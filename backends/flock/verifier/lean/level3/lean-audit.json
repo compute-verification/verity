@@ -1,0 +1,804 @@
+{
+ "roots": ["FlockLevel3"],
+ "exempt": {
+  "CheckAxioms": "the #print axioms list backends/flock/tests/test_lean_verifier.py reads; superseded by this audit"
+ },
+ "pins": {
+  "FlockLevel3.F128.poly_add": {
+   "signature": [
+    "FlockLevel3.F128.poly_add (a b : Flock.F128) :",
+    "  FlockLevel3.F128.poly (a + b) = FlockLevel3.F128.poly a + FlockLevel3.F128.poly b"
+   ],
+   "assumptions": [],
+   "type_hash": "000000000654ae58"
+  },
+  "FlockLevel3.F128.poly_injective": {
+   "signature": ["FlockLevel3.F128.poly_injective : Function.Injective FlockLevel3.F128.poly"],
+   "assumptions": [],
+   "type_hash": "00000000218a5380"
+  },
+  "FlockLevel3.F128.poly_mul": {
+   "signature": [
+    "FlockLevel3.F128.poly_mul (a b : Flock.F128) :",
+    "  FlockLevel3.F128.poly (a * b) = FlockLevel3.F128.poly a * FlockLevel3.F128.poly b %ₘ FlockLevel3.G"
+   ],
+   "assumptions": [],
+   "type_hash": "000000000f638260"
+  },
+  "FlockLevel3.GF128.add_eq": {
+   "signature": [
+    "FlockLevel3.GF128.add_eq (a b : Flock.F128) :",
+    "  FlockLevel3.GF128.of a + FlockLevel3.GF128.of b = FlockLevel3.GF128.of (a + b)"
+   ],
+   "assumptions": [],
+   "type_hash": "000000001d992e44"
+  },
+  "FlockLevel3.GF128.inv_eq": {
+   "signature": ["FlockLevel3.GF128.inv_eq (a : Flock.F128) : (FlockLevel3.GF128.of a)⁻¹ = FlockLevel3.GF128.of a.inv"],
+   "assumptions": [],
+   "type_hash": "00000000c98167aa"
+  },
+  "FlockLevel3.GF128.mul_eq": {
+   "signature": [
+    "FlockLevel3.GF128.mul_eq (a b : Flock.F128) :",
+    "  FlockLevel3.GF128.of a * FlockLevel3.GF128.of b = FlockLevel3.GF128.of (a * b)"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000016419e9"
+  },
+  "FlockLevel3.GF128.xinv_mul_x": {
+   "signature": [
+    "FlockLevel3.GF128.xinv_mul_x : FlockLevel3.GF128.of Flock.F256.xinv * FlockLevel3.GF128.of (Flock.F128.monomial 1) = 1"
+   ],
+   "assumptions": [],
+   "type_hash": "0000000069f5f9cf"
+  },
+  "FlockLevel3.GF256.add_eq": {
+   "signature": [
+    "FlockLevel3.GF256.add_eq (a b : Flock.F256) :",
+    "  FlockLevel3.GF256.of a + FlockLevel3.GF256.of b = FlockLevel3.GF256.of (a + b)"
+   ],
+   "assumptions": [],
+   "type_hash": "0000000081132c78"
+  },
+  "FlockLevel3.GF256.mul_eq": {
+   "signature": [
+    "FlockLevel3.GF256.mul_eq (a b : Flock.F256) :",
+    "  FlockLevel3.GF256.of a * FlockLevel3.GF256.of b = FlockLevel3.GF256.of (a * b)"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000d094bd8f"
+  },
+  "FlockLevel3.G_irreducible": {
+   "signature": ["FlockLevel3.G_irreducible : Irreducible FlockLevel3.G"],
+   "assumptions": [],
+   "type_hash": "0000000070df2569"
+  },
+  "FlockLevel3.Q_irreducible": {
+   "signature": ["FlockLevel3.Q_irreducible : Irreducible FlockLevel3.Q"],
+   "assumptions": [],
+   "type_hash": "000000009980026d"
+  },
+  "FlockLevel3.T_xK": {
+   "signature": ["FlockLevel3.T_xK : FlockLevel3.T FlockLevel3.xK = 1"],
+   "assumptions": [],
+   "type_hash": "000000007fb05456"
+  },
+  "FlockLevel3.addDelta_get": {
+   "signature": [
+    "FlockLevel3.addDelta_get (w : ℕ → Flock.F128) (pairs : List (ℕ × ℕ)) (out : Array Flock.F128) (c : ℕ) :",
+    "  c < out.size →",
+    "    (Flock.Stmt.addDelta w pairs out).size = out.size ∧",
+    "      FlockLevel3.GF128.of (Flock.Stmt.addDelta w pairs out)[c]! =",
+    "        FlockLevel3.GF128.of out[c]! +",
+    "          (List.map (fun ic => if ic.2 = c then FlockLevel3.GF128.of (w ic.1) else 0) pairs).sum"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000ac3b7280"
+  },
+  "FlockLevel3.baseOf_get": {
+   "signature": [
+    "FlockLevel3.baseOf_get (alpha : Flock.F128) (eLo : Array Flock.F128) (a b : Flock.Sparse)",
+    "  (lk : Option Flock.LookupTable) (sl i' : ℕ) (hi : i' < 2 ^ sl) (ha : i' < a.width) (hb : i' < b.width) :",
+    "  FlockLevel3.GF128.of (Flock.Stmt.baseOf alpha eLo a b lk sl)[i']! =",
+    "    FlockLevel3.GF128.of alpha * FlockLevel3.sparseT a eLo i' + FlockLevel3.sparseT b eLo i' +",
+    "      FlockLevel3.lookupTerm eLo lk i'"
+   ],
+   "assumptions": [],
+   "type_hash": "000000001175d961"
+  },
+  "FlockLevel3.build_computes": {
+   "signature": [
+    "FlockLevel3.build_computes.{u_1} {K : Type u_1} [Field K] [CharP K 2] [DecidableEq K] {name : String}",
+    "  {table : ByteArray} {n lo bits : ℕ} {net : Flock.Net} (hb : Flock.Lookup.build name table n lo bits = Except.ok net)",
+    "  (hK : net.useful ≤ Flock.Lookup.KONST) :",
+    "  ∃ RA RB lk col,",
+    "    Flock.Sparse.ofRows RA (2 ^ net.unitLog) = Except.ok net.a ∧",
+    "      Flock.Sparse.ofRows RB (2 ^ net.unitLog) = Except.ok net.b ∧",
+    "        RA.size = net.useful ∧",
+    "          RB.size = net.useful ∧",
+    "            net.lookup = some lk ∧",
+    "              lk.table = table ∧",
+    "                lk.n = n ∧",
+    "                  lk.lo = lo ∧",
+    "                    lk.bits = bits ∧",
+    "                      net.outGroups = #[{ col := col, words := 1, bits := #[bits] }] ∧",
+    "                        ∀ (z : ℕ → K),",
+    "                          (∀ r < net.useful,",
+    "                              z r =",
+    "                                FlockLevel3.rowSum z (RA.getD r #[]) *",
+    "                                  (FlockLevel3.rowSum z (RB.getD r #[]) + FlockLevel3.tableB lk z r)) →",
+    "                            z net.constPos = 1 →",
+    "                              (∀ i < n, z i = 0 ∨ z i = 1) ∧",
+    "                                ∀ j < bits,",
+    "                                  z (128 * col + j) =",
+    "                                    if",
+    "                                        (Flock.rd32 table (4 * FlockLevel3.bitsVal z (List.range n))).testBit j =",
+    "                                          true then",
+    "                                      1",
+    "                                    else 0"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000143c7adc"
+  },
+  "FlockLevel3.card_F": {
+   "signature": ["FlockLevel3.card_F : Fintype.card FlockLevel3.GF128 = 2 ^ 128"],
+   "assumptions": [],
+   "type_hash": "000000000742ca17"
+  },
+  "FlockLevel3.card_K": {
+   "signature": ["FlockLevel3.card_K : Fintype.card FlockLevel3.GF256 = 2 ^ 256"],
+   "assumptions": [],
+   "type_hash": "000000001928aa04"
+  },
+  "FlockLevel3.charTwoK": {
+   "signature": ["FlockLevel3.charTwoK : CharP FlockLevel3.GF256 2"],
+   "assumptions": [],
+   "type_hash": "000000000bbbf379"
+  },
+  "FlockLevel3.clmul_spec": {
+   "signature": [
+    "FlockLevel3.clmul_spec (a b : UInt64) :",
+    "  FlockLevel3.natPoly (FlockLevel3.w128 (Flock.F128.clmul a b).1 (Flock.F128.clmul a b).2) =",
+    "    FlockLevel3.poly64 a * FlockLevel3.poly64 b"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000d5d486b2"
+  },
+  "FlockLevel3.eqAt_split": {
+   "signature": [
+    "FlockLevel3.eqAt_split {R : Type} [CommRing R] (a b : ℕ) (r : Fin (a + b) → R) (u : ℕ) :",
+    "  FlockLevel3.eqAt r u =",
+    "    FlockLevel3.eqAt (fun j => r (Fin.castAdd b j)) (u % 2 ^ a) *",
+    "      FlockLevel3.eqAt (fun j => r (Fin.natAdd a j)) (u / 2 ^ a)"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000d4f013c2"
+  },
+  "FlockLevel3.eqTable_get": {
+   "signature": [
+    "FlockLevel3.eqTable_get (r : Array Flock.F128) (b : ℕ) (hb : b < (Flock.eqTable r).size) :",
+    "  FlockLevel3.GF128.of (Flock.eqTable r)[b] = ∏ j, FlockLevel3.eqFactor (b.testBit ↑j) r[j]"
+   ],
+   "assumptions": [],
+   "type_hash": "000000001b354397"
+  },
+  "FlockLevel3.eqTable_size": {
+   "signature": ["FlockLevel3.eqTable_size (r : Array Flock.F128) : (Flock.eqTable r).size = 2 ^ r.size"],
+   "assumptions": [],
+   "type_hash": "000000003c8d91e7"
+  },
+  "FlockLevel3.foldB_get": {
+   "signature": [
+    "FlockLevel3.foldB_get (lk : Flock.LookupTable) (e acc0 : Array Flock.F128) (c : ℕ) (hc : c < acc0.size) :",
+    "  FlockLevel3.GF128.of (Flock.Lookup.foldB lk e acc0)[c]! =",
+    "    FlockLevel3.GF128.of acc0[c]! +",
+    "      ∑ h ∈ Finset.range (2 ^ (lk.n - lk.lo)),",
+    "        ∑ l ∈ Finset.range (2 ^ lk.lo),",
+    "          if lk.loTop + l = c then",
+    "            FlockLevel3.wordSum (Flock.Lookup.ej lk (2 ^ (lk.n - lk.lo)) e h)",
+    "              (Flock.Lookup.word lk (2 ^ lk.lo) (2 ^ lk.bits - 1) h l)",
+    "          else 0"
+   ],
+   "assumptions": [],
+   "type_hash": "000000004947aec2"
+  },
+  "FlockLevel3.foldRanges_get": {
+   "signature": [
+    "FlockLevel3.foldRanges_get (st : Flock.Stmt) (alpha : Flock.F128) (lw rho : Array Flock.F128) (rs : List Flock.Range)",
+    "  (bases : Array ((Flock.Kind × ℕ) × Array Flock.F128)) (out res : Array Flock.F128) :",
+    "  st.foldRanges alpha lw rho rs bases out = Except.ok res →",
+    "    (∀ kb ∈ bases, st.slotBase alpha lw rho kb.1 = Except.ok kb.2) →",
+    "      res.size = out.size ∧ ∀ c < out.size, res[c]! = FlockLevel3.rangesVal st alpha lw rho rs c out[c]!"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000d6e68825"
+  },
+  "FlockLevel3.foldT_get": {
+   "signature": [
+    "FlockLevel3.foldT_get (m : Flock.Sparse) (e : Array Flock.F128) (c : ℕ) (hc : c < m.width) :",
+    "  FlockLevel3.GF128.of (m.foldT e)[c]! =",
+    "    ∑ i ∈ Finset.range (min m.rows e.size),",
+    "      ∑ t ∈ Finset.range m.len[i]!, if m.col i t = c then FlockLevel3.GF128.of e[i]! else 0"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000d509668a"
+  },
+  "FlockLevel3.fold_get": {
+   "signature": [
+    "FlockLevel3.fold_get (st : Flock.Stmt) (alpha : Flock.F128) (lw rho out : Array Flock.F128)",
+    "  (h : st.fold alpha lw rho = Except.ok out) (c : ℕ) (hc : c < 2 ^ st.c.kLog) :",
+    "  FlockLevel3.GF128.of out[c]! =",
+    "    FlockLevel3.GF128.of (FlockLevel3.rangesVal st alpha lw rho st.c.ranges.toList c 0) +",
+    "        (List.map",
+    "            (fun ic =>",
+    "              if ic.2 = c then FlockLevel3.GF128.of alpha * FlockLevel3.GF128.of (FlockLevel3.eIn lw rho ic.1) else 0)",
+    "            st.da.toList).sum +",
+    "      (List.map (fun ic => if ic.2 = c then FlockLevel3.GF128.of (FlockLevel3.eIn lw rho ic.1) else 0) st.db.toList).sum"
+   ],
+   "assumptions": [],
+   "type_hash": "000000006f41e872"
+  },
+  "FlockLevel3.lo_balanced": {
+   "signature": [
+    "FlockLevel3.lo_balanced (b : ℕ) :",
+    "  b ≤ 64 → ∀ t < 2 ^ b, {w | FlockLevel3.lo w % 2 ^ b = t}.card = Fintype.card FlockLevel3.GF128 / 2 ^ b"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000a0ad34a1"
+  },
+  "FlockLevel3.mask_term": {
+   "signature": [
+    "FlockLevel3.mask_term (lw rho : Array Flock.F128) (hlw : lw.size = 64) (sl : ℕ) (hsl : 6 ≤ sl)",
+    "  (hslr : sl - 6 ≤ rho.size) (alpha : Flock.F128) (c : ℕ) (hq : c / 2 ^ sl < 2 ^ (rho.size - (sl - 6))) :",
+    "  FlockLevel3.GF128.of",
+    "      ((Flock.eqTable (rho.extract (sl - 6)))[c / 2 ^ sl]! *",
+    "        (Array.map (fun x => (alpha + 1) * x) (Flock.Stmt.tensor lw (rho.extract 0 (sl - 6))))[c % 2 ^ sl]!) =",
+    "    (FlockLevel3.GF128.of alpha + 1) * FlockLevel3.GF128.of (FlockLevel3.eIn lw rho c)"
+   ],
+   "assumptions": [],
+   "type_hash": "000000006cbe3c7e"
+  },
+  "FlockLevel3.nodes": {
+   "signature": [
+    "FlockLevel3.nodes :",
+    "  ∃ nS nΛ,",
+    "    Function.Injective nS ∧",
+    "      Function.Injective nΛ ∧",
+    "        (∀ (s i : Fin 64), nS s ≠ nΛ i) ∧",
+    "          (∀ (p : Polynomial FlockLevel3.GF128),",
+    "              p.natDegree < 64 →",
+    "                ∀ (ζ : FlockLevel3.GF128), ∑ s, FlockLevel3.lagS ζ s * Polynomial.eval (nS s) p = Polynomial.eval ζ p) ∧",
+    "            (∀ (p : Polynomial FlockLevel3.GF128),",
+    "                p.natDegree < 64 →",
+    "                  ∀ (ζ : FlockLevel3.GF128),",
+    "                    ∑ i, FlockLevel3.lagΛ ζ i * Polynomial.eval (nΛ i) p = Polynomial.eval ζ p) ∧",
+    "              ∀ (p : Polynomial FlockLevel3.GF128),",
+    "                p.natDegree < 128 →",
+    "                  (∀ (s : Fin 64), Polynomial.eval (nS s) p = 0) →",
+    "                    ∀ (ζ : FlockLevel3.GF128),",
+    "                      ∑ i, FlockLevel3.combW ζ i * Polynomial.eval (nΛ i) p = Polynomial.eval ζ p"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000de27dbdd"
+  },
+  "FlockLevel3.ofLimbs": {
+   "signature": [
+    "FlockLevel3.ofLimbs (c0 c1 : Flock.F128) :",
+    "  FlockLevel3.GF256.of { c0 := c0, c1 := c1 } =",
+    "    FlockLevel3.embed (FlockLevel3.GF128.of c0) + FlockLevel3.embed (FlockLevel3.GF128.of c1) * FlockLevel3.u"
+   ],
+   "assumptions": [],
+   "type_hash": "000000008b650bd6"
+  },
+  "FlockLevel3.ofLimbs_bijective": {
+   "signature": [
+    "FlockLevel3.ofLimbs_bijective :",
+    "  Function.Bijective fun w => FlockLevel3.embed w.1 + FlockLevel3.embed w.2 * FlockLevel3.u"
+   ],
+   "assumptions": [],
+   "type_hash": "000000006e72ac19"
+  },
+  "FlockLevel3.omega_injective": {
+   "signature": ["FlockLevel3.omega_injective (d : ℕ) : d ≤ 64 → Set.InjOn FlockLevel3.omega {q | q < 2 ^ d}"],
+   "assumptions": [],
+   "type_hash": "000000009d4b54de"
+  },
+  "FlockLevel3.pack_unpack": {
+   "signature": ["FlockLevel3.pack_unpack (a : FlockLevel3.GF128) : FlockLevel3.pack (FlockLevel3.unpack a) = a"],
+   "assumptions": [],
+   "type_hash": "000000008cf66ea8"
+  },
+  "FlockLevel3.phi_injective": {
+   "signature": ["FlockLevel3.phi_injective : Function.Injective FlockLevel3.phi"],
+   "assumptions": [],
+   "type_hash": "00000000387b7096"
+  },
+  "FlockLevel3.phi_surjective": {
+   "signature": ["FlockLevel3.phi_surjective : Function.Surjective FlockLevel3.phi"],
+   "assumptions": [],
+   "type_hash": "000000000d959e04"
+  },
+  "FlockLevel3.pinned_indep": {
+   "signature": [
+    "FlockLevel3.pinned_indep (c : Fin 128 → ZMod 2) : ∑ b, ↑(c b).val * FlockLevel3.eqAtPinned ↑b = 0 → c = 0"
+   ],
+   "assumptions": [],
+   "type_hash": "000000000165e8c4"
+  },
+  "FlockLevel3.pinned_ne_one": {
+   "signature": ["FlockLevel3.pinned_ne_one (i : Fin 7) : FlockLevel3.pinnedF i ≠ 1"],
+   "assumptions": [],
+   "type_hash": "0000000013822833"
+  },
+  "FlockLevel3.placeRange_get": {
+   "signature": [
+    "FlockLevel3.placeRange_get (r : Flock.Range) (eHi base : Array Flock.F128) (fuel k : ℕ) (out : Array Flock.F128)",
+    "  (c : ℕ) :",
+    "  c < out.size →",
+    "    (Flock.Stmt.placeRange r eHi base fuel k out)[c]! =",
+    "      if r.pos0 + k ≤ c / 2 ^ r.slotLog ∧ c / 2 ^ r.slotLog < r.pos0 + k + fuel then",
+    "        eHi[c / 2 ^ r.slotLog]! * base[c % 2 ^ r.slotLog]!",
+    "      else out[c]!"
+   ],
+   "assumptions": [],
+   "type_hash": "0000000077f65c0f"
+  },
+  "FlockLevel3.placeSlot_get": {
+   "signature": [
+    "FlockLevel3.placeSlot_get (s : Flock.F128) (base : Array Flock.F128) (at_ fuel i : ℕ) (out : Array Flock.F128) (c : ℕ) :",
+    "  c < out.size →",
+    "    (Flock.Stmt.placeSlot s base at_ fuel i out)[c]! =",
+    "      if at_ + i ≤ c ∧ c < at_ + i + fuel then s * base[c - at_]! else out[c]!"
+   ],
+   "assumptions": [],
+   "type_hash": "000000006e720b22"
+  },
+  "FlockLevel3.reduce_spec": {
+   "signature": [
+    "FlockLevel3.reduce_spec (r0 r1 r2 r3 : UInt64) :",
+    "  FlockLevel3.F128.poly (Flock.F128.reduce r0 r1 r2 r3) =",
+    "    (FlockLevel3.poly64 r0 + Polynomial.X ^ 64 * FlockLevel3.poly64 r1 + Polynomial.X ^ 128 * FlockLevel3.poly64 r2 +",
+    "        Polynomial.X ^ 192 * FlockLevel3.poly64 r3) %ₘ",
+    "      FlockLevel3.G"
+   ],
+   "assumptions": [],
+   "type_hash": "000000007e844f7d"
+  },
+  "FlockLevel3.slot_factor": {
+   "signature": [
+    "FlockLevel3.slot_factor (lw rho : Array Flock.F128) (hlw : lw.size = 64) (sl : ℕ) (hsl : 6 ≤ sl)",
+    "  (hslr : sl - 6 ≤ rho.size) (q c : ℕ) (hq : q < 2 ^ (rho.size - (sl - 6))) (hc : c < 2 ^ sl) :",
+    "  FlockLevel3.GF128.of (lw[(q * 2 ^ sl + c) % 64]! * (Flock.eqTable rho)[(q * 2 ^ sl + c) / 64]!) =",
+    "    FlockLevel3.GF128.of (Flock.Stmt.tensor lw (rho.extract 0 (sl - 6)))[c]! *",
+    "      FlockLevel3.GF128.of (Flock.eqTable (rho.extract (sl - 6)))[q]!"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000ea67dedf"
+  },
+  "FlockLevel3.slot_term": {
+   "signature": [
+    "FlockLevel3.slot_term (st : Flock.Stmt) (alpha : Flock.F128) (lw rho : Array Flock.F128) (r : Flock.Range)",
+    "  (a b : Flock.Sparse) (lk : Option Flock.LookupTable)",
+    "  (hbase :",
+    "    FlockLevel3.baseFor st alpha lw rho r =",
+    "      Flock.Stmt.baseOf alpha (Flock.Stmt.tensor lw (rho.extract 0 (r.slotLog - 6))) a b lk r.slotLog)",
+    "  (c : ℕ) (hc : c % 2 ^ r.slotLog < a.width ∧ c % 2 ^ r.slotLog < b.width) :",
+    "  FlockLevel3.GF128.of",
+    "      ((FlockLevel3.eHiFor rho r)[c / 2 ^ r.slotLog]! * (FlockLevel3.baseFor st alpha lw rho r)[c % 2 ^ r.slotLog]!) =",
+    "    FlockLevel3.GF128.of (FlockLevel3.eHiFor rho r)[c / 2 ^ r.slotLog]! *",
+    "      (FlockLevel3.GF128.of alpha *",
+    "            FlockLevel3.sparseT a (Flock.Stmt.tensor lw (rho.extract 0 (r.slotLog - 6))) (c % 2 ^ r.slotLog) +",
+    "          FlockLevel3.sparseT b (Flock.Stmt.tensor lw (rho.extract 0 (r.slotLog - 6))) (c % 2 ^ r.slotLog) +",
+    "        FlockLevel3.lookupTerm (Flock.Stmt.tensor lw (rho.extract 0 (r.slotLog - 6))) lk (c % 2 ^ r.slotLog))"
+   ],
+   "assumptions": [],
+   "type_hash": "000000005a1070b4"
+  },
+  "FlockLevel3.sparseT_scale": {
+   "signature": [
+    "FlockLevel3.sparseT_scale (lw rho : Array Flock.F128) (hlw : lw.size = 64) (sl : ℕ) (hsl : 6 ≤ sl)",
+    "  (hslr : sl - 6 ≤ rho.size) (q : ℕ) (hq : q < 2 ^ (rho.size - (sl - 6))) (m : Flock.Sparse) (i' : ℕ) :",
+    "  FlockLevel3.GF128.of (Flock.eqTable (rho.extract (sl - 6)))[q]! *",
+    "      FlockLevel3.sparseT m (Flock.Stmt.tensor lw (rho.extract 0 (sl - 6))) i' =",
+    "    ∑ i ∈ Finset.range (min m.rows (2 ^ sl)),",
+    "      ∑ t ∈ Finset.range m.len[i]!,",
+    "        if m.col i t = i' then FlockLevel3.GF128.of (FlockLevel3.eIn lw rho (q * 2 ^ sl + i)) else 0"
+   ],
+   "assumptions": [],
+   "type_hash": "0000000013267073"
+  },
+  "FlockLevel3.subsetTab_get": {
+   "signature": [
+    "FlockLevel3.subsetTab_get (f : ℕ → Flock.F128) (y : ℕ) (hy : y < 256) :",
+    "  FlockLevel3.GF128.of (Flock.Lookup.subsetTab f)[y]! = FlockLevel3.byteSum f y"
+   ],
+   "assumptions": [],
+   "type_hash": "000000003862b546"
+  },
+  "FlockLevel3.toAdj_injective": {
+   "signature": ["FlockLevel3.toAdj_injective : Function.Injective FlockLevel3.toAdj"],
+   "assumptions": [],
+   "type_hash": "000000003dfe6361"
+  },
+  "FlockLevel3.toAdj_surjective": {
+   "signature": ["FlockLevel3.toAdj_surjective : Function.Surjective FlockLevel3.toAdj"],
+   "assumptions": [],
+   "type_hash": "000000009b4f91b3"
+  },
+  "FlockLevel3.u_root": {
+   "signature": [
+    "FlockLevel3.u_root : FlockLevel3.u * FlockLevel3.u + FlockLevel3.u + FlockLevel3.embed FlockLevel3.xK = 0"
+   ],
+   "assumptions": [],
+   "type_hash": "0000000055beaafc"
+  },
+  "FlockLevel3.unpack_add": {
+   "signature": [
+    "FlockLevel3.unpack_add (a a' : FlockLevel3.GF128) :",
+    "  FlockLevel3.unpack (a + a') = FlockLevel3.unpack a + FlockLevel3.unpack a'"
+   ],
+   "assumptions": [],
+   "type_hash": "0000000064fd584b"
+  },
+  "FlockLevel3.unpack_pack": {
+   "signature": ["FlockLevel3.unpack_pack (b : Fin 128 → ZMod 2) : FlockLevel3.unpack (FlockLevel3.pack b) = b"],
+   "assumptions": [],
+   "type_hash": "0000000044bc5b9f"
+  },
+  "FlockLevel3.xhat_poly": {
+   "signature": [
+    "FlockLevel3.xhat_poly (L : ℕ) :",
+    "  L ≤ 40 →",
+    "    ∃ P,",
+    "      (∀ (c : Fin (2 ^ L)), (P c).natDegree < 2 ^ L) ∧",
+    "        LinearIndependent FlockLevel3.GF128 P ∧",
+    "          ∀ (c : Fin (2 ^ L)) (ω : FlockLevel3.GF128), FlockLevel3.Xhat (↑c) L ω = Polynomial.eval ω (P c)"
+   ],
+   "assumptions": [],
+   "type_hash": "000000002b2d0cdd"
+  }
+ },
+ "reads": {
+  "FlockLevel3.ArithFacts": {
+   "digest": "21c6513b342f9900aed953e7c8924246",
+   "definitions": {
+    "FlockLevel3.f128Equiv": "f48157670cea76a1",
+    "FlockLevel3.f256Equiv": "4f6f392a988e7265",
+    "FlockLevel3.instFintypeGF128": "5e0597b5a6520825",
+    "FlockLevel3.instFintypeGF256": "acc2edcc67a69c44",
+    "FlockLevel3.lo": "f23cb7956686595d",
+    "FlockLevel3.omega": "f0a0ebe21809c229",
+    "FlockLevel3.pack": "103db3f01dac6068",
+    "FlockLevel3.pinnedF": "525ae5fe26806b25",
+    "FlockLevel3.unpack": "33c9bd21c8216137"
+   },
+   "pins": [
+    "FlockLevel3.card_F",
+    "FlockLevel3.card_K",
+    "FlockLevel3.lo_balanced",
+    "FlockLevel3.omega_injective",
+    "FlockLevel3.pack_unpack",
+    "FlockLevel3.pinned_indep",
+    "FlockLevel3.pinned_ne_one",
+    "FlockLevel3.unpack_add",
+    "FlockLevel3.unpack_pack"
+   ]
+  },
+  "FlockLevel3.Assembly": {
+   "digest": "7b4826451e17ec2a4d4cff8c8b7a6b33",
+   "definitions": {
+    "FlockLevel3.eqFactor": "7b4826451e17ec2a"
+   },
+   "pins": ["FlockLevel3.eqTable_get"]
+  },
+  "FlockLevel3.Bits": {
+   "digest": "8874c37c6725189df9eccdb123c28376",
+   "definitions": {
+    "FlockLevel3.P": "49a6f8b34e73c88f",
+    "FlockLevel3.natPoly": "5162bcc1ce64f198"
+   },
+   "pins": [
+    "FlockLevel3.F128.poly_add",
+    "FlockLevel3.F128.poly_injective",
+    "FlockLevel3.F128.poly_mul",
+    "FlockLevel3.GF128.add_eq",
+    "FlockLevel3.GF128.inv_eq",
+    "FlockLevel3.GF128.mul_eq",
+    "FlockLevel3.GF128.xinv_mul_x",
+    "FlockLevel3.GF256.add_eq",
+    "FlockLevel3.GF256.mul_eq",
+    "FlockLevel3.G_irreducible",
+    "FlockLevel3.Q_irreducible",
+    "FlockLevel3.T_xK",
+    "FlockLevel3.addDelta_get",
+    "FlockLevel3.baseOf_get",
+    "FlockLevel3.charTwoK",
+    "FlockLevel3.clmul_spec",
+    "FlockLevel3.eqTable_get",
+    "FlockLevel3.foldB_get",
+    "FlockLevel3.foldT_get",
+    "FlockLevel3.fold_get",
+    "FlockLevel3.mask_term",
+    "FlockLevel3.nodes",
+    "FlockLevel3.ofLimbs",
+    "FlockLevel3.ofLimbs_bijective",
+    "FlockLevel3.pack_unpack",
+    "FlockLevel3.phi_injective",
+    "FlockLevel3.phi_surjective",
+    "FlockLevel3.pinned_indep",
+    "FlockLevel3.pinned_ne_one",
+    "FlockLevel3.reduce_spec",
+    "FlockLevel3.slot_factor",
+    "FlockLevel3.slot_term",
+    "FlockLevel3.sparseT_scale",
+    "FlockLevel3.subsetTab_get",
+    "FlockLevel3.toAdj_injective",
+    "FlockLevel3.toAdj_surjective",
+    "FlockLevel3.u_root",
+    "FlockLevel3.unpack_add",
+    "FlockLevel3.unpack_pack",
+    "FlockLevel3.xhat_poly"
+   ]
+  },
+  "FlockLevel3.Fold": {
+   "digest": "628767d5ff5a8bf98b6bcd083c5f320c",
+   "definitions": {
+    "FlockLevel3.eqAt": "628767d5ff5a8bf9"
+   },
+   "pins": ["FlockLevel3.eqAt_split"]
+  },
+  "FlockLevel3.FoldStmt": {
+   "digest": "009648fb507cec5f944c1bd68d0b6ae6",
+   "definitions": {
+    "FlockLevel3.baseFor": "fc4267887f6f0b08",
+    "FlockLevel3.covers": "59b910b51d2c0ff6",
+    "FlockLevel3.eHiFor": "7b03edca1df57a6a",
+    "FlockLevel3.eIn": "39d48380140bb487",
+    "FlockLevel3.instDecidableCovers": "e729a15297954cbb",
+    "FlockLevel3.lookupTerm": "f1af835150d6ebf8",
+    "FlockLevel3.rangesVal": "587a6978f34e5630",
+    "FlockLevel3.sparseT": "f8bf5e2dc92f27f8"
+   },
+   "pins": [
+    "FlockLevel3.baseOf_get",
+    "FlockLevel3.foldRanges_get",
+    "FlockLevel3.fold_get",
+    "FlockLevel3.mask_term",
+    "FlockLevel3.slot_term",
+    "FlockLevel3.sparseT_scale"
+   ]
+  },
+  "FlockLevel3.GF128": {
+   "digest": "db60788eaad90ae775887eca8816ce10",
+   "definitions": {
+    "FlockLevel3.F128.poly": "e5b815e1c8d79831",
+    "FlockLevel3.G": "30f2d25924005de4",
+    "FlockLevel3.S": "5cb5323c43d66885",
+    "FlockLevel3.poly64": "97b02f9084e185d6",
+    "FlockLevel3.w128": "74a2d7f0bc29b87a"
+   },
+   "pins": [
+    "FlockLevel3.F128.poly_add",
+    "FlockLevel3.F128.poly_injective",
+    "FlockLevel3.F128.poly_mul",
+    "FlockLevel3.GF128.add_eq",
+    "FlockLevel3.GF128.inv_eq",
+    "FlockLevel3.GF128.mul_eq",
+    "FlockLevel3.GF128.xinv_mul_x",
+    "FlockLevel3.GF256.add_eq",
+    "FlockLevel3.GF256.mul_eq",
+    "FlockLevel3.G_irreducible",
+    "FlockLevel3.Q_irreducible",
+    "FlockLevel3.T_xK",
+    "FlockLevel3.addDelta_get",
+    "FlockLevel3.baseOf_get",
+    "FlockLevel3.charTwoK",
+    "FlockLevel3.clmul_spec",
+    "FlockLevel3.eqTable_get",
+    "FlockLevel3.foldB_get",
+    "FlockLevel3.foldT_get",
+    "FlockLevel3.fold_get",
+    "FlockLevel3.mask_term",
+    "FlockLevel3.nodes",
+    "FlockLevel3.ofLimbs",
+    "FlockLevel3.ofLimbs_bijective",
+    "FlockLevel3.pack_unpack",
+    "FlockLevel3.phi_injective",
+    "FlockLevel3.phi_surjective",
+    "FlockLevel3.pinned_indep",
+    "FlockLevel3.pinned_ne_one",
+    "FlockLevel3.reduce_spec",
+    "FlockLevel3.slot_factor",
+    "FlockLevel3.slot_term",
+    "FlockLevel3.sparseT_scale",
+    "FlockLevel3.subsetTab_get",
+    "FlockLevel3.toAdj_injective",
+    "FlockLevel3.toAdj_surjective",
+    "FlockLevel3.u_root",
+    "FlockLevel3.unpack_add",
+    "FlockLevel3.unpack_pack",
+    "FlockLevel3.xhat_poly"
+   ]
+  },
+  "FlockLevel3.GF128Field": {
+   "digest": "91ec5e88b728fc0ff5cc5d9fba715bd5",
+   "definitions": {
+    "FlockLevel3.GF128": "911baf730c5426ae",
+    "FlockLevel3.GF128.of": "4eec3e0c489f05c5",
+    "FlockLevel3.instFieldGF128": "d78105b3c29f09dd"
+   },
+   "pins": [
+    "FlockLevel3.GF128.add_eq",
+    "FlockLevel3.GF128.inv_eq",
+    "FlockLevel3.GF128.mul_eq",
+    "FlockLevel3.GF128.xinv_mul_x",
+    "FlockLevel3.GF256.add_eq",
+    "FlockLevel3.GF256.mul_eq",
+    "FlockLevel3.Q_irreducible",
+    "FlockLevel3.T_xK",
+    "FlockLevel3.addDelta_get",
+    "FlockLevel3.baseOf_get",
+    "FlockLevel3.card_F",
+    "FlockLevel3.card_K",
+    "FlockLevel3.charTwoK",
+    "FlockLevel3.eqTable_get",
+    "FlockLevel3.foldB_get",
+    "FlockLevel3.foldT_get",
+    "FlockLevel3.fold_get",
+    "FlockLevel3.lo_balanced",
+    "FlockLevel3.mask_term",
+    "FlockLevel3.nodes",
+    "FlockLevel3.ofLimbs",
+    "FlockLevel3.ofLimbs_bijective",
+    "FlockLevel3.omega_injective",
+    "FlockLevel3.pack_unpack",
+    "FlockLevel3.phi_injective",
+    "FlockLevel3.phi_surjective",
+    "FlockLevel3.pinned_indep",
+    "FlockLevel3.pinned_ne_one",
+    "FlockLevel3.slot_factor",
+    "FlockLevel3.slot_term",
+    "FlockLevel3.sparseT_scale",
+    "FlockLevel3.subsetTab_get",
+    "FlockLevel3.u_root",
+    "FlockLevel3.unpack_add",
+    "FlockLevel3.unpack_pack",
+    "FlockLevel3.xhat_poly"
+   ]
+  },
+  "FlockLevel3.GF128Ring": {
+   "digest": "db948c0e549630056b909131e7015803",
+   "definitions": {
+    "FlockLevel3.equivAdj": "f146b67b5e357019",
+    "FlockLevel3.toAdj": "dacfbc5be315f0f6"
+   },
+   "pins": [
+    "FlockLevel3.GF128.add_eq",
+    "FlockLevel3.GF128.inv_eq",
+    "FlockLevel3.GF128.mul_eq",
+    "FlockLevel3.GF128.xinv_mul_x",
+    "FlockLevel3.GF256.add_eq",
+    "FlockLevel3.GF256.mul_eq",
+    "FlockLevel3.Q_irreducible",
+    "FlockLevel3.T_xK",
+    "FlockLevel3.addDelta_get",
+    "FlockLevel3.baseOf_get",
+    "FlockLevel3.charTwoK",
+    "FlockLevel3.eqTable_get",
+    "FlockLevel3.foldB_get",
+    "FlockLevel3.foldT_get",
+    "FlockLevel3.fold_get",
+    "FlockLevel3.mask_term",
+    "FlockLevel3.nodes",
+    "FlockLevel3.ofLimbs",
+    "FlockLevel3.ofLimbs_bijective",
+    "FlockLevel3.pack_unpack",
+    "FlockLevel3.phi_injective",
+    "FlockLevel3.phi_surjective",
+    "FlockLevel3.pinned_indep",
+    "FlockLevel3.pinned_ne_one",
+    "FlockLevel3.slot_factor",
+    "FlockLevel3.slot_term",
+    "FlockLevel3.sparseT_scale",
+    "FlockLevel3.subsetTab_get",
+    "FlockLevel3.toAdj_injective",
+    "FlockLevel3.toAdj_surjective",
+    "FlockLevel3.u_root",
+    "FlockLevel3.unpack_add",
+    "FlockLevel3.unpack_pack",
+    "FlockLevel3.xhat_poly"
+   ]
+  },
+  "FlockLevel3.GF256": {
+   "digest": "86dd41499fa8fafbf0c755efd40ea0ba",
+   "definitions": {
+    "FlockLevel3.GF256": "c8e8a4fb1cec02dc",
+    "FlockLevel3.GF256.of": "2b5b4f92d523f379",
+    "FlockLevel3.K": "a6ec9301900cfdd9",
+    "FlockLevel3.Q": "ce6cad32901f9d5a",
+    "FlockLevel3.T": "7b0a69c57753aa82",
+    "FlockLevel3.equivPhi": "a1be0d24ab3734d9",
+    "FlockLevel3.instFieldGF256": "85f536abf4fe4642",
+    "FlockLevel3.phi": "cb62e38219f40d68",
+    "FlockLevel3.xK": "3c5829f32f812106"
+   },
+   "pins": [
+    "FlockLevel3.GF256.add_eq",
+    "FlockLevel3.GF256.mul_eq",
+    "FlockLevel3.Q_irreducible",
+    "FlockLevel3.T_xK",
+    "FlockLevel3.card_K",
+    "FlockLevel3.charTwoK",
+    "FlockLevel3.ofLimbs",
+    "FlockLevel3.ofLimbs_bijective",
+    "FlockLevel3.phi_injective",
+    "FlockLevel3.phi_surjective",
+    "FlockLevel3.u_root"
+   ]
+  },
+  "FlockLevel3.LookupFold": {
+   "digest": "a9a608efee9ddede2d5dda6b3a7cde7a",
+   "definitions": {
+    "FlockLevel3.byteSum": "1f8a06799f8b7b6c",
+    "FlockLevel3.wordSum": "454ddf0c1f1940b2"
+   },
+   "pins": ["FlockLevel3.baseOf_get", "FlockLevel3.foldB_get", "FlockLevel3.slot_term", "FlockLevel3.subsetTab_get"]
+  },
+  "FlockLevel3.LookupRows": {
+   "digest": "9f1dbf118ac1eae59aa39ab938f517a0",
+   "definitions": {
+    "FlockLevel3.bitsVal": "0cf9e0e7f21aca40",
+    "FlockLevel3.rowSum": "7efa04f14ce4ab9a",
+    "FlockLevel3.tableB": "bf7fe87b36d9c85a"
+   },
+   "pins": ["FlockLevel3.build_computes"]
+  },
+  "FlockLevel3.Nodes": {
+   "digest": "c402244b2facacaff70397b10b28a915",
+   "definitions": {
+    "FlockLevel3.combW": "57117f53716a9af2",
+    "FlockLevel3.lagS": "35bbe65769dd5754",
+    "FlockLevel3.lagΛ": "4bc831a2c07c9734"
+   },
+   "pins": ["FlockLevel3.nodes"]
+  },
+  "FlockLevel3.NovelBasis": {
+   "digest": "e8e780b663c7cf46f4ef192c018bc39a",
+   "definitions": {
+    "FlockLevel3.What": "c16dbc626e7b283b",
+    "FlockLevel3.Xhat": "03754dca46370afc",
+    "FlockLevel3.beta": "2209b05114a65142",
+    "FlockLevel3.sPoly": "97b19d0ec8fd900f"
+   },
+   "pins": ["FlockLevel3.xhat_poly"]
+  },
+  "FlockLevel3.Pinned": {
+   "digest": "d7d9e7a22c94537145d876ed55b466d5",
+   "definitions": {
+    "FlockLevel3.eqAtPinned": "d7d9e7a22c945371"
+   },
+   "pins": ["FlockLevel3.pinned_indep"]
+  },
+  "FlockLevel3.Seam": {
+   "digest": "ae5680e645a7a3c7ab37a7afa4a15183",
+   "definitions": {
+    "FlockLevel3.GF128.val": "5bc9fa4a312bbe3b",
+    "FlockLevel3.embed": "85ef9d4ba725b5b9",
+    "FlockLevel3.u": "2b76b486951e7592"
+   },
+   "pins": [
+    "FlockLevel3.card_F",
+    "FlockLevel3.card_K",
+    "FlockLevel3.lo_balanced",
+    "FlockLevel3.nodes",
+    "FlockLevel3.ofLimbs",
+    "FlockLevel3.ofLimbs_bijective",
+    "FlockLevel3.pack_unpack",
+    "FlockLevel3.u_root",
+    "FlockLevel3.unpack_add",
+    "FlockLevel3.unpack_pack"
+   ]
+  }
+ }
+}

@@ -98,6 +98,12 @@ theorem ind_nonneg (p : α → Prop) (a : α) : 0 ≤ ind p a := by
 theorem ind_le_one (p : α → Prop) (a : α) : ind p a ≤ 1 := by
   unfold ind; split_ifs <;> norm_num
 
+theorem ind_mono {p q : α → Prop} (h : ∀ a, p a → q a) (a : α) : ind p a ≤ ind q a := by
+  unfold ind
+  by_cases hp : p a
+  · rw [if_pos hp, if_pos (h a hp)]
+  · rw [if_neg hp]; split_ifs <;> norm_num
+
 theorem expect_ind_le_one (p : α → Prop) (g : Game α) (s : Strategy g) :
     expect (ind p) g s ≤ 1 := by
   have := expect_mono (ind_le_one p) g s

@@ -40,7 +40,7 @@ theorem padMcaA_nonneg (l : Level) (t : ℕ) (hr : 0 ≤ l.padRadius t)
 /-- **The padded level 0's lane rounds.** From a level-0 claim false for every family of the list
 against `W0`, after the lane rounds the claim is false for every family's folded witness lanes, and
 no round was an MCA event, except with probability `(2^k₀ − 1)·a'/|K| + 2k₀·|S|/|K|`. -/
-theorem lane_rounds_pad (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) (hA : A.Correct)
+theorem lane_rounds_pad (A : Arith F K) (hA : A.Correct)
     (n : ℕ) (b : ℕ → F) (l : Level) (t : ℕ) (hpad : PadOK l t) (c₀ : F) (k0 e r : ℕ)
     (hk0 : 1 ≤ k0) (hn : n = k0 + l.logCols) (C : Oracle F) (z₀ : List F) (hz : z₀.length = n)
     (β₀ : F) (s₀ : K) (q₀ : Quad K) (hq₀ : q₀.eval 0 + q₀.eval 1 = s₀)
@@ -82,7 +82,7 @@ theorem lane_rounds_pad (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) (hA : 
   have hmcaε : ∀ U : Fin 2 → Fin (2 ^ l.logLen) → K,
       prCoin (fun γ : K => IsMCA (AffineLineGenerator K) code γ U (l.padRadius t)) ≤
         ENNReal.ofReal (l.padMcaA t / qK) :=
-    prCoin_pad_mca_le A hA hMCA l t hd64 hpad.hk1 hpad.hr
+    prCoin_pad_mca_le A hA l t hd64 hpad.hk1 hpad.hr
   have hsumε := value_foldRounds_sum_le A hA S u v k0 l.logCols s₀ q₀ hq₀
     (fun M hM => by rw [← hn]; exact hdoom M hM)
   calc value _ (foldRounds A k0 s₀ q₀)
@@ -121,7 +121,7 @@ theorem sum_padFold (A : Arith F K) {k0 e cols t : ℕ} (c₀ : F) (ch : List K)
 
 /-- **The extra lanes.** After the lane rounds, the `e` extra coins keep the restarted claim false
 for every family and are no MCA event, except with probability `e·a'/|K| + e·|S|/|K|`. -/
-theorem extras_pad (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) (hA : A.Correct)
+theorem extras_pad (A : Arith F K) (hA : A.Correct)
     (l : Level) (t : ℕ) (hpad : PadOK l t) (c₀ : F) (k0 e r : ℕ) (C : Oracle F) (ch : List K)
     (s : K) (ev : Fin e → K) (res : ℕ → K)
     (hdoom : ∀ M ∈ padList A l t k0 e r C,
@@ -155,7 +155,7 @@ theorem extras_pad (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) (hA : A.Cor
     simp only [T0, g, mul_sub, Finset.sum_sub_distrib]
     linear_combination heq
   · exact value_drawKs_extras_le A hA code (l.padRadius t) _
-      (prCoin_pad_mca_le A hA hMCA l t hd64 hpad.hk1 hpad.hr) e _ _
+      (prCoin_pad_mca_le A hA l t hd64 hpad.hk1 hpad.hr) e _ _
   · exact value_drawKs_affine_le A hA S e (fun M => s - T0 M) (fun M i => ev i - g M i)
       fun M hM => sub_ne_zero.2 (hdoom M hM)
 
@@ -201,7 +201,7 @@ theorem ligeritoPad_eq (A : Arith F K) (m k0 : ℕ) (l₀ l₁ : Level) (rest : 
 /-- **Ligerito with the padded level 0 is sound.** For a schedule of the `fast100` shape whose
 level 0 meets `PadOK`, if the claim `Σ_y f(y)·b(y) = T` is false for every family of rep `r`'s
 list, `ligeritoPad` accepts with probability at most `padLigeritoError`. -/
-theorem ligeritoPad_sound (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) (hA : A.Correct)
+theorem ligeritoPad_sound (A : Arith F K) (hA : A.Correct)
     (sch : Schedule)
     (hshape : 2 ≤ sch.levels.length ∧ (sch.levels.headD default).lanes = sch.k0 ∧
       sch.m - 7 = sch.k0 + (sch.levels.headD default).logCols ∧
@@ -240,7 +240,7 @@ theorem ligeritoPad_sound (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) (hA 
       PreFold A (m - 7) b initial l₁ C' l₀.logCols st' →
       value (fun r => r = true) (recursiveRounds A (m - 7) b initial ext (l₁ :: rest)
         { st' with prev := C', prevLevel := l₁ }) ≤ εrest :=
-    fun initial C' st' hpre' => value_recursiveRounds_le hMCA A hA (m - 7) b initial ext (l₁ :: rest)
+    fun initial C' st' hpre' => value_recursiveRounds_le A hA (m - 7) b initial ext (l₁ :: rest)
       { st' with prev := C', prevLevel := l₁ } l₀.logCols hrest
       ⟨hpre'.sum, hpre'.ok, hpre'.dim, hpre'.doom⟩
   set εmid : ℝ≥0∞ := ENNReal.ofReal (midAPad l₀ l₁ t)
@@ -318,9 +318,9 @@ theorem ligeritoPad_sound (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) (hA 
             ⟨s', fromMsg msg' s', m - 7 - k0 + 1, [], [⟨List.ofFn z₀, β₀, none⟩], [], C, l₀⟩ hpost0
             hdim₀ (m - 7 - k0 + 1) (by omega) _ εrest fun C' st' hpre' => hrec initial C' st' hpre'
         · refine add_le_add ?_ le_rfl
-          refine extras_pad hMCA A hA l₀ t hpad c₀ k0 e r C initial s ev _ hdoom'
+          refine extras_pad A hA l₀ t hpad c₀ k0 e r C initial s ev _ hdoom'
       · refine add_le_add ?_ le_rfl
-        exact lane_rounds_pad hMCA A hA (m - 7) b l₀ t hpad c₀ k0 e r hk1 hn C (List.ofFn z₀)
+        exact lane_rounds_pad A hA (m - 7) b l₀ t hpad c₀ k0 e r hk1 hn C (List.ofFn z₀)
           (by simp) β₀ (s₀ β₀) _ hq₀ fun M hM h => hβ₀ M hM h
   · -- the arithmetic
     have hq : (0 : ℝ) < qF := by unfold qF; positivity
