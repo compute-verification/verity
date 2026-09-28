@@ -193,8 +193,8 @@ side read from the held table, at its `READ` record's columns and value bits (`k
 def placedNet (l : Layout) (d : DeriveAll.D) (nm : String) (held : Array Held) : V Net := do
   match l.own with
   | .gen sha n _ lo =>
-    let r ← match d.reads with
-      | #[r] => pure r
+    let r ← match d.reads.toList with
+      | [r] => pure r
       | _ => throw s!"layout {nm}: a generated layout that is not one read"
     if r.table != sha || r.n != n || r.lo != lo then throw s!"layout {nm}: its read is not its record's"
     let some h := held.find? (·.sha512 == sha) | throw s!"layout {nm}: its table is not held"
@@ -204,27 +204,148 @@ def placedNet (l : Layout) (d : DeriveAll.D) (nm : String) (held : Array Held) :
     if !d.reads.isEmpty then throw s!"layout {nm}: a placed call that reads a table, which this verifier does not fold yet"
     netOfD d nm
 
+/-- The template root's rows: the unit's own, with their entries at part columns (Δ's cross entries) left out. -/
+def rootOf (u : DeriveAll.D) : DeriveAll.D :=
+  { u with rows := u.rows.map fun (a, b) => (a.filter (· < u.size), b.filter (· < u.size)) }
+
+/-- The unit's own rows' entries at part columns: `(row, A's, B's)` for each row that has any. -/
+def crossOf (u : DeriveAll.D) : Array (Nat × Array Nat × Array Nat) :=
+  (Array.range u.size).filterMap fun r =>
+    let (a, b) := u.rows.getD r ([], [])
+    let (xa, xb) := (a.filter (· ≥ u.size), b.filter (· ≥ u.size))
+    if xa.isEmpty && xb.isEmpty then none else some (r, xa.toArray, xb.toArray)
+
+/-- Placed layout `j`'s entry in the block: its digest, its net, and its range's log size. -/
+def placedEntry (digests : List String) (ls : Array Layout) (done : Array DeriveAll.D) (held : Array Held) (j : Nat) :
+    V (String × Net × Nat) := do
+  let d := digests.getD j ""
+  let l := ls.getD j default
+  pure (d, ← placedNet l (done.getD j default) (d.take 16).toString held, l.rangeLog.getD 0)
+
 /-- A template's block from its derivation. -/
 def templateOf (name : String) (done : Array DeriveAll.D) (ls : Array Layout) (unit : Nat) (t : CircuitType)
     (held : Array Held) : V Template := do
   let u := done.getD unit default
-  let own := u.size
-  if u.reads.any (·.prod0 < own) then
+  if u.reads.any (·.prod0 < u.size) then
     throw "META: the instance type reads a table in its own region, which this verifier's template reading does not fold yet"
-  let inOwn := fun (xs : List Nat) => xs.filter (· < own)
-  let root ← netOfD { u with rows := u.rows.map fun (a, b) => (inOwn a, inOwn b) } name
-  let digests ← ls.mapM (·.digest)
+  let root ← netOfD (rootOf u) name
+  let digests ← ls.toList.mapM (·.digest)
   let placed := (List.range ls.size).filter fun j => u.parts.any (·.1 == j)
-  let layouts ← placed.toArray.mapM fun j => do
-    let d := digests.getD j ""
-    let l := ls.getD j default
-    pure (d, ← placedNet l (done.getD j default) (d.take 16).toString held, l.rangeLog.getD 0)
-  let cross := (Array.range own).filterMap fun r =>
-    let (a, b) := u.rows.getD r ([], [])
-    let (xa, xb) := (a.filter (· ≥ own), b.filter (· ≥ own))
-    if xa.isEmpty && xb.isEmpty then none else some (r, xa.toArray, xb.toArray)
-  return { root, layouts, parts := u.parts.map fun (j, b) => (digests.getD j "", b), own, ins := t.ins, outs := t.outs,
-           inCols := u.inCols, bind := u.delta.filterMap fun (r, src) => src.map (r, ·.toArray), cross }
+  let layouts ← placed.mapM (placedEntry digests ls done held)
+  return { root, layouts := layouts.toArray, parts := u.parts.map fun (j, b) => (digests.getD j "", b), own := u.size,
+           ins := t.ins, outs := t.outs, inCols := u.inCols, bind := u.delta.filterMap fun (r, src) => src.map (r, ·.toArray),
+           cross := crossOf u }
+
+/-- `List.mapM` in `V`: an `ok` result has one entry per input, each the function's `ok` value there. -/
+theorem mapM_ok {α β : Type} {f : α → V β} : ∀ {xs : List α} {ys : List β}, xs.mapM f = .ok ys →
+    ys.length = xs.length ∧ ∀ i (hx : i < xs.length) (hy : i < ys.length), f xs[i] = .ok ys[i]
+  | [], ys, h => by
+    simp only [List.mapM_nil, pure, Except.pure, Except.ok.injEq] at h
+    subst h; exact ⟨rfl, fun i hx => absurd hx (by simp)⟩
+  | x :: xs, ys, h => by
+    simp only [List.mapM_cons, bind, Except.bind, pure, Except.pure] at h
+    split at h
+    · simp at h
+    rename_i y hy
+    split at h
+    · simp at h
+    rename_i ys' hys
+    simp only [Except.ok.injEq] at h
+    subst h
+    obtain ⟨hl, hi⟩ := mapM_ok hys
+    refine ⟨by simp [hl], fun i hx hy' => ?_⟩
+    cases i with
+    | zero => simpa using hy
+    | succ i => simpa using hi i (by simpa using hx) (by simpa using hy')
+
+/-- A placed layout's entry: its digest, its range's log size, and its net, `placedNet` of its own derivation. -/
+theorem placedEntry_ok {digests : List String} {ls : Array Layout} {done : Array DeriveAll.D} {held : Array Held}
+    {j : Nat} {e : String × Net × Nat} (h : placedEntry digests ls done held j = .ok e) :
+    e.1 = digests.getD j "" ∧ e.2.2 = (ls.getD j default).rangeLog.getD 0 ∧
+      placedNet (ls.getD j default) (done.getD j default) ((digests.getD j "").take 16).toString held = .ok e.2.1 := by
+  unfold placedEntry at h
+  simp only [bind, Except.bind, pure, Except.pure] at h
+  split at h
+  · simp at h
+  rename_i n hn
+  simp only [Except.ok.injEq] at h
+  subst h
+  exact ⟨rfl, rfl, hn⟩
+
+/-- **A placed layout's net is its derivation's** (`netOfD`), with no lookup; a generated read's adds the one its `READ`
+record and held table give (the product rows' table-direct side). -/
+theorem placedNet_spec {l : Layout} {d : DeriveAll.D} {nm : String} {held : Array Held} {n : Net}
+    (h : placedNet l d nm held = .ok n) :
+    ∃ n0, netOfD d nm = .ok n0 ∧ { n with lookup := none } = n0 ∧
+      (l.own = .derive → n.lookup = none) ∧
+      ∀ sha nb vb lo, l.own = .gen sha nb vb lo → ∃ r hd, d.reads.toList = [r] ∧ held.find? (·.sha512 == sha) = some hd ∧
+        n.lookup = some ⟨hd.bytes, r.n, r.lo, r.k, r.prod0, r.loTop⟩ := by
+  have hnone : ∀ {n0 : Net}, netOfD d nm = .ok n0 → n0.lookup = none := by
+    intro n0 h0; unfold netOfD Net.ofRows at h0
+    simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h0
+    repeat' (first | split at h0 | (injection h0 with h0; subst h0))
+    all_goals first | exact absurd h0 (by simp) | rfl
+  unfold placedNet at h
+  split at h
+  · rename_i sha nb vb lo hown
+    simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
+    split at h
+    · rename_i r hr
+      split at h
+      · simp at h
+      split at h
+      · rename_i hd hhd
+        split at h
+        · simp at h
+        rename_i n0 hn0
+        simp only [Except.ok.injEq] at h
+        subst h
+        have h0 := hnone hn0
+        refine ⟨n0, hn0, ?_, by simp [hown], fun sha' nb' vb' lo' h' => ?_⟩
+        · cases n0; simp_all
+        · rw [hown] at h'; cases h'; exact ⟨r, hd, hr, hhd, rfl⟩
+      · simp at h
+    · simp at h
+  · rename_i hown
+    simp only [bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h
+    split at h
+    · simp at h
+    have h0 := hnone h
+    refine ⟨n, h, by cases n; simp_all, fun _ => h0, fun _ _ _ _ h' => by simp [hown] at h'⟩
+
+/-- **A template, as `templateOf` builds it** (for audit-lean's `TemplateLayout`): its root is `netOfD` of the unit's own
+rows, its cross entries and bound rows are the unit's, and its `i`-th placed layout is `placedEntry` of the `i`-th layout
+the unit places. -/
+theorem templateOf_spec {name : String} {done : Array DeriveAll.D} {ls : Array Layout} {unit : Nat} {ty : CircuitType}
+    {held : Array Held} {t : Template} (h : templateOf name done ls unit ty held = .ok t) :
+    let u := done.getD unit default
+    let placed := (List.range ls.size).filter fun j => u.parts.any (·.1 == j)
+    ∃ digests : List String, ls.toList.mapM (·.digest) = .ok digests ∧
+      netOfD (rootOf u) name = .ok t.root ∧ t.own = u.size ∧ t.inCols = u.inCols ∧ t.ins = ty.ins ∧ t.outs = ty.outs ∧
+      t.bind = u.delta.filterMap (fun (r, src) => src.map (r, ·.toArray)) ∧ t.cross = crossOf u ∧
+      t.parts = u.parts.map (fun (j, b) => (digests.getD j "", b)) ∧ t.layouts.size = placed.length ∧
+      ∀ i (hi : i < placed.length) (ht : i < t.layouts.size),
+        placedEntry digests ls done held placed[i] = .ok t.layouts[i] := by
+  intro u placed
+  unfold templateOf at h
+  simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
+  split at h
+  · simp at h
+  split at h
+  · simp at h
+  rename_i root hroot
+  split at h
+  · simp at h
+  rename_i digests hdig
+  split at h
+  · simp at h
+  rename_i lays hlays
+  simp only [Except.ok.injEq] at h
+  subst h
+  obtain ⟨hlen, hi⟩ := mapM_ok hlays
+  refine ⟨digests, hdig, hroot, rfl, rfl, rfl, rfl, rfl, rfl, rfl, by rw [List.size_toArray]; exact hlen, fun i hx ht => ?_⟩
+  rw [List.getElem_toArray]
+  exact hi i hx (by rw [List.size_toArray] at ht; exact ht)
 
 /-- **A typed file, read** (item 1e): its class, its rows derived once through `deriveChecked`, and the nets built from
 them. A flat class is its unit's net (`.inl`), which `HmRow.parse` places first, where the old statement's `CIRCUIT unit`
