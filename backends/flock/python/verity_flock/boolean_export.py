@@ -14,17 +14,20 @@ are the gates live in the unit (they sum to the unit's committed ANDs). Identica
 one node, referenced with instance counts. A subcircuit with children records its parts in order and the wiring between them
 (:func:`_wiring`); a gate list tags each gate with the scope of the innermost named subcircuit that made it.
 
+Every subcircuit type also has a module (:func:`_module`): its own gates, table reads and part calls in the order the
+lowering made them, with each call's inputs bound to the module's wires. Expanding a module (:func:`expand_module`) rebuilds
+the subcircuit's gates to any depth from the modules alone, so no size limit applies to them.
+
     python -m verity_flock.boolean_export --program-graph ROW.program.json --out DIR
 """
 from __future__ import annotations
 
 import argparse
 import bisect
-import dataclasses
 import gc
 import gzip
 import hashlib
-import inspect
+import io
 import json
 import random
 import re
@@ -33,7 +36,9 @@ import time
 from pathlib import Path
 
 from . import fp, gf2, ir_lower as IL, tail_pieces as TP, topp_word as TW, unit as U
-from .gf2 import Circuit, L, const_bits
+from . import circuit_types as CT
+from . import type_trace as TT
+from .gf2 import Circuit, const_bits
 
 SCHEMA = "verity-boolean-circuit/v1"
 #: how a gather from committed weights (the embedding's row, a MoE expert's weights) is sized: "mux", a multiplexer over the
@@ -41,10 +46,6 @@ SCHEMA = "verity-boolean-circuit/v1"
 GATHERS = "mux"
 #: a gather over at most this many candidates is traced as one circuit; a wider one is a composed Definition of its muxes
 GATHER_INLINE = 4096
-GATE_LIMIT = 20000
-OP = {"AND": 0, "XOR": 1, "NOT": 2}
-CONST0, CONST1 = -1, -2
-
 #: traced function -> display name (the id is structural; renaming a display name changes no id)
 DISPLAY = {
     "bf16_to_f32": "bf16→f32", "f32_to_bf16": "f32→bf16 (round)", "unpack": "unpack f32", "round_f32": "round",
@@ -72,113 +73,22 @@ KIND = {"multiply": "multiply", "f32_mul": "multiply", "shr_sticky": "align", "a
         "f32_to_bf16": "round", "lookup": "table", "decode": "table", "bf16_to_f32": "convert", "tc_dot16": "dot-step",
         "group_sum": "add", "compress_columns": "add", "f32_fma": "fma"}
 
-# --- tracing -----------------------------------------------------------------------------------------------------------
+# --- tracing: which named call made each committed bit (circuit-check's attribution of redundant ANDs) --------------------
 
 class _Call:
-    __slots__ = ("fn", "start", "end", "ins", "outs", "kids", "seq0", "seq1", "iports", "oports", "label", "table")
+    __slots__ = ("fn", "start", "end", "kids")
 
     def __init__(self, fn, start):
-        self.fn, self.start, self.end, self.ins, self.outs, self.kids = fn, start, start, [], [], []
-        self.seq0 = self.seq1 = _SEQ[0]
-        self.iports = self.oports = ()
-        self.label = self.table = None
+        self.fn, self.start, self.end, self.kids = fn, start, start, []
 
 
 _T: dict = {"C": None, "stack": None}
-_SEQ = [0]
-
-
-class TL(L):
-    """A linear form made by an XOR or NOT the lowering performed while traced: the gate, its operands, the subcircuit that
-    ran it and its creation order."""
-
-    __slots__ = ("op", "p1", "p2", "nd", "seq")
-
-
-def _mk(op, p1, p2, s, c):
-    t = TL(s, c)
-    t.op, t.p1, t.p2 = op, p1, p2
-    t.nd = _T["stack"][-1]
-    t.seq = _SEQ[0]
-    _SEQ[0] += 1
-    return t
-
-
-def _xor(self, o):
-    s, c = self.s ^ o.s, self.c ^ o.c
-    if _T["stack"] is None or not s:
-        return L(s, c)
-    if not self.s or not o.s:
-        x, k = (o, self) if not self.s else (self, o)
-        return x if k.c == 0 else _mk("NOT", x, None, s, c)
-    return _mk("XOR", self, o, s, c)
-
-
-def _inv(self):
-    if _T["stack"] is None or not self.s:
-        return L(self.s, self.c ^ 1)
-    return _mk("NOT", self, None, self.s, self.c ^ 1)
-
-
-_new_orig = Circuit._new
-
-
-def _new(self, kind, data):
-    w = _new_orig(self, kind, data)
-    seq = self.__dict__.setdefault("seq", [])
-    seq.append(_SEQ[0])
-    _SEQ[0] += 1
-    return w
-
-
-def _bits(x, out):
-    if isinstance(x, L):
-        out.append(x)
-    elif isinstance(x, (list, tuple)):
-        for y in x:
-            _bits(y, out)
-    elif dataclasses.is_dataclass(x) and not isinstance(x, type):
-        for f in dataclasses.fields(x):
-            _bits(getattr(x, f.name), out)
-
-
-_SIG: dict = {}
-
-
-def _tc_label(fn, a, k) -> str:
-    """A tensor-core k-step's display name from its parameters: the IR step whose (groups, W, F) they are."""
-    ba = inspect.signature(fn).bind(*a, **k)
-    ba.apply_defaults()
-    got = (tuple(ba.arguments["groups"]), ba.arguments["W"], ba.arguments["F"])
-    step = next((pid.removesuffix("_v1") for pid, (g, W, F) in IL.TC_STEPS.items() if (tuple(g), W, F) == got),
-                f"groups {got[0]}, W {got[1]}, F {got[2]}")
-    return f"tensor-core k-step ({step}, total)"
-
-
-def _arg_names(fn) -> tuple[list[str], str | None]:
-    if fn not in _SIG:
-        try:
-            ps = list(inspect.signature(fn).parameters.values())
-        except (TypeError, ValueError):
-            ps = []
-        _SIG[fn] = ([p.name for p in ps if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD)],
-                    next((p.name for p in ps if p.kind == p.VAR_POSITIONAL), None))
-    return _SIG[fn]
-
-
-def _ports(items, out) -> tuple:
-    """Flatten ``(name, value)`` items' bits into ``out``; the ``(name, width)`` of each item with bits."""
-    ports = []
-    for name, x in items:
-        n = len(out)
-        _bits(x, out)
-        if len(out) > n:
-            ports.append((name, len(out) - n))
-    return tuple(ports)
 
 
 def _wrap(name, fn):
     def w(*a, **k):
+        if TT._S["on"]:
+            return TT.call(name, fn, a, k)
         st = _T["stack"]
         if st is None:
             return fn(*a, **k)
@@ -190,29 +100,10 @@ def _wrap(name, fn):
         st[-1].kids.append(node)
         st.append(node)
         try:
-            r = fn(*a, **k)
+            return fn(*a, **k)
         finally:
             st.pop()
-        node.end = len(_T["C"].kind) if _T["C"] is not None else node.start
-        node.seq1 = _SEQ[0]
-        pos, var = _arg_names(fn)
-        node.iports = _ports([(pos[i] if i < len(pos) else f"{var or 'arg'}[{i - len(pos)}]", x) for i, x in enumerate(a)
-                              if not isinstance(x, Circuit)] + list(k.items()), node.ins)
-        if isinstance(r, tuple):
-            outs = [(f"out{i}", x) for i, x in enumerate(r)]
-        elif dataclasses.is_dataclass(r) and not isinstance(r, type):
-            outs = [(f.name, getattr(r, f.name)) for f in dataclasses.fields(r)]
-        else:
-            outs = [("out", r)]
-        node.oports = _ports(outs, node.outs)
-        if name == "table_read":
-            node.table = a[1]
-            node.label = f"{a[1]} table (plain gates)"
-        if name == "tc_dot16":
-            node.label = _tc_label(fn, a, k)
-        if name == "tc_dot_e4m3":
-            node.label = "tensor-core k-step (HopperE4m3QgmmaDot32, total)"
-        return r
+            node.end = len(_T["C"].kind) if _T["C"] is not None else node.start
 
     w.__wrapped__ = fn
     return w
@@ -242,575 +133,180 @@ def _patch():
     IL.PIECES.wrap = _wrap
     for k, (f, ins, out) in list(TW.OPS.items()):
         TW.OPS[k] = (wrapped.get(id(f), f), ins, out)
-    L.__xor__, L.inv, Circuit._new = _xor, _inv, _new
     _PATCHED = True
 
 
 def trace(build) -> tuple[Circuit, _Call]:
-    """Run ``build()`` (returns the Circuit it built) with the named functions traced."""
+    """Run ``build()`` (returns the Circuit it built) with the named functions traced: which call made each committed bit."""
     _patch()
     root = _Call("root", 0)
     _T.update(C=None, stack=[root])
     try:
         C = build()
     finally:
-        _T["stack"] = None
+        _T.update(C=None, stack=None)
     root.end = len(C.kind)
-    root.seq1 = _SEQ[0]
-    root.iports = _ports(list(C.inputs.items()), root.ins)
-    root.oports = _ports(list(C.outputs.items()), root.outs)
     return C, root
 
 
-# --- analysis: counts, structural ids, gate lists ----------------------------------------------------------------------
+# --- a table read's gates -----------------------------------------------------------------------------------------------
 
-#: low decoder bits of M0's table circuits (``live/src/lookup.rs``) per index width of its MUFU tables; the high decoder takes the rest
-LOOKUP_LO = {24: 14, 23: 13}
+#: a read's low index bits by index width: the prover's inline read (``ir_lower.READ_LO``, constant design step 1: 14 for the
+#: measured MUFU tables' widths); another width takes the split with the fewest rows
+READ_LO = {24: 14, 23: 14}
 _TABLE_GATES: dict[str, dict] = {}
 
 
 def _decode_ands(k: int) -> int:
-    return 0 if k == 1 else (1 << k) + _decode_ands(k // 2) + _decode_ands(k - k // 2)
-
-
-def _lo_bits(n: int, bits: int) -> int:
-    """M0's split for the MUFU tables' widths; for another table the split with the fewest ANDs."""
-    return LOOKUP_LO.get(n) or min(range(1, n), key=lambda lo: _decode_ands(lo) + _decode_ands(n - lo) + bits * (1 << (n - lo)))
+    return 0 if k <= 1 else (1 << k) + _decode_ands(k // 2) + _decode_ands(k - k // 2)
 
 
 def table_gates(table: str) -> dict:
-    """The plain gate circuit that reads a pinned constant table (M0's, ``live/src/lookup.rs``): one-hot decoders of the index's
-    low and high bits (each minterm the AND of two half minterms, a NOT per index bit), per value bit j and high minterm h one
-    AND of h with the XOR of the low minterms whose table word has bit j set, each value bit the XOR of its products. The
-    table is constants in those XOR sums; the gates are counted over it, too many to list."""
+    """The plain gate circuit of a read of a pinned table, as the prover lays it out (``ir_lower._Read``, constant design step
+    1): one-hot decoders of the index's low and high bits (each minterm the AND of two half minterms, a NOT per index bit); per
+    value bit j and high minterm h an AND of h with the XOR of the low minterms whose word has bit j set, where that XOR is not
+    empty; each value bit the XOR of its products. A library table's bits that are constant over the whole table get no gates
+    (they are its constant); a program table's every bit does. The table is constants in the XOR sums."""
     if table not in _TABLE_GATES:
         import numpy as np
+        from verity.ml import library
 
-        n, bits = TP.TABLE_BITS[table], TP.TABLE_VALUE_BITS.get(table, TP.VALUE_BITS)
-        lo = _lo_bits(n, bits)
-        words = np.asarray(gf2.table(table), dtype=np.uint32).reshape(1 << (n - lo), 1 << lo)
-        xor = bits * ((1 << (n - lo)) - 1)
+        n, width = TP.TABLE_BITS[table], TP.TABLE_VALUE_BITS.get(table, TP.VALUE_BITS)
+        words = np.asarray(gf2.table(table), dtype=np.uint32)
+        lib = library.table_label(TT.table_sha512(table)) == library.LIBRARY
+        bits = [j for j in range(width) if not (lib and (((words >> np.uint32(j)) & np.uint32(1)).all()
+                                                         or not ((words >> np.uint32(j)) & np.uint32(1)).any()))]
+        lo = READ_LO.get(n) or min(range(2, n - 1), key=lambda lb: (1 << lb) + (1 << (n - lb)) * (len(bits) + 1))
+        seg = words.reshape(1 << (n - lo), 1 << lo)
+        ands, xor = _decode_ands(lo) + _decode_ands(n - lo), 0
         step = max(1, (1 << 22) >> lo)
-        for r in range(0, words.shape[0], step):
-            w = words[r:r + step]
-            for j in range(bits):
-                c = ((w >> j) & 1).sum(axis=1, dtype=np.int64)
+        for j in bits:
+            prods = 0
+            for r in range(0, seg.shape[0], step):
+                c = ((seg[r:r + step] >> np.uint32(j)) & np.uint32(1)).sum(axis=1, dtype=np.int64)
+                prods += int((c > 0).sum())
                 xor += int(np.maximum(c - 1, 0).sum())
-        _TABLE_GATES[table] = {"and": _decode_ands(lo) + _decode_ands(n - lo) + bits * (1 << (n - lo)), "xor": xor, "not": n,
-                               "kind": "table", "table": table, "table_sha256": TP.table_sha256(table), "index_bits": n,
-                               "value_bits": bits, "low_index_bits": lo,
-                               "built_by": "M0's table circuit (backends/flock/live/src/lookup.rs, verity PR #83): one-hot decoders "
-                                           "of the index halves, an AND per value bit and high minterm, XOR-summed outputs, the "
-                                           "table as constants"}
+            ands += prods
+            xor += max(prods - 1, 0)
+        del words, seg
+        _TABLE_GATES[table] = {"and": ands, "xor": xor, "not": n, "table": table, "sha512": TT.table_sha512(table),
+                               "index_bits": n, "value_bits": width, "live_value_bits": len(bits), "low_index_bits": lo,
+                               "label": library.LIBRARY if lib else library.PROGRAM,
+                               "built_by": "the prover's inline read (verity_flock.ir_lower._Read, constant design step 1)"}
     return _TABLE_GATES[table]
 
 
+def _read_cost(entry: tuple) -> dict:
+    return table_gates(TT.table_name(entry[0]))
+
+
+# --- the circuit types ---------------------------------------------------------------------------------------------------
+
+def _display(fn: str) -> str:
+    return DISPLAY.get(fn, fn)
+
+
+def _evaluate_type(types: dict, d: str, C: Circuit, T: int = 64, seed: int = 0) -> bool:
+    """Type ``d`` (the root of ``C``'s types) against the flat circuit ``C`` on T random vectors."""
+    rng = random.Random(seed)
+    ins = {name: [rng.getrandbits(T) for _ in bits] for name, bits in C.inputs.items()}
+    want, _fail = C.evaluate(ins, T)
+    words: dict[str, object] = {}
+
+    def word(sha, i):
+        if sha not in words:
+            words[sha] = gf2.table(TT.table_name(sha))
+        return int(words[sha][i])
+
+    got = CT.evaluate(types, d, [x for bits in ins.values() for x in bits], T, word)
+    return got == [x for bits in want.values() for x in bits]
+
+
 class Registry:
-    """Node types by structural hash, across units, templates and rows."""
+    """Every circuit type (`circuit_types`) the export builds, by its digest: each distinct sub-circuit once, shared across
+    templates and rows, with its names and counts as metadata."""
 
-    def __init__(self, out: Path):
+    def __init__(self, out: Path | None = None):
         self.nodes: dict[str, dict] = {}
-        self.gates_dir = out / "gates"
-        self.gates_dir.mkdir(parents=True, exist_ok=True)
-        self.verified = self.tag_scopes = self.tag_and_differs = 0
-        self.wiring_compared = self.wiring_differs = 0
+        self.types: dict[str, CT.CircuitType] = {}
+        self.counts: dict[str, dict] = {}
+        self.roots = self.evaluated = 0
+        #: per root: the flat circuit's ANDs and its types' (their difference: the sharing a type boundary stops)
+        self.shared: list[tuple[str, int, int]] = []
 
-    def _tag_ands(self, gl) -> int:
-        """Tag scopes whose subtree's tagged ANDs differ from their subcircuit's ``and`` (a list holds every gate its outputs
-        need; the tree counts the gates live in the unit)."""
-        sc, g, tags = gl["tag_scopes"], gl["gates"], gl["tags"]
-        n = [0] * len(sc)
-        for i, t in enumerate(tags):
-            if g[3 * i] == 0:
-                n[t] += 1
-        for i in range(len(sc) - 1, 0, -1):
-            n[sc[i][1]] += n[i]
-        return sum(n[i] != self.nodes[s[0]]["and"] for i, s in enumerate(sc))
+    def type_of(self, build, name: str, kind: str, label: str | None = None) -> str:
+        """The type of the circuit ``build()`` makes, and every type below it: validated, the root evaluated against the flat
+        circuit. Returns the root's digest."""
+        from verity.ml import library
 
-    def analyse(self, C: Circuit, root: _Call, name: str, kind: str, list_root: bool = False) -> str:
-        live = C.live()
-        is_and = [k == "and" for k in C.kind]
-        data = C.data
-        memo: dict[str, _Call] = {}
-        owner = [root] * len(C.kind)
+        _patch()
+        types, root, names = TT.trace_types(build, label or library.PROGRAM)
+        for d, t in types.items():
+            if d not in self.types:
+                CT.validate(t, lambda x: types.get(x) or self.types[x])
+        C = build()
+        if not _evaluate_type(types, root, C):
+            raise AssertionError(f"the types of {name} disagree with its circuit")
+        self.evaluated += 1
+        for d, t in types.items():
+            self.types.setdefault(d, t)
+        for d, t in types.items():
+            self._record(d, t, names.get(d, "root"), name if d == root else None, kind if d == root else None)
+        self.roots += 1
+        reads = sum(table_gates(TT.table_name(e[0]))["and"] * n for e, n in self._reads(root).items())
+        flat = C.counts()["ands"]
+        self.shared.append((name, flat, self.nodes[root]["and"] - reads))
+        self.nodes[root]["flat_and"] = flat + reads
+        del C
+        return root
 
-        def own_range(node):
-            for k in node.kids:
-                own_range(k)
-            for v in range(node.start, node.end):
-                if owner[v] is root:
-                    owner[v] = node
-        for k in root.kids:
-            own_range(k)
-        xn: dict[int, list[int]] = {}
-        seen: set[int] = set()
+    def _reads(self, d: str, memo: dict | None = None) -> dict:
+        memo = {} if memo is None else memo
+        if d not in memo:
+            t, out = self.types[d], {}
+            for it in t.items:
+                if it[0] == CT.READ:
+                    out[t.tables[it[1]]] = out.get(t.tables[it[1]], 0) + 1
+                elif it[0] == CT.CALL:
+                    for e, n in self._reads(t.calls[it[1]], memo).items():
+                        out[e] = out.get(e, 0) + n
+            memo[d] = out
+        return memo[d]
 
-        def charge(f, user):
-            stack = [(f, user)]
-            while stack:
-                x, u = stack.pop()
-                if id(x) in seen:
-                    continue
-                seen.add(id(x))
-                if isinstance(x, TL):
-                    e = xn.setdefault(id(x.nd), [0, 0])
-                    e[0 if x.op == "XOR" else 1] += 1
-                    stack.append((x.p1, x.nd))
-                    if x.p2 is not None:
-                        stack.append((x.p2, x.nd))
-                elif len(x.s) > 1 or (x.s and x.c):
-                    e = xn.setdefault(id(u), [0, 0])
-                    e[0] += len(x.s) - 1
-                    e[1] += x.c
-        for v in live:
-            if is_and[v]:
-                for f in data[v]:
-                    charge(f, owner[v])
-        for bits in C.outputs.values():
-            for f in bits:
-                charge(f, root)
-
-        def visit(node):
-            kid_ids = [visit(k) for k in node.kids]
-            covered = set()
-            for k in node.kids:
-                covered.update(range(k.start, k.end))
-            own = [v for v in range(node.start, node.end) if is_and[v] and v in live and v not in covered]
-            xor, nots = xn.get(id(node), (0, 0))
-            ext = {}
-            for i, f in enumerate(node.ins):
-                if len(f.s) == 1 and f.c == 0:
-                    (v,) = tuple(f.s)
-                    if not node.start <= v < node.end:
-                        ext.setdefault(v, i)
-            extra: dict[int, int] = {}
-
-            def lab(v):
-                if node.start <= v < node.end:
-                    return (0, v - node.start)
-                if v in ext:
-                    return (1, ext[v])
-                return (2, extra.setdefault(v, len(extra)))
-
-            def canon(f):
-                return (tuple(sorted(lab(t) for t in f.s)), f.c)
-
-            h = hashlib.sha256()
-            h.update(json.dumps([node.fn, len(node.ins), len(node.outs), xor, nots] + ([node.label] if node.label else [])).encode())
-            for v in own:
-                a, b = data[v]
-                h.update(repr((v - node.start, canon(a), canon(b))).encode())
-            for (kh, _), k in zip(kid_ids, node.kids):
-                h.update(repr((kh, k.start - node.start)).encode())
-            h.update(repr([canon(f) for f in node.outs]).encode())
-            hid = "sc-" + h.hexdigest()[:16]
-            hid_of[id(node)] = hid
-            slot = table_gates(node.table) if node.fn == "table_read" else None
-            n_and, n_xor, n_not = len(own), xor, nots
-            if slot:
-                n_and, n_xor, n_not = n_and + slot["and"], n_xor + slot["xor"], n_not + slot["not"]
-            children: dict[str, int] = {}
-            for kh, (ka, kx, kn) in kid_ids:
-                n_and, n_xor, n_not = n_and + ka, n_xor + kx, n_not + kn
-                children[kh] = children.get(kh, 0) + 1
-            wires = _wiring(node, data, is_and) if node.kids else None
-            if hid not in self.nodes:
-                fn = node.fn
-                rec = self.nodes[hid] = {
-                    "id": hid, "name": _display(fn, node),
-                    "kind": KIND.get(fn, "piece" if fn in IL.PIECES or fn.endswith("_v1") else "subcircuit"),
-                    "function": fn, "and": n_and, "xor": n_xor, "not": n_not, "in_bits": len(node.ins), "out_bits": len(node.outs),
-                    "in_ports": [list(p) for p in node.iports], "out_ports": [list(p) for p in node.oports],
-                    "children": [{"ref": c, "count": n} for c, n in children.items()],
-                    "own": {"and": len(own), "xor": xor, "not": nots}}
-                if slot:
-                    rec.update(own={k: n_and if k == "and" else n_xor if k == "xor" else n_not for k in ("and", "xor", "not")},
-                               **{k: v for k, v in slot.items() if k not in ("and", "xor", "not")})
-                if wires is not None:
-                    at = {c: i for i, c in enumerate(children)}
-                    rec["parts"] = [at[kh] for kh, _ in kid_ids]
-                    rec["wiring"] = wires
-            elif wires is not None:
-                self.wiring_compared += 1
-                rec = self.nodes[hid]
-                if rec["wiring"] != wires:
-                    merged = _merge_wiring(rec["wiring"], wires, _cuts(node))
-                    if merged is None:
-                        self.wiring_differs += 1
-                    else:
-                        rec["wiring"] = merged
-            memo.setdefault(hid, node)
-            return hid, (n_and, n_xor, n_not)
-
-        hid_of: dict[int, str] = {}
-        rid, _ = visit(root)
-        rec = self.nodes[rid]
-        rec["name"], rec["kind"] = name, kind
-        self._gate_lists(C, root, rid, memo, owner, hid_of, list_root)
-        return rid
-
-    def _gate_lists(self, C, root, rid, memo, owner, hid_of, list_root=False):
-        """Write the gate list of every node type that is at most GATE_LIMIT gates and whose parent is larger (or is a root),
-        once, and with ``list_root`` also the root's (and its lone child's, when that is the whole root) whatever the size;
-        verify each against the circuit on random inputs."""
-        want = set()
-
-        def total(h):
-            n = self.nodes[h]
-            return n["and"] + n["xor"] + n["not"]
-
-        def walk(h, parent_big):
-            n = self.nodes[h]
-            small = total(h) <= GATE_LIMIT
-            if small and parent_big and total(h) > 0:
-                want.add(h)
-            for c in n["children"]:
-                walk(c["ref"], not small)
-
-        walk(rid, True)
-        h = rid
-        while list_root:
-            want.add(h)
-            ch = self.nodes[h]["children"]
-            if len(ch) != 1 or ch[0]["count"] != 1 or total(ch[0]["ref"]) != total(h):
-                break
-            h = ch[0]["ref"]
-        vals, bundle = None, {}
-        for h in sorted(want):
-            rec = self.nodes[h]
-            if rec.get("gates") or h not in memo:
-                continue
-            node = memo[h]
-            gl = gate_list(C, node, owner, hid_of)
-            if vals is None:
-                vals = _evaluate_all(C, 64)
-            _check(gl, node, vals, C)
-            self.verified += 1
-            self.tag_scopes += len(gl["tag_scopes"])
-            self.tag_and_differs += self._tag_ands(gl)
-            bundle[h] = gl
-            rec["gates"] = {"file": f"gates/{rid}.json.gz", "key": h}
-            rec["gate_list"] = {"and": gl["counts"]["and"], "xor": gl["counts"]["xor"], "not": gl["counts"]["not"]}
-        if bundle:
-            (self.gates_dir / f"{rid}.json.gz").write_bytes(gzip.compress(json.dumps(
-                {"schema": SCHEMA + "/gates", "lists": bundle}, separators=(",", ":")).encode(), mtime=0))
+    def _record(self, d: str, t: CT.CircuitType, fn: str, name: str | None, kind: str | None) -> None:
+        if d in self.nodes:
+            return
+        c = TT.counts(self.types, d, _read_cost, self.counts)
+        own = TT.own_counts(t)
+        calls: dict[str, int] = {}
+        reads: dict[tuple, int] = {}
+        for it in t.items:
+            if it[0] == CT.CALL:
+                calls[t.calls[it[1]]] = calls.get(t.calls[it[1]], 0) + 1
+            elif it[0] == CT.READ:
+                reads[t.tables[it[1]]] = reads.get(t.tables[it[1]], 0) + 1
+        fn_kind = "table" if reads and not calls and not own["and"] else KIND.get(fn, "piece" if fn in IL.PIECES else "subcircuit")
+        rec = {"id": d, "name": name or _display(fn), "kind": kind or fn_kind, "function": fn, "label": t.label,
+               "and": c["and"], "xor": c["xor"], "not": c["not"], "in_bits": t.in_bits, "out_bits": t.out_bits,
+               "in": [list(p) for p in t.ins], "out": [list(p) for p in t.outs], "own": own,
+               "children": [{"ref": r, "count": n} for r, n in calls.items()]}
+        if reads:
+            rec["reads"] = [{"table": TT.table_name(e[0]), "sha512": e[0], "index_bits": e[1], "value_bits": e[2], "count": n,
+                             **{k: v for k, v in table_gates(TT.table_name(e[0])).items() if k in ("and", "xor", "not", "label")}}
+                            for e, n in reads.items()]
+        self.nodes[d] = rec
 
 
-def _wiring(node: _Call, data, is_and) -> list[list[int]]:
-    """The dataflow between a node's parts (its child calls, in order): edges ``[src_part, src_port, dst_part, dst_port,
-    width]``, bits ``src_port + i`` -> ``dst_port + i``. Part -1 is the node itself (its input ports as a source, its output
-    ports as a destination); part -2 is a constant (port = its value, the destinations all get it); part -3 is the node's own
-    gates (``own``), unnumbered (port -1): the bits it reads and the bits it makes. ``src_port`` -1 on a part: made inside it
-    but not one of its output ports; part -4: from outside the node without being one of its inputs."""
-    kids = node.kids
-    p_in: dict = {}
-    for i, f in enumerate(node.ins):
-        p_in.setdefault((f.s, f.c), i)
-    sib: dict = {}
-    by_seq = [(k.seq0, k.seq1, m) for m, k in enumerate(kids) if k.seq1 > k.seq0]
-    by_bit = [(k.start, k.end, m) for m, k in enumerate(kids) if k.end > k.start]
-    seq0s, bit0s = [e[0] for e in by_seq], [e[0] for e in by_bit]
-
-    def part(spans, lows, v):
-        i = bisect.bisect_right(lows, v) - 1
-        return spans[i][2] if i >= 0 and v < spans[i][1] else None
-
-    def known(k):
-        if k in p_in:
-            return (-1, p_in[k])
-        return sib.get(k)
-
-    def classify(x):
-        k = (x.s, x.c)
-        got = known(k)
-        if got is not None:
-            return {got}, ()
-        if not x.s:
-            return set(), ()
-        if isinstance(x, TL):
-            if not node.seq0 <= x.seq < node.seq1:
-                return {(-4, -1)}, ()
-            m = part(by_seq, seq0s, x.seq)
-            if m is not None:
-                return {(m, -1)}, ()
-            return set(), (x.p1,) if x.p2 is None else (x.p1, x.p2)
-        direct, deps = set(), []
-        for t in x.s:
-            got = known((frozenset((t,)), 0))
-            if got is not None:
-                direct.add(got)
-            elif node.start <= t < node.end:
-                m = part(by_bit, bit0s, t)
-                if m is not None:
-                    direct.add((m, -1))
-                elif is_and[t]:
-                    deps.extend(data[t])
-                else:
-                    direct.add((-4, -1))
-            else:
-                direct.add((-4, -1))
-        return direct, deps
-
-    bits: list[tuple] = []
-    own_reads: set = set()
-    seen: set[int] = set()
-
-    def reads(x0):
-        stack = [x0]
-        while stack:
-            x = stack.pop()
-            if id(x) in seen:
-                continue
-            seen.add(id(x))
-            direct, deps = classify(x)
-            own_reads.update(direct)
-            stack.extend(deps)
-
-    def edge(sp, sport, dp, dport):
-        bits.append((sp, sport, dp, dport))
-
-    def resolve(f, dp, dport):
-        if not f.s:
-            return edge(-2, f.c, dp, dport)
-        got = known((f.s, f.c))
-        if got is not None:
-            return edge(got[0], got[1], dp, dport)
-        reads(f)
-        edge(-3, -1, dp, dport)
-
-    for m, k in enumerate(kids):
-        for j, f in enumerate(k.ins):
-            resolve(f, m, j)
-        for i, f in enumerate(k.outs):
-            sib.setdefault((f.s, f.c), (m, i))
-    for i, f in enumerate(node.outs):
-        resolve(f, -1, i)
-    for sp, sport in sorted(own_reads):
-        edge(sp, sport, -3, -1)
-    return _runs(bits, _cuts(node))
-
-
-def _cuts(node: _Call) -> tuple[dict, dict]:
-    """The first bit of every port, per part as a source (its outputs; the node's inputs for part -1) and as a destination (its
-    inputs; the node's outputs for part -1)."""
-    def starts(ports):
-        out, o = set(), 0
-        for _, w in ports:
-            out.add(o)
-            o += w
-        return out
-    src = {m: starts(k.oports) for m, k in enumerate(node.kids)}
-    dst = {m: starts(k.iports) for m, k in enumerate(node.kids)}
-    src[-1], dst[-1] = starts(node.iports), starts(node.oports)
-    return src, dst
-
-
-def _runs(bits, cuts) -> list[list[int]]:
-    """Bit edges ``(src_part, src_port, dst_part, dst_port)`` as runs ``[..., width]`` (a constant's or an unnumbered port
-    does not advance), none spanning two ports on either side."""
-    src, dst = cuts
-    edges: list[list[int]] = []
-    for sp, sport, dp, dport in bits:
-        if edges:
-            e = edges[-1]
-            n = e[4]
-            if (e[0] == sp and e[2] == dp and e[1] + (0 if sp == -2 or sport < 0 else n) == sport
-                    and e[3] + (0 if dport < 0 else n) == dport
-                    and not (sp != -2 and sport > 0 and sport in src.get(sp, ())) and not (dport > 0 and dport in dst.get(dp, ()))):
-                e[4] += 1
-                continue
-        edges.append([sp, sport, dp, dport, 1])
-    return edges
-
-
-def _bitwise(edges) -> list[tuple]:
-    return [(sp, sport if sp == -2 or sport < 0 else sport + i, dp, dport if dport < 0 else dport + i)
-            for sp, sport, dp, dport, w in edges for i in range(w)]
-
-
-def _merge_wiring(old, new, cuts):
-    """``old`` with the constants whose value differs in ``new`` as port -1, if that is the only difference; else None."""
-    a, b = _bitwise(old), _bitwise(new)
-    if len(a) != len(b) or any(x[2:] != y[2:] or (x[:2] != y[:2] and not x[0] == y[0] == -2) for x, y in zip(a, b)):
-        return None
-    return _runs([x if x[:2] == y[:2] else (-2, -1) + x[2:] for x, y in zip(a, b)], cuts)
-
-
-def _display(fn, node) -> str:
-    base = node.label or DISPLAY.get(fn, fn)
-    return f"{base} [{len(node.ins)}→{len(node.outs)} bits]"
-
-
-def gate_list(C: Circuit, node: _Call, owner: list, hid_of: dict) -> dict:
-    """The node's gates as an explicit AND/XOR/NOT list, in the order the lowering made them: wires 0..n_in-1 are its inputs
-    (forms made outside it, its argument bits first), each gate appends one wire, -1 / -2 are constants 0 / 1; ``gates`` is
-    flat ``[op, a, b]`` (op 0 AND, 1 XOR, 2 NOT with b = -1). A linear form with no recorded operations (``fp.lookup``'s table
-    sums) is a chain of XORs where it is used. ``tags[g]`` is gate g's scope: ``tag_scopes`` lists the node's call tree in
-    preorder as ``[subcircuit id, parent scope, part index in the parent's parts]`` (scope 0 is the node), and a gate's scope
-    is the innermost named subcircuit that made it (a chain's, the one that used it)."""
-    data, kind, cseq = C.data, C.kind, C.seq
-    lo, hi, s0, s1 = node.start, node.end, node.seq0, node.seq1
-    scopes: list[list] = []
-    scope_of: dict[int, int] = {}
-    todo = [(node, -1, -1)]
-    while todo:
-        n, parent, j = todo.pop()
-        scope_of[id(n)] = len(scopes)
-        scopes.append([hid_of[id(n)], parent, j])
-        todo.extend((k, scope_of[id(n)], i) for i, k in reversed(list(enumerate(n.kids))))
-
-    def inside(x):
-        if isinstance(x, TL):
-            return s0 <= x.seq < s1
-        return len(x.s) == 1 and x.c == 0 and lo <= next(iter(x.s)) < hi and kind[next(iter(x.s))] == "and"
-
-    # the objects the outputs need, inside the node; everything else they reach is an input
-    need_tl: dict[int, TL] = {}
-    need_and: set[int] = set()
-    need_lk: dict[int, int] = {}
-    ext: dict = {}
-    stack = list(node.outs)
-    while stack:
-        x = stack.pop()
-        if isinstance(x, TL):
-            if not s0 <= x.seq < s1:
-                ext.setdefault(("f", id(x)), x)
-                continue
-            if id(x) in need_tl:
-                continue
-            need_tl[id(x)] = x
-            stack.append(x.p1)
-            if x.p2 is not None:
-                stack.append(x.p2)
-            continue
-        for t in x.s:
-            if lo <= t < hi and kind[t] == "and":
-                if t not in need_and:
-                    need_and.add(t)
-                    stack.extend(data[t])
-            else:
-                if lo <= t < hi and kind[t] == "lookup" and data[t][0] not in need_lk:
-                    need_lk[data[t][0]] = t
-                    stack.extend(C.lookups[data[t][0]][1])
-                ext.setdefault(("b", t), L(frozenset((t,)), 0))
-    order: dict = {}
-    origin = []
-    for i, f in enumerate(node.ins):
-        k = ("f", id(f)) if isinstance(f, TL) and not s0 <= f.seq < s1 else (("b", next(iter(f.s))) if len(f.s) == 1 and f.c == 0 else None)
-        if k is not None and k in ext and k not in order:
-            order[k] = len(order)
-            origin.append(["arg", i])
-    for k, x in ext.items():
-        if k not in order:
-            order[k] = len(order)
-            if k[0] == "b" and kind[k[1]] == "lookup":
-                g, j = data[k[1]]
-                origin.append(["table", C.lookups[g][0], j, k[1]])
-            else:
-                origin.append(["ext", k[1]] if k[0] == "b" else ["form", sorted(x.s), x.c])
-    n_in = len(order)
-    gates: list[int] = []
-    tags: list[int] = []
-    cnt = {"and": 0, "xor": 0, "not": 0}
-    nxt = [n_in]
-    cur = [0]
-    wire_tl: dict[int, int] = {}
-    wire_and: dict[int, int] = {}
-    chain: dict = {}
-
-    def emit(op, a, b=-1):
-        gates.extend((OP[op], a, b))
-        tags.append(cur[0])
-        cnt[op.lower()] += 1
-        nxt[0] += 1
-        return nxt[0] - 1
-
-    def bit(t):
-        return wire_and[t] if t in wire_and else order[("b", t)]
-
-    def wire(x):
-        if isinstance(x, TL):
-            return wire_tl[id(x)] if id(x) in wire_tl else order[("f", id(x))]
-        if not x.s:
-            return CONST1 if x.c else CONST0
-        if len(x.s) == 1 and x.c == 0:
-            return bit(next(iter(x.s)))
-        k = x.key()
-        if k not in chain:
-            ts = sorted(x.s)
-            w = bit(ts[0])
-            for t in ts[1:]:
-                w = emit("XOR", w, bit(t))
-            chain[k] = emit("NOT", w) if x.c else w
-        return chain[k]
-
-    items = sorted([(cseq[v], 0, v) for v in need_and] + [(x.seq, 1, x) for x in need_tl.values()], key=lambda e: e[0])
-    for _, typ, x in items:
-        if typ == 0:
-            cur[0] = scope_of[id(owner[x])]
-            a, b = data[x]
-            wire_and[x] = emit("AND", wire(a), wire(b))
-        else:
-            cur[0] = scope_of[id(x.nd)]
-            if x.op == "XOR":
-                wire_tl[id(x)] = emit("XOR", wire(x.p1), wire(x.p2))
-            else:
-                wire_tl[id(x)] = emit("NOT", wire(x.p1))
-    tables = []
-    for g, t in sorted(need_lk.items()):
-        cur[0] = scope_of[id(owner[t])] if id(owner[t]) in scope_of else 0
-        tables.append({"table": C.lookups[g][0], "index": [wire(f) for f in C.lookups[g][1]],
-                        "value": [[data[v][1], order[("b", v)]] for v in range(t, t + C.lookups[g][2]) if ("b", v) in order]})
-    cur[0] = 0
-    outs = [wire(f) for f in node.outs]
-    gl = {"inputs": n_in, "input_origin": origin, "outputs": outs, "gates": gates, "tags": tags, "tag_scopes": scopes, "counts": cnt}
-    if tables:
-        gl["tables"] = tables
-    return gl
-
-
-def _evaluate_all(C: Circuit, T: int) -> list[int]:
-    rng = random.Random(101)
-    return C.values({name: [rng.getrandbits(T) for _ in bits] for name, bits in C.inputs.items()}, T)[0]
-
-
-def _ev(f, val, mask):
-    x = mask if f.c else 0
-    for t in f.s:
-        x ^= val[t]
-    return x
-
-
-def _check(gl, node, val, C: Circuit | None = None, T: int = 64):
-    mask = (1 << T) - 1
-    w = []
-    for o in gl["input_origin"]:
-        if o[0] == "arg":
-            w.append(_ev(node.ins[o[1]], val, mask))
-        elif o[0] == "ext":
-            w.append(val[o[1]])
-        elif o[0] == "table":
-            w.append(val[o[3]])
-        else:
-            w.append(_ev(L(frozenset(o[1]), o[2]), val, mask))
-    g = gl["gates"]
-    for i in range(0, len(g), 3):
-        op, a, b = g[i], g[i + 1], g[i + 2]
-        va = mask if a == CONST1 else 0 if a == CONST0 else w[a]
-        if op == 2:
-            w.append(va ^ mask)
-            continue
-        vb = mask if b == CONST1 else 0 if b == CONST0 else w[b]
-        w.append(va & vb if op == 0 else va ^ vb)
-    for lk in gl.get("tables", ()):
-        t = gl["input_origin"][lk["value"][0][1]][3] if lk["value"] else None
-        idx = [mask if o == CONST1 else 0 if o == CONST0 else w[o] for o in lk["index"]]
-        if t is not None and idx != [_ev(f, val, mask) for f in C.lookups[C.data[t][0]][1]]:
-            raise AssertionError(f"gate list of {node.fn}: a table read's index wires disagree with the circuit")
-    got = [mask if o == CONST1 else 0 if o == CONST0 else w[o] for o in gl["outputs"]]
-    want = [_ev(f, val, mask) for f in node.outs]
-    if got != want:
-        raise AssertionError(f"gate list of {node.fn} disagrees with the circuit")
+def write_modules(reg: Registry, path: Path) -> int:
+    """``modules.json.gz``: ``{schema, format, types: {digest: content}}`` (``circuit_types``' content, its digest the key),
+    streamed; returns its bytes."""
+    with open(path, "wb") as raw, gzip.GzipFile(fileobj=raw, mode="wb", compresslevel=6, mtime=0) as gz, \
+            io.TextIOWrapper(gz, encoding="utf-8") as f:
+        f.write(json.dumps({"schema": SCHEMA + "/modules", "format": CT.FORMAT})[:-1] + ',"types":{')
+        for n, d in enumerate(sorted(reg.types)):
+            f.write(("," if n else "") + json.dumps(d) + ":" + reg.types[d].canonical().decode())
+        f.write("}}")
+    return path.stat().st_size
 
 
 # --- the definition walker (templates without a C-Flock unit lowering, attention per T, GEMM coordinates) ---------------
@@ -951,6 +447,10 @@ def _const_value(fn: str):
     return None
 
 
+#: a lane counter's value: a different constant at every step of its scan
+COUNTER = object()
+
+
 class Walker:
     """Definitions as trees: children are sub-definitions (``call`` x1, ``batch`` / ``scan`` x n) and primitive leaves; a
     tensor-core step is the proof unit; another primitive is its ir_lower piece (lowered once per operand signature, constant
@@ -982,9 +482,9 @@ class Walker:
                     acc = C.input("in32", 32)
                     C.output("out0", fp.tc_dot16(C, acc, a, b, groups=groups, W=W, F=F))
                     return C
-            C, root = trace(build)
-            self.cache[key] = self.reg.analyse(C, root, f"tensor-core k-step unit ({pid}, total)", "tc-step", list_root=True)
-            del C, root
+            from verity.ml import library
+
+            self.cache[key] = self.reg.type_of(build, f"tensor-core k-step unit ({pid}, total)", "tc-step", library.definition_label(pid))
             gc.collect()
         return self.cache[key]
 
@@ -1011,14 +511,12 @@ class Walker:
                     C.output("out0", IL.PIECES[pid](C, *ops))
                     return C
                 try:
-                    C, root = trace(build)
-                    self.cache[ck] = self.reg.analyse(C, root, f"{pid} (outside the units)", "piece")
-                    del C, root
+                    self.cache[ck] = self.reg.type_of(build, f"{pid} (outside the units)", "piece")
                     gc.collect()
                 except Exception as e:  # noqa: BLE001  (the piece does not take these operands)
                     self.cache[ck] = str(e)
             got = self.cache[ck]
-            if not got.startswith("sc-"):
+            if got not in self.reg.nodes:
                 return {"not_yet_lowered": pid, "in_bits": sum(free), "out_bits": sum(p.ret.leaf_widths()), "reason": got}
             return {"ref": got}
         if not free:
@@ -1032,9 +530,7 @@ class Walker:
         ck = ("gather", V)
         if ck not in self.cache:
             def traced(name, build):
-                C, root = trace(build)
-                rid = self.reg.analyse(C, root, name, "piece")
-                del C, root
+                rid = self.reg.type_of(build, name, "piece")
                 gc.collect()
                 return rid
 
@@ -1072,10 +568,8 @@ class Walker:
         """The subcircuit of ``topp_word`` piece ``name`` with constant operands ``key``."""
         ck = ("tw", name, key)
         if ck not in self.cache:
-            C, root = trace(lambda: TW.build(name, key))
             consts = ", ".join(f"operand {j} = 0x{c:x}" for j, c in enumerate(key) if c is not None)
-            self.cache[ck] = self.reg.analyse(C, root, TW.NAMES[name] + (f" ({consts})" if consts else ""), "piece")
-            del C, root
+            self.cache[ck] = self.reg.type_of(lambda: TW.build(name, key), TW.NAMES[name] + (f" ({consts})" if consts else ""), "piece")
             gc.collect()
         return self.cache[ck]
 
@@ -1114,12 +608,18 @@ class Walker:
         self.cache[ck] = top
         return top
 
-    def walk(self, did: str) -> str:
-        rid = "def-" + hashlib.sha256(did.encode()).hexdigest()[:16]
+    def walk(self, did: str, counters: frozenset = frozenset()) -> str:
+        """Definition ``did`` as a tree. Constants propagate: a gate whose operands are all constant is folded (constant-api
+        §1.3: constant sub-circuits are folded before the partition), as are a scan's lane counters (a carry leaf the step
+        advances from constants alone: ``counters``, of the step's carry parameter), and a gate reading a constant is lowered
+        with it; a gate reading a lane counter with free operands is lowered generic, as a unit's past its constant variants."""
+        tag = did if not counters else f"{did}|lane counters {sorted(counters)}"
+        rid = "def-" + hashlib.sha256(tag.encode()).hexdigest()[:16]
         if rid in self.defs:
             return rid
         d = self.store.get(did)
-        rec = {"id": rid, "name": did, "kind": "definition", "children": []}
+        name = did if not counters else f"{did} (carry leaf {', '.join(str(j) for _, j in sorted(counters))} a lane counter)"
+        rec = {"id": rid, "name": name, "kind": "definition", "children": []}
         self.defs[rid] = rec
         if d is None:
             rec.update(kind="not-yet-lowered", reason="definition not in the program graphs' store")
@@ -1137,49 +637,108 @@ class Walker:
             ps = d["body"]["params"]
             opens = {"table": next(p[0] for p in ps if p[1][0] == "Array"), "index": next(p[0] for p in ps if p[1][0] == "Value"),
                      "committed": "weights"}
-        for n in nodes:
+        cval: dict[int, object] = {}
+
+        def const_of(ref):
+            if not ref or ref[3] != 1:
+                return None
+            if ref[0] == "n":
+                return cval.get(ref[1]) if ref[2] == 0 else None
+            return COUNTER if ref[0] == "p" and (ref[1], ref[2]) in counters else None
+
+        for i, n in enumerate(nodes):
             fn, form = n["fn"], n["form"]
             count = n.get("n", 1) if form in ("batch", "scan") else 1
-            if _const_value(fn) is not None:
+            if (c := _const_value(fn)) is not None:
+                cval[i] = c
                 continue
             if opened and fn.startswith("Gather"):
                 self.openings.add(fn)
                 agg.setdefault(("open", fn), [{"commitment_opening": fn, "kind": "opening", "opens": opens, "reason": opened}, 0])[1] += count
                 continue
             if fn in self.store.ix and (self.store.get(fn) or {}).get("form") == "composite":
-                key = ("def", fn)
-                agg.setdefault(key, [{"def": self.walk(fn)}, 0])[1] += count
+                sub = self._counters(n, fn, const_of) if form == "scan" else frozenset()
+                k = ("def", fn, sub)
+                agg.setdefault(k, [{"def": self.walk(fn, sub)}, 0])[1] += count
                 continue
             consts = []
-            for a in n.get("args", []):
+            axes = n.get("axes") or [0] * len(n.get("args", []))
+            for a, ax in zip(n.get("args", []), axes):
                 ref = (a.get("refs") or {}).get("affine")
-                c = None
-                if form == "primitive" and ref and ref[0] == "n" and ref[3] == 1:
-                    src = nodes[ref[1]]
-                    c = _const_value(src["fn"]) if src.get("form") == "primitive" else None
-                consts.extend([c] * (len(_words(a["type"])) if form == "primitive" else 1))
-            key = ("prim", fn, tuple(consts) if form == "primitive" else ())
-            if key not in agg:
-                e = self._leaf(fn, key[2], count)
+                if form == "primitive":
+                    consts.extend([const_of(ref)] * len(_words(a["type"])))
+                elif form == "batch" and ax is None:
+                    consts.extend([const_of(ref)] * len(_words(a["type"])))
+                elif form == "batch" and a["type"][0] == "Array":
+                    consts.extend([None] * len(_words(a["type"][2])))
+                else:
+                    consts = None
+                    break
+            if consts and all(c is not None for c in consts):
+                v = self._fold(fn, consts) if form == "primitive" else COUNTER
+                if v is not None:
+                    if form == "primitive":
+                        cval[i] = v
+                    continue
+            consts = [None if c is COUNTER else c for c in consts] if consts is not None else None
+            k = ("prim", fn, tuple(consts) if consts and any(c is not None for c in consts) or form == "primitive" and consts
+                 else ())
+            if k not in agg:
+                e = self._leaf(fn, k[2], count)
                 if e is None:
                     continue
-                agg[key] = [e, 0]
-            agg[key][1] += count
+                agg[k] = [e, 0]
+            agg[k][1] += count
         rec["children"] = [dict(e, count=c) for e, c in agg.values()]
         self._total(rec)
         return rid
+
+    def _fold(self, pid: str, consts: list):
+        """A gate of constant (or lane-counter) operands: its value, COUNTER when a counter reads into it, or None when it
+        cannot be folded here (not one word, or no evaluator)."""
+        p = prims().get(pid) or _width_prim(pid)
+        if p is None or len(p.ret.leaf_widths()) != 1:
+            return None
+        if any(c is COUNTER for c in consts):
+            return COUNTER
+        try:
+            return int(p.evaluate(*consts))
+        except Exception:  # noqa: BLE001  (an evaluator over arrays, or a partial one: leave the gate to its piece)
+            return None
+
+    def _counters(self, n: dict, step: str, const_of) -> frozenset:
+        """A scan's lane counters: the carry leaves whose initial value is constant and that the step advances from that leaf
+        and constants alone (``TokenSelect``'s index, the Gumbel select's lane)."""
+        init = (n["args"][0].get("refs") or {}) if n.get("args") else {}
+        body = (self.store.get(step) or {}).get("body") or {}
+        ret = body.get("ret") or {}
+        if "concat" not in init or "concat" not in ret or "concat" not in (ret["concat"][0] or {}):
+            return frozenset()
+        snodes = body["nodes"]
+        out = set()
+        for j, (lr, orf) in enumerate(zip(init["concat"], ret["concat"][0]["concat"])):
+            o = orf.get("affine")
+            if const_of(lr.get("affine")) is None or not o or o[0] != "n" or o[3] != 1:
+                continue
+            sn = snodes[o[1]]
+            refs = [(a.get("refs") or {}).get("affine") for a in sn.get("args", [])]
+            if sn["form"] == "primitive" and refs and any(r and r[0] == "p" for r in refs) and all(
+                    r and r[3] == 1 and ((r[0] == "p" and r[1] == 0 and r[2] == j)
+                                         or (r[0] == "n" and _const_value(snodes[r[1]]["fn"]) is not None)) for r in refs):
+                out.add((0, j))
+        return frozenset(out)
 
     def _leaf(self, pid, consts, count):
         return self.prim(pid, consts)
 
     def _total(self, rec):
-        t = {"and": 0, "xor": 0, "not": 0, "not_yet_lowered": 0}
+        t = {"and": 0, "xor": 0, "not": 0, "flat_and": 0, "not_yet_lowered": 0}
         opened = 0
         for c in rec["children"]:
             if "def" in c:
                 s = self.defs[c["def"]]
                 for k in t:
-                    t[k] += s.get(k, 0) * c["count"]
+                    t[k] += s.get(k, s.get("and", 0) if k == "flat_and" else 0) * c["count"]
                 opened += s.get("commitment_openings", 0) * c["count"]
                 if s["kind"] == "not-yet-lowered":
                     t["not_yet_lowered"] += c["count"]
@@ -1187,6 +746,7 @@ class Walker:
                 n = self.reg.nodes[c["ref"]]
                 for k in ("and", "xor", "not"):
                     t[k] += n[k] * c["count"]
+                t["flat_and"] += n.get("flat_and", n["and"]) * c["count"]
             elif "commitment_opening" in c:
                 opened += c["count"]
             else:
@@ -1234,9 +794,9 @@ class Commitments:
             rec = self._primitive(fn, fid, WQ)
         elif (sep := WQ._separable(fn)) is not None:
             rec = self._combine(fid, fn.gates, [(self.records[self.of(c)], m) for c, m in sep])
-        elif fn.gates > WQ.MAX_GATES:
+        elif fn.gates > (limit := WQ.gate_limit(fn)):
             rec = _empty(fid, fn.gates)
-            rec["violations"] = [{"class": "too-large", "gates": fn.gates, "limit": WQ.MAX_GATES}]
+            rec["violations"] = [{"class": "too-large", "gates": fn.gates, "limit": limit}]
         else:
             rec = self._partition(fn, fid, WQ)
         self.records[fid] = rec
@@ -1514,7 +1074,7 @@ OPENED = {
     "EmbeddingShard_v1": "checked by opening the tensor-parallel shard of the committed embedding table at the token's row "
                          "(a commitment opening, not a circuit)",
 }
-DOT_SEMANTICS = {"AmpereBF16TcDot16_v1": "sm80.mma.m16n8k16.bf16"}
+DOT_SEMANTICS = {"AmpereBF16TcDot16_v1": "sm80.mma.m16n8k16.bf16", "AmpereBF16TcDot16_v2": "sm80.mma.m16n8k16.bf16"}
 
 
 def _params(tname: str, tp: dict) -> dict:
@@ -1530,18 +1090,34 @@ def _params(tname: str, tp: dict) -> dict:
     return out
 
 
+def _constants(call) -> dict[int, int]:
+    """The gates of ``call`` whose value is a constant: its Const gates, and every one-word gate whose operands all are (a
+    constant sub-circuit, folded before the partition: constant-api §1.3)."""
+    cval: dict[int, int] = {}
+    for g in call:
+        fam = getattr(g.prim, "family", None)
+        if fam == "Const":
+            cval[g.index] = int(g.prim.evaluate())
+        elif fam != "Input" and g.operands and all(o in cval for o in g.operands) and len(g.prim.ret.leaf_widths()) == 1:
+            try:
+                cval[g.index] = int(g.prim.evaluate(*[cval[o] for o in g.operands]))
+            except Exception:  # noqa: BLE001  (a partial evaluator: leave the gate to its piece)
+                pass
+    return cval
+
+
 def _tail(reg: Registry, units, target, cache: dict) -> list[dict]:
     """The template's gates outside its units: each (primitive, constant operands) once with its count, lowered with its
     ``ir_lower`` piece where one exists, else marked not yet lowered."""
     _prog, call = IL.standalone(target)
     by = {g.index: g for g in call}
+    cval = _constants(call)
     groups: dict = {}
     for g in units.tail:
         fam = getattr(g.prim, "family", None)
-        if fam in ("Input", "Const"):
+        if fam in ("Input", "Const") or g.index in cval:
             continue
-        consts = tuple(int(by[o].prim.evaluate()) if o in by and getattr(by[o].prim, "family", None) == "Const" else None
-                       for o in g.operands)
+        consts = tuple(cval.get(o) for o in g.operands)
         widths = tuple(by[o].prim.ret.w for o in g.operands)
         key = (g.prim.id, consts, widths)
         if key not in groups:
@@ -1559,13 +1135,11 @@ def _tail(reg: Registry, units, target, cache: dict) -> list[dict]:
                     C.output("out0", IL.PIECES[pid](C, *ops))
                     return C
                 try:
-                    C, root = trace(build)
-                    cache[ck] = reg.analyse(C, root, f"{pid} (outside the units)", "piece")
-                    del C, root
+                    cache[ck] = reg.type_of(build, f"{pid} (outside the units)", "piece")
                     gc.collect()
                 except Exception as e:  # noqa: BLE001  (the piece does not take these operands)
                     cache[ck] = str(e)
-            if not cache[ck].startswith("sc-"):
+            if cache[ck] not in reg.nodes:
                 out.append({"not_yet_lowered": pid, "count": n, "in_bits": sum(free), "out_bits": prim.ret.w, "reason": cache[ck]})
                 continue
             out.append({"ref": cache[ck], "count": n})
@@ -1590,9 +1164,7 @@ def _io_bits(target) -> tuple[int, int]:
 def _unit(reg: Registry, units, name: str, cache: dict) -> str:
     key = ("unit", units.signature if units.builder is None else "tc")
     if key not in cache:
-        C, root = trace(units.circuit)
-        cache[key] = reg.analyse(C, root, name, "c-flock-unit")
-        del C, root
+        cache[key] = reg.type_of(units.circuit, name, "c-flock-unit")
         gc.collect()
     return cache[key]
 
@@ -1619,7 +1191,7 @@ def template(reg: Registry, tname: str, tp: dict, T_range=None, cache: dict | No
     rid = "tpl-" + hashlib.sha256(json.dumps([tname, tp, T_range] + ([member] if member else []), sort_keys=True).encode()).hexdigest()[:16]
     base = {"id": rid, "template": tname, "params": tp}
     if tname.startswith(("Const32", "Const64")):
-        return dict(base, name=tname, kind="constant", **{"and": 0, "xor": 0, "not": 0}, children=[])
+        return dict(base, name=tname, kind="constant", bind="run", **{"and": 0, "xor": 0, "not": 0}, children=[])
     if tname in OPENED and GATHERS == "opening":
         return dict(base, name=tname, kind="commitment-opening", reason=OPENED[tname], children=[])
     if tname in NOT_LOWERED:
@@ -1633,7 +1205,7 @@ def template(reg: Registry, tname: str, tp: dict, T_range=None, cache: dict | No
                 continue
             d = walker.defs[walker.walk(ids[T])]
             per_t[str(T)] = {"definition": d["id"], "name": d["name"], "children": [{"def": d["id"], "count": 1}],
-                             **{k: d.get(k) for k in ("and", "xor", "not", "not_yet_lowered", "in_bits", "out_bits")}}
+                             **{k: d.get(k) for k in ("and", "xor", "not", "flat_and", "not_yet_lowered", "in_bits", "out_bits")}}
         top = per_t[str(T_range[1])]
         return dict(base, name=f"{tname}{json.dumps(tp, sort_keys=True)} T∈[{T_range[0]},{T_range[1]}]", kind="template",
                     children=top.get("children", []), children_at=f"T={T_range[1]}", per_key_count=per_t,
@@ -1683,12 +1255,16 @@ def _coordinate(store: DefStore, did: str | None) -> tuple[str, int] | None:
 
 
 def _node_totals(node: dict, t: dict) -> dict:
-    """A program-graph node's AND / XOR / NOT: its instances times its template's, per T where the T varies."""
+    """A program-graph node's AND / XOR / NOT, and ``flat_and`` (its circuits' own ANDs, sharing across calls): its instances
+    times its template's, per T where the T varies."""
+    def get(x, k):
+        return (x.get(k, x.get("and") if k == "flat_and" else 0) or 0)
+
     by_t = node.get("instances_by_T")
     if by_t:
         pk = t["per_key_count"]
-        return {k: sum(n * (pk[T].get(k) or 0) for T, n in by_t.items()) for k in ("and", "xor", "not")}
-    return {k: (node.get("instances") or 0) * (t.get(k) or 0) for k in ("and", "xor", "not")}
+        return {k: sum(n * get(pk[T], k) for T, n in by_t.items()) for k in ("and", "xor", "not", "flat_and")}
+    return {k: (node.get("instances") or 0) * get(t, k) for k in ("and", "xor", "not", "flat_and")}
 
 
 def _walked(base: dict, walker: "Walker", did: str | None, name: str) -> dict:
@@ -1700,16 +1276,17 @@ def _walked(base: dict, walker: "Walker", did: str | None, name: str) -> dict:
 
 
 def _totals(reg: Registry, children: list[dict], defs: dict | None = None) -> dict:
-    t = {"and": 0, "xor": 0, "not": 0, "not_yet_lowered": 0}
+    t = {"and": 0, "xor": 0, "not": 0, "flat_and": 0, "not_yet_lowered": 0}
     for c in children:
         if "def" in c:
             d = defs[c["def"]]
             for k in t:
-                t[k] += (d.get(k) or 0) * c["count"]
+                t[k] += (d.get(k, d.get("and") if k == "flat_and" else 0) or 0) * c["count"]
         elif "ref" in c:
             n = reg.nodes[c["ref"]]
             for k in ("and", "xor", "not"):
                 t[k] += n[k] * c["count"]
+            t["flat_and"] += n.get("flat_and", n["and"]) * c["count"]
         elif "commitment_opening" not in c:
             t["not_yet_lowered"] += c["count"]
     return t
@@ -1762,7 +1339,7 @@ def export_row(pg_path: Path, out: Path, reg: Registry, tpl_cache: dict, cache: 
         if cm is not None:
             node.update(_commitment(g, cm, checks))
         nodes.append(node)
-    totals = {k: sum(n["totals"][k] for n in nodes) for k in ("and", "xor", "not")}
+    totals = {k: sum(n["totals"][k] for n in nodes) for k in ("and", "xor", "not", "flat_and")}
     return {"schema": SCHEMA + "/row", "row": row["row"], "row_key": row["serving"]["row_key"], "model": row["serving"].get("model"),
             "program_graph": Path(pg_path).name, "totals": totals, "nodes": nodes, "edges": p.get("edges", []),
             "templates": sorted(set(used))}
@@ -1847,7 +1424,8 @@ def _input_role(name: str) -> str:
 
 def _roles(g: dict, into: list[dict], tpl: dict[str, str], store: DefStore) -> dict:
     """A Call's parameters with their roles, as far as the program graph records them: a parameter another Call's output feeds
-    (``edges[].ports``) is ``activations`` (``constant`` from a constant Call); one a prescribed input feeds (``param_inputs``)
+    (``edges[].ports``) is ``activations`` (``constant`` from a constant Call: a run constant, the root body's, so the parameter
+    is bound ``run`` and no type holds its value); one a prescribed input feeds (``param_inputs``)
     takes the input's group (``weights``, ``prompt``, ``seed``, ``splits``, ``peers``). The Call's prescribed inputs are listed
     in ``inputs`` whether or not the graph says which parameter reads them."""
     dids = [g["spec"]] if g.get("spec") else list(g.get("definition_ids") or [])
@@ -1874,11 +1452,19 @@ def _roles(g: dict, into: list[dict], tpl: dict[str, str], store: DefStore) -> d
                        | {_input_role(i) for i in (pin or {}).get(name, {})})
         params.append({"name": name, "bits": w[0] if min(w) == max(w) else [min(w), max(w)], "roles": roles or None,
                        "from_calls": from_calls.get(name, {}), "from_inputs": (pin or {}).get(name, {}) if pin is not None else None})
+        if "constant" in roles:
+            params[-1]["bind"] = "run"
     inputs = [{"input": k, "role": _input_role(k), "reads": v} for k, v in sorted((g.get("prescribed_reads") or {}).items())]
     return {"params": params, "inputs": inputs, "param_roles_complete": pin is not None or not inputs,
             "param_roles": "exact (edges' ports and param_inputs)" if pin is not None else
                            "activations exact from edges' ports; which parameter reads each of `inputs` is not in this program graph "
                            "(param_inputs, verity PR #94), so input roles are not assigned to parameters"}
+
+
+def _library_digest() -> str:
+    from verity.ml import library
+
+    return library.digest()
 
 
 def _git_head() -> str | None:
@@ -1923,8 +1509,8 @@ def main(argv=None) -> int:
         print(f"row {doc['row']}: {len(doc['nodes'])} nodes, {len(doc['templates'])} templates, {time.time() - t0:.0f}s", flush=True)
     ntpl.write_text(json.dumps({"schema": SCHEMA + "/templates", "templates": {r["id"]: r for r in tpl_cache.values()},
                                 "definitions": walker.defs}, separators=(",", ":")))
-    (out / "subcircuits.json").write_text(json.dumps({"schema": SCHEMA + "/subcircuits", "gate_limit": GATE_LIMIT, "nodes": reg.nodes},
-                                                     separators=(",", ":")))
+    (out / "subcircuits.json").write_text(json.dumps({"schema": SCHEMA + "/subcircuits", "nodes": reg.nodes}, separators=(",", ":")))
+    module_bytes = write_modules(reg, out / "modules.json.gz")
     from verity_vllm.query.word import query_id
     (out / "commitments.json").write_text(json.dumps({"schema": SCHEMA + "/commitments", "query": query_id(X_BITS, W_BITS),
                                                       "code": f"verity_vllm.query.word at verity {_git_head()}", "mark_kinds": MARK_KINDS,
@@ -1946,29 +1532,20 @@ def main(argv=None) -> int:
                 fam = d["name"].split("{")[0]
                 if fam not in e.setdefault("in", []):
                     e["in"].append(fam)
-    gates = sorted(reg.gates_dir.glob("*.json.gz"))
+    flat_ands, type_ands = sum(f for _, f, _ in reg.shared), sum(t for _, _, t in reg.shared)
     index = {"schema": SCHEMA + "/index", "generator": "verity_flock.boolean_export (lane flock-ir-lowering)",
              "source": "internal/datasets/program-graphs/<row>.program.json (its groups' templates)",
              "rows": rows, "files": {"row": "<row_key>.boolean.json", "templates": "templates.json", "subcircuits": "subcircuits.json",
-                                     "gates": "gates/<circuit root id>.json.gz: {lists: {subcircuit id: gate list}}",
+                                     "modules": "modules.json.gz: {types: {digest: circuit type content}}",
                                      "commitments": "commitments.json: {records: {Call descriptor id: its cut}}"},
-             "gate_list_rule": "wires 0..inputs-1 are the inputs; each gate appends one wire; -1 = 0, -2 = 1; gates = flat [op, a, b], "
-                               "op 0 AND, 1 XOR, 2 NOT (b = -1); tags[g] indexes tag_scopes = [subcircuit id, parent scope, part index] "
-                               "(preorder, scope 0 = the list's subcircuit)",
-             "wiring_rule": "parts[i] indexes children (the i-th child call, in order); wiring = [src_part, src_port, dst_part, dst_port, "
-                            "width]: bits src_port+i -> dst_port+i; part -1 = the subcircuit's inputs (as source) / outputs (as "
-                            "destination), -2 = a constant (port = its value; -1 = its value differs between instances), "
-                            "-3 = the subcircuit's own gates (port -1, unnumbered)",
-             "gate_limit": GATE_LIMIT,
-             "gate_lists_also": "the tensor-core k-step units and their k-step subcircuit, whatever their size",
-             "subcircuits": len(reg.nodes), "gate_lists": reg.verified, "gate_list_bundles": len(gates),
-             "gate_lists_bytes": sum(p.stat().st_size for p in gates),
-             "verification": f"every gate list evaluated against its circuit (gf2 bit-sliced, 64 random vectors): {reg.verified} checked, 0 differ",
-             "wiring_verification": f"every instance's wiring computed and compared with its type's: {reg.wiring_compared} further "
-                                    f"instances compared, {reg.wiring_differs} differ beyond the value of a constant input; "
-                                    f"{sum(any(e[0] == -2 and e[1] == -1 for e in n.get('wiring', ())) for n in reg.nodes.values())} "
-                                    f"types have a constant input whose value differs between instances (port -1)",
-             "tag_scopes": reg.tag_scopes, "tag_scopes_whose_tagged_ands_differ_from_the_tree": reg.tag_and_differs,
+             "types": {"format": CT.FORMAT, "count": len(reg.types), "bytes": module_bytes, "library_digest": _library_digest(),
+                       "own_ands": sum(sum(1 for it in t.items if it[0] == CT.AND) for t in reg.types.values()),
+                       "verification": f"every type validated (circuit_types.validate); every circuit root's type evaluated against "
+                                       f"its flat circuit (gf2, 64 random vectors): {reg.evaluated} roots, 0 differ",
+                       "sharing_across_types": {
+                           "rule": "a type's gates are shared only inside it (constant-api §2.5); the flat circuits the lowering "
+                                   "builds share ANDs across a call too, so their ANDs are fewer",
+                           "flat_ands": flat_ands, "type_ands": type_ands, "roots": reg.roots}},
              "commitments": {"query": query_id(X_BITS, W_BITS), "records": len(cm.records),
                              "check": f"each Call's cut against its program graph's q_word_v1 (units, gates, structure gates, committed "
                                       f"interior words per Call): {len(checks['agree'])} agree, {len(checks['differ'])} differ",
@@ -1987,9 +1564,8 @@ def main(argv=None) -> int:
     (out / "index.json").write_text(json.dumps(index, indent=1))
     if fails:
         raise SystemExit(f"cross-check failed: {fails[:10]}")
-    print(json.dumps({"rows": rows, "subcircuits": len(reg.nodes), "gate_lists_verified": reg.verified,
-                      "wiring_compared": reg.wiring_compared, "wiring_differs": reg.wiring_differs,
-                      "tag_and_differs": reg.tag_and_differs}))
+    print(json.dumps({"rows": [{k: r[k] for k in ("row", "and", "xor", "not")} for r in rows], "types": len(reg.types),
+                      "roots_evaluated": reg.evaluated, "flat_ands": flat_ands, "type_ands": type_ands}))
     return 0
 
 
