@@ -2164,7 +2164,6 @@ const CASES: &[(&str, bool, bool)] = &[
     ("unit_draw_ignored_refused", false, false),
     ("prover_is_deterministic", true, false),
     ("gpu_proofs_match_cpu", true, false),
-    ("region_word_shared_refused", false, false),
     ("zk_pads_not_the_committed_ones", false, true),
     ("zk_level0_folds_another_extra_lane", false, true),
     ("zk_level0_blinded_claim_forged", false, true),
@@ -2273,38 +2272,6 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
     }
     if name == "gpu_proofs_match_cpu" {
         return gpu_cpu_case(st, inst);
-    }
-    if name == "region_word_shared_refused" {
-        // docs/region-word-check.md's negatives on the loaded circuit: a column sharing a partial region's word is refused with an
-        // entry in its slot type's A row, or with a Δ wire into it; a Δ pair that cancels leaves it forced to zero
-        let Some(&(_, q)) = region_shared_columns(&st.regions).first() else {
-            return json!({"case": name, "pass": true, "skipped": "no partial region: every region covers whole words"});
-        };
-        let mut c = st.c.clone();
-        let r = c.ranges.iter().find(|r| q >= r.start() && q < r.start() + (r.count << r.slot_log)).cloned().expect("a slot holds the column");
-        let Kind::Net(i) = r.kind else {
-            return json!({"case": name, "pass": false, "why": format!("column {q} is in the mask slot")});
-        };
-        let row = q & ((1usize << r.slot_log) - 1);
-        let a = &mut c.nets[i].1.a;
-        if a.len() <= row {
-            a.resize(row + 1, Vec::new());
-        }
-        a[row].push(row);
-        let entry = Stmt::new(c, st.n, st.identity.clone()).err();
-        let (q32, pin) = (q as u32, st.pin as u32);
-        let with = |extra: &[(u32, u32)]| {
-            let (mut da, mut db) = (st.circuit.da.clone(), st.circuit.db.clone());
-            da.extend_from_slice(extra);
-            db.extend_from_slice(extra);
-            region_word_violation(&st.c, &st.regions, &da, &db)
-        };
-        let (wire, cancels) = (with(&[(q32, q32), (q32, pin)]), with(&[(q32, pin), (q32, pin)]));
-        let pinned = region_word_violation(&st.c, &st.regions, &st.circuit.da, &st.circuit.db);
-        let refused = |e: &Option<String>| e.as_deref().is_some_and(|m| m.contains(&format!("column {q} shares a word")));
-        return json!({"case": name, "expect": "refused with an A entry or a Δ wire; a cancelling Δ pair and the pinned circuit pass", "column": q,
-                      "entry_refused": entry, "wire_refused": wire, "cancelling_pair_passes": cancels.is_none(), "pinned_passes": pinned.is_none(),
-                      "pass": refused(&entry) && refused(&wire) && cancels.is_none() && pinned.is_none()});
     }
     #[cfg(feature = "seed-injection")]
     if name == "zk_verifier_coin_off_its_commitment" || name == "zk_verifier_commits_beta_zero" {

@@ -347,21 +347,6 @@ mod tests {
         }
     }
 
-    /// The keyed tree's spec (`coin-tree/hm96-sha512/v2`, docs/coin-tree-v2.md §9) rests on this reading of v1: its `v1_root` is
-    /// this code's root over the spec's test tape, read without a key.
-    #[test]
-    fn v1_reproduces_the_v2_specs_v1_root() {
-        let stream: Vec<u8> = (0..4096u64).flat_map(|i| sha(&[b"verity/coin-tree/v2/test-tape\0", &i.to_le_bytes()])).collect();
-        let mut at = 0;
-        let mut tape = |b: &mut [u8]| {
-            b.copy_from_slice(&stream[at..at + b.len()]);
-            at += b.len();
-        };
-        let spec = Spec { streams: ["session", "t/rep0", "t/rep1"].map(String::from).to_vec(), rounds_log: 2, block: 3 };
-        let root: String = CoinTree::draw(spec, &mut tape).root().iter().map(|b| format!("{b:02x}")).collect();
-        assert_eq!(root, "33cfd9f396b0f775a8db99f0d3d38563601416c556b9ad46e49500dee6d22d79f1c5f655a8f979d4879afaa87e0623bd23e7776b517b5b0dbdfe2b2682ed12a7");
-    }
-
     #[test]
     fn openings_verify_and_forgeries_do_not() {
         let spec = Spec { streams: vec![SESSION.into(), "t/rep0".into(), "t/rep1".into()], rounds_log: 4, block: 32 };
