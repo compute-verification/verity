@@ -238,6 +238,63 @@ def test_the_logs_outside_their_domain_are_one_pinned_nan_on_every_path():
         (0xFF800000, 0xFF800000, 0x80000000, 0xFF800000)
 
 
+#: the probe's edge words (art:e5dd6ce9..., the L40S and the H100, every FTZ build alike): input -> the GPU's output
+PROBE_EDGES = {"nv_logf": {0xBF800000: 0x7FFFFFFF, 0x80000000: 0xFF800000, 0x80400000: 0xFF800000, 0x80000001: 0xFF800000,
+                           0x807FFFFF: 0xFF800000, 0xFF7FFFFF: 0x7FFFFFFF, 0xFF800000: 0x7FFFFFFF},
+               "nv_log1pf": {0xC0000000: 0x7FFFFFFF, 0xBF800000: 0xFF800000, 0xBF800001: 0x7FFFFFFF, 0xFF800000: 0x7FFFFFFF,
+                             0xFF7FFFFF: 0x7FFFFFFF}}
+PROBE = "art:e5dd6ce9fa74e7ca4538b848943d8bb555f2adac528277848395dbf4cdff66a5"
+
+
+def _gpu_paths(name: str) -> list:
+    """The `_v2` logs: the scalar function and, for logf, the registered `NvLogf_v2`."""
+    from verity_vllm.program.registry import topp_word_gates as TWG
+    return [getattr(SP, f"{name}_gpu")] + ([TWG.NvLogfV2.evaluate] if name == "nv_logf" else [])
+
+
+@pytest.mark.parametrize("name", ["nv_logf", "nv_log1pf"])
+def test_the_v2_logs_are_the_gpus_words_on_the_probes_edges(name):
+    for f in _gpu_paths(name):
+        got = [f(x) for x in PROBE_EDGES[name]]
+        assert got == list(PROBE_EDGES[name].values()), (name, f, [hex(g) for g in got])
+
+
+def test_the_v2_logs_are_the_gpus_words_on_every_probed_input(tmp_path):
+    """Every input word of the probe (20,007 for logf, 20,005 for log1pf: the edges, then random negatives and NaNs), against each FTZ
+    build's output on the L40S and the H100.  Skipped where the evidence store is unreachable."""
+    import glob
+
+    from tests.regression import store_io
+    if os.environ.get("VERITY_SKIP_STORE") == "1" or not store_io.reachable():
+        pytest.skip("the evidence store is not reachable here")
+    root = store_io.fetch(PROBE, to=tmp_path / "probe")
+    runs = sorted(glob.glob(str(root / "*" / "out-*-ftz-true-*.json")))
+    assert len(runs) == 4
+    for path in runs:
+        d = json.load(open(path))
+        for name, key in (("nv_logf", "logf"), ("nv_log1pf", "log1pf")):
+            pairs = [(int(x, 16), int(w, 16)) for x, w in zip(d[key]["in"], d[key]["out"])]
+            for f in _gpu_paths(name):
+                bad = [(hex(x), hex(f(x)), hex(w)) for x, w in pairs if f(x) != w]
+                assert not bad, (path, name, len(bad), bad[:4])
+
+
+def test_v2_is_v1_but_for_nan_results_and_the_noise_lane_is_the_same_function():
+    """`_v2` differs from `_v1` only where `_v1` gives a NaN (outside the domain, a NaN input); the noise never gets there, so
+    `GumbelNoiseLane_v2` is `GumbelNoiseLane_v1` on every lane (sampled here)."""
+    rng = np.random.default_rng(3)
+    edges = np.array([0x7FC00123, 0xFFC00123, 0x7F800000, 0], dtype=np.uint64)
+    words = np.concatenate([rng.integers(0, 1 << 32, 20000, dtype=np.uint64), edges])
+    for v1, v2 in ((SP.nv_logf, SP.nv_logf_gpu), (SP.nv_log1pf, SP.nv_log1pf_gpu)):
+        for x in words.tolist():
+            a, b = v1(x), v2(x)
+            assert b == (SP.LOG_NAN if (a & 0x7F800000) == 0x7F800000 and a & 0x7FFFFF else a), (v1.__name__, hex(x))
+    assert SP.GumbelNoiseLaneV2.id == "GumbelNoiseLane_v2"
+    for key in (0, 942961759, 0xFFFFFFFF):
+        for v in list(range(512)) + [128255, 0x7FFFFFFF]:
+            assert SP.GumbelNoiseLaneV2.evaluate(key, v) == SP.GumbelNoiseLane.evaluate(key, v)
+
+
 def test_philox_stream_key_and_the_noise_row_match_the_scalar_registry_lane_for_lane():
     for seed, pos in ((942961759, 7), (1, 1023), ((1 << 63) - 1, (1 << 40) + 5), (-5 & ((1 << 64) - 1), 0), (509133774, 107)):
         k = SP.stream_key(seed, pos)
@@ -262,7 +319,7 @@ def test_the_registry_keeps_one_gumbel_chain_at_version_1_and_its_evaluator_is_t
     from verity.ir.defs import bind
     assert SP.GumbelNoiseLane.id == "GumbelNoiseLane_v1" and SP.GumbelSelectF32.id == "GumbelSelectF32_v1"
     assert SP.GumbelTokenSelect.id == "GumbelTokenSelect_v1" and SP.GumbelTopPTokenSelect.id == "GumbelTopPTokenSelect_v1"
-    assert not any(n.endswith("V2") or n.endswith("_v2") for n in SP.__all__), SP.__all__
+    assert [n for n in SP.__all__ if n.endswith(("V2", "_v2"))] == ["GumbelNoiseLaneV2"], SP.__all__   # the GPU-NaN logs' lane
     assert SP.GumbelNoiseLane.evaluate(942961759, 17) == SP.noise_lane(942961759, 17)
     assert bind(SP.GumbelSelectF32, V=64).id.startswith("GumbelSelectF32_v1")
     # a lane whose draw is the finding's boundary draw (u < 2^-25, 0.9 % of a 2^16-lane row is NOT expected: ~3e-8 per lane) still
