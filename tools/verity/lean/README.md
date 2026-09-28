@@ -129,7 +129,7 @@ installs it first, so a machine without elan works), must pass clean and fail on
 - `roots`: the modules the audit imports; every module under them is audited. `axioms` is optional.
 - `proved_in` (optional): the packages, as paths relative to this one, that prove its guarantees (below).
 - `runs`: the package's tests, compiled evaluation that no proof reads (a bulk conformance check over more vectors than
-  the kernel checks). Each is an exempt module, run after the replay by `lake env lean --run` in the build sandbox, and
+  the kernel checks). Each is an exempt module, run beside the facts and the replay by `lake env lean --run` in the build sandbox, and
   passes when it exits 0. An argument `{NAME}` is the path of data file NAME, which is what `generate` writes (run first,
   outside the sandbox, with `{repo}` the checkout, `--repo`, and `{out}` the directory it writes) or else the package's
   own file, either one possibly gzipped (`NAME.gz`). A file is used only with the SHA-256 under `data`: another fails the
