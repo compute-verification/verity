@@ -90,7 +90,7 @@ def test_attach_refuses_a_manifest_without_the_family_and_taps_attach_it_when_na
     with pytest.raises(SystemExit):
         S.attach(com, True, {"identities": []}, ("a",))
     plain, shared = (_v2_manifest(fp8_program(s), taps=(SP.POLICY,)) for s in (False, True))
-    assert taps.attach(com, plain, ("a",)) == ("a",) and com.sources == []
-    assert taps.attach(com, shared, ("a",)) == ("a", SP.FAMILY)
+    assert taps.attach(com, plain, ("a",), taps.TapSources()) == ("a",) and com.sources == []
+    assert taps.attach(com, shared, ("a",), taps.TapSources()) == ("a", SP.FAMILY)
     assert [s.sites for s in com.sources] == [SP.manifest_sites(shared)]
-    assert taps.attach(com, shared, ("a",), explicit_classes=True) == ("a",)
+    assert taps.attach(com, shared, ("a",), taps.TapSources(), explicit_classes=True) == ("a",)
