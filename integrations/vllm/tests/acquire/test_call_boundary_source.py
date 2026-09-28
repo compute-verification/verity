@@ -15,7 +15,9 @@ import types
 import numpy as np
 import pytest
 from verity.evaluation import evaluate
+from verity_vllm.commit.binding import build_binding_map, logical_request
 from verity_vllm.correspondence.reader_for_query import Correspondence
+from verity_vllm.query.compose import compose_global
 from verity_vllm.query.call_scope import specialization
 from verity_vllm.query.manifest.format import spec_family
 from verity_vllm.query.program_view import definition_ports, from_instances, spec_statics
@@ -97,14 +99,14 @@ DENSE = [(f"{EMB}.weight", V * H, 16, f"Array<{V},Array<{H},Value<16>>>"), (f"{P
          (f"{IL}.weight", H, 16, f"Array<{H},Value<16>>")]
 
 
-def dense_program(embed=EMB):
-    """Per step (the prompt's LP rows, then one): embed -> a post-feedforward norm chain (one input) -> an input-layernorm chain (x +
-    residual, widened) -> the soft-capped logits of the last row -> TokenSelect; node-major rows, as the Build writes a prefill.
-    `embed` = the module the embedding rows are named under.  Returns (Rows, {(step, "e" | "x" | "y"): Calls})."""
+def dense_program(embed=EMB, lp=LP, t=T, eps=EPS):
+    """Per step (the prompt's `lp` rows, then one, `t` times): embed -> a post-feedforward norm chain (one input) -> an input-layernorm
+    chain (x + residual, widened; `eps` its epsilon) -> the soft-capped logits of the last row -> TokenSelect; node-major rows, as the Build
+    writes a prefill.  `embed` = the module the embedding rows are named under.  Returns (Rows, {(step, "e" | "x" | "y"): Calls})."""
     b, at = Rows(DENSE), {}
     sel = None
-    for s in range(1 + T):
-        ks = range(LP) if s == 0 else range(1)
+    for s in range(1 + t):
+        ks = range(lp) if s == 0 else range(1)
 
         def each(spec, node, *reads):
             return [b.add(s, spec, f"{node}[{k}]", *([["n", r[0][k], 0, r[1]]] if isinstance(r, tuple) else r for r in reads)) for k in ks]
@@ -123,7 +125,7 @@ def dense_program(embed=EMB):
         ad = each(f"AddWidenedBf16_v1{{N={H}}}", f"{IL}/add_1_{s}", (x, H), (e, H))
         sq = each(f"SquareF32_v1{{N={H}}}", f"{IL}/pow_{s}", (ad, H))
         mu = each(f"MeanTriton_v1{{N={H}}}", f"{IL}/mean_{s}", (sq, H))
-        ve = each(f"AddScalarF32_v1{{N=1,C={EPS}}}", f"{IL}/add_2_{s}", (mu, 1))
+        ve = each(f"AddScalarF32_v1{{N=1,C={eps}}}", f"{IL}/add_2_{s}", (mu, 1))
         rs = each("RsqrtF32_v1{N=1}", f"{IL}/rsqrt_{s}", (ve, 1))
         sc = each(f"ScaleRowF32_v1{{N={H}}}", f"{IL}/mul_{s}", (ad, H), (rs, 1))
         mv = each(f"MulVecF32_v1{{N={H}}}", f"{IL}/mul_1_{s}", (sc, H), (b0, H))
@@ -155,17 +157,17 @@ def reference(doc, prompt, fields, field_order):
     return vals
 
 
-def build_dir(tmp_path, doc, observed):
+def build_dir(tmp_path, doc, observed, *, name="build_request", digest="d0", request_id="r0"):
     """A Build dir holding `doc`, and the manifest of its one request (the implementation paths observed = `observed`)."""
-    res = {"program": {"digest": "d0", "function": "f"}, "attention_impls_observed": {p: {} for p in observed},
+    res = {"program": {"digest": digest, "function": "f"}, "attention_impls_observed": {p: {} for p in observed},
            "target": {"declared": {"compute_capability": [8, 9]}}}
-    d = tmp_path / "build_request"
+    d = tmp_path / name
     d.mkdir()
     with gzip.open(d / "instances.json.gz", "wt") as f:
         json.dump(doc, f)
     (d / "result.json").write_text(json.dumps(res))
     P = from_instances(str(d / "instances.json.gz"))
-    return str(d), request_manifest(P, Correspondence(P, implementation_paths=observed), res, request_id="r0").manifest
+    return str(d), request_manifest(P, Correspondence(P, implementation_paths=observed), res, request_id=request_id).manifest
 
 
 def runtime(paths, tensors=None):
@@ -216,14 +218,15 @@ def _drive(world, com, src, *, steps=range(1 + T)):
         mods[PF[len("model."):]](rows(world.at[(s, "e")]))
         mods[IL[len("model."):]](rows(world.at[(s, "x")]), residual=rows(world.at[(s, "e")]))
         mods["logits_processor"](mods["model.embed_tokens"], rows(world.at[(s, "y")][-1:]))
+        src.on_step_end(com._cur)
     com._cur = None
 
 
-def _dense_source(world):
+def _dense_source(world, man=None, root=None):
     model = runtime(["model.embed_tokens", PF[len("model."):], IL[len("model."):], "logits_processor"],
                     {n[len("model."):]: _tensor(w, torch.bfloat16) for n, w in world.fields.items()})
     com = Recorder(model)
-    classes = taps.attach(com, world.man, ("instance_outputs",), programs=(None, os.path.dirname(world.pdir)))     # found under the root
+    classes = taps.attach(com, man or world.man, ("instance_outputs",), programs=(None, root or os.path.dirname(world.pdir)))  # under the root
     assert classes == ("instance_outputs", CB.FAMILY) and len(com.sources) == 1
     com.sources[0].install()
     return com, com.sources[0]
@@ -355,6 +358,8 @@ def test_fp8_group_quant_on_edge_words_is_the_ir_and_the_consuming_gemm_replays(
         served[(s, "gate_up")] = x = _fp8_rows(rng, n, fp8.H, s == 0)
         mods["model.layers.0.mlp.gate_up_proj"](_tensor(x, torch.bfloat16))
         mods["model.layers.0.mlp.down_proj"](_tensor(np.stack([_bf16(rng, fp8.I) for _ in range(n)]), torch.bfloat16))
+        assert src.activation_scales("model.layers.0.mlp.gate_up_proj", s) is not None      # x_s during the forward, before the step ends
+        src.on_step_end(com._cur)
         assert not com.errors, com.errors
         got = {name: CB.words(torch, t).reshape(t.shape) for st, name, t in com.acquired if st == s}
         op = f"model.layers.0.mlp.gate_up_proj/per_token_group_fp8_quant_{s}"
@@ -417,3 +422,112 @@ def test_identities_another_source_claims_are_left_to_it(dense, monkeypatch):
     monkeypatch.setattr(CB, "CLAIMS", [lambda r: "everything-tap"])
     com = Recorder(Probe())
     assert taps.attach(com, dense.man, ("instance_outputs",), programs=(dense.pdir,)) == ("instance_outputs",) and not com.sources
+
+
+# ------------------------------------------------------------------------------------------------------------------------------ B = 2
+EPS_R1 = '{"f64":"0x1.0c6f7a0b5ed8dp-17"}'
+
+
+def _global(parts, arrive):
+    reqs = [{"request_id": r, "workload_request_id": f"w-{r}", "index": i, "prompt_len": lp, "max_tokens": n, "arrive_step": arrive[r]}
+            for i, (r, lp, n) in enumerate((("r0", 7, 3), ("r1", 4, 2)))]
+    return compose_global({}, parts, sorted(reqs, key=lambda r: (r["arrive_step"], r["index"])), workload_digest="w" * 64)
+
+
+@pytest.fixture(scope="module")
+def pair(tmp_path_factory):
+    """Two requests of one model under one programs root, composed by `compose_global`: r0 (LP 7, three steps) and r1 (LP 4, two steps,
+    another input-layernorm epsilon, so its template of that body differs and it is evaluated per request), both arriving at step 0 --
+    co-scheduled at engine steps 0 and 1, r0 alone at 2."""
+    root = tmp_path_factory.mktemp("pair")
+    fields = dense_fields()
+    worlds, parts = {}, {}
+    for rid, lp, t, eps, prompt in (("r0", LP, T, EPS, PROMPT), ("r1", 4, 1, EPS_R1, [9, 1, 3, 0])):
+        b, at = dense_program(lp=lp, t=t, eps=eps)
+        doc = b.doc(lp)
+        _d, parts[rid] = build_dir(root, doc, [PF[len("model."):]], name=f"build_{rid}", digest=f"d-{rid}", request_id=rid)
+        worlds[rid] = types.SimpleNamespace(b=b, at=at, doc=doc, vals=reference(doc, prompt, fields, [n for n, *_ in DENSE]), steps=1 + t)
+    return types.SimpleNamespace(root=str(root), fields=fields, worlds=worlds, parts=parts, man=_global(parts, {"r0": 0, "r1": 0}))
+
+
+def _drive_pair(pair, com, src, order, rows_of=lambda e, rows: rows):
+    """Each engine step's module forwards on the rows of its requests packed in the runtime's `order`, and `step_rows` as the committer
+    records it (engine ids suffixed as vLLM v1 does), through `rows_of(e, rows)`."""
+    mods = dict(src.model.named_modules())
+    com.step_rows = {}
+    for e in range(3):
+        live = [r for r in order if e < pair.worlds[r].steps]
+
+        def pack(key, last=False):
+            cs = [(r, c) for r in live for c in pair.worlds[r].at[(e, key)][-1 if last else 0:]]
+            return _tensor(np.array([pair.worlds[r].vals[c][:H] for r, c in cs], dtype=np.uint16), torch.bfloat16)
+
+        com._cur = types.SimpleNamespace(step=e)
+        src.on_step_begin()
+        mods[PF[len("model."):]](pack("e"))
+        mods[IL[len("model."):]](pack("x"), residual=pack("e"))
+        mods["logits_processor"](mods["model.embed_tokens"], pack("y", last=True))
+        rows, lo = [], 0
+        for r in live:
+            rows.append((f"w-{r}-0badc0de", lo, lo + len(pair.worlds[r].at[(e, "e")])))
+            lo = rows[-1][2]
+        com.step_rows[e] = rows_of(e, rows)
+        src.on_step_end(com._cur)
+    com._cur = None
+
+
+def test_a_global_manifest_commits_every_requests_rows_packed_as_the_binding_map_splits_them(pair):
+    """The runtime runs r1's rows first: every target is one packed tensor per engine step, and the binding map over the committed
+    layouts and `step_rows` binds each request's identity to its own rows -- the IR's words of that request's Program."""
+    ids = CB.manifest_sites(pair.man)
+    com, src = _dense_source(pair, pair.man, pair.root)
+    assert src.plan.covered == src.plan.identities == len(ids) == 2 * (7 + 8 + 3) + 3 * (7 + 8 + 3)
+    bodies = src.plan.bodies
+    assert not bodies[(0, IL[len("model."):])].packed and bodies[(0, PF[len("model."):])].packed and bodies[(1, "logits_processor")].packed
+    assert [(q.request, q.rows) for q in bodies[(0, PF[len("model."):])].parts] == [("r0", LP), ("r1", 4)]
+    _drive_pair(pair, com, src, ["r1", "r0"])
+    assert not com.errors, com.errors
+    got = {(s, n): t for s, n, t in com.acquired}
+    assert len(got) == len(com.acquired) == 3 * (7 + 8 + 3)
+    layouts = {e: [types.SimpleNamespace(name=n, shape=list(t.shape), stream_off=0, first_leaf=0, chunk=256, nbytes=t.numel() * t.element_size(),
+                                         dtype=str(t.dtype), ordinal=i) for i, ((s, n), t) in enumerate(sorted(got.items())) if s == e] for e in range(3)}
+    order = {"w-r0": "r0", "w-r1": "r1"}
+    bmap = build_binding_map(layouts, [types.SimpleNamespace(root=bytes(32))] * 3, bytes(32), "w" * 64,
+                             request_rows={e: [(logical_request(rid, order), lo, hi) for rid, lo, hi in rs] for e, rs in com.step_rows.items()})
+    want = {(r["request_id"], r["engine_step"], r["op_path"], r["output_member"]): r for r in ids}
+    seen = set()
+    for x in bmap["entries"]:
+        i = x["identity"]
+        key = (i["request_id"], int(i["step"]), i["op_path"], i["output_member"])
+        r, w = want[key], pair.worlds[key[0]]
+        assert i["element_range"] == r["element_range"]
+        flat = CB.words(torch, got[(key[1], x["name"])]).astype(np.uint64)
+        lo, hi = (x["element_offset"] + v for v in r["element_range"])
+        assert np.array_equal(flat[lo:hi].reshape(r["rows"], r["width"]), ir_words(w.doc, w.vals, w.b.step, r)), key
+        seen.add(key)
+    assert seen == set(want)
+
+
+def test_a_packing_that_disagrees_with_the_declared_composition_is_a_collector_error_naming_the_step(pair):
+    def wrong(e, rows):
+        if e == 0:
+            return [(rows[0][0], 0, 5), (rows[1][0], 5, 11)]       # r0 five token rows and r1 six, where they declare seven and four
+        if e == 1:
+            return [rows[0], (rows[0][0], 1, 2)]                  # r0's id twice, r1 absent
+        return None                                               # no row order recorded
+
+    com, src = _dense_source(pair, pair.man, pair.root)
+    _drive_pair(pair, com, src, ["r0", "r1"], wrong)
+    assert not com.acquired and len(com.errors) == 3, com.errors
+    assert "engine step 0 ran (request, rows) [('r0', 5), ('r1', 6)]" in com.errors[0] and "declares [('r0', 7), ('r1', 4)]" in com.errors[0]
+    assert "engine step 1 ran (request, rows) [('r0', 1), ('r0', 1)]" in com.errors[1]
+    assert "no row order recorded at engine step 2" in com.errors[2]
+
+
+def test_requests_at_other_local_steps_of_one_engine_step_are_refused_by_name(pair):
+    """r1 arriving a step later: at engine steps 1 and 2 the requests' bodies are fx nodes of other local steps, which one packed tensor
+    per name cannot bind; step 0 (r0 alone) is covered."""
+    plan = CB.plan_of(_global(pair.parts, {"r0": 0, "r1": 1}), pair.root)
+    why = " ".join(plan.uncovered)
+    assert plan.uncovered and "@ engine step 0" not in why and "@ engine step 1" in why and "commit other targets" in why
+    assert {e for e, _m in plan.bodies} == {0}
