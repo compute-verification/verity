@@ -7,7 +7,7 @@
 # env: BINARY= PYBIN= (skip the build and the venv: a local dry run)
 #      GRAPH=path/to/<row>.program.json | DEFS=path/to/defs.json  SHAPES=path/to/shapes.txt  SELECT=table-free  MODULES= (a module-path prefix)
 #      BATCH=auto  WARM=1  RUNS=3  SELFTEST=25  JOBS=1 (shapes staged in parallel)  GPU=1  SM (from nvidia-smi)  PORT=7710
-#      PROTOCOL=sweep-v0  OUT=$RESEARCH_RUN_DIR/out
+#      PROTOCOL=sweep-v0  OUT=$RESEARCH_RUN_DIR/out  RESUME=path/to/results.jsonl (an earlier run's records: those shapes are skipped)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 REPO=$(pwd); O=${OUT:-${RESEARCH_RUN_DIR:-/tmp/fcs}/out}; W=/workspace/flock-circuit; mkdir -p $O $W
@@ -41,7 +41,8 @@ nvidia-smi -L 2>/dev/null | tee $O/host.txt; lscpu | grep -E 'Model name|^CPU\(s
 G_=; [ $G = 1 ] && G_=--gpu
 # a path named at launch that isn't here is the file research run --send shipped to the run dir's inputs/
 inp() { local p=$1; if [ -n "$p" ] && [ ! -e "$p" ] && [ -e "${RESEARCH_RUN_DIR:-/nonexistent}/inputs/$(basename "$p")" ]; then p=$RESEARCH_RUN_DIR/inputs/$(basename "$p"); fi; echo "$p"; }
-GRAPH=$(inp "${GRAPH:-}"); DEFS=$(inp "${DEFS:-}"); SHAPES=$(inp "${SHAPES:-}")
+GRAPH=$(inp "${GRAPH:-}"); DEFS=$(inp "${DEFS:-}"); SHAPES=$(inp "${SHAPES:-}"); RESUME=$(inp "${RESUME:-}")
+[ -n "$RESUME" ] && { mkdir -p $O/classes; grep '^{' "$RESUME" > $O/classes/results.jsonl; }
 SRC=(--program-graph "$GRAPH"); [ -n "$DEFS" ] && SRC=(--definitions "$DEFS")
 SEL=(); [ -n "${SHAPES:-}" ] && SEL+=(--shapes "$SHAPES"); [ -n "${SELECT:-}" ] && SEL+=(--select "$SELECT")
 $PYBIN -m verity_flock.class_statement "${SRC[@]}" ${MODULES:+--modules "$MODULES"} --partition q-word --out $O/classes \
