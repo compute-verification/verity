@@ -23,8 +23,8 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
     `Q_word` v1 or the instance-granular `Q_template_instance(s)` v0:
     `evaluate`, `locate`, `validate`, `verify`; pinned by
     `tests/ir/partition_vectors.json` and `template_instance_vectors.json`).
-    `units` cuts each unit of a partition out as a standalone circuit, with
-    the shape that units of equal circuits share.
+    `units` cuts each proof unit of a partition out as a standalone circuit,
+    with the shape that units of equal circuits share.
     `annotations` is `verity/annotations/v0`: names, descriptions, formats and
     groupings keyed by descriptor ids, validated against a descriptor's
     structure, never inside a digest.
@@ -61,7 +61,7 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
  The first is `protocols/sampled_proofs` (`verity_sampled_proofs`): the
  two-stage law, its beacon-keyed draws, and verification plans. See its
  `PROTOCOL.md`. `protocols/one_stage` (`verity_one_stage`) is the one-stage
- audit: registration, the verifier's draw over a partition's units, and the
+ audit: registration, the verifier's draw over a partition's proof units, and the
  audit record with its profile; `benchmarks/one_stage` runs it end to end with
  C-Flock's circuit prover (M0, `verity_flock.circuit`, which lands on `main` with
  PR #192; until then `--m0-pythonpath` names a checkout of it) and the Lean
