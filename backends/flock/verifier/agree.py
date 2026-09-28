@@ -1,7 +1,8 @@
 """The agreement check (PROTOCOL.md §17.1): the Lean verifier and upstream's Rust verifier on the same sessions.
 
     python agree.py --lean BIN --upstream BIN [--statement ID] --circuit F [--comp F] [--partition F] [--program F] \
-        --public F [--registered F] [--tables DIR] [--expect FILE]... [--jobs J] --out DIR --sessions DIR...
+        --public F [--registered F] [--tables DIR] [--zk] [--session-tables J] [--expect FILE]... [--jobs J] \
+        --out DIR --sessions DIR...
 
 `--upstream` is PR #83's binary built with the vectors patch (`netlist-vectors.patch` at 9294e161, `flock-netlist`;
 `circuit-vectors.patch` at 19c7269a, `flock-circuit`): its `replay` subcommand is upstream's offline verdict. Each
@@ -94,13 +95,19 @@ def lean_cmd(a, public, registered=None):
         cmd += ["--registered", archived(a, registered)]
     if a.coins:
         cmd += ["--coins", a.coins]
-    return cmd + ["--session"]
+    return cmd + modes(a) + ["--session"]
+
+
+def modes(a):
+    """`--zk` and `--session-tables J`, which both verifiers read (absent from check.py's preflight namespace)."""
+    tables = getattr(a, "session_tables", None)
+    return (["--zk"] if getattr(a, "zk", False) else []) + (["--session-tables", tables] if tables else [])
 
 
 def upstream_cmd(a, public, extra=()):
     flag = "--netlist" if a.statement == "verity/flock-netlist/v1" else "--circuit"
     tables = ["--tables", a.tables] if a.tables else []
-    return [a.upstream, "replay", *extra, "--instances", public, flag, a.circuit, *tables, "--sessions"]
+    return [a.upstream, "replay", *extra, *modes(a), "--instances", public, flag, a.circuit, *tables, "--sessions"]
 
 
 def verdicts(a, slots=None):
@@ -114,7 +121,8 @@ def verdicts(a, slots=None):
         for si, s in enumerate(sessions):
             order[s] = (gi, si)
         base = lean_cmd(a, public, registered)
-        for c in chunks(sessions, a.jobs):
+        # a keyed coin tree's key is fresh once per verifier run, and a tampered session keeps its original's key
+        for c in [[s] for s in sessions] if a.zk else chunks(sessions, a.jobs):
             tasks.append(("lean", base, c))
         if a.upstream == LIVE:
             continue
@@ -175,6 +183,8 @@ def main(argv=None, slots=None, quiet=False):
     ap.add_argument("--registered", default=None, help="the verifier's own registered reads (verity/registered-reads/v0)")
     ap.add_argument("--statement", default="verity/flock-circuit")
     ap.add_argument("--coins", default=None)
+    ap.add_argument("--zk", action="store_true", help="flock-circuit --zk sessions (upstream: the live build's replay)")
+    ap.add_argument("--session-tables", default=None, help="the tables of every session")
     ap.add_argument("--tables", default=None, help="the pinned MUFU tables, for circuits with lookup slots")
     ap.add_argument("--expect", action="append", default=[])
     ap.add_argument("--out", required=True, type=Path)
