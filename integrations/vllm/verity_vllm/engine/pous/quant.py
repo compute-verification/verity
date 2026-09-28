@@ -71,6 +71,7 @@ class Store:
         dense.CHUNKED_THREADS[0] = int(spec.get("chunked_threads") or 128)
         dense.CHUNKED_SPLIT[0] = bool(spec.get("split"))
         dense.CHUNKED_FUSED_X[0] = bool(spec.get("fused_x"))
+        dense.CHUNKED_WHOLE[0] = bool(spec.get("whole_chain"))
         self.salt = bytes.fromhex(spec["salt"])
         self.device = torch.device("cuda", torch.cuda.current_device())
         self.c: torch.Tensor | None = None

@@ -92,6 +92,10 @@ unsplit kernel already fills the GPU and the pair's shuffles cost more than its 
 CHUNKED_FUSED_X = [False]
 """Unsplit chunk-major decodes read each step's parents (and the pad) inside the Feistel launch instead of gathering them."""
 
+CHUNKED_WHOLE = [False]
+"""Unsplit chunk-major decodes at the 64 KiB width run every row's whole chain in one launch (`band_chain_kernel`), writing
+`W` straight to its place: no per-step launches and no key extraction."""
+
 CHUNKED_MAX_ROWS = [18_000]
 """Chunk-major launches over more rows run as equal sequential pieces of at most this many: past about one warp per
 scheduler (18k rows on the L40S) a launch's per-row rate collapses (23,744 rows: 93.6 ms at once, 84.7 ms in two)."""
@@ -203,6 +207,22 @@ def _decode_chunked(c_flat, seg, blk, ln, tags, base, starts, width: int) -> tor
     return st.get(0, 0, width)
 
 
+def _decode_whole(c_flat, seg, blk, ln, tags, base, order, width: int) -> torch.Tensor:
+    from verity_vllm.engine.pous import native
+
+    r = len(blk)
+    st = _Chunked(r, width, c_flat.device)
+    st.put(1, width - 32, slice(None), tags[seg])
+    dom = torch.zeros(r, 32, dtype=torch.uint8, device=c_flat.device)
+    dom[:, 0], dom[:, 1] = (blk & 0xFF).to(torch.uint8), (blk >> 8).to(torch.uint8)
+    st.put(1, width, slice(None), dom)
+    out = torch.empty(r, width, dtype=torch.uint8, device=c_flat.device)
+    base, blk, ln, dest = base.contiguous(), blk.contiguous(), ln.contiguous(), order.contiguous()
+    for start, n, _ in st.launches(0, allow_split=False):
+        native.ext().band_chain(st.words, start, n, codec.PI_DOMAIN, CHUNKED_THREADS[0], c_flat, base, blk, ln, dest, out)
+    return out
+
+
 def decode_blocks(c_flat: torch.Tensor, tags: torch.Tensor, segs: torch.Tensor, blocks: torch.Tensor,
                   per_segment: int, window: int | None = None) -> torch.Tensor:
     """`W` of the blocks `(segs[r], blocks[r])` alone, from every segment's `C` (`[S * B, L]`, segment-major) and tags
@@ -220,6 +240,8 @@ def decode_blocks(c_flat: torch.Tensor, tags: torch.Tensor, segs: torch.Tensor, 
     state[:, 2 * width + 33] = (blk >> 8).to(torch.uint8)
     starts = torch.searchsorted(ln, torch.arange(int(ln[-1]) + 2, device=ln.device)).tolist()
     base = seg * per_segment
+    if CHUNKED[0] and r >= CHUNKED_MIN_ROWS[0] and CHUNKED_WHOLE[0] and width == 65_536 and c_flat.is_contiguous():
+        return _decode_whole(c_flat, seg, blk, ln, tags, base, order, width)
     if CHUNKED[0] and r >= CHUNKED_MIN_ROWS[0]:
         w = _decode_chunked(c_flat, seg, blk, ln, tags, base, starts, width) ^ c_flat[base + blk]
         out = torch.empty_like(w)

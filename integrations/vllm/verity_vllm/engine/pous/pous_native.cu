@@ -706,13 +706,12 @@ __device__ __forceinline__ void x_chunk_load(const uint64_t* slot, const uint64_
   }
 }
 
+// One Π₂ on row `r` of a chunk-major state (feistel_chunked_kernel's body); with `xfused`, round 1 reads X from `xrow` (the
+// pad when null) instead of the state.
 template <int64_t HW_FIXED>
-__global__ void feistel_chunked_kernel(uint64_t* st_words, int64_t pitch, int64_t row0, int64_t rows, int64_t hw_arg,
-                                       int domain, const uint64_t* xsrc, const int64_t* xidx, int64_t xwords) {
-  const int64_t n = (int64_t)blockIdx.x * blockDim.x + threadIdx.x;
-  if (n >= rows) return;
+__device__ __forceinline__ void pi2_chunked_row(uint64_t* st_words, int64_t pitch, int64_t r, int64_t hw_arg, int domain,
+                                                bool xfused, const uint64_t* xrow, int64_t xwords) {
   const int64_t hw = HW_FIXED ? HW_FIXED : hw_arg;
-  const int64_t r = row0 + n;
   const int64_t nch = (hw + RATE_WORDS - 1) / RATE_WORDS;
   const int64_t len = 8 * hw + 2;
   const int64_t full = len / RATE;
@@ -742,9 +741,7 @@ __global__ void feistel_chunked_kernel(uint64_t* st_words, int64_t pitch, int64_
 #pragma unroll
     for (int k = 0; k < 25; ++k) t[k] = 0;
     carry = ((uint64_t)(uint8_t)domain | ((uint64_t)(i + 1) << 8)) << 48;
-    const bool fused_x = xsrc != nullptr && i == 1;
-    const int64_t xi = fused_x ? xidx[r] : -1;
-    const uint64_t* xrow = xi >= 0 ? xsrc + xi * xwords : nullptr;
+    const bool fused_x = xfused && i == 1;
     if (fused_x) x_chunk_load(CHUNK_AT(h, 0), xrow, 0, xwords, nxt);
     else slot_load(CHUNK_AT(h, 0), nxt);
     for (int64_t c = 0; c < chunks; ++c) {
@@ -770,6 +767,67 @@ __global__ void feistel_chunked_kernel(uint64_t* st_words, int64_t pitch, int64_
     for (int k = 0; k < 25; ++k) s[k] = t[k];
   }
 #undef CHUNK_AT
+}
+
+template <int64_t HW_FIXED>
+__global__ void feistel_chunked_kernel(uint64_t* st_words, int64_t pitch, int64_t row0, int64_t rows, int64_t hw_arg,
+                                       int domain, const uint64_t* xsrc, const int64_t* xidx, int64_t xwords) {
+  const int64_t n = (int64_t)blockIdx.x * blockDim.x + threadIdx.x;
+  if (n >= rows) return;
+  const int64_t r = row0 + n;
+  const int64_t xi = xsrc != nullptr ? xidx[r] : -1;
+  pi2_chunked_row<HW_FIXED>(st_words, pitch, r, hw_arg, domain, xsrc != nullptr, xi >= 0 ? xsrc + xi * xwords : nullptr, xwords);
+}
+
+// Every step of rows `row0 .. row0 + rows`' chains in one launch: row `r` (block `blk[r]` at `base[r]` in the row-major `c`,
+// chain length `len[r]`) runs its `len + 1` Π₂ calls, each reading its parent C_{blk-j} (then the pad) in round 1, and writes
+// W = key ^ C_blk to row `dest[r]` of `out`.  The state must hold each row's h_0 (tag and dom) and nothing else it relies on.
+__global__ void band_chain_kernel(uint64_t* st_words, int64_t pitch, int64_t row0, int64_t rows, int domain, const uint64_t* c,
+                                  const int64_t* base, const int64_t* blk, const int64_t* len, const int64_t* dest,
+                                  uint64_t* out) {
+  constexpr int64_t hw = 8196, xwords = 8192;
+  const int64_t n = (int64_t)blockIdx.x * blockDim.x + threadIdx.x;
+  if (n >= rows) return;
+  const int64_t r = row0 + n;
+  const int64_t b = blk[r], L = len[r], at = base[r];
+  for (int64_t j = 1; j <= L + 1; ++j)
+    pi2_chunked_row<hw>(st_words, pitch, r, hw, domain, true, j <= L ? c + (at + b - j) * xwords : nullptr, xwords);
+  constexpr int64_t nch = (hw + RATE_WORDS - 1) / RATE_WORDS;
+  const uint64_t* crow = c + (at + b) * xwords;
+  uint64_t* orow = out + dest[r] * xwords;
+  for (int64_t ch = 0; ch * RATE_WORDS < xwords; ++ch) {
+    const uint64_t* slot = st_words + ((0 * nch + ch) * pitch + r) * SLOT_WORDS;
+    uint64_t v[RATE_WORDS];
+    slot_load(slot, v);
+#pragma unroll
+    for (int w = 0; w < RATE_WORDS; ++w) {
+      const int64_t j = ch * RATE_WORDS + w;
+      if (j < xwords) orow[j] = v[w] ^ crow[j];
+    }
+  }
+}
+
+void band_chain(torch::Tensor state, int64_t row0, int64_t rows, int64_t domain, int64_t threads, torch::Tensor c,
+                torch::Tensor base, torch::Tensor blk, torch::Tensor len, torch::Tensor dest, torch::Tensor out) {
+  TORCH_CHECK(state.is_cuda() && state.scalar_type() == torch::kInt64 && state.is_contiguous() && state.dim() == 4 &&
+              state.size(0) == 2 && state.size(3) == SLOT_WORDS && state.size(1) == (8196 + RATE_WORDS - 1) / RATE_WORDS,
+              "state must be the 64 KiB chunk-major int64 [2, 483, pitch, SLOT_WORDS]");
+  TORCH_CHECK(c.is_cuda() && c.scalar_type() == torch::kUInt8 && c.is_contiguous() && c.dim() == 2 && c.size(1) == 65536,
+              "c must be contiguous uint8 [rows, 65536]");
+  TORCH_CHECK(out.is_cuda() && out.scalar_type() == torch::kUInt8 && out.is_contiguous() && out.size(0) == state.size(2) &&
+              out.size(1) == 65536, "out must be contiguous uint8 [pitch, 65536]");
+  for (auto* t : {&base, &blk, &len, &dest})
+    TORCH_CHECK(t->is_cuda() && t->scalar_type() == torch::kInt64 && t->is_contiguous() && t->numel() == state.size(2),
+                "base, blk, len must be int64 with one entry per state row");
+  TORCH_CHECK(row0 >= 0 && rows >= 0 && row0 + rows <= state.size(2), "rows out of range");
+  if (rows == 0) return;
+  c10::cuda::CUDAGuard guard(state.device());
+  auto stream = c10::cuda::getCurrentCUDAStream();
+  band_chain_kernel<<<(unsigned)((rows + threads - 1) / threads), (unsigned)threads, 0, stream>>>(
+      reinterpret_cast<uint64_t*>(state.data_ptr<int64_t>()), state.size(2), row0, rows, (int)domain,
+      reinterpret_cast<const uint64_t*>(c.data_ptr<uint8_t>()), base.data_ptr<int64_t>(), blk.data_ptr<int64_t>(),
+      len.data_ptr<int64_t>(), dest.data_ptr<int64_t>(), reinterpret_cast<uint64_t*>(out.data_ptr<uint8_t>()));
+  C10_CUDA_KERNEL_LAUNCH_CHECK();
 }
 
 // A Keccak-f[1600] state split across a lane pair: lane parity h holds bits 32h .. 32h + 31 of every 64-bit word.  A 64-bit
@@ -1278,6 +1336,9 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("shake256_rows", &shake256_rows, "out (^)= SHAKE256(prefix || body)[0:out.size(1)], row by row");
   m.def("chunked_gather", &chunked_gather, "parent rows into half 0 of a chunk-major state", pybind11::arg("state"),
         pybind11::arg("row0"), pybind11::arg("src"), pybind11::arg("index"), pybind11::arg("words"));
+  m.def("band_chain", &band_chain, "every step of the rows' chains in one launch, writing W", pybind11::arg("state"),
+        pybind11::arg("row0"), pybind11::arg("rows"), pybind11::arg("domain"), pybind11::arg("threads"), pybind11::arg("c"),
+        pybind11::arg("base"), pybind11::arg("blk"), pybind11::arg("len"), pybind11::arg("dest"), pybind11::arg("out"));
   m.def("feistel_chunked", &feistel_chunked, "Π₂ on rows of a chunk-major state", pybind11::arg("state"), pybind11::arg("row0"),
         pybind11::arg("rows"), pybind11::arg("hw"), pybind11::arg("domain"), pybind11::arg("threads") = 128,
         pybind11::arg("specialize") = true, pybind11::arg("split") = false, pybind11::arg("xsrc") = pybind11::none(),
