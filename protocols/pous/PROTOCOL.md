@@ -54,7 +54,8 @@ Three codecs share everything above the scheme (setup, layout, `vk`, audits):
   `Pous.Model.Invertible`.
 
 The concrete primitives are those of POUS `docs/p3-instantiation.md`. Each set of parameters names its codec
-(`params.codec`), and every function that takes a codec defaults to it.
+(`params.codec`), and every function that takes a codec defaults to it. P2 (`schemes/p2.py`, experimental) is a
+`protocol.Scheme` and not a codec: see "The generic protocol".
 
 The secure-first scheme is the band graph with in-degree `d = 12` (Daniel, 28 Sep 2026, 01:10Z; POUS
 `docs/band-vs-dense.md`), superseding the dense choice of `docs/scheme-choice-e2e.md`. Dense stays selectable
@@ -214,9 +215,9 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
   `research=True` runs such an audit anyway, except past the cliff.
 - **`protocol.StorageProfile`** is what an accepted audit establishes: a server whose state held fewer than
   `⌊rho · |C|⌋` bits passes with probability at most `delta + 2^eps_log2`, by the certificate. It also lists the
-  `gaps`, where the certificate does not cover the audit: a refusal run with `research=True`, or more segments of `W`
-  than the theorem is about. The headline `band_meets_64` is about one segment; the 14 GB multi-segment form is the
-  next item. `to_json` writes `verity-pous/storage-profile/v1`.
+  `gaps`, where the certificate does not cover the audit: a refusal run with `research=True`, or a segment count of `W`
+  other than the theorem's. The band's certificate is `band_meets_64` at one segment and `band_meets_14` at 448.
+  `to_json` writes `verity-pous/storage-profile/v1`.
 - **The rest:**
   - `protocol.verifier_key(scheme, commitment, salt, mode=PRIVATE or PUBLIC, w=..., encoded=...)` builds `vk`
     either way;
@@ -232,7 +233,8 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
   - `tests/test_pous_protocol.py` checks it for every scheme, and replays the attack on real labels.
   - `benchmarks/pous` gates every implementation's tags against `salt ‖ u64 s` over 448 segments.
 - **Claims.** `protocol.claim(id)` resolves an id from `verity.claims`, or from `protocol.LOCAL_CLAIMS` until core holds
-  it: `ideal-permutation`, `perfect-isolation`, `sequential-step-floor`, `feistel-indifferentiability`.
+  it: `ideal-permutation`, `perfect-isolation`, `sequential-step-floor`, `feistel-indifferentiability`, and P2's
+  `m1-ideal-permutations`, `sms-m1-instantiation`, `seq-root`.
 - **Tests.** `tests/test_pous_protocol.py` runs one conformance suite over every scheme, plus a toy that implements
   only the two methods. Each registered scheme's vectors are pinned in `tests/fixtures/schemes/<name>.json`, written
   by `tests/pous_scheme_vectors.py`: the certificate at the registered point, and a small instance's segment digests
