@@ -3,9 +3,10 @@ import Pouw.Protocol.PearlC.TileCheck
 /-!
 # L3 from its parts, and on a transcript
 
-`TileCheck.computes_of`: L3 is its cap and its words. `TileCheck.mem_of_computes`: under L3, a tile whose unit `τ`
-commits as `c`, with a witness its check accepts, is in `goodTiles ∪ blankTiles`, or the registered values fail to
-bind the circuit's words; `TileGame.good_of_accept`'s conclusion when `Collides` is in the proof system's bad event.
+`TileCheck.computes_of`: L3 is its cap and its words; the tile's weight rows are the check's own.
+`TileCheck.mem_of_computes`: under L3, a tile whose unit `τ` commits as `c`, with a witness its check accepts, is in
+`goodTiles ∪ blankTiles`, or the registered values fail to bind the circuit's words; `TileGame.good_of_accept`'s
+conclusion when `Collides` is in the proof system's bad event.
 -/
 
 namespace Pouw.PearlC
@@ -13,14 +14,20 @@ namespace Pouw.PearlC
 variable {Q R S : Type}
 
 theorem tileGood_iff (P : Protocol Q R S) (TR : TileRules Q R S) (U : Workload) (H : Q → R) (s : S) (g : ℕ)
-    (c : Commit) : TileGood P TR U H s g c ↔ TR.capOK H s U g c.act ∧ TileWordsGood P TR U H s g c :=
+    (c : Commit) :
+    TileGood P TR U H s g c ↔
+      TR.capOK H s U g c.act ∧
+        (∀ j ∈ (TR.tiling U.layout).cols g,
+          P.weightOK (U.layout.shape ((TR.tiling U.layout).unit g))
+            (U.weight (U.layout.wid ((TR.tiling U.layout).unit g))) j) ∧
+        TileWordsGood P TR U H s g c :=
   Iff.rfl
 
 theorem TileCheck.computes_of (TC : TileCheck Q R S) (P : Protocol Q R S) (TR : TileRules Q R S)
     (D : Layout → Prop) (hc : TC.ComputesCap P TR D) (hw : TC.ComputesWords P TR D) : TC.Computes P TR D := by
   intro U hU H s g hg c X hX
   rcases hw U hU H s g hg c X hX with h | h
-  · exact Or.inl ⟨hc U hU H s g hg c X hX, h⟩
+  · exact Or.inl ⟨hc U hU H s g hg c X hX, hX.2.2.2, h⟩
   · exact Or.inr h
 
 theorem TileCheck.mem_of_computes (TC : TileCheck Q R S) (P : Protocol Q R S) (TR : TileRules Q R S)

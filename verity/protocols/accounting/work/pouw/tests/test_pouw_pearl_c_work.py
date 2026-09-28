@@ -202,6 +202,32 @@ def test_audit_credits_real_rows_and_checks_the_excluded_ones():
     assert out.credit == (1 - S.cap) * W.cell_credit(S, records[0]) * 19 * 16 and out.job == S.job_cost(16, K)
 
 
+def test_an_excluded_weight_row_earns_nothing_and_its_tiles_are_accepted():
+    """Where the work law and L3's tile check differ: a weight row that fails the per-row rules is excluded, and every
+    tile holding its column is accepted with none of that column's cells credited, while L3's `TileCheck.Accepts` asks
+    `weightOK` of each of a tile's columns and refuses the tile.  The work law is credit-sound there only while the
+    excluded column's chain words (its C̃ and U words, computed and bound as any other's) earn nothing: W and the credit
+    count 19 · 15 cells, not 19 · 16, and declaring the row credited fails its tile."""
+    rows_a = CV.rows_f32("work-life", "A", 20, K) + [C.f32_row([0] * K)] * 12
+    rows_a[3] = spiked(rows_a[3])
+    rows_b = CV.rows_f32("work-life", "B", 16, K)
+    rows_b[5] = spiked(rows_b[5])
+    work = Workload((Matmul(3, Shape(32, K, 16), 9),))
+    prover = Prover(S, {9: rows_b})
+    epoch = Epoch.unverified(work, prover.weight_roots, b"beacon")
+    tr = prover.prove(epoch, {3: rows_a})
+    records = W.declare(S, epoch, {3: rows_a}, {9: rows_b}, SPLITS, real_rows={3: 20})
+    assert records == [W.UnitRecord(epoch.workload.matmuls[0], 20, K, (3,), (5,))]
+    out = W.audit(S, epoch, prover, tr, SPLITS, records, BEFORE, AFTER, 8)
+    assert all(5 in t.cols for t in S.tiles(work.matmuls[0].shape))
+    assert out.audit.accepted and len(out.audit.verdicts) == 9
+    assert out.wref == W.cell_wref(S, records[0]) * 19 * 15 and out.credit == (1 - S.cap) * W.cell_credit(S, records[0]) * 19 * 15
+    credited_b = W.UnitRecord(epoch.workload.matmuls[0], 20, K, (3,), ())
+    rejected = W.audit(S, epoch, prover, tr, SPLITS, [credited_b], BEFORE, AFTER, 8)
+    assert not rejected.audit.accepted and any(v.reason == "B row 5 is credited but fails the per-row rules"
+                                               for v in rejected.audit.verdicts)
+
+
 def test_r1_is_a_no_op_on_pearl_c():
     """R1, the salted per-row credit rule `check_opened` and `declare` now consult, is Pearl-C4's (its F1′ bound).
     Pearl-C (FP8) brings no hook, so an excluded row that passes the per-row rules still fails its tile, and declaring

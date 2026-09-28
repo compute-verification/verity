@@ -108,7 +108,8 @@ def test_fraction_draws_and_gamma():
     assert A.eps_for(300) == pytest.approx(0.00994, abs=1e-5)
     g = A.gamma(8192, 8192)
     assert g["gamma"] == "1648180439/446072750000" and g["status"] == "pinned"
-    assert g["pin"] == "Pouw.PearlC.pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_8192" and g["source"].endswith("lean-audit.json")
+    assert g["pin"] == "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192"
+    assert g["source"].endswith("lean-audit.json")
     f = A.fraction({0: 600, 3: 300}, {0: 1.5, 3: 2.0}, 1.8, Fraction(1, 100))
     assert f["capacity_gemms"] == 1200 + 900 and f["credited_gemms"] == 900
     assert f["fraction"] == pytest.approx(0.99 * 0.95 * 900 / 2100) and f["slowdown"] == pytest.approx(2100 / 900)

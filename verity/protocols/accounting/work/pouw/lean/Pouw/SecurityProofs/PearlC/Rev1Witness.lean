@@ -75,6 +75,7 @@ theorem ttOutPearlCH100Rev1Witness :
         (pearlCProtocolDevRev1 devH100 witnessSem (1 / 400)) (pearlCDomainDev devH100) (fun _ => 0) ∧
       TTOutPearlCH100Rev1 (witnessCM (pearlCProtocolDevRev1 devH100 witnessSem (1 / 400))) witnessSem (1 / 400) ∧
       witnessWorkload.InDomain (pearlCProtocolDevRev1 devH100 witnessSem (1 / 400)) (pearlCDomainDev devH100) ∧
+      witnessWorkload.WeightsOK (pearlCProtocolDevRev1 devH100 witnessSem (1 / 400)) ∧
       (pearlCProtocolDevRev1 devH100 witnessSem (1 / 400)).capOK (fun _ => ()) () witnessWorkload 0 (witnessAct 0) ∧
       0 < ∑ u ∈ range witnessWorkload.layout.N,
         (pearlCProtocolDevRev1 devH100 witnessSem (1 / 400)).credit (fun _ => ()) () witnessWorkload u (witnessAct u) := by
@@ -91,8 +92,8 @@ theorem ttOutPearlCH100Rev1Witness :
     simp (disch := decide) only [laterZeroPromos_eq_zero_of_le, Nat.cast_zero, sum_const_zero, mul_zero,
       add_zero]
   have hdom := ttOutPearlCWitness.2.2.1
-  refine ⟨?_, ?_, ?_, ?_, ?_⟩
-  · refine ⟨true, fun U _ act _ H s => ⟨by simp [witnessCM], ?_, by simp [witnessCM]⟩⟩
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
+  · refine ⟨true, fun U _ _ act _ H s => ⟨by simp [witnessCM], ?_, by simp [witnessCM]⟩⟩
     show (if true = true then ∑ u ∈ range U.layout.N, max (P.credit H s U u (act u)) 0 else 0) ≤ _
     simp only [↓reduceIte]
     apply sum_le_sum
@@ -124,6 +125,7 @@ theorem ttOutPearlCH100Rev1Witness :
       linarith
   · rw [pearlCDomainDev_h100]
     exact hdom
+  · exact ttOutPearlCWitness.2.2.2.1
   · show witnessSem.unitDebitRev1 devH100 (fun _ => ()) () witnessWorkload 0 (witnessAct 0) ≤
       1 / 400 * creditDevRev1 devH100 (witnessWorkload.layout.shape 0)
     rw [hzero]
@@ -143,6 +145,7 @@ theorem ttOutTilePearlCH100Rev1Witness :
     TTOutTilePearlCH100Rev1 (witnessTileCM (pearlCProtocolDevRev1 devH100 witnessSem (1 / 400))
         (pearlCTilesDevRev1 devH100 witnessSem (1 / 400))) witnessSem (1 / 400) ∧
     witnessWorkload.InDomain (pearlCProtocolDevRev1 devH100 witnessSem (1 / 400)) (pearlCDomainDev devH100) ∧
+    witnessWorkload.WeightsOK (pearlCProtocolDevRev1 devH100 witnessSem (1 / 400)) ∧
     (pearlCTilesDevRev1 devH100 witnessSem (1 / 400)).capOK (fun _ => ()) () witnessWorkload 0 (witnessAct 0) ∧
     0 < ∑ g ∈ range ((pearlCTilesDevRev1 devH100 witnessSem (1 / 400)).tiling witnessWorkload.layout).NT,
       (pearlCTilesDevRev1 devH100 witnessSem (1 / 400)).credit (fun _ => ()) () witnessWorkload g (witnessAct 0) := by
@@ -165,8 +168,8 @@ theorem ttOutTilePearlCH100Rev1Witness :
         (witnessWorkload.layout.shape ((gridTiles 64 64 witnessWorkload.layout).getD 0 (0, 0, 0)).1).n) = Ico 0 1
     rw [witness_gridTiles]; rfl
   have hdom := ttOutPearlCWitness.2.2.1
-  refine ⟨?_, ?_, ?_, ?_, ?_⟩
-  · refine ⟨true, fun U _ act _ H s => ⟨by simp [witnessTileCM], ?_, by simp [witnessTileCM]⟩⟩
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
+  · refine ⟨true, fun U _ _ act _ H s => ⟨by simp [witnessTileCM], ?_, by simp [witnessTileCM]⟩⟩
     show (if true = true then ∑ g ∈ range (TR.tiling U.layout).NT,
         max (TR.credit H s U g (act ((TR.tiling U.layout).unit g))) 0 else 0) ≤ tileWrefTotal TR U.layout
     simp only [↓reduceIte, tileWrefTotal]
@@ -209,6 +212,7 @@ theorem ttOutTilePearlCH100Rev1Witness :
       linarith
   · rw [pearlCDomainDev_h100]
     exact hdom
+  · exact ttOutPearlCWitness.2.2.2.1
   · show witnessSem.tileDebitRev1 devH100 (fun _ => ()) () witnessWorkload ((TR.tiling witnessWorkload.layout).unit 0)
         (witnessSem.passRows (witnessWorkload.layout.shape ((TR.tiling witnessWorkload.layout).unit 0)) (witnessAct 0)
           ((TR.tiling witnessWorkload.layout).rows 0)) ((TR.tiling witnessWorkload.layout).cols 0) (witnessAct 0) ≤

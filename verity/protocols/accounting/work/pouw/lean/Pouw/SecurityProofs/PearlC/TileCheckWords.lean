@@ -96,7 +96,7 @@ theorem tileCheck8_computesWords {ops : RowOps} (hops : Pc8OpsAgree ops) (p : Pi
   intro i hi hok j hj
   have him := hrows U.layout g i hi
   have hjn := hcols U.layout g j hj
-  obtain ⟨hM, hN, nw, hnw, hK⟩ := hsh U.layout hU.2.1 g hg
+  obtain ⟨hM, hN, nw, hnw, hK⟩ := hsh U.layout hU.2 g hg
   have hW : (pc8Sem ops p noise).RowOK _ _ (U.weight (U.layout.wid ((TR.tiling U.layout).unit g))) j := hwt j hj
   have hR := hrow _ c.act i hok
   obtain ⟨w1, w2⟩ := entry8_accepts hops p pr hnw hK hM hN X _ c.act _ c.ticket c.useful ⟨i, him⟩ ⟨j, hjn⟩
@@ -105,7 +105,7 @@ theorem tileCheck8_computesWords {ops : RowOps} (hops : Pc8OpsAgree ops) (p : Pi
     (fun v hv h => hreg ⟨v, hv⟩ (Finset.mem_filter.2 ⟨Finset.mem_univ _, h⟩))
     (row8OK_of_floor hops p noise him hR.1 (hR.2 him).2)
     (row8OK_of_floor hops p noise hjn hW.1 (hW.2 hjn).2)
-    (hnoise H s U _ c.act) (hent H s U _ c.act ⟨i, him⟩ ⟨j, hjn⟩ hU.2.1 (hunit _ g hg) hok)
+    (hnoise H s U _ c.act) (hent H s U _ c.act ⟨i, him⟩ ⟨j, hjn⟩ hU.2 (hunit _ g hg) hok)
   refine ⟨w1.trans ?_, w2.trans ?_⟩
   · show _ = atNat _ i j
     unfold atNat
@@ -187,12 +187,12 @@ theorem tileCheck4_computesWords {ops : RowOps} (hops : Pc4OpsAgree ops) (ρ : �
   intro i hi hok j hj
   have him := hrows U.layout g i hi
   have hjn := hcols U.layout g j hj
-  obtain ⟨hM, hN, nw, hnw, hK⟩ := hsh U.layout hU.2.1 g hg
+  obtain ⟨hM, hN, nw, hnw, hK⟩ := hsh U.layout hU.2 g hg
   have hW : (pc4Sem ops lines).RowOK _ _ (U.weight (U.layout.wid ((TR.tiling U.layout).unit g))) j := hwt j hj
   have hR := hrow _ c.act i hok
   have hRa := row4OK_of_admit hops lines him hR.1 (hR.2 him)
   have hRb := row4OK_of_admit hops lines hjn hW.1 (hW.2 hjn)
-  have hE := PeelExists.pc4EntryOK_of_rows hops ⟨nw, hK⟩ (hk16 U.layout hU.2.1 g hg) (lines H s U _ c.act) c.act _
+  have hE := PeelExists.pc4EntryOK_of_rows hops ⟨nw, hK⟩ (hk16 U.layout hU.2 g hg) (lines H s U _ c.act) c.act _
     ⟨i, him⟩ ⟨j, hjn⟩ hRa hRb
   obtain ⟨w1, w2⟩ := entry4_accepts hops hnw hK hM hN X _ c.act _ c.ticket c.useful ⟨i, him⟩ ⟨j, hjn⟩
     (fun v hv => Finset.mem_filter.2 ⟨Finset.mem_univ _, i, hi, j, hj, him, hjn, hv⟩) hcone

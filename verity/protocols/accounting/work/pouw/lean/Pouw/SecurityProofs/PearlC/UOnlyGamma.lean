@@ -29,8 +29,8 @@ theorem correctSet_subset_correctSetU (P : Protocol Q R S) (U : Workload) (H : Q
   unfold correctSet at hu
   unfold correctSetU
   rw [mem_filter] at hu ⊢
-  obtain ⟨hu, c, hc, hact, hcap, hw⟩ := hu
-  exact ⟨hu, c, hc, hact, hcap, fun i hi j hj => (hw i hi j hj).2⟩
+  obtain ⟨hu, c, hc, hact, hcap, hB, hw⟩ := hu
+  exact ⟨hu, c, hc, hact, hcap, hB, fun i hi j hj => (hw i hi j hj).2⟩
 
 /-- `G_γ^U` gives `G_γ` when `W_ref` is non-negative. -/
 theorem gammaU_implies_gamma [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
@@ -105,7 +105,7 @@ theorem ttOutPearlCDevRev1_of_uOnly [Fintype Q] [DecidableEq Q] [Fintype R] [Fin
   unfold correctSetU at hu
   rw [mem_filter] at hu
   obtain ⟨hur, c, hc, _, hcap, _⟩ := hu
-  obtain ⟨_, _, hk, _, hg, _⟩ := hU.2.1 u (mem_range.mp hur)
+  obtain ⟨_, _, hk, _, hg, _⟩ := hU.2 u (mem_range.mp hur)
   have hcr := creditDevRev1_nonneg d hadd hbf (U.layout.shape u) hk hg
   have hact : actOf (A.transcript U x.1 x.2) u = c.act := by simp [actOf, hc]
   rw [hact]
@@ -132,7 +132,7 @@ theorem pearlCGammaDevUOnlyAt {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintyp
           (pearlCProtocolDevRev1 d sem ρ).Wref U.layout u ≤
             (ω : ℝ) * (pearlCProtocolDevRev1 d sem ρ).credit H s' U u act := by
     intro U hU H s' u hu act _ hcap
-    have hsh : U.layout.shape u = s := hU.2.1.2 u hu
+    have hsh : U.layout.shape u = s := hU.2.2 u hu
     have hc : sem.unitDebitRev1 d H s' U u act ≤ ρ * creditDevRev1 d (U.layout.shape u) := hcap
     show (wrefDevRev1 d (U.layout.shape u) : ℝ) ≤
       (ω : ℝ) * ((creditDevRev1 d (U.layout.shape u) - sem.unitDebitRev1 d H s' U u act : ℚ) : ℝ)
@@ -142,7 +142,7 @@ theorem pearlCGammaDevUOnlyAt {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintyp
       mul_le_mul_of_nonneg_left (by linarith) hω0.le
     exact_mod_cast this
   have hmono : TTOutU CM (pearlCProtocolDevRev1 d sem ρ) (pearlCDomainDevAt d s) (1 / 400) εPearlC :=
-    ⟨hTT.1, fun U hU => hTT.2 U ⟨hU.1, hU.2.1.1, hU.2.2⟩⟩
+    ⟨hTT.1, fun U hU => hTT.2 U ⟨hU.1, hU.2.1⟩⟩
   have key := gammaFromTTOutU CM (pearlCProtocolDevRev1 d sem ρ) (pearlCDomainDevAt d s) (1 / 400) (ω : ℝ) εPearlC
     (by exact_mod_cast hω0) hW hmono
   have e : (γ : ℝ) = 1 - (1 - 1 / 400) / (ω : ℝ) := by rw [hγ]; push_cast; ring

@@ -54,7 +54,7 @@ theorem pearlCGammaDevRev1KShapes [Fintype Q] [DecidableEq Q] [Fintype R] [Finty
     intro U hU H s' u hu act _ hcap
     have hc : sem.unitDebitRev1 d H s' U u act ≤ ρ * creditDevRev1 d (U.layout.shape u) := hcap
     have h1 : wrefDevRev1K d c (U.layout.shape u) ≤ ω * ((1 - ρ) * creditDevRev1 d (U.layout.shape u)) :=
-      hω _ (hU.2.1.2 u hu) _
+      hω _ (hU.2.2 u hu) _
     show (wrefDevRev1K d c (U.layout.shape u) : ℝ) ≤
       (ω : ℝ) * ((creditDevRev1 d (U.layout.shape u) - sem.unitDebitRev1 d H s' U u act : ℚ) : ℝ)
     have : ω * ((1 - ρ) * creditDevRev1 d (U.layout.shape u)) ≤
@@ -86,7 +86,7 @@ theorem pearlCSampledDevRev1KShapes_gen [Fintype Q] [DecidableEq Q] [Fintype R] 
     have hu := auditTiling_unit_lt 64 64 U.layout hg
     have h1 : wrefDevRev1K d c (U.layout.shape ((auditTiling 64 64 U.layout).unit g)) ≤
         ω * ((1 - ρ) * creditDevRev1 d (U.layout.shape ((auditTiling 64 64 U.layout).unit g))) :=
-      hω _ (hU.2.1.2 _ hu) _
+      hω _ (hU.2.2 _ hu) _
     simp only [pearlCTilesDevRev1K, pearlCTilesDevRev1]
     exact mul_share_le_cast h1 (tileShare_nonneg _ _ _)
   have hWc : ∀ U : Workload, U.InDomain (pearlCProtocolDevRev1K d sem ρ c) (pearlCDomainDevShapes d nks) →
@@ -94,7 +94,7 @@ theorem pearlCSampledDevRev1KShapes_gen [Fintype Q] [DecidableEq Q] [Fintype R] 
         (pearlCTilesDevRev1K d sem ρ c).Wcred U.layout g act ≤ (pearlCTilesDevRev1K d sem ρ c).Wref U.layout g := by
     intro U hU g hg act
     have hu := auditTiling_unit_lt 64 64 U.layout hg
-    have h0 : 0 ≤ wrefDevRev1K d c (U.layout.shape ((auditTiling 64 64 U.layout).unit g)) := hw0 _ (hU.2.1.2 _ hu) _
+    have h0 : 0 ≤ wrefDevRev1K d c (U.layout.shape ((auditTiling 64 64 U.layout).unit g)) := hw0 _ (hU.2.2 _ hu) _
     simp only [pearlCTilesDevRev1K, pearlCTilesDevRev1]
     exact_mod_cast mul_le_mul_of_nonneg_left (tileShare_mono _ (passRows_subset sem _ _ _) _) h0
   exact gammaSampled CM (pearlCProtocolDevRev1K d sem ρ c) (pearlCTilesDevRev1K d sem ρ c)

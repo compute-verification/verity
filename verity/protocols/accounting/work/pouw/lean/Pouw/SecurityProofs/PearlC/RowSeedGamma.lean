@@ -529,12 +529,25 @@ theorem rowCap_agg (sem : PearlCSem Q R S) (d : PearlCDevice) (ρ : ℚ) (H : Q 
     _ = ρ * creditDevRev1 d (U.layout.shape u) := by
         rw [sum_const, card_range, nsmul_eq_mul, creditDevRev1_rows d (U.layout.shape u)]; ring
 
+/-- A weight row of a unit passes as a weight row of each of its rows' split units. -/
+theorem split_weightOK (hN : RowSeedNoise sem sem') {d : PearlCDevice} (ρ : ℚ) {U : Workload} {u i j : ℕ}
+    (hu : u < U.layout.N) (hi : i < (U.layout.shape u).m)
+    (h : (pearlCProtocolDevRev1RowCap d sem' ρ).weightOK (U.layout.shape u) (U.weight (U.layout.wid u)) j) :
+    (pearlCProtocolDevRev1 d sem ρ).weightOK ((splitWorkload U).layout.shape (rowIdx U.layout u i))
+      ((splitWorkload U).weight ((splitWorkload U).layout.wid (rowIdx U.layout u i))) j := by
+  show sem.RowOK (U.layout.shape (unitOfRow U.layout (rowIdx U.layout u i))).n
+    (U.layout.shape (unitOfRow U.layout (rowIdx U.layout u i))).k
+    (U.weight (U.layout.wid (unitOfRow U.layout (rowIdx U.layout u i)))) j
+  rw [unitOfRow_rowIdx hu hi]
+  exact rowOK_of_floor hN.2.2.2.1 h
+
 /-- **A row of a correct unit is a correct unit of the split workload.** -/
 theorem split_correct {d : PearlCDevice} (hd : d.RowLocal) (hN : RowSeedNoise sem sem') (ρ : ℚ) (H : Q → R) (s : S)
     {U : Workload} {u i : ℕ} (hu : u < U.layout.N) (hi : i < (U.layout.shape u).m) (hn : 0 < (U.layout.shape u).n)
     {c : Commit} (hc : Correct (pearlCProtocolDevRev1RowCap d sem' ρ) U H s u c) :
     Correct (pearlCProtocolDevRev1 d sem ρ) (splitWorkload U) H s (rowIdx U.layout u i) (rowCommit c i) := by
-  refine ⟨split_actOK hN hu hi hc.1, ?_, fun a ha j hj => ?_⟩
+  refine ⟨split_actOK hN hu hi hc.1, ?_,
+    fun j hj => split_weightOK hN ρ hu hi (hc.2.2.1 j (by rw [← splitShapeW_n hu hi]; exact hj)), fun a ha j hj => ?_⟩
   · show sem.unitDebitRev1 d H s (splitWorkload U) (rowIdx U.layout u i) (rowCodes c.act i) ≤
       ρ * creditDevRev1 d ((splitWorkload U).layout.shape (rowIdx U.layout u i))
     rw [split_debit hd hN H s hu hi hn, splitShapeW_eq hu hi, ← rowShare_credit d ρ _ i (by omega) hn]
@@ -543,8 +556,8 @@ theorem split_correct {d : PearlCDevice} (hd : d.RowLocal) (hN : RowSeedNoise se
     have ha0 : a = 0 := by omega
     subst ha0
     have hj' : j < (U.layout.shape u).n := by rw [← splitShapeW_n hu hi]; exact hj
-    exact ⟨(hc.2.2 i hi j hj').1.trans (split_ticket hd hN ρ H s hu hi c.act j),
-      (hc.2.2 i hi j hj').2.trans (split_useful hd hN ρ H s hu hi c.act j)⟩
+    exact ⟨(hc.2.2.2 i hi j hj').1.trans (split_ticket hd hN ρ H s hu hi c.act j),
+      (hc.2.2.2 i hi j hj').2.trans (split_useful hd hN ρ H s hu hi c.act j)⟩
 
 theorem splitTranscript_rowIdx {L : Layout} (τ : Transcript) {u i : ℕ} (hu : u < L.N) (hi : i < (L.shape u).m) :
     splitTranscript L τ (rowIdx L u i) = (τ u).map fun c => rowCommit c i := by
@@ -648,13 +661,13 @@ theorem ttOutRowSeed_of_ttOut [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S
     ⟨(hrun H (A.pre.eval H) s).2.1.trans (hA H s).1,
       le_trans (Nat.add_le_add_left (hrun H (A.pre.eval H) s).2.2 _) (hA H s).2⟩
   have hU' : (splitWorkload U).InDomain (pearlCProtocolDevRev1 d sem ρ) (pearlCDomainDev d) :=
-    ⟨hR, pearlCDomainDev_split hU.2.1, fun v hv j hj => rowOK_of_floor hN.2.2.2.1 (hU.2.2 _ (unitOfRow_lt hv) j hj)⟩
+    ⟨hR, pearlCDomainDev_split hU.2⟩
   refine le_trans (Pouw.pr_mono fun x hx => lt_of_lt_of_le hx ?_)
     (hTT.2 (splitWorkload U) hU' T hT q hq ⟨A.pre, prog', act'⟩ hA')
   have htr : (⟨A.pre, prog', act'⟩ : Adversary CM).transcript (splitWorkload U) x.1 x.2 =
       splitTranscript U.layout (A.transcript U x.1 x.2) := (hrun x.1 (A.pre.eval x.1) x.2).1
   rw [htr]
-  exact split_credit_le hd hN hρ hadd hbf hU.2.1 x.1 x.2 (A.transcript U x.1 x.2)
+  exact split_credit_le hd hN hρ hadd hbf hU.2 x.1 x.2 (A.transcript U x.1 x.2)
 
 end Reduction
 
@@ -956,7 +969,7 @@ theorem split_tileCredit_le {d : PearlCDevice} (hd : d.RowLocal) (hN : RowSeedNo
     obtain ⟨⟨g, i⟩, hp, rfl⟩ := mem_image.mp hv
     obtain ⟨hg, hi⟩ := mem_sigma.mp hp
     dsimp only at hg hi ⊢
-    obtain ⟨hgr, c, hc, hcap, hwords⟩ := mem_filter.mp hg
+    obtain ⟨hgr, c, hc, hcap, hwts, hwords⟩ := mem_filter.mp hg
     obtain ⟨u, bi, bj, hb, hu, hbj⟩ := tile_facts (mem_range.mp hgr)
     have hdom := hU u hu
     have hc' : τ u = some c := by
@@ -968,7 +981,7 @@ theorem split_tileCredit_le {d : PearlCDevice} (hd : d.RowLocal) (hN : RowSeedNo
     rw [tile_unit hb, hact] at hrow
     have hiu : i < (U.layout.shape u).m := by have := mem_Ico.mp hiI; omega
     simp only [tile_unit hb, hb]
-    refine mem_filter.mpr ⟨mem_range.mpr (splitTileW_lt hu hiu hbj), rowCommit c i, ?_, ?_, ?_⟩
+    refine mem_filter.mpr ⟨mem_range.mpr (splitTileW_lt hu hiu hbj), rowCommit c i, ?_, ?_, ?_, ?_⟩
     · show splitTranscript U.layout τ
         ((auditTiling 64 64 (splitWorkload U).layout).unit (splitTile U.layout u i bj)) = _
       rw [splitTileW_unit hu hiu hbj, splitTranscript_rowIdx τ hu hiu, hc']
@@ -983,6 +996,17 @@ theorem split_tileCredit_le {d : PearlCDevice} (hd : d.RowLocal) (hN : RowSeedNo
       have := hcap i (by rw [tile_unit hb]; exact hpass)
       rw [tile_unit hb, tile_cols hb] at this
       exact this
+    · intro j hj'
+      have hj : j ∈ (auditTiling 64 64 (splitWorkload U).layout).cols (splitTile U.layout u i bj) := hj'
+      rw [splitTileW_cols hu hiu hbj] at hj
+      have hw := hwts j (show j ∈ (auditTiling 64 64 U.layout).cols g by rw [tile_cols hb]; exact hj)
+      rw [show ((pearlCTilesDevRev1RowCap d sem' ρ).tiling U.layout).unit g = u from tile_unit hb] at hw
+      show (pearlCProtocolDevRev1 d sem ρ).weightOK
+        ((splitWorkload U).layout.shape ((auditTiling 64 64 (splitWorkload U).layout).unit (splitTile U.layout u i bj)))
+        ((splitWorkload U).weight ((splitWorkload U).layout.wid
+          ((auditTiling 64 64 (splitWorkload U).layout).unit (splitTile U.layout u i bj)))) j
+      rw [splitTileW_unit hu hiu hbj]
+      exact split_weightOK hN ρ hu hiu hw
     · intro i' hi'' _ j hj'
       have hi0 : i' ∈ (auditTiling 64 64 (splitWorkload U).layout).rows (splitTile U.layout u i bj) := hi''
       have hj : j ∈ (auditTiling 64 64 (splitWorkload U).layout).cols (splitTile U.layout u i bj) := hj'
@@ -1024,13 +1048,13 @@ theorem ttOutTileRowSeed_of_ttOutTile [Fintype Q] [DecidableEq Q] [Fintype R] [F
     ⟨(hrun H (A.pre.eval H) s).2.1.trans (hA H s).1,
       le_trans (Nat.add_le_add_left (hrun H (A.pre.eval H) s).2.2 _) (hA H s).2⟩
   have hU' : (splitWorkload U).InDomain (pearlCProtocolDevRev1 d sem ρ) (pearlCDomainDev d) :=
-    ⟨hR, pearlCDomainDev_split hU.2.1, fun v hv j hj => rowOK_of_floor hN.2.2.2.1 (hU.2.2 _ (unitOfRow_lt hv) j hj)⟩
+    ⟨hR, pearlCDomainDev_split hU.2⟩
   refine le_trans (Pouw.pr_mono fun x hx => lt_of_lt_of_le hx ?_)
     (hTT.2 (splitWorkload U) hU' T hT q hq ⟨A.pre, prog', act'⟩ hA')
   have htr : (⟨A.pre, prog', act'⟩ : Adversary CM).transcript (splitWorkload U) x.1 x.2 =
       splitTranscript U.layout (A.transcript U x.1 x.2) := (hrun x.1 (A.pre.eval x.1) x.2).1
   rw [htr]
-  exact split_tileCredit_le hd hN hρ hadd hbf hU.2.1 x.1 x.2 (A.transcript U x.1 x.2)
+  exact split_tileCredit_le hd hN hρ hadd hbf hU.2 x.1 x.2 (A.transcript U x.1 x.2)
 
 end TileReduction
 
@@ -1046,16 +1070,16 @@ theorem ttOut_of_ttOutRowSeed {CM : CostModel Q R S} {P : Protocol Q R S} {d : P
     (h : TTOutRowSeed CM P (pearlCDomainDev d) γ₀) :
     TTOut CM P (fun L => pearlCDomainDevAt d s L ∧ rowsOf L ≤ 2 ^ 64) γ₀ (fun q N => εPearlC q (N * s.m)) :=
   ⟨h.1, fun U hU T hT q hq A hA => by
-    have h' := h.2 U ⟨hU.1, hU.2.1.1.1, hU.2.2⟩ hU.2.1.2 T hT q hq A hA
-    rwa [rowsOf_const hU.2.1.1.2] at h'⟩
+    have h' := h.2 U ⟨hU.1, hU.2.1.1⟩ hU.2.2 T hT q hq A hA
+    rwa [rowsOf_const hU.2.1.2] at h'⟩
 
 /-- **The row-seeded TT_OUT per audit tile is a TT_OUT per tile at the row count**, as `ttOut_of_ttOutRowSeed`. -/
 theorem ttOutTile_of_ttOutTileRowSeed {CM : CostModel Q R S} {P : Protocol Q R S} {TR : TileRules Q R S}
     {d : PearlCDevice} {s : Shape} {γ₀ : ℝ} (h : TTOutTileRowSeed CM P TR (pearlCDomainDev d) γ₀) :
     TTOutTile CM P TR (fun L => pearlCDomainDevAt d s L ∧ rowsOf L ≤ 2 ^ 64) γ₀ (fun q N => εPearlC q (N * s.m)) :=
   ⟨h.1, fun U hU T hT q hq A hA => by
-    have h' := h.2 U ⟨hU.1, hU.2.1.1.1, hU.2.2⟩ hU.2.1.2 T hT q hq A hA
-    rwa [rowsOf_const hU.2.1.1.2] at h'⟩
+    have h' := h.2 U ⟨hU.1, hU.2.1.1⟩ hU.2.2 T hT q hq A hA
+    rwa [rowsOf_const hU.2.1.2] at h'⟩
 
 /-- The row-seeded TT_OUT gives `G_γ` for rev1 with the per-row cap on the one-shape domain at
 `γ = 1 − (399/400)/ω`, where `wrefDevRev1 = ω·(1 − ρ)·creditDevRev1`, with the error at the row count
@@ -1074,8 +1098,8 @@ theorem pearlCGammaDevRev1RowSeedAt (CM : CostModel Q R S) (d : PearlCDevice) (s
           (pearlCProtocolDevRev1RowCap d sem ρ).Wref U.layout u ≤
             (ω : ℝ) * (pearlCProtocolDevRev1RowCap d sem ρ).credit H s' U u act := by
     intro U hU H s' u hu act _ hcap
-    have hsh : U.layout.shape u = s := hU.2.1.1.2 u hu
-    have hdom := hU.2.1.1.1 u hu
+    have hsh : U.layout.shape u = s := hU.2.1.2 u hu
+    have hdom := hU.2.1.1 u hu
     have hc : sem.unitDebitRev1 d H s' U u act ≤ ρ * creditDevRev1 d (U.layout.shape u) :=
       rowCap_agg sem d ρ H s' U u act hdom.1 hdom.2.1 hcap
     show (wrefDevRev1 d (U.layout.shape u) : ℝ) ≤
@@ -1109,7 +1133,7 @@ theorem pearlCSampledDevRev1RowSeedAt (CM : CostModel Q R S) (d : PearlCDevice) 
           (ω : ℝ) * (pearlCTilesDevRev1RowCap d sem ρ).credit H s' U g act := by
     intro U hU H s' g hg act _
     have hu := auditTiling_unit_lt 64 64 U.layout hg
-    have hsh : U.layout.shape ((auditTiling 64 64 U.layout).unit g) = s := hU.2.1.1.2 _ hu
+    have hsh : U.layout.shape ((auditTiling 64 64 U.layout).unit g) = s := hU.2.1.2 _ hu
     simp only [pearlCTilesDevRev1RowCap, pearlCTilesDevRev1]
     rw [hsh, hω]
     push_cast
@@ -1121,7 +1145,7 @@ theorem pearlCSampledDevRev1RowSeedAt (CM : CostModel Q R S) (d : PearlCDevice) 
           (pearlCTilesDevRev1RowCap d sem ρ).Wref U.layout g := by
     intro U hU g hg act
     have hu := auditTiling_unit_lt 64 64 U.layout hg
-    have hsh : U.layout.shape ((auditTiling 64 64 U.layout).unit g) = s := hU.2.1.1.2 _ hu
+    have hsh : U.layout.shape ((auditTiling 64 64 U.layout).unit g) = s := hU.2.1.2 _ hu
     simp only [pearlCTilesDevRev1RowCap, pearlCTilesDevRev1]
     rw [hsh]
     exact_mod_cast mul_le_mul_of_nonneg_left (tileShare_mono _ (passRows_subset sem _ _ _) _) hw0

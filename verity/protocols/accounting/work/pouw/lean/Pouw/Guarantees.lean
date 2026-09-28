@@ -3,6 +3,7 @@ import Pouw.Guarantees.Deadline
 import Pouw.Guarantees.Dimension
 import Pouw.Guarantees.Game
 import Pouw.Guarantees.NCP
+import Pouw.Guarantees.PearlC
 
 /-!
 # PoUW's guarantees (trusted)

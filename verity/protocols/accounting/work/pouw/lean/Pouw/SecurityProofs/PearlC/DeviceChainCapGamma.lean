@@ -160,7 +160,7 @@ theorem pearlCGammaDevChainCapAt {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fin
           (pearlCProtocolDevChainCap d sem ρ).Wref U.layout u ≤
             (ω : ℝ) * (pearlCProtocolDevChainCap d sem ρ).credit H s' U u act := by
     intro U hU H s' u hu act _ hcap
-    have hsh : U.layout.shape u = s := hU.2.1.2 u hu
+    have hsh : U.layout.shape u = s := hU.2.2 u hu
     have hc : debitDev d (sem.unitDebitDev d H s' U u act) ≤ ρ * chainCreditDev d (U.layout.shape u) := hcap
     show (wrefDev d (U.layout.shape u) : ℝ) ≤
       (ω : ℝ) * ((creditDev d (U.layout.shape u) - debitDev d (sem.unitDebitDev d H s' U u act) : ℚ) : ℝ)
@@ -191,7 +191,7 @@ theorem pearlCSampledDevChainCapAt {Q R S : Type} [Fintype Q] [DecidableEq Q] [F
           (ω : ℝ) * (pearlCTilesDevChainCap d sem ρ).credit H s' U g act := by
     intro U hU H s' g hg act _
     have hu := auditTiling_unit_lt 64 64 U.layout hg
-    have hsh : U.layout.shape ((auditTiling 64 64 U.layout).unit g) = s := hU.2.1.2 _ hu
+    have hsh : U.layout.shape ((auditTiling 64 64 U.layout).unit g) = s := hU.2.2 _ hu
     simp only [pearlCTilesDevChainCap, pearlCTilesDev]
     rw [hsh, hω]
     push_cast
@@ -201,7 +201,7 @@ theorem pearlCSampledDevChainCapAt {Q R S : Type} [Fintype Q] [DecidableEq Q] [F
         (pearlCTilesDevChainCap d sem ρ).Wcred U.layout g act ≤ (pearlCTilesDevChainCap d sem ρ).Wref U.layout g := by
     intro U hU g hg act
     have hu := auditTiling_unit_lt 64 64 U.layout hg
-    have hsh : U.layout.shape ((auditTiling 64 64 U.layout).unit g) = s := hU.2.1.2 _ hu
+    have hsh : U.layout.shape ((auditTiling 64 64 U.layout).unit g) = s := hU.2.2 _ hu
     simp only [pearlCTilesDevChainCap, pearlCTilesDev]
     rw [hsh]
     exact_mod_cast mul_le_mul_of_nonneg_left (tileShare_mono _ (passRows_subset sem _ _ _) _) hw0

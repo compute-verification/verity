@@ -15,8 +15,9 @@ rejected, and an accepted unit is credited (1 − ρ)·`creditDevRev1`).  `pearl
   card's captured step, `BLACKWELL_SM120_E4M3_M16N8K32` (one group of 32 in a 26-bit adder), and the prices are
   `SM120_PRICES` (`Prices.sm120`, measured on node 2); the other fields are stand-ins (`standins` names each):
   `HOPPER_BF16_M16N8K16` for the peel, and the H100's G = 4 and k bound.  Its cap is ρ = 1/1,000 (Daniel, 9:43 AM PDT on
-  2 Oct; Lean `pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_8192` and its twins).  G, the prices, the k bound and the cap
-  are statement parameters: they change through the coordinator and the cheap-binding and Lean lanes, not here.
+  2 Oct; Lean `Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192` and its twins).  G, the prices, the k
+  bound and the cap are statement parameters: they change through the coordinator and the cheap-binding and Lean lanes,
+  not here.
 * `SM120_UNPROMOTED` is `SM120` without promotion (G is None: one accumulator from +0 over the whole of k, and the word is
   the last atom's output).  It is the panel's ``pearl-c-sm120`` v2, built for the kernels and the twin; no scheme
   is registered on it and its debit raises until the theory and Lean lanes restate Pearl-C without promotion.
