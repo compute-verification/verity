@@ -143,7 +143,9 @@ def test_pous_serves_decoded_weights_releases_the_plaintext_and_passes_its_own_a
 
     c = opt.commitment()
     s = opt.store
-    assert c["covers"] == "linears" and c["tensors"] == 2 and c["bytes"] == 140 and c["segments"] == 2
+    wc = next(p for p in comp.record()["protocols"] if p["entry"] == f"pous:{BAND}")["weights"]    # phase 1, before any salt
+    assert wc["covers"] == "linears" and wc["tensors"] == 2 and wc["bytes"] == 140 and wc["commitment"] == c["commitment"]
+    assert c["segments"] == 2
     assert bytes.fromhex(c["salt"]) == protocol.draw_salt(bytes.fromhex(SALT_SOURCE), bytes.fromhex(c["commitment"]))
     vk = protocol.verifier_key(s.scheme, bytes.fromhex(c["commitment"]), s.salt, w=s.layout.pack(toy.plain))
     assert vk.root.hex() == c["storage_root"]                                           # the verifier's own encoding agrees
@@ -184,6 +186,18 @@ def test_pous_wraps_around_pouw_so_pouws_gemm_reads_the_decoded_weight(toy, monk
         assert k.quant_method.apply(k, "x") == ("pouw", toy.plain["k"], "x")
         assert comp.info()[f"pous:{BAND}"]["salt_source"] == "local-random (placeholder)"
     assert hooks.live() == before and toy.layers["k"].weight.raw == toy.plain["k"]
+
+
+def test_weights_that_change_after_the_commitment_are_refused_and_leave_nothing(toy, monkeypatch):
+    def pouw_install(scheme, target):                                   # an inner option that alters a weight in place
+        toy.layers["k"].weight.raw = bytes(100)
+        return PO.Option(name=f"pouw:{scheme}", hooks=target.hooks(f"pouw:{scheme}"))
+
+    _fake_pouw(monkeypatch, pouw_install)
+    before = hooks.live()
+    with pytest.raises(ValueError, match="changed after the composition committed"):
+        PO.install(toy, _ctx("pouw:ncp-v1", f"pous:{BAND}"))
+    assert hooks.live() == before and toy.layers["q"].weight.raw == toy.plain["q"]
 
 
 def test_a_model_without_linears_is_refused_at_install_and_leaves_nothing(toy, monkeypatch):

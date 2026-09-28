@@ -7,7 +7,9 @@ Placeholder, 28 Sep 2026: this wires the protocol in; it certifies nothing yet.
 * **What is encoded** is the weight of every ``LinearBase`` layer, found by type, deduplicated by storage and laid out
   in module order (`verity_pous.layout.Layout`).  Linears only: whether the embedding and the tied head are encoded too
   is open with Daniel, and `commitment` says what is covered.
-* **Install**, in order: the commitment to ``W`` before any salt (`protocol.commit`); the salt, drawn after it from
+* **Commit** (`commit_weights`, the composition's first phase, model untouched): the commitment to ``W`` before any
+  salt exists (`protocol.commit`), recorded in the composition record's ``weights``.
+* **Install**, in order: the same commitment recomputed, refused if the weights changed since; the salt, drawn after it from
   the settings' ``salt_source`` (the verifier's secret or a beacon round; without one a local random, recorded as
   such); ``C = Enc(W, salt)`` with the scheme's reference codec, on the CPU; the storage root over ``C``; then, through
   the option's tagged `Hooks`, the plaintext released (a service whose stop restores ``W`` from ``C``), each layer's
@@ -130,16 +132,50 @@ def _layers(model: Any) -> list[tuple[str, Any]]:
     return [(name, m) for name, m in model.named_modules() if isinstance(m, types) and getattr(m, "weight", None) is not None]
 
 
-def _encode(scheme_id: str, weights: Mapping[str, bytes], source: bytes | None) -> _Store:
+def _plaintext(entry: str, model: Any) -> tuple[list[tuple[str, Any]], dict[int, str], dict[str, bytes], dict[str, Any]]:
+    """The layers, each layer's weight's name (its first holder's), and each unique weight's bytes and metadata."""
+    layers = _layers(model)
+    if not layers:
+        raise ValueError(f"{entry}: the model has no {', '.join(t.__name__ for t in linear_types())} layer to encode")
+    first: dict[Hashable, str] = {}
+    names: dict[int, str] = {}
+    weights: dict[str, bytes] = {}
+    meta: dict[str, Any] = {}
+    for name, m in layers:
+        k = TENSORS.key(m.weight)
+        if k not in first:
+            first[k] = name
+            weights[name], meta[name] = TENSORS.to_bytes(m.weight), TENSORS.meta(m.weight)
+        names[id(m)] = first[k]
+    return layers, names, weights, meta
+
+
+def _commit(scheme_id: str, weights: Mapping[str, bytes]) -> tuple[Any, Any, bytes, bytes]:
+    """``W`` laid out, the scheme at its size, ``W`` itself and the commitment to it (no salt exists yet)."""
     from verity_pous import protocol
     from verity_pous import schemes as pous_schemes
     from verity_pous.layout import Layout
-    from verity_pous.verifier import VerifierKey, leaf_hash
 
     layout = Layout.of(_base(scheme_id), [(n, len(b)) for n, b in weights.items()])
     scheme = pous_schemes.get(scheme_id, params=layout.params)
     w = layout.pack(dict(weights))
-    commitment = protocol.commit(scheme, w)
+    return layout, scheme, w, protocol.commit(scheme, w)
+
+
+def commit_weights(scheme: str, target: Target) -> dict[str, Any]:
+    """Phase 1 of a composition: the commitment to the plaintext ``W`` of record, with the model untouched and before any
+    salt exists (`protocol.commit`).  `install` refuses weights that no longer match it."""
+    _, _, weights, _ = _plaintext(f"{NAME}:{scheme}", target.model)
+    layout, sch, _, commitment = _commit(scheme, weights)
+    return {"scheme": sch.name, "covers": COVERS, "tensors": len(weights), "bytes": sum(map(len, weights.values())),
+            "commitment": commitment.hex(),
+            "layout": hashlib.sha256(json.dumps(layout.manifest(), sort_keys=True).encode()).hexdigest()}
+
+
+def _encode(layout: Any, scheme: Any, w: bytes, commitment: bytes, source: bytes | None) -> _Store:
+    from verity_pous import protocol
+    from verity_pous.verifier import VerifierKey, leaf_hash
+
     salt = protocol.draw_salt(source if source is not None else os.urandom(32), commitment)
     blocks = [b for seg in protocol.encode(scheme, w, salt) for b in seg]
     p = scheme.params
@@ -200,22 +236,14 @@ def _wrapper(decoded: Callable[[Any], Any]) -> Callable[[Any], Any]:
 def install(scheme: str, target: Target) -> PousOption:
     entry = f"{NAME}:{scheme}"
     own = target.context.settings_of(NAME)
-    layers = _layers(target.model)
-    if not layers:
-        raise ValueError(f"{entry}: the model has no {', '.join(t.__name__ for t in linear_types())} layer to encode")
-    first: dict[Hashable, str] = {}
-    names: dict[int, str] = {}
-    weights: dict[str, bytes] = {}
-    meta: dict[str, Any] = {}
-    for name, m in layers:
-        k = TENSORS.key(m.weight)
-        if k not in first:
-            first[k] = name
-            weights[name], meta[name] = TENSORS.to_bytes(m.weight), TENSORS.meta(m.weight)
-        names[id(m)] = first[k]
+    layers, names, weights, meta = _plaintext(entry, target.model)
     qualnames = _qualnames(entry, target.model, layers, names)
+    layout, sch, w, commitment = _commit(scheme, weights)
+    committed = target.weight_commitments.get(entry)
+    if committed is not None and committed.get("commitment") != commitment.hex():
+        raise ValueError(f"{entry}: the weights changed after the composition committed to them (commit_weights)")
     source = own.get("salt_source")
-    store = _encode(scheme, weights, bytes.fromhex(source) if source else None)
+    store = _encode(layout, sch, w, commitment, bytes.fromhex(source) if source else None)
     store.meta = meta
 
     def plaintext() -> dict[str, Any]:
@@ -242,10 +270,8 @@ def install(scheme: str, target: Target) -> PousOption:
     for qm in {id(m.quant_method): m.quant_method for _, m in layers}.values():
         hooks.wrap(qm, "apply", _wrapper(decoded))
     hooks.service("responder", lambda: opt.answer, lambda handle: {"answered": opt.answered})
-    opt.commits = {"scheme": store.scheme.name, "covers": COVERS, "tensors": len(weights), "bytes": sum(map(len, weights.values())),
-                   "segments": store.scheme.params.segments, "commitment": store.commitment.hex(), "salt": store.salt.hex(),
-                   "storage_root": store.storage_root.hex(),
-                   "layout": hashlib.sha256(json.dumps(store.layout.manifest(), sort_keys=True).encode()).hexdigest()}
+    opt.commits = {"scheme": store.scheme.name, "commitment": store.commitment.hex(), "segments": store.scheme.params.segments,
+                   "salt": store.salt.hex(), "storage_root": store.storage_root.hex()}
     cert = store.scheme.certificate
     opt.details = {"salt_source": store.salt_source, "blocks": len(store.blocks), "layers": len(layers),
                    "certificate": None if cert is None else cert.theorem, "experimental": store.scheme.experimental,
