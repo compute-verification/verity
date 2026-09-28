@@ -6,16 +6,19 @@
 M0's statement proves a template's identical units with every instance's input rows hashed in the circuit
 (``hm96-sha512/row/v1`` under frame-v3-sha512 trees). A class becomes such a template here:
 
-* one unit per instance: the class's circuit (`partition_units.lower_class`), its inputs packed into one row port ``in`` of u16
-  words (a word of w bits takes ceil(w / 16) consecutive u16 leaves, low half first; the row padded with unread zero words to a
-  whole number of 64-word SHA-512 blocks, as frame-v3 rows are), its outputs into one u16 output port ``out`` (each output
-  padded with zero bits to whole u16 words);
-* the instances are the class's lanes from `partition_units.lanes` (synthetic inputs lifted through the flat Definition), the
-  statement binds the partition's ``verity/partition/v1`` digest and the program's SHA-512 (an owner-function partition, which no
-  record can name, binds the SHA-512 of its description under the tag ``verity/flock/experimental-owners``).
+* one unit per instance: the class's circuit (`partition_units.lower_class`), its inputs packed into one u16 row port per source
+  (`sources`: a Call parameter it reads, or a class of producing units whose committed outputs it reads; a word of w bits takes
+  ceil(w / 16) consecutive u16 leaves, low half first; each row padded with unread zero words to a whole number of 64-word SHA-512
+  blocks, as frame-v3 rows are), its outputs into one u16 output port ``out`` (each output padded with zero bits to whole u16 words);
+* each source's row is committed once and opened by every instance that reads it (M0's shared rows), rows being keyed by the
+  identity of the values they hold, not by value (`class_lanes`);
+* the instances are every unit of the class in its flat Definition (`class_lanes`: synthetic inputs lifted through the flat
+  Definition, a Call's broadcast parameters drawn once per Call), the statement binds the partition's ``verity/partition/v1``
+  digest and the program's SHA-512 (an owner-function partition, which no record can name, binds the SHA-512 of its description
+  under the tag ``verity/flock/experimental-owners``).
 
-This is a synthetic layout: one row per unit instance, not the scheme's layout rule over the partition (which is not specified
-yet), and M0's statement publishes the declared outputs, where a partition's unit outputs are committed values.  Every class is one plain
+This is a synthetic layout, not the scheme's layout rule over the partition (which is not specified yet), and M0's statement
+publishes the declared outputs, where a partition's unit outputs are committed values.  Every class is one plain
 Boolean circuit, with no slot type other than M0's row slots: a unit's pinned-table reads (MUFU) are laid out inline as ordinary
 rows by `ir_lower.layout` (the one-hot construction; 154-309 M matrix entries per read, about 20 B of prover memory each), and each
 record carries the class's table reads and its unit's matrix entries.  `distinct_calls` builds a served row's workload from its program graph:
@@ -78,10 +81,11 @@ class ClassDefinition:
         return tuple((f"p{i}", Array(w, Value(16))) for i, w in enumerate(self.port_words)), Array(self.w_out, Value(16))
 
 
-def sources(act: Activation, uc: UnitCircuit, owner_of: dict[int, int]) -> list[list[int]]:
-    """The unit's inputs grouped by source, in first-read order: one group per Call parameter it reads leaves of, and one per producing
-    unit whose committed outputs it reads (``owner_of``: computing gate -> its unit in the flat cut). Each group is one row: serving
-    commits a source's values once, and every instance reading the same values opens the same row."""
+def sources(act: Activation, uc: UnitCircuit, owner_of: dict[int, str]) -> list[list[int]]:
+    """The unit's inputs grouped by source, in first-read order: one group per Call parameter it reads leaves of, and one per class
+    (shape) of producing units whose committed outputs it reads (``owner_of``: computing gate -> its unit's shape in the flat cut),
+    as serving commits a tensor once, not per element. Each group is one row, and every instance reading the same values opens
+    the same row."""
     leaf_param = []
     for i, (_n, t) in enumerate(act.fn.signature()[0]):
         leaf_param += [i] * t.leaves
@@ -194,6 +198,8 @@ def cache_slot_circuits() -> None:
     S.compression3, S.hm96_row = (lambda: c3), (lambda: hm)
     IL.layout, FC._expanded = cached_layout, cached_expanded
     _SLOTS.update(c3=c3, hm=hm)
+    FC._expanded(IL.layout(c3, ["cv0", "msg0", "cv1", "msg1", "cv2", "msg2"], ["out0", "out1", "out2"]), FC.SHA_NET)   # as compose asks
+    FC._expanded(IL.layout(hm, ["cv", "pad", "y"], ["bc"]), FC.HM_NET)
 
 
 def distinct_calls(graph_path: str, modules: str | None = None) -> tuple[Any, dict[str, int], list[dict]]:
@@ -256,19 +262,33 @@ def distinct_calls(graph_path: str, modules: str | None = None) -> tuple[Any, di
     return Program(root), calls, prov
 
 
+_BINDINGS: dict = {}
+
+
 def partition_binding(units: PartitionUnits, spec: str) -> tuple[str, str]:
-    """(partition digest, program SHA-512) the statement binds."""
+    """(partition digest, program SHA-512) the statement binds, computed once per partition."""
+    if (id(units), spec) in _BINDINGS:
+        return _BINDINGS[id(units), spec]
     program = PO.program_sha512(units.program)
     if units.query is not None:
-        return PO.digest(PO.build(units.program, units.query)), program
-    return hashlib.sha512(EXPERIMENTAL.encode() + b"\0" + json.dumps({"program": program, "owners": spec}, sort_keys=True).encode()).hexdigest(), program
+        out = PO.digest(PO.build(units.program, units.query)), program
+    else:
+        out = hashlib.sha512(EXPERIMENTAL.encode() + b"\0" + json.dumps({"program": program, "owners": spec}, sort_keys=True).encode()).hexdigest(), program
+    _BINDINGS[id(units), spec] = out
+    return out
 
 
-def owners_of(units: PartitionUnits, fn_id: str) -> dict[int, int]:
-    """Computing gate -> its unit, in the flat Definition's cut (structure gates, copied into every reader, have none)."""
-    act = units.activation_of(fn_id)
-    keep = set(act.graph.keep)
-    return {j: uc.unit for uc in units._flat[fn_id][1] for j in uc.gates if j in keep}
+_OWNERS: dict = {}
+
+
+def owners_of(units: PartitionUnits, fn_id: str) -> dict[int, str]:
+    """Computing gate -> its unit's shape, in the flat Definition's cut (structure gates, copied into every reader, have none)."""
+    if (id(units), fn_id) not in _OWNERS:
+        act = units.activation_of(fn_id)
+        keep = set(act.graph.keep)
+        _OWNERS.clear()
+        _OWNERS[id(units), fn_id] = {j: uc.shape for uc in units._flat[fn_id][1] for j in uc.gates if j in keep}
+    return _OWNERS[id(units), fn_id]
 
 
 def broadcast_params(units: PartitionUnits) -> dict[str, tuple[set[int], int]]:
@@ -296,9 +316,9 @@ def broadcast_params(units: PartitionUnits) -> dict[str, tuple[set[int], int]]:
 def class_lanes(units: PartitionUnits, cl, key, n: int, shared: dict[str, tuple[set[int], int]]) -> tuple[list, list, list]:
     """``n`` instances of the class: every unit of that shape in its flat Definition, from as many evaluations as it takes, each
     evaluation's parameters uniform words, except those the Call shares across members (``shared``), which are drawn once per Call
-    (group of members). Returns (inputs, outputs, sources): per input position, every instance's word and the identity of the
-    value it reads (the Call and leaf of a broadcast parameter, else the evaluation and leaf or computing gate), which is what
-    makes two instances' rows the same committed row."""
+    (group of members). Returns (inputs, outputs, rows): per input position every instance's word, and per source group
+    (`sources` of the representative) every instance's row identity: the leaves it reads, and the Call they belong to when all
+    are parameters the Call broadcasts, else the evaluation. Instances with one identity open one committed row."""
     act = units.activation(cl.definition)
     mine = [uc for uc in units._flat[cl.definition.id][1] if uc.shape == cl.shape]
     widths = [act.width(-1 - p) for p in range(act.params)]
@@ -306,9 +326,12 @@ def class_lanes(units: PartitionUnits, cl, key, n: int, shared: dict[str, tuple[
     for i, (_nm, t) in enumerate(act.fn.signature()[0]):
         leaf_param += [i] * t.leaves
     bcast, members = shared.get(cl.definition.id, (set(), 1))
+    groups = sources(act, cl.representative, owners_of(units, cl.definition.id))
+    reads = [[(all(x < 0 and leaf_param[-1 - x] in bcast for x in sub), sub) for sub in (tuple(uc.inputs[t] for t in g) for g in groups)]
+             for uc in mine]
     ins = [[] for _ in mine[0].inputs]
     want = [[] for _ in mine[0].outputs]
-    src = [[] for _ in mine[0].inputs]
+    rows = [[] for _ in groups]
     have, t = 0, 0
     while have < n:
         call = t // max(1, members)
@@ -316,17 +339,18 @@ def class_lanes(units: PartitionUnits, cl, key, n: int, shared: dict[str, tuple[
         grp = PU.synthetic_words(key, f"{act.fn.id}#call{call}", widths, 1)[0]
         words = [grp[p] if leaf_param[p] in bcast else raw[p] for p in range(len(raw))]
         run = PU.evaluate(act, words)
-        for uc in mine:
+        for uc, per in zip(mine, reads):
             if have >= n:
                 break
-            for port, ids, x in zip(ins, src, uc.inputs):
+            for port, x in zip(ins, uc.inputs):
                 port.append(run[x])
-                ids.append(("call", call, x) if x < 0 and leaf_param[-1 - x] in bcast else ("eval", t, x))
             for port, j in zip(want, uc.outputs):
                 port.append(run[j])
+            for ids, (b, sub) in zip(rows, per):
+                ids.append((b, call if b else t, sub))
             have += 1
         t += 1
-    return ins, want, src
+    return ins, want, rows
 
 
 def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_dir: Path, salt_key: bytes) -> dict:
@@ -336,7 +360,7 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
     act = units.activation(cl.definition)
     uc = cl.representative
     name = shape[:16]
-    ins, want, src = lanes_ if len(lanes_) == 3 else (*lanes_, None)
+    ins, want, idents = lanes_ if len(lanes_) == 3 else (*lanes_, None)
     partition, program = partition_binding(units, spec)
     groups = sources(act, uc, owners_of(units, cl.definition.id))
     low = class_lowering(act, uc, f"unit-class/{name}", groups)
@@ -350,18 +374,18 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
     (out_dir / "circuit.txt").write_text(text)
     n = len(rows)
     tables = refs = None
-    if src is not None:
+    if idents is not None:
+        if len(idents) != len(groups):
+            raise AssertionError(f"class {name}: the lanes' source groups are not the statement's")
         tables, refs = {}, {}
-        for i, g in enumerate(groups):
+        for i, ids in enumerate(idents):
             index: dict[tuple, int] = {}
-            ref, at = [], []
-            for k in range(n):
-                ident = tuple(src[t][k] for t in g)
+            at: list[int] = []
+            for k, ident in enumerate(ids):
                 if ident not in index:
                     index[ident] = len(at)
                     at.append(k)
-                ref.append(index[ident])
-            ref = np.asarray(ref)
+            ref = np.asarray([index[ident] for ident in ids])
             tables[f"p{i}"], refs[f"p{i}"] = per_port[f"p{i}"][at], ref
             if not np.array_equal(tables[f"p{i}"][ref], per_port[f"p{i}"]):
                 raise AssertionError(f"class {name}: instances reading one source disagree on its row")
@@ -430,6 +454,81 @@ def _vm_hwm(pid: int) -> float | None:
     return None
 
 
+#: what `_stage_job` reads: set once in `main` before the workers fork
+_CTX: dict = {}
+#: AND-instances per prove under ``--batch auto``
+BATCH_ANDS = 1 << 29
+
+
+def auto_batch(ands: int, row_units: int) -> int:
+    cap = min(1024, row_units, BATCH_ANDS // max(1, ands))
+    return max(16, 1 << max(0, cap.bit_length() - 1))
+
+
+def _stage_job(s: str) -> dict:
+    """Lower, lift the lanes of and stage one shape: its record, with ``stage`` when it staged, else ``broke``."""
+    c = _CTX
+    units, cl, a = c["units"], c["classes"][s], c["a"]
+    uc = cl.representative
+    rec: dict[str, Any] = {"shape": s, "definition": uc.definition, "unit": uc.unit, "units": cl.units, "row_units": c["row_units"].get(s),
+                           "word_gates": len(uc.gates), "in_bits": sum(uc.in_widths), "out_bits": sum(uc.out_widths)}
+    t0 = time.time()
+    cc = PU.lower_class(units.activation(cl.definition), uc)
+    if cc.circuit is None:
+        rec["broke"] = {"at": "lowering", "why": cc.reason, "missing": list(cc.missing)}
+    elif cc.counts["ands"] > a.max_ands:
+        rec["broke"] = {"at": "size", "why": f"{cc.counts['ands']} ANDs > --max-ands {a.max_ands}"}
+        rec["ands"] = cc.counts["ands"]
+    else:
+        try:
+            rec["ands"] = cc.counts["ands"]
+            rec["table_reads"] = dict(Counter(t for t, _i, _w in cc.circuit.lookups))
+            n = auto_batch(cc.counts["ands"], c["row_units"].get(s) or cl.units) if a.batch == "auto" else a.n
+            lanes_ = class_lanes(units, cl, c["key"], n, c["shared"])
+            rec["stage"] = stage(units, a.partition, s, cl, lanes_, c["out"] / s[:16], c["salt_key"])
+            rec["stage_py_maxrss_gb"] = round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 2)
+        except Exception as e:  # noqa: BLE001  (a class that breaks is a result, recorded with where it broke)
+            rec.pop("stage", None)
+            rec["broke"] = {"at": "statement", "why": f"{type(e).__name__}: {e}"[:400]}
+    rec["stage_s"] = rec["stage_wall_s"] = round(time.time() - t0, 3)
+    return rec
+
+
+def _staged(jobs: list[str], workers: int):
+    """`_stage_job` over ``jobs``, records in order: in this process, or in ``workers`` forked processes at most two shapes each
+    ahead of the prover. A worker that dies (the OOM killer) breaks the pool: the shapes in flight are staged again in a new one,
+    and a shape lost twice is recorded as broken."""
+    if workers <= 1:
+        yield from map(_stage_job, jobs)
+        return
+    import multiprocessing as mp
+    from collections import deque
+    from concurrent.futures import ProcessPoolExecutor
+    from concurrent.futures.process import BrokenProcessPool
+
+    queue, lost = list(reversed(jobs)), Counter()
+    while queue:
+        live: deque = deque()
+        with ProcessPoolExecutor(workers, mp_context=mp.get_context("fork")) as ex:
+            try:
+                while queue or live:
+                    while queue and len(live) < 2 * workers:
+                        s = queue.pop()
+                        live.append((s, ex.submit(_stage_job, s)))
+                    rec = live[0][1].result()
+                    live.popleft()
+                    yield rec
+            except BrokenProcessPool:
+                for s, _f in reversed(live):
+                    lost[s] += 1
+                    if lost[s] < 2:
+                        queue.append(s)
+                    else:
+                        cl = _CTX["classes"][s]
+                        yield {"shape": s, "definition": cl.representative.definition, "units": cl.units, "word_gates": len(cl.representative.gates),
+                               "broke": {"at": "statement", "why": "its staging worker died twice (killed, likely out of memory)"}}
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     src = ap.add_mutually_exclusive_group(required=True)
@@ -454,8 +553,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--warm", type=int, default=0)
     ap.add_argument("--runs", type=int, default=1, help="timed runs per shape; the record is the median")
     ap.add_argument("--shapes", default=None, help="a file of shape digests (or prefixes), one per line: prove only these")
-    ap.add_argument("--batch", default=None, help="'auto': instances per shape = min(1024, the row's units of it) as a power of two "
-                    ">= 16, 256 above 10^6 ANDs (overrides --n)")
+    ap.add_argument("--batch", default=None, help="'auto': instances per shape = the least of 1024, the row's units of it and 2^29 / its "
+                    "ANDs, as a power of two >= 16 (overrides --n)")
+    ap.add_argument("--jobs", type=int, default=1, help="shapes staged in parallel (forked workers); proving stays one at a time")
     a = ap.parse_args(argv)
     calls: dict[str, int] | None = None
     if a.program_graph:
@@ -494,36 +594,20 @@ def main(argv: Sequence[str] | None = None) -> int:
     if a.sample:
         keep = set(sorted(classes, key=lambda sh: hashlib.sha256(f"{a.seed}/{sh}".encode()).digest())[:a.sample])
         order = [kv for kv in order if kv[0] in keep]
-    shared = broadcast_params(units)
     largest = {}
     for sh, cl in order:
         largest[cl.definition.id if hasattr(cl.definition, "id") else cl.definition] = sh
-    for s, cl in order:
-        if s in done or (a.only and not any(s.startswith(p) for p in a.only.split(","))) or (wanted is not None and not any(s.startswith(p) for p in wanted)):
-            continue
-        rec: dict[str, Any] = {"shape": s, "definition": cl.representative.definition, "unit": cl.representative.unit,
-                               "units": cl.units, "row_units": row_units.get(s), "word_gates": len(cl.representative.gates), "in_bits": sum(cl.representative.in_widths),
-                               "out_bits": sum(cl.representative.out_widths)}
-        t0 = time.time()
-        cc = PU.lower_class(units.activation(cl.definition), cl.representative)
-        if cc.circuit is None:
-            rec["broke"] = {"at": "lowering", "why": cc.reason, "missing": list(cc.missing)}
-        elif cc.counts["ands"] > a.max_ands:
-            rec["broke"] = {"at": "size", "why": f"{cc.counts['ands']} ANDs > --max-ands {a.max_ands}"}
-            rec["ands"] = cc.counts["ands"]
-        else:
+    jobs = [s for s, _cl in order if not (s in done or (a.only and not any(s.startswith(p) for p in a.only.split(",")))
+                                          or (wanted is not None and not any(s.startswith(p) for p in wanted)))]
+    _CTX.update(units=units, classes=classes, row_units=row_units, shared=broadcast_params(units), key=key, salt_key=salt_key,
+                out=out, a=a)
+    partition_binding(units, a.partition)
+    for rec in _staged(jobs, a.jobs):
+        s, cl = rec["shape"], classes[rec["shape"]]
+        t0 = time.time() - rec.pop("stage_wall_s", 0)
+        if "stage" in rec:
+            d = out / s[:16]
             try:
-                n = a.n
-                if a.batch == "auto":
-                    have = row_units.get(s) or cl.units
-                    n = 256 if cc.counts["ands"] > 10**6 else max(16, min(1024, 1 << max(0, have.bit_length() - 1)))
-                lanes_ = class_lanes(units, cl, key, n, shared)
-                d = out / s[:16]
-                rec["ands"] = cc.counts["ands"]
-                rec["table_reads"] = dict(Counter(t for t, _i, _w in cc.circuit.lookups))
-                rec["stage"] = stage(units, a.partition, s, cl, lanes_, d, salt_key)
-                rec["stage_py_maxrss_gb"] = round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 2)
-                rec["stage_s"] = round(time.time() - t0, 3)
                 if not a.selftest_only:
                     rec["live"] = prove(a.binary, d, rec["stage"]["n"], a.port, gpu=a.gpu, warm=a.warm, runs=a.runs)
                 if a.selftest and (len(done) % a.selftest == 0 or s == largest.get(cl.definition.id)):
@@ -533,10 +617,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                                            "failed": [c for c, x in zip(READ_CASES, runs) if not x["all_pass"]], "subset": list(READ_CASES)}
                     else:
                         rec["selftest"] = prove(a.binary, d, rec["stage"]["n"], a.port, selftest=True)
-                for f in d.glob("*.bin"):
-                    f.unlink()
             except Exception as e:  # noqa: BLE001  (a class that breaks is a result, recorded with where it broke)
-                rec["broke"] = {"at": "statement or prover", "why": f"{type(e).__name__}: {e}"[:400]}
+                rec["broke"] = {"at": "prover", "why": f"{type(e).__name__}: {e}"[:400]}
+            for f in d.glob("*.bin"):
+                f.unlink()
+            if (d / "circuit.txt").exists() and (d / "circuit.txt").stat().st_size > 1 << 28:
+                (d / "circuit.txt").unlink()                    # the record keeps its digest; restaging rebuilds it byte for byte
         rec["seconds"] = round(time.time() - t0, 3)
         with results.open("a") as f:
             f.write(json.dumps(rec, sort_keys=True) + "\n")
