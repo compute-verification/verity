@@ -8,7 +8,9 @@ top. Its hashing part, which this module states over plain Python:
 * **Tops** (`tops`). Each tree's top (its Ligerito cap, ``2^c`` nodes) is the prover's (``private.json``); the coin server
   received each node's salted commitment (`verity_flock.rec_live.commit_top`): level 0's at ``Commit`` (``root_B``, the one
   tree both reps share), level ``l >= 1``'s in the round that absorbed it. A top whose nodes and salts do not open those
-  commitments is refused (``FIREWALL-REFUSED: tree top``).
+  commitments is refused (``FIREWALL-REFUSED: tree top``). The stacked table R has no root at ``Commit``: its level 0 is
+  its binding round's top, which must be the top registered at staging (`registered`: the ``stacked`` entry of the
+  circuit registration, ``verity/registration/v2``, `rec_live.REGISTRATION`, whose digest the statement's META binds).
 * **Openings** (PROTOCOL.md §13.3, §13.5). Level ``l`` of a rep's Ligerito opening is ``Q_l`` queries into that tree. Query
   ``j``'s position is ``pos_j = (s_j << (d - c_j)) | (coin_j.lo mod 2^(d - c_j))`` over the level's query round's coins,
   its leaf ``SHA-512(row)`` (the row's elements, 16 bytes each, lo LE then hi LE: the statement's
@@ -245,11 +247,14 @@ def opened_top(opening: dict, bcs: list[str], what: str) -> Top:
 
 def tops(public: dict, private: dict, stream: str, table: str = "circuit") -> list[Top]:
     """Each Ligerito level's top of a rep's stream, opened (`opened_top`) against the coin server's record: level 0's the
-    table's ``root_B`` from ``Commit``, then each later salted top in the order the stream's rounds absorbed them. A round's
-    copies of a level-0 top (``level0``: the binding round's, Ligerito's first absorb) are not levels of their own."""
+    table's ``root_B`` from ``Commit`` (for a table with none there, the stacked table R, its binding round's salted top),
+    then each later salted top in the order the stream's rounds absorbed them. A round's copies of a level-0 top
+    (``level0``: the binding round's, Ligerito's first absorb) are not levels of their own."""
     if public.get("tops") != RL.TOPS or private.get("tops") != RL.TOPS:
         raise ValueError(RL.refused("tree top: the record's tops are not salted (rec_live.TOPS)"))
-    out = [opened_top(private["roots"][table], public["link"]["roots"][table], f"{table}'s root_B")]
+    out = []
+    if table in public["link"]["roots"]:
+        out.append(opened_top(private["roots"][table], public["link"]["roots"][table], f"{table}'s root_B"))
     prv = {(r["stream"], r["k"]): r for r in private["rounds"]}
     for r in _stream_rounds(public, stream):
         got = prv.get((stream, r["k"]), {}).get("tops", [])
@@ -258,6 +263,25 @@ def tops(public: dict, private: dict, stream: str, table: str = "circuit") -> li
                              f"opens {len(got)}")
         out += [opened_top(o, bcs, f"{stream} round {r['k']}'s top {i}") for i, (o, bcs) in enumerate(zip(got, r["tops"]))]
     return out
+
+
+def registered(public: dict, registration: dict | None, bound: str | None, table: str = RL.STACKED) -> None:
+    """A table with no root at ``Commit`` (R) is bound by the circuit registration alone (`rec_live.register_top`, at
+    staging): the record must be the one whose digest the statement's META binds (``bound``, one-stage
+    ``registration.digest``), and its registered entry named ``table`` the entry its stream's binding round's salted top makes
+    (`rec_live.top_entry` under the record's ``program``: root, leaves, words and domain); refused by name otherwise."""
+    from verity.core.protocols.sampled_proofs.one_stage import registration as R
+
+    stream = f"{table}/rep0"
+    first = next((r for r in _stream_rounds(public, stream) if r["k"] == 0), None)
+    if bound is None or not isinstance(registration, dict) or R.digest(registration) != bound:
+        raise ValueError(RL.refused(f"registration: the record is not the circuit registration META binds ({bound})"))
+    entry = RL.registered_entry(registration, table)
+    if entry is None:
+        raise ValueError(RL.refused(f"registration: {table} has no root at Commit and no registered top"))
+    if first is None or not first["tops"] or RL.top_entry(registration["program"], table,
+                                                          [bytes.fromhex(b) for b in first["tops"][0]]) != entry:
+        raise ValueError(RL.refused(f"registration: {stream}'s binding round's top is not {table}'s registered top"))
 
 
 def reps(public: dict) -> list[int]:
@@ -333,11 +357,16 @@ def main(argv=None) -> int:
 
     ap = argparse.ArgumentParser()
     ap.add_argument("inner", help="an inner session directory (public.json, private.json, session/)")
+    ap.add_argument("--circuit", help="the inner statement's circuit.txt, whose META binds the circuit registration (a "
+                    "session with the stacked table R is refused without it)")
     a = ap.parse_args(argv)
     try:
         public, private, proofs = load(Path(a.inner))
         res = check(public, private, proofs)
-        if RL.STACKED in public["link"]["roots"]:
+        if f"{RL.STACKED}/rep0" in public["streams"]:
+            reg = Path(a.inner) / RL.REGISTRATION
+            meta = json.loads(Path(a.circuit).read_text().split("\n", 2)[1][5:]) if a.circuit else {}
+            registered(public, json.loads(reg.read_text()) if reg.exists() else None, meta.get("registration"))
             res["stacked"] = check(public, private, load(Path(a.inner), RL.STACKED)[2], RL.STACKED)
             res["accepted"] = res["accepted"] and res["stacked"]["accepted"]
     except ValueError as e:
