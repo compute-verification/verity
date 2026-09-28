@@ -2,7 +2,10 @@
 # Bring up (or start again) the one Nebius server, vy-nebius-1: 8x RTX PRO 6000 (sm_120), 192 vCPU, 1,744 GiB, $14.40/h, in uk-south2.
 #
 #   launch.sh --dry-run                          print the cloud-init and the VM spec; needs no credentials, touches nothing
-#   launch.sh --max-hours H --yes [--register]   find or create each piece below, start the VM, arm its lease for H hours
+#   launch.sh --max-hours H --yes [--register] [--deadline UTC]
+#                                                find or create each piece below, start the VM, arm its lease for H hours; --deadline
+#                                                (e.g. 2026-10-02T05:02:26Z, the end of the spend authorization) writes the VM's
+#                                                /etc/research/deadline, a hard cap no lease extension or restart passes (vm_setup.sh)
 #
 # Idempotent: every resource is looked up by name first, so a rerun after a failure (or on a stopped VM) resumes; nothing is
 # ever deleted here (teardown.sh).  In order, in project NEBIUS_PROJECT_ID (default-project-uk-south2; set it empty to look up or
@@ -22,14 +25,15 @@ here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 src=$(cd "$here/../../.." && pwd)            # tools/research/src: the research package, stdlib only
 . "$here/common.sh"
 
-max_hours="" yes=0 dry=0 register=0
+max_hours="" yes=0 dry=0 register=0 deadline=""
 while [ $# -gt 0 ]; do
   case $1 in
     --max-hours) max_hours=${2:?}; shift ;;
     --yes) yes=1 ;;
     --dry-run) dry=1 ;;
     --register) register=1 ;;
-    *) die "unknown argument $1 (launch.sh --dry-run | --max-hours H --yes [--register])" ;;
+    --deadline) deadline=${2:?}; shift ;;
+    *) die "unknown argument $1 (launch.sh --dry-run | --max-hours H --yes [--register] [--deadline UTC])" ;;
   esac
   shift
 done
@@ -37,6 +41,11 @@ done
 if [ "$dry" = 0 ]; then
   [ "$yes" = 1 ] || die "this starts billing at \$$RATE_USD_PER_HOUR/h: pass --yes (or --dry-run)"
   [[ $max_hours =~ ^[0-9]+$ ]] && [ "$max_hours" -ge 1 ] || die "--max-hours H (whole hours >= 1): the VM stops itself after it"
+fi
+deadline_epoch=""
+if [ -n "$deadline" ]; then
+  deadline_epoch=$(date -u -d "$deadline" +%s 2> /dev/null) || die "--deadline $deadline is not a UTC time (2026-10-02T05:02:26Z)"
+  [ "$deadline_epoch" -gt "$(date +%s)" ] || die "--deadline $deadline has passed"
 fi
 
 ssh_pubkey() {
@@ -47,13 +56,13 @@ ssh_pubkey() {
 
 # render_user_data PUBKEY LEASE_EPOCH: the cloud-init document (scripts gzip+base64 so no YAML quoting can bend them)
 render_user_data() {
-  VY_PUBKEY=$1 VY_LEASE_EPOCH=$2 VY_USER=$SSH_USER VY_DEV=$DATA_DEVICE_ID python3 - "$here" "$src/research/pods/sh" <<'PY'
+  VY_PUBKEY=$1 VY_LEASE_EPOCH=$2 VY_USER=$SSH_USER VY_DEV=$DATA_DEVICE_ID VY_DEADLINE=$deadline_epoch python3 - "$here" "$src/research/pods/sh" <<'PY'
 import base64, gzip, os, sys
 nebius, sh = sys.argv[1], sys.argv[2]
 def blob(path):
     return base64.b64encode(gzip.compress(open(path, "rb").read(), mtime=0)).decode()
 env = (f"VY_USER={os.environ['VY_USER']}\nVY_DATA_DEVICE_ID={os.environ['VY_DEV']}\nVY_BOOT_LEASE_S=7200\n"
-       f"VY_LEASE_EPOCH={os.environ['VY_LEASE_EPOCH']}\n")
+       f"VY_LEASE_EPOCH={os.environ['VY_LEASE_EPOCH']}\nVY_DEADLINE_EPOCH={os.environ['VY_DEADLINE']}\n")
 files = [("/etc/vy/vy.env", "0644", base64.b64encode(gzip.compress(env.encode(), mtime=0)).decode()),
          ("/usr/local/sbin/vy-setup", "0755", blob(f"{nebius}/vm_setup.sh")),
          ("/usr/local/sbin/vy-nebius-stop", "0755", blob(f"{nebius}/vm_stop.sh")),
@@ -180,6 +189,11 @@ eval "SSH=($(PYTHONPATH=$src python3 -c 'import shlex, sys; from research import
 for _ in $(seq 90); do "${SSH[@]}" true 2> /dev/null && break; sleep 10; done
 "${SSH[@]}" true || die "no ssh to $SSH_USER@$IP"
 "${SSH[@]}" 'sudo cloud-init status --wait > /dev/null; test -f /var/lib/vy-setup.done' || die "first-boot setup did not finish: ssh in and read /var/log/cloud-init-output.log"
+if [ -n "$deadline_epoch" ]; then
+  "${SSH[@]}" "sudo install -d -m 755 /etc/research && printf '%s %s %s\\n' $deadline_epoch $(date -u -d "@$deadline_epoch" +%Y-%m-%dT%H:%M:%SZ) launch \
+    | sudo tee /etc/research/deadline.tmp > /dev/null && sudo mv -f /etc/research/deadline.tmp /etc/research/deadline && cat /etc/research/deadline" \
+    | sed 's/^/nebius: deadline /' >&2
+fi
 "${SSH[@]}" "sh ~/.research/lease.sh extend $((max_hours * 3600)) launch" | sed 's/^/nebius: lease /' >&2
 
 if [ "$register" = 1 ]; then
