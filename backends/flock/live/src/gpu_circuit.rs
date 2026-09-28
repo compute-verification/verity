@@ -1,6 +1,7 @@
 //! Flock-CUDA for `verity/flock-circuit` (feature `gpu`): `flock_cuda_prove_circuit` (backends/flock/cuda/prove_circuit.cuh,
 //! installed by backends/flock/cuda_circuit_patch.py). The honest witness is built on the device from the compressions'
-//! inputs and every unit's input words (both computed here from the rows, a few MB); a tampered witness is uploaded whole.
+//! inputs and every unit's input words (both computed here from the rows, a few MB), a deep unit's slots here (`deep_unit`);
+//! a tampered witness is uploaded whole. Rep 1 proves from rep 0's witness and level-0 commitment (`Reuse`).
 
 use std::{ffi::c_void, ptr::{null, null_mut}, sync::OnceLock};
 
@@ -86,6 +87,11 @@ struct CircuitParams {
     hm96_prefixes: *const u8,
     hm96_tables: *const u64,
     hm96_level0_leaves: i64,
+    /// the units' slots are among the host slots: the device's unit kernel does not run
+    u_host: i32,
+    /// `Reuse`: 0 none, 1 keep for `reuse_tag`, 2 take `reuse_tag`'s
+    rep_reuse: i32,
+    reuse_tag: u64,
 }
 
 type Hm96TreeCb = unsafe extern "C" fn(*mut c_void, i32) -> i64;
@@ -152,6 +158,35 @@ unsafe extern "C" {
     fn flock_cuda_free(p: *mut u8);
     #[cfg(feature = "sha512")]
     fn flock_cuda_hm96_salts(key: *const u8, nonce: u64, idx: *const i64, n: i32, out: *mut u8) -> i32;
+    fn flock_cuda_circuit_kept(tag: u64) -> i32;
+}
+
+/// Rep 1 proves from rep 0's witness and level-0 commitment, which both reps bind (one level-0 root): rep 0 keeps them on the
+/// device for the session's tag, and rep 1 takes them. Where the device has no room to keep them, rep 1 proves in full.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Reuse {
+    None,
+    Keep(u64),
+    Take(u64),
+}
+
+/// Whether the device holds a rep 0's witness and level-0 commitment for `tag`.
+pub fn kept(tag: u64) -> bool {
+    unsafe { flock_cuda_circuit_kept(tag) != 0 }
+}
+
+/// The device's unit kernel syncs once per AND-level for 32 units per CTA, so a deep unit leaves the device idle (a flattened
+/// GEMM coordinate has 305 levels per tensor-core step), while the host's `eval64` walks its rows once per 64 units. A unit at
+/// least this deep is evaluated on the host; `FC_HOST_UNITS=0|1` overrides.
+pub const HOST_UNIT_LEVELS: usize = 2048;
+
+/// Whether the statement's units are evaluated on the host (`HOST_UNIT_LEVELS`).
+pub fn deep_unit(st: &Stmt) -> bool {
+    match std::env::var("FC_HOST_UNITS").as_deref() {
+        Ok("0") => false,
+        Ok("1") => true,
+        _ => types(st).sched.level_off.len() - 1 >= HOST_UNIT_LEVELS,
+    }
 }
 
 /// The salts of leaves `idx` of tree `nonce` under `key` as the device expands them (192 bytes each): a test vector against
@@ -175,6 +210,7 @@ pub enum CircuitSrc<'a> {
     DeviceCut { rows: &'a [F128], host: &'a [HostSlot], inputs: &'a [F128], mid: Mid<'a> },
     /// Every compression slot's input words (`[blocks][slots per block][in_words]`, `Stmt::row_inputs`), the hm96 slots' witness
     /// (host slots), and every unit's input words (`[blocks][units per block][in_words]`): the honest witness, built on the device.
+    /// With `inputs` empty, every unit slot is among the host slots (`deep_unit`).
     Device { rows: &'a [F128], host: &'a [HostSlot], inputs: &'a [F128] },
 }
 
@@ -328,7 +364,8 @@ pub fn host_slots(st: &Stmt, ni: usize, ins: &[Vec<F128>]) -> Vec<HostSlot> {
 }
 
 /// One rep on the GPU: proof, commitment, and the phase split (witness, commit, link, zerocheck, lincheck, ring switch,
-/// ligerito, total; seconds), plus the device witness's own split (compressions, units).
+/// ligerito, total; seconds), plus the device witness's own split (compressions, units). With `Reuse::Take` of a kept tag,
+/// `src` is not read: the witness and level-0 commitment are rep 0's.
 #[allow(clippy::too_many_arguments)]
 pub fn prove_circuit(
     st: &Stmt,
@@ -338,6 +375,7 @@ pub fn prove_circuit(
     mut hook: &mut dyn FnMut(&[u8]) -> Vec<Vec<F128>>,
     ch: &mut LiveChallenger,
     salts: Option<&std::sync::Mutex<crate::zk_hooks::LeafSalts>>,
+    reuse: Reuse,
 ) -> (R1csProofLigerito, Commitment, [f64; 8], [f64; 3]) {
     let s = statics_for(comp(), &st.circuit.da, &st.circuit.db);
     let (sc, cfg) = sched(pcs);
@@ -358,16 +396,24 @@ pub fn prove_circuit(
         mctx = Some(MidCtx { mid, n_late: t.sched.late_rows.len(), n_cut: t.sched.cut_rows.len(), at: Vec::new(), words: Vec::new(), zab: Vec::new() });
         src = CircuitSrc::Device { rows, host, inputs };
     }
+    let taken = matches!(reuse, Reuse::Take(tag) if kept(tag));
+    let mut u_host = 0;
     match &src {
+        _ if taken => {}
         CircuitSrc::Host { z, a, b } => {
             assert_eq!(z.len(), 1 << (m - 7));
             (hz, ha, hb) = (z.as_ptr() as *const u64, a.as_ptr() as *const u64, b.as_ptr() as *const u64);
         }
         CircuitSrc::DeviceCut { .. } => unreachable!(),
         CircuitSrc::Device { rows, host, inputs } => {
-            assert_eq!(inputs.len(), st.blocks() * st.c.unit_range().count * unit.in_words);
+            if inputs.is_empty() {
+                assert!(mctx.is_none(), "a cut template's units are the device's");
+                u_host = 1;
+            } else {
+                assert_eq!(inputs.len(), st.blocks() * st.c.unit_range().count * unit.in_words);
+                uin = inputs.as_ptr() as *const u64;
+            }
             assert_eq!(rows.len(), st.blocks() * st.c.range_of(st.c.sha_net).count * st.c.nets[st.c.sha_net].1.in_words);
-            uin = inputs.as_ptr() as *const u64;
             hin = rows.as_ptr() as *const u64;
             for (at, z, a, b) in host.iter() {
                 h_at.push(*at as i64);
@@ -451,6 +497,9 @@ pub fn prove_circuit(
         hm96_prefixes: std::ptr::null(),
         hm96_tables: std::ptr::null(),
         hm96_level0_leaves: 0,
+        u_host,
+        rep_reuse: match reuse { Reuse::None => 0, Reuse::Keep(_) => 1, Reuse::Take(_) => 2 },
+        reuse_tag: match reuse { Reuse::None => 0, Reuse::Keep(t) | Reuse::Take(t) => t },
     };
     #[cfg(feature = "sha512")]
     let hm96_prefixes: Vec<u8> = {

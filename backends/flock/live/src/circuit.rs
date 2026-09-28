@@ -1294,6 +1294,36 @@ fn set_bit(w: &mut F128, t: usize) {
     if t < 64 { w.lo |= 1 << t } else { w.hi |= 1 << (t - 64) }
 }
 
+/// A 64 × 64 bit transpose: afterwards bit i of `m[j]` is what bit j of `m[i]` was.
+fn transpose64(m: &mut [u64; 64]) {
+    let (mut j, mut mask) = (32, 0x0000_0000_ffff_ffffu64);
+    while j != 0 {
+        for k in (0..64).step_by(2 * j) {
+            for i in k..k + j {
+                let t = ((m[i] >> j) ^ m[i + j]) & mask;
+                m[i] ^= t << j;
+                m[i + j] ^= t;
+            }
+        }
+        j >>= 1;
+        mask ^= mask << j;
+    }
+}
+
+/// Bit-sliced rows (`v[row]` bit l is lane l's bit) as the first `n` lanes' packed words, `uw` each.
+fn lanes(v: &[u64], n: usize, uw: usize) -> Vec<Vec<F128>> {
+    let mut out = vec![vec![F128::ZERO; uw]; n];
+    for (blk, rows) in v.chunks(64).enumerate() {
+        let mut t = [0u64; 64];
+        t[..rows.len()].copy_from_slice(rows);
+        transpose64(&mut t);
+        for (o, &x) in out.iter_mut().zip(&t) {
+            if blk % 2 == 0 { o[blk / 2].lo = x } else { o[blk / 2].hi = x }
+        }
+    }
+    out
+}
+
 fn flip_bit(w: &mut F128, t: usize) {
     if t < 64 { w.lo ^= 1 << t } else { w.hi ^= 1 << (t - 64) }
 }
@@ -1674,18 +1704,8 @@ impl Stmt {
             } else {
                 ins.par_chunks(64).enumerate().flat_map_iter(|(gi, grp)| {
                     let (zz, aa, bq) = net.eval64(|col| grp.iter().enumerate().fold(0u64, |x, (l, r)| x | (bit(&r[col / WORD], col % WORD) << l)));
-                    (0..grp.len()).map(move |l| {
-                        let pack = |v: &Vec<u64>| -> Vec<F128> {
-                            let mut o = vec![F128::ZERO; uw];
-                            for (row, &y) in v.iter().enumerate() {
-                                if (y >> l) & 1 == 1 {
-                                    set_bit(&mut o[row / WORD], row % WORD);
-                                }
-                            }
-                            o
-                        };
-                        (64 * gi + l, pack(&zz), pack(&aa), pack(&bq))
-                    }).collect::<Vec<_>>()
+                    let (z, a, b) = (lanes(&zz, grp.len(), uw), lanes(&aa, grp.len(), uw), lanes(&bq, grp.len(), uw));
+                    z.into_iter().zip(a).zip(b).enumerate().map(move |(l, ((z, a), b))| (64 * gi + l, z, a, b))
                 }).collect()
             };
             items
@@ -1826,6 +1846,22 @@ mod tests {
         // public_digest streams the header without sorting it: that holds while serde_json's maps are sorted (no preserve_order)
         let v: Value = serde_json::from_str(r#"{"z": 1, "a": {"y": [2, {"q": 3, "b": 4}], "c": null}, "m": "s"}"#).unwrap();
         assert_eq!(serde_json::to_vec(&v).unwrap(), serde_json::to_vec(&sorted(&v)).unwrap());
+    }
+
+    #[test]
+    fn lanes_are_the_bitwise_pack() {
+        let mut s = 0x9e37_79b9_7f4a_7c15u64;
+        let v: Vec<u64> = (0..1000).map(|_| { s ^= s << 13; s ^= s >> 7; s ^= s << 17; s }).collect();
+        let (n, uw) = (37, 1000usize.div_ceil(WORD) + 1);
+        for (l, got) in lanes(&v, n, uw).iter().enumerate() {
+            let mut want = vec![F128::ZERO; uw];
+            for (row, &y) in v.iter().enumerate() {
+                if (y >> l) & 1 == 1 {
+                    set_bit(&mut want[row / WORD], row % WORD);
+                }
+            }
+            assert!(*got == want, "lane {l}");
+        }
     }
 
     #[test]

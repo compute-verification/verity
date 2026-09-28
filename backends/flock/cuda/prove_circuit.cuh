@@ -7,11 +7,13 @@
 // 2^type_log columns. The witness is built on the device: the compressions from their host-given inputs (the BLAKE3 witness
 // kernel, then scattered to their slots), the units by fc_unit_witness (32 units per CTA, bit-sliced: a row is one u32
 // over the 32 units; rows in level order, several warps per level; then a 32x32 bit transpose per 32 rows into each
-// unit's slot), the mask slot's free cells left zero (the no-op mask hook). With host_z the whole witness comes from the
-// host instead (a tampered witness).
+// unit's slot), the mask slot's free cells left zero (the no-op mask hook). A deep unit's slots come from the host instead
+// (u_host), and with host_z the whole witness does (a tampered witness).
 
 #define FC_MAX_TYPES 12
 #define FC_MAX_RANGES 32
+// device memory rep 0 leaves free when it keeps its witness for rep 1: the witness's scratch and inputs are outside the arena
+#define FC_KEEP_MARGIN ((size_t)6 << 30)
 
 typedef struct {
     FlockChunkParams c;                // link, delta, gamma, phase, host witness (c.host_z / host_a / host_b)
@@ -54,6 +56,13 @@ typedef struct {
     const uint8_t* hm96_prefixes;
     const uint64_t* hm96_tables;
     long long hm96_level0_leaves;   // the level-0 tree's leaves: salt-stream id 0 is refused for a tree of any other size
+    // the units' slots are among the host slots (host0), so the unit kernel does not run (a deep unit's witness is the host's)
+    int u_host;
+    // rep 1 from rep 0's witness and level-0 commitment (both reps bind one level-0 root): 1 keeps them for the next call with
+    // the same reuse_tag, which leaves the device arena open between the two calls; 2 takes them, or proves in full when
+    // nothing was kept (rep 0 had no room)
+    int rep_reuse;
+    unsigned long long reuse_tag;
 } FlockCircuitParams;
 
 // Salts of leaves idx[0..n) of tree `nonce` under `key`, expanded on the device (192 bytes each, in order): a test vector against
@@ -188,6 +197,59 @@ __global__ void fc_comb_expand(FcRanges R, const F128* __restrict__ eq, long lon
     }
 }
 
+// What rep 0 keeps for rep 1 (rep_reuse): its witness (z, a, b and the lincheck's z) and level-0 codeword, tree and cap, live
+// in the device arena, which stays open until rep 1 releases them.
+struct FcKept {
+    bool live = false;
+    unsigned long long tag = 0;
+    int m = 0, k_log = 0;
+    F128 *df = nullptr, *d_a = nullptr, *d_b = nullptr;
+    uint8_t* d_zlin = nullptr;
+    F128* d_cw0 = nullptr;
+    uint8_t* d_tree0 = nullptr;
+    long long l0_bl = 0;
+    int l0_ni = 0;
+    std::vector<MHash> l0_cap;
+};
+static FcKept g_fc_kept;
+// the most this prover has asked of device_arena, which only grows (a larger request by another prover makes the keep check
+// below conservative, never optimistic)
+static size_t g_fc_arena = 0;
+
+// a session that stopped between its reps: release what its rep 0 kept
+static void fc_kept_drop() {
+    if (!g_fc_kept.live) return;
+    for (void* p : {(void*)g_fc_kept.df, (void*)g_fc_kept.d_a, (void*)g_fc_kept.d_b, (void*)g_fc_kept.d_zlin, (void*)g_fc_kept.d_cw0,
+                    (void*)g_fc_kept.d_tree0})
+        ffi_free(p);
+    device_arena.finish();
+    g_fc_kept = FcKept{};
+}
+
+// whether rep 0 can keep its witness: the arena grows by `extra` and the device keeps `margin` free for the witness's own
+// buffers (the compression and unit scratch, the inputs), which are not the arena's
+static bool fc_can_keep(size_t arena, size_t extra, size_t margin) {
+    size_t free_b = 0, total_b = 0;
+    if (cudaMemGetInfo(&free_b, &total_b) != cudaSuccess) { cudaGetLastError(); return false; }
+    const size_t want = arena + extra;
+    const size_t after = want <= g_fc_arena ? free_b : (free_b + g_fc_arena >= want ? free_b + g_fc_arena - want : 0);
+    return after >= margin;
+}
+
+// rep 1 opens rep 0's level-0 tree: with hm96 leaves it is salt stream 0 (tree 0), and rep 1's own trees count from 1
+static void fc_rejoin_level0(const uint8_t* d_tree0) {
+#ifdef FLOCK_HB
+    if (g_hm96.tree_cb) {
+        g_hm96.nonce[d_tree0] = 0;
+        g_hm96.trees = 1;
+    }
+#else
+    (void)d_tree0;
+#endif
+}
+
+extern "C" int flock_cuda_circuit_kept(unsigned long long tag) { return g_fc_kept.live && g_fc_kept.tag == tag; }
+
 static int fc_bad_shape(const FlockCudaProveParams* P, const FlockCircuitParams* N) {
     const int k_log = P->k_log;
     if (k_log < 20 || k_log > 26 || N->n_types < 1 || N->n_types > FC_MAX_TYPES || N->n_ranges < 1 || N->n_ranges > FC_MAX_RANGES) return 1;
@@ -255,79 +317,80 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
             CK(cudaStreamSynchronize(0));
         }
         auto t1 = std::chrono::steady_clock::now();
-
-        static std::once_flag net_once;
-        static cudaError_t net_err = cudaSuccess;
-        static uint32_t *d_ao = nullptr, *d_ac = nullptr, *d_bo = nullptr, *d_bc = nullptr, *d_lo = nullptr, *d_ord = nullptr;
-        std::call_once(net_once, [&] {
-            auto up = [&](uint32_t** d, const uint32_t* h, size_t n) {
-                if (net_err == cudaSuccess) net_err = cudaMalloc(d, (n ? n : 1) * sizeof(uint32_t));
-                if (net_err == cudaSuccess && n) net_err = cudaMemcpy(*d, h, n * sizeof(uint32_t), cudaMemcpyHostToDevice);
-            };
-            const size_t na = N->u_a_off[N->u_useful], nb = N->u_b_off[N->u_useful];
-            up(&d_ao, N->u_a_off, N->u_useful + 1); up(&d_bo, N->u_b_off, N->u_useful + 1);
-            up(&d_ac, N->u_a_col, na); up(&d_bc, N->u_b_col, nb);
-            up(&d_lo, N->u_level_off, N->u_levels + 1); up(&d_ord, N->u_order, N->u_level_off[N->u_levels]);
-        });
-        CK(net_err);
-        const int ur = N->u_range;
-        const int ul = N->type_log[N->r_type[ur]];
-        const long long per_block = N->r_count[ur];
-        const long long n_units = (1LL << (m - k_log)) * per_block;
-        const long long groups = (n_units + 31) / 32;
-        uint64_t* d_in; uint32_t* d_scratch;
-        CK(cudaMalloc(&d_in, (size_t)n_units * N->u_in_words * 16));
-        CK(cudaMemcpy(d_in, N->u_inputs, (size_t)n_units * N->u_in_words * 16, cudaMemcpyHostToDevice));
-        // groups in batches that keep the scratch under ~2 GB
-        const long long per = 3LL * N->u_useful * 4;
-        const int warps = N->u_warps < 1 ? 1 : (N->u_warps > 8 ? 8 : N->u_warps);
-        if (N->u_n_late == 0) {
-            const long long batch = std::max(1LL, std::min(groups, (2LL << 30) / per));
-            CK(cudaMalloc(&d_scratch, (size_t)(batch * per)));
-            for (long long g0 = 0; g0 < groups; g0 += batch) {
-                const long long ng = std::min(batch, groups - g0);
-                CK(cudaMemsetAsync(d_scratch, 0, (size_t)(ng * per)));
-                fc_unit_witness<<<(unsigned)ng, 32 * warps>>>(d_in + 2LL * 32 * g0 * N->u_in_words, N->u_in_words, n_units - 32 * g0, (int)per_block,
-                    N->r_pos0[ur] + 0, ul, k_log, d_ao, d_ac, d_bo, d_bc, N->u_useful, N->u_const, N->u_levels, d_lo, d_ord, d_scratch,
-                    (uint32_t*)df, (uint32_t*)d_a, (uint32_t*)d_b, 2, 0, N->u_levels, 0, nullptr, nullptr, 0, nullptr, nullptr, g0);
+        if (!N->u_host) {
+            static std::once_flag net_once;
+            static cudaError_t net_err = cudaSuccess;
+            static uint32_t *d_ao = nullptr, *d_ac = nullptr, *d_bo = nullptr, *d_bc = nullptr, *d_lo = nullptr, *d_ord = nullptr;
+            std::call_once(net_once, [&] {
+                auto up = [&](uint32_t** d, const uint32_t* h, size_t n) {
+                    if (net_err == cudaSuccess) net_err = cudaMalloc(d, (n ? n : 1) * sizeof(uint32_t));
+                    if (net_err == cudaSuccess && n) net_err = cudaMemcpy(*d, h, n * sizeof(uint32_t), cudaMemcpyHostToDevice);
+                };
+                const size_t na = N->u_a_off[N->u_useful], nb = N->u_b_off[N->u_useful];
+                up(&d_ao, N->u_a_off, N->u_useful + 1); up(&d_bo, N->u_b_off, N->u_useful + 1);
+                up(&d_ac, N->u_a_col, na); up(&d_bc, N->u_b_col, nb);
+                up(&d_lo, N->u_level_off, N->u_levels + 1); up(&d_ord, N->u_order, N->u_level_off[N->u_levels]);
+            });
+            CK(net_err);
+            const int ur = N->u_range;
+            const int ul = N->type_log[N->r_type[ur]];
+            const long long per_block = N->r_count[ur];
+            const long long n_units = (1LL << (m - k_log)) * per_block;
+            const long long groups = (n_units + 31) / 32;
+            uint64_t* d_in; uint32_t* d_scratch;
+            CK(cudaMalloc(&d_in, (size_t)n_units * N->u_in_words * 16));
+            CK(cudaMemcpy(d_in, N->u_inputs, (size_t)n_units * N->u_in_words * 16, cudaMemcpyHostToDevice));
+            // groups in batches that keep the scratch under ~2 GB
+            const long long per = 3LL * N->u_useful * 4;
+            const int warps = N->u_warps < 1 ? 1 : (N->u_warps > 8 ? 8 : N->u_warps);
+            if (N->u_n_late == 0) {
+                const long long batch = std::max(1LL, std::min(groups, (2LL << 30) / per));
+                CK(cudaMalloc(&d_scratch, (size_t)(batch * per)));
+                for (long long g0 = 0; g0 < groups; g0 += batch) {
+                    const long long ng = std::min(batch, groups - g0);
+                    CK(cudaMemsetAsync(d_scratch, 0, (size_t)(ng * per)));
+                    fc_unit_witness<<<(unsigned)ng, 32 * warps>>>(d_in + 2LL * 32 * g0 * N->u_in_words, N->u_in_words, n_units - 32 * g0, (int)per_block,
+                        N->r_pos0[ur] + 0, ul, k_log, d_ao, d_ac, d_bo, d_bc, N->u_useful, N->u_const, N->u_levels, d_lo, d_ord, d_scratch,
+                        (uint32_t*)df, (uint32_t*)d_a, (uint32_t*)d_b, 2, 0, N->u_levels, 0, nullptr, nullptr, 0, nullptr, nullptr, g0);
+                    CK(cudaGetLastError());
+                }
+            } else {
+                // both passes over every group at once: the scratch holds the first pass's rows for the second
+                uint32_t *d_lr, *d_cr, *d_late, *d_cut;
+                CK(cudaMalloc(&d_scratch, (size_t)(groups * per))); CK(cudaMemsetAsync(d_scratch, 0, (size_t)(groups * per)));
+                CK(cudaMalloc(&d_lr, N->u_n_late * 4)); CK(cudaMalloc(&d_cr, N->u_n_cut * 4));
+                CK(cudaMalloc(&d_late, (size_t)groups * N->u_n_late * 4)); CK(cudaMalloc(&d_cut, (size_t)groups * N->u_n_cut * 4));
+                CK(cudaMemcpy(d_lr, N->u_late_rows, N->u_n_late * 4, cudaMemcpyHostToDevice));
+                CK(cudaMemcpy(d_cr, N->u_cut_rows, N->u_n_cut * 4, cudaMemcpyHostToDevice));
+                fc_unit_witness<<<(unsigned)groups, 32 * warps>>>(d_in, N->u_in_words, n_units, (int)per_block, N->r_pos0[ur], ul, k_log, d_ao, d_ac,
+                    d_bo, d_bc, N->u_useful, N->u_const, N->u_levels, d_lo, d_ord, d_scratch, (uint32_t*)df, (uint32_t*)d_a, (uint32_t*)d_b,
+                    0, 0, N->u_levels0, 0, nullptr, nullptr, N->u_n_cut, d_cr, d_cut, 0);
                 CK(cudaGetLastError());
+                std::vector<uint32_t> cut((size_t)groups * N->u_n_cut), late((size_t)groups * N->u_n_late);
+                CK(cudaMemcpy(cut.data(), d_cut, cut.size() * 4, cudaMemcpyDeviceToHost));
+                long long n_host = 0; const long long* host_at = nullptr; const int* host_words = nullptr; const uint64_t* host_zab = nullptr;
+                if (N->mid_cb(N->mid_ctx, cut.data(), groups, late.data(), &n_host, &host_at, &host_words, &host_zab) != 0) {
+                    printf("FFI circuit: the host tail failed\n"); return 206;
+                }
+                CK(cudaMemcpy(d_late, late.data(), late.size() * 4, cudaMemcpyHostToDevice));
+                fc_unit_witness<<<(unsigned)groups, 32 * warps>>>(d_in, N->u_in_words, n_units, (int)per_block, N->r_pos0[ur], ul, k_log, d_ao, d_ac,
+                    d_bo, d_bc, N->u_useful, N->u_const, N->u_levels, d_lo, d_ord, d_scratch, (uint32_t*)df, (uint32_t*)d_a, (uint32_t*)d_b,
+                    1, N->u_levels0, N->u_levels, N->u_n_late, d_lr, d_late, 0, nullptr, nullptr, 0);
+                CK(cudaGetLastError());
+                // the host slots (tail stages, lookups): z, a, b words at their word offsets
+                const uint64_t* p = host_zab;
+                for (long long i = 0; i < n_host; i++) {
+                    const size_t w = (size_t)host_words[i];
+                    CK(cudaMemcpyAsync(df + host_at[i], p, w * 16, cudaMemcpyHostToDevice));
+                    CK(cudaMemcpyAsync(d_a + host_at[i], p + 2 * w, w * 16, cudaMemcpyHostToDevice));
+                    CK(cudaMemcpyAsync(d_b + host_at[i], p + 4 * w, w * 16, cudaMemcpyHostToDevice));
+                    p += 6 * w;
+                }
+                cudaFree(d_lr); cudaFree(d_cr); cudaFree(d_late); cudaFree(d_cut);
             }
-        } else {
-            // both passes over every group at once: the scratch holds the first pass's rows for the second
-            uint32_t *d_lr, *d_cr, *d_late, *d_cut;
-            CK(cudaMalloc(&d_scratch, (size_t)(groups * per))); CK(cudaMemsetAsync(d_scratch, 0, (size_t)(groups * per)));
-            CK(cudaMalloc(&d_lr, N->u_n_late * 4)); CK(cudaMalloc(&d_cr, N->u_n_cut * 4));
-            CK(cudaMalloc(&d_late, (size_t)groups * N->u_n_late * 4)); CK(cudaMalloc(&d_cut, (size_t)groups * N->u_n_cut * 4));
-            CK(cudaMemcpy(d_lr, N->u_late_rows, N->u_n_late * 4, cudaMemcpyHostToDevice));
-            CK(cudaMemcpy(d_cr, N->u_cut_rows, N->u_n_cut * 4, cudaMemcpyHostToDevice));
-            fc_unit_witness<<<(unsigned)groups, 32 * warps>>>(d_in, N->u_in_words, n_units, (int)per_block, N->r_pos0[ur], ul, k_log, d_ao, d_ac,
-                d_bo, d_bc, N->u_useful, N->u_const, N->u_levels, d_lo, d_ord, d_scratch, (uint32_t*)df, (uint32_t*)d_a, (uint32_t*)d_b,
-                0, 0, N->u_levels0, 0, nullptr, nullptr, N->u_n_cut, d_cr, d_cut, 0);
-            CK(cudaGetLastError());
-            std::vector<uint32_t> cut((size_t)groups * N->u_n_cut), late((size_t)groups * N->u_n_late);
-            CK(cudaMemcpy(cut.data(), d_cut, cut.size() * 4, cudaMemcpyDeviceToHost));
-            long long n_host = 0; const long long* host_at = nullptr; const int* host_words = nullptr; const uint64_t* host_zab = nullptr;
-            if (N->mid_cb(N->mid_ctx, cut.data(), groups, late.data(), &n_host, &host_at, &host_words, &host_zab) != 0) {
-                printf("FFI circuit: the host tail failed\n"); return 206;
-            }
-            CK(cudaMemcpy(d_late, late.data(), late.size() * 4, cudaMemcpyHostToDevice));
-            fc_unit_witness<<<(unsigned)groups, 32 * warps>>>(d_in, N->u_in_words, n_units, (int)per_block, N->r_pos0[ur], ul, k_log, d_ao, d_ac,
-                d_bo, d_bc, N->u_useful, N->u_const, N->u_levels, d_lo, d_ord, d_scratch, (uint32_t*)df, (uint32_t*)d_a, (uint32_t*)d_b,
-                1, N->u_levels0, N->u_levels, N->u_n_late, d_lr, d_late, 0, nullptr, nullptr, 0);
-            CK(cudaGetLastError());
-            // the host slots (tail stages, lookups): z, a, b words at their word offsets
-            const uint64_t* p = host_zab;
-            for (long long i = 0; i < n_host; i++) {
-                const size_t w = (size_t)host_words[i];
-                CK(cudaMemcpyAsync(df + host_at[i], p, w * 16, cudaMemcpyHostToDevice));
-                CK(cudaMemcpyAsync(d_a + host_at[i], p + 2 * w, w * 16, cudaMemcpyHostToDevice));
-                CK(cudaMemcpyAsync(d_b + host_at[i], p + 4 * w, w * 16, cudaMemcpyHostToDevice));
-                p += 6 * w;
-            }
-            cudaFree(d_lr); cudaFree(d_cr); cudaFree(d_late); cudaFree(d_cut);
+            CK(cudaStreamSynchronize(0));
+            cudaFree(d_scratch); cudaFree(d_in);
         }
-        CK(cudaStreamSynchronize(0));
-        cudaFree(d_scratch); cudaFree(d_in);
         auto t2 = std::chrono::steady_clock::now();
         if (N->witness_s) {
             N->witness_s[0] = std::chrono::duration<double>(t1 - t0).count();
