@@ -20,6 +20,7 @@ gates are then its own nodes' gates.
 -/
 import Flock.Program
 import Flock.Public
+import Flock.Registered
 import SampledProofs.Partition
 
 namespace SampledProofs.Registered
@@ -29,12 +30,8 @@ open Flock (V)
 open Flock.Program (Ty)
 open Flock.TemplateQuery (Desc)
 
-def REGISTERED_DOMAIN : String := "verity/one-stage/registered-domain/v0"
 def SCHEMA : String := Flock.HmRow.ROW_SCHEMA
-/-- The default leaf width, which the domain and the entry name only by leaving `word_bits` out. -/
-def WORD_BITS : Nat := 16
-def WIDTHS : List Nat := [16, 32]
-def WIDTH_KEY : String := "word_bits"
+export Flock.Registered (REGISTERED_DOMAIN WORD_BITS WIDTHS WIDTH_KEY)
 def ENTRY_KEYS : Array String := sortStrings #["value", "root", "leaves", "words", "domain"]
 
 /-! A type's element or field is smaller than it: `widthSet`'s and `lower`'s termination. -/
@@ -128,22 +125,6 @@ def width (p : Param) : V Nat :=
   | [w] => if 0 < w && w ≤ 32 then pure (16 * ((w + 15) / 16)) else throw s!"parameter {p.name}: its leaves are {w} bits"
   | ws => throw s!"parameter {p.name}: its leaves are not one width ({ws})"
 
-private def tagged (frame : String) (H : ByteArray → ByteArray) (tag : String) (manifest : Json) : V ByteArray := do
-  let t := tag.toUTF8
-  let m := (← Flock.canon manifest).toUTF8
-  return H (frame.toUTF8.push 0 ++ Flock.be32 t.size.toUInt32 ++ t ++ Flock.be64 m.size.toUInt64 ++ m)
-
-/-- `registered.domain(program, value, words, leaves, word_bits).domain_id`, `leaves` the value's rows. -/
-def domain (program value : String) (words leaves wordBits : Nat) : V ByteArray := do
-  if !WIDTHS.contains wordBits then throw s!"a registered value's leaves are 16 or 32 bits, not {wordBits}"
-  let manifest := Json.mkObj ([("program", Json.str program), ("value", Json.str value), ("schema", Json.str SCHEMA),
-    ("words", Lean.toJson words), ("leaves", Lean.toJson leaves)] ++
-    (if wordBits == WORD_BITS then [] else [(WIDTH_KEY, Lean.toJson wordBits)]))
-  let binding ← tagged "veritor/tagged-sha256/v1" Flock.Sha256.hash REGISTERED_DOMAIN manifest
-  let positions ← tagged "verity/tagged-sha512/v1" Flock.Sha512.hash "veritor/indexed-domain/range/v1"
-    (Json.mkObj [("start", Lean.toJson (0 : Nat)), ("step", Lean.toJson (1 : Nat)), ("stop", Lean.toJson leaves)])
-  return Flock.FV3.hash "domain" [binding, Flock.FV3.uint 0, positions, Flock.FV3.uint leaves] Flock.Sha512.hash
-
 /-- The verifier's own entry for one registered value: its rows (`leaves`), their `words`, `word_bits` and domain (hex). -/
 structure Entry where
   value : String
@@ -162,7 +143,7 @@ def entries (d : Desc) (ps : Array Param) (values : Array (String × Nat)) : V (
     if w < 1 || n % w != 0 then throw s!"parameter {v}: {n} leaves are not rows of {w}"
     let b ← width p
     return { value := v, leaves := n / w, words := w, wordBits := b,
-             domain := Flock.hexOf (← domain (Flock.hexOf d.sha512) v w (n / w) b) }
+             domain := Flock.hexOf (← Flock.Registered.domain (Flock.hexOf d.sha512) v w (n / w) b) }
 
 def Entry.toJson (e : Entry) : Json :=
   Json.mkObj [("leaves", Lean.toJson e.leaves), ("words", Lean.toJson e.words), ("word_bits", Lean.toJson e.wordBits),
