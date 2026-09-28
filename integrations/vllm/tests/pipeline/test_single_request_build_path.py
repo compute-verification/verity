@@ -124,6 +124,7 @@ def test_101s_request_program_composes_as_its_build_does(tmp_path):
     assert _decode_cold(tmp_path / "build_workload" / "descriptor.json.gz") == r["gates"]
 
 
+@pytest.mark.slow
 def test_101s_manifest_step_resolves_every_call_as_its_build_does(tmp_path):
     """`manifest build` as the row runs it, in its own interpreter: the program view finds every Call's Definition and the word check
     runs over them all.  At the default gate limit its one violation is the sampler Call's size (the row raises the limit for it on a
@@ -137,6 +138,7 @@ def test_101s_manifest_step_resolves_every_call_as_its_build_does(tmp_path):
     assert p.returncode != 0 and "1 violation(s): GumbelTopPTokenSelect_v2{V=128256,S=32}: too-large, 32 Call(s)" in p.stderr, p.stderr[-3000:]
 
 
+@pytest.mark.slow
 def test_101s_program_view_and_word_lookups_resolve_every_call(tmp_path):
     """In a fresh interpreter: the query's program view of #101's request Program (as the manifest reads it), every Call's ports and its
     Definition as the word check specialises it, the sampler's unit rule, and the Commit's replay evaluator for every family."""
