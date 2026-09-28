@@ -63,8 +63,12 @@ def ncp_hash_words(m: int, k: int, n: int) -> int:
 
 
 def pearl_terms(m: int, k: int, n: int) -> list[Term]:
-    """Pearl's honest miner per unit (``schemes/pearl_kw``), A side and outputs; the per-weight B side is amortized."""
-    mk, mn = m * k, m * n
+    """Pearl's honest miner per unit (``schemes/pearl_kw``), A side and outputs; the per-weight B side is amortized.
+
+    B̃·F_A is charged per unit: the whitepaper derives F_A from noise seed_A (§4.5, eq. 10), fresh for every activation
+    commitment. Pearl #311's consensus (``zk-pow/src/api/fp8/noise.rs``) and ``pearl_kw`` key it by seed_B instead, which
+    would amortize it with the B side."""
+    mk, mn, nk = m * k, m * n, n * k
     return [
         Term("GEMM m x k x n, FP8 mma with FP32 accumulate", m * k * n * MAC_FP8_F32, True, "Pearl credits m·k·n MACs"),
         Term("noise N = E·Fᵀ, one rank-32 FP8 atom per A entry", mk * R * MAC_FP8_F32, True),
@@ -73,6 +77,7 @@ def pearl_terms(m: int, k: int, n: int) -> list[Term]:
         Term("row norms l2, linf from the planes", mk * 2 * FP32, True, "Unverified count"),
         Term("extract: IMAD + SHF per output feeding the ticket", mn * 2 * INT32, True),
         Term("peel: A·F_B, BF16 mma (m·k·r)", mk * R * MAC_BF16_F32, False, "the useful output is unchecked"),
+        Term("peel: B̃·F_A, BF16 mma (n·k·r)", nk * R * MAC_BF16_F32, False, "unchecked; F_A fresh per unit"),
         Term("peel: 2r correction columns per output, BF16 mma", mn * 2 * R * MAC_BF16_F32, False, "unchecked"),
         Term("unscale: one FFMA per output", mn * FP32, False, "unchecked"),
     ]

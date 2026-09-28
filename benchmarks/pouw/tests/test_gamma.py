@@ -27,6 +27,10 @@ def test_pearl_has_no_gamma_and_a_floor():
     assert r.gamma is None and float(r.gamma_floor.rstrip("%")) > 1.0
 
 
+def test_pearl_floor_charges_b_f_a():
+    assert G.row("pearl-fp8-v4", 8192, 8192, 8192).gamma_floor == "3.044%"   # (2r/n + 2r/m + 4r/k + 4/k)/Ω, r = 32
+
+
 def test_uncovered_lm_head():
     import json
     model = json.loads(G.WORKLOAD.read_text())["model"]
