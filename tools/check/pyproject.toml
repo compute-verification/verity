@@ -18,4 +18,4 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # The tests read the verifier's pin, replayable sets and agreement scripts (the agreement step's inputs).
-inputs = ["backends/flock/verifier"]
+inputs = ["READY.json", "backends/flock/verifier"]
