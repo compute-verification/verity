@@ -1,0 +1,36 @@
+import NetTiming
+open NetTiming
+#print axioms card_free
+#print axioms card_leftPacked
+#print axioms occ_fill
+#print axioms leftPacked_occ_fill
+#print axioms fill_injective
+#print axioms exists_fill_of_leftPacked
+#print axioms card_counts_eq_le
+#print axioms card_counts_le_le
+#print axioms released_self
+#print axioms leftPacked_fifoGrid
+#print axioms encard_fifoGrids
+#print axioms encard_le_prod_of_branching
+#print axioms encard_acceptedRuns_le
+#print axioms encard_decodable_le
+#print axioms no_fault_of_accepted
+#print axioms recorded_row_eq_fill
+#print axioms encard_accSeqs_le_advice
+#print axioms encard_accSeqs_le_blocks
+#print axioms encard_accSeqs_le_blocks_counts
+#print axioms encard_decodable_le_blocks
+#print axioms witnessWarden_assumptions
+#print axioms witnessWarden_jitter_varies
+#print axioms witnessProgram_conditions
+#print axioms witnessProgram_timing_matters
+#print axioms toy_leftPacked
+#print axioms encard_accSeqs_le_sync
+#print axioms encard_accSeqs_le_fixedClock
+#print axioms sum_released_le
+#print axioms encard_fifoGrids_le_of_available
+#print axioms encard_obsDecodable_le
+#print axioms joint_witness
+#print axioms joint_witness_bound
+#print axioms zP_accepts_one
+#print axioms zP_constOp_accepts_one

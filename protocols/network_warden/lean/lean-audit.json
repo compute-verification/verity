@@ -1,0 +1,539 @@
+{
+ "roots": ["NetTiming"],
+ "exempt": {
+  "CheckAxioms": "the #print axioms list (`lake env lean CheckAxioms.lean`)"
+ },
+ "assumptions": ["NetTiming.Assumptions"],
+ "layers": {
+  "NetTiming.Model": {
+   "imports": ["Mathlib", "NetTiming.Model"],
+   "except": [],
+   "why": "definitions import no proofs"
+  },
+  "NetTiming.Assumptions": {
+   "imports": ["Mathlib", "NetTiming.Model", "NetTiming.Assumptions"],
+   "except": [],
+   "why": "the trusted layer reads only the model"
+  }
+ },
+ "pins": {
+  "NetTiming.card_counts_eq_le": {
+   "signature": [
+    "NetTiming.card_counts_eq_le (T S M : Nat) :",
+    "  instLENat.le (Finset.filter (fun n => Eq (Finset.univ.sum fun t => (n t).val) M) Finset.univ).card",
+    "    ((instHSub.hSub (instHAdd.hAdd T M) 1).choose M)"
+   ],
+   "assumptions": [],
+   "type_hash": "000000003f8e42d9"
+  },
+  "NetTiming.card_counts_le_le": {
+   "signature": [
+    "NetTiming.card_counts_le_le (T S M : Nat) :",
+    "  instLENat.le (Finset.filter (fun n => instLENat.le (Finset.univ.sum fun t => (n t).val) M) Finset.univ).card",
+    "    ((instHAdd.hAdd T M).choose M)"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000d130c156"
+  },
+  "NetTiming.card_free": {
+   "signature": [
+    "NetTiming.card_free (T S : Nat) : Eq (Fintype.card (Fin T → Fin S → Bool)) (instHPow.hPow 2 (instHMul.hMul T S))"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000b5c0fcc2"
+  },
+  "NetTiming.card_leftPacked": {
+   "signature": [
+    "NetTiming.card_leftPacked (T S : Nat) :",
+    "  Eq (Fintype.card (Subtype fun P => NetTiming.LeftPacked P)) (instHPow.hPow (instHAdd.hAdd S 1) T)"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000b50305ed"
+  },
+  "NetTiming.encard_accSeqs_le_advice": {
+   "signature": [
+    "NetTiming.encard_accSeqs_le_advice {L K S : Nat} {In Adv : Type} [Fintype Adv] (P : NetTiming.Program L S In Adv)",
+    "  (op : Nat → List (NetTiming.Obs L K S) → In) (n D : Nat) :",
+    "  instLEENat.le (NetTiming.AccSeqs P op n D).encard (instHMul.hMul (Fintype.card Adv) (instHPow.hPow D n)).cast"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000a1b331f1"
+  },
+  "NetTiming.encard_accSeqs_le_blocks": {
+   "signature": [
+    "NetTiming.encard_accSeqs_le_blocks {L K S : Nat} {In Ac B C : Type} {At : B → Type} {U : C → Type} [Fintype Ac]",
+    "  [Fintype B] [DecidableEq B] [(β : B) → Fintype (At β)] [Fintype C] [DecidableEq C] [(c : C) → Fintype (U c)]",
+    "  (P : NetTiming.Program L S In (Prod Ac ((β : B) → At β))) (op : Nat → List (NetTiming.Obs L K S) → In) (n D : Nat)",
+    "  (step : C → Nat) (blk : C → B) (occ : (c : C) → List In → Prod Ac ((β : B) → At β) → U c)",
+    "  (h1 : NetTiming.FramesReadNoTimingAdvice P step occ) (h2 : NetTiming.OccupancyReadsOwnBlock blk occ) :",
+    "  instLEENat.le (NetTiming.AccSeqs P op n D).encard",
+    "    (instHMul.hMul (instHMul.hMul (Fintype.card Ac) (instHPow.hPow D n))",
+    "        (Finset.univ.prod fun β =>",
+    "          instMinNat.min (Fintype.card (At β))",
+    "            ((Finset.filter (fun c => Eq (blk c) β) Finset.univ).prod fun c => Fintype.card (U c)))).cast"
+   ],
+   "assumptions": [],
+   "type_hash": "000000004c0ef228"
+  },
+  "NetTiming.encard_accSeqs_le_blocks_counts": {
+   "signature": [
+    "NetTiming.encard_accSeqs_le_blocks_counts {L K S : Nat} {In Ac B : Type} {At : B → Type} [Fintype Ac] [Fintype B]",
+    "  [DecidableEq B] [(β : B) → Fintype (At β)] (P : NetTiming.Program L S In (Prod Ac ((β : B) → At β)))",
+    "  (op : Nat → List (NetTiming.Obs L K S) → In) (n D : Nat) (blk : Prod (Fin L) (Fin n) → B)",
+    "  (h1 :",
+    "    NetTiming.FramesReadNoTimingAdvice P (fun c => c.snd.val) fun c ins a =>",
+    "      NetTiming.rowCount (P.rows c.snd.val ins a c.fst))",
+    "  (h2 : NetTiming.OccupancyReadsOwnBlock blk fun c ins a => NetTiming.rowCount (P.rows c.snd.val ins a c.fst)) :",
+    "  instLEENat.le (NetTiming.AccSeqs P op n D).encard",
+    "    (instHMul.hMul (instHMul.hMul (Fintype.card Ac) (instHPow.hPow D n))",
+    "        (Finset.univ.prod fun β =>",
+    "          instMinNat.min (Fintype.card (At β))",
+    "            (instHPow.hPow (instHAdd.hAdd S 1) (Finset.filter (fun c => Eq (blk c) β) Finset.univ).card))).cast"
+   ],
+   "assumptions": [],
+   "type_hash": "0000000061357c1a"
+  },
+  "NetTiming.encard_accSeqs_le_fixedClock": {
+   "signature": [
+    "NetTiming.encard_accSeqs_le_fixedClock {L K S : Nat} {In Ac : Type} [Fintype Ac] (W : Nat)",
+    "  (P : NetTiming.Program L S In (Prod Ac (Fin W → Unit))) (op : Nat → List (NetTiming.Obs L K S) → In) (n D : Nat) :",
+    "  instLEENat.le (NetTiming.AccSeqs P op n D).encard (instHMul.hMul (Fintype.card Ac) (instHPow.hPow D n)).cast"
+   ],
+   "assumptions": [],
+   "type_hash": "0000000035fda5fd"
+  },
+  "NetTiming.encard_accSeqs_le_sync": {
+   "signature": [
+    "NetTiming.encard_accSeqs_le_sync {L K S : Nat} {In Ac Sync : Type} [Fintype Ac] [Fintype Sync] (W : Nat)",
+    "  (P : NetTiming.Program L S In (Prod Ac (Fin W → Sync))) (op : Nat → List (NetTiming.Obs L K S) → In) (n D : Nat) :",
+    "  instLEENat.le (NetTiming.AccSeqs P op n D).encard",
+    "    (instHMul.hMul (instHMul.hMul (Fintype.card Ac) (instHPow.hPow (Fintype.card Sync) W)) (instHPow.hPow D n)).cast"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000e2115d88"
+  },
+  "NetTiming.encard_acceptedRuns_le": {
+   "signature": [
+    "NetTiming.encard_acceptedRuns_le {L K S : Nat} {Z In Act Wire Adv : Type}",
+    "  (I : NetTiming.Interaction L K S Z In Act Wire) (P : NetTiming.Program L S In Adv) (n : Nat) (N : Nat → Nat)",
+    "  (hN :",
+    "    ∀ (t : Nat),",
+    "      instLTNat.lt t n →",
+    "        ∀ (h : List (NetTiming.Obs L K S)),",
+    "          instLEENat.le",
+    "            (Set.ofPred fun x =>",
+    "                Exists fun z =>",
+    "                  And (NetTiming.AcceptedUpTo P I.op (instHAdd.hAdd t 1) (I.obsRun z (instHAdd.hAdd t 1)))",
+    "                    (Eq (I.obsRun z (instHAdd.hAdd t 1)) (instHAppendOfAppend.hAppend h (List.cons x List.nil)))).encard",
+    "            (N t).cast) :",
+    "  instLEENat.le",
+    "    (Set.ofPred fun o => Exists fun z => And (Eq o (I.obsRun z n)) (NetTiming.AcceptedUpTo P I.op n o)).encard",
+    "    ((Finset.range n).prod fun t => N t).cast"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000ac6c3b14"
+  },
+  "NetTiming.encard_decodable_le": {
+   "signature": [
+    "NetTiming.encard_decodable_le {L K S : Nat} {Z In Act Wire Adv : Type} (I : NetTiming.Interaction L K S Z In Act Wire)",
+    "  (P : NetTiming.Program L S In Adv) (n : Nat) (view : Nat → NetTiming.Obs L K S → Wire)",
+    "  (hW2 : NetTiming.Regenerates I.warden view) (Zs : Set Z)",
+    "  (hacc : ∀ (z : Z), Set.instMembership.mem Zs z → NetTiming.AcceptedUpTo P I.op n (I.obsRun z n)) (dec : List Wire → Z)",
+    "  (hdec : ∀ (z : Z), Set.instMembership.mem Zs z → Eq (dec (I.wireRun z n)) z) :",
+    "  instLEENat.le Zs.encard",
+    "    (Set.ofPred fun o => Exists fun z => And (Eq o (I.obsRun z n)) (NetTiming.AcceptedUpTo P I.op n o)).encard"
+   ],
+   "assumptions": [],
+   "type_hash": "000000008d8b87fd"
+  },
+  "NetTiming.encard_decodable_le_blocks": {
+   "signature": [
+    "NetTiming.encard_decodable_le_blocks {L K S : Nat} {Z In Act Wire Ac B C : Type} {At : B → Type} {U : C → Type}",
+    "  [Fintype Ac] [Fintype B] [DecidableEq B] [(β : B) → Fintype (At β)] [Fintype C] [DecidableEq C]",
+    "  [(c : C) → Fintype (U c)] (I : NetTiming.Interaction L K S Z In Act Wire)",
+    "  (P : NetTiming.Program L S In (Prod Ac ((β : B) → At β))) (n D : Nat) (view : Nat → NetTiming.Obs L K S → Wire)",
+    "  (hW2 : NetTiming.Regenerates I.warden view) (hJ : NetTiming.JitterBounded I.warden D) (step : C → Nat) (blk : C → B)",
+    "  (occ : (c : C) → List In → Prod Ac ((β : B) → At β) → U c) (h1 : NetTiming.FramesReadNoTimingAdvice P step occ)",
+    "  (h2 : NetTiming.OccupancyReadsOwnBlock blk occ) (Zs : Set Z)",
+    "  (hacc : ∀ (z : Z), Set.instMembership.mem Zs z → NetTiming.AcceptedUpTo P I.op n (I.obsRun z n)) (dec : List Wire → Z)",
+    "  (hdec : ∀ (z : Z), Set.instMembership.mem Zs z → Eq (dec (I.wireRun z n)) z) :",
+    "  instLEENat.le Zs.encard",
+    "    (instHMul.hMul (instHMul.hMul (Fintype.card Ac) (instHPow.hPow D n))",
+    "        (Finset.univ.prod fun β =>",
+    "          instMinNat.min (Fintype.card (At β))",
+    "            ((Finset.filter (fun c => Eq (blk c) β) Finset.univ).prod fun c => Fintype.card (U c)))).cast"
+   ],
+   "assumptions": [],
+   "type_hash": "0000000079a0e133"
+  },
+  "NetTiming.encard_fifoGrids": {
+   "signature": [
+    "NetTiming.encard_fifoGrids {F : Type} (T S : Nat) (f : Nat → F) :",
+    "  Eq (Set.range fun enq => NetTiming.fifoGrid T S f enq).encard (instHPow.hPow (instHAdd.hAdd S 1) T).cast"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000a45da021"
+  },
+  "NetTiming.encard_fifoGrids_le_of_available": {
+   "signature": [
+    "NetTiming.encard_fifoGrids_le_of_available {F : Type} (T S M : Nat) (f : Nat → F) :",
+    "  instLEENat.le",
+    "    (Set.ofPred fun g =>",
+    "        Exists fun enq =>",
+    "          And (instLENat.le ((Finset.range T).sum fun t => enq t) M) (Eq g (NetTiming.fifoGrid T S f enq))).encard",
+    "    ((instHAdd.hAdd T M).choose M).cast"
+   ],
+   "assumptions": [],
+   "type_hash": "0000000035e5b9e3"
+  },
+  "NetTiming.encard_le_prod_of_branching": {
+   "signature": [
+    "NetTiming.encard_le_prod_of_branching {α : Type} (n : Nat) (Sq : Set (List α)) (N : Nat → Nat)",
+    "  (hlen : ∀ (o : List α), Set.instMembership.mem Sq o → Eq o.length n)",
+    "  (hN :",
+    "    ∀ (t : Nat),",
+    "      instLTNat.lt t n →",
+    "        ∀ (h : List α),",
+    "          instLEENat.le",
+    "            (Set.ofPred fun x =>",
+    "                Exists fun o =>",
+    "                  And (Set.instMembership.mem Sq o)",
+    "                    (Eq (List.take (instHAdd.hAdd t 1) o)",
+    "                      (instHAppendOfAppend.hAppend h (List.cons x List.nil)))).encard",
+    "            (N t).cast) :",
+    "  instLEENat.le Sq.encard ((Finset.range n).prod fun t => N t).cast"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000d5af51fd"
+  },
+  "NetTiming.encard_obsDecodable_le": {
+   "signature": [
+    "NetTiming.encard_obsDecodable_le {L K S : Nat} {Z In Act Wire Adv : Type}",
+    "  (I : NetTiming.Interaction L K S Z In Act Wire) (P : NetTiming.Program L S In Adv) (n : Nat) (Zs : Set Z)",
+    "  (hacc : ∀ (z : Z), Set.instMembership.mem Zs z → NetTiming.AcceptedUpTo P I.op n (I.obsRun z n))",
+    "  (dec : List (NetTiming.Obs L K S) → Z) (hdec : ∀ (z : Z), Set.instMembership.mem Zs z → Eq (dec (I.obsRun z n)) z) :",
+    "  instLEENat.le Zs.encard",
+    "    (Set.ofPred fun o => Exists fun z => And (Eq o (I.obsRun z n)) (NetTiming.AcceptedUpTo P I.op n o)).encard"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000a563c5f9"
+  },
+  "NetTiming.exists_fill_of_leftPacked": {
+   "signature": [
+    "NetTiming.exists_fill_of_leftPacked {T S : Nat} {F : Type} [Inhabited F] (g : NetTiming.Grid T S F)",
+    "  (h : NetTiming.LeftPacked (NetTiming.occ g)) : Exists fun f => Exists fun n => Eq g (NetTiming.fill f n)"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000282c851a"
+  },
+  "NetTiming.fill_injective": {
+   "signature": ["NetTiming.fill_injective {T S : Nat} {F : Type} (f : Nat → F) : Function.Injective (NetTiming.fill f)"],
+   "assumptions": [],
+   "type_hash": "00000000f794e211"
+  },
+  "NetTiming.joint_witness": {
+   "signature": [
+    "NetTiming.joint_witness :",
+    "  And (NetTiming.Regenerates NetTiming.rWarden fun x o => o)",
+    "    (And (NetTiming.JitterBounded NetTiming.rWarden 2)",
+    "      (And",
+    "        (NetTiming.FramesReadNoTimingAdvice (NetTiming.rP 3) (fun c => c.snd.val) fun c ins a =>",
+    "          NetTiming.rowCount ((NetTiming.rP 3).rows c.snd.val ins a c.fst))",
+    "        (And",
+    "          (NetTiming.OccupancyReadsOwnBlock (fun c => c.snd) fun c ins a =>",
+    "            NetTiming.rowCount ((NetTiming.rP 3).rows c.snd.val ins a c.fst))",
+    "          (And",
+    "            (∀ (z : Fin 3 → Fin 3),",
+    "              NetTiming.AcceptedUpTo (NetTiming.rP 3) (NetTiming.rI 3).op 3 ((NetTiming.rI 3).obsRun z 3))",
+    "            (∀ (z : Fin 3 → Fin 3), Eq (NetTiming.rDec ((NetTiming.rI 3).wireRun z 3)) z)))))"
+   ],
+   "assumptions": [],
+   "type_hash": "000000001d5ef5c9"
+  },
+  "NetTiming.joint_witness_bound": {
+   "signature": [
+    "NetTiming.joint_witness_bound :",
+    "  And (Eq Set.univ.encard 27)",
+    "    (instLEENat.le Set.univ.encard",
+    "      (instHMul.hMul (instHMul.hMul (Fintype.card Unit) (instHPow.hPow 2 3))",
+    "          (Finset.univ.prod fun β =>",
+    "            instMinNat.min (Fintype.card (Fin 3))",
+    "              ((Finset.filter (fun c => Eq c.snd β) Finset.univ).prod fun _c =>",
+    "                Fintype.card (Fin (instHAdd.hAdd 2 1))))).cast)"
+   ],
+   "assumptions": [],
+   "type_hash": "000000006cf8e428"
+  },
+  "NetTiming.no_fault_of_accepted": {
+   "signature": [
+    "NetTiming.no_fault_of_accepted {L K S : Nat} {Z In Act Wire Adv : Type} (I : NetTiming.Interaction L K S Z In Act Wire)",
+    "  (P : NetTiming.Program L S In Adv) (winEnd : Nat → Nat) (hwin : ∀ (i : Nat), instLENat.le i (winEnd i))",
+    "  (hW6 : NetTiming.FailClosed I.warden winEnd) (z : Z) (n : Nat) (hacc : NetTiming.AcceptedUpTo P I.op n (I.obsRun z n))",
+    "  (i : Nat) (hi : instLTNat.lt i (I.actRun z n).length) (hend : instLTNat.lt (winEnd i) n) :",
+    "  Not (I.warden.fault (List.instGetElemNatLtLength.getElem (I.actRun z n) i hi))"
+   ],
+   "assumptions": [],
+   "type_hash": "000000006ab1425d"
+  },
+  "NetTiming.recorded_row_eq_fill": {
+   "signature": [
+    "NetTiming.recorded_row_eq_fill {L K S : Nat} {In Act Wire : Type} (w : NetTiming.Warden L K S In Act Wire)",
+    "  (hW4 : NetTiming.Packed w) (k : Nat) (xs : List In) (as : List Act) (ℓ : Fin L) :",
+    "  Exists fun f => Exists fun c => Eq (fun x => (w.obs k xs as).rows ℓ) (NetTiming.fill f c)"
+   ],
+   "assumptions": [],
+   "type_hash": "000000001fe4c877"
+  },
+  "NetTiming.released_self": {
+   "signature": [
+    "NetTiming.released_self (S : Nat) (n : Nat → Fin (instHAdd.hAdd S 1)) : Eq (NetTiming.released S fun t => (n t).val) n"
+   ],
+   "assumptions": [],
+   "type_hash": "000000000bd6b454"
+  },
+  "NetTiming.sum_released_le": {
+   "signature": [
+    "NetTiming.sum_released_le (T S : Nat) (enq : Nat → Nat) :",
+    "  instLENat.le ((Finset.range T).sum fun t => (NetTiming.released S enq t).val) ((Finset.range T).sum fun t => enq t)"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000e5604650"
+  },
+  "NetTiming.toy_leftPacked": {
+   "signature": ["NetTiming.toy_leftPacked : Eq (Fintype.card (Subtype fun P => NetTiming.LeftPacked P)) 729"],
+   "assumptions": [],
+   "type_hash": "000000003f41fd54"
+  },
+  "NetTiming.witnessProgram_conditions": {
+   "signature": [
+    "NetTiming.witnessProgram_conditions (n : Nat) :",
+    "  And",
+    "    (NetTiming.FramesReadNoTimingAdvice (NetTiming.witnessProgram n) (fun c => c.snd.val) fun c ins a =>",
+    "      NetTiming.rowCount ((NetTiming.witnessProgram n).rows c.snd.val ins a c.fst))",
+    "    (NetTiming.OccupancyReadsOwnBlock (fun c => c.snd) fun c ins a =>",
+    "      NetTiming.rowCount ((NetTiming.witnessProgram n).rows c.snd.val ins a c.fst))"
+   ],
+   "assumptions": [],
+   "type_hash": "000000008ae9aae7"
+  },
+  "NetTiming.witnessProgram_timing_matters": {
+   "signature": [
+    "NetTiming.witnessProgram_timing_matters :",
+    "  Ne ((NetTiming.witnessProgram 1).rows 0 List.nil { fst := Bool.true, snd := fun x => 0 })",
+    "    ((NetTiming.witnessProgram 1).rows 0 List.nil { fst := Bool.true, snd := fun x => 1 })"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000c1b7c851"
+  },
+  "NetTiming.witnessWarden_assumptions": {
+   "signature": [
+    "NetTiming.witnessWarden_assumptions :",
+    "  And (NetTiming.Regenerates NetTiming.witnessWarden fun x o => o)",
+    "    (And (NetTiming.Padded NetTiming.witnessWarden 1)",
+    "      (And (NetTiming.Packed NetTiming.witnessWarden)",
+    "        (And (NetTiming.UntimedStatus NetTiming.witnessWarden NetTiming.winEnd2)",
+    "          (And (NetTiming.FailClosed NetTiming.witnessWarden NetTiming.winEnd2)",
+    "            (NetTiming.JitterBounded NetTiming.witnessWarden 2)))))"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000005db75c"
+  },
+  "NetTiming.witnessWarden_jitter_varies": {
+   "signature": [
+    "NetTiming.witnessWarden_jitter_varies :",
+    "  Ne",
+    "    (NetTiming.witnessWarden.obs 0 (List.cons Unit.unit List.nil)",
+    "        (List.cons { count := 0, jit := 0, fault := Bool.false } List.nil)).jitter",
+    "    (NetTiming.witnessWarden.obs 0 (List.cons Unit.unit List.nil)",
+    "        (List.cons { count := 0, jit := 1, fault := Bool.false } List.nil)).jitter"
+   ],
+   "assumptions": [],
+   "type_hash": "000000005ed6cc7f"
+  },
+  "NetTiming.zP_accepts_one": {
+   "signature": [
+    "NetTiming.zP_accepts_one (z : Fin 3 → Fin 3) :",
+    "  Iff (NetTiming.AcceptedUpTo (NetTiming.zP 3) NetTiming.rOp 3 ((NetTiming.rI 3).obsRun z 3)) (Eq z fun x => 0)"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000aa8b595a"
+  },
+  "NetTiming.zP_constOp_accepts_one": {
+   "signature": [
+    "NetTiming.zP_constOp_accepts_one (z : Fin 3 → Fin 3) :",
+    "  Iff (NetTiming.AcceptedUpTo (NetTiming.zP 3) (fun x x_1 => 1) 3 ((NetTiming.rI 3).obsRun z 3)) (Eq z fun x => 1)"
+   ],
+   "assumptions": [],
+   "type_hash": "0000000098371b90"
+  }
+ },
+ "reads": {
+  "NetTiming.Assumptions": {
+   "digest": "c466207400754f075e5ebe42bd340439",
+   "definitions": {
+    "NetTiming.FailClosed": "ca0315d509a1bf7c",
+    "NetTiming.FramesReadNoTimingAdvice": "9e54752f8fb20855",
+    "NetTiming.JitterBounded": "1dc053c5e0d53ab5",
+    "NetTiming.OccupancyReadsOwnBlock": "70e36795ee606665",
+    "NetTiming.Packed": "7c9a3506b76b0d0c",
+    "NetTiming.Padded": "7827ecf2171b735a",
+    "NetTiming.Regenerates": "fade0df34dbfcd3d",
+    "NetTiming.UntimedStatus": "810de05affd36a85"
+   },
+   "pins": [
+    "NetTiming.encard_accSeqs_le_blocks",
+    "NetTiming.encard_accSeqs_le_blocks_counts",
+    "NetTiming.encard_decodable_le",
+    "NetTiming.encard_decodable_le_blocks",
+    "NetTiming.joint_witness",
+    "NetTiming.no_fault_of_accepted",
+    "NetTiming.recorded_row_eq_fill",
+    "NetTiming.witnessProgram_conditions",
+    "NetTiming.witnessWarden_assumptions"
+   ]
+  },
+  "NetTiming.Model.Grid": {
+   "digest": "1bcb356042c48b33d8e2d05ca619c48e",
+   "definitions": {
+    "NetTiming.Grid": "24b7ceb88922185a",
+    "NetTiming.LeftPacked": "5f00e1bc8816a4a9",
+    "NetTiming.Row": "2714f272c12dcc48",
+    "NetTiming.RowLeftPacked": "178b63e178676b0f",
+    "NetTiming.fifoGrid": "92863c73fe25f967",
+    "NetTiming.fill": "0f2988c5716f5085",
+    "NetTiming.instDecidablePredForallFinBoolRowLeftPacked": "dc6ccea3343d5ad4",
+    "NetTiming.instDecidablePredForallFinForallBoolLeftPacked": "5e5a32dad18c1e07",
+    "NetTiming.occ": "3e1c414d03d1d8e3",
+    "NetTiming.offset": "65178174667ac5c2",
+    "NetTiming.queue": "dd63ec7ac25f828d",
+    "NetTiming.released": "702e9052b3733682",
+    "NetTiming.rowCount": "c97ad12ae86b127c"
+   },
+   "pins": [
+    "NetTiming.card_leftPacked",
+    "NetTiming.encard_accSeqs_le_advice",
+    "NetTiming.encard_accSeqs_le_blocks",
+    "NetTiming.encard_accSeqs_le_blocks_counts",
+    "NetTiming.encard_accSeqs_le_fixedClock",
+    "NetTiming.encard_accSeqs_le_sync",
+    "NetTiming.encard_acceptedRuns_le",
+    "NetTiming.encard_decodable_le",
+    "NetTiming.encard_decodable_le_blocks",
+    "NetTiming.encard_fifoGrids",
+    "NetTiming.encard_fifoGrids_le_of_available",
+    "NetTiming.encard_obsDecodable_le",
+    "NetTiming.exists_fill_of_leftPacked",
+    "NetTiming.fill_injective",
+    "NetTiming.joint_witness",
+    "NetTiming.no_fault_of_accepted",
+    "NetTiming.recorded_row_eq_fill",
+    "NetTiming.released_self",
+    "NetTiming.sum_released_le",
+    "NetTiming.toy_leftPacked",
+    "NetTiming.witnessProgram_conditions",
+    "NetTiming.witnessProgram_timing_matters",
+    "NetTiming.witnessWarden_assumptions",
+    "NetTiming.witnessWarden_jitter_varies",
+    "NetTiming.zP_accepts_one",
+    "NetTiming.zP_constOp_accepts_one"
+   ]
+  },
+  "NetTiming.Model.Run": {
+   "digest": "0dead3cabfe8e5b44354569bb858eabc",
+   "definitions": {
+    "NetTiming.AccSeqs": "934ec7954a33ce7e",
+    "NetTiming.Accepted": "f12fb2bd8f7c127b",
+    "NetTiming.AcceptedUpTo": "ddde2e48af085738",
+    "NetTiming.Interaction": "793dbb33c8c1e740",
+    "NetTiming.Interaction.actRun": "9d0df7c441c3aba7",
+    "NetTiming.Interaction.obsRun": "f9b8bce6b2a63b89",
+    "NetTiming.Interaction.op": "49f546f3e6118785",
+    "NetTiming.Interaction.snd": "d9ba2e9bb53cffcc",
+    "NetTiming.Interaction.trace": "8d6e3b4e12115590",
+    "NetTiming.Interaction.warden": "0adcbf619a2b40fc",
+    "NetTiming.Interaction.wireRun": "f8db71380cdf3a0f",
+    "NetTiming.Obs": "c4045488a7b8cf7b",
+    "NetTiming.Obs.jitter": "1c7731ef6c120d77",
+    "NetTiming.Obs.rows": "914555b27a71c632",
+    "NetTiming.Obs.status": "a52611ad131bdf97",
+    "NetTiming.Program": "cda16c55092b5ea0",
+    "NetTiming.Program.rows": "f8f24b68920b9e9a",
+    "NetTiming.Reason": "d939bb5facf876a9",
+    "NetTiming.Reason.coverageNeverEstablished": "820d00d8e898157f",
+    "NetTiming.Reason.deliveryRefused": "ac7794f12425e5c3",
+    "NetTiming.Reason.dropped": "2cc4f06bb16247ff",
+    "NetTiming.Reason.malformed": "afbe8bb4fe993c82",
+    "NetTiming.Reason.monitorUnavailable": "7707ff09404dad1d",
+    "NetTiming.Reason.overflow": "307a11b786fbbff0",
+    "NetTiming.Status": "74487f627e663970",
+    "NetTiming.Status.complete": "ef80b3492cf4af7b",
+    "NetTiming.Status.notEstablished": "6412e2cddf92d3d0",
+    "NetTiming.Warden": "77633bfa7a9caa75",
+    "NetTiming.Warden.fault": "81962584df41e1f7",
+    "NetTiming.Warden.obs": "126a972ecfb10c8b",
+    "NetTiming.Warden.wire": "a2f990416c213fe2",
+    "NetTiming.ingressUpTo": "8329a6346166cb50"
+   },
+   "pins": [
+    "NetTiming.encard_accSeqs_le_advice",
+    "NetTiming.encard_accSeqs_le_blocks",
+    "NetTiming.encard_accSeqs_le_blocks_counts",
+    "NetTiming.encard_accSeqs_le_fixedClock",
+    "NetTiming.encard_accSeqs_le_sync",
+    "NetTiming.encard_acceptedRuns_le",
+    "NetTiming.encard_decodable_le",
+    "NetTiming.encard_decodable_le_blocks",
+    "NetTiming.encard_obsDecodable_le",
+    "NetTiming.joint_witness",
+    "NetTiming.no_fault_of_accepted",
+    "NetTiming.recorded_row_eq_fill",
+    "NetTiming.witnessProgram_conditions",
+    "NetTiming.witnessProgram_timing_matters",
+    "NetTiming.witnessWarden_assumptions",
+    "NetTiming.witnessWarden_jitter_varies",
+    "NetTiming.zP_accepts_one",
+    "NetTiming.zP_constOp_accepts_one"
+   ]
+  },
+  "NetTiming.Sanity": {
+   "digest": "88c532708ba121cfa8157eb93c84ef36",
+   "definitions": {
+    "NetTiming.WAct": "a39439910086e80d",
+    "NetTiming.WAct.count": "1cf08e9b386b13c3",
+    "NetTiming.WAct.fault": "69b7f4baa46730d7",
+    "NetTiming.WAct.jit": "720dfc07350da6c0",
+    "NetTiming.instInhabitedWAct": "14044400f202a699",
+    "NetTiming.rDec": "dbfb49ed9cb3169f",
+    "NetTiming.rI": "e2b2ce0b8979c20f",
+    "NetTiming.rOp": "5538920d30e4a53c",
+    "NetTiming.rP": "1992d84c7dda000a",
+    "NetTiming.rWarden": "3342fedb698d5352",
+    "NetTiming.winEnd2": "cc33def17f96a76a",
+    "NetTiming.witnessObs": "c872d47ccaae9d15",
+    "NetTiming.witnessProgram": "dd449a342928238a",
+    "NetTiming.witnessWarden": "2f3dfacdc9328594",
+    "NetTiming.zP": "70c9faa9fcfad34f"
+   },
+   "pins": [
+    "NetTiming.joint_witness",
+    "NetTiming.witnessProgram_conditions",
+    "NetTiming.witnessProgram_timing_matters",
+    "NetTiming.witnessWarden_assumptions",
+    "NetTiming.witnessWarden_jitter_varies",
+    "NetTiming.zP_accepts_one",
+    "NetTiming.zP_constOp_accepts_one"
+   ]
+  }
+ },
+ "dependencies": {
+  "LeanSearchClient": "10aad9bd3954ead737fba8bd3b55709e5171edda2656068ad330158e6ad622c9",
+  "Qq": "7e75bb83a56f636baeb8e63ef3d44e1ac8b33e2ed4bf187462e0cc9bbdb55adf",
+  "aesop": "b36c1fbce9f43510169424e3ec097b69126f0e6afe5a801760e86c4da75f285d",
+  "batteries": "f636c26b816c1a1021a770fafa410e7a4dde75a6ede520dc3babaa69f4c1ac6d",
+  "importGraph": "c2a38b9540d4202c5331616b78727f2aeec0a2ae1b203889c6c6a2c8d6cb2ca3",
+  "mathlib": "895db2c5b33b7b16cd79ce30b6cd085844b909a8ea5aa33c46901b5ff4112fc5",
+  "plausible": "266681444eb79c332dec9abe5201b0811a5963e7093a906ee4455f0825de2559",
+  "proofwidgets": "4edab11dd995fc9c2cbf6c1e03d9a99e1f77e91b6b904838c87c7dad86c9c323",
+  "toolchain": "fa5ee1e723185f882e3c9db196e42d9d59f5e1c689eb6ab4bf502b37424885dc"
+ }
+}
