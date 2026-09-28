@@ -2344,13 +2344,13 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                             print(f"[delta] replay/linkage arrivals follow the engine schedule of record: {_arr} (declared {_sched_r.get('declared_arrive_steps')})", flush=True)
                         _k0 = next(iter(_progs))
                         _pi0 = SR.ProgramIndex(_progs[_k0], program_dir=_loaded[_k0].get("dir"))
-                        _wp, _rd = SRW.readers(args.serving_rows, com, rc, SR.model_weights_provider(eng.model, _pi0.prefix), _progs, _bm, _arr, _loaded, required_manifest, args.label)
+                        _wp, _rd = SRW.readers(args.serving_rows, com, rc, SR.model_weights_provider(PO.weights_view(protocols, eng.model), _pi0.prefix), _progs, _bm, _arr, _loaded, required_manifest, args.label)
                         # [O5] the weight slices the relations consume must be the COMMITTED weights: re-register the live parameters now and
                         # compare the root with the run's weights root (registered before the workload; a param swap after it is a named FAIL)
                         _wc: dict[str, Any]
                         try:
                             _w_saved = getattr(com, "weights", None)
-                            _w_now = com.register_weights()
+                            _w_now = PO.register_weights(protocols, com)     # through what a protocol option released
                             if _w_saved is not None:
                                 com.weights = _w_saved
                             _w_ref = (rc.weight_registration or {}).get("root") if isinstance(rc.weight_registration, dict) else (_w_saved or {}).get("root")
