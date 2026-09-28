@@ -6,6 +6,7 @@ from __future__ import annotations
 import hashlib
 import itertools
 import json
+import os
 import random
 from pathlib import Path
 
@@ -29,7 +30,7 @@ SMALL = {
 class Stream(protocol.Scheme):
     """A toy scheme (no security): each block xored with a SHAKE-256 stream.  It implements only the two methods."""
 
-    id = "toy-stream/v0"
+    name = "toy-stream/v0"
     backend = staticmethod(lambda params: None)
 
     def _pad(self, salt: bytes, s: int, v: int) -> bytes:
@@ -127,22 +128,52 @@ def test_band_through_the_interface_is_the_pinned_band_codec():
     w, salt = pous_vectors._bytes("band-small-w", small.params.w_bytes), pous_vectors._bytes("salt", 24)
     pinned = json.loads((Path(__file__).parent / "fixtures" / "vectors.json").read_text())["band/small/blocks"]
     assert [b.hex() for seg in protocol.encode(small, w, salt) for b in seg] == pinned
-    assert small.codec().name == band.codec_for(4).name == small.id
+    assert small.codec().name == band.codec_for(4).name == small.name
 
 
 def test_registry():
-    assert set(schemes.SCHEMES) == {"band-chain/d12/v1", "dense-chain/v1", "p3/v1"}
+    assert set(schemes.REGISTRY) == {"band-chain/d12/v1", "dense-chain/v1", "p3/v1"}
     assert schemes.DEFAULT == band.BAND12.name
     b = schemes.get()
-    assert isinstance(b, schemes.Band) and b.params == band.SECURE_FIRST and b.id == "band-chain/d12/v1"
+    assert isinstance(b, schemes.Band) and b.params == band.SECURE_FIRST and b.name == "band-chain/d12/v1"
     assert schemes.get(segments=30).params.segments == 30
     assert schemes.get("dense-chain/v1").params == dense.POINT_64K
+    assert schemes.get("band-chain/d12/v1", params=band.BandParams(16, 64, 12)).params.blocks_per_segment == 16
+    with pytest.raises(ValueError, match="band-chain/d4/v1"):
+        schemes.get("band-chain/d12/v1", params=band.BandParams(16, 64, 4))
     with pytest.raises(KeyError, match="registered"):
         schemes.get("band-chain/d13/v1")
     with pytest.raises(TypeError):
         protocol.Scheme(band.SECURE_FIRST)
     with pytest.raises(TypeError):
         schemes.Band(dense.POINT_64K)
+
+
+@pytest.mark.parametrize("name", sorted(schemes.REGISTRY))
+def test_pinned_scheme_vectors(name):
+    """Each registered scheme's conformance vector (`fixtures/schemes/`, `tests/pous_scheme_vectors.py`): its
+    certificate at the registered point, and a small instance's encoded segments and `vk` root in both setups."""
+    import pous_scheme_vectors as sv
+
+    pinned = json.loads(sv.path(name).read_text())
+    assert pinned["name"] == name and pinned == sv.vector(name)
+    small = schemes.get(name, params=sv.SMALL[name])
+    w, salt = sv.small_inputs(name)
+    c = protocol.encode(small, w, salt)
+    assert protocol.decode(small, salt, c) == w
+    public = protocol.verifier_key(small, protocol.commit(small, w), salt, mode=protocol.PUBLIC, encoded=c)
+    assert public.root.hex() == pinned["small"]["root"]
+
+
+@pytest.mark.skipif(not os.environ.get("VERITY_POUS_SLOW"), reason="a whole segment at the registered point: VERITY_POUS_SLOW=1")
+def test_band12_segment_at_the_registered_point():
+    """One whole 32 MiB band12 segment through the interface equals `band/64kb/segment` (about 25 s)."""
+    import pous_vectors
+
+    w, salt = pous_vectors.band_segment_input()
+    blocks = schemes.get().encode_segment(salt, 0, w)
+    pinned = json.loads((Path(__file__).parent / "fixtures" / "vectors.json").read_text())["band/64kb/segment"]
+    assert hashlib.sha256(b"".join(blocks)).hexdigest() == pinned
 
 
 def test_certificates_at_their_points():

@@ -121,9 +121,11 @@ is 14.4 MB. `params.LEAN_P3_MEETS` (`wc = 37`) is the instance Lean's `p3_meets`
 The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
 
 - **What a scheme supplies.** It implements `encode_segment(salt, s, w_seg)` and `decode_segment(salt, s, blocks)`, and
-  overrides `respond` only if an honest answer is more than the stored block. It also sets `id` (its byte-format
-  string), `backend` (its reference primitives) and `certificate`.
-- **The registry.** `schemes.get(id, segments)` returns a registered scheme at its own parameters:
+  overrides `respond` only if an honest answer is more than the stored block. It also sets `name` (its byte-format
+  string), `backend` (its reference primitives) and `certificate`. As with `verity.commitments.scheme.CommitmentScheme`,
+  a scheme is named and versioned, looked up by name, and has conformance vectors pinned under its name.
+- **The registry.** `schemes.get(name, segments)` returns a registered scheme at its own parameters, or at
+  `params=` of the same name. Each scheme is one module, `schemes/<name>.py`:
   - `band-chain/d12/v1`, the default;
   - `dense-chain/v1`;
   - `p3/v1`.
@@ -136,8 +138,9 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
   - `claims`: ids in `verity.claims`' format.
 
   At the frozen point, the band is `band_meets_64` given `ChainExPostFactoG`: k 111, D 5, Q 2^20, 483 µs, cliff at
-  `d`, one segment. Dense is `chain_meets_64` given `ChainExPostFacto`, with no cliff. P3 has no certificate, since
-  Lean's P3 `Meets` is about a random-oracle `H`.
+  `d`, one segment. Dense is `chain_meets_64` given `ChainExPostFacto`, with no cliff. P3 has no certificate for the
+  implemented `H`. Lean's `p3_meets_64_D10_final` and `p3_meets_multi_64_D10_final` (k 117, D 10, 64 KB and 971
+  segments) are about a random-oracle `H` and an ideal tweakable `P`, while the code's `H` is the overwrite chain.
 - **`protocol.Verifier`** is `audit.TimedVerifier` at the certificate's `k`. It refuses:
   - a `k` below the certificate's;
   - a deadline whose effective D (calls of `call_ns` within `Δ + RTT`) exceeds the certificate's `rounds`: for the
@@ -160,7 +163,10 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
 - **Claims.** `protocol.claim(id)` resolves an id from `verity.claims`, or from `protocol.LOCAL_CLAIMS` until core holds
   it: `ideal-permutation`, `perfect-isolation`, `sequential-step-floor`, `feistel-indifferentiability`.
 - **Tests.** `tests/test_pous_protocol.py` runs one conformance suite over every scheme, plus a toy that implements
-  only the two methods.
+  only the two methods. Each registered scheme's vectors are pinned in `tests/fixtures/schemes/<name>.json`, written
+  by `tests/pous_scheme_vectors.py`: the certificate at the registered point, and a small instance's segment digests
+  and `vk` root. `VERITY_POUS_SLOW=1` also encodes a whole band12 segment through the interface against
+  `band/64kb/segment`.
 
 ## API
 
@@ -180,7 +186,7 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
 | `audit` | `challenge_key`, `HonestResponder`, `TimedVerifier` and `run_timed` (wall clock; `respond` may return `(block, report)`, kept in `Answer.report`), `simulate` (oracle rounds); `k` and the adversary's call time default to the parameters' own (band and dense: 111 and 483 µs); `TimedVerifier` refuses a band deadline past the cliff |
 | `adversary` | holdings (Lean `ColState`), `schedule`, `answer_prog`, strategies, `measure`; `col_round` is Lean's `colRound` |
 | `protocol` | the generic protocol: `Scheme` (abstract), `Certificate`, `Verifier` (refuses what its certificate doesn't cover), `StorageProfile`, `PRIVATE`/`PUBLIC`, `verifier_key`, `commit`, `draw_salt`, `encode`, `decode`, `decode_tensor`, `challenge_key`, `responder`, `claim`, `LOCAL_CLAIMS` |
-| `schemes` | `Band`, `Dense`, `P3` as `protocol.Scheme`s with their certificates; `SCHEMES`, `DEFAULT` (`band-chain/d12/v1`), `get(id, segments)` |
+| `schemes` | `band.Band`, `dense.Dense`, `p3.P3` (one module each) as `protocol.Scheme`s with their certificates; `REGISTRY`, `DEFAULT` (`band-chain/d12/v1`), `get(name, segments, params)` |
 
 **Large `W`.** Nothing above the codec holds `W` as one integer: encode each segment with `scheme.encode_segment` (the
 segments are independent, so a process pool works), feed the results to `VerifierKey.from_segments`, or pass them to

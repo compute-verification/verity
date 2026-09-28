@@ -132,11 +132,13 @@ class Scheme(ABC):
     """A POUS scheme over `params` (its `codec.Geometry`, with the number of segments of `W`) and primitives `prims`
     (the reference backend by default).
 
-    A subclass sets `id` (its byte-format version string), `backend` (the reference primitives for its parameters)
-    and `certificate`.  It implements `encode_segment` and `decode_segment`, and `respond` only when an honest answer
-    is more than the stored block."""
+    Like `verity.commitments.scheme.CommitmentScheme`, it is a named, versioned format behind a small interface, looked
+    up by name (`schemes.get`), with its conformance vectors pinned under the name (`tests/fixtures/schemes/`).  A
+    subclass sets `name` (its byte-format version string), `backend` (the reference primitives for its parameters) and
+    `certificate`.  It implements `encode_segment` and `decode_segment`, and `respond` only when an honest answer is
+    more than the stored block."""
 
-    id: ClassVar[str] = ""
+    name: ClassVar[str] = ""
     backend: ClassVar[Callable[[Any], Primitives]]
 
     def __init__(self, params: Geometry, prims: Primitives | None = None) -> None:
@@ -168,13 +170,13 @@ class Scheme(ABC):
         def decode(params: Geometry, prims: Primitives, salt: bytes, s: int, blocks: Sequence[bytes]) -> bytes:
             return self._at(params, prims).decode_segment(salt, s, blocks)
 
-        return Codec(self.id, encode, decode)
+        return Codec(self.name, encode, decode)
 
     def _at(self, params: Geometry, prims: Primitives) -> Scheme:
         if params == self.params and prims is self.prims:
             return self
         if params.with_segments(1) != self.params.with_segments(1):
-            raise ValueError(f"{self.id} runs at {self.params.manifest()}, not {params.manifest()}")
+            raise ValueError(f"{self.name} runs at {self.params.manifest()}, not {params.manifest()}")
         return type(self)(params, prims)
 
     def __repr__(self) -> str:
@@ -307,8 +309,8 @@ class Verifier:
         uncovered: tuple[str, ...] = ()
         if cert is None:
             if k is None:
-                raise ValueError(f"{scheme.id} has no certificate at these parameters: pass k")
-            refused = (f"{scheme.id} has no certificate at {scheme.params.manifest()}",)
+                raise ValueError(f"{scheme.name} has no certificate at these parameters: pass k")
+            refused = (f"{scheme.name} has no certificate at {scheme.params.manifest()}",)
         else:
             k = cert.k if k is None else k
             refused = cert.refusals(k, limit)
@@ -354,7 +356,7 @@ class Verifier:
         if not self.accepted:
             raise ValueError("only an accepted audit has a storage profile")
         p = self.scheme.params
-        return StorageProfile(self.scheme.id, p.manifest(), p.blocks, p.m, self.k, self.limit_ns, self.certificate,
+        return StorageProfile(self.scheme.name, p.manifest(), p.blocks, p.m, self.k, self.limit_ns, self.certificate,
                               self.gaps)
 
 
