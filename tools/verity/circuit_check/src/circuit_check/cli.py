@@ -400,9 +400,10 @@ PEAKS_REPORTED = 50
 
 
 def budget_gb(mem_gb: int | None) -> float:
-    """What the targets' processes may take together, in GiB: ``mem_gb`` (all of circuit-check) less what this process holds
-    now (its own copy of the task list), or by default what `memory_gb` leaves, which has this process's use taken off already."""
-    return memory_gb() if mem_gb is None else mem_gb - (_rss_gb() or 0.0)
+    """What the targets' processes may take together, in GiB: what `memory_gb` leaves (this process's use taken off already),
+    and with ``mem_gb`` (all of circuit-check: a check slot's mem=) at most that less what this process holds now (its own copy
+    of the task list)."""
+    return memory_gb() if mem_gb is None else min(mem_gb - (_rss_gb() or 0.0), memory_gb())
 
 
 def heavy() -> dict[str, float]:

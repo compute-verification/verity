@@ -76,7 +76,8 @@ doesn't name:
                     feature set a pod builds, the proving builds without `seed-injection` among them (a Flock b684b12 checkout,
                     cached under $FLOCK_CHECKOUT), so a merge that breaks the Rust build ends the run in minutes; then
                     `circuit-check --all --jobs` the other half, whose workers start only while their measured peaks
-                    (`circuit_check/heavy.json`) fit the memory the run has: every registered Definition and template
+                    (`circuit_check/heavy.json`) fit the memory the run has, at most its check slot's mem= (`--mem-gb`, from
+                    slot.py's CHECK_SLOT_MEM_GB): every registered Definition and template
                     (`tools/verity/circuit_check`),
                     its report beside the run's result; then flock-rust-tests, `check_build.sh test` on that checkout:
                     `cargo test --release` of flock-live's unit tests and of the five upstream crates the patches change
@@ -975,7 +976,8 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
         lean.insert(3, ("lean-suites", ["bash", "-c", ELAN + shlex.join(lean_suites)], ROOT))
     pytest = [*suites, "--json", str(out / "suites.json"), "--logs", str(out / "suites"), *after_lean, *tail]
     cc = [py, "-m", "circuit_check", "--all", "-q", "--jobs", str(b), "--out", str(out / "circuit-check.json"),
-          *(["--cache", str(cache_dir() / "circuit-check")] if cache else [])]
+          *(["--cache", str(cache_dir() / "circuit-check")] if cache else []),
+          *(["--mem-gb", m] if (m := os.environ.get(SLOT.SLOT_MEM_ENV, "")).isdigit() else [])]
     build = ["bash", str(ROOT / "verity" / "ml" / "flock" / "check_build.sh")]
     rust = ["env", f"CARGO_BUILD_JOBS={b}", f"RUST_TEST_THREADS={b}", *build, "test"]
     built = {"pytest": ("pytest", pytest, ROOT), "flock-circuit-build": ("flock-circuit-build", build, ROOT),
