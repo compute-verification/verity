@@ -241,7 +241,13 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
     about 3.14 ms (3,139,500 ns at `d = 12`);
   - a scheme with no certificate at its parameters.
 
-  `research=True` runs such an audit anyway, except past the cliff.
+  A scheme may have several certificates (`Scheme.certificates`), and the verifier audits under the first that
+  covers its `k` and deadline. The band's are `BandMultiMeetsFamily` (`k = 111` at `D = 5`, the default), then
+  `BandMultiMeetsFamilyD2` (`k = 97` at `D = 2`, `Δ + RTT` under 724.5 µs, `d ≥ 2`) and `BandMultiMeetsFamilyD1`
+  (`k = 93` at `D = 1`, under 483 µs, `d ≥ 1`). An unset `k` stays at the first certificate's, so the default audit is
+  unchanged; the two smaller `k`s are used only when asked for. A band with `d < 5` has only the last two.
+
+  `research=True` runs a refused audit anyway, except past the cliff, with the first certificate's refusals as gaps.
 - **`protocol.StorageProfile`** is what an accepted audit establishes: a server whose state held fewer than
   `⌊rho · |C|⌋` bits passes with probability at most `delta + 2^eps_log2`, by the certificate. It also lists the
   `gaps`, where the certificate does not cover the audit: a refusal run with `research=True`, or a segment count of `W`
@@ -287,7 +293,7 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
 | `verifier` | `VerifierKey` (`root` and leaf digests; `build`, `from_leaves`, `from_segments`), `leaf_hash` (whole or chunked blocks), `segment_leaves`, `MerkleTree` (audit paths), `verify_path` |
 | `audit` | `challenge_key`, `HonestResponder`, `TimedVerifier` and `run_timed` (wall clock; `respond` may return `(block, report)`, kept in `Answer.report`), `simulate` (oracle rounds); `k` and the adversary's call time default to the parameters' own (band and dense: 111 and 241.5 µs); `TimedVerifier` refuses a band deadline past the cliff |
 | `adversary` | holdings (Lean `ColState`), `schedule`, `answer_prog`, strategies, `measure`; `col_round` is Lean's `colRound` |
-| `protocol` | the generic protocol: `Scheme` (abstract), `Certificate`, `Verifier` (refuses what its certificate doesn't cover), `StorageProfile`, `PRIVATE`/`PUBLIC`, `verifier_key`, `commit`, `draw_salt`, `encode`, `decode`, `decode_tensor`, `challenge_key`, `responder`, `claim`, `LOCAL_CLAIMS` |
+| `protocol` | the generic protocol: `Scheme` (abstract), `Certificate`, `Verifier` (refuses what none of its certificates covers), `StorageProfile`, `PRIVATE`/`PUBLIC`, `verifier_key`, `commit`, `draw_salt`, `encode`, `decode`, `decode_tensor`, `challenge_key`, `responder`, `claim`, `LOCAL_CLAIMS` |
 | `schemes` | `band.Band`, `dense.Dense`, `p3.P3`, `p2.P2` (experimental; one module each) as `protocol.Scheme`s with their certificates; `REGISTRY`, `DEFAULT` (`band-chain/d12/v1`), `get(name, segments, params)` |
 
 **Large `W`.** Nothing above the codec holds `W` as one integer: encode each segment with `scheme.encode_segment` (the
