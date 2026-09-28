@@ -34,6 +34,7 @@ import Pouw.Protocol.NCP.RouteU
 import Pouw.Protocol.NCP.Witness
 import Pouw.Protocol.NCP.Word
 import Pouw.Protocol.PearlC.Accum
+import Pouw.Protocol.PearlC.Completeness
 import Pouw.Protocol.PearlC.Defs
 import Pouw.Protocol.PearlC.Device
 import Pouw.Protocol.PearlC.DeviceChainOnly
@@ -52,6 +53,8 @@ import Pouw.Protocol.PearlC.Fp4Chain
 import Pouw.Protocol.PearlC.Fp4Skip
 import Pouw.Protocol.PearlC.Fp4Vectors
 import Pouw.Protocol.PearlC.Game
+import Pouw.Protocol.PearlC.Hidden
+import Pouw.Protocol.PearlC.HiddenTileGame
 import Pouw.Protocol.PearlC.Instance
 import Pouw.Protocol.PearlC.PeelExact
 import Pouw.Protocol.PearlC.PeelExactP
@@ -72,8 +75,9 @@ import Pouw.Protocol.Witness.Model
 /-!
 # PoUW's protocol: the definitions the statements read
 
-This layer, `Pouw.Assumptions` and `Pouw.Guarantees` are the trusted text: they import only each other and Mathlib
-(`Pouw.Protocol.PearlC.Defs` also Batteries), so their diff is everything a statement reviewer reads.
+This layer, `Pouw.Assumptions` and `Pouw.Guarantees` are the trusted text: they import only each other, Mathlib and
+core's `Verity.Protocol` (`Pouw.Protocol.PearlC.Defs` also Batteries), so their diff, with core's, is everything a
+statement reviewer reads.
 `Pouw.SecurityProofs` holds the proofs and every lemma, which nobody reviews for meaning. A topic's modules keep their
 basenames in each layer (`Pouw.Protocol.Fp8Atom.E4M3`, `Pouw.SecurityProofs.Fp8Atom.Proofs`), and the topics' maps
 below name them by basename.
@@ -117,7 +121,12 @@ the encoders, the conversion and the atom-mix chain (`EncVectors`, generated fro
 chain (`Peel`): U's cancellation identities, where the rounding is, and the clean-up terms' liveness at degenerate
 inputs. P1, freezing under promotion (`Freeze`), and P3, the forming credit (`Forming`), from their lanes. The
 cheap-binding lane's game (`Game`), named protocol (`Instance`), named assumption TT_OUT (`TTOut`) and γ from it
-(`Gamma`).
+(`Gamma`). The hidden audit, the tile check as a proof over core's `Verity.Game` (`Hidden`), its open obligation that a
+drawn tile's proof is sound (`HiddenTile`), what a proof system gives per tile to meet it (`HiddenTileGame`, met in
+`SecurityProofs` through core's batch lemma) and the sampled audit's γ under it (`HiddenGamma`). The sampled audit's
+completeness on a population of activations (`Completeness`), its one assumption, the honest tiles' measured cap rate
+(`HonestCap`, empirical), the proof that every honest word is an FP32 word's (`HonestWords`) and completeness from the
+two (`Completeness`).
 
 ## `TileBound`: the FP4-tile model (`docs/pouw/fp4-tile-model.md`, bc-d9842080)
 

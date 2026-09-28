@@ -44,6 +44,7 @@ import importlib.util
 import json
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import tarfile
@@ -488,6 +489,9 @@ def pin(run_id: str) -> int:
 
 
 def main(argv: list[str]) -> int:
+    # a manual stop or a runner's timeout sends SIGTERM to check.py's whole process group: as SIGINT, it runs `_audit`'s finally,
+    # which removes the scratch tree (about 60 GB on a node, left behind by every stopped check otherwise)
+    signal.signal(signal.SIGTERM, signal.default_int_handler)
     if argv[:1] == ["--pin"] and len(argv) == 2:
         return pin(argv[1])
     if argv[:1] == ["--explain"] and len(argv) in (2, 4):

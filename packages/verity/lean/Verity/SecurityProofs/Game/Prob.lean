@@ -10,7 +10,8 @@ they use:
 
 * `prob_mono`, `prob_le_one`, `prob_or_le`: monotonicity and the union bound;
 * `prob_and_const`: an event conjoined with a fact fixed by the strategy;
-* `Strategy.ofMap`, `prob_map`: relabelling the output (`map`) keeps the game's strategies.
+* `prob_map`, `Strategy.toMap_ofMap`: relabelling the output (`map`) keeps the game's strategies (`Strategy.ofMap` and
+  `Strategy.toMap`, in `Protocol`).
 -/
 
 namespace Verity.Game
@@ -119,12 +120,6 @@ theorem prCoin_pi_forall {ι : Type} [Fintype ι] [DecidableEq ι] {Ω : ι → 
         simp only [hi, ite_true]
         exact avg_ite_eq_prCoin _
 
-/-- A strategy for the relabelled game is a strategy for the game. -/
-def Strategy.ofMap (f : α → β) : (g : Game α) → Strategy (g.map f) → Strategy g
-  | .ret _, _ => PUnit.unit
-  | .send _ k, s => ⟨s.1, Strategy.ofMap f (k s.1) s.2⟩
-  | @Game.coin _ _ _ _ k, s => fun c => Strategy.ofMap f (k c) (s c)
-
 /-- Relabelling the output relabels the event. -/
 theorem prob_map (p : β → Prop) (f : α → β) :
     ∀ (g : Game α) (s : Strategy (g.map f)),
@@ -134,6 +129,14 @@ theorem prob_map (p : β → Prop) (f : α → β) :
   | @Game.coin _ C _ _ k, s => by
       show avg (fun c => prob p ((k c).map f) (s c)) = avg fun c => prob _ (k c) _
       exact congrArg avg (funext fun c => prob_map p f (k c) (s c))
+
+theorem Strategy.toMap_ofMap (f : α → β) :
+    ∀ (g : Game α) (s : Strategy (g.map f)), Strategy.toMap f g (Strategy.ofMap f g s) = s
+  | .ret _, _ => rfl
+  | .send _ k, ⟨m, s'⟩ => by
+      show (⟨m, Strategy.toMap f (k m) (Strategy.ofMap f (k m) s')⟩ : Strategy ((Game.send _ k).map f)) = ⟨m, s'⟩
+      rw [Strategy.toMap_ofMap f (k m) s']
+  | @Game.coin _ _ _ _ k, s => funext fun c => Strategy.toMap_ofMap f (k c) (s c)
 
 theorem prob_true : ∀ (g : Game α) (s : Strategy g), prob (fun _ => True) g s = 1
   | .ret _, _ => by simp [prob]

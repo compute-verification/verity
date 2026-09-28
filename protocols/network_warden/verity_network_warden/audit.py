@@ -3,7 +3,7 @@
 An egress link-window (`check_link`) is **accepted** if three things hold:
 - its status is complete;
 - every slot of its grid equals the Program's grid;
-- the window's declared clock sync is in the protocol's set.
+- the window's declared clock sync is in the protocol's set, and is the spatial unit's sync for that window.
 
 It must also have exactly one record, settled by the verdict deadline: a link-window with more than one record is a
 `duplicate` violation, whatever the records say. Anything else is a **violation**. It is recorded and the run is
@@ -11,9 +11,15 @@ rejected, as a policy signal. There is no halt: later windows are still checked 
 `capacity` holds on accepted runs only; a rejected window may already have carried up to its unbound capacity before it
 was rejected.
 
+A spatial unit has one clock. The audit keeps each window's sync (`Audit.syncs`), set by the first egress link checked
+for that window, and a link that declares a different sync for the window is an `advice` violation there. The bound on
+accepted runs charges one sync per window for all links, `#Σ_sync^W` values over W windows (Lean
+`SecurityProofs.EncardAccSeqsLeSync`, whose timing advice is `Fin W → Sync`): 7 bits per window at 16 × 8. A sync per
+link would be advice of `#Σ_sync^(L·W)`, which that bound doesn't cover.
+
 The Program's grids are computed from the syncs as declared, out-of-set values included, so a declared sync outside the
-set is an `advice` violation in its own window only. A window's grid reads only the syncs of its own and earlier
-windows (`schedule.expected_grids`), so an out-of-set sync never changes an earlier window's verdict.
+set, or other than the unit's, is an `advice` violation in its own window only. A window's grid reads only the syncs of
+its own and earlier windows (`schedule.expected_grids`), so such a sync never changes an earlier window's verdict.
 
 A record may come raw or committed (`commitment`: its digest, with padding elided). A committed record's grid check
 compares its digest with the digest of the Program's grid, which is exact up to a SHA-256 collision.
@@ -49,9 +55,11 @@ class Verdict:
 
 @dataclass
 class Audit:
-    """Every verdict of a run, in order. The run is accepted only if every link-window is."""
+    """Every verdict of a run, in order, and the spatial unit's clock: each window's sync, set by the first egress link
+    checked for that window. The run is accepted only if every link-window is."""
 
     verdicts: list[Verdict] = field(default_factory=list)
+    syncs: dict[int, ClockSync] = field(default_factory=dict)
 
     def check_link(
         self,
@@ -63,16 +71,18 @@ class Audit:
         params: GridParams,
     ) -> list[Verdict]:
         """Check one egress link's records for windows 0 … len(syncs) − 1 against the Program's grids under the
-        declared syncs."""
+        declared syncs. A window whose declared sync differs from the unit's for it, set by an earlier link, is an
+        `advice` violation."""
         expected = expected_grids(frames, syncs, params)
         by_window = _by_window(link, records)
         out = []
         for w, sync in enumerate(syncs):
+            unit_sync = self.syncs.setdefault(w, sync)
             found = by_window.get(w, [])
             violation = _status_violation(found)
             if violation is None:
                 record = found[0]
-                if sync not in sync_set:
+                if sync not in sync_set or sync != unit_sync:
                     violation = "advice"
                 elif isinstance(record, CommittedRecord):
                     if record.digest != record_digest(link, w, expected[w], COMPLETE, params):

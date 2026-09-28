@@ -9,8 +9,10 @@ A verdict is a pass that one step stored under a key of everything it read: a su
 and under `$CHECK_CACHE` a circuit-check target's report, a Lean package's audit (`lean_audit.py`) and the agreement's pass
 (`check.py`).  A step looks an entry up by the key it computes from this machine's own inputs, so a pack can answer only for inputs
 identical to the ones that earned it.  It is trusted as far as its source: the merge queue builds packs only from recorded runs.
-Never packed, since they aren't verdicts: `lean-deps/` (fetched dependencies), the suites' `logs/` and `durations.json`, and any file
-that isn't a finished `.json` entry.
+Never packed, since they aren't verdicts: `lean-deps/` (fetched dependencies), the trees steps build in (`lean_changed.py`'s
+`lean-changed/`, and `lean_audit.py`'s `lean-audit-scratch-*/`, which another slot may remove while this one reads it), the suites'
+`logs/` and `durations.json`, and any file that isn't a finished `.json` entry. An entry that goes away while it is read (`suites.py`
+keeps only a module's newest passes) is left out.
 
 A pack is a gzipped tar of regular files under `check/` and `tests/`. `import` refuses a pack holding anything else (a link, an
 absolute or `..` path, a device, another prefix), and it never overwrites an entry that exists here.
@@ -27,7 +29,12 @@ import sys
 import tarfile
 from pathlib import Path
 
-SKIP = {"check": {"lean-deps"}, "tests": {"logs", "durations.json"}}
+SKIP = {"check": {"lean-deps", "lean-changed"}, "tests": {"logs", "durations.json"}}
+SCRATCH = {"check": ("lean-audit-scratch-",), "tests": ()}
+
+
+def _skipped(prefix: str, top: str) -> bool:
+    return top in SKIP[prefix] or top.startswith(SCRATCH[prefix])
 
 
 def roots() -> dict[str, Path]:
@@ -46,34 +53,40 @@ def entries() -> dict[str, Path]:
             continue
         for p in sorted(base.rglob("*.json")):
             rel = p.relative_to(base)
-            if p.is_file() and not p.is_symlink() and rel.parts[0] not in SKIP[prefix] and not any(x.startswith(".") for x in rel.parts):
+            if p.is_file() and not p.is_symlink() and not _skipped(prefix, rel.parts[0]) and not any(x.startswith(".") for x in rel.parts):
                 out[f"{prefix}/{rel.as_posix()}"] = p
     return out
 
 
-def _sha(p: Path) -> str:
-    return hashlib.sha256(p.read_bytes()).hexdigest()
+def _read(p: Path) -> bytes | None:
+    try:
+        return p.read_bytes()
+    except FileNotFoundError:
+        return None
 
 
 def snapshot() -> dict[str, str]:
-    return {k: _sha(p) for k, p in entries().items()}
+    return {k: hashlib.sha256(data).hexdigest() for k, p in entries().items() if (data := _read(p)) is not None}
 
 
 def export(out: Path, since: dict[str, str] | None = None) -> int:
     """Write the entries new or changed since `since` (all when None) as a pack at `out`; the number written."""
-    todo = {k: p for k, p in entries().items() if since is None or since.get(k) != _sha(p)}
     out.parent.mkdir(parents=True, exist_ok=True)
     tmp = out.with_name(out.name + ".tmp")
+    n = 0
     # the same entries always make the same pack: no mtimes in the tar, and no file name or mtime in the gzip header
     with open(tmp, "wb") as raw, gzip.GzipFile(filename="", mode="wb", fileobj=raw, mtime=0) as gz, \
             tarfile.open(fileobj=gz, mode="w", format=tarfile.PAX_FORMAT) as tar:
-        for k, p in sorted(todo.items()):
-            data = p.read_bytes()
+        for k, p in sorted(entries().items()):
+            data = _read(p)
+            if data is None or (since is not None and since.get(k) == hashlib.sha256(data).hexdigest()):
+                continue
             info = tarfile.TarInfo(k)
             info.size, info.mode, info.mtime = len(data), 0o644, 0
             tar.addfile(info, io.BytesIO(data))
+            n += 1
     os.replace(tmp, out)
-    return len(todo)
+    return n
 
 
 class BadPack(Exception):
@@ -86,7 +99,7 @@ def _members(tar: tarfile.TarFile) -> list[tarfile.TarInfo]:
         parts = Path(m.name).parts
         if not m.isfile() or m.name.startswith("/") or ".." in parts or len(parts) < 2 or parts[0] not in SKIP or not m.name.endswith(".json"):
             raise BadPack(f"member {m.name!r} is not a verdict entry (a regular .json file under check/ or tests/)")
-        if parts[1] in SKIP[parts[0]] or any(x.startswith(".") for x in parts):
+        if _skipped(parts[0], parts[1]) or any(x.startswith(".") for x in parts):
             raise BadPack(f"member {m.name!r} is in a part of the caches that holds no verdicts")
         out.append(m)
     return out

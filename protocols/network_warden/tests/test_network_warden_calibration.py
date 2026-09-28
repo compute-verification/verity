@@ -112,6 +112,48 @@ def test_prover_does_not_trade_pace_for_one_bucket_of_offset():
     assert max(h - r for h, r in zip(hands, ready)) <= 1
 
 
+def paced_configuration(name, rate, windows, window_buckets=20):
+    """One session per window, anchored 2 buckets in, producing frames at `rate` per bucket from the next bucket."""
+    frames = []
+    for w in range(windows):
+        anchor = w * window_buckets + 2
+        for i in range(2 * rate.numerator + 1):
+            frames.append({"session": f"{name}{w}", "index": i, "anchor": anchor,
+                           "ready": anchor + 1 + i * rate.denominator // rate.numerator})
+    return {"name": name, "egress": [{"link": "responses", "frames": frames}]}
+
+
+def test_weighted_percentile_with_unit_weights_is_the_percentile():
+    rng = random.Random(7)
+    for n in (1, 2, 5, 40):
+        xs = [Fraction(rng.randrange(1, 50), rng.randrange(1, 9)) for _ in range(n)]
+        for p in (0.01, 25, 50, 99.9, 100):
+            assert calibration.weighted_percentile(xs, [1] * n, p) == calibration.percentile(xs, p)
+    assert calibration.weighted_percentile([Fraction(2), Fraction(1, 2)], [1, 3], 50) == Fraction(1, 2)
+    with pytest.raises(ValueError):
+        calibration.weighted_percentile([Fraction(1)], [0], 50)
+
+
+def test_top_rho_is_the_median_over_windows():
+    """One configuration spans 8 windows at one frame every 2 buckets, and two others span one window each at 2 frames
+    per bucket. The median over configurations is 2, the rate of 2 of the 10 windows; over windows it is 1/2, so Σ_sync's
+    ρ stops at 1/2. Cutting the long configuration into 8 one-window ones leaves Σ_sync as it was."""
+    half, two = Fraction(1, 2), Fraction(2)
+    configs = [paced_configuration("a", half, 8), paced_configuration("b", two, 1), paced_configuration("c", two, 1)]
+    trace = {"bucket_ms": 100, "window_buckets": 20, "frame_bytes": 4096, "queue_capacity": 4096,
+             "configurations": configs}
+    old = calibration.choose_sync_set([1] * 10, [half, two, two], [half, two, two])
+    new = calibration.choose_sync_set([1] * 10, [half, two, two], [half, two, two], typical_weights=[8, 1, 1])
+    assert max(old.rhos) == two and new.rhos == (half,)
+    sync = calibration.calibrate(trace)["clock_sync"]
+    assert sync["rhos"] == ["1/2"] and sync["honest_miss_rate"] == 0
+    a = configs[0]["egress"][0]["frames"]
+    cut = [{"name": f"a{w}", "egress": [{"link": "responses",
+                                         "frames": [dict(f, anchor=f["anchor"] - 20 * w, ready=f["ready"] - 20 * w)
+                                                    for f in a if f["anchor"] // 20 == w]}]} for w in range(8)]
+    assert calibration.calibrate(dict(trace, configurations=cut + configs[1:]))["clock_sync"] == sync
+
+
 def test_fraction_at_most_rounds_down():
     assert calibration.fraction_at_most(Fraction(1, 3)) == Fraction(1, 3)
     assert calibration.fraction_at_most(Fraction(2, 161)) == Fraction(2, 161)  # an 8.05 s step at 100 ms buckets

@@ -140,6 +140,11 @@
    "assumptions": [],
    "type_hash": "4c3bae588a8b15087f0b98c7fee1a916e24956b95df6fd0453546703c7f048e0"
   },
+  "Verity.SecurityProofs.ProbBatchInduced": {
+   "signature": ["Verity.SecurityProofs.ProbBatchInduced : Verity.Guarantees.ProbBatchInduced"],
+   "assumptions": [],
+   "type_hash": "d3b33f0f68f5f726e9e6807f5420faa852ef8afba25cb45c5842e42815cdb713"
+  },
   "Verity.SecurityProofs.RangeGadget": {
    "signature": ["Verity.SecurityProofs.RangeGadget : Verity.Guarantees.RangeGadget"],
    "assumptions": [],
@@ -213,8 +218,9 @@
    ]
   },
   "Verity.Guarantees.Game": {
-   "digest": "b90ebaf68edabc62c09575e8aa5a885d542f8f3916f2b7d58bca9fb813886681",
+   "digest": "ecc7ed75a024d948af30f5c1fe65ee26298c9a426911af3c1ef7e90ae13b029a",
    "definitions": {
+    "Verity.Guarantees.ProbBatchInduced": "b7429a669651d1a8c24f8f946f3b2ca83f7c5c29279f7bb1d335fd63fb5bf7b2",
     "Verity.Guarantees.SoundAnd": "40437eeb1f6ccb9c4b5644af7f9b966c5e4aabe6ea59140bdcc75972988d1f5b",
     "Verity.Guarantees.SoundBatch": "c9beedbe57744d07208470011d76aa1d4ca58b593726a94f5133b5c0eafef363",
     "Verity.Guarantees.SoundBind": "6f75427202914962a6f46d107ec588a1fdb637f11ad0ceb7c2ffebbb7eccd0f2",
@@ -222,6 +228,7 @@
     "Verity.Guarantees.SoundMono": "fa86a98c87341208789aaed40edf38ef88f68a7c4e2c23a1a19738acbc0771df"
    },
    "pins": [
+    "Verity.SecurityProofs.ProbBatchInduced",
     "Verity.SecurityProofs.SoundAnd",
     "Verity.SecurityProofs.SoundBatch",
     "Verity.SecurityProofs.SoundBind",
@@ -314,10 +321,16 @@
    "pins": ["Verity.SecurityProofs.ContainsImplements"]
   },
   "Verity.Protocol.Game": {
-   "digest": "79f23e03fb630f66432e1fbacbc556bde2d1d07fcc9164ee43fbd1ef5d97a34f",
+   "digest": "c3a8196d1e9e6903cfd0374e5b087e6377800253e09d265e24fef1ae2fab24fc",
    "definitions": {
     "Verity.Game": "34c713229a1259c2d5972e7184a6879ce0f3e67dbb8dc0fe4219cf7aad78bf16",
-    "Verity.Game.Strategy": "9ea6ffb37eaa47c603e7c09054af31e4c5edf402cec2c9c48052197adae2fb22",
+    "Verity.Game.InducedAt": "0c3e058da3fbda23c861e5e706c916599bc4b893d399efbe4535390b4d0c448f",
+    "Verity.Game.InducedL": "2e988db571b2eca62bf3bc9f21d1946a714a461777ff82353bf47d90ea0d8375",
+    "Verity.Game.InducedR": "c2243672779ceb6e2c4a3275bd22bf9b9a1003f2d01d3efe2c98f097d61ad3e4",
+    "Verity.Game.InducedWithL": "1617ed74f91a304eeb40c85829416d3a2f77e738a4395f95e1f8b14062485ccc",
+    "Verity.Game.InducedWithR": "8c9816d39502ef1f763da132e2211aa59ae1de4a5042e579bea165391dc4a16c",
+    "Verity.Game.Strategy": "adbb9d9cc6b114fa6a9ebfb3c8d43406b9c2272e136d74953736875e7054817b",
+    "Verity.Game.Strategy.ofMap": "6ea46533e626d971f430730846cec8e1f8c38af21feab3a98d39f5184155ee22",
     "Verity.Game.batch": "ab402840c5a36246c2bab7a131339b316ed204cbed98d862272ade83db9139cd",
     "Verity.Game.bind": "57f9bfd5a89f6841f4aa91aa534c194d08183e997fc3cf6e41d2459a37c717ce",
     "Verity.Game.brecOn.go": "b26b92002b61ca899c176b5358f3905100497203a1e6a329d813643c08759cd4",
@@ -325,12 +338,14 @@
     "Verity.Game.interleave": "8cc579f2e14080866cf44bdf92a1ad8006e6594e7f085ec58b2d64b67e3c5164",
     "Verity.Game.interleaveWith": "397c914cdff84b1aea6f1f1d28a609d6dc69b580a3d1564ffc6a7e0202beefd9",
     "Verity.Game.map": "6cd5468a1f484fdc57f7e452b1201fa4960f461c800d5cf222c0ccf5b1b9580a",
+    "Verity.Game.prob": "123c931b895fd86ca8afa118e08bd86e8000707f80332932138acb82d630574c",
     "Verity.Game.ret": "36d51e203dc27816f87118662a944dfd4726229a8d44c08551ba14dd7fc69649",
     "Verity.Game.send": "8d24c747132730510c15eb71bd4e887838687cee9b7d9e59f46a29a712c01efc",
     "Verity.Game.value": "2b85019b6d4066405668df2c794c89d1fb80e777c12864c3e6cc71a57de83258",
     "Verity.Sound": "8ce08e78994d35e34dd4fb619f6366bee293379b3c7442a8007d53d80d5a5bd7"
    },
    "pins": [
+    "Verity.SecurityProofs.ProbBatchInduced",
     "Verity.SecurityProofs.SoundAnd",
     "Verity.SecurityProofs.SoundBatch",
     "Verity.SecurityProofs.SoundBind",

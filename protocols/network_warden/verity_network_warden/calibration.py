@@ -51,6 +51,20 @@ def percentile(xs: Sequence[float], p: float) -> float:
     return s[min(len(s) - 1, max(0, math.ceil(p / 100 * len(s)) - 1))]
 
 
+def weighted_percentile(xs: Sequence[Fraction], weights: Sequence[int], p: float) -> Fraction:
+    """The nearest-rank percentile of `xs` with each `xs[i]` repeated `weights[i]` times: of W = Σ weights, the least x
+    whose cumulative weight reaches rank ⌈p/100 · W⌉ (at least 1). With unit weights it is `percentile`."""
+    if len(xs) != len(weights) or any(w < 0 for w in weights) or sum(weights) == 0:
+        raise ValueError("weighted percentile needs one non-negative weight per value and a positive total")
+    total = sum(weights)
+    rank, acc = min(total, max(1, math.ceil(p / 100 * total))), 0
+    for x, w in sorted(zip(xs, weights, strict=True)):
+        acc += w
+        if acc >= rank:
+            return x
+    raise AssertionError("unreachable: the cumulative weight reaches the total")
+
+
 def first_frame_latencies(frames: Sequence[dict]) -> list[int]:
     """Ready bucket minus anchor, for every session's first frame."""
     return [f["ready"] - f["anchor"] for f in frames if f["index"] == 0]
@@ -80,20 +94,25 @@ def fraction_at_most(x: Fraction | float, max_denominator: int = MAX_RHO_DENOMIN
 
 
 def choose_sync_set(latencies: Sequence[int], low_rates: Sequence[Fraction], typical_rates: Sequence[Fraction],
-                    n_delta: int = 16, n_rho: int = 8) -> SyncSet:
+                    n_delta: int = 16, n_rho: int = 8, typical_weights: Sequence[int] | None = None) -> SyncSet:
     """Σ_sync:
     - **δ** runs from 0 up to the p99.99 first-frame latency, in `n_delta` steps;
-    - **ρ** runs geometrically from the p0.01 of `low_rates` up to the p50 of `typical_rates`, in `n_rho` values, each
-      rounded down to a fraction with denominator at most 1024. ρ is below 1 for sessions slower than one frame per
-      bucket.
+    - **ρ** runs geometrically from the p0.01 of `low_rates` up to the p50 of `typical_rates` weighted by
+      `typical_weights`, in `n_rho` values, each rounded down to a fraction with denominator at most 1024. ρ is below 1
+      for sessions slower than one frame per bucket.
 
-    `calibrate` passes one rate per configuration in each: its sessions' p0.01 production rate in `low_rates`, and
-    their p50 rate in `typical_rates`."""
+    `calibrate` passes one rate per configuration in each: its sessions' p0.01 production rate in `low_rates`, their
+    p50 rate in `typical_rates`, and its windows in `typical_weights`, which is 1 + its largest anchor // T, the windows
+    its egress frames span. The top ρ is then the median over windows (`weighted_percentile`): the least typical rate t
+    such that the configurations with a typical rate at most t span at least ⌈W/2⌉ of all W windows. A configuration of
+    n windows counts as n configurations of one window each, so cutting a run into more configurations (at a dropped
+    window, say) doesn't move it. Without `typical_weights`, every configuration counts once."""
     hi = math.ceil(percentile(latencies, 99.99)) if latencies else 0
     step = max(1, math.ceil(hi / max(1, n_delta - 1)))
     deltas = tuple(i * step for i in range(n_delta))
     lo_r = fraction_at_most(percentile(low_rates, 0.01)) if low_rates else Fraction(1)
-    hi_r = max(lo_r, Fraction(percentile(typical_rates, 50))) if typical_rates else lo_r
+    weights = [1] * len(typical_rates) if typical_weights is None else typical_weights
+    hi_r = max(lo_r, Fraction(weighted_percentile(typical_rates, weights, 50))) if typical_rates else lo_r
     if n_rho == 1 or hi_r == lo_r:
         return SyncSet(deltas, (lo_r,))
     ratio = float(hi_r / lo_r)
@@ -288,13 +307,14 @@ def calibrate(trace: dict, *, ingress_bucket_ms: int = 100, n_delta: int = 16, n
     per_link_frames: dict[str, list[list[dict]]] = defaultdict(list)
     per_link_arrivals: dict[str, list[list[int]]] = defaultdict(list)
     per_link_arrival_ms: dict[str, list[list[float]]] = defaultdict(list)
-    latencies, low_rates, typical_rates = [], [], []
+    latencies, low_rates, typical_rates, typical_weights = [], [], [], []
     for cfg in configs:
-        cfg_rates = []
+        cfg_rates, cfg_windows = [], 0
         for link in cfg.get("egress", []):
             per_link_frames[link["link"]].append(link["frames"])
             latencies += first_frame_latencies(link["frames"])
             cfg_rates += session_rates(link["frames"])
+            cfg_windows = max(cfg_windows, max((f["anchor"] // T + 1 for f in link["frames"]), default=0))
         for link in cfg.get("ingress", []):
             if "arrival_ms" in link:
                 per_link_arrival_ms[link["link"]].append(link["arrival_ms"])
@@ -303,7 +323,8 @@ def calibrate(trace: dict, *, ingress_bucket_ms: int = 100, n_delta: int = 16, n
         if cfg_rates:
             low_rates.append(percentile(cfg_rates, 0.01))
             typical_rates.append(percentile(cfg_rates, 50))
-    sync_set = choose_sync_set(latencies, low_rates, typical_rates, n_delta, n_rho)
+            typical_weights.append(cfg_windows)
+    sync_set = choose_sync_set(latencies, low_rates, typical_rates, n_delta, n_rho, typical_weights)
 
     egress, windows_total, misses_total, chosen = [], 0, 0, []
     for name, runs in per_link_frames.items():

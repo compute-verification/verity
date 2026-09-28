@@ -53,7 +53,7 @@ run: |
   cd "$SRC"
   nvidia-smi --query-gpu=clocks.sm,clocks.mem,clocks.max.sm --format=csv > clocks-before.csv || true
   rc=0
-  PYTHONPATH=$SRC/tools/research/src /workspace/jobs/bin/uv run --no-project --python 3.12 python -m research run --campaign "$CAMPAIGN" -- bash -c "cd \"$SRC\" && $CMD" || rc=$?
+  PYTHONPATH=$SRC/tools/research/src /workspace/jobs/bin/uv run --no-project --python 3.12 python -m research run --campaign "$CAMPAIGN" --run-record -- bash -c "cd \"$SRC\" && $CMD" || rc=$?
   # the pod's copy goes once research run has exited (it imports from this tree while it publishes), never from a trap; a
   # preempted pod's copy is left to node 1's jobs/src sweep
   cd / && rm -rf "$SRC"

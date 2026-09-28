@@ -9,7 +9,7 @@ Staged; nothing pinned.
   `ρ'` from it at `ρ`, for `ρ' ≤ ρ ≤ 1` at any record with non-negative add and BF16 prices: `DeviceCapGamma`'s
   `ttOutPearlCDev_cap_anti` with rev1's credit and cap. rev1's credit can be negative off the domain, so the sum's
   bound (`cap_credit_sum_le_rev1`) takes the workload's layout in `pearlCDomainDev`, where `creditDevRev1_nonneg`
-  holds. Per tile there is no such theorem, for `DeviceCapGamma`'s reason.
+  holds. Per tile it holds only at a larger `γ₀`, for `DeviceCapGamma`'s reason (`TileCapRev1Gamma`).
 * **γ at v1's headline record at any cap `ρ < 1`**: `DeviceSm120KernelGamma`'s v1 under rev1 with FP32 at 8.376
   (`devSm120v1 Prices.sm120Loop`) and the honest cast at 8.72 (`W_ref` at `wrefDevRev1K` with `c = 8.72 − 8.953`),
   at `γ = 1 − (1 − ρ)/ω` with `ω = 446072750/444869439` at 8192³ and `294158650/293393877` at 16384³, per unit and
@@ -18,7 +18,8 @@ Staged; nothing pinned.
 * **At the cap 1/1,000** (`tt-out/pearl-c-sm120-rev1-cap1000` and its tile twin): `1648180439/446072750000`
   (0.36949%) at 8192³ and `1058166877/294158650000` (0.35973%) at 16384³, per unit and per audit tile. Per unit the
   γ also follows from rev1 at 1/400 (`tt-out/pearl-c-sm120-rev1`) alone
-  (`pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_8192_of_cap400`, `_16384_of_cap400`).
+  (`pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_8192_of_cap400`, `_16384_of_cap400`). Per audit tile it does not: from
+  rev1 per tile at 1/400 the sampled γ at 1/1,000 is 1/400's (`TileCapRev1Gamma`).
 -/
 
 namespace Pouw.PearlC

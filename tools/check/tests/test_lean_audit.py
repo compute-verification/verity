@@ -5,7 +5,10 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import os
 import re
+import signal
+import subprocess
 import sys
 import tarfile
 import types
@@ -118,6 +121,40 @@ def test_a_packages_test_generates_its_data_from_the_checkout_not_the_scratch_tr
     root = _tree(tmp_path, monkeypatch)
     _run(tmp_path, 1)
     assert (tmp_path / "out1" / "repo.txt").read_text() == str(root)
+
+
+#: runs lean_audit.py's main on the tree `_tree` wrote, as check.py's step does: argv is the module, the root, the tracked files
+#: (JSON) and main's arguments
+DRIVER = r'''
+import importlib.util, json, sys
+from pathlib import Path
+spec = importlib.util.spec_from_file_location("lean_audit_driven", sys.argv[1])
+LA = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(LA)
+LA.ROOT, files = Path(sys.argv[2]), json.loads(sys.argv[3])
+LA.COMMON.tracked_files = lambda r=None: files
+LA.COMMON.cores = lambda: 2
+sys.exit(LA.main(sys.argv[4:]))
+'''
+
+
+def test_a_stopped_audit_removes_its_scratch_tree(tmp_path, monkeypatch):
+    """A manual stop (`research cancel`) sends SIGTERM to the check's whole process group. The audit died of it without
+    running its finally, and left its scratch tree, about 60 GB, in `~/.cache/verity-check`: two of them filled node 2's root
+    disk until a check refused to start (3 Oct, r20261003-055703-86e3 and r20261003-030801-94eb)."""
+    root = _tree(tmp_path, monkeypatch)
+    (root / "tools/lean/audit.py").write_text('import sys\nprint("auditing", flush=True)\nsys.stdin.read()\n')
+    cache = tmp_path / "cache"
+    p = subprocess.Popen([sys.executable, "-c", DRIVER, str(ROOT / "tools/check/lean_audit.py"), str(root),
+                          json.dumps(LA.COMMON.tracked_files()), "--out", str(tmp_path / "out"),
+                          "--cache", str(cache / "lean-audit"), "--deps", str(cache / "lean-deps")],
+                         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True, text=True)
+    while "auditing" not in (line := p.stdout.readline()):
+        assert line, p.communicate()[1]
+    assert len(list(cache.glob("lean-audit-scratch-*"))) == 1
+    os.killpg(p.pid, signal.SIGTERM)
+    p.communicate()
+    assert p.returncode != 0 and list(cache.glob("lean-audit-scratch-*")) == []
 
 
 def test_a_check_py_edit_keeps_every_verdict_and_a_pack_carries_them_to_another_machine(tmp_path, monkeypatch):

@@ -1,5 +1,5 @@
-"""The verifier's exact check with record-and-reject, an honest shaper that meets the logical schedule, and the ingress
-links' status check."""
+"""The verifier's exact check with record-and-reject, an honest shaper that meets the logical schedule, one clock per
+spatial unit, and the ingress links' status check."""
 
 from verity_network_warden.audit import Audit
 from verity_network_warden.commitment import commit
@@ -90,6 +90,36 @@ def test_an_out_of_set_sync_flags_only_its_own_window():
     tampered = records[:2] + [Record("responses", 2, tuple(tuple(r) for r in rows), records[2].status)]
     verdicts = Audit().check_link("responses", tampered, FRAMES, declared, SYNC_SET, P)
     assert [v.violation for v in verdicts] == [None, "advice", "mismatch"]
+
+
+def test_egress_links_with_the_same_syncs_are_accepted():
+    """The spatial unit's clock is each window's sync, which every egress link declares alike."""
+    audit = Audit()
+    for link in ("responses", "tokens"):
+        audit.check_link(link, run_shaper(FRAMES, honest_ready(), SYNCS, Warden(link, P)), FRAMES, SYNCS, SYNC_SET, P)
+    assert audit.accepted and len(audit.verdicts) == 6
+    assert audit.syncs == dict(enumerate(SYNCS))
+
+
+def test_a_link_with_another_sync_is_advice_in_that_window_only():
+    """A second egress link declares δ = 2 in window 1, in the set but not the unit's: one sync per window for all links
+    is the advice `EncardAccSeqsLeSync` counts, `#Σ_sync^W`. Window 1 of the link checked second is an advice
+    violation, its other windows are accepted, and the first link checked sets the clock. The same holds committed."""
+    other = [SYNCS[0], ClockSync(2, 1), SYNCS[2]]
+    assert other[1] in SYNC_SET and other[1] != SYNCS[1]
+    responses = run_shaper(FRAMES, honest_ready(), SYNCS, Warden("responses", P))
+    tokens = run_shaper(FRAMES, honest_ready(), other, Warden("tokens", P))
+    assert all(v.accepted for v in Audit().check_link("tokens", tokens, FRAMES, other, SYNC_SET, P))
+    for committed in (False, True):
+        resp, tok = ([commit(r, P) for r in recs] if committed else recs for recs in (responses, tokens))
+        audit = Audit()
+        audit.check_link("responses", resp, FRAMES, SYNCS, SYNC_SET, P)
+        audit.check_link("tokens", tok, FRAMES, other, SYNC_SET, P)
+        assert [(v.link, v.window, v.violation) for v in audit.violations] == [("tokens", 1, "advice")]
+        audit = Audit()
+        audit.check_link("tokens", tok, FRAMES, other, SYNC_SET, P)
+        audit.check_link("responses", resp, FRAMES, SYNCS, SYNC_SET, P)
+        assert [(v.link, v.window, v.violation) for v in audit.violations] == [("responses", 1, "advice")]
 
 
 def ingress_run(arrivals, faults=None):

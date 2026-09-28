@@ -17,7 +17,10 @@ first of these that applies.
 
 If `research data`, `research queue` or node ssh fail for missing credentials, rerun from a fresh tmux login shell before
 anything else: on a cloud VM a long-lived tool shell can lose the injected secrets (store, node SSH key, Slack token) that a
-fresh login shell still has.
+fresh login shell still has. `research` itself takes them from the tmux server first; a plain `ssh` or script doesn't.
+If git push fails because the VM's GitHub token lapsed, hand the branch over through the evidence store (git bundle create B
+origin/BASE..BRANCH, then research data put --kind evidence/v1 --file B --preserve), and send the art id, the branch and its
+head sha: no agent can read another agent's Cursor store.
 
 ## 1. Fix it, when it's clearly yours
 
