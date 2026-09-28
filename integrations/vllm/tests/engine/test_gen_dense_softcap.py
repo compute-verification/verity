@@ -22,7 +22,7 @@ from tests.engine.test_gen_dense2 import FA2, SCOPE, _fa2_edit
 from tests.observe.test_patterns_synthetic import D, KVH, NH, _context_on_host, by_spec, context, decode_step
 from verity_vllm.observe.fold.tree import step_events
 from verity_vllm.program.frontend.rules.vocab import vocabulary_for
-from verity_vllm.program.registry import targets as TG
+from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.registry.quarantine.dense import softcap as SC
 
 BASE = "Attention_v3{T=33,NH=9,KVH=3,D=64,BN=128}"

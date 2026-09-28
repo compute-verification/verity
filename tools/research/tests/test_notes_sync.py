@@ -515,6 +515,10 @@ def test_sync_with_the_token_goes_past_the_bots_insteadof(cloud_vm, monkeypatch)
     (a / "lanes" / "x" / "report.md").write_text("CHECKPOINT none (20:00Z) [open] started\n")
     rep = NS.sync(a, secrets=[])
     assert rep["rc"] == 1 and "git fetch origin failed" in rep["error"], "unset: the plain URL is the bot's, refused as before"
+    assert f"{NS.TOKEN_ENV} is empty in this shell" in rep["error"] and "Cloud Agents > Secrets" in rep["error"], rep["error"]
+    monkeypatch.setenv("CLOUD_AGENT_INJECTED_SECRET_NAMES", f"OTHER,{NS.TOKEN_ENV}")
+    err = NS.sync(a, secrets=[])["error"]
+    assert NS.FRESH_SHELL in err and "Cloud Agents" not in err, "a secret this VM injects is lost from the shell, not unconfigured"
     monkeypatch.setenv(NS.TOKEN_ENV, TOKEN)
     seen = _argv_log(monkeypatch)
     rep = NS.sync(a, secrets=[])
@@ -532,6 +536,7 @@ def test_a_refused_fetch_with_the_token_says_so_without_the_token(cloud_vm, tmp_
     (a / "kb" / "new.md").write_text("new\n")
     rep = NS.sync(a, secrets=[])
     assert rep["rc"] == 1 and "git fetch origin failed" in rep["error"] and TOKEN not in rep["error"]
+    assert f"{NS.TOKEN_ENV} is empty" not in rep["error"], "set but refused: not the empty-token hint"
 
 
 def test_the_standby_pull_uses_the_token_and_updates_the_tracking_branch(cloud_vm, monkeypatch):

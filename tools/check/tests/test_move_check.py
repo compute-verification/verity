@@ -258,6 +258,20 @@ def test_lean_split_is_certified(tmp_path):
                                                              if n != "lakefile.lean"}}
 
 
+def test_module_names_follow_src_dir(tmp_path):
+    """A nested package with `srcDir = ".."` names its modules from the directory above it, as Lake does."""
+    repo, base = _repo(tmp_path, {"verity/Security/lakefile.toml": 'name = "security"\n[[lean_lib]]\nname = "Spec"\n',
+                                  "verity/Security/Spec/Pouw.lean": "",
+                                  "verity/Security/Proofs/lakefile.toml": 'name = "proofs"\nsrcDir = ".."\n',
+                                  "verity/Security/Proofs/Pouw/End.lean": "",
+                                  "p/lakefile.toml": '[[lean_lib]]\nname = "P"\nsrcDir = "src"\n', "p/src/P/A.lean": "",
+                                  "p/Check.lean": ""})
+    tree = MC.Tree(base, str(repo))
+    assert tree.module("verity/Security/Spec/Pouw.lean") == "Spec.Pouw"
+    assert tree.module("verity/Security/Proofs/Pouw/End.lean") == "Proofs.Pouw.End"
+    assert tree.module("p/src/P/A.lean") == "P.A" and tree.module("p/Check.lean") == "Check"
+
+
 def test_lean_split_that_changes_a_proof_line_is_refused(tmp_path):
     bar = BAR.replace("import Verity.SecurityProofs.Foo", "import CoreProofs.Foo").replace(":= rfl", ":= by rfl")
     [f] = _split(tmp_path, bar=bar)[2]["refusals"]

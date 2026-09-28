@@ -121,8 +121,8 @@ def test_the_cli_prints_the_placement_or_the_refusal(capsys):
     assert cli.main([*base, "--gpus", "1", "--gpu-model", "rtx-pro-6000", "--mem-gb", "64"]) == 0
     out = json.loads(capsys.readouterr().out)
     assert out["machine"] == "vy-nebius-2" and out["job"]["gpu_model"] == "rtx-pro-6000"
-    assert cli.main([*base, "--gpus", "1", "--preempt", "never"]) == 3
-    assert "refused" in json.loads(capsys.readouterr().out)
+    assert cli.main([*base, "--gpus", "1", "--mem-gb", "64", "--preempt", "never"]) == 3
+    assert "preemptible" in json.loads(capsys.readouterr().out)["refused"]
     assert cli.main(["submit", NEBIUS, "--run-id", "r2", "--now", str(T), "--project", "verity", "--submitter", "w",
                      "--kind", "lean-audit"]) == 0
     assert json.loads(capsys.readouterr().out)["max_s"] == 1200
@@ -153,14 +153,24 @@ def test_the_held_rules_warn_and_never_refuse(tmp_path):
     reg = kinds.load(KINDS)
     c = model.load(NEBIUS)
     with pytest.raises(submit.Refused, match="longest run"):
-        submit.submit(c, reg, run_id="r1", now=T, project="verity", submitter="w")
-    out = submit.submit(c, reg, run_id="r1", now=T, project="verity", submitter="w", max_s=600)
+        submit.submit(c, reg, run_id="r1", now=T, project="verity", submitter="w", memory_gib=8)
+    out = submit.submit(c, reg, run_id="r1", now=T, project="verity", submitter="w", max_s=600, memory_gib=8)
     assert any("adhoc" in w for w in out["warnings"]) and any("no research question" in w for w in out["warnings"])
     out = submit.submit(c, reg, run_id="r1", now=T, kind="lean-audit", project="verity", submitter="w", cpus=4, max_s=3600)
     assert any("not its phase cpu-m" in w for w in out["warnings"]) and any("over its max_wall_min" in w for w in out["warnings"])
     (tmp_path / "x.toml").write_text('[kinds.big]\nphase = "gpu1"\nmax_wall_min = 90\nquestion = "q"\n')
     w = kinds.warnings(kinds.load(tmp_path)["big"], "big", question="q", gpus=1, cpus=8, memory_gib=64, max_s=5400, preempt="never")
     assert w == ["a GPU job over 60 min: split it into chunks", "a GPU kind that isn't preemptible", "declares no outputs"]
+
+
+def test_a_job_of_an_unregistered_kind_names_its_memory_cap():
+    c, reg = model.load(NEBIUS), kinds.load(KINDS)
+    with pytest.raises(submit.Refused, match=r"--mem-gb G.*'adhoc' isn't registered.*MemoryMax"):
+        submit.submit(c, reg, run_id="r1", now=T, project="verity", submitter="w", max_s=600)
+    out = submit.submit(c, reg, run_id="r1", now=T, project="verity", submitter="w", max_s=600, memory_gib=96)
+    assert out["job"]["memory_gib"] == 96 and "MemoryMax=96G" in out["wrap"]
+    out = submit.submit(c, reg, run_id="r1", now=T, kind="lean-audit", project="verity", submitter="w")
+    assert out["job"]["memory_gib"] == 32, "a registered kind's shape still gives its memory"
 
 
 def test_a_malformed_registry_names_its_file(tmp_path):

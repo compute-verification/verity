@@ -142,7 +142,7 @@ def visited_rows(c: dict[str, Any], geo: dict[str, Any]) -> Iterator[tuple[int, 
 
 
 def masked_from(c: dict[str, Any], geo: dict[str, Any]) -> dict[tuple[int, int], int]:
-    """FA3: (slab, packed row) -> the row's tile's `n_block_min_causal_local_mask` (`fa3_check_inf.fa3_masked_from`), the lowest key block
+    """FA3: (slab, packed row) -> the row's tile's `n_block_min_causal_local_mask` (`attention_vocab.fa3_masked_from`), the lowest key block
     the kernel runs with `Check_inf`: tile `m_block = row // kBM` starts at query row `m_block * kBM // g`, and the blocks at or above
     `(m_idx_min + sk - sq) // BN` are its first and causal-masked iterations."""
     BN, kBM, g, out = geo["BN"], geo["kBM"], geo["g"], {}

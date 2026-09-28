@@ -98,7 +98,7 @@ SUPPLIED_PARAM = re.compile(r"^(values|run(_\d+)?)$")
 def collective_kind(family: str) -> str | None:
     """The tensor-parallel collective a Definition family is, any world: "all_reduce" | "all_gather" | None -- the registry's composites
     decide (AllReduce2_v1 / AllReduce_v2{WORLD,N} / AllGather2_v1 / AllGather_v1{WORLD,N}); imported on first use (only a rank Program asks)."""
-    from verity_vllm.program.registry.b1_tp2 import collective_kind as kind
+    from verity_vllm.program.frontend.collective_kinds import collective_kind as kind
     return kind(family)
 
 # ---------------------------------------------------------------------------------------------------------------------------------

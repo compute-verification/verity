@@ -186,7 +186,7 @@ if __name__ == "__main__":
         print("MoE skipped:", type(e).__name__, str(e)[:120])
     # 5. Gumbel: the Const64 gates
     try:
-        from verity_vllm.program.registry.quarantine.ov_sampling import gumbel as G
+        from verity_vllm.program.registry import sampling as G
         P5 = Program(bind(G.GumbelArgmaxBf16, V=8, SEED=12345, POS=3))
         sc5 = P5.circuit.root_scope
         ok5, w5 = check(P5, sc5, body_parts(sc5), "GumbelArgmaxBf16_v1{V=8} nodes")

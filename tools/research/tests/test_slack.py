@@ -1079,6 +1079,18 @@ def test_a_reply_rings_the_root_poster_and_a_quiet_one_rings_no_one(fake, regist
     assert len(bells(fake, circuits)) == 3                                             # a status line reaches the root's poster
 
 
+def test_an_fyi_from_the_starter_wakes_only_its_to_names(fake, registry, routes_dirs, capsys):
+    circuits, lean = inbox(fake, routes_dirs, "circuits"), inbox(fake, routes_dirs, "lean")
+    root = fake.add(COORD, text="@circuits @lean the move starts at 7", username="top", bot_id=BOT)
+    assert run(capsys, "send", "--as", "top", "--thread", root["ts"], "--kind", "fyi", "--text", "shard 3/5 passed")[0] == 0
+    assert bells(fake, circuits) == [] and bells(fake, lean) == []                    # a progress note is for the digest
+    note = next(m for m in reversed(fake.messages[COORD]) if m.get("username") == "top" and m is not root)
+    assert slack.tags_of(note["text"]) == ["fyi", slack.QUIET]
+    assert run(capsys, "send", "--as", "top", "--thread", root["ts"], "--kind", "fyi", "--to", "@lean",
+               "--text", "your shard passed")[0] == 0
+    assert bells(fake, circuits) == [] and len(bells(fake, lean)) == 1
+
+
 def test_one_author_rings_one_inbox_from_a_thread_at_most_cap_times_an_hour_then_says_so_once(fake, registry, routes_dirs, capsys, monkeypatch):
     monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
     box = inbox(fake, routes_dirs, "circuits")
@@ -1183,6 +1195,7 @@ def test_traffic_counts_doorbells_and_reports_dropped_names_and_unanswered_asks(
     box = inbox(fake, routes_dirs, "circuits")
     add_route(routes_dirs[0], "old-circuits", box, closed="2026-10-01T18:00Z", forward_to="circuits")   # renamed: one inbox
     run(capsys, "ask", "--as", "infra", "--to", "@circuits", "--text", "one")
+    fake.add(COORD, text="circuits 06:00Z: 3 open", username="circuits", bot_id=BOT, thread_ts=box)   # its own note, no doorbell
     old = fake.add(COORD, text="@proofs ancient ask", username="infra", bot_id=BOT, ts="1600000000.000001")
     fyi = fake.add(COORD, text="@proofs ancient fyi (quiet)", username="infra", bot_id=BOT, ts="1600000000.000002")
     fake.add(COORD, text="@no-such-lane hello", username="infra", bot_id=BOT)

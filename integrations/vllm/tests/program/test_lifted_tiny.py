@@ -36,7 +36,7 @@ from verity.primitives.circuits import Program, bind  # noqa: E402
 from verity.primitives.circuits.codec import decode_program, encode_program, program_digest  # noqa: E402
 from verity.primitives.circuits.defs import REGISTRY, PrimitiveDefinition  # noqa: E402
 from verity_vllm.program.registry import b1, lifted as L, pad_prims as PP, prims as P, serve3  # noqa: E402
-from verity_vllm.program.registry import serve3_reference as ref  # noqa: E402
+from verity_vllm.program.kernels import serve3_reference as ref  # noqa: E402
 from verity_vllm.program.registry.b1 import weights_type  # noqa: E402
 from tests.program.test_serve3 import D_MAX, EOS_FOR, LP, TINY, Y_RAW, _inputs, _v1  # noqa: E402
 from verity.primitives.circuits.types import Array, Record, Tuple, Value  # noqa: E402
@@ -637,14 +637,14 @@ def test_lsplits_for_candidate_pad04():
     """CANDIDATE PAD-04 / F-pad-11: `LSplitsForSMS<SMS>_v1` — payload agreement with stoch's `SplitsFor_v1` (the verbatim vLLM
     doubling loop) for every `1 ≤ n ≤ 64` at 142 / 132 / 108 SMs; `Active(0)` → ⊥ (no live row, no event); ⊥ → ⊥; INV → INV_6;
     `n > 64` refused by name (structural bound, asserted at build); the table flips stoch named (17, 34, 35, 67.. are beyond 64)."""
-    from verity_vllm.program.registry import topp_split as TS
+    from verity_vllm.program.registry import topp_geometry
     for sms in (142, 132, 108):
         lp, up = L.l_splits_for(sms), L.splits_for_prim(sms)
         assert lp.id == f"LSplitsForSMS{sms}_v1" and up.id == f"SplitsForSMS{sms}_v1" and lp.lifted_from is up
         assert lp.lift_class == "specified" and lp.candidate == "PAD-04" and lp.id in L.specified_ids()
         assert lp.params == (("n_live", Value(L.N_LIVE_BITS + 1)),) and lp.ret == Value(L.SPLITS_BITS + 1)
         for n in range(1, 65):
-            s = TS.splits_for(n, sms)
+            s = topp_geometry.splits_for(n, sms)
             assert lp.evaluate(n) == up.evaluate(n) == s and 1 <= s <= 32 and s & (s - 1) == 0  # Active(n) → 0‖S, bit for bit
             assert s == max(x for x in (1, 2, 4, 8, 16, 32) if x * n <= sms or x == 1)
         assert lp.evaluate(0) == L.enc_bot(L.SPLITS_BITS)  # the specified rule

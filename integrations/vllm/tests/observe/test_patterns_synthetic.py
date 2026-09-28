@@ -460,9 +460,9 @@ def test_the_biased_linear_resolves_to_one_gemm_bias_at_the_add():
 @pytest.mark.parametrize("cc,sms", [((12, 0), 188), ((9, 0), 132)])
 def test_on_a_gemm_v2_host_the_biased_linear_resolves_as_the_frontend_binds_it(cc, sms):
     """The same pair on a `Gemm_v2` target (cc 12.0, cc 9.0): one `GemmBias_v2{K,N,DOT}` at the add, the record target's one-Call
-    Definition (`registry.targets.gemm_bias_spec`), the frontend's choice."""
+    Definition (`frontend.targets.gemm_bias_spec`), the frontend's choice."""
     from verity_vllm.program.frontend.target_profile import TargetProfile
-    from verity_vllm.program.registry import targets as TG
+    from verity_vllm.program.frontend import targets as TG
     events, start = decode_step(qkv_bias="add", num_sms=sms)
     se = step_events(events)
     specs = by_spec(resolve_step(se, _context_on_host(start, se.sample, sms, cc)))

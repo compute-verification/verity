@@ -289,7 +289,7 @@ def fa3_tile(head_dim: int, max_seqlen_q: int, qheads_per_kvhead: int, num_split
     """(kBlockM, kBlockN) of the pinned FA3 (506341a1 hopper/) forward vLLM launches: `tile_size_fwd_sm90` (bf16, causal, paged KV without TMA)
     under `use_one_mma_wg` = max_seqlen_q * qheads_per_kvhead <= 64 (heuristics.h; varlen -> params.seqlen_q is max_seqlen_q): hdim 64 ->
     64 x 192 (one warpgroup) / 192 x 128; hdim 128 -> 64 x 128 / 128 x 128.  num_splits must be 1 (the kernel disarms the tap on the
-    split/combine path; batch-invariant serving passes 1).  The same rule as `verity_vllm.program.registry.targets.fa3_kblock_n`."""
+    split/combine path; batch-invariant serving passes 1).  The same rule as `verity_vllm.program.frontend.targets.fa3_kblock_n`."""
     if num_splits != 1:
         raise RuntimeError(f"fa3 tap: num_splits={num_splits} (only the num_splits==1 batch-invariant kernel is tapped)")
     one_wg = max_seqlen_q * qheads_per_kvhead <= 64

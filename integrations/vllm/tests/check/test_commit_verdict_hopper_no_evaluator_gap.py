@@ -1,4 +1,4 @@
-"""[R16 pin F-r16-20b / M-0431; the Hopper instance of rev's F-r16-20 class] On a cc 9.0 step `verity_vllm.program.registry.targets.gemm_spec` /
+"""[R16 pin F-r16-20b / M-0431; the Hopper instance of rev's F-r16-20 class] On a cc 9.0 step `verity_vllm.program.frontend.targets.gemm_spec` /
 `attention_spec` bind `Gemm_v2{K,N,DOT=HopperBF16WgmmaDot16_v1}` and `Attention_v2{...}` (only an Ampere-family step under FA2 binds the
 accepted Gemm_v1 / Attention_v3).  `rows.EVALUATORS` has Gemm_v1 and not Gemm_v2, so `population.population()` excluded
 EVERY Hopper GEMM output VU (every linear + lm_head) as `no registered evaluator for Gemm_v2` -- why-class 'no-evaluator', the applicability
@@ -22,7 +22,7 @@ from verity_vllm.check.c2_rules import _complete_replay_population_gap, _no_eval
 from verity_vllm.check.verdict import commit_verdict
 from verity_vllm.check.replay.replay_codes import NOT_YET, why_class
 from verity_vllm.program.kernels.rows import EVALUATORS
-from verity_vllm.program.registry import targets as T
+from verity_vllm.program.frontend import targets as T
 
 
 def _bnd(n_req):
@@ -66,7 +66,7 @@ def test_the_mechanism_is_in_the_registry_and_the_evaluator_table():
         def effective_flash_attn_version(self):
             return 3
     assert not T.uses_accepted_kinds(_P())                                      # a cc 9.0 step binds the statics-lifted kinds (gemm_spec -> b1.GemmV2)
-    from verity_vllm.program.registry.gemm_targets import REGISTERED
+    from verity_vllm.program.frontend.gemm_targets import REGISTERED
     assert REGISTERED["hopper"].kind.startswith("Gemm_v2{") and "HopperBF16WgmmaDot16" in REGISTERED["hopper"].kind
     assert "Gemm_v2" in EVALUATORS and "Gemm_v2" not in NOT_YET               # [R17 dense] the evaluator landed: HopperBF16WgmmaDot16 k16 chain
     assert "HopperBF16WgmmaDot16_v1" in EVALUATORS["Gemm_v2"] and "dot_bf16_for(DOT)" in EVALUATORS["Gemm_v2"]

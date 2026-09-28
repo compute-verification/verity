@@ -11,7 +11,7 @@ vllm-flash-attn 506341a `flash_fwd_kernel.h::compute_attn_1rowblock_splitkv<...,
 
 with `flash_api.cpp::set_params_fprop`: `params.softcap = softmax_scale / softcap` (`dense.softcap_mul_bits`) and
 `params.scale_softmax_log2 = softcap * M_LOG2E` (`dense.softcap_scale_log2_bits`).  The softcap runs before the row max, so the
-`Check_inf` placement (`MASKED_FROM`, `fa2_check_inf.fa2_masked_from`) and every stage after A' are `AttnBlock_v5`'s word for word;
+`Check_inf` placement (`MASKED_FROM`, `attention_vocab.fa2_masked_from`) and every stage after A' are `AttnBlock_v5`'s word for word;
 `AttnBlockSoftcap_v1` (dense) is this body with every block guarded and the Ampere step.  `MufuTanh_v1` is the sm_89 table: on another
 target its words are the target's only where the capture's tanh probe measured them equal.
 """

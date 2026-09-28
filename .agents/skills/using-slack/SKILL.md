@@ -43,6 +43,10 @@ an ask or an alert, which has one owner, the owner's `pickup`, `done` and `decli
 or `❌ declined — ...`), with no reaction: every handle posts through one bot, which can place each reaction only once.
 `roster` reads those lines.
 
+A reply you post in your own thread without naming anyone wakes everyone the root addressed, which on an announcement is
+every handle. So a progress note goes out as `send --kind fyi`, which is quiet: it wakes only the `--to` names it starts
+with, and everyone else reads it in their digest.
+
 `registry.json` (beside this file) names every handle (holder, remit, charter, user-group id, the paths it `owns`), the
 channels and the named humans; `research slack handles` prints it. `research msg owners PATH...` names who owns each path (the
 longest `owns` prefix wins), so a question about a file goes to its owner; a PR that moves files updates its owners' entries. The tool is `research slack` (`tools/research/src/research/slack.py`); every

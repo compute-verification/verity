@@ -96,13 +96,13 @@ class TritonGemmRule(InPlaceRule):
     `b` is `W.t()` (a view of the [N, K] parameter: stride_bk == 1, stride_bn == K); the kind takes W as [N, K].  When the only reader
     of `c` is the linear's bias add (`_bias_add_reader`), the pair is one `GemmBias_v1{K,N}(a row, W, b)` per row bound to the add's
     value instead, on the target whose GEMM is `Gemm_v1`, and one `GemmBias_v2{K,N,DOT}` on a target whose record says `gemm_bias_dot`
-    (`registry.targets.gemm_bias_spec`: cc 9.0 and cc 12.0).  Under `pouw:ncp-v2` a linear layer's launch is its call's served rows:
+    (`frontend.targets.gemm_bias_spec`: cc 9.0 and cc 12.0).  Under `pouw:ncp-v2` a linear layer's launch is its call's served rows:
     `NcpLinearRow_v1{K,N}`, or `NcpLinearRowBias_v1{K,N}` bound to the bias add's value on any target (`_pouw_scheme`)."""
     modes = frozenset({"profile"})
     info = RuleInfo("TritonGemm[vllm-bi]", 3, "in-place-binding",
                     applies_to="verity_cba::triton_launch of batch_invariant.matmul_kernel_persistent (kernel name + constexprs pinned)",
                     preconditions=("kernel qualified name is the profile's `matmul_kernel_persistent`; source sha256 pinned",
-                                   "the active TargetProfile's capability has a REGISTERED GEMM specialization (verity_vllm.program.registry.gemm_targets: ada cc 8.9 with "
+                                   "the active TargetProfile's capability has a REGISTERED GEMM specialization (verity_vllm.program.frontend.gemm_targets: ada cc 8.9 with "
                                    "vLLM's tuned sm_89 table, ampere cc 8.0 default tiling only; anything else -> numerics_unregistered)",
                                    "tiling = that target's launch geometry for (M, N, K) (GemmTarget.launch_config: the default 128/128/64, 8 warps, 3 stages, or the "
                                    "M-bucket row of the target's pinned tuned table); GROUP_SIZE_M 8, *_LARGE False, HAS_BIAS False, "
@@ -124,7 +124,7 @@ class TritonGemmRule(InPlaceRule):
         if meta.get("kernel") != GEMM_PINS["kernel"]:
             return f"kernel {meta.get('kernel')} is not {GEMM_PINS['kernel']}"
         sc = meta.get("scalars", {})
-        from verity_vllm.program.registry.gemm_targets import UnregisteredGemmTarget
+        from verity_vllm.program.frontend.gemm_targets import UnregisteredGemmTarget
         try:
             pins, _src = gemm_pins_for(sc.get("M"), sc.get("N"), sc.get("K"))
         except UnregisteredGemmTarget as e:   # fail closed: no registered Gemm Definition for the target, whatever tiling the launch shows

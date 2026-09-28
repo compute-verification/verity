@@ -207,6 +207,10 @@ def load_machines(path: Path | None = None) -> dict[str, dict[str, Any]]:
     return ms
 
 
+#: a machine's runs root when its entry names none (a pod `research pods register` wrote without --root)
+DEFAULT_ROOT = "/workspace/research"
+
+
 def resolve_machine(name: str, project: str | None, machines: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:
     ms = load_machines() if machines is None else machines
     m = ms.get(name)
@@ -224,7 +228,7 @@ def resolve_machine(name: str, project: str | None, machines: dict[str, dict[str
     if project not in allowed:
         raise Refused(f"machine {name!r} belongs to project(s) {allowed}, not {project!r}; refusing to touch it")
     out = dict(m)
-    out.setdefault("root", "/workspace/research")
+    out.setdefault("root", DEFAULT_ROOT)
     out.setdefault("python", "python3")
     out["name"] = name
     return out
@@ -1751,6 +1755,7 @@ def adopt(runs_root: Path, run_id: str, *, on: str | None = None, machines: dict
         except Refused as e:
             answers.append(f"{name}: {e}")
             continue
+        m = {**m, "root": m.get("root") or DEFAULT_ROOT}
         rd = f"{m['root']}/runs/{run_id}"
         ssh = ssh_argv(tgt["host"], tgt["port"], user=tgt.get("user", "root"))
         try:

@@ -1,6 +1,6 @@
 """[R15 hopper HOP-03, M-0225] The LAUNCH CONTEXT of every request shape of a workload -- what `derive_step --launch-max-seqlen-q` needs.
 
-FA3's forward tile (`verity_vllm.program.registry.targets.fa3_kblock_n`: vllm-flash-attn `tile_size_fwd_sm90` + `heuristics.h::use_one_mma_wg`) reads
+FA3's forward tile (`verity_vllm.program.frontend.targets.fa3_kblock_n`: vllm-flash-attn `tile_size_fwd_sm90` + `heuristics.h::use_one_mma_wg`) reads
 the varlen launch's `max_seqlen_q` = the most query rows any ONE sequence of the launch has.  A request Program built alone sees its own rows
 (its prompt on step 0, one row per decode step); in a batch the launch's value is the max over every co-scheduled sequence.  Measured on
 cp-h100 (Llama-3.2-1B B8 mixed 1024/128): the 8-token prompt's standalone Program said kBlockN 192 (64 x 192 tile, `8 * 4 <= 64`), the batched

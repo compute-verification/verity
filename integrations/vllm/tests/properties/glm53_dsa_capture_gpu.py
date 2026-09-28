@@ -430,7 +430,7 @@ def index_k_forms(b: np.ndarray, cs: np.ndarray, got: np.ndarray) -> dict[str, A
     Definition's) = fma(x, cos, RN(+-partner sin)), B = fma(+-partner, sin, RN(x cos)), N = RN(x cos) + RN(+-partner sin), separately
     for even (L) and odd (H) elements; b (launches, D) f32 words, cs (launches, ROPE) bf16 words, got (launches, D) bytes."""
     from verity_vllm.program.kernels import derived_rows as DR
-    from verity_vllm.program.registry.fp8 import np_f32_to_e4m3_sat
+    from verity_vllm.program.kernels.fp8_twins import np_f32_to_e4m3_sat
 
     half = ROPE // 2
     x = np.asarray(b, dtype=np.uint32)[:, :ROPE]

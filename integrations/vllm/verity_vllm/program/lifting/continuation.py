@@ -36,10 +36,11 @@ from enum import Enum
 from typing import Any, Callable, Iterable, Sequence
 
 from verity_vllm.program.registry import lifted as L
+from verity_vllm.program.lifting import lifted_records
 
 CONTINUATION_VERSION = "continuation-v1"  # every Continuation_v1 result carries it (spec s1: recorder, builder, Match share one version)
 PROFILES = {0: "synchronous (zero lag: run moves with emit)", 1: "admitted one-step-ahead async (run trails emit by exactly one slot after early EOS)"}
-PROFILE_FIELD = L.LAG_FIELD  # RunHeader.profile.engine_kwargs.async_scheduling -- the ONE resolved field A and LAG both read (revb R6)
+PROFILE_FIELD = lifted_records.LAG_FIELD  # RunHeader.profile.engine_kwargs.async_scheduling -- the ONE resolved field A and LAG both read (revb R6)
 FAMILIES = ("is_eos", "emit", "run", "out", "in")  # b_t, e_t, r_t, o_t, u_t: Q(P) identities with named families (revb R4)
 #: revb S-r17b-16 R5 / S-r17b-20: the Definition's statement about randomness.  The sampler of slot `t` EXECUTES iff `r_t = 1` (it is the
 #: slot's sampling event; `u_t = bot` makes the whole step bot by strictness, sampler included), so a stochastic Program draws exactly once
@@ -73,12 +74,12 @@ def check_profile(A: int) -> int:
 def resolve_profile(header: dict) -> tuple[int, str]:
     """`A` from the record's RESOLVED profile (`RunHeader.profile.engine_kwargs.async_scheduling`, True -> 1, False -> 0), through R17-1's
     `lag_from_header` -- the one rule; an absent / non-boolean attestation is refused by name, never defaulted (spec s1; revb R6)."""
-    return L.lag_from_header(header)
+    return lifted_records.lag_from_header(header)
 
 
 def declared_profile(workload_program: dict | None) -> tuple[int | None, str | None]:
     """`A` as the Build DECLARED it (the Program's digest-bound `lag=<n>` static and moe's sidecar fields; R17-1's `declared_lag_of_row`)."""
-    return L.declared_lag_of_row(workload_program)
+    return lifted_records.declared_lag_of_row(workload_program)
 
 
 # ---------------------------------------------------------------------------------------------------------

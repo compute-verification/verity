@@ -123,7 +123,7 @@ class TargetProfile:
     sampler_construction -> how the stochastic token select is constructed (a Program static, declared-and-bound, never attested).
                            `"greedy-check-per-stage"` binds `GumbelTokenSelect_v1` / `GumbelTopPTokenSelect_v1`, whose temperature scale
                            and Gumbel select each compute `temp == 0`; `"shared-greedy"` (the default when None) binds their
-                           `registry.sampling.SHARED_GREEDY` entry (the same function), which computes it once for both.  Omitted from
+                           `registry.sampling_vocab.SHARED_GREEDY` entry (the same function), which computes it once for both.  Omitted from
                            `to_json()` when None.
     fp8_scale_construction -> how the blockwise FP8 GEMM's scale products `sx[kb] * sw[nb][kb]` are constructed (a Program static,
                            declared-and-bound, never attested).  `"shared-per-block"` (the default when None) binds
@@ -146,7 +146,7 @@ class TargetProfile:
                            `RMSNormFusedCuda_v4`, `Attention_v10` / `Attention_v11`); a Definition that has no such version keeps
                            its constants.  Declaring false is refused (declare None).  Omitted from `to_json()` when None.
 
-    Derived (not fields; one rule each, `verity_vllm.program.registry.targets` consumes them): `tensor_core_family` (the registered k16
+    Derived (not fields; one rule each, `verity_vllm.program.frontend.targets` consumes them): `tensor_core_family` (the registered k16
     tensor-core step of the capability: `ampere` for sm_8x, `hopper` for sm_90, `blackwell_consumer` for sm_120) and `tuned_gemm_arch_family` (vLLM's tuned
     batch-invariant GEMM table for the capability: `ada` 8.9, `hopper` 9.x, None otherwise — mirrors
     `batch_invariant_configs._get_tuned_matmul_arch_family`, read back by the builder).
@@ -485,11 +485,11 @@ class TargetProfile:
     def with_overrides(self, **kw) -> "TargetProfile":
         return replace(self, **kw)
 
-    # -- derived GEMM target facts (one source: this profile's capability -> verity_vllm.program.registry.gemm_targets) ----------------
+    # -- derived GEMM target facts (one source: this profile's capability -> verity_vllm.program.frontend.gemm_targets) ----------------
     def tuned_gemm_arch_family(self) -> str | None:
         """vLLM's tuned-GEMM arch family for the declared capability (`gemm_targets.vllm_tuned_gemm_arch_family`: vLLM's own function
         when importable, else its pinned rule). Selects vLLM's tuned table — and therefore the launch geometry — on the target."""
-        from verity_vllm.program.registry.gemm_targets import vllm_tuned_gemm_arch_family  # noqa: PLC0415  (lazy: keeps this module light)
+        from verity_vllm.program.frontend.gemm_targets import vllm_tuned_gemm_arch_family  # noqa: PLC0415  (lazy: keeps this module light)
         return vllm_tuned_gemm_arch_family(self.compute_capability)
 
     def gemm_target(self, arch_family=...):
@@ -497,7 +497,7 @@ class TargetProfile:
         step, the correspondence evidence) — what Bet A pins, the eager resolver pins and the applicability manifest requires.  `arch_family`
         = the family the host actually reported (construction read-back / capture header), when known: it must be the record's.  Raises
         `gemm_targets.UnregisteredGemmTarget` (fail closed) for a target without a registered specialization."""
-        from verity_vllm.program.registry.gemm_targets import gemm_target_for  # noqa: PLC0415
+        from verity_vllm.program.frontend.gemm_targets import gemm_target_for  # noqa: PLC0415
         return gemm_target_for(self.compute_capability, arch_family)
 
     @classmethod
@@ -603,7 +603,7 @@ def profile_mismatches(profile: TargetProfile, applied: dict) -> list[str]:
     if ab == "<absent>" or (ab or None) != (profile.attention_backend or None):
         bad.append(f"attention_backend declared {profile.attention_backend!r}, applied {ab!r}")
     # [R13 ampere] the tuned-GEMM arch family vLLM applied for the declared capability must be the one the registered GEMM target
-    # (verity_vllm.program.registry.gemm_targets) requires: another answer means another launch geometry than the Definition was admitted for.
+    # (verity_vllm.program.frontend.gemm_targets) requires: another answer means another launch geometry than the Definition was admitted for.
     fam = applied.get("tuned_gemm_arch_family", "<absent>")
     if fam == "<absent>" or fam != profile.tuned_gemm_arch_family():
         bad.append(f"tuned_gemm_arch_family for cc {profile.capability_str} is {profile.tuned_gemm_arch_family()!r} (vLLM {profile.vllm_revision}), applied {fam!r}")

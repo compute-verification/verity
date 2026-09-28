@@ -82,9 +82,6 @@ from verity_vllm.program.registry.fp8 import C448, C_NEG448, E4M3, Fp8RowScale, 
 from verity_vllm.program.registry.moe import ONE32, NvExpf
 from verity_vllm.program.registry.prims import BF16, F32
 
-#: `get_default_config` under VLLM_BATCH_INVARIANT (fused_moe.py:1308-1315) clamped by the block (fused_moe.py:844-846)
-BATCH_INVARIANT_KB = 32
-BATCH_INVARIANT_SWAP = False
 
 _CONF = ("model-untested: read from vLLM d9105ea80 fused_moe_kernel and Triton 3.7.1; tests/properties/glm53_block_fp8_capture_gpu.py "
          "is its hardware check")

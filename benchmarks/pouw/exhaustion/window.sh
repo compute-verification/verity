@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # One salt-to-deadline window (window.py) per schedule inside one GPU lease, the cards' cuBLASLt FP8 baseline at the window's
-# shape before and after it in the same lease (harness bench.py), and after the lease the CPU audit (audit.py) and the
-# harness's verify step on the arm's own transcript.
+# shape before and after it in the same lease (harness bench.py), and after the lease audit.sh: the CPU audit (audit.py) and the
+# harness's verify step on the arm's own transcript (AUDIT=0 skips it, to run audit.sh elsewhere on OUT).
 #   bash benchmarks/pouw/exhaustion/window.sh MODE SHIP_TAR HARNESS_BUILD [DURATION_S]
 #     MODE rehearsal: gpu-lease 1 --wait --preemptible --max-min MAX_MIN (untimed)
 #     MODE timed:     gpu-lease 8 --wait --timed --max-min MAX_MIN
@@ -12,7 +12,9 @@
 #   and the ship are unpacked, default /tmp), MPSTAT_CPUS (when set, `mpstat -P MPSTAT_CPUS 5` beside each timed segment).
 # Writes under OUT (default $RESEARCH_RUN_DIR/out): ship.sha256; bench-before/card<g>/ (bench.py with the Pearl-C arm: the
 # baselines' and the arm's times, its gates and transcript); <schedule>/ (window.py's OUT and audit.json); bench-after/card<g>/
-# (the baselines alone); verify-before/card<g>.json; mpstat-<segment>.txt.  Exit: the first window's audit's, else the first failure.
+# (the baselines alone); verify-before/card<g>.json; mpstat-<segment>.txt.  Exit: the first window's audit's, else the first failure
+# (with AUDIT=0, the lease's).  With AUDIT=0 the bench transcripts' rows stay in the scratch dir, which OUT/kept-rows names, until
+# audit.sh on this machine verifies and releases them; each start sweeps scratch dirs older than ROWS_KEEP_HOURS (rows.sh).
 set -uo pipefail
 exec < /dev/null
 mode=${1:?rehearsal|timed}; ship_tar=${2:?SHIP_TAR}; build=${3:?HARNESS_BUILD}
@@ -25,8 +27,10 @@ case $mode in
   timed) LEASE=(gpu-lease 8 --wait --timed --max-min "$MAX_MIN" --mem-gb "${MEM_GB:-160}") ;;
   *) echo "MODE $mode: rehearsal or timed" >&2; exit 2 ;;
 esac
+. "$HERE/rows.sh"
+rows_sweep "${SCRATCH_ROOT:-/tmp}"
 SCR=$(mktemp -d -p "${SCRATCH_ROOT:-/tmp}" exhaustion.XXXXXX)
-trap 'rm -rf "$SCR"' EXIT
+trap 'rows_exit "$SCR" "$OUT"' EXIT
 mkdir -p "$OUT"
 tar -xf "$ship_tar" -C "$SCR" || exit 1
 export PEARLC_SHIP=$SCR/ship PEARLC_ROWS=$SCR/rows POUW_SASS_GATE_CACHE=${POUW_SASS_GATE_CACHE:-$SCR/sass-gate-cache}
@@ -68,18 +72,6 @@ done
 mpwatch bench-after; bench after; mpunwatch
 EOF
 "${LEASE[@]}" -- timeout $((MAX_MIN * 60 - 60)) bash "$SCR/lease.sh" < /dev/null
-echo "lease rc=$? at $(date -u +%FT%T.%3NZ)"
-
-rc=
-for s in $SCHEDULES; do
-  "$PY" "$HERE/audit.py" "$OUT/$s" --bench-before "$OUT/bench-before" --bench-after "$OUT/bench-after" --jobs "$JOBS" < /dev/null
-  a=$?; echo "audit $s rc=$a"; rc=${rc:-$a}
-done
-mkdir -p "$OUT/verify-before"
-for b in "$OUT"/bench-before/card*/bench.json; do
-  [ -f "$b" ] || continue
-  g=$(basename "$(dirname "$b")")
-  "$PY" "$ROOT/benchmarks/pouw/harness/verify.py" "$b" --out "$OUT/verify-before/$g.json" --no-ledger > "$OUT/verify-before/$g.log" 2>&1 < /dev/null
-  echo "verify $g rc=$?"
-done
-exit "${rc:-1}"
+l=$?; echo "lease rc=$l at $(date -u +%FT%T.%3NZ)"
+[ "${AUDIT:-1}" = 0 ] && exit "$l"
+PY=$PY JOBS=$JOBS bash "$HERE/audit.sh" "$OUT"

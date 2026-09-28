@@ -45,16 +45,16 @@ def active_gemm_target():
 
 
 def _target_kinds():
-    """(uses accepted kinds?, DOT) of the active target — the ONE selection the GEMM and attention emits consult (`registry.targets`)."""
-    from verity_vllm.program.registry import targets as T
+    """(uses accepted kinds?, DOT) of the active target — the ONE selection the GEMM and attention emits consult (`frontend.targets`)."""
+    from verity_vllm.program.frontend import targets as T
     tp = active_target_profile()
     return T.uses_accepted_kinds(tp), T.tensor_core_dot(tp)
 
 
 def gemm_bias_role() -> tuple[str, dict] | None:
     """(vocabulary role, its extra statics) of a biased linear's one-Call Definition on the active target
-    (`registry.targets.gemm_bias_spec`), or None: the target keeps the launch and its bias add as two Calls."""
-    from verity_vllm.program.registry import targets as T
+    (`frontend.targets.gemm_bias_spec`), or None: the target keeps the launch and its bias add as two Calls."""
+    from verity_vllm.program.frontend import targets as T
     tp = active_target_profile()
     if T.uses_accepted_kinds(tp):
         return "gemm_bias", {}
@@ -64,8 +64,8 @@ def gemm_bias_role() -> tuple[str, dict] | None:
 
 def moe_expert_role(routed: bool) -> tuple[str, dict]:
     """(vocabulary role, its extra statics) of a `fused_moe_kernel` launch's per-pair Definition on the active target: the `_v1` kinds,
-    or the `_dot` ones with the target's k16 step (`registry.targets.moe_expert_dot`)."""
-    from verity_vllm.program.registry import targets as T
+    or the `_dot` ones with the target's k16 step (`frontend.targets.moe_expert_dot`)."""
+    from verity_vllm.program.frontend import targets as T
     dot = T.moe_expert_dot(active_target_profile())
     role = "moe_expert_gemm_w" if routed else "moe_expert_gemm"
     return (role, {}) if dot is None else (role + "_dot", {"DOT": dot})
@@ -74,7 +74,7 @@ def moe_expert_role(routed: bool) -> tuple[str, dict]:
 def moe_expert_refusal(padded: bool = False) -> str | None:
     """None when the active target binds the fused-MoE block's expert GEMMs under the construction, else the refusal: a target without
     a registered step, or the padded construction on a target whose expert GEMMs take the `_v2{DOT}` Definitions."""
-    from verity_vllm.program.registry import targets as T
+    from verity_vllm.program.frontend import targets as T
     try:
         dot = T.moe_expert_dot(active_target_profile())
     except T.UnregisteredTarget as e:
@@ -88,7 +88,7 @@ def moe_expert_refusal(padded: bool = False) -> str | None:
 def gemm_pins_for(M: int, N: int, K: int) -> tuple[dict, str]:
     """The pins a bf16 `[M,K] x [K,N]` launch must match on the active target: vLLM's `_get_matmul_config` picks a tabled (N, K) row's
     M-bucket tiling when the target's arch family has a tuned table, else the default — `GemmTarget.launch_config` of the registered
-    target (`verity_vllm.program.registry.gemm_targets`), the SAME record the eager resolver (`patterns.GemmLaunch`) pins. Same `Gemm_v1{K,N}`
+    target (`verity_vllm.program.frontend.gemm_targets`), the SAME record the eager resolver (`patterns.GemmLaunch`) pins. Same `Gemm_v1{K,N}`
     body either way (per-coordinate f32 accumulator over ascending k16 steps): that the target's geometry keeps it is the record's
     correspondence evidence, not this docstring. Returns (pins, source); raises `UnregisteredGemmTarget` for an unregistered target.
 

@@ -1,5 +1,5 @@
-"""The Definitions with a program value as an input rather than a constant: the norms' epsilon (the served and reference norms;
-the quarantine's `LayerNormAten_v2` stays in `quarantine.ln.layer_norm_aten`, out of the registry's load), the attention softmax scale, the attention softcap's two words, and the scalars of the elementwise kinds (a logits
+"""The Definitions with a program value as an input rather than a constant: the norms' epsilon (the served and reference norms, and
+`layer_norm`'s `LayerNormAten_v2`), the attention softmax scale, the attention softcap's two words, and the scalars of the elementwise kinds (a logits
 softcap's `1 / C` and `C`, `variance + eps`).
 
 Each takes the f32 word the kernel reads (an `eps` argument; FA2's `scale_softmax_log2`) as its last parameter(s), which a

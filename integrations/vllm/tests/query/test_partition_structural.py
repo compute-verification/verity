@@ -405,7 +405,7 @@ def test_readiness_lists_64bit_input_and_primitive():
 
 
 def test_readiness_gumbel_const64():
-    G = pytest.importorskip("verity_vllm.program.registry.quarantine.ov_sampling.gumbel")
+    G = pytest.importorskip("verity_vllm.program.registry.sampling")
     from verity.primitives.circuits.defs import bind
     from verity.primitives.circuits.program import Program
     P_ = Program(bind(G.GumbelArgmaxBf16, V=8, SEED=12345, POS=3))

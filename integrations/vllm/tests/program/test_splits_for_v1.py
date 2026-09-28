@@ -17,7 +17,7 @@ import os
 
 import pytest
 
-from verity_vllm.program.registry.topp_split import SPLIT_MAX_BATCH, SPLITS_FOR_V1_WIDTH, splits_for, splits_for_v1
+from verity_vllm.program.registry.topp_geometry import SPLIT_MAX_BATCH, SPLITS_FOR_V1_WIDTH, splits_for, splits_for_v1
 
 DATA = os.path.join(os.path.dirname(__file__), "data", "topp_split_fixture")
 

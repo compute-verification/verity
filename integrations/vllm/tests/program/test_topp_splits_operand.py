@@ -26,6 +26,7 @@ from verity.primitives.circuits.defs import bind
 from verity_vllm.program.registry import sampling as SM
 from verity_vllm.program.registry import sampling_topp_difftest as D
 from verity_vllm.program.registry import topp_split as TS
+from verity_vllm.program.registry import topp_geometry
 
 f32 = np.float32
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -183,6 +184,6 @@ def test_codec_materialises_the_operand_form_by_name():
 @pytest.mark.parametrize("nsm", [132, 142])
 def test_splits_for_v1_is_the_relation_the_match_checks_the_operand_against(nsm):
     for n in range(1, 65):
-        S = TS.splits_for_v1(n, nsm)
-        assert S == TS.splits_for(n, nsm) and S in SM.SPLIT_COUNTS
-    assert TS.splits_for_v1(1, nsm) == 32 and TS.splits_for_v1(8, 142) == 16 and TS.splits_for_v1(4, 142) == 32
+        S = topp_geometry.splits_for_v1(n, nsm)
+        assert S == topp_geometry.splits_for(n, nsm) and S in SM.SPLIT_COUNTS
+    assert topp_geometry.splits_for_v1(1, nsm) == 32 and topp_geometry.splits_for_v1(8, 142) == 16 and topp_geometry.splits_for_v1(4, 142) == 32

@@ -12,8 +12,6 @@ The callees are `verity_catalog.definitions.boolean.gemm`'s `HopperE4m3QgmmaDot3
 """
 from __future__ import annotations
 
-import numpy as np
-
 from verity.primitives.circuits import boolean as BL
 from verity.primitives.circuits.defs import bind
 from verity.primitives.circuits.refs import Coll, concat, tuple_of
@@ -89,7 +87,7 @@ MoeExpertFp8BlockGemmWV2 = EW.on_bits(
     _gemm_w, M.MoeExpertFp8BlockGemmW)
 
 
-F1 = bits_of(np.float32(1.0))
+F1 = bits_of(1.0)
 
 
 def _result(B, S, gate, up):

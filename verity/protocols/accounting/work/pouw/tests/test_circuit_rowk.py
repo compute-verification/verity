@@ -17,7 +17,7 @@ import pytest
 import circuit_fixtures as CF
 import pearl_c4_vectors as V4
 import pearl_c_vectors as V8
-from verity.primitives.commitments.rowleaf import bit_row, row_bytes
+from verity.primitives.commitments.rowleaf import ROLE_W, ROLE_X, bit_row, row_bytes
 from verity.primitives.circuits.evaluation import evaluate
 from verity.primitives.circuits import partition_object as PO
 from verity.primitives.circuits.cut import CallGraph
@@ -363,7 +363,7 @@ def test_each_row_is_its_elements_bits():
     for row, (words, (memory, n_bits)) in rows.items():
         assert (row_bytes(words, 16), 16 * len(words)) == (memory, n_bits), row
         assert len(words) == L.ROW_WORDS[row](128), row
-        assert L.ROW_SCHEMA[row] == L.ROW_SCHEMA["ok"]
+        assert all(L.ROW_SCHEMA[row, role] == L.ROW_SCHEMA["ok", role] for role in (ROLE_X, ROLE_W)), row
     for fn in (rowk.pieces8(256, 128, "sm120", "a")[3], rowk.pieces8(256, 128, "h100", "b")[3],
                rowk.pieces4(128, 64, "a")[0], rowk.pieces4(128, 64, "b")[0]):
         b = fn.body

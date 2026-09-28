@@ -303,7 +303,7 @@ def test_moe_expert_gemm():
 
 
 def test_gumbel_64bit_gates_reported():
-    from verity_vllm.program.registry.quarantine.ov_sampling import gumbel as G
+    from verity_vllm.program.registry import sampling as G
     P_ = Program(bind(G.GumbelArgmaxBf16, V=8, SEED=12345, POS=3))
     oracle = Oracle(P_)
     sc = P_.circuit.root_scope
@@ -829,7 +829,7 @@ def test_partial_reads_shared_argument_and_scan_xs():
     for spec in (bind(b1.SiluMul, I=8), bind(b1.AttentionHeadV3, T=40, D=16, BN=16), bind(b1.AttentionV3, T=8, NH=2, KVH=1, D=16, BN=16)):
         check_used_against_liveness(spec)
     from verity_vllm.program.registry.quarantine.ov_moe import moe as Q
-    from verity_vllm.program.registry.quarantine.ov_sampling import gumbel as G
+    from verity_vllm.program.registry import sampling as G
     for spec in (bind(Q.MoeRouterTopK, E=8, TOPK=2, VPT=8), bind(Q.MoeExpertGemm, E=4, K=16, N=3), bind(G.GumbelArgmaxBf16, V=8, SEED=12345, POS=3)):
         check_used_against_liveness(spec)
 

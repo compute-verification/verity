@@ -111,7 +111,7 @@ def gemm_v2_program(K: int = 32, N: int = 6) -> Program:
 
 
 def layer_norm_aten_program(N: int = 32, EPS: float = 1e-5) -> Program:
-    from verity_vllm.program.registry.quarantine.ln import layer_norm_aten as LN
+    from verity_vllm.program.registry import layer_norm as LN
     return Program(bind(LN.LayerNormAten, N=N, EPS=EPS))
 
 
@@ -132,7 +132,7 @@ def moe_sum_program(TOPK: int = 2, H: int = 4) -> Program:
 
 def gumbel_program(V: int = 8, SEED: int = 12345, POS: int = 3) -> Program:
     """`GumbelArgmaxBf16_v1{V,SEED,POS}`: the only supported family with gates wider than 32 bits (two `Const64`)."""
-    from verity_vllm.program.registry.quarantine.ov_sampling import gumbel as G
+    from verity_vllm.program.registry import sampling as G
     return Program(bind(G.GumbelArgmaxBf16, V=V, SEED=SEED, POS=POS))
 
 

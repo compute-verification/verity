@@ -1,0 +1,1853 @@
+{
+ "digests": {
+  "BitAnd_v1": "9cd0c67777651cb82617b54364c650fe1a91e7e15c8e531850aefa31b326877d",
+  "BitNot_v1": "e9c593889be631747e1d37fe61f98704c3b5f71b632cf0ec86cbc07b97669569",
+  "BitOr_v1": "584e47c44ea259467d6e9a343770fa520289e2b4d08a841b1a261c605f76e434",
+  "Const32[0x1e3ce508]_v1": "c97d41f2f06c8d6646bff678a5c5d992a7058688601c4653037519b7dcfa0eba",
+  "Const32[0x2edbe6ff]_v1": "b9d8cbef26521f237bc18fcecb17ad04acad167e413a1e56a4c125af2f329a71",
+  "Const32[0x32a57060]_v1": "7bc8d1d41237e4a6899a0583f273017e3239b498f6a6a263536f0760e325d694",
+  "Const32[0x36924925]_v1": "907d41a3cd508d7f4cdad316d3267e42d24a7174e403cc90e1ebfe0bd14ebf5f",
+  "Const32[0x3bbb989d]_v1": "5fb2eace3e6a374c72faf3e7e9c8c15dc97128196436da9175eb6a145c2d8025",
+  "Const32[0x3c80f082]_v1": "73f59d4ca2c1617d0a7087c95a56af179c66bfbbdd98a5773d9cdb26c5255ce1",
+  "Const32[0x3e085941]_v1": "fdee4217f7c72c8b3af64de3828e9e0c4c533cb09faa2409714ecc2e32740c9b",
+  "Const32[0x3f000000]_v1": "d8a95daf35bba4ec20a10d2e36cb43d1dd18a1122a7a6b1e015aa0667551a2d1",
+  "Const32[0x3f199999]_v1": "8debaa2e1caf1b36bba9519b578fce72b8bc6faa22206cb578d35f4c01e5a90e",
+  "Const32[0x3f800000]_v1": "bd83f8c49082e1b4b5659efe5f4f7341ffd8f3f86313f47958b1bfa0b950e0ea",
+  "Const32[0x3fb8aa3b]_v1": "85cbae2abee57f34e47c91b023c5e5a07553cc87d1f948a1f1598251cdfc40e7",
+  "Const32[0x4038aa3b]_v1": "263a5b5fa15ec2a0c128c9e77555413724a12f956d1e867c8ac3393446a587cc",
+  "Const32[0x40c00000]_v1": "adb9327190fa204f6381ae061936044ddfaa362e0c7797a720900bb58b371e56",
+  "Const32[0x41102cb3]_v1": "1dde7951285fa5062610cf5e6585e4c022a91073a7a3ad4ef84164369c953c8c",
+  "Const32[0x437c0000]_v1": "7a5fa481c4ac543c92f3513a2a3f0e3487b5a44fe35288626c0400e06df4df91",
+  "Const32[0x43e00000]_v1": "e3dc2db2aeeb4ba8aa4b12f78d49f9ad6dcb02041bd8cb2250b4d7f41299ee8c",
+  "Const32[0x4b400001]_v1": "54eee13ca9f1cb3cd9f707ab63b267c51b463b17fc1bf79ee3c2650ddc77cddc",
+  "Const32[0x7fffffff]_v1": "cbd036b95d4671dae85a1f4648e27fca9e27f591243d6e20ff1c31c17a1c6b72",
+  "Const32[0xbd563cae]_v1": "cd0c757cf670a9d8c00065ca84c82e1ea295a041bec01d5418af3f157b353d36",
+  "Const32[0xbeaaa9ed]_v1": "057fcd8ff2f60026778dd60cf539c10c0e392b2fbad37798d4ac53a2b8e5c0c7",
+  "Const32[0xc0000000]_v1": "a1597a6b426b5e81b0a38da0e7abd6e403cd994b7be8e26db20fd756e0e5cad4",
+  "Const32[0xc3e00000]_v1": "ee8d563b4486d5c437c8c66c664adf8d716341105bf1ed83b7cdc6e897ffa970",
+  "Const32[0xc61c4000]_v1": "59276f5f5da967700da7c1ef52ea2c4a0137a6f0acc70adadf58f1062a86b7cc",
+  "Const32[0xcb40007f]_v1": "86f37a5f784a3eeff9a90434a981fa168fdec94bc36fd9151a93b6f4d200528d",
+  "DotE4m3_v1{K=256}": "e27ccbb798c7e7aa3a7e1da8c291e8c8d39cf68f98b69acb4d9e109d3d5790a6",
+  "DotE4m3_v2{K=64,DOT={\"fn\":\"BlackwellE4m3QmmaDot32_v1\"}}": "a610353984f5a06562ee7328d7787c56852fb7a81dabd3da8ecf56c87c6a2167",
+  "DotE4m3_v3{K=256}": "534d9f7d6caa854de4a28155704913e1853fa2502812c2a6571cbad917948133",
+  "DotE4m3_v3{K=32}": "3b35c58e32e26194b310f28ae77f1b45008cb9bc8fe9c2a4925e90eedf14624b",
+  "DotE4m3_v4{K=64,DOT={\"fn\":\"BlackwellE4m3QmmaDot32_v2\"}}": "7b74939a62d1cb2c8514b20500c411392a1611b50b490ea2f074b4aa2b94712f",
+  "DotNvfp4_v1{K=64,DOT={\"fn\":\"BlackwellNvf4OmmaDot64_v1\"}}": "43cd7ef199218108028d8faac461d5513ac75b246283891136222c85da201b39",
+  "E4m3ToF32_v1": "78403ad795681814e8d16e25c6329944196a931c7c94fca6d5470921107983bf",
+  "Embedding_v2{V=64,H=16}": "a672d48f73d03c9cdcacd306461c740a8b567025fc25a000da82715a9c4efa43",
+  "F32BitsShl23_v1": "5307d0c7c467e4585de49337cb301bad718b3847a675b0b98aa0c6f3a6a1478b",
+  "F32Eq_v1": "c898c3241f4b615c3815f8612a841025848a3c6a7f6d72a57ff7cc844b9882cc",
+  "F32Fabs_v1": "23a09a47856aa7ed4a988a5f53b87df73b18955643bac438f6a0ba20808c33ce",
+  "F32FmaRm_v1": "6b9daab564ba393a84ba470ce50aca22ee5429b10050e464dc582e62b04a5522",
+  "F32FmaRm_v2": "c0e1d81ab6e763128d6c2054cb75d1a533d5148816d0a9946b59a51397c5ac19",
+  "F32Fmaxf_v1": "16b738d632ef894dd1557d21805241787fe95811a0f19c865ae180c4dba15076",
+  "F32Fminf_v1": "c0cf3b0b2e3ef0c9c5cca2a52e84585c218629b5e807255dd1dbc9b076ab899f",
+  "F32GtStrict_v1": "9a77b79d8c2057f5593c11faff66f29f0dc0c5213d15c9950d867f923ba1b974",
+  "F32IsFinite_v1": "121365a167fa2a3049a0e69a25874792c144b71ad957213d4035f6d12126cfb8",
+  "F32Neg_v1": "c42dceaadded0cfb4746743de699d94fc05151630c8ee4c9835f8c38cca92412",
+  "F32Sat_v1": "a8e27494b1d42ede8f76fbac7c2123964bc400cb0f3b1251434d0ed332032ede",
+  "F32Sub_v1": "2030f41fef6f847e4b3c71714c1c63c0362acf677ab54f5f86e37c092e62a72c",
+  "F32ToE2m1Sat_v1": "ea08ef4f1382f8bb0604d67b0ec48ab5fb3d4ba16d09735783c8fc6a915dac7d",
+  "F32ToE4m3Sat_v1": "782c5b4ebfb449e6614c206f32acffb02616c1cf2e9406e0535f525af9e87c0f",
+  "Fp8ActQuant_v1{K=256}": "139c390468da679d7ed2bd83c7bfea8116779fc34193a1f8d304a3bf83a9cd97",
+  "Fp8ActQuant_v2{K=256}": "f2a7d82666f6aefc7daec55159d6c646514a4c67f623e8595989baccd251de02",
+  "Fp8GroupQuant_v1{K=128,G=64}": "ca29c3d790b371a4a00a5be0f04eff2cd8ee44ca5e3e1e5dfdb0976eda2171d5",
+  "Fp8GroupQuant_v1{K=256,G=128}": "19be1cd1d87734abf7dee52c0db4782515938a3ff41a44a1e1068a43de7f6acd",
+  "Fp8GroupQuant_v2{K=64,G=32}": "5e60cfab4ee02bd060ade9a7866475f0ff3d7fba31b8a4dc840362a45f6ad9da",
+  "Fp8GroupScale_v1{G=128}": "08201b042e5b9ec0663dc57f5b438213f906caa8a9ba817f861e29325d0ddd31",
+  "Fp8GroupScale_v1{G=64}": "764595eaf1ff3be4c2fa97444053991efe338a0d514101d2c4e38b4ec59e9ede",
+  "Fp8GroupScale_v2{G=32}": "b47f3c952768f07abf7f3fd0b72379320bac6aadfb29c4cedb07e4b455bf3025",
+  "Fp8RowAbsMax_v1{K=256}": "84db2bf4b12f9b475c6328077dc9b4474565909aa9e0ea74f47c4a12862495a9",
+  "Fp8RowAbsMax_v2{K=256}": "df1e920d3fa38f83428f104e0ee34c5992ba11ee0f35bbaeee7d843ab8c4a0eb",
+  "Fp8RowScale_v1": "6110b1344149bbe194edb74b582089f2f465d8c4444688bf32481325d2d8aaef",
+  "Fp8RowScale_v2": "9444ff05acd591680bcc60745d20923e2ac5d36a094b279bd3a557cddf330eb5",
+  "GatherBf16x1100_v2": "805ff8aa05e3f636a9ec9e434b094cfb903dfe14e06b6a12be5300f89893d6a2",
+  "HopperE4m3QgmmaDot32_v1": "86dc4f8448a93206938ab59b67dcd1af0cddccbd5a82e3da09828c00e5e32101",
+  "LMoeBlockL_v1{E=4,TOPK=2,VPT=2,H=16,I=16}": "4220e1b801a4eec67b1c982e90c34fd1a8301ddeab1b5497aba84e62944fd08a",
+  "LMoeBlock_v1{E=4,TOPK=2,VPT=2,H=16,I=16}": "b53caa759cab7bd87742dccf8207118a26ac0b19a06cbf0af815b16dcf4603ae",
+  "LMoeFfnL_v1{E=4,TOPK=2,VPT=2,H=16,I=16}": "3ca0a4779c77c8f7e7edfbcf33c79f754d599da04ed2b86db84d9152ffb0210c",
+  "LMoeFfn_v1{E=4,TOPK=2,VPT=2,H=16,I=16}": "3cb7ecb6ac0b8dac0b5eff1536262e757875fb77fedfec047217f7d775aebb47",
+  "LayerPostFp8_v1{C={\"dict\":{\"BIAS\":true,\"D\":128,\"EPS\":{\"f64\":\"0x1.4f8b588e368f1p-17\"},\"GU\":512,\"H\":256,\"I\":256,\"KVH\":1,\"MAX_POS\":8,\"NH\":2,\"NL\":1,\"QKV\":512,\"ROPE_THETA\":{\"f64\":\"0x1.3880000000000p+13\"},\"V\":16,\"model\":\"tiny\",\"profile\":{\"dict\":{}},\"revision\":null,\"tie_word_embeddings\":true}}}": "7acd85639e78a9c1699c7cf6e07a907316a99135e1408eb26c9c024e4308ef19",
+  "LayerPreFp8_v1{C={\"dict\":{\"BIAS\":true,\"D\":128,\"EPS\":{\"f64\":\"0x1.4f8b588e368f1p-17\"},\"GU\":512,\"H\":256,\"I\":256,\"KVH\":1,\"MAX_POS\":8,\"NH\":2,\"NL\":1,\"QKV\":512,\"ROPE_THETA\":{\"f64\":\"0x1.3880000000000p+13\"},\"V\":16,\"model\":\"tiny\",\"profile\":{\"dict\":{}},\"revision\":null,\"tie_word_embeddings\":true}},L0=true}": "a1bb17064feae2c19d7683bf3c31854880cbab3a43280686a2e7cb146e99b085",
+  "MoeExpertBody_v1{H=16,I=16}": "b45633c272dae60603cacd5db0a98a958546e032756cea80f88ad6406ed906dd",
+  "MoeExpertCoordinateW_v1{E=2,K=32}": "3a6304c60ccbcc9b7a4775b04d28b8146bb197cbf8540e492a50ee38dbd615fc",
+  "MoeExpertCoordinateW_v1{E=4,K=32}": "d6ac382e200ac248719f2614851e91f647f5249088859b5b90f3a5e020d9fa8f",
+  "MoeExpertCoordinateW_v1{E=4,K=64}": "f6a8dc205b75720407ba5f723232bcce800127c1b1f7b5dd668b67994e9a8b44",
+  "MoeExpertCoordinateW_v2{E=2,K=32,DOT={\"fn\":\"AmpereBF16TcDot16_v2\"}}": "d7f85b75fd0879096b26c0384b006bb3c8e2301bb758ddd169bf4246eb17354c",
+  "MoeExpertCoordinateW_v2{E=2,K=32,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}": "d0d9a3862ba3314b1bbc44275ae82721af789cb0460295256540bc4c95cf8c60",
+  "MoeExpertCoordinateW_v2{E=4,K=32,DOT={\"fn\":\"AmpereBF16TcDot16_v2\"}}": "f0945bd40cf28d44438214a933118f6edb470638c8d788d8e7402da69c1572df",
+  "MoeExpertCoordinate_v1{E=2,K=32}": "ea85cf7fdb996fb7afa2421e2cd0a69e9a5b2daa4d689c2998e67c8264b263b8",
+  "MoeExpertCoordinate_v1{E=4,K=32}": "296b86361f63e955c33d32061121a7b25f68c0dc3bcb6cd655ff0fb23b6490b1",
+  "MoeExpertCoordinate_v1{E=4,K=64}": "1b612221a25c6d75e487092fa14472d9567bdf759f34d2b0d04bc37cfb2ab50c",
+  "MoeExpertCoordinate_v2{E=2,K=32,DOT={\"fn\":\"AmpereBF16TcDot16_v2\"}}": "ffb4aef00d697fbce874354224a03d9093fe29d17690d890383850a28a1400d4",
+  "MoeExpertCoordinate_v2{E=2,K=32,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}": "578a95269c0ce37a6f6b8f6ae4c7f36e198e1e8dd0539ade8c3026212684ab1e",
+  "MoeExpertCoordinate_v2{E=4,K=32,DOT={\"fn\":\"AmpereBF16TcDot16_v2\"}}": "16ee15f5dee5879ba16ba5d5f89e924274d1f1d3b72cdc729d1556980c0a23e4",
+  "MoeExpertFp8BlockCoordinateW_v1{K=256,G=128,KB=32,SWAP=false}": "264addcdec6a1cbdd88be13f41ae33e96976705ddae2c196f2d0f27e0239a048",
+  "MoeExpertFp8BlockCoordinateW_v1{K=64,G=32,KB=32,SWAP=true}": "486adf9a75b3f035767bfc3fa705e7905d920642547d989961d2c1ec00dbda99",
+  "MoeExpertFp8BlockCoordinateW_v2{K=32,G=32,KB=32,SWAP=true}": "b81f0b8a2d302ce42186e4d0d5b549b35af33ecfbaa61214e344c167996d185c",
+  "MoeExpertFp8BlockCoordinateW_v2{K=64,G=32,KB=32,SWAP=true}": "a27d4379ba82df589c6cfb2a811aff6eb98e91bf9f08889f839d8d754b745279",
+  "MoeExpertFp8BlockCoordinate_v1{K=128,G=64,KB=32,SWAP=false}": "2a4e15c3f844e9f939d20ac9cf079ce78a353404e82a97c0a0288959b4c47e0e",
+  "MoeExpertFp8BlockCoordinate_v1{K=6144,G=128,KB=32,SWAP=false}": "9183f6b4e89152a0057d4742cf0e9b5004374f6ad182d5942fd9377929ffbf50",
+  "MoeExpertFp8BlockCoordinate_v2{K=32,G=32,KB=32,SWAP=false}": "102337ea6e9379c24cbb460be525084447ab232f02583031459bb9cb9f1fe281",
+  "MoeExpertFp8BlockCoordinate_v2{K=64,G=32,KB=32,SWAP=false}": "90e8f4d8f9786280d94748ddd3ad1534a0a7d0c55bb9e0921fa2d38f38c2101d",
+  "MoeExpertFp8BlockCoordinate_v2{K=64,G=64,KB=32,SWAP=true}": "fd91ad57c8e6ed4bc47e916fd3e76f4951e3ffd34932975515966cb651679056",
+  "MoeExpertFp8BlockCoordinate_v2{K=64,G=64,KB=64,SWAP=false}": "249b54e3def4ca3c8a0fe19f5164fbd4040691e97599b69e345dfa7151bf59de",
+  "MoeExpertFp8BlockGemmW_v1{K=64,N=48,G=32,KB=32,SWAP=true}": "b8a328a6c54c669374a7f7661905bf003961d4bb5dacd099691dd6c5cd60f797",
+  "MoeExpertFp8BlockGemmW_v2{K=32,N=40,G=32,KB=32,SWAP=true}": "d76d0b04df0295d3a399b06e742d65c76296900484c543d2717945851342dead",
+  "MoeExpertFp8BlockGemm_v1{K=128,N=80,G=64,KB=32,SWAP=false}": "dab044e9e07635b87fc204a628ee53224ec7e223b0cbfd8b66f632b0b950336c",
+  "MoeExpertFp8BlockGemm_v2{K=32,N=40,G=32,KB=32,SWAP=false}": "4f29c5f8034d8683fe8cb8e341c4bf05e466d2bbe7813b1f9d7e06d137b934fd",
+  "MoeExpertGemmW_v1{E=2,K=32,N=3}": "df84e31412efbf8af684e3712441f5f58291a9e09d187b4a8e90da07b033e193",
+  "MoeExpertGemmW_v1{E=4,K=32,N=16}": "ade7f9bf8a8b1f375220af752a4be2154a66d93a5f52c8abe4624c9af006bb7b",
+  "MoeExpertGemmW_v1{E=4,K=64,N=1}": "413cf87f4cd8d2cdf58f2c8b548e0ec5ce7c1fe2f1c28ddd6004d81a44d53fe4",
+  "MoeExpertGemmW_v2{E=2,K=32,N=3,DOT={\"fn\":\"AmpereBF16TcDot16_v2\"}}": "30bb2e3ff895baa93621a43a645b2f4b9f4bcc1c985616e816776c6ed0f8fab6",
+  "MoeExpertGemmW_v2{E=2,K=32,N=3,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}": "09085ed16950c2330ea17623db53a7d4cf330bb7ff0bf4f931b3b550fbc69bca",
+  "MoeExpertGemmW_v2{E=4,K=32,N=16,DOT={\"fn\":\"AmpereBF16TcDot16_v2\"}}": "e40febf45c42ed88f4ed33e101a0769e3ad3e336eb10931be5c8f23bd3251cad",
+  "MoeExpertGemm_v1{E=2,K=32,N=3}": "225eb1f8790db69b1159be76989994514662df584bb8eb298ac40288c17bc577",
+  "MoeExpertGemm_v1{E=4,K=32,N=16}": "8a90cb519b159e5cd75bdc9a8fd62a3c4796def478f974ada084b2e388446808",
+  "MoeExpertGemm_v1{E=4,K=64,N=1}": "c2716a8bedff404327c46b4d6963342d72f92164cf0ce4eb7af592ab09dd1fcd",
+  "MoeExpertGemm_v2{E=2,K=32,N=3,DOT={\"fn\":\"AmpereBF16TcDot16_v2\"}}": "26b57db3192f37fb5026613bb466ca655c3fd73a2b290897c34380d46d64a023",
+  "MoeExpertGemm_v2{E=2,K=32,N=3,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}": "2a1ab8e10b431ae0f903434754e842b62477c3549f0fea4d90621254b8e27965",
+  "MoeExpertGemm_v2{E=4,K=32,N=16,DOT={\"fn\":\"AmpereBF16TcDot16_v2\"}}": "9b2b7208700550080f3a7beebcfa22eaf871c4be3b623352c03e2f1d4b8a6641",
+  "MoeExpertRow_v1{E=2,K=32}": "1cf11fb2d50df6fd0590f8ab8c0f563b5280bff7eb7bf743b555b5e6786202cf",
+  "MoeExpertRow_v1{E=4,K=32}": "22b17ea906874e3df19075701acdf0db513d05a3d48faf7471c45360503c3a67",
+  "MoeExpertRow_v1{E=4,K=64}": "89151ed6a34e724243b9b65b31aeb4bb95adf6cf38c9b7f5691d23cffa30524b",
+  "MoeFfnFixedL_v1{E=4,TOPK=2,VPT=2,H=16,I=16}": "c52702ab0af774ce9852d2cf574f17a647f2ce5c97757234413bdecac3c1cab6",
+  "MoeFfnFixedL_v1{E=8,TOPK=2,VPT=8,H=16,I=16}": "3b054aa30e9c0192596887ff431b9b5a270cb75209287ed7eb176c9c8545ab22",
+  "MoeFfnFixed_v1{E=8,TOPK=2,VPT=8,H=16,I=16}": "bf2f6e35d742a201f0a555f70eb1d4b8657899dc666e3fac7bd40df4eb3cfdb1",
+  "MoeRouterBiasNext_v1{E=8}": "d82c48f201804074cf5ab66688ef63963ab3443eb7eb4fc81f163a84a0573a66",
+  "MoeRouterBiasScore_v1": "29fd326c2d730c3ca6a1e2e90012b6c450eedbcd60ca41bcd02122d4059d0be0",
+  "MoeRouterBiasTopK_v1{E=8,TOPK=2,SCALE={\"f64\":\"0x1.4000000000000p+1\"},KERNEL=\"block\"}": "383af413669bf42e7a4d25c65fffc99165eb8dbb376a8f9965be2819988589ed",
+  "MoeRouterBiasTopK_v1{E=8,TOPK=2,SCALE={\"f64\":\"0x1.4000000000000p+1\"},KERNEL=\"warp\"}": "7b187b42a4404c75c9841df2b34a21de13dd7983b2d016b63b97be99f0517d02",
+  "MoeRouterFirst_v1{E=4}": "4078165011304705046dbb5d928f67bae0e0b6b5dd22cdf1fb3cd73712e208cf",
+  "MoeRouterFirst_v1{E=8}": "873067dfb198123a4f2c9b3d4a24138ae78986d472202cc92c3b4b12d74343fa",
+  "MoeRouterNext_v1{E=4}": "9f438de15053156b953ca7048fd5f43e4841327133f8c07b77c9aec392e96870",
+  "MoeRouterNext_v1{E=8}": "ffce434e190caa26de08e98c48158f036abfe8b9a7f6e2deeabcbe819022cfe5",
+  "MoeRouterNormalize_v1{E=8,VPT=4}": "d31e9aaff5234c0a525e51c73e58ac2bcef6a7b498934ffdf9ac59c76cba2177",
+  "MoeRouterPickPair_v1{E=8}": "68dc0b05aba3405c01c541399666fd6c2e0d272282814ebabdc4fa85b18f04cd",
+  "MoeRouterPick_v1{E=4}": "1a8d8934f716e8d0e25587a48f47a64e0e0c993f03b75b5998f6f9121e195a2e",
+  "MoeRouterPick_v1{E=8}": "6083194a58afbef1e2bada36592b27cd28a7ad17ab2898bef2daf2c9a1987cbf",
+  "MoeRouterProbs_v1{E=4,VPT=2}": "f0b50826a724e36c93aca990b4c3147456dc5958b9ff13d8b352af7c678632c1",
+  "MoeRouterProbs_v1{E=8,VPT=8}": "93f56ce42c84f90d5c9910765d34718fbe09ec08e0d06b0240b83f9a20e20fd4",
+  "MoeRouterProbs_v2{E=8,VPT=4}": "6d96617fe2e4107bdbc14ba51d46b0d2fcf43ede029da6120a2f830912539e2e",
+  "MoeRouterSelect_v1{E=8,TOPK=2}": "468de3de98512882a935680c17c9e1a757ff219ff4932361a87311fd276a1518",
+  "MoeRouterShift_v1{E=8,VPT=4}": "1f013a08290d8df01bcd403bca7f5bf18a4170281c81320564b0a9b707ecc81c",
+  "MoeRouterSigmoidBias_v1{E=8,TOPK=2,SCALE={\"f64\":\"0x1.4000000000000p+1\"},KERNEL=\"block\"}": "2322b2d97f5f5866d017009b0bf844b4b8d729623f3d6be4e95163f6bebebc6b",
+  "MoeRouterSigmoidBias_v1{E=8,TOPK=2,SCALE={\"f64\":\"0x1.4000000000000p+1\"},KERNEL=\"warp\"}": "041858e9224b2adbbcd3e28070a75de88cb95a6dd7cf203b8495f16be7dd8c47",
+  "MoeRouterSigmoidBias_v2{E=8,TOPK=2,SCALE={\"f64\":\"0x1.4000000000000p+1\"},KERNEL=\"block\"}": "7e4b8880e72fd31d29b41ed06f00df46b7820df6c61d74f3abf899afa12a6c8d",
+  "MoeRouterSigmoidBias_v2{E=8,TOPK=2,SCALE={\"f64\":\"0x1.4000000000000p+1\"},KERNEL=\"warp\"}": "67fac96d309f4bc570585cb7516902f2185c4b80957e4839b2f359b2a43d743b",
+  "MoeRouterSigmoidIn_v1": "008f345e583110071caabf26375cb6d345ee4a397c1634c463275d07ed29c410",
+  "MoeRouterSigmoidMid_v1": "1e3d34411273a9845d616eb218966c63e965c4d793c9eb9e0372d7e4c76784fe",
+  "MoeRouterSigmoidNorm_v1{TOPK=2,SCALE={\"f64\":\"0x1.4000000000000p+1\"},KERNEL=\"block\"}": "2e6dd44399734d5c7dfbbc3df300e45e5d0bbd48e84998f766827c76d7168256",
+  "MoeRouterSigmoidNorm_v1{TOPK=2,SCALE={\"f64\":\"0x1.4000000000000p+1\"},KERNEL=\"warp\"}": "3ed7a9d8ac0ab010178b08e21cc057774ebac370607005ec343a0228ade1a9a7",
+  "MoeRouterSigmoidOut_v1": "02fbacdb7aa8ea7808fce57718f10a7e3a89e674a626bed87becea53a6749f9f",
+  "MoeRouterSigmoidScore_v1": "79f1eba83f9da45c999d430884e80e5624a05ab510293a08c07062c337359427",
+  "MoeRouterSigmoidScore_v2": "9343f3cbf6a9217ee1ad23dfffe1f3e366c1b566a08dcf810fb1bd3d922f4b2a",
+  "MoeRouterTopKNorm_v1{E=4,TOPK=2,VPT=2}": "a76ad66c0b305dd89ecd2fa40e88f4a4ca137779e023ef73555f6f1c78b2f4c8",
+  "MoeRouterTopKNorm_v1{E=64,TOPK=8,VPT=8}": "8ec581a3a6b81f933fd481a3787bfb70b251e24d305c35a7179fd1f11cd1fa37",
+  "MoeRouterTopKNorm_v1{E=8,TOPK=2,VPT=8}": "71978588b290a9b1ebc475476b74ebc7e97c36150872136592b3f1ce72a113ef",
+  "MoeRouterTopKOrderedNorm_v1{E=4,TOPK=2,VPT=2}": "75f01463a70edb7164900fd0b0f46214cfcf566419fbd63d9a43667de116c364",
+  "MoeRouterTopKOrderedNorm_v1{E=8,TOPK=2,VPT=8}": "9f1b847c99c33ca4d8d2e8c0fb6a8337505c74343a821a87ef0c69f68654aa89",
+  "MoeRouterTopKOrdered_v1{E=4,TOPK=2,VPT=2}": "bfa544caefa4e4cedae494bfd39f6cce4118f980bd5d929317ff104d759ffc1e",
+  "MoeRouterTopKOrdered_v1{E=8,TOPK=2,VPT=8}": "763baa7549b98f567311e37c6709bcfaa3ac52f099e13872aca681b726d87c8e",
+  "MoeRouterTopKOrdered_v2{E=8,TOPK=2,VPT=4}": "88bc9364f100e93562282051fc786ef7db6a65e1a055d9e253a045311a4b0043",
+  "MoeRouterTopK_v1{E=4,TOPK=2,VPT=2}": "a54c8592f05cf7af43e10eebf334ddbbbece5d5ee75ac62d5880700c72350c5f",
+  "MoeRouterTopK_v1{E=64,TOPK=8,VPT=8}": "90fbd09121ce1a7f5c7b7cf7200bd2226af7826347b5ec5d44f5241b2a89e4e0",
+  "MoeRouterTopK_v1{E=8,TOPK=2,VPT=8}": "c2c6c0a9385f14f8cc9a690ab994efcd1735fc8cc48a898a79736308f1508fb3",
+  "MoeSlotDownCoordinate_v1{K=16}": "324545a70e76b6cf298e72f410d6b1c37e7c64a4478d29ce9e33a6f2da1bff24",
+  "MoeSlotDown_v1{K=16,N=16}": "e4bec9934e107ab7bb9608ebee091519221457711e9d01e651234908f493b43a",
+  "MoeSumCoordinate_v1{TOPK=2}": "ab3fb41f988a7165e906d804efff478f9069db63812228432e0a79b9b8665f85",
+  "MoeSumCoordinate_v1{TOPK=8}": "159470c9a39b81491b17d99921ed6faadfb5a96eec62b9d8c2b5b434ad706a48",
+  "MoeSumCoordinate_v2{TOPK=8}": "9ae015375eb6cab95f2829bcd736fbbeee6ca3b7b35e7b1a011a25e76ee2fba8",
+  "MoeSum_v1{TOPK=2,H=16}": "c8a88b5380e0a5cf6718f5c25fb42347e5f87dfc2a9e906c80a0ed837816ecf4",
+  "MoeSum_v1{TOPK=2,H=8}": "1c9f68c3a4d6f182adc933a5b1c46470903870142370edf97f0afe9804912d8e",
+  "MoeSum_v1{TOPK=8,H=2048}": "d4c5548d476dbc4cc22461502e525e337500b68febe5fcf21a3441657e0c0d59",
+  "MoeSum_v2{TOPK=8,H=8}": "9168e5631fd73f10eb8e18cb8f869bd30f96e7edb3c09f8d669b0ce703a310e6",
+  "MufuEx2Ftz_v2": "d40b8f042fe3c16264602254539653f3adbd81db7266986d218c1018c016e529",
+  "MufuRcpFtz_v2": "ccc4af2a2fb9d7a12b7c5c1f7d4e8044be8b547767af1bb62ca4ecbe714aaef8",
+  "NvExpfIn_v1": "9adca2800f65a974d60779f4c9d62b502807a2777b41d2dc726a32f087dcf63c",
+  "NvExpfOut_v1": "cddf07c4b0fea653178576abacc1414e4fccf85c9fe46887e34c9ed181a9b3ab",
+  "NvExpf_v1": "2660d0134e7bc7b9098ff2888df54d72a9fb4e1f6621834f7876dd80a5b74e3d",
+  "NvExpf_v2": "1bed8324ccc8bc9970448ef05ab52ff4a8c6bae3cfccb03a399178d5df8ea6d5",
+  "NvSigmoid_v1": "c805535375c43797fdf0259ddc47867772eb9d0faf2740948d2568bd953d7106",
+  "Nvfp4ActQuant_v1{K=64}": "cafc3ce8ba0a5ab17b19093ff06fafc9590b2b76977c7dd2363e90d58a577f80",
+  "Nvfp4QuantBlock_v1": "0c89860fb9ad0a172f83f01ec2eb76c8557287b25086390e3952e771623b280d",
+  "QuantLinearFp8_v1{K=256,N=2,BIAS=true}": "4479464d3e1e0d138fbc7e392842dc85d29e3e495604fa056fbb4ea0001c23ae",
+  "QuantLinearFp8_v2{K=256,N=2,BIAS=true}": "f835cf138cfbd8ba4597cab6c7066c08f609ad0d6d53be3561533d95e16add18",
+  "QuantLinearNvfp4_v1{K=64,N=2,DOT={\"fn\":\"BlackwellNvf4OmmaDot64_v1\"}}": "53446e04352cc3d0bc7bad73f80484dbdcc2ef9e816aa760e852cba27fa88d75",
+  "RMSNormFusedCuda_v2{N=1,EPS={\"f64\":\"0x1.0c6f7a0b5ed8dp-20\"}}": "6f2b16c2302b60268b1c9957a1fabcf3557cad64a11cce1a60f2c2451723dc80",
+  "RMSNormFusedCuda_v2{N=100,EPS={\"f64\":\"0x1.4f8b588e368f1p-17\"}}": "44b3af7ea3f181d4907efcf2c8e756f8642573f03b458b364b2209f4b38bb9f4",
+  "RMSNormFusedCuda_v2{N=1030,EPS={\"f64\":\"0x1.4f8b588e368f1p-17\"}}": "792c338fe78da3d4be9dc05b2ffd9535d2b8d76195e945c0a2cba46bfb68c229",
+  "RMSNormFusedCuda_v2{N=16,EPS={\"f64\":\"0x1.0c6f7a0b5ed8dp-20\"}}": "aebda418d65b662b36872f59af8beec360a193efc76103f3b371f8aef6a9cfa6",
+  "RMSNormFusedCuda_v2{N=16,EPS={\"f64\":\"0x1.4f8b588e368f1p-17\"}}": "65ed465a87432a4a8dab54328b64c4db5faacfac7e9b654750e836d24e148246",
+  "RMSNormFusedCuda_v2{N=2048,EPS={\"f64\":\"0x1.4f8b588e368f1p-17\"}}": "9a3fba3a8bb91bb63d016b9d5dda12ca6ea5c19e248425b359808583a72680c5",
+  "RMSNormFusedCuda_v2{N=256,EPS={\"f64\":\"0x1.4f8b588e368f1p-17\"}}": "5cd3433d3ab476250e1121bc1ae403395d62191b6f95be84b3463f5405b28e01",
+  "RMSNormFusedCuda_v2{N=32,EPS={\"f64\":\"0x1.4f8b588e368f1p-17\"}}": "bddb6c9c1c29d5527f3cb7f8c12be88e27ad3ee04be5dfd1e0d009813979b863",
+  "RMSNormTriton_v1{N=1024,EPS={\"f64\":\"0x1.4f8b588e368f1p-17\"}}": "62758bbb1c591881d422e8f52827b90e6d2cefdbc83ebd26bb7da25e23f3a022",
+  "RMSNormTriton_v1{N=128,EPS={\"f64\":\"0x1.0c6f7a0b5ed8dp-20\"}}": "79c59a5ebc6800ee7b3f3a28db6b223dee75b7507c0c5c191596a6ab433c8fcc",
+  "RMSNormTriton_v1{N=16,EPS={\"f64\":\"0x1.0c6f7a0b5ed8dp-20\"}}": "d2bb97d9e5a09d3a43742783b3427021e879fc457be41dfb570dd69ae5905428",
+  "RMSNormTriton_v1{N=16,EPS={\"f64\":\"0x1.4f8b588e368f1p-17\"}}": "f357eeedb85546dfe0966fcb65be99cbff0e99b97308cf4ddf9c744bcf6086cb",
+  "RMSNormTriton_v1{N=200,EPS={\"f64\":\"0x1.0c6f7a0b5ed8dp-20\"}}": "aec3a20c4b76c3d9d3b7e84fc21363f71307b8adad21eee0d0430918ef28eef3",
+  "RMSNormTriton_v1{N=256,EPS={\"f64\":\"0x1.4f8b588e368f1p-17\"}}": "c8d79c10eb98e47ffc56d145cec22a205761d470cf7d5cc03c2474cc3adb64d7",
+  "RMSNormTriton_v1{N=32,EPS={\"f64\":\"0x1.4f8b588e368f1p-17\"}}": "02cfeb1c9059bfa8d59c969f92dbef90c16fc42adf3a7510046e40387352dc76",
+  "RMSNormTriton_v1{N=64,EPS={\"f64\":\"0x1.4f8b588e368f1p-17\"}}": "6c13ac3a68981484f67d90a827c47b3bf2dc0d56d4df85bc892763789c8b6b04",
+  "RoPE_v1{NHEADS=1,D=128}": "107d596cb871264712c7389c1759262afdd3cec9bcda7e0fa949b462a25bf56a",
+  "RoPE_v1{NHEADS=1,D=16}": "3fd5cadcde5e0147656231e700a73b49881bb10b5f2d15f0e608d36bdf6fee34",
+  "RoPE_v1{NHEADS=1,D=64}": "04d02a35a95e2585f9ee628c2a137355278fcbaa81dc6a25c28e506a4b260488",
+  "RoPE_v1{NHEADS=2,D=128}": "2b866c67e718b37614634e78071c67d8ef8b962ddbbb5f196904cad9840251a4",
+  "RoPE_v1{NHEADS=2,D=14}": "434317992f09b0dfd70180864bf04e14c9f692fda1ced8c70ebe4f9db4b35747",
+  "RoPE_v1{NHEADS=2,D=16}": "0f3d0c5aa0f787810f9263b1761b3c81e32d472b2cc53bf322c3b6c236544832",
+  "RoPE_v1{NHEADS=2,D=8}": "d354222f8a7f4dd41dced40395bf7ac8093ecb09a093b295b96537033de38a80",
+  "RoPE_v1{NHEADS=3,D=20}": "949192c1be3664e3ea8c93a6bdd07b4782e6dbfb8f50ec22d6c6a724b87aa6ea",
+  "RoPE_v1{NHEADS=4,D=18}": "24447cf7171d8a7b1a5c410392e9655379ed7bc0efbc81965d819d297d334c79",
+  "RouterArgmaxOkStep_v1": "2ce2062071a1c805cd7e18fd88e0a58781009c75e534618556bedc3bb22bc78e",
+  "RouterArgmaxStep_v1": "9243d7743f8bab05986128bb0c9c117d546833653e55c328be56db63a0a9e75d",
+  "ScaledMmFp8BlockCoordinateGivenScale_v1{K=128,G=128}": "3311ef8ebe58f1d62fe6f7650e2931245dd0d8d7eefab2c0046efda0abe836d7",
+  "ScaledMmFp8BlockCoordinateGivenScale_v1{K=256,G=128}": "7880f2bcb397f8e8fea5c9360ec99ac82119c353ba863fa3290b744bc8018482",
+  "ScaledMmFp8BlockCoordinateGivenScale_v2{K=64,G=32}": "80baac1a342c701f3b876554356c0221f54cf8d91fd5d029159d6a7b49010e71",
+  "ScaledMmFp8BlockCoordinateGivenScale_v3{K=256,G=128,DOT={\"fn\":\"BlackwellE4m3QmmaDot32_v1\"}}": "5df3b20b5818e08028a1f43bd73aaf787f8afc8800b10d74dab2f1f9a286a6d2",
+  "ScaledMmFp8BlockCoordinateGivenScale_v4{K=64,G=32,DOT={\"fn\":\"BlackwellE4m3QmmaDot32_v2\"}}": "68f63d6745d7540b13bd0185b74857487d4f2250159ba8a3851bfbe0fd872e2a",
+  "ScaledMmFp8BlockCoordinate_v1{K=128,G=128}": "490dc6f153a2afa6975c06966a2880554cfc02a568b4d097e81df20ab2d6a6fd",
+  "ScaledMmFp8BlockCoordinate_v1{K=256,G=128}": "8129bdf9aaf58ce9c2599b1d098f0113e92d2b30dfa669e7e861cc4ff37731e2",
+  "ScaledMmFp8BlockCoordinate_v2{K=32,G=32}": "104337d3da636abf71afa0bad474ccbafce340702ad909e4f2a0fd5de8966589",
+  "ScaledMmFp8BlockCoordinate_v3{K=256,G=128,DOT={\"fn\":\"BlackwellE4m3QmmaDot32_v1\"}}": "672148fa0d4f0a4bc16872e0319016f40cf00f9417880169352e7d07c7a90e31",
+  "ScaledMmFp8BlockCoordinate_v4{K=32,G=32,DOT={\"fn\":\"BlackwellE4m3QmmaDot32_v2\"}}": "1371f10aac9fc45a11349f4d96f6058020154d61dff6aff895cf85b638739e7c",
+  "ScaledMmFp8BlockSharedScaleTile_v1{K=128,G=128}": "0162dc9d7d54b910218aecad80ef034e03f51e24322fa6ce03cf958c9e47d9fb",
+  "ScaledMmFp8BlockSharedScaleTile_v1{K=256,G=128}": "f1c1e2451c9787f5b6232d677fd88ff9d13901cb27775d11d83033219b178a3b",
+  "ScaledMmFp8BlockSharedScaleTile_v2{K=64,G=32}": "2e556797d877326a0feaa39ae1bcdf6790510632f1f53b6ab7bba794bf83587d",
+  "ScaledMmFp8BlockSharedScaleTile_v3{K=256,G=128,DOT={\"fn\":\"BlackwellE4m3QmmaDot32_v1\"}}": "3ee37ef051d1ad9c33be4be58a4b248026d6decc43ffa4f84a1898d030f0e869",
+  "ScaledMmFp8BlockSharedScaleTile_v4{K=64,G=32,DOT={\"fn\":\"BlackwellE4m3QmmaDot32_v2\"}}": "8573fa6efeb9d8567a37ce1f830ec253bbe02d298c3ef55e2eedeb097b519d71",
+  "ScaledMmFp8BlockSharedScale_v1{K=128,N=128,G=128}": "cde30a16e58dd7d8eca06788235d0ac72262f3fe9dc31c67546b8923aaf4269a",
+  "ScaledMmFp8BlockSharedScale_v1{K=128,N=192,G=128}": "4cc49bdbfdbaac6498b9b3806a2af33c2cf484de6b3856ebc202a23fc784f302",
+  "ScaledMmFp8BlockSharedScale_v1{K=256,N=192,G=128}": "ea60a675422bf257848a720d7d36508aa67fe2083f76883e003ad283ab63e3ca",
+  "ScaledMmFp8BlockSharedScale_v1{K=256,N=256,G=128}": "9507cb441740b8b0a57881041fd3c38dbee53e0d2e1ee19e303922d6d99976d5",
+  "ScaledMmFp8BlockSharedScale_v2{K=64,N=32,G=32}": "1630b6c64a572cea28e5697dd037b06b6794171306e4458932350ce82bbed8a3",
+  "ScaledMmFp8BlockSharedScale_v3{K=256,N=192,G=128,DOT={\"fn\":\"BlackwellE4m3QmmaDot32_v1\"}}": "bf8ad3e2473a450274e9b02f541d6869962af6909fa471f119634122c06721c1",
+  "ScaledMmFp8BlockSharedScale_v3{K=256,N=256,G=128,DOT={\"fn\":\"BlackwellE4m3QmmaDot32_v1\"}}": "c3c3387ddb1bcd385a521ffc430d8ed7590ae47ded060c5872d6a2c69241dea1",
+  "ScaledMmFp8BlockSharedScale_v4{K=64,N=32,G=32,DOT={\"fn\":\"BlackwellE4m3QmmaDot32_v2\"}}": "58630d03e226dd314e14f883aa127770b1c3406cb32f3e9c3072c2aee6fc1e2d",
+  "ScaledMmFp8Block_v1{K=128,N=128,G=128}": "2bb92aa9916e9572ee0a17dfd60b0db02c6849bd6978389272607788acfe6fac",
+  "ScaledMmFp8Block_v1{K=128,N=192,G=128}": "7a268f7505fc74b92c4fdb80d4ec7c85c79f2907ea70316931ce483c83dea0a4",
+  "ScaledMmFp8Block_v1{K=256,N=192,G=128}": "3d221ac9c6daef3fabf31adfcd7149b643a0d1c970929a424fafe7f42e805dd5",
+  "ScaledMmFp8Block_v2{K=32,N=32,G=32}": "1bb50fe722c9d065779beee40c46d5efaefa65e8efc67de7d877925ccbe691d9",
+  "ScaledMmFp8Block_v3{K=256,N=192,G=128,DOT={\"fn\":\"BlackwellE4m3QmmaDot32_v1\"}}": "f4661cbb7700330cf4c9a5fdb4896f3adf44717d2f78c5b9e5303c40301d5d64",
+  "ScaledMmFp8Block_v4{K=32,N=32,G=32,DOT={\"fn\":\"BlackwellE4m3QmmaDot32_v2\"}}": "8ea6834a38228de56731caf68111db94c3bcc862a591046c3d2ec7a27a61d094",
+  "ScaledMmFp8Coordinate_v1{K=256,BIAS=false}": "35e7174668a0f6b257a55a87f43e1735dba156353ce32b0d7c8d3bd972e8125f",
+  "ScaledMmFp8Coordinate_v1{K=256,BIAS=true}": "1af77963b04ebddd4d952d9760c008368417c8113a950338ad2c091f6435597d",
+  "ScaledMmFp8Coordinate_v2{K=256,BIAS=true}": "1386f2f9bd9187e82286010fba9efd8f3d742cf3169f521cfbb3f05586908d0d",
+  "ScaledMmFp8Coordinate_v2{K=32,BIAS=false}": "b4f5d17d51a86eb4d00c6d42c72657d843671dc54837a62bacb04ead90eac8d1",
+  "ScaledMmFp8NoSwapCoordinate_v1{K=64,BIAS=true,DOT={\"fn\":\"BlackwellE4m3QmmaDot32_v1\"}}": "33b6ee359996f713b2e1d1d8b0fac6916b2509ed7552f4f848b3bcdb7b38fd49",
+  "ScaledMmFp8NoSwapCoordinate_v2{K=64,BIAS=true,DOT={\"fn\":\"BlackwellE4m3QmmaDot32_v2\"}}": "1e16d65337d15cb911c1e1097320149e3d3b942ba8d257347541fd9b5cb79d13",
+  "ScaledMmFp8NoSwap_v1{K=64,N=2,BIAS=true,DOT={\"fn\":\"BlackwellE4m3QmmaDot32_v1\"}}": "ebd8cf4b9e99d0b753c4b4f77a1d5d1236a8c32384481f39dbd7372415270f23",
+  "ScaledMmFp8NoSwap_v2{K=64,N=2,BIAS=true,DOT={\"fn\":\"BlackwellE4m3QmmaDot32_v2\"}}": "934397d960a63c66e07d40d168f5b4bf19f4faea8d57641fb16e207197c234d9",
+  "ScaledMmFp8_v1{K=256,N=2,BIAS=true}": "44bfbba52008700cd2b44dcbf41ed581597239bb2fe646d53b6a88d9833d9972",
+  "ScaledMmFp8_v1{K=256,N=256,BIAS=false}": "e83abacc7be589a2d9218eba94e2ab0bed9a2bf869cd949507af223fe8ff7611",
+  "ScaledMmFp8_v1{K=256,N=512,BIAS=false}": "7de34f844bc4471c668f996556b1276cee978cd186042723af6cc4431d2e9815",
+  "ScaledMmFp8_v1{K=256,N=512,BIAS=true}": "b8bbb571cb0893a26bca66ccb6c5963763250f7f811e31ffef07b080fe622778",
+  "ScaledMmFp8_v2{K=256,N=2,BIAS=true}": "ddded472bbba24d47fb4bb8c1d966b9042f72d5c2db7ad01707cb64b07b20000",
+  "ScaledMmFp8_v2{K=32,N=2,BIAS=false}": "71932f78818df9fe25600f451186d38b8a0535de4c92d8fdca95e81bc313b1fb",
+  "ScaledMmNvfp4Coordinate_v1{K=64,DOT={\"fn\":\"BlackwellNvf4OmmaDot64_v1\"}}": "d76911d1089a751dee291d25421e59d5774ffa663e19c6e107575799bc4d031c",
+  "ScaledMmNvfp4_v1{K=64,N=2,DOT={\"fn\":\"BlackwellNvf4OmmaDot64_v1\"}}": "e7571337c938f8a94723723992129852c3bc323911febbc470fd2dfff1e719e7",
+  "SelectF32_v1": "9048378d3acdcfa1bab63cb8e452705012f9f4565a9a6d9c8f4c68a565141339",
+  "ServeFp8_v1{C={\"dict\":{\"BIAS\":true,\"D\":128,\"EPS\":{\"f64\":\"0x1.4f8b588e368f1p-17\"},\"GU\":512,\"H\":256,\"I\":256,\"KVH\":1,\"MAX_POS\":8,\"NH\":2,\"NL\":1,\"QKV\":512,\"ROPE_THETA\":{\"f64\":\"0x1.3880000000000p+13\"},\"V\":16,\"model\":\"tiny\",\"profile\":{\"dict\":{}},\"revision\":null,\"tie_word_embeddings\":true}},LP=2,STEPS=1}": "7d748f5b3df097ac545736c5a78302774c7581476db50c4ecc3656c996142708",
+  "SiluMulFp8BlockQuantGroup_v1{G=128}": "6fbc9f2cf1de0b5401877165e8cbb02d2dce6bcb387a6ebf9fc000fb04fdc4be",
+  "SiluMulFp8BlockQuantGroup_v1{G=8}": "058121caf4ecde7a5bc5cab92434d211f1307ba6265efee2251f110f98eb10ee",
+  "SiluMulFp8BlockQuantGroup_v2{G=4}": "26ffa267a1a5c9975cefd010c9fc4eddb2a3dd54acb78531240bc04ab79e7d7c",
+  "SiluMulFp8BlockQuantResult_v1": "5cfe468f49aad610cf573faf8099661e9e78a147c3bc38887e174fcc12a55101",
+  "SiluMulFp8BlockQuantResult_v2": "bd234182928c3e219da7291d9937dd265740c9d4cdaee3d8038e2498c7d84ed7",
+  "SiluMulFp8BlockQuant_v1{I=16,G=8}": "3a93e0a149f5cdc2f89984d2d426ae88910c4fb521afed787c2ff875157e111c",
+  "SiluMulFp8BlockQuant_v2{I=8,G=4}": "db56bf1bb35059c1f7d6ebdab43ecb4ae2c435169459315f899f4e220854bb03",
+  "SiluMul_v1{I=115}": "5ba9ec3bd5a9b8174648a86aeac57082b121f317cbb5de645e7347febba4a3bf",
+  "SiluMul_v1{I=154}": "3ff061843209a155f478c41e47bfcdae0a34b0cb6d93c5dcdd2edb1150638dcc",
+  "SiluMul_v1{I=16}": "53d14915f7724afc19564488e2eed281aa7413537a10f05c585d8a14fc134abb",
+  "SiluMul_v1{I=256}": "b545985bb10dc94d47620f2d54b00c6724c2305a63fa15a38f390ae3991418f2",
+  "SiluMul_v1{I=32}": "f8bbedf4954f4deb2d5a4e9c5f50e9caf7b4f3e43b7de6c8b4ff093991b937a1",
+  "SiluMul_v1{I=69}": "7da4f8ec55f6e20810e2faa8d4e7499992440e88a921054992c3280babe14d27",
+  "SiluMul_v1{I=8192}": "453c5f9994b9e88b90af784fff3d1ce15fff7777f927531887a6778b6da0e71b",
+  "SiluMul_v1{I=8}": "c169850ec136ae85289bcb8cf374e1b29650faa6ef75eb5b1f06003ee9893c32"
+ },
+ "extra": {
+  "Embedding_v2{V=1100,H=2}": "f1535863327760d065be8c56f3f74a4d8a4caeb66961962e224945eb3943405d",
+  "RoPE_v1{NHEADS=32,D=64}": "230ac309ca43eb2dac753832fa06620dc4d3a98d3b8106a1f974db95030537e8",
+  "RoPE_v1{NHEADS=8,D=64}": "ef0bb420755d71fd603f592b9f08ac44ecc06153246b1200ba56f3fa75646734",
+  "SiluMul_v1{I=1536}": "1772d36e6f0d16c6630180193a05e163cc0d96e31708bfc3a5901adf3a0cb6d4"
+ },
+ "tasks": [
+  [
+   "definition",
+   "BitAnd_v1",
+   {
+    "pieces": {
+     "and": 1
+    }
+   }
+  ],
+  [
+   "definition",
+   "BitNot_v1",
+   {
+    "pieces": {
+     "and": 0
+    }
+   }
+  ],
+  [
+   "definition",
+   "BitOr_v1",
+   {
+    "pieces": {
+     "and": 1
+    }
+   }
+  ],
+  [
+   "definition",
+   "Const32[0x1e3ce508]_v1",
+   {}
+  ],
+  [
+   "definition",
+   "Const32[0x2edbe6ff]_v1",
+   {}
+  ],
+  [
+   "definition",
+   "Const32[0x32a57060]_v1",
+   {}
+  ],
+  [
+   "definition",
+   "Const32[0x36924925]_v1",
+   {}
+  ],
+  [
+   "definition",
+   "Const32[0x3bbb989d]_v1",
+   {}
+  ],
+  [
+   "definition",
+   "Const32[0x3c80f082]_v1",
+   {}
+  ],
+  [
+   "definition",
+   "Const32[0x3e085941]_v1",
+   {}
+  ],
+  [
+   "definition",
+   "Const32[0x3f000000]_v1",
+   {}
+  ],
+  [
+   "definition",
+   "Const32[0x3f199999]_v1",
+   {}
+  ],
+  [
+   "definition",
+   "Const32[0x3f800000]_v1",
+   {}
+  ],
+  [
+   "definition",
+   "Const32[0x3fb8aa3b]_v1",
+   {}
+  ],
+  [
+   "definition",
+   "Const32[0x4038aa3b]_v1",
+   {}
+  ],
+  [
+   "definition",
+   "Const32[0x40c00000]_v1",
+   {}
+  ],
+  [
+   "definition",
+   "Const32[0x41102cb3]_v1",
+   {}
+  ],
+  [
+   "definition",
+   "Const32[0x437c0000]_v1",
+   {}
+  ],
+  [
+   "definition",
+   "Const32[0x43e00000]_v1",
+   {}
+  ],
+  [
+   "definition",
+   "Const32[0x4b400001]_v1",
+   {}
+  ],
+  [
+   "definition",
+   "Const32[0x7fffffff]_v1",
+   {}
+  ],
+  [
+   "definition",
+   "Const32[0xbd563cae]_v1",
+   {}
+  ],
+  [
+   "definition",
+   "Const32[0xbeaaa9ed]_v1",
+   {}
+  ],
+  [
+   "definition",
+   "Const32[0xc0000000]_v1",
+   {}
+  ],
+  [
+   "definition",
+   "Const32[0xc3e00000]_v1",
+   {}
+  ],
+  [
+   "definition",
+   "Const32[0xc61c4000]_v1",
+   {}
+  ],
+  [
+   "definition",
+   "Const32[0xcb40007f]_v1",
+   {}
+  ],
+  [
+   "definition",
+   "DotE4m3_v1{K=256}",
+   {}
+  ],
+  [
+   "definition",
+   "DotE4m3_v2{K=64,DOT=BlackwellE4m3QmmaDot32_v1}",
+   {}
+  ],
+  [
+   "definition",
+   "DotE4m3_v3{K=32}",
+   {
+    "definitions": {
+     "and": 6596
+    }
+   }
+  ],
+  [
+   "definition",
+   "DotE4m3_v4{K=64,DOT=BlackwellE4m3QmmaDot32_v2}",
+   {
+    "definitions": {
+     "and": 17984
+    }
+   }
+  ],
+  [
+   "definition",
+   "DotNvfp4_v1{K=64,DOT=BlackwellNvf4OmmaDot64_v1}",
+   {}
+  ],
+  [
+   "definition",
+   "E4m3ToF32_v1",
+   {
+    "pieces": {
+     "and": 15
+    }
+   }
+  ],
+  [
+   "definition",
+   "Embedding_v2{V=64,H=16}",
+   {
+    "definitions": {
+     "and": 22784
+    }
+   }
+  ],
+  [
+   "definition",
+   "F32BitsShl23_v1",
+   {
+    "pieces": {
+     "and": 0
+    }
+   }
+  ],
+  [
+   "definition",
+   "F32Eq_v1",
+   {
+    "pieces": {
+     "and": 155
+    }
+   }
+  ],
+  [
+   "definition",
+   "F32Fabs_v1",
+   {
+    "pieces": {
+     "and": 0
+    }
+   }
+  ],
+  [
+   "definition",
+   "F32FmaRm_v1",
+   {
+    "pieces": {
+     "and": 4531
+    }
+   }
+  ],
+  [
+   "definition",
+   "F32FmaRm_v2",
+   {
+    "pieces": {
+     "and": 4531
+    }
+   }
+  ],
+  [
+   "definition",
+   "F32Fmaxf_v1",
+   {
+    "pieces": {
+     "and": 474
+    }
+   }
+  ],
+  [
+   "definition",
+   "F32Fminf_v1",
+   {
+    "pieces": {
+     "and": 474
+    }
+   }
+  ],
+  [
+   "definition",
+   "F32GtStrict_v1",
+   {
+    "pieces": {
+     "and": 191
+    }
+   }
+  ],
+  [
+   "definition",
+   "F32IsFinite_v1",
+   {
+    "pieces": {
+     "and": 7
+    }
+   }
+  ],
+  [
+   "definition",
+   "F32Neg_v1",
+   {
+    "pieces": {
+     "and": 0
+    }
+   }
+  ],
+  [
+   "definition",
+   "F32Sat_v1",
+   {
+    "pieces": {
+     "and": 100
+    }
+   }
+  ],
+  [
+   "definition",
+   "F32Sub_v1",
+   {
+    "pieces": {
+     "and": 823
+    }
+   }
+  ],
+  [
+   "definition",
+   "F32ToE2m1Sat_v1",
+   {
+    "pieces": {
+     "and": 60
+    }
+   }
+  ],
+  [
+   "definition",
+   "F32ToE4m3Sat_v1",
+   {
+    "pieces": {
+     "and": 238
+    }
+   }
+  ],
+  [
+   "definition",
+   "Fp8ActQuant_v1{K=256}",
+   {}
+  ],
+  [
+   "definition",
+   "Fp8ActQuant_v2{K=256}",
+   {}
+  ],
+  [
+   "definition",
+   "Fp8GroupQuant_v1{K=128,G=64}",
+   {}
+  ],
+  [
+   "definition",
+   "Fp8GroupQuant_v1{K=256,G=128}",
+   {}
+  ],
+  [
+   "definition",
+   "Fp8GroupQuant_v2{K=64,G=32}",
+   {}
+  ],
+  [
+   "definition",
+   "Fp8GroupScale_v1{G=128}",
+   {}
+  ],
+  [
+   "definition",
+   "Fp8GroupScale_v1{G=64}",
+   {}
+  ],
+  [
+   "definition",
+   "Fp8GroupScale_v2{G=32}",
+   {
+    "definitions": {
+     "and": 8544
+    }
+   }
+  ],
+  [
+   "definition",
+   "Fp8RowAbsMax_v1{K=256}",
+   {}
+  ],
+  [
+   "definition",
+   "Fp8RowAbsMax_v2{K=256}",
+   {}
+  ],
+  [
+   "definition",
+   "Fp8RowScale_v1",
+   {}
+  ],
+  [
+   "definition",
+   "Fp8RowScale_v2",
+   {
+    "definitions": {
+     "and": 1211
+    }
+   }
+  ],
+  [
+   "definition",
+   "GatherBf16x1100_v2",
+   {
+    "definitions": {
+     "and": 18016
+    }
+   }
+  ],
+  [
+   "definition",
+   "HopperE4m3QgmmaDot32_v1",
+   {
+    "pieces": {
+     "and": 7377
+    }
+   }
+  ],
+  [
+   "definition",
+   "LMoeBlockL_v1{E=4,TOPK=2,VPT=2,H=16,I=16}",
+   {}
+  ],
+  [
+   "definition",
+   "LMoeBlock_v1{E=4,TOPK=2,VPT=2,H=16,I=16}",
+   {}
+  ],
+  [
+   "definition",
+   "LMoeFfnL_v1{E=4,TOPK=2,VPT=2,H=16,I=16}",
+   {}
+  ],
+  [
+   "definition",
+   "LMoeFfn_v1{E=4,TOPK=2,VPT=2,H=16,I=16}",
+   {}
+  ],
+  [
+   "definition",
+   "LayerPostFp8_v1{C={d7e67d0c8a47}}",
+   {}
+  ],
+  [
+   "definition",
+   "LayerPreFp8_v1{C={d7e67d0c8a47},L0=True}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeExpertBody_v1{H=16,I=16}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeExpertCoordinateW_v1{E=2,K=32}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeExpertCoordinateW_v1{E=4,K=32}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeExpertCoordinateW_v1{E=4,K=64}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeExpertCoordinateW_v2{E=2,K=32,DOT=AmpereBF16TcDot16_v2}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeExpertCoordinateW_v2{E=2,K=32,DOT=HopperBF16WgmmaDot16_v1}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeExpertCoordinateW_v2{E=4,K=32,DOT=AmpereBF16TcDot16_v2}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeExpertCoordinate_v1{E=2,K=32}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeExpertCoordinate_v1{E=4,K=32}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeExpertCoordinate_v1{E=4,K=64}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeExpertCoordinate_v2{E=2,K=32,DOT=AmpereBF16TcDot16_v2}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeExpertCoordinate_v2{E=2,K=32,DOT=HopperBF16WgmmaDot16_v1}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeExpertCoordinate_v2{E=4,K=32,DOT=AmpereBF16TcDot16_v2}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeExpertFp8BlockCoordinateW_v1{K=256,G=128,KB=32,SWAP=False}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeExpertFp8BlockCoordinateW_v1{K=64,G=32,KB=32,SWAP=True}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeExpertFp8BlockCoordinateW_v2{K=32,G=32,KB=32,SWAP=True}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeExpertFp8BlockCoordinateW_v2{K=64,G=32,KB=32,SWAP=True}",
+   {
+    "definitions": {
+     "and": 28533
+    }
+   }
+  ],
+  [
+   "definition",
+   "MoeExpertFp8BlockCoordinate_v1{K=128,G=64,KB=32,SWAP=False}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeExpertFp8BlockCoordinate_v1{K=6144,G=128,KB=32,SWAP=False}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeExpertFp8BlockCoordinate_v2{K=32,G=32,KB=32,SWAP=False}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeExpertFp8BlockCoordinate_v2{K=64,G=32,KB=32,SWAP=False}",
+   {
+    "definitions": {
+     "and": 26103
+    }
+   }
+  ],
+  [
+   "definition",
+   "MoeExpertFp8BlockCoordinate_v2{K=64,G=64,KB=32,SWAP=True}",
+   {
+    "definitions": {
+     "and": 26103
+    }
+   }
+  ],
+  [
+   "definition",
+   "MoeExpertFp8BlockCoordinate_v2{K=64,G=64,KB=64,SWAP=False}",
+   {
+    "definitions": {
+     "and": 19391
+    }
+   }
+  ],
+  [
+   "definition",
+   "MoeExpertFp8BlockGemmW_v1{K=64,N=48,G=32,KB=32,SWAP=True}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeExpertFp8BlockGemmW_v2{K=32,N=40,G=32,KB=32,SWAP=True}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeExpertFp8BlockGemm_v1{K=128,N=80,G=64,KB=32,SWAP=False}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeExpertFp8BlockGemm_v2{K=32,N=40,G=32,KB=32,SWAP=False}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeExpertGemmW_v1{E=2,K=32,N=3}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeExpertGemmW_v1{E=4,K=32,N=16}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeExpertGemmW_v1{E=4,K=64,N=1}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeExpertGemmW_v2{E=2,K=32,N=3,DOT=AmpereBF16TcDot16_v2}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeExpertGemmW_v2{E=2,K=32,N=3,DOT=HopperBF16WgmmaDot16_v1}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeExpertGemmW_v2{E=4,K=32,N=16,DOT=AmpereBF16TcDot16_v2}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeExpertGemm_v1{E=2,K=32,N=3}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeExpertGemm_v1{E=4,K=32,N=16}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeExpertGemm_v1{E=4,K=64,N=1}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeExpertGemm_v2{E=2,K=32,N=3,DOT=AmpereBF16TcDot16_v2}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeExpertGemm_v2{E=2,K=32,N=3,DOT=HopperBF16WgmmaDot16_v1}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeExpertGemm_v2{E=4,K=32,N=16,DOT=AmpereBF16TcDot16_v2}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeExpertRow_v1{E=2,K=32}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeExpertRow_v1{E=4,K=32}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeExpertRow_v1{E=4,K=64}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeFfnFixedL_v1{E=4,TOPK=2,VPT=2,H=16,I=16}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeFfnFixedL_v1{E=8,TOPK=2,VPT=8,H=16,I=16}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeFfnFixed_v1{E=8,TOPK=2,VPT=8,H=16,I=16}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeRouterBiasNext_v1{E=8}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeRouterBiasScore_v1",
+   {}
+  ],
+  [
+   "definition",
+   "MoeRouterBiasTopK_v1{E=8,TOPK=2,SCALE=2.5,KERNEL='block'}",
+   {
+    "definitions": {
+     "and": 11371
+    }
+   }
+  ],
+  [
+   "definition",
+   "MoeRouterBiasTopK_v1{E=8,TOPK=2,SCALE=2.5,KERNEL='warp'}",
+   {
+    "definitions": {
+     "and": 12914
+    }
+   }
+  ],
+  [
+   "definition",
+   "MoeRouterFirst_v1{E=4}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeRouterFirst_v1{E=8}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeRouterNext_v1{E=4}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeRouterNext_v1{E=8}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeRouterNormalize_v1{E=8,VPT=4}",
+   {
+    "definitions": {
+     "and": 26738
+    }
+   }
+  ],
+  [
+   "definition",
+   "MoeRouterPickPair_v1{E=8}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeRouterPick_v1{E=4}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeRouterPick_v1{E=8}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeRouterProbs_v1{E=4,VPT=2}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeRouterProbs_v1{E=8,VPT=8}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeRouterProbs_v2{E=8,VPT=4}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeRouterSelect_v1{E=8,TOPK=2}",
+   {
+    "definitions": {
+     "and": 2261
+    }
+   }
+  ],
+  [
+   "definition",
+   "MoeRouterShift_v1{E=8,VPT=4}",
+   {
+    "definitions": {
+     "and": 6268
+    }
+   }
+  ],
+  [
+   "definition",
+   "MoeRouterSigmoidBias_v1{E=8,TOPK=2,SCALE=2.5,KERNEL='block'}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeRouterSigmoidBias_v1{E=8,TOPK=2,SCALE=2.5,KERNEL='warp'}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeRouterSigmoidBias_v2{E=8,TOPK=2,SCALE=2.5,KERNEL='block'}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeRouterSigmoidIn_v1",
+   {
+    "definitions": {
+     "and": 23369
+    }
+   }
+  ],
+  [
+   "definition",
+   "MoeRouterSigmoidMid_v1",
+   {
+    "definitions": {
+     "and": 719
+    }
+   }
+  ],
+  [
+   "definition",
+   "MoeRouterSigmoidNorm_v1{TOPK=2,SCALE=2.5,KERNEL='block'}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeRouterSigmoidNorm_v1{TOPK=2,SCALE=2.5,KERNEL='warp'}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeRouterSigmoidOut_v1",
+   {
+    "definitions": {
+     "and": 4776
+    }
+   }
+  ],
+  [
+   "definition",
+   "MoeRouterSigmoidScore_v1",
+   {}
+  ],
+  [
+   "definition",
+   "MoeRouterSigmoidScore_v2",
+   {
+    "definitions": {
+     "and": 30795
+    }
+   }
+  ],
+  [
+   "definition",
+   "MoeRouterTopKNorm_v1{E=4,TOPK=2,VPT=2}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeRouterTopKNorm_v1{E=64,TOPK=8,VPT=8}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeRouterTopKNorm_v1{E=8,TOPK=2,VPT=8}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeRouterTopKOrderedNorm_v1{E=4,TOPK=2,VPT=2}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeRouterTopKOrderedNorm_v1{E=8,TOPK=2,VPT=8}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeRouterTopKOrdered_v1{E=4,TOPK=2,VPT=2}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeRouterTopKOrdered_v1{E=8,TOPK=2,VPT=8}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeRouterTopKOrdered_v2{E=8,TOPK=2,VPT=4}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeRouterTopK_v1{E=4,TOPK=2,VPT=2}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeRouterTopK_v1{E=64,TOPK=8,VPT=8}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeRouterTopK_v1{E=8,TOPK=2,VPT=8}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeSlotDownCoordinate_v1{K=16}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeSlotDown_v1{K=16,N=16}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeSumCoordinate_v1{TOPK=2}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeSumCoordinate_v1{TOPK=8}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeSumCoordinate_v2{TOPK=8}",
+   {
+    "definitions": {
+     "and": 5222
+    }
+   }
+  ],
+  [
+   "definition",
+   "MoeSum_v1{TOPK=2,H=16}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeSum_v1{TOPK=2,H=8}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeSum_v1{TOPK=8,H=2048}",
+   {}
+  ],
+  [
+   "definition",
+   "MoeSum_v2{TOPK=8,H=8}",
+   {
+    "definitions": {
+     "and": 41776
+    }
+   }
+  ],
+  [
+   "definition",
+   "MufuEx2Ftz_v2",
+   {
+    "definitions": {
+     "and": 1073
+    }
+   }
+  ],
+  [
+   "definition",
+   "MufuRcpFtz_v2",
+   {
+    "definitions": {
+     "and": 902
+    }
+   }
+  ],
+  [
+   "definition",
+   "NvExpfIn_v1",
+   {
+    "definitions": {
+     "and": 9556
+    }
+   }
+  ],
+  [
+   "definition",
+   "NvExpfOut_v1",
+   {
+    "definitions": {
+     "and": 743
+    }
+   }
+  ],
+  [
+   "definition",
+   "NvExpf_v1",
+   {}
+  ],
+  [
+   "definition",
+   "NvExpf_v2",
+   {
+    "definitions": {
+     "and": 11371
+    }
+   }
+  ],
+  [
+   "definition",
+   "NvSigmoid_v1",
+   {}
+  ],
+  [
+   "definition",
+   "Nvfp4ActQuant_v1{K=64}",
+   {}
+  ],
+  [
+   "definition",
+   "Nvfp4QuantBlock_v1",
+   {}
+  ],
+  [
+   "definition",
+   "QuantLinearFp8_v1{K=256,N=2,BIAS=True}",
+   {}
+  ],
+  [
+   "definition",
+   "QuantLinearFp8_v2{K=256,N=2,BIAS=True}",
+   {}
+  ],
+  [
+   "definition",
+   "QuantLinearNvfp4_v1{K=64,N=2,DOT=BlackwellNvf4OmmaDot64_v1}",
+   {}
+  ],
+  [
+   "definition",
+   "RMSNormFusedCuda_v2{N=1,EPS=1e-06}",
+   {}
+  ],
+  [
+   "definition",
+   "RMSNormFusedCuda_v2{N=100,EPS=1e-05}",
+   {}
+  ],
+  [
+   "definition",
+   "RMSNormFusedCuda_v2{N=1030,EPS=1e-05}",
+   {}
+  ],
+  [
+   "definition",
+   "RMSNormFusedCuda_v2{N=16,EPS=1e-05}",
+   {}
+  ],
+  [
+   "definition",
+   "RMSNormFusedCuda_v2{N=16,EPS=1e-06}",
+   {}
+  ],
+  [
+   "definition",
+   "RMSNormFusedCuda_v2{N=2048,EPS=1e-05}",
+   {}
+  ],
+  [
+   "definition",
+   "RMSNormFusedCuda_v2{N=256,EPS=1e-05}",
+   {}
+  ],
+  [
+   "definition",
+   "RMSNormFusedCuda_v2{N=32,EPS=1e-05}",
+   {}
+  ],
+  [
+   "definition",
+   "RMSNormTriton_v1{N=1024,EPS=1e-05}",
+   {}
+  ],
+  [
+   "definition",
+   "RMSNormTriton_v1{N=128,EPS=1e-06}",
+   {}
+  ],
+  [
+   "definition",
+   "RMSNormTriton_v1{N=16,EPS=1e-05}",
+   {}
+  ],
+  [
+   "definition",
+   "RMSNormTriton_v1{N=16,EPS=1e-06}",
+   {}
+  ],
+  [
+   "definition",
+   "RMSNormTriton_v1{N=200,EPS=1e-06}",
+   {}
+  ],
+  [
+   "definition",
+   "RMSNormTriton_v1{N=256,EPS=1e-05}",
+   {}
+  ],
+  [
+   "definition",
+   "RMSNormTriton_v1{N=32,EPS=1e-05}",
+   {}
+  ],
+  [
+   "definition",
+   "RMSNormTriton_v1{N=64,EPS=1e-05}",
+   {}
+  ],
+  [
+   "definition",
+   "RoPE_v1{NHEADS=1,D=128}",
+   {}
+  ],
+  [
+   "definition",
+   "RoPE_v1{NHEADS=1,D=16}",
+   {}
+  ],
+  [
+   "definition",
+   "RoPE_v1{NHEADS=1,D=64}",
+   {}
+  ],
+  [
+   "definition",
+   "RoPE_v1{NHEADS=2,D=128}",
+   {}
+  ],
+  [
+   "definition",
+   "RoPE_v1{NHEADS=2,D=14}",
+   {}
+  ],
+  [
+   "definition",
+   "RoPE_v1{NHEADS=2,D=16}",
+   {}
+  ],
+  [
+   "definition",
+   "RoPE_v1{NHEADS=2,D=8}",
+   {}
+  ],
+  [
+   "definition",
+   "RoPE_v1{NHEADS=3,D=20}",
+   {}
+  ],
+  [
+   "definition",
+   "RoPE_v1{NHEADS=4,D=18}",
+   {}
+  ],
+  [
+   "definition",
+   "RouterArgmaxOkStep_v1",
+   {}
+  ],
+  [
+   "definition",
+   "RouterArgmaxStep_v1",
+   {}
+  ],
+  [
+   "definition",
+   "ScaledMmFp8BlockCoordinateGivenScale_v1{K=128,G=128}",
+   {}
+  ],
+  [
+   "definition",
+   "ScaledMmFp8BlockCoordinateGivenScale_v1{K=256,G=128}",
+   {}
+  ],
+  [
+   "definition",
+   "ScaledMmFp8BlockCoordinateGivenScale_v2{K=64,G=32}",
+   {
+    "definitions": {
+     "and": 21175
+    }
+   }
+  ],
+  [
+   "definition",
+   "ScaledMmFp8BlockCoordinateGivenScale_v3{K=256,G=128,DOT=BlackwellE4m3QmmaDot32_v1}",
+   {}
+  ],
+  [
+   "definition",
+   "ScaledMmFp8BlockCoordinateGivenScale_v4{K=64,G=32,DOT=BlackwellE4m3QmmaDot32_v2}",
+   {
+    "definitions": {
+     "and": 25779
+    }
+   }
+  ],
+  [
+   "definition",
+   "ScaledMmFp8BlockCoordinate_v1{K=128,G=128}",
+   {}
+  ],
+  [
+   "definition",
+   "ScaledMmFp8BlockCoordinate_v1{K=256,G=128}",
+   {}
+  ],
+  [
+   "definition",
+   "ScaledMmFp8BlockCoordinate_v2{K=32,G=32}",
+   {
+    "definitions": {
+     "and": 12566
+    }
+   }
+  ],
+  [
+   "definition",
+   "ScaledMmFp8BlockCoordinate_v3{K=256,G=128,DOT=BlackwellE4m3QmmaDot32_v1}",
+   {}
+  ],
+  [
+   "definition",
+   "ScaledMmFp8BlockCoordinate_v4{K=32,G=32,DOT=BlackwellE4m3QmmaDot32_v2}",
+   {
+    "definitions": {
+     "and": 14868
+    }
+   }
+  ],
+  [
+   "definition",
+   "ScaledMmFp8BlockSharedScaleTile_v1{K=128,G=128}",
+   {}
+  ],
+  [
+   "definition",
+   "ScaledMmFp8BlockSharedScaleTile_v1{K=256,G=128}",
+   {}
+  ],
+  [
+   "definition",
+   "ScaledMmFp8BlockSharedScaleTile_v2{K=64,G=32}",
+   {}
+  ],
+  [
+   "definition",
+   "ScaledMmFp8BlockSharedScaleTile_v3{K=256,G=128,DOT=BlackwellE4m3QmmaDot32_v1}",
+   {}
+  ],
+  [
+   "definition",
+   "ScaledMmFp8BlockSharedScaleTile_v4{K=64,G=32,DOT=BlackwellE4m3QmmaDot32_v2}",
+   {}
+  ],
+  [
+   "definition",
+   "ScaledMmFp8BlockSharedScale_v1{K=128,N=128,G=128}",
+   {}
+  ],
+  [
+   "definition",
+   "ScaledMmFp8BlockSharedScale_v1{K=128,N=192,G=128}",
+   {}
+  ],
+  [
+   "definition",
+   "ScaledMmFp8BlockSharedScale_v1{K=256,N=192,G=128}",
+   {}
+  ],
+  [
+   "definition",
+   "ScaledMmFp8BlockSharedScale_v1{K=256,N=256,G=128}",
+   {}
+  ],
+  [
+   "definition",
+   "ScaledMmFp8BlockSharedScale_v2{K=64,N=32,G=32}",
+   {}
+  ],
+  [
+   "definition",
+   "ScaledMmFp8BlockSharedScale_v3{K=256,N=192,G=128,DOT=BlackwellE4m3QmmaDot32_v1}",
+   {}
+  ],
+  [
+   "definition",
+   "ScaledMmFp8BlockSharedScale_v3{K=256,N=256,G=128,DOT=BlackwellE4m3QmmaDot32_v1}",
+   {}
+  ],
+  [
+   "definition",
+   "ScaledMmFp8BlockSharedScale_v4{K=64,N=32,G=32,DOT=BlackwellE4m3QmmaDot32_v2}",
+   {}
+  ],
+  [
+   "definition",
+   "ScaledMmFp8Block_v1{K=128,N=128,G=128}",
+   {}
+  ],
+  [
+   "definition",
+   "ScaledMmFp8Block_v1{K=128,N=192,G=128}",
+   {}
+  ],
+  [
+   "definition",
+   "ScaledMmFp8Block_v1{K=256,N=192,G=128}",
+   {}
+  ],
+  [
+   "definition",
+   "ScaledMmFp8Block_v2{K=32,N=32,G=32}",
+   {}
+  ],
+  [
+   "definition",
+   "ScaledMmFp8Block_v3{K=256,N=192,G=128,DOT=BlackwellE4m3QmmaDot32_v1}",
+   {}
+  ],
+  [
+   "definition",
+   "ScaledMmFp8Block_v4{K=32,N=32,G=32,DOT=BlackwellE4m3QmmaDot32_v2}",
+   {}
+  ],
+  [
+   "definition",
+   "ScaledMmFp8Coordinate_v1{K=256,BIAS=False}",
+   {}
+  ],
+  [
+   "definition",
+   "ScaledMmFp8Coordinate_v1{K=256,BIAS=True}",
+   {}
+  ],
+  [
+   "definition",
+   "ScaledMmFp8Coordinate_v2{K=32,BIAS=False}",
+   {
+    "definitions": {
+     "and": 11514
+    }
+   }
+  ],
+  [
+   "definition",
+   "ScaledMmFp8NoSwapCoordinate_v1{K=64,BIAS=True,DOT=BlackwellE4m3QmmaDot32_v1}",
+   {}
+  ],
+  [
+   "definition",
+   "ScaledMmFp8NoSwapCoordinate_v2{K=64,BIAS=True,DOT=BlackwellE4m3QmmaDot32_v2}",
+   {
+    "definitions": {
+     "and": 24832
+    }
+   }
+  ],
+  [
+   "definition",
+   "ScaledMmFp8NoSwap_v1{K=64,N=2,BIAS=True,DOT=BlackwellE4m3QmmaDot32_v1}",
+   {}
+  ],
+  [
+   "definition",
+   "ScaledMmFp8NoSwap_v2{K=64,N=2,BIAS=True,DOT=BlackwellE4m3QmmaDot32_v2}",
+   {
+    "definitions": {
+     "and": 49664
+    }
+   }
+  ],
+  [
+   "definition",
+   "ScaledMmFp8_v1{K=256,N=2,BIAS=True}",
+   {}
+  ],
+  [
+   "definition",
+   "ScaledMmFp8_v1{K=256,N=256,BIAS=False}",
+   {}
+  ],
+  [
+   "definition",
+   "ScaledMmFp8_v1{K=256,N=512,BIAS=False}",
+   {}
+  ],
+  [
+   "definition",
+   "ScaledMmFp8_v1{K=256,N=512,BIAS=True}",
+   {}
+  ],
+  [
+   "definition",
+   "ScaledMmFp8_v2{K=32,N=2,BIAS=False}",
+   {
+    "definitions": {
+     "and": 23028
+    }
+   }
+  ],
+  [
+   "definition",
+   "ScaledMmNvfp4Coordinate_v1{K=64,DOT=BlackwellNvf4OmmaDot64_v1}",
+   {}
+  ],
+  [
+   "definition",
+   "ScaledMmNvfp4_v1{K=64,N=2,DOT=BlackwellNvf4OmmaDot64_v1}",
+   {}
+  ],
+  [
+   "definition",
+   "SelectF32_v1",
+   {
+    "pieces": {
+     "and": 32
+    }
+   }
+  ],
+  [
+   "definition",
+   "ServeFp8_v1{C={d7e67d0c8a47},LP=2,STEPS=1}",
+   {}
+  ],
+  [
+   "definition",
+   "SiluMulFp8BlockQuantGroup_v1{G=128}",
+   {}
+  ],
+  [
+   "definition",
+   "SiluMulFp8BlockQuantGroup_v1{G=8}",
+   {}
+  ],
+  [
+   "definition",
+   "SiluMulFp8BlockQuantGroup_v2{G=4}",
+   {}
+  ],
+  [
+   "definition",
+   "SiluMulFp8BlockQuantResult_v1",
+   {}
+  ],
+  [
+   "definition",
+   "SiluMulFp8BlockQuantResult_v2",
+   {
+    "definitions": {
+     "and": 16899
+    }
+   }
+  ],
+  [
+   "definition",
+   "SiluMulFp8BlockQuant_v1{I=16,G=8}",
+   {}
+  ],
+  [
+   "definition",
+   "SiluMulFp8BlockQuant_v2{I=8,G=4}",
+   {}
+  ],
+  [
+   "definition",
+   "SiluMul_v1{I=115}",
+   {}
+  ],
+  [
+   "definition",
+   "SiluMul_v1{I=154}",
+   {}
+  ],
+  [
+   "definition",
+   "SiluMul_v1{I=16}",
+   {}
+  ],
+  [
+   "definition",
+   "SiluMul_v1{I=256}",
+   {}
+  ],
+  [
+   "definition",
+   "SiluMul_v1{I=32}",
+   {}
+  ],
+  [
+   "definition",
+   "SiluMul_v1{I=69}",
+   {}
+  ],
+  [
+   "definition",
+   "SiluMul_v1{I=8192}",
+   {}
+  ],
+  [
+   "definition",
+   "SiluMul_v1{I=8}",
+   {}
+  ],
+  [
+   "template",
+   "moe-expert-coordinate/e4-k64/bf16",
+   {}
+  ],
+  [
+   "template",
+   "moe-expert-coordinate-weighted/e4-k64/bf16",
+   {}
+  ],
+  [
+   "template",
+   "moe-router-topk/e64-topk8-vpt8/bf16",
+   {}
+  ],
+  [
+   "template",
+   "moe-router-topk-norm/e64-topk8-vpt8/bf16",
+   {}
+  ],
+  [
+   "template",
+   "moe-sum/topk8-h2048/bf16",
+   {}
+  ],
+  [
+   "template",
+   "rmsnorm-fused-cuda/n2048-eps1e-05/bf16",
+   {
+    "units": {
+     "and": 328453,
+     "not": 62814,
+     "xor": 2165677
+    }
+   }
+  ],
+  [
+   "template",
+   "rmsnorm-triton/n128-eps1e-06/bf16",
+   {
+    "units": {
+     "and": 148173,
+     "not": 22942,
+     "xor": 1029829
+    }
+   }
+  ],
+  [
+   "template",
+   "scaled-mm-fp8-block-coordinate/k256-g128/sm90-wgmma-e4m3",
+   {}
+  ],
+  [
+   "template",
+   "silu-mul/i8192/bf16",
+   {
+    "units": {
+     "and": 2633,
+     "not": 172,
+     "xor": 54087
+    }
+   }
+  ]
+ ]
+}

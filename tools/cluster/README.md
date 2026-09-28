@@ -24,7 +24,8 @@ workload alone runs under `gpu-lease --wait` on node 2, so the GPU is booked onl
 `gpu-lease`, whose GPUs `n1_lease.py` lends from Kueue, once the description sets its `gpu_executor = "n1-lease"`; until then
 such a job goes to node 2 or is refused. Only a GPU job pinned to node 1 (`--on vy-nebius-1`) goes there, since the submit path
 can't see node 1's lease pool. A job names its kind (`--kind`, default `adhoc`) and research question (`--question`); a kind registered in
-`kinds/<owner>.toml` supplies its shape, time and question, and the rules on kinds only warn for now.
+`kinds/<owner>.toml` supplies its shape, time and question, and the rules on kinds only warn for now. A job of an unregistered
+kind gives its own time (`--max-min`) and memory (`--mem-gb`), or is refused: its scope is killed at `MemoryMax=`.
 
 ## Layout
 

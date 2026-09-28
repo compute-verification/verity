@@ -112,13 +112,17 @@ def resolve(cluster: Cluster, j: Job, run_id: str, now: int, kind: str | None = 
 def submit(cluster: Cluster, registry: dict[str, Kind], *, run_id: str, now: int, kind: str = "adhoc", question: str = "",
            gpus: int | None = None, cpus: int | None = None, memory_gib: int | None = None, max_s: int | None = None,
            quiet: bool | None = None, preempt: str = "requeue", disk_gb: float | None = None, **declared: Any) -> dict[str, Any]:
-    """`resolve` for a job of `kind`: what the job leaves unsaid comes from its registered kind (else 0 GPUs, 1 CPU, 8 GiB),
-    and the placement also names the kind, its question, the registry file it came from, and the held rules it breaks."""
+    """`resolve` for a job of `kind`: what the job leaves unsaid comes from its registered kind (else 0 GPUs, 1 CPU), and the
+    placement also names the kind, its question, the registry file it came from, and the held rules it breaks. A job whose
+    kind isn't registered names its memory: the scope's `MemoryMax=` kills the job at that cap."""
     k = registry.get(kind)
     shape = k.shape if k else {}
     gpus = gpus if gpus is not None else int(shape.get("gpus", 0))
     cpus = cpus if cpus is not None else int(shape.get("cpus", 1))
-    memory_gib = memory_gib if memory_gib is not None else int(shape.get("memory_gib", 8))
+    if memory_gib is None and "memory_gib" not in shape:
+        raise Refused(f"give the job's memory (--mem-gb G): kind {kind!r} isn't registered, so it has no shape's memory, and the job's "
+                      "scope is killed at its cap (MemoryMax=G)")
+    memory_gib = memory_gib if memory_gib is not None else int(shape["memory_gib"])
     quiet = quiet if quiet is not None else bool(shape.get("quiet", False))
     if max_s is None:
         if k is None:

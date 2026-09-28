@@ -225,7 +225,7 @@ def gpu_info() -> dict[str, Any]:
         "multi_processor_count": int(props.multi_processor_count),
         # [R13 ampere] the tuned-GEMM arch family vLLM selects its batch-invariant GEMM table by, from vLLM's OWN function on this
         # device's capability (None = no table = default tiling, e.g. Ampere): the fold's GEMM target selection
-        # (verity_vllm.program.registry.gemm_targets) checks the record against it.
+        # (verity_vllm.program.frontend.gemm_targets) checks the record against it.
         "tuned_gemm_arch_family": _tuned_gemm_arch_family(props.major, props.minor),
     }
 

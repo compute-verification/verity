@@ -10,6 +10,7 @@ import pytest
 from verity.primitives.circuits.evaluation import evaluate
 from verity.primitives.circuits.defs import bind
 from verity_vllm.program.registry import moe
+from verity_vllm.program.kernels import moe_twins
 
 from tests.properties import sigmoid_router_capture_gpu as S
 
@@ -40,7 +41,7 @@ def test_sigmoid_words_is_the_sass_model():
     words = np.concatenate([S.EXTREMES, S.NONFINITE, edges, edges | U32(S.SIGN),
                             rng.integers(0, 1 << 32, 3000, dtype=np.uint64).astype(U32),
                             S._w(np.concatenate([rng.uniform(-20, 20, 3000), rng.standard_normal(500) * 1e-3]))]).astype(U32)
-    assert S.sigmoid_words(words).tolist() == [moe.nv_sigmoid_bits(int(w)) for w in words]
+    assert S.sigmoid_words(words).tolist() == [moe_twins.nv_sigmoid_bits(int(w)) for w in words]
 
 
 @pytest.mark.parametrize("launch", S.LAUNCHES)
