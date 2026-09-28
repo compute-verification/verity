@@ -142,8 +142,8 @@ docstring states every parameter.
 
 Genuine FP8 PoUW: the checked computation is the H100's E4M3 tensor-core matmul with FP32 accumulation. The scheme is
 a fixed **core** over a swappable **forming layer**; `fp8-is-h100-<layer>` names the pair. **No certificate names a
-γ_0 yet**: the core's premise is refuted for both layers here. The main line is repaired C-2 (track D's D-3), a new
-layer that drops in with the core unchanged.
+γ_0 yet**: `DistinctLive` is refuted for `fpncp-v0` and `d2-draft`, and for `d3-v0` it is claimed but not yet
+certified (Phase 17c).
 
 ~~~text
 rows      k E4M3 codes, one byte each; 0x7F and 0xFF (NaN) are malformed; the layer may narrow the domain (`admits`)
@@ -174,6 +174,13 @@ wref      6·m·k·n − d·m·n + f_A·m·k + f_B·n·k: an atom word per cell 
 - **`H_32`** is stated for every writer class, including legacy `mma.sync` small-K shapes, sparse `wgmma`, the b1 paths,
   conversions, the uniform datapath and memory-side arithmetic (`red`/`atom`, `cp.reduce.async.bulk`, texture
   filtering), each priced per 32-bit word it writes; it is a measurement on an H100 SXM, not yet made.
+- **`d3-v0`** (`D3`), **the main line:** repaired C-2, track D's D-3. It keeps C-2's three NCP blocks and row-RMS
+  noise, and adds partner-max full-cell noise, s_l·v_l with s_l the larger E4M3 cell of the entry and of the entry that
+  reads the same noise in block 2, which fixes X-C2-B1. Weight streams are keyed per column (X-D2-5).
+  - It is formed in binary16 (`verity.ml.tc.fp16`, the half2 pipe), with a power-of-two row scale α and E4M3 casts by
+    `cvt.rn.satfinite.e4m3x2.f16x2`. The core runs unseeded.
+  - Its op-by-op MH100 trace (`D3_TRACE`) is 372 units per element per side nominal and 494.65 at Round 7's measured
+    prices. Track D claims 192 for a native schedule; `D3(form_units=…)` sets the price the certificate uses.
 - **`fpncp-v0`**: C-2's FP-NCP forming as posted (row-scaled uniform noise, NCP blocks, three `cvt.rn.satfinite.e4m3x2`),
   with every FP32 operation fixed (`FpNcpV0`). **Refuted:** its noise is row-scaled, so it is rounded away on large
   entries (X-C2-B1) and alignment erases everything but a spike (X-D1-1). Kept as the negative control; the tests
@@ -187,8 +194,8 @@ wref      6·m·k·n − d·m·n + f_A·m·k + f_B·n·k: an atom word per cell 
   a **placeholder** for track D's repair. The domain is |A| ≤ 64 and |B| ≤ 32, so no transform saturates.
 - **Prices.** `wref` uses MH100's nominal table. Round 7 (H100 SXM) measured the atom at 32.00 at N ≥ 64, the FP32 add at
   33.5 and F2FP e4m3x2 at 66.7 per instruction, and H_32 per class with c = 32 (legacy k8 at 34.0).
-- **Vectors.** `tests/vectors/fp8_is.json` (from `tests/fp8_is_vectors.py`): both layers on a test instance and
-  `d2-draft` at k = 8,192. The core is checked against the total FP8 step and numpy's float32 running sum, and D-2's
+- **Vectors.** `tests/vectors/fp8_is.json` (from `tests/fp8_is_vectors.py`): every layer on a test instance, and `d3-v0`
+  and `d2-draft` at k = 8,192. The core is checked against the total FP8 step and numpy's float32 running sum, and D-2's
   exact algebra (before any rounding) against A·Bᵀ.
 
 ## Not here yet
