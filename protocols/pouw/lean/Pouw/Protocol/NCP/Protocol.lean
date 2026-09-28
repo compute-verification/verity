@@ -19,6 +19,9 @@ Unit `u` of shape `(m, k, n)` with activations `A` and weight `B = B_{w(u)}`:
 The lead's parameters (`IsLead`): `d = 16`, `E₁` and `F₁` in `[−31, 32]` (6 bits), and every `R` a signed permutation
 that passes the rejection rule of red-team N1, NA1 and P2-1 (`Admissible`). The domain `leadDomain` is §3.2's default shape domain with at
 most `2^40` rows per weight (red-team N5).
+
+`GameProofs.shiftBy c k` is the cyclic shift by `c`; at `c = 24` it passes the rule for every `k ≥ 1024` with `16 ∣ k`
+(`Pouw.Guarantees.NCP.ShiftBy24Admissible`).
 -/
 
 namespace Pouw.NCP
@@ -45,6 +48,13 @@ def Admissible (k d : ℕ) (R : Mat) : Prop :=
     ∀ t' < k / d, ¬ ∀ j, t * d ≤ j → j < (t + 1) * d → ∃ i, t' * d ≤ i ∧ i < (t' + 1) * d ∧ R i j ≠ 0) ∧
   (¬ ∀ i < k, ∀ j < k, mm k R R i j = if i = j then 1 else 0) ∧
   ¬ ∀ i < k, ∀ j < k, mm k R R i j = if i = j then -1 else 0
+
+namespace GameProofs
+
+/-- The cyclic shift by `c`: column `j < k` has its `1` in row `j + c mod k`. -/
+def shiftBy (c k : ℕ) : Mat := fun i j => if j < k ∧ i = (if j + c < k then j + c else j + c - k) then 1 else 0
+
+end GameProofs
 
 /-- NCP's parameters. -/
 structure Params (Q R S : Type) where

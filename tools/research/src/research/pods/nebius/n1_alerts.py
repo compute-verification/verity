@@ -4,7 +4,9 @@ addressed to its owner, and a "cleared" reply in that thread when it ends:
 
 - a lease pool's `blocked` file exists (gpu_stray.py writes it, a person removes it): that pool's owner, with the file's text,
   which names the pid, pod and GPU;
-- the dispatcher's last 3 ticks in its tmux pane failed, or it hasn't ticked for 10 minutes: circuits and infra, with the error;
+- the dispatcher's last 3 ticks failed, or it hasn't ticked for 10 minutes: circuits and infra, with the error. Its ticks are
+  read from both its tmux pane (the only place a failed tick, on stderr, shows) and `loop.log` (the pane's stdout, which can
+  go on ticking while the pane shows nothing);
 - node 1 can't be read for 10 minutes: infra.
 
 The posts go in #agent-coordination, where they ring the owners' doorbells (#agent-alerts rings none). Infra, their author, can't
@@ -29,16 +31,18 @@ from typing import Callable
 POOLS = {"/run/gpu-lease": "proofs", "/run/gpu-lease-circuits": "circuits"}
 DISPATCH = ("circuits", "infra")
 SESSION = "node1-dispatch"
+LOOP_LOG = "/workspace/jobs/dispatch/loop.log"
 FAILS = 3
 STALL_S = 600
 UNREAD_S = 600
 STAMP = "%Y-%m-%dT%H:%M:%SZ"
 TICK_RE = re.compile(r"^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ) tick(?: failed: (.*)| )")
 
-# run on node 1 with `python3 -`: the pools' blocked files and the pane's last ticks (None when the pane can't be read)
+# run on node 1 with `python3 -`: the pools' blocked files, and the last ticks in the pane and in loop.log (None when unreadable)
 REMOTE = f"""
 import json, os, re, subprocess, time
-out = {{"now": time.time(), "blocked": {{}}, "ticks": None}}
+out = {{"now": time.time(), "blocked": {{}}, "pane": None, "log": None}}
+ticks = lambda text: [ln for ln in text.splitlines() if re.match({TICK_RE.pattern!r}, ln)][-{FAILS}:]
 for d in {list(POOLS)!r}:
     p = os.path.join(d, "blocked")
     if os.path.exists(p):
@@ -48,9 +52,23 @@ for d in {list(POOLS)!r}:
             out["blocked"][d] = "(unreadable: %s)" % e
 r = subprocess.run(["tmux", "capture-pane", "-pJ", "-t", {SESSION!r}, "-S", "-400"], capture_output=True, text=True)
 if r.returncode == 0:
-    out["ticks"] = [ln for ln in r.stdout.splitlines() if re.match({TICK_RE.pattern!r}, ln)][-{FAILS}:]
+    out["pane"] = ticks(r.stdout)
+try:
+    with open({LOOP_LOG!r}, "rb") as f:
+        f.seek(max(0, os.fstat(f.fileno()).st_size - 65536))
+        out["log"] = ticks(f.read().decode(errors="replace"))
+except OSError:
+    pass
 print(json.dumps(out))
 """
+
+
+def last_ticks(snap: dict) -> list[str] | None:
+    """The last FAILS tick lines of the pane and loop.log together, oldest first (both start with their UTC stamp); None when
+    neither can be read."""
+    if snap.get("pane") is None and snap.get("log") is None:
+        return None
+    return sorted({*(snap.get("pane") or []), *(snap.get("log") or [])})[-FAILS:]
 
 Post = Callable[[list, str, "str | None"], "str | None"]
 
@@ -64,20 +82,20 @@ def incidents(snap: dict) -> dict[str, tuple[list[str], str, str]]:
                                f"holders. `{d}/blocked` says: _{text[:400]}_ Once that process is gone, remove the file "
                                f"(`ssh n1 sudo rm {d}/blocked`).",
                                f"*Cleared:* `{d}/blocked` is gone, so the pool grants GPUs again.")
-    pane = f"`ssh n1 tmux capture-pane -pJ -t {SESSION}`"
-    ticks = snap.get("ticks")
+    pane = f"`ssh n1 tmux capture-pane -pJ -t {SESSION}` and `ssh n1 tail {LOOP_LOG}`"
+    ticks = last_ticks(snap)
     if ticks is None:
-        out["dispatch"] = (list(DISPATCH), f"*Node 1's dispatcher pane is gone* (tmux `{SESSION}`), so nobody can see whether it "
-                           "ticks. If it was restarted elsewhere, tell infra the session's name.",
-                           "*Cleared:* node 1's dispatcher ticks again.")
+        out["dispatch"] = (list(DISPATCH), f"*Node 1's dispatcher can't be seen*: neither its pane (tmux `{SESSION}`) nor "
+                           f"`{LOOP_LOG}` can be read, so nobody can see whether it ticks. If it was restarted elsewhere, tell "
+                           "infra where.", "*Cleared:* node 1's dispatcher ticks again.")
         return out
     ms = [m for m in map(TICK_RE.match, ticks) if m]
     if len(ms) >= FAILS and all(m[2] is not None for m in ms[-FAILS:]):
         out["dispatch"] = (list(DISPATCH), f"*Node 1's dispatcher failed its last {FAILS} ticks* ({ms[-FAILS][1]} to {ms[-1][1]}): "
-                           f"`{ms[-1][2][:300]}`. Its pane: {pane}.", "*Cleared:* node 1's dispatcher ticks again.")
+                           f"`{ms[-1][2][:300]}`. Its ticks: {pane}.", "*Cleared:* node 1's dispatcher ticks again.")
     elif not ms or snap["now"] - calendar.timegm(time.strptime(ms[-1][1], STAMP)) > STALL_S:
-        since = f"since {ms[-1][1]}" if ms else "in its pane's last 400 lines"
-        out["dispatch"] = (list(DISPATCH), f"*Node 1's dispatcher hasn't ticked {since}*; it ticks every minute. Its pane: {pane}.",
+        since = f"since {ms[-1][1]}" if ms else "in its pane or the end of its log"
+        out["dispatch"] = (list(DISPATCH), f"*Node 1's dispatcher hasn't ticked {since}*; it ticks every minute. Its ticks: {pane}.",
                            "*Cleared:* node 1's dispatcher ticks again.")
     return out
 

@@ -251,8 +251,9 @@ def test_gates_only_runs_the_kernel_gates_and_times_nothing(tmp_path):
 
 def test_band_d_builds_the_band_at_that_in_degree_with_its_certificate_cliff_there():
     """`--band-d 6`: the band at in-degree 6, unregistered (`band-chain/d6/v1` is the codec's name, not a registered byte
-    format), whose segments round-trip and whose certificate at the frozen point is `Pous.Pinned.BandMultiMeetsFamily`
-    with the cliff at 6; the verifier process rebuilds it from its manifest; d = 4 has no certificate and is refused."""
+    format), whose segments round-trip and whose certificate at the frozen point is
+    `Pous.SecurityProofs.BandMultiMeetsFamily` with the cliff at 6; the verifier process rebuilds it from its manifest;
+    d = 4 has no certificate and is refused."""
     from verity_pous import band, schemes
 
     harness = _harness()
@@ -267,8 +268,8 @@ def test_band_d_builds_the_band_at_that_in_degree_with_its_certificate_cliff_the
     assert blocks != scheme_of(BAND, _small()).encode_segment(harness.SALT, 0, w)            # another d, another encoding
     point = harness.with_in_degree(band.SECURE_FIRST, 6)
     cert = scheme_of("band-chain/d6/v1", point).certificate
-    assert (cert.theorem, cert.cliff, cert.k, cert.rounds, cert.call_ns) == ("Pous.Pinned.BandMultiMeetsFamily", 6, 111, 5,
-                                                                             241_500)
+    assert (cert.theorem, cert.cliff, cert.k, cert.rounds, cert.call_ns) == (
+        "Pous.SecurityProofs.BandMultiMeetsFamily", 6, 111, 5, 241_500)
     assert scheme_of("band-chain/d6/v1", point.with_segments(448)).certificate.segments == 448
     gate, _ = _bench().certificate_gate(scheme_of("band-chain/d6/v1", point), 111, 700_000)
     assert gate["passed"] and gate["effective_rounds"] == 2

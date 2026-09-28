@@ -1,27 +1,6 @@
-import Pous.Game.Prob
-import Pous.Game.Oracle
-import Pous.Model.Scheme
-import Pous.Model.Audit
-import Pous.Model.PubEncoder
-import Pous.Model.Inc
-import Pous.Model.M1
-import Pous.Model.M1p
-import Pous.Model.HashChain
-import Pous.Model.Pebbling
-import Pous.Model.Labelling
-import Pous.Model.Invertible
-import Pous.Model.ColumnGame
-import Pous.Model.Dense
-import Pous.Model.P3Chain
-import Pous.Model.BandChain
-import Pous.Model.SampledAudit
-import Pous.Accounting.Params
-import Pous.Accounting.PubMeets
-import Pous.Accounting.Numbers
-import Pous.Accounting.LemmaA
+import Pous.Protocol
 import Pous.Assumptions
-import Pous.Pinned
-import Pous.P2.Pinned
-import Pous.P2.Cost
-import Pous.P2.Assumptions
-import Pous.Sanity
+import Pous.Guarantees
+import Pous.SecurityProofs
+
+/-! PoUS: the protocol's definitions, its named assumptions, its guarantees and their proofs. -/

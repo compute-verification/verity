@@ -101,7 +101,7 @@ research run --on <RTX PRO 6000 pod> --project verity --source . --cwd source --
 
 `BAND_D=N` (`bench.py --band-d N`, band-gpu and side-by-side's band arm) runs the band at in-degree `d = N`, as
 `band-chain/dN/v1`, with no byte-format name registered for it. It is refused for `d < 5`, which has no certificate. For
-`d >= 5`, the certificate gate checks `Pous.Pinned.BandMultiMeetsFamily`, for any segment count, with the cliff at `d`. The pinned
+`d >= 5`, the certificate gate checks `Pous.SecurityProofs.BandMultiMeetsFamily`, for any segment count, with the cliff at `d`. The pinned
 vector is still checked at the registered `d = 12`, and the reference gate checks the run's own `d`. `bench-result.json` records
 the run's `d` in `scheme` and `scheme_params`.
 

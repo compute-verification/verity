@@ -399,9 +399,6 @@ theorem oneSegment : GamePinned.OneSegment := by
 
 /-! ## The lead's parameters are satisfiable -/
 
-/-- The cyclic shift by `c`: column `j < k` has its `1` in row `j + c mod k`. -/
-def shiftBy (c k : ℕ) : Mat := fun i j => if j < k ∧ i = (if j + c < k then j + c else j + c - k) then 1 else 0
-
 theorem shiftBy_signed {c k : ℕ} (hc : c < k) : SignedPerm k (shiftBy c k) := by
   obtain ⟨n, rfl⟩ : ∃ n, k = n + 1 := ⟨k - 1, by omega⟩
   refine ⟨Equiv.addRight (⟨c, hc⟩ : Fin (n + 1)), fun _ => 1, fun _ => Or.inl rfl, fun i j => ?_⟩

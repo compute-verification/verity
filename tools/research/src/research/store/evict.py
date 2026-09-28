@@ -7,11 +7,11 @@ Two kinds of local copy can go, and only these:
   Largest first, until the target free space is reached.  `LocalStore._resolve_blob` re-fetches an evicted blob on demand;
   `has_local` / `where` report the eviction honestly, and `index.set_presence(local=...)` is refreshed for every touched artifact.
   `trees/` (materialised tree copies) is a pure cache and is cleared whole unless `keep_trees`.
-* **run-directory files** (`~/.research/runs/<run>/...`, `evict_runs`): the big files of a finished run whose attempt names a
-  `run_files` artifact that is PRESERVED, and only files that appear in that artifact's tree with the same size (and the same
-  sha256 when the file is <= `hash_max` bytes).  Oldest run first.  A run touched in the last `quiet_s` seconds, or whose status
-  is not terminal, is left alone.  `run-files.evicted.json` in the run dir lists what went and the `research data fetch` that
-  brings it back.
+* **run-directory files** (`~/.research/runs/<run>/...`, `evict_runs`): the big files of a finished run that appear, with the same
+  size (and the same sha256 when the file is <= `hash_max` bytes), in a PRESERVED tree artifact of its attempt: `run_record` /
+  `run_files`, or a typed output its `outputs.json` declares, laid out under that output's `tree` path (a Build's `outputs/build`).
+  Oldest run first.  A run touched in the last `quiet_s` seconds, or whose status is not terminal, is left alone.
+  `run-files.evicted.json` in the run dir lists what went and the `research data fetch`es that bring it back.
 
 Never touched: pending (unpushed or unverified) objects, `manifests/`, `attempts/`, `labels/`, `catalog.sqlite`, `scratch/`.
 Artifacts that are flagged `remote` in the catalog but never verified are counted in `held_back_bytes` so the operator can
@@ -149,7 +149,8 @@ def _sha256(p: Path) -> str:
 
 def plan_runs(store: LocalStore, runs_root: Path, *, min_bytes: int = MIN_BYTES, quiet_s: float = QUIET_S, hash_max: int = HASH_MAX,
               now: float | None = None, log: Callable[[str], None] | None = None) -> list[dict[str, Any]]:
-    """Per run dir with evictable files: `{"run", "dir", "artifact", "files": [{"path", "bytes", "sha256"}]}`, oldest run first."""
+    """Per run dir with evictable files: `{"run", "dir", "artifact", "files": [{"path", "bytes", "sha256", "artifact"}], "restore"}`,
+    oldest run first; `artifact` is the first of the run's PRESERVED trees (`_sources`) that holds one of them."""
     say = log or (lambda s: None)
     now = time.time() if now is None else now
     verified = verified_remote(store)
@@ -191,20 +192,23 @@ def plan_runs(store: LocalStore, runs_root: Path, *, min_bytes: int = MIN_BYTES,
         if state not in TERMINAL_STATES:
             say(f"{run}: state {state!r}, skipping")
             continue
-        outs = a.get("outputs") or {}
-        art = next((outs[k] for k in ("run_record", "run_files") if outs.get(k) in verified), None) or outs.get("run_record") or outs.get("run_files")
-        if not art:
-            say(f"{run}: no run_record or run_files artifact ({sum(b for _, b in big) / 1e6:.0f} MB), skipping")
+        sources = _sources(rd, a.get("outputs") or {})
+        if not sources:
+            say(f"{run}: no run_record, run_files or tree output artifact ({sum(b for _, b in big) / 1e6:.0f} MB), skipping")
             continue
-        if art not in verified:
-            say(f"{run}: {art[:20]} not verified on the remote, skipping")
+        preserved = [(art, under) for art, under in sources if art in verified]
+        if not preserved:
+            say(f"{run}: {', '.join(art[:20] for art, _ in sources)} not verified on the remote, skipping")
             continue
-        try:
-            m = store.get_manifest(art)
-        except Exception as e:  # noqa: BLE001
-            say(f"{run}: manifest {art[:20]} unreadable ({e}), skipping")
-            continue
-        tree = {tf.path: (tf.sha256, tf.bytes) for tf in (m.payload.files if m.payload and m.payload.type == "tree" else [])}
+        tree: dict[str, tuple[str, int, str]] = {}
+        for art, under in preserved:
+            try:
+                m = store.get_manifest(art)
+            except Exception as e:  # noqa: BLE001
+                say(f"{run}: manifest {art[:20]} unreadable ({e}), keeping its files")
+                continue
+            for tf in m.payload.files if m.payload and m.payload.type == "tree" else []:
+                tree.setdefault(f"{under}/{tf.path}" if under else tf.path, (tf.sha256, tf.bytes, art))
         files = []
         for rel, size in big:
             if rel not in tree or tree[rel][1] != size:
@@ -212,10 +216,35 @@ def plan_runs(store: LocalStore, runs_root: Path, *, min_bytes: int = MIN_BYTES,
             if size <= hash_max and _sha256(rd / rel) != tree[rel][0]:
                 say(f"{run}: {rel} sha256 differs from the artifact, keeping")
                 continue
-            files.append({"path": rel, "bytes": size, "sha256": tree[rel][0]})
+            files.append({"path": rel, "bytes": size, "sha256": tree[rel][0], "artifact": tree[rel][2]})
         if files:
-            plan.append({"run": run, "dir": str(rd), "artifact": art, "files": files})
+            used = [(art, under) for art, under in preserved if any(f["artifact"] == art for f in files)]
+            plan.append({"run": run, "dir": str(rd), "artifact": used[0][0], "files": files,
+                         "restore": " && ".join(f"research data fetch {art} --to {rd / under if under else rd}" for art, under in used)})
     return plan
+
+
+def _sources(rd: Path, outs: dict[str, Any]) -> list[tuple[str, str]]:
+    """The attempt's tree artifacts that hold copies of the run dir's files, as (art id, the run-dir path the tree is laid out
+    under, "" for the run dir itself): `run_record` / `run_files`, a `files` output (staged relative to the run dir) and a `tree`
+    output at its `tree` path, as the run's `outputs.json` declares them (`attempt.typed_outputs`)."""
+    src = [(outs[k], "") for k in ("run_record", "run_files") if isinstance(outs.get(k), str)]
+    try:
+        doc = json.loads((rd / "outputs.json").read_bytes())
+    except (OSError, ValueError):
+        doc = None
+    entries = doc.get("outputs") if isinstance(doc, dict) else None
+    for ent in entries if isinstance(entries, list) else []:
+        art = outs.get(ent.get("name")) if isinstance(ent, dict) else None
+        if not isinstance(art, str) or not art.startswith("art:"):
+            continue
+        if "files" in ent:
+            src.append((art, ""))
+        elif isinstance(ent.get("tree"), str) and ent["tree"]:
+            p = Path(ent["tree"])
+            if not p.is_absolute() and ".." not in p.parts and p.as_posix() != ".":
+                src.append((art, p.as_posix()))
+    return src
 
 
 def evict_runs(store: LocalStore, runs_root: Path, *, target_free_bytes: int, dry_run: bool = False, min_bytes: int = MIN_BYTES,
@@ -238,7 +267,7 @@ def evict_runs(store: LocalStore, runs_root: Path, *, target_free_bytes: int, dr
             for f in r["files"]:
                 (rd / f["path"]).unlink(missing_ok=True)
             doc = {"schema": EVICTED_SCHEMA, "run_id": r["run"], "artifact": r["artifact"], "evicted_utc": utc_now(), "files": r["files"],
-                   "restore": f"research data fetch {r['artifact']} --to {rd}"}
+                   "restore": r["restore"]}
             (rd / EVICTED_FILE).write_text(json.dumps(doc, indent=1) + "\n")
         simulated += n
         rep["evicted_bytes"] += n

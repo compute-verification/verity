@@ -18,8 +18,8 @@ def fail(stamp: str) -> str:
     return f"2026-10-02T{stamp}Z tick failed: kubectl create: jobs.batch \"nd-x\" already exists"
 
 
-def snap(ticks=(OK,), blocked=None, now=T0) -> dict:
-    return {"now": now, "blocked": blocked or {}, "ticks": None if ticks is None else list(ticks)}
+def snap(ticks=(OK,), blocked=None, now=T0, log=None) -> dict:
+    return {"now": now, "blocked": blocked or {}, "pane": None if ticks is None else list(ticks), "log": log}
 
 
 def test_the_remote_read_compiles_and_matches_the_dispatchers_tick_lines():
@@ -29,7 +29,7 @@ def test_the_remote_read_compiles_and_matches_the_dispatchers_tick_lines():
     assert not A.TICK_RE.match("submitted nd-vllm-epoch-run-f6f9d7d87d-replay-0 (vllm-epoch-run/cov-gm294 task 2 try 0)")
 
 
-def test_incidents_are_a_blocked_pool_three_failed_ticks_a_stalled_or_missing_pane():
+def test_incidents_are_a_blocked_pool_three_failed_ticks_a_stalled_or_unseen_dispatcher():
     assert A.incidents(snap()) == {}
     two = A.incidents(snap([OK, fail("00:12:00"), fail("00:13:00")]))
     assert two == {}
@@ -37,11 +37,21 @@ def test_incidents_are_a_blocked_pool_three_failed_ticks_a_stalled_or_missing_pa
     who, text, _ = three["dispatch"]
     assert who == ["circuits", "infra"] and "00:11:00Z to 2026-10-02T00:13:00Z" in text and "already exists" in text
     assert "hasn't ticked since 2026-10-02T00:13:00Z" in A.incidents(snap(now=T0 + 601))["dispatch"][1]
-    assert "pane is gone" in A.incidents(snap(ticks=None))["dispatch"][1]
+    assert "can't be seen" in A.incidents(snap(ticks=None))["dispatch"][1]
     b = A.incidents(snap(blocked={"/run/gpu-lease-circuits": "t pid 41 (circuits-x) ran on GPU 3 without a lease"}))
     who, text, _ = b["blocked:/run/gpu-lease-circuits"]
     assert who == ["circuits"] and "pid 41" in text and "GPU 3" in text
     assert A.incidents(snap(blocked={"/run/gpu-lease": "t"}))["blocked:/run/gpu-lease"][0] == ["proofs"]
+
+
+def test_the_dispatchers_ticks_are_the_pane_and_loop_log_together():
+    late = T0 + 601
+    blank_pane = snap(ticks=[OK], now=late, log=["2026-10-02T00:22:00Z tick {}", "2026-10-02T00:23:00Z tick {}"])
+    assert A.incidents(blank_pane) == {}
+    assert "since 2026-10-02T00:23:00Z" in A.incidents(snap(ticks=None, now=T0 + 1300, log=blank_pane["log"]))["dispatch"][1]
+    failed_in_pane = snap([fail("00:11:00"), fail("00:12:00"), fail("00:13:00")], log=["2026-10-02T00:10:00Z tick {}"])
+    assert "failed its last 3 ticks" in A.incidents(failed_in_pane)["dispatch"][1]
+    assert A.last_ticks(snap([OK], log=[OK])) == [OK]
 
 
 def test_each_incident_is_posted_once_and_cleared_once_in_its_thread():

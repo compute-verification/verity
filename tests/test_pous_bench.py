@@ -48,5 +48,5 @@ def test_harness_registry_and_certificate_gate():
     _, gaps = bench.certificate_gate(schemes.get(segments=30), 111, 536_800)
     assert gaps == ()                                       # BandMultiMeetsFamily covers every segment count
     _, gaps = bench.certificate_gate(schemes.get("dense-chain/v1", segments=30), 111, 536_800)
-    assert gaps == ("W has 30 segments; Pous.Pinned.ChainDenseMeets64 is about 1",)
+    assert gaps == ("W has 30 segments; Pous.SecurityProofs.ChainDenseMeets64 is about 1",)
     assert bench.conformance_gate("band-chain/d12/v1")["passed"]

@@ -265,16 +265,27 @@ env.update(SRC=n2["src"], TREE=d["tree"], KEY=n2["key"], COMMIT_KEY=n2["commit_k
            N2_QUESTION=f"Does {env.get('ROW')}'s Commit validate on vy-nebius-2's RTX PRO 6000, its replay equal on every sampled unit,"
                        " as node 1's Commits of its Build do?")
 print("\n".join(f"export {k}={shlex.quote(v)}" for k, v in env.items()))
-print("ITEM_ARGS=(" + " ".join(shlex.quote(a) for a in
-      [x for k, v in {**(d.get("env") or {}), "REPLAY_DEFERRED": "1"}.items() for x in ("--env", f"{k}={v}")]
-      + ([ "--class", d["class"]] if d.get("class") else [])
-      + (["--resources", json.dumps(d["resources"])] if d.get("resources") else [])
-      + (["--queue", d["queue"]] if d.get("queue") else []) + (["--priority", d["priority"]] if d.get("priority") else [])) + ")")
 EOF
 )"
+  eval "ITEM_ARGS=($(submit_args "$1"))"
   research=(/workspace/jobs/bin/uv run --no-project --python 3.12 python -m research)
   mkdir -p /workspace/jobs/hot /workspace/jobs/dm /workspace/jobs/cache/unit-rules
   [ -x /workspace/jobs/bin/py312 ] || printf '#!/bin/sh\nexec /workspace/jobs/bin/uv run --no-project --python 3.12 python "$@"\n' > /workspace/jobs/bin/py312
+}
+
+# the item's fields node 1's `dispatch.py submit` takes, as shell words: a Commit that goes back to node 1 (dispatch_n1, reclaim)
+# keeps its env, class, resources, queue, priority, lease and pinned template; without its lease a `lease: self` Commit comes
+# back as a whole-GPU pod that holds the GPU through its CPU prep
+submit_args() {  # submit_args ITEM.json
+  python3 - "$1" << 'EOF'
+import json, shlex, sys
+d = json.load(open(sys.argv[1]))
+args = [x for k, v in {**(d.get("env") or {}), "REPLAY_DEFERRED": "1"}.items() for x in ("--env", f"{k}={v}")]
+for k, flag in (("class", "--class"), ("queue", "--queue"), ("priority", "--priority"), ("lease", "--lease"), ("template_sha", "--template-sha")):
+    args += [flag, str(d[k])] if d.get(k) else []
+args += ["--resources", json.dumps(d["resources"])] if d.get("resources") else []
+print(shlex.join(args))
+EOF
 }
 
 # the GPU's environment, for a guest Commit's record to be checked against node 1's (circuits, 2:41 PM PDT): the driver, the vLLM pin,
@@ -534,16 +545,11 @@ reclaim() {
     ssh -n "$N2" "mkdir -p $GUEST/reclaimed && mv /workspace/pouw/fill/queue/$f $GUEST/reclaimed/$f" || continue
     item=$(mktemp)
     ssh -n "$N2" "cat $GUEST/items/commit-$key.json && rm -f $GUEST/items/commit-$key.json" > "$item"
-    python3 - "$item" "$DISPATCH" << 'EOF' | bash
-import json, shlex, sys
-d = json.load(open(sys.argv[1]))
-args = [x for k, v in (d.get("env") or {}).items() for x in ("--env", f"{k}={v}")] + (["--class", d["class"]] if d.get("class") else []) \
-    + (["--resources", json.dumps(d["resources"])] if d.get("resources") else []) + (["--queue", d["queue"]] if d.get("queue") else []) \
-    + (["--priority", d["priority"]] if d.get("priority") else [])
-print(shlex.join(["env", "KUBECONFIG=" + __import__("os").path.expanduser("~/.kube/config"), "/workspace/jobs/venv312/bin/python", sys.argv[2],
-                  "submit", "config-run", d["n2"]["commit_key"], "--tree", d["tree"], "--task", "1", *args]))
-EOF
-    python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["n2"]["commit_key"])' "$item" >> "$GUEST/reclaimed.txt"
+    local commit_key tree args
+    { read -r commit_key; read -r tree; } < <(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(d["n2"]["commit_key"]); print(d["tree"])' "$item")
+    eval "args=($(submit_args "$item"))"
+    KUBECONFIG=$HOME/.kube/config /workspace/jobs/venv312/bin/python "$DISPATCH" submit config-run "$commit_key" --tree "$tree" --task 1 "${args[@]}"
+    echo "$commit_key" >> "$GUEST/reclaimed.txt"
     rm -f "$item"
     echo "reclaimed $key: waited ${VY_N2_RECLAIM_MIN:-60} min on node 2; back in node 1's queue"
   done

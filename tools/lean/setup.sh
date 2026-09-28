@@ -11,4 +11,7 @@ export PATH="$HOME/.elan/bin:$PATH"
 cd "$pkg"
 elan toolchain install "$(tr -d '[:space:]' < lean-toolchain)"
 lake --version
+# `cache get` opens its downloads in parallel; under a soft limit of 1024 (some pods) part of them fail with EMFILE, and
+# `lake build` then compiles those Mathlib modules, which the audit's `dependencies` check refuses.
+ulimit -n "$(ulimit -Hn)" 2>/dev/null || true
 lake exe cache get || echo "setup.sh: no Mathlib cache fetched (Mathlib not a dependency, or the cache is unreachable); lake build compiles it"
