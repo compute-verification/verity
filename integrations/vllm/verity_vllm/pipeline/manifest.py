@@ -8,13 +8,12 @@
 `build` / `build-global` take the same inputs as v1's (a derive_step output dir holds `instances.json.gz` + `result.json` [+ `artifact.json`];
 a row dir holds one such dir per request shape, `*LP<prompt_len>_T<max_tokens-1>`), and write a manifest of v1's schema whose identities
 are the bridge's (`required.request_manifest` / `compose_global`; a TP row's rank manifests merged by `merge_ranks`).  `--no-return-slots`
-builds the pure-dataflow population (no RETURN-SLOT policy) for the record.  `--norm-scales` (opt-in, never the record) adds the norm-scale
-policy (`query.norm_scales`), `--guarded-max` (likewise) the guarded-max policy (`query.guarded_max`: the query header states it, and
-every attention hidden-stream identity gains the MS class); `--router-softmax` and `--vocab-range` (opt-in, never the record) add the
-router-softmax and vocabulary-range policies (`query.router_softmax`, `query.vocab_range`); the scale-products policy
-(`query.scale_products`) applies to every manifest and adds nothing to a Program without a shared-scale FP8 GEMM.  `--cross-call-check`
-(opt-in) fails the Build when a value is computed in two Calls (`query.cross_call`).  `compare` classifies every identity difference
-(`compare.summarize`).
+builds the pure-dataflow population (no RETURN-SLOT policy) for the record.  Four tap policies are on by default, each with a
+`--no-...` for A/B only: `--norm-scales` (`query.norm_scales`), `--guarded-max` (`query.guarded_max`: the query header states it, and
+every attention hidden-stream identity gains the MS class), `--router-softmax` and `--vocab-range` (`query.router_softmax`,
+`query.vocab_range`); the scale-products policy (`query.scale_products`) applies to every manifest and adds nothing to a Program without a
+shared-scale FP8 GEMM.  `--cross-call-check` (opt-in) fails the Build when a value is computed in two Calls (`query.cross_call`).
+`compare` classifies every identity difference (`compare.summarize`).
 """
 
 from __future__ import annotations
@@ -232,16 +231,17 @@ def _write(man: dict[str, Any], out: str) -> None:
         json.dump(man, f, separators=(",", ":"))
 
 
-ROUTER_SOFTMAX_HELP = ("opt-in, never the record: the router-softmax policy (verity_vllm.query.router_softmax) -- one router_softmax identity "
-                       "per (step, MoE layer) of the selection-order router, `moe/L<k>/router_softmax`; the Commit then needs --router-tap-so")
-VOCAB_RANGE_HELP = ("opt-in, never the record: the vocabulary-range policy (verity_vllm.query.vocab_range) -- one vocab_range identity per "
-                    "(step, TP embedding site), `<embedding module>/vocab_range`; the Commit then needs --vocab-range")
-NORM_SCALES_HELP = ("opt-in, never the record: the norm-scale policy (verity_vllm.query.norm_scales) -- one norm_scales identity per norm "
-                    "Call row, `<norm module>/norm_scale`; the Commit then needs --norm-tap-so")
+ROUTER_SOFTMAX_HELP = ("on by default, --no-router-softmax for A/B only: the router-softmax policy (verity_vllm.query.router_softmax) -- "
+                       "one router_softmax identity per (step, MoE layer) of the selection-order router, `moe/L<k>/router_softmax`; the "
+                       "Commit then needs --router-tap-so")
+VOCAB_RANGE_HELP = ("on by default, --no-vocab-range for A/B only: the vocabulary-range policy (verity_vllm.query.vocab_range) -- one "
+                    "vocab_range identity per (step, TP embedding site), `<embedding module>/vocab_range`; the Commit then needs --vocab-range")
+NORM_SCALES_HELP = ("on by default, --no-norm-scales for A/B only: the norm-scale policy (verity_vllm.query.norm_scales) -- one norm_scales "
+                    "identity per norm Call row, `<norm module>/norm_scale`; the Commit then needs --norm-tap-so")
 CROSS_CALL_HELP = "check that no value is computed in two Calls (verity_vllm.query.cross_call); fail the Build naming every recompute"
-GUARDED_MAX_HELP = ("opt-in, never the record: the guarded-max policy (verity_vllm.query.guarded_max) -- the attention stream's ROW word 3 "
-                    "carries GuardNegInfZero(m) after a row's first key block and its MS class every block's max * scale; the Commit then "
-                    "needs the guarded-max tap build")
+GUARDED_MAX_HELP = ("on by default, --no-guarded-max for A/B only: the guarded-max policy (verity_vllm.query.guarded_max) -- the attention "
+                    "stream's ROW word 3 carries GuardNegInfZero(m) after a row's first key block and its MS class every block's max * "
+                    "scale; the Commit then needs the guarded-max tap build")
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -255,10 +255,10 @@ class BuildOptions:
     no_return_slots: bool = option("--no-return-slots", default=False, action="store_true")
     word_check: str | None = option("--word-check", env="VERITY_WORD_CHECK", default=None,
                                     help="check Q_word_v1{X,W} (\"16/32[+extras]\") over the Program; fail the Build naming every violation")
-    norm_scales: bool = option("--norm-scales", default=False, action="store_true", help=NORM_SCALES_HELP)
-    guarded_max: bool = option("--guarded-max", default=False, action="store_true", help=GUARDED_MAX_HELP)
-    router_softmax: bool = option("--router-softmax", default=False, action="store_true", help=ROUTER_SOFTMAX_HELP)
-    vocab_range: bool = option("--vocab-range", default=False, action="store_true", help=VOCAB_RANGE_HELP)
+    norm_scales: bool = option("--norm-scales", default=True, action="boolean_optional", help=NORM_SCALES_HELP)
+    guarded_max: bool = option("--guarded-max", default=True, action="boolean_optional", help=GUARDED_MAX_HELP)
+    router_softmax: bool = option("--router-softmax", default=True, action="boolean_optional", help=ROUTER_SOFTMAX_HELP)
+    vocab_range: bool = option("--vocab-range", default=True, action="boolean_optional", help=VOCAB_RANGE_HELP)
     cross_call_check: bool = option("--cross-call-check", default=False, action="store_true", help=CROSS_CALL_HELP)
     out: str = option("--out")
     cmd: str = field(default="build", init=False)
@@ -278,10 +278,10 @@ class BuildGlobalOptions:
     no_return_slots: bool = option("--no-return-slots", default=False, action="store_true")
     word_check: str | None = option("--word-check", env="VERITY_WORD_CHECK", default=None,
                                     help="check Q_word_v1{X,W} (\"16/32[+extras]\") over the Program; fail the Build naming every violation")
-    norm_scales: bool = option("--norm-scales", default=False, action="store_true", help=NORM_SCALES_HELP)
-    guarded_max: bool = option("--guarded-max", default=False, action="store_true", help=GUARDED_MAX_HELP)
-    router_softmax: bool = option("--router-softmax", default=False, action="store_true", help=ROUTER_SOFTMAX_HELP)
-    vocab_range: bool = option("--vocab-range", default=False, action="store_true", help=VOCAB_RANGE_HELP)
+    norm_scales: bool = option("--norm-scales", default=True, action="boolean_optional", help=NORM_SCALES_HELP)
+    guarded_max: bool = option("--guarded-max", default=True, action="boolean_optional", help=GUARDED_MAX_HELP)
+    router_softmax: bool = option("--router-softmax", default=True, action="boolean_optional", help=ROUTER_SOFTMAX_HELP)
+    vocab_range: bool = option("--vocab-range", default=True, action="boolean_optional", help=VOCAB_RANGE_HELP)
     cross_call_check: bool = option("--cross-call-check", default=False, action="store_true", help=CROSS_CALL_HELP)
     out: str = option("--out")
     cmd: str = field(default="build-global", init=False)

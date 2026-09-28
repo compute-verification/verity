@@ -78,13 +78,15 @@ required, name a model.
 `stage.py`, `compiled.py` (the manifest of `Execution=compiled` rows), `sources/` (`hidden_source.py` / `moe_source.py` /
 `compiled_source.py` / `compiled_kernel_source.py` / `partial_source.py` / `norm_scale_source.py` / `router_softmax_source.py` /
 `vocab_range_source.py`, attached by `taps.py`), `fa2_plane_classes.py`, `committer_api.py`, and the shipped tap sources (`fa2_tap_src/`,
-`fa3_tap_src/`, `norm_tap_src/`, `router_tap_src/`).  `gate.py` is the CPU gate (one row's acquisition plan, off-pod).  The norm-scale
-tap (`NORM_TAP=1`, `query/norm_scales.py`) is opt-in and never the record, and so are the guarded-max tap (`GUARDED_MAX_TAP=1`,
-`query/guarded_max.py`: the FA2 / FA3 tap builds of `pod_fa2_tap.sh FA2_TAP_ROW_GUARD=1` / `pod_fa3_tap.sh FA3_TAP_ROW_GUARD=1` write
-`GuardNegInfZero(m)` into word 3 of the stream's ROW entry, and each key block's `max * scale` into the MS class appended after
-FIN (`VERITY_MAT_SRC=123`), which lengthens every stream identity of the manifest), the router-softmax tap (`ROUTER_TAP=1`, `query/router_softmax.py`: the ordered
-router's committed softmax per token, from a tapped `topk_softmax`) and the vocabulary-range source (`VOCAB_TAP=1`, `query/vocab_range.py`: a
-TP rank's `tok - START` and range bits per token, from the fused embedding's ids, no kernel change).
+`fa3_tap_src/`, `norm_tap_src/`, `router_tap_src/`).  `gate.py` is the CPU gate (one row's acquisition plan, off-pod).  Four taps are
+on by default; `NORM_TAP=0`, `GUARDED_MAX_TAP=0`, `ROUTER_TAP=0` or `VOCAB_TAP=0` turns one off, for A/B only.  The guarded-max tap
+(`query/guarded_max.py`) runs on every row, whose attention is FA2 or FA3: the tap builds of `pod_fa2_tap.sh FA2_TAP_ROW_GUARD=1` /
+`pod_fa3_tap.sh FA3_TAP_ROW_GUARD=1` write `GuardNegInfZero(m)` into word 3 of the stream's ROW entry, and each key block's
+`max * scale` into the MS class appended after FIN (`VERITY_MAT_SRC=123`), which lengthens every stream identity of the manifest.  The
+others attach only where the row's manifest names their family (`pipeline/row_records.py` `applicable_taps`): the norm-scale tap
+(`query/norm_scales.py`), the router-softmax tap on MoE rows (`query/router_softmax.py`: the ordered router's committed softmax per
+token, from a tapped `topk_softmax`) and the vocabulary-range source on TP rows (`query/vocab_range.py`: a TP rank's `tok - START` and
+range bits per token, from the fused embedding's ids, no kernel change).  `ops/pod_bootstrap.sh` builds their libraries.
 Never: decide what is required; never a model-name list.
 
 **`commit/`** implements *commitment*: `merkle.py` (trees over canonical ids, `path_shape` / `fold_path`, openings), `hashing.py`
