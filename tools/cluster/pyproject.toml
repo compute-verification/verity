@@ -1,0 +1,20 @@
+[project]
+name = "cluster"
+version = "0.1.0"
+description = "Cluster tooling: the machines' description, a pure per-node planner, placement, and the allocation ledger."
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+cluster = "cluster.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cluster"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
