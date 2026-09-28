@@ -39,6 +39,7 @@ pub struct Group {
 }
 
 /// A `flock-ir-unit/v2` netlist.
+#[derive(Clone)]
 pub struct IrUnitNet {
     pub name: String,
     pub useful: usize,
