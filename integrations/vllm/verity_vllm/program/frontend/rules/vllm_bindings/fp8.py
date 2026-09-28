@@ -9,6 +9,7 @@ from verity_vllm.program.frontend.derive import Alloc, refuse
 from verity_vllm.program.frontend.rules.base import InPlaceRule, RuleInfo, ViewRule
 from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, rows_of, shape
 from verity_vllm.program.frontend.rules.vllm_bindings.elementwise import _C_op
+from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile
 from verity_vllm.program.frontend.rules.vllm_bindings.operands import BF16, _row_value, _untransposed, aten
 
 
@@ -95,8 +96,8 @@ class PerTokenGroupFp8QuantRule(InPlaceRule):
 
 class CutlassScaledMmFp8BlockRule(InPlaceRule):
     """`_C.cutlass_scaled_mm(out! bf16 [.., N], a e4m3 [.., K], b = W.T ([K, N] view of e4m3 W [N, K]), a_scales f32 [.., K/G],
-    b_scales = Ws.T ([K/G, N/G] view of f32 Ws [N/G, K/G]), bias None)` -> `scaled_mm_fp8_block{K,N,G}` (ScaledMmFp8Block_v1) per token row;
-    `out` is rebound.  W and Ws are prescribed weight Inputs (the checkpoint's e4m3 words and f32 block scales); `a` / `a_scales` are the
+    b_scales = Ws.T ([K/G, N/G] view of f32 Ws [N/G, K/G]), bias None)` -> `scaled_mm_fp8_block{K,N,G}` per token row (the active target's
+    `fp8_scale_construction`: ScaledMmFp8BlockSharedScale_v1 by default, ScaledMmFp8Block_v1 per-coordinate); `out` is rebound.  W and Ws are prescribed weight Inputs (the checkpoint's e4m3 words and f32 block scales); `a` / `a_scales` are the
     values `PerTokenGroupFp8Quant[vllm]` computed.  Binds the BLOCK-scaled shapes only: a per-tensor / per-token scaled_mm (scales [M,1] /
     [1,N] / 0-d) is another kernel (`ScaledMmFp8_v1` of registry.fp8, R14 QZ) and is refused here, named."""
     modes = frozenset({"profile"})
@@ -106,7 +107,8 @@ class CutlassScaledMmFp8BlockRule(InPlaceRule):
                                    "b is a transposed view of an e4m3 [N, K] matrix; b_scales a transposed view of an f32 [N/G, K/G] matrix, G = 128",
                                    "a_scales is an f32 value [.., K/G] (the group scales the quant rule computed)", "bias is None",
                                    "K % G == 0 and N % G == 0"),
-                    evidence_domain="structural; numerics: ScaledMmFp8Block_v1 (exact-model-tested on the H100 against the blockwise _C.cutlass_scaled_mm, both dispatch variants)")
+                    evidence_domain="structural; numerics: ScaledMmFp8Block_v1 (exact-model-tested on the H100 against the blockwise _C.cutlass_scaled_mm, both dispatch "
+                                    "variants) and ScaledMmFp8BlockSharedScale_v1, its function restated")
 
     def targets(self):
         return _C_op("cutlass_scaled_mm")
@@ -159,10 +161,11 @@ class CutlassScaledMmFp8BlockRule(InPlaceRule):
         srows, _ = rows_of(ctx.coll(a_s))
         if len(rows) != len(srows):
             refuse("shape", node, ctx.module_path(node), f"a has {len(rows)} rows but a_scales {len(srows)}")
-        fn = ctx.kind("scaled_mm_fp8_block", node, K=K, N=N, G=G)
+        scale = active_target_profile().effective_fp8_scale_construction()
+        fn = ctx.kind("scaled_mm_fp8_block", node, K=K, N=N, G=G, SCALE=scale)
         outs = [ctx.call(fn, r, s, w, ws, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]") for i, (r, s) in enumerate(zip(rows, srows))]
         ctx.rebind(out, from_rows(outs, lead), self, what="out")
-        ctx.record(self, node, {"K": K, "N": N, "G": G, "rows": len(rows), "b_view": str(getattr(b, "target", None)),
+        ctx.record(self, node, {"K": K, "N": N, "G": G, "rows": len(rows), "scale": scale, "b_view": str(getattr(b, "target", None)),
                                 "b_scales_view": str(getattr(b_s, "target", None))}, emitted=f"{fn.id} x{len(rows)}")
 
 

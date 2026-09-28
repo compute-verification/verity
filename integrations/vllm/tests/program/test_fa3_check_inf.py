@@ -1,5 +1,6 @@
 """FA3's per-iteration `Check_inf` (`registry.fa3_check_inf`): the block Definition against FA3's `max_get_scale` / `fwd_step`, the tile's
-`n_block_min_causal_local_mask`, the opt-in construction selector (nothing of record moves without it), the twin and the partition rule."""
+`n_block_min_causal_local_mask`, the construction selector (the default; `guard-every-block` declared keeps `Attention_v2`), the twin and
+the partition rule."""
 from __future__ import annotations
 
 from types import SimpleNamespace
@@ -86,9 +87,9 @@ def test_the_twin_is_the_head_definition(masked_from):
     assert not st["nonfinite"][0] and st["out"][0].tolist() == list(ref)
 
 
-def test_without_the_selector_nothing_of_record_moves():
-    tp = TargetProfile(**H100)
-    assert "fa3_construction" not in tp.to_json() and tp.digest() == TargetProfile.from_json(tp.to_json()).digest()
+def test_guard_every_block_declared_keeps_attention_v2():
+    tp = TargetProfile(**H100, fa3_construction="guard-every-block")
+    assert tp.to_json()["fa3_construction"] == "guard-every-block" and tp.digest() == TargetProfile.from_json(tp.to_json()).digest()
     assert tp.effective_fa3_construction() == "guard-every-block" and not TG.fa3_check_inf(tp)
     spec = TG.attention_spec(tp, 287, 32, 8, 128, 1)
     assert spec.id == bind(b1.AttentionV2, T=287, NH=32, KVH=8, D=128, BN=128, **FA3).id
@@ -98,15 +99,16 @@ def test_without_the_selector_nothing_of_record_moves():
     assert not TG.fa3_check_inf(old)
 
 
-def test_the_selector_binds_attention_v4_on_fa3_only():
-    on = TargetProfile(**H100, fa3_construction="check-inf-per-iteration")
-    assert on.to_json()["fa3_construction"] == "check-inf-per-iteration" and on.digest() != TargetProfile(**H100).digest()
+def test_the_default_binds_attention_v4_on_fa3_only():
+    on = TargetProfile(**H100)
+    assert "fa3_construction" not in on.to_json() and on.effective_fa3_construction() == "check-inf-per-iteration" and TG.fa3_check_inf(on)
+    assert TargetProfile(**H100, fa3_construction="check-inf-per-iteration").digest() != on.digest()
     spec = TG.attention_spec(on, 287, 32, 8, 128, 1, row=0)                               # a decode row: only the first block guarded
     assert spec.id == bind(F3.AttentionV4, T=287, NH=32, KVH=8, D=128, BN=128, MASKED_FROM=2, **FA3).id
     with pytest.raises(TG.UnregisteredTarget, match="row's index"):
         TG.attention_spec(on, 287, 32, 8, 128, 1)
     assert TG.describe(on)["attention_kind"].startswith("Attention_v4{")
-    fa2 = TargetProfile(**dict(H100, flash_attn_version=2), fa3_construction="check-inf-per-iteration")
+    fa2 = TargetProfile(**dict(H100, flash_attn_version=2))
     assert TG.attention_spec(fa2, 287, 32, 8, 64, 1, row=0).id.startswith("Attention_v2{")  # forced FA2 on Hopper guards every block
     with pytest.raises(ValueError, match="fa3_construction must be"):
         TargetProfile(**H100, fa3_construction="per-block")
