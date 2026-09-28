@@ -60,7 +60,7 @@ theorem range_close {t T : Nat} (h : (t + 1) % T = 0) : List.range ((t + 1) / T)
   rw [succ_div_of_mod h, List.range_succ]
 
 /-- **One step keeps `Inv`**, the records it publishes appended. -/
-theorem step_inv {c : Config} (hT : Ticking c) (hd : Distinct c) {st : State} {P : List Record} (h : Inv c st P)
+theorem step_inv {c : Config} (hd : Distinct c) {st : State} {P : List Record} (h : Inv c st P)
     (ev : Event) : Inv c (step st ev).1 (P ++ publishes (step st ev).2) := by
   by_cases hl : ∃ now backlog, ev = .tick .egress now backlog ∧ st.shaper.t < horizon c
   · obtain ⟨now, backlog, rfl, ht⟩ := hl
@@ -102,7 +102,7 @@ theorem step_inv {c : Config} (hT : Ticking c) (hd : Distinct c) {st : State} {P
     · obtain ⟨now, backlog, rfl, ht⟩ := hi
       obtain ⟨b0, hb0, e1, e2⟩ := step_ingress h.good ht (now := now) (backlog := backlog)
       have hg0 := h.bu.rel hb0
-      obtain ⟨k1, k2, k3, k4⟩ := bucketerTick_spec hg0 hT.2
+      obtain ⟨k1, k2, k3, k4⟩ := bucketerTick_spec hg0 (Nat.pos_of_ne_zero fun h0 => by simp [h0] at ht)
       rw [e2]
       have hbt : (step st (.tick .ingress now backlog)).1.bucketer.t = st.bucketer.t + 1 := by rw [e1, k2, hb0.2]
       cases hr : b0.tick.2.2 with
@@ -131,12 +131,12 @@ theorem step_inv {c : Config} (hT : Ticking c) (hd : Distinct c) {st : State} {P
       exact ⟨hgood, h.bu.rel hb, by rw [hst]; exact h.sh_le, by rw [hb.2]; exact h.bu_le, by rw [hst]; exact h.eg,
         by rw [hb.2]; exact h.ig, h.grid⟩
 
-theorem inv_after {c : Config} (hT : Ticking c) (hd : Distinct c) :
+theorem inv_after {c : Config} (hd : Distinct c) :
     ∀ (tr : List Event) (st : State) (P : List Record), Inv c st P →
       Inv c (after st tr) (P ++ (outputs st tr).flatMap publishes)
   | [], st, P, h => by simpa [after, outputs] using h
   | ev :: tr, st, P, h => by
-    have := inv_after hT hd tr _ _ (step_inv hT hd h ev)
+    have := inv_after hd tr _ _ (step_inv hd h ev)
     show Inv c (after (step st ev).1 tr) (P ++ ((step st ev).2 :: outputs (step st ev).1 tr).flatMap publishes)
     rwa [List.flatMap_cons, ← List.append_assoc]
 
@@ -144,7 +144,7 @@ theorem inv_after {c : Config} (hT : Ticking c) (hd : Distinct c) :
 theorem closed_records {c : Config} {tr : List Event} (hT : Ticking c) (hd : Distinct c) (hc : Closed c tr) :
     windowsOn c.egressLink (published c tr) = List.range c.windows ∧
       windowsOn c.ingressLink (published c tr) = List.range c.windows ∧ ∀ r ∈ published c tr, OfGrid c r := by
-  have h := inv_after hT hd tr (init c) [] (init_inv c)
+  have h := inv_after hd tr (init c) [] (init_inv c)
   rw [List.nil_append] at h
   change Inv c (after (init c) tr) (published c tr) at h
   unfold Closed State.done State.ticks at hc
