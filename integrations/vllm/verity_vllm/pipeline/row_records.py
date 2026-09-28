@@ -14,6 +14,7 @@ import os
 import time
 from typing import Any
 
+from verity_vllm.commit.partition import word_check_refusal
 from verity_vllm.config import checkpoint_dir
 
 
@@ -318,15 +319,6 @@ def served_shape(d: str) -> str:
 QUERY_OF_RECORD = "Q_word_v1{X=16,W=32,R=no-recompute}"
 
 
-def manifest_header(path: str) -> dict[str, Any]:
-    """A manifest's query header (``query``: its ``query_id``, partition, word check and policies), {} when unreadable or absent."""
-    try:
-        q = json.load(open(path)).get("query")
-    except (OSError, ValueError, AttributeError):
-        return {}
-    return q if isinstance(q, dict) else {}
-
-
 #: the taps a row runs by default, NORM_TAP=0 etc. opting out for A/B only: (CommitConfig field, manifest build / verify flag, the query
 #: header key its policy writes, which is also its identities' family)
 TAP_POLICIES = (("norm_tap", "--norm-scales", "norm_scales"), ("router_tap", "--router-softmax", "router_softmax"),
@@ -340,14 +332,39 @@ def tap_policy_flags(ck: Any) -> list[str]:
     return [flag if getattr(ck, field, "0") == "1" else f"--no-{flag[2:]}" for field, flag, _key in POLICIES]
 
 
-def manifest_policy_mismatch(path: str, ck: Any) -> list[str]:
-    """The policies a manifest's query header disagrees with the row's CommitConfig on, either way (every policy the row runs when the
-    manifest is unreadable)."""
-    try:
-        q = json.load(open(path)).get("query")
-    except (OSError, ValueError, AttributeError):
-        q = None
+def policy_mismatch(q: Any, ck: Any) -> list[str]:
+    """The policies a manifest's query header `q` disagrees with the row's CommitConfig on, either way (every policy the row runs when
+    there is no header)."""
     return [key for field, _flag, key in POLICIES if (getattr(ck, field, "0") == "1") != (isinstance(q, dict) and isinstance(q.get(key), dict))]
+
+
+def manifest_policy_mismatch(path: str, ck: Any) -> list[str]:
+    """`policy_mismatch` of the manifest at `path` (every policy the row runs when it is unreadable)."""
+    doc = load_json(path)
+    return policy_mismatch(doc.get("query") if isinstance(doc, dict) else None, ck)
+
+
+def manifest_not_of_record(doc: Any, program_digest: str, ck: Any) -> tuple[str, str]:
+    """Why the manifest `doc` beside a Build is not the Commit's manifest of record, as (the slug its moved-aside file is named by, the
+    reason); ("", "") when it is: built under the query of record with a partition, of the Build's Program digest (`program_digest`,
+    the one the Commit is keyed by; unknown is not a match), under the row's tap policies, and recording the word check it passed (the
+    Commit refuses one without: `commit.partition.word_check_refusal`)."""
+    q = doc.get("query") if isinstance(doc, dict) and isinstance(doc.get("query"), dict) else {}
+    qid = str(q.get("query_id") or "")
+    if qid != QUERY_OF_RECORD:
+        return "other-query", f"is not built under the query of record {QUERY_OF_RECORD} (query.query_id={qid or 'none'})"
+    if not isinstance(q.get("partition"), dict):
+        return "no-partition", "names no partition (query.partition)"
+    if not program_digest or doc.get("program_digest") != program_digest:
+        return "other-program", (f"is of Program {str(doc.get('program_digest'))[:16]}, not the Build's "
+                                 f"{program_digest[:16] if program_digest else '(unknown: no build_summary.json)'}")
+    mismatch = policy_mismatch(q, ck)
+    if mismatch:
+        return "policy-" + "-".join(mismatch).replace("_", "-"), f"disagrees with this Commit's taps on the {', '.join(mismatch)} policy"
+    unchecked = word_check_refusal(q)
+    if unchecked:
+        return "unchecked", f"does not record a passing word check ({unchecked})"
+    return "", ""
 
 
 def applicable_taps(path: str, ck: Any) -> list[str]:
