@@ -471,9 +471,11 @@ class SingleRow(Row):
     def match_cmd(self) -> list[str]:
         d, cm = self.d, self.cm
         snapmax = ["--snapshot-max-bytes", cm.snapshot_max_bytes] if cm.snapshot_max_bytes else []
+        # the Programs the Match compares against (B=1 the request Program, B>=2 its components): the fold binds their sampler construction
+        progs = [p for p in ([f"{d}/build_request"] if self.B <= 1 else sorted(glob.glob(f"{d}/build_request_LP*_T*"))) if os.path.isfile(f"{p}/result.json")]
         return self.cli("match", "--case", self.role, "--workload", self.wl, "--out", f"{d}/match", "--checkpoint-dir", self.ck,
                         "--phase", cm.match_phase, "--python-gpu", self.py, "--python-cpu", self.py312, "--max-num-seqs", str(self.B),
-                        "--snapshot-steps", self.snap_steps or self.snap_def, *snapmax, "--skip", SKIP,
+                        "--snapshot-steps", self.snap_steps or self.snap_def, *snapmax, *(x for p in progs for x in ("--program-dir", p)), "--skip", SKIP,
                         "--engine-arg", f"gpu_memory_utilization={self.gpu_util}", "--cards-dir", f"{d}/match/cards", py=self.py312)
 
     def stochastic(self) -> bool:
