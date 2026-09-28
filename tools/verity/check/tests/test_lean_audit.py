@@ -397,6 +397,23 @@ def test_the_dependencies_are_kept_by_manifest_and_toolchain(tmp_path, monkeypat
     assert LA.deps_key(root / "pkg/a") != k
 
 
+def test_a_path_entry_changes_no_dependencies_key(tmp_path, monkeypatch):
+    """`.lake/packages` holds only fetched packages, so requiring another package of the repository by path needs no new
+    bundle (#1499's trailing check was refused for want of one), while a changed fetched entry needs one; node 1's daily run
+    keeps its copies under the same key."""
+    root = _tree(tmp_path, monkeypatch)
+    m, k = root / "pkg/a/lake-manifest.json", LA.deps_key(root / "pkg/a")
+    doc = json.loads(m.read_text())
+    m.write_text(json.dumps({**doc, "packages": [*doc["packages"], {"name": "b", "type": "path", "dir": "../b"}]}, indent=1))
+    assert LA.deps_key(root / "pkg/a") == k
+    spec = importlib.util.spec_from_file_location("lean_run_daily", ROOT / "tools/verity/lean/run_daily.py")
+    daily = sys.modules[spec.name] = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(daily)
+    assert daily.deps_key(root / "pkg/a") == k
+    m.write_text(json.dumps({**doc, "packages": [{**doc["packages"][0], "rev": "abd"}]}))
+    assert LA.deps_key(root / "pkg/a") != k
+
+
 def test_packages_of_one_manifest_and_toolchain_both_build_warm(tmp_path, monkeypatch):
     """POUS and PoUW pin one Mathlib on one toolchain. A run that audits both moves the kept tree into one and a copy of it
     into the other, which would otherwise clone its dependencies from GitHub."""
