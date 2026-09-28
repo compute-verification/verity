@@ -145,3 +145,31 @@ def test_a_request_that_always_stalls_fails_within_its_retries(server, tmp_path,
     with pytest.raises((TimeoutError, OSError)):
         server.get("k", tmp_path / "out")
     assert not (tmp_path / "out").exists() and len(_fired()) == 2
+
+
+def test_a_part_upload_that_stops_moving_is_cut_off_after_one_idle_window_and_retried(server, monkeypatch, tmp_path):
+    # nebius hosts: part PUTs sat for over an hour with nothing moving, under a whole-body deadline of hours for a 256 MiB part
+    monkeypatch.setattr(remote_s3, "STALL_MIN_BYTES", 1)
+    puts: list[int] = []
+
+    def do_PUT(self):
+        body = self.rfile.read(int(self.headers["Content-Length"]))
+        puts.append(len(body))
+        if len(puts) == 1:
+            _Deadline.pass_latest()                        # the window saw the whole body move: re-armed, not fired
+            _Deadline.pass_latest()                        # then nothing moves (no response): cut off
+            self.rfile.read()
+            return
+        self.send_response(200)
+        self.send_header("ETag", '"' + remote_s3.hashlib.md5(body).hexdigest() + '"')
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+    monkeypatch.setattr(_Stall, "do_PUT", do_PUT, raising=False)
+    part = {"n": 1, "offset": 0, "bytes": len(BODY), "sha256": remote_s3.hashlib.sha256(BODY).hexdigest(),
+            "md5": remote_s3.hashlib.md5(BODY).hexdigest()}
+    path = tmp_path / "f"
+    path.write_bytes(BODY)
+    assert server._upload_part("k", "u", path, part) == part["md5"]
+    assert puts == [len(BODY), len(BODY)]
+    assert server.deadline_hits == [{"method": "PUT", "key": "k", "try": 1, "of": remote_s3.RETRIES + 1, "deadline_s": remote_s3.STALL_WINDOW_S}]
+    assert all(t.seconds == remote_s3.STALL_WINDOW_S for t in _Deadline.armed)
