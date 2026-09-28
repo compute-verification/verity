@@ -148,7 +148,7 @@ def PublicAudit : Prop :=
       RoundFork (custodied zr _hCust h) dg N k Rw (transported zr _hCust h σ) cmt ∨
       SessionFork (custodied zr _hCust h) dg N k Rw M (transported zr _hCust h σ) ∨
       InnerForkRec (custodied zr _hCust h) dg N k Rw (transported zr _hCust h σ) (fun _ _ => publicHidden st) wmsg
-        Refine.H512 (clashPickCL T CT execArith Refine.H512 Refine.enc512 Refine.leaf512 (execClassAt st).cls
+        Refine.H512 (clashPickCL T CT execArith Refine.H512 Refine.enc512 Refine.leafPlain (execClassAt st).cls
           (execClassAt st).regs (execClassAt st).sch) ∨
       prob (fun o => AcceptsPublic obj prog st ∧ VerifiesVStar ish bind rows (zr o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
             ¬ (innerAt T CT st).holds (publicHidden st))

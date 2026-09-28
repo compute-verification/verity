@@ -8,11 +8,10 @@ import Proofs.Flock.Soundness.Refine.Seam
 
 `OpenedAll` (`hopen` of `vbridgeRead_assembled`) asks, at each rep's proof file, that every level's queries open to the
 level's cap (`RecAlgebra.Opened`, Ligerito.lean:148-158) under the setup's scheme `st.merkle`, which `SetupRealizes`
-pins to `MerkleScheme.hm96Sha512`. V*'s openings are the recursion's open circuit `RecOpen` (rec_open.py:37,
-rec_vstar.py:15-19): it climbs from the plain leaf `SHA-512(row)` and has no salt port, and the verifier refuses
-statements at plain leaves (FlockVerify.lean:335). So `OpenedAll` is false at V*: with no salts, hm96's check fails at its
-shape (`not_opened_hm96`: one salt per query); with salts, hm96's leaf is not V*'s. This file proves the check at the
-scheme V* climbs, `plain` (`flock-leaf/sha512-unsalted`):
+pins to `plain` (`flock-leaf/sha512-unsalted`, the scheme the inner statements name). V*'s openings are the recursion's
+open circuit `RecOpen` (rec_open.py:37, rec_vstar.py:15-19): it climbs from the plain leaf `SHA-512(row)` and has no salt
+port. At hm96 `OpenedAll` would be false at V*: with no salts, hm96's check fails at its shape (`not_opened_hm96`: one
+salt per query); with salts, hm96's leaf is not V*'s. This file proves the check at the scheme V* climbs, `plain`:
 
 * `Conss`: the verifier's Ligerito run (`RecAlgebra.ligerito`) pushes one consistency context per level, in level order,
   each with the level's `q` positions (`ligerito_conss`).
@@ -331,7 +330,7 @@ open FlockVBridge.AccChain (levelLanes)
 open FlockSoundness.Discharge.Hm (bitL)
 open Conss (climb_congr merkleCheck_of sibsOf_ofFn getD_default)
 
-/-- The scheme V*'s openings climb (rec_open.py:37; Tags.lean:333-348): SHA-512 of the row, no salt. -/
+/-- The scheme V*'s openings climb (rec_open.py:37; `Tags.withPlainLeaves`): SHA-512 of the row, no salt. -/
 abbrev plain : MerkleScheme := MerkleScheme.sha512 "flock-leaf/sha512-unsalted"
 
 /-- **`verifierRows`' consistency contexts are the schedule's levels, in order**, each with the level's `q` positions
