@@ -14,7 +14,7 @@ import types
 
 import numpy as np
 import pytest
-from verity.evaluation import evaluate
+from verity.evaluation import evaluate, evaluate_batch
 from verity_vllm.commit.binding import build_binding_map, logical_request
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.query.compose import compose_global
@@ -25,6 +25,7 @@ from verity_vllm.query.required import request_manifest
 
 torch = pytest.importorskip("torch")
 
+from verity_vllm.acquire.sources import call_boundary_plan as CP  # noqa: E402
 from verity_vllm.acquire.sources import call_boundary_source as CB  # noqa: E402
 from verity_vllm.acquire.sources import taps  # noqa: E402
 
@@ -422,6 +423,25 @@ def test_identities_another_source_claims_are_left_to_it(dense, monkeypatch):
     monkeypatch.setattr(CB, "CLAIMS", [lambda r: "everything-tap"])
     com = Recorder(Probe())
     assert taps.attach(com, dense.man, ("instance_outputs",), programs=(dense.pdir,)) == ("instance_outputs",) and not com.sources
+
+
+def test_a_definition_past_the_reference_bound_is_its_row_kernels_alone(dense, monkeypatch):
+    """Past `REFERENCE_LEAVES` argument words per instance (lowered here below the logits Gemm's 8 + 128) a Definition is evaluated by its
+    row kernel alone, to the reference's words; an instance the kernel declines (this K = 8 Gemm: its k16 chain needs K % 16 == 0) is a
+    collector error naming it and nothing of the body is committed, never the reference; and one no row kernel claims is uncovered."""
+    gemm = specialization("Gemm_v1", {"K": 32, "N": 3})
+    rng = np.random.default_rng(5)
+    x, w = _bf16(rng, 2 * 32).reshape(2, 32), np.broadcast_to(_bf16(rng, 3 * 32), (2, 3 * 32))
+    assert np.array_equal(CP._kernel_rows(gemm, "Gemm_v1{K=32,N=3}", [x, w]), evaluate_batch(gemm, x, w, kernel="reference"))
+    monkeypatch.setattr(CP, "REFERENCE_LEAVES", 100)
+    com, src = _dense_source(dense)
+    assert src.plan.kernel_only == {f"Gemm_v1{{K={H},N={V}}}"}
+    _drive(dense, com, src)
+    assert len(com.errors) == 1 + T and all(f"the row kernel of Gemm_v1{{K={H},N={V}}} declines an instance" in e for e in com.errors)
+    assert com.acquired and not any(n.startswith("logits_processor") for _s, n, _t in com.acquired)
+    monkeypatch.setattr(CP, "REFERENCE_LEAVES", 12)
+    why = " ".join(CB.plan_of(dense.man, dense.pdir).uncovered)
+    assert "Bf16DivScalar_v1" in why and "past the reference's bound, and no rows kernel registered" in why
 
 
 # ------------------------------------------------------------------------------------------------------------------------------ B = 2

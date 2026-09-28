@@ -216,7 +216,11 @@ class CallBoundarySource:
                 continue
             out = self._values.get((b.module, e))
             if out is None and order is not None and (e, b.module) in self._args:
-                out = self._values[(b.module, e)] = self.per_request(b, order, self._args.pop((e, b.module)))
+                try:
+                    out = self._values[(b.module, e)] = self.per_request(b, order, self._args.pop((e, b.module)))
+                except ValueError as err:
+                    self.error(str(err))
+                    continue
             if out is None or order is None:
                 continue
             for t in b.targets:

@@ -35,6 +35,10 @@ import numpy as np
 FAMILY = "call_boundaries"
 #: the manifest's word dtype -> the numpy word it is evaluated as and the torch dtype it is committed as
 WORD_DTYPES = {"bf16": (np.uint16, "bfloat16"), "f32": (np.uint32, "float32"), "w8": (np.uint8, "uint8"), "i64": (np.uint64, "int64")}
+#: argument words per instance above which a Definition is its row kernel's alone: the reference holds an instance as Python ints (a
+#: 256000 x 2304 logits weight is ~20 GB of them), so an instance the kernel declines is an error, and a Definition no row kernel claims
+#: is uncovered
+REFERENCE_LEAVES = 1 << 24
 
 
 class Uncovered(Exception):
@@ -117,6 +121,7 @@ class Plan:
     literals: dict[str, np.ndarray] = field(default_factory=dict)         # literal spec -> its leaves
     fields: dict[str, tuple[int, int]] = field(default_factory=dict)      # weight field (implementation name) -> (elements, width)
     definitions: dict[str, tuple[Any, int]] = field(default_factory=dict)
+    kernel_only: set[str] = field(default_factory=set)                    # Definitions over REFERENCE_LEAVES words per instance
     composition: dict[int, dict[str, int]] = field(default_factory=dict)  # engine step -> {request: token rows}: a global manifest's
     order: dict[str, str] = field(default_factory=dict)                   # workload request id -> `r<i>` (the binding map's)
     identities: int = 0
@@ -328,12 +333,21 @@ class _Context:
         if str(r.get("form") or "call") != "call":
             raise Uncovered(f"Call {cid} ({spec}) is a {r.get('form')} row")
         if spec not in self.plan.definitions:
+            from verity.evaluation.reference import signature_of
+            from verity_vllm.program.kernels import kernel_registry, rows
+
             try:
                 d = specialization(spec_family(spec), spec_statics(spec))
-                n = len(d.signature()[0])
+                params = signature_of(d)[0]
             except Exception as e:  # noqa: BLE001
                 raise Uncovered(f"Call {cid}: {spec} does not resolve to a registered Definition ({e!r:.80})") from None
-            self.plan.definitions[spec] = (d, n)
+            leaves = sum(pt.leaves for pt in params)
+            if leaves > REFERENCE_LEAVES:
+                why = kernel_registry.covers(d, rows.KERNEL)
+                if why:
+                    raise Uncovered(f"Call {cid}: {spec} reads {leaves} words per instance, past the reference's bound, and {why}")
+                self.plan.kernel_only.add(spec)
+            self.plan.definitions[spec] = (d, len(params))
         if self.plan.definitions[spec][1] != len(r.get("args") or ()):
             raise Uncovered(f"Call {cid}: {spec} takes {self.plan.definitions[spec][1]} arguments, the row gives {len(r.get('args') or ())}")
         return spec
@@ -514,8 +528,9 @@ def _arena_bound(manifest: Mapping[str, Any], plan: Plan) -> tuple[int, int]:
 def evaluate_template(plan: Plan, tpl: Template, R: int, operands: Sequence[np.ndarray], weight: Callable[[str], np.ndarray]) -> dict[str, np.ndarray]:
     """Target name -> its [R, f * width] words: `tpl` over R rows, level by level, one `evaluate_batch` per (level, Definition) over
     every row (a registered row kernel of `verity_vllm.program.kernels.rows` where one is, the reference for the rest and for what a
-    kernel declines).  `operands[k]` = forward argument k's [R * per_row, elems] words; `weight(name)` = a weight field's words, read
-    once per row batch as a broadcast view (never copied per row)."""
+    kernel declines; a `plan.kernel_only` Definition by its row kernel alone, a declined instance a ValueError).  `operands[k]` = forward
+    argument k's [R * per_row, elems] words; `weight(name)` = a weight field's words, read once per row batch as a broadcast view (never
+    copied per row)."""
     from verity.evaluation import evaluate_batch
     from verity_vllm.program.kernels import rows  # noqa: F401  -- registers the row kernels evaluate_batch picks
 
@@ -539,10 +554,31 @@ def evaluate_template(plan: Plan, tpl: Template, R: int, operands: Sequence[np.n
             groups = list(zip(*(tpl.recipes[i] for i in poss)))
             arrays = ([arg(g[0]) for g in groups] if len(poss) == 1 else
                       [np.stack([arg(x) for x in g], axis=1).reshape(R * len(poss), -1) for g in groups])
-            out = evaluate_batch(plan.definitions[spec][0], *arrays).reshape(R, len(poss), -1)
+            d = plan.definitions[spec][0]
+            out = (_kernel_rows(d, spec, arrays) if spec in plan.kernel_only else evaluate_batch(d, *arrays)).reshape(R, len(poss), -1)
             for n, i in enumerate(poss):
                 vals[i] = out[:, n]
     return {t.name: np.concatenate([vals[i][:, t.lo:t.hi] for i in t.at], axis=1).astype(WORD_DTYPES[t.dtype][0]) for t in tpl.targets}
+
+
+def _kernel_rows(d: Any, spec: str, arrays: Sequence[np.ndarray]) -> np.ndarray:
+    """`d` on every row of `arrays` by its row kernel alone; an instance the kernel declines is a ValueError naming it."""
+    from verity.evaluation.batch import type_dtype, type_shape
+    from verity.evaluation.reference import signature_of, statics_of
+    from verity_vllm.program.kernels.kernel_registry import Declined, instance
+    from verity_vllm.program.kernels.rows import KERNEL
+
+    params, ret = signature_of(d)
+    fn, statics = instance(d, KERNEL), statics_of(d)
+    args = [np.asarray(a).reshape(len(a), *type_shape(pt)).astype(type_dtype(pt), copy=False) for a, pt in zip(arrays, params)]
+    out = []
+    for i in range(len(args[0])):
+        try:
+            out.append(np.asarray(fn(*(a[i] for a in args), **statics)).reshape(-1))
+        except (Declined, ValueError) as e:
+            raise ValueError(f"call boundaries: the row kernel of {spec} declines an instance ({e}); at "
+                             f"{sum(pt.leaves for pt in params)} words per instance the reference is not run") from None
+    return np.stack(out).astype(type_dtype(ret))
 
 
 __all__ = ["FAMILY", "WORD_DTYPES", "Uncovered", "Operand", "Target", "Template", "Part", "Body", "Plan", "build_dirs", "request_programs",
