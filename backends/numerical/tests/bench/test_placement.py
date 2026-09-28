@@ -474,8 +474,9 @@ def test_an_ssh_started_probe_records_the_pod_from_the_container_init_environmen
     the container's init process, so the shared-NAT re-check at register finds the pod id.  Only those keys are read."""
     for k in ("RUNPOD_POD_ID", "RUNPOD_PUBLIC_IP", "RUNPOD_DC_ID"):
         monkeypatch.delenv(k, raising=False)
-    _init_environ(monkeypatch, tmp_path, b"PATH=/bin\0RUNPOD_POD_ID=w3joukypegsto7\0RUNPOD_PUBLIC_IP=91.199.227.82\0RUNPOD_DC_ID=EU-NL-1\0"
-                               b"RUNPOD_API_KEY=not-to-be-copied\0RUNPOD_EMPTY=\0")
+    init = {"PATH": "/bin", "RUNPOD_POD_ID": "w3joukypegsto7", "RUNPOD_PUBLIC_IP": "91.199.227.82", "RUNPOD_DC_ID": "EU-NL-1",
+            "RUNPOD_API_KEY": "not-to-be-copied", "RUNPOD_EMPTY": ""}
+    _init_environ(monkeypatch, tmp_path, b"".join(f"{k}={v}\0".encode() for k, v in init.items()))
     rec = PL.probe()
     assert (rec["pod_id"], rec["public_ip"], rec["datacenter"]) == ("w3joukypegsto7", "91.199.227.82", "EU-NL-1")
     assert "not-to-be-copied" not in json.dumps(rec)

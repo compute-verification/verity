@@ -89,6 +89,7 @@ def _decode_cold(descriptor: Path) -> int:
     return int(p.stdout.strip().splitlines()[-1])
 
 
+@pytest.mark.slow
 def test_a_single_request_stochastic_workload_composes_as_the_build_does(tmp_path):
     """At V = 1000 and S = 32 the keep word's NaN tests read multi-part sequences (the writer's alias case)."""
     V, S, LP, STEPS = 1000, 32, 3, 1
@@ -114,6 +115,7 @@ def _run(code: str, *args: str) -> subprocess.CompletedProcess:
     return subprocess.run([sys.executable, "-c", code, *args], cwd=VLLM_DIR, capture_output=True, text=True, timeout=1800)
 
 
+@pytest.mark.slow
 def test_101s_request_program_composes_as_its_build_does(tmp_path):
     """#101's request Program (V = 128256, S = 32, 23.26 x 10^9 word gates once composed) through GP-01 and a cold decode."""
     build = _build_101(tmp_path)

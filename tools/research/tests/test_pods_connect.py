@@ -86,6 +86,7 @@ def test_git_visible_files_are_tracked_existing_plus_unignored_untracked(repo):
 
 
 @pytest.mark.parametrize("rsync", [True, False], ids=["rsync", "tar-stream"])
+@pytest.mark.slow
 def test_sync_ships_prunes_only_its_own_files_and_stamps_the_source(repo, tmp_path, rsync):
     if rsync and shutil.which("rsync") is None:
         pytest.skip("rsync is not installed here (the transport then falls back to the tar stream, the other case)")
