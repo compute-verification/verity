@@ -154,7 +154,7 @@ link term per audit.
 | Sampled audits: the integrity profile over any partition and draw law, two-stage and its relations, minimax, tightness and insecurity (`FlockSoundness/Audit/README.md`) | (composition) | `Audit/*` | proved; per-unit terms named |
 | The Flock audit at the oracle layer: the batched session's projection to one table, `2^-205` (the audit layer) | 1a, composition | `Audit/Flock.lean`, `flock_session_sound` | proved, given the lowering |
 | The compiled lowering: the audit's circuit is the rows the verifier parses, and a satisfied table makes every placed unit correct, for every template (§1.5) | 1a | `Lowering.lean`, `lowering_sound`, `Prog.isRowsUnit` | proved, given the placement |
-| L1: each template's rows compute its gates (`ASSUMPTIONS.md`) | (meaning) | named | evidence: the IR comparison tests; discharge by a verified lowering |
+| L1: each template's rows compute its gates (`ASSUMPTIONS.md`) | (meaning) | named; proved for RoPE | RoPE: `Rope.rope_sound`, a verified lowering; the rest: the IR comparison tests |
 
 The proved results depend only on Lean's three standard axioms (`propext`, `Classical.choice`, `Quot.sound`). Run
 `lake env lean FlockSoundness/Check.lean` to check.
@@ -186,7 +186,8 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
     share a wire hold it in different columns. The link, not the lowering, makes them agree.
 - **The placement is the statement builder's job.** `Placement` states it. Proving it for the executable's statement
   (the slots with Δ XORed in, spec §16.1) is part of the level-3 refinement (`assumptions/trusted-components.md`).
-- **L1, each template's rows compute its gates,** is a named hypothesis (`ASSUMPTIONS.md`).
+- **L1, each template's rows compute its gates,** is a named hypothesis (`ASSUMPTIONS.md`). For RoPE it is proved
+  (`Rope.rope_sound`, `assumptions/l1-template-rows.md`).
 
 ### 1.6 Proved from the libraries, not assumed
 
@@ -248,7 +249,8 @@ term below 2^-170.
     extracted (§1.3).
 - **The circuit.** The theorem is about the block R1CS the statement lowers to (spec §16.1), with the pinned constant
   column and the public regions. That this R1CS means the named circuit is the lowering theorem (level 3). Its generic
-  step, for every template, is proved here (§1.5). The placement for the executable's statement and L1 remain.
+  step, for every template, is proved here (§1.5). The placement for the executable's statement and L1 (proved for
+  RoPE) remain.
 
 ## 3. Zero knowledge (planned; not yet proved)
 
