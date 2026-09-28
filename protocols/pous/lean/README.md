@@ -31,8 +31,9 @@ Pous/Protocol/P2/Cost.lean          P2's cost model, the generic ring over `Z/p`
                                     `MeetsOn`, `MeetsWithSlack`, and P2 in it (`p2ring`)
 Pous/Assumptions.lean               trusted, the Assumptions layer: named hypotheses (Lemma A, Conjecture B1′)
 Pous/Assumptions/P2.lean            P2's named open step `PrimeP16448`, the primality of its modulus
-Pous/Guarantees.lean                trusted, the Guarantees layer: 48 statements, the 47 grade.sh grades against
-                                    and `InvExPostFactoTwoLayer`, which `N10Refuted` negates
+Pous/Guarantees.lean                trusted, the Guarantees layer: 65 statements, the 54 grade.sh grades against,
+                                    `InvExPostFactoTwoLayer`, which `N10Refuted` negates, and ten proved results
+                                    cited outside the package
 Pous/Guarantees/P2.lean             six statements about the abstract model `m1p` at P2's parameters,
                                     which grade.sh also grades against; none is about the concrete P2
 Pous/SecurityProofs.lean            proved, the SecurityProofs layer: imports every proof module, and proves
@@ -46,6 +47,10 @@ Pous/SecurityProofs/P2/             proved: the `m1p` pins (Count, Rows, Domain,
                                     bits breaks `k = 88` from `L = 2^30`)
 Pous/SecurityProofs/Chain/Flat.lean proved, generated: P3 with a concrete `H`, the band, the dense chain scheme and
                                     the public encoder over the overwrite chain (the graded lanes, flattened)
+Pous/SecurityProofs/Continuous/     the continuous audit: MissCount (proved, pinned: the bound on misses whose
+                                    conditional probabilities are at least q_j); Game (draft, unreviewed: the
+                                    variable-state responder and two statements), PerAnswer (their proofs) and
+                                    Band (the guarantee on the 64 KiB band at D = 5)
 lean-audit.json                     the policy and pin records for tools/lean/audit.py
 CheckAxioms.lean                    one #print axioms line per headline theorem
 PousTargets.lean                    untrusted, not in the default build: the open statements as sorry targets
@@ -74,7 +79,8 @@ no proof), a kernel replay, and the pinned theorems' records. `lean-audit.json` 
 `Pous.SecurityProofs.X` (among them the stacked one-way bound, the band certificate, and the dense scheme at the 64 KB
 point, with the implementation's tagged keying and its per-segment tags), the raw-storage refutations the `m1p` pins
 cite, and P2 in the cost model (`PousP2Ring`: `meets_of_meetsOn`, the non-vacuity pins `complete`, `tight` and
-`tight_p16448`, and the refutation `not_meetsOn_b19_k88`). A changed record needs a named statement reviewer (Verity's
+`tight_p16448`, and the refutation `not_meetsOn_b19_k88`), and the continuous audit's counting step
+(`PousContinuous.pr_misses_le`, `pr_misses_gt_le`). A changed record needs a named statement reviewer (Verity's
 `AGENTS.md`).
 
 **Submissions** are one file that imports only the trusted layers (`Pous.Protocol`, `Pous.Assumptions`,
