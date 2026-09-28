@@ -145,3 +145,4 @@ import FlockSoundness.Discharge.Zero
 import FlockSoundness.Discharge.Const
 import FlockSoundness.Discharge.Placed
 import FlockSoundness.Discharge.ZkSession
+import FlockSoundness.ZK.GK
