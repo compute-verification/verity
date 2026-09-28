@@ -1,6 +1,6 @@
 # POUS (`verity_pous`)
 
-A spec-level reference for POUS, the proof-of-unique-storage encoding, with three codecs behind one API:
+A spec-level reference for POUS, proof of useful space for model weights, with three codecs behind one API:
 
 - **the band scheme** (`verity_pous.band`, the secure-first default): one layer on the band DAG with in-degree 12, `H`
   an overwrite chain on a double-width permutation (Lean's `chainBand`). Deploy it only while the effective round
