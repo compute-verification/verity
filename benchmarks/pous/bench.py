@@ -84,7 +84,7 @@ def conformance_gate(name: str) -> dict[str, Any]:
     import pous_scheme_vectors as sv
 
     pinned = json.loads(sv.path(name).read_text())
-    got = sv.vector(name)
+    got = sv.vector(name, sv.pinned_blocks(pinned) if name in sv.SLOW_ENCODE else None)
     return {"passed": got == pinned, "vector": str(sv.path(name).relative_to(ROOT)), "root": got["small"]["root"]}
 
 
@@ -119,7 +119,8 @@ def profile_json(scheme, k: int, limit_ns: int, gaps: tuple[str, ...]) -> dict[s
     from verity_pous.protocol import StorageProfile
 
     p = scheme.params
-    return StorageProfile(scheme.name, p.manifest(), p.blocks, p.m, k, limit_ns, scheme.certificate, gaps).to_json()
+    return StorageProfile(scheme.name, p.manifest(), p.blocks, p.m, k, limit_ns, scheme.certificate, gaps,
+                          scheme.experimental).to_json()
 
 
 # ---------------------------------------------------------------------------------------------------------- reference (CPU)
@@ -208,7 +209,8 @@ class Reference:
     def _audits(protocol, scheme, vk, block, audits: int, rtt_ns: int) -> dict[str, Any]:
         results = []
         for j in range(audits):
-            v = protocol.Verifier(scheme, vk, protocol.challenge_key(f"bench-audit/{j}".encode(), vk), rtt_allowance_ns=rtt_ns)
+            v = protocol.Verifier(scheme, vk, protocol.challenge_key(f"bench-audit/{j}".encode(), vk), rtt_allowance_ns=rtt_ns,
+                                  experimental=True)   # an experimental scheme's profile says so
             results.append(v.run(protocol.responder(scheme, block)))
         elapsed = [x.elapsed_ns for r in results for x in r.answers]
         return {"audits": audits, "accepted": sum(r.accepted for r in results), "k": v.k, "limit_ns": v.limit_ns,
@@ -272,7 +274,137 @@ class VllmGpu:
         }
 
 
-IMPLS = {c.name: c for c in (Reference, VllmGpu)}
+# ---------------------------------------------------------------------------------------------------------- p2-gpu
+
+class P2Gpu:
+    """P2's GPU decode (`benchmarks/pous/p2_gpu/`, the efficient-cryptography campaign's tuned CGBN kernel, bc-28faaf0e).
+
+    Two builds run on the same C:
+    - `-DP2_KEYS`, the scheme's own key schedule (M1: fresh per-block `K_j, t_j`), whose rate is the result. The keys
+      are derived on the host with `verity_pous.schemes.p2.block_keys` and read from device memory. Deriving them on the
+      device (two SHAKE256 calls per block, about 0.016 Keccak-f per byte) is not in the timed kernel.
+    - The campaign's shared-key build (M2, not covered by `P2MeetsM1Uncond`), for comparison only.
+
+    C is random blocks below p, with four blocks encoded by the reference planted in it. The kernel's sampled outputs
+    (the first 1,024 blocks, 1,024 pseudo-random ones, the last, and the planted ones) are checked against the
+    reference's decode.  The timed audit and its negative control run on the same C through `verity_pous.protocol`."""
+
+    name = "p2-gpu"
+
+    def run(self, a: argparse.Namespace, ws: dict[str, Any], out: Path) -> dict[str, Any]:
+        import numpy as np
+
+        from verity_pous import protocol, schemes
+        from verity_pous.labels import salt_value, tag
+        from verity_pous.schemes import p2
+        from verity_pous.verifier import VerifierKey, leaf_hash
+
+        base = schemes.get(a.scheme)
+        if not isinstance(base, schemes.P2):
+            raise SystemExit(f"p2-gpu runs a P2 scheme, not {a.scheme}")
+        pb, nb, bps = base.params.payload_bytes, base.params.block_bytes, base.params.blocks_per_segment
+        n = -(-ws["bytes"] // pb)
+        if a.max_segments:
+            n = min(n, a.max_segments * bps)
+        scheme = schemes.get(a.scheme, segments=-(-n // bps))
+        params, f, nl = scheme.params, p2._field(scheme.params), nb // 4
+        work = Path(a.scratch) / "p2"
+        work.mkdir(parents=True, exist_ok=True)
+        bins = Path(a.p2_bin)
+
+        rng = np.random.default_rng(20260928)
+        c = rng.integers(0, 1 << 32, size=(params.blocks, nl), dtype=np.uint32)
+        c[:, -1] = np.minimum(c[:, -1], 0xFFFFFFFE)                   # every block below p = 2^w − c0
+        planted = {}
+        t0 = time.perf_counter()
+        for g in sorted({1, n // 3, (2 * n) // 3, n - 2}):
+            s, j = divmod(g, bps)
+            m = int.from_bytes(hashlib.shake_256(f"verity-pous/bench/p2/{g}".encode()).digest(pb), "little")
+            k, tj = p2.block_keys(params, SALT, s, j)
+            c[g] = np.frombuffer(f.rho(f.sigma(f.rho((m + tj) % f.p), k)).to_bytes(nb, "little"), dtype=np.uint32)
+            planted[g] = m
+        encode_s = (time.perf_counter() - t0) / len(planted)
+        (work / "c.bin").write_bytes(c.tobytes())
+        t0 = time.perf_counter()
+        keys = [p2.block_keys(params, SALT, *divmod(g, bps)) for g in range(n)]
+        keys_s = time.perf_counter() - t0
+        with (work / "keys.bin").open("wb") as fk:
+            fk.write(n.to_bytes(4, "little"))
+            fk.write(b"".join(k.to_bytes(nb, "little") for k, _ in keys))
+            fk.write(b"".join(tj.to_bytes(nb, "little") for _, tj in keys))
+        shared = [int.from_bytes(hashlib.shake_256(f"verity-pous/bench/p2/shared/{x}".encode()).digest(nb + 8), "little")
+                  for x in ("K", "t0", "step")]
+        shared = [shared[0] % (1 << params.w), shared[1] % f.p, shared[2] % f.p]
+        (work / "params.bin").write_bytes(params.w.to_bytes(4, "little") + params.c0.to_bytes(4, "little")
+                                          + b"".join(x.to_bytes(nb, "little") for x in shared))
+        (work / "specials.bin").write_bytes(len(planted).to_bytes(4, "little") + b"".join(
+            g.to_bytes(8, "little") + c[g].tobytes() for g in planted))
+        (work / "nospec.bin").write_bytes(bytes(4))
+
+        def kernel(binary: str, specials: str, sample: Path, extra: list[str]) -> dict[str, Any]:
+            cmd = [str(bins / binary), str(work / "params.bin"), str(work / specials), str(sample), str(n * nb), "7",
+                   str(work / "c.bin"), *extra]
+            proc = subprocess.run(cmd, capture_output=True, text=True)
+            (out / f"{binary}.log").write_text(proc.stdout + proc.stderr)
+            if proc.returncode != 0:
+                raise SystemExit(f"{binary} exited {proc.returncode}: {proc.stderr[-400:]}")
+            return json.loads(proc.stdout.strip().splitlines()[-1])
+
+        m1 = kernel("p2dec_16448_32_s2_keys", "specials.bin", out / "sample-m1.bin", [str(work / "keys.bin")])
+        m2 = kernel("p2dec_16448_32_s2", "nospec.bin", out / "sample-m2.bin", [])
+
+        def check(sample: Path, decode, expect: dict[int, int]) -> dict[str, Any]:
+            data = sample.read_bytes()
+            count = int.from_bytes(data[4:8], "little")
+            seen, bad, off = set(), 0, 8
+            for _ in range(count):
+                g = int.from_bytes(data[off:off + 8], "little")
+                cv = int.from_bytes(data[off + 8:off + 8 + nb], "little")
+                mv = int.from_bytes(data[off + 8 + nb:off + 8 + 2 * nb], "little")
+                off += 8 + 2 * nb
+                if g in seen:
+                    continue
+                seen.add(g)
+                bad += mv != decode(g, cv) or (g in expect and mv != expect[g])
+            return {"passed": bad == 0 and bool(seen) and all(g in seen for g in expect), "checked": len(seen),
+                    "mismatches": bad, "planted": sum(g in seen for g in expect), "planted_of": len(expect)}
+
+        def m1_decode(g: int, cv: int) -> int:
+            k, tj = keys[g]
+            return (f.sq(f.sigma(f.sq(cv), k)) - tj) % f.p
+
+        def m2_decode(g: int, cv: int) -> int:
+            return (f.sq(f.sigma(f.sq(cv), shared[0])) - (shared[1] + g * shared[2])) % f.p
+
+        blocks = [c[g].tobytes() for g in range(params.blocks)]
+        vk = VerifierKey.from_leaves(params, SALT, [leaf_hash(params, SALT, g, b) for g, b in enumerate(blocks)])
+        honest = Reference._audits(protocol, scheme, vk, blocks.__getitem__, a.audits, a.rtt_allowance_ns)
+        wrong = [bytes(nb) if g % 10 == 0 else b for g, b in enumerate(blocks)]
+        negative = Reference._audits(protocol, scheme, vk, wrong.__getitem__, a.audits, a.rtt_allowance_ns)
+        gate, gaps = certificate_gate(scheme, honest["k"], honest["limit_ns"])
+        nt = max(params.segments, TAG_SEGMENTS)
+        pass_s = m1["ms_med"] / 1e3
+        return {
+            "implementation": {"name": self.name, "commit": a.impl_commit, "kernel": "benchmarks/pous/p2_gpu s2, TPI 32, 64-thread blocks",
+                               "keys": "per block, derived on the host (verity_pous.schemes.p2.block_keys), read from device memory"},
+            "device": {"gpu": m1.get("gpu"), "sms": m1.get("sms"), "regs": m1.get("regs")},
+            "segments": params.segments, "blocks": n, "weight_bytes": n * pb,
+            "gates": {"reference_decode": check(out / "sample-m1.bin", m1_decode, planted),
+                      "m2_reference_decode": check(out / "sample-m2.bin", m2_decode, {}),
+                      "certificate": gate, "segment_tags": tags_gate([tag(salt_value(SALT), s).to_bytes(32, "little")
+                                                                       for s in range(nt)], nt),
+                      "timed_audit": {"passed": honest["accepted"] == honest["audits"]},
+                      "negative_control": {"passed": negative["accepted"] == 0, "accepted": negative["accepted"]}},
+            "metrics": {"decode_pass_s": pass_s, "ewb": n * pb / pass_s, "stored_GBps": m1["GBps_stored_med"],
+                        "m2_shared_key": {"decode_pass_s": m2["ms_med"] / 1e3, "ewb": n * pb / (m2["ms_med"] / 1e3),
+                                          "stored_GBps": m2["GBps_stored_med"]},
+                        "h2d_GBps": m1.get("h2d_GBps"), "host_keys_s": keys_s, "reference_encode_s_per_block": encode_s,
+                        "audit": honest, "negative_audit": negative, "kernel": {"m1": m1, "m2": m2}},
+            "profile": profile_json(scheme, honest["k"], honest["limit_ns"], gaps) if honest["accepted"] else None,
+        }
+
+
+IMPLS = {c.name: c for c in (Reference, VllmGpu, P2Gpu)}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -285,17 +417,22 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--audits", type=int, default=20)
     ap.add_argument("--rtt-allowance-ns", type=int, default=0, help="reference: the verifier's round-trip allowance")
     ap.add_argument("--workers", type=int, default=cpus(), help="reference: CPU processes (default: the usable CPUs)")
-    ap.add_argument("--max-segments", type=int, default=0, help="reference: decode only the first N segments (0: all)")
+    ap.add_argument("--max-segments", type=int, default=0, help="reference, p2-gpu: only the first N segments (0: all)")
     ap.add_argument("--impl-tree", help="vllm-gpu: the tree holding verity_vllm.engine.pous (#188)")
     ap.add_argument("--impl-commit", help="the implementation's source commit, recorded")
     ap.add_argument("--build-dir", default="/workspace/pous_build", help="vllm-gpu: the pous_native JIT build directory")
     ap.add_argument("--python", default=sys.executable, help="vllm-gpu: the interpreter with torch")
+    ap.add_argument("--p2-bin", default=str(HERE / "p2_gpu" / "bin"), help="p2-gpu: the directory of the built kernels")
+    ap.add_argument("--scratch", default="/tmp/pous-bench", help="large inputs (C, keys), kept out of the run directory")
     a = ap.parse_args(argv)
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     ws = weight_set(a.weight_set)
     t = time.perf_counter()
+    from verity_pous import schemes as _schemes
+
     doc: dict[str, Any] = {"schema": SCHEMA, "scheme": a.scheme, "weight_set": a.weight_set, "hardware": a.hardware,
+                           "experimental": _schemes.get(a.scheme).experimental,
                            "source_commit": os.environ.get("RESEARCH_SOURCE_COMMIT"), "run_id": os.environ.get("RESEARCH_RUN_ID"),
                            "gates": {"conformance": conformance_gate(a.scheme)}}
     body = IMPLS[a.impl]().run(a, ws, out)

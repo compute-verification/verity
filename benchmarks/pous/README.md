@@ -24,6 +24,13 @@ Implementations:
 - `vllm-gpu`: the GPU kernels of `verity_vllm.engine.pous` (#172, #188), from their own tree, through its frozen
   harness `verity-vllm pous-dense-bench`, with the flags of the band's run of record.
 
+- `p2-gpu`: the efficient-cryptography campaign's tuned P2 kernel (`p2_gpu/`, CGBN) for the **experimental**
+  `p2-16448/v0`.
+  - The measured build reads fresh per-block keys from device memory: M1's schedule, the one `P2MeetsM1Uncond` is
+    about.
+  - The campaign's shared-key build (M2) runs on the same C for comparison.
+  - The keys are derived on the host and excluded from the timed kernel.
+
 A new one is a class in `bench.py`'s `IMPLS`.
 
 ~~~bash
@@ -33,4 +40,6 @@ PYTHONPATH=packages/verity/src:protocols/pous python benchmarks/pous/bench.py --
 git -C <#188 checkout> archive -o impl.tar 4e49163193c3750dad580f3a28f5428fbb722a8a
 research run --on <L40S pod> --project verity --source . --cwd source --send impl.tar --campaign pous \
   -- bash benchmarks/pous/pod.sh IMPL=vllm-gpu IMPL_COMMIT=4e49163193c3750dad580f3a28f5428fbb722a8a
+research run --on <L40S pod> --project verity --source . --cwd source --campaign pous \
+  -- bash benchmarks/pous/pod.sh IMPL=p2-gpu [WS=qwen2.5-7b/layer0+head]                     # experimental P2
 ~~~

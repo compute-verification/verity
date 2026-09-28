@@ -14,7 +14,8 @@
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 REPO=$(pwd); I=$RESEARCH_RUN_DIR/inputs; O=$RESEARCH_RUN_DIR; W=${WORK:-/workspace}/pous-bench
-IMPL=${IMPL:-vllm-gpu}; WS=${WS:-qwen2.5-0.5b/linears+head}; HW=${HW:-l40s-48gb/bf16}; SCHEME=${SCHEME:-band-chain/d12/v1}
+IMPL=${IMPL:-vllm-gpu}; WS=${WS:-qwen2.5-0.5b/linears+head}; HW=${HW:-l40s-48gb/bf16}
+SCHEME=${SCHEME:-$([ "$IMPL" = p2-gpu ] && echo p2-16448/v0 || echo band-chain/d12/v1)}
 AUDITS=${AUDITS:-20}
 mkdir -p "$W" "$O/bench"
 nvidia-smi --query-gpu=name,driver_version,clocks.max.sm --format=csv,noheader || true
@@ -48,6 +49,20 @@ if [ "$IMPL" = vllm-gpu ]; then
   export PATH=$(dirname "$PY"):$PATH
   "$PY" benchmarks/pous/bench.py --scheme "$SCHEME" --impl vllm-gpu --impl-tree "$W/impl" --impl-commit "${IMPL_COMMIT:-unknown}" \
     --build-dir "$W/pous_build" --python "$PY" --weight-set "$WS" --hardware "$HW" --out "$O/bench" --audits "$AUDITS"
+elif [ "$IMPL" = p2-gpu ]; then
+  # P2's kernels (benchmarks/pous/p2_gpu): CGBN at its pinned commit, libgmp for CGBN's host pass, nvcc for sm_89
+  export PATH=/usr/local/cuda/bin:$PATH
+  [ -f /usr/include/gmp.h ] || { apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq libgmp-dev >/dev/null; } || exit 3
+  CG=$W/CGBN
+  [ -d "$CG/.git" ] || git clone -q https://github.com/NVlabs/CGBN "$CG" || exit 3
+  git -C "$CG" checkout -q "$(cat benchmarks/pous/p2_gpu/CGBN.commit)" || exit 3
+  make -C benchmarks/pous/p2_gpu CGBN="$CG" BIN="$W/p2bin" -j2 > "$O/p2-make.log" 2>&1 || { tail -20 "$O/p2-make.log"; exit 3; }
+  cp "$W"/p2bin/*.ptxas "$O/" 2>/dev/null
+  PY=$W/ref312/bin/python
+  [ -x "$PY" ] || { uv venv -q "$W/ref312" --python 3.12 && uv pip install -q --python "$PY" numpy; } || exit 3
+  "$PY" benchmarks/pous/bench.py --scheme "$SCHEME" --impl p2-gpu --p2-bin "$W/p2bin" --scratch "$W/scratch" \
+    --impl-commit "${RESEARCH_SOURCE_COMMIT:-}" --weight-set "$WS" --hardware "$HW" --out "$O/bench" --audits "$AUDITS" \
+    ${MAX_SEGMENTS:+--max-segments "$MAX_SEGMENTS"}
 else
   PY=$W/ref312/bin/python
   [ -x "$PY" ] || { uv venv -q "$W/ref312" --python 3.12 && uv pip install -q --python "$PY" numpy; } || exit 3
