@@ -84,8 +84,9 @@ theorem scopeOk_eq (c : Circuit) : ProvedScope.scopeOk c = Layout.scopeOk c := b
 /-- **The executable's `scopeOkH` is `Layout.scopeOkH`.** -/
 theorem scopeOkH_eq (c : Circuit) : ProvedScope.scopeOkH c = Layout.scopeOkH c := by
   have e : ProvedScope.v2Row = Layout.v2Row := rfl
+  have e' : ProvedScope.segRow = Layout.segRow := rfl
   simp only [ProvedScope.scopeOkH, Layout.scopeOkH, portReadsB_eq, ProvedScope.v1Ports, Layout.v1Ports,
-    ProvedScope.v2Rows, Layout.v2Rows, e]
+    ProvedScope.bitRows, Layout.bitRows, e, e']
 
 /-! ## The check, and what it gives -/
 
