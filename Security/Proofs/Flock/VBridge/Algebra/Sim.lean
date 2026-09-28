@@ -1,4 +1,4 @@
-import Proofs.Flock.VBridge.Algebra.Structure
+import Flock.RecAlgebra
 import Proofs.Flock.Soundness.Refine.Arith
 
 /-!
@@ -14,7 +14,7 @@ points are the same.
   `SimL` is the same through Ligerito's state. Each function `run` calls has its lemma, in the order `run` calls them.
 -/
 
-namespace FlockVBridge.Algebra
+namespace Flock.RecAlgebra
 
 open Flock FlockSoundness.Refine FlockLevel3
 
@@ -135,7 +135,7 @@ theorem Hom.foldl_add (hh : Hom h) {γ : Type} (f : γ → α) (g : γ → β) (
   | c :: l, acc => by simp only [List.foldl_cons]; rw [hh.foldl_add f g hfg l, hh.add, hfg]
 
 theorem Hom.dotV (hh : Hom h) (cs : Array F128) (xs : Array α) : h (dotV cs xs) = dotV cs (xs.map h) := by
-  unfold FlockVBridge.Algebra.dotV
+  unfold Flock.RecAlgebra.dotV
   rw [← Array.foldl_toList, ← Array.foldl_toList,
     hh.foldl_add (fun cx : F128 × α => Val.sm cx.1 cx.2) (fun cx => Val.sm cx.1 (h cx.2)) (fun cx => hh.sm _ _),
     hh.zero]
@@ -149,25 +149,25 @@ theorem Hom.zipWith_add (hh : Hom h) (a b : Array α) :
   simp only [hh.add]
 
 theorem Hom.kadd (hh : Hom h) (x y : KV α) : KV.map h (kadd x y) = kadd (KV.map h x) (KV.map h y) := by
-  simp only [KV.map, FlockVBridge.Algebra.kadd, hh.add]
+  simp only [KV.map, Flock.RecAlgebra.kadd, hh.add]
 
 theorem Hom.kc (hh : Hom h) (c : F256) (x : KV α) : KV.map h (kc c x) = kc c (KV.map h x) := by
-  simp only [KV.map, FlockVBridge.Algebra.kc, hh.add, hh.sm]
+  simp only [KV.map, Flock.RecAlgebra.kc, hh.add, hh.sm]
 
 theorem Hom.kf (hh : Hom h) (c : F256) (x : α) : KV.map h (kf c x) = kf c (h x) := by
-  simp only [KV.map, FlockVBridge.Algebra.kf, hh.sm]
+  simp only [KV.map, Flock.RecAlgebra.kf, hh.sm]
 
 theorem Hom.fk (hh : Hom h) (b : F128) (x : KV α) : KV.map h (fk b x) = fk b (KV.map h x) := by
-  simp only [KV.map, FlockVBridge.Algebra.fk, hh.sm]
+  simp only [KV.map, Flock.RecAlgebra.fk, hh.sm]
 
 theorem Hom.kofF (hh : Hom h) (y : α) : KV.map h (kofF y) = kofF (h y) := by
-  simp only [KV.map, FlockVBridge.Algebra.kofF, hh.zero]
+  simp only [KV.map, Flock.RecAlgebra.kofF, hh.zero]
 
 theorem Hom.kaddAll (hh : Hom h) (xs : List (KV α)) :
     KV.map h (kaddAll xs) = kaddAll (xs.map (KV.map h)) := by
-  unfold FlockVBridge.Algebra.kaddAll
-  suffices ∀ (l : List (KV α)) (acc : KV α), KV.map h (l.foldl FlockVBridge.Algebra.kadd acc) =
-      (l.map (KV.map h)).foldl FlockVBridge.Algebra.kadd (KV.map h acc) by
+  unfold Flock.RecAlgebra.kaddAll
+  suffices ∀ (l : List (KV α)) (acc : KV α), KV.map h (l.foldl Flock.RecAlgebra.kadd acc) =
+      (l.map (KV.map h)).foldl Flock.RecAlgebra.kadd (KV.map h acc) by
     rw [this]; simp only [KV.map, hh.zero]
   intro l
   induction l with
@@ -176,11 +176,11 @@ theorem Hom.kaddAll (hh : Hom h) (xs : List (KV α)) :
 
 theorem Hom.ofMsg (hh : Hom h) (mm : KV α × KV α) (s : KV α) :
     KV3.map h (ofMsg mm s) = ofMsg (KV.map h mm.1, KV.map h mm.2) (KV.map h s) := by
-  simp only [KV3.map, FlockVBridge.Algebra.ofMsg, hh.kadd]
+  simp only [KV3.map, Flock.RecAlgebra.ofMsg, hh.kadd]
 
 theorem Hom.kaddAll_kf (hh : Hom h) (cs : Array F256) (xs : Array α) :
-    KV.map h (FlockVBridge.Algebra.kaddAll ((cs.zip xs).toList.map fun fa => FlockVBridge.Algebra.kf fa.1 fa.2)) =
-      FlockVBridge.Algebra.kaddAll ((cs.zip (xs.map h)).toList.map fun fa => FlockVBridge.Algebra.kf fa.1 fa.2) := by
+    KV.map h (Flock.RecAlgebra.kaddAll ((cs.zip xs).toList.map fun fa => Flock.RecAlgebra.kf fa.1 fa.2)) =
+      Flock.RecAlgebra.kaddAll ((cs.zip (xs.map h)).toList.map fun fa => Flock.RecAlgebra.kf fa.1 fa.2) := by
   rw [hh.kaddAll, List.map_map]
   congr 1
   rw [Array.toList_zip, Array.toList_zip, Array.toList_map, List.zip_map_right, List.map_map]
@@ -579,4 +579,4 @@ theorem run_sim (sh : Shape) (M : Messages α) (extras : Array Claim) :
 
 end Run
 
-end FlockVBridge.Algebra
+end Flock.RecAlgebra
