@@ -1107,6 +1107,17 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   forced-zero row); every wire.
 - **Regions.** `Digest(p)` per port: the hm96 range's `bc` group, free bits `[0, 10)` and the `log2 G` VU bits above slot
   `p`, valued at each VU's `b ‖ c` (a padding VU's the pinned `dummy.bc`); then `Out` (§16.5).
+- **The region-word check** (`HmRow.checkRegionWords`, `docs/region-word-check.md`; the red team's C3, H_reg).
+  - A region claim's ring-switch message carries every bit of each word the region covers in the clear.
+  - So `setupH` refuses a statement in which a column shares a 128-bit word with a *partial* region's columns without
+    being one of them, unless its rows in the combined `A` and `B` are both empty.
+  - A region is partial when some in-word bit 0–6 is not free. Its covered words are its fixed bits above 6, with each
+    combination of its free bits above 6.
+  - Row `q` of the combined `A` is the slot type's row placed at `q`, in block columns (a mask slot's is `[q]`), plus every
+    `Δ_A` entry `(q, col)`, summed over GF(2) as `addDelta` sums them. An entry twice cancels. `B` is the same.
+  - Today only a tail stage's `Out` region is partial. On the GEMM coordinate it is 16 bits of a word, and the other 112
+    columns are checked.
+  - `flock-verify region-words` runs the check alone, with optional extra Δ entries (`test_lean_region_words.py`).
 - **Public file.** `flock-circuit-inputs`: header `units = {vus_per_block, units_per_vu, indices (ascending, one per
   instance), blocks (indices in chunks of G)}`, `frame_v3.frame = "frame-v3-sha512"`, `frame_v3.row_key_sha512`; body
   `b ‖ c` (128 bytes per instance and port, instance-major), then the output words. The public digest is

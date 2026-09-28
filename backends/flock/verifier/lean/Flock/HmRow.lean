@@ -718,6 +718,49 @@ def regions (c : Circuit) (pub : Public) : V (Array Region) := do
           acc.push (v % 256).toUInt8 |>.push (v / 256).toUInt8) acc) ByteArray.empty)
   return out.push (← c.outRegion pub)
 
+/-- The columns that share a 128-bit word with a partial region's columns without being one of them, as (region, column).
+A region is partial when some in-word bit (0 to 6) is not free; its covered words are its fixed bits above 6 with each
+combination of its free bits above 6. -/
+def sharedColumns (regions : Array Region) : Array (Nat × Nat) := Id.run do
+  let mut out := #[]
+  for ri in [0:regions.size] do
+    let r := regions[ri]!
+    if !(List.range 7).all r.free.contains then
+      let high := r.free.filter (· ≥ 7)
+      for a in [0:2 ^ high.size] do
+        let w := (List.range high.size).foldl (fun x i => x ||| (a >>> i) % 2 * 2 ^ high[i]!) (r.fixed / WORD * WORD)
+        for v in [0:WORD] do
+          if (w + v) &&& r.mask != r.fixed then out := out.push (ri, w + v)
+  return out
+
+/-- A sorted list of columns sums to zero over GF(2): every column appears an even number of times. -/
+def evenRuns (s : Array Nat) : Bool := s.size % 2 == 0 && (List.range (s.size / 2)).all fun i => s[2 * i]! == s[2 * i + 1]!
+
+/-- **The region-word check** (`docs/region-word-check.md`; the red team's C3 on the public-circuit ZK proof, H_reg): a
+region claim's ring-switch message carries every bit of each word the region covers in the clear, so a column sharing a
+word with a region's columns must be one of them, or be forced to zero: its rows in the combined `A` and `B` both empty.
+Row `q` of the combined `A` is the row of the slot type placed at `q` in block columns (a mask slot's is `[q]`), plus every
+`Δ_A` entry `(q, col)`, summed over GF(2) as `addDelta` sums them (an entry twice cancels); likewise `B`. -/
+def checkRegionWords (c : Circuit) (da db : Array (Nat × Nat)) (regions : Array Region) : V Unit := do
+  let shared := sharedColumns regions
+  let want : Std.HashSet Nat := shared.foldl (fun s e => s.insert e.2) {}
+  let byRow := fun (d : Array (Nat × Nat)) => d.foldl (fun (m : Std.HashMap Nat (Array Nat)) e =>
+    if want.contains e.1 then m.insert e.1 ((m.getD e.1 #[]).push e.2) else m) {}
+  let (ra, rb) := (byRow da, byRow db)
+  let empty := fun (q : Nat) (delta : Std.HashMap Nat (Array Nat)) (useA : Bool) => Id.run do
+    let mut cols := delta.getD q #[]
+    if let some r := c.ranges.find? (fun r => r.start ≤ q && q < r.start + r.count * 2 ^ r.slotLog) then
+      let slot0 := q / 2 ^ r.slotLog * 2 ^ r.slotLog
+      match r.kind with
+      | .net i =>
+        let net := (c.nets.getD i default).2
+        cols := cols ++ ((if useA then net.a else net.b).row (q - slot0)).map (slot0 + ·)
+      | _ => cols := cols.push q
+    return evenRuns (cols.qsort (· < ·))
+  for (ri, q) in shared do
+    if !(empty q ra true && empty q rb false) then
+      throw s!"region {(regions.getD ri default).name}: column {q} shares a word with the region's bits and is not forced to zero"
+
 end HmRow
 
 /-- `setup` for an `hm96-sha512/row/v1` statement: the circuit, the population's public file and, for a drawn session, the
@@ -756,6 +799,7 @@ def Stmt.setupH (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coin
   let pin ← HmRow.pin c
   let (da, db) := HmRow.delta c pin
   let regions ← HmRow.regions c pub
+  HmRow.checkRegionWords c da db regions
   let mut h := tags.statement.toUTF8 ++ c.sha ++ (← canon tags.identity).toUTF8
   for x in [n, blocksReal, nbl, m, c.kLog, pin, regions.size, c.g] do h := pushLe64 h x
   for d in [da, db] do
