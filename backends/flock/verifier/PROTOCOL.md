@@ -1234,7 +1234,7 @@ Soundness of a verdict rests on:
   live coins: 2^-195.5 per table by §15's ledger. The soundness lane proves 2^-205 per table in Lean, at the analysis
   slack `η = 1/200`, with no named assumption: mutual correlated agreement up to the Johnson bound (BCHKS25 Theorem
   4.6) is proved from DKT26 in ArkLib, and ring switching and Ligerito's list-decoding analysis are proved there too
-  (`lean/soundness/ASSUMPTIONS.md` §1.1, §3).
+  (`lean/soundness/README.md` §1.1 and §1.6, and its `ASSUMPTIONS.md`).
 - **Coins:** with `os` coins, each coin is uniform and unknown to the prover before it sent the round the coin answers.
   With `seed` coins, additionally: the seed commitment hides the seed, and SHA-256 in counter mode is a PRF (§7.2).
 - **Hashes:** SHA-256 collision resistance for the Merkle trees, the round digests and the statement binding (Table 1:
@@ -1336,6 +1336,17 @@ Level-3 status (`lean/FlockProofs`, kernel-checked; `CheckAxioms.lean` and a tes
     `ofLimbs_bijective`, `lo_balanced`.
 - **1d, the fold, first lemmas** (`Fold.lean`): `slot_factor`, so a slot's in-block tensor is its local tensor times
   `eq(ρ_hi, q)`, which is the reason `Stmt.fold` folds each slot type once; and `foldT_get`, so the sparse fold is `Xᵀe`.
+- **A lookup slot's rows compute `table[index]`** (`LookupRows.lean`, `build_computes`, over any field of characteristic
+  2, for every table and index):
+  - `build` encodes rows `RA`, `RB` into its net (`Sparse.ofRows`). A witness satisfying every row, with the product rows'
+    B side the table's as `Lookup.foldB` folds it (`tableB`), and the constant 1, has:
+    - index bits that are bits (`z = z·z`);
+    - output bit `j < bits` equal to bit `j` of the table word the index bits name.
+  - The decoders are one-hot (`decode_spec`), each product row picks one table bit, and each output row sums them.
+  - `build_spec` walks `build`'s loops.
+  - The one hypothesis on the net is `useful ≤ KONST`, which every table meets: the pinned tables' slots have about 50,000
+    rows, and `KONST` is 2^48 − 1.
+  - `net.a.row r = RA[r]` is `Sparse.ofRows`'s round trip (`ofRows_row`, in the soundness package, #177).
 - Planned: the lookup slots' `foldB`, then the fold theorem itself (`Stmt.fold` is `α·A_0ᵀe + B_0ᵀe` for the statement's
   `A_0`, `B_0` with Δ); the region values; the lowering checkers.
 
