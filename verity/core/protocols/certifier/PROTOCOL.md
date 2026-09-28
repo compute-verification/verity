@@ -437,7 +437,8 @@ replays recorded traces through the proxy in real time, and on an injected clock
 ## Tests
 
 `uv run tools/verity/check/suites.py verity/core/protocols/certifier`. The tests enumerate small
-horizons, so they check the Lean statements on examples and prove nothing. By name, they mirror 19 of the Lean package's 35 statements
+horizons, so they check the Lean statements on examples and prove nothing. By name, they mirror 19 of the analysis's 35
+statements (in `Security/`, not the certifier program's `lean/`)
 `NetTiming.SecurityProofs.G : NetTiming.Guarantees.G`, none of them among its guarantees (`Security/lean-audit.json`'s
 `guarantees`), and three more proved lemmas:
 - **`test_network_certifier_grid.py`:**

@@ -303,3 +303,42 @@ def test_the_script_runs_with_its_arguments(repo, monkeypatch):
     monkeypatch.setattr(RS, "SCRIPT_ARGS", ())
     with pytest.raises(SystemExit, match="isn't what"):
         RS.restack("args-pr", move, cwd=str(repo))
+
+
+TOY_PINS = """import pathlib, sys
+assert sys.argv[1:] == ["--regen"]
+p = pathlib.Path("PIN")
+want = "pin of " + pathlib.Path("app/core/util.py").read_text().splitlines()[1] + "\\n"
+if pathlib.Path("BROKEN").exists():
+    print("PIN is stale: run `make pin`", file=sys.stderr)
+    sys.exit(1)
+if p.read_text() != want:
+    p.write_text(want)
+"""
+
+
+def test_a_restacked_result_gets_its_stale_pins_regenerated_by_its_own_list(repo):
+    """After the last merge, restack runs the result's `pins.py --regen` at its root and commits what it rewrote: a pin the
+    branch recorded against the old tree is regenerated, never left for someone to write by hand."""
+    on(repo, "pr", ("a pin", {RS.PINS: TOY_PINS, "PIN": "pin of old\n",
+                              "app/util.py": edit(UTIL, "return 1", "return 10")}))
+    r = RS.restack("pr", "move", cwd=str(repo))
+    assert r["status"] == "clean", r
+    assert [s["step"] for s in r["steps"]] == ["base", "script", "moved", "pins"]
+    assert show(repo, r["result"], "PIN") == "pin of     return 10\n"
+    assert git(repo, "rev-list", "--parents", "-n", "1", r["result"]).split()[1:] == [r["steps"][2]["commit"]]
+    assert RS.restack("pr", "move", cwd=str(repo), pins=False)["steps"][-1]["step"] == "moved"
+
+
+def test_a_pin_whose_command_fails_leaves_the_restack_pins_stale(repo, capsys):
+    on(repo, "pr", ("a pin", {RS.PINS: TOY_PINS, "PIN": "x\n", "BROKEN": ""}))
+    r = RS.restack("pr", "move", cwd=str(repo))
+    assert r["status"] == "pins-stale" and "run `make pin`" in r["error"], r
+    assert show(repo, r["result"], "PIN") == "x\n"
+    assert f"pr: pins-stale {r['result'][:12]}" in RS.line(r)
+
+
+def test_a_result_without_a_list_of_pins_runs_none(repo):
+    on(repo, "pr", ("edit", {"README.md": "readme 2\n"}))
+    r = RS.restack("pr", "move", cwd=str(repo))
+    assert r["status"] == "clean" and "pins" not in [s["step"] for s in r["steps"]], r

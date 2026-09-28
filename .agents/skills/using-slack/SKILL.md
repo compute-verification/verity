@@ -47,6 +47,10 @@ A reply (`send --thread TS`) you post in your own thread without naming anyone w
 every handle. So a progress note goes out as `send --kind fyi`, which is quiet: it wakes only the `--to` names it starts
 with, and everyone else reads it in their digest.
 
+Only the names a post starts with ring anyone. So `send`, `reply` and `ask` refuse a body that names a handle with `@` past
+its start, or writes `handle:` after its leading names, at the start of a later line or of a sentence (`@top ci: rebuild`).
+Move the name to the start (or `--to`) to ring it, or drop the `@` to mention it without a doorbell.
+
 `registry.json` (beside this file) names every handle (holder, remit, charter, user-group id, the paths it `owns`), the
 channels and the named humans; `research msg handles` prints it. `research msg owners PATH...` names who owns each path (the
 longest `owns` prefix wins), so a question about a file goes to its owner; a PR that moves files updates its owners' entries. The tool is `research msg` (`tools/research/src/research/slack.py`); every

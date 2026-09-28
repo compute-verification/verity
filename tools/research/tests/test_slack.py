@@ -1132,6 +1132,25 @@ def test_an_announcement_to_every_handle_refuses_leading_names(registry, capsys)
     assert run(capsys, "announce", "--as", "infra", "--dry-run", "--text", "@lean @ci daily wasters")[0] == 2
 
 
+def test_a_handle_named_past_the_start_is_refused_since_nothing_rings_it(registry, capsys):
+    reply = ["reply", "--as", "top", "--thread", "1700000000.000001", "--dry-run", "--text"]
+    rc, _, err = run(capsys, *reply, "@proofs stack point is 4. @lean, rebase onto it")
+    assert rc == 2 and "names @lean past its start" in err and "Move them to the start" in err
+    rc, _, err = run(capsys, *reply, "@proofs two things:\ncompute-accounting: your ask is open\n- @lean: rebase")
+    assert rc == 2 and "names @lean @compute-accounting past its start" in err
+    for bad in ("@proofs compute-accounting: 98c5 is yours", "@proofs the slot is #1574 (9987, 2000). lean: stack on 8cf4. done"):
+        assert run(capsys, *reply, bad)[0] == 2, bad
+    assert run(capsys, "send", "--as", "top", "--to", "@ci", "--dry-run", "--text", "can @ci rebuild? not @lean")[0] == 2
+    for ok in ("@proofs @lean stack point is 4", "@proofs stack point is 4; lean rebases onto it",
+               "@proofs run `research msg read --as @lean`", "@proofs\n> @lean said 4\nagreed", "top: @top is me",
+               "@proofs mail a@lean.example", "@proofs @lean stack point is 4. @lean, rebase", "lean: stack point is 4",
+               "@proofs note: the slot is 4"):
+        assert run(capsys, *reply, ok)[0] == 0, ok
+    assert run(capsys, "send", "--as", "top", "--to", "@ci", "--dry-run", "--text", "can @ci rebuild?")[0] == 0
+    assert run(capsys, "ask", "--as", "top", "--to", "@ci", "--dry-run", "--text", "@ci, can you rebuild")[0] == 0
+    assert run(capsys, "ask", "--as", "top", "--to", "@ci", "--dry-run", "--text", "rebuild for @lean")[0] == 2
+
+
 def test_an_fyi_from_the_starter_wakes_only_its_to_names(fake, registry, routes_dirs, capsys):
     circuits, lean = inbox(fake, routes_dirs, "circuits"), inbox(fake, routes_dirs, "lean")
     root = fake.add(COORD, text="@circuits @lean the move starts at 7", username="top", bot_id=BOT)
@@ -1251,12 +1270,14 @@ def test_traffic_counts_doorbells_and_reports_dropped_names_and_unanswered_asks(
     fake.add(COORD, text="circuits 06:00Z: 3 open", username="circuits", bot_id=BOT, thread_ts=box)   # its own note, no doorbell
     old = fake.add(COORD, text="@proofs ancient ask", username="infra", bot_id=BOT, ts="1600000000.000001")
     fyi = fake.add(COORD, text="@proofs ancient fyi (quiet)", username="infra", bot_id=BOT, ts="1600000000.000002")
+    bare = fake.add(COORD, text="@proofs an older client's fyi\n\n_fyi_", username="infra", bot_id=BOT, ts="1600000000.000003")
     fake.add(COORD, text="@no-such-lane hello", username="infra", bot_id=BOT)
     rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000", "--json")
     rep = json.loads(out)
     assert rc == 0 and [x for x in rep["inboxes"] if x["doorbells"]] == [{"name": "circuits", "doorbells": 1, "peak_per_hour": 1, "paused": 0}]
     assert [d["name"] for d in rep["dropped"]] == ["no-such-lane"]
-    assert old["ts"] in [s["ts"] for s in rep["unanswered"]] and fyi["ts"] not in [s["ts"] for s in rep["unanswered"]]
+    stale = [s["ts"] for s in rep["unanswered"]]
+    assert old["ts"] in stale and fyi["ts"] not in stale and bare["ts"] not in stale
 
 
 def test_verify_author_accepts_a_routed_workers_name_and_the_router(fake, registry, routes_dirs, capsys):

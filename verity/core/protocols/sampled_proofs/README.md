@@ -82,7 +82,7 @@ captured from serving, and says so (`window.kind = "stand-in"`).
   prove that its draws escape no more often than the modelled laws, and `Audit/FlockWork.lean` that its sizes are the
   model's.
 - **The Python.** `verity.core.protocols.sampled_proofs.one_stage` is the one-stage audit: `registration`, `draw` (the draw's checks, not
-  a sampler), `partition`, `audit`, `verdict` and `consumers`. `service` is the proof service over it, whose `Stream`
+  a sampler), `partition`, `audit` and `verdict`. `consumers` reads its profile. `service` is the proof service over it, whose `Stream`
   draws from the challenger's own randomness as `two_stage.draw_first` does. `two_stage` is the two-stage law and the
   verifier's randomness, and
   `verity.core.protocols.sampled_proofs.plan` holds verification plans over IR Programs.
@@ -326,8 +326,8 @@ Pinned by `tests/test_one_stage.py` (`test_profile_counts_wrong_units`, `test_th
 
 ### The consumers
 
-`one_stage.consumers` reads any `IntegrityProfile`, whichever protocol produced it, at its delta, through its weighted
-bound `harm_bound`; each application counts delta once.
+`verity.core.protocols.sampled_proofs.consumers` reads any `IntegrityProfile`, whichever protocol produced it, at its
+delta, through its weighted bound `harm_bound`; each application counts delta once.
 
 - `exfiltration_bound(profile, output_bits)` is `harm_bound(output_bits) + location_bits(profile)`, in bits.
   `location_bits` is the location term: with `K = ⌊bound()⌋` of `n` units, 0 when `K ≤ 0` or `n = 0`, `n` when

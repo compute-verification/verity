@@ -102,6 +102,9 @@ Only a repeat whose fix needs money, keys or a claim becomes a question for Dani
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-08 (22:55Z, the coordinator's, under the 7:16 AM PDT ruling): the two-PR cap counts the PRs a lane is working
+  on. A ready PR whose head is in a queued or running check, or in a train the lander holds, doesn't count, and counts
+  again if that check fails, so a slow check never holds a lane's next PR.
 - 2026-10-08 (14:16Z, relayed by top): no change waits on a per-head grant, whether red-team's, the vLLM coordinator's
   or a statement reviewer's: `research merge` and `research queue` read none. This retires the grant rulings of 6 and 7
   Oct below.

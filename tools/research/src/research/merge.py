@@ -53,7 +53,10 @@ reads each again when the tip lands (`unstacked`); a train member needs no ready
 is the gate (Daniel, 6 and 8 Oct).
 A ref whose merge onto the train so far conflicts only on import lines (two PRs adding modules to one root import list) keeps
 both sides, ours first; a conflict on any other line refuses it, and so does a JSON file whose lines git merged into something
-that doesn't parse (`_merge`).
+that doesn't parse (`_merge`). Generated files never keep merged text: every merge runs the tree's own
+`tools/verity/check/pins.py --merged` before its commit (`regenerate`), which runs `lake update` in each Lake package both sides'
+Lake changes reach, re-points its dependency bundle's pin, regenerates every stale pin, and resolves a conflict in any of those
+files; the merge commit names what it rewrote in a `Regenerated:` trailer, which `reverted` reads as removals the train means.
 
 A push that lands a change to what a guarantee says (a `lean-audit.json`'s guarantees or the definitions they read) DMs Daniel
 what changed, and nothing waits on him (`spec_alert`; his ruling, 3 Oct). A DM that fails is printed and goes to #agent-alerts,
@@ -729,29 +732,71 @@ def broken_json(tree: Path, theirs: str) -> list[str]:
     return bad
 
 
+#: the tree's own list of generated files and how each is regenerated after a merge (`pins.py --merged`)
+PINS_SCRIPT = "tools/verity/check/pins.py"
+
+
+def regenerate(tree: Path, ours: str, theirs: str, conflicted: list[str]) -> list[str]:
+    """Run the tree's `pins.py --merged OURS THEIRS` on the merge under way in ``tree`` and stage what it rewrote; the paths.
+    Refused when a conflict is in a file it doesn't generate or a regeneration failed. A tree without it (one that predates
+    it) resolves nothing."""
+    script = tree / PINS_SCRIPT
+    if not script.is_file() or "--merged" not in script.read_text():
+        if conflicted:
+            raise Refused(f"a conflict in {', '.join(conflicted)} holds more than import lines")
+        return []
+    p = subprocess.run([sys.executable, PINS_SCRIPT, "--merged", ours, theirs, "--conflicted", *conflicted], cwd=tree,
+                       capture_output=True, text=True)
+    try:
+        doc = json.loads((p.stdout.strip().splitlines() or ["{}"])[-1])
+    except ValueError:
+        doc = {}
+    notes = doc.get("notes") or [(p.stderr or p.stdout).strip()[-300:]]
+    for n in notes:
+        print(f"research merge: {PINS_SCRIPT} --merged: {n}", file=sys.stderr)
+    if p.returncode == 3:
+        raise Refused(f"a conflict in {', '.join(conflicted)} holds more than import lines ({'; '.join(notes)})")
+    if p.returncode:
+        raise Refused(f"`{PINS_SCRIPT} --merged` exited {p.returncode}: {'; '.join(notes)}")
+    regenerated = doc.get("regenerated", [])
+    if regenerated:
+        _git(tree, "add", "--", *regenerated)
+    return regenerated
+
+
 def _merge(tree: Path, label: str, sha: str, msg: str) -> None:
     """Merge ``sha`` onto the worktree ``tree``'s HEAD (`--no-ff`).  A conflict made only of import lines keeps both sides
     (`keep_both_imports`), named in the commit's `Imports:` trailer; any other refuses.  A merged JSON file must parse
     (`broken_json`)."""
-    r = _git(tree, "-c", "merge.conflictStyle=merge", "merge", "--no-ff", "-m", msg, sha, check=False)
-    if r.returncode:
-        conflicted = [p for p in _git(tree, "diff", "--name-only", "-z", "--diff-filter=U").stdout.split("\0") if p]
-        resolved = {}
-        for p in conflicted:
-            try:
-                resolved[p] = keep_both_imports((tree / p).read_text())
-            except (OSError, UnicodeDecodeError):
-                resolved[p] = None
-        if not conflicted or None in resolved.values():
-            _git(tree, "merge", "--abort", check=False)
-            other = [p for p, v in resolved.items() if v is None]
-            raise Refused(f"{label} does not merge onto the train so far"
-                          + (f" (a conflict in {', '.join(other)} holds more than import lines)" if other else "")
-                          + f": {(r.stderr or r.stdout).strip()[-300:]}")
-        for p, new in resolved.items():
-            (tree / p).write_text(new)
+    ours = _git(tree, "rev-parse", "HEAD").stdout.strip()
+    r = _git(tree, "-c", "merge.conflictStyle=merge", "merge", "--no-ff", "--no-commit", sha, check=False)
+    conflicted = [p for p in _git(tree, "diff", "--name-only", "-z", "--diff-filter=U").stdout.split("\0") if p]
+    if r.returncode and not conflicted:
+        _git(tree, "merge", "--abort", check=False)
+        raise Refused(f"{label} does not merge onto the train so far: {(r.stderr or r.stdout).strip()[-300:]}")
+    resolved, rest = {}, []
+    for p in conflicted:
+        try:
+            new = keep_both_imports((tree / p).read_text())
+        except (OSError, UnicodeDecodeError):
+            new = None
+        if new is None:
+            rest.append(p)
+        else:
+            resolved[p] = new
+    for p, new in resolved.items():
+        (tree / p).write_text(new)
+    if resolved:
         _git(tree, "add", "--", *resolved)
-        _git(tree, "commit", "-q", "-m", f"{msg}\nImports: {', '.join(resolved)}")
+    try:
+        regenerated = regenerate(tree, ours, sha, rest)
+    except Refused as e:
+        _git(tree, "merge", "--abort", check=False)
+        raise Refused(f"{label} does not merge onto the train so far ({e}): {(r.stderr or r.stdout).strip()[-300:]}") from None
+    trailers = "".join([f"\nImports: {', '.join(resolved)}" if resolved else "",
+                        f"\nRegenerated: {', '.join(regenerated)}" if regenerated else ""])
+    if _git(tree, "rev-parse", "-q", "--verify", "MERGE_HEAD", check=False).returncode == 0:
+        _git(tree, "commit", "-q", "-m", msg + trailers)
     if bad := broken_json(tree, sha):
         raise Refused(f"merging {label} onto the train leaves {', '.join(bad)} unparseable as JSON (or with a key twice in one "
                       "object), though both sides parse: git merged their lines; merge the train so far into it and fix that by hand")
@@ -862,7 +907,7 @@ def reverted(repo: Path, base: str, tip: str, pins: list[tuple[str, str]], allow
     of ``base..SHA``; a layout move's restack commit, trailer `Restack-move`, counts as none): a line a merge in a ref's history
     dropped, as #1142's merge of main dropped #1012's lines and its train `25157eb17` silently undid #1012. Lines match by
     content, wherever a ref's commit removed them, so a removal survives a move of its file. One line per path, none for a
-    path in ``allow``."""
+    path in ``allow`` or in a merge's `Regenerated:` trailer (a generated file, rewritten by its command: `regenerate`)."""
     own: Counter = Counter()
     for _label, sha in pins:
         log = _git(repo, "log", "--no-merges", "-p", "-U0", "--no-renames", "--no-color", "--format=%x00%(trailers:key=Restack-move,valueonly)",
@@ -873,6 +918,8 @@ def reverted(repo: Path, base: str, tip: str, pins: list[tuple[str, str]], allow
                 for lines in _removals(patch).values():
                     own += lines
     out = []
+    regen = _git(repo, "log", "--format=%(trailers:key=Regenerated,valueonly,separator=%x2C)", f"{base}..{tip}").stdout
+    allow = (*allow, *{p for t in re.split(r"[,\n]", regen) if (p := t.strip())})
     for path, lines in sorted(_removals(_git(repo, "diff", "-U0", "--no-renames", "--no-color", base, tip).stdout).items()):
         extra = lines - own
         own -= lines
