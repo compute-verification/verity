@@ -190,6 +190,14 @@ def test_a_dry_run_calls_nothing_and_keeps_its_own_files(guard_dir):
     assert "WOULD-TERMINATE me vyv-control" in log and "\nTERMINATED" not in log and log.count("WOULD-TERMINATE") == 4
 
 
+def test_a_fresh_machine_gets_its_guard_dir_even_when_the_log_goes_elsewhere(guard_dir, tmp_path):
+    assert not guard_dir.exists()
+    assert G.run(G.Config(prefix="vyv-", rate_max=4.5, self_pod="me"), fleet(), log_path=str(tmp_path / "logs" / "g.log"),
+                 clock=lambda: T0, sleep=lambda s: None, iterations=1) == 0
+    assert (guard_dir / "guard-vyv-.pid").exists() and (guard_dir / "guard-vyv-.json").exists()
+    assert (tmp_path / "logs" / "g.log").exists()
+
+
 def test_a_failed_list_is_logged_and_the_guard_keeps_polling(guard_dir):
     api = fleet()
     api.fail_list = 1
