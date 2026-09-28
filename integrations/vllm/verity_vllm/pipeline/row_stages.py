@@ -326,22 +326,46 @@ class SingleRow(Row):
                 out += ["--derived", dd]
         return out
 
+    def follow_compose(self, to: int) -> tuple[Any, str, str]:
+        """B >= 2: the workload Program's compose starts beside the derives (`global-program --follow`) and loads each component as its
+        derive finishes -> (its future, the derives-done marker, the derives-failed marker)."""
+        done, stop = f"{self.d}/build_workload.derives_done", f"{self.d}/build_workload.derives_failed"
+        for f in (done, stop):
+            if os.path.exists(f):
+                os.remove(f)
+        dirs = [f"{self.d}/build_request", *(f"{self.d}/build_request_LP{lp}_T{t}" for lp, t in R.extra_shapes(self.path(self.wl), self.LP, self.T))]
+        cmd = self.cli("global-program", "--workload", self.wl, *(x for d in dirs for x in ("--derived", d)), "--out", f"{self.d}/build_workload",
+                       "--checkpoint-dir", self.ck, "--follow", str(to), "--follow-done", done, "--follow-stop", stop, py=self.py312)
+        pool = ThreadPoolExecutor(max_workers=1)
+        fut = pool.submit(self.run_tl, "build.global_program", to, f"{self.d}/build_workload.log", cmd)
+        pool.shutdown(wait=False)
+        return fut, done, stop
+
     def build(self) -> None:
         scale = max(1, (max(self.LP, 256) // 256) * (max(self.T, 31) // 31))
         to = self.cb.build_timeout or min(CAP, 900 * scale)
         t0 = int(time.time())
         self.tl("stage.build", "start")
         self.gpu_exclusive("build")
+        follow = self.follow_compose(to) if self.B > 1 else None
         rc1, rc2 = self.derive_all(to)
         wall = int(time.time()) - t0
         self.tl("build.summary", "start")
         ok = self.guarded("build summary", R.build_summary, self.d)
         wd = ""
         self.tl("build.summary", "end", ("ok", ok))
+        if follow is not None:
+            fut, done, stop = follow
+            open(done if ok == "PASS" else stop, "w").close()
+            rcw = fut.result()
+            for f in (done, stop):
+                if os.path.exists(f):
+                    os.remove(f)
         if ok == "PASS":
-            rcw = self.run_tl("build.global_program", to, f"{self.d}/build_workload.log",
-                              self.cli("global-program", "--workload", self.wl, *self.derived_dirs(), "--out", f"{self.d}/build_workload",
-                                       "--checkpoint-dir", self.ck, py=self.py312))
+            if follow is None:
+                rcw = self.run_tl("build.global_program", to, f"{self.d}/build_workload.log",
+                                  self.cli("global-program", "--workload", self.wl, *self.derived_dirs(), "--out", f"{self.d}/build_workload",
+                                           "--checkpoint-dir", self.ck, py=self.py312))
             wd = (R.load_json(f"{self.d}/build_workload/workload_program.json") or {}).get("workload_digest") or ""
             if not (rcw == 0 and wd):
                 ok = "FAIL"
