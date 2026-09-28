@@ -217,8 +217,9 @@ def test_band_window_round_trips(ext):
 
 
 @needs_cuda
+@pytest.mark.parametrize("split", [False, True])
 @pytest.mark.parametrize("window", [None, 12])
-def test_chunked_decode_matches_row_major(ext, window):
+def test_chunked_decode_matches_row_major(ext, window, split):
     """The chunk-major decode (`dense.CHUNKED`) gives the row-major decode's bits at the secure point's width, dense and band."""
     from verity_vllm.engine.pous import codec, dense
 
@@ -228,11 +229,11 @@ def test_chunked_decode_matches_row_major(ext, window):
     blocks = torch.tensor([19, 0, 3, 12, 13, 1, 18, 7] * 2, device="cuda")
     segs = torch.tensor([0] * 8 + [1] * 8, device="cuda")
     want = dense.decode_blocks(c, tags, segs, blocks, 20, window=window)
-    dense.CHUNKED[0], dense.CHUNKED_MIN_ROWS[0], dense.CHUNKED_THREADS[0] = True, 1, 32
+    dense.CHUNKED[0], dense.CHUNKED_MIN_ROWS[0], dense.CHUNKED_THREADS[0], dense.CHUNKED_SPLIT[0] = True, 1, 32, split
     try:
         got = dense.decode_blocks(c, tags, segs, blocks, 20, window=window)
     finally:
-        dense.CHUNKED[0], dense.CHUNKED_MIN_ROWS[0], dense.CHUNKED_THREADS[0] = False, 4096, 128
+        dense.CHUNKED[0], dense.CHUNKED_MIN_ROWS[0], dense.CHUNKED_THREADS[0], dense.CHUNKED_SPLIT[0] = False, 4096, 128, False
     assert torch.equal(got, want)
 
 

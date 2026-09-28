@@ -69,6 +69,7 @@ class Store:
         codec.COALESCED[0] = bool(spec.get("coalesced"))
         dense.CHUNKED[0] = bool(spec.get("chunked"))
         dense.CHUNKED_THREADS[0] = int(spec.get("chunked_threads") or 128)
+        dense.CHUNKED_SPLIT[0] = bool(spec.get("split"))
         self.salt = bytes.fromhex(spec["salt"])
         self.device = torch.device("cuda", torch.cuda.current_device())
         self.c: torch.Tensor | None = None

@@ -479,11 +479,14 @@ __global__ void feistel_fused_kernel(uint8_t* x, int64_t x_stride, int64_t half,
 // feistel_fused_kernel with each row on a lane pair: in round r one lane squeezes round r's sponge and writes the destination
 // half, and its partner absorbs the words it writes (sent by shuffle) into round r + 1's sponge; the roles swap each round.  Both
 // lanes run the same Keccak code on their own state, so the pair does not diverge.
-__global__ void feistel_pair_kernel(uint8_t* x, int64_t x_stride, int64_t half, int domain, int64_t rows) {
+// HALF_FIXED != 0 compiles the kernel for halves of exactly HALF_FIXED bytes, folding every bound and per-word check.
+template <int64_t HALF_FIXED>
+__global__ void feistel_pair_kernel(uint8_t* x, int64_t x_stride, int64_t half_arg, int domain, int64_t rows) {
   const int64_t tid = (int64_t)blockIdx.x * blockDim.x + threadIdx.x;
   const int64_t n = tid / 2;
   const int parity = (int)(tid & 1);
   const bool active = n < rows;
+  const int64_t half = HALF_FIXED ? HALF_FIXED : half_arg;
   const int64_t hw = half / 8;
   uint64_t* a = reinterpret_cast<uint64_t*>(x + (active ? n : 0) * x_stride);
   uint64_t* b = a + hw;
@@ -749,10 +752,203 @@ __global__ void feistel_chunked_kernel(uint64_t* st_words, int64_t pitch, int64_
 #undef CHUNK_AT
 }
 
+// A Keccak-f[1600] state split across a lane pair: lane parity h holds bits 32h .. 32h + 31 of every 64-bit word.  A 64-bit
+// rotation is one shuffle for the partner's half and one funnel shift, written the same on both lanes, so the pair never
+// diverges; XOR, AND and NOT act on the halves alone.  `half_rot` is rotl64 of (mine, other) restricted to this lane's half.
+__device__ __forceinline__ uint32_t half_rot(uint32_t mine, int r) {
+  const uint32_t other = __shfl_xor_sync(0xffffffffu, mine, 1);
+  if (r == 0) return mine;
+  if (r < 32) return __funnelshift_l(other, mine, r);
+  if (r == 32) return other;
+  return __funnelshift_l(mine, other, r - 32);
+}
+
+// One split state.
+__device__ __forceinline__ void keccak_f_split(uint32_t s[25], int h) {
+  const int rotc[24] = {1, 3, 6, 10, 15, 21, 28, 36, 45, 55, 2, 14, 27, 41, 56, 8, 25, 43, 62, 18, 39, 61, 20, 44};
+  const int piln[24] = {10, 7, 11, 17, 18, 3, 5, 16, 8, 21, 24, 4, 15, 23, 19, 13, 12, 2, 20, 14, 22, 9, 6, 1};
+#pragma unroll 1
+  for (int r = 0; r < 24; ++r) {
+    uint32_t bs[5];
+#pragma unroll
+    for (int i = 0; i < 5; ++i) bs[i] = s[i] ^ s[i + 5] ^ s[i + 10] ^ s[i + 15] ^ s[i + 20];
+#pragma unroll
+    for (int i = 0; i < 5; ++i) {
+      const uint32_t ds = bs[(i + 4) % 5] ^ half_rot(bs[(i + 1) % 5], 1);
+#pragma unroll
+      for (int j = 0; j < 25; j += 5) s[j + i] ^= ds;
+    }
+    uint32_t us = s[1];
+#pragma unroll
+    for (int i = 0; i < 24; ++i) {
+      const int j = piln[i];
+      const uint32_t s0 = s[j];
+      s[j] = half_rot(us, rotc[i]);
+      us = s0;
+    }
+#pragma unroll
+    for (int j = 0; j < 25; j += 5) {
+      uint32_t a[5];
+#pragma unroll
+      for (int i = 0; i < 5; ++i) a[i] = s[j + i];
+#pragma unroll
+      for (int i = 0; i < 5; ++i) s[j + i] ^= (~a[(i + 1) % 5]) & a[(i + 2) % 5];
+    }
+    s[0] ^= (uint32_t)(KECCAK_RC[r] >> (32 * h));
+  }
+}
+
+// Two split states (`s`, `t`) permuted in one round loop, their instructions interleaved.
+__device__ __forceinline__ void keccak_f_split_pair(uint32_t s[25], uint32_t t[25], int h) {
+  const int rotc[24] = {1, 3, 6, 10, 15, 21, 28, 36, 45, 55, 2, 14, 27, 41, 56, 8, 25, 43, 62, 18, 39, 61, 20, 44};
+  const int piln[24] = {10, 7, 11, 17, 18, 3, 5, 16, 8, 21, 24, 4, 15, 23, 19, 13, 12, 2, 20, 14, 22, 9, 6, 1};
+#pragma unroll 1
+  for (int r = 0; r < 24; ++r) {
+    uint32_t bs[5], bt[5];
+#pragma unroll
+    for (int i = 0; i < 5; ++i) {
+      bs[i] = s[i] ^ s[i + 5] ^ s[i + 10] ^ s[i + 15] ^ s[i + 20];
+      bt[i] = t[i] ^ t[i + 5] ^ t[i + 10] ^ t[i + 15] ^ t[i + 20];
+    }
+#pragma unroll
+    for (int i = 0; i < 5; ++i) {
+      const uint32_t ds = bs[(i + 4) % 5] ^ half_rot(bs[(i + 1) % 5], 1);
+      const uint32_t dt = bt[(i + 4) % 5] ^ half_rot(bt[(i + 1) % 5], 1);
+#pragma unroll
+      for (int j = 0; j < 25; j += 5) {
+        s[j + i] ^= ds;
+        t[j + i] ^= dt;
+      }
+    }
+    uint32_t us = s[1], ut = t[1];
+#pragma unroll
+    for (int i = 0; i < 24; ++i) {
+      const int j = piln[i];
+      const uint32_t s0 = s[j], t0 = t[j];
+      s[j] = half_rot(us, rotc[i]);
+      t[j] = half_rot(ut, rotc[i]);
+      us = s0;
+      ut = t0;
+    }
+#pragma unroll
+    for (int j = 0; j < 25; j += 5) {
+      uint32_t a[5], c[5];
+#pragma unroll
+      for (int i = 0; i < 5; ++i) {
+        a[i] = s[j + i];
+        c[i] = t[j + i];
+      }
+#pragma unroll
+      for (int i = 0; i < 5; ++i) {
+        s[j + i] ^= (~a[(i + 1) % 5]) & a[(i + 2) % 5];
+        t[j + i] ^= (~c[(i + 1) % 5]) & c[(i + 2) % 5];
+      }
+    }
+    const uint32_t rc = (uint32_t)(KECCAK_RC[r] >> (32 * h));
+    s[0] ^= rc;
+    t[0] ^= rc;
+  }
+}
+
+// Absorbs message words (w_j << 16 | w_{j-1} >> 48) of chunk c into this lane's half of `t`: the low half needs the partner's
+// previous high half, the high half the partner's current low half, so each lane sends (low: current, high: previous) and
+// both compute (cur << 16) | (got >> 16).  `prev` is this lane's half of the previous word; padding as absorb_chunk.
+__device__ __forceinline__ void absorb_chunk_split(uint32_t t[25], const uint32_t* vals, int64_t c, int64_t hw, int64_t full,
+                                                   int tail, uint32_t& prev, int h) {
+#pragma unroll
+  for (int w = 0; w < RATE_WORDS; ++w) {
+    const int64_t j = c * RATE_WORDS + w;
+    const uint32_t cur = j < hw ? vals[w] : 0;
+    const uint32_t got = __shfl_xor_sync(0xffffffffu, h == 0 ? cur : prev, 1);
+    if (j <= hw) t[w] ^= (cur << 16) | (got >> 16);
+    prev = cur;
+  }
+  if (c == full) {
+    const int pad_word = tail / 8, pad_byte = tail % 8;
+    if ((pad_byte >= 4) == (h == 1)) t[pad_word] ^= (uint32_t)0x1F << (8 * (pad_byte % 4));
+    if (h == 1) t[RATE_WORDS - 1] ^= (uint32_t)0x80 << 24;
+  }
+}
+
+// feistel_chunked_kernel<8196> with every state split across a lane pair (keccak_f_split_pair): twice the threads per row,
+// half the registers per thread.  Same chunk-major slots; each lane reads and writes its 32-bit halves of the slot's words.
+__global__ void feistel_split_kernel(uint64_t* st_words, int64_t pitch, int64_t row0, int64_t rows, int domain) {
+  constexpr int64_t hw = 8196;
+  const int64_t tid = (int64_t)blockIdx.x * blockDim.x + threadIdx.x;
+  const int64_t n = tid / 2;
+  const int h = (int)(tid & 1);
+  const bool active = n < rows;
+  const int64_t r = row0 + (active ? n : 0);
+  constexpr int64_t nch = (hw + RATE_WORDS - 1) / RATE_WORDS;
+  constexpr int64_t len = 8 * hw + 2;
+  constexpr int64_t full = len / RATE;
+  constexpr int tail = (int)(len - full * RATE);
+  constexpr int64_t chunks = nch;
+  uint32_t* halves = reinterpret_cast<uint32_t*>(st_words);
+#define HALF_AT(hh, c) (halves + ((((int64_t)(hh) * nch + (c)) * pitch + r) * SLOT_WORDS) * 2 + h)
+  uint32_t s[25], t[25], vals[RATE_WORDS], nxt[RATE_WORDS];
+#pragma unroll
+  for (int k = 0; k < 25; ++k) s[k] = 0;
+  const uint32_t pre1 = (uint32_t)(uint8_t)domain | (1u << 8);
+  uint32_t prev = h == 1 ? pre1 << 16 : 0;
+  {
+    const uint32_t* p0 = HALF_AT(1, 0);
+#pragma unroll
+    for (int w = 0; w < RATE_WORDS; ++w) nxt[w] = p0[2 * w];
+  }
+  for (int64_t c = 0; c < chunks; ++c) {
+#pragma unroll
+    for (int w = 0; w < RATE_WORDS; ++w) vals[w] = nxt[w];
+    if (c + 1 < chunks) {
+      const uint32_t* pn = HALF_AT(1, c + 1);
+#pragma unroll
+      for (int w = 0; w < RATE_WORDS; ++w) nxt[w] = pn[2 * w];
+    }
+    absorb_chunk_split(s, vals, c, hw, full, tail, prev, h);
+    keccak_f_split(s, h);
+  }
+  for (int i = 1; i <= 10; ++i) {
+    const int hh = (i % 2) ? 0 : 1;
+    const bool next = i < 10;
+#pragma unroll
+    for (int k = 0; k < 25; ++k) t[k] = 0;
+    const uint32_t pre = (uint32_t)(uint8_t)domain | ((uint32_t)(i + 1) << 8);
+    prev = h == 1 ? pre << 16 : 0;
+    {
+      const uint32_t* p0 = HALF_AT(hh, 0);
+#pragma unroll
+      for (int w = 0; w < RATE_WORDS; ++w) nxt[w] = p0[2 * w];
+    }
+    for (int64_t c = 0; c < chunks; ++c) {
+#pragma unroll
+      for (int w = 0; w < RATE_WORDS; ++w) vals[w] = nxt[w] ^ s[w];
+      if (c + 1 < chunks) {
+        const uint32_t* pn = HALF_AT(hh, c + 1);
+#pragma unroll
+        for (int w = 0; w < RATE_WORDS; ++w) nxt[w] = pn[2 * w];
+      }
+      uint32_t* dst = HALF_AT(hh, c);
+      if (active) {
+#pragma unroll
+        for (int w = 0; w < RATE_WORDS; ++w)
+          if (c * RATE_WORDS + w < hw) dst[2 * w] = vals[w];
+      }
+      if (next) absorb_chunk_split(t, vals, c, hw, full, tail, prev, h);
+      if (c + 1 < chunks && next) keccak_f_split_pair(s, t, h);
+      else if (c + 1 < chunks) keccak_f_split(s, h);
+      else if (next) keccak_f_split(t, h);
+    }
+    if (!next) break;
+#pragma unroll
+    for (int k = 0; k < 25; ++k) s[k] = t[k];
+  }
+#undef HALF_AT
+}
+
 // Π₂ (untweaked Feistel-10, domain `domain`) on rows `row0 .. row0 + rows` of a chunk-major state (`feistel_chunked_kernel`):
 // `state` is int64 `[2, nch, pitch, SLOT_WORDS]` for halves of `hw` words.
 void feistel_chunked(torch::Tensor state, int64_t row0, int64_t rows, int64_t hw, int64_t domain, int64_t threads,
-                     bool specialize) {
+                     bool specialize, bool split) {
   TORCH_CHECK(state.is_cuda() && state.scalar_type() == torch::kInt64 && state.is_contiguous() && state.dim() == 4 &&
               state.size(0) == 2 && state.size(3) == SLOT_WORDS && state.size(1) == (hw + RATE_WORDS - 1) / RATE_WORDS &&
               reinterpret_cast<uintptr_t>(state.data_ptr<int64_t>()) % 16 == 0,
@@ -764,7 +960,10 @@ void feistel_chunked(torch::Tensor state, int64_t row0, int64_t rows, int64_t hw
   TORCH_CHECK(threads >= 32 && threads <= 1024 && threads % 32 == 0, "threads must be a multiple of 32");
   const unsigned blocks = (unsigned)((rows + threads - 1) / threads);
   uint64_t* words = reinterpret_cast<uint64_t*>(state.data_ptr<int64_t>());
-  if (specialize && hw == 8196)
+  if (split && hw == 8196) {
+    feistel_split_kernel<<<(unsigned)((2 * rows + threads - 1) / threads), (unsigned)threads, 0, stream>>>(
+        words, state.size(2), row0, rows, (int)domain);
+  } else if (specialize && hw == 8196)
     feistel_chunked_kernel<8196><<<blocks, (unsigned)threads, 0, stream>>>(words, state.size(2), row0, rows, hw, (int)domain);
   else
     feistel_chunked_kernel<0><<<blocks, (unsigned)threads, 0, stream>>>(words, state.size(2), row0, rows, hw, (int)domain);
@@ -848,8 +1047,11 @@ void feistel_rows(torch::Tensor x, torch::Tensor tweak, int64_t domain, bool inv
   }
   if (thread_rows > 0 && rows >= thread_rows && words && fused && pair && rows < pair_max_rows && !inverse) {
     const int threads = 128;
-    feistel_pair_kernel<<<(unsigned)((2 * rows + threads - 1) / threads), threads, 0, stream>>>(
-        x.data_ptr<uint8_t>(), x.stride(0), x.size(1) / 2, (int)domain, rows);
+    const unsigned blocks = (unsigned)((2 * rows + threads - 1) / threads);
+    if (x.size(1) / 2 == 65568)
+      feistel_pair_kernel<65568><<<blocks, threads, 0, stream>>>(x.data_ptr<uint8_t>(), x.stride(0), 65568, (int)domain, rows);
+    else
+      feistel_pair_kernel<0><<<blocks, threads, 0, stream>>>(x.data_ptr<uint8_t>(), x.stride(0), x.size(1) / 2, (int)domain, rows);
     C10_CUDA_KERNEL_LAUNCH_CHECK();
     return;
   }
@@ -1043,7 +1245,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
         pybind11::arg("row0"), pybind11::arg("src"), pybind11::arg("index"), pybind11::arg("words"));
   m.def("feistel_chunked", &feistel_chunked, "Π₂ on rows of a chunk-major state", pybind11::arg("state"), pybind11::arg("row0"),
         pybind11::arg("rows"), pybind11::arg("hw"), pybind11::arg("domain"), pybind11::arg("threads") = 128,
-        pybind11::arg("specialize") = true);
+        pybind11::arg("specialize") = true, pybind11::arg("split") = false);
   m.def("feistel_rows", &feistel_rows, "Feistel-10 in place, SHAKE256 round functions under a domain byte and per-row tweak",
         pybind11::arg("x"), pybind11::arg("tweak"), pybind11::arg("domain"), pybind11::arg("inverse"), pybind11::arg("thread_rows") = 0,
         pybind11::arg("word_io") = false, pybind11::arg("fused") = false, pybind11::arg("pair") = false,
