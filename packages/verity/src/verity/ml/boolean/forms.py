@@ -90,6 +90,12 @@ class Circuit:
             w = self.cse[key] = self._new("and", (a, b))
         return w
 
+    def commit(self, word):
+        """``word`` as committed bits: a bit that is not already one committed bit or a constant gets a bit of its own (one
+        row, ``A = its form, B = 1``), so a form an XOR would otherwise carry from use to use (Keccak's state, round over
+        round) is one column wherever it is read.  A gate circuit has no rows: `trace.TracingCircuit.commit` returns the word."""
+        return [w if w.is_const() or (len(w.s) == 1 and w.c == 0) else self._new("and", (w, ONE)) for w in word]
+
     def lookup(self, table_name, idx, width):
         """``table[idx]``'s low ``width`` bits as committed bits: a table read (no ANDs here; ``ir_lower.layout`` lays it out as
         plain rows of the unit)."""

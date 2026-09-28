@@ -220,8 +220,10 @@ unsafe def entriesOf (α : Type) (data : ModuleData) (ext : Name) : Array (Name 
   | some (_, es) => es.map fun e => unsafeCast e
   | none => #[]
 
-/-- The definitions under `meaning` that the constants `roots` read, transitively. -/
-def reads (env : Environment) (meaning : Array Name) (roots : Array Name) : Array (Name × Name × ConstantInfo) := Id.run do
+/-- The definitions under `meaning` that the constants `roots` read, transitively. The state holds each definition's
+`meaningDeps`, shared across calls: a read definition's value is walked once per run, not once per guarantee. -/
+def reads (env : Environment) (meaning : Array Name) (roots : Array Name) :
+    StateM (Std.HashMap Name (Array Name)) (Array (Name × Name × ConstantInfo)) := do
   let mut seen : NameSet := {}
   let mut stack := roots
   let mut out := #[]
@@ -238,11 +240,14 @@ def reads (env : Environment) (meaning : Array Name) (roots : Array Name) : Arra
       if !under meaning m then continue
       if ci matches .thmInfo _ then continue
       out := out.push (c, m, ci)
-      stack := stack ++ meaningDeps ci
+      let ds ← match (← get)[c]? with
+        | some ds => pure ds
+        | none => let ds := meaningDeps ci; modifyGet fun memo => (ds, memo.insert c ds)
+      stack := stack ++ ds
   return out
 
-def pinInfo (env : Environment) (meaning : Array Name) (axioms : Std.HashMap Name NameSet)
-    (ranges : Std.HashMap Name DeclarationRanges) (n : Name) : MetaM Json := do
+def pinInfo (env : Environment) (axioms : Std.HashMap Name NameSet)
+    (ranges : Std.HashMap Name DeclarationRanges) (rs : Array (Name × Name × ConstantInfo)) (n : Name) : MetaM Json := do
   let some ci := env.find? n | return Json.mkObj [("kind", "missing")]
   let moduleOf (c : Name) : Option Name := (env.getModuleIdxFor? c).map fun i => env.header.moduleNames[i.toNat]!
   let signature := toString (← PrettyPrinter.ppSignature n).fmt
@@ -264,7 +269,7 @@ def pinInfo (env : Environment) (meaning : Array Name) (axioms : Std.HashMap Nam
   return Json.mkObj [("kind", toJson (kind ci)), ("module", toJson ((moduleOf n).map toString)),
     ("signature", toJson signature), ("axioms", toJson ((axioms.getD n {}).toArray.qsort Name.lt |>.map toString)),
     ("hypotheses", toJson hypotheses), ("type_hash", toJson (hex ci.type.hash)),
-    ("reads", toJson ((reads env meaning ci.type.getUsedConstants).map readJson))]
+    ("reads", toJson (rs.map readJson))]
 
 def names (j : Json) (k : String) : Array Name :=
   ((j.getObjValD k).getArr?.toOption.getD #[]).filterMap fun v => v.getStr?.toOption.map String.toName
@@ -330,8 +335,17 @@ unsafe def main (args : List String) : IO UInt32 := do
         escapes := escapes.push <| Json.mkObj [("name", toJson n.toString), ("module", toJson m.toString), ("why", toJson why)]
   let opts : Options := (({} : Options).set `pp.proofs false).set `format.width (100 : Nat)
   let ctx : Core.Context := { fileName := "<audit>", fileMap := default, maxHeartbeats := 0, options := opts }
-  let (pinned, _) ← (MetaM.run' (pins.mapM fun p => do return (p.toString, ← pinInfo env meaning axioms ranges p))).toIO
-    ctx { env }
+  let readsOf : Std.HashMap Name (Array (Name × Name × ConstantInfo)) := Id.run do
+    let mut memo := {}
+    let mut acc := {}
+    for p in pins do
+      if let some ci := env.find? p then
+        let (rs, memo') := (reads env meaning ci.type.getUsedConstants).run memo
+        memo := memo'
+        acc := acc.insert p rs
+    return acc
+  let (pinned, _) ← (MetaM.run' (pins.mapM fun p => do
+    return (p.toString, ← pinInfo env axioms ranges (readsOf.getD p #[]) p))).toIO ctx { env }
   let mut conflicts := #[]
   if let some path := (cfg.getObjValD "canon").getStr?.toOption then
     let h ← IO.FS.Handle.mk path .write
@@ -348,7 +362,7 @@ unsafe def main (args : List String) : IO UInt32 := do
           | none => []
         h.putStrLn (Json.mkObj ([("id", toJson s!"moved-pin:{p}"), ("as", toJson (rn p).toString),
           ("canon", toJson (canonText ci.type rn))] ++ unfolded)).compress
-      for (c, _, rci) in reads env meaning ci.type.getUsedConstants do
+      for (c, _, rci) in readsOf.getD p #[] do
         if done.contains c then continue
         done := done.insert c
         h.putStrLn (Json.mkObj [("id", toJson s!"read:{c}"), ("canon", toJson (readCanon rci))]).compress

@@ -24,7 +24,9 @@ the Commit process; the verdict, the row's records and the research run's publis
 A grouped Commit (`commit_group`: the Commits of several rows of one engine in one process) holds one lease: its first row's
 ``acquire`` takes it, its later rows keep it and the devices it set (``LEASED``), and only its last row's last run releases it.
 A TP Commit (`pipeline.tp.lease`) takes all its GPUs with one ``acquire`` and gives them back together after its last run's
-finalize, its ranks off their devices first (``keep`` and ``let_go`` are the two ends either release comes to).
+finalize, its ranks off their devices first (``keep`` and ``let_go`` are the two ends either release comes to). A TP Match's capture
+and its control (`row_tp.TpRow.match`) each take all their GPUs the same way, right before their engine, and hold them to their exit
+(their record in ``match/lease/<leg>/``); the Match's check, its served-shape derives and its fold Match see no device and hold no lease.
 
 ``gpu_lease.json`` beside the row records the lease: requested and started (written by the Commit and the holder), released and the
 stage it was released after (``released_at``: the Commit's last run, or ``process.end`` with ``kept``, the reason), and the minutes
@@ -456,9 +458,10 @@ def _stamp(path: str) -> float | None:
 
 
 def run(row_dir: str, log: str, cmd: list[str], timeout_s: int, environ: dict[str, str], run_tl: Callable[[int, list[str]], int],
-        *, clock: Callable[[], float] = time.time, every_s: float = HEARTBEAT_S) -> tuple[int, dict[str, Any]]:
+        *, clock: Callable[[], float] = time.time, every_s: float = HEARTBEAT_S, kept: str | None = None) -> tuple[int, dict[str, Any]]:
     """Run the leased Commit ``cmd`` -> (its rc, the lease record). ``run_tl(timeout, argv)`` runs argv as the row runs a stage; it may
-    wait for the GPU as long as the Commit may run, and the lease tool ends the Commit at its timeout."""
+    wait for the GPU as long as the Commit may run, and the lease tool ends the Commit at its timeout.  ``kept``: the record's reason
+    when the process never released (one that holds its lease to its exit by design, a TP Match's capture); else the Commit's."""
     started = os.path.join(row_dir, "gpu_lease.started")
     for p in (started, _requested(started), _released(started)):
         if os.path.exists(p):
@@ -486,8 +489,8 @@ def run(row_dir: str, log: str, cmd: list[str], timeout_s: int, environ: dict[st
     rec: dict[str, Any] = {"schema": "verity-vllm/gpu-lease/v1", "tool": environ["GPU_LEASE"], "max_min": max_min(timeout_s),
                            "process_started": _utc(t0), "requested": None, "released": _utc(t_rel),
                            "released_at": rel.get("released_at") or "process.end", "process_ended": _utc(t1),
-                           "kept": rel.get("kept") or (None if rel.get("released") else "the Commit ended before its release (its last run was "
-                                                       "not an instrumented one, or it ended before that run's records)"),
+                           "kept": rel.get("kept") or (None if rel.get("released") else kept or "the Commit ended before its release (its last "
+                                                       "run was not an instrumented one, or it ended before that run's records)"),
                            "rc": rc, "started": None, "waited_min": None, "held_min": None}
     rec.update({k: rel[k] for k in ("shutdown_s", "reset_s", "holder_s", "shutdown_error", "context_reappeared", "threads", "ranks") if rel.get(k) is not None})
     tr, ts = _stamp(_requested(started)), _stamp(started)

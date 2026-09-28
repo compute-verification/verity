@@ -136,8 +136,8 @@ theorem coinedOf_setup_of (Tz : TabZK 𝔽 mPts) (st : Stmt) (hwf : StmtWF st) (
     fun _ _ => rfl
   have he : ∀ a : F128, ((coinedOf P Tz st).T c).embed (fOf a) =
       GF256.of ⟨a, 0⟩ := fun _ => rfl
-  obtain ⟨hrank, hW, hb⟩ := coin_facts _ c hc.1 hβ hρ hw he
-  exact ⟨g4 c hc.1, ⟨hβ, hρ, hw, he⟩, hrank, fun _ _ => rfl, hW, bodyOf_padsOnto_of P Tz st c hc.1, hb,
+  obtain ⟨hrank, hW, hb⟩ := coin_facts _ c hc hβ hρ hw he
+  exact ⟨g4 c hc, ⟨hβ, hρ, hw, he⟩, hrank, fun _ _ => rfl, hW, bodyOf_padsOnto_of P Tz st c hc, hb,
     innerOf_holds_of P Tz st hwf hS M hdm c hc⟩
 
 theorem coinedOf_setup (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}

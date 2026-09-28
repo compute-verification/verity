@@ -1,21 +1,25 @@
 """A leased TP Commit (`pipeline.tp.lease`): the driver takes every GPU of the task at once right before its engine; after the last
 run's finalize has fixed each rank's root, every rank leaves its device and resets its context, the driver's context goes, and every
 lock goes back at once, before the checks that follow.  A rank that still needs its device, or a step that fails, keeps the whole lease
-to the Commit's exit (never part of it), and a Commit that ends before its release frees every lock at its exit.  CPU-only: the ranks
-are `TP2CaptureWorkerExtension`'s commit methods over a stand-in committer and model, the LLM dispatches `collective_rpc` to them, and
-the lease is `test_gpu_lease`'s stand-in tool."""
+to the Commit's exit (never part of it), and a Commit that ends before its release frees every lock at its exit.  A leased TP Match
+leases every GPU for its capture and its control only, each to its exit; its check, served-shape derives and fold Match run with no
+device and no lease, and its verdict is an unleased Match's.  CPU-only: the ranks are `TP2CaptureWorkerExtension`'s commit methods over
+a stand-in committer and model, the LLM dispatches `collective_rpc` to them, the Match's legs are stand-in processes, and the lease is
+`test_gpu_lease`'s stand-in tool."""
 from __future__ import annotations
 
 import ast
 import fcntl
 import json
 import os
+import re
 import socket
 import subprocess
 import sys
 import threading
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
@@ -24,7 +28,7 @@ from tests.pipeline.test_row import TP_DENSE, _tp_row
 from verity_vllm.engine import hooks
 from verity_vllm.engine.rank_worker import TP2CaptureWorkerExtension as _cls
 from verity_vllm.pipeline import gpu_lease as GL
-from verity_vllm.pipeline.row_driver import Stop
+from verity_vllm.pipeline.row_tp import MATCH_LEG_KEPT
 from verity_vllm.pipeline.tp import lease as TPL
 
 GPUS = ("4", "5")
@@ -405,7 +409,7 @@ def test_a_tp_commit_that_fails_holding_its_lease_frees_every_gpu_at_its_exit(tm
 def test_the_tp_commit_takes_its_lease_before_the_device_and_gives_it_back_only_at_its_last_runs_finalize():
     """In `tp.commit.main`: the lease before the target reads the device and before the engine; the one release at the finalize of the
     last instrumented run (not under --value-check, whose run follows), before the openings and the cross-rank pass; and in the row,
-    the Commit under the lease and no Match for a leased item."""
+    the Commit under the lease."""
     src = Path(TPL.__file__).with_name("commit.py").read_text()
     main = ast.get_source_segment(src, next(n for n in ast.parse(src).body if isinstance(n, ast.FunctionDef) and n.name == "main"))
     marks = ["TPL.acquire()", "va.target_of_workload(wl)", "LLM(**kw)", '"tp2_commit_make"', '"tp2_commit_install"', "TPL.finalize(llm",
@@ -418,10 +422,143 @@ def test_the_tp_commit_takes_its_lease_before_the_device_and_gives_it_back_only_
     assert 'self.run_gpu("commit.tp_commit", to_k' in Path(TPL.__file__).parents[1].joinpath("row_tp.py").read_text()
 
 
-def test_a_leased_tp_row_has_no_match(tmp_path):
+@pytest.mark.parametrize("item,leased,mode", [(None, False, "device"), (None, True, "device"), ("host", False, "host"),
+                                              ("device-checked", True, "device-checked")])
+def test_a_tp_commit_hashes_its_weights_on_the_device_unless_the_item_says_otherwise(tmp_path, monkeypatch, item, leased, mode):
+    from verity_vllm.pipeline import row_records as R
     t = _tp_row(tmp_path, TP_DENSE)
-    os.makedirs(t.d)
-    t.child_env["GPU_LEASE"] = "/l/gpu-lease"
-    with pytest.raises(Stop) as e:
-        t.match()
-    assert e.value.rc == 11 and "match FAIL" in (Path(t.d) / "stages.txt").read_text()
+    os.makedirs(f"{t.d}/commit")
+    Path(f"{t.d}/commit/summary.json").write_text('{"pass": true}')
+    t.hidden_so = str(tmp_path / "hidden.so")
+    Path(t.hidden_so).touch()
+    env = {k: v for k, v in os.environ.items() if not k.startswith(("GPU_LEASE", "VERITY_LEASE", GL.WEIGHTS_HASH))}
+    env.update({GL.WEIGHTS_HASH: item} if item else {})
+    env.update({"GPU_LEASE": "/l/gpu-lease"} if leased else {})
+    t.child_env = env
+    for name, value in (("tp_rank_workload_digest", lambda bdir, r: f"wd{r}"), ("tp_manifest_complete", lambda d: True),
+                        ("applicable_taps", lambda man, ck: [])):
+        monkeypatch.setattr(R, name, value)
+    seen: list[dict] = []
+    monkeypatch.setattr(t, "manifest_global", lambda *a: 0)
+    monkeypatch.setattr(t, "run_tl", lambda stage, to, log, cmd: seen.append(dict(t.child_env)) or 0)
+    t.commit()
+    assert [e.get(GL.WEIGHTS_HASH) for e in seen] == [mode] and (GL.STARTED in seen[0]) == leased
+    assert f"weights hash {mode}" in Path(f"{t.d}/row.log").read_text() and "commit PASS" in Path(f"{t.d}/stages.txt").read_text()
+
+
+#: Every Match leg's stand-in, run as ``leg.py <command> ARGS...`` from the dir of the lease tool's stand-in: it notes what it saw
+#: (its devices, its lease, the lease locks it holds, whether each was free) in ``legs.jsonl`` and writes what the row reads after it.
+#: A capture or control ends as its exit would end its lease (every lock and the holder's stdin closed, the holder gone) before it
+#: returns, so the next leg sees the lease as the next process after it sees it.
+LEG = '''\
+import fcntl, json, os, sys
+from verity_vllm.pipeline import cli, gpu_lease as GL
+from verity_vllm.pipeline.tp import lease as TPL
+
+TMP, cmd, args = os.path.dirname(os.path.abspath(__file__)), sys.argv[1], sys.argv[2:]
+out = args[args.index("--out") + 1]
+
+
+def free(g):
+    fd = os.open(os.path.join(TMP, g + ".lock"), os.O_CREAT | os.O_WRONLY | os.O_APPEND)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return True
+    except BlockingIOError:
+        return False
+    finally:
+        os.close(fd)
+
+
+if cmd == "tp-capture":
+    cli.process_settings(os.environ)
+    TPL.acquire()
+fds = (os.path.realpath(f"/proc/self/fd/{f}") for f in os.listdir("/proc/self/fd"))
+seen = {"leg": os.path.basename(out) if cmd == "tp-capture" else cmd, "devices": os.environ.get("CUDA_VISIBLE_DEVICES"),
+        "lease": os.environ.get(GL.STARTED, "").partition("/match/")[2], "locks": sorted(os.path.basename(p) for p in fds if p.endswith(".lock"))}
+seen["free"] = [free(g) for g in ("4", "5")]
+with open(os.path.join(TMP, "legs.jsonl"), "a") as f:
+    f.write(json.dumps(seen) + "\\n")
+os.makedirs(out, exist_ok=True)
+if cmd == "tp-capture":
+    reqs = [{"prompt_token_ids": [1] * 16, "generated_token_ids": [2] * n} for n in (4, 2)]      # the second stopped before its cap
+    json.dump({"requests": reqs}, open(os.path.join(out, "tokens.json"), "w"))
+    if GL._HELD:
+        holder, ours, held = GL._HELD[0][:3]
+        GL._EXITING.set()
+        for fd in held:
+            os.close(fd)
+        ours.close()
+        holder.stdin.close()
+        holder.wait()
+elif cmd == "tp-match":
+    json.dump({"pass": True, "structure": {"pass": True, "per_rank": {"0": {"n_collectives": 6, "build_signature_len": 6, "n_steps": 4}}},
+               "provenance": {"pass": True, "collectives_checked": 6, "n_mismatches": 0}, "tokens": {"pass": True}},
+              open(os.path.join(out, "tp2_match.json"), "w"))
+elif cmd == "build":
+    json.dump({"ok": True}, open(os.path.join(out, "result.json"), "w"))
+elif cmd == "global-program":
+    json.dump({"workload_digest": "wd"}, open(os.path.join(out, "workload_program.json"), "w"))
+elif cmd == "tp-fold-match":
+    json.dump({"pass": True, "legs": {"0": "PASS", "1": "PASS"}, "problems": []}, open(os.path.join(out, "tp2_fold_match.json"), "w"))
+'''
+
+
+def _match(tmp: Path, leased: bool) -> tuple[Any, list[dict]]:
+    """A TP Match of a built row (step and declared request Programs on disk), every leg `LEG`; leased: the item's lease tool is
+    `test_gpu_lease`'s stand-in over GPUs 4 and 5 and its devices are hidden, as `Row.setup` leaves them; else they are visible."""
+    tmp.mkdir()
+    t = _tp_row(tmp, TP_DENSE)
+    t.shapes, t.MML, t.tgt_args, t.fold_profile = [(16, 3)], 64, [], "derived_test_tp2"
+    for r in range(t.W):
+        for d in ("build_step", "build_request_LP16_T3"):
+            os.makedirs(f"{t.rank(r)}/{d}")
+            Path(f"{t.rank(r)}/{d}/result.json").write_text('{"ok": true}')
+    os.makedirs(t.M)
+    (tmp / "leg.py").write_text(LEG)
+    t.cli = lambda *a, py=None: [sys.executable, str(tmp / "leg.py"), *a]
+    env = {k: v for k, v in os.environ.items() if not k.startswith(("GPU_LEASE", "VERITY_LEASE", GL.WEIGHTS_HASH))}
+    env.update(PATH=f"{tmp / 'bin'}:{os.environ['PATH']}", CUDA_VISIBLE_DEVICES=",".join(GPUS))
+    if leased:
+        env.update(GPU_LEASE=fake_lease(tmp, ",".join(GPUS)), GPU_LEASE_N=str(len(GPUS)))
+        GL.hide_devices(env)
+    t.child_env = env
+    t.match()
+    return t, [json.loads(ln) for ln in (tmp / "legs.jsonl").read_text().splitlines()]
+
+
+def _stages(t: Any) -> list[str]:
+    """The row's verdict lines without their times."""
+    return [re.sub(r"wall=\d+s", "wall=", re.sub(r" \d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", "", ln.rstrip("\n"))) for ln in open(f"{t.d}/stages.txt")]
+
+
+def test_a_leased_tp_match_holds_every_gpu_only_for_the_capture_and_the_control_and_judges_as_an_unleased_one(tmp_path):
+    t, legs = _match(tmp_path / "leased", True)
+    u, legs_u = _match(tmp_path / "unleased", False)
+    gpu = [{"leg": leg, "devices": "4,5", "lease": f"lease/{leg}/gpu_lease.started", "locks": ["4.lock", "5.lock"], "free": [False, False]}
+           for leg in ("capture", "control")]
+    cpu = ["tp-match", "build", "build", "global-program", "global-program", "tp-fold-match"]
+    assert legs == gpu + [{"leg": leg, "devices": "", "lease": "", "locks": [], "free": [True, True]} for leg in cpu]
+    assert legs_u == [{"leg": leg, "devices": "4,5", "lease": "", "locks": [], "free": [True, True]} for leg in ["capture", "control", *cpu]]
+    assert _stages(t) == _stages(u) and len(_stages(t)) == 2, _stages(t)
+    assert _stages(t)[0].startswith("eos-truncated served=[16,3 16,1] declared=[16,3]") and _stages(t)[1].startswith("match PASS rc=0/0/0/0 ")
+    summary = lambda r: json.loads(Path(f"{r.d}/match_summary.json").read_text())
+    assert summary(t) == summary(u) and summary(t)["pass"] is True and summary(t)["fold_rc"] == 0
+    for leg in ("capture", "control"):
+        rec = json.loads(Path(f"{t.M}/lease/{leg}/{GL.RECORD}").read_text())
+        assert rec["kept"] == MATCH_LEG_KEPT and rec["released_at"] == "process.end" and rec["rc"] == 0 and rec["held_min"] is not None
+    assert not Path(f"{t.d}/{GL.RECORD}").exists() and not Path(f"{u.M}/lease").exists()
+    assert (tmp_path / "leased" / "lease.args").read_text().startswith("2 --wait ")
+    assert all(GL.STARTED not in e and GL.WEIGHTS_HASH not in e for e in (t.child_env, u.child_env))
+    assert sum("GPU lease (gpu_lease.json)" in ln for ln in open(f"{t.d}/row.log")) == 2
+
+
+def test_the_tp_capture_takes_its_lease_before_the_device_and_before_its_engine():
+    """In `tp.capture.main`: the lease before anything reads the device or builds the engine (the case's environment, the engine's
+    arguments, the LLM), and no CUDA call of its own before it."""
+    src = Path(TPL.__file__).with_name("capture.py").read_text()
+    main = ast.get_source_segment(src, next(n for n in ast.parse(src).body if isinstance(n, ast.FunctionDef) and n.name == "main"))
+    marks = ["TPL.acquire()", "case_of(", "LLM(**kw)"]
+    at = [main.index(m) for m in marks]
+    assert at == sorted(at) and main.count("TPL.acquire()") == 1, dict(zip(marks, at))
+    assert "torch.cuda" not in main[:at[0]]

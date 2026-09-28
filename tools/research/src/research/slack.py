@@ -12,7 +12,7 @@ Notes are records, never messages.
                     [--verify CMD] [--ships URL#sha256=HEX | git:SHA]...     # prints `<ts> <permalink>`; --kind announce: an announcement
   research msg close --as NAME --thread TS [--link URL] [--note T] [--declined WHY]   # ✅ or ❌: a status line, and the reaction on an ask
   research msg list [--as NAME] [--hours H] [--open] [--json]     # threads: when, kind, from, to, state
-  research msg read --thread TS | --since TS | --as NAME [--peek] [--urgent] [--json]  # --as: unread doorbells, then the digest
+  research msg read --thread TS [--since TS] | --since TS | --as NAME [--peek] [--urgent] [--json]  # --as: unread doorbells, then the digest
   research msg names open|read|close|list [--as NAME] [--forward-to @NAME] [--succeeds]  # the names you answer to (`inbox` too)
   research msg subscribe --as NAME [--filter F [--deliver wake|digest] | --remove F]   # F: all, kind:K, from:@x, to:@x, thread:TS
   research msg traffic [--hours H] [--json]                        # the monitor: doorbells, pauses, dropped names, unanswered asks
@@ -1191,8 +1191,8 @@ def cmd_verify_author(ns: argparse.Namespace, reg: dict) -> int:
 
 
 def cmd_read(ns: argparse.Namespace, reg: dict) -> int:
-    if ns.thread and (ns.since or ns.handle):
-        raise SlackError("read: --thread reads one thread; it takes neither --since nor --as")
+    if ns.thread and ns.handle:
+        raise SlackError("read: --thread reads one thread; it doesn't take --as")
     if not (ns.thread or ns.since or ns.handle):
         raise SlackError("read: one of --thread TS, --since TS or --as NAME is required")
     if ns.handle:
@@ -1203,7 +1203,10 @@ def cmd_read(ns: argparse.Namespace, reg: dict) -> int:
         return inbox_read(ns, reg, r)
     api, ch = client(ns), channel_id(ns, reg)
     if ns.thread:
-        msgs = api.paged("conversations.replies", "messages", ns.limit, channel=ch, ts=ns.thread)
+        since = {"oldest": ns.since} if ns.since else {}
+        msgs = api.paged("conversations.replies", "messages", ns.limit, channel=ch, ts=ns.thread, **since)
+        if ns.since:
+            msgs = [m for m in msgs if float(m["ts"]) > float(ns.since)]     # Slack returns the thread's root whatever `oldest` says
     else:
         msgs = api.paged("conversations.history", "messages", ns.limit, channel=ch, oldest=ns.since)
         msgs = [m for m in msgs if m.get("ts") != ns.since][::-1]                   # oldest first; `oldest` is inclusive at the edge
@@ -1682,6 +1685,12 @@ def permalink(reg: dict, ch: str, ts: str) -> str:
     return f"https://{reg['workspace']}/archives/{ch}/p{ts.replace('.', '')}"
 
 
+def no_such_card(verb: str, cid: str) -> str:
+    """The route answers 404 only for an ID with no card: a pending card's status is 200."""
+    return (f"ask-daniel {verb} {cid}: HTTP 404: no card has that ID. It is the UUID `ask-daniel` printed first when it posted "
+            "the card, not the card's Slack ts; for a card posted any other way, record Daniel's thread reply as a ruling")
+
+
 def cmd_ask_daniel(ns: argparse.Namespace, reg: dict) -> int:
     if ns.verb:
         if not ns.id:
@@ -1698,15 +1707,19 @@ def cmd_ask_daniel(ns: argparse.Namespace, reg: dict) -> int:
                 return _show(AskDaniel().call("POST", f"{path}/resolve", body), ns.json)
             except RouteError as e:
                 if e.status == 404:
-                    raise SlackError(f"ask-daniel resolve {ns.id}: HTTP 404: the resolve route isn't deployed yet (console is building it), "
-                                     "or there is no such card; until it is, the thread reply is the answer: record it as a ruling") from None
+                    raise SlackError(no_such_card("resolve", ns.id)) from None
                 raise
         if ns.dry_run:
             print(f"dry-run: GET {ASK_DANIEL}{path}", file=sys.stderr)
             return 0
         route = AskDaniel()
         polls = math.ceil((DEADLINE_MAX + WAIT_GRACE).total_seconds() / ns.every) if ns.wait else 1
-        return _show(wait_for(lambda: route.call("GET", path), sleep=_sleep, every=ns.every, polls=polls), ns.json)
+        try:
+            return _show(wait_for(lambda: route.call("GET", path), sleep=_sleep, every=ns.every, polls=polls), ns.json)
+        except RouteError as e:
+            if e.status == 404:
+                raise SlackError(no_such_card("status", ns.id)) from None
+            raise
 
     now = _now()
     body = card(ns, reg, now)
@@ -1848,7 +1861,8 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--why", action="store_true", help="print the verdict on stderr")
     p = cmd("read", "a thread, the channel since TS, or (--as) what reached NAME since it last read (or since TS)")
     p.add_argument("--thread", default=None, metavar="TS")
-    p.add_argument("--since", default=None, metavar="TS", help="the channel since TS; with --as, NAME's doorbells and digest since TS")
+    p.add_argument("--since", default=None, metavar="TS",
+                   help="the channel since TS; with --thread, its replies since TS; with --as, NAME's doorbells and digest since TS")
     p.add_argument("--as", dest="handle", default=None, metavar="NAME", help="NAME's unread doorbells, then its digest")
     p.add_argument("--limit", type=int, default=None)
     p.add_argument("--peek", action="store_true", help="--as: don't mark them read")

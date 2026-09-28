@@ -36,13 +36,13 @@ def _order(u: int, width: int) -> int:
 
 @primitive("F32Fabs", 1, [("x", F32)], F32, conformance="exact-model-tested")
 def F32Fabs(x: int) -> int:
-    """`fabsf`: clear the sign bit (NaN payloads kept)."""
+    """`fabsf`: clear the sign bit (NaN payloads kept: documented, not measured)."""
     return x & 0x7FFFFFFF
 
 
 @primitive("F32Neg", 1, [("a", F32)], F32, conformance="exact-model-tested")
 def F32Neg(a: int) -> int:
-    """`neg.f32`: flip the sign bit (exact; -0 for +0, NaN stays NaN)."""
+    """`neg.f32`: flip the sign bit (exact; -0 for +0, a NaN keeps its payload: documented, not measured)."""
     return (a ^ 0x80000000) & 0xFFFFFFFF
 
 

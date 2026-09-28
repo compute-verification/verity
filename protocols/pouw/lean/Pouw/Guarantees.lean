@@ -1,4 +1,5 @@
 import Pouw.Guarantees.Barrier
+import Pouw.Guarantees.Deadline
 import Pouw.Guarantees.Dimension
 import Pouw.Guarantees.Game
 import Pouw.Guarantees.NCP

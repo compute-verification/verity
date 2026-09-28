@@ -128,6 +128,7 @@ def test_a_queued_run_with_a_disk_request_is_admitted_on_the_machine_ahead_of_it
     req, runs_root = _request(tmp_path, "d1", [PY, "-c", "print('ok')"])
     doc = json.loads(req.read_text())
     doc["queue"] = {"disk_gb": 0.001}
+    doc["env"] = {**(doc.get("env") or {}), "RESEARCH_DISK_HOLD_PCT": "100"}   # admitted however full this host's disk is
     req.write_text(json.dumps(doc))
     out = remote.launch_request(req)
     assert out["started"] and _wait_terminal(runs_root / "d1")["state"] == "done"

@@ -172,6 +172,13 @@ fn level0_zk(st: &Stmt, rng: &mut flock_live::zk_hooks::ProverRng, zero: bool, t
 }
 
 /// M1's hooks identity: what is masked, and what is not yet (the statement is not zero knowledge until the list is empty).
+/// `refused_coins`: the coins at which the prover stops, each before it sends anything that depends on them and reading only
+/// opened coins (live PROTOCOL.md, "Refused coins"):
+/// - `β = 0` (the inner proof);
+/// - mask-slot weights of rank `< 128·k` over the claims so far (the rank check, §6);
+/// - `ρ_0, ρ_1` dependent over F128;
+/// - a zerocheck outer coin `r_j = 1`, as it opens ([`zkv::Masking`]). Completeness: under uniform coins the honest prover
+///   refuses with probability at most `(#outer coins) · 2^-128` per rep, `m − 13` outer coins.
 fn zk_identity(c: &Composite) -> Value {
     json!({"zk": true, "stage": "m2-prototype (committed verifier coins, CPU)", "compiler": "veil (ePrint 2026/683 §4.1, Remark 4.4) over gf(2^128)",
            "verifier_coins": format!("committed before the prover's first message ({}): the prover's fresh nonce in hello; the root and the \
@@ -189,7 +196,8 @@ fn zk_identity(c: &Composite) -> Value {
                                value, the lane-round messages and the pair's sums padded; T' and ybar sent (uniform)",
            "ligerito_level0_queries": "q_0 = 277, 242, 229 at m = 25, 26, 27, else the least q_0 >= fast100's with q_0 log2(1/(sqrt(rho') + 1/50)) >= 100; \
                                        rho' = (L + 2 q_0) / 2L; refused below 100 bits and at m <= 24",
-           "refused_coins": ["beta = 0", "mask-slot weights of rank < 128 k over the claims so far", "rho_0, rho_1 dependent over F128"],
+           "refused_coins": ["beta = 0", "mask-slot weights of rank < 128 k over the claims so far", "rho_0, rho_1 dependent over F128",
+                             "a zerocheck outer coin r_j = 1"],
            "not_yet_masked": []})
 }
 
@@ -1626,7 +1634,8 @@ fn zk_audit_inner_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Valu
 /// every prover message. Rewinding V* is a fresh instance on the same tape, replayed to the same point. `Abort` and
 /// `AdaptiveCoins` act at the first round whose message, hashed with the tape, falls below [`TRIGGER`]: the first stops
 /// there; the second answers a coin it picks from that message, under the committed coin's opening. `CoinAt(k)` does the
-/// latter at rep 0's round `k`. `ZeroBeta(k)` commits to β = 0 at rep 0's round `k`. The gated strategies decide on one
+/// latter at rep 0's round `k`. `ZeroBeta(k)` commits to β = 0 at rep 0's round `k`, `OuterOne(k)` to a zerocheck outer coin
+/// `r_0 = 1` at rep 0's round `k` (the round that opens the outer coins, [`outer_round`]). The gated strategies decide on one
 /// message whether to continue for sure (half of those messages, "good") or only with probability `ε / 65536`:
 /// `CapGated(ε)` on the witness cap (red-team-m2-zk's; it stops at rep 0's first round), `LateGated(ε)` on rep 0's round
 /// that carries `T'` and `ybar` (it stops there). A simulator that reused messages across rewinds would fail against them.
@@ -1638,6 +1647,7 @@ enum Strategy {
     AdaptiveCoins,
     CoinAt(usize),
     ZeroBeta(usize),
+    OuterOne(usize),
     CapGated(u16),
     LateGated(u16),
 }
@@ -1675,11 +1685,11 @@ impl VStar {
     fn with_server(mut s: Server, table0: &str, strategy: Strategy, tape: [u8; 32]) -> Self {
         s.inject_coin_tape(tape);
         let rep0 = rep_stream(table0, 0);
-        if let Strategy::ZeroBeta(k) = strategy {
-            let r0 = rep0.clone();
+        if let Strategy::ZeroBeta(k) | Strategy::OuterOne(k) = strategy {
+            let (r0, x) = (rep0.clone(), if matches!(strategy, Strategy::ZeroBeta(_)) { F128::ZERO } else { F128::ONE });
             s.inject_coin_edit(Box::new(move |stream, round, b| {
                 if stream == r0 && round == k {
-                    b[0] = F128::ZERO;
+                    b[0] = x;
                 }
             }));
         }
@@ -1991,6 +2001,15 @@ fn beta_round(view: &View, rep0: &str) -> Option<usize> {
         .last()
 }
 
+#[cfg(feature = "seed-injection")]
+/// Rep 0's round that opens the zerocheck's outer coins: the one after the round whose message carries the zerocheck's label
+/// (that round's squeeze opens the skip coins).
+fn outer_round(view: &View, rep0: &str) -> Option<usize> {
+    view.iter().filter_map(|(r, _)| match r { Req::Round { stream, content, .. } if stream == rep0 => Some(content), _ => None })
+        .position(|c| c.windows(zkv::LABEL_ZC.len()).any(|w| w == zkv::LABEL_ZC))
+        .map(|k| k + 1)
+}
+
 /// `zkrewind --zk --n N`: per verifier strategy (`--strategies`, default all), N real sessions and N Goldreich–Kahan
 /// simulations against V* on one tape, each view printed as `ZKVIEW` (its summary), `ZKVIEWP` (each received proof's
 /// checked fields) and, when complete, `ZKVIEWREL` (the session's cross-rep relations) for
@@ -2051,6 +2070,7 @@ fn zkrewind(st: &Arc<Stmt>, inst: &Arc<Instances>) {
             "abort" => Strategy::Abort,
             "adaptive-coins" => Strategy::AdaptiveCoins,
             "zero-beta" => Strategy::ZeroBeta(beta_round(&real(&|| VStar::of(&tabs, Strategy::Honest, tape)), &rep0).expect("rep 0's beta round")),
+            "outer-one" => Strategy::OuterOne(outer_round(&real(&|| VStar::of(&tabs, Strategy::Honest, tape)), &rep0).expect("rep 0's outer round")),
             "cap-gated" => Strategy::CapGated(eps),
             "late-gated" => Strategy::LateGated(eps),
             x => refuse(format!("unknown strategy {x}")),
@@ -2895,6 +2915,7 @@ const CASES: &[(&str, bool, bool)] = &[
     ("zk_level0_extra_lane_sum_forged", false, true),
     ("zk_verifier_coin_off_its_commitment", false, false),
     ("zk_verifier_commits_beta_zero", false, false),
+    ("zk_verifier_commits_outer_coin_one", false, false),
     ("zk_session_relations_vary_with_the_seed", true, false),
     ("zk_audit_attributes_the_inner_proof", true, false),
     ("zk_dummy_witness_passes_the_region_claims", false, true),
@@ -3177,15 +3198,19 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
                       "pass": refused(&entry) && refused(&wire) && cancels.is_none() && pinned.is_none()});
     }
     #[cfg(feature = "seed-injection")]
-    if name == "zk_verifier_coin_off_its_commitment" || name == "zk_verifier_commits_beta_zero" {
-        // M2: V* answers rep 0's round 3 with a coin of its choosing under the committed coin's opening, or commits to β = 0;
-        // the prover stops at that coin, before it sends anything that depends on it
-        let (strategy, want) = if name.ends_with("beta_zero") {
+    if ["zk_verifier_coin_off_its_commitment", "zk_verifier_commits_beta_zero", "zk_verifier_commits_outer_coin_one"].contains(&name) {
+        // M2: V* answers rep 0's round 3 with a coin of its choosing under the committed coin's opening, or commits to β = 0 or
+        // to a zerocheck outer coin r_0 = 1; the prover stops at that coin, before it sends anything that depends on it
+        let (strategy, want) = if name.ends_with("beta_zero") || name.ends_with("outer_coin_one") {
             let v = VStar::new(st, inst, Strategy::Honest, [7; 32]);
             let view = v.view.clone();
             session(st, inst, shared(v), &Plan { gpu, ..Plan::default() }, ProverSeed::from_os());
-            let k = beta_round(&view.lock().unwrap_or_else(PoisonError::into_inner), &rep_stream(TABLE, 0)).expect("rep 0's beta round");
-            (Strategy::ZeroBeta(k), "degenerate coin β = 0")
+            let (view, rep0) = (view.lock().unwrap_or_else(PoisonError::into_inner), rep_stream(TABLE, 0));
+            if name.ends_with("beta_zero") {
+                (Strategy::ZeroBeta(beta_round(&view, &rep0).expect("rep 0's beta round")), "degenerate coin β = 0")
+            } else {
+                (Strategy::OuterOne(outer_round(&view, &rep0).expect("rep 0's outer round")), "zerocheck outer coin r_0 = 1")
+            }
         } else {
             (Strategy::CoinAt(3), "do not open its step-0 commitment")
         };
@@ -4127,6 +4152,18 @@ fn main() {
     }
     if let Err(e) = check_public(&c, &inst) {
         refuse(e);
+    }
+    // the verifier's commands check Linking on the population before any session; the prover's take no links file
+    if matches!(cmd.as_str(), "serve" | "replay" | "statement") {
+        let path = arg("--links", "");
+        let file: Option<Value> = (!path.is_empty()).then(|| {
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap_or_else(|e| refuse(format!("--links {path}: {e}"))))
+                .unwrap_or_else(|e| refuse(format!("--links {path}: {e}")))
+        });
+        let links = flock_live::circuit::check_links(&c, &inst, file.as_ref()).unwrap_or_else(|e| refuse(e));
+        if links > 0 {
+            eprintln!("links: {links} cut wire(s) checked on the population's public file");
+        }
     }
     let id = identity(&c);
     let st = Arc::new(Stmt::new(c, inst.n, id).unwrap_or_else(|e| refuse(e)));

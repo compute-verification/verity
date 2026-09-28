@@ -8,7 +8,9 @@
               (and names the IEEE f32 arithmetic of `elementwise` and the bf16 widening of `cast`)
     fp4       the NVFP4 / MXFP4 block-scaled step (64 E2M1 codes and their scale bytes per operand)
     universal protocol 2's universal unit: one Definition per size class that runs any hidden netlist given as a value
+    sha512    SHA-512's compression (58,120 ANDs), its reference and padding
+    merkle    the hidden-index Merkle read: one Definition per tree shape that opens a leaf at a position given as a value
 
 These builders are what C-Flock's lowering has always run; `verity_flock.gf2`, `.fp`, `.unit` and `.unit_fp4` are these modules,
-and `verity_flock.tail_pieces` imports `softmax`'s and `scalar`'s.
+`verity_flock.tail_pieces` imports `softmax`'s and `scalar`'s, and `verity_flock.sha512_circuit` imports `sha512`'s.
 """

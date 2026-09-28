@@ -7,7 +7,7 @@ import FlockSoundness.LigeritoRes
 Rep `r`'s rows `ligerito lane phase (c0)`, `(c1)` (`rowsOf`'s rows 5 and 6: `limbRows` of `laneRow`), on the honest
 masked values (`honestMasked`: `honestAt` plus the exposed pads) and the honest restart `T' = Σ_c y₁'(c)·b̄(c)`, given the
 ring switch's target `T = Σ_y f(y)·b(y)` (`hT`, at the opening's batched basis `openB`). No coin is excluded: the lane
-rounds don't divide, so these hold at every coin vector, `Covered` or not.
+rounds don't divide, so these hold at every coin vector, an outer coin `1` included.
 
 * `laneRun_eval`: after `j ≤ k₀` lane rounds the claim's value at the pads is `Σ_y f_j(y)·B_j(y)` (`laneF`, `laneB`), from
   `T + Σ_i β_i·y_i = Σ_y f(y)·B(y)` and one honest round at a time (`lane_round`).

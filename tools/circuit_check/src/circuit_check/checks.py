@@ -44,6 +44,7 @@ import numpy as np
 
 from verity.evaluation import ScalarReference, evaluate, kernels, self_check
 from verity.evaluation.reference import resolve, signature_of, standalone_call
+from verity.ir import boolean as BL
 from verity.ir.boolean import is_boolean
 from verity.ir.defs import PrimitiveDefinition
 
@@ -223,6 +224,28 @@ def target_equivalence(target: Any, definition: Any, opts: Options, F: Findings)
     return {"target": target.id, "compared": len(rows), "mismatches": len(bad)}
 
 
+def _wide_words(t: Any, params: Sequence[Any], ret: Any, arrays: Sequence[np.ndarray], n: int) -> np.ndarray:
+    """`evaluate_words` where an element is wider than its 64 bits (PoUW's 576-bit sums of squares): Python ints, each element
+    through its bits (`verity.evaluation.bits.evaluate_bits`)."""
+    from verity.evaluation.batch import type_shape
+    from verity.evaluation.bits import evaluate_bits
+
+    ins = []
+    for a, p in zip(arrays, params):
+        widths = BL.elements(p)
+        rows = np.asarray(a, dtype=object).reshape(n, len(widths))
+        ins.append(np.array([[(int(v) >> j) & 1 for v, w in zip(row, widths) for j in range(w)] for row in rows],
+                            dtype=np.uint8).reshape(n, *type_shape(p)))
+    bits = np.asarray(evaluate_bits(t, *ins)).reshape(n, -1)
+    out = np.zeros((n, len(BL.elements(ret))), dtype=object)
+    at = 0
+    for e, w in enumerate(BL.elements(ret)):
+        for i in range(n):
+            out[i, e] = sum(int(b) << j for j, b in enumerate(bits[i, at:at + w]))
+        at += w
+    return out
+
+
 def word_view(t: Any, opts: Options, F: Findings) -> dict | None:
     """A Boolean Definition against the word Definition it computes (`verity.ml.boolean.trace.word_of`), through the word view
     (`verity.evaluation.bits.evaluate_words`), on the word Definition's edge and random vectors."""
@@ -239,8 +262,13 @@ def word_view(t: Any, opts: Options, F: Findings) -> dict | None:
     pw, _ = signature_of(word)
     arrays = vectors(pw, 16 * opts.vectors, opts.seed + 2)
     n = arrays[0].shape[0]
-    want = np.asarray(evaluate_batch(word, *arrays), dtype=np.uint64).reshape(n, -1)
-    got = np.asarray(evaluate_words(t, *arrays), dtype=np.uint64).reshape(n, -1)
+    pb, rb = signature_of(t)
+    if max(w for p in (*pb, rb) for w in BL.elements(p)) > 64:
+        want = np.asarray(evaluate_batch(word, *arrays), dtype=object).reshape(n, -1)
+        got = _wide_words(t, pb, rb, arrays, n)
+    else:
+        want = np.asarray(evaluate_batch(word, *arrays), dtype=np.uint64).reshape(n, -1)
+        got = np.asarray(evaluate_words(t, *arrays), dtype=np.uint64).reshape(n, -1)
     bad = np.flatnonzero((got != want).any(axis=1)).tolist()
     if bad:
         F.fail("correspondence", "word-view-mismatch", t.id, f"[{word.id}]: {len(bad)} of {n} vectors", via=f"word-view:{word.id}",

@@ -4,19 +4,20 @@ import FlockSoundness.ZK.Abort
 /-!
 # One `--zk` session at every coin vector: what the prover sends and what the simulator outputs
 
-`Composed.ZkViewAt` is the view statement at the covered coin vectors (`CoinedSetup.Covered`). Here the statement at every
-coin vector, with the verifier's coins uniform and drawn independently of the prover's randomness:
+`Composed.ZkViewAt` is the view statement at the coin vectors the honest prover doesn't refuse (`CoinedSetup.Admits`).
+Here the statement at every coin vector, with the verifier's coins uniform and drawn independently of the prover's
+randomness:
 
 * `sentAt`: the guarded messages a table sent before the session's first failing check (`Session.sent`, one table).
 * `outExe`: **the honest prover's output** at a coin vector: its view (`viewExe`) where it doesn't refuse
   (`CoinedSetup.Admits`, `refused_coins`), and where it does, the prefix of that view it sends before it stops
-  (`Table.abort`: `at_open` returns `Err` before any `ŝ` leaves, and so on for `ρ` and `β`).
+  (`Table.abort`: `at_open` returns `Err` before any `ŝ` leaves, and so on for `ρ` and `β`; at a zerocheck outer coin `1`
+  it stops earlier still, and what it sent is a function of that cut).
 * `simAll`: **the simulator**: `S_shvzk` (`simExe`) where the prover doesn't refuse, and the honest prefix on the dummy
   witness with the public region values (`Table.pubAbort`) where it does. Which branch is taken is a function of the
   coins, which are public, so the simulator aborts exactly when the prover does.
 * `ZkViewAll`: every event on the coins and the output has, averaged over uniform coins, probabilities within
-  `2·|LeafPos|·δ₁ + Pr[Admits ∧ ¬Covered]` under the prover and the simulator, both ways. The last term is the coin
-  vectors the prover doesn't refuse with a zerocheck outer coin `1`, the only ones where nothing is simulated.
+  `2·|LeafPos|·δ₁` under the prover and the simulator, both ways.
 * `instFintypeF128`, `instFintypeF256`, `instFintypeRestZK`, `instFintypeCoinsZK` (and `instFintypeRestCoinedOf` at a draw's tables): the uniform distribution on a
   draw's coins.
 -/
@@ -52,7 +53,7 @@ noncomputable def simAll (C : CoinedSetup) (c : CoinsZK C.Rest) (w0 : Witness C.
 /-- **Zero knowledge at a `CoinedSetup`, at every coin vector, at `δ₁` per leaf**: for any valid witness `w` whose
 registered values are the public ones (at every coin vector's link points), any dummy witness `w0` and any event `E` on
 the coins and the output, the probability under uniform coins `c` and the honest prover's randomness (`outExe`) and
-under uniform coins and the simulator's (`simAll`) are within `2·|LeafPos|·δ₁ + Pr_c[Admits c ∧ ¬Covered c]`, both ways.
+under uniform coins and the simulator's (`simAll`) are within `2·|LeafPos|·δ₁`, both ways.
 The coins are drawn independently of either party's randomness, so each probability is the average over `c` of the
 probability at `c`. -/
 def ZkViewAll (C : CoinedSetup) [Fintype (CoinsZK C.Rest)] (δ₁ : ℝ≥0∞) : Prop :=
@@ -61,11 +62,11 @@ def ZkViewAll (C : CoinedSetup) [Fintype (CoinsZK C.Rest)] (δ₁ : ℝ≥0∞) 
       avg (fun c => prCoin fun p : (C.T c).tab.Rand × ((C.T c).tab.Hid → ZkView.Salt) => E c (outExe C c w p.1 p.2))
           ≤ avg (fun c => prCoin fun p : (C.T c).tab.SimRand × ((C.T c).tab.Hid → ZkView.Salt) =>
               E c (simAll C c w0 p.1 p.2))
-            + 2 * Fintype.card (LeafPos C.z) * δ₁ + prCoin (fun c => C.Admits c ∧ ¬ C.Covered c)
+            + 2 * Fintype.card (LeafPos C.z) * δ₁
         ∧ avg (fun c => prCoin fun p : (C.T c).tab.SimRand × ((C.T c).tab.Hid → ZkView.Salt) =>
               E c (simAll C c w0 p.1 p.2))
           ≤ avg (fun c => prCoin fun p : (C.T c).tab.Rand × ((C.T c).tab.Hid → ZkView.Salt) => E c (outExe C c w p.1 p.2))
-            + 2 * Fintype.card (LeafPos C.z) * δ₁ + prCoin (fun c => C.Admits c ∧ ¬ C.Covered c)
+            + 2 * Fintype.card (LeafPos C.z) * δ₁
 
 /-! ## The uniform distribution on a draw's coins -/
 

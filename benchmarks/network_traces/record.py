@@ -340,7 +340,11 @@ def offline_replay(eng, com, requests: list[dict], t0: float, drain_until: float
                 commits({"t_ms": ms(now - t0), "finalize_ms": ms(done - now), "restart_ms": ms(clock() - done),
                          "steps": len(rc.steps), "bytes": sum(s.n_bytes for s in rc.steps),
                          "root_ready_delay_ms": ms(rc.root_ready_delay_s), "run_root": rc.run_root.hex(),
-                         "errors": rc.extra.get("errors_n"), "gc_ms": ms(paused.take())})
+                         "errors": rc.extra.get("errors_n"), "gc_ms": ms(paused.take()),
+                         # the collector's plans the reset before this window dropped, those still pending at its end, and the
+                         # window's step that freed the last of them (native_plans.h)
+                         **{k: rc.extra.get("native_collect", {}).get(k)
+                            for k in ("plans_dropped", "plans_pending", "plans_pending_emptied_step")}})
                 next_run += window_s
                 continue
             if not core.has_unfinished_requests():

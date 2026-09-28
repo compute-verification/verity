@@ -63,12 +63,12 @@ theorem planZHJ_get_eq {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : 
   rw [tableZHJ, dif_pos ⟨y⟩]
   exact DrawSetupZHJ.table_eq _ _
 
-/-- **Zero knowledge at `J` `CoinedSetup`s, at `δ₁` per hidden leaf** (`ZkViewAt` at `J` tables): at any covered coin
-vector of each table, for any encoding `enc` of the joint view and any event `E`, the real joint view at valid witnesses
-`w j` whose registered values are the public ones and the simulators' at any `w0 j`, each table's prover randomness
-independent, are within `Σ_j 2·|Hid_j|·δ₁`, both ways. -/
+/-- **Zero knowledge at `J` `CoinedSetup`s, at `δ₁` per hidden leaf** (`ZkViewAt` at `J` tables): at any coin vector of
+each table that the honest prover doesn't refuse (`CoinedSetup.Admits`), for any encoding `enc` of the joint view and any
+event `E`, the real joint view at valid witnesses `w j` whose registered values are the public ones and the simulators' at
+any `w0 j`, each table's prover randomness independent, are within `Σ_j 2·|Hid_j|·δ₁`, both ways. -/
 def ZkViewAtJ {J : ℕ} (C : Fin J → CoinedSetup) (δ₁ : ℝ≥0∞) : Prop :=
-  ∀ (c : ∀ j, CoinsZK (C j).Rest), (∀ j, (C j).Covered (c j)) → ∀ {Out : Type}
+  ∀ (c : ∀ j, CoinsZK (C j).Rest), (∀ j, (C j).Admits (c j)) → ∀ {Out : Type}
     (enc : (∀ j, ((C j).T (c j)).tab.View) → Out) (w w0 : ∀ j, Witness (C j).S.m), (∀ j, (C j).Valid (w j)) →
     ∀ (_hreg : ∀ j, ((C j).T (c j)).tab.sReg (w j) = ((C j).T (c j)).tab.pubReg) (E : Out → Prop),
     Game.prCoin (fun p : ∀ j, ((C j).T (c j)).tab.Rand × (((C j).T (c j)).tab.Hid → ZkView.Salt) =>
@@ -135,13 +135,14 @@ theorem zkViewAtJ_of_ok {J : ℕ} (C : Fin J → CoinedSetup) (hC : ∀ j, Coine
       (fun j p => ((C j).T (c j)).simExe (w0 j) p.1 p.2) (fun j p => ((C j).T (c j)).viewExe (w j) p.1 p.2)
       (fun j => 2 * Fintype.card ((C j).T (c j)).tab.Hid * (2 : ℝ≥0∞) ^ (-193 : ℤ)) (fun j E' => (one j E').2) fun v => E (enc v)⟩
 
-/-- **One hidden-output `--zk` sampled session is zero knowledge, at the covered coin vectors** (`zk_session_view` under
+/-- **One hidden-output `--zk` sampled session is zero knowledge, at the coins it doesn't refuse** (`zk_session_view` under
 hidden outputs).
 
-The zero knowledge is honest-verifier: it holds at uniform coins, at the coin vectors the honest prover covers. At a
-verifier-chosen outer coin `1` the view leaks (`ASSUMPTIONS.md`, zero knowledge's coverage) until the prover refuses that
-coin. `avoidsMask` (`hdm`) is a named hypothesis that no check implies yet, until the verifier's D3 refusal in
-`Net.ofRows` discharges it. -/
+Which verifiers: this is honest-verifier zero knowledge at each fixed coin vector, a zerocheck outer coin `1` among the
+refused (`CoinedSetup.Admits`). It covers a verifier that chooses its coins because the coin server commits every coin at
+`Hello`, before the prover's first message (`coin_tree.rs`), under `keyed-cr`, which no statement here models yet
+(`ASSUMPTIONS.md`, zero knowledge's coverage). `avoidsMask` (`hdm`) is a named hypothesis that no check implies yet, until
+the verifier's D11 refusal in `Net.ofRows` discharges it. -/
 theorem zk_session_viewH (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     (y₀ : DrawSetupZKH I mPts S₀ (dj S₀)) (ht : I.tags.typed = false)
     (hdm : ∀ (S : Finset (Fin n)) (y : DrawSetupZKH I mPts S (dj S)), avoidsMask y.x.st = true)
@@ -151,14 +152,15 @@ theorem zk_session_viewH (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ 
   fun S R y => zkViewAt_of_ok _ (coinedOf_setup_of P _ y.x.st y.x.wf.1 (by rw [tablesAtZKH_eq dj y₀ S R y]; rfl)
     (maskSetup_of_setupHidden ((ZkExec.zkTags_typed I).trans ht) y.x.h) (hdm S y)).2.2.2.2.2 hKey
 
-/-- **One hidden-output `--zk` sampled session of `J` tables is zero knowledge, at the covered coin vectors**: at every
+/-- **One hidden-output `--zk` sampled session of `J` tables is zero knowledge, at the coins it doesn't refuse**: at every
 draw at which `verify --zk` sets every table up (`ys`), the joint view of `zk_session_soundHJ`'s plan `planZHJ`, table
-`j` at its executable statement, at any covered coin vector per table.
+`j` at its executable statement, at any coin vector per table that the honest prover doesn't refuse.
 
-The zero knowledge is honest-verifier: it holds at uniform coins, at the coin vectors the honest prover covers. At a
-verifier-chosen outer coin `1` the view leaks (`ASSUMPTIONS.md`, zero knowledge's coverage) until the prover refuses that
-coin. `avoidsMask` (`hdm`) is a named hypothesis that no check implies yet, until the verifier's D3 refusal in
-`Net.ofRows` discharges it. -/
+Which verifiers: this is honest-verifier zero knowledge at each fixed coin vector, a zerocheck outer coin `1` among the
+refused (`CoinedSetup.Admits`). It covers a verifier that chooses its coins because the coin server commits every coin at
+`Hello`, before the prover's first message (`coin_tree.rs`), under `keyed-cr`, which no statement here models yet
+(`ASSUMPTIONS.md`, zero knowledge's coverage). `avoidsMask` (`hdm`) is a named hypothesis that no check implies yet, until
+the verifier's D11 refusal in `Net.ofRows` discharges it. -/
 theorem zk_session_viewHJ (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     (y₀ : DrawSetupZKH I mPts S₀ (dj S₀)) (ht : I.tags.typed = false)
     (hdm : ∀ (S : Finset (Fin n)) (j : Fin (nTab I))
@@ -176,10 +178,11 @@ theorem zk_session_viewHJ (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀
 /-- **One hidden-output `--zk` sampled session of `J` tables, sound and zero knowledge**: `zk_session_soundHJ` and
 `zk_session_viewHJ` on the same plan `planZHJ dj y₀`.
 
-The zero knowledge is honest-verifier: it holds at uniform coins, at the coin vectors the honest prover covers. At a
-verifier-chosen outer coin `1` the view leaks (`ASSUMPTIONS.md`, zero knowledge's coverage) until the prover refuses that
-coin. `avoidsMask` (`hdm`) is a named hypothesis that no check implies yet, until the verifier's D3 refusal in
-`Net.ofRows` discharges it. -/
+Which verifiers: this is honest-verifier zero knowledge at each fixed coin vector, a zerocheck outer coin `1` among the
+refused (`CoinedSetup.Admits`). It covers a verifier that chooses its coins because the coin server commits every coin at
+`Hello`, before the prover's first message (`coin_tree.rs`), under `keyed-cr`, which no statement here models yet
+(`ASSUMPTIONS.md`, zero knowledge's coverage). `avoidsMask` (`hdm`) is a named hypothesis that no check implies yet, until
+the verifier's D11 refusal in `Net.ofRows` discharges it. -/
 theorem zk_session_composedHJ
     (I : Inputs) (ht : I.tags.typed = false)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZKH I mPts S₀ (dj S₀))

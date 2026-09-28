@@ -32,7 +32,7 @@ Since #757 main's prover writes the hidden-output statement (`verity/flock-circu
 * `Flat`, `Copies`, `Placed`, `Sites`: the copy, constant and zero facts at `keyProg`'s places in the hidden tables
   (`ppH`, `hConstH`, `hZeroH`, `sitesAtH`).
 * `Ret`, `SiteH`: where the circuit computes each output word (the unit copy and port `HmOut.outCol` reads), and the
-  site of a drawn unit (`BcSiteH`, every row's registered `b ‖ c` through `Hidden.bc_drawnH`).
+  site of a drawn unit (`BcSiteH`, every row's registered `b ‖ c` through `Hidden.bc_drawnW`).
 * `KeyH`: `lay` and `rs` at `keyProg`'s places (`keyLayoutH`, `keyRowsH`, `keyRowsH_computes`): every row a commit
   string, a unit's computed committed gates bits of its output rows.
 * `HeadlineExec`: `flock_headline_exec_hidden`, #828's `flock_headline_exec` for hidden-output sessions, `hdec` open.

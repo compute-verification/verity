@@ -135,7 +135,7 @@ theorem out_site (a : Placed.Accepted T) {pop : Public} {o : Fin (2 ^ T.nbl)} {g
     (hj : j < (a.st.c.leavesOut.getD u' #[]).size) (ht : t < 16) :
     bit (z (siteAddr a o (outAddr a.st.c (g * a.st.c.upv + u') j t))) =
       (pop.outputs.getD (u * a.st.c.outWords + (a.st.c.leavesOut.getD u' #[])[j]!) 0).testBit t := by
-  obtain ⟨d, D, hd, hD, hlt, hregs, hpop, -, -, hu⟩ := hs
+  obtain ⟨d, D, hd, hD, hlt, hregs, hpop, -, hu⟩ := hs
   have hm : (g * a.st.c.upv + u') % a.st.c.upv = u' := by
     rw [Nat.add_comm, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt hu']
   have hdv : (g * a.st.c.upv + u') / a.st.c.upv = g := by

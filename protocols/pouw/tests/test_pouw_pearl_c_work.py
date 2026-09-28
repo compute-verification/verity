@@ -18,6 +18,7 @@ from verity_pouw.protocol import Matmul, Shape, Tile
 from verity_pouw.schemes import pearl_c as C
 from verity_pouw.schemes import pearl_c_work as W
 from verity_pouw.schemes import pearl_kw as P
+from verity_pouw.schemes.pearl_c_device import SM120
 
 S = C.PearlC(k_min=32, tile=(16, 16), forming="v1")
 K = 128
@@ -61,6 +62,34 @@ def test_credit_is_per_row_on_kept_cells_at_leans_accounting():
     picks = W.draw(S, [r], AFTER, bytes(32), bytes(32), bytes(32), 200)
     assert {(t.rows[0], t.cols[0]) for _, t in picks} == set(tiles) and all(r.credited(t)[0] for _, t in picks)
     assert W.draw(S, [r], W.Beacon(6, b"another round"), bytes(32), bytes(32), bytes(32), 200) != picks
+
+
+def test_the_served_draw_weighs_mixed_linears_by_the_cited_statements_wref():
+    """Red team #919 F1: on sm_120 at its cap the tickets are `pearlCTilesDevRev1K`'s weights at `Prices.sm120Loop` and
+    c = 218/25 − 8953/1000, Lean's definitions restated here in exact fractions, on both served models' four linears at
+    once.  By the scheme's own `wref` they are not proportional (down is under-drawn); off sm_120 the draw is unchanged."""
+    add, bf16, fs, qa, g, r, c = Fraction(1047, 125), 2, 40, 2, 4, 32, Fraction(218, 25) - Fraction(8953, 1000)
+
+    def lean(m: int, n: int, k: int) -> Fraction:
+        credit = m * k * n * (1 + add / (32 * g)) + m * k * r + 2 * bf16 * r * m * n + fs * m * k - add * m * n
+        return credit + qa * m * k + c * m * k
+
+    s = C.PearlC(forming="v1", device=SM120)
+    assert W.draw_wref(s) is W.SM120_LOOP_CAST_8P72 and W.draw_wref(S) is None
+    linears = {"llama": [(6144, 4096), (4096, 4096), (28672, 4096), (4096, 14336)],
+               "qwen": [(6144, 4096), (4096, 4096), (24576, 4096), (4096, 12288)]}
+    for nks in linears.values():
+        records = [W.UnitRecord(Matmul(i, Shape(32, k, n), i), 32, k) for i, (n, k) in enumerate(nks)]
+        assert [W.ticket_cell(s, rec) for rec in records] == [lean(1, n, k) / n for n, k in nks]
+        own = {W.cell_wref(s, rec) * n / lean(1, n, k) for rec, (n, k) in zip(records, nks)}
+        assert len(own) == len(nks) and min(own) == W.cell_wref(s, records[3]) * nks[3][0] / lean(1, *nks[3])
+    h = record(excluded_a=(3,), excluded_b=(20,))
+    assert all(W.tile_weight(S, h, t) == W.cell_wref(S, h) * len(h.credited(t)[0]) * len(h.credited(t)[1])
+               for t in S.tiles(h.matmul.shape))
+    mixed = [W.UnitRecord(Matmul(0, Shape(64, 4096, 128), 0), 64, 4096), W.UnitRecord(Matmul(1, Shape(64, 14336, 64), 1), 40, 14336)]
+    tk = W.tickets(s, mixed)
+    weight = {(p, t.rows[0], t.cols[0]): w for p, t, w in tk}
+    assert Fraction(weight[(1, 0, 0)], weight[(0, 0, 0)]) == Fraction(40 * 64, 64 * 64) * lean(1, 64, 14336) / 64 / (lean(1, 128, 4096) / 128)
 
 
 def test_tile_cap_is_the_cells_share_of_the_units_credit():

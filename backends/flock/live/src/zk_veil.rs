@@ -21,7 +21,8 @@
 //! **Simulation** ([`simulate_inner`], and the binary's `simulate`): every exposed value is uniform (the pads are), `Y` is
 //! uniform, `τ = (⟨c, Y⟩ + t) / β`, and the opened columns are uniform subject to `C(Y)_j = C(h)_j + β C(μ)_j` (the padding
 //! makes any `Q ≤ K_PAD` columns of one codeword uniform). The prover refuses the degenerate coins `β = 0` and `ε`-independent
-//! cases, and a mask slot whose weights fail to span (`mask_rank_ok`); the simulator refuses the same coins.
+//! cases, a zerocheck outer coin `r_j = 1` ([`Masking`], as it opens), and a mask slot whose weights fail to span
+//! (`mask_rank_ok`); the simulator refuses the same coins.
 
 use flock_core::{
     lincheck::{LincheckCircuit, QuirkyPoint, SkipPoint, build_quirky_eq_table_from_weights},
@@ -310,12 +311,24 @@ pub struct Masking<C: Challenger> {
     /// Called at the opening's label with the phase's coins, before any opening message is absorbed: the prover's refusal
     /// point for degenerate coins (`Err` stops the proof there).
     pub at_open: Option<Box<dyn FnMut(&[F128]) -> Result<(), String> + Send>>,
+    /// the zerocheck's outer coins: `coins[K_SKIP..K_SKIP + n_outer]` ([`points_from_coins`]' `r_outer`)
+    n_outer: usize,
 }
 
 impl<C: Challenger> Masking<C> {
     pub fn new(inner: C, lay: &Layout, pads: &Pads, root: [u8; 64]) -> Self {
         Masking { inner, order: lay.absorbed(), n_piop: lay.piop_absorbed(), lig: lay.ligerito(), h: pads.h.clone(), at: 0, on: false, done: false,
-                  done_l0: false, root, coins: Vec::new(), coins_l0: Vec::new(), l0: false, at_open: None }
+                  done_l0: false, root, coins: Vec::new(), coins_l0: Vec::new(), l0: false, at_open: None, n_outer: lay.n_mlv - N_INNER }
+    }
+    /// The prover stops at a zerocheck outer coin `r_j = 1` among `coins[from..]`, as the coin opens and before it sends
+    /// anything that depends on it, reading the coin alone. At `r_j = 1` the replay's round `j` divides by zero, and the
+    /// honest pads miss the inner proof's constraint by a witness-dependent amount that the view would show. Under uniform
+    /// coins this refuses with probability at most `n_outer · 2^-128` per rep.
+    fn refuse_outer(&self, from: usize) {
+        let outer = K_SKIP..K_SKIP + self.n_outer;
+        if let Some(i) = (from..self.coins.len()).find(|i| outer.contains(i) && self.coins[*i] == F128::ONE) {
+            panic!("PROVER-STOPPED: degenerate coin: zerocheck outer coin r_{} = 1", i - K_SKIP);
+        }
     }
     pub fn finish(self) -> (C, Vec<F128>, Vec<F128>) {
         assert!(self.done && (self.done_l0 || !self.lig) && self.at == self.order.len(),
@@ -375,6 +388,7 @@ impl<C: Challenger> Challenger for Masking<C> {
             self.coins_l0.push(x);
         } else if self.on {
             self.coins.push(x);
+            self.refuse_outer(self.coins.len() - 1);
         }
         x
     }
@@ -384,6 +398,7 @@ impl<C: Challenger> Challenger for Masking<C> {
             self.coins_l0.extend_from_slice(&x);
         } else if self.on {
             self.coins.extend_from_slice(&x);
+            self.refuse_outer(self.coins.len() - n);
         }
         x
     }
@@ -397,7 +412,7 @@ impl<C: Challenger> Challenger for Masking<C> {
     fn fork_from_seed(&self, seed: [F128; 2], label: &'static [u8]) -> Self {
         assert!(!self.on, "masking: a fork inside the masked phase");
         Masking { inner: self.inner.fork_from_seed(seed, label), order: Vec::new(), n_piop: 0, lig: false, h: Vec::new(), at: 0, on: false,
-                  done: true, done_l0: true, root: self.root, coins: Vec::new(), coins_l0: Vec::new(), l0: false, at_open: None }
+                  done: true, done_l0: true, root: self.root, coins: Vec::new(), coins_l0: Vec::new(), l0: false, at_open: None, n_outer: 0 }
     }
 }
 
@@ -1214,6 +1229,48 @@ mod tests {
         assert!(run(false, false), "the honest proof");
         assert!(!run(true, false), "a failing row");
         assert!(!run(true, true), "a failing row cancelled by final_c' solved after γ");
+    }
+
+    /// The prover stops at a zerocheck outer coin `r_j = 1` as the coin opens, drawn as one vector or one at a time, and at
+    /// no other coin equal to 1 (a skip coin, a later one).
+    #[test]
+    fn outer_coin_one_is_refused_as_it_opens() {
+        let lay = Layout::new(20, 16, 0, 0);
+        let p = Pads::draw(&mut ProverRng::from_seed(ProverSeed::injected([9; 32])), &lay, 0);
+        let n_outer = lay.n_mlv - N_INNER;
+        let run = |outer_at: Option<usize>, singly: bool| -> Result<usize, String> {
+            let mut outer: Vec<F128> = (0..n_outer as u64).map(|i| F128::new(i + 2, 7)).collect();
+            if let Some(j) = outer_at {
+                outer[j] = F128::ONE;
+            }
+            let mut schedule = vec![vec![F128::ONE; K_SKIP]];
+            if singly {
+                schedule.extend(outer.into_iter().map(|x| vec![x]));
+            } else {
+                schedule.push(outer);
+            }
+            schedule.push(vec![F128::ONE]);
+            let mut ch = Masking::new(crate::RecordingChallenger::new(b"rep", schedule), &lay, &p, [0; 64]);
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
+                ch.observe_label(LABEL_ZC);
+                ch.sample_f128_vec(K_SKIP);
+                if singly {
+                    (0..n_outer).for_each(|_| { ch.sample_f128(); });
+                } else {
+                    ch.sample_f128_vec(n_outer);
+                }
+                ch.sample_f128();
+                assert!(ch.inner.mismatch.is_none());
+                ch.coins.len()
+            }))
+            .map_err(|e| e.downcast_ref::<String>().cloned().unwrap_or_default())
+        };
+        for singly in [false, true] {
+            assert_eq!(run(None, singly), Ok(K_SKIP + n_outer + 1));
+            for j in [0, n_outer / 2, n_outer - 1] {
+                assert_eq!(run(Some(j), singly), Err(format!("PROVER-STOPPED: degenerate coin: zerocheck outer coin r_{j} = 1")));
+            }
+        }
     }
 
     #[test]

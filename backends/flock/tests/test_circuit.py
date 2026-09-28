@@ -199,6 +199,23 @@ def test_shared_rows_as_given_keep_equal_rows_apart(tmp_path):
         FC.write(text, s, 0, 4, None, tmp_path / "bad.bin", salts=salts, registered={"nope": reg["cs"]}, **shared)
 
 
+@pytest.mark.slow
+def test_the_header_carries_an_rfc8785_identifier(tmp_path):
+    """The header's identifier (PROTOCOL.md §16.10) is both files' as given; anything but a JSON object on which canonical
+    JSON is RFC 8785 is refused."""
+    s = _set("rope-head/d64/neox-bf16", 4, tmp_path)
+    text = FC.compose(FC.lowering_for_set(s), s.subcircuit)
+    ident = {"scheme": "test/identifier/v0", "s": 7, "U": [3, 1, 2], "nested": {"b": None}}
+    assert FC.write(text, s, 0, 4, tmp_path / "inst.bin", tmp_path / "pub.bin", b"k" * 32, identifier=ident)["identifier"] == ident
+    for f in ("inst.bin", "pub.bin"):
+        assert json.loads((tmp_path / f).read_bytes().split(b"\n", 1)[0])["identifier"] == ident
+    assert "identifier" not in FC.write(text, s, 0, 4, None, tmp_path / "plain.bin", b"k" * 32)
+    for bad, match in (([1], "not a JSON object"), ({"s": 1.5}, "a float"), ({"s": 2 ** 53}, r"exceeds 2\^53"),
+                       ({"s": "café"}, "not ASCII")):
+        with pytest.raises(ValueError, match=match):
+            FC.write(text, s, 0, 4, None, tmp_path / "bad.bin", b"k" * 32, identifier=bad)
+
+
 PUBLIC_CS = {"cs": {"seed": "rope/positions", "derivation": "verity/rope/neox-bf16/cos-sin/v1"}}
 
 

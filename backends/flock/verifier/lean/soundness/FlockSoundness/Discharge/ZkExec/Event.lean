@@ -18,8 +18,9 @@ places, all of which this file restates:
 `AcceptsZK I t` is that verdict on the transcript `t`: the session's statement set up from `zkInputs I` and the
 record's draw (`Exec.setupOf`, `Stmt.setupTables`), every table's shape check, and `Zk.verify` accepting the record and
 proofs.
-`verifyCmd` refuses more: a statement's registered reads (`checkRegistered`, under `--registered`) and a coin-tree key
-an earlier session of the run used (`CoinTree.checkFresh`), which only shrink the event.
+`verifyCmd` refuses more: a statement's registered reads (`checkRegistered`, under `--registered`), its header's
+identifier against the verifier's own (`checkIdentifier`, `--identifier`), and a coin-tree key an earlier session of the
+run used (`CoinTree.checkFresh`), which only shrink the event.
 
 `AcceptsZK` covers every tag `--statement` names, hidden outputs (`setupTables` calls `setupHidden` per table) and any
 table count and draw: nothing here fixes them. Lemmas that read `setupH`'s statement take `hh : hiddenOutputs = false`.

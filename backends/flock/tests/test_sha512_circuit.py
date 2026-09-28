@@ -1,5 +1,4 @@
-"""The SHA-512 compression and the ``hm96-sha512/v1`` row circuit against their references (``hashlib``, core's hm96)."""
-import hashlib
+"""The SHA-512 compression and the ``hm96-sha512/v1`` row circuit against their references (core's `compress_ref`, core's hm96)."""
 import os
 import random
 
@@ -17,17 +16,6 @@ def _unsliced(bits, t):
 
 def _pack(words):
     return sum(w << (64 * i) for i, w in enumerate(words))
-
-
-def test_reference_is_sha512():
-    for m in (b"", b"abc", bytes(range(111))):
-        assert S.compress_ref(S.IV, S.words_be(m + S.pad_tail(len(m)))) == S.words_be(hashlib.sha512(m).digest())
-    long = os.urandom(300)
-    cv = S.IV
-    padded = long + S.pad_tail(len(long))
-    for i in range(0, len(padded), 128):
-        cv = S.compress_ref(cv, S.words_be(padded[i:i + 128]))
-    assert cv == S.words_be(hashlib.sha512(long).digest())
 
 
 def test_compression_circuit():
