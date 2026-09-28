@@ -37,7 +37,6 @@ use serde_json::{Value, json};
 use sha2::{Digest, Sha512};
 
 const TABLE: &str = "circuit";
-const SIGMA_TAG: &[u8] = b"verity/flock-circuit/sigma";
 
 fn arg(k: &str, d: &str) -> String {
     let a: Vec<String> = std::env::args().collect();
@@ -52,8 +51,8 @@ fn f128_bytes(v: &[F128]) -> Vec<u8> {
     v.iter().flat_map(|x| x.lo.to_le_bytes().into_iter().chain(x.hi.to_le_bytes())).collect()
 }
 
-fn domain(rep: usize) -> Vec<u8> {
-    format!("flock-circuit/fast100x2/rep{rep}").into_bytes()
+fn domain(c: &Composite, rep: usize) -> Vec<u8> {
+    format!("{}{rep}", c.tags().domain).into_bytes()
 }
 
 /// The Merkle hash of every Ligerito level: hm96-sha512/v1 leaves under SHA-512 nodes in a production build (feature `sha512`,
@@ -82,10 +81,10 @@ fn identity(c: &Composite) -> Value {
            "hooks": NoMask::new(ProverSeed::from_os()).identity()})
 }
 
-/// Σ = SHA-512(SIGMA_TAG ‖ the circuit's SHA-512 ‖ the statement digest ‖ the public digest).
+/// Σ = SHA-512(the statement's Σ tag ‖ the circuit's SHA-512 ‖ the statement digest ‖ the public digest).
 fn sigma(st: &Stmt, inst: &Instances) -> [u8; 64] {
     let mut h = Sha512::new();
-    h.update(SIGMA_TAG);
+    h.update(st.c.tags().sigma.as_bytes());
     h.update(st.c.sha512);
     h.update(st.digest);
     h.update(inst.public_sha512);
@@ -99,7 +98,7 @@ struct CircuitVerifier {
 
 impl StatementVerifier for CircuitVerifier {
     fn domain(&self, _t: &str, rep: usize) -> Vec<u8> {
-        domain(rep)
+        domain(&self.st.c, rep)
     }
 
     fn verify(&self, _t: &str, _rep: usize, proof: &[u8], ch: &mut ReplayChallenger, link: &LinkCtx<'_>) -> Result<Vec<u8>, String> {
@@ -337,7 +336,7 @@ fn prove_gpu(st: &Stmt, wt: &WitData, lig: LigeritoProfile, rep: usize, hook: Ho
             CircuitSrc::DeviceCut { rows: r, host: h, inputs: i, mid: &mut mid_fn }
         }
     };
-    let (proof, commitment, ph, wph) = prove_circuit(st, src, &params(st.m, lig), &domain(rep), hook, ch, Some(salts));
+    let (proof, commitment, ph, wph) = prove_circuit(st, src, &params(st.m, lig), &domain(&st.c, rep), hook, ch, Some(salts));
     let bk = json!({"t.witness": ph[0], "t.witness_comp": wph[0], "t.witness_units": wph[1], "t.encoding_commitment": ph[1], "t.link": ph[2],
                     "t.zerocheck": ph[3], "t.lincheck": ph[4], "t.ring_switch": ph[5], "t.ligerito": ph[6], "t.total": ph[7],
                     "t.arithmetic": ph[3] + ph[4] + ph[5] + ph[6], "device_witness": !matches!(wt, WitData::Host(..))});
@@ -488,7 +487,7 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
         #[cfg(feature = "sha512")]
         let level0 = (!plan.gpu).then(|| Arc::new(salts.lock().unwrap_or_else(PoisonError::into_inner).expand(0, params(st.m, lig).n_leaves())));
         for rep in 0..2 {
-            let mut lch = LiveChallenger::new(t.clone(), TABLE, rep, &domain(rep))?;
+            let mut lch = LiveChallenger::new(t.clone(), TABLE, rep, &domain(&st.c, rep))?;
             let tt = t.clone();
             let mut hook = |root: &[u8]| -> Vec<Vec<F128>> {
                 // red-team-hm96 C1: both reps' level-0 trees take salt stream 0, so they must be one tree; stop before rep 1
