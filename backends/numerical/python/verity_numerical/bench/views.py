@@ -110,6 +110,8 @@ SCHEMES: tuple[Scheme, ...] = (
     Scheme("frame-v3/blake3-row", "frame-v3 · keyed-BLAKE3 rows",
            "verity.commitments.merkle trees; the keyed-BLAKE3 row-leaf schema is promoted from backends/direct/ligero/leaf/blake3.py (core-schemes)", True),
     Scheme("vllm-v1", "vllm-v1 · SHA-256", "verity.commitments.vllm_v1 (position / fa2h / id leaves, step and stream root bindings)", True),
+    Scheme("frame-v3-sha512/hm96-sha512", "frame-v3 · SHA-512, hm96-sha512 leaves",
+           "verity.commitments.frame_v3 (the SHA-512 variant) over verity.commitments.hm96 hm96-sha512/v1 leaves", True),
     Scheme("frame-v3/poseidon2-row", "frame-v3 · Poseidon2 rows", "verity.commitments.rowleaf (leaf/v2h)", False),
     Scheme("frame-v3/poseidon2-tile", "frame-v3 · Poseidon2 64x64 tiles", None, False),
     Scheme("frame-v3/ajtai-row", "frame-v3 · Ajtai rows", None, False),
@@ -398,9 +400,29 @@ FLOCK_VLLM_CONFIG = dataclasses.replace(
     hashes=(_SHA256_STMT, Hash("SHA-256", _STMT, _CR + " (position leaves)"), *FLOCK_CONFIG.hashes[2:]),
     soundness="2^-195.44 per proof for flock-128-r2 (live verifier coins, no grinding credit), union 2^-193.44 over 4 proofs; "
               "red-team-flock: GRANTED WITH CONDITIONS at ff1c1e3f (VL1 closed at af6aae19)")
-CONFIGURATIONS = (*(dataclasses.replace(c, interaction=_INTERACTION[c.id]) for c in CONFIGURATIONS), FLOCK_CONFIG, FLOCK_VLLM_CONFIG)
+#: M0's generic circuit (statement ``verity/flock-circuit``): one pinned GF(2) circuit per template, the SHA-512 commitments
+#: proved inside it.  The unit wording, the absent privacy claim and the time and AND qualifiers follow red-team-flock-3's
+#: statement review (a plain row would call the attention unit a head, or read the hm96 leaves as hiding).
+FLOCK_CIRCUIT_CONFIG = dataclasses.replace(
+    FLOCK_CONFIG, id="C-Flock, generic circuit, SHA-512 in-circuit commitments", scheme="frame-v3-sha512/hm96-sha512",
+    ports="per instance: one query row (attention: one query over T keys) or one output coordinate (GEMM); x, W committed; "
+          "y public, equal to the IR reference on every proved instance",
+    commitment="frame-v3-sha512 trees over hm96-sha512 leaves, proved in the circuit (the benchmark's salts are "
+               "public); commitment timed separately as serving's hm96-sha512 leaf and tree commitment of the committed values",
+    hashes=(Hash("SHA-512", _STMT, _CR + " (frame-v3-sha512 trees, in circuit)"), Hash("SHA-512", _STMT, _CR + " (hm96-sha512 leaves, in circuit)"),
+            *FLOCK_CONFIG.hashes[2:3],
+            Hash("SHA-512", _COINS, "commit-before-coin binding of the live transcript")),
+    zk="No: NON_ZK_PROOF; no privacy claim (M0's mask slots are zero and the benchmark's hm96 salts are public)",
+    soundness="2^-205 per table for flock-128-r2 (fast100 x2, live verifier coins); knowledge soundness under SHA-512 CR and "
+              "Ligerito's named axioms",
+    assumptions=FLOCK_CONFIG.assumptions + "; template instances as stated (M0's provisional unit cover), all proved, no unit draw",
+    pin="verity/flock-circuit pinned circuit file (PR #83); the Lean verifier of record for this format (PR #142)",
+    interaction="live verifier: coins for every squeeze of both reps; prover end-to-end time (witness, proof, live rounds, upload), "
+                "verification separate")
+CONFIGURATIONS = (*(dataclasses.replace(c, interaction=_INTERACTION[c.id]) for c in CONFIGURATIONS), FLOCK_CONFIG, FLOCK_VLLM_CONFIG,
+                  FLOCK_CIRCUIT_CONFIG)
 _CONFIG = {c.id: c for c in CONFIGURATIONS}
-assert set(_CONFIG) == set(D._BY_ID) | {FLOCK_CONFIG.id, FLOCK_VLLM_CONFIG.id}, "every drilldown.VARIANTS entry is a declared configuration"
+assert set(_CONFIG) == set(D._BY_ID) | {FLOCK_CONFIG.id, FLOCK_VLLM_CONFIG.id, FLOCK_CIRCUIT_CONFIG.id}, "every drilldown.VARIANTS entry is a declared configuration"
 
 TABLE1_COLUMNS = ("Configuration", "Flag", "Statement", "x, W, y", "Commitment scheme", "Hashes (role; property; class)", "ZK and verifier model",
                   "Soundness (whole-proof bound at its cells; dominant term)", "Proximity bounds", "Interaction model", "Transferability",
@@ -419,6 +441,8 @@ def configuration_of(meta: Mapping[str, Any], configurations: Mapping[str, Confi
     name = _get(fp, "software", "backend", "name")
     if not FLOCK.recognises(name):
         return None
+    if fp.get("statement") == "verity/flock-circuit":
+        return cfgs.get(FLOCK_CIRCUIT_CONFIG.id)
     return cfgs.get(FLOCK_VLLM_CONFIG.id if str(name).lower().startswith("flock-vllm-v1") else FLOCK_CONFIG.id)
 
 
