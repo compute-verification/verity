@@ -11,8 +11,9 @@
                                                  # with --on; a --tool's declared preflight (or --preflight TOOL's) runs on the machine first
   research run --job-user USER [...] -- CMD...   # the workload as USER in a sandboxed system unit; records stay the runner's (research/jobuser.py)
   research fetch <run-id> [--all] [--on NAME]    # copy the machine's records (or every file, verified) into the local run dir
-  research cancel <run-id> --reason TEXT [--by WHO]   # SIGTERM to the run's workload process group, recorded as a manual cancel;
-                                                 # never the runner, never SIGKILL, so it still records the exit and publishes custody
+  research cancel <run-id> --reason TEXT [--by WHO] [--on NAME]   # SIGTERM to the run's workload process group, recorded as a manual
+                                                 # cancel; never the runner, never SIGKILL, so it still records the exit and publishes
+                                                 # custody.  From any VM: a run another VM launched is found as `inspect` finds it
   research status [RUN] [--on NAME] [--runs-dir D] [--refresh] [--balance] [--all] [--json]
   research inspect <run-id|prefix|path> [--on NAME] [--runs-dir D] [--json]
                                                  # a full run id another VM launched (no local dir): found on --on NAME, else on
@@ -491,7 +492,7 @@ def _survive_stray_signals() -> None:
 
     def note(signum: int, _frame: object) -> None:
         print(f"research: runner got {signal.Signals(signum).name} at {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}, ignored: it records "
-              f"and publishes the run when the workload exits; stop the workload with `research cancel RUN` from the launcher, or "
+              f"and publishes the run when the workload exits; stop the workload with `research cancel RUN` from any VM, or "
               f"`kill -TERM -<pgid>` (status.json) here, and never SIGKILL the runner", file=sys.stderr, flush=True)
 
     for s in (signal.SIGTERM, signal.SIGHUP):
@@ -939,18 +940,23 @@ def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts
     return 0
 
 
-def _run_dir(root: Path, ref: str, on: str | None) -> Path:
+def _run_dir(root: Path, ref: str, on: str | None, *, unique: bool = False) -> Path:
     """`ref` under the local runs root, else, for a full run id, the run another VM launched, adopted from the machine that holds
-    it (`remote.adopt`).  FileNotFoundError names each machine's answer, and the store's attempt when it has one."""
+    it (`remote.adopt`; `unique`: refused when two machines hold it).  FileNotFoundError names each machine's answer, and the store's
+    attempt when it has one; LookupError when `on` names another machine than the local run dir's."""
     try:
-        return R.resolve(root, ref)
+        d = R.resolve(root, ref)
     except FileNotFoundError:
         from .store import ids
 
         if not ids.is_run_id(ref):
             raise
+    else:
+        if on and (held := (remote._read_json(d / "remote.json") or {}).get("machine")) != on:
+            raise LookupError(f"{d.name} is {f'on {held}' if held else 'a local run'} (its local run dir), not on {on}")
+        return d
     try:
-        return remote.adopt(root, ref, on=on)
+        return remote.adopt(root, ref, on=on, unique=unique)
     except remote.Refused as e:
         raise FileNotFoundError(f"no run {ref!r} under {root}, and {e}{_attempt_hint(ref)}") from None
 
@@ -1003,13 +1009,14 @@ def cmd_fetch(argv: list[str]) -> int:
 def cmd_cancel(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="research cancel", description="stop a remote run the one way that keeps its custody: SIGTERM to its "
                                                                      "workload's process group, recorded as a manual cancel (remote.cancel)")
-    ap.add_argument("ref")
+    ap.add_argument("ref", help="a run id or prefix under the runs root; a full run id another VM launched is found on its machine")
     ap.add_argument("--reason", required=True)
     ap.add_argument("--by", default=os.environ.get("RESEARCH_LANE") or os.environ.get("USER") or "-")
     ap.add_argument("--runs-dir", default=None)
+    ap.add_argument("--on", default=None, metavar="NAME", help="a run another VM launched: look for it on this machine only")
     ns = ap.parse_args(argv)
     try:
-        run_dir = R.resolve(R.runs_root(ns.runs_dir), ns.ref)
+        run_dir = _run_dir(R.runs_root(ns.runs_dir), ns.ref, ns.on, unique=True)
         out = remote.cancel(run_dir, reason=ns.reason, by=ns.by)
     except (FileNotFoundError, LookupError, remote.Refused) as e:
         print(f"research cancel: {e}", file=sys.stderr)
