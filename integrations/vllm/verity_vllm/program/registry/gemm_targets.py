@@ -31,7 +31,10 @@ What a record says
 Registered: `ada` (cc 8.9, vLLM family "ada": the tuned sm_89 table — R10/R11 Tier A on the RTX 4090 / L40S captures),
 `ampere` (cc 8.0, vLLM family None: default tiling for every shape — R13 correspondence on the A100) and `hopper` (cc 9.0, vLLM
 family "hopper": the tuned sm_90 table; on sm_90 Triton lowers `tl.dot` to `wgmma`, a DIFFERENT k16 step (`HopperBF16WgmmaDot16`),
-so the Definition is `Gemm_v2{K,N,DOT}` — R13 lane hopper).  Anything else (Blackwell; cc 8.6/8.7 with no run yet) is
+so the Definition is `Gemm_v2{K,N,DOT}` — R13 lane hopper) and `blackwell_consumer` (cc 12.0, the RTX PRO 6000: vLLM family None, so a
+Triton launch takes the default tiling, but the pinned vLLM keeps the bf16 linear on cuBLASLt with split-K disabled there, as on cc 9.0;
+the k16 step is `mma.sync.m16n8k16`, whose sm_120 model is Hopper's, so the Definition is `Gemm_v2{K,N,DOT=HopperBF16WgmmaDot16_v1}`).
+Anything else (datacenter Blackwell cc 10.x; cc 8.6/8.7 and 12.1 with no run yet) is
 `UnregisteredGemmTarget`: construction refuses (`numerics_unregistered`), the resolver answers Unsupported, and the
 applicability check fails — a launch that happens to show a registered tiling on an unregistered target is still refused.
 """
@@ -173,6 +176,26 @@ REGISTERED: dict[str, GemmTarget] = {
                   "(2048,2048) tuned rows BLOCK_SIZE_M 16 / BLOCK_SIZE_K 128 at M<=16 and the default tiling elsewhere, Triton PTX sm_90 wgmma) — "
                   "out/gen/sweep/evidence/hopper/gemm_target_h100.json; row llama32-1b__bf16__h100__…__bi-eager-fa2 Match replay (o_proj M=1 tuned row + "
                   "the default-tiled GEMMs bit-exact against Gemm_v2{K,N,DOT=Hopper})",)),
+    # The pinned vLLM installs the Triton override on cc 8.x only: on cc 12.0, as on 9.0, the bf16 linear stays on cuBLASLt with
+    # split-K disabled (VLLM_BATCH_INVARIANT=1), and the Definition claims it equals the ascending chain of the target's k16 step.  sm_120
+    # has no wgmma: that step is `mma.sync.m16n8k16`, whose pinned model on sm_120 (core `verity.ml.tc.instructions`, measured on an RTX
+    # 5090) is HOPPER_BF16_M16N8K16, not the Ampere/Ada pipeline.  `HopperBF16WgmmaDot16_v1` evaluates HOPPER_BF16_WGMMA_K16, the same
+    # parameters.  vLLM family None: a Triton launch would take the default tiling for every shape.
+    "blackwell_consumer": GemmTarget(
+        key="blackwell_consumer", compute_capabilities=((12, 0),), vllm_arch_family=None, dot="HopperBF16WgmmaDot16", tuned_table={},
+        kind="Gemm_v2{K,N,DOT=HopperBF16WgmmaDot16_v1}",
+        evidence=("core verity.ml.tc.instructions: the cc 12.0 mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32 entry is pinned to "
+                  "HOPPER_BF16_M16N8K16 (one group of 16, width 26, floor -133; dossier art:b87e5a5b4dfaa5e4cfc501fa834df2c968e5ce3d53839660e37a42a2525218d2, "
+                  "run r20260922-182911-1f10: 204,800/204,800 elements, the Ampere/Ada pipeline fails 48,569 of them)",
+                  "the cc 12.0 port's GEMM lane: verity_vllm/program/kernels/gemm_target_correspondence.py on an RTX PRO 6000 (188 SMs, driver "
+                  "595.91.07, torch 2.13.0+cu129, vLLM d9105ea80 under VLLM_BATCH_INVARIANT=1: cuBLASLt with split-K disabled), run "
+                  "r20260930-031354-3b6d: every linear (K, N) of the 14 bf16 HF configs of engine/profiles/hf_configs at TP1 and TP2 x M in "
+                  "{1..8,12,13,16,17,31,32,33,64,65,127,128,129,255,256,257,512,515,1024,1033,2048,2049,4096,8192} (+ four stress families at M "
+                  "1/7/129/1033): 4,794 cases over about 30 cuBLASLt kernels (CUTLASS s16816 and wmma s161616 tilings, chosen by M). Every linear "
+                  "without a bias is bit-exact against the ascending HopperBF16WgmmaDot16_v1 chain (181M sampled coordinates, both tile tails kept; "
+                  "the step cross-checked against the registered primitive on 1.2M), and every GPU rerun is bit-identical. A linear with a bias is "
+                  "bit-exact at M >= 2 with the bias added in FP32 before the rounding (cuBLASLt's epilogue, not GemmBias_v1's bf16 add after it); "
+                  "at M = 1 cuBLAS runs a gemv kernel that is not this chain (20 of 24 cases off in 1 to 3 of 1,024 coordinates)")),
 }
 
 
