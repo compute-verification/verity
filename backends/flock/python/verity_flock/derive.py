@@ -94,6 +94,7 @@ class Derived:
     own: int = 0  # the own region's rows
     size: int = 0  # the physical rows: up to an inner layout's last placed range; the unit's own region
     parts: list = field(default_factory=list)  # the unit's placed entries: (layout index, base in unit coordinates)
+    part_rows: list = field(default_factory=list)  # the unit's parts' own derivations with their bases, copied lazily
     delta: list = field(default_factory=list)  # the unit's Δ: (row in unit coordinates, source entries or ONE)
     extent: int = 0  # the unit coordinates' end, where `one` sits
 
@@ -392,8 +393,11 @@ class Derivation:
         """A placed entry's rows at its base. In an inner layout its input rows become binding copies and its constant
         copies the caller's; for the unit, its rows stay its layout's and the bindings go to Δ."""
         sub, base = inst["sub"], inst["base"]
-        for col, (a, b) in sub.rows.items():
-            d.rows[base + col] = ([x + base for x in a], [x + base for x in b])
+        if unit_level:
+            d.part_rows.append((sub, base))
+        else:
+            for col, (a, b) in sub.rows.items():
+                d.rows[base + col] = ([x + base for x in a], [x + base for x in b])
         cb = base + sub.const
         if unit_level:
             d.delta.append((cb, ONE))
@@ -419,6 +423,9 @@ class Derivation:
         bound input row reads its source in A and B; a slot's constant reads ``one``)."""
         d = self.unit
         rows = dict(d.rows)
+        for sub, base in d.part_rows:
+            for col, (a, b) in sub.rows.items():
+                rows[base + col] = ([x + base for x in a], [x + base for x in b])
         for c, src in d.delta:
             rows[c] = ([ONE], [ONE]) if src == ONE else (list(src), list(src))
         return rows
