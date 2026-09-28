@@ -12,20 +12,24 @@ import pytest
 
 import verity_vllm.program.registry as registry
 
-CORE = ("verity.ml.prims", "verity.ml.scalar", "verity.ml.gemm", "verity.ml.kernels")
+CORE = ("verity.ml.prims", "verity.ml.scalar", "verity.ml.fp32", "verity.ml.gemm", "verity.ml.kernels")
 
 CHECK = """
 import importlib, sys
 for m in sys.argv[1:]:
     importlib.import_module(m)
 from verity.ir.defs import REGISTRY
-from verity.ml import gemm as G, prims as C, scalar as S
+from verity.ml import fp32 as F, gemm as G, prims as C, scalar as S
 from verity_vllm.program.registry import b1, fp8, hopper as H, moe, pad_prims as PP, prims as P, sampling as SM, targets as T
+from verity.ir.defs import PrimitiveDefinition
 core = [C.Bf16ToF32, C.F32ToBf16Rn, C.F2fpBf16, C.HopperBF16WgmmaDot16, C.AmpereBF16TcDot16, C.F32ToE4m3Sat,
         C.HopperE4m3QgmmaDot32, C.ZERO32, G.DotBf16, G.GemmCoordinate, G.Gemm]
 core += [getattr(S, n) for n in S.__all__ if n not in ("BIT", "BF16", "F32", "I32")]
+fp32 = [getattr(F, n) for n in F.__all__ if isinstance(getattr(F, n), PrimitiveDefinition)]
+core += fp32
 assert all(REGISTRY[d.id] is d for d in core), [d.id for d in core if REGISTRY[d.id] is not d]
 assert (P.Bf16ToF32, P.F32ToBf16Rn, P.F2fpBf16) == (C.Bf16ToF32, C.F32ToBf16Rn, C.F2fpBf16)
+assert len(fp32) == 15 and all(getattr(P, d.name) is d for d in fp32), [d.id for d in fp32 if getattr(P, d.name) is not d]
 assert (P.I32Le, P.I32Add, P.I32Eq, P.SelectF32, P.SelectBf16, P.SelectI32, P.Bf16GtStrict) == (
     S.I32Le, S.I32Add, S.I32Eq, S.SelectF32, S.SelectBf16, S.SelectI32, S.Bf16GtStrict)
 assert fp8.FP8_PRIMITIVES == [S.F32Fabs, S.F32Fmaxf, S.F32Fminf, C.F32ToE4m3Sat, C.HopperE4m3QgmmaDot32]

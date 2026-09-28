@@ -33,6 +33,7 @@ import re
 import time
 from dataclasses import dataclass
 
+from verity_vllm.check.match.sampler_geometry import constant_splits_agree
 from verity_vllm.config import option
 from verity_vllm.program.sampling_event import is_sampling_event as _is_sampling_event  # [R15 stoch] the step-boundary families
 
@@ -178,7 +179,8 @@ class Prog:
         ("SPLITS", lo, hi) = ("SPLITS", s, s+1) for event s.  Both sides therefore agree exactly when the fold's e-th select of the request
         carries the constant the Program's event e reads: no value is compared here (GM-01 checks S_t against the live count).  A select
         whose splits operand is neither form (the R15 {V,S} static form has no 6th operand) binds nothing and compares as before; a
-        `Const32` read by anything other than a select's splits operand is never removed."""
+        `Const32` read by anything other than a select's splits operand is never removed.  A single-request Program's own `Const32[S]`
+        binds like the fold's; `compare_steps` holds the two sides' values equal per event (`sampler_geometry.constant_splits_agree`)."""
         self.splits_values: dict[int, int] = {}      # select node k -> S (fold side)
         self.splits_nodes: set[int] = set()          # Input nodes read as the splits operand (Program side)
         bound_consts: dict[int, int] = {}            # const instance index -> select node k
@@ -678,13 +680,8 @@ def _divergence_report(a: list, b: list) -> dict:
 def compare_steps(A: Prog, B: Prog, unfold_a: bool = False, *, canon_step_relative=None, canonical_hash=None) -> dict:
     """Spec sequences + wiring per step. `unfold_a`: drop A's pad-kind instances and follow muxes (padded vs flat)."""
     canon_step_relative, canonical_hash = canon_step_relative or _canon_step_relative, canonical_hash or _canonical_hash
-    def seq(P: Prog, unfold: bool):
-        out = []
-        for idxs in P.steps:
-            keep = [i for i in idxs if not (unfold and P.is_pad(i))]
-            out.append(keep)
-        # drop empty trailing segments
-        return [s for s in out if s]
+    def seq(P: Prog, unfold: bool):   # each step's instances, pad kinds dropped when unfolding; empty segments dropped
+        return [k for k in ([i for i in idxs if not (unfold and P.is_pad(i))] for idxs in P.steps) if k]
 
     sa, sb = seq(A, unfold_a), seq(B, False)
     def _side(P: Prog, seqs):
@@ -692,7 +689,7 @@ def compare_steps(A: Prog, B: Prog, unfold_a: bool = False, *, canon_step_relati
         # [M-0169 (4)] the derived split count binding, when present on this side (fold: bound Const32[S] per select; Program: splits input)
         sv = getattr(P, "splits_values", {})
         if sv:
-            d["splits_bound"] = {"form": "fold Const32[S] per top-p select (removed from the sequence, value kept)", "selects": len(sv),
+            d["splits_bound"] = {"form": "Const32[S] per top-p select (removed from the sequence, value kept)", "selects": len(sv),
                                  "values": sorted(set(sv.values()))}
         elif getattr(P, "splits_nodes", ()):
             d["splits_bound"] = {"form": "request-owned `splits` Input read per event", "nodes": sorted(P.splits_nodes)}
@@ -753,6 +750,8 @@ def compare_steps(A: Prog, B: Prog, unfold_a: bool = False, *, canon_step_relati
     res["totals"] = dict(res["totals"])
     res["canonical_sha256"] = {"a": canonical_hash(A, sa, unfold_a), "b": canonical_hash(B, sb, False)}
     res["canonical_sha256"]["equal"] = res["canonical_sha256"]["a"] == res["canonical_sha256"]["b"]
+    if (sv := constant_splits_agree(A, B)) is not None:       # a single-request Program's own Const32[S], held equal per event
+        res["splits_values"], res["canonical_sha256"]["equal"] = sv, res["canonical_sha256"]["equal"] and sv["equal"]
     return res
 
 

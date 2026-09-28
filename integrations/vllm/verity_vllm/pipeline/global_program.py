@@ -493,15 +493,16 @@ def sampler_schedule_binding(reqs: list[dict], shapes: dict[tuple[int, int], str
     the Program of ONE request: compose must not reuse it for a request with the same shape (LP, T) but another arrival (its S-schedule
     differs and its Match would fail for the wrong reason).  Checked here per binding: (a) every request bound to the component arrives
     at the step the component declares; (b) a list schedule has T+1 entries; (c) the component's declared live counts are the manifest's
-    (a component derived against another manifest of the same shape does not compose).  Refusal is named; a component without a
-    per-request geometry (greedy, or S constant over the live counts) binds by shape as before."""
+    (a component derived against another manifest of the same shape does not compose); (d) a constant S (the single-request form,
+    SplitsFor_v1(1, num_SMs)) binds only in a manifest of one request.  Refusal is named; greedy and derived-S components bind by shape."""
     out = {"checked": {}, "refusal": None}
-    n_live = None
     for s, d in shapes.items():
         samp = component_sampling(d)
-        geom = (samp or {}).get("geometry") or {}
+        geom, splits = samp.get("geometry") or {}, samp.get("splits")
         req = geom.get("request")
-        splits = (samp or {}).get("splits")
+        if type(splits) is int and len(reqs) != 1:
+            out["refusal"] = f"component (LP={s[0]}, T={s[1]}) {d}: S = {splits} is the single-request constant, but this manifest has {len(reqs)} requests (S_t follows the live set: the derived-S component)"
+            return out
         if not req and not isinstance(splits, list):
             continue
         bound = [r for r in reqs if (r["prompt_len"], r["cap"] - 1) == s]
@@ -519,12 +520,10 @@ def sampler_schedule_binding(reqs: list[dict], shapes: dict[tuple[int, int], str
             out["refusal"] = f"component (LP={s[0]}, T={s[1]}) {d}: S-schedule has {len(splits)} entries, the request has T+1 = {s[1] + 1} sampling events"
             return out
         dl = geom.get("declared_live_counts")
-        if dl is not None:
-            n_live = n_live if n_live is not None else declared_live_counts(reqs)
-            if [int(x) for x in dl] != n_live:
-                out["refusal"] = (f"component (LP={s[0]}, T={s[1]}) {d}: its S-schedule was computed from live counts {list(dl)[:12]}... but this "
-                                  f"manifest's declared chronology has {n_live[:12]}...: the component was derived against another workload")
-                return out
+        if dl is not None and [int(x) for x in dl] != (n_live := declared_live_counts(reqs)):
+            out["refusal"] = (f"component (LP={s[0]}, T={s[1]}) {d}: its S-schedule was computed from live counts {list(dl)[:12]}... but this "
+                              f"manifest's declared chronology has {n_live[:12]}...: the component was derived against another workload")
+            return out
     return out
 
 
