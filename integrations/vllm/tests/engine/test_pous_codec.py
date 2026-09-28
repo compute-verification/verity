@@ -186,10 +186,11 @@ def test_feistel_kernels_agree(ext):
         x = torch.randint(0, 256, (37, width), dtype=torch.uint8, generator=g).cuda()
         empty = x.new_empty((37, 0))
         outs = []
-        for thread_rows, words, fused, pair in ((0, False, False, False), (1, False, False, False), (1, True, False, False),
-                                                (1, True, True, False), (1, True, True, True)):
+        for thread_rows, words, fused, pair, co in ((0, False, False, False, False), (1, False, False, False, False),
+                                                    (1, True, False, False, False), (1, True, True, False, False),
+                                                    (1, True, True, True, False), (1, True, True, False, True)):
             y = x.clone()
-            ext.feistel_rows(y, empty, codec.PI_DOMAIN, False, thread_rows, words, fused, pair)
+            ext.feistel_rows(y, empty, codec.PI_DOMAIN, False, thread_rows, words, fused, pair, 1 << 62, co)
             outs.append(y)
         assert all(torch.equal(outs[0], o) for o in outs[1:]), width
         ext.feistel_rows(outs[2], empty, codec.PI_DOMAIN, True, 1, True, True, True)

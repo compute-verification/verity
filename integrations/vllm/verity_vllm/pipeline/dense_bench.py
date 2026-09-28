@@ -45,6 +45,9 @@ class Options:
     fused: bool = option("--fused", action="store_true", default=False,
                          help="with --word-io, fuse each Feistel round's squeeze to the next round's absorb")
     pair: bool = option("--pair", action="store_true", default=False, help="with --fused, run each row on a lane pair")
+    pair_max_rows: int = option("--pair-max-rows", type=int, default=1 << 62, help="launches from this many rows skip the lane pair")
+    coalesced: bool = option("--coalesced", action="store_true", default=False,
+                             help="with --fused, launches not on a lane pair stage every chunk through shared memory")
     gate_segments: int = option("--gate-segments", type=int, default=2, help="segments whose sampled blocks the reference decodes")
     workers: int = option("--workers", type=int, default=12, help="processes for the reference side of G2")
     result: str | None = option("--result", default=None, help="also write the research result.json here")
@@ -273,6 +276,8 @@ def main(a: Options) -> int:
     codec.WORD_IO[0] = a.word_io
     codec.FUSED[0] = a.fused
     codec.PAIR[0] = a.pair
+    codec.PAIR_MAX_ROWS[0] = a.pair_max_rows
+    codec.COALESCED[0] = a.coalesced
     doc: dict[str, Any] = {"options": dataclasses.asdict(a), "device": device_facts(), "gates": {"vectors": gate_vectors()}}
     salt = bytes(range(24))
     table = models(a.shapes)
@@ -304,7 +309,7 @@ def main(a: Options) -> int:
             "schema": "research/result/v0.1", "run_id": a.run_id,
             "workload_fingerprint": {"benchmark": "dense-decode/v1", "models": list(doc["models"]), "thread_rows": a.thread_rows,
                                      "word_io": a.word_io, "fused": a.fused,
-                                     "pair": a.pair},
+                                     "pair": a.pair, "pair_max_rows": a.pair_max_rows, "coalesced": a.coalesced},
             "validation": {"status": "passed" if passed else "failed", "checker": "verity-vllm pous-dense-bench gates",
                            "detail": json.dumps({k: v["passed"] for k, v in doc["gates"].items()}), "evidence": ["dense-bench.json"]},
             "measurements": rows, "measurement_files": ["dense-bench.json"], "artifacts": ["dense-bench.json"]}, indent=1))

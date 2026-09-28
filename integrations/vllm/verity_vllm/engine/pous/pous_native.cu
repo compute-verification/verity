@@ -558,6 +558,115 @@ __global__ void feistel_pair_kernel(uint8_t* x, int64_t x_stride, int64_t half, 
   }
 }
 
+// Moves one 17-word chunk of each of the warp's 32 rows between global and shared memory with consecutive lanes on consecutive
+// words, so a warp instruction covers a few contiguous runs of a row instead of 32 rows at once.
+__device__ __forceinline__ void chunk_load(uint64_t (*sm)[RATE_WORDS], const uint8_t* x, int64_t x_stride, int64_t off,
+                                           int64_t n0, int64_t rows, int64_t j0, int64_t hw, int lane) {
+#pragma unroll
+  for (int k = 0; k < RATE_WORDS; ++k) {
+    const int idx = k * 32 + lane;
+    const int r = idx / RATE_WORDS, w = idx % RATE_WORDS;
+    const int64_t n = n0 + r, j = j0 + w;
+    sm[r][w] = (n < rows && j < hw) ? reinterpret_cast<const uint64_t*>(x + n * x_stride)[off + j] : 0;
+  }
+}
+
+__device__ __forceinline__ void chunk_store(uint64_t (*sm)[RATE_WORDS], uint8_t* x, int64_t x_stride, int64_t off,
+                                            int64_t n0, int64_t rows, int64_t j0, int64_t hw, int lane) {
+#pragma unroll
+  for (int k = 0; k < RATE_WORDS; ++k) {
+    const int idx = k * 32 + lane;
+    const int r = idx / RATE_WORDS, w = idx % RATE_WORDS;
+    const int64_t n = n0 + r, j = j0 + w;
+    if (n < rows && j < hw) reinterpret_cast<uint64_t*>(x + n * x_stride)[off + j] = sm[r][w];
+  }
+}
+
+// Absorbs chunk c of message words (w_j << 16 | w_{j-1} >> 48, the 2-byte prefix in the first carry) into `t`, with the
+// pad10*1 of a message of 8 * hw + 2 bytes when chunk c holds its end; `carry` is the previous word.
+__device__ __forceinline__ void absorb_chunk(uint64_t t[25], const uint64_t* vals, int64_t c, int64_t hw, int64_t full, int tail,
+                                             uint64_t& carry) {
+#pragma unroll
+  for (int w = 0; w < RATE_WORDS; ++w) {
+    const int64_t j = c * RATE_WORDS + w;
+    if (j < hw) {
+      t[w] ^= (vals[w] << 16) | (carry >> 48);
+      carry = vals[w];
+    } else if (j == hw) {
+      t[w] ^= carry >> 48;
+    }
+  }
+  if (c == full) {
+    t[tail / 8] ^= (uint64_t)0x1F << (8 * (tail % 8));
+    t[RATE_WORDS - 1] ^= (uint64_t)0x80 << 56;
+  }
+}
+
+// feistel_fused_kernel with coalesced memory: every chunk of the warp's 32 rows goes through shared memory, the next chunk's
+// load issued before the current chunk's Keccak work; the last (partial) chunk is the next sponge's final block.
+__global__ void feistel_coalesced_kernel(uint8_t* x, int64_t x_stride, int64_t half, int domain, int64_t rows) {
+  __shared__ uint64_t buf[WARPS_PER_BLOCK][2][32][RATE_WORDS];
+  const int lane = threadIdx.x % 32, warp = threadIdx.x / 32;
+  const int64_t n0 = ((int64_t)blockIdx.x * WARPS_PER_BLOCK + warp) * 32;
+  if (n0 >= rows) return;
+  const int64_t hw = half / 8;
+  const int64_t len = 8 * hw + 2;
+  const int64_t full = len / RATE;
+  const int tail = (int)(len - full * RATE);
+  const int64_t chunks = (hw + RATE_WORDS - 1) / RATE_WORDS;
+  uint64_t (*bufs[2])[RATE_WORDS] = {buf[warp][0], buf[warp][1]};
+  uint64_t s[25], t[25], vals[RATE_WORDS];
+#pragma unroll
+  for (int k = 0; k < 25; ++k) s[k] = 0;
+  uint64_t carry = ((uint64_t)(uint8_t)domain | (1ull << 8)) << 48;
+  for (int64_t c = 0; c < chunks; ++c) {
+    chunk_load(bufs[0], x, x_stride, hw, n0, rows, c * RATE_WORDS, hw, lane);
+    __syncwarp();
+#pragma unroll
+    for (int w = 0; w < RATE_WORDS; ++w) vals[w] = bufs[0][lane][w];
+    __syncwarp();
+    absorb_chunk(s, vals, c, hw, full, tail, carry);
+    keccak_f_thread(s);
+  }
+  if (chunks == full) {
+    s[0] ^= (carry >> 48) ^ ((uint64_t)0x1F << (8 * (tail % 8)));
+    s[RATE_WORDS - 1] ^= (uint64_t)0x80 << 56;
+    keccak_f_thread(s);
+  }
+  for (int i = 1; i <= 10; ++i) {
+    const int64_t off = (i % 2) ? 0 : hw;
+    const bool next = i < 10;
+#pragma unroll
+    for (int k = 0; k < 25; ++k) t[k] = 0;
+    carry = ((uint64_t)(uint8_t)domain | ((uint64_t)(i + 1) << 8)) << 48;
+    chunk_load(bufs[0], x, x_stride, off, n0, rows, 0, hw, lane);
+    for (int64_t c = 0; c < chunks; ++c) {
+      __syncwarp();
+      uint64_t (*cur)[RATE_WORDS] = bufs[c % 2];
+#pragma unroll
+      for (int w = 0; w < RATE_WORDS; ++w) {
+        vals[w] = cur[lane][w] ^ s[w];
+        cur[lane][w] = vals[w];
+      }
+      __syncwarp();
+      if (c + 1 < chunks) chunk_load(bufs[(c + 1) % 2], x, x_stride, off, n0, rows, (c + 1) * RATE_WORDS, hw, lane);
+      chunk_store(cur, x, x_stride, off, n0, rows, c * RATE_WORDS, hw, lane);
+      if (next) absorb_chunk(t, vals, c, hw, full, tail, carry);
+      if (c + 1 < chunks && next) keccak_f_pair(s, t);
+      else if (c + 1 < chunks) keccak_f_thread(s);
+      else if (next) keccak_f_thread(t);
+    }
+    if (!next) break;
+    if (chunks == full) {
+      t[0] ^= (carry >> 48) ^ ((uint64_t)0x1F << (8 * (tail % 8)));
+      t[RATE_WORDS - 1] ^= (uint64_t)0x80 << 56;
+      keccak_f_thread(t);
+    }
+#pragma unroll
+    for (int k = 0; k < 25; ++k) s[k] = t[k];
+  }
+}
+
 static void check_rows(const torch::Tensor& t, const char* name, int64_t rows) {
   TORCH_CHECK(t.is_cuda() && t.scalar_type() == torch::kUInt8 && t.dim() == 2, name, " must be a 2-D uint8 CUDA tensor");
   TORCH_CHECK(t.size(0) == rows || (t.size(0) == 1 && t.stride(0) == 0) || t.size(1) == 0, name, " has the wrong row count");
@@ -585,7 +694,7 @@ void shake256_rows(torch::Tensor prefix, torch::Tensor body, torch::Tensor out, 
 // Feistel-10 in place on the rows of x ([R, 2h]) with round functions SHAKE256(domain || u8(i) || tweak[r] || .): one warp
 // per row below `thread_rows` rows (latency), one thread per row from there (throughput).
 void feistel_rows(torch::Tensor x, torch::Tensor tweak, int64_t domain, bool inverse, int64_t thread_rows, bool word_io,
-                  bool fused, bool pair) {
+                  bool fused, bool pair, int64_t pair_max_rows, bool coalesced) {
   const int64_t rows = x.size(0);
   check_rows(x, "x", rows);
   check_rows(tweak, "tweak", rows);
@@ -596,7 +705,14 @@ void feistel_rows(torch::Tensor x, torch::Tensor tweak, int64_t domain, bool inv
   auto stream = c10::cuda::getCurrentCUDAStream();
   const bool words = word_io && tweak.size(1) == 0 && x.size(1) % 16 == 0 && x.stride(0) % 8 == 0 &&
                      reinterpret_cast<uintptr_t>(x.data_ptr<uint8_t>()) % 8 == 0;
-  if (thread_rows > 0 && rows >= thread_rows && words && fused && pair && !inverse) {
+  if (thread_rows > 0 && rows >= thread_rows && words && fused && coalesced && !inverse &&
+      !(pair && rows < pair_max_rows)) {
+    feistel_coalesced_kernel<<<(unsigned)((rows + 32 * WARPS_PER_BLOCK - 1) / (32 * WARPS_PER_BLOCK)), 32 * WARPS_PER_BLOCK, 0,
+                               stream>>>(x.data_ptr<uint8_t>(), x.stride(0), x.size(1) / 2, (int)domain, rows);
+    C10_CUDA_KERNEL_LAUNCH_CHECK();
+    return;
+  }
+  if (thread_rows > 0 && rows >= thread_rows && words && fused && pair && rows < pair_max_rows && !inverse) {
     const int threads = 128;
     feistel_pair_kernel<<<(unsigned)((2 * rows + threads - 1) / threads), threads, 0, stream>>>(
         x.data_ptr<uint8_t>(), x.stride(0), x.size(1) / 2, (int)domain, rows);
@@ -791,7 +907,8 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("shake256_rows", &shake256_rows, "out (^)= SHAKE256(prefix || body)[0:out.size(1)], row by row");
   m.def("feistel_rows", &feistel_rows, "Feistel-10 in place, SHAKE256 round functions under a domain byte and per-row tweak",
         pybind11::arg("x"), pybind11::arg("tweak"), pybind11::arg("domain"), pybind11::arg("inverse"), pybind11::arg("thread_rows") = 0,
-        pybind11::arg("word_io") = false, pybind11::arg("fused") = false, pybind11::arg("pair") = false);
+        pybind11::arg("word_io") = false, pybind11::arg("fused") = false, pybind11::arg("pair") = false,
+        pybind11::arg("pair_max_rows") = INT64_MAX, pybind11::arg("coalesced") = false);
   pybind11::class_<Responder>(m, "Responder")
       .def(pybind11::init<int64_t, int64_t, int64_t, int, std::string, int, int>())
       .def("start", &Responder::start)

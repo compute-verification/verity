@@ -68,12 +68,17 @@ FUSED = [False]
 """With `WORD_IO`, forward launches fuse each round's squeeze to the next round's absorb (`feistel_fused_kernel`)."""
 
 PAIR = [False]
-"""With `FUSED`, each row runs on a lane pair, one squeezing and one absorbing (`feistel_pair_kernel`)."""
+"""With `FUSED`, launches below `PAIR_MAX_ROWS` rows run each row on a lane pair (`feistel_pair_kernel`)."""
+
+PAIR_MAX_ROWS = [1 << 62]
+COALESCED = [False]
+"""With `FUSED`, the other launches stage every chunk through shared memory (`feistel_coalesced_kernel`)."""
 
 
 def permute(state: torch.Tensor) -> None:
     """The key derivation's permutation (`Pi` or `Pi2`, by the state's width) in place on `[R, width]` states."""
-    native.ext().feistel_rows(state, state.new_empty((state.shape[0], 0)), PI_DOMAIN, False, THREAD_ROWS[0], WORD_IO[0], FUSED[0], PAIR[0])
+    native.ext().feistel_rows(state, state.new_empty((state.shape[0], 0)), PI_DOMAIN, False, THREAD_ROWS[0], WORD_IO[0], FUSED[0], PAIR[0],
+                              PAIR_MAX_ROWS[0], COALESCED[0])
 
 
 def _tweaks(tags: torch.Tensor, layer: int, vs: torch.Tensor) -> torch.Tensor:
@@ -89,7 +94,8 @@ def _tweaks(tags: torch.Tensor, layer: int, vs: torch.Tensor) -> torch.Tensor:
 
 def p_t(x: torch.Tensor, tags: torch.Tensor, layer: int, vs: torch.Tensor, inverse: bool = False) -> None:
     """`P_T` (or its inverse) in place on `[R, M]` labels, row `r` under tweak `(tags[r], layer, vs[r])`."""
-    native.ext().feistel_rows(x, _tweaks(tags, layer, vs), P_DOMAIN, inverse, THREAD_ROWS[0], WORD_IO[0], FUSED[0], PAIR[0])
+    native.ext().feistel_rows(x, _tweaks(tags, layer, vs), P_DOMAIN, inverse, THREAD_ROWS[0], WORD_IO[0], FUSED[0], PAIR[0],
+                              PAIR_MAX_ROWS[0], COALESCED[0])
 
 
 def key_mode(prims) -> str:
