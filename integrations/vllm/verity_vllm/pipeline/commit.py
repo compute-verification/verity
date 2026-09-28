@@ -1038,6 +1038,7 @@ class Options:
     max_num_seqs: int = option("--max-num-seqs", type=int, default=8)
     engine_arg: list[str] | None = option("--engine-arg", action="append", default=None)
     target: str | None = option("--target", default=None, help="[R13 hopper] TargetProfile JSON overrides / path (default: the workload's `target` block over this device)")
+    protocols_config: str | None = option("--protocols-config", default=None, help="the protocols' settings, a JSON file (default: the workload's `protocols_config`); never hashed")
     warmup: int = option("--warmup", type=int, default=2)
     label: str = option("--label", default="")
     gpu_tree: bool = option("--gpu-tree", default=False, action="store_true", help="native_host: GPU-resident SHA-256 chunk tree (CMT-2 hidden_gpu_tree.cu) over the arena; no D2H, no hashlib")
@@ -1205,12 +1206,11 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     # closed within VERITY_COLLECT_DEAD_GRACE_S; row_pod reads rc 3 as COMMIT FAIL, and a present marker names the hang in the row evidence.
     os.environ.setdefault("VERITY_COLLECT_WATCHDOG_MARKER", str(out / "COLLECTOR_DEAD_HUNG.json"))
     wl = va.load_workload(args.workload)
-    engine_args = dict(wl.get("engine_args_required") or {})
-    engine_args.update(va.parse_engine_args(args.engine_arg))
+    engine_args = {**(wl.get("engine_args_required") or {}), **va.parse_engine_args(args.engine_arg)}
     TL.event("startup.imports", "end", s=round(time.time() - _T_PROCESS0, 3), label=args.label, workload=str(args.workload),
              hot_job=(_HOT or {}).get("jobs"))
     _ekw = dict(checkpoints=args.checkpoints, max_num_seqs=args.max_num_seqs, case=va.case_of(wl, args.case), engine_args=engine_args,
-                target=PO.commit_guard(va.target_of_workload(wl, args.target), hot=_HOT is not None, settings=wl.get("protocols_config")), execution=va.execution_of_workload(wl))
+                target=PO.commit_guard(va.target_of_workload(wl, args.target), hot=_HOT is not None, settings=args.protocols_config or wl.get("protocols_config")), execution=va.execution_of_workload(wl))
     _live = (_HOT or {}).get("eng")
     if _live is not None:
         # [R16 sys] hot worker with a live engine: reuse iff THIS job would build exactly the same engine (kwargs set + env flags +
@@ -1814,7 +1814,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
               f"errors {rc.extra.get('errors')}", flush=True)
         coms[kind] = com
     com = coms[kinds[0]] if kinds else None
-    protocols = PO.at_commit(_ekw["target"], eng.model, versions, wl.get("protocols_config"))   # after every committer registered the weights
+    protocols = PO.at_commit(_ekw["target"], eng.model, versions, args.protocols_config or wl.get("protocols_config"))   # after every committer registered the weights
     if args.value_check and com is not None and hasattr(com, "_layouts"):
         # VALUE-CORRECTNESS (VALUE-FIRST §5): one extra instrumented run with reference taps + re-execution of the registered relation
         from verity_vllm.check.value_check import run_value_check
@@ -2303,7 +2303,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                         print(f"[delta] replay cache: pair {pair} key differs from pair {_v0['pair']}'s in {_d0}: own replay (root {rc.run_root.hex()[:16]} vs {_v0['run_root'][:16]})", flush=True)
                     TL.start("validate.sampled_replay", pair=pair, cached=_cached is not None)
                     try:
-                        from verity_vllm.check import executed_prefix as EPX, oracle_compare as OC; from verity_vllm.check.replay import replay_codes as RC, driver as SR; from verity_vllm.pipeline import vu_store as VUX, serving_rows as SRW
+                        from verity_vllm.check import executed_prefix as EPX, oracle_compare as OC; from verity_vllm.check.replay import replay_codes as RC, driver as SR, pouw_circuit as _PWC; from verity_vllm.pipeline import vu_store as VUX, serving_rows as SRW
                         from verity_vllm.query.manifest import format as MF
                         if _cached is not None:
                             raise _ReplayReused()
@@ -2444,7 +2444,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                         elif _epr_r["any_eos_stop"]:
                             print("[delta] WARNING: this tree's sampled_replay has no executed_prefix= (reqval R17-26/R17-27 not in the tree): the EOS-stopped "
                                   "request's rows past the stop are sampled as ordinary strata and grade 'not evaluated' -> C2 partial, never PASS", flush=True)
-                        sr = SR.sampled_replay(_progs, _bm, _rd, _wp, arrivals=_arr, per_stratum=int(args.replay_per_stratum), seed=_seed, seed_source=_seed_src,
+                        sr = _PWC.replayed(protocols, lambda: SR.sampled_replay(_progs, _bm, _rd, _wp, arrivals=_arr, per_stratum=int(args.replay_per_stratum), seed=_seed, seed_source=_seed_src,
                                                seed_challenge=_seed_chal,
                                                max_evaluate=int(args.replay_max), weights_check=_wc, targets=list(getattr(args, "replay_target", None) or []), replay_k=args.replay_k,
                                                workers=getattr(args, "replay_workers", None), retention=_retention,
@@ -2452,7 +2452,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                                                # [R17-3 / reqval] Q(P) of record: the replay's reach is reconciled against it identity by identity
                                                manifest=(required_manifest if isinstance(required_manifest, dict) else None),
                                                program_dirs={_k: _v["dir"] for _k, _v in _loaded.items() if _v.get("dir")},
-                                               **_sr_kw)
+                                               **_sr_kw))
                         sr["sample"]["seed_form"] = _seed_form            # replay_codes.SEED_FORMS: the verdict reads the form, never the source text
                         sr["programs"] = {k: {"dir": _loaded[k].get("dir"), "program_digest": _digs[k]} for k in _loaded}
                         sr["executed_prefix_of_record"] = {k: {kk: vv for kk, vv in v.items() if kk in ("served_output_len", "executed_prefix_len", "cap", "cap_exhausted", "eos_stop")}
