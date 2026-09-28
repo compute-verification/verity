@@ -86,6 +86,7 @@ appear here. `tools/lean/audit.py` checks every declaration; this list is the he
 #print axioms PousProofs.BandChainMeets64D12
 #print axioms PousProofs.BandMultiMeets14
 #print axioms PousProofs.BandMultiMeets14K106
+#print axioms PousProofs.BandMultiMeetsFamily
 #print axioms PousProofs.ChainDenseMeets64
 #print axioms PousProofs.BandPubMeets64
 #print axioms PousProofs.BandPubMeets14

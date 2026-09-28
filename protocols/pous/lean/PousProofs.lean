@@ -24,4 +24,5 @@ import PousProofs.P3.Column.BandTwoWay
 import PousProofs.Dense.DenseReCert
 import PousProofs.Dense.SegTagged
 import PousProofs.Chain.Flat
+import PousProofs.Chain.Family
 import PousProofs.Pinned

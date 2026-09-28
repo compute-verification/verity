@@ -610,6 +610,27 @@ def BandMultiMeets14K106 : Prop :=
     Meets (Pous.BandMulti.chainBandSeg 448 (2 ^ 9) d 524288 512 (Pous.BandMulti.segDom salt (2 ^ 9))) .sequential 5
       (2 ^ 20) 106 ((2⁻¹ : ℝ≥0∞) ^ 128)
 
+/-- **Unconditional: the band store at every segment count from 1 to 2^64.** For every `N` with `1 ≤ N ≤ 2^64` and
+every `d ≥ 5`, the `N`-segment band `chainBandSeg N (2^9) d` (`N·512` blocks of 64 KiB, `N·32` MiB) meets the
+requirement at `D = 5`, `Q = 2^20`, `k = 111`, `ε = 2^-128`, both with the implementation's per-segment tags
+(`segDom salt`, segment `s` keyed by `salt ‖ u64(s)`, any 192-bit salt) and with one global salt and global indices
+(`dom salt`). One advice string covers the whole store. `2^64` is where `u64(s)` stops being injective, and the domains
+must be injective across segments: with a shared domain every `N ≥ 2` breaks (the lane's `shared_domain_breaks_fam`).
+At `N = 448` this is `BandMultiMeets14`, and at `N = 1` its global layout is `BandChainMeets64`. Added on 29 Sep 2026.
+Statement reviewer: the statement red team (`bc-22298e90`), GO (the POUS store's `docs/lean-trusted-layer-review.md`
+§58), on a red-team read (`bc-9e381a9e`, for the band lane), GO (the POUS store's
+`internal/p3-instantiation/band-family-pin-redteam-verdict.md`). Proof: the POUS store's
+`lean/submissions/band-multi/BandMultiFamilyFinal.lean`, `PousBandMulti.band_meets_family_final` (graded:
+`band-multi/family-pin/GRADE.txt`); here `PousProofs.BandMultiMeetsFamily`. -/
+def BandMultiMeetsFamily : Prop :=
+  ∀ (N : ℕ) [NeZero N], N ≤ 2 ^ 64 → ∀ d : ℕ, 5 ≤ d →
+    (∀ salt : Bits 192,
+      Meets (Pous.BandMulti.chainBandSeg N (2 ^ 9) d 524288 512 (Pous.BandMulti.segDom salt (2 ^ 9))) .sequential
+        5 (2 ^ 20) 111 ((2⁻¹ : ℝ≥0∞) ^ 128)) ∧
+    (∀ salt : Bits 256,
+      Meets (Pous.BandMulti.chainBandSeg N (2 ^ 9) d 524288 512 (Pous.Sponge.dom salt)) .sequential 5 (2 ^ 20) 111
+        ((2⁻¹ : ℝ≥0∞) ^ 128))
+
 /-- **Unconditional: the overwrite-chain dense scheme at 64 KiB.** `chainDense (2^9)` (512 blocks of 64 KiB on the
 complete DAG) meets the requirement at `D = 5`, `Q = 2^20`, `k = 111`, `ε = 2^-128`. Not `DenseMeets` (the dense
 scheme with `H` a random oracle), and not `SpongeDense`'s `ChainDenseMeetsPinned` (`2^16` blocks of 1 KiB, `D = 64`).

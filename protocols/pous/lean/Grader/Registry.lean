@@ -41,6 +41,7 @@ def pinnedTargets : List Name := [
   `Pous.Pinned.BandChainMeets64D12,
   `Pous.Pinned.BandMultiMeets14,
   `Pous.Pinned.BandMultiMeets14K106,
+  `Pous.Pinned.BandMultiMeetsFamily,
   `Pous.Pinned.ChainDenseMeets64,
   `Pous.Pinned.BandPubMeets64,
   `Pous.Pinned.BandPubMeets14,
