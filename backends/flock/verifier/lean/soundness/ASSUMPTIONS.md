@@ -5,8 +5,10 @@ soundness theorems take, each in full; the detail behind them is in `assumptions
 and, for the audit layer, `FlockSoundness/Audit/README.md`. `DESIGN.md` holds the derivations.
 
 **The end-to-end theorem** is a skeleton: `flock_e2e_count` and `flock_e2e_drawn`, in `FlockSoundness/E2E.lean`. They
-state the whole chain, from the executable verifier's acceptance to the integrity profile on the committed circuit. Each
-unfinished piece is a named hypothesis, and `assumptions/e2e-checklist.md` lists them with their owners.
+state the chain from the audit's acceptance to the integrity profile on the committed circuit. Each unfinished piece is a
+named hypothesis, and `assumptions/e2e-checklist.md` lists them with their owners. Two of those carry what the statement
+doesn't say yet: that the acceptance is the executable verifier's (`hExec`), and that the units' rows are the ones the
+verifier derives (`dp`, `hL1`).
 
 ## Named assumptions (taken without proof)
 
@@ -95,10 +97,10 @@ before the session's first coin, not bounds state by state.
 `lean-audit.json` records each pinned theorem's statement (`pins`) and the definitions it reads (`reads`). The audit
 fails when either changes until the record is rewritten, and a rewritten record needs a named statement reviewer. The
 pins include the table theorems (`README.md` §1.1 and §1.2, with their `_exec` forms), `execArith_correct` and
-`Merkle.opening_binding`; none takes a named assumption. The theorem that takes A2, `flock_batched_linkSoundE`, is not
-pinned, nor are `flock_inputs_sound`, `flock_session_sound`, `lowering_sound` and `mcaError_le_bchks25`. A theorem that
-is not in `pins` is still audited (standard axioms, kernel replay), but a change to its statement would not fail the
-audit.
+`Merkle.opening_binding`; none takes a named assumption. The end-to-end skeleton's `flock_e2e_count` and `flock_e2e_drawn`
+are pinned too; they take A2 as `hCR` and pass it to the link theorem, `flock_batched_linkSoundE`, which is not pinned,
+nor are `flock_inputs_sound`, `flock_session_sound`, `lowering_sound` and `mcaError_le_bchks25`. A theorem that is not in
+`pins` is still audited (standard axioms, kernel replay), but a change to its statement would not fail the audit.
 
 ## Upstream status
 
