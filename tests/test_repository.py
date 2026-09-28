@@ -71,7 +71,7 @@ ALLOWLIST = {
 }
 AUDIT_RECORD = "lean-audit.json"
 #: A Lean package's audit record must stay in Git, since the audit compares the build against it and `--update`'s diff is
-#: what a statement reviewer reads; it grows 3-5 KiB per pin and with every definition under `meaning` (following the whole
+#: what Daniel is shown when a guarantee changes; it grows 3-5 KiB per pin and with every definition under `meaning` (following the whole
 #: executable verifier, `Flock`, took soundness's record past 2 MiB).
 AUDIT_RECORD_LIMIT = 4 * 1024 * 1024
 #: Tracked data (everything but CODE_SUFFIXES) in the whole tree, so that many small files cannot

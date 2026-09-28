@@ -18,7 +18,7 @@ def _roles(*changed: str) -> set[str]:
 
 def test_the_rules_parse_and_name_known_roles():
     assert {r.role for r in RULES.grants} <= set(vocab.GRANT_ROLES) and RULES.hold_label == "hold"
-    assert [r.lean_audit for r in RULES.grants if r.role == "statement-reviewer"] == [("pins", "reads")]
+    assert not any(r.lean_audit for r in RULES.grants)      # a changed guarantee alerts Daniel and waits on nobody
 
 
 def test_the_rules_ask_for_the_grants_applied_by_hand():
