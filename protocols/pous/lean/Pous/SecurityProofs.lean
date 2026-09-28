@@ -10,6 +10,7 @@ import Pous.SecurityProofs.P3.InvertibleCore
 import Pous.SecurityProofs.P3.Refutation
 import Pous.SecurityProofs.Chain.Flat
 import Pous.SecurityProofs.Chain.Family
+import Pous.SecurityProofs.Chain.FamilyRounds
 import Pous.SecurityProofs.P2.Margin
 import Pous.SecurityProofs.Accounting.Numbers
 import Pous.SecurityProofs.Audit.SampledAudit
@@ -34,6 +35,8 @@ import Pous.SecurityProofs.Thm1.Theorem1iTimed
 import Pous.SecurityProofs.Thm1.Theorem1ii
 import Pous.SecurityProofs.Thm1.Theorem1iiSeq
 import Pous.SecurityProofs.Thm1.Theorem1iiiTimed
+import Pous.SecurityProofs.Chain.PubFamily
+import Pous.SecurityProofs.Chain.PubRounds
 
 /-!
 # The proved guarantees
@@ -114,7 +117,8 @@ theorem StackedAuditSeq : Pous.Guarantees.StackedAuditSeq := @PousAudit.stacked_
 theorem StackedAuditOnePercent : Pous.Guarantees.StackedAuditOnePercent := @PousAudit.stacked_audit_one_percent
 theorem DenseMeets : Pous.Guarantees.DenseMeets := PousDense.dense_meets
 
-/-! ## The overwrite chain (`Pous/SecurityProofs/Chain/Flat.lean`, and `Family.lean` for `BandMultiMeetsFamily`)
+/-! ## The overwrite chain (`Pous/SecurityProofs/Chain/Flat.lean`, `Family.lean` for `BandMultiMeetsFamily`, and
+`FamilyRounds.lean` for the band at `D = 2` and `D = 1`)
 
 P3 with a concrete `H`, the band, the dense chain scheme and the public encoder, each over the trusted copies
 (`Pous/Protocol/Model/P3Chain.lean`, `BandChain.lean`, `PubEncoder.lean`, `Pous/Protocol/Accounting/PubMeets.lean`). -/
@@ -132,9 +136,16 @@ theorem BandMultiMeets14 : Pous.Guarantees.BandMultiMeets14 := Pous.BandMulti.ba
 theorem BandMultiMeets14K106 : Pous.Guarantees.BandMultiMeets14K106 := Pous.BandMulti.band_meets_14_k106_final
 theorem BandMultiMeetsFamily : Pous.Guarantees.BandMultiMeetsFamily := Pous.BandMulti.band_meets_family_final
 theorem ChainDenseMeets64 : Pous.Guarantees.ChainDenseMeets64 := PousSpongeChain.chain_meets_64_final
+theorem BandMultiMeetsFamilyD2 : Pous.Guarantees.BandMultiMeetsFamilyD2 := Pous.BandMulti.Rounds.band_meets_family_d2
+theorem BandMultiMeetsFamilyD1 : Pous.Guarantees.BandMultiMeetsFamilyD1 := Pous.BandMulti.Rounds.band_meets_family_d1
+theorem BandChainMeets64Rounds2 : Pous.Guarantees.BandChainMeets64Rounds2 := Pous.BandMulti.Rounds.band_meets_64_d2
+theorem BandChainMeets64Rounds1 : Pous.Guarantees.BandChainMeets64Rounds1 := Pous.BandMulti.Rounds.band_meets_64_d1
 theorem BandPubMeets64 : Pous.Guarantees.BandPubMeets64 := PousPub.band_pub_meets_64_final
 theorem BandPubMeets14 : Pous.Guarantees.BandPubMeets14 := PousPub.band_pub_meets_14_final
 theorem BandPubMeets14Global : Pous.Guarantees.BandPubMeets14Global := PousPub.band_pub_meets_14_global_final
+theorem BandPubMeetsFamily : Pous.Guarantees.BandPubMeetsFamily := PousPub.band_pub_meets_family_final
+theorem BandPubMeetsFamilyD2 : Pous.Guarantees.BandPubMeetsFamilyD2 := PousPub.band_pub_meets_family_d2
+theorem BandPubMeetsFamilyD1 : Pous.Guarantees.BandPubMeetsFamilyD1 := PousPub.band_pub_meets_family_d1
 theorem ChainDenseMeets111 : Pous.Guarantees.ChainDenseMeets111 := PousSpongeChain.chainDenseMeets111_final
 
 theorem P2MeetsM1pB19Uncond : Pous.Guarantees.P2MeetsM1pB19Uncond := PousP2p.p2_meets_m1p_b19
