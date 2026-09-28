@@ -16,6 +16,7 @@ import argparse
 import hashlib
 import json
 import math
+import multiprocessing
 import os
 import platform
 import statistics
@@ -44,11 +45,89 @@ def salt_key(input_set) -> bytes:
     return hashlib.sha256(b"verity/flock-circuit/bench-stage-salts\0" + bytes.fromhex(input_set.content_digest)).digest()
 
 
+def _compose_t(job: tuple[str, int, int, str]) -> tuple[int, str]:
+    """One key count's composite circuit, written to ``path`` (a pool worker: it reopens the set)."""
+    from verity_numerical.bench.input_sets import InputSet
+
+    from .templates import attention_head as AH
+
+    set_dir, T, first, path = job
+    s = InputSet.open(set_dir)
+    sub = s.subcircuit
+    statics = dict(sub.instance_statics_of({p.name: s.port(p.name, first, first + 1)[0] for p in sub.inputs}))
+    text = FC.compose(AH.lowering(sub, T), sub, statics=statics)
+    Path(path).write_text(text)
+    return T, FC.digest(text)
+
+
+class KeyClass:
+    """Attention over several key counts (a class cell, as ``ir_bench``'s): M0's statement covers one T (its pin per T), so each
+    sub-batch is one T, proved with that T's own composite circuit, composed with that T's statics. The class manifest lists every
+    T's circuit pin; its sha256 is the class pin."""
+
+    MANIFEST = "flock-circuit-class/v1"
+
+    def __init__(self, input_set, set_dir: str, out: Path, procs: int, total: int):
+        from .templates import attention_head as AH
+
+        self.AH, self.sub, self.out = AH, input_set.subcircuit, out
+        D = int(self.sub.params["D"])
+        self.T = [len(k) // D for k in input_set.port("k", 0, total)]
+        if any(b < a for a, b in zip(self.T, self.T[1:])):
+            raise ValueError(f"{input_set.name}: instances not in key-count order")
+        self.lo, self.hi = min(self.T), max(self.T)
+        first = {t: self.T.index(t) for t in sorted(set(self.T))}
+        jobs = [(set_dir, t, i, str(self.net(t))) for t, i in first.items()]
+        workers = max(1, min(procs, len(jobs), _mem_gb() // 7))
+        with multiprocessing.get_context("spawn").Pool(workers) as pool:
+            self.pins = dict(pool.map(_compose_t, jobs, chunksize=1))
+        self.manifest = out / "class.json"
+        self.manifest.write_text(json.dumps({"manifest": self.MANIFEST, "statement": FC.STATEMENT, "subcircuit": self.sub.id,
+                                             "T": [self.lo, self.hi], "circuits": {str(t): self.pins[t] for t in sorted(self.pins)}},
+                                            indent=1, sort_keys=True) + "\n")
+        self.pin = hashlib.sha256(self.manifest.read_bytes()).hexdigest()
+
+    def lowering(self, T: int):
+        return self.AH.lowering(self.sub, T)
+
+    def net(self, T: int) -> Path:
+        return self.out / f"circuit-t{T}.txt"
+
+    def subs(self, total: int, per: int) -> list[tuple[int, int]]:
+        out, i = [], 0
+        while i < total:
+            j = i
+            while j < total and self.T[j] == self.T[i]:
+                j += 1
+            out += [(x, min(j, x + per)) for x in range(i, j, per)]
+            i = j
+        return out
+
+
+def _mem_gb() -> int:
+    try:
+        return int(os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") / 2**30)
+    except (ValueError, OSError):
+        return 8
+
+
+def circuit_of(a, net: Path, pin: str, lo: int) -> tuple[Path, str]:
+    """The (circuit file, pin) a sub-batch starting at instance ``lo`` is proved with: its key count's under a class, else the one."""
+    k = getattr(a, "klass", None)
+    return (k.net(k.T[lo]), k.pins[k.T[lo]]) if k else (net, pin)
+
+
 def stage_point(a, low, input_set, total: int, d: Path, public: bool) -> tuple[list[tuple[int, int]], float]:
     d.mkdir(parents=True, exist_ok=True)
-    subs = subbatches(total, a.per_proof)
+    k = getattr(a, "klass", None)
+    subs = k.subs(total, a.per_proof) if k else subbatches(total, a.per_proof)
     t0 = time.time()
     for i, (lo, hi) in enumerate(subs):
+        if k:
+            dst = d / f"instances-s{i}.bin"
+            FC.write(k.net(k.T[lo]).read_text(), input_set, lo, hi, None if public else dst, dst if public else d / f"public-s{i}.bin",
+                     salt_key(input_set))
+            continue
         p = FC.stage(low, input_set, lo, hi, d / f"stage-s{i}", public_only=public, salt_key=salt_key(input_set))
         os.replace(p, d / f"instances-s{i}.bin")
     return subs, time.time() - t0
@@ -91,21 +170,22 @@ def point(a, low, input_set, total: int, d: Path, net: Path, pin: str) -> dict:
     guard = tg.Guard(sampler=_sampler).start()
     t1 = time.time()
     parts, rcs, rss = [], [], None
-    for i, _ in enumerate(subs):
+    for i, (lo, _hi) in enumerate(subs):
+        cnet, cpin = circuit_of(a, net, pin, lo)
         srv, addr = None, a.verifier
         if addr:
             _probe(addr)
         else:
             addr = "127.0.0.1:%d" % (7500 + total.bit_length())
             log = d / f"serve-s{i}.log"
-            srv = subprocess.Popen(["nice", "-n", "5", a.bin, "serve", "--listen", addr, "--out", str(d / f"sessions-s{i}"), "--pin", pin,
-                                    "--instances", str(d / "verifier" / f"instances-s{i}.bin"), "--circuit", str(net), *a.tables],
+            srv = subprocess.Popen(["nice", "-n", "5", a.bin, "serve", "--listen", addr, "--out", str(d / f"sessions-s{i}"), "--pin", cpin,
+                                    "--instances", str(d / "verifier" / f"instances-s{i}.bin"), "--circuit", str(cnet), *a.tables],
                                    stdout=open(log, "w"), stderr=subprocess.STDOUT)
             _wait_serving(log, srv)
         try:
             timer = ["/usr/bin/time", "-v", "-o", str(d / f"prove-s{i}.time")] if Path("/usr/bin/time").exists() else []
             pr = subprocess.Popen([*timer, a.bin, "prove", "--verifier", addr, "--warm", "1", "--runs", str(a.runs), "--dump", str(d / f"proofs-s{i}"),
-                                   *a.prove_arg, "--instances", str(d / f"instances-s{i}.bin"), "--circuit", str(net), *a.tables],
+                                   *a.prove_arg, "--instances", str(d / f"instances-s{i}.bin"), "--circuit", str(cnet), *a.tables],
                                   stdout=open(d / f"prove-s{i}.txt", "w"), stderr=open(d / f"prove-s{i}.err", "w"))
             _OURS.add(pr.pid)
             try:
@@ -133,23 +213,31 @@ def point(a, low, input_set, total: int, d: Path, net: Path, pin: str) -> dict:
     live = _merge(parts) if ok else []
     timed = [r for r in live if not r.get("warm")]
     ok = ok and len(timed) == a.runs
+    per_sub = []
+    if ok and getattr(a, "klass", None):
+        for (lo, hi), runs in zip(subs, parts):
+            t = [r for r in runs if not r.get("warm")]
+            per_sub.append({"T": a.klass.T[lo], "lo": lo, "hi": hi, "e2e_s": statistics.median(r["e2e_s"] for r in t),
+                            "prove_s": statistics.median(sum(r["prove_s"]) for r in t),
+                            "verify_s": statistics.median(r["verdict"].get("verify_s", 0.0) for r in t)})
     return {"total": total, "rc": max(rcs) if rcs else None, "ok": ok, "live": live, "timed": timed, "gen_s": gen_s, "wall_s": wall,
-            "contention": contention, "peak_rss": rss, "dir": d.name, "subbatches": subs}
+            "contention": contention, "peak_rss": rss, "dir": d.name, "subbatches": subs, "per_sub": per_sub}
 
 
 def loopback_probe(a, q: dict, out: Path, net: Path, pin: str) -> dict:
     d = out / q["dir"]
     stage_point(a, a.low, a.input_set, q["total"], d / "verifier", public=True)
     per = []
-    for i, _ in enumerate(q["subbatches"]):
+    for i, (lo, _hi) in enumerate(q["subbatches"]):
+        cnet, cpin = circuit_of(a, net, pin, lo)
         log = d / f"loopback-serve-s{i}.log"
-        srv = subprocess.Popen([a.bin, "serve", "--listen", "127.0.0.1:7591", "--out", str(d / f"loopback-sessions-s{i}"), "--pin", pin,
-                                "--instances", str(d / "verifier" / f"instances-s{i}.bin"), "--circuit", str(net), *a.tables],
+        srv = subprocess.Popen([a.bin, "serve", "--listen", "127.0.0.1:7591", "--out", str(d / f"loopback-sessions-s{i}"), "--pin", cpin,
+                                "--instances", str(d / "verifier" / f"instances-s{i}.bin"), "--circuit", str(cnet), *a.tables],
                                stdout=open(log, "w"), stderr=subprocess.STDOUT)
         try:
             _wait_serving(log, srv)
             subprocess.call([a.bin, "prove", "--verifier", "127.0.0.1:7591", "--warm", "1", "--runs", str(a.runs), *a.prove_arg,
-                             "--instances", str(d / f"instances-s{i}.bin"), "--circuit", str(net), *a.tables],
+                             "--instances", str(d / f"instances-s{i}.bin"), "--circuit", str(cnet), *a.tables],
                             stdout=open(d / f"loopback-prove-s{i}.txt", "w"), stderr=open(d / f"loopback-prove-s{i}.err", "w"))
         finally:
             srv.terminate()
@@ -176,7 +264,14 @@ def result(a, input_set, low, p: dict, sweep: dict, pin: str) -> dict:
     n = p["total"]
     first = timed[0]
     sub = input_set.subcircuit
-    and_count = ands(low) * n
+    k = getattr(a, "klass", None)
+    per_ands = {t: ands(k.lowering(t)) for t in sorted(set(k.T[:n]))} if k else None
+    and_count = sum(per_ands[t] for t in k.T[:n]) if k else ands(low) * n
+    extra = {}
+    if k:
+        Ts = k.T[:n]
+        extra = {"key_counts": {str(t): Ts.count(t) for t in sorted(set(Ts))},
+                 "key_class": {"T": [min(Ts), max(Ts)], "pin": k.pin, "manifest": k.MANIFEST}}
     # a GEMM coordinate's result names its campaign target and K, as flock-pure's cells do (bench.PROFILES)
     gemm = sub.template.id == "gemm-coordinate"
     fp = contract.fingerprint(
@@ -188,7 +283,8 @@ def result(a, input_set, low, p: dict, sweep: dict, pin: str) -> dict:
         hardware=contract.probe_hardware(),
         software={"backend": {"name": Path(a.bin).name, "configuration": f"C-interactive/{Path(a.bin).name}", "commit": a.commit,
                               "statement": FC.STATEMENT, "prover": first.get("prover"), "prove_args": a.prove_arg, "lowering_sha256": pin,
-                              "circuit_format": FC.FORMAT, "unit": low.name, "unit_sha256": low.sha256, "identity": first.get("identity"),
+                              "circuit_format": FC.FORMAT, "unit": low.name.rsplit("/", 1)[0] + f"/class-t{min(k.T[:n])}-{max(k.T[:n])}" if k else low.name,
+                              "unit_sha256": low.sha256, "identity": first.get("identity"),
                               "flock": "succinctlabs/flock b684b12 + backends/flock/flock-link-b684b12.patch + cuda_circuit_patch.py"},
                   "toolchain": {"rustc": a.rustc, "python": platform.python_version()}},
         preprocessing="none: the circuit shape and the composite circuit are built once per process (fixed.setup_seconds: staging); every "
@@ -196,7 +292,8 @@ def result(a, input_set, low, p: dict, sweep: dict, pin: str) -> dict:
         retention="retained", instances=input_set.ref(0, n, a.art), N_subbatches=len(p["subbatches"]),
         batching={"total": n, "per_proof": a.per_proof, "in_flight": 1, "subbatches": [list(x) for x in p["subbatches"]]},
         scheme=FC.SCHEME, statement=FC.STATEMENT, relation=relation(a.template), subcircuit=sub.id, subcircuit_template=sub.template.id,
-        roots=first["roots"], sigma=first["sigma"], dense_m=first["dense_m"], units_per_instance=low.units.n, ands_per_instance=ands(low),
+        roots=first["roots"], sigma=first["sigma"], dense_m=first["dense_m"], units_per_instance=low.units.n,
+        ands_per_instance=and_count / n if k else ands(low), **extra,
         private="every word but the frame-v3 roots, the row digests, the declared outputs and the pinned layout",
         rtt_method="net.rtt_ms = 64-byte Ping round trips on the open session connection before Hello, per timed session, median",
         verifier={"placement": "loopback" if not a.verifier else a.verifier, "process": f"{Path(a.bin).name} serve (separate process)",
@@ -251,6 +348,18 @@ def result(a, input_set, low, p: dict, sweep: dict, pin: str) -> dict:
                         "warm_rule": "one full untimed session (prove --warm 1) before the timed sessions, same process"},
            "runs": [{"e2e_s": r["e2e_s"], "witness_s": r["witness_s"], "prove_s": r["prove_s"], "wait_s": r["wait_s"],
                      "wait_e2e_s": r["wait_e2e_s"]} for r in timed]}
+    if k:
+        per_t: dict = {}
+        for x in p["per_sub"]:
+            e = per_t.setdefault(str(x["T"]), {"heads": 0, "e2e_s": 0.0, "prove_s": 0.0, "verify_s": 0.0})
+            e["heads"] += x["hi"] - x["lo"]
+            for key in ("e2e_s", "prove_s", "verify_s"):
+                e[key] += x[key]
+        doc["per_key_count"] = per_t
+        doc["per_key_count_method"] = ("per T: the sum over its sub-batches of the median over the timed runs (each sub-batch one T, "
+                                       "proved with that T's own verity/flock-circuit composite, its pin in the class manifest); the "
+                                       "cell's e2e.seconds is the median over timed runs of the sum over all sub-batches")
+        doc["ands_per_key_count"] = {str(t): v for t, v in per_ands.items()}
     doc["validation"]["contract_problems"] = contract.validate(doc)
     return doc
 
@@ -262,11 +371,12 @@ def serve_plan(a, low, input_set, plan: list[int], out: Path, net: Path, pin: st
     for i, total in enumerate(plan):
         d = out / f"p{i}-{total}"
         subs, _ = stage_point(a, low, input_set, total, d, public=True)
-        jobs += [(d, j) for j in range(len(subs))]
+        jobs += [(d, j, lo) for j, (lo, _hi) in enumerate(subs)]
     print(f"PLAN\t{json.dumps({'points': plan, 'servers': len(jobs)})}", flush=True)
-    for d, j in jobs:
-        rc = subprocess.call([a.bin, "serve", "--listen", a.listen, "--out", str(d / f"sessions-s{j}"), "--pin", pin,
-                              "--instances", str(d / f"instances-s{j}.bin"), "--circuit", str(net), "--sessions", str(a.runs + 2),
+    for d, j, lo in jobs:
+        cnet, cpin = circuit_of(a, net, pin, lo)
+        rc = subprocess.call([a.bin, "serve", "--listen", a.listen, "--out", str(d / f"sessions-s{j}"), "--pin", cpin,
+                              "--instances", str(d / f"instances-s{j}.bin"), "--circuit", str(cnet), "--sessions", str(a.runs + 2),
                               "--operator", a.operator, *a.tables], stdout=open(d / f"serve-s{j}.log", "w"), stderr=subprocess.STDOUT)
         print(f"SERVED\t{d.name}/s{j} rc={rc}", flush=True)
     return 0
@@ -299,13 +409,23 @@ def main(argv=None) -> int:
     if input_set.subcircuit.template.id != a.template:
         print(f"input set {input_set.name} is not a {a.template} set", file=sys.stderr)
         return 2
-    low = FC.lowering_for_set(input_set)
-    a.low, a.input_set = low, input_set
     out = Path(a.out_dir)
     out.mkdir(parents=True, exist_ok=True)
-    net = out / "circuit.txt"
-    net.write_text(FC.compose(low, input_set.subcircuit, statics=FC.set_statics(input_set)))
-    pin = hashlib.sha512(net.read_bytes()).hexdigest()
+    D = int(input_set.subcircuit.params.get("D", 0) or 0)
+    total = max(int(x) for x in a.points.split())
+    a.klass = None
+    if a.template == "attention-head" and len({len(k) // D for k in input_set.port("k", 0, min(total, input_set.n))}) > 1:
+        t0 = time.time()
+        a.klass = KeyClass(input_set, a.input_set, out, a.procs, min(total, input_set.n))
+        low, net, pin = a.klass.lowering(a.klass.T[0]), None, a.klass.pin
+        print(f"CLASS\t{json.dumps({'T': [a.klass.lo, a.klass.hi], 'pin': pin, 'key_counts': len(a.klass.pins), 'compose_s': round(time.time() - t0, 1)})}",
+              flush=True)
+    else:
+        low = FC.lowering_for_set(input_set)
+        net = out / "circuit.txt"
+        net.write_text(FC.compose(low, input_set.subcircuit, statics=FC.set_statics(input_set)))
+        pin = hashlib.sha512(net.read_bytes()).hexdigest()
+    a.low, a.input_set = low, input_set
     a.tables = []
     if low.units.cut:
         from . import ir_lower
