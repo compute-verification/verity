@@ -180,6 +180,11 @@ def cmd_run(argv: list[str]) -> int:
     if ns.custody_r2 is False and ns.custody_ttl:
         print("research run: --custody-ttl is the lifetime of the --custody-r2 key; --no-custody-r2 mints none", file=sys.stderr)
         return 2
+    try:
+        harness_opts = _normalize_timeout(harness_opts)
+    except ValueError as e:
+        print(f"research run: --timeout: {e}", file=sys.stderr)
+        return 2
     if ns.on and ns.custody_r2 is not False:
         why = _custody_ttl_problem(ns.custody_ttl, harness_opts)
         if why:
@@ -306,15 +311,24 @@ CUSTODY_TTL_CAP_S = 24 * 3600
 
 
 def _harness_timeout(harness_opts: list[str]) -> float | None:
-    """The harness ``--timeout`` (seconds) among the pass-through options, or ``None``."""
-    for i, o in enumerate(harness_opts):
-        v = o.split("=", 1)[1] if o.startswith("--timeout=") else harness_opts[i + 1] if o == "--timeout" and i + 1 < len(harness_opts) else None
-        if v is not None:
-            try:
-                return float(v)
-            except ValueError:
-                return None
-    return None
+    """The harness ``--timeout`` (seconds) among the pass-through options, or ``None`` (normalized by :func:`_normalize_timeout`)."""
+    v = remote.flag_value(harness_opts, "--timeout")
+    return None if v is None else float(v)
+
+
+def _normalize_timeout(harness_opts: list[str]) -> list[str]:
+    """``--timeout 40m`` -> ``--timeout 2400``: the harness, the custody-key guard and the lease extension all read seconds.
+    ValueError on a malformed value, so it is refused here and not by the machine after launch."""
+    out, i = [], 0
+    while i < len(harness_opts):
+        o = harness_opts[i]
+        if o == "--timeout" and i + 1 < len(harness_opts):
+            out += [o, f"{remote.timeout_seconds(harness_opts[i + 1]):g}"]
+            i += 2
+            continue
+        out.append(f"--timeout={remote.timeout_seconds(o.split('=', 1)[1]):g}" if o.startswith("--timeout=") else o)
+        i += 1
+    return out
 
 
 def _custody_ttl_problem(custody_ttl: str | None, harness_opts: list[str]) -> str | None:
@@ -540,6 +554,10 @@ def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts
         print(f"research run --on {ns.on}: --cwd {asked_cwd} is relative to the shipped source tree, and there is none; pass --source GITDIR "
               f"or an absolute --cwd (the default is the run dir)", file=sys.stderr)
         return 2
+    if asked_cwd is None and ns.source and command and "/" in command[0] and not os.path.isabs(command[0]):
+        print(f"research run --on {ns.on}: {command[0]} is relative, and without --cwd the workload starts in the run dir, not the shipped "
+              f"tree; pass --cwd source (or --cwd DIR)", file=sys.stderr)
+        return 2
     harness_args = ["--stage", ns.stage, *harness_opts]
     for e in ns.expect:
         harness_args += ["--expect", e]
@@ -580,6 +598,7 @@ def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts
         print(f"research: run {run_id} refused on {ns.on} ({launch.get('fault') or 'Refused'}): {launch.get('refused')}  (recorded in {run_dir})", file=sys.stderr)
         return 3
     print(f"research: run {run_id} launched on {ns.on} ({rec['pod_id']}) pid={launch.get('runner_pid')} -> {rec['remote_run_dir']}", file=sys.stderr)
+    print(f"research: workload cwd: {rec.get('workload_cwd') or remote.WORKLOAD_CWD_DEFAULT}", file=sys.stderr)
     print(f"research: observe with `research fetch {run_id}`; the workload does not depend on this session staying alive", file=sys.stderr)
     return 0
 
@@ -606,6 +625,9 @@ def cmd_fetch(argv: list[str]) -> int:
               f"last observed {lo.get('state')} at {lo.get('at_utc')}; current status unknown", file=sys.stderr)
         return 4
     s = R.summarize(run_dir)
+    if ex := rec.get("launcher_exited"):
+        print(f"research fetch: {s['run_id']}: the machine's runner (pid {ex['runner_pid']}) exited without writing status.json; "
+              f"launcher.log ends: {ex['last_line'] or '(empty)'}", file=sys.stderr)
     print(f"research: {s['run_id']} observed {rec['observed_utc']}: {s['state']} rc={s['rc']} class={s['class'] or '-'} result={s['result']}"
           + (f"  preserved={'yes' if rec.get('preserved') else 'NO: ' + json.dumps(rec.get('preserve_error'))}" if ns.all else ""))
     marker = rec.get("fetched_marker") if ns.all else None
