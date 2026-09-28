@@ -52,3 +52,7 @@ POUW_VLLM = Tool(name="pouw_vllm", version="1", command=["python", "benchmarks/p
                  key_params=["model", "modes"], produces=["bench-result/v1", "run-files/v1"], parse=parse_vllm)
 POUW_E2E = Tool(name="pouw_e2e", version="1", command=["python", "benchmarks/pouw/e2e_audit.py"], closure=CLOSURE,
                 key_params=["t"], produces=["bench-result/v1", "run-files/v1"], parse=parse_e2e)
+POUW_PEARL_CAL = Tool(name="pouw_pearl_cal", version="1", command=["python", "benchmarks/pouw/pearl_calibration.py"],
+                      closure=["benchmarks/pouw/pearl_calibration.py", "benchmarks/pouw/pearl_b200_setup.sh",
+                               "benchmarks/pouw/run_result.py"],
+                      key_params=["model"], produces=["bench-result/v1", "run-files/v1"], parse=parse_vllm)

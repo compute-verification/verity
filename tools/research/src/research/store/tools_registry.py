@@ -27,6 +27,7 @@ REGISTRY: dict[str, str] = {
     "pouw_gemm": "benchmarks.pouw.tool:POUW_GEMM",
     "pouw_vllm": "benchmarks.pouw.tool:POUW_VLLM",
     "pouw_e2e": "benchmarks.pouw.tool:POUW_E2E",
+    "pouw_pearl_cal": "benchmarks.pouw.tool:POUW_PEARL_CAL",
     "flock_pure": "backends.flock.tool:FLOCK_PURE",
     "flock_agreement": "backends.flock.verifier.tool:FLOCK_AGREEMENT",
     "check": "tools.check.tool:CHECK",
