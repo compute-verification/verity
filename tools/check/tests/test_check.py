@@ -510,6 +510,17 @@ def test_the_preflight_is_the_lockfile_and_the_repository_lints(monkeypatch):
     assert CHECK.preflight()[0][1].startswith("failed: no `uv` here")
 
 
+def test_preflight_alone_runs_every_step_and_fails_if_any_does(tmp_path, monkeypatch, capsys):
+    """`check.py --preflight`, what `research merge --train --prepare` runs on a train before pushing it."""
+    marker = tmp_path / "ran"
+    touch = _py("open(__import__('sys').argv[1], 'w')", marker)
+    monkeypatch.setattr(CHECK, "preflight", lambda: [("preflight-lock", "failed: no `uv` here", tmp_path), ("preflight-lints", touch, tmp_path)])
+    assert CHECK.main(["--preflight"]) == 1 and marker.exists()
+    assert capsys.readouterr().out.splitlines() == ["check: preflight-lock: failed: no `uv` here", "check: preflight-lints: passed"]
+    monkeypatch.setattr(CHECK, "preflight", lambda: [("preflight-lints", touch, tmp_path)])
+    assert CHECK.main(["--preflight"]) == 0
+
+
 def test_a_contradicted_cached_pass_is_named_in_the_result(tmp_path, monkeypatch):
     import json
 

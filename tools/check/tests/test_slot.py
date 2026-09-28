@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import fcntl
 import importlib.util
+import json
 import os
+import stat
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -161,6 +163,54 @@ def test_a_waiter_goes_after_the_live_ones_that_came_before_it_and_a_dead_ones_t
     assert "slot: 1 check(s) ahead in line; retrying every 20 s" in capsys.readouterr().err
 
 
+def test_a_waiter_names_the_slots_holders_and_the_waiters_ahead_of_it_each_time_its_reason_changes(tmp_path, monkeypatch, capsys):
+    """A check's log says whom it waits behind, not only how many (proofs, 2 Oct: "3-4 check(s) ahead in line" for 45 min)."""
+    (tmp_path / "slots").write_text("a 0\n")
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    held = _hold(tmp_path / "check-a.lock")
+    (tmp_path / "check-a.who").write_text(json.dumps({"pid": os.getpid(), "run": "r-train", "tree": "/src/6b3d704c8", "by": "lander"}))
+    line = tmp_path / SLOT.LINE
+    line.mkdir()
+    ahead = line / f"{int((NOW.timestamp() - 600) * 1e9):020d}-11"
+    ahead.write_text(json.dumps({"pid": 11, "run": "r-ahead", "tree": "/src/740daff33", "by": "proofs"}))
+    afd = _hold(ahead)
+    real_join = SLOT.join
+
+    def join(d, priority=False, who=None):
+        ticket, fd = real_join(d, priority, who)
+        later = line / f"{int(ticket.name.split('-')[0]) + 1:020d}-12"
+        later.write_text(json.dumps({"pid": 12, "run": "r-later"}))
+        fds.append(_hold(later))
+        return ticket, fd
+
+    fds, polls = [], []
+
+    def sleep(_s):
+        polls.append(1)
+        if len(polls) == 1:
+            ahead.unlink()                                                   # the waiter ahead takes the slot when it frees
+            os.close(afd)
+        elif len(polls) == 2:
+            os.close(held)
+
+    def execvpe(f, argv, env):
+        raise Exec
+
+    monkeypatch.setattr(SLOT, "join", join)
+    monkeypatch.setattr(SLOT.os, "sched_setaffinity", lambda pid, cpus: None)
+    monkeypatch.setattr(SLOT.os, "execvpe", execvpe)
+    with pytest.raises(Exec):
+        SLOT.main(["--", "true"], now=lambda: NOW, sleep=sleep)
+    err = capsys.readouterr().err.splitlines()
+    assert err[0] == "slot: 1 check(s) ahead in line; retrying every 20 s"
+    assert err[1].startswith("slot:   a  cores 0  held by pid ") and "(run r-train, tree 6b3d704c8, by lander)" in err[1]
+    assert err[2] == "slot:   waiting since 2026-10-01T08:50Z (10 min): pid 11 (run r-ahead, tree 740daff33, by proofs)"
+    assert err[3].startswith("slot: every check slot is taken (a: busy)") and err[4].startswith("slot:   a  cores 0  held by pid ")
+    assert not any("r-later" in ln for ln in err) and err[5] == "slot: check slot a (cores 0)"
+    for fd in fds:
+        os.close(fd)
+
+
 def test_without_a_slots_file_the_command_runs_as_it_is(tmp_path, monkeypatch):
     monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "absent")
 
@@ -206,6 +256,59 @@ def test_status_names_each_slots_holder_or_free(tmp_path, monkeypatch):
     assert SLOT.main(["--status"], now=lambda: NOW) == 0
 
 
+def test_status_names_who_asked_for_each_held_slot_and_each_live_waiter(tmp_path):
+    """Which run, tree and agent hold or wait for a slot, without asking around (old-circuits-and-proofs, 2 Oct)."""
+    slots = SLOT.parse("a 0\nb 1\n")
+    held = _hold(tmp_path / "check-a.lock")
+    me = {"pid": os.getpid(), "run": "r20261002-040109-a7ed", "tree": "/workspace/research/src/6a1d0bf19", "by": "proofs"}
+    (tmp_path / "check-a.who").write_text(json.dumps(me))
+    (tmp_path / "check-b.who").write_text(json.dumps({**me, "run": "r-gone"}))     # b is free: its last holder isn't shown
+    line = tmp_path / SLOT.LINE
+    line.mkdir()
+    (line / f"{1:020d}-1").write_text(json.dumps({**me, "run": "r-dead"}))           # a waiter that died: nobody holds its ticket
+    waiter = line / f"{SLOT.PRIORITY}{int((NOW.timestamp() - 300) * 1e9):020d}-4242"   # the lander's train check
+    waiter.write_text(json.dumps({"pid": 4242, "run": "r-waiting", "tree": "/workspace/research/src/bc63d108f", "by": "lander"}))
+    wfd = _hold(waiter)
+    a, b, w = SLOT.status(slots, tmp_path, NOW)
+    assert f"held by pid {os.getpid()} since " in a and " (run r20261002-040109-a7ed, tree 6a1d0bf19, by proofs): " in a
+    assert b == "b  cores 1  free"
+    assert w == "waiting since 2026-10-01T08:55Z (5 min) with priority: pid 4242 (run r-waiting, tree bc63d108f, by lander)"
+    (tmp_path / "check-a.who").write_text(json.dumps({**me, "pid": 1}))              # left by an earlier holder: a hand-run flock now
+    assert "(run " not in SLOT.status(slots, tmp_path, NOW)[0]
+    os.close(held)
+    os.close(wfd)
+    assert SLOT.status(slots, tmp_path, NOW) == ["a  cores 0  free", "b  cores 1  free"]
+
+
+def test_the_check_that_takes_a_slot_records_who_asked_for_it(tmp_path, monkeypatch):
+    (tmp_path / "slots").write_text("a 0\n")
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
+    monkeypatch.setenv("RESEARCH_AGENT_URL", "https://cursor.com/agents/bc-1")
+    monkeypatch.chdir(tmp_path)
+    real, tickets = SLOT.join, []
+
+    def join(d, priority=False, who=None):
+        ticket, fd = real(d, priority, who)
+        tickets.append(json.loads(ticket.read_text()))
+        return ticket, fd
+
+    def execvpe(f, argv, env):
+        raise Exec(argv)
+
+    monkeypatch.setattr(SLOT, "join", join)
+    monkeypatch.setattr(SLOT.os, "sched_setaffinity", lambda pid, cpus: None)
+    monkeypatch.setattr(SLOT.os, "execvpe", execvpe)
+    with pytest.raises(Exec) as e:
+        SLOT.main(["--by", "lander", "--", "true"], now=lambda: NOW)
+    assert e.value.args[0] == ["true"]
+    me = {"pid": os.getpid(), "run": "r1", "tree": os.getcwd(), "by": "lander"}
+    who = tmp_path / "check-a.who"
+    assert tickets == [me] and json.loads(who.read_text()) == me and stat.S_IMODE(who.stat().st_mode) == 0o664
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["check-a.lock", "check-a.who", SLOT.LINE, "slots"]
+    assert SLOT.asker()["by"] == "https://cursor.com/agents/bc-1"
+
+
 def test_a_waiters_line_in_proc_locks_is_not_the_holder(tmp_path):
     lock = tmp_path / "check-a.lock"
     lock.touch()
@@ -233,9 +336,14 @@ def test_a_check_recorded_on_a_machine_runs_in_a_slot(monkeypatch):
 
     monkeypatch.setattr(check.subprocess, "run", run)
     monkeypatch.setattr(check, "lean_deps_url_file", lambda d: None)
+    monkeypatch.delenv("RESEARCH_AGENT_URL", raising=False)
+    monkeypatch.delenv("RESEARCH_LANE", raising=False)
     assert check.record(["--on", "vy-nebius-2"]) == 0
     remote = calls[-1][calls[-1].index("--") + 1:]
     assert remote[:3] == check.SLOT_WRAP[:3] == ["python3", "tools/check/slot.py", "--"] and remote[3:5] == ["uv", "run"]
+    monkeypatch.setenv("RESEARCH_LANE", "proofs")
+    assert check.record(["--on", "vy-nebius-2"]) == 0
+    assert calls[-1][calls[-1].index("--") + 1:][:5] == ["python3", "tools/check/slot.py", "--by", "proofs", "--"]
     assert check.record([]) == 0 and "slot.py" not in " ".join(calls[-1])
 
 
@@ -293,8 +401,13 @@ def test_priority_reaches_slot_py_from_record_and_unknown_options_are_refused(mo
     calls = []
     monkeypatch.setattr(check.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or subprocess.CompletedProcess(cmd, 0, "", ""))
     monkeypatch.setattr(check, "lean_deps_url_file", lambda d: None)
+    monkeypatch.delenv("RESEARCH_AGENT_URL", raising=False)
+    monkeypatch.delenv("RESEARCH_LANE", raising=False)
     assert check.record(["--on", "vy-nebius-1", "--priority"]) == 0
     remote = calls[-1][calls[-1].index("--") + 1:]
     assert remote[:4] == ["python3", "tools/check/slot.py", "--priority", "--"] and "--priority" not in remote[4:]
+    monkeypatch.setenv("RESEARCH_LANE", "lander")
+    assert check.record(["--on", "vy-nebius-1", "--priority"]) == 0
+    assert calls[-1][calls[-1].index("--") + 1:][:6] == ["python3", "tools/check/slot.py", "--priority", "--by", "lander", "--"]
     with pytest.raises(SystemExit):
         SLOT.main(["--fast", "--", "true"])

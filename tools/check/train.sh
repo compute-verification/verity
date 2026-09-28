@@ -6,7 +6,7 @@
 # MACHINE to free, ahead of lane checks still waiting and never stopping a running one (`slot.py --priority`), with the
 # pinned upstream build when COMMIT changes backends/flock/ against origin/main. --agreement sends that build whatever the
 # train changes: the lander's rule for a train that adds or changes a pinned guarantee (`lean-audit.json`) anywhere. It
-# prints the run id; `research merge COMMIT` lands it on a pass.
+# prints the run id; `research merge COMMIT` lands it on a pass. `research merge --train --prepare` builds COMMIT's branch.
 #
 # Run it where the parent store key is (the Cursor secrets), from a Verity checkout with `machines.d` for MACHINE. It refuses a
 # temporary credential, which cannot mint the run's custody key, and a shell that skips the store-backed tests.

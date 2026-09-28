@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""`python3 tools/check/slot.py -- CMD...`: CMD in a free merge-check slot of this machine, the way the lander's train checks run.
+"""`python3 tools/check/slot.py [--priority] [--by NAME] -- CMD...`: CMD in a free merge-check slot of this machine, the way the lander's train checks run.
 
 `check.py --record --on MACHINE` starts its check through this, so a lane's own check queues behind the train checks for a slot
 instead of spreading over every core the checks share (vy-nebius-1, 1 Oct: two unslotted checks on 0-127 at load 137).
@@ -25,11 +25,17 @@ before every lane waiter's, so it takes the next slot that frees ahead of the la
 running check, and priority waiters keep their own arrival order. Merges unblock everyone (root, 2 Oct).
 
 `python3 tools/check/slot.py --status`: one line per slot, with who holds its lock (the pid in /proc/locks, when that process
-started, its command) or `free`, and the window that blocks it, if any.
+started, its command) or `free`, and the window that blocks it, if any; then one line per live waiter, a priority one marked
+so. A check that came through here also names its run (RESEARCH_RUN_ID), the tree it checks (its working directory, which
+`research run` names by commit) and who asked (`--by NAME`, else RESEARCH_AGENT_URL): a waiter in its ticket, the holder in
+`check-NAME.who` beside the lock, shown only while its pid holds the lock, so a hand-run `flock` is never shown as the check that
+came before it. A waiting check prints the same lines, the waiters before it only, each time its reason to wait changes, so its
+log says whom it waits behind.
 """
 from __future__ import annotations
 
 import fcntl
+import json
 import os
 import sys
 import time
@@ -115,7 +121,27 @@ def started(pid: int, proc: Path = Path("/proc")) -> datetime | None:
     return datetime.fromtimestamp(btime + ticks / os.sysconf("SC_CLK_TCK"), timezone.utc)
 
 
-def status(slots: list[dict], lock_dir: Path, now: datetime, proc: Path = Path("/proc")) -> list[str]:
+def asker(by: str | None = None) -> dict:
+    """Who asked for a slot: this process, the run it belongs to, the tree it checks and who (--by, else RESEARCH_AGENT_URL)."""
+    return {"pid": os.getpid(), "run": os.environ.get("RESEARCH_RUN_ID"), "tree": os.getcwd(),
+            "by": by or os.environ.get("RESEARCH_AGENT_URL")}
+
+
+def describe(who: dict) -> str:
+    parts = [f"run {who['run']}" if who.get("run") else "", f"tree {Path(who['tree']).name}" if who.get("tree") else "",
+             f"by {who['by']}" if who.get("by") else ""]
+    return ", ".join(p for p in parts if p)
+
+
+def _read(p: Path) -> dict:
+    try:
+        return json.loads(p.read_text() or "{}")
+    except (OSError, ValueError):
+        return {}
+
+
+def status(slots: list[dict], lock_dir: Path, now: datetime, proc: Path = Path("/proc"), before: str | None = None) -> list[str]:
+    """`--status`'s lines; with `before` (a ticket's name), only the waiters that came before it."""
     out = []
     for slot in slots:
         pid, held = holder(lock_dir / f"check-{slot['name']}.lock", proc), "free"
@@ -126,9 +152,32 @@ def status(slots: list[dict], lock_dir: Path, now: datetime, proc: Path = Path("
             except OSError:
                 cmd = "(gone)"
             since = f" since {t:%Y-%m-%dT%H:%MZ} ({(now - t).total_seconds() / 60:.0f} min)" if t else ""
-            held = f"held by pid {pid}{since}: {cmd[:200]}"
+            who = _read(lock_dir / f"check-{slot['name']}.who")
+            held = f"held by pid {pid}{since}" + (f" ({describe(who)})" if who.get("pid") == pid and describe(who) else "") + f": {cmd[:200]}"
         why = blocked(slot, now)
         out.append(f"{slot['name']}  cores {slot['cpus']}  {held}" + (f"; blocked: {why}" if why else ""))
+    line = lock_dir / LINE
+    for p in sorted(line.iterdir()) if line.is_dir() else []:
+        if before is not None and p.name >= before:
+            break
+        if p.name.startswith("."):
+            continue
+        try:
+            fd = os.open(p, os.O_RDONLY)
+        except FileNotFoundError:
+            continue
+        try:
+            fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
+            continue                                                    # nobody holds it: a waiter that died
+        except BlockingIOError:
+            pass
+        finally:
+            os.close(fd)
+        t = datetime.fromtimestamp(int(p.name.lstrip(PRIORITY).split("-")[0]) / 1e9, timezone.utc)
+        who = _read(p)
+        out.append(f"waiting since {t:%Y-%m-%dT%H:%MZ} ({(now - t).total_seconds() / 60:.0f} min)"
+                   + (" with priority" if p.name.startswith(PRIORITY) else "") + f": pid {who.get('pid', p.name.split('-')[-1])}"
+                   + (f" ({describe(who)})" if describe(who) else ""))
     return out
 
 
@@ -136,7 +185,7 @@ def status(slots: list[dict], lock_dir: Path, now: datetime, proc: Path = Path("
 PRIORITY = "!"
 
 
-def join(lock_dir: Path, priority: bool = False) -> tuple[Path, int]:
+def join(lock_dir: Path, priority: bool = False, who: dict | None = None) -> tuple[Path, int]:
     """This waiter's ticket in the line and the descriptor holding its lock; named by arrival (after every priority ticket
     unless it is one), and locked before it is visible."""
     d = lock_dir / LINE
@@ -144,6 +193,8 @@ def join(lock_dir: Path, priority: bool = False) -> tuple[Path, int]:
     name = f"{PRIORITY if priority else ''}{time.time_ns():020d}-{os.getpid()}"
     fd = os.open(d / f".{name}", os.O_RDWR | os.O_CREAT, 0o664)
     fcntl.flock(fd, fcntl.LOCK_EX)
+    if who:
+        os.write(fd, (json.dumps(who) + "\n").encode())
     os.rename(d / f".{name}", d / name)
     return d / name, fd
 
@@ -198,10 +249,10 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
             return 0
         print("\n".join(status(parse(SLOTS.read_text()), SLOTS.parent, now())))
         return 0
-    opts = argv[:argv.index("--")] if "--" in argv else []
-    cmd = argv[argv.index("--") + 1:] if "--" in argv else argv
-    if not cmd or set(opts) - {"--priority"}:
-        sys.exit("usage: slot.py [--priority] -- CMD...")
+    opts, cmd = (argv[:argv.index("--")], argv[argv.index("--") + 1:]) if "--" in argv else ([], argv)
+    by = opts[opts.index("--by") + 1] if "--by" in opts[:-1] else None
+    if not cmd or set(opts) - {"--priority", "--by", by}:
+        sys.exit("usage: slot.py [--priority] [--by NAME] -- CMD...")
     if not SLOTS.exists():
         print(f"slot: no check slots on this machine ({SLOTS}); running unpinned", file=sys.stderr, flush=True)
         os.execvp(cmd[0], cmd)
@@ -214,7 +265,7 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
         print(f"slot: skipping {out}: outside this process's cores", file=sys.stderr, flush=True)
     if not slots:
         sys.exit(f"slot: none of {SLOTS}'s slots is within this process's cores")
-    ticket, tfd = join(SLOTS.parent, priority="--priority" in opts)
+    ticket, tfd = join(SLOTS.parent, priority="--priority" in opts, who=asker(by))
     told = None
     while True:
         slots = usable(reread(slots)) or slots
@@ -226,11 +277,18 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
             "every check slot is taken (" + "; ".join(f"{s['name']}: {blocked(s, now()) or 'busy'}" for s in slots) + ")"
         if why != told:
             print(f"slot: {why}; retrying every {POLL_S} s", file=sys.stderr, flush=True)
+            for ln in status(slots, SLOTS.parent, now(), before=ticket.name):
+                print(f"slot:   {ln}", file=sys.stderr, flush=True)
             told = why
         sleep(POLL_S)
     ticket.unlink()
     os.close(tfd)
     slot, fd = got
+    who = SLOTS.parent / f"check-{slot['name']}.who"
+    tmp = who.with_name(f".{who.name}.{os.getpid()}")
+    tmp.write_text(json.dumps(asker(by)) + "\n")
+    tmp.chmod(0o664)
+    os.replace(tmp, who)
     os.set_inheritable(fd, True)
     os.sched_setaffinity(0, cpulist(slot["cpus"]))
     env = {k: v for k, v in os.environ.items() if k != "LEASE_DIR"}

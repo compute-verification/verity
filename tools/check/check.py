@@ -14,6 +14,7 @@
                                                             (a train that changes a pinned guarantee elsewhere: `train.sh`);
                                                             a warning first when the commit can't land on REF as it is
     uv run python tools/check/check.py --lean-deps-files    the `--send` for those URLs, for `research merge --train`
+    python tools/check/check.py --preflight                 the preflight alone, for `research merge --train --prepare`
     ... [--verdicts-in PACK]                                import the passes another machine stored (`verdicts.py`) before
                                                             the steps; with --record --on, the pack travels with the run
 
@@ -166,6 +167,13 @@ LEAN_DEPS_URLS = "lean-deps-urls.json"
 LEAN_DEPS_URLS_ENV = "CHECK_LEAN_DEPS_URLS"
 #: what a `--record --on` check runs under on the machine: a free check slot's lock and cores (slot.py), from the shipped tree
 SLOT_WRAP = ["python3", "tools/check/slot.py", "--"]
+
+
+def slot_wrap(priority: bool = False) -> list[str]:
+    """SLOT_WRAP naming who asked (RESEARCH_LANE, else RESEARCH_AGENT_URL), which `slot.py --status` on the machine shows, and
+    with --priority for the lander's train checks."""
+    by = os.environ.get("RESEARCH_LANE") or os.environ.get("RESEARCH_AGENT_URL")
+    return [*SLOT_WRAP[:-1], *(["--priority"] if priority else []), *(["--by", by] if by else []), SLOT_WRAP[-1]]
 
 
 def take_lean_deps_urls(out: Path) -> Path | None:
@@ -426,8 +434,7 @@ def record(argv: list[str]) -> int:
         cmd += ["--on", on, "--source", "."]
         if "--verdicts-in" in rest:                    # the pack travels with the run; on the machine it's found in the run's inputs/
             cmd += ["--send", str(Path(rest[rest.index("--verdicts-in") + 1]).resolve())]
-    wrap = [*SLOT_WRAP[:-1], "--priority", SLOT_WRAP[-1]] if priority else SLOT_WRAP
-    cmd += ["--", *(wrap if on else []), *tool.CHECK.command, *rest]
+    cmd += ["--", *(slot_wrap(priority) if on else []), *tool.CHECK.command, *rest]
     try:
         return subprocess.run(cmd, cwd=ROOT, env=env).returncode
     finally:
@@ -591,6 +598,16 @@ def preflight() -> list[tuple[str, list[str] | str, Path]]:
     lock = [uv, "lock", "--check"] if uv else "failed: no `uv` here to check `uv.lock` (run check through `uv run`)"
     return [("preflight-lock", lock, ROOT),
             ("preflight-lints", [sys.executable, "-B", "-m", "pytest", "-q", "-p", "no:cacheprovider", *LINTS], ROOT)]
+
+
+def preflight_only() -> int:
+    """`--preflight`: every preflight step, its output here; 0 when all pass."""
+    failed = []
+    for name, argv, cwd in preflight():
+        ok = not isinstance(argv, str) and subprocess.run(argv, cwd=cwd).returncode == 0
+        print(f"check: {name}: {'passed' if ok else argv if isinstance(argv, str) else 'FAILED'}", flush=True)
+        failed += [] if ok else [name]
+    return 1 if failed else 0
 
 
 def _tree(pid: int) -> list[int]:
@@ -797,6 +814,8 @@ def main(argv: list[str]) -> int:
         return 0
     if argv[:1] == ["--lean-agreement"] and len(argv) == 4:
         return lean_agreement(*map(Path, argv[1:]))
+    if argv == ["--preflight"]:
+        return preflight_only()
     if "--record" in argv:
         if os.environ.get("RESEARCH_RUN_ID"):
             print("check: --record inside a recorded run", file=sys.stderr)
