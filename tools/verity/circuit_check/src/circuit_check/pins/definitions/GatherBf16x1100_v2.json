@@ -1,0 +1,7 @@
+{
+ "definitions": {
+  "GatherBf16x1100_v2": {
+   "and": 18016
+  }
+ }
+}

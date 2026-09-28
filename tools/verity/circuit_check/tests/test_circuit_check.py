@@ -53,6 +53,20 @@ def test_every_registered_definition_is_checked():
     assert not missing, f"registered Definitions no circuit-check binding reaches: {missing}"
 
 
+def test_the_registries_import_every_module_with_a_sidecar_and_key_every_target_on_them():
+    """A Definition module is registered by having a sidecar, not by a line in `targets.py`, so the set of them is in every
+    target's key (`cache.registries`): a new one reruns every target, as a new import line did."""
+    import hashlib
+    import sys
+
+    from circuit_check import cache as CC
+    from circuit_check import sidecars as SC
+
+    assert len(SC.discover()) > 50 and not sorted(set(SC.discover()) - set(sys.modules))
+    want = hashlib.sha256("\n".join(sorted(SC.discover())).encode()).hexdigest()
+    assert CC.key({})["registries"] == want
+
+
 def test_every_operation_is_checked_and_reaches_no_table_outside_the_library():
     """The guard does not visit an operation (`verity.ml.circuits.operations`), so a table an operation reached would be hidden: every
     listed operation has a specialization here, and none reaches a primitive that holds a table the library does not list."""

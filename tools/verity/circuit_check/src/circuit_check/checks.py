@@ -23,7 +23,7 @@
                      Both resolve every parameter leaf, so a Definition over ``partition_max_leaves`` is not partitioned (a
                      warning, ``partition/unchecked``)
     lowering pins    a lowering's AND/XOR/NOT counts against its pin (a piece's, a Boolean Definition's whole lowering's,
-                     a template unit's, in the sidecar of the module that defines it or `pins.json`, `sidecars`; a Boolean
+                     a template unit's, in the sidecar of the module that defines it or its file in ``pins/``, `sidecars`; a Boolean
                      Definition's lowering has at most its own And gates), a template unit's circuit digest against its C-Flock
                      module's `PINS`, and the Boolean export's gate lists checked against the unit circuit
                      (`verity_flock.boolean_export`)
@@ -51,7 +51,7 @@ from . import sidecars as SC
 from .vectors import edge_count, flat, instance_args, vectors
 
 SCHEMA = "verity-circuit-check/v1"
-PINS = Path(__file__).with_name("pins.json")
+PINS = SC.SHARED_PINS
 _EXAMPLES = 3
 _LIMB = (1 << 64) - 1
 
@@ -111,7 +111,7 @@ def _family(t: Any) -> str:
 
 
 def load_pins() -> dict:
-    """Every pin: `PINS`' and each sidecar's (`sidecars.load_pins`)."""
+    """Every pin: those in `PINS` (``pins/``) and each sidecar's (`sidecars.load_pins`)."""
     return SC.load_pins(PINS)
 
 
