@@ -68,17 +68,45 @@ def test_table_free_classes_compose_and_prove(units, tmp_path: Path):
             assert live["coins"] == ("live-os" if os.environ.get("FC_COINS") == "os" else "os-seed-prf")
 
 
-def _fp_class(dtype: str, K: int):
-    import importlib.util
-
+def _gemm_fp():
     spec = importlib.util.spec_from_file_location("gemm_fp", Path(__file__).parents[1] / "pod" / "gemm_fp.py")
     gemm_fp = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(gemm_fp)
+    return gemm_fp
+
+
+def _fp_class(dtype: str, K: int):
     CS.cache_slot_circuits()
-    units = PU.partition_units(gemm_fp.program(dtype, K, 4), "q-word")
+    units = PU.partition_units(_gemm_fp().program(dtype, K, 4), "q-word")
     ((s, cl),) = units.classes().items()
     act, uc = units.activation(cl.definition), cl.representative
     return units, s, cl, act, uc, CS.sources(act, uc, CS.owners_of(units, cl.definition.id))
+
+
+def test_a_partitions_binding_and_owners_are_its_own_when_a_freed_partitions_address_is_reused(monkeypatch):
+    """`partition_binding` and `owners_of` cache per `PartitionUnits` object, so a partition freed while cached leaves no entry
+    that a later partition allocated at its address could read (test_wired_links' flat staging once bound the freed wired
+    partition's digest that way). Two programs alternate, each partition freed after its binding, with every address made
+    one (`id` constant in `class_statement`), so a cache keyed by address reads the other program's entry every time."""
+    import gc
+    import weakref
+
+    from verity.ir import partition_object as PO
+
+    monkeypatch.setattr(CS, "id", lambda o: 0, raising=False)
+    gemm_fp = _gemm_fp()
+    programs = [gemm_fp.program("e4m3", K, 4) for K in (128, 256)]
+    bindings = len(CS._BINDINGS)
+    for i in range(16):
+        units = PU.partition_units(programs[i % 2], "q-word")
+        assert CS.partition_binding(units, "q-word")[0] == PO.digest(PO.build(units.program, units.query))
+        ((_s, cl),) = units.classes().items()
+        assert CS.owners_of(units, cl.definition.id)
+        assert len(CS._BINDINGS) == bindings + 1 and len(CS._OWNERS) == 1
+        gone = weakref.ref(units)
+        del units
+        gc.collect()
+        assert gone() is None and len(CS._BINDINGS) == bindings and not CS._OWNERS
 
 
 @pytest.mark.parametrize("dtype", ["e4m3", "nvf4", "mxf4"])
