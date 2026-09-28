@@ -28,7 +28,7 @@ KEY_PARAMS = ["stage", "row", "role", "model", "revision", "model_tag", "dtype",
               "sampling", "exec", "query", "lp", "t"]
 CONFIG = {"row": ROW, "role": "LLAMA32_1B", "model": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da",
           "model_tag": "llama32-1b", "dtype": "bf16", "hw": "l40s", "tp": 1, "batch": 1, "input": 4096, "output": 512, "arrivals": "mixed",
-          "sampling": "greedy", "exec": "bi-eager", "query": "Q_module_body_v1", "lp": None, "t": None}
+          "sampling": "greedy", "exec": "bi-eager", "query": "Q_word_v1{X=16,W=32,R=no-recompute}", "lp": None, "t": None}
 
 pytestmark = pytest.mark.skipif(not (RESEARCH_SRC / "research" / "store").is_dir() or not RUN_FIXTURE.is_dir(),
                                 reason="needs tools/research/src (research.store) and its run_v0.2 fixture in this checkout")
@@ -213,7 +213,7 @@ def test_attempt_provenance_reproduces_when_the_rerun_cites_the_fixture_row(stor
     assert AP.applies(row) is None
     exp = AP.expected(row)
     assert exp["config"]["model"] == "unsloth/Llama-3.2-1B" and exp["config"]["tp"] == 1 and exp["config"]["batch"] == 1
-    assert exp["config"]["query"] == "Q_module_body_v1" and exp["chain_consistent"] is True
+    assert exp["config"]["query"] == "Q_word_v1{X=16,W=32,R=no-recompute}" and exp["chain_consistent"] is True
     act = AP.actual(row)
     assert resolver.diff(exp, act) == [], resolver.diff(exp, act)
     assert act["chain_problems"] == [] and act["stages"]["match"]["inputs"] == {"build": store["arts"]["build"]}

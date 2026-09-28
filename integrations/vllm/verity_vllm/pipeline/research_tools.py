@@ -10,7 +10,7 @@ Rules encoded here (Phase 5a of the v2 plan):
 
 * ``key_params`` is the row configuration — model id, dtype, hw family, tp,
   batch, input/output lengths, arrival mix, sampling, execution mode, the
-  verification query id (default ``Q_module_body_v1``) — plus the
+  verification query id (default the query of record, ``Q_word_v1{X=16,W=32,R=no-recompute}``) — plus the
   stage-specific flags that change the stage's *outputs*.  RETAIN mode,
   window sizing, GPU utilisation, hot-engine toggles etc. are footprint /
   schedule knobs: recorded as params, **not** key params.
@@ -37,7 +37,7 @@ from typing import Any
 
 from research.store.tool import Tool
 
-DEFAULT_QUERY = "Q_module_body_v1"
+DEFAULT_QUERY = "Q_word_v1{X=16,W=32,R=no-recompute}"
 DEFAULT_PY = "/workspace/venv312/bin/python"
 
 COMMAND = ["verity-vllm", "row", "stage"]
