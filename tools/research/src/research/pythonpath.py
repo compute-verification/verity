@@ -224,6 +224,18 @@ def shim_dir(root: str | os.PathLike[str], packages: list[str], base: str | os.P
     return str(d)
 
 
+def shim_packages(d: str | os.PathLike[str], root: str | os.PathLike[str]) -> list[str] | None:
+    """The packages of `d` when it is a shim of `root` (what `shim_dir(root, packages)` builds: a directory of links, each to `root`'s
+    entry of its name), sorted; None for anything else.  The shim is not under `root`, but what it imports is."""
+    tree = os.path.realpath(root)
+    try:
+        names = sorted(os.listdir(d))
+        links = all(os.path.islink(p := os.path.join(d, n)) and os.path.realpath(p) == os.path.join(tree, n) for n in names)
+    except OSError:
+        return None
+    return names if names and links else None
+
+
 def pythonpath(root: str, derived: dict, extra: str | None = None, shim_base: str | os.PathLike[str] | None = None) -> str:
     """`root`-absolute roots joined with ':', then `extra` (the user's own PYTHONPATH) appended; the tree's shim (`shim_dir`, under
     `shim_base`) first when the workspace root is itself a package."""

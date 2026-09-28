@@ -123,14 +123,6 @@ noncomputable def pearlCProtocol (sem : PearlCSem Q R S) (c : Costs) (ρ : ℚ) 
     debitOf Params.pi c (sem.unitDebit H s U u act) ≤ ρ * creditOf Params.pi c (U.layout.shape u)
   Wref := fun L u => (wrefOf Params.pi c (L.shape u) : ℝ)
 
-theorem pearlCProtocol_accounting (sem : PearlCSem Q R S) (c : Costs) (ρ : ℚ) :
-    PearlCAccounting (pearlCProtocol sem c ρ) Params.pi c ρ := by
-  refine ⟨fun _ _ => rfl, fun H s U u act h => ?_⟩
-  show (((1 - ρ) * creditOf Params.pi c (U.layout.shape u) : ℚ) : ℝ) ≤
-    ((creditOf Params.pi c (U.layout.shape u) - debitOf Params.pi c (sem.unitDebit H s U u act) : ℚ) : ℝ)
-  have h' : debitOf Params.pi c (sem.unitDebit H s U u act) ≤ ρ * creditOf Params.pi c (U.layout.shape u) := h
-  exact_mod_cast (by linarith)
-
 /-- **The named error** `ε(q, N) = (q + N)·2^−128`. Each of the `q` oracle calls, preprocessing included, yields at
 most one fresh noise draw, and each of the `N` declared units has its own E_A draw (keyed by the unit's index; F_A, F_B
 and E_B are per job, shared by the job's units). The conjecture is that a draw on which some program undercuts that

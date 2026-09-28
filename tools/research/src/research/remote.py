@@ -46,11 +46,11 @@
                     `source/SUB`, or a relative SUB) runs it inside the tree instead, an explicit opt-in; `--cwd clone` (or `clone/SUB`)
                     in the run's own `git clone --shared` of the tree at <root>/scratch/<run-id>/tree, checked to be the shipped commit
                     and removed when the workload exits (research/clone.py), so nothing one run does there reaches another's; its
-                    PYTHONPATH entries under the tree move into the clone too (cli._clone_imports); job.json records run.cwd and
-                    run.cwd_basis (and run.cwd_clone).  The launcher refuses `--cwd clone` for a tree shipped without git or a package
-                    that predates it.  Python bytecode goes to <root>/cache/pycache (PYTHONPYCACHEPREFIX), not into the tree; a clone's
-                    goes beside the clone.  A tree whose own research package predates this runs its workloads in the tree; the launcher says
-                    so (remote.json workload_cwd).
+                    PYTHONPATH entries under the tree, and the tree's shim, move into the clone too (cli._clone_imports); job.json
+                    records run.cwd and run.cwd_basis (and run.cwd_clone).  The launcher refuses `--cwd clone` for a tree shipped
+                    without git or a package that predates it.  Python bytecode goes to <root>/cache/pycache (PYTHONPYCACHEPREFIX), not
+                    into the tree; a clone's goes beside the clone.  A tree whose own research package predates this runs its workloads
+                    in the tree; the launcher says so (remote.json workload_cwd).
     claim           `research launch-request` on the machine does mkdir(<root>/runs/<run-id>) as the claim, then starts the detached
                     runner.  Re-delivering the same request finds the directory and reports its state; it never starts a second workload.
                     Each delivery holds flock(<root>/requests/<run-id>/.launch.lock) until it has answered, so a re-delivery (an ssh drop,
@@ -1833,6 +1833,27 @@ def fetch(local_dir: Path, *, everything: bool = False) -> dict[str, Any]:
             rec["fetched_marker"] = _mark_fetched(ssh, rd, local_dir, manifest)
     write_json_atomic(local_dir / "remote.json", rec)
     return rec
+
+
+def scope_memory(local_dir: Path) -> list[dict[str, Any]]:
+    """The run's memory in the cgroups it executes in on the machine (research.scopemem, sent as `python3 -` over fetch's ssh)."""
+    from . import scopemem
+
+    rec = _read_json(local_dir / "remote.json")
+    if not rec or not rec.get("remote_run_dir"):
+        raise Refused(f"{local_dir} is not a launched remote run")
+    ssh = ssh_argv(rec["host"], rec["port"], user=rec.get("user") or "root")
+    try:
+        r = ssh_run(ssh, ["python3", "-", rec["remote_run_dir"]], stdin=Path(scopemem.__file__).read_bytes(), timeout=60)
+    except subprocess.TimeoutExpired:
+        raise Refused(f"reading its cgroups on {rec.get('machine')} took over 60 s") from None
+    try:
+        out = json.loads(r.stdout) if r.returncode == 0 else None
+    except ValueError:
+        out = None
+    if not isinstance(out, list):
+        raise Refused(f"reading its cgroups on {rec.get('machine')}: rc {r.returncode} {r.stderr.decode(errors='replace').strip()[-200:]}")
+    return out
 
 
 def cancel(local_dir: Path, *, reason: str, by: str) -> dict[str, Any]:

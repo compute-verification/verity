@@ -64,7 +64,8 @@ def _connect(machine: str, project: str | None = None) -> tuple[dict[str, Any], 
 def _node(m: dict[str, Any], ssh: list[str], argv: list[str], stdin: bytes | None = None) -> Any:
     """`vy-keeper ARGV` on the node: its JSON answer; Refused with its refusal, or its stderr when it gave none."""
     try:
-        r = remote.ssh_run(ssh, [m["python"], NODE_KEEPER, *argv], stdin=stdin, timeout=120)
+        # an ssh session doesn't carry the KEEPER_NODE that vy-keeper.service sets, and set refuses without it
+        r = remote.ssh_run(ssh, ["env", f"KEEPER_NODE={m['name']}", m["python"], NODE_KEEPER, *argv], stdin=stdin, timeout=120)
     except subprocess.TimeoutExpired:
         raise remote.Refused(f"`vy-keeper {argv[0]}` on {m['name']} gave no answer in 120 s; it may still apply once the node's lock "
                              f"frees (`research keeper status --on {m['name']}` says)") from None

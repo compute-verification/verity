@@ -574,14 +574,20 @@ def _clone_imports(of: Path, tree: Path, home: Path, remote_info: dict | None) -
     """A machine's runner has the shipped tree's import roots on PYTHONPATH (launch_request), so the workload would import its code
     from the shared tree: a write beside a module's __file__ would land there, and the run would execute that tree's files, whatever
     another run left in them, while the record describes the clean clone.  Each entry under `of` is moved to the same directory in
-    the clone (run.remote.pythonpath too), and bytecode goes beside the clone: under <root>/cache/pycache every clone path would add
-    its own copies, never removed.  Locally the workload imports from whatever its interpreter has installed (an editable install
-    points at the invoking checkout); nothing is moved."""
+    the clone, and `of`'s shim (`pythonpath.shim_packages`: <root>/cache/pyshim/<key>, outside `of` but linking into it, so
+    `import verity` reached the shared tree) is replaced by a shim of the clone under `home`, removed with it; in place,
+    run.remote.pythonpath too.  Bytecode goes beside the clone: under <root>/cache/pycache every clone path would add its own
+    copies, never removed.  Locally the workload imports from whatever its interpreter has installed (an editable install points
+    at the invoking checkout); nothing is moved."""
+    from .pythonpath import shim_dir, shim_packages
+
     base = os.path.realpath(of)
 
     def move(p: str) -> str:
         real = os.path.realpath(p)
-        return str(tree / os.path.relpath(real, base)) if real == base or real.startswith(base + os.sep) else p
+        if real == base or real.startswith(base + os.sep):
+            return str(tree / os.path.relpath(real, base))
+        return shim_dir(tree, pkgs, home / "pyshim") if (pkgs := shim_packages(p, base)) else p
 
     if remote_info is not None and remote_info.get("pythonpath"):
         remote_info["pythonpath"] = [move(p) for p in remote_info["pythonpath"]]
@@ -1176,7 +1182,8 @@ def cmd_status(argv: list[str]) -> int:
     ap.add_argument("--runs-dir", default=None)
     ap.add_argument("--on", default=None, metavar="NAME", help="with RUN another VM launched: look for it on this machine only")
     ap.add_argument("--all", action="store_true", help="every run, not just the last 20")
-    ap.add_argument("--refresh", action="store_true", help="fetch the records of every non-terminal remote run first")
+    ap.add_argument("--refresh", action="store_true", help="fetch the records of every non-terminal remote run first, and read each "
+                                                          "active one's memory on its machine (research.scopemem)")
     ap.add_argument("--balance", action="store_true", help="show the provider's account ledger (balance, spend limit, current $/h) with its observation time")
     ap.add_argument("--json", action="store_true")
     ns = ap.parse_args(argv)
@@ -1208,6 +1215,20 @@ def cmd_status(argv: list[str]) -> int:
     rows = [R.summarize(one)] if one else R.list_runs(root)
     if not ns.all:
         rows = rows[-20:]
+    from . import scopemem
+
+    unread = 0
+    for s in rows:
+        rr = s.get("remote_rec")
+        if s["state"] not in R.ACTIVE or (rr and not rr.get("remote_run_dir")):
+            continue
+        if rr and not (ns.refresh or one):
+            unread += 1
+            continue
+        try:
+            s["scope_memory"] = remote.scope_memory(Path(s["dir"])) if rr else scopemem.reading(Path(s["dir"]))
+        except remote.Refused as e:
+            s["scope_memory_error"] = str(e)
     if ns.json:
         print(json.dumps({"runs_root": str(root), "runs": rows, "ledger": ledger}, indent=2, sort_keys=True))
         return 0
@@ -1223,9 +1244,14 @@ def cmd_status(argv: list[str]) -> int:
     print(f"{'run':<24} {'state':<10} {'rc':>3}  {'class':<22} {'res':<4} {'valid':<8} {'project':<10} {'where':<11} {'stage':<16} command")
     for s in rows:
         print(_fmt(s))
+        for m in s.get("scope_memory") or []:
+            print(f"{'':<26}mem  {scopemem.render(m)}")
+        if s.get("scope_memory_error"):
+            print(f"{'':<26}mem  unread: {s['scope_memory_error']}")
     active = sum(1 for s in rows if s["state"] in R.ACTIVE)
     unfetched = sum(1 for s in rows if s.get("remote_rec") and not s["has_job"] and s["state"] != "refused")
-    print(f"\n{len(rows)} shown ({active} active" + (f", {unfetched} remote not yet fetched: `research status --refresh`" if unfetched else "") + f") under {root}"
+    print(f"\n{len(rows)} shown ({active} active" + (f", {unfetched} remote not yet fetched: `research status --refresh`" if unfetched else "")
+          + (f", memory of {unread} active remote run(s): `--refresh` or `research status RUN`" if unread else "") + f") under {root}"
           f"   res: result.json ok/BAD/-absent   valid: the workload's own checker")
     return 0
 

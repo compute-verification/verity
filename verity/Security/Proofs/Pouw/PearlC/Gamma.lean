@@ -1,5 +1,7 @@
 import Specs.Pouw.Assumptions.PearlC.TTOut
 import Proofs.Pouw.Prob
+import Proofs.Pouw.PearlC.Game
+import Proofs.Pouw.PearlC.Instance
 import Mathlib.Algebra.BigOperators.Ring.Finset
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
 import Mathlib.Tactic.Linarith

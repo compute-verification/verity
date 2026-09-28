@@ -211,10 +211,6 @@ debited element. -/
 def debitOf (p : Params) (c : Costs) (d : Debit) : ℚ :=
   (32 + (if p.G = 0 then 0 else 32 / p.G)) * d.atoms + (c.fs : ℚ) * d.elems
 
-theorem debitOf_nonneg (p : Params) (c : Costs) (d : Debit) : 0 ≤ debitOf p c d := by
-  unfold debitOf
-  split_ifs <;> positivity
-
 /-- The honest reference's work: the credited work plus the forming that depends on the activations alone. Neither this
 nor `creditOf` has a weight-side term (`B̃·F_A`, `P_B`, the forming of B̃), whether that work runs per call or once per
 weight and epoch, so a verifier's `W_ref` and its draw's tickets must use exactly `wrefOf` (the red team's F2). -/

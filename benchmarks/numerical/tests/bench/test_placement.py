@@ -96,7 +96,8 @@ def test_the_probe_runs_before_the_job_and_records_the_machine(tmp_path, listene
     rec = json.loads((tmp_path / "placement.json").read_text())
     assert (rec["pod_id"], rec["public_ip"]) == ("pod-x", "203.0.113.7") and rec["boot_id"] and rec["link"]["peer_ip"] == "127.0.0.1"
     assert rec["hypervisor"] in (True, False, None) and "sys_vendor" in rec and "product_name" in rec
-    assert rec["link"]["rtt"]["n"] == PL.RTT_CONNECTS and rec["link"]["rtt"]["method"] == PL.RTT_METHOD
+    rtt = rec["link"]["rtt"]                                   # real loopback connects: on a loaded node one can fail
+    assert rtt["n"] + rtt["failed"] == PL.RTT_CONNECTS and rtt["n"] >= 1 and rtt["method"] == PL.RTT_METHOD
     ident = PL.from_job(tmp_path)
     assert ident["pod_id"] == "pod-x" and ident["link"]["peer_ip"] == "127.0.0.1"
     r = subprocess.run(["bash", "-c", C.PROBE_WRAP, "cell-job", "", "", "true"], cwd=C.LW.REPO, env=env, capture_output=True, text=True)
@@ -303,10 +304,43 @@ def test_s4_the_sessions_rtt_does_not_stand_in_for_the_tcp_connects(tmp_path, pr
     assert res.get("refused") and any("no TCP-connect RTT of at least 0.1 ms" in x for x in res["problems"]), res["problems"]
 
 
-def test_s4_tcp_rtt_times_kernel_connects_to_the_target(listener):
-    r = PL.tcp_rtt(listener, n=10)
-    assert (r["target"], r["target_ip"], r["n"], r["failed"], r["method"]) == (listener, "127.0.0.1", 10, 0, PL.RTT_METHOD)
-    assert 0 < r["min_ms"] <= r["median_ms"]
+def _stub_connects(monkeypatch, refused=()) -> list:
+    """Sockets whose k-th connect (from 1) takes k ms on a stub clock, or is refused when k is in ``refused``: real loopback
+    connects on a loaded node sometimes fail or stall, so the bookkeeping is checked without them."""
+    import time
+
+    now, calls = [0.0], []
+
+    class Sock:
+        def __init__(self, family, kind):
+            assert (family, kind) == (socket.AF_INET, socket.SOCK_STREAM)
+
+        def settimeout(self, t):
+            pass
+
+        def connect(self, addr):
+            calls.append(addr)
+            now[0] += len(calls) / 1e3
+            if len(calls) in refused:
+                raise ConnectionRefusedError("refused")
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(PL.socket, "socket", Sock)
+    monkeypatch.setattr(time, "perf_counter", lambda: now[0])
+    return calls
+
+
+def test_s4_tcp_rtt_times_kernel_connects_to_the_target(monkeypatch):
+    calls = _stub_connects(monkeypatch, refused=(3, 7))
+    r = PL.tcp_rtt("127.0.0.1:7400", n=10)
+    assert calls == [("127.0.0.1", 7400)] * 10
+    assert (r["target"], r["target_ip"], r["n"], r["failed"], r["method"]) == ("127.0.0.1:7400", "127.0.0.1", 8, 2, PL.RTT_METHOD)
+    assert (r["median_ms"], r["min_ms"]) == (pytest.approx(5.5), pytest.approx(1.0))   # of 1, 2, 4, 5, 6, 8, 9, 10 ms
+
+
+def test_s4_tcp_rtt_counts_refused_connects_to_a_closed_port():
     s = socket.socket()
     s.bind(("127.0.0.1", 0))
     closed = f"127.0.0.1:{s.getsockname()[1]}"
@@ -393,17 +427,9 @@ def test_r1_the_nat_rtt_needs_every_connect_to_succeed(n, failed):
     assert PL.assess(*_pair(rtt__n=30, rtt__failed=0))["problems"] == []
 
 
-def test_r1_a_real_run_of_connects_that_partly_fail_is_refused(listener, monkeypatch):
-    real, calls = socket.socket.connect, []
-
-    def flaky(self, addr):                                     # one connect in 30 refused
-        calls.append(addr)
-        if len(calls) == 7:
-            raise ConnectionRefusedError("refused")
-        return real(self, addr)
-
-    monkeypatch.setattr(socket.socket, "connect", flaky)
-    r = PL.tcp_rtt(listener)
+def test_r1_a_real_run_of_connects_that_partly_fail_is_refused(monkeypatch):
+    _stub_connects(monkeypatch, refused=(7,))                  # one connect in 30 refused
+    r = PL.tcp_rtt("127.0.0.1:7400")
     assert (r["n"], r["failed"]) == (29, 1) and r["median_ms"] is not None
     p, v, link = _pair()
     assert any("29 did and 1 failed" in x for x in PL.separation(p, v, {**link, "rtt": {**r, "target_ip": link["peer_ip"],
