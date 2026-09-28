@@ -111,6 +111,17 @@
    "assumptions": [],
    "type_hash": "00000000df3a73f7"
   },
+  "Flock.mkRegion_ok": {
+   "signature": [
+    "Flock.mkRegion_ok {kl : Nat} {name : String} {free : Array Nat} {fixed : Nat} {bytes : Nat → ByteArray}",
+    "  {r : Flock.Region} (h : Eq (Flock.mkRegion kl name free fixed bytes) (Except.ok r)) :",
+    "  And (Eq r.free free)",
+    "    (And free.toList.Nodup",
+    "      (And (instLENat.le free.size Flock.PT_LOCAL) (∀ (b : Nat), Array.instMembership.mem free b → instLTNat.lt b kl)))"
+   ],
+   "assumptions": [],
+   "type_hash": "000000005195ccef"
+  },
   "Flock.opens_binding": {
    "signature": [
     "Flock.opens_binding (ms : Flock.MerkleScheme) (hs : ms.Sized) (cap : Array ByteArray) (c d lanes pos : Nat)",

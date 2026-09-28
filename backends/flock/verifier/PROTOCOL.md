@@ -872,7 +872,9 @@ circuit correct against its reference function (the lowering theorem).
 ### 16.2 Region claims
 
 A region is a set of witness bits in every block whose values the verifier knows. It is given by `free` (up to `PT_LOCAL`
-in-block bit positions, LSB first) and a fixed assignment of the other in-block bits (`mask`, `fixed`). For a link point
+distinct in-block bit positions, LSB first) and a fixed assignment of the other in-block bits (`mask`, `fixed`). The
+verifier refuses a statement one of whose regions repeats a free bit: the pinned bound assumes them distinct
+(`Statement.LinkLayout`), and a region built from two bit ranges that overlap would otherwise pass. For a link point
 `r ∈ F^{m_pts}` the claim is:
 
 ~~~text

@@ -336,6 +336,23 @@ def test_merkle_collision_is_not_met_by_a_split_string(tmp_path):
         assert p.returncode != 0 and "decide" in p.stdout + p.stderr, (goal, p.stdout[-800:])
 
 
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_region_refuses_a_repeated_free_bit(tmp_path):
+    """`mkRegion` refuses a region whose free bits repeat, since the pinned table-soundness theorems assume them distinct
+    (`Statement.LinkLayout`); a repeat would pass the other checks and be covered by none (PR #278's red-team review).
+    Two ranges of free bits that overlap in one bit, as `bits 0 w ++ bits slotLog c` do when `slotLog < w`, are refused."""
+    subprocess.run(["lake", "build", "Flock"], cwd=LEAN, check=True, capture_output=True)
+    f = tmp_path / "Region.lean"
+    f.write_text("import Flock\nopen Flock\n"
+                 "def verdict (free : Array Nat) : String :=\n"
+                 "  match mkRegion 20 \"r\" free 0 fun _ => .empty with | .ok r => s!\"ok {r.free}\" | .error e => e\n"
+                 "#eval verdict #[3, 9, 3]\n#eval verdict (#[0, 1, 2] ++ #[2, 3])\n#eval verdict #[3, 9, 4]\n")
+    p = subprocess.run(["lake", "env", "lean", str(f)], cwd=LEAN, capture_output=True, text=True)
+    assert p.returncode == 0, p.stdout + p.stderr
+    repeat = '"r: a free bit repeats; a region\'s free bits are distinct"'
+    assert p.stdout.split("\n")[:3] == [repeat, repeat, '"ok #[3, 9, 4]"'], p.stdout
+
+
 TOY_EXTRACTOR = r"""import FlockProofs
 open Flock
 
