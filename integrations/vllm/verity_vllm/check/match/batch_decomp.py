@@ -808,7 +808,7 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
                 ent["criterion"] = "dag-multiset over the live cone (chunked prefill)"
             elif not seq_equal and not diff and within_step == "dag":
                 ent["criterion"] = "dag-multiset over the live cone (within-step criterion of record, COORD M-0177; sequence differs)"
-        ent["canonical_equal"] = seq_equal or (ent.get("dag_multiset_equal") is True and (chunked or within_step == "dag"))
+        ent["canonical_equal"] = (seq_equal or (ent.get("dag_multiset_equal") is True and (chunked or within_step == "dag"))) and (cmp.get("splits_values") or {}).get("equal", True)
         ent["totals"] = cmp["totals"]
         ent["a_steps"], ent["b_steps"] = cmp["a"]["steps"], cmp["b"]["steps"]
         bad = [s for s in cmp["steps"] if not s["spec_seq_equal"] or (s.get("wiring") or {}).get("operands_different")]

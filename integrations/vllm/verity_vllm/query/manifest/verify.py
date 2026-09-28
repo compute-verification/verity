@@ -100,14 +100,14 @@ class Options:
     profile: str | None = option("--profile", default=None)
     rank: int = option("--rank", type=int, default=0)
     ranks: int = option("--ranks", type=int, default=1)
-    norm_scales: bool = option("--norm-scales", default=False, action="store_true",
-                               help="rebuild under the norm-scale policy (the row runs NORM_TAP=1; opt-in, never the record)")
-    guarded_max: bool = option("--guarded-max", default=False, action="store_true",
-                               help="rebuild under the guarded-max policy (the row runs GUARDED_MAX_TAP=1; opt-in, never the record)")
-    router_softmax: bool = option("--router-softmax", default=False, action="store_true",
-                                  help="rebuild under the router-softmax policy (the row runs ROUTER_TAP=1; opt-in, never the record)")
-    vocab_range: bool = option("--vocab-range", default=False, action="store_true",
-                               help="rebuild under the vocabulary-range policy (the row runs VOCAB_TAP=1; opt-in, never the record)")
+    norm_scales: bool = option("--norm-scales", default=True, action="boolean_optional",
+                               help="rebuild under the norm-scale policy (on by default; --no-norm-scales when the row ran NORM_TAP=0, for A/B only)")
+    guarded_max: bool = option("--guarded-max", default=True, action="boolean_optional",
+                               help="rebuild under the guarded-max policy (on by default; --no-guarded-max when the row ran GUARDED_MAX_TAP=0, for A/B only)")
+    router_softmax: bool = option("--router-softmax", default=True, action="boolean_optional",
+                                  help="rebuild under the router-softmax policy (on by default; --no-router-softmax when the row ran ROUTER_TAP=0, for A/B only)")
+    vocab_range: bool = option("--vocab-range", default=True, action="boolean_optional",
+                               help="rebuild under the vocabulary-range policy (on by default; --no-vocab-range when the row ran VOCAB_TAP=0, for A/B only)")
     query: str | None = option("--query", default=None, help="the query to rebuild under (default: the query of record; Q_module_body_v1 for A/B only)")
     out: str | None = option("--out", default=None, help="write the verification record (json)")
 

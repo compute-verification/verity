@@ -38,6 +38,13 @@ def test_the_lowerings_pins_agree_with_the_library():
             assert TP.table_sha256(name) == L.table(name).sha256
 
 
+def test_the_lean_library_list_is_cores():
+    """`Flock/Library.lean`'s `LIBRARY_TABLES`, which labels tables in `Flock/CircuitType.lean`, is core's list."""
+    text = (LOOKUP_LEAN.parent / "Library.lean").read_text()
+    rows = re.findall(r'⟨"(\w+)",\s*"([0-9a-f]{128})",\s*(\d+),\s*(\d+)⟩', text)
+    assert [(n, s, int(i), int(v)) for n, s, i, v in rows] == [(t.name, t.sha512, t.index_bits, t.value_bits) for t in L.TABLES]
+
+
 def test_derived_tables_stay_program():
     assert {"tanh_rn", "gelu_tanh_bf16"} <= set(TP.TABLE_SHA256)
     for name in ("tanh_rn", "gelu_tanh_bf16"):

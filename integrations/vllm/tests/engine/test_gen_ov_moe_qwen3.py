@@ -5,7 +5,7 @@ What is proved here, CPU only (no rank log exists yet -- R17's Qwen3 TP2 rank lo
     `lane/r17-tp` .../r17int9/build_summary.json `tp.sharded_params.by_class`, transcribed below) and the fold's `weights` parameter has the
     Build's element count (+ the rotary table);
   * on synthetic `vllm.moe_forward` scope events at the RANK shapes (E=128, TOPK=8, H=2048, I_r=384; the recorded kernel bodies of the
-    OLMoE capture with Qwen3's `renormalize=True`) the scope folds to the six-part pair-major Group over `MoeRouterTopKNorm_v1{128,8,8}`,
+    OLMoE capture with Qwen3's `renormalize=True`) the scope folds to the six-part pair-major Group over `MoeRouterTopKOrderedNorm_v1{128,8,8}`,
     `MoeExpertGemm_v1{128,2048,768}`, `SiluMul_v1{384}`, `MoeExpertGemmW_v1{128,384,2048}`, `MoeSum_v1{8,2048}` -- with the block's TP
     all-reduce resolved as `AllReduce2_v1{N=2048}` whether vLLM issues it inside the scope or after it -- and refuses, with the observed
     value, an unnormalised router, another tiling, the padded construction, a shared-experts input;
@@ -61,7 +61,7 @@ def test_rank_profile_states_the_shard_configuration_and_the_rank_patterns():
     assert C["BIAS"] is False and C["tie_word_embeddings"] is False and C["QK_NORM"] == "head" and C["NORM_TOPK_PROB"] is True and C["BN"] == 64
     assert C["MOE_I_FULL"] == 768 and C["EPS"] == 1e-6 and C["ROPE_THETA"] == 1e6
     names = [type(x).__name__ for x in Q3.PROFILE.patterns]
-    assert names[:4] == ["EmbeddingShardCuda", "TpCollective", "GemmLaunchTuned", "MoEFusedExperts"], names[:5]
+    assert names[:4] == ["EmbeddingShardCuda", "TpCollective", "GemmLaunchTuned", "MoEFusedExpertsOrdered"], names[:5]
     assert type(Q3.PROFILE.patterns[0]) is EmbeddingShardCuda and Q3.PROFILE.patterns[1].world == 2
     moe = Q3.PROFILE.patterns[3]
     assert moe.renormalize is True and moe.config is C and len(moe.scope_patterns) == 1 and isinstance(moe.scope_patterns[0], TpCollective)
@@ -129,7 +129,7 @@ def test_tp1_profile_is_the_same_module_at_world_one():
     c1 = p1.config
     assert (c1["NH"], c1["KVH"], c1["I"], c1["V"], c1["QKV"], c1["NUM_EXPERTS"]) == (32, 4, 768, 151936, 5120, 128)
     names = [type(x).__name__ for x in p1.patterns]
-    assert names[:2] == ["GemmLaunchTuned", "MoEFusedExperts"] and "TpCollective" not in names and "EmbeddingShardCuda" not in names
+    assert names[:2] == ["GemmLaunchTuned", "MoEFusedExpertsOrdered"] and "TpCollective" not in names and "EmbeddingShardCuda" not in names
     assert p1.patterns[1].scope_patterns == () and p1.patterns[1].renormalize is True
     assert p1.id != Q3.PROFILE.id and "tp" not in p1.id
 
@@ -279,7 +279,7 @@ def _resolve(M: int, profile=None, **kw):
     return resolve_step(se, _ctx(start, profile)), se
 
 
-EXPECTED_SPECS = [f"MoeRouterTopKNorm_v1{{E={E},TOPK={TOPK},VPT=8}}", f"MoeExpertGemm_v1{{E={E},K={H},N={2 * I}}}", f"SiluMul_v1{{I={I}}}",
+EXPECTED_SPECS = [f"MoeRouterTopKOrderedNorm_v1{{E={E},TOPK={TOPK},VPT=8}}", f"MoeExpertGemm_v1{{E={E},K={H},N={2 * I}}}", f"SiluMul_v1{{I={I}}}",
                   f"MoeExpertGemmW_v1{{E={E},K={I},N={H}}}", f"MoeSum_v1{{TOPK={TOPK},H={H}}}"]
 
 
@@ -296,7 +296,7 @@ def test_rank_scope_folds_to_the_renormalising_pair_major_group_plus_the_block_a
     assert specs == EXPECTED_SPECS + in_scope, specs
     assert [c.rows for c in computes[:5]] == [M, M * TOPK, M * TOPK, M * TOPK, M]
     router, up, silu, down, msum = computes[:5]
-    assert router.spec.name == "MoeRouterTopKNorm" and router.outputs[0].view.dtype == "float32" and router.outputs[1].view.dtype == "int32"
+    assert router.spec.name == "MoeRouterTopKOrderedNorm" and router.outputs[0].view.dtype == "float32" and router.outputs[1].view.dtype == "int32"
     assert up.operands[0].indices == tuple(p // TOPK for p in range(M * TOPK)) and up.operands[2].view.shape == (E, 2 * I, H)
     assert down.operands[3].view.shape == (E, H, I) and down.operands[2].view.alloc == router.outputs[0].view.alloc
     assert msum.outputs[0].view.shape == (M, H)
@@ -344,7 +344,7 @@ def test_padded_construction_refuses_under_the_renormalising_router():
     res, _ = _resolve(2, profile=p)
     bad = [r for r in res if isinstance(r, Unsupported)]
     assert bad and "renormalize=True" in bad[0].reason and "MoeFfnFixedL" in bad[0].reason
-    assert Q3.with_moe_construction(Q3.PROFILE, None) is Q3.PROFILE and Q3.with_moe_construction(Q3.PROFILE, "indexed-read") is Q3.PROFILE
+    assert Q3.with_moe_construction(Q3.PROFILE, None) is Q3.PROFILE and Q3.with_moe_construction(Q3.PROFILE, "indexed-read-ordered") is Q3.PROFILE
 
 
 def test_olmoe_profile_is_unchanged_by_the_renormalize_and_scope_pattern_fields():

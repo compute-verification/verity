@@ -10,7 +10,7 @@ sha2 = { workspace = true }
 serde = { workspace = true }
 serde_json = "1"
 # The Aeneas-translatable restructuring of the validator and interpreter
-# (zk/sp1/check-model), tested against this crate in tests/model.rs.
+# (backends/sp1/check-model), tested against this crate in tests/model.rs.
 veritor-check-model = { path = "../check-model", features = ["debug"] }
 
 [features]
@@ -30,7 +30,7 @@ lean-plan-bridge = []
 # accept openings it did not authenticate, so the achievable cycle floor of
 # the authentication pass can be measured.  A build with either feature
 # announces itself on stdout and commits a verdict byte (0xEE / 0xEF) that no
-# sound verifier accepts; see `public_values` and zk/sp1/README.md.
+# sound verifier accepts; see `public_values` and backends/sp1/README.md.
 #
 # Skip the leaf hashing and the path folding entirely (values are still
 # decoded, public inputs still compared, gates still recomputed).

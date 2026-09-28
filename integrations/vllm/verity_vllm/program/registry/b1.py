@@ -979,7 +979,7 @@ ALL_COMPOSITES = [DotBf16, GemmCoordinate, Gemm, BiasAdd, ResidualAdd, RMSNormTr
 # (the statics) changed; every v1 definition stays registered and untouched (registry version discipline).
 #
 # statics introduced
-#   DOT        the k16 tensor-core accumulator step: AmpereBF16TcDot16_v1 (mma.sync m16n8k16) | HopperBF16WgmmaDot16_v1 (wgmma)
+#   DOT        the k16 tensor-core accumulator step: AmpereBF16TcDot16_v2 (mma.sync m16n8k16) | HopperBF16WgmmaDot16_v1 (wgmma)
 #   BN         kBlockN of the attention kernel: 64 (FA2 hdim128 sm_80) | 128 (FA3 tile_size_fwd_sm90 hdim128 causal)
 #   INV        the softmax-epilogue inverse sum: Fa2InvSum_v1 ((sum==0||NaN) ? 1 : rcp) | Fa3InvSum_v1 (... ? 0 : rcp)
 #   GEMM       {"DOT": <prim>}                                   the linear layers' implementation record

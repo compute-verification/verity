@@ -64,7 +64,7 @@ SELECTION_SOURCE = b"verity-vllm benchmark selection"
 
 NOT_EXPORTED = {"Embedding_v1": "a commitment opening of the embedding table (spec), not a subcircuit"}
 
-_DOT_SLUG = {"AmpereBF16TcDot16_v1": "ampere-bf16", "HopperBF16WgmmaDot16_v1": "hopper-bf16-wgmma", "HopperE4m3QgmmaDot32_v1": "hopper-e4m3"}
+_DOT_SLUG = {"AmpereBF16TcDot16_v2": "ampere-bf16", "HopperBF16WgmmaDot16_v1": "hopper-bf16-wgmma", "HopperE4m3QgmmaDot32_v1": "hopper-e4m3"}
 _WORD = {1: ("u8", np.uint8), 2: ("u16", np.uint16), 4: ("u32", np.uint32), 8: ("u64", np.uint64)}
 
 
@@ -176,7 +176,7 @@ def _one(out: dict[str, np.ndarray]) -> np.ndarray:
 
 def _gemm_dot(fam: str, st: dict[str, Any]) -> tuple[str, Callable]:
     if fam == "Gemm_v1":
-        return "AmpereBF16TcDot16_v1", D.dot_bf16
+        return "AmpereBF16TcDot16_v2", D.dot_bf16
     dot_id = RK.gemm_dot_prim(st)
     return dot_id, D.dot_bf16_for(dot_id)
 
@@ -269,7 +269,7 @@ def routed_gemm_coordinate(dot_id: str, x: np.ndarray, w: np.ndarray, g: int) ->
 
 def _decompose_moe_expert(fam, st, ops, out, pick, limits, *, routed: bool) -> Iterator[Instance]:
     E, K, N = int(st["E"]), int(st["K"]), int(st["N"])
-    dot_id = "AmpereBF16TcDot16_v1"
+    dot_id = "AmpereBF16TcDot16_v2"
     x = np.asarray(ops[0], dtype=np.uint16).reshape(K)
     e = int(np.asarray(ops[1]).reshape(-1)[0])
     w = ops[3 if routed else 2]
@@ -302,7 +302,7 @@ def _decompose_moe_expert(fam, st, ops, out, pick, limits, *, routed: bool) -> I
 def _attn_prims(fam: str, st: dict[str, Any]) -> tuple[str, str]:
     if fam == "Attention_v2":
         return RK.prim_static(st, "DOT", fam), RK.prim_static(st, "INV", fam)
-    return "AmpereBF16TcDot16_v1", "Fa2InvSum_v1"
+    return "AmpereBF16TcDot16_v2", "Fa2InvSum_v1"
 
 
 def attention_head(dot_id: str, inv_id: str, BN: int, q: np.ndarray, k: np.ndarray, v: np.ndarray, Dh: int) -> tuple[np.ndarray, bool]:
@@ -400,7 +400,7 @@ def _fp8_block_template(fam: str, st: dict[str, Any]) -> tuple[str, dict[str, An
 
 
 def _moe_expert_template(template: str, fam: str, st: dict[str, Any]) -> tuple[str, dict[str, Any], int]:
-    return template, {"K": st["K"], "dot": "AmpereBF16TcDot16_v1"}, int(st["N"])
+    return template, {"K": st["K"], "dot": "AmpereBF16TcDot16_v2"}, int(st["N"])
 
 
 def _attention_template(fam: str, st: dict[str, Any]) -> tuple[str, dict[str, Any], int]:
