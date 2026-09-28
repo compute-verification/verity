@@ -66,11 +66,23 @@ wref     3·m·k·n + 24·m·k   (route U under W1 with sub-word moves priced; t
 γ        1 − (199/200)/(1608/1600) ≈ 0.995% over the whole domain; ≈ 0.89% at n = 2,048; ≈ 0.69% at 4,096²
 ~~~
 
-- **P.** `ncp-v1` uses the word-granular production P: a SHAKE256 Fisher-Yates over the k/4 aligned words from seed
-  `pous-pouw-ncp-Pword-v1`, then the deterministic repair (seed + `/repair`) so that no word lands in its own 16-step; the
-  order inside each word is kept and every sign is +1. At k = 4,096 its SHA-256 (entries as 2-byte little-endian
-  integers) is `24e68f30…`, the P the research coordinator certified. It must pass the rejection rule (Lean `Admissible`,
-  checked at every k) and checkpoint independence (the fingerprint rank, per k; not in Lean).
+- **γ is not yet citable for a real machine.** The red team found that A2, as written, requires the model program to
+  reproduce every output rather than only the checked words; the fix restricting A2 to the checked words is being applied.
+  TT_NCP(0.5%) itself, the named conjecture, is unaffected.
+- **Route.** `wref` prices route U (biased u8 operands, the bias in the accumulator's initial value), but `checked()` is
+  the unbiased running sums the Lean defines, which route S computes (52 units per position: γ ≈ 1.34% at n = 2,048,
+  ≈ 0.92% at 4,096²). Route U's biased checkpoints await the research coordinator's decision
+  (`route-u-checkpoints.md`).
+
+- **P.** `ncp-v1` uses the word-granular production P v1.1: a SHAKE256 Fisher-Yates over the k/4 aligned words from
+  seed `pous-pouw-ncp-Pword-v1`; repair 1 (seed + `/repair`) so that no word lands in its own 16-step; repair 2 (seed +
+  `/repair2`): while some word lies on a cycle of the arcs w → p(p(w)) that stay inside w's step, swap p at the least such
+  word with p at a drawn word, under repair 1's condition. The order inside each word is kept and every sign is +1. Its
+  SHA-256 (entries as 2-byte little-endian integers) is `536757a2…` at k = 1,088, `7f00a9b7…` at 2,048, `24e68f30…` at
+  4,096 and `a57ea054…` at 11,008, all reproduced by the red team's own generator, which certified independence rank
+  T − 1, λ₃ = 32 and MinRank 16 at each. The repairs guarantee clause 1 of the rejection rule and minrank.md's hypotheses
+  (a) to (c), not the rule's other clauses or λ₃ ≥ 16: the rule (Lean `Admissible`) is checked at every k, and
+  `tests/test_pouw_word_p.py` certifies all of them exactly at the k the MVP uses (1,088, 2,048, 11,008).
   `ncp-v1-shift24` uses the shift by 24 instead, admissible with independent checkpoints for every k ≥ 1,024 with
   16 ∣ k (Lean `shiftBy24_admissible`, `independentWitness`).
 - **Lean.** Proved: the barrier (`Pouw.Barrier.Proofs.generic`), the algebra (`Pouw.NCP.Proofs.cancel`, `stacked`,
