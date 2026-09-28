@@ -507,7 +507,8 @@ def test_d3_family_exact_algebra_and_amplitude(law, route):
     ctx = ctx_of((64, k, 64))
     x, e1, amp_a = noise_of(layer, a, F.xof(f"verity/pouw/fp8-is/{layer.tag}/E1", 2 * k, ctx.salt, 3, ctx.root_a, 5, 0),
                             True, pi, inv)
-    y, f1, amp_b = noise_of(layer, b, F.xof(f"verity/pouw/fp8-is/{layer.tag}/F1", 2 * k, ctx.salt, 3, 5, 0), False, pi, inv)
+    y, f1, amp_b = noise_of(layer, b, F.xof(f"verity/pouw/fp8-is/{layer.tag}/F1", 2 * k, ctx.salt, 3, ctx.root_a, 5, 0),
+                            False, pi, inv)
     for l in range(k):
         assert amp_a[l] >= max(e4m3_cell(x[l]), e4m3_cell(x[inv[l]])) and amp_b[l] >= max(e4m3_cell(y[l]), e4m3_cell(y[pi[l]]))
     e2 = [e1[pi[l]] for l in range(k)]
@@ -567,6 +568,49 @@ def test_d3_family_weight_noise_is_per_unit(law):
     two = Context(one.salt, Matmul(4, Shape(64, k, 64), 5), one.root_a, one.root_b)
     assert layer.form(one, layer.noise(one), [act], [w], Tile((0,), (0,))).y != \
         layer.form(two, layer.noise(two), [act], [w], Tile((0,), (0,))).y
+
+
+class UnboundF1(F.D3Family):
+    """#295 before X-R9-2: F₁ does not read root_A, so B̃ is known from the salt before the activations are committed."""
+
+    def stream(self, name, ctx, line):
+        if name == "E1":
+            return super().stream(name, ctx, line)
+        u = ctx.matmul
+        return F.xof(f"verity/pouw/fp8-is/{self.tag}/F1", 2 * u.shape.k, ctx.salt, u.index, u.weight, line)
+
+
+def spike_functions(layer, k: int, spikes: int, columns: int, draws: int) -> dict[tuple[int, int], int]:
+    """X-R9-2's witness (red team Round 9 §5.2), scaled down: identical rows and columns with one 288 per spike slice,
+    each spike's NCP partners outside every spike slice; the salt is fixed and only root_A is drawn again.  For each
+    spike slice and block, the number of distinct functions root_A -> atom word over the columns."""
+    pi, inv = F.ncp_perm(k, layer.P_SEED)
+    slices = [t * (k // 32) // spikes for t in range(spikes)]
+    inside = {l for t in slices for l in range(32 * t, 32 * t + 32)}
+    pos = [next(l for l in range(32 * t, 32 * t + 32) if pi[l] not in inside and inv[l] not in inside) for t in slices]
+    row = bytes(0x79 if l in pos else 0 for l in range(k))
+    h, w = layer.parse(row, k, True), layer.parse(row, k, False)
+    words: dict[tuple[int, int], dict[int, list[int]]] = {}
+    for r in range(draws):
+        ctx = Context(hashlib.sha256(b"x-r9-2").digest(), Matmul(7, Shape(64, k, 64), 5),
+                      hashlib.sha256(bytes([r])).digest(), bytes(32))
+        st = layer.form(ctx, layer.noise(ctx), [h], [w] * columns, Tile((0,), tuple(range(columns))))
+        for c in range(columns):
+            for t in slices:
+                for blk in range(3):
+                    o = blk * k + 32 * t
+                    words.setdefault((t, blk), {}).setdefault(c, []).append(F.ATOM.step(0, st.x[0][o:o + 32],
+                                                                                        st.y[c][o:o + 32]))
+    return {key: len({tuple(v) for v in cols.values()}) for key, cols in words.items()}
+
+
+def test_weight_noise_reads_root_a():
+    """X-R9-2: with F₁ keyed on (salt, index, weight, j) alone, identical columns' spike slices in blocks 1 and 2 are at
+    most 3 functions of E₁; keyed on root_A too, every column is its own function in every block."""
+    k, spikes, columns, draws = 1024, 4, 8, 8
+    unbound = spike_functions(UnboundF1("d3s"), k, spikes, columns, draws)
+    assert all(n <= 3 for (t, blk), n in unbound.items() if blk < 2)
+    assert set(spike_functions(F.D3s(), k, spikes, columns, draws).values()) == {columns}
 
 
 @pytest.mark.parametrize("law,route", [(law, route) for law in ("d3s", "d3m") for route in ("xq", "y16")])

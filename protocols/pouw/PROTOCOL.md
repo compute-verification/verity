@@ -190,7 +190,10 @@ wref      ⌈m·n·(32·T + p_FADD·n_R) + f_A·m·k + f_B·n·k⌉: an atom wor
     the three blocks, a widen of each e_b and an FADD, then `cvt.rn.satfinite.e4m3x2.f32`) or `f16` (schedule M2: HADD2,
     then `cvt.rn.satfinite.e4m3x2.f16x2`). Either way a block value at or beyond ±464 saturates to ±448. The two differ
     by double rounding, so they are different checked functions with different tags.
-  - **The streams.** Weight streams are keyed per unit and per column (r = 1, X-D3-3).
+  - **The streams.** E₁'s row i and F₁'s column j are SHAKE256("verity/pouw/fp8-is/<tag>/E1" or "/F1", salt, index,
+    root_A, weight, i or j): per unit and per column (r = 1, X-D3-3), and both read com(A_u), so no stream that forms
+    the unit's operands exists before its activations are committed (X-R9-2: with F₁ known from the salt, X-D3-3
+    recurs at r = 1, ε ≈ 6.8%). #218's lifecycle order is unchanged.
   - **The price** is the cell's per-element trace (`d3_trace`) from one `PRICES` row, which prices the forming layer and
     the core's FADD together (`get(name, prices=…)`; `FP8IS` rejects a layer priced from another row).
   - **Round 8** reproduces Phase 17f: at 16,384³, `d3s` gives γ = 0.940% (copy) and 0.972% (decoded).

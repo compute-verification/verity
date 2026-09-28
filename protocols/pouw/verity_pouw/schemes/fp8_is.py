@@ -708,8 +708,9 @@ class D3Family:
     is cvt.rn.satfinite.e4m3x2.f16x2.  Either way a block value at or beyond ±464 saturates to ±448.  For normal h, |h|/8 lies in [cell(h), 2·cell(h)), and rms′ ≥ 2^−6
     gives every entry (the zeros of an all-zero row, and E4M3 subnormals) at least one subnormal cell 2^−9: D-3s's
     amplitude is never below D-3m's.  E₁'s row i is SHAKE256("verity/pouw/fp8-is/<tag>/E1", salt, index, root_A,
-    weight, i); each weight column j has its own stream per unit, SHAKE256("verity/pouw/fp8-is/<tag>/F1", salt, index,
-    weight, j), 2k bytes each: B̃ is re-formed for every unit (r = 1, X-D3-3).  Weights are E4M3 codes quantized
+    weight, i) and each weight column j has its own stream per unit, SHAKE256("verity/pouw/fp8-is/<tag>/F1", salt,
+    index, root_A, weight, j), 2k bytes each: B̃ is re-formed for every unit (r = 1, X-D3-3), and neither stream exists
+    before the unit's activations are committed (X-R9-2: with F₁ known first, X-D3-3 recurs at r = 1).  Weights are E4M3 codes quantized
     offline per column.  A Y16 row is k little-endian f16 words, finite and at most 448 in magnitude.
     """
 
@@ -808,13 +809,15 @@ class D3Family:
         return [f32_to_e4m3_sat_word(fp32.add(fp16.to_f32(x), fp16.to_f32(n)))
                 for base, nz in blocks for x, n in zip(base, nz)]
 
+    def stream(self, name: str, ctx: Context, line: int) -> bytes:
+        """E₁'s row ``line`` or F₁'s column ``line``: 2k bytes, each reading root_A."""
+        u = ctx.matmul
+        return xof(f"verity/pouw/fp8-is/{self.tag}/{name}", 2 * u.shape.k, ctx.salt, u.index, ctx.root_a, u.weight, line)
+
     def form(self, ctx: Context, noise, a: list[list[int]], b: list[list[int]], tile: Tile) -> Stack:
         pi, inv = noise
-        u, k = ctx.matmul, ctx.matmul.shape.k
-        x = [self.side(r, xof(f"verity/pouw/fp8-is/{self.tag}/E1", 2 * k, ctx.salt, u.index, ctx.root_a, u.weight, i),
-                       pi, inv, True) for r, i in zip(a, tile.rows)]
-        y = [self.side(r, xof(f"verity/pouw/fp8-is/{self.tag}/F1", 2 * k, ctx.salt, u.index, u.weight, j), pi, inv, False)
-             for r, j in zip(b, tile.cols)]
+        x = [self.side(r, self.stream("E1", ctx, i), pi, inv, True) for r, i in zip(a, tile.rows)]
+        y = [self.side(r, self.stream("F1", ctx, j), pi, inv, False) for r, j in zip(b, tile.cols)]
         return Stack(x, y, [b""] * len(x), [b""] * len(y))
 
 
