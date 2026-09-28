@@ -167,7 +167,9 @@ theorem setupH_flatLayout (ht : tags.typed = true)
       exact ⟨P.nets, P.portWords, P.v1Segs, P.rowWires, P.unitNet, P.shaNet, P.hmNet, P.kinds, P.check,
         (by rw [← P.rowNets]; exact HmNets.check_congr rfl rfl rfl),
         (by rw [← P.recNet]; exact RecOpen.check_congr rfl rfl),
-        (by rw [← P.recResiduals]; exact RecResiduals.check_congr rfl rfl), P.typed⟩
+        (by rw [← P.recResiduals]; exact RecResiduals.check_congr rfl rfl),
+        (by rw [← P.recSparse]; exact RecSparse.check_congr rfl rfl),
+        (by rw [← P.recOpening]; exact RecOpening.check_congr rfl rfl), P.typed⟩
     refine ⟨by rw [hc], ?_, layout_of P' hpin hda hdb hm hk⟩
     have h0 : c'.nets[0]? = some ("unit", net) := by
       rw [← Array.getElem?_toList, hmore]
