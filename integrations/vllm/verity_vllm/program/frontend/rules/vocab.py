@@ -282,7 +282,8 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            # exact to vLLM d9105ea80 `_temperature_kernel` -> `_apply_topp_split` (S splits) -> `_gumbel_sample_kernel` + argmax; the seed, pos,
            # temperature, top_p and [R16, coord M-0169] the split count S (= SplitsFor_v1(|live|, num_SMs), a derived value of the workload the
            # request Program reads from its `splits` Input) are OPERANDS).  `rules/vllm_sampling.py` asks for it.  Greedy rows keep `token_select`.
-           "token_select_stochastic": lambda V: ir_bind(_sampling.GumbelTopPTokenSelect, V=V),
+           # `CONSTRUCTION` = the target's `sampler_construction` (`registry.sampling.select_for`; the role and its note stay as they were)
+           "token_select_stochastic": lambda V, CONSTRUCTION: ir_bind(_sampling.select_for(_sampling.GumbelTopPTokenSelect, CONSTRUCTION), V=V),
            # [R15 fp8] the block-scaled FP8 linear of a pre-quantised checkpoint on Hopper (registry.fp8, pinned bit-exact on the H100 against
            # _C.per_token_group_fp8_quant and the blockwise _C.cutlass_scaled_mm): the dynamic per-128-group activation quant (both outputs
            # computed) and the scaled GEMM over e4m3 weights with f32 128x128 block scales as Inputs. `rules/vllm_bindings.py` asks for them.

@@ -118,6 +118,11 @@ class TargetProfile:
                            None) = the Program issues it at its first forward and every later forward reads that value (Build: the
                            `vllm_bindings.norm_chain` rules; Match: the fold issues each weight-only Call once per run).  Omitted from
                            `to_json()` when None so every earlier profile digest is unchanged.
+    sampler_construction -> how the stochastic token select is constructed (a Program static, declared-and-bound, never attested).
+                           `"greedy-check-per-stage"` binds `GumbelTokenSelect_v1` / `GumbelTopPTokenSelect_v1`, whose temperature scale
+                           and Gumbel select each compute `temp == 0`; `"shared-greedy"` (the default when None) binds their
+                           `registry.sampling.SHARED_GREEDY` entry (the same function), which computes it once for both.  Omitted from
+                           `to_json()` when None.
 
     Derived (not fields; one rule each, `verity_vllm.program.registry.targets` consumes them): `tensor_core_family` (the registered k16
     tensor-core step of the capability: `ampere` for sm_8x, `hopper` for sm_90) and `tuned_gemm_arch_family` (vLLM's tuned
@@ -156,9 +161,13 @@ class TargetProfile:
     fa3_construction: str | None = None
     #: how often the Program issues a weight-only Call (None = "once"; see the doc); never attested
     weight_only_calls: str | None = None
+    #: the stochastic token select's construction (None = "shared-greedy"; see the doc); never attested
+    sampler_construction: str | None = None
 
     WEIGHT_ONLY_CALLS = ("per-forward", "once")
     DEFAULT_WEIGHT_ONLY_CALLS = "once"
+    SAMPLER_CONSTRUCTIONS = ("greedy-check-per-stage", "shared-greedy")
+    DEFAULT_SAMPLER_CONSTRUCTION = "shared-greedy"
 
     # the registered block-scaled FP8 GEMM selections: value -> the vLLM kernel class the selector must have taken
     FP8_BLOCK_GEMM_KERNELS = {"cutlass": "CutlassFp8BlockScaledMMKernel"}
@@ -233,6 +242,9 @@ class TargetProfile:
         if self.weight_only_calls is not None and self.weight_only_calls not in self.WEIGHT_ONLY_CALLS:
             raise ValueError(f"weight_only_calls must be None ({self.DEFAULT_WEIGHT_ONLY_CALLS}) or one of {list(self.WEIGHT_ONLY_CALLS)}; "
                              f"got {self.weight_only_calls!r}")
+        if self.sampler_construction is not None and self.sampler_construction not in self.SAMPLER_CONSTRUCTIONS:
+            raise ValueError(f"sampler_construction must be None ({self.DEFAULT_SAMPLER_CONSTRUCTION}) or one of "
+                             f"{list(self.SAMPLER_CONSTRUCTIONS)}; got {self.sampler_construction!r}")
 
     # -- derived facts (one rule each; no second table anywhere) ---------------------------------------------------------
     def effective_moe_construction(self) -> str:
@@ -247,6 +259,9 @@ class TargetProfile:
     def effective_weight_only_calls(self) -> str:
         """How often the Program issues a weight-only Call: the declared knob, else `once`."""
         return self.weight_only_calls if self.weight_only_calls is not None else self.DEFAULT_WEIGHT_ONLY_CALLS
+    def effective_sampler_construction(self) -> str:
+        """The stochastic token select's construction: the declared knob, else `shared-greedy`."""
+        return self.sampler_construction if self.sampler_construction is not None else self.DEFAULT_SAMPLER_CONSTRUCTION
 
     def moe_construction_declaration(self) -> dict:
         """[R17-42] The construction block GP-01 writes into the workload Program header: value, whether it was declared explicitly, the
@@ -374,6 +389,8 @@ class TargetProfile:
             d.pop("fa3_construction", None)   # absent = DEFAULT_FA3_CONSTRUCTION; every earlier profile digest unchanged
         if d.get("weight_only_calls") is None:
             d.pop("weight_only_calls", None)  # absent = DEFAULT_WEIGHT_ONLY_CALLS; every earlier profile digest unchanged
+        if d.get("sampler_construction") is None:
+            d.pop("sampler_construction", None)
         return d
 
     def fp8_block_gemm_kernel(self) -> str | None:
