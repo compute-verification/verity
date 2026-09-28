@@ -3,8 +3,11 @@ its own `serve` (`sampled-proofs-one-stage`, a `ProtocolPort`), and its pieces t
 on drawn programs, laws, records, draws and verdicts, valid ones and one or two changes to each.
 
 The reference is `one_stage` itself (`registration.check`, `draw.derive`, `check_draw`, `audit.audit_record`, `profile`,
-`wrong_units`) behind the protocol's decoders, which this file writes as the Lean reads them (`OneStage.paramsOfJson`,
-`commitmentOf`, `evidenceOf`), and for the `draw` piece `two_stage.draw_first` on `OwnRandomness` over the given bytes.
+`wrong_units`, `registered.registered_entries` and `domain`) behind the protocol's decoders, which this file writes as the
+Lean reads them (`OneStage.paramsOfJson`, `commitmentOf`, `evidenceOf`), and for the `draw` piece `two_stage.draw_first` on
+`OwnRandomness` over the given bytes. Records are v1 and, on the programs with root parameters to register
+(`REGISTERED_SETUPS`, 16- and 32-bit), mostly v2: the verifier expects values registered (`registered`, with its program
+function's `parameters`), and the record (and an earlier one in the log) registers `Registered.commit`'s entries.
 The verifier's program is looked up among this file's programs by its descriptor. Inputs
 stay inside what Python reads as Lean does: integers that are not booleans where Python compares with `==`, ASCII digits
 in a probability, and integer populations in a draw.
@@ -12,6 +15,7 @@ in a probability, and integer populations in a draw.
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import re
@@ -26,11 +30,12 @@ from hypothesis import strategies as st
 import verity_difftest as D
 from verity_difftest import protocol as PR
 from verity.core.protocols.profile import Stratified, Stratum
-from verity.core.protocols.sampled_proofs.one_stage import audit, draw as DR, partition as P, registration as R
+from verity.core.protocols.sampled_proofs.one_stage import audit, draw as DR, partition as P, registered as G, registration as R
 from verity.core.protocols.sampled_proofs.two_stage import OwnRandomness, draw_first
 from verity.ml.circuits import codec, partition_object as PO
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.types import Array, Value
+from verity.ml.circuits.program import Program, input_id
+from verity.ml.circuits.types import Array, Record, Tuple, Value
 
 PACKAGE = Path(__file__).resolve().parents[1]
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -72,7 +77,52 @@ class Setup:
 SETUPS = [Setup(P.population_program(PAIR, n), P.template_instance_query(PAIR.id)) for n in (1, 3, 6)] + [
     Setup(P.mixed_population_program([(PAIR, 2), (TRIPLE, 3)]), P.template_instances_query([PAIR.id, TRIPLE.id])),
     Setup(P.mixed_population_program([(PAIR, 1), (TRIPLE, 2), (PAIR, 2)]), P.template_instances_query([TRIPLE.id, PAIR.id]))]
-PROGRAMS = {s.sha512: s.program for s in SETUPS}
+
+
+def _registered_program(name: str, n: int, extra, registered) -> Program:
+    """`n` instances of `PAIR` over `x`, beside root parameters `extra` the body does not read, those `registered` names
+    bound at registration."""
+    ((_, t),), ret = PAIR.signature()
+
+    def signature(S):
+        return (("x", Array(S.N, t)), *extra), Array(S.N, ret)
+
+    def body(B, S, x, *_):
+        return B.batch(PAIR, x, axes=(0,))
+
+    return Program(bind(CompositeDefinition(name, 0, ("N",), signature, body, register=False), N=n), registered=registered)
+
+
+class RegisteredSetup(Setup):
+    """A verifier's program with root parameters to register: `values`, the `{parameter: words}` it may expect, each value
+    committed once at each of its words (`Registered.commit`, salts fixed), and its signature as `parameters` names it."""
+
+    def __init__(self, program, values):
+        super().__init__(program, P.template_instance_query(PAIR.id))
+        self.signature = _json([[name, t.to_json()] for name, t in program.fn.signature()[0]])
+        self.values = values
+        self.committed = {}
+        for v, w in {(v, w) for vs in values for v, w in vs.items()}:
+            n, bits = len(G.parameter_gates(program, v)), G.width(program, v)
+            rows = [[(i * 40503 + 7) % (1 << bits) for i in range(r * w, (r + 1) * w)] for r in range(n // w)]
+            salts = [hashlib.shake_256(f"{v}/{w}/{r}".encode()).digest(192) for r in range(n // w)]
+            self.committed[v, w] = G.Registered.commit(self.sha512, v, rows, salts, bits)
+
+    def entries(self, values) -> list[dict]:
+        return [self.committed[v, w].entry() for v, w in (values or {}).items()]
+
+
+#: Programs whose root parameters a verifier may expect registered: 16-bit ones (`W`, and `D` of 12-bit leaves) and ones
+#: `registered_entries` refuses (`E` has no gates, `M` two widths, `V` is 40 bits), and 32-bit ones (`T`, and `U` of
+#: 20-bit leaves); `x`, bound per run, reads as a 16-bit value too.
+REGISTERED_SETUPS = [
+    RegisteredSetup(_registered_program("CoreSampledProofsRegistered16", 3, (
+        ("W", Array(6, Value(16))), ("D", Array(4, Value(12))), ("E", Array(0, Value(16))), ("M", Tuple(Value(8), Value(16))),
+        ("V", Value(40))), ("W", "D")), [{"W": 2}, {"D": 1, "W": 3}, {"D": 4}, {"W": 6, "x": 2}]),
+    RegisteredSetup(_registered_program("CoreSampledProofsRegistered32", 2, (
+        ("T", Array(4, Value(32))), ("U", Record(("a", Array(3, Value(20))),))), ("T", "U")),
+        [{"T": 2}, {"T": 1, "U": 3}, {"U": 1}, {"T": 4, "x": 1}])]
+PROGRAMS = {s.sha512: s.program for s in SETUPS + REGISTERED_SETUPS}
 PROGRAMS_TEMPLATES = [PAIR.id, TRIPLE.id]
 #: Queries a verifier may hold: the setups' own, and ones core refuses or one-stage doesn't apply.
 QUERIES = [s.query for s in SETUPS] + [
@@ -144,8 +194,59 @@ def rule(law) -> dict:
     return law
 
 
+def _type(j):
+    """`Ty.ofJson`: a type exactly as `to_json` writes it."""
+    tag = j[0] if isinstance(j, list) and j else None
+    if tag == "Value" and len(j) == 2 and _nat(j[1]) and j[1] > 0:
+        return Value(j[1])
+    if tag == "Array" and len(j) == 3 and _nat(j[1]):
+        return Array(j[1], _type(j[2]))
+    if tag == "Tuple" and len(j) == 2 and isinstance(j[1], list):
+        return Tuple(*map(_type, j[1]))
+    if (tag == "Record" and len(j) == 2 and isinstance(j[1], list)
+            and all(isinstance(f, list) and len(f) == 2 and isinstance(f[0], str) for f in j[1])
+            and len({k for k, _ in j[1]}) == len(j[1])):
+        return Record(*[(k, _type(t)) for k, t in j[1]])
+    raise D.Reject(f"type {j!r}")
+
+
+def _lower(t) -> list[tuple[int, int]]:
+    """`program._lower_input`'s input nodes, `(width, n)` each."""
+    w = t.homogeneous_width()
+    if w is not None:
+        return [(w, t.leaves)]
+    fields = [t.elem] * t.n if isinstance(t, Array) else [f[1] if isinstance(t, Record) else f for f in t.fields]
+    return [node for f in fields for node in _lower(f)]
+
+
+def _parameters(desc: dict, program: Program, j) -> None:
+    """`Registered.params`: the program function's `[[name, type], ...]`, distinct names whose types lower to exactly the
+    root body's input nodes. The strategies draw no signature but the program's own that lowers so, which this file would
+    have no program for."""
+    if not (isinstance(j, list) and all(isinstance(p, list) and len(p) == 2 and isinstance(p[0], str) for p in j)):
+        raise D.Reject("parameters is not a list of [name, type]")
+    types = [_type(t) for _, t in j]
+    if len({k for k, _ in j}) != len(j):
+        raise D.Reject("parameters: a name twice")
+    callees, root = desc["callees"], desc["definitions"][desc["root"]]["body"]["nodes"]
+    nodes = [(input_id(callees[x["fn"]])[1], x["n"]) for x in root if input_id(callees[x["fn"]])]
+    if [node for t in types for node in _lower(t)] != nodes:
+        raise D.Reject("parameters: they do not lower to the program's input nodes")
+    if j != _json([[name, t.to_json()] for name, t in program.fn.signature()[0]]):
+        raise RuntimeError(f"the strategy drew a signature this file has no program for: {j}")
+
+
+def _log_record(e) -> None:
+    """`OneStage.logRecord`: an object whose `registered`, when truthy, lists objects with a string `value` and `root`."""
+    r = e.get("registered") if isinstance(e, dict) else None
+    if not isinstance(e, dict) or (r and not (isinstance(r, list) and all(
+            isinstance(x, dict) and isinstance(x.get("value"), str) and isinstance(x.get("root"), str) for x in r))):
+        raise D.Reject("a record of the log")
+
+
 def decode_params(j) -> dict:
-    _exactly(j, PARAM_KEYS, "the parameters")
+    v2 = isinstance(j, dict) and j.get("registered") is not None
+    _exactly(j, PARAM_KEYS | {"parameters"} if v2 else PARAM_KEYS, "the parameters")
     desc = _obj(j["program"], "program")
     if not desc:
         raise D.Reject("not a program descriptor")
@@ -164,14 +265,18 @@ def decode_params(j) -> dict:
             raise D.Reject(f"port {p}: leaves or domain")
     if j["leaf_layer"] is not None and not isinstance(j["leaf_layer"], str):
         raise D.Reject("leaf_layer is not a string or null")
-    if not isinstance(j["anchors"], list) or not isinstance(j["log"], list) or not all(isinstance(e, dict) for e in j["log"]):
+    if not isinstance(j["anchors"], list) or not isinstance(j["log"], list):
         raise D.Reject("anchors is not a list or log not a list of records")
+    for e in j["log"]:
+        _log_record(e)
     part = j["partition"]
     if part is not None and not (isinstance(part, dict) and isinstance(part.get("program"), str)
                                  and isinstance(part.get("query"), dict)):
         raise D.Reject("partition names no program digest or query")
-    if j["registered"] is not None:
-        raise D.Reject("registered values (R7) are not ported")
+    if v2:
+        if not all(map(_nat, _obj(j["registered"], "registered").values())):
+            raise D.Reject("registered: words that are not a natural number")
+        _parameters(desc, PROGRAMS[sha], j["parameters"])
     delta = ratio(j["delta"])
     if not 0 < delta < 1:
         raise D.Reject("delta is not in (0, 1)")
@@ -200,11 +305,11 @@ def decode_evidence(b: bytes) -> dict:
 
 def _registration(p: dict, rec) -> tuple[str, ...]:
     return R.check(rec, p["program"], p["query"], p["law"], p["scheme"], p["ports"], p["leaf_layer"], p["anchors"], p["log"],
-                   p["partition"], p["work_table"]).codes
+                   p["partition"], p["work_table"], p["registered"]).codes
 
 
 def check(p: dict, c: tuple[dict, bytes], e: dict) -> tuple:
-    """The outcome `OneStage.check` gives, from `one_stage`'s own checks: reject on R1-R6, the draw's checks, the record's
+    """The outcome `OneStage.check` gives, from `one_stage`'s own checks: reject on R1-R7, the draw's checks, the record's
     checks or a verdict that ran and did not accept; undecided when only the verifier of record is missing or has not run;
     accept exactly when `audit_record` accepts, with the drawn and proved units, the bounds and the profile."""
     rec, _ = c
@@ -283,6 +388,25 @@ def partition(j):
 def registration(j):
     j = _json(j)
     return {"codes": list(_registration(_params_of(j), j.get("record") if isinstance(j, dict) else None))}
+
+
+def registered(j):
+    p = _params_of(_json(j))
+    try:
+        return G.registered_entries(p["program"], p["registered"] or {})
+    except ValueError:
+        return None
+
+
+def domain(j):
+    j = _json(j)
+    if not (isinstance(j, dict) and isinstance(j.get("program"), str) and isinstance(j.get("value"), str)
+            and all(_nat(j.get(k)) for k in ("words", "leaves", "word_bits"))):
+        raise D.Reject("program or value is not a string, or words, leaves or word_bits not a natural number")
+    try:
+        return G.domain(j["program"], j["value"], j["words"], j["leaves"], j["word_bits"]).domain_id.hex()
+    except ValueError as e:
+        raise D.Reject(str(e)) from None
 
 
 def check_draw(j):
@@ -418,9 +542,13 @@ def drawn(draw, law: dict, n: int) -> dict:
 
 
 @st.composite
-def audits(draw) -> tuple[dict, dict, dict]:
-    """A valid audit: the verifier's parameters, the registration record and the evidence (verdicts mostly accepting)."""
-    s = draw(st.sampled_from(SETUPS))
+def audits(draw, setups=(*SETUPS, *REGISTERED_SETUPS)) -> tuple[dict, dict, dict]:
+    """A valid audit: the verifier's parameters, the registration record and the evidence (verdicts mostly accepting). On a
+    program with values to register it is mostly v2: the verifier expects some registered, the record registers them, the
+    log's earlier record (if any) some of them under the same roots, and the sessions opened their reads against those."""
+    s = draw(st.sampled_from(setups))
+    values = draw(st.sampled_from([*s.values, None, *s.values, {}])) if isinstance(s, RegisteredSetup) else None
+    held = draw(st.sampled_from([values, dict(list(values.items())[:1]), None])) if values else None
     n = s.population
     law = draw(laws(n))
     table = draw(work_tables(s)) if law["law"] == "work" else None
@@ -434,15 +562,18 @@ def audits(draw) -> tuple[dict, dict, dict]:
     log = []
     if draw(st.booleans()):
         log = [R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
-                        EARLIER, leaf_layer=LEAF, partition=part, work_table=table)]
+                        EARLIER, leaf_layer=LEAF, partition=part, work_table=table,
+                        registered=s.entries(held) if held else ())]
     anchors = draw(st.sampled_from([[], ["weights"]]))
     rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports], WINDOW,
                    leaf_layer=LEAF, anchors=anchors, previous=R.digest(log[-1]) if log else None, partition=part,
-                   work_table=table)
+                   work_table=table, registered=s.entries(values) if values else ())
     assert rec["law"] == mine
     params = {"anchors": anchors, "delta": draw(st.sampled_from(["1/1000", "1/10", "1/2", "999/1000"])), "law": law,
               "leaf_layer": LEAF, "log": log, "partition": part, "ports": s.ports, "program": s.desc, "query": s.query,
-              "registered": None, "scheme": SCHEME, "work_table": table}
+              "registered": values, "scheme": SCHEME, "work_table": table}
+    if values is not None:
+        params["parameters"] = s.signature
     d = drawn(draw, mine, n)
     proved = DR.proved(d)
     verdicts = {"lean": {"accepted": True, "digest": "aa" * 64, "of_record": True}}
@@ -451,7 +582,8 @@ def audits(draw) -> tuple[dict, dict, dict]:
     evidence = {"draw": d, "instances": len(proved), "proved_units": proved,
                 "receipt": R.receipt(rec, "verifier-test", received=RECEIVED),
                 "served": draw(st.sampled_from([None, list(d["units"])])),
-                "session_registered": draw(st.sampled_from([None, {}])),
+                "session_registered": ({e["value"]: e["root"] for e in rec["registered"]} if values
+                                       else draw(st.sampled_from([None, {}]))),
                 "session_roots": draw(st.sampled_from([None, dict(ROOTS)])), "sessions": ["ab" * 64],
                 "statement": {"instances": len(proved)}, "verdicts": verdicts}
     return _json(params), _json(rec), _json(evidence)
@@ -479,7 +611,7 @@ def _other_setup(a, x):
     return SETUPS[x % len(SETUPS)].desc
 
 
-#: One change each to the record (R1-R6), the parameters (decodable or not) and the evidence (the draw, the record's checks,
+#: One change each to the record (R1-R6; R7's are `ENTRIES`), the parameters (decodable or not) and the evidence (the draw, the record's checks,
 #: the verdicts, its decoding); `x` picks among variants.
 RECORD = [
     _set("record", "format", lambda a, x: [R.FORMAT_V2, "verity/registration/v0"][x % 2]),
@@ -570,14 +702,87 @@ VERDICTS_OF = [_set("evidence", "verdicts", v) for v in (
     {"lean": {"accepted": 1, "of_record": True}}, {"lean": {"accepted": False, "of_record": True}}, {},
     {"lean": "accepted"}, [], {"a": {"accepted": True, "of_record": True}, "b": {"accepted": None, "of_record": 1}})] + [
     _set("evidence", "verdicts", lambda a, x: {"lean": {"accepted": True, "of_record": [1, "x", [], 0, {}, [0], "", None][x % 8]}})]
-GROUPS = [RECORD, PARAMS, DRAW, EVIDENCE, VERDICTS_OF]
+
+
+def _entries(f):
+    def change(a, x):
+        a["record"]["registered"] = f(a["record"]["registered"], x)
+    return change
+
+
+def _entry(f):
+    """A change to the record's `x`-th registered entry."""
+    return _entries(lambda es, x: [f(e, x) if i == x % len(es) else e for i, e in enumerate(es)])
+
+
+def _held(a, x):
+    """The log's last record registered its values under other roots (and the record's `previous` follows it)."""
+    last = a["params"]["log"][-1]
+    last = {**last, "registered": [{**e, "root": "12" * 64} for e in last["registered"]]}
+    a["params"]["log"] = [*a["params"]["log"][:-1], last]
+    a["record"]["previous"] = R.digest(last)
+
+
+def _signature(sig: list, x: int):
+    """A signature `Registered.params` refuses: not a list, a parameter dropped, added, retyped or named twice, a malformed
+    type or pair, or another program's."""
+    t = [["Value", 0], ["Value", 8, 1], ["Nope"], [], ["Record", [["a", ["Value", 8]], ["a", ["Value", 8]]]],
+         ["Array", -1, ["Value", 8]], ["Array", True, ["Value", 8]], ["Tuple", ["Value", 8]], ["Record", [[5, ["Value", 8]]]],
+         ["Value", 7], ["Array", 6, ["Value", 32]]][x % 11]
+    i = x % len(sig)
+    return [
+        "parameters", sig[:-1], [*sig, ["Z", ["Value", 8]]], [*sig[:i], [sig[i][0], t], *sig[i + 1:]],
+        [sig[0], [sig[0][0], sig[1][1]], *sig[2:]], [*sig[:i], [sig[i][0]], *sig[i + 1:]], [*sig[:i], [5, sig[i][1]], *sig[i + 1:]],
+        REGISTERED_SETUPS[x % 2].signature if REGISTERED_SETUPS[x % 2].signature != sig else sig[1:],
+        _json([[n, t_.to_json()] for n, t_ in SETUPS[0].program.fn.signature()[0]])][x % 9]
+
+
+#: One change each to a v2 record's registered entries (R7), the verifier's registered values, signature or log, and the
+#: roots the sessions opened registered reads against.
+ENTRIES = [
+    _entries(lambda es, x: ["registered", None, {}, [5], [[]]][x % 5]),
+    _entry(lambda e, x: {k: v for k, v in e.items() if k != ["domain", "root", "value", "leaves", "words"][x % 5]}),
+    _entry(lambda e, x: {**e, "extra": 1}),
+    _entries(lambda es, x: es[:-1]), _entries(lambda es, x: es + es[:1]), _entries(lambda es, x: es[::-1]),
+    _entry(lambda e, x: {**e, "value": ["nope", 5, "w", None, True, "x"][x % 6]}),
+    _entry(lambda e, x: {**e, "root": ["AB" * 64, "ab" * 63, "ab" * 65, 5, "", "zz" * 64, None, "a" * 128][x % 8]}),
+    _entry(lambda e, x: {**e, "root": "12" * 64}),
+    _entry(lambda e, x: {**e, "leaves": [e["leaves"] + 1, True, str(e["leaves"]), None, e["leaves"] - 1, 1][x % 6]}),
+    _entry(lambda e, x: {**e, "words": [e["words"] + 1, True, str(e["words"]), 0, 1][x % 5]}),
+    _entry(lambda e, x: {**e, "domain": ["00" * 64, e["domain"].upper(), 5, None][x % 4]}),
+    _entry(lambda e, x: {**e, "word_bits": [16, 32, 24, True, "32", None, 0, 64][x % 8]}),
+    _entry(lambda e, x: {k: v for k, v in e.items() if k != "word_bits"}),
+    _set("record", "format", lambda a, x: [R.FORMAT, "verity/registration/v3"][x % 2]),
+    lambda a, x: a["record"].pop("registered"),
+    _held,
+]
+REGISTERED_PARAMS = [
+    _set("params", "registered", lambda a, x: [{"W": 4}, {"W": 0}, {"E": 1}, {"M": 1}, {"V": 1}, {"nope": 1}, {"T": 3},
+                                               {"U": 2}, {"W": -1}, {"W": True}, {"W": "2"}, [], "W", {}, {"T": 2}][x % 15]),
+    _set("params", "registered", lambda a, x: {**a["params"]["registered"],
+                                               **[{"D": 1}, {"x": 1}, {"T": 4}, {"U": 3}, {"W": 6}, {"x": 3}][x % 6]}),
+    lambda a, x: (a["params"].pop("parameters"), a["params"].update(registered=None)),
+    lambda a, x: a["params"].pop("parameters"),
+    _set("params", "parameters", lambda a, x: _signature(a["params"]["parameters"], x)),
+    _set("params", "log", lambda a, x: [{**a["record"], "registered": [
+        "x", [5], [{"value": 5, "root": "r"}], [{"value": "W"}], {"W": "r"}, 1, [], 0, "", None, [{"root": 1, "value": "W"}],
+        [{"root": "r", "value": "W", "x": 1}]][x % 12]}]),
+    _held,
+]
+REGISTERED_EVIDENCE = [
+    _set("evidence", "session_registered", lambda a, x: (lambda sr: [
+        None, {}, {k: "12" * 64 for k in sr}, dict(list(sr.items())[:-1]), {**sr, "extra": "ab" * 64},
+        {**sr, **{k: None for k in list(sr)[:1]}}, {k: r.upper() for k, r in sr.items()}][x % 7])(
+        a["evidence"]["session_registered"] or {})),
+]
+GROUPS = [RECORD, PARAMS, DRAW, EVIDENCE, VERDICTS_OF, ENTRIES, REGISTERED_PARAMS, REGISTERED_EVIDENCE]
 
 
 @st.composite
-def changed_audits(draw, groups=GROUPS, most: int = 2, least: int = 0) -> dict:
+def changed_audits(draw, groups=GROUPS, most: int = 2, least: int = 0, setups=(*SETUPS, *REGISTERED_SETUPS)) -> dict:
     """An audit as `{"params", "record", "evidence"}`, with `least` to `most` changes, each from one of `groups`; a change
     that doesn't apply to what an earlier one left (a field it removed, a list it replaced) is skipped."""
-    params, rec, evidence = draw(audits())
+    params, rec, evidence = draw(audits(setups))
     a = {"params": params, "record": rec, "evidence": evidence}
     for _ in range(draw(st.integers(least, most))):
         change = draw(st.sampled_from(draw(st.sampled_from(groups))))
@@ -674,10 +879,40 @@ PARTITION = D.Port(PIECES, "partition", partition, st.one_of(
         st.one_of(st.none(), st.dictionaries(st.sampled_from(PROGRAMS_TEMPLATES + ["Other_v1"]), WORK_ENTRY | BAD_WORK_ENTRY,
                                              max_size=3)), st.booleans()),
     JSON), package=PACKAGE)
-REGISTRATION = D.Port(PIECES, "registration", registration,
-                      st.one_of(_audit_inputs(lambda a: {"params": a["params"], "record": a["record"]}, [RECORD, PARAMS], 2),
-                                st.builds(lambda a, r: {"params": a["params"], "record": r}, changed_audits(most=0), JSON)),
-                      package=PACKAGE)
+_REGISTRATION_OF = lambda a: {"params": a["params"], "record": a["record"]}  # noqa: E731
+REGISTRATION = D.Port(PIECES, "registration", registration, st.one_of(
+    _audit_inputs(_REGISTRATION_OF, [RECORD, PARAMS, ENTRIES, REGISTERED_PARAMS], 2),
+    changed_audits([ENTRIES], 1, 1, REGISTERED_SETUPS).map(_REGISTRATION_OF),
+    changed_audits([REGISTERED_PARAMS], 1, 1, REGISTERED_SETUPS).map(_REGISTRATION_OF),
+    changed_audits([ENTRIES, RECORD], 2, 2, REGISTERED_SETUPS).map(_REGISTRATION_OF),
+    st.builds(lambda a, r: {"params": a["params"], "record": r}, changed_audits(most=0), JSON)), package=PACKAGE)
+
+
+@st.composite
+def registered_values(draw) -> dict:
+    """The verifier's parameters expecting values registered: a v2 audit's with one change, or any `{parameter: words}` of
+    its program's parameters (and one it lacks)."""
+    a = draw(changed_audits([REGISTERED_PARAMS, PARAMS], 1, 0, REGISTERED_SETUPS))
+    if "parameters" in a["params"] and draw(st.booleans()):
+        names = [p[0] for p in a["params"]["parameters"] if isinstance(p, list) and p and isinstance(p[0], str)]
+        a["params"]["registered"] = draw(st.dictionaries(st.sampled_from([*names, "nope"]), st.integers(0, 7), max_size=3))
+    return {"params": a["params"]}
+
+
+REGISTERED_ENTRIES = D.Port(PIECES, "registered", registered, st.one_of(
+    registered_values(), _audit_inputs(lambda a: {"params": a["params"]}, [PARAMS]), JSON), package=PACKAGE)
+TEXT = st.text(max_size=4) | st.sampled_from(["W", "x", "é", "\x00", "\U0001f600", '"'])
+def _domains(widths):
+    return st.builds(lambda program, value, words, leaves, b: {"leaves": leaves, "program": program, "value": value,
+                                                               "word_bits": b, "words": words},
+                     st.sampled_from([s.sha512 for s in REGISTERED_SETUPS]) | TEXT, TEXT, st.integers(0, 70),
+                     st.integers(0, 70) | st.integers(0, 1 << 40), st.sampled_from(widths))
+
+
+DOMAIN = D.Port(PIECES, "domain", domain, st.one_of(_domains([16, 32]), st.one_of(
+    _domains([0, 8, 24, 48]),
+    st.builds(lambda k, v: {"leaves": 3, "program": "p", "value": "W", "word_bits": 16, "words": 2, k: v},
+              st.sampled_from(["leaves", "program", "value", "word_bits", "words"]), JSON), JSON)), package=PACKAGE)
 CHECK_DRAW = D.Port(PIECES, "check_draw", check_draw, st.one_of(
     st.builds(lambda a, dn, other: {"draw": a["evidence"]["draw"], "law": other or a["record"]["law"],
                                     "population": a["record"]["population"] + dn},
@@ -761,11 +996,65 @@ VERDICT = D.Port(PIECES, "verdict", verdict, st.one_of(
 pieces = D.server_fixture(DECODE)
 
 
-PIECE_RUNS = [(DECODE, 300), (PARTITION, 400), (REGISTRATION, 500), (CHECK_DRAW, 500), (DRAW, 500), (CHECK_PROVED, 300),
-              (BOUND, 500), (VERDICT, 300)]
+PIECE_RUNS = [(DECODE, 300), (PARTITION, 400), (REGISTRATION, 700), (REGISTERED_ENTRIES, 300), (DOMAIN, 300),
+              (CHECK_DRAW, 500), (DRAW, 500), (CHECK_PROVED, 300), (BOUND, 500), (VERDICT, 300)]
 
 
 @pytest.mark.parametrize("port, examples", PIECE_RUNS, ids=[p.fn for p, _ in PIECE_RUNS])
 def test_a_piece_agrees(pieces, port, examples):
     stats = D.run(port, examples=examples, server=pieces)
     assert stats.outputs > examples // 4 and stats.rejects > 0, stats
+
+
+R7_CODES = {"R7-registered", "R7-values", "R7-root", "R7-leaves", "R7-words", "R7-domain", "R7-word_bits", "R7-held"}
+
+
+def _v2_audit(s: RegisteredSetup, values: dict) -> dict:
+    """One valid v2 audit of `s` expecting `values` registered, the log's earlier record registering them under the same
+    roots."""
+    law = {"k": 1, "law": "subset"}
+    roots = [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports]
+    earlier = R.record(s.program, s.query, law, SCHEME, roots, EARLIER, leaf_layer=LEAF, registered=s.entries(values))
+    rec = R.record(s.program, s.query, law, SCHEME, roots, WINDOW, leaf_layer=LEAF, previous=R.digest(earlier),
+                   registered=s.entries(values))
+    params = {"anchors": [], "delta": "1/10", "law": law, "leaf_layer": LEAF, "log": [earlier], "parameters": s.signature,
+              "partition": None, "ports": s.ports, "program": s.desc, "query": s.query, "registered": values,
+              "scheme": SCHEME, "work_table": None}
+    evidence = {"draw": {**law, "population": s.population, "units": [0]}, "instances": 1, "proved_units": [0],
+                "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None,
+                "session_registered": {e["value"]: e["root"] for e in rec["registered"]}, "session_roots": None,
+                "sessions": [], "statement": {}, "verdicts": {"lean": {"accepted": True, "of_record": True}}}
+    return _json({"evidence": evidence, "params": params, "record": rec})
+
+
+def test_every_r7_code_is_reached(pieces):
+    """The record's and the parameters' registered changes on v2 audits of both programs, Lean and Python agreeing on each:
+    together they reach every R7 code, which the drawn runs only probably do, and the unchanged audits none."""
+    seen: set[str] = set()
+    for s in REGISTERED_SETUPS:
+        for values in s.values[:2]:
+            a = _v2_audit(s, values)
+            assert D.replay(REGISTRATION, _REGISTRATION_OF(a), pieces) == ("output", D.canonical({"codes": []}))
+            for change, x in ((c, x) for c in ENTRIES + REGISTERED_PARAMS for x in range(8)):
+                b = copy.deepcopy(a)
+                try:
+                    change(b, x)
+                except (KeyError, TypeError, IndexError, ValueError, AttributeError):
+                    continue
+                kind, out = D.replay(REGISTRATION, _json(_REGISTRATION_OF(b)), pieces)
+                seen |= set(json.loads(out)["codes"]) if kind == "output" else set()
+    assert R7_CODES <= seen, sorted(R7_CODES - seen)
+
+
+def test_a_v2_audit_reads_the_sessions_registered_roots(server):
+    """A v2 audit of each program accepts with the sessions' registered reads opened against the registered roots, and
+    rejects them opened against another root, one missing, one extra, or none reported."""
+    for s in REGISTERED_SETUPS:
+        a = _v2_audit(s, s.values[1])
+        opened = a["evidence"]["session_registered"]
+        v = sorted(opened)[0]
+        for got, want in ((opened, "accept"), ({**opened, v: "12" * 64}, "reject"),
+                          ({k: r for k, r in opened.items() if k != v}, "reject"), ({**opened, "extra": "ab" * 64}, "reject"),
+                          ({}, "reject"), (None, "reject")):
+            case = _json(_case({**a, "evidence": {**a["evidence"], "session_registered": got}}))
+            assert D.replay(ONE_STAGE, case, server)[0] == want, (s.program.fn.id, got)

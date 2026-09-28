@@ -149,6 +149,29 @@ def test_a_pack_holding_anything_but_verdict_entries_is_refused_whole(tmp_path, 
     assert V.main(["combine", str(tmp_path / "all.tar.gz"), str(pack)]) == 1 and not (tmp_path / "all.tar.gz").exists()
 
 
+def test_combine_streams_its_entries_and_writes_the_pack_holding_them_whole_would(tmp_path):
+    """`gather_verdicts` combines the newest recorded checks' packs on the lander's VM, and twelve of them held whole outgrew its
+    15 GB: combining keeps one entry at a time in memory, writes the same bytes, and leaves no spill behind."""
+    import tracemalloc
+
+    big = 8 << 20
+    a, b = tmp_path / "a.tar.gz", tmp_path / "b.tar.gz"
+    V._write(a, [("check/lean-builds/x.json", os.urandom(big)), ("tests/k.json", b"{\"a\": 1}")])
+    V._write(b, [("check/lean-builds/y.json", os.urandom(big)), ("tests/k.json", b"{\"b\": 2}")])
+    out = tmp_path / "out" / "all.tar.gz"
+    tracemalloc.start()
+    assert V.combine([a, b], out) == 3
+    peak = tracemalloc.get_traced_memory()[1]
+    tracemalloc.stop()
+    assert peak < big // 2, peak
+    with tarfile.open(a, "r:gz") as ta, tarfile.open(b, "r:gz") as tb:
+        found = {**{m.name: tb.extractfile(m).read() for m in tb.getmembers()}, **{m.name: ta.extractfile(m).read() for m in ta.getmembers()}}
+    whole = tmp_path / "whole.tar.gz"
+    V._write(whole, sorted(found.items()))
+    assert out.read_bytes() == whole.read_bytes() and found["tests/k.json"] == b"{\"a\": 1}"
+    assert [p.name for p in out.parent.iterdir()] == ["all.tar.gz"]
+
+
 def test_check_imports_a_pack_from_the_runs_inputs_and_names_it_in_the_result(tmp_path, monkeypatch):
     check = _load("check")
     _fill(_machine(tmp_path, monkeypatch, "a"))
@@ -215,6 +238,31 @@ def test_a_recorded_check_gathers_the_newest_recorded_checks_packs_into_one(tmp_
     assert V.import_(got) == (3, 0)
     assert (V.roots()["tests"] / "k1.json").read_text() == "new"
     assert check.gather_verdicts(tmp_path / "none", _Store(tmp_path, {"r-none": None})) is None
+
+
+def test_a_recorded_checks_pack_import_refuses_is_passed_over_by_name_and_a_refused_pack_given_is_an_error(tmp_path, monkeypatch,
+                                                                                                          capsys):
+    """A pack holding a Lean audit's scratch (9 Oct: `check/lean-audit-scratch-*/.../lake-manifest.json` in a recorded check's
+    pack crashed every `--record`) is skipped and the next one taken; none of its entries is reused."""
+    check = _load("check")
+    bad = tmp_path / "bad.tar.gz"
+    with tarfile.open(bad, "w:gz") as tar:
+        for name in ("tests/k7.json", "check/lean-audit-scratch-_2hjygw7/backends/flock/verifier/lean/lake-manifest.json"):
+            data = b"{}"
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
+            tar.addfile(info, io.BytesIO(data))
+    r = _machine(tmp_path, monkeypatch, "old")
+    _write(r["tests"] / "k3.json", "3")
+    V.export(old := tmp_path / "old.tar.gz")
+    got = check.gather_verdicts(tmp_path / "out", _Store(tmp_path, {"r-bad": bad, "r-old": old}), limit=1)
+    out = capsys.readouterr().out
+    assert "skipping r-bad's pack, which import refuses (BadPack: member 'check/lean-audit-scratch-" in out
+    assert "1 entries gathered from 1 recorded checks (r-old)" in out
+    _machine(tmp_path, monkeypatch, "pod")
+    assert V.import_(got) == (1, 0) and not (V.roots()["tests"] / "k7.json").exists()
+    with pytest.raises(SystemExit, match="refused"):
+        check.gather_verdicts(tmp_path / "x", _Store(tmp_path, {}), given=bad)
 
 
 def test_a_store_that_cant_be_read_gathers_nothing_and_says_why(tmp_path, capsys):

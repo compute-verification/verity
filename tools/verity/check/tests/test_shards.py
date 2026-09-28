@@ -287,6 +287,7 @@ def test_record_sends_a_shard_only_what_its_own_steps_read(tmp_path, monkeypatch
 
 def test_a_recorded_shard_tells_the_preflight_its_parts(monkeypatch):
     """The preflight asks for the Lean dependencies of the packages a shard audits, the only ones it carries URLs for."""
+    monkeypatch.setattr(CHECK, "gather_verdicts", lambda d, given=None: None)
     real, parts = subprocess.run, []
 
     def run(cmd, *a, **k):
