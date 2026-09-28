@@ -78,7 +78,8 @@ def run_mode(model: str, mode: str) -> dict:
     t0 = time.perf_counter()
     llm.generate(decode, SamplingParams(temperature=0.0, max_tokens=128, ignore_eos=True), use_tqdm=False)
     dec_s = time.perf_counter() - t0
-    return {"mode": mode, "load_s": load_s, "prefill_tok_s": 4 * 2048 / min(times), "prefill_s": times,
+    return {"mode": mode, "load_s": load_s, "prefill_tok_s": 4 * 2048 / median, "prefill_tok_s_best": 4 * 2048 / min(times),
+            "prefill_s": times,
             "decode_b32_tok_s": 32 * 128 / dec_s, "tokens": [list(o.outputs[0].token_ids) for o in outs],
             "texts": [o.outputs[0].text for o in outs[:3]], "device": torch.cuda.get_device_name(),
             "attention_backend": os.environ.get("ATTENTION_BACKEND", "auto")}
