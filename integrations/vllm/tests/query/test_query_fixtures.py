@@ -300,6 +300,7 @@ def _canonical_sets(P, sc) -> list[Part]:
 
 
 @pytest.mark.parametrize("name", FX.VLLM_FAMILY_FIXTURES)
+@pytest.mark.slow
 def test_canonical_shapes_by_oracle(name):
     P = FX.fixture(name)
     sets = _canonical_sets(P, FX.root_scope(P))

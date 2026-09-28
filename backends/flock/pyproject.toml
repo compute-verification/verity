@@ -3,7 +3,7 @@ name = "verity-flock"
 version = "0.1.0"
 description = "Flock backend family: the committed GEMM-coordinate relation and its keyed-BLAKE3 row leaves in one binary-field proof (flock-pure), with the pinned unit lowering."
 requires-python = ">=3.12"
-dependencies = ["verity", "verity-numerical", "numpy", "blake3>=1.0"]
+dependencies = ["verity", "verity-vllm", "verity-numerical", "numpy", "blake3>=1.0"]
 
 [build-system]
 requires = ["hatchling"]
@@ -14,4 +14,13 @@ packages = ["python/verity_flock"]
 
 [tool.uv.sources]
 verity = { workspace = true }
+verity-vllm = { workspace = true }
 verity-numerical = { workspace = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# Test-only: tests import B-Ligero (through verity_numerical) and circuit-check's targets, and read the census.
+inputs = ["backends/direct", "census", "tools/circuit_check"]

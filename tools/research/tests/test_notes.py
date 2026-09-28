@@ -630,6 +630,7 @@ def test_push_sends_the_lane_branch_never_main_and_never_forces(tmp_path, repo):
     assert notes.push_branch(root, "nobranch", repo) == (f"REFUSED nobranch: no local branch lane/nobranch in {repo}", 2)
 
 
+@pytest.mark.slow
 def test_branches_lists_what_origin_lacks_and_blocks_only_on_open_lanes(tmp_path, repo):
     root = tmp_path / "notes"
     origin = tmp_path / "origin.git"

@@ -866,6 +866,7 @@ def test_stage1_flip_one_payload_bit_of_bot_is_named_by_every_class_and_never_re
         assert g.evaluate(1, x16, BOT16, 0x3F80, 0x3F80) == INV16  # INV beats bot in an unselected row too (A3: INV anywhere -> INV)
 
 
+@pytest.mark.slow
 def test_stage1_reference_evaluator_exposes_the_complete_assignment_every_gate_with_its_reading(tmp_path):
     """Stage-1 cross-cutting: `serve3_reference.materialize` assigns EVERY gate (not only outputs); `lifted_dump.rows` reads the complete
     assignment back with each gate's class / width / raw word / A3 reading; on the tiny serve fixture with EOS at the raw event the

@@ -1,3 +1,4 @@
+import pytest
 """[R17 mfast] cb_a.compact: run progressions are the record's maximal runs, run-length-encoded over (idx, lo, hi) -- built from the
 descriptor's refs JSON without expanding a Strided or a gather over consecutive producers, equal iff the run lists are equal, expandable
 back to the record's bytes."""
@@ -255,6 +256,7 @@ def _prog_facts(P) -> dict:
             "peer_fields": P.peer_fields, "peer_index": P.peer_index, "tp": getattr(P, "tp", None), "seed_index": P.seed_index}
 
 
+@pytest.mark.slow
 def test_nothing_beside_the_files_of_record_is_read_a_forged_compact_sidecar_changes_no_document(tmp_path, monkeypatch):
     """[rev F-r17-12, M-0497] unit 7's fold-dir sidecars are withdrawn: the fold writes none, and the loader (record form and compact form)
     reads program.json + instances.jsonl only.  Negative: the forgery rev demonstrated -- another fold's compact copy placed in this fold
@@ -376,6 +378,7 @@ def test_stored_form_progressions_is_lossless_over_the_records_run_lists():
     assert n_items < n_runs
 
 
+@pytest.mark.slow
 def test_persist_program_progressions_form_gives_the_same_prog_and_document_and_converts_losslessly(tmp_path, monkeypatch):
     """[R17 mfast F2] VERITY_INSTANCES_FORM=progressions: persist_program writes instances.jsonl v2 straight from the fold's Refs (no runs()
     expansion); (1) it converts to the v1 file BYTE FOR BYTE (rows) and v1 -> v2 gives the v2 bytes; (2) load_oracle (record form and

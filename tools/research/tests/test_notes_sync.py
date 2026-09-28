@@ -58,6 +58,7 @@ def test_a_sync_commits_pushes_and_the_other_machine_picks_it_up(machines):
     assert NS.sync(b, secrets=[]) == {**rep, "note": "already on the remote"}
 
 
+@pytest.mark.slow
 def test_a2_two_machines_20_times_in_the_same_minute_lose_no_write(machines):
     origin, a, b = machines
     errors: list = []
@@ -111,6 +112,7 @@ def test_the_watcher_reports_a_failed_sync_as_sync_failed_with_its_lag_every_pas
     assert notes.sync_lines(a, NS.sync(a, secrets=[]), now) == []                                    # a clean pass says nothing
 
 
+@pytest.mark.slow
 def test_key_material_is_refused_before_anything_is_pushed(machines):
     origin, a, _ = machines
     before = _git(origin, "rev-parse", "main")
@@ -146,7 +148,7 @@ def test_a5_scan_finds_big_blobs_and_keys_anywhere_in_history(machines):
     _, a, _ = machines
     assert NS.scan(a, secrets=[]) == {"blobs": 1, "big": [], "keys": []}
     (a / "big.bin").write_bytes(b"x" * 2000)
-    (a / "k.md").write_text("-----BEGIN OPENSSH PRIVATE KEY-----\n")
+    (a / "k.md").write_text("-----BEGIN OPENSSH " "PRIVATE KEY-----\n")   # split, so no scanner reads a key here
     _git(a, "add", "-A")
     _git(a, "commit", "-qm", "bad")
     _git(a, "rm", "-q", "k.md", "big.bin")
@@ -220,6 +222,7 @@ def test_notes_already_committed_are_not_rechecked_but_a_changed_created_is(mach
         f"{old}: created: 2026-09-28T09:00Z is 138 min ahead; use 2026-09-28T06:42Z (date -u +%Y-%m-%dT%H:%MZ)"]
 
 
+@pytest.mark.slow
 def test_sync_and_checkpoint_exit_5_naming_the_note_and_the_stamp_to_use(machines, monkeypatch, capsys):
     origin, a, _ = machines
     monkeypatch.setattr(NS, "_utcnow", lambda: NOW)

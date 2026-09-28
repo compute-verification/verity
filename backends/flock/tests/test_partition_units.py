@@ -28,6 +28,7 @@ def rope():
     return PU.one_call(TG.definition("RoPE_v1{NHEADS=2,D=16}"))
 
 
+@pytest.mark.slow
 def test_q_word_on_the_tiny_model(tiny):
     r = PU.check(PU.partition_units(tiny, "q-word"), T=8)
     assert r["units"] == 3595 and r["shapes"] == 31 and r["shapes_lowered"] >= 11
@@ -43,6 +44,7 @@ def test_odd_partitions(rope, spec):
     assert r["units"] != PU.check(PU.partition_units(rope, "q-word"), T=1)["units"]
 
 
+@pytest.mark.slow
 def test_a_class_circuit_rejects_another_class(tiny):
     units = PU.partition_units(tiny, "q-word")
     lowered = []

@@ -41,7 +41,7 @@ from typing import Any, Callable, Iterable, Iterator, Sequence
 from verity.proofs.query import ValueRef
 
 __all__ = ["Port", "CallView", "ProgramView", "InputView", "from_instances", "from_descriptor", "definition_ports", "parse_type_repr",
-           "spec_base", "spec_statics", "ports_of_type", "REGISTRY_MODULES", "param_reads", "reads_any_of", "iter_instance_rows"]
+           "spec_base", "spec_statics", "ports_of_type", "param_reads", "reads_any_of", "iter_instance_rows"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -545,28 +545,16 @@ def parse_type_repr(s: str):
     return t
 
 
-#: the integration's registry modules whose Definitions a derived Program names (imported once by `definition_ports`; a module that
-#: fails to import is reported with the port lookup that needed it, never treated as "not registered")
-REGISTRY_MODULES = ("b1", "dense", "fp8", "moe", "sampling", "b1_tp2", "moe_pad", "fa3_check_inf")
-_REGISTRY: dict[str, Any] = {}
-
-
 def _registry():
-    if "reg" not in _REGISTRY:
-        import importlib
-        try:
-            from verity.ir.defs import REGISTRY
-        except Exception as e:  # noqa: BLE001  -- the core package missing is an ENVIRONMENT fault, named (never a "not registered" answer)
-            from verity_vllm.query.manifest.format import RegistryUnavailable
-            raise RegistryUnavailable(e) from e
-        errors = []
-        for m in REGISTRY_MODULES:
-            try:
-                importlib.import_module(f"verity_vllm.program.registry.{m}")
-            except Exception as e:  # noqa: BLE001
-                errors.append(f"verity_vllm.program.registry.{m}: {type(e).__name__}: {e}")
-        _REGISTRY["reg"], _REGISTRY["errors"] = REGISTRY, errors
-    return _REGISTRY["reg"], _REGISTRY["errors"]
+    """(REGISTRY, import errors) of the integration's registry, every module loaded (`verity_vllm.program.registry.load`); a module that
+    fails to import is reported with the lookup that needed it, never treated as "not registered"."""
+    try:
+        from verity.ir.defs import REGISTRY  # noqa: F401
+    except Exception as e:  # noqa: BLE001  -- the core package missing is an ENVIRONMENT fault, named (never a "not registered" answer)
+        from verity_vllm.query.manifest.format import RegistryUnavailable
+        raise RegistryUnavailable(e) from e
+    from verity_vllm.program.registry.catalog import load
+    return load()
 
 
 _PORTS_CACHE: dict[str, tuple[Port, ...]] = {}

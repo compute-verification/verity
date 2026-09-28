@@ -12,6 +12,7 @@
   research data <store subcommand...>            # the evidence store: put show where fetch verify select snapshot labels label reindex sql
   research merge REF [--into main] [--tool check] [-m MSG] [--dry-run]   # the merge gate: `git merge --no-ff REF` only with a passing
                                                  # attempt of the tool for that exact commit in the store (research/merge.py)
+  research merge --train A B C [--on MACHINE --project P]                # several refs as one candidate, one check, a fast-forward
   research pods check-part <machine|pod-id>      # reference-part gate: name, VRAM vs [families.<fam>] vram_mb, host CPU, load, verdict (exit 3 = variant)
   research pods create <runpod flags> [--require-reference-part] [--register --project P] [--allow-duplicate]   # at most one live pod per --name (exit 4 exists, 5 no stock, 2 failed), then the same verdict once sshd answers
   research pods register NAME --pod-id ID --project P | unregister NAME | registry [import]   # the pod registry: one file per machine (pods/registry.py)

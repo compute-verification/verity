@@ -120,6 +120,7 @@ def test_zgroup_structure():
 # ------------------------------------------------------------------------------------------------ 3. the GPU fixture
 
 
+@pytest.mark.slow
 def test_gpu_fixture_every_split_geometry_bit_exact():
     from verity_vllm.pipeline.topp_split_probe import check
     rep = check(FIX, RECORD, verbose=False)

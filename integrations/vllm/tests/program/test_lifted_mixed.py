@@ -282,6 +282,7 @@ def PoisonedWorkload(B, S, *args):
     return tuple_of(out_a, array_of(gated))
 
 
+@pytest.mark.slow
 def test_negative_a_cross_request_bot_edge_is_caught_by_identity_and_by_the_interface_check(wl_u, wl_l):
     prompts = {"A": list(_inputs()[0]), "B": _prompt_b()}
     bad = Program(bind(PoisonedWorkload, WL=wl_l.fn, EOS=EOS, CAP=CAP))
@@ -370,6 +371,7 @@ def _wl_call_base(wl, prog, rid):
 
 
 @pytest.mark.parametrize("lag", [0, 1])
+@pytest.mark.slow
 def test_the_live_count_hook_equals_the_components_own_input_activity_and_drops_by_one_at_a_A(component, lag):
     prompts = {"A": list(_inputs()[0]), "B": _prompt_b()}
     wl, prog, t, outs, n_live, S = _hook_run(component, (0, 0), prompts, lag)
@@ -402,6 +404,7 @@ def test_the_live_count_hook_equals_the_components_own_input_activity_and_drops_
     assert [L.payload(L.SPLITS_BITS, x) for x in S] == [32] * CAP and all(L.is_active(L.SPLITS_BITS, x) for x in S)
 
 
+@pytest.mark.slow
 def test_the_hook_follows_declared_arrivals_and_S_is_bot_when_no_request_is_live(component):
     # arrivals (0, 2): the horizon is 11 engine steps; A alone for t < 2, both until A stops, B alone after
     prompts = {"A": list(_inputs()[0]), "B": _prompt_b()}

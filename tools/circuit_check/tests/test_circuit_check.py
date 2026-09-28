@@ -4,7 +4,8 @@ negatives (each check fires by name on a circuit built to break it).
 A failure is a correctness or invariant violation.  The ones `main` already has are listed in `circuit_check.known` with their
 cause; a test whose only failures are known is an expected failure, and `test_known_failures_are_current` fails once a known one
 is fixed, so the entry is dropped.  Redundant and dead gates are warnings: counted in the report, never a test failure here.
-The per-target tests are marked `circuit_suite`: `check` deselects them and runs `circuit-check --all`, the same checks.
+The per-target tests are marked `circuit_suite` and collected only under `-m circuit_suite` (see conftest.py): `check` runs the
+same checks as `circuit-check --all`.
 """
 from __future__ import annotations
 
@@ -96,6 +97,7 @@ def _request_program(tmp_path: Path, **kw) -> Path:
     return out
 
 
+@pytest.mark.slow
 def test_row(tmp_path, results):
     r = CK.check_row(_request_program(tmp_path, rope=True), OPTS, memo=MEMO, pins=PINS)
     results.append({**r, "kind": "row", "target": "synthetic request Program"})
@@ -103,6 +105,7 @@ def test_row(tmp_path, results):
     _clean(r)
 
 
+@pytest.mark.slow
 def test_a_call_output_no_commitment_holds_is_named(tmp_path):
     """The attention fixture's o_proj Gemm returns a value no later Call reads and the query does not require: a unit would end
     at an uncommitted value, across Calls."""
@@ -263,6 +266,7 @@ def test_redundant_ands_are_counted():
     assert CK.redundant_ands(C)[0] == 2
 
 
+@pytest.mark.slow
 def test_the_cli_writes_a_report_and_fails_by_name(tmp_path, capsys):
     from circuit_check import cli
 
@@ -276,3 +280,55 @@ def test_the_cli_writes_a_report_and_fails_by_name(tmp_path, capsys):
     assert cli.main([fp8, "-q"]) == 0                                            # a known failure: named, not failing
     assert f"known partition/gate-recomputed {fp8}" in capsys.readouterr().out
     assert cli.main([fp8, "-q", "--strict"]) == 1
+
+
+def test_the_cache_reuses_a_report_only_while_every_read_is_unchanged(tmp_path):
+    """Two runs of one request: the second is a hit.  An entry whose recorded digest of one file it read no longer matches (as
+    after an edit) is not reused, and the run records a new entry."""
+    import subprocess
+    import sys
+
+    def run():
+        r = subprocess.run([sys.executable, "-m", "circuit_check", "F32Mul_v1", "-q", "--cache", str(tmp_path)], capture_output=True, text=True)
+        assert r.returncode == 0, r.stderr
+        return r.stdout
+
+    assert "cache hit" not in run() and "cache hit" in run()
+    (entry,) = list(tmp_path.glob("*/*.json"))
+    e = json.loads(entry.read_text())
+    assert "packages/verity/src/verity/ir/defs.py" in e["reads"]["files"] and e["reads"]["dirs"]
+    assert e["key"]["version"] == entry.parent.name
+    e["reads"]["files"]["packages/verity/src/verity/ir/defs.py"] = "0" * 64
+    entry.write_text(json.dumps(e))
+    assert "cache hit" not in run() and len(list(tmp_path.glob("*/*.json"))) == 2
+
+
+def test_parallel_jobs_give_the_serial_report(tmp_path):
+    from circuit_check import cli
+
+    specs = ["F32Mul_v1", "RMSNormTriton_v1{N=64,EPS=1e-05}", "TokenSelect_v1{V=64}", "rope-head"]
+    strip = lambda rep: [{k: v for k, v in t.items() if k != "seconds"} for t in rep["targets"]]  # noqa: E731
+    assert strip(cli.run(specs, OPTS, log=None, jobs=3)) == strip(cli.run(specs, OPTS, log=None, jobs=1))
+
+
+def test_the_cache_reads_the_tree_as_git_has_it(tmp_path):
+    """A build or bytecode inside the tree (ignored by git) changes no recorded read; a new file git sees does."""
+    import subprocess
+
+    from circuit_check import cache as CC
+
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    (tmp_path / ".gitignore").write_text("build/\n")
+    (tmp_path / "a.txt").write_text("a")
+    got = {"files": ["a.txt", "build/lib.so"], "dirs": ["."], "probes": ["build/lib.so", "b.txt"]}
+    CC._VISIBLE.clear()
+    before = CC._digests(tmp_path, got)
+    (tmp_path / "build").mkdir()
+    (tmp_path / "build" / "lib.so").write_bytes(b"built")
+    CC._VISIBLE.clear()
+    assert CC._digests(tmp_path, got) == before
+    (tmp_path / "b.txt").write_text("b")
+    CC._VISIBLE.clear()
+    after = CC._digests(tmp_path, got)
+    assert after["dirs"] != before["dirs"] and after["probes"]["b.txt"] == "file"
+    CC._VISIBLE.clear()
