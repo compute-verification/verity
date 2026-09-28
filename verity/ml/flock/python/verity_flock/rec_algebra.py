@@ -179,27 +179,29 @@ class _Reader:
 
 
 def decode(sh: Shape, data: bytes) -> Proof:
-    """The proof container (`decodeProof`); bytes after it are ignored (§8.1)."""
-    if sh.opening_only:
-        raise ValueError("an opening-only shape has no proof container of its own")
+    """The proof container (`decodeProof`); bytes after it are ignored (§8.1). An opening-only shape's is a rep's with an empty
+    zerocheck and lincheck (``flock-circuit stacked``)."""
     s = sh.sched
     R = len(s.levels) - 1
     r = _Reader(data)
     h = lambda: r.take(sh.hash_len)
     salts = lambda q: r.vec(q if sh.salt_len else 0, lambda: r.take(sh.salt_len), "opened_salts")
     pair = lambda: (r.f(), r.f())
+    piop = not sh.opening_only
     r.vec(1 << s.levels[0].cap, h, "cap")
     r.take(8 * 3 + 4)
     if r.take(1)[0]:
         r.u64()
     r.take(4)
-    ab = r.vec(64, r.f, "round1_ab")
-    c = r.vec(64, r.f, "round1_c")
-    zc = r.vec(sh.m - 6, pair, "multilinear_rounds")
+    ab = r.vec(64 * piop, r.f, "round1_ab")
+    c = r.vec(64 * piop, r.f, "round1_c")
+    zc = r.vec((sh.m - 6) * piop, pair, "multilinear_rounds")
     fa, fb, fc = r.f(), r.f(), r.f()
+    if not piop and (fa or fb or fc):
+        raise ValueError("an opening-only container's zerocheck evaluations are not empty")
     r.vec(0, r.u64, "zerocheck grinding_nonces")
-    lc = r.vec(sh.k_log - 6, pair, "lincheck rounds")
-    zp = r.vec(64, r.f, "z_partial")
+    lc = r.vec((sh.k_log - 6) * piop, pair, "lincheck rounds")
+    zp = r.vec(64 * piop, r.f, "z_partial")
     for _ in range(r.u64()):
         pair()
     r.vec(0, r.u64, "lincheck grinding_nonces")
