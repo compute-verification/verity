@@ -19,8 +19,8 @@ VERIFIER = LEAN.parent
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 STATEMENT = "verity/flock-circuit/types+seed-injection"
 #: the typed GEMM (gemm-coordinate/k64/sm80-mma-bf16, 4 instances) staged at #273, and every CPU selftest case of its
-#: flock-circuit (seed-injection build), recorded
-FIXTURE = "art:dc3225f1"
+#: flock-circuit (seed-injection build, #273 at 8505c540: the typed id's own tags), recorded
+FIXTURE = "art:e9c0209d"
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
@@ -53,8 +53,6 @@ def test_the_verifier_reads_a_typed_template(gemm):
     assert st["circuit_sha512"] == hashlib.sha512(circuit.read_bytes()).hexdigest() and st["regions"] == 3
 
 
-@pytest.mark.xfail(strict=True, reason=f"{FIXTURE}'s sessions were proved under the flat digest tag `verity/flock-circuit`; "
-                   "the statement digest now leads with the typed id, as Rust's TAG will, so re-record them from that build")
 def test_it_gives_the_rust_provers_sessions_their_verdicts(gemm, tmp_path):
     root, _ = gemm
     subprocess.run([sys.executable, str(VERIFIER / "selftest_records.py"), str(root / "records"), str(tmp_path)], check=True,
