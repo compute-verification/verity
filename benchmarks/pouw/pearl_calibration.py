@@ -51,7 +51,9 @@ def run_mode(model: str, mode: str) -> dict:
     import torch
     from vllm import LLM, SamplingParams
 
-    kw = dict(model=model, gpu_memory_utilization=0.8, max_model_len=4096, max_num_seqs=32, max_num_batched_tokens=8192, seed=0)
+    # Prefix caching would serve the repeated prefill prompts from cache, and cached prefills skip Pearl's mining.
+    kw = dict(model=model, gpu_memory_utilization=0.8, max_model_len=4096, max_num_seqs=32, max_num_batched_tokens=8192, seed=0,
+              enable_prefix_caching=False)
     if mode != "bf16":
         kw["quantization"] = "pearl"
     if os.environ.get("ATTENTION_BACKEND"):
