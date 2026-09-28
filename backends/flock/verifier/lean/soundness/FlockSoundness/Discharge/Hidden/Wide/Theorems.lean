@@ -4,6 +4,7 @@ import FlockSoundness.Discharge.Hidden.Wide.V2
 import FlockSoundness.Discharge.Hidden.Wide.Shared
 import FlockSoundness.Discharge.Hidden.Wide.Checked
 import FlockSoundness.Discharge.Hidden.Wide.Upv
+import FlockSoundness.Discharge.Hidden.Wide.Block
 
 /-!
 # The widened hidden-output statements, one theorem each
