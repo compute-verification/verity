@@ -70,6 +70,7 @@ import fcntl
 import hashlib
 import importlib.util
 import json
+import math
 import os
 import re
 import shlex
@@ -892,7 +893,8 @@ class RemoteQuickTier(QuickTier):
                       f'-- python3 "$i/{job.name}" {shlex.join(args)}')
             r = self.launch([sys.executable, "-m", "research", "run", "--id", rid, "--on", on, "--project", self.project,
                              "--source", str(wt), "--cwd", "source", "--send", str(job), "--send", str(self.slot), "--require-result",
-                             "--timeout", f"{self.wait_s + self.timeout_s:g}", "--declared-output", "out/*", "--", "sh", "-c", script], wt)
+                             "--timeout", f"{self.wait_s + self.timeout_s:g}", "--custody-ttl", str(math.ceil(self.wait_s + self.timeout_s + REMOTE_GRACE_S)),
+                             "--declared-output", "out/*", "--", "sh", "-c", script], wt)
         if r.returncode:
             return f"`research run --on {on}` failed (exit {r.returncode}): {(r.stderr or r.stdout or '').strip()[-400:]}"
         print(f"research queue: the quick tier runs as {rid} on {on}, in a check slot; waiting for it to end "
