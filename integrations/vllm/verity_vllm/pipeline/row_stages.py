@@ -558,27 +558,28 @@ class SingleRow(Row):
                        "committer": {"source": self.env.environ.get("RESEARCH_SOURCE_SHA")}}, f)
         return req
 
+    def program_digest(self) -> str:
+        """The Program digest the Commit is keyed by: the one named, else the Build's of record ("" when unreadable)."""
+        try:
+            return self.ck_.program_digest or R.program_digest_of_record(self.d, self.B)
+        except (OSError, ValueError, KeyError, TypeError, AttributeError):
+            return ""
+
     def manifest_of_record(self) -> str:
-        """The required-value manifest the Commit runs over: the one named, else the Build's when it is built under the query of record
-        (a manifest of another query, or of none, is moved aside, never used), else rebuilt here from the Build's request Programs."""
+        """The required-value manifest the Commit runs over: the one named, else the Build's when it is of record (`R.manifest_not_of_record`:
+        the query of record with a partition, the Build's Program digest, the row's tap policies); any other is moved aside, never used, and
+        the manifest rebuilt here from the Build's request Programs."""
         d = self.d
         man = self.ck_.required_manifest or ""
         if not man and os.path.isfile(f"{d}/manifest.json"):
-            qid = R.manifest_query(f"{d}/manifest.json")
-            mismatch = R.manifest_policy_mismatch(f"{d}/manifest.json", self.ck_) if qid == R.QUERY_OF_RECORD else []
-            if mismatch:
-                prev = f"{d}/manifest.policy-{'-'.join(mismatch).replace('_', '-')}-{_stamp()}.json"
-                os.replace(f"{d}/manifest.json", prev)
-                self.log(f"manifest.json beside the Build disagrees with this Commit's taps on the {', '.join(mismatch)} policy: moved aside "
-                         f"({os.path.basename(prev)}), rebuilding the manifest under the row's policies")
-            elif qid == R.QUERY_OF_RECORD:
+            slug, why = R.manifest_not_of_record(R.load_json(f"{d}/manifest.json"), self.program_digest(), self.ck_)
+            if not why:
                 man = f"{d}/manifest.json"
                 self.log(f"required-value manifest of record: {man} (built at the Build stage: {_tail(f'{d}/manifest.log', 200)})")
             else:
-                prev = f"{d}/manifest.other-query-{_stamp()}.json"
+                prev = f"{d}/manifest.{slug}-{_stamp()}.json"
                 os.replace(f"{d}/manifest.json", prev)
-                self.log(f"manifest.json beside the Build is not built under the query of record {R.QUERY_OF_RECORD} (query.query_id="
-                         f"{qid or 'none'}): moved aside ({os.path.basename(prev)}), rebuilding the manifest of record")
+                self.log(f"manifest.json beside the Build {why}: moved aside ({os.path.basename(prev)}), rebuilding the manifest of record")
         if not man and (os.path.isfile(f"{d}/build_request/instances.json.gz") or glob.glob(f"{d}/build_request_LP*_T*")):
             mrc = self.required_manifest("commit")
             if mrc == 3:
@@ -688,12 +689,7 @@ class SingleRow(Row):
         cmd = self.commit_cmd(taps)
         if man:
             cmd += ["--required-manifest", man]
-        pdig = ck.program_digest
-        if not pdig:
-            try:
-                pdig = R.program_digest_of_record(d, self.B)
-            except (OSError, ValueError, KeyError, TypeError, AttributeError):
-                pdig = ""
+        pdig = self.program_digest()
         if pdig:
             cmd += ["--program-digest", pdig]
         cmd += (ck.commit_args or "").split()

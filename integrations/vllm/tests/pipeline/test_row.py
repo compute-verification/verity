@@ -289,9 +289,26 @@ def test_a_manifest_of_other_policies_is_rebuilt_either_way(tmp_path):
                                                                                                 "guarded_max"]
 
 
-def _record_manifest(path: Path, query_id: str) -> None:
+PD = "p" * 64
+
+
+def _record_manifest(path: Path, query_id: str, *, program_digest: str = PD, partition: bool = True) -> None:
     query = {"query_id": query_id, **{k: {} for k in ("norm_scales", "router_softmax", "vocab_range", "guarded_max")}}
-    path.write_text(json.dumps({"query": query, "identities": [{"family": "instance_outputs"}]}))
+    if partition:
+        query["partition"] = {"object": {"format": "verity/partition/v1"}, "digest": "d" * 128}
+    path.write_text(json.dumps({"query": query, "program_digest": program_digest, "identities": [{"family": "instance_outputs"}]}))
+
+
+def _row_with_build(tmp_path: Path, monkeypatch) -> tuple[SingleRow, list[str]]:
+    """A B=1 row whose Build recorded Program `PD`, and whose manifest rebuild (recorded in the list) writes the manifest of record."""
+    r = _row(tmp_path)
+    r.B = 1
+    (Path(r.d) / "build_request").mkdir()
+    (Path(r.d) / "build_request" / "instances.json.gz").write_bytes(b"")
+    (Path(r.d) / "build_summary.json").write_text(json.dumps({"request": {"program_digest": PD}}))
+    built: list[str] = []
+    monkeypatch.setattr(r, "required_manifest", lambda stage: built.append(stage) or _record_manifest(Path(r.d) / "manifest.json", R.QUERY_OF_RECORD) or 0)
+    return r, built
 
 
 def test_the_rows_query_of_record_is_the_one_its_manifest_build_writes():
@@ -299,29 +316,27 @@ def test_the_rows_query_of_record_is_the_one_its_manifest_build_writes():
     assert R.QUERY_OF_RECORD == required.QUERY_OF_RECORD == required.query_header("ampere", "fa2_hidden_m1_stream", return_slots=True)["query_id"]
 
 
-def test_a_manifest_of_record_under_the_query_of_record_is_reused_and_one_of_another_query_rebuilt(tmp_path, monkeypatch):
-    """#4's Commit (15:31Z) moved the Build's Q_word manifest aside as "not the query path's" and rebuilt it: a third full build per row.
-    The Build's manifest under the query of record is the Commit's; a pre-S1 Build's module-body manifest is moved aside and rebuilt."""
-    from verity_vllm.query.module_body import Q_MODULE_BODY_ID
-    r = _row(tmp_path)
-    (Path(r.d) / "build_request").mkdir()
-    (Path(r.d) / "build_request" / "instances.json.gz").write_bytes(b"")
-    built: list[str] = []
-
-    def rebuild(stage: str) -> int:
-        built.append(stage)
-        _record_manifest(Path(r.d) / "manifest.json", R.QUERY_OF_RECORD)
-        return 0
-
-    monkeypatch.setattr(r, "required_manifest", rebuild)
+def test_the_builds_q_word_manifest_with_a_partition_of_its_program_is_the_manifest_of_record(tmp_path, monkeypatch):
+    """#4's Commit (15:31Z) moved the Build's Q_word manifest aside as "not the query path's" and rebuilt it: a third full build per row."""
+    r, built = _row_with_build(tmp_path, monkeypatch)
+    assert r.program_digest() == PD
     _record_manifest(Path(r.d) / "manifest.json", R.QUERY_OF_RECORD)
     assert r.manifest_of_record() == f"{r.d}/manifest.json" and built == [] and list(Path(r.d).glob("manifest.*-*.json")) == []
     assert "required-value manifest of record:" in (Path(r.d) / "row.log").read_text()
-    _record_manifest(Path(r.d) / "manifest.json", Q_MODULE_BODY_ID)
+
+
+@pytest.mark.parametrize("kw, slug, why", [
+    ({"query_id": "Q_module_body_v1"}, "other-query", "is not built under the query of record"),      # a pre-S1 Build's
+    ({"program_digest": "q" * 64}, "other-program", "is of Program qqqqqqqqqqqqqqqq, not the Build's pppppppppppppppp"),
+    ({"partition": False}, "no-partition", "names no partition"),
+])
+def test_a_manifest_of_an_older_query_another_program_or_no_partition_is_moved_aside_and_rebuilt(tmp_path, monkeypatch, kw, slug, why):
+    r, built = _row_with_build(tmp_path, monkeypatch)
+    _record_manifest(Path(r.d) / "manifest.json", kw.pop("query_id", R.QUERY_OF_RECORD), **kw)
     assert r.manifest_of_record() == f"{r.d}/manifest.json" and built == ["commit"]
-    aside = list(Path(r.d).glob("manifest.other-query-*.json"))
-    assert len(aside) == 1 and R.manifest_query(str(aside[0])) == Q_MODULE_BODY_ID
-    assert R.manifest_query(f"{r.d}/manifest.json") == R.QUERY_OF_RECORD
+    aside = list(Path(r.d).glob(f"manifest.{slug}-*.json"))
+    assert len(aside) == 1 and why in (Path(r.d) / "row.log").read_text()
+    assert R.manifest_not_of_record(R.load_json(f"{r.d}/manifest.json"), PD, r.ck_) == ("", "")
 
 
 def test_a_dense_tp1_row_attaches_the_norm_tap_only(tmp_path):
