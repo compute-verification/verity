@@ -11,6 +11,10 @@ Steps, in order; `check` stops at the first that fails:
     pytest          every test under the root `pyproject.toml` testpaths, except the `circuit_suite` ones (the next step runs them)
     circuit-check   `circuit-check --all`: every registered Definition and template (`tools/circuit_check`), its report beside
                     the run's result
+    flock-circuit-build
+                    `backends/flock/check_build.sh`: `cargo check` of flock-circuit in every CPU feature set a pod builds,
+                    the proving builds without `seed-injection` among them (a Flock b684b12 checkout, cached under
+                    $FLOCK_CHECKOUT)
     lean-build      `lake build` of the Lean verifier (`backends/flock/verifier/lean`), then
     lean-unit-cut   its partition check against `verity.ir.partition` on random cuts (`unit_cut_agree.py`), then
     lean-audit      `tools/lean/audit.py --all --build`: every Lake package with a `lean-audit.json` built and audited
@@ -72,6 +76,7 @@ def steps(out: Path) -> list[tuple[str, list[str] | str, Path]]:
     py = sys.executable
     return [("pytest", [py, "-m", "pytest", "-q", "-p", "no:cacheprovider", "-m", "not circuit_suite"], ROOT),
             ("circuit-check", [py, "-m", "circuit_check", "--all", "-q", "--out", str(out / "circuit-check.json")], ROOT),
+            ("flock-circuit-build", ["bash", str(ROOT / "backends" / "flock" / "check_build.sh")], ROOT),
             *lean_steps(out)]
 
 
