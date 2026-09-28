@@ -13,7 +13,8 @@ process (vLLM keeps device memory until exit):
   difficulty; decode and CUDA-graph replays serve the fallback, as Pearl ships it.
 
 Measured: prefill tokens/s (4 prompts of 2,048 tokens, one scheduler step), decode tokens/s (batch 32, 128 tokens), and
-greedy-token agreement with ``bf16`` on 16 prompts.  The ratio of ``pearl-mining`` to ``pearl-fallback`` prefill is Pearl's
+greedy-token agreement with ``bf16`` on 16 prompts.  ``ATTENTION_BACKEND`` (e.g. ``FLASH_ATTN``) overrides vLLM's choice
+in every mode: FlashInfer's TRT-LLM attention JIT needs a full CUDA 13 toolkit, which a pip-only environment lacks.  The ratio of ``pearl-mining`` to ``pearl-fallback`` prefill is Pearl's
 own mining overhead on its own hardware, the calibration point for the RTX 4090 port in ``gemm_bench.py`` and
 ``vllm_bench.py``.
 """
@@ -53,6 +54,8 @@ def run_mode(model: str, mode: str) -> dict:
     kw = dict(model=model, gpu_memory_utilization=0.8, max_model_len=4096, max_num_seqs=32, max_num_batched_tokens=8192, seed=0)
     if mode != "bf16":
         kw["quantization"] = "pearl"
+    if os.environ.get("ATTENTION_BACKEND"):
+        kw["attention_config"] = {"backend": os.environ["ATTENTION_BACKEND"]}
     t0 = time.perf_counter()
     llm = LLM(**kw)
     load_s = time.perf_counter() - t0
@@ -74,7 +77,8 @@ def run_mode(model: str, mode: str) -> dict:
     dec_s = time.perf_counter() - t0
     return {"mode": mode, "load_s": load_s, "prefill_tok_s": 4 * 2048 / min(times), "prefill_s": times,
             "decode_b32_tok_s": 32 * 128 / dec_s, "tokens": [list(o.outputs[0].token_ids) for o in outs],
-            "texts": [o.outputs[0].text for o in outs[:3]], "device": torch.cuda.get_device_name()}
+            "texts": [o.outputs[0].text for o in outs[:3]], "device": torch.cuda.get_device_name(),
+            "attention_backend": os.environ.get("ATTENTION_BACKEND", "auto")}
 
 
 def main() -> None:
