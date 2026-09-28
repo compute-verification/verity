@@ -166,9 +166,15 @@ def _div_scale_a(C, a, b):
 
 
 def _f32_div(C, a, b):
+    """``RN(a / b)`` (``div.rn.f32``) for a constant divisor that is a normal power of two: ``RN(a * 2^-k)`` with an exact
+    reciprocal, a NaN result canonical."""
     if not all(w.is_const() for w in b):
         raise NotImplementedError("F32Div by a non-constant divisor has no piece yet")
-    return fp.f32_div_const(C, a, sum(w.c << i for i, w in enumerate(b)))
+    k = sum(w.c << i for i, w in enumerate(b))
+    e, m = (k >> 23) & 0xFF, k & 0x7FFFFF
+    if m or e in (0, 0xFF) or not 1 <= 254 - e <= 254:
+        raise NotImplementedError(f"f32 division by 0x{k:08x}: only by a normal power of two whose reciprocal is normal")
+    return fp.f32_mul(C, a, fp.f32_const((k & 0x80000000) | ((254 - e) << 23)))
 
 
 def _ftz(C, x):
