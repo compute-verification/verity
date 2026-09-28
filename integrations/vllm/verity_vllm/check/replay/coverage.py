@@ -60,6 +60,9 @@ QUERY_FAMILY_MECHANISM: dict[str, str] = {
     "vocab_range": ("opt-in, never the record (query.vocab_range): a TP rank's range values per token row -- interior to EmbeddingShard_v1 "
                     "(the vocabulary-range source): no VU row of its own under Q_module_body_v1; C1 / C3 here, and every value == the IR's is the "
                     "vocabulary-range exactness property (properties.vocab_range_exactness)"),
+    "scale_products": ("additive (query.scale_products): a shared-scale FP8 GEMM's scale products per token row -- interior to "
+                       "ScaledMmFp8BlockSharedScale_v1 (the scale-products source, F32Mul_v1 of the Call's own scale operands through the IR): "
+                       "no VU row of its own under Q_module_body_v1; C1 / C3 here"),
 }
 #: the query families whose identities ARE produced by Program rows (a VU or a named non-evaluable row must address each of them)
 QUERY_FAMILIES_WITH_ROWS = ("instance_outputs", "sampled_token_ids", "moe_block_stream", "tp_rank_partials")

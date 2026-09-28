@@ -1,5 +1,6 @@
-"""The opt-in taps a Commit attaches beside the record's sources, never the record: the router softmax (`router_softmax_source`) and a TP
-rank's vocabulary range (`vocab_range_source`).  One entry point for the single-rank Commit (`pipeline.commit`: `attach`) and for the
+"""The taps a Commit attaches beside the record's sources.  Opt-in, never the record: the router softmax (`router_softmax_source`) and a TP
+rank's vocabulary range (`vocab_range_source`).  Whenever the manifest names them: the blockwise FP8 GEMM's scale products
+(`scale_products_source`; the single-rank Commit only).  One entry point for the single-rank Commit (`pipeline.commit`: `attach`) and for the
 rank workers of a TP Commit: `pipeline.tp.commit` hands `for_ranks(...)` to `engine.rank_worker.tp2_commit_make` through the RPC, each
 rank calls it with its own committer and its rows of the merged manifest, and `require_on_every_rank` fails the Commit closed unless
 every rank attached every tap that is on."""
@@ -10,8 +11,9 @@ from functools import partial
 from pathlib import Path
 from typing import Any, Mapping
 
-from verity_vllm.acquire.sources import router_softmax_source, vocab_range_source
+from verity_vllm.acquire.sources import router_softmax_source, scale_products_source, vocab_range_source
 from verity_vllm.query import router_softmax as RS
+from verity_vllm.query import scale_products as SP
 from verity_vllm.query import vocab_range as VR
 
 #: (the rank result's key, the source module, the manifest family)
@@ -20,10 +22,12 @@ SOURCES = (("router_softmax_source", router_softmax_source, RS.FAMILY), ("vocab_
 
 def attach(com: Any, manifest: Mapping[str, Any] | None, required_classes: tuple[str, ...], *, router_tap_so: str | None = None,
            vocab_range: bool = False, explicit_classes: bool = False, model: Any = None) -> tuple[str, ...]:
-    """Attach each tap that is on to `com` (each refuses a manifest that does not name its family, exit 3); returns the required classes
-    with the taps' families added unless the caller gave them explicitly."""
+    """Attach each tap that is on to `com` (each refuses a manifest that does not name its family, exit 3), and the scale-products source
+    when the manifest names its family; returns the required classes with the taps' families added unless the caller gave them explicitly."""
     for (_key, mod, _fam), arg in zip(SOURCES, (router_tap_so, vocab_range)):
         required_classes, _src = mod.attach(com, arg, manifest, required_classes, explicit_classes=explicit_classes, model=model)
+    required_classes, _src = scale_products_source.attach(com, bool(SP.manifest_sites(manifest)), manifest, required_classes,
+                                                          explicit_classes=explicit_classes, model=model)
     return required_classes
 
 
