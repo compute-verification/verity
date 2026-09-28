@@ -119,8 +119,8 @@ def device_scales(fmt: F.Fmt, data: bytes) -> dict:
     return out
 
 
-def draw_beacon(transcript_root: bytes, records_digest: bytes) -> W.Beacon:
-    return W.Beacon(COMMITTED_ROUND + 1, tagged(DRAW_BEACON_TAG, transcript_root, records_digest))
+def draw_beacon(transcript_root: bytes, records_digest: bytes) -> W.RecordedDraw:
+    return W.RecordedDraw(COMMITTED_ROUND + 1, tagged(DRAW_BEACON_TAG, transcript_root, records_digest))
 
 
 def _pool(workers: int, chunksize: int = 1) -> tuple[Callable, Callable[[], None]]:
@@ -192,7 +192,8 @@ def prove(dump: str | os.PathLike, run: str, t: int = 8, workers: int = 1, schem
     splits = {unit.weight: W.Split(k)}
     digest = W.records_root(epoch.salt, epoch.weights_root, splits, [record])
     beacon = draw_beacon(tree.commitment.root, digest)
-    picks = W.draw(s, [record], beacon, tree.commitment.root, digest, epoch.salt, t) + W.exclusion_tiles(s, [record])
+    picks = (W.draw(s, [record], W.replay_key(beacon, tree.commitment.root, digest, epoch.salt), t)
+             + W.exclusion_tiles(s, [record]))
     ids = {(r.matmul, r.tile.rows[0], r.tile.cols[0]): r.id for r in refs}
     opened = sorted({ids[(pos, tile.rows[0], tile.cols[0])] for pos, tile in picks})
     openings = [{"tile": i, "a": [_opening_json(tree_a.open(r)) for r in refs[i].tile.rows],
@@ -250,7 +251,7 @@ def verify(t: dict, workers: int = 1, scheme: F.PearlC4 | None = None) -> dict:
               for w, sp in t["splits"].items()}
     commitment = Commitment(bytes.fromhex(t["transcript"]["root"]), t["transcript"]["count"])
     transcript = au.Transcript(tuple(bytes.fromhex(r) for r in t["activation_roots"]), commitment, ())
-    beacon = W.Beacon(t["draw"]["round"], bytes.fromhex(t["draw"]["value"]))
+    beacon = W.RecordedDraw(t["draw"]["round"], bytes.fromhex(t["draw"]["value"]))
     report = {"format": REPORT, "scheme": s.name, "run": t["run"], "shape": t["shape"], "t": t["t"],
               "shortcuts": list(SHORTCUTS), "salt": epoch.salt.hex()}
     fs = draw_beacon(commitment.root, W.records_root(epoch.salt, epoch.weights_root, splits, records))

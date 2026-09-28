@@ -30,13 +30,17 @@ Everything else is the protocol's (`audit`), the same for every scheme.
 
 1. **Weights.** Each weight's rows are committed in a `verity.primitives.commitments.merkle` tree bound to the weight id (owner −2);
    `weights_root` binds every weight root.
-2. **Salt.** `derive(beacon, "verity/pouw/salt/v1", {"weights": weights_root})`, drawn after the weights, 32 bytes.
+2. **Salt.** The challenger opens the epoch's salt coin after the verifier recorded `weights_root` ("Epoch coins"); the
+   salt is `derive(coin, "verity/pouw/epoch-salt/v1", {"epoch": e, "coins": coins_root, "weights": weights_root})`,
+   32 bytes (`Epoch.start`). An epoch without coins (`Epoch.unverified`, benchmarks and replays of recorded runs) keeps
+   v1, `derive(seed, "verity/pouw/salt/v1", {"weights": weights_root})` over a label it is handed.
 3. **Units.** For each matmul (a 64-bit index, a shape, a weight id), the activation rows are committed bound to the salt
    and the index. The scheme derives its noise from (salt, matmul, roots); every tile yields checked values and a digest.
    The useful output is assembled from the tiles.
 4. **Transcript.** A tree over every tile's digest, in matmul order then tile order, bound to (salt, weights_root).
 5. **Selection.**
-   - `Sampled(t)`, the default: `derive(source, "verity/pouw/audit/v1", {"transcript": root, "salt": salt})`; draw j is
+   - `Sampled(t)`, the default: `derive(source, "verity/pouw/audit/v1", {"transcript": root, "salt": salt})`, the source
+     being the epoch's draw coin, opened after the verifier recorded the transcript's root (`draw_coin`); draw j is
      `key.uniform(W, j)` mapped to a tile by cumulative work, so t tiles are drawn independently, each with probability
      W_ref(tile)/W, a tile's work being its cells' share of its matmul's W_ref (Lean `WorkWeightedSampling`).
    - `Lottery(target)`, Pearl's mining rule: the tiles whose digest, read little-endian, is at most target·|rows|·|cols|·k.
@@ -63,9 +67,31 @@ shallower leaf. A leaf over L bytes is a tree over its ⌈L/256⌉ segments (one
    γ = 1 − (1 − γ_0)/Ω*, under the certificate's conjecture. A scheme with no γ_0 gets only the sampling half; a lottery
    gets neither.
 
-**Randomness.** The protocol owns the outer coins: the salt (from a beacon round) and the draw (from the verifier's source,
-never the prover's root). A scheme's noise is its own derivation from the salt and the prover's roots, Fiat-Shamir inside
-the scheme, whose grinding is inside the conjecture's error term.
+**Randomness.** The protocol owns the outer coins, the salt and the draw, and both are the challenger's epoch coins, never
+a public beacon and never Fiat-Shamir over the prover's roots. A scheme's noise is its own derivation from the salt and the
+prover's roots, Fiat-Shamir inside the scheme, whose grinding is inside the conjecture's error term.
+
+## Epoch coins (`coins`)
+
+The challenger is the auditor's service that issues coins. Before epoch e it draws one 32-byte coin per label (`"salt"`,
+`"draw"`, in that order) from its own generator, and publishes the coin commitment, a frame-v3-sha512 tree over hiding
+leaves:
+
+~~~text
+x_l     = SHA-512("verity/pouw/epoch-coin/v1" || 0x00 || coin_l)
+value_l = hm96-sha512 tree_leaf(key, commit_string(key, x_l, salt_l))     salt_l: 192 fresh bytes, key the pinned default
+root    = MerkleTree over (value_salt, value_draw) at positions 0, 1, binding tagged("verity/pouw/epoch-coins/v1", e),
+          owner -1, schema "verity/pouw/epoch-coins/v1"
+~~~
+
+An unopened coin is statistically hidden (`hm96/PROTOCOL.md`); binding rests on SHA-512's collision resistance. A coin is
+opened live and once: the salt coin after the verifier recorded `weights_root`, the draw coin after it recorded what the
+draw keys (the transcript's root; Pearl-C's work law adds its records' root, `pearl_c_work.draw_after`). An opening is
+(epoch, label, after, coin, hm96 salt, path); the verifier refuses one whose epoch or label is not the one it asked for,
+that is malformed, that does not open against the epoch's root, or whose `after` is not what it recorded (`coin_reason`).
+A second request for an opened coin is refused, so a retry never redraws. The coins are the designated verifier's: an
+outcome convinces the auditor, who trusts its own challenger, and no third party (claim `live-verifier`). Vectors:
+`tests/vectors/epoch_coins_v1.json`.
 
 ## The proof's identifier (v1) (`identifier`)
 
@@ -344,7 +370,7 @@ at its floor, so a wholly wrong one is caught directly (`audit_work_whole_stratu
       from which anyone re-derives the key and the draw (`replay_key`). The limit: a third party can check that the
       draw came from the recorded source, not that the source was fresh. A verifier colluding with a prover could pick a
       source whose draw misses; that is the designated verifier's trust, and a beacon or a commit-and-reveal would be
-      needed for a third party to check it. No protocol or beacon timing changes: the key is still the verifier's own
+      needed for a third party to check it. No protocol timing changes: the key is still the verifier's own
       randomness after the receipt.
     - *ε_ks and δ_link are the window's.* The guarantee's are one window `Analysis`'s (M2). The per-call values are not
       cited as the window's; no statement composes them yet.
@@ -476,13 +502,13 @@ useful    U/(α_A·α_B), glue
   - **Voluntary rows (V-EX;** research store `theory-pearl-c4-domain.md` §6.13, the assessor's B at 17:32Z**):** the
     record may also give up up to ⌈m/64⌉ A rows (`voluntary_a`), and each weight up to ⌈n/64⌉ B rows (`voluntary_b`,
     the same in every unit of the weight).
-    - They are committed in `records_root` beside the excluded rows, before the draws' beacon. A record without them
+    - They are committed in `records_root` beside the excluded rows, before the draw coin opens. A record without them
       encodes exactly as before.
     - A voluntary row earns no credit, and its words are still checked on every drawn tile that holds it.
     - It is exempt from the two-sided per-row check and R1, and it opens no exclusion tile.
     - The tile cap and R1 read the credited rows only. Past the count caps the audit rejects.
     - `volunteer` is an honest prover's remedy for a tile over the cap: it gives up the rows whose removal brings each
-      tile under, before the beacon.
+      tile under, before the draw coin opens.
   - A cell's draw weight is its row's share of `W_ref` at the kept width, the `W_ref` of the Lean statement the draw
     cites (`draw_wref`). On sm_120 at its cap that is `wrefDevRev1K` at `Prices.sm120Loop` and the honest cast at 8.72
     (`SM120_LOOP_CAST_8P72`), the statement of the served γ and ε. Its ratio to `wref` differs between linears, so a
@@ -502,8 +528,9 @@ useful    U/(α_A·α_B), glue
     statement's `tileShare`). A row's forming and A′·F_B are so charged once across its row band, a |cols|/n share in
     each tile. `credit_of` of the tile's own shape would charge them whole in every tile: at 8,192³ that cap is 2.17×
     the cells' share.
-  - The draws are keyed by a beacon round published after the verifier recorded the commitment (the transcript root and
-    the records root), through `derive`.
+  - The draws are keyed by the epoch's draw coin, opened after the verifier recorded the commitment (the transcript root
+    and the records root, `draw_after`), through `derive(coin, DRAW_DOMAIN, {"transcript", "records", "salt"})`
+    (`draw_key`). A replay of a recorded run keys them as the run recorded them (`RecordedDraw`, `replay_key`).
 - **The TurboSHAKE128 reference** is `verity.primitives.crypto.turboshake`, checked against RFC 9861 and `hashlib`'s
   Keccak-f[1600].
 - **U's exact order, CPU-pinned** (`schemes/pearl_c_u.py`), for the Lean model of the clean-up.
@@ -797,7 +824,7 @@ useful    U/(α_A·α_B), glue
   It takes about 2 CPU-minutes per 64 × 64 tile at k = 8,192, and F1′ adds about 0.35 CPU-s per formed row, evaluated
   once per row and shared by R1 and the debit (about 0.75 CPU-minutes per tile; measured on a cloud-agent VM before the
   sharing, at twice that). Its shortcuts
-  are in every report: the draws' beacon is Fiat-Shamir over the commitment, the epoch beacon is the benchmark's label,
+  are in every report: the draws are keyed by Fiat-Shamir over the commitment, not a draw coin, the epoch's salt is from the benchmark's label,
   and the transcript tree and the records are built on the host after timing.
 
   Its ACCEPT is replay-verified (development shortcut; the protocol's check is a ZK proof). The replay opens rows and

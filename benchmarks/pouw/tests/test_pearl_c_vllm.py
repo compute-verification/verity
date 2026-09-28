@@ -439,7 +439,7 @@ def test_verify_run_accepts_an_honest_pass_as_the_work_law_does(honest_pass):
     path, s, epoch, prover, tr, splits, records = honest_pass
     source = b"verifier" * 4
     got = VR.verify(path, 3, 1, "test", source)
-    want = PW.audit_replay(s, epoch, prover, tr, splits, records, 0, PW.Beacon(1, source), 3)
+    want = PW.audit_replay(s, epoch, prover, tr, splits, records, 0, PW.RecordedDraw(1, source), 3)
     assert got["accepted"] and want.audit.accepted, got.get("line") or got.get("error")
     assert tuple(got["tiles"]) == want.audit.selected and got["exclusion_tiles"] == 1
     assert got["line"].startswith(f"ACCEPT {s.name} pouw:{s.name}: pearl_c_work's tiles (3 drawn, 1 for excluded rows)")

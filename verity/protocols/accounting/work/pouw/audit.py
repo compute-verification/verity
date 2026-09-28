@@ -1,19 +1,22 @@
 """The protocol's lifecycle, the same for every `PoUWScheme` (``PROTOCOL.md``, "Lifecycle").
 
+0. **Coins.**  Before the epoch the challenger publishes its coin commitment over the epoch's coins (`coins`).
 1. **Weights.**  Each weight is committed as its rows along k; `weights_root` binds every weight root.
-2. **Salt.**  ``derive(beacon, "verity/pouw/salt/v1", {"weights": weights_root})``, drawn after the weights.
+2. **Salt.**  The challenger opens the epoch's salt coin after it recorded the weights' root, and the salt is
+   ``derive(coin, "verity/pouw/epoch-salt/v1", {"epoch": e, "coins": root, "weights": weights_root})`` (`Epoch.start`).
 3. **Units.**  For each matmul the prover commits the activation rows (bound to the salt and the index); the scheme
    derives its noise from (salt, matmul, roots), and every tile yields checked values and a digest.  The useful output is
    assembled from the tiles.
 4. **Transcript.**  A Merkle root over every tile's digest, in matmul order and then tile order.
 5. **Selection.**  `Sampled`: ``derive(source, "verity/pouw/audit/v1", {"transcript": root, "salt": salt})`` draws t
-   tiles independently, each with probability ``W_ref(tile)/W`` (Lean `WorkWeightedSampling`).  `Lottery`: the tiles whose
-   digest, read little-endian, is at most ``target·|rows|·|cols|·k`` (Pearl's mining rule).  The prover opens each
-   selected tile's strips and leaf; the verifier recomputes the tile through the scheme.
+   tiles independently, each with probability ``W_ref(tile)/W`` (Lean `WorkWeightedSampling`); on an epoch with coins the
+   source is the epoch's draw coin, which the challenger opens after the verifier recorded the transcript.  `Lottery`: the
+   tiles whose digest, read little-endian, is at most ``target·|rows|·|cols|·k`` (Pearl's mining rule).  The prover opens
+   each selected tile's strips and leaf; the verifier recomputes the tile through the scheme.
 6. **Profile.**  When every selected tile passes, `WorkProfile` states what that establishes.
 
-The protocol owns every outer coin (the salt and the draw).  A scheme's noise is its own derivation from the salt and the
-prover's roots, Fiat-Shamir inside the scheme.  Commitments are `verity.primitives.commitments.merkle` trees, framed SHA-256 unless the
+The protocol owns every outer coin (the salt and the draw), and both are the challenger's live coins.  A scheme's noise is
+its own derivation from the salt and the prover's roots, Fiat-Shamir inside the scheme.  Commitments are `verity.primitives.commitments.merkle` trees, framed SHA-256 unless the
 scheme names another frame hash in ``commitment_hash`` (`commitment_hash`): ``"blake3"`` is ``frame-b3``, the tree mode whose
 row leaves stream through BLAKE3's chunk tree, for schemes whose rows must be committed within a decode step, and
 ``"blake3-s256"`` is ``frame-b3s``, ``frame-b3`` with each leaf a tree over its value's 256-byte segments (a shallower leaf).
@@ -31,10 +34,11 @@ from math import lcm
 from verity.primitives.commitments import Commitment, CommitmentDomain, MerkleTree, Opening, RangeIndexedDomain, VerificationLimits, verify_opening
 from verity.primitives.randomness import derive
 
-from verity.primitives.crypto.beacon import QUICKNET, Chain, Round, check_after
+from .coins import Challenger, CoinCommitment, CoinOpening, coin_reason
 from .protocol import Certificate, Context, DomainError, Matmul, PoUWScheme, Tile, tagged
 
 SALT_DOMAIN = "verity/pouw/salt/v1"
+EPOCH_SALT_DOMAIN = "verity/pouw/epoch-salt/v1"
 AUDIT_DOMAIN = "verity/pouw/audit/v1"
 ROW_SCHEMA = "verity/pouw/row/v1"
 TILE_SCHEMA = "verity/pouw/tile/v1"
@@ -85,35 +89,60 @@ class Workload:
 
 @dataclass(frozen=True, slots=True)
 class Epoch:
-    """The committed weights and the salt drawn after them."""
+    """The committed weights, the salt drawn after them, and the challenger's coin commitment the epoch's coins open
+    against (None for an `unverified` epoch's salt with no draw coin)."""
 
     workload: Workload
     weight_roots: Mapping[int, bytes]
     salt: bytes
+    coins: CoinCommitment | None = None
 
     @property
     def weights_root(self) -> bytes:
         return weights_root(self.weight_roots)
 
     @classmethod
-    def start(cls, workload: Workload, weight_roots: Mapping[int, bytes], beacon: Round, recorded_at: float,
-              chain: Chain = QUICKNET) -> Epoch:
-        """The epoch whose salt is keyed by a verified beacon round after the weight roots: `recorded_at` is the
-        verifier's clock (UNIX s) when it recorded them, and the round must verify under `chain`'s pinned key and be at
-        least `beacon.MARGIN` rounds after the one due then (`beacon.check_after`)."""
-        reason = check_after(chain, beacon, recorded_at)
+    def start(cls, workload: Workload, weight_roots: Mapping[int, bytes], coins: CoinCommitment, opening: CoinOpening
+              ) -> Epoch:
+        """The epoch whose salt is the challenger's salt coin: `opening` must be epoch `coins.epoch`'s salt coin, opened
+        against `coins` (the commitment the challenger published before the epoch) after it recorded the weights' root."""
+        _check_weights(workload, weight_roots)
+        root = weights_root(weight_roots)
+        reason = coin_reason(coins, opening, "salt", root)
         if reason is not None:
             raise DomainError(f"the salt's {reason}")
-        return cls.unverified(workload, weight_roots, beacon.value)
+        return cls(workload, dict(weight_roots), salt_of(coins, opening.coin, root), coins)
 
     @classmethod
-    def unverified(cls, workload: Workload, weight_roots: Mapping[int, bytes], seed: bytes) -> Epoch:
-        """The epoch whose salt is keyed by bare bytes, with no beacon rule: test instances, replays of recorded runs,
-        and integrations that don't claim `beacon-unpredictability`.  `start` salts by its round's value this way."""
-        if set(weight_roots) != set(workload.weights()):
-            raise DomainError("every weight of the workload is committed, and only those")
+    def unverified(cls, workload: Workload, weight_roots: Mapping[int, bytes], seed: bytes,
+                   coins: CoinCommitment | None = None) -> Epoch:
+        """The epoch whose salt is keyed by bare bytes under ``verity/pouw/salt/v1``, with no coin behind it: test
+        instances, replays of recorded runs, and integrations whose salt claims nothing.  `coins`, when given, is the
+        commitment the epoch's draw coin opens against."""
+        _check_weights(workload, weight_roots)
         salt = derive(seed, SALT_DOMAIN, {"weights": weights_root(weight_roots)}).stream("salt", 32)
-        return cls(workload, dict(weight_roots), salt)
+        return cls(workload, dict(weight_roots), salt, coins)
+
+
+def _check_weights(workload: Workload, weight_roots: Mapping[int, bytes]) -> None:
+    if set(weight_roots) != set(workload.weights()):
+        raise DomainError("every weight of the workload is committed, and only those")
+
+
+def salt_of(coins: CoinCommitment, coin: bytes, weights_root: bytes) -> bytes:
+    """The epoch's 32-byte salt from its opened salt coin."""
+    return derive(coin, EPOCH_SALT_DOMAIN, {"epoch": coins.epoch, "coins": coins.root, "weights": weights_root}
+                  ).stream("salt", 32)
+
+
+def draw_coin(epoch: Epoch, challenger: Challenger, after: bytes) -> tuple[bytes | None, str | None]:
+    """The epoch's draw coin, asked of the challenger once the verifier recorded `after`, and checked against the
+    epoch's coin commitment: (coin, None), or (None, why it is refused)."""
+    if epoch.coins is None:
+        return None, "the epoch has no coin commitment for its draw coin to open against"
+    opening = challenger.open("draw", after)
+    reason = coin_reason(epoch.coins, opening, "draw", after)
+    return (None, f"the draw's {reason}") if reason is not None else (opening.coin, None)
 
 
 @dataclass(frozen=True, slots=True)
@@ -344,9 +373,17 @@ class Verifier:
             return Verdict(ref.id, False, "checked values")
         return Verdict(ref.id, True)
 
-    def audit(self, prover: Prover, transcript: Transcript, selection: Sampled | Lottery, source: bytes) -> Audit:
+    def audit(self, prover: Prover, transcript: Transcript, selection: Sampled | Lottery, source: bytes | Challenger
+              ) -> Audit:
+        """Draw, open and check the selected tiles.  On an epoch with a coin commitment `source` is the challenger, asked
+        for the epoch's draw coin after the transcript is recorded; on one without, the draw's bare source bytes."""
         if len(transcript.activation_roots) != len(self.epoch.workload.matmuls):
             return Audit(False, (), (), None)
+        if self.epoch.coins is not None or not isinstance(source, bytes):
+            source, reason = ((None, "an epoch with a coin commitment draws from its draw coin, not from bare bytes")
+                              if isinstance(source, bytes) else draw_coin(self.epoch, source, transcript.commitment.root))
+            if reason is not None:
+                return Audit(False, (), (Verdict(-1, False, reason),), None)
         selected = selection.select(self.scheme, self.epoch, transcript, source, self.refs, prover.digest)
         verdicts = tuple(self.check_tile(transcript, prover.open(self.epoch, tid)) for tid in selected)
         ok = all(v.ok for v in verdicts)
@@ -355,6 +392,6 @@ class Verifier:
         return Audit(ok, selected, verdicts, profile)
 
 
-__all__ = ["AUDIT_DOMAIN", "SALT_DOMAIN", "Audit", "Epoch", "Lottery", "Prover", "Sampled", "TileOpening", "TileRef", "Transcript",
-           "Verdict", "Verifier", "WorkProfile", "Workload", "commit_rows", "commitment_hash", "reference_kernel", "tickets",
-           "tile_refs"]
+__all__ = ["AUDIT_DOMAIN", "EPOCH_SALT_DOMAIN", "SALT_DOMAIN", "Audit", "Epoch", "Lottery", "Prover", "Sampled", "TileOpening", "TileRef", "Transcript",
+           "Verdict", "Verifier", "WorkProfile", "Workload", "commit_rows", "commitment_hash", "draw_coin", "reference_kernel",
+           "salt_of", "tickets", "tile_refs"]
