@@ -608,6 +608,13 @@ def decode (bytes : ByteArray) : V Prog := do
   let (root, st) ← go.run {}
   let rd := st.defs[root]!
   if rd.prim || !rd.params.isEmpty then throw s!"root '{rootId}': the root is a composite without parameters"
+  -- an input node (`Input<w>_v1` or `RegisteredInput<w>_v1`) appears only in the root's body (PROTOCOL.md §5.2)
+  for d in st.defs do
+    if d.prim || d.key == rootId then continue
+    for k in [0:d.body.nodes.size] do
+      let c := st.defs[d.body.nodes[k]!.fn]!
+      if c.prim && (isInputId c.key || (c.key.startsWith "Registered" && isInputId (c.key.drop 10).toString)) then
+        throw s!"definition '{d.key}' node {k}: an input node ({c.key}) appears only in the root's body"
   let bare := Json.mkObj (top.toArray.filter (·.1 != "annotations")).toList
   return { defs := st.defs, index := st.index, root, programFn, sha512 := Sha512.hash (← canon bare).toUTF8 }
 
