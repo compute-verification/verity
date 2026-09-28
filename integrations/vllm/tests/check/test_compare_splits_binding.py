@@ -8,6 +8,10 @@ fold) and run the real `compare.Prog` binding + `compare_steps`."""
 
 from __future__ import annotations
 
+import collections
+
+import pytest
+
 from verity_vllm.check.match import program_compare as C
 from verity_vllm.check.match import sampler_geometry as SG
 
@@ -132,6 +136,30 @@ def test_a_single_request_programs_constant_S_must_equal_the_folds_at_every_even
     res = C.compare_steps(F16, A)
     assert not res["canonical_sha256"]["equal"] and res["splits_values"] == {"equal": False, "events": 3, "mismatches": [[1, 16, 32]]}
     assert res["canonical_sha256"]["a"] == res["canonical_sha256"]["b"]            # the structure agrees; the values do not
+    # a fold that stopped after two events: its S agree with the Program's where both have an event; the missing step is structural
+    res = C.compare_steps(_prog("fold-eos", splits_form="const", S=[32, 32], weights=2), A)
+    assert res["splits_values"] == {"equal": True, "events": 2, "mismatches": []} and res["totals"]["steps_spec_equal"] == 2
+
+
+@pytest.mark.parametrize("within_step", ["dag", "sequence"])
+def test_gm01_fails_a_component_whose_constant_S_is_not_the_folds(within_step):
+    """GM-01's per-request comparison (G3) decides from the per-step sequences or the DAG hashes, where a bound `Const32[S]` carries no
+    value: a single-request component's constant must still equal the fold's S at every event, under either criterion."""
+    from verity_vllm.check.match import batch_decomp as BD, per_request as PR
+
+    A = _prog("program", splits_form="const", S=[32, 32, 32], weights=2)
+
+    def g3(S_fold):
+        P = _prog("fold", splits_form="const", S=S_fold, weights=2)
+        P.xreq = collections.Counter()
+        out = {"fails": [], "perm": {}}
+        PR._compare_component(BD.record_ops(), within_step, False, {"request_id": "r0", "component": {"LP": LP, "T": T}}, {}, P, A,
+                              "component-dir", LP, out)
+        return out["fails"]
+
+    assert g3([32, 32, 32]) == []
+    fails = g3([32, 16, 32])
+    assert [f[0] for f in fails] == ["G3"] and "constant S differs from the fold's at 1 event(s)" in fails[0][1] and "[1, 32, 16]" in fails[0][1]
 
 
 def test_a_fold_without_top_p_selects_binds_nothing():
