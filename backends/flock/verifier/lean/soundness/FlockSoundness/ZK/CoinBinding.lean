@@ -9,9 +9,10 @@ M2): per (stream, round), a block of coins is chained, `T_i = H(CHAIN ‖ c_i �
 `x = H(ROUND ‖ stream ‖ round ‖ T_0)`; the leaf is the hm96 leaf of `x` under a salt, `H(lp ‖ b ‖ c)` with `b = mix(x, y)`
 and `c = H(sp ‖ y)`; the leaves sit in one SHA-512 tree. An opening of `n` coins is the coins, `T_n`, the salt and the path.
 
-`coin_opening_binding`: two openings of one (stream, round) position with the same number of coins that both reach the
-root and disagree on a coin give an explicit collision of `H`. So a rewound verifier that opens other coins than it did in
-the extraction run has found a SHA-512 collision, which is how the proof's simulator turns `⊥_bind` into A2's bound.
+`coin_opening_binding`: if two openings of one (stream, round) position with the same number of coins both reach the root
+and disagree on a coin, then `H` has a collision. The conclusion is the proposition `Collision H`, that a collision exists.
+The proof's simulator also needs the collision computed from the two openings, in time linear in their size, to turn
+`⊥_bind` into A2's bound. That extraction is this proof's case split run as an algorithm, and it stays on paper.
 
 The model is `FlockSoundness.Merkle`'s: one hash on byte strings, injective fixed-length encodings. `mix` stands for
 `x ⊕ M(key)·y`, of which the proof needs only that it is injective in `x` for each salt.
@@ -67,8 +68,8 @@ theorem chain_binding (tag : List UInt8) :
         exact chain_binding tag rest rest' Tn Tn' (by simpa using hlen) hrest (E.dig_inj ht)
       · exact ⟨_, _, hin, heq⟩
 
-/-- **T6: the coin commitment is binding.** Two openings of one (stream, round) position, with equally many coins and a
-coin on which they disagree, that both walk from their leaves to one root give an explicit collision of `H`. -/
+/-- **T6: the coin commitment is binding.** If two openings of one (stream, round) position, with equally many coins and a
+coin on which they disagree, both walk from their leaves to one root, then `H` has a collision. -/
 theorem coin_opening_binding (mix : D → Salt → D) (hmix : ∀ y, Function.Injective (fun x => mix x y))
     (chainTag roundTag pos lp sp : List UInt8) (root : D) (idx : ℕ)
     (cs cs' : List Coin) (Tn Tn' : D) (y y' : Salt) (sibs sibs' : List D)
