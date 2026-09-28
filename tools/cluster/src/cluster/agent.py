@@ -17,6 +17,12 @@
   kernel drops the lock when the agent exits, and `gpu-lease` falls back to its own rules.
 - **It stops itself** on an exception, or when a plan would break a rule the observed state doesn't
   (`invariants.check`), writing `summary.json` with the reason, and exits nonzero. In live mode that is the fallback.
+- **It continues the ledger it finds.** Live mode takes `agent.lock` before it reads the ledger, so the chain it extends is
+  the one the previous holder finished, and its first record is `agent` (its pid and the tree it runs from). A request
+  that ledger has queued is planned like a new one.
+- **With `roll`**, `out` is a root of segments: each run, and each UTC day or `roll_bytes` of ledger after it (checked
+  only outside a timed window), writes a new `<out>/<stamp>/`, whose ledger continues the last segment's chain
+  (`ledger.segments`), and `<out>/state.json` is the state every reader reads.
 
 The clock and sleep are parameters, so tests drive it without wall-clock time.
 """
@@ -135,19 +141,50 @@ def stamp(t: int) -> str:
     return datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+ROLL_BYTES = 256 << 20
+
+
+def segment(root: Path, t: float) -> Path:
+    """A new segment directory under `root`, named by `t` (UTC)."""
+    name = datetime.fromtimestamp(t, timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    path, k = root / name, 1
+    while path.exists():
+        k += 1
+        path = root / f"{name}-{k}"
+    return path
+
+
+def _day(t: float) -> str:
+    return datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%d")
+
+
 def run(cluster: Cluster, out: Path, *, mode: str = "shadow", clock: Callable[[], float], sleep: Callable[[float], None],
         lease_dir: Path = nebius2.LEASE_DIR, proc: Path = Path("/proc"), status: Path = STATUS,
         stop_file: Path | None = None, until: float | None = None, tick_s: float = 1.0, window_poll_s: float = 5.0,
-        footprint: Footprint | None = None, executor: Executor | None = None) -> dict[str, Any]:
-    """Run the agent (module docstring) and return its summary, also written to `out/summary.json`."""
+        footprint: Footprint | None = None, executor: Executor | None = None, roll: bool = False,
+        roll_bytes: int = ROLL_BYTES) -> dict[str, Any]:
+    """Run the agent (module docstring) and return its summary, also written to `summary.json` in its (last) segment."""
     if mode not in ("shadow", "live"):
         raise ValueError(f"unknown mode {mode!r}")
     out = Path(out)
     fp = footprint or Footprint()
     t0 = clock()
-    sh = shadow.Shadow(cluster, out)
-    pre = PreemptedLog(lease_dir / "preempted.log")
     lock_fd = None
+    if mode == "live":
+        executor = executor or Executor(lease_dir)
+        lock_fd = os.open(lease_dir / "agent.lock", os.O_RDWR | os.O_CREAT, 0o644)
+        fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    if roll:
+        out.mkdir(parents=True, exist_ok=True)
+        sh = shadow.Shadow(cluster, segment(out, t0), chain=ledger.segments(out))
+    else:
+        sh = shadow.Shadow(cluster, out)
+    state_json = out / "state.json"
+    if mode == "live":
+        sh._append([sh.ledger.append(max(int(t0), sh.ledger.last_t or 0), "agent", mode=mode, pid=os.getpid(),
+                                     tree=os.getcwd())])
+    day, rolled = _day(t0), 0
+    pre = PreemptedLog(lease_dir / "preempted.log")
     stop = {"why": None}
     exception = None
     in_window_since: float | None = None
@@ -158,10 +195,6 @@ def run(cluster: Cluster, out: Path, *, mode: str = "shadow", clock: Callable[[]
     def on_term(signum, frame):
         stop["why"] = "SIGTERM"
 
-    if mode == "live":
-        executor = executor or Executor(lease_dir)
-        lock_fd = os.open(lease_dir / "agent.lock", os.O_RDWR | os.O_CREAT, 0o644)
-        fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
     try:
         signal.signal(signal.SIGTERM, on_term)
     except ValueError:
@@ -188,14 +221,14 @@ def run(cluster: Cluster, out: Path, *, mode: str = "shadow", clock: Callable[[]
             obs = nebius2.read(int(now), lease_dir, proc)
             sh.step(obs, pre.new())
             ticks += 1
-            broke = [d for d in _tail(out / "divergences.jsonl", sh) if d.get("class") == "safety"
+            broke = [d for d in _tail(sh.out / "divergences.jsonl", sh) if d.get("class") == "safety"
                      and d["msg"].startswith("the plan breaks a rule")]
             if broke:
                 stop["why"] = f"invariant: {broke[0]['msg']}"
                 break
             if mode == "live":
                 _carry_out(cluster, sh, obs, executor, int(now), quiet_only=in_status_window)
-            ledger.write_state(out / "state.json", sh.state)
+            ledger.write_state(state_json, sh.state)
             if nebius2.timed_now(cluster, obs):
                 windows += 0 if in_window_since is not None else 1
                 in_window_since = now if in_window_since is None else in_window_since
@@ -207,6 +240,9 @@ def run(cluster: Cluster, out: Path, *, mode: str = "shadow", clock: Callable[[]
                 sleep(window_poll_s)
                 continue
             in_window_since = None
+            if roll and (_day(now) != day or sh.ledger.path.exists() and sh.ledger.path.stat().st_size >= roll_bytes):
+                sh.roll(segment(out, now))
+                day, rolled = _day(now), rolled + 1
             sleep(tick_s)
     except Exception:
         exception = traceback.format_exc(limit=8)
@@ -220,7 +256,8 @@ def run(cluster: Cluster, out: Path, *, mode: str = "shadow", clock: Callable[[]
             os.close(lock_fd)
     summary = {"mode": mode, "stopped": stop["why"], "exception": exception, "ticks_read": ticks,
                "window_polls": window_polls, "windows_seen": windows,
-               "windows_from_status_only": status_only, "footprint": fp.report(clock() - t0)}
+               "windows_from_status_only": status_only, "footprint": fp.report(clock() - t0),
+               **({"segment": sh.out.name, "segments_rolled": rolled} if roll else {})}
     return sh.close(int(clock()), summary)
 
 

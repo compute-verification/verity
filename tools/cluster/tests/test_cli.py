@@ -41,3 +41,15 @@ def test_ledger_commands(capsys, tmp_path):
     assert "1 records, chain intact" in out and '"what": "refused: no share"' in out
     p.write_text(p.read_text().replace("no share", "a share"))
     assert cli.main(["ledger", "verify", str(p)]) == 1
+
+
+def test_agent_exit_status_tells_a_stop_from_a_crash_from_a_broken_rule(monkeypatch, tmp_path, capsys):
+    """The systemd unit restarts on 1 (a crash) and never on 2 (the agent's own safety stop) or 0 (STOP file, SIGTERM)."""
+    from cluster import agent
+    monkeypatch.setattr(agent, "main_hook", lambda fp: None)
+    for summary, rc in (({"stopped": "stop file x", "exception": None}, 0), ({"stopped": "SIGTERM", "exception": None}, 0),
+                        ({"stopped": "exception", "exception": "Traceback"}, 1),
+                        ({"stopped": "invariant: the plan breaks a rule: x", "exception": None}, 2)):
+        monkeypatch.setattr(agent, "run", lambda *a, _s=summary, **k: _s)
+        assert cli.main(["agent", NEBIUS, "--out", str(tmp_path), "--mode", "live", "--roll"]) == rc
+    capsys.readouterr()

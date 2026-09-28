@@ -67,17 +67,20 @@ class Request:
 
 
 class Shadow:
-    def __init__(self, cluster: Cluster, out: Path, node: str = nebius2.NODE):
+    """`chain`: the earlier segments' ledger files, in order, which this one's ledger continues (`ledger.segments`)."""
+
+    def __init__(self, cluster: Cluster, out: Path, node: str = nebius2.NODE, chain: Iterable[Path] = ()):
         self.cluster, self.node, self.out = cluster, node, Path(out)
         self.out.mkdir(parents=True, exist_ok=True)
-        self.ledger = ledger.Ledger(self.out / "ledger.jsonl")
-        self.state = ledger.state(ledger.read(self.ledger.path)) if self.ledger.seq else ledger.State({}, {})
+        files = [Path(p) for p in chain] + [self.out / "ledger.jsonl"]
+        self.ledger = ledger.Ledger(self.out / "ledger.jsonl", chain=files[:-1])
+        records = [r for f in files if f.exists() for r in ledger.read(f)] if self.ledger.seq else []
+        self.state = ledger.state(records) if records else ledger.State({}, {})
         self.requests: dict[str, Request] = {}
         self.sigterm: dict[str, str] = {}
         self.stopped_for: dict[str, tuple[int, list[str]]] = {}
         self.observed: set[str] = set()
-        self.ended: set[str] = set(ledger.history(ledger.read(self.ledger.path))[0]) - set(self.state.allocations) \
-            if self.ledger.seq else set()
+        self.ended: set[str] = set(ledger.history(records)[0]) - set(self.state.allocations) if records else set()
         self.unowned: list[Allocation] = []
         self.ticks = 0
         self.last_t: int | None = None
@@ -91,6 +94,13 @@ class Shadow:
 
     def _append(self, recs: Iterable[dict[str, Any]]) -> None:
         self.state = ledger.state(list(recs), self.state)
+
+    def roll(self, out: Path) -> None:
+        """Write from now on to `out`, a new segment: its ledger continues this one's chain."""
+        self.out = Path(out)
+        self.out.mkdir(parents=True, exist_ok=True)
+        self.ledger.roll(self.out / "ledger.jsonl")
+        self._div_offset = 0
 
     def _request(self, job: Job, handle: str | None, t_req: int, seen_waiting: bool) -> Request:
         r = self.requests.get(job.id)
@@ -150,6 +160,9 @@ class Shadow:
             for jid, (job, handle) in sorted(waiting.items()):
                 if jid not in self.state.queue:
                     recs.append(self.ledger.submit(t, job, self.node, handle))
+                    self._request(job, handle, job.submitted, True)
+                elif jid not in self.requests and jid not in started_jobs:
+                    # queued before this agent started (a restart, or a handover from another agent)
                     self._request(job, handle, job.submitted, True)
         new = [a for aid, a in sorted(allocs.items()) if aid not in self.state.allocations]
         for a in new:

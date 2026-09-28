@@ -6,8 +6,12 @@ its request holds live), `withdraw` (a queued job left without starting: its han
 allocation; `source` names who decided it when that wasn't this ledger's planner, as for a lease `gpu-lease` granted),
 `freeze` and `evict` (with `by`), `thaw`, `expire`, `end` (with `rc`, the run id when it was a recorded run, and `gpus`:
 each GPU's held, busy and sampled seconds, from `gpu_usage` or a `gpu-lease/usage/v1` record), `refuse` (a job and its
-reason), `idle` (GPUs held without computing, a notice only), and `admin-begin` / `admin-end` for a repair session on a
-node (who and why), which no scheduler decided and every quiet report must see.
+reason), `idle` (GPUs held without computing, a notice only), `admin-begin` / `admin-end` for a repair session on a
+node (who and why), which no scheduler decided and every quiet report must see, and `agent` (a live agent took over the
+chain: its pid and the tree it runs from), which changes no state.
+
+A long-lived agent writes its ledger in segments (`<root>/<stamp>/ledger.jsonl`): each segment's first record continues the
+last one's `seq` and `prev`, so the segments in order (`segments`) are one chain, and `read` of the root reads them all.
 
 The ledger is the one source of lease and queue state: `state` replays it into the live allocations and the queue, and
 the node agent writes that to `state.json` after every tick, so every reader (the fill runner, the quiet step, status
@@ -43,17 +47,26 @@ def digest(record: dict[str, Any]) -> str:
 
 
 class Ledger:
-    """Appends to one ledger file. Opening checks the chain, so a writer never extends a broken one."""
+    """Appends to one ledger file, which continues `chain` (the earlier segments' files, in order) when given. Opening checks
+    the whole chain, so a writer never extends a broken one."""
 
-    def __init__(self, path: str | Path):
+    def __init__(self, path: str | Path, chain: Iterable[str | Path] = ()):
         self.path = Path(path)
-        records = read(self.path) if self.path.exists() else []
+        files = [Path(p) for p in chain if Path(p) != self.path] + [self.path]
+        records = [r for f in files if f.exists() for r in read(f)]
         problems = verify(records)
         if problems:
             raise ValueError(f"{self.path}: {problems[0]}")
         self.seq = records[-1]["seq"] if records else 0
         self.last = records[-1]["hash"] if records else GENESIS
         self.last_t = records[-1]["t"] if records else None
+
+    def roll(self, path: str | Path) -> None:
+        """Append from now on to `path`, a new segment's file, continuing this chain."""
+        path = Path(path)
+        if path.exists() and path.stat().st_size:
+            raise ValueError(f"{path}: a new segment must start empty")
+        self.path = path
 
     def append(self, t: int, kind: str, **fields: Any) -> dict[str, Any]:
         if self.last_t is not None and t < self.last_t:
@@ -93,7 +106,23 @@ class Ledger:
 
 
 def read(path: str | Path) -> list[dict[str, Any]]:
-    return [json.loads(line) for line in Path(path).read_text().splitlines() if line.strip()]
+    """A ledger file's records; for a directory, its own `ledger.jsonl`, else every segment's under it in order."""
+    path = Path(path)
+    if path.is_dir():
+        if (path / "ledger.jsonl").exists():
+            return read(path / "ledger.jsonl")
+        return [r for seg in segments(path) for r in read(seg)]
+    return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+
+
+def segments(root: str | Path) -> list[Path]:
+    """The segment ledgers under `root` (`<root>/*/ledger.jsonl`) in chain order: by their first record's `seq`, then by
+    name, with the empty ones last."""
+    def first(p: Path) -> float:
+        with p.open() as f:
+            line = f.readline()
+        return json.loads(line)["seq"] if line.strip() else float("inf")
+    return sorted(Path(root).glob("*/ledger.jsonl"), key=lambda p: (first(p), p.parent.name))
 
 
 @dataclass(frozen=True)

@@ -2,11 +2,13 @@
 
   cluster validate DESCRIPTION.toml
   cluster plan DESCRIPTION.toml SNAPSHOT.json         # one JSON action per line; the snapshot names the node and `now`
-  cluster ledger verify LEDGER.jsonl
-  cluster ledger quiet LEDGER.jsonl ALLOC|RUN [--until T]   # what ran beside a window: owner, GPUs, pid (in the id), run
-  cluster ledger failures LEDGER.jsonl [--since T]
-  cluster ledger usage LEDGER.jsonl [--since T]         # held against busy GPU time per holder, lowest share first
+  cluster ledger verify LEDGER.jsonl|DIR               # DIR: its ledger.jsonl, or every segment under it as one chain
+  cluster ledger quiet LEDGER.jsonl|DIR ALLOC|RUN [--until T]   # what ran beside a window: owner, GPUs, pid (in the id), run
+  cluster ledger failures LEDGER.jsonl|DIR [--since T]
+  cluster ledger usage LEDGER.jsonl|DIR [--since T]     # held against busy GPU time per holder, lowest share first
   cluster agent DESCRIPTION.toml --out DIR [--mode shadow|live] [--hours H] [--stop-file P] [--copy-to DIR]
+                [--roll [--roll-mb M]]                  # DIR is a root of daily segments (agent.py); exit 0 when stopped,
+                                                        # 1 on an exception, 2 when a plan would break a rule
   cluster shadow replay DESCRIPTION.toml --sampler UTIL.jsonl[.gz] --preempted LOG[.gz] --out DIR
   cluster shadow evaluate DIR [--quiet-log QUIET.jsonl[.gz]] [--sampler UTIL.jsonl[.gz]...]  # the pass bar: exit 0 or 2
   cluster submit DESCRIPTION.toml --run-id R --now T --project P --submitter W [--kind K] [--max-s S] [--gpus N ...]
@@ -75,6 +77,8 @@ def main(argv: list[str] | None = None) -> int:
     ag.add_argument("--lease-dir", default="/run/gpu-lease")
     ag.add_argument("--status", default="/workspace/pouw/fill/status.txt")
     ag.add_argument("--tick-s", type=float, default=1.0)
+    ag.add_argument("--roll", action="store_true", help="--out is a root of segments, a new one each run and UTC day")
+    ag.add_argument("--roll-mb", type=int, default=256, help="with --roll, also a new segment once the ledger passes M MiB")
     sh = sub.add_parser("shadow")
     ssub = sh.add_subparsers(dest="scmd", required=True)
     sr = ssub.add_parser("replay")
@@ -133,11 +137,14 @@ def main(argv: list[str] | None = None) -> int:
         start = time.time()
         summary = agent.run(c, Path(a.out), mode=a.mode, clock=time.time, sleep=time.sleep, lease_dir=Path(a.lease_dir),
                             status=Path(a.status), stop_file=Path(a.stop_file) if a.stop_file else None,
-                            until=start + 3600 * a.hours if a.hours else None, tick_s=a.tick_s, footprint=fp)
+                            until=start + 3600 * a.hours if a.hours else None, tick_s=a.tick_s, footprint=fp,
+                            roll=a.roll, roll_bytes=a.roll_mb << 20)
         if a.copy_to:
             shutil.copytree(a.out, a.copy_to, dirs_exist_ok=True)
         print(json.dumps(summary, sort_keys=True))
-        return 1 if summary.get("exception") or str(summary.get("stopped", "")).startswith("invariant") else 0
+        if summary.get("exception"):
+            return 1
+        return 2 if str(summary.get("stopped", "")).startswith("invariant") else 0
     if a.cmd == "shadow":
         from . import shadow
         if a.scmd == "replay":
