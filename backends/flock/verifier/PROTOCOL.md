@@ -1225,8 +1225,9 @@ digest's leading tag is the statement id, `verity/flock-circuit/types`, as the p
   - **A read's slot:** its generated rows. Its product rows' B side is read from the held table in the fold
     (`Lookup.foldB`), at its `READ` record's `prod0`, `lo_top` and `k` (not the table's value bits).
   - A read inside the root's own region, or inside a placed call, is refused.
-  - **Rows only through `deriveChecked`:** its check covers `and` and call items, so a statement with a read is refused
-    until it covers reads.
+  - **Rows only through `deriveChecked`,** whose check covers reads (#263): a placed read is a segment of a generated
+    layout for its table, and a generated layout's rows are `table/v2`'s (`genOk`).
+  - **Tested** on typed attention (`test_lean_typed_reads.py`): the derived rows are the writer's `rows/` byte for byte.
 - **Not yet:** `unit_in`'s constant bindings.
 
 ## 17. Acceptance, assumptions and trust

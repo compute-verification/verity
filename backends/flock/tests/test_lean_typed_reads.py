@@ -56,8 +56,6 @@ def test_a_table_not_given_is_refused(attn, tmp_path):
     assert p.returncode != 0 and "table ex2: not given" in p.stdout + p.stderr, p.stdout
 
 
-@pytest.mark.xfail(strict=True, reason="deriveChecked's check has no read: its walk takes and and call items, and "
-                   "checkLayout derived layouts only (the soundness lane's S3c)")
 def test_the_verifiers_rows_are_the_writers(attn, tmp_path):
     """Through `deriveChecked`, the rows are the writer's `rows/` byte for byte: the root, the tensor-core part, each read's
     generated layout with its `READ` line (ex2 k 23, rcp k 24), and `delta.txt`."""
