@@ -7,6 +7,7 @@ storage root and the audit are `verity_pous`'s own.
 from __future__ import annotations
 
 import itertools
+import sys
 import types
 
 import pytest
@@ -76,6 +77,12 @@ class Model:
     def modules(self):
         return (m for _, m in self.named_modules())
 
+    def named_parameters(self):
+        return ((f"{n}.weight", m.weight) for n, m in self.layers.items())
+
+    def named_buffers(self):
+        return iter(())
+
 
 @pytest.fixture
 def toy(monkeypatch):
@@ -108,8 +115,14 @@ def test_pous_refuses_what_it_cannot_run():
     assert any("experimental" in r for r in pous.refusals("p2-16448/v2", _ctx("pous:p2-16448/v2")))
     assert pous.refusals("p2-16448/v2", _ctx("pous:p2-16448/v2", settings={"pous": {"experimental": True}})) == ()
     assert any("decode_group" in r for r in pous.refusals(BAND, _ctx(f"pous:{BAND}", settings={"pous": {"decode_group": "layers:2"}})))
-    resident = _ctx("pouw:ncp-v1", f"pous:{BAND}", settings={"pouw": {"resident_weights": True}})
-    assert any("bypass C" in r for r in pous.refusals(BAND, resident))
+    assert not hasattr(pous, "keeps_weight_copy")                                       # POUS keeps only C
+
+
+def test_with_pous_on_the_selector_refuses_an_option_that_keeps_a_weight_copy(monkeypatch):
+    _fake_pouw(monkeypatch, lambda scheme, target: None, keeps=True)
+    got = PO.refusals(_ctx("pouw:ncp-v1", f"pous:{BAND}"))
+    assert any(r.startswith("pouw:ncp-v1: keeps a weight-derived copy") for r in got)
+    assert PO.refusals(_ctx("pouw:ncp-v1")) == ()
 
 
 def test_pous_serves_decoded_weights_releases_the_plaintext_and_passes_its_own_audit(toy):
@@ -121,7 +134,11 @@ def test_pous_serves_decoded_weights_releases_the_plaintext_and_passes_its_own_a
         assert layer.weight.raw == b""                                                   # only C is held
         want = toy.plain["q" if name == "head" else name]
         assert layer.quant_method.apply(layer, "x") == ("gemm", want, "x")             # decoded from C on every use
-    assert {n: w.raw for n, w in opt.weights().items()} == toy.plain                     # tied weights are encoded once
+    plain = opt.weights()                                                                # tied weights: encoded once, one tensor
+    assert {n: w.raw for n, w in plain.items()} == {"q.weight": toy.plain["q"], "k.weight": toy.plain["k"], "head.weight": toy.plain["q"]}
+    assert plain["q.weight"] is plain["head.weight"]
+    view = PO.weights_view(comp, toy)                                                    # what the Commit's replay reads
+    assert {n: w.raw for n, w in view.named_parameters()} == {n: w.raw for n, w in plain.items()}
     assert [type(e).__name__ for e in hooks.live(f"pous:{BAND}")] == ["Service", "Patch", "Patch", "Patch", "Service"]
 
     c = opt.commitment()
@@ -139,8 +156,17 @@ def test_pous_serves_decoded_weights_releases_the_plaintext_and_passes_its_own_a
     comp.close()
     assert {n: layer.weight.raw for n, layer in toy.layers.items()} == {"q": toy.plain["q"], "k": toy.plain["k"], "head": toy.plain["q"]}
     assert all("apply" not in vars(layer.quant_method) for layer in toy.layers.values()) and hooks.live() == before
+    assert opt.weights() is None and PO.weights_view(comp, toy) is toy
     with pytest.raises(RuntimeError, match="closed"):
         opt.answer(0)
+
+
+def _fake_pouw(monkeypatch, install, keeps=False):
+    mod = types.ModuleType("verity_vllm.protocol_options.fake_pouw")
+    mod.NAME, mod.schemes, mod.refusals, mod.install = "pouw", lambda: ("ncp-v1",), lambda s, c: (), install
+    mod.keeps_weight_copy = lambda scheme, ctx: keeps
+    monkeypatch.setitem(sys.modules, mod.__name__, mod)
+    monkeypatch.setitem(PO.ADAPTERS, "pouw", "fake_pouw")
 
 
 def test_pous_wraps_around_pouw_so_pouws_gemm_reads_the_decoded_weight(toy, monkeypatch):
@@ -150,10 +176,7 @@ def test_pous_wraps_around_pouw_so_pouws_gemm_reads_the_decoded_weight(toy, monk
             h.wrap(m.quant_method, "apply", lambda orig: (lambda layer, x, bias=None: ("pouw", layer.weight.raw, x)))
         return PO.Option(name=f"pouw:{scheme}", hooks=h)
 
-    mod = types.ModuleType("verity_vllm.protocol_options.fake_pouw")
-    mod.NAME, mod.schemes, mod.refusals, mod.install = "pouw", lambda: ("ncp-v1",), lambda s, c: (), pouw_install
-    monkeypatch.setitem(__import__("sys").modules, mod.__name__, mod)
-    monkeypatch.setitem(PO.ADAPTERS, "pouw", "fake_pouw")
+    _fake_pouw(monkeypatch, pouw_install)
     before = hooks.live()
     with PO.install(toy, _ctx("pouw:ncp-v1", f"pous:{BAND}")) as comp:
         k = toy.layers["k"]

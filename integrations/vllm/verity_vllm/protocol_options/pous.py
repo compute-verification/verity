@@ -13,12 +13,14 @@ Placeholder, 28 Sep 2026: this wires the protocol in; it certifies nothing yet.
   the option's tagged `Hooks`, the plaintext released (a service whose stop restores ``W`` from ``C``), each layer's
   ``quant_method.apply`` wrapped (decode the layer's weight from ``C`` and call the inner ``apply`` with a proxy layer
   holding it), and the responder started last.  Uninstall runs newest first: responder, wrappers, then ``W`` restored.
-* **Composition:** installed after PoUW and around it, so PoUW's GEMM consumes the decoded weight.  It refuses PoUW
-  settings that keep a weight-derived copy resident across forwards, which would let the GEMMs bypass ``C``.
+* **Composition:** installed after PoUW and around it, so PoUW's GEMM consumes the decoded weight.  An option that
+  keeps a weight-derived copy resident across forwards is the selector's to refuse (``keeps_weight_copy``); POUS keeps
+  only ``C``.
+* **Weights of record:** `Installed.weights` (``decoded``) returns the released plaintext by ``named_parameters`` name,
+  tied names mapped to one tensor, which the Commit's replay reads (`protocol_options.weights_view`).
 
 What is not here yet: the GPU codec and the batched decode once per forward (#172, #188's kernels), the native
-responder on its own core and port, TP, and the Commit reading `PousOption.weights` for its weight re-registration and
-replay (so a composed Commit's verdict is not of record, `outside_program`).
+responder on its own core and port, and TP.
 """
 from __future__ import annotations
 
@@ -35,8 +37,8 @@ NAME = "pous"
 DEFAULT_SCHEME = "band-chain/d12/v1"
 SETTINGS = ("salt_source", "responder_cpu", "port", "decode_group", "experimental")
 COVERS = "linears"
-OUTSIDE_PROGRAM = ("the Commit's weight re-registration and replay read live parameters, which POUS releases; they do not "
-                   "read PousOption.weights yet")
+OUTSIDE_PROGRAM = ("placeholder: the Program describes the served computation (the decode is input provenance and W is "
+                   "bit-identical), but no Commit with a protocol option on is of record yet")
 
 
 def schemes() -> tuple[str, ...]:
@@ -58,9 +60,6 @@ def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
         out.append(f"{scheme} is experimental ({reason}); settings pous.experimental = true runs it anyway")
     if own.get("decode_group", "all") != "all":
         out.append(f"decode_group {own['decode_group']!r}: only 'all' is built (each layer decodes on its own use)")
-    if ctx.scheme("pouw") is not None and ctx.settings_of("pouw").get("resident_weights"):
-        out.append("pouw keeps a weight-derived copy resident across forwards, which lets its GEMMs bypass C and empties "
-                   "POUS's claim; pouw must prepare its operands per forward from the weight it is handed")
     return tuple(out)
 
 
@@ -162,8 +161,8 @@ class _Proxy:
 
 @dataclass(eq=False)
 class PousOption(Option):
-    """The installed option: `answer` is the responder's reply to a challenge, `weights` the plaintext weights decoded
-    from ``C`` (for the Commit's weight re-registration and replay)."""
+    """The installed option: `answer` is the responder's reply to a challenge; ``weights()`` (`Option.decoded`) is the
+    released plaintext decoded from ``C``."""
 
     store: _Store | None = None
     names: dict[int, str] = field(default_factory=dict)
@@ -176,10 +175,18 @@ class PousOption(Option):
         from verity_pous import protocol
         return protocol.responder(self.store.scheme, self.store.blocks.__getitem__)(index)
 
-    def weights(self) -> dict[str, Any]:
-        """Each encoded weight, by the first module that holds it (tied weights appear once)."""
-        s = self.store
-        return {p.name: TENSORS.from_bytes(s.decode(p.name), s.meta[p.name]) for p in s.layout.tensors}
+
+def _qualnames(entry: str, model: Any, layers: list[tuple[str, Any]], names: dict[int, str]) -> dict[str, list[str]]:
+    """Each encoded weight's names in ``model.named_parameters()``, which the replay's weights view reads it under."""
+    by_param = {id(m.weight): names[id(m)] for _, m in layers}
+    out: dict[str, list[str]] = {n: [] for n in dict.fromkeys(names.values())}
+    for q, p in model.named_parameters():
+        if id(p) in by_param:
+            out[by_param[id(p)]].append(q)
+    missing = [n for n, qs in out.items() if not qs]
+    if missing:
+        raise ValueError(f"{entry}: the weights of {missing} are no parameters of the model, so no reader could find them")
+    return out
 
 
 def _wrapper(decoded: Callable[[Any], Any]) -> Callable[[Any], Any]:
@@ -206,11 +213,19 @@ def install(scheme: str, target: Target) -> PousOption:
             first[k] = name
             weights[name], meta[name] = TENSORS.to_bytes(m.weight), TENSORS.meta(m.weight)
         names[id(m)] = first[k]
+    qualnames = _qualnames(entry, target.model, layers, names)
     source = own.get("salt_source")
     store = _encode(scheme, weights, bytes.fromhex(source) if source else None)
     store.meta = meta
+
+    def plaintext() -> dict[str, Any]:
+        out: dict[str, Any] = {}
+        for name, qs in qualnames.items():
+            out.update(dict.fromkeys(qs, TENSORS.from_bytes(store.decode(name), meta[name])))
+        return out
+
     hooks = target.hooks(entry)
-    opt = PousOption(name=entry, hooks=hooks, outside_program=OUTSIDE_PROGRAM, store=store, names=names)
+    opt = PousOption(name=entry, hooks=hooks, outside_program=OUTSIDE_PROGRAM, decoded=plaintext, store=store, names=names)
     params = [m.weight for _, m in layers]
 
     def release() -> list[Any]:
