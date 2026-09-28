@@ -137,8 +137,15 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
   - `theorem`, and its open `hypotheses`;
   - `claims`: ids in `verity.claims`' format.
 
-  At the frozen point, the band is `band_meets_64` given `ChainExPostFactoG`: k 111, D 5, Q 2^20, 483 µs, cliff at
-  `d`, one segment. Dense is `chain_meets_64` given `ChainExPostFacto`, with no cliff. P3 has no certificate for the
+  At the frozen point, the band's certificates are given `ChainExPostFactoG`: k 111, D 5, Q 2^20, 483 µs, cliff at
+  `d`.
+  - One segment is `band_meets_64`.
+  - 448 segments (14 GB) is `band_meets_14`, from POUS `lean/submissions/band-multi/`, red team §47 GO. It is one
+    `Meets` for the whole store: challenges are uniform over all its blocks, the state bound is the whole store's, and
+    one permutation serves every segment.
+  - Other segment counts are gaps in the storage profile.
+
+  Dense is `chain_meets_64` given `ChainExPostFacto`, with no cliff. P3 has no certificate for the
   implemented `H`. Lean's `p3_meets_64_D10_final` and `p3_meets_multi_64_D10_final` (k 117, D 10, 64 KB and 971
   segments) are about a random-oracle `H` and an ideal tweakable `P`, while the code's `H` is the overwrite chain.
 - **`protocol.Verifier`** is `audit.TimedVerifier` at the certificate's `k`. It refuses:
@@ -160,6 +167,14 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
   - `commit`, `draw_salt`, `encode`, `decode`, `decode_tensor`, `challenge_key` and `responder` wrap the modules
     below;
   - every coin comes from `verity.randomness` through `setup` and `audit`, and a scheme draws none.
+- **Segment tags must be injective across all segments.** This is a hard requirement of every implementation:
+  segment `s` is keyed by `tag_s = salt ‖ u64 s` (`labels.tag`), or by one salt with global indices.
+  - With a shared domain, identical segments get identical labels. An adversary storing one of them then answers every
+    challenge, and the audit accepts with probability 1: Lean's `shared_domain_breaks` makes `Meets` false for every D,
+    Q, k and ε.
+  - `segDom_inj` is the certificates' hypothesis.
+  - `tests/test_pous_protocol.py` checks it for every scheme, and replays the attack on real labels.
+  - `benchmarks/pous` gates every implementation's tags against `salt ‖ u64 s` over 448 segments.
 - **Claims.** `protocol.claim(id)` resolves an id from `verity.claims`, or from `protocol.LOCAL_CLAIMS` until core holds
   it: `ideal-permutation`, `perfect-isolation`, `sequential-step-floor`, `feistel-indifferentiability`.
 - **Tests.** `tests/test_pous_protocol.py` runs one conformance suite over every scheme, plus a toy that implements

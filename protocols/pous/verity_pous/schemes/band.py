@@ -5,7 +5,7 @@ Its certificates at the frozen point (`band.SECURE_FIRST`: `B = 512`, 64 KiB blo
 `ChainExPostFactoG`: `k = 111`, `D = 5` calls of at least 483 µs, `Q = 2^20`, with the cliff at `d` (`band_cliff_d12`):
 
 - one segment: `band_meets_64` (POUS `lean/submissions/band-chain/`, red team §40);
-- 448 segments, 14 GB: `band_meets_14` (`lean/submissions/band-multi/`, red-team §47 pending). It is one `Meets` for
+- 448 segments, 14 GB: `band_meets_14` (`lean/submissions/band-multi/`, red team §47 GO). It is one `Meets` for
   the whole store: challenges uniform over its 229,376 blocks, the state bound of the whole store, one permutation.
   It needs the segment tags injective across segments (`tag_s = salt ‖ u64 s`, `segDom_inj`); with a shared domain,
   identical segments get identical labels and the audit accepts with probability 1 (`shared_domain_breaks`).
