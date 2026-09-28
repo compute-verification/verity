@@ -158,7 +158,7 @@ theorem setupH_flatLayout (ht : tags.typed = true)
   · cases hrt
   · cases hrn
     obtain ⟨name, hnet, -⟩ := Typed.read_flat hr
-    obtain ⟨P, ⟨more, hmore⟩, hunit⟩ := parse_facts_pre (fun x hx => by
+    obtain ⟨P, ⟨more, hmore⟩, hunit, -⟩ := parse_facts_pre (fun x hx => by
       simp at hx
       subst hx
       exact netOfD_built hnet) hpc

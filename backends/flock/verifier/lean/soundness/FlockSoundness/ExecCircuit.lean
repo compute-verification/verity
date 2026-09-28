@@ -100,7 +100,8 @@ set_option maxHeartbeats 4000000 in
 then the file's own, and its unit is the first named `unit`. -/
 theorem parse_facts_pre {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {pre : Array (String × Net)}
     {c : Circuit} (hpre : ∀ x ∈ pre.toList, Built x.2) (h : HmRow.parse tags bytes tables (pre := pre) = .ok c) :
-    ParseFacts tags c ∧ (∃ more, c.nets.toList = pre.toList ++ more) ∧ c.nets.findIdx? (·.1 == "unit") = some c.unitNet := by
+    ParseFacts tags c ∧ (∃ more, c.nets.toList = pre.toList ++ more) ∧ c.nets.findIdx? (·.1 == "unit") = some c.unitNet ∧
+      (c.nets.getD c.shaNet default).1 = HmRow.SHA_NET ∧ (c.nets.getD c.hmNet default).1 = HmRow.HM_NET := by
   unfold HmRow.parse at h
   simp (config := { zeta := false }) only [Option.isSome_none, Bool.false_eq_true, ↓reduceIte, Option.mapM_none] at h
   ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) sha jp0 at h)
@@ -373,7 +374,17 @@ theorem parse_facts_pre {tags : Tags} {bytes : ByteArray} {tables : List (String
     · rcases hmore x hx with ⟨_, hp⟩ | hb
       · exact Or.inl (parse_built hp)
       · exact Or.inr hb
-  refine ⟨?_, ⟨more, hm⟩, hunit⟩
+  have hname : ∀ nm i, netOf nm = .ok i → (nets2.getD i default).1 = nm := by
+    intro nm i hi
+    simp only [netOf] at hi
+    split at hi
+    · rename_i i' hi'
+      cases hi
+      obtain ⟨hlt, hp, -⟩ := Array.findIdx?_eq_some_iff_getElem.1 hi'
+      rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hlt, Option.getD_some]
+      simpa using hp
+    · cases hi
+  refine ⟨?_, ⟨more, hm⟩, hunit, hname _ _ hsha, hname _ _ hhm⟩
   exact { nets := hbuilt, ports := hports, unitNet := findIdx?_lt hunit, shaNet := hnetOf _ _ hsha,
           hmNet := hnetOf _ _ hhm, kinds := hkinds, check := ⟨ls, by cases w; exact hcheck⟩, typed := rfl }
 
