@@ -1,7 +1,7 @@
 {
  "DT": "bf16",
  "definition": {
-  "ref_vocab_digest": "791320f527c1dd79fcbc3360f965911a09a0b753cd9bb7de57bbc67540cc6842",
+  "ref_vocab_digest": "82fd6a281c1b999ad2929c0c05a701614a5e322bfe2a92141dd77ec2af8f8e52",
   "ref_vocab_version": "verity-ref-vocab/1"
  },
  "domain": {
@@ -22,12 +22,12 @@
  "notes": "Element-wise products and one add per output, each a DT tensor op: no reduction, bit-exact on the domain.",
  "oracle": {
   "device": "cpu",
-  "machine": "x86_64",
+  "machine": "arm64",
   "numpy": "2.5.3",
   "op": "HF GPT-J _apply_rotary_pos_emb (x*cos + rotate_every_two(x)*sin)",
-  "platform": "Linux-6.12.94+-x86_64-with-glibc2.39",
-  "python": "3.12.3",
-  "torch": "2.14.0+cu130"
+  "platform": "macOS-26.5.1-arm64-arm-64bit-Mach-O",
+  "python": "3.13.5",
+  "torch": "2.14.0"
  },
  "result": {
   "exact_fraction": 1.0,

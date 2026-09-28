@@ -1,7 +1,7 @@
 {
  "DT": "f32",
  "definition": {
-  "ref_vocab_digest": "791320f527c1dd79fcbc3360f965911a09a0b753cd9bb7de57bbc67540cc6842",
+  "ref_vocab_digest": "82fd6a281c1b999ad2929c0c05a701614a5e322bfe2a92141dd77ec2af8f8e52",
   "ref_vocab_version": "verity-ref-vocab/1"
  },
  "domain": {
@@ -26,33 +26,33 @@
  "notes": "torch: vectorised max, Sleef exp, vectorised sum, then multiply by 1/sum; reference: sequential max/sum, correctly rounded exp, multiply by RN(1/sum).",
  "oracle": {
   "device": "cpu",
-  "machine": "x86_64",
+  "machine": "arm64",
   "numpy": "2.5.3",
   "op": "torch.nn.functional.softmax(dim=-1, dtype=float32).to(dt)",
-  "platform": "Linux-6.12.94+-x86_64-with-glibc2.39",
-  "python": "3.12.3",
-  "torch": "2.14.0+cu130"
+  "platform": "macOS-26.5.1-arm64-arm-64bit-Mach-O",
+  "python": "3.13.5",
+  "torch": "2.14.0"
  },
  "result": {
-  "exact_fraction": 0.3270223752151463,
-  "exact_words": 3040,
-  "max_abs_err": 3.5762786865234375e-07,
+  "exact_fraction": 0.2790447504302926,
+  "exact_words": 2594,
+  "max_abs_err": 2.980232238769531e-07,
   "max_normalised_err": 0.07333303657227976,
-  "max_ulp": 11,
+  "max_ulp": 12,
   "per_shape": [
    {
     "N": 5,
-    "exact_fraction": 0.875,
-    "exact_words": 35,
-    "max_abs_err": 2.9802322387695312e-08,
+    "exact_fraction": 0.5,
+    "exact_words": 20,
+    "max_abs_err": 5.960464477539063e-08,
     "max_normalised_err": 0.07333303657227976,
     "max_ulp": 2,
     "scale": 1.0,
     "tolerance": "4*(N+2)*u32*|ref| + ulp_DT(ref)  (positive terms: relative)",
     "ulp_histogram_capped_8": {
-     "0": 35,
-     "1": 4,
-     "2": 1
+     "0": 20,
+     "1": 18,
+     "2": 2
     },
     "words": 40,
     "worst": {
@@ -85,120 +85,119 @@
    },
    {
     "N": 64,
-    "exact_fraction": 0.3515625,
-    "exact_words": 180,
-    "max_abs_err": 4.470348358154297e-08,
-    "max_normalised_err": 0.02386544119130424,
-    "max_ulp": 5,
+    "exact_fraction": 0.228515625,
+    "exact_words": 117,
+    "max_abs_err": 5.960464477539063e-08,
+    "max_normalised_err": 0.028290547060942566,
+    "max_ulp": 6,
     "scale": 1.0,
     "tolerance": "4*(N+2)*u32*|ref| + ulp_DT(ref)  (positive terms: relative)",
     "ulp_histogram_capped_8": {
-     "0": 180,
-     "1": 65,
-     "2": 128,
-     "3": 108,
-     "4": 29,
-     "5": 2
+     "0": 117,
+     "1": 35,
+     "2": 160,
+     "3": 129,
+     "4": 52,
+     "5": 17,
+     "6": 2
     },
     "words": 512,
     "worst": {
-     "index": 257,
-     "oracle": 0.004930347669869661,
-     "ref": 0.0049303495325148106,
-     "tol": 7.804779866837919e-08
+     "index": 268,
+     "oracle": 0.00415453128516674,
+     "ref": 0.00415453314781189,
+     "tol": 6.58398420227968e-08
     }
    },
    {
     "N": 64,
-    "exact_fraction": 0.712890625,
-    "exact_words": 365,
-    "max_abs_err": 1.1920928955078125e-07,
-    "max_normalised_err": 0.014863805177085729,
-    "max_ulp": 3,
+    "exact_fraction": 0.904296875,
+    "exact_words": 463,
+    "max_abs_err": 9.313225746154785e-10,
+    "max_normalised_err": 0.0068107858517644,
+    "max_ulp": 1,
     "scale": 10.0,
     "tolerance": "4*(N+2)*u32*|ref| + ulp_DT(ref)  (positive terms: relative)",
     "ulp_histogram_capped_8": {
-     "0": 365,
-     "1": 113,
-     "2": 33,
-     "3": 1
+     "0": 463,
+     "1": 49
     },
     "words": 512,
     "worst": {
-     "index": 345,
-     "oracle": 0.005943200085312128,
-     "ref": 0.005943198688328266,
-     "tol": 9.398561440221442e-08
+     "index": 378,
+     "oracle": 4.214256478007883e-06,
+     "ref": 4.214256023260532e-06,
+     "tol": 6.676870493126097e-11
     }
    },
    {
     "N": 512,
-    "exact_fraction": 0.25537109375,
-    "exact_words": 1046,
+    "exact_fraction": 0.23046875,
+    "exact_words": 944,
     "max_abs_err": 2.9802322387695312e-08,
-    "max_normalised_err": 0.006000388973928182,
-    "max_ulp": 11,
+    "max_normalised_err": 0.007410713534662048,
+    "max_ulp": 12,
     "scale": 1.0,
     "tolerance": "4*(N+2)*u32*|ref| + ulp_DT(ref)  (positive terms: relative)",
     "ulp_histogram_capped_8": {
-     "0": 1046,
-     "1": 1101,
-     "2": 370,
-     "3": 62,
-     "4": 231,
-     "5": 351,
-     "6": 378,
-     "7": 291,
-     "8": 266
+     "0": 944,
+     "1": 92,
+     "2": 366,
+     "3": 724,
+     "4": 580,
+     "5": 367,
+     "6": 308,
+     "7": 323,
+     "8": 392
     },
     "words": 4096,
     "worst": {
-     "index": 2571,
-     "oracle": 0.0011072681518271565,
-     "ref": 0.0011072689667344093,
-     "tol": 1.3580907110011253e-07
+     "index": 2693,
+     "oracle": 0.0011527397437021136,
+     "ref": 0.00115274079144001,
+     "tol": 1.4138151360754136e-07
     }
    },
    {
     "N": 512,
-    "exact_fraction": 0.336669921875,
-    "exact_words": 1379,
-    "max_abs_err": 3.5762786865234375e-07,
-    "max_normalised_err": 0.0048986147976034615,
-    "max_ulp": 9,
+    "exact_fraction": 0.247802734375,
+    "exact_words": 1015,
+    "max_abs_err": 2.980232238769531e-07,
+    "max_normalised_err": 0.004574047429745405,
+    "max_ulp": 8,
     "scale": 10.0,
     "tolerance": "4*(N+2)*u32*|ref| + ulp_DT(ref)  (positive terms: relative)",
     "ulp_histogram_capped_8": {
-     "0": 1379,
-     "1": 244,
-     "2": 330,
-     "3": 274,
-     "4": 625,
-     "5": 565,
-     "6": 470,
-     "7": 190,
-     "8": 19
+     "0": 1015,
+     "1": 608,
+     "2": 572,
+     "3": 676,
+     "4": 571,
+     "5": 418,
+     "6": 211,
+     "7": 23,
+     "8": 2
     },
     "words": 4096,
     "worst": {
-     "index": 614,
-     "oracle": 2.587363656658681e-09,
-     "ref": 2.5873652109709155e-09,
-     "tol": 3.172962763342061e-13
+     "index": 1040,
+     "oracle": 9.43579986043832e-16,
+     "ref": 9.43580515439424e-16,
+     "tol": 1.1573898175852633e-19
     }
    }
   ],
   "tolerance": "4*(N+2)*u32*|ref| + ulp_DT(ref)  (positive terms: relative)",
   "ulp_histogram_capped_8": {
-   "0": 3040,
-   "1": 1532,
-   "2": 862,
-   "3": 445,
-   "4": 885,
-   "5": 918,
-   "6": 848,
-   "7": 481,
-   "8": 285
+   "0": 2594,
+   "1": 807,
+   "2": 1100,
+   "3": 1529,
+   "4": 1203,
+   "5": 802,
+   "6": 521,
+   "7": 346,
+   "8": 394
   },
   "words": 9296,
   "worst": {

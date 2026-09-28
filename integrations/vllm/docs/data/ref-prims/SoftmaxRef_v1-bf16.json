@@ -1,7 +1,7 @@
 {
  "DT": "bf16",
  "definition": {
-  "ref_vocab_digest": "791320f527c1dd79fcbc3360f965911a09a0b753cd9bb7de57bbc67540cc6842",
+  "ref_vocab_digest": "82fd6a281c1b999ad2929c0c05a701614a5e322bfe2a92141dd77ec2af8f8e52",
   "ref_vocab_version": "verity-ref-vocab/1"
  },
  "domain": {
@@ -26,19 +26,19 @@
  "notes": "torch: vectorised max, Sleef exp, vectorised sum, then multiply by 1/sum; reference: sequential max/sum, correctly rounded exp, multiply by RN(1/sum).",
  "oracle": {
   "device": "cpu",
-  "machine": "x86_64",
+  "machine": "arm64",
   "numpy": "2.5.3",
   "op": "torch.nn.functional.softmax(dim=-1, dtype=float32).to(dt)",
-  "platform": "Linux-6.12.94+-x86_64-with-glibc2.39",
-  "python": "3.12.3",
-  "torch": "2.14.0+cu130"
+  "platform": "macOS-26.5.1-arm64-arm-64bit-Mach-O",
+  "python": "3.13.5",
+  "torch": "2.14.0"
  },
  "result": {
-  "exact_fraction": 0.9998924268502581,
-  "exact_words": 9295,
-  "max_abs_err": 7.62939453125e-06,
-  "max_normalised_err": 0.9754934909018683,
-  "max_ulp": 1,
+  "exact_fraction": 1.0,
+  "exact_words": 9296,
+  "max_abs_err": 0.0,
+  "max_normalised_err": 0.0,
+  "max_ulp": 0,
   "per_shape": [
    {
     "N": 5,
@@ -122,23 +122,22 @@
    },
    {
     "N": 512,
-    "exact_fraction": 0.999755859375,
-    "exact_words": 4095,
-    "max_abs_err": 7.62939453125e-06,
-    "max_normalised_err": 0.9754934909018683,
-    "max_ulp": 1,
+    "exact_fraction": 1.0,
+    "exact_words": 4096,
+    "max_abs_err": 0.0,
+    "max_normalised_err": 0.0,
+    "max_ulp": 0,
     "scale": 1.0,
     "tolerance": "4*(N+2)*u32*|ref| + ulp_DT(ref)  (positive terms: relative)",
     "ulp_histogram_capped_8": {
-     "0": 4095,
-     "1": 1
+     "0": 4096
     },
     "words": 4096,
     "worst": {
-     "index": 2465,
-     "oracle": 0.0015716552734375,
-     "ref": 0.00156402587890625,
-     "tol": 7.821061444701627e-06
+     "index": 0,
+     "oracle": 0.000881195068359375,
+     "ref": 0.000881195068359375,
+     "tol": 3.922685209545307e-06
     }
    },
    {
@@ -164,15 +163,14 @@
   ],
   "tolerance": "4*(N+2)*u32*|ref| + ulp_DT(ref)  (positive terms: relative)",
   "ulp_histogram_capped_8": {
-   "0": 9295,
-   "1": 1
+   "0": 9296
   },
   "words": 9296,
   "worst": {
-   "index": 3569,
-   "oracle": 0.0015716552734375,
-   "ref": 0.00156402587890625,
-   "tol": 7.821061444701627e-06
+   "index": 0,
+   "oracle": 0.58203125,
+   "ref": 0.58203125,
+   "tol": 0.003907221369445324
   }
  },
  "schema": "verity-ir/ref-prims-conformance/v0",

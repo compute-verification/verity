@@ -1,7 +1,7 @@
 {
  "DT": "f32",
  "definition": {
-  "ref_vocab_digest": "791320f527c1dd79fcbc3360f965911a09a0b753cd9bb7de57bbc67540cc6842",
+  "ref_vocab_digest": "82fd6a281c1b999ad2929c0c05a701614a5e322bfe2a92141dd77ec2af8f8e52",
   "ref_vocab_version": "verity-ref-vocab/1"
  },
  "domain": {
@@ -26,239 +26,249 @@
  "notes": "torch CPU accumulates in a blocked order (oneDNN/MKL or cpublas fallback); the reference is the sequential IEEE fma chain from +0. Disagreements are reassociation differences within the a-priori bound; output-ulp distance is large only where the dot product nearly cancels.",
  "oracle": {
   "device": "cpu",
-  "machine": "x86_64",
+  "machine": "arm64",
   "numpy": "2.5.3",
   "op": "torch.nn.functional.linear",
-  "platform": "Linux-6.12.94+-x86_64-with-glibc2.39",
-  "python": "3.12.3",
-  "torch": "2.14.0+cu130"
+  "platform": "macOS-26.5.1-arm64-arm-64bit-Mach-O",
+  "python": "3.13.5",
+  "torch": "2.14.0"
  },
  "result": {
-  "exact_fraction": 0.6875,
-  "exact_words": 660,
-  "max_abs_err": 1.430511474609375e-06,
-  "max_normalised_err": 0.004745953339450757,
-  "max_ulp": 1140,
+  "exact_fraction": 0.35104166666666664,
+  "exact_words": 337,
+  "max_abs_err": 1.0728836059570312e-06,
+  "max_normalised_err": 0.039132715853636174,
+  "max_ulp": 934,
   "per_shape": [
    {
     "BIAS": true,
     "K": 16,
     "N": 8,
-    "exact_fraction": 1.0,
-    "exact_words": 64,
-    "max_abs_err": 0.0,
-    "max_normalised_err": 0.0,
-    "max_ulp": 0,
+    "exact_fraction": 0.484375,
+    "exact_words": 31,
+    "max_abs_err": 2.384185791015625e-07,
+    "max_normalised_err": 0.039132715853636174,
+    "max_ulp": 14,
     "tolerance": "2*(K+2)*u32*(sum_k |x_k w_k| + |b|) + ulp_DT(ref)",
     "ulp_histogram_capped_8": {
-     "0": 64
+     "0": 31,
+     "1": 22,
+     "2": 6,
+     "3": 2,
+     "7": 1,
+     "8": 2
     },
     "words": 64,
     "worst": {
-     "index": 0,
-     "oracle": 2.6434640884399414,
-     "ref": 2.6434640884399414,
-     "tol": 8.805913462169369e-06
+     "index": 45,
+     "oracle": -2.0274477005004883,
+     "ref": -2.027447462081909,
+     "tol": 6.092564083548238e-06
     }
    },
    {
     "BIAS": false,
     "K": 16,
     "N": 8,
-    "exact_fraction": 1.0,
-    "exact_words": 64,
-    "max_abs_err": 0.0,
-    "max_normalised_err": 0.0,
-    "max_ulp": 0,
+    "exact_fraction": 0.3125,
+    "exact_words": 20,
+    "max_abs_err": 2.384185791015625e-07,
+    "max_normalised_err": 0.03476121282694414,
+    "max_ulp": 32,
     "tolerance": "2*(K+2)*u32*(sum_k |x_k w_k| + |b|) + ulp_DT(ref)",
     "ulp_histogram_capped_8": {
-     "0": 64
+     "0": 20,
+     "1": 28,
+     "2": 6,
+     "3": 5,
+     "4": 1,
+     "6": 1,
+     "7": 1,
+     "8": 2
     },
     "words": 64,
     "worst": {
-     "index": 0,
-     "oracle": 1.8094395399093628,
-     "ref": 1.8094395399093628,
-     "tol": 9.12140712949074e-06
+     "index": 30,
+     "oracle": 2.1984052658081055,
+     "ref": 2.1984055042266846,
+     "tol": 6.858753182419438e-06
     }
    },
    {
     "BIAS": true,
     "K": 64,
     "N": 32,
-    "exact_fraction": 1.0,
-    "exact_words": 256,
-    "max_abs_err": 0.0,
-    "max_normalised_err": 0.0,
-    "max_ulp": 0,
+    "exact_fraction": 0.19921875,
+    "exact_words": 51,
+    "max_abs_err": 4.76837158203125e-07,
+    "max_normalised_err": 0.012312999313093454,
+    "max_ulp": 90,
     "tolerance": "2*(K+2)*u32*(sum_k |x_k w_k| + |b|) + ulp_DT(ref)",
     "ulp_histogram_capped_8": {
-     "0": 256
+     "0": 51,
+     "1": 72,
+     "2": 49,
+     "3": 23,
+     "4": 20,
+     "5": 11,
+     "6": 3,
+     "7": 1,
+     "8": 26
     },
     "words": 256,
     "worst": {
-     "index": 0,
-     "oracle": 0.3189152479171753,
-     "ref": 0.3189152479171753,
-     "tol": 2.5867247245315667e-05
+     "index": 129,
+     "oracle": 1.4876353740692139,
+     "ref": 1.4876348972320557,
+     "tol": 3.872632053963194e-05
     }
    },
    {
     "BIAS": false,
     "K": 64,
     "N": 32,
-    "exact_fraction": 1.0,
-    "exact_words": 256,
-    "max_abs_err": 0.0,
-    "max_normalised_err": 0.0,
-    "max_ulp": 0,
+    "exact_fraction": 0.1953125,
+    "exact_words": 50,
+    "max_abs_err": 9.5367431640625e-07,
+    "max_normalised_err": 0.016989834011314923,
+    "max_ulp": 144,
     "tolerance": "2*(K+2)*u32*(sum_k |x_k w_k| + |b|) + ulp_DT(ref)",
     "ulp_histogram_capped_8": {
-     "0": 256
+     "0": 50,
+     "1": 72,
+     "2": 41,
+     "3": 22,
+     "4": 24,
+     "5": 6,
+     "6": 9,
+     "7": 4,
+     "8": 28
     },
     "words": 256,
     "worst": {
-     "index": 0,
-     "oracle": -0.17182183265686035,
-     "ref": -0.17182183265686035,
-     "tol": 4.2453539003202194e-05
+     "index": 20,
+     "oracle": 3.0755982398986816,
+     "ref": 3.075599193572998,
+     "tol": 5.613205613257435e-05
     }
    },
    {
     "BIAS": true,
     "K": 256,
     "N": 16,
-    "exact_fraction": 0.0546875,
-    "exact_words": 7,
-    "max_abs_err": 1.430511474609375e-06,
-    "max_normalised_err": 0.004745953339450757,
-    "max_ulp": 392,
+    "exact_fraction": 0.1171875,
+    "exact_words": 15,
+    "max_abs_err": 7.152557373046875e-07,
+    "max_normalised_err": 0.0024654564597745756,
+    "max_ulp": 934,
     "tolerance": "2*(K+2)*u32*(sum_k |x_k w_k| + |b|) + ulp_DT(ref)",
     "ulp_histogram_capped_8": {
-     "0": 7,
-     "1": 27,
-     "2": 29,
-     "3": 9,
-     "4": 13,
-     "5": 4,
-     "6": 4,
+     "0": 15,
+     "1": 37,
+     "2": 25,
+     "3": 11,
+     "4": 9,
+     "5": 7,
+     "6": 1,
      "7": 4,
-     "8": 31
+     "8": 19
     },
     "words": 128,
     "worst": {
-     "index": 72,
-     "oracle": -2.503279209136963,
-     "ref": -2.5032806396484375,
-     "tol": 0.00030141709626983526
+     "index": 33,
+     "oracle": -0.9391129612922668,
+     "ref": -0.9391136765480042,
+     "tol": 0.00029011087763037825
     }
    },
    {
     "BIAS": false,
     "K": 256,
     "N": 16,
-    "exact_fraction": 0.078125,
+    "exact_fraction": 1.0,
+    "exact_words": 128,
+    "max_abs_err": 0.0,
+    "max_normalised_err": 0.0,
+    "max_ulp": 0,
+    "tolerance": "2*(K+2)*u32*(sum_k |x_k w_k| + |b|) + ulp_DT(ref)",
+    "ulp_histogram_capped_8": {
+     "0": 128
+    },
+    "words": 128,
+    "worst": {
+     "index": 0,
+     "oracle": -0.8206532597541809,
+     "ref": -0.8206532597541809,
+     "tol": 0.00030055832445710884
+    }
+   },
+   {
+    "BIAS": true,
+    "K": 768,
+    "N": 4,
+    "exact_fraction": 0.3125,
     "exact_words": 10,
     "max_abs_err": 1.0728836059570312e-06,
-    "max_normalised_err": 0.003726280380736504,
-    "max_ulp": 151,
+    "max_normalised_err": 0.0006938168033457807,
+    "max_ulp": 32,
     "tolerance": "2*(K+2)*u32*(sum_k |x_k w_k| + |b|) + ulp_DT(ref)",
     "ulp_histogram_capped_8": {
      "0": 10,
-     "1": 17,
-     "2": 20,
-     "3": 21,
-     "4": 15,
-     "5": 9,
-     "6": 9,
-     "7": 6,
-     "8": 21
-    },
-    "words": 128,
-    "worst": {
-     "index": 37,
-     "oracle": -1.6378507614135742,
-     "ref": -1.6378518342971802,
-     "tol": 0.00028792347765977137
-    }
-   },
-   {
-    "BIAS": true,
-    "K": 768,
-    "N": 4,
-    "exact_fraction": 0.03125,
-    "exact_words": 1,
-    "max_abs_err": 1.1920928955078125e-06,
-    "max_normalised_err": 0.0007926960029837719,
-    "max_ulp": 226,
-    "tolerance": "2*(K+2)*u32*(sum_k |x_k w_k| + |b|) + ulp_DT(ref)",
-    "ulp_histogram_capped_8": {
-     "0": 1,
-     "1": 3,
+     "1": 6,
      "2": 5,
      "3": 2,
-     "4": 5,
-     "5": 3,
-     "6": 1,
-     "7": 1,
-     "8": 11
+     "4": 3,
+     "6": 3,
+     "8": 3
     },
     "words": 32,
     "worst": {
-     "index": 20,
-     "oracle": -1.829439401626587,
-     "ref": -1.8294382095336914,
-     "tol": 0.0015038462298544188
+     "index": 16,
+     "oracle": 1.141291618347168,
+     "ref": 1.141290545463562,
+     "tol": 0.0015463499886184413
     }
    },
    {
     "BIAS": false,
     "K": 768,
     "N": 4,
-    "exact_fraction": 0.0625,
-    "exact_words": 2,
-    "max_abs_err": 1.0728836059570312e-06,
-    "max_normalised_err": 0.0006771389536524903,
-    "max_ulp": 1140,
+    "exact_fraction": 1.0,
+    "exact_words": 32,
+    "max_abs_err": 0.0,
+    "max_normalised_err": 0.0,
+    "max_ulp": 0,
     "tolerance": "2*(K+2)*u32*(sum_k |x_k w_k| + |b|) + ulp_DT(ref)",
     "ulp_histogram_capped_8": {
-     "0": 2,
-     "1": 4,
-     "2": 3,
-     "3": 2,
-     "4": 1,
-     "5": 1,
-     "6": 2,
-     "7": 2,
-     "8": 15
+     "0": 32
     },
     "words": 32,
     "worst": {
-     "index": 24,
-     "oracle": -1.3161556720733643,
-     "ref": -1.3161567449569702,
-     "tol": 0.0015844363998997438
+     "index": 0,
+     "oracle": -0.17657321691513062,
+     "ref": -0.17657321691513062,
+     "tol": 0.0015608499746719675
     }
    }
   ],
   "tolerance": "2*(K+2)*u32*(sum_k |x_k w_k| + |b|) + ulp_DT(ref)",
   "ulp_histogram_capped_8": {
-   "0": 660,
-   "1": 51,
-   "2": 57,
-   "3": 34,
-   "4": 34,
-   "5": 17,
-   "6": 16,
-   "7": 13,
-   "8": 78
+   "0": 337,
+   "1": 237,
+   "2": 132,
+   "3": 65,
+   "4": 57,
+   "5": 24,
+   "6": 17,
+   "7": 11,
+   "8": 80
   },
   "words": 960,
   "worst": {
-   "index": 712,
-   "oracle": -2.503279209136963,
-   "ref": -2.5032806396484375,
-   "tol": 0.00030141709626983526
+   "index": 45,
+   "oracle": -2.0274477005004883,
+   "ref": -2.027447462081909,
+   "tol": 6.092564083548238e-06
   }
  },
  "schema": "verity-ir/ref-prims-conformance/v0",

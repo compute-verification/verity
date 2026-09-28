@@ -1,7 +1,7 @@
 {
  "DT": "f32",
  "definition": {
-  "ref_vocab_digest": "791320f527c1dd79fcbc3360f965911a09a0b753cd9bb7de57bbc67540cc6842",
+  "ref_vocab_digest": "82fd6a281c1b999ad2929c0c05a701614a5e322bfe2a92141dd77ec2af8f8e52",
   "ref_vocab_version": "verity-ref-vocab/1"
  },
  "domain": {
@@ -18,33 +18,34 @@
  "notes": "GQA head->KV-head mapping h // (NH/KVH) checked against repeat_kv.",
  "oracle": {
   "device": "cpu",
-  "machine": "x86_64",
+  "machine": "arm64",
   "numpy": "2.5.3",
   "op": "HF eager attention with repeat_kv (torch ops)",
-  "platform": "Linux-6.12.94+-x86_64-with-glibc2.39",
-  "python": "3.12.3",
-  "torch": "2.14.0+cu130"
+  "platform": "macOS-26.5.1-arm64-arm-64bit-Mach-O",
+  "python": "3.13.5",
+  "torch": "2.14.0"
  },
  "result": {
-  "exact_fraction": 0.15625,
-  "exact_words": 5,
-  "max_abs_err": 5.960464477539063e-08,
-  "max_normalised_err": 0.0012230592351385873,
-  "max_ulp": 27,
+  "exact_fraction": 0.46875,
+  "exact_words": 15,
+  "max_abs_err": 1.1920928955078125e-07,
+  "max_normalised_err": 0.0024446235105966387,
+  "max_ulp": 11,
   "tolerance": "16*(T+D+2)*u32*max|v| + ulp_DT(ref)",
   "ulp_histogram_capped_8": {
-   "0": 5,
-   "1": 16,
-   "2": 7,
-   "3": 1,
-   "8": 3
+   "0": 15,
+   "1": 6,
+   "2": 6,
+   "3": 3,
+   "4": 1,
+   "8": 1
   },
   "words": 32,
   "worst": {
-   "index": 22,
-   "oracle": 0.2934468686580658,
-   "ref": 0.293446809053421,
-   "tol": 4.87340621475596e-05
+   "index": 25,
+   "oracle": -0.6022037863731384,
+   "ref": -0.602203905582428,
+   "tol": 4.8763864469947293e-05
   }
  },
  "schema": "verity-ir/ref-prims-conformance/v0",

@@ -1,7 +1,7 @@
 {
  "DT": "f32",
  "definition": {
-  "ref_vocab_digest": "791320f527c1dd79fcbc3360f965911a09a0b753cd9bb7de57bbc67540cc6842",
+  "ref_vocab_digest": "82fd6a281c1b999ad2929c0c05a701614a5e322bfe2a92141dd77ec2af8f8e52",
   "ref_vocab_version": "verity-ref-vocab/1"
  },
  "domain": {
@@ -20,36 +20,36 @@
  "notes": "torch silu = x / (1 + exp(-x)) (vectorised Sleef expf, scalar std::exp); the reference uses the correctly rounded F32ExpRn with the same division form. No cancellation: differences stay at 1 ulp.",
  "oracle": {
   "device": "cpu",
-  "machine": "x86_64",
+  "machine": "arm64",
   "numpy": "2.5.3",
   "op": "torch.nn.functional.silu (contiguous and strided)",
-  "platform": "Linux-6.12.94+-x86_64-with-glibc2.39",
-  "python": "3.12.3",
-  "torch": "2.14.0+cu130"
+  "platform": "macOS-26.5.1-arm64-arm-64bit-Mach-O",
+  "python": "3.13.5",
+  "torch": "2.14.0"
  },
  "result": {
-  "exact_fraction": 0.9587350500366122,
+  "exact_fraction": 0.9586740297778863,
   "max_ulp": 2,
   "torch_scalar_path_strided": {
-   "exact_fraction": 0.999710153771052,
-   "exact_words": 65533,
-   "max_abs_err": 1.1920928955078125e-07,
+   "exact_fraction": 0.9977117402977789,
+   "exact_words": 65402,
+   "max_abs_err": 2.384185791015625e-07,
    "max_ulp": 2,
    "ulp_histogram_capped_8": {
-    "0": 65533,
-    "1": 14,
-    "2": 5
+    "0": 65402,
+    "1": 126,
+    "2": 24
    },
    "words": 65552
   },
   "torch_vectorised_path_contiguous": {
-   "exact_fraction": 0.9587350500366122,
-   "exact_words": 62847,
+   "exact_fraction": 0.9586740297778863,
+   "exact_words": 62843,
    "max_abs_err": 4.76837158203125e-07,
    "max_ulp": 2,
    "ulp_histogram_capped_8": {
-    "0": 62847,
-    "1": 2435,
+    "0": 62843,
+    "1": 2439,
     "2": 270
    },
    "words": 65552
