@@ -36,7 +36,7 @@ use flock_live::{
 };
 use flock_prover::{pcs::Commitment, prover::{prove_fast_ligerito_from_witness_extra, prove_fast_ligerito_from_witness_extra_zk}};
 #[cfg(feature = "gpu")]
-use flock_live::gpu_circuit::HostSlot;
+use flock_live::gpu_circuit::HostSlots;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha512};
 
@@ -652,17 +652,18 @@ type Witness = (Vec<F128>, Vec<F128>, Vec<F128>, Vec<u8>);
 #[derive(Clone)]
 enum WitData {
     Host(Witness),
-    /// the device witness's inputs: every compression slot's input words, the hm96 slots (host slots), every unit's input words
+    /// the device witness's inputs: every compression slot's input words, the host slots (hm96, M1's mask slot, deep units)
+    /// packed as the device takes them, every unit's input words
     #[cfg(feature = "gpu")]
-    Dev(Vec<F128>, Vec<HostSlot>, Vec<F128>),
+    Dev(Vec<F128>, HostSlots, Vec<F128>),
     /// a cut template on the device: as `Dev` (the late words come from the host tail between the units' passes)
     #[cfg(feature = "gpu")]
-    DevCut(Vec<F128>, Vec<HostSlot>, Vec<F128>, Arc<dyn Fn(usize, usize) -> Vec<F128> + Sync + Send>),
+    DevCut(Vec<F128>, HostSlots, Vec<F128>, Arc<dyn Fn(usize, usize) -> Vec<F128> + Sync + Send>),
 }
 
 /// A rep's witness: for an honest prover on the GPU (`device`), the device witness's inputs (the compression slots' and the
 /// units' input words, the hm96 slots computed here, and M1's mask slot); otherwise the packed host witness.
-fn witness(st: &Stmt, w: &Wit, device: bool) -> (WitData, f64) {
+fn witness(st: &Stmt, w: &Wit, device: bool, host_units: bool) -> (WitData, f64) {
     let t = Instant::now();
     // the mask slot's words where the device's fill is not zero: z = a = b (its circuit is the identity on the slot)
     #[cfg(feature = "gpu")]
@@ -686,11 +687,17 @@ fn witness(st: &Stmt, w: &Wit, device: bool) -> (WitData, f64) {
         let hm: Vec<Vec<F128>> = ri.into_iter().flat_map(|x| x.1).collect();
         let mut host = flock_live::gpu_circuit::host_slots(st, st.c.hm_net, &hm);
         host.extend(mask_slots());
-        let inputs: Vec<F128> = (0..st.blocks() * ur.count).into_par_iter().flat_map_iter(|x| (w.inputs)(x / ur.count, x % ur.count)).collect();
+        let unit_inputs = || (0..st.blocks() * ur.count).into_par_iter().map(|x| (w.inputs)(x / ur.count, x % ur.count));
         if st.c.wires.iter().any(|x| x.dst.0 != st.c.sha_net && x.dst.0 != st.c.hm_net) {
-            return (WitData::DevCut(rows, host, inputs, w.inputs.clone()), t.elapsed().as_secs_f64());
+            let inputs: Vec<F128> = unit_inputs().flatten_iter().collect();
+            return (WitData::DevCut(rows, HostSlots::pack(&host), inputs, w.inputs.clone()), t.elapsed().as_secs_f64());
         }
-        return (WitData::Dev(rows, host, inputs), t.elapsed().as_secs_f64());
+        if host_units {
+            let ins: Vec<Vec<F128>> = unit_inputs().collect();
+            host.extend(flock_live::gpu_circuit::host_slots(st, st.c.unit_net, &ins));
+            return (WitData::Dev(rows, HostSlots::pack(&host), Vec::new()), t.elapsed().as_secs_f64());
+        }
+        return (WitData::Dev(rows, HostSlots::pack(&host), unit_inputs().flatten_iter().collect()), t.elapsed().as_secs_f64());
     }
     #[cfg(feature = "gpu")]
     // a tail that returns the outputs (a chain of units, the tail's stages): the host converges every slot's inputs and computes
@@ -708,9 +715,9 @@ fn witness(st: &Stmt, w: &Wit, device: bool) -> (WitData, f64) {
         }
         host.extend(mask_slots());
         let inputs: Vec<F128> = ins[c.unit_net].iter().flatten().copied().collect();
-        return (WitData::Dev(rows, host, inputs), t.elapsed().as_secs_f64());
+        return (WitData::Dev(rows, HostSlots::pack(&host), inputs), t.elapsed().as_secs_f64());
     }
-    let _ = device;
+    let _ = (device, host_units);
     let mut ins = st.converge(&*w.inputs, &*w.rowin, &w.nets);
     if let Some((n, x, col)) = w.cut_flip {
         let word = &mut ins[n][x][col / 128];
@@ -1641,6 +1648,7 @@ fn extracted(tabs: &Tables, view: &View) -> Result<(Vec<Vec<F128>>, Vec<Vec<Vec<
 }
 
 /// The `Hello` a view's session sent (its coin-tree nonce: the simulator's rewinds restart after it).
+#[cfg(feature = "seed-injection")]
 fn view_hello(view: &View) -> Result<String, String> {
     view.iter().find_map(|(req, _)| if let Req::Hello(h) = req { Some(h.clone()) } else { None }).ok_or("the view has no Hello".into())
 }
@@ -1995,13 +2003,14 @@ fn zkaudit(_: &Arc<Stmt>, _: &Arc<Instances>) {
 #[cfg(feature = "gpu")]
 fn with_gpu_src<R>(st: &Stmt, wt: &WitData, f: impl FnOnce(flock_live::gpu_circuit::CircuitSrc<'_>) -> R) -> R {
     use flock_live::gpu_circuit::CircuitSrc;
-    let sched = flock_live::gpu_circuit::schedule(st.c.unit());
-    let (cut_rows, late_rows): (Vec<usize>, Vec<usize>) = (sched.cut_rows.iter().map(|&r| r as usize).collect(), sched.late_rows.iter().map(|&r| r as usize).collect());
     let mut mid_fn;
     let src = match wt {
         WitData::Host((z, a, b, _)) => CircuitSrc::Host { z, a, b },
         WitData::Dev(r, h, i) => CircuitSrc::Device { rows: r, host: h, inputs: i },
         WitData::DevCut(r, h, i, ui) => {
+            let sched = flock_live::gpu_circuit::schedule(st.c.unit());
+            let cut_rows: Vec<usize> = sched.cut_rows.iter().map(|&r| r as usize).collect();
+            let late_rows: Vec<usize> = sched.late_rows.iter().map(|&r| r as usize).collect();
             mid_fn = move |cut: &[u32]| st.host_tail(&**ui, cut, &cut_rows, &late_rows);
             CircuitSrc::DeviceCut { rows: r, host: h, inputs: i, mid: &mut mid_fn }
         }
@@ -2010,21 +2019,36 @@ fn with_gpu_src<R>(st: &Stmt, wt: &WitData, f: impl FnOnce(flock_live::gpu_circu
 }
 
 #[cfg(feature = "gpu")]
-fn gpu_buckets(wt: &WitData, ph: [f64; 8], wph: [f64; 3]) -> Value {
+/// A rep's buckets: the device's phases (`t.`), and the host's around it (`h.`: setup, staging the device's inputs, decoding and
+/// serializing the proof), which with `t.total` make up the rep's wall time.
+fn gpu_buckets(wt: &WitData, ph: [f64; 8], wph: [f64; 3], hph: [f64; 3], reused: bool) -> Value {
     json!({"t.witness": ph[0], "t.witness_comp": wph[0], "t.witness_units": wph[1], "t.encoding_commitment": ph[1], "t.link": ph[2],
            "t.zerocheck": ph[3], "t.lincheck": ph[4], "t.ring_switch": ph[5], "t.ligerito": ph[6], "t.total": ph[7],
-           "t.arithmetic": ph[3] + ph[4] + ph[5] + ph[6], "device_witness": !matches!(wt, WitData::Host(..))})
+           "t.arithmetic": ph[3] + ph[4] + ph[5] + ph[6], "h.setup": hph[0], "h.stage": hph[1], "h.decode": hph[2],
+           "device_witness": !matches!(wt, WitData::Host(..)), "host_units": matches!(wt, WitData::Dev(_, _, i) if i.is_empty()),
+           "rep_reused": reused})
 }
 
+/// One rep on the GPU; with `reuse_tag`, rep 0 keeps its witness and level-0 commitment on the device and rep 1 takes them.
 #[cfg(feature = "gpu")]
+#[allow(clippy::too_many_arguments)]
 fn prove_gpu(st: &Stmt, wt: &WitData, lig: LigeritoProfile, rep: usize, hook: Hook<'_>, ch: &mut LiveChallenger,
-             salts: &Mutex<flock_live::zk_hooks::LeafSalts>) -> (Vec<u8>, Value) {
-    use flock_live::gpu_circuit::{Live, prove_circuit};
-    let (proof, commitment, ph, wph) =
-        with_gpu_src(st, wt, |src| prove_circuit(st, src, &params(st.m, lig), &domain(&st.c, rep), hook, Live::Stream(ch), Some(salts)));
-    let bk = gpu_buckets(wt, ph, wph);
+             salts: &Mutex<flock_live::zk_hooks::LeafSalts>, reuse_tag: Option<u64>) -> (Vec<u8>, Value) {
+    use flock_live::gpu_circuit::{Live, Reuse, kept, prove_circuit};
+    let reuse = match (reuse_tag, rep) {
+        (None, _) => Reuse::None,
+        (Some(t), 0) => Reuse::Keep(t),
+        (Some(t), _) => Reuse::Take(t),
+    };
+    let reused = matches!(reuse, Reuse::Take(t) if kept(t));
+    let (proof, commitment, ph, wph, hph) =
+        with_gpu_src(st, wt, |src| prove_circuit(st, src, &params(st.m, lig), &domain(&st.c, rep), hook, Live::Stream(ch), Some(salts), reuse));
+    let ts = Instant::now();
+    let bytes = bincode::serialize(&(commitment, proof)).unwrap();
+    let mut bk = gpu_buckets(wt, ph, wph, hph, reused);
+    bk["h.serialize"] = json!(ts.elapsed().as_secs_f64());
     eprintln!("GPUPHASE\t{bk}");
-    (bincode::serialize(&(commitment, proof)).unwrap(), bk)
+    (bytes, bk)
 }
 
 /// M1 on the device, its device part: every live round the device frames goes to `rounds` (the rep's masking challenger, made
@@ -2035,17 +2059,19 @@ fn prove_gpu(st: &Stmt, wt: &WitData, lig: LigeritoProfile, rep: usize, hook: Ho
 fn gpu_zk_device(st: &Stmt, wt: &WitData, lig: LigeritoProfile, rep: usize, hook: Hook<'_>, salts: &Mutex<flock_live::zk_hooks::LeafSalts>,
                  level0: &flock_core::pcs::ligerito::zk::Level0Zk, rounds: &mut dyn FnMut(&[u8], usize) -> Vec<F128>)
                  -> (R1csProofLigerito, Commitment, Value) {
-    use flock_live::gpu_circuit::{Live, prove_circuit};
-    let (proof, commitment, ph, wph) =
-        with_gpu_src(st, wt, |src| prove_circuit(st, src, &params(st.m, lig), &domain(&st.c, rep), hook, Live::Zk { level0, rounds }, Some(salts)));
-    let bk = gpu_buckets(wt, ph, wph);
+    use flock_live::gpu_circuit::{Live, Reuse, prove_circuit};
+    let (proof, commitment, ph, wph, hph) =
+        with_gpu_src(st, wt, |src| prove_circuit(st, src, &params(st.m, lig), &domain(&st.c, rep), hook, Live::Zk { level0, rounds }, Some(salts),
+                                                 Reuse::None));
+    let bk = gpu_buckets(wt, ph, wph, hph, false);
     eprintln!("GPUPHASE\t{bk}");
     (proof, commitment, bk)
 }
 
 #[cfg(not(feature = "gpu"))]
+#[allow(clippy::too_many_arguments)]
 fn prove_gpu(_: &Stmt, _: &WitData, _: LigeritoProfile, _: usize, _: Hook<'_>, _: &mut LiveChallenger,
-             _: &Mutex<flock_live::zk_hooks::LeafSalts>) -> (Vec<u8>, Value) {
+             _: &Mutex<flock_live::zk_hooks::LeafSalts>, _: Option<u64>) -> (Vec<u8>, Value) {
     panic!("built without the gpu feature")
 }
 
@@ -2093,6 +2119,10 @@ struct Plan {
     /// the coin-tree nonce `Hello` carries, instead of the prover's own fresh one: the simulator's, drawn once per simulated
     /// session, so every run restarts after the same `Hello`
     coin_nonce: Option<[u8; 32]>,
+    /// the device witness's units from the host (`Some(true)`), the device (`Some(false)`), or by depth (`deep_unit`)
+    host_units: Option<bool>,
+    /// rep 1 from rep 0's device witness and level-0 commitment (default: unless `FC_REP_REUSE=0`; never under `--zk`)
+    rep_reuse: Option<bool>,
     /// the session's tables ([`session_tables`]; 0 or 1: one table)
     tables: usize,
     /// those tables over the population, built once for a harness's repeated sessions without a draw
@@ -2220,6 +2250,16 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
     };
     let mut commit: Vec<F128> = Vec::new();
     let device = plan.gpu && !plan.mask_random && std::env::var("FC_HOST_WITNESS").is_err();
+    #[cfg(feature = "gpu")]
+    let host_units = device && plan.host_units.unwrap_or_else(|| flock_live::gpu_circuit::deep_unit(st));
+    #[cfg(not(feature = "gpu"))]
+    let host_units = false;
+    // on the device, rep 1 proves from rep 0's witness and level-0 commitment (the session's tag keys what rep 0 keeps); not
+    // under M1, whose level 0 and lane phase are its own
+    static SESSIONS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    let reuse_tag = (plan.gpu && !plan.rep1_other_witness && !is_zk(st)
+        && plan.rep_reuse.unwrap_or_else(|| std::env::var("FC_REP_REUSE").as_deref() != Ok("0")))
+        .then(|| SESSIONS.fetch_add(1, std::sync::atomic::Ordering::Relaxed));
     let lig = if plan.fast { LigeritoProfile::Fast } else { LigeritoProfile::Fast100 };
     // hm96-sha512 leaf salts: one ChaCha20 key per proof; the level-0 tree is id 0 (both reps bind one root), every later
     // tree a fresh id (table j's from j << 32). The device expands its own trees' salts; a CPU proof takes host expansions.
@@ -2242,9 +2282,9 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
     let mut wits = Vec::new();
     for (j, tb) in tabs.list.iter().enumerate() {
         let w0 = wit(&tb.st, &tb.inst, plan, plan.zero_witness, seed, j);
-        let (wt0, tw0) = witness(&tb.st, &w0, device);
+        let (wt0, tw0) = witness(&tb.st, &w0, device, host_units);
         let (wt1, tw1) = if plan.rep1_other_witness {
-            let (w, t) = witness(&tb.st, &wit(&tb.st, &tb.inst, plan, true, seed, j), device);
+            let (w, t) = witness(&tb.st, &wit(&tb.st, &tb.inst, plan, true, seed, j), device, host_units);
             (Some(w), t)
         } else {
             (None, 0.0)
@@ -2382,7 +2422,7 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
                         (0, true) => wt0.take(),
                         (0, false) if per_rep => wt0.take(),
                         (0, false) => wt0.clone(),
-                        _ => wt1.take().or_else(|| wt0.take()).or_else(|| Some(witness(st, &w0, device).0)),
+                        _ => wt1.take().or_else(|| wt0.take()).or_else(|| Some(witness(st, &w0, device, host_units).0)),
                     }.expect("a rep's witness")
                 };
                 #[cfg(feature = "sha512")]
@@ -2447,7 +2487,8 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
                                 let (mch, sent) = opened.take().expect("rep 1's stream opened");
                                 zk_finish(st, &z, proof, cm, mch, &sent, tp, t_up, bk)
                             }
-                            None => prove_gpu(st, wt, lig, rep, &mut hook, lch.as_mut().expect("the rep's stream"), salts),
+                            None => prove_gpu(st, wt, lig, rep, &mut hook, lch.as_mut().expect("the rep's stream"), salts,
+                                             reuse_tag.map(|t| (t << 8) | j as u64)),
                         }
                     } else if let Some(z) = &zkrep {
                         prove_cpu_zk(st, &own(&mut wt0, &mut wt1), lig, rep, &mut hook, lch.as_mut().expect("the rep's stream"), z)
@@ -2569,6 +2610,8 @@ const CASES: &[(&str, bool, bool)] = &[
     ("unit_draw_ignored_refused", false, false),
     ("prover_is_deterministic", true, false),
     ("gpu_proofs_match_cpu", true, false),
+    ("gpu_paths_agree", true, false),
+    ("host_units_match_witness", true, false),
     ("region_word_shared_refused", false, false),
     ("zk_pads_not_the_committed_ones", false, true),
     ("zk_level0_folds_another_extra_lane", false, true),
@@ -2695,6 +2738,24 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
     }
     if name == "gpu_proofs_match_cpu" {
         return gpu_cpu_case(st, inst);
+    }
+    if name == "gpu_paths_agree" {
+        return gpu_paths_case(st, inst);
+    }
+    if name == "host_units_match_witness" {
+        // the device witness's host units (a deep unit's slots, Stmt::slot_zab from their inputs) are the CPU witness's unit
+        // slots word for word
+        let w = wit(st, inst, &Plan::default(), false, ProverSeed::from_os(), 0);
+        let ins = st.converge(&*w.inputs, &*w.rowin, &w.nets);
+        let (z, a, b, _) = st.witness(&ins, &*w.mask, &w.nets);
+        let (ur, wpb) = (st.c.unit_range(), 1usize << (st.c.k_log - 7));
+        let slots = st.slot_zab(st.c.unit_net, st.c.unit(), &ins[st.c.unit_net]);
+        let same = slots.iter().all(|(x, zs, xa, xb)| {
+            let at = (x / ur.count) * wpb + ur.slot(x % ur.count) / 128;
+            z[at..at + zs.len()] == zs[..] && a[at..at + xa.len()] == xa[..] && b[at..at + xb.len()] == xb[..]
+        });
+        return json!({"case": name, "expect": "host-evaluated unit slots equal the witness's", "slots": slots.len(),
+                      "pass": same && slots.len() == st.blocks() * ur.count});
     }
     if name == "region_word_shared_refused" {
         // docs/region-word-check.md's negatives on the loaded circuit: a column sharing a partial region's word is refused with an
@@ -3248,6 +3309,34 @@ fn gpu_cpu_case(_: &Arc<Stmt>, _: &Arc<Instances>) -> Value {
     json!({"case": "gpu_proofs_match_cpu", "pass": true, "skipped": "built without the test harness's seed-injection feature"})
 }
 
+/// The device prover's paths against each other: the device's units and a rebuilt rep 1, against the host's units and rep 1
+/// from rep 0's witness and level-0 commitment (host units only where the device witness takes them, a statement whose units
+/// return its outputs; neither under M1). Equal seeds and verifier coins give byte-identical proofs and transcripts.
+#[cfg(feature = "seed-injection")]
+fn gpu_paths_case(st: &Arc<Stmt>, inst: &Arc<Instances>) -> Value {
+    let run = |plan: Plan| {
+        let s0 = Arc::new(Mutex::new(server(st, inst)));
+        fix_verifier_coins(&mut s0.lock().unwrap_or_else(PoisonError::into_inner), [9; 32]);
+        let (v, proofs) = session(st, inst, shared(InProc(s0.clone())), &plan, ProverSeed::injected([1; 32]));
+        let rec = s0.lock().unwrap_or_else(PoisonError::into_inner).record_json();
+        (v, proofs, json!({"streams": rec["streams"], "link": rec["link"], "proofs": rec["proof_sha512"]}))
+    };
+    let a = run(Plan { gpu: true, host_units: Some(false), rep_reuse: Some(false), ..Plan::default() });
+    let b = run(Plan { gpu: true, host_units: Some(true), rep_reuse: Some(true), ..Plan::default() });
+    let used = |k: &str| b.0["buckets"].as_array().map(|x| x.iter().map(|r| r[k].clone()).collect::<Vec<_>>());
+    let accepted = a.0["accepted"] == true && b.0["accepted"] == true;
+    let (pe, te) = (a.1 == b.1, a.2 == b.2);
+    json!({"case": "gpu_paths_agree", "expect": "byte-identical proofs and transcripts", "gpu": true, "zk": is_zk(st), "accepted": accepted,
+           "proofs_equal": pe, "transcripts_equal": te, "transcript_first_difference": first_diff(&a.2, &b.2, String::new()),
+           "host_units": used("host_units"), "rep_reused": used("rep_reused"), "prove_s": [a.0["prove_s"].clone(), b.0["prove_s"].clone()],
+           "pass": accepted && pe && te})
+}
+
+#[cfg(not(feature = "seed-injection"))]
+fn gpu_paths_case(_: &Arc<Stmt>, _: &Arc<Instances>) -> Value {
+    json!({"case": "gpu_paths_agree", "pass": true, "skipped": "built without the test harness's seed-injection feature"})
+}
+
 /// The same circuit with unit 0's first two leaf inputs swapped in its META: the rows are unchanged, the meaning is not.
 fn relabel(text: &str) -> String {
     let mut lines: Vec<String> = text.split('\n').map(|s| s.to_string()).collect();
@@ -3270,7 +3359,7 @@ fn selftest(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) {
     let mut all = true;
     for &(name, want_accept, _) in CASES {
         if skipped(st, name) || (name == "row_ref_claim_false" && !inst.tables.as_ref().is_some_and(|t| t.counts.iter().any(|&r| r > 1)))
-            || (name == "gpu_proofs_match_cpu" && !gpu) {
+            || ((name == "gpu_proofs_match_cpu" || name == "gpu_paths_agree") && !gpu) {
             continue;
         }
         let v = if gpu {

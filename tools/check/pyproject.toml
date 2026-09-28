@@ -17,5 +17,6 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# The tests read the verifier's pin, replayable sets and agreement scripts (the agreement step's inputs).
-inputs = ["READY.json", "backends/flock/verifier"]
+# The tests read the verifier's pin, replayable sets and agreement scripts (the agreement step's inputs), check.py's
+# shipped-tree commit record, and the flock-circuit build step's script.
+inputs = ["READY.json", "backends/flock/check_build.sh", "backends/flock/verifier"]

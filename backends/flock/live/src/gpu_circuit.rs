@@ -1,8 +1,9 @@
 //! Flock-CUDA for `verity/flock-circuit` (feature `gpu`): `flock_cuda_prove_circuit` (backends/flock/cuda/prove_circuit.cuh,
 //! installed by backends/flock/cuda_circuit_patch.py). The honest witness is built on the device from the compressions'
-//! inputs and every unit's input words (both computed here from the rows, a few MB); a tampered witness is uploaded whole.
+//! inputs and every unit's input words (both computed here from the rows, a few MB), a deep unit's slots here (`deep_unit`);
+//! a tampered witness is uploaded whole. Rep 1 proves from rep 0's witness and level-0 commitment (`Reuse`).
 
-use std::{ffi::c_void, ptr::{null, null_mut}, sync::OnceLock};
+use std::{ffi::c_void, ptr::{null, null_mut}, sync::OnceLock, time::Instant};
 
 use flock_field::F128;
 use flock_prover::{
@@ -95,6 +96,11 @@ struct CircuitParams {
     zk_tamper: i32,
     zk_pads: *const u64,
     zk_extra: *const u64,
+    /// the units' slots are among the host slots: the device's unit kernel does not run
+    u_host: i32,
+    /// `Reuse`: 0 none, 1 keep for `reuse_tag`, 2 take `reuse_tag`'s
+    rep_reuse: i32,
+    reuse_tag: u64,
 }
 
 #[cfg(feature = "sha512")]
@@ -176,6 +182,35 @@ unsafe extern "C" {
     fn flock_cuda_free(p: *mut u8);
     #[cfg(feature = "sha512")]
     fn flock_cuda_hm96_salts(key: *const u8, nonce: u64, idx: *const i64, n: i32, out: *mut u8) -> i32;
+    fn flock_cuda_circuit_kept(tag: u64) -> i32;
+}
+
+/// Rep 1 proves from rep 0's witness and level-0 commitment, which both reps bind (one level-0 root): rep 0 keeps them on the
+/// device for the session's tag, and rep 1 takes them. Where the device has no room to keep them, rep 1 proves in full.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Reuse {
+    None,
+    Keep(u64),
+    Take(u64),
+}
+
+/// Whether the device holds a rep 0's witness and level-0 commitment for `tag`.
+pub fn kept(tag: u64) -> bool {
+    unsafe { flock_cuda_circuit_kept(tag) != 0 }
+}
+
+/// The device's unit kernel syncs once per AND-level for 32 units per CTA, so a deep unit leaves the device idle (a flattened
+/// GEMM coordinate has 305 levels per tensor-core step), while the host's `eval64` walks its rows once per 64 units. A unit at
+/// least this deep is evaluated on the host; `FC_HOST_UNITS=0|1` overrides.
+pub const HOST_UNIT_LEVELS: usize = 2048;
+
+/// Whether the statement's units are evaluated on the host (`HOST_UNIT_LEVELS`).
+pub fn deep_unit(st: &Stmt) -> bool {
+    match std::env::var("FC_HOST_UNITS").as_deref() {
+        Ok("0") => false,
+        Ok("1") => true,
+        _ => types(st).sched.level_off.len() - 1 >= HOST_UNIT_LEVELS,
+    }
 }
 
 /// The salts of leaves `idx` of tree `nonce` under `key` as the device expands them (192 bytes each): a test vector against
@@ -191,15 +226,49 @@ pub fn device_salts(key: &[u8; 32], nonce: u64, idx: &[i64]) -> Vec<u8> {
 /// A slot whose witness the host computed: its absolute F128 word offset and its z, a, b words.
 pub type HostSlot = (usize, Vec<F128>, Vec<F128>, Vec<F128>);
 
+/// Host slots as the device takes them (`host0`): each slot's absolute F128 word offset and word count, and every slot's z, a,
+/// b words back to back. Packed once per witness, so a rep hands the device pointers rather than a copy.
+#[derive(Clone, Default)]
+pub struct HostSlots {
+    pub at: Vec<i64>,
+    pub words: Vec<i32>,
+    pub zab: Vec<u64>,
+}
+
+impl HostSlots {
+    pub fn pack(slots: &[HostSlot]) -> Self {
+        let words: Vec<i32> = slots.iter().map(|s| s.1.len() as i32).collect();
+        let mut zab = vec![0u64; words.iter().map(|&w| 6 * w as usize).sum()];
+        let mut rest: &mut [u64] = &mut zab;
+        let mut dst = Vec::with_capacity(slots.len());
+        for &w in &words {
+            let (a, b) = std::mem::take(&mut rest).split_at_mut(6 * w as usize);
+            dst.push(a);
+            rest = b;
+        }
+        dst.into_par_iter().zip(slots.par_iter()).for_each(|(d, (_, z, a, b))| {
+            let w = z.len();
+            for (k, v) in [z, a, b].into_iter().enumerate() {
+                assert_eq!(v.len(), w, "a host slot's z, a and b are not one length");
+                for (o, x) in d[2 * k * w..2 * (k + 1) * w].chunks_exact_mut(2).zip(v) {
+                    (o[0], o[1]) = (x.lo, x.hi);
+                }
+            }
+        });
+        HostSlots { at: slots.iter().map(|s| s.0 as i64).collect(), words, zab }
+    }
+}
+
 /// Where a rep's witness comes from.
 pub enum CircuitSrc<'a> {
     /// The whole packed `(z, a, b)` from the host (any witness, a tampered one included).
     Host { z: &'a [F128], a: &'a [F128], b: &'a [F128] },
     /// A cut template: as `Device`, the units in two passes around `mid`.
-    DeviceCut { rows: &'a [F128], host: &'a [HostSlot], inputs: &'a [F128], mid: Mid<'a> },
+    DeviceCut { rows: &'a [F128], host: &'a HostSlots, inputs: &'a [F128], mid: Mid<'a> },
     /// Every compression slot's input words (`[blocks][slots per block][in_words]`, `Stmt::row_inputs`), the hm96 slots' witness
     /// (host slots), and every unit's input words (`[blocks][units per block][in_words]`): the honest witness, built on the device.
-    Device { rows: &'a [F128], host: &'a [HostSlot], inputs: &'a [F128] },
+    /// With `inputs` empty, every unit slot is among the host slots (`deep_unit`).
+    Device { rows: &'a [F128], host: &'a HostSlots, inputs: &'a [F128] },
 }
 
 /// The unit's expanded circuit's rows as CSR and its level schedule: level 0 the input rows and the constant, a row one past its
@@ -352,9 +421,11 @@ pub fn host_slots(st: &Stmt, ni: usize, ins: &[Vec<F128>]) -> Vec<HostSlot> {
 }
 
 /// One rep on the GPU: proof, commitment, and the phase split (witness, commit, link, zerocheck, lincheck, ring switch,
-/// ligerito, total; seconds), plus the device witness's own split (compressions, units). Under M1 (`Live::Zk`) the proof is the
+/// ligerito, total; seconds), the device witness's own split (compressions, units), and the host's around the device (its
+/// setup: parameters and schedule; staging the witness's inputs and host slots; decoding the proof). Under M1 (`Live::Zk`) the proof is the
 /// unmasked one the CPU prover leaves before masking (with level 0's hiding messages and record, and lincheck's folded comb),
-/// and a round the handler refused (the masking's degenerate coins, a refused coin) is raised once the device returns.
+/// and a round the handler refused (the masking's degenerate coins, a refused coin) is raised once the device returns. With
+/// `Reuse::Take` of a kept tag, `src` is not read: the witness and level-0 commitment are rep 0's (never under M1).
 #[allow(clippy::too_many_arguments)]
 pub fn prove_circuit(
     st: &Stmt,
@@ -364,7 +435,9 @@ pub fn prove_circuit(
     mut hook: &mut dyn FnMut(&[u8]) -> Vec<Vec<F128>>,
     live: Live<'_>,
     salts: Option<&std::sync::Mutex<crate::zk_hooks::LeafSalts>>,
-) -> (R1csProofLigerito, Commitment, [f64; 8], [f64; 3]) {
+    reuse: Reuse,
+) -> (R1csProofLigerito, Commitment, [f64; 8], [f64; 3], [f64; 3]) {
+    let t_setup = Instant::now();
     let s = statics_for(comp(), &st.circuit.da, &st.circuit.db);
     let (sc, cfg) = sched(pcs);
     let m = pcs.m;
@@ -384,6 +457,8 @@ pub fn prove_circuit(
         Some(r) => params.with_rounds(r),
         None => params,
     };
+    // M1's level-0 commitment and lane phase are its own (fc_commit_l0_zk, ligerito_zk.cuh): both reps prove in full under it
+    let reuse = if level0.is_some() { Reuse::None } else { reuse };
     let t = types(st);
     let unit = st.c.unit();
     let n_claims = 2 + 2 * st.regions.len();
@@ -392,31 +467,34 @@ pub fn prove_circuit(
     let mut wphase = [0f64; 3];
     let (mut hz, mut ha, mut hb): (*const u64, *const u64, *const u64) = (null(), null(), null());
     let (mut uin, mut hin): (*const u64, *const u64) = (null(), null());
-    let (mut h_at, mut h_words, mut h_zab): (Vec<i64>, Vec<i32>, Vec<u64>) = (Vec::new(), Vec::new(), Vec::new());
+    let mut host0: Option<&HostSlots> = None;
     let mut src = src;
     let mut mctx: Option<MidCtx<'_>> = None;
     if let CircuitSrc::DeviceCut { rows, host, inputs, mid } = src {
         mctx = Some(MidCtx { mid, n_late: t.sched.late_rows.len(), n_cut: t.sched.cut_rows.len(), at: Vec::new(), words: Vec::new(), zab: Vec::new() });
         src = CircuitSrc::Device { rows, host, inputs };
     }
+    let (h_setup, t_stage) = (t_setup.elapsed().as_secs_f64(), Instant::now());
+    let taken = matches!(reuse, Reuse::Take(tag) if kept(tag));
+    let mut u_host = 0;
     match &src {
+        _ if taken => {}
         CircuitSrc::Host { z, a, b } => {
             assert_eq!(z.len(), 1 << (m - 7));
             (hz, ha, hb) = (z.as_ptr() as *const u64, a.as_ptr() as *const u64, b.as_ptr() as *const u64);
         }
         CircuitSrc::DeviceCut { .. } => unreachable!(),
         CircuitSrc::Device { rows, host, inputs } => {
-            assert_eq!(inputs.len(), st.blocks() * st.c.unit_range().count * unit.in_words);
-            assert_eq!(rows.len(), st.blocks() * st.c.range_of(st.c.sha_net).count * st.c.nets[st.c.sha_net].1.in_words);
-            uin = inputs.as_ptr() as *const u64;
-            hin = rows.as_ptr() as *const u64;
-            for (at, z, a, b) in host.iter() {
-                h_at.push(*at as i64);
-                h_words.push(z.len() as i32);
-                for v in [z, a, b] {
-                    h_zab.extend(v.iter().flat_map(|x| [x.lo, x.hi]));
-                }
+            if inputs.is_empty() {
+                assert!(mctx.is_none(), "a cut template's units are the device's");
+                u_host = 1;
+            } else {
+                assert_eq!(inputs.len(), st.blocks() * st.c.unit_range().count * unit.in_words);
+                uin = inputs.as_ptr() as *const u64;
             }
+            assert_eq!(rows.len(), st.blocks() * st.c.range_of(st.c.sha_net).count * st.c.nets[st.c.sha_net].1.in_words);
+            hin = rows.as_ptr() as *const u64;
+            host0 = Some(*host);
         }
     }
     let c = ChunkParams {
@@ -461,10 +539,10 @@ pub fn prove_circuit(
         h_level_off: t.hsched.level_off.as_ptr(),
         h_order: t.hsched.order.as_ptr(),
         h_inputs: hin,
-        n_host0: h_at.len() as i64,
-        host0_at: h_at.as_ptr(),
-        host0_words: h_words.as_ptr(),
-        host0_zab: h_zab.as_ptr(),
+        n_host0: host0.map_or(0, |h| h.at.len() as i64),
+        host0_at: host0.map_or(null(), |h| h.at.as_ptr()),
+        host0_words: host0.map_or(null(), |h| h.words.as_ptr()),
+        host0_zab: host0.map_or(null(), |h| h.zab.as_ptr()),
         u_range: t.u_range as i32,
         u_useful: unit.useful as i32,
         u_const: unit.const_pos as i32,
@@ -498,6 +576,9 @@ pub fn prove_circuit(
         zk_tamper: 0,
         zk_pads: null(),
         zk_extra: null(),
+        u_host,
+        rep_reuse: match reuse { Reuse::None => 0, Reuse::Keep(_) => 1, Reuse::Take(_) => 2 },
+        reuse_tag: match reuse { Reuse::None => 0, Reuse::Keep(t) | Reuse::Take(t) => t },
     };
     #[cfg(feature = "sha512")]
     let zk_words: Option<(Vec<F128>, Vec<F128>)> = level0.map(|z| {
@@ -547,7 +628,9 @@ pub fn prove_circuit(
     }
     let mut out: *mut u8 = null_mut();
     let mut out_len: usize = 0;
+    let h_stage = t_stage.elapsed().as_secs_f64();
     let rc = unsafe { flock_cuda_prove_circuit(&params, &p, &mut out, &mut out_len) };
+    let t_decode = Instant::now();
     drop(mctx);
     #[cfg(feature = "sha512")]
     drop(key_guard);
@@ -562,5 +645,24 @@ pub fn prove_circuit(
     let bytes = unsafe { std::slice::from_raw_parts(out, out_len) }.to_vec();
     unsafe { flock_cuda_free(out) };
     let (proof, commitment) = decode_with(&bytes, pcs, level0.is_some());
-    (proof, commitment, phase, wphase)
+    (proof, commitment, phase, wphase, [h_setup, h_stage, t_decode.elapsed().as_secs_f64()])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn host_slots_pack_as_the_device_reads_them() {
+        let f = |k: u64, n: usize| (0..n as u64).map(|i| F128::new(k * 1000 + 2 * i, k * 1000 + 2 * i + 1)).collect::<Vec<F128>>();
+        let slots: Vec<HostSlot> = vec![(7, f(1, 3), f(2, 3), f(3, 3)), (40, f(4, 1), f(5, 1), f(6, 1)), (9, vec![], vec![], vec![])];
+        let h = HostSlots::pack(&slots);
+        let mut want = Vec::new();
+        for (_, z, a, b) in &slots {
+            for v in [z, a, b] {
+                want.extend(v.iter().flat_map(|x| [x.lo, x.hi]));
+            }
+        }
+        assert_eq!((h.at, h.words, h.zab), (vec![7, 40, 9], vec![3, 1, 0], want));
+    }
 }
