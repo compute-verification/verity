@@ -11,8 +11,8 @@ One distribution (`verity-vllm`), one package (`verity_vllm`), one subpackage pe
 (Draft 3.1): core Verity nouns get the shortest names (`program`, `query`, `commit`), integration concepts carry their
 qualifier (`runtime` correspondence, `weights_of_record`), implementation artefacts have descriptive compound names
 (`native_collect`, `poc_*` for v1 leftovers).  Build / Match / Commit are the stage drivers in `pipeline/`, not layers.
-Imports point down the layer order `pipeline` > `check` | `properties` > `acquire` > `observe` | `commit` > `engine` >
-`query` | `correspondence` > `program` > `collectives` > `config` (lint P9).
+Imports point down the layer order `pipeline` > `check` | `properties` > `acquire` | `protocol_options` > `observe` | `commit` >
+`engine` > `query` | `correspondence` > `program` > `collectives` > `config` (lint P9).
 
 ~~~text
 verity_vllm/
@@ -23,6 +23,7 @@ verity_vllm/
   correspondence/     runtime corresp.   runtime.py reader_for_*.py resolve*.py capture_identities.py
   observe/            value observation  observer.py events.py log.py storage.py contract.py runtime_tree.py chunks.py fold/
   acquire/            value acquisition  plan.py install.py stage.py gate.py compiled.py sources/ *_tap_src/
+  protocol_options/   protocol options   __init__.py (selector, composition) interface.py sampled_proofs.py pous.py pouw.py
   commit/             commitment         merkle.py hashing.py identity.py binding.py padding_steps.py hidden_*.py committer/
   check/              checks -> verdicts match/ replay/ executed_prefix.py verdict.py gates.py weights_of_record.py root_policy.py ...
   properties/         property harnesses noninterference.py census.py kernel_allowlist.py golden.py holdout.py admission.py ...
@@ -206,12 +207,26 @@ builds it: dtype, tokenizer and attention come from the profile, and prefix cach
 | `gpu_memory_utilization` | the profile's | fraction of device memory the engine may take |
 | `enforce_eager` | True | eager execution; False compiles with torch.compile and CUDA graphs |
 | `seed` | 0 | the engine seed |
+| `protocols` | none | protocol options installed on the engine: `"pouw:<scheme>,pous:<scheme>"` or `{name: scheme}` |
+| `protocols_config` | none | each enabled protocol's settings, `{name: {...}}`; never hashed |
 
 Any other option raises `TypeError` naming it and this list; an engine built elsewhere is not accepted.  `generate(prompts,
 sampling_params=None, use_tqdm=True)` returns vLLM's `RequestOutput` list unchanged and appends a `GenerateRecord` (sampling
 parameters, prompt and generated token ids per request) to `llm.records`; `llm.pin` is the resolved `EnginePin` and
 `llm.engine_record` the engine as built (the `vllm.LLM` keyword arguments, the profile's environment flags, the execution vLLM
-reports).
+reports, the protocol composition record).
+
+## Protocol options
+
+PoUW, POUS and sampled proofs are protocol options (`verity_vllm/protocol_options/`), each enabled on its own and any of them
+in one run.  A set is `name:scheme` entries, one per protocol (`config.parse_protocols`), off by default: `LLM(protocols=...)`
+installs PoUW and POUS on a serving engine; a row declares its set as the target's `protocols` (`TargetProfile.protocols`;
+unset is sampled proofs alone, the Commit as it has always run), and its Commit installs the others once its committers
+registered the weights of record.  Adapters install innermost first (PoUW replaces the linear GEMMs, POUS decodes the
+weights they read, sampled proofs commits what the model computed) and uninstall in reverse, every patch and service through
+`engine/hooks.py` tagged with its option.  The protocol logic is `verity_pouw`, `verity_pous` and `verity_sampled_proofs`';
+the adapters (`pouw.py`, `pous.py`, `sampled_proofs.py`) are thin.  A Commit with an option its Program does not describe
+writes its verdict with `protocols.of_record = false`.
 
 ## Running
 

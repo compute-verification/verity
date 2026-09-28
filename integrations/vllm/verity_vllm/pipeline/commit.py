@@ -33,7 +33,7 @@ PROTOCOL SUMMARY (Commit stage entry: the instrumented runs + the fail-closed X-
     --programs-root (the Build Programs); --match-dir (this attempt's Match record); --weights-of-record | --checkpoint-dir;
     --retain device|host, --openings, --pairs, --window-mb/--window-slots, --bounded-staging.
   Outputs (--out DIR): runs.jsonl, steps.jsonl, summary.json/.md, verdict.json, versions.json, source_identity.json,
-    binding_map_p<k>.json, sampled_replay_p<k>.json, host_admission_<kind>.json, weights_of_record.json, declaration_<committer>.json.
+    binding_map_p<k>.json, sampled_replay_p<k>.json, host_admission_<kind>.json, weights_of_record.json, declaration_<committer>.json, protocols.json.
   Invariants: the Program/source identity precheck (`identity`) runs before any engine (exit 3 PRECHECK_FAIL_SOURCE_IDENTITY); a
     required-value manifest whose program_digest is not the Build's is refused before the engine starts; the population is Q(P) at the CAP shape -- EOS-stopped
     positions are classified not-executed by rule, never cut out; control and instrumented tokens must be equal; PASS only when
@@ -62,6 +62,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from verity_vllm import protocol_options as PO
 from verity_vllm.acquire.sources import taps as TAPS
 from verity_vllm.config import group, option
 from verity_vllm.engine import engine_profile as prof  # noqa: F401
@@ -1103,7 +1104,6 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     if os.environ.get("VERITY_TRACEDUMP"):
         # diagnostics: dump every thread's Python stack to stderr every N seconds (hang isolation on pods without ptrace)
         import faulthandler
-
         faulthandler.dump_traceback_later(float(os.environ["VERITY_TRACEDUMP"]), repeat=True)
     # [R18 infra, F-r17-tp-06 / BRIEF Phase 0] source identity precheck BEFORE anything else runs: verity.ir, verity_vllm, vllm-poc,
     # hidden_gpu (and the telemetry package) must all resolve from THIS tree (the one commit_delta.py lives in; $VERITOR_REPO must agree).
@@ -1209,7 +1209,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     TL.event("startup.imports", "end", s=round(time.time() - _T_PROCESS0, 3), label=args.label, workload=str(args.workload),
              hot_job=(_HOT or {}).get("jobs"))
     _ekw = dict(checkpoints=args.checkpoints, max_num_seqs=args.max_num_seqs, case=va.case_of(wl, args.case), engine_args=engine_args,
-                target=va.target_of_workload(wl, args.target), execution=va.execution_of_workload(wl))
+                target=PO.commit_guard(va.target_of_workload(wl, args.target), hot=_HOT is not None, settings=wl.get("protocols_config")), execution=va.execution_of_workload(wl))
     _live = (_HOT or {}).get("eng")
     if _live is not None:
         # [R16 sys] hot worker with a live engine: reuse iff THIS job would build exactly the same engine (kwargs set + env flags +
@@ -1813,11 +1813,10 @@ def main(args: Options, argv: list[str] | None = None) -> None:
               f"errors {rc.extra.get('errors')}", flush=True)
         coms[kind] = com
     com = coms[kinds[0]] if kinds else None
-
+    protocols = PO.at_commit(_ekw["target"], eng.model, versions, wl.get("protocols_config"))   # after every committer registered the weights
     if args.value_check and com is not None and hasattr(com, "_layouts"):
         # VALUE-CORRECTNESS (VALUE-FIRST §5): one extra instrumented run with reference taps + re-execution of the registered relation
         from verity_vllm.check.value_check import run_value_check
-
         vres = run_value_check(com, lambda: run_workload(eng, reqs, sampling), lambda: assert_pristine(eng, base))
         vres.update({"committer": com.name, "case": eng.case, "model": eng.cp["repo"], "gpu": torch.cuda.get_device_name(0), "label": "measured"})
         (out / "value_check.json").write_text(json.dumps(vres, indent=1, default=str) + "\n")
@@ -2838,6 +2837,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                   f"{'under' if _peak <= _b else 'OVER'} by {abs(_b - _peak) >> 20} MiB (measured/predicted {round(_peak / _b, 3) if _b else None}; "
                   f"admission {_a.get('admission_utc')} printed_before_run={_pbr}, first run {(_RUN0 or {}).get('utc')}; "
                   f"admission_of_record {(_a.get('admission_of_record') or {}).get('governing') if isinstance(_a.get('admission_of_record'), dict) else _a.get('admission_of_record')})", flush=True)
+    PO.into_verdict(protocols, verdict, out, _ekw["target"], program_digest=args.program_digest, manifest=required_manifest)
     (out / "verdict.json").write_text(json.dumps(verdict, indent=1) + "\n")
     # [COORD R17-29 planner, calibration] measured vs predicted for the record-only plan printed before the run: one calibration ENTRY per
     # Commit (VmHWM / footprint peaks / the peak step's staged bytes) -- exec collects these; the table in tests/fixtures/admission grows by name

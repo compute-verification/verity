@@ -32,6 +32,9 @@ SUPPORTED: dict[str, Supported] = {
                                                             "engine profile's)"),
     "enforce_eager": Supported(bool, True, "True runs eagerly; False compiles with torch.compile and CUDA graphs"),
     "seed": Supported(int, 0, "the engine seed"),
+    "protocols": Supported((str, dict, list, tuple), None, "protocol options installed on the engine: 'pouw:<scheme>,pous:<scheme>' "
+                                                             "or {name: scheme} (verity_vllm.protocol_options); default none"),
+    "protocols_config": Supported(dict, None, "each enabled protocol's settings, {name: {...}}; never hashed"),
 }
 #: Options passed to vLLM only when the caller sets them; unset, the engine profile's value stands.
 ENGINE_ARGS = ("max_num_batched_tokens", "max_model_len", "gpu_memory_utilization", "seed")
@@ -56,6 +59,23 @@ def resolve_options(options: dict[str, Any]) -> dict[str, Any]:
     if out["tensor_parallel_size"] < 1 or out["max_num_seqs"] < 1:
         raise ValueError("verity_vllm.LLM: tensor_parallel_size and max_num_seqs must be at least 1")
     return out
+
+
+def protocol_context(opts: dict[str, Any]) -> Any:
+    """The protocol options' serving context for resolved options, None when none is enabled; ``ValueError`` names every
+    refusal, before any engine exists."""
+    enabled = config.parse_protocols(opts["protocols"])
+    if not enabled:
+        if opts["protocols_config"]:
+            raise ValueError("verity_vllm.LLM: protocols_config without protocols")
+        return None
+    from verity_vllm import protocol_options as PO
+    ctx = PO.Context(stage="serve", enabled=enabled, world=opts["tensor_parallel_size"], enforce_eager=opts["enforce_eager"],
+                     settings=PO.load_settings(opts["protocols_config"]))
+    bad = PO.refusals(ctx)
+    if bad:
+        raise PO.Refused(bad)
+    return ctx
 
 
 @dataclass(frozen=True)
@@ -98,18 +118,25 @@ class LLM:
     * ``enforce_eager`` (bool, default True): True runs eagerly; False compiles with torch.compile and CUDA graphs, in a
       fresh Inductor cache for this process.
     * ``seed`` (int, default 0): the engine seed.
+    * ``protocols`` (str or mapping): protocol options installed on the engine once it is built
+      (:mod:`verity_vllm.protocol_options`), ``"pouw:<scheme>,pous:<scheme>"`` or ``{"pous": "<scheme>"}``; default none.
+      A set the options refuse raises ``ValueError`` before the engine is built.  Sampled proofs runs in the Commit stage
+      of a row, not here.
+    * ``protocols_config`` (dict): each enabled protocol's settings, ``{name: {...}}``; never hashed.
 
     ``generate(prompts, sampling_params=None, use_tqdm=True)`` returns vLLM's ``list[RequestOutput]`` unchanged and
     appends a :class:`GenerateRecord` to ``records``.  ``pin`` is the resolved :class:`~verity_vllm.config.EnginePin`
     and ``engine_record`` the engine as built: the ``vllm.LLM`` keyword arguments, the environment flags the profile
-    set, and the execution vLLM reports back.  The engine is always built here; an engine built elsewhere is not
-    accepted.
+    set, and the execution vLLM reports back.  ``protocols`` is the installed
+    :class:`~verity_vllm.protocol_options.Composition` (None without protocols); ``close()`` uninstalls it.  The engine
+    is always built here; an engine built elsewhere is not accepted.
     """
 
     def __init__(self, model: str, *, revision: str, **options: Any) -> None:
         opts = resolve_options(options)
         self.options = opts
         self.pin = EnginePin.resolve(model, revision, world=opts["tensor_parallel_size"])
+        ctx = protocol_context(opts)
         from verity_vllm.engine import vllm_adapter as va
 
         engine_args = {k: opts[k] for k in ENGINE_ARGS if k in options}
@@ -118,12 +145,22 @@ class LLM:
         self._engine = va.build_engine(config.CHECKPOINTS, max_num_seqs=opts["max_num_seqs"], case=self.pin.case,
                                        engine_args=engine_args, execution=va.execution_label_of(opts["enforce_eager"]))
         self.records: list[GenerateRecord] = []
+        self.protocols = None
+        if ctx is not None:
+            from verity_vllm import protocol_options as PO
+            self.protocols = PO.install(self._engine.model, ctx)
+
+    def close(self) -> None:
+        """Uninstall the protocol options.  Idempotent."""
+        if self.protocols is not None:
+            self.protocols.close()
 
     @property
     def engine_record(self) -> dict[str, Any]:
         e = self._engine
         return {"pin": asdict(self.pin), "engine_kwargs": dict(e.kwargs), "env_flags": dict(e.env_flags),
-                "execution": e.execution, "effective": e.effective, "build_s": e.build_s}
+                "execution": e.execution, "effective": e.effective, "build_s": e.build_s,
+                "protocols": None if self.protocols is None else self.protocols.record()}
 
     def generate(self, prompts: Any, sampling_params: Any = None, **kwargs: Any) -> list[Any]:
         unknown = sorted(set(kwargs) - set(GENERATE_SUPPORTED))

@@ -367,7 +367,7 @@ def main(args: Options) -> int:
     from verity_vllm.pipeline.tp.capture import parse_engine_args
     from verity_vllm.engine.rank_worker import EXTENSION
     from verity_vllm.commit.challenge import challenge_positions
-
+    from verity_vllm import protocol_options as PO
     if args.world is not None:
         args.tp = int(args.world)
     relabel = None
@@ -389,6 +389,7 @@ def main(args: Options) -> int:
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     wl = va.load_workload(args.workload, None)
+    PO.commit_guard(va.target_of_workload(wl), world=args.tp, installs=False)      # exit 3 when the target declares protocols
     case = va.case_of(wl, args.case)
     env_flags = prof.apply_env()
     cp = prof.checkpoint_for(case, args.checkpoints)
@@ -424,7 +425,6 @@ def main(args: Options) -> int:
     for i in range(args.warmup):
         r = run_workload(eng, va.throwaway_requests(eng, reqs, seed=100 + i), sampling)
         print(f"[tp2commit] warm-up control {i}: {r['wall_s']:.3f}s {r['iterations']} it", flush=True)
-
     envelope = {"batch": args.max_num_seqs, "max_prompt": max(len(r["prompt_token_ids"]) for r in reqs),
                 "max_new": max(int(r.get("max_tokens") or sampling.get("max_tokens") or 1) for r in reqs),
                 "max_num_batched_tokens": kw.get("max_num_batched_tokens"), "max_model_len": kw.get("max_model_len")}

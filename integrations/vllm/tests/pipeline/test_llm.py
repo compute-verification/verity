@@ -131,6 +131,45 @@ def test_generate_returns_the_outputs_and_records_the_call(built):
     assert llm.get_tokenizer() == "tok"
 
 
+def test_without_protocols_nothing_is_installed(built):
+    llm = L.LLM(LLAMA[0], revision=LLAMA[1])
+    assert llm.protocols is None and llm.engine_record["protocols"] is None
+    llm.close()
+    with pytest.raises(ValueError, match="protocols_config without protocols"):
+        L.LLM(LLAMA[0], revision=LLAMA[1], protocols_config={"pous": {}})
+
+
+def test_a_refused_set_raises_before_the_engine_is_built(built):
+    with pytest.raises(ValueError, match="sampled proofs runs in the Commit stage"):
+        L.LLM(LLAMA[0], revision=LLAMA[1], protocols="sampled-proofs:vllm-v1")
+    with pytest.raises(ValueError, match="unknown protocol"):
+        L.LLM(LLAMA[0], revision=LLAMA[1], protocols={"zk": "v1"})
+    assert built == {}
+
+
+def test_protocols_install_on_the_built_model_and_close_uninstalls_them(built, monkeypatch):
+    from verity_vllm import protocol_options as PO
+    from verity_vllm.engine import vllm_adapter as va
+    model, seen = SimpleNamespace(name="model"), []
+
+    def install(scheme, target):
+        seen.append((scheme, target.model, target.context.stage, target.context.settings_of("pous")))
+        h = target.hooks(f"pous:{scheme}")
+        h.patch(target.model, "decoded", True)
+        return PO.Option(name=f"pous:{scheme}", hooks=h, commits={"storage_root": "c"})
+
+    fake = SimpleNamespace(NAME="pous", schemes=lambda: ("band-chain/d12/v1",), refusals=lambda scheme, ctx: (), install=install)
+    monkeypatch.setitem(sys.modules, "verity_vllm.protocol_options.fake_pous", fake)
+    monkeypatch.setitem(PO.ADAPTERS, "pous", "fake_pous")
+    real = va.build_engine
+    monkeypatch.setattr(va, "build_engine", lambda *a, **kw: SimpleNamespace(**vars(real(*a, **kw)), model=model))
+    llm = L.LLM(LLAMA[0], revision=LLAMA[1], protocols="pous:band-chain/d12/v1", protocols_config={"pous": {"cpu": 3}})
+    assert seen == [("band-chain/d12/v1", model, "serve", {"cpu": 3})] and model.decoded is True
+    assert llm.engine_record["protocols"]["protocols"] == [{"entry": "pous:band-chain/d12/v1", "commitment": {"storage_root": "c"}}]
+    llm.close()
+    assert not hasattr(model, "decoded")
+
+
 def test_importing_the_package_loads_neither_torch_nor_vllm():
     code = "import sys, verity_vllm; assert not {'torch', 'vllm'} & set(sys.modules), sorted({'torch', 'vllm'} & set(sys.modules))"
     subprocess.run([sys.executable, "-c", code], check=True, cwd=config.ROOT)
