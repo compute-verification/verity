@@ -10,7 +10,10 @@ S3c). `deriveChecked` walks each layout's type item by item against its rows:
 * the input rows are self rows, the output rows copy the output forms, and the constant row copies the constant.
 
 It also checks the unit's logical order (`order`, the list `Rows.compose` reads): each of the unit's rows is listed once,
-the inputs first; each row after them reads only earlier columns; every row outside it is a zero row.
+the inputs first; each row after them reads only earlier columns; every row outside it is a zero row. And it checks the
+unit's parts as its template statement reads them (`partsChecked`): each part's rows are its callee's, shifted, past the
+unit's own rows and apart from the other parts'; Δ is exactly the unit's constant and the parts' constants and bound
+inputs; the own rows read only own and part columns.
 
 An inline read is checked as `table/v2` lays it out: its decoders' rows (`chkDecode`), its product rows, each a high minterm
 times the table-direct side its record gives (`readSide`, the side `Lookup.foldB` folds), and its output rows; a value bit
@@ -359,15 +362,62 @@ def orderChecked (words : String → Option (Array Nat)) (done : Array D) (unit 
   let u := done.getD unit default
   orderOk words u u.inCols.size (order done u) 0 {} && outsideOk u (order done u)
 
-/-- **The rows the verifier uses**: `deriveAll`'s, once every layout's pass the check and the unit's are in logical
-order. -/
+/-! ## The unit's parts -/
+
+/-- Every column row `r` reads is below `n`. -/
+def rowWithin (r : List Nat × List Nat) (n : Nat) : Bool := r.1.all (· < n) && r.2.all (· < n)
+
+/-- No column repeats in `l`, nor is one of `seen`. -/
+def distinctFrom : List Nat → Std.HashSet Nat → Bool
+  | [], _ => true
+  | c :: rest, seen => !seen.contains c && distinctFrom rest (seen.insert c)
+
+/-- Column `x` is one of a part's rows. -/
+def inPart (done : Array D) (u : D) (x : Nat) : Bool :=
+  u.parts.any fun p => p.2 ≤ x && x < p.2 + (done.getD p.1 default).size
+
+/-- **Part `(j, b)` of the unit `u`, placed**: its callee `done[j]`, an earlier layout whose rows are its size, sits at `b`,
+past the unit's own rows and inside its rows. Each callee row reads only the callee's rows, and sits at `b + c`, shifted,
+but for the callee's constant, which is Δ's copy of `one`, and its bound inputs, which are Δ's bindings. -/
+def partOk (done : Array D) (unit : Nat) (u : D) (j b : Nat) : Bool :=
+  let sub := done.getD j default
+  j < unit && sub.rows.size == sub.size && u.size ≤ b && b + sub.size ≤ u.rows.size &&
+    (List.range sub.size).all fun c =>
+      rowWithin (sub.rows.getD c ([], [])) sub.size &&
+        if c == sub.const then u.delta.find? (·.1 == b + c) == some (b + c, none)
+        else match u.delta.find? (·.1 == b + c) with
+          | some (_, some _) => sub.inCols.contains c
+          | some (_, none) => false
+          | none => u.rows[b + c]? == some (shiftRow b (sub.rows.getD c ([], [])))
+
+/-- A Δ entry is the unit's constant, a part's constant, or a part's bound input. -/
+def deltaEntryOk (done : Array D) (u : D) (e : Nat × Option (List Nat)) : Bool :=
+  (e.1 == u.const && e.2.isNone) || u.parts.any fun p =>
+    (e.1 == p.2 + (done.getD p.1 default).const && e.2.isNone) ||
+      (e.2.isSome && (done.getD p.1 default).inCols.any (p.2 + · == e.1))
+
+/-- **The unit's parts, as its template statement reads them** (`Typed.templateOf`): each part is placed (`partOk`), and
+the parts follow one another by base; Δ has one entry per row, each the unit's constant, a part's constant or a part's
+bound input; each of the unit's own rows reads only its own and its parts' rows. -/
+def partsChecked (done : Array D) (unit : Nat) : Bool :=
+  let u := done.getD unit default
+  u.parts.all (fun p => partOk done unit u p.1 p.2) &&
+    (u.parts.toList.zip u.parts.toList.tail).all (fun pq => decide (pq.1.2 + (done.getD pq.1.1 default).size ≤ pq.2.2)) &&
+    distinctFrom (u.delta.toList.map (·.1)) {} && u.delta.all (deltaEntryOk done u) &&
+    (List.range u.size).all fun c =>
+      ((u.rows.getD c ([], [])).1 ++ (u.rows.getD c ([], [])).2).all fun x => decide (x < u.size) || inPart done u x
+
+/-- **The rows the verifier uses**: `deriveAll`'s, once every layout's pass the check, the unit's are in logical order, and
+its parts are as its template reads them. -/
 def deriveChecked (types : String → Option CircuitType) (ls : Array Layout) (info : String → Option TableInfo)
     (words : String → Option (Array Nat)) (unit : Nat) : Except String (Array D) := do
   let done ← deriveAll types ls info words unit
   match (List.range ls.size).find? fun j => !checkLayout types words ls done unit j with
   | some j => throw s!"derive: layout {j}'s rows fail the check"
   | none =>
-    if orderChecked words done unit then return done else throw "derive: the unit's rows are not in logical order"
+    if !orderChecked words done unit then throw "derive: the unit's rows are not in logical order"
+    else if !partsChecked done unit then throw "derive: the unit's parts are not placed as its template reads them"
+    else return done
 
 /-- `flock-rows --archive FILE --part check`: `ok` when every layout's rows pass the check. -/
 def archiveCheck (j : Json) : V String := do

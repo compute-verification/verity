@@ -1345,10 +1345,11 @@ theorem unit_sound_of {types : String → Option CircuitType} {words : String �
   exact checked_sound (hall unit hu) ht (by rw [hk]; exact facts_unit hz h1 hone)
     (fun jj hlt hne => ⟨hall jj (by omega), layouts_sound_of hall jj (by omega) hne⟩) F hF o ho
 
-theorem deriveChecked_spec {types : String → Option CircuitType} {ls : Array Layout} {info : String → Option TableInfo}
+theorem deriveChecked_checks {types : String → Option CircuitType} {ls : Array Layout} {info : String → Option TableInfo}
     {words : String → Option (Array Nat)} {unit : Nat} {done : Array D}
     (h : deriveChecked types ls info words unit = .ok done) :
-    (∀ jj < ls.size, checkLayout types words ls done unit jj = true) ∧ orderChecked words done unit = true := by
+    (∀ jj < ls.size, checkLayout types words ls done unit jj = true) ∧ orderChecked words done unit = true ∧
+      partsChecked done unit = true := by
   unfold deriveChecked at h
   cases hd : deriveAll types ls info words unit with
   | error e => simp [hd, bind, Except.bind] at h
@@ -1358,12 +1359,26 @@ theorem deriveChecked_spec {types : String → Option CircuitType} {ls : Array L
     · cases h
     · rename_i hf
       split at h
-      · rename_i ho
-        cases h
-        refine ⟨fun jj hjj => ?_, ho⟩
-        have := List.find?_eq_none.mp hf jj (List.mem_range.mpr hjj)
-        simpa using this
       · cases h
+      · rename_i ho
+        split at h
+        · cases h
+        · rename_i hp
+          cases h
+          refine ⟨fun jj hjj => ?_, by simpa using ho, by simpa using hp⟩
+          have := List.find?_eq_none.mp hf jj (List.mem_range.mpr hjj)
+          simpa using this
+
+theorem deriveChecked_spec {types : String → Option CircuitType} {ls : Array Layout} {info : String → Option TableInfo}
+    {words : String → Option (Array Nat)} {unit : Nat} {done : Array D}
+    (h : deriveChecked types ls info words unit = .ok done) :
+    (∀ jj < ls.size, checkLayout types words ls done unit jj = true) ∧ orderChecked words done unit = true :=
+  ⟨(deriveChecked_checks h).1, (deriveChecked_checks h).2.1⟩
+
+theorem deriveChecked_parts {types : String → Option CircuitType} {ls : Array Layout} {info : String → Option TableInfo}
+    {words : String → Option (Array Nat)} {unit : Nat} {done : Array D}
+    (h : deriveChecked types ls info words unit = .ok done) : partsChecked done unit = true :=
+  (deriveChecked_checks h).2.2
 
 theorem deriveChecked_all {types : String → Option CircuitType} {ls : Array Layout} {info : String → Option TableInfo}
     {words : String → Option (Array Nat)} {unit : Nat} {done : Array D}
