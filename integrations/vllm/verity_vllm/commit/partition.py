@@ -12,18 +12,18 @@ import json
 import os
 from typing import Any
 
-__all__ = ["program_sha512s", "partition_of_record", "word_check_refusal", "require_partition", "partition_entry"]
+__all__ = ["program_digests", "partition_of_record", "word_check_refusal", "require_partition", "partition_entry"]
 
 
-def program_sha512s(*roots: str | None) -> set[str]:
-    """The SHA-512s the Builds under `roots` recorded (`result.json` program.sha512, every request / rank Program dir)."""
+def program_digests(*roots: str | None) -> set[str]:
+    """The program digests the Builds under `roots` recorded (`result.json` program.digest, every request / rank Program dir)."""
     out: set[str] = set()
     for root in roots:
         if not root:
             continue
         for p in glob.glob(os.path.join(root, "**", "result.json"), recursive=True):
             with contextlib.suppress(Exception):
-                s = (json.load(open(p)).get("program") or {}).get("sha512")
+                s = (json.load(open(p)).get("program") or {}).get("digest")
                 if isinstance(s, str) and s:
                     out.add(s)
     return out
@@ -95,7 +95,7 @@ def word_check_refusal(q: dict[str, Any]) -> str | None:
 def require_partition(man: dict[str, Any], programs_root: str | None, program_dir: str | None) -> dict[str, Any]:
     """`partition_of_record` over the Programs the Builds under `programs_root` / `program_dir` recorded and, under the query of record,
     a passing word check for every part (`word_check_refusal`; SystemExit naming what is missing); prints what it checked and returns `man`."""
-    rec = partition_of_record(man, program_sha512s(programs_root, program_dir))
+    rec = partition_of_record(man, program_digests(programs_root, program_dir))
     why = word_check_refusal(man.get("query") or {}) if rec["checked"] else None
     if why:
         raise SystemExit(f"[delta] REFUSED: {why}; rebuild the manifest (verity-vllm manifest build / build-global, --word-check 16/32)")

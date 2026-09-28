@@ -133,8 +133,8 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
         c.fail("window", rec["window"])
     # R2
     part = dict(partition) if partition is not None else P.partition(program, query)
-    if part["program"] != P.program_sha512(program):
-        c.fail("R2-program", {"partition": part["program"], "verifier": P.program_sha512(program)})
+    if part["program"] != P.program_digest(program):
+        c.fail("R2-program", {"partition": part["program"], "verifier": P.program_digest(program)})
     try:
         part_digest = P.digest(part)
     except ValueError as e:

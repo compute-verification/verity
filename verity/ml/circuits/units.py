@@ -11,8 +11,8 @@ Definition's own gates ``0 .. gates - 1`` in canonical order, its parameter leaf
   a parameter leaf of the activation, or a computing gate of another unit (committed under the partition invariant);
 * **outputs**: the unit's committed gates, ascending (`cut.derived_committed`: another unit reads it, or the activation returns
   it); a unit with none (a dead unit) has an empty circuit;
-* **shape**: SHA-256 of ``canon({"in": [input widths], "gates": [[primitive id, [["g", local] | ["i", input]], ...], ...],
-  "out": [local, ...]})``, ``local`` a gate's position in ``gates``.  Equal shapes are equal circuits of equal interface, so one
+* **shape**: `shape_digest` of ``canon({"in": [input widths], "gates": [[primitive id, [["g", local] | ["i", input]], ...], ...],
+  "out": [local, ...]})``, ``local`` a gate's position in ``gates``: ``SHA-512("verity/partition/v2/shape\0" || form)``.  Equal shapes are equal circuits of equal interface, so one
   lowering and one statement serve a class.  A constant's primitive id carries its value (``Const32[0x3f800000]_v1``).
 
 `PartitionUnits` gives every unit of a program's partition in the partition's own numbering (by Call, then within the Call's
@@ -31,6 +31,11 @@ from typing import Any, Callable, Iterator, Mapping, Sequence
 from . import partition_object as PO
 from .codec import canonical_json
 from .cut import WIRING, CallGraph, DefinitionCut, call_scope, derived_committed
+
+
+def shape_digest(form: str) -> str:
+    """The SHA-512 of a unit's circuit: of its canonical form (`UnitCircuit.form`)."""
+    return hashlib.sha512(b"verity/partition/v2/shape\0" + form.encode()).hexdigest()
 
 
 @dataclass(frozen=True)
@@ -126,7 +131,7 @@ class Activation:
         out_w = tuple(self.width(j) for j in outputs)
         text = canonical_json({"in": list(in_w), "gates": form, "out": [local[j] for j in outputs]}).decode()
         return UnitCircuit(self.fn.id, u, gates, len(owned), inputs, tuple(outputs), in_w, out_w, text,
-                           hashlib.sha256(text.encode()).hexdigest())
+                           shape_digest(text))
 
 
 @dataclass(frozen=True)
@@ -255,4 +260,4 @@ class PartitionUnits:
         return {s: UnitClass(s, *self._reps[s], n) for s, n in total.items()}
 
 
-__all__ = ["UnitCircuit", "Activation", "Placement", "UnitClass", "PartitionUnits"]
+__all__ = ["shape_digest", "UnitCircuit", "Activation", "Placement", "UnitClass", "PartitionUnits"]

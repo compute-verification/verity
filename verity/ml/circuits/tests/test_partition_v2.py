@@ -183,7 +183,7 @@ def _restart(adv: V.Advice) -> V.Advice:
 def _classes(adv, j, program, owner):
     from verity.ml.circuits.units import Activation
     fn = [fn for _k, fn in PO.calls(program) if V.definition_digest(fn) == adv.entries[j].definition][0]
-    shape, classes = V._classes(V.shape_digest(uc.form) for uc in Activation(fn).circuits(owner))
+    shape, classes = V._classes(uc.shape for uc in Activation(fn).circuits(owner))
     return {"owner": tuple(owner), "units": max(owner) + 1, "shape": shape, "classes": classes}
 
 
@@ -411,7 +411,7 @@ def build() -> dict:
                  "and the global refusals: [label, SHA-512 of the edited advice's padded rows, predicate edits, codes].  Written by "
                  "verity/ml/circuits/tests/test_partition_v2.py --write.",
         "descriptor": _descriptor(P),
-        "program_sha512": PO.program_sha512(P),
+        "program_digest": codec.program_digest(P),
         "rows": [r.hex() for r in rs],
         "leaves": [x.hex() for x in reg.leaves],
         "root": reg.root.hex(),
@@ -430,7 +430,7 @@ def test_the_pinned_vector():
     assert set(got) == set(want)
     rs = [bytes.fromhex(r) for r in want["rows"]]
     P = codec.decode_program(json.loads(want["descriptor"]), REGISTRY)           # the verifier's side: from the bytes alone
-    assert PO.program_sha512(P) == want["program_sha512"] == PO.program_sha512(_program())
+    assert codec.program_digest(P) == want["program_digest"] == codec.program_digest(_program())
     assert V.check(want["statement"], rs, P).ok and V.decode(rs) == V.build(P)
     assert A.register(rs, V.ROW_BITS, V.BINDING, _salts("vtop", len(rs))).root.hex() == want["root"] == want["statement"]["advice"]["root"]
 

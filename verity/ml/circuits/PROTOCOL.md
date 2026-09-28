@@ -44,18 +44,13 @@ top-level field but `definitions` and `annotations`, and each definition's key, 
 body's `params` and `ret_type`. The rest of a descriptor is integers bounded by the program's own table sizes and leaf counts,
 and strings of a fixed vocabulary, which the decoder checks (§4.6).
 
-A stored descriptor file need not be canonical (builds write it with spaces). The digests are over the canonical bytes of the
-descriptor without `annotations`:
-
-- `program_digest`: hex SHA-256 of those bytes, the Build's program digest;
-- `partition_object.program_sha512`: hex SHA-512 of the same bytes, the `program` field of `verity/partition/v1`.
-
-`annotations` never enter a digest and carry no meaning in this format. The program digests carry no domain prefix (the partition
-object's digests do). Adding one is deferred to the re-baseline, where the IR's identity digests move anyway: the A2 roots served on
-2026-09-27 already bind the current digest.
+A stored descriptor file need not be canonical (builds write it with spaces). The program digest, `program_digest`, is the hex
+SHA-512 of the canonical bytes of the descriptor without `annotations`: the Build's program digest and the `program` field of
+`verity/partition/v1`. `annotations` never enter it and carry no meaning in this format. It carries no domain prefix (the
+partition object's digests do).
 
 Vectors: `canonical_json.in_domain` (value, bytes), `canonical_json.outside` (value, Python's bytes, the JCS bytes, the
-refusal), `program_digest_sha256`, `program_sha512`.
+refusal), `program_digest`.
 
 ## 2. Types and leaves
 
@@ -145,7 +140,7 @@ the IR's input primitive of that binding time (§5.2). A body's `params` and `re
 - `bindings` holds the same values keyed by static name. Canonical JSON sorts its keys, so the static order is read from the
   key.
 - The root's key is `Root[<readable id of the program function>]_v1`. A readable id abbreviates dict statics to a 12-digit hex
-  hash, so a reader treats it as opaque; it is well formed like any static-free composite's.
+  hash (the first 12 hex digits of SHA-512), so a reader treats it as opaque; it is well formed like any static-free composite's.
 
 Example (the descriptor vector): `TRow_v1{N=4,OP={"fn":"TAdd32_v1"},C={"f64":"0x1.8000000000000p+0"},D={"dict":{"a":[1,"x"],"k":2}}}`.
 

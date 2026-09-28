@@ -192,7 +192,7 @@ def _program_dir(tmp_path, **kw) -> str:
     inst, _w = _program(**kw)
     with gzip.open(tmp_path / "instances.json.gz", "wt") as f:
         json.dump(inst, f)
-    (tmp_path / "result.json").write_text(json.dumps({"program": {"digest": "0" * 64, "function": "f"},
+    (tmp_path / "result.json").write_text(json.dumps({"program": {"digest": "0" * 128, "function": "f"},
                                                       "target": {"declared": {"compute_capability": [8, 9]}}}))
     return str(tmp_path)
 

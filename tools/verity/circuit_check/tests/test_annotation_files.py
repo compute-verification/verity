@@ -99,4 +99,4 @@ def test_annotation_file(owner, path, families):
     # Carrying the file moves no program digest.
     with_ann = A.attach(some, ann)
     assert codec.program_digest(with_ann) == codec.program_digest(some)
-    assert PO.program_sha512(with_ann) == PO.program_sha512(some)
+    assert codec.program_digest(with_ann) == codec.program_digest(some)

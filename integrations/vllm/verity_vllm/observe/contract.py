@@ -141,7 +141,7 @@ def _program_json_layout(path: str, digest: str | None) -> tuple[int | None, lis
         m = re.search(r'"n_input_nodes":\s*(\d+)', text)
         if m and n_in is None:
             n_in = int(m.group(1))
-        m = re.search(r'"digest":\s*"([0-9a-f]{64})"', text)
+        m = re.search(r'"digest":\s*"([0-9a-f]{128})"', text)
         if m and digest is None:
             digest = m.group(1)
         m = re.search(r'"params":\s*(\[\[.*?\]\])', text, re.S)

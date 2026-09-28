@@ -610,7 +610,7 @@ def digest(fn) -> str:
     from verity.ml.circuits.program import Program
 
     if isinstance(fn, PrimitiveDefinition):
-        return hashlib.sha256(canonical_json(definition_entry(fn))).hexdigest()
+        return hashlib.sha512(canonical_json(definition_entry(fn))).hexdigest()
     return program_digest(Program(fn))
 
 
