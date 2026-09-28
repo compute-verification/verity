@@ -102,6 +102,15 @@ Only a repeat whose fix needs money, keys or a claim becomes a question for Dani
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-08 (5:11 PM PDT, relayed by top): the premises rule is mechanical. A property's only arguments are the input,
+  the function's acceptance and premises from the list, a premise being an assumption about the world that the function
+  can't see. Completeness theorems move to `Proofs/`, each with one concrete instance of its honest case, and
+  properties that don't fit yet sit on a frozen list that only shrinks (`.agents/skills/lean-proofs/SKILL.md`).
+- 2026-10-08 (4:30 PM PDT, relayed by top): a property's hypotheses come only from a short list of named premises kept
+  in `Security/Definitions/`: physical premises, such as a device being intact or every uplink being certified, and
+  VBridge until it's proved. The Lean check refuses any other hypothesis in `Properties/`, and adding a premise is a
+  `Definitions/` change, so it messages Daniel. The same day, `RecursiveSound` took the fork form of the hash break
+  (`.agents/skills/lean-proofs/SKILL.md`).
 - 2026-10-08 (22:55Z, the coordinator's, under the 7:16 AM PDT ruling): the two-PR cap counts the PRs a lane is working
   on. A ready PR whose head is in a queued or running check, or in a train the lander holds, doesn't count, and counts
   again if that check fails, so a slow check never holds a lane's next PR.
