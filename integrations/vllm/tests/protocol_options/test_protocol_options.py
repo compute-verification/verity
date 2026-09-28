@@ -256,5 +256,112 @@ def test_the_default_commit_imports_no_adapter():
     subprocess.run([sys.executable, "-c", code], check=True, cwd=config.ROOT)
 
 
+class Params:
+    """`named_parameters` / `named_buffers` over plain values, the only reads the replay's weight readers make."""
+
+    def __init__(self, params, buffers=()):
+        self.params, self.buffers = dict(params), dict(buffers)
+
+    def named_parameters(self):
+        return iter(self.params.items())
+
+    def named_buffers(self):
+        return iter(self.buffers.items())
+
+
+class Committer:
+    def __init__(self, model):
+        self.model = model
+
+    def register_weights(self):
+        return {"root": sorted(list(self.model.named_parameters()) + list(self.model.named_buffers()))}
+
+
+def test_readers_of_live_weights_see_the_plaintext_an_option_released(monkeypatch):
+    def install(scheme, target):
+        target.model.params["l0.weight"] = "released"
+        return PO.Option(name=f"pous:{scheme}", hooks=target.hooks(f"pous:{scheme}"), decoded=lambda: {"l0.weight": "W0"})
+
+    _fake_adapter(monkeypatch, "pous", install)
+    model = Params({"l0.weight": "W0", "l1.weight": "W1"}, {"rope.cos_sin_cache": "cs"})
+    com = Committer(model)
+    assert PO.weights_view(None, model) is model and PO.register_weights(None, com) == com.register_weights()
+    plain = com.register_weights()
+    comp = PO.install(model, _serve("pous:s1"))
+    assert dict(model.named_parameters())["l0.weight"] == "released" and comp.weights() == {"l0.weight": "W0"}
+    view = PO.weights_view(comp, model)
+    assert dict(view.named_parameters()) == {"l0.weight": "W0", "l1.weight": "W1"} and dict(view.named_buffers()) == {"rope.cos_sin_cache": "cs"}
+    assert PO.register_weights(comp, com) == plain and com.model is model
+    with pytest.raises(ValueError, match="name no parameter"):
+        PO.WeightsView(model, {"l9.weight": "W9"})
+    comp.close()
+    assert comp.weights() == {} and PO.weights_view(comp, model) is model
+
+
+def test_with_pous_on_an_option_keeping_a_resident_weight_copy_is_refused(monkeypatch):
+    pouw = _fake_adapter(monkeypatch, "pouw", _pouw([]), schemes=("ncp-v1",))
+    pouw.keeps_weight_copy = lambda scheme, ctx: ctx.settings_of("pouw").get("weight_operands", "resident") == "resident"
+    _fake_adapter(monkeypatch, "pous", _pous([]), schemes=("band-chain/d12/v1",))
+    assert PO.refusals(_serve("pouw:ncp-v1")) == ()
+    got = PO.refusals(_serve("pouw:ncp-v1", "pous:band-chain/d12/v1"))
+    assert len(got) == 1 and got[0].startswith("pouw:ncp-v1: keeps a weight-derived copy resident across forwards")
+    assert PO.refusals(_serve("pouw:ncp-v1", "pous:band-chain/d12/v1", settings={"pouw": {"weight_operands": "per-forward"}})) == ()
+
+
+@pytest.mark.parametrize("knob,target,world,match", [
+    ("pous:s1", {}, 1, "a row is a sampled-proofs run"),
+    ("pous:s1,sampled-proofs:vllm-v1", {"protocols": ["pouw:s1", "sampled-proofs:vllm-v1"]}, 1, "contradicts"),
+    ("pous:s1,sampled-proofs:vllm-v1", {}, 2, "TP 2"),
+    (None, {"protocols": ["pous:s1", "sampled-proofs:vllm-v1"]}, 1, "not on this tree")])
+def test_a_row_refuses_a_set_it_cannot_run_before_any_stage(monkeypatch, knob, target, world, match):
+    if match != "not on this tree":
+        _fake_adapter(monkeypatch, "pous", _pous([]))
+    else:
+        monkeypatch.setitem(PO.ADAPTERS, "pous", "not_landed_here")
+    with pytest.raises(PO.Refused, match=match):
+        PO.at_row(knob, {"target": target}, world=world)
+
+
+def test_a_row_without_protocols_is_the_row_as_before(monkeypatch):
+    assert PO.at_row(None, {}) is None and PO.at_row("sampled-proofs:vllm-v1", {"target": {"flash_attn_version": 2}}) is None
+    _fake_adapter(monkeypatch, "pous", _pous([]))
+    assert PO.at_row("sampled-proofs:vllm-v1,pous:s1", {"target": {}}) == ("pous:s1", "sampled-proofs:vllm-v1")
+    with pytest.raises(PO.Refused, match="does not enable"):
+        PO.at_row("sampled-proofs:vllm-v1,pous:s1", {"protocols_config": {"pouw": {}}})
+
+
+def test_run_row_refuses_first_and_hands_the_set_to_the_stages(monkeypatch, tmp_path, capsys):
+    from types import SimpleNamespace
+
+    from verity_vllm.pipeline import row as ROW
+    from verity_vllm.pipeline import row_records as R
+    from verity_vllm.pipeline import row_stages
+    row = "llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__greedy__bi-eager"
+    seen = {}
+
+    class Single:
+        def __init__(self, **kw):
+            seen.update(kw)
+
+        def run(self):
+            return 0
+
+    monkeypatch.setattr(row_stages, "SingleRow", Single)
+    o = SimpleNamespace(row=row, role="LLAMA32_1B", repo="r", rev="v", env=None, gpu_util=None, build=None, match=None, commit=None,
+                        world=None, protocols=None)
+    assert ROW.run_row(o, "build") == 0 and seen["protocols"] is None
+    assert ROW.run_row(SimpleNamespace(**{**vars(o), "protocols": "pous:s1"}), "build") == 3
+    assert "REFUSE (fail-closed)" in capsys.readouterr().out
+    _fake_adapter(monkeypatch, "pous", _pous([]))
+    assert ROW.run_row(SimpleNamespace(**{**vars(o), "protocols": "pous:s1,sampled-proofs:vllm-v1"}), "build") == 0
+    assert seen["protocols"] == ("pous:s1", "sampled-proofs:vllm-v1")
+    tp = SimpleNamespace(**{**vars(o), "row": row.replace("__tp1__", "__tp2__"), "protocols": "pous:s1,sampled-proofs:vllm-v1"})
+    assert ROW.run_row(tp, "build") == 3
+    wl = tmp_path / "wl.json"
+    wl.write_text(json.dumps({"target": {"flash_attn_version": 2}}))
+    assert R.declared_target(str(wl)) == '{"flash_attn_version": 2}'
+    assert json.loads(R.declared_target(str(wl), seen["protocols"])) == {"flash_attn_version": 2, "protocols": list(seen["protocols"])}
+
+
 def test_every_protocol_has_an_adapter_module_name():
     assert tuple(PO.ADAPTERS) == config.PROTOCOLS

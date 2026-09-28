@@ -45,9 +45,12 @@ def row_shape(wl: str, checkpoints: str, hf_home: str) -> dict[str, Any]:
     return {"B": int(s["batch"]), "I": int(s["max_input"]), "O": int(s["max_output"]), "LP": lp, "T": t, "snap": snap, "ck": ck}
 
 
-def declared_target(wl: str) -> str:
-    """The workload's declared TargetProfile block as sorted JSON (Build's ``--target``), "" when it declares none."""
+def declared_target(wl: str, protocols: tuple[str, ...] | None = None) -> str:
+    """The workload's declared TargetProfile block as sorted JSON (Build's ``--target``), "" when it declares none;
+    ``protocols`` (the row's set, `protocol_options.at_row`) is laid over it as the target's ``protocols``."""
     t = json.load(open(wl)).get("target")
+    if protocols:
+        t = {**(t or {}), "protocols": list(protocols)}
     return json.dumps(t, sort_keys=True) if t else ""
 
 
