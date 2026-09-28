@@ -662,8 +662,8 @@ SHIP_CONFIG = re.compile(r"core\.(?:repositoryformatversion|filemode|bare|logall
 """The keys a ship's clone has in .git/config (every tree on vy-nebius-1, 4 Oct).  Any other key may change what `git status`
 reports (excludes, fsmonitor, filters, sparse checkout, an include) or run a command, so the tree is kept rather than trusted."""
 SHIP_EXCLUDE = frozenset({f"/{READY_FILE}"})
-REGENERABLE = re.compile(r"(?:^|/)(?:\.lake|\.venv|__pycache__|\.pytest_cache|\.ruff_cache|\.mypy_cache|node_modules|target"
-                         r"|[^/]*\.egg-info)(?:/|$)|\.py[co]$")
+REGENERABLE = re.compile(r"(?:^|/)(?:\.lake|\.venv|__pycache__|\.pytest_cache|\.ruff_cache|\.mypy_cache|\.hypothesis|node_modules"
+                         r"|target|[^/]*\.egg-info)(?:/|$)|\.py[co]$")
 """Ignored paths a build or test run regenerates.  Every other ignored path but READY.json and a fetched fixture (re-fetchable by
 its id) may be a workload's only output (`out/`, `results/`, `*.png`...) and keeps the tree."""
 _CLEAN_GIT = {"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null"}
