@@ -50,6 +50,11 @@ def archived(a, path):
     return h
 
 
+#: `--upstream live`: upstream's verdicts are its own live ones, recorded in each selftest session's `case.json`, for a
+#: prover build with no `replay` subcommand
+LIVE = "live"
+
+
 #: sessions per verifier process at least, where there are enough: each process sets its statement up once (about 20 s)
 MIN_CHUNK = 4
 
@@ -98,6 +103,8 @@ def verdicts(a, slots=None):
         base = lean_cmd(a, public)
         for c in chunks(sessions, a.jobs):
             tasks.append(("lean", base, c))
+        if a.upstream == LIVE:
+            continue
         plain = [s for s in sessions if not drawn(s)]
         for c in chunks(plain, a.jobs) if plain else []:
             tasks.append(("upstream", upstream_cmd(a, public), c))
@@ -133,6 +140,11 @@ def verdicts(a, slots=None):
                 lines.append((order.get(v["session"], (1 << 30, 0)), line))
             else:
                 lines.append(((1 << 30, len(lines)), line))
+    if a.upstream == LIVE:
+        for s in a.sessions:
+            live = json.loads((Path(s) / "case.json").read_text()).get("live")
+            if live is not None:
+                up[s] = {"accepted": live["accepted"], "why": live.get("why", "")}
     for kind in ("lean", "upstream"):
         lines, errs = logs[kind]
         (a.out / f"{kind}.txt").write_text("".join(l + "\n" for _k, l in sorted(lines, key=lambda x: x[0])))

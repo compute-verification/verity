@@ -48,7 +48,7 @@ def py(*args):
 
 
 def run_set(i, s, a, ups, store):
-    up = ups.get(s["pr83"])
+    up = agree.LIVE if s.get("upstream") == agree.LIVE else ups.get(s["pr83"])
     if up is None:
         return {"set": i, "pr83": s["pr83"], "skipped": "no upstream binary for this PR #83 commit"}, False
     w = a.work / f"set{i}"
