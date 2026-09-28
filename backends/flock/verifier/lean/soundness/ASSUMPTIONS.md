@@ -180,10 +180,13 @@ before the session's first coin, not bounds state by state.
 `lean-audit.json` records each pinned theorem's statement (`pins`) and the definitions it reads (`reads`). The audit
 fails when either changes until the record is rewritten, and a rewritten record needs a named statement reviewer. The
 pins include the table theorems (`README.md` §1.1 and §1.2, with their `_exec` forms), `execArith_correct` and
-`Merkle.opening_binding`; none takes a named assumption. The end-to-end skeleton's `flock_e2e_count` and `flock_e2e_drawn`
-are pinned too; they take A2 as `hCR` and pass it to the link theorem, `flock_batched_linkSoundE`, which is not pinned,
-nor are `flock_inputs_sound`, `flock_session_sound`, `lowering_sound` and `mcaError_le_bchks25`. A theorem that is not in
-`pins` is still audited (standard axioms, kernel replay), but a change to its statement would not fail the audit.
+`Merkle.opening_binding`; none takes a named assumption. So do the knowledge-soundness theorems of `README.md` §1.3
+(`table_knowledge_sound`, `table_knowledge_sound_joint`, `table_knowledge_sound_joint_tight`, `session_knowledge_sound`,
+and the batched session's `flock_batched_knowledgeSoundE`), and the link theorem, `flock_batched_linkSoundE`, which takes A2
+as `hCR`. The end-to-end skeleton's `flock_e2e_count` and `flock_e2e_drawn` are pinned too; they take A2 as `hCR` and pass
+it to the link theorem. `flock_inputs_sound`, `flock_session_sound`, `lowering_sound` and `mcaError_le_bchks25` are not
+pinned. A theorem that is not in `pins` is still audited (standard axioms, kernel replay), but a change to its statement
+would not fail the audit.
 
 ## Upstream status
 

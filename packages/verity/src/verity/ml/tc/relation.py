@@ -63,7 +63,7 @@ from dataclasses import dataclass, field
 from .silicon import Pipeline
 
 __all__ = ["ALIGN_DIV", "ALIGN_TABLE", "Census", "State", "TABLES", "Violation", "census", "check_step", "decode_state",
-           "pack_relation", "pack_state", "step_witness", "vu_census", "zero_state"]
+           "pack_relation", "pack_state", "step_witness", "vu_census", "witness_shape_error", "zero_state"]
 
 CLS_FIN, CLS_ZERO, CLS_INF, CLS_NAN = 0, 1, 2, 3
 FP32_MIN_E = -126
@@ -470,8 +470,29 @@ def step_witness(pipe: Pipeline, st: State, a: Sequence[int], b: Sequence[int], 
 # The predicates
 # ---------------------------------------------------------------------------------------------------------------------
 
+def witness_shape_error(pipe: Pipeline, w: dict) -> str | None:
+    """Why `w` does not have the relation's fixed shape (`k` operand words and product rows, one group row per group,
+    `size + 1` term rows in each), or `None`.  The predicates below range over the witness's own lists, so a shorter
+    list would drop predicates rather than fail them."""
+    if len(w["a"]) != pipe.k or len(w["b"]) != pipe.k:
+        return f"{len(w['a'])} and {len(w['b'])} operand words, not {pipe.k}"
+    if len(w["prod"]) != pipe.k:
+        return f"{len(w['prod'])} product rows, not {pipe.k}"
+    if len(w["groups"]) != len(pipe.groups):
+        return f"{len(w['groups'])} group rows, not {len(pipe.groups)}"
+    for gi, (size, g) in enumerate(zip(pipe.groups, w["groups"])):
+        if len(g["terms"]) != size + 1:
+            return f"group {gi}: {len(g['terms'])} term rows, not {size + 1}"
+    return None
+
+
 def check_step(pipe: Pipeline, w: dict, c: Census) -> State:
-    """Check every predicate of one k16 step against the witness `w`; returns the claimed output state."""
+    """Check every predicate of one k16 step against the witness `w`; returns the claimed output state.  A witness of
+    the wrong shape is a violation, and no predicate is checked on it."""
+    shape = witness_shape_error(pipe, w)
+    if shape is not None:
+        c._fail(f"witness shape: {shape}")
+        return w["in"]
     p = params(pipe)
     Z = p.Z
     align = w.get("align", ALIGN_DIV)
