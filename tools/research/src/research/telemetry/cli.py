@@ -35,7 +35,7 @@ def _kv(items: list[str]) -> dict:
 
 
 def cmd_init(argv: list[str]) -> int:
-    from .job import build_job, input_ref, sha256_file, write_json_atomic
+    from .job import build_job, input_ref, sampler_instruments, sha256_file, write_json_atomic
     ap = argparse.ArgumentParser(prog="tele init")
     ap.add_argument("--attempt-dir", required=True)
     ap.add_argument("--project", required=True)
@@ -59,7 +59,7 @@ def cmd_init(argv: list[str]) -> int:
     ap.add_argument("--policy-version", default=None)
     ap.add_argument("--source-identity", default=None, help="source_identity.json written by the runner's precheck (F-r17-tp-06); embedded in job.json computation.source_identity")
     ap.add_argument("--cadence", type=float, default=1.0)
-    ap.add_argument("--pss-every", type=float, default=5.0)
+    ap.add_argument("--pss-every", type=float, default=5.0, help="the sampler's --pss-every, recorded (0: PSS off, not an instrument)")
     ap.add_argument("--force", action="store_true")
     a = ap.parse_args(argv)
     p = Path(a.attempt_dir) / "job.json"
@@ -76,7 +76,7 @@ def cmd_init(argv: list[str]) -> int:
                     release_tag=a.release_tag, workload_digest=a.workload_digest, stage=a.stage, inputs=[input_ref(x) for x in a.input],
                     profile={k: os.environ.get(k) for k in a.profile_key if k in os.environ}, command=a.command, declared_outputs=a.declared_output,
                     timeout_s=a.timeout, reservation={"gpu": a.reservation_gpu, "host_memory_bytes": a.reservation_host_memory_bytes},
-                    policy_version=pv, policy_sha256=ps, instruments=["cgroup", "process", "pss", "gpu", "storage"], cadence_s=a.cadence, pss_every_s=a.pss_every,
+                    policy_version=pv, policy_sha256=ps, instruments=sampler_instruments(a.pss_every), cadence_s=a.cadence, pss_every_s=a.pss_every,
                     source_identity=(json.loads(Path(a.source_identity).read_text()) if a.source_identity and Path(a.source_identity).exists() else None))
     Path(a.attempt_dir).mkdir(parents=True, exist_ok=True)
     write_json_atomic(p, doc)

@@ -11,7 +11,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 
-from verity_vllm.engine.rank_worker import _tp2_request_program_dirs  # noqa: E402
+from verity_vllm.pipeline.tp.rank_replay import request_program_dirs  # noqa: E402
 
 
 def _prog(root, name, lp, t, ok=True):
@@ -30,7 +30,7 @@ def test_nominal_shape_under_bare_build_request_and_named_shape_both_resolve(tmp
     root = tmp_path / "rank0"
     nominal = _prog(root, "build_request", 1024, 127)
     small = _prog(root, "build_request_LP9_T1", 9, 1)
-    dirs = _tp2_request_program_dirs(str(root), [_req("r0", 1024, 128), _req("r1", 9, 2)], 0)
+    dirs = request_program_dirs(str(root), [_req("r0", 1024, 128), _req("r1", 9, 2)], 0)
     assert dirs == {"r0": nominal, "r1": small}
 
 
@@ -38,14 +38,14 @@ def test_named_lp_t_dir_wins_over_the_bare_default(tmp_path):
     root = tmp_path / "rank1"
     _prog(root, "build_request", 1024, 127)
     named = _prog(root, "build_request_LP1024_T127", 1024, 127)
-    assert _tp2_request_program_dirs(str(root), [_req("r0", 1024, 128)], 1) == {"r0": named}
+    assert request_program_dirs(str(root), [_req("r0", 1024, 128)], 1) == {"r0": named}
 
 
 def test_missing_shape_is_refused_by_name_with_the_rank(tmp_path):
     root = tmp_path / "rank0"
     _prog(root, "build_request", 1024, 127)
     with pytest.raises(RuntimeError) as ei:
-        _tp2_request_program_dirs(str(root), [_req("r0", 1024, 128), _req("r1", 100, 6)], 0)
+        request_program_dirs(str(root), [_req("r0", 1024, 128), _req("r1", 100, 6)], 0)
     msg = str(ei.value)
     assert msg.startswith("rank 0:") and "LP100_T5" in msg and "r1" in msg
 
@@ -55,12 +55,12 @@ def test_near_shape_and_failed_build_are_never_taken(tmp_path):
     _prog(root, "build_request", 1023, 127)  # near shape: LP off by one
     _prog(root, "build_request_x", 1024, 127, ok=False)  # exact shape but the Build did not pass
     with pytest.raises(RuntimeError, match=r"rank 0: .*LP1024_T127"):
-        _tp2_request_program_dirs(str(root), [_req("r0", 1024, 128)], 0)
+        request_program_dirs(str(root), [_req("r0", 1024, 128)], 0)
 
 
 def test_single_program_root_maps_every_request_to_the_root(tmp_path):
     root = tmp_path / "rank0" / "build_request"
     root.mkdir(parents=True)
     (root / "instances.json.gz").write_bytes(b"")
-    dirs = _tp2_request_program_dirs(str(root), [_req("r0", 256, 32), _req("r1", 256, 32)], 0)
+    dirs = request_program_dirs(str(root), [_req("r0", 256, 32), _req("r1", 256, 32)], 0)
     assert dirs == {"r0": str(root), "r1": str(root)}

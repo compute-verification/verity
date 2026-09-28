@@ -30,6 +30,11 @@ NetTiming/SecurityProofs/PerWindow.lean  the last two over the run's first `m` w
                                          per link-window
 NetTiming/SecurityProofs/Sanity.lean     a satisfiability witness for every named hypothesis, the joint witnesses, and the
                                          toy of the September draft
+NetTiming/Difftest.lean        tested: the definitions evaluated on an instance (expectedRow, and Accepted of constantRate
+                               and StatusComplete by decide), in the shape of the Python audit's results
+NetTimingDifftest.lean         the difftest's run (`runs` in lean-audit.json): every instance against the Python audit's
+                               results
+scripts/difftest_vectors.py    the difftest's data: 10,000 random instances and the Python audit's results on them
 lean-audit.json                the policy and pin records for tools/lean/audit.py
 CheckAxioms.lean               one #print axioms line per pin, then the three proved but unpinned lemmas
 ~~~
@@ -39,6 +44,9 @@ lake exe cache get                                          # Mathlib's prebuilt
 lake build                                                  # NetTiming (the default target)
 python3 ../../../tools/lean/audit.py .                      # Verity's Lean audit
 lake env lean CheckAxioms.lean                              # the axioms of the 51 pins and the 3 unpinned
+# the difftest, which the audit runs: its data from this checkout's Python audit, then the Lean side on it
+uv run python scripts/difftest_vectors.py ../../.. --out /tmp/dt
+lake env lean --run NetTimingDifftest.lean /tmp/dt/difftest/instances.jsonl /tmp/dt/difftest/python.jsonl 10000
 ~~~
 
 **Trusted without proof:** the statements in `NetTiming/Protocol/`, `NetTiming/Assumptions.lean` and
@@ -49,7 +57,8 @@ as `docs/…` and `internal/…` name the network-transparency project store, wh
 **The audit.** `tools/lean/audit.py` audits every declaration under `NetTiming`: allowed axioms (only `propext`,
 `Classical.choice` and `Quot.sound`), named assumptions, escapes, orphan files, the import layers (`NetTiming.Protocol`,
 `NetTiming.Assumptions` and `NetTiming.Guarantees` import only one another and Mathlib, never a proof), the dependency
-record, a kernel replay, and the 51 pins' records, whose meaning it follows through those three (`meaning`).
+record, a kernel replay, and the 51 pins' records, whose meaning it follows through those three (`meaning`). It then
+runs the difftest (`runs`): on 10,000 random instances, the definitions give what the Python audit gives.
 A changed record needs a named statement reviewer (Verity's `AGENTS.md`).
 
 ## The model

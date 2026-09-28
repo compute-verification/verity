@@ -12,7 +12,8 @@ quantized at run time, so there is no calibration set and no seed.  Its output i
 bytes, so every host re-makes the pinned bytes.
 
 The recipe makes dense checkpoints only: a mixture of experts (``num_experts`` / ``num_local_experts`` in config.json) is
-refused, since its router is a 2-D weight vLLM keeps in bf16 and the integration models no FP8 MoE.  The linear weights are
+refused, since its router is a 2-D weight vLLM keeps in bf16 and its experts are 3-D (an FP8 MoE is served from its authors'
+release, its routers in ``modules_to_not_convert``).  The linear weights are
 read off the structure, never the tensor names: every 2-D tensor none of whose dimensions is the config's ``vocab_size`` (so
 the embedding and ``lm_head`` stay bf16, and ``modules_to_not_convert`` is ``["lm_head"]``).  For every such W [N, K], G = 128:
 

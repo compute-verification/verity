@@ -139,6 +139,11 @@ def _read_text(path: str) -> tuple[str | None, str | None]:
         return None, e.strerror
 
 
+def sampler_instruments(pss_every_s: float) -> list[str]:
+    """What the sampler records; `--pss-every 0` turns PSS off."""
+    return ["cgroup", "process", *(["pss"] if pss_every_s > 0 else []), "gpu", "storage"]
+
+
 def build_job(*, project: str, task: str, job: str, attempt: int, lane: str, generation: int, tree_sha: str | None, release_tag: str | None,
               workload_digest: str | None, stage: str, inputs: list[dict[str, Any]], profile: dict[str, str], command: list[str],
               declared_outputs: list[str], timeout_s: float | None, reservation: dict[str, Any], policy_version: str | None,

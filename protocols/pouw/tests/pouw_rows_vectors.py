@@ -4,7 +4,7 @@ protocols/pouw/tests/pouw_rows_vectors.py`` rewrites ``tests/vectors/pouw_rows.j
 a row schema and needs a reason in the PR.
 
 Inputs are derived, not stored: part ``p`` of case ``c`` is the first bytes of SHAKE256("verity/pouw/rows-vectors/v1", c, p),
-read as the schema's elements (16-bit and 32-bit words little-endian, codes one per byte masked to their width), and the salt
+read as the schema's elements (16-, 32- and 64-bit words little-endian, codes one per byte masked to their width), and the salt
 is its 192 bytes of part "salt".  A tile case's C̃ and U are TM x TN 32-bit words, hashed by `pearl_c.leaf`.  Each case's
 leaf is the row C-Flock commits from its words and salt (`leaves.ROW_SCHEMA`); a case's name says which tree (x or w) the
 row sits in, which its registration domain binds and its leaf does not."""
@@ -27,7 +27,13 @@ CASES = (("bf16-x-64", "bf16", 64), ("bf16-w-4096", "bf16", 4096),
          ("nvfp4-p-x-64", "nvfp4-p", 64), ("nvfp4-p-w-4096", "nvfp4-p", 4096),
          ("fp8-p-x-64", "fp8-p", 64), ("fp8-p-w-4096", "fp8-p", 4096),
          ("tile-2x33", "tile", (2, 33)), ("tile-64x64", "tile", (64, 64)),
-         ("ok-x", "ok", 64), ("ok-w", "ok", 4096))
+         ("ok-x", "ok", 64), ("ok-w", "ok", 4096),
+         ("pc8-head-x", "pc8-head", 2048), ("pc8-head-w", "pc8-head", 2048),
+         ("pc8-carry-x", "pc8-carry", 2048), ("pc8-carry-w", "pc8-carry", 2048),
+         ("fp8-codes-x-64", "fp8-codes", 64), ("fp8-codes-w-2048", "fp8-codes", 2048),
+         ("pc4-head-x", "pc4-head", 2048), ("pc4-head-w", "pc4-head", 2048),
+         ("pc4-carry-x", "pc4-carry", 2048), ("pc4-carry-w", "pc4-carry", 2048),
+         ("nvfp4-codes-x-64", "nvfp4-codes", 64), ("nvfp4-codes-w-2048", "nvfp4-codes", 2048))
 
 
 def shake(case: str, part: str, n: int) -> bytes:
@@ -60,6 +66,20 @@ def inputs(case: str, row: str, k) -> dict:
         return {"codes": codes(case, "codes", k, 8), "p": u16(case, "p", L.P_WORDS)}
     if row == "ok":
         return {"ok": codes(case, "ok", 1, 1)[0]}
+    if row == "pc8-head":
+        return {"alpha": u32(case, "alpha", 1)[0], "ep": codes(case, "ep", C.R, 8),
+                "th": int.from_bytes(shake(case, "th", 8), "little"), "finite": codes(case, "finite", 1, 1)[0],
+                "floor": codes(case, "floor", 1, 1)[0]}
+    if row == "pc8-carry":
+        return {"dead": u32(case, "dead", 1)[0], "tot": u32(case, "tot", C.R)}
+    if row == "fp8-codes":
+        return {"codes": codes(case, "codes", k, 8)}
+    if row == "pc4-head":
+        return {"alpha": u32(case, "alpha", 1)[0], "ae": codes(case, "ae", 1, 8)[0]}
+    if row == "pc4-carry":
+        return {"tot": u32(case, "tot", C.R)}
+    if row == "nvfp4-codes":
+        return {"codes": codes(case, "codes", k, 4), "scales": codes(case, "scales", k // 16, 8)}
     tm, tn = k
     return {"c": [u32(case, f"c{i}", tn) for i in range(tm)], "u": [u32(case, f"u{i}", tn) for i in range(tm)]}
 
@@ -75,6 +95,18 @@ def words(row: str, x: dict) -> list[int]:
         return L.words_fp8_p(x["codes"], x["p"])
     if row == "ok":
         return L.words_ok(x["ok"])
+    if row == "pc8-head":
+        return L.words_pc8_head(x["alpha"], x["ep"], x["th"], x["finite"], x["floor"])
+    if row == "pc8-carry":
+        return L.words_pc8_carry(x["dead"], x["tot"])
+    if row == "fp8-codes":
+        return L.words_fp8_codes(x["codes"])
+    if row == "pc4-head":
+        return L.words_pc4_head(x["alpha"], x["ae"])
+    if row == "pc4-carry":
+        return L.words_pc4_carry(x["tot"])
+    if row == "nvfp4-codes":
+        return L.words_nvfp4_codes(x["codes"], x["scales"])
     return L.words_tile(C.leaf(types.SimpleNamespace(c=x["c"], u=x["u"])))
 
 

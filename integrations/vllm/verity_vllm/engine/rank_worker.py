@@ -165,24 +165,6 @@ def swap_label(label: str, sw: dict | None, step: int | None) -> str:
     return label
 
 
-def _tp2_request_program_dirs(root: str, reqs: list[dict], rank: int) -> dict[str, str]:
-    """[TP-13 / moe] This rank's request Program DIR per declared request, by the manifest's lookup of record
-    (`required_manifest._program_dirs_for`): a single request Program at `<root>` (B1: `<root>/instances.json.gz`), else under `<root>`
-    a `*LP<prompt_len>_T<max_tokens-1>` dir, else any `build_request*/result.json` declaring EXACTLY (LP, T) -- row_pod names the row's
-    nominal shape `build_request` and every other shape `build_request_LP<lp>_T<t>`, so a B>=2 mixed row's nominal-shape request has no
-    `*LP_T` dir and a bare glob refused it ("no request Program for r0 at <root>/*LP1024_T127": the Qwen3-30B-A3B TP2 B2 and OLMoE TP2 B8
-    rows on r16-int-4 537a9362d, sampled replay not run on both ranks and TP-12's unreplayable_sites never set).  Never a near shape;
-    the caller still refuses any loaded Program whose digest is not of record."""
-    from verity_vllm.query.manifest import format as RM
-
-    if os.path.exists(os.path.join(str(root), "instances.json.gz")):
-        return {str(r["request_id"]): str(root) for r in reqs}
-    try:
-        return {str(k): str(v) for k, v in RM.program_dirs_for({"requests": list(reqs)}, str(root)).items()}
-    except SystemExit as e:  # the manifest lookup names the missing (LP, T) and exits; inside a worker that is an error, not an exit
-        raise RuntimeError(f"rank {rank}: {e}") from None
-
-
 class TP2CaptureWorkerExtension:
     """Mixed into vLLM's Worker (`worker_extension_cls`); `self` is the Worker of one rank."""
 
@@ -867,9 +849,10 @@ class TP2CaptureWorkerExtension:
         st["rc"] = None
         return {"rank": st["rank"], "installed": True}
 
-    def tp2_commit_finalize(self, checks: bool = True) -> dict[str, Any]:
+    def tp2_commit_finalize(self, checks: bool = True, defer: dict[str, Any] | None = None) -> dict[str, Any]:
         """After the run: the rank's run root (fixed BEFORE any challenge), leaf counts, coverage declaration; a warm-up (`pipeline.tp.warmup`)
-        is never bound, attributed, compared or replayed.  ``checks=False``: the root only (a leased Commit's last run: `pipeline.tp.lease`)."""
+        is never bound, attributed, compared or replayed.  ``checks=False``: the root only (a leased Commit's last run: `pipeline.tp.lease`).
+        ``defer`` ({"out", "pair"}, `--replay-deferred`): the rank's replay bundle in place of its sampled replay (`_deferred_replay`)."""
         from verity_vllm.pipeline.commit import assert_pristine, class_coverage
 
         st = self._tp2_commit
@@ -896,7 +879,9 @@ class TP2CaptureWorkerExtension:
         elif match_dir:
             match_oracle = {"rank": st["rank"], "verdict": "FAIL", "why": "no tp partial source on this rank (partials not bound)"}
         # [manbind MAN-06 / coord M-0451 form (A), per rank -- tp TP-08] the C2 OF RECORD on THIS rank's map, Programs and shards
-        sampled_replay = self._tp2_sampled_replay(rc) if record and st.get("replay") else None
+        sampled_replay = None
+        if record and st.get("replay"):
+            sampled_replay = self._deferred_replay(rc, defer) if defer else self._tp2_sampled_replay(rc)
         return _jsonable({"rank": st["rank"], "run_root": rc.run_root.hex(), "binding": binding, "attribution": attribution, "match_oracle": match_oracle,
                           "sampled_replay": sampled_replay, "weights_pin": st.get("weights_pin"),
                           "steps": len(rc.steps), "leaves_per_step": [s.n_leaves for s in rc.steps],
@@ -1112,132 +1097,25 @@ class TP2CaptureWorkerExtension:
 
     def _tp2_sampled_replay(self, rc: Any) -> dict[str, Any]:
         """[TP-08; manbind MAN-06 (`verity_vllm.check.replay.sampled_replay`, taken verbatim), coord M-0451 form (A), interface note M-0523]
-        The C2 OF RECORD on THIS rank: a seeded stratified sample of the rank Program's rows is re-evaluated from the rank's COMMITTED
-        input members + the rank's registered weight SHARDS (the rank Program's weights params ARE the shards this worker holds) and
-        compared bit-for-bit with the rank's committed output members; plus the exhaustive boundary linkage (committed input ids at
-        arrival == the declared prompt; later steps == the previous step's committed sampled id, per request).  Programs = THIS rank's
-        request Programs (`derive_step --tp 2 --rank r`; B>=2: one component per (LP, T) under the rank's Build root), REFUSED by name
-        unless every loaded digest is a digest of record for this rank (the GP-01 workload_program's component list / the manifest's
-        per-rank Program, both already checked against the Build by the driver).  Rows that read a peer rank's partial (`peers_*`
-        inputs of AllReduce2 / AllGather2) have no evaluator and are counted by name -- never PASS by omission.  The stratum key's
-        rank label comes from manbind's population(rank=0) at v1 (M-0523 (1) pending); this record carries the true rank beside it."""
-        import time as _t
+        The C2 OF RECORD on THIS rank (`pipeline.tp.rank_replay`): a seeded stratified sample of the rank Program's rows is re-evaluated
+        from the rank's COMMITTED input members + the rank's registered weight SHARDS (the rank Program's weights params ARE the shards
+        this worker holds) and compared bit-for-bit with the rank's committed output members; plus the exhaustive boundary linkage
+        (committed input ids at arrival == the declared prompt; later steps == the previous step's committed sampled id, per request).
+        Programs = THIS rank's request Programs (`derive_step --tp 2 --rank r`; B>=2: one component per (LP, T) under the rank's Build
+        root), REFUSED by name unless every loaded digest is a digest of record for this rank (the GP-01 workload_program's component
+        list / the manifest's per-rank Program, both already checked against the Build by the driver).  Rows that read a peer rank's
+        partial (`peers_*` inputs of AllReduce2 / AllGather2) have no evaluator and are counted by name -- never PASS by omission.  The
+        stratum key's rank label comes from manbind's population(rank=0) at v1 (M-0523 (1) pending); this record carries the true rank
+        beside it."""
+        from verity_vllm.pipeline.tp import rank_replay as RR
 
-        st = self._tp2_commit
-        cfg = st.get("replay") or {}
-        rank = int(st["rank"])
-        t0 = _t.perf_counter()
-        base = {"schema": "verity-sweep/tp-sampled-replay/v1", "rank": rank, "method": "sampled-exact-replay per rank (manbind sampled_replay on the rank's map, Programs and shards)"}
-        bmap = st.get("bmap")
-        if not bmap:
-            return base | {"sampled_replay": {"result": None, "grade": "not-evaluated", "why": "no binding map on this rank (binding skipped / failed)"},
-                           "boundary_linkage": {"result": None, "why": "no binding map on this rank"}}
-        try:
-            from verity_vllm.check import oracle_compare as OC
-            from verity_vllm.query.manifest import format as RM
-            from verity_vllm.check.replay import driver as SR
-            from verity_vllm.program.registry import b1_tp2 as _TP2
+        return RR.in_process(self._tp2_commit, rc)
 
-            com = st["com"]
-            reqs = list(cfg.get("requests") or [])
-            root = (cfg.get("programs") or {}).get(str(rank))
-            if not root:
-                raise RuntimeError(f"no Build dir for rank {rank} in the replay config (driver --build-rank{rank})")
-            of_record = {str(x) for x in ((cfg.get("of_record") or {}).get(str(rank)) or [])}
-            if not of_record:
-                raise RuntimeError(f"no Program digest of record for rank {rank} (GP-01 workload_program components / manifest per-rank digest)")
-            # this rank's request Programs: a single request Program dir (B1: <root>/result.json) or one component per (LP, T) under <root>
-            # [TP-13 / moe] resolved by the manifest's lookup of record (`_tp2_request_program_dirs`), not a bare `*LP_T` glob
-            dirs = _tp2_request_program_dirs(str(root), reqs, rank)
-            by_dir = {d: RM.load_program(d) for d in sorted(set(dirs.values()))}
-            loaded: dict[str, dict] = {rid: by_dir[d] for rid, d in dirs.items()}
-            digs = {k: str(((v.get("result") or {}).get("program") or {}).get("digest") or (v.get("result") or {}).get("program_digest")
-                           or (v.get("instances") or {}).get("digest") or "") for k, v in loaded.items()}
-            bad = {k: d for k, d in digs.items() if d not in of_record}
-            if bad:
-                named = ", ".join(f"{k}: {d[:16]} ({loaded[k].get('dir')})" for k, d in bad.items())
-                raise RuntimeError(f"rank {rank}: REFUSED (not the Program of record): {named} vs of-record {sorted(x[:16] for x in of_record)}")
-            progs = {k: v["instances"] for k, v in loaded.items()}
-            arr = {str(r["request_id"]): int(r.get("arrive_step") or 0) for r in reqs}
-            # the export wrapper's prefix is DETERMINED from the Program's attention rows vs the implementation paths result.json observed
-            # (`attention_impls_observed`) -- the same source the manifest used, so the replay addresses the map's op_paths (a rank Program
-            # names `inner.model.model.layers.*`, the map `model.layers.*`; without the observed paths the heuristic strips nothing)
-            attn_paths = sorted({a for v in loaded.values() for a in ((v.get("result") or {}).get("attention_impls_observed") or {}).keys()})
-            # [TP-08d] the rank Programs' TP context (result.json `tp` = {"world", "rank"}): their row-parallel Gemm / EmbeddingShard rows
-            # produce this rank's PARTIAL members, the collective rows the module's output -- every loaded Program must be THIS rank's
-            tps = {k: ((v.get("result") or {}).get("tp") or {}) for k, v in loaded.items()}
-            bad_tp = {k: t for k, t in tps.items() if int(t.get("world") or 1) != int(st["world"]) or int(t.get("rank") or 0) != rank}
-            if bad_tp:
-                raise RuntimeError(f"rank {rank}: REFUSED (not this rank's Program): " + ", ".join(f"{k}: tp={t}" for k, t in bad_tp.items()))
-            tp_ctx = {"rank": rank, "world": int(st["world"])}
-            rid0 = next(iter(progs))
-            pi0 = SR.ProgramIndex(progs[rid0], attention_paths=attn_paths, tp=tp_ctx, program_dir=dirs.get(rid0))
-            wp = SR.model_weights_provider(st["eng"].model, pi0.prefix)
-            # [TP-12 / rev M-0418] the SITES of the collective-output families this replay cannot evaluate (AllReduce2 / AllGather2 /
-            # EmbeddingShard rows with a committed member), from the Program itself -- the cross-rank pass records its strata against them
-            try:
-                xs: dict[str, set] = {}
-                xr_fams = _TP2.cross_rank_families(int(st["world"]))     # [lane vllm-tp-n] from the registry's composites at this world, not typed
-                for r_ in pi0.rows:
-                    fam_ = RM.spec_family(r_["spec"])
-                    if fam_ in xr_fams:
-                        d_ = pi0.describe(r_)
-                        if d_ and d_.get("members"):
-                            xs.setdefault(fam_, set()).add(str(d_["op_path"]))
-                st["xrank_unreplayable_sites"] = {f_: sorted(v_) for f_, v_ in xs.items()}
-            except Exception as e:  # noqa: BLE001
-                st["xrank_unreplayable_sites"] = {"error": repr(e)[:200]}
-            rd = OC.OpenedReader(com, rc)
-            # [O5] the shards the relations consume must be the COMMITTED shards: re-register the live parameters now vs the run's weights root
-            try:
-                w_saved = getattr(com, "weights", None)
-                w_now = com.register_weights()
-                if w_saved is not None:
-                    com.weights = w_saved
-                w_ref = (rc.weight_registration or {}).get("root") if isinstance(rc.weight_registration, dict) else (w_saved or {}).get("root")
-                eq = (str(w_now.get("root")) == str(w_ref)) if w_ref else None
-                # [rev-cb M-0610 / COORD M-0614] this is SELF-CONSISTENCY (the shards the relations consumed are the shards the run committed),
-                # NOT a pin: nothing here compares the root with a digest OF RECORD derived from the checkpoint bytes (tp TIP M-0632: per rank
-                # = H(shard bytes in Program order) via the rank Program's shard map).  `pin_of_record` stays None until the Build emits it.
-                wc = {"equal": eq, "self_consistent": eq, "pin_of_record": None, "pinned": None, "committed_root": w_ref, "replay_root": w_now.get("root"),
-                      "tensors": w_now.get("tensors"), "method": f"rank {rank}: live parameters (weight SHARDS) re-registered at replay == the run's committed weights root "
-                                                                  "(self-consistency; not a weights-of-record pin, M-0614)",
-                      "why": None if eq else ("no committed weights root on the run" if not w_ref else "root differs")}
-            except Exception as we:  # noqa: BLE001
-                wc = {"equal": None, "self_consistent": None, "pin_of_record": None, "pinned": None, "note": f"by reference, unverified at replay: {we!r}"[:200]}
-            # [O6] seed from the rank's run root AFTER commitment unless the driver targets one; [manbind MAN-06d, M-0608] under a
-            # VERIFIER-ISSUED post-commitment challenge the seed is sha256(challenge | this rank's run root)[:8] (no grind by recommitting)
-            if cfg.get("seed") is not None:
-                seed, seed_src = int(cfg["seed"]), "--replay-seed (targeted)"
-            elif cfg.get("challenge"):
-                seed, seed_src = SR.challenge_seed(str(cfg["challenge"]), rc.run_root)
-            else:
-                seed, seed_src = int.from_bytes(rc.run_root[:8], "big"), "this rank's run root (first 8 bytes, after commitment)"
-            ring = cfg.get("ring_slots")
-            # [R17-3 / reqval] Q(P) of record for THIS rank: the merged TP manifest's identities of rank r (per-rank populations + the
-            # rank's own partials); the replay's reach is reconciled against them identity by identity (population.query_total / ...)
-            _man_doc = st.get("manifest_doc")
-            _man_rank = (dict(_man_doc, identities=[x for x in (_man_doc.get("identities") or []) if int(x.get("rank", 0) or 0) == rank])
-                         if isinstance(_man_doc, dict) and isinstance(_man_doc.get("identities"), list) else None)
-            sr = SR.sampled_replay(progs, bmap, rd, wp, arrivals=arr, per_stratum=int(cfg.get("per_stratum") or 2), seed=seed, seed_source=seed_src,
-                                   max_evaluate=int(cfg.get("max_evaluate") or 2000), weights_check=wc, targets=list(cfg.get("targets") or []),
-                                   workers=cfg.get("workers"), ring_slots=(int(ring) if ring else None), attention_paths=attn_paths, tp=tp_ctx,
-                                   manifest=_man_rank, program_dirs=dirs, replay_k=(cfg.get("k_per_rank") or {}).get(str(rank)))
-            sr["wrapper_prefix"] = pi0.prefix
-            sr["tp_context"] = tp_ctx
-            sr["programs"] = {k: {"dir": loaded[k].get("dir"), "program_digest": digs[k]} for k in loaded}
-            sr["rank"] = rank                    # [MAN-06c] the strata carry this rank's label (a per-rank map: every entry identity.rank == rank)
-            wreq = [{"request_id": str(r["request_id"]), "arrive_step": arr[str(r["request_id"])], "prompt_token_ids": list(r.get("prompt_token_ids") or []), "seed": r.get("seed"),
-                     "steps": list(range(arr[str(r["request_id"])], arr[str(r["request_id"])] + int(r.get("max_tokens") or 1)))} for r in reqs]
-            lk = SR.boundary_linkage(bmap, rd, wreq, embed_op_path=pi0.embed_op_path(), splits_of_record=SR.splits_of_record(loaded))
-            lk["rank"] = rank
-            sr["value_source"] = dict(rd.record(), forked_children=sr.pop("value_reads_in_children", None))
-        except Exception as e:  # noqa: BLE001  -- fail closed: an unrunnable replay is 'not evaluated', never PASS
-            import traceback
-            sr = {"schema": "verity-sweep/sampled-replay/v1", "method": "sampled-exact-replay", "result": None, "grade": "not-evaluated", "rank": rank,
-                  "why": f"rank {rank}: sampled replay not run: {e!r}"[:400], "error": repr(e)[:400], "trace": traceback.format_exc()[-1500:]}
-            lk = {"schema": "verity-sweep/boundary-linkage/v1", "result": None, "rank": rank, "why": f"rank {rank}: boundary linkage not run: {e!r}"[:300], "pairs": 0, "linked": 0}
-        return base | {"sampled_replay": sr, "boundary_linkage": lk, "wall_s": round(_t.perf_counter() - t0, 3)}
+    def _deferred_replay(self, rc: Any, defer: dict[str, Any]) -> dict[str, Any]:
+        """`--replay-deferred`: this rank's replay bundle in place of `_tp2_sampled_replay` (`pipeline.tp.rank_replay.defer`)."""
+        from verity_vllm.pipeline.tp import rank_replay as RR
+
+        return RR.defer(self._tp2_commit, rc, defer)
 
     def tp2_repo_modules(self) -> dict[str, Any]:
         """[TP-11] the repo-local modules THIS rank process imported so far (call after finalize: replay / pin / linkage imports included)."""

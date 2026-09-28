@@ -448,6 +448,37 @@ def knows_preflight(pkg: Path | None) -> bool:
         return False
 
 
+def knows_pss_bound(pkg: Path | None) -> bool:
+    """Whether the research package that will run on the machine knows `--pss-every 0` (PSS off) and `--pss-max-rss-gb`."""
+    if pkg is None:
+        return True
+    try:
+        return "pss_max_rss_gb" in (Path(pkg) / "telemetry" / "sample.py").read_text()
+    except OSError:
+        return False
+
+
+def pss_bound_problem(harness_args: list[str], source: Path | None) -> str | None:
+    """Why the machine must not get these sampler flags, or None: `--pss-every` <= 0 or `--pss-max-rss-gb` for a --source tree whose
+    research package predates them. On that package `--pss-every 0` reads every process's smaps_rollup every round, and an unknown
+    `--pss-max-rss-gb` fails the run on the machine."""
+    asked = []
+    every = flag_value(harness_args, "--pss-every")
+    try:
+        if every is not None and float(every) <= 0:
+            asked.append(f"--pss-every {every}")
+    except ValueError:
+        pass                                    # the harness's own parser rejects it by name
+    if (bound := flag_value(harness_args, "--pss-max-rss-gb")) is not None:
+        asked.append(f"--pss-max-rss-gb {bound}")
+    if not asked or knows_pss_bound(pkg := source_tool_package(source)):
+        return None
+    return (f"{' and '.join(asked)}: the research package in {source} predates them ({pkg}/telemetry/sample.py has no "
+            f"--pss-max-rss-gb), and it is what the machine runs: there --pss-every 0 means a PSS round (smaps_rollup of every process, "
+            f"under its mmap lock) every round, about once a second, and --pss-max-rss-gb fails the run.  Rebase the --source tree onto "
+            f"main, or drop the flag")
+
+
 def check_tool(expected: str | None) -> dict[str, str]:
     """The running package's identity and path; ResearchVersionMismatch when `expected` is given and differs."""
     here = str(Path(__file__).resolve().parent)

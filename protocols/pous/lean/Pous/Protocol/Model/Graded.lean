@@ -34,8 +34,10 @@ round excludes that only by assumption, because a late answer pushes the next ar
 re-encoding takes (requirement 1). The `S`-bit state at each arrival models storage at rest only while the whole window,
 `k − t` rounds within `(D, Q)` and `t` rounds within `(D_late, Q_late)`, is too short to re-encode `C`. That is the
 sequential audit's own link from the `S`-bit state to storage at rest; an instance states it as a condition on its
-parameters (`Pous.Guarantees.BandGradedMeetsFamily`: `D_late ≤ d` and `D_late ≤ 12`, so every window is at most
-`240·5 + 3·12 = 1,236` sequential calls, against the `3,057` that re-encoding a band segment from `W` takes).
+parameters (`Pous.Guarantees.BandGradedMeetsFamily`: `D_late ≤ d` and `D_late ≤ 12`, so every row's rounds last under
+`240·6 + 3·13 = 1,479` call-times, and with the verifier's gaps the window stays within the `1,505` that
+`Pous.Guarantees.BackgroundRebuildExcluded` requires the verifier to cap it at, against the `3,057` that re-encoding a
+band segment from `W` takes).
 
 **Requirements on the protocol.** The game assumes each of these, and a bound proved in it says nothing about a
 protocol that breaks one. `PROTOCOL.md` ("The graded audit") states them as requirements of the graded audit.

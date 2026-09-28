@@ -1,6 +1,7 @@
 # tools/lean: the Lean audit
 
-One audit for every Lake package, run by `check` (`python tools/lean/audit.py --all --build`). It needs the standard
+One audit for every Lake package (`python tools/lean/audit.py --all --build`), which `check` runs on the packages whose inputs
+changed (`audit.py --build PKG...`, `tools/check/lean_audit.py`). It needs the standard
 library, `lake` and the toolchain's `lean`; nothing here imports Verity, so another repository can copy the directory
 (`audit.py`, `Facts.lean`, `Replay.lean`, `upstream.py`, `Upstream.lean`, `merge.py`, `sandbox.sh`, `setup.sh`, `tests/`) and
 point it at its own packages.
@@ -52,7 +53,8 @@ Every declaration of the package's audited modules (not a list of theorems), fro
 - no dependency the `upstream` section scans proves, at the revision `lake-manifest.json` pins, a theorem about a watched
   statement that nobody has acknowledged (below);
 - the kernel accepts every declaration again (`Replay.lean`, on one import of the package's dependencies, each
-  declaration in a task of its own on Lean's threads, `LEAN_NUM_THREADS`, checked against the import and the
+  declaration in a task of its own on Lean's threads, `LEAN_NUM_THREADS` (by default the CPUs the audit may use: its
+  affinity, bounded by the cgroup quota, where Lean's own default is the whole machine), checked against the import and the
   declarations it comes after): a declaration that skipped the kernel shows no axiom, and only the replay catches it.
   The replay also walks the environment it checked for the axioms the package uses, and the audit fails if they differ
   from the sets the `.olean` files recorded. No `#print axioms` output is parsed anywhere. A replay killed by a signal

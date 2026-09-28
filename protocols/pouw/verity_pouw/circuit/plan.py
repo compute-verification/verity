@@ -268,19 +268,24 @@ def layout(shape: Shape, kind: str = "shift24") -> Layout:
 
 def tile_layout(shape, w_ref: int) -> Layout:
     """A tile check's layout (`pc4.Shape` or `pc8.Shape`), from the shape alone: the call's units and strata, each tile's
-    closure (itself, then its TM `RowA` units) and its TN `RowB` units in the weight's Program, at W_ref ``w_ref`` a tile."""
+    closure (itself, then its TM rows of A's units) and its TN rows of B's units in the weight's Program, at W_ref ``w_ref``
+    a tile.  A row's units are its `RowA` (`RowB`) unit, or with ``row_k`` its head, forms and tail (`rowk`)."""
     from . import pc4, pc8
 
     mod = pc8 if isinstance(shape, pc8.Shape) else pc4
     us, ws = mod.units(mod.call(shape)), mod.units(mod.weight(shape))
     tm, tn = shape.tile
-    row_a = {u.where[0]: u.index for u in us if u.role == "row_a"}
-    row_b = {u.where[0]: u.index for u in ws if u.role == "row_b"}
+    row_a: dict[int, list[int]] = {}
+    row_b: dict[int, list[int]] = {}
+    for rows, side, units_ in ((row_a, "row_a", us), (row_b, "row_b", ws)):
+        for u in units_:
+            if u.role.startswith(side):
+                rows.setdefault(u.where[0], []).append(u.index)
     closure, b_rows = {}, {}
     for t in (u for u in us if u.role == "tile"):
         rs, cs = t.where
-        closure[t.index] = (t.index, *(row_a[rs * tm + i] for i in range(tm)))
-        b_rows[t.index] = tuple(row_b[cs * tn + j] for j in range(tn))
+        closure[t.index] = (t.index, *(a for i in range(tm) for a in row_a[rs * tm + i]))
+        b_rows[t.index] = tuple(b for j in range(tn) for b in row_b[cs * tn + j])
     return Layout(shape, us, template_strata(us, w_ref), closure, None, b_rows, w_ref)
 
 

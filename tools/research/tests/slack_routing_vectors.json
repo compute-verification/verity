@@ -490,6 +490,25 @@
       ]
     },
     {
+      "name": "(quiet) inside the text is prose, not the marker: the marker ends the text or is a footer tag",
+      "msg": {
+        "ts": "1700000031.000003",
+        "thread_ts": "1700000031.000002",
+        "bot_id": "B1",
+        "username": "circuits",
+        "text": "noted: a post ending in (quiet) still wakes the names it starts with\n\n_fyi_"
+      },
+      "root": {
+        "ts": "1700000031.000002",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "@circuits how does the quiet marker work now?"
+      },
+      "targets": [
+        "infra"
+      ]
+    },
+    {
       "name": "a user-group mention routes by its label, even with an id the registry lacks",
       "msg": {
         "ts": "1700000032.000001",

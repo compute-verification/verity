@@ -22,7 +22,8 @@ from the evidence dir into `$RESEARCH_RUN_DIR/outputs/<name>/` and declared in `
                                       manifest.log, manifest_verify.log; meta {row, stage, program_digest, verdict, outcome, stage_status};
                                       refs.build, refs.match  (commit_summary.json and the finalize board are retired: F-r19-int-21 / P5);
                                       a config run (`config` verdict line) decides in config_record.json instead, at TP1 and TP
-    replay  -> vllm-verdict/v1        config_record.json beside the rewritten Commit record; and one vllm-replay-slim/v1 per slim keep
+    replay  -> vllm-verdict/v1        config_record.json beside the rewritten Commit record (a TP row that is not a config run decides in
+                                      commit/summary.json, as tp-commit-replay folded it); and one vllm-replay-slim/v1 per slim keep
                                       (`replay_slim_p<pair>`: commit/replay_slim_p<pair>/ whole, planes included; meta = its slim.json's
                                       pair, run_root, program_digest, picked, bytes, dump_sha256, commit_pass).  Never a replay bundle.
     (all)   -> execution-evidence/v1  timeline.jsonl, stages.txt, admission.json, timeline_report.json; meta {row, stage}
@@ -268,13 +269,20 @@ def build_outputs(d: Path, row: str, stage: str, run_dir: Path, inputs: dict[str
                         runs_failed=runs_.get("failed") if runs_ else None)
         e = _entry("verdict", KINDS[stage], meta, run_dir, d, present, skipped, refs=refs, optional=not passed)
     elif stage == "replay":
-        # a config run's deferred C2, decided on CPU: its decision document is config_record.json, beside the rewritten Commit record
+        # a deferred C2, decided on CPU, beside the rewritten Commit record: a config run's decision document is config_record.json (TP1
+        # and TP); any other TP row's is commit/summary.json as tp-commit-replay folded the ranks' replays into it
+        rel = "commit/summary.json" if tp and "config" not in v else "config_record.json"
         present, skipped = _collect(d, ["config_record.json", *COMMIT_FILES], ["commit"])
-        doc = _read_json(d / "config_record.json")
+        doc = _read_json(d / rel)
         if not isinstance(doc, dict) and passed:
-            raise ValueError(f"replay stage PASS but its decision document config_record.json is absent or unreadable under {d}")
-        meta = {**base_meta, "verdict": status, "decision_record": "config_record.json",
-                **({"outcome": doc.get("outcome")} if isinstance(doc, dict) else {"decision_record_missing": "config_record.json"})}
+            raise ValueError(f"replay stage PASS but its decision document {rel} is absent or unreadable under {d}")
+        meta = {**base_meta, "verdict": status, "decision_record": rel}
+        if not isinstance(doc, dict):
+            meta["decision_record_missing"] = rel
+        elif rel == "config_record.json":
+            meta["outcome"] = doc.get("outcome")
+        else:
+            meta.update(tp_pass=doc.get("pass"), tokens_equal=doc.get("tokens_equal"), pairs=doc.get("pairs"))
         e = _entry("verdict", KINDS[stage], meta, run_dir, d, present, skipped, refs=refs, optional=not passed)
     else:
         raise ValueError(f"unknown stage {stage!r}")
