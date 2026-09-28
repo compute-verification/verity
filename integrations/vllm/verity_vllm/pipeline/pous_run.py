@@ -1,8 +1,9 @@
 """`verity-vllm pous`: POUS end to end on one GPU, each role in its own process.
 
-    verity-vllm pous e2e --out DIR --case QWEN05 --build-dir DIR [--audits N] [--drop-fraction F] [--result FILE]
+    verity-vllm pous e2e --out DIR --case QWEN05 --build-dir DIR [--codec NAME] [--audits N] [--drop-fraction F] [--result FILE]
 
-runs the reference lifecycle (`protocols/pous/PROTOCOL.md`):
+runs the reference lifecycle (`protocols/pous/PROTOCOL.md`) of the reference codec ``--codec`` (`engine/pous/twins.reference`:
+``p3/v1``, the default, ``dense-chain/v1`` or ``band-chain/d12/v1``), at the geometry it is served at, in every role:
 
 1. `commit` (server): `verity_pous.setup.commit` of `W`, the checkpoint's data section (`engine/pous/layout.py`);
 2. `vk` (verifier): `setup.draw_salt` from its own secret after the commitment, then its own reference encoding of `W`
@@ -46,6 +47,13 @@ def _read(path: Path) -> Any:
     return json.loads(path.read_text())
 
 
+def reference_codec(name: str):
+    """The reference codec ``name`` and the geometry it is served at (`engine/pous/twins.reference`, no torch)."""
+    from verity_vllm.engine.pous import twins
+
+    return twins.reference(name)
+
+
 def checkpoint_files(case: str) -> list[str]:
     """The pinned checkpoint's `.safetensors` files, in name order (the shard order)."""
     from verity_vllm import config
@@ -87,49 +95,58 @@ def cmd_commit(a) -> None:
 
     from verity_vllm.engine.pous import layout
 
-    ck = layout.read(checkpoint_files(a.case))
+    ref, base = reference_codec(a.codec)
+    ck = layout.read(checkpoint_files(a.case), base)
     commitment = setup.commit(ck.params, ck.read_w())
-    _write(Path(a.out) / "commit.json", {"commitment": commitment.hex(), "params": ck.params.manifest(), "checkpoint": [x.path for x in ck.sections]})
+    _write(Path(a.out) / "commit.json", {"commitment": commitment.hex(), "codec": ref.name, "params": ck.params.manifest(),
+                                         "checkpoint": [x.path for x in ck.sections]})
 
 
 def cmd_vk(a) -> None:
     from verity_pous import setup
     from verity_pous.primitives import reference
 
-    from verity_vllm.engine.pous import codec, layout
+    from verity_vllm.engine.pous import layout
     from verity_vllm.pipeline import pous_verifier as pv
 
     out = Path(a.out)
-    commitment = bytes.fromhex(_read(out / "commit.json")["commitment"])
+    committed = _read(out / "commit.json")
+    commitment = bytes.fromhex(committed["commitment"])
+    ref_codec, base = reference_codec(a.codec)
+    if committed.get("codec", ref_codec.name) != ref_codec.name:
+        raise SystemExit(f"the server committed under {committed['codec']}, not {ref_codec.name}")
     salt = setup.draw_salt(os.urandom(32), commitment)
-    ck = layout.read(checkpoint_files(a.case))
+    ck = layout.read(checkpoint_files(a.case), base)
     w = ck.read_w()
     if setup.commit(ck.params, w) != commitment:
         raise SystemExit("W does not match the server's commitment")
     _write(out / "salt.json", {"salt": salt.hex()})
     t0 = time.perf_counter()
-    segments = pv.encode(ck.params, w, salt, a.workers, codec.REFERENCE)
-    vk = setup.verifier_key(ck.params, reference(ck.params), w, commitment, salt, encoded=segments, codec=codec.REFERENCE)
+    segments = pv.encode(ck.params, w, salt, a.workers, ref_codec)
+    vk = setup.verifier_key(ck.params, reference(ck.params), w, commitment, salt, encoded=segments, codec=ref_codec)
     enc_s = time.perf_counter() - t0
     (out / "vk-leaves.bin").write_bytes(b"".join(vk.leaves))
     t1 = time.perf_counter()
     names = sorted(n for n in ck.dtypes if n.startswith(LAYER0))
     ref = {n: hashlib.sha256(b).hexdigest()
-           for n, b in pv.reference_decode(ck.layout, segments, salt, names, a.workers, codec.REFERENCE).items()}
+           for n, b in pv.reference_decode(ck.layout, segments, salt, names, a.workers, ref_codec).items()}
     plain = {n: hashlib.sha256(ck.layout.unpack(w, n)).hexdigest() for n in names}
-    _write(out / "vk.json", {"salt": salt.hex(), "root": vk.root.hex(), "params": ck.params.manifest(), "codec": codec.REFERENCE.name,
+    _write(out / "vk.json", {"salt": salt.hex(), "root": vk.root.hex(), "params": ck.params.manifest(), "codec": ref_codec.name,
                              "encode_s": enc_s,
                              "workers": a.workers, "reference_decode_s": time.perf_counter() - t1,
                              "reference_decode_layer0": ref, "reference_decode_matches_w": ref == plain})
 
 
 def load_vk(out: Path):
-    from verity_pous.params import Params
     from verity_pous.verifier import VerifierKey
 
     doc = _read(out / "vk.json")
+    _, base = reference_codec(doc["codec"])
+    params = base.with_segments(doc["params"]["segments"])
+    if params.manifest() != doc["params"]:
+        raise ValueError(f"vk.json's params {doc['params']} are not {doc['codec']}'s served geometry {params.manifest()}")
     raw = (out / "vk-leaves.bin").read_bytes()
-    vk = VerifierKey.from_leaves(Params(**doc["params"]), bytes.fromhex(doc["salt"]), [raw[i:i + 32] for i in range(0, len(raw), 32)])
+    vk = VerifierKey.from_leaves(params, bytes.fromhex(doc["salt"]), [raw[i:i + 32] for i in range(0, len(raw), 32)])
     if vk.root.hex() != doc["root"]:
         raise ValueError("vk-leaves.bin does not have the root vk.json records")
     return doc, vk
@@ -140,6 +157,13 @@ def cmd_plain(a) -> None:
     _write(Path(a.out) / "plain.json", {"outputs": generate(engine, a.max_tokens)})
 
 
+def serve_spec(a, out: Path) -> dict[str, Any]:
+    """The `engine/pous/quant.py` spec of the served store: the codec, the checkpoint, the verifier's salt, the drop."""
+    return {"codec": reference_codec(a.codec)[0].name, "safetensors": checkpoint_files(a.case), "build_dir": a.build_dir,
+            "salt": _read(out / "salt.json")["salt"], "drop_fraction": a.drop_fraction, "drop_source": os.urandom(32).hex(),
+            "layers_per_decode": a.layers_per_decode}
+
+
 def cmd_serve(a) -> None:
     from verity_pous.verifier import MerkleTree
 
@@ -147,8 +171,7 @@ def cmd_serve(a) -> None:
     if reserved:
         os.sched_setaffinity(0, set(os.sched_getaffinity(0)) - reserved)
     out = Path(a.out)
-    spec = {"safetensors": checkpoint_files(a.case), "build_dir": a.build_dir, "salt": _read(out / "salt.json")["salt"], "drop_fraction": a.drop_fraction,
-            "drop_source": os.urandom(32).hex(), "layers_per_decode": a.layers_per_decode}
+    spec = serve_spec(a, out)
     spec_path = out / f"pous-{a.tag}.json"
     _write(spec_path, spec)
     t0 = time.perf_counter()
@@ -206,7 +229,7 @@ def _step(out: Path, name: str, args: list[str]) -> None:
 
 
 def _base(a) -> list[str]:
-    return ["--out", a.out, "--case", a.case, "--build-dir", a.build_dir]
+    return ["--out", a.out, "--case", a.case, "--build-dir", a.build_dir, "--codec", a.codec]
 
 
 def _audit_round(out: Path, tag: str, extra: list[str], a) -> dict[str, Any]:
@@ -329,6 +352,8 @@ class _Common:
     out: str = option("--out", required=True, help="the run directory every role reads and writes")
     case: str = option("--case", required=True, help="the checkpoint role in manifests/checkpoints.json")
     build_dir: str = option("--build-dir", required=True, help="parent directory of the pous_native JIT build")
+    codec: str = option("--codec", default="p3/v1",
+                        help="the reference codec served and audited (engine/pous/twins.reference): p3/v1, dense-chain/v1, band-chain/d12/v1")
     tag: str = option("--tag", default="honest", help="the server round: honest or dropped")
     max_tokens: int = option("--max-tokens", type=int, default=6, help="tokens per prompt of the compared generation")
     load_tokens: int = option("--load-tokens", type=int, default=2, help="tokens per prompt of the serving loop during the audit")
