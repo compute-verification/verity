@@ -31,9 +31,10 @@ time.
 | Hypothesis | What it says | Owner | Discharged by |
 |---|---|---|---|
 | `hExec` | the audit's acceptance event implies the model's: `∀ o, execAccept o → o.1 = true` | the refinement lane, "Prove verifier refines Lean model" (bc-159ce83b) | its refinement theorem, game-level (R11), which restates the pins with the executable's verdict on the run's transcript |
-| `dp : DerivedPlaces` | each drawn unit's place in its table (`UnitPlace`), with its rows the verifier's: `(place S R u h).R = unitRows u`. Its input columns on one gate carry one value in every satisfying witness (`UnitPlace.aliased`) | audit-lean (1d); flock-verifier (1e); flock-soundness (S4) | 1d's `placement_compose` from `setupH`; 1e, the verifier folding `deriveChecked`'s rows; S4, `unitRows u = Rows.compose (deriveChecked …)` for the partition's units. `aliased` from each slot input's copy position and the forced-zero rows: inputs on one source copy one position, and the zero's inputs copy forced-zero rows |
+| `dp : DerivedPlaces` | each drawn unit's place in its table (`UnitPlace`), with its rows the verifier's: `(place S R u h).R = unitRows u`. Its input columns on one gate carry one value in every satisfying witness (`UnitPlace.aliased`) | audit-lean (1d); flock-verifier (1e); flock-soundness (S4) | 1d's `placement_compose` from `setupH`; 1e, the verifier folding `deriveChecked`'s rows; S4, `unitRows u = Rows.compose (deriveChecked …)` for the partition's units. `aliased` from each slot input's copy position and the forced-zero rows as the verifier's Δ writes them, both kinds (the unit's own and the range's first slot's): inputs on one source copy one position, and the zero's inputs copy forced-zero rows. It is sound because Δ has one source per destination, which the verifier's exactly-once checks keep |
 | `hL1 : RowsL1 … ones` | at values carrying 1 on `ones` (the gates the units' constants read), a unit wrong on the program's Boolean circuit is wrong on its rows: `PB.wrong (proj X) ⊆ P.wrong X` | flock-soundness | `compose_sound` (#205, flat types) and `Types.Dag.unit_sound` (#247, type DAGs), both at the constant 1; `flatten_eval` and W6 (S4) |
 | `hOne` | the committed values carry 1 on `ones`: `∀ g ∈ ones, Xplur … g = true` | flock-soundness, with audit-lean | every opening of the constant's commit string carries 1 on it (`UnitPlace.decode_one` through `ValueBinding.opening_spec`), so the plurality does whenever the string is read. The case where it is never read needs care, since `Xval` then falls back to an arbitrary argmax. Alternatively the constant becomes a public wire of the value binding |
+| the zero's binding (a condition on claims; not yet a hypothesis) | the committed values carry 0 on the statement's zero, the program input its forced-zero rows carry: `Xplur … zer = false` | flock-soundness, with audit-lean; the refinement lane if R11 adds `hZero` | `hOne`'s argument: every opening of the zero's positions carries 0 (the forced-zero rows, through `ValueBinding.opening_spec`), so the plurality does whenever the zero is read; the never-read case needs the same care. #207 takes it as `hZero` when R11 restates it, or the zero becomes a public wire of the value binding. Until then, no claim may read the profile as being about the zero padding |
 | `vb : ValueBinding` | the wires bind to their registered commit strings (already named on `main`) | M0's `hm96-sha512` leaf layout | the row hashing's circuit side (verified-lowering design, phase 2, 2i) |
 | `hCR` (A2) | SHA-512 expected-time collision resistance for the link finders | the assumption of record | not discharged: it is the theorem's cryptographic assumption |
 
@@ -45,6 +46,11 @@ constant is a gap of its own (red-team review of #207).
   false, and a set too large makes `hOne` false. S4 discharges both for exactly the gates the units' constants read.
 - **`hOne` holds per strategy.** The final theorem needs it for every `σ`. The never-read case is where that needs work.
   Making the constant a public wire of the value binding would avoid it.
+
+**Why the zero is different.** The zero multiplies no row, so `RowsL1` holds at any value of it, and #207's bound needs
+no `hZero` (#316). But "wrong at the committed values" judges a unit that reads the zero at the zero's committed value:
+at a committed zero of 1, a padded attention unit would be judged against `b = 1`. So the zero's binding is a condition
+on claims. None may read the profile as being about the zero padding until it's bound (red-team review of #316, C1).
 
 **How to use this list.**
 - Each PR that discharges a hypothesis changes the skeleton to prove it: an argument becomes a theorem applied. It also
