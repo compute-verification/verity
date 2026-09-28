@@ -21,11 +21,13 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
     is written in its docstring), `partition.validate_unit_cut` (the invariant)
     and `partition_object` (`verity/partition/v1` = program digest + query,
     `Q_word` v1 or the instance-granular `Q_template_instance(s)` v0:
- `evaluate`, `locate`, `validate`, `verify`; pinned by
- `tests/ir/partition_vectors.json` and `template_instance_vectors.json`).
- `annotations` is `verity/annotations/v0`: names, descriptions, formats and
- groupings keyed by descriptor ids, validated against a descriptor's
- structure, never inside a digest.
+    `evaluate`, `locate`, `validate`, `verify`; pinned by
+    `tests/ir/partition_vectors.json` and `template_instance_vectors.json`).
+    `units` cuts each proof unit of a partition out as a standalone circuit,
+    with the shape that units of equal circuits share.
+    `annotations` is `verity/annotations/v0`: names, descriptions, formats and
+    groupings keyed by descriptor ids, validated against a descriptor's
+    structure, never inside a digest.
   - `verity.evaluation`: the one evaluator. The plain-integer reference
     (`evaluate`, the IR oracle), `evaluate_batch` over numpy arrays,
     `register_kernel`, `self_check`. Every registered kernel must be listed
@@ -38,30 +40,32 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
     mul/linear/lookup predicates and counts them (`census()`). Tests replay
     the A100 / RTX 4090 / H100 captures under `tests/ml/fixtures/` (see its
     README for provenance).
- - `verity.randomness`: `derive(source, domain, context) -> Key`, the one
- challenge derivation, with exact samplers (`uniform`, `bernoulli`, `subset`)
- over counter-mode streams. Stdlib only, and it imports no other core module.
- Its byte formats are pinned by `tests/randomness/vectors.json`.
- - `verity.proofs`: single statements and how a backend is judged on them,
- plus `proofs.profile.IntegrityProfile`, which records what verification
- established: the exhaustive facts, a verifier's law over named levels of a
- partition hierarchy (`verity.ir.partition.Level`) and δ. Consumers read
- it with their own utilities; their readers stay out of core. Its tests live
- in `tests/proofs/`.
- - `verity.commitments`: see its module docstring.
- - `verity.claims`: the ids of security claims (guarantees, assumptions as `property/instance`
- such as `cr/sha-512`, models, setup) that Table 1 cites; the docs site imports them from the
- entities render. Stdlib only; imports no other core module.
- Other modules are created when code lands, not before.
- - Tests live in `packages/verity/tests/<module>/`.
+  - `verity.randomness`: `derive(source, domain, context) -> Key`, the one
+    challenge derivation, with exact samplers (`uniform`, `bernoulli`, `subset`)
+    over counter-mode streams. Stdlib only, and it imports no other core module.
+    Its byte formats are pinned by `tests/randomness/vectors.json`.
+  - `verity.proofs`: single statements and how a backend is judged on them,
+    plus `proofs.profile.IntegrityProfile`, which records what verification
+    established: the exhaustive facts, a verifier's law over named levels of a
+    partition hierarchy (`verity.ir.partition.Level`) and δ. Consumers read
+    it with their own utilities; their readers stay out of core. Its tests live
+    in `tests/proofs/`.
+  - `verity.commitments`: see its module docstring.
+  - `verity.claims`: the ids of security claims (guarantees, assumptions as `property/instance`
+    such as `cr/sha-512`, models, setup) that Table 1 cites; the docs site imports them from the
+    entities render. Stdlib only; imports no other core module.
+    Other modules are created when code lands, not before.
+  - Tests live in `packages/verity/tests/<module>/`.
 - `protocols/`: one distribution per protocol, and each imports only the
  stdlib, `verity` and itself (`protocols/tests/test_protocol_boundaries.py`).
  The first is `protocols/sampled_proofs` (`verity_sampled_proofs`): the
  two-stage law, its beacon-keyed draws, and verification plans. See its
  `PROTOCOL.md`. `protocols/one_stage` (`verity_one_stage`) is the one-stage
- audit: registration, the verifier's draw over a partition's units, and the
+ audit: registration, the verifier's draw over a partition's proof units, and the
  audit record with its profile; `benchmarks/one_stage` runs it end to end with
- M0's prover and the Lean verifier. Applications (vLLM) compose protocols.
+ C-Flock's circuit prover (M0, `verity_flock.circuit`, which lands on `main` with
+ PR #192; until then `--m0-pythonpath` names a checkout of it) and the Lean
+ verifier. Applications (vLLM) compose protocols.
 - `census/`: data only, meant to move to its own repository: `hardware.json`, `datatypes.json`, `networks.json`,
  `subcircuits.json`, `input_sets.json`, `workloads.json` (stable ids, sources), a JSON Schema for each under `schemas/`,
  and a README with the id scheme and sourcing rules. Nothing imports it; the renderer and benchmarks
@@ -75,18 +79,28 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
 - `tools/check/`: `check`, the one repository check a merge requires (see Checking and merging below).
 - `tools/lean/`: the Lean audit (`audit.py`), which `check` runs on every Lake package (see Lean below).
 - `backends/`, `frontends/`, `integrations/`, `benchmarks/`: created when a
-  component has real code. The first is `backends/sp1`; its `README.md` is
-  the how-to (build, identity, Python API, tests, recorded pod runs).
+  component has real code; there is no `frontends/` yet. `backends/flock`
+  (`verity_flock`) is C-Flock, the backend in active development; its verifier
+  of record is the Lean one under `backends/flock/verifier/` (see Lean below).
+  A-GKR (`backends/gkr`), B-Ligero (`backends/direct`, `backends/ligero-verify`,
+  `backends/ligerito-verify`) and D-SP1 (`backends/sp1`) are frozen: kept, and
+  still in the benchmark tables, but not developed; so is the VOLE research
+  backend (`backends/vole`). `backends/numerical` holds the numerical references
+  and the benchmark tooling that renders the tables. `backends/sp1/README.md` is
+  D-SP1's how-to (build, identity, Python API, tests, recorded pod runs).
   **SP1 proving never runs on a laptop or the control pod**: use
   `research run --on vy-sp1 ...` (`~/.research/machines.toml`).
+  `integrations/vllm` (`verity_vllm`) is the vLLM integration.
 
-Dependency direction (README "Development"): `ir <- ml`, `ir <- commitments`,
-`ir + commitments <- proofs`, everything else depends inward on the
-core. Backends must be testable without a frontend or runtime integration.
+Dependency direction (README "Development"): `ir <- evaluation <- ml`,
+`ir <- commitments`, `ir + ml + commitments <- proofs`; `randomness` and
+`claims` import no core module; everything else depends inward on the core
+(`packages/verity/tests/test_boundaries.py`). Backends must be testable
+without a frontend or runtime integration.
 
 ~~~text
 uv sync                                   # workspace root; installs research and verity editable
-uv run pytest                             # all tests
+uv run pytest                             # the root pyproject's testpaths; integrations/vllm keeps its own pytest config
 uv run python tools/check/check.py        # the check a merge requires; --record publishes it as an Attempt
 ~~~
 
@@ -99,7 +113,8 @@ small binding in `circuit_check.targets`, which the suite enforces.
 ## Checking and merging
 
 There is no GitHub Actions CI. `check` (`tools/check/check.py`) is the one check: pytest, `circuit-check --all`, the Lean
-verifier's build with its upstream cross-check once PR #85 is on `main`, and the Lean audit. `--record` runs it through `research run` as an
+verifier's build and its partition check against `verity.ir`, the Lean audit, and the verifier's cross-check against
+upstream's Rust verifier when the run is sent its input bundle (skipped by name otherwise). `--record` runs it through `research run` as an
 Attempt of the checked-out clean commit. Merge into `main` only through `research merge <branch>`, which refuses without a
 passing `check` of that exact commit in the evidence store, or when `main` has moved past it.
 
