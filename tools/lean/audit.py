@@ -34,9 +34,10 @@ environment extension loaded, so none of the package's code runs), and replays t
                  of the term that ignores what `Expr.hash` ignores (records written with its 32 bits are checked as they
                  are until `--update` rewrites them)
     replay       the kernel rejects a declaration of an audited module when `Replay.lean` sends them all to it again, on
-                 one import of what they import from outside: a declaration that skipped the kernel shows no axiom, and
-                 only this catches it (the `kernel` control); or the axioms found by walking the replayed environment
-                 differ from those the `.olean` files recorded; a replay killed by a signal is reported as a kill
+                 one import of what they import from outside, one declaration per task on Lean's threads
+                 (`LEAN_NUM_THREADS`): a declaration that skipped the kernel shows no axiom, and only this catches it
+                 (the `kernel` control); or the axioms found by walking the replayed environment differ from those the
+                 `.olean` files recorded; a replay killed by a signal is reported as a kill
     upstream     a dependency that the policy's `upstream` section scans proves, at the revision `lake-manifest.json` pins,
                  a theorem about a watched assumption or hand proof that the entry's `ack` does not hold (`upstream.py`):
                  a bump that brings such a proof fails until someone has looked at it
@@ -984,6 +985,8 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--fresh", action="store_true", help="also `leanchecker --fresh` each root: its whole closure, Mathlib and core "
                     "included, through the kernel (slow: see README)")
     ap.add_argument("--no-runs", action="store_true", help="skip the packages' tests (`runs`)")
+    ap.add_argument("--no-controls", action="store_true", help="--all without the controls (check's audit: the `tools/lean` "
+                    "suite runs them, when the auditor changes)")
     ap.add_argument("--repo", type=Path, default=ROOT, help="the checkout a test's `generate` reads as {repo} (default: the "
                     "one this file is in)")
     ap.add_argument("--out", type=Path, default=None, help="where the reports and logs go (default $RESEARCH_RUN_DIR/lean-audit in a "
@@ -1054,7 +1057,7 @@ def main(argv: list[str]) -> int:
                 print(f"  note: {n}", flush=True)
 
     with ThreadPoolExecutor(max_workers=len(pkgs) + 1) as ex:
-        jobs = ([ex.submit(check_controls)] if a.all else []) + [ex.submit(one, p) for p in pkgs]
+        jobs = ([ex.submit(check_controls)] if a.all and not a.no_controls else []) + [ex.submit(one, p) for p in pkgs]
         for j in jobs:
             j.result()
     reports = [reports[p] for p in pkgs]
