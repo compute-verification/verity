@@ -9,6 +9,7 @@ Every row is explicit except the product rows' B side (about `bits · 2^(n−1)`
 fold reads from the table directly (`Lookup.foldB`).
 -/
 import Flock.Net
+import Flock.Library
 
 namespace Flock
 
@@ -95,6 +96,79 @@ def build (name : String) (table : ByteArray) (n lo bits : Nat) : V Net := do
   let b ← Sparse.ofRows (fix bd.b) (2 ^ unitLog)
   return { name, useful, constPos := konst, inGroups := #[⟨0, 1, #[n]⟩], outGroups := #[⟨out0 / 128, 1, #[bits]⟩],
            inWords := 1, a, b, unitLog, lookup := some { table, n, lo, bits, prod0, loTop } }
+
+/-! ### `table/v2` (Project doc `verified-lowering-design.md` §1.9, question 4; `constant-api-public.md` §5, step 1)
+
+v1 over the output bits that vary: a `library` table's bits at and above `varying` are constant over the whole table, so
+their output rows are the constant bit itself and they get no product rows. A `program` table keeps every output bit, so
+its slot's shape shows nothing of its content (the private track's rule). The label is the table's own: `library`
+exactly when its SHA-512 is listed in `LIBRARY_TABLES`, as in `Layout.kOf`. The fold is v1's: the lookup record's `bits`
+is the width `k`. -/
+
+/-- The varying width of `table`'s low `bits` output bits: one more than the highest bit that is not the same in all
+`2^n` words (0 if none varies). -/
+def varying (table : ByteArray) (n bits : Nat) : Nat :=
+  let first := rd32 table 0
+  let diff := (List.range (2 ^ n)).foldl (fun acc i => acc ||| (rd32 table (4 * i) ^^^ first)) 0
+  let d := diff &&& (2 ^ bits - 1)
+  if d = 0 then 0 else Nat.log2 d + 1
+
+/-- The output bits a read of the table named `sha512` gives product rows: a `library` table's up to its varying width,
+a `program` table's all `bits`. -/
+def width (sha512 : String) (table : ByteArray) (n bits : Nat) : Nat :=
+  if (libraryTable? sha512).isSome then varying table n bits else bits
+
+/-- **The `table/v2` slot**, the one specification of a read's rows (`lookup.rs` and Python mirror it): v1's rows with
+product rows only for the `k = width sha512 table n bits` output bits, and output bit `k ≤ j < bits` the constant bit,
+`A = B = [const]` for 1 and an empty row for 0. `sha512` is the table's SHA-512 in hex (its archive key), which the caller
+has checked names these words; a library table is read only in the library's shape. -/
+def buildV2 (name sha512 : String) (table : ByteArray) (n lo bits : Nat) : V Net := do
+  if table.size != 4 * 2 ^ n || !(2 ≤ lo && lo < n) || bits > 32 || n > 128 then throw s!"lookup {name}: not a table of 2^{n} words"
+  if !(libraryTable? sha512).all (fun t => t.indexBits == n && t.valueBits == bits) then
+    throw s!"lookup {name}: a library table read in a shape other than the library's"
+  let k := width sha512 table n bits
+  let c0 := rd32 table 0
+  let mut bd : Builder := {}
+  for i in [0:128] do
+    bd := if i < n then { a := bd.a.push #[i], b := bd.b.push #[i] } else { a := bd.a.push #[], b := bd.b.push #[] }
+  let (bd1, loM, loTop) := decode bd ((List.range lo)) lo
+  let (bd2, hiM, _) := decode bd1 ((List.range (n - lo)).map (lo + ·)) (n - lo)
+  bd := bd2
+  let nlo := 2 ^ lo
+  let nh := hiM.size
+  let prod0 := bd.a.size
+  for _ in [0:k] do
+    for h in [0:nh] do
+      bd := { a := bd.a.push (cols (hiM.getD h default)), b := bd.b.push #[] }
+  while bd.a.size % 128 != 0 do bd := { a := bd.a.push #[], b := bd.b.push #[] }
+  let out0 := bd.a.size
+  for j in [0:128] do
+    bd := if j < k then { a := bd.a.push ((Array.range nh).map (prod0 + j * nh + ·)), b := bd.b.push #[KONST] }
+          else if j < bits && c0.testBit j then { a := bd.a.push #[KONST], b := bd.b.push #[KONST] }
+          else { a := bd.a.push #[], b := bd.b.push #[] }
+  let konst := bd.a.size
+  bd := { a := bd.a.push #[konst], b := bd.b.push #[konst] }
+  let fix := fun (rs : Array (Array Nat)) => rs.map fun r => r.map fun c => if c == KONST then konst else c
+  let useful := bd.a.size
+  let unitLog := max 7 (log2ceil useful)
+  if loM.size != nlo || nh != 2 ^ (n - lo) then throw s!"lookup {name}: decoder shape"
+  let a ← Sparse.ofRows (fix bd.a) (2 ^ unitLog)
+  let b ← Sparse.ofRows (fix bd.b) (2 ^ unitLog)
+  return { name, useful, constPos := konst, inGroups := #[⟨0, 1, #[n]⟩], outGroups := #[⟨out0 / 128, 1, #[bits]⟩],
+           inWords := 1, a, b, unitLog, lookup := some { table, n, lo, bits := k, prod0, loTop } }
+
+/-- The rows digest the mirrors are held to: `SHA-512("flock-lookup-rows/v2" ‖ 0 ‖ le32[n, lo, bits, k, useful, constPos,
+prod0, loTop, unitLog] ‖ per row: le32|A_r| ‖ A_r ‖ le32|B_r| ‖ B_r)`, columns as le32 with the constant resolved. -/
+def rowsDigest (net : Net) (n lo bits : Nat) : ByteArray := Id.run do
+  let lk := net.lookup.getD default
+  let mut h := "flock-lookup-rows/v2".toUTF8.push 0
+  for x in [n, lo, bits, lk.bits, net.useful, net.constPos, lk.prod0, lk.loTop, net.unitLog] do h := pushLe32 h x
+  for r in [0:net.useful] do
+    for m in [net.a, net.b] do
+      let row := m.row r
+      h := pushLe32 h row.size
+      for c in row do h := pushLe32 h c
+  return Sha512.hash h
 
 /-- One subset-sum entry: `t[x] = t[x without its lowest set bit] + f(that bit)`. -/
 @[inline] def subsetStep (f : Nat → F128) (t : Array F128) (x : Nat) : Array F128 :=

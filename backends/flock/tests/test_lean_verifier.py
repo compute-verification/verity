@@ -296,6 +296,36 @@ def test_template_queries_agree_with_the_vectors(tmp_path):
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_table_v2_generator_reproduces_its_vectors(tmp_path):
+    """`flock-verify lookup-rows` (the `table/v2` generator, `Lookup.buildV2`) reproduces `lookup_v2_vectors.json`, the
+    digests Rust's and Python's generators are held to. A table's label is its own (library exactly when its SHA-512 is
+    listed): library tables keep product rows for their varying bits only (every other bit its constant), and program
+    tables every bit, so a program slot's shape never depends on its values."""
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    p = subprocess.run(["python3", str(LEAN.parent / "lookup_v2_vectors.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify")],
+                       capture_output=True, text=True)
+    assert p.returncode == 0, p.stdout + p.stderr
+    r = json.loads(p.stdout.strip().splitlines()[-1])
+    assert r["small"] == 6 and r["disagree"] == [], r
+    v = json.loads((LEAN.parent / "lookup_v2_vectors.json").read_text())
+    assert all(not e["library"] and e["k"] == e["bits"] for e in v["small"])
+    const = next(e for e in v["small"] if e["label"] == "all-constant")
+    (tmp_path / "c.u32").write_bytes(bytes.fromhex(const["table_hex"]))
+    (tmp_path / "r.u32").write_bytes(bytes(range(4 << const["n"])))
+    shapes = []
+    for f in ("c.u32", "r.u32"):
+        out = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "lookup-rows", str(tmp_path / f), str(const["n"]),
+                              str(const["lo"]), str(const["bits"])], capture_output=True, text=True).stdout
+        r = json.loads(out.split(" ", 1)[1])
+        shapes.append({k: r[k] for k in ("library", "k", "useful", "unit_log", "prod0", "lo_top")})
+    assert shapes[0] == shapes[1], shapes
+    mufu = {e["label"]: e for e in v["mufu"]}
+    assert all(e["library"] for e in v["mufu"])
+    assert [mufu[t]["k"] for t in ("rcp", "ex2", "rsq", "sqrt")] == [24, 23, 24, 23]
+    assert mufu["rcp"]["useful"] == 29953 and mufu["rcp"]["unit_log"] == 15
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_merkle_collision_is_not_met_by_a_split_string(tmp_path):
     """`MerkleScheme.Collision` is a collision of the hash, not of how its input is split: one byte string split two ways
     (`[0] ‖ []` against `[] ‖ [0]`) gives one node, and must not count, since the children are not of the digest's width

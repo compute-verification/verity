@@ -257,7 +257,13 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
     if 2 ^ n != size || !(2 ≤ lo && lo < n) then throw s!"META: lookup {lname}'s index is not its table's"
     let some (_, words) := tables.find? (·.1 == lname) | throw s!"the circuit has a lookup of {lname}: its table is not given"
     if words.size != 4 * size || hexOf (Sha512.hash words) != pinned.sha512 then throw s!"MUFU table {lname}: not the pinned table"
-    nets := nets.push (s!"lookup:{lname}", ← Lookup.build s!"lookup:{lname}" words n lo 31)
+    -- META `gen`: absent, v1's rows (`Lookup.build`); `table/v2`, the v2 generator (`Lookup.buildV2`, labeled by the
+    -- SHA-512 just checked)
+    let net ← match (spec.getObjVal? "gen").toOption with
+      | none => Lookup.build s!"lookup:{lname}" words n lo 31
+      | some (Json.str "table/v2") => Lookup.buildV2 s!"lookup:{lname}" pinned.sha512 words n lo 31
+      | some _ => throw s!"META: lookup {lname}'s gen is neither absent nor table/v2"
+    nets := nets.push (s!"lookup:{lname}", net)
   if (← J.str mj "scheme" ctx) != SCHEME || (← J.str mj "row_schema" ctx) != ROW_SCHEMA then
     throw s!"META: rows are not {SCHEME} ({ROW_SCHEMA}) leaves"
   let ports ← (← J.arr mj "ports" ctx).mapM fun p => do

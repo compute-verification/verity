@@ -141,6 +141,40 @@
    "assumptions": [],
    "type_hash": "00000000143c7adc"
   },
+  "FlockLevel3.build_computes_v2": {
+   "signature": [
+    "FlockLevel3.build_computes_v2.{u_1} {K : Type u_1} [Field K] [CharP K 2] [DecidableEq K] {name sha512 : String}",
+    "  {table : ByteArray} {n lo bits : ℕ} {net : Flock.Net}",
+    "  (hb : Flock.Lookup.buildV2 name sha512 table n lo bits = Except.ok net) (hK : net.useful ≤ Flock.Lookup.KONST) :",
+    "  ∃ RA RB lk col,",
+    "    Flock.Sparse.ofRows RA (2 ^ net.unitLog) = Except.ok net.a ∧",
+    "      Flock.Sparse.ofRows RB (2 ^ net.unitLog) = Except.ok net.b ∧",
+    "        RA.size = net.useful ∧",
+    "          RB.size = net.useful ∧",
+    "            net.lookup = some lk ∧",
+    "              lk.table = table ∧",
+    "                lk.n = n ∧",
+    "                  lk.lo = lo ∧",
+    "                    lk.bits = Flock.Lookup.width sha512 table n bits ∧",
+    "                      net.outGroups = #[{ col := col, words := 1, bits := #[bits] }] ∧",
+    "                        ∀ (z : ℕ → K),",
+    "                          (∀ r < net.useful,",
+    "                              z r =",
+    "                                FlockLevel3.rowSum z (RA.getD r #[]) *",
+    "                                  (FlockLevel3.rowSum z (RB.getD r #[]) + FlockLevel3.tableB lk z r)) →",
+    "                            z net.constPos = 1 →",
+    "                              (∀ i < n, z i = 0 ∨ z i = 1) ∧",
+    "                                ∀ j < bits,",
+    "                                  z (128 * col + j) =",
+    "                                    if",
+    "                                        (Flock.rd32 table (4 * FlockLevel3.bitsVal z (List.range n))).testBit j =",
+    "                                          true then",
+    "                                      1",
+    "                                    else 0"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000c54f947b"
+  },
   "FlockLevel3.card_F": {
    "signature": ["FlockLevel3.card_F : Fintype.card FlockLevel3.GF128 = 2 ^ 128"],
    "assumptions": [],
@@ -752,7 +786,7 @@
     "FlockLevel3.rowSum": "7efa04f14ce4ab9a",
     "FlockLevel3.tableB": "bf7fe87b36d9c85a"
    },
-   "pins": ["FlockLevel3.build_computes"]
+   "pins": ["FlockLevel3.build_computes", "FlockLevel3.build_computes_v2"]
   },
   "FlockLevel3.Nodes": {
    "digest": "c402244b2facacaff70397b10b28a915",
