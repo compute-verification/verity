@@ -120,7 +120,7 @@ theorem StackedAuditOnePercent : Pous.Guarantees.StackedAuditOnePercent := @Pous
 theorem DenseMeets : Pous.Guarantees.DenseMeets := PousDense.dense_meets
 
 /-! ## The overwrite chain (`Pous/SecurityProofs/Chain/Flat.lean`, `Family.lean` for `BandMultiMeetsFamily`, and
-`FamilyRounds.lean` for the band at `D = 2` and `D = 1`)
+`FamilyRounds.lean` for the band at `D = 2`, `D = 1` and `D = 0`)
 
 P3 with a concrete `H`, the band, the dense chain scheme and the public encoder, each over the trusted copies
 (`Pous/Protocol/Model/P3Chain.lean`, `BandChain.lean`, `PubEncoder.lean`, `Pous/Protocol/Accounting/PubMeets.lean`). -/
@@ -140,6 +140,7 @@ theorem BandMultiMeetsFamily : Pous.Guarantees.BandMultiMeetsFamily := Pous.Band
 theorem ChainDenseMeets64 : Pous.Guarantees.ChainDenseMeets64 := PousSpongeChain.chain_meets_64_final
 theorem BandMultiMeetsFamilyD2 : Pous.Guarantees.BandMultiMeetsFamilyD2 := Pous.BandMulti.Rounds.band_meets_family_d2
 theorem BandMultiMeetsFamilyD1 : Pous.Guarantees.BandMultiMeetsFamilyD1 := Pous.BandMulti.Rounds.band_meets_family_d1
+theorem BandMultiMeetsFamilyD0 : Pous.Guarantees.BandMultiMeetsFamilyD0 := Pous.BandMulti.Rounds.band_meets_family_d0
 theorem BandChainMeets64Rounds2 : Pous.Guarantees.BandChainMeets64Rounds2 := Pous.BandMulti.Rounds.band_meets_64_d2
 theorem BandChainMeets64Rounds1 : Pous.Guarantees.BandChainMeets64Rounds1 := Pous.BandMulti.Rounds.band_meets_64_d1
 theorem BandPubMeets64 : Pous.Guarantees.BandPubMeets64 := PousPub.band_pub_meets_64_final

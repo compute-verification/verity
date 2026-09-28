@@ -645,11 +645,12 @@ def ChainDenseMeets64 : Prop :=
     Meets (Pous.Sponge.chainDense (2 ^ 9) 524288 512 (Pous.Sponge.dom salt)) .sequential 5 (2 ^ 20) 111
       ((2⁻¹ : ℝ≥0∞) ^ 128)
 
-/-! ### The band at `D = 2` and `D = 1` rounds
+/-! ### The band at `D = 2`, `D = 1` and `D = 0` rounds
 
-Added on 3 Oct 2026, approved by Daniel (3 Oct 2026, 05:27Z). Statement reviewer: @lean, to be confirmed. Each
-statement is a band pin above with only the round budget `D`, the challenge count `k` and the bound on the in-degree
-`d` changed; the model, the scope and `d ≥ D` (`BandGapAttack`) are as there. The proofs are
+Added on 3 Oct 2026, approved by Daniel (3 Oct 2026, 05:27Z; `D = 0` approved 3 Oct 2026). Statement reviewer: @lean,
+to be confirmed. Each statement is a band pin above with only the round budget `D`, the challenge count `k` and the
+bound on the in-degree `d` changed; the model, the scope and `d ≥ D` (`BandGapAttack`) are as there (`D = 0` puts no
+bound on `d`, since the responder makes no `Π₂` call). The proofs are
 `Pous/SecurityProofs/Chain/FamilyRounds.lean`'s (`Pous.BandMulti.Rounds`): `Family.lean`'s certificate with `D` and
 `k` as parameters. -/
 
@@ -678,6 +679,20 @@ def BandMultiMeetsFamilyD1 : Prop :=
         1 (2 ^ 20) 93 ((2⁻¹ : ℝ≥0∞) ^ 128)) ∧
     (∀ salt : Bits 256,
       Meets (Pous.BandMulti.chainBandSeg N (2 ^ 9) d 524288 512 (Pous.Sponge.dom salt)) .sequential 1 (2 ^ 20) 93
+        ((2⁻¹ : ℝ≥0∞) ^ 128))
+
+/-- **Unconditional: the band store at `D = 0` rounds and `k = 89`, at every segment count from 1 to 2^64.**
+`BandMultiMeetsFamily` at `D = 0` and `k = 89`, for every `d` with no bound on the in-degree: at `D = 0` the responder
+makes no `Π₂` call and answers from its state alone, so the band needs no bound on `d`. Both domain layouts. Approved
+by Daniel (3 Oct 2026). Proof: `Pous.BandMulti.Rounds.band_meets_family_d0`; here
+`Pous.SecurityProofs.BandMultiMeetsFamilyD0`. -/
+def BandMultiMeetsFamilyD0 : Prop :=
+  ∀ (N : ℕ) [NeZero N], N ≤ 2 ^ 64 → ∀ d : ℕ,
+    (∀ salt : Bits 192,
+      Meets (Pous.BandMulti.chainBandSeg N (2 ^ 9) d 524288 512 (Pous.BandMulti.segDom salt (2 ^ 9))) .sequential
+        0 (2 ^ 20) 89 ((2⁻¹ : ℝ≥0∞) ^ 128)) ∧
+    (∀ salt : Bits 256,
+      Meets (Pous.BandMulti.chainBandSeg N (2 ^ 9) d 524288 512 (Pous.Sponge.dom salt)) .sequential 0 (2 ^ 20) 89
         ((2⁻¹ : ℝ≥0∞) ^ 128))
 
 /-- **Unconditional: the band scheme at 64 KiB, `D = 2` rounds and `k = 97`.** `BandChainMeets64` at `D = 2` and
