@@ -7,6 +7,7 @@
 # env: BINARY= PYBIN= (skip the build and the venv: a local dry run)
 #      GRAPH=path/to/<row>.program.json | DEFS=path/to/defs.json  SHAPES=path/to/shapes.txt  SELECT=table-free  MODULES= (a module-path prefix)
 #      BATCH=auto  WARM=1  RUNS=3  SELFTEST=25  JOBS=1 (shapes staged in parallel)  GPU=1  SM (from nvidia-smi)  PORT=7710
+#      SELFTEST_GPU=1 (the selftests on the GPU, its paths against each other and the CPU's included)
 #      PROTOCOL=sweep-v0  OUT=$RESEARCH_RUN_DIR/out  RESUME=path/to/results.jsonl (an earlier run's records: those shapes are skipped)
 #      SELFTEST_LARGEST=0 (selftest every SELFTEST-th shape only, not also each Definition's largest)
 #      BATCH_ANDS= MAX_STATEMENT_BITS= (larger statements: --batch auto's AND budget and the witness-bit cap per statement)
@@ -50,4 +51,4 @@ SEL=(); [ -n "${SHAPES:-}" ] && SEL+=(--shapes "$SHAPES"); [ "${SELFTEST_LARGEST
 [ -n "${BATCH_ANDS:-}" ] && SEL+=(--batch-ands "$BATCH_ANDS"); [ -n "${MAX_STATEMENT_BITS:-}" ] && SEL+=(--max-statement-bits "$MAX_STATEMENT_BITS"); [ -n "${SELECT:-}" ] && SEL+=(--select "$SELECT")
 $PYBIN -m verity_flock.class_statement "${SRC[@]}" ${MODULES:+--modules "$MODULES"} --partition q-word --out $O/classes \
   --binary $B --selftest-binary $SB "${SEL[@]}" --batch ${BATCH:-auto} --jobs ${JOBS:-1} --warm ${WARM:-1} --runs ${RUNS:-3} --selftest ${SELFTEST:-25} \
-  --port ${PORT:-7710} --protocol ${PROTOCOL:-sweep-v0} $G_
+  --port ${PORT:-7710} --protocol ${PROTOCOL:-sweep-v0} ${SELFTEST_GPU:+--selftest-gpu} $G_
