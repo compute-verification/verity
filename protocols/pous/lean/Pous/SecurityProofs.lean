@@ -11,6 +11,7 @@ import Pous.SecurityProofs.P3.Refutation
 import Pous.SecurityProofs.Chain.Flat
 import Pous.SecurityProofs.Chain.Family
 import Pous.SecurityProofs.Chain.FamilyRounds
+import Pous.SecurityProofs.Continuous
 import Pous.SecurityProofs.P2.Margin
 import Pous.SecurityProofs.Accounting.Numbers
 import Pous.SecurityProofs.Audit.SampledAudit
