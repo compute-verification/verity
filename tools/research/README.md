@@ -63,6 +63,13 @@ unset stays unset. If one is still missing, the store, `research queue
 ready`, node ssh and the Nebius scripts fail and say `rerun from a fresh tmux
 login shell` (`secret_hint.py`).
 
+`research doctor [--role lane|coordinator|infra] [--json]` says whether this
+VM can do its job before a run finds out: the role's secret names
+(`doctor.SECRETS`) against what the VM injects, status-only probes (`gh`,
+dry-run pushes, the store's remote, Slack for coordinator and infra, ssh to
+each machine), `uv sync --check`, the disk floor and the clock. Each finding
+names its fix (exit 1). It prints names and verdicts, never a value or body.
+
 ## Commands
 
 ~~~text
