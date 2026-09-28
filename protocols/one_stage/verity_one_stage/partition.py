@@ -149,6 +149,20 @@ def units(program: Program, query: Mapping[str, Any]) -> int:
     return sum(n for _, _, n in ranges(program, query))
 
 
+def strata(program: Program, query: Mapping[str, Any]) -> list[tuple[str, list[list[int]]]]:
+    """`query` applied to `program`, grouped by template: one stratum per template descriptor id, its units as ascending,
+    disjoint half-open ranges `[lo, hi)` with adjacent ones merged, the strata in the order of their first unit. These are
+    the stratified law's strata, which each verifier derives from its own copies."""
+    groups: dict[str, list[list[int]]] = {}
+    for tid, lo, n in ranges(program, query):
+        rs = groups.setdefault(tid, [])
+        if rs and rs[-1][1] == lo:
+            rs[-1][1] = lo + n
+        else:
+            rs.append([lo, lo + n])
+    return list(groups.items())
+
+
 __all__ = ["template_id", "FORMAT", "Q_TEMPLATE_INSTANCE", "Q_TEMPLATE_INSTANCE_VERSION", "Q_TEMPLATE_INSTANCES", "Q_TEMPLATE_INSTANCES_VERSION",
            "QueryRefused", "digest", "mixed_population_program", "partition", "population_program", "program_sha512", "ranges",
-           "template_instance_query", "template_instances_query", "units"]
+           "strata", "template_instance_query", "template_instances_query", "units"]

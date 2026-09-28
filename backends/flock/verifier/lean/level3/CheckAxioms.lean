@@ -50,3 +50,6 @@ import FlockLevel3
 #print axioms FlockLevel3.slot_term
 #print axioms FlockLevel3.mask_term
 #print axioms FlockLevel3.sparseT_scale
+#print axioms FlockLevel3.decode_spec
+#print axioms FlockLevel3.build_spec
+#print axioms FlockLevel3.build_computes
