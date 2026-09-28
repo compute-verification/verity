@@ -11,7 +11,7 @@ authenticated.
 `vectors.json` (schema `veritor/proof-format-v3/vectors/v1`) is **generated** by
 `tests/veritor/protocol/proofs/test_format3_equivalence.py::test_write_vectors` (the Python
 reference decides every vector; `expected` is its verdict) and **replayed** by
-`zk/sp1/common/tests/format3_equivalence.rs` on the guest kernel. Gate set
+`backends/sp1/common/tests/format3_equivalence.rs` on the guest kernel. Gate set
 `veritor.word-arithmetic@2` at width 16; packed leaves of 8 `u16le` words under
 `verity-vllm/leaf/v1` framing; frame-v3 (`u16`) leaves for the multiproof family.
 
@@ -21,7 +21,7 @@ reference decides every vector; `expected` is its verdict) and **replayed** by
 # Python (the reference; regenerates vectors.json and asserts it is unchanged)
 .venv/bin/python -m pytest -q -p no:cacheprovider tests/veritor/protocol/proofs/test_format3_equivalence.py
 # Rust (the guest kernel; every path that can take a vector must agree exactly)
-cd zk/sp1 && CARGO_BUILD_JOBS=2 cargo test -p veritor-zk-common --test format3_equivalence -- --nocapture
+cd backends/sp1 && CARGO_BUILD_JOBS=2 cargo test -p veritor-zk-common --test format3_equivalence -- --nocapture
 ~~~
 
 ## Fields
