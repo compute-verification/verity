@@ -63,8 +63,35 @@ fn sha(parts: &[&[u8]]) -> [u8; 64] {
     h.finalize().into()
 }
 
+// The scheme's digests are SHA-512's: the SHA-512 build's 64-byte nodes and hm96 leaves. A build without it (M0's older GPU
+// binaries) keeps the types and refuses the scheme.
+#[cfg(feature = "sha512")]
+fn digest(b: &[u8]) -> Hash {
+    flock_hash::digest_from(b)
+}
+#[cfg(feature = "sha512")]
+fn bytes(h: &Hash) -> &[u8] {
+    h.as_flattened()
+}
+#[cfg(feature = "sha512")]
+fn hm96_leaf(x: &[u8; 64], salt: &[u8]) -> Hash {
+    flock_merkle::hm96::leaf(&digest(x), salt)
+}
+#[cfg(not(feature = "sha512"))]
+fn digest(_: &[u8]) -> Hash {
+    panic!("{SCHEME} needs the SHA-512 build")
+}
+#[cfg(not(feature = "sha512"))]
+fn bytes(h: &Hash) -> &[u8] {
+    h.as_slice()
+}
+#[cfg(not(feature = "sha512"))]
+fn hm96_leaf(_: &[u8; 64], _: &[u8]) -> Hash {
+    panic!("{SCHEME} needs the SHA-512 build")
+}
+
 fn node(l: &Hash, r: &Hash) -> Hash {
-    flock_hash::digest_from(&sha(&[l.as_flattened(), r.as_flattened()]))
+    digest(&sha(&[bytes(l), bytes(r)]))
 }
 
 fn f128_bytes(x: &F128) -> [u8; 16] {
@@ -94,7 +121,7 @@ fn chain(block: &[F128]) -> Vec<[u8; 64]> {
 
 fn leaf(stream: usize, round: usize, t0: &[u8; 64], salt: &[u8]) -> Hash {
     let x = sha(&[ROUND, &(stream as u32).to_be_bytes(), &(round as u32).to_be_bytes(), t0]);
-    flock_merkle::hm96::leaf(&flock_hash::digest_from(&x), salt)
+    hm96_leaf(&x, salt)
 }
 
 /// The verifier's side: every coin of the session, their commitment, and the openings.
@@ -171,13 +198,13 @@ impl CoinTree {
             .collect();
         let width = 1usize << spec.streams_log();
         let mut tops: Vec<Hash> = trees.iter().map(|t| *t.last().unwrap()).collect();
-        tops.resize(width, flock_hash::digest_from(&sha(&[PAD])));
+        tops.resize(width, digest(&sha(&[PAD])));
         let top = flat_tree(tops);
         CoinTree { spec, blocks, tails, salts, trees, top }
     }
 
     pub fn root(&self) -> [u8; 64] {
-        self.top.last().unwrap().as_flattened().try_into().unwrap()
+        bytes(self.top.last().unwrap()).try_into().unwrap()
     }
 
     /// The root as the four F128 words `Hello` answers with.
@@ -197,7 +224,7 @@ impl CoinTree {
         let p: Vec<Hash> = path(&self.trees[stream], 1 << self.spec.rounds_log, round).into_iter()
             .chain(path(&self.top, 1 << self.spec.streams_log(), stream)).collect();
         for h in p {
-            w.extend(words64(h.as_flattened()));
+            w.extend(words64(bytes(&h)));
         }
         Ok((coins, w))
     }
@@ -219,19 +246,19 @@ pub fn check(spec: &Spec, root: &[u8; 64], stream: usize, round: usize, n: usize
     let mut at = n + 4 + SALT_BYTES / 16;
     let mut idx = round;
     for _ in 0..spec.rounds_log {
-        let sib = flock_hash::digest_from(&bytes64(&words[at..at + 4]));
+        let sib = digest(&bytes64(&words[at..at + 4]));
         h = if idx & 1 == 0 { node(&h, &sib) } else { node(&sib, &h) };
         idx /= 2;
         at += 4;
     }
     let mut idx = stream;
     for _ in 0..spec.streams_log() {
-        let sib = flock_hash::digest_from(&bytes64(&words[at..at + 4]));
+        let sib = digest(&bytes64(&words[at..at + 4]));
         h = if idx & 1 == 0 { node(&h, &sib) } else { node(&sib, &h) };
         idx /= 2;
         at += 4;
     }
-    if h.as_flattened() != root.as_slice() {
+    if bytes(&h) != root.as_slice() {
         return Err(format!("the verifier's coins for {} round {round} do not open its step-0 commitment", spec.streams[stream]));
     }
     Ok(coins)
