@@ -9215,6 +9215,30 @@
    "assumptions": [],
    "type_hash": "36906b103677801e37a225289f88f2fb1a17ccfca99fd53128defa577409b6d2"
   },
+  "FlockSoundness.Discharge.ZkCoins.committed_le": {
+   "signature": ["FlockSoundness.Discharge.ZkCoins.committed_le : FlockSoundness.Discharge.ZkCoins.CommittedLe"],
+   "assumptions": [],
+   "type_hash": "b311478157a7aa66564543c49fda75b508bad625859d713db0acb12f0a09b188"
+  },
+  "FlockSoundness.Discharge.ZkCoins.committed_le_hm96": {
+   "signature": ["FlockSoundness.Discharge.ZkCoins.committed_le_hm96 : FlockSoundness.Discharge.ZkCoins.CommittedLeHm96"],
+   "assumptions": [],
+   "type_hash": "4e12c5b8a9abd89059fb23b6dfcc2937ada0c77e32e32c93a3610dadfa402dfa"
+  },
+  "FlockSoundness.Discharge.ZkCoins.session_coins_hm96": {
+   "signature": [
+    "FlockSoundness.Discharge.ZkCoins.session_coins_hm96 : FlockSoundness.Discharge.ZkCoins.SessionCoinsHm96"
+   ],
+   "assumptions": [],
+   "type_hash": "bb4636d5015e64d5c12230c2d21d7373d1ee0ad5a272b47c1d10afa4ae169992"
+  },
+  "FlockSoundness.Discharge.ZkCoins.session_coins_sound": {
+   "signature": [
+    "FlockSoundness.Discharge.ZkCoins.session_coins_sound : FlockSoundness.Discharge.ZkCoins.SessionCoinsSound"
+   ],
+   "assumptions": [],
+   "type_hash": "32b716e044d668aed03d6af9094f271fea7308a590aa9dcd9c877f40252d2572"
+  },
   "FlockSoundness.Discharge.ZkExec.acceptsZK_one": {
    "signature": ["FlockSoundness.Discharge.ZkExec.acceptsZK_one : FlockSoundness.Discharge.ZkExec.AcceptsZKOne"],
    "assumptions": [],
@@ -15840,6 +15864,8 @@
     "FlockSoundness.Discharge.Integrate.flock_headline_exec",
     "FlockSoundness.Discharge.PlaysCoin.decodesAllOfRuns",
     "FlockSoundness.Discharge.PlaysCoin.decodesOnOfRuns",
+    "FlockSoundness.Discharge.ZkCoins.session_coins_hm96",
+    "FlockSoundness.Discharge.ZkCoins.session_coins_sound",
     "FlockSoundness.Discharge.ZkSession.TabZK.after_sound",
     "FlockSoundness.Discharge.ZkSession.TabZK.bound_le_m1",
     "FlockSoundness.Discharge.ZkSession.repMaskedZK_couple",
@@ -15908,6 +15934,8 @@
     "FlockSoundness.Audit.Partition.flock_two_stage_exfiltration",
     "FlockSoundness.Discharge.Exec.session_knowledge_soundL",
     "FlockSoundness.Discharge.Exec.table_sound_compiledL",
+    "FlockSoundness.Discharge.ZkCoins.session_coins_hm96",
+    "FlockSoundness.Discharge.ZkCoins.session_coins_sound",
     "FlockSoundness.Discharge.ZkSession.TabZK.after_sound",
     "FlockSoundness.Discharge.ZkSession.TabZK.bound_le_m1",
     "FlockSoundness.Discharge.ZkSession.rep_sound_pad_zk",
@@ -15948,6 +15976,8 @@
     "FlockSoundness.Accounting.padRepError": "4f4a4fdca77d6a089e1d51810b1206ea8ea24c612a05babeb3cfbd44aa4ef50a"
    },
    "pins": [
+    "FlockSoundness.Discharge.ZkCoins.session_coins_hm96",
+    "FlockSoundness.Discharge.ZkCoins.session_coins_sound",
     "FlockSoundness.Discharge.ZkSession.TabZK.after_sound",
     "FlockSoundness.Discharge.ZkSession.TabZK.bound_le_m1",
     "FlockSoundness.Discharge.ZkSession.rep_sound_pad_zk",
@@ -16114,6 +16144,8 @@
     "FlockSoundness.Discharge.Zero.zeroCols_keyProg",
     "FlockSoundness.Discharge.Zero.zeroCols_progPlaces",
     "FlockSoundness.Discharge.Zero.zeroCols_uniform",
+    "FlockSoundness.Discharge.ZkCoins.session_coins_hm96",
+    "FlockSoundness.Discharge.ZkCoins.session_coins_sound",
     "FlockSoundness.Discharge.ZkSession.TabZK.after_sound",
     "FlockSoundness.Discharge.ZkSession.TabZK.bound_le_m1",
     "FlockSoundness.Discharge.ZkSession.repMaskedZK_couple",
@@ -16243,6 +16275,8 @@
     "FlockSoundness.Discharge.Hm.keyedRowsOuts_computes",
     "FlockSoundness.Discharge.Integrate.flock_headline_exec",
     "FlockSoundness.Discharge.Integrate.rsAt_computes",
+    "FlockSoundness.Discharge.ZkCoins.committed_le",
+    "FlockSoundness.Discharge.ZkCoins.session_coins_sound",
     "FlockSoundness.Discharge.ZkSession.coinLeaf_fresh",
     "FlockSoundness.Discharge.ZkSession.coin_fresh",
     "FlockSoundness.Discharge.ZkSession.coin_fresh_key",
@@ -17861,7 +17895,9 @@
     "FlockSoundness.CROnly.hm96_sha512_sum",
     "FlockSoundness.CROnly.session_shvzk_gap",
     "FlockSoundness.CROnly.session_shvzk_le",
-    "FlockSoundness.CROnly.sum_hidingGap_le"
+    "FlockSoundness.CROnly.sum_hidingGap_le",
+    "FlockSoundness.Discharge.ZkCoins.committed_le_hm96",
+    "FlockSoundness.Discharge.ZkCoins.session_coins_hm96"
    ]
   },
   "FlockSoundness.Certificate": {
@@ -18199,6 +18235,8 @@
     "FlockSoundness.Discharge.Layout.ofRows_bcPinned",
     "FlockSoundness.Discharge.Layout.ofRows_copies",
     "FlockSoundness.Discharge.Layout.ofRows_valPinned",
+    "FlockSoundness.Discharge.ZkCoins.session_coins_hm96",
+    "FlockSoundness.Discharge.ZkCoins.session_coins_sound",
     "FlockSoundness.Discharge.ZkSession.TabZK.after_sound",
     "FlockSoundness.Discharge.ZkSession.TabZK.bound_le_m1",
     "FlockSoundness.Discharge.ZkSession.posLo_uniform",
@@ -19790,6 +19828,68 @@
     "FlockSoundness.Discharge.Zero.zeroCols_uniform"
    ]
   },
+  "FlockSoundness.Discharge.ZkCoins.Basic": {
+   "digest": "f90e7bbd8cb60808d6a3652c111de5e1bd8fe3ab8612773fe7c06a8838483c1b",
+   "definitions": {
+    "FlockSoundness.Discharge.ZkCoins.TGame": "e1b348f4d6eb37f6faa7cfdee71e1228fbb400a98f4f402a33df5a7c7ebc5950",
+    "FlockSoundness.Discharge.ZkCoins.TGame.CStrat": "b0a4a342a27b0db874c5f6ee245c66760fb702cb0a1ce62b34c8c9fa3bca4372",
+    "FlockSoundness.Discharge.ZkCoins.TGame.Distinct": "0a73819e7446163458d2e20cdc59c55f68ab08ef303f57fc6a052b0d7087d11a",
+    "FlockSoundness.Discharge.ZkCoins.TGame.NoRead": "94103cdaf8513c539652ecf0d7f86571b880d0719e24c26b249672d7d137a80a",
+    "FlockSoundness.Discharge.ZkCoins.TGame.brecOn.go": "17d015a4b7f2e7b20664ac5f3348cf77be3ac60148ef53efa69c7449cbba5955",
+    "FlockSoundness.Discharge.ZkCoins.TGame.coin": "8416f7d65dfd7ed5173e66bf870145f907a186d2d3ff8cfd3fafdc893a07422f",
+    "FlockSoundness.Discharge.ZkCoins.TGame.erase": "d56ee0eac380476c22264dfc0755c01f497eae014f8d11a20c7e68c325cd20cc",
+    "FlockSoundness.Discharge.ZkCoins.TGame.fresh": "39be5b7a8df4c9bc9677c70f94e99b2ab1c0d815d9a69f7e5f695e473b5ead70",
+    "FlockSoundness.Discharge.ZkCoins.TGame.pr": "2da3f6d670fc6bc36cc61018489b73915dc93766d361b590e00c55bddc91b447",
+    "FlockSoundness.Discharge.ZkCoins.TGame.ret": "a472bb9395e01f9616132e72d34a778d050ea101882808779892281890706404",
+    "FlockSoundness.Discharge.ZkCoins.TGame.send": "5c1fb8802515805f34b37b9dfe6b74858dfbccb96f249488e4bae083cc00130f",
+    "FlockSoundness.Discharge.ZkCoins.leaf": "b2670842d36fa23cf822fc171d8f0fc2b70b7ba6c3ceb610016edd60de79d393",
+    "FlockSoundness.Discharge.ZkCoins.probC": "2e3710cf0851f24ecbb4014d4b295d98d2f288716561bef7fdf73bbe4abf6937"
+   },
+   "pins": [
+    "FlockSoundness.Discharge.ZkCoins.committed_le",
+    "FlockSoundness.Discharge.ZkCoins.committed_le_hm96",
+    "FlockSoundness.Discharge.ZkCoins.session_coins_hm96",
+    "FlockSoundness.Discharge.ZkCoins.session_coins_sound"
+   ]
+  },
+  "FlockSoundness.Discharge.ZkCoins.SessionDefs": {
+   "digest": "4572ba6f65d8316d400a415656dc24203c133e9168e0523c14946f6416f0ed66",
+   "definitions": {
+    "FlockSoundness.Discharge.ZkCoins.Balanced": "3b9916bc883f69152bad35533d2e690f9fffcc94f8659749ee9ef0d9115855e2",
+    "FlockSoundness.Discharge.ZkCoins.Decoders": "d162a21a831e2aad029d4af32c13022b1a56c5e47da09baa1727cb2be1858265",
+    "FlockSoundness.Discharge.ZkCoins.Decoders.dec": "6e5334b64750fac7a8c0001622778600969291e04f876e2a2127d5e2c2be9e64",
+    "FlockSoundness.Discharge.ZkCoins.SessIdx": "11534bab69e97aa053087752bdcc7f0b854aa42df42817abbd6ab3683b20dbfa",
+    "FlockSoundness.Discharge.ZkCoins.TGame.batch": "222526df19e7b35b735c4d9fbd65d8dae595281c129e7cabb374a1edf3e9461e",
+    "FlockSoundness.Discharge.ZkCoins.TGame.bind": "c166f87f3c32faf20ad95b63f116605ea3d83da43b62b1f40adcc57713b2cdfe",
+    "FlockSoundness.Discharge.ZkCoins.TGame.interleave": "b84156c90e777caa14e2056d64c95d8f00cf61a4819e3ba77d0dbac10af76859",
+    "FlockSoundness.Discharge.ZkCoins.TGame.interleaveWith": "229530e88f9cf9c1472ecdd134581d1ee5a863d51d92ff276bdce9a481870cfa",
+    "FlockSoundness.Discharge.ZkCoins.TGame.map": "2ea46e081950fffd46981a051e72e04c8bddc9511dad3392b821319328632da5",
+    "FlockSoundness.Discharge.ZkCoins.afterC": "04a0b0321097a4f415cc586d544f8bdfc5a8c096dbdecd9e3aa82ddf4b4b7009",
+    "FlockSoundness.Discharge.ZkCoins.coinAt": "eea9349638b92d83d9677b8b1fd061aaaf96af8005d07018b86478a57023291a",
+    "FlockSoundness.Discharge.ZkCoins.repOf": "d8572ed678da1878118da1d1f496371c0c063063e278e61498b9e2fc3da280c5",
+    "FlockSoundness.Discharge.ZkCoins.sessionZKC": "d64d343acac4b0acdcc22ed2f22a02787cb7dc54258ee5f7fbde5d08969f648b",
+    "FlockSoundness.Discharge.ZkCoins.tagRep": "f2bd7c0236ef463e04c0f6f39d68b63dda7704877c1d77c9fc29e600cef1c601"
+   },
+   "pins": [
+    "FlockSoundness.Discharge.ZkCoins.session_coins_hm96",
+    "FlockSoundness.Discharge.ZkCoins.session_coins_sound"
+   ]
+  },
+  "FlockSoundness.Discharge.ZkCoins.Statements": {
+   "digest": "fa4c66f38a4c02289e5a1889f64de5074254924b45199706782c8c373d977bd2",
+   "definitions": {
+    "FlockSoundness.Discharge.ZkCoins.CommittedLe": "2bff2b4cdf982da1ba84b0f8614d835480145e5d9a07ef29eb5bd52741bfb53d",
+    "FlockSoundness.Discharge.ZkCoins.CommittedLeHm96": "43cbbd5a7bb3f28f64a5c8c0dcc41095d8fe21346aea30ce958edb07970c5b65",
+    "FlockSoundness.Discharge.ZkCoins.SessionCoinsHm96": "6c78fbf1e3bbe4334b2c3f8ab51a56d02ed33d6ffad0e096a83f5f3c7fbb6a67",
+    "FlockSoundness.Discharge.ZkCoins.SessionCoinsSound": "ea392ff9eddf548613aabd69af6896e897f413e5649238ad71e553d342680c6f"
+   },
+   "pins": [
+    "FlockSoundness.Discharge.ZkCoins.committed_le",
+    "FlockSoundness.Discharge.ZkCoins.committed_le_hm96",
+    "FlockSoundness.Discharge.ZkCoins.session_coins_hm96",
+    "FlockSoundness.Discharge.ZkCoins.session_coins_sound"
+   ]
+  },
   "FlockSoundness.Discharge.ZkExec.Event": {
    "digest": "f4c121a3a3a163068eb5575394f10f0e3fd9eb4f8267ccda71d20e4fe55f4a31",
    "definitions": {
@@ -19889,6 +19989,8 @@
     "FlockSoundness.Discharge.ZkSession.zerocheckZK": "9ac4ef32f695cb7b12b36171e1dcf1ef0d575a2db63ca12e8d3ffd841660559a"
    },
    "pins": [
+    "FlockSoundness.Discharge.ZkCoins.session_coins_hm96",
+    "FlockSoundness.Discharge.ZkCoins.session_coins_sound",
     "FlockSoundness.Discharge.ZkSession.TabZK.after_sound",
     "FlockSoundness.Discharge.ZkSession.TabZK.bound_le_m1",
     "FlockSoundness.Discharge.ZkSession.lincheckZK_couple",
@@ -19912,6 +20014,8 @@
     "FlockSoundness.Discharge.ZkSession.repZK": "783f58de83f7b86b794a9bb5bf7176e780598daec4e968eb605c5de51225d21f"
    },
    "pins": [
+    "FlockSoundness.Discharge.ZkCoins.session_coins_hm96",
+    "FlockSoundness.Discharge.ZkCoins.session_coins_sound",
     "FlockSoundness.Discharge.ZkSession.TabZK.after_sound",
     "FlockSoundness.Discharge.ZkSession.rep_sound_pad_zk",
     "FlockSoundness.Discharge.ZkSession.sessionZK_sound",
@@ -19952,6 +20056,8 @@
     "FlockSoundness.Discharge.ZkSession.εInner": "40e880dca06dbfc14b036690e78a6a002f521b1ed12eac7089f141e0a17d7e37"
    },
    "pins": [
+    "FlockSoundness.Discharge.ZkCoins.session_coins_hm96",
+    "FlockSoundness.Discharge.ZkCoins.session_coins_sound",
     "FlockSoundness.Discharge.ZkSession.TabZK.after_sound",
     "FlockSoundness.Discharge.ZkSession.TabZK.bound_le_m1",
     "FlockSoundness.Discharge.ZkSession.inner_sound",
@@ -19994,6 +20100,8 @@
     "FlockSoundness.Discharge.ZkSession.unmask": "c357b03dc113e26534236d04ec77e175578e392cd33cee37f6ffbda77e6438ab"
    },
    "pins": [
+    "FlockSoundness.Discharge.ZkCoins.session_coins_hm96",
+    "FlockSoundness.Discharge.ZkCoins.session_coins_sound",
     "FlockSoundness.Discharge.ZkSession.TabZK.after_sound",
     "FlockSoundness.Discharge.ZkSession.TabZK.bound_le_m1",
     "FlockSoundness.Discharge.ZkSession.repMaskedZK_couple",
@@ -20058,6 +20166,8 @@
     "FlockSoundness.Discharge.ZkSession.zkStrat": "610d8cab02af9f0e0289d16c76db51746a522a82092e237be84a9b3532b5df22"
    },
    "pins": [
+    "FlockSoundness.Discharge.ZkCoins.session_coins_hm96",
+    "FlockSoundness.Discharge.ZkCoins.session_coins_sound",
     "FlockSoundness.Discharge.ZkSession.TabZK.after_sound",
     "FlockSoundness.Discharge.ZkSession.TabZK.bound_le_m1",
     "FlockSoundness.Discharge.ZkSession.sessionZK_sound",
@@ -20991,6 +21101,10 @@
     "FlockSoundness.Discharge.PlaysCoin.decodesOfRunsAt",
     "FlockSoundness.Discharge.PlaysCoin.decodesOnOfRuns",
     "FlockSoundness.Discharge.PlaysCoin.toT_exact",
+    "FlockSoundness.Discharge.ZkCoins.committed_le",
+    "FlockSoundness.Discharge.ZkCoins.committed_le_hm96",
+    "FlockSoundness.Discharge.ZkCoins.session_coins_hm96",
+    "FlockSoundness.Discharge.ZkCoins.session_coins_sound",
     "FlockSoundness.Discharge.ZkExec.execRefinesZK_one",
     "FlockSoundness.Discharge.ZkExec.zk_headline_exec_one",
     "FlockSoundness.Discharge.ZkSession.TabZK.after_sound",
@@ -21856,6 +21970,8 @@
     "FlockSoundness.padWit": "b476385f1b312a595f8430993f0374ab90570b1c1de69156cb67b465a138fe9f"
    },
    "pins": [
+    "FlockSoundness.Discharge.ZkCoins.session_coins_hm96",
+    "FlockSoundness.Discharge.ZkCoins.session_coins_sound",
     "FlockSoundness.Discharge.ZkSession.TabZK.after_sound",
     "FlockSoundness.Discharge.ZkSession.rep_sound_pad_zk",
     "FlockSoundness.Discharge.ZkSession.sessionZK_sound",
@@ -21877,6 +21993,8 @@
    "pins": [
     "FlockSoundness.Discharge.Exec.session_knowledge_soundL",
     "FlockSoundness.Discharge.Exec.table_sound_compiledL",
+    "FlockSoundness.Discharge.ZkCoins.session_coins_hm96",
+    "FlockSoundness.Discharge.ZkCoins.session_coins_sound",
     "FlockSoundness.Discharge.ZkSession.TabZK.after_sound",
     "FlockSoundness.Discharge.ZkSession.TabZK.bound_le_m1",
     "FlockSoundness.Discharge.ZkSession.rep_sound_pad_zk",
@@ -22066,6 +22184,8 @@
     "FlockSoundness.Discharge.Zero.zeroCols_keyProg",
     "FlockSoundness.Discharge.Zero.zeroCols_progPlaces",
     "FlockSoundness.Discharge.Zero.zeroCols_uniform",
+    "FlockSoundness.Discharge.ZkCoins.session_coins_hm96",
+    "FlockSoundness.Discharge.ZkCoins.session_coins_sound",
     "FlockSoundness.Discharge.ZkSession.TabZK.after_sound",
     "FlockSoundness.Discharge.ZkSession.TabZK.bound_le_m1",
     "FlockSoundness.Discharge.ZkSession.sessionZK_sound",
@@ -22560,6 +22680,8 @@
     "FlockSoundness.Discharge.Layout.ofRows_valPinned",
     "FlockSoundness.Discharge.PlaysCoin.decodesAllOfRuns",
     "FlockSoundness.Discharge.PlaysCoin.decodesOnOfRuns",
+    "FlockSoundness.Discharge.ZkCoins.session_coins_hm96",
+    "FlockSoundness.Discharge.ZkCoins.session_coins_sound",
     "FlockSoundness.Discharge.ZkSession.TabZK.after_sound",
     "FlockSoundness.Discharge.ZkSession.lincheckZK_couple",
     "FlockSoundness.Discharge.ZkSession.posLo_uniform",
@@ -22890,6 +23012,8 @@
     "FlockSoundness.Discharge.Integrate.flock_headline_exec",
     "FlockSoundness.Discharge.PlaysCoin.decodesAllOfRuns",
     "FlockSoundness.Discharge.PlaysCoin.decodesOnOfRuns",
+    "FlockSoundness.Discharge.ZkCoins.session_coins_hm96",
+    "FlockSoundness.Discharge.ZkCoins.session_coins_sound",
     "FlockSoundness.Discharge.ZkSession.TabZK.after_sound",
     "FlockSoundness.Discharge.ZkSession.repMaskedZK_couple",
     "FlockSoundness.Discharge.ZkSession.rep_sound_pad_zk",
@@ -22963,6 +23087,8 @@
     "FlockSoundness.Model.repPad": "2d0b062fc67b5e365d38ff5ec2083457340c843ddeb134f3ed37d33d9628a56f"
    },
    "pins": [
+    "FlockSoundness.Discharge.ZkCoins.session_coins_hm96",
+    "FlockSoundness.Discharge.ZkCoins.session_coins_sound",
     "FlockSoundness.Discharge.ZkSession.TabZK.after_sound",
     "FlockSoundness.Discharge.ZkSession.repMaskedZK_couple",
     "FlockSoundness.Discharge.ZkSession.rep_sound_pad_zk",
@@ -23066,6 +23192,8 @@
     "FlockSoundness.Discharge.Integrate.flock_headline_exec",
     "FlockSoundness.Discharge.PlaysCoin.decodesAllOfRuns",
     "FlockSoundness.Discharge.PlaysCoin.decodesOnOfRuns",
+    "FlockSoundness.Discharge.ZkCoins.session_coins_hm96",
+    "FlockSoundness.Discharge.ZkCoins.session_coins_sound",
     "FlockSoundness.Discharge.ZkSession.TabZK.after_sound",
     "FlockSoundness.Discharge.ZkSession.lincheckZK_couple",
     "FlockSoundness.Discharge.ZkSession.repMaskedZK_couple",
@@ -23187,6 +23315,8 @@
     "FlockSoundness.Discharge.Integrate.flock_headline_exec",
     "FlockSoundness.Discharge.PlaysCoin.decodesAllOfRuns",
     "FlockSoundness.Discharge.PlaysCoin.decodesOnOfRuns",
+    "FlockSoundness.Discharge.ZkCoins.session_coins_hm96",
+    "FlockSoundness.Discharge.ZkCoins.session_coins_sound",
     "FlockSoundness.Discharge.ZkSession.TabZK.after_sound",
     "FlockSoundness.Discharge.ZkSession.sessionZK_sound",
     "FlockSoundness.Discharge.ZkSession.sessionZK_sound_any",
@@ -23415,6 +23545,8 @@
     "FlockSoundness.Discharge.Zero.zeroCols_keyProg",
     "FlockSoundness.Discharge.Zero.zeroCols_progPlaces",
     "FlockSoundness.Discharge.Zero.zeroCols_uniform",
+    "FlockSoundness.Discharge.ZkCoins.session_coins_hm96",
+    "FlockSoundness.Discharge.ZkCoins.session_coins_sound",
     "FlockSoundness.Discharge.ZkSession.TabZK.after_sound",
     "FlockSoundness.Discharge.ZkSession.TabZK.bound_le_m1",
     "FlockSoundness.Discharge.ZkSession.lincheckZK_couple",
@@ -23483,6 +23615,8 @@
     "FlockSoundness.opStep": "5ec7851d1115b45a62daaa784397e6e14a3613f28981ae5445883616248b2ce9"
    },
    "pins": [
+    "FlockSoundness.Discharge.ZkCoins.session_coins_hm96",
+    "FlockSoundness.Discharge.ZkCoins.session_coins_sound",
     "FlockSoundness.Discharge.ZkSession.TabZK.after_sound",
     "FlockSoundness.Discharge.ZkSession.repMaskedZK_couple",
     "FlockSoundness.Discharge.ZkSession.rep_sound_pad_zk",
@@ -23504,6 +23638,8 @@
     "FlockSoundness.encAt": "6063ca2589aaf81f35112962526995d10646e325b88bf83074ef8536359667f9"
    },
    "pins": [
+    "FlockSoundness.Discharge.ZkCoins.session_coins_hm96",
+    "FlockSoundness.Discharge.ZkCoins.session_coins_sound",
     "FlockSoundness.Discharge.ZkSession.TabZK.after_sound",
     "FlockSoundness.Discharge.ZkSession.rep_sound_pad_zk",
     "FlockSoundness.Discharge.ZkSession.sessionZK_sound",
@@ -24835,6 +24971,8 @@
     "FlockSoundness.padWits": "2dcfff3d191b61a77e14cad6defb19a7258ebf3e2f50124eca404e640152564b"
    },
    "pins": [
+    "FlockSoundness.Discharge.ZkCoins.session_coins_hm96",
+    "FlockSoundness.Discharge.ZkCoins.session_coins_sound",
     "FlockSoundness.Discharge.ZkSession.TabZK.after_sound",
     "FlockSoundness.Discharge.ZkSession.rep_sound_pad_zk",
     "FlockSoundness.Discharge.ZkSession.sessionZK_sound",

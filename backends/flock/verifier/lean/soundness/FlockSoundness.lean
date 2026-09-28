@@ -158,3 +158,4 @@ import FlockSoundness.Discharge.PlaysCoin
 import FlockSoundness.Discharge.ZkExec
 import FlockSoundness.ZK.GK
 import FlockSoundness.Discharge.Hidden
+import FlockSoundness.Discharge.ZkCoins
