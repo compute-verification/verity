@@ -21,11 +21,20 @@ def _pearl(**config: Any) -> PoUWScheme:
     return PearlKW(**config)
 
 
+def _fp8_is(forming: str) -> Callable[..., PoUWScheme]:
+    def make(**config: Any) -> PoUWScheme:
+        from .fp8_is import FORMINGS, FP8IS
+        return FP8IS(FORMINGS[forming](), **config)
+    return make
+
+
 #: name -> factory of the configured scheme (keyword arguments configure it, as a commitment scheme's ports do)
 SCHEMES: dict[str, Callable[..., PoUWScheme]] = {
     "ncp-v1": _ncp("word"),
     "ncp-v1-shift24": _ncp("shift24"),
     "pearl-fp8-v4": _pearl,
+    "fp8-is-h100-d2-draft": _fp8_is("d2-draft"),
+    "fp8-is-h100-fpncp-v0": _fp8_is("fpncp-v0"),
 }
 
 

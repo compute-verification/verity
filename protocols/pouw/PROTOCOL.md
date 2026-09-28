@@ -138,6 +138,50 @@ docstring states every parameter.
   signed permutation (`tests/vectors/ncp_lean.json`, from `tests/ncp_lean.py` on the integrated package, with the Lean
   sources' SHA-256). The scheme's own pinned vectors are `tests/vectors/ncp.json`.
 
+## `fp8-is-h100-*`: fresh FP8 atoms and FP32 running words on the H100 (`schemes/fp8_is.py`)
+
+Genuine FP8 PoUW: the checked computation is the H100's E4M3 tensor-core matmul with FP32 accumulation. The scheme is
+a fixed **core** over a swappable **forming layer**; `fp8-is-h100-<layer>` names the pair. **No certificate names a
+γ_0 yet**: the core's premise is refuted for `fpncp-v0` and not established for `d2-draft`.
+
+~~~text
+rows      k E4M3 codes, one byte each; 0x7F and 0xFF (NaN) are malformed; the layer may narrow the domain (`admits`)
+forming   the layer gives each tile's stacked operands X̃ (rows) and Ỹ (columns), K = blocks·k codes, block-major,
+          and its own checked words for those rows and columns (`Forming.form`)
+atom      I_τ = HOPPER_E4M3_WGMMA_K32.step(+0, X̃[i, S_τ], Ỹ[S_τ, j]), S_τ the τ-th 32-slice of K, ascending
+          (wgmma m64nNk32 f32.e4m3.e4m3, pinned on H100 with nonzero accumulators too)
+running   R_0 = +0, R_τ = add.rn.f32(R_(τ−1), I_τ)   (`verity.ml.tc.fp32.add`: IEEE binary32, ties to even, no FTZ)
+checked   the layer's words, then every (I_τ, R_τ); useful = R_T
+digest    SHAKE256("verity/pouw/<name>/tile" ‖ 0 ‖ layer words of the tile's rows, then columns ‖ core words)[:32];
+          core words little-endian, step-major, row-major over cells within a step, I_τ before R_τ
+tiles     64 × 8 (one physical m64n8 atom per slice)
+domain    64 | m, 8 | n, 32 | k, 8,192 ≤ m, k, n ≤ 2^16
+wref      6·m·k·n (an atom word and an FADD per cell per slice, 32 + 32 units on MH100) + f_A·m·k + f_B·n·k
+Ω*        (6N + f_A + f_B)/(6N + c_A + c_B) at N = 8,192, with c the part of f spent on the layer's checked words
+~~~
+
+- **The core's premise** (the lower-bound lane's cost model, `genuine-fp8-interface.md` §1.3): under `H_32` every
+  checked word that is salt-dependent and distinct from the others costs at least 32 (`distinctWritesMH100`, in
+  progress), and the honest schedule pays exactly 32. What is left is a property of the forming layer,
+  `DistinctLive(γ_0)`: for every admitted input, all but a γ_0 fraction of the credited words are salt-dependent and
+  pairwise distinct as functions of the salt. Plus `A2_fp` (branching, routing, grinding) and `AdmitsRef`.
+- **`H_32`** is stated for every writer class, including legacy `mma.sync` small-K shapes, sparse `wgmma`, the b1 paths,
+  conversions, the uniform datapath and memory-side arithmetic (`red`/`atom`, `cp.reduce.async.bulk`, texture
+  filtering), each priced per 32-bit word it writes; it is a measurement on an H100 SXM, not yet made.
+- **`fpncp-v0`**: C-2's FP-NCP forming as posted (row-scaled uniform noise, NCP blocks, three `cvt.rn.satfinite.e4m3x2`),
+  with every FP32 operation fixed (`FpNcpV0`). **Refuted:** its noise is row-scaled, so it is rounded away on large
+  entries (X-C2-B1) and alignment erases everything but a spike (X-D1-1). Kept as the negative control; the tests
+  reproduce both attacks bit for bit. Its MH100 trace is 384 units per element per side.
+- **`d2-draft`**: track D's D-2 (`D2Draft`). Each NCP block's operand is a checked FP8 Hadamard transform (block 32,
+  α = 1/8 left, β = 1/4 right, αβ·32 = 1), computed as chains of k32 atoms that mix the base and E4M3 noise codes in
+  aligned 4-code words, then converted by `cvt.rn.satfinite.e4m3`; block 3 is the three-part transform, and signs sit in
+  the transform weights. Its checked words are every transform atom word and every converted code (7 words and 3 codes
+  per element: 272 units credited per element per side). The noise-code distribution (`MaxRelativeCodes`, 64 units) is
+  a **placeholder** for track D's repair. The domain is |A| ≤ 64 and |B| ≤ 32, so no transform saturates.
+- **Vectors.** `tests/vectors/fp8_is.json` (from `tests/fp8_is_vectors.py`): both layers on a test instance and
+  `d2-draft` at k = 8,192. The core is checked against the total FP8 step and numpy's float32 running sum, and D-2's
+  exact algebra (before any rounding) against A·Bᵀ.
+
 ## Not here yet
 
 - The fast implementations: the RTX 4090 kernels and the vLLM adapter (`integrations/vllm/verity_vllm/protocol_options/pouw.py`)
