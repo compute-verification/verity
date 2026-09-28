@@ -93,8 +93,9 @@ CHUNKED_FUSED_X = [False]
 """Unsplit chunk-major decodes read each step's parents (and the pad) inside the Feistel launch instead of gathering them."""
 
 CHUNKED_WHOLE = [False]
-"""Unsplit chunk-major decodes at the 64 KiB width run every row's whole chain in one launch (`band_chain_kernel`), writing
-`W` straight to its place: no per-step launches and no key extraction."""
+"""Chunk-major decodes of at least `CHUNKED_SPLIT_MAX_ROWS` rows at the 64 KiB width run every row's whole chain in one
+unsplit launch (`band_chain_kernel`), writing `W` straight to its place: no per-step launches and no key extraction.  Smaller
+decodes keep the per-step split launches, which are faster there."""
 
 CHUNKED_MAX_ROWS = [18_000]
 """Chunk-major launches over more rows run as equal sequential pieces of at most this many: past about one warp per
@@ -240,7 +241,8 @@ def decode_blocks(c_flat: torch.Tensor, tags: torch.Tensor, segs: torch.Tensor, 
     state[:, 2 * width + 33] = (blk >> 8).to(torch.uint8)
     starts = torch.searchsorted(ln, torch.arange(int(ln[-1]) + 2, device=ln.device)).tolist()
     base = seg * per_segment
-    if CHUNKED[0] and r >= CHUNKED_MIN_ROWS[0] and CHUNKED_WHOLE[0] and width == 65_536 and c_flat.is_contiguous():
+    if (CHUNKED[0] and CHUNKED_WHOLE[0] and r >= max(CHUNKED_MIN_ROWS[0], CHUNKED_SPLIT_MAX_ROWS[0]) and width == 65_536
+            and c_flat.is_contiguous()):
         return _decode_whole(c_flat, seg, blk, ln, tags, base, order, width)
     if CHUNKED[0] and r >= CHUNKED_MIN_ROWS[0]:
         w = _decode_chunked(c_flat, seg, blk, ln, tags, base, starts, width) ^ c_flat[base + blk]

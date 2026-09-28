@@ -231,12 +231,12 @@ def test_chunked_decode_matches_row_major(ext, window, split, fused_x, whole):
     segs = torch.tensor([0] * 8 + [1] * 8, device="cuda")
     want = dense.decode_blocks(c, tags, segs, blocks, 20, window=window)
     dense.CHUNKED[0], dense.CHUNKED_MIN_ROWS[0], dense.CHUNKED_THREADS[0], dense.CHUNKED_SPLIT[0] = True, 1, 32, split
-    dense.CHUNKED_FUSED_X[0], dense.CHUNKED_WHOLE[0] = fused_x, whole
+    dense.CHUNKED_FUSED_X[0], dense.CHUNKED_WHOLE[0], dense.CHUNKED_SPLIT_MAX_ROWS[0] = fused_x, whole, 1 if whole else 9_500
     try:
         got = dense.decode_blocks(c, tags, segs, blocks, 20, window=window)
     finally:
         dense.CHUNKED[0], dense.CHUNKED_MIN_ROWS[0], dense.CHUNKED_THREADS[0], dense.CHUNKED_SPLIT[0] = False, 1024, 128, False
-        dense.CHUNKED_FUSED_X[0], dense.CHUNKED_WHOLE[0] = False, False
+        dense.CHUNKED_FUSED_X[0], dense.CHUNKED_WHOLE[0], dense.CHUNKED_SPLIT_MAX_ROWS[0] = False, False, 9_500
     assert torch.equal(got, want)
 
 
