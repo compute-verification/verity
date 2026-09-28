@@ -434,8 +434,10 @@ GIT_ARCHIVE_CAPS = ("-c", "core.deltaBaseCacheLimit=8m", "-c", "core.packedGitWi
 
 
 def _git_archive(git_dir: Path) -> subprocess.Popen:
-    return subprocess.Popen(["git", *GIT_ARCHIVE_CAPS, "archive", "--format=tar", "HEAD"], cwd=git_dir, stdout=subprocess.PIPE,
-                            stderr=tempfile.TemporaryFile())
+    err = tempfile.TemporaryFile()
+    proc = subprocess.Popen(["git", *GIT_ARCHIVE_CAPS, "archive", "--format=tar", "HEAD"], cwd=git_dir, stdout=subprocess.PIPE, stderr=err)
+    proc.archive_stderr = err          # Popen.stderr is None when stderr is a file, so the file is kept here
+    return proc
 
 
 def _git_archive_done(proc: subprocess.Popen) -> str | None:
@@ -443,8 +445,8 @@ def _git_archive_done(proc: subprocess.Popen) -> str | None:
     proc.stdout.close()
     if proc.wait() == 0:
         return None
-    proc.stderr.seek(0)
-    return f"rc {proc.returncode}: {proc.stderr.read().decode(errors='replace')[-300:].strip()}"
+    proc.archive_stderr.seek(0)
+    return f"rc {proc.returncode}: {proc.archive_stderr.read().decode(errors='replace')[-300:].strip()}"
 
 
 def archive_manifest_git(git_dir: Path) -> dict[str, Any]:
