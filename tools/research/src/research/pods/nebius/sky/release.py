@@ -37,7 +37,8 @@ WAVES = ["cov-n082", "cov-n083", "cov-n084", "cov-n085", "cov-n087", "cov-n088",
 KEEP = {"cov-n133", "cov-g108", "cov-n002", "cov-g019", "cov-g061", "cov-n158", "cov-g084", "cov-g128"}
 BIG_MODELS = ("mistral-7b", "qwen25-7b", "qwen3-30b", "olmoe", "llama31-8b", "gemma2-9b")
 CIRCUITS = ("vllm-epoch-run/", "n2-build/", "vllm-coverage-defs/")
-MAX_INFLIGHT, MAX_BIG, DISK_PAUSE_PCT = 6, 4, 80   # circuits, 6:09 PM PDT: 6 in flight, 4 at batch 8+ (was 3 and 2)
+MAX_INFLIGHT, MAX_BIG, DISK_PAUSE_PCT = 6, 6, 80   # circuits, 2:04 AM PDT Oct 2: batch 8+ as many as in flight (was 4, a
+                                                   # disk guard the disk-following cap and the 80% pause now cover)
 BOOST_UNTIL, BOOST_INFLIGHT, BOOST_BIG = 1790866200, 8, 6   # circuits, 6:22 AM PDT Oct 1: 8 and 6 until 7:50 AM PDT (14:50Z)
 
 
