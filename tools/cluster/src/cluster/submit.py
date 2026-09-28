@@ -22,7 +22,7 @@ from dataclasses import replace
 from typing import Any
 
 from . import cpuset
-from .kinds import Kind, warnings
+from .kinds import DISK_GB, Kind, warnings
 from .model import OWNER, Cluster, Job, job_to_dict
 from .plan import allowed_cpus, static_refusal
 from .route import place
@@ -91,7 +91,7 @@ def resolve(cluster: Cluster, j: Job, run_id: str, now: int, kind: str | None = 
 
 def submit(cluster: Cluster, registry: dict[str, Kind], *, run_id: str, now: int, kind: str = "adhoc", question: str = "",
            gpus: int | None = None, cpus: int | None = None, memory_gib: int | None = None, max_s: int | None = None,
-           quiet: bool | None = None, preempt: str = "requeue", **declared: Any) -> dict[str, Any]:
+           quiet: bool | None = None, preempt: str = "requeue", disk_gb: float | None = None, **declared: Any) -> dict[str, Any]:
     """`resolve` for a job of `kind`: what the job leaves unsaid comes from its registered kind (else 0 GPUs, 1 CPU, 8 GiB),
     and the placement also names the kind, its question, the registry file it came from, and the held rules it breaks."""
     k = registry.get(kind)
@@ -108,7 +108,8 @@ def submit(cluster: Cluster, registry: dict[str, Kind], *, run_id: str, now: int
     j = job(run_id=run_id, gpus=gpus, cpus=cpus, memory_gib=memory_gib, max_s=max_s, quiet=quiet, preempt=preempt,
             submitted=now, **declared)
     out = resolve(cluster, j, run_id, now, kind)
-    out.update(kind=kind, question=question, max_s=max_s, kind_source=k.source if k else None,
+    disk_gb = disk_gb if disk_gb is not None else k.disk_gb if k and k.disk_gb is not None else DISK_GB
+    out.update(kind=kind, question=question, max_s=max_s, disk_gb=disk_gb, kind_source=k.source if k else None,
                warnings=warnings(k, kind, question=question, gpus=gpus, cpus=cpus, memory_gib=memory_gib, max_s=max_s,
                                  preempt=preempt))
     return out

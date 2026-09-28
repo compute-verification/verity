@@ -171,14 +171,16 @@ def test_run_queue_places_the_job_then_launches_on_the_placed_machine_with_its_w
     [kw] = seen
     assert kw["machine_name"] == "vy-nebius-2" and kw["queue"]["wrap"] == ["env", "HELD=1"] and kw["mem_gb"] is None
     assert kw["queue"]["workload_wrap"] == ["lease", "--"] and (kw["queue"]["kind"], kw["queue"]["phase"]) == ("vllm.commit", "gpu")
+    assert kw["queue"]["disk_gb"] == 20 and "--disk-gb" not in argv
     assert kw["harness_args"][kw["harness_args"].index("--timeout") + 1] == str(600 + 60 * cli.GPU_WAIT_MIN)
     assert main([*base, "--mem-gb", "8", "--max-min", "10", "--", "true"]) == 0
     assert seen[-1]["queue"]["kind"] == "adhoc" and seen[-1]["queue"]["phase"] == "cpu"
     assert seen[-1]["harness_args"][seen[-1]["harness_args"].index("--timeout") + 1] == "600"
     assert main([*base, "--mem-gb", "8", "--max-min", "10", "--phase", "cpu", "--gpus", "1", "--", "true"]) == 2
     assert "a cpu phase takes no GPUs" in capsys.readouterr().err
-    assert main([*base, "--kind", "lean-audit", "--question", "does it check?", "--", "true"]) == 0
+    assert main([*base, "--kind", "lean-audit", "--question", "does it check?", "--disk-gb", "5", "--", "true"]) == 0
     argv = json.loads((src / "tools" / "cluster" / "src" / "cluster" / "__main__.py.argv").read_text())
+    assert argv[argv.index("--disk-gb") + 1] == "5.0" and seen[-1]["queue"]["disk_gb"] == 5.0
     assert "--mem-gb" not in argv and "--max-s" not in argv and argv[argv.index("--question") + 1] == "does it check?"
     assert seen[-1]["harness_args"][seen[-1]["harness_args"].index("--timeout") + 1] == "1200", "the kind's time"
     assert main([*base, "--mem-gb", "8", "--max-min", "10", "--phase", "gpu", "--", "true"]) == 2

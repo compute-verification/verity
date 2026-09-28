@@ -105,6 +105,7 @@ def main(argv: list[str] | None = None) -> int:
     sb.add_argument("--cpus", type=int)
     sb.add_argument("--mem-gb", type=int)
     sb.add_argument("--max-s", type=int, help="its longest run (default: its kind's max_wall_min)")
+    sb.add_argument("--disk-gb", type=float, help="the disk it writes (default: its kind's disk_gb, else 20)")
     sb.add_argument("--custody-s", type=int, default=0)
     sb.add_argument("--preempt", choices=("requeue", "never"), default="requeue")
     sb.add_argument("--quiet", action="store_true", default=None)
@@ -118,7 +119,7 @@ def main(argv: list[str] | None = None) -> int:
         try:
             out = submit.submit(c, kinds.load(kinds.kinds_dir(a.description)), run_id=a.run_id, now=a.now, kind=a.kind,
                                 question=a.question, gpus=a.gpus, cpus=a.cpus, memory_gib=a.mem_gb, max_s=a.max_s,
-                                quiet=a.quiet, preempt=a.preempt, project=a.project, submitter=a.submitter,
+                                quiet=a.quiet, preempt=a.preempt, disk_gb=a.disk_gb, project=a.project, submitter=a.submitter,
                                 priority=a.priority, gpu_model=a.gpu_model, custody_s=a.custody_s, node=a.node,
                                 gpu_ids=tuple(int(x) for x in a.gpu_ids.split(",") if x))
         except (submit.Refused, ValueError) as e:
