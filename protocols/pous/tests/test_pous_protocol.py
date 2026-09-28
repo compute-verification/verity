@@ -235,8 +235,8 @@ def test_a_shared_domain_breaks_the_audit(name):
 
 
 def test_the_14_gb_certificate():
-    """`band_meets_14`: one `Meets` for 448 segments (14 GB) at k = 111, the same hypothesis as one segment; other
-    segment counts keep the gap."""
+    """`band_meets_14`: one `Meets` for 448 segments (14 GB) at k = 111, the same hypothesis as one segment; every other
+    count from 2 to 2^64 is `band_meets_family`, with no gap."""
     sch = schemes.get(segments=448)
     cert = sch.certificate
     assert (cert.theorem, cert.segments, cert.k, cert.rounds, cert.hypotheses) == ("band_meets_14", 448, 111, 5,
@@ -246,9 +246,22 @@ def test_the_14_gb_certificate():
     assert v.gaps == ()
     p = protocol.StorageProfile(sch.name, sch.params.manifest(), sch.params.blocks, sch.params.m, 111, 536_800, cert)
     assert p.certified and p.state_bound_bits == 113_929_658_799
-    assert schemes.get(segments=30).certificate.theorem == "band_meets_64"
+    c30 = schemes.get(segments=30).certificate
+    assert (c30.theorem, c30.segments, c30.k, c30.rounds, c30.hypotheses) == ("band_meets_family", 30, 111, 5,
+                                                                             ("ChainExPostFactoG",))
     v30 = protocol.Verifier(schemes.get(segments=30), _fake_vk(schemes.get(segments=30)), protocol.challenge_key(b"\x00" * 32, vk))
-    assert v30.gaps == ("W has 30 segments; band_meets_64 is about 1",)
+    assert v30.gaps == ()
+
+
+def test_the_family_certificate_covers_a_70_gb_store():
+    """A 70 GiB FP8 store (2,240 segments of 32 MiB) is certified whole by `band_meets_family`, as one `Meets` over its
+    1,146,880 blocks; a single segment keeps `band_meets_64`."""
+    sch = schemes.get(segments=2240)
+    cert = sch.certificate
+    assert (cert.theorem, cert.segments, cert.k) == ("band_meets_family", 2240, 111)
+    assert sch.params.blocks == 2240 * 512 and schemes.get(segments=1).certificate.theorem == "band_meets_64"
+    from verity_pous.schemes import band as band_scheme
+    assert band_scheme.FAMILY_SEGMENTS == 1 << 64
 
 
 def test_certificates_at_their_points():
@@ -321,10 +334,14 @@ def test_certified_profile_of_one_band12_segment():
 
 
 def test_many_segments_are_a_gap_not_a_refusal():
-    """`band_meets_64` is about one segment; the 14 GB multi-segment form is the next item."""
-    sch = schemes.get(segments=2)
+    """A segment count its certificate doesn't state is a gap, not a refusal: dense's `chain_meets_64` is about one
+    segment. The band states every count up to 2^64 (`band_meets_family`), so two band segments have none."""
+    band2 = schemes.get(segments=2)
+    assert protocol.Verifier(band2, _fake_vk(band2), protocol.challenge_key(b"\x00" * 32, _fake_vk(band2))).gaps == ()
+    sch = schemes.get("dense-chain/v1", segments=2)
+    theorem = sch.certificate.theorem
     v = protocol.Verifier(sch, _fake_vk(sch), protocol.challenge_key(b"\x00" * 32, _fake_vk(sch)))
-    assert v.gaps == ("W has 2 segments; band_meets_64 is about 1",)
+    assert v.gaps == (f"W has 2 segments; {theorem} is about 1",)
 
 
 def test_claims_resolve_and_local_ones_are_not_in_core():

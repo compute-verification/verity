@@ -330,6 +330,13 @@ def test_the_plan_reads_every_committed_range_the_replay_reads_and_evaluates_not
     rep = SR.sampled_replay(_programs(world), bmap, reader("replay"), _weights(world), per_stratum=2, seed=3, workers=0)
     assert plan["plan"] is True and plan["picked"] == rep["sample"]["picked"] and plan["unresolved_n"] == 0
     assert seen["replay"] and seen["replay"] <= seen["plan"], sorted(seen["replay"] - seen["plan"])[:4]
+    by_step: dict = {}
+    for req, step, _row, _op in plan["picks"]:
+        by_step.setdefault(req, {}).setdefault(str(step), 0)
+        by_step[req][str(step)] += 1
+    assert len(plan["picks"]) == plan["picked"] and len({tuple(p) for p in plan["picks"]}) == plan["picked"]
+    assert by_step == {r: {str(s): v[0] for s, v in st.items()} for r, st in rep["sample"]["picks_by_request_step"].items()}, \
+        "the plan's picks are the replay's, request by request and step by step"
 
 
 def test_a_population_prepared_before_the_seed_draws_and_reads_the_same(world):

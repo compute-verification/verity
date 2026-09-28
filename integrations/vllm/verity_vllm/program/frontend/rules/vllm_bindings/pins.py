@@ -51,6 +51,17 @@ def _target_kinds():
     return T.uses_accepted_kinds(tp), T.tensor_core_dot(tp)
 
 
+def gemm_bias_role() -> tuple[str, dict] | None:
+    """(vocabulary role, its extra statics) of a biased linear's one-Call Definition on the active target
+    (`registry.targets.gemm_bias_spec`), or None: the target keeps the launch and its bias add as two Calls."""
+    from verity_vllm.program.registry import targets as T
+    tp = active_target_profile()
+    if T.uses_accepted_kinds(tp):
+        return "gemm_bias", {}
+    dot = T.gemm_bias_dot(tp)
+    return None if dot is None else ("gemm_bias_dot", {"DOT": dot})
+
+
 def moe_expert_role(routed: bool) -> tuple[str, dict]:
     """(vocabulary role, its extra statics) of a `fused_moe_kernel` launch's per-pair Definition on the active target: the `_v1` kinds,
     or the `_dot` ones with the target's k16 step (`registry.targets.moe_expert_dot`)."""

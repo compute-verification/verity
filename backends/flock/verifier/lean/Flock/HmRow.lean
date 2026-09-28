@@ -583,12 +583,12 @@ def unitsEntry (c : Circuit) (indices : Array Nat) : Json :=
     else base ++ [("classes", Json.arr (Array.replicate indices.size (Json.str (hexOf c.classSha))))])
 
 /-- The queries the verifier can evaluate itself (`Flock.Qword`), given the program's Call graphs. -/
-def EVALUABLE : List (String × Nat) := [("Q_word", 1)]
+def EVALUABLE : List (String × Nat) := [("Q_word", 1), ("Q_word", 2)]
 
 /-- A `verity/partition/v1` object's form (#111's canonical form, open query names): exactly `format`, `program`, `query`; a
 SHA-512 program; a query of exactly `name` (a non-empty string), `version` (a natural number) and `params` (an object). For a
-query the verifier evaluates, its parameters too (`Q_word` v1: exactly `X`, `W`, positive integers). The query's name and
-version. -/
+query the verifier evaluates, its parameters too (`Q_word` v1 and v2: exactly `X`, `W`, positive integers). The query's name
+and version. -/
 def checkPartitionObject (obj : Json) : V (String × Nat) := do
   let keys := fun (j : Json) => match j with
     | .obj kvs => (kvs.toArray.map (·.1)).qsort (· < ·)
@@ -607,8 +607,8 @@ def checkPartitionObject (obj : Json) : V (String × Nat) := do
   match ps with
   | .obj _ => pure ()
   | _ => throw "partition: the query's params are not an object"
-  if (name, version) == ("Q_word", 1) then
-    if keys ps != #["W", "X"] then throw "partition: Q_word v1's parameters are not X, W"
+  if EVALUABLE.contains (name, version) then
+    if keys ps != #["W", "X"] then throw s!"partition: Q_word v{version}'s parameters are not X, W"
     for k in ["X", "W"] do
       match (ps.getObjVal? k).toOption with
       | some (.num n) => if !(n.exponent == 0 && n.mantissa > 0) then throw s!"partition: {k} is not a positive integer"
@@ -664,12 +664,14 @@ def deriveTemplateUnits (c : Circuit) (obj : Json) (program : ByteArray) (indice
     | some (_, _, ti) => if ti != t then throw s!"partition: unit {i} is an instance of {ti}, not the circuit's template {t}"
   return s!"units derived: {name} v{version} over the verifier's program ({pop} units); the statement's {indices.size} units are instances of {t}"
 
-/-- `Q_word` v1's units, derived from the verifier's own program: the program is the object's, the query evaluates on it
-(`Flock.Extract`, `Flock.Qword`), and every unit the statement claims (`indices`) is one whole activation of the circuit's
-template; and every Call's cut holds the partition invariant and the width rule on its whole graph (`Extract.checkCalls`, as
-`partition_object.verify` checks them). -/
+/-- `Q_word` v1's or v2's units, derived from the verifier's own program: the program is the object's, the query evaluates on
+it (`Flock.Extract`, `Flock.Qword`; v2's units are v1's), and every unit the statement claims (`indices`) is one whole
+activation of the circuit's template; and every Call's cut holds the partition invariant and the width rule on its whole graph
+(`Extract.checkCalls`, as `partition_object.verify` checks them), under v2 with a value computed in two units reported, not
+refused. -/
 def deriveQwordUnits (c : Circuit) (obj : Json) (program : ByteArray) (indices : Array Nat) : V String := do
   let q := (obj.getObjVal? "query").toOption.getD Json.null
+  let version := (q.getObjValAs? Nat "version").toOption.getD 0
   let ps := (q.getObjVal? "params").toOption.getD Json.null
   let X := (ps.getObjValAs? Nat "X").toOption.getD 0
   let W := (ps.getObjValAs? Nat "W").toOption.getD 0
@@ -680,19 +682,22 @@ def deriveQwordUnits (c : Circuit) (obj : Json) (program : ByteArray) (indices :
     | .ok cs => pure cs
     | .error e => throw s!"partition: {e}"
   let some t := circuitTemplate c | throw "partition: META program_digests does not name the circuit's one template"
-  let checked ← Extract.checkCalls P calls X W
+  let checked ← Extract.checkCalls P calls X W (report := version == 2)
   if let some (k, r) := (Extract.cutFailures calls checked)[0]? then
     throw s!"partition: cut: Call {k}'s cut fails {r.codes}{if r.wide.isEmpty then "" else s!" (too wide, (unit, bits, values): {(r.wide.extract 0 4).toList})"}"
+  let across := if version == 2 then
+      s!"; values computed in two units, reported, not refused: {checked.foldl (fun n (_, r) => n + r.across) 0} pair(s) over its Definitions"
+    else ""
   match Extract.claimedUnits P calls t indices with
-  | .ok note => return s!"units derived: Q_word v1 {"{"}X: {X}, W: {W}{"}"} over the verifier's program ({note}); every Call's cut holds the partition invariant and the width rule"
+  | .ok note => return s!"units derived: Q_word v{version} {"{"}X: {X}, W: {W}{"}"} over the verifier's program ({note}); every Call's cut holds the partition invariant and the width rule{across}"
   | .error e => throw s!"partition: {e}"
 
-/-- The partition finding of a query the template queries don't cover, given the verifier's program: `Q_word` v1's units
-derived (`deriveQwordUnits`), any other query's finding as it stands. -/
+/-- The partition finding of a query the template queries don't cover, given the verifier's program: `Q_word` v1's or v2's
+units derived (`deriveQwordUnits`), any other query's finding as it stands. -/
 def qwordFinding (c : Circuit) (pub : Public) (obj : Json) (program : ByteArray) (f : PartitionFinding) :
     V (Option PartitionFinding) := do
   let q := (obj.getObjVal? "query").toOption.getD Json.null
-  if ((q.getObjValAs? String "name").toOption.getD "", (q.getObjValAs? Nat "version").toOption.getD 0) == ("Q_word", 1) then
+  if EVALUABLE.contains ((q.getObjValAs? String "name").toOption.getD "", (q.getObjValAs? Nat "version").toOption.getD 0) then
     let indices ← (← J.arr (← J.get pub.header "units" "public file") "indices" "public file").mapM (J.asNat · "a unit index")
     pure (some { f with derived := true, note := ← deriveQwordUnits c obj program indices })
   else pure (some f)

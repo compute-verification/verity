@@ -188,3 +188,31 @@ def test_a_replay_stage_publishes_the_config_record_it_decided(tmp_path):
         assert "config_record.json" in str(e)
     else:
         raise AssertionError("a PASS replay without its config record published")
+
+
+def test_a_replay_stage_publishes_its_slim_keep_whole_and_never_the_bundle(tmp_path, monkeypatch):
+    monkeypatch.setattr(ro, "MAX_FILE", 16)
+    row = "smollm2-135m__bf16__l40s__tp1__b1__i256__o32__mixed__greedy__bi-eager"
+    d = tmp_path / "row"
+    _w(d / "stages.txt", "commit PENDING 2026-09-30T00:00:01Z rc=0\nreplay PASS 2026-09-30T00:00:02Z rc=0\n")
+    _w(d / "config_record.json", {"outcome": "PASS"})
+    _w(d / "commit" / "verdict.json", {"commit_pass": True})
+    k = d / "commit" / "replay_slim_p1"
+    slim = {"pair": 1, "run_root": "ab" * 32, "program_digest": "cd" * 32, "picked": 460, "bytes": 3, "dump_sha256": "ef" * 32,
+            "commit_pass": True, "picks": [["r0", 0, 1, "model.embed_tokens"]] * 460}
+    _w(k / "slim.json", slim)
+    _w(k / "store" / "store.json", {"steps": []})
+    (k / "store" / "raw").mkdir()
+    (k / "store" / "raw" / "s0.bin").write_bytes(b"\x01" * (ro.MAX_FILE + 1))
+    _w(d / "commit" / "replay_bundle_p1" / "MANIFEST.json", {})
+    _w(d / "commit" / "replay_slim_p2.partial" / "slim.json", {})
+    doc = ro.build_outputs(d, row, "replay", tmp_path / "run", {})
+    s = next(e for e in doc["outputs"] if e["name"] == "replay_slim_p1")
+    assert (s["kind"], s["tree"]) == ("vllm-replay-slim/v1", "outputs/replay_slim_p1") and "refs" not in s
+    assert {x: s["meta"][x] for x in ro.SLIM_META} == {x: slim[x] for x in ro.SLIM_META} and s["meta"]["stage"] == "replay"
+    got = tmp_path / "run" / "outputs" / "replay_slim_p1"
+    assert sorted(x.relative_to(got).as_posix() for x in got.rglob("*") if x.is_file()) == ["slim.json", "store/raw/s0.bin", "store/store.json"]
+    assert (got / "store" / "raw" / "s0.bin").stat().st_size == ro.MAX_FILE + 1, "a slim keep's planes are published whatever their size"
+    assert [e["name"] for e in doc["outputs"] if e["kind"] == "vllm-replay-slim/v1"] == ["replay_slim_p1"]
+    v = tmp_path / "run" / "outputs" / "verdict"
+    assert not [x for x in v.rglob("*") if "replay_slim_p" in x.as_posix() or "replay_bundle_p" in x.as_posix()]
