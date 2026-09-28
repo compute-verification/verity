@@ -1,5 +1,6 @@
 import Flock
 import Flock.CircuitType
+import Flock.Layout
 
 open Flock
 
@@ -420,4 +421,5 @@ def main (args : List String) : IO UInt32 := do
   | ["field-test", path] => fieldTest path
   | ["hash-test", path] => hashTest path
   | "circuit-type" :: paths => CircuitType.cmd paths
+  | "layout" :: paths => Layout.cmd paths
   | _ => IO.eprintln "usage: flock-verify field-test FILE"; return 2

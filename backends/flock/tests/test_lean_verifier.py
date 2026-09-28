@@ -111,6 +111,17 @@ def test_circuit_type_agrees_with_the_reference(tmp_path):
     assert p.returncode == 0, p.stdout + p.stderr
 
 
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_layout_agrees_with_the_reference(tmp_path):
+    """`flock-verify layout` gives `verity_flock.layouts`' verdict, layout digests and own-region sizes on every archive
+    (random types and call trees, placed and inline calls and reads, nested units, one mutation per rule;
+    `layout_agree.py`)."""
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    p = subprocess.run(["python3", str(LEAN.parent / "layout_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
+                        "--out", str(tmp_path), "--n", "150"], capture_output=True, text=True)
+    assert p.returncode == 0, p.stdout + p.stderr
+
+
 def _stream_uniform(n, stream, pos):
     """`verity.randomness`'s exact reduction on a raw stream: (value, next position), or None when it runs out."""
     from verity.randomness import uniform_from_words
