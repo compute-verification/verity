@@ -6,7 +6,7 @@ import Proofs.NetworkCertifier.Ingress
 import Proofs.NetworkCertifier.Schedule
 import Proofs.NetworkCertifier.PerWindow
 import Proofs.NetworkCertifier.Sanity
-import Proofs.NetworkCertifier.Difftest
+import Proofs.NetworkCertifier.Code
 
 /-!
 # Proofs of the network certifier's guarantees
@@ -14,7 +14,8 @@ import Proofs.NetworkCertifier.Difftest
 One theorem `NetTiming.SecurityProofs.G : NetTiming.Guarantees.G` per guarantee, each the theorem of the same statement
 in `Occupancy` (Proposition 2), `Counting` (Theorem 1(b)), `Advice` (Theorem 3), `Schedule` (Theorem 3 for the
 constant-rate Program), `Ingress` (the ingress bound) or `PerWindow` (the last two over whole windows), and every lemma
-behind them. `Sanity` shows every named assumption satisfiable.
+behind them. `Sanity` shows every named assumption satisfiable. `Code` proves the certifier's program (`certifier_program`,
+`NetworkCertifier`), which the difftest runs against the Python audit, equal to these definitions.
 -/
 
 namespace NetTiming.SecurityProofs

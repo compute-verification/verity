@@ -1835,25 +1835,98 @@ def fetch(local_dir: Path, *, everything: bool = False) -> dict[str, Any]:
     return rec
 
 
-def scope_memory(local_dir: Path) -> list[dict[str, Any]]:
-    """The run's memory in the cgroups it executes in on the machine (research.scopemem, sent as `python3 -` over fetch's ssh)."""
+#: slot.py and lean_slot.py, beside this package in the caller's checkout, which NODE_PROGRAM loads on the machine (as `check.py
+#: --slots` does) for the check and Lean slots a run holds or waits on; without them the reading has no slots
+CHECK_DIR = Path(__file__).resolve().parents[3] / "check"
+#: what `node_readings` runs on a machine as `python3 - RUN_DIR...`, after `SRC = {...}`: research.scopemem's `node`
+NODE_PROGRAM = '''
+import json, sys, types
+
+
+def load(name, src, file):
+    m = types.ModuleType(name)
+    m.__file__ = file
+    sys.modules[name] = m
+    exec(compile(src, file, "exec"), m.__dict__)
+    return m
+
+
+mem = load("research_scopemem", SRC["scopemem"], "research/scopemem.py")
+mods = (load("check_slot_for_lean_slot", SRC["slot"], "tools/check/slot.py"),
+        load("check_lean_slot", SRC["lean"], "tools/check/lean_slot.py")) if SRC.get("slot") and SRC.get("lean") else None
+print(json.dumps(mem.node(sys.argv[1:], slot_mods=mods)))
+'''
+
+
+def node_payload(check_dir: Path = CHECK_DIR) -> bytes:
     from . import scopemem
+
+    def src(p: Path) -> str | None:
+        try:
+            return p.read_text()
+        except OSError:
+            return None
+
+    srcs = {"scopemem": Path(scopemem.__file__).read_text(), "slot": src(check_dir / "slot.py"), "lean": src(check_dir / "lean_slot.py")}
+    return (f"SRC = {srcs!r}\n" + NODE_PROGRAM).encode()
+
+
+def node_readings(local_dirs: list[Path]) -> dict[str, dict[str, Any]]:
+    """Each launched remote run's reading where it executes (research.scopemem's `node`: its memory and CPUs, and its machine's
+    GPU leases and check and Lean slots), by local run dir: `{"run", "node", "machine"}`, or `{"error"}` when it can't be read.
+    One ssh per machine, whatever the number of its runs."""
+    by: dict[tuple, list[tuple[Path, dict[str, Any]]]] = {}
+    out: dict[str, dict[str, Any]] = {}
+    for d in local_dirs:
+        rec = _read_json(d / "remote.json")
+        if not rec or not rec.get("remote_run_dir"):
+            out[str(d)] = {"error": f"{d} is not a launched remote run"}
+            continue
+        by.setdefault((rec["host"], rec["port"], rec.get("user") or "root"), []).append((d, rec))
+    payload = node_payload() if by else b""
+
+    def one(target: tuple, runs: list[tuple[Path, dict[str, Any]]]) -> None:
+        machine = runs[0][1].get("machine")
+        try:
+            r = ssh_run(ssh_argv(target[0], target[1], user=target[2]), ["python3", "-", *(rec["remote_run_dir"] for _, rec in runs)],
+                        stdin=payload, timeout=60)
+            doc = json.loads(r.stdout) if r.returncode == 0 else None
+            why = None if isinstance(doc, dict) else f"rc {r.returncode} {r.stderr.decode(errors='replace').strip()[-200:]}"
+        except subprocess.TimeoutExpired:
+            doc, why = None, "took over 60 s"
+        except ValueError:
+            doc, why = None, f"its answer is not JSON: {r.stdout[:120]!r}"
+        except Exception as e:  # noqa: BLE001  (no ssh key here, ...): that machine's runs unread, the rest still shown
+            doc, why = None, f"{type(e).__name__}: {e}"
+        for d, rec in runs:
+            run = (doc or {}).get("runs", {}).get(rec["remote_run_dir"])
+            out[str(d)] = ({"run": run, "node": {k: v for k, v in doc.items() if k != "runs"}, "machine": machine} if run is not None
+                           else {"error": f"reading {machine}: {why or 'no reading of this run'}"})
+
+    from concurrent.futures import ThreadPoolExecutor
+
+    with ThreadPoolExecutor(max_workers=max(1, len(by))) as ex:
+        list(ex.map(lambda kv: one(*kv), by.items()))
+    return out
+
+
+def py_spy(local_dir: Path) -> str:
+    """`research inspect --py-spy`: a py-spy dump of the live workload's Python processes on its machine (research.telemetry.pyspy,
+    sent as `python3 -` over fetch's ssh, which reads the machine's status.json)."""
+    from .telemetry import pyspy
 
     rec = _read_json(local_dir / "remote.json")
     if not rec or not rec.get("remote_run_dir"):
         raise Refused(f"{local_dir} is not a launched remote run")
-    ssh = ssh_argv(rec["host"], rec["port"], user=rec.get("user") or "root")
+    limit = pyspy.MAX_PROCS * pyspy.DUMP_TIMEOUT_S + 60
     try:
-        r = ssh_run(ssh, ["python3", "-", rec["remote_run_dir"]], stdin=Path(scopemem.__file__).read_bytes(), timeout=60)
+        r = ssh_run(ssh_argv(rec["host"], rec["port"], user=rec.get("user") or "root"), ["python3", "-", rec["remote_run_dir"]],
+                    stdin=Path(pyspy.__file__).read_bytes(), timeout=limit)
     except subprocess.TimeoutExpired:
-        raise Refused(f"reading its cgroups on {rec.get('machine')} took over 60 s") from None
-    try:
-        out = json.loads(r.stdout) if r.returncode == 0 else None
-    except ValueError:
-        out = None
-    if not isinstance(out, list):
-        raise Refused(f"reading its cgroups on {rec.get('machine')}: rc {r.returncode} {r.stderr.decode(errors='replace').strip()[-200:]}")
-    return out
+        raise Refused(f"the dump on {rec.get('machine')} took over {limit:g} s") from None
+    if r.returncode:
+        raise Refused(f"no dump on {rec.get('machine')}: rc {r.returncode} {r.stderr.decode(errors='replace').strip()[-300:]}")
+    return r.stdout.decode(errors="replace")
 
 
 def cancel(local_dir: Path, *, reason: str, by: str) -> dict[str, Any]:
@@ -1895,7 +1968,8 @@ def cancel(local_dir: Path, *, reason: str, by: str) -> dict[str, Any]:
                 if x.get("kind") == "cancel_result" and (x.get("target") or {}).get("pgid") == pgid), None)
     if res is None:
         raise Refused(f"the cancel recorded no result on the machine (rc {r.returncode}): {stderr[-300:]}")
-    return {"pgid": pgid, "processes": len((res.get("target") or {}).get("members") or []), "delivered": bool(res.get("delivered")),
+    tgt = res.get("target") or {}
+    return {"pgid": pgid, "processes": tgt.get("members_total", len(tgt.get("members") or [])), "delivered": bool(res.get("delivered")),
             "why": res.get("reason")}
 
 

@@ -2,8 +2,10 @@
 
 A spatial unit is the machines behind network certifiers. The question is how much a covert sender can move across its
 boundary through **when** frames leave, once the content and order of every frame are fixed by the declared Program.
-This package is the reference for the answer, in the terms of its Lean package `network-timing` (`lean/`). The tests
-mirror some of its statements by name; the Tests section lists which.
+This package is the reference for the answer, in the terms of its Lean analysis `NetTiming` (`verity/Security/`: the
+areas `Definitions/NetworkCertifier`, `Specs/NetworkCertifier` and `Proofs/NetworkCertifier`, whose `README.md` has the modelling choices). The
+tests mirror some of its statements by name; the Tests section lists which. The certifier program (`lean/`, the Lake
+package `certifier_program`, Lean core only) is the code the difftest runs, proved equal to the analysis's definitions.
 
 ## The certifier (`grid`)
 
@@ -167,8 +169,8 @@ steps:
 
 `expected_grids` is the Program's grid, and `run_shaper` drives a certifier as an honest sender does. Lean's
 `NetTiming.Protocol.Schedule` defines the same objects (`eligible`, `handingBuckets`, `expectedRow`), and the Program
-`constantRate` whose advice is the content advice and one in-set sync per window (`lean/README.md`, modelling choices
-13–17).
+`constantRate` whose advice is the content advice and one in-set sync per window (`verity/Security/Proofs/NetworkCertifier/README.md`,
+modelling choices 13–17).
 
 ## The audit (`audit`)
 
@@ -210,7 +212,7 @@ declared advice gives it.
 
 **Ingress links are audited on their statuses** (`Audit.check_ingress_link(link, records, windows)`). Lean's acceptance
 needs every boundary link's status to be complete, ingress links included, since an ingress status is itself an egress
-channel (`lean/README.md`, modelling choice 6). An ingress link's rows are the Program's input, which it reads rather
+channel (`verity/Security/Proofs/NetworkCertifier/README.md`, modelling choice 6). An ingress link's rows are the Program's input, which it reads rather
 than predicts, so no grid is compared. An ingress link-window is accepted if it has exactly one record, present by the
 deadline, and its status is complete; otherwise it is a `no-verdict`, `duplicate` or `status:<reason>` violation, as on
 egress. A committed record's status is read in the clear, and the digest binds it. The verifier has no Program grid to
@@ -247,7 +249,8 @@ plus what survived that wipe. `capacity.k_share` expresses bits as a share of K,
 (`calibrate(k_bits=…)`, `--k-bits`): 9.12e7 under NCI's inference-only policy (α·Γ = 9.6e−11 × 9.5e17). The
 calibration report records the K it used.
 
-`lean-audit.json` lists as guarantees only the four whose bounds `calibration.calibrate` reports: egress over a horizon
+Of the bounds, `verity/Security/lean-audit.json` lists as guarantees only the four whose bounds `calibration.calibrate`
+reports (its other four certifier guarantees are the program's agreement, in Tests): egress over a horizon
 (`capacity.egress_bits_per_day_one_clock`, `SecurityProofs.EncardDecodableLeConstantRate`) and per window
 (`clock_sync.bits_per_window`, `SecurityProofs.EncardDecodableLeConstantRatePerWindow`), and ingress over a horizon (the
 K charge, `k_charge.share_of_k_by_span` from each link's `rate_bps`, `SecurityProofs.EncardIngressObsDecodableLe`) and
@@ -420,7 +423,7 @@ replays recorded traces through the proxy in real time, and on an injected clock
 
 `uv run tools/check/suites.py verity/protocols/accounting/communication/certifier`. The tests enumerate small
 horizons, so they check the Lean statements on examples and prove nothing. By name, they mirror 19 of the Lean package's 35 statements
-`NetTiming.SecurityProofs.G : NetTiming.Guarantees.G`, none of them among its four guarantees (`lean-audit.json`'s
+`NetTiming.SecurityProofs.G : NetTiming.Guarantees.G`, none of them among its guarantees (`verity/Security/lean-audit.json`'s
 `guarantees`), and three more proved lemmas:
 - **`test_network_certifier_grid.py`:**
   - Proposition 2's ten statements, by enumeration: `SecurityProofs.CardFree`, `SecurityProofs.CardLeftPacked`,
@@ -487,9 +490,12 @@ per-window forms (`SecurityProofs.EncardAccSeqsLeConstantRatePerWindow`,
 Python counterpart.
 
 **The difftest** checks the definitions those statements are about, not the statements. On 10,000 random instances,
-`NetTiming`'s definitions, evaluated, give what this package gives. The Lean side is `expectedRow`, with `Accepted` of
-`constantRate` and `StatusComplete` decided per prefix of whole windows. The Python side is `expected_grids`,
-`check_link`'s verdicts with the first differing bucket, `check_ingress_link`, and each prefix's acceptance.
-`lean/scripts/difftest_vectors.py` writes the instances and this package's results, and the Lean audit runs
-`lean/NetTimingDifftest.lean` on them (`runs` in `lean/lean-audit.json`). `test_network_certifier_lean_difftest.py`
-checks that the data the record pins is still this package's.
+the certifier program (`lean/`, `NetworkCertifier`), evaluated, gives what this package gives. The Lean side is
+`expectedRow`, with `Accepted` of `constantRate` and `StatusComplete` decided per prefix of whole windows. The Python
+side is `expected_grids`, `check_link`'s verdicts with the first differing bucket, `check_ingress_link`, and each
+prefix's acceptance. `lean/scripts/difftest_vectors.py` writes the instances and this package's results, and the Lean
+audit runs `lean/NetworkCertifier/DifftestMain.lean` on them (`runs` in `lean/lean-audit.json`).
+`test_network_certifier_lean_difftest.py` checks that the data the record pins is still this package's. The program's
+definitions are List forms of `NetTiming`'s `Finset` ones, and four guarantees prove them equal on everything the
+difftest compares (`NetTiming.SecurityProofs.Code`): `CodeExpectedRow`, `CodeAcceptedConstantRate`,
+`CodeStatusComplete` and `CodeSyncSet`.

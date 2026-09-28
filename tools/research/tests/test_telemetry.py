@@ -335,6 +335,24 @@ def test_cancel_markers_classify_by_actor_and_need_delivery_or_matching_signal(t
     assert doc["class"] == "CANCELLED_MANUAL" and doc["certainty"] == "inferred"
 
 
+def test_a_cancel_of_a_large_group_keeps_its_pgid_and_classifies(tmp_path, monkeypatch):
+    from research.telemetry import cancel
+    members = [{"pid": 1000 + i, "comm": "python3", "starttime_ticks": 45_000_000 + i} for i in range(120)]
+    monkeypatch.setattr(cancel, "pgid_members", lambda pgid: members)
+    monkeypatch.setattr(cancel, "run_dir_of", lambda pid: str(tmp_path.resolve()))
+    d = _attempt(tmp_path, rc=143, sig=None, samples=[], pid=100)
+    a = argparse.Namespace(actor="manual", attempt_dir=str(d), fallback=None, target_pid=None, target_pgid=100, target_pod=None,
+                           expect_starttime=None, expect_comm=None, expect_run_dir=str(d), expect_nonempty=False, reason="r", signal=15,
+                           project=None, job=None, attempt=None, controller=None, deliver=False)
+    assert cancel.cancel(a) == 0
+    intent = [json.loads(l) for l in (d / "events.jsonl").read_text().splitlines()][-1]
+    assert "truncated_fields" not in intent
+    assert intent["target"]["pgid"] == 100 and intent["target"]["members_total"] == 120 and intent["verified"] is True
+    intent["t_mono"] = 105.0
+    (d / "events.jsonl").write_text(json.dumps(intent) + "\n" + json.dumps(dict(intent, kind="cancel_result", delivered=True, t_mono=105.1)) + "\n")
+    assert classify(d)["class"] == "CANCELLED_MANUAL"
+
+
 def test_logs_cuda_enospc_and_checker_record(tmp_path):
     d = _attempt(tmp_path, rc=1, sig=None, samples=[])
     (d / "stderr.log").write_text("blah\ntorch.OutOfMemoryError: CUDA out of memory. Tried to allocate 20.00 GiB\n")

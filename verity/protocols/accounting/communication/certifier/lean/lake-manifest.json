@@ -1,0 +1,8 @@
+{
+ "version": "1.2.0",
+ "packagesDir": ".lake/packages",
+ "packages": [],
+ "name": "certifier_program",
+ "lakeDir": ".lake",
+ "fixedToolchain": false
+}

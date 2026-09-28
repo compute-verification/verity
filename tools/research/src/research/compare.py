@@ -114,10 +114,10 @@ def load(store: Any, run_id: str) -> Attempt:
     if "run_record" in mans and mans["run_record"].payload is not None:
         scope = "run_record"
         for f in mans["run_record"].payload.files or []:
-            if f.path not in skip:
+            if f.path not in skip and not custody.is_run_file(f.path):
                 files[f.path] = f.sha256
         for t in custody.trimmed_of(store, outs["run_record"], mans["run_record"]):
-            if t["path"] not in skip:
+            if t["path"] not in skip and not custody.is_run_file(t["path"]):
                 files[t["path"]] = t["sha256"]
     return Attempt(id=run_id, doc=doc, result=mans["result"].meta if "result" in mans else None, outputs=outs, contents=contents,
                    files=files, listed=frozenset(listed), files_scope=scope)

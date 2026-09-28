@@ -114,6 +114,22 @@ def test_a_sent_credential_is_deleted_before_the_record_is_taken_whatever_the_wo
     _no_url_anywhere(vault)
 
 
+def test_a_machine_runs_workload_writes_to_out_and_its_record_holds_all_of_it(tmp_path, monkeypatch):
+    """`$OUT` is the run dir's out/, there before the workload starts, on a machine (and a queued run, which launches the same
+    request) as locally; custody uploads all of it with no --declared-output."""
+    vault = tmp_path / "vault"
+    work = ("import os, pathlib; o = pathlib.Path(os.environ['OUT']); assert o == pathlib.Path(os.environ['RESEARCH_RUN_DIR'], 'out') "
+            "and o.is_dir(); (o / 'deep').mkdir(); (o / 'deep' / 'kept.bin').write_bytes(b'k' * 1000)")
+    req, runs = _request(tmp_path, RID, [PY, "-c", work], vault)
+    assert remote.launch_request(req)["started"]
+    d = runs / RID
+    marker = _wait_marker(d)
+    assert marker["preserved"] is True and json.loads((d / "status.json").read_text())["rc"] == 0
+    st2 = _other_machine(tmp_path, vault, monkeypatch)
+    m = st2.get_manifest(st2.get_attempt(RID)["outputs"]["run_record"])
+    assert "out/deep/kept.bin" in {f.path for f in m.payload.files} and not m.meta.get("trimmed")
+
+
 def test_a_repair_publish_deletes_a_sent_credential_too(tmp_path, monkeypatch, capsys):
     """A runner killed before it published leaves the run dir as the workload left it; `research data custody --publish` takes its
     record later."""
@@ -253,7 +269,8 @@ def test_a_local_run_with_run_record_preserves_the_files_its_workload_left_in_th
     cfg = tmp_path / "store.toml"
     cfg.write_text(f'[remote]\ntype = "fs"\npath = "{vault}"\n')
     monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
-    work = "import os, pathlib; p = pathlib.Path(os.environ['RESEARCH_RUN_DIR'], 'out'); p.mkdir(); (p / 'capture.json').write_text('{}')"
+    work = ("import os, pathlib; p = pathlib.Path(os.environ['OUT']); assert p == pathlib.Path(os.environ['RESEARCH_RUN_DIR'], 'out') "
+            "and p.is_dir(); (p / 'capture.json').write_text('{}')")
     ids = {}
     for name, flags in (("plain", []), ("recorded", ["--run-record"])):
         runs = tmp_path / name
@@ -786,7 +803,23 @@ def test_select_keeps_run_files_and_declared_outputs_and_trims_undeclared_past_t
     _declare(d, ["*"])
     assert CU.select(d, cap=0)[1] == [], "`*` keeps everything"
     w = CU.trim_warning(trimmed)
-    assert "--declared-output" in w and "will be dropped once lanes declare their outputs" in w and CU.SKILL in w
+    assert "--declared-output" in w and "$OUT" in w and "will be dropped once lanes declare their outputs" in w and CU.SKILL in w
+
+
+def test_select_always_keeps_all_of_out_and_a_declared_glob_adds_to_it(tmp_path):
+    d = _fixture_run(tmp_path / "runs")
+    (d / "out" / "deep").mkdir()
+    (d / "out" / "deep" / "big.bin").write_bytes(b"x" * 100)
+    (d / "res").mkdir()
+    (d / "res" / "r.json").write_text("{}")
+    (d / "outside.bin").write_bytes(b"z" * 100)
+    (d / "outx.bin").write_bytes(b"z" * 10)
+    kept, trimmed = CU.select(d, cap=0)
+    assert {"out/proof.bin", "out/verify.jsonl", "out/deep/big.bin"} <= set(kept), "out/ is kept in full with nothing declared"
+    assert [t["path"] for t in trimmed] == ["outside.bin", "outx.bin", "res/r.json"], "only out/, not a name that starts with out"
+    _declare(d, ["res/*"])
+    kept, trimmed = CU.select(d, cap=0)
+    assert {"out/deep/big.bin", "res/r.json"} <= set(kept) and [t["path"] for t in trimmed] == ["outside.bin", "outx.bin"]
 
 
 def test_trimmed_files_are_listed_not_uploaded_and_custody_still_verifies(tmp_path, monkeypatch, capsys):
@@ -802,13 +835,13 @@ def test_trimmed_files_are_listed_not_uploaded_and_custody_still_verifies(tmp_pa
     (d / "junk.bin").write_bytes(b"j" * 1000)
     _declare(d, ["res/*"])
     assert data_main(["custody", FIXTURE_RID, "--runs-dir", str(runs), "--publish"]) == 0
-    assert "custody trimmed 3 undeclared file(s)" in capsys.readouterr().err   # junk.bin and the fixture's out/
+    assert "custody trimmed 1 undeclared file(s)" in capsys.readouterr().err   # junk.bin; the fixture's out/ is always kept
     assert CU.has_custody(d) == (True, "on the remote (.custody)")
     st2 = _other_machine(tmp_path, vault, monkeypatch)
     m = st2.get_manifest(st2.get_attempt(FIXTURE_RID)["outputs"]["run_record"])
     paths = {f.path for f in m.payload.files}
-    assert "res/result.json" in paths and "junk.bin" not in paths
-    assert [t["path"] for t in m.meta["trimmed"]] == ["junk.bin", "out/proof.bin", "out/verify.jsonl"]
+    assert {"res/result.json", "out/proof.bin", "out/verify.jsonl"} <= paths and "junk.bin" not in paths
+    assert [t["path"] for t in m.meta["trimmed"]] == ["junk.bin"]
     assert CU.verify(st2, d, mark=False)["preserved"]
     (d / "junk.bin").write_bytes(b"k" * 1000)
     assert "changed" in CU.verify(st2, d, mark=False)["error"], "a trimmed file is still pinned by its hash"
@@ -832,9 +865,9 @@ def test_a_trimmed_listing_too_big_for_the_manifest_goes_in_the_record_and_custo
     st2 = _other_machine(tmp_path, vault, monkeypatch)
     rr = st2.get_attempt(FIXTURE_RID)["outputs"]["run_record"]
     m = st2.get_manifest(rr)
-    assert "trimmed" not in m.meta and m.meta["trimmed_listing"] == CU.TRIMMED_LISTING and m.meta["trimmed_files"] == 3002
+    assert "trimmed" not in m.meta and m.meta["trimmed_listing"] == CU.TRIMMED_LISTING and m.meta["trimmed_files"] == 3000
     assert {f.path for f in m.payload.files} & {CU.TRIMMED_LISTING, "stdout.log"} == {CU.TRIMMED_LISTING, "stdout.log"}
-    assert len(CU.trimmed_of(st2, rr)) == 3002
+    assert len(CU.trimmed_of(st2, rr)) == 3000
     rep = CU.verify(st2, d, mark=False)
     assert rep["preserved"] and CU.TRIMMED_LISTING not in rep["gone"]
     (d / "suites" / "t2999.log").write_text("changed")

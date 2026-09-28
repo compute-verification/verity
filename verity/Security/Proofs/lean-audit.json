@@ -4,8 +4,7 @@
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",
   "Proofs.Pous.Targets": "open targets: every pinned statement as a sorry stub",
   "Proofs.Pous.CheckAxioms": "the headline #print axioms list (`lake env lean CheckAxioms.lean`)",
-  "Proofs.NetworkCertifier.CheckAxioms": "the #print axioms list (`lake env lean CheckAxioms.lean`)",
-  "Proofs.NetworkCertifier.DifftestMain": "the difftest against the Python audit, under `runs`: compiled evaluation of NetTiming.Difftest.main, audited under NetTiming, a test and not a proof"
+  "Proofs.NetworkCertifier.CheckAxioms": "the #print axioms list (`lake env lean CheckAxioms.lean`)"
  },
  "runs": {
   "Proofs.Pouw.Bulk": {
@@ -18,21 +17,6 @@
    "generate": [
     "python3",
     "{repo}/verity/protocols/accounting/work/pouw/lean/scripts/fp8atom_vectors.py",
-    "{repo}",
-    "--out",
-    "{out}"
-   ]
-  },
-  "Proofs.NetworkCertifier.DifftestMain": {
-   "why": "10,000 random instances on which NetTiming's definitions (expectedRow, and Accepted of constantRate and StatusComplete by decide) give what the Python audit gives: schedule.expected_grids, Audit.check_link with the first differing bucket, Audit.check_ingress_link, and each prefix's acceptance",
-   "args": ["{difftest/instances.jsonl}", "{difftest/python.jsonl}", "10000"],
-   "data": {
-    "difftest/instances.jsonl": "c048b4c1fcf4b2918611f2c249d46aead1cbd3124d068fe659645964ecc62601",
-    "difftest/python.jsonl": "355d87108c136dd003c12c07f4026ec776d07922de7c1dbbe47381f48b74796f"
-   },
-   "generate": [
-    "python3",
-    "{repo}/verity/protocols/accounting/communication/certifier/lean/scripts/difftest_vectors.py",
     "{repo}",
     "--out",
     "{out}"
@@ -189,11 +173,6 @@
     "mentions": ["IO.getRandomBytes"],
     "ack": []
    },
-   "A4-prf-sha512": {
-    "about": "A4 (KeyedStreamsUniform, prf/sha-512): verity.randomness's keyed streams at distinct indices pass a test as independent uniform streams do, up to eta, SHA-512's compression function keyed by a secret first block or by its chaining value being a PRF",
-    "mentions": ["PRFScheme.prfAdvantage"],
-    "ack": []
-   },
    "hm96-hiding": {
     "about": "Assumptions.Hm96Hiding (zero knowledge's T1, hash-derived-key): (M·y, H(sp‖y)) is δ₁-close to (U, H(sp‖y)), the leftover hash lemma at the pinned key",
     "mentions": ["PMF.tvDist", "Matrix.mulVec"],
@@ -217,6 +196,11 @@
    "live-verifier-custody-tables": {
     "about": "Assumptions.Zk.RecordCustodyZKJ (live-verifier): RecordCustodyZK at J tables, the record flock-verify verify --zk --session-tables J reads is the one the verifier's coin server wrote for the live session, and its draw file the one flock-verify draw printed for the verifier's own subset draw (PROTOCOL.md §17.2: nothing in the record authenticates its writer)",
     "mentions": ["IO.FS.readFile", "IO.FS.writeFile"],
+    "ack": []
+   },
+   "A4-prf-sha512": {
+    "about": "A4 (KeyedStreamsUniform, prf/sha-512): verity.randomness's keyed streams at distinct indices pass a test as independent uniform streams do, up to eta, SHA-512's compression function keyed by a secret first block or by its chaining value being a PRF",
+    "mentions": ["PRFScheme.prfAdvantage"],
     "ack": []
    }
   },

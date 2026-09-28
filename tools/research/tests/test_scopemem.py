@@ -18,11 +18,12 @@ SCOPE = "/system.slice/cluster-r1.scope"
 LEASE = "/user.slice/user-0.slice/user@0.service/app.slice/gpu-lease-41.scope"
 
 
-def _proc(proc: Path, pid: int, pgid: int, cgroup: str, start: int = 1000) -> None:
+def _proc(proc: Path, pid: int, pgid: int, cgroup: str, start: int = 1000, cpus: str = "0-191") -> None:
     d = proc / str(pid)
     d.mkdir(parents=True)
     (d / "stat").write_text(f"{pid} (py thon) S 1 {pgid} {pgid} " + " ".join(["0"] * 15) + f" {start} 0 0\n")
     (d / "cgroup").write_text(f"0::{cgroup}\n")
+    (d / "status").write_text(f"Name:\tpython\nCpus_allowed:\tff\nCpus_allowed_list:\t{cpus}\n")
 
 
 def _cg(root: Path, path: str, *, current: int | None = None, peak: int | None = None, max_: str | None = None) -> None:
@@ -31,6 +32,12 @@ def _cg(root: Path, path: str, *, current: int | None = None, peak: int | None =
     for name, v in (("memory.current", current), ("memory.peak", peak), ("memory.max", max_)):
         if v is not None:
             (d / name).write_text(f"{v}\n")
+
+
+def _no_node(tmp_path: Path) -> dict[str, str]:
+    """No gpu-lease directory and no slot files: the machine running the test has its own."""
+    return {"RESEARCH_GPU_LEASE_DIRS": str(tmp_path / "no-leases"), "CHECK_SLOTS": str(tmp_path / "no-slots"),
+            "LEAN_SLOTS": str(tmp_path / "no-lean-slots")}
 
 
 @pytest.fixture
@@ -123,6 +130,7 @@ def test_status_prints_a_local_active_runs_memory(node, monkeypatch, capsys):
     _cg(cg, SCOPE, current=380 * GIB)
     monkeypatch.setenv("RESEARCH_PROC_ROOT", str(proc))
     monkeypatch.setenv("RESEARCH_CGROUP_ROOT", str(cg))
+    monkeypatch.setenv("RESEARCH_GPU_LEASE_DIRS", str(run.parent / "no-leases"))
     assert main(["status", "--runs-dir", str(run.parent)]) == 0
     out = capsys.readouterr().out
     assert f"mem  {SCOPE}  current 380.0 GiB  peak 120.0 GiB  cap 400.0 GiB (95% used)  growth -  NEAR CAP" in out
@@ -145,7 +153,7 @@ def test_status_reads_a_remote_runs_memory_with_the_script_it_sends(node, tmp_pa
         sent.append(argv)
         assert argv[:2] == ["python3", "-"]
         return subprocess.run([sys.executable, "-", *argv[2:]], input=stdin, capture_output=True, timeout=timeout,
-                              env={"RESEARCH_PROC_ROOT": str(proc), "RESEARCH_CGROUP_ROOT": str(cg)}, cwd=tmp_path)
+                              env={"RESEARCH_PROC_ROOT": str(proc), "RESEARCH_CGROUP_ROOT": str(cg), **_no_node(tmp_path)}, cwd=tmp_path)
 
     monkeypatch.setattr(remote, "ssh_run", ssh_run)
     monkeypatch.setattr(remote, "fetch", lambda d, **_: {})
@@ -166,4 +174,4 @@ def test_status_says_why_a_remote_read_failed(node, tmp_path, monkeypatch, capsy
     monkeypatch.setattr(remote, "ssh_run", lambda *a, **k: subprocess.CompletedProcess(a, 255, b"", b"ssh: connect refused"))
     monkeypatch.setattr(remote, "fetch", lambda d, **_: {})
     assert main(["status", "--runs-dir", str(local.parent), "--refresh"]) == 0
-    assert "mem  unread: reading its cgroups on vy-nebius-2: rc 255 ssh: connect refused" in capsys.readouterr().out
+    assert "mem  unread: reading vy-nebius-2: rc 255 ssh: connect refused" in capsys.readouterr().out

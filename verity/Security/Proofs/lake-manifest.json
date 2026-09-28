@@ -21,6 +21,15 @@
    "configFile": "lakefile.toml"
   },
   {
+   "type": "path",
+   "scope": "",
+   "name": "certifier_program",
+   "manifestFile": "lake-manifest.json",
+   "inherited": false,
+   "dir": "../../protocols/accounting/communication/certifier/lean",
+   "configFile": "lakefile.toml"
+  },
+  {
    "url": "https://github.com/Verified-zkEVM/ArkLib",
    "type": "git",
    "subDir": null,

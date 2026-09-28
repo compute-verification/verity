@@ -13,7 +13,7 @@ link-local addresses (the cloud metadata service) unreachable; the CPUs, memory 
 variables job_env passes, from a file only root reads (no value travels on a command line).  SIGTERM, SIGINT or SIGHUP stops
 the unit (SIGTERM, then SIGKILL after TIMEOUT_STOP_S) and exits 128+signal.
 
-The runner opens its run dir to the job (prepare: sticky and world-writable, so the kernel's protected_symlinks and
+The runner opens its run dir and its out/ to the job (prepare: sticky and world-writable, so the kernel's protected_symlinks and
 protected_regular keep it from following or opening what the job leaves at the top) and, once the harness returns and before
 anything reads the run dir, finish() waits for the unit to be gone, deletes as root every entry the job left that is neither a
 file nor a directory (a symlink, a FIFO, a socket), gives the rest to the runner's user and restores the mode.  admit refuses a
@@ -35,6 +35,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
+from .telemetry.run import OUT_DIR
+
 SUDO = ("sudo", "-n")
 UNIT_PREFIX = "research-job-"
 ENV_FILE = Path("control") / "job.env"          # run-dir relative, in the runner's control/ (the job can't write there)
@@ -46,8 +48,8 @@ UNREACHABLE = ("/home", "/root", "/run", "/tmp", "/var/tmp", "/dev/shm")
 TIMEOUT_STOP_S = 10                 # the harness's own --grace: the SIGTERM-to-SIGKILL window a workload has without --job-user
 STOP_SIGNALS = (signal.SIGTERM, signal.SIGINT, signal.SIGHUP)
 FORBIDDEN_GROUPS = frozenset({"root", "sudo", "admin", "wheel", "adm", "docker", "lxd", "systemd-journal"})
-#: what the workload gets beside --pass: the run's identity, the tree's import path, the GPUs its lease gave it
-PASS_NAMES = frozenset({"PYTHONPATH", "CUDA_VISIBLE_DEVICES", "CUDA_DEVICE_ORDER", "LANG", "LC_ALL", "TZ"})
+#: what the workload gets beside --pass: the run's identity and its OUT, the tree's import path, the GPUs its lease gave it
+PASS_NAMES = frozenset({"OUT", "PYTHONPATH", "CUDA_VISIBLE_DEVICES", "CUDA_DEVICE_ORDER", "LANG", "LC_ALL", "TZ"})
 PASS_PREFIXES = ("RESEARCH_", "GPU_LEASE_")
 #: a name a credential would travel in: passed only when the run's own --env names it
 CREDENTIAL = re.compile(r"TOKEN|SECRET|PASSW|KEY|CREDENTIAL|^AWS_|^R2_|^GH_|^GITHUB_|^HF_|^SSH_|SLACK|NOTION|RUNPOD|NEBIUS|CURSOR",
@@ -218,26 +220,31 @@ def supervise(argv: list[str], unit: str, popen=subprocess.Popen, run=subprocess
 
 
 def prepare(run_dir: str) -> int:
-    """Runner side, before the harness: the runner's control/ in place, then the run dir opened to the job.  Returns its mode."""
+    """Runner side, before the harness: the runner's control/ in place, then the run dir and its out/ ($OUT) opened to the job.
+    Returns the run dir's mode."""
     st = os.lstat(run_dir)
     if not stat.S_ISDIR(st.st_mode) or st.st_uid != os.getuid():
         raise Refused(f"{run_dir} is not a directory this user owns")
     os.makedirs(os.path.join(run_dir, "control"), exist_ok=True)    # the harness's timeout control and the env file
-    os.chmod(run_dir, 0o1777)
+    os.makedirs(os.path.join(run_dir, OUT_DIR), exist_ok=True)
+    for d in (run_dir, os.path.join(run_dir, OUT_DIR)):
+        os.chmod(d, 0o1777)
     return stat.S_IMODE(st.st_mode)
 
 
 def finish(run_dir: str, unit: str, user: str, uid: int, mode: int, run=subprocess.run) -> tuple[list[str], list[str]]:
     """Runner side, once the harness returns and before anything reads the run dir: wait for the unit to be gone (however the
     workload ended, job-exec killed included), then as root delete what the job left that is neither a file nor a directory, give
-    the rest to this user, and restore the run dir's mode.  Returns what was deleted and what the job user still owns."""
+    the rest to this user, and give the run dir and its out/ that mode back.  Returns what was deleted and what the job user still
+    owns."""
     run([*SUDO, "systemctl", "stop", unit], capture_output=True)            # waits out a stop in progress; a no-op once gone
     (Path(run_dir) / ENV_FILE).unlink(missing_ok=True)
     r = run([*SUDO, "find", "-P", run_dir, "-mindepth", "1", "-user", user, "!", "-type", "d", "!", "-type", "f", "-print",
              "-delete"], capture_output=True, text=True)
     removed = [os.path.relpath(p, run_dir) for p in (r.stdout or "").splitlines() if p]
     run([*SUDO, "chown", "-R", "-P", f"--from={user}", f"{os.getuid()}:{os.getgid()}", "--", run_dir], capture_output=True)
-    os.chmod(run_dir, mode)
+    for d in (os.path.join(run_dir, OUT_DIR), run_dir):
+        os.chmod(d, mode)
     still = [os.path.relpath(os.path.join(base, n), run_dir) for base, dirs, files in os.walk(run_dir) for n in dirs + files
              if os.lstat(os.path.join(base, n)).st_uid == uid]
     return removed, still

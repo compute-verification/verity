@@ -485,8 +485,8 @@ research data snapshot --name NAME (--members art:... | --select <select flags>)
 research data labels TARGET [--history] [--key K] [--by PAT] [--remote] [--json]
                                               --remote: both / LOCAL ONLY (not durable) / REMOTE ONLY per assertion; exit 1 if any is local only
 research data label  TARGET KEY VALUE --by WHO [--ref REF] [--value-json] [--off-vocab]   refuses what the vocabulary (§8.1) cannot place
-research data preserved (RUN|ART)... [--mode head|readback|recorded] [--json]
-                                              the durability gate: attempt manifest + artifacts + labels all on the remote, else the failing legs
+research data preserved (RUN|ART)... [--mode head|readback|recorded] [--jobs N] [--json]
+                                              the durability gate: attempt manifest + artifacts + labels on the remote, else the failing legs
 research data vocab [--json]                  the label vocabulary (§8.1): key, asserter group, value form, enum values, status
 research data refresh-fixtures [--preserve] [--dry-run] [--repo DIR] [--json]
                                               re-register every fixtures/artifacts.json entry whose bytes changed (§7): put as a bare
