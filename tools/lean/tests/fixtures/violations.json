@@ -98,9 +98,9 @@
   "fails": "compile-time: the listing of Control.Bad was reviewed against another version of Control/Bad.lean"
  },
  "compile_time_pinned": {
-  "policy": {"compile_time": {"Control.Defs": {"why": "a listing where a pinned statement reads",
+  "policy": {"compile_time": {"Control.Defs": {"why": "a listing where a pin reads",
    "digest": "fabe4581b46bc415cac5ac6fbd8cbba3c7bd4c497031f984cb49effabdfdf556"}}},
-  "fails": "compile-time: Control.Defs is listed under `compile_time`, and pinned statements are declared or read there"
+  "fails": "compile-time: Control.Defs is listed under `compile_time`, and pins are declared or read there"
  },
  "run_exit": {
   "replace": {"RunOk.lean": ["then 0 else 1", "then 3 else 1"]},

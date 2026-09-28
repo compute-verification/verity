@@ -1,0 +1,214 @@
+import NetTiming.Protocol
+import NetTiming.Assumptions
+import Mathlib.Data.Sym.Card
+import Mathlib.Data.Set.Card
+import Mathlib.Data.Fintype.Pi
+import Mathlib.Order.Interval.Finset.Fin
+import Mathlib.Algebra.BigOperators.Fin
+import Mathlib.Algebra.Order.BigOperators.Group.Finset
+
+/-!
+# The network warden's guarantees
+
+Each guarantee is a `def G : Prop`, stated over `Protocol`'s definitions with the assumptions it rests on as hypotheses
+(`Assumptions`). Its proof is the theorem `NetTiming.SecurityProofs.G : NetTiming.Guarantees.G`, and a guarantee without
+one is open: nothing may cite it until it is proved.
+
+`docs/network-transparency/timing-channel.md`: Proposition 2 (§2.3), Theorem 1(b) (§2.2) and Theorem 3 (§2.4).
+-/
+
+namespace NetTiming.Guarantees
+
+open Finset
+
+-- A guarantee keeps its theorem's hypothesis names for the reader, though no statement refers to them.
+set_option linter.unusedVariables false
+
+/-! ## Proposition 2: timing is occupancy, its counts, and tightness -/
+
+/-- Free slots: the sender addresses slots, and there are `2^(T·S)` occupancies. -/
+def CardFree : Prop :=
+  ∀ (T S : ℕ), Fintype.card (Fin T → Fin S → Bool) = 2 ^ (T * S)
+
+/-- Left-packed: `(S + 1)^T` occupancies. -/
+def CardLeftPacked : Prop :=
+  ∀ (T S : ℕ), Fintype.card {P : Fin T → Fin S → Bool // LeftPacked P} = (S + 1) ^ T
+
+/-- **Timing is occupancy, (i).** For a fixed frame sequence, the grid determines the counts. -/
+def FillInjective : Prop :=
+  ∀ {T S : ℕ} {F : Type} (f : ℕ → F), Function.Injective (fill (T := T) (S := S) f)
+
+/-- **Timing is occupancy, (ii).** A grid whose occupancy is left-packed is the fill of some frame sequence at some
+counts. -/
+def ExistsFillOfLeftPacked : Prop :=
+  ∀ {T S : ℕ} {F : Type} [Inhabited F] (g : Grid T S F) (h : LeftPacked (occ g)),
+    ∃ (f : ℕ → F) (n : Fin T → Fin (S + 1)), g = fill f n
+
+/-- **Fixed M, all released:** at most `binom(T + M − 1, M)` count vectors, which is the doc's `binom(M+T−1, T−1)`
+for `T ≥ 1`. -/
+def CardCountsEqLe : Prop :=
+  ∀ (T S M : ℕ),
+    (univ.filter fun n : Fin T → Fin (S + 1) => ∑ t, (n t : ℕ) = M).card ≤ (T + M - 1).choose M
+
+/-- **At most M released:** at most `binom(T + M, M)`, which is the doc's `binom(M+T, T)`. -/
+def CardCountsLeLe : Prop :=
+  ∀ (T S M : ℕ),
+    (univ.filter fun n : Fin T → Fin (S + 1) => ∑ t, (n t : ℕ) ≤ M).card ≤ (T + M).choose M
+
+/-- **Tightness, the schedule.** If the sender enqueues `n t ≤ S` frames in bucket `t`, the queue stays empty and the
+FIFO warden releases exactly `n t`. Over `T` buckets this uses `∑ n t ≤ T·S` frames. -/
+def ReleasedSelf : Prop :=
+  ∀ (S : ℕ) (n : ℕ → Fin (S + 1)), released S (fun t => (n t : ℕ)) = n
+
+/-- **The warden never releases more than was enqueued.** -/
+def SumReleasedLe : Prop :=
+  ∀ (T S : ℕ) (enq : ℕ → ℕ),
+    ∑ t ∈ Finset.range T, (released S enq t : ℕ) ≤ ∑ t ∈ Finset.range T, enq t
+
+/-- **Fixed M, at the warden.** When the sender enqueues at most `M` frames over the window, the FIFO warden can release
+at most `binom(T + M, M)` distinct grids: the doc's `binom(M+T, T)`. -/
+def EncardFifoGridsLeOfAvailable : Prop :=
+  ∀ {F : Type} (T S M : ℕ) (f : ℕ → F),
+    {g | ∃ enq : ℕ → ℕ, ∑ t ∈ Finset.range T, enq t ≤ M ∧ g = fifoGrid T S f enq}.encard ≤
+      ((T + M).choose M : ℕ)
+
+/-- **Tightness.** Over all enqueue schedules, with the frames leaving in queue order `f`, the FIFO warden can release
+exactly `(S + 1)^T` distinct grids. So `T·log2(S+1)` bits are attained with zero error. -/
+def EncardFifoGrids : Prop :=
+  ∀ {F : Type} (T S : ℕ) (f : ℕ → F),
+    (Set.range fun enq : ℕ → ℕ => fifoGrid T S f enq).encard = ((S + 1) ^ T : ℕ)
+
+/-! ## Theorem 1(b): the counting bound on accepted runs -/
+
+/-- **The tree lemma.** Take a set of length-`n` sequences in which, after any prefix of length `t`, the next element
+takes at most `N t` values. It has at most `∏_{t<n} N t` elements. -/
+def EncardLeProdOfBranching : Prop :=
+  ∀ {α : Type} (n : ℕ) (Sq : Set (List α)) (N : ℕ → ℕ)
+    (hlen : ∀ o ∈ Sq, o.length = n)
+    (hN : ∀ t < n, ∀ h : List α, {x | ∃ o ∈ Sq, o.take (t + 1) = h ++ [x]}.encard ≤ N t),
+    Sq.encard ≤ ((∏ t ∈ Finset.range n, N t : ℕ) : ℕ∞)
+
+/-- **Theorem 1(b), accepted runs.** Take the observation sequences of the runs accepted up to the horizon `n`,
+whatever the sender's strategy (over all secrets) and however the operator reacts. Suppose that after any prefix of
+length `t`, the runs accepted up to `t + 1` continue with at most `N t` distinct observations; this is the doc's
+`N_acc`, defined by prefix acceptance. Then there are at most `∏_{t<n} N t` such sequences. -/
+def EncardAcceptedRunsLe : Prop :=
+  ∀ {L K S : ℕ} {Z In Act Wire Adv : Type}
+    (I : Interaction L K S Z In Act Wire) (P : Program L S In Adv) (n : ℕ) (N : ℕ → ℕ)
+    (hN : ∀ t < n, ∀ h : List (Obs L K S),
+      {x | ∃ z, AcceptedUpTo P I.op (t + 1) (I.obsRun z (t + 1)) ∧ I.obsRun z (t + 1) = h ++ [x]}.encard ≤ N t),
+    {o | ∃ z, o = I.obsRun z n ∧ AcceptedUpTo P I.op n o}.encard ≤ ((∏ t ∈ Finset.range n, N t : ℕ) : ℕ∞)
+
+/-- **Zero error, from the observations.** A decoder reads the observations of the first `n` steps (the published
+records, jitter and statuses) and recovers every secret in `Zs`, all of whose runs are accepted up to `n`. Then `Zs`
+has at most as many elements as there are accepted observation sequences. This needs no W2, and the wire version below
+follows from it. -/
+def EncardObsDecodableLe : Prop :=
+  ∀ {L K S : ℕ} {Z In Act Wire Adv : Type}
+    (I : Interaction L K S Z In Act Wire) (P : Program L S In Adv) (n : ℕ)
+    (Zs : Set Z) (hacc : ∀ z ∈ Zs, AcceptedUpTo P I.op n (I.obsRun z n))
+    (dec : List (Obs L K S) → Z) (hdec : ∀ z ∈ Zs, dec (I.obsRun z n) = z),
+    Zs.encard ≤ {o | ∃ z, o = I.obsRun z n ∧ AcceptedUpTo P I.op n o}.encard
+
+/-- **Zero error, through the wire (uses W2).** A decoder reads the wire of the first `n` steps and recovers every
+secret in `Zs`, all of whose runs are accepted up to `n`. Then `Zs` has at most as many elements as there are accepted
+observation sequences. -/
+def EncardDecodableLe : Prop :=
+  ∀ {L K S : ℕ} {Z In Act Wire Adv : Type}
+    (I : Interaction L K S Z In Act Wire) (P : Program L S In Adv) (n : ℕ)
+    (view : ℕ → Obs L K S → Wire) (hW2 : Regenerates I.warden view)
+    (Zs : Set Z) (hacc : ∀ z ∈ Zs, AcceptedUpTo P I.op n (I.obsRun z n))
+    (dec : List Wire → Z) (hdec : ∀ z ∈ Zs, dec (I.wireRun z n) = z),
+    Zs.encard ≤ {o | ∃ z, o = I.obsRun z n ∧ AcceptedUpTo P I.op n o}.encard
+
+/-- **W6 on accepted runs.** Under fail-closed wardening, a run accepted up to `n` takes no fault action at any step
+`i` whose window closes before `n`. (`hwin`: every step lies in its own window, which ends no earlier.) -/
+def NoFaultOfAccepted : Prop :=
+  ∀ {L K S : ℕ} {Z In Act Wire Adv : Type}
+    (I : Interaction L K S Z In Act Wire) (P : Program L S In Adv) (winEnd : ℕ → ℕ)
+    (hwin : ∀ i, i ≤ winEnd i)
+    (hW6 : FailClosed I.warden winEnd) (z : Z) (n : ℕ) (hacc : AcceptedUpTo P I.op n (I.obsRun z n))
+    (i : ℕ) (hi : i < (I.actRun z n).length) (hend : winEnd i < n),
+    ¬ I.warden.fault (I.actRun z n)[i]
+
+/-! ## Theorem 3: the advice caps -/
+
+/-- **W4 at the warden: timing is occupancy.** Under packing, every recorded egress row is the fill of some frame
+sequence at its count, written as a one-bucket grid. -/
+def RecordedRowEqFill : Prop :=
+  ∀ {L K S : ℕ} {In Act Wire : Type} (w : Warden L K S In Act Wire) (hW4 : Packed w)
+    (k : ℕ) (xs : List In) (as : List Act) (ℓ : Fin L),
+    ∃ (f : ℕ → List Bool) (c : Fin 1 → Fin (S + 1)), (fun _ : Fin 1 => (w.obs k xs as).rows ℓ) = fill f c
+
+/-- **Theorem 3, the `2^A` cap.** With `Fintype.card Adv = 2^A`, the accepted observation sequences of length `n` with
+jitter below `D` number at most `2^A · D^n`. -/
+def EncardAccSeqsLeAdvice : Prop :=
+  ∀ {L K S : ℕ} {In Adv : Type} [Fintype Adv] (P : Program L S In Adv)
+    (op : ℕ → List (Obs L K S) → In) (n D : ℕ),
+    (AccSeqs P op n D).encard ≤ ((Fintype.card Adv * D ^ n : ℕ) : ℕ∞)
+
+/-- **Theorem 3, the clock-sync form.** This is the `2^A` cap with the advice type `Ac × (Fin W → Sync)`: one
+clock-sync value per window from `Sync`, for example an offset δ and a rate ρ, 16 × 8 values. Over `W` windows the
+accepted sequences number at most `#Ac · #Sync^W · D^n`, that is `A_c + W·log2 #Sync` bits plus jitter.
+
+Instantiated for constant-rate release, this bounds the timing channel when the Program's only timing advice is the
+clock sync. That the logical schedule leaves no other timing freedom is the Program's definition, which is not
+formalized here. A sync alphabet that varies by window is covered by `encard_accSeqs_le_advice` directly. -/
+def EncardAccSeqsLeSync : Prop :=
+  ∀ {L K S : ℕ} {In Ac Sync : Type} [Fintype Ac] [Fintype Sync] (W : ℕ)
+    (P : Program L S In (Ac × (Fin W → Sync))) (op : ℕ → List (Obs L K S) → In) (n D : ℕ),
+    (AccSeqs P op n D).encard ≤ ((Fintype.card Ac * Fintype.card Sync ^ W * D ^ n : ℕ) : ℕ∞)
+
+/-- **A fixed clock.** With the clock-sync value fixed (`Sync = Unit`), the accepted sequences number at most
+`#Ac · D^n`. Instantiated for constant-rate release under a fixed logical schedule, timing carries nothing beyond the
+jitter, and nothing at all under J (`D = 1`): the Notion zero-capacity theorem, with content advice. -/
+def EncardAccSeqsLeFixedClock : Prop :=
+  ∀ {L K S : ℕ} {In Ac : Type} [Fintype Ac] (W : ℕ)
+    (P : Program L S In (Ac × (Fin W → Unit))) (op : ℕ → List (Obs L K S) → In) (n D : ℕ),
+    (AccSeqs P op n D).encard ≤ ((Fintype.card Ac * D ^ n : ℕ) : ℕ∞)
+
+/-- **Theorem 3, the block cap, under the two dataflow conditions.** The advice is content advice `Ac` and timing
+advice `At β` per block `β`. The cells `C` carry the Program's occupancy predictions `occ c : U c`, at step `step c`,
+in block `blk c`. Then the accepted sequences number at most
+`#Ac · D^n · ∏_β min(#At β, ∏_{c ∈ β} #U c)`. -/
+def EncardAccSeqsLeBlocks : Prop :=
+  ∀ {L K S : ℕ} {In Ac B C : Type} {At : B → Type} {U : C → Type}
+    [Fintype Ac] [Fintype B] [DecidableEq B] [∀ β, Fintype (At β)] [Fintype C] [DecidableEq C] [∀ c, Fintype (U c)]
+    (P : Program L S In (Ac × ((β : B) → At β))) (op : ℕ → List (Obs L K S) → In) (n D : ℕ)
+    (step : C → ℕ) (blk : C → B) (occ : (c : C) → List In → Ac × ((β : B) → At β) → U c)
+    (h1 : FramesReadNoTimingAdvice P step occ) (h2 : OccupancyReadsOwnBlock blk occ),
+    (AccSeqs P op n D).encard ≤
+      ((Fintype.card Ac * D ^ n *
+        ∏ β, min (Fintype.card (At β)) (∏ c ∈ univ.filter (fun c => blk c = β), Fintype.card (U c)) : ℕ) : ℕ∞)
+
+/-- **The left-packed instance.** Cells are the (link, step) pairs of the horizon, and the Program's occupancy at a
+cell is the count of its row, a value in `Fin (S + 1)`. Then the block cap reads
+`#Ac · D^n · ∏_β min(#At β, (S + 1)^|β|)`. -/
+def EncardAccSeqsLeBlocksCounts : Prop :=
+  ∀ {L K S : ℕ} {In Ac B : Type} {At : B → Type}
+    [Fintype Ac] [Fintype B] [DecidableEq B] [∀ β, Fintype (At β)]
+    (P : Program L S In (Ac × ((β : B) → At β))) (op : ℕ → List (Obs L K S) → In) (n D : ℕ)
+    (blk : Fin L × Fin n → B)
+    (h1 : FramesReadNoTimingAdvice P (fun c : Fin L × Fin n => (c.2 : ℕ))
+      (fun c ins a => rowCount (P.rows c.2 ins a c.1)))
+    (h2 : OccupancyReadsOwnBlock blk (fun c : Fin L × Fin n => fun ins a => rowCount (P.rows c.2 ins a c.1))),
+    (AccSeqs P op n D).encard ≤
+      ((Fintype.card Ac * D ^ n *
+        ∏ β, min (Fintype.card (At β)) ((S + 1) ^ (univ.filter (fun c => blk c = β)).card) : ℕ) : ℕ∞)
+
+/-- **The composed statement (W2, J and both conditions).** A decoder reads the wire and recovers every secret in `Zs`,
+all of whose runs are accepted up to `n`. Then `Zs` is no larger than the block cap. -/
+def EncardDecodableLeBlocks : Prop :=
+  ∀ {L K S : ℕ} {Z In Act Wire Ac B C : Type} {At : B → Type} {U : C → Type}
+    [Fintype Ac] [Fintype B] [DecidableEq B] [∀ β, Fintype (At β)] [Fintype C] [DecidableEq C] [∀ c, Fintype (U c)]
+    (I : Interaction L K S Z In Act Wire) (P : Program L S In (Ac × ((β : B) → At β))) (n D : ℕ)
+    (view : ℕ → Obs L K S → Wire) (hW2 : Regenerates I.warden view) (hJ : JitterBounded I.warden D)
+    (step : C → ℕ) (blk : C → B) (occ : (c : C) → List In → Ac × ((β : B) → At β) → U c)
+    (h1 : FramesReadNoTimingAdvice P step occ) (h2 : OccupancyReadsOwnBlock blk occ)
+    (Zs : Set Z) (hacc : ∀ z ∈ Zs, AcceptedUpTo P I.op n (I.obsRun z n))
+    (dec : List Wire → Z) (hdec : ∀ z ∈ Zs, dec (I.wireRun z n) = z),
+    Zs.encard ≤
+      ((Fintype.card Ac * D ^ n *
+        ∏ β, min (Fintype.card (At β)) (∏ c ∈ univ.filter (fun c => blk c = β), Fintype.card (U c)) : ℕ) : ℕ∞)
+
+end NetTiming.Guarantees

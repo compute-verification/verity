@@ -1,38 +1,38 @@
 import NetTiming
 open NetTiming
 
--- The 31 pinned theorems (`lean-audit.json`'s `pins`).
-#print axioms card_free
-#print axioms card_leftPacked
-#print axioms fill_injective
-#print axioms exists_fill_of_leftPacked
-#print axioms card_counts_eq_le
-#print axioms card_counts_le_le
-#print axioms released_self
-#print axioms encard_fifoGrids
-#print axioms encard_le_prod_of_branching
-#print axioms encard_acceptedRuns_le
-#print axioms encard_decodable_le
-#print axioms no_fault_of_accepted
-#print axioms recorded_row_eq_fill
-#print axioms encard_accSeqs_le_advice
-#print axioms encard_accSeqs_le_blocks
-#print axioms encard_accSeqs_le_blocks_counts
-#print axioms encard_decodable_le_blocks
+-- The 31 pins (`lean-audit.json`'s `pins`): the 22 guarantees' proofs, then the nine witnesses.
+#print axioms SecurityProofs.CardFree
+#print axioms SecurityProofs.CardLeftPacked
+#print axioms SecurityProofs.FillInjective
+#print axioms SecurityProofs.ExistsFillOfLeftPacked
+#print axioms SecurityProofs.CardCountsEqLe
+#print axioms SecurityProofs.CardCountsLeLe
+#print axioms SecurityProofs.ReleasedSelf
+#print axioms SecurityProofs.SumReleasedLe
+#print axioms SecurityProofs.EncardFifoGridsLeOfAvailable
+#print axioms SecurityProofs.EncardFifoGrids
+#print axioms SecurityProofs.EncardLeProdOfBranching
+#print axioms SecurityProofs.EncardAcceptedRunsLe
+#print axioms SecurityProofs.EncardObsDecodableLe
+#print axioms SecurityProofs.EncardDecodableLe
+#print axioms SecurityProofs.NoFaultOfAccepted
+#print axioms SecurityProofs.RecordedRowEqFill
+#print axioms SecurityProofs.EncardAccSeqsLeAdvice
+#print axioms SecurityProofs.EncardAccSeqsLeSync
+#print axioms SecurityProofs.EncardAccSeqsLeFixedClock
+#print axioms SecurityProofs.EncardAccSeqsLeBlocks
+#print axioms SecurityProofs.EncardAccSeqsLeBlocksCounts
+#print axioms SecurityProofs.EncardDecodableLeBlocks
 #print axioms witnessWarden_assumptions
 #print axioms witnessWarden_jitter_varies
 #print axioms witnessProgram_conditions
 #print axioms witnessProgram_timing_matters
-#print axioms toy_leftPacked
-#print axioms encard_accSeqs_le_sync
-#print axioms encard_accSeqs_le_fixedClock
-#print axioms sum_released_le
-#print axioms encard_fifoGrids_le_of_available
-#print axioms encard_obsDecodable_le
 #print axioms joint_witness
 #print axioms joint_witness_bound
 #print axioms zP_accepts_one
 #print axioms zP_constOp_accepts_one
+#print axioms toy_leftPacked
 
 -- Proved and audited, not pinned: no record in `lean-audit.json`, so not citable as pinned.
 #print axioms occ_fill

@@ -1,6 +1,7 @@
-"""Theorems 1(b) and 3 on small grids. By name, the tests mirror five of the theorems `NetTiming.Counting` and
-`NetTiming.Advice` pin: `encard_le_prod_of_branching`, `encard_obsDecodable_le`, `encard_accSeqs_le_sync`,
-`encard_accSeqs_le_fixedClock` and `encard_accSeqs_le_blocks`.
+"""Theorems 1(b) and 3 on small grids. By name, the tests mirror five of their guarantees (`NetTiming.SecurityProofs`,
+proved in its `Counting` and `Advice`): `SecurityProofs.EncardLeProdOfBranching`, `SecurityProofs.EncardObsDecodableLe`,
+`SecurityProofs.EncardAccSeqsLeSync`, `SecurityProofs.EncardAccSeqsLeFixedClock` and
+`SecurityProofs.EncardAccSeqsLeBlocks`.
 
 The accepted observation sequences are the grids an accepted run can show. The tests enumerate every sender behaviour
 on a small horizon: every hand-time schedule, and every declared clock sync. They count what an accepted run can
@@ -57,7 +58,7 @@ def accepted_observations(sync_set, windows):
 
 
 def test_tree_lemma():
-    """encard_le_prod_of_branching"""
+    """SecurityProofs.EncardLeProdOfBranching"""
     rng = random.Random(5)
     for _ in range(200):
         n, alpha = rng.randint(1, 4), rng.randint(1, 3)
@@ -72,7 +73,7 @@ def test_tree_lemma():
 
 
 def test_accepted_count_le_sync_advice():
-    """encard_accSeqs_le_sync: accepted sequences ≤ #Sync^W (content fixed, J so D = 1)."""
+    """SecurityProofs.EncardAccSeqsLeSync: accepted sequences ≤ #Sync^W (content fixed, J so D = 1)."""
     sync_set = SyncSet((0, 1), (1, 2))
     windows = 2
     seen = accepted_observations(sync_set, windows)
@@ -92,7 +93,7 @@ def test_fractional_rate_count_le_sync_advice():
 
 
 def test_fixed_clock_zero_capacity():
-    """encard_accSeqs_le_fixedClock: with a fixed clock, every accepted run shows the same grids."""
+    """SecurityProofs.EncardAccSeqsLeFixedClock: with a fixed clock, every accepted run shows the same grids."""
     sync_set = SyncSet((1,), (1,))
     seen = accepted_observations(sync_set, 2)
     assert len(seen) == 1
@@ -100,8 +101,9 @@ def test_fixed_clock_zero_capacity():
 
 
 def test_secret_senders_are_rejected_or_silent():
-    """Zero error (encard_obsDecodable_le). A sender encodes a secret in its hand times. Under a fixed clock, every
-    accepted secret shows the Program's grids, so a decoder can tell at most one apart; every other secret is rejected."""
+    """Zero error (SecurityProofs.EncardObsDecodableLe). A sender encodes a secret in its hand times. Under a fixed
+    clock, every accepted secret shows the Program's grids, so a decoder can tell at most one apart; every other secret
+    is rejected."""
     sync = ClockSync(1, 1)
     sync_set = SyncSet((1,), (1,))
     expected = tuple(expected_grids(FRAMES, [sync, sync], P))
@@ -148,8 +150,9 @@ def test_reacting_operator_does_not_add_capacity():
 
 
 def test_block_bound_random_programs():
-    """encard_accSeqs_le_blocks. The occupancy of cell (link, bucket) reads only its own block's timing advice and the
-    history, and the frames read only content advice and the history: at most 2^A_c · ∏ min(2^A_β, #P_β) sequences."""
+    """SecurityProofs.EncardAccSeqsLeBlocks. The occupancy of cell (link, bucket) reads only its own block's timing
+    advice and the history, and the frames read only content advice and the history: at most
+    2^A_c · ∏ min(2^A_β, #P_β) sequences."""
     rng = random.Random(6)
     T, links = 2, 2
     for _ in range(1500):

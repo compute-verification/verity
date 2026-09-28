@@ -101,14 +101,14 @@ about 8·T·r·B bits (`capacity.unbound_bits`). On committed records, the bound
 
 | Quantity | Value | Lean |
 |---|---|---|
-| Free slot choice | `2^(T·r)` occupancies | `card_free` |
-| Left-packed | `(r + 1)^T` occupancies, attained by the FIFO warden | `card_leftPacked`, `encard_fifoGrids` |
-| Exactly M released | at most `binom(T + M − 1, M)` | `card_counts_eq_le` |
-| At most M available | at most `binom(T + M, M)` grids | `encard_fifoGrids_le_of_available` |
+| Free slot choice | `2^(T·r)` occupancies | `SecurityProofs.CardFree` |
+| Left-packed | `(r + 1)^T` occupancies, attained by the FIFO warden | `SecurityProofs.CardLeftPacked`, `SecurityProofs.EncardFifoGrids` |
+| Exactly M released | at most `binom(T + M − 1, M)` | `SecurityProofs.CardCountsEqLe` |
+| At most M available | at most `binom(T + M, M)` grids | `SecurityProofs.EncardFifoGridsLeOfAvailable` |
 | Envelope, with no clock | `T·log2(r + 1)` bits per link-window | Proposition 2 |
-| Accepted runs, with clock-sync advice | `A_c + W·log2 #Σ_sync + n·log2 D` bits | `encard_accSeqs_le_sync` |
-| A fixed clock, under J (D = 1) | 0 bits of timing | `encard_accSeqs_le_fixedClock` |
-| Ingress, where no clock applies | `log2(r_in + 1)/τ_in` bit/s per link | not stated in Lean (`card_leftPacked`'s count) |
+| Accepted runs, with clock-sync advice | `A_c + W·log2 #Σ_sync + n·log2 D` bits | `SecurityProofs.EncardAccSeqsLeSync` |
+| A fixed clock, under J (D = 1) | 0 bits of timing | `SecurityProofs.EncardAccSeqsLeFixedClock` |
+| Ingress, where no clock applies | `log2(r_in + 1)/τ_in` bit/s per link | not stated in Lean (`SecurityProofs.CardLeftPacked`'s count) |
 
 The inference-only policy charges an isolation unit the ingress covert capacity from the last wipe before it starts,
 plus what survived that wipe. `capacity.k_share` expresses bits as a share of `K = 9.12e7` bits.
@@ -148,21 +148,22 @@ shaping delay (hand time minus ready time, over every frame), the capacity per d
 ## Tests
 
 `uv run tools/check/suites.py verity-network-warden`. The tests enumerate small horizons, so they check the Lean
-statements on examples and prove nothing. By name, they mirror 15 of the Lean package's 31 pins and its three proved
-but unpinned lemmas:
+statements on examples and prove nothing. By name, they mirror 15 of the Lean package's 31 pins, each a guarantee
+`NetTiming.SecurityProofs.G : NetTiming.Guarantees.G`, and its three proved but unpinned lemmas:
 - **`test_network_warden_grid.py`:**
-  - Proposition 2's ten pins, by enumeration: `card_free`, `card_leftPacked`, `fill_injective`,
-    `exists_fill_of_leftPacked`, `card_counts_eq_le`, `card_counts_le_le`, `released_self`, `sum_released_le`,
-    `encard_fifoGrids` and `encard_fifoGrids_le_of_available`;
-  - the unpinned `occ_fill`, `leftPacked_occ_fill` and `leftPacked_fifoGrid`;
+  - Proposition 2's ten pins, by enumeration: `SecurityProofs.CardFree`, `SecurityProofs.CardLeftPacked`,
+    `SecurityProofs.FillInjective`, `SecurityProofs.ExistsFillOfLeftPacked`, `SecurityProofs.CardCountsEqLe`,
+    `SecurityProofs.CardCountsLeLe`, `SecurityProofs.ReleasedSelf`, `SecurityProofs.SumReleasedLe`,
+    `SecurityProofs.EncardFifoGrids` and `SecurityProofs.EncardFifoGridsLeOfAvailable`;
+  - the unpinned `occ_fill`, `leftPacked_occ_fill` and `leftPacked_fifoGrid` (`NetTiming.SecurityProofs.Occupancy`);
   - the warden's semantics, which Lean takes as hypotheses (W4 packing, W5's untimed status, W6 fail-closed);
 - **`test_network_warden_capacity.py`:**
-  - `encard_le_prod_of_branching`, the tree lemma;
-  - `encard_accSeqs_le_sync`: accepted grids at most `#Σ_sync^W`, over every sender and declaration on a small
-    horizon, with ρ below 1, and with a reacting operator;
-  - `encard_accSeqs_le_fixedClock`: the fixed clock's single accepted grid;
-  - `encard_obsDecodable_le`: under a fixed clock, accepted secrets all show one grid sequence;
-  - `encard_accSeqs_le_blocks`: the block bound on random Programs;
+  - `SecurityProofs.EncardLeProdOfBranching`, the tree lemma;
+  - `SecurityProofs.EncardAccSeqsLeSync`: accepted grids at most `#Σ_sync^W`, over every sender and declaration on a
+    small horizon, with ρ below 1, and with a reacting operator;
+  - `SecurityProofs.EncardAccSeqsLeFixedClock`: the fixed clock's single accepted grid;
+  - `SecurityProofs.EncardObsDecodableLe`: under a fixed clock, accepted secrets all show one grid sequence;
+  - `SecurityProofs.EncardAccSeqsLeBlocks`: the block bound on random Programs;
 - **`test_network_warden_audit.py`:** record-and-reject and each violation, which no Lean statement names;
 - **`test_network_warden_commitment.py`:**
   - the elided digest is injective on left-packed grids, by enumeration;
@@ -170,6 +171,8 @@ but unpinned lemmas:
   - the committed audit's verdicts equal the raw audit's;
 - **`test_network_warden_calibration.py`:** the calibration tool.
 
-No test mirrors the other seven pins of Theorems 1(b) and 3 (`encard_acceptedRuns_le`, `encard_decodable_le`,
-`no_fault_of_accepted`, `recorded_row_eq_fill`, `encard_accSeqs_le_advice`, `encard_accSeqs_le_blocks_counts`,
-`encard_decodable_le_blocks`), and the nine witnesses of `NetTiming.Sanity` have no Python counterpart.
+No test mirrors the other seven pins of Theorems 1(b) and 3 (`SecurityProofs.EncardAcceptedRunsLe`,
+`SecurityProofs.EncardDecodableLe`, `SecurityProofs.NoFaultOfAccepted`, `SecurityProofs.RecordedRowEqFill`,
+`SecurityProofs.EncardAccSeqsLeAdvice`, `SecurityProofs.EncardAccSeqsLeBlocksCounts`,
+`SecurityProofs.EncardDecodableLeBlocks`), and the nine witnesses of `NetTiming.SecurityProofs.Sanity` have no Python
+counterpart.

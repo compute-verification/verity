@@ -34,7 +34,7 @@ Then three independent groups run at once, the cores split between them (`--core
     lean            `lake build` of the Lean verifier (`backends/flock/verifier/lean`), then its partition check against
                     `verity.ir.partition` (`unit_cut_agree.py`), then the audit of every Lake package with a `lean-audit.json`
                     (`tools/lean/audit.py --all --build`: axioms, sorry, declared axioms, escapes, files, kernel bypasses, code
-                    run while compiling, dependency .olean digests, pinned statements, a kernel replay; its reports under
+                    run while compiling, dependency .olean digests, the pins' records, a kernel replay; its reports under
                     `lean-audit/`), then the suites that use Lean (`AFTER_LEAN`, outcomes in `suites-lean.json`) on what those
                     steps built, then its agreement with upstream's Rust verifier (`ci.py`) on the upstream build stored once
                     and pinned by hash (`backends/flock/verifier/upstream.json`), when the run has it; skipped by name without
