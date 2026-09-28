@@ -387,7 +387,8 @@ class SiluAndMulRule(InPlaceRule):
     modes = frozenset({"profile"})
     info = RuleInfo("SiluAndMul[vllm]", 1, "in-place-binding", applies_to="_C.silu_and_mul(Tensor! out, x[.., 2I])",
                     preconditions=("x is bf16 [.., 2I]", "out is an unwritten allocation (or value) [.., I]"),
-                    evidence_domain="structural; numerics: SiluMul_v1 (vLLM _C.silu_and_mul)")
+                    evidence_domain="structural; numerics: the vocabulary's silu_mul kind (b1-eager-v3, dense2-eager-v1: SiluMul_v2; "
+                                    "b1-eager, b1-eager-v2: SiluMul_v1; vLLM _C.silu_and_mul)")
 
     def targets(self):
         return targets_for("silu_and_mul")
