@@ -15,6 +15,7 @@ from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.geometry import is_int, sub_rows
 from verity_vllm.observe.fold.patterns.ops import base_op, bound_args, first, triton_name
 from verity_vllm.observe.fold.patterns.resolutions import ComputeGroup, _fmt, hint_of, unsupported
+from verity_vllm.observe.fold.patterns.target import target_of
 from verity_vllm.observe.fold.patterns.transparent import widened_source
 from verity_vllm.observe.fold.resolver import Compute, Const, Gather, Param, PerRow, Resolution, StepContext, Transparent, Unsupported
 from verity_vllm.observe.fold.tree import TreeNode
@@ -261,12 +262,13 @@ class TokenSelectGumbelTopP:
                 (PerRow(sampled[r]),))
 
     -- the registry composite (`verity_vllm/program/registry/sampling.py`: TemperatureScale -> TopPMask{V} (topp_split model) -> GumbelSelectF32),
-    the same instance the derived Program's `GumbelTopPTokenSelect[vllm]_v1` rule emits: temperature / top_p / pos are Program constants
+    the same instance the derived Program's `GumbelTopPTokenSelect[vllm]` rule emits: temperature / top_p / pos are Program constants
     (the fold emits their `Const` instances in operand order right before the select), the seed is the request's `seed` PARAMETER.  S
     ([R16 stoch, coord M-0169] the 6th operand, `Const32[S]` "splits") is read from the split kernels' constexpr (the launch geometry:
     live batch x SM count), must agree across the three kernels, and is bound at compare to the request Program's `splits` Input entry
-    for the event; the relation S = SplitsFor_v1(|live(t)|, num_SMs) is checked per engine step by GM-01 G6.  Values
-    (which seed / T / p the kernels consumed) are NOT read from device memory here: they are the header's request record; the value check
+    for the event (or held equal to a single-request Program's own `Const32[S]`); the relation S = SplitsFor_v1(|live(t)|, num_SMs) is
+    checked per engine step by GM-01 G6.  Values (which seed / T / p the kernels consumed) are NOT read from device memory here: they
+    are the header's request record; the value check
     (`bench.stoch_recompute`) recomputes the served token from the snapshotted logits under the DECLARED seed and fails on a wrong one.
 
     Unsupported (fail closed, each a named reason): a greedy header (the registered TokenSelect patterns' case, returns None); top-k
@@ -519,7 +521,7 @@ class TokenSelectGumbelTopP:
         if out.rank == 1:
             out = ViewDesc(out.alloc, out.offset, (R, 1), (out.strides[0], 1), out.dtype, out.device)
         from verity_vllm.program.registry import sampling as _sampling
-        spec = bind(_sampling.GumbelTopPTokenSelect, V=V)
+        spec = bind(_sampling.select_for(_sampling.GumbelTopPTokenSelect, target_of(ctx)[0].effective_sampler_construction()), V=V)
         S = int(s2["S"])        # the split kernels' constexpr: the launch's S -> the 6th operand (bound to the Program's `splits` Input)
         kernels = (*s2["kernels"], "ArgMaxOps", "gather_kernel")
         parts = []

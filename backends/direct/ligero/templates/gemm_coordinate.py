@@ -1,7 +1,7 @@
 """B-Ligero lowering of ``gemm-coordinate``: the registered chain relations (``ligero.relations``), with the
 ``--auth included-hash`` leaf scheme named by the relation's ``+<leaf>`` suffix (``leaf.registry.split_relation_name``).
 
-At K = 1536 ``bench-vu`` draws each relation's frozen instance set itself (``relchain``), so a cell there runs on the frozen set
+At K = 1536 ``bench-vu`` draws each relation's frozen input set itself (``relchain``), so a cell there runs on the frozen set
 only.  At vLLM's reduction lengths (``relations.REAL_KS``) the x4 folds are registered as ``<fold>-k<K>`` and read an input set
 (``bench-vu --input-set``; :func:`stage` writes a range of one); keyed-BLAKE3 rows are proved with the xob circuit.  H100 BF16
 ``wgmma`` is the ``bf16-hopper`` relation: on the H100 it writes ``mma``'s words on every captured input (PR #49), and the

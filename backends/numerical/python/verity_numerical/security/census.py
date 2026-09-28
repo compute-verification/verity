@@ -488,7 +488,7 @@ def census_unit(p: Params = REAL) -> UnitCensus:
 
 
 def census_vu(K: int, p: Params = REAL) -> UnitCensus:
-    """The verification unit of the active ``CHECKER_VARIANT`` (v1: word-chained; v2: state-chained)."""
+    """The proof unit of the active ``CHECKER_VARIANT`` (v1: word-chained; v2: state-chained)."""
     return census_vu_v2(K, p) if CHECKER_VARIANT == "v2" else census_vu_v1(K, p)
 
 
@@ -529,7 +529,7 @@ def census_unit_v2(p: Params = REAL) -> UnitCensus:
 
 
 def census_vu_v2(K: int, p: Params = REAL) -> UnitCensus:
-    """The v2 verification unit: K/16 state-chained units from the constant zero state, one Pack, the epilogue."""
+    """The v2 proof unit: K/16 state-chained units from the constant zero state, one Pack, the epilogue."""
     if K % sum(p.groups):
         raise ValueError("K must be a multiple of the unit's product count")
     ctx = CensusCtx(f"vu-v2(K={K})")
@@ -555,7 +555,7 @@ def fixed_tables_v2(p: Params = REAL) -> dict[str, tuple[int, int]]:
 
 
 def census_vu_v1(K: int, p: Params = REAL) -> UnitCensus:
-    """The v1 verification unit: K/16 word-chained units from ``c_0 = 0`` plus the epilogue, as ``step.py`` composes it."""
+    """The v1 proof unit: K/16 word-chained units from ``c_0 = 0`` plus the epilogue, as ``step.py`` composes it."""
     if K % sum(p.groups):
         raise ValueError("K must be a multiple of the unit's product count")
     ctx = CensusCtx(f"vu(K={K})")

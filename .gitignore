@@ -31,9 +31,16 @@ runs/
 **/reports/plots/
 **/reports/gate*/
 **/results/**
+**/results_*.json*
 !**/reports/ledger/
 # evidence still read by code, pinned in the repo until those scripts read from the notes store:
 # backends/shared/anchor_a100/report.py, backends/direct/encode/reprice_v2.py, backends/gkr/tensor/fused/bench.py
+!backends/direct/encode/results_buckets_r20260922-065537-279b.json
+!backends/direct/encode/results_commit_r20260922-064722-07c7.json
+!backends/direct/encode/results_lintest_r20260922-073017-0924.json
+!backends/direct/encode/results_r20260922-062016-6bdf.json
+!backends/shared/hash_gpu/results_r20260922-054241-b966.json
+!fixtures/redteam/vu-battery/v1/a/results_r20260922-070024-e7d1.jsonl
 !backends/numerical/reports/b_measured_4090.json
 !backends/numerical/reports/fused_logup_4090.json
 !backends/numerical/reports/fused_sumcheck_4090.json

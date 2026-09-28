@@ -165,10 +165,10 @@ PROFILE_B1_EAGER_V2 = Vocabulary(
         "select_bf16": lambda: P.SelectBf16,
     },
     notes={
-        "gemm": "Gemm_v2{K,N,DOT=AmpereBF16TcDot16_v1}: batch(GemmCoordinate_v2) — Serve_v2/v3's linear",
+        "gemm": "Gemm_v2{K,N,DOT=AmpereBF16TcDot16_v2}: batch(GemmCoordinate_v2) — Serve_v2/v3's linear",
         "bias_add": "BiasAdd_v1{N}", "rmsnorm": "norm_bundle(C)['L0'] = RMSNormTriton_v1{N,EPS}",
         "rmsnorm_fused": "norm_bundle(C)['FUSED'] = RMSNormFusedCuda (b1's default fused norm){N,EPS}",
-        "rope": "RoPE_v1{NHEADS,D}", "attention": "Attention_v2{T,NH,KVH,D,BN=64,DOT=AmpereBF16TcDot16_v1,INV=Fa2InvSum_v1} (FA2)",
+        "rope": "RoPE_v1{NHEADS,D}", "attention": "Attention_v2{T,NH,KVH,D,BN=64,DOT=AmpereBF16TcDot16_v2,INV=Fa2InvSum_v1} (FA2)",
         "silu_mul": "SiluMul_v1{I}", "embedding": "Embedding_v1{V,H}", "token_select": "TokenSelect_v1{V}", "residual_add": "ResidualAdd_v1{N}",
         "const": "Const<W>[bits]: a constant gate (b1.const)", "i32_eq": "I32Eq_v1", "bit_not": "BitNot_v1 (pad_prims)",
         "bit_and": "BitAnd_v1 (pad_prims; absorbing)", "select_i32": "SelectI32_v1", "select_bf16": "SelectBf16_v1",
@@ -236,6 +236,7 @@ def _moe_ffn_fixed(E: int, TOPK: int, VPT: int, H: int, I: int):
 # this head dim, D54/D57). Used by the export-of-the-real-vLLM-class frontend (`rules/vllm_bindings.py`). ---------------------------
 _PAD_KINDS = {k: PROFILE_B1_EAGER_V2.kinds[k] for k in ("const", "i32_eq", "bit_not", "bit_and", "select_i32", "select_bf16")}
 _PAD_NOTES = {k: PROFILE_B1_EAGER_V2.notes[k] for k in _PAD_KINDS}
+_FP8_SCALE = {"per-coordinate": _fp8.ScaledMmFp8Block, "shared-per-block": _fp8.SHARED_SCALE[_fp8.ScaledMmFp8Block.id]}
 
 PROFILE_B1_EAGER_V3 = Vocabulary(
     "b1-eager-v3", "profile", "b1-eager-v3",
@@ -245,8 +246,8 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            # attention) the block size / epilogue as declared statics — bound by the vLLM rules when the active TargetProfile is not the
            # accepted records' (Ampere-family step under FA2); those keep `gemm` / `attention` above, so their digests do not move.
            "gemm_dot": lambda K, N, DOT: ir_bind(b1.GemmV2, K=K, N=N, DOT=DOT),
-           # a `MASKED_FROM` binds FA3's per-iteration Check_inf chain instead (`Attention_v4`, `TargetProfile.fa3_construction`; opt-in, so the
-           # role and its note -- and with them this vocabulary's version -- stay as they were)
+           # a `MASKED_FROM` binds FA3's per-iteration Check_inf chain instead (`Attention_v4`, `TargetProfile.fa3_construction`; an optional
+           # static, so the role and its note -- and with them this vocabulary's version -- stay as they were)
            "attention_dot": lambda T, NH, KVH, D, BN, DOT, INV, MASKED_FROM=None:
                ir_bind(b1.AttentionV2, T=T, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=INV) if MASKED_FROM is None
                else ir_bind(_f3.AttentionV4, T=T, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=INV, MASKED_FROM=MASKED_FROM),
@@ -282,12 +283,14 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            # exact to vLLM d9105ea80 `_temperature_kernel` -> `_apply_topp_split` (S splits) -> `_gumbel_sample_kernel` + argmax; the seed, pos,
            # temperature, top_p and [R16, coord M-0169] the split count S (= SplitsFor_v1(|live|, num_SMs), a derived value of the workload the
            # request Program reads from its `splits` Input) are OPERANDS).  `rules/vllm_sampling.py` asks for it.  Greedy rows keep `token_select`.
-           "token_select_stochastic": lambda V: ir_bind(_sampling.GumbelTopPTokenSelect, V=V),
+           # `CONSTRUCTION` = the target's `sampler_construction` (`registry.sampling.select_for`; the role and its note stay as they were)
+           "token_select_stochastic": lambda V, CONSTRUCTION: ir_bind(_sampling.select_for(_sampling.GumbelTopPTokenSelect, CONSTRUCTION), V=V),
            # [R15 fp8] the block-scaled FP8 linear of a pre-quantised checkpoint on Hopper (registry.fp8, pinned bit-exact on the H100 against
            # _C.per_token_group_fp8_quant and the blockwise _C.cutlass_scaled_mm): the dynamic per-128-group activation quant (both outputs
            # computed) and the scaled GEMM over e4m3 weights with f32 128x128 block scales as Inputs. `rules/vllm_bindings.py` asks for them.
+           # SCALE is `TargetProfile.effective_fp8_scale_construction()`.
            "fp8_group_quant": lambda K, G: ir_bind(_fp8.Fp8GroupQuant, K=K, G=G),
-           "scaled_mm_fp8_block": lambda K, N, G: ir_bind(_fp8.ScaledMmFp8Block, K=K, N=N, G=G)},
+           "scaled_mm_fp8_block": lambda K, N, G, SCALE: ir_bind(_FP8_SCALE[SCALE], K=K, N=N, G=G)},
     notes={**PROFILE_B1_EAGER.notes, **_PAD_NOTES, **_DNN,
            "token_select_stochastic": "GumbelTopPTokenSelect_v1{V}(logits bf16[V], top_p f32, seed i64, pos i64, temp f32, splits i32) -> i32: f32 "
                                       "widening, div.full.f32 temperature, the S-split top-p mask (_topp_sb_{stats,step,mask}; S = the splits operand "
@@ -321,8 +324,10 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "embedding_shard": "EmbeddingShard_v1{VS,H,START}: one rank of VocabParallelEmbedding — shard[id-START] if START<=id<START+VS else 0 (b1_tp2)",
            "fp8_group_quant": "Fp8GroupQuant_v1{K,G}: _C.per_token_group_fp8_quant on one bf16 row -> (x_q e4m3[K], x_s f32[K/G]); per group absmax fmaxf-fold "
                               "from eps 1e-10, s = absmax/448 (div.rn), q = e4m3(clamp(f32(x)/s, ±448)); both outputs computed",
-           "scaled_mm_fp8_block": "ScaledMmFp8Block_v1{K,N,G}: blockwise _C.cutlass_scaled_mm on one token row -- per coordinate, ascending 128-tiles: temp = 4x "
-                                  "HopperE4m3QgmmaDot32 from +0, acc = FFMA(temp, FMUL(x_s[kb], Ws[n//G][kb]), acc); cvt.rn.bf16.f32; W e4m3 [N,K] + Ws f32 [N/G,K/G] Inputs"})
+           "scaled_mm_fp8_block": "ScaledMmFp8BlockSharedScale_v1{K,N,G} (SCALE shared-per-block) or ScaledMmFp8Block_v1{K,N,G} (per-coordinate): blockwise "
+                                  "_C.cutlass_scaled_mm on one token row -- per coordinate, ascending 128-tiles: temp = 4x HopperE4m3QgmmaDot32 from +0, "
+                                  "acc = FFMA(temp, FMUL(x_s[kb], Ws[n//G][kb]), acc); cvt.rn.bf16.f32; shared-per-block forms each weight block's FMULs "
+                                  "once; W e4m3 [N,K] + Ws f32 [N/G,K/G] Inputs"})
 
 
 def profile_records(vocab: Vocabulary) -> dict | None:

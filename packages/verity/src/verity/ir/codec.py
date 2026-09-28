@@ -19,7 +19,7 @@ Schemas (`schema` field): `verity-ir/descriptor/v0` writes every body verbatim; 
 (the default since 2026-09-08) writes the same program with flat concatenations, the reference-sequence alias
 and interned callee ids / types (see `SCHEMA_V1` below). Both decode. The digest is a function of the
 encoding, so it differs between the schemas for one program; `descriptor_equivalence` is the test that two
-descriptors denote the same circuit (docs/vllm-poc/descriptor-codec.md).
+descriptors denote the same circuit (veritor's docs/vllm-poc/descriptor-codec.md).
 """
 
 from __future__ import annotations
