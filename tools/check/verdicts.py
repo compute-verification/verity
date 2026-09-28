@@ -5,7 +5,7 @@
     python tools/check/verdicts.py export OUT.tar.gz [--since SNAP.json] the entries (those new or changed since SNAP) as a pack
     python tools/check/verdicts.py import PACK.tar.gz                    add a pack's entries here, never replacing one
 
-A verdict is a pass that one step stored under a key of everything it read: a suite's pass (`suites.py`, under `$VERITY_TEST_CACHE`),
+A verdict is a pass that one step stored under a key of everything it read: a suite's pass and its tests' (`suites.py`, under `$VERITY_TEST_CACHE`),
 and under `$CHECK_CACHE` a circuit-check target's report, a Lean package's audit (`lean_audit.py`) and the agreement's pass
 (`check.py`).  A step looks an entry up by the key it computes from this machine's own inputs, so a pack can answer only for inputs
 identical to the ones that earned it.  It is trusted as far as its source: the merge queue builds packs only from recorded runs.

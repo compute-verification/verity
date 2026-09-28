@@ -426,3 +426,18 @@ def test_the_preflight_is_the_lockfile_and_the_repository_lints(monkeypatch):
     monkeypatch.delenv("UV", raising=False)
     monkeypatch.setattr(CHECK.shutil, "which", lambda _name: None)
     assert CHECK.preflight()[0][1].startswith("failed: no `uv` here")
+
+
+def test_a_contradicted_cached_pass_is_named_in_the_result(tmp_path, monkeypatch):
+    import json
+
+    from research import result as RES
+
+    (tmp_path / "suites.json").write_text(json.dumps([{"suite": "pkg", "contradicts": ["tests/test_a.py::test_a"]}, {"suite": "b"}]))
+    bad = CHECK.contradictions(tmp_path)
+    assert bad == [{"suite": "pkg", "contradicts": ["tests/test_a.py::test_a"]}]
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r20260929-010000-abcd")
+    CHECK.write_result(tmp_path, False, [{"step": "pytest", "status": "failed", "rc": 1, "seconds": 1.0}], None, bad)
+    r = RES.check(tmp_path, "r20260929-010000-abcd")
+    assert r.valid, r.errors
+    assert r.doc["cache_contradictions"] == bad
