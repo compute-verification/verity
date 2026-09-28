@@ -30,6 +30,7 @@ flock-transcript = { workspace = true }
 flock-field = { workspace = true }
 sha2 = { workspace = true }
 serde_json = { workspace = true }
+serde = { workspace = true }
 bincode = { workspace = true }
 flock-hash = { workspace = true }
 flock-merkle = { workspace = true }
@@ -46,3 +47,10 @@ workspace = true
 name = "flock-pure"
 path = "src/bin/flock-pure.rs"
 required-features = ["verity-unit"]
+
+# The circuit statement's rows are hm96-sha512 leaves (its Merkle trees on SHA-512), and its --zk mode needs Ligerito level
+# 0's hiding: both come with the sha512 patches (flock-sha512 and flock-zk, applied together by pod/60-circuit.sh).
+[[bin]]
+name = "flock-circuit"
+path = "src/bin/flock-circuit.rs"
+required-features = ["sha512"]
