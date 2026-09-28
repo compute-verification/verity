@@ -325,7 +325,9 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
     """Audit ``missed`` (and the packages they require by path) on a scratch tree of their inputs, and store each pass.
     Returns (the failed, the audited)."""
     deps.mkdir(parents=True, exist_ok=True)
-    work = Path(tempfile.mkdtemp(prefix="lean-audit-scratch-", dir=deps.parent))    # beside the dependencies: moves, not copies
+    # beside the dependencies: moves, not copies. Resolved, because audit.py names each package by its resolved path, and a
+    # cache reached through a symlink would otherwise match no report to its package
+    work = Path(tempfile.mkdtemp(prefix="lean-audit-scratch-", dir=deps.parent)).resolve()
     warm = WarmDeps(deps, urls)
     passed: set[Path] = set()
     audited: list[str] = []
