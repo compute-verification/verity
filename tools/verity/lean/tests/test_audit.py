@@ -311,6 +311,14 @@ def test_a_32_bit_record_is_checked_as_it_is_and_rehashed_by_update():
     assert text == [f"guarantee P.t: {A.REHASHED}", "definition P.f (P.Defs), read by P.t: changed", f"reads: 1 {A.REGROUPED}"]
 
 
+def test_facts_names_a_module_without_listing_every_module():
+    """`EnvironmentHeader.moduleNames` maps over every imported module on each call. Indexed once per constant a
+    guarantee's reads reach, it was 1,471 s of `Security`'s 1,504 s audit (check r20261012-005706-568f)."""
+    for tool in ("Facts.lean", "Upstream.lean"):
+        assert "moduleNames[" not in (HERE.parent / tool).read_text(), \
+            f"{tool}: name a module by `env.header.modules[i].module` (`moduleName env i`), not `env.header.moduleNames[i]`"
+
+
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_the_sha256_hash_is_expr_hash_s_equivalence(tmp_path):
     pkg = tmp_path / "control"

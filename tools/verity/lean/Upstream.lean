@@ -87,7 +87,7 @@ unsafe def main (args : List String) : IO UInt32 := do
     return acc
   let axioms := nonstandard env (hits.foldl (· ++ ·) #[])
   let module (n : Name) : String := match env.getModuleIdxFor? n with
-    | some i => env.header.moduleNames[i.toNat]!.toString
+    | some i => env.header.modules[i.toNat]!.module.toString
     | none => "?"
   let mut found : List (String × Json) := []
   let mut missing : List (String × Json) := []
