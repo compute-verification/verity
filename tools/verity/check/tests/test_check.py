@@ -145,6 +145,26 @@ def test_the_lean_steps_once_the_verifier_is_on_the_tree(tmp_path, monkeypatch):
     assert CHECK.lean_steps(out)[3][1].startswith("skipped: the pinned upstream build was not sent")
 
 
+def test_the_agreement_fails_while_the_verifier_requires_a_package_from_outside_it(tmp_path, monkeypatch):
+    """The agreement's pass is kept under the verifier's directory only (`agreement_closure`), and `research merge` asks for
+    it only for changes there, so a requirement from outside it, by the manifest or the lakefile, fails the step whether or
+    not the upstream build was sent; one inside the directory doesn't, and this tree's verifier has none."""
+    import json
+
+    out, sent = _pinned(tmp_path, monkeypatch)
+    lean = CHECK.FLOCK_LEAN
+    (lean / "lakefile.toml").write_text('name = "flock_verifier"\n[[require]]\nname = "inner"\npath = "inner"\n')
+    assert not isinstance(CHECK.lean_steps(out)[3][1], str)
+    (lean / "lakefile.toml").write_text('name = "flock_verifier"\n[[require]]\nname = "identity"\npath = "../identity"\n')
+    assert CHECK.lean_steps(out)[3][1].startswith("the verifier's Lean package requires identity from outside its directory")
+    (lean / "lakefile.toml").write_text('name = "flock_verifier"\n')
+    (lean / "lake-manifest.json").write_text(json.dumps({"packages": [{"type": "git", "name": "mathlib", "rev": "abc"}]}))
+    for f in sent.iterdir():
+        f.unlink()
+    assert CHECK.lean_steps(out)[3][1].startswith("the verifier's Lean package requires mathlib from outside")
+    assert CHECK.requires_outside(ROOT / "verity" / "core" / "service" / "flock") == []
+
+
 def test_the_lean_dependency_urls_leave_the_run_directory_before_any_step(tmp_path, monkeypatch):
     """The presigned URLs sent with a run reach the audit step from outside the run directory, which the run's record keeps."""
     monkeypatch.delenv(CHECK.LEAN_DEPS_URLS_ENV, raising=False)
