@@ -18,7 +18,7 @@ from verity.protocols.verification.sampled_proofs import service as S
 from verity.protocols.verification.sampled_proofs.one_stage import partition as P, registration as R
 
 from test_network_certifier_audit import FRAMES, P as PARAMS, SYNC_SET, SYNCS, honest_ready, ingress_run
-from toy_signer import ToySigner
+import signers
 
 LINK = "responses"
 EGRESS, INGRESS = Direction.EGRESS, Direction.INGRESS
@@ -43,10 +43,10 @@ def ingress_records():
 
 
 class Run:
-    """A link with its network certifier (the toy signer), the protocol's parameters, and the challenger's stream."""
+    """A link with its network certifier (an LMS signer on a small tree), the protocol's parameters, and the challenger's stream."""
 
     def __init__(self, tmp_path, *, proof_deadline=60.0, coins=b"\x07") -> None:
-        self.signer = ToySigner.create(tmp_path, height=6)
+        self.signer = signers.signer(tmp_path)
         self.issuer = Issuer(self.signer)
         self.lw = LinkWindows(LINK, PARAMS, SYNC_SET, self.signer.public_key(), "r-network-test",
                               proof_deadline=proof_deadline)
@@ -193,7 +193,7 @@ def test_a_bad_signature_is_a_reject(tmp_path):
     zeros = CertifiedRecord(eg.head, replace(eg.certificate, signature=bytes(len(eg.certificate.signature))))
     assert reject(run.round(run.lw.commit(0, zeros, ig, SALTS[0])))
     (tmp_path / "stranger").mkdir()
-    stranger = Issuer(ToySigner.create(tmp_path / "stranger", seed=b"other", height=6))
+    stranger = Issuer(signers.signer(tmp_path / "stranger", seed=b"other"))
     signed = stranger.certify(ingress_records()[1], INGRESS, PARAMS, parameters_digest(PARAMS))
     assert reject(run.round(run.lw.commit(1, run.egress(egress_records()[1]), signed, SALTS[1])))
     assert run.round(run.honest(2)).accepted and run.stream.symbols == ("reject", "reject", "accept")
