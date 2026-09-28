@@ -22,6 +22,7 @@ from verity.ir.defs import bind
 from verity.ir.types import Array, Value
 from verity.ml import gemm as G
 from verity.ml import kernels as K
+from verity.ml import mufu as M
 from verity.ml import prims as P
 from verity.ml.tc.models import AMPERE_BF16_M16N8K16, GroupSum
 from verity.ml.tc.total import HOPPER_BF16_WGMMA_K16, tc_dot_total
@@ -50,6 +51,13 @@ SELF_CHECKED = [
     (K.SM120_NVF4_DOT.bind(K=256), 2000),
     (K.SM120_MXF4_STEP, 20000),
     (K.SM120_MXF4_DOT.bind(K=256), 2000),
+    (M.MufuEx2Ftz, 20000),
+    (M.MufuRcpFtz, 20000),
+    (M.Fa2InvSum, 20000),
+    (M.MufuSqrtFtz, 20000),
+    (M.DivFullRcp, 20000),
+    (M.DivFullScaleA, 20000),
+    (M.RsqrtApprox, 20000),
 ]
 
 

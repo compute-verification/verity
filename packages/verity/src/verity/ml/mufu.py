@@ -11,10 +11,12 @@ little-endian u32 words, xz-compressed, from the first word 1.0 (`0x3F800000`). 
 same words under that SHA-512.  `mufu_tanh_sm89.{json,xzblocks}` is MUFU.TANH's measured shard with its manifest (see the
 MufuTanh section).  All were measured on an RTX 4090 (sm_89): conformance evidence for that architecture.
 
+Batch kernels.  Every primitive but `MufuTanh` has a numpy kernel registered with `verity.evaluation` (domain: every encoding).
+
 Provenance.  These are the definitions the vLLM integration registered in `verity_vllm.program.registry.prims` (same ids,
 signatures and conformance statuses), which re-exports them from here.  The bit rules are the integration's C++ models
 (`fa2_model.cpp`: `mufu_ex2_bits`, `mufu_rcp_bits`; `rms_triton_model.cpp`: `mufu_sqrt`, `mufu_rsq`, `div_full_parts`,
-`rsqrt_nonftz`) on integers.
+`rsqrt_nonftz`) on integers; the kernels are its numpy ports (`kernels/derived_rows.py`).
 """
 from __future__ import annotations
 
@@ -26,6 +28,7 @@ from importlib import resources
 
 import numpy as np
 
+from verity.evaluation import register_kernel
 from verity.ir.defs import primitive
 from verity.ir.types import Value
 
@@ -437,3 +440,128 @@ def MufuTanh(x: int) -> int:
     raise MufuTanhUnmeasured(f"MufuTanh(0x{u:08X}) = tanh.approx.f32({f32_of(u)!r}): word outside the loaded tables "
                              f"{[(s['lo'], s['hi']) for s in cov['shards']]} and the established regions {cov['rules']}")
 
+
+# ---------------------------------------------------------------------------------------------------------
+# numpy kernels (u32 word arrays in and out)
+# ---------------------------------------------------------------------------------------------------------
+
+
+def _as_f32(w: np.ndarray) -> np.ndarray:
+    return np.ascontiguousarray(w, dtype=np.uint32).view(np.float32)
+
+
+def _as_u32(f: np.ndarray) -> np.ndarray:
+    return np.ascontiguousarray(f, dtype=np.float32).view(np.uint32)
+
+
+def mufu_ex2_words(x: np.ndarray, T: np.ndarray) -> np.ndarray:
+    x = np.asarray(x, dtype=np.uint32)
+    ax = x & 0x7FFFFFFF
+    e = (ax >> 23).astype(np.int64)
+    neg = (x >> 31).astype(bool)
+    mant = ((ax & 0x7FFFFF) | 0x800000).astype(np.int64)
+    unb = e - 127
+    # K = floor(|x| 2^23); lanes with unb >= 30 are overwritten below, so the left shift is clipped where it would overflow
+    k = np.where(unb >= 0, mant << np.clip(unb, 0, 29), mant >> np.clip(-unb, 0, 24))
+    fixed = np.where(~neg, k, np.where((k & 0x7FFFFF) == 0, -k, -k - 1))
+    t = T[fixed & 0x7FFFFF].astype(np.int64)
+    re = ((t >> 23) & 0xFF) + (fixed >> 23)
+    out = np.where(re >= 0xFF, _INF, np.where(re <= 0, 0, (np.clip(re, 0, 0xFF) << 23) | (t & 0x7FFFFF)))
+    out = np.where(e == 0, _ONE, out)
+    out = np.where(unb >= 30, np.where(neg, 0, _INF), out)  # includes ±inf
+    out = np.where((e == 0xFF) & ((ax & 0x7FFFFF) != 0), _NAN, out)
+    return out.astype(np.uint32)
+
+
+def mufu_rcp_words(x: np.ndarray, T: np.ndarray) -> np.ndarray:
+    x = np.asarray(x, dtype=np.uint32)
+    s = (x & 0x80000000).astype(np.int64)
+    ax = x & 0x7FFFFFFF
+    e = (ax >> 23).astype(np.int64)
+    r = T[ax & 0x7FFFFF].astype(np.int64)
+    re = ((r >> 23) & 0xFF) - (e - 127)
+    out = np.where(re <= 0, s, np.where(re >= 0xFF, s | _INF, s | (np.clip(re, 0, 0xFF) << 23) | (r & 0x7FFFFF)))
+    out = np.where(e == 0, s | _INF, out)
+    out = np.where(e == 0xFF, np.where((ax & 0x7FFFFF) != 0, _NAN, s), out)
+    return out.astype(np.uint32)
+
+
+def _sqrt_like_words(x: np.ndarray, T: np.ndarray, rsq: bool) -> np.ndarray:
+    x = np.asarray(x, dtype=np.uint32)
+    s = (x & 0x80000000).astype(np.int64)
+    ax = x & 0x7FFFFFFF
+    e = (ax >> 23).astype(np.int64)
+    k = e - 127
+    par = k & 1
+    t = T[(par << 23) | (ax & 0x7FFFFF)].astype(np.int64)
+    half = (k - par) // 2
+    out = ((((t >> 23) & 0xFF) + (-half if rsq else half)) << 23) | (t & 0x7FFFFF)
+    out = np.where(s != 0, _NAN, out)
+    out = np.where(e == 0, (s | _INF) if rsq else s, out)
+    inf = np.where(s != 0, _NAN, 0 if rsq else _INF)
+    out = np.where(e == 0xFF, np.where((ax & 0x7FFFFF) != 0, _NAN, inf), out)
+    return (out & 0xFFFFFFFF).astype(np.uint32)
+
+
+def mufu_sqrt_words(x: np.ndarray, T: np.ndarray) -> np.ndarray:
+    return _sqrt_like_words(x, T, False)
+
+
+def mufu_rsq_words(x: np.ndarray, T: np.ndarray) -> np.ndarray:
+    return _sqrt_like_words(x, T, True)
+
+
+def _small(w: np.ndarray) -> np.ndarray:
+    return (w & 0x7FFFFFFF) < _MIN_NORMAL  # |w| < 2^-126
+
+
+def _times_2_24_words(w: np.ndarray) -> np.ndarray:
+    """`_times_2_24` on integers, so that the host's denormals-are-zero mode cannot change it."""
+    w = np.asarray(w, dtype=np.uint32)
+    m = (w & 0x7FFFFF).astype(np.int64)
+    k = np.clip((m.astype(np.float64).view(np.int64) >> 52) - 1022, 1, 23)  # bit_length(m) for m >= 1
+    scaled = (w & 0x80000000).astype(np.int64) | ((k + 1) << 23) | ((m << (24 - k)) & 0x7FFFFF)
+    return np.where(m == 0, w, scaled).astype(np.uint32)
+
+
+def div_full_divisor_words(b: np.ndarray) -> np.ndarray:
+    b = np.asarray(b, dtype=np.uint32)
+    ab = b & 0x7FFFFFFF
+    big = (ab > _TWO_POW_126) & (ab < _INF)
+    return np.where(_small(b), _times_2_24_words(b), np.where(big, b - np.uint32(2 << 23), b))
+
+
+def rsqrt_approx_words(x: np.ndarray, T: np.ndarray) -> np.ndarray:
+    x = np.asarray(x, dtype=np.uint32)
+    small = _small(x)
+    r = mufu_rsq_words(np.where(small, _times_2_24_words(x), x), T)
+    return np.where(small & ((r & _INF) != _INF), r + np.uint32(12 << 23), r)
+
+
+def div_full_scale_a_words(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    a = np.asarray(a, dtype=np.uint32)
+    ab = np.abs(_as_f32(b))
+    big = ab > np.float32(8.507059173023462e37)
+    small = ab < np.float32(1.1754943508222875e-38)
+    af = _as_f32(a)
+    return np.where(big, _as_u32(af * np.float32(0.25)), np.where(small, _as_u32(af * np.float32(16777216.0)), a))
+
+
+def fa2_inv_sum_words(s: np.ndarray, T: np.ndarray) -> np.ndarray:
+    s = np.asarray(s, dtype=np.uint32)
+    ax = s & 0x7FFFFFFF
+    return np.where((ax == 0) | (ax > _INF), np.uint32(_ONE), mufu_rcp_words(s, T))
+
+
+def _register_kernels() -> None:
+    every = "every encoding"
+    register_kernel(MufuEx2Ftz, lambda x: (mufu_ex2_words(x, table("ex2")), None), domain=every)
+    register_kernel(MufuRcpFtz, lambda x: (mufu_rcp_words(x, table("rcp")), None), domain=every)
+    register_kernel(Fa2InvSum, lambda s: (fa2_inv_sum_words(s, table("rcp")), None), domain=every)
+    register_kernel(MufuSqrtFtz, lambda x: (mufu_sqrt_words(x, table("sqrt")), None), domain=every)
+    register_kernel(DivFullRcp, lambda b: (mufu_rcp_words(div_full_divisor_words(b), table("rcp")), None), domain=every)
+    register_kernel(DivFullScaleA, lambda a, b: (div_full_scale_a_words(a, b), None), domain=every)
+    register_kernel(RsqrtApprox, lambda x: (rsqrt_approx_words(x, table("rsq")), None), domain=every)
+
+
+_register_kernels()
