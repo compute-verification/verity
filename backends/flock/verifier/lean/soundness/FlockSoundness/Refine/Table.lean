@@ -44,6 +44,111 @@ theorem entries_eq_of_flat : ∀ (a b : List ByteArray), (∀ x ∈ a, x.size = 
       rw [hxy, entries_eq_of_flat a b (fun z hz => ha z (List.mem_cons_of_mem _ hz))
         (fun z hz => hb z (List.mem_cons_of_mem _ hz)) (by simpa using hl) h2]
 
+theorem list_mapM_ok_mem {α β ε : Type} {f : α → Except ε β} :
+    ∀ {l : List α} {l' : List β}, l.mapM f = .ok l' → ∀ y ∈ l', ∃ x, f x = .ok y
+  | [], l', h, y, hy => by
+      simp only [List.mapM_nil, pure, Except.pure, Except.ok.injEq] at h
+      subst h; cases hy
+  | a :: l, l', h, y, hy => by
+      rw [List.mapM_cons] at h
+      obtain ⟨b, hb, h⟩ := ebind_ok h
+      obtain ⟨bs, hbs, h⟩ := ebind_ok h
+      simp only [pure, Except.pure, Except.ok.injEq] at h
+      subst h
+      rcases List.mem_cons.1 hy with rfl | hy
+      · exact ⟨a, hb⟩
+      · exact list_mapM_ok_mem hbs y hy
+
+theorem mapM_ok_mem {α β ε : Type} {f : α → Except ε β} {xs : Array α} {ys : Array β}
+    (h : xs.mapM f = .ok ys) : ∀ y ∈ ys.toList, ∃ x, f x = .ok y := by
+  rw [Array.mapM_eq_mapM_toList] at h
+  cases hl : xs.toList.mapM f with
+  | error e => rw [hl] at h; cases h
+  | ok l =>
+      rw [hl] at h
+      simp only [Functor.map, Except.map, Except.ok.injEq] at h
+      subst h
+      simpa using list_mapM_ok_mem hl
+
+theorem mapIdxM_go_ok_mem {α β ε : Type} {f : ℕ → α → Except ε β} :
+    ∀ {l : List α} {acc : Array β} {l' : List β}, List.mapIdxM.go f l acc = .ok l' →
+      ∀ y ∈ l', y ∈ acc.toList ∨ ∃ i x, f i x = .ok y
+  | [], acc, l', h, y, hy => by
+      simp only [List.mapIdxM.go, pure, Except.pure, Except.ok.injEq] at h
+      subst h; exact Or.inl hy
+  | a :: l, acc, l', h, y, hy => by
+      simp only [List.mapIdxM.go] at h
+      obtain ⟨b, hb, h⟩ := ebind_ok h
+      rcases mapIdxM_go_ok_mem h y hy with hy | hy
+      · rw [Array.toList_push, List.mem_append, List.mem_singleton] at hy
+        rcases hy with hy | rfl
+        · exact Or.inl hy
+        · exact Or.inr ⟨_, _, hb⟩
+      · exact Or.inr hy
+
+theorem mapIdxM_ok_mem {α β ε : Type} {f : ℕ → α → Except ε β} {xs : Array α} {ys : Array β}
+    (h : xs.mapIdxM f = .ok ys) : ∀ y ∈ ys.toList, ∃ i x, f i x = .ok y := by
+  have e := Array.toList_mapIdxM (xs := xs) (f := f)
+  rw [h] at e
+  simp only [Functor.map, Except.map] at e
+  intro y hy
+  rcases mapIdxM_go_ok_mem (f := f) (l := xs.toList) (acc := #[]) (by simpa [List.mapIdxM] using e.symm) y hy with
+    hy | hy
+  · simp at hy
+  · exact hy
+
+theorem check_ok_iff {b : Bool} {why : String} {u : Unit} : Record.check b why = .ok u ↔ b = true := by
+  unfold Record.check
+  cases b
+  · exact ⟨(fun h => by cases h), (fun h => by cases h)⟩
+  · exact ⟨fun _ => rfl, fun _ => rfl⟩
+
+theorem check_coins {n : ℕ} {coins : Array Flock.F128} {a b c : Bool} {why : String} {u : Unit}
+    (h : Record.check (a && b && coins.size == n && c) why = .ok u) : coins.size = n := by
+  have := check_ok_iff.1 h
+  simp only [Bool.and_eq_true, beq_iff_eq] at this
+  exact this.1.2
+
+theorem roundsWF_of {rs : Array Round} (h : ∀ r ∈ rs.toList, r.coins.size = r.n) : RoundsWF rs := by
+  intro i hi
+  rw [getElem!_pos rs i hi]
+  exact h _ (Array.getElem_mem_toList hi)
+
+set_option maxHeartbeats 1000000 in
+/-- The record's rounds are well formed: `Record.decode` checks every round's coin count (S12). -/
+theorem decode_roundsWF {spec : SessionSpec} {text : String} {sess : Session}
+    (h : Record.decode spec text = .ok sess) : ∀ s ∈ sess.streams.toList, RoundsWF s.rounds := by
+  unfold Record.decode at h
+  dsimp only at h
+  repeat' (first | (obtain ⟨_, _, h⟩ := ebind_ok h) | (split at h))
+  all_goals
+    simp only [pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    intro s hs
+    try dsimp only at hs
+    obtain ⟨x, hx⟩ := mapM_ok_mem (by assumption) s hs
+    try dsimp only at hx
+    repeat' (first | (obtain ⟨_, _, hx⟩ := ebind_ok hx) | (split at hx))
+    all_goals
+      simp only [pure, Except.pure, Except.ok.injEq] at hx
+      subst hx
+      apply roundsWF_of
+      intro r hr
+      obtain ⟨k, y, hg⟩ := mapIdxM_ok_mem (by assumption) r hr
+      try dsimp only at hg
+      repeat' (first | (obtain ⟨_, _, hg⟩ := ebind_ok hg) | (split at hg))
+      all_goals
+        simp only [pure, Except.pure, Except.ok.injEq] at hg
+        subst hg
+        exact check_coins (by assumption)
+
+theorem exec_fast100_ge {m : ℕ} {s : Flock.Schedule} (hs : Flock.fast100 m = some s) : 22 ≤ m := by
+  by_contra hm
+  have : (m < 22 || m > 35) = true := by rw [Bool.or_eq_true, decide_eq_true_iff, decide_eq_true_iff]; omega
+  unfold Flock.fast100 at hs
+  rw [ite_eq_left_of_eq_true _ _ (eq_true this)] at hs
+  cases hs
+
 /-- The proof files' openings (§14): rep `r`'s opened rows and siblings, level by level. -/
 def opensOf (p₀ p₁ : Proof) (sch : Flock.Schedule) : Opens 𝔽 Dig :=
   fun r ℓ j => if r = 0 then openRow p₀.ligerito sch ℓ j else openRow p₁.ligerito sch ℓ j
@@ -53,12 +158,11 @@ two proof files under the unsalted SHA-512 scheme, on a statement whose `m`, `k_
 the model's `S` and `extra`, the record and both proofs decode. Then at the proofs' openings, each rep's compiled game,
 played with its proof's messages and every coin of its stream, accepts, and both reps' paths verify against the one
 level-0 cap. -/
-theorem verify_refines (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m) (h14 : 14 ≤ S.m)
+theorem verify_refines (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m)
     (hmS : st.m = S.m) (hkS : st.kLog = S.kLog) (hfold : FoldRealizes st.fold S) (msId : String)
     (hms : st.merkle = MerkleScheme.sha512 msId) (extra : Session → List (Model.Claim 𝔽 S.m))
     (record : String) (proofs : Array ByteArray)
     (hext : ∀ sess, Record.decode st.spec record = .ok sess → ExtraRealizes st S sess.points (extra sess))
-    (hwf : ∀ sess, Record.decode st.spec record = .ok sess → ∀ s ∈ sess.streams.toList, RoundsWF s.rounds)
     (h : Flock.verify st record proofs = .ok ()) :
     ∃ (sess : Session) (sch : Flock.Schedule) (p₀ p₁ : Proof) (s₀ s₁ : StreamRec) (pend₀ pend₁ : PendL 𝔽 Dig),
       Record.decode st.spec record = .ok sess ∧ Flock.fast100 st.m = some sch ∧
@@ -79,6 +183,8 @@ theorem verify_refines (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m) (h14
   cases hf : Flock.fast100 st.m with
   | none => rw [hf] at h; cases h
   | some sch =>
+      have h14 : 14 ≤ S.m := by have := exec_fast100_ge hf; omega
+      have hwf := decode_roundsWF hsess
       rw [hf] at h
       dsimp only at h
       by_cases c1 : (proofs.size != 2) = true
@@ -102,9 +208,9 @@ theorem verify_refines (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m) (h14
         fast100_level st.m sch hf _ (by unfold Array.getD; rw [dite_eq_left hi]; exact Array.getElem_mem hi)
       have hschm : sch.m = S.m := hsm.trans hmS
       obtain ⟨s₀, p₀, hs₀, hp₀, hc₀, -, hsz₀, hw₀, hrest₀⟩ := rep_refines st S hm h14 sch hmS hkS hfold (extra sess)
-        sess (hext sess hsess) hdim hlv hschm (hwf sess hsess) 0 _ _ h0
+        sess (hext sess hsess) hdim hlv hschm hwf 0 _ _ h0
       obtain ⟨s₁, p₁, hs₁, hp₁, hc₁, -, hsz₁, hw₁, hrest₁⟩ := rep_refines st S hm h14 sch hmS hkS hfold (extra sess)
-        sess (hext sess hsess) hdim hlv hschm (hwf sess hsess) 1 _ _ h1
+        sess (hext sess hsess) hdim hlv hschm hwf 1 _ _ h1
       obtain ⟨pend₀, hpl₀, hcaps₀, hreqs₀, hver₀⟩ := hrest₀ capDig (opensOf p₀ p₁ sch) fun ℓ _ j _ => rfl
       obtain ⟨pend₁, hpl₁, hcaps₁, hreqs₁, hver₁⟩ := hrest₁ capDig (opensOf p₀ p₁ sch) fun ℓ _ j _ => rfl
       rw [hms] at hreqs₀ hreqs₁ hw₀ hw₁
@@ -124,13 +230,12 @@ open Classical in
 /-- **The verifier refines the model's table, as one run** (§5). When `Flock.verify` accepts, with the extra claims the
 model's `extraClaims` at link points `pts` read off the record, `tableAfter` has an accepting run. It is played on the
 two streams' coins, rep 0's then rep 1's; its messages interleave the proofs' messages, and end with the openings. -/
-theorem verify_tableAfter (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m) (h14 : 14 ≤ S.m)
+theorem verify_tableAfter (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m)
     (hmS : st.m = S.m) (hkS : st.kLog = S.kLog) (hfold : FoldRealizes st.fold S) (msId : String)
     (hms : st.merkle = MerkleScheme.sha512 msId) (ptLocal mPts : ℕ) (pts : Session → Fin 2 → Fin mPts → 𝔽)
     (record : String) (proofs : Array ByteArray)
     (hext : ∀ sess, Record.decode st.spec record = .ok sess →
       ExtraRealizes st S sess.points (Model.extraClaims S ptLocal mPts (pts sess)))
-    (hwf : ∀ sess, Record.decode st.spec record = .ok sess → ∀ s ∈ sess.streams.toList, RoundsWF s.rounds)
     (h : Flock.verify st record proofs = .ok ()) :
     ∃ (sess : Session) (sch : Flock.Schedule) (p₀ p₁ : Proof) (s₀ s₁ : StreamRec) (ms : List Msg) (out : OutC 𝔽 Dig),
       Record.decode st.spec record = .ok sess ∧ Flock.fast100 st.m = some sch ∧
@@ -142,8 +247,8 @@ theorem verify_tableAfter (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m) (
         (s₀.rounds.toList.map (·.coins) ++ s₁.rounds.toList.map (·.coins)) out ∧
       out.accepted = true ∧ out.opens = opensOf p₀ p₁ sch := by
   obtain ⟨sess, sch, p₀, p₁, s₀, s₁, pend₀, pend₁, hsess, hf, hp₀, hp₁, hs₀, hs₁, hpl₀, hpl₁, hv₀, hv₁, hok₀, hok₁⟩ :=
-    verify_refines st S hm h14 hmS hkS hfold msId hms (fun sess => Model.extraClaims S ptLocal mPts (pts sess)) record
-      proofs hext hwf h
+    verify_refines st S hm hmS hkS hfold msId hms (fun sess => Model.extraClaims S ptLocal mPts (pts sess)) record
+      proofs hext h
   obtain ⟨ms, hint⟩ := Plays.interleave_first hpl₀ hpl₁
   refine ⟨sess, sch, p₀, p₁, s₀, s₁, ms ++ [⟨Opens 𝔽 Dig, opensOf p₀ p₁ sch⟩],
     ⟨pend₀.verdict (opensOf p₀ p₁ sch) && pend₁.verdict (opensOf p₀ p₁ sch) &&

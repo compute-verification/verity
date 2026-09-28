@@ -17,3 +17,4 @@ import FlockSoundness.Refine.Final
 import FlockSoundness.Refine.Basis
 import FlockSoundness.Refine.Rep
 import FlockSoundness.Refine.Paths
+import FlockSoundness.Refine.Table
