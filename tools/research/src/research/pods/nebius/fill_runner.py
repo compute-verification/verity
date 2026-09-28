@@ -42,7 +42,8 @@ Every POLL_S seconds the runner:
     to CPU_SET at nice 19; more queued CPU jobs borrow the Verity pool's idle slots while no Verity job waits;
   - runs the CPU jobs of an owner listed in FILL_DIR/cpu-sets (`<owner> <cpus> <slots> [mem_gb]  # why`, read each tick) on
     those CPUs instead, up to that many at a time, at nice 19 and ionice idle, with their memory cap lowered to mem_gb if
-    given; and logs each scoped CPU job's peak memory (mem_peak_gb) when it exits.
+    given, and paused (none started) while a train check holds FILL_YIELD_LOCK if those CPUs meet FILL_YIELD_CPUS; and logs
+    each scoped CPU job's peak memory (mem_peak_gb) when it exits.
 Status: FILL_DIR/status.txt; every start, stop and exit: FILL_DIR/events.jsonl.
 """
 from __future__ import annotations
@@ -71,6 +72,10 @@ CPU_MEM_GB = int(os.environ.get("FILL_CPU_MEM_GB", "128"))
 # timed, and pous and lent CPU jobs keep their memory off NUMA 0 (numactl --membind=<node>).
 FREEZE_ON_WAIT = os.environ.get("FILL_FREEZE_ON_WAIT", "0") == "1"
 CPU_MEMBIND = os.environ.get("FILL_CPU_MEMBIND", "")
+# slot d's train checks on 0-47 (top-level, 1 Oct 1:52 AM PDT) run in a login session's cgroup, beside fill's user scopes, so
+# nice 19 can't make a CPU job yield to one: a cpu-sets job on those CPUs pauses while a check holds the slot's lock
+YIELD_LOCK = Path(os.environ.get("FILL_YIELD_LOCK", "/workspace/research/locks/check-d.lock"))
+YIELD_CPUS = os.environ.get("FILL_YIELD_CPUS", "0-47")
 MAX_TRIES = 2
 # Verity's CPU-only jobs (project=verity, gpus=0) get their own pool, so they never take pous's CPU slots (the terms agreed with
 # the nebius-infra steward): their CPU set, a job count, a per-job and a total memory cap, no start once the disk reaches
@@ -166,10 +171,10 @@ def lease(i: int) -> str | None:
         return "held"
 
 
-def agent_up() -> bool:
-    """Whether the node's scheduler agent (`cluster agent --mode live`) holds LEASE_DIR/agent.lock."""
+def held(lock: Path) -> bool:
+    """Whether someone holds `lock` exclusively (flock)."""
     try:
-        fd = os.open(LEASE_DIR / "agent.lock", os.O_RDONLY)
+        fd = os.open(lock, os.O_RDONLY)
     except OSError:
         return False
     try:
@@ -179,6 +184,16 @@ def agent_up() -> bool:
         return True
     finally:
         os.close(fd)
+
+
+def agent_up() -> bool:
+    """Whether the node's scheduler agent (`cluster agent --mode live`) holds LEASE_DIR/agent.lock."""
+    return held(LEASE_DIR / "agent.lock")
+
+
+def yields(cpus: str | None) -> bool:
+    """Whether a cpu-sets job on `cpus` gives way to a train check: its CPUs meet YIELD_CPUS."""
+    return bool(cpus) and bool(gpu_set(cpus, 1 << 16) & gpu_set(YIELD_CPUS, 1 << 16))
 
 
 def waiters() -> list[int]:
@@ -514,13 +529,15 @@ def tick(n: int) -> str:
     frozen = cpu_frozen(timed, window)
     if frozen and any(not j["h"]["gpus"] and not j.get("stopping") and not j["paused"] for j in running.values()):
         event("freeze-memory", "-", timed=timed, waiting=window, **numa0_gb())
+    checking = held(YIELD_LOCK)
     for k, j in running.items():
         if not j["h"]["gpus"] and not j.get("stopping"):
+            hold = frozen or (checking and yields(j["h"].get("cpuset")))
             try:
-                if frozen and not j["paused"]:
+                if hold and not j["paused"]:
                     scope(j, "freeze")
                     os.killpg(j["pid"], signal.SIGSTOP); j["paused"], j["paused_at"] = True, time.monotonic(); event("pause", k)
-                elif not frozen and j["paused"]:
+                elif not hold and j["paused"]:
                     scope(j, "thaw")
                     os.killpg(j["pid"], signal.SIGCONT)
                     j["paused_s"] = j.get("paused_s", 0.0) + time.monotonic() - j["paused_at"]; j["paused"] = False
@@ -580,6 +597,8 @@ def tick(n: int) -> str:
         own = [x for x in queued if not x[1]["gpus"] and x[1]["project"] != "verity" and x[1]["owner"] in sets]
         rest = [x for x in queued if x not in own]
         for owner, s in sets.items():
+            if checking and yields(s["cpus"]):
+                continue
             busy = sum(1 for j in running.values() if j["h"].get("cpuset") and j["h"]["owner"] == owner)
             mine = sorted((x for x in own if x[1]["owner"] == owner), key=lambda x: (x[2], x[0].name))
             for p, h, _ in mine[:max(0, s["slots"] - busy)]:
