@@ -32,7 +32,7 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
     Property("fa2_target_capture", "verity-vllm/fa2-target-capture/v1",
              "On the capture's GPU, vLLM selects FA2, the installed kernel launches kBlockM 64 and kBlockN fa2_kblock_n(D), MUFU ex2 / rcp "
              "are core's tables on every input, and every checked output row equals the Hopper-step Attention_v2 wherever its operands "
-             "are finite and FA2's own Check_inf placement on every row."),
+             "are finite and FA2's own Check_inf placement, the registered Attention_v5, on every row, which the target binds."),
     Property("norm_tap_exactness", "verity-vllm/norm-tap-exactness/v1",
              "The tapped norm kernels (fused CUDA op, Triton copy) compute exactly the installed kernels' outputs, write every row's "
              "scale, and each scale is the IR model's scale bit for bit; the Triton copy's compiled arithmetic is the installed kernel's."),

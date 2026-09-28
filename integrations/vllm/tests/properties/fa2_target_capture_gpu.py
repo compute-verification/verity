@@ -1,7 +1,8 @@
 """FA2 on a target: the stock vllm-flash-attn kernel vLLM launches there, against the attention Definitions a target can bind.
 
 One GPU process writes `<out>/fa2_target_capture.json`, the property record `fa2_target_capture` (`properties.record`).  `ok` = the
-gate, MUFU, every launch's tile and determinism, the engine, and every row equal to fa2_check_inf and, on its finite heads, to v2_hopper.
+gate, MUFU, every launch's tile and determinism, the engine, every row equal to fa2_check_inf and v5 and, on its finite heads, to
+v2_hopper, and the target's own binding of every row the checked `Attention_v5` (where the target binds FA2's construction).
 The device gate runs first and nothing else runs when it fails (exit 3):
 
   gate     nvidia-smi driver, compute capability and `multi_processor_count` against `--min-driver`, `--want-cc`, `--want-sms`.
@@ -17,6 +18,7 @@ The device gate runs first and nothing else runs when it fails (exit 3):
              v3_ampere      Attention_v3{T,NH,KVH,D,BN} (the Ampere step)
              fa2_check_inf  v2_hopper with the kernel's own `Check_inf` placement: after the launch's `n_masking_steps` iterations the
                             rescale reads the running max unguarded (`max_scaled` stays guarded: softmax.h `scale_apply_exp2`)
+             v5             the registered `Attention_v5{..., MASKED_FROM}` (`registry.fa2_check_inf`), which fa2_check_inf restates
            by the vectorised twins, and by the reference evaluator on every head a twin flags non-finite.  On finite heads the running max
            is finite from the row's first visible block on, so fa2_check_inf equals v2_hopper there and is evaluated on non-finite heads only.
   engine   `engine.build.build_engine(case="B0", target=...)` for the declared target: each attention layer's impl and FA version.
@@ -58,7 +60,7 @@ MUFU_SRC = Path(__file__).resolve().parents[2] / "verity_vllm/program/kernels/cu
 MODELS = {"smollm2-135m": (9, 3, 64), "smollm2-360m": (15, 5, 64), "pythia-160m": (12, 12, 64), "qwen2.5-0.5b": (14, 2, 64),
           "llama-3.2-1b": (32, 8, 64), "tinyllama-1.1b": (32, 4, 64), "phi-3-mini": (32, 32, 96), "qwen2.5-1.5b": (12, 2, 128),
           "qwen2.5-7b": (28, 4, 128), "qwen3-4b": (32, 8, 128), "olmoe-1b-7b": (16, 16, 128), "qwen3-30b-a3b": (32, 4, 128)}
-VARIANTS = ("v2_hopper", "v3_ampere", "fa2_check_inf")
+VARIANTS = ("v2_hopper", "v3_ampere", "fa2_check_inf", "v5")
 
 
 def _run(cmd: list[str], **kw) -> subprocess.CompletedProcess:
@@ -313,17 +315,21 @@ def compare(job: dict[str, Any]) -> dict[str, Any]:
     from verity.evaluation.reference import evaluate
     from verity.ir.defs import bind
     from verity_vllm.program.kernels import derived_rows as DR
+    from verity_vllm.program.frontend.target_profile import TargetProfile
     from verity_vllm.program.registry import b1, hopper
+    from verity_vllm.program.registry import fa2_check_inf as F2
     from verity_vllm.program.registry import prims as P
+    from verity_vllm.program.registry import targets as TG
 
     c, D, q, k, v, o, bt = job["case"], job["D"], job["q"], job["k"], job["v"], job["out"], job["block_table"]
+    tp = TargetProfile.default().with_overrides(compute_capability=tuple(job["cc"]), num_sms=int(job["sms"])) if job.get("cc") else None
     H, Hk = c["H"], c["Hk"]
     BN = b1.fa2_kblock_n(D)
     g = H // Hk
     kvh = np.arange(H) // g
     sq_max = max(c["seqlens_q"])
     twin = {"v2_hopper": DR.TC_DOT16_BY_PRIM["HopperBF16WgmmaDot16_v1"], "v3_ampere": DR.TC_DOT16_BY_PRIM["AmpereBF16TcDot16_v2"]}
-    rec: dict[str, Any] = {"rows": 0, "heads": 0, "nonfinite_heads": 0, "reference_heads": 0, "self_check_mismatch": 0,
+    rec: dict[str, Any] = {"rows": 0, "heads": 0, "nonfinite_heads": 0, "reference_heads": 0, "self_check_mismatch": 0, "binding_mismatch": 0,
                            **{f"{n}_mismatch": 0 for n in VARIANTS}, **{f"{n}_mismatch_finite": 0 for n in VARIANTS}, "first_mismatch": {}}
     tok = 0
     for seq, (sq, sk) in enumerate(zip(c["seqlens_q"], c["seqlens_k"])):
@@ -340,16 +346,26 @@ def compare(job: dict[str, Any]) -> dict[str, Any]:
                 st = DR.attention_head_states(q[tok + r], kk, vv, BN, dot16=dot16, inv=DR.INV_SUM_BY_PRIM["Fa2InvSum_v1"])
                 want[name] = np.asarray(st["out"], dtype=np.uint16)
                 nonfinite |= np.asarray(st["nonfinite"], dtype=bool)
-            want["fa2_check_inf"] = want["v2_hopper"].copy()
             gfrom = guarded_from(sq_max, sq, sk, r, BN)
+            v5 = bind(F2.AttentionHeadV5, T=T, D=D, BN=BN, DOT=hopper.HopperBF16WgmmaDot16, INV=P.Fa2InvSum, MASKED_FROM=gfrom)
+            st = DR.attention_head_states(q[tok + r], kk, vv, BN, dot16=twin["v2_hopper"], inv=DR.INV_SUM_BY_PRIM["Fa2InvSum_v1"],
+                                          masked_from=gfrom, rescale_only=True)
+            want["v5"] = np.asarray(st["out"], dtype=np.uint16)
+            want["fa2_check_inf"] = want["v2_hopper"].copy()
+            if tp is not None and TG.fa2_check_inf(tp):           # the target's own binding of this row is the Definition checked here
+                spec = TG.attention_spec(tp, T, H, Hk, D, sq_max, row=r, own_rows=sq)
+                rec["binding_mismatch"] += spec.id != bind(F2.AttentionV5, T=T, NH=H, KVH=Hk, D=D, BN=BN, DOT=hopper.HopperBF16WgmmaDot16,
+                                                             INV=P.Fa2InvSum, MASKED_FROM=gfrom).id
             for h in np.flatnonzero(nonfinite):
                 qh, kf, vf = q[tok + r, h].tolist(), kk[h].reshape(-1).tolist(), vv[h].reshape(-1).tolist()
                 want["v2_hopper"][h] = evaluate(bind(b1.AttentionHeadV2, T=T, D=D, BN=BN, DOT=hopper.HopperBF16WgmmaDot16, INV=P.Fa2InvSum),
                                                 qh, kf, vf)
                 want["v3_ampere"][h] = evaluate(bind(b1.AttentionHeadV3, T=T, D=D, BN=BN), qh, kf, vf)
                 want["fa2_check_inf"][h] = _fa2_check_inf_head(qh, kk[h], vv[h], BN, gfrom)
-                if _fa2_check_inf_head(qh, kk[h], vv[h], BN, 0) != [int(x) for x in want["v2_hopper"][h]]:
-                    rec["self_check_mismatch"] += 1          # the restatement with every block guarded must be AttentionHead_v2
+                want["v5"][h] = evaluate(v5, qh, kf, vf)
+                if (_fa2_check_inf_head(qh, kk[h], vv[h], BN, 0) != [int(x) for x in want["v2_hopper"][h]]
+                        or [int(x) for x in want["fa2_check_inf"][h]] != [int(x) for x in want["v5"][h]]):
+                    rec["self_check_mismatch"] += 1          # the restatement is AttentionHead_v2 with every block guarded, AttentionHead_v5 at gfrom
                 rec["reference_heads"] += 1
             rec["rows"] += 1
             rec["heads"] += H
@@ -407,7 +423,8 @@ def _verdict(doc: dict[str, Any]) -> bool:
     launches, rows = doc["launches"], doc["cases"]
     return (doc["gate"]["ok"] and doc["mufu"].get("ok") is True and doc["engine"].get("ok") is True
             and bool(launches) and all(x["ok"] and x["deterministic"] for x in launches)
-            and bool(rows) and all(x.get("v2_hopper_mismatch_finite") == 0 and x.get("fa2_check_inf_mismatch") == 0
+            and bool(rows) and all(x.get("v2_hopper_mismatch_finite") == 0 and x.get("fa2_check_inf_mismatch") == 0 and x.get("v5_mismatch") == 0
+                                   and x.get("binding_mismatch") == 0
                                    and x.get("self_check_mismatch") == 0 for x in rows))
 
 
@@ -452,6 +469,7 @@ def run(out: str, min_driver: int, want_cc: str, want_sms: int, workers: int, on
             for D in c["hdims"]:
                 with record_function(f"{LABEL}{len(jobs)}"):
                     launch, job = gpu_case(op, c, D, 1000 * D + i)
+                    job.update(cc=[p.major, p.minor], sms=int(p.multi_processor_count))
                     torch.cuda.synchronize()
                 doc["launches"].append(launch)
                 jobs.append(job)

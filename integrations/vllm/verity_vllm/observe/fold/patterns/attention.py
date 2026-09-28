@@ -157,18 +157,22 @@ class AttentionScope:
         # under FA3's per-iteration Check_inf chain (`fa3_construction`) a row's tile is part of its Definition: rows group by (T, the row's
         # index among its request's rows in this step); otherwise by T alone
         check_inf = fa_v == 3 and _targets().fa3_check_inf(tp)
+        # FA2's per-iteration Check_inf chain also reads how many query rows the row's request has in this step
+        check_inf2 = fa_v == 2 and _targets().fa2_check_inf(tp)
         first_pos: dict = {}
         for req, position in ctx.start.rows:
             first_pos[req] = min(int(position), first_pos.get(req, int(position)))
-        groups: dict[tuple[int, int | None], list[int]] = {}
+        own = collections.Counter(req for req, _ in ctx.start.rows)
+        groups: dict[tuple[int, int | None, int | None], list[int]] = {}
         for i, (req, position) in enumerate(ctx.start.rows):
             T = int(position) + 1
             seq = ctx.start.seq_lens.get(req)
             if seq is not None and T > seq:
                 return unsupported(node, "row position exceeds the request's KV length", row=i, request=req, T=T, seq_len=seq)
-            groups.setdefault((T, int(position) - first_pos[req] if check_inf else None), []).append(i)
+            groups.setdefault((T, int(position) - first_pos[req] if check_inf or check_inf2 else None, own[req] if check_inf2 else None),
+                              []).append(i)
         computes: list[Compute] = []
-        for (T, row_in_request), rows in groups.items():
+        for (T, row_in_request, own_rows), rows in groups.items():
             try:
                 slots = tuple(kv_slots(ctx, ctx.start.rows[i][0], T, layer=layer_s) for i in rows)
             except GeometryError as e:
@@ -177,8 +181,8 @@ class AttentionScope:
                 return unsupported(node, "a KV slot is outside the cache", T=T, cache_slots=kcs.shape[0])
             try:
                 # the launch's `max_seqlen_q` (FA3's tile rule reads it): the most query rows any ONE request has in this step
-                max_seqlen_q = max(collections.Counter(req for req, _ in ctx.start.rows).values())
-                spec = _targets().attention_spec(tp, T, NH, KVH, D, max_seqlen_q, row=row_in_request)
+                max_seqlen_q = max(own.values())
+                spec = _targets().attention_spec(tp, T, NH, KVH, D, max_seqlen_q, row=row_in_request, own_rows=own_rows)
             except _targets().UnregisteredTarget as e:
                 return unsupported(node, f"target has no registered attention binding: {e}")
             computes.append(Compute(spec, len(rows),

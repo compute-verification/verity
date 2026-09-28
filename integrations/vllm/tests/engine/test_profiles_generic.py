@@ -109,13 +109,15 @@ def test_the_x07_name_is_for_dense_architectures_only():
 def test_profile_module_for_case_is_derived_not_looked_up():
     from verity_vllm.engine import profiles
     assert not hasattr(profiles, "PROFILE_BY_CASE")
+    refused = {"QWEN15_AWQ": "awq", "QWEN3_30B_A3B_FP8": "mixed-precision"}      # shipped configs the constructor refuses by name
     for role, world in ROLES:
-        if role == "QWEN15_AWQ":
+        if role in refused:
             continue
         assert profile_module_for_case(role, world) == G.module_name(role, world)
         assert profile_for_case(role, world).notes["case"] == role
-    with pytest.raises(KeyError, match="awq"):
-        profile_module_for_case("QWEN15_AWQ")
+    for role, why in refused.items():
+        with pytest.raises(KeyError, match=why):
+            profile_module_for_case(role)
     with pytest.raises(KeyError, match="no HF config.json"):
         profile_module_for_case("NO_SUCH_ROLE")
 

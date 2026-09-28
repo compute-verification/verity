@@ -110,7 +110,7 @@ class TpRow(Row):
         s = R.tp_shape(self.path(self.wl), self.path("manifests/checkpoints.json"), env.hf_home)
         self.B, self.I, self.O, self.shapes, self.ck = s["B"], s["I"], s["O"], s["shapes"], s["ck"]
         self.MML, self.MNBT = s["MML"], s["MNBT"]
-        tgt = R.declared_target(self.path(self.wl))
+        tgt = R.declared_target(self.path(self.wl), row=self.row)
         self.tgt_args = ["--target", tgt] if tgt else []
         fp = self.cm.fold_profile
         self.fold_profile = f"derived_{self.role}_tp{self.W}" if fp is None else fp

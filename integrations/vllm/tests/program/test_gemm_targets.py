@@ -74,8 +74,9 @@ def test_sm120_is_the_default_tiling_on_the_hopper_k16_step():
 
 def test_sm120_binds_the_hopper_gemm_and_hopper_step_fa2():
     """The sm_120 step family binds `Gemm_v2{K,N,DOT=HopperBF16WgmmaDot16_v1}` and FA2 only: vLLM's FA2 on cc 12.0 is the driver's JIT
-    of the compute_80 PTX on the Hopper step, so its attention is `Attention_v2{..., BN=fa2_kblock_n(D), DOT=HopperBF16WgmmaDot16_v1,
-    INV=Fa2InvSum_v1}`, the H100 forced-FA2 chain, never the Ampere-step `Attention_v3`; a declared FA3 is refused by name."""
+    of the compute_80 PTX on the Hopper step, so its attention is the H100 forced-FA2 chain (`BN=fa2_kblock_n(D)`,
+    `DOT=HopperBF16WgmmaDot16_v1`, `INV=Fa2InvSum_v1`) with FA2's own `Check_inf` placement, `Attention_v5`; never the Ampere-step
+    `Attention_v3`; a declared FA3 is refused by name."""
     from verity_vllm.program.registry import b1
     from verity_vllm.program.registry import targets as TG
 
@@ -85,16 +86,19 @@ def test_sm120_binds_the_hopper_gemm_and_hopper_step_fa2():
     assert TG.gemm_spec(PRO6000_TP, 2048, 3072).id == TG.gemm_spec(HOPPER_TP, 2048, 3072).id
     hopper_fa2 = HOPPER_TP.with_overrides(flash_attn_version=2)
     for D in (64, 96, 128, 256):
-        spec = TG.attention_spec(PRO6000_TP, 33, 32, 8, D, 1)
-        assert spec.id == TG.attention_spec(hopper_fa2, 33, 32, 8, D, 1).id
-        assert spec.id == f"Attention_v2{{T=33,NH=32,KVH=8,D={D},BN={b1.fa2_kblock_n(D)},DOT=HopperBF16WgmmaDot16_v1,INV=Fa2InvSum_v1}}"
+        BN = b1.fa2_kblock_n(D)
+        spec = TG.attention_spec(PRO6000_TP, 33, 32, 8, D, 1, row=0, own_rows=1)          # a decode row: only its first block guarded
+        assert spec.id == (f"Attention_v5{{T=33,NH=32,KVH=8,D={D},BN={BN},DOT=HopperBF16WgmmaDot16_v1,INV=Fa2InvSum_v1,"
+                           f"MASKED_FROM={-(-33 // BN) - 1}}}")
+        assert TG.attention_spec(hopper_fa2, 33, 32, 8, D, 1).id == \
+               f"Attention_v2{{T=33,NH=32,KVH=8,D={D},BN={BN},DOT=HopperBF16WgmmaDot16_v1,INV=Fa2InvSum_v1}}"
     assert TG.check_flash_attn_registered(PRO6000_TP) == 2
     with pytest.raises(TG.UnregisteredTarget, match="flash_attn_version 3 on blackwell_consumer"):
         TG.attention_spec(PRO6000_TP.with_overrides(flash_attn_version=3), 33, 32, 8, 64, 1)
     d = TG.describe(PRO6000_TP)
     assert d["gemm_target"] == "blackwell_consumer" and d["dot"] == "HopperBF16WgmmaDot16_v1" and d["tuned_gemm_arch_family"] is None
     assert d["gemm_kind"] == "Gemm_v2{K,N,DOT=HopperBF16WgmmaDot16_v1}" and d["flash_attn_registered"] is True
-    assert d["attention_kind"] == "Attention_v2{T,NH,KVH,D,BN=fa2_kblock_n(D),DOT=HopperBF16WgmmaDot16_v1,INV=Fa2InvSum_v1}"
+    assert d["attention_kind"] == "Attention_v5{T,NH,KVH,D,BN=fa2_kblock_n(D),DOT=HopperBF16WgmmaDot16_v1,INV=Fa2InvSum_v1,MASKED_FROM}"
     assert d["evidence"]["gemm"] == list(GT.REGISTERED["blackwell_consumer"].evidence) and d["evidence"]["attention_fa2"]
 
 
