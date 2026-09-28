@@ -265,7 +265,7 @@ class TokenSelectGumbelTopP:
     (the fold emits their `Const` instances in operand order right before the select), the seed is the request's `seed` PARAMETER.  S
     ([R16 stoch, coord M-0169] the 6th operand, `Const32[S]` "splits") is read from the split kernels' constexpr (the launch geometry:
     live batch x SM count), must agree across the three kernels, and is bound at compare to the request Program's `splits` Input entry
-    for the event; the relation S = SplitsFor_v1(|live(t)|, num_SMs) is checked per engine step by GM-01 G6.  Values
+    for the event (a single-request Program's own `Const32[S]`, held equal to it); the relation S = SplitsFor_v1(|live(t)|, num_SMs) is checked per engine step by GM-01 G6.  Values
     (which seed / T / p the kernels consumed) are NOT read from device memory here: they are the header's request record; the value check
     (`bench.stoch_recompute`) recomputes the served token from the snapshotted logits under the DECLARED seed and fails on a wrong one.
 

@@ -120,6 +120,20 @@ def test_a_program_reading_the_wrong_splits_entry_or_an_unbound_fold_constant_is
     assert not res["canonical_sha256"]["equal"] and res["totals"]["steps_spec_equal"] == 0
 
 
+def test_a_single_request_programs_constant_S_must_equal_the_folds_at_every_event():
+    """[single-request workloads] A single-request Program takes S = SplitsFor_v1(1, num_SMs) as its own `Const32[S]` per select: both
+    sides bind their constants (removed from the sequences, values kept) and compare holds them equal event by event."""
+    F = _prog("fold", splits_form="const", S=[32, 32, 32], weights=2)
+    A = _prog("program", splits_form="const", S=[32, 32, 32], weights=2)          # [prompt, seed, weights]: no splits input
+    assert A.n_splits_consts_bound == 3 and not A.splits_nodes
+    res = C.compare_steps(F, A)
+    assert res["canonical_sha256"]["equal"] and res["splits_values"] == {"equal": True, "events": 3, "mismatches": []}
+    F16 = _prog("fold-16", splits_form="const", S=[32, 16, 32], weights=2)           # the kernels ran another S at event 1
+    res = C.compare_steps(F16, A)
+    assert not res["canonical_sha256"]["equal"] and res["splits_values"] == {"equal": False, "events": 3, "mismatches": [[1, 16, 32]]}
+    assert res["canonical_sha256"]["a"] == res["canonical_sha256"]["b"]            # the structure agrees; the values do not
+
+
 def test_a_fold_without_top_p_selects_binds_nothing():
     """Greedy folds (TokenSelect_v1, five-operand R15 stochastic forms) are untouched: no instance removed, no splits node."""
     P = _prog("greedy-like", splits_form="static", S=[1, 1, 1], weights=2)
