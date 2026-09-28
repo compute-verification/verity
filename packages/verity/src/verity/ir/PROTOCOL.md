@@ -181,8 +181,10 @@ Writers (`codec._BodyEncoder`) take a body's sequences in order (node 0's argume
 
 1. A sequence that is not a concatenation (affine, strided, explicit) is written as itself.
 2. A concatenation is flattened into its parts p1..pN (nested concatenations spliced, depth first).
-3. For m = N, N − 1, …, max(2, N − 8) (`ALIAS_WINDOW` = 8): if p1..pm is exactly the part list recorded for an earlier node
-   argument (k, a), write `{"alias": [k, a]}` followed by p(m+1)..pN, and stop. Parts compare by form and fields.
+3. For m = N, N − 1, …, max(2, N − 8) (`ALIAS_WINDOW` = 8): if p1..pm is exactly the part list recorded for an argument
+   (k, a) of an earlier node (k below the node being written; for `ret`, any node), write `{"alias": [k, a]}` followed by
+   p(m+1)..pN, and stop. Parts compare by form and fields. A list recorded by an earlier argument of the node being written
+   counts as not recorded: a reader resolves an alias against the nodes before the one it reads.
 4. Otherwise write p1..pN.
 5. The result is `{"concat": [...]}`, or its only element when it has one.
 6. A node argument with N ≥ 2 parts is then recorded under its full part list, unless that list is already recorded (the

@@ -579,7 +579,7 @@ def _name(a: dict[str, Any]) -> str:
 
 
 def members_check(fn: Any, memo: dict | None = None) -> dict[str, Any]:
-    """Recomputes between the node members of a Definition whose body nodes read only its parameters (`word._separable`: its
+    """Recomputes between the node members of a Definition whose body nodes read only its parameters (`verity.ir.cut.separable`: its
     partition is each member's own): each member is a Call over `fn`'s parameters, its operand runs its references
     (`verity.ir.refs.runs`), checked as a Program's Calls are (`check_program`).  The recompute classes name each member's callee."""
     from verity.ir.parts import n_members
