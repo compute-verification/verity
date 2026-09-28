@@ -17,8 +17,8 @@ from verity_vllm.check.oracle_compare import entry_read_name as _entry_read_name
 _ITEMSIZE = {"bf16": 2, "f16": 2, "u16": 2, "i32": 4, "u32": 4, "f32": 4, "i64": 8, "u64": 8,
              "bfloat16": 2, "float16": 2, "int16": 2, "uint16": 2, "float32": 4, "int32": 4, "uint32": 4, "int64": 8, "uint64": 8, "float64": 8,
              # [revb F-r17b-52 (iii)] the LIFTED words of the padded MoE construction (manifest_format.LIFTED_DTYPES): Value<17> -> u32, Value<33> -> u64
-             "l17": 4, "l33": 8}
-_NPDTYPE = {2: np.uint16, 4: np.uint32, 8: np.uint64}
+             "l17": 4, "l33": 8, "w8": 1, "uint8": 1, "int8": 1}
+_NPDTYPE = {1: np.uint8, 2: np.uint16, 4: np.uint32, 8: np.uint64}
 
 
 def alias_table(manifest: dict[str, Any] | None) -> dict[str, tuple[str, int]]:

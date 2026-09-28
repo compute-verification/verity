@@ -212,12 +212,12 @@ def test_parse_target_arg_lays_a_partial_declaration_over_the_host_profile():
 
 
 def test_moe_construction_is_a_declared_and_bound_static_never_applied_to_the_engine_and_keeps_undeclared_digests():
-    """[R17-42 route A (3)] `moe_construction` (None = indexed-read / MOE-01, `padded` = MoeFfnFixedL_v1 per token) is a Program static:
+    """[R17-42 route A (3)] `moe_construction` (None = indexed-read-ordered, `padded` = MoeFfnFixedL_v1 per token) is a Program static:
     an undeclared profile serialises exactly as before (no key, digest unchanged); `padded` changes the digest; it is NOT an engine knob
     (`engine_args` unchanged), NOT judged by `profile_mismatches` (nothing is read back: never attested), and one spelling only."""
     e = TargetProfile()
     assert "moe_construction" not in e.to_json() and TargetProfile.from_json(e.to_json()).digest() == e.digest()
-    assert e.effective_moe_construction() == "indexed-read" and e.moe_construction_declaration()["declared_explicitly"] is False
+    assert e.effective_moe_construction() == "indexed-read-ordered" and e.moe_construction_declaration()["declared_explicitly"] is False
     p = e.with_overrides(moe_construction="padded")
     assert p.to_json()["moe_construction"] == "padded" and p.digest() != e.digest() and TargetProfile.from_json(p.to_json()) == p
     assert p.effective_moe_construction() == "padded" and p.execution_label == e.execution_label == "bi-eager"   # not another execution
@@ -227,9 +227,11 @@ def test_moe_construction_is_a_declared_and_bound_static_never_applied_to_the_en
     assert d["value"] == "padded" and d["declared_explicitly"] is True and d["attested"] is False
     assert "MoeFfnFixedL_v1{E,TOPK,VPT,H,I}" in d["definitions"] and "LMoeFfnL_v1" in d["lift_of_record"] and d["profile_digest"] == p.digest()
     assert "MoeExpertGemm_v1{E,K,N}" in e.moe_construction_declaration()["definitions"]
-    # explicit indexed-read: the same construction as undeclared, a different (explicit) digest, the same Program family
+    # explicit indexed-read-ordered: the same construction as undeclared, a different (explicit) digest; explicit indexed-read keeps the old router
+    o = e.with_overrides(moe_construction="indexed-read-ordered")
+    assert o.effective_moe_construction() == "indexed-read-ordered" and o.to_json()["moe_construction"] == "indexed-read-ordered" and o.digest() != e.digest()
     i = e.with_overrides(moe_construction="indexed-read")
-    assert i.effective_moe_construction() == "indexed-read" and i.to_json()["moe_construction"] == "indexed-read" and i.digest() != e.digest()
+    assert i.effective_moe_construction() == "indexed-read" and i.moe_construction_declaration()["definitions"][0] == "MoeRouterTopK_v1{E,TOPK,VPT}"
     for bad in ("MOE-01", "fixed-slot", "Padded", True, 1):
         with pytest.raises(ValueError):
             TargetProfile(moe_construction=bad)
