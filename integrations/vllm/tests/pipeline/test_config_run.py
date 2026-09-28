@@ -86,6 +86,54 @@ def test_the_config_run_s_commit_decides_by_its_one_run(tmp_path, commit_pass, r
         assert e.value.rc == expect
 
 
+def test_a_deferred_config_run_passes_the_flag_and_parses(tmp_path):
+    r = _row(tmp_path, "--config-run", "1", "--replay-deferred", "1")
+    r.hidden_so, r.B = "/x/verity_fa2_matReqG.so", 1
+    cmd = r.commit_cmd([])
+    assert "--replay-deferred" in cmd
+    plain = _row(tmp_path / "plain", "--config-run", "1")
+    plain.hidden_so, plain.B = "/x/verity_fa2_matReqG.so", 1
+    assert "--replay-deferred" not in plain.commit_cmd([])
+    of_record = _row(tmp_path / "row", "--replay-deferred", "1")
+    of_record.hidden_so, of_record.B = "/x/verity_fa2_matReqG.so", 1
+    assert "--replay-deferred" not in of_record.commit_cmd([]), "only a config run defers its replay"
+    pytest.importorskip("torch")
+    from verity_vllm.pipeline import cli
+    assert cli.parse("commit", cmd[cmd.index("commit") + 1:], {}).replay_deferred is True
+
+
+def _pending_commit(r, *, bundles):
+    (Path(r.d) / "commit").mkdir()
+    (Path(r.d) / "commit" / "summary.json").write_text(json.dumps({"only_arm": "instrumented", "runs": 1, "commit_pass": None}))
+    (Path(r.d) / "commit" / "verdict.json").write_text(json.dumps({"commit_pass": None, "replay_deferred": {
+        "pending_pairs": [1], "bundles": [{"pair": 1, "path": "/b/replay_bundle_p1", "manifest_sha256": "ab" * 32}] * bundles}}))
+
+
+def test_a_deferred_commit_is_pending_with_its_bundle_and_fails_without_one(tmp_path):
+    r = _row(tmp_path, "--config-run", "1", "--replay-deferred", "1")
+    _pending_commit(r, bundles=1)
+    assert RC.commit_verdict(r, 0, 60) is True
+    assert "commit PENDING" in (st := (Path(r.d) / "stages.txt").read_text()) and "/b/replay_bundle_p1" in st
+    with pytest.raises(Stop):
+        RC.commit_verdict(r, 3, 60)
+    bare = _row(tmp_path / "bare", "--config-run", "1", "--replay-deferred", "1")
+    _pending_commit(bare, bundles=0)
+    with pytest.raises(Stop):
+        RC.commit_verdict(bare, 0, 60)
+
+
+def test_a_pending_config_run_writes_no_record(tmp_path, monkeypatch):
+    r = _row(tmp_path, "--config-run", "1", "--replay-deferred", "1")
+    calls = []
+    for name in ("build", "research_result", "timeline_report"):
+        monkeypatch.setattr(r, name, lambda n=name: calls.append(n))
+    monkeypatch.setattr(r, "prepare", lambda: setattr(r, "trap", True))
+    monkeypatch.setattr(r, "commit", lambda: setattr(r, "replay_pending", True))
+    monkeypatch.setattr(RC, "word_check", lambda row: None)
+    monkeypatch.setattr(RC, "config_record", lambda row: calls.append("config_record"))
+    assert r.run() == 0 and "config_record" not in calls
+
+
 TP2 = "olmoe-1b-7b__bf16__l40s__tp2__b8__i1024__o128__mixed__greedy__bi-eager"
 
 
