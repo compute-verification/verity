@@ -39,7 +39,17 @@
    8192,
    8192,
    8192
+  ],
+  [
+   16,
+   8192,
+   8192
+  ],
+  [
+   1,
+   8192,
+   8192
   ]
  ],
- "note": "The 8192^3 headline size alone (Daniel, 28 Sep): gemm_bench.py and gamma.py read it with --workload."
+ "note": "The 8192^3 headline size (Daniel, 28 Sep), plus decode at m = 16 and m = 1 through the same 8192 x 8192 weight: gemm_bench.py and gamma.py read it with --workload."
 }

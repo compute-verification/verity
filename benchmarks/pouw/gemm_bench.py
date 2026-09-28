@@ -140,6 +140,13 @@ def bench_shape(ext, m: int, k: int, n: int, gates: dict) -> dict:
         out["fp8_cublaslt_ms"] = timed(lambda: torch._scaled_mm(Af8, Bf8.T, scale_a=one, scale_b=one, out_dtype=torch.bfloat16))
     except RuntimeError as e:
         out["fp8_cublaslt_error"] = str(e)[:200]
+    if m < pad:
+        Abm, Af8m = Abf[:m].contiguous(), Af8[:m].contiguous()
+        out["bf16_true_m_ms"] = timed(lambda: Abm @ Bbf.T)
+        try:
+            out["fp8_cublaslt_true_m_ms"] = timed(lambda: torch._scaled_mm(Af8m, Bf8.T, scale_a=one, scale_b=one, out_dtype=torch.bfloat16))
+        except RuntimeError as e:
+            out["fp8_cublaslt_true_m_error"] = str(e)[:200]
     if gates["ncp"]["ok"]:
         X = torch.randint(-127, 127, (pad, 3 * k), dtype=torch.int8, device=dev).view(torch.uint8)
         Y = torch.randint(-127, 127, (n, 3 * k), dtype=torch.int8, device=dev).view(torch.uint8)
