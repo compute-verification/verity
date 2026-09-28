@@ -35,4 +35,5 @@ verity_vllm.properties.fa_tap_exactness
 verity_vllm.properties.norm_tap_exactness
 verity_vllm.properties.router_tap_exactness
 verity_vllm.properties.vocab_range_exactness
+verity_vllm/protocol_options/      # the adapters, imported by name when a run enables their protocol (protocol_options.adapter)
 tests/regression/

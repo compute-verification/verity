@@ -4,8 +4,9 @@
   the package in the source tree; they are run definitions, not package data.  Library code locates them, and the source
   tree itself, through ``ROOT``, ``MANIFESTS``, ``WORKLOADS`` and ``CHECKPOINTS``.
 * **What runs.**  The row-id grammar (:class:`RowId`), the dtype vocabulary (``DTYPES``), the target table
-  (``TARGETS``), and :class:`EnginePin`, the pinned engine record every engine is built from: model, full revision and
-  checkpoint role, checked against ``manifests/checkpoints.json``.
+  (``TARGETS``), the protocol-set grammar (``PROTOCOLS``, :func:`parse_protocols`), and :class:`EnginePin`, the pinned
+  engine record every engine is built from: model, full revision and checkpoint role, checked against
+  ``manifests/checkpoints.json``.
 * **How a stage runs.**  :class:`BuildConfig`, :class:`MatchConfig` and :class:`CommitConfig`: defaults in code,
   overrides from flags or the environment of ``verity-vllm row``.
 * **Where it runs.**  :class:`RunEnv`: interpreters, caches and roots.  ``pipeline/cli.py`` fills it from flags and the
@@ -160,6 +161,42 @@ def row_target(row: str) -> str | None:
     """The device token of a row id (its third field when the fourth is ``tp<N>``), None when the id lacks the grammar."""
     parts = str(row).split("__")
     return parts[2] if len(parts) >= 4 and parts[3].startswith("tp") else None
+
+
+#: The protocols a run can enable (`verity_vllm.protocol_options`), in install order, innermost first: PoUW replaces the
+#: linear layers' GEMMs, POUS decodes the weights those GEMMs read, sampled proofs commits what the model computed.
+PROTOCOLS = ("pouw", "pous", "sampled-proofs")
+#: The set a row runs when its target declares none: sampled proofs alone, the Commit as it has always run.
+DEFAULT_ROW_PROTOCOLS = ("sampled-proofs:vllm-v1",)
+_SCHEME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/+-]*")
+
+
+def parse_protocols(value: str | Mapping[str, str] | Any | None) -> tuple[str, ...]:
+    """A protocol set in its one spelling: ``name:scheme`` entries, one per protocol, in `PROTOCOLS` order.
+
+    ``value`` is None, ``""`` or ``"none"`` (the empty set), a comma-separated string, an iterable of entries, or a mapping
+    ``{name: scheme}``.  Refuses (ValueError) an unknown protocol, an entry without a scheme, a malformed scheme and two
+    entries of one protocol.  Whether a scheme is registered is the protocol package's to say
+    (`verity_vllm.protocol_options.refusals`)."""
+    if value is None or (isinstance(value, str) and value.strip() in ("", "none")):
+        return ()
+    if isinstance(value, Mapping):
+        items = [f"{k}:{v}" for k, v in value.items()]
+    elif isinstance(value, str):
+        items = [x.strip() for x in value.split(",")]
+    else:
+        items = [str(x).strip() for x in value]
+    got: dict[str, str] = {}
+    for item in items:
+        name, sep, scheme = item.partition(":")
+        if name not in PROTOCOLS:
+            raise ValueError(f"protocol entry {item!r}: unknown protocol {name!r} (known: {', '.join(PROTOCOLS)})")
+        if not sep or not _SCHEME.fullmatch(scheme):
+            raise ValueError(f"protocol entry {item!r}: expected {name}:<scheme>, the scheme a name its protocol registers")
+        if name in got:
+            raise ValueError(f"protocol {name!r} is enabled twice ({got[name]!r} and {scheme!r}); a run enables one scheme per protocol")
+        got[name] = scheme
+    return tuple(f"{n}:{got[n]}" for n in PROTOCOLS if n in got)
 
 
 def checkpoint_entries(checkpoints: str | Path = CHECKPOINTS) -> list[dict[str, Any]]:
