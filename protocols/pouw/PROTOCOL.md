@@ -105,9 +105,12 @@ docstring states every parameter.
   sampling half and the policy's allowances (5% skippable summands, 1/64 dead entries per side, the unchecked peel).
 - **Its differences from milestone 1's D1**, the hardened KW transcript: see the module docstring.
 
+- **Vectors.** The reference equals Lean's own `#eval` of `mmW (blockEnd 16 (3k) t) (stackX k A E₁ R) (stackY k B R F₁)`
+  at every checkpoint, for the word-granular P, the shift by 24 and a random signed permutation
+  (`tests/vectors/ncp_lean.json`, from `tests/ncp_lean.py`), and its own pinned vectors (`tests/vectors/ncp.json`).
+
 ## Not here yet
 
-- NCP vectors evaluated by Lean itself (the reference is checked against its own pinned vectors and the stated algebra).
 - The fast implementations: the RTX 4090 kernels and the vLLM adapter (`integrations/vllm/verity_vllm/protocol_options/pouw.py`)
   are gated by these vectors when they land.
 - The per-weight share of the honest reference's work in `wref`, and a `TargetProfile` Definition of the NCP GEMM.
