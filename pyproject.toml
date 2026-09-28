@@ -3,13 +3,13 @@ name = "verity-workspace"
 version = "0.0.0"
 description = "Verity monorepo root; a uv workspace, not a package."
 requires-python = ">=3.12"
-dependencies = ["research", "verity", "verity-sp1", "verity-numerical", "verity-vllm", "verity-sampled-proofs", "verity-flock"]
+dependencies = ["research", "verity", "verity-sp1", "verity-numerical", "verity-vllm", "verity-sampled-proofs", "verity-one-stage", "verity-flock", "verity-circuit-check"]
 
 [tool.uv]
 package = false
 
 [tool.uv.workspace]
-members = ["tools/research", "packages/verity", "backends/sp1", "backends/numerical", "integrations/vllm", "protocols/sampled_proofs", "backends/flock"]
+members = ["tools/research", "packages/verity", "backends/sp1", "backends/numerical", "integrations/vllm", "protocols/sampled_proofs", "protocols/one_stage", "backends/flock", "tools/circuit_check"]
 
 [tool.uv.sources]
 research = { workspace = true }
@@ -18,11 +18,14 @@ verity-sp1 = { workspace = true }
 verity-numerical = { workspace = true }
 verity-vllm = { workspace = true }
 verity-sampled-proofs = { workspace = true }
+verity-one-stage = { workspace = true }
 verity-flock = { workspace = true }
+verity-circuit-check = { workspace = true }
 
 [dependency-groups]
 dev = ["jsonschema>=4.26", "pytest>=8"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "tools/research/tests", "tools/native_peak/tests", "packages/verity/tests", "backends/sp1/tests", "backends/numerical/tests", "backends/gkr/tests", "backends/flock/tests", "protocols"]
-markers = ["slow: full rechecks that take minutes (bench-instances full recheck); opt in with `--slow`"]
+testpaths = ["tests", "tools/research/tests", "tools/native_peak/tests", "packages/verity/tests", "backends/sp1/tests", "backends/numerical/tests", "backends/gkr/tests", "backends/flock/tests", "tools/circuit_check/tests", "tools/lean/tests", "protocols"]
+markers = ["slow: full rechecks that take minutes (bench-instances full recheck); opt in with `--slow`",
+           "circuit_suite: one circuit-check target per test (tools/circuit_check); `check` runs these as `circuit-check --all`"]

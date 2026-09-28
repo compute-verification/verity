@@ -6,7 +6,7 @@ import ArkLib.Data.CodingTheory.JohnsonBound.Family
 
 Every phase of `rep_sound` pays a union bound over the codewords within the level-0 proximity
 radius of the committed table (`closeMsgs`). This file bounds their number by `listBound₀ =
-25·2^r` at rate `2^-r` (`closeMsgs_card_le`), from ArkLib's Johnson bound for interleaved
+100·2^r` at rate `2^-r` (`closeMsgs_card_le`), from ArkLib's Johnson bound for interleaved
 Reed–Solomon codes (`irs_lambda_le_johnson_mds`: at radius `1 − √ρ − η`, at most `1/(2ηρ)`
 codewords). The bridge:
 
@@ -166,8 +166,8 @@ theorem fast100_m : ∀ m s, fast100 m = some s → s.m = m := by
   obtain ⟨h1, h2⟩ := hm m (by simp [h])
   interval_cases m <;> (simp only [fast100, Option.some.injEq] at h; subst h; rfl)
 
-/-- At rate `2^-r`, `1/(2ηρ) = 25·2^r`. -/
-theorem johnson_value (r : ℕ) : 1 / (2 * eta * (2⁻¹ : ℝ) ^ r) = ((25 * 2 ^ r : ℕ) : ℝ) := by
+/-- At rate `2^-r`, `1/(2ηρ) = 100·2^r`. -/
+theorem johnson_value (r : ℕ) : 1 / (2 * eta * (2⁻¹ : ℝ) ^ r) = ((100 * 2 ^ r : ℕ) : ℝ) := by
   unfold eta
   push_cast
   rw [inv_pow]
@@ -176,7 +176,7 @@ theorem johnson_value (r : ℕ) : 1 / (2 * eta * (2⁻¹ : ℝ) ^ r) = ((25 * 2 
   ring
 
 open Classical in
-/-- **The list size at any level.** At most `listBound l = 25·2^r` messages with `2^lanes` lanes
+/-- **The list size at any level.** At most `listBound l = 100·2^r` messages with `2^lanes` lanes
 encode within `l`'s radius of any table: ArkLib's Johnson bound for `l`'s interleaved
 Reed–Solomon code, `1/(2ηρ)`. -/
 theorem card_close_le (A : Arith F K) (hA : A.Correct) (l : Level) (hl : l.Fits) (lanes : ℕ)
@@ -223,12 +223,12 @@ theorem card_close_le (A : Arith F K) (hA : A.Correct) (l : Level) (hl : l.Fits)
   rw [← hcode, hrate] at hJ
   have hrad : 1 - Real.sqrt l.rate - eta = l.radius := rfl
   rw [hrad, Level.rate, johnson_value, ENNReal.ofReal_natCast] at hJ
-  have h1 : ((S.card : ℕ∞) : ℝ≥0∞) ≤ ((25 * 2 ^ l.logInvRate : ℕ) : ℝ≥0∞) :=
+  have h1 : ((S.card : ℕ∞) : ℝ≥0∞) ≤ ((100 * 2 ^ l.logInvRate : ℕ) : ℝ≥0∞) :=
     (ENat.toENNReal_le.2 hcardS).trans hJ
   exact_mod_cast h1
 
 open Classical in
-/-- **The list size.** At most `listBound₀ = 25·2^r` messages encode within the level-0 radius of
+/-- **The list size.** At most `listBound₀ = 100·2^r` messages encode within the level-0 radius of
 any table: `card_close_le` at level 0. -/
 theorem closeMsgs_card_le (A : Arith F K) (hA : A.Correct) (sch : Schedule) (m : ℕ)
     (hsch : fast100 m = some sch) (C : Oracle F) :

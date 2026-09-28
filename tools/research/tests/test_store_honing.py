@@ -121,7 +121,7 @@ def test_evict_runs_only_preserved_terminal_quiet_runs_and_leaves_a_restore_reco
     assert store.push(art)["preserved"]
     plan = EV.plan_runs(store, runs, min_bytes=1000, log=print)
     log = capsys.readouterr().out
-    assert [p["run"] for p in plan] == [RUN] and [f["path"] for f in plan[0]["files"]] == ["proofs/sub_00.proof", "proofs/sub_01.proof"][::-1], "largest first"
+    assert [p["run"] for p in plan] == [RUN] and [f["path"] for f in plan[0]["files"]] == ["proofs/sub_00.proof", "proofs/sub_01.proof"], "largest first"
     assert "no attempt record" in log and "state 'running'" in log and "sha256 differs" in log
     fresh = _tree(runs / "r20260922-105909-0004", {"proofs/z.proof": os.urandom(4000)})
     store.put_attempt(_attempt(run_id="r20260922-105909-0004", outputs={"run_files": art}))

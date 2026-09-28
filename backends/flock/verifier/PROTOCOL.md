@@ -320,9 +320,25 @@ that runs out is extended and the sampler rerun, so the draw stays exact.
 The draw is the object
 
 ~~~text
-{"law": "subset",    "population": N, "k": K,          "units": [u_0 < u_1 < …]}
-{"law": "bernoulli", "population": N, "p": "num/den",  "units": [u_0 < u_1 < …]}
+{"law": "subset",     "population": N, "k": K,                       "units": [u_0 < u_1 < …]}
+{"law": "bernoulli",  "population": N, "p": "num/den",               "units": [u_0 < u_1 < …]}
+{"law": "stratified", "population": N, "k": K, "strata": [stratum…], "units": [u_0 < u_1 < …]}
 ~~~
+
+**The stratified law** is the default (Daniel, Sep 27; the encoding is `note:20260927T1550Z-handoff-from-stratified-law`,
+the same as `protocols/one_stage/PROTOCOL.md`'s):
+- **Strata.** The verifier derives them from its own program and partition object, never from anyone else
+  (`HmRow.stratifiedLaw`, `flock-verify draw --program P --partition Q --stratified K`). It applies the query, groups the
+  units by the template descriptor id of their root node, and writes each stratum's units as ascending, disjoint, non-empty
+  ranges `[lo, hi)`, adjacent ones merged, the strata in the order of their first unit. Only `Q_template_instance` v0 and
+  `Q_template_instances` v0 define strata; any other query refuses the law.
+- **Sizes.** For `1 ≤ K ≤ N`, stratum `s` of `n_s` units draws `k_s = max(1, ⌊(2 K n_s + N) / (2N)⌋)`: `K n_s / N` rounded
+  half up, never below one. A stratum is `{"template": id, "units": [[lo, hi], …], "k": k_s}`, and `Σ k_s` units are drawn.
+- **The sampler.** Each stratum draws `subset(k_s, n_s)` on its own stream of the verifier's randomness, of
+  `2 k_s · w(n_s) + 64` bytes, extended and rerun on its own when it runs out. Local index `j` is the stratum's `j`-th unit,
+  and the draw is the union, ascending. Given bytes (a test's `--stream`) are cut into consecutive per-stratum segments of
+  those sizes, and aren't extended.
+- A session that proves one template's units is served that template's share as a `subset` draw over its `n_s` units.
 
 The statement carries it as the public header's `unit_draw` (so under `pub.sha` and Σ), instance `i` being unit `u_i`,
 and the record keeps it as `unit_draw`. The offline checks:
@@ -330,8 +346,15 @@ and the record keeps it as `unit_draw`. The offline checks:
 | check | rule |
 |---|---|
 | U1 | the record keeps a draw iff the statement carries one, and they are canonically equal |
-| U2 | the draw is well formed: exactly the law's keys; units ascending, distinct and in `[0, N)`; `subset` has `K ≤ N` units; `bernoulli` has `0 ≤ num ≤ den`, `den > 0`, no unit at `p = 0` and every unit at `p = 1` |
+| U2 | the draw is well formed: exactly the law's keys; units ascending, distinct and in `[0, N)`; `subset` has `K ≤ N` units; `bernoulli` has `0 ≤ num ≤ den`, `den > 0`, no unit at `p = 0` and every unit at `p = 1`; `stratified` has `1 ≤ K ≤ N`, each stratum exactly `{template, units, k}` with a distinct template, its ranges ascending, disjoint, not adjacent and non-empty, its `k` the rule's, the strata's ranges tiling `[0, N)` exactly, and exactly `k_s` units in each. When the verifier holds the program and a template-query partition object, a stratified draw's law must be its own derivation from them, at the draw's `K` |
 | U3 | the statement's `instances` is the number of drawn units |
+
+`stratified_agree.py` checks the Lean verifier against core's (#164's `verity_one_stage.draw`, #161's `Stratified`):
+- the derived law and population, against `draw.derive` and `partition.units`;
+- the units drawn on given bytes, against the sampler written out in Python;
+- every draw, from given bytes or the operating system's, accepted by `check_draw`;
+- U2's verdicts on mutations of accepted draws, against `check_draw`'s;
+- inclusion frequencies over operating-system draws, against `k_s / n_s`.
 
 Offline, the draw's uniformity is not checkable; soundness rests on the verifier's honest draw after registration. A
 session without a draw on either side is unchanged. The live side (PR #83) sends the draw after registration, stages the
@@ -962,8 +985,11 @@ included. Claims are listed region-major, then point 0 before point 1.
     earlier columns that are not input padding, or the constant (topological order: the soundness package's `Rows.topo`).
     So every column a row reads is below `useful`.
   - Each port group's ports fit its words, and each input group lies within the input rows.
-  - Upstream's composite verifier checks neither, and every circuit of sets 0–15 meets both. `flock-verify net-check`
-    parses one expanded circuit.
+  - The input rows end before the constant (`128 · inWords ≤ constPos`, 128 rows per input word). Otherwise an input
+    port could cover the constant's column, and Δ's input copies would rewrite the slot's constant row, leaving the
+    unit's constant free.
+  - Upstream's composite verifier checks none of these, and every circuit of sets 0–15 meets them all.
+    `flock-verify net-check` parses one expanded circuit.
   - Lookup slots (META `lookups`, in key order after the expanded circuits, each named `lookup:<table>`) are built from
     SHA-256-pinned tables (`rsq, sqrt, rcp, ex2`) as two-level one-hot circuits.
     - Rows: the `n` index bits in one input word; the low and high decoders, each minterm the AND of two half minterms,
@@ -1087,6 +1113,8 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   aligned to its power-of-two span.
 - **Wires.** META `wires` begins with the row wires, which the verifier derives and compares: compression `k`'s `cv` from
   compression `k − 1`'s `out`, and hm96 slot `p`'s `cv` from the row's last compression. No other wire touches a row slot.
+- **The pin** is the constant column of the first slot of the first range that is not the mask (`HmRow.pin`). That range
+  must have a slot: with none, the pin's row would be empty, or, in a packed range, could fall inside another range's rows.
 - **Δ,** in this order: every slot's constant from the pin; per VU and port, the first compression's `cv` bits (the
   midstate) and the hm96 slot's `pad` bits (the padding block), each bit from the pin (1) or the unit range's first slot's
   forced-zero row (0); every unit's leaf bit `t` of the u16 word at row byte `B` from the message bit of byte `B + t/8`,
@@ -1218,9 +1246,10 @@ rejects explicitly.
 Soundness of a verdict rests on:
 
 - **Statistical:** the Flock protocol's round-by-round errors for `fast100` (§15), squared over two reps on one root with
-  live coins: 2^-195.5 per table. The paper's theorems enter as named axioms in the soundness lane (level 4a): proximity
-  gaps and mutual correlated agreement for Reed–Solomon codes up to the Johnson bound (BCHKS25 Theorem 4.6), soundness of
-  ring switching (Diamond–Posen), Ligerito's list-decoding analysis (paper Appendix C).
+  live coins: 2^-195.5 per table by §15's ledger. The soundness lane proves 2^-205 per table in Lean, at the analysis
+  slack `η = 1/200`, with no named assumption: mutual correlated agreement up to the Johnson bound (BCHKS25 Theorem
+  4.6) is proved from DKT26 in ArkLib, and ring switching and Ligerito's list-decoding analysis are proved there too
+  (`lean/soundness/README.md` §1.1 and §1.6, and its `ASSUMPTIONS.md`).
 - **Coins:** with `os` coins, each coin is uniform and unknown to the prover before it sent the round the coin answers.
   With `seed` coins, additionally: the seed commitment hides the seed, and SHA-256 in counter mode is a PRF (§7.2).
 - **Hashes:** SHA-256 collision resistance for the Merkle trees, the round digests and the statement binding (Table 1:
@@ -1269,8 +1298,30 @@ uses `native_decide`.
 
 Level-3 status (`lean/FlockProofs`, kernel-checked; `CheckAxioms.lean` and a test allow only `propext`,
 `Classical.choice` and `Quot.sound`):
-- **1b, Merkle:** `merkle_binding` is proved, for any `MerkleScheme`. Two accepted checks against one cap at the same
-  positions, whose rows differ at a query, give a node or leaf collision (`climb_binding`, `opens_binding`).
+- **1b, Merkle: an explicit collision extractor.** A fixed hash with 32- or 64-byte digests has collisions by counting, so
+  a proposition "a collision exists" holds outright and says nothing about the verifier. The statements therefore carry the
+  reduction as computable functions from the verifier's accepted checks to an explicit pair of inputs, with theorems that
+  the pair collides:
+  - `merklePair` (through `opensPair` and `climbPair`) maps two Merkle checks the verifier accepts against one cap, whose
+    rows differ at a query, to a `MerklePair`. That is either the first node whose two parents are one while its children
+    differ, or the two rows when their leaves are one.
+  - `merkle_binding` proves the pair collides (`MerklePair.Collides`), for any `MerkleScheme` whose nodes and leaves have its
+    digest width (`Sized`; `MerkleScheme.all_sized` for every known scheme, from `Sha256.hash_size` and `Sha512.hash_size`,
+    proved from the definitions). The collision is either two different pairs of digest-width children with one node, or
+    two different rows with one leaf, under any salts.
+  - `MerklePair.shaInputs` and `MerklePair.hm96Inputs` map the pair to the hash's own inputs. `sha256_inputs`,
+    `sha512_inputs` and `hm96_inputs` prove those two inputs differ and have one digest:
+    - a node's input is its two children, concatenated at a fixed split, so different pairs are different inputs;
+    - the row encoding is injective (`rowBytes_inj`);
+    - for `hm96-sha512/v1`, `Hm96.leafPair` gives the outer inputs, or the salt digest's (`leafPair_collides`), or the rows'
+      when their row hashes are one.
+  - The propositions `merkle_binding_collision` and `MerkleScheme.collision_hash` are corollaries.
+  - A test evaluates the extractor on a toy scheme with 1-byte digests, whose accepted checks do collide.
+  - The executable only ever hashes digest-width children: `merkleCheck` refuses a sibling or cap entry of another width,
+    and the running digests are hash outputs.
+  - Nodes and leaves are not tag-separated in the unsalted schemes, and binding doesn't need it. Both openings climb from
+    a leaf at one position through `d − c` nodes, so a leaf is only ever compared with a leaf. As a backstop, under
+    `fast100` an opened row has 16, 32 or 64 elements (256, 512 or 1,024 bytes), while a node's input is 64 or 128 bytes.
 - **1c, session binding:** `squeeze_answers` and `squeeze_retained` are proved. A squeeze that succeeds returns exactly
   round k's recorded coins, and only if the framed bytes are that round's retained bytes, or hash to its digest.
 - **2, the fields** (`lean/level3`, a second package: Mathlib at the soundness package's pin, the executable by path; its
@@ -1300,6 +1351,17 @@ Level-3 status (`lean/FlockProofs`, kernel-checked; `CheckAxioms.lean` and a tes
     `ofLimbs_bijective`, `lo_balanced`.
 - **1d, the fold, first lemmas** (`Fold.lean`): `slot_factor`, so a slot's in-block tensor is its local tensor times
   `eq(ρ_hi, q)`, which is the reason `Stmt.fold` folds each slot type once; and `foldT_get`, so the sparse fold is `Xᵀe`.
+- **A lookup slot's rows compute `table[index]`** (`LookupRows.lean`, `build_computes`, over any field of characteristic
+  2, for every table and index):
+  - `build` encodes rows `RA`, `RB` into its net (`Sparse.ofRows`). A witness satisfying every row, with the product rows'
+    B side the table's as `Lookup.foldB` folds it (`tableB`), and the constant 1, has:
+    - index bits that are bits (`z = z·z`);
+    - output bit `j < bits` equal to bit `j` of the table word the index bits name.
+  - The decoders are one-hot (`decode_spec`), each product row picks one table bit, and each output row sums them.
+  - `build_spec` walks `build`'s loops.
+  - The one hypothesis on the net is `useful ≤ KONST`, which every table meets: the pinned tables' slots have about 50,000
+    rows, and `KONST` is 2^48 − 1.
+  - `net.a.row r = RA[r]` is `Sparse.ofRows`'s round trip (`ofRows_row`, in the soundness package, #177).
 - Planned: the lookup slots' `foldB`, then the fold theorem itself (`Stmt.fold` is `α·A_0ᵀe + B_0ᵀe` for the statement's
   `A_0`, `B_0` with Δ); the region values; the lowering checkers.
 

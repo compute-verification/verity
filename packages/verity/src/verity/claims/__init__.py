@@ -52,6 +52,9 @@ class Instance:
 
 PROPERTIES: dict[str, Property] = {p.id: p for p in (
     Property("cr", "Collision resistance", "CR"),
+    # success linear in the finder's expected time (Chiesa-Dall'Agnol-Guan-Spooner-Yogev, ePrint 2024/1434, Thm 2); the constant
+    # is the assumption's statement (A2 in backends/flock/verifier/lean/soundness/ASSUMPTIONS.md), not restated here
+    Property("ecr", "Expected-time collision resistance", "ECR"),
     Property("xof", "Extendable-output-function security", "XOF"),
     Property("sis", "Ring-SIS binding", "SIS"),
 )}

@@ -6,8 +6,10 @@ requires-python = ">=3.12"
 members = [
     "research",
     "verity",
+    "verity-circuit-check",
     "verity-flock",
     "verity-numerical",
+    "verity-one-stage",
     "verity-sampled-proofs",
     "verity-sp1",
     "verity-vllm",
@@ -1211,6 +1213,27 @@ dependencies = [
 requires-dist = [{ name = "numpy", specifier = ">=1.26" }]
 
 [[package]]
+name = "verity-circuit-check"
+version = "0.1.0"
+source = { editable = "tools/circuit_check" }
+dependencies = [
+    { name = "numpy" },
+    { name = "verity" },
+    { name = "verity-flock" },
+    { name = "verity-numerical" },
+    { name = "verity-vllm" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "numpy" },
+    { name = "verity", editable = "packages/verity" },
+    { name = "verity-flock", editable = "backends/flock" },
+    { name = "verity-numerical", editable = "backends/numerical" },
+    { name = "verity-vllm", editable = "integrations/vllm" },
+]
+
+[[package]]
 name = "verity-flock"
 version = "0.1.0"
 source = { editable = "backends/flock" }
@@ -1245,6 +1268,17 @@ requires-dist = [
     { name = "verity", editable = "packages/verity" },
     { name = "z3-solver", specifier = ">=4.13" },
 ]
+
+[[package]]
+name = "verity-one-stage"
+version = "0.1.0"
+source = { editable = "protocols/one_stage" }
+dependencies = [
+    { name = "verity" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "verity", editable = "packages/verity" }]
 
 [[package]]
 name = "verity-sampled-proofs"
@@ -1299,8 +1333,10 @@ source = { virtual = "." }
 dependencies = [
     { name = "research" },
     { name = "verity" },
+    { name = "verity-circuit-check" },
     { name = "verity-flock" },
     { name = "verity-numerical" },
+    { name = "verity-one-stage" },
     { name = "verity-sampled-proofs" },
     { name = "verity-sp1" },
     { name = "verity-vllm" },
@@ -1316,8 +1352,10 @@ dev = [
 requires-dist = [
     { name = "research", editable = "tools/research" },
     { name = "verity", editable = "packages/verity" },
+    { name = "verity-circuit-check", editable = "tools/circuit_check" },
     { name = "verity-flock", editable = "backends/flock" },
     { name = "verity-numerical", editable = "backends/numerical" },
+    { name = "verity-one-stage", editable = "protocols/one_stage" },
     { name = "verity-sampled-proofs", editable = "protocols/sampled_proofs" },
     { name = "verity-sp1", editable = "backends/sp1" },
     { name = "verity-vllm", editable = "integrations/vllm" },

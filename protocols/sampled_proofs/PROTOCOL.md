@@ -15,10 +15,10 @@ Spot-checks a committed transcript of a Verity Program, and says what an accepte
 5. Each checked VU is established on its authenticated boundary values.
 6. An accepted audit emits a `verity.proofs.profile.IntegrityProfile` per RU class (`TwoStageLaw.profile`). It
    holds the exhaustively checked facts: the evaluated Programs, the prescribed families, linkage, and the families
-   covered on every audit (`VerificationPlan.covered`). It also holds the law as two named levels, `replay`
-   (the `n_r` RUs, drawn `Bernoulli(p)`) and `check` (the `n_v` VUs in each, drawn `Subset(k)`), the counts
-   drawn at each, and `delta`. Resource accounting, policies and PoUW each read what they need off it, passing their own
-   utility to `worst_case`. The application counts `delta` once.
+   covered on every audit (`VerificationPlan.covered`). Its law is one level, `replay` (the `n_r` RUs), drawn
+   `Bernoulli(p * k / n_v)`, with the count drawn and `delta`; it counts wrong RUs (see "The law"). Resource
+   accounting, policies and PoUW each read what they need off it, passing their own utility to `worst_case` (work in VUs
+   charges `n_v` per wrong RU). The application counts `delta` once.
 
 ## Randomness
 
@@ -33,9 +33,14 @@ The law is `TwoStageLaw({class: Stage(p, k)})` (decision 43). A Bernoulli law ov
 where every VU is its own RU with `k = 1` (`TwoStageLaw.bernoulli`). A gate-level `plan.VerificationPlan` is that
 case: every gate is its own RU.
 
-An RU with `m` incorrect VUs out of `n_v` passes with probability
-`1 - p + p * C(n_v - m, k) / C(n_v, k)` (`IntegrityProfile.accept`). `tests/test_law.py` checks the sampler
-against this exactly.
+An RU with `m` incorrect VUs out of `n_v` passes with probability `1 - p + p * C(n_v - m, k) / C(n_v, k)`. That is
+not the profile's law: the interiors are committed after the RU draw, so the prover chooses `m` after seeing which RUs
+were drawn, and `m = 1` is always enough to leave a skipped RU wrong. A wrong RU therefore escapes with probability
+at most `1 - p * k / n_v`, independently across RUs, and the profile is over the RUs with that rate
+(`docs/audit-protocols.md` §3.3, pitfall 6). A larger RU escapes more often, so a class is profiled at its largest RU's
+`n_v` (`TwoStageLaw.profile` takes the class's RUs and uses their maximum). The rate also rests on the VU draw being made by
+the verifier from its own randomness after the interiors are committed (pitfall 4). `tests/test_law.py` checks the sampler against the per-RU formula and
+reproduces the attack the old two-level profile missed (§2.9's `TOY`: 64 skipped VUs pass with probability 0.01).
 
 ## Boundaries
 

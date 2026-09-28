@@ -2,14 +2,17 @@
 
 The two consumer utilities below stand in for PoUW's incorrect-unit bound and the KV touched-unit bound, which live
 with their consumers, not in core.  `two_level` is sampled proofs' shape (n_r units drawn with p, then k of the n_v
-inside each), and `_before_levels` is the profile's arithmetic as it stood in those four numbers, kept as the oracle
-the level form must reproduce exactly."""
+inside each), and `_before_levels` is the profile's arithmetic as it stood in those four numbers (every pair of m tried), kept as the
+oracle the level form must reproduce: `accept` exactly, and `worst_case` from above, within its directed margin.
+`_exact_rhos` and `_exact_lp` are the high-precision reference (60-digit `Decimal`): `worst_case` is never below it."""
 
 from __future__ import annotations
 
 from fractions import Fraction
 from itertools import combinations, product
-from math import comb, exp, inf, log
+import random
+from decimal import Decimal, localcontext
+from math import comb, exp, inf, log, sqrt
 
 import pytest
 
@@ -17,7 +20,7 @@ from verity.ir import Program, bind
 from verity.ir import query_ast as G
 from verity.ir.partition import Level, members_per_parent, validate_partition
 from verity.ml import gemm
-from verity.proofs.profile import Bernoulli, IntegrityProfile, Subset
+from verity.proofs.profile import HARM_MARGIN, MARGIN, Bernoulli, IntegrityProfile, Stratified, Stratum, Subset
 
 
 def two_level(n_r, n_v, p, k, delta, **facts) -> IntegrityProfile:
@@ -149,7 +152,8 @@ def test_the_two_level_case_reproduces_the_four_number_law_exactly(n_r, n_v, p, 
         a = two_level(n_r, n_v, p, k, delta)
         assert all(a.accept(m) == accept(m) for m in range(n_v + 1))
         for utility in (lambda m: m, lambda m: 1, lambda m: m * m, lambda m: 4 * m):
-            assert a.worst_case(utility) == worst_case(utility)
+            new, old = a.worst_case(utility), worst_case(utility)
+            assert old * (1 - 1e-12) - 1e-12 <= new <= old * (1 + 4 * MARGIN) + 1e-12
 
 
 def test_undrawn_levels_only_group():
@@ -232,3 +236,331 @@ def test_a_chain_read_off_a_program_gives_the_profile_its_sizes():
     a = IntegrityProfile((Level("coordinate", G.query_id(coarse_q)), Level("call", G.query_id(fine_q))),
                          (coarse.count(), per[0]), {"coordinate": Bernoulli(Fraction(1, 2)), "call": Subset(1)}, 0.01)
     assert a.count("call") == fine.count() == 8 and a.accept(2) == Fraction(1, 2)
+
+
+def one_level(n, k, delta) -> IntegrityProfile:
+    return IntegrityProfile((Level("unit"),), (n,), {"unit": Subset(k)}, delta)
+
+
+#: The one-stage audits' wrong-unit bounds (lane one-stage-e2e): (n units, k drawn, delta, the exact optimum to 12 digits,
+#: at most).  `worst_case` is within its margin above the exact optimum.
+E2E = {"A0": (1024, 16, 0.01, 254.226320800, 254),
+       "A1": (1024, 256, 2.0 ** -20, 46.9243795425, 46),
+       "A3": (344, 128, 2.0 ** -20, 28.2555988015, 28),
+       "A2": (183_680, 256, 2.0 ** -20, 9675.41945720, 9675)}
+
+
+@pytest.mark.parametrize("run", sorted(E2E))
+def test_the_one_stage_audit_bounds(run):
+    """A2 is serving's real population (183,680 units); the quadratic, float `worst_case` crashed there."""
+    n, k, delta, value, at_most = E2E[run]
+    bound = one_level(n, k, delta).worst_case(lambda m: m)
+    exact = _exact_threshold(n, k, delta)
+    assert float(exact) == pytest.approx(value, rel=1e-11)
+    assert exact <= Decimal(bound) <= exact * (1 + 4 * Decimal(MARGIN))
+    assert int(bound) == at_most
+
+
+def _largest_admitted(n, k, delta) -> int:
+    """The largest K with C(n - K, k)/C(n, k) >= delta, in exact rationals: `audit_count` (`Audit/OneStage.lean`)
+    bounds Pr[accept and at least K wrong] by that ratio (`Law.subset_miss`) plus the per-unit terms."""
+    d, top = Fraction(delta), comb(n, k)
+    lo, hi = 0, n + 1
+    while hi - lo > 1:
+        mid = (lo + hi) // 2
+        lo, hi = (mid, hi) if Fraction(comb(n - mid, k), top) >= d else (lo, mid)
+    return lo
+
+
+@pytest.mark.parametrize("run", sorted(E2E))
+def test_the_count_bound_is_the_lean_curve(run):
+    """For one level drawn Subset(k), `accept(K)` is the Lean count curve's sampling term C(n - K, k)/C(n, k)
+    (`Law.subset_miss`), and the integer bound is the largest count it does not exclude at delta."""
+    n, k, delta, _, at_most = E2E[run]
+    a = one_level(n, k, delta)
+    top = comb(n, k)
+    for K in {0, 1, k, n // 3, at_most, at_most + 1, n - k, n - k + 1, n}:
+        assert a.accept(K) == Fraction(comb(n - K, k), top)
+    assert _largest_admitted(n, k, delta) == at_most == int(a.worst_case(lambda m: m))
+
+
+def test_rho_is_exact_where_accept_underflows():
+    """At A2's size accept(m) falls far below the smallest float; rho stays exact, from integer binomials."""
+    n, k = 183_680, 256
+    a = one_level(n, k, 2.0 ** -20)
+    assert a.accept(n - k) > 0 and float(a.accept(n - k)) == 0.0
+    assert a.rho(n - k) == pytest.approx(log(comb(n, k)), rel=1e-15)
+    assert a.rho(n - k + 1) == inf and a.rho(0) == 0.0
+    assert [a.rho(m) for m in (0, 1, 1000, 9675, 9676, n - k)] == [a._rhos()[m] for m in (0, 1, 1000, 9675, 9676, n - k)]
+    with pytest.raises(ValueError):
+        a.rho(n + 1)
+
+
+def _exact_threshold(n, k, delta) -> Decimal:
+    """For one level drawn Subset(k), rho is convex from rho(0) = 0, so the relaxation's optimum interpolates between the
+    last admitted count and the next (one-stage-e2e's direct bound, #116 6ccb9b7b), here in 60-digit Decimal."""
+    with localcontext() as ctx:
+        ctx.prec = 60
+        lo = _largest_admitted(n, k, delta)
+        top = Decimal(comb(n, k)).ln()
+        ra, rb = top - Decimal(comb(n - lo, k)).ln(), top - Decimal(comb(n - lo - 1, k)).ln()
+        return lo + ((1 / Decimal(delta)).ln() - ra) / (rb - ra)
+
+
+def test_worst_case_is_the_convex_threshold_for_one_subset_level():
+    for n, k, delta, _, _ in E2E.values():
+        exact = _exact_threshold(n, k, delta)
+        assert exact <= Decimal(one_level(n, k, delta).worst_case(lambda m: m)) <= exact * (1 + 4 * Decimal(MARGIN))
+
+
+def _exact_rhos(a: IntegrityProfile) -> list:
+    """rho(0..n) in 60-digit Decimal, None for inf: -ln of `accept`'s exact ratio."""
+    _, n, p, k = a._law()
+    num, den, top = p.numerator, p.denominator, comb(n, k)
+    with localcontext() as ctx:
+        ctx.prec = 60
+        whole = Decimal(den * top).ln()
+        return [None if (x := (den - num) * top + num * comb(n - m, k)) == 0 else whole - Decimal(x).ln()
+                for m in range(n + 1)]
+
+
+def _exact_lp(a: IntegrityProfile, utility, rhos=None) -> Decimal:
+    """The relaxation's exact optimum, independently of the envelope: members times the best value, at mean risk at most
+    t = ln(1/delta)/members, of a single point or of a chord between a point below t and one above (brute force), in
+    60-digit Decimal."""
+    members, n, _, _ = a._law()
+    rhos = _exact_rhos(a) if rhos is None else rhos
+    with localcontext() as ctx:
+        ctx.prec = 60
+        if members == 0:
+            return Decimal(0)
+        t = (1 / Decimal(a.delta)).ln() / members
+        pts = [(Decimal(0), Decimal(0))] + [(r, Decimal(utility(m))) for m, r in enumerate(rhos)
+                                            if m >= 1 and r is not None and utility(m) > 0]
+        lo, hi = [q for q in pts if q[0] <= t], [q for q in pts if q[0] > t]
+        best = max(u for _r, u in lo)
+        for ra, ua in lo:
+            for rb, ub in hi:
+                best = max(best, ua + (ub - ua) * (t - ra) / (rb - ra))
+        return best * members
+
+
+UTILITIES = {"m": lambda m: m, "one": lambda m: 1, "m2": lambda m: m * m, "4m": lambda m: 4 * m, "sqrt": lambda m: sqrt(m)}
+
+
+def _grid(count: int, seed: int = 135):
+    rng = random.Random(seed)
+    for _ in range(count):
+        n_v = rng.randint(1, 40)
+        p = rng.choice([Fraction(0), Fraction(1, 1000), Fraction(1, 7), Fraction(1, 4), Fraction(1, 2), Fraction(3, 4), Fraction(1)])
+        yield two_level(rng.choice([0, 1, 2, 3, 7, 50, 512, 10_000]), n_v, p, rng.randint(0, n_v),
+                        rng.choice([0.3, 0.01, 2.0 ** -20, 1e-9]))
+
+
+def test_worst_case_is_never_below_the_exact_optimum():
+    """On a seeded grid (small risks included, where a log difference would cancel), the bound is at or above the
+    high-precision optimum, and within the margin of it."""
+    for a in _grid(160):
+        rhos = _exact_rhos(a)
+        for name, u in UTILITIES.items():
+            exact, got = _exact_lp(a, u, rhos), Decimal(a.worst_case(u))
+            assert exact <= got <= exact * (1 + 4 * Decimal(MARGIN)) + Decimal(1e-300), (a.sizes, a.draws, a.delta, name)
+
+
+def test_rho_is_accurate_to_a_few_ulps():
+    """Against the 60-digit reference, including risks near 0 (p = 1/1000, k = 1) and the underflow regime."""
+    cases = list(_grid(80)) + [two_level(1, 250, Fraction(1, 1000), 1, 0.01), two_level(1, 4000, Fraction(1), 256, 2.0 ** -20),
+                               two_level(50, 4000, Fraction(1, 2), 256, 2.0 ** -20)]
+    worst = 0.0
+    for a in cases:
+        for m, (r, x) in enumerate(zip(a._rhos(), _exact_rhos(a))):
+            assert (r == inf) == (x is None) and r == a.rho(m)
+            if x is not None and x > 0:
+                worst = max(worst, abs(float((Decimal(r) - x) / x)))
+    assert worst < 1e-15
+
+
+def test_the_red_team_cases():
+    """Where the plain log difference put the bound below the exact optimum (red-team-flock-3 on b4c9a489): n = 4,000,
+    k = 256, p = 1/2, 50 members, by 8.5e-14; the exact optimum here is the envelope evaluated in Decimal."""
+    a = two_level(50, 4000, Fraction(1, 2), 256, 2.0 ** -20)
+    rhos = _exact_rhos(a)
+    with localcontext() as ctx:
+        ctx.prec = 60
+        t = (1 / Decimal(a.delta)).ln() / 50
+        hull = []
+        for q in sorted([(Decimal(0), Decimal(0))] + [(r, Decimal(m)) for m, r in enumerate(rhos) if m and r is not None]):
+            while len(hull) >= 2 and (hull[-1][0] - hull[-2][0]) * (q[1] - hull[-2][1]) >= (hull[-1][1] - hull[-2][1]) * (q[0] - hull[-2][0]):
+                hull.pop()
+            hull.append(q)
+        seg = max(i for i, q in enumerate(hull) if q[0] <= t)
+        (ra, ua), (rb, ub) = hull[seg], hull[seg + 1]
+        exact = 50 * (ua + (ub - ua) * (t - ra) / (rb - ra))
+    got = Decimal(a.worst_case(lambda m: m))
+    assert exact <= got <= exact * (1 + 4 * Decimal(MARGIN))
+
+
+
+def test_the_float_pairwise_version_crashed_where_the_profile_now_serves():
+    """The profile's arithmetic before this fix: -log(float(accept)) underflows once accept < 1e-308, as it does at
+    n = 4,000, k = 256 (accept(n - k) = 1/C(4000, 256), about e^-960)."""
+    _, before = _before_levels(1, 4000, Fraction(1), 256, 2.0 ** -20)
+    with pytest.raises(ValueError):
+        before(lambda m: m)
+    bound = two_level(1, 4000, Fraction(1), 256, 2.0 ** -20).worst_case(lambda m: m)
+    assert int(bound) == _largest_admitted(4000, 256, 2.0 ** -20)
+
+
+# ---- Stratified: independent uniform draws inside strata (docs: sampling-strategies) -------------------------------
+
+#: A4 P6's layer 0 (one-stage-e2e): six templates, 6,771,765 units, in canonical order.
+A4_SIZES = {"rms_triton": 287, "gemm2048": 6_171_648, "rope": 11_480, "rms_fused": 287, "silu_mul": 287,
+            "gemm8192": 587_776}
+#: Output bits per unit: the prover's freedom in a wrong unit (16-bit words).
+A4_BITS = {"rms_triton": 2048 * 16, "gemm2048": 16, "rope": 64 * 16, "rms_fused": 2 * 2048 * 16, "silu_mul": 8192 * 16,
+           "gemm8192": 16}
+
+
+def a4_law(ks: dict) -> Stratified:
+    return Stratified(tuple(Stratum(name, size, ks[name]) for name, size in A4_SIZES.items()))
+
+
+def _enumerate(law: Stratified):
+    """Every unit as (stratum index, unit index), and every equally likely draw of the law."""
+    units = [(i, j) for i, s in enumerate(law.strata) for j in range(s.size)]
+    per = [[{(i, j) for j in c} for c in combinations(range(s.size), s.k)] for i, s in enumerate(law.strata)]
+    draws = [set().union(*parts) for parts in product(*per)]
+    return units, draws
+
+
+def _escapes(law: Stratified):
+    """(wrong set, exact escape) for every subset of the units, by counting draws."""
+    units, draws = _enumerate(law)
+    for r in range(len(units) + 1):
+        for b in combinations(units, r):
+            yield set(b), Fraction(sum(not (d & set(b)) for d in draws), len(draws))
+
+
+def _counts(law: Stratified, b) -> dict:
+    return {s.name: sum(1 for i, _ in b if i == idx) for idx, s in enumerate(law.strata)}
+
+
+SMALL = [Stratified((Stratum("a", 4, 2), Stratum("b", 3, 1), Stratum("c", 3, 0))),
+         Stratified((Stratum("a", 5, 1), Stratum("b", 5, 1))),                          # tied strata
+         Stratified((Stratum("a", 6, 3), Stratum("b", 2, 2), Stratum("c", 1, 1))),
+         Stratified.uniform(9, 2)]
+
+
+@pytest.mark.parametrize("law", SMALL)
+def test_stratified_escape_miss_and_count_bound_by_enumeration(law):
+    """Escape depends only on the counts per stratum and is exact; miss(K) is the largest escape of K wrong units; the
+    count bound is the largest K with miss(K) >= delta."""
+    best = {}
+    for b, e in _escapes(law):
+        assert law.escape(_counts(law, b)) == e
+        best[len(b)] = max(best.get(len(b), Fraction(0)), e)
+    assert [law.miss(K) for K in range(law.population + 1)] == [best[K] for K in range(law.population + 1)]
+    for delta in (0.9, 0.5, 0.3, 0.1, 0.01, 1e-6):
+        assert law.count_bound(delta) == max(K for K, e in best.items() if e >= Fraction(delta))
+
+
+@pytest.mark.parametrize("law", SMALL)
+def test_stratified_harm_bound_brackets_the_integer_optimum(law):
+    """The relaxation is at or above the best integer strategy and within one unit's harm of it (only its last unit is
+    fractional); harms per stratum, and several harms inside one stratum."""
+    harms = [{s.name: float(i + 1) for i, s in enumerate(law.strata)},
+             {law.strata[0].name: [(5.0, 1), (2.0, law.strata[0].size - 1)]},
+             {s.name: 1.0 for s in law.strata}]
+    for harm in harms:
+        def unit_harm(i, j):
+            h = harm.get(law.strata[i].name, 0.0)
+            if isinstance(h, float):
+                return h
+            for v, c in h:
+                if j < c:
+                    return v
+                j -= c
+            return 0.0
+        top = max(unit_harm(i, j) for i, s in enumerate(law.strata) for j in range(s.size))
+        for delta in (0.5, 0.1, 0.01):
+            exact = max(sum(unit_harm(i, j) for i, j in b) for b, e in _escapes(law) if e >= Fraction(delta))
+            bound = law.harm_bound(harm, delta)
+            assert exact <= bound <= (exact + top) * (1 + 4 * HARM_MARGIN) + 1e-12, (law, harm, delta)
+
+
+@pytest.mark.parametrize("run", sorted(E2E))
+def test_one_stratum_is_the_uniform_subset(run):
+    """One stratum drawn k of n is the one-stage audits' law: the same count bound as the profile and the Lean curve."""
+    n, k, delta, _, at_most = E2E[run]
+    law = Stratified.uniform(n, k)
+    assert law.count_bound(delta) == at_most == _largest_admitted(n, k, delta)
+    assert law.miss(at_most) == Fraction(comb(n - at_most, k), comb(n, k)) and law.inclusion("unit") == Fraction(k, n)
+
+
+def test_a4_uniform_leaves_the_norms_undrawn():
+    """A4 P6's law: at most 91,051 wrong units at 2^-20 (the audit's own bound), but a template of 287 units that is
+    wrong in every unit escapes with probability 0.958, and the prover's freedom reaches 9.4 MiB."""
+    law = Stratified.uniform(sum(A4_SIZES.values()), 1024)
+    assert law.count_bound(2.0 ** -20) == 91_051
+    assert 0.957 < float(law.escape({"unit": 287})) < 0.958
+    segments = [(A4_BITS[name], size) for name, size in A4_SIZES.items()]
+    assert 9.39 < law.harm_bound({"unit": segments}, 2.0 ** -20) / 8 / 2 ** 20 < 9.41
+
+
+def test_a4_one_unit_floor_per_template():
+    """Proportional allocation with one unit per template, at A4's proving cost: every template is exercised, a
+    template wrong in every unit is always caught, and the count bound moves by 3%."""
+    law = a4_law({"rms_triton": 1, "gemm2048": 905, "rope": 2, "rms_fused": 1, "silu_mul": 1, "gemm8192": 86})
+    assert law.k == 996 and law.count_bound(2.0 ** -20) == 93_892
+    worst = law.worst_counts(93_892)
+    assert worst["rms_triton"] == worst["rms_fused"] == worst["silu_mul"] == worst["rope"] == 0
+    for name in ("rms_triton", "rms_fused", "silu_mul"):
+        assert law.escape({name: 287}) == 0 and law.stratum_bound(name, 2.0 ** -20) == 286
+        assert law.escape({name: 1}) == Fraction(286, 287)
+    assert 8.80 < law.harm_bound(A4_BITS, 2.0 ** -20) / 8 / 2 ** 20 < 8.82
+
+
+def test_a4_proportional_to_output_bits():
+    """Inclusion proportional to output bits at the same proving cost: the prover's freedom falls from 9.4 MiB to 1.5 MiB,
+    and the count bound rises to 11.4% of the units."""
+    law = a4_law({"rms_triton": 10, "gemm2048": 104, "rope": 12, "rms_fused": 20, "silu_mul": 39, "gemm8192": 10})
+    assert 1.49 < law.harm_bound(A4_BITS, 2.0 ** -20) / 8 / 2 ** 20 < 1.51
+    assert law.count_bound(2.0 ** -20) == 773_981
+
+
+def test_the_count_bound_is_the_unit_harm_bound_rounded_down():
+    law = a4_law({"rms_triton": 1, "gemm2048": 905, "rope": 2, "rms_fused": 1, "silu_mul": 1, "gemm8192": 86})
+    for delta in (2.0 ** -10, 2.0 ** -20, 2.0 ** -40):
+        K = law.count_bound(delta)
+        assert K <= law.harm_bound({s.name: 1 for s in law.strata}, delta) < K + 1 + 1e-6 * K
+
+
+@pytest.mark.parametrize("strata", [(), (Stratum("a", 3, 1), Stratum("a", 2, 1)), ("a",)])
+def test_ill_formed_stratified_laws_are_refused(strata):
+    with pytest.raises(ValueError):
+        Stratified(strata)
+
+
+@pytest.mark.parametrize("kw", [dict(size=-1), dict(k=5), dict(k=-1), dict(name="")])
+def test_ill_formed_strata_are_refused(kw):
+    with pytest.raises(ValueError):
+        Stratum(**{**dict(name="a", size=4, k=1), **kw})
+
+
+def test_stratified_queries_name_known_strata():
+    law = SMALL[0]
+    with pytest.raises(KeyError):
+        law.escape({"z": 1})
+    with pytest.raises(ValueError):
+        law.escape({"a": 5})
+    with pytest.raises(ValueError):
+        law.miss(law.population + 1)
+    with pytest.raises(ValueError):
+        law.count_bound(1.0)
+    assert law.worst_counts(law.population) is None and law.miss(law.population) == 0
+
+
+def test_stratified_json_is_the_profile_law():
+    assert SMALL[0].to_json() == {"law": "stratified", "strata": [{"name": "a", "size": 4, "k": 2},
+                                                                  {"name": "b", "size": 3, "k": 1},
+                                                                  {"name": "c", "size": 3, "k": 0}]}

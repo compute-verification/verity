@@ -28,6 +28,9 @@ ALLOWED_EXTRA = (
     "backends/flock/verifier/lean/soundness/ASSUMPTIONS.md",
     "backends/numerical/python/verity_numerical/redteam/TRANSCRIPT_CHECKLIST.md",
 )
+#: The Flock soundness package's detail behind its named assumptions (its ``ASSUMPTIONS.md`` states them in full), one
+#: file each, so that no one document outgrows its cap.
+SOUNDNESS_ASSUMPTIONS = "backends/flock/verifier/lean/soundness/assumptions/"
 #: Evidence files that code still reads (``backends/shared/anchor_a100/report.py`` inputs, ``reprice_v2.py --v1``,
 #: ``tensor/fused/bench.py`` PREVIOUS_RUN).  Pinned until those scripts read from the notes store; nothing else may
 #: live under ``reports/`` or ``results/``.
@@ -67,6 +70,12 @@ OVERSIZE_FIXTURES = {
 
 
 def _tracked() -> list[str]:
+    if not (ROOT / ".git").exists():                # a shipped `git archive` (research run --source): its files are the commit's,
+        out = []                                    # beside what the machine adds (the runner's READY.json, uv's .venv, bytecode)
+        for d, dirs, files in os.walk(ROOT):
+            dirs[:] = [x for x in dirs if x not in (".venv", "__pycache__")]
+            out += [os.path.relpath(os.path.join(d, f), ROOT) for f in files]
+        return sorted(p for p in out if p != "READY.json")
     out = subprocess.run(["git", "ls-files", "-z"], cwd=ROOT, check=True, capture_output=True).stdout
     return [p.decode() for p in out.split(b"\0") if p]
 
@@ -77,7 +86,8 @@ def _is_pinned(path: str) -> bool:
 
 def test_tracked_markdown_is_maintained_documentation() -> None:
     offenders = [p for p in _tracked() if p.endswith(".md") and os.path.basename(p) not in ALLOWED_MD_BASENAMES
-                 and not p.endswith(".template.md") and p not in ALLOWED_EXTRA]
+                 and not p.endswith(".template.md") and p not in ALLOWED_EXTRA
+                 and not p.startswith(SOUNDNESS_ASSUMPTIONS)]
     assert not offenders, (
         "tracked markdown that is not a maintained document (reports, handoffs and drafts belong in ~/.research/notes):\n"
         + "\n".join(offenders)

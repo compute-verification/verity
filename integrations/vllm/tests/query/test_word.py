@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 
 from verity.ir.layout import GateSelection
+from verity.ir.cut import call_scope
 from verity_vllm.query import word as W
 
 
@@ -29,6 +30,17 @@ def test_query_id_and_parse():
     assert W.parse("16") == (16, 32, 0) and W.parse("16/32+2") == (16, 32, 2) and W.parse("8/8") == (8, 8, 0)
 
 
+def test_max_scaled_is_not_in_the_fa_stream():
+    # ROW word 2 is the kernel's visit index (vt_step): max * scale needs the MS plane
+    for scope in ("AttnBlock_v3{D=64,NVIS=64,FIRST=False,BN=128}", "AttnBlockSoftcap_v1{D=256,NVIS=64,FIRST=False,BN=64,CAP=50.0}"):
+        assert W.committed_today(scope, "F32MulFtz_v1") is None
+        assert W.tap_kernel(scope, "F32MulFtz_v1") == "FA2 / FA3 tap build (MS plane, `max_scaled`)"
+        assert W.committed_today(scope, "F32Max_v1") == "ROW row_max"
+        assert W.committed_today(scope, "GuardNegInfZero_v1") is None                           # opt-in taps stay new taps (norm scales, router)
+        assert W.tap_kernel(scope, "GuardNegInfZero_v1") == "FA2 / FA3 tap build (ROW word 3, opt-in `GUARDED_MAX_TAP=1`, #95)"
+    assert W.tap_kernel("RMSNormTriton_v1{N=64,EPS=1e-05}", "F32MulFtz_v1") == "vLLM batch-invariant Triton _rms_norm_kernel"
+
+
 @pytest.mark.parametrize("fam,statics", [("RMSNormTriton_v1", {"N": 2048, "EPS": 1e-05}), ("Gemm_v1", {"K": 64, "N": 8}),
                                          ("Attention_v3", {"T": 21, "NH": 4, "KVH": 2, "D": 64, "BN": 128}), ("TokenSelect_v1", {"V": 8})])
 def test_every_computation_gate_is_certified_by_one_unit(fam, statics):
@@ -48,7 +60,7 @@ def test_widths_are_the_irs_out_where_no_wiring_sits_between_units(fam, statics)
     fn = _fn(fam, **statics)
     G = W.Graph(fn)
     R = W.units(G, 16, 32)
-    c, call = W._call_scope(fn)
+    c, call = call_scope(fn)
     for u in range(len(R["kinds"])):
         gates = (G.keep[np.flatnonzero(R["owner"] == u)] + call.offset).tolist()
         out = GateSelection(c, gates).out
@@ -209,3 +221,51 @@ def test_the_sampler_computes_its_greedy_flag_twice_inside_its_one_unit():
     (a, b), = G.recomputed                                            # temp == 0, in TemperatureScale and in GumbelSelectF32
     assert {G.prim_names[int(G.prim[a])], G.prim_names[int(G.prim[b])]} == {"F32Eq_v1"} and R["owner"][a] == R["owner"][b]
     assert R["kinds"] == ["output"] and R["cut"].ok and R["cut"].detail["redundant_gates"] == 1
+
+
+def test_a_call_that_only_rearranges_bits_returns_its_inputs():
+    # every gate is wiring: the returned values are the committed inputs themselves (not committed and unread)
+    from verity.ir.defs import CompositeDefinition, bind
+    from verity.ir.types import Array
+    from verity_vllm.program.registry import prims as P
+    f = bind(CompositeDefinition("Widen", 1, ("N",), lambda S: ((("a", Array(S.N, P.BF16)),), Array(S.N, P.F32)),
+                                 lambda B, S, a: B.batch(P.Bf16ToF32, a, axes=(0,)), register=False), N=8)
+    G = W.Graph(f)
+    R = W.units(G, 16, 32)
+    assert G.n == 0 and len(G.returned_inputs) == 8 and R["cut"].ok, R["cut"].codes
+    assert W.unit_rule(f)["violations"] == []
+
+
+def test_the_graph_is_the_core_reference_and_a_programs_partition_object_verifies_in_core():
+    # word.Graph is verity.ir.cut.CallGraph with numpy views; a Program's cut, as verity/partition/v1, checks in core
+    from verity.ir import cut, partition_object as PO
+    from verity.ir.defs import CompositeDefinition, bind
+    from verity.ir.program import Program
+    from verity.ir.refs import tuple_of
+    from verity.ir.types import Tuple
+    fns = [_fn("RMSNormTriton_v1", N=64, EPS=1e-05), _fn("TokenSelect_v1", V=8), _fn("Attention_v3", T=3, NH=2, KVH=1, D=16, BN=128)]
+    for f in fns:
+        c, g = cut.CallGraph(f), W.Graph(f)
+        assert (c.n, c.free, c.outputs, c.recomputed, c.input_reads) == (g.n, g.free, g.outputs, g.recomputed, g.input_reads)
+        assert list(c.src) == g.src.tolist() and list(c.width) == g.width.tolist()
+        R = W.units(g, 16, 32)
+        own, _kinds, head = W.partition(g, 16)
+        assert cut.derived_committed(c, own.tolist()) == np.flatnonzero(head >= 0).tolist()   # the heads are the derived committed set
+        ob, og = cut.boundary_widths(c, R["owner"].tolist(), len(R["kinds"]))
+        assert ob == R["out_bits"].tolist() and og == R["out_gates"].tolist()
+    sig = [f.signature() for f in fns]
+    params = tuple((f"p{i}_{n}", t) for i, (ps, _r) in enumerate(sig) for n, t in ps)
+
+    def body(B, S, *a):
+        outs, i = [], 0
+        for f, (ps, _r) in zip(fns, sig):
+            outs.append(B.call(f, *a[i:i + len(ps)]))
+            i += len(ps)
+        return tuple_of(*outs)
+
+    P = Program(bind(CompositeDefinition("PartitionTop", 1, (), lambda S: (params, Tuple(*[r for _p, r in sig])), body, register=False)))
+    obj = PO.build(P)
+    assert PO.validate(obj).ok and PO.verify(obj, P).ok
+    part = PO.evaluate(P)
+    assert part.population == sum(W.unit_rule(f)["units_per_call"] for f in fns) and len(part.calls) == 3
+    assert PO.owners_digest(part) == PO.owners_digest(PO.evaluate(P))

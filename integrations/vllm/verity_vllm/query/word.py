@@ -11,11 +11,13 @@ The rule (no recomputes):
     are no public inputs: the Call's inputs (weights, tokens, earlier Calls' outputs) are committed, private values.  Constants and
     wiring (`WIRING`: bit rearrangement, such as BF16 -> FP32 zero-extension) are circuit structure: hardwired into each unit's
     statement, never committed, not counted as gates; a unit reads through wiring to its source.
-  * **Width** counts committed elements: a unit passes at |out(S)| <= X (16, where the word allows it), or when out(S) is ONE value of at
-    most W bits (32: float interiors such as a norm scale, attention's max, sum and inverse sum).  No dtype is read.
+  * **Width** counts bits (`verity.ir.cut.fits`): a unit's boundary gates (read by another unit, or returned) total at most X declared
+    bits (16), or the unit has exactly ONE boundary value, of at most W bits (32: float interiors such as a norm scale, attention's
+    max, sum and inverse sum).  No dtype is read.
   * It refines `Q_module_body_v1` without moving its boundary: a Call's inputs and outputs are the bridge's required values.
 
-The cut of one Call (`partition`), on its computing gates (`Graph`: wiring and constants removed, reads through them re-pointed):
+The cut of one Call (`partition`), on its computing gates (`Graph`, core's `verity.ir.cut.CallGraph`: wiring and constants removed,
+reads through them re-pointed):
 
   1. The returned gates, in return order, packed into outputs of at most X bits (a wider value is an output alone).
   2. Backward over the gates (the layout is topological): a gate joins its consumers' unit when they all belong to one; a gate
@@ -28,22 +30,18 @@ where it does not today).  `unit_rule` summarises one specialization; `check_que
 """
 from __future__ import annotations
 
-import json
-from array import array
 from collections import Counter
 from typing import Any, Callable, Iterable, Mapping
 
 import numpy as np
 
+from verity.ir.cut import WIRING, CallGraph, cut_word, fits
 from verity.ir.defs import PrimitiveDefinition
-from verity.ir.layout import WIDE_FAN_IN, resolve
-from verity.ir.refs import Affine
+
+from verity_vllm.query.call_scope import QueryRuleViolation, specialization
 
 QUERY_ID = "Q_word_v1"
 
-#: primitives that only rearrange bits (each output bit a constant or a copy of one input bit; `tests/query/test_word.py` checks it):
-#: wiring, like constants, is computed in no unit, may be read by any, and is never committed
-WIRING = frozenset({"Bf16ToF32_v1", "F32BitsShl23_v1", "F32Fabs_v1"})
 
 #: the rule's name in the query id
 RULE = "no-recompute"
@@ -65,257 +63,27 @@ def parse(spec: str) -> tuple[int, int, int]:
     return int(x), int(w) if w else max(int(x), 32), int(e or 0)
 
 
-class QueryRuleViolation(ValueError):
-    """A Program whose units cannot satisfy `Q_word_v1{X,W}`: named per Definition and module, never widened."""
+def _np(a: Any, dtype: Any = np.int64) -> np.ndarray:
+    return np.frombuffer(a, dtype).astype(np.int64) if len(a) else np.zeros(0, np.int64)
 
 
-def specialization(fam: str, statics: dict[str, Any]):
-    """The registered Definition `fam` bound to `statics` (a primitive as it is); function-valued statics (`DOT`, rendered
-    `{"fn": id}` or as the bare id) resolve to the registered Definition they name."""
-    from verity.ir.codec import lookup_primitive
-    from verity_vllm.query.program_view import _registry
-    reg, _errors = _registry()
-    d = reg.defs.get(fam)
-    if d is None:
-        return lookup_primitive(reg, fam)
-
-    def fn_value(v: Any) -> Any:
-        fid = v.get("fn") if isinstance(v, dict) else (json.loads(v).get("fn") if isinstance(v, str) and v[:5] == '{"fn"' else v)
-        if not isinstance(fid, str):
-            return v
-        try:
-            return lookup_primitive(reg, fid)
-        except KeyError:
-            return reg.defs[fid] if fid in reg.defs else v
-
-    return d.bind(**{k: fn_value(v) for k, v in statics.items()}) if hasattr(d, "bind") else d
-
-
-def _call_scope(fn: Any) -> tuple[Any, Any]:
-    """(circuit, activation of `fn`) in a one-Call Program: the Call's parameters are Input gates, its returned leaves designated
-    outputs.  A returned leaf a real Program does not read only shrinks out(S), so widths here bound those in any Program."""
-    from verity.ir.defs import CompositeDefinition
-    from verity.ir.program import Program
-    params, ret = fn.signature()
-    shell = CompositeDefinition(f"Word[{fn.id}]", 1, (), lambda S: (tuple(params), ret), lambda B, S, *a: B.call(fn, *a), register=False)
-    c = Program(shell).circuit
-    rs = c.root_scope
-    k = next(k for k, n in enumerate(rs.spec.body.nodes) if n.fn is fn)
-    return c, rs.child(k)
-
-
-def _member_refs(a: Any, ax: int | None, m: int) -> Any:
-    if ax is None:
-        return a.refs
-    if ax == 0:
-        L = a.type.elem.leaves
-        return a.refs.slice(m * L, (m + 1) * L)
-    return a.take(ax, m).refs
-
-
-def _wide_operands(gate: Any, call: Any) -> Iterable[int]:
-    """A wide fan-in gate's operands, skipping whole arguments that are the Call's own parameters (Input gates, outside the Call)."""
-    s = gate.scope
-    body = s.spec.body
-    k = body.node_at(gate.index - s.offset)
-    node = body.nodes[k]
-    m = (gate.index - s.offset - body.offsets[k]) // node.fn.gates if node.form == "batch" else 0
-    at_call = s.spec is call.spec and s.offset == call.offset
-    for a, ax in zip(node.args, node.axes if node.form == "batch" else (None,) * len(node.args)):
-        refs = _member_refs(a, ax, m)
-        if at_call and isinstance(refs, Affine) and refs.space == "p":
-            continue
-        for j in range(len(refs)):
-            yield resolve(s, refs[j])
-
-
-class Graph:
-    """The explicit gates of one Call activation that COMPUTE (local index), with wiring and constants removed: declared width,
-    primitive and activation per gate, whether it reads a Call parameter, and the wires between them (`src[e]` -> `dst[e]`), a read
-    through wiring standing for reads of the wiring's source gates.  `outputs`: the returned gates in return order (a returned wiring
-    value: its sources; a returned constant: nothing).  `total` / `free` / `free_by_prim`: the Call's gates, and the free ones."""
+class Graph(CallGraph):
+    """`verity.ir.cut.CallGraph` (the core reference: the computing gates of one activation, structure removed) with numpy views of
+    the per-gate arrays the cut computes on: `keep`, `width`, `prim`, `scope`, `external` and the reads `src` -> `dst`."""
 
     def __init__(self, fn: Any) -> None:
-        c, call = _call_scope(fn)
-        lo, n = call.offset, fn.gates
-        width = np.empty(n, np.int64)
-        prim = np.empty(n, np.int64)
-        scope = np.empty(n, np.int64)
-        external = np.zeros(n, bool)
-        free = np.zeros(n, bool)
-        const = np.zeros(n, bool)
-        self.prims: dict[str, int] = {}
-        self.scopes: dict[str, int] = {}
-        ops: list[list[int]] = []
-        inputs: dict[int, int] = {}                                  # the Call's parameter gates it reads (root id -> index)
-        wide: set[int] = set()
-        for j in range(n):
-            g = c.gate(lo + j)
-            width[j] = g.prim.ret.w
-            prim[j] = self.prims.setdefault(g.prim.id, len(self.prims))
-            scope[j] = self.scopes.setdefault(g.scope.spec.id, len(self.scopes))
-            const[j] = not g.prim.params
-            free[j] = const[j] or g.prim.id in WIRING
-            it = g.operands
-            ext = False
-            if len(it) > WIDE_FAN_IN:
-                it = _wide_operands(g, call)
-                ext = True
-                wide.add(j)
-            mine = []
-            for o in it:
-                if 0 <= o - lo < n:
-                    mine.append(o - lo)
-                else:
-                    ext = True
-                    if j not in wide:                                  # a wide gate's inputs: reads of committed inputs, not listed
-                        mine.append(-1 - inputs.setdefault(o, len(inputs)))      # an input gate: -1 - its index
-            external[j] = ext
-            ops.append(mine)
-        for j in range(n):                                          # a value computed from constants alone is a constant too
-            if not free[j] and not external[j] and ops[j] and all(o >= 0 and const[o] for o in ops[j]):
-                const[j] = free[j] = True
-        # recomputes: a computation gate with the primitive and the operands (by value: constants, inputs, wiring, earlier canonical
-        # gates) of an earlier one computes the same value again; a gate whose wide operands were not enumerated matches nothing
-        tok = array("q", bytes(8 * n))                               # a value's token: equal tokens, equal values
-        first: dict[int, int] = {}                                  # key hash -> the first gate with that key
-        dup: list[tuple[int, int]] = []
-
-        def key(j: int) -> tuple:
-            return (int(prim[j]),) + tuple(hash(("i", -o)) if o < 0 else tok[o] for o in ops[j])   # -o >= 1: hash(-1) == hash(-2)
-
-        for j in range(n):
-            k = key(j)
-            h = hash(k)
-            if free[j]:
-                tok[j] = hash(("s", h))
-            elif j in wide:
-                tok[j] = hash(("u", j))
-            elif h in first and key(first[h]) == k:
-                dup.append((j, first[h]))
-                tok[j] = tok[first[h]]
-            else:
-                first.setdefault(h, j)
-                tok[j] = hash(("g", j))
-        srcs: dict[int, tuple[int, ...]] = {}
-        for j in np.flatnonzero(free).tolist():
-            s: set[int] = set()
-            for o in ops[j]:
-                s.update(srcs[o] if o >= 0 and free[o] else (o,))
-            srcs[j] = tuple(sorted(s))
-        keep = np.flatnonzero(~free)
-        idx = np.full(n, -1, np.int64)
-        idx[keep] = np.arange(len(keep))
-        src, dst = array("q"), array("q")
-        self.input_reads: list[tuple[int, int]] = []                 # (input index, computing gate)
-        for j in keep.tolist():
-            seen: set[int] = set()
-            for o in ops[j]:
-                for u in (srcs[o] if o >= 0 and free[o] else (o,)):
-                    if u in seen:
-                        continue
-                    seen.add(u)
-                    if u < 0:
-                        self.input_reads.append((-1 - u, int(idx[j])))
-                    else:
-                        src.append(int(idx[u]))
-                        dst.append(int(idx[j]))
-        self.input_ids = sorted(inputs, key=inputs.__getitem__)       # root gate id of each input gate read
-        self.total, self.free = n, int(free.sum())
-        self.free_by_prim = Counter()
-        for k, v in zip(*np.unique(prim[free], return_counts=True)):
-            self.free_by_prim[k] = int(v)
-        self.n = len(keep)
-        self.keep = keep                                           # computation gate -> the Call's gate id
-        self.recomputed = [(int(idx[a]), int(idx[b])) for a, b in dup]   # (gate, earlier gate computing the same value)
-        self.width, self.prim, self.scope, self.external = width[keep], prim[keep], scope[keep], external[keep]
-        self.src = np.frombuffer(src, np.int64) if len(src) else np.zeros(0, np.int64)
-        self.dst = np.frombuffer(dst, np.int64) if len(dst) else np.zeros(0, np.int64)
-        outs: list[int] = []
-        for g in (resolve(call, r) - lo for r in fn.body.ret):
-            if 0 <= g < n:
-                outs += [int(idx[u]) for u in (srcs[g] if free[g] else (g,)) if u >= 0]
-        self.outputs = outs
-        self.prim_names = {v: k for k, v in self.prims.items()}
-        self.scope_names = {v: k for k, v in self.scopes.items()}
-        self.free_by_prim = Counter({self.prim_names[k]: v for k, v in self.free_by_prim.items()})
-
-
-def _targets(G: Graph, X: int) -> list[list[int]]:
-    """The returned gates (first occurrence, return order) packed into runs of at most X declared bits."""
-    seen, out, cur, bits = set(), [], [], 0
-    for g in G.outputs:
-        if g in seen:
-            continue
-        seen.add(g)
-        w = int(G.width[g])
-        if cur and bits + w > X:
-            out.append(cur)
-            cur, bits = [], 0
-        cur.append(g)
-        bits += w
-    if cur:
-        out.append(cur)
-    return out
-
-
-def _owners(G: Graph, head: np.ndarray, kinds: list[str]) -> tuple[np.ndarray, np.ndarray]:
-    """Owner per gate for the given heads: backward, a gate joins its consumers' unit when they agree; a gate several units read
-    directly becomes a head (committed); a gate no returned value depends on (dead) joins the one live unit it reads, else heads a
-    dead unit.  Loops until every gate a unit reads from another unit is a head: the committed set is the boundary set."""
-    n = G.n
-    order = np.argsort(G.src, kind="stable")
-    cons = array("q", G.dst[order].tobytes())                 # consumers of gate g: cons[start[g]:start[g + 1]]
-    start = array("q", np.searchsorted(G.src[order], np.arange(n + 1)).tobytes())
-    by_consumer = np.argsort(G.dst, kind="stable")
-    dstart = np.searchsorted(G.dst[by_consumer], np.arange(n + 1))
-    while True:
-        owner = array("q", head.tobytes())                     # -1: no returned value depends on it; -2: several units
-        for g in range(n - 1, -1, -1):
-            if owner[g] >= 0:
-                continue
-            o = -1
-            for e in range(start[g], start[g + 1]):
-                oc = owner[cons[e]]
-                if oc == -1 or oc == o:
-                    continue
-                if o == -1 and oc >= 0:
-                    o = oc
-                else:
-                    o = -2
-                    break
-            owner[g] = o
-        own = np.frombuffer(owner, np.int64).copy()
-        s_, d_ = G.src[order], G.dst[order]
-        promote = np.unique(s_[(own[s_] == -2) & (own[d_] >= 0)])
-        if not len(promote):
-            live = len(kinds)
-            for g in np.flatnonzero(own == -1).tolist():              # reads of committed values (heads) cross units freely
-                us = {int(own[G.src[e_]]) for e_ in by_consumer[dstart[g]:dstart[g + 1]].tolist() if head[G.src[e_]] < 0}
-                alive = {u for u in us if 0 <= u < live}
-                own[g] = alive.pop() if len(alive) == 1 and len(us) == 1 else -1
-            for g in np.flatnonzero(own == -1).tolist():
-                own[g] = len(kinds)
-                kinds.append("dead")
-            cross = own[G.src] != own[G.dst]
-            promote = np.unique(G.src[cross][head[G.src[cross]] < 0])
-            if not len(promote):
-                return own, head
-            del kinds[live:]
-        head[promote] = np.arange(len(kinds), len(kinds) + len(promote))
-        kinds += ["committed"] * len(promote)
+        super().__init__(fn)
+        self.keep, self.width, self.prim, self.scope = _np(self.keep), _np(self.width), _np(self.prim), _np(self.scope)
+        self.external = np.frombuffer(self.external, np.uint8).astype(bool) if len(self.external) else np.zeros(0, bool)
+        self.src, self.dst = _np(self.src), _np(self.dst)
 
 
 def partition(G: Graph, X: int) -> tuple[np.ndarray, list[str], np.ndarray]:
-    """(owner per gate, kind per unit, head per gate): "output" (returned values), "committed" (a value another unit reads), "dead"
-    (read by no returned value); `head[g] >= 0` marks the gates the cut commits -- the returned ones and every value read across units."""
-    head = np.full(G.n, -1, np.int64)
-    kinds: list[str] = []
-    for t in _targets(G, X):
-        head[t] = len(kinds)
-        kinds.append("output")
-    own, head = _owners(G, head, kinds)
-    return own, kinds, head
+    """(owner per gate, kind per unit, head per gate) of core's `verity.ir.cut.cut_word` (the reference): "output" (returned values),
+    "committed" (a value another unit reads), "dead" (read by no returned value); `head[g] >= 0` marks the gates the cut commits -- the
+    returned ones and every value read across units."""
+    own, kinds, head = cut_word(G, X)
+    return np.asarray(own, np.int64), kinds, np.asarray(head, np.int64)
 
 
 def units(G: Graph, X: int, W: int, extras: int = 0) -> dict[str, Any]:
@@ -341,14 +109,14 @@ def units(G: Graph, X: int, W: int, extras: int = 0) -> dict[str, Any]:
     k = len(G.input_ids)
     reads = list(zip(G.src.tolist(), G.dst.tolist())) + [(G.n + i, q) for i, q in G.input_reads]
     committed = np.flatnonzero(head >= 0).tolist() + list(range(G.n, G.n + k))
-    cut = validate_unit_cut(G.total + k, G.free, owner.tolist() + [INPUT_UNIT] * k, reads, G.outputs, committed, range(G.n, G.n + k),
-                            G.recomputed)
+    cut = validate_unit_cut(G.total + k, G.free, owner.tolist() + [INPUT_UNIT] * k, reads, G.outputs + [G.n + i for i in G.returned_inputs],
+                            committed, range(G.n, G.n + k), G.recomputed)
     if not cut.ok:                                                 # the Call's gate ids (its canonical layout), not the compacted ones
         ids = G.keep.tolist() + [f"input:{g}" for g in G.input_ids]
         for k in cut.codes:
             if k != "gate-count":
                 cut.detail[k]["gates"] = [[ids[a] for a in x] if isinstance(x, list) else ids[x] for x in cut.detail[k]["gates"]]
-    ok = (out_bits <= X + extras) | ((out_gates == 1) & (out_bits <= W + extras))
+    ok = fits(out_bits, out_gates, X, W, extras)
     return {"owner": owner, "kinds": kinds, "gates": gates, "out_bits": out_bits, "out_gates": out_gates, "ok": ok, "cut": cut,
             "head_prim": np.where(first >= 0, G.prim[np.maximum(first, 0)], -1),
             "head_scope": np.where(first >= 0, G.scope[np.maximum(first, 0)], -1)}
@@ -426,7 +194,13 @@ def unit_rule(fn: Any, X: int = 16, W: int = 32, extras: int = 0, *, memo: dict 
                                              "nodes": {fn.id: 1}, "ok": bits <= cap or bits <= W + extras}]
         rule = _finish(fn.id, 1, classes, [], X, W, extras)
     elif (sep := _separable(fn)) is not None:
+        from verity_vllm.query.cross_call import members_check
         rule = _combine(fn.id, fn.gates, [(unit_rule(c, X, W, extras, memo=memo, max_gates=max_gates), m) for c, m in sep], X, W, extras)
+        across = members_check(fn, memo)                            # the members are cut one by one: a value two of them compute
+        if across["recomputes"]:
+            rule["violations"].append({"definition": fn.id, "class": "cut", "codes": ["gate-recomputed"],
+                                       "detail": {"gate-recomputed": {"n": across["recomputed_gates"], "between": "node members",
+                                                                      "classes": across["recomputes"][:8]}}})
     elif fn.gates > max_gates:
         rule = _finish(fn.id, fn.gates, [], [], X, W, extras)
         rule["violations"] = [{"definition": fn.id, "class": "too-large", "gates": fn.gates, "limit": max_gates}]
@@ -481,8 +255,11 @@ def _finish(fid: str, gates: int, classes: list[dict], interior: list[dict], X: 
 _ATTENTION = ("AttnBlock", "AttnBlockSoftcap", "AttnBlockFA3", "DotBf16", "AttentionHead", "AttentionHeadSoftcap")
 _STREAM = {"AmpereBF16TcDot16_v1": "S (scores)", "HopperBF16WgmmaDot16_v1": "S (scores)", "MufuTanh_v1": "S (softcapped scores)",
            "MufuEx2Ftz_v1": "P (f32 probabilities) / ROW rescale", "F2fpBf16_v1": "RP (bf16 probabilities)", "F32Max_v1": "ROW row_max",
-           "F32MulFtz_v1": "ROW step (max * scale)", "F32AddFtz_v1": "ROW lane sums / FIN sum", "F32FmaFtz_v1": "ROW lane sums",
-           "Fa2InvSum_v1": "FIN inv_sum", "Fa3InvSum_v1": "FIN inv_sum"}
+           "F32AddFtz_v1": "ROW lane sums / FIN sum", "F32FmaFtz_v1": "ROW lane sums", "Fa2InvSum_v1": "FIN inv_sum", "Fa3InvSum_v1": "FIN inv_sum"}
+#: attention values the stream carries only under an opt-in tap, or not yet, by primitive: the tap each needs (ROW word 2 is the
+#: kernel's visit index, not max * scale)
+_STREAM_NEW = {"F32MulFtz_v1": "FA2 / FA3 tap build (MS plane, `max_scaled`)",
+               "GuardNegInfZero_v1": "FA2 / FA3 tap build (ROW word 3, opt-in `GUARDED_MAX_TAP=1`, #95)"}
 #: the kernel a new tap goes in, by the Definition family holding the value
 _TAP_KERNEL = {"AttnBlock": "FA2 / FA3 tap build (flash_fwd_kernel / hopper mainloop)", "AttnBlockSoftcap": "FA2 tap build (softcap instantiation)",
                "AttentionHead": "FA2 / FA3 tap build (epilogue)", "AttentionHeadSoftcap": "FA2 tap build (softcap epilogue)",
@@ -500,8 +277,11 @@ def committed_today(scope: str | None, head: str | None) -> str | None:
     return None
 
 
-def tap_kernel(scope: str | None) -> str:
+def tap_kernel(scope: str | None, head: str | None = None) -> str:
+    """The kernel a new tap for a committed interior value goes in (`head`: the value's primitive)."""
     fam = (scope or "").split("{")[0].rsplit("_v", 1)[0]
+    if fam in _ATTENTION and head in _STREAM_NEW:
+        return _STREAM_NEW[head]
     return _TAP_KERNEL.get(fam, f"the {fam} kernel")
 
 

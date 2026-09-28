@@ -42,11 +42,13 @@ AUDIT_IMPORTS = re.compile(r"import (Mathlib\.|FlockSoundness\.Game\.|FlockSound
 
 def test_audit_layer_is_abstract():
     """The audit theorems import only the interaction model, Mathlib and each other, so any backend can instantiate them
-    (`soundness/DESIGN.md` §12). The Flock instantiations, `Flock.lean` (oracle layer), `FlockCompiled.lean` (one
-    table) and `FlockBatched.lean` (several tables), are the only files that import Flock's theorems. No proof is
-    admitted."""
+    (`soundness/DESIGN.md` §12). The Flock instantiations are the only files that import Flock's theorems:
+    `Flock.lean` (oracle layer), `FlockCompiled.lean` (one table), `FlockBatched.lean` (several tables),
+    `FlockBatchedAcc.lean` (the expected-time extractor), `FlockLink.lean` (the link theorem) and `FlockLinked.lean` (the
+    two composed). No proof is admitted."""
     files = sorted(AUDIT.glob("*.lean"))
-    flock = {"Flock.lean", "FlockCompiled.lean", "FlockBatched.lean"}
+    flock = {"Flock.lean", "FlockCompiled.lean", "FlockBatched.lean", "FlockBatchedAcc.lean", "FlockLink.lean",
+             "FlockLinked.lean"}
     assert files and flock <= {p.name for p in files}
     bad = [f"{p.name}: {line}" for p in files if p.name not in flock for line in p.read_text().splitlines()
            if line.startswith("import ") and not AUDIT_IMPORTS.match(line)]
@@ -143,6 +145,11 @@ def _ref_bernoulli(a, b, n, stream):
     return out
 
 
+def _lean_draw_obj(args):
+    p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "draw", *args], capture_output=True, text=True)
+    return json.loads(p.stdout[5:]) if p.stdout.startswith("DRAW ") else None
+
+
 def _lean_draw(args):
     p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "draw", *args], capture_output=True, text=True)
     return json.loads(p.stdout[5:])["units"] if p.stdout.startswith("DRAW ") else None
@@ -208,12 +215,150 @@ def _template_vectors():
     return v if v.exists() else None
 
 
+
+def _stratified_agree():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("stratified_agree", LEAN.parent / "stratified_agree.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_stratified_draw_from_the_verifiers_own_program(tmp_path):
+    """`draw --program --partition --stratified K`: the strata derived from the program (one per template, ranges merged,
+    in order of first unit), `k_s = max(1, round(K n_s / N))`, each stratum's `subset` on its own segment of the stream,
+    and U2 on stratified draws, held to the verifier's own law."""
+    import hashlib
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    ref = _stratified_agree()
+    desc = {"schema": "verity-ir/descriptor/v1", "callees": ["Input8_v1", "T0_v0", "T1_v0"], "root": "Root_v0",
+            "definitions": {"Root_v0": {"form": "composite", "body": {"nodes": [
+                {"form": "primitive", "fn": 0}, {"form": "batch", "fn": 1, "n": 2}, {"form": "batch", "fn": 2, "n": 3},
+                {"form": "batch", "fn": 1, "n": 1}]}},
+                "Input8_v1": {"form": "primitive"}, "T0_v0": {"form": "primitive"}, "T1_v0": {"form": "primitive"}}}
+    text = json.dumps(desc, sort_keys=True, separators=(",", ":"))
+    (tmp_path / "p.desc").write_text(text)
+    obj = {"format": "verity/partition/v1", "program": hashlib.sha512(text.encode()).hexdigest(),
+           "query": {"name": "Q_template_instances", "version": 0, "params": {"templates": ["T1_v0", "T0_v0"]}}}
+    (tmp_path / "q.json").write_text(json.dumps(obj))
+    flags = ["--program", str(tmp_path / "p.desc"), "--partition", str(tmp_path / "q.json")]
+    law = {"law": "stratified", "k": 4, "strata": [{"template": "T0_v0", "units": [[0, 2], [5, 6]], "k": 2},
+                                                   {"template": "T1_v0", "units": [[2, 5]], "k": 2}]}
+    import random
+    rng = random.Random(20260927)
+    for _ in range(20):
+        src = rng.randbytes(2 * 2 * 9 + 64 + 2 * 2 * 9 + 64)
+        (tmp_path / "s.bin").write_bytes(src)
+        d = _lean_draw_obj([*flags, "--stratified", "4", "--stream-file", str(tmp_path / "s.bin")])
+        assert {k: d[k] for k in ("law", "k", "strata")} == law and d["population"] == 6
+        assert d["units"] == ref.reference_draw(law, src)
+    d = _lean_draw_obj([*flags, "--stratified", "4"])
+    assert len(d["units"]) == 4 and sum(u in (0, 1, 5) for u in d["units"]) == 2
+    assert [s["k"] for s in _lean_draw_obj([*flags, "--stratified", "1"])["strata"]] == [1, 1]
+    bad = [{**d, "k": 5}, {**d, "strata": d["strata"][::-1]}, {**d, "units": d["units"][:-1]},
+           {**d, "strata": [{**d["strata"][0], "units": [[0, 2], [2, 2], [5, 6]]}, d["strata"][1]]},
+           {**d, "strata": [{**d["strata"][0], "units": [[0, 1], [1, 2], [5, 6]]}, d["strata"][1]]},
+           {**d, "strata": [{**d["strata"][0], "k": True}, d["strata"][1]]}]
+    (tmp_path / "cases.json").write_text(json.dumps([{"record": x, "statement": x, "instances": len(x["units"])} for x in [d, *bad]]))
+    p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "draw-test", str(tmp_path / "cases.json"), *flags,
+                        "--stratified", "4"], capture_output=True, text=True)
+    got = [json.loads(line[10:]) for line in p.stdout.splitlines()]
+    assert [g["ok"] for g in got] == [True] + [False] * len(bad), got
+    for k in ("0", "7"):
+        assert _lean_draw_obj([*flags, "--stratified", k]) is None
+    (tmp_path / "w.json").write_text(json.dumps({**obj, "query": {"name": "Q_word", "version": 1, "params": {"X": 16, "W": 32}}}))
+    assert _lean_draw_obj(["--program", str(tmp_path / "p.desc"), "--partition", str(tmp_path / "w.json"), "--stratified", "4"]) is None
+
+
+def _one_stage_draw():
+    try:
+        from verity_one_stage import draw
+    except ImportError:
+        return None
+    return draw if hasattr(draw, "derive") else None
+
+
+@pytest.mark.skipif(shutil.which("lake") is None or _one_stage_draw() is None,
+                    reason="no Lean toolchain or no stratified law in core (PRs #161, #164)")
+def test_stratified_draw_agrees_with_core(tmp_path):
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    p = subprocess.run(["python3", str(LEAN.parent / "stratified_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
+                        "--out", str(tmp_path), "--random", "20", "--os-draws", "100"], capture_output=True, text=True)
+    assert p.returncode == 0, p.stdout + p.stderr
+
 @pytest.mark.skipif(shutil.which("lake") is None or _template_vectors() is None, reason="no Lean toolchain or no template vectors (PR #131)")
 def test_template_queries_agree_with_the_vectors(tmp_path):
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
     p = subprocess.run(["python3", str(LEAN.parent / "template_query_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
                         "--vectors", str(_template_vectors()), "--out", str(tmp_path)], capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_merkle_collision_is_not_met_by_a_split_string(tmp_path):
+    """`MerkleScheme.Collision` is a collision of the hash, not of how its input is split: one byte string split two ways
+    (`[0] ‖ []` against `[] ‖ [0]`) gives one node, and must not count, since the children are not of the digest's width
+    (PR #146's red-team review). The same witness for `Sha256.Collision` needs two different inputs, which it does not have."""
+    subprocess.run(["lake", "build", "FlockProofs"], cwd=LEAN, check=True, capture_output=True)
+    for goal, witness in [
+        ('(MerkleScheme.sha256 "flock-leaf/sha256-unsalted").Collision',
+         "⟨.node (ByteArray.mk #[0]) ByteArray.empty ByteArray.empty (ByteArray.mk #[0]), by simp only [MerklePair.Collides]; "
+         "exact ⟨by decide, by decide, by decide, by decide, by decide, rfl⟩⟩"),
+        ("MerkleScheme.hm96Sha512.Collision",
+         "⟨.node (ByteArray.mk #[0]) ByteArray.empty ByteArray.empty (ByteArray.mk #[0]), by simp only [MerklePair.Collides]; "
+         "exact ⟨by decide, by decide, by decide, by decide, by decide, rfl⟩⟩"),
+    ]:
+        f = tmp_path / "Split.lean"
+        f.write_text(f"import FlockProofs\nopen Flock\nexample : {goal} :=\n  {witness}\n")
+        p = subprocess.run(["lake", "env", "lean", str(f)], cwd=LEAN, capture_output=True, text=True)
+        assert p.returncode != 0 and "decide" in p.stdout + p.stderr, (goal, p.stdout[-800:])
+
+
+TOY_EXTRACTOR = r"""import FlockProofs
+open Flock
+
+/-- A toy scheme with 1-byte digests: a node is the sum of its children's bytes, a leaf the row encoding's first byte. -/
+def toy : MerkleScheme :=
+  { id := "toy", digestLen := 1, pcsIndex := 0, node := fun l r => ⟨#[l.get! 0 + r.get! 0]⟩,
+    leaf := fun row _ => ⟨#[(MerkleScheme.rowBytes row).get! 0]⟩ }
+
+def b1 (x : UInt8) : ByteArray := ⟨#[x]⟩
+def cap : Array ByteArray := #[b1 6]
+def row1 : Array F128 := #[⟨1, 0⟩]
+def row2 : Array F128 := #[⟨2, 0⟩]
+def row3 : Array F128 := #[⟨257, 0⟩]
+
+def accepts (rows : Array (Array F128)) (sibs : Array ByteArray) : Bool :=
+  match merkleCheck toy cap 0 1 #[0] rows sibs #[] 1 with | .ok () => true | .error _ => false
+
+#eval (accepts #[row1] #[b1 5], accepts #[row2] #[b1 4], accepts #[row3] #[b1 5])
+
+/-- `MerklePair.Collides toy`, decided. -/
+def collides : MerklePair → Bool
+  | .node a b a' b' => a.size == 1 && b.size == 1 && a'.size == 1 && b'.size == 1 && (a != a' || b != b') &&
+      toy.node a b == toy.node a' b'
+  | .leaf r r' y y' => r != r' && toy.leaf r y == toy.leaf r' y'
+
+#eval (merklePair toy 0 1 #[0] #[row1] #[row2] #[b1 5] #[b1 4] #[] #[] 0).render
+#eval (merklePair toy 0 1 #[0] #[row1] #[row3] #[b1 5] #[b1 5] #[] #[] 0).render
+#eval (collides (merklePair toy 0 1 #[0] #[row1] #[row2] #[b1 5] #[b1 4] #[] #[] 0),
+  collides (merklePair toy 0 1 #[0] #[row1] #[row3] #[b1 5] #[b1 5] #[] #[] 0))
+"""
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_merkle_extractor_computes_a_collision(tmp_path):
+    """`merkle_binding` is stated over `merklePair`, a computable extractor, since a collision of a fixed hash exists by
+    counting (PR #146's red-team delta check). On a toy scheme with 1-byte digests, two accepted checks with different rows
+    give its pair: two children pairs under one node, or two rows with one leaf, and each collides."""
+    subprocess.run(["lake", "build", "FlockProofs"], cwd=LEAN, check=True, capture_output=True)
+    f = tmp_path / "Toy.lean"
+    f.write_text(TOY_EXTRACTOR)
+    p = subprocess.run(["lake", "env", "lean", str(f)], cwd=LEAN, capture_output=True, text=True)
+    assert p.returncode == 0, p.stdout + p.stderr
+    assert p.stdout.split("\n")[:4] == ["(true, true, true)", '"node 01 05 | 02 04"',
+        '"leaf 01000000000000000000000000000000  | 01010000000000000000000000000000 "', "(true, true)"], p.stdout
 
 
 def _net(rows, ins="1 0 1 1 2", outs="1 1 1 1 1"):

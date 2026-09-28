@@ -11,7 +11,7 @@ Until the switch (a labelled 6 PM PT digest) the published tables stay :mod:`ver
   and statement (:data:`CONFIGURATIONS`): the statement (the full committed relation or a weaker one) and what the verifier sees of x, W and
   y; the commitment scheme (:data:`SCHEMES`); every hash of the soundness argument with its role, property and class; ZK class
   and verifier model; soundness with the whole-proof bound at the batching of each cell it holds and the dominant term; the
-  proximity bounds (regime, proven or conjectured); transferability; assumptions; the pin; ``archived``; its cells (computed).
+  proximity bounds (regime, proven, machine-checked or conjectured); transferability; assumptions; the pin; ``archived``; its cells (computed).
 * **Table 2** -- end-to-end overhead ``N / P`` per subcircuit, hardware class and admissible commitment scheme (one line per
   ``verity.proofs.target.TARGETS`` entry and scheme some row's statement declares), a native column, one column per
   backend family (:data:`FAMILIES`).  ``N`` is the
@@ -184,7 +184,7 @@ class Hash:
 @dataclass(frozen=True)
 class Proximity:
     """One code-based component's proximity bound: the decoding regime its terms use and whether the bound is proven (with its
-    theorem) or conjectured."""
+    theorem), machine-checked in the configuration's own soundness proof (``MACHINE_CHECKED``), or conjectured."""
 
     component: str
     regime: str
@@ -215,6 +215,10 @@ _SP1_DOMINANT = ("field-bound terms over KoalaBear^4 (|F| = 2^123.95), LogUp-GKR
                  "log2(shards), and shards grow with the batch")
 _SP1_ASSUME = "KoalaBear^4 challenges; zerocheck and jagged-reduction lemmas as SP1 states them"
 _AGKR_PROX = (Proximity("Ligero IRS polynomial commitment", "unique decoding", "proven (BCIKS20 Thm 1.2, n/|F|^sigma)"),)
+#: A proximity bound proved inside the configuration's own Lean soundness theorem, so Table 1 cites no assumption for it.
+MACHINE_CHECKED = "machine-checked"
+_FLOCK_MCA = (f"{MACHINE_CHECKED} (Lean table_sound: Haböck ePrint 2025/2110, with BCHKS25's MCA bound proved from DKT26, "
+              "ArkLib #907)")
 _AGKR_DOMINANT = "IRS query term (2^-130.2 at t = 192) and the LogUp identity term; the (n+1)/|F|^sigma term grows with the committed length n"
 
 
@@ -329,8 +333,8 @@ CONFIGURATIONS: tuple[Configuration, ...] = (
          "(flock-128-r2, live coins) and joined to the prime side by the sigma link (two GF(2^128) points); frame-v3 SHA-256 trees",
          (_SHA256_STMT, Hash("BLAKE3 (keyed)", _STMT, _CR + " (row leaves, proved in Flock)"), Hash("SHA-256", _COINS, "live transcript and root_F binding"),
           Hash("SHA-512", _INTERNAL, _CR + " (Merkle on the A-GKR Ligero side)")),
-         "A-GKR's interactive terms (2^-130.19 whole proof); Flock flock-128-r2 2^-195.5 and the sigma link 2^-243.9 / 2^-246.4 do not bind",
-         (*_AGKR_PROX, Proximity("Ligerito PCS in Flock (binary field)", "Johnson regime (list decoding)", "proven (Haböck ePrint 2025/2110; BCHKS25 MCA)")),
+         "A-GKR's interactive terms (2^-130.19 whole proof); Flock flock-128-r2 2^-205 and the sigma link 2^-243.9 / 2^-246.4 do not bind",
+         (*_AGKR_PROX, Proximity("Ligerito PCS in Flock (binary field)", "Johnson regime (list decoding)", _FLOCK_MCA)),
          "interactive: live-verifier-only (live prime and Flock coins in one session)",
          "collision resistance of SHA-256, keyed BLAKE3 and SHA-512 is a Table 1 assumption (decision 57); BabyBear^6 and GF(2^128) fields",
          "verity-gkr-verify pins (PR #13) plus the Flock profile params and the link version (session-2xgf2_128/v2, verity/link-L/v2)"),
@@ -377,10 +381,11 @@ FLOCK_CONFIG = Configuration(
      Hash("BLAKE3 / SHA-256", _INTERNAL, _CR + " (Ligerito Merkle trees: BLAKE3 in the CPU prover, SHA-256 in Flock-CUDA)"),
      Hash("SHA-256", _COINS, "commit-before-coin binding of the live transcript")),
     "No: not zero-knowledge yet (declared class NON_ZK_PROOF; the Flock lane may change it)",
-    "2^-195.5 for flock-128-r2 (two Fast100 runs with live verifier coins, no grinding credit); red-team-flock: NOT GRANTED until "
+    "2^-205 for flock-128-r2 (two Fast100 runs with live verifier coins, no grinding credit; the table theorems at η = 1/200, "
+    "soundness ASSUMPTIONS.md; the cells record the earlier, still valid 2^-195.5); red-team-flock: NOT GRANTED until "
     "R1–R8 (reps bound to one commitment, a live challenger); under Fiat–Shamir at most 2^-75.6",
     "the Ligerito query term per run (2^-97.8), squared by the two live-coin reps; it does not grow with the batch",
-    (Proximity("Ligerito PCS (binary field)", "Johnson regime (list decoding)", "proven (Haböck ePrint 2025/2110; BCHKS25 MCA)"),),
+    (Proximity("Ligerito PCS (binary field)", "Johnson regime (list decoding)", _FLOCK_MCA),),
     "interactive: live-verifier-only", "GF(2^128) PIOP sites; the aarch64 AG r1 path gives about 14 bits of nonce choice (red-team-flock GAP)",
     "Flock b684b12 profile params pinned (commitment.params == expected)",
     interaction="live verifier: coins for every squeeze of both reps (Fiat–Shamir cannot reach 2^-128 for this profile); the verifier "
@@ -392,7 +397,8 @@ FLOCK_VLLM_CONFIG = dataclasses.replace(
                "domains; the verifier recomputes every bound root from its own instance file (VL1) and the circuit proves the fold "
                "(statement verity/flock-vllm-block/v1)",
     hashes=(_SHA256_STMT, Hash("SHA-256", _STMT, _CR + " (position leaves)"), *FLOCK_CONFIG.hashes[2:]),
-    soundness="2^-195.44 per proof for flock-128-r2 (live verifier coins, no grinding credit), union 2^-193.44 over 4 proofs; "
+    soundness="2^-205 per proof for flock-128-r2 (live verifier coins, no grinding credit), union 2^-203 over 4 proofs (the cells "
+              "record the earlier, still valid 2^-195.44); "
               "red-team-flock: GRANTED WITH CONDITIONS at ff1c1e3f (VL1 closed at af6aae19)")
 CONFIGURATIONS = (*(dataclasses.replace(c, interaction=_INTERACTION[c.id]) for c in CONFIGURATIONS), FLOCK_CONFIG, FLOCK_VLLM_CONFIG)
 _CONFIG = {c.id: c for c in CONFIGURATIONS}
@@ -574,6 +580,15 @@ def interaction_time(ix: Mapping[str, Any], rtt_s: float = REF_RTT_S, bandwidth_
             + (ix["bytes_up"] + ix["bytes_down"]) * 8 / bandwidth_bps)
 
 
+def interaction_deviation(ix: Mapping[str, Any]) -> float | None:
+    """(measured - model) / model at the run's own RTT and bandwidth (the reference's when none was measured), for a live result
+    with its rounds, RTT and wait; else ``None``."""
+    if not ix["live"] or ix["rounds"] is None or ix["rtt_ms"] is None or ix["wait_s"] is None:
+        return None
+    model = interaction_time(ix, ix["rtt_ms"] / 1e3, ix.get("bandwidth_bps") or REF_BANDWIDTH_BPS)
+    return ((ix["prover_s"] or 0.0) + ix["wait_s"] - model) / model if model > 0 else None
+
+
 def interaction_problem(ix: Mapping[str, Any], one_sided: bool = False) -> str | None:
     """Why a result does not meet the interaction standard, or ``None``.  A non-interactive (file-verified) result's record is derived
     and always meets it.  A live-verifier result records its rounds, its measured RTT with how it was measured and its network wait,
@@ -591,8 +606,9 @@ def interaction_problem(ix: Mapping[str, Any], one_sided: bool = False) -> str |
     bw = ix.get("bandwidth_bps") or REF_BANDWIDTH_BPS
     model = interaction_time(ix, ix["rtt_ms"] / 1e3, bw)
     measured = (ix["prover_s"] or 0.0) + ix["wait_s"]
-    if model > 0 and (measured - model if one_sided else abs(measured - model)) > INTERACTION_TOLERANCE * model:
-        return (f"interaction: measured {measured:.3g} s is {100 * (measured - model) / model:+.0f}% from the model's {model:.3g} s at the run's "
+    dev = interaction_deviation(ix)
+    if dev is not None and (dev if one_sided else abs(dev)) > INTERACTION_TOLERANCE:
+        return (f"interaction: measured {measured:.3g} s is {100 * dev:+.0f}% from the model's {model:.3g} s at the run's "
                 f"own network ({ix['rtt_ms']:.3g} ms RTT, {bw / 1e9:.3g} Gb/s{'' if ix.get('bandwidth_bps') else ' (reference; not measured)'}; "
                 f"tolerance ±{100 * INTERACTION_TOLERANCE:.0f}%)")
     return None
@@ -1273,6 +1289,8 @@ class Views:
     domain_of: dict[str, str] = field(default_factory=dict)  #: each admissible result's operand domain (``domain`` label, else its fingerprint)
     prover_gpu: dict[str, str | None] = field(default_factory=dict)  #: each admissible result's ``hardware.gpu.name``, by artifact
     interaction_raw: dict[str, dict[str, Any]] = field(default_factory=dict)  #: each admissible result's raw round and loopback records
+    #: the attempts labelled ``interaction_attempt_of`` a cell, by that cell's artifact (IX1): ``{artifact, attempt, deviation}``
+    interaction_attempts: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
     input_sets: dict[str, tuple[str, Mapping[str, Any]]] = field(default_factory=dict)  #: registered input sets (:func:`input_set_index`)
 
     def columns(self) -> list[str]:
@@ -1306,6 +1324,8 @@ def _results(store: Any, rules: Rules) -> list[tuple[str, Mapping[str, Any]]]:
 
 #: The label that sends a verified result below the tables' 2^-128 bar to its own drill-down (never a Table 2 cell, never dropped).
 BELOW_BAR = "below_bar"
+#: The label on an interaction attempt that is not its cell's figure: the cell's art id; the cell lists it with its deviation (IX1).
+INTERACTION_ATTEMPT_OF = "interaction_attempt_of"
 
 
 def _latest(labels: Sequence[Any], key: str) -> Any:
@@ -1348,6 +1368,14 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
             continue
         rid, attempt = T._attempt_of(store, art)
         labels = list(store.labels(art))
+        of = _latest(labels, INTERACTION_ATTEMPT_OF)
+        if not rules.legacy and of:
+            cell = str(of) if str(of).startswith("art:") else f"art:{of}"
+            V.interaction_attempts.setdefault(cell, []).append(
+                {"artifact": art, "attempt": rid, "deviation": interaction_deviation(interaction(meta))})
+            V.rejected.append({"artifact": art, "family": cand.id, "configuration": None, "line": None, "attempt": rid,
+                               "codes": [("D", f"an interaction attempt of {cell}, listed with that cell (IX1)")]})
+            continue
         if not rules.legacy and str(_latest(labels, BELOW_BAR)).lower() == "true":     # written as a bool or, off-vocabulary, "true"
             V.below_bar.append(below_bar_entry(art, meta, labels, cand))
             continue
@@ -1457,7 +1485,8 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
         V.security_of[c.art] = dict(c.meta["workload_fingerprint"].get("security") or {})
         if _latest(c.labels, "omitted"):
             V.omitted_of[c.art] = _latest(c.labels, "omitted")
-        dom = _latest(c.labels, "domain") or {"finite": "finite-only", "total": "total"}.get(str(c.meta["workload_fingerprint"].get("domain")))
+        fp_dom = contract.identity(c.meta["workload_fingerprint"])["domain"]
+        dom = _latest(c.labels, "domain") or (fp_dom if fp_dom in contract.DOMAINS else None)
         if dom:
             V.domain_of[c.art] = str(dom)
         if c.key_class:
@@ -2009,7 +2038,7 @@ HASH_INSTANCES = {"SHA-256": ("sha-256",), "SHA-512": ("sha-512",), "BLAKE3": ("
                   "Ajtai n=64 (linear digest)": ("ajtai-n64",), "BLAKE3 / SHA-256": ("blake3", "sha-256"), "Ajtai n=128 (linear digest)": ("ajtai-n128",)}
 #: ``verity.claims`` properties by the leading words of a hash's assumed property; a hash assumed to be a random oracle
 #: is cited once, as the ``random-oracle`` model.
-HASH_PROPERTIES = (("collision resistance", "cr"), ("commit-before-coin binding", "cr"), ("live transcript and root_f binding", "cr"),
+HASH_PROPERTIES = (("collision resistance", "cr"), ("expected-time collision resistance", "ecr"), ("commit-before-coin binding", "cr"), ("live transcript and root_f binding", "cr"),
                    ("prg", "xof"), ("ring-sis", "sis"))
 PROXIMITY_REGIMES = {"unique decoding": "rs-proximity-udr", "johnson regime (list decoding)": "rs-proximity-johnson"}
 #: ``verity.claims`` ids of a Table 1 assumption, by a phrase it contains.
@@ -2042,7 +2071,7 @@ def claims_of(cfg: Configuration, bits: float | None = None) -> list[dict[str, A
     detail, a proximity bound's component; empty where nothing is declared) and its Table 1 text.
 
     * soundness rests on every hash of the soundness argument but those assumed to be random oracles, the proximity bounds
-      and the configuration's other assumptions;
+      but those machine-checked in its own proof, and the configuration's other assumptions;
     * ZK: malicious-verifier ZK whose text names the coin commitment rests on the hashes that commit the coins; HVZK on an
       honest verifier;
     * non-interactive (transferable) rests on the random oracle, once per hash modelled as one; an interactive
@@ -2063,7 +2092,7 @@ def claims_of(cfg: Configuration, bits: float | None = None) -> list[dict[str, A
     oracles = [h for h in cfg.hashes if h.prop.lower().startswith("random oracle")]
     sound = [rests(i, _role(h), h.text()) for h in cfg.hashes if h not in oracles for i in (hash_ids(h) or [None])]
     sound += [rests(PROXIMITY_REGIMES.get(x.regime.lower()) if x.basis.startswith("proven") else None, x.component, x.text())
-              for x in cfg.proximity]
+              for x in cfg.proximity if not x.basis.startswith(MACHINE_CHECKED)]
     sound += [rests(next((i for words, i in ASSUMPTION_PHRASES if words in a.lower()), None), "", a) for a in split_list(cfg.assumptions)]
     if transferable:
         sound += [rests("random-oracle", _role(h), h.text()) for h in oracles]
@@ -2280,6 +2309,16 @@ def rtt_method_enum(text: str | None) -> str | None:
     if "tcp connect" in t:
         return "tcp-connect"
     return "unclassified"
+
+
+def interaction_attempts(V: Views, c: ViewCell, ix: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Every interaction attempt of a live cell (IX1): the cell's own (``counted``) first, then each result labelled
+    ``interaction_attempt_of`` it (a label may name the cell by an art-id prefix).  Empty for a file-verified result."""
+    if not ix["live"]:
+        return []
+    linked = [a for key, attempts in V.interaction_attempts.items() if c.artifact.startswith(key) for a in attempts]
+    return [{"artifact": c.artifact, "deviation": interaction_deviation(ix), "counted": True},
+            *({**a, "counted": False} for a in sorted(linked, key=lambda a: a["artifact"]))]
 
 
 def interaction_fields(ix: Mapping[str, Any], P: Mapping[str, Any], raw: Mapping[str, Any]) -> dict[str, Any]:
@@ -2534,6 +2573,7 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
             "throughput": {"inputs": P["instances"], **{k: P[k] for k in ("instances_per_second", "end_to_end_s", "commit_s", "proving_s", "interaction_s")}},
             "batching": dict(c.batching), "instances": dict(c.instances),
             "interaction": interaction_fields(ix, P, V.interaction_raw.get(c.artifact, {})),
+            "interaction_attempts": interaction_attempts(V, c, ix),
             "overhead_at": {n.id: c.native * (P["commit_s"] + interaction_time(ix, n.rtt_s, n.bandwidth_bps)) / P["instances"]
                             for n in (census.REFERENCE_NETWORK, *census.SENSITIVITY_NETWORKS)} if not V.rules.legacy else None}
 
