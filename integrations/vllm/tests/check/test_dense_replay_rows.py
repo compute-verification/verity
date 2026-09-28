@@ -14,6 +14,7 @@ from verity_vllm.program.kernels import ir_rows
 from verity_vllm.program.kernels.rows import EVALUATORS, ROWS
 from verity_vllm.program.registry import dense
 from verity_vllm.query.call_scope import specialization
+from verity_vllm.query.manifest import format as RM
 from verity_vllm.query.manifest.format import spec_family
 from verity_vllm.query.program_view import spec_statics
 
@@ -50,8 +51,9 @@ def test_each_dense_row_is_the_ir_reference():
         fam, st = spec_family(r["spec"]), spec_statics(r["spec"])
         vals[r["i"]] = list(evaluate(specialization(fam, st), *args))
         if fam in ir_rows.FAMILIES:
-            got = ROWS[fam].fn(st, [np.asarray(a, dtype=np.uint64) for a in args])
-            assert [int(w) for m in got.values() for w in m] == vals[r["i"]], r["name"]
+            # the replay reads statics as the manifest spells them (an f64 literal stays `{"f64":"<hex>"}` text)
+            got = ROWS[fam].fn(RM.spec_statics(r["spec"]), [np.asarray(a, dtype=np.uint64) for a in args])
+            assert got["0"] is got["out"] and got["out"].tolist() == vals[r["i"]], r["name"]
             seen.add(fam)
     assert seen == set(ir_rows.FAMILIES) - {"GeluTanhMul_v1"}
 
@@ -62,10 +64,33 @@ def test_gelu_tanh_mul_at_gemma_width_and_its_declines():
     gu = (np.asarray(rng.standard_normal(2 * I) * 3, dtype=np.float32).view(np.uint32) >> 16).astype(np.uint16)
     gu[:6] = [0x7FC0, 0xFF80, 0x7F80, 0x8000, 0x0001, 0x7F7F]
     got = ROWS["GeluTanhMul_v1"].fn({"I": I}, [gu])
-    assert list(got) == ["out"] and got["out"].dtype == np.uint16
+    assert list(got) == ["0", "out"] and got["out"].dtype == np.uint16
     assert got["out"].tolist() == list(evaluate(bind(dense.GeluTanhMul, I=I), gu.tolist()))
     import pytest
     with pytest.raises(ir_rows.Declined, match="arg words"):
         ROWS["GeluTanhMul_v1"].fn({"I": I}, [gu[:-1]])
     with pytest.raises(ir_rows.Declined, match="past"):
         ROWS["GeluTanhMul_v1"].fn({"I": ir_rows.MAX_WORDS}, [np.zeros(2 * ir_rows.MAX_WORDS, dtype=np.uint16)])
+
+
+
+def test_a_one_output_row_is_compared_under_its_one_member_however_the_module_spells_it(monkeypatch):
+    """The ATen norm's rsqrt is `<norm module>/norm_scale` and its residual narrow `<norm module>/1`: the relation's one output is compared
+    under that member, equal and unequal alike; a row requiring two members of a one-output relation is not evaluated, by name."""
+    from types import SimpleNamespace
+    from verity_vllm.check.replay import evaluate as E
+
+    words = np.arange(4, dtype=np.uint32)
+    monkeypatch.setattr(E, "_evaluate_row", lambda *a, **k: ir_rows.ir_row("RsqrtF32_v1", {"N": 1}, [np.array([0x40800000], np.uint32)]))
+    rsqrt4 = ir_rows.ir_row("RsqrtF32_v1", {"N": 1}, [np.array([0x40800000], np.uint32)])["out"]
+
+    def replay(members, committed):
+        d = {"family": "RsqrtF32_v1", "statics": {"N": 1}, "op_path": "model.norm", "row": 0, "step": 0, "members": members}
+        pi = SimpleNamespace(by_i={0: {"i": 0, "spec": "RsqrtF32_v1{N=1}"}}, describe=lambda r: d)
+        store = SimpleNamespace(words=lambda *a: (committed, ""))
+        return E.replay_vu(pi, store, None, {"i": 0, "request_id": "r0", "phase": "prefill"}, arrive=0)
+
+    assert replay([("norm_scale", 1, "f32")], rsqrt4)["result"] is True
+    assert replay([("norm_scale", 1, "f32")], rsqrt4 ^ 1)["result"] is False
+    two = replay([("norm_scale", 1, "f32"), ("1", 1, "f32")], words[:1])
+    assert two["result"] is None and "no member 'norm_scale'" in two["why"]

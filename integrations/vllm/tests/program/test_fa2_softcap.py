@@ -143,6 +143,9 @@ def test_the_replay_row_kernel_is_the_definition(masked_from):
                "DOT": "HopperBF16WgmmaDot16_v1", "INV": "Fa2InvSum_v1"}
     got = R.attention_softcap(statics, [q, k.reshape(-1), v.reshape(-1)])["out"]
     assert got.tolist() == list(evaluate(spec, *_args(q, k, v)))
+    from verity_vllm.query.manifest.format import spec_statics
+    as_replayed = spec_statics(spec.id)                          # the replay's statics: CAP stays `{"f64":"<hex>"}` text
+    assert R.attention_softcap(as_replayed, [q, k.reshape(-1), v.reshape(-1)])["out"].tolist() == got.tolist()
     q[0] = 0x7FC0
     with pytest.raises(SR.Declined, match="non-finite"):
         R.attention_softcap(statics, [q, k.reshape(-1), v.reshape(-1)])
