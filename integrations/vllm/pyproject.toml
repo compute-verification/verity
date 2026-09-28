@@ -6,6 +6,7 @@ requires-python = ">=3.12"
 dependencies = [
     "verity",
     "verity-sampled-proofs",
+    "verity-pous",
     "numpy>=1.26",
 ]
 
@@ -28,6 +29,7 @@ packages = [
 [tool.uv.sources]
 verity = { workspace = true }
 verity-sampled-proofs = { workspace = true }
+verity-pous = { workspace = true }
 
 [tool.pytest.ini_options]
 # Run from this directory: fixtures are read relative to it.  CUDA / vLLM / pod-tree tests skip or fail by name off-pod.
