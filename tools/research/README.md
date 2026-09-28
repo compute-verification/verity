@@ -495,6 +495,29 @@ prints the plan. It keeps reports, unstamped names, anything untracked or change
 inbox); it overwrites nothing, and a failure puts every file back. `inbox`, `status` and `mail` read only a lane's own folder, so
 that folder stays its working set; `git log --follow` finds a moved note's history.
 
+### Approaches: check, then claim
+
+The registry of what has been tried, what is live and what was killed and why (`approaches.py`; the notes' `kb/onboarding.md`
+is the how-to). An approach is a record in the evidence store, kind `approach/v1` with meta `{campaign, slug}`, so its `art:` id
+is a function of its name `<campaign>/<slug>`. Its title, hypothesis, owner lane, status (`live | parked | killed | superseded |
+merged`), reason and evidence are labels in the vocabulary's `approach` group. A run joins one with `research data label RUN
+approach <campaign>/<slug> --by LANE`.
+
+~~~text
+research notes approaches [--campaign C] [--status S] [--grep WORDS] [--refresh]   # the registry
+research notes claim C/SLUG --lane L [--title T --hypothesis H --type scheme|route|attack] [--cite TOKEN]... [--reopen WHY]
+research notes approach C/SLUG STATUS --by L --reason R [--cite TOKEN]... [--superseded-by C/SLUG] [--owner L] [--at UTC]
+research notes approaches render | check                                           # campaigns/<c>/APPROACHES.md; the lint
+~~~
+
+- **`claim` refuses** (exit 2, nothing written) an approach that is live under another lane, and names the owner. It also
+  refuses a killed, superseded or merged approach without `--reopen WHY`. It writes through to the remote and re-reads it, exiting
+  3 when a rival claim landed first.
+- **`approach --at`** records work done before the registry existed. History is append-only.
+- **The public view** is one generated file per campaign, `campaigns/<c>/APPROACHES.md` in the notes. The steward's
+  `[approaches]` rule in `steward.toml` (`store`, `every_min`) refreshes and renders it. The campaign's `BRIEF.md` front matter
+  `registry: titles | full` sets whether hypotheses and reasons are shown, since the notes repo is public.
+
 ## Not yet built, in order
 
 1. `research compare <a> <b>`: descriptive diff of two run records

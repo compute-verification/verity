@@ -451,6 +451,7 @@ prints the table; the groups are:
   carries no verdict — ignored.
 - **evidence** — probe captures and input sets: `instruction`, `model`, `model_agrees` (bool), `model_status`,
   `model_rejected`, `evidence`, `family`, `instances_dataset`, `instances_tier`, `mismatches`, `target`, `component`, `jobs`, `dtype`.
+- **approach** — the registry's labels on `approach/v1` records (`research/approaches.py`; `tools/research/README.md`).
 
 Enum and bool values are compared as the catalog stores them (`scalar_text`: strings raw, everything else JSON), so `true` and
 `"true"` are one word and `"True"` is another. `research data label` writes the canonical spelling of an old key or value

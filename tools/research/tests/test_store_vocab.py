@@ -45,6 +45,7 @@ VERIFICATION_KEYS = ("verified", "verifier", "verifier_seconds", "independently_
                      "grant", "ready", "commit_map")
 EVIDENCE_KEYS = ("instruction", "model", "model_agrees", "model_status", "model_rejected", "evidence", "family", "instances_dataset", "instances_tier",
                  "mismatches", "target", "device", "instances_manifest_sha256", "component", "jobs", "level", "anchor", "dtype")
+APPROACH_KEYS = ("approach", "title", "hypothesis", "approach_type", "attacks", "owner", "approach_status", "reason", "cites")
 
 
 def test_vocabulary_pins_every_key_by_asserter_and_form():
@@ -52,7 +53,10 @@ def test_vocabulary_pins_every_key_by_asserter_and_form():
     assert {n for n, g in groups.items() if g == vocab.GROUP_RESULT} == set(RESULT_KEYS)
     assert {n for n, g in groups.items() if g == vocab.GROUP_VERIFICATION} == set(VERIFICATION_KEYS)
     assert {n for n, g in groups.items() if g == vocab.GROUP_EVIDENCE} == set(EVIDENCE_KEYS)
-    assert vocab.KEYS == tuple(vocab.VOCAB) and len(vocab.KEYS) == len(RESULT_KEYS) + len(VERIFICATION_KEYS) + len(EVIDENCE_KEYS)
+    assert {n for n, g in groups.items() if g == vocab.GROUP_APPROACH} == set(APPROACH_KEYS)
+    assert vocab.KEYS == tuple(vocab.VOCAB) and len(vocab.KEYS) == len(RESULT_KEYS) + len(VERIFICATION_KEYS) + len(EVIDENCE_KEYS) + len(APPROACH_KEYS)
+    assert vocab.key("approach_status").values == ("live", "parked", "killed", "superseded", "merged")
+    assert vocab.key("approach_type").values == ("scheme", "route", "attack")
     # the constants are the strings (a consumer imports vocab.PROOF_CLASS, never spells it)
     assert (vocab.CANDIDATE, vocab.PROOF_CLASS, vocab.VERIFIED, vocab.MODEL_AGREES, vocab.INDEPENDENTLY_VERIFIED, vocab.VERIFIED_BY) == \
         ("candidate", "proof_class", "verified", "model_agrees", "independently_verified", "verified_by")
