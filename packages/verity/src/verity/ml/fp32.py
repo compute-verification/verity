@@ -4,7 +4,8 @@ compute in FP32 and round once to BF16.
 
 Encodings: f32 = `Value<32>`, bf16 = `Value<16>`.  Every evaluator is total on encodings: NaN, infinities, signed zeros and
 subnormals map to the outputs each docstring states.  Add, sub, mul, div and max run on numpy `float32` scalars; FMA is exact
-rational arithmetic with one rounding.
+rational arithmetic with one rounding.  Every NaN result of the arithmetic is the GPU's `F32_NAN_PTX` (0x7FFFFFFF), never the
+host's.
 
 Provenance.  These are the definitions the vLLM integration registered in `verity_vllm.program.registry.prims` (same ids,
 signatures, conformance statuses and evaluators), which re-exports them from here.  Its stored Programs cite these ids.
@@ -17,6 +18,8 @@ import numpy as np
 
 from verity.ir.defs import primitive
 from verity.ir.types import Value
+
+from .scalar import F32_NAN_PTX
 
 BF16, F32 = Value(16), Value(32)
 
@@ -32,6 +35,7 @@ np.seterr(all="ignore")
 # exact float helpers on encodings
 # ---------------------------------------------------------------------------------------------------------
 
+#: the canonical quiet NaN of the stand-in and reference evaluators that cite it; the arithmetic here returns `F32_NAN_PTX`
 F32_NAN = 0x7FC00000
 BF16_NAN_TORCH = 0x7FC0  # aten / torch conversion canonical NaN
 BF16_NAN_F2FP = 0x7FFF  # SASS F2FP.BF16.F32 canonical NaN
@@ -117,7 +121,7 @@ def f32_fma_bits(a: int, b: int, c: int) -> int:
     cb, vb = _decode(b)
     cc, vc = _decode(c)
     if 2 in (ca, cb, cc):
-        return F32_NAN
+        return F32_NAN_PTX
     if ca == 0 and cb == 0:
         prod = va * vb
         prod_zero_neg = (prod == 0) and ((a >> 31) ^ (b >> 31)) == 1
@@ -133,29 +137,33 @@ def f32_fma_bits(a: int, b: int, c: int) -> int:
         return 0x7F800000 if cc == 1 else 0xFF800000
     # a product involving an infinity
     if (ca == 0 and va == 0) or (cb == 0 and vb == 0):
-        return F32_NAN  # inf * 0
+        return F32_NAN_PTX  # inf * 0
     sign = ((a >> 31) ^ (b >> 31)) & 1
     if cc == 0:
         return 0xFF800000 if sign else 0x7F800000
     if (cc == -1) != bool(sign):
-        return F32_NAN  # inf - inf
+        return F32_NAN_PTX  # inf - inf
     return 0xFF800000 if sign else 0x7F800000
 
 
+def _gpu_nan(u: int) -> int:
+    return F32_NAN_PTX if (u & 0x7F800000) == 0x7F800000 and (u & 0x7FFFFF) else u
+
+
 def f32_add_bits(a: int, b: int) -> int:
-    return bits_of(np.float32(f32_of(a)) + np.float32(f32_of(b)))
+    return _gpu_nan(bits_of(np.float32(f32_of(a)) + np.float32(f32_of(b))))
 
 
 def f32_sub_bits(a: int, b: int) -> int:
-    return bits_of(np.float32(f32_of(a)) - np.float32(f32_of(b)))
+    return _gpu_nan(bits_of(np.float32(f32_of(a)) - np.float32(f32_of(b))))
 
 
 def f32_mul_bits(a: int, b: int) -> int:
-    return bits_of(np.float32(f32_of(a)) * np.float32(f32_of(b)))
+    return _gpu_nan(bits_of(np.float32(f32_of(a)) * np.float32(f32_of(b))))
 
 
 def f32_div_bits(a: int, b: int) -> int:
-    return bits_of(np.float32(f32_of(a)) / np.float32(f32_of(b)))
+    return _gpu_nan(bits_of(np.float32(f32_of(a)) / np.float32(f32_of(b))))
 
 
 def f32_max_bits(a: int, b: int) -> int:

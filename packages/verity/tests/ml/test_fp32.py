@@ -23,31 +23,31 @@ from verity.ml import fp32 as F
 PINNED = {  # id: (definition digest, one-call program digest, outputs fingerprint)
     "F32Add_v1": ("b011ec610ad80fdb7115c987245a3a629043d1409aa0b6a82bbd01f99d41b4cb",
                   "168c31f970cb0f992bbe104d57a88e22673b2b36741f2628cdda3ea4addb118f",
-                  "4cf9c7aa0f064e619dff90fb84bda778d4d90d207873843af416d6c6cf58c006"),
+                  "ba88aba0f295c3bae022fd037907562c0b4945f3aabf0329ea92128f94eda70c"),
     "F32Mul_v1": ("2390267b8f55f4e59e648205873977ee8e5dd13efa4d453a6842d9bf5bbd6862",
                   "2508f09a9cbe0f52442abd34dc1d9066570d0d969a5904bc634883bf099c923e",
-                  "ddc6bf5cb03d3cfaa68ce4da6aa91b74ab3c1de81a47dd627eee72173dcbb357"),
+                  "556e178f5afbcbee7ee932faa70eb336e843bf2b206a7159317530be43a580fa"),
     "F32Fma_v1": ("8f64321ddf02d59b831aec87edf7d1336c3d2e4e2a27468b5819b44f49678af6",
                   "70b251fe165707d71c0b7b6062002ae6fe0d79cbe2c6a72a8d940458db505de9",
-                  "54f324eaf0a562b52c664be37233cf69463d1a4b0f3ea6b2c6eab08a5e784771"),
+                  "604fff81edd77a6c6fbe5de0d1dfb7c62d6dd2fa119448c844321d3e84a211d4"),
     "F32Div_v1": ("05331ebc8acb50858f42bfc59937e288a0a2c67033f6debe2ccdd76f3d69e4c4",
                   "4b4728341fd3e014bbc884245002823dff47a64cfb4bdde095fbebbdd855b61c",
-                  "e3ec34582deabc4404bab9a936871c0e202e0eafcf1ecb000eb9160b90ece538"),
+                  "7a9d5283fa10cf7a988656e5ae36a259ef718f2e56797bbf4cf1b682f83cfb30"),
     "F32AddFtz_v1": ("720dc90457ef3543ff220319c28f0960b23671fc23aade004532a732fce8206e",
                      "3ebbc4609194128fb7cde267a860b514314aed972ce4a54442b554a3206d0398",
-                     "adb8f54f23993f1e4b4ea900e9e05ebd6b77212dfeb7c7bc9eaa43d6939da2e4"),
+                     "7e50fe906b60957b93b76945ec1a33d49abe1b01464f6a2c369c167398fbe9b3"),
     "F32SubFtz_v1": ("f63ce33ab3d07799a7269b294ae92b3ee1535c2b289bbabc3c444285a30dfd1c",
                      "692462fc79f9cd14e71d236426dd511ed4d64ec6f8b2e28d11c1c6f4877ef09e",
-                     "f7c526ed180632e27d0fcdbaaa1ee7da315684bb728a4149a20a417b0931efb0"),
+                     "80628c4076af799485610e302b3504674bc3d8b09824dfacd1de719c7f5d594e"),
     "F32MulFtz_v1": ("79665387c6095b7ddd58b6a752e1b486d4e442b53b34ced6e1dd5f030aad1362",
                      "8f64299806e31df6a52b0284d0db994c85c742eac3ebdcdf88ce5b6915f1a626",
-                     "6c4b0edbfec033d7f3e84597877971f4c7ac32bf4b263699511d207d5437ec61"),
+                     "7d440202df108dc3cb35ce6c59651d1e8f60e5125f0aeb562e71af6d60df992c"),
     "F32FmaFtz_v1": ("7bcb27f5f2877b385829a771e103ebe7db75ca78b41a64cf306f0c2eeb211dae",
                      "292b8fdedf60fd30b0a8a8c1b6ca583034c5304a1a555e59957cf08a6aece8d1",
-                     "692d413409c71658f3f536fc722379ed0c80e3a8f0967b201f0dde7d2c6ef4e0"),
+                     "cc0a11e37f6723c1640b67114a90f4d76930945d1eee77df530ed6fea77793f1"),
     "F32FmaSubFtz_v1": ("adc7226403e77dc97c327dcdfb468a0eca3c9d3a00da9c7732b36ffbe80b7dbe",
                         "a4e302fc37af23d4f15f63035a4c758efee7b531d3f3d460d27d3b013938bcb7",
-                        "bef0361b1ff5c3894d2b94d83acf2836cf6972c0d82764bf56c56df3551984dc"),
+                        "131a2e0ba3d202b6853f771f7941f9371bdc3b812c2aee945f5d50a1f15dc884"),
     "F32Max_v1": ("97ed961c7f37e1b45e378018a96de03f3b9e8e86454122c6d92db4ac537130c8",
                   "53d1bf3ed680c698249de133207d93ae26e9567d2dba2df4d8b2d7369e148957",
                   "f9da795c8467141e30c3ba99b1ad8a3ed3533c4a6074a59309cc8870a7659145"),
@@ -117,8 +117,46 @@ def test_outputs(fid: str) -> None:
     assert h.hexdigest() == PINNED[fid][2]
 
 
+#: the GPU's words (fixtures/gpu-nan-2026-09-28: the L40S and the H100, every build alike) for each primitive's PTX instruction
+GPU_OPS = {"F32Add_v1": "add.rn.f32", "F32AddFtz_v1": "add.rn.ftz.f32", "F32SubFtz_v1": "sub.rn.ftz.f32", "F32Mul_v1": "mul.rn.f32",
+           "F32MulFtz_v1": "mul.rn.ftz.f32", "F32Div_v1": "div.rn.f32", "F32Fma_v1": "fma.rn.f32", "F32FmaFtz_v1": "fma.rn.ftz.f32"}
+
+
+def _gpu_cases(op: str) -> list[tuple[tuple[int, ...], int]]:
+    from pathlib import Path
+    d = json.loads((Path(__file__).parent / "fixtures" / "gpu-nan-2026-09-28" / "fp32_ops.json").read_text())
+    specials = [int(w, 16) for w in d["specials"]]
+    words = d["ops"][op]
+    outs = [int(words[i:i + 8], 16) for i in range(0, len(words), 8)]
+    cases = list(itertools.product(specials, repeat=3 if op.startswith("fma") else 2))
+    assert len(cases) == len(outs)
+    return list(zip(cases, outs))
+
+
+@pytest.mark.parametrize("fid", sorted(GPU_OPS))
+def test_every_special_case_is_the_gpus_word(fid: str) -> None:
+    """Every pair (or triple) of the probe's 15 specials: ±0, ±1, ±inf, quiet and signalling NaNs of both signs with payloads.  The
+    GPU's word, finite results included, and every NaN result `F32_NAN_PTX`: no operand's payload or sign survives."""
+    p = _prim(fid)
+    bad = [(tuple(hex(x) for x in c), hex(p.evaluate(*c)), hex(w)) for c, w in _gpu_cases(GPU_OPS[fid]) if p.evaluate(*c) != w]
+    assert not bad, (fid, len(bad), bad[:4])
+
+
+def test_sub_is_the_gpus_sub() -> None:
+    """`f32_sub_bits` (vLLM's `F32Sub_v1`, FSUB without ftz) on the probe's pairs."""
+    bad = [(tuple(map(hex, c)), hex(F.f32_sub_bits(*c)), hex(w)) for c, w in _gpu_cases("sub.rn.f32") if F.f32_sub_bits(*c) != w]
+    assert not bad, (len(bad), bad[:4])
+
+
+def test_fma_sub_is_the_gpus_fma_of_the_negated_addend() -> None:
+    cases = [(c, w) for c, w in _gpu_cases("fma.rn.ftz.f32")]
+    specials = {c[0] for c, _ in cases}
+    got = [(c, F.F32FmaSubFtz.evaluate(c[0], c[1], c[2] ^ 0x80000000), w) for c, w in cases if c[2] ^ 0x80000000 in specials]
+    assert got and all(g == w for _c, g, w in got), [(tuple(map(hex, c)), hex(g), hex(w)) for c, g, w in got if g != w][:4]
+
+
 def test_stated_semantics() -> None:
-    assert F.F32Fma.evaluate(0x7F800000, 0, 0x3F800000) == F.F32_NAN  # inf * 0
+    assert F.F32Fma.evaluate(0x7F800000, 0, 0x3F800000) == F.F32_NAN_PTX  # inf * 0
     assert F.F32Fma.evaluate(0x3F800001, 0x3F800001, 0xBF800002) == 0x28800000  # one rounding: (1+u)^2 - (1+2u) = u^2
     assert (F.F32Add.evaluate(1, 0), F.F32AddFtz.evaluate(1, 0)) == (1, 0)
     assert (F.F32Mul.evaluate(0x00800000, 0x3F000000), F.F32MulFtz.evaluate(0x00800000, 0x3F000000)) == (0x00400000, 0)
