@@ -19,18 +19,18 @@
 # Env: everything `verity-vllm row` takes (PY, PY312, HIDDEN_SO, GPU_UTIL, timeouts); CANARY_DIR (/workspace/cp/canary).
 set -uo pipefail
 TAG=${1:?candidate tag, e.g. r13-rel0}; POS=${2:-smollm2,llama}; NEG=${3:-arena,omitted,lateread}
-# [R17 rel, COORD R17-19 (4)] the canary runs from the tree it is given (VERITOR_REPO, default the pod's live tree): a second canary GPU
+# [R17 rel, COORD R17-19 (4)] the canary runs from the tree it is given (VERITY_TREE, default the pod's live tree): a second canary GPU
 # (cp-big GPU 1) takes the SAME candidate installed as an OWN tree (pod_release.sh REMOTE_TREE=/workspace/cp/<tag>) without replacing that
 # pod's live tree; the collector build dir is the one the release built for THIS tree (RELEASE.json build_dirs.native_collect, per tree for
 # an own tree -- never another tree's nc_build), unless the caller set NATIVE_COLLECT_BUILD explicitly.  CUDA_VISIBLE_DEVICES passes through.
 # [R18 infra, F-r17-tp-06] the tree that runs is the tree THIS SCRIPT lives in (the own-tree install's canary.sh is invoked from that
-# tree): $VERITOR_REPO is set FROM here, never read as the default; a caller exporting another tree is refused by name.
+# tree): $VERITY_TREE is set FROM here, never read as the default; a caller exporting another tree is refused by name.
 TREE_SELF=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)
-if [ -n "${VERITOR_REPO:-}" ] && [ "$(cd "$VERITOR_REPO" 2>/dev/null && pwd -P)" != "$TREE_SELF" ]; then
-  echo "PRECHECK_FAIL_SOURCE_IDENTITY: canary.sh at $TREE_SELF but \$VERITOR_REPO=$VERITOR_REPO names another tree" >&2; exit 3
+if [ -n "${VERITY_TREE:-}" ] && [ "$(cd "$VERITY_TREE" 2>/dev/null && pwd -P)" != "$TREE_SELF" ]; then
+  echo "PRECHECK_FAIL_SOURCE_IDENTITY: canary.sh at $TREE_SELF but \$VERITY_TREE=$VERITY_TREE names another tree" >&2; exit 3
 fi
-export VERITOR_REPO=$TREE_SELF
-cd "$VERITOR_REPO" || exit 1
+export VERITY_TREE=$TREE_SELF
+cd "$VERITY_TREE" || exit 1
 # [R18 infra, r18-int-2] the canary's base rows are `__l40s__` ids and the canary also runs on the Hopper host: the target-family
 # preflight (`verity-vllm row`, PRECHECK_FAIL_TARGET_FAMILY) is WAIVED BY NAME here -- `precheck-target WAIVED canary <tag>` in stages.txt,
 # never on a row of record.  On an L40S the same rows PASS the check unwaived (the waiver only names a would-be failure).

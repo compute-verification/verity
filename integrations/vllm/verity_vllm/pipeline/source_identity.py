@@ -7,7 +7,7 @@
 The tree of record is the VERITY REPO ROOT: the checkout (or the shipped `git archive`, <root>/src/<sha>/) holding `packages/verity/src`,
 `tools/research/src` and `integrations/vllm`.  It defaults to THIS FILE'S tree (never an environment default): the runner that imports this
 module IS the tree that must run.  `--tree` accepts the repo root or the integration root (`integrations/vllm`, what row_pod.sh passes) and
-normalises to the repo root.  `VERITOR_REPO`, when set, must name the same tree (either form) -- a caller that exports another tree is the
+normalises to the repo root.  `VERITY_TREE`, when set, must name the same tree (either form) -- a caller that exports another tree is the
 mixed-tree case and is refused by name.  `--out` writes the manifest record (schema research-infra/source-identity/v1); the same record goes
 into versions.json (commit_delta) and the attempt's job.json (tele init --source-identity).
 
@@ -93,14 +93,14 @@ def code_identity(root: str | os.PathLike[str]) -> dict[str, Any]:
 
 
 def requested_tree(tree: str | os.PathLike[str] | None = None) -> str:
-    """The tree this job must run from: the explicit argument, else THIS file's tree.  $VERITOR_REPO is checked against it, never used
+    """The tree this job must run from: the explicit argument, else THIS file's tree.  $VERITY_TREE is checked against it, never used
     as the default -- a differing value is the mixed-tree case (F-r17-tp-06) and fails by name."""
     root = normalise_tree(tree)
-    env = os.environ.get("VERITOR_REPO")
+    env = os.environ.get("VERITY_TREE")
     if env and normalise_tree(env) != root:
-        raise SourceIdentityError([{"package": "VERITOR_REPO", "resolved_path": os.path.realpath(env), "repo_root": os.path.realpath(env),
+        raise SourceIdentityError([{"package": "VERITY_TREE", "resolved_path": os.path.realpath(env), "repo_root": os.path.realpath(env),
                                     "git_sha": _sid.tree_identity(os.path.realpath(env)).get("git_sha"),
-                                    "why": f"$VERITOR_REPO names another tree than the code that runs ({root})"}], root)
+                                    "why": f"$VERITY_TREE names another tree than the code that runs ({root})"}], root)
     return root
 
 
@@ -158,7 +158,7 @@ def manifest(tree: str | os.PathLike[str] | None = None, *, sha: str | None = No
     if doc.get("requested") is not None and sha and doc["requested"].get("git_sha") is None:
         doc["requested"]["git_sha"] = sha            # the requested tree's own sha, when the tree cannot say it (git archive)
         doc["requested"]["git_sha_source"] = sha_src
-    doc["VERITOR_REPO"] = os.environ.get("VERITOR_REPO")
+    doc["VERITY_TREE"] = os.environ.get("VERITY_TREE")
     doc["PYTHONPATH"] = os.environ.get("PYTHONPATH")
     doc[ENV_SOURCE_SHA] = os.environ.get(ENV_SOURCE_SHA)
     return doc
@@ -193,7 +193,7 @@ def assert_loaded_module_is_ours(mod: Any, name: str, tree: str | os.PathLike[st
 @dataclass(frozen=True, kw_only=True)
 class Options:
     tree: str | None = option("--tree", default=None,
-                              help="the requested tree: the Verity repo root or its integrations/vllm (default: this file's tree; $VERITOR_REPO must agree)")
+                              help="the requested tree: the Verity repo root or its integrations/vllm (default: this file's tree; $VERITY_TREE must agree)")
     sha: str | None = option("--sha", default=None,
                              help="the requested commit; every package's git_sha must equal it (default: $RESEARCH_SOURCE_SHA when set)")
     out: str | None = option("--out", default=None, help="write the manifest record here (also on failure)")

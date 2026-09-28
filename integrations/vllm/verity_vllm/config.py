@@ -337,8 +337,8 @@ class RunEnv:
     hot_idle: str = option("--hot-idle", env="HOT_IDLE", default="900")
     timeline: str | None = option("--timeline", env="VERITY_TIMELINE", default=None,
                                   help="stage telemetry file (default: <row dir>/timeline.jsonl)")
-    veritor_repo: str | None = option("--veritor-repo", env="VERITOR_REPO", default=None,
-                                      help="must name the tree that runs when given (the mixed-tree refusal)")
+    verity_tree: str | None = option("--verity-tree", env="VERITY_TREE", default=None,
+                                     help="must name the tree that runs when given (the mixed-tree refusal)")
     research_run_dir: str | None = option("--research-run-dir", env="RESEARCH_RUN_DIR", default=None)
     research_run_id: str | None = option("--research-run-id", env="RESEARCH_RUN_ID", default=None)
     guard_preserve_file: str = option("--guard-preserve-file", env="GUARD_PRESERVE_FILE")

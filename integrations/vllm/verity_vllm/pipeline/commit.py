@@ -1116,7 +1116,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
 
         faulthandler.dump_traceback_later(float(os.environ["VERITY_TRACEDUMP"]), repeat=True)
     # [R18 infra, F-r17-tp-06 / BRIEF Phase 0] source identity precheck BEFORE anything else runs: verity.ir, verity_vllm, vllm-poc,
-    # hidden_gpu (and the telemetry package) must all resolve from THIS tree (the one commit_delta.py lives in; $VERITOR_REPO must agree).
+    # hidden_gpu (and the telemetry package) must all resolve from THIS tree (the one commit_delta.py lives in; $VERITY_TREE must agree).
     # A mismatch exits 3 with PRECHECK_FAIL_SOURCE_IDENTITY on stderr -- no engine, no inference; the record is written beside the out dir.
     from verity_vllm.pipeline import source_identity as _sid
 

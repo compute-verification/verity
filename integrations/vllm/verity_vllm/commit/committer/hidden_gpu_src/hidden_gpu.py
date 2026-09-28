@@ -15,8 +15,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 
 
 def _repo_of_this_file():
-    """[R18 infra, F-r17-tp-06] the tree THIS FILE lives in -- never $VERITOR_REPO, never a default path.  The former
-    `REPO = os.environ.get('VERITOR_REPO', '/workspace/cp/veritor')` made a Commit under --gpu-tree without VERITOR_REPO import verity.ir
+    """[R18 infra, F-r17-tp-06] the tree THIS FILE lives in -- never $VERITY_TREE, never a default path.  The former
+    `REPO = os.environ.get(<tree variable>, <the pod's default tree>)` made a Commit under --gpu-tree without the variable import verity.ir
     from the pod's DEFAULT tree while verity_vllm ran the release (tp M-1830).  This file is shipped at
     <tree>/verity_vllm/commit/committer/hidden_gpu_src/ and materialised at <tree>/out/gen/r9/cmt-hidden/src/ (pod_hidden_gpu.sh), so the tree
     is found by walking up to the first ancestor holding verity_vllm/ -- the same answer from either copy."""
@@ -31,9 +31,9 @@ def _repo_of_this_file():
 
 
 REPO = _repo_of_this_file()
-_env_repo = os.environ.get('VERITOR_REPO')
+_env_repo = os.environ.get('VERITY_TREE')
 if _env_repo and os.path.realpath(_env_repo) != REPO:
-    raise ImportError(f'PRECHECK_FAIL_SOURCE_IDENTITY: hidden_gpu at {HERE} belongs to tree {REPO} but $VERITOR_REPO={_env_repo} names another tree')
+    raise ImportError(f'PRECHECK_FAIL_SOURCE_IDENTITY: hidden_gpu at {HERE} belongs to tree {REPO} but $VERITY_TREE={_env_repo} names another tree')
 # verity_vllm must resolve from THIS tree: if it is already imported from elsewhere, refuse (mixed tree) rather than import silently
 _vc = sys.modules.get('verity_vllm')
 if _vc is not None and getattr(_vc, '__file__', None) and os.path.realpath(os.path.dirname(os.path.dirname(_vc.__file__))) != REPO:

@@ -13,14 +13,14 @@
 # then compiled_merge.py pairs them by run index -> $D/commit/{summary.json,summary.md,runs.jsonl,verdict.json} (row_pod.sh's Commit shape).
 #
 # Usage: compiled_commit.sh <ROW> <ROLE> [CUDAGRAPH_MODE]          (CUDAGRAPH_MODE default PIECEWISE: attention = splitting op, runs outside the graphs
-#        env: SWEEP_DIR, VERITOR_REPO, PAIRS (3), GPU_UTIL (0.3), HIDDEN_SO, EXTRA_ENGINE_ARGS, COMMIT_TIMEOUT (2400), FAULT (VERITY_FAULT for the treatment)
+#        env: SWEEP_DIR, VERITY_TREE, PAIRS (3), GPU_UTIL (0.3), HIDDEN_SO, EXTRA_ENGINE_ARGS, COMMIT_TIMEOUT (2400), FAULT (VERITY_FAULT for the treatment)
 set -uo pipefail
 ROW=$1; ROLE=$2; CGM=${3:-PIECEWISE}
 PY=${PY:-/workspace/venv-cu129/bin/python}
 export PYTHONPATH=. HF_HOME=/workspace/hf HF_HUB_OFFLINE=1 VLLM_BATCH_INVARIANT=1 TOKENIZERS_PARALLELISM=false
 export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda} PATH=$(dirname "$PY"):/usr/local/cuda/bin:$PATH
-export NATIVE_COLLECT_BUILD=${NATIVE_COLLECT_BUILD:-/workspace/cp/nc_build} VERITOR_REPO="${VERITOR_REPO:-/workspace/cp/veritor}"
-cd "$VERITOR_REPO"
+export NATIVE_COLLECT_BUILD=${NATIVE_COLLECT_BUILD:-/workspace/cp/nc_build} VERITY_TREE="${VERITY_TREE:-/workspace/cp/veritor}"
+cd "$VERITY_TREE"
 D=${SWEEP_DIR:-/workspace/cp/sweep}/$ROW; mkdir -p "$D"
 WL=workloads/$ROW.json
 # [M-0779] fail CLOSED: a bi-compiled row's workload must DECLARE the compiled target (target.compilation, from workload.py --target
