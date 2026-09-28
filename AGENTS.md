@@ -61,7 +61,9 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
  `PROTOCOL.md`. `protocols/one_stage` (`verity_one_stage`) is the one-stage
  audit: registration, the verifier's draw over a partition's units, and the
  audit record with its profile; `benchmarks/one_stage` runs it end to end with
- M0's prover and the Lean verifier. Applications (vLLM) compose protocols.
+ M0's prover and the Lean verifier. `protocols/pouw` (`verity_pouw`) is proof of useful work: the
+ `PoUWScheme` interface (`protocol`), its lifecycle (`audit`) and the named schemes (`schemes.get`: NCP,
+ Pearl's FP8 scheme), each with pinned vectors; see its `PROTOCOL.md`. Applications (vLLM) compose protocols.
 - `census/`: data only, meant to move to its own repository: `hardware.json`, `datatypes.json`, `networks.json`,
  `subcircuits.json`, `input_sets.json`, `workloads.json` (stable ids, sources), a JSON Schema for each under `schemas/`,
  and a README with the id scheme and sourcing rules. Nothing imports it; the renderer and benchmarks
