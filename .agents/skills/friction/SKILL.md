@@ -89,6 +89,8 @@ into a question for Daniel.
 
 Newest first. Each is Daniel's.
 
+- 2026-10-01: whoever lands a train runs `research merge --sweep` after each push, which closes the landed PRs, retargets
+  their children and deletes landed branches. `research merge --push` pushes the merge and then sweeps, so a lander passes it.
 - 2026-09-30: the Lean infrastructure lane changes `tools/lean`, the `lean-proofs` skill, `check`'s Lean steps, shared
   Lean foundations and Lean or Mathlib bumps (in a PR of their own, announced first) without asking. It speeds up another
   lane's proofs when no pinned record changes; a changed record in another lane's package goes through that lane. What a
