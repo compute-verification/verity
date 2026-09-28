@@ -19,6 +19,9 @@ seed-injection = []
 # The circuit statement's Merkle trees on SHA-512, leaves and nodes (backends/flock/flock-sha512-b684b12.patch and
 # cuda_sha512_patch.py must have been applied to the checkout: 64-byte digests throughout).
 sha512 = []
+# Multi-table statements (`tables`): the union's glue hook (backends/flock/flock-glue-b684b12.patch must have been applied after
+# the SHA-512 patch).
+glue = []
 
 [dependencies]
 flock-core = { path = "../flock-core" }

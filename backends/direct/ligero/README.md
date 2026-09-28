@@ -7,7 +7,7 @@ pass below: HM96 coin commitment, PROTOCOL.md 8c; hash and challenge expander ar
 WP2's checker, nothing dropped). Every number below was measured on `vy-g3` (NVIDIA L40S 48 GB, torch cu124) on the frozen
 input set `fixtures/bench-instances/v1`.
 
-## Third pass (lane b-zk, ledger `b-zk.jsonl`, plot `plots/overhead_b-zk.png`): COMPLETE_ZK_BACKEND, 4.6x
+## Third pass (lane b-zk, ledger `b-zk.jsonl`): COMPLETE_ZK_BACKEND, 4.6x
 
 Runs `r20260922-090407-5483` (SIMT encoder), `r20260922-091350-15e3` (+ device mask sampler),
 `r20260922-092404-2a1b` (+ fused test kernels; the numbers below). 4096 VUs of K = 1536 as 25 sub-batches of 170

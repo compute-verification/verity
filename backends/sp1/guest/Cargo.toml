@@ -12,7 +12,7 @@ veritor-zk-common = { workspace = true, features = ["scopes"] }
 # Out-of-line interpreter helpers for the SP1 sampling profiler (sound).
 attribution = ["veritor-zk-common/attribution"]
 # Pass-throughs of the DIAGNOSTIC features of veritor-zk-common: a guest built
-# with either is UNSOUND and announces itself (see src/main.rs, zk/sp1/README.md).
+# with either is UNSOUND and announces itself (see src/main.rs, backends/sp1/README.md).
 unsound-skip-authentication = ["veritor-zk-common/unsound-skip-authentication"]
 unsound-skip-path-fold = ["veritor-zk-common/unsound-skip-path-fold"]
 unsound-relation-only = ["veritor-zk-common/unsound-relation-only"]

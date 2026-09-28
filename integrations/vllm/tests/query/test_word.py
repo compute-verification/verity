@@ -137,6 +137,22 @@ def test_a_width_over_x_and_w_is_named():
         W.check_calls([{"family": "Gemm_v1", "statics": {"K": 64, "N": 8}, "definition": "Gemm_v1{K=64,N=8}", "calls": 3, "where": "m.proj"}], 8, 8)
 
 
+def test_the_gate_limit_is_the_runs_not_the_querys(norm):
+    g = {"family": "RMSNormTriton_v1", "statics": {"N": 2048, "EPS": 1e-05}, "definition": norm.id, "calls": 1}
+    low = norm.gates - 1
+    capped = W.check_calls([g], strict=False, max_gates=f"{low:_}")
+    assert [(v["class"], v["limit"]) for v in capped["violations"]] == [("too-large", low)]
+    assert W.check_calls([g], strict=False)["ok"] and W.gate_limits() == {"*": W.MAX_GATES}
+    for raised in (f"{low},RMSNormTriton_v1={norm.gates}", {"RMSNormTriton_v1": norm.gates}, norm.gates):
+        r = W.check_calls([g], strict=False, max_gates=raised)
+        assert r["ok"] and r["units"] == 2049 and r["query"] == capped["query"] == W.query_id()
+    assert W.gate_limit(norm, f"{low},Gemm_v1=5") == low and W.gate_limit(norm, {norm.id: 7, "RMSNormTriton_v1": 9}) == 7
+    from verity_vllm.pipeline import cli
+    for cmd, argv in (("manifest", ["build", "--program", "p", "--out", "o"]), ("program-graph", ["o", "i"])):
+        assert cli.parse(cmd, argv, {W.MAX_GATES_ENV: "GumbelTopPTokenSelect_v2=120000000"}).word_max_gates == "GumbelTopPTokenSelect_v2=120000000"
+        assert cli.parse(cmd, [*argv, "--word-max-gates", "1"], {}).word_max_gates == "1"
+
+
 def test_uncommitted_boundaries_are_named():
     g = {"family": "Gemm_v1", "statics": {"K": 64, "N": 8}, "definition": "Gemm_v1{K=64,N=8}", "calls": 2, "where": "m.proj",
          "outputs_committed": False}
