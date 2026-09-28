@@ -13,7 +13,7 @@
   "Flock.CircuitType.check_ok": {
    "signature": [
     "Flock.CircuitType.check_ok {callee : String → Option Flock.CircuitType} {t : Flock.CircuitType}",
-    "  (h : Flock.CircuitType.check callee t = Except.ok ()) : Flock.CircuitType.WellFormed callee t"
+    "  (h : Eq (Flock.CircuitType.check callee t) (Except.ok Unit.unit)) : Flock.CircuitType.WellFormed callee t"
    ],
    "assumptions": [],
    "type_hash": "00000000cf966ae0"
@@ -22,7 +22,7 @@
    "signature": [
     "Flock.Layout.check_ok {types : String → Option Flock.CircuitType} {ls : Array Flock.Layout} {unit : Nat}",
     "  {info : String → Option Flock.TableInfo} {sizes : Array Nat}",
-    "  (h : Flock.Layout.check types ls unit info = Except.ok sizes) : Flock.Layout.WellFormed types ls unit info"
+    "  (h : Eq (Flock.Layout.check types ls unit info) (Except.ok sizes)) : Flock.Layout.WellFormed types ls unit info"
    ],
    "assumptions": [],
    "type_hash": "0000000051c2a27d"
