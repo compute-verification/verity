@@ -1184,7 +1184,8 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
 
 `verity_flock.typed_statement` (#225) writes §16.10's statement with its unit as circuit types and a layout instead of
 rows. The first line is `flock-circuit/types NAME`; META `format` and `statement` name it (`Tags.circuitTypes`, and
-`+seed-injection` for the selftest build). Everything else is §16.10's.
+`+seed-injection` for the selftest build). Its identity is `967b8d06`'s text naming the typed statement, and the statement
+digest's leading tag is `verity/flock-circuit` (`Tags.digestTag`), as the prover hashes it. Everything else is §16.10's.
 
 - **No statement carries the unit's rows.** A `CIRCUIT unit` section is refused. `Typed.expand` derives the rows:
   - `types`: `{digest: content}`. Each key must be its content's digest, and each type passes `CircuitType.check` (#194).
@@ -1193,8 +1194,8 @@ rows. The first line is `flock-circuit/types NAME`; META `format` and `statement
   - `unit_layout`: the unit's layout, which must be derived (`own` is `derive`).
   - `unit_type` must be that layout's type, `policy` must be `calls/v1`, and `unit_in` must be empty: this version binds
     no inputs to constants.
-  - The unit's rows are `Derive.derive` (#199) of the unit's type, with the layout's port splits, written as
-    `flock-ir-unit/v2` (`Derive.netlist`).
+  - The unit's rows come only through `DeriveAll.deriveChecked` (#247), written as `flock-ir-unit/v2`
+    (`DeriveAll.netlist`).
 - **Then as §16.10.** `HmRow.parseTyped` inserts the derived rows as the file's `CIRCUIT unit` section, first, where the old
   statement has it, and parses the result with `HmRow.parse`. The circuit digest and the class are the typed file's own:
   its SHA-512, and `classOf` over its bytes.
