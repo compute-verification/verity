@@ -44,6 +44,8 @@ if [ "$IMPL" = vllm-gpu ]; then
     export LD_LIBRARY_PATH=/usr/local/cuda-12.9/compat:${LD_LIBRARY_PATH:-}
   fi
   "$PY" -c 'import torch; assert torch.cuda.is_available(), "torch sees no CUDA device"; print(torch.__version__, torch.cuda.get_device_name(0))' || exit 3
+  "$PY" -c 'import ninja' 2>/dev/null || uv pip install -q --python "$PY" ninja || exit 3   # torch's JIT build of pous_native
+  export PATH=$(dirname "$PY"):$PATH
   "$PY" benchmarks/pous/bench.py --scheme "$SCHEME" --impl vllm-gpu --impl-tree "$W/impl" --impl-commit "${IMPL_COMMIT:-unknown}" \
     --build-dir "$W/pous_build" --python "$PY" --weight-set "$WS" --hardware "$HW" --out "$O/bench" --audits "$AUDITS"
 else
