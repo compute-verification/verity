@@ -4,7 +4,7 @@
  "assumptions": {
   "Flock.Assumptions.VBridge": {
    "owner": "@proofs",
-   "digest": "c7133abbebba54516366c3f9ab4d930cc5e54a9475ff39fe6663208492377d2c"
+   "digest": "123d7906527300b40f49caefdb25e1ee2535989706f0cee85fa7b32d4bb8c0a4"
   },
   "FlockSoundness.Assumptions.HashDerivedKey": {
    "owner": "@proofs",
@@ -11862,14 +11862,15 @@
    "guarantees": ["Flock.SecurityProofs.RecursiveSound"]
   },
   "Proofs.Flock.Recursive.Stage": {
-   "digest": "aa73b2ca927d6eb7fbfba5ce58fc3c97e355add4389c89f8b8c7763189dd11ad",
+   "digest": "9f9382729b6316f70fa48492c0b19793dc8be880c5ad3e868fe14534e43fe0ae",
    "definitions": {
     "FlockSoundness.Discharge.Recursion.Openings.sigma": "f27e1c3c377262da02cc867376cb3e03c8c173960b0b5bf2a6b0894a8944c42f",
     "FlockSoundness.Discharge.Recursion.PosK": "53d9ed266468b8504b5d54a59d6f58c88f857a0c3d57dbe091d965e4df556332",
+    "FlockSoundness.Discharge.Recursion.ReadW": "81560b23656f8dc8058c0d1888d20dd4b5649f904990001833c8fa18677dfed3",
     "FlockSoundness.Discharge.Recursion.ReadsDrawK": "9f711f11c284b403e92d28a801426e33d98a89c94d4a86851fbe3a2be78587a4",
-    "FlockSoundness.Discharge.Recursion.VCommits": "5fe1af3d837d9f95633660d0e2809eb9846d49e3cb3aeb7cac913fcda5c81919",
-    "FlockSoundness.Discharge.Recursion.VDecodes": "473b16b0f23f2efcf7f11fb65addab9a5ff6fae40180ad7df9d01b83f106d2aa",
-    "FlockSoundness.Discharge.Recursion.VFull": "7cf6c5d2fa6151f642d1c38a701d71662463213fd1f3ef4d5947697269d4c55d",
+    "FlockSoundness.Discharge.Recursion.VCommits": "b42dc38e2fcba2a14f448d16ffafc0ce45ad770fb324d928114f14bb4f2b51bd",
+    "FlockSoundness.Discharge.Recursion.VDecodesR": "5c802974a3d13d4d6aa5cf940a52ff2f4a53c97a16ac355abe5662b5d5add80f",
+    "FlockSoundness.Discharge.Recursion.VFullR": "d309fd0c33bf5f26a0fc3bf895d407fc413bc822a2e61cabb4e4c72c11fdd637",
     "FlockSoundness.Discharge.Recursion.ValK": "8195cd44a3add667689eea3a12f40b2615263218a0e898343751d8f7af5ab5ac",
     "FlockSoundness.Discharge.Recursion.ZkOuter.slackCR": "0fdab3c69cd3d44be1bec3e7270195407b59b9bdc53299df483075f3f9a419fb",
     "FlockSoundness.Discharge.Recursion.ZkOuter.stageSlack": "cbac0f85c774e2123240fe509168932df3af0623075443f5d716e24cb3879ba0",
@@ -12170,9 +12171,9 @@
    ]
   },
   "Proofs.Flock.Soundness.Assumptions.Recursive": {
-   "digest": "55e8b99d964f9d51bc208178bd905cae25b8c8961d1b14f1f6d729655a5a5b41",
+   "digest": "518c76bebd2d8c2037a1ba752b2df772b6554b44e4452d634783b16588f80067",
    "definitions": {
-    "Flock.Assumptions.VBridge": "c7133abbebba54516366c3f9ab4d930cc5e54a9475ff39fe6663208492377d2c"
+    "Flock.Assumptions.VBridge": "123d7906527300b40f49caefdb25e1ee2535989706f0cee85fa7b32d4bb8c0a4"
    },
    "guarantees": ["Flock.SecurityProofs.RecursiveSound"]
   },
