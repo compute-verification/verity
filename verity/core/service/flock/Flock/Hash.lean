@@ -99,43 +99,193 @@ def iv : Array UInt64 := #[0x6a09e667f3bcc908, 0xbb67ae8584caa73b, 0x3c6ef372fe9
 
 @[inline] def rotr (x : UInt64) (n : UInt64) : UInt64 := (x >>> n) ||| (x <<< (64 - n))
 
-/-- One compression of the 128-byte block of `data` at `off`. -/
-def compress (h : Array UInt64) (data : ByteArray) (off : Nat) : Array UInt64 := Id.run do
-  let mut w : Array UInt64 := Array.mkEmpty 80
-  for i in [0:16] do
-    let mut x : UInt64 := 0
-    for j in [0:8] do x := (x <<< 8) ||| (data.get! (off + 8 * i + j)).toUInt64
-    w := w.push x
-  for i in [16:80] do
-    let x := w[i - 15]!
-    let y := w[i - 2]!
-    let s0 := rotr x 1 ^^^ rotr x 8 ^^^ (x >>> 7)
-    let s1 := rotr y 19 ^^^ rotr y 61 ^^^ (y >>> 6)
-    w := w.push (w[i - 16]! + s0 + w[i - 7]! + s1)
-  let mut a := h[0]!
-  let mut b := h[1]!
-  let mut c := h[2]!
-  let mut d := h[3]!
-  let mut e := h[4]!
-  let mut f := h[5]!
-  let mut g := h[6]!
-  let mut hh := h[7]!
-  for i in [0:80] do
-    let s1 := rotr e 14 ^^^ rotr e 18 ^^^ rotr e 41
-    let ch := (e &&& f) ^^^ ((~~~e) &&& g)
-    let t1 := hh + s1 + ch + k[i]! + w[i]!
-    let s0 := rotr a 28 ^^^ rotr a 34 ^^^ rotr a 39
-    let maj := (a &&& b) ^^^ (a &&& c) ^^^ (b &&& c)
-    let t2 := s0 + maj
-    hh := g
-    g := f
-    f := e
-    e := d + t1
-    d := c
-    c := b
-    b := a
-    a := t1 + t2
-  return #[h[0]! + a, h[1]! + b, h[2]! + c, h[3]! + d, h[4]! + e, h[5]! + f, h[6]! + g, h[7]! + hh]
+/-- The working registers `(a, b, c, d, e, f, g, h)`. -/
+abbrev Regs := UInt64 × UInt64 × UInt64 × UInt64 × UInt64 × UInt64 × UInt64 × UInt64
+
+/-- The big-endian word of the 8 bytes of `data` at `o`. -/
+@[inline] def word (data : ByteArray) (o : Nat) : UInt64 :=
+  (((((((((0 : UInt64) <<< 8 ||| (data.get! (o + 0)).toUInt64) <<< 8 ||| (data.get! (o + 1)).toUInt64) <<< 8 |||
+    (data.get! (o + 2)).toUInt64) <<< 8 ||| (data.get! (o + 3)).toUInt64) <<< 8 ||| (data.get! (o + 4)).toUInt64) <<< 8 |||
+    (data.get! (o + 5)).toUInt64) <<< 8 ||| (data.get! (o + 6)).toUInt64) <<< 8 ||| (data.get! (o + 7)).toUInt64)
+
+/-- Schedule word `t` of words `t - 16`, `t - 15`, `t - 7` and `t - 2`. -/
+@[inline] def sched (a b c d : UInt64) : UInt64 :=
+  a + (rotr b 1 ^^^ rotr b 8 ^^^ b >>> 7) + c + (rotr d 19 ^^^ rotr d 61 ^^^ d >>> 6)
+
+/-- Round `i` of the registers `s` with schedule word `w`. -/
+@[inline] def round (s : Regs) (i : Nat) (w : UInt64) : Regs :=
+  let (a, b, c, d, e, f, g, hh) := s
+  let t1 := hh + (rotr e 14 ^^^ rotr e 18 ^^^ rotr e 41) + (e &&& f ^^^ ~~~e &&& g) + k[i]! + w
+  let t2 := (rotr a 28 ^^^ rotr a 34 ^^^ rotr a 39) + (a &&& b ^^^ a &&& c ^^^ b &&& c)
+  (t1 + t2, a, b, c, d + t1, e, f, g)
+
+/-- One compression of the 128-byte block of `data` at `off`, straight-line so that the schedule's words and the registers
+stay unboxed (an `Array UInt64` or a loop's state boxes each word). `word`, `sched` and `round` keep the shape of FIPS
+180-4's three loops term for term: the soundness proofs' `compress_unfold` reads them back as those loops. -/
+def compress (h : Array UInt64) (data : ByteArray) (off : Nat) : Array UInt64 :=
+  let w0 := word data (off + 8 * 0)
+  let w1 := word data (off + 8 * 1)
+  let w2 := word data (off + 8 * 2)
+  let w3 := word data (off + 8 * 3)
+  let w4 := word data (off + 8 * 4)
+  let w5 := word data (off + 8 * 5)
+  let w6 := word data (off + 8 * 6)
+  let w7 := word data (off + 8 * 7)
+  let w8 := word data (off + 8 * 8)
+  let w9 := word data (off + 8 * 9)
+  let w10 := word data (off + 8 * 10)
+  let w11 := word data (off + 8 * 11)
+  let w12 := word data (off + 8 * 12)
+  let w13 := word data (off + 8 * 13)
+  let w14 := word data (off + 8 * 14)
+  let w15 := word data (off + 8 * 15)
+  let w16 := sched w0 w1 w9 w14
+  let w17 := sched w1 w2 w10 w15
+  let w18 := sched w2 w3 w11 w16
+  let w19 := sched w3 w4 w12 w17
+  let w20 := sched w4 w5 w13 w18
+  let w21 := sched w5 w6 w14 w19
+  let w22 := sched w6 w7 w15 w20
+  let w23 := sched w7 w8 w16 w21
+  let w24 := sched w8 w9 w17 w22
+  let w25 := sched w9 w10 w18 w23
+  let w26 := sched w10 w11 w19 w24
+  let w27 := sched w11 w12 w20 w25
+  let w28 := sched w12 w13 w21 w26
+  let w29 := sched w13 w14 w22 w27
+  let w30 := sched w14 w15 w23 w28
+  let w31 := sched w15 w16 w24 w29
+  let w32 := sched w16 w17 w25 w30
+  let w33 := sched w17 w18 w26 w31
+  let w34 := sched w18 w19 w27 w32
+  let w35 := sched w19 w20 w28 w33
+  let w36 := sched w20 w21 w29 w34
+  let w37 := sched w21 w22 w30 w35
+  let w38 := sched w22 w23 w31 w36
+  let w39 := sched w23 w24 w32 w37
+  let w40 := sched w24 w25 w33 w38
+  let w41 := sched w25 w26 w34 w39
+  let w42 := sched w26 w27 w35 w40
+  let w43 := sched w27 w28 w36 w41
+  let w44 := sched w28 w29 w37 w42
+  let w45 := sched w29 w30 w38 w43
+  let w46 := sched w30 w31 w39 w44
+  let w47 := sched w31 w32 w40 w45
+  let w48 := sched w32 w33 w41 w46
+  let w49 := sched w33 w34 w42 w47
+  let w50 := sched w34 w35 w43 w48
+  let w51 := sched w35 w36 w44 w49
+  let w52 := sched w36 w37 w45 w50
+  let w53 := sched w37 w38 w46 w51
+  let w54 := sched w38 w39 w47 w52
+  let w55 := sched w39 w40 w48 w53
+  let w56 := sched w40 w41 w49 w54
+  let w57 := sched w41 w42 w50 w55
+  let w58 := sched w42 w43 w51 w56
+  let w59 := sched w43 w44 w52 w57
+  let w60 := sched w44 w45 w53 w58
+  let w61 := sched w45 w46 w54 w59
+  let w62 := sched w46 w47 w55 w60
+  let w63 := sched w47 w48 w56 w61
+  let w64 := sched w48 w49 w57 w62
+  let w65 := sched w49 w50 w58 w63
+  let w66 := sched w50 w51 w59 w64
+  let w67 := sched w51 w52 w60 w65
+  let w68 := sched w52 w53 w61 w66
+  let w69 := sched w53 w54 w62 w67
+  let w70 := sched w54 w55 w63 w68
+  let w71 := sched w55 w56 w64 w69
+  let w72 := sched w56 w57 w65 w70
+  let w73 := sched w57 w58 w66 w71
+  let w74 := sched w58 w59 w67 w72
+  let w75 := sched w59 w60 w68 w73
+  let w76 := sched w60 w61 w69 w74
+  let w77 := sched w61 w62 w70 w75
+  let w78 := sched w62 w63 w71 w76
+  let w79 := sched w63 w64 w72 w77
+  let s0 : Regs := (h[0]!, h[1]!, h[2]!, h[3]!, h[4]!, h[5]!, h[6]!, h[7]!)
+  let s1 := round s0 0 w0
+  let s2 := round s1 1 w1
+  let s3 := round s2 2 w2
+  let s4 := round s3 3 w3
+  let s5 := round s4 4 w4
+  let s6 := round s5 5 w5
+  let s7 := round s6 6 w6
+  let s8 := round s7 7 w7
+  let s9 := round s8 8 w8
+  let s10 := round s9 9 w9
+  let s11 := round s10 10 w10
+  let s12 := round s11 11 w11
+  let s13 := round s12 12 w12
+  let s14 := round s13 13 w13
+  let s15 := round s14 14 w14
+  let s16 := round s15 15 w15
+  let s17 := round s16 16 w16
+  let s18 := round s17 17 w17
+  let s19 := round s18 18 w18
+  let s20 := round s19 19 w19
+  let s21 := round s20 20 w20
+  let s22 := round s21 21 w21
+  let s23 := round s22 22 w22
+  let s24 := round s23 23 w23
+  let s25 := round s24 24 w24
+  let s26 := round s25 25 w25
+  let s27 := round s26 26 w26
+  let s28 := round s27 27 w27
+  let s29 := round s28 28 w28
+  let s30 := round s29 29 w29
+  let s31 := round s30 30 w30
+  let s32 := round s31 31 w31
+  let s33 := round s32 32 w32
+  let s34 := round s33 33 w33
+  let s35 := round s34 34 w34
+  let s36 := round s35 35 w35
+  let s37 := round s36 36 w36
+  let s38 := round s37 37 w37
+  let s39 := round s38 38 w38
+  let s40 := round s39 39 w39
+  let s41 := round s40 40 w40
+  let s42 := round s41 41 w41
+  let s43 := round s42 42 w42
+  let s44 := round s43 43 w43
+  let s45 := round s44 44 w44
+  let s46 := round s45 45 w45
+  let s47 := round s46 46 w46
+  let s48 := round s47 47 w47
+  let s49 := round s48 48 w48
+  let s50 := round s49 49 w49
+  let s51 := round s50 50 w50
+  let s52 := round s51 51 w51
+  let s53 := round s52 52 w52
+  let s54 := round s53 53 w53
+  let s55 := round s54 54 w54
+  let s56 := round s55 55 w55
+  let s57 := round s56 56 w56
+  let s58 := round s57 57 w57
+  let s59 := round s58 58 w58
+  let s60 := round s59 59 w59
+  let s61 := round s60 60 w60
+  let s62 := round s61 61 w61
+  let s63 := round s62 62 w62
+  let s64 := round s63 63 w63
+  let s65 := round s64 64 w64
+  let s66 := round s65 65 w65
+  let s67 := round s66 66 w66
+  let s68 := round s67 67 w67
+  let s69 := round s68 68 w68
+  let s70 := round s69 69 w69
+  let s71 := round s70 70 w70
+  let s72 := round s71 71 w71
+  let s73 := round s72 72 w72
+  let s74 := round s73 73 w73
+  let s75 := round s74 74 w74
+  let s76 := round s75 75 w75
+  let s77 := round s76 76 w76
+  let s78 := round s77 77 w77
+  let s79 := round s78 78 w78
+  let s80 := round s79 79 w79
+  #[h[0]! + s80.1, h[1]! + s80.2.1, h[2]! + s80.2.2.1, h[3]! + s80.2.2.2.1, h[4]! + s80.2.2.2.2.1,
+    h[5]! + s80.2.2.2.2.2.1, h[6]! + s80.2.2.2.2.2.2.1, h[7]! + s80.2.2.2.2.2.2.2]
 
 /-- SHA-512 of `msg` (FIPS 180-4: 128-byte blocks, a 128-bit length). -/
 def hash (msg : ByteArray) : Digest := Id.run do
