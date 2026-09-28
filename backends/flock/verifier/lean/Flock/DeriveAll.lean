@@ -54,7 +54,7 @@ structure ReadRec where
   k : Nat
   prod0 : Nat
   loTop : Nat
-  deriving Inhabited, Repr
+  deriving Inhabited, Repr, DecidableEq
 
 def ReadRec.shift (r : ReadRec) (d : Nat) : ReadRec := { r with prod0 := r.prod0 + d, loTop := r.loTop + d }
 

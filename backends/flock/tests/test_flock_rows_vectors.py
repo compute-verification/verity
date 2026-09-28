@@ -44,12 +44,12 @@ def test_flock_rows_matches_the_mirror(built, case, tmp_path):
 
 @pytest.mark.parametrize("case", cases(), ids=lambda c: c["name"])
 def test_derived_rows_pass_the_check(built, case, tmp_path):
-    """`deriveChecked` accepts every read-free vector's rows; reads are refused until the check covers them (S3c-2)."""
+    """`deriveChecked` accepts every vector's rows but those with a placed read, which it refuses until S3c-2b."""
     path = tmp_path / "archive.json"
     path.write_text(json.dumps(case["archive"]))
     out = subprocess.run([str(LEAN / ".lake/build/bin/flock-rows"), "--archive", str(path), "--part", "check"],
                          capture_output=True, text=True)
-    if any(item[0] == 4 for t in case["archive"]["types"] for item in t["items"]):
+    if any("offset" in e for layout in case["archive"]["layouts"] for e in layout.get("reads", [])):
         assert out.returncode == 1 and "fail the check" in out.stderr, out.stderr
     else:
         assert (out.returncode, out.stdout) == (0, "ok\n"), out.stderr

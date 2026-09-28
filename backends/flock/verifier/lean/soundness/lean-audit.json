@@ -161,13 +161,13 @@
     "  {info : String → Option Flock.TableInfo} {words : String → Option (Array ℕ)} {unit : ℕ}",
     "  {done : Array Flock.DeriveAll.D} (hd : Flock.DeriveAll.deriveChecked types ls info words unit = Except.ok done)",
     "  {j : ℕ} (hj : j ≠ unit) {t : Flock.CircuitType} (ht : (ls.getD j default).type.bind types = some t) (z : ℕ → Bool)",
-    "  (hz : FlockSoundness.Types.Sat (done.getD j default).rows.toList z) (h1 : z (done.getD j default).const = true)",
-    "  (F : ℕ) (hF : j < F) (o : ℕ) (ho : o < t.outputs.size) :",
+    "  (hz : FlockSoundness.Types.Dag.SatAt (Flock.DeriveAll.fullRow words (done.getD j default)) z)",
+    "  (h1 : z (done.getD j default).const = true) (F : ℕ) (hF : j < F) (o : ℕ) (ho : o < t.outputs.size) :",
     "  z ((done.getD j default).outCols.getD o 0) =",
     "    (FlockSoundness.Types.Dag.evalT types words F t fun i => z ((done.getD j default).inCols.getD i 0)).getD o false"
    ],
    "assumptions": [],
-   "type_hash": "00000000bb03ac59"
+   "type_hash": "00000000eb48d8bd"
   },
   "FlockSoundness.Types.Dag.unit_sound": {
    "signature": [
@@ -175,13 +175,13 @@
     "  {info : String → Option Flock.TableInfo} {words : String → Option (Array ℕ)} {unit : ℕ}",
     "  {done : Array Flock.DeriveAll.D} (hd : Flock.DeriveAll.deriveChecked types ls info words unit = Except.ok done)",
     "  {t : Flock.CircuitType} (ht : (ls.getD unit default).type.bind types = some t) (one : ℕ) (z : ℕ → Bool)",
-    "  (hz : FlockSoundness.Types.Dag.SatAt (Flock.DeriveAll.blockRow (done.getD unit default) one) z) (h1 : z one = true)",
-    "  (F : ℕ) (hF : unit < F) (o : ℕ) (ho : o < t.outputs.size) :",
+    "  (hz : FlockSoundness.Types.Dag.SatAt (Flock.DeriveAll.blockRow words (done.getD unit default) one) z)",
+    "  (h1 : z one = true) (F : ℕ) (hF : unit < F) (o : ℕ) (ho : o < t.outputs.size) :",
     "  z ((done.getD unit default).outCols.getD o 0) =",
     "    (FlockSoundness.Types.Dag.evalT types words F t fun i => z ((done.getD unit default).inCols.getD i 0)).getD o false"
    ],
    "assumptions": [],
-   "type_hash": "00000000d95f7500"
+   "type_hash": "00000000e5bf6f1f"
   },
   "FlockSoundness.Types.compose_complete": {
    "signature": [
@@ -409,7 +409,7 @@
    ]
   },
   "Flock.DeriveAll": {
-   "digest": "26f54e2d6a76071d2e7ce5899e75e826",
+   "digest": "0cc432ba738d70475708774a38509f1b",
    "definitions": {
     "Flock.DeriveAll.Build": "d002b4dad286ea98",
     "Flock.DeriveAll.Build.items": "7ae45696c3561161",
@@ -439,7 +439,7 @@
     "Flock.DeriveAll.Inst.forms": "1d8edd29485d5690",
     "Flock.DeriveAll.Inst.item": "8de343361091f164",
     "Flock.DeriveAll.Inst.j": "4d78d57c63797b57",
-    "Flock.DeriveAll.ReadRec": "a1bb193921b563dd",
+    "Flock.DeriveAll.ReadRec": "13beacc4e76be975",
     "Flock.DeriveAll.ReadRec.k": "cb635496cc664cf2",
     "Flock.DeriveAll.ReadRec.lo": "a2badd7c4de69c34",
     "Flock.DeriveAll.ReadRec.loTop": "08b009bc0f5049cf",
@@ -456,10 +456,14 @@
     "Flock.DeriveAll.deriveOne": "258890d229634d1f",
     "Flock.DeriveAll.ent": "1a5619116541aa86",
     "Flock.DeriveAll.formOf": "f9bde0eedaf7e92d",
+    "Flock.DeriveAll.instDecidableEqReadRec": "b42ba9d58d0a3ad4",
+    "Flock.DeriveAll.instDecidableEqReadRec.decEq": "a9cff3ad55b0a444",
     "Flock.DeriveAll.instInhabitedD": "25ac96a9546633bb",
     "Flock.DeriveAll.instInhabitedD.default": "20cf1be003ac07ef",
     "Flock.DeriveAll.instInhabitedInst": "fdfce35fca5ae051",
     "Flock.DeriveAll.instInhabitedInst.default": "5f95b73c66fa71cf",
+    "Flock.DeriveAll.instInhabitedReadRec": "dced766c4fdbc999",
+    "Flock.DeriveAll.instInhabitedReadRec.default": "f81c64af811d2c9c",
     "Flock.DeriveAll.instReprRef.repr": "3d5228e00eae5c37",
     "Flock.DeriveAll.items": "e329c5ff96be3ffd",
     "Flock.DeriveAll.order": "da99a640f2a1107c",
@@ -475,30 +479,39 @@
    "pins": ["FlockSoundness.Types.Dag.layout_sound", "FlockSoundness.Types.Dag.unit_sound"]
   },
   "Flock.DeriveCheck": {
-   "digest": "c4d17eb9dfe93db819642a534b6449e1",
+   "digest": "ef6de9193d520995b3447679fa893b5b",
    "definitions": {
     "Flock.DeriveAll.Chk": "151ea8aaea236e59",
-    "Flock.DeriveAll.Chk.bindAt": "2c014c6e02100ce4",
+    "Flock.DeriveAll.Chk.bindAt": "86eb8746f8ac415b",
     "Flock.DeriveAll.Chk.d": "607dadfc7ca173c7",
-    "Flock.DeriveAll.Chk.oneAt": "69c8f0b67b82a00e",
-    "Flock.DeriveAll.Chk.rowIs": "36b3784b4115e5a0",
+    "Flock.DeriveAll.Chk.oneAt": "d76270d87093c256",
+    "Flock.DeriveAll.Chk.prodIs": "332e1abca19a3bb2",
+    "Flock.DeriveAll.Chk.rowIs": "5c246b82bc8bd31f",
     "Flock.DeriveAll.Chk.unit": "9a9f6ed101e0f44b",
-    "Flock.DeriveAll.blockRow": "237f408dd7101877",
-    "Flock.DeriveAll.checkLayout": "2bf766d44d2751b7",
+    "Flock.DeriveAll.ReadRec.covers": "e49d3e072b2efafd",
+    "Flock.DeriveAll.blockRow": "a53fcf0d7bc6047a",
+    "Flock.DeriveAll.blockRows": "2662cb370862cfa8",
+    "Flock.DeriveAll.checkLayout": "d8408e21fe7ecf08",
+    "Flock.DeriveAll.chkDecode": "d148225f81443f39",
     "Flock.DeriveAll.colSet": "50da0a8eb7d303c6",
-    "Flock.DeriveAll.deriveChecked": "952dd65c4801284b",
-    "Flock.DeriveAll.orderChecked": "5204436fca68d480",
-    "Flock.DeriveAll.orderOk": "3bd9de6b710cffd8",
-    "Flock.DeriveAll.outsideOk": "87df3b52454a2178",
-    "Flock.DeriveAll.placedOk": "09b57cd285eca0e6",
-    "Flock.DeriveAll.readsOf": "6d45feed3570c390",
+    "Flock.DeriveAll.deriveChecked": "9becb22bbb3c5c15",
+    "Flock.DeriveAll.fullRow": "7de91b23c8fa735e",
+    "Flock.DeriveAll.orderChecked": "fea41fd751371b71",
+    "Flock.DeriveAll.orderOk": "4af817ede5db2de6",
+    "Flock.DeriveAll.outRows": "d7fde6a8eac7f371",
+    "Flock.DeriveAll.outsideOk": "ae67f57728791e9c",
+    "Flock.DeriveAll.placedOk": "b6bbca77af62543a",
+    "Flock.DeriveAll.prodRows": "24708b8a8c98bae9",
+    "Flock.DeriveAll.readOk": "e3eac2c6f5463220",
+    "Flock.DeriveAll.readSide": "8d8a6160f11e447c",
+    "Flock.DeriveAll.readsOf": "4d13811fface13c1",
     "Flock.DeriveAll.shiftRow": "54585bbd4270157a",
-    "Flock.DeriveAll.walk": "29aaa6f1e93aae7e"
+    "Flock.DeriveAll.walk": "615b02580a3cce11"
    },
    "pins": ["FlockSoundness.Types.Dag.layout_sound", "FlockSoundness.Types.Dag.unit_sound"]
   },
   "Flock.Layout": {
-   "digest": "6a584805e3c95e358863417bbf6160b1",
+   "digest": "a73b23aa5e2c98ba1b7586119bfdbf99",
    "definitions": {
     "Flock.CallE": "09ea8b20b96d349c",
     "Flock.CallE.layout": "2d0473dfcdd24d6f",
@@ -521,6 +534,7 @@
     "Flock.Layout.readRowsInline": "4494cf139e8b06d1",
     "Flock.Layout.readRowsPlaced": "2a47a0725ec85e5b",
     "Flock.Layout.reads": "d6b2851ed341a375",
+    "Flock.Layout.tableInfo": "306a8a3a475e27ed",
     "Flock.Layout.type": "0fb3b63e47c59b39",
     "Flock.Layout.uses": "1ed68db4cfe3c899",
     "Flock.Own": "01da69ea3c397403",
