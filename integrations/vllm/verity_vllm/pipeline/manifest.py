@@ -11,7 +11,8 @@ are the bridge's (`required.request_manifest` / `compose_global`; a TP row's ran
 builds the pure-dataflow population (no RETURN-SLOT policy) for the record.  Four tap policies are on by default, each with a
 `--no-...` for A/B only: `--norm-scales` (`query.norm_scales`), `--guarded-max` (`query.guarded_max`: the query header states it, and
 every attention hidden-stream identity gains the MS class), `--router-softmax` and `--vocab-range` (`query.router_softmax`,
-`query.vocab_range`).  `--cross-call-check` (opt-in) fails the Build when a value is computed in two Calls (`query.cross_call`).  `compare` classifies every identity difference (`compare.summarize`).
+`query.vocab_range`).  `--cross-call-check` (opt-in) fails the Build when a value is computed in two Calls (`query.cross_call`).
+`compare` classifies every identity difference (`compare.summarize`).
 """
 
 from __future__ import annotations
