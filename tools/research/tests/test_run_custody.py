@@ -229,6 +229,9 @@ def test_the_launchers_remote_json_does_not_cost_its_copy_custody(tmp_path, monk
     assert CU.LAUNCHER_RECORD not in rep["files"], "eviction removes only what verify lists"
     (d / CU.LAUNCHER_RECORD).write_text(json.dumps({"machine": "n1", "phase": "fetched"}))
     assert CU.verify(_other_machine(tmp_path, vault, monkeypatch), d, mark=False)["preserved"]
+    (d / "stdout.log").write_text("changed")
+    rep = CU.verify(_other_machine(tmp_path, vault, monkeypatch), d, mark=False)
+    assert not rep["preserved"] and "stdout.log" in rep["error"] and "changed" in rep["error"], "the skip covers remote.json only"
 
 
 def test_an_attempt_published_without_a_run_record_is_not_run_custody(tmp_path, monkeypatch):
