@@ -46,8 +46,9 @@ def _opts(tmp: Path, *argv: str, environ: dict[str, str] | None = None, row: str
     env = {k: v for k, v in os.environ.items()
            if k not in ("MATCH_IMPL", "MATCH_PIPELINE", "MATCH_PHASE", "VERITOR_REPO", "RESEARCH_RUN_DIR", "RESEARCH_RUN_ID")}
     env.update(environ or {})
+    # `prepare` creates the collector's build dir, whose default is a pod path (`/workspace/cp/...`) a non-root check can't create
     return cli.parse("row", ["run", row, "LLAMA32_1B", "unsloth/Llama-3.2-1B", "9535bd9b", "--sweep-dir", str(tmp), "--py", sys.executable,
-                             *argv], env)
+                             "--native-collect-default", str(tmp / "nc_build"), *argv], env)
 
 
 def _row(tmp: Path, *argv: str, **kw) -> SingleRow:
