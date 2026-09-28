@@ -4,7 +4,7 @@ import NciCheck.Check
 /-!
 # The NCI check's properties, stated against the Lean function
 
-`NciCheck.evaluate` (`verity/experimental/core/protocols/network/nci/lean/NciCheck/Check.lean`, package `nci_check`) is
+`NciCheck.evaluate` (`verity/core/protocols/network/nci/lean/NciCheck/Check.lean`, package `nci_check`) is
 the verifier's check of a declared division against the NCI policy, `Nci.Complies Γ α` (`Definitions/Nci.lean`), and
 `NciCheck.check` is `evaluate` with a refusal written `{"error": code}`. The difftest holds it to the Python reference on
 random instances; the statements here say what it computes on every instance. Each is a named `Prop`, proved as

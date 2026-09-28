@@ -30,7 +30,7 @@ from . import entries as E
 
 REPO = Path(__file__).resolve().parents[5]
 #: the packages whose modules may have a sidecar: the ones that define Definitions (`targets._authored`) and the templates'
-PACKAGES = ("verity", "verity.ml.circuits", "verity.ml.kernels", "verity.experimental", "verity_vllm", "verity_numerical",
+PACKAGES = ("verity", "verity.ml.circuits", "verity.ml.kernels", "verity.core", "verity_vllm", "verity_numerical",
             "verity_flock")
 SUFFIX = CC.SUFFIX
 #: the pins of a Definition no module defines, one file per pin

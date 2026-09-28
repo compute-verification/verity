@@ -8,7 +8,7 @@ FP8 capacity.
 2. The draw: re-derived from draws.json's `source` (drawn after the window root was written) over the window root and the
    salt, uniform over every credited tile, and it must be the tiles the cards opened.
 3. Each drawn tile: its GEMM's entry tagged(ENTRY, card, i, root_A, root_T) opens to its card's root (RFC 6962 path), B's
-   dumped tree has the window's B root, and `verity.experimental.protocols.pouw.audit.Verifier(scheme, epoch).check_tile` accepts it, with the GEMM's
+   dumped tree has the window's B root, and `verity.core.protocols.pouw.audit.Verifier(scheme, epoch).check_tile` accepts it, with the GEMM's
    one-unit epoch (the window's salt, B's root, matmul index card << 32 | i), its transcript (root_A, the tile tree's
    commitment) and the opening read from the dumps (tree_A, tree_T, the tile leaves, tree_B) and the fill's rows (A's set
    i mod 2, B).  The verifier recomputes the tile through the scheme on the CPU (about 11 s per 1,024 of k).
@@ -60,7 +60,7 @@ V = _load("pearl_c_sm120_verify", KERNEL / "verify.py")
 PT = _load("pouw_harness_price_twins", HARNESS / "price_twins.py")
 
 from verity.ml.commitments import Commitment  # noqa: E402
-from verity.experimental.protocols.pouw.audit import TileOpening, TileRef, Transcript, Verifier  # noqa: E402
+from verity.core.protocols.pouw.audit import TileOpening, TileRef, Transcript, Verifier  # noqa: E402
 
 EPS_S = DELTA_S = Fraction(1, 20)
 STATEMENT, PATH = "pearl-c-sm120/v1", "cast-8.72"

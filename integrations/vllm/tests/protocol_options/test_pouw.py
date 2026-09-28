@@ -1,5 +1,5 @@
 """The PoUW adapter (`protocol_options.pouw`): refusals, weights committed before any wrapper, the int7 linear served
-exactly, the executor's tiles equal to `verity.experimental.protocols.pouw`'s reference bit for bit, the weight read from the layer it is handed
+exactly, the executor's tiles equal to `verity.core.protocols.pouw`'s reference bit for bit, the weight read from the layer it is handed
 (so POUS's decoded weight is what the GEMM uses), and an uninstall that leaves the model as it was.
 
 CPU only, on numpy stand-ins for a linear layer; the hook site is the same ``quant_method.apply`` vLLM's ``LinearBase``
@@ -13,11 +13,11 @@ import types
 
 import numpy as np
 import pytest
-from verity.experimental.protocols.pouw.audit import Epoch, Workload, activation_binding, commit_rows, weight_binding, weights_root
-from verity.experimental.protocols.pouw.coins import Challenger, CoinCommitment, CoinOpening, coin_reason
-from verity.experimental.protocols.pouw.protocol import Context as UnitContext
-from verity.experimental.protocols.pouw.protocol import DomainError, Matmul, Shape, Tile
-from verity.experimental.protocols.pouw.schemes import SCHEMES, get
+from verity.core.protocols.pouw.audit import Epoch, Workload, activation_binding, commit_rows, weight_binding, weights_root
+from verity.core.protocols.pouw.coins import Challenger, CoinCommitment, CoinOpening, coin_reason
+from verity.core.protocols.pouw.protocol import Context as UnitContext
+from verity.core.protocols.pouw.protocol import DomainError, Matmul, Shape, Tile
+from verity.core.protocols.pouw.schemes import SCHEMES, get
 from verity_vllm import protocol_options as PO
 from verity_vllm.engine import hooks
 from verity_vllm.protocol_options import pouw
@@ -71,7 +71,7 @@ def _int7_linear(x, w, bias=None):
 # --- what the adapter refuses ------------------------------------------------------------------------------------------------
 
 def test_schemes_are_the_protocol_packages_and_only_ncp_and_pearl_c_sm120_are_executed():
-    from verity.experimental.protocols.pouw import circuit
+    from verity.core.protocols.pouw import circuit
     assert pouw.schemes() == tuple(sorted({*SCHEMES, *circuit.SCHEMES, *PPD.SCHEMES})) and "ncp-v1" in pouw.schemes()
     assert pouw.refusals("ncp-v1", _serve("pouw:ncp-v1")) == () and pouw.refusals("ncp-v2", _serve("pouw:ncp-v2")) == ()
     assert PO.refusals(_serve("pouw:ncp-v1")) == ()                           # through the selector, real adapter

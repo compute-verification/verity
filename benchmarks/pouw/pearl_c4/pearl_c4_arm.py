@@ -54,7 +54,7 @@ from arm import Buffer, Gate, Shape, Work
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
-for _p in (HERE, ROOT, ROOT / "verity" / "experimental" / "protocols" / "pouw"):
+for _p in (HERE, ROOT, ROOT / "verity" / "core" / "protocols" / "pouw"):
     if str(_p) not in sys.path:
         sys.path.append(str(_p))
 
@@ -68,8 +68,8 @@ LINE_IN = 37                           # seed ‖ role ‖ index u32
 
 def _ref():
     import twin as T
-    from verity.experimental.protocols.pouw import audit
-    from verity.experimental.protocols.pouw.schemes import pearl_c4 as F
+    from verity.core.protocols.pouw import audit
+    from verity.core.protocols.pouw.schemes import pearl_c4 as F
     return T, F, audit
 
 
@@ -234,7 +234,7 @@ class _PearlC4:
 
     def work(self, shape: Shape) -> Work:
         _, F, _ = _ref()
-        from verity.experimental.protocols.pouw.protocol import Shape as PShape
+        from verity.core.protocols.pouw.protocol import Shape as PShape
         m, k, n = shape.m, shape.k, shape.n
         mp = -(-m // TILE) * TILE
         s, ps = F.PearlC4(self.fmt), PShape(m, k, n)
@@ -254,8 +254,8 @@ class _PearlC4:
         key = (shape.label, operands.index, operands.seed, operands.b.ptr, weight)
         if key not in self._epochs:
             _, _, au = _ref()
-            from verity.experimental.protocols.pouw.protocol import Matmul
-            from verity.experimental.protocols.pouw.protocol import Shape as PShape
+            from verity.core.protocols.pouw.protocol import Matmul
+            from verity.core.protocols.pouw.protocol import Shape as PShape
             m_pad, k, n = -(-shape.m // TILE) * TILE, shape.k, shape.n
             beacon = hashlib.sha256(f"verity/pouw/pearl-c4-arm/beacon/{shape.label}/{operands.seed}/{operands.index}"
                                     .encode()).digest()
@@ -339,8 +339,8 @@ class _PearlC4:
         roles other than ``hash`` commit nothing per call, so there only B's are checked (A's are those `prepare` primed,
         of the operands before a dependent chain rewrote them)."""
         _, F, au = _ref()
-        from verity.experimental.protocols.pouw.protocol import Context, Matmul
-        from verity.experimental.protocols.pouw.protocol import Shape as PShape
+        from verity.core.protocols.pouw.protocol import Context, Matmul
+        from verity.core.protocols.pouw.protocol import Shape as PShape
         d, pl, k = self.d, call.pl, shape.k
         ta = self._commit_rows(shape, au.activation_binding(call.salt, 0), 0, pl.buf["xa"], call.m_pad, k)
         tb = self._commit_rows(shape, au.weight_binding(call.weight), -2, pl.buf["xb"], shape.n, k)

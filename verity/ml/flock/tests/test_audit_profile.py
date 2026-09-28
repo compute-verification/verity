@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from verity.ml.circuits.partition import Level
-from verity.experimental.protocols.profile import IntegrityProfile, Subset
+from verity.core.protocols.profile import IntegrityProfile, Subset
 
 AUDIT = Path(__file__).resolve().parents[4] / "Security" / "Proofs" / "Flock" / "Soundness" / "Audit"
 SUBSET_MISS = "(subset n k hk).miss K = ((n - K).choose k : ℝ≥0∞) / (n.choose k : ℝ≥0∞)"

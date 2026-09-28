@@ -1,0 +1,20 @@
+[project]
+name = "verity-core-firewall"
+version = "0.1.0"
+description = "Tests only: the firewall's release side in Lean (core_firewall) against Rust's flock_live::release and Python's verity_flock.firewall."
+requires-python = ">=3.12"
+dependencies = ["verity-flock", "verity-difftest", "hypothesis>=6.100"]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# `lake` builds this package and, through its path requires, C-Flock's verifier (`Flock.Firewall.Contract` and what it
+# imports; its `flock-firewall contract` decides the references' transcripts) and the core protocol interface; cargo builds
+# tests/rust, which compiles `verity/ml/flock/live/src/release.rs` (in verity-flock's directory) at the toolchain
+# `verity/ml/flock/check_build.sh` pins.
+inputs = ["verity/core/service/flock", "verity/core/protocols/interface"]

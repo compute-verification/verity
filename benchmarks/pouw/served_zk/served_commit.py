@@ -82,19 +82,19 @@ from verity.ml.commitments.merkle import CommitmentDomain, merkle_depth, tree_le
 from verity.ml.commitments.rowleaf import ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_V2, row_leaf, sha512_row_v2_digest
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.randomness import Key, derive
-from verity.experimental.protocols.pouw import window as Wd
-from verity.experimental.protocols.pouw.circuit import leaves as L
-from verity.experimental.protocols.pouw.circuit import pc8
-from verity.experimental.protocols.pouw.coins import Challenger as Coins
-from verity.experimental.protocols.pouw.coins import CoinCommitment, CoinOpening, coin_reason
-from verity.experimental.protocols.pouw.protocol import Context, DomainError, Matmul, Shape
-from verity.experimental.protocols.pouw.schemes import pearl_c as C
-from verity.experimental.protocols.pouw.schemes import pearl_kw as P
-from verity.experimental.protocols.sampled_proofs import service as S
-from verity.experimental.protocols.sampled_proofs.one_stage import draw as D
-from verity.experimental.protocols.sampled_proofs.one_stage import partition as PT
-from verity.experimental.protocols.sampled_proofs.one_stage import registration as R
-from verity.experimental.protocols.sampled_proofs.one_stage.verdict import Verdict, _Collect
+from verity.core.protocols.pouw import window as Wd
+from verity.core.protocols.pouw.circuit import leaves as L
+from verity.core.protocols.pouw.circuit import pc8
+from verity.core.protocols.pouw.coins import Challenger as Coins
+from verity.core.protocols.pouw.coins import CoinCommitment, CoinOpening, coin_reason
+from verity.core.protocols.pouw.protocol import Context, DomainError, Matmul, Shape
+from verity.core.protocols.pouw.schemes import pearl_c as C
+from verity.core.protocols.pouw.schemes import pearl_kw as P
+from verity.core.protocols.sampled_proofs import service as S
+from verity.core.protocols.sampled_proofs.one_stage import draw as D
+from verity.core.protocols.sampled_proofs.one_stage import partition as PT
+from verity.core.protocols.sampled_proofs.one_stage import registration as R
+from verity.core.protocols.sampled_proofs.one_stage.verdict import Verdict, _Collect
 
 SCHEMA = "verity-pouw/served-zk-window/v1"
 CHALLENGER = "served-zk/challenger"

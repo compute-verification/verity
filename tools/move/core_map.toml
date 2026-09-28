@@ -1,0 +1,94 @@
+# The core-verifiers move: what `tools/move/layout.py --map tools/move/core_map.toml` moves, renames and rewrites (Daniel,
+# 8 Oct 14:16Z: "Put the Python verifiers into core/", reversing the rule that `verity/core/` is Lean only).
+#
+# `verity/experimental/` goes. The Python verifiers (the protocol packages, the integrity profile and the claims they cite)
+# and core's Lean ports move under `verity/core/`; multiproofs and private circuits, which no verifier imports, join `verity/ml/`.
+# Whole packages move: none is split into prover and verifier halves here. The format is `layout_map.toml`'s; the hand
+# fixups that follow the generated move, as a commit of their own, are `tools/move/fixups/core.py`.
+
+[roots]
+old = { verity = "verity", verity_difftest = "verity/experimental/core/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_sp1 = "archive/sp1/python/verity_sp1", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli" }
+new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_sp1 = "archive/sp1/python/verity_sp1", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli" }
+
+[paths]
+# --- core/: the Python verifiers, whole: the protocols with the integrity profile, and the claims they cite
+"verity/experimental/protocols/" = "verity/core/protocols/"
+"verity/experimental/claims/" = "verity/core/claims/"
+# --- core/: the Lean ports, each beside the part it ports (primitives, protocols, service, devices) and the difftest
+# harness; `service/` already holds C-Flock's verifier (`flock/`), which stays
+"verity/experimental/core/" = "verity/core/"
+# PoUW's ports would land in the Python package, `window/` beside `window.py`: they join its Lean, `pouw/lean/`
+"verity/experimental/core/protocols/pouw/" = "verity/core/protocols/pouw/lean/"
+# --- ml/: what no verifier imports
+"verity/experimental/commitments/multiproof.py" = "verity/ml/commitments/multiproof.py"
+"verity/experimental/private_circuits/" = "verity/ml/private_circuits/"
+# --- tests: beside what each tests
+"verity/experimental/tests/commitments/" = "verity/ml/commitments/tests/"
+"verity/experimental/tests/private_circuits/" = "verity/ml/private_circuits/tests/"
+"verity/experimental/tests/network/" = "verity/core/protocols/network/tests/"
+"verity/experimental/tests/sampled_proofs/" = "verity/core/protocols/sampled_proofs/tests/"
+
+[retired]
+paths = ["verity/experimental/"]
+
+[drop]
+# the package levels that go (`verity.experimental`, its `commitments`), and experimental's suite, whose tests all moved
+paths = ["verity/experimental/__init__.py", "verity/experimental/commitments/__init__.py", "verity/experimental/pyproject.toml"]
+
+[split]
+
+[modules]
+# the renames [paths] and [roots] imply (`layout.py --modules`); every module under one follows it unless a longer entry
+# says otherwise
+"verity.experimental.claims" = "verity.core.claims"
+"verity.experimental.commitments.multiproof" = "verity.ml.commitments.multiproof"
+"verity.experimental.core" = "verity.core"
+"verity.experimental.core.protocols.pouw" = "verity.core.protocols.pouw.lean"
+"verity.experimental.private_circuits" = "verity.ml.private_circuits"
+"verity.experimental.protocols" = "verity.core.protocols"
+"verity.experimental.tests.commitments" = "verity.ml.commitments.tests"
+"verity.experimental.tests.network" = "verity.core.protocols.network.tests"
+"verity.experimental.tests.private_circuits" = "verity.ml.private_circuits.tests"
+"verity.experimental.tests.sampled_proofs" = "verity.core.protocols.sampled_proofs.tests"
+
+[aliases]
+# old names of package levels that the move removes, for readers of old data and bare imports
+"verity.experimental.commitments" = "verity.ml.commitments"
+
+[create]
+"verity/core/__init__.py" = '''
+"""Trusted code: the verifiers, every part with proven properties or on its way to them. C-Flock's executable verifier of
+record (`service/flock/`, Lean), the Python verifiers (`protocols`, with the integrity profile, and `claims`) and their Lean
+ports (`primitives`, `protocols`, `service`, `devices`, each held to today's Python by `difftest`). `Security/Models/` names
+the verifiers whose properties aren't proven yet. Core imports the parts of `verity.ml` that `tests/test_boundaries.py`'s
+`ALLOWED` lists, which are on the soundness path because core's verifiers read them; `verity.ml` never imports core."""
+'''
+"verity/ml/private_circuits/pyproject.toml" = '''# A suite of `verity`'s tests: they run in the workspace's environment, against the editable `verity`.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+inputs = ["verity"]
+'''
+
+[rewrite]
+# Never rewritten: records of what was, and files whose bytes a digest pins.
+exclude = ["*.lean", "fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "uv.lock", "tools/move/**",
+           "benchmarks/numerical/reports/**", "benchmarks/numerical/tests/bench/data/**", "**/price_twins.json",
+           "verity/ml/circuits/silicon/captures/**", "verity/ml/circuits/silicon/hawkeye/**",
+           "tools/verity/check/tests/test_suites.py",          # synthetic trees borrow old names
+           "tools/verity/check/tests/test_move_check.py",      # so do its synthetic moves
+           "tools/research/src/research/store/moves.json",     # each move's old paths, kept as they were
+           "benchmarks/tc_probe_fp4/fp4_emulation_1ad1aaa2.py"]
+# Dotted names that are no module, never rewritten, nor anything below them: PoUW's torch op (`verity_pouw.ncp_linear.default`)
+# is in the library namespace `verity_pouw`, which its registration names.
+keep_dotted = ["verity_pouw.ncp_linear"]
+# Rewritten although excluded above: data keyed by repository path (their pinned digests must not change).
+include = ["fixtures/artifacts.json", "**/fixtures/README.md",
+           "verity/experimental/tests/sampled_proofs/fixtures/exfiltration_lean.json",
+           "verity/core/protocols/sampled_proofs/tests/fixtures/exfiltration_lean.json",
+           "verity/ml/flock/tests/fixtures/randomness_lean.json",
+           "verity/experimental/protocols/pouw/tests/vectors/pearl_c_u.json", "verity/core/protocols/pouw/tests/vectors/pearl_c_u.json",
+           "**/lake-manifest.json", "verity/ml/circuits/silicon/captures/README.md"]

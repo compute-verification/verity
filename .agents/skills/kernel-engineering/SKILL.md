@@ -67,7 +67,7 @@ If it was tried and dropped, your hypothesis says what's different this time, or
 
 - **Exact semantics:** `verity.ml.circuits.silicon`. A newly captured step lands as a model with a sampled fixture and an
   `instructions` entry (`benchmarks/tc_probe`, `benchmarks/tc_probe_fp4`). A kernel directory never defines a second one.
-- **The scheme and its verifier:** `verity/experimental/protocols/pouw` (`verity.experimental.protocols.pouw`, stdlib only; its `PROTOCOL.md`).
+- **The scheme and its verifier:** `verity/core/protocols/pouw` (`verity.core.protocols.pouw`, stdlib only; its `PROTOCOL.md`).
 - **The kernel:** a directory under `benchmarks/pouw/`, like GPU 1's `pearl_c_sm120/` on #540: `run.py` (`Dev`,
   `Pipeline`), `fixture.py`, `build.sh`, its sources, and its harness arm against `arm.py`'s contract. Where serving
   kernels finally live is Daniel's call; the loader keys on digests, so a later move is cheap.
@@ -238,7 +238,7 @@ nobody.
 - **One owner per thing.** A kernel directory, the hashing module, the harness, the serving API and the panel each have
   one owner lane. Change theirs by a PR against their branch or a message to them, and review their PRs when they ask.
 - **Interfaces are data, in one place.** Scheme names, hashing formats, schedules, step groups and kernel variants are
-  defined once (`verity.experimental.protocols.pouw.serving`, #567). Never keep a local copy of such a table (tree hashes, keys, arm tables); if
+  defined once (`verity.core.protocols.pouw.serving`, #567). Never keep a local copy of such a table (tree hashes, keys, arm tables); if
   you find one, replace yours with the shared one, or tell its owner.
 - **Messages:** a one-line checkpoint per result in your status file. Message your coordinator (never through a note)
   only to unblock, to ask for a decision, or when your result changes someone's plan (lane contract §3a).

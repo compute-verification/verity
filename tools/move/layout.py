@@ -604,7 +604,7 @@ class Run:
                 self.split_reference(path, target, f"{path}: {token} -> {new_target}")
         else:
             new_target = self.L.file(target) or target
-        if path == old and new_target == target:
+        if path == old and new_target == target and not self._through_moved(posixpath.dirname(old), t):
             return None                                 # neither end moved: the token stays as written
         rel = posixpath.relpath(new_target, base_new or ".")
         if t.startswith("./") and not rel.startswith("."):
@@ -612,6 +612,17 @@ class Run:
         if plain and rel.startswith(".."):
             self.note("relative paths that now leave their directory", f"{path}: {t} -> {rel}")
         return rel + ("/." if dot else "") + ("/" if slash else "")
+
+    def _through_moved(self, base: str, t: str) -> bool:
+        """Whether relative path `t`, written from `base`, climbs back out of a directory the move takes away (a Lake
+        manifest's inherited `lms/lean/../../../../../core/service/flock`): as written it would stop resolving, so it is
+        rewritten to its normal form even when neither end moved."""
+        segs, cur = t.split("/"), base
+        for i, seg in enumerate(segs[:-1]):
+            cur = posixpath.normpath(posixpath.join(cur, seg))
+            if seg != ".." and ".." in segs[i + 1:] and self.L.directory(cur)[0] not in (None, cur):
+                return True
+        return False
 
     def _member_of(self, old: str) -> str | None:
         """The directory of the distribution (a pyproject.toml below the root) that file `old` belongs to."""

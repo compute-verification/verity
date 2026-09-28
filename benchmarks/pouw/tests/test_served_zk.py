@@ -16,16 +16,16 @@ from pathlib import Path
 import numpy as np
 import pytest
 from verity.ml.commitments.merkle import tree_levels
-from verity.experimental.protocols.pouw import window as Wd
-from verity.experimental.protocols.pouw.audit import Epoch, Workload, weights_root
-from verity.experimental.protocols.pouw.circuit import leaves as L
-from verity.experimental.protocols.pouw.coins import Challenger as Coins
-from verity.experimental.protocols.pouw.coins import CoinOpening, coin_reason
-from verity.experimental.protocols.pouw.protocol import Context, Matmul, Shape
-from verity.experimental.protocols.pouw.schemes import pearl_c as C
-from verity.experimental.protocols.pouw.schemes.pearl_c_device import DEVICES
-from verity.experimental.protocols.sampled_proofs import service as S
-from verity.experimental.protocols.sampled_proofs.one_stage import registration as R
+from verity.core.protocols.pouw import window as Wd
+from verity.core.protocols.pouw.audit import Epoch, Workload, weights_root
+from verity.core.protocols.pouw.circuit import leaves as L
+from verity.core.protocols.pouw.coins import Challenger as Coins
+from verity.core.protocols.pouw.coins import CoinOpening, coin_reason
+from verity.core.protocols.pouw.protocol import Context, Matmul, Shape
+from verity.core.protocols.pouw.schemes import pearl_c as C
+from verity.core.protocols.pouw.schemes.pearl_c_device import DEVICES
+from verity.core.protocols.sampled_proofs import service as S
+from verity.core.protocols.sampled_proofs.one_stage import registration as R
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "served_zk"))
 import served_commit as SC  # noqa: E402
@@ -134,7 +134,7 @@ def test_rows_are_the_schemes_operands(served):
     none of the call's kept rows."""
     scheme, ctx, noise, words = served
     assert words["a"][M] is None and all(w is not None for w in words["a"][:M] + words["b"])
-    from verity.experimental.protocols.pouw.protocol import Tile
+    from verity.core.protocols.pouw.protocol import Tile
     ops = scheme.encode(ctx, noise, _rows(1, M)[1:2], _rows(2, N)[3:4], Tile((1,), (3,)))
     assert words["a"][1] == L.words_fp8_p(ops.a.codes[0], ops.pa[0])
     assert words["b"][3] == L.words_fp8_p(ops.b.codes[0], ops.pb[0])

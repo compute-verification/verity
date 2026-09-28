@@ -37,11 +37,11 @@ from verity.ml.commitments.rowleaf import ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW
 from verity_flock import circuit as FC
 from verity_flock import class_statement as CS
 from verity_flock import ir_lower as IL
-from verity.experimental.protocols.pouw.circuit import leaves as L
-from verity.experimental.protocols.pouw.circuit import pc4
-from verity.experimental.protocols.pouw.circuit.anchors import TileAnchors, public_ports
-from verity.experimental.protocols.pouw.protocol import Context, Matmul, Shape
-from verity.experimental.protocols.pouw.schemes import pearl_c4 as F
+from verity.core.protocols.pouw.circuit import leaves as L
+from verity.core.protocols.pouw.circuit import pc4
+from verity.core.protocols.pouw.circuit.anchors import TileAnchors, public_ports
+from verity.core.protocols.pouw.protocol import Context, Matmul, Shape
+from verity.core.protocols.pouw.schemes import pearl_c4 as F
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
@@ -109,7 +109,7 @@ def main() -> None:
         for p in ports:
             rows[p] = np.array([r[p] for r in regs], dtype=np.uint16)
     elif ROLE.startswith(("tile", "hidden")):
-        V = _load("pouw_rows_vectors", ROOT / "verity" / "experimental" / "protocols" / "pouw" / "tests" / "pouw_rows_vectors.py")
+        V = _load("pouw_rows_vectors", ROOT / "verity" / "core" / "protocols" / "pouw" / "tests" / "pouw_rows_vectors.py")
         hidden = ROLE.startswith("hidden")
         if hidden:
             sys.path.insert(0, str(HERE))

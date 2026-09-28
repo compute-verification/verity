@@ -30,7 +30,7 @@ from verity.ml.commitments.merkle import CommitmentDomain
 from verity.ml.circuits.codec import canonical_json, encode_program, program_digest
 from verity.ml.circuits.program import Program
 from verity_numerical.bench.input_sets import InputSet
-from verity.experimental.protocols.sampled_proofs.one_stage import audit, draw as D, partition as P, registration as R
+from verity.core.protocols.sampled_proofs.one_stage import audit, draw as D, partition as P, registration as R
 
 HERE = Path(__file__).resolve().parent
 SCHEME = "frame-v3-sha512/hm96-sha512"

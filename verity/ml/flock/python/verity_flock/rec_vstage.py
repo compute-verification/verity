@@ -155,7 +155,7 @@ def message_rounds(public: dict, private: dict, sh: A.Shape) -> list[dict]:
 
 def messages(program: str, mrs: list[dict]) -> tuple[dict, dict]:
     """The prover's registrations ``rec-c<i>`` and the verifier's own entries of them (from the ``c_k`` alone), by port."""
-    from verity.experimental.protocols.sampled_proofs.one_stage import registered as RG
+    from verity.core.protocols.sampled_proofs.one_stage import registered as RG
 
     regs, own = {}, {}
     for i, mr in enumerate(mrs):
@@ -197,7 +197,7 @@ def acc_salts(path: Path, n: int) -> list[bytes]:
 
 def forge_chain(chain: O.Chain, row: int) -> O.Chain:
     """The prover's running sums with row ``row`` one bit off (its first word), every other row and every salt honest."""
-    from verity.experimental.protocols.sampled_proofs.one_stage import registered as RG
+    from verity.core.protocols.sampled_proofs.one_stage import registered as RG
 
     rows = [list(r) for r in chain.reg.rows]
     rows[row][0] ^= 1

@@ -65,7 +65,7 @@
       "usergroup": "S0C5Q6KJZTQ",
       "owns": [
         "verity/",
-        "verity/experimental/protocols/sampled_proofs/",
+        "verity/core/protocols/sampled_proofs/",
         "benchmarks/one_stage/",
         "benchmarks/commitments/",
         "archive/sp1/benchmarks/dot_product/",
@@ -92,11 +92,11 @@
     {
       "handle": "compute-accounting",
       "holder": "the compute-accounting coordinator (bc-e90634dd-8e87-5b7b-8ecd-97abfd87e3fa)",
-      "remit": "Proof of useful work: verity/experimental/protocols/pouw, its schemes and their runs.",
+      "remit": "Proof of useful work: verity/core/protocols/pouw, its schemes and their runs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
       "usergroup": "S0C5U3Q04JD",
       "owns": [
-        "verity/experimental/protocols/pouw/",
+        "verity/core/protocols/pouw/",
         "Security/Definitions/Pouw/",
         "Security/Models/Pouw/",
         "Security/Proofs/Pouw/",
@@ -110,11 +110,11 @@
     {
       "handle": "memory-accounting",
       "holder": "the memory-accounting coordinator (bc-15ada664-f325-5371-a473-65d408be3cf5)",
-      "remit": "Proof of useful space: verity/experimental/protocols/pous, its Lean package and its runs.",
+      "remit": "Proof of useful space: verity/core/protocols/pous, its Lean package and its runs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
       "usergroup": "S0C5VRGBZFE",
       "owns": [
-        "verity/experimental/protocols/pous/",
+        "verity/core/protocols/pous/",
         "Security/Definitions/Pous/",
         "Security/Models/Pous/",
         "Security/Proofs/Pous/",
@@ -124,11 +124,11 @@
     {
       "handle": "network-accounting",
       "holder": "the network-accounting coordinator (bc-ecea50f6-c509-5918-b17a-d2148d57728f)",
-      "remit": "Network accounting: the network certifier (verity/experimental/protocols/certifier) and its timing-channel proofs.",
+      "remit": "Network accounting: the network certifier (verity/core/protocols/certifier) and its timing-channel proofs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
       "usergroup": "S0C6LGGSY6L",
       "owns": [
-        "verity/experimental/protocols/certifier/",
+        "verity/core/protocols/certifier/",
         "Security/Definitions/NetworkCertifier/",
         "Security/Models/NetworkCertifier/",
         "Security/Proofs/NetworkCertifier/",

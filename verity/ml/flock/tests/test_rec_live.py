@@ -10,7 +10,7 @@ import struct
 
 import pytest
 from verity_flock import rec_live as RL
-from verity.experimental.protocols.sampled_proofs.one_stage import registered as G
+from verity.core.protocols.sampled_proofs.one_stage import registered as G
 
 
 def _counter_rand():

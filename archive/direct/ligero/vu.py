@@ -317,7 +317,7 @@ def auth_trees_for(vu: instances.VuTier, root: Path, total_vus: int, cache: str 
             "leaf": "H('leaf' | domain_id | uint(rank) | uint(position) | 'u16' | word as 2 big-endian bytes)",
             "domain": "CommitmentDomain(binding, owner, RangeIndexedDomain(0, count)); binding = identity_digest("
                       f"{auth_mod.BINDING_TAG!r}, {{dataset, tier, manifest_sha256, vu_lo, vu_hi, K, tree, schema}})",
-            "multiproof": "canonical shared-path multiproof of verity.experimental.commitments.multiproof (per level, ascending, the "
+            "multiproof": "canonical shared-path multiproof of verity.ml.commitments.multiproof (per level, ascending, the "
                           "sibling of every known node whose sibling is not known)",
             "trees": {n: {"count": t.count, "depth": merkle_depth(t.count), "root": t.root.hex(),
                           "binding": t.ref.binding.hex(), "owner": t.ref.owner} for n, t in trees.items()},

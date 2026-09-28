@@ -1,0 +1,16 @@
+# `verity.ml.randomness` v2 as executable Lean: `derive`, the counter-mode stream, `shard` and the exact samplers, on
+# C-Flock's SHA-512 and `Flock.Draw`. PoUW, PoUS and the one-stage audit import it; the soundness proofs' keyed-draw
+# theorems are about it. No Mathlib.
+name = "core_randomness"
+defaultTargets = ["Randomness"]
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+
+[[require]]
+name = "flock_verifier"
+path = "../../service/flock"
+
+[[lean_lib]]
+name = "Randomness"

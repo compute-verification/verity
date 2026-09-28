@@ -170,7 +170,7 @@ def test_the_task_lists_differences_ignore_which_file_names_a_unit():
 
 
 #: the source roots the migration reads and writes, copied whole
-COPIED = ("tools/verity/circuit_check", ".", "integrations/vllm/verity_vllm", "verity/experimental/protocols/pouw",
+COPIED = ("tools/verity/circuit_check", ".", "integrations/vllm/verity_vllm", "verity/core/protocols/pouw",
           "benchmarks/numerical/python", "verity/ml/flock/python")
 
 

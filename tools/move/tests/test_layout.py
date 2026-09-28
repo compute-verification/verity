@@ -140,6 +140,26 @@ def test_a_reference_to_a_directory_the_map_splits_fails_unless_split_acknowledg
     assert branch.returncode == 0 and "gates.toml: backends/flock (" in branch.stdout, branch.stderr
 
 
+def test_a_relative_path_through_a_moved_directory_is_normalized_though_neither_end_moved(tmp_path):
+    """Lake writes an inherited path requirement as its requirer's path joined to the requirement's own, so a manifest that
+    stays can name a directory that stays through one that moves (`lms/lean/../../../../core/service/flock`); as written it
+    would stop resolving. One that never leaves a moved directory is a path the move doesn't touch, and keeps its text."""
+    r = tmp_path / "repo"
+    manifest = '{"packages": [{"type": "path", "dir": "../old/lms/lean/../../../keep/flock"}, {"type": "path", "dir": "../keep/x/../flock"}]}\n'
+    files = {"old/lms/lean/lakefile.toml": "", "keep/flock/lakefile.toml": "", "keep/x/a.txt": "", "pkg/lake-manifest.json": manifest,
+             "tools/research/src/research/store/moves.json": '{"moves": []}\n'}
+    for p, t in files.items():
+        (r / p).parent.mkdir(parents=True, exist_ok=True)
+        (r / p).write_text(t)
+    (tmp_path / "map.toml").write_text('[roots]\nold = {}\nnew = {}\n\n[paths]\n"old/" = "new/"\n\n[modules]\n"old" = "new"\n')
+    git(r, "init", "-q", "-b", "main")
+    git(r, "add", "-A")
+    git(r, "commit", "-q", "-m", "old")
+    subprocess.run(["python3", str(LAYOUT), "--root", str(r), "--map", str(tmp_path / "map.toml"), "--no-lock"], check=True,
+                   capture_output=True)
+    assert (r / "pkg/lake-manifest.json").read_text() == manifest.replace("../old/lms/lean/../../../keep/flock", "../keep/flock")
+
+
 def test_rust_literals_spans_strings_and_skips_comments_chars_and_lifetimes():
     text = '''// "no" \n/* "no" /* "nested" */ */ let a = "x\\"y"; let b = br##"r"#"##; let c = '"'; fn f<'a>() { "z" }'''
     got = [text[s:e] for s, e in L.rust_literals(text)]

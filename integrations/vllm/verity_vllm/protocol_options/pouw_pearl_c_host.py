@@ -11,7 +11,7 @@ from typing import Any
 
 from verity.ml.commitments import RangeIndexedDomain
 from verity.ml.commitments.merkle import domain_message
-from verity.experimental.protocols.pouw.audit import HM96, activation_binding, rows_domain
+from verity.core.protocols.pouw.audit import HM96, activation_binding, rows_domain
 
 #: the pinned ring's key slots (each call's dom_a ‖ unit, 168 bytes)
 UPLOAD_SLOTS = 1024

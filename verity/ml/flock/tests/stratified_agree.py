@@ -1,4 +1,4 @@
-"""The Lean verifier's stratified draw against core's (PR #164's `verity.experimental.protocols.sampled_proofs.one_stage.draw`, PR #161's `Stratified`).
+"""The Lean verifier's stratified draw against core's (PR #164's `verity.core.protocols.sampled_proofs.one_stage.draw`, PR #161's `Stratified`).
 
 For each program (A4 P6's six-template population, as #164's test builds it, and small and random programs):
 
@@ -141,7 +141,7 @@ def main() -> int:
     ap.add_argument("--seed", type=int, default=20260927)
     a = ap.parse_args()
     from verity.ml.circuits.codec import canonical_json, encode_program
-    from verity.experimental.protocols.sampled_proofs.one_stage import audit, draw as D, partition as P
+    from verity.core.protocols.sampled_proofs.one_stage import audit, draw as D, partition as P
 
     rng = random.Random(a.seed)
     out = a.out or Path(tempfile.mkdtemp(prefix="stratified-agree-"))

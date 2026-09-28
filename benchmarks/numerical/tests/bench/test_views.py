@@ -937,7 +937,7 @@ def test_cli_entities(store: LocalStore, capsys: pytest.CaptureFixture[str]) -> 
 
 
 def test_entities_table1_claims_are_properties_with_the_assumptions_they_rest_on_and_their_declared_roles() -> None:
-    from verity.experimental import claims
+    from verity.core import claims
 
     ent = V.render_entities(V.Views(rules=V.SPEC), rendered_at="2026-09-25T23:00:00Z", commit="abc")
     cfgs = {c["variant"]: c for c in V.configuration_records(V.Views(rules=V.SPEC))}
@@ -1083,7 +1083,7 @@ def test_entities_schemes_carry_the_hash_assumptions_their_configurations_declar
     assert "statement commitment (frame-v3 trees)" in b3["assumption_details"][0]["roles"]
     assert {"B-Ligero + BLAKE3 in circuit", V.ROUTE_A, V.FLOCK_CONFIG.id} <= set(b3["implementations"])
     assert all(r["scheme"] in sch for r in ent["results"])
-    from verity.experimental import claims
+    from verity.core import claims
     assert all(claims.get(i).kind == "assumption" for s in sch.values() for i in s["assumptions"])
 
 

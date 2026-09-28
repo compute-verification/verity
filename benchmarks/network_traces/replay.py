@@ -56,13 +56,13 @@ from collections.abc import Iterable, Sequence
 from fractions import Fraction
 from pathlib import Path
 
-from verity.experimental.protocols.certifier import online
-from verity.experimental.protocols.certifier.audit import Audit
-from verity.experimental.protocols.certifier.calibration import choose_syncs
-from verity.experimental.protocols.certifier.certificate import Direction, Issuer, parameters_digest
-from verity.experimental.protocols.certifier.commitment import commit
-from verity.experimental.protocols.certifier.grid import GridParams, Record, Certifier
-from verity.experimental.protocols.certifier.schedule import ClockSync, LogicalFrame, SyncSet, expected_grids, handing_buckets, run_shaper
+from verity.core.protocols.certifier import online
+from verity.core.protocols.certifier.audit import Audit
+from verity.core.protocols.certifier.calibration import choose_syncs
+from verity.core.protocols.certifier.certificate import Direction, Issuer, parameters_digest
+from verity.core.protocols.certifier.commitment import commit
+from verity.core.protocols.certifier.grid import GridParams, Record, Certifier
+from verity.core.protocols.certifier.schedule import ClockSync, LogicalFrame, SyncSet, expected_grids, handing_buckets, run_shaper
 
 REPLAY_FRAME_BYTES = 8
 PERCENTILES = (50, 99, 99.9)

@@ -1336,6 +1336,20 @@
         "Security/Specs.lean": "Security/Models.lean",
         "Security/Specs/": "Security/Models/"
       }
+    },
+    {
+      "paths": {
+        "verity/experimental/protocols/": "verity/core/protocols/",
+        "verity/experimental/claims/": "verity/core/claims/",
+        "verity/experimental/core/": "verity/core/",
+        "verity/experimental/core/protocols/pouw/": "verity/core/protocols/pouw/lean/",
+        "verity/experimental/commitments/multiproof.py": "verity/ml/commitments/multiproof.py",
+        "verity/experimental/private_circuits/": "verity/ml/private_circuits/",
+        "verity/experimental/tests/commitments/": "verity/ml/commitments/tests/",
+        "verity/experimental/tests/private_circuits/": "verity/ml/private_circuits/tests/",
+        "verity/experimental/tests/network/": "verity/core/protocols/network/tests/",
+        "verity/experimental/tests/sampled_proofs/": "verity/core/protocols/sampled_proofs/tests/"
+      }
     }
   ]
 }

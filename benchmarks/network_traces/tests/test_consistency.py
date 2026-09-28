@@ -9,8 +9,8 @@ import json
 import sys
 from pathlib import Path
 
-from verity.experimental.protocols.certifier.active import DATA, encode_frame
-from verity.experimental.protocols.certifier.grid import COMPLETE, Record
+from verity.core.protocols.certifier.active import DATA, encode_frame
+from verity.core.protocols.certifier.grid import COMPLETE, Record
 
 HERE = Path(__file__).resolve().parents[1]
 B = 4096

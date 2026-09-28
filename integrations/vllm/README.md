@@ -120,7 +120,7 @@ and the embedding shard layout (`embedding_shard.py`).
 above would import.
 
 The stdlib-only core of `verity_ir` (`types refs defs program layout evaluate query codec parts query_codec`, `gateset`
-as `query_ast`) is `verity.ml.circuits` in `verity`, and its `plan` is `verity.experimental.protocols.sampled_proofs.plan` in `verity/experimental/protocols/sampled_proofs`; the on-demand primitive families
+as `query_ast`) is `verity.ml.circuits` in `verity`, and its `plan` is `verity.core.protocols.sampled_proofs.plan` in `verity/core/protocols/sampled_proofs`; the on-demand primitive families
 veritor hardcoded in `codec.py` are registered by `verity_vllm/program/registry/__init__.py` through `verity.ml.circuits.codec.register_lazy_family`.
 
 ## Vocabulary (frozen; Notion "vLLM integration v2 — Draft 3" §12)
@@ -230,13 +230,13 @@ alone, the Commit as it has always run), `run_row` refuses a set it cannot run b
 the others once its committers registered the weights of record (the replay reads live weights through what an option
 released: `protocol_options.weights_view`).  Adapters install innermost first (PoUW replaces the linear GEMMs, POUS decodes the
 weights they read, sampled proofs commits what the model computed) and uninstall in reverse, every patch and service through
-`engine/hooks.py` tagged with its option.  The protocol logic is `verity.experimental.protocols.pouw`, `verity.experimental.protocols.pous` and `verity.experimental.protocols.sampled_proofs`';
+`engine/hooks.py` tagged with its option.  The protocol logic is `verity.core.protocols.pouw`, `verity.core.protocols.pous` and `verity.core.protocols.sampled_proofs`';
 the adapters (`pouw.py`, `pous.py`, `sampled_proofs.py`) are thin.  A Commit admits only options its Program describes (POUS's
 bit-identical decode; an executor whose scheme has a circuit in its protocol package, `protocol_options.CIRCUITS` and
 `traced_as`: PoUW's `ncp-v2`), so its verdict is of record as usual and carries the set
 (`verdict.protocols`) and the composition record's digest.
 PoUW is refused beside sampled proofs until its modeled circuit lands (its `traced_as` is None).  PoUW's settings are `coins` (the epoch's challenger,
-`verity.experimental.protocols.pouw.coins.Challenger`, held in the auditor's process: install opens its salt coin
+`verity.core.protocols.pouw.coins.Challenger`, held in the auditor's process: install opens its salt coin
 after the weights' root and refuses without one; a pipeline that is its run's own auditor supplies one,
 `pouw.challenged`), `retain_steps` and `transcript_dir`. Its weight operands are formed per forward from the weight each call is handed, so
 PoUW keeps no weight-derived copy and POUS composes with it. A call holds the formed operands of the one layer it

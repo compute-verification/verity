@@ -333,7 +333,7 @@ The draw is the object
 ~~~
 
 **The stratified law** is the default (Daniel, Sep 27; the encoding is `note:20260927T1550Z-handoff-from-stratified-law`,
-the same as `verity.experimental.protocols.sampled_proofs.one_stage`'s, in `verity/experimental/protocols/sampled_proofs/README.md`):
+the same as `verity.core.protocols.sampled_proofs.one_stage`'s, in `verity/core/protocols/sampled_proofs/README.md`):
 - **Strata.** The verifier derives them from its own program and partition object, never from anyone else
   (`HmRow.stratifiedLaw`, `flock-verify draw --program P --partition Q --stratified K`). It applies the query, groups the
   units by the template descriptor id of their root node, and writes each stratum's units as ascending, disjoint, non-empty
@@ -407,7 +407,7 @@ and the record keeps it as `unit_draw`. The offline checks:
 | U3 | the statement's `instances` is the number of drawn units and their closure. A work draw's closure must be the verifier's own derivation from its closure map, and `verify` refuses a closure draw without the map |
 
 `stratified_agree.py` checks the Lean verifier's laws, draws and U2 verdicts against core's (#164's
-`verity.experimental.protocols.sampled_proofs.one_stage.draw`, #161's `Stratified`).
+`verity.core.protocols.sampled_proofs.one_stage.draw`, #161's `Stratified`).
 
 Offline, the draw's uniformity is not checkable; soundness rests on the verifier's honest draw after registration. A
 session without a draw on either side is unchanged. The live side (PR #83) sends the draw after registration, stages the

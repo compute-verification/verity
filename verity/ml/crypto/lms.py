@@ -1,6 +1,6 @@
 """A stateful hash-based signature: LMS with LM-OTS (RFC 8554) over SHA-512, in plain Python, the scheme of the network
 certifier's certificates and the memory challenger's records, and the reference of their in-proof verifier
-(`verity.ml.commitments.gates.lms`). Its security is the claim ``euf-cma/lms-sha512-n64`` (`verity.experimental.claims`).
+(`verity.ml.commitments.gates.lms`). Its security is the claim ``euf-cma/lms-sha512-n64`` (`verity.core.claims`).
 
 **Use.** One key per device per role. ``keygen(DEPLOYED, seed)`` (seed: N = 64 secret bytes the device keeps), then once
 ``LeafState.create(path, public_key(key), DEPLOYED.H)``; to sign, ``sign(key, state, message)`` with ``state = LeafState(path,

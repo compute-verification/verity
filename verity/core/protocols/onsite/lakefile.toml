@@ -1,0 +1,28 @@
+# Onsite Verity as one `Core.Protocol` (`verity/onsite/v0`): the composition of integrity (sampled proofs), work (PoUW),
+# space (PoUS) and communication (the network certifier), each a stub until its port lands. Its executable is the core CLI
+# (`onsite id | check | serve`), which the difftest drives. Code: no Mathlib.
+name = "core_onsite"
+defaultTargets = ["CoreOnsite", "onsite"]
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+
+[[require]]
+name = "flock_verifier"
+path = "../../service/flock"
+
+[[require]]
+name = "core_protocol"
+path = "../interface"
+
+[[require]]
+name = "core_composition"
+path = "../composition"
+
+[[lean_lib]]
+name = "CoreOnsite"
+
+[[lean_exe]]
+name = "onsite"
+root = "OnsiteMain"

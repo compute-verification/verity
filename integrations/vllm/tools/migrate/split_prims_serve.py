@@ -62,7 +62,7 @@ FIXTURE = "tools/verity/circuit_check/tests/fixtures/split/prims_serve.json"
 DEFINITION_MODULES = ("__init__", "catalog", "prims", "ref_prims", "pad_prims", "lifted", "tables", "value_inputs", "operand_widths",
                       "b1", "b1_tp2", "serve3", "spec", "pouw_rows")
 #: a Definition module's import of a Definition module outside the registry, with the reason it stays
-BOUNDARY_EXCEPTIONS = {("pouw_rows", "verity.experimental.protocols.pouw.circuit.ncp2"): "NcpDequant is PoUW's own Definition (`verity.experimental.protocols.pouw`), which this "
+BOUNDARY_EXCEPTIONS = {("pouw_rows", "verity.core.protocols.pouw.circuit.ncp2"): "NcpDequant is PoUW's own Definition (`verity.core.protocols.pouw`), which this "
                        "row binds; the catalog will import it from PoUW, not from the integration"}
 
 
@@ -1543,7 +1543,7 @@ def inventory(root: Path = REPO) -> str:
                 if isinstance(n, (ast.Import, ast.ImportFrom)):
                     mods = [a.name for a in n.names] if isinstance(n, ast.Import) else [_absolute(n, REG)]
                     for m in mods:
-                        if m.startswith(PKG) or m.startswith("verity.experimental.protocols.pouw"):
+                        if m.startswith(PKG) or m.startswith("verity.core.protocols.pouw"):
                             where = next((f"{p.kind}, moves to `{p.dst[len(PKG) + 1:]}`" for p in PARTS if p.src == name
                                           and any(n.lineno >= s.lineno and n.end_lineno <= s.end_lineno for s in tree.body
                                                   if _defined(s) & set(p.names))), None)

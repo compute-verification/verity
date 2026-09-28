@@ -1,0 +1,25 @@
+[project]
+name = "verity-core-composition"
+version = "0.0.0"
+description = "The difftest of onsite's and remote's Lean (core_composition, core_onsite, core_remote) against the trial's composition rule with reject dominance."
+requires-python = ">=3.12"
+dependencies = ["verity-difftest"]
+
+# Not an installable package: a workspace member so that its tests run in the workspace environment.
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# Test-only: `lake` builds the onsite and remote packages beside this one (each product's executable, whose `serve` the
+# harness drives) and, through their path requires, the core interface and these files of C-Flock's verifier (canonical
+# JSON, bytes, SHA-512, and the package's configuration).
+inputs = ["verity/core/protocols/onsite", "verity/core/protocols/remote",
+          "verity/core/protocols/interface",
+          "verity/core/service/flock/lakefile.toml", "verity/core/service/flock/lake-manifest.json",
+          "verity/core/service/flock/lean-toolchain", "verity/core/service/flock/Flock/Field.lean",
+          "verity/core/service/flock/Flock/Bytes.lean", "verity/core/service/flock/Flock/Canon.lean",
+          "verity/core/service/flock/Flock/Hash.lean"]

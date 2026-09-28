@@ -98,25 +98,25 @@ DOCS: dict[str, tuple[str, dict[str, str]]] = {
 #: `_pouw_roots` split by module: the digest of the function it splits (`_digest`) and each module's function.  The suite
 #: checks every binding file's `_pouw_roots` whatever their size (`targets.suite`)
 POUW: tuple[str, dict[str, str]] = ("95c09339a3fda91f", {
-    "verity.experimental.protocols.pouw.circuit.cap": '''
+    "verity.core.protocols.pouw.circuit.cap": '''
 def _pouw_roots() -> list[Any]:
     """The prototype of Pearl-C's per-tile cap: its row (pc8's with the salt-dead counts), its word and a one-word tile at
     k = 256 (two promotion windows) on sm_120, the split's units (the strip, the word unit, a tile row's digests and sums,
     the tile and its tally) at the same k, and a tile row's digests and sums at the deployed 64 columns (two chunks)."""
     from verity.ml.circuits.defs import bind
-    from verity.experimental.protocols.pouw.circuit import cap
+    from verity.core.protocols.pouw.circuit import cap
 
     out = [*cap.templates(256, "sm120").values()]
     out += [t for r, t in cap.unit_templates(256, "sm120").items()
             if r in ("strip", "word", "row_digest", "row_tally", "tile", "tally")]
     return out + [bind(cap.Pc8CapRowDigestDef, TN=64), bind(cap.Pc8CapRowTallyDef, K=256, TN=64)]
 ''',
-    "verity.experimental.protocols.pouw.circuit.ncp2": '''
+    "verity.core.protocols.pouw.circuit.ncp2": '''
 def _pouw_roots() -> list[Any]:
     """`ncp-v2`'s unit templates at k = 64, and the smallest whole call, its weight side and a window of two calls on it, for
     both P's (`ncp-v2`'s word P and `ncp-v2-shift24`); the package's own tests check their template partitions and the Z
     separator."""
-    from verity.experimental.protocols.pouw.circuit import ncp2
+    from verity.core.protocols.pouw.circuit import ncp2
 
     shape = ncp2.Shape(16, 64, 16)
     out = []
@@ -125,15 +125,15 @@ def _pouw_roots() -> list[Any]:
         out += [ncp2.linear(shape, kind), ncp2.weight(shape, kind), ncp2.window(shape, 2, kind)]
     return out
 ''',
-    "verity.experimental.protocols.pouw.circuit.pc4": '''
+    "verity.core.protocols.pouw.circuit.pc4": '''
 def _pouw_roots() -> list[Any]:
     """Pearl-C4's tile check: its unit templates at k = 64 with a one-word tile (small enough to lower whole), and its weight
     side, call side and whole check at one row a side; its hiding tiles and roots (``hidden``: the tile digest,
-    `verity.experimental.protocols.pouw.circuit.leaves`; their rows are C-Flock's ports) at the same shapes; and its roots with the row units cut
-    along k (`verity.experimental.protocols.pouw.circuit.rowk`, ``Shape.row_k``) in two segments at k = 128, plain and hiding."""
+    `verity.core.protocols.pouw.circuit.leaves`; their rows are C-Flock's ports) at the same shapes; and its roots with the row units cut
+    along k (`verity.core.protocols.pouw.circuit.rowk`, ``Shape.row_k``) in two segments at k = 128, plain and hiding."""
     from dataclasses import replace
 
-    from verity.experimental.protocols.pouw.circuit import pc4
+    from verity.core.protocols.pouw.circuit import pc4
 
     tile = pc4.Shape(1, 64, 1, tile=(1, 1))
     out = [*pc4.templates(64, tile.tile).values(), pc4.weight(tile), pc4.call(tile), pc4.check(tile)]
@@ -144,16 +144,16 @@ def _pouw_roots() -> list[Any]:
     seen = {t.id for t in out}
     return out + [t for t in cut if t.id not in seen and not seen.add(t.id)]
 ''',
-    "verity.experimental.protocols.pouw.circuit.pc8": '''
+    "verity.core.protocols.pouw.circuit.pc8": '''
 def _pouw_roots() -> list[Any]:
     """Pearl-C's tile check as Pearl-C4's at k = 128 (one promotion window): its templates on the H100's and sm_120's
     records and its roots on sm_120's; its hiding templates and roots on sm_120's; its hiding roots with the per-tile cap
-    (``Shape.cap``, `verity.experimental.protocols.pouw.circuit.cap`) at k = 256 (two promotion windows) on sm_120's with
-    one row a side; and its roots with the row units cut along k (`verity.experimental.protocols.pouw.circuit.rowk`,
+    (``Shape.cap``, `verity.core.protocols.pouw.circuit.cap`) at k = 256 (two promotion windows) on sm_120's with
+    one row a side; and its roots with the row units cut along k (`verity.core.protocols.pouw.circuit.rowk`,
     ``Shape.row_k``) in two segments at k = 256 on sm_120's, plain and hiding."""
     from dataclasses import replace
 
-    from verity.experimental.protocols.pouw.circuit import pc8
+    from verity.core.protocols.pouw.circuit import pc8
 
     tile8 = pc8.Shape(1, 128, 1, tile=(1, 1), dev="sm120")
     out = [*pc8.templates(128, tile8.tile, "h100").values(), *pc8.templates(128, tile8.tile, "sm120").values(),
@@ -168,11 +168,11 @@ def _pouw_roots() -> list[Any]:
     seen = {t.id for t in out}
     return out + [t for t in cut if t.id not in seen and not seen.add(t.id)]
 ''',
-    "verity.experimental.protocols.pouw.circuit.rowk": '''
+    "verity.core.protocols.pouw.circuit.rowk": '''
 def _pouw_roots() -> list[Any]:
     """Both tile checks' row units cut along k (``Shape.row_k``) in two segments: Pearl-C4's pieces at k = 128, and Pearl-C's
     at k = 256 on the H100's and sm_120's records and at k = 64 unpromoted."""
-    from verity.experimental.protocols.pouw.circuit import rowk
+    from verity.core.protocols.pouw.circuit import rowk
 
     cut = [p for side in ("a", "b") for pieces in (rowk.pieces4(128, 64, side), rowk.pieces8(256, 128, "h100", side),
                                                     rowk.pieces8(256, 128, "sm120", side),

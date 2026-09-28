@@ -813,7 +813,7 @@ outer session of the stream and every open, and `rec_live` closes the next conne
 recursive session the worker abandons, asking for no statement after some release, ends where it stands for the
 challenger (its next proof never comes, `late`), but the firewall records no stop until a request comes, so its own count
 misses it; the challenger's stream counts it. b is the challenger's stream's `budget` (P1's `Stream(budget=...)`,
-`verity/experimental/protocols/sampled_proofs/service.py` on `cursor/proof-service-95d4`, bound into the stream's digest),
+`verity/core/protocols/sampled_proofs/service.py` on `cursor/proof-service-95d4`, bound into the stream's digest),
 and the two must agree in three places: the same b, the same stream (one firewall stream a challenger stream), and one
 recursive session a registration, so that each firewall failure is one `reject` or `late` there. A stop shows the
 challenger a cut or a missing proof, which is `late` or `reject`; a session the firewall refuses after its stop sends

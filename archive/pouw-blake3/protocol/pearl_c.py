@@ -29,7 +29,7 @@ leaf      for each tile row r and each 32-column chunk h: d_rh = TurboSHAKE128(l
           D = 0x21); leaf = TurboSHAKE128(d_00 ‖ d_01 ‖ d_10 ‖ … , D = 0x22), 32 bytes each
           (hashing format -h1: BLAKE3 keyed by blake3("pearl-c/h1/message") and blake3("pearl-c/h1/leaf") in their places;
           -h3s: the leaf is `sha512/row-seg/v1` over the messages themselves, 64 bytes)
-trees     A's rows, B's rows and the tile leaves: `verity.experimental.protocols.pouw.audit`'s framed SHA-256 Merkle trees
+trees     A's rows, B's rows and the tile leaves: `verity.core.protocols.pouw.audit`'s framed SHA-256 Merkle trees
           (-h1: `frame-b3`, BLAKE3 keyed by the domain id, each row leaf through BLAKE3's chunk tree;
           -h2: `frame-b3s`, -h1 with each leaf a tree over its value's 256-byte segments, each segment's key binding its
           position, the value's length and the leaf's rank, position and schema;
@@ -104,7 +104,7 @@ TILE = 64
 CHUNK = 32                         # columns per ticket message
 D_MESSAGE, D_LEAF = 0x21, 0x22     # TurboSHAKE128 domain bytes
 LABELS = {r: f"pearl-c/v0/{r}".encode() for r in ("seed-A", "seed-B")}
-#: The hashing formats this scheme implements, of the one table (`verity.experimental.protocols.pouw.serving.HASH_FORMATS`): h0 (TurboSHAKE128
+#: The hashing formats this scheme implements, of the one table (`verity.core.protocols.pouw.serving.HASH_FORMATS`): h0 (TurboSHAKE128
 #: messages and leaf, SHA-256 trees), h1 (BLAKE3 throughout, for decode latency) and h2 (h1's messages and leaf; every tree
 #: `frame-b3s`, 256-byte segments under each leaf, for a shallower A commitment), h3 (h2, with E_A seeded per row from the
 #: row's leaf) and h3s (h3 through SHA-512: `s512` seeds, lines and tickets, a `sha512/row-seg/v1` tile leaf and `audit.HM96`

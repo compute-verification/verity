@@ -1,4 +1,4 @@
-"""Pinned vectors for ``pearl-c-h100-v0``: ``uv run python verity/experimental/protocols/pouw/tests/pearl_c_vectors.py`` rewrites
+"""Pinned vectors for ``pearl-c-h100-v0``: ``uv run python verity/core/protocols/pouw/tests/pearl_c_vectors.py`` rewrites
 ``tests/vectors/pearl_c.json``.  A change to that file is a change to the scheme and needs a reason in the PR.
 
 Inputs are derived, not stored: row i of operand ``name`` in case ``c`` is an FP10 row whose k codes are the signed bytes
@@ -22,10 +22,10 @@ import json
 import struct
 from pathlib import Path
 
-from verity.experimental.protocols.pouw.audit import HM96, ROW_SCHEMA, activation_binding, commit_rows, hm96_salt
-from verity.experimental.protocols.pouw.protocol import Context, Matmul, Shape, Tile
-from verity.experimental.protocols.pouw.schemes import pearl_c as C
-from verity.experimental.protocols.pouw.schemes import pearl_kw as P
+from verity.core.protocols.pouw.audit import HM96, ROW_SCHEMA, activation_binding, commit_rows, hm96_salt
+from verity.core.protocols.pouw.protocol import Context, Matmul, Shape, Tile
+from verity.core.protocols.pouw.schemes import pearl_c as C
+from verity.core.protocols.pouw.schemes import pearl_kw as P
 
 OUT = Path(__file__).with_name("vectors") / "pearl_c.json"
 #: (case, shape, tile rows, tile cols, unit index, weight id, test instance, forming[, hashing])
