@@ -170,6 +170,11 @@ def test_tick_writes_only_shadow_objects(tmp_path, monkeypatch) -> None:
 
     applied: list[dict] = []
     monkeypatch.setattr(K, "_status", lambda script: None)
+    pools = {}
+    for pool, (_, cq, pc) in K.POOLS.items():
+        (tmp_path / "leases" / pool).mkdir(parents=True)
+        pools[pool] = (str(tmp_path / "leases" / pool), cq, pc)
+    monkeypatch.setattr(K, "POOLS", pools)              # node 1's /run/gpu-lease holds live leases (744f, 9 Oct: created 2)
     rec = K.tick(tmp_path / "rec.jsonl", run=run, apply=applied.extend, delete=lambda names: None)
     assert all(c[0] == "get" for c in calls)
     assert all(o["metadata"]["labels"] == {"vy.dev/shadow": "true"} for o in applied)
