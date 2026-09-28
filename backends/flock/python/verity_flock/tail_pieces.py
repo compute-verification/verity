@@ -604,7 +604,7 @@ PIECES = {
     "F32Max_v1": f32_max,
     "GuardNegInfZero_v1": guard_neg_inf_zero,
     "MufuEx2Ftz_v1": mufu_ex2,
-    # the top-p keep word's word gates (verity_vllm.program.registry.topp_words)
+    # the top-p keep word's word gates (verity_vllm.program.registry.topp_word_gates)
     "BitXor_v1": lambda C, a, b: [a[0] ^ b[0]],
     "U32Xor_v1": lambda C, a, b: [x ^ y for x, y in zip(a, b)],
     "SelectBit_v1": lambda C, c, a, b: mux(C, c[0], a, b),

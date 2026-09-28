@@ -45,10 +45,11 @@ from .gf2 import (
     sub,
 )
 
-# the pipeline and its constants are written once, in the registry (`topp_words`); F, R, CW, WIDTH and SPLIT_COUNTS are re-exported
-from verity_vllm.program.registry.topp_words import CW, EPS9, F, HALF, LOG2E, M126, QNAN, R, SPLIT_COUNTS, WIDTH  # noqa: E402, F401
-from verity_vllm.program.registry.topp_words import Engine as _Engine  # noqa: E402
-from verity_vllm.program.registry.topp_words import keep_word  # noqa: E402
+# the pipeline, its word gates and their constants are written once, in the registry (`topp_keep_builder`, `topp_word_gates`);
+# F, R, CW, WIDTH and SPLIT_COUNTS are re-exported
+from verity_vllm.program.registry.topp_keep_builder import F, R, SPLIT_COUNTS, keep_word  # noqa: E402, F401
+from verity_vllm.program.registry.topp_keep_builder import Engine as _Engine  # noqa: E402
+from verity_vllm.program.registry.topp_word_gates import CW, EPS9, HALF, LOG2E, M126, QNAN, WIDTH  # noqa: E402, F401
 
 
 def _c(v: int):
@@ -187,7 +188,7 @@ def build(name: str, key: tuple) -> Circuit:
 # --- the engine: the registry's builder, the pieces' circuits ---------------------------------------------------------------
 
 class Engine(_Engine):
-    """`topp_words.Engine` with each operation computed by its piece's ``gf2`` circuit (:func:`build`, once per constant-operand
+    """`topp_keep_builder.Engine` with each operation computed by its piece's ``gf2`` circuit (:func:`build`, once per constant-operand
     variant): counting its instances (``T = 0``) or evaluating them on T test vectors."""
 
     def __init__(self, T: int = 0):

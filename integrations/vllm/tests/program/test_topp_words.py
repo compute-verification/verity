@@ -9,6 +9,7 @@ import pytest
 from verity.evaluation import evaluate
 from verity.ir.defs import bind
 from verity_vllm.program.registry import sampling as SM
+from verity_vllm.program.registry import topp_word_gates as TWGates
 from verity_vllm.program.registry import topp_words as TWG
 
 
@@ -60,10 +61,10 @@ def test_q_word_cuts_it_into_word_units():
 
 def test_the_new_word_gates():
     f = lambda x: int(np.float32(x).view(np.uint32))
-    assert TWG.TopPNumkeep.evaluate(10, f(3.7)) == 7 and TWG.TopPNumkeep.evaluate(10, f(12.0)) == 1
-    assert TWG.TopPNumkeep.evaluate(0, f(3.0)) == 0 and TWG.TopPNumkeep.evaluate(5, f(float("nan"))) == 5
-    assert TWG.TopPNumkeep.evaluate(5, f(-2.0)) == 5 and TWG.TopPNumkeep.evaluate(5, f(float("inf"))) == 5
-    assert TWG.I32ToF32.evaluate(7) == f(7.0) and TWG.I32ToF32.evaluate(0xFFFFFFFF) == f(-1.0)
-    assert TWG.I32ToF32.evaluate(16777217) == f(16777216.0)      # ties to even
-    assert TWG.NvLogf.evaluate(f(1.0)) == 0 and TWG.NvLogf.evaluate(0xBF800000) == 0xFFC00000
-    assert TWG.BitXor.evaluate(1, 1) == 0 and TWG.U32Xor.evaluate(0xF0F0, 0xFFFF) == 0x0F0F and TWG.SelectBit.evaluate(0, 1, 0) == 0
+    assert TWGates.TopPNumkeep.evaluate(10, f(3.7)) == 7 and TWGates.TopPNumkeep.evaluate(10, f(12.0)) == 1
+    assert TWGates.TopPNumkeep.evaluate(0, f(3.0)) == 0 and TWGates.TopPNumkeep.evaluate(5, f(float("nan"))) == 5
+    assert TWGates.TopPNumkeep.evaluate(5, f(-2.0)) == 5 and TWGates.TopPNumkeep.evaluate(5, f(float("inf"))) == 5
+    assert TWGates.I32ToF32.evaluate(7) == f(7.0) and TWGates.I32ToF32.evaluate(0xFFFFFFFF) == f(-1.0)
+    assert TWGates.I32ToF32.evaluate(16777217) == f(16777216.0)      # ties to even
+    assert TWGates.NvLogf.evaluate(f(1.0)) == 0 and TWGates.NvLogf.evaluate(0xBF800000) == 0xFFC00000
+    assert TWGates.BitXor.evaluate(1, 1) == 0 and TWGates.U32Xor.evaluate(0xF0F0, 0xFFFF) == 0x0F0F and TWGates.SelectBit.evaluate(0, 1, 0) == 0
