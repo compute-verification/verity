@@ -9,7 +9,9 @@
 #  2. the ship: its MANIFEST.sha256 holds and its run.py is the tree's;
 #  3. GPU 1's device check on this cubin, v1 (G = 4) only, no timing (run.py check.json, SHAPES empty);
 #  4. e2e.py: every mode's own gates, then its timing, then pearlc's verify pass, retained under $WORK/passes/<run id> (about
-#     45 GB on node 2's /workspace, outside the run directory, so custody does not upload it).
+#     45 GB on node 2's /workspace, outside the run directory, so custody does not upload it).  Before e2e.py writes a
+#     retained pass, its directory gets a retention record (`research keep`, priority keep, never expiring, owner
+#     @compute-accounting; KEEP_PRIORITY, KEEP_EXPIRES and KEEP_OWNER override them), and the window fails KEEP without one.
 # The reference replay runs after the window, on the CPU (verify.sh <run id>); its ACCEPT is replay-verified (development
 # shortcut; the protocol's check is a ZK proof, PROTOCOL.md).  Needs setup.sh's $WORK.
 # The venv's tools (ninja, which FlashInfer's JIT calls) come first on PATH, and FLASHINFER_CUDA_ARCH_LIST is setup.sh's, so
@@ -74,7 +76,14 @@ VARIANTS="sm120"; [ "$MODE" = perplexity ] && VARIANTS="sm120 sm120-unpromoted"
 PEARLC_EXPECT_UUID=$UUID SHAPES="" VARIANTS=$VARIANTS "$PY" "$SHIP/run.py" "$SHIP/check/check.json" > "$OUT/gpu1-check.jsonl" \
   || fail GPU1_CHECK "run.py's device check failed (exit $?); see gpu1-check.jsonl"
 
+keep_passes() {
+  local d=$WORK/passes/${RESEARCH_RUN_ID:?}
+  mkdir -p "$d" && PYTHONPATH=$PWD/tools/research/src python3 -m research keep "$d" --owner "${KEEP_OWNER:-@compute-accounting}" \
+    --expires "${KEEP_EXPIRES:-never}" --priority "${KEEP_PRIORITY:-keep}" --why "retained passes of run $RESEARCH_RUN_ID" \
+    ${RESEARCH_AGENT_URL:+--by "$RESEARCH_AGENT_URL"} > "$OUT/keep.json" || fail KEEP "no retention record on $d"
+}
 if [ "$MODE" = smoke ]; then
+  [ -z "${RETAIN:-}" ] || keep_passes
   "$PY" benchmarks/pouw/pearl_c_vllm/e2e.py --model "$MODEL" --kernel benchmarks/pouw/pearl_c_sm120 --cubin "$SHIP/pearl_c_sm120.cubin" \
     --out "$OUT/smoke.json" --smoke ${RETAIN:+--retain "$WORK/passes/${RESEARCH_RUN_ID:?}"} "${SWITCHES[@]}"
 elif [ "$MODE" = perplexity ]; then
@@ -88,6 +97,7 @@ elif [ "$MODE" = profile ]; then
   "$PY" benchmarks/pouw/pearl_c_vllm/profile_decode.py --nsys-kernels "$(ls "$OUT"/decode*cuda_gpu_kern_sum*.csv | head -1)" \
     --out "$OUT/profile.json"
 else
+  keep_passes
   "$PY" benchmarks/pouw/pearl_c_vllm/e2e.py --model "$MODEL" --kernel benchmarks/pouw/pearl_c_sm120 --cubin "$SHIP/pearl_c_sm120.cubin" \
     --out "$OUT/e2e.json" --retain "$WORK/passes/${RESEARCH_RUN_ID:?}" "${SWITCHES[@]}"
 fi

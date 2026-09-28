@@ -5,8 +5,8 @@
 #   research run --on vy-nebius-2 --project verity --campaign pouw --source <tree> --cwd source --declared-output 'out/*' \
 #     --env GPU_LEASE_WHO=<id> [--env MODE=window] -- bash benchmarks/pouw/served_zk/zk_window.sh
 # MODE: smoke (the default; untimed, both engines resident, the gates, each mode's first sampling calls) or window (the gates,
-# the interleaved reps with pearlc-zk after each pearlc, and the retained verify passes, deleted after: their -h2 commitments
-# are pouw-e2e's, not this run's).  LEASE: gpu-lease's arguments (default one preemptible GPU, untimed), e.g. "8 --wait
+# the interleaved reps with pearlc-zk after each pearlc, and the retained verify passes, recorded at priority low for a day:
+# their -h2 commitments are pouw-e2e's, not this run's, so `research retention gc` may take them after that).  LEASE: gpu-lease's arguments (default one preemptible GPU, untimed), e.g. "8 --wait
 # --timed" in a booked window.  WRAP: words between gpu-lease's -- and the command, e.g. infra's host-thread pinning
 # "env VY_PROVERS_CPUS=160-175 vy-provers taskset -c 160-175".  PREBUILT: a directory holding this head's ship.tar and
 # hm96_rows.cubin, which MODE=build writes (the builds only, no lease) and the other modes then use, so a booked window
@@ -17,7 +17,7 @@ WORK=/workspace/pouw/mvp-e2e; PASSES=$WORK/passes/$ID; CUDA=/usr/local/cuda-13.0
 S=$(mktemp -d /workspace/pouw/tmp-served-zk-window.XXXXXX); trap 'rm -rf "$S"' EXIT
 HEAD=$(git rev-parse HEAD); echo "tree $HEAD" | tee "$OUT/tree.txt"
 stamp() { echo "served-zk: $* at $(date -u +%H:%M:%SZ)"; }
-export MODE=${MODE:-smoke}
+export MODE=${MODE:-smoke} KEEP_PRIORITY=low KEEP_EXPIRES=1d
 B=${PREBUILT:-$S}
 
 if [ "$MODE" = build ] || [ -z "${PREBUILT:-}" ]; then
@@ -44,5 +44,5 @@ SHIP_TAR=$B/ship.tar OUT=$OUT/window gpu-lease "${LEASE_ARGS[@]}" -- "${WRAP_ARG
   bash benchmarks/pouw/pearl_c_vllm/window.sh
 rc=$?; stamp "window.sh exited $rc"
 rm -rf "$OUT/window/ship"
-[ -d "$PASSES" ] && { du -sh "$PASSES"; rm -rf "$PASSES"; stamp "passes deleted"; }
+[ -d "$PASSES" ] && du -sh "$PASSES"
 exit "$rc"
