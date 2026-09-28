@@ -6,9 +6,9 @@ import Definitions.Pous.Model.Dense
 
 The definitions the proposed band pins read (`BandChainMeets64`, `BandChainMeets64D5`, `BandChainMeets64D12`,
 `BandMultiMeets14`, `BandMultiMeets14K106`, `ChainDenseMeets64`), copied verbatim from the proofs' sources, with
-each source namespace `PousX` renamed `Pous.X` (the `Pous.Dense` and `Pous.Protocol.Model.P3Chain` precedent). The
+each source namespace `PousX` renamed `Pous.X` (the `Pous.Dense` and `Definitions.Pous.Model.P3Chain` precedent). The
 overwrite chain itself (`Pous.Sponge.{iv, padBlk, parentsDesc, ovR, ovH, ovStep, ovAbsorb, ovKey}`) is reused from
-`Pous.Protocol.Model.P3Chain`, whose copies are of the same source.
+`Definitions.Pous.Model.P3Chain`, whose copies are of the same source.
 - `Pous.Sponge` (`lean/submissions/sponge-dense/SpongeDense.lean`, §§1, 4 and 9): the ideal-permutation model
   `idealPerm` (one uniform permutation `Π₂`, queried both ways), the domain `dom salt i = salt ‖ bin(i)`, and the dense
   scheme over the chain, `chainDense`, on the complete DAG;

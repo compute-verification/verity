@@ -1,7 +1,7 @@
 import PousSponge.SpongeModel
 
 /-!
-# Lean-evaluated vectors for `verity_pous.dense`
+# Lean-evaluated vectors for `verity.protocols.accounting.space.pous.dense`
 
 Evaluates `chainDense`'s own definitions (`lean/submissions/sponge-dense/SpongeModel.lean` §4, §9) on small cases and
 prints them as JSON (`tests/fixtures/lean_dense_vectors.json`): `labelOv` (the encoder), the decoder's formula, `dom`,

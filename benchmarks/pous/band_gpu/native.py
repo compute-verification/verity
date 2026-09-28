@@ -1,9 +1,10 @@
 """The JIT build of `pous_native.cu` (the batched SHAKE256 kernel and the audit responder), keyed by what it compiles.
 
-`load(build_dir)` builds (or adopts) the extension under `<build_dir>/<digest12>`, the digest covering the source bytes, the flags,
-the torch/CUDA versions, the release of the nvcc that compiles it (`nvcc_release`) and the arch list (`arch_list`: always the
-device's capability, 12.0 on an sm_120), so a `.so` built from another source set or by another toolkit is never adopted (the
-rule of `commit.committer.native_jit`, which this layer may not import); `ext()` is the loaded extension.
+`load(build_dir)` builds (or adopts) the extension under `<build_dir>/<digest12>` from a copy of the source kept there, the
+digest covering the source bytes, the flags, the torch/CUDA versions, the release of the nvcc that compiles it (`nvcc_release`)
+and the arch list (`arch_list`: always the device's capability, 12.0 on an sm_120), so a `.so` built from another source set or
+by another toolkit is never adopted (the rule of `commit.committer.native_jit`, which this layer may not import); `ext()` is
+the loaded extension.
 """
 from __future__ import annotations
 
@@ -43,6 +44,26 @@ def arch_list(device_arch: str, given: str | None) -> str:
     return given if given and device_arch in named else device_arch
 
 
+def _stable_copy(build: str) -> str:
+    """`SOURCE` copied into its digest's build directory, rewritten only when its bytes differ. ninja rebuilds when the source's
+    path or mtime moves, and each checkout (a run's source tree) has its own, so compiling the copy lets every checkout of the
+    same source adopt the build instead of recompiling it (inside a timed lease, a compile is work the node's ops daemon stops)."""
+    copy = os.path.join(build, os.path.basename(SOURCE))
+    with open(SOURCE, "rb") as f:
+        data = f.read()
+    try:
+        with open(copy, "rb") as f:
+            same = f.read() == data
+    except FileNotFoundError:
+        same = False
+    if not same:
+        tmp = f"{copy}.{os.getpid()}"
+        with open(tmp, "wb") as f:
+            f.write(data)
+        os.replace(tmp, copy)
+    return copy
+
+
 def load(build_dir: str):
     if _LOADED:
         return _LOADED[0]
@@ -56,8 +77,8 @@ def load(build_dir: str):
     nvcc = nvcc_release(cpp_extension.CUDA_HOME)
     build = os.path.join(build_dir, source_digest(torch.__version__, str(torch.version.cuda), nvcc, arches)[:12])
     os.makedirs(build, exist_ok=True)
-    _LOADED.append(jit_load(name="verity_pous_native", sources=[SOURCE], build_directory=build, extra_cflags=["-O3"],
-                            extra_cuda_cflags=list(CUDA_CFLAGS), verbose=False))
+    _LOADED.append(jit_load(name="verity_pous_native", sources=[_stable_copy(build)], build_directory=build,
+                            extra_cflags=["-O3"], extra_cuda_cflags=list(CUDA_CFLAGS), verbose=False))
     return _LOADED[0]
 
 

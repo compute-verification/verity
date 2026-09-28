@@ -39,7 +39,7 @@ theorem b1_indep_set (n Δ : ℕ) (G : SimpleGraph (Fin n)) [DecidableRel G.Adj]
     _ ≤ s.card + ∑ _u ∈ s, Δ := Nat.add_le_add_left (Finset.sum_le_sum fun u _ => hΔ u) _
     _ = (Δ + 1) * s.card := by rw [Finset.sum_const, smul_eq_mul, Nat.succ_mul, Nat.mul_comm]; omega
 
-/-! ### Proposed corollary (not drafted in `PousProofs.lean`)
+/-! ### Proposed corollary
 
 `construction-paths.md` §4 names the corollary only in prose: "the free fraction under local re-derivation". This is
 one reading of it, for review. -/

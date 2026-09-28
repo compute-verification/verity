@@ -8,8 +8,8 @@ import Proofs.Pous.Chain.Family
 (`band_audit_2152`: `PousTargetsDense.theorem1_ii_seq` with the band's `TimedINC`, `band_seg_timedINC` with
 `chainExPostFactoG_v6`), and `secure_erasure_meets` on top of it.
 
-**The certificate at `s = 2152`**, `S = ⌊ρ·N·2^28⌋ ≤ (18/19)·N·2^28`, as `Pous/SecurityProofs/Chain/Family.lean` does
-at `k = 111` but with the sampling term pushed to `2^-129`:
+**The certificate at `s = 2152`**, `S = ⌊ρ·N·2^28⌋ ≤ (18/19)·N·2^28`, as `Security/Proofs/Pous/Chain/Family.lean`
+does at `k = 111` but with the sampling term pushed to `2^-129`:
 - `N ≥ 2`, `β = 265616286·N − 681516`: `β + 1 + 390·507N + 157227 = 524288·(507N − 1)`, so both terms of `chainPiSeg`
   are at most `2^-157227`, and `Σ_{j<2152} (N·2^9)^j ≤ 2^(73·2152)` leaves `|Hist|·π ≤ 2^-130`. `p₀ ≤ 9593/10000`
   (it needs `N ≥ 2`).

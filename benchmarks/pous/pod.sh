@@ -9,16 +9,24 @@
 #   ... -- bash benchmarks/pous/pod.sh IMPL=p2-gpu [WS=...]      # built for the device's arch (ARCH=sm_NN overrides)
 #   ... -- bash benchmarks/pous/pod.sh IMPL=band-gpu [WS=...] [NVME_DIR=/workspace/nvme] [SCHEME=dense-chain/v1]
 #   ... -- bash benchmarks/pous/pod.sh IMPL=p2-v1-gpu [WS=...] [NVME_DIR=...]       # P2 v1 (builds p2_v1/libp2v1.so with CGBN)
-#   ... -- bash benchmarks/pous/pod.sh IMPL=side-by-side [WS=...] [NVME_DIR=...]    # band-gpu then p2-v1-gpu, and the table
+#   ... -- bash benchmarks/pous/pod.sh IMPL=p2-v3-gpu [WS=...] [NVME_DIR=...]       # p2-16448/v3 on the same library, audited by protocol.TimedAudit
+#   ... -- bash benchmarks/pous/pod.sh IMPL=p2-v3-mc-gpu [WS=...] [NVME_DIR=...]    # the same, audited by the memory challenger,
+#                                                                               signed with S1's key in $W/pous-mc-lms (MC_SIGNER=test: the test signer)
+#   ... -- bash benchmarks/pous/pod.sh IMPL=side-by-side [WS=...] [NVME_DIR=...]    # band-gpu then P2_ARM (p2-v3-gpu), and the table
 #   ... -- bash benchmarks/pous/pod.sh IMPL=side-by-side GATES_ONLY=1 MAX_SEGMENTS=2  # build check: kernels built, gates run
 #   ... -- bash benchmarks/pous/pod.sh IMPL=band-gpu BAND_D=6 [WS=...]   # the band at in-degree d (>= 5; side-by-side's band arm too)
 #
 # On a shared node (band-gpu, p2-v1-gpu, side-by-side): WORK=<dir> holds the venvs and builds, VCPU and RCPU the verifier's and
 # the responder's cores (default: the 3rd and 4th physical cores), WORKERS the reference gate's processes (default nproc).
+# POUS_BUILD=<dir> is the pous_native JIT build directory (default $W/pous_build). A timed run needs a directory no other run
+# builds into: a rebuild inside a timed lease is a compile the node's ops daemon stops.
 # A timed run there goes inside the node's quiet slice, `gpu-lease 1 --on N --max-min M -- vy-pous-quiet CMD`, with VCPU and
 # RCPU among its cores: outside it, neighbours' load makes honest answers late (r20261005-231145-6d0f accepted 18 of 20).
 # AUDITS=0 is an untimed placement (a preemptible fill slot): the gates, encode, the synthetic loop and the step floor run, no
 # limit, audit or control does, and the result is labelled timed: false, audits: skipped (untimed placement).
+# P2_ENCODE_BLOCKS=N (the P2 arms) encodes the first N blocks of C on the device (0: all of C, so C is W's encoding; default
+# bench.py's 2048, the rest random canonical blocks); with P2_ENCODE_BLOCKS=0, P2_C_CACHE=1 keeps C under $W/p2-c-cache and
+# reuses it (an untimed run encodes, a timed one of the same setup loads it). P2_ARM picks side-by-side's P2 arm (default p2-v3-gpu).
 # KERNELS='<json>' (band-gpu) sets kernel switches over harness.KERNELS (bench.py --kernels): '{"chain_pairs": false}' runs the
 # run of record's kernels.
 #
@@ -47,7 +55,7 @@
 # venv with torch built for the pod's CUDA toolkit (TORCH_CUDA=cuNNN overrides), numpy and ninja, and this tree's band_gpu/.
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
-REPO=$(pwd); I=$RESEARCH_RUN_DIR/inputs; O=$RESEARCH_RUN_DIR; W=${WORK:-/workspace}/pous-bench
+REPO=$(pwd); I=$RESEARCH_RUN_DIR/inputs; O=$RESEARCH_RUN_DIR; W=${WORK:-/workspace}/pous-bench; POUS_BUILD=${POUS_BUILD:-$W/pous_build}
 IMPL=${IMPL:-vllm-gpu}; WS=${WS:-qwen2.5-0.5b/linears+head}
 # the run's GPU for nvidia-smi --id: a UUID, or an index as nvidia-smi counts them (gpu-lease's CUDA_DEVICE_ORDER=PCI_BUS_ID)
 gpu_uuid() {
@@ -80,7 +88,7 @@ case "$GPU" in                                            # the census id is the
   *) [ -n "${HW:-}" ] || { echo "no census id for GPU '$GPU': pass HW=<benchmarks/census/hardware.json id>"; exit 2; } ;;
 esac
 SCHEME=${SCHEME:-$([ "$IMPL" = p2-gpu ] && echo p2-16448/v2 || echo band-chain/d12/v1)}
-AUDITS=${AUDITS:-20}; WORKERS=${WORKERS:-$(nproc)}
+AUDITS=${AUDITS:-20}; WORKERS=${WORKERS:-$(nproc)}; P2_ARM=${P2_ARM:-p2-v3-gpu}
 GO=$([ "${GATES_ONLY:-0}" = 1 ] && echo --gates-only)
 mkdir -p "$W" "$O/bench"
 nvcc_release() { "$1/bin/nvcc" --version 2>/dev/null | sed -n 's/.*release \([0-9]*\)\.\([0-9]*\).*/\1 \2/p'; }
@@ -167,18 +175,18 @@ if [ "$IMPL" = vllm-gpu ]; then
   "$PY" -c 'import ninja' 2>/dev/null || uv pip install -q --python "$PY" ninja || exit 3   # torch's JIT build of pous_native
   export PATH=$(dirname "$PY"):$PATH
   "$PY" benchmarks/pous/bench.py --scheme "$SCHEME" --impl vllm-gpu --impl-tree "$W/impl" --impl-commit "${IMPL_COMMIT:-unknown}" \
-    --build-dir "$W/pous_build" --python "$PY" --weight-set "$WS" --hardware "$HW" --out "$O/bench" --audits "$AUDITS"
+    --build-dir "$POUS_BUILD" --python "$PY" --weight-set "$WS" --hardware "$HW" --out "$O/bench" --audits "$AUDITS"
 elif [ "$IMPL" = band-gpu ]; then
   gpu_env || exit 3
   record_host
-  "$PY" benchmarks/pous/bench.py --scheme "$SCHEME" --impl band-gpu --build-dir "$W/pous_build" --impl-commit "${RESEARCH_SOURCE_COMMIT:-}" \
+  "$PY" benchmarks/pous/bench.py --scheme "$SCHEME" --impl band-gpu --build-dir "$POUS_BUILD" --impl-commit "${RESEARCH_SOURCE_COMMIT:-}" \
     --weight-set "$WS" --hardware "$HW" --out "$O/bench" --audits "$AUDITS" --workers "$WORKERS" --verifier-cpu "$VCPU" \
     --responder-cpu "$RCPU" ${NVME_DIR:+--nvme-dir "$NVME_DIR"} ${MAX_SEGMENTS:+--max-segments "$MAX_SEGMENTS"} $GO \
     ${BAND_D:+--band-d "$BAND_D"} ${KERNELS:+--kernels "$KERNELS"}
   RC=$?
   clocks after
   exit $RC
-elif [ "$IMPL" = p2-v1-gpu ] || [ "$IMPL" = side-by-side ]; then
+elif [ "$IMPL" = p2-v1-gpu ] || [ "$IMPL" = p2-v3-gpu ] || [ "$IMPL" = p2-v3-mc-gpu ] || [ "$IMPL" = side-by-side ]; then
   gpu_env || exit 3
   record_host
   # P2 v1's library (benchmarks/pous/p2_v1): CGBN at p2_gpu's pinned commit, gmp.h for CGBN's host pass (the system's, else
@@ -194,22 +202,28 @@ elif [ "$IMPL" = p2-v1-gpu ] || [ "$IMPL" = side-by-side ]; then
   git -C "$CG" checkout -q "$(cat benchmarks/pous/p2_gpu/CGBN.commit)" || exit 3
   NVCC_REL=$(nvcc_release "$CUDA_HOME" | tr ' ' .)
   [ -n "$NVCC_REL" ] || { echo "no nvcc under CUDA_HOME=$CUDA_HOME"; exit 3; }
-  # keyed by the nvcc and the sources too: a .so another toolkit or another tree built is never adopted
-  P2SRC=$(cat benchmarks/pous/p2_v1/Makefile benchmarks/pous/p2_v1/*.cu benchmarks/pous/p2_v1/*.cuh benchmarks/pous/p2_gpu/p2dec.cu | sha256sum | cut -c1-12)
-  P2LIB=$W/p2v1bin-$ARCH-cuda$NVCC_REL-$P2SRC
-  make -C benchmarks/pous/p2_v1 NVCC="$CUDA_HOME/bin/nvcc" CGBN="$CG" BIN="$P2LIB" ARCH="$ARCH" ${GMPINC:+"INC=-I $GMPINC"} > "$O/p2v1-make.log" 2>&1 || { tail -20 "$O/p2v1-make.log"; exit 3; }
+  # keyed by the nvcc and the sources' bytes: a .so another toolkit or source built is never adopted, and every checkout of the
+  # same sources adopts it rather than rebuilding (make goes by mtimes, and each run's source tree is a fresh checkout)
+  P2KEY=$(cat benchmarks/pous/p2_v1/Makefile benchmarks/pous/p2_v1/*.cu benchmarks/pous/p2_v1/*.cuh benchmarks/pous/p2_gpu/{p2dec.cu,CGBN.commit} | sha256sum | cut -c1-12)
+  P2LIB=$W/p2v1bin-$ARCH-cuda$NVCC_REL-$P2KEY
+  if [ -f "$P2LIB/libp2v1.so" ]; then echo "adopted $P2LIB/libp2v1.so" > "$O/p2v1-make.log"
+  else make -C benchmarks/pous/p2_v1 NVCC="$CUDA_HOME/bin/nvcc" CGBN="$CG" BIN="$P2LIB" ARCH="$ARCH" ${GMPINC:+"INC=-I $GMPINC"} > "$O/p2v1-make.log" 2>&1 || { tail -20 "$O/p2v1-make.log"; exit 3; }
+  fi
   cp "$P2LIB"/*.ptxas "$O/" 2>/dev/null
   arm() {  # arm IMPL OUT [sub]: one bench.py run of that implementation into OUT; a sub-run writes no result.json of its own
-    ${3:+env -u RESEARCH_RUN_DIR} "$PY" benchmarks/pous/bench.py --scheme "$SCHEME" --impl "$1" --build-dir "$W/pous_build" --p2-lib "$P2LIB" \
+    ${3:+env -u RESEARCH_RUN_DIR} "$PY" benchmarks/pous/bench.py --scheme "$SCHEME" --impl "$1" --build-dir "$POUS_BUILD" --p2-lib "$P2LIB" \
       --impl-commit "${RESEARCH_SOURCE_COMMIT:-}" --weight-set "$WS" --hardware "$HW" --out "$2" --audits "$AUDITS" \
       --workers "$WORKERS" --verifier-cpu "$VCPU" --responder-cpu "$RCPU" ${NVME_DIR:+--nvme-dir "$NVME_DIR"} \
-      ${MAX_SEGMENTS:+--max-segments "$MAX_SEGMENTS"} $GO $([ "$1" = band-gpu ] && [ -n "${BAND_D:-}" ] && echo --band-d "$BAND_D")
+      ${MAX_SEGMENTS:+--max-segments "$MAX_SEGMENTS"} $GO $([ "$1" = band-gpu ] && [ -n "${BAND_D:-}" ] && echo --band-d "$BAND_D") \
+      $([ "$1" != band-gpu ] && [ -n "${P2_ENCODE_BLOCKS:-}" ] && echo --p2-encode-blocks "$P2_ENCODE_BLOCKS") \
+      $([ "$1" != band-gpu ] && [ -n "${P2_C_CACHE:-}" ] && echo --p2-c-cache "$W/p2-c-cache") \
+      $([ "$1" = p2-v3-mc-gpu ] && [ "${MC_SIGNER:-lms}" = lms ] && echo --mc-lms-key "$W/pous-mc-lms-n64")
   }
   if [ "$IMPL" = side-by-side ]; then
     mkdir -p "$O/bench/band" "$O/bench/p2"
     arm band-gpu "$O/bench/band" sub; RB=$?
     clocks between
-    arm p2-v1-gpu "$O/bench/p2" sub; RP=$?
+    arm "$P2_ARM" "$O/bench/p2" sub; RP=$?
     if [ -n "$GO" ]; then   # gates only: no measurements to table
       RC=0
     else
@@ -219,7 +233,7 @@ elif [ "$IMPL" = p2-v1-gpu ] || [ "$IMPL" = side-by-side ]; then
     fi
     [ $RB -ne 0 ] || [ $RP -ne 0 ] && RC=1
   else
-    arm p2-v1-gpu "$O/bench"; RC=$?
+    arm "$IMPL" "$O/bench"; RC=$?
   fi
   clocks after
   exit $RC

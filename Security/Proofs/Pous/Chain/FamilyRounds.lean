@@ -5,7 +5,7 @@ import Proofs.Pous.Chain.Family
 
 `Family.lean`'s certificate (`band_meets_fam_dom`, fixed at `D = 5`, `k = 111`) with the round budget `D` and the
 challenge count `k` as parameters. The band's hardness (`band_seg_hard`), the glue (`band_seg_timedINC`) and
-`theorem1_ii_seq` already hold for every `D ≤ d`; only the numbers change. `Pous/SecurityProofs.lean` states the
+`theorem1_ii_seq` already hold for every `D ≤ d`; only the numbers change. `Security/Proofs/Pous.lean` states the
 pinned forms, `BandMultiMeetsFamilyD2` and `BandMultiMeetsFamilyD1`.
 
 **The certificate at `D` rounds.** `theorem1_ii_seq` at `S = ⌊ρ·N·2^28⌋ ≤ (18/19)·N·2^28` and loss
