@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""A sampled cover of a vLLM row's verification units on SP1: many instances of one subcircuit, in chunks.
+"""A sampled cover of a vLLM row's proof units on SP1: many instances of one subcircuit, in chunks.
 
 ``sp1_ir_call.py`` proves one bundle whose typed object travels with it.  A cover proves a whole range of a
 ``vllm-vu-set/v1`` set, so the objects (one per chunk, JSON listing every word) stay in the recorded ``prepare`` run
