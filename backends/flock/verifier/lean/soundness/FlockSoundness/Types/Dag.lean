@@ -20,10 +20,11 @@ The check also covers the unit's logical order (`Flock.DeriveAll.order`, the lis
 after them reads only earlier columns (and `one`), and every column outside the order has a zero row or none.
 
 So all of this holds of whatever `deriveAll` builds: nothing here is about how it builds. The flat case is `compose_sound`
-(`Types/Flat.lean`). Reads are checked inline (the decoders' one-hot minterms, the product rows' table-direct side, the
-output rows, bits constant across the table) and placed: a placed read's segment embeds a generated `table/v2` layout,
-checked the same way in its own coordinates, and **`genOk_sound`** gives that its output columns carry the table's bits
-at the index its input columns spell.
+(`Types/Flat.lean`), and on a flat type `evalT` is its `eval` (**`evalT_flat`**), so there the two say the same. Reads are
+checked inline (the decoders' one-hot minterms, the product rows' table-direct side, the output rows, bits constant across
+the table) and placed: a placed read's segment embeds a generated `table/v2` layout, checked the same way in its own
+coordinates, and **`genOk_sound`** gives that its output columns carry the table's bits at the index its input columns
+spell.
 -/
 
 namespace FlockSoundness.Types.Dag
@@ -1650,5 +1651,67 @@ theorem inputs_self {types : String → Option CircuitType} {ls : Array Layout} 
       blockRow words (done.getD unit default) one ((done.getD unit default).inCols.getD i 0) =
         some ([(done.getD unit default).inCols.getD i 0], [(done.getD unit default).inCols.getD i 0]) :=
   inputs_self_of (deriveChecked_all hd) (lt_of_type ht) ht one
+
+/-! ## Flat types -/
+
+/-- On AND items that read only earlier wires, `runT`'s wire list is `run`'s wire values. -/
+theorem runT_ands (types : String → Option CircuitType) (words : String → Option (Array ℕ))
+    (ev : CircuitType → (ℕ → Bool) → List Bool) (t : CircuitType) :
+    ∀ (items : List Item) (vals : List Bool) (v : ℕ → Bool),
+      (∀ k (hk : k < items.length), ∃ a b, items[k] = .and a b ∧ (∀ x ∈ a.ws.toList, x < vals.length + k) ∧
+        (∀ x ∈ b.ws.toList, x < vals.length + k)) →
+      (∀ j < vals.length, vals.getD j false = v j) →
+      (runT types words ev t vals items).length = vals.length + items.length ∧
+        ∀ j < vals.length + items.length, (runT types words ev t vals items).getD j false = run v vals.length items j
+  | [], vals, v, _, hv => ⟨by simp [runT], fun j hj => by simpa [runT, run] using hv j (by simpa using hj)⟩
+  | it :: rest, vals, v, hit, hv => by
+    obtain ⟨a, b, hab, ha, hb⟩ := hit 0 (by simp)
+    simp only [List.getElem_cons_zero, Nat.add_zero] at hab ha hb
+    subst hab
+    have hval : (formVal (vals.getD · false) a && formVal (vals.getD · false) b) = itemVal v (.and a b) := by
+      simp only [itemVal]
+      rw [formVal_congr fun x hx => hv x (ha x hx), formVal_congr fun x hx => hv x (hb x hx)]
+    obtain ⟨h1, h2⟩ := runT_ands types words ev t rest (vals ++ [itemVal v (.and a b)])
+      (fun j => if j = vals.length then itemVal v (.and a b) else v j)
+      (fun k hk => by
+        obtain ⟨a', b', h', ha', hb'⟩ := hit (k + 1) (by simp; omega)
+        refine ⟨a', b', by simpa using h', fun x hx => ?_, fun x hx => ?_⟩
+        · have := ha' x hx; simp; omega
+        · have := hb' x hx; simp; omega)
+      (fun j hj => by
+        simp only [List.length_append, List.length_singleton] at hj
+        by_cases hjw : j = vals.length
+        · subst hjw
+          simp [List.getD_eq_getElem?_getD]
+        · have hj' : j < vals.length := by omega
+          simp only [hjw, ↓reduceIte]
+          rw [← hv j hj', List.getD_eq_getElem?_getD, List.getD_eq_getElem?_getD,
+            List.getElem?_append_left hj'])
+    simp only [runT, itemOut]
+    rw [hval]
+    refine ⟨by rw [h1]; simp; omega, fun j hj => ?_⟩
+    simp only [List.length_cons] at hj
+    rw [h2 j (by simp; omega)]
+    simp [run]
+
+/-- **A flat type's `evalT` is S2's `eval`**, at any fuel past zero: for a type `flatOk` accepts (AND items over
+earlier wires, output forms over the wires), `Types.Dag`'s statements say what `Types.Flat`'s do. -/
+theorem evalT_flat (types : String → Option CircuitType) (words : String → Option (Array ℕ)) {t : CircuitType}
+    (h : Flock.Derive.flatOk t = true) (F : ℕ) (x : ℕ → Bool) : evalT types words (F + 1) t x = eval t x := by
+  have hlen : ((List.range t.inBits).map x).length = t.inBits := by simp
+  obtain ⟨-, h2⟩ := runT_ands types words (fun u y => evalT types words F u y) t t.items.toList
+    ((List.range t.inBits).map x) x
+    (fun k hk => by
+      obtain ⟨a, b, hab, ha, hb⟩ := flatOk_items h k (by simpa using hk)
+      exact ⟨a, b, by simpa using hab, fun y hy => by rw [hlen]; exact ha y hy, fun y hy => by rw [hlen]; exact hb y hy⟩)
+    (fun j hj => by rw [hlen] at hj; simp [List.getD_eq_getElem?_getD, hj])
+  simp only [evalT, eval]
+  apply List.map_congr_left
+  intro f hf
+  apply formVal_congr
+  intro y hy
+  obtain ⟨o, ho, rfl⟩ := List.getElem_of_mem hf
+  have hy' := (flatOk_outputs h).2 o (by simpa using ho) y (by simpa using hy)
+  rw [h2 y (by rw [hlen]; simpa using hy'), hlen]
 
 end FlockSoundness.Types.Dag
