@@ -171,6 +171,16 @@
    "assumptions": [],
    "type_hash": "00000000117ec39a"
   },
+  "FlockSoundness.Refine.encs_inj": {
+   "signature": [
+    "FlockSoundness.Refine.encs_inj {fs fs' : List FlockSoundness.Refine.Frame} :",
+    "  (∀ (f : FlockSoundness.Refine.Frame), List.instMembership.mem fs f → f.WF) →",
+    "    (∀ (f : FlockSoundness.Refine.Frame), List.instMembership.mem fs' f → f.WF) →",
+    "      Eq (FlockSoundness.Refine.encs fs) (FlockSoundness.Refine.encs fs') → Eq fs fs'"
+   ],
+   "assumptions": [],
+   "type_hash": "0000000073fc4a73"
+  },
   "FlockSoundness.Refine.fast100_dims": {
    "signature": [
     "FlockSoundness.Refine.fast100_dims (m : Nat) (s : Flock.Schedule) (hs : Eq (Flock.fast100 m) (Option.some s)) :",
@@ -906,6 +916,50 @@
    ],
    "assumptions": [],
    "type_hash": "000000004b18250f"
+  },
+  "FlockSoundness.Refine.zerocheck_frames": {
+   "signature": [
+    "FlockSoundness.Refine.zerocheck_frames (m : Nat) (hm : instLENat.le 14 m) (digest cap : ByteArray)",
+    "  (p : Flock.ZerocheckProof) (t t' : Flock.Transcript) (zc : Flock.ZcOut)",
+    "  (hret : FlockSoundness.Refine.AllRetained t.rounds)",
+    "  (h : Eq (Flock.bindAndZerocheck m digest cap p t) (Except.ok { fst := zc, snd := t' })) :",
+    "  And (Eq t'.rounds t.rounds)",
+    "    (And (Eq t'.k (instHAdd.hAdd (instHAdd.hAdd t.k 3) (instHSub.hSub m 6)))",
+    "      (And",
+    "        (FlockSoundness.Refine.Retains (Array.instGetElem?NatLtSize.getElem! t.rounds t.k)",
+    "          (instHAppendOfAppend.hAppend t.pending.data.toList",
+    "            (FlockSoundness.Refine.encs",
+    "              (List.cons (FlockSoundness.Refine.Frame.label \"flock-r1cs-v0\".toUTF8)",
+    "                (List.cons (FlockSoundness.Refine.Frame.bytes digest)",
+    "                  (List.cons (FlockSoundness.Refine.Frame.bytes cap)",
+    "                    (List.cons (FlockSoundness.Refine.Frame.label \"flock-zerocheck-v0\".toUTF8)",
+    "                      (List.cons (FlockSoundness.Refine.Frame.sq 2 6) List.nil))))))))",
+    "        (And",
+    "          (FlockSoundness.Refine.Retains (Array.instGetElem?NatLtSize.getElem! t.rounds (instHAdd.hAdd t.k 1))",
+    "            (FlockSoundness.Refine.encs (List.cons (FlockSoundness.Refine.Frame.sq 2 (instHSub.hSub m 13)) List.nil)))",
+    "          (And",
+    "            (FlockSoundness.Refine.Retains (Array.instGetElem?NatLtSize.getElem! t.rounds (instHAdd.hAdd t.k 2))",
+    "              (FlockSoundness.Refine.encs",
+    "                (List.cons (FlockSoundness.Refine.Frame.vec p.round1ab.toList)",
+    "                  (List.cons (FlockSoundness.Refine.Frame.vec p.round1c.toList)",
+    "                    (List.cons (FlockSoundness.Refine.Frame.sq 1 1) List.nil)))))",
+    "            (And",
+    "              (∀ (i : Nat),",
+    "                instLTNat.lt i (instHSub.hSub m 6) →",
+    "                  FlockSoundness.Refine.Retains",
+    "                    (Array.instGetElem?NatLtSize.getElem! t.rounds (instHAdd.hAdd (instHAdd.hAdd t.k 3) i))",
+    "                    (FlockSoundness.Refine.encs",
+    "                      (List.cons (FlockSoundness.Refine.Frame.one (Array.instGetElem?NatLtSize.getElem! p.rounds i).fst)",
+    "                        (List.cons",
+    "                          (FlockSoundness.Refine.Frame.one (Array.instGetElem?NatLtSize.getElem! p.rounds i).snd)",
+    "                          (List.cons (FlockSoundness.Refine.Frame.sq 1 1) List.nil)))))",
+    "              (Eq t'.pending.data.toList",
+    "                (FlockSoundness.Refine.encs",
+    "                  (List.cons (FlockSoundness.Refine.Frame.one p.finalA)",
+    "                    (List.cons (FlockSoundness.Refine.Frame.one p.finalB) List.nil)))))))))"
+   ],
+   "assumptions": [],
+   "type_hash": "0000000046fe30bb"
   },
   "FlockSoundness.Refine.zerocheck_refines": {
    "signature": [
@@ -2032,6 +2086,28 @@
    },
    "pins": ["FlockSoundness.Refine.final_refines"]
   },
+  "FlockSoundness.Refine.Frames": {
+   "digest": "f878d08346bcc06328a16cb810f4576a",
+   "definitions": {
+    "FlockSoundness.Refine.AllRetained": "8f2c13718aff97a3",
+    "FlockSoundness.Refine.Frame": "c179a6e661fd2603",
+    "FlockSoundness.Refine.Frame.WF": "51aab469d7a3a6bc",
+    "FlockSoundness.Refine.Frame.bytes": "5677b825b21cd5ad",
+    "FlockSoundness.Refine.Frame.dom": "40b2dff81c88d997",
+    "FlockSoundness.Refine.Frame.enc": "b1f7cdfaefbf49ce",
+    "FlockSoundness.Refine.Frame.kind": "b58e6d749803290d",
+    "FlockSoundness.Refine.Frame.label": "fa512b610ec55b44",
+    "FlockSoundness.Refine.Frame.len": "48c5bdf1214a45d6",
+    "FlockSoundness.Refine.Frame.one": "4348569bfa2e566a",
+    "FlockSoundness.Refine.Frame.op": "c71924feeb2f2987",
+    "FlockSoundness.Refine.Frame.pay": "90d3db0ff438acaa",
+    "FlockSoundness.Refine.Frame.sq": "ca29785696a1f605",
+    "FlockSoundness.Refine.Frame.vec": "18fefba6532169d1",
+    "FlockSoundness.Refine.Retains": "7228349562c74651",
+    "FlockSoundness.Refine.encs": "d71c6a2cddeb3a06"
+   },
+   "pins": ["FlockSoundness.Refine.encs_inj", "FlockSoundness.Refine.zerocheck_frames"]
+  },
   "FlockSoundness.Refine.Ligerito": {
    "digest": "12e6da387e8206ed41f600012a1eac1e",
    "definitions": {
@@ -2175,11 +2251,13 @@
     "FlockSoundness.Refine.toDig": "d188cde24e5cecab"
    },
    "pins": [
+    "FlockSoundness.Refine.encs_inj",
     "FlockSoundness.Refine.merkleCheck_verifies",
     "FlockSoundness.Refine.opensOK_of",
     "FlockSoundness.Refine.verify_refines",
     "FlockSoundness.Refine.verify_refines_ofCircuit",
-    "FlockSoundness.Refine.verify_tableAfter"
+    "FlockSoundness.Refine.verify_tableAfter",
+    "FlockSoundness.Refine.zerocheck_frames"
    ]
   },
   "FlockSoundness.Refine.Realizes": {
