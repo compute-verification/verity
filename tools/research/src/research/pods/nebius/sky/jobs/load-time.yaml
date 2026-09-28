@@ -1,0 +1,69 @@
+# A model's time to vLLM engine-ready on node 1 (benchmarks/load_time): queue deployments-gpu, priority circuits-gpu, all 8 GPUs.
+#
+#   tools/research/src/research/pods/nebius/sky/submit.sh load-time lt-qwen235 --env MODEL=/workspace/hf/hub/models--.../snapshots/<sha>
+#
+# Memory covers the model's files in the pod's page cache (they are charged to the pod's cgroup) plus 8 TP workers: a 223 GB model
+# needs ~400 GB. Not in the quiet hour, 12:30-13:30Z.
+name: load-time
+
+resources:
+  infra: ssh/vy-nebius
+  accelerators: RTXPRO6000:8
+  cpus: 32
+  labels:
+    budget-line: nebius-config-run
+  memory: 480
+
+envs:
+  SRC: /workspace/research/checkout
+  OMP_NUM_THREADS: "32"
+  MODEL: null
+  PLAN: default
+  CAMPAIGN: circuits-load-time
+  HF_HOME: /workspace/hf
+  HF_HUB_OFFLINE: "1"
+  CUDA_HOME: /workspace/jobs/cuda-12.9
+  RESEARCH_RUNS: /workspace/jobs/runs
+  RESEARCH_STORE: /workspace/jobs/store
+  UV_CACHE_DIR: /workspace/jobs/cache/uv
+  UV_PYTHON_INSTALL_DIR: /workspace/jobs/cache/python
+
+secrets:
+  R2_ENDPOINT: null
+  R2_BUCKET: null
+  AWS_ACCESS_KEY_ID: null
+  AWS_SECRET_ACCESS_KEY: null
+
+setup: |
+  set -euo pipefail
+  # the job runs from the one copy of $SRC per tree content (job_tree.sh), which it only reads: its scratch is a temporary directory
+  SRC=$(bash "$SRC/tools/research/src/research/pods/nebius/sky/job_tree.sh" "$SRC"); export SRC
+  [ -x /workspace/jobs/bin/uv ] || curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/workspace/jobs/bin UV_NO_MODIFY_PATH=1 sh
+  cd "$SRC/integrations/vllm"
+  bash "$SRC/tools/research/src/research/pods/nebius/sky/vllm_bootstrap.sh" --cpu --out /workspace/jobs/bootstrap/load-time-cpu     # no native taps; skipped, without the lock, once this tree and venv passed
+
+run: |
+  set -euo pipefail
+  export PATH=$CUDA_HOME/bin:$PATH
+  export PATH=/workspace/jobs/venv312/bin:$PATH    # ahead of CUDA_HOME's tools
+  SRC=$(bash "$SRC/tools/research/src/research/pods/nebius/sky/job_tree.sh" --mine); export SRC
+  cd "$SRC"
+  PYTHONPATH=$SRC/tools/research/src /workspace/jobs/bin/uv run --no-project --python 3.12 python -m research run --campaign "$CAMPAIGN" --run-record \
+    --declared-output 'out/*' -- \
+    bash -c '/workspace/jobs/venv312/bin/python "$SRC/benchmarks/load_time/load_time.py" --model "$MODEL" --plan "$PLAN" --out "$RESEARCH_RUN_DIR/out"'
+
+config:
+  ssh:
+    provision_timeout: -1
+    pod_config:
+      metadata:
+        labels:
+          kueue.x-k8s.io/queue-name: deployments-gpu
+          kueue.x-k8s.io/priority-class: circuits-gpu
+      spec:
+        terminationGracePeriodSeconds: 300
+        containers:
+        - volumeMounts:
+          - {name: workspace, mountPath: /workspace}
+        volumes:
+        - {name: workspace, hostPath: {path: /workspace, type: Directory}}

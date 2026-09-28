@@ -83,7 +83,7 @@ def test_every_job_template_names_a_defined_queue_and_priority():
         assert "provision_timeout: -1" in t and "infra: ssh/vy-nebius" in t and "budget-line:" in t, f.name
         seen[f.stem] = (queue, prio)
     assert seen == {"config-run": ("deployments-cpu", "circuits"), "config-run-row": ("deployments-gpu", "circuits-gpu"),
-                    "commit-pack": ("deployments-gpu", "circuits-gpu"),
+                    "commit-pack": ("deployments-gpu", "circuits-gpu"), "load-time": ("deployments-gpu", "circuits-gpu"),
                     "port-capture": ("deployments-gpu", "capture"), "prover-dev": ("provers", "dev"), "prover-bench": ("provers", "prover-bench"),
                     "store-push": ("backfill", "backfill"), "store-fetch": ("backfill", "backfill")}
 

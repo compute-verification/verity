@@ -29,7 +29,7 @@ from .cancel import add_args as cancel_args, cancel as cancel_run
 from .classify import classify, write as write_failure
 from .events import Emitter, append, events_path, utc_now_ms
 from .job import build_job, input_ref, sampler_instruments, set_status, sha256_file, write_json_atomic
-from .procs import stat_fields
+from .procs import live_group, stat_fields
 
 
 def _tele_argv() -> list[str]:
@@ -195,6 +195,22 @@ def set_timeout_main(argv: list[str]) -> int:
     return 0
 
 
+def _end_leftovers(em: Emitter, stage: str, pgid: int) -> None:
+    """SIGKILL what is left of the workload's process group once its leader has exited, and mark it. A pool's workers whose parent
+    the OOM killer took live on otherwise, holding their memory after the run is recorded as ended (vy-nebius-cpu-1, 8 Oct 06:05Z:
+    two failed circuit-check runs' ~270 workers kept the user slice full for 40 minutes). A process that must outlive its run
+    leaves the run's session (setsid), as tmux does."""
+    if not (left := live_group(pgid)):
+        return
+    em.mark(stage, "group_outlived_leader", n=len(left), pids=[f"{st['pid']} {st['comm']}" for st in left[:10]])
+    print(f"[tele run] {stage}: {len(left)} process(es) of the workload's group {pgid} outlived it; SIGKILL to the group",
+          file=sys.stderr)
+    try:
+        os.killpg(pgid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+
+
 def run(a: argparse.Namespace, cmd: list[str]) -> int:
     d = Path(a.attempt_dir)
     d.mkdir(parents=True, exist_ok=True)
@@ -287,6 +303,7 @@ def run(a: argparse.Namespace, cmd: list[str]) -> int:
         _marker(d, "manual", None, proc.pid, signal.SIGTERM, "tele run interrupted (SIGINT)", None, True, a.job)
         rc = proc.wait()
     t_end = time.monotonic()
+    _end_leftovers(em, a.stage, proc.pid)
     sig = -rc if rc is not None and rc < 0 else None
     status_rc = 128 + sig if sig else rc
     outcome = "ok" if rc == 0 else "fail"
