@@ -1117,7 +1117,7 @@ def test_train_sh_refuses_an_empty_commit_one_origin_lacks_and_a_base_that_is_no
     git("commit", "-q", "--allow-empty", "-m", "empty")
     git("push", "-q", "origin", "HEAD:main")
     p = train("HEAD", "vy-x")
-    assert p.returncode == 1 and "is empty (its tree is its parent's)" in p.stderr, p.stderr
+    assert p.returncode == 1 and "is empty (its tree is its base" in p.stderr, p.stderr
 
     (tmp_path / "repo" / "a").write_text("b\n")
     git("commit", "-q", "-am", "local")
@@ -1136,6 +1136,35 @@ def test_train_sh_refuses_an_empty_commit_one_origin_lacks_and_a_base_that_is_no
 
     p = train(head, "vy-x", "--against", root, "--agreement")
     assert p.returncode == 2 and "--agreement refused with --against" in p.stderr, p.stderr
+    assert not argv.exists()
+
+
+def test_train_sh_takes_a_restack_by_merge_head_and_refuses_one_with_mains_tree(tmp_path):
+    """#1585's head 13df320192c2 merged main into a commit that already held main's change: its tree is its first parent's, yet
+    it differs from main, and train.sh refused it as empty (22:23Z, 9 Oct). Empty means the tree is main's, where it leaves main."""
+    git, train, argv = _train_repo(tmp_path)
+    root = git("rev-parse", "HEAD")
+    (tmp_path / "repo" / "m").write_text("m\n")
+    git("add", "m")
+    git("commit", "-q", "-m", "main")
+    git("push", "-q", "origin", "HEAD:main")
+    for branch, files in (("pr", ("m", "p")), ("same", ("m",))):
+        git("checkout", "-q", "-b", branch, root)
+        for f in files:
+            (tmp_path / "repo" / f).write_text(f"{f}\n")
+            git("add", f)
+        git("commit", "-q", "-m", branch)
+        git("merge", "-q", "--no-edit", "origin/main")
+        git("push", "-q", "origin", branch)
+    head = git("rev-parse", "pr")
+    assert git("rev-parse", "pr^{tree}") == git("rev-parse", "pr^1^{tree}") != git("rev-parse", "origin/main^{tree}")
+    p = train(head, "vy-x")
+    assert p.returncode == 0 and p.stdout.splitlines()[-1] == "RUN r20261009-050001-aaaa", (p.stdout, p.stderr)
+    argv.unlink()
+
+    assert git("rev-parse", "same^{tree}") == git("rev-parse", "origin/main^{tree}")
+    p = train(git("rev-parse", "same"), "vy-x")
+    assert p.returncode == 1 and "is empty (its tree is its base" in p.stderr, p.stderr
     assert not argv.exists()
 
 
