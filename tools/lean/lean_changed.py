@@ -27,8 +27,8 @@ in a recorded run, into its `result.json`, the Attempt's result. `check` fails i
 one without the replay (`check.lean_fast`), and `research merge` refuses an attempt whose result is of that kind
 (`research.merge.REFUSED_KINDS`), whatever `--tool` recorded it.
 
-The tree (`--tree`) holds each such package's tracked files, and those of the packages it requires by path, at their paths in
-this repository, with each package's own `.lake`: Lake rebuilds only the modules that changed since its last build there and
+The tree (`--tree`) holds each such package's tracked files, and those of the packages it requires by path or names under
+`proved_in`, at their paths in this repository, with each package's own `.lake`: Lake rebuilds only the modules that changed since its last build there and
 what imports them. A package's fetched dependencies are hard links to the ones the audit keeps (`--deps`, `lean_audit.WarmDeps`),
 taken under their lock while the tree has none for its manifest and toolchain; the build runs in the audit's sandbox
 (`tools/lean/sandbox.sh`), where they are mounted read-only, so it cannot write what the audit reads, and a concurrent audit can
@@ -91,13 +91,16 @@ LINKS = "links.json"
 
 
 def missed(files: list[str], cache: Path) -> list[str]:
-    """The packages whose audit would run, those another requires by path first."""
+    """The packages whose audit would run, those another requires by path first, and a spec after the packages its
+    `proved_in` names."""
     pkgs = [p for p in LA.packages(files) if not (cache / f"{LA.key(p, files, LA.FLAGS)}.json").is_file()]
-    return sorted(pkgs, key=lambda p: (len(LA.path_deps(p)), p))
+    rank = lambda p: max([len(LA.path_deps(p)), *(len(LA.path_deps(q)) + 1 for q in LA.provers(p))])
+    return sorted(pkgs, key=lambda p: (rank(p), p))
 
 
 def closure(pkg: str) -> list[str]:
-    return [pkg, *LA.path_deps(pkg)]
+    """``pkg``, the packages it requires by path, and those its `proved_in` names with theirs, whose builds `records` reads."""
+    return list(dict.fromkeys([pkg, *LA.path_deps(pkg), *(d for q in LA.provers(pkg) for d in (q, *LA.path_deps(q)))]))
 
 
 def sync(pkgs: list[str], files: list[str], tree: Path) -> int:
@@ -217,8 +220,9 @@ def records(pkg: str, tree: Path, lake: str) -> list[str]:
     """The audit's failures about the guarantees on the tree's build of ``pkg`` (`audit.py`'s `facts_of` and `judge`, without
     the kernel replay): a guarantee missing, no longer a theorem or with no record, using an axiom the policy does not allow or
     assuming an unnamed `Prop`, whose statement or the definitions it reads no longer match its record, or a `reads` entry
-    that no longer lists the modules the guarantees read, the guarantees that read them or their definitions' digest. Raises
-    RuntimeError when `Facts.lean` cannot read the build."""
+    that no longer lists the modules the guarantees read, the guarantees that read them or their definitions' digest. A spec's
+    guarantees are read from the builds of the packages its `proved_in` names (`audit.proved`), built before it (`missed`).
+    Raises RuntimeError when `Facts.lean` cannot read a build."""
     policy = AUDIT.load(tree / pkg)
     work = tree / pkg / FACTS
     work.mkdir(parents=True, exist_ok=True)
@@ -234,10 +238,13 @@ def records(pkg: str, tree: Path, lake: str) -> list[str]:
     AUDIT.run, AUDIT.TOOL = lake_in_sandbox, work
     try:
         facts = AUDIT.facts_of(tree / pkg, policy, work)
+        cross: list[str] = []
+        if "proved_in" in policy:
+            cross, facts, _ = AUDIT.proved(tree / pkg, policy, facts, work)
     finally:
         AUDIT.run, AUDIT.TOOL = plain, tool
     fails, _ = AUDIT.judge(policy, facts, AUDIT.lean_modules(tree / pkg))
-    return [f for f in fails if f.startswith("guarantees:")]
+    return [f for f in cross + fails if f.startswith("guarantees:")]
 
 
 def sandboxed() -> bool:

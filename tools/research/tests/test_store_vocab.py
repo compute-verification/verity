@@ -39,7 +39,7 @@ def fs_remote(env):
 
 RESULT_KEYS = ("candidate", "proof_class", "soundness", "K", "B", "hardware", "authentication", "campaign", "relation", "mode", "zk", "overhead",
                "seconds_per_vu", "track", "scope", "label", "note", "assumptions", "omitted", "domain", "breakthrough",
-               "lane", "question", "row", "sweep", "arm", "stage", "source", "superseded_by", "abandoned", "interaction_attempt_of", "hash", "sharing", "fold",
+               "lane", "question", "row", "sweep", "arm", "stage", "source", "superseded_by", "abandoned", "replay_set", "replay_expect", "interaction_attempt_of", "hash", "sharing", "fold",
                "pipeline", "kernel_outcome", "kernel_reason")
 VERIFICATION_KEYS = ("verified", "verifier", "verifier_seconds", "independently_verified", "verified_by", "finding", "same_device", "below_bar", "outcome",
                      "grant", "ready", "lean_review", "commit_map", "custody")
@@ -142,7 +142,10 @@ def test_label_refuses_what_the_vocabulary_cannot_place_unless_off_vocab(env, ca
                (["model_agrees", "maybe"], "model_agrees='maybe' is not one of true, false"),
                (["verified", "yes"], "not one of accepted, rejected, not-transferable, no-dumps"),
                (["fold", "four"], "fold='four' is not an int"),
-               (["overhead", "n/a"], "overhead='n/a' is not a number")]
+               (["overhead", "n/a"], "overhead='n/a' is not a number"),
+               (["replay_set", "warden"], "replay_set='warden' does not match"),
+               (["replay_set", "warden/rerun"], "replay_set='warden/rerun' does not match"),
+               (["replay_expect", "blocked"], "replay_expect='blocked' does not match")]
     for args, why in refused:
         assert main(["label", ART, *args, "--by", "lane-x"]) == 2, args
         out, err = capsys.readouterr()
@@ -160,6 +163,9 @@ def test_label_refuses_what_the_vocabulary_cannot_place_unless_off_vocab(env, ca
     out, err = capsys.readouterr()
     assert Path(out.strip()).is_file() and err.startswith("research data label: local only (write-through off)") and err.count("\n") == 1
     assert {(l.key, l.value) for l in st.labels(ART)} == {("nonesuch", "v1"), ("model_agrees", True), ("verified", "accepted")}
+    for key, value in (("replay_set", "warden/re-verify"), ("replay_set", "pouw/re-run"), ("replay_expect", "blocked: V3")):
+        assert main(["label", ART, key, value, "--by", "lane-x", "--ref", "run:x"]) == 0, (key, value)
+    capsys.readouterr()
 
 
 def test_lane_shorthand_folds_into_one_spelling(env, capsys):

@@ -7,7 +7,7 @@
 `.gitattributes` names this driver for every `lean-audit.json`, and git runs it when both sides changed the file. A record is
 a map of entries by name: the guarantees, the modules under `reads`, the dependencies, and the policy's own sections. Each
 side's change to an entry (added, changed or removed) applies, and an entry both sides changed differently refuses the merge.
-A guarantee's record and a dependency's digest are one entry each. Under `reads`, which two branches adding guarantees that
+A guarantee's record (its `owner` aside, which merges on its own) and a dependency's digest are one entry each. Under `reads`, which two branches adding guarantees that
 read one module both change, the module's definitions merge the same way, its readers (`guarantees`) as sets, and its digest
 is recomputed from the merged definitions (`audit.module_digest`). The merge also refuses when one side stops reading a
 definition in a module the other side changed: the record does not say which guarantees read which definition. A side
@@ -73,6 +73,24 @@ def entries(path: str, o: dict, a: dict, b: dict, why: list[str], depth: int = 1
     return out
 
 
+def guarantees(o: dict, a: dict, b: dict, why: list[str]) -> dict:
+    """The guarantees entry by entry, each one's `owner` apart from the rest of its record: a branch that restates a guarantee
+    and one that gives it an owner merge."""
+    out = {}
+    for k in keys("guarantees", a, b):
+        x, y, z = o.get(k, MISSING), a.get(k, MISSING), b.get(k, MISSING)
+        if MISSING in (y, z) or not all(isinstance(r, dict) for r in (y, z, {} if x is MISSING else x)):
+            v = one(f"guarantees[{k}]", x, y, z, why)
+        else:
+            v = one(f"guarantees[{k}]", x if x is MISSING else A.unowned(x), A.unowned(y), A.unowned(z), why)
+            who = one(f"guarantees[{k}].owner", MISSING if x is MISSING else x.get("owner", MISSING), y.get("owner", MISSING),
+                      z.get("owner", MISSING), why)
+            v = v if who is MISSING else {"owner": who} | v
+        if v is not MISSING:
+            out[k] = v
+    return out
+
+
 def core(group):
     """What a `reads` entry says, its digest (which it determines) aside."""
     return None if group is None else (A.definitions(group), sorted(group.get("guarantees", [])))
@@ -126,6 +144,8 @@ def merge(base: dict, ours: dict, theirs: dict) -> tuple[dict, list[str]]:
         o, a, b = base.get(k, MISSING), ours.get(k, MISSING), theirs.get(k, MISSING)
         if k == "reads":
             v = reads({} if o is MISSING else o, {} if a is MISSING else a, {} if b is MISSING else b, why)
+        elif k == "guarantees" and isinstance(a, dict) and isinstance(b, dict) and (o is MISSING or isinstance(o, dict)):
+            v = guarantees({} if o is MISSING else o, a, b, why)
         elif isinstance(a, dict) and isinstance(b, dict) and (o is MISSING or isinstance(o, dict)):
             v = entries(k, {} if o is MISSING else o, a, b, why, 2 if k in NESTED else 1)
         else:

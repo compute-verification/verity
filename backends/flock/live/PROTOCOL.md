@@ -158,7 +158,8 @@ It proves `⟨c, h⟩ = t` for the batched constraint, where `(c, t)` comes from
 
 1. P sends `final_c'`, a constant of the c_eval and ring switch c rows: sent after `γ`, it could be solved to cancel any
    failing row. `ε` ← V. P sends `ρ = ε h_fa + h_tx` and `σ = h_fb + h_ty`.
-2. `γ` (10) ← V. Both sides form `(c, t)`. P computes `τ = ⟨c, mu⟩` and sends its commitment
+2. `γ` (10) ← V. Both sides form `(c, t)`. P checks `⟨c, h⟩ = t` on its pads and stops otherwise, before it sends anything
+   more. P computes `τ = ⟨c, mu⟩` and sends its commitment
    `hm96::leaf(SHA-512("verity/flock-zk/tau/v1\0" ‖ τ), salt)` with a fresh 192-byte salt (`tau_commitment`, M2).
 3. `β` ← V. P refuses `β = 0`. P sends `Y = (h + β mu ‖ pad_h + β pad_mu)`.
 4. 168 query words ← V, reduced to `j = lo mod N`. P opens `(C_h[j], C_mu[j])` with salts and paths. The proof carries
@@ -168,6 +169,14 @@ It proves `⟨c, h⟩ = t` for the batched constraint, where `(c, t)` comes from
 
 `τ` in the clear before `β` (M1's first version) would let a verifier test `⟨c, Y⟩ = t + βτ` as soon as `Y` arrives,
 before the last coin; §9's extraction run needs every message before the last coin masked, committed or public.
+
+**The prover checks before it speaks** (step 2, `zk_veil::SelfCheck`). On a failing constraint, `⟨c, Y[..s]⟩ + t + βτ`
+is `⟨c, h⟩ + t`, a function of the witness, and the simulator covers only runs whose constraint holds. So the prover
+stops with `PROVER-STOPPED: the batched constraint fails` before `τ`'s commitment, and the last thing it sent is `[ρ, σ]`.
+An honest witness passes for every `γ`, so the honest prover's messages and proofs are unchanged. Two kinds of run skip
+the check: the selftest's negative controls whose witness or pads fail by design (`plan_of` names them), whose proofs
+the verifier must refuse, and the simulator's dummy-witness runs (§9), which must reach the proofs as a real run does. No
+flag or variable turns it off.
 
 **Soundness terms, for review.** Batching costs `1/|F|`, the sacrifice `1/|F|`, and `β` `1/|F|`. RS proximity is at
 rate `L_h/N ≈ 0.12` with 168 queries: `(1 − δ)^168` at the unique-decoding `δ ≈ 0.44` is about `2^-140`, plus BCIKS20's
@@ -307,7 +316,7 @@ is the minimum.
   constraint by a witness-dependent amount). Each stops the prover before it sends anything that depends on the coins it
   reads, and reads only opened coins; `r_j = 1` is checked as the coin opens, in `zk_veil::Masking`'s draw. Its
   completeness loss: under uniform coins the honest prover refuses with probability at most `(#outer coins)·2^-128` per
-  rep, `m − 13` outer coins.
+  rep, `m − 13` outer coins. §5's self-check refuses no coin: an honest witness passes it for every `γ`.
   The mask slot must have `blocks · 2^(mask_log−7) ≥ 128 · 4` words for the rank to be reachable. Both sides refuse a
   statement, or a table of a split session, with fewer than `128 · 4 + 64` words when it is built, before `Hello`
   (`zk_shape_ok`). RoPE and GEMM have 1024 at every split tried: m ≥ 25 at their `k_log` means at least 8 blocks.
@@ -480,7 +489,9 @@ extraction run's lucky pass every time. Evidence is kept in the private store.
 Selftest negatives: `zk_verifier_coin_off_its_commitment` (the prover stops at rep 0's round 3),
 `zk_verifier_commits_beta_zero` (it stops at the β round, 98), `zk_verifier_commits_outer_coin_one` (it stops at the
 round that opens the outer coins), `zk_dummy_witness_passes_the_region_claims` (the dummy is
-rejected by the inner proof alone).
+rejected by the inner proof alone), `zk_failing_witness_stops_before_tau` (an honest plan's prover on a witness with a
+flipped unit bit stops after the batching coins: rep 0's stream ends with `[ρ, σ]`, and no `τ` commitment, `β` or proof
+goes out).
 
 **Still to do.**
 - **C1's level-0 root check** stays: both reps prove one witness, level 0's randomness is drawn once per session and
