@@ -189,6 +189,11 @@ class Stack:
     def executing(self) -> bool:
         return self.active is not None and self.active.executor is not None
 
+    @property
+    def open_pass(self) -> ExecutorPass | None:
+        """The pass `pass_` holds open now, if any."""
+        return self._pass
+
     @contextmanager
     def pass_(self, spec: PassSpec | None = None) -> Iterator[ExecutorPass | None]:
         """One pass under `spec` (the active arm's by default).  A pass that raises is ended, so its lanes join, and not

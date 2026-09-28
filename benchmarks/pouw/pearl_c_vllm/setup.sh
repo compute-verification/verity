@@ -6,13 +6,22 @@
 # the window's build flags and cache path are these and nothing rebuilds there.  pyarrow reads the quality run's WikiText-2.
 #   research run --on vy-nebius-2 --project verity --campaign pouw --source <run tree> --cwd source \
 #     --env GPU_LEASE_WHO=bc-dd22acf8 -- bash benchmarks/pouw/pearl_c_vllm/setup.sh
-# Env: WORK (/workspace/pouw/mvp-e2e), HF_HOME (/workspace/hf).  Writes $WORK/ready.json.
+# Env: WORK (/workspace/pouw/mvp-e2e), HF_HOME (/workspace/hf).  Writes $WORK/ready.json.  LINK_VENV=DIR links a venv already
+# on the node (node 1's /workspace/jobs/venv312) as $WORK/venv312 instead of bootstrapping one, once its vLLM and torch are
+# pod_bootstrap.sh's pins; nothing is installed into it, so pyarrow (the quality run's) is left out.
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
 export WORK=${WORK:-/workspace/pouw/mvp-e2e} HF_HOME=${HF_HOME:-/workspace/hf}
 REPO=unsloth/Meta-Llama-3.1-8B-Instruct REV=a2856192dd7c25b842431f39c179a6c2c2f627d1
 mkdir -p "$WORK"
-(cd "$ROOT/integrations/vllm" && VENV=$WORK/venv312 bash verity_vllm/ops/pod_bootstrap.sh --cpu --cases "" --out "$WORK/bootstrap")
+if [ -n "${LINK_VENV:-}" ]; then
+  "$LINK_VENV/bin/python" -c "import sys, torch, vllm
+sys.exit(vllm.__version__ != '0.28.1rc1.dev472+gd9105ea80' or torch.__version__ != '2.13.0+cu129')" \
+    || { echo "LINK_VENV $LINK_VENV is not pod_bootstrap.sh's vLLM d9105ea80 and torch 2.13.0+cu129" >&2; exit 3; }
+  [ -e "$WORK/venv312" ] || ln -s "$LINK_VENV" "$WORK/venv312"
+else
+  (cd "$ROOT/integrations/vllm" && VENV=$WORK/venv312 bash verity_vllm/ops/pod_bootstrap.sh --cpu --cases "" --out "$WORK/bootstrap")
+fi
 "$WORK/venv312/bin/python" - "$REPO" "$REV" "$WORK/models/llama-3.1-8b-instruct" <<'EOF'
 import json, os, sys
 from pathlib import Path
@@ -28,7 +37,7 @@ ready = {"model": repo, "revision": rev, "path": str(p), "vllm": vllm.__version_
 (Path(os.environ["WORK"]) / "ready.json").write_text(json.dumps(ready, indent=1) + "\n")
 print(json.dumps(ready))
 EOF
-"$WORK/venv312/bin/python" -c "import pyarrow" 2>/dev/null || uv pip install --python "$WORK/venv312/bin/python" -q pyarrow
+[ -n "${LINK_VENV:-}" ] || "$WORK/venv312/bin/python" -c "import pyarrow" 2>/dev/null || uv pip install --python "$WORK/venv312/bin/python" -q pyarrow
 PATH=$WORK/venv312/bin:$PATH FLASHINFER_CUDA_ARCH_LIST=12.0f CUDA_VISIBLE_DEVICES= "$WORK/venv312/bin/python" - <<'EOF'
 import json, os
 from pathlib import Path
