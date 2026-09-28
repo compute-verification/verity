@@ -618,8 +618,22 @@ def test_run_canary_bookkeeping_without_a_device(canary, tmp_path):
     assert all(f["first_mismatches"][0]["tile"] == 0 for f in bad["families"].values() if f["asserted"])
 
 
+def _tc_probe_tool():
+    """tc_probe's tool declaration, by path: a bare `import tool` takes whichever of the repo's many `tool.py` is first on
+    sys.path or already in sys.modules, which depends on what the suite ran before this test."""
+    import importlib.util
+
+    name = "_tc_probe_tool_declaration"
+    if name not in sys.modules:
+        spec = importlib.util.spec_from_file_location(name, TC_PROBE / "tool.py")
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules[name] = mod
+        spec.loader.exec_module(mod)
+    return sys.modules[name]
+
+
 def test_tc_probe_tool_declaration_keys_the_canary_flag():
-    import tool as T
+    T = _tc_probe_tool()
 
     with_flag = T.parse(["python", "tools/tc_probe/tc_probe.py", "--instruction", INSTRUCTION, "--out", "x", "--canary"])
     without = T.parse(["python", "tools/tc_probe/tc_probe.py", "--instruction", INSTRUCTION, "--out", "x", "--sweep"])
