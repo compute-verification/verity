@@ -407,6 +407,15 @@
    "assumptions": [],
    "type_hash": "00000000be141dea"
   },
+  "FlockSoundness.Refine.ofCircuit_fold": {
+   "signature": [
+    "FlockSoundness.Refine.ofCircuit_fold (st : Flock.Stmt) (h : FlockSoundness.Refine.StmtWF st)",
+    "  (regions : List (FlockSoundness.Model.Region st.c.kLog (instHSub.hSub st.m st.c.kLog))) :",
+    "  FlockSoundness.Refine.FoldRealizes (Flock.Setup.ofCircuit st).fold (FlockSoundness.Refine.stmtOf st h regions)"
+   ],
+   "assumptions": [],
+   "type_hash": "0000000003db3016"
+  },
   "FlockSoundness.Refine.opening_refines": {
    "signature": [
     "FlockSoundness.Refine.opening_refines (m : Nat) (hm : instLENat.le 7 m) (claims : Array Flock.Claim)",
@@ -890,6 +899,7 @@
     "FlockSoundness.Refine.ligerito_accepts_opening",
     "FlockSoundness.Refine.ligerito_refines",
     "FlockSoundness.Refine.lincheck_refines",
+    "FlockSoundness.Refine.ofCircuit_fold",
     "FlockSoundness.Refine.opening_refines",
     "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.Refine.verify_refines",
@@ -900,6 +910,14 @@
     "FlockSoundness.table_sound_exec_fast100",
     "FlockSoundness.table_sound_exec_fast100_34_35"
    ]
+  },
+  "FlockLevel3.FoldStmt": {
+   "digest": "81ad5678b5754d5ed03d59e5b3bf8880",
+   "definitions": {
+    "FlockLevel3.covers": "59b910b51d2c0ff6",
+    "FlockLevel3.instDecidableCovers": "e729a15297954cbb"
+   },
+   "pins": ["FlockSoundness.Refine.ofCircuit_fold"]
   },
   "FlockLevel3.GF128": {
    "digest": "238daf9bf2ee59921fa3ba13d8c1e929",
@@ -916,6 +934,7 @@
     "FlockSoundness.Refine.ligerito_accepts_opening",
     "FlockSoundness.Refine.ligerito_refines",
     "FlockSoundness.Refine.lincheck_refines",
+    "FlockSoundness.Refine.ofCircuit_fold",
     "FlockSoundness.Refine.opening_refines",
     "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.Refine.verify_refines",
@@ -942,6 +961,7 @@
     "FlockSoundness.Refine.ligerito_refines",
     "FlockSoundness.Refine.lincheck_refines",
     "FlockSoundness.Refine.merkleCheck_verifies",
+    "FlockSoundness.Refine.ofCircuit_fold",
     "FlockSoundness.Refine.opening_refines",
     "FlockSoundness.Refine.opensOK_of",
     "FlockSoundness.Refine.rep_refines",
@@ -967,6 +987,7 @@
     "FlockSoundness.Refine.ligerito_accepts_opening",
     "FlockSoundness.Refine.ligerito_refines",
     "FlockSoundness.Refine.lincheck_refines",
+    "FlockSoundness.Refine.ofCircuit_fold",
     "FlockSoundness.Refine.opening_refines",
     "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.Refine.verify_refines",
@@ -1438,6 +1459,7 @@
     "FlockSoundness.Refine.ligerito_accepts_opening",
     "FlockSoundness.Refine.ligerito_refines",
     "FlockSoundness.Refine.lincheck_refines",
+    "FlockSoundness.Refine.ofCircuit_fold",
     "FlockSoundness.Refine.opening_refines",
     "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.Refine.verify_refines",
@@ -1673,6 +1695,7 @@
    },
    "pins": [
     "FlockSoundness.Refine.lincheck_refines",
+    "FlockSoundness.Refine.ofCircuit_fold",
     "FlockSoundness.Refine.opening_refines",
     "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.Refine.verify_refines",
@@ -1774,6 +1797,7 @@
    },
    "pins": [
     "FlockSoundness.Refine.lincheck_refines",
+    "FlockSoundness.Refine.ofCircuit_fold",
     "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.Refine.verify_refines",
     "FlockSoundness.Refine.verify_tableAfter"
@@ -1837,6 +1861,24 @@
     "FlockSoundness.Refine.verify_tableAfter"
    ]
   },
+  "FlockSoundness.Refine.StmtOf": {
+   "digest": "14fbb7a5cf1c4feed1070de5dce4f504",
+   "definitions": {
+    "FlockSoundness.Refine.StmtWF": "5cc8750093fa6250",
+    "FlockSoundness.Refine.dCnt": "1026db5e0f22bb80",
+    "FlockSoundness.Refine.lastCover": "3e7d3b101745ceca",
+    "FlockSoundness.Refine.lkCnt": "4025548839cb1eb4",
+    "FlockSoundness.Refine.lkSide": "a417529133d033d9",
+    "FlockSoundness.Refine.matA": "66b3420b0e0225ce",
+    "FlockSoundness.Refine.matB": "e89e1c9b7848e324",
+    "FlockSoundness.Refine.rangeCnt": "6fbca9babaa64db5",
+    "FlockSoundness.Refine.slotA": "9cee52d6dcbfcf68",
+    "FlockSoundness.Refine.slotB": "196a8140995e5c18",
+    "FlockSoundness.Refine.spCnt": "e5c18a909d67006f",
+    "FlockSoundness.Refine.stmtOf": "e4c418751a5d754e"
+   },
+   "pins": ["FlockSoundness.Refine.ofCircuit_fold"]
+  },
   "FlockSoundness.Refine.Table": {
    "digest": "983ee33194e90bac35de429ffef6177d",
    "definitions": {
@@ -1864,6 +1906,7 @@
     "FlockSoundness.Refine.ligerito_accepts_opening",
     "FlockSoundness.Refine.ligerito_refines",
     "FlockSoundness.Refine.lincheck_refines",
+    "FlockSoundness.Refine.ofCircuit_fold",
     "FlockSoundness.Refine.opening_refines",
     "FlockSoundness.Refine.opensOK_of",
     "FlockSoundness.Refine.rep_refines",
