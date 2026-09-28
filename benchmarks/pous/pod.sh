@@ -6,6 +6,10 @@
 #     -- bash benchmarks/pous/pod.sh IMPL=vllm-gpu IMPL_COMMIT=<commit> [WS=qwen2.5-0.5b/linears+head] [AUDITS=20]
 #   research run --on <pod> --project verity --source . --cwd source --campaign pous \
 #     -- bash benchmarks/pous/pod.sh IMPL=reference [WS=...] [MAX_SEGMENTS=N]
+#   ... -- bash benchmarks/pous/pod.sh IMPL=p2-gpu [WS=...]      # built for the device's arch (ARCH=sm_NN overrides)
+#
+# HW, the census id recorded with the result, is the pod's GPU: the H100 SXM and the L40S are known, and any other GPU, or
+# none, needs HW=<census/hardware.json id>.
 #
 # vllm-gpu bootstraps the implementation tree's Python 3.12 environment (its ops/pod_bootstrap.sh --cpu: the venv, torch cu129,
 # vLLM, the QWEN05 checkpoint; no native taps, which this benchmark does not use), then runs bench.py, which drives that tree's
@@ -14,7 +18,13 @@
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 REPO=$(pwd); I=$RESEARCH_RUN_DIR/inputs; O=$RESEARCH_RUN_DIR; W=${WORK:-/workspace}/pous-bench
-IMPL=${IMPL:-vllm-gpu}; WS=${WS:-qwen2.5-0.5b/linears+head}; HW=${HW:-l40s-48gb/bf16}
+IMPL=${IMPL:-vllm-gpu}; WS=${WS:-qwen2.5-0.5b/linears+head}
+GPU=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1)
+case "$GPU" in                                            # the census id is the device's, never a default another GPU inherits
+  *"H100 80GB HBM3"*) HW=${HW:-h100-sxm5-80gb/bf16} ;;
+  *L40S*) HW=${HW:-l40s-48gb/bf16} ;;
+  *) [ -n "${HW:-}" ] || { echo "no census id for GPU '$GPU': pass HW=<census/hardware.json id>"; exit 2; } ;;
+esac
 SCHEME=${SCHEME:-$([ "$IMPL" = p2-gpu ] && echo p2-16448/v1 || echo band-chain/d12/v1)}
 AUDITS=${AUDITS:-20}
 mkdir -p "$W" "$O/bench"
@@ -50,17 +60,19 @@ if [ "$IMPL" = vllm-gpu ]; then
   "$PY" benchmarks/pous/bench.py --scheme "$SCHEME" --impl vllm-gpu --impl-tree "$W/impl" --impl-commit "${IMPL_COMMIT:-unknown}" \
     --build-dir "$W/pous_build" --python "$PY" --weight-set "$WS" --hardware "$HW" --out "$O/bench" --audits "$AUDITS"
 elif [ "$IMPL" = p2-gpu ]; then
-  # P2's kernels (benchmarks/pous/p2_gpu): CGBN at its pinned commit, libgmp for CGBN's host pass, nvcc for sm_89
+  # P2's kernels (benchmarks/pous/p2_gpu): CGBN at its pinned commit, libgmp for CGBN's host pass, nvcc for the device's arch
   export PATH=/usr/local/cuda/bin:$PATH
-  [ -f /usr/include/gmp.h ] || { apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq libgmp-dev >/dev/null; } || exit 3
+  ARCH=${ARCH:-sm_$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader | head -1 | tr -d .)}
+  echo '#include <gmp.h>' | cpp >/dev/null 2>&1 || { apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq libgmp-dev >/dev/null; } || exit 3
   CG=$W/CGBN
   [ -d "$CG/.git" ] || git clone -q https://github.com/NVlabs/CGBN "$CG" || exit 3
   git -C "$CG" checkout -q "$(cat benchmarks/pous/p2_gpu/CGBN.commit)" || exit 3
-  make -C benchmarks/pous/p2_gpu CGBN="$CG" BIN="$W/p2bin" -j2 > "$O/p2-make.log" 2>&1 || { tail -20 "$O/p2-make.log"; exit 3; }
-  cp "$W"/p2bin/*.ptxas "$O/" 2>/dev/null
+  BIN=$W/p2bin-$ARCH
+  make -C benchmarks/pous/p2_gpu CGBN="$CG" BIN="$BIN" ARCH="$ARCH" -j2 > "$O/p2-make.log" 2>&1 || { tail -20 "$O/p2-make.log"; exit 3; }
+  cp "$BIN"/*.ptxas "$O/" 2>/dev/null
   PY=$W/ref312/bin/python
   [ -x "$PY" ] || { uv venv -q "$W/ref312" --python 3.12 && uv pip install -q --python "$PY" numpy; } || exit 3
-  "$PY" benchmarks/pous/bench.py --scheme "$SCHEME" --impl p2-gpu --p2-bin "$W/p2bin" --scratch "$W/scratch" \
+  "$PY" benchmarks/pous/bench.py --scheme "$SCHEME" --impl p2-gpu --p2-bin "$BIN" --scratch "$W/scratch" \
     --impl-commit "${RESEARCH_SOURCE_COMMIT:-}" --weight-set "$WS" --hardware "$HW" --out "$O/bench" --audits "$AUDITS" \
     ${MAX_SEGMENTS:+--max-segments "$MAX_SEGMENTS"}
 else
