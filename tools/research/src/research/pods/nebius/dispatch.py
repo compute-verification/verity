@@ -68,6 +68,23 @@ Anything short ends the item failed and stops packing for its model (`stop_model
 From 12:10Z to the quiet hour's end (13:30Z; Kueue holds node 1's queues at 12:10Z) nothing is spooled, adopted or started: queued
 entries go back out as normal Jobs, pack Jobs not yet started are deleted, and from 12:33Z any pack Job still active is deleted, so
 its Commits requeue unpacked (the pilot itself drains at 12:28Z).
+
+**Spilling to node 2 (while `$VY_DISPATCH_ROOT/n2-spill.on` exists).** A GPU Job of this dispatcher that Kueue has held
+VY_N2_SPILL_WAIT_S (120 s) without ever starting it, whose item carries an `n2` block, goes to vy-nebius-2's fill queue when
+node 2's fill runner would start it now: a GPU whose gpu-lease lock is free, not in its keep-free, no Commit, pous or
+higher-prio Verity GPU job queued for it, 2+ GPUs free (the runner's rule for Verity GPU jobs), no timed window running or
+waiting, and no booked window within the block's max_min. At most one per tick, never in node 1's hold (12:10-13:30Z):
+
+    "n2": {"cmd": "...", "owner": "bc-...", "max_min": 25, "gpus": 1, "cpus": 16, "mem_gb": 96, "prio": 5, "pool": "provers",
+           "cpuset": "160-175", "on": "0-3", "cwd": "/..."}      (cmd, owner and max_min (<= 30) required; gpus 1)
+
+The fill job (`n2spill-<Job>.sh`) runs `bash -c cmd` (`pool: provers`: under /usr/local/bin/vy-provers, with VY_PROVERS_CPUS
+= `cpuset` when given) with N2_SPILL_ITEM (the item's JSON on node 2), N2_SPILL_KEY, N2_SPILL_JOB and N2_SPILL_TASK set. The
+Kueue workload is deactivated (spec.active=false, only at the resourceVersion that showed it unadmitted), and the spill is
+recorded in `<root>/n2-spill/<Job>.json` and an `ev: n2-spill` log line. Each tick reads node 2's `result.json` for every
+outstanding spill: exit 0 ends the task as the Job would have (the Job is deleted, the chain continues); any other exit, a third
+start (it was stopped twice), or a fill job gone from node 2 without a result reactivates the workload, so node 1 runs it
+(`ev: n2-spill-back`). Rollback: remove the flag; outstanding spills still resolve.
 """
 from __future__ import annotations
 
@@ -85,6 +102,7 @@ import sys
 import time
 import urllib.parse
 import urllib.request
+from datetime import UTC, datetime
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -119,6 +137,16 @@ PACK_ALERTS = Path(os.environ.get("PACK_ALERT_DIR", "/workspace/monitoring/alert
 QUIET = ((12, 30), (13, 30))
 PACK_HOLD = ((12, 10), QUIET[1])     # node 1's daily quota cutover and quiet hour: Kueue holds every queue at 12:10Z
 PACK_DRAIN = (12, 33)                # pack pods must be gone by 12:35Z
+N2 = os.environ.get("VY_N2", "vy-n2")
+SPILL = ROOT / "n2-spill"
+SPILL_FLAG = Path(os.environ.get("VY_N2_SPILL_FLAG", str(ROOT / "n2-spill.on")))
+SPILL_WAIT_S = int(os.environ.get("VY_N2_SPILL_WAIT_S", "120"))
+SPILL_TRIES = 2
+SPILL_SLACK_MIN = 2                  # node 2's runner starts a queued job at its own poll, a little after this tick
+N2_FILL = os.environ.get("VY_N2_FILL", "/workspace/pouw/fill")
+N2_LEASES = "/run/gpu-lease"
+N2_SPILL = os.environ.get("VY_N2_SPILL_DIR", "/workspace/verity-guest/spill")
+VY_PROVERS = "/usr/local/bin/vy-provers"
 
 
 def kubectl(*args: str, stdin: str | None = None) -> str:
@@ -715,6 +743,372 @@ def submit_pack_pod(priority: str | None = None, dry: bool = False) -> str:
     return submit(item, key, dry=dry)
 
 
+N2_PROBE = r'''
+import fcntl, glob, json, os, re, sys
+fill, leases, spill, names = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4:]
+def read(p):
+    try:
+        with open(p, errors="replace") as f:
+            return f.read()
+    except OSError:
+        return None
+def held(p):
+    try:
+        fd = os.open(p, os.O_RDONLY)
+    except OSError:
+        return False
+    try:
+        fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
+        return False
+    except OSError:
+        return True
+    finally:
+        os.close(fd)
+gpus = sorted(int(m.group(1)) for m in (re.fullmatch(r"(\d+)\.lock", os.path.basename(p)) for p in glob.glob(leases + "/*.lock")) if m)
+queued = []
+for p in sorted(glob.glob(fill + "/queue/*")):
+    m = re.search(r"^#\s*fill:\s*(.*)$", (read(p) or "")[:4000], re.M) if not os.path.basename(p).startswith(".") else None
+    if m:
+        queued.append([os.path.basename(p), m.group(1)])
+dirs = sorted(d for d in os.listdir(fill) if os.path.isdir(os.path.join(fill, d)))
+spills = {}
+for n in names:
+    where = next((d for d in dirs if os.path.isfile(os.path.join(fill, d, n + ".sh"))), None)
+    spills[n] = {"where": where, "result": read(os.path.join(spill, n, "result.json"))}
+print(json.dumps({"gpus": gpus, "busy": [i for i in gpus if held(f"{leases}/{i}.lock")], "keep_free": read(fill + "/keep-free"),
+                  "windows": read(fill + "/windows"), "status": (read(fill + "/status.txt") or "").split("\n")[0],
+                  "queued": queued, "spills": spills}))
+'''
+
+N2_WRITE = r'''
+import json, os, sys
+fill, spill = sys.argv[1], sys.argv[2]
+d = json.load(sys.stdin)
+n = d["name"]
+if os.path.exists(os.path.join(spill, n, "result.json")) or any(
+        os.path.isfile(os.path.join(fill, q, n + ".sh")) for q in os.listdir(fill) if os.path.isdir(os.path.join(fill, q))):
+    sys.exit(n + " is on node 2 already")
+os.makedirs(os.path.join(spill, n), exist_ok=True)
+with open(os.path.join(spill, n, "item.json"), "w") as f:
+    json.dump(d["item"], f, sort_keys=True)
+tmp = os.path.join(fill, "queue", "." + n + ".sh.tmp")
+with open(tmp, "w") as f:
+    f.write(d["script"])
+os.chmod(tmp, 0o755)
+os.rename(tmp, os.path.join(fill, "queue", n + ".sh"))
+print("queued", n)
+'''
+
+
+def n2_python(code: str, *args: str, stdin: str | None = None) -> str:
+    """`python3 -c code args...` on node 2 over ssh, its stdout; raises RuntimeError when it fails."""
+    try:
+        r = subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", N2, shlex.join(["python3", "-c", code, *args])],
+                           input=stdin, capture_output=True, text=True, timeout=60, check=False)
+    except subprocess.TimeoutExpired as e:
+        raise RuntimeError(f"ssh {N2}: {e}") from None
+    if r.returncode:
+        raise RuntimeError(f"ssh {N2}: rc {r.returncode}: {r.stderr.strip()[-300:]}")
+    return r.stdout
+
+
+def n2_block(item: dict) -> dict:
+    """The item's `n2` block with its defaults; raises ValueError when it can't become a node-2 fill job."""
+    b = item.get("n2")
+    if not isinstance(b, dict) or not b.get("cmd") or not b.get("owner"):
+        raise ValueError("no n2 block with a cmd and an owner")
+    b = {"gpus": 1, "cpus": 8, "prio": 0, **b}
+    for k in ("gpus", "cpus", "prio", "max_min", "mem_gb"):
+        if k in b:
+            b[k] = int(b[k])
+    if b["gpus"] != 1:
+        raise ValueError(f"n2.gpus {b['gpus']}: a node-2 fill job other than a Commit holds 1 GPU")
+    if not 1 <= b.get("max_min", 0) <= 30:
+        raise ValueError(f"n2.max_min {b.get('max_min')}: 1-30, the fill runner's cap")
+    if b.get("pool") not in (None, "provers"):
+        raise ValueError(f"n2.pool {b['pool']!r}: provers or none")
+    for k in ("owner", "on", "cpuset"):
+        if k in b and not re.fullmatch(r"[\w.,-]+", str(b[k])):
+            raise ValueError(f"n2.{k} {b[k]!r}")
+    return b
+
+
+def spill_script(name: str, job: str, key: str, idx: int, queue: str, b: dict) -> str:
+    """Node 2's fill job for a spilled task. It keeps its state in N2_SPILL/<name>/: tries (each start), result.json and exit
+    (written once it ended for good). A rerun after that only repeats the exit; the third start ends it as stopped (rc null)."""
+    d = f"{N2_SPILL}/{name}"
+    run = f"bash -c {shlex.quote(b['cmd'])}"
+    if b.get("pool") == "provers":
+        run = f"{VY_PROVERS} {run}"
+    env = {"N2_SPILL_ITEM": f"{d}/item.json", "N2_SPILL_KEY": key, "N2_SPILL_JOB": job, "N2_SPILL_TASK": str(idx),
+           **({"VY_PROVERS_CPUS": str(b["cpuset"])} if b.get("cpuset") else {})}
+    hdr = (f"# fill: owner={b['owner']} gpus={b['gpus']} max_min={b['max_min']} cpus={b['cpus']} project=verity prio={b['prio']}"
+           + (f" mem_gb={b['mem_gb']}" if b.get("mem_gb") else "") + (f" on={b['on']}" if b.get("on") else ""))
+    return f"""#!/usr/bin/env bash
+{hdr}
+# node 1's {key} (task {idx}, Job {job}), held by Kueue in {queue}: spilled by dispatch.py (infra/nebius). Exit 0 ends the task
+# on node 1; any other exit, or a third start (stopped twice), sends it back to node 1's queue (node 1's tick reads result.json).
+set -uo pipefail
+d={shlex.quote(d)}
+[ ! -s "$d/result.json" ] || exit "$(cat "$d/exit" 2> /dev/null || echo 1)"
+n=$(( $(cat "$d/tries" 2> /dev/null || echo 0) + 1 ))
+echo "$n" > "$d/tries"
+result() {{
+  echo "$2" > "$d/exit"
+  printf '{{"rc": %s, "tries": %s, "fill_job": "%s", "t": "%s"}}\\n' "$1" "$n" "${{FILL_JOB:-}}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$d/.result.json"
+  mv "$d/.result.json" "$d/result.json"
+}}
+[ "$n" -le {SPILL_TRIES} ] || {{ result null 1; exit 1; }}
+export {' '.join(f'{k}={shlex.quote(v)}' for k, v in env.items())}
+cd {shlex.quote(b.get('cwd') or d)} || {{ result 2 2; exit 2; }}
+rc=0
+{run} || rc=$?
+case $rc in
+  99) echo $((n - 1)) > "$d/tries"; exit 99 ;;
+  124 | 137 | 143) exit 143 ;;
+esac
+result "$rc" "$rc"
+exit "$rc"
+"""
+
+
+def gpu_list(s: str | None) -> set[int]:
+    """GPU indices as the fill runner reads them (`7`, `0,1`, `2-7`), before any `# comment`."""
+    out: set[int] = set()
+    for part in re.split(r"[,\s]+", (s or "").split("#")[0].strip()):
+        lo, _, hi = part.partition("-")
+        if lo.isdigit() and (not hi or hi.isdigit()):
+            out.update(range(int(lo), int(hi or lo) + 1))
+    return out
+
+
+def booked(text: str | None) -> list[tuple[float, float]]:
+    """The fill runner's booked windows (`2026-10-01T10:00Z 30 # who`), as (start, end) epoch seconds."""
+    out = []
+    for line in (text or "").splitlines():
+        f = line.split("#")[0].split()
+        try:
+            s = datetime.fromisoformat(f[0])
+            s = (s if s.tzinfo else s.replace(tzinfo=UTC)).timestamp()
+            out.append((s, s + 60 * float(f[1] if len(f) > 1 else 30)))
+        except (IndexError, ValueError):
+            continue
+    return out
+
+
+def n2_room(probe: dict, b: dict, t: float) -> tuple[list[int], str | None]:
+    """(node 2's idle GPUs the block's fill job could take, None), or ([], why node 2's runner wouldn't start it now): keep-free,
+    the runner's order (Commit guests, then pous, then Verity by prio), its 2+ free GPUs for a Verity GPU job, and the windows."""
+    status = probe.get("status") or ""
+    if "timed False, window waiting False" not in status:
+        return [], f"node 2's runner: {status[:160] or 'no status'}"
+    gpus, busy, keep = probe["gpus"], set(probe["busy"]), gpu_list(probe.get("keep_free"))
+    on = gpu_list(str(b["on"])) if b.get("on") else None
+    idle = [i for i in gpus if i not in busy and i not in keep and (on is None or i in on)]
+    if len(gpus) - len(busy) < 2:
+        return [], f"{len(gpus) - len(busy)} GPU free on node 2: its runner starts a Verity GPU job only with 2+"
+    ahead = 0
+    for name, h in probe.get("queued") or []:
+        f = dict(re.findall(r"(\w+)=(\S+)", h))
+        g = int(f["gpus"]) if f.get("gpus", "").isdigit() else 1
+        prio = int(f["prio"]) if f.get("prio", "").isdigit() else 0
+        if g and (name.startswith("verity-commit-") or f.get("project", "pous") != "verity" or prio >= b["prio"]):
+            ahead += g
+    if len(idle) - ahead < b["gpus"]:
+        return [], f"node 2's idle GPUs {idle or '-'} (keep-free {sorted(keep) or '-'}) go to {ahead} queued GPU job(s) ahead"
+    end = t + 60 * (b["max_min"] + SPILL_SLACK_MIN)
+    for s, e in booked(probe.get("windows")):
+        if not (end <= s or t >= e):
+            return [], f"node 2's window at {time.strftime('%H:%MZ', time.gmtime(s))} is within max_min {b['max_min']}"
+    return idle, None
+
+
+def spill_records() -> list[dict]:
+    out = []
+    for f in sorted(SPILL.glob("*.json")):
+        try:
+            out.append(json.loads(f.read_text()))
+        except (OSError, ValueError) as e:
+            print(f"n2-spill: {f} unreadable: {e}", file=sys.stderr)
+    return out
+
+
+def write_json(p: Path, d: dict) -> None:
+    p.parent.mkdir(parents=True, exist_ok=True)
+    tmp = p.with_name(f".{p.name}.{os.getpid()}.tmp")
+    tmp.write_text(json.dumps(d, sort_keys=True))
+    tmp.rename(p)
+
+
+def settle(rec: dict, **kw) -> None:
+    write_json(SPILL / "done" / f"{rec['job']}.json", {**rec, **kw, "settled": now_utc()})
+    (SPILL / f"{rec['job']}.json").unlink(missing_ok=True)
+
+
+def ts(s: str) -> float:
+    return calendar.timegm(time.strptime(s, "%Y-%m-%dT%H:%M:%SZ"))
+
+
+def spill_candidates(jobs: list[dict], wls: list[dict], t: float) -> list[tuple[dict, dict, dict, dict]]:
+    """(Job, workload, item, n2 block) for each GPU Job of this dispatcher that Kueue has held SPILL_WAIT_S and never started,
+    whose item has an n2 block, and that was never spilled before; oldest workload first."""
+    by_name = {j["metadata"]["name"]: j for j in jobs}
+    out = []
+    for w in sorted(wls, key=lambda w: w["metadata"].get("creationTimestamp", "")):
+        st = w.get("status") or {}
+        if (w.get("spec") or {}).get("active") is False or st.get("admission") or any(
+                c.get("type") == "Finished" and c.get("status") == "True" for c in st.get("conditions") or []):
+            continue
+        name = next((r.get("name") for r in w["metadata"].get("ownerReferences") or [] if r.get("kind") == "Job"), None)
+        j = by_name.get(name)
+        if j is None or not j["spec"].get("suspend") or (j.get("status") or {}).get("startTime") or j["metadata"].get("deletionTimestamp"):
+            continue
+        if t - ts(w["metadata"]["creationTimestamp"]) < SPILL_WAIT_S:
+            continue
+        req = ((j["spec"]["template"]["spec"]["containers"][0].get("resources") or {}).get("requests") or {})
+        if not int(req.get("nvidia.com/gpu", 0) or 0):
+            continue
+        if (SPILL / f"{name}.json").exists() or (SPILL / "done" / f"{name}.json").exists():
+            continue
+        item = job_item(j)
+        try:
+            b = n2_block(item)
+        except (ValueError, TypeError):
+            continue
+        out.append((j, w, item, b))
+    return out
+
+
+def spill(j: dict, w: dict, item: dict, b: dict, idle: list[int], t: float, dry: bool = False) -> bool:
+    """Deactivate the held workload (only while it is still unadmitted at the resourceVersion just read), then queue its fill job
+    on node 2; a node-2 write that fails reactivates it at once."""
+    name, wl = j["metadata"]["name"], w["metadata"]["name"]
+    key, labels = j["metadata"]["annotations"]["verity.dev/item"], j["metadata"]["labels"]
+    idx, tries, queue = int(labels["verity.dev/task"]), int(labels["verity.dev/try"]), (w.get("spec") or {}).get("queueName", "")
+    n2 = f"n2spill-{name}"
+    held_s = int(t - ts(w["metadata"]["creationTimestamp"]))
+    if dry:
+        print(f"would spill {name} ({key}, held {held_s} s in {queue}) to node 2 as {n2} (idle GPUs {idle})")
+        return True
+    rec = {"job": name, "workload": wl, "key": key, "task": idx, "try": tries, "queue": queue, "n2": n2, "spilled": now_utc(),
+           "held_s": held_s, "idle": idle, "item": item}
+    fresh = json.loads(kubectl("get", "workload", wl, "-o", "json"))
+    if (fresh.get("spec") or {}).get("active") is False or (fresh.get("status") or {}).get("admission"):
+        return False
+    write_json(SPILL / f"{name}.json", rec)
+    try:
+        kubectl("patch", "workload", wl, "--type", "merge", "-p",
+                json.dumps({"metadata": {"resourceVersion": fresh["metadata"]["resourceVersion"]}, "spec": {"active": False}}))
+    except RuntimeError as e:
+        (SPILL / f"{name}.json").unlink(missing_ok=True)
+        print(f"n2-spill {name}: not deactivated, it stays on node 1: {e}", file=sys.stderr)
+        return False
+    try:
+        n2_python(N2_WRITE, N2_FILL, N2_SPILL, stdin=json.dumps({"name": n2, "item": item, "script": spill_script(n2, name, key, idx, queue, b)}))
+    except RuntimeError as e:
+        spill_back(rec, f"node 2 took no fill job: {e}")
+        return False
+    append("log.jsonl", {"ev": "n2-spill", "job": name, "key": key, "task": idx, "try": tries, "queue": queue, "workload": wl,
+                         "n2": n2, "held_s": held_s, "idle": idle, "max_min": b["max_min"], "owner": b["owner"], "pool": b.get("pool")})
+    print(f"n2-spill {name} ({key}, held {held_s} s in {queue}) -> node 2 {n2}")
+    return True
+
+
+def spill_back(rec: dict, why: str) -> bool:
+    """Back to node 1's queue: the workload active again. False when Kueue couldn't be told (retried next tick)."""
+    try:
+        kubectl("patch", "workload", rec["workload"], "--type", "merge", "-p", json.dumps({"spec": {"active": True}}))
+        outcome = "back"
+    except RuntimeError as e:
+        if "not found" not in str(e).lower():
+            print(f"n2-spill {rec['job']}: not reactivated yet: {e}", file=sys.stderr)
+            return False
+        outcome = "gone"
+        append("done.jsonl", {"key": rec["key"], "state": "failed", "task": rec["task"], "job": rec["job"], "n2": rec["n2"],
+                              "why": f"{why}; its node-1 Job is gone"})
+    append("log.jsonl", {"ev": "n2-spill-back", "job": rec["job"], "key": rec["key"], "n2": rec["n2"], "why": why, "outcome": outcome})
+    print(f"n2-spill {rec['job']}: back to node 1 ({why})")
+    settle(rec, outcome=outcome, why=why)
+    return True
+
+
+def spill_done(rec: dict, res: dict) -> None:
+    """A spilled task that exited 0 on node 2: its node-1 Job goes, and the chain continues as it would from that Job."""
+    item, key, idx = rec["item"], rec["key"], rec["task"]
+    try:
+        ntasks = len(load_template(item["template"], item["template_sha"])[0])
+        kubectl("delete", "job", rec["job"], "--ignore-not-found", "--wait=false")
+    except (OSError, ValueError, RuntimeError) as e:
+        print(f"n2-spill {rec['job']}: held ({e}); retried next tick", file=sys.stderr)
+        return
+    append("log.jsonl", {"ev": "end", "job": rec["job"], "key": key, "task": idx, "try": rec["try"], "state": "succeeded", "rc": 0,
+                         "n2": rec["n2"], "fill_job": res.get("fill_job"), "tries": res.get("tries")})
+    if idx + 1 < ntasks:
+        route(item, key, idx + 1, 0)
+    else:
+        append("done.jsonl", {"key": key, "state": "succeeded", "rc": 0, "task": idx, "job": rec["job"], "n2": rec["n2"]})
+    settle(rec, outcome="done", rc=0, fill_job=res.get("fill_job"))
+
+
+def spill_results(probe: dict, recs: list[dict], dry: bool = False) -> None:
+    for rec in recs:
+        s = (probe.get("spills") or {}).get(rec["n2"]) or {}
+        if not s.get("result"):
+            where = s.get("where") or ""
+            if where in ("queue", "running") or where.startswith("held"):
+                if rec.get("missing"):
+                    write_json(SPILL / f"{rec['job']}.json", {**rec, "missing": 0})
+                continue
+            if rec.get("missing", 0) + 1 < 2:
+                if not dry:
+                    write_json(SPILL / f"{rec['job']}.json", {**rec, "missing": rec.get("missing", 0) + 1})
+                continue
+            why = f"node 2 has no result, and its fill job is {'in ' + where if where else 'gone'}"
+            print(f"would send {rec['job']} back: {why}") if dry else spill_back(rec, why)
+            continue
+        try:
+            res = json.loads(s["result"])
+        except ValueError:
+            res = {"rc": None, "unreadable": s["result"][:200]}
+        if dry:
+            print(f"would read back {rec['n2']}: {res}")
+        elif res.get("rc") == 0:
+            spill_done(rec, res)
+        else:
+            stopped = " (stopped twice)" if res.get("rc") is None and "unreadable" not in res else ""
+            spill_back(rec, f"node 2 rc {res.get('rc')} after {res.get('tries')} start(s){stopped}")
+
+
+SPILL_WHY: dict[str, str] = {}
+
+
+def n2_spill(jobs: list[dict], wls: list[dict], dry: bool = False, t: float | None = None) -> set[str]:
+    """Read back every outstanding spill, then spill at most one held GPU Job to node 2 (while SPILL_FLAG exists, outside node 1's
+    hold). The workloads it deactivated."""
+    t = time.time() if t is None else t
+    recs = spill_records()
+    cands = spill_candidates(jobs, wls, t) if SPILL_FLAG.exists() and not held(t) else []
+    if not recs and not cands:
+        return set()
+    try:
+        probe = json.loads(n2_python(N2_PROBE, N2_FILL, N2_LEASES, N2_SPILL, *[r["n2"] for r in recs]))
+    except (RuntimeError, ValueError) as e:
+        print(f"n2-spill: node 2 unreadable, nothing spilled or read back: {e}", file=sys.stderr)
+        return set()
+    if recs:
+        spill_results(probe, recs, dry)
+    for j, w, item, b in cands:
+        name = j["metadata"]["name"]
+        idle, why = n2_room(probe, b, t)
+        if why:
+            if dry or SPILL_WHY.get(name) != why:
+                print(f"n2-spill {name}: stays on node 1: {why}")
+            SPILL_WHY[name] = why
+            continue
+        return {w["metadata"]["name"]} if spill(j, w, item, b, idle, t, dry) and not dry else set()
+    return set()
+
+
 def done_keys() -> set[str]:
     p = ROOT / "done.jsonl"
     return {json.loads(line)["key"] for line in p.read_text().splitlines() if line.strip()} if p.exists() else set()
@@ -837,8 +1231,11 @@ def tick(dry: bool = False) -> None:
         pack_adopt(jobs, dry)
     pack_hold(jobs, dry)
     wls = json.loads(kubectl("get", "workloads", "-o", "json"))["items"]
+    spilled = n2_spill(jobs, wls, dry)
     pending: dict[str, int] = {}
     for w in wls:
+        if w["metadata"]["name"] in spilled or (w.get("spec") or {}).get("active") is False:
+            continue
         if not (w.get("status") or {}).get("admission") and not any(
                 c.get("type") == "Finished" and c.get("status") == "True" for c in (w.get("status") or {}).get("conditions") or []):
             q = (w.get("spec") or {}).get("queueName", "")
