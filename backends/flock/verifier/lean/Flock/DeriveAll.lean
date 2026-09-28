@@ -11,7 +11,7 @@ first, and the unit's rows in unit coordinates, as the prover's mirror (`verity_
 * An input bit is exported to a placed call when its form is one input wire the caller reads nowhere else; the callee's
   input row is then that wire's column.
 
-Reads come with S3b. `Flock.Derive.derive` is the flat case.
+Reads, inline and placed, by `table/v2` (S3b). `Flock.Derive.derive` is the flat case.
 -/
 import Flock.Derive
 import Flock.Layout
@@ -45,6 +45,19 @@ def roundUp (r size : Nat) : Nat := (r + size - 1) / size * size
 
 def span (n : Nat) : Nat := WORD * Derive.ceilPow2 (max 1 ((n + WORD - 1) / WORD))
 
+/-- A read's table-direct side: product row `prod0 + j·nh + h` (`j < k`) reads low minterm `loTop + l` exactly when bit
+`j` of word `h·2^lo + l` is set (`READ table n lo k prod0 lo_top`). -/
+structure ReadRec where
+  table : String
+  n : Nat
+  lo : Nat
+  k : Nat
+  prod0 : Nat
+  loTop : Nat
+  deriving Inhabited, Repr
+
+def ReadRec.shift (r : ReadRec) (d : Nat) : ReadRec := { r with prod0 := r.prod0 + d, loTop := r.loTop + d }
+
 /-- A logical item: an own row, or a placed entry's segment (its layout, base and exported bits). -/
 inductive Ref where
   | row (c : Nat)
@@ -65,12 +78,14 @@ structure D where
   parts : Array (Nat × Nat) := #[]
   /-- The unit's Δ: a row and its source (`none`: `one`). -/
   delta : Array (Nat × Option (List Nat)) := #[]
+  reads : Array ReadRec := #[]
   deriving Inhabited
 
 /-- The builder of one layout's own region. -/
 structure Build where
   rows : Array (Ent × Ent) := #[]
   items : Array Ref := #[]
+  reads : Array ReadRec := #[]
 
 def Build.row (b : Build) (a c : Ent) : Build × Nat := ({ b with rows := b.rows.push (a, c) }, b.rows.size)
 
@@ -81,7 +96,39 @@ structure Ctx where
   types : String → Option CircuitType
   ls : Array Layout
   info : String → Option TableInfo
+  words : String → Option (Array Nat)
   done : Array D
+
+/-- `Flock.Lookup.decode`: minterm `i` of the leaves, committing every block of two or more bits; and its first row. -/
+partial def decode (b : Build) (leaves : Array CF) : Build × Array CF × Nat :=
+  if leaves.size ≤ 1 then
+    let f := leaves.getD 0 ([], 0)
+    (b, #[(f.1, (f.2 + 1) % 2), f], b.rows.size)
+  else
+    let h := leaves.size / 2
+    let (b1, lo, _) := decode b (leaves.extract 0 h)
+    let (b2, hi, _) := decode b1 (leaves.extract h leaves.size)
+    let first := b2.rows.size
+    let (b3, outs) := (List.range (2 ^ leaves.size)).foldl (fun (acc : Build × Array CF) i =>
+      let (bb, col) := acc.1.row (ent (lo.getD (i % 2 ^ h) default)) (ent (hi.getD (i / 2 ^ h) default))
+      (bb, acc.2.push ([col], 0))) (b2, #[])
+    (b3, outs, first)
+
+/-- A read's product rows and outputs at the builder's end (`table/v2`): `k·nh` products (the hi minterm in A, the
+table's side folded table-direct), then an output row per live bit; a constant bit is the constant. -/
+def readRows (cx : Ctx) (b0 : Build) (sha : String) (n lo vb : Nat) (hiM : Array CF) (loTop : Nat) :
+    Build × Array CF × Nat :=
+  let words := (cx.words sha).getD #[]
+  let k := Layout.kOf sha vb ((cx.info sha).getD default)
+  let nh := hiM.size
+  let prod0 := b0.rows.size
+  let b1 := (List.range (k * nh)).foldl (fun b x => (b.row (ent (hiM.getD (x % nh) default)) ([], false)).1) b0
+  let (b2, outs) := (List.range vb).foldl (fun (acc : Build × Array CF) j =>
+    if j < k then
+      let (bb, col) := acc.1.row ((List.range nh).map (prod0 + j * nh + ·), false) ([], true)
+      (bb, acc.2.push ([col], 0))
+    else (acc.1, acc.2.push ([], (words.getD 0 0 >>> j) % 2))) (b1, #[])
+  ({ b2 with reads := b2.reads.push ⟨sha, n, lo, k, prod0, loTop⟩ }, outs, prod0)
 
 /-- A placed entry: its item, layout, base, argument forms and exported bits. -/
 structure Inst where
@@ -100,6 +147,7 @@ partial def items (cx : Ctx) (t : CircuitType) (l : Layout) (b0 : Build) (wire0 
   let mut wire := wire0
   let mut insts := insts0
   let mut c := 0
+  let mut r := 0
   for i in [0:t.items.size] do
     match t.items[i]! with
     | .and fa fb =>
@@ -124,7 +172,26 @@ partial def items (cx : Ctx) (t : CircuitType) (l : Layout) (b0 : Build) (wire0 
         b := { b with items := b.items.push (.seg inst.j inst.base inst.exported) }
         let sub := cx.done.getD inst.j default
         wire := wire ++ sub.outCols.map fun col => ([inst.base + col], 0)
-    | .read _ _ => throw "derive: reads come with S3b"
+    | .read k idx =>
+      let e := l.reads.getD r default
+      r := r + 1
+      let fs := idx.map (formOf wire)
+      match e.placed with
+      | none =>
+        let (sha, n, vb) := t.tables.getD k ("", 0, 0)
+        let start := b.rows.size
+        let (b1, _, loTop) := decode b (fs.extract 0 e.lo)
+        let (b2, hiM, _) := decode b1 (fs.extract e.lo fs.size)
+        let (b3, outs, _) := readRows cx b2 sha n e.lo vb hiM loTop
+        b := { b3 with items := b3.items ++ (Array.range (b3.rows.size - start)).map fun x => .row (start + x) }
+        wire := wire ++ outs
+      | some _ =>
+        let some m := insts.findIdx? (·.item == i) | throw s!"derive: item {i}'s placed read is missing"
+        let inst := insts[m]!
+        insts := insts.set! m { inst with forms := fs }
+        b := { b with items := b.items.push (.seg inst.j inst.base inst.exported) }
+        let sub := cx.done.getD inst.j default
+        wire := wire ++ sub.outCols.map fun col => ([inst.base + col], 0)
     | .bad op => throw s!"derive: item {i} has op {op}"
   return (b, wire, insts)
 
@@ -137,6 +204,7 @@ def placements (cx : Ctx) (t : CircuitType) (l : Layout) (unitLevel : Bool) (sta
   let mut exports : Array (Nat × Nat) := #[]
   let mut cursor := start
   let mut c := 0
+  let mut r := 0
   for i in [0:t.items.size] do
     match t.items[i]! with
     | .call _ args =>
@@ -156,7 +224,16 @@ def placements (cx : Ctx) (t : CircuitType) (l : Layout) (unitLevel : Bool) (sta
             ex := ex ++ [bit]
             exports := exports.push (f.ws[0]!, base + sub.inCols.getD bit 0)
         insts := insts.push { item := i, j := e.layout, base, exported := ex }
-    | .read _ _ => throw "derive: reads come with S3b"
+    | .read _ _ =>
+      let e := l.reads.getD r default
+      r := r + 1
+      match e.placed with
+      | none => pure ()
+      | some (jj, q) =>
+        let s := (cx.ls.getD jj default).rangeLog.getD 0
+        let base := if unitLevel then roundUp cursor (2 ^ s) else q * 2 ^ s
+        if unitLevel then cursor := base + 2 ^ s
+        insts := insts.push { item := i, j := jj, base, exported := [] }
     | _ => pure ()
   return (insts, exports)
 
@@ -166,7 +243,28 @@ def resolve (k : Nat) (e : Ent) : List Nat := if e.2 then (e.1 ++ [k]).mergeSort
 def deriveOne (cx : Ctx) (j : Nat) (unitLevel : Bool) : Except String D := do
   let l := cx.ls.getD j default
   match l.own with
-  | .gen .. => throw "derive: generated reads come with S3b"
+  | .gen sha n vb lo =>
+    let mut b : Build := {}
+    for i in [0:WORD] do b := (if i < n then b.row ([i], false) ([i], false) else b.row ([], false) ([], false)).1
+    let (b1, _, loTop) := decode b ((Array.range lo).map fun i => ([i], 0))
+    let (b2, hiM, _) := decode b1 ((Array.range (n - lo)).map fun i => ([lo + i], 0))
+    let words := (cx.words sha).getD #[]
+    let k := Layout.kOf sha vb ((cx.info sha).getD default)
+    let nh := hiM.size
+    let prod0 := b2.rows.size
+    b := (List.range (k * nh)).foldl (fun b x => (b.row (ent (hiM.getD (x % nh) default)) ([], false)).1) b2
+    b := b.zeros (roundUp b.rows.size WORD)
+    let out0 := b.rows.size
+    for j in [0:WORD] do
+      b := (if j < k then b.row ((List.range nh).map (prod0 + j * nh + ·), false) ([], true)
+        else if j < vb && (words.getD 0 0 >>> j) % 2 == 1 then b.row ([], true) ([], true)
+        else b.row ([], false) ([], false)).1
+    let (b3, const) := b.row ([], true) ([], true)
+    let rows := b3.rows.map fun (a, c) => (resolve const a, resolve const c)
+    return { rows, const, inGroups := #[(0, 1, #[n])], outGroups := #[(out0 / WORD, 1, #[vb])],
+             inCols := Array.range n, outCols := (Array.range vb).map (out0 + ·),
+             items := (Array.range (prod0 + k * nh - WORD)).map fun x => .row (WORD + x), own := b3.rows.size,
+             size := b3.rows.size, reads := #[⟨sha, n, lo, k, prod0, loTop⟩] }
   | .derive =>
   let some t := l.type.bind cx.types | throw s!"derive: layout {j}'s type is not held"
   let ex := Layout.exported t l
@@ -234,8 +332,10 @@ def deriveOne (cx : Ctx) (j : Nat) (unitLevel : Bool) : Except String D := do
     let (a, c) := b.rows[r]!
     rows := rows.set! r (resolve const a, resolve const c)
   let mut delta : Array (Nat × Option (List Nat)) := if unitLevel then #[(const, none)] else #[]
+  let mut reads := b.reads
   for inst in insts do
     let sub := cx.done.getD inst.j default
+    reads := reads ++ sub.reads.map (·.shift inst.base)
     for col in [0:sub.rows.size] do
       let (a, c) := sub.rows[col]!
       if !(a.isEmpty && c.isEmpty) then rows := rows.set! (inst.base + col) (a.map (· + inst.base), c.map (· + inst.base))
@@ -248,14 +348,14 @@ def deriveOne (cx : Ctx) (j : Nat) (unitLevel : Bool) : Except String D := do
         let src := resolve const (ent f)
         if unitLevel then delta := delta.push (row, some src) else rows := rows.set! row (src, [cb])
   return { rows, const, inGroups, outGroups, inCols, outCols, items := b.items, own, size,
-           parts := if unitLevel then insts.map fun inst => (inst.j, inst.base) else #[], delta }
+           parts := if unitLevel then insts.map fun inst => (inst.j, inst.base) else #[], delta, reads }
 
 /-- **Every layout derived**, callees first, the unit's last. -/
 def deriveAll (types : String → Option CircuitType) (ls : Array Layout) (info : String → Option TableInfo)
-    (unit : Nat) : Except String (Array D) := do
+    (words : String → Option (Array Nat)) (unit : Nat) : Except String (Array D) := do
   let mut done : Array D := #[]
   for j in [0:ls.size] do
-    let cx : Ctx := { types, ls, info, done }
+    let cx : Ctx := { types, ls, info, words, done }
     let d ← if j == unit then deriveOne cx j true else deriveOne cx j false
     done := done.push d
   return done
@@ -272,7 +372,9 @@ def netlist (d : D) (name : String) : String :=
     toString gs.size :: gs.toList.flatMap fun (w, ws, bits) => ([w, ws, bits.size] ++ bits.toList).map toString
   let head := line (["flock-ir-unit/v2", name, toString d.size, toString d.const] ++ side d.inGroups ++ side d.outGroups)
   let rows := (List.range d.size).map fun c => let (a, b) := d.rows.getD c ([], []); line (sideStr a ++ sideStr b)
-  "\n".intercalate (head :: rows) ++ "\n"
+  let reads := (d.reads.toList.filter (·.prod0 < d.size)).map fun r =>
+    line ["READ", r.table, toString r.n, toString r.lo, toString r.k, toString r.prod0, toString r.loTop]
+  "\n".intercalate (head :: rows ++ reads) ++ "\n"
 
 /-- The unit's parts and Δ: `PART digest base`, then `DELTA row |src| src..` (`one` as `one`). -/
 def deltaText (ls : Array Layout) (digests : Array String) (u : D) : String :=
@@ -305,8 +407,8 @@ def logicalText (done : Array D) (u : D) : String :=
 /-! ## Archives (`flock-verify layout`'s format) -/
 
 /-- An archive's types, tables, layouts and unit: each type and layout checked as `Layout.checkFile` checks it. -/
-def load (j : Json) : V ((String → Option CircuitType) × Array Layout × (String → Option TableInfo) × Nat ×
-    Array String) := do
+def load (j : Json) : V ((String → Option CircuitType) × Array Layout × (String → Option TableInfo) ×
+    (String → Option (Array Nat)) × Nat × Array String) := do
   let mut known : Array (String × CircuitType) := #[]
   for c in ← J.arr j "types" "archive" do
     let t ← CircuitType.ofJson c
@@ -316,23 +418,26 @@ def load (j : Json) : V ((String → Option CircuitType) × Array Layout × (Str
     | .ok () => known := known.push (d, t)
     | .error e => throw s!"type {d.take 16}: {e}"
   let mut tabs : Array (String × TableInfo) := #[]
+  let mut wordsOf : Array (String × Array Nat) := #[]
   match (← J.get j "tables" "archive") with
   | Json.obj kvs =>
     for (sha, spec) in kvs.toArray do
       let ws ← (← J.arr spec "words" "archive").mapM (J.asNat · "archive: a table word")
       tabs := tabs.push (sha, Layout.tableInfo ws)
+      wordsOf := wordsOf.push (sha, ws)
   | _ => throw "archive: tables is not an object"
   let ls ← (← J.arr j "layouts" "archive").mapM Layout.ofJson
   let types := fun (x : String) => (known.find? (·.1 == x)).map (·.2)
   let info := fun (x : String) => (tabs.find? (·.1 == x)).map (·.2)
   let unit ← J.nat j "unit_layout" "archive"
   let _ ← Layout.check types ls unit info
-  return (types, ls, info, unit, ← ls.mapM Layout.digest)
+  let words := fun (x : String) => (wordsOf.find? (·.1 == x)).map (·.2)
+  return (types, ls, info, words, unit, ← ls.mapM Layout.digest)
 
 /-- The part of an archive's derivation that `part` names: `unit`, `delta`, `logical` or a layout's digest. -/
 def archivePart (j : Json) (part : String) : V String := do
-  let (types, ls, info, unit, ds) ← load j
-  let done ← deriveAll types ls info unit
+  let (types, ls, info, words, unit, ds) ← load j
+  let done ← deriveAll types ls info words unit
   let u := done.getD unit default
   if part == "unit" then return netlist u ((ds.getD unit "").take 16).toString
   if part == "delta" then return deltaText ls ds u

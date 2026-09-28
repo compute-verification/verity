@@ -1,6 +1,6 @@
 """`flock-rows --archive`, the verifier's `Flock.DeriveAll.deriveAll` compiled, gives the prover's mirror's rows on
 #203's derive vectors (`derive_vectors.json`): each inner layout's physical rows, the unit's own region, its parts and Δ,
-and the logical list, by SHA-512. Reads come with S3b, so read cases are refused for now, by name."""
+and the logical list, by SHA-512: calls placed and inlined, exports, and reads inline and placed."""
 from __future__ import annotations
 
 import hashlib
@@ -37,7 +37,5 @@ def test_flock_rows_matches_the_mirror(built, case, tmp_path):
     for part, want in parts:
         out = subprocess.run([str(LEAN / ".lake/build/bin/flock-rows"), "--archive", str(path), "--part", part],
                              capture_output=True, text=True)
-        if out.returncode != 0 and "reads come with S3b" in out.stderr:
-            pytest.skip("reads come with S3b")
         assert out.returncode == 0, out.stderr
         assert hashlib.sha512(out.stdout.encode()).hexdigest() == want, f"{case['name']}: {part[:16]}"
