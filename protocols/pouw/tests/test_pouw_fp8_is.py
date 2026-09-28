@@ -49,9 +49,9 @@ def test_registry_and_certificates():
         assert s.name == name and s.certificate.gamma0 is None and s.certificate.gamma is None
         (f_a, f_b), (c_a, c_b) = s.forming.units, s.forming.credited
         assert s.credit == 6
-        assert s.certificate.omega == Fraction(6 * 8192 + f_a + f_b, 6 * 8192 + c_a + c_b)
+        assert s.certificate.omega == Fraction(6 * 8192 - 32 + f_a + f_b, 6 * 8192 - 32 + c_a + c_b)
         sh = Shape(8192, 8192, 16384)
-        assert s.wref(sh) == 6 * sh.wmm + f_a * sh.m * sh.k + f_b * sh.n * sh.k
+        assert s.wref(sh) == 6 * sh.wmm - 32 * sh.m * sh.n + f_a * sh.m * sh.k + f_b * sh.n * sh.k
     assert get("fp8-is-h100-d2-draft").forming.units == (336, 336)
     assert get("fp8-is-h100-d2-draft").forming.credited == (272, 272)
     assert get("fp8-is-h100-fpncp-v0").forming.units == (384, 384)
@@ -66,15 +66,18 @@ def test_domain():
 
 
 def test_core_against_independent_implementations():
-    """I_τ is the total FP8 step (`tc_dot_total_e4m3`) from +0; R_τ is numpy's float32 running sum of the I_τ."""
+    """I_τ is the total FP8 step (`tc_dot_total_e4m3`) from +0; R_τ (τ >= 2) is numpy's float32 running sum of the I_τ,
+    and R_1 = I_1 is not a checked word."""
     rng = random.Random("core")
+    as_f32 = lambda w: np.array([w], dtype=np.uint32).view(np.float32)[0]
     for _ in range(20):
         x, y = codes(rng, 32 * 12, 0x7E), codes(rng, 32 * 12, 0x7E)
-        words = F.cell_words(x, y)
-        r = np.float32(0)
-        for t, (i, rt) in enumerate(words):
-            assert i == tc_dot_total_e4m3(F.ATOM, 0, x[32 * t:32 * t + 32], y[32 * t:32 * t + 32])
-            r = np.float32(r + np.array([i], dtype=np.uint32).view(np.float32)[0])
+        atoms, running = F.cell_words(x, y)
+        assert len(atoms) == 12 and len(running) == 11
+        assert atoms == [tc_dot_total_e4m3(F.ATOM, 0, x[32 * t:32 * t + 32], y[32 * t:32 * t + 32]) for t in range(12)]
+        r = as_f32(atoms[0])
+        for i, rt in zip(atoms[1:], running):
+            r = np.float32(r + as_f32(i))
             assert rt == int(np.array([r], dtype=np.float32).view(np.uint32)[0])
 
 

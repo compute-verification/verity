@@ -7,13 +7,15 @@ the tile's row i of X̃, and ``y[j]``, its column j of Ỹ, each K = blocks·k E
 slices S_1 … S_T (T = K/32) in ascending order.  For every output cell (i, j):
 
     I_τ = HOPPER_E4M3_WGMMA_K32.step(+0, x[i][S_τ], y[j][S_τ])   one accumulator word of wgmma m64nNk32 f32.e4m3.e4m3
-    R_0 = +0,  R_τ = add.rn.f32(R_(τ−1), I_τ)                     one FADD (`verity.ml.tc.fp32.add`)
-    checked = every (I_τ, R_τ);  useful = R_T
+    R_1 = I_1,  R_τ = add.rn.f32(R_(τ−1), I_τ) for τ >= 2          one FADD (`verity.ml.tc.fp32.add`)
+    checked = I_1 … I_T and R_2 … R_T;  useful = R_T
 
-A tile's digest is SHAKE256 over, in order, the forming layer's checked words for the tile's rows and then its columns,
-and the core's words, 4 bytes little-endian each, step-major (τ ascending), row-major over the cells within a step, I_τ
-before R_τ.  The honest H100 schedule prices an atom word at 32 and an FADD at 32 W1 units (MH100 nominal), so the core
-credits 2·blocks·m·k·n (6mkn for three blocks).
+R_1 is not a checked word: from R_0 = +0 the first add returns I_1 exactly, a duplicate in every output
+(`c2FirstRunCopy`), so the honest schedule copies it for free.  A tile's digest is SHAKE256 over, in order, the forming
+layer's checked words for the tile's rows and then its columns, and the core's words, 4 bytes little-endian each,
+step-major (τ ascending), row-major over the cells within a step, I_τ before R_τ.  The honest H100 schedule prices an
+atom word at 32 and an FADD at 32 W1 units (MH100 nominal), so the core credits 2·blocks·m·k·n − 32·m·n (6mkn − 32mn
+for three blocks).
 
 **The forming layer** (`Forming`) owns the input domain, the noise, the operands, any checked words of its own and its
 W1 price per element.  Two instances:
@@ -62,16 +64,16 @@ def e4m3_row(row: bytes, k: int) -> list[int] | None:
     return list(row)
 
 
-def cell_words(x: Sequence[int], y: Sequence[int]) -> list[tuple[int, int]]:
-    """One output cell's checked words ``[(I_τ, R_τ)]`` over the stacked depth."""
-    if len(x) != len(y) or len(x) % SLICE:
-        raise DomainError(f"the stacked depth is a multiple of {SLICE}")
-    r, out = 0, []
-    for s in range(0, len(x), SLICE):
-        i = ATOM.step(0, x[s:s + SLICE], y[s:s + SLICE])
+def cell_words(x: Sequence[int], y: Sequence[int]) -> tuple[list[int], list[int]]:
+    """One output cell's checked words over the stacked depth: ``([I_1 … I_T], [R_2 … R_T])``."""
+    if not x or len(x) != len(y) or len(x) % SLICE:
+        raise DomainError(f"the stacked depth is a positive multiple of {SLICE}")
+    atoms = [ATOM.step(0, x[s:s + SLICE], y[s:s + SLICE]) for s in range(0, len(x), SLICE)]
+    r, running = atoms[0], []
+    for i in atoms[1:]:
         r = fp32.add(r, i)
-        out.append((i, r))
-    return out
+        running.append(r)
+    return atoms, running
 
 
 def live_products(x: Sequence[int], y: Sequence[int]) -> int:
@@ -101,10 +103,10 @@ class Stack:
 
 @dataclass(frozen=True, slots=True)
 class Checked:
-    """A tile's checked values: the forming layer's words (serialized) and the core's ``cells[i][j][τ] = (I_τ, R_τ)``."""
+    """A tile's checked values: the forming layer's words (serialized) and the core's ``cells[i][j] = ([I_τ], [R_τ, τ >= 2])``."""
 
     trace: bytes
-    cells: list[list[list[tuple[int, int]]]]
+    cells: list[list[tuple[list[int], list[int]]]]
 
 
 # ---- the forming layer ----------------------------------------------------------------------------------------------
@@ -453,11 +455,11 @@ class FP8IS:
         self.name = f"{PREFIX}-{self.forming.name}"
         self.credit = self.forming.blocks * (ATOM_UNITS + FADD_UNITS) // SLICE     # core W1 units per useful MAC
         (f_a, f_b), (c_a, c_b) = self.forming.units, self.forming.credited
-        n = mnk_min
+        core = self.credit * mnk_min - FADD_UNITS                                  # per N² at m = n = k = N
         self.certificate = Certificate(
             conjecture="tt-fp8-h100-core",
             gamma0=None,
-            omega=Fraction(self.credit * n + f_a + f_b, self.credit * n + c_a + c_b),
+            omega=Fraction(core + f_a + f_b, core + c_a + c_b),
             claims=("tt-fp8-h100-core", "h32-mh100", "w1-cost-model", "random-oracle", "xof/shake-256", "beacon-unpredictability"),
             theorems=("Pouw.Proofs.theorem1", "Pouw.Proofs.workWeightedSampling", "Pouw.Proofs.endToEnd"),
             hypotheses=(
@@ -487,10 +489,11 @@ class FP8IS:
         return grid_tiles(shape, *self.tile)
 
     def wref(self, shape: Shape) -> int:
-        """The core (an atom word and an FADD per cell per slice) plus the forming trace on both sides.  The weight side
-        is charged once per matmul; sharing it across matmuls is not credited."""
+        """The core (an atom word per cell per slice, and an FADD for every slice after the first) plus the forming trace
+        on both sides.  The weight side is charged once per matmul; sharing it across matmuls is not credited."""
         f_a, f_b = self.forming.units
-        return self.credit * shape.wmm + f_a * shape.m * shape.k + f_b * shape.n * shape.k
+        core = self.credit * shape.wmm - FADD_UNITS * shape.m * shape.n
+        return core + f_a * shape.m * shape.k + f_b * shape.n * shape.k
 
     def noise(self, ctx: Context):
         return self.forming.noise(ctx)
@@ -508,15 +511,16 @@ class FP8IS:
         return True
 
     def checked(self, ctx: Context, ops: Stack) -> Checked:
-        """The forming words of the tile's rows then columns, and ``cells[i][j][τ] = (I_τ, R_τ)`` (`cell_words`)."""
+        """The forming words of the tile's rows then columns, and each cell's core words (`cell_words`)."""
         return Checked(b"".join(ops.trace_x + ops.trace_y), [[cell_words(x, y) for y in ops.y] for x in ops.x])
 
     def digest(self, ctx: Context, noise, checked: Checked) -> bytes:
-        cells = checked.cells
-        steps = len(cells[0][0]) if cells and cells[0] else 0
-        words = b"".join(struct.pack("<II", *row[j][t]) for t in range(steps) for row in cells for j in range(len(row)))
+        cells = [cell for row in checked.cells for cell in row]
+        steps = len(cells[0][0]) if cells else 0
+        words = b"".join(struct.pack("<I", atoms[t]) + (struct.pack("<I", running[t - 1]) if t else b"")
+                         for t in range(steps) for atoms, running in cells)
         return hashlib.shake_256(f"verity/pouw/{self.name}/tile".encode() + b"\0" + checked.trace + words).digest(32)
 
     def useful(self, ctx: Context, noise, ops: Stack, checked: Checked) -> list[list[float]]:
         """R_T per cell as its FP32 value (≈ α_i·β_j·(A·Bᵀ)_ij for fpncp-v0, ≈ (A·Bᵀ)_ij for d2-draft)."""
-        return [[f32_float(cell[-1][1]) for cell in row] for row in checked.cells]
+        return [[f32_float(running[-1] if running else atoms[0]) for atoms, running in row] for row in checked.cells]

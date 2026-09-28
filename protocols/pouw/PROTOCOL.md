@@ -150,19 +150,23 @@ forming   the layer gives each tile's stacked operands X̃ (rows) and Ỹ (colum
           and its own checked words for those rows and columns (`Forming.form`)
 atom      I_τ = HOPPER_E4M3_WGMMA_K32.step(+0, X̃[i, S_τ], Ỹ[S_τ, j]), S_τ the τ-th 32-slice of K, ascending
           (wgmma m64nNk32 f32.e4m3.e4m3, pinned on H100 with nonzero accumulators too)
-running   R_0 = +0, R_τ = add.rn.f32(R_(τ−1), I_τ)   (`verity.ml.tc.fp32.add`: IEEE binary32, ties to even, no FTZ)
-checked   the layer's words, then every (I_τ, R_τ); useful = R_T
+running   R_1 = I_1, R_τ = add.rn.f32(R_(τ−1), I_τ) for τ ≥ 2   (`verity.ml.tc.fp32.add`: binary32, ties to even, no FTZ)
+checked   the layer's words, then I_1 … I_T and R_2 … R_T; useful = R_T.  R_1 is not checked: from +0 it is I_1
+          exactly, a duplicate in every output (`c2FirstRunCopy`)
 digest    SHAKE256("verity/pouw/<name>/tile" ‖ 0 ‖ layer words of the tile's rows, then columns ‖ core words)[:32];
-          core words little-endian, step-major, row-major over cells within a step, I_τ before R_τ
+          core words little-endian, step-major, row-major over cells within a step, I_τ before R_τ (τ ≥ 2)
 tiles     64 × 8 (one physical m64n8 atom per slice)
 domain    64 | m, 8 | n, 32 | k, 8,192 ≤ m, k, n ≤ 2^16
-wref      6·m·k·n (an atom word and an FADD per cell per slice, 32 + 32 units on MH100) + f_A·m·k + f_B·n·k
-Ω*        (6N + f_A + f_B)/(6N + c_A + c_B) at N = 8,192, with c the part of f spent on the layer's checked words
+wref      6·m·k·n − 32·m·n (an atom word per cell per slice and an FADD per slice after the first, 32 each on MH100)
+          + f_A·m·k + f_B·n·k
+Ω*        (6N − 32 + f_A + f_B)/(6N − 32 + c_A + c_B) at N = 8,192, c being the part of f spent on the layer's checked words
+γ         1 − (1 − γ_core)/Ω*,  γ_core ≤ ε + μ·(32 − c_k8)/32  (ε from `DistinctLive(ε)`, μ the fraction of credited
+          words a sub-32 writer can write, c_k8 its measured price; `distinctWritesMH100`, `distinctWritesLegacy`)
 ~~~
 
 - **The core's premise** (the lower-bound lane's cost model, `genuine-fp8-interface.md` §1.3): under `H_32` every
-  checked word that is salt-dependent and distinct from the others costs at least 32 (`distinctWritesMH100`, in
-  progress), and the honest schedule pays exactly 32. What is left is a property of the forming layer,
+  checked word that is salt-dependent and distinct from the others costs at least 32 (`distinctWritesMH100`, proved;
+  `distinctWritesAttained`), and the honest schedule pays exactly 32. What is left is a property of the forming layer,
   `DistinctLive(γ_0)`: for every admitted input, all but a γ_0 fraction of the credited words are salt-dependent and
   pairwise distinct as functions of the salt. Plus `A2_fp` (branching, routing, grinding) and `AdmitsRef`.
 - **`H_32`** is stated for every writer class, including legacy `mma.sync` small-K shapes, sparse `wgmma`, the b1 paths,

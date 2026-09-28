@@ -55,7 +55,7 @@ def case_vector(case, forming, shape, r, c, index, weight) -> dict:
             "weight": weight, "salt": ctx.salt.hex(), "root_a": ctx.root_a.hex(), "root_b": ctx.root_b.hex(),
             "x_row0": ops.x[0][:16], "y_col0": ops.y[0][:16],
             "trace_sha256": hashlib.sha256(checked.trace).hexdigest(),
-            "cell00_words": [list(w) for w in checked.cells[0][0][:4]],
+            "cell00_atoms": checked.cells[0][0][0][:4], "cell00_running": checked.cells[0][0][1][:3],
             "digest": s.digest(ctx, None, checked).hex(),
             "useful_sha256": hashlib.sha256(json.dumps(useful).encode()).hexdigest(), "useful_00": useful[0][0]}
 
