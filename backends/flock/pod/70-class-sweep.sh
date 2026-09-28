@@ -26,8 +26,11 @@
 #      for a prover in another pod that runs with FC_VERIFIERS=DIR; give SM)  SERVE_POINTS=1 (with SERVE_ONLY: that many provers'
 #      sessions, one prover after another, on the same verifier processes)
 #      BUILD_ONLY=1 (build, print BINARY= and SELFTEST_BINARY= and stop; give SM without a GPU)
+#      FC_COINS=os (M0's sessions on per-round OS coins: no seed, no PRF; seed: the binary's default, M0's step-0 seed). A verifier
+#      pod runs this script too, so both sides agree; a selftest build seeds whatever it says
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
+export FC_COINS=${FC_COINS:-os}
 REPO=$(pwd); O=${OUT:-${RESEARCH_RUN_DIR:-/tmp/fcs}/out}; W=${FLOCK_WORK:-/workspace}/flock-circuit; mkdir -p $O $W
 G=${GPU:-1}
 SM=${SM:-$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1 | tr -d .)}; SM=${SM:-89}

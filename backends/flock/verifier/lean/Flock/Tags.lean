@@ -55,6 +55,9 @@ structure Tags where
   typed : Bool := false
   /-- #306: a session may prove its units in several tables; `none`: one table per session -/
   manyTables : Option TablesTags := none
+  /-- the prover of main from `804be92b4`: on per-round OS coins (`FC_COINS=os`) its identity names the coin mode and no coin
+  commitment or derivation (`liveOsIdentity`) -/
+  liveOs : Bool := false
   deriving Inhabited
 
 namespace Tags
@@ -86,6 +89,13 @@ private def n (x : Nat) : Json := Lean.toJson x
 def hooksNoMask : Json :=
   Json.mkObj [("zk", Json.bool false), ("t_pad", n 0), ("masks", s "none"), ("sumcheck_mask", s "none"),
     ("claim_permutation", s "identity")]
+
+/-- `id` on per-round OS coins, as upstream's `identity()` writes it under `FC_COINS=os`: `coins` names the mode, and
+`hashes` names no coin commitment or derivation. -/
+def liveOsIdentity (id : Json) : Json :=
+  let hashes := (id.getObjValD "hashes").setObjVal! "coin_commitment" (s "none (FC_COINS=os)")
+  let hashes := hashes.setObjVal! "coin_derivation" (s "none (FC_COINS=os)")
+  (id.setObjVal! "hashes" hashes).setObjVal! "coins" (s "live-os (every round's coins the verifier's OS draws: no seed, no PRF)")
 
 /-- `verity/flock-netlist/v1`, PR #83 at `9294e161` (the recorded sessions of 2026-09-26 up to 20:40Z). -/
 def netlistV1 : Tags :=
@@ -214,10 +224,13 @@ its units in several tables. -/
 def circuit967b8d06 : Tags :=
   { circuit with
     name := "verity/flock-circuit@967b8d06", identity := identityHm96 false true, sharedRows := true,
-    manyTables := some { sigmaTag := "verity/flock-circuit/sigma-tables", domainPrefix := "flock-circuit/fast100x2/" } }
+    manyTables := some { sigmaTag := "verity/flock-circuit/sigma-tables", domainPrefix := "flock-circuit/fast100x2/" },
+    liveOs := true }
 
+/-- A selftest build always seeds, so its statement has no live-OS identity. -/
 def circuit967b8d06Selftest : Tags :=
-  { circuit967b8d06 with name := "verity/flock-circuit@967b8d06+seed-injection", identity := identityHm96 true true }
+  { circuit967b8d06 with
+    name := "verity/flock-circuit@967b8d06+seed-injection", identity := identityHm96 true true, liveOs := false }
 
 /-- `verity/flock-circuit/types` (item 1e, #225, #273): `verity/flock-circuit`'s statement (with `967b8d06`'s identity text)
 with its unit as circuit types and a layout; the verifier derives the unit's rows (`Flock.Typed`). The identity and the
@@ -231,7 +244,8 @@ def circuitTypes : Tags :=
 
 def circuitTypesSelftest : Tags :=
   { circuitTypes with
-    name := "verity/flock-circuit/types+seed-injection", identity := identityHm96 true true "verity/flock-circuit/types" }
+    name := "verity/flock-circuit/types+seed-injection", identity := identityHm96 true true "verity/flock-circuit/types",
+    liveOs := false }
 
 /-- The versions this verifier knows, by name. -/
 def all : List Tags := [netlistV1, circuit19c7269a, circuitFd02e847, circuit631567f7, circuitEb90718f, circuitEb90718fSelftest,

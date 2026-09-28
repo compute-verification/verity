@@ -80,9 +80,10 @@ M = 35
 #: row slot and its rows' hashing): 24, 24, 25, 26, 27. K = 32768 is at Stmt.InRange's k_log <= 27. The FP8 / FP4 rows take theirs
 #: from the preflight check's staging (`fill`)
 INSTANCES = {2048: 2048, 4096: 2048, 8192: 1024, 16384: 512, 32768: 256}
-#: a session's coins, from its verdict: `os-seed-prf` (M0's default: the verifier's 256-bit OS-random seed, committed at Hello
-#: and opened in the verdict, every round's coins its SHA-256 counter-mode PRF) or `live-os` (the verifier's OS draws, round by
-#: round); points under different coin modes are never compared
+#: a session's coins, as the sweep's record names them (`verity_flock.circuit.coins`): `os-seed-prf` (the binary's default: the
+#: verifier's 256-bit OS-random seed, committed at Hello and opened in the verdict, every round's coins its SHA-256 counter-mode
+#: PRF) or `live-os` (FC_COINS=os, 70-class-sweep.sh's default: the verifier's OS draws, round by round); points under different
+#: coin modes are never compared
 COINS = {"os-seed-prf": "os-seed-prf: the verifier's OS-random seed under a SHA-512 commitment, its coins a SHA-256 counter-mode PRF",
          "live-os": "live-os: the verifier's OS draws, round by round"}
 #: the proof-system scheme a point measured, from its coins (docs/protocol-schemes.md): flock-i-v1 is M0's configuration (SHA-512
@@ -489,7 +490,7 @@ def metrics(a) -> None:
             "overhead": t_session / t_native, "overhead_prove_only": t_prove / t_native,
             "throughput_coords_per_s": 1 / t_session, "throughput_prove_coords_per_s": 1 / t_prove,
             "gpu_util_steady": steady["sm"], "gpu_mem_util_steady": steady["mem"], "gpu_held_s_per_coord": t_session,
-            "coins": "os-seed-prf" if any(v.get("coin_seed") for v in verdicts) else "live-os",
+            "coins": lv.get("coins"),
             "session": {"tables": len(timed[-1][1].get("tables") or [None]), "streams": verdicts[-1].get("streams"),
                         "rounds": verdicts[-1].get("rounds"), "round_trips": timed[-1][1].get("calls"),
                         "why": "--session-tables J: the tables share one link exchange and both reps one root (Session.lean); "

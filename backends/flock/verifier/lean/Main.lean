@@ -262,6 +262,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
   let some count := ((argOf args "--session-tables").getD "1").toNat? | IO.eprintln usage; return 2
   let dirs := (args.dropWhile (· != "--session")).drop 1
   let coins := if argOf args "--coins" == some "os" then Coins.os else Coins.seed
+  let tags := tags.withCoins coins
   let t0 ← IO.monoMsNow
   let (circuitB, pubB, compB, tables) ← match ← statementInputs args with
     | .ok x => pure x
@@ -355,6 +356,7 @@ def statementCmd (args : List String) : IO UInt32 := do
     | IO.eprintln s!"unknown statement; known: {Tags.all.map (·.name)}"; return 2
   if !tags.hm96Rows && (argOf args "--comp").isNone then IO.eprintln s!"{tags.name}: --comp is required"; return 2
   let coins := if argOf args "--coins" == some "os" then Coins.os else Coins.seed
+  let tags := tags.withCoins coins
   let (circuitB, pubB, compB, tables) ← match ← statementInputs args with
     | .ok x => pure x
     | .error e => IO.eprintln s!"statement inputs: {e}"; return 2
