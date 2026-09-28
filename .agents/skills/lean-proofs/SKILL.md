@@ -187,6 +187,11 @@ simp with that.
 - Merge `main` into your branch rather than rebasing someone else's work; conflicts in a ledger are resolved by keeping
   both sides' rows. Run `python tools/verity/lean/merge.py --install` once per clone: `lean-audit.json` then merges without a
   rebuild, and only a conflict it refuses needs `check.py --update` on the merged tree.
+- Record your lock at your own head, for what your change says, and then mark the PR ready. Don't merge a moving `main`
+  in again just to re-record. When the train's check fails only because a record's `guarantees`, `reads` or
+  `assumptions` differ (another PR changed a definition yours reads), the lander's `tools/verity/check/retip.py`
+  regenerates them at the train tip. Re-record yourself only what it can't regenerate: a conflict `merge.py` refuses, any
+  other key (`shape`, a move's map), or a failure in another step.
 
 ## Rulings so far
 
