@@ -281,6 +281,21 @@ def hm96Test (path : String) (h : Hm96 := Hm96.sha256) : IO UInt32 := do
   IO.println s!"hm96-test: {n} cases, {bad} failures"
   return (if bad == 0 then 0 else 1)
 
+/-- `net-check FILE...`: each file as one `flock-ir-unit/v2` expanded circuit through `Net.parse` (its port groups, input
+rows, constant row and row order); one `NETCHECK {"file", "ok", "error"}` line per file. -/
+def netCheckCmd (paths : List String) : IO UInt32 := do
+  let mut all := true
+  for path in paths do
+    let text ← try IO.FS.readFile path catch _ => pure ""
+    let lines := (text.splitOn "\n").toArray
+    let lines := if lines.back? == some "" then lines.pop else lines
+    let (ok, err) := match Net.parse lines with
+      | .ok _ => (true, "")
+      | .error e => (false, e)
+    all := all && ok
+    IO.println s!"NETCHECK {(Lean.Json.mkObj [("file", Lean.Json.str path), ("ok", Lean.Json.bool ok), ("error", Lean.Json.str err)]).compress}"
+  return (if all then 0 else 1)
+
 /-- `unit-cut FILE...`: the partition invariant (`Flock.Partition.validate`) on each cut, one `CUT` line per file. -/
 def unitCutCmd (paths : List String) : IO UInt32 := do
   let mut all := true
@@ -445,6 +460,7 @@ def main (args : List String) : IO UInt32 := do
   | "unit-cut" :: paths => unitCutCmd paths
   | "archive-put" :: dir :: paths => archivePutCmd dir paths
   | "template-query" :: paths => templateQueryCmd paths
+  | "net-check" :: paths => netCheckCmd paths
   | "draw" :: rest => drawCmd rest
   | "draw-test" :: path :: rest => drawTest path rest
   | "statement" :: rest => statementCmd rest

@@ -979,13 +979,26 @@ included. Claims are listed region-major, then point 0 before point 1.
 - The circuit file: line 1 `flock-netlist/v1 <name>`, line 2 `META <json>`, then `NET <name> <lines>` blocks, each an
   expanded circuit in `flock-ir-unit/v2` form (the unit, tail stages). `sha256(file)` is the pin. The parser refuses a `CUT`
   line and the META keys `tail, cut, cut_words, public_ports, public, native, outputs_by_tail`: that is where the rule
-  "the verifier evaluates nothing" is enforced. Lookup slots (META `lookups`, in key order after the expanded circuits,
-  each named `lookup:<table>`) are built from SHA-256-pinned tables (`rsq, sqrt, rcp, ex2`) as two-level one-hot circuits.
-  - Rows: the `n` index bits in one input word; the low and high decoders, each minterm the AND of two half minterms,
-    recursively; one product row per output bit `j` and high minterm `h`, with B the XOR of the low minterms `l` whose
-    `table[h·2^lo + l]` has bit `j`; padding to a word; the output word; the constant.
-  - `lo` is META's `lo_bits`, and the table's size must be `2^n` words.
-  - A fold may read the product rows' B side from the table, since it is about `bits · 2^{n−1}` entries.
+  "the verifier evaluates nothing" is enforced.
+  - Each expanded circuit's rows: the input rows `A = B = [i]` (an input column) or empty (input padding, a forced zero);
+    the constant `A = B = [const]`, the last useful column. Every computed row, between them, reads in A and in B only
+    earlier columns that are not input padding, or the constant (topological order: the soundness package's `Rows.topo`).
+    So every column a row reads is below `useful`.
+  - Each port group's ports fit its words, and each input group lies within the input rows.
+  - The input rows end before the constant (`128 · inWords ≤ constPos`, 128 rows per input word). Otherwise an input
+    port could cover the constant's column, and Δ's input copies would rewrite the slot's constant row, leaving the
+    unit's constant free.
+  - Upstream's composite verifier checks none of these, and every circuit of sets 0–15 meets them all.
+    `flock-verify net-check` parses one expanded circuit.
+  - Lookup slots (META `lookups`, in key order after the expanded circuits, each named `lookup:<table>`) are built from
+    SHA-256-pinned tables (`rsq, sqrt, rcp, ex2`) as two-level one-hot circuits.
+    - Rows: the `n` index bits in one input word; the low and high decoders, each minterm the AND of two half minterms,
+      recursively; one product row per output bit `j` and high minterm `h`, with B the XOR of the low minterms `l` whose
+      `table[h·2^lo + l]` has bit `j`; padding to a word; the output word; the constant.
+    - `lo` is META's `lo_bits`, and the table's size must be `2^n` words.
+    - A fold may read the product rows' B side from the table, since it is about `bits · 2^{n−1}` entries.
+    - The built rows are held to the same order. The product rows' B side, from the table, reads the low decoder's
+      minterms, which precede them.
 - Layout: whole VUs per block (`G` per block); slots: BLAKE3 compression runs per input port and chunk, one parent tree
   per multi-chunk port (heap order, root first), the unit range, tail stages, lookup slots, one mask slot, forced-zero
   padding. Δ: const wiring to the pin; A-only chaining-value copies within runs and from children into parents; "both"
@@ -1100,6 +1113,8 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   aligned to its power-of-two span.
 - **Wires.** META `wires` begins with the row wires, which the verifier derives and compares: compression `k`'s `cv` from
   compression `k − 1`'s `out`, and hm96 slot `p`'s `cv` from the row's last compression. No other wire touches a row slot.
+- **The pin** is the constant column of the first slot of the first range that is not the mask (`HmRow.pin`). That range
+  must have a slot: with none, the pin's row would be empty, or, in a packed range, could fall inside another range's rows.
 - **Δ,** in this order: every slot's constant from the pin; per VU and port, the first compression's `cv` bits (the
   midstate) and the hm96 slot's `pad` bits (the padding block), each bit from the pin (1) or the unit range's first slot's
   forced-zero row (0); every unit's leaf bit `t` of the u16 word at row byte `B` from the message bit of byte `B + t/8`,

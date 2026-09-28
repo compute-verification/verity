@@ -73,6 +73,17 @@ structure Net where
 
 namespace Net
 
+/-- Topological order: every computed row (after the `inCols` input rows, before the constant) reads, in A and in B, only
+earlier columns that are not input padding (an empty input row: a forced zero), or the constant. With the input rows and
+the constant row, every column a row reads is then below `useful`. -/
+def checkOrder (name : String) (inCols constPos : Nat) (ra rb : Array (Array Nat)) : V Unit := do
+  let padding := fun (c : Nat) => c < inCols && (ra.getD c #[]).isEmpty && (rb.getD c #[]).isEmpty
+  for r in [inCols:constPos] do
+    for c in ra.getD r #[] ++ rb.getD r #[] do
+      if c == constPos then continue
+      if c ≥ r then throw s!"{name}: row {r} reads column {c}, not an earlier one"
+      if padding c then throw s!"{name}: row {r} reads column {c}, an input padding column"
+
 private def num (h : Array String) (i : Nat) : V Nat :=
   match h[i]?.bind String.toNat? with
   | some n => pure n
@@ -102,6 +113,10 @@ def ofRows (name : String) (useful constPos : Nat) (inGroups outGroups : Array G
   if outGroups.isEmpty then throw "flock-ir-unit/v2: no output group"
   if constPos + 1 != useful then throw "flock-ir-unit/v2: the constant is not the last useful column"
   let inWords := (inGroups.back?.map fun g => g.col + g.words).getD 0
+  if inGroups.any (fun g => g.bits.foldl (· + ·) 0 > g.words * WORD || g.col + g.words > inWords)
+      || outGroups.any (fun g => g.bits.foldl (· + ·) 0 > g.words * WORD) then
+    throw "flock-ir-unit/v2: a port group's ports overrun its words, or an input group the input rows"
+  if inWords * WORD > constPos then throw "flock-ir-unit/v2: the input rows reach the constant"
   let unitLog := max 7 (log2ceil useful)
   match (List.range (inWords * WORD)).find? fun i =>
       !((ra.getD i #[] == #[i] && rb.getD i #[] == #[i]) || ((ra.getD i #[]).isEmpty && (rb.getD i #[]).isEmpty)) with
@@ -109,23 +124,34 @@ def ofRows (name : String) (useful constPos : Nat) (inGroups outGroups : Array G
   | none => pure ()
   if ra.getD constPos #[] != #[constPos] || rb.getD constPos #[] != #[constPos] then
     throw "flock-ir-unit/v2: the constant row is not A = B = [const]"
+  checkOrder "flock-ir-unit/v2" (inWords * WORD) constPos ra rb
   let a ← Sparse.ofRows ra (2 ^ unitLog)
   let b ← Sparse.ofRows rb (2 ^ unitLog)
   return { name, useful, constPos, inGroups, outGroups, inWords, a, b, unitLog }
 
 /-- A net `ofRows` builds holds exactly the rows it was given: its A and B are theirs at its slot size, and its size,
-constant and port groups are the ones given. -/
+constant and port groups are the ones given. And the checks it ran hold: the input rows end before the constant, each is
+a self row or empty, the constant row is `[const]·[const]`, and the row order (`checkOrder`) passed. -/
 theorem ofRows_ok {name : String} {useful constPos : Nat} {ig og : Array Group} {ra rb : Array (Array Nat)} {n : Net}
     (h : ofRows name useful constPos ig og ra rb = .ok n) :
     n.unitLog = max 7 (log2ceil useful) ∧ Sparse.ofRows ra (2 ^ n.unitLog) = .ok n.a ∧
       Sparse.ofRows rb (2 ^ n.unitLog) = .ok n.b ∧ n.useful = useful ∧ n.constPos = constPos ∧ n.inGroups = ig ∧
-      n.outGroups = og := by
+      n.outGroups = og ∧ n.inWords * WORD ≤ constPos ∧ ra.getD constPos #[] = #[constPos] ∧
+      rb.getD constPos #[] = #[constPos] ∧ checkOrder "flock-ir-unit/v2" (n.inWords * WORD) constPos ra rb = .ok () ∧
+      ∀ i < n.inWords * WORD,
+        ((ra.getD i #[] == #[i] && rb.getD i #[] == #[i]) || ((ra.getD i #[]).isEmpty && (rb.getD i #[]).isEmpty)) = true := by
   unfold ofRows at h
   simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
   repeat' (first | split at h | (injection h with h; subst h))
   all_goals first
     | exact absurd h (by simp)
-    | (rename_i ha _ _ hb; exact ⟨rfl, ha, hb, rfl, rfl, rfl, rfl⟩)
+    | (rename_i _ _ _ _ hreach _ hfind hconst _ _ hord _ _ ha _ _ hb
+       simp only [Bool.or_eq_true, bne_iff_ne, ne_eq, not_or, Decidable.not_not] at hconst
+       refine ⟨rfl, ha, hb, rfl, rfl, rfl, rfl, Nat.not_lt.mp hreach, hconst.1, hconst.2, hord, fun i hi => ?_⟩
+       have := List.find?_eq_none.mp hfind i (List.mem_range.mpr hi)
+       revert this
+       generalize ((ra.getD i #[] == #[i] && rb.getD i #[] == #[i]) || ((ra.getD i #[]).isEmpty && (rb.getD i #[]).isEmpty)) = b
+       cases b <;> simp)
 
 /-- Parse one expanded circuit (the lines of a `NET` block). -/
 def parse (lines : Array String) : V Net := do
@@ -139,6 +165,11 @@ def parse (lines : Array String) : V Net := do
   if at2 != h.size then throw "flock-ir-unit/v2: trailing header fields"
   if outGroups.isEmpty then throw "flock-ir-unit/v2: no output group"
   if constPos + 1 != useful then throw "flock-ir-unit/v2: the constant is not the last useful column"
+  let inWords := (inGroups.back?.map fun g => g.col + g.words).getD 0
+  if inGroups.any (fun g => g.bits.foldl (· + ·) 0 > g.words * WORD || g.col + g.words > inWords)
+      || outGroups.any (fun g => g.bits.foldl (· + ·) 0 > g.words * WORD) then
+    throw "flock-ir-unit/v2: a port group's ports overrun its words, or an input group the input rows"
+  if inWords * WORD > constPos then throw "flock-ir-unit/v2: the input rows reach the constant"
   let mut ra := #[]
   let mut rb := #[]
   for i in [0:useful] do

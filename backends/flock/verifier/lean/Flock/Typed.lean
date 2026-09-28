@@ -147,12 +147,17 @@ def netOfD (d : DeriveAll.D) (name : String) : V Net :=
   Net.ofRows name d.size d.const (grp d.inGroups) (grp d.outGroups) (rowsA d) (rowsB d)
 
 /-- **The net holds the derived rows:** a net built from `d` has `d`'s rows as its A and B, at its slot size, and `d`'s
-size and constant. -/
+size and constant; and #147's checks hold of it: the input rows end before the constant, each is a self row or empty,
+the constant row is `[const]·[const]`, and the row order passed. -/
 theorem netOfD_ok {d : DeriveAll.D} {name : String} {n : Net} (h : netOfD d name = .ok n) :
     n.unitLog = max 7 (log2ceil d.size) ∧ Sparse.ofRows (rowsA d) (2 ^ n.unitLog) = .ok n.a ∧
-      Sparse.ofRows (rowsB d) (2 ^ n.unitLog) = .ok n.b ∧ n.useful = d.size ∧ n.constPos = d.const := by
-  obtain ⟨h1, h2, h3, h4, h5, -, -⟩ := Net.ofRows_ok h
-  exact ⟨h1, h2, h3, h4, h5⟩
+      Sparse.ofRows (rowsB d) (2 ^ n.unitLog) = .ok n.b ∧ n.useful = d.size ∧ n.constPos = d.const ∧
+      n.inWords * WORD ≤ d.const ∧ (rowsA d).getD d.const #[] = #[d.const] ∧ (rowsB d).getD d.const #[] = #[d.const] ∧
+      Net.checkOrder "flock-ir-unit/v2" (n.inWords * WORD) d.const (rowsA d) (rowsB d) = .ok () ∧
+      ∀ i < n.inWords * WORD, (((rowsA d).getD i #[] == #[i] && (rowsB d).getD i #[] == #[i]) ||
+        (((rowsA d).getD i #[]).isEmpty && ((rowsB d).getD i #[]).isEmpty)) = true := by
+  obtain ⟨h1, h2, h3, h4, h5, -, -, h8, h9, h10, h11, h12⟩ := Net.ofRows_ok h
+  exact ⟨h1, h2, h3, h4, h5, h8, h9, h10, h11, h12⟩
 
 /-- A flat class's unit: no placed parts, no reads, no Δ but its constant's copy of the block's `one` (which `HmRow.delta`
 pins for every unit slot). -/
