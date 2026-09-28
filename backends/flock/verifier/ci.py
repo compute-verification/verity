@@ -5,9 +5,10 @@
     python ci.py --live --lean BIN --work DIR [--sets I,J] ...    `vectors.json`'s `live.sets`, against the live verdicts
 
 For each set (in `vectors.json` `replayable.sets`) whose PR #83 commit has an upstream binary, the job:
-- fetches its inputs from the evidence store (`research data fetch`);
-- regenerates the proof mutants (`redigest.py`), the retained-bytes sessions (`redigest.py --retain`) and `N` fuzz cases
-  (`fuzz.py --seed S`) from its honest session;
+- fetches its inputs from the evidence store (`research data fetch`), among them the verifier's own registered reads
+  (`statement.registered`, `agree.py --registered`) for a statement that reads registered values;
+- for a set that names `mutants`, regenerates the proof mutants (`redigest.py`), the retained-bytes sessions
+  (`redigest.py --retain`) and `N` fuzz cases (`fuzz.py --seed S`) from its honest session;
 - adds the set's stored forgeries, if it has any;
 - runs `agree.py` on all of them.
 
@@ -78,18 +79,22 @@ def run_set(i, s, a, ups, store):
     partition = fetch(st["partition"], store) if "partition" in st else None
     program = fetch(st["program"], store) if "program" in st else None
     tables = fetch(st["tables"], store) if "tables" in st else None
+    registered = fetch(st["registered"], store) if "registered" in st else None
     checks = ",".join(s.get("upstream_checks", [])) or "none"
     sessions, expects = [], []
     if "sessions" in s:
         vectors = fetch(s["sessions"][0]["dir"].rsplit("/", 1)[0], store)
+        expect = w / "expect.json"
+        w.mkdir(parents=True, exist_ok=True)
+        expect.write_text(json.dumps([{"name": x["dir"].rsplit("/", 1)[1], "expect": x["expect"]} for x in s["sessions"]]))
+        expects = [expect]
+        sessions = [str(vectors / x["dir"].rsplit("/", 1)[1]) for x in s["sessions"]]
+    if "mutants" in s:
         honest = vectors / "honest"
         py(HERE / "redigest.py", honest, w / "mutants")
         py(HERE / "redigest.py", "--retain", honest, w / "retained", "--upstream-checks", checks)
         py(HERE / "fuzz.py", honest, w / "fuzz", "--seed", a.seed, "--n", a.fuzz, "--upstream-checks", checks)
-        expect = w / "expect.json"
-        expect.write_text(json.dumps([{"name": x["dir"].rsplit("/", 1)[1], "expect": x["expect"]} for x in s["sessions"]]))
         expects = [w / "mutants" / "mutants.json", w / "fuzz" / "fuzz.json", w / "retained" / "retained.json", expect]
-        sessions = [str(vectors / x["dir"].rsplit("/", 1)[1]) for x in s["sessions"]]
         sessions += sorted(str(p) for p in (w / "mutants").iterdir() if p.is_dir())
         sessions += [str(w / "retained" / n) for n in ("retained", "retained-edited")]
         if "retained_bytes" in checks.split(","):
@@ -104,7 +109,7 @@ def run_set(i, s, a, ups, store):
         sessions += sorted(str(p) for p in d.iterdir() if p.is_dir())
     cmd = [sys.executable, HERE / "agree.py", "--lean", a.lean, "--upstream", up, "--statement", s["lean_statement"],
            "--circuit", circuit, *(("--comp", comp) if comp else ()), *(("--partition", partition) if partition else ()), *(("--program", program) if program else ()),
-           "--public", public, *(x for e in expects for x in ("--expect", e)),
+           "--public", public, *(("--registered", registered) if registered else ()), *(x for e in expects for x in ("--expect", e)),
            "--out", w / "agree", "--jobs", a.session_jobs, "--sessions", *sessions]
     if tables:
         cmd += ["--tables", tables]

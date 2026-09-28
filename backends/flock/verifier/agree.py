@@ -1,7 +1,7 @@
 """The agreement check (PROTOCOL.md §17.1): the Lean verifier and upstream's Rust verifier on the same sessions.
 
-    python agree.py --lean BIN --upstream BIN [--statement ID] --circuit F [--comp F] [--partition F] --public F \
-        [--tables DIR] [--expect FILE]... [--jobs J] --out DIR --sessions DIR...
+    python agree.py --lean BIN --upstream BIN [--statement ID] --circuit F [--comp F] [--partition F] [--program F] \
+        --public F [--registered F] [--tables DIR] [--expect FILE]... [--jobs J] --out DIR --sessions DIR...
 
 `--upstream` is PR #83's binary built with the vectors patch (`netlist-vectors.patch` at 9294e161, `flock-netlist`;
 `circuit-vectors.patch` at 19c7269a, `flock-circuit`): its `replay` subcommand is upstream's offline verdict. Each
@@ -9,7 +9,8 @@
 is its directory's basename, and `why` is a prefix of the Lean verifier's reason. An expectation may add
 `upstream_accepted` for an intended divergence (PROTOCOL.md §17.1: D1–D4): upstream must then return that verdict instead
 of the Lean verifier's. A session directory may carry its own
-public file (`pub.bin`, a forgery's false statement) and its expected verdict (`case.json`, from the vectors patch's
+public file (`pub.bin`, a forgery's false statement), the verifier's own registered reads (`registered.json`, in place of
+`--registered`; null for none; upstream reads none) and its expected verdict (`case.json`, from the vectors patch's
 `forgeries` subcommand). The Lean verifier loads the circuit, public, compression and table files from DIR/archive by
 their digests (PROTOCOL.md §16.8); upstream reads the paths. Writes DIR/agreement.tsv, the two
 verdict logs and DIR/result.json; exits 1 if the verifiers disagree on any session or either misses an expectation.
@@ -19,12 +20,21 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 
+def reads(a, s):
+    """The verifier's own registered reads for session `s`: its directory's `registered.json` when it has one (null: none),
+    else the set's `--registered`."""
+    own = Path(s) / "registered.json"
+    if own.exists():
+        return None if json.loads(own.read_text()) is None else str(own)
+    return a.registered
+
+
 def groups(a):
-    """Sessions by the public file their verifier reads."""
+    """Sessions by the public file and the registered reads their verifier reads."""
     g = {}
     for s in a.sessions:
         own = Path(s) / "pub.bin"
-        g.setdefault(str(own) if own.exists() else a.public, []).append(s)
+        g.setdefault((str(own) if own.exists() else a.public, reads(a, s)), []).append(s)
     return g
 
 
@@ -66,8 +76,9 @@ def chunks(xs, k):
     return [xs[i::k] for i in range(k)]
 
 
-def lean_cmd(a, public):
-    """The Lean verifier's command for a public file: every statement object from the run's archive, by SHA-512."""
+def lean_cmd(a, public, registered=None):
+    """The Lean verifier's command for a public file and the verifier's registered reads: every statement object from the
+    run's archive, by SHA-512."""
     if a.tables:
         for t in sorted(Path(a.tables).glob("*.u32")):
             archived(a, t)
@@ -79,6 +90,8 @@ def lean_cmd(a, public):
         cmd += ["--partition", archived(a, a.partition)]
     if a.program:
         cmd += ["--program", archived(a, a.program)]
+    if registered:
+        cmd += ["--registered", archived(a, registered)]
     if a.coins:
         cmd += ["--coins", a.coins]
     return cmd + ["--session"]
@@ -97,10 +110,10 @@ def verdicts(a, slots=None):
     not depend on its chunk: the logs are written in the sequential run's order (by public file, then session)."""
     tasks = []                                                        # (kind, order, command, sessions)
     order = {}
-    for gi, (public, sessions) in enumerate(groups(a).items()):
+    for gi, ((public, registered), sessions) in enumerate(groups(a).items()):
         for si, s in enumerate(sessions):
             order[s] = (gi, si)
-        base = lean_cmd(a, public)
+        base = lean_cmd(a, public, registered)
         for c in chunks(sessions, a.jobs):
             tasks.append(("lean", base, c))
         if a.upstream == LIVE:
@@ -159,6 +172,7 @@ def main(argv=None, slots=None, quiet=False):
     ap.add_argument("--comp", default=None, help="the BLAKE3 row leaf's compression circuit (statements before eb90718f)")
     ap.add_argument("--partition", default=None, help="the verity/partition/v1 object the circuit binds (PR #83 from e51e2b86)")
     ap.add_argument("--program", default=None, help="the program's descriptor bytes, to derive a template query's units")
+    ap.add_argument("--registered", default=None, help="the verifier's own registered reads (verity/registered-reads/v0)")
     ap.add_argument("--statement", default="verity/flock-circuit")
     ap.add_argument("--coins", default=None)
     ap.add_argument("--tables", default=None, help="the pinned MUFU tables, for circuits with lookup slots")
