@@ -37,6 +37,9 @@ from verity_vllm.config import option
 PROMPTS = ["The capital of France is", "def fibonacci(n):", "Proof of useful space means", "1, 1, 2, 3, 5, 8,"]
 GPU_MEMORY_UTILIZATION = 0.6
 LAYER0 = "model.layers.0."
+MAX_BATCHED_TOKENS = 16384      # pous-bench's scheduler budget: a 4 x 2048-token prefill is one forward
+DECODE_PROMPT = 128             # pous-bench's decode prompt
+PLAIN_DECODE_TOKENS = 64        # the plaintext decode steps averaged, as pous-bench
 
 
 def _write(path: Path, doc: Any) -> None:
@@ -152,9 +155,42 @@ def load_vk(out: Path):
     return doc, vk
 
 
+def engine_args(a) -> dict[str, Any] | None:
+    """The scheduler budget of the timed configurations, the same for the plain and the served engine."""
+    return {"max_num_batched_tokens": MAX_BATCHED_TOKENS} if a.prefill else None
+
+
+def throughput(engine, a, info) -> list[dict[str, Any]]:
+    """pous-bench's prefill configurations (``--prefill``) and decode at batch 1 on this role's engine (`pipeline/pous_timing.py`):
+    prefill tokens/s over the time to every first token, decode tokens/s over the steps after it.  A POUS forward pays the
+    whole model's decode, so the served engine times ``--decode-tokens`` steps and the plain one `PLAIN_DECODE_TOKENS`."""
+    from verity_vllm.pipeline import pous_timing as pb
+
+    rows = []
+    for item in filter(None, a.prefill.split(",")):
+        length, batch = (int(x) for x in item.split("x"))
+        rows.append(pb.prefill(engine, length, batch, info))
+    if a.decode_tokens:
+        rows.append(pb.decode(engine, 1, DECODE_PROMPT, a.decode_tokens if info() is not None else PLAIN_DECODE_TOKENS, info))
+    return rows
+
+
+def slowdowns(plain: list[dict[str, Any]], pous: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Plain tokens/s over POUS tokens/s, per configuration both roles timed."""
+    key = lambda r: f"prefill {r['length']}x{r['batch']}" if r["kind"] == "prefill" else f"decode batch {r['batch']}"  # noqa: E731
+    served = {key(r): r for r in pous}
+    return {key(p): {"plain_tokens_per_s": p["tokens_per_s"], "pous_tokens_per_s": served[key(p)]["tokens_per_s"],
+                     "slowdown": p["tokens_per_s"] / served[key(p)]["tokens_per_s"],
+                     "pous_decode_s": served[key(p)].get("decode_s"), "pous_decodes": served[key(p)].get("decodes")}
+            for p in plain if key(p) in served}
+
+
 def cmd_plain(a) -> None:
-    engine = build(a.case, None)
-    _write(Path(a.out) / "plain.json", {"outputs": generate(engine, a.max_tokens)})
+    engine = build(a.case, None, engine_args=engine_args(a))
+    doc = {"outputs": generate(engine, a.max_tokens)}
+    if a.prefill or a.decode_tokens:
+        doc["throughput"] = throughput(engine, a, lambda: None)
+    _write(Path(a.out) / "plain.json", doc)
 
 
 def serve_spec(a, out: Path) -> dict[str, Any]:
@@ -175,11 +211,13 @@ def cmd_serve(a) -> None:
     spec_path = out / f"pous-{a.tag}.json"
     _write(spec_path, spec)
     t0 = time.perf_counter()
-    engine = build(a.case, spec_path)
+    engine = build(a.case, spec_path, engine_args=engine_args(a))
     llm = engine.llm
     doc: dict[str, Any] = {"build_s": time.perf_counter() - t0, "spec": spec, "info_after_load": llm.collective_rpc("pous_info")[0]}
     if not a.drop_fraction:
         doc["outputs"] = generate(engine, a.max_tokens)
+        if a.prefill or a.decode_tokens:
+            doc["throughput"] = throughput(engine, a, lambda: llm.collective_rpc("pous_info")[0])
     raw = llm.collective_rpc("pous_leaves")[0]
     (out / f"leaves-{a.tag}.bin").write_bytes(raw)
     doc["root"] = MerkleTree([raw[i:i + 32] for i in range(0, len(raw), 32)]).root.hex()
@@ -229,7 +267,8 @@ def _step(out: Path, name: str, args: list[str]) -> None:
 
 
 def _base(a) -> list[str]:
-    return ["--out", a.out, "--case", a.case, "--build-dir", a.build_dir, "--codec", a.codec]
+    return ["--out", a.out, "--case", a.case, "--build-dir", a.build_dir, "--codec", a.codec, "--prefill", a.prefill,
+            "--decode-tokens", str(a.decode_tokens)]
 
 
 def _audit_round(out: Path, tag: str, extra: list[str], a) -> dict[str, Any]:
@@ -291,6 +330,7 @@ def summarize(out: Path, honest: dict, negative: dict, a) -> dict[str, Any]:
         "timing": {"plain_generate_s": plain[0]["wall_s"], "pous_generate_s": (hs.get("outputs") or [{}])[0].get("wall_s"),
                    "max_tokens": a.max_tokens, "decode": {k: (hs.get("info_end") or {}).get(k) for k in ("decodes", "decode_s", "decoded_bytes")},
                    "serving_loops_during_audit_s": hs.get("serving_loops_during_audit_s")},
+        "throughput": slowdowns(_read(out / "plain.json").get("throughput") or [], hs.get("throughput") or []),
         "rc": {"honest": [honest["serve_rc"], honest["verify_rc"]], "dropped": [negative["serve_rc"], negative["verify_rc"]]},
     }
     rec = hv.get("audit_of_record") or {}
@@ -317,6 +357,10 @@ def research_result(result: dict[str, Any], a, passed: bool) -> dict[str, Any]:
             ("plain_generate", result["timing"]["plain_generate_s"], "s"), ("pous_generate", result["timing"]["pous_generate_s"], "s"),
             ("honest_audits_accepted", result["honest"]["audits_accepted"], "count"),
             ("negative_audits_accepted", result["negative"]["audits_accepted"], "count")]
+    for config, s in (result.get("throughput") or {}).items():
+        tag = config.replace(" ", "_")
+        rows += [(f"slowdown_{tag}", s["slowdown"], "x"), (f"plain_{tag}", s["plain_tokens_per_s"], "token/s"),
+                 (f"pous_{tag}", s["pous_tokens_per_s"], "token/s")]
     failed = sorted(k for k, v in result["verdicts"].items() if not v)
     return {"schema": "research/result/v0.1", "run_id": a.run_id,
             "workload_fingerprint": {"case": a.case, "codec": result["codec"], "salt": result["setup"]["salt"],
@@ -352,6 +396,10 @@ class _Common:
     out: str = option("--out", required=True, help="the run directory every role reads and writes")
     case: str = option("--case", required=True, help="the checkpoint role in manifests/checkpoints.json")
     build_dir: str = option("--build-dir", required=True, help="parent directory of the pous_native JIT build")
+    prefill: str = option("--prefill", default="",
+                          help="prefill configurations the plain and honest serve roles time, length x batch, comma separated (e.g. 2048x4)")
+    decode_tokens: int = option("--decode-tokens", type=int, default=0,
+                                help="decode steps the honest serve role times at batch 1 (plain: 64); 0 times no decode")
     codec: str = option("--codec", default="p3/v1",
                         help="the reference codec served and audited (engine/pous/twins.reference): p3/v1, dense-chain/v1, band-chain/d12/v1")
     tag: str = option("--tag", default="honest", help="the server round: honest or dropped")

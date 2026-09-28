@@ -33,9 +33,9 @@ def _checkpoint(path) -> bytes:
     return data
 
 
-def _args(out, codec: str = BAND) -> types.SimpleNamespace:
+def _args(out, codec: str = BAND, prefill: str = "", decode_tokens: int = 0) -> types.SimpleNamespace:
     return types.SimpleNamespace(out=str(out), case="TOY", build_dir=str(out), codec=codec, workers=2, tag="honest",
-                                 drop_fraction=0.0, layers_per_decode=1)
+                                 drop_fraction=0.0, layers_per_decode=1, prefill=prefill, decode_tokens=decode_tokens)
 
 
 @pytest.fixture
@@ -69,9 +69,24 @@ def test_every_role_is_handed_the_codec_and_the_default_stays_p3(toy):
     out, _ = toy
     (out / "salt.json").write_text(json.dumps({"salt": "00" * 24}))
     assert pous_run.serve_spec(_args(out), out)["codec"] == BAND
-    assert pous_run._base(_args(out))[-2:] == ["--codec", BAND]
+    assert pous_run._base(_args(out, prefill="2048x4", decode_tokens=4))[-6:] == [
+        "--codec", BAND, "--prefill", "2048x4", "--decode-tokens", "4"]
     default = {f.name: f.default for f in dataclasses.fields(pous_run.COMMANDS["e2e"])}["codec"]
     assert default == "p3/v1" == pous_run.reference_codec(default)[0].name
+
+
+def test_prefill_and_decode_slowdowns_pair_the_plain_and_served_configurations(toy):
+    out, _ = toy
+    assert pous_run.engine_args(_args(out, prefill="2048x4")) == {"max_num_batched_tokens": pous_run.MAX_BATCHED_TOKENS}
+    assert pous_run.engine_args(_args(out)) is None                     # the plain and served engines get the same budget
+    plain = [{"kind": "prefill", "length": 2048, "batch": 4, "tokens_per_s": 150_000.0},
+             {"kind": "decode", "batch": 1, "tokens_per_s": 100.0}]
+    pous = [{"kind": "prefill", "length": 2048, "batch": 4, "tokens_per_s": 7_500.0, "decode_s": 1.0, "decodes": 3},
+            {"kind": "decode", "batch": 1, "tokens_per_s": 1.25, "decode_s": 3.2, "decodes": 12}]
+    got = pous_run.slowdowns(plain, pous)
+    assert list(got) == ["prefill 2048x4", "decode batch 1"]
+    assert got["prefill 2048x4"]["slowdown"] == 20.0 and got["decode batch 1"]["slowdown"] == 80.0
+    assert got["decode batch 1"]["pous_decodes"] == 12 and pous_run.slowdowns(plain, []) == {}
 
 
 def test_the_verifier_refuses_a_commitment_under_another_codec(toy):
