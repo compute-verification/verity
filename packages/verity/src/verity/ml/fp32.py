@@ -6,8 +6,14 @@ Encodings: f32 = `Value<32>`, bf16 = `Value<16>`.  Every evaluator is total on e
 subnormals map to the outputs each docstring states.  Add, sub, mul, div and max run on numpy `float32` scalars; FMA is exact
 rational arithmetic with one rounding.
 
-Provenance.  These are the definitions the vLLM integration registered in `verity_vllm.program.registry.prims` (same ids,
-signatures, conformance statuses and evaluators), which re-exports them from here.  Its stored Programs cite these ids.
+NaN words.  The `_v1` arithmetic gives the host's NaN, not the hardware's: add, sub, mul and div return numpy float32's word
+on x86-64 (an operand's NaN quieted, `0xFFC00000` for an invalid operation) and the FMAs `F32_NAN`.  Each `_v2` is its `_v1`
+with every NaN result the GPU's `F32_NAN_PTX`, and equal to it on every other word.  A registered id denotes one function, so
+the GPU's NaN came as new ids (as `verity.ml.prims.AmpereBF16TcDot16_v2` did); Programs move to `_v2` at a re-baseline.
+
+Provenance.  The `_v1` primitives are the definitions the vLLM integration registered in `verity_vllm.program.registry.prims`
+(same ids, signatures, conformance statuses and evaluators), which re-exports them from here.  Its stored Programs cite these
+ids.
 """
 from __future__ import annotations
 
@@ -18,12 +24,16 @@ import numpy as np
 from verity.ir.defs import primitive
 from verity.ir.types import Value
 
+from .scalar import F32_NAN_PTX
+
 BF16, F32 = Value(16), Value(32)
 
-__all__ = ["f32_decode", "f32_round", "BF16", "BF16_NAN_F2FP", "BF16_NAN_TORCH", "F32", "F32_NAN", "Bf16Add", "Bf16AddF2fp", "Bf16MulBf16", "Bf16MulF32",
-           "F32Add", "F32AddFtz", "F32Div", "F32Fma", "F32FmaFtz", "F32FmaSubFtz", "F32Max", "F32Mul", "F32MulFtz", "F32SubFtz",
-           "GuardNegInfZero", "bf16_to_f32_bits", "bits_of", "f32_add_bits", "f32_div_bits", "f32_fma_bits", "f32_is_nan",
-           "f32_max_bits", "f32_mul_bits", "f32_of", "f32_sub_bits", "f32_to_bf16_rn_bits", "ftz_bits"]
+__all__ = ["f32_decode", "f32_round", "BF16", "BF16_NAN_F2FP", "BF16_NAN_TORCH", "F32", "F32_NAN", "F32_NAN_PTX", "Bf16Add", "Bf16AddF2fp",
+           "Bf16MulBf16", "Bf16MulF32", "F32Add", "F32AddFtz", "F32Div", "F32Fma", "F32FmaFtz", "F32FmaSubFtz", "F32Max", "F32Mul",
+           "F32MulFtz", "F32SubFtz", "F32AddV2", "F32AddFtzV2", "F32DivV2", "F32FmaV2", "F32FmaFtzV2", "F32FmaSubFtzV2", "F32MulV2",
+           "F32MulFtzV2", "F32SubFtzV2", "GuardNegInfZero", "bf16_to_f32_bits", "bits_of", "f32_add_bits", "f32_div_bits",
+           "f32_fma_bits", "f32_gpu_nan", "f32_is_nan", "f32_max_bits", "f32_mul_bits", "f32_of", "f32_sub_bits",
+           "f32_to_bf16_rn_bits", "ftz_bits"]
 
 # The float32 evaluators must return the IEEE result on overflow, invalid and division by zero, never warn or raise.
 np.seterr(all="ignore")
@@ -32,6 +42,7 @@ np.seterr(all="ignore")
 # exact float helpers on encodings
 # ---------------------------------------------------------------------------------------------------------
 
+#: the `_v1` FMAs' NaN, and the canonical NaN of the stand-in and reference evaluators that cite it; `_v2` returns `F32_NAN_PTX`
 F32_NAN = 0x7FC00000
 BF16_NAN_TORCH = 0x7FC0  # aten / torch conversion canonical NaN
 BF16_NAN_F2FP = 0x7FFF  # SASS F2FP.BF16.F32 canonical NaN
@@ -168,6 +179,11 @@ def f32_is_nan(u: int) -> bool:
     return (u & 0x7F800000) == 0x7F800000 and (u & 0x7FFFFF) != 0
 
 
+def f32_gpu_nan(u: int) -> int:
+    """``u``, or `F32_NAN_PTX` when ``u`` is a NaN: the GPU's word for every NaN result of the FP32 arithmetic."""
+    return F32_NAN_PTX if f32_is_nan(u) else u
+
+
 # ---------------------------------------------------------------------------------------------------------
 # f32 arithmetic (IEEE RN-even, no ftz) and the FTZ family used by the fast-math FA2 kernel
 # ---------------------------------------------------------------------------------------------------------
@@ -225,6 +241,64 @@ def F32FmaFtz(a: int, b: int, c: int) -> int:
 def F32FmaSubFtz(a: int, b: int, c: int) -> int:
     """FFMA.FTZ with negated addend: ftz(RN(ftz(a) * ftz(b) - ftz(c)))."""
     return ftz_bits(f32_fma_bits(ftz_bits(a), ftz_bits(b), ftz_bits(c) ^ 0x80000000))
+
+
+# --- version 2: every NaN result the GPU's `F32_NAN_PTX` (the L40S / H100 probe art:e5dd6ce9..., every build, ftz on and off);
+# equal to `_v1` on every other word ------------------------------------------------------------------------------------------
+
+
+@primitive("F32Add", 2, [("a", F32), ("b", F32)], F32, conformance="exact-model-tested")
+def F32AddV2(a: int, b: int) -> int:
+    """FADD: RN(a + b); every NaN result `F32_NAN_PTX`."""
+    return f32_gpu_nan(F32Add.evaluate(a, b))
+
+
+@primitive("F32Mul", 2, [("a", F32), ("b", F32)], F32, conformance="exact-model-tested")
+def F32MulV2(a: int, b: int) -> int:
+    """FMUL: RN(a * b); every NaN result `F32_NAN_PTX`."""
+    return f32_gpu_nan(F32Mul.evaluate(a, b))
+
+
+@primitive("F32Fma", 2, [("a", F32), ("b", F32), ("c", F32)], F32, conformance="exact-model-tested")
+def F32FmaV2(a: int, b: int, c: int) -> int:
+    """FFMA: RN(a * b + c), one rounding; every NaN result `F32_NAN_PTX`."""
+    return f32_gpu_nan(F32Fma.evaluate(a, b, c))
+
+
+@primitive("F32Div", 2, [("a", F32), ("b", F32)], F32, conformance="exact-model-tested")
+def F32DivV2(a: int, b: int) -> int:
+    """IEEE `div.rn.f32`: RN(a / b); every NaN result `F32_NAN_PTX`."""
+    return f32_gpu_nan(F32Div.evaluate(a, b))
+
+
+@primitive("F32AddFtz", 2, [("a", F32), ("b", F32)], F32, conformance="exact-model-tested")
+def F32AddFtzV2(a: int, b: int) -> int:
+    """FADD.FTZ: ftz(RN(ftz(a) + ftz(b))); every NaN result `F32_NAN_PTX`."""
+    return f32_gpu_nan(F32AddFtz.evaluate(a, b))
+
+
+@primitive("F32SubFtz", 2, [("a", F32), ("b", F32)], F32, conformance="exact-model-tested")
+def F32SubFtzV2(a: int, b: int) -> int:
+    """ftz(RN(ftz(a) - ftz(b))); every NaN result `F32_NAN_PTX`."""
+    return f32_gpu_nan(F32SubFtz.evaluate(a, b))
+
+
+@primitive("F32MulFtz", 2, [("a", F32), ("b", F32)], F32, conformance="exact-model-tested")
+def F32MulFtzV2(a: int, b: int) -> int:
+    """FMUL.FTZ: ftz(RN(ftz(a) * ftz(b))); every NaN result `F32_NAN_PTX`."""
+    return f32_gpu_nan(F32MulFtz.evaluate(a, b))
+
+
+@primitive("F32FmaFtz", 2, [("a", F32), ("b", F32), ("c", F32)], F32, conformance="exact-model-tested")
+def F32FmaFtzV2(a: int, b: int, c: int) -> int:
+    """FFMA.FTZ: ftz(RN(ftz(a) * ftz(b) + ftz(c))); every NaN result `F32_NAN_PTX`."""
+    return f32_gpu_nan(F32FmaFtz.evaluate(a, b, c))
+
+
+@primitive("F32FmaSubFtz", 2, [("a", F32), ("b", F32), ("c", F32)], F32, conformance="exact-model-tested")
+def F32FmaSubFtzV2(a: int, b: int, c: int) -> int:
+    """FFMA.FTZ with negated addend: ftz(RN(ftz(a) * ftz(b) - ftz(c))); every NaN result `F32_NAN_PTX`."""
+    return f32_gpu_nan(F32FmaSubFtz.evaluate(a, b, c))
 
 
 @primitive("F32Max", 1, [("a", F32), ("b", F32)], F32, conformance="exact-model-tested")
