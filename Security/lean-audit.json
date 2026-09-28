@@ -225,7 +225,9 @@
   "Proofs.Flock.EndToEndHidden",
   "Proofs.Flock.EndToEndRegistered",
   "Proofs.Flock.ZeroKnowledgeHidden",
-  "Proofs.Pouw.PearlC.FlockTile"
+  "Proofs.Pouw.PearlC.FlockTile",
+  "Definitions.Accounting",
+  "Models.Accounting.Guarantees"
  ],
  "layers": {
   "Definitions.Core": {
@@ -397,6 +399,16 @@
    "imports": ["Mathlib", "Models.Flock.Guarantees"],
    "except": [],
    "why": "a guarantee is a Prop over Mathlib, never over a proof"
+  },
+  "Definitions.Accounting": {
+   "imports": ["Mathlib", "Definitions.Pouw", "Definitions.Accounting"],
+   "except": [],
+   "why": "resource accounting's definitions are trusted text: the tensor-core sketch reads the sm_120 E4M3 step's definitions (Definitions.Pouw.Fp8Atom, Definitions.Pouw.PearlC.Sm120), and they import no assumption, guarantee or proof"
+  },
+  "Models.Accounting.Guarantees": {
+   "imports": ["Mathlib", "Definitions.Accounting", "Models.Accounting.Guarantees"],
+   "except": [],
+   "why": "a guarantee is stated over resource accounting's definitions, never over a proof"
   }
  },
  "reads_exempt": {
@@ -413,8 +425,88 @@
   "Proofs.Flock.ZeroKnowledgeHidden": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Pouw.PearlC.FlockTile": "the PoUW × C-Flock statement reads C-Flock's definitions, which are still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT); lean's Q3 ruling, 6 Oct"
  },
- "four_names": ["Nci", "NetTiming"],
+ "four_names": ["Nci", "NetTiming", "Accounting"],
  "guarantees": {
+  "Accounting.SecurityProofs.Sketch.CommitThenProject": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Sketch.CommitThenProject : Accounting.Guarantees.Sketch.CommitThenProject"],
+   "assumptions": [],
+   "type_hash": "60ef20fb730d1ceea94759327454412907affacffe8181611821b4f73c79af44"
+  },
+  "Accounting.SecurityProofs.Sketch.Exact": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Sketch.Exact : Accounting.Guarantees.Sketch.Exact"],
+   "assumptions": [],
+   "type_hash": "beb881ea782a3d7e26ad2b1b9d0486f244d86095ca1bcd33d14e2318fdf2e3c0"
+  },
+  "Accounting.SecurityProofs.Sketch.LittlewoodOfford": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Sketch.LittlewoodOfford : Accounting.Guarantees.Sketch.LittlewoodOfford"],
+   "assumptions": [],
+   "type_hash": "b7902f6672039ec6b46f39bfecb444653ed58702c49fb71b29f2cab6c83410fc"
+  },
+  "Accounting.SecurityProofs.Sketch.NonCollision": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Sketch.NonCollision : Accounting.Guarantees.Sketch.NonCollision"],
+   "assumptions": [],
+   "type_hash": "ed4b9d28cce0b4981cf2ed7a9416b8dd9f7991a3636c4b6b9f4b7f9edaefd7e6"
+  },
+  "Accounting.SecurityProofs.Sketch.SmallCode": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Sketch.SmallCode : Accounting.Guarantees.Sketch.SmallCode"],
+   "assumptions": [],
+   "type_hash": "14182e1b312345740fa40c111d5c05709686b6bd6988959fe200927f1675a6cf"
+  },
+  "Accounting.SecurityProofs.Sketch.TensorCoreNonCollision": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.Sketch.TensorCoreNonCollision : Accounting.Guarantees.Sketch.TensorCoreNonCollision"
+   ],
+   "assumptions": [],
+   "type_hash": "3826b46366b899e55a3083d468bae586354658a2e785f88f40dd75e38c0577e0"
+  },
+  "Accounting.SecurityProofs.Tag.DigestNonCollision": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Tag.DigestNonCollision : Accounting.Guarantees.Tag.DigestNonCollision"],
+   "assumptions": [],
+   "type_hash": "a5885b18cdc13950f3c4fc02f5c781a957dd2052abf4391c6b55a518ad2f19f5"
+  },
+  "Accounting.SecurityProofs.Tag.FoldNonCollision": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Tag.FoldNonCollision : Accounting.Guarantees.Tag.FoldNonCollision"],
+   "assumptions": [],
+   "type_hash": "79612cf8b8ff82de4c0a82bfddf5723de71efbdc8cb5219aec9a866c5fcb6876"
+  },
+  "Accounting.SecurityProofs.Tag.HornerIsBlockHash": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Tag.HornerIsBlockHash : Accounting.Guarantees.Tag.HornerIsBlockHash"],
+   "assumptions": [],
+   "type_hash": "fad930b61c45eb758145c976bd5544c44efb5cba4dcc55342e5dfe5865f76b63"
+  },
+  "Accounting.SecurityProofs.Tag.PartialReadGuess": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Tag.PartialReadGuess : Accounting.Guarantees.Tag.PartialReadGuess"],
+   "assumptions": [],
+   "type_hash": "a699a385085916af1e166ba392545ca8d2ebe459f68e867c508db72f919f6803"
+  },
+  "Accounting.SecurityProofs.Tag.PolyNonCollision": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Tag.PolyNonCollision : Accounting.Guarantees.Tag.PolyNonCollision"],
+   "assumptions": [],
+   "type_hash": "7b0f647827cedcc43c3c71d20282fe6947495ea846027d4268fddc1dfbc468f1"
+  },
+  "Accounting.SecurityProofs.Tag.PolyNonCollisionKeyed": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Tag.PolyNonCollisionKeyed : Accounting.Guarantees.Tag.PolyNonCollisionKeyed"],
+   "assumptions": [],
+   "type_hash": "c6ca9b886962d17559eb99064498a277a8c46edf712e5c11a84d8542bbda4fee"
+  },
+  "Accounting.SecurityProofs.Tag.PolyUnpredictable": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Tag.PolyUnpredictable : Accounting.Guarantees.Tag.PolyUnpredictable"],
+   "assumptions": [],
+   "type_hash": "67b1fadb363e69e86a6d5bd4f1470fc59a8c75d8d3422ec50bd514d9437b7035"
+  },
   "Flock.SecurityProofs.EndToEnd": {
    "owner": "@proofs",
    "signature": ["Flock.SecurityProofs.EndToEnd : Flock.Guarantees.EndToEnd"],
@@ -3543,6 +3635,58 @@
    "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties": {
     "function": ["Flock.Stmt.setupTables", "Flock.verify", "Flock.Zk.verify", "Flock.ProvedScope.check"],
     "outcome": "accept"
+   },
+   "Accounting.SecurityProofs.Tag.PolyNonCollision": {
+    "function": "Accounting.Tag.blockHash",
+    "outcome": "none"
+   },
+   "Accounting.SecurityProofs.Tag.PolyNonCollisionKeyed": {
+    "function": "Accounting.Tag.blockHash",
+    "outcome": "none"
+   },
+   "Accounting.SecurityProofs.Tag.PolyUnpredictable": {
+    "function": "Accounting.Tag.blockHash",
+    "outcome": "none"
+   },
+   "Accounting.SecurityProofs.Tag.PartialReadGuess": {
+    "function": "Accounting.Tag.wordGuess",
+    "outcome": "none"
+   },
+   "Accounting.SecurityProofs.Tag.FoldNonCollision": {
+    "function": "Accounting.Tag.fold",
+    "outcome": "none"
+   },
+   "Accounting.SecurityProofs.Tag.DigestNonCollision": {
+    "function": "Accounting.Tag.digest",
+    "outcome": "none"
+   },
+   "Accounting.SecurityProofs.Tag.HornerIsBlockHash": {
+    "function": "Accounting.Tag.hornerHash",
+    "outcome": "none"
+   },
+   "Accounting.SecurityProofs.Sketch.NonCollision": {
+    "function": "Accounting.Tag.project",
+    "outcome": "none"
+   },
+   "Accounting.SecurityProofs.Sketch.SmallCode": {
+    "function": "Accounting.Tag.smallCode",
+    "outcome": "none"
+   },
+   "Accounting.SecurityProofs.Sketch.Exact": {
+    "function": "Accounting.Tag.sketchWord",
+    "outcome": "none"
+   },
+   "Accounting.SecurityProofs.Sketch.TensorCoreNonCollision": {
+    "function": "Accounting.Tag.sketchWord",
+    "outcome": "none"
+   },
+   "Accounting.SecurityProofs.Sketch.CommitThenProject": {
+    "function": "Accounting.Tag.signMatrix",
+    "outcome": "none"
+   },
+   "Accounting.SecurityProofs.Sketch.LittlewoodOfford": {
+    "function": "Accounting.Tag.unreadSum",
+    "outcome": "none"
    }
   },
   "frozen": {
@@ -3887,6 +4031,71 @@
   "events": ["FlockSoundness.Game.prob"]
  },
  "reads": {
+  "Definitions.Accounting.Tag.PolyHash": {
+   "digest": "745bfb72ad4da7469d679c4cb9bc2be42ca7640140c26059793b094d186a1f6f",
+   "definitions": {
+    "Accounting.Tag.Block": "496478e52aa53eb36c9f8e2f57505e61e0c042bcf2d7df89245964222bb23438",
+    "Accounting.Tag.P": "1e13f3806b340c3540c6539824653737b91897e76b4efef6d60b36f94cd96623",
+    "Accounting.Tag.Word": "1e46537a35242d3e7593eaf643bd8c90094a2654a54862103b3b0a6a872b4b6c",
+    "Accounting.Tag.blockHash": "a1051c68278216a1985f74236200d12e32a07e4eb3a11c5b55a54d100eaa0119",
+    "Accounting.Tag.consistent": "739a656a0f787e2a3fa4d3d31f739e2062075fb9089fd1cb80a7fa98cfd521a8",
+    "Accounting.Tag.digest": "b5c6a85a2422825ccc5a3aa915d4298e64a6d2b549b2a646d87bcaad87566483",
+    "Accounting.Tag.fold": "da2409922eb9770d78c929eda1f70ce47989610ee81461306cf0330a0f41b7bc",
+    "Accounting.Tag.hornerHash": "05406102fc52f3a9679bf83083f4dd84a12edbae2940ab945c48e67c9a2532d6",
+    "Accounting.Tag.partialRead": "75ccb99b3b8ac2301c59c40df979563444e2e9153d7f7322a8977353eba8c6f8",
+    "Accounting.Tag.residue": "35490ea3a9bc32d44807b5f8fe8b4b17f9a33a23aaa2ddd5bf256542543ab63c",
+    "Accounting.Tag.residues": "0d6ad4efaa2ffe38a6c68fcdfbcc4765237f6aff174b3b9205d14440d7de334e",
+    "Accounting.Tag.wordGuess": "af304f950eb6b98a49e10fd89cddb3c43e796d694eef306d0957c6fb3dc1ac7f"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Tag.DigestNonCollision",
+    "Accounting.SecurityProofs.Tag.FoldNonCollision",
+    "Accounting.SecurityProofs.Tag.HornerIsBlockHash",
+    "Accounting.SecurityProofs.Tag.PartialReadGuess",
+    "Accounting.SecurityProofs.Tag.PolyNonCollision",
+    "Accounting.SecurityProofs.Tag.PolyNonCollisionKeyed",
+    "Accounting.SecurityProofs.Tag.PolyUnpredictable"
+   ]
+  },
+  "Definitions.Accounting.Tag.Prob": {
+   "digest": "fd72301bac0a45de24b8b65047fad63158f5201c33a50da86c108b6fff9fe108",
+   "definitions": {
+    "Accounting.Tag.prob": "ed2c540751af0a6a113efc4d7a5e17342d51a00a17fdc1ef713432753e7f0c81"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Sketch.CommitThenProject",
+    "Accounting.SecurityProofs.Sketch.LittlewoodOfford",
+    "Accounting.SecurityProofs.Sketch.NonCollision",
+    "Accounting.SecurityProofs.Sketch.TensorCoreNonCollision",
+    "Accounting.SecurityProofs.Tag.DigestNonCollision",
+    "Accounting.SecurityProofs.Tag.FoldNonCollision",
+    "Accounting.SecurityProofs.Tag.PolyNonCollision",
+    "Accounting.SecurityProofs.Tag.PolyNonCollisionKeyed",
+    "Accounting.SecurityProofs.Tag.PolyUnpredictable"
+   ]
+  },
+  "Definitions.Accounting.Tag.Sketch": {
+   "digest": "8062f83ebbb7833f79534999717b3fee1b2bd5b876cbc7fba3cfd2a39dce2c79",
+   "definitions": {
+    "Accounting.Tag.Signs": "1971a91db84b1282a20b09950149e48937f1b7c08b1440acf5d59597dbe21c25",
+    "Accounting.Tag.project": "9efbdb80d33169faff2c437cbc1ba434b4961a8eed9920408b12a3b33db0957e",
+    "Accounting.Tag.sgn": "2829107b4acabb55d30b6778c4cfbf6026d30340415d5a631d09629dd6af6703",
+    "Accounting.Tag.signCode": "eba5663bc8f9ab9e2c713dddce49a1898efe439401731cdaaa0e0a6ebf418d90",
+    "Accounting.Tag.signMatrix": "c9e26e4dd64153c880f93036eb160ffe50dbcb7d1dc2c48615eb66b4979b37c1",
+    "Accounting.Tag.sketchWord": "83e52c94bdf9cae9cb0c747f4a13849924aff8f5229097cb8e68ef23fff44a16",
+    "Accounting.Tag.smallCode": "61f9c1ce82b2cc8b818ef1f9adbb4c90f6e7d527ade134fbfeeb44290033dd76",
+    "Accounting.Tag.smallValue": "44d4978966d2179bc2a33cf705d1a187ac7dae77a1fac63144c2147c9bdc199e",
+    "Accounting.Tag.unreadSum": "1f8e83f1fa0da60f295e0e8589e62dcd3099e7d20aac633bad80388bb962172d"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Sketch.CommitThenProject",
+    "Accounting.SecurityProofs.Sketch.Exact",
+    "Accounting.SecurityProofs.Sketch.LittlewoodOfford",
+    "Accounting.SecurityProofs.Sketch.NonCollision",
+    "Accounting.SecurityProofs.Sketch.SmallCode",
+    "Accounting.SecurityProofs.Sketch.TensorCoreNonCollision"
+   ]
+  },
   "Definitions.Core.Circuit": {
    "digest": "a08239081fcf880dee928fce0029cfa179f6f760db51ccd16bd97d7097f3e541",
    "definitions": {
@@ -4883,6 +5092,8 @@
     "Pouw.Fp8Atom.toAdder": "7cca6dae786a59469327bc2aa6032363b2a1bdcd7511f2c4acbdf378ad2326cf"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Sketch.Exact",
+    "Accounting.SecurityProofs.Sketch.TensorCoreNonCollision",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCodeCap1000_8192",
@@ -4986,6 +5197,9 @@
     "Pouw.Fp8Atom.decode": "961a08fb469def3000eb6aa9d8ad0a30df4176a4259c48373aab4a8b40f4fe51"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Sketch.Exact",
+    "Accounting.SecurityProofs.Sketch.SmallCode",
+    "Accounting.SecurityProofs.Sketch.TensorCoreNonCollision",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCodeCap1000_8192",
@@ -5086,6 +5300,7 @@
     "Pouw.Fp8Atom.wordQ": "9ee27b990d0e72f11d265812837b74b8f725d76bc5731473248c43e952e65d1f"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Sketch.Exact",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCodeCap1000_8192",
@@ -7364,12 +7579,15 @@
    ]
   },
   "Definitions.Pouw.PearlC.Sm120": {
-   "digest": "707251e81ff9c998a15c96eae81fad181d5c68b018af5cea1518b2603ce4c976",
+   "digest": "637352112421c7ee2b6222521f5034a54bc2aabfdecc5f7a18e8e8ff24508eed",
    "definitions": {
     "Pouw.PearlC.sm120E4m3": "46fe445a03ea01e961de594d17fd2e537e12bfaf764f296745ced647bd757797",
-    "Pouw.PearlC.sm120E4m3K32": "313fc54181e0834aed11b24d2ec50dfa0b5a2bfbd2dce390c2c6660068845b0a"
+    "Pouw.PearlC.sm120E4m3K32": "313fc54181e0834aed11b24d2ec50dfa0b5a2bfbd2dce390c2c6660068845b0a",
+    "Pouw.PearlC.sm120Step": "4d41987d8760990c4db61e96d761db62a4ce809ae3308b0fb7126b80f4a24d2a"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Sketch.Exact",
+    "Accounting.SecurityProofs.Sketch.TensorCoreNonCollision",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCodeCap1000_8192",
@@ -12146,6 +12364,46 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous"
+   ]
+  },
+  "Models.Accounting.Guarantees.Sketch": {
+   "digest": "b0f902b6c4a59615f713c7b8e4761a2b41f6505fa1f9612ea7aa985b9b450a0c",
+   "definitions": {
+    "Accounting.Guarantees.Sketch.CommitThenProject": "54f22d9cbc22d9aa62abe469ac39b6bc010fd743894ec7a3dcca86081df00a0a",
+    "Accounting.Guarantees.Sketch.Exact": "a3ccc6c5611d7e7810cf6af35ccf38d8b4cc1f2c2e8eb398467c02dc83dd6e17",
+    "Accounting.Guarantees.Sketch.LittlewoodOfford": "b81210eab2788abfdc3365f610d43d067c2e9170d12674843aa410d4a711c1b4",
+    "Accounting.Guarantees.Sketch.NonCollision": "0cb63484681d03e2d97a53ab0c7b27f3617141002637323b33111970b0f5cf7b",
+    "Accounting.Guarantees.Sketch.SmallCode": "9b60072c680f33c72abeea3b5d6ecd41ea315c3d750bd5af2b30c8478c7dda8d",
+    "Accounting.Guarantees.Sketch.TensorCoreNonCollision": "a144f14393abe87c5fad5674adccd5e2cb088fe8afebcd7ea7cc4f2ebfddd05e"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Sketch.CommitThenProject",
+    "Accounting.SecurityProofs.Sketch.Exact",
+    "Accounting.SecurityProofs.Sketch.LittlewoodOfford",
+    "Accounting.SecurityProofs.Sketch.NonCollision",
+    "Accounting.SecurityProofs.Sketch.SmallCode",
+    "Accounting.SecurityProofs.Sketch.TensorCoreNonCollision"
+   ]
+  },
+  "Models.Accounting.Guarantees.Tag": {
+   "digest": "14098591f75c2d59cf79e1a6f0a0f25d72916b5094145f8fb5c477854f9c924d",
+   "definitions": {
+    "Accounting.Guarantees.Tag.DigestNonCollision": "994d80a9a8aa02abe529198230054de987b196fc2dd1d3074134cdc85e6782b4",
+    "Accounting.Guarantees.Tag.FoldNonCollision": "4077e6860268f3f7963a8b0b2f4ba65556740b2f7aee6aa3da12daa1825c3f12",
+    "Accounting.Guarantees.Tag.HornerIsBlockHash": "04fbe390bc43edeea67f7d0ff3885bb187b21faaa4bc4d1577a6ec57cca6e475",
+    "Accounting.Guarantees.Tag.PartialReadGuess": "97d99a8e201e8a4a3b0cbc6bf91690583ae2aafae28f476c7acfec8f86df4162",
+    "Accounting.Guarantees.Tag.PolyNonCollision": "6dd88144840a2cf07a065710c054bd4fae574c5c4043632d9f2b04f9b04e2fd7",
+    "Accounting.Guarantees.Tag.PolyNonCollisionKeyed": "a1c0f18fd7ac138d31219457e785136949367f1ba9f88366f8e316036d988780",
+    "Accounting.Guarantees.Tag.PolyUnpredictable": "fc091e1a1dbddec242b99deba404ec5a8eed66facffff4694815df976ea144f8"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Tag.DigestNonCollision",
+    "Accounting.SecurityProofs.Tag.FoldNonCollision",
+    "Accounting.SecurityProofs.Tag.HornerIsBlockHash",
+    "Accounting.SecurityProofs.Tag.PartialReadGuess",
+    "Accounting.SecurityProofs.Tag.PolyNonCollision",
+    "Accounting.SecurityProofs.Tag.PolyNonCollisionKeyed",
+    "Accounting.SecurityProofs.Tag.PolyUnpredictable"
    ]
   },
   "Models.Flock.Guarantees.Audit": {
@@ -20313,9 +20571,9 @@
   "aesop": "b36c1fbce9f43510169424e3ec097b69126f0e6afe5a801760e86c4da75f285d",
   "batteries": "93d037527498f18cb49b52aa08a14febe351a161b47e44ca105e85e935264406",
   "importGraph": "c2a38b9540d4202c5331616b78727f2aeec0a2ae1b203889c6c6a2c8d6cb2ca3",
-  "mathlib": "50a8792e71531b731845e9ef9041c7aef3d5f57da8e8469363f8264ed4ec52e8",
+  "mathlib": "a6d8a20d22b4bb1b26e538dd2ecdeb61c6bd65122c64cf013539ac3673a858a8",
   "plausible": "266681444eb79c332dec9abe5201b0811a5963e7093a906ee4455f0825de2559",
   "proofwidgets": "4edab11dd995fc9c2cbf6c1e03d9a99e1f77e91b6b904838c87c7dad86c9c323",
-  "toolchain": "d95e8a4c480ea108924167135008bc1409c650e2ac659cc2acb8bd8db870d011"
+  "toolchain": "aa972bbb9beca661b6dff9dc137830b371ecc15504c0130bbeaa1554de1d1c03"
  }
 }
