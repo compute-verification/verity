@@ -421,6 +421,35 @@
    "assumptions": [],
    "type_hash": "0000000070a529c7"
   },
+  "FlockSoundness.Refine.live_le_tableC": {
+   "signature": [
+    "FlockSoundness.Refine.live_le_tableC {K D : Type} [Field K] [Fintype K] [DecidableEq K] [Nonempty D]",
+    "  (A : FlockSoundness.Model.Arith FlockLevel3.GF128 K) (H : List UInt8 → D)",
+    "  (E : FlockSoundness.Merkle.Enc (List FlockLevel3.GF128) D) (S : FlockSoundness.Model.Statement)",
+    "  (sch : FlockSoundness.Accounting.Schedule) (hm : instLENat.le 13 S.m) (ptLocal mPts : Nat)",
+    "  (pL : FlockSoundness.Refine.LiveOut mPts → Prop)",
+    "  (opn : Array ByteArray → FlockSoundness.Model.Opens FlockLevel3.GF128 D) (dg : ByteArray → ByteArray)",
+    "  (dec : Nat → ByteArray → List FlockSoundness.Game.Msg) (one : Nat → Bool)",
+    "  (fin : Fin 2 → Array ByteArray → List FlockSoundness.Game.Msg) (capOf : ByteArray → FlockSoundness.Model.Cap D)",
+    "  (N : Nat)",
+    "  (hdec :",
+    "    FlockSoundness.Refine.Decodes (FlockSoundness.Refine.tableOut H E) pL (fun x => Eq x.accepted Bool.true) opn dec one",
+    "      fin capOf fun pts r =>",
+    "      FlockSoundness.Model.repC A r.val S sch hm (FlockSoundness.Model.extraClaims S ptLocal mPts pts))",
+    "  (Pr : (FlockSoundness.Refine.liveTable dg mPts N).Strategy) :",
+    "  ENNReal.instLE.le (FlockSoundness.Game.prob pL (FlockSoundness.Refine.liveTable dg mPts N) Pr)",
+    "    (FlockSoundness.Game.prob (fun x => Eq x.accepted Bool.true)",
+    "      (FlockSoundness.Model.tableC A H E S sch hm ptLocal mPts)",
+    "      ((FlockSoundness.Refine.simTable (FlockSoundness.Refine.tableOut H E) pL (fun x => Eq x.accepted Bool.true) opn dg",
+    "            dec one fin capOf N",
+    "            (fun x x_1 =>",
+    "              FlockSoundness.Model.repC A x_1.val S sch hm (FlockSoundness.Model.extraClaims S ptLocal mPts x))",
+    "            ⋯ hdec).strategy",
+    "        Pr))"
+   ],
+   "assumptions": [],
+   "type_hash": "000000004817336b"
+  },
   "FlockSoundness.Refine.merkleCheck_verifies": {
    "signature": [
     "FlockSoundness.Refine.merkleCheck_verifies (msId : String) {cap : Array ByteArray} {c d : Nat} {pos : Array Nat}",
@@ -1070,6 +1099,7 @@
     "FlockSoundness.Refine.ligerito_refines",
     "FlockSoundness.Refine.lincheck_refines",
     "FlockSoundness.Refine.live_le",
+    "FlockSoundness.Refine.live_le_tableC",
     "FlockSoundness.Refine.opening_refines",
     "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.Refine.tableC_eq_modelTable",
@@ -1097,6 +1127,7 @@
     "FlockSoundness.Refine.ligerito_refines",
     "FlockSoundness.Refine.lincheck_refines",
     "FlockSoundness.Refine.live_le",
+    "FlockSoundness.Refine.live_le_tableC",
     "FlockSoundness.Refine.ofCircuit_extra",
     "FlockSoundness.Refine.ofCircuit_fold",
     "FlockSoundness.Refine.opening_refines",
@@ -1141,6 +1172,7 @@
     "FlockSoundness.Refine.ligerito_refines",
     "FlockSoundness.Refine.lincheck_refines",
     "FlockSoundness.Refine.live_le",
+    "FlockSoundness.Refine.live_le_tableC",
     "FlockSoundness.Refine.ofCircuit_extra",
     "FlockSoundness.Refine.ofCircuit_fold",
     "FlockSoundness.Refine.opening_refines",
@@ -1171,6 +1203,7 @@
     "FlockSoundness.Refine.ligerito_refines",
     "FlockSoundness.Refine.lincheck_refines",
     "FlockSoundness.Refine.live_le",
+    "FlockSoundness.Refine.live_le_tableC",
     "FlockSoundness.Refine.merkleCheck_verifies",
     "FlockSoundness.Refine.ofCircuit_extra",
     "FlockSoundness.Refine.ofCircuit_fold",
@@ -1202,6 +1235,7 @@
     "FlockSoundness.Refine.ligerito_refines",
     "FlockSoundness.Refine.lincheck_refines",
     "FlockSoundness.Refine.live_le",
+    "FlockSoundness.Refine.live_le_tableC",
     "FlockSoundness.Refine.ofCircuit_extra",
     "FlockSoundness.Refine.ofCircuit_fold",
     "FlockSoundness.Refine.opening_refines",
@@ -1315,6 +1349,7 @@
     "FlockSoundness.Refine.ligerito_refines",
     "FlockSoundness.Refine.lincheck_refines",
     "FlockSoundness.Refine.live_le",
+    "FlockSoundness.Refine.live_le_tableC",
     "FlockSoundness.Refine.opening_refines",
     "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.Refine.tableC_eq_modelTable",
@@ -1361,6 +1396,7 @@
     "FlockSoundness.Refine.ligerito_accepts",
     "FlockSoundness.Refine.ligerito_accepts_opening",
     "FlockSoundness.Refine.ligerito_refines",
+    "FlockSoundness.Refine.live_le_tableC",
     "FlockSoundness.Refine.opensOK_of",
     "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.Refine.tableC_eq_modelTable",
@@ -1417,6 +1453,7 @@
     "FlockSoundness.Refine.ligerito_accepts",
     "FlockSoundness.Refine.ligerito_accepts_opening",
     "FlockSoundness.Refine.ligerito_refines",
+    "FlockSoundness.Refine.live_le_tableC",
     "FlockSoundness.Refine.opensOK_of",
     "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.Refine.tableC_eq_modelTable",
@@ -1529,6 +1566,7 @@
     "FlockSoundness.Refine.ligerito_refines",
     "FlockSoundness.Refine.lincheck_refines",
     "FlockSoundness.Refine.live_le",
+    "FlockSoundness.Refine.live_le_tableC",
     "FlockSoundness.Refine.opening_refines",
     "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.Refine.tableC_eq_modelTable",
@@ -1563,6 +1601,7 @@
    },
    "pins": [
     "FlockSoundness.Refine.live_le",
+    "FlockSoundness.Refine.live_le_tableC",
     "FlockSoundness.Refine.tableC_eq_modelTable",
     "FlockSoundness.Refine.verify_tableAfter",
     "FlockSoundness.table_sound",
@@ -1661,6 +1700,7 @@
    },
    "pins": [
     "FlockSoundness.Merkle.opening_binding",
+    "FlockSoundness.Refine.live_le_tableC",
     "FlockSoundness.Refine.merkleCheck_verifies",
     "FlockSoundness.Refine.opensOK_of",
     "FlockSoundness.Refine.tableC_eq_modelTable",
@@ -1697,6 +1737,7 @@
     "FlockSoundness.Refine.ligerito_accepts_opening",
     "FlockSoundness.Refine.ligerito_refines",
     "FlockSoundness.Refine.lincheck_refines",
+    "FlockSoundness.Refine.live_le_tableC",
     "FlockSoundness.Refine.ofCircuit_fold",
     "FlockSoundness.Refine.opening_refines",
     "FlockSoundness.Refine.rep_refines",
@@ -1764,6 +1805,7 @@
     "FlockSoundness.Refine.ligerito_accepts",
     "FlockSoundness.Refine.ligerito_accepts_opening",
     "FlockSoundness.Refine.ligerito_refines",
+    "FlockSoundness.Refine.live_le_tableC",
     "FlockSoundness.Refine.opensOK_of",
     "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.Refine.tableC_eq_modelTable",
@@ -1824,6 +1866,7 @@
     "FlockSoundness.Refine.ligerito_accepts",
     "FlockSoundness.Refine.ligerito_accepts_opening",
     "FlockSoundness.Refine.ligerito_refines",
+    "FlockSoundness.Refine.live_le_tableC",
     "FlockSoundness.Refine.opensOK_of",
     "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.Refine.tableC_eq_modelTable",
@@ -1871,6 +1914,7 @@
     "FlockSoundness.Refine.basis_eq",
     "FlockSoundness.Refine.ligerito_accepts_opening",
     "FlockSoundness.Refine.lincheck_refines",
+    "FlockSoundness.Refine.live_le_tableC",
     "FlockSoundness.Refine.opening_refines",
     "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.Refine.tableC_eq_modelTable",
@@ -1898,6 +1942,7 @@
     "FlockSoundness.Model.table": "dcc09e165b51dba2"
    },
    "pins": [
+    "FlockSoundness.Refine.live_le_tableC",
     "FlockSoundness.Refine.ofCircuit_extra",
     "FlockSoundness.Refine.tableC_eq_modelTable",
     "FlockSoundness.Refine.verify_refines_ofCircuit",
@@ -1944,6 +1989,7 @@
    },
    "pins": [
     "FlockSoundness.Refine.lincheck_refines",
+    "FlockSoundness.Refine.live_le_tableC",
     "FlockSoundness.Refine.ofCircuit_extra",
     "FlockSoundness.Refine.ofCircuit_fold",
     "FlockSoundness.Refine.opening_refines",
@@ -2058,7 +2104,18 @@
     "FlockSoundness.Refine.liveTable": "341df9579342b561",
     "FlockSoundness.Refine.roundOf": "4bd990ce6ffc9a6f"
    },
-   "pins": ["FlockSoundness.Game.Sim.prob_le", "FlockSoundness.Refine.live_le"]
+   "pins": [
+    "FlockSoundness.Game.Sim.prob_le",
+    "FlockSoundness.Refine.live_le",
+    "FlockSoundness.Refine.live_le_tableC"
+   ]
+  },
+  "FlockSoundness.Refine.LiveCompiled": {
+   "digest": "ead90cfc91929021a7d5a7022f4f9c13",
+   "definitions": {
+    "FlockSoundness.Refine.tableOut": "ead90cfc91929021"
+   },
+   "pins": ["FlockSoundness.Refine.live_le_tableC"]
   },
   "FlockSoundness.Refine.LiveSim": {
    "digest": "a5451c418cc617707b8f0275f2f6f183",
@@ -2100,7 +2157,11 @@
     "FlockSoundness.Refine.simTable": "f4df9ee82a83b5b0",
     "FlockSoundness.Refine.tapeFrom": "b100cf5a6ba3c6bb"
    },
-   "pins": ["FlockSoundness.Refine.live_le", "FlockSoundness.Refine.tableC_eq_modelTable"]
+   "pins": [
+    "FlockSoundness.Refine.live_le",
+    "FlockSoundness.Refine.live_le_tableC",
+    "FlockSoundness.Refine.tableC_eq_modelTable"
+   ]
   },
   "FlockSoundness.Refine.Paths": {
    "digest": "56fbd975296b992b9028b03887bb530c",
@@ -2184,6 +2245,7 @@
     "FlockSoundness.Refine.ligerito_refines",
     "FlockSoundness.Refine.lincheck_refines",
     "FlockSoundness.Refine.live_le",
+    "FlockSoundness.Refine.live_le_tableC",
     "FlockSoundness.Refine.opening_refines",
     "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.Refine.verify_refines",
@@ -2271,6 +2333,7 @@
     "FlockSoundness.Refine.ligerito_refines",
     "FlockSoundness.Refine.lincheck_refines",
     "FlockSoundness.Refine.live_le",
+    "FlockSoundness.Refine.live_le_tableC",
     "FlockSoundness.Refine.ofCircuit_extra",
     "FlockSoundness.Refine.ofCircuit_fold",
     "FlockSoundness.Refine.opening_refines",
