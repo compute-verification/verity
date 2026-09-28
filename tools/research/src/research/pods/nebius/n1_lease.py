@@ -30,6 +30,9 @@ SIGTERM, then SIGKILL once `KILL_AFTER_S` have passed, as gpu-lease's own preemp
 node1, the `provers` pool in /run/gpu-lease). A second pool runs as a second controller with its own `$GPU_LEASE_DIR`,
 `$VY_POOL_QUEUE`, `$VY_POOL_PRIORITY` and `$VY_POOL_NAME` (circuits': /run/gpu-lease-circuits, `deployments-gpu`, `circuits-gpu`,
 circuits): each fences, in its own lock files, every GPU its own holders don't hold, so a waiter gets only its own pool's GPUs.
+`$VY_POOL_QUEUE` is the ClusterQueue whose quota the holders take; `$VY_POOL_LOCAL_QUEUE` (default the same name) is the
+LocalQueue they are submitted to. Circuits' holders use `deployments-gpu-pool`, so the Commit pacer's hold on the
+`deployments-gpu` LocalQueue never holds them back (sky/release.py).
 **Blocked.** While `$GPU_LEASE_DIR/blocked` exists (gpu_stray.py writes it when a process of the pool's pods runs on a GPU it
 holds no lease for; a person removes it once that's cleared), the pool grants nothing new: leases already held go on, every
 other pool GPU is fenced and its holder deleted, and pending holders are cancelled.
@@ -53,6 +56,7 @@ from pathlib import Path
 
 DIR = Path(os.environ.get("GPU_LEASE_DIR", "/run/gpu-lease"))
 QUEUE = os.environ.get("VY_POOL_QUEUE", "provers")
+LOCAL_QUEUE = os.environ.get("VY_POOL_LOCAL_QUEUE", QUEUE)   # the LocalQueue its holders are submitted to, on ClusterQueue QUEUE
 PRIORITY = os.environ.get("VY_POOL_PRIORITY", "dev")
 POOL_MAX = int(os.environ.get("VY_POOL_MAX", "3"))
 IDLE_S = int(os.environ.get("VY_POOL_IDLE_S", "120"))
@@ -183,7 +187,7 @@ def holder_job(t: float) -> dict:
     labels = {POOL_LABEL: POOL_NAME}
     return {
         "apiVersion": "batch/v1", "kind": "Job",
-        "metadata": {"name": name, "labels": {**labels, "kueue.x-k8s.io/queue-name": QUEUE,
+        "metadata": {"name": name, "labels": {**labels, "kueue.x-k8s.io/queue-name": LOCAL_QUEUE,
                                               "kueue.x-k8s.io/priority-class": PRIORITY}},
         "spec": {"suspend": True, "backoffLimit": 0, "ttlSecondsAfterFinished": 600, "template": {
             "metadata": {"labels": labels},
