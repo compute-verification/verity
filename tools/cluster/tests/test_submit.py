@@ -27,8 +27,10 @@ def test_a_cpu_job_goes_home_in_a_capped_pinned_scope_with_cuda_hidden():
     assert w[:3] == ["env", "GPU_LEASE_WHO=lane-x", "RESEARCH_RUN_ID=r1"] and "CUDA_VISIBLE_DEVICES=" in w
     assert w[w.index("systemd-run"):][:7] == ["systemd-run", "--user", "--scope", "--quiet", "--collect", "--unit", "cluster-r1"]
     assert "MemoryMax=16G" in w and "MemorySwapMax=0" in w
-    assert w[-3:] == ["taskset", "-c", "96-191"], "the owner runs outside node 1's reserved pools, at its own priority"
+    assert w[-3:] == ["taskset", "-c", "96-127"], "the owner runs outside node 1's checks and provers pools, at its own priority"
     assert out["workload_wrap"] == []
+    guest = submit.resolve(model.load(NEBIUS), _job(project="pous", cpus=4, memory_gib=16, node="vy-nebius-1"), "r1", T)
+    assert guest["wrap"][-6:] == ["taskset", "-c", "96-127", "nice", "-n", "19"], "a guest's share narrows to the unpooled CPUs"
 
 
 def test_a_guest_gpu_job_goes_to_node_2_its_runner_on_its_shares_cpus_and_its_workload_alone_in_gpu_lease():
