@@ -1,5 +1,5 @@
 """The chain test (PROTOCOL.md section "Chain"): Ligero's *general* linear test for the cross-column constraints of
-the verification unit.  Columns j = 96 v + i hold unit i of VU v; the constraints
+the proof unit.  Columns j = 96 v + i hold unit i of VU v; the constraints
 
     link_j  : W[c.x][j + 1] - Y_x(W)[j] = 0     x in (s, t, f), for every j whose successor is in the same VU
     start_j : W[c.x][j] = 0                     for every j that starts a VU (and every pad column)
