@@ -1,14 +1,17 @@
 //! flock-circuit: `verity/flock-circuit` (`flock_live::circuit`), proved by the CPU prover or by Flock-CUDA (`--gpu`,
 //! feature `gpu`) in a flock-128-r2 live session: one commitment root, bound by both reps (R1). Lane flock-circuit.
 //!
-//!   flock-circuit serve    --listen ADDR --out DIR --instances PUB --circuit FILE --pin SHA256 [--sessions N] [--operator LANE]
-//!   flock-circuit prove    --verifier ADDR --instances INST --circuit FILE [--gpu] [--runs N] [--warm W] [--dump DIR]
+//!   flock-circuit serve    --listen ADDR --out DIR --instances PUB --circuit FILE --pin SHA256 [--sessions N] [--operator LANE] [--session-tables J]
+//!   flock-circuit prove    --verifier ADDR --instances INST --circuit FILE [--gpu] [--runs N] [--warm W] [--dump DIR] [--session-tables J]
 //!   flock-circuit selftest --instances INST --circuit FILE [--gpu] [--only CASE]
 //!
 //! The verifier loads only its own public file (`verity_flock.circuit.stage(..., public_only=True)`: roots, each row's `b || c`,
 //! outputs; no row, no salt) and the pinned circuit, from which it derives Δ, the regions and their values; it checks the
 //! frame-v3-sha512 roots and the pinned padding values before any session. Session: `Hello(Σ)`, `Commit(root_f = Σ, root)`, two verifier
 //! points (the regions' claims), `Link(y = 0, 0)` (nothing is prover-supplied), Flock's coins.
+//!
+//! `--session-tables J` (both sides, CPU prover): the session's units in J equal tables (`session_tables`), each with its own
+//! randomness, all J roots in one `Commit`, and every proof after the session's last coin (the barrier).
 
 use std::{
     collections::BTreeMap,
@@ -39,6 +42,9 @@ use sha2::{Digest, Sha512};
 
 const TABLE: &str = "circuit";
 const SIGMA_TAG: &[u8] = b"verity/flock-circuit/sigma";
+const SIGMA_TABLES_TAG: &[u8] = b"verity/flock-circuit/sigma-tables";
+/// The most tables in one session (`--session-tables`); their names sort in table order (`circuit-00` to `circuit-63`).
+const MAX_TABLES: usize = 64;
 
 fn arg(k: &str, d: &str) -> String {
     let a: Vec<String> = std::env::args().collect();
@@ -55,6 +61,11 @@ fn f128_bytes(v: &[F128]) -> Vec<u8> {
 
 fn domain(rep: usize) -> Vec<u8> {
     format!("flock-circuit/fast100x2/rep{rep}").into_bytes()
+}
+
+/// A rep stream's transcript domain in a session of `tables` tables: [`domain`] for one, and the table's name in it for several.
+fn domain_of(tables: usize, table: &str, rep: usize) -> Vec<u8> {
+    if tables <= 1 { domain(rep) } else { format!("flock-circuit/fast100x2/{table}/rep{rep}").into_bytes() }
 }
 
 /// The Merkle hash of every Ligerito level: hm96-sha512/v1 leaves under SHA-512 nodes in a production build (feature `sha512`,
@@ -172,21 +183,118 @@ fn sigma(st: &Stmt, inst: &Instances) -> [u8; 64] {
     h.finalize().into()
 }
 
-struct CircuitVerifier {
+/// A session's Σ: its one table's, or for several SHA-512(SIGMA_TABLES_TAG ‖ the table count (u64 LE) ‖ every table's Σ, in
+/// table order).
+fn session_sigma(tabs: &[(&str, &Stmt, &Instances)]) -> [u8; 64] {
+    if let [(_, st, inst)] = tabs {
+        return sigma(st, inst);
+    }
+    let mut h = Sha512::new();
+    h.update(SIGMA_TABLES_TAG);
+    h.update((tabs.len() as u64).to_le_bytes());
+    for (_, st, inst) in tabs {
+        h.update(sigma(st, inst));
+    }
+    h.finalize().into()
+}
+
+/// One table of a session (the public-circuit ZK proof's table `j`): its name, and the statement it proves.
+#[derive(Clone)]
+struct Table {
+    name: String,
     st: Arc<Stmt>,
     inst: Arc<Instances>,
 }
 
-impl StatementVerifier for CircuitVerifier {
-    fn domain(&self, _t: &str, rep: usize) -> Vec<u8> {
-        domain(rep)
+/// A session's statement: its tables, and the verifier's draw they prove (`None`: the registered population's units).
+#[derive(Clone)]
+struct Tables {
+    list: Vec<Table>,
+    draw: Option<Value>,
+}
+
+impl Tables {
+    fn one(st: &Arc<Stmt>, inst: &Arc<Instances>) -> Self {
+        Tables { list: vec![Table { name: TABLE.into(), st: st.clone(), inst: inst.clone() }], draw: None }
     }
 
-    fn verify(&self, _t: &str, rep: usize, proof: &[u8], ch: &mut ReplayChallenger, link: &LinkCtx<'_>) -> Result<Vec<u8>, String> {
-        if is_zk(&self.st) {
-            return self.verify_zk(rep, proof, ch, link);
+    fn parts(&self) -> Vec<(&str, &Stmt, &Instances)> {
+        self.list.iter().map(|t| (t.name.as_str(), &*t.st, &*t.inst)).collect()
+    }
+}
+
+/// The table names of a session of `tables` tables: `circuit` alone, or `circuit-00`, `circuit-01`, ...
+fn table_names(tables: usize) -> Vec<String> {
+    if tables <= 1 { vec![TABLE.into()] } else { (0..tables).map(|j| format!("{TABLE}-{j:02}")).collect() }
+}
+
+/// A session's tables over a registered population, which both sides derive from the population file, the draw and the
+/// count. One table `circuit` proves the drawn units (the population's with no draw). For several, the units split into
+/// `count` equal consecutive parts, and table `j` proves part `j` as a subset draw of the population, under an identity that
+/// names the session's rules for several tables.
+fn session_tables(st: &Arc<Stmt>, inst: &Arc<Instances>, draw: Option<&Value>, count: usize) -> Result<Tables, String> {
+    if count <= 1 {
+        let (st, inst) = match draw { Some(d) => drawn(st, inst, d)?, None => (st.clone(), inst.clone()) };
+        return Ok(Tables { list: vec![Table { name: TABLE.into(), st, inst }], draw: draw.cloned() });
+    }
+    if count > MAX_TABLES {
+        return Err(format!("tables: at most {MAX_TABLES} per session, not {count}"));
+    }
+    let units = match draw {
+        Some(d) if d["population"].as_u64() != Some(inst.n as u64) => return Err("U: the draw's population is not this registered population".into()),
+        Some(d) => flock_live::unit_draw::check(d)?,
+        None => (0..inst.n).collect(),
+    };
+    if units.is_empty() || units.len() % count != 0 {
+        return Err(format!("tables: {} units do not split into {count} equal tables", units.len()));
+    }
+    let k = units.len() / count;
+    let list = units.chunks(k).zip(table_names(count)).enumerate().map(|(j, (part, name))| {
+        let di = inst.drawn(&st.c, &json!({"law": "subset", "population": inst.n, "k": k, "units": part}))?;
+        check_public(&st.c, &di)?;
+        let mut id = st.identity.clone();
+        id["session"] = json!({"tables": count, "table": j,
+                               "units": "the draw's units (without a draw, the population's) in equal consecutive parts; table j proves part j as a subset draw of the population"});
+        if is_zk(st) {
+            id["hooks"]["tables"] = json!("per table: ChaCha20 streams at purpose | j << 32 and hm96 salt trees from id j << 32 (table 0's are a \
+                                           one-table session's); a rank check per table; every table's level-0 root in one commit; every proof \
+                                           after the last coin of every stream (the barrier)");
         }
-        let st = &self.st;
+        let ds = Stmt::new(st.c.clone(), di.n, id)?;
+        if is_zk(&ds) {
+            zk_queries0(ds.m)?;
+        }
+        Ok(Table { name, st: Arc::new(ds), inst: Arc::new(di) })
+    }).collect::<Result<Vec<_>, String>>()?;
+    if list.iter().any(|t| t.st.m_pts != list[0].st.m_pts) {
+        return Err("tables: the tables' link points have different lengths".into());
+    }
+    Ok(Tables { list, draw: draw.cloned() })
+}
+
+/// `--session-tables J`: the tables of every session (1, the default: one table).
+fn tables_arg() -> usize {
+    match arg("--session-tables", "1").parse() {
+        Ok(j) if (1..=MAX_TABLES).contains(&j) => j,
+        _ => refuse(format!("--session-tables: 1 to {MAX_TABLES}")),
+    }
+}
+
+struct CircuitVerifier {
+    tabs: Tables,
+}
+
+impl StatementVerifier for CircuitVerifier {
+    fn domain(&self, t: &str, rep: usize) -> Vec<u8> {
+        domain_of(self.tabs.list.len(), t, rep)
+    }
+
+    fn verify(&self, t: &str, rep: usize, proof: &[u8], ch: &mut ReplayChallenger, link: &LinkCtx<'_>) -> Result<Vec<u8>, String> {
+        let tb = self.tabs.list.iter().find(|x| x.name == t).ok_or(format!("no table {t} in the statement"))?;
+        if is_zk(&tb.st) {
+            return Self::verify_zk(tb, rep, proof, ch, link);
+        }
+        let st = &tb.st;
         let (commitment, proof): (Commitment, R1csProofLigerito) = bincode::deserialize(proof).map_err(|e| format!("decode: {e}"))?;
         let pcs = params(st.m, LigeritoProfile::Fast100);
         if commitment.params != pcs {
@@ -195,7 +303,7 @@ impl StatementVerifier for CircuitVerifier {
         if link.points.len() != 2 || link.y.iter().any(|y| *y != F128::ZERO) {
             return Err("session: two points and y = 0 expected (nothing is prover-supplied)".into());
         }
-        let extra = st.extra_claims(link.points, &self.inst);
+        let extra = st.extra_claims(link.points, &tb.inst);
         catch_unwind(AssertUnwindSafe(|| verify_ligerito_extra(&st.r1cs, &commitment, &proof, &st.circuit, &pcs, &extra, ch)))
             .map_err(|_| "verifier panicked".to_string())?
             .map_err(|e| format!("{e:?}").chars().take(160).collect::<String>())?;
@@ -204,14 +312,19 @@ impl StatementVerifier for CircuitVerifier {
 }
 
 impl CircuitVerifier {
+    /// The verifier of one-table sessions.
+    fn one(st: &Arc<Stmt>, inst: &Arc<Instances>) -> Self {
+        CircuitVerifier { tabs: Tables::one(st, inst) }
+    }
+
     /// M1: the zerocheck and lincheck replayed on masked values as constraints on the committed pads (`zk_veil::replay`),
     /// upstream's opening with the two masked claims' ring-switch checks turned into constraints, then the inner proof.
-    fn verify_zk(&self, rep: usize, proof: &[u8], ch: &mut ReplayChallenger, link: &LinkCtx<'_>) -> Result<Vec<u8>, String> {
+    fn verify_zk(tb: &Table, rep: usize, proof: &[u8], ch: &mut ReplayChallenger, link: &LinkCtx<'_>) -> Result<Vec<u8>, String> {
         if link.points.len() != 2 || link.y.iter().any(|y| *y != F128::ZERO) {
             return Err("session: two points and y = 0 expected (nothing is prover-supplied)".into());
         }
         let (commitment, proof, inner): (Commitment, R1csProofLigerito, InnerProof) = bincode::deserialize(proof).map_err(|e| format!("decode: {e}"))?;
-        verify_zk_with(&self.st, &self.inst, &commitment, &proof, &inner, link.points, rep, ch)?;
+        verify_zk_with(&tb.st, &tb.inst, &commitment, &proof, &inner, link.points, rep, ch)?;
         Ok(merkle_digest_bytes(&commitment.cap).to_vec())
     }
 }
@@ -280,8 +393,15 @@ fn verify_zk_with<Ch: flock_transcript::challenger::Challenger>(st: &Stmt, inst:
 /// M2's committed coin schedule: the session's stream (the link points), then the table's two reps; 256 rounds of at most
 /// 512 coins each (a RoPE rep uses 100 rounds, at most 218 coins in one).
 fn coin_spec() -> flock_live::coin_tree::Spec {
+    coin_spec_of(&[TABLE.into()])
+}
+
+/// [`coin_spec`] for a session of several tables: the session's stream, then every table's two reps, in table order (a
+/// subtree per table and rep).
+fn coin_spec_of(tables: &[String]) -> flock_live::coin_tree::Spec {
     use flock_live::coin_tree::{SESSION, Spec};
-    Spec { streams: vec![SESSION.into(), rep_stream(TABLE, 0), rep_stream(TABLE, 1)], rounds_log: 8, block: 512 }
+    let streams = std::iter::once(SESSION.to_string()).chain(tables.iter().flat_map(|t| [rep_stream(t, 0), rep_stream(t, 1)])).collect();
+    Spec { streams, rounds_log: 8, block: 512 }
 }
 
 /// A test harness's fixed verifier coins: M0's step-0 seed, or under M2 the committed schedule's random tape.
@@ -295,17 +415,32 @@ fn fix_verifier_coins(s: &mut Server, tape: [u8; 32]) {
 }
 
 fn config(st: &Stmt, inst: &Instances) -> SessionConfig {
-    let mut cfg = SessionConfig::flock_128_r2(vec![TableSpec { name: TABLE.into(), binding: Binding::R1cs { statement_digest: st.flock_digest } }]);
-    cfg.link = Some(LinkSpec { sigma: sigma(st, inst).to_vec(), m: st.m_pts, points: 2 });
+    config_with(&[(TABLE, st, inst)], inst.header.get("unit_draw").cloned())
+}
+
+/// [`config`] over a session's tables: for several, the session's draw (each table's header has its part).
+fn config_of(tabs: &Tables) -> SessionConfig {
+    let parts = tabs.parts();
+    let draw = if let [(_, _, inst)] = parts[..] { inst.header.get("unit_draw").cloned() } else { tabs.draw.clone() };
+    config_with(&parts, draw)
+}
+
+/// The session's configuration over its tables: one link exchange, whose points every table reads (the tables share `m_pts`,
+/// [`session_tables`]), and each table's own root, y and rep streams.
+fn config_with(tabs: &[(&str, &Stmt, &Instances)], unit_draw: Option<Value>) -> SessionConfig {
+    let st = tabs[0].1;
+    let specs = tabs.iter().map(|(name, st, _)| TableSpec { name: name.to_string(), binding: Binding::R1cs { statement_digest: st.flock_digest } }).collect();
+    let mut cfg = SessionConfig::flock_128_r2(specs);
+    cfg.link = Some(LinkSpec { sigma: session_sigma(tabs).to_vec(), m: st.m_pts, points: 2 });
     // M2 (--zk): every coin committed at Hello and opened round by round; M0: the step-0 seed
     if is_zk(st) {
-        cfg.coin_tree = Some(coin_spec());
+        cfg.coin_tree = Some(coin_spec_of(&tabs.iter().map(|t| t.0.to_string()).collect::<Vec<_>>()));
     } else {
         cfg.coin_seed = true;
     }
     cfg.retain_rounds = true;
     cfg.sha512_digests = true;
-    cfg.unit_draw = inst.header.get("unit_draw").cloned();
+    cfg.unit_draw = unit_draw;
     cfg
 }
 
@@ -380,33 +515,44 @@ fn check_coin_seed(commit: &[F128], hello: &str, verdict: &Value, coins: &[Vec<F
 }
 
 fn server(st: &Arc<Stmt>, inst: &Arc<Instances>) -> Server {
-    let s = Server::new(config(st, inst), Box::new(CircuitVerifier { st: st.clone(), inst: inst.clone() }));
-    let file = arg("--draw-file", "");
+    server_tables(st, inst, 1)
+}
+
+/// The verifier's server for sessions of `count` tables. With a draw (`--draw`, `--draw-file`) the tables are the drawn
+/// units' (until `Register`, the population's one-table statement stands in); without, the population's.
+fn server_tables(st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) -> Server {
+    let (file, law) = (arg("--draw-file", ""), arg("--draw", ""));
+    let tabs = if count > 1 && file.is_empty() && law.is_empty() {
+        session_tables(st, inst, None, count).unwrap_or_else(|e| refuse(e))
+    } else {
+        Tables::one(st, inst)
+    };
+    let s = Server::new(config_of(&tabs), Box::new(CircuitVerifier { tabs }));
     if !file.is_empty() {
         // the verifier's own draw, made outside this server: served at Register as it is (checked there, U2, and against the
         // registered population when the drawn statement is built)
         let draw: Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap_or_else(|e| refuse(format!("--draw-file: {e}"))))
             .unwrap_or_else(|e| refuse(format!("--draw-file: {e}")));
         flock_live::unit_draw::check(&draw).unwrap_or_else(|e| refuse(e));
-        let mut s = with_draw(s, st, inst, flock_live::unit_draw::Law::Subset { k: 0 });
+        let mut s = with_draw(s, st, inst, flock_live::unit_draw::Law::Subset { k: 0 }, count);
         s.cfg.draw_law = None;
         s.cfg.draw_given = Some(draw);
         return s;
     }
-    let law = arg("--draw", "");
     if law.is_empty() {
         return s;
     }
-    with_draw(s, st, inst, flock_live::unit_draw::Law::parse(&law).unwrap_or_else(|e| refuse(e)))
+    with_draw(s, st, inst, flock_live::unit_draw::Law::parse(&law).unwrap_or_else(|e| refuse(e)), count)
 }
 
-/// A server that draws `law` over the registered population at `Register` and serves the drawn units' statement.
-fn with_draw(mut s: Server, st: &Arc<Stmt>, inst: &Arc<Instances>, law: flock_live::unit_draw::Law) -> Server {
+/// A server that draws `law` over the registered population at `Register` and serves the drawn units' statement, in `count`
+/// tables.
+fn with_draw(mut s: Server, st: &Arc<Stmt>, inst: &Arc<Instances>, law: flock_live::unit_draw::Law, count: usize) -> Server {
     s.cfg.draw_law = Some((law, inst.n as u64));
     let (st, inst) = (st.clone(), inst.clone());
     s.with_draw(Box::new(move |draw: &Value| {
-        let (ds, di) = drawn(&st, &inst, draw)?;
-        Ok((config(&ds, &di), Box::new(CircuitVerifier { st: ds, inst: di }) as Box<dyn StatementVerifier>))
+        let tabs = session_tables(&st, &inst, Some(draw), count)?;
+        Ok((config_of(&tabs), Box::new(CircuitVerifier { tabs }) as Box<dyn StatementVerifier>))
     }))
 }
 
@@ -604,6 +750,29 @@ fn zk_prepare(st: &Stmt, plan: &Plan, seed: ProverSeed, lig: LigeritoProfile, sa
         (make_zkrep(st, plan, &mut prng, &level0, points, rep, id, salts), id)
     });
     (t_level0, reps)
+}
+
+/// A table's level-0 root before any stream opens, in a session of several tables (whose one `Commit` carries every table's
+/// root): the commitment the table's reps compute again, from its witness, its level-0 hiding and its level-0 salts.
+fn level0_root(st: &Stmt, wt: &WitData, lig: LigeritoProfile, level0: Option<&flock_core::pcs::ligerito::zk::Level0Zk>,
+               salts: &Mutex<flock_live::zk_hooks::LeafSalts>) -> Vec<u8> {
+    #[allow(irrefutable_let_patterns)]
+    let WitData::Host((z, ..)) = wt else { panic!("a table committed before the session opens takes a host witness") };
+    let pcs = params(st.m, lig);
+    #[cfg(feature = "sha512")]
+    {
+        let s = salts.lock().unwrap_or_else(PoisonError::into_inner);
+        flock_merkle::hm96::begin(Arc::new(s.expand(s.level0_id(), pcs.n_leaves())), Box::new(|_| panic!("the level-0 commitment draws no other tree")));
+    }
+    #[cfg(not(feature = "sha512"))]
+    let _ = salts;
+    let (cm, _) = match level0 {
+        Some(z0) => flock_core::pcs::commit::commit_zk(z, &pcs, z0),
+        None => flock_core::pcs::commit::commit(z, &pcs),
+    };
+    #[cfg(feature = "sha512")]
+    flock_merkle::hm96::end();
+    merkle_digest_bytes(&cm.cap).to_vec()
 }
 
 /// The mask slot's word indices in the packed witness (every block's slot).
@@ -1818,6 +1987,11 @@ struct Plan {
     /// the coin-tree nonce `Hello` carries, instead of the prover's own fresh one: the simulator's, drawn once per simulated
     /// session, so every run restarts after the same `Hello`
     coin_nonce: Option<[u8; 32]>,
+    /// the session's tables ([`session_tables`]; 0 or 1: one table)
+    tables: usize,
+    /// a prover without the barrier: each table's proofs as soon as its reps finish, before the next table's coins (the
+    /// verifier accepts them; the barrier's order check must not)
+    early_proofs: bool,
 }
 
 fn call(t: &SharedTransport, r: Req) -> Result<Resp, String> {
@@ -1828,7 +2002,8 @@ fn panic_msg(e: Box<dyn std::any::Any + Send>) -> String {
     e.downcast_ref::<String>().cloned().or_else(|| e.downcast_ref::<&str>().map(|s| s.to_string())).unwrap_or_default()
 }
 
-fn wit(st: &Arc<Stmt>, inst: &Arc<Instances>, plan: &Plan, zero: bool, seed: ProverSeed) -> Wit {
+/// Table `table`'s witness sources (its mask slot from the table's own streams).
+fn wit(st: &Arc<Stmt>, inst: &Arc<Instances>, plan: &Plan, zero: bool, seed: ProverSeed, table: usize) -> Wit {
     let mut rows = inst.instance_rows(&st.c).expect("the prover's instance file has the rows");
     if plan.message_flip {
         rows[3] ^= 0x10;
@@ -1857,7 +2032,7 @@ fn wit(st: &Arc<Stmt>, inst: &Arc<Instances>, plan: &Plan, zero: bool, seed: Pro
     let mask_words = 1usize << (st.c.meta["mask_log"].as_u64().unwrap_or(14) as usize - 7);
     // M1: the mask slot's words are uniform (they hide the non-region claims' ring-switch s_hat_v)
     let random = plan.mask_random || (is_zk(st) && !plan.zk_zero_pads);
-    let hooks = Arc::new(Mutex::new(NoMask::new(seed)));
+    let hooks = Arc::new(Mutex::new(NoMask::for_table(seed, table as u64)));
     let mask: Arc<dyn Fn(usize) -> Vec<F128> + Sync + Send> = Arc::new(move |b| {
         let mut h = hooks.lock().unwrap_or_else(PoisonError::into_inner);
         if random { h.rng.f128s(flock_live::zk_hooks::STREAM_MASK, (b * mask_words) as u64, mask_words) } else { h.mask_fill(b, mask_words) }
@@ -1883,54 +2058,66 @@ fn forged_stages(st: &Stmt) -> BTreeMap<usize, &'static flock_live::ir_block::Ir
 
 fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Plan, seed: ProverSeed) -> (Value, Vec<Vec<u8>>) {
     let log = Arc::new(Mutex::new(Vec::new()));
+    let names = table_names(plan.tables);
     // M2: every coin the verifier sends is checked against its step-0 commitment before the prover uses it
-    let t: SharedTransport = if is_zk(st) { shared(flock_live::coin_tree::Checked::new(SharedCall(t), coin_spec())) } else { t };
+    let t: SharedTransport = if is_zk(st) { shared(flock_live::coin_tree::Checked::new(SharedCall(t), coin_spec_of(&names))) } else { t };
     let t: SharedTransport = shared(Logged { inner: SharedCall(t), coins: log.clone() });
     let t0 = Instant::now();
-    // registration done: the verifier draws the units (or none), and the statement is the drawn units'
-    let drawn_st = match call(&t, Req::Register) {
-        Ok(Resp::Draw(d)) if d == "null" || plan.ignore_draw => None,
-        Ok(Resp::Draw(d)) => {
-            let draw: Value = serde_json::from_str(&d).unwrap_or(Value::Null);
-            match drawn(st, inst, &draw) {
-                Ok(x) => Some(x),
-                Err(e) => return (json!({"accepted": false, "why": e, "prover_stopped": format!("the drawn statement: {e}")}), Vec::new()),
-            }
-        }
+    // registration done: the verifier draws the units (or none), and the statement is the drawn units', in the session's tables
+    let tabs = match call(&t, Req::Register) {
+        Ok(Resp::Draw(d)) if d == "null" || plan.ignore_draw => session_tables(st, inst, None, names.len()),
+        Ok(Resp::Draw(d)) => session_tables(st, inst, Some(&serde_json::from_str(&d).unwrap_or(Value::Null)), names.len()),
         other => return (json!({"accepted": false, "why": format!("register: {other:?}"), "prover_stopped": "register refused"}), Vec::new()),
     };
-    let (st, inst) = match &drawn_st { Some((a, b)) => (a, b), None => (st, inst) };
-    let sig = sigma(st, inst);
+    let tabs = match tabs {
+        Ok(x) if plan.gpu && x.list.len() > 1 => {
+            let why = "the device prover proves one table per session (several: the CPU prover)";
+            return (json!({"accepted": false, "why": why, "prover_stopped": why}), Vec::new());
+        }
+        Ok(x) => x,
+        Err(e) => return (json!({"accepted": false, "why": e, "prover_stopped": format!("the drawn statement: {e}")}), Vec::new()),
+    };
+    let (st, inst) = (&tabs.list[0].st, &tabs.list[0].inst);
+    let sig = session_sigma(&tabs.parts());
     let hello = if is_zk(st) {
-        config(st, inst).hello_with_nonce(&plan.coin_nonce.unwrap_or_else(|| flock_live::zk_hooks::coin_nonce(&seed)))
+        config_of(&tabs).hello_with_nonce(&plan.coin_nonce.unwrap_or_else(|| flock_live::zk_hooks::coin_nonce(&seed)))
     } else {
-        config(st, inst).hello()
+        config_of(&tabs).hello()
     };
     let mut commit: Vec<F128> = Vec::new();
     let device = plan.gpu && !plan.mask_random && std::env::var("FC_HOST_WITNESS").is_err();
     let lig = if plan.fast { LigeritoProfile::Fast } else { LigeritoProfile::Fast100 };
     // hm96-sha512 leaf salts: one ChaCha20 key per proof; the level-0 tree is id 0 (both reps bind one root), every later
-    // tree a fresh id. The device expands its own trees' salts; a CPU proof takes host expansions.
-    let salts = Arc::new(Mutex::new(flock_live::zk_hooks::LeafSalts::for_seed(&seed)));
-    let zk_points = Arc::new(Mutex::new(Vec::new()));
+    // tree a fresh id (table j's from j << 32). The device expands its own trees' salts; a CPU proof takes host expansions.
+    let salts_t: Vec<Arc<Mutex<flock_live::zk_hooks::LeafSalts>>> = {
+        let s = flock_live::zk_hooks::LeafSalts::for_seed(&seed);
+        (0..tabs.list.len()).map(|j| Arc::new(Mutex::new(s.table(j as u64)))).collect()
+    };
+    // the rank check's claim points: per table (each has its own mask slot)
+    let points_t: Vec<Arc<Mutex<Vec<Vec<F128>>>>> = tabs.list.iter().map(|_| Arc::new(Mutex::new(Vec::new()))).collect();
     // M1 on the device: level 0's hiding and both reps' pads commitments beside the witness build, and rep 0's replay and inner
     // proof beside rep 1's device run (FC_ZK_SEQUENTIAL: neither, the reference for the overlap's gain)
     let overlap = std::env::var_os("FC_ZK_SEQUENTIAL").is_none();
     let zk_pre = (plan.gpu && is_zk(st) && overlap).then(|| {
-        let (st, plan, salts, points) = (st.clone(), plan.clone(), salts.clone(), zk_points.clone());
+        let (st, plan, salts, points) = (st.clone(), plan.clone(), salts_t[0].clone(), points_t[0].clone());
         std::thread::spawn(move || zk_prepare(&st, &plan, seed, lig, &salts, &points))
     });
-    let w0 = wit(st, inst, plan, plan.zero_witness, seed);
-    let (wt0, tw0) = witness(st, &w0, device);
-    // rep 1 proves from rep 0's witness unless it has its own: the CPU prover consumes a witness, so rep 0 takes a copy and rep 1
-    // the original (two copies at most, never one per rep plus the original)
-    let (mut wt0, (mut wt1, tw1)) = (Some(wt0), if plan.rep1_other_witness {
-        let (w, t) = witness(st, &wit(st, inst, plan, true, seed), device);
-        (Some(w), t)
-    } else {
-        (None, 0.0)
-    });
-    let witness_s = tw0 + tw1;
+    // every table's witness. Rep 1 proves from rep 0's unless it has its own: the CPU prover consumes a witness, so rep 0 takes a
+    // copy and rep 1 the original (two copies at most, never one per rep plus the original)
+    let mut witness_s = 0.0;
+    let mut wits = Vec::new();
+    for (j, tb) in tabs.list.iter().enumerate() {
+        let w0 = wit(&tb.st, &tb.inst, plan, plan.zero_witness, seed, j);
+        let (wt0, tw0) = witness(&tb.st, &w0, device);
+        let (wt1, tw1) = if plan.rep1_other_witness {
+            let (w, t) = witness(&tb.st, &wit(&tb.st, &tb.inst, plan, true, seed, j), device);
+            (Some(w), t)
+        } else {
+            (None, 0.0)
+        };
+        witness_s += tw0 + tw1;
+        wits.push((w0, Some(wt0), wt1));
+    }
     let tj = Instant::now();
     let mut zk_pre = match zk_pre.map(|h| h.join()) {
         Some(Ok((_, reps))) => Some(reps.map(Some)),
@@ -1942,9 +2129,10 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
     let mut prove_s = Vec::new();
     let mut buckets = Vec::new();
     let mut proofs: Vec<Vec<u8>> = Vec::new();
-    let mut cached: Option<Vec<Vec<F128>>> = None;
-    let mut root0: Option<Vec<u8>> = None;
+    let mut link_pts: Option<Vec<Vec<F128>>> = None;
     let mut stop_why: Option<String> = None;
+    // the proofs a prover without the barrier sent before the session's last coin (`early_proofs`)
+    let mut early = 0;
     let tp0 = Instant::now();
     let res: Result<(), String> = (|| {
         match call(&t, Req::Hello(hello.clone()))? {
@@ -1952,164 +2140,211 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
             Resp::Coins(c) if c.len() == if is_zk(st) { 20 } else { 4 } => commit = c,
             r => return Err(format!("hello: step 0 expects the verifier's seed commitment, got {r:?}")),
         }
-        #[cfg(feature = "sha512")]
-        let level0 = (!plan.gpu).then(|| Arc::new(salts.lock().unwrap_or_else(PoisonError::into_inner).expand(0, params(st.m, lig).n_leaves())));
-        let mut prng = flock_live::zk_hooks::ProverRng::from_seed(seed);
-        let tl0 = Instant::now();
-        let zk_level0 = (is_zk(st) && zk_pre.is_none()).then(|| level0_zk(st, &mut prng, plan.zk_zero_pads, plan.zk_l0_tamper));
-        let t_level0 = if zk_pre.is_some() { t_zk_pre_wait } else { tl0.elapsed().as_secs_f64() };
-        // M1 on the device: rep 0's replay and inner proof run beside rep 1's device run; rep 1's stream opens (its first round)
-        // after rep 0's last round, so the wire carries the sequential prover's messages in its order
-        let mut rep0_finish: Option<std::thread::JoinHandle<(Vec<u8>, Value)>> = None;
-        let mut rep0_done: Option<(Vec<u8>, Value)> = None;
-        for rep in 0..2 {
-            // M1: this rep's pads and their commitment (a fresh salt tree id), drawn before anything of the rep is sent (on the
-            // device path, beside the witness build: rep 1's tree id is consumed here, where the sequential prover takes it)
-            let tz0 = Instant::now();
-            let (zkrep, pre_id) = match zk_pre.as_mut() {
-                Some(z) => { let (r, id) = z[rep].take().expect("a rep's pads"); (Some(r), Some(id)) }
-                None => (is_zk(st).then(|| {
-                    let id = salts.lock().unwrap_or_else(PoisonError::into_inner).next_id();
-                    make_zkrep(st, plan, &mut prng, zk_level0.as_ref().unwrap(), &zk_points, rep, id, &salts)
-                }), None),
+        // several tables: every table after the first commits its level-0 root (and draws its level-0 hiding) before any stream
+        // opens, so the session's one Commit, in table 0's first rep, carries every table's root
+        let mut later = Vec::new();
+        for (j, tb) in tabs.list.iter().enumerate().skip(1) {
+            let tc = Instant::now();
+            let mut prng = flock_live::zk_hooks::ProverRng::for_table(seed, j as u64);
+            let l0 = is_zk(&tb.st).then(|| level0_zk(&tb.st, &mut prng, plan.zk_zero_pads, plan.zk_l0_tamper));
+            let root = level0_root(&tb.st, wits[j].1.as_ref().expect("a table's witness"), lig, l0.as_ref(), &salts_t[j]);
+            later.push((root, l0, tc.elapsed().as_secs_f64()));
+        }
+        let later_roots: Vec<Vec<u8>> = later.iter().map(|x| x.0.clone()).collect();
+        let mut later = later.into_iter();
+        for (j, (tb, (w0, mut wt0, mut wt1))) in tabs.list.iter().zip(wits).enumerate() {
+            let (st, salts, zk_points) = (&tb.st, &salts_t[j], &points_t[j]);
+            let dom = |rep: usize| domain_of(tabs.list.len(), &tb.name, rep);
+            // a later table's reps bind the root it committed
+            let (mut root0, table_level0, t_table) = if j == 0 {
+                (None, None, 0.0)
+            } else {
+                let (r, l, s) = later.next().expect("a later table's committed root");
+                (Some(r), l, s)
             };
-            if let (Some(id), 1) = (pre_id, rep) {
-                let got = salts.lock().unwrap_or_else(PoisonError::into_inner).next_id();
-                assert_eq!(got, id, "rep 1's pads tree takes the salt id after rep 0's proof's trees");
-            }
-            let t_zk_commit = if pre_id.is_some() { if rep == 0 { t_level0 } else { 0.0 } }
-                              else { tz0.elapsed().as_secs_f64() + if rep == 0 { t_level0 } else { 0.0 } };
-            // rep 1's stream on the device path opens at its first round, after rep 0's last one (the order on the wire)
-            let mut lch = if rep0_finish.is_some() { None } else { Some(LiveChallenger::new(t.clone(), TABLE, rep, &domain(rep))?) };
-            let tt = t.clone();
-            let mut hook = |root: &[u8]| -> Vec<Vec<F128>> {
-                // red-team-hm96 C1: both reps' level-0 trees take salt stream 0, so they must be one tree; stop before rep 1
-                // opens anything (its openings would reveal id-0 salts over other leaves)
-                match &root0 {
-                    None => root0 = Some(root.to_vec()),
-                    Some(r0) if r0.as_slice() != root && !plan.skip_level0_check => {
-                        // the device prover's callback swallows the panic, so the reason is kept here too
-                        let why = "PROVER-STOPPED: rep 1's level-0 root is not rep 0's; the shared level-0 salts would open over two trees";
-                        stop_why = Some(why.into());
-                        panic!("{why}")
-                    }
-                    _ => {}
-                }
-                if let Some(c) = &cached {
-                    return c.clone();
-                }
-                let pts: Vec<Vec<F128>> = match call(&tt, Req::Commit { root_f: sig.to_vec(), roots: vec![(TABLE.into(), root.to_vec())], publics: vec![] }) {
-                    Ok(Resp::Coins(c)) if c.len() == 2 * st.m_pts => c.chunks(st.m_pts).map(|r| r.to_vec()).collect(),
-                    other => panic!("LIVE-REFUSED commit: {other:?}"),
+            #[cfg(feature = "sha512")]
+            let level0 = (!plan.gpu).then(|| {
+                let s = salts.lock().unwrap_or_else(PoisonError::into_inner);
+                Arc::new(s.expand(s.level0_id(), params(st.m, lig).n_leaves()))
+            });
+            let mut prng = flock_live::zk_hooks::ProverRng::for_table(seed, j as u64);
+            let tl0 = Instant::now();
+            let zk_level0 = if j == 0 { (is_zk(st) && zk_pre.is_none()).then(|| level0_zk(st, &mut prng, plan.zk_zero_pads, plan.zk_l0_tamper)) } else { table_level0 };
+            let t_level0 = if zk_pre.is_some() { t_zk_pre_wait } else { tl0.elapsed().as_secs_f64() + t_table };
+            let mut cached: Option<Vec<Vec<F128>>> = None;
+            // M1 on the device: rep 0's replay and inner proof run beside rep 1's device run; rep 1's stream opens (its first round)
+            // after rep 0's last round, so the wire carries the sequential prover's messages in its order
+            let mut rep0_finish: Option<std::thread::JoinHandle<(Vec<u8>, Value)>> = None;
+            let mut rep0_done: Option<(Vec<u8>, Value)> = None;
+            for rep in 0..2 {
+                // M1: this rep's pads and their commitment (a fresh salt tree id), drawn before anything of the rep is sent (on the
+                // device path, beside the witness build: rep 1's tree id is consumed here, where the sequential prover takes it)
+                let tz0 = Instant::now();
+                let (zkrep, pre_id) = match zk_pre.as_mut() {
+                    Some(z) => { let (r, id) = z[rep].take().expect("a rep's pads"); (Some(r), Some(id)) }
+                    None => (is_zk(st).then(|| {
+                        let id = salts.lock().unwrap_or_else(PoisonError::into_inner).next_id();
+                        make_zkrep(st, plan, &mut prng, zk_level0.as_ref().unwrap(), zk_points, rep, id, salts)
+                    }), None),
                 };
-                if !plan.no_y {
-                    match call(&tt, Req::Link(f128_bytes(&[F128::ZERO, F128::ZERO]))) {
-                        Ok(Resp::Ok) => {}
-                        other => panic!("LIVE-REFUSED y: {other:?}"),
-                    }
+                if let (Some(id), 1) = (pre_id, rep) {
+                    let got = salts.lock().unwrap_or_else(PoisonError::into_inner).next_id();
+                    assert_eq!(got, id, "rep 1's pads tree takes the salt id after rep 0's proof's trees");
                 }
-                let e = st.extra_points(&pts);
-                cached = Some(e.clone());
-                e
-            };
-            let tp = Instant::now();
-            // FC_WITNESS_PER_REP: rep 1 rebuilds its witness rather than rep 0 proving from a copy (one copy at a time)
-            let per_rep = std::env::var("FC_WITNESS_PER_REP").is_ok();
-            let own = |wt0: &mut Option<WitData>, wt1: &mut Option<WitData>| -> WitData {
-                match (rep, wt1.is_some()) {
-                    (0, true) => wt0.take(),
-                    (0, false) if per_rep => wt0.take(),
-                    (0, false) => wt0.clone(),
-                    _ => wt1.take().or_else(|| wt0.take()).or_else(|| Some(witness(st, &w0, device).0)),
-                }.expect("a rep's witness")
-            };
-            #[cfg(feature = "sha512")]
-            if let Some(l0) = &level0 {
-                let s = salts.clone();
-                flock_merkle::hm96::begin(l0.clone(), Box::new(move |n| {
-                    let mut g = s.lock().unwrap_or_else(PoisonError::into_inner);
-                    let id = g.next_id();
-                    g.expand(id, n)
-                }));
-            }
-            let mut zkrep = zkrep;
-            let proved = catch_unwind(AssertUnwindSafe(|| {
-                if plan.gpu {
-                    let wt = if rep == 0 { wt0.as_ref() } else { wt1.as_ref().or(wt0.as_ref()) }.expect("a rep's witness");
-                    match zkrep.take() {
-                        // M1 on the device, rep 0: the device part, then its replay and inner proof on a thread
-                        Some(z) if rep == 0 && overlap => {
-                            let (mut mch, sent) = zk_masking(st, lch.take().expect("rep 0's stream"), &z);
-                            let tp = Instant::now();
-                            let (proof, cm, bk) = {
-                                let mut rounds = |c: &[u8], n: usize| replay_round(&mut mch, c, n).unwrap_or_else(|e| panic!("LIVE-ERROR replay: {e}"));
-                                gpu_zk_device(st, wt, lig, rep, &mut hook, &salts, &z.level0, &mut rounds)
+                let t_zk_commit = if pre_id.is_some() { if rep == 0 { t_level0 } else { 0.0 } }
+                                  else { tz0.elapsed().as_secs_f64() + if rep == 0 { t_level0 } else { 0.0 } };
+                // rep 1's stream on the device path opens at its first round, after rep 0's last one (the order on the wire)
+                let mut lch = if rep0_finish.is_some() { None } else { Some(LiveChallenger::new(t.clone(), &tb.name, rep, &dom(rep))?) };
+                let tt = t.clone();
+                let mut hook = |root: &[u8]| -> Vec<Vec<F128>> {
+                    // red-team-hm96 C1: both reps' level-0 trees take salt stream 0, so they must be one tree; stop before rep 1
+                    // opens anything (its openings would reveal id-0 salts over other leaves). A later table's rep 0 checks the
+                    // root it committed the same way.
+                    match &root0 {
+                        None => root0 = Some(root.to_vec()),
+                        Some(r0) if r0.as_slice() != root && !plan.skip_level0_check => {
+                            // the device prover's callback swallows the panic, so the reason is kept here too
+                            let why = if j == 0 {
+                                "PROVER-STOPPED: rep 1's level-0 root is not rep 0's; the shared level-0 salts would open over two trees".to_string()
+                            } else {
+                                format!("PROVER-STOPPED: {}'s level-0 root is not the one it committed; its level-0 salts would open over two trees", tb.name)
                             };
-                            let (t_up, st2) = (tp.elapsed().as_secs_f64(), st.clone());
-                            rep0_finish = Some(std::thread::spawn(move || zk_finish(&st2, &z, proof, cm, mch, &sent, tp, t_up, bk)));
-                            (Vec::new(), Value::Null)
+                            stop_why = Some(why.clone());
+                            panic!("{why}")
                         }
-                        // rep 1 beside rep 0's finish: the device starts now, its first round waits for rep 0's last one and then
-                        // opens rep 1's stream; otherwise (sequential) the rep's stream is open already
-                        Some(z) => {
-                            let mut first = rep0_finish.take();
-                            let mut opened: Option<(zkv::Masking<LiveChallenger>, zkv::Pads)> = lch.take().map(|l| zk_masking(st, l, &z));
-                            let mut r0: Option<Result<(Vec<u8>, Value), String>> = None;
-                            let tp = Instant::now();
-                            let dev = catch_unwind(AssertUnwindSafe(|| {
-                                let mut rounds = |c: &[u8], n: usize| -> Vec<F128> {
-                                    if opened.is_none() {
-                                        let done = first.take().expect("rep 0's replay and inner proof").join().map_err(panic_msg);
-                                        let stop = done.as_ref().err().cloned();
-                                        r0 = Some(done);
-                                        if let Some(e) = stop {
-                                            panic!("{e}");
-                                        }
-                                        let l = LiveChallenger::new(t.clone(), TABLE, rep, &domain(rep)).unwrap_or_else(|e| panic!("LIVE-REFUSED open: {e}"));
-                                        opened = Some(zk_masking(st, l, &z));
-                                    }
-                                    let m = &mut opened.as_mut().expect("rep 1's stream").0;
-                                    replay_round(m, c, n).unwrap_or_else(|e| panic!("LIVE-ERROR replay: {e}"))
-                                };
-                                gpu_zk_device(st, wt, lig, rep, &mut hook, &salts, &z.level0, &mut rounds)
-                            }));
-                            if let Some(h) = first.take() {
-                                r0 = Some(h.join().map_err(panic_msg));
-                            }
-                            // rep 0's stop comes first on the wire, so it is the session's
-                            if let Some(r) = r0 {
-                                rep0_done = Some(r.unwrap_or_else(|e| panic!("{e}")));
-                            }
-                            let (proof, cm, bk) = dev.unwrap_or_else(|e| std::panic::resume_unwind(e));
-                            let t_up = tp.elapsed().as_secs_f64();
-                            let (mch, sent) = opened.take().expect("rep 1's stream opened");
-                            zk_finish(st, &z, proof, cm, mch, &sent, tp, t_up, bk)
-                        }
-                        None => prove_gpu(st, wt, lig, rep, &mut hook, lch.as_mut().expect("the rep's stream"), &salts),
+                        _ => {}
                     }
-                } else if let Some(z) = &zkrep {
-                    prove_cpu_zk(st, &own(&mut wt0, &mut wt1), lig, rep, &mut hook, lch.as_mut().expect("the rep's stream"), z)
-                } else {
-                    prove_cpu(st, own(&mut wt0, &mut wt1), lig, &mut hook, lch.as_mut().expect("the rep's stream"))
+                    if let Some(c) = &cached {
+                        return c.clone();
+                    }
+                    let pts = match &link_pts {
+                        Some(p) => p.clone(),
+                        None => {
+                            // the session's one Commit: this root (table 0's) and every later table's
+                            let roots = tabs.list.iter().map(|x| x.name.clone()).zip(std::iter::once(root.to_vec()).chain(later_roots.iter().cloned())).collect();
+                            let p: Vec<Vec<F128>> = match call(&tt, Req::Commit { root_f: sig.to_vec(), roots, publics: vec![] }) {
+                                Ok(Resp::Coins(c)) if c.len() == 2 * st.m_pts => c.chunks(st.m_pts).map(|r| r.to_vec()).collect(),
+                                other => panic!("LIVE-REFUSED commit: {other:?}"),
+                            };
+                            if !plan.no_y {
+                                match call(&tt, Req::Link(f128_bytes(&vec![F128::ZERO; 2 * tabs.list.len()]))) {
+                                    Ok(Resp::Ok) => {}
+                                    other => panic!("LIVE-REFUSED y: {other:?}"),
+                                }
+                            }
+                            link_pts = Some(p.clone());
+                            p
+                        }
+                    };
+                    let e = st.extra_points(&pts);
+                    cached = Some(e.clone());
+                    e
+                };
+                let tp = Instant::now();
+                // FC_WITNESS_PER_REP: rep 1 rebuilds its witness rather than rep 0 proving from a copy (one copy at a time)
+                let per_rep = std::env::var("FC_WITNESS_PER_REP").is_ok();
+                let own = |wt0: &mut Option<WitData>, wt1: &mut Option<WitData>| -> WitData {
+                    match (rep, wt1.is_some()) {
+                        (0, true) => wt0.take(),
+                        (0, false) if per_rep => wt0.take(),
+                        (0, false) => wt0.clone(),
+                        _ => wt1.take().or_else(|| wt0.take()).or_else(|| Some(witness(st, &w0, device).0)),
+                    }.expect("a rep's witness")
+                };
+                #[cfg(feature = "sha512")]
+                if let Some(l0) = &level0 {
+                    let s = salts.clone();
+                    flock_merkle::hm96::begin(l0.clone(), Box::new(move |n| {
+                        let mut g = s.lock().unwrap_or_else(PoisonError::into_inner);
+                        let id = g.next_id();
+                        g.expand(id, n)
+                    }));
                 }
-            }));
-            #[cfg(feature = "sha512")]
-            if level0.is_some() {
-                flock_merkle::hm96::end();
+                let mut zkrep = zkrep;
+                let proved = catch_unwind(AssertUnwindSafe(|| {
+                    if plan.gpu {
+                        let wt = if rep == 0 { wt0.as_ref() } else { wt1.as_ref().or(wt0.as_ref()) }.expect("a rep's witness");
+                        match zkrep.take() {
+                            // M1 on the device, rep 0: the device part, then its replay and inner proof on a thread
+                            Some(z) if rep == 0 && overlap => {
+                                let (mut mch, sent) = zk_masking(st, lch.take().expect("rep 0's stream"), &z);
+                                let tp = Instant::now();
+                                let (proof, cm, bk) = {
+                                    let mut rounds = |c: &[u8], n: usize| replay_round(&mut mch, c, n).unwrap_or_else(|e| panic!("LIVE-ERROR replay: {e}"));
+                                    gpu_zk_device(st, wt, lig, rep, &mut hook, salts, &z.level0, &mut rounds)
+                                };
+                                let (t_up, st2) = (tp.elapsed().as_secs_f64(), st.clone());
+                                rep0_finish = Some(std::thread::spawn(move || zk_finish(&st2, &z, proof, cm, mch, &sent, tp, t_up, bk)));
+                                (Vec::new(), Value::Null)
+                            }
+                            // rep 1 beside rep 0's finish: the device starts now, its first round waits for rep 0's last one and then
+                            // opens rep 1's stream; otherwise (sequential) the rep's stream is open already
+                            Some(z) => {
+                                let mut first = rep0_finish.take();
+                                let mut opened: Option<(zkv::Masking<LiveChallenger>, zkv::Pads)> = lch.take().map(|l| zk_masking(st, l, &z));
+                                let mut r0: Option<Result<(Vec<u8>, Value), String>> = None;
+                                let tp = Instant::now();
+                                let dev = catch_unwind(AssertUnwindSafe(|| {
+                                    let mut rounds = |c: &[u8], n: usize| -> Vec<F128> {
+                                        if opened.is_none() {
+                                            let done = first.take().expect("rep 0's replay and inner proof").join().map_err(panic_msg);
+                                            let stop = done.as_ref().err().cloned();
+                                            r0 = Some(done);
+                                            if let Some(e) = stop {
+                                                panic!("{e}");
+                                            }
+                                            let l = LiveChallenger::new(t.clone(), &tb.name, rep, &dom(rep)).unwrap_or_else(|e| panic!("LIVE-REFUSED open: {e}"));
+                                            opened = Some(zk_masking(st, l, &z));
+                                        }
+                                        let m = &mut opened.as_mut().expect("rep 1's stream").0;
+                                        replay_round(m, c, n).unwrap_or_else(|e| panic!("LIVE-ERROR replay: {e}"))
+                                    };
+                                    gpu_zk_device(st, wt, lig, rep, &mut hook, salts, &z.level0, &mut rounds)
+                                }));
+                                if let Some(h) = first.take() {
+                                    r0 = Some(h.join().map_err(panic_msg));
+                                }
+                                // rep 0's stop comes first on the wire, so it is the session's
+                                if let Some(r) = r0 {
+                                    rep0_done = Some(r.unwrap_or_else(|e| panic!("{e}")));
+                                }
+                                let (proof, cm, bk) = dev.unwrap_or_else(|e| std::panic::resume_unwind(e));
+                                let t_up = tp.elapsed().as_secs_f64();
+                                let (mch, sent) = opened.take().expect("rep 1's stream opened");
+                                zk_finish(st, &z, proof, cm, mch, &sent, tp, t_up, bk)
+                            }
+                            None => prove_gpu(st, wt, lig, rep, &mut hook, lch.as_mut().expect("the rep's stream"), salts),
+                        }
+                    } else if let Some(z) = &zkrep {
+                        prove_cpu_zk(st, &own(&mut wt0, &mut wt1), lig, rep, &mut hook, lch.as_mut().expect("the rep's stream"), z)
+                    } else {
+                        prove_cpu(st, own(&mut wt0, &mut wt1), lig, &mut hook, lch.as_mut().expect("the rep's stream"))
+                    }
+                }));
+                #[cfg(feature = "sha512")]
+                if level0.is_some() {
+                    flock_merkle::hm96::end();
+                }
+                let (p, bk) = proved.map_err(|e| stop_why.clone().unwrap_or_else(|| panic_msg(e)))?;
+                if rep0_finish.is_some() {
+                    // rep 0 on the device path: its proof comes with rep 1's
+                    continue;
+                }
+                if let Some((p0, bk0)) = rep0_done.take() {
+                    prove_s.push(bk0["t.prove"].as_f64().unwrap_or(0.0) + t_level0);
+                    buckets.push(bk0);
+                    proofs.push(p0);
+                }
+                prove_s.push(tp.elapsed().as_secs_f64() + t_zk_commit);
+                buckets.push(bk);
+                proofs.push(p);
             }
-            let (p, bk) = proved.map_err(|e| stop_why.clone().unwrap_or_else(|| panic_msg(e)))?;
-            if rep0_finish.is_some() {
-                // rep 0 on the device path: its proof comes with rep 1's
-                continue;
+            if plan.early_proofs && j + 1 < tabs.list.len() {
+                for (rep, p) in proofs[early..].iter().enumerate() {
+                    call(&t, Req::Proof { table: tb.name.clone(), rep: rep as u32, bytes: p.clone() })?;
+                }
+                early = proofs.len();
             }
-            if let Some((p0, bk0)) = rep0_done.take() {
-                prove_s.push(bk0["t.prove"].as_f64().unwrap_or(0.0) + t_level0);
-                buckets.push(bk0);
-                proofs.push(p0);
-            }
-            prove_s.push(tp.elapsed().as_secs_f64() + t_zk_commit);
-            buckets.push(bk);
-            proofs.push(p);
         }
         Ok(())
     })();
@@ -2126,8 +2361,10 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
     if plan.salt_flip {
         sent = sent.iter().map(|p| flip_salt(p)).collect();
     }
-    for (rep, p) in sent.iter().enumerate() {
-        call(&t, Req::Proof { table: TABLE.into(), rep: rep as u32, bytes: p.clone() }).unwrap();
+    // the barrier (the public-circuit ZK proof's §2.3, line 12): a stream's proof exists only after its last coin, and every
+    // proof leaves here, after every table's reps, so none before the session's last coin
+    for (k, p) in sent.iter().enumerate().skip(early) {
+        call(&t, Req::Proof { table: tabs.list[k / 2].name.clone(), rep: (k % 2) as u32, bytes: p.clone() }).unwrap();
     }
     let v: Value = match call(&t, Req::Finish) {
         Ok(Resp::Verdict(v)) => serde_json::from_str(&v).unwrap(),
@@ -2148,7 +2385,8 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
                "buckets": buckets, "wait_s": wait_s, "wait_e2e_s": wait_e2e_s, "calls": calls, "wire_sent": ws, "wire_recv": wr,
                "proof_bytes": proofs.iter().map(|p| p.len()).collect::<Vec<_>>(), "sigma": hex(&sig), "roots": inst.header["frame_v3"]["roots"],
                "circuit_sha512": hex(&c.sha512), "statement_digest": hex(&st.digest), "public_sha512": hex(&inst.public_sha512),
-               "unit_draw": inst.header.get("unit_draw"),
+               "unit_draw": if tabs.list.len() == 1 { inst.header.get("unit_draw").cloned() } else { tabs.draw.clone() },
+               "tables": tabs.list.iter().map(|t| &t.name).collect::<Vec<_>>(),
                "identity": st.identity, "tp_s": tp0.elapsed().as_secs_f64(), "coin_seed": v["coin_seed"].clone(),
                "step0_checked": step0.is_ok() && v["accepted"] == true}),
         proofs,
@@ -2205,6 +2443,9 @@ const CASES: &[(&str, bool, bool)] = &[
     ("zk_verifier_commits_beta_zero", false, false),
     ("zk_session_relations_vary_with_the_seed", true, false),
     ("zk_dummy_witness_passes_the_region_claims", false, true),
+    ("tables_two_in_one_session", true, false),
+    ("tables_proofs_before_the_last_coin_detected", true, false),
+    ("zk_tables_share_no_randomness", true, false),
 ];
 
 /// Cases that exercise the statement's parse or the non-ZK proof format only (M1's `--zk` selftest skips them).
@@ -2411,6 +2652,35 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
             (Err(e), _) | (_, Err(e)) => json!({"case": name, "gpu": gpu, "pass": false, "why": e}),
         };
     }
+    if name.starts_with("tables_") || name == "zk_tables_share_no_randomness" {
+        if gpu {
+            return json!({"case": name, "pass": true, "skipped": "several tables per session: the CPU prover"});
+        }
+        let tabs = match session_tables(st, inst, None, 2) {
+            Ok(t) => t,
+            Err(e) => return json!({"case": name, "pass": true, "skipped": format!("no two-table split of this set: {e}")}),
+        };
+        if name == "zk_tables_share_no_randomness" {
+            return tables_randomness_case(&tabs);
+        }
+        // the public-circuit ZK proof's J = 2: both tables' roots in one Commit, a coin subtree per table and rep, and every
+        // proof after the session's last coin. A prover without the barrier sends table 0's proofs before table 1's coins: the
+        // verifier accepts them, and the order check must not.
+        let early = name.ends_with("_detected");
+        let s0 = Arc::new(Mutex::new(server_tables(st, inst, 2)));
+        let order = Arc::new(Mutex::new(Vec::new()));
+        let plan = Plan { tables: 2, early_proofs: early, ..Plan::default() };
+        let (v, proofs) = session(st, inst, shared(Order { inner: InProc(s0.clone()), log: order.clone() }), &plan, ProverSeed::from_os());
+        let rec = s0.lock().unwrap_or_else(PoisonError::into_inner).record_json();
+        let reps: Vec<Value> = rec["verdict"]["reps"].as_array().cloned().unwrap_or_default();
+        let roots = rec["link"]["root_b"].as_object().map(|m| m.keys().cloned().collect::<Vec<_>>()).unwrap_or_default();
+        let barrier = barrier_holds(&order.lock().unwrap_or_else(PoisonError::into_inner));
+        let accepted = v["accepted"] == true && reps.len() == 4 && reps.iter().all(|r| r["ok"] == true) && roots == table_names(2) && proofs.len() == 4;
+        return json!({"case": name, "expect": if early { "accepted, and the order check finds a proof before the last coin" } else { "accepted, every proof after the last coin" },
+                      "accepted": v["accepted"], "why": v["why"], "prover_stopped": v["prover_stopped"], "committed_roots": roots,
+                      "tables_m": tabs.list.iter().map(|t| t.st.m).collect::<Vec<_>>(), "reps_ok": reps.iter().map(|r| json!([r["stream"], r["ok"], r["why"]])).collect::<Vec<_>>(),
+                      "barrier_holds": barrier, "pass": accepted && barrier != early});
+    }
     if name == "coin_seed_record_replays" {
         // step 0 replayed from the verifier's record alone; the same record with two rounds' coin-request indices swapped is refused
         let s0 = Arc::new(Mutex::new(server(st, inst)));
@@ -2433,7 +2703,7 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         let rec = s0.lock().unwrap_or_else(PoisonError::into_inner).record_json();
         let replay = |p: [&Vec<u8>; 2]| -> Result<Value, String> {
             let map = p.iter().enumerate().map(|(r, b)| ((TABLE.to_string(), r), b.to_vec())).collect::<BTreeMap<_, _>>();
-            let v: Box<dyn StatementVerifier> = Box::new(CircuitVerifier { st: st.clone(), inst: inst.clone() });
+            let v: Box<dyn StatementVerifier> = Box::new(CircuitVerifier::one(st, inst));
             Ok(Server::from_record(config(st, inst), v, &rec, map)?.finish())
         };
         let (honest, swapped) = (replay([&proofs[0], &proofs[1]]), replay([&proofs[1], &proofs[0]]));
@@ -2442,14 +2712,14 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         let mut bad = rec.clone();
         let m = bad["streams"][0]["rounds"][0]["msg"].as_str().unwrap_or("").to_string();
         bad["streams"][0]["rounds"][0]["msg"] = json!(format!("{}{}", if m.starts_with('0') { "1" } else { "0" }, m.get(1..).unwrap_or("")));
-        let v2: Box<dyn StatementVerifier> = Box::new(CircuitVerifier { st: st.clone(), inst: inst.clone() });
+        let v2: Box<dyn StatementVerifier> = Box::new(CircuitVerifier::one(st, inst));
         let map = proofs.iter().enumerate().map(|(r, b)| ((TABLE.to_string(), r), b.to_vec())).collect::<BTreeMap<_, _>>();
         let altered = Server::from_record(config(st, inst), v2, &bad, map.clone()).err();
         // the same record with its link.sigma flipped: refused (Σ is the verifier's own)
         let mut bad_sigma = rec.clone();
         let sg = bad_sigma["link"]["sigma"].as_str().unwrap_or("").to_string();
         bad_sigma["link"]["sigma"] = json!(format!("{}{}", if sg.starts_with('0') { "1" } else { "0" }, sg.get(1..).unwrap_or("")));
-        let v3: Box<dyn StatementVerifier> = Box::new(CircuitVerifier { st: st.clone(), inst: inst.clone() });
+        let v3: Box<dyn StatementVerifier> = Box::new(CircuitVerifier::one(st, inst));
         let sigma_refused = Server::from_record(config(st, inst), v3, &bad_sigma, map).err();
         return json!({"case": name, "expect": "the honest record replays offline; swapped proofs, altered round bytes and another Σ do not",
                       "accepted": v["accepted"], "altered_bytes_refused": altered, "sigma_refused": sigma_refused,
@@ -2487,7 +2757,7 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
     if name == "unit_draw_from_file" {
         // the verifier's own draw (units 0 and the last), served at Register: the session proves exactly those units
         let draw = json!({"law": "subset", "population": inst.n, "k": 2.min(inst.n), "units": if inst.n > 1 { json!([0, inst.n - 1]) } else { json!([0]) }});
-        let mut srv = with_draw(server(st, inst), st, inst, flock_live::unit_draw::Law::Subset { k: 0 });
+        let mut srv = with_draw(server(st, inst), st, inst, flock_live::unit_draw::Law::Subset { k: 0 }, 1);
         srv.cfg.draw_law = None;
         srv.cfg.draw_given = Some(draw.clone());
         let s = Arc::new(Mutex::new(srv));
@@ -2499,7 +2769,7 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
     if name == "unit_draw_session" || name == "unit_draw_ignored_refused" {
         // the verifier draws one unit of the registered population after Register; the prover proves the drawn statement
         // (or, ignoring the draw, the population's, whose Σ is not the verifier's)
-        let s = Arc::new(Mutex::new(with_draw(server(st, inst), st, inst, flock_live::unit_draw::Law::Subset { k: 1 })));
+        let s = Arc::new(Mutex::new(with_draw(server(st, inst), st, inst, flock_live::unit_draw::Law::Subset { k: 1 }, 1)));
         let plan = Plan { gpu, ignore_draw: name.ends_with("refused"), ..Plan::default() };
         let (v, proofs) = session(st, inst, shared(InProc(s.clone())), &plan, ProverSeed::from_os());
         let rec = s.lock().unwrap_or_else(PoisonError::into_inner).record_json();
@@ -2509,13 +2779,13 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         let replay = if acc {
             let (ds, di) = drawn(st, inst, &draw).unwrap();
             let map: BTreeMap<(String, usize), Vec<u8>> = proofs.iter().enumerate().map(|(r, p)| ((TABLE.to_string(), r), p.clone())).collect();
-            let ok = Server::from_record(config(&ds, &di), Box::new(CircuitVerifier { st: ds.clone(), inst: di.clone() }), &rec, map.clone())
+            let ok = Server::from_record(config(&ds, &di), Box::new(CircuitVerifier::one(&ds, &di)), &rec, map.clone())
                 .map(|mut x| x.finish()).map(|v| v["accepted"] == true);
             // under the population's statement Σ differs (the draw is under Σ); with the record's draw altered, U1
-            let pop = Server::from_record(config(st, inst), Box::new(CircuitVerifier { st: st.clone(), inst: inst.clone() }), &rec, map.clone()).err();
+            let pop = Server::from_record(config(st, inst), Box::new(CircuitVerifier::one(st, inst)), &rec, map.clone()).err();
             let mut bad = rec.clone();
             bad["unit_draw"]["k"] = json!(draw["k"].as_u64().unwrap_or(0) + 1);
-            let u1 = Server::from_record(config(&ds, &di), Box::new(CircuitVerifier { st: ds.clone(), inst: di.clone() }), &bad, map).err();
+            let u1 = Server::from_record(config(&ds, &di), Box::new(CircuitVerifier::one(&ds, &di)), &bad, map).err();
             json!({"drawn_accepted": ok, "population_refused": pop, "altered_draw_refused": u1})
         } else { Value::Null };
         let pass = if name == "unit_draw_session" {
@@ -2592,7 +2862,7 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         }
         _ => (st.clone(), inst.clone(), inst.clone()),
     };
-    let s = Arc::new(Mutex::new(Server::new(config(st, &vinst), Box::new(CircuitVerifier { st: st.clone(), inst: vinst.clone() }))));
+    let s = Arc::new(Mutex::new(Server::new(config(st, &vinst), Box::new(CircuitVerifier::one(st, &vinst)))));
     let (v, proofs) = session(&pst, &pinst, shared(InProc(s.clone())), &plan, ProverSeed::from_os());
     let acc = v["accepted"].as_bool().unwrap_or(false);
     let rec = s.lock().unwrap_or_else(PoisonError::into_inner).record_json();
@@ -2669,9 +2939,86 @@ fn determinism_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Value {
     };
     let (a, b, c) = (run([1; 32]), run([1; 32]), run([2; 32]));
     let same = a.1 == b.1 && a.2 == b.2;
+    // `--expect-transcript HEX`: another build's digest (the one-table session before a change: byte-identical, or not)
+    let pin = arg("--expect-transcript", "");
+    let pinned = pin.is_empty() || pin == hex(&a.2);
     json!({"case": "prover_is_deterministic", "expect": "equal seeds and coins give byte-identical proofs and transcripts", "gpu": gpu,
            "accepted": a.0 && b.0, "proofs_equal": a.1 == b.1, "transcripts_equal": a.2 == b.2, "other_seed_equal": a.1 == c.1 && a.2 == c.2,
-           "transcript_sha256": hex(&a.2), "pass": a.0 && b.0 && c.0 && same})
+           "transcript_sha256": hex(&a.2), "transcript_pinned": (!pin.is_empty()).then_some(pinned), "pass": a.0 && b.0 && c.0 && same && pinned})
+}
+
+/// Every round and proof request in the order the prover sends them (`round STREAM`, `proof STREAM`), for the barrier's order
+/// check.
+struct Order<T: Transport> {
+    inner: T,
+    log: Arc<Mutex<Vec<String>>>,
+}
+
+impl<T: Transport> Transport for Order<T> {
+    fn call(&mut self, req: Req) -> Result<Resp, String> {
+        let at = match &req {
+            Req::Round { stream, .. } => Some(format!("round {stream}")),
+            Req::Proof { table, rep, .. } => Some(format!("proof {}", rep_stream(table, *rep as usize))),
+            _ => None,
+        };
+        if let Some(a) = at {
+            self.log.lock().unwrap_or_else(PoisonError::into_inner).push(a);
+        }
+        self.inner.call(req)
+    }
+    fn stats(&self) -> (u64, u64, u64) {
+        self.inner.stats()
+    }
+    fn wait_s(&self) -> f64 {
+        self.inner.wait_s()
+    }
+}
+
+/// The barrier on the wire: rounds and proofs were sent, and every proof after the last round of every stream.
+fn barrier_holds(order: &[String]) -> bool {
+    match (order.iter().rposition(|x| x.starts_with("round ")), order.iter().position(|x| x.starts_with("proof "))) {
+        (Some(last_round), Some(first_proof)) => last_round < first_proof,
+        _ => false,
+    }
+}
+
+/// The public-circuit ZK proof's gap 1, at the session's own draws: two tables' level-0 hiding (every lane's padding, the extra
+/// lanes), both reps' pads (h, μ, the pads' padding, τ's salt), the mask slot, and the salts of their level-0 and later trees
+/// share no 16-byte word. The per-rep indexing alone (the second table at the first's addresses) gives the second table every
+/// word of the first, which would reveal the difference of their masked values.
+fn tables_randomness_case(tabs: &Tables) -> Value {
+    let seed = ProverSeed::from_os();
+    let salts = flock_live::zk_hooks::LeafSalts::for_seed(&seed);
+    let draws = |tb: &Table, at: u64| -> Vec<[u8; 16]> {
+        let (st, lay) = (&tb.st, zk_layout(&tb.st));
+        let mut prng = flock_live::zk_hooks::ProverRng::for_table(seed, at);
+        let l0 = level0_zk(st, &mut prng, false, 0);
+        let mut w: Vec<F128> = l0.extra.iter().chain(&l0.pads).flatten().copied().collect();
+        let mut s = salts.table(at);
+        let mut b = s.expand(s.level0_id(), 64);
+        for rep in 0..2 {
+            let p = zkv::Pads::draw(&mut prng, &lay, rep);
+            w.extend(p.h.iter().chain(&p.mu).chain(&p.pad_h).chain(&p.pad_mu));
+            b.extend(&p.tau_salt);
+            let id = s.next_id();
+            b.extend(s.expand(id, 64));
+        }
+        let mask = wit(st, &tb.inst, &Plan::default(), false, seed, at as usize).mask;
+        w.extend((0..st.blocks().min(4)).flat_map(|k| mask(k)));
+        w.iter().map(|x| {
+            let mut a = [0u8; 16];
+            a[..8].copy_from_slice(&x.lo.to_le_bytes());
+            a[8..].copy_from_slice(&x.hi.to_le_bytes());
+            a
+        }).chain(b.chunks(16).map(|c| c.try_into().expect("16 bytes"))).collect()
+    };
+    let (a, b, control) = (draws(&tabs.list[0], 0), draws(&tabs.list[1], 1), draws(&tabs.list[1], 0));
+    let first: std::collections::BTreeSet<&[u8; 16]> = a.iter().collect();
+    let shared = b.iter().filter(|x| first.contains(x)).count();
+    let control_equal = a.iter().zip(&control).filter(|(x, y)| x == y).count();
+    json!({"case": "zk_tables_share_no_randomness", "expect": "no word in common across the tables; all of them at one table's addresses",
+           "words": [a.len(), b.len()], "shared_words": shared, "control_words_equal": control_equal,
+           "pass": !a.is_empty() && a.len() == b.len() && shared == 0 && control.len() == a.len() && control_equal == a.len()})
 }
 
 #[cfg(not(feature = "seed-injection"))]
@@ -2856,6 +3203,10 @@ fn main() {
     if zk_mode() {
         zk_queries0(st.m).unwrap_or_else(|e| refuse(e));
     }
+    let tables = tables_arg();
+    if tables > 1 && flag("--gpu") {
+        refuse("--session-tables above 1: the CPU prover (the device prover proves one table per session)".into());
+    }
     eprintln!("statement {} instances={} vus_per_block={} blocks={} k_log={} nbl={} m={} regions={} delta={} built in {:.2}s",
               st.c.name, st.n, st.c.g, st.blocks_real, st.c.k_log, st.nbl, st.m, st.regions.len(), st.circuit.da.len() / 2, tb.elapsed().as_secs_f64());
     match cmd.as_str() {
@@ -2864,12 +3215,12 @@ fn main() {
         "zkaudit" => zkaudit(&st, &inst),
         "zkrewind" => zkrewind(&st, &inst),
         "zkgk" => zkgk(&st, &inst),
-        "serve" => serve_loop(move || server(&st, &inst)),
+        "serve" => serve_loop(move || server_tables(&st, &inst, tables)),
         "prove" => {
             let runs: usize = arg("--runs", "1").parse().unwrap();
             let warm: usize = arg("--warm", "0").parse().unwrap();
             let dump = arg("--dump", "");
-            let plan = Plan { gpu: flag("--gpu"), ..Plan::default() };
+            let plan = Plan { gpu: flag("--gpu"), tables, ..Plan::default() };
             for run in 0..warm + runs {
                 let mut tcp = TcpTransport::connect(&arg("--verifier", "127.0.0.1:7500")).unwrap();
                 let (rtt, rtt_min, rtt_n) = tcp.ping_rtt(30);

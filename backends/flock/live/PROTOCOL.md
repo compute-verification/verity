@@ -112,6 +112,11 @@ padding belongs to one rep (§7).
 
 Streams 1–3 belong to M0: mask, padding, and the injected-seed salt tape. None of this is derived from the transcript.
 
+**Several tables** (`--session-tables J`, the CPU prover). Table `j` reads every stream above at ChaCha20 stream
+`purpose | j << 32` (`ProverRng::for_table`). Its salt trees are ids `j << 32` (its level-0 tree) and up, below the next
+table's (`LeafSalts::table`, the session's one salt key). So no two tables share a pad, a mask word, a padding coefficient or
+a salt. Table 0's addresses are a one-table session's, and a one-table session's bytes are unchanged.
+
 ## 3. The pads commitment
 
 The code is Reed–Solomon over GF(2^128). The message is `(h ‖ pad_h)` of length `L_h = s + 192`, read as coefficients
@@ -468,7 +473,17 @@ rejected by the inner proof alone).
   belongs to its one tree, and the pads trees take `next_id() ≥ 1`.
 - **GPU.** `--zk` is CPU-only. The mask slot fill, §7's padding and extra lanes, and `commit_zk` belong on the device,
   expanded from ChaCha20 like the hm96 salts.
-- **Several tables per session.** The schedule's streams are one table's; a batched session adds a subtree per table and
-  rep.
+- **Several tables per session** (the public-circuit ZK proof's §2.3 and gap 1) are on the CPU prover, `--session-tables J`:
+  - the draw's units split into J equal tables `circuit-00`, `circuit-01`, ... (`session_tables`), under Σ over every
+    table's Σ;
+  - randomness per table (§2) and a rank check per table (§6);
+  - one `Commit` carrying every table's level-0 root: a later table commits its root before any stream opens, and its reps
+    stop unless they bind it;
+  - a coin subtree per table and rep;
+  - every proof after the session's last coin (the barrier).
+
+  The selftests are `tables_two_in_one_session`, `tables_proofs_before_the_last_coin_detected` (a prover without the
+  barrier is accepted by the verifier and caught by the order check) and `zk_tables_share_no_randomness`. The device prover
+  still proves one table per session, and `gk_simulate` still simulates one table.
 - **Review.** A red team on §5, §7 and this section, then the Lean reference prover and its differential test, before any
   `COMPLETE_*` class.
