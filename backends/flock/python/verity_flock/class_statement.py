@@ -387,6 +387,13 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "circuit.txt").write_text(text)
     n = len(rows)
+    meta = json.loads(text.split("\n", 2)[1][5:])
+    per_instance = (1 << meta["k_log"]) // meta["vus_per_block"]
+    if n * per_instance > MAX_STATEMENT_BITS:            # a unit whose rows are long pays for their hashing in every instance
+        n = max(meta["vus_per_block"], 1 << ((MAX_STATEMENT_BITS // per_instance).bit_length() - 1))
+        rows, outs = rows[:n], outs[:n]
+        per_port = {k: v[:n] for k, v in per_port.items()}
+        idents = [ids[:n] for ids in idents] if idents is not None else None
     tables = refs = None
     if idents is not None:
         if len(idents) != len(groups):
@@ -405,7 +412,6 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
                 raise AssertionError(f"class {name}: instances reading one source disagree on its row")
     head = FC.write(text, iset, 0, n, out_dir / f"inst-{n}.bin", out_dir / f"pub-{n}.bin", salt_key, rows=per_port, outs={"out": outs},
                     share_rows=True, tables=tables, refs=refs)
-    meta = json.loads(text.split("\n", 2)[1][5:])
     return {"n": n, "unit_nnz": low.layout.counts["nnz_a"] + low.layout.counts["nnz_b"], "circuit_bytes": len(text), "w_in": low.definition.w_in,
             "w_out": low.definition.w_out, "unit_rows": low.layout.useful, "ports": list(low.definition.port_words),
             "shared_rows": head.get("shared_rows"), "ands": low.layout.counts["ands"], "k_log": meta["k_log"],
@@ -472,6 +478,8 @@ def _vm_hwm(pid: int) -> float | None:
 _CTX: dict = {}
 #: AND-instances per prove under ``--batch auto``
 BATCH_ANDS = 1 << 29
+#: witness bits per statement (instances x the block bits each takes, row hashing included); an 80 GB GPU proves 2^32
+MAX_STATEMENT_BITS = 1 << 32
 
 
 def auto_batch(ands: int, row_units: int) -> int:
