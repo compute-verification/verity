@@ -564,6 +564,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--select", choices=["table-free", "reads", "units"], default=None,
                     help="leave out the token-select Calls, and prove only the shapes whose unit reads no pinned table (table-free), "
                     "reads one (reads), or either (units); the others are recorded as skipped, unstaged")
+    ap.add_argument("--counts-only", action="store_true", help="write counts.json (every shape's row units and each Call Definition's "
+                    "units per shape) and stage nothing: what `class_sweep rollup --counts` reads")
     ap.add_argument("--protocol", default="sweep-v0", help="the measurement protocol the result is labelled with (sweep-v0: never a "
                     "table cell)")
     a = ap.parse_args(argv)
@@ -595,11 +597,20 @@ def main(argv: Sequence[str] | None = None) -> int:
     results = out / ("selftests.jsonl" if a.selftest_only else "results.jsonl")
     done = {json.loads(ln)["shape"] for ln in results.read_text().splitlines()} if results.exists() else set()
     row_units: dict[str, int] = {}
+    per_definition: dict[str, dict[str, int]] = {}
     if calls is not None:
         from verity.ir.codec import descriptor_id
         for _k, _m, fn, cut in units._calls():
-            for sh, c in units._count(cut, fn).items():
+            per_definition[descriptor_id(fn)] = dict(units._count(cut, fn))
+            for sh, c in per_definition[descriptor_id(fn)].items():
                 row_units[sh] = row_units.get(sh, 0) + c * calls[descriptor_id(fn)]
+    if a.counts_only:
+        (out / "counts.json").write_text(json.dumps({
+            "calls": calls, "per_definition": per_definition,
+            "shapes": {s: {"definition": cl.representative.definition, "units": cl.units, "row_units": row_units.get(s),
+                           "word_gates": len(cl.representative.gates)} for s, cl in classes.items()}}, sort_keys=True))
+        print(f"counts: {len(classes)} shapes over {len(per_definition)} Call Definitions -> {out / 'counts.json'}")
+        return 0
     order = sorted(classes.items(), key=lambda kv: len(kv[1].representative.gates))
     wanted = [ln.strip() for ln in Path(a.shapes).read_text().split() if ln.strip()] if a.shapes else None
     if a.sample:

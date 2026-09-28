@@ -59,3 +59,18 @@ def test_rollup_sums_row_units_over_throughput_and_lists_what_was_not_proved():
     assert got["ands_proved"] == 20_000 and got["and_coverage"] == 0.5
     assert got["overhead"]["tensor_peak"]["overhead"] == got["proving_s"] / 1.0
     assert [(x["shape"], x["why"]) for x in got["not_proved"]] == [("c", "skipped: reads"), ("d", "broke at size: too big")]
+
+
+def test_regroup_carries_known_definitions_over_and_names_the_ones_to_cut():
+    known = CW.merge_counts([{"calls": {"A": 2}, "per_definition": {"A": {"s1": 3, "s2": 1}}, "shapes": {"s1": {"row_units": 6, "definition": "a"},
+                                                                                                         "s2": {"row_units": 2, "definition": "a"}}},
+                             {"calls": {"B": 1}, "per_definition": {"B": {"s2": 5}}, "shapes": {"s2": {"row_units": 5, "definition": "b"}}}])
+    assert known["shapes"]["s2"]["row_units"] == 7
+    got, missing = CW.regroup({"A": 10, "B": 1, "C": 4}, known)
+    assert missing == ["C"] and got["shapes"]["s1"]["row_units"] == 30 and got["shapes"]["s2"]["row_units"] == 15
+
+
+def test_rollup_with_counts_lists_every_shape_of_the_row():
+    got = CW.rollup([_rec("a", 1, 256, 2.0, 10)], total_ands=1e6, counts={"a": {"row_units": 512}, "z": {"row_units": 7, "definition": "Tz"}})
+    assert got["row_units_proved"] == 512 and got["proving_s"] == 512 * 2.0 / 256
+    assert [(x["shape"], x["why"]) for x in got["not_proved"]] == [("z", "broke at sweep: not run")]
