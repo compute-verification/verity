@@ -13,7 +13,8 @@ import Models.Pouw.Guarantees.PearlC
 /-!
 # γ from TT_OUT (the cheap-binding lane's file)
 
-Staged; nothing pinned. The pins proposed are `pearlCGamma8192`, `pearlCGamma16384` and `ttOutPearlCWitness`.
+Lemmas, none a guarantee: `TTOutPearlC`, the premise of `pearlCGamma8192` and `pearlCGamma16384`, is falsified by the
+first-promotion skip (`Models.Pouw.Assumptions.PearlC.TTOut`), and rev1 (`TTOutPearlCDevRev1`) is its repair.
 
 * `gammaFromTTOut`: if every in-domain unit that passes the activation rules and the debit cap has reference cost at
   most `Ω` times its credit, `TT_OUT(γ₀)` gives the γ-gap property at `γ = 1 − (1 − γ₀)/Ω` with the same error; the
@@ -382,7 +383,3 @@ theorem ttOutPearlCWitness :
     norm_num [creditOf, Params.pi, Costs.adopted, witnessWorkload]
 
 end Pouw.PearlC
-
-theorem Pouw.SecurityProofs.PearlC.Gamma16384 : Pouw.Guarantees.PearlC.Gamma16384 := @Pouw.PearlC.pearlCGamma16384
-
-theorem Pouw.SecurityProofs.PearlC.Gamma8192 : Pouw.Guarantees.PearlC.Gamma8192 := @Pouw.PearlC.pearlCGamma8192

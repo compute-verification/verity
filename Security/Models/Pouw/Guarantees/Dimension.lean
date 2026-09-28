@@ -32,19 +32,3 @@ def A2WordsIff : Prop :=
         PerWordCost γ₂ M (word k m n N R A B) U)
 
 end Pouw.Guarantees.Dimension
-
-namespace Pouw.Dimension.H100
-
-/-- **`H32` holds at the loop-free prices** (Round 8). -/
-def _root_.Pouw.Guarantees.Dimension.H100.H32LoopFree : Prop :=
-  H32 h100LoopFree
-
-end Pouw.Dimension.H100
-
-namespace Pouw.Dimension.H100
-
-/-- **`H32` holds at the measured prices** (Round 7). -/
-def _root_.Pouw.Guarantees.Dimension.H100.H32Measured : Prop :=
-  H32 h100Measured
-
-end Pouw.Dimension.H100
