@@ -93,6 +93,7 @@ class CallBoundarySource:
         self._args: dict[tuple[int, str], list[np.ndarray]] = {}             # a body evaluated per request: its packed operand words
         self._values: dict[tuple[str, int], dict[str, np.ndarray]] = {}
         self._fields: dict[str, np.ndarray] = {}
+        self._shared: dict = {}                                               # step-shared Values by form, once per Commit
         self.stats: dict[str, Any] = {"tensors": 0, "bytes": 0, "bodies": 0, "modules": len(self.modules), "errors": 0, "seconds": 0.0}
         self.active = False
 
@@ -163,7 +164,8 @@ class CallBoundarySource:
         ops = operand_words(self.torch, body, tensors)
         if body.packed:
             tpl = body.parts[0].template
-            self._values[(body.module, body.engine_step)] = CP.evaluate_template(self.plan, tpl, sum(q.rows for q in body.parts), ops, self.weight)
+            self._values[(body.module, body.engine_step)] = CP.evaluate_template(self.plan, tpl, sum(q.rows for q in body.parts), ops,
+                                                                                 self.weight, self._shared)
         else:
             self._args[(body.engine_step, body.module)] = ops
         self.stats["seconds"] += time.perf_counter() - t0
@@ -189,7 +191,7 @@ class CallBoundarySource:
 
     def per_request(self, body: Body, order: Sequence[str], ops: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
         """Each request's rows of the packed operands `ops`, in the runtime's `order`, evaluated with its own template; the targets
-        packed back in that order."""
+        packed back in that order, a step-shared target once (the requests' step-shared Calls are one form, `call_boundary_plan._merge`)."""
         parts = {q.request: q for q in body.parts}
         off, outs = [0] * len(ops), []
         for r in order:
@@ -199,8 +201,8 @@ class CallBoundarySource:
                 n = q.operand_rows(k)
                 mine.append(o[off[k]:off[k] + n])
                 off[k] += n
-            outs.append(CP.evaluate_template(self.plan, q.template, q.rows, mine, self.weight))
-        return {t.name: np.concatenate([o[t.name] for o in outs]) for t in body.targets}
+            outs.append(CP.evaluate_template(self.plan, q.template, q.rows, mine, self.weight, self._shared))
+        return {t.name: outs[0][t.name] if t.shared else np.concatenate([o[t.name] for o in outs]) for t in body.targets}
 
     def on_step_end(self, job: Any) -> None:
         """Check the step's row order against the declared composition, evaluate the per-request bodies, and commit every target."""

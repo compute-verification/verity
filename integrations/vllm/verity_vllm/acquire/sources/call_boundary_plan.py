@@ -11,7 +11,10 @@ then keyword), holding the producer rows read in ascending order, as [rows, port
 anything else -- a Program input other than a weight, a Value of another step, a module under M, a slice across two ports or two fields --
 leaves its identities uncovered, named.
 
-A body's Calls at a step split into groups connected through M's own Values or one producer row of an outside Value.  R groups of one form
+A body's step-shared Calls -- those reading only weights, literals and each other (a norm's `weight + 1`) -- are evaluated once per step,
+whatever its rows, and each of their targets is committed as one row (with several requests, the binding map's split of a member neither
+per token nor per request: the whole row to each, whose step-shared Calls must be of one form).  The other Calls split into groups
+connected through M's own Values or one producer row of an outside Value.  R groups of one form
 (the same Definitions and statics, dataflow, literals and weight slices, group j reading block j of every outside Value's rows) are a row
 template repeated R times -- a token's rows, or a sequence's; any other body is one group (R = 1).  Target t's Calls are f per group and it
 is committed as [R, f * width].  At an engine step of several requests (the global manifest's `engine_steps` composition) the forward
@@ -58,26 +61,32 @@ class Operand:
 
 @dataclass(frozen=True)
 class Target:
-    """One `call_boundaries` identity: per template row, the Calls at positions `at` produce its rows, each the leaves [lo, hi)."""
+    """One `call_boundaries` identity: per template row (once per step when `shared`), the Calls at positions `at` produce its rows, each
+    the leaves [lo, hi)."""
 
     name: str                              # the committed tensor name `<op_path>/<member>`
     at: tuple[int, ...]
     lo: int
     hi: int
     dtype: str
+    shared: bool = False
 
 
 @dataclass(frozen=True)
 class Template:
     """One row of a body: per position (Program order) its Definition and per argument group its slices -- ("v", position, lo, hi) a Value
-    of the row, ("l", literal spec, lo, hi), ("o", operand, row of the block, lo, hi) a forward argument's words, ("w", field, lo, hi) a
-    weight field's; `levels` = [(spec, positions)] per dependency level."""
+    of the row, ("s", shared position, lo, hi) a step-shared Value, ("l", literal spec, lo, hi), ("o", operand, row of the block, lo, hi)
+    a forward argument's words, ("w", field, lo, hi) a weight field's; `levels` = [(spec, positions)] per dependency level.  `shared_*`:
+    the step's Calls that read only weights, literals and each other (a norm's `weight + 1`), evaluated once whatever the rows."""
 
     specs: tuple[str, ...]
     recipes: tuple[tuple[tuple[tuple, ...], ...], ...]
     levels: tuple[tuple[tuple[str, tuple[int, ...]], ...], ...]
     operands: tuple[Operand, ...]
     targets: tuple[Target, ...]
+    shared_specs: tuple[str, ...] = ()
+    shared_recipes: tuple[tuple[tuple[tuple, ...], ...], ...] = ()
+    shared_levels: tuple[tuple[tuple[str, tuple[int, ...]], ...], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -294,10 +303,13 @@ def _merge(p: Plan, e: int, m: str, got: Mapping[str, Part]) -> Body:
     parts = tuple(got[r] for r in declared)
 
     def shape(t: Template) -> tuple:
-        return tuple((x.name, len(x.at), x.hi - x.lo, x.dtype) for x in t.targets), tuple((o.elems, o.width) for o in t.operands)
+        return tuple((x.name, len(x.at), x.hi - x.lo, x.dtype, x.shared) for x in t.targets), tuple((o.elems, o.width) for o in t.operands)
 
     if any(shape(q.template) != shape(parts[0].template) for q in parts):
         raise Uncovered(f"the requests of the step commit other targets of {m} or read other arguments (fx nodes of another local step?)")
+    if any((q.template.shared_specs, q.template.shared_recipes) != (parts[0].template.shared_specs, parts[0].template.shared_recipes)
+           for q in parts):
+        raise Uncovered(f"{m}: the requests' step-shared Calls differ (other weights or literals): one committed row cannot be each's")
     if len(parts) > 1 and not (all(q.rows == declared[q.request] for q in parts) or all(q.rows == 1 for q in parts)):
         raise Uncovered(f"{m}: rows (request, rows, token rows) {[(q.request, q.rows, declared[q.request]) for q in parts]} are neither "
                         f"each request's token rows nor one per request")
@@ -425,8 +437,15 @@ class _Context:
 # ------------------------------------------------------------------------------------------------------------------------------ template
 def _template(order: list[int], recipes: dict[int, list[list[tuple]]], specs: dict[int, str], operands: list[tuple],
               targets: list[tuple]) -> tuple[Template, int]:
-    """The body's row template and its rows R (module docstring): R groups of one form, else the whole body as one group."""
-    root = {c: c for c in order}
+    """The body's row template and its rows R (module docstring): the step-shared Calls once, then R groups of one form, else the rest of
+    the body as one group."""
+    shared = _step_shared(order, recipes, targets)
+    spos = {c: i for i, c in enumerate(shared)}
+    own = [c for c in order if c not in spos]
+    rec = {c: [[("s", spos[x[1]], *x[2:]) if x[0] == "v" and x[1] in spos else x for x in g] for g in recipes[c]] for c in own}
+    sat = {t[0]: tuple(spos[c] for c in t[1]) for t in targets if t[1][0] in spos}
+    rtargets = [t for t in targets if t[0] not in sat]
+    root = {c: c for c in own}
 
     def find(x: int) -> int:
         while root[x] != x:
@@ -435,27 +454,43 @@ def _template(order: list[int], recipes: dict[int, list[list[tuple]]], specs: di
         return x
 
     first: dict[tuple[int, int], int] = {}
-    for c in order:
-        for g in recipes[c]:
+    for c in own:
+        for g in rec[c]:
             for x in g:
                 o = x[1] if x[0] == "v" else first.setdefault((x[1], x[2]), c) if x[0] == "o" else None
                 if o is not None:
                     root[find(c)] = find(o)
     groups: dict[int, list[int]] = defaultdict(list)
-    for c in order:
+    for c in own:
         groups[find(c)].append(c)
     rows = sorted(groups.values(), key=lambda cs: cs[0])
-    got = _row_template(rows, recipes, specs, operands, targets) if len(rows) > 1 else None
-    if got is not None:
-        return got, len(rows)
-    whole = _form(order, 0, [n for _w, n, _e, _b in operands], recipes, specs)
-    pos = {c: i for i, c in enumerate(order)}
-    assert whole is not None
-    return _assemble(whole, operands, [n for _w, n, _e, _b in operands], [tuple(pos[c] for c in t[1]) for t in targets], targets), 1
+    got = _row_template(rows, rec, specs, operands, rtargets) if len(rows) > 1 else None
+    R = len(rows) if got is not None else 1
+    if got is None:
+        pos = {c: i for i, c in enumerate(own)}
+        whole = _form(own, 0, [n for _w, n, _e, _b in operands], rec, specs)
+        assert whole is not None
+        got = whole, [n for _w, n, _e, _b in operands], [tuple(pos[c] for c in t[1]) for t in rtargets]
+    form, per, ats = got
+    sform = _form(shared, 0, [], recipes, specs)
+    assert sform is not None
+    return _assemble(form, sform, operands, per, {**dict(zip((t[0] for t in rtargets), ats)), **sat}, set(sat), targets), R
+
+
+def _step_shared(order: list[int], recipes: dict[int, list[list[tuple]]], targets: list[tuple]) -> list[int]:
+    """The Calls of `order` that read only weights, literals and each other; none when a target has both such Calls and others."""
+    shared: set[int] = set()
+    for c in order:
+        if all(x[0] in ("l", "w") or (x[0] == "v" and x[1] in shared) for g in recipes[c] for x in g):
+            shared.add(c)
+    if any(len({c in shared for c in t[1]}) > 1 for t in targets):
+        return []
+    return [c for c in order if c in shared]
 
 
 def _row_template(rows: list[list[int]], recipes: dict[int, list[list[tuple]]], specs: dict[int, str], operands: list[tuple],
-                  targets: list[tuple]) -> Template | None:
+                  targets: list[tuple]) -> tuple[tuple, list[int], list[tuple[int, ...]]] | None:
+    """(form, operand rows per template row, target positions) of R = len(rows) groups of one form, or None."""
     R = len(rows)
     if any(n % R for _w, n, _e, _b in operands) or any(len(t[1]) % R for t in targets):
         return None
@@ -468,7 +503,7 @@ def _row_template(rows: list[list[int]], recipes: dict[int, list[list[tuple]]], 
         if f is None or (form is not None and (f != form or at != ats)) or any(-1 in a for a in at):
             return None
         form, ats = f, at
-    return _assemble(form, operands, per, ats, targets)
+    return form, per, ats
 
 
 def _form(cs: list[int], j: int, per: list[int], recipes: dict[int, list[list[tuple]]], specs: dict[int, str]) -> tuple | None:
@@ -494,7 +529,7 @@ def _form(cs: list[int], j: int, per: list[int], recipes: dict[int, list[list[tu
     return tuple(specs[c] for c in cs), tuple(rec)
 
 
-def _assemble(form: tuple, operands: list[tuple], per: list[int], ats: list[tuple[int, ...]], targets: list[tuple]) -> Template:
+def _levels(form: tuple) -> tuple[tuple[tuple[str, tuple[int, ...]], ...], ...]:
     specs, recipes = form
     lv: list[int] = []
     for rec in recipes:
@@ -502,9 +537,13 @@ def _assemble(form: tuple, operands: list[tuple], per: list[int], ats: list[tupl
     levels: list[dict[str, list[int]]] = [defaultdict(list) for _ in range(1 + max(lv, default=-1))]
     for i, n in enumerate(lv):
         levels[n][specs[i]].append(i)
-    return Template(specs, recipes, tuple(tuple((s, tuple(ps)) for s, ps in d.items()) for d in levels),
-                    tuple(Operand(w, k, e, b) for (w, _n, e, b), k in zip(operands, per)),
-                    tuple(Target(t[0], at, t[2], t[3], t[4]) for t, at in zip(targets, ats)))
+    return tuple(tuple((s, tuple(ps)) for s, ps in d.items()) for d in levels)
+
+
+def _assemble(form: tuple, sform: tuple, operands: list[tuple], per: list[int], at: Mapping[str, tuple[int, ...]], shared: set[str],
+              targets: list[tuple]) -> Template:
+    return Template(*form, _levels(form), tuple(Operand(w, k, e, b) for (w, _n, e, b), k in zip(operands, per)),
+                    tuple(Target(t[0], at[t[0]], t[2], t[3], t[4], t[0] in shared) for t in targets), *sform, _levels(sform))
 
 
 def _arena_bound(manifest: Mapping[str, Any], plan: Plan) -> tuple[int, int]:
@@ -519,22 +558,38 @@ def _arena_bound(manifest: Mapping[str, Any], plan: Plan) -> tuple[int, int]:
     for (e, _m), b in plan.bodies.items():
         rows = sum(q.rows for q in b.parts)
         for t in b.targets:
-            nbytes[e] += rows * len(t.at) * (t.hi - t.lo) * np.dtype(WORD_DTYPES[t.dtype][0]).itemsize
+            nbytes[e] += (1 if t.shared else rows) * len(t.at) * (t.hi - t.lo) * np.dtype(WORD_DTYPES[t.dtype][0]).itemsize
             count[e] += 1
     return max((-(-n // max(1, tokens.get(e, 1))) for e, n in nbytes.items()), default=0), max(count.values(), default=0)
 
 
 # ---------------------------------------------------------------------------------------------------------------------------- evaluation
-def evaluate_template(plan: Plan, tpl: Template, R: int, operands: Sequence[np.ndarray], weight: Callable[[str], np.ndarray]) -> dict[str, np.ndarray]:
-    """Target name -> its [R, f * width] words: `tpl` over R rows, level by level, one `evaluate_batch` per (level, Definition) over
-    every row (a registered row kernel of `verity_vllm.program.kernels.rows` where one is, the reference for the rest and for what a
-    kernel declines; a `plan.kernel_only` Definition by its row kernel alone, a declined instance a ValueError).  `operands[k]` = forward
-    argument k's [R * per_row, elems] words; `weight(name)` = a weight field's words, read once per row batch as a broadcast view (never
-    copied per row)."""
+def evaluate_template(plan: Plan, tpl: Template, R: int, operands: Sequence[np.ndarray], weight: Callable[[str], np.ndarray],
+                      shared: dict | None = None) -> dict[str, np.ndarray]:
+    """Target name -> its [R, f * width] words ([1, f * width] for a step-shared target): `tpl` over R rows, level by level, one
+    `evaluate_batch` per (level, Definition) over every row (a registered row kernel of `verity_vllm.program.kernels.rows` where one is,
+    the reference for the rest and for what a kernel declines; a `plan.kernel_only` Definition by its row kernel alone, a declined
+    instance a ValueError).  `operands[k]` = forward argument k's [R * per_row, elems] words; `weight(name)` = a weight field's words, read
+    as a broadcast view (never copied per row); `shared` = the step-shared Values by form, kept across steps by the caller (weights and
+    literals do not change within a Commit)."""
+    ops = [np.asarray(o).reshape(R, tpl.operands[k].per_row, -1) for k, o in enumerate(operands)]
+    key = (tpl.shared_specs, tpl.shared_recipes)
+    sv = (shared or {}).get(key)
+    if sv is None:
+        sv = _run(plan, tpl.shared_levels, tpl.shared_recipes, 1, {}, ops, weight)
+        if shared is not None:
+            shared[key] = sv
+    vals = _run(plan, tpl.levels, tpl.recipes, R, sv, ops, weight)
+    return {t.name: np.concatenate([(sv if t.shared else vals)[i][:, t.lo:t.hi] for i in t.at], axis=1).astype(WORD_DTYPES[t.dtype][0])
+            for t in tpl.targets}
+
+
+def _run(plan: Plan, levels: tuple, recipes: tuple, R: int, sv: Mapping[int, np.ndarray], ops: Sequence[np.ndarray],
+         weight: Callable[[str], np.ndarray]) -> dict[int, np.ndarray]:
+    """Position -> [R, leaves] of the Calls of `recipes` over R rows; `sv` the step-shared Values ("s") they read."""
     from verity.evaluation import evaluate_batch
     from verity_vllm.program.kernels import rows  # noqa: F401  -- registers the row kernels evaluate_batch picks
 
-    ops = [np.asarray(o).reshape(R, tpl.operands[k].per_row, -1) for k, o in enumerate(operands)]
     vals: dict[int, np.ndarray] = {}
 
     def part(x: tuple) -> np.ndarray:
@@ -542,23 +597,23 @@ def evaluate_template(plan: Plan, tpl: Template, R: int, operands: Sequence[np.n
             return vals[x[1]][:, x[2]:x[3]]
         if x[0] == "o":
             return ops[x[1]][:, x[2], x[3]:x[4]]
-        src = plan.literals[x[1]] if x[0] == "l" else weight(x[1])
+        src = sv[x[1]][0] if x[0] == "s" else plan.literals[x[1]] if x[0] == "l" else weight(x[1])
         return np.broadcast_to(src[x[2]:x[3]], (R, x[3] - x[2]))
 
     def arg(g: tuple) -> np.ndarray:
         parts = [part(x) for x in g]
         return parts[0] if len(parts) == 1 else np.concatenate([q.astype(np.uint64) for q in parts], axis=1)
 
-    for level in tpl.levels:
+    for level in levels:
         for spec, poss in level:
-            groups = list(zip(*(tpl.recipes[i] for i in poss)))
+            groups = list(zip(*(recipes[i] for i in poss)))
             arrays = ([arg(g[0]) for g in groups] if len(poss) == 1 else
                       [np.stack([arg(x) for x in g], axis=1).reshape(R * len(poss), -1) for g in groups])
             d = plan.definitions[spec][0]
             out = (_kernel_rows(d, spec, arrays) if spec in plan.kernel_only else evaluate_batch(d, *arrays)).reshape(R, len(poss), -1)
             for n, i in enumerate(poss):
                 vals[i] = out[:, n]
-    return {t.name: np.concatenate([vals[i][:, t.lo:t.hi] for i in t.at], axis=1).astype(WORD_DTYPES[t.dtype][0]) for t in tpl.targets}
+    return vals
 
 
 def _kernel_rows(d: Any, spec: str, arrays: Sequence[np.ndarray]) -> np.ndarray:

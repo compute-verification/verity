@@ -103,7 +103,8 @@ DENSE = [(f"{EMB}.weight", V * H, 16, f"Array<{V},Array<{H},Value<16>>>"), (f"{P
 def dense_program(embed=EMB, lp=LP, t=T, eps=EPS):
     """Per step (the prompt's `lp` rows, then one, `t` times): embed -> a post-feedforward norm chain (one input) -> an input-layernorm
     chain (x + residual, widened; `eps` its epsilon) -> the soft-capped logits of the last row -> TokenSelect; node-major rows, as the Build
-    writes a prefill.  `embed` = the module the embedding rows are named under.  Returns (Rows, {(step, "e" | "x" | "y"): Calls})."""
+    writes a prefill, each norm's `weight + 1` one Call of the step that every row reads.  `embed` = the module the embedding rows are named
+    under.  Returns (Rows, {(step, "e" | "x" | "y"): Calls})."""
     b, at = Rows(DENSE), {}
     sel = None
     for s in range(1 + t):
@@ -114,22 +115,22 @@ def dense_program(embed=EMB, lp=LP, t=T, eps=EPS):
 
         e = [b.add(s, f"Embedding_v1{{V={V},H={H}}}", f"{embed}/embedding_{s}[{k}]", [["p", 0, k, k + 1]] if s == 0 else [["n", sel, 0, 1]],
                    b.W(f"{EMB}.weight")) for k in ks]
-        a0 = each(f"AddScalarBf16_v1{{N={H},C={ONE}}}", f"{PF}/add_{s}", b.W(f"{PF}.weight"))
+        a0 = [["n", b.add(s, f"AddScalarBf16_v1{{N={H},C={ONE}}}", f"{PF}/add_{s}[0]", b.W(f"{PF}.weight")), 0, H]]
         sq = each(f"SquareBf16_v1{{N={H}}}", f"{PF}/pow_{s}", (e, H))
         mu = each(f"MeanTriton_v1{{N={H}}}", f"{PF}/mean_{s}", (sq, H))
         ve = each(f"AddScalarF32_v1{{N=1,C={EPS}}}", f"{PF}/add_1_{s}", (mu, 1))
         rs = each("RsqrtF32_v1{N=1}", f"{PF}/rsqrt_{s}", (ve, 1))
         sc = each(f"ScaleRowBf16_v1{{N={H}}}", f"{PF}/mul_{s}", (e, H), (rs, 1))
-        mv = each(f"MulVecF32_v1{{N={H}}}", f"{PF}/mul_1_{s}", (sc, H), (a0, H))
+        mv = each(f"MulVecF32_v1{{N={H}}}", f"{PF}/mul_1_{s}", (sc, H), a0)
         x = each(f"NarrowF32ToBf16_v1{{N={H}}}", f"{PF}/to_{s}/out", (mv, H))
-        b0 = each(f"AddScalarBf16_v1{{N={H},C={ONE}}}", f"{IL}/add_{s}", b.W(f"{IL}.weight"))
+        b0 = [["n", b.add(s, f"AddScalarBf16_v1{{N={H},C={ONE}}}", f"{IL}/add_{s}[0]", b.W(f"{IL}.weight")), 0, H]]
         ad = each(f"AddWidenedBf16_v1{{N={H}}}", f"{IL}/add_1_{s}", (x, H), (e, H))
         sq = each(f"SquareF32_v1{{N={H}}}", f"{IL}/pow_{s}", (ad, H))
         mu = each(f"MeanTriton_v1{{N={H}}}", f"{IL}/mean_{s}", (sq, H))
         ve = each(f"AddScalarF32_v1{{N=1,C={eps}}}", f"{IL}/add_2_{s}", (mu, 1))
         rs = each("RsqrtF32_v1{N=1}", f"{IL}/rsqrt_{s}", (ve, 1))
         sc = each(f"ScaleRowF32_v1{{N={H}}}", f"{IL}/mul_{s}", (ad, H), (rs, 1))
-        mv = each(f"MulVecF32_v1{{N={H}}}", f"{IL}/mul_1_{s}", (sc, H), (b0, H))
+        mv = each(f"MulVecF32_v1{{N={H}}}", f"{IL}/mul_1_{s}", (sc, H), b0)
         y = each(f"NarrowF32ToBf16_v1{{N={H}}}", f"{IL}/to_{s}/0", (mv, H))
         g = b.add(s, f"Gemm_v1{{K={H},N={V}}}", f"{LG}/triton_launch_{s}[0]", [["n", y[-1], 0, H]], b.W(f"{EMB}.weight"))
         dv = b.add(s, f"Bf16DivScalar_v1{{N={V},C={CAP}}}", f"{LG}/div_{s}[0]", [["n", g, 0, V]])
@@ -498,7 +499,8 @@ def _drive_pair(pair, com, src, order, rows_of=lambda e, rows: rows):
 
 def test_a_global_manifest_commits_every_requests_rows_packed_as_the_binding_map_splits_them(pair):
     """The runtime runs r1's rows first: every target is one packed tensor per engine step, and the binding map over the committed
-    layouts and `step_rows` binds each request's identity to its own rows -- the IR's words of that request's Program."""
+    layouts and `step_rows` binds each request's identity to its own rows (a step-shared target's one row to each) -- the IR's words of
+    that request's Program."""
     ids = CB.manifest_sites(pair.man)
     com, src = _dense_source(pair, pair.man, pair.root)
     assert src.plan.covered == src.plan.identities == len(ids) == 2 * (7 + 8 + 3) + 3 * (7 + 8 + 3)
@@ -509,6 +511,8 @@ def test_a_global_manifest_commits_every_requests_rows_packed_as_the_binding_map
     assert not com.errors, com.errors
     got = {(s, n): t for s, n, t in com.acquired}
     assert len(got) == len(com.acquired) == 3 * (7 + 8 + 3)
+    shared = [t.name for t in bodies[(0, PF[len("model."):])].targets if t.shared]         # `weight + 1`: one row, bound whole to each request
+    assert shared == [f"{PF[len('model.'):]}/add_0/out"] and tuple(got[(0, shared[0])].shape) == (1, H)
     layouts = {e: [types.SimpleNamespace(name=n, shape=list(t.shape), stream_off=0, first_leaf=0, chunk=256, nbytes=t.numel() * t.element_size(),
                                          dtype=str(t.dtype), ordinal=i) for i, ((s, n), t) in enumerate(sorted(got.items())) if s == e] for e in range(3)}
     order = {"w-r0": "r0", "w-r1": "r1"}
