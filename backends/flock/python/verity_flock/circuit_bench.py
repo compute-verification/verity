@@ -180,7 +180,7 @@ def result(a, input_set, low, p: dict, sweep: dict, pin: str) -> dict:
     # a GEMM coordinate's result names its campaign target and K, as flock-pure's cells do (bench.PROFILES)
     gemm = sub.template.id == "gemm-coordinate"
     fp = contract.fingerprint(
-        profile=PROFILES["bf16-ampere"] if gemm else None, domain="finite", K=int(sub.params["K"]) if gemm else None, B=n, proof_class="NON_ZK_PROOF", authentication="included-hash", zk_mode="none",
+        profile=PROFILES["bf16-ampere"] if gemm else None, domain=low.domain, K=int(sub.params["K"]) if gemm else None, B=n, proof_class="NON_ZK_PROOF", authentication="included-hash", zk_mode="none",
         security={"target": -128, "achieved_log2": PER_PROOF_LOG2 + math.log2(len(p["subbatches"])), "per_proof_log2": PER_PROOF_LOG2,
                   "proofs": len(p["subbatches"]), "union": "union bound over the batch's sequential sub-batch proofs",
                   "profile": "flock-128-r2", "reps": 2, "per_rep_log2": -97.8, "commitments": "one root per proof, bound by both reps (R1)",
