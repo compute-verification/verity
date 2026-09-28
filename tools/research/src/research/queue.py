@@ -203,10 +203,12 @@ def grant_target(pr: int, head: str) -> str:
 
 
 class StoreGrants:
-    """Grants from the evidence store: `grant` labels on `pr:{n}@{head}`, pulled from the remote first when there is one."""
+    """Grants from the evidence store: `grant` labels on `pr:{n}@{head}`, pulled from the remote first when there is one.  With
+    no remote configured it says so once, since every mark and grant made on another machine is then missing, and `not marked
+    ready` would read as the PR's state (ci, 2 Oct: a VM that had lost its secrets)."""
 
     def __init__(self, store, log: Callable[[str], None] = print):
-        self.store, self.log = store, log
+        self.store, self.log, self._told = store, log, False
 
     def __call__(self, pr: int, head: str) -> set[str]:
         return {str(lab.value) for lab in self._labels(pr, head, vocab.GRANT)}
@@ -218,6 +220,10 @@ class StoreGrants:
         from .store import labels_sync
 
         target = grant_target(pr, head)
+        if self.store.remote is None and not getattr(self.store, "remote_error", None) and not self._told:
+            self._told = True
+            self.log("research queue: no evidence-store remote is configured here (are the R2 secrets set?): answering from the "
+                     "local labels, without the ready marks and grants made on other machines")
         labels_sync.read_through(self.store, [target], lambda s: self.log(f"research queue: {s}"))
         return self.store.labels(target, key=key)
 

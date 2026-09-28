@@ -283,7 +283,7 @@ class FakeBroker:
     """The broker's route as a transport: checks the identity and the allowlist, then answers from the FakeSlack state."""
 
     def __init__(self, state: FakeSlack):
-        self.state, self.requests, self.identities, self.fail = state, [], [], None
+        self.state, self.requests, self.identities, self.fail, self.valid = state, [], [], None, OIDC
 
     def oidc(self, aud: str) -> str:
         self.identities.append(aud)
@@ -294,7 +294,7 @@ class FakeBroker:
         self.requests.append((url, req, headers))
         if self.fail:
             raise self.fail
-        if headers.get("Authorization") != f"Bearer {OIDC}":
+        if headers.get("Authorization") != f"Bearer {self.valid}":
             raise http_error(401, {"error": "invalid_identity"})
         if req["method"] not in slack.BROKER_METHODS:
             raise http_error(403, {"error": "method_not_allowed"})
@@ -374,6 +374,24 @@ def test_broker_failures_are_clear_exit_2_and_never_show_the_identity(broker, re
     rc, out, err = run(capsys, "pickup", "--thread", "1.0")
     assert rc == 2 and says in err and err.startswith("research msg: reactions.add: ")
     assert OIDC not in out + err
+
+
+def test_a_long_running_client_gets_a_new_identity_once_the_broker_rejects_its_cached_one(broker, monkeypatch):
+    issued = iter(["t1", "t2", "t3", "t4"])
+    monkeypatch.setattr(slack, "oidc_token", lambda aud: next(issued))
+    auths = lambda: [h["Authorization"].split()[1] for _, _, h in broker.requests]
+    api, broker.valid = slack.Slack(None), "t1"
+    api.call("chat.postMessage", channel=COORD, text="first")
+    broker.valid = "t2"                                                                     # t1 expired (Cursor's live 300 s)
+    api.call("chat.postMessage", channel=COORD, text="second")
+    assert auths() == ["t1", "t1", "t2"] and [m["text"] for m in broker.state.messages[COORD]] == ["first", "second"]
+    broker.valid = "none"
+    with pytest.raises(slack.SlackError, match=re.escape("rejected this agent's Cursor identity (HTTP 401 invalid_identity)")):
+        api.call("chat.postMessage", channel=COORD, text="third")
+    assert auths()[3:] == ["t2", "t3"]                                                     # one retry, then the error stands
+    with pytest.raises(slack.SlackError):
+        slack.Slack(None).call("chat.postMessage", channel=COORD, text="fresh")
+    assert auths()[5:] == ["t4"]                                                           # a token just issued isn't retried
 
 
 def test_a_slack_error_through_the_broker_is_slacks_own(broker, registry, capsys):
@@ -659,12 +677,14 @@ class FakeRoute:
 
     def __init__(self):
         self.mode, self.resolve, self.requests, self.statuses, self.answer = "fields", False, [], [], None
+        self.auths, self.valid = [], OIDC
 
     def handle(self, method: str, path: str, body: dict | None, auth: str) -> tuple[int, dict]:
         self.requests.append((method, path, body))
+        self.auths.append(auth)
         if self.answer:
             return self.answer
-        if auth != f"Bearer {OIDC}":
+        if auth != f"Bearer {self.valid}":
             return 401, {"error": "invalid_identity"}
         if method == "POST" and path == "/api/agent-approvals":
             if self.mode == "old" and not body.get("title"):
@@ -755,6 +775,17 @@ def test_a_route_without_the_fields_gets_the_old_shape_with_the_card_in_its_text
     assert "*Default:* Looks right (`yes`), which applies at the deadline" in old["text"]
     assert "*Deadline:* 3:00 PM PDT, Wed 30 Sep" in old["text"] and "reply in the thread" in old["text"]
     assert "HTTP 400 title_required" in err and "the old shape" in err and "`yes` applies, and you record it" in err
+
+
+def test_a_card_polled_past_its_identitys_life_gets_a_new_one(route, monkeypatch):
+    issued = iter(["t1", "t2"])
+    monkeypatch.setattr(slack, "oidc_token", lambda aud: next(issued))
+    route.statuses, route.valid = [{"status": "pending"}], "t1"
+    ask = slack.AskDaniel()
+    assert ask.call("GET", "/42")["status"] == "pending"
+    route.valid = "t2"
+    assert ask.call("GET", "/42")["status"] == "pending"
+    assert route.auths == ["Bearer t1", "Bearer t1", "Bearer t2"]
 
 
 def test_only_a_400_falls_back(route, registry, capsys):
@@ -1060,6 +1091,26 @@ def test_inbox_read_shows_unread_doorbells_urgent_first_and_marks_them_read(fake
     rc, out, _ = run(capsys, "inbox", "read", "--as", "vllm-epoch-run", "--urgent")
     assert rc == 1 and out.strip() == "SLACK @vllm-epoch-run: nothing new"
     assert box
+
+
+def test_read_as_since_rereads_the_doorbells_after_ts_and_never_moves_the_mark_back(fake, registry, routes_dirs, capsys):
+    inbox(fake, routes_dirs, "vllm-epoch-run")
+    run(capsys, "ask", "--as", "circuits", "--to", "@vllm-epoch-run", "--text", "first")
+    run(capsys, "ask", "--as", "circuits", "--to", "@vllm-epoch-run", "--text", "second")
+    run(capsys, "ask", "--as", "circuits", "--to", "@vllm-epoch-run", "--text", "third")
+    rc, out, _ = run(capsys, "read", "--as", "vllm-epoch-run", "--json")
+    first, second, third = json.loads(out)
+    assert rc == 0 and "third" in third["text"]
+    rc, out, _ = run(capsys, "read", "--as", "vllm-epoch-run", "--since", first["ts"], "--json")
+    assert rc == 0 and [m["ts"] for m in json.loads(out)] == [second["ts"], third["ts"]]
+    assert json.loads(run(capsys, "read", "--as", "vllm-epoch-run", "--json")[1]) == []
+    assert slack.seen_path("vllm-epoch-run").read_text().strip() == third["ts"]
+    slack.mark_read("vllm-epoch-run", [second])
+    assert slack.seen_path("vllm-epoch-run").read_text().strip() == third["ts"]
+    rc, _, err = run(capsys, "read", "--thread", first["ts"], "--since", first["ts"])
+    assert rc == 2 and "neither --since nor --as" in err
+    rc, _, err = run(capsys, "read")
+    assert rc == 2 and "one of --thread TS, --since TS or --as NAME" in err
 
 
 def test_traffic_counts_doorbells_and_reports_dropped_names_and_unanswered_asks(fake, registry, routes_dirs, capsys):

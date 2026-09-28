@@ -1,5 +1,6 @@
-import Pous.Accounting.LemmaA
-import Pous.Model.Inc
+import Pous.Protocol.Accounting.LemmaA
+import Pous.Protocol.Model.Inc
+import Pous.Assumptions.P2
 
 /-!
 # Named assumptions
@@ -15,7 +16,7 @@ open scoped ENNReal
 challenge, `(D, Q)` per answer) obeys the M1 completion bound with a domain of `Mdom` points. For every `g` and `λ'`
 with `|Hist| · Γ_M1(g) ≤ 2^-λ'`, `Pr[pass] ≤ ((g − 1)/B)^k + 2^-λ'`.
 
-For the M1 scheme with `Mdom = 2^ℓ` it follows from A2 and A3′ (`Pinned.A2LemmaAM1`, `Pinned.A3PrimeLam` with
+For the M1 scheme with `Mdom = 2^ℓ` it follows from A2 and A3′ (`Guarantees.A2LemmaAM1`, `Guarantees.A3PrimeLam` with
 `G = True`). For a scheme whose blocks share a primitive (models M2/M3, RW–SMS) it is the conjecture that the sharing
 costs nothing beyond M1's bound. -/
 def B1Prime {M : IdealModel} (sch : Scheme M) (Mdom S D Q k : ℕ) : Prop :=

@@ -160,28 +160,32 @@ def test_the_sha256_hash_is_expr_hash_s_equivalence(tmp_path):
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_moved_declarations_are_compared_under_their_old_names(tmp_path):
     """`Facts.lean`'s renaming and unfolding on a real build: a pin restated as a `Prop` definition (its old theorem kept as
-    the lemma that proves it) and a pin renamed, both the same statement, a definition renamed with its content and one
-    renamed with a new body; then a statement that reads a moved definition beside one that has its old name, which the
-    audit refuses."""
+    the lemma that proves it), one whose statement holds a proof Lean abstracts out of a definition (`_proof_1`), and a
+    pin renamed, all the same statement, a definition renamed with its content and one renamed with a new body; then a
+    statement that reads a moved definition beside one that has its old name, which the audit refuses."""
     pkg = tmp_path / "control"
     shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
     (pkg / "Control.lean").write_text((pkg / "Control.lean").read_text() + "import Control.Moves\n")
     moves = pkg / "Control" / "Moves.lean"
+    fin = "(⟨n, Nat.lt_succ_of_le (Nat.le_refl n)⟩ : Fin (n + 1)).val = n"
     moves.write_text("namespace Control\ndef f (n : Nat) : Nat := n + 0\ndef g (n : Nat) : Nat := n\n"
-                     "theorem a (n : Nat) : f n = n := rfl\ntheorem b (n : Nat) : g n = n := rfl\nend Control\n")
-    A.dump(pkg, A.load(pkg) | {"pins": {"Control.main_thm": {}, "Control.a": {}, "Control.b": {}}})
+                     "theorem a (n : Nat) : f n = n := rfl\ntheorem b (n : Nat) : g n = n := rfl\n"
+                     f"theorem c (n : Nat) : {fin} := rfl\nend Control\n")
+    A.dump(pkg, A.load(pkg) | {"pins": {"Control.main_thm": {}, "Control.a": {}, "Control.b": {}, "Control.c": {}}})
     build = lambda: subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
     audit = lambda **kw: A.audit(pkg, tmp_path / "out", update=True, replay=False, runs=False, log=lambda *_: None, **kw)
     build()
     assert audit()["failures"] == []
     before = (pkg / A.POLICY).read_text()
-    moved = {"Control.a": "Control.SecurityProofs.a", "Control.b": "Control.SecurityProofs.b", "Control.f": "Control.Protocol.f",
-             "Control.g": "Control.Protocol.g"}
+    moved = {"Control.a": "Control.SecurityProofs.a", "Control.b": "Control.SecurityProofs.b",
+             "Control.c": "Control.SecurityProofs.c", "Control.f": "Control.Protocol.f", "Control.g": "Control.Protocol.g"}
     after = ("def Control.Protocol.f (n : Nat) : Nat := n + 0\ndef Control.Protocol.g (n : Nat) : Nat := 0 + n\n"
              "def Control.Guarantees.A : Prop := ∀ n, Control.Protocol.f n = n\n"
              "theorem Control.a (n : Nat) : Control.Protocol.f n = n := rfl\n"
              "theorem Control.SecurityProofs.a : Control.Guarantees.A := Control.a\n"
-             "theorem Control.SecurityProofs.b (n : Nat) : Control.Protocol.g n = n := Nat.zero_add n\n")
+             "theorem Control.SecurityProofs.b (n : Nat) : Control.Protocol.g n = n := Nat.zero_add n\n"
+             f"def Control.Guarantees.C : Prop := ∀ n : Nat, {fin}\ntheorem Control.c (n : Nat) : {fin} := rfl\n"
+             "theorem Control.SecurityProofs.c : Control.Guarantees.C := Control.c\n")
     moves.write_text(after)
     build()
     rep = audit(moved=moved)
@@ -189,6 +193,7 @@ def test_moved_declarations_are_compared_under_their_old_names(tmp_path):
     must = A.statement_changes(rep["review"])
     assert set(rep["review"]) - set(must) == {
         f"pin Control.SecurityProofs.a: moved from Control.a, restated as Control.Guarantees.A: {A.MOVED}",
+        f"pin Control.SecurityProofs.c: moved from Control.c, restated as Control.Guarantees.C: {A.MOVED}",
         f"pin Control.SecurityProofs.b: moved from Control.b: {A.MOVED}", f"reads: 1 {A.MOVED_READS}"}
     assert must[0] == ("definition Control.Protocol.g (Control.Moves), was Control.g (Control.Moves), read by "
                        "Control.SecurityProofs.b: changed") and must[-1] == "    def Control.Protocol.g (n : Nat) : Nat := 0 + n"

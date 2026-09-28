@@ -1,5 +1,5 @@
 name = "pous"
-defaultTargets = ["Pous", "PousProofs"]
+defaultTargets = ["Pous"]
 
 [leanOptions]
 autoImplicit = false
@@ -12,10 +12,6 @@ rev = "5ed2965256430c3649e86755f9576b54eca72435"
 
 [[lean_lib]]
 name = "Pous"
-
-# Proofs of the pinned statements and the results beside them, checked by `tools/lean/audit.py` (`lean-audit.json`).
-[[lean_lib]]
-name = "PousProofs"
 
 # The open targets (`sorry`). Not a default target.
 [[lean_lib]]

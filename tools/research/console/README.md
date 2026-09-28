@@ -15,11 +15,12 @@ on a host.
   `scripts/overnight-dashboard.py`, and the `research` package. `console-loop.sh` is the loop, started at boot by the pod's
   `/post_start.sh`; it reads the R2 credentials from `/root/.config/verity/r2.env` and the store from `/workspace/steward/store`.
 
-Deploy to vy-nebius-1:
+Deploy to vy-nebius-1 with `research deploy` (`pods/nebius/deploy.toml` lists the two scripts and both units; it reloads systemd
+after a unit changes, and the timer's next pass runs the new files):
 
 ~~~sh
-scp tools/research/console/{verity_console.py,util_collect.py} research@vy-nebius-1:/workspace/research/console/
-sudo cp infra/nebius/verity-console.{service,timer} /etc/systemd/system/ && sudo systemctl daemon-reload
+research deploy install vy-nebius-1 tools/research/console/{verity_console.py,util_collect.py} \
+    infra/nebius/verity-console.{service,timer} --ref origin/main --by WHO
 ~~~
 
 Deploy to the control pod (`vy-control-verity`, `nv7h6w1pairkcu`). The loop runs `verity_console.py` fresh each time, so the next

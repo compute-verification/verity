@@ -84,6 +84,15 @@ theorem sum_card_gates : ∑ u, (P.gates u).card = C.computed.card := by
     rw [mem_gates] at hu hv
     exact Option.some_injective _ (hu.symm.trans hv)
 
+/-- A unit's gates are computed gates. -/
+theorem gates_subset_computed (u : Fin n) : P.gates u ⊆ C.computed := fun g hg => by
+  simp only [Circuit.computed, Finset.mem_filter, Finset.mem_univ, true_and]
+  cases h : C.isInput g
+  · rfl
+  · rw [← P.input_iff] at h
+    rw [P.mem_gates, h] at hg
+    cases hg
+
 theorem mem_committed_of_read {g h : Fin C.N} (hg : g ∈ C.reads h) (hne : P.unit h ≠ P.unit g) :
     g ∈ P.committed := by
   simp only [committed, Finset.mem_filter, Finset.mem_univ, true_and]

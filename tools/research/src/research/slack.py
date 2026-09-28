@@ -295,6 +295,26 @@ def oidc_token(aud: str) -> str:
     return token
 
 
+class _Identity:
+    """This agent's OIDC token for one audience, fetched when first needed and again when the server rejects a cached one.
+    Cursor's tokens live 300 s, so a long-running client's (a relay, `ask-daniel --wait`) goes stale; a 401 means the server
+    refused before acting, so the one retry can't post or file anything twice."""
+
+    def __init__(self, aud: str):
+        self.aud, self.token = aud, None
+
+    def send(self, request: Callable[[str], Any]) -> Any:
+        cached = self.token is not None
+        self.token = self.token or oidc_token(self.aud)
+        try:
+            return request(self.token)
+        except urllib.error.HTTPError as e:
+            if e.code != 401 or not cached:
+                raise
+        self.token = oidc_token(self.aud)
+        return request(self.token)
+
+
 def via(token: str | None) -> str:
     """`direct` (the bot token, to Slack) or `broker`: the broker only without a token, or when RESEARCH_SLACK_VIA says so."""
     forced = os.environ.get("RESEARCH_SLACK_VIA", "")
@@ -335,7 +355,7 @@ class Slack:
     def __init__(self, token: str | None, *, base: str | None = None, dry_run: bool = False, log=None, transport=None):
         self.via = via(token)
         self.token = token if self.via == "direct" else None
-        self.dry_run, self.log, self.transport, self._oidc = dry_run, log, transport or post, None
+        self.dry_run, self.log, self.transport, self._oidc = dry_run, log, transport or post, _Identity(BROKER)
         self.base = (base or os.environ.get("SLACK_API_URL") or DEFAULT_API).rstrip("/") + "/"
         if not dry_run and self.via == "direct" and not token:
             raise SlackError("SLACK_BOT_TOKEN is not set (a Cursor secret; see the using-slack skill), or pass --dry-run")
@@ -371,8 +391,7 @@ class Slack:
         body = json.dumps({"method": method, "args": args}).encode()
         if len(body) > BROKER_MAX_BODY:
             raise SlackError(f"{method}: {len(body)} bytes is more than the broker takes ({BROKER_MAX_BODY}); put the content in a file and link it")
-        self._oidc = self._oidc or oidc_token(BROKER)
-        return self.transport(BROKER, body, {"Authorization": f"Bearer {self._oidc}", "Content-Type": "application/json"})
+        return self._oidc.send(lambda t: self.transport(BROKER, body, {"Authorization": f"Bearer {t}", "Content-Type": "application/json"}))
 
     def paged(self, method: str, key: str, limit: int | None = None, **params: Any) -> list[dict]:
         items: list[dict] = []
@@ -1172,6 +1191,10 @@ def cmd_verify_author(ns: argparse.Namespace, reg: dict) -> int:
 
 
 def cmd_read(ns: argparse.Namespace, reg: dict) -> int:
+    if ns.thread and (ns.since or ns.handle):
+        raise SlackError("read: --thread reads one thread; it takes neither --since nor --as")
+    if not (ns.thread or ns.since or ns.handle):
+        raise SlackError("read: one of --thread TS, --since TS or --as NAME is required")
     if ns.handle:
         name = ns.handle.lstrip("@")
         r = routes_of(ns).get_route(name, fresh=name not in routes_of(ns).local)
@@ -1296,18 +1319,23 @@ def seen_path(name: str) -> Path:
     return Path(os.environ.get("RESEARCH_SLACK_SEEN") or Path.home() / ".research" / "slack-seen") / name
 
 
-def unread(api: Slack, r: dict) -> list[dict]:
+def unread(api: Slack, r: dict, since: str | None = None) -> list[dict]:
+    """The doorbells after `since`, else after the last one this machine marked read."""
     p = seen_path(r["name"])
-    seen = p.read_text().strip() if p.is_file() else "0"
+    seen = since or (p.read_text().strip() if p.is_file() else "0")
     msgs = api.paged("conversations.replies", "messages", channel=r.get("channel"), ts=r["inbox_ts"], oldest=seen)
     return [m for m in msgs if m.get("ts") not in (r["inbox_ts"], seen) and float(m["ts"]) > float(seen)]
 
 
 def mark_read(name: str, msgs: list[dict]) -> None:
+    """Only ever forward: a read from an older --since leaves the newer mark."""
     if msgs:
         p = seen_path(name)
+        new = max((m["ts"] for m in msgs), key=float)
+        if p.is_file() and float(p.read_text().strip() or 0) >= float(new):
+            return
         p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(max((m["ts"] for m in msgs), key=float) + "\n")
+        p.write_text(new + "\n")
 
 
 def render_unread(name: str, msgs: list[dict]) -> str:
@@ -1322,8 +1350,9 @@ def render_unread(name: str, msgs: list[dict]) -> str:
 def inbox_read(ns: argparse.Namespace, reg: dict, r: dict) -> int:
     r = {**r, "channel": r.get("channel") or channel_id(ns, reg, FRONT_DOOR)}
     api = client(ns)
-    msgs = unread(api, r)
-    dig = digest(api, reg, routes_of(ns), r) if any(s.get("deliver", "digest") == "digest" for s in r.get("subscriptions") or []) else None
+    since = getattr(ns, "since", None)
+    msgs = unread(api, r, since)
+    dig = digest(api, reg, routes_of(ns), r, since) if any(s.get("deliver", "digest") == "digest" for s in r.get("subscriptions") or []) else None
     if ns.json:
         print(json.dumps(msgs if dig is None else {"doorbells": msgs, "digest": dig}, indent=2, ensure_ascii=False))
     else:
@@ -1362,10 +1391,11 @@ DIGEST_FIRST_H = 24                                              # a first diges
 DIGEST_THREADS_D = 7                                             # replies count in threads started this recently
 
 
-def digest(api: Slack, reg: dict, routes: Routes, r: dict) -> list[dict]:
-    """The posts since `r`'s last digest that its `digest` subscriptions match (what's addressed to it came as doorbells)."""
+def digest(api: Slack, reg: dict, routes: Routes, r: dict, since_ts: str | None = None) -> list[dict]:
+    """The posts since `since_ts`, else since `r`'s last digest, that its `digest` subscriptions match (what's addressed to it
+    came as doorbells)."""
     p = seen_path(f"{r['name']}.digest")
-    since = float(p.read_text().strip()) if p.is_file() else _now().timestamp() - DIGEST_FIRST_H * 3600
+    since = float(since_ts) if since_ts else float(p.read_text().strip()) if p.is_file() else _now().timestamp() - DIGEST_FIRST_H * 3600
     ch, inboxes, book = r["channel"], routes.inboxes(), {r["name"]: r}
     picked = []
 
@@ -1612,15 +1642,14 @@ class AskDaniel:
 
     def __init__(self):
         self.base = (os.environ.get("RESEARCH_ASK_DANIEL_URL") or ASK_DANIEL).rstrip("/")
-        self._oidc: str | None = None
+        self._oidc = _Identity(ASK_DANIEL)
 
     def call(self, method: str, path: str = "", body: dict | None = None) -> dict:
-        self._oidc = self._oidc or oidc_token(ASK_DANIEL)
         data = None if body is None else json.dumps(body).encode()
-        headers = {"Authorization": f"Bearer {self._oidc}", **({"Content-Type": "application/json"} if data else {})}
+        ctype = {"Content-Type": "application/json"} if data else {}
         what = f"{method} {ASK_DANIEL}{path}"
         try:
-            out = http_json(method, self.base + path, data, headers)
+            out = self._oidc.send(lambda t: http_json(method, self.base + path, data, {"Authorization": f"Bearer {t}", **ctype}))
         except urllib.error.HTTPError as e:
             raise RouteError(route_error(what, e), e.code) from None
         except (urllib.error.URLError, OSError, ValueError) as e:
@@ -1816,11 +1845,10 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p = cmd("verify-author", "exit 0 only when the post's author is in the registry")
     p.add_argument("--event", required=True, help="the message event as JSON, @PATH or - (stdin)")
     p.add_argument("--why", action="store_true", help="print the verdict on stderr")
-    p = cmd("read", "a thread, the channel since TS, or (--as) what reached NAME since it last read")
-    g = p.add_mutually_exclusive_group(required=True)
-    g.add_argument("--thread", default=None, metavar="TS")
-    g.add_argument("--since", default=None, metavar="TS")
-    g.add_argument("--as", dest="handle", default=None, metavar="NAME", help="NAME's unread doorbells, then its digest")
+    p = cmd("read", "a thread, the channel since TS, or (--as) what reached NAME since it last read (or since TS)")
+    p.add_argument("--thread", default=None, metavar="TS")
+    p.add_argument("--since", default=None, metavar="TS", help="the channel since TS; with --as, NAME's doorbells and digest since TS")
+    p.add_argument("--as", dest="handle", default=None, metavar="NAME", help="NAME's unread doorbells, then its digest")
     p.add_argument("--limit", type=int, default=None)
     p.add_argument("--peek", action="store_true", help="--as: don't mark them read")
     p.add_argument("--urgent", action="store_true", help="--as: exit 1 unless an unread doorbell is URGENT")

@@ -10,11 +10,11 @@ PASS. With `POUS_GRADE_MEMORY_MB` set, as `grade.sh` sets it, that is Lean's res
 the kernel checks during the replay.
 
 1. The trusted environment is the submission's imports without the submission. TARGET must be in `pinnedTargets`
-   and be a definition of type `Prop` in namespace `Pous.Pinned` there.
+   and be a definition of type `Prop` in namespace `Pous.Guarantees` there.
 2. Every constant the submission adds is replayed through the kernel on top of the trusted environment, so a
    declaration that skipped kernel checking (the kernel-skipping debug option, environment tampering) is rejected here.
 3. In the replayed environment, `solution` must be a universe-monomorphic theorem whose type is the constant TARGET
-   itself, as `theorem solution : Pous.Pinned.NAME` elaborates. The comparison is syntactic: deciding definitional
+   itself, as `theorem solution : Pous.Guarantees.NAME` elaborates. The comparison is syntactic: deciding definitional
    equality against a near-miss statement can keep the kernel unfolding without bound.
 4. Every axiom `solution` depends on must be in `allowedAxioms`. The axioms are collected from the replayed
    environment with no environment extensions loaded, so nothing the submission's own compilation recorded is
@@ -27,7 +27,7 @@ open Lean
 @[extern "lean_internal_set_max_memory"] opaque setMaxMemory (max : USize) : BaseIO Unit
 
 def solutionName : Name := `solution
-def pinnedPrefix : Name := `Pous.Pinned
+def pinnedPrefix : Name := `Pous.Guarantees
 
 def report (file target : String) (pass : Bool) (reason : String) (axioms : Array Name := #[]) : IO UInt32 := do
   IO.println <| Json.compress <| Json.mkObj
