@@ -1363,7 +1363,8 @@ def main(argv: list[str]) -> int:
         print(f"check: CACHE CONTRADICTED in {c['suite']}: {', '.join(c['contradicts'][:5])} failed fresh, and a cached pass answers for it",
               flush=True)
     for c in flaky:
-        print(f"check: NONDETERMINISTIC in {c['suite']}: {', '.join(c['nondeterministic'][:5])} passed and failed under one key", flush=True)
+        print(f"check: NONDETERMINISTIC in {c['suite']}: {', '.join(c['nondeterministic'][:5])} passed and failed under one key: "
+              "delete each (a flaky test is deleted, not rerun or fixed)", flush=True)
     if run_dir is not None:
         if before is not None:
             verdicts["out"] = {"file": "verdicts.tar.gz", "entries": VERDICTS.export(run_dir / "verdicts.tar.gz", before)}
