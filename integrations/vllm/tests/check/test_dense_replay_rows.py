@@ -7,6 +7,7 @@ import numpy as np
 from tests.acquire.call_boundary_programs import DENSE, LP, PF, build_dir, dense_program
 from verity.evaluation import evaluate
 from verity.ir.defs import bind
+from verity_vllm.check.replay import coverage as COV
 from verity_vllm.check.replay.driver import manifest_query
 from verity_vllm.check.replay.index import ProgramIndex
 from verity_vllm.check.replay.population import population
@@ -72,6 +73,31 @@ def test_gelu_tanh_mul_at_gemma_width_and_its_declines():
     with pytest.raises(ir_rows.Declined, match="past"):
         ROWS["GeluTanhMul_v1"].fn({"I": ir_rows.MAX_WORDS}, [np.zeros(2 * ir_rows.MAX_WORDS, dtype=np.uint16)])
 
+
+def test_a_norm_scale_manifest_addresses_every_rsqrt_row_where_it_is_committed(tmp_path):
+    """Under the norm-scale policy (a Commit with the norm tap) the ATen norm's `RsqrtF32{N=1}` output is `<norm module>/norm_scale`,
+    family norm_scales: the replay's index spells it so, and every row's address is one the manifest names."""
+    b, _at = dense_program()
+    doc = b.doc(LP)
+    pdir, man = build_dir(tmp_path, doc, [PF[len("model."):]], norm_scales=True)
+    named = {(i["op_path"], i["output_member"]) for i in man["identities"]}
+    scales = {(i["op_path"], i["output_member"]) for i in man["identities"] if i["family"] == "norm_scales"}
+    assert scales and {m for _o, m in scales} == {"norm_scale"}
+
+    def addresses(pi):
+        return {(d["op_path"], m[0]) for r in doc["rows"] if (d := pi.describe(r)) for m in d["members"]}
+
+    q = manifest_query(man)
+    assert addresses(ProgramIndex(doc, program_dir=pdir, query=q, norm_scales=True)) <= named
+    assert not addresses(ProgramIndex(doc, program_dir=pdir, query=q)) <= named
+    at: dict = {}
+    vus, ne, _nef = population(ProgramIndex(doc, program_dir=pdir, query=q, norm_scales=True), "r0", addresses=at)
+    assert "RsqrtF32_v1" in {v["family"] for v in vus} and not [w for w in ne if "no registered evaluator" in w], dict(ne)
+    qp = COV.query_population(man, at, set(), ranks=[0])
+    checks = qp["query_checks"]
+    assert checks["vus_outside_query"]["n"] == 0 and checks["identities_without_rows"]["n"] == 0 and checks["accounted"], checks
+    assert qp["sampled_strata"]["by_family_reached"]["norm_scales"] == qp["query_total"]["by_family"]["norm_scales"]
+    assert "norm_scales" not in {u["family"] for u in qp["uncovered_by_name"]}
 
 
 def test_a_one_output_row_is_compared_under_its_one_member_however_the_module_spells_it(monkeypatch):
