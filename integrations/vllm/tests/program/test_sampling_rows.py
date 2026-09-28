@@ -214,6 +214,30 @@ def test_nv_logf_and_nv_log1pf_are_word_equal_to_the_libdevice_transcriptions_on
             assert l2 == rl2, ("nv_log1pf v1 model", hex(x), hex(l2), hex(rl2))
 
 
+def test_the_logs_outside_their_domain_are_one_pinned_nan_on_every_path():
+    """`__nv_logf` of a negative word and `__nv_log1pf` of a word below -1 (-inf included) are libdevice's invalid -inf + inf:
+    `sampling.LOG_INVALID_NAN` on the scalar lane, the rows twin and the float32 transcription alike, whatever the host's default
+    NaN. -0 and the negative subnormals (flushed to -0) keep logf's -inf, and log1pf keeps -0 at -0 and -inf at -1."""
+    from verity_vllm.program.kernels import libdevice_sampling as L
+
+    rng = np.random.default_rng(5)
+    edges = [0x80000000, 0x80000001, 0x807FFFFF, 0x80800000, 0xBF7FFFFF, 0xBF800000, 0xBF800001, 0xFF7FFFFF, 0xFF800000]
+    a = np.concatenate([rng.integers(0x80000001, 0xFF800001, size=20000, dtype=np.uint64).astype(np.uint32),
+                        np.array(edges, dtype=np.uint32)])
+    tr = {"nv_logf": L.nv_logf(a.view(np.float32)).view(np.uint32), "nv_log1pf": L.nv_log1pf(a.view(np.float32)).view(np.uint32)}
+    for name, domain_ok in (("nv_logf", lambda x: (x & 0x7FFFFFFF) < 0x00800000), ("nv_log1pf", lambda x: x <= 0xBF800000),
+                            ("nv_log1pf_v1_model", lambda x: x <= 0xBF800000)):
+        rows = getattr(SR, name)(a)
+        for i, x in enumerate(a.tolist()):
+            want = getattr(SP, name)(x)
+            assert int(rows[i]) == want, (name, hex(x), hex(int(rows[i])), hex(want))
+            if name in tr:
+                assert int(tr[name][i]) == want, (name, "transcription", hex(x), hex(int(tr[name][i])), hex(want))
+            assert domain_ok(x) or want == SP.LOG_INVALID_NAN, (name, hex(x), hex(want))
+    assert (SP.nv_logf(0x80000000), SP.nv_logf(0x807FFFFF), SP.nv_log1pf(0x80000000), SP.nv_log1pf(0xBF800000)) == \
+        (0xFF800000, 0xFF800000, 0x80000000, 0xFF800000)
+
+
 def test_philox_stream_key_and_the_noise_row_match_the_scalar_registry_lane_for_lane():
     for seed, pos in ((942961759, 7), (1, 1023), ((1 << 63) - 1, (1 << 40) + 5), (-5 & ((1 << 64) - 1), 0), (509133774, 107)):
         k = SP.stream_key(seed, pos)
