@@ -53,6 +53,36 @@ pub const HM_NET: &str = "hm96";
 pub const PER_SLOT: usize = 3;
 /// META's bindings (what the statement binds about the circuit): a class leaves them out.
 pub const BINDING_KEYS: [&str; 3] = ["partition", "program_sha512", "program_digests"];
+/// `Stmt.InRange` as the pinned table-soundness theorems prove it (`FlockSoundness/Accounting/Fast100.lean`): `k_log <= 26`,
+/// at most 1,024 public regions, at most 64 link-point coordinates; with PROTOCOL.md §16.5's `m <= 35`. A statement outside it
+/// is refused, so an accepted statement is one the pins cover.
+pub const IN_RANGE_K_LOG: usize = 26;
+pub const IN_RANGE_REGIONS: usize = 1024;
+pub const IN_RANGE_M_PTS: usize = 64;
+pub const M_MAX: usize = 35;
+
+/// A circuit file's part of `Stmt.InRange`: its block size and its public regions.
+pub fn circuit_in_range(k_log: usize, regions: usize) -> Result<(), String> {
+    if k_log > IN_RANGE_K_LOG {
+        return Err(format!("k_log {k_log}: outside the proved range (Stmt.InRange: k_log <= {IN_RANGE_K_LOG})"));
+    }
+    if regions > IN_RANGE_REGIONS {
+        return Err(format!("{regions} public regions: outside the proved range (Stmt.InRange: at most {IN_RANGE_REGIONS})"));
+    }
+    Ok(())
+}
+
+/// The instance count's part: the dense size `m = k_log + nbl` (PROTOCOL.md §16.5) and the link points' coordinates.
+pub fn shape_in_range(m: usize, m_pts: usize) -> Result<(), String> {
+    if m > M_MAX {
+        return Err(format!("m = {m}: outside the spec's shape (m <= {M_MAX})"));
+    }
+    if m_pts > IN_RANGE_M_PTS {
+        return Err(format!("{m_pts} link-point coordinates: outside the proved range (Stmt.InRange: at most {IN_RANGE_M_PTS})"));
+    }
+    Ok(())
+}
+
 pub const PARTITION_V1: &str = "verity/partition/v1";
 pub const PARTITION_PROVISIONAL: &str = "flock-circuit/unit-cover/v0";
 pub const SALT_BYTES: usize = 192;
@@ -452,6 +482,7 @@ impl Composite {
             lookups: lookups_fast.into_iter().collect(),
         };
         c.check()?;
+        circuit_in_range(c.k_log, Stmt::regions(&c)?.len())?;
         Ok(c)
     }
 
@@ -1308,6 +1339,7 @@ impl Stmt {
         let blocks_real = n.div_ceil(c.g);
         let nbl = log2ceil(blocks_real.max(1)).max(3);
         let m = k_log + nbl;
+        shape_in_range(m, PT_LOCAL + nbl)?;
         let pin = pin_of(&c);
         let (da, db) = delta(&c, pin);
         let mut types: Vec<(usize, SparseMatrixCircuit<'static>)> = Vec::new();
@@ -1820,6 +1852,16 @@ impl Stmt {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn statements_outside_the_proved_range_are_refused() {
+        assert!(circuit_in_range(IN_RANGE_K_LOG, IN_RANGE_REGIONS).is_ok());
+        assert!(circuit_in_range(IN_RANGE_K_LOG + 1, 1).unwrap_err().contains("Stmt.InRange"));
+        assert!(circuit_in_range(20, IN_RANGE_REGIONS + 1).unwrap_err().contains("Stmt.InRange"));
+        assert!(shape_in_range(M_MAX, PT_LOCAL + M_MAX - IN_RANGE_K_LOG).is_ok());
+        assert!(shape_in_range(M_MAX + 1, PT_LOCAL).is_err());
+        assert!(shape_in_range(30, IN_RANGE_M_PTS + 1).unwrap_err().contains("Stmt.InRange"));
+    }
 
     #[test]
     fn headers_serialize_key_sorted_as_they_are() {
