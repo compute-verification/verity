@@ -1,8 +1,10 @@
 """The protocol options of a vLLM run: PoUW, POUS and sampled proofs, each enabled on its own, any of them in one run.
 
 A run enables a set of ``name:scheme`` entries (`config.parse_protocols`), off by default.  `verity_vllm.LLM` takes it as
-``protocols=``; a row declares it as its target's ``protocols`` (`TargetProfile.protocols`), so the Build, the Commit and
-the Check read one copy.  Each protocol has one adapter module here (`interface`), imported only when it is enabled.  The
+``protocols=``; a row takes it from ``PROTOCOLS`` (``verity-vllm row --protocols``) or its workload target, and every stage
+reads it as the target's ``protocols`` (`TargetProfile.protocols`), so the Build, the Commit and the Check read one copy.
+A row refuses a set it cannot run before any stage starts (`at_row`); the Commit checks it again before its engine exists
+(`commit_guard`).  Each protocol has one adapter module here (`interface`), imported only when it is enabled.  The
 protocol logic is its package's (`verity_pouw`, `verity_pous`, `verity_sampled_proofs`), never this package's.
 
 **Order.**  Adapters install in `config.PROTOCOLS` order, innermost first, and uninstall in reverse:
@@ -18,7 +20,12 @@ installs its composition after its committers registered them (`at_commit`).
 
 **Refused** (`refusals`): an unknown protocol; a scheme its package does not register, or an adapter not on this tree;
 a protocols config naming a protocol the run does not enable; a set at TP > 1 (each rank would install its own, which is
-not wired); and whatever an adapter refuses for its context (sampled proofs outside the Commit stage, for one).
+not wired); with ``pous`` on, an option that keeps a weight-derived copy resident across forwards (its adapter's
+``keeps_weight_copy``); and whatever an adapter refuses for its context (sampled proofs outside the Commit stage, for one).
+
+**Weights of record.**  An option that releases weights from the model (POUS) returns their plaintext from
+``Installed.weights()``; the Commit's replay reads and re-registers the live weights through `weights_view` /
+`register_weights`, which is the model itself when no option released any.
 
 **The record.**  `Composition.record` is ``verity-vllm/protocol-composition/v0``: the stage, the profile digest and, per
 protocol, its entry and what it commits to, with the SHA-256 of its canonical JSON.  It is a placeholder: each protocol's
@@ -40,8 +47,8 @@ from verity_vllm.engine import hooks
 from verity_vllm.protocol_options.interface import Context, Installed, Option, Target
 
 __all__ = ["ADAPTERS", "RECORD_SCHEMA", "Composition", "Context", "Installed", "Option", "Refused", "Target", "adapter",
-           "at_commit", "commit_context", "commit_guard", "install", "into_verdict", "load_settings", "parse", "refusals",
-           "undeclared"]
+           "WeightsView", "at_commit", "at_row", "commit_context", "commit_guard", "install", "into_verdict", "load_settings",
+           "parse", "refusals", "register_weights", "undeclared", "weights_view"]
 
 #: protocol -> its adapter module in this package
 ADAPTERS = {"pouw": "pouw", "pous": "pous", "sampled-proofs": "sampled_proofs"}
@@ -103,6 +110,9 @@ def refusals(ctx: Context) -> tuple[str, ...]:
             out.append(f"{entry}: {name} registers no scheme {scheme!r} (registered: {', '.join(known) or 'none'})")
             continue
         out.extend(f"{entry}: {r}" for r in mod.refusals(scheme, ctx))
+        if ctx.scheme("pous") is not None and name != "pous" and getattr(mod, "keeps_weight_copy", lambda s, c: False)(scheme, ctx):
+            out.append(f"{entry}: keeps a weight-derived copy resident across forwards, so with pous on its GEMMs would not read "
+                       f"what POUS stores (prepare its weight operands per forward from the weight it is handed)")
     return tuple(out)
 
 
@@ -144,6 +154,18 @@ class Composition:
                 err = err or e
         if err is not None:
             raise err
+
+    def weights(self) -> dict[str, Any]:
+        """The plaintext of every tensor an installed option released, by qualname (`Installed.weights`)."""
+        out: dict[str, Any] = {}
+        for i in self.installed:
+            got = getattr(i, "weights", None)
+            got = got() if callable(got) else None
+            for k, v in (got or {}).items():
+                if k in out:
+                    raise ValueError(f"{k!r} is released by two options ({i.name} and an earlier one)")
+                out[k] = v
+        return out
 
     def outside_program(self) -> dict[str, str]:
         """Each option the Program of record does not describe, with the reason."""
@@ -200,6 +222,40 @@ def install(model: Any, ctx: Context, *, rank: int = 0) -> Composition:
     return comp
 
 
+class WeightsView:
+    """A model's parameters and buffers as a reader of live weights sees them (`named_parameters`, `named_buffers`), every
+    tensor a protocol option released replaced by its plaintext.  The Commit's replay reads the weights of record through
+    it (`check.replay.opening.model_weights_provider`) and re-registers them through it (`register_weights`)."""
+
+    def __init__(self, model: Any, plaintext: Mapping[str, Any]) -> None:
+        names = {n for n, _ in model.named_parameters()} | {n for n, _ in model.named_buffers()}
+        stray = sorted(set(plaintext) - names)
+        if stray:
+            raise ValueError(f"released weights name no parameter or buffer of the model: {stray[:5]}")
+        self.model, self.plaintext = model, dict(plaintext)
+
+    def named_parameters(self, *a: Any, **kw: Any) -> Any:
+        return ((n, self.plaintext.get(n, p)) for n, p in self.model.named_parameters(*a, **kw))
+
+    def named_buffers(self, *a: Any, **kw: Any) -> Any:
+        return ((n, self.plaintext.get(n, b)) for n, b in self.model.named_buffers(*a, **kw))
+
+
+def weights_view(comp: Composition | None, model: Any) -> Any:
+    """``model`` itself when no installed option released a weight, else its `WeightsView`."""
+    plain = comp.weights() if comp is not None else {}
+    return WeightsView(model, plain) if plain else model
+
+
+def register_weights(comp: Composition | None, com: Any) -> Any:
+    """``com.register_weights()`` over the weights of record: through `weights_view` while an option holds them released."""
+    view = weights_view(comp, com.model)
+    if view is com.model:
+        return com.register_weights()
+    with hooks.patched(com, "model", view):
+        return com.register_weights()
+
+
 def undeclared(enabled: tuple[str, ...] = ()) -> tuple[str, ...]:
     """The tags of live hook entries that name a protocol option outside ``enabled``: an option some other path installed."""
     return tuple(sorted({e.tag for e in hooks.live() if e.tag and e.tag.partition(":")[0] in ADAPTERS and e.tag not in enabled}))
@@ -216,6 +272,26 @@ def commit_context(profile: Any, *, world: int = 1, settings: Any = None) -> Con
     if bad:
         raise Refused(bad)
     return ctx
+
+
+def at_row(knob: Any, workload: Mapping[str, Any], *, world: int = 1) -> tuple[str, ...] | None:
+    """A row's protocol set, checked before any stage runs (the fail-closed point of single-GPU and TP rows alike): the
+    ``PROTOCOLS`` knob, else the workload target's ``protocols``; None for sampled proofs alone, the row as it has always
+    run.  Either is the whole set, sampled proofs included.  `Refused` names every refusal: a set without sampled proofs,
+    a knob that contradicts the target, and every refusal of the set at the Commit (a TP row, an adapter not on this tree)."""
+    enabled, declared = parse(knob), parse((workload.get("target") or {}).get("protocols"))
+    if enabled and declared and enabled != declared:
+        raise Refused([f"PROTOCOLS {list(enabled)} contradicts the workload target's protocols {list(declared)}"])
+    enabled = enabled or declared
+    if not enabled or enabled == config.DEFAULT_ROW_PROTOCOLS:
+        return None
+    if not any(e.startswith("sampled-proofs:") for e in enabled):
+        raise Refused([f"{list(enabled)}: a row is a sampled-proofs run, so its set names sampled-proofs:<scheme> "
+                       "(serve without it through verity_vllm.LLM)"])
+    bad = refusals(Context(stage="commit", enabled=enabled, world=int(world), settings=load_settings(workload.get("protocols_config"))))
+    if bad:
+        raise Refused(bad)
+    return enabled
 
 
 def commit_guard(profile: Any, *, world: int = 1, hot: bool = False, installs: bool = True, settings: Any = None) -> Any:

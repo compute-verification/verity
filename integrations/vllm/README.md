@@ -220,9 +220,11 @@ reports, the protocol composition record).
 
 PoUW, POUS and sampled proofs are protocol options (`verity_vllm/protocol_options/`), each enabled on its own and any of them
 in one run.  A set is `name:scheme` entries, one per protocol (`config.parse_protocols`), off by default: `LLM(protocols=...)`
-installs PoUW and POUS on a serving engine; a row declares its set as the target's `protocols` (`TargetProfile.protocols`;
-unset is sampled proofs alone, the Commit as it has always run), and its Commit installs the others once its committers
-registered the weights of record.  Adapters install innermost first (PoUW replaces the linear GEMMs, POUS decodes the
+installs PoUW and POUS on a serving engine; a row takes its set from `verity-vllm row --protocols` (`PROTOCOLS`) or its
+workload's target, every stage reads it as the target's `protocols` (`TargetProfile.protocols`; unset is sampled proofs
+alone, the Commit as it has always run), `run_row` refuses a set it cannot run before any stage, and the Commit installs
+the others once its committers registered the weights of record (the replay reads live weights through what an option
+released: `protocol_options.weights_view`).  Adapters install innermost first (PoUW replaces the linear GEMMs, POUS decodes the
 weights they read, sampled proofs commits what the model computed) and uninstall in reverse, every patch and service through
 `engine/hooks.py` tagged with its option.  The protocol logic is `verity_pouw`, `verity_pous` and `verity_sampled_proofs`';
 the adapters (`pouw.py`, `pous.py`, `sampled_proofs.py`) are thin.  A Commit with an option its Program does not describe

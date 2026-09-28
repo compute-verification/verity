@@ -52,9 +52,10 @@ def _stamp() -> str:
 
 class SingleRow(Row):
     def __init__(self, *, row: str, role: str, repo: str, rev: str, stages: str, env: RunEnv, gpu_util: str,
-                 build: BuildConfig, match: MatchConfig, commit: CommitConfig):
+                 build: BuildConfig, match: MatchConfig, commit: CommitConfig, protocols: tuple[str, ...] | None = None):
         super().__init__(row=row, role=role, repo=repo, rev=rev, stages=stages, env=env, proc="row_pod")
         self.gpu_util, self.cb, self.cm, self.ck_ = gpu_util, build, match, commit
+        self.protocols = protocols            # the row's protocol set beside sampled proofs (protocol_options.at_row), None by default
         self.trap = False
 
     def run(self) -> int:
@@ -153,7 +154,7 @@ class SingleRow(Row):
         self.LP = self.cb.lp if self.cb.lp is not None else s["LP"]
         self.T = self.cb.t if self.cb.t is not None else s["T"]
         self.MML = self.I + self.O
-        self.tgt = R.declared_target(self.path(self.wl))
+        self.tgt = R.declared_target(self.path(self.wl), self.protocols)
         self.tgt_args = ["--target", self.tgt] if self.tgt else []
         # the attention implementation the row executes (declared, else the pinned vLLM's default for this device) selects the tap
         _, fa = self.output(self.cli("row", "fa-version", self.wl), stderr=subprocess.DEVNULL)
@@ -513,6 +514,8 @@ class SingleRow(Row):
         cmd = self.cli("commit", "--case", self.role, "--workload", self.wl, "--committer", "native_collect_v2b", "--fast-copy", "--gpu-tree",
                        "--hidden-so", self.hidden_so, "--openings", "64", "--pairs", str(ck.pairs), "--warmup", "2", "--max-num-seqs", str(self.B),
                        "--engine-arg", f"gpu_memory_utilization={self.gpu_util}", "--label", self.row, "--out", f"{self.d}/commit")
+        if self.protocols:
+            cmd += self.tgt_args                      # the declared target with the row's protocols; unset, the Commit reads the workload's
         # the windowed collector (ring of window_slots x window_mb MiB, raw copies retained on host, openings verified after release)
         # is the default; window_mb=0 is per-step blocks, retain=device the device-resident footprint
         if int(ck.window_mb) > 0:

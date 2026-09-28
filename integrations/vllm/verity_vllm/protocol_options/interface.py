@@ -6,7 +6,10 @@ An adapter is one module of this package (`sampled_proofs`, `pous`, `pouw`) that
 * ``schemes() -> tuple[str, ...]``: the scheme names its protocol package registers;
 * ``refusals(scheme, ctx) -> tuple[str, ...]``: why this run cannot enable it (empty: it can), decided from the `Context`
   alone, before the engine is built;
-* ``install(scheme, target) -> Installed``: install it on the built model.
+* ``install(scheme, target) -> Installed``: install it on the built model;
+* optionally ``keeps_weight_copy(scheme, ctx) -> bool``: True when the installed option keeps a weight-derived copy
+  (PoUW's prepared int7 or FP10 operands) resident across forwards.  With POUS enabled, the selector refuses such an
+  option (`protocol_options.refusals`): its GEMMs would read the copy, not what POUS stores.  Absent means False.
 
 An adapter holds no protocol logic: the scheme, its commitments, the salt and the audit are its protocol package's
 (`verity_pouw`, `verity_pous`, `verity_sampled_proofs`), which never import this one.  It finds its hook sites by type,
@@ -82,20 +85,27 @@ class Installed(Protocol):
     def info(self) -> dict[str, Any]:
         """Certificate, counters and endpoints, recorded beside the run and never hashed."""
 
+    def weights(self) -> Mapping[str, Any] | None:
+        """The plaintext of every parameter or buffer the option released from the model, by its qualname in
+        ``model.named_parameters()`` / ``named_buffers()`` (tied names map to one tensor object); None when it released
+        none.  Readers of live weights read through it while the option is installed (`protocol_options.weights_view`)."""
+
     def close(self) -> None:
         """Uninstall the option's hooks, then release its device state.  Idempotent."""
 
 
 @dataclass(eq=False)
 class Option:
-    """An `Installed` an adapter can return as it is: ``commits`` and ``details`` are its commitment and info, and
-    ``release`` runs once after its hooks are off."""
+    """An `Installed` an adapter can return as it is: ``commits`` and ``details`` are its commitment and info,
+    ``decoded`` returns the plaintext of what it released (`Installed.weights`), and ``release`` runs once after its
+    hooks are off."""
 
     name: str
     hooks: Hooks
     commits: dict[str, Any] = field(default_factory=dict)
     details: dict[str, Any] = field(default_factory=dict)
     outside_program: str | None = None
+    decoded: Callable[[], Mapping[str, Any]] | None = None
     release: Callable[[], Any] | None = None
     closed: bool = False
 
@@ -104,6 +114,9 @@ class Option:
 
     def info(self) -> dict[str, Any]:
         return {"entries": len(self.hooks.entries), **self.details}
+
+    def weights(self) -> Mapping[str, Any] | None:
+        return None if self.decoded is None or self.closed else self.decoded()
 
     def close(self) -> None:
         if self.closed:
