@@ -95,6 +95,12 @@ installs it first, so a machine without elan works), must pass clean and fail on
   definitions the pinned statements read, with a hash each. Without `--update` the audit fails on any difference, so a
   statement, or a definition it depends on, cannot change without a visible diff of this file. A record holds the
   statement, not the proof: pin a `sorry` stub, and the pin passes once a proof with allowed axioms replaces it.
+- **The hashes are SHA-256.** They are taken over a canonical form of the kernel term (`Facts.lean`'s `canonText`),
+  which keeps what Lean's `Expr.hash` keeps (constant names, universe levels, bound variable indices, projections,
+  literals) and drops what it drops (binder names and binder info, `let` names, metadata). A renamed hypothesis is
+  therefore the same statement, and a different term is a different one. Records written with `Expr.hash`, which has
+  32 bits, are still checked as they are, and the run notes them. `--update` rewrites them, and its review says
+  "rehashed" where the 32-bit hash still matches, so no reviewer is needed for that.
 
 **A changed pin needs a named statement reviewer.** A weakened definition leaves every proof valid, so the axiom checks
 and the replay pass it: only the pins see it, and only a person can judge it. (A redefinition of `Collision` once made
