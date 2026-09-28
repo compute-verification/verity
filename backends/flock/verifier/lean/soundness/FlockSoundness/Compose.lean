@@ -73,6 +73,29 @@ theorem lidx_getD (hn : L.order.Nodup) {ℓ : ℕ} (hℓ : ℓ < L.order.length)
   rw [List.getD_eq_getElem _ _ hℓ]
   exact hn.idxOf_getElem ℓ hℓ
 
+theorem lidx_lt_of_mem_take {c ℓ : ℕ} (hc : c ∈ L.order.take ℓ) : lidx L c < ℓ := by
+  unfold lidx
+  rw [← List.take_append_drop ℓ L.order, List.idxOf_append_of_mem hc]
+  exact lt_of_lt_of_le (List.idxOf_lt_length_iff.2 hc) (List.length_take_le _ _)
+
+/-- **`Ordered` from reads earlier in `order`**: each computed row, at `order[ℓ]` for `ℓ ≥ nIn`, reads only columns that
+come before it in `order`. -/
+theorem ordered_of_take (hle : L.nIn ≤ L.order.length)
+    (hread : ∀ ℓ < L.order.length, L.nIn ≤ ℓ → ∀ p, L.row (L.order.getD ℓ 0) = some p →
+      ∀ c ∈ p.1 ++ p.2, c ∈ L.order.take ℓ) : Ordered L := by
+  refine ⟨hle, fun k hk c hc => ?_, fun k hk p hp c hc => List.mem_of_mem_take (hread _ (by omega) (by omega) p hp c hc)⟩
+  cases hr : L.row (L.order.getD (L.nIn + k) 0) with
+  | none =>
+    rw [lrow_none hr] at hc
+    simp only [List.mem_append, List.mem_singleton, or_self] at hc
+    exact Or.inr hc
+  | some p =>
+    rw [lrow_some hr] at hc
+    simp only [List.mem_append, List.mem_map] at hc
+    rcases hc with ⟨x, hx, rfl⟩ | ⟨x, hx, rfl⟩
+    · exact Or.inl (lidx_lt_of_mem_take (hread _ (by omega) (by omega) p hr x (List.mem_append_left _ hx)))
+    · exact Or.inl (lidx_lt_of_mem_take (hread _ (by omega) (by omega) p hr x (List.mem_append_right _ hx)))
+
 end Compose
 
 open Compose

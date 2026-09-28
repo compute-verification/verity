@@ -180,6 +180,7 @@ hypotheses of the theorems that use them, never `axiom` declarations, so they ca
 -- computing the type
 #print axioms FlockSoundness.Rows.compose
 #print axioms FlockSoundness.placement_of_realizes
+#print axioms FlockSoundness.Compose.ordered_of_take
 #print axioms FlockSoundness.compose_ordered
 #print axioms FlockSoundness.Compose.sat_physical
 #print axioms FlockSoundness.Rows.compose_eval
