@@ -474,6 +474,8 @@ WORD_MAX_GATES_HELP = ("--word-check's gate limits (verity_vllm.query.word.gate_
 GUARDED_MAX_HELP = ("on by default, --no-guarded-max for A/B only: the guarded-max policy (verity_vllm.query.guarded_max) -- the attention "
                     "stream's ROW word 3 carries GuardNegInfZero(m) after a row's first key block and its MS class every block's max * "
                     "scale; the Commit then needs the guarded-max tap build")
+UNIT_RULE_CACHE_HELP = ("a directory the word check's unit rules are shared through, across processes and runs (word.use_rule_cache); "
+                        "a rule read there is the one the check computes")
 JOBS_HELP = ("processes for the word check's cuts (word.prefetch) and, in build-global, the component builds (build_components, within "
              "the memory headroom); the manifest is the same under any.  0 (the default): the CPUs this process may use; 1: one process")
 
@@ -489,6 +491,7 @@ class BuildOptions:
     no_return_slots: bool = option("--no-return-slots", default=False, action="store_true")
     word_check: str = option("--word-check", env="VERITY_WORD_CHECK", default="16/32", help=WORD_CHECK_HELP)
     word_max_gates: str | None = option("--word-max-gates", env=word_query.MAX_GATES_ENV, default=None, help=WORD_MAX_GATES_HELP)
+    unit_rule_cache: str | None = option("--unit-rule-cache", env=word_query.RULE_CACHE_ENV, default=None, help=UNIT_RULE_CACHE_HELP)
     query: str = option("--query", default=QUERY_OF_RECORD, choices=list(QUERIES), help=QUERY_HELP)
     norm_scales: bool = option("--norm-scales", default=True, action="boolean_optional", help=NORM_SCALES_HELP)
     guarded_max: bool = option("--guarded-max", default=True, action="boolean_optional", help=GUARDED_MAX_HELP)
@@ -514,6 +517,7 @@ class BuildGlobalOptions:
     no_return_slots: bool = option("--no-return-slots", default=False, action="store_true")
     word_check: str = option("--word-check", env="VERITY_WORD_CHECK", default="16/32", help=WORD_CHECK_HELP)
     word_max_gates: str | None = option("--word-max-gates", env=word_query.MAX_GATES_ENV, default=None, help=WORD_MAX_GATES_HELP)
+    unit_rule_cache: str | None = option("--unit-rule-cache", env=word_query.RULE_CACHE_ENV, default=None, help=UNIT_RULE_CACHE_HELP)
     query: str = option("--query", default=QUERY_OF_RECORD, choices=list(QUERIES), help=QUERY_HELP)
     norm_scales: bool = option("--norm-scales", default=True, action="boolean_optional", help=NORM_SCALES_HELP)
     guarded_max: bool = option("--guarded-max", default=True, action="boolean_optional", help=GUARDED_MAX_HELP)
@@ -573,6 +577,7 @@ def main(a: Any) -> int:
     if a.cmd in ("build", "build-global"):
         from verity_vllm.pipeline.gc_tuning import tune as _gc_tune   # process-level cyclic-GC thresholds; content-neutral (VERITY_GC_THRESHOLDS)
         _gc_tune()
+        word_query.use_rule_cache(a.unit_rule_cache)
     if a.cmd == "build":
         wl = _load_json(a.workload) if a.workload else None
         man = build(a.program, workload=wl, request_id=a.request_id, rank=a.rank, ranks=a.ranks, profile=a.profile, return_slots=not a.no_return_slots,

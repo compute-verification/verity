@@ -223,6 +223,11 @@ def _encode_definition(fn: FunctionDefinition, schema: str = SCHEMA_V0, tables: 
     }
 
 
+def definition_entry(fn: FunctionDefinition) -> dict:
+    """The self-contained (v0) descriptor entry of one definition, callees named by id: what a digest of the definition alone hashes."""
+    return _encode_definition(fn)
+
+
 def _static_functions(v: Any):
     """The function definitions referenced by a static value, recursing into the same containers `_static_key`
     and `_static_json` support (tuples/lists and string-keyed dicts), in encoding order."""

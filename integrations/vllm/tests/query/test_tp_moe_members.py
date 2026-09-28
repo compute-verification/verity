@@ -5,6 +5,7 @@ Program its AllReduce's) was dropped as a "second producer", and the manifest wa
 partial of the dropped all-reduce outputs was left without its peer's collective output: 12,480 unbound bindings."""
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import json
 import os
@@ -110,8 +111,11 @@ def test_the_stored_tp2_moe_builds_merge_with_every_peer_bound(tmp_path, row):
         wd = json.loads((d / "build_workload" / "workload_program.json").read_text())["workload_digest"]
         args += ["--programs-root", str(d), "--rank", str(r), "--workload-digest", wd]
     out = tmp_path / "manifest.json"
-    p = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", "manifest", "build-global", "--fixture", str(VLLM_DIR / "workloads" / f"{row}.json"),
-                        *args, "--ranks", "2", "--out", str(out)], cwd=VLLM_DIR, capture_output=True, text=True)
+    # checks share a host (vy-nebius-1's slots): its stored-MoE build-globals run one at a time there, and nothing else waits
+    with open(os.environ.get("VERITY_TP_MOE_LOCK", "/tmp/verity-tp-moe-build-global.lock"), "a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        p = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", "manifest", "build-global", "--fixture", str(VLLM_DIR / "workloads" / f"{row}.json"),
+                            *args, "--ranks", "2", "--out", str(out)], cwd=VLLM_DIR, capture_output=True, text=True)
     assert p.returncode == 0, p.stderr[-3000:]
     m = json.loads(out.read_text())
     assert m["complete"] and m["tp_peer_binding"]["n_unbound"] == 0 and not any("two producers" in k for k in m["unmodelled"]), m["tp_peer_binding"]
