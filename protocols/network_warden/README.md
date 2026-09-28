@@ -3,7 +3,8 @@
 A spec-level reference for network transparency's timing channel:
 - the constant-rate, left-packed warden;
 - the Program's logical schedule, with its clock-sync advice (δ, ρ);
-- the exact audit with record-and-reject, on raw records or records committed by hash (padding elided);
+- the exact audit with record-and-reject, on raw records or records committed by hash (padding elided), and the
+  ingress links' status check;
 - the capacity counts;
 - the calibration of honest runs.
 
