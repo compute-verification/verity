@@ -79,18 +79,24 @@ def gate_ncp(ext) -> dict:
     X = torch.tensor(full.x, dtype=torch.int16, device="cuda")
     Y = torch.tensor(full.y, dtype=torch.int16, device="cuda")
     C, _, ck = ext.ncp_gemm(s8(X), s8(Y), 2, 1)
+    CU, ck_u = ext.ncp_route_u((X + ncp.BETA).to(torch.uint8), s8(Y), 1)
     A = torch.tensor([[x - 256 if x >= 128 else x for x in r] for r in a], dtype=torch.int64)
     B = torch.tensor([[x - 256 if x >= 128 else x for x in r] for r in b], dtype=torch.int64)
     ok_out = torch.equal(C.cpu().long(), A @ B.T)
     tiles = [Tile(tuple(range(16)), tuple(range(j, j + 16))) for j in (0, 112, 240)]
     ck = ck.cpu()
+    ck_u = ck_u.cpu()
     ok_tiles = []
     for t in tiles:
         ref = s.digest(ctx, None, s.checked(ctx, s.encode(ctx, s.noise(ctx), a, [b[j] for j in t.cols], t)))
         unbiased = [[[w & 0xFFFFFFFF for w in ck[i, j].tolist()] for j in t.cols] for i in t.rows]
         got_checked = ncp.route_u_shift(unbiased, [full.y[j] for j in t.cols], s.beta)
-        ok_tiles.append(s.digest(ctx, None, got_checked) == ref)
-    return {"shape": [m, k, n], "output_exact": ok_out, "tile_digests_match": ok_tiles, "ok": ok_out and all(ok_tiles)}
+        native_checked = [[[w & 0xFFFFFFFF for w in ck_u[i, j].tolist()] for j in t.cols] for i in t.rows]
+        ok_tiles.append((s.digest(ctx, None, got_checked) == ref, s.digest(ctx, None, native_checked) == ref))
+    native_out = torch.equal(CU.cpu(), C.cpu())
+    ok = ok_out and native_out and all(all(pair) for pair in ok_tiles)
+    return {"shape": [m, k, n], "output_exact": ok_out, "native_output_matches": native_out,
+            "tile_digests_match_shift_native": ok_tiles, "ok": ok}
 
 
 def gate_pearl(ext) -> dict:

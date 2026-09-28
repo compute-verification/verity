@@ -1,6 +1,7 @@
 """Store declarations for the PoUW harness (research.store README §6.1).
 
     research run --on vy-pouw-mvp --project verity --campaign pouw --tool pouw_gemm -- python benchmarks/pouw/gemm_bench.py --out $D/gemm.json
+    research run ... --tool pouw_route_u -- python benchmarks/pouw/route_u_bench.py --out $D/route_u.json
     research run ... --tool pouw_vllm -- python benchmarks/pouw/vllm_bench.py --model /root/models/qwen2.5-3b-instruct --out $D/vllm.json
     research run ... --tool pouw_e2e -- python benchmarks/pouw/e2e_audit.py --out $D/e2e.json
 
@@ -46,8 +47,17 @@ def parse_e2e(argv: list[str]) -> dict:
     return {"t": ns.t}
 
 
+def parse_route_u(argv: list[str]) -> dict:
+    ap = _parser()
+    ap.add_argument("--reps", type=int, default=30)
+    ns, _ = ap.parse_known_args(argv)
+    return {"reps": ns.reps}
+
+
 POUW_GEMM = Tool(name="pouw_gemm", version="1", command=["python", "benchmarks/pouw/gemm_bench.py"], closure=CLOSURE,
                  key_params=["workload"], produces=["bench-result/v1", "run-files/v1"], parse=parse_gemm)
+POUW_ROUTE_U = Tool(name="pouw_route_u", version="1", command=["python", "benchmarks/pouw/route_u_bench.py"], closure=CLOSURE,
+                    key_params=["reps"], produces=["bench-result/v1", "run-files/v1"], parse=parse_route_u)
 POUW_VLLM = Tool(name="pouw_vllm", version="1", command=["python", "benchmarks/pouw/vllm_bench.py"], closure=CLOSURE,
                  key_params=["model", "modes"], produces=["bench-result/v1", "run-files/v1"], parse=parse_vllm)
 POUW_E2E = Tool(name="pouw_e2e", version="1", command=["python", "benchmarks/pouw/e2e_audit.py"], closure=CLOSURE,

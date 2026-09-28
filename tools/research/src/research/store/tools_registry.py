@@ -25,6 +25,7 @@ REGISTRY: dict[str, str] = {
     "commit_cost": "benchmarks.commitments.tool:COMMIT_COST",
     "hiding_leaf_cost": "benchmarks.commitments.tool:HIDING_LEAF_COST",
     "pouw_gemm": "benchmarks.pouw.tool:POUW_GEMM",
+    "pouw_route_u": "benchmarks.pouw.tool:POUW_ROUTE_U",
     "pouw_vllm": "benchmarks.pouw.tool:POUW_VLLM",
     "pouw_e2e": "benchmarks.pouw.tool:POUW_E2E",
     "pouw_pearl_cal": "benchmarks.pouw.tool:POUW_PEARL_CAL",

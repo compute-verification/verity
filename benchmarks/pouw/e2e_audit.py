@@ -2,8 +2,8 @@
 
     python benchmarks/pouw/e2e_audit.py --out RESULT.json
 
-- ``ncp-v1`` on Qwen2.5-3B-shaped matmuls at decode (m = 16): every checkpoint from the s8 GEMM (dump mode), shifted to
-  route U (`kernels.route_u_checkpoints`), each 16 x 16 tile's digest over them; the verifier draws work-weighted tiles and
+- ``ncp-v1`` on Qwen2.5-3B-shaped matmuls at decode (m = 16): the native u8xs8 route-U kernel starts at c0 and dumps every
+  depth-16 checkpoint; each 16 x 16 tile's digest covers them step-major.  The verifier draws work-weighted tiles and
   recomputes each with the reference.
 - ``pearl-fp8-v4`` (ada) on a smaller matmul: the e4m3 GEMM of the noisy-quantized operands; the verifier recomputes the
   drawn tiles (noise, quantization, policy, replay, extract, J).
@@ -25,7 +25,7 @@ import numpy as np
 import torch
 
 sys.path.insert(0, str(Path(__file__).parent))
-from kernels import load, route_u_checkpoints  # noqa: E402
+from kernels import load  # noqa: E402
 from verity_pouw.audit import Epoch, Prover, Sampled, Verifier, Workload, reference_kernel  # noqa: E402
 from verity_pouw.protocol import Matmul, Shape  # noqa: E402
 from verity_pouw.schemes import get  # noqa: E402
@@ -53,8 +53,9 @@ def ncp_gpu_kernel(ext, corrupt: float = 0.0, seed: int = 0):
         X = np.concatenate([A + E1, A + E2, -(A + E1 + E2)], axis=1).astype(np.int8)
         Y = np.concatenate([B + F1, B + F2, B + F1 + F2], axis=1).astype(np.int8)
         cfg = 1 if len(a_rows) <= 32 else 0
-        _, _, ck = ext.ncp_gemm(torch.from_numpy(X.view(np.uint8)).cuda(), torch.from_numpy(Y.view(np.uint8)).cuda(), 2, cfg)
-        ck = route_u_checkpoints(ck.cpu().numpy().astype(np.uint32), Y.astype(np.int64), N.BETA)    # [m, n, T]
+        XU = (X.astype(np.int16) + N.BETA).astype(np.uint8)
+        _, ck = ext.ncp_route_u(torch.from_numpy(XU).cuda(), torch.from_numpy(Y.view(np.uint8)).cuda(), cfg)
+        ck = ck.cpu().numpy().astype(np.uint32)    # [m, n, T], already route U
         out = []
         for t in tiles:
             block = ck[np.ix_(t.rows, t.cols)]            # [h, w, T]

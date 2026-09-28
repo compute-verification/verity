@@ -4,6 +4,9 @@
 //     mode 0: bare; 1: every accumulator register read once per 16-deep step and folded (run = run·odd + acc: one IMAD
 //     per word, the free hash feed's stand-in); 2: every checkpoint written out (int32 [M, N, K/16], for the bit-identity
 //     gate at small shapes).
+//   ncp_route_u(Xu u8 [M,K], Y s8 [N,K], cfg) -> C s32 [M,N], checkpoints s32 [M,N,K/16]
+//     c0[j] = -128*sum_l Y[j,l]; each m16n8k16 u8xs8 step is dumped.  The Python wrapper hashes 16x16 tiles
+//     step-major with ncp-v1's SHAKE256 framing.
 //   fp8_gemm(A e4m3 [M,K], B e4m3 [N,K], cfg) -> C f32 [M,N]: m16n8k32 e4m3 mma with FP32 accumulate, a fresh +0
 //     accumulator every 128 products promoted to the total by one FP32 add (the `ada` device of verity_pouw's
 //     pearl-fp8-v4, which the gate checks bit for bit).
@@ -28,6 +31,10 @@ __device__ __forceinline__ void mma16(uint32_t* c, uint32_t a0, uint32_t a1, uin
   asm volatile("mma.sync.aligned.m16n8k16.row.col.s32.s8.s8.s32 {%0,%1,%2,%3}, {%4,%5}, {%6}, {%0,%1,%2,%3};"
                : "+r"(c[0]), "+r"(c[1]), "+r"(c[2]), "+r"(c[3]) : "r"(a0), "r"(a1), "r"(b0));
 }
+__device__ __forceinline__ void mma16_u8s8(uint32_t* c, uint32_t a0, uint32_t a1, uint32_t b0) {
+  asm volatile("mma.sync.aligned.m16n8k16.row.col.s32.u8.s8.s32 {%0,%1,%2,%3}, {%4,%5}, {%6}, {%0,%1,%2,%3};"
+               : "+r"(c[0]), "+r"(c[1]), "+r"(c[2]), "+r"(c[3]) : "r"(a0), "r"(a1), "r"(b0));
+}
 __device__ __forceinline__ void mma_e4m3(float* c, const uint32_t* a, uint32_t b0, uint32_t b1) {
   asm volatile("mma.sync.aligned.m16n8k32.row.col.f32.e4m3.e4m3.f32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%0,%1,%2,%3};"
                : "+f"(c[0]), "+f"(c[1]), "+f"(c[2]), "+f"(c[3]) : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "r"(b0), "r"(b1));
@@ -35,13 +42,13 @@ __device__ __forceinline__ void mma_e4m3(float* c, const uint32_t* a, uint32_t b
 
 #define NRUN 8
 
-// MODE: 0 bare, 1 fold, 2 dump (NCP); 3 fp8 windowed (Pearl ada).
+// MODE: 0 bare, 1 fold, 2 dump (signed NCP); 3 fp8 windowed (Pearl ada); 4 native route-U dump.
 template <int MT, int NT, int WM, int WN, int STAGES, int MODE>
 __global__ void __launch_bounds__(WM * WN * 32)
     k_gemm(const uint8_t* __restrict__ A, const uint8_t* __restrict__ B, void* __restrict__ Cout, uint32_t* __restrict__ runout,
-           int32_t* __restrict__ ckpt, int M, int N, int K) {
+           int32_t* __restrict__ ckpt, const int32_t* __restrict__ c0, int M, int N, int K) {
   constexpr int NTHR = WM * WN * 32, BM = WM * MT * 16, BN = WN * NT * 8;
-  constexpr bool FP8 = MODE == 3;
+  constexpr bool FP8 = MODE == 3, ROUTE_U = MODE == 4;
   extern __shared__ __align__(128) uint8_t smem[];
   const uint32_t sA = (uint32_t)__cvta_generic_to_shared(smem), sB = sA + STAGES * BM * BK;
   const int tid = threadIdx.x, lane = tid & 31, warp = tid >> 5, wm = warp / WN, wn = warp % WN;
@@ -61,6 +68,7 @@ __global__ void __launch_bounds__(WM * WN * 32)
       if (idx < BN * 4) cp_async16(sB + stage * BN * BK + swz(r, ch), gB + (size_t)r * K + kt * BK + ch * 16);
     }
   };
+  const int g = lane >> 2, tg = lane & 3;
   uint32_t c[MT][NT][4], run[NRUN];
   float fc[FP8 ? MT : 1][FP8 ? NT : 1][4], ft[FP8 ? MT : 1][FP8 ? NT : 1][4];
 #pragma unroll
@@ -69,12 +77,16 @@ __global__ void __launch_bounds__(WM * WN * 32)
     for (int nt = 0; nt < NT; nt++)
 #pragma unroll
       for (int i = 0; i < 4; i++) {
-        c[mt][nt][i] = 0;
+        if constexpr (ROUTE_U) {
+          int col = bn * BN + wn * NT * 8 + nt * 8 + tg * 2;
+          c[mt][nt][i] = c0[col + (i & 1)];
+        } else {
+          c[mt][nt][i] = 0;
+        }
         if (FP8) { fc[FP8 ? mt : 0][FP8 ? nt : 0][i] = 0.f; ft[FP8 ? mt : 0][FP8 ? nt : 0][i] = 0.f; }
       }
 #pragma unroll
   for (int j = 0; j < NRUN; j++) run[j] = j;
-  const int g = lane >> 2, tg = lane & 3;
 #pragma unroll
   for (int s = 0; s < STAGES - 1; s++) { if (s < KT) load(s, s); cp_commit(); }
   const int a_row = wm * MT * 16 + ((lane >> 3) & 1) * 8 + (lane & 7), a_ch = lane >> 4;
@@ -104,7 +116,10 @@ __global__ void __launch_bounds__(WM * WN * 32)
 #pragma unroll
           for (int mt = 0; mt < MT; mt++)
 #pragma unroll
-            for (int nt = 0; nt < NT; nt++) mma16(c[mt][nt], af[mt][2 * h], af[mt][2 * h + 1], bf[nt][h]);
+            for (int nt = 0; nt < NT; nt++) {
+              if constexpr (ROUTE_U) mma16_u8s8(c[mt][nt], af[mt][2 * h], af[mt][2 * h + 1], bf[nt][h]);
+              else mma16(c[mt][nt], af[mt][2 * h], af[mt][2 * h + 1], bf[nt][h]);
+            }
           if constexpr (MODE == 1) {
 #pragma unroll
             for (int mt = 0; mt < MT; mt++)
@@ -113,7 +128,7 @@ __global__ void __launch_bounds__(WM * WN * 32)
 #pragma unroll
                 for (int i = 0; i < 4; i++) { uint32_t& r = run[(nt * 4 + i) % NRUN]; r = r * 0x9E3779B1u + c[mt][nt][i]; }
           }
-          if constexpr (MODE == 2) {
+          if constexpr (MODE == 2 || MODE == 4) {
             const int t = kt * 4 + kk * 2 + h;
 #pragma unroll
             for (int mt = 0; mt < MT; mt++)
@@ -168,10 +183,25 @@ __global__ void __launch_bounds__(WM * WN * 32)
   }
 }
 
-// Configs: (MT, NT, WM, WN, STAGES).  0: 128 x 256 tiles (large M, int8);  1: 16 x 256 (decode);  2: 128 x 128 (FP8, large M);
-// 3: 16 x 128 (FP8, decode).
+__global__ void route_u_c0(const uint8_t* __restrict__ B, int32_t* __restrict__ c0, int N, int K) {
+  int j = blockIdx.x;
+  int sum = 0;
+  for (int l = threadIdx.x; l < K; l += blockDim.x) sum += (int)(int8_t)B[(size_t)j * K + l];
+  __shared__ int sums[256];
+  sums[threadIdx.x] = sum;
+  __syncthreads();
+  for (int d = blockDim.x / 2; d; d >>= 1) {
+    if (threadIdx.x < d) sums[threadIdx.x] += sums[threadIdx.x + d];
+    __syncthreads();
+  }
+  if (threadIdx.x == 0) c0[j] = (int32_t)(0u - 128u * (uint32_t)sums[0]);
+}
+
+// Configs: (MT, NT, WM, WN, STAGES).  0: 128 x 256; 1: 16 x 256; 2: 16 x 16 route-U tile;
+// FP8 uses 0 -> 128 x 128 and 1 -> 16 x 128 below.
 template <int MT, int NT, int WM, int WN, int STAGES, int MODE>
-static void launch(const torch::Tensor& A, const torch::Tensor& B, torch::Tensor& C, torch::Tensor& run, torch::Tensor& ck) {
+static void launch(const torch::Tensor& A, const torch::Tensor& B, torch::Tensor& C, torch::Tensor& run,
+                   torch::Tensor& ck, const torch::Tensor& c0) {
   constexpr int NTHR = WM * WN * 32, BM = WM * MT * 16, BN = WN * NT * 8;
   const int M = A.size(0), K = A.size(1), N = B.size(0);
   TORCH_CHECK(M % BM == 0 && N % BN == 0 && K % BK == 0, "shape (", M, ", ", K, ", ", N, ") is not a multiple of the tile ", BM, " x ", BN, " x ", BK);
@@ -181,7 +211,8 @@ static void launch(const torch::Tensor& A, const torch::Tensor& B, torch::Tensor
   int blocks = (M / BM) * (N / BN);
   if (MODE == 1 && run.numel() < (int64_t)blocks * NTHR) run.resize_({(int64_t)blocks * NTHR});
   kern<<<blocks, NTHR, smem, c10::cuda::getCurrentCUDAStream()>>>(A.data_ptr<uint8_t>(), B.data_ptr<uint8_t>(), C.data_ptr(),
-                                                                   (uint32_t*)run.data_ptr<int32_t>(), ck.numel() ? ck.data_ptr<int32_t>() : nullptr, M, N, K);
+      (uint32_t*)run.data_ptr<int32_t>(), ck.numel() ? ck.data_ptr<int32_t>() : nullptr,
+      c0.numel() ? c0.data_ptr<int32_t>() : nullptr, M, N, K);
   C10_CUDA_KERNEL_LAUNCH_CHECK();
 }
 
@@ -191,12 +222,32 @@ std::vector<torch::Tensor> ncp_gemm(torch::Tensor A, torch::Tensor B, int64_t mo
   auto C = torch::empty({M, N}, A.options().dtype(torch::kInt32));
   auto run = torch::empty({1}, A.options().dtype(torch::kInt32));
   auto ck = mode == 2 ? torch::empty({M, N, K / 16}, A.options().dtype(torch::kInt32)) : torch::empty({0}, A.options().dtype(torch::kInt32));
+  auto c0 = torch::empty({0}, A.options().dtype(torch::kInt32));
 #define DISPATCH(MD)                                                                  \
-  if (cfg == 0) launch<4, 8, 2, 4, 4, MD>(A, B, C, run, ck);                          \
-  else launch<1, 8, 1, 4, 4, MD>(A, B, C, run, ck);
+  if (cfg == 0) launch<4, 8, 2, 4, 4, MD>(A, B, C, run, ck, c0);                       \
+  else if (cfg == 1) launch<1, 8, 1, 4, 4, MD>(A, B, C, run, ck, c0);                  \
+  else launch<1, 2, 1, 1, 3, MD>(A, B, C, run, ck, c0);
   if (mode == 0) { DISPATCH(0) } else if (mode == 1) { DISPATCH(1) } else { DISPATCH(2) }
 #undef DISPATCH
   return {C, run, ck};
+}
+
+std::vector<torch::Tensor> ncp_route_u(torch::Tensor A, torch::Tensor B, int64_t cfg) {
+  TORCH_CHECK(A.is_cuda() && B.is_cuda() && A.dtype() == torch::kUInt8 && B.dtype() == torch::kUInt8
+              && A.is_contiguous() && B.is_contiguous());
+  TORCH_CHECK(A.size(1) == B.size(1), "route-U operands have the same stacked depth");
+  const int64_t M = A.size(0), K = A.size(1), N = B.size(0);
+  auto C = torch::empty({M, N}, A.options().dtype(torch::kInt32));
+  auto ck = torch::empty({M, N, K / 16}, A.options().dtype(torch::kInt32));
+  auto run = torch::empty({1}, A.options().dtype(torch::kInt32));
+  auto c0 = torch::empty({N}, A.options().dtype(torch::kInt32));
+  route_u_c0<<<N, 256, 0, c10::cuda::getCurrentCUDAStream()>>>(
+      B.data_ptr<uint8_t>(), c0.data_ptr<int32_t>(), N, K);
+  C10_CUDA_KERNEL_LAUNCH_CHECK();
+  if (cfg == 0) launch<4, 8, 2, 4, 4, 4>(A, B, C, run, ck, c0);
+  else if (cfg == 1) launch<1, 8, 1, 4, 4, 4>(A, B, C, run, ck, c0);
+  else launch<1, 2, 1, 1, 3, 4>(A, B, C, run, ck, c0);
+  return {C, ck};
 }
 
 torch::Tensor fp8_gemm(torch::Tensor A, torch::Tensor B, int64_t cfg) {
@@ -204,12 +255,14 @@ torch::Tensor fp8_gemm(torch::Tensor A, torch::Tensor B, int64_t cfg) {
   auto C = torch::empty({A.size(0), B.size(0)}, A.options().dtype(torch::kFloat32));
   auto run = torch::empty({1}, A.options().dtype(torch::kInt32));
   auto ck = torch::empty({0}, A.options().dtype(torch::kInt32));
-  if (cfg == 0) launch<4, 4, 2, 4, 3, 3>(A, B, C, run, ck);
-  else launch<1, 4, 1, 4, 4, 3>(A, B, C, run, ck);
+  auto c0 = torch::empty({0}, A.options().dtype(torch::kInt32));
+  if (cfg == 0) launch<4, 4, 2, 4, 3, 3>(A, B, C, run, ck, c0);
+  else launch<1, 4, 1, 4, 4, 3>(A, B, C, run, ck, c0);
   return C;
 }
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("ncp_gemm", &ncp_gemm, "NCP's s8 GEMM with 16-deep checkpoint reads (mode 0 bare, 1 fold, 2 dump)");
+  m.def("ncp_route_u", &ncp_route_u, "NCP route U: u8 x s8, c0 = -128*colsum(Y), every d=16 checkpoint dumped");
   m.def("fp8_gemm", &fp8_gemm, "Pearl's e4m3 GEMM on the ada device (promote every 128 products)");
 }
