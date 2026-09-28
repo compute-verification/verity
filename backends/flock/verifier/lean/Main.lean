@@ -148,6 +148,33 @@ def archivePutCmd (dir : String) (paths : List String) : IO UInt32 := do
     IO.println s!"{hex}  {path}"
   return 0
 
+/-- `coin-tree-check FILE`: R7 and the record's `coin_tree` for the keyed coin tree (`Flock.CoinTree`), on `{"hello": the
+verifier's Hello object (its coins.nonce empty), "sessions": [{"hello": the prover's Hello, "coin_tree": ...}, ...]}`, in
+order, each key fresh. One `COINTREE` line per session: the nonce and the canonical `coins` it checked, or the refusal. -/
+def coinTreeCmd (path : String) : IO UInt32 := do
+  let j ← match Lean.Json.parse (← IO.FS.readFile path) with
+    | .ok j => pure j
+    | .error e => IO.eprintln s!"coin-tree-check: {e}"; return 2
+  let own := (j.getObjVal? "hello").toOption.getD Lean.Json.null
+  let some spec := CoinTree.ofHello ((canon own).toOption.getD "")
+    | IO.eprintln "coin-tree-check: the Hello names no keyed coin tree"; return 2
+  let mut keys : Array String := #[]
+  let mut all := true
+  for s in (j.getObjValAs? (Array Lean.Json) "sessions").toOption.getD #[] do
+    let res : V (String × String) := do
+      let nonce ← CoinTree.checkHello own ((s.getObjValAs? String "hello").toOption.getD "")
+      let key ← CoinTree.checkRecord spec nonce ((s.getObjVal? "coin_tree").toOption.getD Lean.Json.null)
+      CoinTree.checkFresh keys key
+      return (nonce, key)
+    let line := match res with
+      | .ok (nonce, _) => Lean.Json.mkObj [("ok", Lean.Json.bool true), ("nonce", Lean.Json.str nonce),
+          ("coins", Lean.Json.str ((canon (spec.coins nonce)).toOption.getD ""))]
+      | .error e => Lean.Json.mkObj [("ok", Lean.Json.bool false), ("error", Lean.Json.str e)]
+    if let .ok (_, k) := res then keys := keys.push k
+    all := all && res.toBool
+    IO.println s!"COINTREE {line.compress}"
+  return (if all then 0 else 1)
+
 /-- `verify --statement ID --circuit F --comp F --public F [--coins seed|os] --session DIR...`: `ID` names the statement's
 tags (`verity/flock-circuit` by default, or `verity/flock-netlist/v1`); `--comp` is the row leaf's pinned compression
 circuit. Each DIR holds `session.json`, `<table>.rep0.bin` and `<table>.rep1.bin`. The statement is set up once; one
@@ -176,6 +203,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
   let setup := setupOf none
   IO.eprintln s!"setup: {(← IO.monoMsNow) - t0} ms"
   let mut drawn : Array (String × Except String (Setup × Lean.Json)) := #[]
+  let mut coinKeys : Array String := #[]
   let mut all := true
   for dir in dirs do
     let t1 ← IO.monoMsNow
@@ -195,7 +223,18 @@ def verifyCmd (args : List String) : IO UInt32 := do
           | none =>
             st := setupOf (some d)
             drawn := drawn.push (key, st)
-    let verdict := do let (record, proofs) ← files; verify (← st).1 record proofs
+    -- a keyed coin tree's session key is fresh: refuse a key an earlier session of this run used
+    let coinKey : Option String := match st, files with
+      | .ok (s, _), .ok (record, _) =>
+        if s.spec.coinTree.isNone then none
+        else (Lean.Json.parse record).toOption.bind fun j =>
+          (j.getObjVal? "coin_tree").toOption.bind fun ct => (ct.getObjValAs? String "key").toOption
+      | _, _ => none
+    let verdict := do
+      let (record, proofs) ← files
+      if let some k := coinKey then CoinTree.checkFresh coinKeys k
+      verify (← st).1 record proofs
+    if let some k := coinKey then coinKeys := coinKeys.push k
     let (ok, why) := match verdict with | .ok () => (true, "") | .error e => (false, e)
     all := all && ok
     -- the partition finding: the rule, the query, the digest, and whether the units were derived or taken as stated
@@ -435,6 +474,7 @@ def templateQueryCmd (paths : List String) : IO UInt32 := do
 def main (args : List String) : IO UInt32 := do
   match args with
   | ["merkle-test", path] => merkleTest path
+  | ["coin-tree-check", path] => coinTreeCmd path
   | ["hm96-test", path] => hm96Test path
   | ["hm96-test", path, "sha512"] => hm96Test path Hm96.sha512
   | "unit-cut" :: paths => unitCutCmd paths
