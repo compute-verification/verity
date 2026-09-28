@@ -461,7 +461,7 @@ fn witness(st: &Stmt, w: &Wit, device: bool) -> (WitData, f64) {
     };
     #[cfg(feature = "gpu")]
     // a tail that returns the outputs interleaves with the units round by round: the device's two passes cannot follow it
-    if device && w.flip_z.is_none() && w.cut_flip.is_none() && w.nets.is_empty() && st.c.out_net == st.c.unit_net {
+    if device && w.flip_z.is_none() && w.cut_flip.is_none() && w.nets.is_empty() && w.regions.is_none() && st.c.out_net == st.c.unit_net {
         use rayon::prelude::*;
         let ur = st.c.unit_range();
         let ri: Vec<_> = (0..st.blocks()).into_par_iter().map(|b| (w.rowin)(b)).collect();
@@ -478,7 +478,7 @@ fn witness(st: &Stmt, w: &Wit, device: bool) -> (WitData, f64) {
     #[cfg(feature = "gpu")]
     // a tail that returns the outputs (a chain of units, the tail's stages): the host converges every slot's inputs and computes
     // the stages and lookups; the device the compressions, and the units from their converged inputs
-    if device && w.flip_z.is_none() && w.cut_flip.is_none() && w.nets.is_empty() {
+    if device && w.flip_z.is_none() && w.cut_flip.is_none() && w.nets.is_empty() && w.regions.is_none() {
         use rayon::prelude::*;
         let c = &st.c;
         let ri: Vec<_> = (0..st.blocks()).into_par_iter().map(|b| (w.rowin)(b)).collect();
