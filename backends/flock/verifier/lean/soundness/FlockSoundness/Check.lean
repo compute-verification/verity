@@ -170,6 +170,9 @@ hypotheses of the theorems that use them, never `axiom` declarations, so they ca
 #print axioms FlockSoundness.UnitPlace.decode_one
 #print axioms FlockSoundness.Prog.topo
 #print axioms FlockSoundness.Prog.isRowsUnit
+-- the end-to-end theorem, a skeleton: every gap a named hypothesis (assumptions/e2e-checklist.md)
+#print axioms FlockSoundness.Audit.Partition.flock_e2e_count
+#print axioms FlockSoundness.Audit.Partition.flock_e2e_drawn
 -- the audit layer: strategy-level probabilities, draw laws, partitions, the one-stage profile
 #print axioms FlockSoundness.Game.prob_or_le
 #print axioms FlockSoundness.Game.prob_map
