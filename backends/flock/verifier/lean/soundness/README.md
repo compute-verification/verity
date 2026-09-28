@@ -229,7 +229,12 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
   - Over the type DAG (`ComposeDag.lean`), the unit's rows as the block holds them (`Compose.ofBlock`: `deriveChecked`'s
     order, Δ's constant copies copying `one`) are in that order (`ofBlock_ordered`, from `Types.Dag.order_sound`), and
     satisfied composed rows carry the unit type's outputs (`Rows.compose_eval_unit`, from `Types.Dag.unit_sound`).
-  - Still to prove: that the unit net `setupH` parses holds the derived rows (1e), for templates too (#277).
+  - **Placed** (`ComposePlace.lean`). `Compose.Realizes` is `placement_of_realizes`'s block facts as one proposition,
+    and `Realizes.placement` the `Placement` it gives. `Compose.BlockFacts` is 1e's form of the same facts, over the
+    unit's block rows (`blockRow`), and `BlockFacts.placement` gives a table class's placement at a slot for the unit's
+    composed rows (`ofBlock`) from them. `Layout.realizes` proves `Realizes` at any unit slot of a flat statement
+    `Stmt.setupH` accepted, for composed rows that are the parsed unit net's (`Compose.NetRows`).
+  - Still to prove: that the unit net `setupH` parses holds the derived rows (`NetRows`, 1e), and templates (#277).
 
 ### 1.6 Proved from the libraries, not assumed
 

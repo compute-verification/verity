@@ -363,3 +363,14 @@ hypotheses of the theorems that use them, never `axiom` declarations, so they ca
 #print axioms FlockSoundness.setupH_layout
 #print axioms FlockSoundness.placement_of_setupH
 #print axioms FlockSoundness.unitPlace_of_setupH
+-- composed rows, placed: the block's facts as one proposition (Compose.Realizes) and the Placement they give, and a flat
+-- accepted statement's unit slots realizing the rows of its unit net
+#print axioms FlockSoundness.Compose.Realizes.placement
+#print axioms FlockSoundness.Compose.BlockFacts.realizes
+#print axioms FlockSoundness.Compose.BlockFacts.placement
+#print axioms FlockSoundness.Layout.placedA_comp
+#print axioms FlockSoundness.Layout.placedB_comp
+#print axioms FlockSoundness.Layout.placedA_const
+#print axioms FlockSoundness.Layout.placedB_const
+#print axioms FlockSoundness.Layout.placed_pin
+#print axioms FlockSoundness.Layout.realizes
