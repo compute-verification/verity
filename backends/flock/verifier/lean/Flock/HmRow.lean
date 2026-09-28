@@ -1284,7 +1284,10 @@ def Stmt.setupH (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coin
   checkInRange c.kLog regions.size (PT_LOCAL + nbl)
   let identity := if J.has c.metaJ "row_schemas" then Tags.rowV2Identity tags.identity else tags.identity
   let identity := if c.ports.any (·.segs.isSome) then Tags.rowSegIdentity identity else identity
-  let identity := if J.has c.metaJ "out_row_ports" then Tags.outRowsIdentity identity else identity
+  let v2Run := (List.range c.outRowPorts.size).any fun j =>
+    (c.ports.getD (c.ports.size - c.outRowPorts.size + j) default).segs.isNone && c.outRowPorts[j]! > 1
+  let identity := if !J.has c.metaJ "out_row_ports" then identity
+    else if v2Run then Tags.outRowsV2Identity identity else Tags.outRowsIdentity identity
   let mut h := tags.statement.toUTF8 ++ c.sha ++ (← canon identity).toUTF8
   for x in [n, blocksReal, nbl, m, c.kLog, pin, regions.size, c.g] do h := pushLe64 h x
   for d in [da, db] do
@@ -1331,10 +1334,10 @@ def checkRows (c : Circuit) : V Unit := do
       || (List.range c.outRowPorts.size).any (fun j =>
         let (first, n, _, w) := outGroup c j
         let p := c.ports.getD (k + j) default
-        (c.outPorts[first]?.map (·.1)) != some p.name || match p.segs with
-          | some _ => p.bits != 16 * w
-          | none => n != 1 || p.words != (w + 63) / 64 * 64 || p.bits != 16 * p.words) then
-    throw "the rows are not the input rows, then one output row per output port (its name, its words zero-padded to whole SHA-512 blocks, all their bits) or per run of output ports (META out_row_ports: a sha512/row-seg/v1 row of exactly their words, named after the first), each name once"
+        let padded := n == 1 && p.words == (w + 63) / 64 * 64 && p.bits == 16 * p.words
+        (c.outPorts[first]?.map (·.1)) != some p.name ||
+          !(if p.segs.isSome then p.bits == 16 * w else if p.v2 then p.bits == 16 * w || padded else padded)) then
+    throw "the rows are not the input rows, then one output row per output port (its name, its words zero-padded to whole SHA-512 blocks, all their bits) or per run of output ports (META out_row_ports), a bit row of exactly their words (sha512/row/v2 or sha512/row-seg/v1) named after the first, each name once"
   let w := inWords c
   if c.leavesIn.any (·.any (· ≥ (w : Int))) || c.leafCuts.any (·.2.2 ≥ w) then
     throw "a unit's leaf or leaf cut reads an output row: units read the input rows only"
@@ -1392,12 +1395,13 @@ def delta (c : Circuit) (pin : Nat) : Array (Nat × Nat) × Array (Nat × Nat) :
   let (da, db) := HmRow.delta c pin
   let (_, where_) := rowSlots c.ports
   let sin := portCols (c.nets.getD c.shaNet default).2.inGroups
-  -- an output row's bytes all sit in its compressions before the hm96 slot's block (a v1 row's last block is padding, a
-  -- segmented row's is its outer message's)
+  let hin := portCols (c.nets.getD c.hmNet default).2.inGroups
   let msgCol := fun (g p byte t : Nat) =>
     let (k, o) := byteAt (c.ports.getD p default) byte
-    let (slot, sub) := where_[p]![k]!
-    c.slotCol c.shaNet g slot + sin[2 * sub + 1]!.1 + 64 * (o / 8) + 56 - 8 * (o % 8) + t
+    if k < where_[p]!.size then
+      let (slot, sub) := where_[p]![k]!
+      c.slotCol c.shaNet g slot + sin[2 * sub + 1]!.1 + 64 * (o / 8) + 56 - 8 * (o % 8) + t
+    else c.slotCol c.hmNet g p + hin[1]!.1 + 64 * (o / 8) + 56 - 8 * (o % 8) + t
   let forcedZero := c.unitRange.slot 0 + c.unit.useful
   let col := outCol c
   let k0 := nIn c
@@ -1702,7 +1706,10 @@ def Stmt.setupHidden (tags : Tags) (circuitFile publicFile : ByteArray) (coins :
   checkInRange c.kLog regions.size (PT_LOCAL + nbl)
   let identity := if J.has c.metaJ "row_schemas" then Tags.rowV2Identity tags.identity else tags.identity
   let identity := if c.ports.any (·.segs.isSome) then Tags.rowSegIdentity identity else identity
-  let identity := if J.has c.metaJ "out_row_ports" then Tags.outRowsIdentity identity else identity
+  let v2Run := (List.range c.outRowPorts.size).any fun j =>
+    (c.ports.getD (c.ports.size - c.outRowPorts.size + j) default).segs.isNone && c.outRowPorts[j]! > 1
+  let identity := if !J.has c.metaJ "out_row_ports" then identity
+    else if v2Run then Tags.outRowsV2Identity identity else Tags.outRowsIdentity identity
   let mut h := tags.statement.toUTF8 ++ c.sha ++ (← canon identity).toUTF8
   for x in [n, blocksReal, nbl, m, c.kLog, pin, regions.size, c.g] do h := pushLe64 h x
   for d in [da, db] do

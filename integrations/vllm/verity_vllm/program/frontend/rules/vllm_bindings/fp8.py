@@ -105,7 +105,9 @@ class CutlassScaledMmFp8BlockRule(InPlaceRule):
     modes = frozenset({"profile"})
     info = RuleInfo("CutlassScaledMmFp8Block[vllm]", 1, "in-place-binding",
                     applies_to="_C.cutlass_scaled_mm(Tensor! out, a e4m3, b e4m3 [K, N], a_scales f32 [.., K/G], b_scales f32 [K/G, cdiv(N, G)], bias None)",
-                    preconditions=("a is a float8_e4m3fn value [.., K]; out an unwritten bf16 allocation [.., N]",
+                    preconditions=("the active target's tensor-core family is hopper (cc 9.x): the Definition is that family's blockwise CUTLASS "
+                                   "kernel, and `_C.cutlass_scaled_mm` on another target runs another kernel under the same op and kernel class",
+                                   "a is a float8_e4m3fn value [.., K]; out an unwritten bf16 allocation [.., N]",
                                    "b is a transposed view of an e4m3 [N, K] matrix; b_scales a transposed view of an f32 [cdiv(N, G), K/G] matrix, G = 128",
                                    "a_scales is an f32 value [.., K/G] (the group scales the quant rule computed)", "bias is None",
                                    "K % G == 0 (N need not be: the last weight block may be partial)"),
@@ -116,6 +118,10 @@ class CutlassScaledMmFp8BlockRule(InPlaceRule):
         return _C_op("cutlass_scaled_mm")
 
     def applies(self, node, ctx):
+        tp = active_target_profile()
+        if tp.tensor_core_family != "hopper":
+            return (f"numerics_unregistered: target {tp.tensor_core_family} (cc {tp.capability_str}); ScaledMmFp8Block_v1 is the hopper "
+                    f"family's blockwise CUTLASS kernel, and this target's `_C.cutlass_scaled_mm` blockwise kernel has no registered Definition")
         if len(node.args) < 5:
             return "unexpected operator arity"
         out, a, b, a_s, b_s = node.args[:5]

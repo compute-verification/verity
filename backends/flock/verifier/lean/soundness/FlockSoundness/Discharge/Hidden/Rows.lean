@@ -1,13 +1,13 @@
 import FlockSoundness.Discharge.Hidden.Facts
 
 /-!
-# An output row's compressions
+# An output row's shape
 
-`HmOut.delta` writes output row `j`'s message bytes `0 … 2 · words` into the row's `sha512x3` slots, byte `b` in
-compression `(HmRow.byteAt row b).1`. Each is one of the row's compressions (`out_bytes`): a `sha512/row/v1` row's by
-`ParseFacts.portWords`; a `sha512/row/v2` or `sha512/row-seg/v1` row's because `HmRow.rowPorts` derives its compressions
-from its length in bits (`rowPorts_v2`), which `HmOut.checkRows` holds to its run's words (`checkRows_out`). Unsegmented
-output rows are one per output port (`outRows_single`, `outGroup_single`).
+`HmOut.checkRows` holds output row `j` to one of two shapes (`checkRows_out`): a lone output port's words zero-padded to
+whole SHA-512 blocks, all of them bits, or a bit row (`sha512/row/v2` or `sha512/row-seg/v1`) of exactly its run's words.
+A `sha512/row/v1` row is the first (`out_rows_v1`), so its output rows are one per output port (`outRows_single`,
+`outGroup_single`) and whole blocks (`ParseFacts.portWords`). `HmRow.rowPorts` derives a bit row's words and compressions
+from its length in bits (`rowPorts_v2`).
 -/
 
 open Flock FlockLevel3
@@ -238,16 +238,18 @@ theorem parse_rowPorts {tags : Tags} {bytes : ByteArray} {tables : List (String 
   subst hc
   exact ⟨⟨_, tags.typed, hrp⟩, hsum⟩
 
-/-- **What `HmOut.checkRows` checks of output row `j`**: it is row `nIn + j`, a row of the circuit; a segmented row has
-its run's bits; an unsegmented one is one port's, its words that port's zero-padded to whole SHA-512 blocks (a multiple of
-64) and its bits all of them. -/
+/-- **What `HmOut.checkRows` checks of output row `j`**: it is row `nIn + j`, a row of the circuit, and either a padded
+lone port (its run one port, its words that port's zero-padded to whole SHA-512 blocks, a multiple of 64, and its bits
+all of them; unsegmented) or an exact run (a bit row, `sha512/row/v2` or `sha512/row-seg/v1`, of exactly its run's
+words). -/
 theorem checkRows_out {c : Circuit} (h : HmOut.checkRows c = .ok ()) {j : ℕ} (hj : j < c.outRowPorts.size) :
     HmOut.nIn c + j < c.ports.size ∧
-      (∀ s, (c.ports.getD (HmOut.nIn c + j) default).segs = some s →
-        (c.ports.getD (HmOut.nIn c + j) default).bits = 16 * (HmOut.outGroup c j).2.2.2) ∧
-      ((c.ports.getD (HmOut.nIn c + j) default).segs = none → (HmOut.outGroup c j).2.1 = 1 ∧
-        (c.ports.getD (HmOut.nIn c + j) default).words = ((HmOut.outGroup c j).2.2.2 + 63) / 64 * 64 ∧
-        (c.ports.getD (HmOut.nIn c + j) default).bits = 16 * (c.ports.getD (HmOut.nIn c + j) default).words) := by
+      (((HmOut.outGroup c j).2.1 = 1 ∧
+          (c.ports.getD (HmOut.nIn c + j) default).words = ((HmOut.outGroup c j).2.2.2 + 63) / 64 * 64 ∧
+          (c.ports.getD (HmOut.nIn c + j) default).bits = 16 * (c.ports.getD (HmOut.nIn c + j) default).words ∧
+          (c.ports.getD (HmOut.nIn c + j) default).segs = none) ∨
+        (((c.ports.getD (HmOut.nIn c + j) default).segs.isSome ∨ (c.ports.getD (HmOut.nIn c + j) default).v2) ∧
+          (c.ports.getD (HmOut.nIn c + j) default).bits = 16 * (HmOut.outGroup c j).2.2.2)) := by
   unfold HmOut.checkRows at h
   obtain ⟨k, -, h⟩ := except_bind_ok h
   extract_lets (config := { underBinder := false, onlyGivenNames := true }) names jp at h
@@ -259,22 +261,29 @@ theorem checkRows_out {c : Circuit} (h : HmOut.checkRows c = .ok ()) {j : ℕ} (
   have := (hrow j hj).2
   rw [hk']
   generalize c.ports.getD (k + j) default = q at this ⊢
-  refine ⟨by omega, fun s hs => ?_, fun hs => ?_⟩
-  · simp only [hs, bne_iff_ne, ne_eq, Decidable.not_not] at this
-    exact this
-  · simp only [hs, Bool.or_eq_true, bne_iff_ne, ne_eq, not_or, Decidable.not_not] at this
-    exact ⟨this.1.1, this.1.2, this.2⟩
+  refine ⟨by omega, ?_⟩
+  cases hs : q.segs with
+  | some s =>
+    simp only [hs, Option.isSome_some, ↓reduceIte, beq_iff_eq, Bool.not_eq_eq_eq_not, Bool.not_true,
+      Bool.not_eq_false] at this
+    exact Or.inr ⟨Or.inl rfl, this⟩
+  | none =>
+    cases hv : q.v2
+    · simp only [hs, hv, Option.isSome_none, Bool.false_eq_true, ↓reduceIte, Bool.and_eq_true, beq_iff_eq,
+        Bool.not_eq_eq_eq_not, Bool.not_true, Bool.not_eq_false] at this
+      exact Or.inl ⟨this.1.1, this.1.2, this.2, rfl⟩
+    · simp only [hs, hv, Option.isSome_none, Bool.false_eq_true, ↓reduceIte, Bool.or_eq_true, Bool.and_eq_true,
+        beq_iff_eq, Bool.not_eq_eq_eq_not, Bool.not_true, Bool.not_eq_false] at this
+      rcases this with h16 | ⟨⟨h1, hw⟩, hb⟩
+      · exact Or.inr ⟨Or.inr rfl, h16⟩
+      · exact Or.inl ⟨h1, hw, hb, rfl⟩
 
-/-- **Unsegmented rows' output rows are one per output port**: each run is one port. -/
+/-- **Output rows each of one port are one per output port.** -/
 theorem outRows_single {c : Circuit} (hsum : c.outRowPorts.foldl (· + ·) 0 = c.outPorts.size)
-    (h : HmOut.checkRows c = .ok ()) (hs : ∀ p ∈ c.ports.toList, p.segs = none) :
+    (h1' : ∀ j < c.outRowPorts.size, (HmOut.outGroup c j).2.1 = 1) :
     c.outRowPorts = Array.replicate c.outPorts.size 1 := by
   have h1 : ∀ i (hi : i < c.outRowPorts.size), c.outRowPorts[i] = 1 := fun i hi => by
-    obtain ⟨hlt, -, hn⟩ := checkRows_out h hi
-    have hm : c.ports.getD (HmOut.nIn c + i) default ∈ c.ports.toList := by
-      rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hlt, Option.getD_some]
-      exact Array.getElem_mem_toList hlt
-    have := (hn (hs _ hm)).1
+    have := h1' i hi
     simp only [HmOut.outGroup, Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hi, Option.getD_some] at this
     exact this
   have hr : c.outRowPorts = Array.replicate c.outRowPorts.size 1 :=
@@ -303,96 +312,9 @@ theorem outGroup_single {c : Circuit} (hr : c.outRowPorts = Array.replicate c.ou
       Array.getElem?_eq_getElem hj, Option.getD_some]
     simp
 
-/-- A segmented row's byte `byte`, of a row of more than `8 · byte` bits, is in one of its compressions. -/
-theorem segByte_lt {l byte : ℕ} (hb : 8 * byte < l) :
-    ((HmRow.segShape l).1.extract 0 (byte / 1024)).foldl (· + ·.2) 0 + byte % 1024 / 128 <
-      (HmRow.segShape l).1.foldl (· + ·.2) 0 + (HmRow.segShape l).2 - 1 := by
-  have hJ : byte / 1024 < (l + HmRow.ROW_SEG_BITS - 1) / HmRow.ROW_SEG_BITS := by
-    simp only [HmRow.ROW_SEG_BITS]; omega
-  rw [← Array.foldl_toList, Array.toList_extract, List.extract_eq_take_drop, List.drop_zero, Nat.sub_zero,
-    ← Array.foldl_toList, foldl_snd_eq, foldl_snd_eq, Nat.zero_add, Nat.zero_add, List.map_take]
-  unfold HmRow.segShape
-  simp only [Array.toList_map, Array.toList_range]
-  generalize hs : (l + HmRow.ROW_SEG_BITS - 1) / HmRow.ROW_SEG_BITS = s at hJ ⊢
-  generalize hM : List.map (·.2) (List.map (fun j => (min (l - HmRow.ROW_SEG_BITS * j) HmRow.ROW_SEG_BITS,
-    ((min (l - HmRow.ROW_SEG_BITS * j) HmRow.ROW_SEG_BITS + 7) / 8 + 17 + 127) / 128)) (List.range s)) = M
-  have hlen : byte / 1024 < M.length := by rw [← hM]; simpa using hJ
-  have hget : M[byte / 1024] = ((min (l - HmRow.ROW_SEG_BITS * (byte / 1024)) HmRow.ROW_SEG_BITS + 7) / 8 + 17 + 127) / 128 := by
-    subst hM; simp
-  have hsplit := congrArg List.sum (List.take_append_drop (byte / 1024) M)
-  rw [List.sum_append, List.drop_eq_getElem_cons hlen, List.sum_cons, hget] at hsplit
-  simp only [HmRow.ROW_SEG_BITS] at hsplit hs ⊢
-  omega
-
-/-- **Output row `j`'s message bytes are in its compressions** (`HmRow.byteAt`), for every byte below `2 · words`: a
-`sha512/row/v1` row's by `ParseFacts.portWords`, a `sha512/row/v2` row's because `HmRow.rowPorts` derives its compressions
-from its length (`rowPorts_v2`), which `HmOut.checkRows` holds to its words (`checkRows_out`). -/
-theorem out_bytes {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
-    (hp : HmRow.parse tags cf tables = .ok c) (hc : HmOut.checkRows c = .ok ()) {j : ℕ} (hj : j < c.outRowPorts.size) :
-    HmOut.nIn c + j < c.ports.size ∧ ∀ byte < 2 * (c.ports.getD (HmOut.nIn c + j) default).words,
-      (HmRow.byteAt (c.ports.getD (HmOut.nIn c + j) default) byte).1 <
-        (c.ports.getD (HmOut.nIn c + j) default).chunks := by
-  obtain ⟨hlt, hseg, hun⟩ := checkRows_out hc hj
-  refine ⟨hlt, ?_⟩
-  have hmem : c.ports.getD (HmOut.nIn c + j) default ∈ c.ports.toList := by
-    rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hlt, Option.getD_some]
-    exact Array.getElem_mem_toList hlt
-  generalize c.ports.getD (HmOut.nIn c + j) default = p at hmem hseg hun ⊢
-  intro byte hb
-  obtain ⟨⟨mj, typed, hr⟩, -⟩ := parse_rowPorts hp
-  cases hs : p.segs with
-  | none =>
-    rw [Typed.byteAt_none hs]
-    obtain ⟨-, h64, hbits⟩ := hun hs
-    cases hv : p.v2
-    · have := (parse_facts hp).portWords p hmem hv
-      simp only
-      omega
-    · obtain ⟨-, hch, -⟩ := rowPorts_v2 hr p hmem hv
-      rw [hch hs, hbits]
-      simp only
-      omega
-  | some s =>
-    have hv : p.v2 = true := by
-      cases hv : p.v2
-      · rw [(parse_facts hp).v1Segs p hmem hv] at hs; cases hs
-      · rfl
-    obtain ⟨hw, -, hsg⟩ := rowPorts_v2 hr p hmem hv
-    obtain ⟨rfl, hch⟩ := hsg s hs
-    have hbits := hseg _ hs
-    unfold HmRow.byteAt
-    rw [hs, hch]
-    exact segByte_lt (by omega)
-
-/-- **Unsegmented rows' output rows**: one per output port, each after the input rows, of `2 · words = 128 · chunks`
-bytes (`ParseFacts.portWords`; a `sha512/row/v2` row's by `rowPorts_v2` and `checkRows_out`) and `16 · words` bits. -/
-theorem out_rows_unseg {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
-    (hp : HmRow.parse tags cf tables = .ok c) (hc : HmOut.checkRows c = .ok ())
-    (hu : ∀ p ∈ c.ports.toList, p.segs = none) :
-    c.outRowPorts = Array.replicate c.outPorts.size 1 ∧
-      ∀ j < c.outPorts.size, HmOut.nIn c + j < c.ports.size ∧
-        2 * (c.ports.getD (HmOut.nIn c + j) default).words = 128 * (c.ports.getD (HmOut.nIn c + j) default).chunks ∧
-        (c.ports.getD (HmOut.nIn c + j) default).bits = 16 * (c.ports.getD (HmOut.nIn c + j) default).words := by
-  have P := parse_facts hp
-  have hr := outRows_single (parse_rowPorts hp).2 hc hu
-  refine ⟨hr, fun j hj => ?_⟩
-  have hj' : j < c.outRowPorts.size := by rw [hr, Array.size_replicate]; exact hj
-  obtain ⟨hlt, -, hun⟩ := checkRows_out hc hj'
-  have hmem : c.ports.getD (HmOut.nIn c + j) default ∈ c.ports.toList := by
-    rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hlt, Option.getD_some]
-    exact Array.getElem_mem_toList hlt
-  generalize c.ports.getD (HmOut.nIn c + j) default = p at hmem hun ⊢
-  obtain ⟨-, h64, hbits⟩ := hun (hu p hmem)
-  refine ⟨hlt, ?_, hbits⟩
-  cases hv : p.v2
-  · exact P.portWords p hmem hv
-  · obtain ⟨⟨mj, typed, hrp⟩, -⟩ := parse_rowPorts hp
-    obtain ⟨-, hch, -⟩ := rowPorts_v2 hrp p hmem hv
-    rw [hch (hu p hmem), hbits]
-    omega
-
 /-- **`sha512/row/v1` rows' output rows**: unsegmented, one per output port, each after the input rows and of
-`2 · words = 128 · chunks` bytes (`ParseFacts.portWords`). -/
+`2 · words = 128 · chunks` bytes (`ParseFacts.portWords`): a `sha512/row/v1` row is no bit row, so each output row is a
+padded lone port (`checkRows_out`). -/
 theorem out_rows_v1 {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
     (hp : HmRow.parse tags cf tables = .ok c) (hc : HmOut.checkRows c = .ok ())
     (hv1 : ∀ p ∈ c.ports.toList, p.v2 = false) :
@@ -401,12 +323,48 @@ theorem out_rows_v1 {tags : Tags} {cf : ByteArray} {tables : List (String × Byt
         2 * (c.ports.getD (HmOut.nIn c + j) default).words = 128 * (c.ports.getD (HmOut.nIn c + j) default).chunks := by
   have P := parse_facts hp
   have hu : ∀ p ∈ c.ports.toList, p.segs = none := fun p hm => P.v1Segs p hm (hv1 p hm)
-  have hr := outRows_single (parse_rowPorts hp).2 hc hu
+  have hr := outRows_single (parse_rowPorts hp).2 fun j hj => by
+    obtain ⟨hlt, h1 | ⟨hs, -⟩⟩ := checkRows_out hc hj
+    · exact h1.1
+    · rw [hu _ (getD_mem_toList (d := default) hlt), hv1 _ (getD_mem_toList (d := default) hlt)] at hs
+      simp at hs
   refine ⟨hu, hr, fun j hj => ?_⟩
   have hj' : j < c.outRowPorts.size := by rw [hr, Array.size_replicate]; exact hj
   have hlt := (checkRows_out hc hj').1
-  refine ⟨hlt, P.portWords _ ?_ (hv1 _ ?_)⟩ <;>
-  · rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hlt, Option.getD_some]
-    exact Array.getElem_mem_toList hlt
+  exact ⟨hlt, P.portWords _ (getD_mem_toList (d := default) hlt) (hv1 _ (getD_mem_toList (d := default) hlt))⟩
+
+/-- **Unsegmented output rows of whole blocks**: when the output rows are one per output port, each a multiple of 64
+words, each is after the input rows, of `2 · words = 128 · chunks` bytes (`ParseFacts.portWords`; a `sha512/row/v2`
+row's by `rowPorts_v2`) and `16 · words` bits (`checkRows_out`: a padded lone port's, or a bit row's of exactly its
+port's words). -/
+theorem out_rows_whole {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
+    (hp : HmRow.parse tags cf tables = .ok c) (hc : HmOut.checkRows c = .ok ())
+    (hu : ∀ p ∈ c.ports.toList, p.segs = none) (hr : c.outRowPorts = Array.replicate c.outPorts.size 1)
+    (h64 : ∀ j < c.outPorts.size, (c.ports.getD (HmOut.nIn c + j) default).words % 64 = 0) :
+    ∀ j < c.outPorts.size, HmOut.nIn c + j < c.ports.size ∧
+      2 * (c.ports.getD (HmOut.nIn c + j) default).words = 128 * (c.ports.getD (HmOut.nIn c + j) default).chunks ∧
+      (c.ports.getD (HmOut.nIn c + j) default).bits = 16 * (c.ports.getD (HmOut.nIn c + j) default).words := by
+  have P := parse_facts hp
+  obtain ⟨⟨mj, typed, hrp⟩, -⟩ := parse_rowPorts hp
+  intro j hj
+  have hj' : j < c.outRowPorts.size := by rw [hr, Array.size_replicate]; exact hj
+  have h6 := h64 j hj
+  obtain ⟨hlt, hrow⟩ := checkRows_out hc hj'
+  have hmem := getD_mem_toList (d := default) hlt
+  generalize c.ports.getD (HmOut.nIn c + j) default = p at hmem hrow h6 ⊢
+  have hb : p.bits = 16 * p.words := by
+    rcases hrow with ⟨-, -, hb, -⟩ | ⟨hs, hb⟩
+    · exact hb
+    · have hv : p.v2 = true := by
+        rcases hs with hs | hs
+        · rw [hu p hmem] at hs; cases hs
+        · exact hs
+      rw [(rowPorts_v2 hrp p hmem hv).1, hb]
+      omega
+  refine ⟨hlt, ?_, hb⟩
+  cases hv : p.v2
+  · exact P.portWords p hmem hv
+  · rw [(rowPorts_v2 hrp p hmem hv).2.1 (hu p hmem), hb]
+    omega
 
 end FlockSoundness.Discharge.Hidden

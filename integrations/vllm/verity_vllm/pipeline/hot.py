@@ -402,7 +402,7 @@ def cold_run(argv: list[str], reason: str, log=print) -> int:
 # sources, the staging arena, the pinned pool, the retained device store).  A cold process frees them at exit; the hot worker must drop them
 # explicitly after `close()` so the caching allocator can hand the memory to the next job (R16 sys: +2.3 GiB allocated per hot job otherwise).
 DEVICE_ATTRS = ("win_tensors", "win_scratch", "arena", "pool", "_gpu_blocks", "_gpu_levels", "_levels", "_done", "_layouts", "_streams",
-                "_metas_cache", "_ld_cache", "_nbytes_cache", "_wrapped", "_handles", "_cur", "sources", "_nc", "_hi")
+                "_metas_cache", "_wrapped", "_handles", "_cur", "sources", "_nc", "_hi")
 
 
 def release_committer_device(com: Any) -> list[str]:

@@ -31,12 +31,16 @@ def outSrc (c : Circuit) (g j k t : ℕ) : ℕ :=
   if k < (HmOut.outGroup c j).2.2.2 then HmOut.outCol c g ((HmOut.outGroup c j).2.2.1 + k) + t else Hm.zeroCol c
 
 /-- Row `p`'s message bit `t` of byte `byte` at VU `g`, as `HmOut.delta` writes it: in the row's chain's `sha512x3`
-slot for the byte's compression (`HmRow.byteAt`; block `byte / 128` of an unsegmented row). -/
+slot for the byte's compression (`HmRow.byteAt`; block `byte / 128` of an unsegmented row), or, past the row's
+compressions, in its `hm96` slot's `pad` (an exact-length row's last block). -/
 def deltaMsgCol (c : Circuit) (g p byte t : ℕ) : ℕ :=
   let ko := HmRow.byteAt (c.ports.getD p default) byte
-  let sl := ((HmRow.rowSlots c.ports).2[p]!)[ko.1]!
-  c.slotCol c.shaNet g sl.1 + (portCols (c.nets.getD c.shaNet default).2.inGroups)[2 * sl.2 + 1]!.1 +
-    64 * (ko.2 / 8) + 56 - 8 * (ko.2 % 8) + t
+  if ko.1 < ((HmRow.rowSlots c.ports).2[p]!).size then
+    let sl := ((HmRow.rowSlots c.ports).2[p]!)[ko.1]!
+    c.slotCol c.shaNet g sl.1 + (portCols (c.nets.getD c.shaNet default).2.inGroups)[2 * sl.2 + 1]!.1 +
+      64 * (ko.2 / 8) + 56 - 8 * (ko.2 % 8) + t
+  else c.slotCol c.hmNet g p + (portCols (c.nets.getD c.hmNet default).2.inGroups)[1]!.1 +
+      64 * (ko.2 / 8) + 56 - 8 * (ko.2 % 8) + t
 
 /-- **Δ's pairs past `HmRow.delta`'s** (`HmOut.delta`): per VU `g`, output row `j` (one per run of output ports,
 `outRowPorts`), row word `k` and bit `t < 16`, the message column `i` of row `nIn + j`'s byte `2k + t / 8`, bit `t % 8`,

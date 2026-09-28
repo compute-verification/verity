@@ -61,10 +61,12 @@ keeps the cache sound: a pass is only reused while everything the tests read is 
 
 - **The package imports another at run time:** add it to `[project] dependencies` (with a `[tool.uv.sources]` workspace entry).
 - **Only the tests need it,** such as a cross-check against another package, a shared fixture or the census: list the path
-  under `[tool.verity.tests] inputs` in the suite's pyproject.toml, with a comment saying why. A listed workspace package
-  brings its own dependencies.
+  under `[tool.verity.tests] inputs` in the suite's pyproject.toml, with a comment saying why. List what the tests read, as
+  narrowly as a directory or a file allows: a listed workspace package is its directory alone, not its dependencies, and
+  every listed path adds the suite to the quick tier of each change under it.
 
-Programs a test starts as a subprocess aren't traced, so list what they read. Locate files from `__file__`
+Programs a test starts as a subprocess aren't traced, so list what they read; the guard sees opens, not `exists()` or `stat()`,
+so list a path a test only checks the existence of too. Locate files from `__file__`
 (`Path(__file__).parent / "fixtures"`), never from the working directory. Never lean on another suite's side effects, such as
 a `sys.path` entry another test file added: every suite runs alone.
 

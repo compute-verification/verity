@@ -142,12 +142,9 @@ theorem bc_drawnH {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : Li
   rw [← hchunk g hr]
   exact bc_pinned' L regs hregs hz o hg hg2 (Array.getElem_mem_toList hpr) (hall _ hpr) hsz128
 
-/-- A row's message column (`Typed.msgCol`) in one of the row's compressions is `HmOut.delta`'s (`deltaMsgCol`). -/
-theorem msgCol_delta {c : Circuit} {g p b t : ℕ}
-    (hk : (HmRow.byteAt (c.ports.getD p default) b).1 < ((HmRow.rowSlots c.ports).2[p]!).size) :
-    Typed.msgCol c g p b t = deltaMsgCol c g p b t := by
-  simp only [Typed.msgCol, deltaMsgCol, getElem!_eq_getD'] at hk ⊢
-  simp only [hk, ↓reduceIte]
+/-- A row's message column (`Typed.msgCol`, `HmRow.delta`'s) is `HmOut.delta`'s (`deltaMsgCol`). -/
+theorem msgCol_delta (c : Circuit) (g p b t : ℕ) : Typed.msgCol c g p b t = deltaMsgCol c g p b t := by
+  simp only [Typed.msgCol, deltaMsgCol, getElem!_eq_getD']
 
 section Msg
 
@@ -166,16 +163,11 @@ theorem msg_bytes {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z :
     bytesOf (blockBit (L.model regs) z o) (2 * (st.c.ports.getD (HmOut.nIn st.c + j) default).words)
         (Typed.msgCol st.c g (HmOut.nIn st.c + j)) =
       outBytes (blockBit (L.model regs) z o) st.c g j := by
-  obtain ⟨hp, hw⟩ := hrows.2.2 j hj
   have hG := outGroup_single hrows.2.1 hj
   unfold bytesOf outBytes
   congr 1
   funext b
   have hb := b.isLt
-  have hks : (HmRow.byteAt (st.c.ports.getD (HmOut.nIn st.c + j) default) b.val).1 <
-      ((HmRow.rowSlots st.c.ports).2[HmOut.nIn st.c + j]!).size := by
-    rw [Typed.byteAt_none (segs_getD hrows.1 hp), rowSlots_size hp, getElem!_eq_getD']
-    omega
   have hcopy : ∀ t : Fin 8,
       blockBit (L.model regs) z o (Typed.msgCol st.c g (HmOut.nIn st.c + j) b.val t.val) =
         blockBit (L.model regs) z o (outSrc st.c g j (b.val / 2) (8 * (b.val % 2) + t.val)) := fun t => by
@@ -185,7 +177,7 @@ theorem msg_bytes {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z :
     have := msg_copy L L0 F0 hv1 hda hrows hz o hg hj (k := b.val / 2) (t := 8 * (b.val % 2) + t.val) (by omega)
       (by omega)
     rw [e1, e2] at this
-    rw [msgCol_delta hks]
+    rw [msgCol_delta]
     exact this
   by_cases hk : b.val / 2 < (st.c.outPorts.getD j default).2
   · simp only [hk, ↓reduceIte]

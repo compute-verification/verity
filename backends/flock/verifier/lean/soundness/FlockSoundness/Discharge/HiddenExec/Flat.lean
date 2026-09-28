@@ -79,7 +79,10 @@ theorem deltaMsgCol_ne_unit (L : Layout st) (P : ParseFacts tags st.c) (C : Chec
   have hne := L.ne_unit_at P C P.shaNet hsha.symm hg (by rw [C.perVu_sha]; exact h1)
     (getElem_mem_toList' (by rw [hsz]; exact hidx)) (tt := 64 * (byte % 128 / 8) + 56 - 8 * (byte % 128 % 8) + t)
     (by rw [hw]; omega) hs₀ hb
-  dsimp only [Hidden.deltaMsgCol]
+  have hk : (HmRow.byteAt (st.c.ports.getD p default) byte).1 < ((HmRow.rowSlots st.c.ports).2[p]!).size := by
+    rw [Typed.byteAt_none hs, Hm.rowSlots_size hp]
+    exact hbyte
+  simp only [Hidden.deltaMsgCol, hk, ↓reduceIte]
   rw [Typed.byteAt_none hs]
   dsimp only
   intro he

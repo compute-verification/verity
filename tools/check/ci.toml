@@ -1,0 +1,63 @@
+# The jobs `check` runs, written as data: who owns each, which group it runs in, and what its failure means for the run.
+# `declaration.py` reads this file without running any of the commit's code. `tests/test_declaration.py` fails when it and
+# check.py disagree, so a job can't be added, dropped, moved or halted in one place and not the other. Today check.py still
+# builds the commands; this file is the first step of the CI job API (owners declare their jobs, CI runs them).
+schema = "ci/v0"
+
+# Group 1: the test suites (tools/check/suites.py), each suite owned by its package.
+[[job]]
+name = "pytest"
+owner = "ci"
+group = 1
+
+# Group 2: C-Flock's Rust build and tests, and the property checks every circuit passes.
+[[job]]
+name = "flock-circuit-build"
+owner = "proofs"
+group = 2
+halts_on = "error: could not compile"
+
+[[job]]
+name = "circuit-check"
+owner = "circuits"
+group = 2
+
+[[job]]
+name = "flock-rust-tests"
+owner = "proofs"
+group = 2
+
+# Group 3: the Lean verifier and every Lake package's audit, then the suites that need the built packages, then the
+# agreement with upstream's Rust verifier.
+[[job]]
+name = "lean-build"
+owner = "proofs"
+group = 3
+
+[[job]]
+name = "lean-unit-cut"
+owner = "proofs"
+group = 3
+
+[[job]]
+name = "lean-audit"
+owner = "lean"
+group = 3
+
+[[job]]
+name = "lean-suites"
+owner = "ci"
+group = 3
+
+[[job]]
+name = "lean-agreement"
+owner = "proofs"
+group = 3
+merge_requires = ["backends/flock/", "!README.md", "!PROTOCOL.md"]
+
+# Group 4: the early Lean check on a merge (stale records, broken builds); its failure stops the whole run.
+[[job]]
+name = "lean-changed"
+owner = "lean"
+group = 4
+halts = true

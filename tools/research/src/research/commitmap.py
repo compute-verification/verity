@@ -33,6 +33,8 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .gates import git_env
+
 KIND = "commit-map/v1"
 LABEL = "commit_map"
 ACCEPTED, RETRACTED = "accepted", "retracted"
@@ -103,7 +105,7 @@ class Maps:
     def old_history(self, repo: Path, ref: str, base: str | None = None) -> list[str]:
         if not self.pairs:
             return []
-        revs = _git(repo, "rev-list", ref, *(["--not", base] if base else [])).split()
+        revs = _git(repo, "rev-list", ref, *(["--not", base] if base else []), env=git_env()).split()
         gone = self.replaced()
         return [c for c in revs if c in gone]
 

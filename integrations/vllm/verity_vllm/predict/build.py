@@ -286,7 +286,7 @@ class _Specs:
             self.embedding = self.kind("embedding_shard", VS=VS, H=C.H, START=rank * VS)
             self.all_reduce, self.all_gather = self.kind("all_reduce2", N=C.H), self.kind("all_gather2", N=VS)
         self.norm0 = self.kind("rmsnorm", N=C.H, EPS=C.EPS)
-        self.fused = self.kind("rmsnorm_fused", N=C.H, EPS=C.EPS)
+        self.fused = self.kind("rmsnorm_fused", N=C.H, EPS=C.EPS, TARGET=target)
         self.qkv, self.o = self.gemm(C.H, C.QKV), self.gemm(C.NH * C.D, C.H)
         self.qkv_bias = self.qkv_fused = None
         if C.qkv_bias:
@@ -355,7 +355,10 @@ class _Specs:
         return self._const[key]
 
     def kind(self, role: str, **statics):
-        fn = self.voc.kind(role, **statics)
+        try:
+            fn = self.voc.kind(role, **statics)
+        except self.TG.UnregisteredTarget as e:
+            raise Unexpressible(f"numerics_unregistered: {e}") from None
         if fn is None:
             raise Unexpressible(f"vocabulary {self.voc.name!r} has no kind for role {role!r} with {statics}")
         return fn

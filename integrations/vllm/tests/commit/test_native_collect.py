@@ -189,3 +189,33 @@ def test_native_hook_body_collects_like_the_python_wrapper(mod):
     assert c.drain_errors() == []
     del p.forward, s.forward
     assert isinstance(p(x), tuple)
+
+
+def test_end_run_keeps_the_plans_the_ended_run_used_and_a_dropped_plan_is_learned_again_at_the_same_offsets(mod):
+    """`Collector.end_run` (native_plans.h through the committer's reset): the plan of the run that ended is followed by the next
+    one across commit.py's second reset; a plan a whole run did not use is dropped, and when its key recurs it is learned again at
+    the same offsets, under a version above the dropped one."""
+    c = mod.Collector()
+    arena = torch.zeros(1 << 16, dtype=torch.uint8, device="cuda")
+    ts = [torch.randn(4, 4, device="cuda"), torch.randn(7, device="cuda", dtype=torch.float16), torch.arange(5, device="cuda", dtype=torch.int8)]
+
+    def step(key):
+        c.begin_step(plan_key=key, arena_ptr=arena.data_ptr(), arena_bytes=arena.numel(), use_plan=True)
+        for i, t in enumerate(ts):
+            c.collect(i, t)
+        return c.end_step()
+
+    assert step(3)[2:] == (True, 1)
+    learned = c.export_plan(3)
+    c.end_run()
+    c.end_run()
+    assert step(3)[2:] == (False, 1) and c.stats()["plans"] == 1
+    c.end_run()
+    step(4)
+    c.end_run()
+    assert c.plan_version(3) == -1 and c.export_plan(3) == [] and (c.stats()["plans"], c.stats()["plan_entries"]) == (1, len(ts))
+    used, n, changed, version = step(3)
+    torch.cuda.synchronize()
+    assert changed and version > 1 and c.export_plan(3) == learned
+    for t, (off, _, nb) in zip(ts, _reference_layout(ts)[0]):
+        assert torch.equal(arena[off:off + nb], _as_bytes(t))

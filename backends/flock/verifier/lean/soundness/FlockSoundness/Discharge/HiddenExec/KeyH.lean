@@ -65,10 +65,11 @@ theorem outBitRow_spec {u u' : Fin n} {d : ℕ × ℕ × ℕ} {q : Fin c.ports.s
 
 /-- **An output word's bit is an output row's**: at an output word of the circuit (`outWords`), in a circuit whose
 output rows hold their ports' words (`HmOut.checkRows`), each of its 16 bits is a bit of an output row. -/
-theorem outBitRow_ne_none (hcr : HmOut.checkRows c = .ok ()) (hrows : Hidden.OutRows c) (u : Fin n)
+theorem outBitRow_ne_none (hcr : HmOut.checkRows c = .ok ()) (hrows : Hidden.OutRows c)
+    (hv : ∀ p ∈ c.ports.toList, p.v2 = false) (u : Fin n)
     {d : ℕ × ℕ × ℕ} (hw : outWordOf c d < c.outWords) (ht : d.2.2 < 16) : outBitRow c u d ≠ none := by
   obtain ⟨hjo, -, hk⟩ := outPortOf_spec c hw
-  have hle := checkRows_words hcr hrows.2.1 hrows.1 hjo
+  have hle := checkRows_words hcr hrows.2.1 hrows.1 hv hjo
   obtain ⟨hq, -⟩ := hrows.2.2 _ hjo
   have hpw : portRowW c ⟨_, hq⟩ = 16 * (c.ports.getD (HmOut.nIn c + outPortOf c (outWordOf c d)) default).words := by
     unfold portRowW
@@ -359,7 +360,8 @@ theorem keyProgH_valPinned (hkeys : KeysRow c hU (portRowW c)) :
       refine (hlo u'' hu').2 _ ?_
       rw [← hget]
       exact Array.getElem_mem_toList _
-    exact outBitRow_ne_none hcr (Hidden.out_rows_v1 (hparse S R u hu) hcr fun p hp => (hv1 p hp).1) u hwlt ht hno'
+    exact outBitRow_ne_none hcr (Hidden.out_rows_v1 (hparse S R u hu) hcr fun p hp => (hv1 p hp).1)
+      (fun p hp => (hv1 p hp).1) u hwlt ht hno'
 
 /-- **`lay` at `keyProg`'s places in hidden-output tables**: the readers' layout (`Layout.Readers.layout`), with
 `bitCode` for the single gates and Δ's copies from `keyProgH_copies`. -/

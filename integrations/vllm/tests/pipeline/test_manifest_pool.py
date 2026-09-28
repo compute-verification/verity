@@ -1,8 +1,15 @@
 """`manifest.build_components` takes the machine's pool lock only when its headroom is the host's, shared: a `budget_gb` or a
-cgroup `memory.max` below the host's RAM is the process's own budget, which it sizes the pool from without waiting on other runs."""
+cgroup `memory.max` below the host's RAM is the process's own budget, which it sizes the pool from without waiting on other runs.
+The lock is one file per machine that every user opens read-only and never with O_CREAT once it exists (`_open_shared_lock`)."""
 
 from __future__ import annotations
 
+import errno
+import fcntl
+import os
+import pwd
+import stat
+import tempfile
 from contextlib import contextmanager
 
 import pytest
@@ -61,3 +68,118 @@ def test_build_components_takes_the_lock_only_without_a_budget_of_its_own(host, 
     host("max", head=70 * GiB)
     M.build_components(tasks, jobs=2)
     assert (locks, heads) == ([1], [90 * GiB, 70 * GiB])
+
+
+# --- the lock file: one per machine, whichever user made it -------------------------------------------------------------------------
+
+@pytest.fixture
+def umask():
+    old = os.umask(0o022)
+    yield os.umask
+    os.umask(old)
+
+
+def held_elsewhere(path) -> bool:
+    """True when another open of `path` cannot take the lock without waiting (flock locks belong to the open file description)."""
+    fd = os.open(path, os.O_RDONLY)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        return True
+    else:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        return False
+    finally:
+        os.close(fd)
+
+
+def opens_of(monkeypatch, path, before=None) -> list[int]:
+    """The flags of every `os.open` of `path`; `before(flags, n)` runs ahead of the n-th (1-based), as another process would."""
+    real, calls = os.open, []
+
+    def spy(p, flags, *a, **kw):
+        if os.fspath(p) == os.fspath(path):
+            calls.append(flags)
+            if before:
+                before(flags, len(calls))
+        return real(p, flags, *a, **kw)
+    monkeypatch.setattr(os, "open", spy)
+    return calls
+
+
+def test_an_existing_lock_it_cannot_write_is_opened_read_only_and_excludes_a_second_holder(tmp_path):
+    lock = tmp_path / M.POOL_LOCK
+    lock.write_text("")
+    lock.chmod(0o444)       # to its owner as another user's 0o664 file is to this one: readable, not writable
+    with M._pool_lock(str(lock)):
+        assert held_elsewhere(lock)
+    assert not held_elsewhere(lock)
+    assert stat.S_IMODE(lock.stat().st_mode) == 0o444
+
+
+def test_an_existing_lock_is_never_opened_with_o_creat(tmp_path, monkeypatch):
+    """`fs.protected_regular` refuses an O_CREAT open of another user's file in a sticky world-writable directory, whatever its mode."""
+    lock = tmp_path / M.POOL_LOCK
+    lock.write_text("")
+    calls = opens_of(monkeypatch, lock)
+    with M._pool_lock(str(lock)):
+        pass
+    assert calls == [os.O_RDONLY]
+
+
+@pytest.mark.parametrize("mask", [0o022, 0o077, 0o777], ids=lambda m: f"umask-{m:03o}")
+def test_a_missing_lock_is_created_0o666_whatever_the_umask(tmp_path, umask, mask):
+    lock = tmp_path / M.POOL_LOCK
+    umask(mask)
+    with M._pool_lock(str(lock)):
+        assert held_elsewhere(lock)
+    assert stat.S_IMODE(lock.stat().st_mode) == 0o666
+
+
+def test_the_default_lock_is_the_one_name_in_the_temp_dir(tmp_path, monkeypatch):
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+    with M._pool_lock():
+        assert held_elsewhere(tmp_path / M.POOL_LOCK)
+
+
+def test_losing_the_creation_race_opens_the_winners_lock_unchanged(tmp_path, monkeypatch):
+    lock = tmp_path / M.POOL_LOCK
+
+    def another_creates_it(flags, n):
+        if n == 2:          # between this process's plain open (ENOENT) and its create
+            lock.write_text("")
+            lock.chmod(0o640)
+    calls = opens_of(monkeypatch, lock, another_creates_it)
+    with M._pool_lock(str(lock)):
+        opened = list(calls)
+        assert held_elsewhere(lock)
+    assert opened == [os.O_RDONLY, os.O_RDONLY | os.O_CREAT | os.O_EXCL, os.O_RDONLY]
+    assert stat.S_IMODE(lock.stat().st_mode) == 0o640
+
+
+def test_a_lock_that_keeps_vanishing_raises_by_name_after_its_attempts(tmp_path, monkeypatch):
+    lock = tmp_path / M.POOL_LOCK
+
+    def churn(flags, n):
+        if flags & os.O_CREAT:
+            lock.write_text("")
+        else:
+            lock.unlink(missing_ok=True)
+    calls = opens_of(monkeypatch, lock, churn)
+    with pytest.raises(RuntimeError, match="kept appearing and vanishing over 4 attempts"):
+        with M._pool_lock(str(lock)):
+            pytest.fail("locked a file that was never there")
+    assert calls == [os.O_RDONLY, os.O_RDONLY | os.O_CREAT | os.O_EXCL] * 4
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root opens a mode-0 file")
+def test_a_lock_it_cannot_read_raises_naming_its_path_and_owner(tmp_path):
+    lock = tmp_path / M.POOL_LOCK
+    lock.write_text("")
+    lock.chmod(0)
+    with pytest.raises(PermissionError) as e:
+        with M._pool_lock(str(lock)):
+            pytest.fail("locked a file it cannot read")
+    msg = str(e.value)
+    assert e.value.errno == errno.EACCES and e.value.filename == str(lock)
+    assert f"owner {pwd.getpwuid(os.getuid()).pw_name}, uid {os.getuid()}, mode 0)" in msg and "chmod a+r" in msg

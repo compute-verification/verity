@@ -278,18 +278,63 @@ def _build_in_turn(tasks: list[tuple[str, dict[str, Any]]], after: Callable[[int
     return out
 
 
+POOL_LOCK = "verity-manifest-build-components.lock"
+
+
 @contextmanager
-def _pool_lock():
-    """One process pool of component builds per machine at a time (two budgeting one headroom would take it twice: the vLLM suite's
-    xdist workers run both stored TP2 rows at once)."""
+def _pool_lock(path: str | None = None):
+    """One process pool of component builds per machine at a time, whichever user runs them (two budgeting one headroom would take it
+    twice: the vLLM suite's xdist workers run both stored TP2 rows at once).  `path`: the lock file, default `POOL_LOCK` in the temp dir."""
     import fcntl
     import tempfile
-    with open(os.path.join(tempfile.gettempdir(), "verity-manifest-build-components.lock"), "a") as f:
-        fcntl.flock(f, fcntl.LOCK_EX)
+    fd = _open_shared_lock(path or os.path.join(tempfile.gettempdir(), POOL_LOCK))
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
         try:
             yield
         finally:
-            fcntl.flock(f, fcntl.LOCK_UN)
+            fcntl.flock(fd, fcntl.LOCK_UN)
+    finally:
+        os.close(fd)
+
+
+def _open_shared_lock(path: str, attempts: int = 4) -> int:
+    """A read-only descriptor of the lock file `path` that every user of the machine opens.  An existing file is opened without O_CREAT:
+    under `fs.protected_regular` an O_CREAT open of another user's file in a sticky world-writable directory (/tmp) is refused whatever
+    its mode, and flock needs no write access.  A missing one is created 0o666 whatever the umask; losing that race to another creator
+    opens theirs.  A file this user cannot read raises, naming its owner: a lock of its own would not exclude the other users' builds."""
+    for _ in range(attempts):
+        try:
+            return os.open(path, os.O_RDONLY)
+        except FileNotFoundError:
+            pass
+        except PermissionError as e:
+            raise PermissionError(e.errno, f"the machine's component pool lock {path} {_owner(path)} is not readable by uid {os.getuid()}: "
+                                           "every user's builds share it, so its owner must make it readable (chmod a+r) or remove it", path) from e
+        try:
+            fd = os.open(path, os.O_RDONLY | os.O_CREAT | os.O_EXCL, 0o666)
+        except FileExistsError:
+            continue
+        try:
+            os.fchmod(fd, 0o666)
+        except BaseException:
+            os.close(fd)
+            raise
+        return fd
+    raise RuntimeError(f"the machine's component pool lock {path} kept appearing and vanishing over {attempts} attempts to open it")
+
+
+def _owner(path: str) -> str:
+    import pwd
+    try:
+        st = os.stat(path)
+    except OSError as e:
+        return f"(stat failed: {e.strerror})"
+    try:
+        name = pwd.getpwuid(st.st_uid).pw_name
+    except KeyError:
+        name = "?"
+    return f"(owner {name}, uid {st.st_uid}, mode {st.st_mode & 0o7777:o})"
 
 
 def _build_forked(tasks: list[tuple[str, dict[str, Any]]], jobs: int, after: Callable[[int, dict[str, Any]], None], head: int,

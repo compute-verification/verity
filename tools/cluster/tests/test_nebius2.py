@@ -153,7 +153,7 @@ def test_a_lease_holding_its_gpu_with_wait_in_its_argv_is_an_allocation_and_only
     file nobody holds (its waiter died) is neither. The adapter reads locks from the holders' fdinfo, so it never holds one."""
     gl = tmp_path / "gl"
     env = {k: v for k, v in os.environ.items() if k != "RESEARCH_RUN_DIR"}
-    env.update(GPU_LEASE_DIR=str(gl), GPU_LEASE_ALLOWED_FILE=str(tmp_path / "no-direct-gpus"), GPU_LEASE_COUNT="1", RESEARCH_RUN_ID="r-test", GPU_LEASE_WHO="bc-holder",
+    env.update(GPU_LEASE_DIR=str(gl), GPU_LEASE_ALLOWED_FILE=str(tmp_path / "no-direct-gpus"), GPU_LEASE_WINDOWS=str(tmp_path / "no-windows"), GPU_LEASE_COUNT="1", RESEARCH_RUN_ID="r-test", GPU_LEASE_WHO="bc-holder",
                GPU_LEASE_UUID_TABLE="GPU-a0", GPU_LEASE_USAGE_LOG=str(tmp_path / "usage.jsonl"),
                GPU_LEASE_UTIL_LOG=str(tmp_path / "util-*.jsonl"))
     pause = [sys.executable, "-c", "import signal; print('ready', flush=True); signal.pause()"]
@@ -196,7 +196,7 @@ def test_live_mode_grants_through_gpu_lease_agent_mode_and_observes_the_lease_it
     lock = os.open(gl / "agent.lock", os.O_RDWR | os.O_CREAT, 0o644)
     fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
     env = {k: v for k, v in os.environ.items() if k != "RESEARCH_RUN_DIR"}
-    env.update(GPU_LEASE_DIR=str(gl), GPU_LEASE_ALLOWED_FILE=str(tmp_path / "no-direct-gpus"), GPU_LEASE_COUNT="8", GPU_LEASE_AGENT_POLL_S="0.05", RESEARCH_RUN_ID="r-test",
+    env.update(GPU_LEASE_DIR=str(gl), GPU_LEASE_ALLOWED_FILE=str(tmp_path / "no-direct-gpus"), GPU_LEASE_WINDOWS=str(tmp_path / "no-windows"), GPU_LEASE_COUNT="8", GPU_LEASE_AGENT_POLL_S="0.05", RESEARCH_RUN_ID="r-test",
                GPU_LEASE_WHO="bc-asker", GPU_LEASE_USAGE_LOG=str(tmp_path / "usage.jsonl"),
                GPU_LEASE_UTIL_LOG=str(tmp_path / "util-*.jsonl"))
     pause = [sys.executable, "-c", "import signal; print('ready', flush=True); signal.pause()"]

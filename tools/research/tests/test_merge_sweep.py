@@ -10,7 +10,7 @@ from pathlib import Path
 
 import research.merge as M
 from research.cli import main as research_main
-from test_merge_gate import CHECKED, DECL
+from test_merge_gate import CHECK_FILES, CHECKED
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -47,7 +47,8 @@ def _world(tmp_path: Path):
     (repo / "mytools").mkdir()
     (repo / "mytools" / "decl_check.py").write_text("from research.store.tool import Tool\nT = Tool(name='check', version='1')\n")
     (repo / "tools" / "check").mkdir(parents=True)
-    (repo / "tools" / "check" / "tool.py").write_text(DECL.format(""))
+    for rel, text in CHECK_FILES.items():
+        (repo / rel).write_text(text)
     (repo / ".gitignore").write_text("__pycache__/\n")
     _git(repo, "init", "-q", "-b", "main")
     _git(repo, "add", "-A")
