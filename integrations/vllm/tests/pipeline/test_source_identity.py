@@ -348,7 +348,10 @@ def test_shipped_and_r9_copies_of_hidden_gpu_are_identical():
 # ---- runners set VERITY_TREE from their own tree ---------------------------------------------------------------------------------------------------
 
 @pytest.mark.parametrize("argv", [[PY, "-m", "verity_vllm.pipeline.cli", "row", "run", "some-row", "ROLE", "org/repo", "rev"],
-                                  ["bash", "verity_vllm/ops/canary.sh", "r18-test"]])
+                                  ["bash", "verity_vllm/ops/canary.sh", "r18-test"],
+                                  ["bash", "verity_vllm/ops/compiled_commit.sh", "some-row", "ROLE"],
+                                  ["bash", "verity_vllm/ops/stoch_negatives.sh", "some-row", "ROLE", "unused-out"],
+                                  ["bash", "verity_vllm/ops/stoch_negative_n3.sh", "some-row", "ROLE", "org/repo", "rev", "unused-out"]])
 def test_runners_refuse_a_foreign_verity_tree_before_doing_anything(tmp_path, argv):
     other = tmp_path / "other"
     other.mkdir()
@@ -359,6 +362,7 @@ def test_runners_refuse_a_foreign_verity_tree_before_doing_anything(tmp_path, ar
     assert not list(tmp_path.glob("**/stages.txt"))
 
 
-def test_canary_exports_verity_tree_from_its_own_tree_and_ignores_the_default_path():
-    can = (INTEGRATION / "verity_vllm" / "ops" / "canary.sh").read_text()
-    assert 'cd "${VERITY_TREE:-' not in can and 'export VERITY_TREE=$TREE_SELF' in can
+@pytest.mark.parametrize("script", ["canary.sh", "compiled_commit.sh", "stoch_negatives.sh", "stoch_negative_n3.sh"])
+def test_runner_scripts_export_verity_tree_from_their_own_tree_and_have_no_default_path(script):
+    text = (INTEGRATION / "verity_vllm" / "ops" / script).read_text()
+    assert 'cd "${VERITY_TREE:-' not in text and 'export VERITY_TREE=$TREE_SELF' in text

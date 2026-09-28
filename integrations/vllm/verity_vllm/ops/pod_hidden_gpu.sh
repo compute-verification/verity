@@ -4,7 +4,7 @@
 # `import hidden_gpu` from `<repo>/out/gen/r9/cmt-hidden/src`).  `record_v5/ship.sh` does not ship that directory and `pod_up.sh` never
 # built the extension, so every Commit on a fresh R12 pod failed with `ModuleNotFoundError: No module named 'hidden_gpu'` (C-HIDDENGPU).
 #
-#   cd /workspace/cp/veritor && bash verity_vllm/ops/pod_hidden_gpu.sh            # idempotent; ~1-2 min on first run, seconds after
+#   cd <tree>/integrations/vllm && bash verity_vllm/ops/pod_hidden_gpu.sh            # idempotent; ~1-2 min on first run, seconds after
 #   -> prints  HIDDEN-GPU-OK <sha256 of hidden_gpu_tree.so>   (or HIDDEN-GPU-FAIL <reason>, exit 1)
 #
 # What it does: (1) materialises `out/gen/r9/cmt-hidden/src/{hidden_gpu.py,hidden_gpu_tree.cu}` from the shipped copies in

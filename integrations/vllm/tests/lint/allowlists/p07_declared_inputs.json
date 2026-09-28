@@ -189,7 +189,7 @@
     {"file": "verity_vllm/pipeline/hot.py", "kind": "environ", "symbol": "unsafe_hints", "detail": "os.environ"},
     {"file": "verity_vllm/pipeline/hot.py", "kind": "machine-path", "symbol": "<module>", "detail": "/workspace", "count": 2},
     {"file": "verity_vllm/pipeline/release_json.py", "kind": "cwd", "symbol": "main", "detail": "os.getcwd"},
-    {"file": "verity_vllm/pipeline/release_json.py", "kind": "machine-path", "symbol": "<module>", "detail": "/workspace", "count": 3},
+    {"file": "verity_vllm/pipeline/release_json.py", "kind": "machine-path", "symbol": "<module>", "detail": "/workspace", "count": 2},
     {"file": "verity_vllm/pipeline/release_json.py", "kind": "machine-path", "symbol": "main", "detail": "/workspace"},
     {"file": "verity_vllm/pipeline/research_result.py", "kind": "environ", "symbol": "build_result", "detail": "RESEARCH_RUN_ID"},
     {"file": "verity_vllm/pipeline/research_tools.py", "kind": "environ", "symbol": "_probe_pins", "detail": "PY"},

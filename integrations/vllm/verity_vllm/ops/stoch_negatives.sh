@@ -11,10 +11,16 @@
 # A negative PASSES (as a negative) iff the Match verdict is FAIL with a named reason; anything else is recorded as NEGATIVE-NOT-CAUGHT.
 # Nothing is retried; every artefact stays under $OUT/<N1|N2>/.
 #
-# usage: stoch_negatives.sh <row-id> <role> <out-dir>        (env: VERITY_TREE, SWEEP_DIR, PY, PY312, GPU_UTIL as row_pod.sh)
+# usage: stoch_negatives.sh <row-id> <role> <out-dir>        (env: SWEEP_DIR, PY, PY312, GPU_UTIL as row_pod.sh)
 set -uo pipefail
 ROW=${1:?row-id}; ROLE=${2:?role}; OUT=${3:?out-dir}
-cd "${VERITY_TREE:-/workspace/cp/veritor}"
+# the tree that runs is the one this script lives in, never an environment default
+TREE_SELF=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)
+if [ -n "${VERITY_TREE:-}" ] && [ "$(cd "$VERITY_TREE" 2>/dev/null && pwd -P)" != "$TREE_SELF" ]; then
+  echo "PRECHECK_FAIL_SOURCE_IDENTITY: stoch_negatives.sh at $TREE_SELF but \$VERITY_TREE=$VERITY_TREE names another tree" >&2; exit 3
+fi
+export VERITY_TREE=$TREE_SELF
+cd "$VERITY_TREE" || exit 1
 export PYTHONPATH=. HF_HOME=/workspace/hf HF_HUB_OFFLINE=1 VLLM_BATCH_INVARIANT=1 TOKENIZERS_PARALLELISM=false
 PY=${PY:-/workspace/venv-cu129/bin/python}; PY312=${PY312:-/workspace/venv-py312/bin/python}
 GPU_UTIL=${GPU_UTIL:-0.3}

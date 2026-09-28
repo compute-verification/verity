@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # R13 rel: the release canary suite (BRIEF §5A), run on the verification worker (cp-rev) for EVERY release candidate before it is tagged.
 #
-#   cd /workspace/cp/veritor && bash verity_vllm/ops/canary.sh <candidate-tag> [positives=smollm2,llama[,llama_b2,llama_b2_bm,phi3,qwen,olmoe,stoch]] [negatives=arena,omitted,lateread[,drop1dup0,nopd,nosr,flipweight,lateflush,wl_swapped]]
+#   cd <tree>/integrations/vllm && bash verity_vllm/ops/canary.sh <candidate-tag> [positives=smollm2,llama[,llama_b2,llama_b2_bm,phi3,qwen,olmoe,stoch]] [negatives=arena,omitted,lateread[,drop1dup0,nopd,nosr,flipweight,lateflush,wl_swapped]]
 #   -> evidence under /workspace/cp/canary/<tag>/, summary canary.json; last line  CANARY-GREEN <tag>  or  CANARY-RED <tag> <first failing check>
 #
 # Positives (the two base canaries, through the SAME row procedure the sweep uses -- `verity-vllm row run`, PAIRS=1):
