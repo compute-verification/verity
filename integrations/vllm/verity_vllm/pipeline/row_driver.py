@@ -11,6 +11,8 @@ through ``timeout`` to the stage's workers), the row waits for the stage to be g
 """
 from __future__ import annotations
 
+import glob
+import hashlib
 import json
 import os
 import re
@@ -20,15 +22,19 @@ import subprocess
 import sys
 import threading
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.config import ROOT, RunEnv
+from verity_vllm.config import ROOT, TARGETS, RunEnv, row_execution, row_target
 from verity_vllm.pipeline import gpu_lease as GL
 
 CLI = ("-m", "verity_vllm.pipeline.cli")
 SIGNUM = {"TERM": 15, "INT": 2, "HUP": 1}
+SHARED_JIT = ("TRITON_CACHE_DIR", "VLLM_CACHE_ROOT")
 _NUM = re.compile(r"^-?[0-9]+(\.[0-9]+)?$")
+_TREE_ID = re.compile(r"[0-9a-f]{16}")
+_TRITON_KERNEL = re.compile(rb"^[ \t]*@triton\.(?:jit|autotune)\b", re.M)
 
 
 class Stop(Exception):
@@ -55,10 +61,49 @@ def _read_json(path: str | Path) -> Any:
         return None
 
 
-def jit_cache(env: dict[str, str]) -> None:
-    """The CUDA driver's JIT cache on the host beside the tree's Triton cache (the template's ``TRITON_CACHE_DIR``), not in the pod's
-    home: vLLM's FA2 extension has no code for the RTX PRO 6000 (sm_120), so each pod's first launch of every attention kernel has the
-    driver compile its PTX on the CPU, about a minute of a held GPU, unless the compiled kernels outlive the pod."""
+def jit_key(py: str, cuda_home: str, row: str, tree: str) -> str | None:
+    """What a shared JIT cache is partitioned by (`jit_cache`), hashed: the ``triton``, ``torch`` and ``vllm`` installed for the
+    interpreter ``py`` (each dist-info ``RECORD``), the toolkit's ``CUDA_VERSION``, the compute capability of ``row``'s device class
+    and the tree's own Triton kernels (each ``verity_vllm`` module that defines one, by path and content), so that a new toolchain or
+    an edited kernel starts a cache of its own.  None when any of them can't be read."""
+    try:
+        parts: list[list[str]] = []
+        venv = glob.escape(os.path.dirname(os.path.dirname(py)))
+        for name in ("triton", "torch", "vllm"):
+            rec = glob.glob(os.path.join(venv, "lib", "python*", "site-packages", f"{name}-*.dist-info", "RECORD"))
+            if len(rec) != 1:
+                return None
+            parts.append([name, hashlib.sha256(Path(rec[0]).read_bytes()).hexdigest()])
+        ver = re.search(rb"^#define CUDA_VERSION (\d+)", Path(cuda_home, "include", "cuda.h").read_bytes(), re.M)
+        cc = TARGETS.get(row_target(row) or "")
+        if not ver or not cc:
+            return None
+        parts += [["cuda", ver.group(1).decode()], ["cc", f"{cc[0]}.{cc[1]}"]]
+        for p in sorted(Path(tree, "verity_vllm").rglob("*.py")):
+            b = p.read_bytes()
+            if _TRITON_KERNEL.search(b):
+                parts.append([p.relative_to(tree).as_posix(), hashlib.sha256(b).hexdigest()])
+    except OSError:
+        return None
+    return hashlib.sha256(json.dumps(parts).encode()).hexdigest()[:16]
+
+
+def jit_cache(env: dict[str, str], tree: str | None = None, key: Callable[[], str | None] | None = None) -> None:
+    """The template gives a ``*__bi-eager`` row JIT caches on the host named for its job tree (``TRITON_CACHE_DIR`` and
+    ``VLLM_CACHE_ROOT`` ending in the id of ``job_tree.sh``'s copy, ``<id>/integrations/vllm`` = ``tree``), so each sync of a tree
+    started them empty and each model's first Commit on it compiled its kernels again under its GPU lease.  The caches named for
+    ``tree`` move to ``k-<key()>`` beside them, one per `jit_key`, shared by every tree of that key: Triton's own key covers each
+    kernel's source, dependencies, signature, options and backend, vLLM's modelinfos are keyed by their module's hash, and both write
+    atomically.  Any other directory is kept, as is every directory when ``key()`` is None.
+
+    The CUDA driver's JIT cache follows the Triton cache, on the host, not in the pod's home: vLLM's FA2 extension has no code for the
+    RTX PRO 6000 (sm_120), so each pod's first launch of every attention kernel has the driver compile its PTX on the CPU, about a
+    minute of a held GPU, unless the compiled kernels outlive the pod."""
+    tree_id = os.path.basename(os.path.dirname(os.path.dirname(tree))) if tree else ""
+    named = [v for v in SHARED_JIT if _TREE_ID.fullmatch(tree_id) and os.path.basename(env.get(v) or "") == tree_id]
+    shared = key() if named and key else None
+    for v in named if shared else ():
+        env[v] = os.path.join(os.path.dirname(env[v]), f"k-{shared}")
     triton = env.get("TRITON_CACHE_DIR")
     if not triton or env.get("CUDA_CACHE_PATH"):
         return
@@ -105,7 +150,7 @@ class Row:
                     "PYTHONPATH": f".:{core_s}:{research_s}", "HF_HOME": self.env.hf_home, "HF_HUB_OFFLINE": "1",
                     "VLLM_BATCH_INVARIANT": "1", "TOKENIZERS_PARALLELISM": "false", "CUDA_HOME": self.env.cuda_home})
         env.update(pins)
-        jit_cache(env)
+        jit_cache(env, self.tree, lambda: jit_key(self.py, env["CUDA_HOME"], self.row, self.tree) if self.bi_eager() else None)
         if GL.leased(env):
             GL.hide_devices(env)
         self.child_env = env
@@ -118,6 +163,16 @@ class Row:
     def path(self, rel: str) -> str:
         """``rel`` under the tree (the stages' cwd)."""
         return os.path.join(self.tree, rel)
+
+    def bi_eager(self) -> bool:
+        """The row's execution is ``bi-eager``, the only one the template gives JIT caches: its workload's ``execution`` (or
+        ``sweep.execution``), else its id's last token.  A compiled row records cubins its Triton cache holds
+        (`code_identity.loaded_code_objects`), so it never shares one."""
+        doc = _read_json(self.path(self.wl))
+        if not isinstance(doc, dict):
+            return False
+        sw = doc.get("sweep") if isinstance(doc.get("sweep"), dict) else {}
+        return (doc.get("execution") or sw.get("execution") or row_execution(self.row)) == "bi-eager"
 
     def export_commit(self) -> str:
         """The shipped tree's commit (``EXPORT.json``), "" when absent."""

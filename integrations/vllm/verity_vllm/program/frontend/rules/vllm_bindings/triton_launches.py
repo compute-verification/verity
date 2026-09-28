@@ -10,7 +10,7 @@ from verity.ir.refs import Coll
 from verity_vllm.program.frontend.derive import Alloc
 from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
 from verity_vllm.program.frontend.rules.base import InPlaceRule, RuleInfo
-from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, rows_of, shape
+from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, norm_kind, rows_of, shape
 from verity_vllm.program.frontend.rules.profile import BF16, _bias_shape
 from verity_vllm.program.frontend.rules.triton_iface import launch_meta, launch_tensor, triton_launch
 from verity_vllm.program.frontend.rules.vllm_bindings.operands import _row_value, _strides, _untransposed
@@ -83,8 +83,8 @@ class TritonRmsNormRule(InPlaceRule):
         xc, wc = ctx.coll(x), ctx.coll(w)
         rows, lead = rows_of(xc)
         N, eps = rows[0].type.n, float(sc["eps"])
-        fn = ctx.kind("rmsnorm", node, N=N, EPS=eps)
-        outs = [ctx.call(fn, r, wc, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]") for i, r in enumerate(rows)]
+        fn, extra = norm_kind(ctx, "rmsnorm", node, N, eps)
+        outs = [ctx.call(fn, r, wc, *extra, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]") for i, r in enumerate(rows)]
         ctx.rebind(out, from_rows(outs, lead), self, what="output")
         ctx.bind_weight_role(w, self, "rmsnorm.weight", N=N, EPS=eps)
         ctx.record(self, node, {"N": N, "EPS": eps, "rows": len(rows), "lookup_key": lookup_key(meta), "pins": RMS_PINS}, emitted=f"{fn.id} x{len(rows)}")

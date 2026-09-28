@@ -1,4 +1,4 @@
-import Pouw.Fp8Atom.Fp32
+import Pouw.Protocol.Fp8Atom.Fp32
 
 /-!
 # The bulk conformance test (compiled evaluation: a test, not a proof)

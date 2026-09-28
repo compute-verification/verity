@@ -65,7 +65,7 @@ def test_tile_output_is_exact_and_in_range(case):
     tile = Tile(tuple(range(*r)), tuple(range(*c)))
     a, b = MV.rows(name, "A", len(tile.rows), shape[1], r[0]), MV.rows(name, "B", len(tile.cols), shape[1], c[0])
     ops = s.encode(ctx, s.noise(ctx), a, b, tile)
-    assert all(-127 <= v <= 126 for row in ops.x + ops.y for v in row)       # Lean `Pouw.NCP.Proofs.range`
+    assert all(-127 <= v <= 126 for row in ops.x + ops.y for v in row)       # Lean `Pouw.SecurityProofs.NCP.Range`
     assert all(0 <= v + s.beta <= 255 for row in ops.x for v in row)           # `rangeU`: route U's u8 operand
     sa, sb = ncp.int7_rows(a, shape[1]), ncp.int7_rows(b, shape[1])
     assert s.useful(ctx, None, ops, s.checked(ctx, ops)) == [[sum(p * q for p, q in zip(x, y)) for y in sb] for x in sa]
@@ -78,7 +78,7 @@ def test_interface_and_names():
     cert = get("ncp-v1").certificate
     assert cert.gamma == 1 - Fraction(199, 200) / Fraction(1608, 1600)   # gammaFromTTNCP_U_v1 at n0 = 1600: 0.995%
     assert cert.gamma < Fraction(1, 100)
-    assert cert.conjecture == "tt-ncp-u" and cert.theorems[0] == "Pouw.NCP.RouteUProofs.gammaFromTTNCP_U_v1"
+    assert cert.conjecture == "tt-ncp-u" and cert.theorems[0] == "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_v1"
     assert dict(cert.parameters) == {"beta": 128, "f": 24, "n0": 1600, "k_max": 1 << 16}    # red-team R13-4
     assert float(1 - Fraction(199, 200) / (1 + Fraction(24, 3 * 1024))) > 0.0127            # 1.27% at n = 1024: why n0 is recorded
     assert ncp.NCP(k_min=64, n_min=64).certificate.gamma is None                              # a test instance

@@ -32,7 +32,8 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
     `And<n>_v1`, `Xor<n>_v1` (any n >= 2), `Not_v1`, the constant bits,
     `is_boolean` and the word view (`word_type`, `bit_type`).
   - `verity.evaluation`: the one evaluator. The plain-integer reference
-    (`evaluate`, the IR oracle), `evaluate_batch` over numpy arrays,
+    (`evaluate`, the IR oracle, which also takes a table held in a registered
+    input lazily, as a `RegisteredTable`), `evaluate_batch` over numpy arrays,
     `register_kernel`, `self_check`. Every registered kernel must be listed
     in `tests/evaluation/test_evaluation.py`, which self-checks it.
     `bits` evaluates Boolean Definitions bit-sliced (`evaluate_bits`, and
@@ -92,7 +93,7 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
  is proof of useful work: the `PoUWScheme` interface (`protocol`), its lifecycle
  (`audit`) and the named schemes (`schemes.get`: NCP, Pearl's FP8 scheme, Pearl-C), each with
  pinned vectors, `circuit`, `ncp-v2` as a Program that sampled proofs verifies, and its Lean
- package (`lean/`, whose `Pouw.Proofs.endToEnd` is the guarantee); see its `PROTOCOL.md`.
+ package (`lean/`, whose `Pouw.SecurityProofs.EndToEnd` is the guarantee); see its `PROTOCOL.md`.
  `protocols/network_warden` (`verity_network_warden`) is network transparency's timing
  channel: the warden, its audit and calibration, and its Lean package (`lean/`).
  `protocols/nci` is novel communication intensity, the policy that throttles frontier training

@@ -16,7 +16,7 @@ from verity_vllm.observe.fold.patterns.ops import as_float, bound_args, first, o
 from verity_vllm.observe.fold.patterns.resolutions import _group_compute, hint_of, unsupported
 from verity_vllm.observe.fold.patterns.target import _targets, target_of
 from verity_vllm.observe.fold.patterns.transparent import find_descendants, scope_transparents
-from verity_vllm.observe.fold.resolver import Compute, GatherMany, Resolution, StepContext, Unsupported
+from verity_vllm.observe.fold.resolver import Compute, GatherMany, Resolution, StepContext, Supplied, Unsupported
 from verity_vllm.observe.fold.tree import TreeNode
 
 FA2_OP_NAMES = frozenset({"varlen_fwd", "flash_attn_varlen_func", "fwd"})
@@ -172,6 +172,7 @@ class AttentionScope:
             groups.setdefault((T, int(position) - first_pos[req] if check_inf or check_inf2 else None, own[req] if check_inf2 else None),
                               []).append(i)
         computes: list[Compute] = []
+        registered = getattr(ctx.profile, "registered_values", False)
         for (T, row_in_request, own_rows), rows in groups.items():
             try:
                 slots = tuple(kv_slots(ctx, ctx.start.rows[i][0], T, layer=layer_s) for i in rows)
@@ -182,11 +183,13 @@ class AttentionScope:
             try:
                 # the launch's `max_seqlen_q` (FA3's tile rule reads it): the most query rows any ONE request has in this step
                 max_seqlen_q = max(own.values())
-                spec = _targets().attention_spec(tp, T, NH, KVH, D, max_seqlen_q, row=row_in_request, own_rows=own_rows)
+                spec = _targets().attention_spec(tp, T, NH, KVH, D, max_seqlen_q, row=row_in_request, own_rows=own_rows,
+                                                 scale_input=registered)
             except _targets().UnregisteredTarget as e:
                 return unsupported(node, f"target has no registered attention binding: {e}")
+            scale = (Supplied("registration", f"scale_log2_d{D}", 32, b1._scale_log2_bits(D)),) if registered else ()
             computes.append(Compute(spec, len(rows),
-                                    (rows_operand(q, rows), GatherMany(kcs, slots), GatherMany(vcs, slots)),
+                                    (rows_operand(q, rows), GatherMany(kcs, slots), GatherMany(vcs, slots)) + scale,
                                     (rows_operand(out, rows),), (), hint=hint_of(node, str(layer) if isinstance(layer, str) else "attn"),
                                     kernels=(kernel_name,), attribution=tuple(ctx.start.rows[i] for i in rows),
                                     pattern=pattern_name))

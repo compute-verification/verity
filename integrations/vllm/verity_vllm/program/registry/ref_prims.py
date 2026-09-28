@@ -58,6 +58,7 @@ from functools import lru_cache
 
 import numpy as np
 
+from verity.ir.codec import register_lazy_family
 from verity.ir.defs import CompositeDefinition, PrimitiveDefinition, bind, composite, primitive
 from verity.ir.refs import Coll as _Coll, Explicit, concat, strided_view, tuple_of
 from verity.ir.types import Array, Tuple, Value
@@ -264,19 +265,7 @@ def gather_f32(vocab: int) -> PrimitiveDefinition:
     return p
 
 
-def _extend_codec_lazy_families() -> None:
-    """Make `GatherF32x{V}_v1` decodable in a process that did not build the program (additive rebinding of the codec's
-    lazy-family table; `codec.py` itself is not edited)."""
-    import re
-
-    from verity.ir import codec
-    pat = re.compile(r"^GatherF32x(\d+)_v1$")
-    if any(p.pattern == pat.pattern for p, _ in codec._LAZY_PRIMITIVE_FAMILIES):
-        return
-    codec._LAZY_PRIMITIVE_FAMILIES = tuple(codec._LAZY_PRIMITIVE_FAMILIES) + ((pat, lambda m: gather_f32(int(m[1]))),)
-
-
-_extend_codec_lazy_families()
+register_lazy_family(r"^GatherF32x(\d+)_v1$", lambda m: gather_f32(int(m[1])))   # decodable where the program was not built
 
 REF_PRIMITIVES = [F32Sub, F32Sqrt, F32MaxRef, F32GtStrict, F32ExpRn, F32ErfRn, F32TanhRn]
 
@@ -389,7 +378,7 @@ def LinearRef(B, S, x, w, *bias):
 @composite("RMSNormRef", 1, ["N", "EPS", "DT"],
            lambda S: ((("x", Array(S.N, _dt(S.DT))), ("w", Array(S.N, _dt(S.DT)))), Array(S.N, _dt(S.DT))),
            conformance=_REF_CONF)
-def RMSNormRef(B, S, x, w):
+def RMSNormRef(B, S, x, w, eps=None):
     """HF `LlamaRMSNorm` / `Qwen2RMSNorm` (`h = x.to(f32); var = h.pow(2).mean(-1); h = h * rsqrt(var + eps);
     return w * h.to(dt)`), reference arithmetic:
       `sq_i = RN(x_i * x_i)`; `acc = RN(acc + sq_i)` sequential ascending from +0;  `mean = RN(acc / N)`;
@@ -403,7 +392,7 @@ def RMSNormRef(B, S, x, w):
     sq = B.batch(P.F32Mul, xf, xf, axes=(0, 0))
     acc = _seq_sum(B, [sq[i] for i in range(N)])
     mean = B.call(P.F32Div, acc, B.call(b1.f32c(float(N))))
-    var_eps = B.call(P.F32Add, mean, B.call(b1.f32c(S.EPS)))
+    var_eps = B.call(P.F32Add, mean, B.call(b1.f32c(S.EPS)) if eps is None else eps)
     rs = B.call(P.F32Div, B.call(b1.f32c(1.0)), B.call(F32Sqrt, var_eps))
     h = B.batch(P.F32Mul, xf, rs, axes=(0, None))
     hf = _widen(B, _narrow(B, h, DT), DT)
@@ -416,7 +405,7 @@ def RMSNormRef(B, S, x, w):
            lambda S: ((("x", Array(S.N, _dt(S.DT))), ("g", Array(S.N, _dt(S.DT))), ("b", Array(S.N, _dt(S.DT)))),
                       Array(S.N, _dt(S.DT))),
            conformance=_REF_CONF)
-def LayerNormRef(B, S, x, g, b):
+def LayerNormRef(B, S, x, g, b, eps=None):
     """`F.layer_norm(x, (N,), g, b, eps)` on one row, reference arithmetic (two-pass, biased variance, f32 internally):
       `mean = RN(Σ_i x_i / N)` with the sum sequential ascending from +0;  `d_i = RN(x_i - mean)`;
       `var = RN(Σ_i RN(d_i * d_i) / N)` (sequential);  `rstd = RN(1 / RN(sqrt(RN(var + eps))))`;
@@ -430,7 +419,7 @@ def LayerNormRef(B, S, x, g, b):
     d = B.batch(F32Sub, xf, mean, axes=(0, None))
     sq = B.batch(P.F32Mul, d, d, axes=(0, 0))
     var = B.call(P.F32Div, _seq_sum(B, [sq[i] for i in range(N)]), n_c)
-    rstd = B.call(P.F32Div, B.call(b1.f32c(1.0)), B.call(F32Sqrt, B.call(P.F32Add, var, B.call(b1.f32c(S.EPS)))))
+    rstd = B.call(P.F32Div, B.call(b1.f32c(1.0)), B.call(F32Sqrt, B.call(P.F32Add, var, B.call(b1.f32c(S.EPS)) if eps is None else eps)))
     gf = _widen(B, g, DT)
     bf = _widen(B, b, DT)
     y = B.batch(P.F32Add, B.batch(P.F32Mul, B.batch(P.F32Mul, d, rstd, axes=(0, None)), gf, axes=(0, 0)), bf, axes=(0, 0))

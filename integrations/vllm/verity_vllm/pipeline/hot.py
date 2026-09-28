@@ -520,10 +520,9 @@ def serve(wdir: Path, *, idle_s: float, reason: str) -> int:
             cd._HOT["coms"] = []
             write_state(jobs=jobs, reuses=reuses, current=job["id"])
             log(f"job {job['id']} #{jobs}: {shlex.join(job['argv'])[:400]}")
-            # per-job process state: the worker's own env restored, then the job's per-job keys; the job's cwd
-            os.environ.clear()
-            os.environ.update(env0)
-            os.environ.update(job.get("env") or {})
+            # per-job process state: the worker's own env restored, then the job's per-job keys, then what the engine's build wrote
+            # into the process (Engine.environ: vLLM's batch invariance sets cuBLAS' switches as it builds); the job's cwd
+            cli.set_environment({**env0, **(job.get("env") or {}), **(getattr(cd._HOT.get("eng"), "environ", None) or {})})
             os.chdir(job.get("cwd") or cwd0)
             res: dict[str, Any] = {"schema": SCHEMA, "id": job["id"], "worker_pid": os.getpid(), "worker_job": jobs, "started": time.time()}
             had_engine = (cd._HOT.get("eng") is not None)

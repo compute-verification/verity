@@ -9,7 +9,7 @@ from verity.ir.types import Array, Value
 from verity_vllm.program.frontend.derive import Alloc, refuse
 from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
 from verity_vllm.program.frontend.rules.base import RuleInfo, StateRule
-from verity_vllm.program.frontend.rules.common import kv_logs, shape
+from verity_vllm.program.frontend.rules.common import attention_scale, kv_logs, shape
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import (ATTN_PINS, _OBSERVED, _attn_pins_ok, active_launch_context,
                                                                            active_target_profile, attn_kind_for, attn_lookup_key)
 from verity_vllm.program.frontend.rules.vllm_bindings.operands import _row_value
@@ -217,6 +217,11 @@ class UnifiedAttentionWithOutputRule(StateRule):
         check_inf = geom is not None and TG.fa3_check_inf(tp)
         # FA2's (`targets.fa2_check_inf`): the row's tile and the launch's causality decide it, from the same row index and own rows
         check_inf2 = geom is not None and TG.fa2_check_inf(tp)
+        # under registered_values the chain's twin that reads the scale (a softcapped chain: its two words) as inputs, with no CAP
+        scale = attention_scale(ctx, D, node, cap=extra.get("CAP"))
+        dot_kind = ("attention_dot" if not scale else "attention_softcap_dot_value" if extra else "attention_dot_value" if check_inf2
+                    else "attention_dot_fa3_value" if check_inf else "attention_dot_plain_value")
+        statics = {} if scale else extra
         for i in range(T):
             P = P0 + i + 1
             if window is not None and P > window:
@@ -224,15 +229,15 @@ class UnifiedAttentionWithOutputRule(StateRule):
                        f"has {P} keys in its history: the window is active and no windowed attention kind is registered "
                        f"(positions < {window} are exact under the unwindowed kind)")
             if geom is None:
-                fn = ctx.kind(role, node, T=P, NH=NH, KVH=KVH, D=D, **extra)
+                fn = ctx.kind(f"{role}_value" if scale else role, node, T=P, NH=NH, KVH=KVH, D=D, **statics)
             else:
-                fn = ctx.kind("attention_dot", node, T=P, NH=NH, KVH=KVH, D=D, BN=geom["BN"], DOT=geom["DOT"], INV=geom["INV"],
+                fn = ctx.kind(dot_kind, node, T=P, NH=NH, KVH=KVH, D=D, BN=geom["BN"], DOT=geom["DOT"], INV=geom["INV"],
                               **({"MASKED_FROM": TG.fa3_masked_from(tp, P, NH, KVH, D, launch_sq, i if P0 == 0 else 0)} if check_inf else {}),
                               **({"FA2_MASKED_FROM": TG.fa2_masked_from(tp, P, D, launch_sq, i if P0 == 0 else 0, own_rows)} if check_inf2 else {}),
-                              **extra)
+                              **statics)
             kcat = Coll(Array(P, Array(KVH, Array(D, Value(16)))), klog.cut(P))
             vcat = Coll(Array(P, Array(KVH, Array(D, Value(16)))), vlog.cut(P))
-            outs.append(ctx.call(fn, qrows[i], kcat, vcat, node=node, rule=self, name=f"{ctx.hint_name(node)}[t={P - 1}]"))
+            outs.append(ctx.call(fn, qrows[i], kcat, vcat, *scale, node=node, rule=self, name=f"{ctx.hint_name(node)}[t={P - 1}]"))
         ctx.rebind(out, array_of(outs).reshape(_tensor_type(qs, 16)), self, what="output")
         obs = (_OBSERVED["attention_impls"] or {}).get(layer_name, {})
         ctx.record(self, node, {"layer_name": layer_name, "positions": [P0, P0 + T - 1], "NH": NH, "KVH": KVH, "D": D, "history_rows_after": P0 + T,
