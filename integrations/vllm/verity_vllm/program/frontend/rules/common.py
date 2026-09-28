@@ -6,9 +6,25 @@ import math
 
 import torch
 
-from verity.ir.refs import Coll, array_of
+from verity.ir.refs import Coll, PartLog, array_of
 from verity.ir.types import Array
 from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
+
+
+def kv_logs(ctx, layer_name: str, krow_list: list[Coll], vrow_list: list[Coll]) -> tuple[PartLog, PartLog]:
+    """The key and value rows of `layer_name`'s history as `PartLog`s, one row per part, so that the rows an attention call
+    reads are `log.cut(P)`. The logs follow the history lists: a row the cache write rebound starts a new log."""
+    logs = ctx.state.setdefault("kv_logs", {})
+    have = logs.get(layer_name) or (None, None)
+    out = []
+    for log, rows in zip(have, (krow_list, vrow_list)):
+        if log is None or len(log) > len(rows) or any(p is not r.refs for p, r in zip(log.parts, rows)):
+            log = PartLog()
+        for r in rows[len(log):]:
+            log.append(r.refs)
+        out.append(log)
+    logs[layer_name] = (out[0], out[1])
+    return out[0], out[1]
 
 
 def rows_of(x: Coll) -> tuple[list[Coll], tuple[int, ...]]:

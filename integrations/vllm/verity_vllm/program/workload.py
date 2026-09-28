@@ -29,7 +29,7 @@ from typing import Any
 from verity.ir.codec import _spec_id, decode_program, encode_program, program_digest
 from verity.ir.defs import Body, CompositeDefinition, Node, SpecializedDefinition
 from verity.ir.program import Program
-from verity.ir.refs import Affine, Coll, Concat, Explicit, Refs, Strided, coll_concat, concat
+from verity.ir.refs import Affine, Coll, Concat, Explicit, PartLog, Refs, Strided, coll_concat, concat
 from verity.ir.types import Tuple as TupleT, Type
 from verity_vllm.program.sampling_event import is_sampling_event
 
@@ -40,8 +40,20 @@ def _is_input_node(n: Node) -> bool:
     return n.form == "batch" and (getattr(n.fn, "family", None) == "Input" or n.fn.id.startswith("Input"))
 
 
-def _remap(r: Refs, K: int) -> Refs:
-    """Root-body refs -> request-body refs: node k < K (an Input batch) becomes parameter k; node k >= K becomes node k-K."""
+def _remap(r: Refs, K: int, logs: dict[int, tuple[PartLog, PartLog]] | None = None) -> Refs:
+    """Root-body refs -> request-body refs: node k < K (an Input batch) becomes parameter k; node k >= K becomes node k-K.
+
+    `logs` (one per `K`) maps a `PartLog` a `Concat` was cut from to the log of its remapped parts, so a key/value sequence
+    one row longer than the call before remaps one part."""
+    if logs is not None and isinstance(r, Concat) and r.prefix is not None:
+        log, j = r.prefix
+        hit = logs.get(id(log))
+        if hit is None or hit[0] is not log:
+            hit = logs[id(log)] = (log, PartLog())
+        sub = hit[1]
+        for p in log.parts[len(sub):j]:
+            sub.append(_remap(p, K))
+        return sub.raw_cut(j, [_remap(p, K) for p in r.parts[j:]])
     if isinstance(r, Affine):
         if r.space != "n":
             raise ValueError(f"unexpected ref space {r.space!r} in a root body")
@@ -257,8 +269,9 @@ def request_component(desc: dict, registry, wrapper_params: list[tuple[str, str]
         names.append(g if groups.count(g) == 1 else f"{g}[{counts.get(g, 0)}]")
         counts[g] = counts.get(g, 0) + 1
     params = tuple((names[j], body.nodes[j].out) for j in range(K))
-    nodes = [Node(n.form, n.fn, tuple(Coll(a.type, _remap(a.refs, K)) for a in n.args), n.out, axes=n.axes, n=n.n, n_xs=n.n_xs, name=n.name)
-             for n in body.nodes[K:]]
+    logs: dict = {}
+    nodes = [Node(n.form, n.fn, tuple(Coll(a.type, _remap(a.refs, K, logs)) for a in n.args), n.out, axes=n.axes, n=n.n, n_xs=n.n_xs,
+                  name=n.name) for n in body.nodes[K:]]
     offsets = [0]
     for n in nodes:
         offsets.append(offsets[-1] + n.gates)

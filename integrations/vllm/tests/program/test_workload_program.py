@@ -4,7 +4,7 @@ lowering (`Program(fn)` -> Input batches + body), the same descriptor codec."""
 
 import pytest
 
-from verity.ir.codec import encode_program, program_digest
+from verity.ir.codec import SCHEMA_V1, _encode_body, _Tables, encode_program, program_digest
 from verity.ir.defs import CompositeDefinition, PrimitiveDefinition, REGISTRY
 from verity.ir.program import Program
 from verity.ir.refs import coll_concat
@@ -114,6 +114,48 @@ def test_refusals():
     # the wrapper parameters must tile the Input batches exactly
     with pytest.raises(ValueError, match="tile|leaves"):
         W.request_component(_desc(3, 2), REGISTRY, [("prompt", "Array<2,Value<16>>"), ("weights", "Array<5,Value<16>>")])
+
+
+def test_a_growing_key_value_sequence_composes_to_the_same_workload_through_its_log(monkeypatch):
+    """Call i reads the rows of calls 0..i (the decoder's alias chain, one log): the component's arguments remapped through the
+    log are the parts the plain remap gives, and its body encodes to the same descriptor entry."""
+    def sum_sig(S):
+        return ((("xs", Array(S.P, Value(16))),), Value(16))
+
+    def sum_body(B, S, xs):
+        acc = xs[0]
+        for p in range(1, S.P):
+            acc = B.call(_ADD, acc, xs[p])
+        return acc
+
+    def sig(S):
+        return ((("prompt", Array(S.LP, Value(16))), ("weights", Array(4, Value(16)))), Array(S.LP, Value(16)))
+
+    def body(B, S, prompt, weights):
+        rows, outs = [], []
+        for i in range(S.LP):
+            rows.append(B.call(_ADD, prompt[i], weights[i % 4]))
+            outs.append(B.call(prefix_sum.bind(P=i + 1), coll_concat(Array(i + 1, Value(16)), rows)))
+        return coll_concat(Array(S.LP, Value(16)), outs)
+
+    prefix_sum = REGISTRY["GpTestPrefixSum_v1"] if "GpTestPrefixSum_v1" in REGISTRY else CompositeDefinition(
+        "GpTestPrefixSum", 1, ("P",), sum_sig, sum_body)
+    req = REGISTRY["ToyKvRequest_v1"] if "ToyKvRequest_v1" in REGISTRY else CompositeDefinition("ToyKvRequest", 1, ("LP",), sig, body)
+    desc = encode_program(Program(req.bind(LP=12)))
+
+    def component():
+        monkeypatch.setattr(W, "_REQUEST_CACHE", {})
+        body = W.request_component(desc, REGISTRY, _WP(12)).fn.body
+        return body, _encode_body(body, SCHEMA_V1, _Tables())
+
+    body, enc = component()
+    shared = [a.refs for n in body.nodes for a in n.args if getattr(a.refs, "prefix", None) is not None]
+    assert len(shared) >= 10 and len({id(r.prefix[0]) for r in shared}) == 1
+    plain = W._remap
+    monkeypatch.setattr(W, "_remap", lambda r, K, logs=None: plain(r, K))
+    body0, enc0 = component()
+    assert [[a.refs.to_json() for a in n.args] for n in body.nodes] == [[a.refs.to_json() for a in n.args] for n in body0.nodes]
+    assert enc == enc0
 
 
 def test_record_weights_lower_to_several_input_batches_shared_as_one_group():

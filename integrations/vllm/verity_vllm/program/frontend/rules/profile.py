@@ -9,12 +9,12 @@ from __future__ import annotations
 
 import torch
 
-from verity.ir.refs import Coll, array_of, concat
+from verity.ir.refs import Coll, array_of
 from verity.ir.types import Array, Value
 from verity_vllm.program.frontend.derive import Alloc, StaticIndex, refuse
 from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
 from verity_vllm.program.frontend.rules.base import InPlaceRule, OpRule, RuleInfo, StateRule
-from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, rows_of, shape
+from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, kv_logs, rows_of, shape
 from verity_vllm.program.frontend.rules.reference import LinearRule
 from verity_vllm.program.frontend.rules.vllm_iface import targets_for
 
@@ -484,6 +484,7 @@ class UnifiedAttentionRule(StateRule):
         for i in range(T):
             krow_list.append(krows[i])
             vrow_list.append(vrows[i])
+        klog, vlog = kv_logs(ctx, layer_name, krow_list, vrow_list)
         # `allowed_dims`: the request's row count of this call (prefill T / decode 1) and the context length it reaches
         ctx.check_dim("T", T, node)
         ctx.check_dim("CONTEXT", P0 + T, node)
@@ -491,8 +492,8 @@ class UnifiedAttentionRule(StateRule):
         for i in range(T):
             P = P0 + i + 1
             fn = ctx.kind("attention", node, T=P, NH=NH, KVH=KVH, D=D)
-            kcat = Coll(Array(P, Array(KVH, Array(D, Value(16)))), concat([r.refs for r in krow_list[:P]]))
-            vcat = Coll(Array(P, Array(KVH, Array(D, Value(16)))), concat([r.refs for r in vrow_list[:P]]))
+            kcat = Coll(Array(P, Array(KVH, Array(D, Value(16)))), klog.cut(P))
+            vcat = Coll(Array(P, Array(KVH, Array(D, Value(16)))), vlog.cut(P))
             outs.append(ctx.call(fn, qrows[i], kcat, vcat, node=node, rule=self, name=f"{ctx.hint_name(node)}[t={P - 1}]"))
         ctx.define(node, array_of(outs).reshape(_tensor_type(qs, 16)))
         ctx.record(self, node, {"layer_name": layer_name, "positions": [P0, P0 + T - 1], "NH": NH, "KVH": KVH, "D": D, "history_rows_after": P0 + T,
