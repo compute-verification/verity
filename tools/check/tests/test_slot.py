@@ -178,3 +178,34 @@ def test_a_check_recorded_on_a_machine_runs_in_a_slot(monkeypatch):
     remote = calls[-1][calls[-1].index("--") + 1:]
     assert remote[:3] == check.SLOT_WRAP[:3] == ["python3", "tools/check/slot.py", "--"] and remote[3:5] == ["uv", "run"]
     assert check.record([]) == 0 and "slot.py" not in " ".join(calls[-1])
+
+
+def test_agreement_sends_the_upstream_build_whatever_the_commit_changes(monkeypatch, tmp_path):
+    """`--record --agreement`: the lander's check of a train that changes a pinned guarantee outside backends/flock/ still runs
+    the agreement step, with the pinned build and inputs as the run's inputs."""
+    spec2 = importlib.util.spec_from_file_location("repo_check_agreement", ROOT / "tools" / "check" / "check.py")
+    check = importlib.util.module_from_spec(spec2)
+    spec2.loader.exec_module(check)
+    import research.store.local as local
+
+    calls = []
+
+    def run(cmd, **kw):
+        calls.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+    class Store:
+        def fetch(self, art):
+            f = tmp_path / art.replace(":", "_")
+            f.write_bytes(b"")
+            return f
+
+    monkeypatch.setattr(check.subprocess, "run", run)
+    monkeypatch.setattr(check, "lean_deps_url_file", lambda d: None)
+    monkeypatch.setattr(local, "LocalStore", Store)
+    assert check.record(["--on", "vy-nebius-1", "--base", "HEAD"]) == 0
+    assert "--input" not in calls[-1]
+    assert check.record(["--on", "vy-nebius-1", "--base", "HEAD", "--agreement"]) == 0
+    cmd = calls[-1]
+    assert [cmd[i + 1].split("=")[0] for i, x in enumerate(cmd) if x == "--input"] == ["flock_upstream", "flock_inputs"]
+    assert "--agreement" not in cmd
