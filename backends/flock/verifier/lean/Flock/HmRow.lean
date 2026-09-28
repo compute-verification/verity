@@ -764,7 +764,7 @@ def Stmt.setupH (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coin
   let pin ← HmRow.pin c
   let (da, db) := HmRow.delta c pin
   let regions ← HmRow.regions c pub
-  let mut h := tags.statement.toUTF8 ++ c.sha ++ (← canon tags.identity).toUTF8
+  let mut h := (tags.digestTag.getD tags.statement).toUTF8 ++ c.sha ++ (← canon tags.identity).toUTF8
   for x in [n, blocksReal, nbl, m, c.kLog, pin, regions.size, c.g] do h := pushLe64 h x
   for d in [da, db] do
     h := pushLe64 h d.size
