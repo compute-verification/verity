@@ -573,7 +573,9 @@ def test_relaunch_saves_the_work_supersedes_binds_the_successor_and_prints_its_l
     import tarfile
     assert tarfile.open(ev / "uncommitted-2100Z-untracked.tgz").getnames() == ["notes.txt"]
     assert (ev / "uncommitted-2100Z.merge").read_text().strip() == _git(repo, "rev-parse", "other").strip()
-    row = notes.lane_status(notes.report_for(root, "wave-4090"), NOW, 30)
+    report = notes.report_for(root, "wave-4090")
+    os.utime(report, (NOW.timestamp(), NOW.timestamp()))   # relaunch wrote it at the real clock; checkpoints anchor to mtime
+    row = notes.lane_status(report, NOW, 30)
     assert row["state"] == "superseded" and row["text"] == "by wave-4090-2 (relaunch): stall 4"
     assert notes.binding(root, "wave-4090-2") == {"branch": "lane/wave-4090", "worktree": str(repo), "pod": "vy-wave-4090",
                                                   "succeeds": "wave-4090", "brief": "campaigns/w/BRIEF.md", "final": "06:30Z", "budget": "$5"}
