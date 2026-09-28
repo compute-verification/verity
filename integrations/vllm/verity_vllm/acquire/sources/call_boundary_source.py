@@ -93,9 +93,19 @@ class Plan:
         return sum(len(b.targets) for b in self.bodies.values())
 
 
+#: other sources' claims on `call_boundaries` identities (identity -> the claiming source's name, or None): a claimed identity is that
+#: source's to acquire (a tap of a Value the runtime already holds, like a pre-bias GEMM output) and is never evaluated here
+CLAIMS: list[Callable[[Mapping[str, Any]], str | None]] = []
+
+
+def claimed(r: Mapping[str, Any]) -> str | None:
+    """The source that claims identity `r` (`CLAIMS`), or None: this source evaluates it."""
+    return next((c for f in CLAIMS if (c := f(r))), None)
+
+
 def manifest_sites(manifest: Mapping[str, Any] | None) -> list[Mapping[str, Any]]:
-    """The `call_boundaries` identities of a manifest."""
-    return [r for r in (manifest or {}).get("identities") or [] if r.get("family") == FAMILY]
+    """The `call_boundaries` identities of a manifest this source evaluates: every one no other source claims."""
+    return [r for r in (manifest or {}).get("identities") or [] if r.get("family") == FAMILY and claimed(r) is None]
 
 
 def program_dir_of(manifest: Mapping[str, Any], *roots: str | None) -> str | None:
@@ -523,5 +533,5 @@ def attach(com: Any, enabled: bool, manifest: Mapping[str, Any] | None, required
     return required_classes, src
 
 
-__all__ = ["FAMILY", "WORD_DTYPES", "Uncovered", "Target", "Operand", "Body", "Plan", "CallBoundarySource", "manifest_sites", "program_dir_of",
+__all__ = ["FAMILY", "WORD_DTYPES", "CLAIMS", "Uncovered", "Target", "Operand", "Body", "Plan", "CallBoundarySource", "claimed", "manifest_sites", "program_dir_of",
            "plan_of", "evaluate_body", "words", "operand_words", "attach"]
