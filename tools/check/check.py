@@ -563,11 +563,17 @@ def memory_gb() -> int:
     return 0
 
 
+#: the share of this process's memory the agreement's verifier processes may count on: lean-suites (and, unsharded, the
+#: suites and circuit-check) run beside it, and on a 128 GB pod the whole budget for the agreement OOM-killed 36 of them
+#: (tip 38's shard 2/3, 6 Oct)
+AGREEMENT_MEMORY_SHARE = 2
+
+
 def session_jobs() -> int:
     """`ci.py --session-jobs`: its own default counts the host's CPUs and memory inside a container, so check passes what this
-    process may use, at ci.py's `GB_PER_PROCESS` per verifier process."""
+    process may use (its `AGREEMENT_MEMORY_SHARE`), at ci.py's `GB_PER_PROCESS` per verifier process."""
     m = re.search(r"^GB_PER_PROCESS = (\d+)", (FLOCK_VERIFIER / "ci.py").read_text(), re.M)
-    return max(1, min(cores(), memory_gb() // int(m.group(1) if m else 8)))
+    return max(1, min(cores(), memory_gb() // AGREEMENT_MEMORY_SHARE // int(m.group(1) if m else 8)))
 
 
 #: the agreement's memory floor: set 13's upstream replay (GEMM, m = 26) alone takes more than 15 GB
@@ -1357,7 +1363,8 @@ def main(argv: list[str]) -> int:
         print(f"check: CACHE CONTRADICTED in {c['suite']}: {', '.join(c['contradicts'][:5])} failed fresh, and a cached pass answers for it",
               flush=True)
     for c in flaky:
-        print(f"check: NONDETERMINISTIC in {c['suite']}: {', '.join(c['nondeterministic'][:5])} passed and failed under one key", flush=True)
+        print(f"check: NONDETERMINISTIC in {c['suite']}: {', '.join(c['nondeterministic'][:5])} passed and failed under one key: "
+              "delete each (a flaky test is deleted, not rerun or fixed)", flush=True)
     if run_dir is not None:
         if before is not None:
             verdicts["out"] = {"file": "verdicts.tar.gz", "entries": VERDICTS.export(run_dir / "verdicts.tar.gz", before)}

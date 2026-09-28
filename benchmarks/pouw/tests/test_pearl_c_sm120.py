@@ -23,6 +23,10 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from verity.protocols.accounting.work.pouw.audit import Epoch, Workload, weights_root
+from verity.protocols.accounting.work.pouw.coins import CoinCommitment, CoinOpening, coin_reason
+from verity.protocols.accounting.work.pouw.protocol import Matmul
+from verity.protocols.accounting.work.pouw.protocol import Shape as MShape
 
 HERE = Path(__file__).resolve().parents[1] / "pearl_c_sm120"
 H100_DIR = HERE.parent / "pearl_c"
@@ -263,6 +267,34 @@ def test_fixture_agrees_with_the_scheme(small_fixture):
     y_plain = (small_fixture / man["common"]["y_plain"]["file"]).read_bytes()
     y_fast = (small_fixture / man["common"]["y_fast"]["file"]).read_bytes()
     assert len(y_plain) == len(y_fast) == 2 * 128 * 128
+    commitment, opening = CoinCommitment.from_json(man["coins"]), CoinOpening.from_json(man["salt_opening"])
+    assert commitment == F.test_challenger().commitment and "beacon" not in man
+    assert coin_reason(commitment, opening, "salt", weights_root({F.WEIGHT: bytes.fromhex(man["seeds"]["root_b"])})) is None
+
+
+def test_a_transcripts_epoch_is_its_salt_coins_and_a_v1_transcript_only_a_recorded_ones():
+    """verify.py re-starts a v2 transcript's epoch from its salt coin under its coin commitment, opened after the weight
+    root; a v1 transcript (recorded before epoch coins, salted from a beacon) is read only with ``--recorded``, and a
+    transcript of another schema not at all."""
+    V = load("pearl_c_sm120_verify", HERE / "verify.py")
+    mm, root = Matmul(0, MShape(64, 1024, 128), 3), bytes([7]) * 32
+    coins = F.test_challenger()
+    opening = coins.open("salt", weights_root({3: root}))
+    epoch = Epoch.start(Workload((mm,)), {3: root}, coins.commitment, opening)
+    man = {"schema": V.SCHEMA, "weight_root": root.hex(), "coins": coins.commitment.to_json(),
+           "salt_opening": opening.to_json(), "salt": epoch.salt.hex()}
+    assert V.transcript_epoch(man, mm) == epoch == V.transcript_epoch(man, mm, recorded=True)
+    beacon = bytes([9]) * 32
+    v1 = {"schema": V.SCHEMA_RECORDED, "weight_root": root.hex(), "beacon": beacon.hex(),
+          "salt": Epoch.unverified(Workload((mm,)), {3: root}, beacon).salt.hex()}
+    assert V.transcript_epoch(v1, mm, recorded=True).salt.hex() == v1["salt"]
+    for bad, recorded, why in ((v1, False, "recorded before epoch coins: only --recorded reads it"),
+                               ({**v1, "salt": epoch.salt.hex()}, True, "not its recorded beacon's"),
+                               ({**man, "salt_opening": {**opening.to_json(), "label": "draw"}}, False, "'draw' coin"),
+                               ({**man, "salt": v1["salt"]}, False, "not its salt coin's"),
+                               ({**man, "schema": "verity-pouw/pearl-c-sm120-transcript/v0"}, True, f"not {V.SCHEMA} or")):
+        with pytest.raises(ValueError, match=why):
+            V.transcript_epoch(bad, mm, recorded)
 
 
 # ---- the dry run ---------------------------------------------------------------------------------------------------
@@ -839,7 +871,8 @@ def test_arm_gate_accepts_the_fixture_and_rejects_a_flip(A, small_fixture, ship,
 
     man, path = transcript(tmp_path / "run", arm.name, "fixture")
     check = json.loads((small_fixture / "check.json").read_text())
-    assert man["beacon"] == check["beacon"] and man["weight_root"] == check["seeds"]["root_b"]
+    assert (man["coins"], man["salt_opening"]) == (check["coins"], check["salt_opening"])
+    assert man["weight_root"] == check["seeds"]["root_b"] and man["salt"] == check["seeds"]["salt"] and "beacon" not in man
     _, neg_path = transcript(tmp_path / "run", arm.name, "fixture", root="negative")
     assert all(set((neg_path.parent / f"{f}.bin").read_bytes()) == {A.POISON} for f in ("tree_a", "tree_t", "tree_b", "leaves"))
     r = subprocess.run([sys.executable, str(HERE / "verify.py"), str(tmp_path / "run"), "--draws", "1", "--jobs", "1",
@@ -876,8 +909,9 @@ def test_a_transcript_its_call_did_not_write_is_rejected(A, small_fixture, ship,
 @pytest.mark.slow
 def test_verify_rejects_what_the_prover_cannot_open(A, small_fixture, ship, arm_dir, tmp_path):
     """verify.py rejects, before any tile is recomputed: another root_A (every drawn tile's activation openings fail), another
-    tile root (the leaf openings), a beacon the salt isn't from, a file that isn't the manifest's (its SHA-256), a scheme the
-    arguments don't name; and a run directory with no transcript, or an arm's error in place of one."""
+    tile root (the leaf openings), a salt coin that doesn't open against the coin commitment, a salt that isn't the coin's, a
+    v1 transcript (recorded before epoch coins) read without --recorded, a file that isn't the manifest's (its SHA-256), a
+    scheme the arguments don't name; and a run directory with no transcript, or an arm's error in place of one."""
     driver(A, ship, arm_dir, tmp_path, "PearlCSm120", "accept", str(small_fixture / "check.json"))
     V = load("pearl_c_sm120_verify", HERE / "verify.py")
     _, path = transcript(tmp_path / "run", "pearl-c-sm120-v1-h1", "fixture")
@@ -897,8 +931,14 @@ def test_verify_rejects_what_the_prover_cannot_open(A, small_fixture, ship, arm_
     def tile_root(man, d):
         man["commitment"]["root"] = flip(man["commitment"]["root"])
 
-    def beacon(man, d):
-        man["beacon"] = flip(man["beacon"])
+    def salt_coin(man, d):
+        man["salt_opening"]["coin"] = flip(man["salt_opening"]["coin"])
+
+    def salt(man, d):
+        man["salt"] = flip(man["salt"])
+
+    def recorded(man, d):
+        man["schema"] = V.SCHEMA_RECORDED
 
     def leaves(man, d):
         (d / "leaves.bin").write_bytes(bytes(32) + (d / "leaves.bin").read_bytes()[32:])
@@ -906,9 +946,9 @@ def test_verify_rejects_what_the_prover_cannot_open(A, small_fixture, ship, arm_
     def scheme(man, d):
         man["scheme_args"]["device"] = "sm120-unpromoted"
 
-    for edit, why in ((root_a, "activation opening"), (tile_root, "transcript opening"), (beacon, "salt"),
-                      (leaves, "the manifest says"),
-                      (scheme, "is not")):
+    for edit, why in ((root_a, "activation opening"), (tile_root, "transcript opening"),
+                      (salt_coin, "the salt's coin does not open against"), (salt, "not its salt coin's"),
+                      (recorded, "only --recorded reads it"), (leaves, "the manifest says"), (scheme, "is not")):
         r = tampered(edit)
         assert not r["accepted"] and r["line"].startswith("REJECT") and why in r["line"], (edit.__name__, r["line"])
 

@@ -3,7 +3,7 @@ set, one builder at a time holds the dir's fcntl build lock (released by the ker
 the dir by a killed build is removed under it.  Torch-free: a stand-in loader, FIFOs and process exits instead of clocks.
 
 Every test that loads, forks, signals or locks runs in a fresh interpreter (`_isolated`): run in the pytest worker, they leave it in a
-state that breaks later tests in the same worker (`test_native_jit_isolation.py`)."""
+state that breaks later tests in the same worker."""
 from __future__ import annotations
 
 import errno

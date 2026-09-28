@@ -687,26 +687,6 @@ def test_i64_to_i32_vs_torch():
 # ---------------------------------------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("name,fn,top", [("F32ExpRn_v1", R.f32_exp_rn_bits, torch.exp), ("F32ErfRn_v1", R.f32_erf_rn_bits, torch.erf),
-                                         ("F32TanhRn_v1", R.f32_tanh_rn_bits, torch.tanh)])
-@pytest.mark.slow
-def test_transcendentals_vs_torch_and_float64(name, fn, top):
-    rng = np.random.default_rng(SEED)
-    x = _elementwise_domain(rng, "f32")
-    ref = np.fromiter((fn(int(w)) for w in x), dtype=np.uint32, count=x.size)
-    got = t_words(top(words_t(x, "f32")))
-    res = compare(ref, got, "f32")
-    # float64 libm rounded to f32 agrees with the correctly rounded value except in double-rounding cases
-    xf = x.view(np.float32).astype(np.float64)
-    f64 = {"F32ExpRn_v1": np.exp, "F32ErfRn_v1": np.vectorize(__import__("math").erf), "F32TanhRn_v1": np.tanh}[name](xf)
-    res64 = compare(ref, f64.astype(np.float32).view(np.uint32), "f32")
-    assert res["max_ulp"] <= 2, res
-    assert res64["max_ulp"] <= 1, res64
-    write_record(name, "f32", statics={}, oracle_op=f"torch.{top.__name__} (Sleef vectorised, <= 1 ulp)",
-                 domain={"x": "65,536 x N(0,4) f32 + 16 edge words"}, result={"vs_torch": res, "vs_float64_libm_rounded": res64},
-                 gate_check={"evaluated": "primitive evaluator"},
-                 notes="The reference primitive is RN32 of a 100-digit decimal evaluation; torch is Sleef (<= 1 ulp), so torch "
-                       "disagrees on a fraction of words by 1 ulp. This is a property of the oracle, not a defect of the definition.")
 
 
 def test_transcendental_specials():

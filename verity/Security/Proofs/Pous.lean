@@ -6,6 +6,8 @@ import Proofs.Pous.TrackA.A6Rederive
 import Proofs.Pous.Pebbling.B1IndepSet
 import Proofs.Pous.Pebbling.B3Chain
 import Proofs.Pous.Dense.DenseMeets
+import Proofs.Pous.FreeBlocks.Zero
+import Proofs.Pous.FreeBlocks.P2
 import Proofs.Pous.P3.InvertibleCore
 import Proofs.Pous.P3.Refutation
 import Proofs.Pous.Chain.Flat
@@ -188,6 +190,8 @@ theorem P2ErrorSplitB19Uncond : Pous.Guarantees.P2ErrorSplitB19Uncond := by
   obtain ⟨-, h1, h2, h3, h0⟩ := PousMargin.b19_meets_129 b hsp hb D
   exact ⟨h1, h2, h3, h0, (PousMargin.b19_64_129 b hsp hb D).2.2.2.2, (PousMargin.b19_128_129 b hsp hb D).2.2.2.2,
     (PousMargin.b19_256_129 b hsp hb D).2.2.2.2⟩
+
+theorem P2SlackFamilyFreeBlocks : Pous.Guarantees.P2SlackFamilyFreeBlocks := Pous.FreeBlocks.p2_slack_family_free_blocks
 
 /-! ## Proved results cited outside the package (`Pous/Guarantees.lean`) -/
 

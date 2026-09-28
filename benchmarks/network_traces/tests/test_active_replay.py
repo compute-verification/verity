@@ -64,8 +64,7 @@ def runs(setup, tmp_path_factory):
     results = {}
     for strategy in ar.STRATEGIES:
         run = out / strategy
-        mine = plan if strategy == "honest" else plan | {
-            "writes": ar.adversary_writes(plan, s.sync_set, s.egress_params.buckets, strategy, seed=1)}
+        mine = plan if strategy == "honest" else ar.adversary_plan(plan, s, strategy, seed=1)
         assert ar.run_virtual(mine, report, run) == {"server": 0, "proxy": 0, "peer": 0}
         results[strategy] = (run, ar.audit_configuration(mine, report, run))
     return plan, results
@@ -146,7 +145,7 @@ def test_a_released_frame_that_isnt_the_programs_is_counted_not_a_crash(setup, r
         [("requests", w, None, None) for w in range(3)]
 
 
-@pytest.mark.parametrize("strategy", ["burst", "spread", "bits"])
+@pytest.mark.parametrize("strategy", ["burst", "spread", "bits", "covert"])
 def test_a_server_that_signals_by_its_write_times_leaves_the_wire_identical(runs, strategy):
     _, results = runs
     run, audit = results[strategy]

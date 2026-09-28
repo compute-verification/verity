@@ -210,9 +210,9 @@ def test_the_commit_context_is_none_for_the_default_and_checked_for_a_declared_s
     PO.into_verdict(None, versions, "/nonexistent", TargetProfile(), program_digest=None, manifest=None)
     _fake_adapter(monkeypatch, "pouw", _pouw([]), schemes=("ncp-v1",))
     p = TargetProfile(protocols=ALL[:1] + ALL[2:], compilation="piecewise")
-    ctx = PO.commit_context(p, settings={"pouw": {"beacon": 7}})
+    ctx = PO.commit_context(p, settings={"pouw": {"draws": 7}})
     assert (ctx.stage, ctx.enabled, ctx.enforce_eager, ctx.scheme("pouw"), ctx.settings_of("pouw")) == \
-        ("commit", ALL[:1] + ALL[2:], False, "ncp-v1", {"beacon": 7})
+        ("commit", ALL[:1] + ALL[2:], False, "ncp-v1", {"draws": 7})
     with pytest.raises(PO.Refused, match="TP 2"):
         PO.commit_context(p, world=2)
 

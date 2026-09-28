@@ -110,6 +110,7 @@ import Proofs.Pouw.PearlC.RowPrimChecks
 import Proofs.Pouw.PearlC.RowSeedCode
 import Proofs.Pouw.PearlC.RowSeedFragment
 import Proofs.Pouw.PearlC.RowSeedGamma
+import Proofs.Pouw.PearlC.RowSeedKGamma
 import Proofs.Pouw.PearlC.RowSeedSkip
 import Proofs.Pouw.PearlC.ServedMixedRev1Gamma
 import Proofs.Pouw.PearlC.ServedRev1Gamma

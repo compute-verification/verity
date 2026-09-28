@@ -17,7 +17,8 @@
 # ready.json whose library is elsewhere fails SETUP).  jit-built.txt lists every FlashInfer library
 # built during the run: empty unless a first-call JIT landed in it.
 # MODE=smoke (untimed, `gpu-lease 1`): the same checks, then `e2e.py --smoke` (both engines resident and each one's first
-# sampling calls) into smoke.json.  MODE=profile (untimed, `gpu-lease 1`): the same checks, then `profile_decode.py` under
+# sampling calls) into smoke.json; with RETAIN=1 the arm then serves e2e.py's SERVED requests, each a retained pass under
+# $WORK/passes/<run id>.  MODE=profile (untimed, `gpu-lease 1`): the same checks, then `profile_decode.py` under
 # nsys (the capture is its steady-state pass) into profile.json, with nsys's per-kernel sums merged in.  SHIP_TAR names a
 # ship already on the node instead of the sent one.  MODE=perplexity (untimed, as node-2 fill or `gpu-lease 1`): the same
 # checks, GPU 1's for both variants (v2 runs the unpromoted kernels), then `e2e.py --perplexity` into quality.json, a scheme
@@ -27,6 +28,8 @@
 # ROWS_FORM=s (an -h2 SCHEME only) passes --rows-form s to e2e.py and profile_decode.py: forming's statistics from -h2's row-leaf pass.
 # WHOLE_STEP=1 passes --whole-step: the arm's decode forwards as vLLM's FULL graphs with Pearl-C's calls inside; with it,
 # WHOLE_DEFER=1 passes --whole-defer: each call's tile hashing captured beside the next call.
+# STATEMENT (with WHOLE_STEP=1) passes --statement: hm96_rows.cu's cubin (a path, or "build" to build it here with
+# /usr/local/cuda-13.0's nvcc), adding e2e.py's pearlc-zk mode, each decode forward's rows committed in the ZK statement's format too.
 set -euo pipefail
 WORK=${WORK:-/workspace/pouw/mvp-e2e}; PY=$WORK/venv312/bin/python
 MODEL=${MODEL:-$WORK/models/llama-3.1-8b-instruct}
@@ -50,6 +53,12 @@ export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES%%,*} CUDA_DEVICE_ORDER=PCI_BU
 UUID=${GPU_LEASE_UUID:-}; UUID=${UUID%%,*}
 [ -n "$UUID" ] || fail IDENTITY "no GPU_LEASE_UUID: run under gpu-lease"
 export E2E_GPU_UUID=$UUID
+if [ "${STATEMENT:-}" = build ]; then
+  /usr/local/cuda-13.0/bin/nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -cubin -o "$OUT/hm96_rows.cubin" \
+    benchmarks/pouw/served_zk/hm96_rows.cu || fail STATEMENT "hm96_rows.cu did not build"
+  STATEMENT=$OUT/hm96_rows.cubin
+fi
+[ -z "${STATEMENT:-}" ] || SWITCHES+=(--statement "$STATEMENT")
 touch "$OUT/.started"
 trap 'find "$FLASHINFER_WORKSPACE_BASE/.cache/flashinfer" -name "*.so" -newer "$OUT/.started" > "$OUT/jit-built.txt" 2>/dev/null || true' EXIT
 
@@ -67,7 +76,7 @@ PEARLC_EXPECT_UUID=$UUID SHAPES="" VARIANTS=$VARIANTS "$PY" "$SHIP/run.py" "$SHI
 
 if [ "$MODE" = smoke ]; then
   "$PY" benchmarks/pouw/pearl_c_vllm/e2e.py --model "$MODEL" --kernel benchmarks/pouw/pearl_c_sm120 --cubin "$SHIP/pearl_c_sm120.cubin" \
-    --out "$OUT/smoke.json" --smoke "${SWITCHES[@]}"
+    --out "$OUT/smoke.json" --smoke ${RETAIN:+--retain "$WORK/passes/${RESEARCH_RUN_ID:?}"} "${SWITCHES[@]}"
 elif [ "$MODE" = perplexity ]; then
   "$PY" benchmarks/pouw/pearl_c_vllm/e2e.py --model "$MODEL" --kernel benchmarks/pouw/pearl_c_sm120 --cubin "$SHIP/pearl_c_sm120.cubin" \
     --out "$OUT/quality.json" --perplexity --chunk-min "${CHUNK_MIN:-7}"

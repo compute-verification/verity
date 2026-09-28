@@ -771,7 +771,7 @@ def unpreserved(ctx: Ctx) -> list[Finding]:
 
 
 def asks(ctx: Ctx) -> list[Finding]:
-    """An ask in #agent-coordination with no 👀, reply, ✅ or ❌ after 2 hours (`research slack traffic --json`), to its owner."""
+    """An ask in #agent-coordination with no 👀, reply, ✅ or ❌ after 2 hours (`research msg traffic --json`), to its owner."""
     rep = json.loads(ctx.sh([*ctx.research, "slack", "traffic", "--json", "--hours", "24", "--stale-h", "2"], timeout=300))
     out = []
     for a in rep.get("unanswered") or []:
@@ -849,7 +849,7 @@ MONITORS: list[Monitor] = [
             "`research pods unpreserved MACHINE` lists them and `research data preserved RUN` says why each isn't preserved: "
             "push them, or fix the custody service that should have.", every_s=1800, unread_s=4 * 3600),
     Monitor("asks", "infra", "warn", "relay", asks,
-            "Pick the ask up (👀), answer it, or decline it with a reason: `research slack pickup|done|decline --thread TS`.",
+            "Answer the ask, or close it: `research msg close --as YOU --thread TS` (✅), or with `--declined WHY` (❌).",
             every_s=900, unread_s=3 * 3600),
     Monitor("node-heartbeat", "infra", "page", "relay", node_heartbeat,
             "`ssh n1 systemctl status vy-monitors.timer vy-monitors.service` and `ssh n1 journalctl -u vy-monitors -n 50`; for "

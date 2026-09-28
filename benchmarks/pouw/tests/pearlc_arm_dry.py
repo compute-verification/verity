@@ -7,9 +7,10 @@ directory the arm writes its transcripts under (`build`'s out_dir); PEARLC_ROWS 
   dry:     at a prefill-like and a decode shape, both flag sets on two operand sets of gen_f32 rows (each call launched, then
            run again as its three phases), the weight side, the gate and `known_bad`; one JSON line per gate.  The hash calls
            of set 0 are then taken as gated, so freeing them writes their transcripts (of the stand-in's bytes).
-  accept:  at the fixture's shape on its inputs and epoch (its beacon, matmul index and weight, B's root), the fixture's bytes
-           written where the device would have put them (the call's buffers and the gate's second launch), the gate; then one
-           C~ word flipped (a message digest's where the call stores no C~, the fused call), the gate again; then the word
+  accept:  at the fixture's shape on its inputs and epoch (its test challenger, matmul index and weight, B's root), the
+           fixture's bytes written where the device would have put them (the call's buffers and the gate's second launch), the
+           gate; then one C~ word flipped (a message digest's where the call stores no C~, the fused call), the gate again;
+           then the word
            restored, the gate, and the call freed, which writes its transcript and its negative control.  Each later launch
            of the whole call writes the fixture's bytes again, as the device would; the negative control's launches don't.
   stale:   accept, but no launch writes the fixture's bytes again: the transcript's call, like the negative control's,
@@ -110,7 +111,7 @@ def accept(arm, check: Path, rewrite: bool = True) -> None:
     variant = man["variants"][arm.variant]
     load = lambda name: ((base / arm.variant / variant["files"][name]["file"]) if name in variant["files"]  # noqa: E731
                          else (base / man["common"][name]["file"])).read_bytes()
-    arm.index, arm.beacon = A.F.INDEX, lambda shape, ops: bytes.fromhex(man["beacon"])
+    arm.index, arm.challenger = A.F.INDEX, lambda shape, ops: A.F.test_challenger()
     A._Call.root_b = lambda self: bytes.fromhex(man["seeds"]["root_b"])
     shape = Shape("fixture", m, k, n)
     rd = arm.rd

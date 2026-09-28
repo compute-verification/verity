@@ -99,6 +99,9 @@ a `sys.path` entry another test file added: every suite runs alone.
   time: `tests/test_no_wall_clock.py` rejects sleeps, clock readings, timeouts and sleeping workloads in every suite. Wait on
   the event instead (a child's exit, a line of its output, a FIFO the test holds open: `tools/research/tests/waits.py`), and
   inject the clock or timer that the code under test measures time with (`monkeypatch.setattr(mod, "clock", ...)`).
+  Don't write a test whose result can depend on load, a shared machine or what holds it (GPU leases, check slots, pods),
+  ports and sockets, a race between processes, or an outside service. A test that flakes (it passed and failed under one
+  key, which `suites.py` reports as `nondeterministic`) is deleted, not fixed or rerun.
 - **Isolated:** write only under `tmp_path`; change the environment, `sys.path` or a module only through `monkeypatch`. The
   runner fails a run in which the tests changed a file of the repository, and names the files.
 - **Exact:** for bit-exact code, compare words, digests and pinned vectors, not approximations. A negative checks that the

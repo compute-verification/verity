@@ -176,3 +176,18 @@ def test_provers_reject_ranks_outside_the_tree_and_inconsistent_paths() -> None:
         multiproof_from_paths(6, forged)
     with pytest.raises(ProtocolError, match="depth"):
         multiproof_from_paths(6, {0: tree.open(BASE).path[:-1]})
+
+
+@pytest.mark.parametrize("hash", ["blake3", "blake3-s256"])
+def test_blake3_frames_are_refused(hash: str) -> None:
+    """Multiproofs are over the SHA frames only: a ``frame-b3`` or ``frame-b3s`` tree, or its hash named to the verifier,
+    raises instead of folding nodes of another frame."""
+    domain = CommitmentDomain(bytes(32), -1, RangeIndexedDomain(BASE, BASE + 7), hash=hash)
+    values = {BASE + rank: bytes([rank]) for rank in range(7)}
+    tree = MerkleTree(domain, values, lambda _position: SCHEMA)
+    with pytest.raises(ValueError, match="framing hash"):
+        multiproof(tree, [1, 4])
+    leaves = leaves_of(domain, values, (1, 4))
+    paths = {rank: tree.open(BASE + rank).path for rank in (1, 4)}
+    with pytest.raises(ValueError, match="framing hash"):
+        verify_multiproof(tree.commitment.root, 7, domain.domain_id, leaves, multiproof_from_paths(7, paths), hash=hash)

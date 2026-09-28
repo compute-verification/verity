@@ -1,5 +1,5 @@
 """``frame-b3``: the BLAKE3 tree mode of `verity.primitives.commitments.merkle` (a ``hash="blake3"`` domain): its message layouts (a
-block-aligned leaf header, one-block nodes under per-level keys), openings, multiproofs, pinned vectors and the root rebuilt
+block-aligned leaf header, one-block nodes under per-level keys), openings, pinned vectors and the root rebuilt
 with the `blake3` package from the layout alone."""
 
 from __future__ import annotations
@@ -13,7 +13,6 @@ from verity.primitives.commitments import (
     VerificationLimits,
     verify_opening,
 )
-from verity_experimental.commitments.multiproof import multiproof, verify_multiproof
 from verity.primitives.crypto.blake3 import BLOCK_LEN, blake3, keyed
 from verity.primitives.commitments.merkle import _FRAME, _uint
 
@@ -62,16 +61,6 @@ def test_openings_authenticate_and_tampering_fails():
     assert len({tree.commitment.root, other.commitment.root, sha.commitment.root}) == 3
     assert not verify_opening(domain(owner=4), tree.commitment, tree.open(0), "rows", limits)
     assert MerkleTree(domain(0), {}, lambda _: "rows").commitment.root == domain(0).empty_root()
-
-
-def test_multiproofs_use_the_same_nodes():
-    d, vals = domain(7), values(7)
-    tree = MerkleTree(d, vals, lambda _: "rows")
-    ranks = (1, 4, 6)
-    proof = multiproof(tree, ranks)
-    leaves = {r: d.leaf(r, r, "rows", vals[r]) for r in ranks}
-    assert verify_multiproof(tree.commitment.root, 7, d.domain_id, leaves, proof, hash="blake3")
-    assert not verify_multiproof(tree.commitment.root, 7, d.domain_id, leaves, proof, hash="sha256")
 
 
 #: the vectors another implementation checks against: `domain()` (five values, binding bytes(range(32)), owner 3), schema "rows"

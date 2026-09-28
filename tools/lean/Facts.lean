@@ -15,7 +15,8 @@ judgement; `audit.py` holds the policy.
 - `declared_axioms`: the `axiom` declarations among them.
 - `escapes`: the `opaque` ones (a `partial def` is one), and the `unsafe`, `@[implemented_by]` and `@[extern]` ones:
   compiled code with no definition a proof can unfold. The attributes are read from the modules' data.
-- `pins`: for each name in `pins`, its kind, signature, axioms, `Prop` hypotheses, the hash of its type, and the
+- `pins`: for each name in `pins`, its kind, where its declaration starts (`at`: line, codepoint column), signature,
+  axioms, `Prop` hypotheses, the hash of its type, and the
   definitions its statement reads, followed through every definition, inductive type and constructor declared under
   `meaning`, with their source lines (`reads`), and the constants other than theorems outside `meaning` where that walk
   stops, with their modules (`outside`). Signatures print with no notation, since no notation is loaded: nothing a
@@ -287,6 +288,7 @@ def pinInfo (env : Environment) (axioms : Std.HashMap Name NameSet)
       ("hash", toJson s!"{hex ci.type.hash}{hex (valueHash ci)}"),
       ("lines", toJson (ranges[c]?.map fun (d : DeclarationRanges) => #[d.range.pos.line, d.range.endPos.line]))]
   return Json.mkObj [("kind", toJson (kind ci)), ("module", toJson ((moduleOf n).map toString)),
+    ("at", toJson (ranges[n]?.map fun (d : DeclarationRanges) => #[d.range.pos.line, d.range.pos.column])),
     ("signature", toJson signature), ("axioms", toJson ((axioms.getD n {}).toArray.qsort Name.lt |>.map toString)),
     ("hypotheses", toJson hypotheses), ("type_hash", toJson (hex ci.type.hash)),
     ("reads", toJson (rs.1.map readJson)),

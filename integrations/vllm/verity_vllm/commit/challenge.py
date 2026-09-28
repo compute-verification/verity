@@ -2,8 +2,8 @@
 
 Today's derivations hash the run root, the prover's own commitment (Fiat-Shamir), and their outputs are recorded in
 verdicts.  They stay byte-identical while `LEGACY` is true; decision 42 retires them at the re-baseline epoch.  The
-non-legacy forms draw through `verity.primitives.randomness.derive` from a `source` that is a beacon round published after the
-run root was registered, or an auditor key, with the run root and the draw's other bindings as context:
+non-legacy forms draw through `verity.primitives.randomness.derive` from a `source` that is an auditor key, with the run root
+and the draw's other bindings as context:
 
 * opening positions (`challenge_positions`): `verity/vllm-commit/opening-positions/v1`;
 * opening identities from the expected population (`identity_picker`): `verity/vllm-commit/opening-identities/v1`;
@@ -43,7 +43,7 @@ def _source(legacy: bool, source: bytes | None) -> None:
     if legacy and source is not None:
         raise ValueError("a legacy challenge derives from the run root alone; pass legacy=False with a source")
     if not legacy and not source:
-        raise ValueError("a non-legacy challenge needs a source: a beacon round after the root, or an auditor key")
+        raise ValueError("a non-legacy challenge needs a source: an auditor key")
 
 
 def challenge_positions(run_root: bytes, leaves_per_step: list[int], k: int, salt: bytes = b"", *, legacy: bool = LEGACY,

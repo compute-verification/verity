@@ -3,6 +3,7 @@
     python tools/lean/audit.py [--build] [--update [--owner @LANE] [--moved FILE]] [--out DIR] PACKAGE_DIR...
     python tools/lean/audit.py --all [--root DIR] [--build] [--out DIR]   the controls, then every package under DIR (default .)
     python tools/lean/audit.py --name-instances [--build] PACKAGE_DIR...  write each anonymous instance's name into its source
+    python tools/lean/audit.py --lift FILE [--build] PACKAGE_DIR   lift guarantees into `SecurityProofs.G : G` (`lift`)
 
 For each package it reads the facts from the roots' `.olean` files as data (`Facts.lean`: initializers disabled and no
 environment extension loaded, so none of the package's code runs), and replays the audited modules through the kernel
@@ -120,6 +121,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import textwrap
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -160,7 +162,7 @@ FIXTURES = HERE / "tests" / "fixtures"
 GENERATED = re.compile(r"^(_.*|match_\d+|proof_\d+|eq_\d+|eq_def|mk|rec|recOn|casesOn|noConfusion|noConfusionType|below|brecOn"
                        r"|binductionOn|ibelow|ctorIdx|inj|injEq|sizeOf_spec)$")
 ORDER = ("roots", "proved_in", "exempt", "runs", "axioms", "assumptions", "meaning", "escapes", "compile_time",
-         "dependency_unchecked", "layers", "reads_exempt", "upstream", "guarantees", "reads", "dependencies")
+         "dependency_unchecked", "layers", "reads_exempt", "upstream", "four_names", "guarantees", "reads", "dependencies")
 #: a guarantee's `owner`: the handle of the lane that answers for it (`@proofs`)
 OWNER = re.compile(r"@[a-z0-9][a-z0-9-]*")
 
@@ -383,6 +385,176 @@ def name_instances(pkg: Path, found: list[dict]) -> None:
                 at = j
             src = src[:at] + " " + i["id"] + src[at:]
         (pkg / rel).write_text(src)
+
+
+OPEN = {"(": ")", "[": "]", "{": "}", "⦃": "⦄", "⟨": "⟩"}
+IDENT = r"(?<![\w.'!?₀-₉ₐ-ₜᵢ-ᵪ])({})(?![\w'!?₀-₉ₐ-ₜᵢ-ᵪ])"
+
+
+def groups(text: str) -> list[str]:
+    """The bracketed binder groups of ``text`` at its top level (`(a b : T)`, `{a}`, `[C a]`, `⦃a : T⦄`)."""
+    out, depth, at = [], [], 0
+    for i, c in enumerate(text):
+        if c in OPEN and c != "⟨":
+            if not depth:
+                at = i
+            depth.append(OPEN[c])
+        elif depth and c == depth[-1]:
+            depth.pop()
+            if not depth:
+                out.append(text[at:i + 1])
+    return out
+
+
+def in_scope(src: str, start: int) -> tuple[list[str], str]:
+    """The `variable` binder groups in scope at ``start`` of ``src`` (those of sections and namespaces not yet ended),
+    and the `open … in` line directly above the declaration there (above its doc comment, if it has one)."""
+    clean, scopes = strip_comments(src[:start]), [[]]
+    for cmd in re.finditer(r"(?m)^(section|namespace|end|variable)\b(.*(?:\n[ \t]+\S.*)*)", clean):
+        kind, rest = cmd.group(1), cmd.group(2)
+        if kind in ("section", "namespace"):
+            scopes.extend([] for _ in (rest.split()[0].split(".") if kind == "namespace" and rest.split() else [""]))
+        elif kind == "end":
+            for _ in (rest.split()[0].split(".") if rest.split() else [""]):
+                if len(scopes) > 1:
+                    scopes.pop()
+        else:
+            scopes[-1].extend(groups(rest))
+    above = src[:start].rstrip()
+    if above.endswith("-/") and (o := above.rfind("/--")) >= 0:
+        above = above[:o].rstrip()
+    last = above.rsplit("\n", 1)[-1].strip()
+    return [g for s in scopes for g in s], last if re.fullmatch(r"open\s.*\sin", last) else ""
+
+
+def used(variables: list[str], text: str) -> list[str]:
+    """The groups of ``variables`` a statement ``text`` includes, as Lean does: a named group when the statement or an
+    included group mentions one of its names, an instance group when every variable it mentions is included."""
+    named = {g: g[1:-1].split(":")[0].split() for g in variables if g[0] != "["}
+    names = {n for ns in named.values() for n in ns}
+    mentions = lambda s: {n for n in names if re.search(IDENT.format(re.escape(n)), s)}
+    inc, seen = set(), None
+    while seen != inc:
+        seen = set(inc)
+        for g, ns in named.items():
+            if g not in inc and mentions(" ".join([text, *inc])) & set(ns):
+                inc.add(g)
+        have = {n for g in inc for n in named.get(g, [])}
+        for g in variables:
+            if g[0] == "[" and (ms := mentions(g)) and ms <= have:
+                inc.add(g)
+    return [g for g in variables if g in inc]
+
+
+def unproved_opens(line: str, proof_ns: set[str]) -> str:
+    """An `open A B …` line without the namespaces only proof modules declare, which a spec module cannot open (empty when
+    none is left); any other form of `open` as it is."""
+    words = line.split()[1:]
+    if not words or any(w in ("scoped", "hiding", "renaming") or not re.fullmatch(r"[^\s()]+", w) for w in words):
+        return line
+    kept = [w for w in words if w not in proof_ns]
+    return line if kept == words else f"open {' '.join(kept)}" if kept else ""
+
+
+def statement(src: str, at: tuple[int, int]) -> tuple[str, str, str, str]:
+    """(doc comment, universe parameters, binders, type) of the theorem whose declaration starts at ``at`` (line,
+    codepoint column) in ``src``, as its source writes them: the binders and type are what lies between the name and the
+    first `:` outside brackets, and from there to the `:=` (or a `|` starting a line) outside brackets."""
+    clean = strip_comments(src)
+    start = sum(len(line) + 1 for line in src.split("\n")[:at[0] - 1]) + at[1]
+    before = src[:start].rstrip()
+    if src.startswith("/--", start):
+        doc = src[start:src.index("-/", start) + 2]
+    elif before.endswith("-/") and (o := before.rfind("/--")) >= 0 and "-/" not in before[o:-2]:
+        doc = before[o:]
+    else:
+        doc = ""
+    head = re.compile(r"\b(?:theorem|lemma)\s+[^\s({\[⦃:]+?(\.\{[^}]*\})?(?=[\s({\[⦃:])").search(clean, start + (len(doc) if src.startswith("/--", start) else 0))
+    if head is None:
+        raise ValueError(f"no `theorem` at line {at[0]}")
+    depth, colon, i = [], None, head.end()
+    while i < len(clean):
+        c = clean[i]
+        if c in OPEN:
+            depth.append(OPEN[c])
+        elif depth and c == depth[-1]:
+            depth.pop()
+        elif not depth and clean.startswith(":=", i):
+            break
+        elif not depth and c == ":" and colon is None:
+            colon = i
+        elif not depth and c == "|" and clean[clean.rfind("\n", 0, i) + 1:i].strip() == "" and colon is not None:
+            break
+        i += 1
+    if colon is None or i == len(clean):
+        raise ValueError(f"the theorem at line {at[0]} has no `: type :=` this can read")
+    lines = [line for line in clean[colon + 1:i].strip().split("\n") if line.strip()]
+    typ = "\n".join([lines[0], *textwrap.indent(textwrap.dedent("\n".join(lines[1:])), "    ").split("\n")]) \
+        if len(lines) > 1 else lines[0]
+    return doc, head.group(1) or "", " ".join(clean[head.end():colon].split()), typ
+
+
+def lift(pkg: Path, policy: dict, facts: dict, lifts: dict[str, dict]) -> dict[str, str]:
+    """Lift each guarantee ``old`` of ``lifts`` ({old: {"as": "X.Guarantees.G", "into": spec module}}) into the four-name
+    form: `def G : Prop := ∀ binders, type` (its theorem's doc comment, binders and type as its source writes them, after
+    the binders of the `variable`s in scope that Lean would include), appended to the spec module in the theorem's
+    namespace with its file's `open`s above it (less the namespaces only proof modules declare) and the `open … in` right
+    above it, so that its names resolve as they did (the spec module then imports the modules of the definitions the
+    statement reads; a statement that reads a non-theorem constant of a proof package is refused), and `theorem X.SecurityProofs.G : X.Guarantees.G := @old` appended to the module that
+    proves ``old``, or to the one ``beside`` names, which then imports the spec module and the proof's. Returns the
+    moves ({old: X.SecurityProofs.G}) for `--update --moved`, which certifies each lift as the same statement or prints
+    the change."""
+    files = {m: f for _, q in provers(pkg, policy) if q.is_dir() for m, f in module_files(q).items()} | module_files(pkg)
+    proofs = {m for _, q in provers(pkg, policy) if q.is_dir() for m in lean_modules(q)}
+    declared = lambda mods: {n for mod in mods for n in re.findall(r"(?m)^namespace\s+(\S+)", strip_comments(files[mod].read_text()))}
+    proof_ns = declared(proofs & files.keys()) - declared(files.keys() - proofs)
+    moves, original, added, needs = {}, {}, {}, {}
+    for old, spec in sorted(lifts.items()):
+        new, into = spec["as"], spec["into"]
+        parts = new.split(".")
+        fact = facts["pins"].get(old) or {}
+        if "Guarantees" not in parts[:-1] or not spec_module(into) or into not in files or into == fact.get("module"):
+            raise ValueError(f"lift {old}: `as` names X.Guarantees.G and `into` a module of the package named `Guarantees` "
+                             f"or under one, other than the proof's ({new}, {into})")
+        if fact.get("kind") != "theorem" or not fact.get("at") or fact.get("module") not in files:
+            raise ValueError(f"lift {old}: not a guarantee of the package that this build declares in its source")
+        m = fact["module"]
+        beside = spec.get("beside", m)
+        if beside not in files or spec_module(beside):
+            raise ValueError(f"lift {old}: `beside` names a module of the package outside `Guarantees` ({beside})")
+        reads = {mod for mod in [*(r.get("module") for r in fact.get("reads", [])), *(o[1] for o in fact.get("outside", []))]
+                 if mod in files} - {into}
+        if bad := sorted(reads & proofs):
+            raise ValueError(f"lift {old}: its statement reads definitions of {', '.join(bad)}, which a spec module may not "
+                             f"import; move them into the definitions first")
+        at = len(parts) - 1 - parts[::-1].index("Guarantees")
+        proof = ".".join([*parts[:at], "SecurityProofs", *parts[at + 1:]])
+        src = original.setdefault(m, files[m].read_text())
+        original.setdefault(into, files[into].read_text())
+        original.setdefault(beside, files[beside].read_text())
+        doc, univ, binders, typ = statement(src, tuple(fact["at"]))
+        start = sum(len(line) + 1 for line in src.split("\n")[:fact["at"][0] - 1]) + fact["at"][1]
+        variables, open_in = in_scope(src, start)
+        binders = " ".join([*used(variables, f"{binders} {typ}"), binders]).strip()
+        opens = [o for o in (unproved_opens(line, proof_ns) for line in strip_comments(src[:start]).split("\n")
+                             if re.match(r"open\s", line) and not re.search(r"\sin\s*$", line)) if o]
+        ns = ".".join(old.split(".")[:-1])
+        added.setdefault(into, []).append("\n".join([
+            f"namespace {ns}" if ns else "section", *opens, "", *([open_in] if open_in else []), *([doc] if doc else []),
+            f"def _root_.{new}{univ} : Prop :=", *([f"  ∀ {binders},", f"    {typ}"] if binders else [f"  {typ}"]), "",
+            f"end {ns}".rstrip()]))
+        added.setdefault(beside, []).append(f"theorem {proof}{univ} : {new}{univ} := @{old}{univ}")
+        needs.setdefault(beside, set()).update({into, m} - {beside})
+        needs.setdefault(into, set()).update(reads)
+        moves[old] = proof
+    for m, src in original.items():
+        imports = list(re.finditer(r"(?m)^import\s+(\S+)[ \t]*$", strip_comments(src)))
+        if more := sorted(needs.get(m, set()) - {i.group(1) for i in imports}):
+            cut = imports[-1].end() if imports else 0
+            lines = "\n".join(f"import {i}" for i in more)
+            src = src[:cut] + ("\n" + lines if imports else lines + "\n") + src[cut:]
+        files[m].write_text("\n\n".join([src.rstrip("\n"), *added.get(m, [])]) + "\n")
+    return moves
 
 
 def listings(pkg: Path, files: dict[str, str], policy: dict, facts: dict, update: bool = False
@@ -672,6 +844,10 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
             else:
                 fails.append(f"guarantees: {name} assumes ({h['binder']} : {h['type']}), a closed Prop that is not a named assumption "
                              f"(a Prop constant of {', '.join(policy.get('assumptions', [])) or 'an `assumptions` module'})")
+        if name.split(".")[0] in policy.get("four_names", []) and not four_named(name, f):
+            fails.append(f"four names: {name} is a guarantee of {name.split('.')[0]}, which `four_names` lists, so it is "
+                         f"stated as `X.SecurityProofs.G : X.Guarantees.G` with `G` a definition of a `Guarantees` module "
+                         f"(`audit.py --lift` writes it), or is not a guarantee")
         now = {"signature": f["signature"].splitlines(), "assumptions": sorted(set(named)), "type_hash": f["type_sha256"]}
         kept[name] = ({"owner": who} if who else {}) | now
         if update:
@@ -933,6 +1109,20 @@ MOVED_READS = "definitions read in another module or under another name: the sam
 OWNED = "who answers for it, not what it says"
 
 
+def four_named(name: str, fact: dict) -> bool:
+    """Whether the guarantee ``name`` (its facts ``fact``) is in the four-name form: `X.SecurityProofs.G : X.Guarantees.G`,
+    universe parameters aside, with `X.Guarantees.G` a definition of a spec module (`spec_module`)."""
+    parts = name.split(".")
+    if "SecurityProofs" not in parts[1:-1]:
+        return False
+    at = parts.index("SecurityProofs", 1)
+    g = ".".join([*parts[:at], "Guarantees", *parts[at + 1:]])
+    univ = r"(\.\{[^}]*\})?"
+    lift = fact.get("lift") or {}
+    return bool(re.fullmatch(rf"{re.escape(name)}{univ} : {re.escape(g)}{univ}", " ".join(fact["signature"].split()))) \
+        and lift.get("head") == g and spec_module(lift.get("module") or "")
+
+
 def spec_module(module: str) -> bool:
     """Whether a guarantee may be lifted into a definition of ``module``: a module named `Guarantees` or under one
     (`Pous.Guarantees`, `Pous.Guarantees.P2`)."""
@@ -962,7 +1152,8 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path], renames:
     says what its record says (`lifted_into`) gets one line, and the definition, new and read by nothing else, needs no
     reading of its own.  After `--moved` (``renames``, `facts_of`), a guarantee and a definition are compared with the
     record of their old names, by their texts under the old names: a guarantee that says what its record says gets one line
-    (moved from its old name, lifted), and the definitions that are the same are counted on one line."""
+    (moved from its old name, lifted), and the definitions that are the same are counted on one line.  One the base already
+    records under its new name (a lock re-recorded after the move) is compared with that record."""
     out = []
     op, np = old.get("guarantees", {}), new.get("guarantees", {})
     moves = not facts.get("moved_conflicts")
@@ -999,19 +1190,21 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path], renames:
             out.append(f"  named assumptions: {', '.join(a.get('assumptions', [])) or 'none'} -> "
                        f"{', '.join(b.get('assumptions', [])) or 'none'}")
     spans = {r["name"]: r.get("lines") for p in facts["pins"].values() for r in p.get("reads", [])}
+    oreads = old.get("reads", {})
+    recorded = {d: {"module": m, "hash": h, "guarantees": rec.get("guarantees", [])}
+                for m, rec in oreads.items() for d, h in definitions(rec).items()}
     now: dict[str, dict] = {}
     for m, es in guarantee_reads(facts).items():
         groups: dict[str, list] = {}
         for n, e in es.items():
-            groups.setdefault(parent(e["moved"]["as"] if moves and e.get("moved") else n), []).append(e)
+            was = moves and e.get("moved") and parent(n) not in recorded
+            groups.setdefault(parent(e["moved"]["as"]) if was else parent(n), []).append(e)
         for d, g in groups.items():
-            as_was = [{"name": e["moved"]["as"], "kind": e["kind"], "sha256": e["moved"]["sha256"]}
-                      if moves and e.get("moved") else e for e in g]
-            now[d] = {"name": parent(min(e["name"] for e in g)), "module": m, "sha256": digest(as_was),
+            as_was = digest([{"name": e["moved"]["as"], "kind": e["kind"], "sha256": e["moved"]["sha256"]}
+                             if moves and e.get("moved") else e for e in g])
+            sha256 = digest(g) if recorded.get(d, {}).get("hash") == digest(g) else as_was
+            now[d] = {"name": parent(min(e["name"] for e in g)), "module": m, "sha256": sha256,
                       "hash": digest(g, old=True)[:OLD], "guarantees": sorted(set().union(*(e["guarantees"] for e in g)))}
-    oreads = old.get("reads", {})
-    recorded = {d: {"module": m, "hash": h, "guarantees": rec.get("guarantees", [])}
-                for m, rec in oreads.items() for d, h in definitions(rec).items()}
     regrouped = sum(old_group(rec) and all(now.get(d, {}).get("hash") == h for d, h in definitions(rec).items())
                     for rec in oreads.values())
     elsewhere = 0
@@ -1225,7 +1418,7 @@ def template(pkg: Path) -> dict:
 
 def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, replay: bool = True, fresh: bool = False,
           log=print, built=lambda: None, runs: bool = True, repo: Path = ROOT, moved: dict[str, str] | None = None,
-          ready=lambda q: None, owner: str | None = None, name: bool = False) -> dict:
+          ready=lambda q: None, owner: str | None = None, name: bool = False, lifts: dict | None = None) -> dict:
     """Audit one package; returns its report (`failures` empty when it passes). ``built`` is called once its build has
     passed, before anything reads it; ``ready`` (a package its `proved_in` names) returns once that package's build has
     ended (`proved`). ``runs`` runs the package's tests (`tests`), ``repo`` the checkout their data's
@@ -1233,7 +1426,8 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     the build with the records under the old names (`review`). An update's report holds the review, whether it changes what a
     guarantee says (`statement_changes`), and the guarantees and reads it compared with (`before`) beside those it wrote.
     ``owner`` (with ``update``) is the owner of a guarantee whose entry names none.  ``name`` writes each anonymous
-    instance's name into its source (`name_instances`) instead of failing on it.  The report lists the spec's definitions
+    instance's name into its source (`name_instances`) instead of failing on it.  ``lifts`` writes those lifts (`lift`)
+    instead of auditing, and the report's `moved` holds their moves.  The report lists the spec's definitions
     that no guarantee reads (`unread_spec`)."""
     rep = {"package": str(pkg), "seconds": {}, "failures": []}
     if not (pkg / POLICY).exists():
@@ -1282,6 +1476,12 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         rep["failures"].append(f"lean: {e}")
         return rep
     rep["seconds"]["audit"] = round(time.monotonic() - s, 1)
+    if lifts:
+        try:
+            rep["moved"] = lift(pkg, current, facts, lifts)
+        except ValueError as e:
+            rep["failures"].append(f"lift: {e}")
+        return rep
     files = lean_modules(pkg)
     fails, new = judge(current, facts, files, update, owner)
     fails = cross + fails + spec_reads(current, facts, reads_home(pkg, current))
@@ -1294,8 +1494,9 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     if name and anonymous:
         name_instances(pkg, anonymous)
         rep["named_instances"] = [f"{i['file']}:{i['at'][0]} {i['name']}" for i in anonymous]
-        log(f"audit: {pkg}: wrote the names of {len(anonymous)} anonymous instances into "
-            f"{', '.join(sorted({i['file'] for i in anonymous}))}; build and audit again to see that no record changed")
+        fails.append(f"instance: named {len(anonymous)} anonymous instances in "
+                     f"{', '.join(sorted({i['file'] for i in anonymous}))}, so this audit is of sources it has since rewritten: "
+                     f"build and audit again to see that no record changed")
         anonymous = []
     fails += [f"instance: {i['file']}:{i['at'][0]} declares an instance without a name, which Lean names {i['name']} from its "
               f"type (and, when nothing in the type is the project's own, its project's root): a move or a split renames it, and "
@@ -1506,6 +1707,10 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--owner", metavar="@LANE", help="with --update: the owner of each guarantee whose entry names none")
     ap.add_argument("--name-instances", action="store_true", help="write each anonymous instance's name (the one Lean gave "
                     "it) into its declaration instead of failing on it; no record changes")
+    ap.add_argument("--lift", type=Path, metavar="FILE", help="one package: a JSON object {guarantee: {\"as\": X.Guarantees.G, "
+                    "\"into\": spec module[, \"beside\": module]}}; write each as `def G : Prop` in the spec module and "
+                    "`theorem X.SecurityProofs.G : X.Guarantees.G` beside its proof, or in `beside` (`lift`), instead of "
+                    "auditing, and FILE.moved.json for `--update --moved`")
     ap.add_argument("--no-replay", action="store_true", help="skip the kernel replay (`Replay.lean`)")
     ap.add_argument("--fresh", action="store_true", help="also `leanchecker --fresh` each root: its whole closure, Mathlib and core "
                     "included, through the kernel (slow: see README)")
@@ -1518,8 +1723,8 @@ def main(argv: list[str]) -> int:
                     "recorded run, else a temporary directory)")
     a = ap.parse_args(argv)
     pkgs = [p.resolve() for p in (packages(a.root.resolve()) if a.all else a.package)]
-    if not pkgs or (a.all and a.package) or (a.all and a.update):
-        ap.error("name package directories, or --all (which does not --update)")
+    if not pkgs or (a.all and a.package) or (a.all and (a.update or a.name_instances)):
+        ap.error("name package directories, or --all (which neither updates records nor names instances)")
     moved = None
     if a.moved:
         if not a.update:
@@ -1529,6 +1734,13 @@ def main(argv: list[str]) -> int:
             ap.error(f"{a.moved}: a JSON object of old names to new names")
         if errs := move_errors(moved):
             ap.error(f"{a.moved}: " + "; ".join(errs))
+    lifts = None
+    if a.lift:
+        if a.update or a.all or a.name_instances or len(pkgs) != 1:
+            ap.error("--lift goes with one package, and not with --update, --all or --name-instances")
+        lifts = json.loads(a.lift.read_text())
+        if not isinstance(lifts, dict) or not all(isinstance(v, dict) and {"as", "into"} <= set(v) for v in lifts.values()):
+            ap.error(f"{a.lift}: a JSON object {{guarantee: {{\"as\": X.Guarantees.G, \"into\": module[, \"beside\": module]}}}}")
     if a.owner is not None and not (a.update and OWNER.fullmatch(a.owner)):
         ap.error("--owner goes with --update, and names a handle such as @proofs")
     named = set(pkgs)
@@ -1582,7 +1794,7 @@ def main(argv: list[str]) -> int:
             rep = audit(pkg, out, a.build, a.update and mine, not a.no_replay, a.fresh, built=lambda: seal(pkg),
                         runs=not a.no_runs, repo=a.repo.resolve(), moved=moved if mine else None,
                         ready=lambda q: built[q].wait() if q in built else None, owner=a.owner,
-                        name=a.name_instances and mine)
+                        name=a.name_instances and mine, lifts=lifts if mine else None)
         finally:
             if not built[pkg].is_set():
                 seal(pkg)
@@ -1607,6 +1819,11 @@ def main(argv: list[str]) -> int:
         for j in jobs:
             j.result()
     reports = [reports[p] for p in pkgs]
+    if lifts and not reports[0]["failures"]:
+        moved = Path(f"{a.lift}.moved.json")
+        moved.write_text(json.dumps(reports[0]["moved"], indent=1) + "\n")
+        print(f"audit: lifted {len(lifts)} guarantees; build, then `audit.py --update --moved {moved} {pkgs[0]}` certifies each "
+              f"lift as the same statement or prints the change", flush=True)
     failed = by_controls + [str(r["package"]) for r in reports if r["failures"]]
     if changed := [r["package"] for r in reports if r.get("statement_changes")]:
         print(f"audit: guarantees, the definitions they read, or listed compile-time code changed in "

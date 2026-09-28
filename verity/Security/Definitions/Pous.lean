@@ -13,6 +13,7 @@ import Definitions.Pous.Model.ColumnGame
 import Definitions.Pous.Model.Continuous
 import Definitions.Pous.Model.Dense
 import Definitions.Pous.Model.Digest
+import Definitions.Pous.Model.FreeBlocks
 import Definitions.Pous.Model.Graded
 import Definitions.Pous.Model.HashChain
 import Definitions.Pous.Model.Inc

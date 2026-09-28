@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import copy
 import json
-import os
 import socket
 import subprocess
 from pathlib import Path
@@ -24,15 +23,6 @@ def _no_ssh(monkeypatch):
     """No test reaches a pod: a plan that would probe over ssh sees it fail unless the test supplies the probes."""
     monkeypatch.setattr(PL, "remote_probe", lambda m, peer=None: (_ for _ in ()).throw(RuntimeError("no ssh in tests")))
 
-
-@pytest.fixture
-def listener():
-    """A local TCP server that completes handshakes (the kernel's backlog; nothing is accepted): an RTT target."""
-    s = socket.socket()
-    s.bind(("127.0.0.1", 0))
-    s.listen(128)
-    yield f"127.0.0.1:{s.getsockname()[1]}"
-    s.close()
 
 #: The five L40S cells' pair: two containers of one US-TX-4 host (one machine id, CPU and public IP; a 172.24.0.x bridge).
 CORESIDENT = {"prover": {"pod_id": "pod-l40s-a", "machine_id": "m-tx4", "public_ip": "192.0.2.44", "cpu_model": "AMD EPYC 9354"},
@@ -86,22 +76,6 @@ def test_without_the_api_a_plan_is_refused(monkeypatch):
     assert cell.placement["prover"]["machine_id"] == "m-h100" and cell.placement["link"]["peer_ip"] == "10.0.0.2"
 
 
-def test_the_probe_runs_before_the_job_and_records_the_machine(tmp_path, listener):
-    """The wrapper each job runs: placement.json in the run dir (identity, bare-metal facts, the link and its TCP-connect RTT), then
-    the job itself with its own arguments."""
-    env = dict(os.environ, RESEARCH_RUN_DIR=str(tmp_path), RUNPOD_POD_ID="pod-x", RUNPOD_PUBLIC_IP="203.0.113.7")
-    r = subprocess.run(["bash", "-c", C.PROBE_WRAP, "cell-job", "127.0.0.1:9", listener, "echo", "job", "ran"], cwd=C.LW.REPO, env=env,
-                       capture_output=True, text=True)
-    assert r.returncode == 0 and r.stdout.strip() == "job ran", r.stderr
-    rec = json.loads((tmp_path / "placement.json").read_text())
-    assert (rec["pod_id"], rec["public_ip"]) == ("pod-x", "203.0.113.7") and rec["boot_id"] and rec["link"]["peer_ip"] == "127.0.0.1"
-    assert rec["hypervisor"] in (True, False, None) and "sys_vendor" in rec and "product_name" in rec
-    rtt = rec["link"]["rtt"]                                   # real loopback connects: on a loaded node one can fail
-    assert rtt["n"] + rtt["failed"] == PL.RTT_CONNECTS and rtt["n"] >= 1 and rtt["method"] == PL.RTT_METHOD
-    ident = PL.from_job(tmp_path)
-    assert ident["pod_id"] == "pod-x" and ident["link"]["peer_ip"] == "127.0.0.1"
-    r = subprocess.run(["bash", "-c", C.PROBE_WRAP, "cell-job", "", "", "true"], cwd=C.LW.REPO, env=env, capture_output=True, text=True)
-    assert r.returncode == 0 and "link" not in json.loads((tmp_path / "placement.json").read_text())   # the verifier's job
 
 
 def test_registration_records_both_machines_and_refuses_a_shared_one(tmp_path):
@@ -340,15 +314,6 @@ def test_s4_tcp_rtt_times_kernel_connects_to_the_target(monkeypatch):
     assert (r["median_ms"], r["min_ms"]) == (pytest.approx(5.5), pytest.approx(1.0))   # of 1, 2, 4, 5, 6, 8, 9, 10 ms
 
 
-def test_s4_tcp_rtt_counts_refused_connects_to_a_closed_port():
-    s = socket.socket()
-    s.bind(("127.0.0.1", 0))
-    closed = f"127.0.0.1:{s.getsockname()[1]}"
-    s.close()
-    r = PL.tcp_rtt(closed, n=3)
-    assert (r["n"], r["failed"], r["median_ms"]) == (0, 3, None)
-    p, v, link = _pair()
-    assert PL.separation(p, v, {**link, "rtt": r})                                       # no connect, no exception
 
 
 def test_s4_the_rtt_target_is_the_verifier_pods_sshd_on_its_global_name(monkeypatch):

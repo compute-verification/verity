@@ -4,7 +4,7 @@ description: >
   How to work on Lean in Verity: where a new Lean file or package goes, the inner loop (lake env lean on one file,
   scratch probes with #print axioms, exact? and trace_state, profiling a slow proof), building and auditing with
   tools/lean/audit.py, stating assumptions as named Props, freezing and listing the guarantees a ledger or PR cites in
-  lean-audit.json, moving them without a statement review (--moved), watching ArkLib and other dependencies for proofs
+  lean-audit.json, moving them without a DM to Daniel (--moved), watching ArkLib and other dependencies for proofs
   of what we assume (tools/lean/upstream.py), keeping parallel Lean lanes out of each other's files and build
   directories, and Daniel's Lean rulings (guarantees proved under their assumptions, Lean as the source of truth for
   them). Use when adding or changing Lean proofs, definitions or packages (backends/flock/verifier/lean, level3,
@@ -137,7 +137,8 @@ simp with that.
   change, your edit changed what that guarantee says: undo it, or say so in the PR and update the ledger.
 - **A changed record reaches Daniel.** The axiom checks and the replay pass a weakened definition (a vacuous theorem is
   still a theorem), so paste what `--update` printed into the PR. When it lands on `main`, Daniel gets a DM showing the
-  change; nobody signs off and nothing waits on it.
+  change, and that DM is the check: nobody signs off and nothing waits on it. A statement reviewer is optional: ask one
+  when you want a second reading of the printout, but don't hold the merge for it.
 - **A move is not a change.** When you rename guarantees or move what they read (a package moving to the four names), write
   the moves as a JSON object of old names to new ones, a declaration or a namespace each, and run
   `audit.py --update --moved MOVES.json PKG` on the record as it was before the move. A guarantee that says what its
@@ -145,8 +146,8 @@ simp with that.
   in full. Moving a definition to another module needs no map.
 - **A lift needs no map.** `theorem X (xs) : e` becoming `theorem X (xs) : G as`, with `def G (ys) : Prop := e` in a
   `Guarantees` module, prints as "lifted into G" on a plain `--update` when `G` unfolded once is `e` (the same type hash)
-  and the theorem keeps its named assumptions as binders (tools/lean/README.md, "A lift is not a change"). It needs no
-  statement reviewer, but Daniel's DM still lists the changed record.
+  and the theorem keeps its named assumptions as binders (tools/lean/README.md, "A lift is not a change"). Daniel's DM
+  still lists the changed record.
 
 ## Before the PR
 
@@ -168,6 +169,7 @@ These are Daniel's rulings, newest first.
   conclusion, where an assumption is a named `Prop` (README "Glossary").
 - 2026-10-01: a guarantee that only moved, renamed or restated as a `Guarantees` definition, needs no statement reviewer
   when `--update --moved` prints it as the same statement under its old names, with every definition it reads the same.
+  Since 2026-10-03 no change needs one; `--moved` now decides only whether Daniel's DM lists it.
 - 2026-10-01: a Lean protocol package may require another protocol's package (NCI's requiring sampled proofs', say),
   because composing their guarantees needs it. The requires stay acyclic, and a protocol never requires a backend. Such a
   `path` require changes no revision, so a feature PR may add it. Python's protocols import only `verity`, themselves

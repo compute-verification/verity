@@ -26,6 +26,10 @@ The tree is the complete binary tree of :class:`MerkleTree` (``2**depth``
 leaves, padding leaves past ``count``), so every known node has a sibling
 and a padding sibling is simply supplied by the proof like any other.  With
 one opened rank the multiproof is that rank's authentication path.
+
+Multiproofs are over the SHA frames only: ``frame-v3-sha512`` (``hash="sha512"``)
+and the SHA-256 frame the frozen SP1 backend reads.  A BLAKE3 domain
+(``frame-b3``, ``frame-b3s``) is refused.
 """
 
 from __future__ import annotations
@@ -33,7 +37,8 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 
-from verity.primitives.commitments.merkle import _NODE, MerkleTree, _hash, _uint, blake3_node, merkle_depth
+from verity.primitives.commitments.merkle import _NODE, MerkleTree, _hash, _uint, merkle_depth
+from verity.primitives.commitments.scheme import sha
 from verity.errors import ProtocolError
 
 type Node = Callable[[int, int, bytes, bytes], bytes]
@@ -53,9 +58,9 @@ def _ranks(count: int, ranks: Iterable[int]) -> tuple[int, ...]:
 
 
 def _node_of(domain_id: bytes, hash: str = "sha256") -> Node:
+    sha(hash)
+
     def node(level: int, index: int, left: bytes, right: bytes) -> bytes:
-        if hash in ("blake3", "blake3-s256"):
-            return blake3_node(domain_id, level, index, left, right)
         return _hash(_NODE, domain_id, _uint(level), _uint(index), left, right, hash=hash)
 
     return node
@@ -156,7 +161,8 @@ def verify_multiproof(
     """Whether the leaf digests ``leaves[rank]`` reconstruct ``root`` with ``proof`` (``hash`` the domain's frame hash).
 
     False when a rank lies outside the tree, when ``leaves`` is empty (nothing
-    is authenticated) or when the proof is not consumed exactly.
+    is authenticated) or when the proof is not consumed exactly.  A ``hash``
+    that is not a SHA frame's raises ``ValueError``.
     """
 
     if not leaves or any(not 0 <= rank < count for rank in leaves):

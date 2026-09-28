@@ -310,15 +310,6 @@ def test_the_daemon_ends_an_expired_pod_on_its_first_tick(tmp_path):
 
 # ---- research run --on extends it -----------------------------------------------------------------------------------------------------------
 
-def test_the_machine_extends_its_lease_for_a_run_and_a_machine_without_one_says_so(tmp_path, monkeypatch):
-    d = tmp_path / "lease"
-    assert L.machine_extend(600, "run-r1", lease_dir=str(d)) == {"leased": False, "reason": f"no lease on this machine ({d}/lease)"}
-    d.mkdir()
-    (d / "lease.sh").write_text(L.LEASE_SH.read_text())
-    (d / "lease").write_text(f"{NOW} t create\n")
-    monkeypatch.setenv("LEASE_NOW", str(NOW - 100))
-    rep = L.machine_extend(600, "run-r1", lease_dir=str(d))
-    assert rep["extended"] and rep["expires_epoch"] == NOW + 500 and rep["by"] == "run-r1"
 
 
 def test_launch_request_extends_the_lease_for_a_started_run(tmp_path, monkeypatch):

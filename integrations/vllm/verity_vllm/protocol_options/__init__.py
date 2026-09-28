@@ -354,6 +354,13 @@ def at_row(knob: Any, workload: Mapping[str, Any], *, world: int = 1) -> tuple[s
     return enabled
 
 
+def own_auditor(config: str | Path | Mapping[str, Any] | None, profile: Any) -> dict[str, dict[str, Any]]:
+    """The protocols config (`load_settings`) of a pipeline that is its run's own auditor (the Commit, a Match capture):
+    PoUW's ``coins`` a challenger of the epoch held in this process when ``profile`` declares PoUW (`pouw.challenged`)."""
+    from verity_vllm.protocol_options import pouw
+    return pouw.challenged(load_settings(config), getattr(profile, "protocols", None))
+
+
 def commit_guard(profile: Any, *, world: int = 1, hot: bool = False, installs: bool = True, settings: Any = None) -> Any:
     """The Commit's check before its engine is built: ``profile`` back unchanged when the Commit can run its set, else
     exit 3 (fail-closed) with every reason printed.  ``hot`` is a hot Commit worker and ``installs`` False a Commit that

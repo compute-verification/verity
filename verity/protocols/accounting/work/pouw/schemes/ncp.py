@@ -233,7 +233,7 @@ class NCP:
             conjecture="tt-ncp-u",
             gamma0=Fraction(1, 200) if lead else None,
             omega=Fraction(3 * n_min + FORM_UNITS, 3 * n_min),
-            claims=("tt-ncp-u", "random-oracle", "xof/shake-256", "cr/sha-256", "w1-cost-model", "beacon-unpredictability"),
+            claims=("tt-ncp-u", "random-oracle", "xof/shake-256", "cr/sha-256", "w1-cost-model", "live-verifier"),
             theorems=("Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_v1", "Pouw.SecurityProofs.NCP.TTNCPUIff",
                       "Pouw.SecurityProofs.NCP.TTNCPUWitness", "Pouw.SecurityProofs.Theorem1",
                       "Pouw.SecurityProofs.WorkWeightedSampling", "Pouw.SecurityProofs.EndToEnd",

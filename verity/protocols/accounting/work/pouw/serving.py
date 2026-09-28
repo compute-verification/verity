@@ -179,8 +179,9 @@ def schedule_refusals(fmt: HashFormat, s: Schedule) -> list[str]:
 
 
 MANIFEST_SCHEMA = "verity/pouw/pass-manifest/v1"
-#: the manifests a verifier reads: this one, and the MVP's (`verity_vllm.protocol_options.pouw_pearl_c_device`)
-MANIFEST_SCHEMAS_READ = (MANIFEST_SCHEMA, "verity-vllm/pouw-pearl-c-run/v1")
+#: the manifests a verifier reads: this one, and the MVP's (`verity_vllm.protocol_options.pouw_pearl_c_device`), v1 (salted
+#: from a beacon, before epoch coins) only as a replay of a recorded pass
+MANIFEST_SCHEMAS_READ = (MANIFEST_SCHEMA, "verity-vllm/pouw-pearl-c-run/v2", "verity-vllm/pouw-pearl-c-run/v1")
 
 
 @dataclass(frozen=True)

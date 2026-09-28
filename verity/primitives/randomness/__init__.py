@@ -2,8 +2,7 @@
 
     derive(source, domain, context) -> Key
 
-`source` is a public beacon round or a key holder's secret (an auditor key, a device's challenger key, a seed derived
-earlier).  It is never a prover's own commitment: Fiat-Shamir over a prover's root lets the prover re-commit until the
+`source` is a key holder's secret (an auditor key, a device's challenger key, a seed derived earlier).  It is never a prover's own commitment: Fiat-Shamir over a prover's root lets the prover re-commit until the
 sample misses its incorrect units, so outer challenges must not use it (Fiat-Shamir stays inside proofs).  `domain`
 is ``verity/{protocol}/{purpose}/v{n}``.  `context` names the bindings the challenge must follow (registered roots, a
 Program digest, a request header, a device), so a challenge cannot be computed before they exist.
@@ -152,7 +151,7 @@ class Key:
 
 def derive(source: bytes, domain: str, context: Mapping[str, Part]) -> Key:
     if not isinstance(source, bytes) or not source:
-        raise TypeError("source must be nonempty bytes: a beacon round or a key holder's secret")
+        raise TypeError("source must be nonempty bytes: a key holder's secret")
     if not DOMAIN.fullmatch(domain):
         raise ValueError(f"domain {domain!r} is not verity/{{protocol}}/{{purpose}}/v{{n}}")
     if not all(isinstance(key, str) for key in context):

@@ -4,7 +4,8 @@
     python3 tools/move/rename.py              rename and move, then stage it all; prints what it changed
     python3 tools/move/rename.py --dry-run    print what it would change, and change nothing
     python3 tools/move/rename.py --moves      print the declaration renames that the Lean locks' records need ({old: new}),
-                                              the map `tools/lean/audit.py --update --moved` takes
+                                              the map `tools/lean/audit.py --update --moved` takes; run it on the tree
+                                              you re-record, since a branch's records hold names no other lock has
 
 What it does, on the tree as it is (so it reruns on a later main, and `restack.py --script tools/move/rename.py` carries a
 branch across it):
@@ -247,7 +248,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--map", type=Path, default=HERE / "rename_map.toml")
     ap.add_argument("--root", type=Path, default=None)
     ap.add_argument("--dry-run", action="store_true")
-    ap.add_argument("--moves", action="store_true", help="print the declaration renames for `audit.py --update --moved`")
+    ap.add_argument("--moves", action="store_true", help="print the declaration renames this tree's locks need, for `audit.py --update --moved`")
     ap.add_argument("--allow-dirty", action="store_true")
     a = ap.parse_args(argv)
     root = (a.root or Path(L.git(HERE, "rev-parse", "--show-toplevel").strip())).resolve()

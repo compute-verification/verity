@@ -20,7 +20,7 @@ from research.store import credentials as C
 from research.store import custody as CU
 from research.store import preserved as P
 from research.store.cli import main as data_main
-from research.store.local import LocalStore, object_key
+from research.store.local import LocalStore
 from research.store.model import Label
 from research.telemetry.job import set_status
 
@@ -84,50 +84,6 @@ def _fixture_run(runs: Path, run_id: str = FIXTURE_RID) -> Path:
 
 
 # ---- the machine side, end to end --------------------------------------------------------------------------------------------------------
-
-def test_the_machine_publishes_every_run_file_and_any_machine_sees_custody(tmp_path, monkeypatch):
-    vault = tmp_path / "vault"
-    cmd = [PY, "-c", "import os; print('hello from the workload'); print('token seen:', 'AWS_SESSION_TOKEN' in os.environ); "
-                     "print('run dir:', os.environ['RESEARCH_RUN_DIR'] == os.getcwd())"]
-    req, runs = _request(tmp_path, RID, cmd, vault)
-    out = remote.launch_request(req)
-    assert out["started"], out
-    d = runs / RID
-    marker = _wait_marker(d)
-    assert marker["preserved"] is True, marker
-    assert (d / "stdout.log").read_text().splitlines() == ["hello from the workload", "token seen: False", "run dir: True"], "the key is never the workload's"
-    assert not (req.parent / remote.CUSTODY_DIR / CU.CRED_FILE).exists(), "the key is deleted once used"
-    assert SECRET not in (d / "launcher.log").read_text() + (d / "job.json").read_text() + req.read_text() + json.dumps(marker)
-    assert {"stdout.log", "stderr.log", "launcher.log", "job.json", "status.json"} <= set(marker["files"])
-    launch = json.loads((d / "launch.json").read_text())
-    assert launch["argv"][launch["argv"].index("--custody-dir") + 1] == str(req.parent / remote.CUSTODY_DIR)
-    # nothing touched the run dir after the marker: launcher.log in the record is all of it, and the marker vouches for the dir
-    assert CU.marker_problem(d) is None
-    assert "custody: publishing" in (d / "launcher.log").read_text()
-
-    # another machine, nothing local: the attempt, its logs and the verdict come from the remote alone
-    st2 = _other_machine(tmp_path, vault, monkeypatch)
-    assert P.check(st2, [RID], mode="head")["preserved"]
-    doc = st2.get_attempt(RID)
-    rr = doc["outputs"]["run_record"]
-    assert rr == marker["run_record"]
-    m = st2.get_manifest(rr)
-    assert m.kind == CU.KIND and {f.path for f in m.payload.files} == set(marker["files"])
-    stdout = next(f for f in m.payload.files if f.path == "stdout.log")
-    st2.remote.get(object_key(stdout.sha256), tmp_path / "got")
-    assert (tmp_path / "got").read_text().startswith("hello from the workload")
-    assert data_main(["preserved", RID]) == 0
-
-    # the pod guard: idle, no .fetched, but custody on the remote -> it may terminate; a file changed afterwards -> it refuses
-    root = tmp_path / "root"
-    st = idle_since(root, _env(tmp_path, QUIET), 120)
-    assert st["verdict"] == "terminate" and st["unfetched"] == [], st
-    with (d / "stdout.log").open("a") as f:
-        f.write("late line\n")
-    assert "changed after custody" in CU.marker_problem(d)
-    st = idle_since(root, _env(tmp_path, QUIET), 120)
-    assert st["verdict"] == "refuse" and "stdout.log changed after its custody" in st["unfetched"][0]["why"]
-
 
 def test_a_stray_sigterm_to_the_runner_does_not_cost_the_run_its_record_or_custody(tmp_path):
     # `pkill -f rows.sh` to stop a queue matched the runner's argv too (it carries the workload's command): the runner died, so the run

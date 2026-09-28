@@ -12,7 +12,7 @@ with these bytes before it times anything.
   uv run python benchmarks/pouw/pearl_c_sm120/fixture.py OUT_DIR [m n k]     (default 256 384 1024; m, n multiples of 128)
 
 The instance is a one-unit epoch as `verity.protocols.accounting.work.pouw.audit` starts it, hashing format -h1: B's frame-b3 row tree, the salt from
-the beacon and B's root, A's frame-b3 row tree, and the noise from A's committed root (so E_A's line key is an output the
+the salt coin of the gate's test challenger (`test_challenger`, `Epoch.start`) opened after B's root, A's frame-b3 row tree, and the noise from A's committed root (so E_A's line key is an output the
 device derives, `line_a`).  Writes OUT_DIR/check.json (the shape, keys, seeds, and per buffer its file, dtype and SHA-256)
 and the buffers as raw little-endian files: `common` (both row trees, seed_A and E_A's line key, lines, inputs, forming, the
 plain and adopted baselines) and per variant (`sm120`, `sm120-unpromoted`) the chains and everything after them, through
@@ -21,7 +21,9 @@ the message digests, the tile leaves and the tile tree.
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
+import itertools
 import json
 import multiprocessing
 import sys
@@ -46,7 +48,8 @@ W = _load("pearl_c_twin", HERE.parent / "pearl_c" / "twin.py")
 from verity.primitives.crypto.blake3 import blake3  # noqa: E402
 from verity_kernels.tc import group_sum_total_batch  # noqa: E402
 from verity.protocols.accounting.work.pouw.audit import (ROW_SCHEMA, TILE_SCHEMA, Epoch, Workload, activation_binding, commit_rows,  # noqa: E402
-                               rows_domain, transcript_domain, weight_binding)
+                               rows_domain, transcript_domain, weight_binding, weights_root)
+from verity.protocols.accounting.work.pouw.coins import Challenger, CoinOpening  # noqa: E402
 from verity.protocols.accounting.work.pouw.protocol import Context, Matmul, Shape, Tile  # noqa: E402
 from verity.protocols.accounting.work.pouw.schemes import pearl_c as C  # noqa: E402
 from verity.protocols.accounting.work.pouw.schemes import pearl_kw as P  # noqa: E402
@@ -59,7 +62,22 @@ from verity.protocols.accounting.work.pouw.schemes.pearl_c_device import (  # no
 
 VARIANTS = (SM120, SM120_UNPROMOTED)
 CASE, INDEX, WEIGHT = H.CASE, H.INDEX, H.WEIGHT
-BEACON = b"verity-pouw/pearl-c-sm120-gpu-check/beacon"
+COINS = b"verity-pouw/pearl-c-sm120-gpu-check/coins"
+
+
+def test_challenger() -> Challenger:
+    """The gate's test challenger: epoch 0's coins drawn from SHA-512 in counter mode over `COINS`, the same at every build,
+    so the arm starts the fixture's epoch again from B's root."""
+    blocks, buf = (hashlib.sha512(COINS + i.to_bytes(8, "little")).digest() for i in itertools.count()), bytearray()
+
+    def entropy(n: int) -> bytes:
+        while len(buf) < n:
+            buf.extend(next(blocks))
+        out = bytes(buf[:n])
+        del buf[:n]
+        return out
+
+    return Challenger(0, entropy)
 
 
 def unit_block(salt: bytes, root_b: bytes, index: int) -> bytes:
@@ -67,12 +85,14 @@ def unit_block(salt: bytes, root_b: bytes, index: int) -> bytes:
     return salt + root_b + index.to_bytes(8, "little") + blake3(C.LABELS["seed-A"])
 
 
-def epoch_of(matmul: Matmul, b_rows: list[bytes], beacon: bytes, hash: str) -> tuple[Epoch, bytes, bytes]:
-    """A one-unit epoch on B's rows as `verity.protocols.accounting.work.pouw.audit` starts it: (epoch, B's tree bytes under tree hash `hash`, its
-    root)."""
+def epoch_of(matmul: Matmul, b_rows: list[bytes], coins: Challenger, hash: str) -> tuple[Epoch, CoinOpening, bytes, bytes]:
+    """A one-unit epoch on B's rows as `verity.protocols.accounting.work.pouw.audit` starts it, from `coins`' salt coin
+    opened after B's root: (epoch, the salt coin's opening, B's tree bytes under tree hash `hash`, its root)."""
     dom_b = rows_domain(weight_binding(matmul.weight), -2, len(b_rows), hash)
     tree_b = H.tree_bytes(dom_b, b_rows, ROW_SCHEMA)
-    return Epoch.unverified(Workload((matmul,)), {matmul.weight: tree_b[-32:]}, beacon), tree_b, tree_b[-32:]
+    roots = {matmul.weight: tree_b[-32:]}
+    opening = coins.open("salt", weights_root(roots))
+    return Epoch.start(Workload((matmul,)), roots, coins.commitment, opening), opening, tree_b, tree_b[-32:]
 
 
 def keys_of(scheme: C.PearlC, epoch: Epoch, matmul: Matmul, seed_b: bytes) -> dict[str, bytes]:
@@ -139,7 +159,8 @@ def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024) -> dict:
     scheme = C.PearlC(forming="v1", device=SM120, hashing="h1")
     h = scheme.commitment_hash
     mm = Matmul(INDEX, Shape(m, k, n), WEIGHT)
-    epoch, tree_b, root_b = epoch_of(mm, rb, BEACON, h)
+    coins = test_challenger()
+    epoch, salt_opening, tree_b, root_b = epoch_of(mm, rb, coins, h)
     assert root_b == commit_rows(weight_binding(WEIGHT), -2, rb, h).commitment.root
     dom_a = rows_domain(activation_binding(epoch.salt, INDEX), INDEX, m, h)
     tree_a = H.tree_bytes(dom_a, ra, ROW_SCHEMA)
@@ -148,8 +169,8 @@ def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024) -> dict:
     noise = scheme.noise(ctx)
     keys = keys_of(scheme, epoch, mm, noise.seed_b)
     dom_t = transcript_domain(epoch, len(scheme.tiles(mm.shape)), h)
-    manifest = {"schema": "verity-pouw/pearl-c-sm120-gpu-check/v3", "shape": [m, n, k], "case": CASE, "layout": "rowmajor, k32",
-                "hashing": scheme.hashing, "beacon": BEACON.hex(), "keys": {name: x.hex() for name, x in keys.items()},
+    manifest = {"schema": "verity-pouw/pearl-c-sm120-gpu-check/v4", "shape": [m, n, k], "case": CASE, "layout": "rowmajor, k32",
+                "hashing": scheme.hashing, "coins": coins.commitment.to_json(), "salt_opening": salt_opening.to_json(), "keys": {name: x.hex() for name, x in keys.items()},
                 "seeds": {"seed_a": noise.seed_a.hex(), "seed_b": noise.seed_b.hex(), "salt": epoch.salt.hex(),
                           "root_a": tree_a[-32:].hex(), "root_b": root_b.hex()}, "variants": {}}
     o = H.Out(out_dir)

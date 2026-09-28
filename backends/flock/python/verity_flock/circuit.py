@@ -47,7 +47,7 @@ knows every public value of every block.
 
 The composite circuit (``flock-circuit``) is the statement's meaning: a ``META`` line (ports, ranges, each row's constants,
 the wires, the units' leaf and output maps, the pinned dummy values, the leaf-commitment scheme, the program digests, the
-partition digest), then each slot type's ``flock-ir-unit/v2`` circuit. Its sha256 is the pin. The verifier derives Δ, the public
+partition digest), then each slot type's ``flock-ir-unit/v2`` circuit. Its SHA-512 (:func:`digest`) is the pin. The verifier derives Δ, the public
 regions and their values from it and from its own public instance file (no rows, no salts), never from the prover's; the
 instance file's header carries each block's unit indices (the VUs of the partition it proves).
 """
@@ -68,6 +68,10 @@ STATEMENT = "verity/flock-circuit"
 SCHEME = "frame-v3-sha512/hm96-sha512"
 ROW_SCHEMA = "hm96-sha512/row/v1"
 INST_FORMAT = "flock-circuit-inputs"
+#: Each row tree's frame domain: owner ``OWNER``, binding ``identity_digest_sha512(BINDING_TAG, {set, lo, hi, port, schema})``
+#: (64 bytes), so a root is bound to its input set, its range of instances, its port and the port's row schema.
+BINDING_TAG = "verity/flock-circuit/binding/v2"
+OWNER = -1
 #: The leaf-commitment scheme of the proof's own Merkle trees (Ligerito levels), pinned in the statement and the backend
 #: identity and swappable: ``hm96-sha512/v1`` (``verity.primitives.commitments.hm96.SHA512``, its PROTOCOL.md section 7) over the
 #: SHA-512 column digest, leaf = ``tree_leaf(key, b || c)``, an opening = the column and its 192-byte salt (``opened_salts``).
@@ -698,20 +702,18 @@ def statement(ports: list[Port], input_set, lo: int, hi: int, rows: dict, salts:
     from verity.primitives.commitments import hm96
     from verity.primitives.commitments.frame_v3 import BitRowLeaf, FrameV3
     from verity.primitives.commitments.frame_v3 import Port as FPort
-    from verity.primitives.commitments.identity import identity_digest
+    from verity.primitives.commitments.identity import identity_digest_sha512
     from verity.primitives.commitments.indexed import RangeIndexedDomain
     from verity.primitives.commitments.merkle import CommitmentDomain
     from verity.primitives.commitments.rowleaf import row_leaf
-
-    from . import ir_frame
 
     inst = hm96.SHA512
     schemas = {p.name: p.schema for p in ports}
     bind, doms = {}, {}
     for p in ports:
-        bind[p.name] = bytes.fromhex(identity_digest(ir_frame.BINDING_TAG, {"set": input_set.name, "lo": int(lo), "hi": int(hi), "port": p.name,
-                                                                            "schema": p.schema}))
-        doms[p.name] = CommitmentDomain(bind[p.name], ir_frame.OWNER, RangeIndexedDomain(0, len(rows[p.name])), hash="sha512")
+        bind[p.name] = identity_digest_sha512(BINDING_TAG, {"set": input_set.name, "lo": int(lo), "hi": int(hi), "port": p.name,
+                                                            "schema": p.schema})
+        doms[p.name] = CommitmentDomain(bind[p.name], OWNER, RangeIndexedDomain(0, len(rows[p.name])), hash="sha512")
     # the roots read only the domains: a segmented row's port is configured with its bit row's leaf, which binds no schema here
     fv = FrameV3({p.name: FPort(doms[p.name], BitRowLeaf(p.bits) if p.seg else p.leaf()) for p in ports})
     bcs = _commit_strings(ports, rows, salts)
@@ -720,7 +722,7 @@ def statement(ports: list[Port], input_set, lo: int, hi: int, rows: dict, salts:
         leaves = [row_leaf(doms[p.name], i, inst.tree_leaf(inst.default_key, bc), p.schema) for i, bc in enumerate(bcs[p.name])]
         roots[p.name] = fv.root(p.name, leaves).hex()
     return {"frame": "frame-v3-sha512", "roots": roots, "domain_ids": {k: d.domain_id.hex() for k, d in doms.items()},
-            "bindings": {k: b.hex() for k, b in bind.items()}, "owner": ir_frame.OWNER, "schemas": schemas,
+            "bindings": {k: b.hex() for k, b in bind.items()}, "owner": OWNER, "schemas": schemas,
             "row_key_sha512": hashlib.sha512(inst.default_key).hexdigest()}, bcs
 
 

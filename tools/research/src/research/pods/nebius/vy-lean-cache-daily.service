@@ -2,6 +2,10 @@
 Description=Lean build cache: main's Lean packages built in vy-lean-sandbox, then published (lean's publisher, run-daily)
 Wants=network-online.target
 After=network-online.target
+# /build is /workspace/lean-build/build (vy-lean-build-setup's fstab bind, nofail): without it the unit fails, and nothing is built
+# on the root disk (the Assert holds even if the fstab line is gone, when RequiresMountsFor has no mount unit to require)
+RequiresMountsFor=/build /workspace
+AssertPathIsMountPoint=/build
 
 # As root, outside the sandbox: the publisher alone reads /etc/verity/lean-cache.env, and only to upload a build that passed
 # `vy-lean-sandbox run` and `clean`. No EnvironmentFile: the key is never in the environment its builds inherit.
