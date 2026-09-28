@@ -266,6 +266,32 @@ def test_a_changed_statement_or_meaning_fails_until_updated():
     assert A.judge(pol, facts(pins={"P.t": grown}), FILES)[0] == ["guarantees: they now read definitions in P.More (P.t)"]
 
 
+def test_only_record_differences_are_regenerated_and_the_regenerated_record_passes():
+    pol = recorded()
+    group = pol["reads"]["P.Defs"]
+    hyp = [{"name": "P.f", "module": "P.Defs", "kind": "def", "hash": "1" * 32},
+           {"name": "P.Hyp", "module": "P.Assumptions", "kind": "def", "hash": "8" * 32}]
+    for policy, now in [
+            (pol, facts(pins={"P.t": fact(signature="P.t (h : P.Hyp) (n : Nat) : P.f n ≤ n", h="00000000000000bb")})),
+            (pol, facts(pins={"P.t": fact(reads=fact()["reads"] + [{"name": "P.g", "module": "P.More", "kind": "def",
+                                                                    "hash": "4" * 32}])})),
+            (pol, facts(pins={"P.t": fact(reads=hyp)})),
+            (pol | {"reads": pol["reads"] | {"P.Defs": group | {"digest": "0" * 64, "guarantees": ["P.t", "P.u"]}}}, facts())]:
+        fails = A.judge(policy, now, FILES)[0]
+        assert fails and all(A.RECORD_DIFFERENCE.match(f) for f in fails), fails
+        regen = A.regenerated(policy, now, FILES, fails)
+        assert regen == A.judge(policy, now, FILES, update=True)[1] and A.judge(regen, now, FILES)[0] == []
+    assert A.judge(pol, facts(pins={"P.t": fact(reads=hyp)}), FILES)[0][-1].startswith(
+        "assumptions: P.Hyp's definition in P.Assumptions changed;")
+    signed = facts(pins={"P.t": fact(signature="P.t (h : P.Hyp) (n : Nat) : P.f n ≤ n", h="00000000000000bb")})
+    for policy, now, files in [(pol, facts(), FILES),                                      # passes
+                               (POLICY, facts(), FILES),                                   # no record yet
+                               (pol, facts(pins={}), FILES),                               # renamed or gone: `--moved`
+                               (pol | {"guarantees": {"P.t": pol["guarantees"]["P.t"] | {"owner": "lean"}}}, facts(), FILES),
+                               (pol, signed, FILES | {"Scratch": "Scratch.lean"})]:        # a difference beside an orphan
+        assert A.regenerated(policy, now, files, A.judge(policy, now, files)[0]) is None
+
+
 def test_a_32_bit_record_is_checked_as_it_is_and_rehashed_by_update():
     new = recorded()
     old = new | {"guarantees": {"P.t": new["guarantees"]["P.t"] | {"type_hash": "00000000000000aa"}},
