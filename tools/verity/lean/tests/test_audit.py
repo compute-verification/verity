@@ -46,7 +46,7 @@ def facts(**over):
 
 
 FILES = {"P": "P.lean", "P.Assumptions": "P/Assumptions.lean", "P.Defs": "P/Defs.lean", "P.Thms": "P/Thms.lean"}
-POLICY = {"roots": ["P"], "assumptions": ["P.Assumptions"], "guarantees": {"P.t": {"owner": "@lean"}}}
+POLICY = {"roots": ["P"], "assumptions": {"P.Hyp": {"owner": "@lean"}}, "guarantees": {"P.t": {"owner": "@lean"}}}
 
 
 def recorded(f=None):
@@ -80,7 +80,8 @@ def test_a_recorded_package_passes_and_its_record_is_the_statement():
     assert list(pol["reads"]["P.Defs"]["definitions"]) == ["P.f"] and pol["reads"]["P.Defs"]["guarantees"] == ["P.t"]
     assert all(g["digest"] == A.module_digest(g["definitions"]) for g in pol["reads"].values())
     assert A.judge(pol, facts(), FILES) == ([], pol)
-    assert A.judge(POLICY, facts(), FILES)[0] == ["guarantees: P.t has no record; run `audit.py --update` and commit the record"]
+    assert A.judge(POLICY, facts(), FILES)[0] == ["guarantees: P.t has no record; run `audit.py --update` and commit the record",
+                                                  "assumptions: P.Hyp has no record; run `audit.py --update` and commit the record"]
 
 
 def test_every_field_of_a_reads_record_is_checked():
@@ -748,10 +749,35 @@ def test_a_closed_hypothesis_must_be_a_named_assumption():
     inline = [{"binder": "h", "type": "∀ (m : Nat), m + 0 = m", "closed": True, "named": None, "module": None},
               {"binder": "hn", "type": "n ≠ 0", "closed": False, "named": None, "module": None}]
     fails, _ = A.judge(POLICY, facts(pins={"P.t": fact(hyps=inline)}), FILES, update=True)
-    assert fails == ["guarantees: P.t assumes (h : ∀ (m : Nat), m + 0 = m), a closed Prop that is not a named assumption (a Prop "
-                     "constant of P.Assumptions)"]
+    assert fails == ["guarantees: P.t assumes (h : ∀ (m : Nat), m + 0 = m), a closed Prop that is not a named assumption: a "
+                     "Prop constant listed under `assumptions`"]
     elsewhere = [{"binder": "h", "type": "Q.Hyp", "closed": True, "named": "Q.Hyp", "module": "Q.Stuff"}]
     assert A.judge(POLICY, facts(pins={"P.t": fact(hyps=elsewhere)}), FILES, update=True)[0][0].startswith("guarantees: P.t assumes (h : Q.Hyp)")
+
+
+def test_an_assumption_is_listed_by_name_with_its_record():
+    """Each assumption has an owner and the digest of its definition as `reads` holds it, so a changed assumption is its own
+    record; an entry no guarantee reads fails; an update converts a list of assumption modules into the definitions read
+    there, owned by the owner of the guarantees that read them."""
+    pol = recorded()
+    assert pol["assumptions"] == {"P.Hyp": {"owner": "@lean", "digest": pol["reads"]["P.Assumptions"]["definitions"]["P.Hyp"]}}
+    changed = facts(pins={"P.t": fact(reads=[{"name": "P.f", "module": "P.Defs", "kind": "def", "hash": "1" * 32},
+                                             {"name": "P.Hyp", "module": "P.Assumptions", "kind": "def", "hash": "4" * 32}])})
+    assert "assumptions: P.Hyp's definition in P.Assumptions changed; run `audit.py --update` and commit the record " \
+           "(Daniel's DM shows the change when it lands)" in A.judge(pol, changed, FILES)[0]
+    unread = {**pol, "assumptions": pol["assumptions"] | {"P.Other": {"owner": "@lean", "digest": "0" * 64}}}
+    assert A.judge(unread, facts(), FILES)[0] == ["assumptions: P.Other is listed, but no guarantee reads it; remove the entry"]
+    assert A.judge(unread, facts(), FILES, update=True)[1]["assumptions"] == pol["assumptions"]
+    unowned = {**pol, "assumptions": {"P.Hyp": {"digest": pol["assumptions"]["P.Hyp"]["digest"]}}}
+    assert A.judge(unowned, facts(), FILES)[0] == ['assumptions: P.Hyp has no owner: write "owner": "@lane" in its entry, or '
+                                                   'run `audit.py --update --owner @lane`']
+    unlisted = {**pol, "assumptions": {}}
+    assert A.judge(unlisted, facts(), FILES)[0][0] == ("guarantees: P.t assumes (h : P.Hyp), a closed Prop that is not a "
+                                                       "named assumption: a Prop constant listed under `assumptions`")
+    modules = {**POLICY, "assumptions": ["P.Assumptions"]}
+    assert A.judge(modules, facts(), FILES)[0][0].startswith("assumptions: the policy lists assumption modules (P.Assumptions)")
+    fails, converted = A.judge(modules, facts(), FILES, update=True)
+    assert fails == [] and converted["assumptions"] == pol["assumptions"]
 
 
 def test_a_guarantee_must_be_a_theorem_with_allowed_axioms():

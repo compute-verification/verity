@@ -211,7 +211,8 @@ Until reuse and the merge queue exist:
   (`tools/verity/lean/check.py`):
   - only `propext`, `Classical.choice` and `Quot.sound`;
   - no `sorry`, `axiom`, `native_decide` or kernel bypass;
-  - an assumption is a named `Prop`, taken as a hypothesis;
+  - an assumption is a named `Prop`, taken as a hypothesis or read in a guarantee's statement, and listed by name in the
+    lock with its own record;
   - every file is built, and every declaration is replayed through the kernel.
 - **The lock.** A guarantee (README "Glossary") is listed in `lean-audit.json`, and `check.py --update` records its
   statement and every definition the statement reads; those records are the lock.

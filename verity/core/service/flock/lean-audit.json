@@ -4,7 +4,12 @@
   "FlockFirewall": "the flock-firewall executable's entry point; its commands are Flock.Firewall.cmd and (`contract`) Flock.Firewall.Contract.cmd, audited under Flock",
   "FlockRows": "the flock-rows executable's entry point, one line; its command is Flock.Rows.cmd, audited under Flock"
  },
- "assumptions": ["Flock.Firewall.Assumptions"],
+ "assumptions": {
+  "Flock.Firewall.Contract.FirewallComputes": {
+   "owner": "@firewall-contract",
+   "digest": "0c8b7fe474f4820e1d04fd025d2f6f5b1f83032f66704316d3f21d62dfe4682b"
+  }
+ },
  "meaning": ["Flock"],
  "escapes": {
   "Flock.canon": "partial def: canonical JSON of the statement's objects (PROTOCOL.md 16.8); no proof is about it, and the agreement tests (17.1) cover it",
