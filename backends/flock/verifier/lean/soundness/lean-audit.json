@@ -409,7 +409,7 @@
    ]
   },
   "Flock.DeriveAll": {
-   "digest": "2b007f99f9e729aae0129015fb3c3214",
+   "digest": "26f54e2d6a76071d2e7ce5899e75e826",
    "definitions": {
     "Flock.DeriveAll.Build": "d002b4dad286ea98",
     "Flock.DeriveAll.Build.items": "7ae45696c3561161",
@@ -460,11 +460,14 @@
     "Flock.DeriveAll.instInhabitedD.default": "20cf1be003ac07ef",
     "Flock.DeriveAll.instInhabitedInst": "fdfce35fca5ae051",
     "Flock.DeriveAll.instInhabitedInst.default": "5f95b73c66fa71cf",
+    "Flock.DeriveAll.instReprRef.repr": "3d5228e00eae5c37",
     "Flock.DeriveAll.items": "e329c5ff96be3ffd",
+    "Flock.DeriveAll.order": "da99a640f2a1107c",
     "Flock.DeriveAll.placements": "7c5b4e42a2db64f3",
     "Flock.DeriveAll.readRows": "8022fecb6b907bf5",
     "Flock.DeriveAll.resolve": "1441af696f612712",
     "Flock.DeriveAll.roundUp": "ef1f0b3de8915fe5",
+    "Flock.DeriveAll.segment": "ec4606741c63c1ea",
     "Flock.DeriveAll.span": "1c7d95f3e1db529e",
     "Flock.DeriveAll.xorCF": "14ffc1539f28cdbc",
     "Flock.DeriveAll.xorCols": "e1914f95bd70621c"
@@ -472,7 +475,7 @@
    "pins": ["FlockSoundness.Types.Dag.layout_sound", "FlockSoundness.Types.Dag.unit_sound"]
   },
   "Flock.DeriveCheck": {
-   "digest": "282431ce93d6a0cab33526aac2e964e4",
+   "digest": "c4d17eb9dfe93db819642a534b6449e1",
    "definitions": {
     "Flock.DeriveAll.Chk": "151ea8aaea236e59",
     "Flock.DeriveAll.Chk.bindAt": "2c014c6e02100ce4",
@@ -482,8 +485,13 @@
     "Flock.DeriveAll.Chk.unit": "9a9f6ed101e0f44b",
     "Flock.DeriveAll.blockRow": "237f408dd7101877",
     "Flock.DeriveAll.checkLayout": "2bf766d44d2751b7",
-    "Flock.DeriveAll.deriveChecked": "54aaf3cf08d62ee9",
+    "Flock.DeriveAll.colSet": "50da0a8eb7d303c6",
+    "Flock.DeriveAll.deriveChecked": "952dd65c4801284b",
+    "Flock.DeriveAll.orderChecked": "5204436fca68d480",
+    "Flock.DeriveAll.orderOk": "3bd9de6b710cffd8",
+    "Flock.DeriveAll.outsideOk": "87df3b52454a2178",
     "Flock.DeriveAll.placedOk": "09b57cd285eca0e6",
+    "Flock.DeriveAll.readsOf": "6d45feed3570c390",
     "Flock.DeriveAll.shiftRow": "54585bbd4270157a",
     "Flock.DeriveAll.walk": "29aaa6f1e93aae7e"
    },
@@ -1217,11 +1225,12 @@
    "pins": ["FlockSoundness.table_sound_compiled"]
   },
   "FlockSoundness.Types.Dag": {
-   "digest": "5242c7ec1e5407e9f896450ea5922206",
+   "digest": "0fff8415afc66039f079e4209c110060",
    "definitions": {
     "FlockSoundness.Types.Dag.SatAt": "9c20b67c303103f7",
+    "FlockSoundness.Types.Dag.bitsIdx": "8631b04cad3c3907",
     "FlockSoundness.Types.Dag.evalT": "670068c95066aee5",
-    "FlockSoundness.Types.Dag.itemOut": "9f428bc3e01be0bf",
+    "FlockSoundness.Types.Dag.itemOut": "93565a17d492dc9e",
     "FlockSoundness.Types.Dag.runT": "d4cbf85202cccd40"
    },
    "pins": ["FlockSoundness.Types.Dag.layout_sound", "FlockSoundness.Types.Dag.unit_sound"]

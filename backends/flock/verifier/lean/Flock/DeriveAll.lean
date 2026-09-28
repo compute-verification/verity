@@ -402,9 +402,13 @@ def segment (done : Array D) : Nat → D → Nat → List Nat → Bool → List 
       | .seg j b ex => segment done fuel (done.getD j default) (base + b) ex false
     head ++ body ++ d.outCols.toList.map (base + ·)
 
+/-- **The unit's logical order**: its input columns, then its segment. `Rows.compose` reads the unit's rows in this order,
+and `logicalText` prints it. -/
+def order (done : Array D) (u : D) : List Nat := u.inCols.toList ++ segment done (done.size + 1) u 0 [] true
+
 /-- The logical list: the unit's inputs, its segment, then `one`; each row as the block holds it (Δ applied). -/
 def logicalText (done : Array D) (u : D) : String :=
-  let order := u.inCols.toList ++ segment done (done.size + 1) u 0 [] true
+  let order := order done u
   let deltaAt := fun (c : Nat) => u.delta.find? (·.1 == c)
   let rowStr := fun (c : Nat) => match deltaAt c with
     | some (_, none) => line [toString c, "1", "one", "1", "one"]

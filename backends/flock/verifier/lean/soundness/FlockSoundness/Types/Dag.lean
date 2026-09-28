@@ -13,7 +13,11 @@ item by item against them. From the walk alone:
 * **`unit_sound`**: the same for the unit's rows as the block holds them (Δ applied, `Flock.DeriveAll.blockRow`), with the
   block's constant at 1.
 
-So both hold of whatever `deriveAll` builds: nothing here is about how it builds. The flat case is `compose_sound`
+The check also covers the unit's logical order (`Flock.DeriveAll.order`, the list `Rows.compose` reads), so
+**`order_sound`** and **`inputs_self`** give its facts: no column repeats, the inputs come first with self rows, each row
+after them reads only earlier columns (and `one`), and every column outside the order has a zero row or none.
+
+So all of this holds of whatever `deriveAll` builds: nothing here is about how it builds. The flat case is `compose_sound`
 (`Types/Flat.lean`). Reads are refused by the check for now (S3c-2), so `evalT`'s read case is not yet used.
 -/
 
@@ -113,6 +117,11 @@ theorem xorSum_resolve (z : ℕ → Bool) (k : Nat) (hk : z k = true) (f : CF) (
 
 /-! ## What a type computes -/
 
+/-- The number that bits `bs` spell, least significant first. -/
+def bitsIdx : List Bool → Nat
+  | [] => 0
+  | b :: bs => (if b then 1 else 0) + 2 * bitsIdx bs
+
 /-- The values an item appends to the wire values `vals`: an AND's one, a call's callee outputs (by `ev`), a read's table
 bits. -/
 def itemOut (types : String → Option CircuitType) (words : String → Option (Array Nat))
@@ -126,8 +135,7 @@ def itemOut (types : String → Option CircuitType) (words : String → Option (
   | .read k idx =>
     match t.tables[k]? with
     | some (sha, _, vb) =>
-      let i := (List.range idx.size).foldl
-        (fun acc b => acc + if formVal (vals.getD · false) (idx.getD b default) then 2 ^ b else 0) 0
+      let i := bitsIdx (idx.toList.map (formVal (vals.getD · false)))
       (List.range vb).map fun j => (((words sha).getD #[]).getD i 0).testBit j
     | none => []
   | .bad _ => []
@@ -546,9 +554,10 @@ theorem unit_sound_of {types : String → Option CircuitType} {words : String �
   exact checked_sound (hall unit hu) ht (by rw [hk]; exact facts_unit hz h1 hone)
     (fun jj hlt hne => ⟨hall jj (by omega), layouts_sound_of hall jj (by omega) hne⟩) F hF o ho
 
-theorem deriveChecked_all {types : String → Option CircuitType} {ls : Array Layout} {info : String → Option TableInfo}
+theorem deriveChecked_spec {types : String → Option CircuitType} {ls : Array Layout} {info : String → Option TableInfo}
     {words : String → Option (Array Nat)} {unit : Nat} {done : Array D}
-    (h : deriveChecked types ls info words unit = .ok done) : ∀ jj < ls.size, checkLayout types ls done unit jj = true := by
+    (h : deriveChecked types ls info words unit = .ok done) :
+    (∀ jj < ls.size, checkLayout types ls done unit jj = true) ∧ orderChecked done unit = true := by
   unfold deriveChecked at h
   cases hd : deriveAll types ls info words unit with
   | error e => simp [hd, bind, Except.bind] at h
@@ -557,10 +566,164 @@ theorem deriveChecked_all {types : String → Option CircuitType} {ls : Array La
     split at h
     · cases h
     · rename_i hf
-      cases h
-      intro jj hjj
-      have := List.find?_eq_none.mp hf jj (List.mem_range.mpr hjj)
-      simpa using this
+      split at h
+      · rename_i ho
+        cases h
+        refine ⟨fun jj hjj => ?_, ho⟩
+        have := List.find?_eq_none.mp hf jj (List.mem_range.mpr hjj)
+        simpa using this
+      · cases h
+
+theorem deriveChecked_all {types : String → Option CircuitType} {ls : Array Layout} {info : String → Option TableInfo}
+    {words : String → Option (Array Nat)} {unit : Nat} {done : Array D}
+    (h : deriveChecked types ls info words unit = .ok done) : ∀ jj < ls.size, checkLayout types ls done unit jj = true :=
+  (deriveChecked_spec h).1
+
+/-! ## The unit's logical order -/
+
+theorem colSet_go (c : Nat) : ∀ (o : List Nat) (s : Std.HashSet Nat),
+    (o.foldl (fun s c => s.insert c) s).contains c = true ↔ (s.contains c = true ∨ c ∈ o)
+  | [], s => by simp
+  | x :: o, s => by
+    rw [List.foldl_cons, colSet_go c o, Std.HashSet.contains_insert]
+    simp only [Bool.or_eq_true, beq_iff_eq, List.mem_cons]
+    constructor
+    · intro h
+      rcases h with (h | h) | h
+      · exact Or.inr (Or.inl h.symm)
+      · exact Or.inl h
+      · exact Or.inr (Or.inr h)
+    · intro h
+      rcases h with h | h | h
+      · exact Or.inl (Or.inr h)
+      · exact Or.inl (Or.inl h.symm)
+      · exact Or.inr h
+
+theorem colSet_contains (o : List Nat) (c : Nat) : (colSet o).contains c = true ↔ c ∈ o := by
+  unfold colSet
+  rw [colSet_go]
+  simp [Std.HashSet.contains_empty]
+
+theorem orderOk_spec (u : D) (nIn : Nat) : ∀ (o : List Nat) (ℓ : Nat) (seen : Std.HashSet Nat) (pre : List Nat),
+    (∀ c, seen.contains c = true ↔ c ∈ pre) → pre.length = ℓ → pre.Nodup → orderOk u nIn o ℓ seen = true →
+    (pre ++ o).Nodup ∧ (∀ c ∈ o, c < u.rows.size) ∧
+      ∀ m (hm : m < o.length), nIn ≤ ℓ + m → ∀ x ∈ readsOf u o[m], x ∈ pre ++ o.take m
+  | [], _, _, pre, _, _, hnd, _ => by simpa using hnd
+  | c :: rest, ℓ, seen, pre, hs, hl, hnd, h => by
+    unfold orderOk at h
+    simp only [Bool.and_eq_true, decide_eq_true_eq, Bool.not_eq_true', Bool.or_eq_true, List.all_eq_true] at h
+    obtain ⟨⟨⟨hc, hnew⟩, hreads⟩, hrest⟩ := h
+    have hcpre : c ∉ pre := fun hm => by
+      rw [← hs] at hm
+      rw [hm] at hnew
+      cases hnew
+    have hs' : ∀ x, (seen.insert c).contains x = true ↔ x ∈ pre ++ [c] := by
+      intro x
+      rw [Std.HashSet.contains_insert]
+      simp only [Bool.or_eq_true, beq_iff_eq, List.mem_append, List.mem_singleton, hs]
+      constructor
+      · intro h; rcases h with h | h
+        · exact Or.inr h.symm
+        · exact Or.inl h
+      · intro h; rcases h with h | h
+        · exact Or.inr h
+        · exact Or.inl h.symm
+    have hnd' : (pre ++ [c]).Nodup :=
+      List.nodup_append.mpr ⟨hnd, List.nodup_cons.mpr ⟨by simp, List.nodup_nil⟩, fun a ha b hb hab => by
+        rw [List.mem_singleton] at hb; subst hb; subst hab; exact hcpre ha⟩
+    obtain ⟨h1, h2, h3⟩ := orderOk_spec u nIn rest (ℓ + 1) _ (pre ++ [c]) hs' (by simp [hl]) hnd' hrest
+    refine ⟨by simpa using h1, fun x hx => ?_, fun m hm hnm x hx => ?_⟩
+    · rcases List.mem_cons.mp hx with rfl | hx
+      · exact hc
+      · exact h2 x hx
+    · cases m with
+      | zero =>
+        have hℓ : ¬ ℓ < nIn := by omega
+        have := hreads.resolve_left hℓ x hx
+        rw [hs] at this
+        simpa using this
+      | succ m =>
+        have := h3 m (by simpa using hm) (by omega) x (by simpa using hx)
+        simpa using this
+
+theorem readsOf_blockRow {u : D} {one c : Nat} {p : List Nat × List Nat} (h : blockRow u one c = some p) :
+    ∀ x ∈ p.1 ++ p.2, x ≠ one → x ∈ readsOf u c := by
+  obtain ⟨a, b⟩ := p
+  unfold blockRow at h
+  unfold readsOf
+  split at h
+  · cases h
+    intro x hx hne
+    simp at hx
+    exact absurd hx hne
+  · cases h
+    intro x hx _
+    simpa using hx
+  · rw [h]
+    intro x hx _
+    exact hx
+
+theorem outsideOk_spec {u : D} {o : List Nat} (h : outsideOk u o = true) :
+    (∀ c < u.rows.size, c ∉ o → u.rows[c]? = some ([], [])) ∧ ∀ e ∈ u.delta, e.1 ∈ o := by
+  unfold outsideOk at h
+  simp only [Bool.and_eq_true, List.all_eq_true, List.mem_range, Bool.or_eq_true, beq_iff_eq, Array.all_eq_true] at h
+  refine ⟨fun c hc hco => ?_, fun e he => ?_⟩
+  · rcases h.1 c hc with h' | h'
+    · exact absurd ((colSet_contains o c).mp h') hco
+    · exact h'
+  · obtain ⟨i, hi, rfl⟩ := Array.mem_iff_getElem.mp he
+    exact (colSet_contains o _).mp (h.2 i hi)
+
+theorem inputs_self_of {types : String → Option CircuitType} {ls : Array Layout} {done : Array D} {unit : Nat}
+    (hall : ∀ jj < ls.size, checkLayout types ls done unit jj = true) (hu : unit < ls.size) {t : CircuitType}
+    (ht : (ls.getD unit default).type.bind types = some t) (one : Nat) :
+    ∀ i < (done.getD unit default).inCols.size,
+      blockRow (done.getD unit default) one ((done.getD unit default).inCols.getD i 0) =
+        some ([(done.getD unit default).inCols.getD i 0], [(done.getD unit default).inCols.getD i 0]) := by
+  obtain ⟨t', ht', -, -, hin, -, -, hins, -⟩ := checkLayout_spec (hall unit hu)
+  rw [ht] at ht'
+  cases ht'
+  have hk : (unit == unit) = true := by simp
+  rw [hk] at hins
+  intro i hi
+  exact rowIs_unit (hins i (by omega)) one
+
+/-- **The unit's rows are in logical order**, as `Rows.compose` reads them. If `deriveChecked` accepts, then for `u` the
+unit's rows and `order done u`: no column repeats; each is one of `u`'s rows; the order starts with `u`'s input columns;
+each row after them reads, besides `one`, only columns before it; and every column outside the order has a zero row or
+none. -/
+theorem order_sound {types : String → Option CircuitType} {ls : Array Layout} {info : String → Option TableInfo}
+    {words : String → Option (Array Nat)} {unit : Nat} {done : Array D}
+    (hd : deriveChecked types ls info words unit = .ok done) (one : Nat) :
+    (order done (done.getD unit default)).Nodup ∧
+      (∀ c ∈ order done (done.getD unit default), c < (done.getD unit default).rows.size) ∧
+      (order done (done.getD unit default)).take (done.getD unit default).inCols.size =
+        (done.getD unit default).inCols.toList ∧
+      (∀ ℓ (hℓ : ℓ < (order done (done.getD unit default)).length), (done.getD unit default).inCols.size ≤ ℓ →
+        ∀ p, blockRow (done.getD unit default) one (order done (done.getD unit default))[ℓ] = some p →
+          ∀ x ∈ p.1 ++ p.2, x ≠ one → x ∈ (order done (done.getD unit default)).take ℓ) ∧
+      ∀ c p, c ∉ order done (done.getD unit default) → blockRow (done.getD unit default) one c = some p →
+        p = ([], []) := by
+  have ho := (deriveChecked_spec hd).2
+  unfold orderChecked at ho
+  simp only [Bool.and_eq_true] at ho
+  generalize done.getD unit default = u at *
+  obtain ⟨hnd, hlt, hrd⟩ := orderOk_spec u u.inCols.size (order done u) 0 {} [] (by simp [Std.HashSet.contains_empty])
+    rfl List.nodup_nil ho.1
+  obtain ⟨hz, hdel⟩ := outsideOk_spec ho.2
+  refine ⟨by simpa using hnd, hlt, by simp [order], fun ℓ hℓ hn p hp x hx hne => ?_, fun c p hc hp => ?_⟩
+  · simpa using hrd ℓ hℓ (by omega) x (readsOf_blockRow hp x hx hne)
+  · unfold blockRow at hp
+    split at hp
+    · rename_i x hf
+      have hx : x = c := by simpa using Array.find?_some hf
+      exact absurd (hx ▸ hdel _ (Array.mem_of_find?_eq_some hf)) hc
+    · rename_i x s hf
+      have hx : x = c := by simpa using Array.find?_some hf
+      exact absurd (hx ▸ hdel _ (Array.mem_of_find?_eq_some hf)) hc
+    · have hcs : c < u.rows.size := (Array.getElem?_eq_some_iff.mp hp).1
+      rw [hz c hcs hc] at hp
+      exact (Option.some.inj hp).symm
 
 
 /-! ## The statements -/
@@ -596,5 +759,15 @@ theorem layout_sound {types : String → Option CircuitType} {ls : Array Layout}
     z ((done.getD j default).outCols.getD o 0) =
       (evalT types words F t fun i => z ((done.getD j default).inCols.getD i 0)).getD o false :=
   layouts_sound_of (deriveChecked_all hd) j (lt_of_type ht) hj t ht z hz h1 F hF o ho
+
+/-- **The unit's input rows are self rows** in the block, whatever `one` is. -/
+theorem inputs_self {types : String → Option CircuitType} {ls : Array Layout} {info : String → Option TableInfo}
+    {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D}
+    (hd : deriveChecked types ls info words unit = .ok done) {t : CircuitType}
+    (ht : (ls.getD unit default).type.bind types = some t) (one : ℕ) :
+    ∀ i < (done.getD unit default).inCols.size,
+      blockRow (done.getD unit default) one ((done.getD unit default).inCols.getD i 0) =
+        some ([(done.getD unit default).inCols.getD i 0], [(done.getD unit default).inCols.getD i 0]) :=
+  inputs_self_of (deriveChecked_all hd) (lt_of_type ht) ht one
 
 end FlockSoundness.Types.Dag

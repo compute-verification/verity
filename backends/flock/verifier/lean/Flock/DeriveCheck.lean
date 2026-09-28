@@ -9,9 +9,13 @@ S3c). `deriveChecked` walks each layout's type item by item against its rows:
   `form · form`); an exported input bit's form is one caller wire, held on the callee's input column;
 * the input rows are self rows, the output rows copy the output forms, and the constant row copies the constant.
 
+It also checks the unit's logical order (`order`, the list `Rows.compose` reads): each of the unit's rows is listed once,
+the inputs first; each row after them reads only earlier columns; every row outside it is a zero row.
+
 `compose_sound` (soundness package) is proved from the walk alone, so it holds of whatever `deriveAll` builds. Generated
 read layouts and read items are refused for now; S3c-2 checks them.
 -/
+import Std.Data.HashSet
 import Flock.DeriveAll
 
 namespace Flock.DeriveAll
@@ -133,13 +137,49 @@ def checkLayout (types : String → Option CircuitType) (ls : Array Layout) (don
       | _ => false
   | _, _ => false
 
-/-- **The rows the verifier uses**: `deriveAll`'s, once every layout's pass the check. -/
+/-! ## The unit's logical order -/
+
+/-- The columns the unit's row `c` reads as the block holds it: none for a Δ constant copy (it reads only `one`), a Δ
+binding's source, else the derived row's columns. -/
+def readsOf (u : D) (c : Nat) : List Nat :=
+  match u.delta.find? (·.1 == c) with
+  | some (_, none) => []
+  | some (_, some s) => s
+  | none =>
+    match u.rows[c]? with
+    | some (a, b) => a ++ b
+    | none => []
+
+/-- One pass over the order: each column is one of the unit's rows, none repeats, and each row after the `nIn` inputs
+reads only columns before it. -/
+def orderOk (u : D) (nIn : Nat) : List Nat → Nat → Std.HashSet Nat → Bool
+  | [], _, _ => true
+  | c :: rest, ℓ, seen =>
+    c < u.rows.size && !seen.contains c && (decide (ℓ < nIn) || (readsOf u c).all seen.contains) &&
+      orderOk u nIn rest (ℓ + 1) (seen.insert c)
+
+/-- The columns of a list, as a set. -/
+def colSet (o : List Nat) : Std.HashSet Nat := o.foldl (fun s c => s.insert c) {}
+
+/-- Every row outside the order is a zero row, and every Δ entry sits in the order. -/
+def outsideOk (u : D) (o : List Nat) : Bool :=
+  let s := colSet o
+  (List.range u.rows.size).all (fun c => s.contains c || u.rows[c]? == some ([], [])) && u.delta.all fun e => s.contains e.1
+
+/-- **The unit's rows are in logical order**: `order` lists each of its rows once, the inputs first; each row after them
+reads only earlier columns (and `one`); every other row is a zero row. -/
+def orderChecked (done : Array D) (unit : Nat) : Bool :=
+  let u := done.getD unit default
+  orderOk u u.inCols.size (order done u) 0 {} && outsideOk u (order done u)
+
+/-- **The rows the verifier uses**: `deriveAll`'s, once every layout's pass the check and the unit's are in logical
+order. -/
 def deriveChecked (types : String → Option CircuitType) (ls : Array Layout) (info : String → Option TableInfo)
     (words : String → Option (Array Nat)) (unit : Nat) : Except String (Array D) := do
   let done ← deriveAll types ls info words unit
   match (List.range ls.size).find? fun j => !checkLayout types ls done unit j with
   | some j => throw s!"derive: layout {j}'s rows fail the check"
-  | none => return done
+  | none => if orderChecked done unit then return done else throw "derive: the unit's rows are not in logical order"
 
 /-- `flock-rows --archive FILE --part check`: `ok` when every layout's rows pass the check. -/
 def archiveCheck (j : Json) : V String := do
