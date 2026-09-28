@@ -293,10 +293,12 @@ def broadcast_params(units: PartitionUnits) -> dict[str, tuple[set[int], int]]:
     return out
 
 
-def class_lanes(units: PartitionUnits, cl, key, n: int, shared: dict[str, tuple[set[int], int]]) -> tuple[list, list]:
+def class_lanes(units: PartitionUnits, cl, key, n: int, shared: dict[str, tuple[set[int], int]]) -> tuple[list, list, list]:
     """``n`` instances of the class: every unit of that shape in its flat Definition, from as many evaluations as it takes, each
     evaluation's parameters uniform words, except those the Call shares across members (``shared``), which are drawn once per Call
-    (group of members). Instances of one evaluation or Call share their sources' values, so their rows dedupe as serving's do."""
+    (group of members). Returns (inputs, outputs, sources): per input position, every instance's word and the identity of the
+    value it reads (the Call and leaf of a broadcast parameter, else the evaluation and leaf or computing gate), which is what
+    makes two instances' rows the same committed row."""
     act = units.activation(cl.definition)
     mine = [uc for uc in units._flat[cl.definition.id][1] if uc.shape == cl.shape]
     widths = [act.width(-1 - p) for p in range(act.params)]
@@ -306,31 +308,35 @@ def class_lanes(units: PartitionUnits, cl, key, n: int, shared: dict[str, tuple[
     bcast, members = shared.get(cl.definition.id, (set(), 1))
     ins = [[] for _ in mine[0].inputs]
     want = [[] for _ in mine[0].outputs]
+    src = [[] for _ in mine[0].inputs]
     have, t = 0, 0
     while have < n:
+        call = t // max(1, members)
         raw = PU.synthetic_words(key, f"{act.fn.id}#{t}", widths, 1)[0]
-        grp = PU.synthetic_words(key, f"{act.fn.id}#call{t // max(1, members)}", widths, 1)[0]
+        grp = PU.synthetic_words(key, f"{act.fn.id}#call{call}", widths, 1)[0]
         words = [grp[p] if leaf_param[p] in bcast else raw[p] for p in range(len(raw))]
         run = PU.evaluate(act, words)
         for uc in mine:
             if have >= n:
                 break
-            for port, x in zip(ins, uc.inputs):
+            for port, ids, x in zip(ins, src, uc.inputs):
                 port.append(run[x])
+                ids.append(("call", call, x) if x < 0 and leaf_param[-1 - x] in bcast else ("eval", t, x))
             for port, j in zip(want, uc.outputs):
                 port.append(run[j])
             have += 1
         t += 1
-    return ins, want
+    return ins, want, src
 
 
 def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_dir: Path, salt_key: bytes) -> dict:
     """``circuit.txt``, the prover's ``inst-n.bin`` and the verifier's ``pub-n.bin`` for one class: one row port per input source,
-    each port's equal rows committed once (shared rows)."""
+    and each source's row committed once, shared by every instance that reads it (``lanes_`` from `class_lanes`; lanes without
+    source identities share equal rows)."""
     act = units.activation(cl.definition)
     uc = cl.representative
     name = shape[:16]
-    ins, want = lanes_
+    ins, want, src = lanes_ if len(lanes_) == 3 else (*lanes_, None)
     partition, program = partition_binding(units, spec)
     groups = sources(act, uc, owners_of(units, cl.definition.id))
     low = class_lowering(act, uc, f"unit-class/{name}", groups)
@@ -343,8 +349,24 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "circuit.txt").write_text(text)
     n = len(rows)
+    tables = refs = None
+    if src is not None:
+        tables, refs = {}, {}
+        for i, g in enumerate(groups):
+            index: dict[tuple, int] = {}
+            ref, at = [], []
+            for k in range(n):
+                ident = tuple(src[t][k] for t in g)
+                if ident not in index:
+                    index[ident] = len(at)
+                    at.append(k)
+                ref.append(index[ident])
+            ref = np.asarray(ref)
+            tables[f"p{i}"], refs[f"p{i}"] = per_port[f"p{i}"][at], ref
+            if not np.array_equal(tables[f"p{i}"][ref], per_port[f"p{i}"]):
+                raise AssertionError(f"class {name}: instances reading one source disagree on its row")
     head = FC.write(text, iset, 0, n, out_dir / f"inst-{n}.bin", out_dir / f"pub-{n}.bin", salt_key, rows=per_port, outs={"out": outs},
-                    share_rows=True)
+                    share_rows=True, tables=tables, refs=refs)
     meta = json.loads(text.split("\n", 2)[1][5:])
     return {"n": n, "unit_nnz": low.layout.counts["nnz_a"] + low.layout.counts["nnz_b"], "circuit_bytes": len(text), "w_in": low.definition.w_in,
             "w_out": low.definition.w_out, "unit_rows": low.layout.useful, "ports": list(low.definition.port_words),
