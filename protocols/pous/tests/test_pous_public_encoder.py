@@ -1,6 +1,7 @@
 """Milestone 1 of the public encoder (POUS `docs/public-encoder/protocol.md`): the server encodes and sends `C*` segment
 by segment; the verifier decodes it, checks `commit(Dec(C*))` against the commitment, and builds `vk` from the bytes it
-decoded.  Tests 1–7 are the spec's; the rest are negative controls, the setup flag, and the codec-generic path."""
+decoded.  Tests 1–7 are the spec's, on the band codec (the secure-first default) and on dense; the rest are negative
+controls, the setup flag, and the codec-generic path."""
 
 from __future__ import annotations
 
@@ -11,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from verity_pous import dense, setup
+from verity_pous import band, dense, setup
 from verity_pous.audit import TimedVerifier, challenge_key, run_timed
 from verity_pous.codec import Codec, split
 from verity_pous.labels import salt_value, tag
@@ -21,26 +22,54 @@ from verity_pous.primitives import Primitives, key_program, reference
 from verity_pous.scheme import P3
 from verity_pous.verifier import MerkleTree, VerifierKey, segment_leaves
 
-PARAMS = dense.DenseParams(8, 64, 3)
-PRIMS = dense.reference(PARAMS)
-W = random.Random(21).randbytes(PARAMS.w_bytes)
-COMMITMENT = setup.commit(PARAMS, W)
-SALT = setup.draw_salt(b"verifier-secret", COMMITMENT)
+SCHEMES = {"band": band.BandParams(16, 64, 4, 3), "dense": dense.DenseParams(8, 64, 3)}
+PARAMS = SCHEMES["band"]
 
 
-def _server(params=PARAMS, prims=PRIMS, w=W, salt=SALT):
-    """The honest server's C*, segment by segment."""
-    return [params.codec.encode_segment(params, prims, salt, s, seg) for s, seg in enumerate(split(params, w))]
+class World:
+    """A committed W, the verifier's salt and the honest server's C* under one scheme."""
+
+    def __init__(self, params):
+        self.params = params
+        self.prims = dense.reference(params)
+        self.w = random.Random(21).randbytes(params.w_bytes)
+        self.commitment = setup.commit(params, self.w)
+        self.salt = setup.draw_salt(b"verifier-secret", self.commitment)
+        self.honest = self.server()
+
+    def server(self, w=None, salt=None):
+        w, salt = w or self.w, salt or self.salt
+        return [self.params.codec.encode_segment(self.params, self.prims, salt, s, seg)
+                for s, seg in enumerate(split(self.params, w))]
+
+    def accept(self, encoded, **kw):
+        return setup.verifier_key_from_encoding(self.params, self.prims, self.commitment, self.salt, encoded, **kw)
 
 
-HONEST = _server()
+WORLDS = {name: World(p) for name, p in SCHEMES.items()}
+DEFAULT = WORLDS["band"]
+PRIMS, W, COMMITMENT, SALT, HONEST = DEFAULT.prims, DEFAULT.w, DEFAULT.commitment, DEFAULT.salt, DEFAULT.honest
 
 
 def _accept(encoded, **kw):
-    return setup.verifier_key_from_encoding(PARAMS, PRIMS, COMMITMENT, SALT, encoded, **kw)
+    return DEFAULT.accept(encoded, **kw)
 
 
-def test_1_honest():
+def test_default_is_the_band():
+    assert band.SECURE_FIRST.codec is band.BAND12 and PARAMS.codec is band.codec_for(4)
+
+
+@pytest.mark.parametrize("scheme", SCHEMES)
+def test_1_honest(scheme):
+    x = WORLDS[scheme]
+    vk = x.accept(x.honest)
+    reference_vk = setup.verifier_key(x.params, x.prims, x.w, x.commitment, x.salt)
+    assert vk == reference_vk and vk.root == reference_vk.root
+    blocks = [b for seg in x.honest for b in seg]
+    assert run_timed(TimedVerifier(vk, challenge_key(b"audit", vk)), blocks.__getitem__).accepted
+
+
+def test_1_honest_details():
     vk = _accept(HONEST)
     reference_vk = setup.verifier_key(PARAMS, PRIMS, W, COMMITMENT, SALT)
     assert vk == reference_vk and vk.root == reference_vk.root
@@ -50,44 +79,62 @@ def test_1_honest():
     assert run_timed(TimedVerifier(vk, challenge_key(b"audit", vk)), blocks.__getitem__).accepted
 
 
-def test_2_one_flipped_byte_anywhere():
-    for s in range(PARAMS.segments):
-        for j in range(PARAMS.blocks_per_segment):
-            for byte in (0, PARAMS.block_bytes - 1):
-                bad = [list(seg) for seg in HONEST]
+@pytest.mark.parametrize("scheme", SCHEMES)
+def test_2_one_flipped_byte_anywhere(scheme):
+    x = WORLDS[scheme]
+    for s in range(x.params.segments):
+        for j in range(x.params.blocks_per_segment):
+            for byte in (0, x.params.block_bytes - 1):
+                bad = [list(seg) for seg in x.honest]
                 block = bytearray(bad[s][j])
                 block[byte] ^= 1 << (s + j) % 8
                 bad[s][j] = bytes(block)
                 with pytest.raises(ValueError, match="commitment"):
-                    _accept(bad)
+                    x.accept(bad)
 
 
-def _corrupt_and_continue(s: int, j: int) -> list[bytes]:
+def _corrupt_and_continue(x: World, s: int, j: int) -> list[bytes]:
     """Segment `s` with block `j` set to zeros and every later block encoded honestly on top of it."""
-    mb, t = PARAMS.block_bytes, tag(salt_value(SALT), s)
-    seg = list(split(PARAMS, W))[s]
-    w = [int.from_bytes(seg[i * mb:(i + 1) * mb], "little") for i in range(PARAMS.blocks_per_segment)]
+    p = x.params
+    mb, t = p.block_bytes, tag(salt_value(x.salt), s)
+    seg = list(split(p, x.w))[s]
+    w = [int.from_bytes(seg[i * mb:(i + 1) * mb], "little") for i in range(p.blocks_per_segment)]
     c: list[int] = []
-    for i in range(PARAMS.blocks_per_segment):
+    for i in range(p.blocks_per_segment):
         if i == j:
             c.append(0)
             continue
-        key, _ = run(key_program(PRIMS.h, KeyQuery(t, 0, i, tuple((u, c[u]) for u in range(i)))), PRIMS)
+        key, _ = run(key_program(x.prims.h, KeyQuery(t, 0, i, tuple((u, c[u]) for u in p.parents(i)))), x.prims)
         c.append(key ^ w[i])
-    return [x.to_bytes(mb, "little") for x in c]
+    return [v.to_bytes(mb, "little") for v in c]
 
 
-@pytest.mark.parametrize("s, j", [(0, 0), (1, 3), (2, 7)])
-def test_3_corrupt_and_continue(s, j):
-    bad = [list(seg) for seg in HONEST]
-    bad[s] = _corrupt_and_continue(s, j)
-    mb = PARAMS.block_bytes
-    decoded = dense.decode_segment(PARAMS, PRIMS, SALT, s, bad[s])
-    original = list(split(PARAMS, W))[s]
-    differs = [i for i in range(PARAMS.blocks_per_segment) if decoded[i * mb:(i + 1) * mb] != original[i * mb:(i + 1) * mb]]
+@pytest.mark.parametrize("scheme, s, j", [("band", 0, 0), ("band", 1, 3), ("band", 2, 15), ("dense", 0, 0),
+                                          ("dense", 1, 3), ("dense", 2, 7)])
+def test_3_corrupt_and_continue(scheme, s, j):
+    x = WORLDS[scheme]
+    bad = [list(seg) for seg in x.honest]
+    bad[s] = _corrupt_and_continue(x, s, j)
+    mb = x.params.block_bytes
+    decoded = x.params.codec.decode_segment(x.params, x.prims, x.salt, s, bad[s])
+    original = list(split(x.params, x.w))[s]
+    differs = [i for i in range(x.params.blocks_per_segment)
+               if decoded[i * mb:(i + 1) * mb] != original[i * mb:(i + 1) * mb]]
     assert differs == [j], "the corruption decodes to W' ≠ W at block j only"
     with pytest.raises(ValueError, match="commitment"):
-        _accept(bad)
+        x.accept(bad)
+
+
+@pytest.mark.parametrize("scheme", SCHEMES)
+def test_enc_dec(scheme):
+    """`EncDec` (POUS `PubEncoderModel.lean`): every C re-encodes from its own decode, so `commit(Dec(C*)) = com_W`
+    forces `C* = Enc(W)`.  Lean proves it for dense (`chainDense_encDec`); for the band only this test checks it."""
+    x = WORLDS[scheme]
+    p, rng = x.params, random.Random(9)
+    for s in range(p.segments):
+        c = [rng.randbytes(p.block_bytes) for _ in range(p.blocks_per_segment)]
+        w = p.codec.decode_segment(p, x.prims, x.salt, s, c)
+        assert p.codec.encode_segment(p, x.prims, x.salt, s, w) == c
 
 
 def test_4_wrong_sizes():
@@ -123,15 +170,22 @@ def test_6_no_encoder(monkeypatch):
     def boom(*args, **kwargs):
         raise AssertionError("the verifier called an encoder")
 
-    monkeypatch.setattr(dense, "DENSE", Codec(dense.DENSE.name, boom, dense.decode_segment))
+    reference_root = setup.verifier_key(PARAMS, PRIMS, W, COMMITMENT, SALT, encoded=HONEST).root
+    patched = Codec(PARAMS.codec.name, boom, PARAMS.codec.decode_segment)
+    monkeypatch.setattr(band, "codec_for", lambda d: patched)
     monkeypatch.setattr(dense, "encode_segment", boom)
     monkeypatch.setattr(dense, "encode_segment_prog", boom)
     assert PARAMS.codec.encode_segment is boom
-    vk = _accept(HONEST)
-    assert vk.root == setup.verifier_key(PARAMS, PRIMS, W, COMMITMENT, SALT, encoded=HONEST).root
+    assert _accept(HONEST).root == reference_root
+    dense_world = WORLDS["dense"]
+    monkeypatch.setattr(dense, "DENSE", Codec(dense.DENSE.name, boom, dense.decode_segment))
+    assert dense_world.accept(dense_world.honest).root == setup.verifier_key(
+        dense_world.params, dense_world.prims, dense_world.w, dense_world.commitment, dense_world.salt,
+        encoded=dense_world.honest).root
 
 
 LEAN = json.loads((Path(__file__).parent / "fixtures" / "lean_dense_vectors.json").read_text())
+LEAN_BAND = json.loads((Path(__file__).parent / "fixtures" / "lean_band_vectors.json").read_text())
 
 
 def _lean_codec(t: int) -> Codec:
@@ -148,16 +202,19 @@ def _lean_codec(t: int) -> Codec:
     return Codec("lean-toy-dense", encode, decode)
 
 
-@pytest.mark.parametrize("group, chain", [("real", "real"), ("small", "small")])
+@pytest.mark.parametrize("group, chain", [("band", "small"), ("real", "real"), ("small", "small")])
 def test_7_known_answer_vectors(group, chain):
     """The Lean-evaluated encodings with whole-byte blocks, through the verifier path: accepted against the
-    commitment to the fixture's W, rejected against any other W."""
+    commitment to the fixture's W, rejected against any other W.  `band` is `chainBand`'s (`d = 1`, where the band
+    already cuts row 2's oldest parent); `real` and `small` are `chainDense`'s."""
     from test_pous_dense import SmallCapacity, ToyF
 
-    cases = [c for c in LEAN[group] if c["l"] % 8 == 0]
+    cases = [dict(c, c=4) for c in LEAN_BAND["labels"]] if group == "band" else LEAN[group]
+    cases = [c for c in cases if c["l"] % 8 == 0]
     assert cases
     for case in cases:
-        params = dense.DenseParams(case["B"], case["l"])
+        params = (band.BandParams(case["B"], case["l"], case["d"]) if group == "band"
+                  else dense.DenseParams(case["B"], case["l"]))
         cls = dense.DenseChain if chain == "real" else SmallCapacity
         prims = Primitives(cls(params, ToyF(2 * case["l"] + case["c"])), None)
         mb = params.block_bytes
@@ -171,14 +228,17 @@ def test_7_known_answer_vectors(group, chain):
             setup.verifier_key_from_encoding(params, prims, setup.commit(params, other), SALT, encoded, codec)
 
 
-def test_negative_control_any_wrong_codeword():
-    """A server submitting any C* with Dec(C*) ≠ W is rejected: random blocks, or the honest encoding of another W."""
+@pytest.mark.parametrize("scheme", SCHEMES)
+def test_negative_control_any_wrong_codeword(scheme):
+    """A server submitting any C* with Dec(C*) ≠ W is rejected: random blocks, the honest encoding of another W, or
+    of W under another salt."""
+    x = WORLDS[scheme]
+    p = x.params
     rng = random.Random(4)
-    noise = [[rng.randbytes(PARAMS.block_bytes) for _ in range(PARAMS.blocks_per_segment)] for _ in range(PARAMS.segments)]
-    other_w = bytes(b ^ 0x80 for b in W)
-    for bad in (noise, _server(w=other_w), _server(salt=bytes(24))):
+    noise = [[rng.randbytes(p.block_bytes) for _ in range(p.blocks_per_segment)] for _ in range(p.segments)]
+    for bad in (noise, x.server(w=bytes(b ^ 0x80 for b in x.w)), x.server(salt=bytes(24))):
         with pytest.raises(ValueError, match="commitment"):
-            _accept(bad)
+            x.accept(bad)
 
 
 def test_setup_flag(monkeypatch):
