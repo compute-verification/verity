@@ -2847,6 +2847,21 @@ def test_n1_lease_kills_everything_a_policy_command_that_overruns_started(monkey
 
 
 @needs_flock
+def test_n1_lease_sees_a_waiter_that_a_read_of_proc_locks_misses(monkeypatch, tmp_path, reap):
+    """/proc/locks comes a page per read, so on a node with many locks one read can miss a lock held throughout (seen on node 1,
+    where it left a waiter unserved for a tick): a waiter is its file's lock, probed directly."""
+    m, calls, fd, _, keys = _policy_lease(monkeypatch, tmp_path, 3)
+    keys(max=3)
+    (tmp_path / "gl" / "wait.2.4343").write_text("pid=4343 n=1 who=gone since=x\n")
+    monkeypatch.setattr(m, "lock_holders", dict)
+    assert [w["file"] for w in m.waiters()] == ["wait.1.4242"]
+    m.Controller().tick(1_800_000_000.0)
+    os.close(fd)
+    assert len([a for a, _ in calls if a[0] == "create"]) == 3
+    assert not m.waiters()
+
+
+@needs_flock
 def test_n1_lease_logs_a_limits_file_it_cant_write_and_goes_on(monkeypatch, tmp_path, reap):
     m, calls, fd, _, keys = _policy_lease(monkeypatch, tmp_path, 1)
     keys(max=3)
