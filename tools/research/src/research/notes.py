@@ -1894,6 +1894,8 @@ def main(argv: list[str]) -> int:
     """`sync` / `scan` live in notes_sync; with RESEARCH_NOTES_SYNC=1 a successful checkpoint / bind / relaunch syncs what it wrote."""
     from . import notes_sync  # noqa: PLC0415
 
+    if line := notes_sync.ensure_clone(default_root()):
+        print(line, file=sys.stderr)
     if argv and argv[0] in ("sync", "scan"):
         return notes_sync.main(argv, default_root())
     if argv and argv[0] == "archive":
@@ -2174,7 +2176,9 @@ def _watch(ns: argparse.Namespace, root: Path, repo: Path | None, run: Callable[
             srep = notes_sync.sync(root)
             more += sync_lines(root, srep, now)
         elif ns.sync:                                       # standby: read the others' notes, write nothing
-            _git(root, "pull", "-q", "--ff-only", timeout=300)
+            from . import notes_sync  # noqa: PLC0415
+
+            notes_sync.pull(root)
         elif ns.snapshot and acting and (snap := snapshot(root, now=now)) and snap["commit"]:
             more.append(f"{now:%H:%MZ} {_snapshot_line(snap)}")
         open_ = sum(r["state"] not in DONE for r in rows)
