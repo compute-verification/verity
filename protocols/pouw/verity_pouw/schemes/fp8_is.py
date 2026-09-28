@@ -56,12 +56,13 @@ ATOM_UNITS, FADD_UNITS = 32, 32
 CVT_UNITS = 16
 #: H100 W1 prices by instruction class (units per instruction; `hadd2_f32` per FP32 result register): Round 7 as measured
 #: (``gpu-constants.md`` §12) and Round 8 loop-free, the §0 rule's two sets.  ``unpack`` (cvt e4m3x2 -> f16x2) and
-#: ``hadd2_f32`` are not yet measured and carry the red team's assumptions.  Round 9 adds a row when it lands.
+#: ``hadd2_f32`` and ``f16pack`` (F2FP f16x2 from f32) are not yet measured and carry the red team's assumptions.  Round 9
+#: adds a row when it lands.
 PRICES: dict[str, dict[str, Fraction]] = {
     "round7": {"fadd": Fraction(67, 2), "half2": Fraction(401, 10), "int": Fraction(64), "f2fp": Fraction(667, 10),
-               "unpack": Fraction(667, 10), "hadd2_f32": Fraction(401, 10)},
+               "unpack": Fraction(667, 10), "hadd2_f32": Fraction(401, 10), "f16pack": Fraction(667, 10)},
     "round8": {"fadd": Fraction(32), "half2": Fraction(36), "int": Fraction(64), "f2fp": Fraction(64),
-               "unpack": Fraction(64), "hadd2_f32": Fraction(36)},
+               "unpack": Fraction(64), "hadd2_f32": Fraction(36), "f16pack": Fraction(64)},
 }
 
 
@@ -151,8 +152,12 @@ class Forming(Protocol):
         """Raise `DomainError` when the layer cannot form this shape."""
         ...
 
+    def parse(self, row: bytes, k: int, left: bool) -> list[int] | None:
+        """One committed row (``left``: of A) in the layer's own format, or None when it is malformed."""
+        ...
+
     def admits(self, codes: Sequence[int], left: bool) -> bool:
-        """The input domain: whether one committed row (``left``: of A) is formable."""
+        """The input domain: whether one parsed row (``left``: of A) is formable."""
         ...
 
     def noise(self, ctx: Context) -> Any:
@@ -235,6 +240,13 @@ def ncp_perm(k: int, seed: bytes) -> tuple[tuple[int, ...], tuple[int, ...]]:
     return pi, tuple(inv)
 
 
+class CodeRows:
+    """Row parsing for the layers whose rows are all E4M3 codes (the earlier layers)."""
+
+    def parse(self, row: bytes, k: int, left: bool) -> list[int] | None:
+        return e4m3_row(row, k)
+
+
 # ---- fpncp-v0: C-2's forming as posted (refuted; the negative control) -----------------------------------------------
 
 #: Per-element W1 trace of `FpNcpV0` on MH100 at nominal prices, one operand row, conversions at H_32's floor.
@@ -250,7 +262,7 @@ FPNCP_V0_TRACE = (
 )
 
 
-class FpNcpV0:
+class FpNcpV0(CodeRows):
     """C-2's FP-NCP forming with its FP32 operations fixed.  Per operand row of k E4M3 codes:
 
         x_l   = the code's FP32 value;  inf = max |x_l|
@@ -388,7 +400,7 @@ class MaxRelativeCodes:
         return [((b & 0x8F) + (e0 << 3)) & 0xFF for b in stream]
 
 
-class D2Draft:
+class D2Draft(CodeRows):
     """D-2 (track D; fell in Phase 17b, kept as the worked example of checked forming words): every NCP block's operand is formed by checked FP8 Hadamard transforms, with the noise entering the
     atoms as E4M3 codes, so no elementwise A + E is ever computed.  Per operand row and 32-entry group g:
 
@@ -488,7 +500,7 @@ D3_TRACE = (
 )
 
 
-class D3:
+class D3(CodeRows):
     """Repaired C-2 (track D's D-3): C-2's three NCP blocks with **partner-max full-cell noise** and **column-keyed weight
     streams**, formed in binary16 (`verity.ml.tc.fp16`, the half2 pipe).  Per operand row of k E4M3 codes:
 
@@ -609,92 +621,109 @@ class D3:
         return Stack(x, y, [b""] * len(x), [b""] * len(y))
 
 
-# ---- d3m-v0: D-3 with the max noise law, on X_q (the lead) -----------------------------------------------------------
+# ---- the D-3 family on the committed activation input: d3s-v0 (the lead law) and d3m-v0 ------------------------------
 
 F16_2_POW_M8 = 0x1C00                                               # 2^−8
+F16_448 = 0x5F00                                                    # 448, the largest Y16 magnitude admitted
+ROUTES = ("xq", "y16")
+LAWS = ("d3s", "d3m")
 
 
-def d3m_trace(prices: dict[str, Fraction], chain: int) -> tuple[tuple[str, str, Fraction], ...]:
-    """Schedule M4 (the D-3m strike, §1.1), per element: (operation, sides, units).  ``a`` is the activation side, ``w``
-    the weight side's per-epoch work, and ``c`` the unpack that a registered FP16 weight copy removes."""
+def d3_trace(law: str, route: str, weight_copy: bool, prices: dict[str, Fraction],
+             chain: int) -> tuple[tuple[tuple[str, Fraction], ...], tuple[tuple[str, Fraction], ...]]:
+    """The honest per-element trace of each side, schedule M4 (the D-3m strike; Phase 17f for D-3s): (activation
+    operations, weight operations per unit).  The weight side's statistics, cell widths, partner and floor maxima are
+    functions of the static codes and the fixed P, registered offline."""
     h2, i, blk = prices["half2"] / 2, prices["int"] / 2, prices["hadd2_f32"]
-    return (
-        ("unpack X_q: cvt e4m3x2 -> f16x2", "ac", prices["unpack"] / 2),
-        ("prescale h·2^-8 (HMUL2; 448² overflows f16)", "a", h2),
-        ("sum of squares (HFMA2; a widen and an FADD per chain)", "a", h2 + (blk + prices["fadd"]) / chain),
-        ("cell width: exponent mask (LOP3 on half2)", "a", i),
-        ("partner max (HMNMX2)", "a", h2),
-        ("floor max with σ8 (HMNMX2)", "a", h2),
-        ("noise field (LOP3; two f16 lanes per XOF word)", "aw", i),
-        ("centre (2t − 3)/8 (HFMA2)", "aw", h2),
-        ("scale A8·u (HMUL2)", "aw", h2),
-        ("s = e + e∘P (HADD2)", "aw", h2),
-        ("three block values (HADD2.F32)", "aw", 3 * blk),
-        ("three casts f32 -> e4m3 (F2FP x2)", "aw", 3 * prices["f2fp"] / 2),
-    )
+    source = (("unpack X_q: cvt e4m3x2 -> f16x2", prices["unpack"] / 2) if route == "xq"
+              else ("pack Y16 = f16(A/s): F2FP f16x2 from the model's f32 A/s", prices["f16pack"] / 2))
+    noise = (("noise field (LOP3; two f16 lanes per XOF word)", i), ("centre (2t − 3)/8 (HFMA2)", h2),
+             ("scale A·u (HMUL2)", h2), ("s = e + e∘P (HADD2)", h2), ("three block values (HADD2.F32)", 3 * blk),
+             ("three casts f32 -> e4m3 (F2FP x2)", 3 * prices["f2fp"] / 2))
+    act = (source,
+           ("prescale h·2^-8 (HMUL2; 448² overflows f16)", h2),
+           ("sum of squares (HFMA2; a widen and an FADD per chain)", h2 + (blk + prices["fadd"]) / chain),
+           *((("cell width: exponent mask (LOP3 on half2)", i),) if law == "d3m" else ()),
+           ("partner max (HMNMX2)", h2),
+           ("floor max (HMNMX2)", h2),
+           *noise)
+    weight = ((() if weight_copy else (("decode the weight codes: cvt e4m3x2 -> f16x2", prices["unpack"] / 2),)) + noise)
+    return act, weight
 
 
-class D3m:
-    """D-3m, the lead: C-2's three NCP blocks on the committed E4M3 codes X_q, with Track B's max law, which gives every
-    entry a noise amplitude of max(σ, the larger E4M3 cell of the entry and of its NCP partner) from one noise field.
-    Per operand row of k codes (an activation row of X_q, or a weight column's codes):
+class D3Family:
+    """C-2's three NCP blocks formed on the unit's committed activation input, with one f16 noise field per side and a
+    per-entry amplitude that covers at least one E4M3 cell of the entry and of its NCP partner.  Parameters:
 
-        h_l   = the code's f16 value (exact);   z_l = h_l·2^−8
-        ss    = Σ z_l² in 64 lanes (l mod 64): each lane chains fma.f16 over 256 of its entries, widens the chain to f32
-                and adds it; then an f32 butterfly over the lanes (32 … 1)
-        rms   = sqrt(ss/k)·2^8;   8σ = max(rms/2, 224/√k)   (f32; δ = 1/16.  224/√k is 8 times the least σ of a row
-                whose largest code is 448, so the floor binds only on rows that are all-zero or not normalized)
-        σ8    = max(f16(8σ), 2^−6)                          (2^−6 is eight cells of E4M3's subnormal grid, X-17d-3)
-        c8_l  = h_l & 0x7C00 = 2^⌊log₂|h_l|⌋, 0 at 0         (eight E4M3 cells at h_l, on the cast's own grid)
-        A8_l  = max(c8_l, c8_partner(l), σ8)                A rows: partner π⁻¹(l); B columns: partner π(l)
-        e_l   = A8_l·(2t_l − 3)/8,  t_l = 0x3C00 | (w_l & 0x3FF), w_l the l-th 16-bit half of the row's XOF stream
-        A:  e2_l = e_π(l),   s = e + e2;      X̃ = [Q(h + e) | Q(h + e2) | Q(−h − s)]
-        B:  f2_l = −e_π⁻¹(l), s = e + f2;     Ỹ = [Q(h + e) ; Q(h + f2) ; Q(h + s)]
+    - ``law``: **"d3s"** (Phase 17f, the lead) or "d3m" (the D-3m strike);
+    - ``route``: **"xq"**, the model's FP8 codes X_q (the §0 input), or "y16", Y16 = f16(A/s) with the model's own row
+      scale s (quality-safer; Daniel's ruling (i));
+    - ``weight_copy``: Daniel's ruling (ii), whether a registered FP16 weight copy is free offline data (True) or the
+      codes are decoded every unit (False).  Only the price depends on it;
+    - ``prices``: a `PRICES` row.
 
-    The block values h + e_b are HADD2.F32 (f16 operands, one f32 rounding) and Q is cvt.rn.satfinite.e4m3x2.f32: **a
-    block value at or beyond ±464 saturates to ±448** (0x7E), the only place NCP's cancellation is not exact before the
-    E4M3 rounding.  E₁'s row i is SHAKE256("verity/pouw/fp8-is/d3m/E1", salt, index, root_A, weight, i), and each weight
-    column j has its own stream per unit, SHAKE256("verity/pouw/fp8-is/d3m/F1", salt, index, weight, j), 2k bytes each:
-    B̃ is re-formed for every unit, which is r = 1, the only reuse D-3m tolerates (X-D3-3).  Weights are
-    pre-quantized offline per column (each column's largest code 448) for quality; the σ floor is what stops tiny
-    columns from giving free words (X-D3m-4) whatever the scales.
+    Per operand row of k values (an activation row, or a weight column's E4M3 codes):
 
-    ``weight_copy`` is Daniel's pending ruling (ii): True counts a registered FP16 copy of the weights (with their
-    amplitude table) as free offline data, so the weight side's per-epoch forming skips the unpack; False decodes the
-    weights every epoch.  The checked function is the same; only the price differs.
+        h_l    = the row's f16 values: X_q's codes decoded exactly, or Y16's words
+        ss     = Σ (h_l·2^−8)² in 64 lanes (l mod 64): each lane chains fma.f16 over 256 entries, widens the chain to f32
+                 and adds it; then an f32 butterfly (32 … 1);   rms = sqrt(ss/k)·2^8 (f32)
+        d3s:   A_l = max(|h_l|, |h_partner(l)|, rms′),  rms′ = max(f16(rms), 2^−6)            (δ = 1/8)
+        d3m:   A_l = max(c8_l, c8_partner(l), σ8),  c8 = 2^⌊log₂|h|⌋ (0 at 0),
+               σ8 = max(f16(max(rms/2, 224/√k)), 2^−6)                                      (δ = 1/16)
+        e_l    = A_l·(2t_l − 3)/8,  t_l = 0x3C00 | (w_l & 0x3FF), w_l the l-th 16-bit half of the row's XOF stream
+        A:  e2_l = e_π(l),   s = e + e2;      X̃ = [Q(h + e) | Q(h + e2) | Q(−h − s)]      partner(l) = π⁻¹(l)
+        B:  f2_l = −e_π⁻¹(l), s = e + f2;     Ỹ = [Q(h + e) ; Q(h + f2) ; Q(h + s)]      partner(l) = π(l)
+
+    The block values h + e_b are HADD2.F32 (f16 operands, one f32 rounding) and Q is cvt.rn.satfinite.e4m3x2.f32, so a
+    block value at or beyond ±464 saturates to ±448.  For normal h, |h|/8 lies in [cell(h), 2·cell(h)), and rms′ ≥ 2^−6
+    gives every entry (the zeros of an all-zero row, and E4M3 subnormals) at least one subnormal cell 2^−9: D-3s's
+    amplitude is never below D-3m's.  E₁'s row i is SHAKE256("verity/pouw/fp8-is/<tag>/E1", salt, index, root_A,
+    weight, i); each weight column j has its own stream per unit, SHAKE256("verity/pouw/fp8-is/<tag>/F1", salt, index,
+    weight, j), 2k bytes each: B̃ is re-formed for every unit (r = 1, X-D3-3).  Weights are E4M3 codes quantized
+    offline per column.  A Y16 row is k little-endian f16 words, finite and at most 448 in magnitude.
     """
 
     blocks = 3
     seeded = False
     credited = (0, 0)
-    tag = "d3m-v0"
-    P_SEED = b"verity/pouw/fp8-is/d3m/P"
     LANES, CHAIN = 64, 256
 
-    def __init__(self, weight_copy: bool = True, prices: str = "round8"):
-        self.weight_copy, self.prices = weight_copy, prices
-        self.name = self.tag if weight_copy else f"{self.tag}-decode"
-        self.trace = d3m_trace(PRICES[prices], self.CHAIN)
-        act = sum(u for _, sides, u in self.trace if "a" in sides)
-        wgt = sum(u for _, sides, u in self.trace if "w" in sides or ("c" in sides and not weight_copy))
-        self.units = (act, wgt)
-        self.parameters = (("delta_log2", 4), ("weight_copy", int(weight_copy)), ("form_units_a_ceil", -(-act // 1)),
-                           ("form_units_b_ceil", -(-wgt // 1)))
+    def __init__(self, law: str = "d3s", route: str = "xq", weight_copy: bool = True, prices: str = "round8"):
+        if law not in LAWS or route not in ROUTES:
+            raise ValueError(f"law is one of {LAWS} and route one of {ROUTES}")
+        self.law, self.route, self.weight_copy, self.prices = law, route, weight_copy, prices
+        self.tag = f"{law}-v0" + ("-y16" if route == "y16" else "")
+        self.name = self.tag + ("" if weight_copy else "-decode")
+        self.P_SEED = f"verity/pouw/fp8-is/{law}/P".encode()
+        self.trace = d3_trace(law, route, weight_copy, PRICES[prices], self.CHAIN)
+        self.units = tuple(sum(u for _, u in side) for side in self.trace)
+        self.parameters = (("law_d3s", int(law == "d3s")), ("route_y16", int(route == "y16")),
+                           ("weight_copy", int(weight_copy)), ("form_units_a_ceil", -(-self.units[0] // 1)),
+                           ("form_units_b_ceil", -(-self.units[1] // 1)))
 
     def check(self, shape: Shape) -> None:
         if shape.k % SLICE or shape.k > 1 << 16:
             raise DomainError(f"{self.name}: k is a multiple of {SLICE} and at most 2^16")
         ncp_perm(shape.k, self.P_SEED)
 
-    def admits(self, codes: Sequence[int], left: bool) -> bool:
+    def parse(self, row: bytes, k: int, left: bool) -> list[int] | None:
+        """A committed row as f16 words: X_q's (or the weights') E4M3 codes decoded, or Y16's words (finite, |y| <= 448)."""
+        if left and self.route == "y16":
+            if len(row) != 2 * k:
+                return None
+            words = [int.from_bytes(row[2 * l:2 * l + 2], "little") for l in range(k)]
+            return words if all(w & 0x7FFF <= F16_448 for w in words) else None
+        codes = e4m3_row(row, k)
+        return None if codes is None else [fp16.from_e4m3(c) for c in codes]
+
+    def admits(self, values: Sequence[int], left: bool) -> bool:
         return True
 
     def noise(self, ctx: Context) -> tuple[tuple[int, ...], tuple[int, ...]]:
         return ncp_perm(ctx.matmul.shape.k, self.P_SEED)
 
-    def sigma8(self, h: Sequence[int]) -> int:
-        """The row's σ8 = max(f16(8σ), 2^−6) as an f16 word."""
-        k = len(h)
+    def rms(self, h: Sequence[int]) -> int:
+        """The row's rms as an f32 word (the lane procedure of the class docstring)."""
         z = [fp16.mul(w, F16_2_POW_M8) for w in h]
         lanes = [0] * self.LANES
         for t in range(self.LANES):
@@ -709,23 +738,32 @@ class D3m:
             for t in range(half):
                 lanes[t] = fp32.add(lanes[t], lanes[t + half])
             half //= 2
-        rms = fp32.mul(fp32.sqrt(fp32.div(lanes[0], f32_word(k))), f32_word(256))
-        eight_sigma = max(fp32.mul(rms, f32_word(Fraction(1, 2))), fp32.div(f32_word(224), fp32.sqrt(f32_word(k))))
-        neg, m, e = fp32.decode(eight_sigma)                 # both candidates are non-negative, so words order as values
+        return fp32.mul(fp32.sqrt(fp32.div(lanes[0], f32_word(len(h)))), f32_word(256))
+
+    def floor(self, h: Sequence[int]) -> int:
+        """The row's floor term as an f16 word: rms′ (d3s) or σ8 (d3m)."""
+        rms = self.rms(h)
+        if self.law == "d3m":
+            rms = max(fp32.mul(rms, f32_word(Fraction(1, 2))), fp32.div(f32_word(224), fp32.sqrt(f32_word(len(h)))))
+        neg, m, e = fp32.decode(rms)                         # non-negative words order as their values
         return fp16.max_(fp16.round_to_f16(neg, m, e), F16_2_POW_M6)
 
-    def side(self, codes: Sequence[int], stream: bytes, pi: Sequence[int], inv: Sequence[int], left: bool) -> list[int]:
-        """One stacked row of X̃ (``left``) or column of Ỹ: 3k codes."""
-        k = len(codes)
-        h = [fp16.from_e4m3(c) for c in codes]
-        s8 = self.sigma8(h)
-        c8 = [w & 0x7C00 for w in h]
-        partner = inv if left else pi
+    def amplitudes(self, h: Sequence[int], partner: Sequence[int]) -> list[int]:
+        floor = self.floor(h)
+        if self.law == "d3s":
+            mag = [w & 0x7FFF for w in h]
+        else:
+            mag = [w & 0x7C00 for w in h]
+        return [fp16.max_(fp16.max_(mag[l], mag[partner[l]]), floor) for l in range(len(h))]
+
+    def side(self, h: Sequence[int], stream: bytes, pi: Sequence[int], inv: Sequence[int], left: bool) -> list[int]:
+        """One stacked row of X̃ (``left``) or column of Ỹ from its f16 values: 3k codes."""
+        k = len(h)
+        amp = self.amplitudes(h, inv if left else pi)
         e = []
         for l in range(k):
-            a8 = fp16.max_(fp16.max_(c8[l], c8[partner[l]]), s8)
             t = F16_ONE | (int.from_bytes(stream[2 * l:2 * l + 2], "little") & 0x3FF)
-            e.append(fp16.mul(a8, fp16.fma(F16_TWO_INV4, t, F16_MINUS_3_8)))
+            e.append(fp16.mul(amp[l], fp16.fma(F16_TWO_INV4, t, F16_MINUS_3_8)))
         if left:
             e2 = [e[pi[l]] for l in range(k)]
             s = [fp16.add(a, b) for a, b in zip(e, e2)]
@@ -740,15 +778,25 @@ class D3m:
     def form(self, ctx: Context, noise, a: list[list[int]], b: list[list[int]], tile: Tile) -> Stack:
         pi, inv = noise
         u, k = ctx.matmul, ctx.matmul.shape.k
-        x = [self.side(r, xof("verity/pouw/fp8-is/d3m/E1", 2 * k, ctx.salt, u.index, ctx.root_a, u.weight, i), pi, inv, True)
-             for r, i in zip(a, tile.rows)]
-        y = [self.side(r, xof("verity/pouw/fp8-is/d3m/F1", 2 * k, ctx.salt, u.index, u.weight, j), pi, inv, False)
+        x = [self.side(r, xof(f"verity/pouw/fp8-is/{self.tag}/E1", 2 * k, ctx.salt, u.index, ctx.root_a, u.weight, i),
+                       pi, inv, True) for r, i in zip(a, tile.rows)]
+        y = [self.side(r, xof(f"verity/pouw/fp8-is/{self.tag}/F1", 2 * k, ctx.salt, u.index, u.weight, j), pi, inv, False)
              for r, j in zip(b, tile.cols)]
         return Stack(x, y, [b""] * len(x), [b""] * len(y))
 
 
-FORMINGS = {"d3m-v0": lambda: D3m(True), "d3m-v0-decode": lambda: D3m(False), D3.name: D3, FpNcpV0.name: FpNcpV0,
-            D2Draft.name: D2Draft}
+def D3s(weight_copy: bool = True, prices: str = "round8", route: str = "xq") -> D3Family:
+    return D3Family("d3s", route, weight_copy, prices)
+
+
+def D3m(weight_copy: bool = True, prices: str = "round8", route: str = "xq") -> D3Family:
+    return D3Family("d3m", route, weight_copy, prices)
+
+
+FORMINGS = {f"{law}-v0{'-y16' if route == 'y16' else ''}{'' if copy else '-decode'}":
+            (lambda law=law, route=route, copy=copy: D3Family(law, route, copy))
+            for law in LAWS for route in ROUTES for copy in (True, False)}
+FORMINGS.update({D3.name: D3, FpNcpV0.name: FpNcpV0, D2Draft.name: D2Draft})
 
 
 # ---- the scheme -----------------------------------------------------------------------------------------------------
@@ -820,7 +868,8 @@ class FP8IS:
 
     def encode(self, ctx: Context, noise, a_rows: Sequence[bytes], b_rows: Sequence[bytes], tile: Tile) -> Stack | None:
         k = ctx.matmul.shape.k
-        a, b = [e4m3_row(r, k) for r in a_rows], [e4m3_row(r, k) for r in b_rows]
+        a = [self.forming.parse(r, k, True) for r in a_rows]
+        b = [self.forming.parse(r, k, False) for r in b_rows]
         if any(r is None or not self.forming.admits(r, True) for r in a):
             return None
         if any(r is None or not self.forming.admits(r, False) for r in b):

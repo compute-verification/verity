@@ -16,8 +16,10 @@ from verity_pouw.schemes import fp8_is
 
 OUT = Path(__file__).with_name("vectors") / "fp8_is.json"
 #: (case, forming, shape, tile rows, tile cols, index, weight): test-instance shapes and one lead-domain k
-CASES = (("small-d3m", "d3m-v0", (64, 128, 64), (0, 2), (8, 10), 7, 3),
-         ("lead-k-d3m", "d3m-v0", (16384, 16384, 16384), (0, 1), (0, 1), (1 << 64) - 1, 11),
+CASES = (("small-d3s", "d3s-v0", (64, 128, 64), (0, 2), (8, 10), 7, 3),
+         ("small-d3s-y16", "d3s-v0-y16", (64, 128, 64), (0, 2), (8, 10), 7, 3),
+         ("lead-k-d3s", "d3s-v0", (16384, 16384, 16384), (0, 1), (0, 1), (1 << 64) - 1, 11),
+         ("small-d3m", "d3m-v0", (64, 128, 64), (0, 2), (8, 10), 7, 3),
          ("small-d3", "d3-v0", (64, 128, 64), (0, 2), (8, 10), 7, 3),
          ("lead-k-d3", "d3-v0", (8192, 8192, 8192), (0, 1), (0, 1), (1 << 64) - 1, 11),
          ("small-d2", "d2-draft", (64, 128, 64), (0, 2), (8, 10), 7, 3),
@@ -35,6 +37,17 @@ def rows(case: str, name: str, count: int, k: int, cap: int, first: int = 0) -> 
             for i in range(first, first + count)]
 
 
+def y16_rows(case: str, count: int, k: int, first: int = 0) -> list[bytes]:
+    """Y16 rows: the 16-bit words of SHAKE256("verity/pouw/test-rows/fp8-y16/v1", c, i), magnitudes clamped to 448."""
+    out = []
+    for i in range(first, first + count):
+        raw = hashlib.shake_256(f"verity/pouw/test-rows/fp8-y16/v1\0{case}\0{i}".encode()).digest(2 * k)
+        words = [int.from_bytes(raw[2 * l:2 * l + 2], "little") for l in range(k)]
+        words = [(w & 0x8000) | min(w & 0x7FFF, 0x5F00) for w in words]
+        out.append(b"".join(w.to_bytes(2, "little") for w in words))
+    return out
+
+
 def ctx_of(case: str, shape: tuple[int, int, int], index: int, weight: int) -> Context:
     return Context(hashlib.sha256(f"salt/{case}".encode()).digest(), Matmul(index, Shape(*shape), weight),
                    hashlib.sha256(f"root_a/{case}".encode()).digest(), hashlib.sha256(f"root_b/{case}".encode()).digest())
@@ -50,7 +63,8 @@ def case_vector(case, forming, shape, r, c, index, weight) -> dict:
     s.check(ctx.matmul)
     tile = Tile(tuple(range(*r)), tuple(range(*c)))
     cap_a, cap_b = caps(s.forming)
-    a = rows(case, "A", len(tile.rows), shape[1], cap_a, r[0])
+    a = (y16_rows(case, len(tile.rows), shape[1], r[0]) if getattr(s.forming, "route", "xq") == "y16"
+         else rows(case, "A", len(tile.rows), shape[1], cap_a, r[0]))
     b = rows(case, "B", len(tile.cols), shape[1], cap_b, c[0])
     ops = s.encode(ctx, s.noise(ctx), a, b, tile)
     checked = s.checked(ctx, ops)

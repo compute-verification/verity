@@ -145,7 +145,8 @@ def spike_slice_words(layer, k: int, spike_a: int, spike_b: int, salts: int):
     index, out = 100, []
     for s in range(salts):
         ctx = ctx_of((64, k, 16), salt=bytes([s]))
-        st = layer.form(ctx, layer.noise(ctx), [one_spike(k, index, spike_a)], [one_spike(k, index, spike_b)], Tile((0,), (0,)))
+        a, b = layer.parse(bytes(one_spike(k, index, spike_a)), k, True), layer.parse(bytes(one_spike(k, index, spike_b)), k, False)
+        st = layer.form(ctx, layer.noise(ctx), [a], [b], Tile((0,), (0,)))
         sl = [index // 32 + blk * (k // 32) for blk in range(3)]
         x, y = st.x[0], st.y[0]
         out.append(tuple((F.ATOM.step(0, x[32 * t:32 * t + 32], y[32 * t:32 * t + 32]),
@@ -336,38 +337,15 @@ def test_d3_useful_output_tracks_the_product():
             assert abs(Fraction(got[i][j]) / scale - want) < bound / 8
 
 
-# ---- d3m-v0: the lead (D-3 with the max law, on X_q) -------------------------------------------------------------------
+# ---- the D-3 family: d3s-v0 (the lead law) and d3m-v0, on X_q or Y16 -------------------------------------------------
 
-def test_d3m_variants_prices_and_gamma():
-    """Both weight-copy variants exist; their prices are schedule M4's at Round 8 (426 + a 17/64 chain share per activation,
-    290 or 322 per weight), and their certificates give the strike's γ at 16,384³ with r = 1."""
-    copy, decode = get("fp8-is-h100-d3m-v0"), get("fp8-is-h100-d3m-v0-decode")
-    assert copy.forming.units == (Fraction(27281, 64), 290) and decode.forming.units == (Fraction(27281, 64), 322)
-    assert copy.forming.tag == decode.forming.tag == "d3m-v0"
-    for weight_copy, want in ((True, "0.972"), (False, "1.004")):
-        s = F.FP8IS(F.D3m(weight_copy), mnk_min=16384)
-        gamma = 1 - Fraction(399, 400) / s.certificate.omega
-        assert f"{float(100 * gamma):.3f}" == want
-    r7 = F.D3m(True, prices="round7")
-    assert r7.units[0] > 450 and F.FP8IS(r7, prices="round7").fadd == Fraction(67, 2)
-    sh = Shape(16384, 16384, 16384)
-    assert copy.wref(sh) == -(-(sh.m * sh.n * (32 * 1536 + 32 * 1535) + Fraction(27281, 64) * sh.m * sh.k
-                              + 290 * sh.n * sh.k) // 1)
-
-
-def d3m_noise(layer, row, stream, left, pi, inv):
-    """Recompute e (exact values) and the amplitude A8/8 per entry from the layer's own f16 steps."""
-    h = [F.fp16.from_e4m3(c) for c in row]
-    s8 = layer.sigma8(h)
-    c8 = [w & 0x7C00 for w in h]
-    partner = inv if left else pi
-    amp, e = [], []
-    for l in range(len(row)):
-        a8 = F.fp16.max_(F.fp16.max_(c8[l], c8[partner[l]]), s8)
-        t = F.F16_ONE | (int.from_bytes(stream[2 * l:2 * l + 2], "little") & 0x3FF)
-        amp.append(f16_value(a8) / 8)
-        e.append(f16_value(F.fp16.mul(a8, F.fp16.fma(F.F16_TWO_INV4, t, F.F16_MINUS_3_8))))
-    return [value(c) for c in row], e, amp
+def y16_row(rng: random.Random, k: int) -> bytes:
+    """A Y16 row: f16 words of magnitude at most 448 with full 10-bit mantissas."""
+    words = []
+    for _ in range(k):
+        w = (rng.getrandbits(1) << 15) | (rng.randint(1, 23) << 10) | rng.getrandbits(10)
+        words.append(min(w & 0x7FFF, F.F16_448) | (w & 0x8000))
+    return b"".join(w.to_bytes(2, "little") for w in words)
 
 
 def e4m3_cell(v: Fraction) -> Fraction:
@@ -380,16 +358,46 @@ def e4m3_cell(v: Fraction) -> Fraction:
     return Fraction(2) ** (e - 3)
 
 
-def test_d3m_exact_algebra_and_amplitude():
-    """Before any rounding the three blocks multiply to X_q·W_qᵀ exactly, and every entry's amplitude covers one E4M3 cell
-    of itself and of its NCP partner, on the cast's grid (X-17d-3)."""
-    layer, k = F.D3m(), 128
+CELLS = [(law, route, copy) for law in ("d3s", "d3m") for route in ("xq", "y16") for copy in (True, False)]
+
+
+@pytest.mark.parametrize("law,route,copy", CELLS)
+def test_d3_family_prices_and_gamma(law, route, copy):
+    """Every cell is registered; its price is schedule M4's at Round 8 (D-3s drops the cell mask), and its certificate
+    gives Phase 17f's γ at 16,384³ with r = 1 (within the 0.27-unit chain share the red team does not count)."""
+    name = f"{law}-v0{'-y16' if route == 'y16' else ''}{'' if copy else '-decode'}"
+    s = get(f"fp8-is-h100-{name}")
+    assert s.forming.law == law and s.forming.route == route and s.forming.weight_copy == copy
+    act = Fraction(27281, 64) - (32 if law == "d3s" else 0)
+    assert s.forming.units == (act, 290 if copy else 322)
+    gamma = 1 - Fraction(399, 400) / F.FP8IS(s.forming, mnk_min=16384).certificate.omega
+    want = {("d3s", True): "0.940", ("d3s", False): "0.972", ("d3m", True): "0.972", ("d3m", False): "1.004"}[law, copy]
+    assert f"{float(100 * gamma):.3f}" == want
+    assert s.forming.tag == name.removesuffix("-decode")
+
+
+def noise_of(layer, h, stream, left, pi, inv):
+    amp = layer.amplitudes(h, inv if left else pi)
+    e = []
+    for l in range(len(h)):
+        t = F.F16_ONE | (int.from_bytes(stream[2 * l:2 * l + 2], "little") & 0x3FF)
+        e.append(f16_value(F.fp16.mul(amp[l], F.fp16.fma(F.F16_TWO_INV4, t, F.F16_MINUS_3_8))))
+    return [f16_value(w) for w in h], e, [f16_value(a) / 8 for a in amp]
+
+
+@pytest.mark.parametrize("law,route", [(law, route) for law in ("d3s", "d3m") for route in ("xq", "y16")])
+def test_d3_family_exact_algebra_and_amplitude(law, route):
+    """Before any rounding the three blocks multiply to h·wᵀ exactly, and every amplitude covers one E4M3 cell of the
+    entry and of its NCP partner, on the cast's grid (X-17d-3)."""
+    layer, k = F.D3Family(law, route), 128
     pi, inv = F.ncp_perm(k, layer.P_SEED)
-    rng = random.Random("d3m-algebra")
-    a, b = codes(rng, k, 0x7E), codes(rng, k, 0x7E)
+    rng = random.Random(f"{law}-{route}-algebra")
+    a = layer.parse(y16_row(rng, k) if route == "y16" else bytes(codes(rng, k, 0x7E)), k, True)
+    b = layer.parse(bytes(codes(rng, k, 0x7E)), k, False)
     ctx = ctx_of((64, k, 64))
-    x, e1, amp_a = d3m_noise(layer, a, F.xof("verity/pouw/fp8-is/d3m/E1", 2 * k, ctx.salt, 3, ctx.root_a, 5, 0), True, pi, inv)
-    y, f1, amp_b = d3m_noise(layer, b, F.xof("verity/pouw/fp8-is/d3m/F1", 2 * k, ctx.salt, 3, 5, 0), False, pi, inv)
+    x, e1, amp_a = noise_of(layer, a, F.xof(f"verity/pouw/fp8-is/{layer.tag}/E1", 2 * k, ctx.salt, 3, ctx.root_a, 5, 0),
+                            True, pi, inv)
+    y, f1, amp_b = noise_of(layer, b, F.xof(f"verity/pouw/fp8-is/{layer.tag}/F1", 2 * k, ctx.salt, 3, 5, 0), False, pi, inv)
     for l in range(k):
         assert amp_a[l] >= max(e4m3_cell(x[l]), e4m3_cell(x[inv[l]])) and amp_b[l] >= max(e4m3_cell(y[l]), e4m3_cell(y[pi[l]]))
     e2 = [e1[pi[l]] for l in range(k)]
@@ -398,14 +406,14 @@ def test_d3m_exact_algebra_and_amplitude():
     assert sum(sign * (x[l] + e[l]) * (y[l] + f[l]) for e, f, sign in blocks for l in range(k)) == sum(p * q for p, q in zip(x, y))
 
 
-def test_d3m_repairs_the_refuted_inputs_and_x_d3m_4():
-    """X-C2-B1's absorbed row, X-D1-1's spike and X-D3m-4's tiny column (one code 2^−9, the rest zero, as a per-tensor
-    scale would give) all give salt-dependent codes: the max law and the σ floor leave no free word."""
-    layer, k = F.D3m(), 4096
-    absorbed = [0x7E] + [0x61] * (32 * 14 - 1) + [0] * (k - 32 * 14)
-    tiny = [0x01] + [0] * (k - 1)
-    for row in (absorbed, tiny):
-        stacks = [layer.form(c, layer.noise(c), [row], [row], Tile((0,), (0,)))
+@pytest.mark.parametrize("law", ["d3s", "d3m"])
+def test_d3_family_repairs_the_refuted_inputs(law):
+    """X-C2-B1's absorbed row, X-D3m-4's tiny column (one code 2^−9, the rest zero) and X-D1-1's spike all give
+    salt-dependent codes: no free word."""
+    layer, k = F.D3Family(law), 4096
+    for row in ([0x7E] + [0x61] * (32 * 14 - 1) + [0] * (k - 32 * 14), [0x01] + [0] * (k - 1)):
+        h = layer.parse(bytes(row), k, True)
+        stacks = [layer.form(c, layer.noise(c), [h], [h], Tile((0,), (0,)))
                   for c in (ctx_of((64, k, 64), salt=bytes([s])) for s in range(3))]
         for blk in range(3):
             assert len({tuple(st.x[0][blk * k + 32:blk * k + 32 * 14]) for st in stacks}) == 3
@@ -414,56 +422,71 @@ def test_d3m_repairs_the_refuted_inputs_and_x_d3m_4():
     assert len({tuple(w for w, _ in run) for run in runs}) > 1
 
 
-def test_d3m_zero_rows_and_saturation():
-    """An all-zero row gets σ8 = max(f16(224/√k), 2^−6) and a near-zero useful output; a row of 448s saturates at ±448 and
-    never produces a NaN code."""
-    s, k = F.FP8IS(F.D3m(), mnk_min=16, tile=(2, 1)), 1024
-    zero, full = bytes(k), bytes([0x7E] * k)
-    rng = random.Random("d3m-zero")
+def test_d3s_zero_row_floor_and_saturation():
+    """D-3s's floor rms′ = max(rms, 2^−6) gives an all-zero row noise of one subnormal cell and a near-zero output; a row of
+    448s saturates at ±448 and never produces a NaN code."""
+    s, k = F.FP8IS(F.D3s(), mnk_min=16, tile=(2, 1)), 1024
+    rng = random.Random("d3s-zero")
     w = bytes(codes(rng, k, 0x7E))
     ctx = ctx_of((64, k, 64))
-    assert s.forming.sigma8([0] * k) == F.fp16.round_to_f16(False, 7, 0)          # 224/√1024 = 7
-    ops = s.encode(ctx, s.noise(ctx), [zero, full], [w], Tile((0, 1), (0,)))
-    assert len(set(ops.x[0][:k])) > 1                                             # zero entries carry noise
+    assert s.forming.floor([0] * k) == F.F16_2_POW_M6
+    ops = s.encode(ctx, s.noise(ctx), [bytes(k), bytes([0x7E] * k)], [w], Tile((0, 1), (0,)))
+    assert set(ops.x[0][:k]) - {0x00, 0x80} and set(ops.x[0][:k]) <= {0x00, 0x80, 0x01, 0x81}
     assert all(c & 0x7F != 0x7F for c in ops.x[1]) and (0x7E in ops.x[1] or 0xFE in ops.x[1])
     useful = s.useful(ctx, None, ops, s.checked(ctx, ops))
-    scale = sum(abs(value(c)) * 7 for c in w)
-    assert abs(useful[0][0]) < scale / 8
+    assert abs(useful[0][0]) < sum(abs(value(c)) for c in w) / 64
 
 
-def test_d3m_weight_noise_is_per_unit():
+def test_y16_rows_are_parsed_and_bounded():
+    layer, k = F.D3s(route="y16"), 64
+    ok = F.fp16.round_to_f16(False, 7, 6)                                       # 448
+    assert layer.parse(ok.to_bytes(2, "little") * k, k, True) == [ok] * k
+    for bad in (F.fp16.round_to_f16(False, 449, 0), 0x7C00, 0x7E00):            # above 448, +inf, NaN
+        assert layer.parse(bad.to_bytes(2, "little") * k, k, True) is None
+    assert layer.parse(bytes(k), k, True) is None                               # a Y16 row is 2k bytes
+    assert layer.parse(bytes(k), k, False) == [0] * k                           # weights stay E4M3 codes
+
+
+@pytest.mark.parametrize("law", ["d3s", "d3m"])
+def test_d3_family_weight_noise_is_per_unit(law):
     """r = 1 (X-D3-3): two units that share a weight form different weight columns."""
-    layer, k = F.D3m(), 128
-    rng = random.Random("d3m-units")
-    w, act = codes(rng, k, 0x7E), codes(rng, k, 0x7E)
-    one, two = ctx_of((64, k, 64)), Context(ctx_of((64, k, 64)).salt, Matmul(4, Shape(64, k, 64), 5),
-                                              ctx_of((64, k, 64)).root_a, ctx_of((64, k, 64)).root_b)
+    layer, k = F.D3Family(law), 128
+    rng = random.Random("d3-units")
+    w, act = layer.parse(bytes(codes(rng, k, 0x7E)), k, False), layer.parse(bytes(codes(rng, k, 0x7E)), k, True)
+    one = ctx_of((64, k, 64))
+    two = Context(one.salt, Matmul(4, Shape(64, k, 64), 5), one.root_a, one.root_b)
     assert layer.form(one, layer.noise(one), [act], [w], Tile((0,), (0,))).y != \
         layer.form(two, layer.noise(two), [act], [w], Tile((0,), (0,))).y
 
 
-def test_d3m_weight_copy_variants_share_the_checked_function():
-    rng = random.Random("d3m-copy")
+@pytest.mark.parametrize("law,route", [(law, route) for law in ("d3s", "d3m") for route in ("xq", "y16")])
+def test_d3_family_weight_copy_variants_share_the_checked_function(law, route):
+    rng = random.Random("d3-copy")
     k, tile = 128, Tile((0, 1), (0, 1))
-    a, b = [bytes(codes(rng, k, 0x7E)) for _ in range(2)], [bytes(codes(rng, k, 0x7E)) for _ in range(2)]
+    a = [y16_row(rng, k) if route == "y16" else bytes(codes(rng, k, 0x7E)) for _ in range(2)]
+    b = [bytes(codes(rng, k, 0x7E)) for _ in range(2)]
     ctx = ctx_of((64, k, 64))
     digests = []
-    for name in ("fp8-is-h100-d3m-v0", "fp8-is-h100-d3m-v0-decode"):
-        s = F.FP8IS(F.FORMINGS[name.removeprefix("fp8-is-h100-")](), mnk_min=16)
+    for copy in (True, False):
+        s = F.FP8IS(F.D3Family(law, route, copy), mnk_min=16)
         ops = s.encode(ctx, s.noise(ctx), a, b, tile)
         digests.append(s.digest(ctx, None, s.checked(ctx, ops)))
     assert digests[0] == digests[1]
 
 
-def test_d3m_useful_output_tracks_the_product():
-    s, k = F.FP8IS(F.D3m(), mnk_min=16, tile=(2, 2)), 512
-    rng = random.Random("d3m-useful")
-    a, b = [codes(rng, k, 0x6E) for _ in range(2)], [codes(rng, k, 0x6E) for _ in range(2)]
+@pytest.mark.parametrize("law,route", [(law, route) for law in ("d3s", "d3m") for route in ("xq", "y16")])
+def test_d3_family_useful_output_tracks_the_product(law, route):
+    s, k = F.FP8IS(F.D3Family(law, route), mnk_min=16, tile=(2, 2)), 512
+    rng = random.Random(f"{law}-{route}-useful")
+    a = [y16_row(rng, k) if route == "y16" else bytes(codes(rng, k, 0x6E)) for _ in range(2)]
+    b = [bytes(codes(rng, k, 0x6E)) for _ in range(2)]
     ctx, tile = ctx_of((64, k, 64)), Tile((0, 1), (0, 1))
-    ops = s.encode(ctx, s.noise(ctx), [bytes(r) for r in a], [bytes(r) for r in b], tile)
+    ops = s.encode(ctx, s.noise(ctx), a, b, tile)
     got = s.useful(ctx, None, ops, s.checked(ctx, ops))
+    xs = [[f16_value(w) for w in s.forming.parse(r, k, True)] for r in a]
+    ys = [[value(c) for c in r] for r in b]
     for i in range(2):
         for j in range(2):
-            want = sum(value(p) * value(q) for p, q in zip(a[i], b[j]))
-            bound = sum(abs(value(p) * value(q)) for p, q in zip(a[i], b[j]))
+            want = sum(p * q for p, q in zip(xs[i], ys[j]))
+            bound = sum(abs(p * q) for p, q in zip(xs[i], ys[j]))
             assert abs(Fraction(got[i][j]) - want) < bound / 8
