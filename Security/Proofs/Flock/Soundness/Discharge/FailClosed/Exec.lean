@@ -50,8 +50,8 @@ theorem flock_headline_exec_dec
     (hdraw : ∀ ω, DrawOk I dj mPts ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω))
     (τ : Strategy (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)))
     (hCR : ∀ hs : Scope I, LinkCRL ((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)) H512 enc512 leaf512
-      (Integrate.planAt hs.typed dj x₀) (Integrate.tabAt hs.typed dj x₀) ((rsAt hs.built hs.typed (hs.parse hh) dj x₀ (hs.load hh) hs.tables hs.scope (Reg := Reg)).binding
-        (rsAt_computes hs.built hs.typed (hs.parse hh) dj x₀ (hs.load hh) hs.tables hs.scope))
+      (Integrate.planAt hs.typed dj x₀) (Integrate.tabAt hs.typed dj x₀) ((rsAt hs.built hs.typed (hs.parse hh) dj x₀ (hs.load hh) hs.tables (hs.scope hh) (Reg := Reg)).binding
+        (rsAt_computes hs.built hs.typed (hs.parse hh) dj x₀ (hs.load hh) hs.tables (hs.scope hh)))
       (reg (simAuditOn H512 enc512 leaf512 (tablesAt hs.typed dj x₀) I wr (opnAt (tablesAt hs.typed dj x₀) I dj) dg
         (decAt (tablesAt hs.typed dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
         (decodesOn_exec hs.typed (hs.parse hh) hs.outNet dj x₀ _ wr wOP wLIG op_carries lig_carries (hs.tagsOk hh) hwr hdraw) τ))
@@ -71,8 +71,8 @@ theorem flock_headline_exec_dec
         K ≤ (((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)).wrong
           (Xpub {Layout.oneG} {Layout.zeroG}
             (XplurL ((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)) H512 enc512 leaf512 (Integrate.planAt hs.typed dj x₀)
-              (Integrate.tabAt hs.typed dj x₀) ((rsAt hs.built hs.typed (hs.parse hh) dj x₀ (hs.load hh) hs.tables hs.scope (Reg := Reg)).binding
-                (rsAt_computes hs.built hs.typed (hs.parse hh) dj x₀ (hs.load hh) hs.tables hs.scope))
+              (Integrate.tabAt hs.typed dj x₀) ((rsAt hs.built hs.typed (hs.parse hh) dj x₀ (hs.load hh) hs.tables (hs.scope hh) (Reg := Reg)).binding
+                (rsAt_computes hs.built hs.typed (hs.parse hh) dj x₀ (hs.load hh) hs.tables (hs.scope hh)))
               (reg (simAuditOn H512 enc512 leaf512 (tablesAt hs.typed dj x₀) I wr (opnAt (tablesAt hs.typed dj x₀) I dj) dg
                 (decAt (tablesAt hs.typed dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => [])
                 (fun _ _ b _ => capOfRoot b) N
@@ -90,10 +90,10 @@ theorem flock_headline_exec_dec
             (decodesOn_exec hs.typed (hs.parse hh) hs.outNet dj x₀ _ wr wOP wLIG op_carries lig_carries (hs.tagsOk hh) hwr hdraw) τ)) +
         ((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)).linkBoundE
           (L := Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) (Integrate.planAt hs.typed dj x₀) (Integrate.tabAt hs.typed dj x₀)
-          ((rsAt hs.built hs.typed (hs.parse hh) dj x₀ (hs.load hh) hs.tables hs.scope (Reg := Reg)).binding
-            (rsAt_computes hs.built hs.typed (hs.parse hh) dj x₀ (hs.load hh) hs.tables hs.scope)) k Rw M ρ t') := by
+          ((rsAt hs.built hs.typed (hs.parse hh) dj x₀ (hs.load hh) hs.tables (hs.scope hh) (Reg := Reg)).binding
+            (rsAt_computes hs.built hs.typed (hs.parse hh) dj x₀ (hs.load hh) hs.tables (hs.scope hh))) k Rw M ρ t') := by
   refine prob_scope (A := LiveAccepts I) (fun _ h => h.1) (fun _ h => h.2) _ _ _ _ fun hs => ?_
-  exact FlockSoundness.Discharge.HdecCor.flock_headline_exec_dec hs.built hs.typed (hs.parse hh) dj x₀ (hs.load hh) hs.tables hs.scope hs.outNet (hs.tagsOk hh) σs ks hks St hS Kd pop Lb src hA3 hk hRw hM hρ (hr hs) ht' K wr dg N hwr hdraw τ (hCR hs) (hKS hs)
+  exact FlockSoundness.Discharge.HdecCor.flock_headline_exec_dec hs.built hs.typed (hs.parse hh) dj x₀ (hs.load hh) hs.tables (hs.scope hh) hs.outNet (hs.tagsOk hh) σs ks hks St hS Kd pop Lb src hA3 hk hRw hM hρ (hr hs) ht' K wr dg N hwr hdraw τ (hCR hs) (hKS hs)
 
 /-- **One public-output non-ZK sampled session that flock-verify accepts is sound, at a decoder `hdec`.** `Integrate.flock_headline_exec` over `Verifies`. -/
 theorem flock_headline_exec
@@ -116,8 +116,8 @@ theorem flock_headline_exec
       (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop))
     (τ : Strategy (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)))
     (hCR : ∀ hs : Scope I, LinkCRL ((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)) H512 enc512 leaf512
-      (planAt hs.typed dj x₀) (Integrate.tabAt hs.typed dj x₀) ((rsAt hs.built hs.typed (hs.parse hh) dj x₀ (hs.load hh) hs.tables hs.scope (Reg := Reg)).binding
-        (rsAt_computes hs.built hs.typed (hs.parse hh) dj x₀ (hs.load hh) hs.tables hs.scope))
+      (planAt hs.typed dj x₀) (Integrate.tabAt hs.typed dj x₀) ((rsAt hs.built hs.typed (hs.parse hh) dj x₀ (hs.load hh) hs.tables (hs.scope hh) (Reg := Reg)).binding
+        (rsAt_computes hs.built hs.typed (hs.parse hh) dj x₀ (hs.load hh) hs.tables (hs.scope hh)))
       (reg (simAuditOn H512 enc512 leaf512 (tablesAt hs.typed dj x₀) I wr opn dg dec one fin capOf N (hdec hs) τ))
       (cont (simAuditOn H512 enc512 leaf512 (tablesAt hs.typed dj x₀) I wr opn dg dec one fin capOf N (hdec hs) τ)) k Rw M t')
     {qF qS : ℝ} (hKS : ∀ hs : Scope I, ∀ ω j, TableCRL execArith H512 enc512 leaf512
@@ -129,8 +129,8 @@ theorem flock_headline_exec
         K ≤ (((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)).wrong
           (Xpub {Layout.oneG} {Layout.zeroG}
             (XplurL ((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)) H512 enc512 leaf512 (planAt hs.typed dj x₀)
-              (Integrate.tabAt hs.typed dj x₀) ((rsAt hs.built hs.typed (hs.parse hh) dj x₀ (hs.load hh) hs.tables hs.scope (Reg := Reg)).binding
-        (rsAt_computes hs.built hs.typed (hs.parse hh) dj x₀ (hs.load hh) hs.tables hs.scope))
+              (Integrate.tabAt hs.typed dj x₀) ((rsAt hs.built hs.typed (hs.parse hh) dj x₀ (hs.load hh) hs.tables (hs.scope hh) (Reg := Reg)).binding
+        (rsAt_computes hs.built hs.typed (hs.parse hh) dj x₀ (hs.load hh) hs.tables (hs.scope hh)))
               (reg (simAuditOn H512 enc512 leaf512 (tablesAt hs.typed dj x₀) I wr opn dg dec one fin capOf N (hdec hs) τ))
               (cont (simAuditOn H512 enc512 leaf512 (tablesAt hs.typed dj x₀) I wr opn dg dec one fin capOf N (hdec hs) τ))
               k Rw))).card)
@@ -140,10 +140,10 @@ theorem flock_headline_exec
           (reg (simAuditOn H512 enc512 leaf512 (tablesAt hs.typed dj x₀) I wr opn dg dec one fin capOf N (hdec hs) τ)) +
         ((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)).linkBoundE
           (L := Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) (planAt hs.typed dj x₀) (Integrate.tabAt hs.typed dj x₀)
-          ((rsAt hs.built hs.typed (hs.parse hh) dj x₀ (hs.load hh) hs.tables hs.scope (Reg := Reg)).binding
-        (rsAt_computes hs.built hs.typed (hs.parse hh) dj x₀ (hs.load hh) hs.tables hs.scope)) k Rw M ρ t') := by
+          ((rsAt hs.built hs.typed (hs.parse hh) dj x₀ (hs.load hh) hs.tables (hs.scope hh) (Reg := Reg)).binding
+        (rsAt_computes hs.built hs.typed (hs.parse hh) dj x₀ (hs.load hh) hs.tables (hs.scope hh))) k Rw M ρ t') := by
   refine prob_scope (A := LiveAccepts I) (fun _ h => h.1) (fun _ h => h.2) _ _ _ _ fun hs => ?_
-  exact FlockSoundness.Discharge.Integrate.flock_headline_exec hs.built hs.typed (hs.parse hh) dj x₀ (hs.load hh) hs.tables hs.scope σs ks hks St hS Kd pop Lb src hA3 hk hRw hM hρ (hr hs) ht' K wr opn dg dec one fin capOf N (hdec hs) τ (hCR hs) (hKS hs)
+  exact FlockSoundness.Discharge.Integrate.flock_headline_exec hs.built hs.typed (hs.parse hh) dj x₀ (hs.load hh) hs.tables (hs.scope hh) σs ks hks St hS Kd pop Lb src hA3 hk hRw hM hρ (hr hs) ht' K wr opn dg dec one fin capOf N (hdec hs) τ (hCR hs) (hKS hs)
 
 end Public
 
@@ -167,8 +167,8 @@ theorem flock_headline_exec_hidden_dec
     (hdraw : ∀ ω, DrawOkH I dj mPts ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω))
     (τ : Strategy (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)))
     (hCR : ∀ hs : Scope I, LinkCRL ((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)) H512 enc512 leaf512
-      (planAtH dj x₀) (tabAtH dj x₀) ((rsAtH hs.typed (hs.parseH hh) hs.scope dj x₀ hs.built (hs.loadH hh) hs.tables (Reg := Reg)).binding
-        (rsAtH_computes hs.typed (hs.parseH hh) hs.scope dj x₀ hs.built (hs.loadH hh) hs.tables))
+      (planAtH dj x₀) (tabAtH dj x₀) ((rsAtH hs.typed (hs.parseH hh) hs.scopeH dj x₀ hs.built (hs.loadH hh) hs.tables (Reg := Reg)).binding
+        (rsAtH_computes hs.typed (hs.parseH hh) hs.scopeH dj x₀ hs.built (hs.loadH hh) hs.tables))
       (reg (simAuditOn H512 enc512 leaf512 (tablesAtH dj x₀) I wr (opnAtH (tablesAtH dj x₀) I dj) dg
         (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
         (decodesOn_execH hs.typed (hs.parseH hh) hs.outNet dj x₀ _ wr (hs.tagsOkH hh) hwr hdraw) τ))
@@ -188,8 +188,8 @@ theorem flock_headline_exec_hidden_dec
         K ≤ (((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)).wrong
           (Xpub {Layout.oneG} {Layout.zeroG}
             (XplurL ((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)) H512 enc512 leaf512 (planAtH dj x₀)
-              (tabAtH dj x₀) ((rsAtH hs.typed (hs.parseH hh) hs.scope dj x₀ hs.built (hs.loadH hh) hs.tables (Reg := Reg)).binding
-                (rsAtH_computes hs.typed (hs.parseH hh) hs.scope dj x₀ hs.built (hs.loadH hh) hs.tables))
+              (tabAtH dj x₀) ((rsAtH hs.typed (hs.parseH hh) hs.scopeH dj x₀ hs.built (hs.loadH hh) hs.tables (Reg := Reg)).binding
+                (rsAtH_computes hs.typed (hs.parseH hh) hs.scopeH dj x₀ hs.built (hs.loadH hh) hs.tables))
               (reg (simAuditOn H512 enc512 leaf512 (tablesAtH dj x₀) I wr (opnAtH (tablesAtH dj x₀) I dj) dg
                 (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => [])
                 (fun _ _ b _ => capOfRoot b) N (decodesOn_execH hs.typed (hs.parseH hh) hs.outNet dj x₀ _ wr (hs.tagsOkH hh) hwr hdraw) τ))
@@ -205,10 +205,10 @@ theorem flock_headline_exec_hidden_dec
             (decodesOn_execH hs.typed (hs.parseH hh) hs.outNet dj x₀ _ wr (hs.tagsOkH hh) hwr hdraw) τ)) +
         ((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)).linkBoundE
           (L := Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) (planAtH dj x₀) (tabAtH dj x₀)
-          ((rsAtH hs.typed (hs.parseH hh) hs.scope dj x₀ hs.built (hs.loadH hh) hs.tables (Reg := Reg)).binding
-            (rsAtH_computes hs.typed (hs.parseH hh) hs.scope dj x₀ hs.built (hs.loadH hh) hs.tables)) k Rw M ρ t') := by
+          ((rsAtH hs.typed (hs.parseH hh) hs.scopeH dj x₀ hs.built (hs.loadH hh) hs.tables (Reg := Reg)).binding
+            (rsAtH_computes hs.typed (hs.parseH hh) hs.scopeH dj x₀ hs.built (hs.loadH hh) hs.tables)) k Rw M ρ t') := by
   refine prob_scope (A := LiveAccepts I) (fun _ h => h.1) (fun _ h => h.2) _ _ _ _ fun hs => ?_
-  exact FlockSoundness.Discharge.HdecCor.flock_headline_exec_hidden_dec hs.typed (hs.parseH hh) hs.scope dj x₀ hs.built (hs.loadH hh) hs.tables hs.outNet (hs.tagsOkH hh) σs ks hks St hS Kd pop Lb src hA3 hk hRw hM hρ hr ht' K wr dg N hwr hdraw τ (hCR hs) (hKS hs)
+  exact FlockSoundness.Discharge.HdecCor.flock_headline_exec_hidden_dec hs.typed (hs.parseH hh) hs.scopeH dj x₀ hs.built (hs.loadH hh) hs.tables hs.outNet (hs.tagsOkH hh) σs ks hks St hS Kd pop Lb src hA3 hk hRw hM hρ hr ht' K wr dg N hwr hdraw τ (hCR hs) (hKS hs)
 
 /-- **One hidden-output non-ZK sampled session that flock-verify accepts is sound, at a decoder `hdec`.** `HiddenExec.flock_headline_exec_hidden` over `Verifies`. -/
 theorem flock_headline_exec_hidden
@@ -230,8 +230,8 @@ theorem flock_headline_exec_hidden
       (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop))
     (τ : Strategy (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)))
     (hCR : ∀ hs : Scope I, LinkCRL ((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)) H512 enc512 leaf512
-      (planAtH dj x₀) (tabAtH dj x₀) ((rsAtH hs.typed (hs.parseH hh) hs.scope dj x₀ hs.built (hs.loadH hh) hs.tables (Reg := Reg)).binding
-        (rsAtH_computes hs.typed (hs.parseH hh) hs.scope dj x₀ hs.built (hs.loadH hh) hs.tables))
+      (planAtH dj x₀) (tabAtH dj x₀) ((rsAtH hs.typed (hs.parseH hh) hs.scopeH dj x₀ hs.built (hs.loadH hh) hs.tables (Reg := Reg)).binding
+        (rsAtH_computes hs.typed (hs.parseH hh) hs.scopeH dj x₀ hs.built (hs.loadH hh) hs.tables))
       (reg (simAuditOn H512 enc512 leaf512 (tablesAtH dj x₀) I wr opn dg dec one fin capOf N hdec τ))
       (cont (simAuditOn H512 enc512 leaf512 (tablesAtH dj x₀) I wr opn dg dec one fin capOf N hdec τ)) k Rw M t')
     {qF qS : ℝ} (hKS : ∀ ω j, TableCRL execArith H512 enc512 leaf512
@@ -243,8 +243,8 @@ theorem flock_headline_exec_hidden
         K ≤ (((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)).wrong
           (Xpub {Layout.oneG} {Layout.zeroG}
             (XplurL ((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)) H512 enc512 leaf512 (planAtH dj x₀)
-              (tabAtH dj x₀) ((rsAtH hs.typed (hs.parseH hh) hs.scope dj x₀ hs.built (hs.loadH hh) hs.tables (Reg := Reg)).binding
-                (rsAtH_computes hs.typed (hs.parseH hh) hs.scope dj x₀ hs.built (hs.loadH hh) hs.tables))
+              (tabAtH dj x₀) ((rsAtH hs.typed (hs.parseH hh) hs.scopeH dj x₀ hs.built (hs.loadH hh) hs.tables (Reg := Reg)).binding
+                (rsAtH_computes hs.typed (hs.parseH hh) hs.scopeH dj x₀ hs.built (hs.loadH hh) hs.tables))
               (reg (simAuditOn H512 enc512 leaf512 (tablesAtH dj x₀) I wr opn dg dec one fin capOf N hdec τ))
               (cont (simAuditOn H512 enc512 leaf512 (tablesAtH dj x₀) I wr opn dg dec one fin capOf N hdec τ))
               k Rw))).card)
@@ -254,10 +254,10 @@ theorem flock_headline_exec_hidden
           (reg (simAuditOn H512 enc512 leaf512 (tablesAtH dj x₀) I wr opn dg dec one fin capOf N hdec τ)) +
         ((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)).linkBoundE
           (L := Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) (planAtH dj x₀) (tabAtH dj x₀)
-          ((rsAtH hs.typed (hs.parseH hh) hs.scope dj x₀ hs.built (hs.loadH hh) hs.tables (Reg := Reg)).binding
-            (rsAtH_computes hs.typed (hs.parseH hh) hs.scope dj x₀ hs.built (hs.loadH hh) hs.tables)) k Rw M ρ t') := by
+          ((rsAtH hs.typed (hs.parseH hh) hs.scopeH dj x₀ hs.built (hs.loadH hh) hs.tables (Reg := Reg)).binding
+            (rsAtH_computes hs.typed (hs.parseH hh) hs.scopeH dj x₀ hs.built (hs.loadH hh) hs.tables)) k Rw M ρ t') := by
   refine prob_scope (A := LiveAccepts I) (fun _ h => h.1) (fun _ h => h.2) _ _ _ _ fun hs => ?_
-  exact FlockSoundness.Discharge.HiddenExec.flock_headline_exec_hidden hs.typed (hs.parseH hh) hs.scope dj x₀ hs.built (hs.loadH hh) hs.tables σs ks hks St hS Kd pop Lb src hA3 hk hRw hM hρ hr ht' K wr opn dg dec one fin capOf N hdec τ (hCR hs) hKS
+  exact FlockSoundness.Discharge.HiddenExec.flock_headline_exec_hidden hs.typed (hs.parseH hh) hs.scopeH dj x₀ hs.built (hs.loadH hh) hs.tables σs ks hks St hS Kd pop Lb src hA3 hk hRw hM hρ hr ht' K wr opn dg dec one fin capOf N hdec τ (hCR hs) hKS
 
 end Hidden
 
