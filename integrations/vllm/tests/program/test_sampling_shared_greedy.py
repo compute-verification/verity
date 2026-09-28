@@ -51,6 +51,7 @@ def test_the_same_circuit_with_the_flag_merged(old, new, V):
 
 
 @pytest.mark.parametrize("old,new", PAIRS)
+@pytest.mark.slow
 def test_bit_equal_on_every_temperature_pattern(old, new):
     rng = random.Random(0x5EED)
     fo, fn = bind(old, V=2), bind(new, V=2)

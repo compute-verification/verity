@@ -35,6 +35,7 @@ def _split(path):
 
 
 @pytest.mark.parametrize("sid,rows", [("rope-head/d64/neox-bf16", {"unit.txt"}), ("gemm-coordinate/k64/sm80-mma-bf16", None)])
+@pytest.mark.slow
 def test_typed_staging(sid, rows, tmp_path):
     low, flat, typed = _staged(sid, tmp_path)
     text = (typed.parent / "circuit.txt").read_text()

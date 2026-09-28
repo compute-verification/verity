@@ -107,6 +107,7 @@ def test_host_windows_slices_like_a_tensor():
         sparse[500:756]                                                    # straddles into the missing window
 
 
+@pytest.mark.slow
 def test_window_leaf_count_bookkeeping():
     # what `_commit_step_windowed` asserts: per-window padded chunks sum to the step's padded chunks for any W (multiple of 256)
     C = 256

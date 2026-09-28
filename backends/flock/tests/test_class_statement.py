@@ -31,6 +31,7 @@ def units():
     return PU.partition_units(Program(bind(b1.Serve, C=TG.TINY, LP=3, STEPS=2)), "q-word")
 
 
+@pytest.mark.slow
 def test_table_free_classes_compose_and_prove(units, tmp_path: Path):
     key = PU.derive(PU.SOURCE, PU.DOMAIN, {"program": "test", "seed": 0})
     shared = CS.broadcast_params(units)
