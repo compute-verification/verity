@@ -116,29 +116,32 @@ def gate(repo: Path, ref: str, into: str, store, tool: str = "check", log=print)
 
 ZERO = "0" * 40
 HOOK = """#!/bin/sh
-# installed by `research merge`: a push to {into} needs, for every commit it adds, a passing `{tool}` attempt of that tree
-root=$(git rev-parse --show-toplevel)
-PYTHONPATH="$root/tools/research/src${{PYTHONPATH:+:$PYTHONPATH}}" exec {python} -m research merge --guard-push --into {into} --tool {tool}
+# installed by `research merge`: a push that moves {into} needs a passing `{tool}` attempt of the tree it lands; other pushes pass
+lines=$(cat)
+printf '%s\\n' "$lines" | awk '$3 == "refs/heads/{into}" {{ f = 1 }} END {{ exit !f }}' || exit 0
+if [ ! -x {python} ] || [ ! -d {src} ]; then
+  echo "research merge: push guard: {python} or {src} is gone; refusing the push to {into} (re-run research merge to reinstall)" >&2
+  exit 1
+fi
+printf '%s\\n' "$lines" | PYTHONPATH={src} exec {python} -m research merge --guard-push --into {into} --tool {tool}
 """
 
 
 def unchecked_pushes(repo: Path, lines: list[str], store, into: str = "main", tool: str = "check") -> list[str]:
-    """The commits a push (git's pre-push lines: `local_ref local_sha remote_ref remote_sha`) would add to ``into`` without a
-    passing ``tool`` attempt of their tree: each first-parent commit passes on its own attempt, or, as a `research merge` commit
-    does, on its merged parent's when the two trees are equal."""
+    """The tips a push (git's pre-push lines: `local_ref local_sha remote_ref remote_sha`) would move ``into`` to without a
+    passing ``tool`` attempt of their tree, the merge gate's rule: the tip's own attempt (a `--train` fast-forward), or, as a
+    `research merge` commit has, its merged parent's when the two trees are equal."""
     bad = []
     for line in lines:
         f = line.split()
         if len(f) != 4 or f[2] != f"refs/heads/{into}" or f[1] == ZERO:
             continue
-        span = f[1] if f[3] == ZERO else f"{f[3]}..{f[1]}"
-        for c in _git(repo, "rev-list", "--first-parent", span).stdout.split():
-            tree = _git(repo, "rev-parse", f"{c}^{{tree}}").stdout.strip()
-            parents = _git(repo, "rev-list", "--parents", "-n", "1", c).stdout.split()[1:]
-            ok = any(_git(repo, "rev-parse", f"{x}^{{tree}}").stdout.strip() == tree and passing(store, x, tool, tree=tree)
-                     for x in [c, *parents[1:]])
-            if not ok:
-                bad.append(c)
+        tip = f[1]
+        tree = _git(repo, "rev-parse", f"{tip}^{{tree}}").stdout.strip()
+        parents = _git(repo, "rev-list", "--parents", "-n", "1", tip).stdout.split()[1:]
+        if not any(_git(repo, "rev-parse", f"{x}^{{tree}}").stdout.strip() == tree and passing(store, x, tool, tree=tree)
+                   for x in [tip, *parents[1:]]):
+            bad.append(tip)
     return bad
 
 
@@ -150,7 +153,8 @@ def install_push_guard(repo: Path, into: str = "main", tool: str = "check") -> P
     if hook.exists():
         return None
     hook.parent.mkdir(parents=True, exist_ok=True)
-    hook.write_text(HOOK.format(into=into, tool=tool, python=sys.executable))
+    src = Path(__file__).resolve().parents[1]
+    hook.write_text(HOOK.format(into=into, tool=tool, python=shlex.quote(sys.executable), src=shlex.quote(str(src))))
     hook.chmod(0o755)
     return hook
 
@@ -418,7 +422,7 @@ def main(argv: list[str]) -> int:
         bad = unchecked_pushes(repo, sys.stdin.read().splitlines(), LocalStore(a.store), a.into, a.tool)
         for c in bad:
             print(f"research merge: refused push: {c[:12]} would reach {a.into} with no passing `{a.tool}` attempt of its tree; "
-                  "land it with `research merge`", file=sys.stderr)
+                  "land it with `research merge` (the hook fails closed: `git push --no-verify` only with root's yes)", file=sys.stderr)
         return 1 if bad else 0
     if not a.sweep and not a.dry_run and (hook := install_push_guard(repo, a.into, a.tool)):
         print(f"research merge: installed the push guard {hook}", file=sys.stderr)

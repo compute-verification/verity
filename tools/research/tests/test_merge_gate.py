@@ -254,3 +254,32 @@ def test_the_push_guard_refuses_a_main_commit_no_check_passed_and_allows_a_check
     assert unchecked_pushes(main, [f"refs/heads/other {stray} refs/heads/other {ZERO}"], store) == []   # only main is guarded
     monkeypatch.setattr("sys.stdin", io.StringIO(f"refs/heads/main {stray} refs/heads/main {base}\n"))
     assert merge_main(["--guard-push"]) == 1 and "refused push" in capsys.readouterr().err
+
+
+def test_the_push_guard_allows_a_train_fast_forward_and_its_hook_ignores_other_branches(tmp_path, monkeypatch):
+    """ci's case: a `--train` fast-forward lands the checked tip over prep merges nobody checked one by one; and infra's: an
+    older worktree's push to a lane branch must pass without the guard starting at all."""
+    from research.merge import ZERO, install_push_guard, unchecked_pushes
+    from research.store.local import LocalStore
+
+    main, feat, _ = _repos(tmp_path)
+    base = _git(main, "rev-parse", "HEAD")
+    for name in ("prep-a", "prep-b"):                                             # the candidate: base + two prep commits
+        (feat / f"{name}.txt").write_text(name + "\n")
+        _git(feat, "add", "-A")
+        _git(feat, "commit", "-q", "-m", name)
+    tip = _git(feat, "rev-parse", "HEAD")
+    assert _record(tmp_path, feat, monkeypatch, "true") == 0                      # only the tip was checked
+    assert unchecked_pushes(main, [f"refs/heads/main {tip} refs/heads/main {base}"], LocalStore()) == []
+    hook = install_push_guard(main)
+    env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
+    lane = subprocess.run([str(hook)], input=f"refs/heads/lane {tip} refs/heads/lane {ZERO}\n", text=True, cwd=main, env=env,
+                          capture_output=True)
+    assert lane.returncode == 0 and lane.stderr == ""
+    (main / "stray.txt").write_text("x\n")
+    _git(main, "add", "stray.txt")
+    _git(main, "commit", "-q", "-m", "stray")
+    stray = _git(main, "rev-parse", "HEAD")
+    pushed = subprocess.run([str(hook)], input=f"refs/heads/main {stray} refs/heads/main {base}\n", text=True, cwd=main,
+                            env=env, capture_output=True)
+    assert pushed.returncode == 1 and "refused push" in pushed.stderr
