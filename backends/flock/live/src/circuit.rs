@@ -61,13 +61,22 @@ pub const IN_RANGE_REGIONS: usize = 1024;
 pub const IN_RANGE_M_PTS: usize = 64;
 pub const M_MAX: usize = 35;
 
-/// A circuit file's part of `Stmt.InRange`: its block size and its public regions.
-pub fn circuit_in_range(k_log: usize, regions: usize) -> Result<(), String> {
+/// A circuit file's part of what the pinned table-soundness theorems assume: its block size and the number of its public
+/// regions (`Stmt.InRange`), and each region's free bits distinct (`LinkLayout`: a region is a subcube, one coordinate per
+/// free bit).
+pub fn circuit_in_range(k_log: usize, regions: &[RegionShape]) -> Result<(), String> {
     if k_log > IN_RANGE_K_LOG {
         return Err(format!("k_log {k_log}: outside the proved range (Stmt.InRange: k_log <= {IN_RANGE_K_LOG})"));
     }
-    if regions > IN_RANGE_REGIONS {
-        return Err(format!("{regions} public regions: outside the proved range (Stmt.InRange: at most {IN_RANGE_REGIONS})"));
+    if regions.len() > IN_RANGE_REGIONS {
+        return Err(format!("{} public regions: outside the proved range (Stmt.InRange: at most {IN_RANGE_REGIONS})", regions.len()));
+    }
+    for r in regions {
+        let mut free = r.free.clone();
+        free.sort_unstable();
+        if free.windows(2).any(|p| p[0] == p[1]) {
+            return Err(format!("{:?}: its free bits are not distinct (LinkLayout: one coordinate per free bit)", r.region));
+        }
     }
     Ok(())
 }
@@ -482,7 +491,7 @@ impl Composite {
             lookups: lookups_fast.into_iter().collect(),
         };
         c.check()?;
-        circuit_in_range(c.k_log, Stmt::regions(&c)?.len())?;
+        circuit_in_range(c.k_log, &Stmt::regions(&c)?)?;
         Ok(c)
     }
 
@@ -1855,9 +1864,14 @@ mod tests {
 
     #[test]
     fn statements_outside_the_proved_range_are_refused() {
-        assert!(circuit_in_range(IN_RANGE_K_LOG, IN_RANGE_REGIONS).is_ok());
-        assert!(circuit_in_range(IN_RANGE_K_LOG + 1, 1).unwrap_err().contains("Stmt.InRange"));
-        assert!(circuit_in_range(20, IN_RANGE_REGIONS + 1).unwrap_err().contains("Stmt.InRange"));
+        let region = |free: Vec<usize>| RegionShape { region: Region::Out, free, mask: 0, fixed: 0 };
+        let many = |n: usize| (0..n).map(|i| region(vec![i % 20, 20])).collect::<Vec<_>>();
+        assert!(circuit_in_range(IN_RANGE_K_LOG, &many(IN_RANGE_REGIONS)).is_ok());
+        assert!(circuit_in_range(IN_RANGE_K_LOG + 1, &many(1)).unwrap_err().contains("Stmt.InRange"));
+        assert!(circuit_in_range(20, &many(IN_RANGE_REGIONS + 1)).unwrap_err().contains("Stmt.InRange"));
+        // a region's two bit ranges overlapping: bits 8 and 9 twice (as [bits(0, 10), bits(8, 4)] would be)
+        let overlap = region([(0..10).collect::<Vec<_>>(), (8..12).collect()].concat());
+        assert!(circuit_in_range(20, &[region((0..14).collect()), overlap]).unwrap_err().contains("LinkLayout"));
         assert!(shape_in_range(M_MAX, PT_LOCAL + M_MAX - IN_RANGE_K_LOG).is_ok());
         assert!(shape_in_range(M_MAX + 1, PT_LOCAL).is_err());
         assert!(shape_in_range(30, IN_RANGE_M_PTS + 1).unwrap_err().contains("Stmt.InRange"));
