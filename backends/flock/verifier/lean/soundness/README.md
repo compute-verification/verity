@@ -134,6 +134,15 @@ link term per audit.
   committed to), or `collide` of the two openings is a SHA-512 collision (`Layout.registered_weights`; from
   `HmRowComputes` for rows, `HmRows.registered_weights_hm96`; for the message the audit's extractor settles on,
   `registered_weights_extracted`).
+- **Registered reads** (`Registered/`; PROTOCOL.md §16.10). A row a session reads from a value registered before opens
+  the registered root the verifier holds, at the position the verifier's program reads (`Flock.Registered.check_ok`, in
+  the verifier's package). Two different leaves the verifier accepts at one position under one root give an explicit
+  SHA-512 collision (`TwoOpenings.collides`, from `Flock.Registered.opensLeaf_binding`), at most `q²/2^513` likely under
+  `cr/sha-512` (`TwoOpenings.conflict_strict`). Where the check holds, a registered read's leaf is the registrant's, and
+  the row a satisfying witness holds there is the row the registrant committed, or SHA-512 collides (`Reads.regLeaf_eq`,
+  `Reads.registered_weights`). `flock_e2e_drawn_hm96_reads` and `flock_e2e_count_hm96_reads` add to the end-to-end
+  bounds the event that a registered read's leaf under the prover's registration is not the registrant's, at
+  `δ_reg = qR²/2^513` (`Reads.prob_off_le`).
 
 ### 1.4 Status
 
