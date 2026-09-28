@@ -48,6 +48,9 @@ ArkLib (`README.md` §1.6; watch entries `A1-johnson-mca` and `udr-mca`).
     - the rows at its constant read the pin, as every slot's constant is wired to it (spec §16.1).
   - A unit's input columns on one gate also carry one value in every satisfying witness (`UnitPlace.aliased`): they
     copy one source's position, or forced-zero rows.
+  - **Proved from the executable's accept step** for `hm96-sha512/row/v1` statements (`placement_of_setupH`,
+    `unitPlace_of_setupH`; `README.md` §1.5). Open: which instance a drawn unit is (its block and VU), and `aliased`
+    from the flat statement's copies, which `unitPlace_of_setupH` takes as a hypothesis (`Layout.Aliased`).
 
 **The audit layer's named hypotheses** (`Prop`s taken as hypotheses; no `axiom`; the theorems are in
 `FlockSoundness/Audit/README.md`):
@@ -68,7 +71,7 @@ before the session's first coin, not bounds state by state.
 | Named at the compiled layer | Meaning | Discharged by |
 |---|---|---|
 | `ExtractionAnalysis.LinkSound` (`analysisB`, `analysisC`, `analysisBE`) | `δ_link`: extraction succeeds, but every close satisfying candidate decodes, on the unit's committed wires, to values other than the committed transcript's | for `analysisBE`: `flock_batched_linkSoundE`, under A2 for each commit string's finder and `ValueBinding` (named; the `hm96` layout discharges it); composed in `flock_batched_count_linked`, `_drawn_linked` (`_placed`: from `UnitPlace`) |
-| `Partition.LoweringSoundB`, `Partition.LoweringSoundC` | a message packing a witness that satisfies the statement of a drawn unit's table decodes, for that unit, to values on which it is correct | `loweringSoundB_of_place`, `loweringSoundC_of_place` from each drawn unit's `UnitPlace` (`lowering_sound`, `README.md` §1.5), given the statement builder's `Placement` and `aliased` (level 3) and L1 |
+| `Partition.LoweringSoundB`, `Partition.LoweringSoundC` | a message packing a witness that satisfies the statement of a drawn unit's table decodes, for that unit, to values on which it is correct | `loweringSoundB_of_place`, `loweringSoundC_of_place` from each drawn unit's `UnitPlace` (`lowering_sound`, `README.md` §1.5), given the statement builder's `Placement` and `aliased` (level 3) and L1. `unitPlace_of_setupH` gives it from `Stmt.setupH`, given the unit's instance in the audit circuit and `aliased` |
 
 ## Cryptographic assumptions and coins
 

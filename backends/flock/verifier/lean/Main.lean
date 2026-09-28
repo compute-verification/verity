@@ -238,6 +238,33 @@ def statementCmd (args : List String) : IO UInt32 := do
     return 0
   | .error e => IO.println s!"setup: {e}"; return 1
 
+/-- `region-words [--statement ID] --circuit F --public F [--delta Q,COL]...`: the region-word check
+(`HmRow.checkRegionWords`) on an `hm96-sha512` statement, each `--delta` entry `(Q, COL)` added to both Δs. One
+`REGIONWORDS` line: the partial regions' shared columns, and the refusal if any. -/
+def regionWordsCmd (args : List String) : IO UInt32 := do
+  let some tags := Tags.find? ((argOf args "--statement").getD Tags.circuit.name)
+    | IO.eprintln s!"unknown statement; known: {Tags.all.map (·.name)}"; return 2
+  let (circuitB, pubB, _, tables) ← match ← statementInputs args with
+    | .ok x => pure x
+    | .error e => IO.eprintln s!"region-words inputs: {e}"; return 2
+  let extra := (args.zip args.tail).filterMap fun (k, v) => if k != "--delta" then none else
+    match (v.splitOn ",").map String.toNat? with
+    | [some q, some col] => some (q, col)
+    | _ => none
+  let res : V Nat := do
+    let c ← HmRow.parse tags circuitB tables
+    let pub ← HmRow.loadPublic tags c pubB
+    let pin ← HmRow.pin c
+    let (da, db) := HmRow.delta c pin
+    let regions ← HmRow.regions c pub
+    HmRow.checkRegionWords c (da ++ extra.toArray) (db ++ extra.toArray) regions
+    return (HmRow.sharedColumns regions).size
+  let line := match res with
+    | .ok n => Lean.Json.mkObj [("ok", Lean.Json.bool true), ("shared", Lean.toJson n)]
+    | .error e => Lean.Json.mkObj [("ok", Lean.Json.bool false), ("error", Lean.Json.str e)]
+  IO.println s!"REGIONWORDS {line.compress}"
+  return (if (line.getObjValAs? Bool "ok").toOption.getD false then 0 else 1)
+
 /-- `merkle-test FILE`: lines `scheme c d lanes positions rows siblings cap expect` (lists comma-separated, hex; `rows` as
 32-hex F128 words joined by `.` within a row); `expect` 1 = opens, 0 = rejected. -/
 def merkleTest (path : String) : IO UInt32 := do
@@ -281,6 +308,21 @@ def hm96Test (path : String) (h : Hm96 := Hm96.sha256) : IO UInt32 := do
   IO.println s!"hm96-test: {n} cases, {bad} failures"
   return (if bad == 0 then 0 else 1)
 
+/-- `net-check FILE...`: each file as one `flock-ir-unit/v2` expanded circuit through `Net.parse` (its port groups, input
+rows, constant row and row order); one `NETCHECK {"file", "ok", "error"}` line per file. -/
+def netCheckCmd (paths : List String) : IO UInt32 := do
+  let mut all := true
+  for path in paths do
+    let text ← try IO.FS.readFile path catch _ => pure ""
+    let lines := (text.splitOn "\n").toArray
+    let lines := if lines.back? == some "" then lines.pop else lines
+    let (ok, err) := match Net.parse lines with
+      | .ok _ => (true, "")
+      | .error e => (false, e)
+    all := all && ok
+    IO.println s!"NETCHECK {(Lean.Json.mkObj [("file", Lean.Json.str path), ("ok", Lean.Json.bool ok), ("error", Lean.Json.str err)]).compress}"
+  return (if all then 0 else 1)
+
 /-- `unit-cut FILE...`: the partition invariant (`Flock.Partition.validate`) on each cut, one `CUT` line per file. -/
 def unitCutCmd (paths : List String) : IO UInt32 := do
   let mut all := true
@@ -298,6 +340,38 @@ def unitCutCmd (paths : List String) : IO UInt32 := do
     all := all && (line.getObjValAs? Bool "ok").toOption.getD false
     IO.println s!"CUT {line.compress}"
   return (if all then 0 else 1)
+
+/-- `typed-expand FILE [--out F]`: a `verity/flock-circuit/types` file (item 1e) parsed as `verify` parses it, its unit's
+rows derived (`HmRow.parseTyped`). One `TYPED` line: the circuits, the unit's rows, and the file's SHA-512 and class. With
+`--out`, the file with the derived rows as its `CIRCUIT unit` section (`Typed.expand`). -/
+def typedExpandCmd (args : List String) : IO UInt32 := do
+  let some path := args.head? | IO.eprintln "typed-expand FILE [--out F]"; return 2
+  let bytes ← IO.FS.readBinFile path
+  let tags := Tags.circuitTypes
+  let line ← match HmRow.parseTyped tags bytes with
+    | .error e => pure (Lean.Json.mkObj [("ok", Lean.Json.bool false), ("error", Lean.Json.str e)])
+    | .ok c =>
+      if let some out := argOf args "--out" then
+        if let .ok ex := Typed.expand tags bytes then IO.FS.writeBinFile out ex
+      let u := c.nets[c.unitNet]!.2
+      pure (Lean.Json.mkObj [("ok", Lean.Json.bool true), ("name", Lean.Json.str c.name),
+        ("nets", Lean.toJson (c.nets.map (·.1))), ("unit_useful", Lean.toJson u.useful),
+        ("sha512", Lean.Json.str (hexOf c.sha)), ("class", Lean.Json.str (hexOf c.classSha))])
+  IO.println s!"TYPED {line.compress}"
+  return (if (line.getObjValAs? Bool "ok").toOption.getD false then 0 else 1)
+
+
+/-- `typed-rows FILE [--tables DIR] --out DIR`: a typed template's rows as the verifier derives them, through
+`deriveChecked` with its tables held (`Typed.rows`), written in the writer's `rows/` formats. -/
+def typedRowsCmd (args : List String) : IO UInt32 := do
+  let (some path, some out) := (args.head?, argOf args "--out") | IO.eprintln "typed-rows FILE [--tables DIR] --out DIR"; return 2
+  match Typed.rows Tags.circuitTypes (← IO.FS.readBinFile path) (← readTables args) with
+  | .error e => IO.eprintln s!"typed-rows: {e}"; return 1
+  | .ok files =>
+    IO.FS.createDirAll out
+    for (n, text) in files do IO.FS.writeFile (out ++ "/" ++ n) text
+    IO.println s!"TYPED-ROWS {files.size}"
+    return 0
 
 /-- `--program P --partition Q --stratified K`: the stratified law the verifier derives from its own program and partition
 object (`HmRow.stratifiedLaw`), and the population; none without `--stratified`. -/
@@ -413,13 +487,17 @@ def main (args : List String) : IO UInt32 := do
   | "unit-cut" :: paths => unitCutCmd paths
   | "archive-put" :: dir :: paths => archivePutCmd dir paths
   | "template-query" :: paths => templateQueryCmd paths
+  | "net-check" :: paths => netCheckCmd paths
   | "draw" :: rest => drawCmd rest
   | "draw-test" :: path :: rest => drawTest path rest
   | "statement" :: rest => statementCmd rest
   | "verify" :: rest => verifyCmd rest
   | ["comp-check", path] => compCheck path
   | ["field-test", path] => fieldTest path
+  | "region-words" :: rest => regionWordsCmd rest
   | ["hash-test", path] => hashTest path
+  | "typed-expand" :: rest => typedExpandCmd rest
+  | "typed-rows" :: rest => typedRowsCmd rest
   | "circuit-type" :: paths => CircuitType.cmd paths
   | "layout" :: paths => Layout.cmd paths
   | _ => IO.eprintln "usage: flock-verify field-test FILE"; return 2

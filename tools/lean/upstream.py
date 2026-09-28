@@ -1,6 +1,7 @@
 """`upstream.py`: notice when a dependency proves something a package assumes, or proves by hand.
 
-    python tools/lean/upstream.py PACKAGE_DIR [--rev REV] [--fetch]   no build: the statements at the pinned revision (or REV)
+    python tools/lean/upstream.py PACKAGE_DIR [--rev REV] [--fetch]   no build: the statements at the pinned revision (or REV);
+                                                                      --fetch clones a dependency that has no checkout yet
     python tools/lean/upstream.py PACKAGE_DIR --lean [--out DIR]      exact: build `imports`, then `Upstream.lean`
     add --ack to either to list what is new under the entries' `ack`, after someone has looked at it
 
@@ -111,12 +112,29 @@ def git(repo: Path, *args: str) -> str:
     return subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True, text=True).stdout
 
 
+def manifested(pkg: Path, name: str) -> dict:
+    """``name``'s entry in the package's `lake-manifest.json` ({} when it has none)."""
+    return next((p for p in json.loads((pkg / "lake-manifest.json").read_text()).get("packages", []) if p.get("name") == name), {})
+
+
 def pinned_rev(pkg: Path, name: str) -> str:
     """The revision of ``name`` that the package's `lake-manifest.json` pins."""
-    for p in json.loads((pkg / "lake-manifest.json").read_text()).get("packages", []):
-        if p.get("name") == name and p.get("rev"):
-            return p["rev"]
+    if rev := manifested(pkg, name).get("rev"):
+        return rev
     raise ValueError(f"lake-manifest.json pins no revision of {name}")
+
+
+def fetch(pkg: Path, name: str) -> None:
+    """`git fetch` the checkout of ``name`` under `.lake/packages/`.  Where there is none (a machine that never ran `setup.sh`),
+    clone it from the manifest's url at the pinned revision, as `lake` would: the no-build pass needs git, not Lean."""
+    repo = pkg / ".lake" / "packages" / name
+    if (repo / ".git").exists():
+        git(repo, "fetch", "--quiet", "origin")
+        return
+    if not (url := manifested(pkg, name).get("url")):
+        raise ValueError(f"lake-manifest.json has no url for {name}")
+    subprocess.run(["git", "clone", "--quiet", "--no-checkout", url, str(repo)], check=True, capture_output=True, text=True)
+    git(repo, "checkout", "--quiet", "--detach", pinned_rev(pkg, name))
 
 
 def scan(repo: Path, rev: str, scanned: dict, watch: dict) -> dict[str, list[dict]]:
@@ -197,7 +215,8 @@ def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="upstream.py", description=__doc__.split("\n\n")[0])
     ap.add_argument("package", type=Path, help="a Lake package directory whose lean-audit.json has an `upstream` section")
     ap.add_argument("--rev", help="no-build pass: scan this revision of each `scan` package instead of the pinned one")
-    ap.add_argument("--fetch", action="store_true", help="no-build pass: `git fetch` each `scan` package first (for --rev)")
+    ap.add_argument("--fetch", action="store_true", help="no-build pass: `git fetch` each `scan` package first (for --rev), "
+                    "cloning it from lake-manifest.json when it has no checkout")
     ap.add_argument("--lean", action="store_true", help="the exact pass (builds `imports` first)")
     ap.add_argument("--no-build", action="store_true", help="--lean: skip `lake build`")
     ap.add_argument("--out", type=Path, default=None, help="--lean: where the config and result go (default a temporary directory)")
@@ -213,7 +232,7 @@ def main(argv: list[str]) -> int:
         where = "the imported environment"
     else:
         for name in cfg.get("scan", {}) if a.fetch else ():
-            git(pkg / ".lake" / "packages" / name, "fetch", "--quiet", "origin")
+            fetch(pkg, name)
         hits: dict[str, list[dict]] = {w: [] for w in cfg["watch"]}
         where = []
         for name, scanned in cfg.get("scan", {}).items():

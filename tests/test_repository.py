@@ -28,9 +28,10 @@ ALLOWED_EXTRA = (
     "backends/flock/verifier/lean/soundness/ASSUMPTIONS.md",
     "backends/numerical/python/verity_numerical/redteam/TRANSCRIPT_CHECKLIST.md",
 )
-#: The Flock soundness package's detail behind its named assumptions (its ``ASSUMPTIONS.md`` states them in full), one
-#: file each, so that no one document outgrows its cap.
-SOUNDNESS_ASSUMPTIONS = "backends/flock/verifier/lean/soundness/assumptions/"
+#: One file per entry behind an index document, so that no one document outgrows its cap: the Flock soundness package's
+#: detail behind its named assumptions (its ``ASSUMPTIONS.md`` states them in full) and ligero-verify's discrepancies
+#: (indexed by its ``DISCREPANCIES.md``).
+SPLIT_DOCUMENT_DIRS = ("backends/flock/verifier/lean/soundness/assumptions/", "backends/ligero-verify/discrepancies/")
 #: Evidence files that code still reads (``backends/shared/anchor_a100/report.py`` inputs, ``reprice_v2.py --v1``,
 #: ``tensor/fused/bench.py`` PREVIOUS_RUN).  Pinned until those scripts read from the notes store; nothing else may
 #: live under ``reports/`` or ``results/``, or be named ``results_*``.
@@ -94,7 +95,7 @@ def _is_pinned(path: str) -> bool:
 def test_tracked_markdown_is_maintained_documentation() -> None:
     offenders = [p for p in _tracked() if p.endswith(".md") and os.path.basename(p) not in ALLOWED_MD_BASENAMES
                  and not p.endswith(".template.md") and p not in ALLOWED_EXTRA
-                 and not p.startswith(SOUNDNESS_ASSUMPTIONS)]
+                 and not p.startswith(SPLIT_DOCUMENT_DIRS)]
     assert not offenders, (
         "tracked markdown that is not a maintained document (reports, handoffs and drafts belong in ~/.research/notes):\n"
         + "\n".join(offenders)

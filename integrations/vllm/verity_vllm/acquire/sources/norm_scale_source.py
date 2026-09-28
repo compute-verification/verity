@@ -1,5 +1,6 @@
 """The norm scales (`query.norm_scales`) as an acquisition source: one f32 per norm Call per row, committed as `<norm module>/norm_scale` in
-the same step stream and run root as the module's outputs.  Opt-in (commit_delta `--norm-tap-so`, the row's NORM_TAP=1), never the record.
+the same step stream and run root as the module's outputs.  On by default (commit_delta `--norm-tap-so`, passed when the row's manifest
+names norm scales); NORM_TAP=0 leaves it off, for A/B only.
 
 The modules are the required manifest's `norm_scales` op paths.  A forward pre-hook marks the one that runs (the scale tensor takes its
 input's leading shape: tokens, or tokens x heads for a q/k norm) and a forward hook unmarks it.  Inside it the scale is taken where the
@@ -237,20 +238,21 @@ class NormScaleSource:
                               "bit-identical to the installed kernels and every scale == the IR model's: verity_vllm.properties.norm_tap_exactness")}]
 
 
-def attach(com: Any, args: Any, manifest: Mapping[str, Any] | None, required_classes: tuple[str, ...]) -> tuple[str, ...]:
-    """commit_delta: attach the source to `com` when `--norm-tap-so` is given (the required manifest must name `norm_scales` identities,
-    else the Commit is refused, exit 3); returns the required classes with `norm_scales` added unless `--required-classes` named them."""
-    so = getattr(args, "norm_tap_so", None)
+def attach(com: Any, so: str | None, manifest: Mapping[str, Any] | None, required_classes: tuple[str, ...], *,
+           explicit_classes: bool = False, model: Any = None) -> tuple[tuple[str, ...], NormScaleSource | None]:
+    """Attach the source to `com` when `so` (the tap build) is given; the required manifest must name `norm_scales` identities, else the
+    Commit is refused (exit 3).  Returns the required classes with `norm_scales` added unless they were given explicitly."""
     if not so:
-        return required_classes
+        return required_classes, None
     modules = NS.manifest_modules(manifest)
     if not modules:
         print("[delta] REFUSE: --norm-tap-so but the required-value manifest names no norm_scales identity (manifest build --norm-scales)", flush=True)
         raise SystemExit(3)
-    src = NormScaleSource(com, getattr(com, "model", None), modules, so, words_per_token=NS.words_per_token(manifest) or None)
+    src = NormScaleSource(com, model if model is not None else getattr(com, "model", None), modules, so,
+                          words_per_token=NS.words_per_token(manifest) or None)
     com.attach_source(src)
     print(f"[delta] norm-scale source attached: {len(modules)} norm modules (sites {', '.join(src.kinds)}), {src.words_per_token} words per "
           f"token, tap {so} -> committer {com.name}", flush=True)
-    if getattr(args, "required_classes", None) is None and NS.FAMILY not in required_classes:
-        return (*required_classes, NS.FAMILY)
-    return required_classes
+    if not explicit_classes and NS.FAMILY not in required_classes:
+        return (*required_classes, NS.FAMILY), src
+    return required_classes, src

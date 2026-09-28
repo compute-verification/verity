@@ -145,6 +145,19 @@ def test_campaign_ledger_round_trips_through_a_fresh_store(store: LocalStore) ->
     assert ok2 == n - overridden and len(diffs2) == overridden and all("[label]" in d for d in diffs2)
 
 
+@pytest.mark.skipif(not ledger.DIR.is_dir(), reason="campaign ledger not present")
+def test_every_label_the_ledger_import_writes_is_on_the_vocabulary() -> None:
+    """The frozen ledger and its red-team verdicts are the labels the repo records.  Every one passes `vocab.check` (no unknown key,
+    old spelling, string-typed bool / int or off-enum value), so a change to the vocabulary that would invalidate one fails here."""
+    from research.store import vocab
+
+    labels = [(k, v) for _, _, row in L2S._rows(ledger.DIR) for k, v in L2S.row_labels(row).items()]
+    labels += [kv for verdict in L2S.REDTEAM for kv in verdict["labels"]]
+    off = sorted({f"{k}={v!r}: {why}" for k, v in labels if (why := vocab.check(k, v))})
+    assert len(labels) > 1000 and not off, off
+    assert {v for k, v in labels if k == vocab.CANDIDATE} == {"A-GKR", "B-AIR", "B-Ligero", "C", "SP1", "shared"}
+
+
 def test_dry_run_writes_nothing(store: LocalStore, tmp_path: Path) -> None:
     d = tmp_path / "ledger"
     ledger.add(_entry("b-ligero", "x", None), d)

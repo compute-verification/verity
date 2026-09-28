@@ -979,13 +979,26 @@ included. Claims are listed region-major, then point 0 before point 1.
 - The circuit file: line 1 `flock-netlist/v1 <name>`, line 2 `META <json>`, then `NET <name> <lines>` blocks, each an
   expanded circuit in `flock-ir-unit/v2` form (the unit, tail stages). `sha256(file)` is the pin. The parser refuses a `CUT`
   line and the META keys `tail, cut, cut_words, public_ports, public, native, outputs_by_tail`: that is where the rule
-  "the verifier evaluates nothing" is enforced. Lookup slots (META `lookups`, in key order after the expanded circuits,
-  each named `lookup:<table>`) are built from SHA-256-pinned tables (`rsq, sqrt, rcp, ex2`) as two-level one-hot circuits.
-  - Rows: the `n` index bits in one input word; the low and high decoders, each minterm the AND of two half minterms,
-    recursively; one product row per output bit `j` and high minterm `h`, with B the XOR of the low minterms `l` whose
-    `table[h·2^lo + l]` has bit `j`; padding to a word; the output word; the constant.
-  - `lo` is META's `lo_bits`, and the table's size must be `2^n` words.
-  - A fold may read the product rows' B side from the table, since it is about `bits · 2^{n−1}` entries.
+  "the verifier evaluates nothing" is enforced.
+  - Each expanded circuit's rows: the input rows `A = B = [i]` (an input column) or empty (input padding, a forced zero);
+    the constant `A = B = [const]`, the last useful column. Every computed row, between them, reads in A and in B only
+    earlier columns that are not input padding, or the constant (topological order: the soundness package's `Rows.topo`).
+    So every column a row reads is below `useful`.
+  - Each port group's ports fit its words, and each input group lies within the input rows.
+  - The input rows end before the constant (`128 · inWords ≤ constPos`, 128 rows per input word). Otherwise an input
+    port could cover the constant's column, and Δ's input copies would rewrite the slot's constant row, leaving the
+    unit's constant free.
+  - Upstream's composite verifier checks none of these, and every circuit of sets 0–15 meets them all.
+    `flock-verify net-check` parses one expanded circuit.
+  - Lookup slots (META `lookups`, in key order after the expanded circuits, each named `lookup:<table>`) are built from
+    SHA-256-pinned tables (`rsq, sqrt, rcp, ex2`) as two-level one-hot circuits.
+    - Rows: the `n` index bits in one input word; the low and high decoders, each minterm the AND of two half minterms,
+      recursively; one product row per output bit `j` and high minterm `h`, with B the XOR of the low minterms `l` whose
+      `table[h·2^lo + l]` has bit `j`; padding to a word; the output word; the constant.
+    - `lo` is META's `lo_bits`, and the table's size must be `2^n` words.
+    - A fold may read the product rows' B side from the table, since it is about `bits · 2^{n−1}` entries.
+    - The built rows are held to the same order. The product rows' B side, from the table, reads the low decoder's
+      minterms, which precede them.
 - Layout: whole VUs per block (`G` per block); slots: BLAKE3 compression runs per input port and chunk, one parent tree
   per multi-chunk port (heap order, root first), the unit range, tail stages, lookup slots, one mask slot, forced-zero
   padding. Δ: const wiring to the pin; A-only chaining-value copies within runs and from children into parents; "both"
@@ -1100,6 +1113,8 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   aligned to its power-of-two span.
 - **Wires.** META `wires` begins with the row wires, which the verifier derives and compares: compression `k`'s `cv` from
   compression `k − 1`'s `out`, and hm96 slot `p`'s `cv` from the row's last compression. No other wire touches a row slot.
+- **The pin** is the constant column of the first slot of the first range that is not the mask (`HmRow.pin`). That range
+  must have a slot: with none, the pin's row would be empty, or, in a packed range, could fall inside another range's rows.
 - **Δ,** in this order: every slot's constant from the pin; per VU and port, the first compression's `cv` bits (the
   midstate) and the hm96 slot's `pad` bits (the padding block), each bit from the pin (1) or the unit range's first slot's
   forced-zero row (0); every unit's leaf bit `t` of the u16 word at row byte `B` from the message bit of byte `B + t/8`,
@@ -1107,6 +1122,17 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   forced-zero row); every wire.
 - **Regions.** `Digest(p)` per port: the hm96 range's `bc` group, free bits `[0, 10)` and the `log2 G` VU bits above slot
   `p`, valued at each VU's `b ‖ c` (a padding VU's the pinned `dummy.bc`); then `Out` (§16.5).
+- **The region-word check** (`HmRow.checkRegionWords`, `docs/region-word-check.md`; the red team's C3, H_reg).
+  - A region claim's ring-switch message carries every bit of each word the region covers in the clear.
+  - So `setupH` refuses a statement in which a column shares a 128-bit word with a *partial* region's columns without
+    being one of them, unless its rows in the combined `A` and `B` are both empty.
+  - A region is partial when some in-word bit 0–6 is not free. Its covered words are its fixed bits above 6, with each
+    combination of its free bits above 6.
+  - Row `q` of the combined `A` is the slot type's row placed at `q`, in block columns (a mask slot's is `[q]`), plus every
+    `Δ_A` entry `(q, col)`, summed over GF(2) as `addDelta` sums them. An entry twice cancels. `B` is the same.
+  - Today only a tail stage's `Out` region is partial. On the GEMM coordinate it is 16 bits of a word, and the other 112
+    columns are checked.
+  - `flock-verify region-words` runs the check alone, with optional extra Δ entries (`test_lean_region_words.py`).
 - **Public file.** `flock-circuit-inputs`: header `units = {vus_per_block, units_per_vu, indices (ascending, one per
   instance), blocks (indices in chunks of G)}`, `frame_v3.frame = "frame-v3-sha512"`, `frame_v3.row_key_sha512`; body
   `b ‖ c` (128 bytes per instance and port, instance-major), then the output words. The public digest is
@@ -1179,6 +1205,56 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
 - **Proof.** The Merkle trees are `hm96-sha512/v1` (`PcsParams.merkle_hash = 3`, 64-byte digests): every level's openings
   carry `opened_salts` (192 bytes per opened row, after the siblings), and an opened row's leaf is
   `SHA-512(leaf_prefix ‖ (x ⊕ M(key)·y) ‖ SHA-512(salt_prefix ‖ y))` for `x = SHA-512(row)`.
+
+### 16.11 The typed statement (`verity/flock-circuit/types`, item 1e)
+
+`verity_flock.typed_statement` (#225, #273) writes §16.10's statement with its unit as circuit types and layouts instead
+of rows. The first line is `flock-circuit/types NAME`, and META `format` and `statement` name it: `Tags.circuitTypes`,
+and `+seed-injection` for the selftest build. Its identity is `967b8d06`'s text, naming the typed statement. The statement
+digest's leading tag is the statement id, `verity/flock-circuit/types`, as the prover hashes it; its Σ tag is
+`verity/flock-circuit/types/sigma` and its domain `flock-circuit-types/fast100x2/rep` ‖ r (a new id gets new tags).
+
+- **No statement carries rows.** A `CIRCUIT unit` or `CIRCUIT root` section is refused. `Typed.read` checks META and
+  derives every row once, through `DeriveAll.deriveChecked` (#247) only:
+  - `types`: `{digest: content}`. Each key must be its content's digest, and each type passes `CircuitType.check` (#194).
+  - `layouts`: #200's records. Each record's `sha512` must be its digest, and the list must pass `Layout.check`, with no
+    tables held.
+  - `unit_layout`: the unit's layout, which must be derived (`own` is `derive`).
+  - `unit_type` must be that layout's type, `policy` must be `calls/v1`, and `unit_in` must be empty: this version binds
+    no inputs to constants.
+- **A flat class** (a unit with no placed parts, reads or Δ beyond its constant's copy of `one`) is §16.10's statement.
+  - `HmRow.parseTyped` inserts the unit's rows as the file's `CIRCUIT unit` section, first, where the old statement has
+    it, and parses the result with `HmRow.parse`.
+  - The circuit digest and the class are the typed file's own: its SHA-512, and `classOf` over its bytes.
+  - On RoPE (`D = 64`) and SiLU·mul (`I = 8192`), the derived rows are the old statement's unit section byte for byte
+    (`flock-verify typed-expand`, `test_lean_typed_statement.py`).
+- **A template** (GEMM) is parsed with its block (`HmRow.parse`'s `tmpl`, #273's split).
+  - **Circuits:** `root`, the unit's own region with its entries at part columns left out, one slot per VU. Then each
+    placed layout's rows, named by its digest, one slot of its range per part.
+  - **Derived, never stated:** `units_per_vu` (1), the leaf maps (none), the output circuit (the root) and the wires (the
+    rows' chains). META stating any of them, or `lookups`, `leaf_cuts` or `unit_log`, is refused.
+  - **Checks** (#273's `check_typed`): the root's ports are the rows' words and the output words, 16 bits each, in one
+    output group. Each placed layout has one slot per part, of its range's size. The root's slot has a forced-zero row.
+  - **Δ:** first the flat statement's entries. Then, per VU:
+    1. each input bit `w` a copy of its message bit (bit `w % 16` of row word `w / 16`);
+    2. each part's bound input rows, `(i, i)` and each source, in item order;
+    3. the root rows' cross entries: A's in `Δ_A` and B's in `Δ_B`.
+  - **Regions:** the digests, then `Out` over the root's output group.
+  - **Tested** on #273's GEMM (`test_lean_typed_template.py`): of the prover's 20 recorded CPU selftest sessions, the
+    verifier accepts the 3 honest ones, so its statement digest and Σ are the prover's, and it refuses the 17 negatives.
+- **Reads** (attention): a placed read is a part whose layout `table/v2` generates (`own: {gen: "table/v2", …}`), placed
+  and bound as a call is.
+  - **Tables:** the statement names each table by the SHA-512 of its raw `u32` LE words and never carries them. The
+    verifier holds its own copy (`Typed.hold`): a library table (`LIBRARY_TABLES`, by that SHA-512), read from the
+    verifier's file under the library's name (`--tables DIR/<name>.u32`), of `2^index_bits` words whose SHA-512 is the
+    name, checked before any use. Anything else is refused.
+  - **A read's slot:** its generated rows. Its product rows' B side is read from the held table in the fold
+    (`Lookup.foldB`), at its `READ` record's `prod0`, `lo_top` and `k` (not the table's value bits).
+  - A read inside the root's own region, or inside a placed call, is refused.
+  - **Rows only through `deriveChecked`,** whose check covers reads (#263): a placed read is a segment of a generated
+    layout for its table, and a generated layout's rows are `table/v2`'s (`genOk`).
+  - **Tested** on typed attention (`test_lean_typed_reads.py`): the derived rows are the writer's `rows/` byte for byte.
+- **Not yet:** `unit_in`'s constant bindings.
 
 ## 17. Acceptance, assumptions and trust
 

@@ -1,15 +1,16 @@
-"""`IntegrityProfile`: what verification established about the evaluation of a transcript of Programs.
+"""`IntegrityProfile`: the audit's output, bounds on the wrong proof units of a partition, per stratum, at `delta`.
 
-An integrity protocol (sampled proofs) produces it.  Resource accounting, policies and PoUW read what they need off it
-without importing the protocol that produced it: the facts checked exhaustively, and the verifier's sampling law
-(decision 43) with its failure probability.  Readers for a particular consumer (PoUW's incorrect-unit bound, the KV
-touched-unit bound) live with the consumer, as a utility passed to `worst_case`.  One `delta` serves every consumer;
-the application's failure union counts it once.
+An audit protocol (one-stage, sampled proofs) produces it: the facts checked exhaustively, and the verifier's sampling
+law (decision 43) with its failure probability, from which the bounds on wrong units follow (`bound`, `stratum_bounds`).
+It counts wrong units and weights nothing.  Applications consume it without importing the protocol that produced it:
+each weights wrong units by what one costs it, through the generic weighted bounds (`harm_bound`, `worst_case`), and
+its reader lives with the application, not in core.  One `delta` serves every consumer; the application's failure
+union counts it once.
 
 The law is stated over named levels of a partition hierarchy (`verity.ir.partition.Level`): each level's members
-partition the members of the level above, and a level is either drawn (`Bernoulli`, `Subset`) or only groups.  The
-names are the producer's labels (sampled proofs' two-stage law is one level "replay" drawn `Bernoulli(p * k / n_v)`); the
-profile carries draws, never roles.
+partition the members of the level above, and a level is either drawn (`Bernoulli`, `Subset`, `Stratified`) or only
+groups.  The names are the producer's labels (sampled proofs' two-stage law is one level "replay" drawn
+`Bernoulli(p * k / n_v)`); the profile carries draws, never roles.
 """
 
 from __future__ import annotations
@@ -69,15 +70,14 @@ class Subset:
         return {"subset": self.k}
 
 
-Draw = Bernoulli | Subset
-
-
 @dataclass(frozen=True, slots=True)
 class IntegrityProfile:
     """Checked by sampling over `levels`, coarse to fine: `sizes[0]` members at the top level, then `sizes[i]`
     members of level i inside each member of level i - 1.  The finest level is the checked one; each member of it
     is one statement.  `draws` names the drawn levels: at most one `Bernoulli`, and a `Subset` only at the checked
-    level; undrawn levels only group.  `drawn` counts the members actually drawn at each level, all passed.
+    level; undrawn levels only group.  A `Stratified` draw is the only draw, of the checked level, with its strata
+    tiling that level's members; `accept`, `rho` and `worst_case` are the other laws', and it reads through `strata`.
+    `drawn` counts the members actually drawn at each level, all passed.
 
     A profile of more than one level is valid only when its checked level is committed before the first draw
     (one-stage, or two-stage with every intermediate committed up front).  When the checked level is committed after
@@ -124,15 +124,23 @@ class IntegrityProfile:
         object.__setattr__(self, "drawn", MappingProxyType({n: int(self.drawn[n]) for n in names if n in self.drawn}))
         bernoulli = [n for n, d in self.draws.items() if isinstance(d, Bernoulli)]
         subsets = [n for n, d in self.draws.items() if isinstance(d, Subset)]
-        if len(bernoulli) + len(subsets) != len(self.draws) or len(bernoulli) > 1:
-            raise ValueError("a profile's draws are Bernoulli or Subset, with at most one Bernoulli level")
+        stratified = [n for n, d in self.draws.items() if isinstance(d, Stratified)]
+        if len(bernoulli) + len(subsets) + len(stratified) != len(self.draws) or len(bernoulli) > 1:
+            raise ValueError("a profile's draws are Bernoulli, Subset or Stratified, with at most one Bernoulli level")
         if names[-1] not in self.draws or subsets not in ([], [names[-1]]):
             raise ValueError("the checked (finest) level is drawn, and only it may be drawn by Subset")
+        if stratified and list(self.draws) != [names[-1]]:
+            raise ValueError("a Stratified draw is the profile's only draw, of the checked level")
         if any(v < 0 for v in self.drawn.values()):
             raise ValueError("drawn counts are >= 0")
-        _, n, _, k = self._law()
-        if k > n:
-            raise ValueError(f"a Subset draw of {k} exceeds the {n} checked members it draws from")
+        if stratified:
+            if self.draws[names[-1]].population != self.count(names[-1]):
+                raise ValueError(f"the strata hold {self.draws[names[-1]].population} units, the checked level "
+                                 f"{self.count(names[-1])}")
+        else:
+            _, n, _, k = self._law()
+            if k > n:
+                raise ValueError(f"a Subset draw of {k} exceeds the {n} checked members it draws from")
         if not 0 < self.delta < 1:
             raise ValueError("a profile needs 0 < delta < 1")
         object.__setattr__(self, "programs", tuple(self.programs))
@@ -155,6 +163,8 @@ class IntegrityProfile:
     def _law(self) -> tuple[int, int, Fraction, int]:
         """(Bernoulli members, checked members n inside each, p, k)."""
         checked = self.levels[-1].name
+        if isinstance(self.draws[checked], Stratified):
+            raise ValueError("a stratified profile has no single k: read it through `strata`")
         at = next((n for n, d in self.draws.items() if isinstance(d, Bernoulli)), None)
         p = self.draws[at].p if at is not None else Fraction(1)
         sub = self.draws.get(checked)
@@ -231,6 +241,45 @@ class IntegrityProfile:
                 full = nextafter(full, inf)
             best = full if best * members >= full else min(full, nextafter(best * members * (1 + MARGIN), inf))
         return best if cap is None else min(best, float(cap))
+
+    def strata(self) -> Stratified | None:
+        """The law as independent uniform draws inside strata of the checked level: its `Stratified` draw, or, when a
+        `Subset(k)` of the checked level is the only draw, one stratum of all its members, named after the level.  None
+        when a level is drawn `Bernoulli`."""
+        checked = self.levels[-1].name
+        law = self.draws[checked]
+        if isinstance(law, Stratified):
+            return law
+        if isinstance(law, Subset) and len(self.draws) == 1:
+            return Stratified.uniform(self.count(checked), law.k, checked)
+        return None
+
+    def bound(self) -> int | float:
+        """Except with probability delta, an accepted transcript has at most this many wrong checked members: exact
+        (`Stratified.count_bound`) when the law has strata, else `worst_case` with utility m (the linear relaxation, from
+        above)."""
+        law = self.strata()
+        return law.count_bound(self.delta) if law is not None else self.worst_case(lambda m: float(m))
+
+    def stratum_bounds(self) -> dict[str, int]:
+        """Each stratum's own bound at delta (`Stratified.stratum_bound`); empty when a level is drawn `Bernoulli`.  They
+        hold jointly with `bound`, not each at its own delta: the one-stage profile bounds a family of wrong-unit sets by
+        its likeliest set to escape, and every set breaking one of these bounds escapes with less than delta."""
+        law = self.strata()
+        return {} if law is None else {s.name: law.stratum_bound(s.name, self.delta) for s in law.strata}
+
+    def harm_bound(self, harm: float | Mapping[str, float | Sequence[tuple[float, int]]]) -> float:
+        """An upper bound, at delta, on the total harm of the wrong checked members: the generic weighted bound an
+        application reads with its own harm per member.  `harm` is one number for every member, or, when the law has
+        strata, per stratum a number or (harm, members) pairs (`Stratified.harm_bound`).  Under a `Bernoulli` level
+        every member weighs the same: `worst_case` with utility harm * m."""
+        law = self.strata()
+        if law is not None:
+            per = harm if isinstance(harm, Mapping) else {s.name: float(harm) for s in law.strata}
+            return law.harm_bound(per, self.delta)
+        if isinstance(harm, Mapping):
+            raise ValueError("under a Bernoulli level every checked member weighs the same: pass one number")
+        return self.worst_case(lambda m: harm * m)
 
     def to_json(self) -> dict:
         return {"programs": list(self.programs), "prescribed": sorted(self.prescribed), "linked": self.linked,
@@ -436,7 +485,7 @@ class Stratified:
         """An upper bound on sum_{u in B} harm(u) over the wrong-unit sets B with escape >= delta.
 
         `harm[name]` is one number (every unit of the stratum) or (harm, units) pairs, the stratum's other units harming
-        nothing: output bits for prover freedom, native work for compute transparency.  Inside a stratum the adversary
+        nothing; the harm is the consumer's, what a wrong unit costs it.  Inside a stratum the adversary
         fills the most harmful units first, so the value of m wrong units is concave in m while the risk is convex, and
         the linear relaxation (units taken in the order of risk increment per unit of harm, the last one fractionally)
         is the optimum from above.  The float risks are searched, then the budget and the result are raised by
@@ -503,6 +552,9 @@ class Stratified:
 
     def to_json(self) -> dict:
         return {"law": "stratified", "strata": [{"name": s.name, "size": s.size, "k": s.k} for s in self.strata]}
+
+
+Draw = Bernoulli | Subset | Stratified
 
 
 __all__ = ["HARM_MARGIN", "MARGIN", "Bernoulli", "Draw", "IntegrityProfile", "Stratified", "Stratum", "Subset"]

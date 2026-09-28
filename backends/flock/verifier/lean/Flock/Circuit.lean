@@ -8,6 +8,7 @@ leaf checks its own ranges (`RowLeaf.checkLayout`). Lookup slots are built from 
 import Lean.Data.Json
 import Flock.Lookup
 import Flock.Tags
+import Flock.Typed
 
 namespace Flock
 
@@ -55,6 +56,26 @@ structure Wire where
   src : Nat × Nat × Nat
   deriving Inhabited, Repr
 
+/-- A typed template's block (item 1e; #273's `TypedBlock`): the instance type's root is the unit, one slot per VU, beside
+its parts, each in a slot of its layout's range. Unit coordinates: the root's own region `[0, own)`, then each part from its
+base. -/
+structure TypedBlock where
+  own : Nat
+  /-- the instance type's ports, (count, width) -/
+  ins : Array (Nat × Nat)
+  outs : Array (Nat × Nat)
+  /-- the root's input columns, in input-bit order -/
+  inCols : Array Nat
+  /-- per part, in item order: its layout's circuit, its slot among that circuit's slots in the VU, its base -/
+  parts : Array (Nat × Nat × Nat)
+  /-- per placed layout's circuit, its range's log size -/
+  rangeLogs : Array (Nat × Nat)
+  /-- the parts' bound input rows and their sources (Δ), in item order and bits ascending -/
+  bind : Array (Nat × Array Nat)
+  /-- the root rows' entries at its parts' columns: (row, A's, B's) -/
+  cross : Array (Nat × Array Nat × Array Nat)
+  deriving Inhabited, Repr
+
 /-- The pinned circuit file. -/
 structure Circuit where
   name : String
@@ -88,6 +109,10 @@ structure Circuit where
   outNetPorts : Array Nat := #[]
   /-- the unit inputs that are row words (`(unit, input port, leaf)`): the low 16 bits are the word's message bits -/
   leafCuts : Array (Nat × Nat × Nat) := #[]
+  /-- a typed template's block (item 1e): the unit is its instance's root, beside its parts -/
+  typed : Option TypedBlock := none
+  /-- a typed statement's unit class (item 1e): its derivation's inputs and `deriveChecked`'s run on them -/
+  cls : Option Typed.Class := none
   deriving Inhabited
 
 namespace Circuit
@@ -130,9 +155,10 @@ def checkLayout (c : Circuit) : V Unit := do
     if (r.kind == Kind.comp) != isRole || (r.kind == Kind.mask && r.count != 1) then
       throw "a range's type and role disagree"
     spans := spans.push (r.start, r.start + span)
-  let sorted := spans.qsort (fun a b => a.1 < b.1 || (a.1 == b.1 && a.2 < b.2))
-  for i in [1:sorted.size] do
-    if sorted[i - 1]!.2 > sorted[i]!.1 then throw "two ranges overlap"
+  -- every pair, so that two ranges' disjointness is a direct fact of the loop
+  for i in [0:spans.size] do
+    for j in [i + 1:spans.size] do
+      if spans[i]!.1 < spans[j]!.2 && spans[j]!.1 < spans[i]!.2 then throw "two ranges overlap"
   let unit := c.unit
   let ur := c.ranges.filter (·.kind == Kind.net c.unitNet)
   if ur.size != 1 || ur[0]!.count != c.g * c.upv || !isPow2 ur[0]!.count then
