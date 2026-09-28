@@ -42,7 +42,7 @@ environment extension loaded, so none of the package's code runs), and replays t
     fresh        (`--fresh` only) `leanchecker --fresh` on a root rejects a declaration of its whole import closure,
                  Mathlib and core included
     tamper       this tool's files, the toolchain's `lean`, `lake` or `leanchecker`, or the `.olean` files of a package
-                 audited earlier in the run changed during it; the Lean files are run from a copy taken before the first build
+                 built earlier in the run changed during it; the Lean files are run from a copy taken before the first build
 
 `--build` builds in a sandbox where the machine allows one (`sandbox.sh`: new user, mount, network and PID namespaces;
 everything read-only but the build's `.lake` directories; no network; nothing outlives the build), and says when it
@@ -56,6 +56,9 @@ handoff; `--update` records them, it does not approve them.  A pin whose stateme
 (same type hash and named assumptions: a toolchain's printer, notation) gets one line and needs no reviewer.  `--all` first runs the controls (`controls`): a
 fixture package built with each audited toolchain (which `--build` installs first), which must pass clean and fail each
 check once a violation is added.
+The packages are audited side by side, and the controls beside them, after one `setup.sh` has installed the toolchain. A
+package's build starts once the builds of the packages it requires by path have ended, since its build writes their `.lake`
+too; its reading and replay run beside the builds that follow.
 Exit 0 when every package passes, 1 when one fails, 2 on a usage error.
 
 This directory is self-contained (the standard library, `lake` and the toolchain's `lean` and `leanchecker`): another
@@ -73,7 +76,9 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -99,6 +104,10 @@ COMPILE_TIME = re.compile(r"(?m)^[ \t]*(?:@\[[^\]\n]*\][ \t]*)*(?:(?:private|pro
                           r"[ \t]+)*(#eval!?|run_cmd|run_elab|run_meta|run_tac|initialize|builtin_initialize|elab|elab_rules|macro"
                           r"|macro_rules|syntax|declare_syntax_cat)\b|@\[[^\]\n]*\b(command_elab|term_elab|tactic|macro|init"
                           r"|builtin_init|builtin_command_elab|builtin_term_elab|builtin_tactic|builtin_macro)\b")
+#: held by the first `setup.sh` of each toolchain in a run (`setup`)
+SETUP = threading.Lock()
+#: the toolchains a `setup.sh` of this run has installed
+_INSTALLED: set[str] = set()
 #: the build sandbox (`sandbox.sh`): new user, mount, network and PID namespaces
 UNSHARE = ["unshare", "--user", "--map-root-user", "--mount", "--net", "--pid", "--fork", "--kill-child"]
 #: the controls' own packages; `--all` does not audit them as the repository's
@@ -559,6 +568,20 @@ def statement_changes(notes: list[str]) -> list[str]:
     return [n for n in notes if not n.endswith((REPRINTED, REHASHED, REGROUPED))]
 
 
+def setup(pkg: Path, toolchain: str, log: Path) -> tuple[int, str]:
+    """`setup.sh` for ``pkg``: alone until one has installed ``toolchain``, since they install into one elan home; then beside
+    the others (Mathlib's `cache get`, which they share a download directory for, writes each download to a file of its own
+    process's first)."""
+    argv = ["bash", str(TOOL / "setup.sh"), str(pkg)]
+    with SETUP:
+        if toolchain not in _INSTALLED:
+            rc, text = run(argv, pkg, log)
+            if rc == 0:
+                _INSTALLED.add(toolchain)
+            return rc, text
+    return run(argv, pkg, log)
+
+
 def killed(rc: int) -> bool:
     """A process ended by a signal (the machine's OOM killer, a timeout), which says nothing about the kernel's verdict."""
     return rc < 0 or rc >= 128
@@ -605,8 +628,6 @@ def olean_files(lib: Path) -> list[Path]:
 
 
 def olean_digest(lib: Path, files: list[Path]) -> str:
-    from concurrent.futures import ThreadPoolExecutor
-
     with ThreadPoolExecutor(max_workers=min(8, os.cpu_count() or 1)) as ex:
         hashes = list(ex.map(sha256, files))
     h = hashlib.sha256()
@@ -645,8 +666,9 @@ def template(pkg: Path) -> dict:
 
 
 def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, replay: bool = True, fresh: bool = False,
-          log=print) -> dict:
-    """Audit one package; returns its report (`failures` empty when it passes)."""
+          log=print, built=lambda: None) -> dict:
+    """Audit one package; returns its report (`failures` empty when it passes). ``built`` is called once its build has
+    passed, before anything reads it."""
     rep = {"package": str(pkg), "seconds": {}, "failures": []}
     if not (pkg / POLICY).exists():
         rep["failures"].append(f"policy: {pkg} has no {POLICY}. Start from this one, pin the theorems your documents cite "
@@ -663,15 +685,16 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     t = time.monotonic()
     if build:
         rep["sandbox"] = sandboxed()
-        for step, argv in (("setup", ["bash", str(TOOL / "setup.sh"), str(pkg)]),
+        for step, argv in (("setup", None),
                            ("build", in_sandbox(pkg, ["lake", "build"])),
                            ("build-roots", in_sandbox(pkg, ["lake", "build", *(f"+{r}" for r in policy["roots"])]))):
             s = time.monotonic()
-            rc, text = run(argv, pkg, work / f"{step}.log")
+            rc, text = setup(pkg, rep["toolchain"], work / "setup.log") if argv is None else run(argv, pkg, work / f"{step}.log")
             rep["seconds"][step] = round(time.monotonic() - s, 1)
             if rc:
                 rep["failures"].append(f"{step}: exit {rc}\n{text[-3000:]}")
                 return rep
+    built()
     s = time.monotonic()
     try:
         facts = facts_of(pkg, policy, work)
@@ -771,8 +794,7 @@ def packages(root: Path) -> list[Path]:
 
 def controls(toolchain: str, out: Path, install: bool = False, log=print) -> list[str]:
     """Build the fixture package with ``toolchain``: it must pass clean, and fail each check once a violation is added.
-    ``install`` (`--build`) first installs elan and the toolchain with `setup.sh`: the controls run before any package's
-    own setup does."""
+    ``install`` (`--build`) first installs elan and the toolchain with `setup.sh`."""
     fails = []
     work = out / f"controls-{re.sub(r'[^A-Za-z0-9]+', '_', toolchain)}"
     shutil.rmtree(work, ignore_errors=True)
@@ -780,7 +802,7 @@ def controls(toolchain: str, out: Path, install: bool = False, log=print) -> lis
     pkg = work / "pkg"
     (pkg / "lean-toolchain").write_text(toolchain + "\n")
     if install:
-        rc, text = run(["bash", str(TOOL / "setup.sh"), str(pkg)], pkg, work / "setup.log")
+        rc, text = setup(pkg, toolchain, work / "setup.log")
         if rc:
             return [f"controls: installing {toolchain} failed:\n{text[-2000:]}"]
     rc, text = run(in_sandbox(pkg, ["lake", "build"]), pkg, work / "build.log")
@@ -883,36 +905,63 @@ def main(argv: list[str]) -> int:
     toolchains = sorted({(p / "lean-toolchain").read_text().strip() for p in pkgs if (p / "lean-toolchain").exists()})
     bins = [b for tc in toolchains for b in toolchain_bins(tc)]
     seals = {str(p): sha256(p) for p in [*(p for d in (HERE, TOOL) for p in sorted(d.iterdir())), *bins] if p.is_file()}
-    failed = []
-    reports = []
-    if a.all:
+    lock = threading.Lock()
+    if a.build or a.all:
+        sandboxed()                                     # probed once, before anything runs beside the probe
+    built = {p: threading.Event() for p in pkgs}
+    needs = {p: [d for d in path_deps(p) if d in built and d != p] for p in pkgs}
+    by_controls: list[str] = []
+    reports: dict[Path, dict] = {}
+
+    def seal(pkg: Path) -> None:
+        """After ``pkg``'s build: seal its `.olean` files, then let the packages that require it build."""
+        if (lib := pkg / ".lake" / "build" / "lib" / "lean").is_dir():
+            got = {str(p): sha256(p) for p in olean_files(lib)}
+            with lock:
+                seals.update(got)
+        built[pkg].set()
+
+    def check_controls() -> None:
         for tc in toolchains:
             if fs := controls(tc, out, install=a.build):
-                failed.append(f"controls ({tc})")
-                print("\n".join("  " + f.replace("\n", "\n    ") for f in fs), flush=True)
-        if moved := tampered(seals, bins):
-            failed.append("controls (tamper)")
-            print("\n".join(f"  tamper: {p} changed while the controls ran" for p in moved), flush=True)
-    for pkg in pkgs:
-        rep = audit(pkg, out, a.build, a.update, not a.no_replay, a.fresh)
-        rep["failures"] += [f"tamper: {p} changed while {pkg} was built and audited" for p in tampered(seals, bins)]
-        if (lib := pkg / ".lake" / "build" / "lib" / "lean").is_dir():
-            seals |= {str(p): sha256(p) for p in olean_files(lib)}
-        reports.append(rep)
-        n = sum(rep.get("declarations", {}).values())
-        head = f"AUDIT {pkg}: {'PASS' if not rep['failures'] else 'FAIL'}"
-        if "modules" in rep:
-            head += (f"  {n} declarations in {rep['modules']} modules; axioms {', '.join(rep['axioms']) or 'none'}; "
-                     f"{len(rep['pins'])} pinned theorems; {rep['seconds']}")
-        if "sandbox" in rep:
-            head += "; built in the sandbox" if rep["sandbox"] else "; built WITHOUT a sandbox (unshare unavailable here)"
-        print(head, flush=True)
-        for f in rep["failures"]:
-            print("  " + f.replace("\n", "\n    "), flush=True)
-        for n in rep.get("notes", []):
-            print(f"  note: {n}", flush=True)
-        if rep["failures"]:
-            failed.append(str(pkg))
+                with lock:
+                    by_controls.append(f"controls ({tc})")
+                    print("\n".join("  " + f.replace("\n", "\n    ") for f in fs), flush=True)
+        with lock:
+            if moved := tampered(seals, bins):
+                by_controls.append("controls (tamper)")
+                print("\n".join(f"  tamper: {p} changed while the controls ran" for p in moved), flush=True)
+
+    def one(pkg: Path) -> None:
+        for d in needs[pkg]:
+            built[d].wait()
+        try:
+            rep = audit(pkg, out, a.build, a.update, not a.no_replay, a.fresh, built=lambda: seal(pkg))
+        finally:
+            if not built[pkg].is_set():
+                seal(pkg)
+        with lock:
+            rep["failures"] += [f"tamper: {p} changed while {pkg} was built and audited" for p in tampered(seals, bins)]
+            reports[pkg] = rep
+            n = sum(rep.get("declarations", {}).values())
+            head = f"AUDIT {pkg}: {'PASS' if not rep['failures'] else 'FAIL'}"
+            if "modules" in rep:
+                head += (f"  {n} declarations in {rep['modules']} modules; axioms {', '.join(rep['axioms']) or 'none'}; "
+                         f"{len(rep['pins'])} pinned theorems; {rep['seconds']}")
+            if "sandbox" in rep:
+                head += "; built in the sandbox" if rep["sandbox"] else "; built WITHOUT a sandbox (unshare unavailable here)"
+            print(head, flush=True)
+            for f in rep["failures"]:
+                print("  " + f.replace("\n", "\n    "), flush=True)
+            for n in rep.get("notes", []):
+                print(f"  note: {n}", flush=True)
+
+    with ThreadPoolExecutor(max_workers=len(pkgs) + 1) as ex:
+        jobs = ([ex.submit(check_controls)] if a.all else []) + [ex.submit(one, p) for p in pkgs]
+        for j in jobs:
+            j.result()
+    reports = [reports[p] for p in pkgs]
+    failed = by_controls + [str(r["package"]) for r in reports if r["failures"]]
     if changed := [r["package"] for r in reports if r.get("statement_changes")]:
         print(f"audit: pinned statements, the definitions they read, or listed compile-time code changed in "
               f"{', '.join(changed)}: the merge handoff must name the reviewer who read the changes above (review.txt in "
