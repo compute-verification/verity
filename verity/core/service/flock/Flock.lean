@@ -26,6 +26,7 @@ import Flock.ZkLigerito
 import Flock.Zk
 import Flock.Partition
 import Flock.HmNets
+import Flock.RecOpen
 import Flock.HmRow
 import Flock.Registered
 import Flock.TemplateQuery
