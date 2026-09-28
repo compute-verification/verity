@@ -116,7 +116,7 @@ SAMPLERS_BOUND = {"greedy": "ArgmaxTokenSelect_v1 (aten.argmax over the bf16 log
                   # INPUT of the Program; temperature / top_p / pos are constants; S = SplitsFor_v1(|live(t)|, num_SMs) is a DERIVED input
                   # (`splits`, request-owned, one entry per sampling event; `sampler_geometry`), or the constant SplitsFor_v1(1, num_SMs)
                   # of a single-request workload -- the 6th operand, never a static.
-                  "stochastic": "GumbelTopPTokenSelect[vllm]_v2 (vllm_iface.gumbel_topp_token_select -> GumbelTopPTokenSelect_v1{V}; seed + derived S Program inputs, or seed input + constant S of a single-request workload)"}
+                  "stochastic": "GumbelTopPTokenSelect[vllm]_v3 (vllm_iface.gumbel_topp_token_select -> GumbelTopPTokenSelect_v1{V} with seed + derived S Program inputs, or GumbelTopPTokenSelect_v2{V,S} with the seed input and the constant S of a single-request workload: its keep word as word gates)"}
 
 
 def declared_live_counts(reqs: list[dict]) -> list[int]:
