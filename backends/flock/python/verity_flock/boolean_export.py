@@ -1234,9 +1234,9 @@ class Commitments:
             rec = self._primitive(fn, fid, WQ)
         elif (sep := WQ._separable(fn)) is not None:
             rec = self._combine(fid, fn.gates, [(self.records[self.of(c)], m) for c, m in sep])
-        elif fn.gates > WQ.MAX_GATES:
+        elif fn.gates > (limit := WQ.gate_limit(fn)):
             rec = _empty(fid, fn.gates)
-            rec["violations"] = [{"class": "too-large", "gates": fn.gates, "limit": WQ.MAX_GATES}]
+            rec["violations"] = [{"class": "too-large", "gates": fn.gates, "limit": limit}]
         else:
             rec = self._partition(fn, fid, WQ)
         self.records[fid] = rec
