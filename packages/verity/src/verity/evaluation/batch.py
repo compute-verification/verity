@@ -101,7 +101,7 @@ def _width_dtype(w: int) -> np.dtype:
 
 
 def type_dtype(t: Type) -> np.dtype:
-    return _width_dtype(max(t.leaf_widths(), default=1))
+    return _width_dtype(max(t.width_set(), default=1))
 
 
 def _as_batch(a: Any, t: Type, name: str, n: int | None) -> np.ndarray:
@@ -123,10 +123,17 @@ def _as_batch(a: Any, t: Type, name: str, n: int | None) -> np.ndarray:
     flat = a.reshape(a.shape[0], t.leaves)
     if a.dtype.kind == "i" and flat.size and flat.min() < 0:
         raise ValueError(f"{name}: negative encoding")
-    widths = np.asarray(t.leaf_widths(), dtype=np.uint64)
-    narrow = widths < 64
-    if flat.size and narrow.any() and np.any(flat[:, narrow].astype(np.uint64) >> widths[narrow]):
-        raise ValueError(f"{name}: encoding wider than its declared Value<w>")
+    # widths from the type's structure, never one per leaf; a non-negative word of at most the narrowest width's bits fits every leaf
+    ws = t.width_set()
+    narrow = [w for w in ws if w < 64]
+    if flat.size and narrow and a.dtype.itemsize * 8 > min(narrow):
+        if len(ws) == 1:
+            wide = np.any(flat >> flat.dtype.type(narrow[0]))
+        else:
+            widths = np.asarray(t.leaf_widths(), dtype=np.uint64)
+            wide = np.any(flat[:, widths < 64].astype(np.uint64) >> widths[widths < 64])
+        if wide:
+            raise ValueError(f"{name}: encoding wider than its declared Value<w>")
     return a.astype(dt, copy=False)
 
 

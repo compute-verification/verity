@@ -157,6 +157,7 @@ def live() -> dict:
 def test_the_descriptors_and_ids(live):
     assert live["descriptors"] == VECTORS["descriptors"] and live["template_ids"] == VECTORS["template_ids"]
     assert SCALE_ID == 'TScale_v1{N=2,C={"f64":"0x1.8000000000000p+0"}}' and Scale.id == "TScale_v1{N=2,C=1.5}"
+    assert PO.template_id(Scale) == PO.template_id(SCALE_ID) == SCALE_ID and PO.template_id(Scale.id) == Scale.id
 
 
 @pytest.mark.parametrize("n", range(len(CASES)), ids=[c[0] for c in CASES])
