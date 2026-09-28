@@ -146,6 +146,52 @@
    "assumptions": [],
    "type_hash": "00000000deee5660"
   },
+  "FlockSoundness.ZK.card_fiber_eq_of_triShift": {
+   "signature": [
+    "FlockSoundness.ZK.card_fiber_eq_of_triShift.{u_1, u_2} {K : ℕ} {G : Fin K → Type u_1} [(k : Fin K) → AddGroup (G k)]",
+    "  [(k : Fin K) → Fintype (G k)] [(k : Fin K) → DecidableEq (G k)] {V : Type u_2} [DecidableEq V]",
+    "  (view view' : ((j : Fin K) → G j) → V) {δ : (k : Fin K) → ((j : Fin K) → G j) → G k}",
+    "  (hδ : FlockSoundness.ZK.Triangular δ) (h : ∀ (ω : (j : Fin K) → G j), view ω = view' (FlockSoundness.ZK.triShift δ ω))",
+    "  (v : V) : {ω | view ω = v}.card = {ω | view' ω = v}.card"
+   ],
+   "assumptions": [],
+   "type_hash": "0000000017200e58"
+  },
+  "FlockSoundness.ZK.card_run_eq": {
+   "signature": [
+    "FlockSoundness.ZK.card_run_eq.{u_1, u_2, u_3} {Ω : Type u_1} {M : Type u_2} {C : Type u_3} {n : ℕ} [Inhabited M]",
+    "  [Fintype Ω] [DecidableEq M] (P P' : FlockSoundness.ZK.Strategy Ω M C n) (V : FlockSoundness.ZK.Responder M C n)",
+    "  (h : ∀ (c : Fin n → C) (τ : Fin n → M), {ω | P.msg ω c = τ}.card = {ω | P'.msg ω c = τ}.card) (τ : Fin n → M) :",
+    "  {ω | FlockSoundness.ZK.run P V ω = τ}.card = {ω | FlockSoundness.ZK.run P' V ω = τ}.card"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000bfe026df"
+  },
+  "FlockSoundness.ZK.card_run_eq_of_triShift": {
+   "signature": [
+    "FlockSoundness.ZK.card_run_eq_of_triShift.{u_2, u_3, u_4} {M : Type u_2} {C : Type u_3} {n K : ℕ} {G : Fin K → Type u_4}",
+    "  [(k : Fin K) → AddGroup (G k)] [(k : Fin K) → Fintype (G k)] [(k : Fin K) → DecidableEq (G k)] [Inhabited M]",
+    "  [DecidableEq M] (P P' : FlockSoundness.ZK.Strategy ((k : Fin K) → G k) M C n) (V : FlockSoundness.ZK.Responder M C n)",
+    "  (δ : (Fin n → C) → (k : Fin K) → ((j : Fin K) → G j) → G k)",
+    "  (hδ : ∀ (c : Fin n → C), FlockSoundness.ZK.Triangular (δ c))",
+    "  (h : ∀ (c : Fin n → C) (ω : (k : Fin K) → G k), P.msg ω c = P'.msg (FlockSoundness.ZK.triShift (δ c) ω) c)",
+    "  (τ : Fin n → M) : {ω | FlockSoundness.ZK.run P V ω = τ}.card = {ω | FlockSoundness.ZK.run P' V ω = τ}.card"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000cd3228e1"
+  },
+  "FlockSoundness.ZK.card_seq_masked": {
+   "signature": [
+    "FlockSoundness.ZK.card_seq_masked.{u_2, u_3} {K : ℕ} {G : Fin K → Type u_2} {B : Fin K → Type u_3}",
+    "  [(k : Fin K) → AddCommGroup (G k)] [(k : Fin K) → Fintype (G k)] [(k : Fin K) → DecidableEq (G k)]",
+    "  [(k : Fin K) → AddCommGroup (B k)] [(k : Fin K) → DecidableEq (B k)] (φ : (k : Fin K) → G k →+ B k)",
+    "  (hφ : ∀ (k : Fin K), Function.Surjective ⇑(φ k)) (f : (k : Fin K) → ((j : Fin K) → G j) → B k)",
+    "  (hf : ∀ (k : Fin K) (ω ω' : (j : Fin K) → G j), (∀ j < k, ω j = ω' j) → f k ω = f k ω') (v : (k : Fin K) → B k) :",
+    "  {ω | ∀ (k : Fin K), f k ω + (φ k) (ω k) = v k}.card = {κ | ∀ (k : Fin K), (φ k) (κ k) = 0}.card"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000bfe2a0d5"
+  },
   "FlockSoundness.ZK.card_translate_fiber": {
    "signature": [
     "FlockSoundness.ZK.card_translate_fiber.{u_1, u_2} {A : Type u_1} {B : Type u_2} [AddCommGroup A] [Fintype A]",
@@ -202,6 +248,24 @@
    ],
    "assumptions": [],
    "type_hash": "000000005a260fa1"
+  },
+  "FlockSoundness.ZK.run_eq_iff": {
+   "signature": [
+    "FlockSoundness.ZK.run_eq_iff.{u_1, u_2, u_3} {Ω : Type u_1} {M : Type u_2} {C : Type u_3} {n : ℕ} [Inhabited M]",
+    "  (P : FlockSoundness.ZK.Strategy Ω M C n) (V : FlockSoundness.ZK.Responder M C n) (ω : Ω) (τ : Fin n → M) :",
+    "  FlockSoundness.ZK.run P V ω = τ ↔ P.msg ω (V.ans τ) = τ"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000f9168bdc"
+  },
+  "FlockSoundness.ZK.triShift_bijective": {
+   "signature": [
+    "FlockSoundness.ZK.triShift_bijective.{u_1} {K : ℕ} {G : Fin K → Type u_1} [(k : Fin K) → AddGroup (G k)]",
+    "  [∀ (k : Fin K), Finite (G k)] {δ : (k : Fin K) → ((j : Fin K) → G j) → G k} (hδ : FlockSoundness.ZK.Triangular δ) :",
+    "  Function.Bijective (FlockSoundness.ZK.triShift δ)"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000bd1525e4"
   },
   "FlockSoundness.execArith_correct": {
    "signature": ["FlockSoundness.execArith_correct : FlockSoundness.execArith.Correct"],
@@ -995,6 +1059,26 @@
     "FlockSoundness.Rewinding.ConflictAt": "4d9e617c66a3a013"
    },
    "pins": ["FlockSoundness.table_sound_compiled"]
+  },
+  "FlockSoundness.ZK.Adaptivity": {
+   "digest": "83c34553880ed9e11d15c4d574fb15b0",
+   "definitions": {
+    "FlockSoundness.ZK.Responder": "4aa2f3a01a5d09ec",
+    "FlockSoundness.ZK.Responder.ans": "07b5b9bfb9f5ef23",
+    "FlockSoundness.ZK.Strategy": "c7dd3954f1023096",
+    "FlockSoundness.ZK.Strategy.msg": "2449cb009ff38b7d",
+    "FlockSoundness.ZK.Strategy.step": "15d4e86eb1261c99",
+    "FlockSoundness.ZK.Triangular": "598221542c8b5d3d",
+    "FlockSoundness.ZK.run": "921dafe3b24e3c0d",
+    "FlockSoundness.ZK.triShift": "cd67f9bff9028668"
+   },
+   "pins": [
+    "FlockSoundness.ZK.card_fiber_eq_of_triShift",
+    "FlockSoundness.ZK.card_run_eq",
+    "FlockSoundness.ZK.card_run_eq_of_triShift",
+    "FlockSoundness.ZK.run_eq_iff",
+    "FlockSoundness.ZK.triShift_bijective"
+   ]
   },
   "FlockSoundness.ZK.Masking": {
    "digest": "a85b27f6b49288a085d1c5c6976cab6a",

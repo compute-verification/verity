@@ -83,3 +83,4 @@ import FlockSoundness.Audit.FlockBatchedAcc
 import FlockSoundness.Audit.FlockLink
 import FlockSoundness.Audit.FlockLinked
 import FlockSoundness.ZK.Masking
+import FlockSoundness.ZK.Adaptivity
