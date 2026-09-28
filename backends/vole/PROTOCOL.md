@@ -1,14 +1,15 @@
-# Candidate V (exploratory) — VOLE-based designated-verifier ZK (QuickSilver family) on the WP2 checker
+# VOLE — VOLE-based designated-verifier ZK (QuickSilver family) on the WP2 checker
 
-Status: **cost model / exploratory**. Nothing here is implemented or measured. Every number comes from
+Status: **cost model**, written before the backend was built. The backend is frozen; the assumption stack its measured
+runs used is `ASSUMPTIONS.md`. Every number here comes from
 `verity_numerical.explore.vole` (census from `security.census`, throughput from the cited tables) and is
-reproduced in `notes-asset:campaigns/r20-proof/assets/explore/reports/vole.json`. Same tags as the two candidate documents: **[source]**,
-**[derivation]**, **[proposal]**, **[assumption]**.
+reproduced in `notes-asset:campaigns/r20-proof/assets/explore/reports/vole.json`. Same tags as `backends/gkr/PROTOCOL.md`
+and `backends/direct/PROTOCOL.md`: **[source]**, **[derivation]**, **[proposal]**, **[assumption]**.
 
 **Proof class, stated plainly.** This is *designated-verifier* zero knowledge: the auditor holds a secret MAC key
 \(\Delta\) and the transcript convinces nobody else. It is **not** one of the contract's public-coin classes
-(`backends/AGENTS.md`). If built, it would be recorded as `COMPLETE_ZK_BACKEND` with
-`zk_mode = "vole-itmac-designated-verifier"` and never compared against A-GKR and B-Ligero without that caveat in the
+(`backends/AGENTS.md`). Its runs are recorded as `COMPLETE_ZK_BACKEND` with
+`zk_mode = "designated-verifier"` (`bench.py`) and never compared against A-GKR and B-Ligero without that caveat in the
 same row. It is also **not hash-based**: soundness of the VOLE rests on LPN + oblivious transfer (section 6).
 
 ## 0. Sources (version read 2026-09-22)
