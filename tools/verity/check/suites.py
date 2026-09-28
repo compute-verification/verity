@@ -131,6 +131,19 @@ ENV_PREFIXES = ("VERITY_", "FLOCK_")
 UNKEYED = frozenset({"VERITY_TEST_CACHE", "VERITY_TEST_CACHE_MIN_S"})
 #: and the runner's own, which it sets for the tests (`VERITY_SUITE_ROOT`, `..._MODULE`, `..._READS`, ...)
 UNKEYED_PREFIX = "VERITY_SUITE_"
+#: what a machine's runner gives a run's workload and check's steps never get (check.py's `ENV_PASS`): the run's `RESEARCH_*` and
+#: the machine's PYTHONPYCACHEPREFIX. Tests that start runs of their own would inherit them, so a suite run inside a `research
+#: run` would reach another verdict than inside check (test_remote_cwd, r20261008-010104-2b69)
+RUNNER_PREFIX, RUNNER_ENV = "RESEARCH_", ("PYTHONPYCACHEPREFIX",)
+#: the suites whose tests run `lake` or what `lake build` builds in the Lean verifier: check runs them after its `lean-build`
+#: step (its `lean-suites`), and on its own this runs that build before them, so they run or skip alike in both
+AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "verity-core-composition", "verity-core-evaluate", "verity-core-firewall",
+              "verity/experimental/core/service/vstar", "verity-core-sampled-proofs",
+              "verity/experimental/core/protocols/network")
+#: the toolchain `lean-toolchain` pins, through elan when `lake` is missing (as `ci-pod.sh` does)
+ELAN = ('command -v lake >/dev/null || command -v "$HOME/.elan/bin/lake" >/dev/null || { curl -sSf '
+        'https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null; }; '
+        'export PATH="$HOME/.elan/bin:$PATH"; ')
 QUICK = ["-m", "not slow"]
 REGISTRY = "fixtures/artifacts.json"
 #: what a store fetch from inside the tree reads of it, which every suite may read: the registry, for repo replicas (indexing the
@@ -457,6 +470,31 @@ def roots(suite: Suite, pkgs: dict[str, str]) -> list[str]:
     by_path = {p: n for n, p in pkgs.items()}
     groups = [_requirement_name(r) for g in root.get("dependency-groups", {}).values() for r in g if isinstance(r, str)]
     return sorted({*([own] if own else []), *(by_path[p] for p in suite.inputs if p in by_path), *groups})
+
+
+def flock_lean() -> Path:
+    """The Lean verifier of record, the package check's `lean-build` step builds (check.py's `FLOCK_LEAN`)."""
+    return ROOT / "verity" / "core" / "service" / "flock"
+
+
+def lean_on_path() -> None:
+    """Put elan's `lake` on this process's PATH, installing elan when there is none, as check's Lean steps have it; the suites'
+    keys then see `lake` as they do inside check."""
+    p = subprocess.run(["bash", "-c", ELAN + "command -v lake"], capture_output=True, text=True)
+    lake = p.stdout.strip().splitlines()[-1] if p.returncode == 0 and p.stdout.strip() else ""
+    if lake and shutil.which("lake") is None:
+        os.environ["PATH"] = os.pathsep.join([str(Path(lake).parent), os.environ.get("PATH", "")])
+
+
+def lean_build(log: Path) -> str | None:
+    """check's `lean-build` step, `lake build` in the verifier: None when it built (or the tree has no verifier), else why not."""
+    lean = flock_lean()
+    if not (lean / "lakefile.toml").exists():
+        return None
+    print(f"suites: `lake build` in {lean.relative_to(ROOT)} (check's lean-build step) before {', '.join(AFTER_LEAN)}")
+    with log.open("w") as out:
+        rc = subprocess.run(["bash", "-c", ELAN + "lake build"], cwd=lean, stdout=out, stderr=subprocess.STDOUT).returncode
+    return None if rc == 0 else f"`lake build` in {lean.relative_to(ROOT)} exited {rc}"
 
 
 def environment() -> dict:
@@ -1149,7 +1187,8 @@ def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: 
     slug = suite.path.replace("/", "_") if suite.path != "." else "repository"
     log, report = logs / f"{slug}.log", logs / f"{slug}.json"
     report.unlink(missing_ok=True)
-    env = dict(os.environ, VERITY_SUITE_ROOT=str(ROOT), VERITY_SUITE_ALLOW=json.dumps(allowed), VERITY_SUITE_REPORT=str(report),
+    env = {k: v for k, v in os.environ.items() if not k.startswith(RUNNER_PREFIX) and k not in RUNNER_ENV}
+    env.update(VERITY_SUITE_ROOT=str(ROOT), VERITY_SUITE_ALLOW=json.dumps(allowed), VERITY_SUITE_REPORT=str(report),
                VERITY_SUITE_WATCH=json.dumps(list(watch)))
     env.pop("VERITY_SUITE_REUSE", None)
     env.pop("VERITY_SUITE_MODULE", None)
@@ -1348,6 +1387,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--no-per-test", action="store_true", help="neither reuse nor keep per-test passes")
     ap.add_argument("--explain", metavar="SUITE", help="say why SUITE would run: its key against the nearest pass kept here, and its "
                     "per-test reuse; runs nothing")
+    ap.add_argument("--lean-built", action="store_true", help=f"the Lean verifier is built and `lake` is on the PATH (check's "
+                    f"lean-suites step): don't run `lake build` before {', '.join(AFTER_LEAN)}")
     a = ap.parse_args(argv)
     sys.stdout.reconfigure(line_buffering=True)
     if not in_git():
@@ -1363,10 +1404,15 @@ def main(argv: list[str] | None = None) -> int:
     skipped = select(suites, a.skip) if a.skip else []
     chosen = [s for s in select(suites, [a.explain] if a.explain else a.suites) if s not in skipped]
     args = (QUICK if a.quick else []) + extra
-    tree, env = worktree(), environment()
+    tree = worktree()
     if a.changed:
         chosen = touched(chosen, pkgs, a.changed, tree, locked())
         print(f"suites: the change from {a.changed[:12]} touches {len(chosen)}: {', '.join(s.name for s in chosen) or 'none'}")
+    build_lean = (not (a.list or a.explain or a.lean_built) and any(s.name in AFTER_LEAN for s in chosen)
+                  and (flock_lean() / "lakefile.toml").exists())
+    if build_lean:
+        lean_on_path()
+    env = environment()
     inputs = {s: inputs_of(s, pkgs) for s in chosen}
     fixtures = fetched_fixtures(tree, {p for ps in inputs.values() for p in ps})
     logs = a.logs or CACHE / "logs" / f"{time.strftime('%Y%m%dT%H%M%S')}-{os.getpid()}"
@@ -1409,6 +1455,12 @@ def main(argv: list[str] | None = None) -> int:
               f"{', '.join(sorted(p for p in unfetched if _under(p, inputs[s])))[:300]} (log: {logs / 'fetch-fixtures.log'})")
         results.append(Result(s, "failed", log=logs / "fetch-fixtures.log"))
     todo = [(s, paths, keys, deps) for s, paths, keys, hit, deps in plan if (a.fresh or not hit) and s not in blocked]
+    if build_lean and any(s.name in AFTER_LEAN for s, *_ in todo) and (why := lean_build(logs / "lean-build.log")):
+        for s, *_ in todo:
+            if s.name in AFTER_LEAN:
+                print(f"failed  {s.name:28} {why} (log: {logs / 'lean-build.log'})")
+                results.append(Result(s, "failed", log=logs / "lean-build.log"))
+        todo = [t for t in todo if t[0].name not in AFTER_LEAN]
     known = _durations()
     todo.sort(key=lambda t: (not t[0].parallel, -known.get(t[0].name, float("inf"))))
     for r in results:
