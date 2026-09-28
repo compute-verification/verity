@@ -2,7 +2,7 @@ import FlockSoundness.CompiledLock
 import FlockSoundness.Soundness
 
 /-!
-# Compiled soundness under collision resistance (ASSUMPTIONS.md §1.2)
+# Compiled soundness under collision resistance (README.md §1.2)
 
 The oracle prover `P̃` sends, at each commitment, the plurality table of the openings the
 compiled prover `P*` makes there (`Lock.oracleStrat`). A compiled run that accepts while some
@@ -616,7 +616,7 @@ theorem bad_le [Inhabited D] (A : Arith F K) (H : List UInt8 → D) (E : Merkle.
   linarith
 
 open Classical in
-/-- **Compiled soundness under collision resistance** (ASSUMPTIONS.md §1.2). For every compiled
+/-- **Compiled soundness under collision resistance** (README.md §1.2). For every compiled
 prover `P*` (strategy `σ`), with `T*(P*)` the plurality table of its level-0 openings:
 `Pr[accepted ∧ no codeword near T*(P*) packs a satisfying witness]` is at most `tableError`,
 plus `√(N·Q·Adv)` for the level-0 cap and for every rep's cap, plus the probability of a
