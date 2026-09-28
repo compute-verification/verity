@@ -8,23 +8,27 @@ schema = "ci/v0"
 [[job]]
 name = "pytest"
 owner = "ci"
+part = "tests"
 group = 1
 
 # Group 2: C-Flock's Rust build and tests, and the property checks every circuit passes.
 [[job]]
 name = "flock-circuit-build"
 owner = "proofs"
+part = "circuits"
 group = 2
 halts_on = "error: could not compile"
 
 [[job]]
 name = "circuit-check"
 owner = "circuits"
+part = "circuits"
 group = 2
 
 [[job]]
 name = "flock-rust-tests"
 owner = "proofs"
+part = "circuits"
 group = 2
 needs = ["flock-circuit-build"]
 
@@ -32,17 +36,20 @@ needs = ["flock-circuit-build"]
 [[job]]
 name = "lean-build"
 owner = "proofs"
+part = "lean"
 group = 3
 
 [[job]]
 name = "lean-unit-cut"
 owner = "proofs"
+part = "lean"
 group = 3
 needs = ["lean-build"]
 
 [[job]]
 name = "lean-agreement"
 owner = "proofs"
+part = "lean"
 group = 3
 needs = ["lean-build"]
 merge_requires = ["backends/flock/", "!README.md", "!PROTOCOL.md"]
@@ -51,12 +58,14 @@ merge_requires = ["backends/flock/", "!README.md", "!PROTOCOL.md"]
 [[job]]
 name = "lean-audit"
 owner = "lean"
+part = "lean"
 group = 4
 
 # Group 5: the early Lean check on a merge (stale records, broken builds); its failure stops the whole run.
 [[job]]
 name = "lean-changed"
 owner = "lean"
+part = "lean"
 group = 5
 halts = true
 
@@ -64,6 +73,7 @@ halts = true
 [[job]]
 name = "lean-suites"
 owner = "ci"
+part = "tests"
 group = 6
 after = "lean-build"
 
