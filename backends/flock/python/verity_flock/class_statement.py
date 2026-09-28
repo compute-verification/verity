@@ -653,6 +653,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0
 
 
+def _device(gpu: bool) -> str | None:
+    """The device that proved: the GPU's name (nvidia-smi), else the CPU model."""
+    try:
+        if gpu:
+            return subprocess.run(["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"], capture_output=True, text=True,
+                                  timeout=30).stdout.strip().splitlines()[0]
+        return next(ln.split(":", 1)[1].strip() for ln in open("/proc/cpuinfo") if ln.startswith("model name"))
+    except (OSError, IndexError, StopIteration, subprocess.SubprocessError):
+        return None
+
+
 def write_result(results: Path, a) -> None:
     """``$RESEARCH_RUN_DIR/result.json`` (research/result/v0.1) when run under ``research run``: the settings as the fingerprint, the
     shapes' counts and summed timings as measurements, and every shape's record (keyed by shape digest) in ``results.jsonl``, copied
@@ -670,7 +681,7 @@ def write_result(results: Path, a) -> None:
     doc = {"schema": "research/result/v0.1", "run_id": os.environ.get("RESEARCH_RUN_ID", ""),
            "workload_fingerprint": {"kind": "class-sweep/v1", "statement": FC.STATEMENT, "scheme": FC.SCHEME, "partition": a.partition,
                                     "gpu": a.gpu, "warm": a.warm, "runs": a.runs, "batch": a.batch or a.n, "seed": a.seed,
-                                    "protocol": a.protocol, "shapes": sorted(r["shape"] for r in recs)},
+                                    "protocol": a.protocol, "device": _device(a.gpu), "shapes": sorted(r["shape"] for r in recs)},
            "validation": {"status": "failed" if rejected or any(not x.get("all_pass") for x in selftests) else ("passed" if ok else "not_run"),
                           "checker": "flock-circuit loopback verifier (live coins) and selftest",
                           "detail": f"{len(ok)} of {len(recs)} shapes accepted, {len(rejected)} rejected, "
