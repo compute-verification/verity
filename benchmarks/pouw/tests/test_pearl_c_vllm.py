@@ -682,22 +682,31 @@ def test_the_host_path_commits_what_the_reference_path_commits(device_run, tmp_p
     assert got["native"][0][0] == PPD.call_keys(F, make().salt, make().roots[0], 0, 32, "blake3")
 
 
-def test_the_fused_screen_decides_the_rows_as_the_torch_screen_and_the_rules(monkeypatch):
-    """The Triton kernel under Triton's CPU interpreter, on rows at the rules' edges: its excluded rows are `screen`'s and
-    `pearl_c_work.row_passes`'s."""
+def interpreted_triton(monkeypatch) -> None:
+    """Triton's CPU interpreter for the kernels made from here, or a skip."""
     import os
     if "triton" in sys.modules and os.environ.get("TRITON_INTERPRET") != "1":
         pytest.skip("triton is already imported without its interpreter")
     monkeypatch.setenv("TRITON_INTERPRET", "1")
     pytest.importorskip("triton")
-    rng, k = np.random.default_rng(7), 1024
-    words = bf16_words(rng, 12, k)
+
+
+def edge_rows(k: int = 1024) -> tuple:
+    """Twelve rows at the screen's edges (zero, dead counts either side of k/64, a large outlier) as FP32 words: (words, x,
+    α, aux)."""
+    words = bf16_words(np.random.default_rng(7), 12, k)
     words[1] = 0
     for r, count in ((2, 17), (3, 16), (4, 40)):
         words[r, [p for p in range(k) if p % 8][:count]] = np.float32(1e4).view(np.uint32) & 0xFFFF0000
     words[5, 3] = np.float32(200.0).view(np.uint32)
-    x = torch.from_numpy(words.view(np.float32).copy())
-    alpha, aux = stats(words)
+    return words, torch.from_numpy(words.view(np.float32).copy()), *stats(words)
+
+
+def test_the_fused_screen_decides_the_rows_as_the_torch_screen_and_the_rules(monkeypatch):
+    """The Triton kernel under Triton's CPU interpreter, on rows at the rules' edges: its excluded rows are `screen`'s and
+    `pearl_c_work.row_passes`'s."""
+    interpreted_triton(monkeypatch)
+    words, x, alpha, aux = edge_rows()
     fused = torch.zeros((12, 2), dtype=torch.uint8)
     PPD.screen_into(fused, x, alpha, aux, fused=True)
     ref = torch.zeros((12, 2), dtype=torch.uint8)
@@ -706,6 +715,25 @@ def test_the_fused_screen_decides_the_rows_as_the_torch_screen_and_the_rules(mon
     assert PPD.excluded(fused[:, 0].bool(), fused[:, 1].bool(), x) == PPD.excluded(ref[:, 0].bool(), ref[:, 1].bool(), x) == want
     assert torch.equal(fused, ref)
 
+
+
+@pytest.mark.parametrize("rows, tiles", [(12, 40), (5, 1), (0, 33)])
+def test_a_graphs_scatter_screens_its_rows_into_the_pass_and_copies_its_leaves_and_root_at_the_slots_offsets(monkeypatch, rows,
+                                                                                                           tiles):
+    """A graph's last launch under Triton's CPU interpreter: the flags it writes at the slot's flag offset are `screen_into`'s
+    for its first `rows` rows, its leaves and A root land at their offsets, and no other byte of the pass's buffers changes."""
+    interpreted_triton(monkeypatch)
+    from verity_vllm.protocol_options import pouw_pearl_c_screen as PS
+    _, x, alpha, aux = edge_rows()
+    flags = torch.zeros((12, 2), dtype=torch.uint8)
+    PS.screen_into(flags, x, alpha, aux, fused=True)
+    gen = torch.Generator().manual_seed(rows + tiles)
+    leaves, root = (torch.randint(0, 256, (n,), dtype=torch.uint8, generator=gen) for n in (32 * tiles, 32))
+    bufs = [torch.full((n,), 0xA5, dtype=torch.uint8) for n in (1 << 16, 4096, 32 * 64)]
+    want = [t.clone() for t in bufs]
+    want[0][3200:3200 + 32 * tiles], want[1][74:74 + 2 * rows], want[2][288:320] = leaves, flags[:rows].flatten(), root
+    PS.scatter_into(x, alpha, aux, rows, bufs[1], leaves, bufs[0], root, bufs[2], torch.tensor([3200, 74, 288]))
+    assert all(torch.equal(a, b) for a, b in zip(bufs, want, strict=True))
 
 # ---- step 2 of the decode plan: the deferred schedule -------------------------------------------------------------
 
