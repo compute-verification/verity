@@ -1391,6 +1391,7 @@ fn extracted(st: &Stmt, view: &View) -> Result<(Vec<Vec<F128>>, Vec<Vec<Vec<F128
 }
 
 /// The `Hello` a view's session sent (its coin-tree nonce: the simulator's rewinds restart after it).
+#[cfg(feature = "seed-injection")]
 fn view_hello(view: &View) -> Result<String, String> {
     view.iter().find_map(|(req, _)| if let Req::Hello(h) = req { Some(h.clone()) } else { None }).ok_or("the view has no Hello".into())
 }
