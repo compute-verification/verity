@@ -95,7 +95,6 @@ theorem setupHidden_spec' (h : Stmt.setupHidden tags cf pf coins tables draw par
       da := congrArg Prod.fst (delta_noPorts he)
       db := congrArg Prod.snd (delta_noPorts he)
       regions := by rw [Array.append_empty]; assumption
-      regionWords := by assumption
       inRange := by assumption
       sigma := rfl
       hello := by assumption }

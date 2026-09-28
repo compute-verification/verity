@@ -262,7 +262,6 @@ theorem zk_ligerito_reqs (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (
   have hc01 := hcols 0 (by omega)
   have hn3 : 3 ≤ sch.n := by omega
   unfold Zk.ligerito at h
-  obtain ⟨hR, h⟩ := check_bind h
   obtain ⟨hcap, h⟩ := check_bind h
   obtain ⟨hzl, h⟩ := check_bind h
   obtain ⟨t₁, k₁, h⟩ := label_bind h

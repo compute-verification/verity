@@ -118,7 +118,6 @@ theorem zerocheck_refines (m : ℕ) (hm : 15 ≤ m) (digest cap : ByteArray) (p 
   obtain ⟨t₁, k₁, h⟩ := label_bind h
   obtain ⟨t₂, k₂, h⟩ := absorbBytes_bind h
   obtain ⟨t₃, k₃, h⟩ := absorbBytes_bind h
-  obtain ⟨-, h⟩ := check_bind h
   obtain ⟨t₄, k₄, h⟩ := label_bind h
   obtain ⟨lt₄, n₄, t₅, r₅, kk₅, h⟩ := sampleVec_bind (by omega) h
   obtain ⟨lt₅, n₅, t₆, r₆, kk₆, h⟩ := sampleVec_bind (by omega) h
