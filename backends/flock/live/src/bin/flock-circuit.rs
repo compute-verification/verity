@@ -2230,6 +2230,7 @@ const CASES: &[(&str, bool, bool)] = &[
     ("gpu_proofs_match_cpu", true, false),
     ("gpu_paths_agree", true, false),
     ("host_units_match_witness", true, false),
+    ("native_sha_matches_eval64", true, false),
     ("region_word_shared_refused", false, false),
     ("zk_pads_not_the_committed_ones", false, true),
     ("zk_level0_folds_another_extra_lane", false, true),
@@ -2368,6 +2369,38 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         });
         return json!({"case": name, "expect": "host-evaluated unit slots equal the witness's", "slots": slots.len(),
                       "pass": same && slots.len() == st.blocks() * ur.count});
+    }
+    if name == "native_sha_matches_eval64" {
+        // the compression and hm96 slots' native witness (sha512_native: SHA-512 in 64-bit words, each row read off it by a plan
+        // derived from the pinned slot circuit) is Stmt::slot_zab's (eval64 of the rows, then the lane transpose), word for word,
+        // on every slot of every block, padding instances included
+        use flock_live::sha512_native::NativeSha;
+        use rayon::prelude::*;
+        let w = wit(st, inst, &Plan::default(), false, ProverSeed::from_os());
+        let (mut si, mut hi) = (Vec::new(), Vec::new());
+        for b in 0..st.blocks() {
+            let (s, h) = (w.rowin)(b);
+            si.extend(s);
+            hi.extend(h);
+        }
+        let mut nets = serde_json::Map::new();
+        let mut pass = true;
+        for (ni, ins) in [(st.c.sha_net, &si), (st.c.hm_net, &hi)] {
+            let net = &st.c.nets[ni].1;
+            let v = match NativeSha::derive(net) {
+                Err(e) => json!({"pass": false, "why": e}),
+                Ok(plan) => {
+                    let host = st.slot_zab(ni, net, ins);
+                    let same = host.len() == ins.len()
+                        && host.par_iter().all(|(x, z, a, b)| plan.slot_zab(&ins[*x]) == (z.clone(), a.clone(), b.clone()));
+                    json!({"pass": same, "slots": host.len(), "rows": plan.rows.len(), "window": plan.window(net)})
+                }
+            };
+            pass &= v["pass"] == json!(true);
+            nets.insert(st.c.nets[ni].0.clone(), v);
+        }
+        return json!({"case": name, "expect": "the native SHA-512 witness equals eval64's on every compression and hm96 slot",
+                      "nets": nets, "pass": pass});
     }
     if name == "region_word_shared_refused" {
         // docs/region-word-check.md's negatives on the loaded circuit: a column sharing a partial region's word is refused with an
