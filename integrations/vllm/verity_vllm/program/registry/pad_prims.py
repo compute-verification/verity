@@ -1,5 +1,5 @@
-"""Primitives of the padded serving circuit (`Serve@3`) — lane PAD-IMPL, spec §9 of
-`docs/vllm-poc/serve3-spec.md` (PAD-SPEC v1), GUIDANCE §29.
+"""Primitives of the padded serving circuit (`Serve@3`) — lane PAD-IMPL, §9 of PAD-SPEC v1,
+GUIDANCE §29.
 
 The padded circuit carries one live/finished bit per decode step and selects, at decode-step granularity,
 between the step's computed outputs and the canonical pad values.  The gates this takes are boolean algebra
@@ -26,13 +26,13 @@ primitive exists or is needed (spec §9); the row muxes of `PadDecodeStep_v1` ar
 `serve3.py`.
 
 Backend/spec mirrors (the F2fpBf16 wiring pattern, one row per gate kind):
-  * SP1/Rust statement table: gate set `veritor.pad-serve@1` (`zk/sp1/common/src/gateset.rs`, semantics in
-    `zk/sp1/common/src/pad.rs`) — gates `select_bf16`, `select_f32`, `select_i32`, `eq_i32`, `bit_and`,
-    `bit_not` (+ `in`/`weight` sources at width 32); Python twin `src/veritor/core/pad_serve.py`.
-  * Lean primitive table: `lean/VeritorSpec/PadServe.lean` (`PadServe.family`), `Lawful`, with the
-    select/equality/boolean semantics and the absorbing step as theorems.
-`tests/program/test_pad_prims.py` pins the three-way agreement on vectors; existing primitive semantics
-are not modified anywhere.
+  * SP1/Rust statement table: gate set `veritor.pad-serve@1` (`backends/sp1/common/src/gateset.rs`, semantics in
+    `backends/sp1/common/src/pad.rs`) — gates `select_bf16`, `select_f32`, `select_i32`, `eq_i32`, `bit_and`,
+    `bit_not` (+ `in`/`weight` sources at width 32); its own tests pin the gate set's digest and evaluations.
+  * Lean primitive table: the predecessor implementation's `PadServe.family` (`Lawful`, with the
+    select/equality/boolean semantics and the absorbing step as theorems); not in this repository.
+`tests/program/test_pad_prims.py` pins the primitives on vectors; existing primitive semantics are not
+modified anywhere.
 """
 
 from __future__ import annotations

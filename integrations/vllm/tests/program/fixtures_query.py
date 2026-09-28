@@ -4,7 +4,7 @@ Shared by the boundary / query-API / partition test suites (import as `tests.pro
 constructor returns a `Program` small enough for the explicit oracle (`layout.GateSelection.in_` / `.out` on the expanded
 circuit); `FIXTURES` maps a short name to a memoised constructor so suites can parametrise over every family.
 
-Families (design doc `docs/vu-query-design-2026-09-17.md` §5 table + the counterexample shapes of the freeze doc):
+Families (the query design's §5 table + the counterexample shapes of the query-interface freeze):
 
   registry (verity_vllm/program/registry/b1.py and the quarantines)
     gemm                 Gemm_v1{K=32,N=6}                         members of the GemmCoordinate batch; DotBf16 chain inside

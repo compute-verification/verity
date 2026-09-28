@@ -1,5 +1,5 @@
-"""`Serve@3` — the padded serving circuit (lane PAD-IMPL; semantics frozen by PAD-SPEC in
-`docs/vllm-poc/serve3-spec.md` v1, GUIDANCE §29).
+"""`Serve@3` — the padded serving circuit (lane PAD-IMPL; semantics frozen by PAD-SPEC v1,
+GUIDANCE §29).
 
 Full padding over the one output-dependent dimension of single-request greedy serving: the realized
 generation length is represented *inside* the circuit as values (a per-step live bit), never as circuit

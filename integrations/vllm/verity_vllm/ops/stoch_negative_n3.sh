@@ -10,12 +10,18 @@
 #   Nothing is served again and nothing is retried; every artefact stays under $OUT/N3/.
 #
 # usage: stoch_negative_n3.sh <row-id> <role> <hf-repo> <revision> <out-dir>
-#        env: VERITOR_REPO, SWEEP_DIR, PY, PY312 as row_pod.sh; N3_MUTATION = python over the manifest dict `w` (default: move the
+#        env: SWEEP_DIR, PY, PY312 as row_pod.sh; N3_MUTATION = python over the manifest dict `w` (default: move the
 #        arrival of the request that arrives last-but-one ... see below) — the mutation must change some batch-mate's live count
 #        across a split boundary (4/5 = 32/16 at 142 SMs) or the negative is vacuous (reported as NEGATIVE-VACUOUS, not as caught).
 set -uo pipefail
 ROW=${1:?row-id}; ROLE=${2:?role}; REPO=${3:?hf repo}; REV=${4:?revision}; OUT=${5:?out-dir}
-cd "${VERITOR_REPO:-/workspace/cp/veritor}"
+# the tree that runs is the one this script lives in, never an environment default
+TREE_SELF=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)
+if [ -n "${VERITY_TREE:-}" ] && [ "$(cd "$VERITY_TREE" 2>/dev/null && pwd -P)" != "$TREE_SELF" ]; then
+  echo "PRECHECK_FAIL_SOURCE_IDENTITY: stoch_negative_n3.sh at $TREE_SELF but \$VERITY_TREE=$VERITY_TREE names another tree" >&2; exit 3
+fi
+export VERITY_TREE=$TREE_SELF
+cd "$VERITY_TREE" || exit 1
 export PYTHONPATH=. HF_HOME=/workspace/hf HF_HUB_OFFLINE=1 TOKENIZERS_PARALLELISM=false
 PY=${PY:-/workspace/venv-cu129/bin/python}; PY312=${PY312:-/workspace/venv-py312/bin/python}
 D=${SWEEP_DIR:-/workspace/cp/sweep}/$ROW

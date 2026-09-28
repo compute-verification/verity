@@ -1,5 +1,4 @@
-"""`Serve@3` authored in torch through the frontend (lane PAD-IMPL; semantics frozen by PAD-SPEC in
-`docs/vllm-poc/serve3-spec.md` v1).
+"""`Serve@3` authored in torch through the frontend (lane PAD-IMPL; semantics frozen by PAD-SPEC v1).
 
     Gate -> exactly one Value<w>.
     Composite interfaces -> ordered collections of value references.

@@ -1,6 +1,7 @@
 """Merkle trees over canonical ids, openings, ``commitments.json`` (contract section 5).
 
-Hash layout (also in :mod:`verity_vllm.commit.hashing` and ``docs/vllm-poc/capture-format.md`` section 2)::
+Hash layout (also in :mod:`verity_vllm.commit.hashing`; specified as ``vllm-v1`` in
+``packages/verity/src/verity/commitments/vllm_v1/PROTOCOL.md`` §1–§3)::
 
     H(tag, *parts) = sha256( u32be(len(tag)) || tag || (u64be(len(part)) || part)* )
     leaf  = H("verity-vllm/leaf/v1", canonical_id, dtype, "[d0,d1,...]", raw little-endian bytes)

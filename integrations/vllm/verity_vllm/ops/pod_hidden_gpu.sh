@@ -4,7 +4,7 @@
 # `import hidden_gpu` from `<repo>/out/gen/r9/cmt-hidden/src`).  `record_v5/ship.sh` does not ship that directory and `pod_up.sh` never
 # built the extension, so every Commit on a fresh R12 pod failed with `ModuleNotFoundError: No module named 'hidden_gpu'` (C-HIDDENGPU).
 #
-#   cd /workspace/cp/veritor && bash verity_vllm/ops/pod_hidden_gpu.sh            # idempotent; ~1-2 min on first run, seconds after
+#   cd <tree>/integrations/vllm && bash verity_vllm/ops/pod_hidden_gpu.sh            # idempotent; ~1-2 min on first run, seconds after
 #   -> prints  HIDDEN-GPU-OK <sha256 of hidden_gpu_tree.so>   (or HIDDEN-GPU-FAIL <reason>, exit 1)
 #
 # What it does: (1) materialises `out/gen/r9/cmt-hidden/src/{hidden_gpu.py,hidden_gpu_tree.cu}` from the shipped copies in
@@ -18,7 +18,7 @@ set -uo pipefail
 REPO=${REPO:-$(cd "$(dirname "$0")/../.." && pwd)}; cd "$REPO"
 VENV=${VENV:-/workspace/venv312}; PY=$VENV/bin/python   # [R19] the one Python 3.12 environment of verity_vllm/ops/pod_bootstrap.sh
 export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda}; export PATH=$VENV/bin:$CUDA_HOME/bin:$PATH
-export VERITOR_REPO=$REPO PYTHONPATH=$REPO:$REPO/../../packages/verity/src:$REPO/../../tools/research/src:$REPO/out/gen/r9/cmt-hidden/src${PYTHONPATH:+:$PYTHONPATH}   # [R19] core + runner beside the integration
+export VERITY_TREE=$REPO PYTHONPATH=$REPO:$REPO/../../packages/verity/src:$REPO/../../tools/research/src:$REPO/out/gen/r9/cmt-hidden/src${PYTHONPATH:+:$PYTHONPATH}   # [R19] core + runner beside the integration
 export HF_HUB_OFFLINE=${HF_HUB_OFFLINE:-1}
 fail() { echo "HIDDEN-GPU-FAIL $*"; exit 1; }
 [ -x "$PY" ] || fail "no venv python at $PY"

@@ -1,4 +1,4 @@
-"""PyTorch authoring frontend to `Program` (lane FE, thin prototype; `docs/frontend-pytorch-2026-09-07.md` §2–§3).
+"""PyTorch authoring frontend to `Program` (lane FE, thin prototype; frontend design §2–§3).
 
     Gate -> exactly one Value<w>.
     Composite interfaces -> ordered collections of value references.
