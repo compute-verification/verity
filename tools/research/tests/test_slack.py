@@ -537,7 +537,7 @@ def test_oidc_token_asks_the_cursor_socket_for_the_brokers_audience(identity_soc
             slack.oidc_token(slack.BROKER)
 
 
-def test_oidc_token_asks_again_when_the_socket_drops_the_connection(identity_socket, monkeypatch, tmp_path):
+def test_oidc_token_asks_again_when_the_socket_drops_the_connection(identity_socket, monkeypatch):
     waits: list[float] = []
     identity_socket["drop"] = 2
     assert slack.oidc_token(slack.BROKER, sleep=waits.append) == OIDC
@@ -546,7 +546,7 @@ def test_oidc_token_asks_again_when_the_socket_drops_the_connection(identity_soc
     with pytest.raises(slack.SlackError, match="identity socket the Slack broker needs is unavailable"):
         slack.oidc_token(slack.BROKER, sleep=waits.append)
     assert len(identity_socket["seen"]) == 1 and identity_socket["drop"] == 0
-    monkeypatch.setenv("CURSOR_AGENT_SOCKET", str(tmp_path / "absent.sock"))
+    monkeypatch.setenv("CURSOR_AGENT_SOCKET", os.path.join(os.path.dirname(os.environ["CURSOR_AGENT_SOCKET"]), "absent.sock"))
     waits.clear()
     with pytest.raises(slack.SlackError, match="not a Cursor agent"):
         slack.oidc_token(slack.BROKER, sleep=waits.append)

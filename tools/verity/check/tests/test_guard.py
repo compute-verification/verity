@@ -59,6 +59,31 @@ def test_a_parallel_suite_that_reads_only_its_inputs_passes(tmp_path, monkeypatc
     assert (r.status, r.outside, r.unguarded, r.counts["passed"]) == ("passed", [], [], 4), r.log.read_text()
 
 
+def test_a_suites_tmp_paths_are_under_its_own_basetemp_and_gone_when_it_ends(tmp_path, tmp_path_factory, monkeypatch):
+    """pytest keeps its last three base temps (a flock suite's is ~45 GB: vy-cpu-1 and vy-cpu-2 filled on 11 Oct); each suite gets
+    its own `--basetemp`, removed when it ends, unless the caller passed one, and a killed suites.py's are swept by the next."""
+    import os
+    import tempfile
+    S, suite = _suite(tmp_path, monkeypatch, reads_outside=False)
+    tmp = tmp_path_factory.mktemp("tmp")                         # outside the suite's tree, as /tmp is
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp))
+    monkeypatch.setenv("EXPECT", str(tmp / f"{S.BASETEMP}-{os.getpid()}-"))
+    (tmp_path / "pkg" / "tests" / "test_reads.py").write_text(
+        "import os\n\ndef test_tmp(tmp_path):\n    (tmp_path / 'big').write_bytes(b'x' * 4096)\n"
+        "    assert str(tmp_path).startswith(os.environ['EXPECT'])\n")
+    r = S.run(suite, ["pkg"], [], tmp_path / "logs")
+    assert (r.status, r.counts["passed"]) == ("passed", 1), r.log.read_text()
+    assert list(tmp.iterdir()) == []
+    mine = tmp_path_factory.mktemp("mine")
+    monkeypatch.setenv("EXPECT", str(mine))
+    r = S.run(suite, ["pkg"], [f"--basetemp={mine}"], tmp_path / "logs")
+    assert r.status == "passed" and (mine / "test_tmp0" / "big").exists() and list(tmp.iterdir()) == []
+    dead, live = tmp / f"{S.BASETEMP}-999999999-pkg-x", tmp / f"{S.BASETEMP}-{os.getppid()}-pkg-y"
+    dead.mkdir()
+    live.mkdir()
+    assert S.sweep_basetemps() == [dead] and live.exists()
+
+
 @pytest.mark.parametrize("listed", [False, True])
 def test_markdown_inside_the_inputs_is_outside_them_unless_the_suite_lists_markdown(tmp_path, monkeypatch, listed):
     """A suite's keys leave `*.md` out of its directories unless it lists a `.md` (`suites.markdown`), so a test that reads one
