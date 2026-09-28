@@ -762,8 +762,9 @@ from verity_vllm.program.kernels import softcap_rows  # noqa: E402  -- Attention
 
 
 def attention_softcap(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
+    from verity_vllm.program.kernels.ir_rows import f64_statics
     f = softcap_rows.FAMILY
-    return softcap_rows.attention_softcap(statics, ops, prim_static(statics, "DOT", f), prim_static(statics, "INV", f))
+    return softcap_rows.attention_softcap(f64_statics(statics), ops, prim_static(statics, "DOT", f), prim_static(statics, "INV", f))
 
 
 EVALUATORS[softcap_rows.FAMILY] = softcap_rows.EVALUATOR
