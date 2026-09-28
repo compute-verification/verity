@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import random
 import statistics
 import sys
@@ -112,7 +113,7 @@ def benchmark(ext, reps: int) -> dict:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out", type=Path, default=Path("route_u.json"))
+    ap.add_argument("--out", type=Path, default=Path(os.environ.get("RESEARCH_RUN_DIR", ".")) / "route_u.json")
     ap.add_argument("--reps", type=int, default=30)
     args = ap.parse_args()
     if torch.cuda.get_device_name() != "NVIDIA GeForce RTX 4090":
