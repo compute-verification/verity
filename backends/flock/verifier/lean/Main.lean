@@ -374,6 +374,30 @@ def drawTest (path : String) (args : List String) : IO UInt32 := do
     IO.println s!"DRAWCHECK {(Lean.Json.mkObj [("ok", Lean.Json.bool ok), ("why", Lean.Json.str why)]).compress}"
   return 0
 
+/-- `lookup-rows TABLE n lo bits`: the `table/v2` slot of a table file (raw `u32` LE words), `library` exactly when its
+SHA-512 is listed: its width, shape and rows digest (`Lookup.rowsDigest`), the vectors Rust's and Python's generators are
+held to. One `LOOKUPROWS` line. -/
+def lookupRowsCmd (args : List String) : IO UInt32 := do
+  let (path, n, lo, bits) ← match args with
+    | [p, n, lo, bits] => match n.toNat?, lo.toNat?, bits.toNat? with
+      | some n, some lo, some bits => pure (p, n, lo, bits)
+      | _, _, _ => IO.eprintln "lookup-rows TABLE n lo bits"; return 2
+    | _ => IO.eprintln "lookup-rows TABLE n lo bits"; return 2
+  let table ← IO.FS.readBinFile path
+  let sha := hexOf (Sha512.hash table)
+  let line := match Lookup.buildV2 "lookup" sha table n lo bits with
+    | .error e => Lean.Json.mkObj [("ok", Lean.Json.bool false), ("error", Lean.Json.str e)]
+    | .ok net =>
+      let lk := net.lookup.getD default
+      Lean.Json.mkObj [("ok", Lean.Json.bool true), ("table_sha512", Lean.Json.str sha),
+        ("n", Lean.toJson n), ("lo", Lean.toJson lo), ("bits", Lean.toJson bits),
+        ("library", Lean.Json.bool (libraryTable? sha).isSome),
+        ("k", Lean.toJson lk.bits), ("useful", Lean.toJson net.useful), ("unit_log", Lean.toJson net.unitLog),
+        ("prod0", Lean.toJson lk.prod0), ("lo_top", Lean.toJson lk.loTop),
+        ("rows_sha512", Lean.Json.str (hexOf (Lookup.rowsDigest net n lo bits)))]
+  IO.println s!"LOOKUPROWS {line.compress}"
+  return (if (line.getObjValAs? Bool "ok").toOption.getD false then 0 else 1)
+
 /-- `template-query FILE...`: a template-instance query on a program (`Flock.TemplateQuery`) for each case `{"descriptor", "query"}`
 (the descriptor's bytes as a string): the program's SHA-512, the population, the ranges and every unit's root node, member and
 gates, or the refusal. One `TEMPLATEQUERY` line per file. -/
@@ -403,33 +427,8 @@ def templateQueryCmd (paths : List String) : IO UInt32 := do
     IO.println s!"TEMPLATEQUERY {line.compress}"
   return 0
 
-/-- `lookup-rows TABLE n lo bits`: the `table/v2` slot of a table file (raw `u32` LE words), `library` exactly when its
-SHA-512 is listed: its width, shape and rows digest (`Lookup.rowsDigest`), the vectors Rust's and Python's generators are
-held to. One `LOOKUPROWS` line. -/
-def lookupRowsCmd (args : List String) : IO UInt32 := do
-  let (path, n, lo, bits) ← match args with
-    | [p, n, lo, bits] => match n.toNat?, lo.toNat?, bits.toNat? with
-      | some n, some lo, some bits => pure (p, n, lo, bits)
-      | _, _, _ => IO.eprintln "lookup-rows TABLE n lo bits"; return 2
-    | _ => IO.eprintln "lookup-rows TABLE n lo bits"; return 2
-  let table ← IO.FS.readBinFile path
-  let sha := hexOf (Sha512.hash table)
-  let line := match Lookup.buildV2 "lookup" sha table n lo bits with
-    | .error e => Lean.Json.mkObj [("ok", Lean.Json.bool false), ("error", Lean.Json.str e)]
-    | .ok net =>
-      let lk := net.lookup.getD default
-      Lean.Json.mkObj [("ok", Lean.Json.bool true), ("table_sha512", Lean.Json.str sha),
-        ("n", Lean.toJson n), ("lo", Lean.toJson lo), ("bits", Lean.toJson bits),
-        ("library", Lean.Json.bool (libraryTable? sha).isSome),
-        ("k", Lean.toJson lk.bits), ("useful", Lean.toJson net.useful), ("unit_log", Lean.toJson net.unitLog),
-        ("prod0", Lean.toJson lk.prod0), ("lo_top", Lean.toJson lk.loTop),
-        ("rows_sha512", Lean.Json.str (hexOf (Lookup.rowsDigest net n lo bits)))]
-  IO.println s!"LOOKUPROWS {line.compress}"
-  return (if (line.getObjValAs? Bool "ok").toOption.getD false then 0 else 1)
-
 def main (args : List String) : IO UInt32 := do
   match args with
-  | "lookup-rows" :: rest => lookupRowsCmd rest
   | ["merkle-test", path] => merkleTest path
   | ["hm96-test", path] => hm96Test path
   | ["hm96-test", path, "sha512"] => hm96Test path Hm96.sha512
@@ -440,6 +439,7 @@ def main (args : List String) : IO UInt32 := do
   | "draw-test" :: path :: rest => drawTest path rest
   | "statement" :: rest => statementCmd rest
   | "verify" :: rest => verifyCmd rest
+  | "lookup-rows" :: rest => lookupRowsCmd rest
   | ["comp-check", path] => compCheck path
   | ["field-test", path] => fieldTest path
   | ["hash-test", path] => hashTest path
