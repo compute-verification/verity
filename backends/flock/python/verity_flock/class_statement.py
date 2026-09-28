@@ -389,8 +389,9 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
     n = len(rows)
     meta = json.loads(text.split("\n", 2)[1][5:])
     per_instance = (1 << meta["k_log"]) // meta["vus_per_block"]
-    if n * per_instance > MAX_STATEMENT_BITS:            # a unit whose rows are long pays for their hashing in every instance
-        n = max(meta["vus_per_block"], 1 << ((MAX_STATEMENT_BITS // per_instance).bit_length() - 1))
+    cap_bits = _CTX.get("max_statement_bits", MAX_STATEMENT_BITS)
+    if n * per_instance > cap_bits:                     # a unit whose rows are long pays for their hashing in every instance
+        n = max(meta["vus_per_block"], 1 << ((cap_bits // per_instance).bit_length() - 1))
         rows, outs = rows[:n], outs[:n]
         per_port = {k: v[:n] for k, v in per_port.items()}
         idents = [ids[:n] for ids in idents] if idents is not None else None
@@ -460,7 +461,18 @@ def prove(binary: str, d: Path, n: int, port: int, selftest: bool | str = False,
                                   "witness_s", "prove_s", "prove_total_s", "proof_bytes", "wire_sent", "wire_recv", "statement_digest")} | \
         {"prover_peak_gb": round(prover_gb, 2) if prover_gb else None, "verifier_peak_gb": verifier_gb,
          "verify_s": (v.get("verdict") or {}).get("verify_s"), "timed_runs": len(timed),
-         "prove_total_s_runs": [x.get("prove_total_s") for x in timed]}
+         "prove_total_s_runs": [x.get("prove_total_s") for x in timed],
+         # per rep: the prover's phase timings (witness: units and row hashing; encoding and commitment; zerocheck, lincheck,
+         # ring switch, Ligerito; t.total on the device), and host_s = the rep's wall time less t.total (host work and idle)
+         "buckets": _buckets(v), "buckets_runs": [_buckets(x) for x in timed]}
+
+
+def _buckets(live: dict) -> list[dict] | None:
+    reps = live.get("buckets")
+    if not reps:
+        return None
+    walls = live.get("prove_s") or []
+    return [dict(b, host_s=round(walls[i] - b.get("t.total", 0), 6) if i < len(walls) else None) for i, b in enumerate(reps)]
 
 
 def _vm_hwm(pid: int) -> float | None:
@@ -483,7 +495,7 @@ MAX_STATEMENT_BITS = 1 << 32
 
 
 def auto_batch(ands: int, row_units: int) -> int:
-    cap = min(1024, row_units, BATCH_ANDS // max(1, ands))
+    cap = min(1024, row_units, _CTX.get("batch_ands", BATCH_ANDS) // max(1, ands))
     return max(16, 1 << max(0, cap.bit_length() - 1))
 
 
@@ -587,6 +599,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--shapes", default=None, help="a file of shape digests (or prefixes), one per line: prove only these")
     ap.add_argument("--batch", default=None, help="'auto': instances per shape = the least of 1024, the row's units of it and 2^29 / its "
                     "ANDs, as a power of two >= 16 (overrides --n)")
+    ap.add_argument("--batch-ands", type=int, default=BATCH_ANDS, help="--batch auto's AND-instances per prove (default 2^29)")
+    ap.add_argument("--max-statement-bits", type=int, default=MAX_STATEMENT_BITS, help="witness bits per statement (default 2^32)")
     ap.add_argument("--jobs", type=int, default=1, help="shapes staged in parallel (forked workers); proving stays one at a time")
     ap.add_argument("--select", choices=["table-free", "reads", "units"], default=None,
                     help="leave out the token-select Calls, and prove only the shapes whose unit reads no pinned table (table-free), "
@@ -649,7 +663,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     jobs = [s for s, _cl in order if not (s in done or (a.only and not any(s.startswith(p) for p in a.only.split(",")))
                                           or (wanted is not None and not any(s.startswith(p) for p in wanted)))]
     _CTX.update(units=units, classes=classes, row_units=row_units, shared=broadcast_params(units), key=key, salt_key=salt_key,
-                out=out, a=a)
+                out=out, a=a, batch_ands=a.batch_ands, max_statement_bits=a.max_statement_bits)
     partition_binding(units, a.partition)
     for rec in _staged(jobs, a.jobs):
         s, cl = rec["shape"], classes[rec["shape"]]
@@ -712,7 +726,8 @@ def write_result(results: Path, a) -> None:
     doc = {"schema": "research/result/v0.1", "run_id": os.environ.get("RESEARCH_RUN_ID", ""),
            "workload_fingerprint": {"kind": "class-sweep/v1", "statement": FC.STATEMENT, "scheme": FC.SCHEME, "partition": a.partition,
                                     "gpu": a.gpu, "warm": a.warm, "runs": a.runs, "batch": a.batch or a.n, "seed": a.seed,
-                                    "protocol": a.protocol, "select": a.select, "device": _device(a.gpu), "shapes": sorted(r["shape"] for r in recs)},
+                                    "protocol": a.protocol, "select": a.select, "device": _device(a.gpu),
+                                    "batch_ands": a.batch_ands, "max_statement_bits": a.max_statement_bits, "shapes": sorted(r["shape"] for r in recs)},
            "validation": {"status": "failed" if rejected or any(not x.get("all_pass") for x in selftests) else ("passed" if ok else "not_run"),
                           "checker": "flock-circuit loopback verifier (live coins) and selftest",
                           "detail": f"{len(ok)} of {len(recs)} shapes accepted, {len(rejected)} rejected, "
