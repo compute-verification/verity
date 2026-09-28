@@ -11,6 +11,8 @@ TREE=$(pwd); O=$RESEARCH_RUN_DIR; WORK=${WORK:-/workspace}
 CODEC=${CODEC:-band-chain/d12/v1}; CASE=${CASE:-QWEN05}; AUDITS=${AUDITS:-20}; WORKERS=${WORKERS:-12}
 # prefill and decode-batch-1 slowdowns against plain serving, one decode per forward (pous-bench's method; Qwen2.5-0.5B has 24 layers)
 PREFILL=${PREFILL:-2048x4}; DECODE_TOKENS=${DECODE_TOKENS:-4}; LAYERS_PER_DECODE=${LAYERS_PER_DECODE:-24}
+# the band's run of record's kernel flags (r20260928-045955-1d02, pous-dense-bench), as serve-spec keys
+KERNELS=${KERNELS:-'{"thread_rows": 500, "word_io": true, "fused": true, "pair": true, "pair_max_rows": 7500, "chunked": true, "chunked_threads": 64, "split": true, "fused_x": true, "whole_chain": true}'}
 nvidia-smi --query-gpu=name,driver_version --format=csv,noheader || true
 (cd integrations/vllm && bash verity_vllm/ops/pod_bootstrap.sh --cpu --cases "$CASE" --out "$O/bootstrap") > "$O/bootstrap.log" 2>&1 \
   || { tail -30 "$O/bootstrap.log"; exit 3; }
@@ -30,4 +32,5 @@ if [ "$DRV" -lt 575 ]; then
 fi
 exec verity-vllm pous e2e --out "$O/pous" --case "$CASE" --codec "$CODEC" --build-dir "$WORK/pous_build" \
   --result "$O/result.json" --run-id "$RESEARCH_RUN_ID" --verifier-cpu 3 --responder-cpu 2 --pings 5000 --audits "$AUDITS" \
-  --max-tokens 6 --workers "$WORKERS" --prefill "$PREFILL" --decode-tokens "$DECODE_TOKENS" --layers-per-decode "$LAYERS_PER_DECODE"
+  --max-tokens 6 --workers "$WORKERS" --prefill "$PREFILL" --decode-tokens "$DECODE_TOKENS" --layers-per-decode "$LAYERS_PER_DECODE" \
+  --kernels "$KERNELS"
