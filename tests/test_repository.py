@@ -9,9 +9,11 @@ backstop for anything that slips past it.
 
 from __future__ import annotations
 
+
 import os
 import re
 import subprocess
+import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -144,6 +146,25 @@ def test_markdown_size_caps() -> None:
         if size > cap:
             offenders.append(f"{p}: {size / 1024:.0f} KB > {cap // 1024} KB")
     assert not offenders, "maintained documents are small; move detail to the notes store:\n" + "\n".join(offenders)
+
+
+#: Frozen backends whose other test files need torch, a GPU or cargo, and were never part of `check` (backends/README.md).
+UNSUITED_TEST_DIRS = ("backends/direct/", "backends/gkr/", "backends/shared/")
+
+
+def test_every_test_file_is_in_a_suite() -> None:
+    """`tools/check/suites.py` runs suites, so a test file outside every suite's testpaths would never run. A suite is a
+    directory whose pyproject.toml configures pytest; give a new package one, or put the test in the package it tests."""
+    tracked = _tracked()
+    testpaths = []
+    for p in tracked:
+        if os.path.basename(p) == "pyproject.toml":
+            ini = tomllib.loads((ROOT / p).read_text()).get("tool", {}).get("pytest", {}).get("ini_options")
+            if ini is not None:
+                testpaths += [os.path.normpath(os.path.join(os.path.dirname(p), t)) for t in ini.get("testpaths", ["."])]
+    tests = [p for p in tracked if p.endswith(".py") and (os.path.basename(p).startswith("test_") or p.endswith("_test.py"))]
+    offenders = [p for p in tests if not any(t == "." or p.startswith(t + "/") for t in testpaths) and not p.startswith(UNSUITED_TEST_DIRS)]
+    assert not offenders, "test files that no suite runs:\n" + "\n".join(offenders)
 
 
 def test_no_tracked_blob_exceeds_limit() -> None:
