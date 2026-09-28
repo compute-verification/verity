@@ -13,6 +13,7 @@ from verity_vllm.check.replay.sample import sample
 from verity_vllm.pipeline import config_record as CR
 from verity_vllm.pipeline import program_cache as PC
 from verity_vllm.pipeline import row_config as RC
+from verity_vllm.pipeline import row_records as R_
 from verity_vllm.pipeline import sweep as SW
 from verity_vllm.pipeline.row_driver import Stop
 
@@ -85,13 +86,116 @@ def test_the_config_run_s_commit_decides_by_its_one_run(tmp_path, commit_pass, r
         assert e.value.rc == expect
 
 
-def test_the_tp_path_refuses_a_config_run_by_name(tmp_path):
+TP2 = "olmoe-1b-7b__bf16__l40s__tp2__b8__i1024__o128__mixed__greedy__bi-eager"
+
+
+def test_the_tp_path_runs_a_tp2_config_run_and_refuses_a_larger_world_by_name(tmp_path, monkeypatch):
     from verity_vllm.config import UsageError
     from verity_vllm.pipeline import cli, row
-    o = cli.parse("row", ["run", "olmoe-1b-7b__bf16__l40s__tp2__b8__i1024__o128__mixed__greedy__bi-eager", "OLMOE", "r", "v",
-                          "--sweep-dir", str(tmp_path), "--config-run", "1"], {})
-    with pytest.raises(UsageError, match="tensor-parallel row"):
+    from verity_vllm.pipeline.row_tp import TpRow
+    ran = []
+    monkeypatch.setattr(TpRow, "run", lambda self: ran.append((self.W, self.config_run)) or 0)
+    o = cli.parse("row", ["run", TP2, "OLMOE", "r", "v", "--sweep-dir", str(tmp_path), "--config-run", "1"], {})
+    assert row.run_row(o, o.stages) == 0 and ran == [(2, True)]
+    o = cli.parse("row", ["run", TP2, "OLMOE", "r", "v", "--sweep-dir", str(tmp_path), "--config-run", "1", "--world", "4"], {})
+    with pytest.raises(UsageError, match="runs at world 4; the config run covers single-GPU and TP2 rows"):
         row.run_row(o, o.stages)
+    assert ran == [(2, True)]
+
+
+def _tp(tmp_path, *argv):
+    from tests.pipeline.test_row import TP_DENSE, _tp_row
+    import os
+    t = _tp_row(tmp_path, TP_DENSE, *argv)
+    os.makedirs(t.d, exist_ok=True)
+    return t
+
+
+def test_a_tp2_config_run_skips_the_match_and_word_checks_the_build(tmp_path, monkeypatch):
+    t = _tp(tmp_path, "--config-run", "1")
+    calls = []
+    for name in ("build", "match", "commit", "research_result", "timeline_report"):
+        monkeypatch.setattr(t, name, lambda n=name: calls.append(n))
+    monkeypatch.setattr(t, "prepare", lambda: (calls.append("prepare"), setattr(t, "trap", True)))
+    monkeypatch.setattr(RC, "word_check", lambda row: calls.append("word_check"))
+    monkeypatch.setattr(RC, "config_record", lambda row: calls.append("config_record"))
+    assert t.run() == 0
+    assert calls == ["prepare", "build", "word_check", "commit", "research_result", "config_record", "timeline_report"]
+    calls.clear()
+    monkeypatch.setattr(t, "build", lambda: (_ for _ in ()).throw(Stop(10)))
+    assert t.run() == 10 and calls == ["prepare", "config_record", "research_result"], "a stopped config run still writes its record"
+
+
+def test_the_tp2_word_check_counts_the_components_of_both_ranks(tmp_path, monkeypatch):
+    t = _tp(tmp_path, "--config-run", "1")
+    seen = []
+    monkeypatch.setattr(t, "run_tl", lambda stage, to, log, cmd: seen.append(cmd) or 0)
+    RC.word_check(t)
+    assert seen[0][seen[0].index("--world") + 1] == "2"
+    r = _row(tmp_path / "tp1", "--config-run", "1")
+    monkeypatch.setattr(r, "run_tl", lambda stage, to, log, cmd: seen.append(cmd) or 0)
+    RC.word_check(r)
+    assert seen[1][seen[1].index("--world") + 1] == "1"
+
+
+def test_the_tp2_config_run_s_commit_is_one_instrumented_run_with_no_match(tmp_path):
+    t = _tp(tmp_path, "--config-run", "1", "--replay-k", "460")
+    (Path(t.M) / "fold_match").mkdir(parents=True)
+    (Path(t.M) / "fold_match" / "tp2_fold_match.json").write_text("{}")
+    t.fold_profile = "derived_LLAMA32_1B_tp2"
+    cmd = t.commit_cmd([])
+    assert cmd[cmd.index("--pairs") + 1] == "1" and cmd[cmd.index("--warmup") + 1] == "1"
+    assert cmd[cmd.index("--only-arm") + 1] == "instrumented" and cmd[cmd.index("--replay-k") + 1] == "460"
+    assert not {"--match-dir", "--require-fold-match", "--value-check"} & set(cmd)
+    assert cmd.count("--build-rank") == 2 and cmd[cmd.index("--required-manifest") + 1] == f"{t.d}/manifest.json"
+    row = _tp(tmp_path / "row")
+    (Path(row.M) / "fold_match").mkdir(parents=True)
+    (Path(row.M) / "fold_match" / "tp2_fold_match.json").write_text("{}")
+    row.fold_profile = "derived_LLAMA32_1B_tp2"
+    plain = row.commit_cmd([])
+    i = plain.index("--required-manifest")
+    assert plain[i + 2:i + 4] == ["--match-dir", row.M] and plain[plain.index("--pairs") + 1:plain.index("--pairs") + 6] == ["3", "--warmup", "2", "--value-check", "--replay-workers"]
+    assert "--only-arm" not in plain and plain[-1] == "--require-fold-match", "a TP row of record keeps its Match, pairs and value check"
+
+
+def test_tp_commit_s_own_parser_takes_every_flag_the_tp2_config_run_passes(tmp_path):
+    from verity_vllm.pipeline import cli
+    from verity_vllm.pipeline.tp.config_run import only_arm_summary, replay_k_per_rank
+    t = _tp(tmp_path, "--config-run", "1", "--replay-k", "460")
+    cmd = t.commit_cmd([])
+    args = cli.parse("tp-commit", cmd[cmd.index("tp-commit") + 1:], {})
+    assert (args.only_arm, args.replay_k, args.pairs, args.warmup, args.match_dir) == ("instrumented", 460, 1, 1, None)
+    assert replay_k_per_rank(460, 2) == {"0": 230, "1": 230} and replay_k_per_rank(461, 2) == {"0": 231, "1": 230}
+    assert replay_k_per_rank(None, 2) is None
+    one = [{"arm": "instrumented"}]
+    assert only_arm_summary("instrumented", one, one, [True]) == {"only_arm": "instrumented", "runs": 1, "commit_pass": True}
+    assert only_arm_summary("instrumented", one, one, [False])["commit_pass"] is False
+    assert only_arm_summary("instrumented", one, [], [])["commit_pass"] is False, "no instrumented run is not a pass"
+
+
+@pytest.mark.parametrize("commit_pass,expect", [(True, None), (False, 12)])
+def test_the_tp2_config_run_s_commit_decides_by_its_one_run(tmp_path, commit_pass, expect, monkeypatch):
+    t = _tp(tmp_path, "--config-run", "1")
+    t.to_k = 1
+    (Path(t.d) / "commit").mkdir()
+    (Path(t.d) / "commit" / "summary.json").write_text(json.dumps({"only_arm": "instrumented", "runs": 1, "commit_pass": commit_pass, "pass": commit_pass}))
+    monkeypatch.setattr(R_, "tp_rank_workload_digest", lambda bdir, r: f"wd{r}")
+    monkeypatch.setattr(R_, "tp_manifest_complete", lambda d: True)
+    monkeypatch.setattr(R_, "applicable_taps", lambda man, ck: [])
+    t.hidden_so = str(tmp_path / "verity_fa2_matReqG.so")      # never the host's pod-layout build (unreadable to other users on node 1)
+    Path(t.hidden_so).touch()
+    ran = []
+    monkeypatch.setattr(t, "manifest_global", lambda *a: ran.append("manifest_global") or 0)
+    monkeypatch.setattr(t, "run_tl", lambda stage, to, log, cmd: ran.append(stage) or 0)
+    if expect is None:
+        t.commit()
+        assert "commit PASS" in (Path(t.d) / "stages.txt").read_text()
+    else:
+        with pytest.raises(Stop) as e:
+            t.commit()
+        assert e.value.rc == expect
+    assert ran == ["commit.tp_commit"], "the config run's Commit reuses the Build's complete manifest"
+    assert t.child_env["VERITY_STAGING_BOUNDED"] == "1", "the ranks stage bounded, as the single-GPU config run's --bounded-staging"
 
 
 # ---------------------------------------------------------------------------------------------------------------- the config record
@@ -137,6 +241,66 @@ def test_a_config_run_with_no_commit_is_not_pass(tmp_path):
     d = _row_dir(tmp_path)
     (d / "commit" / "runs.jsonl").unlink()
     assert CR.record(d, ROW)["why"] == "commit not run"
+
+
+ROW_TP2 = "llama32-1b__bf16__l40s__tp2__b1__i256__o32__mixed__greedy__bi-eager"
+
+
+def _tp_sr(rank: int, k: int, mismatch: int = 0) -> dict:
+    return {"result": mismatch == 0, "grade": "complete" if mismatch == 0 else "mismatch",
+            "sample": {"strata_by": "family", "k": k, "picked": k, "evaluated": k, "equal": k - mismatch, "mismatch_n": mismatch, "not_evaluated_n": 0,
+                       "seed": 10 + rank, "seed_source": "this rank's run root"},
+            "mismatch": [{"i": 5, "family": "Gemm_v1", "request_id": "r0", "step": 1, "op_path": "model.layers.0.mlp.down_proj"}] * mismatch,
+            "mismatch_by": {"by_family": {"Gemm_v1": mismatch} if mismatch else {}}}
+
+
+def _tp_row_dir(tmp_path: Path, *, mismatch_r1: int = 0, ranks: int = 2) -> Path:
+    d = tmp_path / ROW_TP2
+    (d / "commit").mkdir(parents=True)
+    (d / "build_summary.json").write_text(json.dumps({"tp": {"world": 2}, "step": {"program_digest": "s0"}, "ranks": {
+        f"rank{r}": {"build_step": {"ok": True, "program_digest": f"s{r}"}, "build_request_LP256_T31": {"ok": True, "program_digest": f"q{r}"},
+                     "workload": {"ok": True, "workload_digest": f"w{r}"}} for r in range(2)}}))
+    (d / "manifest.json").write_text(json.dumps({"manifest_digest": "mm", "ranks": 2, "program_digest_per_rank": {"0": "w0", "1": "w1"},
+                                                 "query": {"query_id": "Q_word_v1{X=16,W=32,R=no-recompute}"}}))
+    (d / "strict_word.json").write_text(json.dumps({"ok": True, "check": "fast", "word_lines": 2, "components": 2, "problems": []}))
+    fail = mismatch_r1 > 0
+    per = {str(r): {"run_root": f"root{r}", "commit_pass": not (fail and r == 1), "commit_fail_reason": "sampled replay mismatch" if fail and r == 1 else None,
+                    "openings": {"n": 64, "verified": 64}, "extra": {"expected_tensors": 9, "committed_tensors": 9},
+                    "binding": {"coverage": {"ok": True}}, "sampled_replay": _tp_sr(r, 230, mismatch_r1 if r == 1 else 0)} for r in range(ranks)}
+    run = {"arm": "instrumented", "wall_s": 20.0, "engine_steps": 32,
+           "commit": {"tp_run_root": "tproot", "world": 2, "per_rank": per, "openings": {"n": 128, "verified": 128}, "tensors": 18,
+                      "commit_pass": not fail, "commit_fail_reason": "rank 1: sampled replay mismatch" if fail else "PASS"}}
+    (d / "commit" / "runs.jsonl").write_text(json.dumps(run) + "\n")
+    return d
+
+
+def test_a_clean_tp2_config_run_s_record_is_per_rank_and_in_total(tmp_path):
+    rec = CR.write(_tp_row_dir(tmp_path), ROW_TP2, tree="abc")
+    assert rec["outcome"] == "PASS" and rec["why"] is None and rec["config"]["tp"] == 2
+    b = rec["build"]
+    assert b["per_rank"]["1"] == {"ok": True, "programs": {"build_request_LP256_T31": "q1", "build_step": "s1"}, "workload_digest": "w1"}
+    assert (b["manifest_digest"], b["program_digest_per_rank"]) == ("mm", {"0": "w0", "1": "w1"})
+    c = rec["commit"]
+    assert (c["run_root"], c["reason"], c["openings"]) == ("tproot", None, {"n": 128, "verified": 128})
+    assert [c["per_rank"][r]["run_root"] for r in ("0", "1")] == ["root0", "root1"]
+    rp = rec["replay"]
+    assert (rp["k"], rp["evaluated"], rp["equal"], rp["mismatch_n"]) == (460, 460, 460, 0), "the replay's k units over both ranks"
+    assert [rp["per_rank"][r]["seed"] for r in ("0", "1")] == [10, 11]
+    assert (tmp_path / ROW_TP2 / CR.NAME).stat().st_size < 16384
+
+
+def test_a_tp2_config_run_that_differed_on_one_rank_names_the_rank(tmp_path):
+    rec = CR.record(_tp_row_dir(tmp_path, mismatch_r1=2), ROW_TP2)
+    assert rec["outcome"] == "FAIL" and rec["why"] == "commit FAIL: rank 1: sampled replay mismatch"
+    rp = rec["replay"]
+    assert (rp["ok"], rp["equal"], rp["mismatch_n"], rp["by_family"]) == (False, 458, 2, {"Gemm_v1": 2})
+    assert rp["differed"][0]["rank"] == 1 and rec["commit"]["per_rank"]["0"]["ok"] is True
+
+
+def test_a_tp2_config_run_missing_a_rank_is_not_pass(tmp_path):
+    d = _tp_row_dir(tmp_path, ranks=1)
+    rec = CR.record(d, ROW_TP2)
+    assert rec["replay"]["ok"] is False and rec["outcome"] == "FAIL"
 
 
 # ---------------------------------------------------------------------------------------------------------------- the Program cache
@@ -243,6 +407,18 @@ def test_the_driver_frees_each_share_as_its_run_ends_and_records_it(tmp_path):
     assert started == [("a", [0], (0, 15)), ("b", [1], (16, 31)), ("c", [0], (0, 15))]
     assert [(d["row"], d["outcome"]) for d in doc["done"]] == [("a", "PASS"), ("b", "PASS"), ("c", "FAIL")]
     assert json.loads((tmp_path / "sweep.json").read_text())["done"] == doc["done"] and doc["pending"] == [] and doc["running"] == []
+
+
+def test_a_tp2_cell_takes_two_gpus_of_one_host_and_its_ram_share(tmp_path):
+    host = SW.Host(gpus=[0, 1, 2, 3], ram_gb=1000, cpus=list(range(64)))
+    tp2 = SW.Config(row=ROW_TP2, need=SW.estimate(ROW_TP2))
+    assert tp2.need == SW.Need(gpus=2, ram_gb=150, cpus=16, minutes=60)
+    p = SW.plan([tp2, _cfg("a", 150), _cfg("b", 150), _cfg("c", 150)], host)
+    by = {c["row"]: c for c in p["configs"]}
+    assert [by[r]["start_min"] for r in ("a", "b", "c")] == [0, 0, 0] and by[ROW_TP2]["start_min"] == 60, "it waits for two free GPUs"
+    assert len(by[ROW_TP2]["gpus"]) == 2 and SW.plan([tp2], host)["configs"][0]["gpus"] == [0, 1]
+    e = SW.child_env({}, tp2, [0, 1], list(range(16)), tmp_path, None)
+    assert (e["CUDA_VISIBLE_DEVICES"], e["BUILD_RAM_BUDGET_GB"]) == ("0,1", "150")
 
 
 def test_each_run_gets_its_share_as_the_build_budget_and_the_host_s_caches(tmp_path):

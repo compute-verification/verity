@@ -1,4 +1,5 @@
-"""The config run's and the Program cache's parts of a single-GPU row (`row_stages.SingleRow`), docs/vllm-config-sweep-plan.md §2-§4.
+"""The config run's and the Program cache's parts of a single-GPU row (`row_stages.SingleRow`) and a TP2 row (`row_tp.TpRow`: the word
+check over the ranks' components, the record per rank), docs/vllm-config-sweep-plan.md §2-§4.
 
 A config run (`--config-run 1`) is the Build, the strict word check of its manifest (`word_check`), ONE instrumented Commit (`--pairs 1
 --only-arm instrumented`: no control arm, no pairs) under bounded staging with a k-unit replay stratified by family, and
@@ -35,7 +36,7 @@ def word_check(row: Any) -> None:
     the run (exit 20)."""
     env = row.env.environ
     rc = row.run_tl("build.word_check", WORD_CHECK_TIMEOUT, f"{row.d}/strict_word.log",
-                    row.cli("epoch", "word-check", row.row, row.d, "--out", f"{row.d}/strict_word.json", "--world", "1",
+                    row.cli("epoch", "word-check", row.row, row.d, "--out", f"{row.d}/strict_word.json", "--world", str(getattr(row, "W", 1)),
                             "--build-word-check", env.get("VERITY_WORD_CHECK", ""), "--build-max-gates", env.get("VERITY_QWORD_MAX_GATES", "")))
     row.verdict("word-check", "PASS" if rc == 0 else "FAIL", f"rc={rc} {_tail(f'{row.d}/strict_word.log')}")
     if rc != 0:

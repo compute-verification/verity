@@ -31,6 +31,8 @@ from pathlib import Path
 
 from verity_vllm.acquire.sources import taps as TAPS
 from verity_vllm.config import group, option
+from verity_vllm.pipeline.tp import config_run as TPC
+from verity_vllm.pipeline.tp.import_path import write_import_path_runtime
 
 TP_ROOT_TAG = b"verity/tp-run-root/v1"
 SCHEMA = "verity/commit-integ/delta-tp/v1"
@@ -354,6 +356,8 @@ class Options:
     flip_weight: str | None = option("--flip-weight", default=None, help="NEGATIVE (rev-cb M-0610 flipweight, TP form): <rank>:<served param name>:<flat index>[:<value>] -- one element of that " "rank's shard changed before register_weights; the weights pin must FAIL naming (rank, param)")
     replay_challenge: str | None = option("--replay-challenge", default=None, help="[manbind MAN-06d, M-0608] verifier-issued POST-COMMITMENT challenge (hex/string): each rank's replay " "seed = sha256(challenge | that rank's run root)[:8]; without it the seed is the rank's run root (honest-prover measurement)")
     replay_target: list[str] | None = option("--replay-target", action="append", default=None, help="<op_path>[@<step>]: add every VU of a module to every rank's sample")
+    replay_k: int | None = option("--replay-k", type=int, default=None, help="the config run's sampled replay: k units over the world, split across the ranks (rank r: k // W, one more for r < k %% W), each rank's share stratified by family, in place of the per-stratum sample")
+    only_arm: str | None = option("--only-arm", choices=["control", "instrumented"], default=None, help="run only this arm (`--pairs` runs of it; the config run: one instrumented run)")
 
 
 def main(args: Options) -> int:
@@ -530,6 +534,8 @@ def main(args: Options) -> int:
                       "challenge": args.replay_challenge, "targets": list(args.replay_target or []), "ring_slots": (int(os.environ["VERITY_WINDOW_SLOTS"]) if os.environ.get("VERITY_WINDOW_SLOTS") and os.environ.get("VERITY_WINDOW_MB") else None)}
         versions["sampled_replay"] = {"of_record": of_record, "per_stratum": replay_cfg["per_stratum"], "max_evaluate": replay_cfg["max_evaluate"], "seed": args.replay_seed,
                                       "challenge": args.replay_challenge, "rule": "manbind MAN-06 O1-O6 per rank: the rank's Programs of record x the rank's map x the rank's committed members + weight shards"}
+        if args.replay_k:
+            replay_cfg["k_per_rank"] = versions["sampled_replay"]["k_per_rank"] = TPC.replay_k_per_rank(args.replay_k, world)
     # [MAN-09 per rank] the weights of record: each rank composes its record from ITS rank Program + the pinned checkpoint shards
     weights_pin_cfg = None
     if args.checkpoint_dir:
@@ -610,7 +616,7 @@ def main(args: Options) -> int:
     from verity_vllm.program.registry import b1_tp2 as _TP2
     xrank_families = _TP2.cross_rank_families(world)      # [lane vllm-tp-n] the cross-rank families of THIS world, from the registry's composites
     for pair in range(args.pairs):
-        order = ["control", "instrumented"] if pair % 2 == 0 else ["instrumented", "control"]
+        order = [a for a in (["control", "instrumented"] if pair % 2 == 0 else ["instrumented", "control"]) if args.only_arm in (None, a)]
         for k, arm in enumerate(order):
             gc.collect()
             if arm != "control":
@@ -1091,22 +1097,9 @@ def main(args: Options) -> int:
                                                                 "identities": (man_doc.get("populations") or {}).get("identities"), "program_digest_per_rank": man_doc.get("program_digest_per_rank")}),
             "negatives": versions["negatives"],
             "pass": all_pass and all(r["tokens_equal_ref"] for r in rows), "required_classes": list(required_classes)}
-    # [R16 tp TP-11, rev F-r16-19] the import-path OF RECORD, from the RUNNING processes: this driver's repo-local sys.modules + every rank
-    # process's (after finalize: replay, linkage, pin, partial source all imported) + the collector's JIT C++/CUDA sources -- what ran, not a
-    # static closure; the tag-candidate equivalence rule (COORD ruling 24) reads this file when it exists.
-    try:
-        from verity_vllm.engine.rank_worker import repo_modules_loaded
-        drv = repo_modules_loaded()
-        ranks_mods = llm.collective_rpc("tp2_repo_modules", timeout=args.rpc_timeout)
-        union = set(drv["files"])
-        for rm in ranks_mods:
-            union.update((rm or {}).get("files") or [])
-        (out / "import_path_runtime.json").write_text(json.dumps({"schema": "verity/tp2/import-path-runtime/v1", "method": drv["method"],
-                                                                   "driver": drv, "ranks": ranks_mods, "union_n": len(union), "union": sorted(union)},
-                                                                  indent=1, default=str) + "\n")
-        print(f"[tp2commit] import path of record (runtime): driver {drv['n']} files, ranks {[r.get('n') for r in ranks_mods]}, union {len(union)} -> import_path_runtime.json", flush=True)
-    except Exception as e:  # noqa: BLE001 -- evidence, not a gate
-        (out / "import_path_runtime.json").write_text(json.dumps({"schema": "verity/tp2/import-path-runtime/v1", "error": repr(e)[:300]}) + "\n")
+    if args.only_arm:
+        summ.update(TPC.only_arm_summary(args.only_arm, rows, trt, summ["commit_pass"]))
+    write_import_path_runtime(llm, out, args.rpc_timeout)
     # [tp, measured b1_r16_tp12b 08:34Z] a NEGATIVE that did not inject is neither a detection nor a miss -- it is an ERROR and must never be
     # recorded as a PASS (the ':ulp' flip spec on a tree without parse_flip left the site unmatched -> flipped 0 -> an honest PASS that a
     # finalizer would read as 'negative not detected').  The ranks report what they applied; when the requested negative did not fire the

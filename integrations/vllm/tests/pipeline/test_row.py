@@ -535,9 +535,9 @@ def test_a_dense_tp1_row_attaches_the_norm_tap_only(tmp_path):
     assert R.applicable_taps(man, _opts(tmp_path, environ={"NORM_TAP": "0"}).commit) == []
 
 
-def _tp_row(tmp_path: Path, row: str, **kw):
+def _tp_row(tmp_path: Path, row: str, *argv: str, **kw):
     from verity_vllm.pipeline.row_tp import TpRow
-    o = _opts(tmp_path, row=row, **kw)
+    o = _opts(tmp_path, *argv, row=row, **kw)
     t = TpRow(row=o.row, role=o.role, repo=o.repo, rev=o.rev, stages=o.stages, env=o.env, world=2, gpu_util=None, nccl_p2p_disable="1",
               build=o.build, match=o.match, commit=o.commit)
     t.hidden_so, t.B, t.engine, t.ck, t.fold_profile = t.hidden_build(), 2, [], "/ck", ""
