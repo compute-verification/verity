@@ -147,7 +147,7 @@ def campaign_fields(rec: dict, backend: str, diagnostic: bool, relation_only: bo
         # every registered typed-obligation/v0 family is the finite-domain relation (target.py: total semantics bind no family)
         "domain": contract.DOMAIN,
         "K": vector_K(rec),
-        # one obligation is one GemmCoordinate verification unit; nothing is padded, so B_real is not reported
+        # one obligation is one GemmCoordinate proof unit; nothing is padded, so B_real is not reported
         "B": sum(1 for o in obj.get("obligations", ()) if o.get("subcircuit") in gemm),
         # the two labels every campaign number carries (module docstring)
         "proof_class": ("ARITHMETIC_DIAGNOSTIC" if diagnostic else "NON_ZK_PROOF") if backend == "sp1-prove" else "NO_PROOF",
@@ -842,7 +842,7 @@ def main(argv: list[str] | None = None) -> int:
         else:
             fingerprint["security"] = {"target": None, "note": "no proof: the executor's verdict, nothing established to a verifier"}
             fingerprint["preprocessing"] = "none"
-    # VU throughput: one obligation is one verification unit; the rate only exists where something was proved
+    # proof-unit throughput: one obligation is one proof unit; the rate only exists where something was proved
     B = fingerprint["B"]
     measurements.append(contract.measurement("vu.count", B))
     total = next((m["value"] for m in measurements if m["name"] == contract.T_TOTAL), None)

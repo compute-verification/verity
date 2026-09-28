@@ -2,7 +2,8 @@
 
 On finite operands the total step is the finite model (`silicon.tc_dot` on the same pipeline); the special encodings follow
 the rules of the BF16 total step restricted to what E4M3 encodes (NaN bytes, no infinities).  The pinned pipeline parameters
-are the ones lane QZ measured (`docs/data/tc-fp8-2026-09-08/`): one group of 32, 14-bit adder, floor -139.
+are the ones lane QZ measured (veritor's `docs/data/tc-fp8-2026-09-08/`, replicated as
+`fixtures/tc/veritor-tc-fp8-2026-09-08.json`): one group of 32, 14-bit adder, floor -139.
 """
 
 from __future__ import annotations
