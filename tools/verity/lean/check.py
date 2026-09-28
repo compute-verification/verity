@@ -1060,7 +1060,8 @@ def shape(policy: dict, facts: dict) -> list[str]:
     reaches the function, and with an outcome other than `accept`, a constant named for the outcome), and premises:
     hypotheses whose head is a constant of a module under `shape.premises`. Several acceptances of the function are
     one, of the tuple of their inputs (a binding property). A `Prop` field of a structure an input ranges over is a
-    hypothesis too, and a conjunction counts as its conjuncts. A guarantee under `shape.frozen` ({name: why it
+    hypothesis too, and a conjunction counts as its conjuncts, each a property of the entry's function or, when the
+    entry lists `conjuncts` (one `{function, outcome}` per conjunct), of its own. A guarantee under `shape.frozen` ({name: why it
     doesn't fit yet}) is exempt until it fits, and then its entry must go. Every statement (`def G : Prop`) of a
     spec module that holds statements (`shape.statements`, module prefixes; by default a module with a `Guarantees`
     component) is one that a listed guarantee states (a named assumption aside), or is under `shape.frozen` until
@@ -1136,13 +1137,25 @@ def shape(policy: dict, facts: dict) -> list[str]:
 
 def refusals(entry: dict | None, got: list[dict], premises: list[str], conjectures: set[str] = frozenset()) -> list[str]:
     """Why a statement's shape (`Facts.lean`'s `shapeInfo`, one part per conjunct) isn't a property of the function
-    ``entry`` names, one line each: none when it is.  A conjunction is a property when each of its conjuncts is one."""
-    if not entry or not entry.get("function") or entry.get("outcome") not in OUTCOMES:
+    ``entry`` names, one line each: none when it is.  A conjunction is a property when each of its conjuncts is one, of
+    the entry's function, or of its own when the entry lists `conjuncts` (one `{function, outcome}` each, in order) in
+    place of one function and outcome for them all."""
+    named = lambda e: isinstance(e, dict) and e.get("function") and e.get("outcome") in OUTCOMES
+    each = (entry or {}).get("conjuncts")
+    if each is not None:
+        if "function" in entry or "outcome" in entry:
+            return ["has an entry under shape.properties with both `conjuncts` and a function or outcome for them all: "
+                    "give one or the other"]
+        if not isinstance(each, list) or len(each) != len(got) or not all(map(named, each)):
+            return [f"has {len(got)} conjunct(s), and its entry's `conjuncts` must list one entry naming its function "
+                    f"and its outcome ({', '.join(OUTCOMES)}) for each, in order"]
+    elif not named(entry):
         return [f"has no entry under shape.properties naming its function and its outcome ({', '.join(OUTCOMES)})"]
+    each = each or [entry] * len(got)
     if len(got) == 1:
-        return part_refusals(entry, got[0], premises, conjectures)
-    return [f"(conjunct {k + 1}) {w}" for k, part in enumerate(got)
-            for w in part_refusals(entry, part, premises, conjectures)]
+        return part_refusals(each[0], got[0], premises, conjectures)
+    return [f"(conjunct {k + 1}) {w}" for k, (e, part) in enumerate(zip(each, got))
+            for w in part_refusals(e, part, premises, conjectures)]
 
 
 def part_refusals(entry: dict, got: dict, premises: list[str], conjectures: set[str] = frozenset()) -> list[str]:
