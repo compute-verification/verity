@@ -30,9 +30,8 @@ private def ctx : String := "typed statement META"
 
 def POLICY : String := "calls/v1"
 
-/-- The typed file with its unit's rows derived and inserted as its `CIRCUIT unit` section; META and the other sections
-unchanged. Refuses a file that carries unit rows itself. -/
-def expand (tags : Tags) (bytes : ByteArray) : V ByteArray := do
+/-- The typed file's lines, its circuit's name and its META. Refuses a file that carries a unit's rows itself. -/
+def split (tags : Tags) (bytes : ByteArray) : V (Array String × String × Json) := do
   let text ← match String.fromUTF8? bytes with
     | some s => pure s
     | none => throw "circuit: not UTF-8"
@@ -50,9 +49,15 @@ def expand (tags : Tags) (bytes : ByteArray) : V ByteArray := do
   while at_ < lines.size do
     let h := tokens lines[at_]!
     if h.size != 3 || h[0]! != tags.blockKeyword then throw s!"circuit: expected a {tags.blockKeyword} line"
-    if h[1]! == "unit" then throw "circuit: a typed statement carries no unit rows; the verifier derives them"
+    if h[1]! == "unit" || h[1]! == "root" then
+      throw "circuit: a typed statement carries no unit rows; the verifier derives them"
     let some n := h[2]!.toNat? | throw s!"circuit: {tags.blockKeyword} line count"
     at_ := at_ + 1 + n
+  return (lines, name, mj)
+
+/-- META's types and layouts, checked, and their rows through `DeriveAll.deriveChecked` only: every layout's rows, the
+layouts, the unit's layout and its type. -/
+def derivation (mj : Json) : V (Array DeriveAll.D × Array Layout × Nat × CircuitType) := do
   let kvs ← match mj.getObjVal? "types" with
     | .ok (Json.obj kvs) => pure kvs.toArray
     | _ => throw "META: types is not an object"
@@ -77,15 +82,75 @@ def expand (tags : Tags) (bytes : ByteArray) : V ByteArray := do
   if (← J.str mj "policy" ctx) != POLICY then throw s!"META: policy is not {POLICY}"
   if !(← J.arr mj "unit_in" ctx).isEmpty then
     throw "META: unit_in binds the unit's inputs to constants, which this verifier does not derive yet"
+  let some t := typeOf ut | throw "META: unit_type names no type"
   let done ← match DeriveAll.deriveChecked typeOf ls (fun _ => none) (fun _ => none) unit with
     | .ok done => pure done
     | .error e => throw s!"META: the unit's rows: {e}"
-  let u := done.getD unit default
-  -- the unit's constant copies the block's `one` through Δ, as `HmRow.delta` pins every unit slot's constant today
-  if !(u.parts.isEmpty && u.reads.isEmpty && u.delta.all (fun e => e.1 == u.const && e.2.isNone)) then
-    throw "META: the unit has placed parts, reads or Δ beyond its constant, which this version's unit section does not carry"
+  return (done, ls, unit, t)
+
+/-- A flat class's unit: no placed parts, no reads, no Δ but its constant's copy of the block's `one` (which `HmRow.delta`
+pins for every unit slot). -/
+def isFlat (u : DeriveAll.D) : Bool :=
+  u.parts.isEmpty && u.reads.isEmpty && u.delta.all (fun e => e.1 == u.const && e.2.isNone)
+
+/-- A flat class's file with its unit's rows `u` inserted as its `CIRCUIT unit` section, first, where the old statement had
+it; META and the other sections unchanged. -/
+def expandWith (tags : Tags) (lines : Array String) (name : String) (u : DeriveAll.D) : ByteArray :=
   let rows := ((DeriveAll.netlist u name).splitOn "\n").toArray.pop
   let out := #[lines[0]!, lines[1]!, s!"{tags.blockKeyword} unit {rows.size}"] ++ rows ++ lines.extract 2 lines.size
-  return ("\n".intercalate out.toList ++ "\n").toUTF8
+  ("\n".intercalate out.toList ++ "\n").toUTF8
+
+/-- A template's block as its types derive it (#273's `Instance`), for `HmRow.parse`: the root net (the unit's own region,
+its entries at part columns left out, which are Δ's), each placed layout's net by digest, and the block's data in unit
+coordinates. -/
+structure Template where
+  root : Net
+  /-- each placed layout, in layout order: its digest, its net, its range's log size -/
+  layouts : Array (String × Net × Nat)
+  /-- per part, in item order: its layout's digest and its base -/
+  parts : Array (String × Nat)
+  own : Nat
+  ins : Array (Nat × Nat)
+  outs : Array (Nat × Nat)
+  inCols : Array Nat
+  bind : Array (Nat × Array Nat)
+  cross : Array (Nat × Array Nat × Array Nat)
+  deriving Inhabited
+
+def netOf (text : String) : V Net := Net.parse ((text.splitOn "\n").toArray.pop)
+
+/-- A template's block from its derivation. -/
+def templateOf (name : String) (done : Array DeriveAll.D) (ls : Array Layout) (unit : Nat) (t : CircuitType) : V Template := do
+  let u := done.getD unit default
+  if !u.reads.isEmpty then throw "META: the unit reads tables, which this verifier's template reading does not place yet"
+  let own := u.size
+  let inOwn := fun (xs : List Nat) => xs.filter (· < own)
+  let root ← netOf (DeriveAll.netlist { u with rows := u.rows.map fun (a, b) => (inOwn a, inOwn b) } name)
+  let digests ← ls.mapM (·.digest)
+  let placed := (List.range ls.size).filter fun j => u.parts.any (·.1 == j)
+  let layouts ← placed.toArray.mapM fun j => do
+    let d := digests.getD j ""
+    pure (d, ← netOf (DeriveAll.netlist (done.getD j default) (d.take 16).toString), (ls.getD j default).rangeLog.getD 0)
+  let cross := (Array.range own).filterMap fun r =>
+    let (a, b) := u.rows.getD r ([], [])
+    let (xa, xb) := (a.filter (· ≥ own), b.filter (· ≥ own))
+    if xa.isEmpty && xb.isEmpty then none else some (r, xa.toArray, xb.toArray)
+  return { root, layouts, parts := u.parts.map fun (j, b) => (digests.getD j "", b), own, ins := t.ins, outs := t.outs,
+           inCols := u.inCols, bind := u.delta.filterMap fun (r, src) => src.map (r, ·.toArray), cross }
+
+/-- **A typed file, read** (item 1e): its rows derived once, through `deriveChecked`. A flat class is its file with the
+unit's rows as its `CIRCUIT unit` section (`.inl`); a template is its block (`.inr`), which `HmRow.parse` places. -/
+def read (tags : Tags) (bytes : ByteArray) : V (ByteArray ⊕ Template) := do
+  let (lines, name, mj) ← split tags bytes
+  let (done, ls, unit, t) ← derivation mj
+  let u := done.getD unit default
+  if isFlat u then return .inl (expandWith tags lines name u)
+  return .inr (← templateOf name done ls unit t)
+
+/-- A flat class's file with its unit's rows derived (`typed-expand`). -/
+def expand (tags : Tags) (bytes : ByteArray) : V ByteArray := do
+  match ← read tags bytes with
+  | .inl b => pure b
+  | .inr _ => throw "META: the unit has placed parts: a template, whose block `HmRow.parse` places, not a flat class"
 
 end Flock.Typed

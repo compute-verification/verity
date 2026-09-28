@@ -55,6 +55,26 @@ structure Wire where
   src : Nat × Nat × Nat
   deriving Inhabited, Repr
 
+/-- A typed template's block (item 1e; #273's `TypedBlock`): the instance type's root is the unit, one slot per VU, beside
+its parts, each in a slot of its layout's range. Unit coordinates: the root's own region `[0, own)`, then each part from its
+base. -/
+structure TypedBlock where
+  own : Nat
+  /-- the instance type's ports, (count, width) -/
+  ins : Array (Nat × Nat)
+  outs : Array (Nat × Nat)
+  /-- the root's input columns, in input-bit order -/
+  inCols : Array Nat
+  /-- per part, in item order: its layout's circuit, its slot among that circuit's slots in the VU, its base -/
+  parts : Array (Nat × Nat × Nat)
+  /-- per placed layout's circuit, its range's log size -/
+  rangeLogs : Array (Nat × Nat)
+  /-- the parts' bound input rows and their sources (Δ), in item order and bits ascending -/
+  bind : Array (Nat × Array Nat)
+  /-- the root rows' entries at its parts' columns: (row, A's, B's) -/
+  cross : Array (Nat × Array Nat × Array Nat)
+  deriving Inhabited, Repr
+
 /-- The pinned circuit file. -/
 structure Circuit where
   name : String
@@ -88,6 +108,8 @@ structure Circuit where
   outNetPorts : Array Nat := #[]
   /-- the unit inputs that are row words (`(unit, input port, leaf)`): the low 16 bits are the word's message bits -/
   leafCuts : Array (Nat × Nat × Nat) := #[]
+  /-- a typed template's block (item 1e): the unit is its instance's root, beside its parts -/
+  typed : Option TypedBlock := none
   deriving Inhabited
 
 namespace Circuit

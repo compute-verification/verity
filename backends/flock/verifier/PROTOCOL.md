@@ -1182,26 +1182,40 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
 
 ### 16.11 The typed statement (`verity/flock-circuit/types`, item 1e)
 
-`verity_flock.typed_statement` (#225) writes §16.10's statement with its unit as circuit types and a layout instead of
-rows. The first line is `flock-circuit/types NAME`; META `format` and `statement` name it (`Tags.circuitTypes`, and
-`+seed-injection` for the selftest build). Everything else is §16.10's.
+`verity_flock.typed_statement` (#225, #273) writes §16.10's statement with its unit as circuit types and layouts instead
+of rows. The first line is `flock-circuit/types NAME`, and META `format` and `statement` name it: `Tags.circuitTypes`,
+and `+seed-injection` for the selftest build. Its identity is `967b8d06`'s text, naming the typed statement. The statement
+digest's leading tag is `verity/flock-circuit` (`Tags.digestTag`), as the prover hashes it.
 
-- **No statement carries the unit's rows.** A `CIRCUIT unit` section is refused. `Typed.expand` derives the rows:
+- **No statement carries rows.** A `CIRCUIT unit` or `CIRCUIT root` section is refused. `Typed.read` checks META and
+  derives every row once, through `DeriveAll.deriveChecked` (#247) only:
   - `types`: `{digest: content}`. Each key must be its content's digest, and each type passes `CircuitType.check` (#194).
   - `layouts`: #200's records. Each record's `sha512` must be its digest, and the list must pass `Layout.check`, with no
     tables held.
   - `unit_layout`: the unit's layout, which must be derived (`own` is `derive`).
   - `unit_type` must be that layout's type, `policy` must be `calls/v1`, and `unit_in` must be empty: this version binds
     no inputs to constants.
-  - The unit's rows are `Derive.derive` (#199) of the unit's type, with the layout's port splits, written as
-    `flock-ir-unit/v2` (`Derive.netlist`).
-- **Then as §16.10.** `HmRow.parseTyped` inserts the derived rows as the file's `CIRCUIT unit` section, first, where the old
-  statement has it, and parses the result with `HmRow.parse`. The circuit digest and the class are the typed file's own:
-  its SHA-512, and `classOf` over its bytes.
-- **This version covers the flat classes:** a unit type of AND items and one layout. `derive` refuses any other type.
-  - On RoPE (`D = 64`) and SiLU·mul (`I = 8192`), the derived rows are the old statement's unit section byte for byte,
-    and every section `HmRow.parse` reads is the old statement's.
-  - `flock-verify typed-expand FILE [--out F]` prints what the verifier derives (`test_lean_typed_statement.py`).
+- **A flat class** (a unit with no placed parts, reads or Δ beyond its constant's copy of `one`) is §16.10's statement.
+  - `HmRow.parseTyped` inserts the unit's rows as the file's `CIRCUIT unit` section, first, where the old statement has
+    it, and parses the result with `HmRow.parse`.
+  - The circuit digest and the class are the typed file's own: its SHA-512, and `classOf` over its bytes.
+  - On RoPE (`D = 64`) and SiLU·mul (`I = 8192`), the derived rows are the old statement's unit section byte for byte
+    (`flock-verify typed-expand`, `test_lean_typed_statement.py`).
+- **A template** (GEMM) is parsed with its block (`HmRow.parse`'s `tmpl`, #273's split).
+  - **Circuits:** `root`, the unit's own region with its entries at part columns left out, one slot per VU. Then each
+    placed layout's rows, named by its digest, one slot of its range per part.
+  - **Derived, never stated:** `units_per_vu` (1), the leaf maps (none), the output circuit (the root) and the wires (the
+    rows' chains). META stating any of them, or `lookups`, `leaf_cuts` or `unit_log`, is refused.
+  - **Checks** (#273's `check_typed`): the root's ports are the rows' words and the output words, 16 bits each, in one
+    output group. Each placed layout has one slot per part, of its range's size. The root's slot has a forced-zero row.
+  - **Δ:** first the flat statement's entries. Then, per VU:
+    1. each input bit `w` a copy of its message bit (bit `w % 16` of row word `w / 16`);
+    2. each part's bound input rows, `(i, i)` and each source, in item order;
+    3. the root rows' cross entries: A's in `Δ_A` and B's in `Δ_B`.
+  - **Regions:** the digests, then `Out` over the root's output group.
+  - **Tested** on #273's GEMM (`test_lean_typed_template.py`): of the prover's 20 recorded CPU selftest sessions, the
+    verifier accepts the 3 honest ones, so its statement digest and Σ are the prover's, and it refuses the 17 negatives.
+- **Not yet:** a template's table reads (attention), and `unit_in`'s constant bindings.
 
 ## 17. Acceptance, assumptions and trust
 
