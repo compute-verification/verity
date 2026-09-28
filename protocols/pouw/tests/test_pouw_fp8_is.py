@@ -48,7 +48,7 @@ def test_registry_and_certificates():
         assert isinstance(s, PoUWScheme) and isinstance(s.forming, F.Forming) and isinstance(s.forming, layer)
         assert s.name == name and s.certificate.gamma0 is None and s.certificate.gamma is None
         (f_a, f_b), (c_a, c_b) = s.forming.units, s.forming.credited
-        assert s.credit == 6
+        assert s.fadd == 32 and s.prices == "round8"
         assert s.certificate.omega == Fraction(6 * 8192 - 32 + f_a + f_b, 6 * 8192 - 32 + c_a + c_b)
         sh = Shape(8192, 8192, 16384)
         assert s.wref(sh) == 6 * sh.wmm - 32 * sh.m * sh.n + f_a * sh.m * sh.k + f_b * sh.n * sh.k
@@ -254,7 +254,7 @@ def f16_value(w: int) -> Fraction:
 
 def test_d3_registry_price_and_domain():
     s = get("fp8-is-h100-d3-v0")
-    assert isinstance(s.forming, F.D3) and not s.forming.seeded and s.dropped == 32
+    assert isinstance(s.forming, F.D3) and not s.forming.seeded
     assert s.forming.units == (372, 372) and s.forming.measured_units == Fraction(9893, 20)
     assert dict(s.certificate.parameters)["trace_units"] == 372
     claimed = F.FP8IS(F.D3(form_units=192))
@@ -334,3 +334,136 @@ def test_d3_useful_output_tracks_the_product():
             want = sum(value(p) * value(q) for p, q in zip(a[i], b[j]))
             bound = sum(abs(value(p) * value(q)) for p, q in zip(a[i], b[j]))
             assert abs(Fraction(got[i][j]) / scale - want) < bound / 8
+
+
+# ---- d3m-v0: the lead (D-3 with the max law, on X_q) -------------------------------------------------------------------
+
+def test_d3m_variants_prices_and_gamma():
+    """Both weight-copy variants exist; their prices are schedule M4's at Round 8 (426 + a 17/64 chain share per activation,
+    290 or 322 per weight), and their certificates give the strike's γ at 16,384³ with r = 1."""
+    copy, decode = get("fp8-is-h100-d3m-v0"), get("fp8-is-h100-d3m-v0-decode")
+    assert copy.forming.units == (Fraction(27281, 64), 290) and decode.forming.units == (Fraction(27281, 64), 322)
+    assert copy.forming.tag == decode.forming.tag == "d3m-v0"
+    for weight_copy, want in ((True, "0.972"), (False, "1.004")):
+        s = F.FP8IS(F.D3m(weight_copy), mnk_min=16384)
+        gamma = 1 - Fraction(399, 400) / s.certificate.omega
+        assert f"{float(100 * gamma):.3f}" == want
+    r7 = F.D3m(True, prices="round7")
+    assert r7.units[0] > 450 and F.FP8IS(r7, prices="round7").fadd == Fraction(67, 2)
+    sh = Shape(16384, 16384, 16384)
+    assert copy.wref(sh) == -(-(sh.m * sh.n * (32 * 1536 + 32 * 1535) + Fraction(27281, 64) * sh.m * sh.k
+                              + 290 * sh.n * sh.k) // 1)
+
+
+def d3m_noise(layer, row, stream, left, pi, inv):
+    """Recompute e (exact values) and the amplitude A8/8 per entry from the layer's own f16 steps."""
+    h = [F.fp16.from_e4m3(c) for c in row]
+    s8 = layer.sigma8(h)
+    c8 = [w & 0x7C00 for w in h]
+    partner = inv if left else pi
+    amp, e = [], []
+    for l in range(len(row)):
+        a8 = F.fp16.max_(F.fp16.max_(c8[l], c8[partner[l]]), s8)
+        t = F.F16_ONE | (int.from_bytes(stream[2 * l:2 * l + 2], "little") & 0x3FF)
+        amp.append(f16_value(a8) / 8)
+        e.append(f16_value(F.fp16.mul(a8, F.fp16.fma(F.F16_TWO_INV4, t, F.F16_MINUS_3_8))))
+    return [value(c) for c in row], e, amp
+
+
+def e4m3_cell(v: Fraction) -> Fraction:
+    a = abs(v)
+    if a < Fraction(1, 64):
+        return Fraction(1, 512)
+    e = a.numerator.bit_length() - a.denominator.bit_length()
+    if Fraction(2) ** e > a:
+        e -= 1
+    return Fraction(2) ** (e - 3)
+
+
+def test_d3m_exact_algebra_and_amplitude():
+    """Before any rounding the three blocks multiply to X_q·W_qᵀ exactly, and every entry's amplitude covers one E4M3 cell
+    of itself and of its NCP partner, on the cast's grid (X-17d-3)."""
+    layer, k = F.D3m(), 128
+    pi, inv = F.ncp_perm(k, layer.P_SEED)
+    rng = random.Random("d3m-algebra")
+    a, b = codes(rng, k, 0x7E), codes(rng, k, 0x7E)
+    ctx = ctx_of((64, k, 64))
+    x, e1, amp_a = d3m_noise(layer, a, F.xof("verity/pouw/fp8-is/d3m/E1", 2 * k, ctx.salt, 3, ctx.root_a, 5, 0), True, pi, inv)
+    y, f1, amp_b = d3m_noise(layer, b, F.xof("verity/pouw/fp8-is/d3m/F1", 2 * k, ctx.salt, 3, 5, 0), False, pi, inv)
+    for l in range(k):
+        assert amp_a[l] >= max(e4m3_cell(x[l]), e4m3_cell(x[inv[l]])) and amp_b[l] >= max(e4m3_cell(y[l]), e4m3_cell(y[pi[l]]))
+    e2 = [e1[pi[l]] for l in range(k)]
+    f2 = [-f1[inv[l]] for l in range(k)]
+    blocks = ((e1, f1, 1), (e2, f2, 1), ([p + q for p, q in zip(e1, e2)], [p + q for p, q in zip(f1, f2)], -1))
+    assert sum(sign * (x[l] + e[l]) * (y[l] + f[l]) for e, f, sign in blocks for l in range(k)) == sum(p * q for p, q in zip(x, y))
+
+
+def test_d3m_repairs_the_refuted_inputs_and_x_d3m_4():
+    """X-C2-B1's absorbed row, X-D1-1's spike and X-D3m-4's tiny column (one code 2^−9, the rest zero, as a per-tensor
+    scale would give) all give salt-dependent codes: the max law and the σ floor leave no free word."""
+    layer, k = F.D3m(), 4096
+    absorbed = [0x7E] + [0x61] * (32 * 14 - 1) + [0] * (k - 32 * 14)
+    tiny = [0x01] + [0] * (k - 1)
+    for row in (absorbed, tiny):
+        stacks = [layer.form(c, layer.noise(c), [row], [row], Tile((0,), (0,)))
+                  for c in (ctx_of((64, k, 64), salt=bytes([s])) for s in range(3))]
+        for blk in range(3):
+            assert len({tuple(st.x[0][blk * k + 32:blk * k + 32 * 14]) for st in stacks}) == 3
+            assert len({tuple(st.y[0][blk * k + 32:blk * k + 32 * 14]) for st in stacks}) == 3
+    runs = spike_slice_words(layer, k, 0x7E, 0x7E, salts=3)
+    assert len({tuple(w for w, _ in run) for run in runs}) > 1
+
+
+def test_d3m_zero_rows_and_saturation():
+    """An all-zero row gets σ8 = max(f16(224/√k), 2^−6) and a near-zero useful output; a row of 448s saturates at ±448 and
+    never produces a NaN code."""
+    s, k = F.FP8IS(F.D3m(), mnk_min=16, tile=(2, 1)), 1024
+    zero, full = bytes(k), bytes([0x7E] * k)
+    rng = random.Random("d3m-zero")
+    w = bytes(codes(rng, k, 0x7E))
+    ctx = ctx_of((64, k, 64))
+    assert s.forming.sigma8([0] * k) == F.fp16.round_to_f16(False, 7, 0)          # 224/√1024 = 7
+    ops = s.encode(ctx, s.noise(ctx), [zero, full], [w], Tile((0, 1), (0,)))
+    assert len(set(ops.x[0][:k])) > 1                                             # zero entries carry noise
+    assert all(c & 0x7F != 0x7F for c in ops.x[1]) and (0x7E in ops.x[1] or 0xFE in ops.x[1])
+    useful = s.useful(ctx, None, ops, s.checked(ctx, ops))
+    scale = sum(abs(value(c)) * 7 for c in w)
+    assert abs(useful[0][0]) < scale / 8
+
+
+def test_d3m_weight_noise_is_per_unit():
+    """r = 1 (X-D3-3): two units that share a weight form different weight columns."""
+    layer, k = F.D3m(), 128
+    rng = random.Random("d3m-units")
+    w, act = codes(rng, k, 0x7E), codes(rng, k, 0x7E)
+    one, two = ctx_of((64, k, 64)), Context(ctx_of((64, k, 64)).salt, Matmul(4, Shape(64, k, 64), 5),
+                                              ctx_of((64, k, 64)).root_a, ctx_of((64, k, 64)).root_b)
+    assert layer.form(one, layer.noise(one), [act], [w], Tile((0,), (0,))).y != \
+        layer.form(two, layer.noise(two), [act], [w], Tile((0,), (0,))).y
+
+
+def test_d3m_weight_copy_variants_share_the_checked_function():
+    rng = random.Random("d3m-copy")
+    k, tile = 128, Tile((0, 1), (0, 1))
+    a, b = [bytes(codes(rng, k, 0x7E)) for _ in range(2)], [bytes(codes(rng, k, 0x7E)) for _ in range(2)]
+    ctx = ctx_of((64, k, 64))
+    digests = []
+    for name in ("fp8-is-h100-d3m-v0", "fp8-is-h100-d3m-v0-decode"):
+        s = F.FP8IS(F.FORMINGS[name.removeprefix("fp8-is-h100-")](), mnk_min=16)
+        ops = s.encode(ctx, s.noise(ctx), a, b, tile)
+        digests.append(s.digest(ctx, None, s.checked(ctx, ops)))
+    assert digests[0] == digests[1]
+
+
+def test_d3m_useful_output_tracks_the_product():
+    s, k = F.FP8IS(F.D3m(), mnk_min=16, tile=(2, 2)), 512
+    rng = random.Random("d3m-useful")
+    a, b = [codes(rng, k, 0x6E) for _ in range(2)], [codes(rng, k, 0x6E) for _ in range(2)]
+    ctx, tile = ctx_of((64, k, 64)), Tile((0, 1), (0, 1))
+    ops = s.encode(ctx, s.noise(ctx), [bytes(r) for r in a], [bytes(r) for r in b], tile)
+    got = s.useful(ctx, None, ops, s.checked(ctx, ops))
+    for i in range(2):
+        for j in range(2):
+            want = sum(value(p) * value(q) for p, q in zip(a[i], b[j]))
+            bound = sum(abs(value(p) * value(q)) for p, q in zip(a[i], b[j]))
+            assert abs(Fraction(got[i][j]) - want) < bound / 8

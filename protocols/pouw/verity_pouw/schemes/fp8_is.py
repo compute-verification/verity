@@ -54,6 +54,15 @@ SLICE = 32
 ATOM_UNITS, FADD_UNITS = 32, 32
 #: MH100 nominal W1 price of one E4M3 code written by ``cvt.rn.satfinite.e4m3x2.f32`` (32 per x2 instruction; unmeasured)
 CVT_UNITS = 16
+#: H100 W1 prices by instruction class (units per instruction; `hadd2_f32` per FP32 result register): Round 7 as measured
+#: (``gpu-constants.md`` §12) and Round 8 loop-free, the §0 rule's two sets.  ``unpack`` (cvt e4m3x2 -> f16x2) and
+#: ``hadd2_f32`` are not yet measured and carry the red team's assumptions.  Round 9 adds a row when it lands.
+PRICES: dict[str, dict[str, Fraction]] = {
+    "round7": {"fadd": Fraction(67, 2), "half2": Fraction(401, 10), "int": Fraction(64), "f2fp": Fraction(667, 10),
+               "unpack": Fraction(667, 10), "hadd2_f32": Fraction(401, 10)},
+    "round8": {"fadd": Fraction(32), "half2": Fraction(36), "int": Fraction(64), "f2fp": Fraction(64),
+               "unpack": Fraction(64), "hadd2_f32": Fraction(36)},
+}
 
 
 # ---- the core -------------------------------------------------------------------------------------------------------
@@ -122,17 +131,19 @@ class Checked:
 class Forming(Protocol):
     """What the core needs from a noise-and-forming layer."""
 
-    #: The layer's name; the scheme is registered as ``fp8-is-h100-<name>``, and the digest tag carries it.
+    #: The layer's name; the scheme is registered as ``fp8-is-h100-<name>``.
     name: str
+    #: The checked function's id, which the digest tag carries; variants that differ only in price share it.
+    tag: str
     #: The number of stacked blocks (K = blocks·k).
     blocks: int
     #: Whether `form` gives every cell a salt word R_0 for the running accumulator (then R_1 = add(R_0, I_1) is checked);
     #: an unseeded layer starts from +0, and R_1 = I_1 is dropped.
     seeded: bool
-    #: W1 units (MH100 nominal) per operand element of the honest forming trace, for an A row and for a B row.
-    units: tuple[int, int]
+    #: W1 units per operand element of the honest forming trace, for an A row and for a B row.
+    units: tuple[int | Fraction, int | Fraction]
     #: The part of ``units`` spent writing the layer's own checked words, which a lower bound may credit.
-    credited: tuple[int, int]
+    credited: tuple[int | Fraction, int | Fraction]
     #: The values the layer is instantiated at (``Certificate.parameters``).
     parameters: tuple[tuple[str, int], ...]
 
@@ -258,7 +269,7 @@ class FpNcpV0:
     arithmetic X̃·Ỹ = α_i β_j·A·Bᵀ (NCP's cancellation holds for any E₁, F₁); the roundings make it approximate.
     """
 
-    name = "fpncp-v0"
+    name = tag = "fpncp-v0"
     blocks = 3
     seeded = False
     units = (sum(u for _, u in FPNCP_V0_TRACE),) * 2
@@ -396,7 +407,7 @@ class D2Draft:
     parts give |U| <= 4·1.5·64 = 384 and |V| <= 8·1.5·32 = 384, below 448; a new sampler re-derives the range).
     """
 
-    name = "d2-draft"
+    name = tag = "d2-draft"
     blocks = 3
     seeded = False
     P_SEED = b"verity/pouw/fp8-is/d2/P"
@@ -501,7 +512,7 @@ class D3:
     The core runs unseeded: R_1 = I_1 is dropped.  An all-zero row has α = 1 and σ = 224.
     """
 
-    name = "d3-v0"
+    name = tag = "d3-v0"
     blocks = 3
     seeded = False
     credited = (0, 0)
@@ -598,7 +609,146 @@ class D3:
         return Stack(x, y, [b""] * len(x), [b""] * len(y))
 
 
-FORMINGS = {D3.name: D3, FpNcpV0.name: FpNcpV0, D2Draft.name: D2Draft}
+# ---- d3m-v0: D-3 with the max noise law, on X_q (the lead) -----------------------------------------------------------
+
+F16_2_POW_M8 = 0x1C00                                               # 2^−8
+
+
+def d3m_trace(prices: dict[str, Fraction], chain: int) -> tuple[tuple[str, str, Fraction], ...]:
+    """Schedule M4 (the D-3m strike, §1.1), per element: (operation, sides, units).  ``a`` is the activation side, ``w``
+    the weight side's per-epoch work, and ``c`` the unpack that a registered FP16 weight copy removes."""
+    h2, i, blk = prices["half2"] / 2, prices["int"] / 2, prices["hadd2_f32"]
+    return (
+        ("unpack X_q: cvt e4m3x2 -> f16x2", "ac", prices["unpack"] / 2),
+        ("prescale h·2^-8 (HMUL2; 448² overflows f16)", "a", h2),
+        ("sum of squares (HFMA2; a widen and an FADD per chain)", "a", h2 + (blk + prices["fadd"]) / chain),
+        ("cell width: exponent mask (LOP3 on half2)", "a", i),
+        ("partner max (HMNMX2)", "a", h2),
+        ("floor max with σ8 (HMNMX2)", "a", h2),
+        ("noise field (LOP3; two f16 lanes per XOF word)", "aw", i),
+        ("centre (2t − 3)/8 (HFMA2)", "aw", h2),
+        ("scale A8·u (HMUL2)", "aw", h2),
+        ("s = e + e∘P (HADD2)", "aw", h2),
+        ("three block values (HADD2.F32)", "aw", 3 * blk),
+        ("three casts f32 -> e4m3 (F2FP x2)", "aw", 3 * prices["f2fp"] / 2),
+    )
+
+
+class D3m:
+    """D-3m, the lead: C-2's three NCP blocks on the committed E4M3 codes X_q, with Track B's max law, which gives every
+    entry a noise amplitude of max(σ, the larger E4M3 cell of the entry and of its NCP partner) from one noise field.
+    Per operand row of k codes (an activation row of X_q, or a weight column's codes):
+
+        h_l   = the code's f16 value (exact);   z_l = h_l·2^−8
+        ss    = Σ z_l² in 64 lanes (l mod 64): each lane chains fma.f16 over 256 of its entries, widens the chain to f32
+                and adds it; then an f32 butterfly over the lanes (32 … 1)
+        rms   = sqrt(ss/k)·2^8;   8σ = max(rms/2, 224/√k)   (f32; δ = 1/16.  224/√k is 8 times the least σ of a row
+                whose largest code is 448, so the floor binds only on rows that are all-zero or not normalized)
+        σ8    = max(f16(8σ), 2^−6)                          (2^−6 is eight cells of E4M3's subnormal grid, X-17d-3)
+        c8_l  = h_l & 0x7C00 = 2^⌊log₂|h_l|⌋, 0 at 0         (eight E4M3 cells at h_l, on the cast's own grid)
+        A8_l  = max(c8_l, c8_partner(l), σ8)                A rows: partner π⁻¹(l); B columns: partner π(l)
+        e_l   = A8_l·(2t_l − 3)/8,  t_l = 0x3C00 | (w_l & 0x3FF), w_l the l-th 16-bit half of the row's XOF stream
+        A:  e2_l = e_π(l),   s = e + e2;      X̃ = [Q(h + e) | Q(h + e2) | Q(−h − s)]
+        B:  f2_l = −e_π⁻¹(l), s = e + f2;     Ỹ = [Q(h + e) ; Q(h + f2) ; Q(h + s)]
+
+    The block values h + e_b are HADD2.F32 (f16 operands, one f32 rounding) and Q is cvt.rn.satfinite.e4m3x2.f32: **a
+    block value at or beyond ±464 saturates to ±448** (0x7E), the only place NCP's cancellation is not exact before the
+    E4M3 rounding.  E₁'s row i is SHAKE256("verity/pouw/fp8-is/d3m/E1", salt, index, root_A, weight, i), and each weight
+    column j has its own stream per unit, SHAKE256("verity/pouw/fp8-is/d3m/F1", salt, index, weight, j), 2k bytes each:
+    B̃ is re-formed for every unit, which is r = 1, the only reuse D-3m tolerates (X-D3-3).  Weights are
+    pre-quantized offline per column (each column's largest code 448) for quality; the σ floor is what stops tiny
+    columns from giving free words (X-D3m-4) whatever the scales.
+
+    ``weight_copy`` is Daniel's pending ruling (ii): True counts a registered FP16 copy of the weights (with their
+    amplitude table) as free offline data, so the weight side's per-epoch forming skips the unpack; False decodes the
+    weights every epoch.  The checked function is the same; only the price differs.
+    """
+
+    blocks = 3
+    seeded = False
+    credited = (0, 0)
+    tag = "d3m-v0"
+    P_SEED = b"verity/pouw/fp8-is/d3m/P"
+    LANES, CHAIN = 64, 256
+
+    def __init__(self, weight_copy: bool = True, prices: str = "round8"):
+        self.weight_copy, self.prices = weight_copy, prices
+        self.name = self.tag if weight_copy else f"{self.tag}-decode"
+        self.trace = d3m_trace(PRICES[prices], self.CHAIN)
+        act = sum(u for _, sides, u in self.trace if "a" in sides)
+        wgt = sum(u for _, sides, u in self.trace if "w" in sides or ("c" in sides and not weight_copy))
+        self.units = (act, wgt)
+        self.parameters = (("delta_log2", 4), ("weight_copy", int(weight_copy)), ("form_units_a_ceil", -(-act // 1)),
+                           ("form_units_b_ceil", -(-wgt // 1)))
+
+    def check(self, shape: Shape) -> None:
+        if shape.k % SLICE or shape.k > 1 << 16:
+            raise DomainError(f"{self.name}: k is a multiple of {SLICE} and at most 2^16")
+        ncp_perm(shape.k, self.P_SEED)
+
+    def admits(self, codes: Sequence[int], left: bool) -> bool:
+        return True
+
+    def noise(self, ctx: Context) -> tuple[tuple[int, ...], tuple[int, ...]]:
+        return ncp_perm(ctx.matmul.shape.k, self.P_SEED)
+
+    def sigma8(self, h: Sequence[int]) -> int:
+        """The row's σ8 = max(f16(8σ), 2^−6) as an f16 word."""
+        k = len(h)
+        z = [fp16.mul(w, F16_2_POW_M8) for w in h]
+        lanes = [0] * self.LANES
+        for t in range(self.LANES):
+            entries = z[t::self.LANES]
+            for g in range(0, len(entries), self.CHAIN):
+                q = 0
+                for w in entries[g:g + self.CHAIN]:
+                    q = fp16.fma(w, w, q)
+                lanes[t] = fp32.add(lanes[t], fp16.to_f32(q))
+        half = self.LANES // 2
+        while half:
+            for t in range(half):
+                lanes[t] = fp32.add(lanes[t], lanes[t + half])
+            half //= 2
+        rms = fp32.mul(fp32.sqrt(fp32.div(lanes[0], f32_word(k))), f32_word(256))
+        eight_sigma = max(fp32.mul(rms, f32_word(Fraction(1, 2))), fp32.div(f32_word(224), fp32.sqrt(f32_word(k))))
+        neg, m, e = fp32.decode(eight_sigma)                 # both candidates are non-negative, so words order as values
+        return fp16.max_(fp16.round_to_f16(neg, m, e), F16_2_POW_M6)
+
+    def side(self, codes: Sequence[int], stream: bytes, pi: Sequence[int], inv: Sequence[int], left: bool) -> list[int]:
+        """One stacked row of X̃ (``left``) or column of Ỹ: 3k codes."""
+        k = len(codes)
+        h = [fp16.from_e4m3(c) for c in codes]
+        s8 = self.sigma8(h)
+        c8 = [w & 0x7C00 for w in h]
+        partner = inv if left else pi
+        e = []
+        for l in range(k):
+            a8 = fp16.max_(fp16.max_(c8[l], c8[partner[l]]), s8)
+            t = F16_ONE | (int.from_bytes(stream[2 * l:2 * l + 2], "little") & 0x3FF)
+            e.append(fp16.mul(a8, fp16.fma(F16_TWO_INV4, t, F16_MINUS_3_8)))
+        if left:
+            e2 = [e[pi[l]] for l in range(k)]
+            s = [fp16.add(a, b) for a, b in zip(e, e2)]
+            blocks = ((h, e), (h, e2), ([fp16.neg(w) for w in h], [fp16.neg(w) for w in s]))
+        else:
+            f2 = [fp16.neg(e[inv[l]]) for l in range(k)]
+            s = [fp16.add(a, b) for a, b in zip(e, f2)]
+            blocks = ((h, e), (h, f2), (h, s))
+        return [f32_to_e4m3_sat_word(fp32.add(fp16.to_f32(x), fp16.to_f32(n)))
+                for base, nz in blocks for x, n in zip(base, nz)]
+
+    def form(self, ctx: Context, noise, a: list[list[int]], b: list[list[int]], tile: Tile) -> Stack:
+        pi, inv = noise
+        u, k = ctx.matmul, ctx.matmul.shape.k
+        x = [self.side(r, xof("verity/pouw/fp8-is/d3m/E1", 2 * k, ctx.salt, u.index, ctx.root_a, u.weight, i), pi, inv, True)
+             for r, i in zip(a, tile.rows)]
+        y = [self.side(r, xof("verity/pouw/fp8-is/d3m/F1", 2 * k, ctx.salt, u.index, u.weight, j), pi, inv, False)
+             for r, j in zip(b, tile.cols)]
+        return Stack(x, y, [b""] * len(x), [b""] * len(y))
+
+
+FORMINGS = {"d3m-v0": lambda: D3m(True), "d3m-v0-decode": lambda: D3m(False), D3.name: D3, FpNcpV0.name: FpNcpV0,
+            D2Draft.name: D2Draft}
 
 
 # ---- the scheme -----------------------------------------------------------------------------------------------------
@@ -609,32 +759,38 @@ class FP8IS:
     word only at N >= 64 (m64n8 runs at 22% of peak).  Smaller bounds or tiles make a test instance.  No certificate names
     a γ_0 yet (``PROTOCOL.md``)."""
 
-    def __init__(self, forming: Forming, mnk_min: int = 8192, tile: tuple[int, int] = (64, 64)):
-        self.forming = forming
+    def __init__(self, forming: Forming, mnk_min: int = 8192, tile: tuple[int, int] = (64, 64), prices: str = "round8"):
+        self.forming, self.prices = forming, prices
         self.mnk_min, self.tile = mnk_min, tile
         self.name = f"{PREFIX}-{forming.name}"
-        self.credit = forming.blocks * (ATOM_UNITS + FADD_UNITS) // SLICE          # core W1 units per useful MAC
-        self.dropped = 0 if forming.seeded else FADD_UNITS                           # R_1's FADD, per output cell
+        self.fadd = PRICES[prices]["fadd"]                                          # the honest running add, per word
         (f_a, f_b), (c_a, c_b) = forming.units, forming.credited
-        core = self.credit * mnk_min - self.dropped                                  # per N² at m = n = k = N
+        slices = forming.blocks * mnk_min // SLICE                                   # T at k = N
+        adds = slices if forming.seeded else slices - 1
+        honest = ATOM_UNITS * slices + self.fadd * adds                              # per output cell
+        credited = ATOM_UNITS * slices + FADD_UNITS * adds                           # 32 per checked word
         self.certificate = Certificate(
             conjecture="tt-fp8-h100-core",
             gamma0=None,
-            omega=Fraction(core + f_a + f_b, core + c_a + c_b),
+            omega=Fraction(honest + f_a + f_b) / (credited + c_a + c_b),
             claims=("tt-fp8-h100-core", "h32-mh100", "w1-cost-model", "random-oracle", "xof/shake-256", "beacon-unpredictability"),
             theorems=("Pouw.Proofs.theorem1", "Pouw.Proofs.workWeightedSampling", "Pouw.Proofs.endToEnd"),
             hypotheses=(
-                "H_32: every MH100 writer, mma.sync small-K shapes, sparse wgmma, b1 paths and memory-side reductions "
-                "included, costs at least the honest atom per 32-bit word it writes (PROTOCOL.md; Round 7: per class, c = 32)",
-                "DistinctLive(γ_0): for every admitted input, all but a γ_0 fraction of the credited checked words are "
-                "salt-dependent and pairwise distinct as functions of the salt (a property of the forming layer)",
-                "A2_fp: data-dependent control flow, routing and grinding do not beat the per-word count",
+                "H_32 per class under additive W1: every MH100 writer class (mma.sync small-K, sparse wgmma, b1, "
+                "conversions, memory-side reductions included) costs at least 32 per 32-bit word it writes "
+                "(Round 8 loop-free: h32LoopFree)",
+                "DistinctLive(1/400): for every legal input, all but 1/400 of each output's checked words are pairwise "
+                "distinct on the salt set and none is free (a property of the forming layer; lifted with the hash as a "
+                "random oracle)",
+                "the named branching gap: data-dependent control flow is outside the proved bound (X-D3m-3: 13-17% of "
+                "the credit sits in low-entropy spike slices when P is fixed)",
                 "AdmitsRef: H_ref runs within wref on an H100",
             ),
             allowances=(
-                f"forming layer {forming.name}: DistinctLive is refuted (fpncp-v0: X-D1-1, X-C2-B1; d2-draft: X-D2-4, "
-                "X-D2-5); γ_0 is withheld until the repaired layer (D-3) lands",
-                "prices are MH100 nominal; Round 7 measured the FP32 add at 33.5 and F2FP e4m3x2 at 66.7 per instruction",
+                f"forming layer {forming.name}: DistinctLive is refuted for fpncp-v0 (X-D1-1, X-C2-B1) and d2-draft "
+                "(X-D2-4, X-D2-5), and claimed for d3m-v0 at r = 1 (the D-3m strike); γ_0 is withheld until it is "
+                "certified and Round 9's prices land",
+                f"prices: {prices} (PRICES); the X_q unpack and HADD2.F32 are unmeasured",
             ),
             parameters=(("mnk_min", mnk_min), ("tile_m", tile[0]), ("tile_n", tile[1]), ("blocks", forming.blocks),
                         ("seeded", int(forming.seeded)), *forming.parameters),
@@ -650,11 +806,14 @@ class FP8IS:
         return grid_tiles(shape, *self.tile)
 
     def wref(self, shape: Shape) -> int:
-        """The core (an atom word per cell per slice, and an FADD per slice, less R_1's when unseeded) plus the forming
-        trace on both sides.  The weight side is charged once per matmul; sharing it across matmuls is not credited."""
+        """The core (an atom word per cell per slice, and an FADD at ``prices``' rate per checked running word) plus the
+        forming trace on both sides, rounded up.  The weight side is charged once per matmul (r = 1); reuse across the
+        epoch's units is the spec's reuse condition, not this per-matmul figure."""
         f_a, f_b = self.forming.units
-        core = self.credit * shape.wmm - self.dropped * shape.m * shape.n
-        return core + f_a * shape.m * shape.k + f_b * shape.n * shape.k
+        slices = self.forming.blocks * shape.k // SLICE
+        adds = slices if self.forming.seeded else slices - 1
+        total = shape.m * shape.n * (ATOM_UNITS * slices + self.fadd * adds) + f_a * shape.m * shape.k + f_b * shape.n * shape.k
+        return -(-Fraction(total) // 1)
 
     def noise(self, ctx: Context):
         return self.forming.noise(ctx)
@@ -685,7 +844,8 @@ class FP8IS:
         steps = len(cells[0][0]) if cells else 0
         words = b"".join(struct.pack("<I", atoms[t]) + (b"" if running[t] is None else struct.pack("<I", running[t]))
                          for t in range(steps) for atoms, running in cells)
-        return hashlib.shake_256(f"verity/pouw/{self.name}/tile".encode() + b"\0" + checked.trace + words).digest(32)
+        return hashlib.shake_256(f"verity/pouw/{PREFIX}-{self.forming.tag}/tile".encode() + b"\0" + checked.trace
+                                 + words).digest(32)
 
     def useful(self, ctx: Context, noise, ops: Stack, checked: Checked) -> list[list[float]]:
         """R_T per cell as its FP32 value, less the seed (one add.rn.f32, glue) for a seeded layer."""

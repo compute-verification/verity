@@ -159,9 +159,10 @@ digest    SHAKE256("verity/pouw/<name>/tile" ‖ 0 ‖ layer words of the tile's
           core words little-endian, step-major, row-major over cells within a step, I_τ before R_τ
 tiles     64 × 64 (one m64n64k32 atom per slice: Round 7 measured 32 per word at N ≥ 64, and m64n8 at 22% of peak)
 domain    64 | m, 64 | n, 32 | k, 8,192 ≤ m, k, n ≤ 2^16
-wref      6·m·k·n − d·m·n + f_A·m·k + f_B·n·k: an atom word per cell per slice and an FADD per checked R_τ, 32 each on
-          MH100 nominal; d = 32 unseeded (R_1's FADD), 0 seeded
-Ω*        (6N − d + f_A + f_B)/(6N − d + c_A + c_B) at N = 8,192, c being the part of f spent on the layer's checked words
+wref      ⌈m·n·(32·T + p_FADD·n_R) + f_A·m·k + f_B·n·k⌉: an atom word per cell per slice at 32, an FADD per checked R_τ at
+          the price table's rate (n_R = T − 1 unseeded, T seeded), and the layer's trace
+Ω*        (32T + p_FADD·n_R + f_A + f_B)/(32T + 32·n_R + c_A + c_B) at m = n = k = N (the scheme's `mnk_min`), c being
+          the part of f spent on the layer's checked words
 γ         1 − (1 − γ_core)/Ω*,  γ_core ≤ ε + μ·(32 − c_k8)/32  (ε from `DistinctLive(ε)`, μ the fraction of credited
           words a sub-32 writer can write, c_k8 its measured price; `distinctWritesMH100`, `distinctWritesLegacy`)
 ~~~
@@ -174,7 +175,20 @@ wref      6·m·k·n − d·m·n + f_A·m·k + f_B·n·k: an atom word per cell 
 - **`H_32`** is stated for every writer class, including legacy `mma.sync` small-K shapes, sparse `wgmma`, the b1 paths,
   conversions, the uniform datapath and memory-side arithmetic (`red`/`atom`, `cp.reduce.async.bulk`, texture
   filtering), each priced per 32-bit word it writes; it is a measurement on an H100 SXM, not yet made.
-- **`d3-v0`** (`D3`), **the main line:** repaired C-2, track D's D-3. It keeps C-2's three NCP blocks and row-RMS
+- **`d3m-v0`** and **`d3m-v0-decode`** (`D3m`), **the lead:** D-3 with Track B's max law, on the committed X_q.
+  - **The noise.** C-2's three NCP blocks formed directly on X_q's codes. Every entry's noise amplitude is
+    max(σ, one E4M3 cell of the entry, one cell of its NCP partner), with σ = max(rms/16, 28/√k), from one f16 noise
+    field. The floor 28/√k gives all-zero and non-normalized rows and columns noise that survives rounding (X-D3m-4).
+    The cell is read on the cast's own grid (X-17d-3).
+  - **The arithmetic.** Block values are HADD2.F32 and the casts are `cvt.rn.satfinite.e4m3x2.f32`, so a block value at
+    or beyond ±464 saturates to ±448.
+  - **The streams.** Weight streams are keyed per unit and per column, so B̃ is re-formed per unit: r = 1, the only reuse
+    D-3m tolerates (X-D3-3).
+  - **The price** is schedule M4 (the D-3m strike) from `PRICES`: 426.27 per activation element at Round 8. The weight
+    side costs 290 with a registered FP16 weight copy (`d3m-v0`) or 322 decoded every epoch (`d3m-v0-decode`); that is
+    Daniel's pending ruling (ii). The two share one checked function and one digest tag.
+  - **At 16,384³ with r = 1:** Ω* gives γ = 0.972% and 1.004% at γ₀ = 1/400.
+- **`d3-v0`** (`D3`), superseded by D-3m: repaired C-2, track D's D-3. It keeps C-2's three NCP blocks and row-RMS
   noise, and adds partner-max full-cell noise, s_l·v_l with s_l the larger E4M3 cell of the entry and of the entry that
   reads the same noise in block 2, which fixes X-C2-B1. Weight streams are keyed per column (X-D2-5).
   - It is formed in binary16 (`verity.ml.tc.fp16`, the half2 pipe), with a power-of-two row scale α and E4M3 casts by
@@ -192,8 +206,9 @@ wref      6·m·k·n − d·m·n + f_A·m·k + f_B·n·k: an atom word per cell 
   the transform weights. Its checked words are every transform atom word and every converted code (7 words and 3 codes
   per element: 272 units credited per element per side). The noise-code distribution (`MaxRelativeCodes`, 64 units) is
   a **placeholder** for track D's repair. The domain is |A| ≤ 64 and |B| ≤ 32, so no transform saturates.
-- **Prices.** `wref` uses MH100's nominal table. Round 7 (H100 SXM) measured the atom at 32.00 at N ≥ 64, the FP32 add at
-  33.5 and F2FP e4m3x2 at 66.7 per instruction, and H_32 per class with c = 32 (legacy k8 at 34.0).
+- **Prices.** `PRICES` holds Round 7 as measured and Round 8 loop-free (FADD 32, half2 36, INT 64, F2FP 64 per
+  instruction). The X_q unpack and HADD2.F32 are the red team's assumptions until Round 9 measures them. The core's FADD
+  and D3m's trace read the same table (`prices=`, default Round 8).
 - **Vectors.** `tests/vectors/fp8_is.json` (from `tests/fp8_is_vectors.py`): every layer on a test instance, and `d3-v0`
   and `d2-draft` at k = 8,192. The core is checked against the total FP8 step and numpy's float32 running sum, and D-2's
   exact algebra (before any rounding) against A·Bᵀ.

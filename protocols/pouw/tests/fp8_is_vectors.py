@@ -16,7 +16,9 @@ from verity_pouw.schemes import fp8_is
 
 OUT = Path(__file__).with_name("vectors") / "fp8_is.json"
 #: (case, forming, shape, tile rows, tile cols, index, weight): test-instance shapes and one lead-domain k
-CASES = (("small-d3", "d3-v0", (64, 128, 64), (0, 2), (8, 10), 7, 3),
+CASES = (("small-d3m", "d3m-v0", (64, 128, 64), (0, 2), (8, 10), 7, 3),
+         ("lead-k-d3m", "d3m-v0", (16384, 16384, 16384), (0, 1), (0, 1), (1 << 64) - 1, 11),
+         ("small-d3", "d3-v0", (64, 128, 64), (0, 2), (8, 10), 7, 3),
          ("lead-k-d3", "d3-v0", (8192, 8192, 8192), (0, 1), (0, 1), (1 << 64) - 1, 11),
          ("small-d2", "d2-draft", (64, 128, 64), (0, 2), (8, 10), 7, 3),
          ("small-fpncp", "fpncp-v0", (64, 128, 64), (0, 2), (8, 10), 7, 3),
@@ -64,7 +66,7 @@ def case_vector(case, forming, shape, r, c, index, weight) -> dict:
 
 def vectors() -> dict:
     return {"schema": "verity-pouw/fp8-is-vectors/v1",
-            "perm_sha256": {name: hashlib.sha256(b"".join(x.to_bytes(2, "little") for x in fp8_is.ncp_perm(8192, layer.P_SEED)[0]))
+            "perm_sha256": {name: hashlib.sha256(b"".join(x.to_bytes(2, "little") for x in fp8_is.ncp_perm(8192, layer().P_SEED)[0]))
                             .hexdigest() for name, layer in fp8_is.FORMINGS.items()},
             "cases": [case_vector(*c) for c in CASES]}
 
