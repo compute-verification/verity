@@ -305,7 +305,7 @@ def test_fill_runner_ranks_commits_first_reclaims_for_them_and_keeps_out_of_book
     queue("pous-c.sh")
     spec.loader.exec_module(fr)
     monkeypatch.setattr(fr.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or subprocess.CompletedProcess(cmd, 0))
-    monkeypatch.setattr(fr.subprocess, "Popen", lambda cmd, **kw: type("P", (), {"pid": 4242, "poll": lambda self: 0})())
+    monkeypatch.setattr(fr.subprocess, "Popen", lambda cmd, **kw: type("P", (), {"pid": 4242, "poll": lambda self: 143})())
     monkeypatch.setattr(fr, "event", lambda *a, **kw: calls.append(a[:2]))
     fr.start(fill / "queue" / "pous-c.sh", fr.header(fill / "queue" / "pous-c.sh"))
     assert fr.running["pous-c.sh"]["unit"] == "gpu-lease-4242"
@@ -316,6 +316,7 @@ def test_fill_runner_ranks_commits_first_reclaims_for_them_and_keeps_out_of_book
     fr.reap()
     assert ["systemctl", "--user", "kill", "--signal=SIGKILL", "gpu-lease-4242.scope"] in calls
     assert ("scope-residue", "pous-c.sh") in calls and "pous-c.sh" not in fr.running
+    assert (fill / "queue" / "pous-c.sh").exists()
 
 
 @needs_flock
@@ -805,6 +806,59 @@ def test_the_verity_pool_lends_idle_slots_to_pous_cpu_jobs_and_takes_them_back(t
     fr.running.pop("p1.sh")
     fr.verity_pool([job("v2.sh", "gpus=0 project=verity")])
     assert [n for n, _ in started] == ["v2.sh"]
+
+
+def test_fill_runner_files_a_job_by_its_own_exit_status_across_a_restart_and_never_requeues_an_unknown_exit(tmp_path, monkeypatch):
+    """A job that finishes while a restarted runner has adopted it goes to done/, not back to the queue, where its rerun deleted
+    its result (pous-climb-a3, 1 Oct 08:50Z); exit 0 is done even when a stop raced it; and a job whose exit the runner can't learn
+    is held, never rerun, while one that asks for more chunks (99) is still requeued."""
+    fill = tmp_path / "fill"
+    for d in ("queue", "running", "done", "failed", "logs", "held-unknown-exit"):
+        (fill / d).mkdir(parents=True)
+    monkeypatch.setenv("FILL_DIR", str(fill))
+    monkeypatch.setenv("FILL_CPU_SET", str(sorted(os.sched_getaffinity(0))[0]))
+    spec = importlib.util.spec_from_file_location("fill_runner_exit", FILL_RUNNER)
+    fr = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(fr)
+    monkeypatch.setattr(fr.shutil, "which", lambda name: None)
+    out = tmp_path / "out"
+
+    def run(name: str, body: str) -> dict:
+        p = fill / "queue" / name
+        p.write_text(f"#!/usr/bin/env bash\n# fill: owner=o gpus=0\n{body}\n")
+        fr.start(p, fr.header(p))
+        j = fr.running[name]
+        j["proc"].wait()
+        return j
+
+    def restart() -> None:
+        fr.running.clear()
+        fr.adopt()
+        fr.reap()
+
+    run("a.sh", f"rm -rf {out}; mkdir -p {out}; echo result > {out}/r; exit 0")
+    restart()
+    assert (fill / "done" / "a.sh").exists() and not (fill / "queue" / "a.sh").exists()
+    assert (out / "r").read_text() == "result\n" and not list((fill / "running").iterdir())
+
+    run("more.sh", "exit 99")
+    restart()
+    assert (fill / "queue" / "more.sh").exists()
+
+    run("raced.sh", "exit 0")["stopping"] = fr.running["raced.sh"]["requeue"] = True
+    fr.reap()
+    assert (fill / "done" / "raced.sh").exists()
+
+    gone = subprocess.Popen(["true"], start_new_session=True)
+    gone.wait()
+    (fill / "running" / "legacy.sh").write_text("# fill: owner=o gpus=0\n")
+    (fill / "running" / ".legacy.sh.pgid").write_text(f"{gone.pid}\n")
+    (fill / "running" / "orphan.sh").write_text("# fill: owner=o gpus=0\n")
+    restart()
+    assert sorted(p.name for p in (fill / "held-unknown-exit").iterdir()) == ["legacy.sh", "orphan.sh"]
+    assert not list((fill / "queue").glob("legacy.sh")) and not list((fill / "queue").glob("orphan.sh"))
+    kinds = [json.loads(l)["event"] for l in (fill / "events.jsonl").read_text().splitlines()]
+    assert kinds.count("unknown-exit") == 2 and "adopted-exit" not in kinds
 
 
 def _pool_n1(monkeypatch, **env):
