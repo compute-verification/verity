@@ -71,6 +71,7 @@ import FlockSoundness.Lowering
 import FlockSoundness.Types.Flat
 import FlockSoundness.Rope.Lowering
 import FlockSoundness.Types.Dag
+import FlockSoundness.Types.Flatten
 import FlockSoundness.Compose
 import FlockSoundness.ComposeDag
 import FlockSoundness.Game.Prob
