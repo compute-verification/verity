@@ -574,6 +574,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--selftest", type=int, default=0, help="also run flock-circuit's selftest (31 cases, negatives included) on every "
                     "Nth provable class and on each flat Definition's largest (0: never)")
+    ap.add_argument("--no-selftest-largest", dest="selftest_largest", action="store_false",
+                    help="selftest every Nth shape only, not also each flat Definition's largest (a full CPU selftest per attention key count)")
     ap.add_argument("--max-ands", type=int, default=1 << 24, help="skip classes above this many ANDs (reported)")
     ap.add_argument("--only", default=None, help="comma-separated shape prefixes")
     ap.add_argument("--selftest-only", action="store_true", help="stage and run the selftest cases only (no loopback session), into selftests.jsonl")
@@ -657,7 +659,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             try:
                 if not a.selftest_only:
                     rec["live"] = prove(a.binary, d, rec["stage"]["n"], a.port, gpu=a.gpu, warm=a.warm, runs=a.runs)
-                if a.selftest and (len(done) % a.selftest == 0 or s == largest.get(cl.definition.id)):
+                if a.selftest and (len(done) % a.selftest == 0 or (a.selftest_largest and s == largest.get(cl.definition.id))):
                     if rec["table_reads"]:                       # a read-bearing circuit re-parses per case: a few cases, one process each
                         runs = [prove(a.selftest_binary or a.binary, d, rec["stage"]["n"], a.port, selftest=c) for c in READ_CASES]
                         rec["selftest"] = {"all_pass": all(x["all_pass"] for x in runs), "cases": len(runs),
