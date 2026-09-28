@@ -5,12 +5,16 @@ import Flock.Bytes
 
 Executable forms of `active.py`'s framing: a link frame is B bytes, a header (kind u8, stream u32be, length u32be), the
 payload and zero fill (`encodeFrame`, `decodeFrame`); a server's byte stream is cut after every `\n\n` (`Events.feed`), and
-an event's `id:` field is its canonical position (`eventPosition`).
+an event's `id:` field is its canonical position (`eventPosition`). A frame's bits (`bitsOf`) are the payload the Program
+carries.
 -/
 
 namespace CertifierDevice
 
 open Flock
+
+/-- The bits of a frame's bytes, most significant first: the payload `NetworkCertifier`'s Program carries. -/
+def bitsOf (b : ByteArray) : List Bool := b.toList.flatMap fun x => (List.range 8).map fun i => x.toNat.testBit (7 - i)
 
 /-- `HEADER.size`: kind u8, stream u32, length u32. -/
 def headerSize : Nat := 9

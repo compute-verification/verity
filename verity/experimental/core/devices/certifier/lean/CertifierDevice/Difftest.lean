@@ -113,9 +113,6 @@ def actionJson : Action → Json
   | .writeUpstream s b drain => .arr #[.str "upstream", toJson s, hexJson b, toJson drain]
   | .publish r p => .arr #[.str "publish", recordJson r, paramsJson p]
 
-/-- The bits of a frame's bytes, most significant first: the payload `NetworkCertifier`'s Program carries. -/
-def bitsOf (b : ByteArray) : List Bool := b.toList.flatMap fun x => (List.range 8).map fun i => x.toNat.testBit (7 - i)
-
 /-- An honest run's check: every record complete, and egress window w's row i is `expectedRow` at bucket w·T + i of the
 Program's frames under the syncs `step` declared. -/
 def honest (c : Config) (syncs : Array ClockSync) (program : Array (ByteArray × Nat × Nat)) (records : Array Record) :

@@ -6,8 +6,8 @@
 gates, each with `novelReads R = width(into(R) \\ θ) ≤ α · size R`, where `into(R)` is the gates outside `R` with a wire
 into `R` (`Security/Definitions/Core/Circuit.lean`). The instance and the refusal codes are the ones `NciCheck.Check`'s
 docstring gives: the declaration's circuit is the canonical layout of a descriptor v1 Program (`verity.ml.circuits`),
-gate `g` of width `Value<w>` bits, an input gate when its primitive is an input (`program.is_input`), reading the gates
-its operands name; θ is a list of input gate ids; the division is one owner per gate, `"input"` or an IU index.
+gate `g` of width `Value<w>` bits, an input gate when its primitive is an input (`program.is_input`, with no operands),
+reading the gates its operands name; θ is a list of input gate ids; the division is one owner per gate, `"input"` or an IU index.
 A primitive is taken as the descriptor declares it, as C-Flock's decoder takes it, so no registry is needed.
 """
 from __future__ import annotations
@@ -58,6 +58,8 @@ def circuit(program: str) -> tuple[list[int], list[bool], list[set[int]]]:
     w, inp, reads = [], [], []
     for g in range(C.size):
         gate = C.gate(g)
+        if is_input(gate.prim) and gate.operands:
+            raise Malformed("program")
         if any(a >= g for a in gate.operands):
             raise Malformed("not-topological")
         w.append(gate.prim.ret.w)
