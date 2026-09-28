@@ -735,27 +735,30 @@ def outputRowsV2 (prod0 nh k bits c0 : ℕ) (s : Builder) : Builder :=
     else if (decide (i < bits) && c0.testBit i) = true then { a := r.a.push #[KONST], b := r.b.push #[KONST] }
     else { a := r.a.push #[], b := r.b.push #[] }) s (List.range 128)
 
-/-- **`buildV2`, step by step:** `build_spec`'s stages, with product rows for the varying width `k` only and output rows
+-- Unfolding `width` reduces the library's SHA-512 literals character by character: the proofs split on it explicitly.
+attribute [local irreducible] width
+
+/-- **`buildV2`, step by step:** `build_spec`'s stages, with product rows for the width `k` only and output rows
 `outputRowsV2` (a bit at or above `k` its constant). -/
-theorem build_spec_v2 {name : String} {table : ByteArray} {n lo bits : ℕ} {library : Bool} {net : Net}
-    (h : buildV2 name table n lo bits library = .ok net) :
+theorem build_spec_v2 {name sha512 : String} {table : ByteArray} {n lo bits : ℕ} {net : Net}
+    (h : buildV2 name sha512 table n lo bits = .ok net) :
     2 ≤ lo ∧ lo < n ∧ bits ≤ 32 ∧ n ≤ 128 ∧ table.size = 4 * 2 ^ n ∧
     ∃ (d1 d2 : Builder × Array Form × ℕ) (r3 : Builder),
       d1 = decode (inputRows n) (List.range lo) lo ∧
       d2 = decode d1.1 ((List.range (n - lo)).map (lo + ·)) (n - lo) ∧
       d1.2.1.size = 2 ^ lo ∧ d2.2.1.size = 2 ^ (n - lo) ∧
-      (∃ k, r3.a = (productRows d2.2.1 (if library then varying table n bits else bits) d2.1).a ++ (List.replicate k (#[] : Array ℕ)).toArray ∧
-        r3.b = (productRows d2.2.1 (if library then varying table n bits else bits) d2.1).b ++ (List.replicate k (#[] : Array ℕ)).toArray ∧ r3.a.size % 128 = 0) ∧
-      Sparse.ofRows (fixKonst (outputRowsV2 d2.1.a.size d2.2.1.size (if library then varying table n bits else bits) bits (rd32 table 0) r3).a.size
-          ((outputRowsV2 d2.1.a.size d2.2.1.size (if library then varying table n bits else bits) bits (rd32 table 0) r3).a.push #[(outputRowsV2 d2.1.a.size d2.2.1.size (if library then varying table n bits else bits) bits (rd32 table 0) r3).a.size]))
+      (∃ k, r3.a = (productRows d2.2.1 (width sha512 table n bits) d2.1).a ++ (List.replicate k (#[] : Array ℕ)).toArray ∧
+        r3.b = (productRows d2.2.1 (width sha512 table n bits) d2.1).b ++ (List.replicate k (#[] : Array ℕ)).toArray ∧ r3.a.size % 128 = 0) ∧
+      Sparse.ofRows (fixKonst (outputRowsV2 d2.1.a.size d2.2.1.size (width sha512 table n bits) bits (rd32 table 0) r3).a.size
+          ((outputRowsV2 d2.1.a.size d2.2.1.size (width sha512 table n bits) bits (rd32 table 0) r3).a.push #[(outputRowsV2 d2.1.a.size d2.2.1.size (width sha512 table n bits) bits (rd32 table 0) r3).a.size]))
           (2 ^ net.unitLog) = .ok net.a ∧
-      Sparse.ofRows (fixKonst (outputRowsV2 d2.1.a.size d2.2.1.size (if library then varying table n bits else bits) bits (rd32 table 0) r3).a.size
-          ((outputRowsV2 d2.1.a.size d2.2.1.size (if library then varying table n bits else bits) bits (rd32 table 0) r3).b.push #[(outputRowsV2 d2.1.a.size d2.2.1.size (if library then varying table n bits else bits) bits (rd32 table 0) r3).a.size]))
+      Sparse.ofRows (fixKonst (outputRowsV2 d2.1.a.size d2.2.1.size (width sha512 table n bits) bits (rd32 table 0) r3).a.size
+          ((outputRowsV2 d2.1.a.size d2.2.1.size (width sha512 table n bits) bits (rd32 table 0) r3).b.push #[(outputRowsV2 d2.1.a.size d2.2.1.size (width sha512 table n bits) bits (rd32 table 0) r3).a.size]))
           (2 ^ net.unitLog) = .ok net.b ∧
-      net.useful = (outputRowsV2 d2.1.a.size d2.2.1.size (if library then varying table n bits else bits) bits (rd32 table 0) r3).a.size + 1 ∧
-      net.constPos = (outputRowsV2 d2.1.a.size d2.2.1.size (if library then varying table n bits else bits) bits (rd32 table 0) r3).a.size ∧
+      net.useful = (outputRowsV2 d2.1.a.size d2.2.1.size (width sha512 table n bits) bits (rd32 table 0) r3).a.size + 1 ∧
+      net.constPos = (outputRowsV2 d2.1.a.size d2.2.1.size (width sha512 table n bits) bits (rd32 table 0) r3).a.size ∧
       net.outGroups = #[⟨r3.a.size / 128, 1, #[bits]⟩] ∧
-      net.lookup = some ⟨table, n, lo, (if library then varying table n bits else bits), d2.1.a.size, d1.2.2⟩ := by
+      net.lookup = some ⟨table, n, lo, (width sha512 table n bits), d2.1.a.size, d1.2.2⟩ := by
   simp only [buildV2] at h
   split at h
   · simp [throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
@@ -764,11 +767,13 @@ theorem build_spec_v2 {name : String} {table : ByteArray} {n lo bits : ℕ} {lib
     decide_eq_true_eq, not_or, not_lt, not_not, not_le] at hchk
   obtain ⟨⟨⟨hts, hlo, hln⟩, hb32⟩, hn⟩ := hchk
   refine ⟨hlo, hln, hb32, hn, hts, ?_⟩
+  split at h
+  · simp [throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
   simp only [forIn_range_foldl, bind, Except.bind] at h
   set d1 := decode (List.foldl (fun (r : Builder) i => if i < n then { a := r.a.push #[i], b := r.b.push #[i] }
     else { a := r.a.push #[], b := r.b.push #[] }) { } (List.range 128)) (List.range lo) lo with hd1
   set d2 := decode d1.1 (List.map (fun x => lo + x) (List.range (n - lo))) (n - lo) with hd2
-  rcases hW : (forIn Lean.Loop.mk (productRows d2.2.1 (if library then varying table n bits else bits) d2.1) fun _ s => if (s.a.size % 128 != 0) = true then
+  rcases hW : (forIn Lean.Loop.mk (productRows d2.2.1 (width sha512 table n bits) d2.1) fun _ s => if (s.a.size % 128 != 0) = true then
       pure (ForInStep.yield ({ a := s.a.push #[], b := s.b.push #[] } : Builder)) else pure (ForInStep.done s) :
       V Builder) with e | r3
   · rw [productRows] at hW; rw [hW] at h; cases h
@@ -780,7 +785,7 @@ theorem build_spec_v2 {name : String} {table : ByteArray} {n lo bits : ℕ} {lib
   · simp [throw, throwThe, MonadExceptOf.throw] at h
   rename_i hshape
   simp only [Bool.or_eq_true, bne_iff_ne, ne_eq, not_or, not_not] at hshape
-  set r4 := List.foldl (fun (r : Builder) i => if i < (if library then varying table n bits else bits) then
+  set r4 := List.foldl (fun (r : Builder) i => if i < (width sha512 table n bits) then
       { a := r.a.push (Array.map (fun x => d2.1.a.size + i * d2.2.1.size + x) (Array.range d2.2.1.size)),
         b := r.b.push #[KONST] }
     else if (decide (i < bits) && (rd32 table 0).testBit i) = true then { a := r.a.push #[KONST], b := r.b.push #[KONST] }
@@ -823,21 +828,21 @@ theorem outputRowsV2_eq (p nh k bits c0 : ℕ) (s : Builder) : outputRowsV2 p nh
   rw [outputRowsV2, this, foldl_push]
 
 /-- **A `table/v2` slot's rows compute `table[index]`** (`build_computes`, for `buildV2`): the same conclusion, for every
-table and index, `library` or `program`. Bits below the varying width `k` are computed as in v1 (the lookup record's
+table, SHA-512 and index, `library` or `program`. Bits below the width `k` are computed as in v1 (the lookup record's
 `bits` is `k`); each bit at or above it is constant over the table (`varying_const`), and its row is that constant. -/
-theorem build_computes_v2 {name : String} {table : ByteArray} {n lo bits : ℕ} {library : Bool} {net : Net}
-    (hb : buildV2 name table n lo bits library = .ok net) (hK : net.useful ≤ KONST) :
+theorem build_computes_v2 {name sha512 : String} {table : ByteArray} {n lo bits : ℕ} {net : Net}
+    (hb : buildV2 name sha512 table n lo bits = .ok net) (hK : net.useful ≤ KONST) :
     ∃ (RA RB : Array (Array ℕ)) (lk : LookupTable) (col : ℕ),
       Sparse.ofRows RA (2 ^ net.unitLog) = .ok net.a ∧ Sparse.ofRows RB (2 ^ net.unitLog) = .ok net.b ∧
       RA.size = net.useful ∧ RB.size = net.useful ∧ net.lookup = some lk ∧
-      lk.table = table ∧ lk.n = n ∧ lk.lo = lo ∧ lk.bits = (if library then varying table n bits else bits) ∧ net.outGroups = #[⟨col, 1, #[bits]⟩] ∧
+      lk.table = table ∧ lk.n = n ∧ lk.lo = lo ∧ lk.bits = (width sha512 table n bits) ∧ net.outGroups = #[⟨col, 1, #[bits]⟩] ∧
       ∀ z : ℕ → K, (∀ r < net.useful, z r = rowSum z (RA.getD r #[]) * (rowSum z (RB.getD r #[]) + tableB lk z r)) →
         z net.constPos = 1 →
         (∀ i < n, z i = 0 ∨ z i = 1) ∧
         ∀ j < bits, z (128 * col + j) = if (rd32 table (4 * bitsVal z (List.range n))).testBit j then 1 else 0 := by
   obtain ⟨hlo, hln, hb32, hn, hts, d1, d2, r3, hd1, hd2, hs1, hs2, ⟨k, hr3a, hr3b, hr3m⟩, hA, hB, huse, hconst, hout, hlk⟩ :=
     build_spec_v2 hb
-  set kw := (if library then varying table n bits else bits) with hKd
+  set kw := (width sha512 table n bits) with hKd
   -- the stages append rows to A and B together
   have I0 := inputRows_eq n
   have hI0a : (inputRows n).a.size = 128 := by rw [I0]; simp
@@ -979,9 +984,10 @@ theorem build_computes_v2 {name : String} {table : ByteArray} {n lo bits : ℕ} 
   by_cases hjk : j < kw
   swap
   · have hc : (rd32 table (4 * bitsVal z (List.range n))).testBit j = (rd32 table 0).testBit j := by
-      cases library
-      · exact absurd hj (by simpa [hKd] using hjk)
+      unfold width at hKd
+      split at hKd
       · exact varying_const table n bits j (by simpa [hKd] using hjk) hj _ (by simpa using bitsVal_lt z (List.range n))
+      · exact absurd hj (by simpa [hKd] using hjk)
     simp only [outAV2, outBV2, hjk, ↓reduceIte, hj, decide_true, Bool.true_and] at h
     rw [h, hc]
     by_cases hc0 : (rd32 table 0).testBit j = true

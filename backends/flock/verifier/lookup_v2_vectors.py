@@ -1,12 +1,15 @@
 """The `table/v2` generator's vectors (`lookup_v2_vectors.json`): the Lean verifier's `Lookup.buildV2` is the one
 specification of a read's rows (Project doc `verified-lowering-design.md` §1.9, question 4), and Rust's `lookup.rs` and
-Python's generators mirror it. Each entry is a table and a slot, `(n, lo, bits, library)`, with what `flock-verify
-lookup-rows` computes: the varying width `k`, the slot's shape, and the rows digest `Lookup.rowsDigest`.
+Python's generators mirror it. Each entry is a table and a slot, `(n, lo, bits)`, with what `flock-verify lookup-rows`
+computes: the table's label (`library` exactly when its SHA-512 is in the library list), the width `k`, the slot's shape,
+and the rows digest `Lookup.rowsDigest`.
 
     python lookup_v2_vectors.py --lean BIN [--tables DIR] [--write]
 
 - The small tables are generated here, deterministically, and embedded as hex: every entry can be reproduced from the file.
-- The four MUFU tables are named by SHA-512 and read from `DIR/<sha512>` (an archive directory), when given.
+  None is in the library, so each keeps every value bit, constant or not.
+- The four MUFU tables are library tables, named by SHA-512 and read from `DIR/<sha512>` (an archive directory), when
+  given: product rows for their varying bits only.
 - `--write` rewrites the file from the Lean output; otherwise the Lean output must equal it. Exit 1 on a difference.
 """
 from __future__ import annotations
@@ -47,9 +50,8 @@ def small_tables() -> list[tuple[str, int, int, int, bytes]]:
     return out
 
 
-def lean_rows(lean: str, path: Path, n: int, lo: int, bits: int, library: bool) -> dict:
-    args = [lean, "lookup-rows", str(path), str(n), str(lo), str(bits)] + ([] if library else ["--program"])
-    p = subprocess.run(args, capture_output=True, text=True)
+def lean_rows(lean: str, path: Path, n: int, lo: int, bits: int) -> dict:
+    p = subprocess.run([lean, "lookup-rows", str(path), str(n), str(lo), str(bits)], capture_output=True, text=True)
     line = next((l for l in p.stdout.splitlines() if l.startswith("LOOKUPROWS ")), None)
     if line is None:
         raise RuntimeError(p.stdout + p.stderr)
@@ -69,8 +71,7 @@ def main() -> int:
         for label, n, lo, bits, table in small_tables():
             f = Path(tmp) / f"{label}.u32"
             f.write_bytes(table)
-            for library in (True, False):
-                got.append({"label": label, "table_hex": table.hex(), **lean_rows(a.lean, f, n, lo, bits, library)})
+            got.append({"label": label, "table_hex": table.hex(), **lean_rows(a.lean, f, n, lo, bits)})
     mufu = []
     if a.tables:
         for name, n, sha in MUFU:
@@ -80,8 +81,7 @@ def main() -> int:
             if hashlib.sha512(f.read_bytes()).hexdigest() != sha:
                 print(f"{f}: not the table its name says", file=sys.stderr)
                 return 1
-            for library in (True, False):
-                mufu.append({"label": name, **lean_rows(a.lean, f, n, 14, 31, library)})
+            mufu.append({"label": name, **lean_rows(a.lean, f, n, 14, 31)})
     if a.write:
         doc = {"about": "table/v2 generator vectors (Flock.Lookup.buildV2, Lookup.rowsDigest); written by lookup_v2_vectors.py "
                         "--write from the compiled Lean verifier. The mirrors (Rust lookup.rs, Python) must reproduce every "
@@ -91,8 +91,8 @@ def main() -> int:
         return 0
     want = json.loads(VECTORS.read_text())
     bad = [g["label"] for g, w in zip(got, want["small"]) if g != w] + ([] if len(got) == len(want["small"]) else ["count"])
-    by = {(w["label"], w["library"]): w for w in want["mufu"]}
-    bad += [f"{m['label']} library={m['library']}" for m in mufu if by.get((m["label"], m["library"])) != m]
+    by = {w["label"]: w for w in want["mufu"]}
+    bad += [m["label"] for m in mufu if by.get(m["label"]) != m]
     print(json.dumps({"small": len(got), "mufu": len(mufu), "disagree": bad}))
     return 1 if bad else 0
 

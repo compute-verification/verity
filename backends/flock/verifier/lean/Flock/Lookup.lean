@@ -9,6 +9,7 @@ Every row is explicit except the product rows' B side (about `bits · 2^(n−1)`
 fold reads from the table directly (`Lookup.foldB`).
 -/
 import Flock.Net
+import Flock.Library
 
 namespace Flock
 
@@ -98,7 +99,9 @@ def build (name : String) (table : ByteArray) (n lo bits : Nat) : V Net := do
 
 v1 over the output bits that vary: a `library` table's bits at and above `varying` are constant over the whole table, so
 their output rows are the constant bit itself and they get no product rows. A `program` table keeps every output bit, so
-its slot's shape shows nothing of its content. The fold is v1's: the lookup record's `bits` is the varying width. -/
+its slot's shape shows nothing of its content (the private track's rule). The label is the table's own: `library`
+exactly when its SHA-512 is listed in `LIBRARY_TABLES`, as in `Layout.kOf`. The fold is v1's: the lookup record's `bits`
+is the width `k`. -/
 
 /-- The varying width of `table`'s low `bits` output bits: one more than the highest bit that is not the same in all
 `2^n` words (0 if none varies). -/
@@ -108,12 +111,20 @@ def varying (table : ByteArray) (n bits : Nat) : Nat :=
   let d := diff &&& (2 ^ bits - 1)
   if d = 0 then 0 else Nat.log2 d + 1
 
+/-- The output bits a read of the table named `sha512` gives product rows: a `library` table's up to its varying width,
+a `program` table's all `bits`. -/
+def width (sha512 : String) (table : ByteArray) (n bits : Nat) : Nat :=
+  if (libraryTable? sha512).isSome then varying table n bits else bits
+
 /-- **The `table/v2` slot**, the one specification of a read's rows (`lookup.rs` and Python mirror it): v1's rows with
-product rows only for the `k` varying output bits (`k = varying table n bits` for a `library` table, `bits` for a
-`program` one), and output bit `k ≤ j < bits` the constant bit, `A = B = [const]` for 1 and an empty row for 0. -/
-def buildV2 (name : String) (table : ByteArray) (n lo bits : Nat) (library : Bool) : V Net := do
+product rows only for the `k = width sha512 table n bits` output bits, and output bit `k ≤ j < bits` the constant bit,
+`A = B = [const]` for 1 and an empty row for 0. `sha512` is the table's SHA-512 in hex (its archive key), which the caller
+has checked names these words; a library table is read only in the library's shape. -/
+def buildV2 (name sha512 : String) (table : ByteArray) (n lo bits : Nat) : V Net := do
   if table.size != 4 * 2 ^ n || !(2 ≤ lo && lo < n) || bits > 32 || n > 128 then throw s!"lookup {name}: not a table of 2^{n} words"
-  let k := if library then varying table n bits else bits
+  if !(libraryTable? sha512).all (fun t => t.indexBits == n && t.valueBits == bits) then
+    throw s!"lookup {name}: a library table read in a shape other than the library's"
+  let k := width sha512 table n bits
   let c0 := rd32 table 0
   let mut bd : Builder := {}
   for i in [0:128] do
