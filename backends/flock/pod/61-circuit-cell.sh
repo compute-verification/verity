@@ -4,8 +4,10 @@
 # verifier on a separate pod serving its own public files (no rows). The cell's input set arrives as inputs/<digest>.tar.
 #   ROLE=prover   TEMPLATE POINTS PER RUNS VERIFIER=host:port RTT_TARGET=host:22 LOOPBACK=1 OPERATOR [ART]   (GPU build)
 #   ROLE=verifier TEMPLATE POINTS PER RUNS OPERATOR                                                        (CPU build; serves on :7501)
+#   FC_COINS=os (both roles: per-round OS coins, no seed and no PRF; seed: the binary's default)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
+export FC_COINS=${FC_COINS:-os}
 REPO=$(pwd); I=$RESEARCH_RUN_DIR/inputs; O=${RESEARCH_RUN_DIR:-/tmp/flock-circuit-cell}/out; W=/workspace/flock-circuit; mkdir -p $O $W
 ROLE=${ROLE:-prover}; TEMPLATE=${TEMPLATE:?}; POINTS=${POINTS:?}; PER=${PER:-1073741824}; RUNS=${RUNS:-5}
 G=1; [ $ROLE = verifier ] && G=0

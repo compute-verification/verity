@@ -2,14 +2,17 @@
 
     dispatch.py submit TEMPLATE KEY --tree PATH [--queue Q] [--priority P] [--class C] [--env K=V ...]   one item, now
     dispatch.py tick [--dry-run]      one pass: advance chains, requeue exit 99, top every queue up from the ready files
-    dispatch.py loop [--every 60]     tick forever (tmux `node1-dispatch` on the server, as research)
+    dispatch.py loop [--every 60]     tick forever, each tick a fresh `loop --once` process (tmux `node1-dispatch`, as research)
     dispatch.py status                queues, this dispatcher's jobs, GPU-busy and CPU-busy (DCGM / node-exporter, 10 and 60 min)
     dispatch.py pack-stops | pack-lift MODEL --by circuits --why TEXT    models stopped from packing; lift one (circuits only)
 
 Runs on the server with a Python that has PyYAML (`/workspace/jobs/venv312/bin/python`) and research's kubeconfig.
 Every invocation reads its settings (the VY_* and PACK_* below) from `$VY_DISPATCH_ROOT/dispatch.env` (`KEY=VALUE` lines, `#`
 comments), under any the caller's environment sets: a one-off `submit`, such as n2_build.sh's and n2_commit.sh's over ssh from
-node 2, renders its Job with the loop's CPU slices and lease pools, not the defaults.
+node 2, renders its Job with the loop's CPU slices and lease pools, not the defaults. The loop is one invocation per tick: each tick
+runs in a fresh process from the environment the loop started with, so an edit to dispatch.env applies at the next tick and a key
+removed from it drops out, with no restart (2 Oct: a lend of cores 128-159 to provers never reached a loop that had read the file
+once, at its start).
 
 **Templates.** Each task of `sky/jobs/<TEMPLATE>.yaml` becomes one batch/v1 Job labelled `kueue.x-k8s.io/queue-name` (Kueue admits
 it by quota and requeues it itself when it is preempted). The Job runs the task's `setup` then `run` with the task's envs, as the
@@ -144,6 +147,7 @@ def load_settings(path: Path) -> None:
             os.environ.setdefault(k.strip(), v.strip())
 
 
+CALLER_ENV = dict(os.environ)   # before dispatch.env: what each of the loop's ticks starts from
 load_settings(ROOT / "dispatch.env")
 PINNED = ROOT / "templates.by-sha"
 IMAGE = os.environ.get("VY_DISPATCH_IMAGE", "us-docker.pkg.dev/sky-dev-465/skypilotk8s/skypilot-gpu:202605150216")
@@ -153,6 +157,7 @@ PROVER_CPUS = os.environ.get("VY_PROVER_CPUS", "128-175")
 SERVER = os.environ.get("VY_DISPATCH_SERVER", "vy-nebius-1")
 SECRET = "research-r2"
 REQUEUE_RC = 99
+TICK_FAILED = 3     # `loop --once`'s exit status after it has printed `tick failed: ...`
 MAX_TRIES = 50
 DEFAULT_DEPTH = "circuits=4,provers=2,backfill=4"
 DEFAULT_PRIORITY = {"backfill": "backfill"}
@@ -1515,6 +1520,7 @@ def main(argv: list[str]) -> int:
     t.add_argument("--dry-run", action="store_true")
     lp = sub.add_parser("loop")
     lp.add_argument("--every", type=int, default=60)
+    lp.add_argument("--once", action="store_true", help="one of the loop's ticks, in this process (what the loop runs each tick)")
     sub.add_parser("status")
     ns = ap.parse_args(argv)
     if ns.cmd == "submit":
@@ -1540,13 +1546,18 @@ def main(argv: list[str]) -> int:
         print(json.dumps(stopped_models(), indent=1, sort_keys=True))
     elif ns.cmd == "tick":
         tick(ns.dry_run)
+    elif ns.cmd == "loop" and ns.once:
+        try:
+            tick()
+            print(f"{now_utc()} tick {json.dumps(busy())}", flush=True)
+        except Exception as e:  # noqa: BLE001  (a failed tick is retried next time, never the end of the loop)
+            print(f"{now_utc()} tick failed: {e}", file=sys.stderr, flush=True)
+            return TICK_FAILED
     elif ns.cmd == "loop":
         while True:
-            try:
-                tick()
-                print(f"{now_utc()} tick {json.dumps(busy())}", flush=True)
-            except Exception as e:  # noqa: BLE001  (a failed tick is retried next time, never the end of the loop)
-                print(f"{now_utc()} tick failed: {e}", file=sys.stderr, flush=True)
+            rc = subprocess.run([sys.executable, str(Path(__file__).resolve()), "loop", "--once"], env=CALLER_ENV).returncode
+            if rc not in (0, TICK_FAILED):    # it died before saying so (an import error in a redeployed copy, a kill)
+                print(f"{now_utc()} tick failed: exit {rc}", file=sys.stderr, flush=True)
             time.sleep(ns.every)
     else:
         status()
