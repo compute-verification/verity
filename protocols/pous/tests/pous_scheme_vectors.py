@@ -27,10 +27,10 @@ from verity_pous.schemes.p2 import P2Params  # noqa: E402
 
 FIXTURES = Path(__file__).parent / "fixtures" / "schemes"
 SMALL = {"band-chain/d12/v1": band.BandParams(16, 64, 12, 2), "dense-chain/v1": dense.DenseParams(8, 64, 2),
-         "p3/v1": Params(8, 64, 3, 2), "p2-16448/v0": P2Params(16448, 21065, 2, 1)}
+         "p3/v1": Params(8, 64, 3, 2), "p2-16448/v1": P2Params(16448, 21065, 2, 1)}
 POINT_VECTOR = {"band-chain/d12/v1": "band/64kb/segment", "dense-chain/v1": None, "p3/v1": "segment_64kb",
-                "p2-16448/v0": None}
-SLOW_ENCODE = {"p2-16448/v0"}
+                "p2-16448/v1": None}
+SLOW_ENCODE = {"p2-16448/v1"}
 
 
 def path(name: str) -> Path:

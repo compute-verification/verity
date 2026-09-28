@@ -1,4 +1,4 @@
-"""`p2-16448/v0`, **experimental**: P2, the squaring-based POUS scheme from the efficient-cryptography campaign (POUS
+"""`p2-16448/v1`, **experimental**: P2, the squaring-based POUS scheme from the efficient-cryptography campaign (POUS
 `internal/efficient-crypto/p2-verdict.md`).  Every block is independent, and its decode is two big-integer squarings
 with no hash call.
 
@@ -10,10 +10,15 @@ sq(a)      a² mod p, negated (p − a² mod p) when a is odd
 σ_K(r)     r ⊕ K if r ⊕ K < p, else r             an involution on [0, p)
 encode     c = ρ(σ_K(ρ(m + t mod p)))            two roots: slow (w − 2 squarings each)
 decode     m = sq(σ_K(sq(c))) − t mod p           two squarings
-keys       fresh per block j of segment s, drawn after W through the salt:
-           K = SHAKE256("verity/pous/p2/K/v0" ‖ tag_s ‖ u64 j)[0 : w/8]
-           t = SHAKE256("verity/pous/p2/t/v0" ‖ tag_s ‖ u64 j)[0 : w/8 + 8] mod p,  tag_s = salt ‖ u64 s
+keys       fresh per block j of segment s, drawn after W through the salt, and expanded where they are used (on the
+           device), so nothing key-sized is stored:
+           seed_s = SHAKE256("verity/pous/p2/seed/v1" ‖ tag_s)[0 : 32],  tag_s = salt ‖ u64 s
+           z      = ChaCha8(key = seed_s, nonce = u64 j, counter 0, 1, …)[0 : 2·w/8]
+           K = z[0 : w/8],  t = z[w/8 : 2·w/8] reduced once below p  (bias ≤ c0 / 2^w)
 ~~~
+
+The keystream is Bernstein's ChaCha with 8 rounds (64-bit counter and nonce), the expander the P2 spec names.  At
+16,448 bits it is 65 ChaCha blocks per data block, about 1% of the decode's multiply work.
 
 **What is proved, and what is not.**
 - The certificate is `P2MeetsM1Uncond` (POUS `lean/pous/Pous/Pinned.lean`, graded PASS; statement reviewer
@@ -31,6 +36,7 @@ keys       fresh per block j of segment s, drawn after W through the salt:
 from __future__ import annotations
 
 import hashlib
+import struct
 from collections.abc import Sequence
 from dataclasses import dataclass
 from functools import cached_property
@@ -42,7 +48,7 @@ from ..protocol import Certificate, Scheme
 
 EXPERIMENTAL = "abstract-M1 result; instantiation assumption pending Daniel"
 
-K_DOMAIN, T_DOMAIN = b"verity/pous/p2/K/v0", b"verity/pous/p2/t/v0"
+SEED_DOMAIN = b"verity/pous/p2/seed/v1"
 
 P2_CLAIMS = ("m1-ideal-permutations", "sms-m1-instantiation", "seq-root", "random-oracle", "perfect-isolation",
              "cr/sha-256", "live-verifier", "designated-verifier")
@@ -115,7 +121,7 @@ class P2Params:
 
     @property
     def codec(self) -> Codec:
-        return Codec(f"p2-{self.w}/v0", encode_segment, decode_segment)
+        return Codec(f"p2-{self.w}/v1", encode_segment, decode_segment)
 
     def with_segments(self, segments: int) -> P2Params:
         return P2Params(self.w, self.c0, self.blocks_per_segment, segments)
@@ -175,15 +181,46 @@ def _field(params: P2Params) -> _Field:
 _FIELDS: dict[tuple[int, int], _Field] = {}
 
 
-def block_keys(params: P2Params, salt: bytes, s: int, j: int) -> tuple[int, int]:
-    """Block `j` of segment `s`'s fresh keys `(K, t)`, keyed by `tag_s = salt ‖ u64 s` (injective across segments)."""
+_M32 = 0xFFFFFFFF
+_SIGMA = (0x61707865, 0x3320646E, 0x79622D32, 0x6B206574)   # "expand 32-byte k"
+
+
+def chacha_block(key: bytes, counter: int, nonce: int, rounds: int = 8) -> bytes:
+    """One 64-byte block of Bernstein's ChaCha: 256-bit key, 64-bit block counter and 64-bit nonce (state words 12–15
+    are the counter then the nonce, little endian), `rounds` rounds."""
+    x = [*_SIGMA, *struct.unpack("<8I", key), counter & _M32, counter >> 32, nonce & _M32, nonce >> 32]
+    s = list(x)
+
+    def qr(a: int, b: int, c: int, d: int) -> None:
+        x[a] = (x[a] + x[b]) & _M32; x[d] ^= x[a]; x[d] = ((x[d] << 16) | (x[d] >> 16)) & _M32
+        x[c] = (x[c] + x[d]) & _M32; x[b] ^= x[c]; x[b] = ((x[b] << 12) | (x[b] >> 20)) & _M32
+        x[a] = (x[a] + x[b]) & _M32; x[d] ^= x[a]; x[d] = ((x[d] << 8) | (x[d] >> 24)) & _M32
+        x[c] = (x[c] + x[d]) & _M32; x[b] ^= x[c]; x[b] = ((x[b] << 7) | (x[b] >> 25)) & _M32
+
+    for _ in range(rounds // 2):
+        qr(0, 4, 8, 12); qr(1, 5, 9, 13); qr(2, 6, 10, 14); qr(3, 7, 11, 15)
+        qr(0, 5, 10, 15); qr(1, 6, 11, 12); qr(2, 7, 8, 13); qr(3, 4, 9, 14)
+    return struct.pack("<16I", *((a + b) & _M32 for a, b in zip(x, s)))
+
+
+def segment_seed(salt: bytes, s: int) -> bytes:
+    """Segment `s`'s 32-byte ChaCha8 key, from `tag_s = salt ‖ u64 s` (injective across segments)."""
     if type(salt) is not bytes or len(salt) != SALT_BITS // 8:
         raise ValueError(f"the salt is {SALT_BITS // 8} bytes, drawn by the verifier after W is committed")
-    ts = tag(salt_value(salt), s).to_bytes(32, "little") + j.to_bytes(8, "little")
+    return hashlib.shake_256(SEED_DOMAIN + tag(salt_value(salt), s).to_bytes(32, "little")).digest(32)
+
+
+def expand_keys(params: P2Params, seed: bytes, j: int) -> tuple[int, int]:
+    """Block `j`'s `(K, t)` from its segment's seed: ChaCha8 with nonce `j`, `2·w/8` bytes."""
     nb = params.block_bytes
-    k = int.from_bytes(hashlib.shake_256(K_DOMAIN + ts).digest(nb), "little")
-    t = int.from_bytes(hashlib.shake_256(T_DOMAIN + ts).digest(nb + 8), "little") % params.p
-    return k, t
+    z = b"".join(chacha_block(seed, i, j) for i in range(-(-2 * nb // 64)))
+    t = int.from_bytes(z[nb:2 * nb], "little")
+    return int.from_bytes(z[:nb], "little"), t - params.p if t >= params.p else t
+
+
+def block_keys(params: P2Params, salt: bytes, s: int, j: int) -> tuple[int, int]:
+    """Block `j` of segment `s`'s fresh keys `(K, t)`."""
+    return expand_keys(params, segment_seed(salt, s), j)
 
 
 def _check(params: P2Params, s: int) -> None:
@@ -199,9 +236,9 @@ def encode_segment(params: P2Params, prims, salt: bytes, s: int, w_seg: bytes) -
     if len(w_seg) != params.segment_bytes:
         raise ValueError(f"a segment of W is {params.segment_bytes} bytes")
     f, pb, nb = _field(params), params.payload_bytes, params.block_bytes
-    out = []
+    seed, out = segment_seed(salt, s), []
     for j in range(params.blocks_per_segment):
-        k, t = block_keys(params, salt, s, j)
+        k, t = expand_keys(params, seed, j)
         m = int.from_bytes(w_seg[j * pb:(j + 1) * pb], "little")
         out.append(f.rho(f.sigma(f.rho((m + t) % f.p), k)).to_bytes(nb, "little"))
     return out
@@ -214,14 +251,14 @@ def decode_segment(params: P2Params, prims, salt: bytes, s: int, blocks: Sequenc
     if len(blocks) != params.blocks_per_segment:
         raise ValueError(f"a segment of C is {params.blocks_per_segment} blocks")
     f, pb, nb = _field(params), params.payload_bytes, params.block_bytes
-    out = bytearray()
+    seed, out = segment_seed(salt, s), bytearray()
     for j, block in enumerate(blocks):
         if len(block) != nb:
             raise ValueError(f"block {j} is not {nb} bytes")
         c = int.from_bytes(block, "little")
         if c >= f.p:
             raise ValueError(f"block {j} is not below p")
-        k, t = block_keys(params, salt, s, j)
+        k, t = expand_keys(params, seed, j)
         m = (f.sq(f.sigma(f.sq(c), k)) - t) % f.p
         if m >> (8 * pb):
             raise ValueError(f"block {j} decodes to more than {8 * pb} bits: not a codeword")
@@ -260,5 +297,5 @@ class P2(Scheme):
         return decode_segment(self.params, self.prims, salt, s, blocks)
 
 
-__all__ = ["EXPERIMENTAL", "K_DOMAIN", "P2_CLAIMS", "POINT", "ROOT_CALL_NS", "T_DOMAIN", "P2", "P2Params", "block_keys",
-           "decode_segment", "encode_segment"]
+__all__ = ["EXPERIMENTAL", "P2_CLAIMS", "POINT", "ROOT_CALL_NS", "SEED_DOMAIN", "P2", "P2Params", "block_keys",
+           "chacha_block", "decode_segment", "encode_segment", "expand_keys", "segment_seed"]

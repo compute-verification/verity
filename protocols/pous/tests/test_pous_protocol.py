@@ -134,9 +134,9 @@ def test_band_through_the_interface_is_the_pinned_band_codec():
 
 
 def test_registry():
-    assert set(schemes.REGISTRY) == {"band-chain/d12/v1", "dense-chain/v1", "p3/v1", "p2-16448/v0"}
+    assert set(schemes.REGISTRY) == {"band-chain/d12/v1", "dense-chain/v1", "p3/v1", "p2-16448/v1"}
     assert schemes.DEFAULT == band.BAND12.name
-    assert schemes.EXPERIMENTAL == {"p2-16448/v0"} and schemes.DEFAULT not in schemes.EXPERIMENTAL
+    assert schemes.EXPERIMENTAL == {"p2-16448/v1"} and schemes.DEFAULT not in schemes.EXPERIMENTAL
     assert schemes.get().experimental is None
     b = schemes.get()
     assert isinstance(b, schemes.Band) and b.params == band.SECURE_FIRST and b.name == "band-chain/d12/v1"
@@ -340,15 +340,15 @@ def test_claims_resolve_and_local_ones_are_not_in_core():
 
 
 def test_p2_is_experimental_and_says_so():
-    """P2 (`p2-16448/v0`) is registered but experimental: the verifier refuses it unless asked, never makes it the
+    """P2 (`p2-16448/v1`) is registered but experimental: the verifier refuses it unless asked, never makes it the
     default, and its profile states "abstract-M1 result; instantiation assumption pending Daniel"."""
-    sch = schemes.get("p2-16448/v0", segments=128)
+    sch = schemes.get("p2-16448/v1", segments=128)
     assert sch.experimental == EXPERIMENTAL == "abstract-M1 result; instantiation assumption pending Daniel"
     cert = sch.certificate
     assert (cert.theorem, cert.k, cert.rounds, cert.work, cert.segments, cert.hypotheses) == ("P2MeetsM1Uncond", 88, 0,
                                                                                               1 << 20, 128, ())
     assert {"m1-ideal-permutations", "sms-m1-instantiation", "seq-root"} <= set(cert.claims)
-    one = schemes.get("p2-16448/v0")
+    one = schemes.get("p2-16448/v1")
     vk = VerifierKey.from_leaves(one.params, SALT, [bytes(32)] * one.params.blocks)
     key = protocol.challenge_key(b"\x00" * 32, vk)
     with pytest.raises(ValueError, match="experimental"):
@@ -382,3 +382,21 @@ def test_p2_arithmetic():
     with pytest.raises(ValueError, match="codeword"):
         sch.decode_segment(SALT, 1, [bytes([7]) + bytes(15)] + c[1:])
     assert sch.decode_segment(SALT, 1, c) == bytes(range(112))
+
+
+def test_p2_keys_are_chacha8_from_a_segment_seed():
+    """P2's per-block keys expand where they are used, on the device, from one 32-byte seed per segment (ChaCha8 with
+    the block index as nonce), so no key-sized state is stored and the 1.05× space bound holds."""
+    from verity_pous.schemes.p2 import chacha_block, expand_keys, segment_seed
+
+    # the ChaCha block function against RFC 8439 §2.3.2 (20 rounds, the same word layout), ChaCha8 against the published
+    # zero-key, zero-nonce vector
+    assert chacha_block(bytes(range(32)), 1 | 0x09000000 << 32, 0x4A000000, 20)[:16].hex() == "10f1e7e4d13b5915500fdd1fa32071c4"
+    assert chacha_block(bytes(32), 0, 0)[:32].hex() == "3e00ef2f895f40d67f5bb8e81f09a5a12c840ec3ce9a7f3b181be188ef711a1e"
+    params = P2Params(16448, 21065, 4)
+    seed = segment_seed(SALT, 3)
+    assert len(seed) == 32 and seed != segment_seed(SALT, 2)
+    k, t = expand_keys(params, seed, 5)
+    z = b"".join(chacha_block(seed, i, 5) for i in range(65))
+    assert k == int.from_bytes(z[:2056], "little") and t == int.from_bytes(z[2056:4112], "little") % params.p
+    assert expand_keys(params, seed, 6) != (k, t)
