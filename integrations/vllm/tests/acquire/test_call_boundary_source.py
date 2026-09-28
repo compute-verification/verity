@@ -228,7 +228,8 @@ def _dense_source(world, man=None, root=None):
     model = runtime(["model.embed_tokens", PF[len("model."):], IL[len("model."):], "logits_processor"],
                     {n[len("model."):]: _tensor(w, torch.bfloat16) for n, w in world.fields.items()})
     com = Recorder(model)
-    classes = taps.attach(com, man or world.man, ("instance_outputs",), programs=(None, root or os.path.dirname(world.pdir)))  # under the root
+    classes = taps.attach(com, man or world.man, ("instance_outputs",), taps.TapSources(),
+                          programs=(None, root or os.path.dirname(world.pdir)))  # under the root
     assert classes == ("instance_outputs", CB.FAMILY) and len(com.sources) == 1
     com.sources[0].install()
     return com, com.sources[0]
@@ -294,7 +295,7 @@ def test_an_argument_the_body_does_not_read_is_a_collector_error_naming_the_site
 def test_without_call_boundaries_nothing_attaches_and_a_forced_attach_refuses(dense, tmp_path):
     com = Recorder(Probe())
     plain = {**dense.man, "identities": [r for r in dense.man["identities"] if r["family"] != CB.FAMILY]}
-    assert taps.attach(com, plain, ("instance_outputs",), programs=(dense.pdir,)) == ("instance_outputs",) and not com.sources
+    assert taps.attach(com, plain, ("instance_outputs",), taps.TapSources(), programs=(dense.pdir,)) == ("instance_outputs",) and not com.sources
     assert CB.attach(com, False, dense.man, ("a",)) == (("a",), None)
     with pytest.raises(SystemExit) as e:
         CB.attach(com, True, plain, ("a",), programs=(dense.pdir,))
@@ -423,7 +424,7 @@ def test_identities_another_source_claims_are_left_to_it(dense, monkeypatch):
     assert CB.plan_of(dense.man, dense.pdir).identities == len(left)
     monkeypatch.setattr(CB, "CLAIMS", [lambda r: "everything-tap"])
     com = Recorder(Probe())
-    assert taps.attach(com, dense.man, ("instance_outputs",), programs=(dense.pdir,)) == ("instance_outputs",) and not com.sources
+    assert taps.attach(com, dense.man, ("instance_outputs",), taps.TapSources(), programs=(dense.pdir,)) == ("instance_outputs",) and not com.sources
 
 
 def test_a_definition_past_the_reference_bound_is_its_row_kernels_alone(dense, monkeypatch):
