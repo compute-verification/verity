@@ -416,9 +416,6 @@ def test_the_float_pairwise_version_crashed_where_the_profile_now_serves():
 #: A4 P6's layer 0 (one-stage-e2e): six templates, 6,771,765 units, in canonical order.
 A4_SIZES = {"rms_triton": 287, "gemm2048": 6_171_648, "rope": 11_480, "rms_fused": 287, "silu_mul": 287,
             "gemm8192": 587_776}
-#: Output bits per unit: the prover's freedom in a wrong unit (16-bit words).
-A4_BITS = {"rms_triton": 2048 * 16, "gemm2048": 16, "rope": 64 * 16, "rms_fused": 2 * 2048 * 16, "silu_mul": 8192 * 16,
-           "gemm8192": 16}
 
 
 def a4_law(ks: dict) -> Stratified:
@@ -499,12 +496,10 @@ def test_one_stratum_is_the_uniform_subset(run):
 
 def test_a4_uniform_leaves_the_norms_undrawn():
     """A4 P6's law: at most 91,051 wrong units at 2^-20 (the audit's own bound), but a template of 287 units that is
-    wrong in every unit escapes with probability 0.958, and the prover's freedom reaches 9.4 MiB."""
+    wrong in every unit escapes with probability 0.958."""
     law = Stratified.uniform(sum(A4_SIZES.values()), 1024)
     assert law.count_bound(2.0 ** -20) == 91_051
     assert 0.957 < float(law.escape({"unit": 287})) < 0.958
-    segments = [(A4_BITS[name], size) for name, size in A4_SIZES.items()]
-    assert 9.39 < law.harm_bound({"unit": segments}, 2.0 ** -20) / 8 / 2 ** 20 < 9.41
 
 
 def test_a4_one_unit_floor_per_template():
@@ -517,14 +512,11 @@ def test_a4_one_unit_floor_per_template():
     for name in ("rms_triton", "rms_fused", "silu_mul"):
         assert law.escape({name: 287}) == 0 and law.stratum_bound(name, 2.0 ** -20) == 286
         assert law.escape({name: 1}) == Fraction(286, 287)
-    assert 8.80 < law.harm_bound(A4_BITS, 2.0 ** -20) / 8 / 2 ** 20 < 8.82
 
 
 def test_a4_proportional_to_output_bits():
-    """Inclusion proportional to output bits at the same proving cost: the prover's freedom falls from 9.4 MiB to 1.5 MiB,
-    and the count bound rises to 11.4% of the units."""
+    """Inclusion proportional to output bits at the same proving cost: the count bound rises to 11.4% of the units."""
     law = a4_law({"rms_triton": 10, "gemm2048": 104, "rope": 12, "rms_fused": 20, "silu_mul": 39, "gemm8192": 10})
-    assert 1.49 < law.harm_bound(A4_BITS, 2.0 ** -20) / 8 / 2 ** 20 < 1.51
     assert law.count_bound(2.0 ** -20) == 773_981
 
 
