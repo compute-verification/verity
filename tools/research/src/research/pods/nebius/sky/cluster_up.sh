@@ -274,6 +274,8 @@ if [ ! -f /etc/systemd/system/vy-store-evict-research.timer ]; then
     echo "   would write vy-store-evict-research.service and vy-store-evict-research.timer (every hour, as research)"
   fi
 fi
+# research's pass also deletes the unused source trees of /workspace/research/src that are on origin (the file says how)
+run sudo install -D -m 644 "$SRC/store_evict_src.conf" /etc/systemd/system/vy-store-evict-research.service.d/src.conf
 run sudo systemctl daemon-reload
 run sudo systemctl enable --now vy-store-evict.timer vy-store-evict-research.timer
 

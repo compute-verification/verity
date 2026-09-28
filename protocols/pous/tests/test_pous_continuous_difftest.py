@@ -46,7 +46,8 @@ HARD = "late_deadline_ns" in inspect.signature(TimedVerifier).parameters
 PARAMS = band.BandParams(16, 64, 12, 2)
 SALT = bytes(range(24))
 CALL = PARAMS.call_ns
-"""The adversary's fastest call, 241.5 µs: one of Lean's units."""
+"""The fastest whole call, 241.5 µs: one of Lean's units (the ideal-permutation model's, not an adversary's floor at the
+reference `Π₂`)."""
 QUERY = 50_000
 """The bridge's time per query of the adversary's throughput, so that `Q = limit // QUERY`."""
 LIMITS = [(500_000, 2_000_000, 0), (500_000, 2_000_000, 40_000), (2 * CALL, 2 * CALL, 0), (CALL - 1, 13 * CALL - 1, 0)]

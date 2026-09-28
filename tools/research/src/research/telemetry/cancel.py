@@ -1,11 +1,14 @@
 """Cancellation markers: intent before the signal, result after (brief §6 "intentional killers write evidence").
 
     tele cancel-intent --actor deadman|timeout|guardian|manual (--target-pid P | --target-pgid G | --target-pod ID) --signal 9 --reason "..."
-                       [--attempt-dir D | --fallback FILE] [--expect-starttime TICKS] [--expect-comm NAME] [--deliver] [--job J --attempt N --project P]
+                       [--attempt-dir D | --fallback FILE] [--expect-starttime TICKS] [--expect-comm NAME] [--expect-nonempty]
+                       [--expect-run-dir D] [--deliver] [--job J --attempt N --project P]
 
 The target's identity is verified from /proc (starttime ticks + comm) and recorded; with --deliver, a pid whose starttime does not match
---expect-starttime is NOT signalled (a recycled pid is not the job).  Logging never blocks the signal: a marker write failure is reported on
-stderr and the signal is still delivered; the fallback file is the safety controller's own scoped record when no attempt dir is reachable.
+--expect-starttime is NOT signalled (a recycled pid is not the job), nor a group that fails --expect-nonempty or --expect-run-dir (no member
+whose environment names RESEARCH_RUN_DIR=D, which the runner exports to its workload: a pgid a stale status.json names may be another job's
+group by now).  Logging never blocks the signal: a marker write failure is reported on stderr and the signal is still delivered; the fallback
+file is the safety controller's own scoped record when no attempt dir is reachable.
 """
 from __future__ import annotations
 
@@ -45,6 +48,18 @@ def pgid_members(pgid: int) -> list[dict[str, Any]]:
     return out[:256]
 
 
+def run_dir_of(pid: int) -> str | None:
+    """RESEARCH_RUN_DIR in the environment `pid` was exec'd with, or None (absent, gone, or not ours to read)."""
+    try:
+        env = Path(f"/proc/{pid}/environ").read_bytes()
+    except OSError:
+        return None
+    for kv in env.split(b"\0"):
+        if kv.startswith(b"RESEARCH_RUN_DIR="):
+            return kv.split(b"=", 1)[1].decode(errors="replace")
+    return None
+
+
 def write_marker(path: Path, rec: dict[str, Any]) -> tuple[bool, str | None]:
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -71,7 +86,12 @@ def cancel(a: argparse.Namespace) -> int:
             verified = None   # no expectation supplied: identity recorded, not verified
     elif a.target_pgid is not None:
         ident = {"pgid": a.target_pgid, "members": pgid_members(a.target_pgid)}
-        verified = bool(ident["members"]) if a.expect_nonempty else None
+        if a.expect_run_dir is not None:
+            want = str(Path(a.expect_run_dir).resolve())
+            ident["run_dir_members"] = [m["pid"] for m in ident["members"] if run_dir_of(m["pid"]) == want]
+            verified = bool(ident["run_dir_members"])
+        else:
+            verified = bool(ident["members"]) if a.expect_nonempty else None
     elif a.target_pod:
         ident = {"pod": a.target_pod}
     intent = {"kind": "cancel_intent", "actor": a.actor, "reason": a.reason, "signal": a.signal, "target": ident, "verified": verified,
@@ -88,8 +108,9 @@ def cancel(a: argparse.Namespace) -> int:
         result.update(delivered=None, reason="pod termination is performed by the caller (runpod API); result recorded by the caller")
         write_marker(path, result)
         return 0
-    if a.target_pid is not None and verified is False:
-        result.update(delivered=False, reason="refused: target identity does not match the expectation (recycled pid?)")
+    if verified is False:
+        result.update(delivered=False, reason="refused: target identity does not match the expectation (recycled pid?)" if a.target_pid is not None
+                      else "refused: no member of the group is the expected workload (a stale pgid, or one another job holds now)")
         write_marker(path, result)
         print("[tele cancel-intent] REFUSED: identity mismatch", file=sys.stderr)
         return 3
@@ -137,6 +158,8 @@ def add_args(ap: argparse.ArgumentParser) -> None:
     ap.add_argument("--expect-starttime", type=int, default=None, help="/proc/<pid>/stat starttime ticks the caller observed when it chose the target")
     ap.add_argument("--expect-comm", default=None)
     ap.add_argument("--expect-nonempty", action="store_true", help="for --target-pgid: verified only if the group has members")
+    ap.add_argument("--expect-run-dir", default=None, metavar="D",
+                    help="for --target-pgid: verified only if a member's environment has RESEARCH_RUN_DIR=D (resolved), the run's workload")
     ap.add_argument("--deliver", action="store_true", help="send the signal after writing the intent, then record the result")
     ap.add_argument("--confirm-exit-s", type=float, default=0.0, help="after delivery, watch the target for this long and record whether it went")
     ap.add_argument("--project", default=None)

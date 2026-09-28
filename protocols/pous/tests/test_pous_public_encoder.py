@@ -6,6 +6,7 @@ controls, the setup flag, and the codec-generic path."""
 from __future__ import annotations
 
 import inspect
+import itertools
 import json
 import random
 from pathlib import Path
@@ -68,7 +69,7 @@ def test_1_honest(scheme):
     reference_vk = setup.verifier_key(x.params, x.prims, x.w, x.commitment, x.salt)
     assert vk == reference_vk and vk.root == reference_vk.root
     blocks = [b for seg in x.honest for b in seg]
-    assert run_timed(TimedVerifier(vk, challenge_key(b"audit", vk)), blocks.__getitem__).accepted
+    assert run_timed(TimedVerifier(vk, challenge_key(b"audit", vk), clock=itertools.count(0, 1000).__next__), blocks.__getitem__).accepted
 
 
 def test_1_honest_details():
@@ -78,7 +79,7 @@ def test_1_honest_details():
     assert setup.check_server_root(vk, MerkleTree([x for s, seg in enumerate(HONEST)
                                                    for x in segment_leaves(PARAMS, SALT, s, seg)]).root)
     blocks = [b for seg in HONEST for b in seg]
-    assert run_timed(TimedVerifier(vk, challenge_key(b"audit", vk)), blocks.__getitem__).accepted
+    assert run_timed(TimedVerifier(vk, challenge_key(b"audit", vk), clock=itertools.count(0, 1000).__next__), blocks.__getitem__).accepted
 
 
 @pytest.mark.parametrize("scheme", SCHEMES)

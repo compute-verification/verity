@@ -22,6 +22,7 @@ from research.store import preserved as P
 from research.store.cli import main as data_main
 from research.store.local import LocalStore, object_key
 from research.store.model import Label
+from research.telemetry.job import set_status
 
 from test_pod_guard_daemon import QUIET, _env, idle_since
 from waits import Gate, wait_runner
@@ -427,15 +428,262 @@ def test_triage_sorts_every_run_by_custody_state(tmp_path, monkeypatch, capsys):
     lost = runs / "r20260925-010005-eeee"
     lost.mkdir()
     (lost / "remote.json").write_text(json.dumps({"phase": "launched", "pod_id": POD}))
-    waived = _fixture_run(runs, "r20260925-010006-ffff")
-    st.add_label(waived.name, "custody", "waived", "daniel")
+    waived, empty = _fixture_run(runs, "r20260925-010006-ffff"), runs / "r20260925-010007-abab"
+    empty.mkdir()
+    (empty / "job.json").write_text("{}")
+    (empty / "status.json").write_text(json.dumps({"state": "submitted"}))
+    assert data_main(["label", waived.name, "custody", "waived", "--by", "daniel"]) == 0, "triage's own next step, in the vocabulary"
+    assert data_main(["label", empty.name, "custody", "never-ran", "--by", "infra"]) == 0
+    assert data_main(["label", empty.name, "custody", "wavied", "--by", "infra"]) == 2
     capsys.readouterr()
     states = {r["run"]: r["state"] for r in CU.triage(LocalStore(), runs)}
     assert states == {r2.name: "r2", plain.name: "attempt-no-record", fetched.name: "fetched", never.name: "never-ran",
-                      lost.name: "no-custody", waived.name: "waived"}
+                      lost.name: "no-custody", waived.name: "waived", empty.name: "never-ran"}
     assert data_main(["custody", "--triage", "--runs-dir", str(runs)]) == 1
     out = capsys.readouterr().out
     assert "2 need action" in out and lost.name in out and plain.name in out
+
+
+def test_a_never_ran_label_holds_only_while_the_run_dir_agrees_and_custody_needed_withdraws_a_verdict(tmp_path, monkeypatch, capsys):
+    """Node 1's custody round held six `overnight-sep30` runs as never-ran and asked for the label, but each had a pid, `started`,
+    `span_start` and `sampler_start` events and sampler readings of its workload: they ran, were killed and printed nothing. A
+    never-ran label read before every record would take them out of triage for good, and the closed set had no value to undo it."""
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(tmp_path / "absent.toml"))
+    runs, st = tmp_path / "runs", LocalStore()
+    ran = _fixture_run(runs, "r20260925-010001-aaaa")
+    assert data_main(["label", ran.name, "custody", "never-ran", "--by", "infra"]) == 0
+    row = CU.triage_row(st, ran, host=HOST)
+    assert row["state"] == "no-custody" and row["state"] in CU.NEEDS_ACTION
+    assert row["why"].startswith("label custody=never-ran ignored, since status.json names pid 4243; no attempt in the store")
+    d = runs / "r20260925-010002-bbbb"
+    d.mkdir()
+    (d / "status.json").write_text(json.dumps({"state": "submitted", "transitions": [{"state": "submitted"}]}))
+    for name in ("stdout.log", "stderr.log", "resources.jsonl"):
+        (d / name).write_text("")
+    (d / "events.jsonl").write_text('{"kind": "submitted"}\nnot json\n[1]\n')
+    assert CU.ran_evidence(d) is None
+    for name, text, says in (("events.jsonl", '{"kind": "submitted"}\n{"kind": "sampler_start"}\n', "events.jsonl has sampler_start"),
+                             ("resources.jsonl", '{"kind": "sample", "processes": [{"pid": 451}]}\n',
+                              "resources.jsonl holds sampler readings"),
+                             ("stderr.log", "Killed\n", "stderr.log holds output"),
+                             ("status.json", json.dumps({"state": "running", "transitions": [{"state": "running", "pid": 451}]}),
+                              "status.json names pid 451")):
+        keep = (d / name).read_text()
+        (d / name).write_text(text)
+        assert CU.ran_evidence(d) == says
+        (d / name).write_text(keep)
+    for p in d.iterdir():
+        os.utime(p, (NOW - CU.STALE_S - 3600,) * 2)
+    assert data_main(["label", d.name, "custody", "never-ran", "--by", "infra"]) == 0
+    assert CU.triage_row(st, d, now=NOW, host=HOST)["state"] == "never-ran"
+    assert data_main(["label", d.name, "custody", "needed", "--by", "infra"]) == 0
+    assert data_main(["label", ran.name, "custody", "waived", "--by", "infra"]) == 0
+    assert CU.triage_row(st, ran, host=HOST)["state"] == "waived", "a waiver needs no sign of anything"
+    assert data_main(["label", ran.name, "custody", "needed", "--by", "infra"]) == 0
+    assert [CU.triage_row(st, x, now=NOW, host=HOST)["state"] for x in (d, ran)] == ["no-custody", "no-custody"]
+    capsys.readouterr()
+
+
+HOST = ("node-2", "boot-1")
+
+
+def _on_host(d: Path, host: tuple[str, str], state: str | None, t: float, **transition) -> None:
+    """The run dir as the machine that ran it sees it: job.json's host, a status (None: none yet), every file last changed at `t`."""
+    job = json.loads((d / "job.json").read_text())
+    job["environment"].update(hostname=host[0], boot_id=host[1])
+    (d / "job.json").write_text(json.dumps(job))
+    (d / "status.json").unlink()
+    if state:
+        (d / "status.json").write_text(json.dumps({"state": state, "transitions": [{"state": state, **transition}]}))
+    for p in d.iterdir():
+        os.utime(p, (t, t))
+
+
+@pytest.mark.skipif(not Path("/proc/self/stat").exists(), reason="a runner's liveness is read from /proc")
+def test_triage_on_the_machine_tells_a_live_runner_from_a_dead_one_and_a_pods_run_from_a_stale_one(tmp_path):
+    """Node 2 runs `research run` as host processes, node 1 in Kubernetes pods. A run still marked running has ended when its runner's
+    pid (same start time) is gone from the host that ran it or that host rebooted since, or, when that runner is in another pid
+    namespace, when none of its records changed for 24 h: node 1 had 326 such runs on 3 Oct, preempted before they recorded an end,
+    that nothing published."""
+    runs, st = tmp_path / "runs", LocalStore(tmp_path / "s", config_path=tmp_path / "absent.toml")
+    me = int(Path("/proc/self/stat").read_text().rsplit(")", 1)[1].split()[19])
+    live, dead, pod, stale, starting = (_fixture_run(runs, f"r20260925-01000{i}-aaaa") for i in range(5))
+    _on_host(live, HOST, "running", NOW - 7200, pid=os.getpid(), starttime_ticks=me)
+    _on_host(dead, HOST, "running", NOW - 7200, pid=2**22 + 7, starttime_ticks=1)
+    _on_host(pod, ("pod-xyz", "boot-1"), "running", NOW - 7200, pid=1, starttime_ticks=1)
+    _on_host(stale, ("pod-xyz", "boot-1"), "running", NOW - CU.STALE_S - 60, pid=1, starttime_ticks=1)
+    _on_host(starting, HOST, None, NOW - 60)
+    rows = {r["run"]: r for r in CU.triage(st, runs, now=NOW, host=HOST)}
+    assert {k: r["state"] for k, r in rows.items()} == {live.name: "running", dead.name: "no-custody", pod.name: "running",
+                                                       stale.name: "no-custody", starting.name: "running"}
+    assert rows[dead.name]["why"].startswith("dead: its runner (pid 4194311)") and "--publish --force" in rows[dead.name]["next"]
+    assert rows[stale.name]["why"].startswith("stale: status running") and rows[pod.name]["why"].startswith("running elsewhere")
+    assert "--publish --force --runner-gone (once its host says its runner is gone)" in rows[stale.name]["next"]
+    assert rows[dead.name]["age_min"] == 120.0 and rows[dead.name]["bytes"] > 0 and rows[live.name]["bytes"] is None
+    other_boot = {r["run"]: r for r in CU.triage(st, runs, now=NOW, host=(HOST[0], "boot-2"))}
+    assert other_boot[live.name]["state"] == "no-custody", "a reboot of the host that ran it ended every runner"
+    assert other_boot[live.name]["why"].startswith("dead: this host rebooted since its runner started (boot boot-1, now boot-2)")
+    assert other_boot[pod.name]["state"] == "running" and other_boot[starting.name]["state"] == "running"
+
+
+@pytest.mark.skipif(not Path("/proc/self/stat").exists(), reason="a runner's liveness is read from /proc")
+def test_a_live_run_whose_timeout_was_changed_is_running_and_a_status_naming_no_pid_is_never_dead(tmp_path):
+    """`tele set-timeout` appends a `running` transition without a pid. Triage and n2_custody.sh read the last transition's pid,
+    found none and took a live run for dead, and n2_custody.sh published it --force: an attempt in state running with no result,
+    which no later publish can replace. The runner's pid is status.json's own (set_status keeps it), and a status naming no pid
+    that reads is never taken for dead."""
+    runs, st = tmp_path / "runs", LocalStore(tmp_path / "s", config_path=tmp_path / "absent.toml")
+    me = int(Path("/proc/self/stat").read_text().rsplit(")", 1)[1].split()[19])
+    live, dead, nopid = (_fixture_run(runs, f"r20260925-01000{i}-aaaa") for i in range(3))
+    for d, pid, ticks in ((live, os.getpid(), me), (dead, 2**22 + 7, 1)):
+        _on_host(d, HOST, None, NOW - 7200)
+        set_status(d, "running", pid=pid, pgid=pid, starttime_ticks=ticks, stage="t")
+        set_status(d, "running", timeout_s=60, timeout_changed_utc="2026-09-25T01:00:00.000Z")
+        assert "pid" not in json.loads((d / "status.json").read_text())["transitions"][-1]
+    _on_host(nopid, HOST, "running", NOW - 7200, pid="?")
+    rows = {r["run"]: r for r in CU.triage(st, runs, now=NOW, host=HOST)}
+    assert {k: r["state"] for k, r in rows.items()} == {live.name: "running", dead.name: "no-custody", nopid.name: "running"}
+    assert rows[live.name]["why"] == "running here" and rows[dead.name]["why"].startswith("dead: its runner (pid 4194311)")
+    assert rows[nopid.name]["why"] == "running here (its status names no pid that reads)"
+
+
+def test_triage_takes_a_valid_custody_marker_where_the_catalog_cannot_say(tmp_path, monkeypatch):
+    """Node 2's runs are published on node 1 (n2_custody.sh), so node 2's own catalog never sees them on the remote: the .custody that
+    node 1's verify wrote, copied back beside identical files, says so instead, and stops saying so once a file changes after it."""
+    cfg = tmp_path / "store.toml"
+    cfg.write_text(f'[remote]\ntype = "fs"\npath = "{tmp_path / "vault"}"\n')
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
+    n1_runs, n2_runs = tmp_path / "n1-runs", tmp_path / "n2-runs"
+    d1 = _fixture_run(n1_runs, "r20260925-010001-aaaa")
+    shutil.copytree(d1, n2_runs / d1.name, copy_function=shutil.copy2)
+    assert data_main(["custody", str(d1), "--publish", "--keep-local", "--store", str(tmp_path / "n1-store")]) == 0
+    d2 = n2_runs / d1.name
+    shutil.copy2(d1 / CU.MARKER, d2 / CU.MARKER)
+    n2 = LocalStore(tmp_path / "n2-store", config_path=tmp_path / "absent.toml")
+    (row,) = CU.triage(n2, n2_runs, host=HOST)
+    assert row["state"] == "r2" and row["why"].startswith("on the remote (.custody, verified ") and row["next"] is None
+    (d2 / "late.txt").write_text("written after custody")
+    (row,) = CU.triage(n2, n2_runs, host=HOST)
+    assert row["state"] == "no-custody"
+
+
+def test_older_min_counts_only_runs_that_ended_n_minutes_ago_across_every_runs_root(tmp_path, capsys, monkeypatch):
+    """The monitors' invariant, per node: ended runs not on the remote N minutes after they ended. One read-only command over every
+    runs root of the node, `research/custody-triage/v1` with --json, exit 1 on a finding and 3 when triage itself fails; a run that
+    just ended is settling (its own custody, or the node's, may still be on the way) and doesn't count."""
+    jobs, research = tmp_path / "jobs-runs", tmp_path / "research-runs"
+    old, new = _fixture_run(jobs, "r20260925-010001-aaaa"), _fixture_run(research, "r20260925-010002-bbbb")
+    for d, t in ((old, NOW - 3600), (new, NOW - 600)):
+        for p in d.iterdir():
+            os.utime(p, (t, t))
+    st = LocalStore(tmp_path / "s", config_path=tmp_path / "absent.toml")
+    rep = CU.triage_report(st, [jobs, research], older_min=30, now=NOW, host=HOST)
+    assert rep["schema"] == "research/custody-triage/v1" and rep["needs_action"] == 1 and rep["settling"] == 1
+    assert {r["run"]: (r["root"], r["settling"]) for r in rep["rows"]} == {old.name: (str(jobs), False), new.name: (str(research), True)}
+    assert CU.triage_report(st, [jobs, research], now=NOW, host=HOST)["needs_action"] == 2
+    (old / "resources.jsonl").write_text("{}\n")
+    os.utime(old / "resources.jsonl", (NOW - 600, NOW - 600))
+    assert CU.triage_report(st, [jobs], older_min=30, now=NOW, host=HOST)["settling"] == 1, "the sampler's last sample is a record"
+    for d, t in ((old, 1_000_000_000), (new, 4_102_444_800)):    # the CLI reads the clock itself: 2001 is older than any N, 2100 younger
+        for p in d.iterdir():
+            os.utime(p, (t, t))
+    base = ["custody", "--triage", "--store", str(tmp_path / "s"), "--older-min", "30"]
+    assert data_main([*base, "--runs-dir", str(jobs), "--runs-dir", str(research), "--json"]) == 1
+    doc = json.loads(capsys.readouterr().out)
+    assert (doc["needs_action"], doc["settling"], doc["runs_roots"]) == (1, 1, [str(jobs), str(research)])
+    assert data_main([*base, "--runs-dir", str(research)]) == 0
+    assert "1 more ended under 30 min ago (settling" in capsys.readouterr().out
+    assert data_main([*base, "--runs-dir", str(tmp_path / "typo")]) == 2, "a runs root that isn't there is not an empty one"
+
+    def crash(*a, **k):
+        raise KeyError("transitions")
+
+    monkeypatch.setattr(CU, "triage_report", crash)
+    assert data_main([*base, "--runs-dir", str(jobs), "--json"]) == 3
+    assert "crashed, nothing triaged: KeyError" in capsys.readouterr().err
+    for bad in (["custody", old.name, "--older-min", "5"], ["custody", "--triage", "--older-min", "-1"], ["custody", old.name, "--force"]):
+        with pytest.raises(SystemExit):
+            data_main(bad)
+
+
+@pytest.mark.skipif(not Path("/proc/self/stat").exists(), reason="a runner's liveness is read from /proc")
+def test_publish_force_takes_home_a_run_whose_runner_died_and_another_hosts_only_once_that_host_says_so(tmp_path, monkeypatch, capsys):
+    """n2_custody.sh publishes a dead run (an OOM-killed scope, a preempted pod) through `research data custody --publish`, which needs
+    --force for a status that never became terminal; without it the run is refused, as `attempt publish` refuses it. This host sees
+    whether a runner that ran here is gone; a pod's or another machine's it can't, and a pod whose records are quiet for 24 h may
+    still run (#1004's red-team F2), so --force publishes such a run only with --runner-gone, which the caller passes once the run's
+    own host says so, and never one whose runner runs here."""
+    cfg = tmp_path / "store.toml"
+    cfg.write_text(f'[remote]\ntype = "fs"\npath = "{tmp_path / "vault"}"\n')
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
+    here, me = CU.this_host(), int(Path("/proc/self/stat").read_text().rsplit(")", 1)[1].split()[19])
+    pod, dead, live = (_fixture_run(tmp_path / "runs", f"r20260925-01000{i}-aaaa") for i in (1, 2, 3))
+    _on_host(pod, ("pod-xyz", here[1]), "running", 1_000_000_000, pid=1, starttime_ticks=1)
+    _on_host(dead, here, "running", 1_000_000_000, pid=2**22 + 7, starttime_ticks=1)
+    _on_host(live, here, "running", 1_000_000_000, pid=os.getpid(), starttime_ticks=me)
+    assert data_main(["custody", str(pod), "--publish", "--keep-local"]) == 1
+    assert "the store only sees completed or failed attempts" in capsys.readouterr().err
+    assert data_main(["custody", str(pod), "--publish", "--keep-local", "--force"]) == 3
+    err = capsys.readouterr().err
+    assert f"{pod.name}: --force refused: stale: status running" in err and not CU.has_custody(pod)[0]
+    assert "pass --runner-gone once that host says it is gone (a pod: `kubectl get pod pod-xyz` NotFound)" in err
+    assert data_main(["custody", str(pod), "--publish", "--keep-local", "--force", "--runner-gone"]) == 0
+    assert CU.has_custody(pod) == (True, "on the remote (.custody)")
+    assert data_main(["custody", str(dead), "--publish", "--keep-local", "--force"]) == 0, "this host sees its pid gone"
+    assert data_main(["custody", str(live), "--publish", "--keep-local", "--force", "--runner-gone"]) == 3
+    assert "--force refused: its runner is running here" in capsys.readouterr().err
+    with pytest.raises(SystemExit):
+        data_main(["custody", str(pod), "--publish", "--runner-gone"])
+
+
+def test_a_run_published_force_while_it_ran_is_not_r2_once_it_writes_its_end(tmp_path, monkeypatch):
+    """#1004's red-team F2: a pod forced as dead while it still ran ends later; its runner's own publish then returns `already` (an
+    attempt is write-once), and triage called the run r2 though its end, its result and its last logs were only on node 1. An
+    attempt published --force is r2 only while .custody shows nothing in the run dir changed after its run record was taken."""
+    from research.store import attempt as A
+
+    cfg = tmp_path / "store.toml"
+    cfg.write_text(f'[remote]\ntype = "fs"\npath = "{tmp_path / "vault"}"\n')
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
+    runs, st = tmp_path / "runs", LocalStore(tmp_path / "store", config_path=cfg)
+    d = _fixture_run(runs, "r20260925-010001-aaaa")
+    _on_host(d, ("pod-xyz", "boot-1"), "running", 1_000_000_000, pid=1, starttime_ticks=1)
+    assert A.publish(d, store=st, remote_push=False, run_record=True, force=True)["published"]
+    assert CU.push_run(st, d.name) == [] and CU.verify(st, d)["preserved"]
+    (row,) = CU.triage(st, runs, host=HOST)
+    assert row["state"] == "r2" and "published --force, and .custody shows nothing in the run dir changed since" in row["why"]
+    (d / "stdout.log").write_text("the workload's stdout\n... and its last 20 hours, and its result\n")
+    (d / "status.json").write_text(json.dumps({"state": "done", "transitions": [{"state": "running", "pid": 1},
+                                                                                 {"state": "done", "rc": 0}]}))
+    for p in (d / "stdout.log", d / "status.json"):         # 20 h later (the kernel's mtime clock is coarser than verified_from's)
+        os.utime(p, (4_102_444_800, 4_102_444_800))
+    assert A.publish(d, store=st, remote_push=False, run_record=True).get("already")
+    (row,) = CU.triage(st, runs, host=HOST)
+    assert row["state"] == "forced-unverified" and row["state"] in CU.NEEDS_ACTION
+    assert "published --force with status running, and no .custody shows the record holds the run dir as it is now: " in row["why"]
+    assert "changed after custody" in row["why"] and "the attempt is write-once" in row["next"]
+    (d / CU.MARKER).unlink()
+    (row,) = CU.triage(st, runs, host=HOST)
+    assert row["state"] == "forced-unverified" and row["next"].startswith(f"research data custody {d.name} (it writes .custody")
+
+
+def test_a_publish_that_the_remote_refuses_names_the_conflict_beside_the_missing_record(tmp_path, monkeypatch, capsys):
+    """r20261003-174723-7ea5: its runner's custody pushed the attempt and its run record, then a file of the run dir changed, and the
+    stopgap published an attempt without a run record on node 1, which the remote's write-once key refuses. n2_custody.sh holds a
+    run on the line `research data custody --publish` prints, so that line names the push's RemoteConflict too."""
+    from research.store import attempt as A
+
+    cfg = tmp_path / "store.toml"
+    cfg.write_text(f'[remote]\ntype = "fs"\npath = "{tmp_path / "vault"}"\n')
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
+    d = _fixture_run(tmp_path / "runs", "r20260925-010001-aaaa")
+    assert data_main(["custody", str(d), "--publish", "--keep-local", "--store", str(tmp_path / "runner")]) == 0
+    (d / "stdout.log").write_text("the workload's stdout, and a line after the record\n")
+    assert A.publish(d, store=LocalStore(tmp_path / "n1", config_path=tmp_path / "absent.toml"))["published"]
+    capsys.readouterr()
+    assert data_main(["custody", str(d), "--publish", "--keep-local", "--store", str(tmp_path / "n1")]) == 1
+    out = capsys.readouterr().out
+    assert "NO custody on the remote: the attempt names no run record" in out and "; push: RemoteConflict: " in out
 
 
 def test_a_launch_longer_than_the_default_custody_key_needs_an_explicit_ttl_capped_at_24h(capsys):

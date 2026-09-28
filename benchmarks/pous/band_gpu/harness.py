@@ -29,9 +29,11 @@ One run, in order:
      decoded and `W`'s block XORed in, timed together), as an adversary would; the limit minus each recomputed answer's
      recorded device time is the measured margin the certificate's headroom only models.
 6. **The step floor.** The fastest single `Π₂` call on one row over the Feistel kernels (`STEP_VARIANTS`) — the fastest honest
-   kernel, an upper bound on an attacker's, who picks its best kernel and may overclock. The SM clock is sampled while it runs,
-   and the floor is scaled to the maximum clock and to a +15% overclock; a single Keccak-f latency is measured beside it. A
-   call under the certificate's `call_ns` is a gap in the profile.
+   kernel, an upper bound on the fastest whole call, which an attacker may beat with its best kernel and an overclock. It is
+   not an upper bound on an attacker's answer: at the reference Feistel-SHAKE256 `Π₂` an attacker completes no call, and
+   rebuilds a label from 1.53% of `C` in one round's squeeze, 481 Keccak-f, about a tenth of a call (red team, 4 Oct 2026,
+   art:7617c8017e80). The SM clock is sampled while it runs, and the floor is scaled to the maximum clock and to a +15%
+   overclock; a single Keccak-f latency is measured beside it. A call under the certificate's `call_ns` is a gap in the profile.
 7. **NVMe** (`--nvme-dir`, optional): one block's read latency from a file there.
 8. **Clocks.** The GPU's clocks, throttle reasons, temperature and power before and after, and the SM clock per timed step.
 
@@ -665,7 +667,8 @@ def _recomputer(backend: Backend, c: Any, tags: Any, dropped: list[int], w_host:
 
 
 def step_floor(backend: Backend, reps: int, call_ns: int | None, facts: dict[str, Any]) -> dict[str, Any] | None:
-    """The fastest single-row `Π₂` call over `STEP_VARIANTS` — the fastest honest kernel, an upper bound on an attacker's —
+    """The fastest single-row `Π₂` call over `STEP_VARIANTS` — the fastest honest kernel, an upper bound on the fastest
+    whole call but not on an attacker's answer, which resumes kept round states without a call (module docstring, step 6) —
     with the SM clock sampled while it runs, scaled to the maximum clock and a +15% overclock, and one Keccak-f beside it."""
     if backend.step is None:
         return None
@@ -687,7 +690,8 @@ def step_floor(backend: Backend, reps: int, call_ns: int | None, facts: dict[str
     scaled = floor * sampled / max_mhz if sampled and max_mhz else None
     keccak = backend.keccak_latency(reps) if backend.keccak_latency is not None else None
     return {"variants": variants, "fastest": fastest, "min_s": floor,
-            "label": "fastest honest kernel (an upper bound on the adversary's floor)",
+            "label": "fastest honest kernel for a whole call (not an upper bound on the adversary's floor, which "
+                     "resumes kept round states in about a tenth of a call)",
             "sampled_sm_mhz": sampled, "sampled_nvidia_smi_id": facts.get("before", {}).get("nvidia_smi_id"),
             "at_max_clock_s": scaled, "at_plus15pct_overclock_s": scaled / 1.15 if scaled else None,
             "keccak_f_s": keccak, "certificate_call_ns": call_ns,

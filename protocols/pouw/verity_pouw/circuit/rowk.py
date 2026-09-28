@@ -33,7 +33,9 @@ two units hold.
 Each piece's rows (`PORTS8`, `PORTS4`; `leaves`' pc8-head, pc8-carry, fp8-codes, pc4-head, pc4-carry and nvfp4-codes) are
 C-Flock-committed ports in the row's session, and a form reads its segment of F_A and F_B as a public input region under
 the anchor's slice rule (`DERIVATIONS8`, `DERIVATIONS4`, `anchors.Derivation.per_segment`).  Every form opens the row of A
-whole, so a form's SHA work still grows with k.
+whole, so a form's SHA work still grows with k.  C-Flock pads each output port to whole words and reads an input row as
+its parameters' bits run together, so the head returns its row in whole-word ports (`HEAD8_OUT`, `HEAD4_OUT`: a_E with
+its pad, and the finite and floor bits with theirs, one port each) and commits the very words the forms and tail read.
 """
 from __future__ import annotations
 
@@ -63,6 +65,10 @@ E4M3, E2M1, U8, BF16 = pc8.E4M3, W.E2M1, W.U8, W.BF16
 #: the head's row, as each form and the tail read it (`leaves`' pc8-head and pc4-head rows)
 HEAD8 = (("alpha", F32), ("ep", pc8.LINE), ("th", Value(64)), ("finite", Value(1)), ("floor", Value(1)), ("pad", Value(14)))
 HEAD4 = (("alpha", F32), ("ae", U8), ("pad", Value(8)))
+#: the head's output ports, each a run of its row's fields: C-Flock pads each output port to whole u16 words
+#: (`class_statement.unit_lowering`), so a_E and its pad, and the finite and floor bits and theirs, are one port each
+HEAD8_OUT = (("alpha",), ("ep",), ("th",), ("finite", "floor", "pad"))
+HEAD4_OUT = (("alpha",), ("ae", "pad"))
 #: a form's carry, as the next form and the tail read it (pc8-carry, pc4-carry); pc8-carry's zero fill makes the row whole
 #: SHA-512 blocks (128 words), a row shape C-Flock's widened scope takes, where 66 words would be neither short nor whole
 FILL8 = 62
@@ -76,13 +82,19 @@ def segment(fn: SpecializedDefinition) -> int:
     return fn.bindings.get("J", 0)
 
 
+def _head_out(head: tuple, ports: tuple) -> tuple:
+    """The head's output types, a field per port: its row field, or a Tuple of the port's fields."""
+    types_ = dict(head)
+    return tuple(types_[p[0]] if len(p) == 1 else Tuple(*(types_[n] for n in p)) for p in ports)
+
+
 # ---- Pearl-C's pieces ----------------------------------------------------------------------------------------------------
 
 def _head8_body(B, S_, x, line):
     e = pc4._Emit(B)
     s, rho, alpha, beta, th = pc8._moments(e, x, S_.K)
     floor, finite = pc8._bounds(e, s, rho, alpha)
-    return tuple_of(alpha, array_of(pc8._ep(e, beta, line)), th, finite, floor, e.c(14, 0))
+    return tuple_of(alpha, array_of(pc8._ep(e, beta, line)), th, tuple_of(finite, floor, e.c(14, 0)))
 
 
 def _seg8_sig(S_, own: str, other: str, carry: bool):
@@ -134,7 +146,8 @@ def _tail8b_body(B, S_, alpha, ep, th, finite, floor, pad, cs, dead, tot, fill, 
 def _pieces8(side: str):
     own, other = ("fa", "fb") if side == "A" else ("fb", "fa")
     head = CompositeDefinition(
-        f"Pc8Row{side}Head", 1, ("K",), lambda S_: ((("x", Array(S_.K, F32)), ("e", pc8.LINE)), Tuple(*(t for _n, t in HEAD8))),
+        f"Pc8Row{side}Head", 1, ("K",),
+        lambda S_: ((("x", Array(S_.K, F32)), ("e", pc8.LINE)), Tuple(*_head_out(HEAD8, HEAD8_OUT))),
         _head8_body, doc=f"Row {side}'s head: its statistics (α, θ, the finite and floor bits) and E′ = e4m3(β·E).",
         conformance="protocol-defined")
     first = CompositeDefinition(
@@ -167,7 +180,7 @@ Pc8RowBTailDef = CompositeDefinition(
 def _head4_body(B, S_, x):
     e = pc4._Emit(B)
     _w, alpha, ae, ok = pc4._stats(e, x, S_.K)
-    return tuple_of(alpha, ae, e.c(8, 0), pc4.ok_word(e, ok))
+    return tuple_of(alpha, tuple_of(ae, e.c(8, 0)), pc4.ok_word(e, ok))
 
 
 def _seg4_sig(S_, own: str, other: str, carry: bool):
@@ -218,7 +231,7 @@ def _tail4b_body(B, S_, alpha, ae, pad, cs, ss, tot, line, g):
 def _pieces4(side: str):
     own, other = ("fa", "fb") if side == "A" else ("fb", "fa")
     head = CompositeDefinition(
-        f"Pc4Row{side}Head", 1, ("K",), lambda S_: ((("x", Array(S_.K, BF16)),), Tuple(*(t for _n, t in HEAD4), OK)),
+        f"Pc4Row{side}Head", 1, ("K",), lambda S_: ((("x", Array(S_.K, BF16)),), Tuple(*_head_out(HEAD4, HEAD4_OUT), OK)),
         _head4_body, doc=f"Row {side}'s head: its statistics (α, a_E) and its admission (`pc4._stats`).",
         conformance="protocol-defined")
     first = CompositeDefinition(
@@ -269,14 +282,16 @@ def _col(out, m: int, f: int):
     return array_of([out[i][f] for i in range(m)])
 
 
-def _rows(B, pieces, ks: int, x, before: tuple, after: tuple, n_head: int, n_codes: int, extra: tuple):
+def _rows(B, pieces, ks: int, x, before: tuple, after: tuple, head_out: tuple, n_codes: int, extra: tuple):
     """One side's row units in a root body: the heads, each segment's forms in order, then the tails, every batch over the
-    side's rows.  ``before`` are the forms' per-row inputs between the head's row and the carry (none), ``after`` theirs
-    after it (Pearl-C4's E line); ``extra`` the tails' shared inputs (G)."""
+    side's rows.  ``before`` are the heads' per-row inputs after the row (Pearl-C's E line), ``after`` the forms' and
+    tails' after the carry (Pearl-C4's); ``head_out`` the head's output ports (`HEAD8_OUT`), whose fields the forms and
+    tail read in order; ``extra`` the tails' shared inputs (G)."""
     head, first, forms, tail = pieces
     m = len(x)
     heads = B.batch(head, x, *before, axes=(0,) * (1 + len(before)))
-    h = [_col(heads, m, f) for f in range(n_head)]
+    h = [array_of([heads[i][f] if len(p) == 1 else heads[i][f][s] for i in range(m)])
+         for f, p in enumerate(head_out) for s in range(len(p))]
     segs, carry = [], []
     for j, fn in enumerate((first, *forms)):
         own, other = (a[j * ks:(j + 1) * ks] for a in extra[:2])
@@ -293,15 +308,15 @@ def _rows(B, pieces, ks: int, x, before: tuple, after: tuple, n_head: int, n_cod
 def rows8(B, k: int, ks: int, dev: str, side: str, x, e, own, other, *extra):
     """Pearl-C's rows of ``side`` cut every ``ks``, in a root body: [codes, P, ok] by row, as `pc8`'s row units return
     them; ``own`` and ``other`` the bases it forms and chains against, ``extra`` the tails' G."""
-    _heads, outs = _rows(B, pieces8(k, ks, dev, side), ks, x, (e,), (), len(HEAD8), 1, (own, other, *extra))
+    _heads, outs = _rows(B, pieces8(k, ks, dev, side), ks, x, (e,), (), HEAD8_OUT, 1, (own, other, *extra))
     return outs
 
 
 def rows4(B, k: int, ks: int, side: str, x, e, own, other, *extra):
     """Pearl-C4's rows of ``side`` cut every ``ks``, in a root body: [codes, scale bytes, P, ok] by row, as `pc4`'s row
     units return them (ok the head's)."""
-    heads, outs = _rows(B, pieces4(k, ks, side), ks, x, (), (e,), len(HEAD4), 2, (own, other, *extra))
-    return outs + [_col(heads, len(x), len(HEAD4))]
+    heads, outs = _rows(B, pieces4(k, ks, side), ks, x, (), (e,), HEAD4_OUT, 2, (own, other, *extra))
+    return outs + [_col(heads, len(x), len(HEAD4_OUT))]
 
 
 def check8(shape) -> None:
@@ -432,6 +447,7 @@ def _ports(head_row: str, carry_row: str, codes_row: str, data_row: str, input_r
     out = {}
     head8 = scheme == "pc8"
     names, carry = (_NAMES8, tuple(n for n, _t in CARRY8)) if head8 else (_NAMES4, ("tot",))
+    head_outs = tuple(range(len(HEAD8_OUT if head8 else HEAD4_OUT)))
     codes_out = (0,) if head8 else (0, 1)
     carry_out = (1, 2, 3) if head8 else (2,)
     tail_codes = ("cs",) if head8 else ("cs", "ss")
@@ -439,10 +455,9 @@ def _ports(head_row: str, carry_row: str, codes_row: str, data_row: str, input_r
         own, other = ("fa", "fb") if side == "a" else ("fb", "fa")
         e = {"e": "ea" if side == "a" else "eb"}
         slices = {own: f"{own}-slice", other: f"{other}-slice"}
-        head_outs = tuple(range(len(names)))
         out[f"row_{side}_head"] = {
             "rows": ((input_row, role, ("x",)), (head_row, role, head_outs))
-            + (() if head8 else (("ok", role, (len(names),)),)), "regions": e if head8 else {}}
+            + (() if head8 else (("ok", role, (len(head_outs),)),)), "regions": e if head8 else {}}
         seg_rows = ((input_row, role, ("x",)), (head_row, role, names))
         seg_out = ((codes_row, role, codes_out), (carry_row, role, carry_out))
         seg_regions = slices if head8 else e | slices
@@ -476,6 +491,6 @@ DERIVATIONS8 = pc8.DERIVATIONS | _slices(pc8.DERIVATIONS, "pearl-c")
 DERIVATIONS4 = pc4.DERIVATIONS | _slices(pc4.DERIVATIONS, "pearl-c4")
 
 
-__all__ = ["CARRY4", "CARRY8", "DERIVATIONS4", "DERIVATIONS8", "FILL8", "FORMS", "HEAD4", "HEAD8", "PORTS4", "PORTS8", "ROLES",
-           "ROLE_OF", "ROW_K", "check4", "check8", "pieces4", "pieces8", "root4", "root8", "rows4", "rows8", "segment",
-           "unit_templates4", "unit_templates8"]
+__all__ = ["CARRY4", "CARRY8", "DERIVATIONS4", "DERIVATIONS8", "FILL8", "FORMS", "HEAD4", "HEAD4_OUT", "HEAD8", "HEAD8_OUT",
+           "PORTS4", "PORTS8", "ROLES", "ROLE_OF", "ROW_K", "check4", "check8", "pieces4", "pieces8", "root4", "root8", "rows4",
+           "rows8", "segment", "unit_templates4", "unit_templates8"]

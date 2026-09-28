@@ -87,8 +87,10 @@ class DenseParams:
 
     @property
     def call_ns(self) -> int:
-        """The adversary's fastest call, a 64 KiB `Π₂` in a long chain: 4,830 Keccak-f, at least 241.5 µs
-        (`primitives.pi2_keccak_f`), so `D = 5` covers `Δ + RTT < 1.449` ms."""
+        """The fastest whole call, a 64 KiB `Π₂` in a long chain: 4,830 Keccak-f, at least 241.5 µs
+        (`primitives.pi2_keccak_f`), so in the ideal-permutation model `D = 5` covers `Δ + RTT < 1.449` ms.  At the
+        reference Feistel-SHAKE256 `Π₂` it does not: an adversary answers without completing a call, from 1.53% of
+        `C` in 481 Keccak-f (red team, 4 Oct 2026, art:7617c8017e80)."""
         return pi2_call_ns(POINT_64K.m)
 
     def parents(self, i: int) -> range:
@@ -107,9 +109,10 @@ class DenseParams:
 
 POINT_64K = DenseParams(512, 524_288)
 """The dense point: 512 blocks of 65,536 B (`ℓ = 524288` bits) per segment (32 MiB), audited at `D = 5` calls of at
-least 241.5 µs with `k = 111`: the point `Pous.SecurityProofs.ChainDenseMeets64` certifies for this `H`, with no
-hypothesis, and `dense_meets_64` for a random oracle (`lean/submissions/dense/DenseReCert.lean`, `k = 106`).  The
-secure-first default is now the band (`band.SECURE_FIRST`)."""
+least 241.5 µs with `k = 111`: the point `Pous.SecurityProofs.ChainDenseMeets64` certifies for this `H` over an ideal
+`Π₂`, with no hypothesis, and `dense_meets_64` for a random oracle (`lean/submissions/dense/DenseReCert.lean`,
+`k = 106`).  At the reference Feistel-SHAKE256 `Π₂` neither bounds an adversary, which rebuilds a label from 1.53% of
+`C` in 481 Keccak-f (`call_ns`).  The secure-first default is now the band (`band.SECURE_FIRST`)."""
 
 
 def dom(t: int, i: int) -> int:

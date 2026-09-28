@@ -10,8 +10,11 @@ the verifier cannot tell apart from the responder's time and so also grants the 
 Two clocks.  `TimedVerifier` is the deployed verifier: it measures each answer's wall-clock latency from the reveal and
 rejects any over the deadline.  `simulate` is the model's: the responder answers each index with a `Prog` (Lean
 `SeqResponder.step`, state kept inside the responder), `oracle.run` counts the answer's rounds, and any answer over the
-round budget or `work` queries is late.  The budget is the deadline over `call_ns`, the adversary's fastest oracle call,
-unless `deadline_rounds` gives it directly.  `on_answer` is the timing hook for both.
+round budget or `work` queries is late.  The budget is the deadline over `call_ns`, the fastest whole oracle call,
+unless `deadline_rounds` gives it directly.  `on_answer` is the timing hook for both.  The conversion of wall-clock
+time into calls holds in the ideal-permutation model only: at the reference Feistel-SHAKE256 `Π₂` a prover answers
+without completing a call, rebuilding a label from 1.53% of `C` in 481 Keccak-f (red team, 4 Oct 2026,
+art:7617c8017e80; `primitives.pi2_keccak_f`).
 """
 
 from __future__ import annotations
@@ -38,8 +41,9 @@ RTT_ALLOWANCE_NS = 0
 """The default network round-trip allowance added to Δ: none, until the verifier's RTT is measured."""
 
 CALL_NS = 242_000
-"""The adversary's fastest oracle call: `P_T`'s Feistel-SHAKE256 floor at 64 KB, 242 µs; a `Π₂` call is at least 480 µs
-(`docs/p3-instantiation.md` §3)."""
+"""The fastest whole oracle call: `P_T`'s Feistel-SHAKE256 floor at 64 KB, 242 µs; a `Π₂` call is at least 480 µs
+(`docs/p3-instantiation.md` §3).  The ideal-permutation model's unit, not an adversary's floor at the reference
+Feistel-SHAKE256, whose round functions resume from kept 200-byte states (`primitives.pi2_keccak_f`)."""
 
 CHALLENGES = 132
 """P3's `k` for 1% at §2c's point (`γ = 0.0183`); parameters with a `challenges` attribute (the dense scheme's 111)
@@ -57,13 +61,17 @@ WORK = 1 << 14
 
 LATE_ROUNDS = 12
 """The most sequential calls a late answer may take, `D_late ≤ 12` (`Pous.SecurityProofs.BandGradedMeetsFamily`, with
-`D_late ≤ d`): at 241.5 µs per call the hard deadline needs `Δ_late + RTT < 13 × 241.5 µs ≈ 3.14` ms."""
+`D_late ≤ d`): at 241.5 µs per call the hard deadline needs `Δ_late + RTT < 13 × 241.5 µs ≈ 3.14` ms.  The wall-clock
+reading holds in the ideal-permutation model only; at the reference Feistel-SHAKE256 `Π₂` a prover answers in about
+24 µs from 1.53% of `C` (`primitives.pi2_keccak_f`)."""
 
 AUDIT_CAP = 1505
 """The most call-times a graded audit may last, from its first challenge's send to its last answer's receipt
 (`Pous.Rebuild.auditCap`, which `Pous.SecurityProofs.BackgroundRebuildExcluded` requires the verifier to enforce): at
 241.5 µs per call, `1,505 × 241.5 µs ≈ 363.5` ms.  Past it the verifier aborts the audit without accepting, as for a
-missed hard deadline, and never retries it with fresh challenges."""
+missed hard deadline, and never retries it with fresh challenges.  What the cap excludes (re-encoding a segment from
+`W`) is counted in whole `Π₂` calls, so it holds in the ideal-permutation model only: at the reference Feistel-SHAKE256
+`Π₂` a prover needs no re-encode, answering from 1.53% of `C` (`primitives.pi2_keccak_f`)."""
 
 
 def _challenges(vk: VerifierKey) -> int:

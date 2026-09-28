@@ -17,7 +17,8 @@ Segment `s` is `chainBand B d ℓ 512 (dom tag_s)`.
 adversary completes within `Δ + RTT`, must not exceed `d`.  With `d ≥ D′` the band is exactly as hard as dense at
 `D′` (`band_chain_hard`); at `D′ = d + 1` the gap attack (`band_gap_attack`, `band_cliff_d12`) frees every
 `(d + 1)`-th block and the audit accepts with probability 1.  `audit.TimedVerifier` refuses a deadline whose effective
-`D` exceeds `d`.
+`D` exceeds `d`.  The effective `D` counts whole `Π₂` calls, the ideal-permutation model's unit; at the reference
+Feistel-SHAKE256 `Π₂` a prover answers without completing a call (`primitives.pi2_keccak_f`).
 """
 
 from __future__ import annotations
@@ -88,8 +89,10 @@ class BandParams:
 
     @property
     def call_ns(self) -> int:
-        """The adversary's fastest call, a 64 KiB `Π₂` in a long chain: 4,830 Keccak-f, at least 241.5 µs
-        (`primitives.pi2_keccak_f`)."""
+        """The fastest whole call, a 64 KiB `Π₂` in a long chain: 4,830 Keccak-f, at least 241.5 µs
+        (`primitives.pi2_keccak_f`).  The ideal-permutation model's unit of time; at the reference Feistel-SHAKE256
+        `Π₂` an adversary answers without completing a call, from 1.53% of `C` in 481 Keccak-f (red team, 4 Oct 2026,
+        art:7617c8017e80)."""
         return pi2_call_ns(SECURE_FIRST.m)
 
     def parents(self, v: int) -> range:
@@ -109,7 +112,9 @@ class BandParams:
 SECURE_FIRST = BandParams(512, 524_288, 12)
 """The secure-first point (POUS `docs/band-vs-dense.md`): `B(512, 12)`, 65,536 B blocks (32 MiB segments), audited at
 `D = 5` calls of at least 241.5 µs with `k = 111` (`Pous.SecurityProofs.BandChainMeets64D12`, with no hypothesis), so
-`Δ + RTT < 1.449` ms.  The cliff is at an effective `D` of 13: 13 call-times, 3.1395 ms, must exceed `Δ + RTT`."""
+in the ideal-permutation model `Δ + RTT < 1.449` ms.  The cliff is at an effective `D` of 13: 13 call-times, 3.1395 ms,
+must exceed `Δ + RTT`.  Neither bounds an adversary at the reference Feistel-SHAKE256 `Π₂`, which rebuilds a label from
+1.53% of `C` in 481 Keccak-f, about 24 µs (red team, 4 Oct 2026, art:7617c8017e80)."""
 
 
 def _checked(d: int, fn):

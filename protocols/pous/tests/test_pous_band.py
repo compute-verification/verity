@@ -4,6 +4,7 @@ decode and the timed audit with the parameters' own codec."""
 
 from __future__ import annotations
 
+import itertools
 import json
 import random
 from pathlib import Path
@@ -149,7 +150,7 @@ def test_end_to_end_with_the_parameters_codec():
     blocks = [b for seg in server for b in seg]
     assert all(decode_tensor(layout, prims, salt, name, blocks.__getitem__) == data[name] for name in data)
     key = challenge_key(b"audit", vk)
-    timed = TimedVerifier(vk, key)
+    timed = TimedVerifier(vk, key, clock=itertools.count(0, 1000).__next__)
     assert timed.k == 111 and run_timed(timed, blocks.__getitem__).accepted
     enc = Encoding(params, salt, tuple(int.from_bytes(b, "little") for b in blocks))
     assert simulate(vk, HonestResponder(enc), prims, key).accepted

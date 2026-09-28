@@ -87,6 +87,7 @@ BROKER_METHODS = ("auth.test", "chat.getPermalink", "chat.postMessage", "convers
 DIRECT_ONLY = ("usergroups.create", "usergroups.enable", "usergroups.update")        # `groups sync --apply`: the token itself
 BROKER_MAX_BODY = 65536                                                   # bytes of request JSON; the route refuses more (413)
 ERROR_CODE_RE = re.compile(r"^[a-z0-9_]{1,64}$")
+SCOPES_RE = re.compile(r"^[a-z0-9_.:]{1,64}(,[a-z0-9_.:]{1,64}){0,15}$")      # a not-ok answer's `needed`: chat:write,users:read
 EVERY = "every handle"
 DESCRIPTION_MAX = 140                                            # Slack's user-group description limit (description_too_long)
 NAME_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,79}$")
@@ -99,7 +100,7 @@ STATUS_RE = re.compile(rf"^((?:{DONE}|{SHORTCODES[DONE]}) done|(?:{DECLINED}|{SH
 PIN_RE = re.compile(r"^(?:https?://\S+#sha256=[0-9a-f]{64}|git:[0-9a-f]{40})$")
 SHIPS_CODE_RE = re.compile(r"\b(curl|wget|pip install|uv (?:pip|sync|tool)|git (?:pull|merge|checkout|fetch)|install|download|upgrade)\b", re.I)
 SAFE_POINT = "Apply at your next safe point; don't interrupt running jobs."
-EXPIRES_S = 259200
+EXPIRES_S = 2592000                                              # 30 days; a lapsed subscription wakes no one and says nothing
 PAGE = 200
 ASK_DANIEL = "https://website-docs-sage.vercel.app/api/agent-approvals"   # the cards' route, and its OIDC token's audience
 ASK_CHANNEL = "ask-daniel"
@@ -253,10 +254,10 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         raise urllib.error.URLError("redirected; refusing to forward the bearer token")
 
 
-def post(url: str, data: bytes, headers: dict[str, str]) -> dict:
+def post(url: str, data: bytes, headers: dict[str, str], timeout: float = 30) -> dict:
     """The one HTTP exchange: POST `data`, parse the JSON answer. Raises urllib's errors for the caller to map."""
     req = urllib.request.Request(url, data=data, method="POST", headers=headers)
-    with urllib.request.build_opener(_NoRedirect).open(req, timeout=30) as r:
+    with urllib.request.build_opener(_NoRedirect).open(req, timeout=timeout) as r:
         return json.load(r)
 
 
@@ -382,7 +383,9 @@ class Slack:
         if not isinstance(out, dict):
             raise SlackError(f"{method}: the answer is not a JSON object")
         if not out.get("ok"):
-            raise SlackError(f"{method}: {out.get('error', 'not ok')}" + (f" (needed scope {out['needed']})" if out.get("needed") else ""))
+            error, needed = out.get("error"), out.get("needed")     # echoed only when they are codes: an answer is not to be printed
+            raise SlackError(f"{method}: {error if isinstance(error, str) and ERROR_CODE_RE.fullmatch(error) else 'not ok'}"
+                             + (f" (needed scope {needed})" if isinstance(needed, str) and SCOPES_RE.fullmatch(needed) else ""))
         return out
 
     def _broker(self, method: str, args: dict[str, str]) -> dict:

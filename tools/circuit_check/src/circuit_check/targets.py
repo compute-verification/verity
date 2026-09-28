@@ -278,7 +278,10 @@ def _boolean_roots() -> list[Any]:
     about 600,000 gates each, every lane about 300,000) and at a full group plus a remainder; the stream key, setup, lane and
     their pieces are static-free; the f32 argmax tree's stages at two and three levels reach its other shapes. FA2 with logit
     soft-capping on bits (`boolean_softcap`) at one head of 17 keys, two blocks (a full one and a partial one) with Check_inf in
-    both, its ``TANH`` and ``EX2`` at mufu's Boolean versions, which reaches its head and blocks."""
+    both, its ``TANH`` and ``EX2`` at mufu's Boolean versions, which reaches its head and blocks. vLLM's GPT-J RoPE on bits at
+    two heads of 8. MLA (`registry.mla`): Triton's one-split decode at one head of two keys over a 16 + 16 latent (a partial
+    block, so its masked columns), which reaches the head, the block, the score and every element; the absorb bmm at two heads,
+    K = 32, N = 3; the shared-expert combine at 8 elements with GLM-4.7-Flash's routed_scaling_factor."""
     from verity.ir.defs import bind
     from verity.ml.boolean import attention as BAT
     from verity.ml.boolean import gemm as BG
@@ -293,10 +296,12 @@ def _boolean_roots() -> list[Any]:
     from verity_vllm.program.registry import boolean_silu as BSL
     from verity_vllm.program.registry import boolean_softcap as BSC
     from verity_vllm.program.registry import gumbel_boolean as GB
+    from verity_vllm.program.registry import mla
     from verity_vllm.program.registry import moe as M
     from verity_vllm.program.registry import prims as P
     from verity_vllm.program.registry import sampling_boolean as SB
 
+    HOP = BG.HopperBF16WgmmaDot16
     rows = [bind(d, N=8) for d in (BDN.SquareBf16, BDN.SquareF32, BDN.AddWidenedBf16, BDN.ScaleRowBf16, BDN.ScaleRowF32,
                                    BDN.MulVecF32, BDN.Bf16MulScalarTensor)]
     rows += [bind(BDN.AddScalarF32, N=8, C=1e-6), bind(BDN.AddScalarBf16, N=8, C=1.0), bind(BDN.Bf16DivScalar, N=8, C=30.0),
@@ -323,7 +328,10 @@ def _boolean_roots() -> list[Any]:
             bind(BSC.AttentionSoftcap, T=17, NH=1, KVH=1, D=16, BN=16, CAP=50.0, DOT=BG.HopperBF16WgmmaDot16, INV=BAT.Fa2InvSum,
                  MASKED_FROM=0, TANH=BM.MufuTanh, EX2=BM.MufuEx2Ftz),
             bind(GB.GumbelSelectF32, V=2), bind(GB.GumbelSelectF32, V=65),
-            *SB.stages(200, SB.F32ArgmaxStage), *SB.stages(4161, SB.F32ArgmaxStage)] + rows
+            *SB.stages(200, SB.F32ArgmaxStage), *SB.stages(4161, SB.F32ArgmaxStage),
+            bind(boolean_rope.RoPEGptJ, NHEADS=2, D=8),
+            bind(mla.TritonMlaDecode, H=1, T=2, DL=16, DR=16, BN=32, SPLITS=1, SCALE=0x3D800000, DOT=HOP),
+            bind(mla.MlaBmm, NHEADS=2, K=32, N=3, DOT=HOP), bind(mla.MoeSharedCombine, H=8, RSF=0x3FE66666)] + rows
 
 
 def _boolean_gather_roots() -> list[Any]:
@@ -371,7 +379,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     from verity_vllm.program.registry import b1, b1_tp2, fa2_check_inf, fp8, fp8_moe, hopper, lifted, moe_pad, nvfp4, ref_prims, sampling
     from verity_vllm.program.registry import serve3, spec
     from verity_vllm.program.registry import value_inputs as VI
-    from verity_vllm.program.registry import boolean_attention, boolean_fp8, boolean_fp8_moe, tables
+    from verity_vllm.program.registry import boolean_attention, boolean_fp8, boolean_fp8_moe, boolean_rope, tables
 
     long = {**TINY, "MAX_POS": 16}
     tp2 = {**TINY_NOBIAS, "BIAS": True, "TP": 2}
@@ -472,6 +480,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("EmbeddingShard_v1", lambda: bind(b1_tp2.EmbeddingShard, VS=16, H=16, START=16)),
         ("ResidualAdd_v1", lambda: bind(b1.ResidualAdd, N=16)),
         ("RoPEGptJ_v1", lambda: bind(ref_prims.RoPEGptJ, NHEADS=2, D=16)),
+        ("RoPEGptJ_v2", lambda: bind(boolean_rope.RoPEGptJV2, NHEADS=2, D=16)),
         ("RoPEInterleavedRef_v1", lambda: bind(ref_prims.RoPEInterleavedRef, D=16, DT="bf16")),
     ]
 
