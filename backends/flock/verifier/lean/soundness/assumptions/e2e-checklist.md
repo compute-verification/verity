@@ -41,6 +41,10 @@ time.
 constant's row is `1 · 1`. At a transcript whose constant is 0, a unit's rows hold with every output 0 while the Boolean
 circuit's outputs are the forms. So `RowsL1` can hold only where the constant is 1, and the committed transcript's
 constant is a gap of its own (red-team review of #207).
+- **One `ones` for both.** `hL1` and `hOne` constrain the same parameter from opposite sides: a set too small makes `hL1`
+  false, and a set too large makes `hOne` false. S4 discharges both for exactly the gates the units' constants read.
+- **`hOne` holds per strategy.** The final theorem needs it for every `σ`. The never-read case is where that needs work.
+  Making the constant a public wire of the value binding would avoid it.
 
 **How to use this list.**
 - Each PR that discharges a hypothesis changes the skeleton to prove it: an argument becomes a theorem applied. It also
