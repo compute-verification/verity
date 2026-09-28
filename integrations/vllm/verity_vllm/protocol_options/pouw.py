@@ -9,9 +9,10 @@ run's workload:
 
 1. quantize x's rows to int7 per row (`quantize`), and take the weight operands (`weight_operands`: the int7 weight per
    output channel with the epoch's noise, Y = [B + F₁ ; B + F₂ ; B + F₃], and c₀).  The setting ``weight_operands`` says
-   where they come from: ``"resident"`` (the default) prepares them once at install and keeps them, so
-   `keeps_weight_copy` is True and the selector refuses POUS beside it; ``"per-forward"`` prepares them from the weight
-   of the layer each call is handed, so under POUS the GEMM reads POUS's decoded weight;
+   where they come from: ``"per-forward"`` (the default) prepares them from the weight of the layer each call is handed,
+   so no weight-derived copy outlives the call and under POUS the GEMM reads POUS's decoded weight; ``"resident"`` (an
+   opt-in) prepares them once at install and keeps them, 3 B per weight, so `keeps_weight_copy` is True and the
+   selector refuses POUS beside it;
 2. commit the unit's activation rows, derive its noise and compute every 16 x 16 tile's route-U checked values and
    digest (`ncp_tiles`, gated bit for bit against the scheme's reference in the tests); the digests join the transcript;
 3. return the useful output, the final checkpoint A·Bᵀ, dequantized by the row and column scales, plus the bias.
@@ -60,9 +61,13 @@ OUTSIDE_PROGRAM = ("PoUW replaces each linear layer's GEMM by its scheme's noise
 PLACEHOLDER = (
     "without a `beacon` setting the salt comes from 32 zero bytes, so it is predictable",
     "with weight_operands = per-forward, a forward's weight is not re-checked against the root committed at install",
-    "tile openings need the activation rows, kept only for the last `retain_steps` units",
+    "not auditable yet: one epoch per install (no rotation), activation rows kept only in memory for the last "
+    "`retain_steps` units (0 by default) and never persisted, no opener, and the transcript's leaves grow without bound "
+    "for the life of the install",
     "the executor runs on the host in numpy, not a native route-U kernel",
 )
+#: The host bytes `weight_operands` works in at a time (its copy of the weight's rows and their int64 noise and sums).
+FORM_BYTES = 1 << 28
 _INV63 = np.float32(1.0) / np.float32(63.0)
 _M32 = 0xFFFFFFFF
 
@@ -76,7 +81,7 @@ class Settings:
     beacon: bytes | None = None
     retain_steps: int = 0
     transcript_dir: str | None = None
-    weight_operands: str = "resident"
+    weight_operands: str = "per-forward"
 
     @classmethod
     def of(cls, raw: Mapping[str, Any]) -> Settings:
@@ -98,14 +103,15 @@ class Settings:
         tdir = raw.get("transcript_dir")
         if tdir is not None and not isinstance(tdir, str):
             raise ValueError("pouw setting 'transcript_dir' is a path string")
-        operands = raw.get("weight_operands", "resident")
+        operands = raw.get("weight_operands", "per-forward")
         if operands not in WEIGHT_OPERANDS:
             raise ValueError(f"pouw setting 'weight_operands' is one of {', '.join(WEIGHT_OPERANDS)}")
         return cls(beacon, retain, tdir, operands)
 
 
 def keeps_weight_copy(scheme: str, ctx: Context) -> bool:
-    """True when the weight operands stay resident across forwards (``weight_operands = "resident"``, the default)."""
+    """True when the weight operands stay resident across forwards (``weight_operands = "resident"``, an opt-in); a
+    malformed setting counts as a copy."""
     try:
         return Settings.of(ctx.settings_of(NAME)).weight_operands == "resident"
     except ValueError:
@@ -162,12 +168,13 @@ class Operands:
     c0: np.ndarray
 
 
-def stack_y(scheme: Any, salt: bytes, w: int, b: np.ndarray, noise: tuple) -> tuple[np.ndarray, np.ndarray]:
-    """Y (as int8 rows: every entry lies in [−128, 127], Lean `rangeU`) and c₀ for the int7 weight ``b`` (n x k), with F₁
-    from the epoch salt (per epoch and weight, as `ncp.stack` draws it), F₂ = −P·F₁ and F₃ = F₁ + F₂ (`ncp.assemble`)."""
+def stack_y(scheme: Any, salt: bytes, w: int, b: np.ndarray, noise: tuple, first: int = 0) -> tuple[np.ndarray, np.ndarray]:
+    """Y (as int8 rows: every entry lies in [−128, 127], Lean `rangeU`) and c₀ for the int7 weight rows ``b`` (n x k, the
+    weight's rows from ``first``), with F₁ from the epoch salt (per epoch, weight and row, as `ncp.stack` draws it),
+    F₂ = −P·F₁ and F₃ = F₁ + F₂ (`ncp.assemble`)."""
     n, k = b.shape
     pi, sigma = np.asarray(noise[0]), np.asarray(noise[1], dtype=np.int64)
-    f1 = _noise("verity/pouw/ncp/F1/v1", n, k, lambda j: (salt, w, j))
+    f1 = _noise("verity/pouw/ncp/F1/v1", n, k, lambda j: (salt, w, first + j))
     f2 = np.empty_like(f1)
     f2[:, pi] = -(f1 * sigma)
     b = b.astype(np.int64)
@@ -175,10 +182,16 @@ def stack_y(scheme: Any, salt: bytes, w: int, b: np.ndarray, noise: tuple) -> tu
     return y.astype(np.int8), (-scheme.beta * y.sum(axis=1)).astype(np.float64)
 
 
-def weight_operands(scheme: Any, salt: bytes, w: int, weight: np.ndarray, noise: tuple) -> Operands:
-    """``weight`` (n x k) quantized per output channel (`quantize`) and stacked (`stack_y`)."""
-    b, scales = quantize(weight)
-    return Operands(scales, *stack_y(scheme, salt, w, b, noise))
+def weight_operands(scheme: Any, salt: bytes, w: int, weight: Any, noise: tuple) -> Operands:
+    """``weight`` (n x k, a tensor or an array) quantized per output channel (`quantize`) and stacked (`stack_y`), a block
+    of rows at a time: its host copy and int64 work stay under about `FORM_BYTES` whatever the layer, beside Y itself."""
+    n, k = weight.shape
+    step = max(1, FORM_BYTES // (128 * k))
+    scales, y, c0 = np.empty(n, np.float32), np.empty((n, 3 * k), np.int8), np.empty(n, np.float64)
+    for j in range(0, n, step):
+        b, scales[j:j + step] = quantize(_host(weight[j:j + step]))
+        y[j:j + step], c0[j:j + step] = stack_y(scheme, salt, w, b, noise, j)
+    return Operands(scales, y, c0)
 
 
 def ncp_tiles(scheme: Any, ctx: UnitContext, noise: tuple, a: np.ndarray, ops: Operands,
@@ -255,8 +268,7 @@ class _Run:
         """The resident operands, or ``weight``'s, prepared now (``weight_operands = "per-forward"``)."""
         if self.resident is not None:
             return self.resident[w]
-        ws = _host(weight)
-        return weight_operands(self.scheme, self.salt, w, ws, self.noise_of(w, *ws.shape))
+        return weight_operands(self.scheme, self.salt, w, weight, self.noise_of(w, *weight.shape))
 
     def gemm(self, w: int, x: Any, weight: Any, bias: Any) -> Any:
         ops = self.operands(w, weight)
@@ -363,7 +375,7 @@ def install(scheme: str, target: Target) -> Option:
     salt = Epoch.start(declared, roots, settings.beacon or bytes(32)).salt
     run = _Run(s, entry, settings, roots, salt)
     if settings.weight_operands == "resident":
-        run.resident = {w: weight_operands(s, salt, w, _host(layer.weight), run.noise_of(w, *shapes[w]))
+        run.resident = {w: weight_operands(s, salt, w, layer.weight, run.noise_of(w, *shapes[w]))
                         for w, layer in enumerate(layers)}
     h = target.hooks(entry)
     for w, layer in enumerate(layers):

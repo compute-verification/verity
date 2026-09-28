@@ -229,9 +229,23 @@ weights they read, sampled proofs commits what the model computed) and uninstall
 `engine/hooks.py` tagged with its option.  The protocol logic is `verity_pouw`, `verity_pous` and `verity_sampled_proofs`';
 the adapters (`pouw.py`, `pous.py`, `sampled_proofs.py`) are thin.  A Commit with an option its Program does not describe
 writes its verdict with `protocols.of_record = false`.  PoUW's settings are `beacon` (hex, at least 32 bytes),
-`retain_steps`, `transcript_dir` and `weight_operands` (`resident`, the default, prepared at install; or `per-forward`,
-from the weight each call is handed, which POUS requires); it executes `ncp-v1` and `ncp-v1-shift24` on the host in numpy,
-and its placeholders are listed in its `info()`.
+`retain_steps`, `transcript_dir` and `weight_operands`. `weight_operands` is `per-forward` by default, formed from the
+weight each call is handed; POUS requires this. The alternative, `resident`, is an opt-in: it is prepared at install and
+kept, a weight-derived copy of 3 B per weight (about 205 GB at 70B), so POUS refuses it. A `per-forward` call holds the
+formed operands of the one layer it executes (3 B per weight of that layer: 1.41 GB for a 70B gate_up), plus under
+`FORM_BYTES` (256 MiB) of host work. PoUW executes `ncp-v1` and `ncp-v1-shift24` on the host in numpy, and its
+placeholders are listed in its `info()`.
+
+**PoUW is not auditable yet.**
+
+- There is one epoch per install, with no epoch rotation.
+- Activation rows are kept only in memory, for the last `retain_steps` units (0 by default), and are never persisted.
+- There is no opener for a drawn tile.
+- The transcript's `leaves` grow without bound for the life of the install: 32 B per 16×16 tile, about 0.84 MB per
+  token at 70B.
+
+The check, and the options with their costs, are in the research store at
+`/cursor/stores/bc-b729c175-2ef6-418e-98fe-10896709028b/internal/pouw-mvp/deployment-audit-315-check.md`.
 
 ## Running
 

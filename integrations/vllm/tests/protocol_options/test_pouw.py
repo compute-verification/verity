@@ -151,11 +151,25 @@ def test_the_executor_is_the_schemes_reference_bit_for_bit():
     assert block.tolist() == s.useful(ctx, noise, ops, checked)
 
 
+def test_weight_operands_formed_in_blocks_equal_one_block(monkeypatch):
+    rng, s = _rng(5), get("ncp-v1")
+    w = rng.standard_normal((N, K), np.float32)
+    ctx = UnitContext(b"\x33" * 32, Matmul(0, Shape(16, K, N), 2), b"", b"\x44" * 32)
+    noise = s.noise(ctx)
+    whole = pouw.weight_operands(s, ctx.salt, 2, w, noise)
+    monkeypatch.setattr(pouw, "FORM_BYTES", 128 * K * 7)                  # 7 rows a block, the last one short
+    blocks = pouw.weight_operands(s, ctx.salt, 2, w, noise)
+    for got, want in ((blocks.scales, whole.scales), (blocks.y, whole.y), (blocks.c0, whole.c0)):
+        assert got.dtype == want.dtype and np.array_equal(got, want)
+    b, _ = pouw.quantize(w)
+    assert np.array_equal(whole.y, pouw.stack_y(s, ctx.salt, 2, b, noise)[0])
+
+
 def test_resident_operands_are_prepared_at_install_and_ignore_the_handed_weight():
     rng = _rng(4)
     w = rng.standard_normal((N, K), np.float32)
     model = Model(w)
-    with PO.install(model, _serve("pouw:ncp-v1")) as comp:
+    with PO.install(model, _serve("pouw:ncp-v1", settings={"pouw": {"beacon": BEACON, "weight_operands": "resident"}})) as comp:
         assert comp.get("pouw").info()["weight_operands"] == "resident"
         x = rng.standard_normal((16, K), np.float32)
         other = types.SimpleNamespace(weight=rng.standard_normal((N, K), np.float32))
@@ -182,16 +196,17 @@ def _fake_pous(monkeypatch):
 
 
 def test_keeps_weight_copy_follows_weight_operands():
-    assert pouw.keeps_weight_copy("ncp-v1", _serve("pouw:ncp-v1"))
-    assert not pouw.keeps_weight_copy("ncp-v1", _serve("pouw:ncp-v1", settings={"pouw": {"weight_operands": "per-forward"}}))
+    assert pouw.Settings.of({}).weight_operands == "per-forward"
+    assert not pouw.keeps_weight_copy("ncp-v1", _serve("pouw:ncp-v1"))
+    assert pouw.keeps_weight_copy("ncp-v1", _serve("pouw:ncp-v1", settings={"pouw": {"weight_operands": "resident"}}))
     assert "one of resident, per-forward" in pouw.refusals("ncp-v1", _serve("pouw:ncp-v1", settings={"pouw": {"weight_operands": "x"}}))[0]
 
 
 def test_the_selector_refuses_pous_beside_resident_operands(monkeypatch):
     _fake_pous(monkeypatch)
     enabled = ("pouw:ncp-v1", "pous:band-chain/d12/v1")
-    assert any("keeps a weight-derived copy" in r for r in PO.refusals(_serve(*enabled)))
-    assert PO.refusals(_serve(*enabled, settings={"pouw": {"weight_operands": "per-forward"}})) == ()
+    assert any("keeps a weight-derived copy" in r for r in PO.refusals(_serve(*enabled, settings={"pouw": {"weight_operands": "resident"}})))
+    assert PO.refusals(_serve(*enabled)) == ()
 
 
 def test_under_pous_the_gemm_reads_the_weight_it_is_handed(monkeypatch):
