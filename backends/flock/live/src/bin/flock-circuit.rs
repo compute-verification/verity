@@ -33,7 +33,7 @@ use flock_live::{
 };
 use flock_prover::{pcs::Commitment, prover::{prove_fast_ligerito_from_witness_extra, prove_fast_ligerito_from_witness_extra_zk}};
 #[cfg(feature = "gpu")]
-use flock_live::gpu_circuit::HostSlot;
+use flock_live::gpu_circuit::HostSlots;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha512};
 
@@ -436,12 +436,13 @@ type Witness = (Vec<F128>, Vec<F128>, Vec<F128>, Vec<u8>);
 #[derive(Clone)]
 enum WitData {
     Host(Witness),
-    /// the device witness's inputs: every compression slot's input words, the hm96 slots (host slots), every unit's input words
+    /// the device witness's inputs: every compression slot's input words, the host slots (hm96, M1's mask slot, deep units)
+    /// packed as the device takes them, every unit's input words
     #[cfg(feature = "gpu")]
-    Dev(Vec<F128>, Vec<HostSlot>, Vec<F128>),
+    Dev(Vec<F128>, HostSlots, Vec<F128>),
     /// a cut template on the device: as `Dev` (the late words come from the host tail between the units' passes)
     #[cfg(feature = "gpu")]
-    DevCut(Vec<F128>, Vec<HostSlot>, Vec<F128>, Arc<dyn Fn(usize, usize) -> Vec<F128> + Sync + Send>),
+    DevCut(Vec<F128>, HostSlots, Vec<F128>, Arc<dyn Fn(usize, usize) -> Vec<F128> + Sync + Send>),
 }
 
 /// A rep's witness: for an honest prover on the GPU (`device`), the device witness's inputs (the compression slots' and the
@@ -473,14 +474,14 @@ fn witness(st: &Stmt, w: &Wit, device: bool, host_units: bool) -> (WitData, f64)
         let unit_inputs = || (0..st.blocks() * ur.count).into_par_iter().map(|x| (w.inputs)(x / ur.count, x % ur.count));
         if st.c.wires.iter().any(|x| x.dst.0 != st.c.sha_net && x.dst.0 != st.c.hm_net) {
             let inputs: Vec<F128> = unit_inputs().flatten_iter().collect();
-            return (WitData::DevCut(rows, host, inputs, w.inputs.clone()), t.elapsed().as_secs_f64());
+            return (WitData::DevCut(rows, HostSlots::pack(&host), inputs, w.inputs.clone()), t.elapsed().as_secs_f64());
         }
         if host_units {
             let ins: Vec<Vec<F128>> = unit_inputs().collect();
             host.extend(flock_live::gpu_circuit::host_slots(st, st.c.unit_net, &ins));
-            return (WitData::Dev(rows, host, Vec::new()), t.elapsed().as_secs_f64());
+            return (WitData::Dev(rows, HostSlots::pack(&host), Vec::new()), t.elapsed().as_secs_f64());
         }
-        return (WitData::Dev(rows, host, unit_inputs().flatten_iter().collect()), t.elapsed().as_secs_f64());
+        return (WitData::Dev(rows, HostSlots::pack(&host), unit_inputs().flatten_iter().collect()), t.elapsed().as_secs_f64());
     }
     #[cfg(feature = "gpu")]
     // a tail that returns the outputs (a chain of units, the tail's stages): the host converges every slot's inputs and computes
@@ -498,7 +499,7 @@ fn witness(st: &Stmt, w: &Wit, device: bool, host_units: bool) -> (WitData, f64)
         }
         host.extend(mask_slots());
         let inputs: Vec<F128> = ins[c.unit_net].iter().flatten().copied().collect();
-        return (WitData::Dev(rows, host, inputs), t.elapsed().as_secs_f64());
+        return (WitData::Dev(rows, HostSlots::pack(&host), inputs), t.elapsed().as_secs_f64());
     }
     let _ = (device, host_units);
     let mut ins = st.converge(&*w.inputs, &*w.rowin, &w.nets);

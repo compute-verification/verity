@@ -226,16 +226,49 @@ pub fn device_salts(key: &[u8; 32], nonce: u64, idx: &[i64]) -> Vec<u8> {
 /// A slot whose witness the host computed: its absolute F128 word offset and its z, a, b words.
 pub type HostSlot = (usize, Vec<F128>, Vec<F128>, Vec<F128>);
 
+/// Host slots as the device takes them (`host0`): each slot's absolute F128 word offset and word count, and every slot's z, a,
+/// b words back to back. Packed once per witness, so a rep hands the device pointers rather than a copy.
+#[derive(Clone, Default)]
+pub struct HostSlots {
+    pub at: Vec<i64>,
+    pub words: Vec<i32>,
+    pub zab: Vec<u64>,
+}
+
+impl HostSlots {
+    pub fn pack(slots: &[HostSlot]) -> Self {
+        let words: Vec<i32> = slots.iter().map(|s| s.1.len() as i32).collect();
+        let mut zab = vec![0u64; words.iter().map(|&w| 6 * w as usize).sum()];
+        let mut rest: &mut [u64] = &mut zab;
+        let mut dst = Vec::with_capacity(slots.len());
+        for &w in &words {
+            let (a, b) = std::mem::take(&mut rest).split_at_mut(6 * w as usize);
+            dst.push(a);
+            rest = b;
+        }
+        dst.into_par_iter().zip(slots.par_iter()).for_each(|(d, (_, z, a, b))| {
+            let w = z.len();
+            for (k, v) in [z, a, b].into_iter().enumerate() {
+                assert_eq!(v.len(), w, "a host slot's z, a and b are not one length");
+                for (o, x) in d[2 * k * w..2 * (k + 1) * w].chunks_exact_mut(2).zip(v) {
+                    (o[0], o[1]) = (x.lo, x.hi);
+                }
+            }
+        });
+        HostSlots { at: slots.iter().map(|s| s.0 as i64).collect(), words, zab }
+    }
+}
+
 /// Where a rep's witness comes from.
 pub enum CircuitSrc<'a> {
     /// The whole packed `(z, a, b)` from the host (any witness, a tampered one included).
     Host { z: &'a [F128], a: &'a [F128], b: &'a [F128] },
     /// A cut template: as `Device`, the units in two passes around `mid`.
-    DeviceCut { rows: &'a [F128], host: &'a [HostSlot], inputs: &'a [F128], mid: Mid<'a> },
+    DeviceCut { rows: &'a [F128], host: &'a HostSlots, inputs: &'a [F128], mid: Mid<'a> },
     /// Every compression slot's input words (`[blocks][slots per block][in_words]`, `Stmt::row_inputs`), the hm96 slots' witness
     /// (host slots), and every unit's input words (`[blocks][units per block][in_words]`): the honest witness, built on the device.
     /// With `inputs` empty, every unit slot is among the host slots (`deep_unit`).
-    Device { rows: &'a [F128], host: &'a [HostSlot], inputs: &'a [F128] },
+    Device { rows: &'a [F128], host: &'a HostSlots, inputs: &'a [F128] },
 }
 
 /// The unit's expanded circuit's rows as CSR and its level schedule: level 0 the input rows and the constant, a row one past its
@@ -434,7 +467,7 @@ pub fn prove_circuit(
     let mut wphase = [0f64; 3];
     let (mut hz, mut ha, mut hb): (*const u64, *const u64, *const u64) = (null(), null(), null());
     let (mut uin, mut hin): (*const u64, *const u64) = (null(), null());
-    let (mut h_at, mut h_words, mut h_zab): (Vec<i64>, Vec<i32>, Vec<u64>) = (Vec::new(), Vec::new(), Vec::new());
+    let mut host0: Option<&HostSlots> = None;
     let mut src = src;
     let mut mctx: Option<MidCtx<'_>> = None;
     if let CircuitSrc::DeviceCut { rows, host, inputs, mid } = src {
@@ -461,13 +494,7 @@ pub fn prove_circuit(
             }
             assert_eq!(rows.len(), st.blocks() * st.c.range_of(st.c.sha_net).count * st.c.nets[st.c.sha_net].1.in_words);
             hin = rows.as_ptr() as *const u64;
-            for (at, z, a, b) in host.iter() {
-                h_at.push(*at as i64);
-                h_words.push(z.len() as i32);
-                for v in [z, a, b] {
-                    h_zab.extend(v.iter().flat_map(|x| [x.lo, x.hi]));
-                }
-            }
+            host0 = Some(*host);
         }
     }
     let c = ChunkParams {
@@ -512,10 +539,10 @@ pub fn prove_circuit(
         h_level_off: t.hsched.level_off.as_ptr(),
         h_order: t.hsched.order.as_ptr(),
         h_inputs: hin,
-        n_host0: h_at.len() as i64,
-        host0_at: h_at.as_ptr(),
-        host0_words: h_words.as_ptr(),
-        host0_zab: h_zab.as_ptr(),
+        n_host0: host0.map_or(0, |h| h.at.len() as i64),
+        host0_at: host0.map_or(null(), |h| h.at.as_ptr()),
+        host0_words: host0.map_or(null(), |h| h.words.as_ptr()),
+        host0_zab: host0.map_or(null(), |h| h.zab.as_ptr()),
         u_range: t.u_range as i32,
         u_useful: unit.useful as i32,
         u_const: unit.const_pos as i32,
@@ -621,3 +648,21 @@ pub fn prove_circuit(
     (proof, commitment, phase, wphase, [h_setup, h_stage, t_decode.elapsed().as_secs_f64()])
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn host_slots_pack_as_the_device_reads_them() {
+        let f = |k: u64, n: usize| (0..n as u64).map(|i| F128::new(k * 1000 + 2 * i, k * 1000 + 2 * i + 1)).collect::<Vec<F128>>();
+        let slots: Vec<HostSlot> = vec![(7, f(1, 3), f(2, 3), f(3, 3)), (40, f(4, 1), f(5, 1), f(6, 1)), (9, vec![], vec![], vec![])];
+        let h = HostSlots::pack(&slots);
+        let mut want = Vec::new();
+        for (_, z, a, b) in &slots {
+            for v in [z, a, b] {
+                want.extend(v.iter().flat_map(|x| [x.lo, x.hi]));
+            }
+        }
+        assert_eq!((h.at, h.words, h.zab), (vec![7, 40, 9], vec![3, 1, 0], want));
+    }
+}
