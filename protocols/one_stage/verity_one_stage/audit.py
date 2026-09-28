@@ -5,7 +5,7 @@ drawn by the verifier's law (`Subset`, `Bernoulli`, or a `Stratified` law with o
 drawn and delta. It bounds wrong units and weights nothing: under `Subset(k)` a transcript with m wrong units passes with
 probability C(N - m, k) / C(N, k), and under the stratified law with prod_s C(n_s - m_s, k_s) / C(n_s, k_s). Except with
 probability delta, an accepted transcript has at most `bound()` wrong units, and at most `stratum_bounds()[t]` in template
-t: exact for `subset` and `stratified`, the linear relaxation for `bernoulli`.
+t: exact for `subset` and `stratified`, the linear relaxation for `bernoulli`. Applications read it through `consumers`.
 
 The record states the profile three ways, in the forms its recorded runs hold: `profile`, the profile's JSON (a stratified
 law's in its v0 form: the law's JSON with delta and the count drawn per template); `wrong_units`, its bounds; and

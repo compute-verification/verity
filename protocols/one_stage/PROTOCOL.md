@@ -59,6 +59,14 @@ size, independently across strata. `docs/sampling-strategies.md` has the analysi
   template's own bound. A template wrong in every unit is never missed. `subset:K` is one stratum and gets the same exact
   bound.
 
+## Consumers
+
+Applications read the profile, and it is neither of them (`consumers`). Each weights wrong units by what one costs it,
+through the profile's generic weighted bound (`IntegrityProfile.harm_bound`), at the profile's delta:
+
+- **Exfiltration security** (`exfiltration_bound`): wrong units weighted by their output bits, which the prover chose.
+- **Compute security** (`compute_bound`): wrong units weighted by their work, which the prover could have skipped.
+
 ## Partition
 
 `{"program": <SHA-512 of the program>, "query": {...}}`, digest `SHA-512("verity/partition/v1\0" ‖ canon(object))`. The
