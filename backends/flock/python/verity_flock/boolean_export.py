@@ -1191,7 +1191,7 @@ def template(reg: Registry, tname: str, tp: dict, T_range=None, cache: dict | No
     rid = "tpl-" + hashlib.sha256(json.dumps([tname, tp, T_range] + ([member] if member else []), sort_keys=True).encode()).hexdigest()[:16]
     base = {"id": rid, "template": tname, "params": tp}
     if tname.startswith(("Const32", "Const64")):
-        return dict(base, name=tname, kind="constant", **{"and": 0, "xor": 0, "not": 0}, children=[])
+        return dict(base, name=tname, kind="constant", bind="run", **{"and": 0, "xor": 0, "not": 0}, children=[])
     if tname in OPENED and GATHERS == "opening":
         return dict(base, name=tname, kind="commitment-opening", reason=OPENED[tname], children=[])
     if tname in NOT_LOWERED:
@@ -1424,7 +1424,8 @@ def _input_role(name: str) -> str:
 
 def _roles(g: dict, into: list[dict], tpl: dict[str, str], store: DefStore) -> dict:
     """A Call's parameters with their roles, as far as the program graph records them: a parameter another Call's output feeds
-    (``edges[].ports``) is ``activations`` (``constant`` from a constant Call); one a prescribed input feeds (``param_inputs``)
+    (``edges[].ports``) is ``activations`` (``constant`` from a constant Call: a run constant, the root body's, so the parameter
+    is bound ``run`` and no type holds its value); one a prescribed input feeds (``param_inputs``)
     takes the input's group (``weights``, ``prompt``, ``seed``, ``splits``, ``peers``). The Call's prescribed inputs are listed
     in ``inputs`` whether or not the graph says which parameter reads them."""
     dids = [g["spec"]] if g.get("spec") else list(g.get("definition_ids") or [])
@@ -1451,6 +1452,8 @@ def _roles(g: dict, into: list[dict], tpl: dict[str, str], store: DefStore) -> d
                        | {_input_role(i) for i in (pin or {}).get(name, {})})
         params.append({"name": name, "bits": w[0] if min(w) == max(w) else [min(w), max(w)], "roles": roles or None,
                        "from_calls": from_calls.get(name, {}), "from_inputs": (pin or {}).get(name, {}) if pin is not None else None})
+        if "constant" in roles:
+            params[-1]["bind"] = "run"
     inputs = [{"input": k, "role": _input_role(k), "reads": v} for k, v in sorted((g.get("prescribed_reads") or {}).items())]
     return {"params": params, "inputs": inputs, "param_roles_complete": pin is not None or not inputs,
             "param_roles": "exact (edges' ports and param_inputs)" if pin is not None else
