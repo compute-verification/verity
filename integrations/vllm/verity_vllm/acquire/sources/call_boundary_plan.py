@@ -134,6 +134,7 @@ class Plan:
     kernel_only: set[str] = field(default_factory=set)                    # Definitions over REFERENCE_LEAVES words per instance
     composition: dict[int, dict[str, int]] = field(default_factory=dict)  # engine step -> {request: token rows}: a global manifest's
     order: dict[str, str] = field(default_factory=dict)                   # workload request id -> `r<i>` (the binding map's)
+    by_index: dict[int, str] = field(default_factory=dict)               # workload index -> `r<i>` (a warm-up request stands in by index)
     identities: int = 0
     uncovered: list[str] = field(default_factory=list)
     bytes_per_token: int = 0
@@ -191,6 +192,7 @@ def plan(manifest: Mapping[str, Any], ids: Sequence[Mapping[str, Any]], *roots: 
     if steps and isinstance(steps[0], Mapping):
         p.composition = {int(e["engine_step"]): {str(m["request_id"]): int(m["rows"]) for m in e.get("members") or ()} for e in steps}
     p.order = {str(d["workload_request_id"]): str(d["request_id"]) for d in manifest.get("requests_declared") or () if d.get("workload_request_id")}
+    p.by_index = {int(d["index"]): str(d["request_id"]) for d in manifest.get("requests_declared") or () if d.get("index") is not None}
     why = (f"a manifest of {ranks} ranks (the source serves one rank)" if ranks > 1 else
            f"a manifest of {len(requests)} requests without per-request components and composition"
            if len(requests) > 1 and (len(progs) != len(requests) or not p.composition) else None)
