@@ -121,3 +121,84 @@ def test_no_packages_import():
             if re.match(r"^\s*(from|import)\s+(verity\w*|packages|veritor|backends|frontends|integrations)\b", line):
                 offenders.append(f"{p.relative_to(src)}: {line.strip()}")
     assert not offenders, offenders
+
+
+STUB_SUBMIT = """\
+import json, sys
+open(sys.argv[0] + '.argv', 'w').write(json.dumps(sys.argv[1:]))
+a = sys.argv
+if '--gpus' in a and a[a.index('--gpus') + 1] == '9':
+    print(json.dumps({'refused': 'vy-nebius-2: not 9 GPUs'})); sys.exit(3)
+print(json.dumps({'node': 'vy-nebius-2', 'machine': 'vy-nebius-2', 'why': 'stub', 'job': {}, 'wrap': ['env', 'HELD=1'],
+                  'workload_wrap': ['lease', '--']}))
+"""
+
+
+def _queue_source(tmp_path) -> Path:
+    pkg = tmp_path / "src-tree" / "tools" / "cluster" / "src" / "cluster"
+    pkg.mkdir(parents=True)
+    (pkg / "__init__.py").write_text("")
+    (pkg / "submit.py").write_text("")
+    (pkg / "__main__.py").write_text(STUB_SUBMIT)
+    return tmp_path / "src-tree"
+
+
+def test_run_queue_places_the_job_then_launches_on_the_placed_machine_with_its_wrapper(tmp_path, monkeypatch, capsys):
+    """`research run --queue`: the declared resources reach `cluster submit` from the --source tree, and the run launches as an
+    `--on` run on the machine it names, carrying the wrappers, its kind and its phase; the runner's --timeout is the job's time
+    plus, for a gpu phase, the time the lease may take to be granted."""
+    from research import cli, remote
+    src, seen = _queue_source(tmp_path), []
+
+    def launch(**kw):
+        seen.append(kw)
+        return {"phase": "launched", "pod_id": "p1", "remote_run_dir": "/r", "launch": {"runner_pid": 1}}
+    monkeypatch.setattr(remote, "launch", launch)
+    monkeypatch.setenv("RESEARCH_LANE", "lane-x")
+    base = ["run", "--runs-dir", str(tmp_path / "runs"), "--queue", "--source", str(src), "--project", "verity"]
+    assert main([*base, "--mem-gb", "64", "--gpus", "1", "--max-min", "10", "--preemptible", "--quiet", "--class", "bench",
+                 "--kind", "vllm.commit", "--", "true"]) == 0
+    assert "the queue places run" in capsys.readouterr().err
+    argv = json.loads((src / "tools" / "cluster" / "src" / "cluster" / "__main__.py.argv").read_text())
+    assert argv[:2] == ["submit", str(src / "tools" / "cluster" / "descriptions" / "nebius.toml")]
+    for k, v in (("--project", "verity"), ("--submitter", "lane-x"), ("--class", "bench"), ("--gpus", "1"), ("--mem-gb", "64"),
+                 ("--max-s", "600"), ("--preempt", "requeue")):
+        assert argv[argv.index(k) + 1] == v, k
+    assert "--quiet" in argv
+    [kw] = seen
+    assert kw["machine_name"] == "vy-nebius-2" and kw["queue"]["wrap"] == ["env", "HELD=1"] and kw["mem_gb"] is None
+    assert kw["queue"]["workload_wrap"] == ["lease", "--"] and (kw["queue"]["kind"], kw["queue"]["phase"]) == ("vllm.commit", "gpu")
+    assert kw["harness_args"][kw["harness_args"].index("--timeout") + 1] == str(600 + 60 * cli.GPU_WAIT_MIN)
+    assert main([*base, "--mem-gb", "8", "--max-min", "10", "--", "true"]) == 0
+    assert seen[-1]["queue"]["kind"] == "adhoc" and seen[-1]["queue"]["phase"] == "cpu"
+    assert seen[-1]["harness_args"][seen[-1]["harness_args"].index("--timeout") + 1] == "600"
+    assert main([*base, "--mem-gb", "8", "--max-min", "10", "--phase", "cpu", "--gpus", "1", "--", "true"]) == 2
+    assert "a cpu phase takes no --gpus" in capsys.readouterr().err
+    assert main([*base, "--mem-gb", "8", "--max-min", "10", "--phase", "gpu", "--", "true"]) == 2
+
+    assert main([*base, "--mem-gb", "8", "--gpus", "9", "--max-min", "1", "--", "true"]) == 3
+    assert "the queue refuses the job: vy-nebius-2: not 9 GPUs" in capsys.readouterr().err
+    assert len(seen) == 2
+
+
+def test_run_queue_needs_source_memory_and_a_longest_time(tmp_path, capsys):
+    base = ["run", "--runs-dir", str(tmp_path / "runs"), "--queue", "--project", "verity"]
+    assert main([*base, "--mem-gb", "8", "--max-min", "1", "--", "true"]) == 2
+    assert "--source GITDIR" in capsys.readouterr().err
+    src = _queue_source(tmp_path)
+    assert main([*base, "--source", str(src), "--max-min", "1", "--", "true"]) == 2
+    assert "--mem-gb" in capsys.readouterr().err
+    assert main([*base, "--source", str(src), "--mem-gb", "8", "--", "true"]) == 2
+    assert "--max-min M or --timeout" in capsys.readouterr().err
+    assert main([*base, "--source", str(tmp_path), "--mem-gb", "8", "--max-min", "1", "--", "true"]) == 3
+    assert "no tools/cluster" in capsys.readouterr().err
+    assert not (tmp_path / "runs").exists() or not list((tmp_path / "runs").iterdir())
+
+
+def test_a_tool_package_that_predates_the_queue_is_told_apart(tmp_path):
+    from research import remote
+    pkg = tmp_path / "research"
+    pkg.mkdir()
+    (pkg / "remote.py").write_text("def tool_identity(): pass\n")
+    assert remote.knows_queue(None) and remote.knows_queue(Path(remote.__file__).parent)
+    assert not remote.knows_queue(pkg) and not remote.knows_queue(tmp_path / "nope")

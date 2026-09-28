@@ -88,6 +88,9 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
 - `tools/circuit_check/`: `circuit-check`, the property checks every circuit passes (see Circuits below).
 - `tools/check/`: `check`, the one repository check a merge requires (see Checking and merging below).
 - `tools/lean/`: the Lean audit (`audit.py`), which `check` runs on every Lake package (see Lean below).
+- `tools/cluster/`: `cluster`, the shared machines' description, a pure per-node planner and the allocation ledger. Stdlib
+ only, imports neither `verity` nor `research`. On vy-nebius-2 its agent runs in shadow mode (read-only, beside
+ `gpu-lease`); nothing it decides is carried out yet (its `README.md`).
 - `backends/`, `frontends/`, `integrations/`, `benchmarks/`: created when a
   component has real code; there is no `frontends/` yet. `backends/flock`
   (`verity_flock`) is C-Flock, the backend in active development; its verifier
