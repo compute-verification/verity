@@ -1,5 +1,24 @@
 # Changelog: `verity_numerical` (the bench renderers and their rules)
 
+## 2026-09-28: Table 1 recognises M0's typed circuit statement (`verity/flock-circuit/types`)
+
+This follows red-team-flock-3's Q4, for #281's `circuit_bench` results.
+- **Its own row:** `views.FLOCK_CIRCUIT_TYPED_CONFIG` has a Table 1 row naming the id and its pin, and `configuration_of`
+  recognises it. The row names the verifier that accepted the sessions: today the Rust live verifier, with no Lean replay.
+- **"Computes its type" is gated:** nothing says it while `views.TYPED_C2` is false. C2 is met when #277 and #268 are on main
+  and the typed path calls #268's checks.
+- **Never merged with flat:** different statement ids are never merged.
+  - A typed result has its own result key.
+  - The workload headline and Table 2 leave typed cells out. A typed result is listed as rejected with the reason
+    `views.TYPED_NOT_IN_TABLE2`, and it stays out even with `TYPED_C2` set.
+  - Once C2 holds, a follow-up gives typed statements Table 2 lines of their own.
+- **ANDs, results and verifier:** `views.circuit_facts` (a result's `circuit` field) gives, for both circuit statements:
+  - ANDs per instance, labelled "tensor-core units + tail", or "units only" for a flat result recorded before #281 without
+    `ands_counted`;
+  - rows per instance, with the rows' SHA-512 and hm96 noted as "proved but not counted";
+  - the accepting verifier;
+  - a unit draw, when a result has one: with `units_per_vu` 1, it counts instances.
+
 ## 2026-09-27: a cell's `domain` is its statement's, not a hardcoded `finite`
 
 - **The bug:** every writer recorded `workload_fingerprint.domain: finite`, whatever its statement covered, and `finite` is not a
