@@ -7,8 +7,9 @@
 // 2^type_log columns. The witness is built on the device: the compressions from their host-given inputs (the BLAKE3 witness
 // kernel, then scattered to their slots), the units by fc_unit_witness (32 units per CTA, bit-sliced: a row is one u32
 // over the 32 units; rows in level order, several warps per level; then a 32x32 bit transpose per 32 rows into each
-// unit's slot), the mask slot's free cells left zero (the no-op mask hook). With host_z the whole witness comes from the
-// host instead (a tampered witness).
+// unit's slot), the mask slot's free cells left zero (the no-op mask hook) or, under M1's masking, given as host slots like
+// the hm96 slots. With host_z the whole witness comes from the host instead (a tampered witness). Under M1 (zk_on) level 0's
+// commitment is fc_commit_l0_zk's and the Ligerito lane phase carries level 0's hiding (ligerito_zk.cuh).
 
 #define FC_MAX_TYPES 12
 #define FC_MAX_RANGES 32
@@ -54,6 +55,12 @@ typedef struct {
     const uint8_t* hm96_prefixes;
     const uint64_t* hm96_tables;
     long long hm96_level0_leaves;   // the level-0 tree's leaves: salt-stream id 0 is refused for a tree of any other size
+    // M1 (lane flock-zk, backends/flock/live/PROTOCOL.md §8), zk_on: Ligerito level 0's hiding. The level-0 codeword has the
+    // witness's 2^initial_k lanes and 4 uniform ones (zk_extra: 4 lanes of L words), every lane's message padded by
+    // (X_L + c)·μ (zk_pads: t_pad words per lane, lane-major, the witness's lanes first); the lane phase folds rep zk_rep's pair
+    // (ligerito_zk.cuh); the proof stream ends in the zk section (fc_write_zk). zk_tamper: the negatives (LigZk::tamper).
+    int zk_on; int zk_rep; int zk_t_pad; int zk_tamper;
+    const uint64_t* zk_pads; const uint64_t* zk_extra;
 } FlockCircuitParams;
 
 // Salts of leaves idx[0..n) of tree `nonce` under `key`, expanded on the device (192 bytes each, in order): a test vector against
@@ -385,4 +392,87 @@ static int fc_fold(const FlockCudaProveParams* P, const FlockCircuitParams* N, c
     CK(cudaStreamSynchronize(0));
     for (int t = 0; t < N->n_types; t++) ffi_free(d_base[t]);
     return 0;
+}
+
+// ---- M1 (lane flock-zk): level 0's commitment with its hiding, and the zk section of the proof stream -------------------
+
+// One batch of level-0 lanes before the transform: lane `lane`'s message (src at pos·s_pos + lane·s_lane, zero past l) plus its
+// padding, c·μ at [0, t_pad) and μ at [l, l + t_pad) (verity's flock-zk patch, zk::lane_codeword; c = x).
+__global__ void fc_zk_lane_input(F128* __restrict__ cw, const F128* __restrict__ src, long long s_pos, long long s_lane, int log_lanes,
+                                 long long n, long long l, const F128* __restrict__ pads, int t_pad) {
+    long long i = blockIdx.x * (long long)blockDim.x + threadIdx.x;
+    if (i >= (n << log_lanes)) return;
+    const long long pos = i >> log_lanes;
+    const int lane = (int)(i & ((1 << log_lanes) - 1));
+    F128 v = pos < l ? src[pos * s_pos + lane * s_lane] : F128{0, 0};
+    const F128* p = pads + (size_t)lane * t_pad;
+    if (pos < t_pad) v = f128_add(v, ghash_mul_karatsuba(F128{2, 0}, p[pos]));
+    if (pos >= l && pos < l + t_pad) v = f128_add(v, p[pos - l]);
+    cw[i] = v;
+}
+
+// Leaves of w + 4 lanes: the witness's w lanes, then the 4 extra ones.
+__global__ void fc_zk_interleave(F128* __restrict__ out, const F128* __restrict__ cw_w, const F128* __restrict__ cw_x, int w, long long n) {
+    long long i = blockIdx.x * (long long)blockDim.x + threadIdx.x;
+    if (i >= n * (w + 4)) return;
+    const long long pos = i / (w + 4);
+    const int lane = (int)(i - pos * (w + 4));
+    out[i] = lane < w ? cw_w[pos * w + lane] : cw_x[pos * 4 + lane - w];
+}
+
+// commit_zk on the device. The padding's upper half is not zero, so the transform runs every layer (M0's commit skips layer 0
+// by reading the message replicated); the witness's lanes and the extra ones go as two batches (the NTT's lane tiles are powers
+// of two), then are interleaved. The pads and extra lanes stay on the device for the lane phase (the caller frees them).
+static int fc_commit_l0_zk(const FlockCudaProveParams* P, const FlockCircuitParams* N, int log_n, const F128* df, F128** d_pads,
+                           F128** d_extra, F128** d_cw0, uint8_t** d_tree0, long long* l0_bl, int* l0_ni, std::vector<MHash>& l0_cap) {
+    const int k = P->initial_k, w = 1 << k, t_pad = N->zk_t_pad;
+    const int k_code = (log_n - k) + P->log_inv_rates[0];
+    const long long n = 1LL << k_code, l = 1LL << (log_n - k);
+    if (t_pad <= 0 || t_pad > l) { printf("FFI circuit: zk t_pad %d outside (0, %lld]\n", t_pad, l); return 204; }
+    CK(ffi_malloc(d_pads, (size_t)(w + 4) * t_pad * sizeof(F128)));
+    CK(ffi_malloc(d_extra, (size_t)4 * l * sizeof(F128)));
+    CK(cudaMemcpy(*d_pads, N->zk_pads, (size_t)(w + 4) * t_pad * sizeof(F128), cudaMemcpyHostToDevice));
+    CK(cudaMemcpy(*d_extra, N->zk_extra, (size_t)4 * l * sizeof(F128), cudaMemcpyHostToDevice));
+    const TwiddleTable* tt;
+    F128* d_tw;
+    CK(get_cached_twiddles(k_code, tt, d_tw));
+    F128 *cw_w, *cw_x;
+    CK(ffi_malloc(&cw_w, (size_t)n * w * sizeof(F128)));
+    CK(ffi_malloc(&cw_x, (size_t)n * 4 * sizeof(F128)));
+    fc_zk_lane_input<<<(unsigned)((n * w + 255) / 256), 256>>>(cw_w, df, w, 1, k, n, l, *d_pads, t_pad);
+    fc_zk_lane_input<<<(unsigned)((n * 4 + 255) / 256), 256>>>(cw_x, *d_extra, 1, l, 2, n, l, *d_pads + (size_t)w * t_pad, t_pad);
+    CK(cudaGetLastError());
+    launch_ntt(cw_w, d_tw, *tt, 0, k_code, w);
+    launch_ntt(cw_x, d_tw, *tt, 0, k_code, 4);
+    CK(cudaGetLastError());
+    CK(ffi_malloc(d_cw0, (size_t)n * (w + 4) * sizeof(F128)));
+    CK(ffi_malloc(d_tree0, (size_t)(2 * n - 1) * FLOCK_HB));
+    fc_zk_interleave<<<(unsigned)((n * (w + 4) + 255) / 256), 256>>>(*d_cw0, cw_w, cw_x, w, n);
+    CK(cudaGetLastError());
+    launch_merkle((const uint8_t*)*d_cw0, *d_tree0, n, (w + 4) * 16);
+    CK(cudaStreamSynchronize(0));
+    ffi_free(cw_w);
+    ffi_free(cw_x);
+    *l0_bl = n;
+    *l0_ni = w + 4;
+    l0_cap = merkle_cap_layer_device(*d_tree0, (size_t)n, stratified_cap_depth(stratified_depths((size_t)P->queries[0], (uint32_t)k_code)));
+    return 0;
+}
+
+// The proof stream's zk section (after the Ligerito section): e, T', ybar; the lane phase's record (the pre-OOD target, (β, y)
+// per OOD sample, the lane challenges, ρ, level 0's queries); lincheck's comb folded to 2^k_skip words. flock_live::gpu reads it.
+static void fc_write_zk(FfiWriter& W, const LigZk& zk, const std::vector<F128>& comb) {
+    auto f256 = [&](F256Ext v) { W.f128(v.c0); W.f128(v.c1); };
+    f256(zk.e[0]); f256(zk.e[1]); f256(zk.t_prime);
+    W.u64(zk.ybar.size());
+    for (auto& y : zk.ybar) f256(y);
+    W.f128(zk.target);
+    W.u64(zk.ood.size());
+    for (auto& o : zk.ood) { W.f128(o.first); W.f128(o.second); }
+    W.u64(zk.challenges.size());
+    for (auto& c : zk.challenges) f256(c);
+    f256(zk.rho[0]); f256(zk.rho[1]);
+    W.u64(zk.queries0.size());
+    for (size_t q : zk.queries0) W.u64(q);
+    W.f128s(comb);
 }
