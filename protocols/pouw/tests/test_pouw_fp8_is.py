@@ -389,18 +389,19 @@ def test_d3_family_round8_reproduces_the_strike(law, route, copy):
 
 def round9_units(law: str, route: str, copy: bool, sums: str, sass: bool) -> tuple[Fraction, Fraction]:
     """Round 9's per-element trace from §14's figures (not from `PRICES`): FADD 32.11, half2 36, HMNMX2 64, LOP3 64,
-    F2FP 64, HMUL2 a·K 32.17, HADD2.F32 64, the four-code unpack 48 per code, the f16 pack 32 per element; the f16 -> e4m3
-    cast 64 per code (Round 8, F2FP + PRMT), or 32 with ``sass`` (ptxas 12.9's PRMT-free pair), when the amplitude's two
-    maxima are also one VHMNMX (32 per element)."""
+    F2FP 64, HMUL2 a·K 32.17, HADD2.F32 64, the four-code unpack 48 per code, the f16 pack 32 per element, the f16 -> e4m3
+    cast 64 per code (Round 8, F2FP + PRMT).  With ``sass`` (the PRMT-free code ptxas emits), the unpack and the cast are
+    32 per code and the amplitude's two maxima one VHMNMX (32 per element)."""
     fadd, half, lop = Fraction(3211, 100), Fraction(18), Fraction(32)
     noise = lop + 3 * half                                    # field, centre, scale, s = e + e∘P
     if sums == "f32":
         blocks, widen = 3 * (64 + fadd) + 3 * 32, Fraction(64)
     else:
         blocks, widen = 3 * half + 3 * (32 if sass else 64), Fraction(0)
-    act = ((48 if route == "xq" else 32) + Fraction(3217, 200) + half + (64 + fadd) / 256
+    unpack = 32 if sass else 48
+    act = ((unpack if route == "xq" else 32) + Fraction(3217, 200) + half + (64 + fadd) / 256
            + (32 if law == "d3m" else 0) + (32 if sass else 64) + widen + noise + blocks)
-    weight = noise + blocks + (0 if copy else 48 + widen)
+    weight = noise + blocks + (0 if copy else unpack + widen)
     return act, weight
 
 
@@ -440,10 +441,12 @@ def test_round9_gamma_at_16384_32768_65536(cell):
 
 
 def test_round9_sass_best_cell_at_16384():
-    """With ptxas 12.9's cast and max, D-3s on Y16 with f16 sums and the copy clears 16,384³ at FADD 32.11 by 0.5%."""
+    """With ptxas's PRMT-free cast and unpack and one VHMNMX, D-3s with f16 sums and the copy clears 16,384³ at FADD
+    32.11 by 0.5%, on either route."""
     s = get("fp8-is-h100-d3s-v0-y16-f16", prices="round9-sass")
     assert f"{float(100 * gamma_at(s, 16384)):.3f}" == "0.995"
     assert f"{float(100 * gamma_at(s, 32768)):.3f}" == "0.709"
+    assert get("fp8-is-h100-d3s-v0-f16", prices="round9-sass").forming.units == s.forming.units   # X_q = Y16
 
 
 def test_one_price_row_prices_forming_and_core():

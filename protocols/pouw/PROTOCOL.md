@@ -198,10 +198,11 @@ wref      ⌈m·n·(32·T + p_FADD·n_R) + f_A·m·k + f_B·n·k⌉: an atom wor
     at 16,384³**; the best cell, `d3s-v0-y16-f16`, is 1.218%. Track D's **D-4** (`mnk_min=32768`, so
     32,768 ≤ m, k, n ≤ 65,536) at 32,768³ clears on `y16` with the copy (0.992%) and in every `f16` cell (0.821–0.853%),
     and at 65,536³ in every `d3s` cell (0.622–0.739%).
-  - **`round9-sass`** is Round 9 with ptxas 12.9's code for two forms Round 9 did not time: the four-code f16 → e4m3
-    cast is two `F2FP.SATFINITE.E4M3.F16.UNPACK_B_MERGE_C` with no PRMT (ptxas 12.4, Round 9's, adds one PRMT per
-    pair), and the amplitude's two maxima are one `VHMNMX` per register with |·| folded, assumed at HMNMX2's 64 until
-    timed. Then `d3s-v0-y16-f16` gives 0.995% at 16,384³ and 0.709% at 32,768³.
+  - **`round9-sass`** is Round 9 with the code ptxas emits for three forms whose Round 9 kernels differed from the honest
+    schedule's: the four-code X_q unpack is two `UNPACK_B`, the second reading `.H1`, with no PRMT (ptxas 12.4 and 12.9);
+    the four-code f16 → e4m3 cast is two `F2FP.SATFINITE.E4M3.F16.UNPACK_B_MERGE_C` with no PRMT (ptxas 12.9; 12.4 adds
+    one per pair); and the amplitude's two maxima are one `VHMNMX` per register with |·| folded, assumed at HMNMX2's 64
+    until timed. Then `d3s-v0[-y16]-f16` gives 0.995% at 16,384³ and 0.709% at 32,768³ on either route.
 - **`d3-v0`** (`D3`), superseded by D-3m: repaired C-2, track D's D-3. It keeps C-2's three NCP blocks and row-RMS
   noise, and adds partner-max full-cell noise, s_l·v_l with s_l the larger E4M3 cell of the entry and of the entry that
   reads the same noise in block 2, which fixes X-C2-B1. Weight streams are keyed per column (X-D2-5).

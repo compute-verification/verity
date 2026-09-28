@@ -60,10 +60,11 @@ CVT_UNITS = 16
 #: and 8 assumed was one two-source HADD2.F32, and which Round 9 found has no such form on sm_90 (a widen of e plus an FADD),
 #: with ``widen_once`` the widen of h shared by the three blocks; ``unpack`` two E4M3 codes to f16 (Round 9: 48 per code in
 #: the four-code form); ``f2fp`` two codes cast from f32; ``f2fp_f16`` two codes cast from f16 (F2FP.F16 + PRMT, Round 8);
-#: ``hmul2_imm`` HMUL2 by an immediate (split, Round 9 §14.6).  ``round9-sass`` is Round 9 with ptxas 12.9's code for two
-#: forms Round 9 did not time: the four-code f16 -> e4m3 cast is two F2FP.SATFINITE.E4M3.F16.UNPACK_B_MERGE_C with no
-#: PRMT (``f2fp_f16`` at F2FP's class price, 64), and D-3's amplitude max is one VHMNMX per register with |.| folded
-#: (``max3``, assumed at HMNMX2's 64 until timed).
+#: ``hmul2_imm`` HMUL2 by an immediate (split, Round 9 §14.6).  ``round9-sass`` is Round 9 with the code ptxas emits for
+#: three forms whose Round 9 kernels differed from the honest schedule's: the four-code X_q unpack is two UNPACK_B, the
+#: second reading ``.H1`` (no PRMT; ptxas 12.4 and 12.9), so ``unpack`` is 64; the four-code f16 -> e4m3 cast is two
+#: F2FP.SATFINITE.E4M3.F16.UNPACK_B_MERGE_C with no PRMT (ptxas 12.9; 12.4 adds one per pair), so ``f2fp_f16`` is 64;
+#: and D-3's amplitude max is one VHMNMX per register with |.| folded (``max3``, assumed at HMNMX2's 64 until timed).
 PRICES: dict[str, dict[str, Fraction]] = {
     "round7": {"fadd": Fraction(67, 2), "half2": Fraction(401, 10), "hmnmx2": Fraction(401, 10), "int": Fraction(64),
                "f2fp": Fraction(667, 10), "f2fp_f16": Fraction(667, 5), "unpack": Fraction(667, 10),
@@ -77,7 +78,7 @@ PRICES: dict[str, dict[str, Fraction]] = {
                "block_f32": Fraction(64) + Fraction(3211, 100), "widen_once": Fraction(64), "f16pack": Fraction(64),
                "hmul2_imm": Fraction(3217, 100)},
 }
-PRICES["round9-sass"] = {**PRICES["round9"], "f2fp_f16": Fraction(64), "max3": Fraction(64)}
+PRICES["round9-sass"] = {**PRICES["round9"], "unpack": Fraction(64), "f2fp_f16": Fraction(64), "max3": Fraction(64)}
 DEFAULT_PRICES = "round9"
 
 
@@ -878,8 +879,8 @@ class FP8IS:
                 f"forming layer {forming.name}: DistinctLive is refuted for fpncp-v0 (X-D1-1, X-C2-B1) and d2-draft "
                 "(X-D2-4, X-D2-5), and claimed for the D-3 family at r = 1 (the D-3m strike, Phase 17f); γ_0 is "
                 "withheld until it is certified",
-                f"prices: {prices} (PRICES); Round 9 measures every class the D-3 family's trace uses except the "
-                "f16 -> e4m3 cast, whose PRMT-free four-code form is untimed (Round 8's pair was merged by ptxas)",
+                f"prices: {prices} (PRICES); round9-sass's VHMNMX rate is assumed, and its PRMT-free cast and unpack "
+                "are counted from ptxas's SASS at Round 9's class prices, untimed in the honest kernel's form",
             ),
             parameters=(("mnk_min", mnk_min), ("tile_m", tile[0]), ("tile_n", tile[1]), ("blocks", forming.blocks),
                         ("seeded", int(forming.seeded)), *forming.parameters),
