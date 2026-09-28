@@ -50,7 +50,7 @@ class GumbelTopPTokenSelectRule(OpRule):
     Input per event: `SplitsFor_v1(|live(t)|, num_SMs)`; a literal S is not a policy and not a geometry the Program may assume) unless
     `splits` is None and `S` is a launched split count: the single-request constant."""
     modes = frozenset({"profile"})
-    info = RuleInfo("GumbelTopPTokenSelect[vllm]", 1, "op-binding",
+    info = RuleInfo("GumbelTopPTokenSelect[vllm]", 2, "op-binding",
                     applies_to="vllm_iface.gumbel_topp_token_select(Tensor logits, Tensor seed, float temperature, float top_p, int pos, Tensor? splits, int? S=None) -> Tensor",
                     preconditions=("logits is a bf16 value collection [.., V]", "seed is a 1-element 64-bit value collection (a Program input)",
                                    "temperature is a static float > 0 (0 is greedy: TokenSelect_v1, not this rule)", "0 < top_p <= 1 static",

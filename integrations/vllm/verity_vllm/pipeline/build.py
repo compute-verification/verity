@@ -115,7 +115,7 @@ SAMPLERS_BOUND = {"greedy": "ArgmaxTokenSelect_v1 (aten.argmax over the bf16 log
                   # INPUT of the Program; temperature / top_p / pos are constants; S = SplitsFor_v1(|live(t)|, num_SMs) is a DERIVED input
                   # (`splits`, request-owned, one entry per sampling event; `sampler_geometry`), or the constant SplitsFor_v1(1, num_SMs)
                   # of a single-request workload -- the 6th operand, never a static.
-                  "stochastic": "GumbelTopPTokenSelect[vllm]_v1 (vllm_iface.gumbel_topp_token_select -> GumbelTopPTokenSelect_v1{V}; seed + derived S Program inputs)"}
+                  "stochastic": "GumbelTopPTokenSelect[vllm]_v2 (vllm_iface.gumbel_topp_token_select -> GumbelTopPTokenSelect_v1{V}; seed + derived S Program inputs, or seed input + constant S of a single-request workload)"}
 
 
 def declared_live_counts(reqs: list[dict]) -> list[int]:
@@ -138,25 +138,26 @@ def _cap_of(r: dict) -> int:
 def sampler_geometry(sampling: dict, target, LP: int | None = None, T: int | None = None) -> dict | None:
     """[R15 stoch; R16 coord M-0169] The launch geometry of the pinned stochastic sampler for this row, or the refusal (`unsupported`
     dict) when the policy has no Definition.  On success `sampling["splits"]` is "derived" (several requests) or the constant S (one
-    request, below) and `sampling["geometry"]` records the
-    RELATION -- {num_sms, relation SplitsFor_v1, live workload-derived, sampler_batch B, pipeline} -- and nothing per request, so every
-    component of a workload declares the same sampler applicability (GP-01 agreement by construction).
+    request, below) and `sampling["geometry"]` records the RELATION -- {num_sms, relation SplitsFor_v1, live workload-derived,
+    sampler_batch B, pipeline} -- and nothing per request, so every component of a workload declares the same sampler applicability
+    (GP-01 agreement by construction).
 
     vLLM d9105ea80 `apply_top_k_top_p` for p-only requests and a sampler batch <= 64 runs `_apply_topp_split` with
     S = splits_for(batch, num_sms) splits (the largest power of two S <= 32 with S * batch <= num_sms; vLLM's doubling loop); the masked
-    row's fp32 value can depend on S (the partials' summation order).  RULING M-0571 (3) / M-0169: S is a WORKLOAD-level DERIVED value --
-    S_t = SplitsFor_v1(|live(t)|, num_SMs), |live(t)| = the requests with a sampled logits row at engine step t (declared chronology and
-    verified EOS stops) -- and the request Program takes it as a request-owned INPUT `splits` (int32 [T+1], one entry per sampling event;
-    `vllm_meta.StochasticRequest`), the 6th operand of `GumbelTopPTokenSelect_v1{V}`.  The Program declares NO S and NO schedule: the
-    Match binds each event's entry to the split kernels' constexpr and checks the relation per engine step (GM-01 G6 'sampler
-    geometry'; `bench.stoch_recompute --build`).  R15's static S / declared-chronology schedule (`STOCH_DECLARED_CHRONOLOGY_S`) is gone:
-    a Program that declared S could only be right by assumption (every request runs to its cap).
+    row's fp32 value can depend on S (the partials' summation order).  RULING M-0571 (3) / M-0169, amended for single-request workloads
+    (below): S is a WORKLOAD-level DERIVED value -- S_t = SplitsFor_v1(|live(t)|, num_SMs), |live(t)| = the requests with a sampled
+    logits row at engine step t (declared chronology and verified EOS stops) -- and the request Program takes it as a request-owned
+    INPUT `splits` (int32 [T+1], one entry per sampling event; `vllm_meta.StochasticRequest`), the 6th operand of
+    `GumbelTopPTokenSelect_v1{V}`.  The Program declares NO S and NO schedule: the Match binds each event's entry to the split kernels'
+    constexpr and checks the relation per engine step (GM-01 G6 'sampler geometry'; `bench.stoch_recompute --build`).  R15's static S /
+    declared-chronology schedule (`STOCH_DECLARED_CHRONOLOGY_S`) is gone: a Program that declared S could only be right by assumption
+    (every request runs to its cap).
 
-    The ruling, AMENDED for single-request workloads (the research store records it): a workload of ONE request has |live(t)| = 1 at every
-    sampling event it has (a request that stops has no later event), so S = SplitsFor_v1(1, num_SMs) exactly, with no assumption about
-    the schedule.  Its Program takes S as a per-event CONSTANT (`sampling["splits"]` = that int; `Const32[S]` the select's 6th operand,
-    computed here from the target's SM count, never hard-coded) and has no `splits` input; the circuit then anchors S itself.  A workload
-    of several requests keeps the derived input above."""
+    The amendment for single-request workloads (the Project's decision record dates it): a workload of ONE request has |live(t)| = 1
+    at every sampling event it has (a request that stops has no later event), so S = SplitsFor_v1(1, num_SMs) exactly, with no
+    assumption about the schedule.  Its Program takes S as a per-event CONSTANT (`sampling["splits"]` = that int; `Const32[S]` the
+    select's 6th operand, computed here from the target's SM count, never hard-coded) and has no `splits` input; the circuit then
+    anchors S itself.  A workload of several requests keeps the derived input above."""
     from verity_vllm.program.registry.topp_split import SPLIT_MAX_BATCH, splits_for, splits_for_v1
     kind = sampling.get("kind")
     if kind != "stochastic":
