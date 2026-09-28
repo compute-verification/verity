@@ -80,7 +80,7 @@ constant's gate, 0 on the zero's, the plurality of its openings elsewhere), with
 Its hypotheses, past the session's inputs:
 * the circuit is in `rs`'s scope, `hscope : Layout.scopeOk c = true`: a check that runs on the parsed circuit, that the
   unit has only its leaf group, returns the outputs, has `unitLog ≤ 32`, reads only port bits among its inputs, and
-  has only `sha512/row/v1` rows (`v1Ports`: each port `v2 = false`, `bits = 16 · words`, `0 < chunks`).
+  has only `sha512/row/v1` rows (`v1Ports`: each port `v2 = false`, unsegmented, `bits = 16 · words`, `0 < chunks`).
   `Layout.scopeOk_spec` gives `rs`'s `h1`, `ho` and `PortReads`, `Layout.scopeOk_ports` gives `hHm`'s v1 rows;
   e2e-layout's `#eval` on the circuit prover's composed RoPE circuit returns `true`;
 * `hdec` (`DecodesOn`, R11b, at the law's draws only), open: owner e2e-exec (the framing decoder, `wr` as the server's

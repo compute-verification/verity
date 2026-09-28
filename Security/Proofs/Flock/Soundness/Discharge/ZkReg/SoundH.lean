@@ -71,7 +71,7 @@ theorem zk_session_soundHR
           k Rw M ρ t' (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveH I ht hc (Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ tablesAtZKH_live hTags hRec hDraw)) τ))
           (cont (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveH I ht hc (Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ tablesAtZKH_live hTags hRec hDraw)) τ)) ∧
     ∀ o : Reg × Finset (Fin n) × Exec.Transcript, LiveAcceptsZKR I own o →
-      ∀ rd : FlockSoundness.Registered.Reads (layShH (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub))
+      ∀ rd : FlockSoundness.Registered.ReadsX (layShH (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub))
           (rsShHS dj y₀ ht hc hscope hU hpub),
         OwnReadsH own c pub o.2.2 rd.isRead rd.port rd.readAt → rd.Checked o.1 (regPathsH c pub o.2.2 rd.port) := by
   refine ⟨?_, fun o hacc rd hown => checked_of_acceptsH I ht own dj y₀ hc hU hpub hscope hTags o hacc rd hown⟩

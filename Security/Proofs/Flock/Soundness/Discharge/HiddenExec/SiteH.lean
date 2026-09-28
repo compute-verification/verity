@@ -2,7 +2,7 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Placed
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Ret
 import Proofs.Flock.Soundness.Discharge.Hidden.Committed
 import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Shared
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Fit
+import Proofs.Flock.Soundness.Discharge.Hidden.Wide.FitS
 import Proofs.Flock.Soundness.Discharge.Layout.OutPin
 
 set_option Elab.async false
@@ -19,10 +19,11 @@ set_option Elab.async false
 * `copy_siteH`: a stacked unit input whose Δ key is message bit `bit` of byte `byte` of row `q` holds the witness's bit
   at that message column (`copyPos_blockH`, `Aliased.copyPos_key` at the flat twin);
 * `out_copyH`: copy `u'`'s output `j`, bit `t` holds the witness's bit at output row `nIn + jo`'s message column for its
-  bit `16 k + t`, where the copy's output word is word `k` of output port `jo` (`Hidden.msg_copyF`, `outCol_leaf`);
-* `bc_site_colH`, `bc_site_commitH`: the `b ‖ c` at row `p`'s `hm96` output is the commit string of the row's prefix
-  (`Hidden.rowPre`) and the bytes at its message columns, under the salt at `saltCol` (`Hidden.sat_flatF`,
-  `Hidden.row_bc_tgt`), at rows that fit, of one kind (`Hidden.RowsFit`).
+  bit `16 k + t`, where the copy's output word is word `k` of output port `jo` (`Hidden.Any.msg_copyF`, `outCol_leaf`);
+* `bc_site_colH`, `bc_site_commitH`: the `b ‖ c` at row `p`'s `hm96` output is the commit string of the bytes the row
+  hashes (`Hidden.Any.rowMsg`: its own prefix and the bytes at its message columns, or `RowSeg.enc` of them), under the
+  salt at `saltCol` (`Hidden.Any.sat_flatF`, `Hidden.Any.row_bc_tgtS`), at rows each fit or `sha512/row-seg/v1`
+  (`Hidden.Any.RowsFitS`).
 -/
 
 namespace FlockSoundness.Discharge.HiddenExec
@@ -157,12 +158,12 @@ theorem col_val_compH (a : AcceptedH T) {g : ℕ} (hg : g < a.st.c.g) (x : Fin a
   exact Layout.stackPlace_val_comp _ _ _ _ _ hu' h1 h2 x hx
 
 /-- **A drawn unit's returned output holds its output row's message bit**: in a satisfying witness of an accepted
-statement whose unit returns the outputs and whose rows fit (`hrf`), at block `o` and template
+statement whose unit returns the outputs and whose rows are covered (`hrf`), at block `o` and template
 instance `g`, copy `u'`'s computed column `outCol j t` (its output `j`, bit `t`) holds the witness's bit at output row
 `nIn + jo`'s message column for bit `16 k + t` (`Typed.msgCol`, byte `(16 k + t) / 8`, bit `(16 k + t) % 8`), where the
 copy's output word `lo[j]` is word `k` of output port `jo`. -/
 theorem out_copyH (a : AcceptedH T) (ho : a.st.c.outNet = a.st.c.unitNet)
-    (hrf : Hidden.RowsFit a.st.c)
+    (hrf : Hidden.Any.RowsFitS a.st.c)
     {z : Witness T.m} (hz : T.Satisfies z) (o : Fin (2 ^ T.nbl)) {g : ℕ} (hg : g < a.st.c.g) (x : Fin a.rows.w)
     {u' j t : ℕ} (hu' : u' < a.st.c.upv) (hj : j < (a.st.c.leavesOut.getD u' #[]).size) (ht : t < 16)
     (h1 : (unitRows a.st a.L.unit_built).nIn ≤ Layout.outCol a.st.c j t)
@@ -198,17 +199,17 @@ theorem out_copyH (a : AcceptedH T) (ho : a.st.c.outNet = a.st.c.unitNet)
     (fun u hu o' ho' => by rw [hget u hu] at ho'; exact (hlo u hu).2 o' ho')
     h16 (fun u hu => by rw [hget u hu]; exact (hlo u hu).1) hpv g hu' hj
   have hkw : k < (st.c.ports.getD (HmOut.nIn st.c + jo) default).words :=
-    lt_of_lt_of_le hk (checkRows_words hcr hrows.2.1 (fun p hp => (hrows.1 p hp).2.1) hjo)
+    lt_of_lt_of_le hk (checkRows_words hcr hrows.1 hrf.bits16 hjo)
   have hsrc : Hidden.outSrc st.c g jo k t = st.c.unitRange.slot (g * st.c.upv + u') + Layout.outCol st.c j t := by
     unfold Hidden.outSrc
-    rw [Hidden.outGroup_single hrows.2.1 hjo]
+    rw [Hidden.outGroup_single hrows.1 hjo]
     dsimp only
     simp only [hk, ↓reduceIte]
     rw [hw, hleaf]
     unfold Layout.outCol
     omega
-  have hmc := Hidden.msg_copyF L L0 F0 hda hrows hz o hg hjo hkw ht
-  have hp := hrows.2.2 jo hjo
+  have hmc := Hidden.Any.msg_copyF L L0 F0 hda hrows hz o hg hjo hkw ht
+  have hp := (hrows.2 jo hjo).1
   have hb : (16 * k + t) / 8 = 2 * k + t / 8 := by omega
   have hb8 : (16 * k + t) % 8 = t % 8 := by omega
   have hin := Layout.msgCol_lt_of_parse hpa hg hp (2 * k + t / 8) (t % 8) (Nat.mod_lt _ (by norm_num))
@@ -218,14 +219,14 @@ theorem out_copyH (a : AcceptedH T) (ho : a.st.c.outNet = a.st.c.unitNet)
 
 /-! ## The rows' `b ‖ c` at a site -/
 
-/-- `Hidden.row_bc_tgt` in an accepted statement `T`, through its flat twin (`Hidden.sat_flatF`). -/
+/-- `Hidden.Any.row_bc_tgtS` in an accepted statement `T`, through its flat twin (`Hidden.Any.sat_flatF`). -/
 theorem AcceptedH.row_bc (a : AcceptedH T) (ho : a.st.c.outNet = a.st.c.unitNet)
-    (hrf : Hidden.RowsFit a.st.c)
+    (hrf : Hidden.Any.RowsFitS a.st.c)
     {z : Witness T.m} (hz : T.Satisfies z) (o : Fin (2 ^ T.nbl)) {g p : ℕ} (hg : g < a.st.c.g)
     (hp : p < a.st.c.ports.size) :
     bytesOf (blockBit T z o) 128 (bcCol a.st.c g p) = Binding.commitString
-      ((Hidden.rowPre (Hidden.rowV2 a.st.c) a.st.c.ports[p]!.words).data.toList ++
-        bytesOf (blockBit T z o) (2 * a.st.c.ports[p]!.words) (Typed.msgCol a.st.c g p))
+      (Hidden.Any.rowMsg a.st.c.ports[p]!
+        (bytesOf (blockBit T z o) (2 * a.st.c.ports[p]!.words) (Typed.msgCol a.st.c g p)))
       (bytesOf (blockBit T z o) 192 (saltCol a.st.c g p)) := by
   obtain ⟨tags, cf, pf, coins, tables, draw, partition, program, st, ht, h, L, hR, regs, hT⟩ := a
   subst hT
@@ -235,23 +236,21 @@ theorem AcceptedH.row_bc (a : AcceptedH T) (ho : a.st.c.outNet = a.st.c.unitNet)
   have F0 := flat_unitFacts ht h
   have hda : st.da = (HmRow.delta st.c st.pin).1 ++ (Hidden.outPairs st.c).toArray := by
     rw [s.da, Hidden.hidden_delta']
-  have hz0 := Hidden.sat_flatF L L0 F0 hda hrf.1 hz
-  obtain ⟨-, hb, h1, h2⟩ := hrf.1.fit hp
-  rw [← Hidden.prefixOf_fit hrf hp]
-  exact Hidden.row_bc_tgt L0 F0 rfl (Hm.upv_pos F0.check ho) hz0 o hg hp hb h1 h2 hrf.1.segs
+  have hz0 := Hidden.Any.sat_flatF L L0 F0 hda hrf.1 hz
+  exact Hidden.Any.row_bc_tgtS L0 F0 rfl (Hm.upv_pos F0.check ho) hz0 o hg hp (hrf.kind hp)
 
 /-- **A row's `b ‖ c` at a drawn unit's site**: in a satisfying witness of an accepted statement whose unit returns the
-outputs and whose rows fit, of one kind (`hrf`), at block `o`, template instance `g` and row `p`, the 128 bytes at the
-`hm96` slot's output (`bcCol`) are the commit string of the row's prefix (`Hidden.rowPre`) and the `2 · words` bytes at the
-message columns (`Typed.msgCol`), under the 192 bytes at `saltCol`. -/
+outputs and whose rows are each fit or `sha512/row-seg/v1` (`hrf`), at block `o`, template instance `g` and row `p`, the
+128 bytes at the `hm96` slot's output (`bcCol`) are the commit string of the bytes the row hashes for the `2 · words`
+bytes at its message columns (`Typed.msgCol`, `Hidden.Any.rowMsg`), under the 192 bytes at `saltCol`. -/
 theorem bc_site_colH (a : AcceptedH T) (ho : a.st.c.outNet = a.st.c.unitNet)
-    (hrf : Hidden.RowsFit a.st.c)
+    (hrf : Hidden.Any.RowsFitS a.st.c)
     {z : Witness T.m} (hz : T.Satisfies z) (o : Fin (2 ^ T.nbl)) {g p : ℕ} (hg : g < a.st.c.g)
     (hp : p < a.st.c.ports.size) :
     Binding.bytesAt z (fun (j : Fin 128) (t : Fin 8) => siteAddrH a o (bcCol a.st.c g p j.val t.val)) =
-      Binding.commitString ((Hidden.rowPre (Hidden.rowV2 a.st.c) a.st.c.ports[p]!.words).data.toList ++
-        List.ofFn fun j : Fin (2 * a.st.c.ports[p]!.words) => Binding.byteOf fun t =>
-          FlockSoundness.bit (z (siteAddrH a o (Typed.msgCol a.st.c g p j.val t.val))))
+      Binding.commitString (Hidden.Any.rowMsg a.st.c.ports[p]!
+        (List.ofFn fun j : Fin (2 * a.st.c.ports[p]!.words) => Binding.byteOf fun t =>
+          FlockSoundness.bit (z (siteAddrH a o (Typed.msgCol a.st.c g p j.val t.val)))))
         (Binding.bytesAt z fun (j : Fin 192) (t : Fin 8) => siteAddrH a o (saltCol a.st.c g p j.val t.val)) := by
   have R := a.rowRanges
   rw [bytesAt_siteH a z o 128 (bcCol a.st.c g p) (fun j hj t ht => Hm.bcCol_lt R hg hp hj ht),
@@ -262,13 +261,13 @@ theorem bc_site_colH (a : AcceptedH T) (ho : a.st.c.outNet = a.st.c.unitNet)
 
 /-- `bc_site_colH` at the address the regions pin (`Layout.bcAddr`). -/
 theorem bc_site_commitH (a : AcceptedH T) (ho : a.st.c.outNet = a.st.c.unitNet)
-    (hrf : Hidden.RowsFit a.st.c)
+    (hrf : Hidden.Any.RowsFitS a.st.c)
     {z : Witness T.m} (hz : T.Satisfies z) (o : Fin (2 ^ T.nbl)) {g p : ℕ} (hg : g < a.st.c.g)
     (hp : p < a.st.c.ports.size) :
     Binding.bytesAt z (fun (j : Fin 128) (t : Fin 8) => siteAddrH a o (Layout.bcAddr a.st.c g p j.val t.val)) =
-      Binding.commitString ((Hidden.rowPre (Hidden.rowV2 a.st.c) a.st.c.ports[p]!.words).data.toList ++
-        List.ofFn fun j : Fin (2 * a.st.c.ports[p]!.words) => Binding.byteOf fun t =>
-          FlockSoundness.bit (z (siteAddrH a o (Typed.msgCol a.st.c g p j.val t.val))))
+      Binding.commitString (Hidden.Any.rowMsg a.st.c.ports[p]!
+        (List.ofFn fun j : Fin (2 * a.st.c.ports[p]!.words) => Binding.byteOf fun t =>
+          FlockSoundness.bit (z (siteAddrH a o (Typed.msgCol a.st.c g p j.val t.val)))))
         (Binding.bytesAt z fun (j : Fin 192) (t : Fin 8) => siteAddrH a o (saltCol a.st.c g p j.val t.val)) := by
   have hbc : (fun (j : Fin 128) (t : Fin 8) => siteAddrH a o (Layout.bcAddr a.st.c g p j.val t.val)) =
       fun j t => siteAddrH a o (bcCol a.st.c g p j.val t.val) := by
