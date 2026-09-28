@@ -61,15 +61,20 @@ def msgOff (b t : ℕ) : ℕ := 64 * (b % 128 / 8) + 56 - 8 * (b % 128 % 8) + t
 theorem msgOff_lt {b t : ℕ} (ht : t < 8) : msgOff b t < 1024 := by
   unfold msgOff; omega
 
-theorem deltaMsgCol_eq (c : Circuit) (g p b t : ℕ) :
+theorem deltaMsgCol_eq (c : Circuit) (g p b t : ℕ) (hs : (c.ports.getD p default).segs = none) :
     deltaMsgCol c g p b t = shaBase c g p (b / 128) + shaIn c (2 * shaSub c p (b / 128) + 1) + msgOff b t := by
-  simp only [deltaMsgCol, shaBase, shaIn, shaSub, msgOff]
+  simp only [deltaMsgCol, Typed.byteAt_none hs, shaBase, shaIn, shaSub, msgOff]
   omega
+
+theorem segs_getD {c : Circuit} (hu : ∀ p ∈ c.ports.toList, p.segs = none) {p : ℕ} (hp : p < c.ports.size) :
+    (c.ports.getD p default).segs = none := by
+  rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hp, Option.getD_some]
+  exact hu _ (Array.getElem_mem_toList hp)
 
 section Cols
 
-variable {c : Circuit} (R : RowRanges c)
-include R
+variable {c : Circuit} (R : RowRanges c) (hu : ∀ p ∈ c.ports.toList, p.segs = none)
+include R hu
 
 /-- **Row `p`'s message bit `t` of byte `b`** is at its compression `b / 128`'s `sha512x3` slot, past the `cv`, below
 the net's self rows. -/
@@ -80,16 +85,16 @@ theorem deltaMsgCol_at {g p b t : ℕ} (hg : g < c.g) (hp : p < c.ports.size) (h
     1536 * shaSub c p (b / 128) + 512 + msgOff b t < 4608 := by
   have hk : b / 128 < c.ports[p]!.chunks := by omega
   have hs := rowSlot_lt hp hk
-  have hu := msgOff_lt (b := b) ht
+  have hmo := msgOff_lt (b := b) ht
   have hsub : shaSub c p (b / 128) < 3 := hs.2
   refine ⟨⟨R.slot_lt_count (Or.inl rfl) hg (by rw [R.perVu_sha]; exact hs.1),
     R.net_off_lt (Or.inl rfl) (shaNet_ofRows R.rowNets) (by rw [shaNet_inRows R.rowNets]; omega), ?_⟩, by omega⟩
-  rw [deltaMsgCol_eq, (shaIn_eq R.rowNets _ hsub).2, shaBase, Circuit.slotCol]
+  rw [deltaMsgCol_eq _ _ _ _ _ (segs_getD hu hp), (shaIn_eq R.rowNets _ hsub).2, shaBase, Circuit.slotCol]
   omega
 
 theorem deltaMsgCol_lt {g p b t : ℕ} (hg : g < c.g) (hp : p < c.ports.size) (hb : b < 128 * c.ports[p]!.chunks)
     (ht : t < 8) : deltaMsgCol c g p b t < 2 ^ c.kLog :=
-  (deltaMsgCol_at R hg hp hb ht).1.lt R.bound (R.range R.shaNet).1
+  (deltaMsgCol_at R hu hg hp hb ht).1.lt R.bound (R.range R.shaNet).1
 
 /-- A compression's `cv` bit is no row's message bit. -/
 theorem cv_ne_msg {g' p' k' t' g p b t : ℕ} (hg' : g' < c.g) (hp' : p' < c.ports.size)
@@ -99,8 +104,8 @@ theorem cv_ne_msg {g' p' k' t' g p b t : ℕ} (hg' : g' < c.g) (hp' : p' < c.por
   intro h
   have hn := R.range R.shaNet
   obtain ⟨-, -, ho⟩ := (R.shaIn_at hg' hp' hk' ht').inj R.disj hn.1 hn.2.1 hn.1 hn.2.1
-    (by rw [h]; exact (deltaMsgCol_at R hg hp hb ht).1)
-  have hu := msgOff_lt (b := b) ht
+    (by rw [h]; exact (deltaMsgCol_at R hu hg hp hb ht).1)
+  have hmo := msgOff_lt (b := b) ht
   omega
 
 /-- An `hm96` slot's input bit is no row's message bit. -/
@@ -110,7 +115,7 @@ theorem hm_ne_msg {g' p' off' g p b t : ℕ} (hg' : g' < c.g) (hp' : p' < c.port
   intro h
   have hn := R.range R.shaNet
   have hm := R.range R.hmNet
-  exact sha_ne_hm R.rowNets ((deltaMsgCol_at R hg hp hb ht).1.inj R.disj hn.1 hn.2.1 hm.1 hm.2.1
+  exact sha_ne_hm R.rowNets ((deltaMsgCol_at R hu hg hp hb ht).1.inj R.disj hn.1 hn.2.1 hm.1 hm.2.1
     (by rw [← h]; exact R.hmIn_at hg' hp' ho')).1
 
 /-- **Distinct message bits are distinct columns**: VU, row, byte and bit. -/
@@ -121,12 +126,12 @@ theorem deltaMsgCol_inj {g p b t g' p' b' t' : ℕ} (hg : g < c.g) (hp : p < c.p
   have hn := R.range R.shaNet
   have hk : b / 128 < c.ports[p]!.chunks := by omega
   have hk' : b' / 128 < c.ports[p']!.chunks := by omega
-  obtain ⟨-, hs, ho⟩ := (deltaMsgCol_at R hg hp hb ht).1.inj R.disj hn.1 hn.2.1 hn.1 hn.2.1
-    (by rw [h]; exact (deltaMsgCol_at R hg' hp' hb' ht').1)
+  obtain ⟨-, hs, ho⟩ := (deltaMsgCol_at R hu hg hp hb ht).1.inj R.disj hn.1 hn.2.1 hn.1 hn.2.1
+    (by rw [h]; exact (deltaMsgCol_at R hu hg' hp' hb' ht').1)
   have h1 := rowSlot_lt hp hk
   have h2 := rowSlot_lt hp' hk'
   obtain ⟨rfl, hs⟩ := slot_inj (by rw [R.perVu_sha]; exact h1.1) (by rw [R.perVu_sha]; exact h2.1) hs
-  have hu := msgOff_lt (b := b) ht
+  have hmo := msgOff_lt (b := b) ht
   have hu' := msgOff_lt (b := b') ht'
   unfold shaSub at ho
   rw [rowSlots_entry hp hk, rowSlots_entry hp' hk'] at hs ho
@@ -149,12 +154,12 @@ theorem msg_filter (hpos : ∀ q < c.ports.size, 0 < c.ports[q]!.chunks) {pin g 
       have hs := (rowSlot_lt hp'' hk2).2
       rw [chainWidth_eq R.rowNets hs] at ht'
       rw [he1, chainDst_eq R.rowNets hs]
-      exact cv_ne_msg R hg' hp'' hk2 ht' hg hp hb ht
+      exact cv_ne_msg R hu hg' hp'' hk2 ht' hg hp hb ht
     · rw [hmWidth_eq R.rowNets] at ht'
       rw [he1]
       show hmWireDst c g' p' + t' ≠ _
       rw [hmWireDst_eq R.rowNets]
-      exact hm_ne_msg R hg' hp'' (by omega) hg hp hb ht
+      exact hm_ne_msg R hu hg' hp'' (by omega) hg hp hb ht
   have hr := filter_flatMap2_none _ _ (fun g' p' =>
       (List.range 512).map (fun t => (cvCol c g' p' + t, constSrc c pin (HmRow.midstate c.ports[p']!.words) t)) ++
       (List.range 1024).map fun t => (padCol c g' p' + t, constSrc c pin (HmRow.padWords c.ports[p']!.words) t))
@@ -162,10 +167,10 @@ theorem msg_filter (hpos : ∀ q < c.ports.size, 0 < c.ports[q]!.chunks) {pin g 
       have hp'' : p' < c.ports.size := hsz ▸ hp'
       rcases rowF_mem he with ⟨t', ht', he1⟩ | ⟨t', ht', he1⟩
       · rw [he1]
-        exact cv_ne_msg R (k' := 0) hg' hp'' (hpos p' hp'') ht' hg hp hb ht
+        exact cv_ne_msg R hu (k' := 0) hg' hp'' (hpos p' hp'') ht' hg hp hb ht
       · rw [he1, padCol_eq R.rowNets, Nat.add_assoc]
-        exact hm_ne_msg R hg' hp'' (by omega) hg hp hb ht
-  rw [List.filter_append, wireCopiesOf_rows _ hpos, hw, List.append_nil]
+        exact hm_ne_msg R hu hg' hp'' (by omega) hg hp hb ht
+  rw [List.filter_append, wireCopiesOf_rows _ hpos (fun q hq => hu _ (getElem_mem_toList' hq)), hw, List.append_nil]
   unfold rowCopies
   exact hr
 
@@ -180,14 +185,14 @@ include L F
 
 /-- **`HmRow.delta`'s pairs at a row's message bit**: none. The slot constants, the leaf and cut bits and the wires past
 the rows' are elsewhere (`Hm.flatPairs_countL`'s), and so are the rows' copies and wires (`msg_filter`). -/
-theorem flat_count_msg (hrw : RowWires st.c) (hpos : ∀ q < st.c.ports.size, 0 < st.c.ports[q]!.chunks)
+theorem flat_count_msg (hrw : RowWires st.c) (hu : ∀ p ∈ st.c.ports.toList, p.segs = none) (hpos : ∀ q < st.c.ports.size, 0 < st.c.ports[q]!.chunks)
     {g p b t : ℕ} (hg : g < st.c.g) (hp : p < st.c.ports.size) (hb : b < 128 * st.c.ports[p]!.chunks) (ht : t < 8)
     (j : ℕ) : (flatPairs st.c st.pin).count (deltaMsgCol st.c g p b t, j) = 0 := by
   have R := RowRanges.ofL L F.parse F.check
   have P := F.parse
   have C := F.check
-  have hf := msg_filter R hpos (pin := st.pin) hg hp hb ht
-  obtain ⟨hat, hoff⟩ := deltaMsgCol_at R hg hp hb ht
+  have hf := msg_filter R hu hpos (pin := st.pin) hg hp hb ht
+  obtain ⟨hat, hoff⟩ := deltaMsgCol_at R hu hg hp hb ht
   generalize deltaMsgCol st.c g p b t = x at hat hf ⊢
   have hnn := R.shaNet
   obtain ⟨hm, hk, -, -⟩ := R.range hnn
@@ -279,8 +284,9 @@ theorem flat_self (hv1 : ∀ p ∈ st.c.ports.toList, p.v2 = false ∧ p.bits = 
       placedB st ⟨deltaMsgCol st.c g p b t, hx⟩ j = (if j.val = deltaMsgCol st.c g p b t then 1 else 0) := by
   have R := RowRanges.ofL L F.parse F.check
   have hpos : ∀ q < st.c.ports.size, 0 < st.c.ports[q]!.chunks := fun q hq => (hv1 _ (getElem_mem_toList' hq)).2.2
-  obtain ⟨hat, hoff⟩ := deltaMsgCol_at R hg hp hb ht
-  have hfc := flat_count_msg L F F.parse.rowWires hpos hg hp hb ht
+  have hu : ∀ p ∈ st.c.ports.toList, p.segs = none := fun p hp => F.parse.v1Segs p hp (hv1 p hp).1
+  obtain ⟨hat, hoff⟩ := deltaMsgCol_at R hu hg hp hb ht
+  have hfc := flat_count_msg L F F.parse.rowWires hu hpos hg hp hb ht
   have hδ : ∀ j : ℕ, deltaEntry st.da (deltaMsgCol st.c g p b t) j =
         (((if j = deltaMsgCol st.c g p b t then 1 else 0) + (if j = deltaMsgCol st.c g p b t then 1 else 0) : ℕ) :
           ZMod 2) ∧
@@ -291,7 +297,7 @@ theorem flat_self (hv1 : ∀ p ∈ st.c.ports.toList, p.v2 = false ∧ p.bits = 
     have e : deltaEntry st.da (deltaMsgCol st.c g p b t) j =
         (((if j = deltaMsgCol st.c g p b t then 1 else 0) + (if j = deltaMsgCol st.c g p b t then 1 else 0) : ℕ) :
           ZMod 2) := by
-      rw [deltaEntry_eq_count, hda, delta_flat_eq _ _ F.parse.typed hv1 F.parse.portWords, hfc]
+      rw [deltaEntry_eq_count, hda, delta_flat_eq _ _ F.parse.typed hv1 F.parse.portWords F.parse.v1Segs, hfc]
       split_ifs <;> rfl
     exact ⟨e, by rw [L.delta_b]; exact e⟩
   exact inBit_rows R (Or.inl rfl) hat (shaNet_ofRows R.rowNets) (shaLaid_self hoff) hx hδ j
@@ -306,18 +312,24 @@ def outCopies (c : Circuit) : List (ℕ × ℕ) :=
     (List.range (c.ports.getD (HmOut.nIn c + j) default).words).flatMap fun k =>
       (List.range 16).map fun t => (deltaMsgCol c g (HmOut.nIn c + j) (2 * k + t / 8) (t % 8), outSrc c g j k t)
 
-theorem outPairs_eq (c : Circuit) : outPairs c = (outCopies c).flatMap pair2 := by
-  simp only [outPairs, outCopies, List.flatMap_assoc, List.flatMap_map, pair2]
+theorem outPairs_eq {c : Circuit} (h : c.outRowPorts.size = c.outPorts.size) :
+    outPairs c = (outCopies c).flatMap pair2 := by
+  simp only [outPairs, outCopies, h, List.flatMap_assoc, List.flatMap_map, pair2]
 
-/-- Output rows, each after the input rows and of `2 · words = 128 · chunks` bytes (`out_chunks`). -/
+/-- Unsegmented rows, one output row per output port, each after the input rows and of `2 · words = 128 · chunks`
+bytes (`out_rows_v1`). -/
 def OutRows (c : Circuit) : Prop :=
-  ∀ j < c.outPorts.size, HmOut.nIn c + j < c.ports.size ∧
-    2 * (c.ports.getD (HmOut.nIn c + j) default).words = 128 * (c.ports.getD (HmOut.nIn c + j) default).chunks
+  (∀ p ∈ c.ports.toList, p.segs = none) ∧ c.outRowPorts = Array.replicate c.outPorts.size 1 ∧
+    ∀ j < c.outPorts.size, HmOut.nIn c + j < c.ports.size ∧
+      2 * (c.ports.getD (HmOut.nIn c + j) default).words = 128 * (c.ports.getD (HmOut.nIn c + j) default).chunks
+
+theorem OutRows.size {c : Circuit} (h : OutRows c) : c.outRowPorts.size = c.outPorts.size := by
+  rw [h.2.1, Array.size_replicate]
 
 theorem outRow_bound {c : Circuit} (hrows : OutRows c) {j k t : ℕ} (hj : j < c.outPorts.size)
     (hk : k < (c.ports.getD (HmOut.nIn c + j) default).words) (ht : t < 16) :
     HmOut.nIn c + j < c.ports.size ∧ 2 * k + t / 8 < 128 * c.ports[HmOut.nIn c + j]!.chunks ∧ t % 8 < 8 := by
-  obtain ⟨hp, hw⟩ := hrows j hj
+  obtain ⟨hp, hw⟩ := hrows.2.2 j hj
   rw [getElem!_eq_getD']
   exact ⟨hp, by omega, by omega⟩
 
@@ -337,7 +349,7 @@ theorem outCopies_filter {g j k t : ℕ} (hg : g < c.g) (hj : j < c.outPorts.siz
     intro g' hg' j' hj' k' hk' t' ht' he
     obtain ⟨hp', hb', ht''⟩ := outRow_bound hrows hj' hk' ht'
     obtain ⟨hp, hb, ht'''⟩ := outRow_bound hrows hj hk ht
-    obtain ⟨h1, h2, h3, h4⟩ := deltaMsgCol_inj R hg' hp' hb' ht'' hg hp hb ht''' he
+    obtain ⟨h1, h2, h3, h4⟩ := deltaMsgCol_inj R hrows.1 hg' hp' hb' ht'' hg hp hb ht''' he
     exact ⟨h1, by omega, by omega, by omega⟩
   unfold outCopies
   rw [filter_flatMap2_single _ _ (fun g j => (List.range (c.ports.getD (HmOut.nIn c + j) default).words).flatMap
@@ -367,7 +379,7 @@ theorem outPairs_count {g j k t : ℕ} (hg : g < c.g) (hj : j < c.outPorts.size)
     (outPairs c).count (deltaMsgCol c g (HmOut.nIn c + j) (2 * k + t / 8) (t % 8), i) =
       (if i = deltaMsgCol c g (HmOut.nIn c + j) (2 * k + t / 8) (t % 8) then 1 else 0) +
         (if i = outSrc c g j k t then 1 else 0) := by
-  rw [outPairs_eq, count_pair2, outCopies_filter R hrows hg hj hk ht]
+  rw [outPairs_eq hrows.size, count_pair2, outCopies_filter R hrows hg hj hk ht]
   simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, Nat.add_zero]
 
 end Out
@@ -397,9 +409,9 @@ theorem msg_copy {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : 
   have R : RowRanges st.c := RowRanges.ofL (st := flatTwin st) L0 F0.parse F0.check
   have hpos : ∀ q < st.c.ports.size, 0 < st.c.ports[q]!.chunks := fun q hq => (hv1 _ (getElem_mem_toList' hq)).2.2
   obtain ⟨hp, hb, ht8⟩ := outRow_bound hrows hj hk ht
-  obtain ⟨hat, hoff⟩ := deltaMsgCol_at R hg hp hb ht8
-  have hx := deltaMsgCol_lt R hg hp hb ht8
-  have hfc := flat_count_msg L0 F0 F0.parse.rowWires hpos hg hp hb ht8
+  obtain ⟨hat, hoff⟩ := deltaMsgCol_at R hrows.1 hg hp hb ht8
+  have hx := deltaMsgCol_lt R hrows.1 hg hp hb ht8
+  have hfc := flat_count_msg L0 F0 F0.parse.rowWires hrows.1 hpos hg hp hb ht8
   have hδ : ∀ i : ℕ, deltaEntry st.da (deltaMsgCol st.c g (HmOut.nIn st.c + j) (2 * k + t / 8) (t % 8)) i =
         (((if i = deltaMsgCol st.c g (HmOut.nIn st.c + j) (2 * k + t / 8) (t % 8) then 1 else 0) +
           (if i = outSrc st.c g j k t then 1 else 0) : ℕ) : ZMod 2) ∧
@@ -411,7 +423,7 @@ theorem msg_copy {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : 
         (((if i = deltaMsgCol st.c g (HmOut.nIn st.c + j) (2 * k + t / 8) (t % 8) then 1 else 0) +
           (if i = outSrc st.c g j k t then 1 else 0) : ℕ) : ZMod 2) := by
       rw [deltaEntry_eq_count, hda, Array.toList_append, List.count_append, List.toList_toArray,
-        delta_flat_eq _ _ F0.parse.typed hv1 F0.parse.portWords, hfc, Nat.zero_add,
+        delta_flat_eq _ _ F0.parse.typed hv1 F0.parse.portWords F0.parse.v1Segs, hfc, Nat.zero_add,
         outPairs_count R hrows hg hj hk ht]
     exact ⟨e, by rw [L.delta_b]; exact e⟩
   exact block_of_rows hz o hx fun i =>
@@ -429,8 +441,9 @@ theorem sat_flat {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : 
     obtain ⟨g, hg, j, hj, k, hk, t, ht, hq⟩ := hq
     have hq1 : q.1 = deltaMsgCol st.c g (HmOut.nIn st.c + j) (2 * k + t / 8) (t % 8) := by
       rcases hq with rfl | rfl <;> rfl
+    rw [hrows.size] at hj
     obtain ⟨hp, hb, ht8⟩ := outRow_bound hrows hj hk ht
-    have hx := deltaMsgCol_lt R hg hp hb ht8
+    have hx := deltaMsgCol_lt R hrows.1 hg hp hb ht8
     have hie : i = ⟨deltaMsgCol st.c g (HmOut.nIn st.c + j) (2 * k + t / 8) (t % 8), hx⟩ :=
       Fin.ext (hqi.symm.trans hq1)
     subst hie

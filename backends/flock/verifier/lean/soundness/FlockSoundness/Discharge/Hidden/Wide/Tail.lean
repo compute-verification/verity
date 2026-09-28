@@ -29,11 +29,11 @@ theorem outputs_committed_tail' : OutputsCommittedTail := by
   have F0 : Aliased.UnitFacts tags (flatTwin st) := unitFacts_of_parse (st := flatTwin st) hp rfl
   have R : RowRanges st.c := RowRanges.ofL (st := flatTwin st) L0 F0.parse F0.check
   have hda : st.da = (HmRow.delta st.c st.pin).1 ++ (outPairs st.c).toArray := by rw [s.da, hidden_delta']
-  have hrows : OutRows st.c := fun j hj => out_chunks hp hcr hj
+  have hrows : OutRows st.c := out_rows_v1 hp hcr fun p hp => (hv1 p hp).1
   have hz0 := sat_flat L L0 F0 hv1 hda hrows hz
   have hzero : blockBit (L.model regs) z o (zeroCol st.c) = false :=
     zero_bit L0 F0 hupv (show 0 < st.c.g by omega) hz0 o
-  obtain ⟨hpl, -⟩ := hrows j hj
+  obtain ⟨hpl, -⟩ := hrows.2.2 j hj
   have hbc : bytesOf (blockBit (L.model regs) z o) 128 (bcCol st.c g (HmOut.nIn st.c + j)) =
       Binding.commitString
         ((HmRow.rowPrefix (st.c.ports.getD (HmOut.nIn st.c + j) default).words).data.toList ++

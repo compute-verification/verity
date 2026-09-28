@@ -19,15 +19,22 @@ def hmWire (ports : Array Port) (sha hm p : ℕ) : Wire :=
     ((HmRow.rowSlots ports).2[p]!)[((HmRow.rowSlots ports).2[p]!).size - 1]!.2)⟩
 
 theorem forIn_range1_append {γ : Type} (G : ℕ → List γ) (n : ℕ) {f : ℕ → Array γ → Id (ForInStep (Array γ))}
-    (hf : ∀ a, ∀ d, ∃ d', f a d = ForInStep.yield d' ∧ d'.toList = d.toList ++ G a) (d : Array γ) :
+    (hf : ∀ a, 1 ≤ a → ∀ d, ∃ d', f a d = ForInStep.yield d' ∧ d'.toList = d.toList ++ G a) (d : Array γ) :
     (forIn [1:n] d f).toList = d.toList ++ (List.range' 1 (n - 1)).flatMap G := by
   rw [Std.Legacy.Range.forIn_eq_forIn_range']
-  have := forIn_id_append G (List.range' 1 [1:n].size) (fun a _ d => hf a d) d
+  have := forIn_id_append G (List.range' 1 [1:n].size) (fun a ha d => hf a
+    (by simp only [Std.Legacy.Range.size, List.mem_range'_1] at ha; omega) d) d
   simpa [Std.Legacy.Range.size] using this
 
-/-- **The rows' wires**, port by port, when every row has a compression: compression `k`'s `cv` from compression
+/-- An unsegmented row's only chain start is its first compression. -/
+theorem chainStart_unseg {p : Port} (hs : p.segs = none) (k : ℕ) :
+    HmRow.chainStart p k = if k == 0 then some 0 else none := by
+  simp only [HmRow.chainStart, hs]
+
+/-- **The rows' wires**, port by port, when every row has a compression and none is segmented: compression `k`'s `cv` from compression
 `k − 1`'s output for `k ≥ 1`, then the `hm96` slot's `cv` from the last compression's output. -/
-theorem rowWires_eq (ports : Array Port) (sha hm : ℕ) (hpos : ∀ p < ports.size, 0 < ports[p]!.chunks) :
+theorem rowWires_eq (ports : Array Port) (sha hm : ℕ) (hpos : ∀ p < ports.size, 0 < ports[p]!.chunks)
+    (hs : ∀ p < ports.size, ports[p]!.segs = none) :
     (HmRow.rowWires ports sha hm).toList = (List.range (HmRow.rowSlots ports).2.size).flatMap fun p =>
       (List.range' 1 (((HmRow.rowSlots ports).2[p]!).size - 1)).map (chainWire ports sha p) ++
         [hmWire ports sha hm p] := by
@@ -41,12 +48,20 @@ theorem rowWires_eq (ports : Array Port) (sha hm : ℕ) (hpos : ∀ p < ports.si
         [hmWire ports sha hm p]) _ (fun p hp d => ?_) #[]) ?_
   · have h0 : 0 < ((HmRow.rowSlots ports).2[p]!).size := by
       rw [rowSlots_size (hS ▸ hp)]; exact hpos _ (hS ▸ hp)
-    simp only [h0, ↓reduceIte]
+    have hcs := chainStart_unseg (hs _ (hS ▸ hp))
+    have h1 : (0 < ((HmRow.rowSlots ports).2[p]!).size &&
+        (HmRow.chainStart ports[p]! ((HmRow.rowSlots ports).2[p]!).size).isNone) = true := by
+      rw [hcs]; simp [h0, Nat.pos_iff_ne_zero.1 h0]
+    simp only [h1, ↓reduceIte]
     refine ⟨_, rfl, ?_⟩
     rw [Array.toList_push, ← List.append_assoc]
     refine (List.append_left_inj _).mpr ?_
-    refine Eq.trans (forIn_range1_append (fun k => [chainWire ports sha p k]) _ (fun k d => ⟨_, rfl, ?_⟩) d) ?_
-    · rw [Array.toList_push]
+    refine Eq.trans (forIn_range1_append (fun k => [chainWire ports sha p k]) _ (fun k hk d => ?_) d) ?_
+    · have hk' : (HmRow.chainStart ports[p]! k).isNone = true := by
+        rw [hcs]; simp [show k ≠ 0 by omega]
+      simp only [hk', ↓reduceIte]
+      refine ⟨_, rfl, ?_⟩
+      rw [Array.toList_push]
       rfl
     · rw [List.map_eq_flatMap]
   · simp

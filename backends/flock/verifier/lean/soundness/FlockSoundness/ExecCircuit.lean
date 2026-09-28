@@ -170,6 +170,62 @@ theorem rowPorts_words {mj : Lean.Json} {typed : Bool} {ports : Array Port} (h :
     cases hf
     cases hv
 
+set_option maxHeartbeats 1000000 in
+/-- `HmRow.rowPorts`' `sha512/row/v1` ports are not segmented (a segmented row is a bit row). -/
+theorem rowPorts_v1 {mj : Lean.Json} {typed : Bool} {ports : Array Port} (h : HmRow.rowPorts mj typed = .ok ports) :
+    ∀ p ∈ ports.toList, p.v2 = false → p.segs = none := by
+  unfold HmRow.rowPorts at h
+  extract_lets (config := { underBinder := false, onlyGivenNames := true }) v2 one at h
+  obtain ⟨s, -, h⟩ := except_bind_ok h
+  extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp0 at h
+  replace h := ite_throw_ok h
+  simp (config := { zeta := false }) only [jp0] at h
+  extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp1 at h
+  replace h := ite_throw_ok h
+  simp (config := { zeta := false }) only [jp1] at h
+  obtain ⟨listedPorts, -, h⟩ := except_bind_ok h
+  extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp2 at h
+  obtain ⟨lengths, h⟩ : ∃ l, jp2 l = .ok ports := by
+    split at h
+    · obtain ⟨s, -, h⟩ := except_bind_ok h
+      extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpv at h
+      replace h := ite_throw_ok h
+      simp (config := { zeta := false }) only [jpv] at h
+      obtain ⟨l, -, h⟩ := except_bind_ok h
+      exact ⟨l, h⟩
+    · exact ⟨_, h⟩
+  simp (config := { zeta := false }) only [jp2] at h
+  obtain ⟨ports', hmap, h⟩ := except_bind_ok h
+  obtain ⟨listed, -, h⟩ := except_bind_ok h
+  extract_lets (config := { underBinder := false, onlyGivenNames := true }) bad jp3 at h
+  replace h := ite_throw_ok h
+  simp (config := { zeta := false }) only [jp3] at h
+  obtain ⟨u, -, h⟩ := except_bind_ok h
+  extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp4 at h
+  replace h := ite_throw_ok h
+  simp (config := { zeta := false }) only [jp4] at h
+  cases h
+  intro p hp hv
+  obtain ⟨i, -, hf⟩ := array_mapM_ok hmap p hp
+  obtain ⟨a, -, hf⟩ := except_bind_ok hf
+  extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpa at hf
+  replace hf := ite_throw_ok hf
+  simp (config := { zeta := false }) only [jpa] at hf
+  obtain ⟨name, -, hf⟩ := except_bind_ok hf
+  obtain ⟨words, -, hf⟩ := except_bind_ok hf
+  obtain ⟨comps, -, hf⟩ := except_bind_ok hf
+  split at hf
+  · extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpn at hf
+    obtain ⟨-, hf⟩ := ite_throw_ok' hf
+    simp (config := { zeta := false }) only [jpn] at hf
+    cases hf
+    rfl
+  · extract_lets (config := { underBinder := false, onlyGivenNames := true }) want jpw at hf
+    replace hf := ite_throw_ok hf
+    simp (config := { zeta := false }) only [jpw] at hf
+    cases hf
+    cases hv
+
 /-! ## What `HmRow.parse` accepted -/
 
 /-- **What `HmRow.parse` accepted.** -/
@@ -177,6 +233,8 @@ structure ParseFacts (tags : Tags) (c : Circuit) : Prop where
   nets : ∀ x ∈ c.nets.toList, Built x.2 ∨ ∃ nm tb n lo bits, Lookup.build nm tb n lo bits = .ok x.2
   /-- a `sha512/row/v1` port's row is whole SHA-512 blocks -/
   portWords : ∀ p ∈ c.ports.toList, p.v2 = false → 2 * p.words = 128 * p.chunks
+  /-- a `sha512/row/v1` port is not segmented -/
+  v1Segs : ∀ p ∈ c.ports.toList, p.v2 = false → p.segs = none
   /-- the rows' chains and hm96 inputs come first, and no other wire enters the `sha512x3` or `hm96` net -/
   rowWires : ∃ rest, c.wires.toList = (HmRow.rowWires c.ports c.shaNet c.hmNet).toList ++ rest ∧
     ∀ w ∈ rest, w.dst.1 ≠ c.shaNet ∧ w.dst.1 ≠ c.hmNet
@@ -275,6 +333,14 @@ theorem parse_facts_nets {tags : Tags} {bytes : ByteArray} {tables : List (Strin
   (have hh := except_bind_ok h; clear h; obtain ⟨dummyOutputs, -, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨outPorts, -, h⟩ := hh)
+  ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpR at h)
+  obtain ⟨outRowPorts, h⟩ : ∃ r, jpR r = .ok c := by
+    split at h
+    · exact ⟨_, h⟩
+    · obtain ⟨_, -, h⟩ := except_bind_ok h
+      obtain ⟨r, -, h⟩ := except_bind_ok h
+      exact ⟨r, ite_throw_ok h⟩
+  simp (config := { zeta := false }) only [jpR] at h
   ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) perVu0 jpP at h)
   obtain ⟨pv, h⟩ : ∃ pv, jpP () pv = .ok c := by
     split at h
@@ -460,7 +526,7 @@ theorem parse_facts_nets {tags : Tags} {bytes : ByteArray} {tables : List (Strin
     · cases hi
   refine ⟨?_, ⟨more, hm, hmore⟩, hunit, hname _ _ hsha, hname _ _ hhm⟩
   have hrowWires := wires_prefix (p := rowNet) hwires
-  exact { nets := hbuilt, portWords := rowPorts_words hrp,
+  exact { nets := hbuilt, portWords := rowPorts_words hrp, v1Segs := rowPorts_v1 hrp,
           rowWires := by
             obtain ⟨rest, hl, hr⟩ := hrowWires
             refine ⟨rest, hl, fun w hw => ?_⟩
