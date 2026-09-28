@@ -9,7 +9,9 @@ Tables (package data under `tables/`).  `mufu_{rsq,sqrt,rcp,ex2}_delta_int8.xz` 
 little-endian u32 words, xz-compressed, from the first word 1.0 (`0x3F800000`).  `table(key)` decodes one by its
 `verity.ml.library` name or SHA-512 and refuses words whose SHA-512 is not the library's; the Lean verifier's archive holds the
 same words under that SHA-512.  `mufu_tanh_sm89.{json,xzblocks}` is MUFU.TANH's measured shard with its manifest (see the
-MufuTanh section).  All were measured on an RTX 4090 (sm_89): conformance evidence for that architecture.
+MufuTanh section).  All were measured on an RTX 4090 (sm_89): conformance evidence for that architecture.  The delta tables are
+the captures of records `W11-40f0cebeb670-20260907T1800Z` (ex2, rcp) and `W11C-40f0cebeb670-20260907T1900Z` (rsq, sqrt); the
+Triton record `W11R-40f0cebeb670-20260907T1802Z` measured the same rcp and sqrt words.
 
 Batch kernels.  Every primitive but `MufuTanh` has a numpy kernel registered with `verity.evaluation` (domain: every encoding).
 
