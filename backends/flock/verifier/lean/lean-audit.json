@@ -6,7 +6,29 @@
  "meaning": ["FlockProofs"],
  "escapes": {
   "Flock.canon": "partial def: canonical JSON of the statement's objects (PROTOCOL.md 16.8); no proof is about it, and the agreement tests (17.1) cover it",
-  "Flock.TemplateQuery.Desc.gates": "partial def: a descriptor definition's gate count, recursing through its callees (the template query, PROTOCOL.md 16.10); no proof is about it, and template_query_agree.py covers it"
+  "Flock.TemplateQuery.Desc.gates": "partial def: a descriptor definition's gate count, recursing through its callees (the template query, PROTOCOL.md 16.10); no proof is about it, and template_query_agree.py covers it",
+  "Flock.Qword.DCut.units": "partial def: a cut's unit count, recursing through its nested parts (Q_word v1, PROTOCOL.md 16.7); no proof is about it, and qword_agree.py covers it",
+  "Flock.Qword.DCut.gates": "partial def: a cut's gate count, recursing through its nested parts (Q_word v1, PROTOCOL.md 16.7); no proof is about it, and qword_agree.py covers it",
+  "Flock.Qword.DCut.owner": "partial def: the owner of every computing gate, recursing through a cut's nested parts (Q_word v1, PROTOCOL.md 16.7); no proof is about it, and qword_agree.py covers it",
+  "Flock.Qword.DCut.locate": "partial def: a unit's path down to a flat cut, recursing through nested parts (Q_word v1, PROTOCOL.md 16.7); no proof is about it, and qword_agree.py covers it",
+  "Flock.Qword.evaluate": "partial def: Q_word v1 on an activation, recursing through a separable body's members (PROTOCOL.md 16.7); no proof is about it, and qword_agree.py covers it",
+  "Flock.Qword.defOfJson": "partial def: a Def read from JSON, recursing through a separable body's members; no proof is about it, and qword_agree.py covers it",
+  "Flock.Program.domainError": "partial def: the RFC 8785 domain check, recursing through the JSON (verity-ir/descriptor/v1 §1, PROTOCOL.md 16.11); no proof is about it, and qword_program_agree.py covers it",
+  "Flock.Program.Ty.beq": "partial def: type equality, recursing through a nested type's arrays and records (descriptor §2); no proof is about it, and qword_program_agree.py covers it",
+  "Flock.Program.Ty.leaves": "partial def: a type's leaf count, recursing through its arrays and records (descriptor §2); no proof is about it, and qword_program_agree.py covers it",
+  "Flock.Program.Ty.widths": "partial def: a type's leaf widths in leaf order, recursing through its arrays and records (descriptor §2); no proof is about it, and qword_program_agree.py covers it",
+  "Flock.Program.Ty.toJson": "partial def: a type's JSON, recursing through its arrays and records (descriptor §2); no proof is about it, and qword_program_agree.py covers it",
+  "Flock.Program.Ty.ofJson": "partial def: type_from_json with its constructors' checks, recursing through arrays and records (descriptor §2); no proof is about it, and qword_program_agree.py covers it",
+  "Flock.Program.Ty.removeAxis": "partial def: remove_axis, recursing through a nested array type (descriptor §3); no proof is about it, and qword_program_agree.py covers it",
+  "Flock.Program.Ty.axisDims": "partial def: a batch axis' length and the leaves below it, recursing through a nested array type (descriptor §3); no proof is about it, and qword_program_agree.py covers it",
+  "Flock.Program.parseParts": "partial def: a reference sequence's parts, recursing through nested and aliased sequences (descriptor §3); no proof is about it, and qword_program_agree.py covers it",
+  "Flock.Program.resolve": "partial def: layout.resolve, up through parameters and down through node outputs to a primitive (descriptor §7); no proof is about it, and qword_program_agree.py covers it",
+  "_private.Flock.Program.0.Flock.Program.fnRefs": "partial def: the functions a static value names, recursing through the JSON (descriptor §4); no proof is about it, and qword_program_agree.py covers it",
+  "_private.Flock.Program.0.Flock.Program.getDef": "partial def: decode_program.get, decoding a definition after every definition it depends on (descriptor §4); no proof is about it, and qword_program_agree.py covers it",
+  "_private.Flock.Program.0.Flock.Program.composite": "partial def: a composite definition's body, decoding its callees first (descriptor §4); no proof is about it, and qword_program_agree.py covers it",
+  "_private.Flock.Program.0.Flock.Program.staticFns": "partial def: static_of, decoding the functions a static value names (descriptor §4); no proof is about it, and qword_program_agree.py covers it",
+  "_private.Flock.Program.0.Flock.Program.gateIn": "partial def: a gate's inputs in an activation, resolving references through scopes (descriptor §6, §7); no proof is about it, and qword_program_agree.py covers it",
+  "Flock.Extract.evalDef": "partial def: cut.evaluate_definition with its memo, recursing through a separable body's members (PROTOCOL.md 16.7); no proof is about it, and qword_program_agree.py covers it"
  },
  "pins": {
   "Flock.MerklePair.hm96_inputs": {
