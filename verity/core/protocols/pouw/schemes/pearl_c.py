@@ -85,6 +85,7 @@ from verity.ml.crypto.turboshake import turboshake128
 from verity.ml.circuits.silicon import fp32
 
 from ..protocol import Certificate, Context, DomainError, Matmul, Shape, Tile, grid_tiles
+from ..registration import check_registration
 from ..serving import HASH_FORMATS
 from . import pearl_kw as P
 from .pearl_c_device import H100, H100_PRICES, PRICES, SM120_PRICES, Device, Prices  # noqa: F401 - re-exported
@@ -516,6 +517,10 @@ class PearlC:
                 and s.m <= 1 << 24 and s.n <= 1 << 24):
             raise DomainError(f"{self.name}: {s} is outside {self.k_min} <= k <= {d.k_max} with {d.window} | k (whole "
                               f"promotion groups), {rows} | m, {self.tile[1]} | n, m, n <= 2^24")
+
+    def check_registration(self, transforms: Sequence[str], curated: bool = False, needs_gamma_fold: bool = False) -> None:
+        """The registered-weights rule, Pearl-C4's too (`registration.check_registration`)."""
+        check_registration(transforms, curated, needs_gamma_fold)
 
     def tiles(self, shape: Shape) -> list[Tile]:
         return grid_tiles(shape, *self.tile)
