@@ -131,15 +131,16 @@ def ofRows (name : String) (useful constPos : Nat) (inGroups outGroups : Array G
 
 /-- A net `ofRows` builds holds exactly the rows it was given: its A and B are theirs at its slot size, and its size,
 constant and port groups are the ones given. And the checks it ran hold: the input rows end before the constant, each is
-a self row or empty, the constant row is `[const]·[const]`, and the row order (`checkOrder`) passed. -/
+a self row or empty, the constant row is `[const]·[const]`, and the row order (`checkOrder`) passed; it has no lookup. -/
 theorem ofRows_ok {name : String} {useful constPos : Nat} {ig og : Array Group} {ra rb : Array (Array Nat)} {n : Net}
     (h : ofRows name useful constPos ig og ra rb = .ok n) :
     n.unitLog = max 7 (log2ceil useful) ∧ Sparse.ofRows ra (2 ^ n.unitLog) = .ok n.a ∧
       Sparse.ofRows rb (2 ^ n.unitLog) = .ok n.b ∧ n.useful = useful ∧ n.constPos = constPos ∧ n.inGroups = ig ∧
       n.outGroups = og ∧ n.inWords * WORD ≤ constPos ∧ ra.getD constPos #[] = #[constPos] ∧
       rb.getD constPos #[] = #[constPos] ∧ checkOrder "flock-ir-unit/v2" (n.inWords * WORD) constPos ra rb = .ok () ∧
-      ∀ i < n.inWords * WORD,
-        ((ra.getD i #[] == #[i] && rb.getD i #[] == #[i]) || ((ra.getD i #[]).isEmpty && (rb.getD i #[]).isEmpty)) = true := by
+      (∀ i < n.inWords * WORD,
+        ((ra.getD i #[] == #[i] && rb.getD i #[] == #[i]) || ((ra.getD i #[]).isEmpty && (rb.getD i #[]).isEmpty)) = true) ∧
+      n.lookup = none ∧ n.inWords = (ig.back?.map fun g => g.col + g.words).getD 0 := by
   unfold ofRows at h
   simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
   repeat' (first | split at h | (injection h with h; subst h))
@@ -147,7 +148,7 @@ theorem ofRows_ok {name : String} {useful constPos : Nat} {ig og : Array Group} 
     | exact absurd h (by simp)
     | (rename_i _ _ _ _ hreach _ hfind hconst _ _ hord _ _ ha _ _ hb
        simp only [Bool.or_eq_true, bne_iff_ne, ne_eq, not_or, Decidable.not_not] at hconst
-       refine ⟨rfl, ha, hb, rfl, rfl, rfl, rfl, Nat.not_lt.mp hreach, hconst.1, hconst.2, hord, fun i hi => ?_⟩
+       refine ⟨rfl, ha, hb, rfl, rfl, rfl, rfl, Nat.not_lt.mp hreach, hconst.1, hconst.2, hord, fun i hi => ?_, rfl, rfl⟩
        have := List.find?_eq_none.mp hfind i (List.mem_range.mpr hi)
        revert this
        generalize ((ra.getD i #[] == #[i] && rb.getD i #[] == #[i]) || ((ra.getD i #[]).isEmpty && (rb.getD i #[]).isEmpty)) = b

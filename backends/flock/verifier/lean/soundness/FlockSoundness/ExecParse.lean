@@ -92,32 +92,24 @@ theorem parse_spec {lines : Array String} {net : Net} (h : Net.parse lines = .ok
   obtain ⟨h5, h⟩ := ite_throw_ok' h
   obtain ⟨h6, h⟩ := ite_throw_ok' h
   obtain ⟨s, -, h⟩ := except_bind_ok h
-  obtain ⟨u, -, h⟩ := except_bind_ok h
-  obtain ⟨h7, h⟩ := ite_throw_ok' h
-  obtain ⟨u', -, h⟩ := except_bind_ok h
   simp only [Bool.or_eq_true, Array.any_eq_true, not_or, not_exists, decide_eq_true_eq] at h5
-  have h7' : s.1.getD constPos #[] = #[constPos] ∧ s.2.getD constPos #[] = #[constPos] := by simpa using h7
-  by_cases hL : (lines.getD (1 + useful) "").startsWith "LEAVES " = true
-  · rw [ite_eq_left hL] at h
-    rcases hj : Lean.Json.parse ((lines.getD (1 + useful) "").drop 7).toString with e | j
-    · rw [hj] at h; exact absurd h throw_bind_ne
-    · rw [hj] at h
-      obtain ⟨a, b, ha, hb, rfl⟩ := parse_tail (ite_throw_ok (ite_throw_ok h))
-      refine ⟨rfl, (by simpa using h4 : constPos + 1 = useful).symm, rfl, Nat.le_of_not_lt h6, ?_, s.1, s.2, h7'.1,
-        h7'.2, ha, hb⟩
-      intro g hg
-      obtain ⟨i, hi, rfl⟩ := Array.mem_iff_getElem.1 (Array.mem_def.2 hg)
-      have := h5.1 i hi
-      dsimp only at this ⊢
-      omega
-  · rw [ite_eq_right hL] at h
-    obtain ⟨a, b, ha, hb, rfl⟩ := parse_tail (ite_throw_ok (ite_throw_ok h))
-    refine ⟨rfl, (by simpa using h4 : constPos + 1 = useful).symm, rfl, Nat.le_of_not_lt h6, ?_, s.1, s.2, h7'.1,
-      h7'.2, ha, hb⟩
-    intro g hg
+  -- the rows' checks and the construction are `Net.ofRows`', after the trailing lines
+  have ho : Net.ofRows ((tokens (lines.getD 0 "")).getD 1 "") useful constPos ig.1 og.1 s.1 s.2 = .ok net := by
+    by_cases hL : (lines.getD (1 + useful) "").startsWith "LEAVES " = true
+    · rw [ite_eq_left hL] at h
+      rcases hj : Lean.Json.parse ((lines.getD (1 + useful) "").drop 7).toString with e | j
+      · rw [hj] at h; exact absurd h throw_bind_ne
+      · rw [hj] at h; exact ite_throw_ok (ite_throw_ok h)
+    · rw [ite_eq_right hL] at h; exact ite_throw_ok (ite_throw_ok h)
+  obtain ⟨hul, ha, hb, huse, hc, hig, -, hle, hca, hcb, -, -, hlk, hiw⟩ := Net.ofRows_ok ho
+  refine ⟨hlk, ?_, by rw [hul, huse], by rw [hc]; exact hle, ?_, s.1, s.2, by rw [hc]; exact hca, by rw [hc]; exact hcb,
+    ha, hb⟩
+  · rw [huse, hc]; exact (by simpa using h4 : constPos + 1 = useful).symm
+  · intro g hg
+    rw [hig] at hg
     obtain ⟨i, hi, rfl⟩ := Array.mem_iff_getElem.1 (Array.mem_def.2 hg)
     have := h5.1 i hi
-    dsimp only at this ⊢
+    rw [hiw]
     omega
 
 /-! ## Text nets -/
@@ -207,7 +199,8 @@ def DeltaIn (c : Circuit) (x : ℕ) : Prop :=
 
 /-- **Δ is its first loop's pairs, then input bits** (`HmRow.delta`): the first loop writes exactly `constPairs`, and
 every later pair's row is one of `DeltaIn`'s forms. -/
-theorem delta_split (c : Circuit) (pin : ℕ) : ExtL (constPairs c pin) (DeltaIn c) (HmRow.delta c pin).1 := by
+theorem delta_split (c : Circuit) (pin : ℕ) (ht : c.typed = none) :
+    ExtL (constPairs c pin) (DeltaIn c) (HmRow.delta c pin).1 := by
   unfold HmRow.delta
   simp only
   refine run_bind_fst (P := fun d => d.toList = constPairs c pin) ?_ ?_
@@ -256,11 +249,18 @@ theorem delta_split (c : Circuit) (pin : ℕ) : ExtL (constPairs c pin) (DeltaIn
         (Or.inr (Or.inr (Or.inr (Or.inl ⟨g, hg, e, he, t, ht, rfl⟩))))⟩) hd⟩) hd⟩) hd) ?_
   intro d hd
   -- the wires
-  exact forIn_id_inv_range _ (fun g _ hg d hd => ⟨_, rfl,
+  refine run_bind_fst (forIn_id_inv_range _ (fun g _ hg d hd => ⟨_, rfl,
     forIn_id_inv_array _ (fun w hw d hd => ⟨_, rfl,
       forIn_id_inv_range _ (fun t _ ht d hd => ⟨_, rfl, hd.push2
-        (Or.inr (Or.inr (Or.inr (Or.inr ⟨g, hg, w, hw, t, ht, rfl⟩))))⟩) hd⟩) hd⟩) hd
+        (Or.inr (Or.inr (Or.inr (Or.inr ⟨g, hg, w, hw, t, ht, rfl⟩))))⟩) hd⟩) hd⟩) hd) ?_
+  intro d hd
+  -- no typed tail: a flat statement's Δ ends with its wires
+  simp only [ht]
+  exact hd
 
-theorem delta_snd (c : Circuit) (pin : ℕ) : (HmRow.delta c pin).2 = (HmRow.delta c pin).1 := rfl
+theorem delta_snd (c : Circuit) (pin : ℕ) (ht : c.typed = none) : (HmRow.delta c pin).2 = (HmRow.delta c pin).1 := by
+  unfold HmRow.delta
+  simp only [ht]
+  rfl
 
 end FlockSoundness

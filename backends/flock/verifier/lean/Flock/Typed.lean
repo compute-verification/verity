@@ -156,7 +156,7 @@ theorem netOfD_ok {d : DeriveAll.D} {name : String} {n : Net} (h : netOfD d name
       Net.checkOrder "flock-ir-unit/v2" (n.inWords * WORD) d.const (rowsA d) (rowsB d) = .ok () ∧
       ∀ i < n.inWords * WORD, (((rowsA d).getD i #[] == #[i] && (rowsB d).getD i #[] == #[i]) ||
         (((rowsA d).getD i #[]).isEmpty && ((rowsB d).getD i #[]).isEmpty)) = true := by
-  obtain ⟨h1, h2, h3, h4, h5, -, -, h8, h9, h10, h11, h12⟩ := Net.ofRows_ok h
+  obtain ⟨h1, h2, h3, h4, h5, -, -, h8, h9, h10, h11, h12, -, -⟩ := Net.ofRows_ok h
   exact ⟨h1, h2, h3, h4, h5, h8, h9, h10, h11, h12⟩
 
 /-- A flat class's unit: no placed parts, no reads, no Δ but its constant's copy of the block's `one` (which `HmRow.delta`

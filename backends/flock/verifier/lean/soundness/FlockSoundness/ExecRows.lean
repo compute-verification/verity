@@ -209,20 +209,21 @@ theorem parse_checkOrder {lines : Array String} {net : Net} (h : Net.parse lines
   obtain ⟨og, -, h⟩ := except_bind_ok h
   replace h := ite_throw_ok (ite_throw_ok (ite_throw_ok (ite_throw_ok (ite_throw_ok h))))
   obtain ⟨s, -, h⟩ := except_bind_ok h
-  obtain ⟨u, -, h⟩ := except_bind_ok h
-  replace h := ite_throw_ok h
-  obtain ⟨u', hco, h⟩ := except_bind_ok h
-  cases u'
+  -- the rows' checks and the construction are `Net.ofRows`', after the trailing lines
+  have fin : Net.ofRows ((tokens (lines.getD 0 "")).getD 1 "") useful constPos ig.1 og.1 s.1 s.2 = .ok net →
+      ∃ ra rb, Net.checkOrder "flock-ir-unit/v2" (net.inWords * WORD) net.constPos ra rb = .ok () ∧
+        Sparse.ofRows ra (2 ^ net.unitLog) = .ok net.a ∧ Sparse.ofRows rb (2 ^ net.unitLog) = .ok net.b := by
+    intro ho
+    obtain ⟨-, ha, hb, -, hc, -, -, -, -, -, hco, -, -, -⟩ := Net.ofRows_ok ho
+    exact ⟨s.1, s.2, by rw [hc]; exact hco, ha, hb⟩
   by_cases hL : (lines.getD (1 + useful) "").startsWith "LEAVES " = true
   · rw [ite_eq_left_of_eq_true _ _ (eq_true hL)] at h
     rcases hj : Lean.Json.parse ((lines.getD (1 + useful) "").drop 7).toString with e | j
     · rw [hj] at h; exact absurd h throw_bind_ne
     · rw [hj] at h
-      obtain ⟨a, b, ha, hb, rfl⟩ := parse_tail (ite_throw_ok (ite_throw_ok h))
-      exact ⟨s.1, s.2, hco, ha, hb⟩
+      exact fin (ite_throw_ok (ite_throw_ok h))
   · rw [ite_eq_right_of_eq_false _ _ (eq_false hL)] at h
-    obtain ⟨a, b, ha, hb, rfl⟩ := parse_tail (ite_throw_ok (ite_throw_ok h))
-    exact ⟨s.1, s.2, hco, ha, hb⟩
+    exact fin (ite_throw_ok (ite_throw_ok h))
 
 /-- **The parser orders every net it accepts**: the rows it stored as `A` and `B` have `RowOrder`,
 so #144's `Rows.topo` for a parsed net is an executable check, not a hypothesis. -/

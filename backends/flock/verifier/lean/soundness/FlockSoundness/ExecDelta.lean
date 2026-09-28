@@ -85,8 +85,9 @@ theorem RowsIn_run_bind {Q : ℕ → Prop} {m : Id (Array (ℕ × ℕ))}
     {k : Array (ℕ × ℕ) → Id (Array (ℕ × ℕ) × Array (ℕ × ℕ))} (hm : RowsIn Q (Id.run m))
     (hk : ∀ d, RowsIn Q d → RowsIn Q (Id.run (k d)).1) : RowsIn Q (Id.run (m >>= k)).1 := hk _ hm
 
-/-- **Every row Δ writes has one of its six forms** (`HmRow.delta`, both halves the same array). -/
-theorem delta_rows (c : Circuit) (pin : ℕ) : RowsIn (DeltaRow c pin) (HmRow.delta c pin).1 := by
+/-- **Every row Δ writes has one of its six forms** (`HmRow.delta` of a flat statement, both halves the same array; a
+typed template's tail is #277's, stated apart). -/
+theorem delta_rows (c : Circuit) (pin : ℕ) (ht : c.typed = none) : RowsIn (DeltaRow c pin) (HmRow.delta c pin).1 := by
   unfold HmRow.delta
   simp only
   -- slot constants
@@ -121,10 +122,14 @@ theorem delta_rows (c : Circuit) (pin : ℕ) : RowsIn (DeltaRow c pin) (HmRow.de
         (Or.inr (Or.inr (Or.inr (Or.inr (Or.inl ⟨g, hg, e, he, t, ht, rfl⟩)))))⟩) hd⟩) hd⟩) hd) ?_
   intro d hd
   -- the wires
-  exact forIn_id_inv_range _ (fun g _ hg d hd => ⟨_, rfl,
+  refine RowsIn_run_bind (forIn_id_inv_range _ (fun g _ hg d hd => ⟨_, rfl,
     forIn_id_inv_array _ (fun w hw d hd => ⟨_, rfl,
       forIn_id_inv_range _ (fun t _ ht d hd => ⟨_, rfl, hd.push2
-        (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr ⟨g, hg, w, hw, t, ht, rfl⟩)))))⟩) hd⟩) hd⟩) hd
+        (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr ⟨g, hg, w, hw, t, ht, rfl⟩)))))⟩) hd⟩) hd⟩) hd) ?_
+  intro d hd
+  -- no typed tail: a flat statement's Δ ends with its wires
+  simp only [ht]
+  exact hd
 
 end FlockSoundness
 
