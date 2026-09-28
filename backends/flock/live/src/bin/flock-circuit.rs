@@ -45,6 +45,8 @@ const SIGMA_TAG: &[u8] = b"verity/flock-circuit/sigma";
 const SIGMA_TABLES_TAG: &[u8] = b"verity/flock-circuit/sigma-tables";
 /// The most tables in one session (`--session-tables`); their names sort in table order (`circuit-00` to `circuit-63`).
 const MAX_TABLES: usize = 64;
+const BERNOULLI_TABLES: &str = "tables: several tables need a subset draw (a Bernoulli draw's unit count is random, so the tables \
+                                could not split it evenly)";
 
 fn arg(k: &str, d: &str) -> String {
     let a: Vec<String> = std::env::args().collect();
@@ -118,6 +120,24 @@ fn zk_queries0(m: usize) -> Result<usize, String> {
 /// Ligerito level 0's padding per lane (`zk_veil::level0_t_pad`).
 fn zk_t_pad(m: usize) -> usize {
     zkv::level0_t_pad(zk_queries0(m).expect("checked when the statement is built"))
+}
+
+/// The claim points a table's rank check covers at its last opening (ab and c, for both reps).
+const RANK_POINTS: usize = 4;
+/// Mask words beyond the rank check's `128 · RANK_POINTS`. For uniformly random rows the rank falls short with probability
+/// below `2^(128 · RANK_POINTS − N)` at `N` words; a shortfall is a refused coin at an opening, which costs completeness only.
+const RANK_SLACK: usize = 64;
+
+/// A statement `--zk` can prove: level 0's query count ([`zk_queries0`]), and mask words enough for the rank check (§6) to be
+/// reachable. A table of a split session has fewer blocks, so fewer mask words. Checked when the statement is built, before
+/// `Hello`, never at an opening.
+fn zk_shape_ok(st: &Stmt) -> Result<(), String> {
+    zk_queries0(st.m)?;
+    let (words, need) = (mask_words(st).len(), 128 * RANK_POINTS);
+    if words < need + RANK_SLACK {
+        return Err(format!("{words} mask words: the rank check needs {need} for its {RANK_POINTS} claim points, and {RANK_SLACK} more"));
+    }
+    Ok(())
 }
 
 /// Ligerito level 0's hiding randomness for a session (both reps open the one level-0 codeword): every lane's padding, and
@@ -235,6 +255,9 @@ fn table_names(tables: usize) -> Vec<String> {
 fn session_tables(st: &Arc<Stmt>, inst: &Arc<Instances>, draw: Option<&Value>, count: usize) -> Result<Tables, String> {
     if count <= 1 {
         let (st, inst) = match draw { Some(d) => drawn(st, inst, d)?, None => (st.clone(), inst.clone()) };
+        if draw.is_some() && is_zk(&st) {
+            zk_shape_ok(&st)?;
+        }
         return Ok(Tables { list: vec![Table { name: TABLE.into(), st, inst }], draw: draw.cloned() });
     }
     if count > MAX_TABLES {
@@ -242,6 +265,7 @@ fn session_tables(st: &Arc<Stmt>, inst: &Arc<Instances>, draw: Option<&Value>, c
     }
     let units = match draw {
         Some(d) if d["population"].as_u64() != Some(inst.n as u64) => return Err("U: the draw's population is not this registered population".into()),
+        Some(d) if d["law"] != "subset" => return Err(BERNOULLI_TABLES.into()),
         Some(d) => flock_live::unit_draw::check(d)?,
         None => (0..inst.n).collect(),
     };
@@ -262,7 +286,7 @@ fn session_tables(st: &Arc<Stmt>, inst: &Arc<Instances>, draw: Option<&Value>, c
         }
         let ds = Stmt::new(st.c.clone(), di.n, id)?;
         if is_zk(&ds) {
-            zk_queries0(ds.m)?;
+            zk_shape_ok(&ds)?;
         }
         Ok(Table { name, st: Arc::new(ds), inst: Arc::new(di) })
     }).collect::<Result<Vec<_>, String>>()?;
@@ -521,28 +545,63 @@ fn server(st: &Arc<Stmt>, inst: &Arc<Instances>) -> Server {
 /// The verifier's server for sessions of `count` tables. With a draw (`--draw`, `--draw-file`) the tables are the drawn
 /// units' (until `Register`, the population's one-table statement stands in); without, the population's.
 fn server_tables(st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) -> Server {
+    server_of(&serving(st, inst, count), st, inst, count)
+}
+
+/// What every session of a server serves: the verifier's own draw (`--draw-file`) or its law (`--draw`), and without either
+/// the population's tables. Built once, when the server starts.
+struct Serving {
+    given: Option<Value>,
+    law: Option<flock_live::unit_draw::Law>,
+    tabs: Tables,
+}
+
+fn serving(st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) -> Serving {
+    use flock_live::unit_draw::Law;
     let (file, law) = (arg("--draw-file", ""), arg("--draw", ""));
-    let tabs = if count > 1 && file.is_empty() && law.is_empty() {
+    // the verifier's own draw, made outside this server: served at Register as it is (checked there, U2, and against the
+    // registered population when the drawn statement is built)
+    let given = (!file.is_empty()).then(|| {
+        let draw: Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap_or_else(|e| refuse(format!("--draw-file: {e}"))))
+            .unwrap_or_else(|e| refuse(format!("--draw-file: {e}")));
+        flock_live::unit_draw::check(&draw).unwrap_or_else(|e| refuse(e));
+        draw
+    });
+    let law = (!law.is_empty()).then(|| Law::parse(&law).unwrap_or_else(|e| refuse(e)));
+    // several tables are refused here, before any session, for a draw they cannot split or whose tables `--zk` cannot prove. A
+    // subset law's table shapes depend on its k alone, so a draw of the first k units stands for every draw.
+    if count > 1 {
+        let probe = match (&given, law) {
+            (Some(d), _) => Some(d.clone()),
+            (None, Some(Law::Bernoulli { .. })) => refuse(BERNOULLI_TABLES.into()),
+            (None, Some(Law::Subset { k })) => Some(json!({"law": "subset", "population": inst.n, "k": k, "units": (0..k).collect::<Vec<_>>()})),
+            (None, None) => None,
+        };
+        if let Some(d) = probe {
+            session_tables(st, inst, Some(&d), count).unwrap_or_else(|e| refuse(e));
+        }
+    }
+    let tabs = if count > 1 && given.is_none() && law.is_none() {
         session_tables(st, inst, None, count).unwrap_or_else(|e| refuse(e))
     } else {
         Tables::one(st, inst)
     };
-    let s = Server::new(config_of(&tabs), Box::new(CircuitVerifier { tabs }));
-    if !file.is_empty() {
-        // the verifier's own draw, made outside this server: served at Register as it is (checked there, U2, and against the
-        // registered population when the drawn statement is built)
-        let draw: Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap_or_else(|e| refuse(format!("--draw-file: {e}"))))
-            .unwrap_or_else(|e| refuse(format!("--draw-file: {e}")));
-        flock_live::unit_draw::check(&draw).unwrap_or_else(|e| refuse(e));
+    Serving { given, law, tabs }
+}
+
+/// One session's server.
+fn server_of(sv: &Serving, st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) -> Server {
+    let s = Server::new(config_of(&sv.tabs), Box::new(CircuitVerifier { tabs: sv.tabs.clone() }));
+    if let Some(draw) = &sv.given {
         let mut s = with_draw(s, st, inst, flock_live::unit_draw::Law::Subset { k: 0 }, count);
         s.cfg.draw_law = None;
-        s.cfg.draw_given = Some(draw);
+        s.cfg.draw_given = Some(draw.clone());
         return s;
     }
-    if law.is_empty() {
-        return s;
+    match sv.law {
+        Some(l) => with_draw(s, st, inst, l, count),
+        None => s,
     }
-    with_draw(s, st, inst, flock_live::unit_draw::Law::parse(&law).unwrap_or_else(|e| refuse(e)), count)
 }
 
 /// A server that draws `law` over the registered population at `Register` and serves the drawn units' statement, in `count`
@@ -2445,6 +2504,7 @@ const CASES: &[(&str, bool, bool)] = &[
     ("zk_dummy_witness_passes_the_region_claims", false, true),
     ("tables_two_in_one_session", true, false),
     ("tables_proofs_before_the_last_coin_detected", true, false),
+    ("tables_unsplittable_draw_refused", false, false),
     ("zk_tables_share_no_randomness", true, false),
 ];
 
@@ -2662,6 +2722,19 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         };
         if name == "zk_tables_share_no_randomness" {
             return tables_randomness_case(&tabs);
+        }
+        if name == "tables_unsplittable_draw_refused" {
+            // both sides refuse, before Hello, a draw two tables cannot split: a Bernoulli law's (its count is random), and an
+            // odd count; the server also refuses them at configuration (`server_tables`)
+            let n = inst.n as u64;
+            let units = |k: u64| (0..k).collect::<Vec<_>>();
+            let bern = session_tables(st, inst, Some(&json!({"law": "bernoulli", "p": "1/1", "population": n, "units": units(n)})), 2).err();
+            let odd = (n >= 3).then(|| session_tables(st, inst, Some(&json!({"law": "subset", "population": n, "k": 3, "units": units(3)})), 2).err());
+            let every = session_tables(st, inst, Some(&json!({"law": "subset", "population": n, "k": n, "units": units(n)})), 2).err();
+            let pass = bern.as_deref() == Some(BERNOULLI_TABLES) && odd.as_ref().is_none_or(|e| e.as_deref().is_some_and(|w| w.contains("do not split")))
+                && every.is_none();
+            return json!({"case": name, "expect": "a Bernoulli draw and an odd count refused; a subset draw of every unit splits", "bernoulli": bern,
+                          "odd": odd, "every_unit": every, "pass": pass});
         }
         // the public-circuit ZK proof's J = 2: both tables' roots in one Commit, a coin subtree per table and rep, and every
         // proof after the session's last coin. A prover without the barrier sends table 0's proofs before table 1's coins: the
@@ -3201,7 +3274,7 @@ fn main() {
     let id = identity(&c);
     let st = Arc::new(Stmt::new(c, inst.n, id).unwrap_or_else(|e| refuse(e)));
     if zk_mode() {
-        zk_queries0(st.m).unwrap_or_else(|e| refuse(e));
+        zk_shape_ok(&st).unwrap_or_else(|e| refuse(e));
     }
     let tables = tables_arg();
     if tables > 1 && flag("--gpu") {
@@ -3215,7 +3288,10 @@ fn main() {
         "zkaudit" => zkaudit(&st, &inst),
         "zkrewind" => zkrewind(&st, &inst),
         "zkgk" => zkgk(&st, &inst),
-        "serve" => serve_loop(move || server_tables(&st, &inst, tables)),
+        "serve" => {
+            let sv = serving(&st, &inst, tables);
+            serve_loop(move || server_of(&sv, &st, &inst, tables))
+        }
         "prove" => {
             let runs: usize = arg("--runs", "1").parse().unwrap();
             let warm: usize = arg("--warm", "0").parse().unwrap();

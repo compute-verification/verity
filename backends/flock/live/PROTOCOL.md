@@ -299,7 +299,9 @@ is the minimum.
   verifier's coin commitment (§9), not M1's hiding.
 - **Refused coins.** The prover's refusals are exactly the ones the argument uses: `β = 0` (the inner proof),
   `ρ^r_0, ρ^r_1` dependent over F128 (`W^r` invertible), and mask-slot weights of rank `< 128·(claim points)` (§6).
-  The mask slot must have `blocks · 2^(mask_log−7) ≥ 128 · 4` words for the rank to be reachable; RoPE has 1024.
+  The mask slot must have `blocks · 2^(mask_log−7) ≥ 128 · 4` words for the rank to be reachable. Both sides refuse a
+  statement, or a table of a split session, with fewer than `128 · 4 + 64` words when it is built, before `Hello`
+  (`zk_shape_ok`). RoPE and GEMM have 1024 at every split tried: m ≥ 25 at their `k_log` means at least 8 blocks.
 
 Negatives, each rejected on both reps (RoPE CPU selftest):
 - another extra lane folded than the committed one;
@@ -475,7 +477,9 @@ rejected by the inner proof alone).
   expanded from ChaCha20 like the hm96 salts.
 - **Several tables per session** (the public-circuit ZK proof's §2.3 and gap 1) are on the CPU prover, `--session-tables J`:
   - the draw's units split into J equal tables `circuit-00`, `circuit-01`, ... (`session_tables`), under Σ over every
-    table's Σ;
+    table's Σ. The server refuses at configuration a Bernoulli law (its count is random), a count J does not divide, and
+    tables `--zk` cannot prove. The session's law is the record's `unit_draw`: each table's header carries only its part
+    as a subset draw;
   - randomness per table (§2) and a rank check per table (§6);
   - one `Commit` carrying every table's level-0 root: a later table commits its root before any stream opens, and its reps
     stop unless they bind it;
@@ -483,7 +487,8 @@ rejected by the inner proof alone).
   - every proof after the session's last coin (the barrier).
 
   The selftests are `tables_two_in_one_session`, `tables_proofs_before_the_last_coin_detected` (a prover without the
-  barrier is accepted by the verifier and caught by the order check) and `zk_tables_share_no_randomness`. The device prover
+  barrier is accepted by the verifier and caught by the order check), `zk_tables_share_no_randomness` and
+  `tables_unsplittable_draw_refused`. The device prover
   still proves one table per session, and `gk_simulate` still simulates one table.
 - **Review.** A red team on §5, §7 and this section, then the Lean reference prover and its differential test, before any
   `COMPLETE_*` class.
