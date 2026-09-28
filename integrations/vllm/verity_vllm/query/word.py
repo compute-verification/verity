@@ -48,8 +48,36 @@ RULE = "no-recompute"
 
 _KINDS = ("output", "committed", "dead")
 
-#: Calls with more gates than this are not partitioned explicitly (`check_calls` names them)
+#: Calls with more gates than this are not partitioned explicitly (`check_calls` names them).  A run raises it (`gate_limits`) with a
+#: subcommand's `--word-max-gates` (or `VERITY_QWORD_MAX_GATES`): a memory budget (about 0.6 KB per gate), not part of `query_id`
 MAX_GATES = 24_000_000
+MAX_GATES_ENV = "VERITY_QWORD_MAX_GATES"
+
+#: `max_gates` as the cut functions take it: a limit for every Definition, {family or descriptor id: limit, "*": the rest}, a
+#: `gate_limits` spec, or None (`MAX_GATES`)
+Limits = int | str | Mapping[str, int] | None
+
+
+def gate_limits(spec: Limits = None) -> dict[str, int]:
+    """`spec` as {"*": limit, family or descriptor id: limit}.  A spec string is comma-separated entries, each a limit for every
+    Definition (`120000000`) or one family's (`GumbelTopPTokenSelect_v2=120000000`); None is `MAX_GATES` for every one."""
+    if spec is None:
+        spec = MAX_GATES
+    if isinstance(spec, int):
+        return {"*": int(spec)}
+    if isinstance(spec, Mapping):
+        return {"*": MAX_GATES, **{str(k): int(v) for k, v in spec.items()}}
+    out = {"*": MAX_GATES}
+    for e in str(spec).split(","):
+        k, _, v = e.strip().rpartition("=")
+        out[k or "*"] = int(v.replace("_", ""))
+    return out
+
+
+def gate_limit(fn: Any, limits: Limits = None) -> int:
+    """The gate limit of `fn` under `limits` (`gate_limits`): its descriptor id's, else its family's, else every Definition's."""
+    lim = gate_limits(limits)
+    return lim.get(fn.id, lim.get(fn.id.split("{")[0], lim["*"]))
 
 
 def query_id(X: int = 16, W: int = 32, extras: int = 0) -> str:
@@ -175,15 +203,18 @@ def _combine(fid: str, gates: int, parts: list[tuple[dict[str, Any], int]], X: i
     return rule
 
 
-def unit_rule(fn: Any, X: int = 16, W: int = 32, extras: int = 0, *, memo: dict | None = None, max_gates: int = MAX_GATES) -> dict[str, Any]:
+def unit_rule(fn: Any, X: int = 16, W: int = 32, extras: int = 0, *, memo: dict | None = None, max_gates: Limits = None) -> dict[str, Any]:
     """One Definition specialization under `Q_word_v1{X,W}`: {"definition", "query", "gates", "units_per_call", "by_kind",
     "committed_interior_words", "max_out_bits", "classes", "violations"}.  A class groups units by kind, the primitive and the
     activation of their first boundary gate, gates per unit and |out(S)|; `count` is units per Call, `nodes` the primitives of one
-    unit.  `committed_interior` lists the committed interior values by (activation, primitive): what a tap must acquire."""
+    unit.  `committed_interior` lists the committed interior values by (activation, primitive): what a tap must acquire.  A
+    Definition over its gate limit (`gate_limit` of `max_gates`) is not cut: a `too-large` violation.  One `memo` per `max_gates`."""
     memo = {} if memo is None else memo
     key = (fn.id, X, W, extras)
     if key in memo:
         return memo[key]
+    max_gates = gate_limits(max_gates)
+    limit = gate_limit(fn, max_gates)
     cap = X + extras
     if isinstance(fn, PrimitiveDefinition) and (not fn.params or fn.id in WIRING):
         rule = _finish(fn.id, 1, [], [], X, W, extras)
@@ -201,9 +232,9 @@ def unit_rule(fn: Any, X: int = 16, W: int = 32, extras: int = 0, *, memo: dict 
             rule["violations"].append({"definition": fn.id, "class": "cut", "codes": ["gate-recomputed"],
                                        "detail": {"gate-recomputed": {"n": across["recomputed_gates"], "between": "node members",
                                                                       "classes": across["recomputes"][:8]}}})
-    elif fn.gates > max_gates:
+    elif fn.gates > limit:
         rule = _finish(fn.id, fn.gates, [], [], X, W, extras)
-        rule["violations"] = [{"definition": fn.id, "class": "too-large", "gates": fn.gates, "limit": max_gates}]
+        rule["violations"] = [{"definition": fn.id, "class": "too-large", "gates": fn.gates, "limit": limit}]
     else:
         G = Graph(fn)
         R = units(G, X, W, extras)
@@ -287,7 +318,7 @@ def tap_kernel(scope: str | None, head: str | None = None) -> str:
 
 def check_calls(groups: Iterable[dict[str, Any]], X: int = 16, W: int = 32, extras: int = 0, *, strict: bool = True,
                 specialize: Callable[[str, dict], Any] = specialization,
-                acquired: Mapping[str, int | Callable[[dict], int]] | None = None) -> dict[str, Any]:
+                acquired: Mapping[str, int | Callable[[dict], int]] | None = None, max_gates: Limits = None) -> dict[str, Any]:
     """`Q_word_v1{X,W}` over a Program's Calls, grouped: each group {"family", "statics", "definition", "calls", "where",
     "inputs_committed", "outputs_committed"}.  Per group: its Definition's unit rule and the committed-boundary conditions (every
     Value the Call reads and every Value it outputs is committed, else a unit would cross Calls).  Violations are aggregated per
@@ -296,8 +327,11 @@ def check_calls(groups: Iterable[dict[str, Any]], X: int = 16, W: int = 32, extr
     `acquired` (Definition family -> committed interior words per Call a tap acquires, e.g. `query.norm_scales.TAP_WORDS`, or a function
     of the Call's statics for a tap whose words depend on them, `query.router_softmax.TAP_WORDS`): those interior values are committed
     boundaries too.  Each group of such a family reports `acquired_interior_words`, and one whose
-    partition commits another number of interior words per Call is an `interior-not-acquired` violation."""
+    partition commits another number of interior words per Call is an `interior-not-acquired` violation.
+
+    `max_gates` (`gate_limits`): the run's gate limits; the query, and so `res["query"]`, is the same under any."""
     memo: dict = {}
+    limits = gate_limits(max_gates)
     out: list[dict[str, Any]] = []
     agg: dict[tuple[str, str], dict[str, Any]] = {}
 
@@ -309,7 +343,7 @@ def check_calls(groups: Iterable[dict[str, Any]], X: int = 16, W: int = 32, extr
 
     for g in groups:
         try:
-            rule = unit_rule(specialize(g["family"], g["statics"]), X, W, extras, memo=memo)
+            rule = unit_rule(specialize(g["family"], g["statics"]), X, W, extras, memo=memo, max_gates=limits)
         except (KeyError, TypeError, ValueError, AttributeError) as e:
             rule = _finish(g["definition"], 0, [], [], X, W, extras)
             rule["violations"] = [{"definition": g["definition"], "class": "unresolved", "why": f"{type(e).__name__}: {str(e)[:200]}"}]
@@ -369,11 +403,11 @@ def call_groups(P: Any, Q: Any) -> list[dict[str, Any]]:
 
 
 def check_query(P: Any, Q: Any, X: int = 16, W: int = 32, extras: int = 0, *, strict: bool = True,
-                acquired: Mapping[str, int] | None = None) -> dict[str, Any]:
-    """Check the Program `P` against `Q_word_v1{X,W}` refining the population `Q` (see `call_groups`; `acquired`: see `check_calls`);
-    `strict` raises `QueryRuleViolation` naming every violating (Definition, class)."""
-    return check_calls(call_groups(P, Q), X, W, extras, strict=strict, acquired=acquired)
+                acquired: Mapping[str, int] | None = None, max_gates: Limits = None) -> dict[str, Any]:
+    """Check the Program `P` against `Q_word_v1{X,W}` refining the population `Q` (see `call_groups`; `acquired`, `max_gates`: see
+    `check_calls`); `strict` raises `QueryRuleViolation` naming every violating (Definition, class)."""
+    return check_calls(call_groups(P, Q), X, W, extras, strict=strict, acquired=acquired, max_gates=max_gates)
 
 
-__all__ = ["QUERY_ID", "WIRING", "RULE", "committed_today", "tap_kernel", "QueryRuleViolation", "query_id", "parse", "specialization", "Graph", "partition", "units",
-           "unit_rule", "check_calls", "call_groups", "check_query"]
+__all__ = ["QUERY_ID", "WIRING", "RULE", "MAX_GATES", "MAX_GATES_ENV", "committed_today", "tap_kernel", "QueryRuleViolation", "query_id", "parse",
+           "gate_limits", "gate_limit", "specialization", "Graph", "partition", "units", "unit_rule", "check_calls", "call_groups", "check_query"]

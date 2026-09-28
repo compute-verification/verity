@@ -30,6 +30,9 @@
   "BitOr_v1": {
    "and": 1
   },
+  "BitXor_v1": {
+   "and": 0
+  },
   "DivFullRcp_v1": {
    "and": 3987
   },
@@ -154,7 +157,7 @@
    "and": 63
   },
   "GumbelNoiseLane_v1": {
-   "and": 109431
+   "and": 109421
   },
   "GumbelStreamKey_v1": {
    "and": 9758
@@ -174,6 +177,9 @@
   "I32Le_v1": {
    "and": 32
   },
+  "I32ToF32_v1": {
+   "and": 368
+  },
   "MufuEx2Ftz_v1": {
    "and": 688
   },
@@ -185,6 +191,9 @@
   },
   "MufuTanh_v1": {
    "and": 160
+  },
+  "NvLogf_v1": {
+   "and": 48646
   },
   "RopeOutAdd_v1": {
    "and": 2998
@@ -198,6 +207,9 @@
   "SelectBf16_v1": {
    "and": 16
   },
+  "SelectBit_v1": {
+   "and": 1
+  },
   "SelectF32_v1": {
    "and": 32
   },
@@ -209,6 +221,12 @@
   },
   "TanhF32Rn_v1": {
    "and": 182
+  },
+  "TopPNumkeep_v1": {
+   "and": 425
+  },
+  "U32Xor_v1": {
+   "and": 0
   }
  },
  "units": {
