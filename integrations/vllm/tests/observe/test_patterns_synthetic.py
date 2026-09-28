@@ -184,6 +184,9 @@ def decode_step(step=1, position=32, token=42, prev_token=7, with_unknown=False,
                 "n_cols": H, "eps": EPS, "BLOCK_SIZE": 1024, "HAS_WEIGHT": True}
     b.triton("vllm.model_executor.determinism.batch_invariant._rms_norm_kernel", rms_args, {"BLOCK_SIZE": 1024, "HAS_WEIGHT": True}, [M], 4, 3)
     # qkv GEMM
+    if qkv_bias:   # `matmul_persistent`'s `c = torch.empty((M, N))`, as the capture records it
+        b.leaf("aten.empty.memory_format", "aten::empty.memory_format(SymInt[] size, *, ScalarType? dtype=None, Layout? layout=None, Device? device=None, bool? pin_memory=None, MemoryFormat? memory_format=None) -> Tensor",
+               [[M, QKV]], {"dtype": {"$repr": "torch.bfloat16"}}, outs=bf(303, (M, QKV)), module="model.layers.0.self_attn.qkv_proj")
     qkv = gemm_launch(b, n1, bf(A_QKV_W, (QKV, H)), 303, H, QKV, M, wrapper=mm_wrapper, **{"num_sms": num_sms, **(gemm_over or {})})
     qa = 303
     if qkv_bias:

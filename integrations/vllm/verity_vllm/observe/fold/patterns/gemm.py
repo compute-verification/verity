@@ -186,7 +186,8 @@ def fuse_bias_adds(resolutions: list, ctx: StepContext, roots: list[TreeNode]) -
             continue
         a = out[j]
         if (type(a) is not Compute or a.spec.id.split("{")[0] != "BiasAdd_v1" or a.rows != g.rows or a.operands[0] != PerRow(c)
-                or not isinstance(a.operands[1], Shared) or any(_names(r, c.alloc) for k, r in enumerate(roots) if k not in (i, j))):
+                or not isinstance(a.operands[1], Shared)
+                or any(_names(r, c.alloc) for k, r in enumerate(roots) if k not in (i, j) and not _allocates(out[k]))):
             continue
         K, N = g.spec.bindings["K"], g.spec.bindings["N"]
         w, b = g.operands[1].view, a.operands[1].view
@@ -196,6 +197,11 @@ def fuse_bias_adds(resolutions: list, ctx: StepContext, roots: list[TreeNode]) -
                          hint=a.hint, kernels=g.kernels + a.kernels, attribution=a.attribution, pattern="gemm_bias.fused",
                          roots=(None, *names))
     return out
+
+
+def _allocates(r) -> bool:
+    """An allocation (`aten.empty` / `zeros` / ... : `matmul_persistent`'s `c = torch.empty(...)`): it reads nothing."""
+    return type(r) is Transparent and r.effect == "alloc"
 
 
 def _names(root: TreeNode, alloc: int) -> bool:
