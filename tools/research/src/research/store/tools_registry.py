@@ -27,6 +27,7 @@ REGISTRY: dict[str, str] = {
     "serving_commit_cost": "benchmarks.commitments.tool:SERVING_COMMIT_COST",
     "flock_pure": "backends.flock.tool:FLOCK_PURE",
     "flock_agreement": "backends.flock.verifier.tool:FLOCK_AGREEMENT",
+    "flock_class_sweep": "backends.flock.tool:FLOCK_CLASS_SWEEP",
     "check": "tools.check.tool:CHECK",
     # vLLM integration sweep stages (integration-owned declarations).
     "vllm.build": "integrations.vllm.verity_vllm.pipeline.research_tools:VLLM_BUILD",
