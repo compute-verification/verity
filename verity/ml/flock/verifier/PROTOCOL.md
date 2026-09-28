@@ -1233,7 +1233,7 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
     the structure;
   - the verifier computes `GfResiduals`' S at that shape (`Flock.RecAlgebra.structureOf`, `rec_algebra.structure`) and
     its row ports (`rec_residuals.spec`: one per round that absorbs elements, then `acc0` and `acc1` of 2), groups its
-    residuals as `rec_residuals.parts` does, each residual in the first part of at most 64 regions, 128 `sha512x3`
+    residuals as `rec_residuals.parts` does, each residual in the first part of at most 64 regions, 160 `sha512x3`
     slots and 16 residuals it fits, and refuses unless the parts hold every residual once; part `j` must exist;
   - part `j`'s S is the whole S's residuals and the operands their products read, each term renumbered into the part's
     `w` (its row ports' elements, in order) and `v` (the elements it reads, ascending); a term outside them, or a
