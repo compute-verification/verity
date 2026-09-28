@@ -297,7 +297,7 @@ class TransparentBackend:
         carrying an unused program with a wrong-arity gate was accepted here
         and rejected by the Lean reference.  No honest statement has a
         malformed program.  Mirrors ``check_programs`` in
-        ``zk/sp1/common/src/check.rs``.
+        ``backends/sp1/common/src/kernel/relations.rs``.
         """
 
         for program in statement.kinds:

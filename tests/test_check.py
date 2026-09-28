@@ -1,4 +1,4 @@
-"""`tools/check/check.py`: its steps in order, the Lean hook before and after PR #85, and the result a recorded run publishes."""
+"""`tools/check/check.py`: its steps in order, the Lean hook with and without the verifier, and the result a recorded run publishes."""
 from __future__ import annotations
 
 import importlib.util
@@ -14,7 +14,7 @@ def test_the_steps_are_pytest_then_circuit_check_then_the_lean_hook(tmp_path, mo
     monkeypatch.setattr(CHECK, "FLOCK_VERIFIER", tmp_path / "verifier")
     names = [(n, argv if isinstance(argv, str) else argv[1:4]) for n, argv, _cwd in CHECK.steps(tmp_path)]
     assert names[0] == ("pytest", ["-m", "pytest", "-q"]) and names[1] == ("circuit-check", ["-m", "circuit_check", "--all"])
-    assert names[2] == ("lean", "skipped: PR #85 (backends/flock/verifier) is not on this tree")
+    assert names[2] == ("lean", "skipped: backends/flock/verifier/lean is not on this tree")
     assert "-m" in CHECK.steps(tmp_path)[0][1] and "not circuit_suite" in CHECK.steps(tmp_path)[0][1]
 
 
