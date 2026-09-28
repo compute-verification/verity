@@ -180,7 +180,7 @@ def test_missing_instances_warns_and_judges(tmp_path: Path) -> None:
     cand = write_run(tmp_path, "r-cand", conforming_result("r-cand"))  # instances: null
     proc = judge(str(base), str(cand))
     assert proc.returncode == 0, proc.stdout + proc.stderr
-    assert "WARNING: candidate instances is null: not measured on the shared instance set" in proc.stdout
+    assert "WARNING: candidate instances is null: not measured on the shared input set" in proc.stdout
     lacking = conforming_result("r-old")
     del lacking["workload_fingerprint"]["instances"]
     old = write_run(tmp_path, "r-old", lacking)

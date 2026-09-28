@@ -228,7 +228,7 @@ _NVFP4 = census.INPUT_SETS["bench-instances-nvfp4-sm120-v1"]
 NVFP4_INSTANCES_DATASET, NVFP4_INSTANCES_TIER = _NVFP4.dataset, _NVFP4.tier
 NVFP4_INSTANCES_SEED, NVFP4_INSTANCES_DIGEST = _NVFP4.seed, _NVFP4.manifest_sha256
 #: The recipe's family composition at the frozen tier size (4096 VUs; VU ``i`` is of family ``i % 14``): the corner families
-#: ``verity.proofs.trust`` criterion Tc asks the honest set to include (a contract-pinned set has no fixture manifest to
+#: ``tools/tc_probe/trust.py`` criterion Tc asks the honest set to include (a contract-pinned set has no fixture manifest to
 #: carry them).  Every family but ``random`` is an edge family of ``BlockScaledAlignAdd``.
 NVFP4_INSTANCES_FAMILIES = {
     "random": 293, "zero-scales": 293, "subnormal-scales": 293, "top-scales": 293, "top-scales-zero-acc": 293, "span-scales": 293,
@@ -847,9 +847,9 @@ def compare_instances(baseline: Mapping[str, Any] | None, candidate: Mapping[str
     warnings = []
     for who, fp, v in (("baseline", fb, a), ("candidate", fc, b)):
         if INSTANCES_FIELD not in fp:
-            warnings.append(f"{who} does not record instances (pre-{INSTANCES_DATASET} result): not measured on the shared instance set")
+            warnings.append(f"{who} does not record instances (pre-{INSTANCES_DATASET} result): not measured on the shared input set")
         elif v is None:
-            warnings.append(f"{who} instances is null: not measured on the shared instance set")
+            warnings.append(f"{who} instances is null: not measured on the shared input set")
     if a is None or b is None or not isinstance(a, Mapping) or not isinstance(b, Mapping):
         return None, warnings
     if any(a.get(k) != b.get(k) for k in ("dataset", "tier", "manifest_sha256")):

@@ -16,8 +16,8 @@ here reads a hand-set ``status`` field: ``Instruction.status`` is reported next 
 can disagree visibly.
 
 The store is any object with the :class:`research.store.local.LocalStore` surface (``index.select_artifacts``,
-``get_manifest``, ``labels``, ``index.attempts_by_output``, ``get_attempt``, ``has_local``, ``fetch``); this module never
-imports ``research`` (the CLI resolves ``--store-class`` by name at run time), so ``verity`` stays dependency-free.
+``get_manifest``, ``labels``, ``index.attempts_by_output``, ``get_attempt``, ``has_local``, ``fetch``); the CLI resolves
+``--store-class`` by name at run time.
 
 Label contract (the exact keys this module reads; producers write them, nobody normalises later):
 
@@ -34,7 +34,7 @@ Label contract (the exact keys this module reads; producers write them, nobody n
     any                trust_downgrade=<trigger id>  /  trust_downgrade=resolved:<D-id>                              (invalidation)
     trust-dossier/v1   target=<subject>  instruction=<id>  level=<LEVEL>  anchor=<family>                          (written by --publish)
 
-Dossier: ``python -m verity.proofs.trust <target|instruction|--all> [--root STORE] [--format md|json] [--publish]``.
+Dossier: ``python tools/tc_probe/trust.py <target|instruction|--all> [--root STORE] [--format md|json] [--publish]``.
 """
 from __future__ import annotations
 
@@ -76,8 +76,8 @@ class Level(IntEnum):
 
 def registry_level(status: str | None) -> Level:
     """The ladder level a registry ``Instruction.status`` asserts (``pinned`` -> PINNED, ``hypothesis`` -> HYPOTHESIS, ``unprobed`` ->
-    UNPROBED).  The registry may never sit above the computed level (TRUSTED and above are computed only): ``python -m
-    verity.proofs.trust --all --publish`` reports every instruction whose status exceeds its level, and the registry is
+    UNPROBED).  The registry may never sit above the computed level (TRUSTED and above are computed only): ``python
+    tools/tc_probe/trust.py --all --publish`` reports every instruction whose status exceeds its level, and the registry is
     downgraded citing the dossier."""
     if status is None:
         return Level.UNPROBED
@@ -1675,9 +1675,8 @@ DEFAULT_STORE_CLASS = "research.store.local:LocalStore"
 
 
 def _open_store(root: str | None, store_class: str = DEFAULT_STORE_CLASS):
-    """The evidence store for the CLI.  ``verity`` has no dependency on the ``research`` tool (the core import-boundary test
-    forbids one): the store class is named as data (``module:Class``) and resolved at run time; any object with the
-    :class:`LocalStore` surface documented at the top of this module works."""
+    """The evidence store for the CLI: the store class is named as data (``module:Class``) and resolved at run time; any
+    object with the :class:`LocalStore` surface documented at the top of this module works."""
     import importlib
 
     mod, _, cls = store_class.partition(":")
@@ -1686,7 +1685,7 @@ def _open_store(root: str | None, store_class: str = DEFAULT_STORE_CLASS):
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(prog="python -m verity.proofs.trust", description=__doc__.split("\n\n")[0])
+    ap = argparse.ArgumentParser(prog="python tools/tc_probe/trust.py", description=__doc__.split("\n\n")[0])
     ap.add_argument("target", nargs="*", help="target name, target constant (FIRST) or instruction id; or --all")
     ap.add_argument("--all", action="store_true", help="every Target plus every modelled registry instruction")
     ap.add_argument("--root", default=None, help="store root (default: the store class's default, ~/.research/store)")
