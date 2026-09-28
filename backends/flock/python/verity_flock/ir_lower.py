@@ -88,6 +88,7 @@ PIECES: dict[str, Callable] = {
     "HopperBF16WgmmaDot16_v1": lambda C, acc, *ab: fp.tc_dot16(C, acc, list(ab[:16]), list(ab[16:]), groups=(16,), W=26, F=-133),
 }
 PIECES.update(tail_pieces.PIECES)
+PIECES["AmpereBF16TcDot16_v2"] = PIECES["AmpereBF16TcDot16_v1"]  # core's id (verity.ml.prims) for the same total function
 
 
 class _Pieces(dict):
@@ -364,15 +365,15 @@ def units(target, cut: Callable | None = None, group: int = 1) -> Units:
     return Units(target, in_widths, [width[g] for g in ret_gates], ins, outs, sigs[0], first, arg_gates, ret_gates, K, tail)
 
 
-TC_PRIM = "AmpereBF16TcDot16_v1"
-#: tensor-core k-step primitive -> fp.tc_dot16's (groups, W, F): verity.ml.tc.models AMPERE_BF16_M16N8K16 / HOPPER_BF16_WGMMA_K16
-TC_STEPS = {"AmpereBF16TcDot16_v1": ((8, 8), 25, -132), "HopperBF16WgmmaDot16_v1": ((16,), 26, -133)}
+#: tensor-core k-step primitive -> fp.tc_dot16's (groups, W, F): verity.ml.tc.models AMPERE_BF16_M16N8K16 / HOPPER_BF16_WGMMA_K16.
+#: The Ampere step has two ids, the vLLM registry's _v1 and core's _v2 (verity.ml.prims): one measured total function.
+TC_STEPS = {"AmpereBF16TcDot16_v1": ((8, 8), 25, -132), "AmpereBF16TcDot16_v2": ((8, 8), 25, -132), "HopperBF16WgmmaDot16_v1": ((16,), 26, -133)}
 #: the FP8 step -> fp.tc_dot_e4m3's (groups, W, F): verity.ml.tc.total_fp8 HOPPER_E4M3_WGMMA_K32 (a GEMM's FP8 coordinate is walked,
 #: not unit-lowered)
 TC_STEPS_FP8 = {"HopperE4m3QgmmaDot32_v1": ((32,), 14, -139)}
 
 
-def tc_units(target, prim: str = TC_PRIM) -> Units:
+def tc_units(target, prim: str | None = None) -> Units:
     """``target`` as tensor-core k-steps: every ``AmpereBF16TcDot16`` gate is one unit, ports in operand order: its 16 ``b``
     operands from input leaves (``("leaf", p)``), or ``("zero", 0)`` where the IR pads with a constant zero word; its 16 ``a``
     operands and its accumulator as cut words; its result a cut word. Input leaves read as ``a`` operands (the query) are public
@@ -382,9 +383,12 @@ def tc_units(target, prim: str = TC_PRIM) -> Units:
     gates = live_gates(call)
     by = {g.index: g for g in gates}
     arg_pos = {g: i for i, g in enumerate(args)}
-    tcs = [g for g in gates if g.prim.id == prim]
+    tcs = [g for g in gates if (g.prim.id == prim if prim else g.prim.id in TC_STEPS)]
     if not tcs:
-        raise ValueError(f"{getattr(target, 'id', target)}: no {prim} gate")
+        raise ValueError(f"{getattr(target, 'id', target)}: no {prim or ' or '.join(TC_STEPS)} gate")
+    if len({g.prim.id for g in tcs}) > 1:
+        raise ValueError("tensor-core steps of two ids in one target")
+    prim = tcs[0].prim.id
 
     def zero_word(o):
         g = by.get(o)
