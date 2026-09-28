@@ -28,8 +28,8 @@ namespace FlockSampled
 open FlockSoundness FlockSoundness.Game FlockSoundness.Audit
 open scoped ENNReal
 
-/-- One type, whose relation holds everywhere and whose matrix has no nonzeros. -/
-def Ty₁ : Types Unit Unit := { holds := fun _ _ => True, nnz := fun _ => 0 }
+/-- One type, whose relation holds everywhere, whose matrix has no nonzeros and whose unit fills one instance. -/
+def Ty₁ : Types Unit Unit := { holds := fun _ _ => True, nnz := fun _ => 0, instances := fun _ => 1 }
 
 /-- The one unit's record, everywhere. -/
 def X₁ : Trace 1 Unit Unit := fun _ => some ((), ())
@@ -37,7 +37,7 @@ def X₁ : Trace 1 Unit Unit := fun _ => some ((), ())
 /-- `k` sessions of one slot each, session `b` holding unit `b`. -/
 def batch₁ (k : ℕ) : Batching k Unit Unit where
   sessions := k
-  shape := fun _ => ⟨1, 0⟩
+  shape := fun _ => ⟨1, 0, 1⟩
   typ := fun _ _ => ()
   idx := fun b _ => some b
   val := fun _ _ => ()
@@ -70,7 +70,7 @@ theorem batch₁_cover (k : ℕ) : CoverCheck Finset.univ (batch₁ k) :=
 /-- The draw `S`'s units, one per one-slot session, in the draw's order. -/
 def batchOf {N : ℕ} (S : Finset (Fin N)) : Batching N Unit Unit where
   sessions := S.card
-  shape := fun _ => ⟨1, 0⟩
+  shape := fun _ => ⟨1, 0, 1⟩
   typ := fun _ _ => ()
   idx := fun b _ => some (S.orderEmbOfFin rfl b)
   val := fun _ _ => ()
@@ -123,7 +123,7 @@ theorem h₁_bound : Bound X₁ h₁.β := fun _ _ _ => rfl
 theorem h₁_proves : Proves Ty₁ C₁ Finset.univ h₁ where
   cover := batch₁_cover 1
   opens := h₁_opens
-  fits := fun _ _ _ => Nat.zero_le _
+  fits := fun _ _ _ => ⟨Nat.zero_le _, le_rfl⟩
   holds := fun _ _ _ => trivial
 
 /-- **`Coverage`'s hypotheses hold together**, at a nonempty draw. -/
@@ -141,13 +141,13 @@ theorem slotsSound_nonvacuous :
     (Finset.univ : Finset (Fin 1)).Nonempty ∧ C₁.Injective ∧ C₁.Committed X₁ path₀₁ ∧ Proves Ty₁ C₁ Finset.univ h₁ :=
   ⟨Finset.univ_nonempty, C₁_injective, C₁_committed, h₁_proves⟩
 
-/-- One-slot sessions of no nonzeros, one per drawn unit, one type per shape, over the inner shape `m = 22, k_log = 6`,
-two claims. -/
+/-- One-slot sessions of no nonzeros and one unit position, one per drawn unit, one type per shape, over the inner shape
+`m = 22, k_log = 6`, two claims. -/
 def menu₀ : Menu where
-  shapes := [⟨1, 0⟩]
+  shapes := [⟨1, 0, 1⟩]
   inner := fun _ => ⟨22, 6, 2⟩
   types := fun _ => 1
-  padded := fun k => (List.finRange k).map fun _ => ⟨1, 0⟩
+  padded := fun k => (List.finRange k).map fun _ => ⟨1, 0, 1⟩
 
 #guard menu₀.staged
 
@@ -180,10 +180,10 @@ theorem menu₀_room : menu₀.Room Ty₁ := by
   exact (List.mem_singleton.1 (hW.1 _ (hU i hi)).1).symm
 
 /-- The one type's placement, at `menu₀`'s one shape. -/
-def place₁ : Unit → Shape := fun _ => ⟨1, 0⟩
+def place₁ : Unit → Shape := fun _ => ⟨1, 0, 1⟩
 
 theorem menu₀_within : menu₀.Within Ty₁ Finset.univ place₁ :=
-  ⟨fun _ _ => ⟨List.mem_singleton_self _, Nat.zero_le _⟩,
+  ⟨fun _ _ => ⟨List.mem_singleton_self _, Nat.zero_le _, le_rfl⟩,
     fun _ => le_of_le_of_eq (Finset.card_le_univ _) Fintype.card_unit⟩
 
 /-- **`Menu.Room` fits every draw** of a trace whose units all hold records of types in `U`, placed within the menu's
@@ -197,8 +197,9 @@ theorem Menu.Room.fits {N : ℕ} {T V : Type} {M : Menu} {Ty : Types T V} (hR : 
   refine ⟨β, hv, hc, fun p i hi => ?_, ht⟩
   obtain ⟨hT, hS⟩ := hp p i hi
   obtain ⟨w, hw, hU⟩ := hty i
-  exact ⟨⟨w, hw.trans (congrArg (fun t => some (t, w)) hT.symm)⟩,
-    (congrArg Ty.nnz hT).trans_le ((hW.1 _ hU).2.trans_eq (congrArg Shape.nnz hS.symm))⟩
+  refine ⟨⟨w, hw.trans (congrArg (fun t => some (t, w)) hT.symm)⟩, ?_⟩
+  rw [hT, hS]
+  exact (hW.1 _ hU).2
 
 /-- **`Menu.Room` gives `Menu.RoomAt` at δ = 0**, under every law, for a trace whose units all hold records of types in
 `U`, placed within the menu's bounds. -/

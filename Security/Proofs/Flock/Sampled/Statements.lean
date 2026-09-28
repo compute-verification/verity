@@ -10,7 +10,8 @@ each one.
   its committed type, on its committed values, against the committed hidden partition; and the auditor, which checks
   only the sessions' padded shapes, has room for the draw.
 * `SlotBinding`: each held slot's opening of the trace root binds it to its unit's committed record, or the run's two
-  openings give a SHA-512 collision.
+  openings give a SHA-512 collision. Each slot has all its shape's unit positions, the record filling the first and
+  dummy copies of the unit the rest, so the unit layout V* reads per slot is public.
 * `ShapeMenu`, `Menu.Fits`, `Menu.RoomAt`, `Menu.Room`: an audit's padded sessions take only the menu's shapes; a draw's
   units fit them by type; the draws that don't fit have probability at most δ under the law (F6's quantile session
   counts); and the deterministic sufficient condition, room for every draw whose types are placed within the menu's
@@ -42,7 +43,11 @@ def Coverage : Prop :=
 /-- **Slot binding.** Under a commitment whose records determine their contents (`Commit.Injective`, the type in the
 leaf as a fixed-width field), with `X` the trace it commits: when every held slot's record opens the root at its unit's
 position, every held slot is on its unit's committed type and values, or some held slot's opening and the committed
-trace's give a SHA-512 collision (`SlotBreak`; F1's `opens_binding` computes it). -/
+trace's give a SHA-512 collision (`SlotBreak`; F1's `opens_binding` computes it). A slot is padded (top's ruling for
+candidate 3's hiding): it has all its shape's unit positions (`Shape.positions`), whatever its type, so U_σ, the unit
+layout V* reads per slot, is the menu entry's and public. The record a held slot is bound to fills the first
+`Ty.instances t` of them, the statement checks that it fits (`Types.FitsIn`), and dummy copies of the unit, wired to
+nothing, fill the rest; the openings bind the record, and the dummies bind nothing. -/
 def SlotBinding : Prop :=
   ∀ {N : ℕ} {T V : Type} (C : Commit N T V) (X : Trace N T V) (path₀ : Fin N → ByteArray) (h : Hidden N T V),
     C.Injective → C.Committed X path₀ → C.SlotOpens h → Bound X h.β ∨ SlotBreak C X path₀ h
@@ -51,12 +56,13 @@ def SlotBinding : Prop :=
 def ShapeMenu (M : Menu) : Prop := ∀ k, ∀ s ∈ M.padded k, s ∈ M.shapes
 
 /-- **The draw's units fit the padded sessions**, by type: some batching of the draw `S` into the menu's padded sessions
-for `|S|` passes the coverage check, puts each held slot on its unit's committed type within its shape's nonzero bound,
-and keeps each session's type table within its shape's type bound. It is an honest batching without the values; a
-placement of the types at shapes with enough sessions at each (F6's) gives one. -/
+for `|S|` passes the coverage check, puts each held slot on its unit's committed type, fitting its shape (`Types.FitsIn`:
+the nonzero bound, and the unit positions with dummy copies in the rest), and keeps each session's type table within its
+shape's type bound. It is an honest batching without the values; a placement of the types at shapes with enough sessions
+at each (F6's) gives one. -/
 def Menu.Fits {N : ℕ} {T V : Type} (M : Menu) (Ty : Types T V) (X : Trace N T V) (S : Finset (Fin N)) : Prop :=
   ∃ β : Batching N T Unit, β.view = M.padded S.card ∧ CoverCheck S β ∧
-    (∀ p i, β.held p = some i → (∃ v, X i = some (β.slotTyp p, v)) ∧ Ty.nnz (β.slotTyp p) ≤ (β.shape p.1).nnz) ∧
+    (∀ p i, β.held p = some i → (∃ v, X i = some (β.slotTyp p, v)) ∧ Ty.FitsIn (β.slotTyp p) (β.shape p.1)) ∧
     ∀ b, (β.table b).card ≤ M.types (β.shape b)
 
 /-- **The padded sessions have room at all but δ of the draws**: under the law `L`, the draws of `X`'s units that don't
@@ -78,11 +84,11 @@ def Menu.Room {T V : Type} (M : Menu) (Ty : Types T V) : Prop :=
 
 /-- **An honest batching** of the draw `S` of the trace `X`: into the menu's padded sessions for `|S|`, each staged by
 V* and in the live verifier's range; passing the coverage check; on the committed types and values; each held slot's
-type within its shape's nonzero bound; each session's type table within its shape's type bound. -/
+type fitting its shape, padded to its unit positions; each session's type table within its shape's type bound. -/
 def Menu.Honest {N : ℕ} {T V : Type} (M : Menu) (Ty : Types T V) (X : Trace N T V) (S : Finset (Fin N))
     (β : Batching N T V) : Prop :=
   β.view = M.padded S.card ∧ (∀ s ∈ β.view, ∃ vs, M.vstar s = .ok vs) ∧ (∀ s ∈ β.view, M.rangeCheck s = .ok ()) ∧
-    CoverCheck S β ∧ Bound X β ∧ (∀ p i, β.held p = some i → Ty.nnz (β.slotTyp p) ≤ (β.shape p.1).nnz) ∧
+    CoverCheck S β ∧ Bound X β ∧ (∀ p i, β.held p = some i → Ty.FitsIn (β.slotTyp p) (β.shape p.1)) ∧
     ∀ b, (β.table b).card ≤ M.types (β.shape b)
 
 /-- **The menu admits each draw that fits** (completeness, per draw). At a menu V* stages and the live verifier accepts
@@ -134,8 +140,10 @@ registration `R` and draw `S`, for every honest witness `h` (sessions at the men
 statement at `S`), the auditor's view of the honest audit is close, in F1's sense, to the simulated one, which reads only
 the reveal list `reveal M S (I.out R)`: the menu (its shapes, nonzero bounds and type bounds), the draw (the auditor's own
 coins, so `k = |S|`), the padded sessions `M.padded |S|` and the owed outputs. It reads nothing of the batching, the
-slots' types, their values or the types' placement; and since the real view holds the registration's root, the trace's
-leaves hide each unit's type as well as its values (the type field salted and hidden with them). -/
+slots' types, their values, their instance counts or the types' placement: each slot's unit layout is its shape's
+(`Shape.positions`, dummy copies where its type has fewer instances), so the padded sessions give it. And since the real
+view holds the registration's root, the trace's leaves hide each unit's type as well as its values (the type field
+salted and hidden with them). -/
 def ZeroKnowledge : Prop :=
   ∀ {N : ℕ} {T V Reg O : Type} (session : Finset (Fin N) → Reg → Game O) (Ty : Types T V) (com : Reg → Commit N T V)
     (I : Recursion session Ty com) (M : Menu) (R : Reg) (S : Finset (Fin N)) (h : Hidden N T V),
