@@ -392,7 +392,9 @@ copies an attempt manifest plus its outputs' manifests and blobs from a machine'
 
 - A registry entry is *tracked* (git holds it; a tracked file is at most 256 KiB) or *fetched* (its path is gitignored).
 - `fetchset.py` fetches any set of ids, `--jobs` at a time: local objects, else the private remote when reachable, else the public
-  export (`HttpRemote`: `GET <url>/manifests/<hex>.json`, `<url>/objects/sha256/<hex>`). A manifest must hash to its id and a blob
+  export (`HttpRemote`: `GET <url>/manifests/<hex>.json`, `<url>/objects/sha256/<hex>`; `<url>` is `fetchset.PUBLIC_URL`, the
+  site's `/store`, which redirects to the `verity-public` bucket, unless `--public-url` or `$RESEARCH_PUBLIC_URL` names another,
+  and an empty one means none). A manifest must hash to its id and a blob
   to its sha256 and size, or the next source is tried. The registry is one caller; a snapshot's members can be another.
 - `fetch-fixtures` makes fetched entries present and exact (a tree's directory holds its files and nothing else), never writes a
   tracked file, and is offline once fetched. `suites.py` runs it first and keys each suite on the ids under its inputs.
