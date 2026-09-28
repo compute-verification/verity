@@ -24,7 +24,7 @@ against the commitment, the tile's C̃ and U through the scalar reference to the
 rows passing the per-row rules and R1 and excluded rows failing one of them, and the replayed debit
 (`pearl_c4.tile_debit`: F1′'s base split under the exact noise law given the drawn E lines and the realised scale bytes,
 F2's int8 route on flat scales, identity atoms, dead × dead pairs, salt-dead or unneeded A forming, sub-grid blocks, D-24's
-2:4 row windows) under the cap, ρ = 1/400 of the credited cells' creditOf.  Its report carries every tile's debit and the
+pair-sparse row windows) under the cap, ρ = 1/400 of the credited cells' creditOf.  Its report carries every tile's debit and the
 accept line (`accept_line`).
 
   python -m verity_pouw.schemes.pearl_c4_replay prove DUMP --run RUN --out transcript.json [--t 8] [--workers N]
