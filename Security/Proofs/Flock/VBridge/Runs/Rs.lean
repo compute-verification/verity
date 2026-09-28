@@ -23,19 +23,20 @@ namespace FlockVBridge.Runs
 
 open Flock Flock.RecAlgebra FlockSoundness.Refine FlockVBridge.Compiled
 
-/-- `Coins.ofRounds` on a record's coins reads round `k`'s, when it has `n` (RecAlgebra.lean:39–42). -/
-theorem ofRounds_round {rs : Array Round} {k n : ℕ} {c : Array F128}
+/-- `Coins.ofRounds` on a record's coins, none of its rounds empty, reads round `k`'s, when it has `n`
+(RecAlgebra.lean:40–46). -/
+theorem ofRounds_round {rs : Array Round} {k n : ℕ} {c : Array F128} (hne : NoEmpty (rs.map (·.coins)))
     (h : (Coins.ofRounds (rs.map (·.coins))).round k n = .ok c) : k < rs.size ∧ (rs[k]!).coins = c ∧ c.size = n := by
   by_cases hk : k < rs.size
   · have e : (rs.map (·.coins))[k]? = some rs[k].coins := by simp [hk]
-    simp only [Coins.ofRounds, e] at h
+    simp only [Coins.ofRounds, filter_noEmpty hne, e] at h
     by_cases hs : rs[k].coins.size = n
     · simp only [hs, ↓reduceIte] at h
       cases h
       exact ⟨hk, by rw [getElem!_pos rs k hk], hs⟩
     · simp [hs] at h
   · have e : (rs.map (·.coins))[k]? = none := by simp [hk]
-    simp only [Coins.ofRounds, e] at h
+    simp only [Coins.ofRounds, filter_noEmpty hne, e] at h
     cases h
 
 theorem getD_zero_of_size {c : Array F128} (h : c.size = 1) : c.getD 0 0 = c[0]! := by
@@ -78,7 +79,7 @@ theorem rs_of_residuals {sh : Shape} {d : RepData} {v : Array F128} {info : Info
     (hm : 14 ≤ st.m) (hmS : st.m = sh.m) (hkS : st.kLog = sh.kLog) (hfS : st.fold.kLog = sh.kLog)
     (hkm : st.kLog ≤ st.m) (hxs : d.extras = extras)
     (hext : ∀ j < extras.size, extras[j]!.skip.size = 64 ∧ extras[j]!.x.size = st.m - 6)
-    (hco : d.rounds = t.rounds.map (·.coins)) (ht : t.k = 0)
+    (hco : d.rounds = t.rounds.map (·.coins)) (hne : NoEmpty d.rounds) (ht : t.k = 0) (hpl : sh.holo = false)
     (hfc : p.zerocheck.finalC = info.zc.vc.eval (valOf sh d.w d.comb d.cons))
     (hzp : p.lincheck.zPartial = (decoded sh d.w d.comb d.cons).zp)
     (hrsw : p.ringSwitches = (decoded sh d.w d.comb d.cons).rs)
@@ -105,11 +106,11 @@ theorem rs_of_residuals {sh : Shape} {d : RepData} {v : Array F128} {info : Info
       rsSws (claimsF sh (valOf sh d.w d.comb d.cons) info extras) (fun k => (info.rs.sws[k]!).rpp) info.rs.gamma =
         info.rs.sws := by
   subst hxs
-  obtain ⟨hcl0, hval, hT⟩ := ringSwitch_of_residuals hrows hS hw hc hacc hres hzero
-  obtain ⟨rs', k, hrun, hres'⟩ := residuals_eq_run d.w d.comb d.cons hrows hS hw hc hacc
+  obtain ⟨hcl0, hval, hT⟩ := ringSwitch_of_residuals hpl hrows hS hw hc hacc hres hzero
+  obtain ⟨rs', k, hrun, hres'⟩ := residuals_eq_run d.w d.comb d.cons hpl hrows hS hw hc hacc
   rw [hres] at hres'
   cases hres'
-  rw [hco] at hrun
+  rw [hco] at hrun hne
   obtain ⟨hsc, r0, r1, rsr, lgr, k1, k2, k3, h0, h1, h2, -, -⟩ := run_stages hrun
   obtain ⟨-, -, hszc⟩ := decoded_sizes sh d.w d.comb d.cons
   have hslc := decoded_lc_size sh d.w d.comb d.cons
@@ -119,9 +120,9 @@ theorem rs_of_residuals {sh : Shape} {d : RepData} {v : Array F128} {info : Info
   obtain ⟨_, -, -, hgam, -, -, hsws, hsw⟩ := ringSwitch_spec (by simp [claimsOf]) h2
   simp only [Info.map, ZcPts.map, LcPts.map] at hr hrho hrp hrIn hw0 hts
   simp only [Info.map, RsPts.map] at hgam hsws hsw
-  obtain ⟨-, hc₁', hc₁s⟩ := ofRounds_round hc₁
-  obtain ⟨-, hcr', hcrs⟩ := ofRounds_round hcr
-  obtain ⟨hgsz, hgam', -⟩ := ofRounds_round hgam
+  obtain ⟨-, hc₁', hc₁s⟩ := ofRounds_round hne hc₁
+  obtain ⟨-, hcr', hcrs⟩ := ofRounds_round hne hcr
+  obtain ⟨hgsz, hgam', -⟩ := ofRounds_round hne hgam
   have hAs : (claimsOf sh.m sh.kLog (info.zc.map (Lin.eval (valOf sh d.w d.comb d.cons)))
       (info.lc.map (Lin.eval (valOf sh d.w d.comb d.cons))) d.extras).size = 2 + d.extras.size := by
     simp [claimsOf]
@@ -164,7 +165,7 @@ theorem rs_of_residuals {sh : Shape} {d : RepData} {v : Array F128} {info : Info
       rw [hkk, ← hAs]
       exact hgsz
     · obtain ⟨c, hc', -, -, h4⟩ := hsw j (by rw [hAs]; exact hj)
-      obtain ⟨-, hc'', -⟩ := ofRounds_round hc'
+      obtain ⟨-, hc'', -⟩ := ofRounds_round hne hc'
       have hjs : j < info.rs.sws.size := by rw [hsws, hAs]; exact hj
       rw [Array.getElem?_eq_getElem hjs, Option.some.injEq] at h4
       show (t.rounds[k₂ + j]!).coins = (info.rs.sws[j]!).rpp
