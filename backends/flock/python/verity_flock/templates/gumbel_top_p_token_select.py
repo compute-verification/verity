@@ -6,7 +6,7 @@ row-level values (the top-p keep word, the Gumbel noise, the temperature's row s
 The lane netlist does not depend on V (only the arrangement does) and is pinned by :data:`PIN`."""
 TEMPLATE = "gumbel-top-p-token-select"
 UNIT = "gumbel-top-p-token-select/fp32/lane"
-PIN = "bc18d1459f87c205977ee8c3739c19e5da93a036ae7dadbef62cba75d9e8aeaa"
+PIN = "c9aeca364cb08b68a174fa9811ff505306c6a8f9af7458689ff23e66409cc1b6"
 FRAME_SCHEMES = ("frame-v3/blake3-keyed",)
 
 

@@ -1,6 +1,6 @@
 import FlockSoundness.Model.Session
 import FlockSoundness.Accounting.Numbers
-import FlockSoundness.Assumptions
+import ArkLib.Data.CodingTheory.ProximityGap.CapacityBounds
 import Mathlib.Algebra.Polynomial.Eval.Defs
 import Mathlib.Algebra.CharP.Defs
 
