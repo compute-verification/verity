@@ -32,23 +32,11 @@ from verity.ir.defs import REGISTRY
 from verity_vllm.config import option
 from verity_vllm.pipeline import layout as build_paths
 from verity_vllm.program import workload as W
-# [R14 moe] the request descriptors decode through the SAME registry set `cb_a.compare._registry` loads: b1 + serve3 + pad_prims + moe
-# (the fused-MoE Definitions and the ref_prims they use, e.g. F32Sub_v1 -- an OLMoE component failed to decode without it) + hopper if present.
-from verity_vllm.program.registry import b1, dense, moe, pad_prims, serve3  # noqa: F401  (dense: [R15] unfused norm chain / GeGLU / softcap)
-from verity_vllm.program.registry import sampling  # noqa: F401  [R15 stoch] the stochastic select families
-try:
-    from verity_vllm.program.registry import hopper  # noqa: F401
-except Exception as _e:  # noqa: BLE001
-    print(f"[global_program] hopper registry unavailable ({_e!r}): Hopper-target components will not decode", file=sys.stderr)
-try:  # [R15 fp8] block-scaled FP8 components (Fp8GroupQuant_v1 / ScaledMmFp8Block_v1 and their primitives)
-    from verity_vllm.program.registry import fp8  # noqa: F401
-except Exception as _e:  # noqa: BLE001
-    print(f"[global_program] fp8 registry unavailable ({_e!r}): FP8 components will not decode", file=sys.stderr)
-try:  # [R17-42 route A (3)] the PADDED MoE construction's Definitions (MoeFfnFixedL_v1 per token + the lifted twins): a component derived
-    # under `target.moe_construction = padded` does not decode without them ("MoeFfnFixedL_v1 is not in the registry"), exactly as moe/fp8
-    from verity_vllm.program.registry import moe_pad  # noqa: F401
-except Exception as _e:  # noqa: BLE001
-    print(f"[global_program] moe_pad registry unavailable ({_e!r}): padded-construction components will not decode", file=sys.stderr)
+from verity_vllm.program.registry.catalog import load as _load_registry
+
+# the request descriptors decode through the registry the Match reads (`program_compare._registry`): every registry module loaded
+for _e in _load_registry()[1]:
+    print(f"[global_program] registry module unavailable ({_e}): components naming its Definitions will not decode", file=sys.stderr)
 
 from verity_vllm.check.match.batch_decomp import derived_shape
 
