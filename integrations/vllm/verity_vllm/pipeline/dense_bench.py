@@ -51,6 +51,7 @@ class Options:
     gate_segments: int = option("--gate-segments", type=int, default=2, help="segments whose sampled blocks the reference decodes")
     workers: int = option("--workers", type=int, default=12, help="processes for the reference side of G2")
     chunked: bool = option("--chunked", action="store_true", default=False, help="chunk-major decode state (dense.CHUNKED)")
+    chunked_threads: int = option("--chunked-threads", type=int, default=128, help="threads per block of chunk-major launches")
     window: int | None = option("--window", type=int, default=None, help="band graph of this in-degree instead of dense")
     audit: int = option("--audit", type=int, default=0,
                         help="timed audits (pous-dense-audit, a separate process) of the first model's C while its passes run")
@@ -356,6 +357,7 @@ def main(a: Options) -> int:
     codec.PAIR_MAX_ROWS[0] = a.pair_max_rows
     codec.COALESCED[0] = a.coalesced
     dense.CHUNKED[0] = a.chunked
+    dense.CHUNKED_THREADS[0] = a.chunked_threads
     WINDOW[0] = a.window
     doc: dict[str, Any] = {"options": dataclasses.asdict(a), "device": device_facts(), "gates": {"vectors": gate_vectors()}}
     salt = bytes(range(24))
@@ -394,7 +396,8 @@ def main(a: Options) -> int:
             "workload_fingerprint": {"benchmark": "dense-decode/v1", "models": list(doc["models"]), "thread_rows": a.thread_rows,
                                      "word_io": a.word_io, "fused": a.fused,
                                      "pair": a.pair, "pair_max_rows": a.pair_max_rows, "coalesced": a.coalesced,
-                                     "chunked": a.chunked, "window": a.window},
+                                     "chunked": a.chunked, "chunked_threads": a.chunked_threads,
+                                     "window": a.window},
             "validation": {"status": "passed" if passed else "failed", "checker": "verity-vllm pous-dense-bench gates",
                            "detail": json.dumps({k: v["passed"] for k, v in doc["gates"].items()}), "evidence": ["dense-bench.json"]},
             "measurements": rows, "measurement_files": ["dense-bench.json"], "artifacts": ["dense-bench.json"]}, indent=1))

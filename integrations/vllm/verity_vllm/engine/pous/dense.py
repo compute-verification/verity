@@ -77,7 +77,12 @@ def _throttle(pending: list, stream) -> None:
 
 
 CHUNKED = [False]
-"""`decode_blocks` keeps its state chunk-major (`_Chunked`, `feistel_chunked_kernel`) instead of row-major."""
+"""`decode_blocks` of at least `CHUNKED_MIN_ROWS` blocks keeps its state chunk-major (`_Chunked`, `feistel_chunked_kernel`)
+instead of row-major; smaller decodes keep the row-major kernels, whose warp and lane-pair launches have the lower latency."""
+
+CHUNKED_MIN_ROWS = [4096]
+CHUNKED_THREADS = [128]
+"""Threads per block of the chunk-major launches (fewer spread a launch over more SMs)."""
 
 CHUNK = 136
 
@@ -138,7 +143,7 @@ class _Chunked:
     def permute(self, row0: int) -> None:
         from verity_vllm.engine.pous import native
 
-        native.ext().feistel_chunked(self.words, row0, self.rows - row0, self.half // 8, codec.PI_DOMAIN)
+        native.ext().feistel_chunked(self.words, row0, self.rows - row0, self.half // 8, codec.PI_DOMAIN, CHUNKED_THREADS[0])
 
 
 def _decode_chunked(c_flat, seg, blk, ln, tags, base, starts, width: int) -> torch.Tensor:
@@ -153,7 +158,9 @@ def _decode_chunked(c_flat, seg, blk, ln, tags, base, starts, width: int) -> tor
         first, pad_end = starts[j - 1], starts[j]
         st.pad(slice(first, pad_end))
         if pad_end < r:
-            st.put(0, 0, slice(pad_end, r), c_flat[base[pad_end:] + blk[pad_end:] - j])
+            from verity_vllm.engine.pous import native
+
+            native.ext().chunked_gather(st.words, pad_end, c_flat, (base[pad_end:] + blk[pad_end:] - j).contiguous(), width // 8)
         st.permute(first)
         _throttle(pending, stream)
     return st.get(0, 0, width)
@@ -176,7 +183,7 @@ def decode_blocks(c_flat: torch.Tensor, tags: torch.Tensor, segs: torch.Tensor, 
     state[:, 2 * width + 33] = (blk >> 8).to(torch.uint8)
     starts = torch.searchsorted(ln, torch.arange(int(ln[-1]) + 2, device=ln.device)).tolist()
     base = seg * per_segment
-    if CHUNKED[0]:
+    if CHUNKED[0] and r >= CHUNKED_MIN_ROWS[0]:
         w = _decode_chunked(c_flat, seg, blk, ln, tags, base, starts, width) ^ c_flat[base + blk]
         out = torch.empty_like(w)
         out[order] = w

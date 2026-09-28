@@ -740,7 +740,7 @@ __global__ void feistel_chunked_kernel(uint64_t* st_words, int64_t pitch, int64_
 
 // Π₂ (untweaked Feistel-10, domain `domain`) on rows `row0 .. row0 + rows` of a chunk-major state (`feistel_chunked_kernel`):
 // `state` is int64 `[2, nch, pitch, 17]` for halves of `hw` words.
-void feistel_chunked(torch::Tensor state, int64_t row0, int64_t rows, int64_t hw, int64_t domain) {
+void feistel_chunked(torch::Tensor state, int64_t row0, int64_t rows, int64_t hw, int64_t domain, int64_t threads) {
   TORCH_CHECK(state.is_cuda() && state.scalar_type() == torch::kInt64 && state.is_contiguous() && state.dim() == 4 &&
               state.size(0) == 2 && state.size(3) == RATE_WORDS && state.size(1) == (hw + RATE_WORDS - 1) / RATE_WORDS,
               "state must be contiguous int64 [2, nch, pitch, 17]");
@@ -748,9 +748,39 @@ void feistel_chunked(torch::Tensor state, int64_t row0, int64_t rows, int64_t hw
   if (rows == 0) return;
   c10::cuda::CUDAGuard guard(state.device());
   auto stream = c10::cuda::getCurrentCUDAStream();
-  const int threads = 128;
-  feistel_chunked_kernel<<<(unsigned)((rows + threads - 1) / threads), threads, 0, stream>>>(
+  TORCH_CHECK(threads >= 32 && threads <= 1024 && threads % 32 == 0, "threads must be a multiple of 32");
+  feistel_chunked_kernel<<<(unsigned)((rows + threads - 1) / threads), (unsigned)threads, 0, stream>>>(
       reinterpret_cast<uint64_t*>(state.data_ptr<int64_t>()), state.size(2), row0, rows, hw, (int)domain);
+  C10_CUDA_KERNEL_LAUNCH_CHECK();
+}
+
+// Rows `row0 + n` of a chunk-major state (`feistel_chunked_kernel`'s layout) take the first `words` words of half 0 from
+// row `index[n]` of the row-major `src` (`src_words` words per row): the parent gather and the transpose in one pass.
+__global__ void chunked_gather_kernel(uint64_t* st_words, int64_t nch, int64_t pitch, int64_t row0, const uint64_t* src,
+                                      int64_t src_words, const int64_t* index, int64_t n_rows, int64_t words) {
+  const int64_t t = (int64_t)blockIdx.x * blockDim.x + threadIdx.x;
+  const int64_t n = t / words, j = t % words;
+  if (n >= n_rows) return;
+  const int64_t c = j / RATE_WORDS, w = j % RATE_WORDS;
+  st_words[(c * pitch + row0 + n) * RATE_WORDS + w] = src[index[n] * src_words + j];
+}
+
+void chunked_gather(torch::Tensor state, int64_t row0, torch::Tensor src, torch::Tensor index, int64_t words) {
+  TORCH_CHECK(state.is_cuda() && state.scalar_type() == torch::kInt64 && state.is_contiguous() && state.dim() == 4 &&
+              state.size(3) == RATE_WORDS, "state must be contiguous int64 [2, nch, pitch, 17]");
+  TORCH_CHECK(src.is_cuda() && src.scalar_type() == torch::kUInt8 && src.is_contiguous() && src.dim() == 2 &&
+              src.size(1) % 8 == 0 && words * 8 <= src.size(1), "src must be contiguous uint8 [rows, 8k]");
+  TORCH_CHECK(index.is_cuda() && index.scalar_type() == torch::kInt64 && index.is_contiguous(), "index must be int64");
+  const int64_t n_rows = index.numel();
+  TORCH_CHECK(row0 >= 0 && row0 + n_rows <= state.size(2), "rows out of range");
+  if (n_rows == 0) return;
+  c10::cuda::CUDAGuard guard(state.device());
+  auto stream = c10::cuda::getCurrentCUDAStream();
+  const int64_t total = n_rows * words;
+  const int threads = 256;
+  chunked_gather_kernel<<<(unsigned)((total + threads - 1) / threads), threads, 0, stream>>>(
+      reinterpret_cast<uint64_t*>(state.data_ptr<int64_t>()), state.size(1), state.size(2), row0,
+      reinterpret_cast<const uint64_t*>(src.data_ptr<uint8_t>()), src.size(1) / 8, index.data_ptr<int64_t>(), n_rows, words);
   C10_CUDA_KERNEL_LAUNCH_CHECK();
 }
 
@@ -992,8 +1022,10 @@ class Responder {
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("shake256_rows", &shake256_rows, "out (^)= SHAKE256(prefix || body)[0:out.size(1)], row by row");
+  m.def("chunked_gather", &chunked_gather, "parent rows into half 0 of a chunk-major state", pybind11::arg("state"),
+        pybind11::arg("row0"), pybind11::arg("src"), pybind11::arg("index"), pybind11::arg("words"));
   m.def("feistel_chunked", &feistel_chunked, "Π₂ on rows of a chunk-major state", pybind11::arg("state"), pybind11::arg("row0"),
-        pybind11::arg("rows"), pybind11::arg("hw"), pybind11::arg("domain"));
+        pybind11::arg("rows"), pybind11::arg("hw"), pybind11::arg("domain"), pybind11::arg("threads") = 128);
   m.def("feistel_rows", &feistel_rows, "Feistel-10 in place, SHAKE256 round functions under a domain byte and per-row tweak",
         pybind11::arg("x"), pybind11::arg("tweak"), pybind11::arg("domain"), pybind11::arg("inverse"), pybind11::arg("thread_rows") = 0,
         pybind11::arg("word_io") = false, pybind11::arg("fused") = false, pybind11::arg("pair") = false,
