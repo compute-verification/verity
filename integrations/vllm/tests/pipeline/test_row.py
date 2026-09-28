@@ -283,7 +283,7 @@ def _built(r: SingleRow, monkeypatch, **kw) -> dict:
     b, _at = dense_program(**kw)
     _d, man = build_dir(Path(r.d), b.doc(LP), [PF[len("model."):]])
     (Path(r.d) / "manifest.json").write_text(json.dumps(man))
-    r.LP, r.T, r.ck = LP, T, "/ck"
+    r.B, r.LP, r.T, r.ck = 1, LP, T, "/ck"
     run_tl = r.run_tl
 
     def child(stage, to, lf, cmd, *extra):
