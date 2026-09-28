@@ -1,14 +1,17 @@
-"""The TABLES sweep for ``flock-circuit`` (``verity/flock-circuit``): one ``result.json`` per point, as ``verity_flock.ir_bench``
+"""The TABLES sweep for ``flock-circuit`` (``verity/flock-circuit``, or with ``--typed`` the typed statement
+``verity/flock-circuit/types``): one ``result.json`` per point, as ``verity_flock.ir_bench``
 does for ``flock-ir-frame`` (whose guard, probes and helpers, from ``verity_flock.bench``, this reuses).
 
     python -m verity_flock.circuit_bench --template rope-head --input-set DIR --bin target/release/flock-circuit --out-dir D \\
-        --points "256 1024" [--per-proof N] [--runs 5] [--verifier HOST:PORT] [--rtt-target HOST:PORT] [--loopback]
+        --points "256 1024" [--per-proof N] [--runs 5] [--verifier HOST:PORT] [--rtt-target HOST:PORT] [--loopback] [--typed]
     python -m verity_flock.circuit_bench ... --serve-plan --listen 0.0.0.0:7501        the verifier pod's side
 
 A point is the first ``total`` instances of the input set, proved in sequential sub-batches of ``--per-proof``. The prover stages
 its instance files (rows included); the verifier stages only its own public files (roots, row digests, outputs; no row) from its
 own copy of the input set, and the composite circuit, whose sha256 is the pin, from the lowering. The plateau is the point with
-the highest median throughput over the planned points; ``--loopback`` re-runs it against a verifier on 127.0.0.1.
+the highest median throughput over the planned points; ``--loopback`` re-runs it against a verifier on 127.0.0.1. A result
+names the pinned circuit's statement, counts ANDs as the prover does on either statement (tensor-core units + tail,
+:data:`ANDS_COUNTED`), and names the verifier that accepted its sessions.
 """
 from __future__ import annotations
 
@@ -25,6 +28,7 @@ import time
 from pathlib import Path
 
 from . import circuit as FC
+from . import typed_statement as TS
 from .bench import PER_PROOF_LOG2, PROFILES, _OURS, _guard, _lines, _probe, _quota, _sampler, _wait_serving, subbatches, tcp_rtt
 
 RULE = "the planned points (instances of the input set, sequential sub-batches of --per-proof); plateau = the point with the highest median throughput"
@@ -48,15 +52,27 @@ def stage_point(a, low, input_set, total: int, d: Path, public: bool) -> tuple[l
     d.mkdir(parents=True, exist_ok=True)
     subs = subbatches(total, a.per_proof)
     t0 = time.time()
+    stage = TS.stage if a.typed else FC.stage
     for i, (lo, hi) in enumerate(subs):
-        p = FC.stage(low, input_set, lo, hi, d / f"stage-s{i}", public_only=public, salt_key=salt_key(input_set))
+        p = stage(low, input_set, lo, hi, d / f"stage-s{i}", public_only=public, salt_key=salt_key(input_set))
         os.replace(p, d / f"instances-s{i}.bin")
     return subs, time.time() - t0
 
 
-def ands(low) -> int:
-    """AND gates per instance: the unit's expanded circuit's ANDs times the units per instance."""
-    return low.layout.counts["ands"] * low.units.n
+#: what ``ands_per_instance`` counts, on the flat and the typed statement alike
+ANDS_COUNTED = "tensor-core units + tail: the instance's AND items as the prover counts them (the rows' SHA-512 and hm96 proved, not counted)"
+
+
+def ands(first: dict) -> int:
+    """AND items per instance, as the prover reports them (``ands_per_vu``): its tensor-core units and its tail."""
+    v = first["ands_per_vu"]
+    return v[0] if isinstance(v, list) else v
+
+
+def rows(first: dict) -> int:
+    """Committed rows per instance, as the prover reports them (``rows_per_vu``): every circuit but the rows'."""
+    v = first["rows_per_vu"]
+    return v[0] if isinstance(v, list) else v
 
 
 def _merge(parts: list[list[dict]]) -> list[dict]:
@@ -68,7 +84,8 @@ def _merge(parts: list[list[dict]]) -> list[dict]:
         m["prove_s"] = [sum(r["prove_s"][i] for r in runs) for i in range(2)]
         m["verdict"] = {k: sum(r["verdict"].get(k, 0) or 0 for r in runs) for k in ("rounds", "verify_s", "handle_s")}
         m["proof_bytes"] = [sum(r["proof_bytes"][i] for r in runs) for i in range(2)]
-        for k in ("roots", "sigma", "dense_m", "k_log", "statement", "statement_digest", "prover", "circuit_sha512", "public_sha512", "unit_draw", "open_rtt_ms", "identity"):
+        for k in ("roots", "sigma", "dense_m", "k_log", "statement", "statement_digest", "prover", "circuit_sha512", "public_sha512", "unit_draw", "open_rtt_ms", "identity",
+                  "ands_per_vu", "rows_per_vu"):
             m[k] = [r.get(k) for r in runs] if len(runs) > 1 else runs[0].get(k)
         m["instances"] = sum(r.get("instances") or 0 for r in runs)
         b = {"t.witness": 0.0, "t.encoding_commitment": 0.0, "t.arithmetic": 0.0}
@@ -176,7 +193,7 @@ def result(a, input_set, low, p: dict, sweep: dict, pin: str) -> dict:
     n = p["total"]
     first = timed[0]
     sub = input_set.subcircuit
-    and_count = ands(low) * n
+    and_count = ands(first) * n
     # a GEMM coordinate's result names its campaign target and K, as flock-pure's cells do (bench.PROFILES)
     gemm = sub.template.id == "gemm-coordinate"
     fp = contract.fingerprint(
@@ -187,19 +204,21 @@ def result(a, input_set, low, p: dict, sweep: dict, pin: str) -> dict:
                   "coins": "live verifier (flock-live R1-R8)"},
         hardware=contract.probe_hardware(),
         software={"backend": {"name": Path(a.bin).name, "configuration": f"C-interactive/{Path(a.bin).name}", "commit": a.commit,
-                              "statement": FC.STATEMENT, "prover": first.get("prover"), "prove_args": a.prove_arg, "lowering_sha256": pin,
-                              "circuit_format": FC.FORMAT, "unit": low.name, "unit_sha256": low.sha256, "identity": first.get("identity"),
+                              "statement": a.meta["statement"], "prover": first.get("prover"), "prove_args": a.prove_arg, "lowering_sha256": pin,
+                              "circuit_format": a.meta["format"], "unit": low.name, "unit_sha256": low.sha256, "identity": first.get("identity"),
                               "flock": "succinctlabs/flock b684b12 + backends/flock/flock-link-b684b12.patch + cuda_circuit_patch.py"},
                   "toolchain": {"rustc": a.rustc, "python": platform.python_version()}},
         preprocessing="none: the circuit shape and the composite circuit are built once per process (fixed.setup_seconds: staging); every "
                       "timed session hashes its rows and evaluates every unit afresh (the witness bucket) before proving",
         retention="retained", instances=input_set.ref(0, n, a.art), N_subbatches=len(p["subbatches"]),
         batching={"total": n, "per_proof": a.per_proof, "in_flight": 1, "subbatches": [list(x) for x in p["subbatches"]]},
-        scheme=FC.SCHEME, statement=FC.STATEMENT, relation=relation(a.template), subcircuit=sub.id, subcircuit_template=sub.template.id,
-        roots=first["roots"], sigma=first["sigma"], dense_m=first["dense_m"], units_per_instance=low.units.n, ands_per_instance=ands(low),
+        scheme=FC.SCHEME, statement=a.meta["statement"], relation=relation(a.template), subcircuit=sub.id, subcircuit_template=sub.template.id,
+        roots=first["roots"], sigma=first["sigma"], dense_m=first["dense_m"], units_per_instance=low.units.n, ands_per_instance=ands(first),
+        ands_counted=ANDS_COUNTED, rows_per_instance=rows(first),
         private="every word but the frame-v3 roots, the row digests, the declared outputs and the pinned layout",
         rtt_method="net.rtt_ms = 64-byte Ping round trips on the open session connection before Hello, per timed session, median",
         verifier={"placement": "loopback" if not a.verifier else a.verifier, "process": f"{Path(a.bin).name} serve (separate process)",
+                  "accepted_by": f"{Path(a.bin).name} serve: the Rust live verifier (flock-live R1-R8); no Lean replay in this run",
                   "instance_file": "its own public file (no rows, no salts)", "stage_salts": STAGE_SALTS})
     ms = [contract.measurement("t.total", t_e2e), contract.measurement("t.total_live", t_e2e), contract.measurement("vu.count", n),
           contract.measurement("vu.seconds_per_vu", t_e2e / n), contract.measurement("vu.per_second", n / t_e2e),
@@ -293,6 +312,7 @@ def main(argv=None) -> int:
     ap.add_argument("--operator", default="")
     ap.add_argument("--rtt-target", default="")
     ap.add_argument("--loopback", action="store_true")
+    ap.add_argument("--typed", action="store_true", help="stage and prove the typed statement (verity/flock-circuit/types)")
     a = ap.parse_args(argv)
     a.rustc = subprocess.run(["rustc", "--version"], capture_output=True, text=True).stdout.strip()
     input_set = InputSet.open(a.input_set)
@@ -304,8 +324,10 @@ def main(argv=None) -> int:
     out = Path(a.out_dir)
     out.mkdir(parents=True, exist_ok=True)
     net = out / "circuit.txt"
-    net.write_text(FC.compose(low, input_set.subcircuit, statics=FC.set_statics(input_set)))
+    statics = FC.set_statics(input_set)
+    net.write_text(TS.compose(low, input_set.subcircuit, statics=statics).text if a.typed else FC.compose(low, input_set.subcircuit, statics=statics))
     pin = hashlib.sha512(net.read_bytes()).hexdigest()
+    a.meta = json.loads(net.read_text().split("\n", 2)[1][len("META "):])
     a.tables = []
     if low.units.cut:
         from . import ir_lower
@@ -330,7 +352,7 @@ def main(argv=None) -> int:
             p = {"total": total, "ok": False, "err": str(e), "timed": [], "dir": f"p{len(points)}-{total}", "contention": {}}
         p["vu_per_second"] = (total / statistics.median(r["e2e_s"] for r in p["timed"])) if p["ok"] else None
         points.append(p)
-        print(f"    ok={p['ok']} rc={p.get('rc')} inst/s={p['vu_per_second']} and/s={p['vu_per_second'] and p['vu_per_second'] * ands(low)} "
+        print(f"    ok={p['ok']} rc={p.get('rc')} inst/s={p['vu_per_second']} and/s={p['vu_per_second'] and p['vu_per_second'] * ands(p['timed'][0])} "
               f"wall={p.get('wall_s')} contended={p.get('contention', {}).get('contended')} rss={p.get('peak_rss')} err={p.get('err')}", flush=True)
         if not p["ok"]:
             break
