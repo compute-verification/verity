@@ -104,8 +104,8 @@ theorem forIn_list_push {α β ε : Type} {l : List α} {b : Array β} {f : α �
     · exact hl a ha
 
 /-- **What `HmRow.check` accepted.** -/
-theorem check_facts {c : Circuit} {tags : Tags} {ls : Lean.Json} (h : HmRow.check c tags ls = .ok ()) :
-    CheckFacts c := by
+theorem check_facts {c : Circuit} {tags : Tags} {ls : Lean.Json} (ht : c.typed = none)
+    (h : HmRow.check c tags ls = .ok ()) : CheckFacts c := by
   unfold HmRow.check at h
   obtain ⟨spans, hspans, h⟩ := except_bind_ok h
   rw [← Array.forIn_toList] at hspans
@@ -170,6 +170,7 @@ theorem check_facts {c : Circuit} {tags : Tags} {ls : Lean.Json} (h : HmRow.chec
   obtain ⟨hlk, h⟩ := ite_throw_ok' h
   obtain ⟨hpv, h⟩ := ite_throw_ok' h
   obtain ⟨hports, h⟩ := ite_throw_ok' h
+  simp only [ht] at h
   obtain ⟨hur, h⟩ := ite_throw_ok' h
   obtain ⟨hug, h⟩ := ite_throw_ok' h
   replace h := ite_join h fun ha => (ite_throw_ok' ha).2

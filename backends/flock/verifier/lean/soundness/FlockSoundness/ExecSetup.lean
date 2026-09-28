@@ -6,15 +6,17 @@ open Flock FlockLevel3
 
 namespace FlockSoundness
 
-/-- **What `Stmt.setupH` accepted** (the `hm96-sha512/row/v1` statement): the circuit `HmRow.parse` accepted, the pin
+/-- **What `Stmt.setupH` accepted** (an untyped `hm96-sha512/row/v1` statement, `tags.typed = false`, which `setupH`
+reads with `HmRow.parse` rather than `parseTyped`): the circuit `HmRow.parse` accepted, the pin
 `HmRow.pin` gave, Δ from `HmRow.delta`, `m = k_log + nbl` and `k_log ≤ 26`. -/
 theorem setupH_spec {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
-    (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) :
+    (ht : tags.typed = false) (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) :
     HmRow.parse tags cf tables = .ok st.c ∧ HmRow.pin st.c = .ok st.pin ∧
       st.da = (HmRow.delta st.c st.pin).1 ∧ st.db = (HmRow.delta st.c st.pin).2 ∧
       st.m = st.c.kLog + st.nbl ∧ st.c.kLog ≤ 26 := by
   unfold Stmt.setupH at h
+  simp (config := { zeta := false }) only [ht, Bool.false_eq_true, ↓reduceIte] at h
   (have hh := except_bind_ok h; clear h; obtain ⟨c, hc, h⟩ := hh)
   ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpA at h)
   obtain ⟨f0, h⟩ : ∃ f0, jpA f0 = .ok st := by
@@ -411,13 +413,14 @@ theorem slotLog_le {c : Circuit} (C : CheckFacts c) {r : Range} (hr : r ∈ c.ra
 variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
   {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
 
-/-- **The statement `Stmt.setupH` accepted has the layout the placement reads** (`Layout`): from `HmRow.parse`'s nets,
+/-- **The untyped statement `Stmt.setupH` accepted has the layout the placement reads** (`Layout`): from `HmRow.parse`'s nets,
 `HmRow.check`'s layout, `HmRow.pin` and `HmRow.delta`. -/
-theorem setupH_layout (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) : Layout st := by
-  obtain ⟨hp, hpin, hda, hdb, hm, hk⟩ := setupH_spec h
+theorem setupH_layout (ht : tags.typed = false) (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) :
+    Layout st := by
+  obtain ⟨hp, hpin, hda, hdb, hm, hk⟩ := setupH_spec ht h
   have P := parse_facts hp
   obtain ⟨ls, hcheck⟩ := P.check
-  have C := check_facts hcheck
+  have C := check_facts P.typed hcheck
   obtain ⟨hum, huk, huc⟩ := unit_range_facts P C
   obtain ⟨lines, hU⟩ := unit_parsed P C
   obtain ⟨hUlk, -, -, hUin, -⟩ := parse_spec hU
@@ -439,9 +442,9 @@ theorem setupH_layout (h : Stmt.setupH tags cf pf coins tables draw partition pr
     unit_in := hUin
     unit_const := parse_constRow hU
     pin := ⟨rp, hrp, ip, hkp, hcp, hpv, hcr (by omega)⟩
-    delta_b := by rw [hdb, hda, delta_snd]
+    delta_b := by rw [hdb, hda, delta_snd _ _ P.typed]
     delta := by
-      obtain ⟨rest, h1, h2⟩ := delta_split st.c st.pin
+      obtain ⟨rest, h1, h2⟩ := delta_split st.c st.pin P.typed
       exact ⟨rest, by rw [hda]; exact h1, fun p hp => deltaIn_inBit P C (h2 p hp)⟩
     kLog := by omega
     kLog6 := by omega
@@ -451,22 +454,23 @@ theorem setupH_layout (h : Stmt.setupH tags cf pf coins tables draw partition pr
 `g` has its `units_per_vu` unit slots' rows (the unit net's rows stacked, `Rows.stack`) placed at `ur.slot (g·upv + u)`,
 the shared constant at the pin, in the model statement of the level-0 matrices the verifier folds (`placedA`,
 `placedB`). -/
-theorem placement_of_setupH (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st)
+theorem placement_of_setupH (ht : tags.typed = false) (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st)
     (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {g : ℕ} (hg : g < st.c.g) :
-    Placement ((setupH_layout h).model regs) ((unitRows st (setupH_layout h).unit_parsed).stack st.c.upv)
-      (stackPlace ((setupH_layout h).model regs) (unitRows st (setupH_layout h).unit_parsed) st.c.upv
-        (fun u => st.c.unitRange.slot (g * st.c.upv + u)) ((setupH_layout h).hb hg)) :=
-  (setupH_layout h).placement regs hg
+    Placement ((setupH_layout ht h).model regs) ((unitRows st (setupH_layout ht h).unit_parsed).stack st.c.upv)
+      (stackPlace ((setupH_layout ht h).model regs) (unitRows st (setupH_layout ht h).unit_parsed) st.c.upv
+        (fun u => st.c.unitRange.slot (g * st.c.upv + u)) ((setupH_layout ht h).hb hg)) :=
+  (setupH_layout ht h).placement regs hg
 
 /-- **A drawn unit's place, from the executable's accept step** (#145's `UnitPlace`, which `loweringSoundB_of_place` and
 #171's `_placed` forms take): VU `g`'s stacked unit slots in block `o` of the accepted statement, given the unit's
 instance in the audit circuit. -/
-noncomputable def unitPlace_of_setupH (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st)
+noncomputable def unitPlace_of_setupH (ht : tags.typed = false)
+    (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st)
     (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {C : Audit.Circuit} {n : ℕ}
     {P : Audit.Partition C n} {u : Fin n}
-    (inst : P.IsRowsUnit u ((unitRows st (setupH_layout h).unit_parsed).stack st.c.upv))
-    (o : Fin (2 ^ ((setupH_layout h).model regs).nbl)) {g : ℕ} (hg : g < st.c.g) :
-    UnitPlace P ((setupH_layout h).model regs) u :=
-  (setupH_layout h).unitPlace regs inst o hg
+    (inst : P.IsRowsUnit u ((unitRows st (setupH_layout ht h).unit_parsed).stack st.c.upv))
+    (o : Fin (2 ^ ((setupH_layout ht h).model regs).nbl)) {g : ℕ} (hg : g < st.c.g) :
+    UnitPlace P ((setupH_layout ht h).model regs) u :=
+  (setupH_layout ht h).unitPlace regs inst o hg
 
 end FlockSoundness

@@ -93,11 +93,14 @@ structure ParseFacts (tags : Tags) (c : Circuit) : Prop where
   hmNet : c.hmNet < c.nets.size
   kinds : ∀ r ∈ c.ranges.toList, ∀ i, r.kind = .net i → i < c.nets.size
   check : ∃ ls, HmRow.check c tags ls = .ok ()
+  /-- not a typed template: `parse`'s `tmpl` is `none` -/
+  typed : c.typed = none
 
 set_option maxHeartbeats 4000000 in
 theorem parse_facts {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
     (h : HmRow.parse tags bytes tables = .ok c) : ParseFacts tags c := by
   unfold HmRow.parse at h
+  simp (config := { zeta := false }) only [Option.isSome_none, Bool.false_eq_true, ↓reduceIte, Option.mapM_none] at h
   ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) sha jp0 at h)
   split at h
   swap
@@ -140,6 +143,8 @@ theorem parse_facts {tags : Tags} {bytes : ByteArray} {tables : List (String × 
   (have hh := except_bind_ok h; clear h; obtain ⟨s1, hwhile, h⟩ := hh)
   ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) nets1 at h)
   (have hh := except_bind_ok h; clear h; obtain ⟨u1, -, h⟩ := hh)
+  ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpT at h)
+  simp (config := { zeta := false }) only [jpT] at h
   ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpL at h)
   obtain ⟨lks, h⟩ : ∃ lks, jpL lks = .ok c := by
     split at h <;> (obtain ⟨l, -, h⟩ := except_bind_ok h; exact ⟨l, h⟩)
@@ -218,6 +223,7 @@ theorem parse_facts {tags : Tags} {bytes : ByteArray} {tables : List (String × 
   replace h := ite_throw_ok h
   simp (config := { zeta := false }) only [jpF] at h
   (have hh := except_bind_ok h; clear h; obtain ⟨kLog, -, h⟩ := hh)
+  simp (config := { zeta := false }) only [pure_bind] at h
   ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) c0 at h)
   (have hh := except_bind_ok h; clear h; obtain ⟨w, hcheck, h⟩ := hh)
   have hc : c0 = c := Except.ok.inj h
@@ -353,6 +359,6 @@ theorem parse_facts {tags : Tags} {bytes : ByteArray} {tables : List (String × 
     · (have hh := except_bind_ok h; clear h; obtain ⟨kind, hk, h⟩ := hh)
       cases hk
   exact { nets := hnets, ports := hports, unitNet := findIdx?_lt hunit, shaNet := hnetOf _ _ hsha,
-          hmNet := hnetOf _ _ hhm, kinds := hkinds, check := ⟨ls, by cases w; exact hcheck⟩ }
+          hmNet := hnetOf _ _ hhm, kinds := hkinds, check := ⟨ls, by cases w; exact hcheck⟩ , typed := rfl }
 
 end FlockSoundness
