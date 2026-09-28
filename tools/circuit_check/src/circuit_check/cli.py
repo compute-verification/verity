@@ -44,10 +44,21 @@ def _one(kind: str, label: str, fn: Callable[[], dict]) -> dict:
     return {**r, "kind": kind, "target": label, "seconds": round(time.time() - t0, 3)}
 
 
-def _work(i: int) -> tuple[int, dict, dict, list[str]]:
+def _errored(r: dict) -> bool:
+    """A check that raised: no verdict on the target, whatever broke (an import, the machine)."""
+    return any(f.get("code") == "error" for f in r.get("failures", []))
+
+
+def _observe(r: dict) -> tuple[dict, list[str], dict | None]:
+    """What a result read, what the tracer missed, and the reads as this process sees them right after the check."""
+    got, untraced = CC.reads(), CC.untraced()
+    return got, untraced, (CC.seen(REPO, got) if CC.tracing() and not untraced and not _errored(r) else None)
+
+
+def _work(i: int) -> tuple[int, dict, dict, list[str], dict | None]:
     kind, label, fn = _TASKS[i]
     r = _one(kind, label, fn)
-    return i, r, CC.reads(), CC.untraced()
+    return i, r, *_observe(r)
 
 
 def target_key(kind: str, label: str, opts: CK.Options, as_call: bool | None) -> dict:
@@ -93,20 +104,25 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
 
     With ``cache`` each target's result is reused while everything its check read is unchanged (`circuit_check.cache`). A
     result is stored with every read its process made up to it (the task list, the modules it imported, the earlier targets
-    whose memoized results it may use), and not at all once that process did something the tracer cannot see."""
+    whose memoized results it may use), and not at all once that process did something the tracer cannot see, nor when the
+    check raised (no verdict), nor when the reads as that process sees them right after its check differ from what would be
+    recorded (the tree changed during the run)."""
     tracing = cache is not None and CC.tracing()
     tasks = _tasks(specs, opts, everything, as_call)
     out: list[dict | None] = [None] * len(tasks)
     keys = [target_key(kind, label, opts, as_call) for kind, label, _ in tasks] if tracing else []
-    stats = {"hits": 0, "stored": 0, "untraced": []}
+    stats = {"hits": 0, "stored": 0, "untraced": [], "errors": [], "changed": []}
 
-    def done(i: int, r: dict, got: dict | None = None, untraced: list[str] | None = None) -> None:
+    def done(i: int, r: dict, got: dict | None = None, untraced: list[str] | None = None, worker: dict | None = None) -> None:
         out[i] = r
         if tracing and got is not None:
-            if untraced:
+            if _errored(r):
+                stats["errors"].append(r["target"])
+            elif untraced:
                 stats["untraced"].append({"target": r["target"], "because": untraced[:3]})
+            elif CC.store(cache, keys[i], REPO, got, r, worker) is None:
+                stats["changed"].append(r["target"])
             else:
-                CC.store(cache, keys[i], REPO, got, r)
                 stats["stored"] += 1
         if log:
             log(f"{'FAIL' if r['failures'] else 'ok  '} {r['kind']:10s} {r['target'][:90]}  failures={len(r['failures'])} "
@@ -116,7 +132,7 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
     if tracing:
         todo = []
         for i, k in enumerate(keys):
-            if (hit := CC.lookup(cache, k, REPO)) is not None:
+            if (hit := CC.lookup(cache, k, REPO)) is not None and not _errored(hit[0]):
                 out[i] = {**hit[0], "cache": {"hit": hit[1]}}
                 stats["hits"] += 1
             else:
@@ -126,13 +142,13 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
 
         init = (specs, opts, everything, as_call, tracing)
         with mp.get_context("forkserver").Pool(min(jobs, len(todo)), initializer=_init, initargs=init) as pool:
-            for i, r, got, untraced in pool.imap_unordered(_work, todo, chunksize=1):
-                done(i, r, got, untraced)
+            for i, r, got, untraced, worker in pool.imap_unordered(_work, todo, chunksize=1):
+                done(i, r, got, untraced, worker)
     else:
         for i in todo:
             kind, label, fn = tasks[i]
             r = _one(kind, label, fn)
-            done(i, r, CC.reads() if tracing else None, CC.untraced() if tracing else None)
+            done(i, r, *(_observe(r) if tracing else (None, None, None)))
     rep = CK.report([r for r in out if r is not None], opts)
     if tracing:
         rep["cache"] = stats
@@ -187,7 +203,8 @@ def main(argv: list[str] | None = None) -> int:
               log=None if a.quiet else lambda s: print(s, flush=True), jobs=jobs, cache=a.cache if a.cache and not a.update_pins else None)
     if c := rep.get("cache"):
         print(f"circuit-check: {c['hits']} of {len(rep['targets'])} targets reused (every file, listing and probe their checks read is "
-              f"unchanged), {c['stored']} stored, {len(c['untraced'])} not cacheable (the tracer could not see what they read)")
+              f"unchanged), {c['stored']} stored, {len(c['untraced'])} not cacheable (the tracer could not see what they read), "
+              f"{len(c['errors'])} not stored because the check raised, {len(c['changed'])} because the tree changed while they ran")
     if a.update_pins:
         update_pins(rep)
     s = rep["summary"]

@@ -331,6 +331,64 @@ print(json.dumps(rep["cache"]))
     assert "subprocess.Popen" in stats["untraced"][0]["because"][0]
 
 
+def test_a_check_that_raised_or_read_another_trees_module_is_not_stored(tmp_path):
+    """A check that raised is no verdict (T11: an ImportError from a tree a concurrent run was rewriting, replayed on the next
+    tree); a module imported from outside the tree is a read no key holds, so that result and later ones are not stored."""
+    import subprocess
+    import sys
+
+    (tmp_path / "elsewhere").mkdir()
+    (tmp_path / "elsewhere" / "other_tree_mod.py").write_text("X = 1\n")
+    script = f"""
+import json, sys
+from pathlib import Path
+from circuit_check import cache as CC, checks as CK, cli
+CC.trace(cli.REPO)
+ok = lambda: {{"failures": [], "warnings": []}}
+def broken():
+    from verity_numerical.bench import no_such_module  # noqa: F401
+def outside():
+    sys.path.insert(0, {str(tmp_path / 'elsewhere')!r})
+    import other_tree_mod  # noqa: F401
+    return ok()
+cli._tasks = lambda *a: [("definition", "A", ok), ("definition", "B", broken), ("definition", "C", outside), ("definition", "D", ok)]
+rep = cli.run([], CK.Options(), log=None, cache=Path({str(tmp_path / 'cache')!r}))
+print(json.dumps(rep["cache"]))
+"""
+    r = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, cwd=REPO)
+    assert r.returncode == 0, r.stderr
+    stats = json.loads(r.stdout.strip().splitlines()[-1])
+    assert stats["stored"] == 1 and stats["errors"] == ["B"] and [u["target"] for u in stats["untraced"]] == ["C", "D"]
+    assert "imported other_tree_mod from" in stats["untraced"][0]["because"][0] and "outside the tree" in stats["untraced"][0]["because"][0]
+
+
+def test_a_result_is_not_stored_when_the_tree_changed_while_it_ran(tmp_path):
+    """The run remembers each read's digest from its first look; the process that ran the check digests its reads again right
+    after it. When they differ (a concurrent run rewrote the tree), nothing is stored: the report may be of a tree no digest names."""
+    import subprocess
+
+    from circuit_check import cache as CC
+
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    (tmp_path / "a.txt").write_text("a")
+    (tmp_path / "pkg").mkdir()
+    (tmp_path / "pkg" / "m.py").write_text("")
+    got = {"files": ["a.txt"], "dirs": ["pkg"], "probes": [], "libs": []}
+    CC._VISIBLE.clear()
+    CC._MEMO.clear()
+    k, rep = {"version": "v", "request": {}}, {"failures": [], "warnings": []}
+    CC._digests(tmp_path, got)                                          # the run's first look, before the check
+    (tmp_path / "pkg" / "m.py").unlink()                                # a concurrent run removes a file while it runs
+    CC._VISIBLE.clear()
+    assert CC.store(tmp_path / "cache", k, tmp_path, got, rep, CC.seen(tmp_path, got)) is None
+    assert not list((tmp_path / "cache").rglob("*.json"))
+    (tmp_path / "pkg" / "m.py").write_text("")
+    CC._VISIBLE.clear()
+    assert CC.store(tmp_path / "cache", k, tmp_path, got, rep, CC.seen(tmp_path, got))    # the same tree: stored
+    CC._VISIBLE.clear()
+    CC._MEMO.clear()
+
+
 def test_parallel_jobs_give_the_serial_report(tmp_path):
     from circuit_check import cli
 
