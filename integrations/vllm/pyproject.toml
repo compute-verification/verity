@@ -46,3 +46,4 @@ markers = [
 [tool.verity.tests]
 # Test-only: tests/pipeline checks the fixtures this package registers.
 inputs = ["fixtures/artifacts.json"]
+parallel = true

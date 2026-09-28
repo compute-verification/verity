@@ -71,11 +71,9 @@ def lean_steps(out: Path) -> list[tuple[str, list[str] | str, Path]]:
 def steps(out: Path) -> list[tuple[str, list[str] | str, Path]]:
     """(name, argv or the reason it is skipped / cannot run, cwd), in order."""
     py = sys.executable
-    # not in the gate yet: 12 of its 4,400 CPU tests fail with torch 2.14 and it takes 20 minutes on one core (it was never in `check`)
-    skip = ["--skip", "verity-vllm"]
     commit = ["--commit", os.environ["RESEARCH_SOURCE_SHA"]] if os.environ.get("RESEARCH_SOURCE_SHA") else []   # a shipped tree has no .git
     return [("pytest", [py, str(ROOT / "tools" / "check" / "suites.py"), "--json", str(out / "suites.json"), "--logs", str(out / "suites"),
-                        *skip, *commit], ROOT),
+                        *commit], ROOT),
             ("circuit-check", [py, "-m", "circuit_check", "--all", "-q", "--out", str(out / "circuit-check.json")], ROOT),
             *lean_steps(out)]
 
