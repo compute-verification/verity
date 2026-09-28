@@ -4,6 +4,7 @@ running sums, the verifier's v with the comb), holding on both reps and failing 
 statement's files, every row port a registered read, under Lean's `statement`."""
 from __future__ import annotations
 
+import dataclasses
 import json
 import random
 import subprocess
@@ -143,6 +144,45 @@ def test_a_real_rep_holds_and_fails_at_a_changed_comb_or_running_sum(reps):
     rows2 = [list(r) for r in rows]
     rows2[-1][0] ^= 1
     assert nz(RR.residual_words(S, rows2, v)) == [2 + sh.claims]
+
+
+def _holo(sh, rows, v, h):
+    """A rep as a holo shape's: h's row inserted at `rec_algebra.h_round`, and the public comb in v the fold less h, so that
+    comb + h is the fixture's fold."""
+    hs = dataclasses.replace(sh, holo=True)
+    i = A.h_round(hs)
+    return hs, rows[:i] + [RR.words(h, RR.port_words(64))] + rows[i:], v[:-64] + [c ^ x for c, x in zip(v[-64:], h, strict=True)]
+
+
+def test_a_holo_rep_reads_h_as_a_row_and_refuses_a_wrong_one(reps):
+    """With hidden unit circuits the prover sends h, the hidden comb's fold, as its own round after z_partial (row port
+    ``m<i>``, `rec_algebra.h_round`, the row `rec_sparse.RecSparse` reads too), and L4′ checks Σ (comb[l] + h[l]) z_partial[l]:
+    both fixture reps hold with the comb split into a public part and h, and a wrong h moves the lincheck alone."""
+    g = random.Random(4)
+    for sh, rows, v in reps:
+        h = [g.getrandbits(128) for _ in range(64)]
+        hs, rows_h, v_h = _holo(sh, rows, v, h)
+        S = RR.spec(hs)
+        assert S["ports"][A.h_round(hs)] == [f"m{A.h_round(hs)}", 64]
+        assert RR.residual_words(S, rows_h, v_h) == [0] * RR.OUT_WORDS
+        assert RR.residual_words(RR.spec(sh), rows, v_h) != [0] * RR.OUT_WORDS
+        nz = lambda out: [i for i in range(len(S["gf"]["res"])) if any(out[8 * i:8 * i + 8])]
+        bad = [list(r) for r in rows_h]
+        bad[A.h_round(hs)][0] ^= 1
+        assert nz(RR.residual_words(S, bad, v_h)) == [1]
+
+
+@pytest.mark.parametrize("shape", [(25, 22, 8), (22, 10, 2), (35, 24, 8)], ids=str)
+def test_h_adds_no_product_to_the_algebra(shape):
+    """A holo shape's S has the same products as the plain one, so InnerRepCheck's ANDs (2,187 a product) are unchanged: h is
+    a w term XORed into the 64 comb operands (``[v comb_l, w h_l]``), and w gains its 64 elements."""
+    sh = A.Shape(*shape)
+    S, H = RR.spec(sh)["gf"], RR.spec(dataclasses.replace(sh, holo=True))["gf"]
+    assert [r["mul"] for r in H["res"]] == [r["mul"] for r in S["res"]] and H["nv"] == S["nv"] and H["nw"] == S["nw"] + 64
+    combs = [op for op in H["ops"] if len(op) == 2 and op[0][0] == "v" and op[0][1] >= H["nv"] - 64]
+    assert len(combs) == 64 and all(op[1][0] == "w" for op in combs)
+    if shape == (25, 22, 8):
+        assert RR.LEAVES * sum(len(r["mul"]) for r in H["res"]) == 2704 * 2187 == 5_913_648
 
 
 def test_the_parts_are_the_residuals_within_the_coin_schedule(reps):
