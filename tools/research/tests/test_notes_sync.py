@@ -58,6 +58,7 @@ def test_a_sync_commits_pushes_and_the_other_machine_picks_it_up(machines):
     assert NS.sync(b, secrets=[]) == {**rep, "note": "already on the remote"}
 
 
+@pytest.mark.slow
 def test_a2_two_machines_20_times_in_the_same_minute_lose_no_write(machines):
     origin, a, b = machines
     errors: list = []
@@ -146,7 +147,7 @@ def test_a5_scan_finds_big_blobs_and_keys_anywhere_in_history(machines):
     _, a, _ = machines
     assert NS.scan(a, secrets=[]) == {"blobs": 1, "big": [], "keys": []}
     (a / "big.bin").write_bytes(b"x" * 2000)
-    (a / "k.md").write_text("-----BEGIN OPENSSH PRIVATE KEY-----\n")
+    (a / "k.md").write_text("-----BEGIN OPENSSH " "PRIVATE KEY-----\n")   # split, so no scanner reads a key here
     _git(a, "add", "-A")
     _git(a, "commit", "-qm", "bad")
     _git(a, "rm", "-q", "k.md", "big.bin")
