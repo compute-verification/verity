@@ -9,12 +9,6 @@ from __future__ import annotations
 import pytest
 
 KNOWN_FAILURES = {
-    "tests/engine/test_gen_ov_easy.py::test_serve_untied_is_not_registered_and_binds_from_the_profile_config":
-        "ServeV4's signature now ends with lm_head after cos_sin",
-    "tests/engine/test_gen_ov_easy.py::test_serve_untied_differs_from_serve_v4_only_at_the_lm_head_operands":
-        "no operand differs from ServeV4's; the test expects three at the lm_head",
-    "tests/program/test_derive.py::test_s3_untied_lm_head_loses_sharing_and_is_refused_by_family":
-        "the untied lm_head adds no input gates (7,158,595 either way)",
     "tests/observe/test_patterns_synthetic.py::test_gumbel_two_stage_sampler_is_one_token_select":
         "the observer refuses the sampler's bf16 [1, V] logits view as not a row-contiguous float32 [R, V] view",
     "tests/pipeline/test_research_tools.py::test_closure_covers_every_core_file":
