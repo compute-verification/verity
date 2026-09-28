@@ -522,4 +522,19 @@ noncomputable def w1 (dv : W1Device) (P : Protocol Q R S) (salt : S → List ℕ
       (st.fetched.dedup.filter fun a => ¬ FreeFetch P U H s (readout U act st.mem) a).length : ℚ) : ℝ)
   calls := fun _ _ _ _ _ _ => 0
 
+/-- The words a run fetches first: its distinct pre-salt or supplied words, every one charged, none refunded. This is
+the run's device-memory read as the bandwidth account counts it, in 32-bit words. -/
+def w1Read (dv : W1Device) (salt : List ℕ) (pr : Prog) (U : Workload) (act : ℕ → Codes) (σ : State) : ℕ :=
+  (final dv salt pr U act σ).fetched.dedup.length
+
+/-- **W1 priced, with no refund** (Daniel, item 9): a run's compute, the instructions' prices (`final`'s `cost`), plus
+`fetch` per word it reads (`w1Read`). Compute goes to the compute account and the read to the bandwidth account, and the
+γ-gap property is stated over this priced sum. It reads neither the oracle nor the protocol. -/
+noncomputable def w1Priced (dv : W1Device) (salt : S → List ℕ) : CostModel Q R S where
+  Prog := Prog
+  run := fun pr _ U act σ s => readout U act (final dv (salt s) pr U act σ).mem
+  cost := fun pr _ U act σ s =>
+    (((final dv (salt s) pr U act σ).cost + dv.prices.fetch * w1Read dv (salt s) pr U act σ : ℚ) : ℝ)
+  calls := fun _ _ _ _ _ _ => 0
+
 end Pouw.PearlC.W1
