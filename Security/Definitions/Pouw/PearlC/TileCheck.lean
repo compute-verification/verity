@@ -16,6 +16,9 @@ by a `Verity.Partition`), with
 * `pub sh`, the public input wires, at `anchorsOf H s U u act`: the anchors E_A, E_B, F_A, F_B and G of unit `u`, which
   the verifier derives from public seeds and so never reads from the prover. That the verifier's public inputs are
   these is L8, outside L3;
+* `anchorsOK H s U u act`: the verifier's own check of those anchors, before it reads the witness. `pc8`'s refuses a
+  noise line with a NaN code, as Python's verifier does (`fp8_to_f32` refuses one); the honest draw never makes one,
+  which is completeness, not L3;
 * `reg sh`, the registered wires, at `rowsOf U u c`: the values unit `u`'s commitment `c` gives them, its activation
   rows, its weight's rows and its tiles' checked words (under hiding, their digests). These are `valueAt`, the values
   `τ`'s commitment binds. Some are outputs of a unit (a tile's words or digest), so the agreement sampled proofs gives
@@ -45,8 +48,9 @@ open Finset Pouw.Fp8Atom
 variable {Q R S : Type}
 
 /-- A tile check: the tile-check Program as a core circuit for each unit shape, its partition into proof units, the
-wires a tile is checked at, the public wires with the anchors the verifier derives, the registered wires with the values a
-commitment gives them, and the event outside which those values bind the circuit's words (see the module docstring). -/
+wires a tile is checked at, the public wires with the anchors the verifier derives and its check of them, the registered
+wires with the values a commitment gives them, and the event outside which those values bind the circuit's words (see
+the module docstring). -/
 structure TileCheck (Q R S : Type) where
   C : Shape → Verity.Circuit
   n : Shape → ℕ
@@ -55,6 +59,7 @@ structure TileCheck (Q R S : Type) where
   pub : (sh : Shape) → Finset (Fin (C sh).N)
   reg : (sh : Shape) → Finset (Fin (C sh).N)
   anchorsOf : (Q → R) → S → (U : Workload) → (u : ℕ) → Codes → (C (U.layout.shape u)).Transcript
+  anchorsOK : (Q → R) → S → Workload → ℕ → Codes → Prop
   rowsOf : (U : Workload) → (u : ℕ) → Commit → (C (U.layout.shape u)).Transcript
   Collides : (U : Workload) → (u : ℕ) → Finset ℕ → Finset ℕ → Commit → (C (U.layout.shape u)).Transcript → Prop
 
@@ -67,14 +72,16 @@ def TileCheck.valueAt (TC : TileCheck Q R S) (U : Workload) (τ : Transcript) (u
   | none => fun _ => 0
 
 /-- **Tile `g`'s check accepts `X`** for the commitment `c` of its unit: every unit of the cone of the tile's checked
-wires is correct in `X`, `X` holds the anchors on the public wires and `c`'s values on the registered ones, and each of
-the tile's weight rows passes the rules (`P.weightOK`). The check decides that last from the weight rows it opens, which
-are `U`'s, never from `X`. -/
+wires is correct in `X`, `X` holds the anchors on the public wires, the anchors pass the verifier's check
+(`TC.anchorsOK`), `X` holds `c`'s values on the registered wires, and each of the tile's weight rows passes the rules
+(`P.weightOK`). The check decides the anchors' check from the public seeds and the last from the weight rows it opens,
+which are `U`'s, never from `X`. -/
 def TileCheck.Accepts (TC : TileCheck Q R S) (P : Protocol Q R S) (TR : TileRules Q R S) (H : Q → R) (s : S)
     (U : Workload) (g : ℕ) (c : Commit) (X : (TC.C (U.layout.shape ((TR.tiling U.layout).unit g))).Transcript) : Prop :=
   (∀ v ∈ (TC.part _).cone (TC.out _ ((TR.tiling U.layout).rows g) ((TR.tiling U.layout).cols g)),
       (TC.part _).Correct X v) ∧
     (∀ w ∈ TC.pub _, X w = TC.anchorsOf H s U ((TR.tiling U.layout).unit g) c.act w) ∧
+    TC.anchorsOK H s U ((TR.tiling U.layout).unit g) c.act ∧
     (∀ w ∈ TC.reg _, X w = TC.rowsOf U ((TR.tiling U.layout).unit g) c w) ∧
     ∀ j ∈ (TR.tiling U.layout).cols g,
       P.weightOK (U.layout.shape ((TR.tiling U.layout).unit g)) (U.weight (U.layout.wid ((TR.tiling U.layout).unit g))) j

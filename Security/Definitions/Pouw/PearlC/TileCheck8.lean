@@ -15,6 +15,8 @@ table (`WholeCircuit.whole8`) at the audit grid's tile at that shape (`tileSide`
   noise (`noise`, the same the semantics reads) as E4M3 codes, and `G_{s,q}` the chain on the step `p` of `F_B`'s column
   `s` against `F_A`'s column `q`, the words `PeelExactP.peelExactP` reads as `G`. That the verifier's public inputs are
   these is L8;
+* `anchorsOK`: the noise has no NaN code (`Noise8OK`): the verifier refuses a tile whose noise has one, as Python's
+  does (`fp8_to_f32` refuses a NaN code);
 * `reg sh`: the activation rows `a`, the weight rows `b` and every entry's `C̃` and `U`, at the commitment's
   activations, its unit's weights, and its ticket and useful words (`rows8`), each as the gate's low 32 bits;
 * `Collides`: `False`, since the checked words are registered wires.
@@ -82,7 +84,17 @@ def anchors8 (p : Pipeline) {m n k : ℕ} (z : Noise m n k Params.pi.r) (g : ℕ
   else if g < in8 m n k then gram8 p z ((g - gAt m n k) / 32) ((g - gAt m n k) % 32)
   else 0
 
-/-- **`pc8`'s tile check** on the step `p`, with `ops` for core's primitives and the anchors from `noise`. -/
+/-- A noise line as the table reads it: no NaN code (`0x7F`, `0xFF`). -/
+def Line8OK (e : Fin Params.pi.r → Code) : Prop := ∀ q, (e q).isNaN = false
+
+/-- **The noise as the table reads it**: `Line8OK` at every line of its four factors. `pc8`'s check refuses the rest
+(`tileCheck8`'s `anchorsOK`), as Python's verifier does: `fp8_to_f32` refuses a NaN code. Python's honest noise has
+none (`sample_line`'s codes are casts that saturate at `0x7E`), which is completeness. -/
+def Noise8OK {m n k : ℕ} (z : Noise m n k Params.pi.r) : Prop :=
+  (∀ i, Line8OK (z.EA i)) ∧ (∀ l, Line8OK (z.FA l)) ∧ (∀ j, Line8OK (z.EB j)) ∧ ∀ l, Line8OK (z.FB l)
+
+/-- **`pc8`'s tile check** on the step `p`, with `ops` for core's primitives and the anchors from `noise`, refusing a
+noise with a NaN code. -/
 def tileCheck8 (ops : RowOps) (p : Pipeline)
     (noise : (Q → R) → S → (U : Workload) → (u : ℕ) → Codes →
       Noise (U.layout.shape u).m (U.layout.shape u).n (U.layout.shape u).k Params.pi.r) : TileCheck Q R S where
@@ -99,6 +111,7 @@ def tileCheck8 (ops : RowOps) (p : Pipeline)
     ∃ i < sh.m, ∃ j < sh.n, g.val = cGlob8 p sh.m sh.n sh.k (tileSide sh.m) (tileSide sh.n) i j ∨
       g.val = uGlob8 p sh.m sh.n sh.k (tileSide sh.m) (tileSide sh.n) i j
   anchorsOf H s U u act := fun g => BitVec.ofNat _ (anchors8 p (noise H s U u act) g.val)
+  anchorsOK H s U u act := Noise8OK (noise H s U u act)
   rowsOf U u c := fun g => BitVec.ofNat _
     (rows8 p (U.layout.shape u).m (U.layout.shape u).n (U.layout.shape u).k (tileSide (U.layout.shape u).m)
       (tileSide (U.layout.shape u).n) c.act (U.weight (U.layout.wid u)) c.ticket c.useful g.val)

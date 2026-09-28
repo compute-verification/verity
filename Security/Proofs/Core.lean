@@ -17,6 +17,8 @@ import Proofs.Core.Game.Rewinding
 import Proofs.Core.Game.Unambiguous
 import Proofs.Core.Scalar.Vectors
 import Proofs.Core.Prims.Vectors
+import Proofs.Core.Round
+import Proofs.Core.Prims.Round
 import Proofs.Core.TC
 import Proofs.Core.Fp32
 
