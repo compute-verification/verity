@@ -313,6 +313,22 @@ def broadcast_params(units: PartitionUnits) -> dict[str, tuple[set[int], int]]:
     return out
 
 
+#: evaluations of flat Definitions this large are kept for the next shape of the same Definition (the sampler's keep word is one flat
+#: Definition of about 10^8 gates, and all of its ~86 shapes read the same evaluations)
+KEEP_EVALUATIONS_ABOVE = 1 << 20
+_EVALUATIONS: dict = {}
+
+
+def _evaluation(act: Activation, key: tuple, words: list[int]) -> dict[int, int]:
+    if act.fn.gates <= KEEP_EVALUATIONS_ABOVE:
+        return PU.evaluate(act, words)
+    if key not in _EVALUATIONS:
+        if len(_EVALUATIONS) >= 2:
+            _EVALUATIONS.pop(next(iter(_EVALUATIONS)))
+        _EVALUATIONS[key] = PU.evaluate(act, words)
+    return _EVALUATIONS[key]
+
+
 def class_lanes(units: PartitionUnits, cl, key, n: int, shared: dict[str, tuple[set[int], int]]) -> tuple[list, list, list]:
     """``n`` instances of the class: every unit of that shape in its flat Definition, from as many evaluations as it takes, each
     evaluation's parameters uniform words, except those the Call shares across members (``shared``), which are drawn once per Call
@@ -338,7 +354,7 @@ def class_lanes(units: PartitionUnits, cl, key, n: int, shared: dict[str, tuple[
         raw = PU.synthetic_words(key, f"{act.fn.id}#{t}", widths, 1)[0]
         grp = PU.synthetic_words(key, f"{act.fn.id}#call{call}", widths, 1)[0]
         words = [grp[p] if leaf_param[p] in bcast else raw[p] for p in range(len(raw))]
-        run = PU.evaluate(act, words)
+        run = _evaluation(act, (act.fn.id, t, call), words)
         for uc, per in zip(mine, reads):
             if have >= n:
                 break
@@ -373,6 +389,14 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "circuit.txt").write_text(text)
     n = len(rows)
+    meta = json.loads(text.split("\n", 2)[1][5:])
+    per_instance = (1 << meta["k_log"]) // meta["vus_per_block"]
+    cap_bits = _CTX.get("max_statement_bits", MAX_STATEMENT_BITS)
+    if n * per_instance > cap_bits:                     # a unit whose rows are long pays for their hashing in every instance
+        n = max(meta["vus_per_block"], 1 << ((cap_bits // per_instance).bit_length() - 1))
+        rows, outs = rows[:n], outs[:n]
+        per_port = {k: v[:n] for k, v in per_port.items()}
+        idents = [ids[:n] for ids in idents] if idents is not None else None
     tables = refs = None
     if idents is not None:
         if len(idents) != len(groups):
@@ -391,7 +415,6 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
                 raise AssertionError(f"class {name}: instances reading one source disagree on its row")
     head = FC.write(text, iset, 0, n, out_dir / f"inst-{n}.bin", out_dir / f"pub-{n}.bin", salt_key, rows=per_port, outs={"out": outs},
                     share_rows=True, tables=tables, refs=refs)
-    meta = json.loads(text.split("\n", 2)[1][5:])
     return {"n": n, "unit_nnz": low.layout.counts["nnz_a"] + low.layout.counts["nnz_b"], "circuit_bytes": len(text), "w_in": low.definition.w_in,
             "w_out": low.definition.w_out, "unit_rows": low.layout.useful, "ports": list(low.definition.port_words),
             "shared_rows": head.get("shared_rows"), "ands": low.layout.counts["ands"], "k_log": meta["k_log"],
@@ -442,7 +465,18 @@ def prove(binary: str, d: Path, n: int, port: int, selftest: bool | str = False,
                                   "buckets")} | \
         {"prover_peak_gb": round(prover_gb, 2) if prover_gb else None, "verifier_peak_gb": verifier_gb,
          "verify_s": (v.get("verdict") or {}).get("verify_s"), "timed_runs": len(timed),
-         "prove_total_s_runs": [x.get("prove_total_s") for x in timed]}
+         "prove_total_s_runs": [x.get("prove_total_s") for x in timed],
+         # per rep: the prover's phase timings (witness: units and row hashing; encoding and commitment; zerocheck, lincheck,
+         # ring switch, Ligerito; t.total on the device), and host_s = the rep's wall time less t.total (host work and idle)
+         "buckets": _buckets(v), "buckets_runs": [_buckets(x) for x in timed]}
+
+
+def _buckets(live: dict) -> list[dict] | None:
+    reps = live.get("buckets")
+    if not reps:
+        return None
+    walls = live.get("prove_s") or []
+    return [dict(b, host_s=round(walls[i] - b.get("t.total", 0), 6) if i < len(walls) else None) for i, b in enumerate(reps)]
 
 
 def _vm_hwm(pid: int) -> float | None:
@@ -460,10 +494,12 @@ def _vm_hwm(pid: int) -> float | None:
 _CTX: dict = {}
 #: AND-instances per prove under ``--batch auto``
 BATCH_ANDS = 1 << 29
+#: witness bits per statement (instances x the block bits each takes, row hashing included); an 80 GB GPU proves 2^32
+MAX_STATEMENT_BITS = 1 << 32
 
 
 def auto_batch(ands: int, row_units: int) -> int:
-    cap = min(1024, row_units, BATCH_ANDS // max(1, ands))
+    cap = min(1024, row_units, _CTX.get("batch_ands", BATCH_ANDS) // max(1, ands))
     return max(16, 1 << max(0, cap.bit_length() - 1))
 
 
@@ -501,31 +537,32 @@ def _stage_job(s: str) -> dict:
 
 
 def _staged(jobs: list[str], workers: int):
-    """`_stage_job` over ``jobs``, records in order: in this process, or in ``workers`` forked processes at most two shapes each
-    ahead of the prover. A worker that dies (the OOM killer) breaks the pool: the shapes in flight are staged again in a new one,
-    and a shape lost twice is recorded as broken."""
+    """`_stage_job` over ``jobs``: in this process, in order, or in ``workers`` forked processes at most two shapes each ahead of
+    the prover, each record as soon as its shape is staged (a long shape doesn't hold the GPU up). A worker that dies (the OOM
+    killer) breaks the pool: the shapes in flight are staged again in a new one, and a shape lost twice is recorded as broken."""
     if workers <= 1:
         yield from map(_stage_job, jobs)
         return
     import multiprocessing as mp
-    from collections import deque
-    from concurrent.futures import ProcessPoolExecutor
+    from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
     from concurrent.futures.process import BrokenProcessPool
 
     queue, lost = list(reversed(jobs)), Counter()
     while queue:
-        live: deque = deque()
+        live: dict = {}
         with ProcessPoolExecutor(workers, mp_context=mp.get_context("fork")) as ex:
             try:
                 while queue or live:
                     while queue and len(live) < 2 * workers:
                         s = queue.pop()
-                        live.append((s, ex.submit(_stage_job, s)))
-                    rec = live[0][1].result()
-                    live.popleft()
-                    yield rec
+                        live[ex.submit(_stage_job, s)] = s
+                    done, _ = wait(live, return_when=FIRST_COMPLETED)      # the first staged shape proves first
+                    for f in done:
+                        rec = f.result()
+                        del live[f]
+                        yield rec
             except BrokenProcessPool:
-                for s, _f in reversed(live):
+                for _f, s in live.items():
                     lost[s] += 1
                     if lost[s] < 2:
                         queue.append(s)
@@ -556,6 +593,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--selftest-gpu", action="store_true", help="run the selftests on the GPU (selftest --gpu; a read-bearing class's "
                     "subset adds GPU_CASES)")
     ap.add_argument("--selftest-cases", default=None, help="comma-separated selftest cases to run instead (one process each)")
+    ap.add_argument("--no-selftest-largest", dest="selftest_largest", action="store_false",
+                    help="selftest every Nth shape only, not also each flat Definition's largest (a full CPU selftest per attention key count)")
     ap.add_argument("--max-ands", type=int, default=1 << 24, help="skip classes above this many ANDs (reported)")
     ap.add_argument("--only", default=None, help="comma-separated shape prefixes")
     ap.add_argument("--selftest-only", action="store_true", help="stage and run the selftest cases only (no loopback session), into selftests.jsonl")
@@ -567,10 +606,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--shapes", default=None, help="a file of shape digests (or prefixes), one per line: prove only these")
     ap.add_argument("--batch", default=None, help="'auto': instances per shape = the least of 1024, the row's units of it and 2^29 / its "
                     "ANDs, as a power of two >= 16 (overrides --n)")
+    ap.add_argument("--batch-ands", type=int, default=BATCH_ANDS, help="--batch auto's AND-instances per prove (default 2^29)")
+    ap.add_argument("--max-statement-bits", type=int, default=MAX_STATEMENT_BITS, help="witness bits per statement (default 2^32)")
     ap.add_argument("--jobs", type=int, default=1, help="shapes staged in parallel (forked workers); proving stays one at a time")
     ap.add_argument("--select", choices=["table-free", "reads", "units"], default=None,
                     help="leave out the token-select Calls, and prove only the shapes whose unit reads no pinned table (table-free), "
                     "reads one (reads), or either (units); the others are recorded as skipped, unstaged")
+    ap.add_argument("--counts-only", action="store_true", help="write counts.json (every shape's row units and each Call Definition's "
+                    "units per shape) and stage nothing: what `class_sweep rollup --counts` reads")
     ap.add_argument("--protocol", default="sweep-v0", help="the measurement protocol the result is labelled with (sweep-v0: never a "
                     "table cell)")
     a = ap.parse_args(argv)
@@ -602,11 +645,20 @@ def main(argv: Sequence[str] | None = None) -> int:
     results = out / ("selftests.jsonl" if a.selftest_only else "results.jsonl")
     done = {json.loads(ln)["shape"] for ln in results.read_text().splitlines()} if results.exists() else set()
     row_units: dict[str, int] = {}
+    per_definition: dict[str, dict[str, int]] = {}
     if calls is not None:
         from verity.ir.codec import descriptor_id
         for _k, _m, fn, cut in units._calls():
-            for sh, c in units._count(cut, fn).items():
+            per_definition[descriptor_id(fn)] = dict(units._count(cut, fn))
+            for sh, c in per_definition[descriptor_id(fn)].items():
                 row_units[sh] = row_units.get(sh, 0) + c * calls[descriptor_id(fn)]
+    if a.counts_only:
+        (out / "counts.json").write_text(json.dumps({
+            "calls": calls, "per_definition": per_definition,
+            "shapes": {s: {"definition": cl.representative.definition, "units": cl.units, "row_units": row_units.get(s),
+                           "word_gates": len(cl.representative.gates)} for s, cl in classes.items()}}, sort_keys=True))
+        print(f"counts: {len(classes)} shapes over {len(per_definition)} Call Definitions -> {out / 'counts.json'}")
+        return 0
     order = sorted(classes.items(), key=lambda kv: len(kv[1].representative.gates))
     wanted = [ln.strip() for ln in Path(a.shapes).read_text().split() if ln.strip()] if a.shapes else None
     if a.sample:
@@ -618,7 +670,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     jobs = [s for s, _cl in order if not (s in done or (a.only and not any(s.startswith(p) for p in a.only.split(",")))
                                           or (wanted is not None and not any(s.startswith(p) for p in wanted)))]
     _CTX.update(units=units, classes=classes, row_units=row_units, shared=broadcast_params(units), key=key, salt_key=salt_key,
-                out=out, a=a)
+                out=out, a=a, batch_ands=a.batch_ands, max_statement_bits=a.max_statement_bits)
     partition_binding(units, a.partition)
     for rec in _staged(jobs, a.jobs):
         s, cl = rec["shape"], classes[rec["shape"]]
@@ -628,7 +680,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             try:
                 if not a.selftest_only:
                     rec["live"] = prove(a.binary, d, rec["stage"]["n"], a.port, gpu=a.gpu, warm=a.warm, runs=a.runs)
-                if a.selftest and (len(done) % a.selftest == 0 or s == largest.get(cl.definition.id)):
+                if a.selftest and (len(done) % a.selftest == 0 or (a.selftest_largest and s == largest.get(cl.definition.id))):
                     sb, g = a.selftest_binary or a.binary, a.selftest_gpu
                     if rec["table_reads"] or a.selftest_cases:   # a read-bearing circuit re-parses per case: a few cases, one process each
                         cases = tuple(a.selftest_cases.split(",")) if a.selftest_cases else READ_CASES + (GPU_CASES if g else ())
@@ -643,8 +695,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 rec["broke"] = {"at": "prover", "why": f"{type(e).__name__}: {e}"[:400]}
             for f in d.glob("*.bin"):
                 f.unlink()
-            if (d / "circuit.txt").exists() and (d / "circuit.txt").stat().st_size > 1 << 28:
-                (d / "circuit.txt").unlink()                    # the record keeps its digest; restaging rebuilds it byte for byte
+            if (d / "circuit.txt").exists():
+                (d / "circuit.txt").unlink()                    # the record keeps its digest; restaging rebuilds it byte for byte, and
+                                                                # the run's custody stays the proofs and records (a list's circuits are tens of GB)
         rec["seconds"] = round(time.time() - t0, 3)
         with results.open("a") as f:
             f.write(json.dumps(rec, sort_keys=True) + "\n")
@@ -684,7 +737,8 @@ def write_result(results: Path, a) -> None:
     doc = {"schema": "research/result/v0.1", "run_id": os.environ.get("RESEARCH_RUN_ID", ""),
            "workload_fingerprint": {"kind": "class-sweep/v1", "statement": FC.STATEMENT, "scheme": FC.SCHEME, "partition": a.partition,
                                     "gpu": a.gpu, "warm": a.warm, "runs": a.runs, "batch": a.batch or a.n, "seed": a.seed,
-                                    "protocol": a.protocol, "select": a.select, "device": _device(a.gpu), "shapes": sorted(r["shape"] for r in recs)},
+                                    "protocol": a.protocol, "select": a.select, "device": _device(a.gpu),
+                                    "batch_ands": a.batch_ands, "max_statement_bits": a.max_statement_bits, "shapes": sorted(r["shape"] for r in recs)},
            "validation": {"status": "failed" if rejected or any(not x.get("all_pass") for x in selftests) else ("passed" if ok else "not_run"),
                           "checker": "flock-circuit loopback verifier (live coins) and selftest",
                           "detail": f"{len(ok)} of {len(recs)} shapes accepted, {len(rejected)} rejected, "
