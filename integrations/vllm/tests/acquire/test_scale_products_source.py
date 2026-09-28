@@ -14,6 +14,7 @@ import pytest
 from tests.acquire.test_vocab_range_source import Recorder
 from tests.check.test_sampled_replay_v2_addresses import _v2_manifest
 from tests.query.test_scale_products import fp8_program
+from verity_vllm.acquire.sources import call_boundary_plan as CBP
 from verity_vllm.program.registry import fp8
 from verity_vllm.query import scale_products as SP
 
@@ -90,6 +91,8 @@ def test_attach_refuses_a_manifest_without_the_family_and_taps_attach_it_when_na
     with pytest.raises(SystemExit):
         S.attach(com, True, {"identities": []}, ("a",))
     plain, shared = (_v2_manifest(fp8_program(s), taps=(SP.POLICY,)) for s in (False, True))
+    # the quant's x_q/x_s are Q_word call boundaries, the call-boundary source's (tests/acquire/test_call_boundary_source.py)
+    plain, shared = ({**m, "identities": [r for r in m["identities"] if r["family"] != CBP.FAMILY]} for m in (plain, shared))
     assert taps.attach(com, plain, ("a",), taps.TapSources()) == ("a",) and com.sources == []
     assert taps.attach(com, shared, ("a",), taps.TapSources()) == ("a", SP.FAMILY)
     assert [s.sites for s in com.sources] == [SP.manifest_sites(shared)]

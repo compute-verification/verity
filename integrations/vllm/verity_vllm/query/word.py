@@ -35,7 +35,7 @@ from typing import Any, Callable, Iterable, Mapping
 
 import numpy as np
 
-from verity.ir.cut import WIRING, CallGraph, cut_word, fits
+from verity.ir.cut import WIRING, CallGraph, cut_word, fits, separable
 from verity.ir.defs import PrimitiveDefinition
 
 from verity_vllm.query.call_scope import QueryRuleViolation, specialization
@@ -150,28 +150,6 @@ def units(G: Graph, X: int, W: int, extras: int = 0) -> dict[str, Any]:
             "head_scope": np.where(first >= 0, G.scope[np.maximum(first, 0)], -1)}
 
 
-def _separable(fn: Any) -> list[tuple[Any, int]] | None:
-    """[(callee, members)] when `fn`'s body nodes read only its parameters and it returns every leaf they produce: no value crosses
-    between nodes, so its partition is each node member's own (a Gemm's N coordinates, attention's heads).  None otherwise."""
-    from verity.ir.intervals import norm, ref_intervals, total
-    from verity.ir.parts import n_members
-    body = fn.body
-    for n in body.nodes:
-        if n.form == "scan":
-            return None
-        reads: dict = {}
-        for a in n.args:
-            ref_intervals(a.refs, reads)
-        if any(space != "p" for space, _i in reads):
-            return None
-    ret: dict = {}
-    ref_intervals(body.ret, ret)
-    for k, n in enumerate(body.nodes):
-        if total(norm(ret.get(("n", k), ()))) != n.out.leaves:
-            return None
-    return [(n.fn, n_members(n)) for n in body.nodes]
-
-
 def _combine(fid: str, gates: int, parts: list[tuple[dict[str, Any], int]], X: int, W: int, extras: int) -> dict[str, Any]:
     agg: dict[tuple, dict[str, Any]] = {}
     interior, ibits = Counter(), Counter()
@@ -224,7 +202,7 @@ def unit_rule(fn: Any, X: int = 16, W: int = 32, extras: int = 0, *, memo: dict 
         classes = [] if not fn.params else [{"kind": "output", "head": fn.id, "scope": fn.id, "gates": 1, "out_bits": bits, "count": 1,
                                              "nodes": {fn.id: 1}, "ok": bits <= cap or bits <= W + extras}]
         rule = _finish(fn.id, 1, classes, [], X, W, extras)
-    elif (sep := _separable(fn)) is not None:
+    elif (sep := separable(fn)) is not None:
         from verity_vllm.query.cross_call import members_check
         rule = _combine(fn.id, fn.gates, [(unit_rule(c, X, W, extras, memo=memo, max_gates=max_gates), m) for c, m in sep], X, W, extras)
         across = members_check(fn, memo)                            # the members are cut one by one: a value two of them compute
