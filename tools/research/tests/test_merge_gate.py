@@ -390,61 +390,31 @@ def test_a_json_file_git_merges_into_a_repeated_key_refuses_the_train(tmp_path, 
     assert _git(origin, "for-each-ref", "refs/heads/train-prep/k") == ""
 
 
-def _store_remote(tmp_path: Path, monkeypatch) -> None:
-    """A store remote (a directory): the gate reads grants only after pulling the target's labels from one."""
-    cfg = tmp_path / "store.toml"
-    cfg.write_text(f'[remote]\ntype = "fs"\npath = "{tmp_path / "vault"}"\n')
-    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
-
-
-def test_a_change_under_a_rules_paths_goes_into_a_train_only_with_its_grant_at_its_head(tmp_path, monkeypatch, capsys):
-    """The queue's rule for a path refuses a ref that changes it before its train is built (`--prepare`) or checked (`--train`),
-    until the `grant` label is on the pull request's pinned head; a change elsewhere needs none."""
-    from research.store.local import LocalStore
-
-    _store_remote(tmp_path, monkeypatch)
+def test_a_change_to_a_lock_goes_into_a_train_and_lands_without_any_label(tmp_path, monkeypatch, capsys):
+    """No change waits on a per-head grant (Daniel, 8 Oct): a pull request changing a `lean-audit.json`, with no label at its
+    head and no store remote to read one from, is built into a train and its checked tip lands."""
     main, _feat, _tip = _repos(tmp_path)
     audit = {"roots": ["P"], "guarantees": {"P.t": {"type_hash": "1"}}, "reads": {}}
-    _origin, heads = _origin_with(tmp_path, main, {
-        "tools/verity/check/queue.toml": '[[grant]]\nrole = "red-team"\npaths = ["lean-audit.json", "other/"]\n',
-        "lean-audit.json": json.dumps(audit, indent=1)}, {
-        20: {"lean-audit.json": json.dumps({**audit, "guarantees": {"P.t": {"type_hash": "2"}}}, indent=1)},
-        21: {"x.txt": "x\n"}})
-    _git(main, "push", "-q", "origin", "pr20:refs/heads/side")
+    _origin, heads = _origin_with(tmp_path, main, {"lean-audit.json": json.dumps(audit, indent=1)}, {
+        20: {"lean-audit.json": json.dumps({**audit, "guarantees": {"P.t": {"type_hash": "2"}}}, indent=1)}})
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(tmp_path / "absent.toml"))
     monkeypatch.chdir(main)
-    pins, lint = [f"20@{heads[20][:9]}", f"21@{heads[21][:9]}"], ["--lint", "true"]
-    assert merge_main(["--train", "--prepare", "train-prep/g", *pins, *lint]) == 3
-    err = capsys.readouterr().err
-    assert f"#20 needs the red-team grant at {heads[20][:12]} (tools/verity/check/queue.toml: from its rule, which names no `by`)" in err
-    assert f"`research data label pr:20@{heads[20]} grant red-team --by REVIEWER`" in err and "#21" not in err
-    assert merge_main(["--train", "--prepare", "train-prep/g", f"side@{heads[20][:9]}", *lint]) == 3
-    assert "side needs the red-team grant (tools/verity/check/queue.toml), which only a pull request's pinned head can hold" \
-        in capsys.readouterr().err
-    assert merge_main(["--train", "pr20", "--tool", "mytools.decl_check:T", "--command", shlex.join(CHECKED)]) == 3
-    out, err = capsys.readouterr()
-    assert "pr20 needs the red-team grant" in err and "nothing was checked" in err and "recorded as" not in out
-    LocalStore().add_label(f"pr:20@{heads[20]}", "grant", "red-team", "red-team")
-    assert merge_main(["--train", "--prepare", "train-prep/g", *pins, *lint]) == 0, capsys.readouterr().err
+    assert merge_main(["--train", "--prepare", "train-prep/g", f"20@{heads[20][:9]}", "--lint", "true"]) == 0, capsys.readouterr().err
+    _git(main, "fetch", "-q", "origin", "train-prep/g:train-prep/g")
+    _git(main, "worktree", "add", "-q", str(tmp_path / "tip"), _git(main, "rev-parse", "train-prep/g"))
+    assert _record(tmp_path, tmp_path / "tip", monkeypatch, *CHECKED) == 0
+    monkeypatch.chdir(main)
+    capsys.readouterr()
+    assert merge_main(["train-prep/g", "--dry-run"]) == 0, capsys.readouterr().err
 
 
-def _pr_train(tmp_path: Path, monkeypatch, rules: str | None = None, grant: str | None = None) -> tuple[Path, Path, str, str]:
-    """A store remote; main, with ``rules`` as its queue rules; origin, with A as pull request 7's head; and origin's train-prep/t
-    merging #7 at that head, fetched here as a branch, with a passing check of its tip: (main, origin, A, the tip).  With
-    ``grant``, a role the rules ask of A, `--prepare` is refused until `pr:7@A` holds it."""
-    from research.store.local import LocalStore
-
-    _store_remote(tmp_path, monkeypatch)
+def _pr_train(tmp_path: Path, monkeypatch) -> tuple[Path, Path, str, str]:
+    """Main; origin, with A as pull request 7's head; and origin's train-prep/t merging #7 at that head, fetched here as a
+    branch, with a passing check of its tip: (main, origin, A, the tip)."""
     main, _feat, _tip = _repos(tmp_path)
-    if rules:
-        (main / "tools" / "verity" / "check" / "queue.toml").write_text(rules)
-        _git(main, "add", "-A")
-        _git(main, "commit", "-q", "-m", "queue rules")
     origin = _remote(tmp_path, main)
     a = _git(main, "rev-parse", "A")
     monkeypatch.chdir(main)
-    if grant:
-        assert merge_main(["--train", "--prepare", "train-prep/t", f"7@{a[:9]}", "--lint", "true"]) == 3
-        LocalStore().add_label(f"pr:7@{a}", "grant", grant, grant)
     assert merge_main(["--train", "--prepare", "train-prep/t", f"7@{a[:9]}", "--lint", "true"]) == 0
     _git(main, "fetch", "-q", "origin", "train-prep/t:train-prep/t")
     tip = _git(main, "rev-parse", "train-prep/t")
@@ -454,13 +424,12 @@ def _pr_train(tmp_path: Path, monkeypatch, rules: str | None = None, grant: str 
     return main, origin, a, tip
 
 
-def test_a_tip_lands_only_while_each_pr_it_merges_is_at_its_pinned_head_with_its_grants(tmp_path, monkeypatch, capsys):
+def test_a_tip_lands_only_while_each_pr_it_merges_is_at_its_pinned_head(tmp_path, monkeypatch, capsys):
     """A tip merging `Merge #1126 (83c25a27b)` would have landed after #1126 moved to a head that fixed two red-team findings
-    against that one (the lander, 4 Oct): pins and grants were read at `--prepare` only.  The gate reads them again at landing:
-    #7's head on origin must still be the merged one, and `pr:7@{head}` must hold every grant the queue's rules say its change
-    needs; a check of the tip doesn't stand in for either.  No ready mark is asked: the train's own check is the gate (Daniel,
-    6 Oct)."""
-    main, _origin, a, _tip = _pr_train(tmp_path, monkeypatch, '[[grant]]\nrole = "red-team"\npaths = ["a2.txt"]\n', "red-team")
+    against that one (the lander, 4 Oct): pins were read at `--prepare` only.  The gate reads them again at landing: #7's head
+    on origin must still be the merged one, or add nothing the tip lacks; a check of the tip doesn't stand in for it.  No ready
+    mark is asked: the train's own check is the gate (Daniel, 6 Oct)."""
+    main, _origin, a, _tip = _pr_train(tmp_path, monkeypatch)
     capsys.readouterr()
     rc, err = merge_main(["train-prep/t", "--dry-run"]), capsys.readouterr().err
     assert rc == 0 and "ready" not in err, err
@@ -484,17 +453,11 @@ def test_a_tip_lands_only_while_each_pr_it_merges_is_at_its_pinned_head_with_its
     assert merge_main(["train-prep/t"]) == 3 and _git(main, "rev-parse", "HEAD") == before
 
 
-def test_a_pr_stacked_on_another_in_the_tip_needs_grants_only_for_what_it_adds(tmp_path, monkeypatch, capsys):
-    """Lean's #1141 and #1144 stack on #1150, whose C-Flock lock change has red-team's grant: judged from main, each would need
-    that grant too.  The gate judges each pull request by what it adds onto the train below its merge, so a base that is neither
-    on main nor pinned in the tip at its head is refused, by name, whatever the stacked one's grants (root's condition, 5 Oct),
-    and a base pinned without its grant is refused for itself."""
-    from research.store.local import LocalStore
-
-    _store_remote(tmp_path, monkeypatch)
+def test_a_pr_stacked_on_another_lands_only_with_its_base_on_main_or_in_the_tip(tmp_path, monkeypatch, capsys):
+    """A base that is neither on main nor pinned in the tip at its head is refused, by name (root's condition, 5 Oct); a stacked
+    pull request lands with its base pinned below it, and one opened at another's head is no base it stacks on."""
     main, _feat, _tip = _repos(tmp_path)
-    origin, heads = _origin_with(tmp_path, main, {"tools/verity/check/queue.toml": '[[grant]]\nrole = "red-team"\npaths = ["f.txt"]\n'},
-                                 {30: {"f.txt": "the lock\n"}})
+    _origin, heads = _origin_with(tmp_path, main, {"f.txt": "\n"}, {30: {"f.txt": "the lock\n"}})
     _git(main, "checkout", "-q", "pr30")
     (main / "g.txt").write_text("on top\n")
     _git(main, "add", "g.txt")
@@ -503,23 +466,17 @@ def test_a_pr_stacked_on_another_in_the_tip_needs_grants_only_for_what_it_adds(t
     _git(main, "push", "-q", "origin", "HEAD:refs/pull/31/head")
     _git(main, "checkout", "-q", "main")
     monkeypatch.chdir(main)
-    store = LocalStore()
-    pins = ["--train", "--prepare", "train-prep/s", f"30@{heads[30][:9]}", f"31@{heads[31][:9]}", "--lint", "true"]
     capsys.readouterr()
-    assert merge_main(pins) == 3
-    err = capsys.readouterr().err
-    assert f"#30 needs the red-team grant at {heads[30][:12]}" in err and "#31" not in err
-    store.add_label(f"pr:30@{heads[30]}", "grant", "red-team", "red-team")
-    assert merge_main(pins) == 0, capsys.readouterr().err
+    assert merge_main(["--train", "--prepare", "train-prep/s", f"30@{heads[30][:9]}", f"31@{heads[31][:9]}", "--lint", "true"]) == 0, \
+        capsys.readouterr().err
     _git(main, "fetch", "-q", "origin", "train-prep/s:train-prep/s")
     _git(main, "worktree", "add", "-q", str(tmp_path / "tip"), _git(main, "rev-parse", "train-prep/s"))
     assert _record(tmp_path, tmp_path / "tip", monkeypatch, *CHECKED) == 0
     monkeypatch.chdir(main)
     assert merge_main(["train-prep/s", "--dry-run"]) == 0, capsys.readouterr().err
 
-    store.add_label(f"pr:31@{heads[31]}", "grant", "red-team", "red-team")
-    # #31 alone: its base #30 is neither on main nor pinned in the tip, refused by name even with a grant at #31's head; `--prepare`
-    # refuses to build it, so the tip is merged by hand
+    # #31 alone: its base #30 is neither on main nor pinned in the tip, refused by name; `--prepare` refuses to build it, so the
+    # tip is merged by hand
     assert merge_main(["--train", "--prepare", "train-prep/u", f"31@{heads[31][:9]}", "--lint", "true"]) == 3
     _git(main, "worktree", "add", "-q", "--detach", str(tmp_path / "tip-u"), "main")
     _git(tmp_path / "tip-u", "merge", "-q", "--no-ff", "-m", f"Merge #31 ({heads[31][:8]})", heads[31])
@@ -540,221 +497,13 @@ def test_a_pr_stacked_on_another_in_the_tip_needs_grants_only_for_what_it_adds(t
     assert merge_main(["train-prep/d", "--dry-run"]) == 0, capsys.readouterr().err
 
 
-def test_a_tip_whose_pr_heads_or_labels_cant_be_read_is_refused(tmp_path, monkeypatch, capsys):
-    """The gate fails closed: with origin unreadable it can't tell the pull requests' heads, and with no store remote its labels may be stale
-    (`StoreGrants` raises STALE), so it refuses either way, saying why.  `--train` refuses before recording anything."""
-    from research.store.local import LocalStore
-
-    main, _origin, a, _tip = _pr_train(tmp_path, monkeypatch, '[[grant]]\nrole = "red-team"\npaths = ["a2.txt"]\n', "red-team")
+def test_a_tip_whose_pr_heads_cant_be_read_is_refused(tmp_path, monkeypatch, capsys):
+    """The gate fails closed: with origin unreadable it can't tell the pull requests' heads, so it refuses, saying why."""
+    main, _origin, _a, _tip = _pr_train(tmp_path, monkeypatch)
     assert merge_main(["train-prep/t", "--dry-run"]) == 0, capsys.readouterr().err
-    url = _git(main, "remote", "get-url", "origin")
     _git(main, "remote", "set-url", "origin", str(tmp_path / "gone.git"))
     assert merge_main(["train-prep/t", "--dry-run"]) == 3
     assert "origin's pull request heads can't be read (" in capsys.readouterr().err
-    _git(main, "remote", "set-url", "origin", url)
-    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(tmp_path / "absent.toml"))
-    assert merge_main(["train-prep/t", "--dry-run"]) == 3
-    assert "the pull requests" in (err := capsys.readouterr().err) and "can't be judged: STALE" in err
-    monkeypatch.setenv("RESEARCH_RUNS", str(tmp_path / "runs"))
-    assert merge_main(["--train", f"7@{a[:9]}", "--tool", "mytools.decl_check:T", "--command", shlex.join(CHECKED)]) == 3
-    out, err = capsys.readouterr()
-    assert "refused: STALE: the labels of pr:7@" in err and "recorded as" not in out
-
-
-def _main_moves(main: Path, origin: Path) -> None:
-    (main / "c.txt").write_text("main moves\n")
-    _git(main, "add", "c.txt")
-    _git(main, "commit", "-q", "-m", "main moves")
-    _git(main, "push", "-q", "origin", "main")
-
-
-def _main_merged_into(main: Path, branch: str) -> str:
-    _git(main, "checkout", "-q", "-b", f"{branch}-merged", branch)
-    _git(main, "merge", "-q", "--no-ff", "--no-edit", "main")
-    _git(main, "checkout", "-q", "main")
-    return _git(main, "rev-parse", f"{branch}-merged")
-
-
-def test_a_grant_carries_into_a_train_across_a_restack_or_a_merge_of_main_and_not_to_a_restated_pin(
-        tmp_path, monkeypatch, capsys):
-    """Daniel's ruling (2 Oct), at the train's gate: the grant on the head that was reviewed counts at a head that only restacks it
-    or merges `main` into it, and the train says which head it carried from; a head whose pin says something else needs a new one."""
-    from research.store.local import LocalStore
-
-    _store_remote(tmp_path, monkeypatch)
-    main, _feat, _tip = _repos(tmp_path)
-    audit = {"roots": ["P"], "pins": {"P.t": {"type_hash": "1"}}, "reads": {}}
-    pinned = json.dumps({**audit, "pins": {"P.t": {"type_hash": "2"}}}, indent=1)
-    origin, heads = _origin_with(tmp_path, main, {
-        "tools/verity/check/queue.toml": '[[grant]]\nrole = "red-team"\npaths = ["lean-audit.json", "other/"]\n',
-        "lean-audit.json": json.dumps(audit, indent=1)}, {20: {"lean-audit.json": pinned}})
-    old = heads[20]
-    LocalStore().add_label(f"pr:20@{old}", "grant", "red-team", "reviewer")
-    _main_moves(main, origin)
-    restacked = _files_branch(main, "pr20-restacked", {"lean-audit.json": pinned})
-    merged = _main_merged_into(main, "pr20")
-    restated = _files_branch(main, "pr20-restated", {"lean-audit.json": json.dumps({**audit, "pins": {"P.t": {"type_hash": "3"}}})})
-    monkeypatch.chdir(main)
-    for head, how in ((restacked, "restack"), (merged, "merge of main")):
-        _git(main, "push", "-q", "-f", "origin", f"{head}:refs/pull/20/head")
-        assert merge_main(["--train", "--prepare", f"train-prep/{how[0]}", f"20@{head[:9]}", "--lint", "true"]) == 0, capsys.readouterr()
-        assert (f"research merge: grant red-team carried from pr:20@{old} to {head[:12]} "
-                f"({how}; lean-audit.json change identical)") in capsys.readouterr().out
-    _git(main, "push", "-q", "-f", "origin", f"{restated}:refs/pull/20/head")
-    assert merge_main(["--train", "--prepare", "train-prep/x", f"20@{restated[:9]}", "--lint", "true"]) == 3
-    out, err = capsys.readouterr()
-    assert f"#20 needs the red-team grant at {restated[:12]}" in err and "nothing was built" in err
-    assert (f"research merge: grant red-team on pr:20@{old} doesn't carry to {restated[:12]}: its lean-audit.json patch "
-            f"isn't byte-identical (lean-audit.json)") in out
-    assert _git(origin, "for-each-ref", "--format=%(refname)", "refs/heads/train-prep") == \
-        "refs/heads/train-prep/m\nrefs/heads/train-prep/r"
-
-
-def test_a_grant_carries_at_landing_as_at_prepare(tmp_path, monkeypatch, capsys):
-    """Proofs' restacked PRs (#1325 #1326 #1331 #1307 #1313, 6 Oct) were built into trains on grants carried from their reviewed
-    heads, but the landing gate read grants at the pinned head alone and would have refused the checked tip.  It carries them
-    under the same rule (`research.queue.carry`, Daniel's Q5), saying from which head."""
-    from research.store.local import LocalStore
-
-    _store_remote(tmp_path, monkeypatch)
-    main, _feat, _tip = _repos(tmp_path)
-    audit = {"roots": ["P"], "pins": {"P.t": {"type_hash": "1"}}, "reads": {}}
-    pinned = json.dumps({**audit, "pins": {"P.t": {"type_hash": "2"}}}, indent=1)
-    origin, heads = _origin_with(tmp_path, main, {
-        "tools/verity/check/queue.toml": '[[grant]]\nrole = "red-team"\npaths = ["lean-audit.json", "other/"]\n',
-        "lean-audit.json": json.dumps(audit, indent=1)}, {20: {"lean-audit.json": pinned}})
-    old = heads[20]
-    LocalStore().add_label(f"pr:20@{old}", "grant", "red-team", "reviewer")
-    _main_moves(main, origin)
-    restacked = _files_branch(main, "pr20-restacked", {"lean-audit.json": pinned})
-    monkeypatch.chdir(main)
-    _git(main, "push", "-q", "-f", "origin", f"{restacked}:refs/pull/20/head")
-    assert merge_main(["--train", "--prepare", "train-prep/r", f"20@{restacked[:9]}", "--lint", "true"]) == 0, capsys.readouterr()
-    _git(main, "fetch", "-q", "origin", "train-prep/r:train-prep/r")
-    _git(main, "worktree", "add", "-q", str(tmp_path / "tip"), _git(main, "rev-parse", "train-prep/r"))
-    assert _record(tmp_path, tmp_path / "tip", monkeypatch, *CHECKED) == 0
-    monkeypatch.chdir(main)
-    capsys.readouterr()
-    assert merge_main(["train-prep/r", "--dry-run"]) == 0, capsys.readouterr().err
-    assert f"research merge: grant red-team carried from pr:20@{old} to {restacked[:12]} (restack" in capsys.readouterr().out
-
-
-def test_a_grant_on_a_stacked_pr_carries_when_only_the_pr_below_it_moved(tmp_path, monkeypatch, capsys):
-    """Proofs' 12 stacked heads (7 Oct): judged against `main`, a stacked PR's change holds its parent's, so any new commit on the
-    parent voided the child's grant though the child's own patch was byte-identical.  The gate takes each head's change against
-    the PR below it in the train, as it does for the grants a PR needs, at `--prepare` and at landing."""
-    from research.queue import carry
-    from research.store.local import LocalStore
-
-    _store_remote(tmp_path, monkeypatch)
-    main, _feat, _tip = _repos(tmp_path)
-    audit = {"roots": ["P"], "pins": {"P.t": {"type_hash": "1"}}, "reads": {}}
-    pinned = json.dumps({**audit, "pins": {"P.t": {"type_hash": "2"}}}, indent=1)
-    origin, heads = _origin_with(tmp_path, main, {
-        "tools/verity/check/queue.toml": '[[grant]]\nrole = "red-team"\npaths = ["lean-audit.json"]\n',
-        "lean-audit.json": json.dumps(audit, indent=1)}, {30: {"p.txt": "parent\n"}})
-
-    def commit_on(start: str, branch: str, files: dict[str, str]) -> str:
-        _git(main, "checkout", "-q", "-b", branch, start)
-        for path, text in files.items():
-            (main / path).write_text(text)
-        _git(main, "add", *files)
-        _git(main, "commit", "-q", "-m", branch)
-        _git(main, "checkout", "-q", "main")
-        return _git(main, "rev-parse", branch)
-
-    old = commit_on(heads[30], "pr31", {"lean-audit.json": pinned})
-    LocalStore().add_label(f"pr:31@{old}", "grant", "red-team", "reviewer")
-    parent = commit_on(heads[30], "pr30-fixed", {"p.txt": "parent, fixed\n"})
-    new = commit_on(parent, "pr31-restacked", {"lean-audit.json": pinned})
-    _git(main, "push", "-q", "-f", "origin", f"{parent}:refs/pull/30/head", f"{new}:refs/pull/31/head")
-    assert carry(main, "main", old, new) == (False, "its change against main differs (p.txt)"), "from main, the parent's commit counts"
-    monkeypatch.chdir(main)
-    capsys.readouterr()
-    pins = [f"30@{parent[:9]}", f"31@{new[:9]}"]
-    assert merge_main(["--train", "--prepare", "train-prep/st", *pins, "--lint", "true"]) == 0, capsys.readouterr().err
-    said = f"research merge: grant red-team carried from pr:31@{old} to {new[:12]} (restack; lean-audit.json change identical)"
-    assert said in capsys.readouterr().out
-    _git(main, "fetch", "-q", "origin", "train-prep/st:train-prep/st")
-    _git(main, "worktree", "add", "-q", str(tmp_path / "tip"), _git(main, "rev-parse", "train-prep/st"))
-    assert _record(tmp_path, tmp_path / "tip", monkeypatch, *CHECKED) == 0
-    monkeypatch.chdir(main)
-    capsys.readouterr()
-    assert merge_main(["train-prep/st", "--dry-run"]) == 0, capsys.readouterr().err
-    assert said in capsys.readouterr().out
-
-
-def test_a_head_with_two_merge_bases_carries_no_grant_and_needs_every_one(tmp_path, monkeypatch, capsys):
-    """Red team of #955: a head merging #30's commit (which `main` merged too) into the reviewed head while keeping the reviewed
-    tree drops #30's pins.  Its merge bases with `main` are both the reviewed head's base and #30's commit; `git merge-base`
-    printed the first (the newer), against which the head changes what the reviewed one did, so the grant carried and the train
-    reverted #30's pins.  `git merge` diffs against all of them: the grant doesn't carry, and the rules, reading the tree the
-    merge writes, see the pins it reverts."""
-    from research.store.local import LocalStore
-
-    _store_remote(tmp_path, monkeypatch)
-    main, _feat, _tip = _repos(tmp_path)
-    audit = {"roots": ["P"], "pins": {"P.t": {"type_hash": "1"}}, "reads": {}}
-    (main / "other").mkdir()
-    days = iter(range(1, 10))
-
-    def next_day() -> None:
-        monkeypatch.setenv("GIT_COMMITTER_DATE", f"2026-01-0{next(days)}T00:00:00 +0000")
-
-    next_day()
-    origin, _ = _origin_with(tmp_path, main, {
-        "tools/verity/check/queue.toml": '[[grant]]\nrole = "red-team"\npaths = ["lean-audit.json", "other/"]\n',
-        "lean-audit.json": json.dumps(audit, indent=1),
-        "other/lean-audit.json": json.dumps({**audit, "pins": {"O.t": {"type_hash": "old"}}}, indent=1)}, {})
-    next_day()
-    theirs = _files_branch(main, "pr30", {"other/lean-audit.json": json.dumps({**audit, "pins": {"O.t": {"type_hash": "new"}}})})
-    next_day()
-    _main_moves(main, origin)
-    next_day()
-    old = _files_branch(main, "pr20", {"lean-audit.json": json.dumps({**audit, "pins": {"P.t": {"type_hash": "2"}}}, indent=1)})
-    LocalStore().add_label(f"pr:20@{old}", "grant", "red-team", "reviewer")
-    next_day()
-    _git(main, "merge", "-q", "--no-ff", "--no-edit", "pr30")
-    _git(main, "push", "-q", "origin", "main")
-    next_day()
-    new = _git(main, "commit-tree", f"{old}^{{tree}}", "-p", old, "-p", theirs, "-m", "Merge branch pr30")
-    _git(main, "push", "-q", "origin", f"{new}:refs/pull/20/head")
-    monkeypatch.chdir(main)
-    assert merge_main(["--train", "--prepare", "train-prep/c", f"20@{new[:9]}", "--lint", "true"]) == 3
-    out, err = capsys.readouterr()
-    tip = _git(main, "rev-parse", "main")
-    listed = _git(main, "merge-base", "--all", tip, new).split()
-    assert sorted(listed) == sorted([_git(main, "rev-parse", "main^1"), theirs])
-    assert _git(main, "merge-base", tip, new) == listed[0] == _git(main, "rev-parse", "main^1"), "the base the grant would carry over"
-    bases = ", ".join(b[:12] for b in listed)
-    merged = _git(main, "merge-tree", "--write-tree", tip, new)
-    assert json.loads(_git(main, "show", f"{merged}:other/lean-audit.json"))["pins"] == {"O.t": {"type_hash": "old"}}
-    assert (f"research merge: grant red-team on pr:20@{old} doesn't carry to {new[:12]}: {new[:12]} has 2 merge bases "
-            f"with {tip[:12]} ({bases}), so no one diff says what merging it changes; merging {tip[:12]} into it again gives it "
-            f"one") in out
-    assert f"#20 needs the red-team grant at {new[:12]}" in err and "nothing was built" in err
-    assert _git(origin, "for-each-ref", "refs/heads/train-prep") == ""
-
-
-def test_a_train_the_store_cant_answer_for_is_refused_as_stale_not_as_the_rules(tmp_path, monkeypatch, capsys):
-    from research.store import labels_sync
-
-    _store_remote(tmp_path, monkeypatch)
-    main, _feat, _tip = _repos(tmp_path)
-    audit = {"roots": ["P"], "pins": {"P.t": {"type_hash": "1"}}, "reads": {}}
-    _origin, heads = _origin_with(tmp_path, main, {
-        "tools/verity/check/queue.toml": '[[grant]]\nrole = "red-team"\npaths = ["lean-audit.json", "other/"]\n',
-        "lean-audit.json": json.dumps(audit, indent=1)}, {20: {"lean-audit.json": json.dumps({**audit, "pins": {"P.t": {"type_hash": "2"}}})}})
-
-    def unreachable(store, prefix):
-        raise OSError("injected")
-
-    monkeypatch.setattr(labels_sync, "pull_prefix", unreachable)
-    monkeypatch.chdir(main)
-    assert merge_main(["--train", "--prepare", "train-prep/s", f"20@{heads[20][:9]}", "--lint", "true"]) == 3
-    err = capsys.readouterr().err
-    assert "refused: STALE: the labels of pr:20@* weren't pulled from the store's remote (OSError: injected)" in err
-    assert "the queue's rules" not in err
 
 
 def test_merge_refuses_an_attempt_whose_result_is_the_lean_fast_paths_whatever_tool_recorded_it(tmp_path, monkeypatch, capsys):

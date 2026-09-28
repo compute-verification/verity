@@ -146,6 +146,7 @@ def test_a_pack_holding_anything_but_verdict_entries_is_refused_whole(tmp_path, 
         V.import_(pack)
     assert not (r["tests"] / "good.json").exists()                 # nothing is written from a refused pack
     assert V.main(["import", str(pack)]) == 1
+    assert V.main(["combine", str(tmp_path / "all.tar.gz"), str(pack)]) == 1 and not (tmp_path / "all.tar.gz").exists()
 
 
 def test_check_imports_a_pack_from_the_runs_inputs_and_names_it_in_the_result(tmp_path, monkeypatch):
@@ -169,3 +170,59 @@ def test_the_agreement_key_leaves_out_what_names_the_machine(monkeypatch):
     one = check._env_key({**base, "HOSTNAME": "a1b2", "RUNPOD_POD_ID": "abc", "RUNPOD_PUBLIC_IP": "1.2.3.4", "PUBLIC_KEY": "ssh-ed25519 A"})
     other = check._env_key({**base, "HOSTNAME": "c3d4", "RUNPOD_POD_ID": "xyz", "RUNPOD_PUBLIC_IP": "5.6.7.8", "PUBLIC_KEY": "ssh-ed25519 B"})
     assert one == other == {"LEAN_NUM_THREADS": "8", "PATH": "<tree>/.venv/bin:/usr/bin"}
+
+
+class _Store:
+    """The store as `gather_verdicts` reads it: recorded checks, newest first, each with its run files."""
+
+    remote = None
+
+    def __init__(self, tmp: Path, runs: dict[str, Path | None]):
+        self.tmp, self.runs = tmp, runs
+        self.index = self
+
+    def sql(self, query: str, params: tuple = ()) -> list[tuple]:
+        assert "tool = 'check'" in query and "state = 'done'" in query
+        return [(rid,) for rid in list(self.runs)[:params[0]]]
+
+    def get_attempt(self, rid: str) -> dict:
+        return {"outputs": {"run_files": f"art:{rid}"}}
+
+    def listing(self, art: str) -> list[dict]:
+        return [{"path": "verdicts.tar.gz"}] if self.runs[art.removeprefix("art:")] else [{"path": "result.json"}]
+
+    def fetch(self, art: str, to: Path, *, paths: list[str]) -> Path:
+        assert paths == ["verdicts.tar.gz"]
+        to.mkdir(parents=True)
+        (to / "verdicts.tar.gz").write_bytes(self.runs[art.removeprefix("art:")].read_bytes())
+        return to
+
+
+def test_a_recorded_check_gathers_the_newest_recorded_checks_packs_into_one(tmp_path, monkeypatch, capsys):
+    """`--record` sends one pack of the newest recorded checks' packs, so a pass any of them earned is reused on any machine.
+    A run that stored none is passed over; where two hold one entry, the newer's is taken."""
+    check = _load("check")
+    packs = {}
+    for name, entries in (("new", {"tests/k1.json": "new", "tests/k2.json": "2"}), ("old", {"tests/k1.json": "old", "tests/k3.json": "3"})):
+        r = _machine(tmp_path, monkeypatch, name)
+        for k, text in entries.items():
+            _write(r["tests"] / k.removeprefix("tests/"), text)
+        V.export(packs.setdefault(name, tmp_path / f"{name}.tar.gz"))
+    store = _Store(tmp_path, {"r-new": packs["new"], "r-none": None, "r-old": packs["old"]})
+    got = check.gather_verdicts(tmp_path / "out", store)
+    assert "3 entries gathered from 2 recorded checks (r-new, r-old)" in capsys.readouterr().out
+    _machine(tmp_path, monkeypatch, "pod")
+    assert V.import_(got) == (3, 0)
+    assert (V.roots()["tests"] / "k1.json").read_text() == "new"
+    assert check.gather_verdicts(tmp_path / "none", _Store(tmp_path, {"r-none": None})) is None
+
+
+def test_a_store_that_cant_be_read_gathers_nothing_and_says_why(tmp_path, capsys):
+    check = _load("check")
+
+    class Broken(_Store):
+        def sql(self, query, params=()):
+            raise OSError("injected")
+
+    assert check.gather_verdicts(tmp_path, Broken(tmp_path, {})) is None
+    assert "no verdicts gathered from the store (OSError: injected)" in capsys.readouterr().out

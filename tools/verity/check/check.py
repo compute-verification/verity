@@ -28,7 +28,8 @@
     uv run python tools/verity/check/check.py --lean-deps-files    the `--send` for those URLs, for `research merge --train`
     python tools/verity/check/check.py --preflight                 the preflight alone, for `research merge --train --prepare`
     ... [--verdicts-in PACK]                                import the passes another machine stored (`verdicts.py`) before
-                                                            the steps; with --record --on, the pack travels with the run
+                                                            the steps; with --record --on, the pack travels with the run;
+                                                            without it, --record gathers one from the newest recorded checks
     uv run python tools/verity/check/check.py --record --shard K/N --on M
                                                             shard K of ci.toml's plan with N shards, on machine M (each shard
                                                             on a pod of the lander's choosing): an Attempt no gate takes alone
@@ -95,8 +96,8 @@ doesn't name:
 
 Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for a cold run), each a hit only on identical inputs:
 
-    pytest          `suites.py`'s own: a suite's pass is reused while its declared inputs are unchanged (`--no-cache` passes
-                    `--fresh`)
+    pytest          `suites.py`'s own: a suite's pass is reused, on any machine, while its declared inputs, the base image and the
+                    check code are unchanged, and names the recorded run that earned it (`--no-cache` passes `--fresh`)
     circuit-check   `circuit-check --cache`, per target: a target's result is reused when every file, directory listing,
                     existence probe and loaded library its own check read or resolved (the Definitions it reached, their builds
                     and modules' import closures, its bindings and its pins, in `targets.py` or a Definition module's sidecar) is
@@ -120,7 +121,9 @@ Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for 
 
 Inside a recorded run it writes `$RESEARCH_RUN_DIR/result.json` (kind `check/v1`): each step's status, seconds and cache use,
 with each step's log beside it, and `verdicts.tar.gz`: the passes this run stored, which another machine imports with
-`--verdicts-in` (the merge queue's pods share their passes this way; the pack imported is named in the result's `verdicts`).
+`--verdicts-in`.  `--record` without `--verdicts-in` or `--no-cache` sends one pack of the newest recorded checks' packs
+(`gather_verdicts`), so every machine reuses every pass a recorded check earned; the pack imported is named in the result's
+`verdicts`.
 
 The evidence store.  A recorded check runs the store-backed tests (integrations/vllm's `store_io`) on the store's remote, never
 skipped: its steps get VERITY_STORE_REQUIRED=1 (a missing remote fails those tests) and, as CHECK_STORE_CUSTODY, the run's custody
@@ -749,7 +752,8 @@ def landable(base: str) -> bool:
 def record(argv: list[str]) -> int:
     """`--record [--on MACHINE|auto|M1,M2] [--base REF] [--agreement]`: `research run --tool check` on this clean commit, with the
     pinned upstream build and inputs (fetched from the store) when the commit changes a path `tools/verity/check/tool.py` names against
-    REF (default origin/main, fetched first), or whenever --agreement is given. A commit that can't land on REF as it is
+    REF (default origin/main, fetched first), or whenever --agreement is given, and the newest recorded checks' verdicts
+    (`gather_verdicts`) unless it is given a pack or --no-cache. A commit that can't land on REF as it is
     (`landable`) gets a warning and is checked anyway. `--on auto` or a list takes the machine `choose` picks, first of all."""
     on = base = None
     agreement = priority = False
@@ -830,6 +834,9 @@ def record(argv: list[str]) -> int:
     if on and (combining or parts is not None):
         (d / SHARD_PARTS).write_text(json.dumps(parts or []))
         cmd += ["--send", str(d / SHARD_PARTS)]
+    if not combining and "--verdicts-in" not in rest and "--no-cache" not in rest:
+        if pack := gather_verdicts(d):
+            rest += ["--verdicts-in", str(pack)]
     if on:
         cmd += ["--on", on, "--source", "."]
         if "--verdicts-in" in rest:                    # the pack travels with the run; on the machine it's found in the run's inputs/
@@ -839,6 +846,40 @@ def record(argv: list[str]) -> int:
         return subprocess.run(cmd, cwd=ROOT, env=env).returncode
     finally:
         shutil.rmtree(d, ignore_errors=True)
+
+
+#: how many of the newest recorded checks' verdict packs a recorded check gathers (`gather_verdicts`)
+GATHER = 12
+
+
+def gather_verdicts(d: Path, store=None, limit: int = GATHER) -> Path | None:
+    """One pack (`verdicts.py combine`) of the verdicts the newest ``limit`` recorded checks stored, for `--record` to send with
+    `--verdicts-in`: a suite whose key one of them earned is reused on any machine, and names the run that earned it.  Only
+    recorded runs' packs are taken.  None when the store has none, or can't be read (the check then runs on its own cache)."""
+    from research.store.local import LocalStore
+
+    try:
+        store = store or LocalStore()
+        if store.remote is not None:
+            store.refresh(attempts_only=True)
+        rows = store.index.sql("SELECT id FROM attempts WHERE tool = 'check' AND state = 'done' ORDER BY start_utc DESC LIMIT ?",
+                               (4 * limit,))
+        packs = []
+        for (rid,) in rows:
+            art = ((store.get_attempt(rid) or {}).get("outputs") or {}).get("run_files")
+            if art and any(f["path"] == "verdicts.tar.gz" for f in store.listing(art)):
+                packs.append(store.fetch(art, d / "verdicts" / rid, paths=["verdicts.tar.gz"]) / "verdicts.tar.gz")
+                if len(packs) == limit:
+                    break
+        if not packs:
+            return None
+        n = VERDICTS.combine(packs, d / "verdicts-gathered.tar.gz")
+    except Exception as e:  # noqa: BLE001  (no pack: the check reuses only this machine's passes)
+        print(f"check: no verdicts gathered from the store ({type(e).__name__}: {e})", flush=True)
+        return None
+    print(f"check: verdicts: {n} entries gathered from {len(packs)} recorded checks ({', '.join(p.parent.name for p in packs)})",
+          flush=True)
+    return d / "verdicts-gathered.tar.gz"
 
 
 def verdicts_in(pack: Path, run_dir: Path | None) -> dict:
@@ -870,7 +911,8 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
         names = {p.partition(":")[0] for p in only}
         a, b = (n if not names & {"flock-circuit-build", "circuit-check", "flock-rust-tests"} else a), (n if "pytest" not in names else b)
     suites = [py, str(ROOT / "tools" / "verity" / "check" / "suites.py")]
-    tail = ["--jobs", str(a), *([] if cache else ["--fresh"])]
+    tail = ["--jobs", str(a), *([] if cache else ["--fresh"]),
+            *(["--run", os.environ["RESEARCH_RUN_ID"]] if os.environ.get("RESEARCH_RUN_ID") else [])]
     lean = lean_steps(out, cache, urls)
     after_lean: list[str] = []
     if len(lean) > 1:
