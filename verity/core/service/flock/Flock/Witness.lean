@@ -21,8 +21,9 @@ reads; `Proofs.Flock.Recursive.Witness` proves that each check's `.ok` is the mo
   (`outerPartsOf`, `outerParts`) and V*'s statements there (`RecVStar.statements`).
 * `session [--statement ID] --circuit F --public F [--partition F] [--program F] [--registered F] [--tables DIR]
   [--session-tables J] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F]] --session DIR...`: one of V*'s outer
-  sessions, with `flock-verify verify --zk`'s flags. Once: `tagsOk` (`DecodeZL.TagsOk`), the statement check without and
-  with the registered reads (`ScopeZ`, `ScopeZR`), and the circuit's `scopeOk` (`VStmt.hscope`). Per session: `fullDraw`
+  sessions, with `flock-verify verify --zk`'s flags. Once: `tagsOk` (`DecodeZL.TagsOk`, public outputs) and `tagsOkZHJ`
+  (`ZkHidden.TagsOkZHJ`, hidden outputs, `ZkOuterR.hTags`), which no session meets both of, the statement check without
+  and with the registered reads (`ScopeZ`, `ScopeZR`), and the circuit's `scopeOk` (`VStmt.hscope`). Per session: `fullDraw`
   (the record's draw is the full draw `RecordCustody` reads, `subset` of every unit of the population), `acceptsZKRAt`
   (`ZkReg.AcceptsZKR`, with the statement's `m` and its schedule's level 0), and with `--rec-inner` `accepts_zkv`
   (`AcceptsZKV`: `acceptsZKRAt`, then `checkZKV`, V*'s statement check, whose refusal it prints apart as `check_stmt`).
@@ -84,6 +85,14 @@ def tagsOk (I : Inputs) : V Unit :=
     pure ()
   else
     throw s!"{I.tags.name}: hidden outputs {I.tags.hiddenOutputs}, retained rounds {I.tags.retainRounds}, leaves {I.tags.merkleLeaf}, {I.count} tables"
+
+/-- The tags V*'s sessions take (`ZkOuterR.hTags`): hidden outputs, retained rounds, `hm96-sha512/v1` leaves, any number
+of tables. -/
+def tagsOkZHJ (I : Inputs) : V Unit :=
+  if I.tags.hiddenOutputs = true ∧ I.tags.retainRounds = true ∧ I.tags.merkleLeaf = "hm96-sha512/v1" then
+    pure ()
+  else
+    throw s!"{I.tags.name}: hidden outputs {I.tags.hiddenOutputs}, retained rounds {I.tags.retainRounds}, leaves {I.tags.merkleLeaf}"
 
 /-- The session's circuit, as `ZkOuterR` parses it, when `scopeOk` accepts it. -/
 def scopeOk (I : Inputs) : V Circuit := do
@@ -275,6 +284,7 @@ def sessionCmd (args : List String) : IO UInt32 := do
   let tables ← readTables args
   let I : Inputs := { tags, circuitFile, publicFile, count, tables, partition, program }
   let mut all ← line "tags_ok" (tagsOk I)
+  all := (← line "tags_ok_zhj" (tagsOkZHJ I)) && all
   all := (← line "scope_z" (scope I false)) && all
   all := (← line "scope_zr" (scope I true)) && all
   let c := scopeOk I

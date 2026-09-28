@@ -8,8 +8,9 @@ change that closes it has to say so here. Two recorded sets, both fetched fixtur
   3's statement restaged by `rec_vstage.stage` as `test_lean_rec_coins` restages it, and checked as
   `verity/flock-circuit`; its outer session was proved before #1677 (art:225370f8… is the level proved again with
   #1677's OS masks, by `r20261010-212517-4f68`, and accepted by today's verifier). The inner description is not
-  registered (no staging runs `inner_registered register`), and V*'s sessions hide their outputs where `ZkOuterR.hTags`
-  (`TagsOk`) takes public ones, so their shared-row public file fails `Typable`'s `ScopeZ`.
+  registered (no staging runs `inner_registered register`). V*'s sessions hide their outputs, as `ZkOuterR.hTags`
+  (`TagsOkZHJ`) takes them, and their shared-row public file passes `ScopeZR`, `Typable`'s statement check; the
+  public-output one-table checks, `TagsOk` and `ScopeZ`, refuse them.
 * `f1-gate`, the F1 gate (`PublicAudit`, the recursive audit at public units): art:df3af922…, 85 at K = 4096, N = 2,
   built, proved and verified at b795ecbde by `r20261010-210008-003d` through `r20261010-214046-3e44` (the custody), V*'s
   statements staged with the inner program; the fixture holds the files these tests read, the circuits and V*'s
@@ -137,10 +138,10 @@ def test_no_recorded_inner_description_is_registered(inner):
                         "opens no registered root")
 
 
-@pytest.mark.parametrize("check", ["scope_zr", "scope_ok", "full_draw"])
+@pytest.mark.parametrize("check", ["tags_ok_zhj", "scope_zr", "scope_ok", "full_draw"])
 def test_the_recorded_level_meets(outer, check):
-    """`ScopeZR` (the event's statement check, with the registered reads), `VStmt.hscope`, and the full draw
-    `RecordCustody` reads."""
+    """`TagsOkZHJ` (`ZkOuterR.hTags`), `ScopeZR` (the event's statement check and `Typable`'s, with the registered reads),
+    `VStmt.hscope`, and the full draw `RecordCustody` reads."""
     assert outer[check]["ok"], outer[check].get("why")
 
 
@@ -153,10 +154,9 @@ def test_the_recorded_level_was_proved_before_the_os_masks(outer, level):
     assert c["ok"], c.get("why")
 
 
-def test_the_recorded_level_is_not_typable(outer):
-    """`ZkOuterR.Typable` takes `ScopeZ`, the statement check without the registered reads, which refuses V*'s shared-row
-    public file. `ScopeZR` gives it only where outputs are public (`typable_of_accepts` reads `hTags`), so it closes with
-    `TagsOk`: `Typable` has to take `ScopeZR` once the chain takes hidden outputs."""
+def test_the_recorded_level_fails_scope_z(outer):
+    """`ScopeZ`, the statement check without the registered reads, which the fail-closed `--zk` headlines read, refuses
+    V*'s shared-row public file. `ZkOuterR.Typable` takes `ScopeZR`, which the level meets."""
     c = outer["scope_z"]
     assert not c["ok"]
     assert c["why"] == ("refused: a shared-row public file (header shared_rows): a statement form the soundness proof does "
@@ -164,8 +164,8 @@ def test_the_recorded_level_is_not_typable(outer):
 
 
 def test_the_recorded_level_hides_its_outputs(outer):
-    """`ZkOuterR.hTags` (`TagsOk`) takes public outputs, but every V* session is a `verity/flock-circuit` statement's,
-    which hides them. It holds once the chain's session lemmas take hidden outputs (`TagsOkZHJ`)."""
+    """Every V* session is a `verity/flock-circuit` statement's, which hides its outputs: `TagsOk`, the public-output
+    one-table tags, refuses it, and `ZkOuterR.hTags` (`TagsOkZHJ`) takes it (`test_the_recorded_level_meets`)."""
     c = outer["tags_ok"]
     assert not c["ok"]
     assert c["why"].startswith(f"{STATEMENT}: hidden outputs true,"), c["why"]
@@ -341,12 +341,12 @@ def test_f1_vstars_statements_are_outer_statements_at(f1_gate, f1_inner):
 def test_f1_the_session_meets(f1, part):
     """V*'s statement `j` at its session: `checkStmt` (`AcceptsZKV`'s second conjunct, so the session's circuit file is
     Lean's own `RecVStar.circuitFile` under the verifier's bindings, byte for byte, and its registered reads pass
-    `checkOwn`, `checkRows` and `checkAcc`), `ScopeZR`, `VStmt.hscope`, and the full draw over its population
-    (`RecordCustody`)."""
+    `checkOwn`, `checkRows` and `checkAcc`), `TagsOkZHJ` (`ZkOuterR.hTags`), `ScopeZR`, `VStmt.hscope`, and the full draw
+    over its population (`RecordCustody`)."""
     w, j = f1[part, STATEMENT], F1_PARTS.index(part)
     assert w["accepts_zkv"]["part"] == j
     assert "check_stmt" not in w["accepts_zkv"], w["accepts_zkv"]["check_stmt"]
-    for check in ("scope_zr", "scope_ok", "full_draw"):
+    for check in ("tags_ok_zhj", "scope_zr", "scope_ok", "full_draw"):
         assert w[check]["ok"], (check, w[check].get("why"))
     assert w["full_draw"]["population"] == F1_STATEMENTS[j][1]
 
@@ -360,8 +360,9 @@ def test_f1_the_session_is_accepted_as_the_verifiers_statement(f1, part):
         assert w[check]["ok"], (check, w[check].get("why"))
 
 
-def test_f1_the_sessions_are_not_typable(f1):
-    """As at rec-coins' level: `TagsOk` refuses V*'s hidden outputs and `ScopeZ` their shared-row public files."""
+def test_f1_the_sessions_fail_the_public_output_checks(f1):
+    """As at rec-coins' level: `TagsOk` refuses V*'s hidden outputs and `ScopeZ` their shared-row public files, while
+    `TagsOkZHJ` and `ScopeZR`, which `ZkOuterR` takes, pass (`test_f1_the_session_meets`)."""
     for part in F1_PARTS:
         w = f1[part, STATEMENT]
         assert w["tags_ok"]["why"].startswith(f"{STATEMENT}: hidden outputs true,"), (part, w["tags_ok"])
@@ -373,8 +374,9 @@ def test_f1_the_rate_is_below_one_at_k_2_21(f1):
     """`_hr`: `rateZ j k = 2^(level 0's logLen) / (e·k)` (`ZkLink.rateZ`) over each session's own plan, its statement's
     `Zk.schedule`, whose level 0's `logLen = logCols + logInvRate` (`Accounting.Level.logLen`) is `cols + rate`. The largest
     is L0's (m 33): 21, so at `k = 2^21` every recorded session's rate is at most `ρ = 1/e < 1`. `_hr` is over every
-    session the prover may supply, so the Lean takes `k = 2^23` (`Witness.hr_inv_exp`), the cap `Zk.schedule` puts on
-    level 0's `logLen` at every `m` it accepts (`ZkBind.zkLogLenCap_23`), which the recorded sessions are under."""
+    session the prover may supply, so the Lean takes `k = 2^23` (`Witness.hr_inv_exp zr` is `_hr`, through
+    `ZkHidden.hr_planZHJ_23`), the cap `Zk.schedule` puts on level 0's `logLen` at every `m` it accepts
+    (`ZkBind.zkLogLenCap_23`), which the recorded sessions are under."""
     zkr = {p: f1[p, STATEMENT]["accepts_zkr"] for p in F1_PARTS}
     for p, c in zkr.items():
         assert c["level0"]["d"] == c["level0"]["cols"] + c["level0"]["rate"], p
