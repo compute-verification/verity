@@ -32,7 +32,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # test_jobs_vectors checks that it still can. infra/cluster: the console computes its usage rows with cluster.usage, and
 # `research usage` runs `cluster usage`. tools/verity/check/slot.py and lean_slot.py: the quick tier and the Lean sandbox ship
 # them to the node (test_queue, test_merge_gate, test_nebius_lean_sandbox).
-inputs = [".agents/skills", ".gitignore", "archive/direct", "fixtures", "infra/ops", "integrations/vllm", "verity", "verity/ml/circuits", "verity/ml/kernels",
+inputs = [".agents/skills", "verity/README.md", ".gitignore", "archive/direct", "fixtures", "infra/ops", "integrations/vllm", "verity", "verity/ml/circuits", "verity/ml/kernels",
           "verity/core", "tools/verity/check/lean_slot.py", "tools/verity/check/slot.py", "tools/verity/check/tool.py", "benchmarks/tc_probe",
           "pyproject.toml", "verity/ml/flock/pyproject.toml", "archive/gkr/pyproject.toml", "benchmarks/numerical/pyproject.toml",
           "archive/sp1/pyproject.toml", "benchmarks/commitments/pyproject.toml", "benchmarks/network_traces/pyproject.toml",
