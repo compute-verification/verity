@@ -313,15 +313,16 @@ def main(argv: list[str] | None = None) -> int:
         rows = ([{"name": f"ewb_T{t}", "value": v, "unit": "B/s"} for t, v in ewb.items()] if isinstance(ewb, dict)
                 else [{"name": "ewb", "value": ewb, "unit": "B/s"}])
         rows += [{"name": "decode_pass_s", "value": doc["metrics"]["decode_pass_s"], "unit": "s"}]
+        result = out.resolve() / "bench-result.json"
+        rel = str(result.relative_to(Path(run_dir).resolve())) if result.is_relative_to(Path(run_dir).resolve()) else str(result)
         Path(run_dir, "result.json").write_text(json.dumps({
             "schema": "research/result/v0.1", "run_id": os.environ.get("RESEARCH_RUN_ID"),
             "workload_fingerprint": {"benchmark": SCHEMA, "scheme": a.scheme, "impl": a.impl, "weight_set": a.weight_set,
                                      "hardware": a.hardware, "impl_commit": a.impl_commit},
             "validation": {"status": "passed" if doc["passed"] else "failed", "checker": "benchmarks/pous/bench.py gates",
                            "detail": json.dumps({g: v.get("passed") for g, v in doc["gates"].items()}),
-                           "evidence": [str((out / "bench-result.json").relative_to(run_dir)) if out.is_relative_to(run_dir)
-                                        else str(out / "bench-result.json")]},
-            "measurements": rows, "measurement_files": ["bench-result.json"], "artifacts": ["bench-result.json"]}, indent=1))
+                           "evidence": [rel]},
+            "measurements": rows, "measurement_files": [rel], "artifacts": [rel]}, indent=1))
     return 0 if doc["passed"] else 1
 
 
