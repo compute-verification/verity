@@ -3,9 +3,11 @@
 idle GPU memory and custody backlog against the steward's watermarks. It reads; it never deletes, stops or touches NVML.
 
     nice -n 19 python3 resource_probe.py --node n1|n2 [--json] [--state PATH]     as research on the node
+    nice -n 19 python3 resource_probe.py --node n1|n2 --reading                   the reading alone, for `research monitors`
 
 Exit 0: every metric is under its watermark (the steward's tick ends silently). Exit 1: one or more breaches, one line each on
 stdout (`--json` prints the whole reading instead). Exit 2: the probe, or one of its sources, failed: never read as all clear.
+`--reading` prints read()'s JSON and exits 0, writing nothing: its caller keeps the rate base and evaluates (`research monitors`).
 
 Sources, all cheap: statvfs of `/` and `/workspace`; `/proc/meminfo`; the ramlock dir's live reservations (research.mem's
 convention); replay RAM to come (node 1: Kueue's pending `*-replay-*` Workloads' memory requests, floored at a bundle's size;
@@ -260,6 +262,11 @@ def evaluate(r: dict[str, Any], prev: dict[str, Any] | None, lim: dict[str, floa
     return b
 
 
+def next_base(r: dict[str, Any], base: dict[str, Any] | None, lim: dict[str, float]) -> dict[str, Any]:
+    """The base reading the next inode rate compares with: `base` until it is `inode_base_max_s` old, then this reading."""
+    return base if base and r["t"] - base.get("t", 0) < lim["inode_base_max_s"] else {"t": r["t"], "disk": r["disk"]}
+
+
 def read(node: str, *, now: float, home: Path, ws: str = "/workspace") -> dict[str, Any]:
     lim = {**COMMON, **LIMITS[node]}
     r: dict[str, Any] = {"schema": "resource-probe/v1", "node": node, "t": now, "errors": []}
@@ -293,12 +300,20 @@ def read(node: str, *, now: float, home: Path, ws: str = "/workspace") -> dict[s
     return r
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--node", choices=sorted(LIMITS), required=True)
     ap.add_argument("--state", type=Path, default=Path.home() / ".local/state/resource-steward/probe.json")
     ap.add_argument("--json", action="store_true")
-    ns = ap.parse_args()
+    ap.add_argument("--reading", action="store_true", help="print the reading as JSON; no state, no history, no evaluation")
+    ns = ap.parse_args(argv)
+    if ns.reading:
+        try:
+            print(json.dumps(read(ns.node, now=time.time(), home=Path.home())))
+        except Exception as e:  # noqa: BLE001
+            print(f"probe failed: {type(e).__name__}: {e}")
+            return 2
+        return 0
     try:
         prev = json.loads(ns.state.read_text()) if ns.state.exists() else None
     except (OSError, ValueError):
@@ -308,7 +323,7 @@ def main() -> int:
         r = read(ns.node, now=time.time(), home=Path.home())
         base = (prev or {}).get("rate_base")
         r["breaches"] = evaluate(r, base, lim)
-        r["rate_base"] = base if base and r["t"] - base.get("t", 0) < lim["inode_base_max_s"] else {"t": r["t"], "disk": r["disk"]}
+        r["rate_base"] = next_base(r, base, lim)
     except Exception as e:  # noqa: BLE001
         print(f"probe failed: {type(e).__name__}: {e}")
         return 2

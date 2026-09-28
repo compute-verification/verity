@@ -1,0 +1,63 @@
+#!/usr/bin/env python3
+"""vy-steward-watch (vy-nebius-1, every 15 min as root, vy-steward-watch.timer): one JSON line of node 1's state, appended to
+/workspace/verity-guest/steward-watch.jsonl, which infra's duty pass reads; it runs on the node, so it needs no agent VM
+(deploy.toml installs it). It changes nothing: the pacer's 78% latch, resource-steward's 82% pause and vy-disk-guard's 90%
+hold act on the disk, and the node holds no Slack credentials. `flags` names each steward threshold crossed: disk-72 (infra acts),
+disk-78 (infra tells @top), pacer-stale and dispatcher-stale (no tick for 10 min).
+"""
+import json
+import os
+import subprocess
+import time
+
+OUT = "/workspace/verity-guest/steward-watch.jsonl"
+SRC = "/workspace/research/src"
+PACER_TICK = "/home/research/commit-release/released"
+DISPATCH_TICK = "/workspace/jobs/dispatch/loop.log"
+STALE_S = 600
+
+
+def run(cmd, timeout=60):
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+
+
+def age(path, now):
+    try:
+        return round(now - os.stat(path).st_mtime)
+    except OSError:
+        return None
+
+
+now = time.time()
+st = os.statvfs("/workspace")
+used_pct = round(100 * (1 - st.f_bavail / (st.f_blocks or 1)), 1)
+rec = {"t": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now)), "disk_pct": used_pct,
+       "free_gib": round(st.f_bavail * st.f_frsize / 2**30)}
+try:
+    rec["src_trees"] = sum(1 for e in os.listdir(SRC) if not e.startswith("."))
+except OSError:
+    rec["src_trees"] = None
+mem = run(["nvidia-smi", "--query-gpu=memory.used", "--format=csv,noheader,nounits"])
+rec["gpus_held"] = sum(1 for line in mem.split() if line.strip().isdigit() and int(line) > 1000) if mem else None
+cq = run(["/usr/local/bin/k3s", "kubectl", "get", "clusterqueue", "-o", "json"])
+try:
+    rec["kueue"] = {i["metadata"]["name"]: [i["status"].get("admittedWorkloads", 0), i["status"].get("pendingWorkloads", 0)]
+                    for i in json.loads(cq)["items"]}
+except (ValueError, KeyError):
+    rec["kueue"] = None
+rec["pacer_tick_age_s"] = age(PACER_TICK, now)
+rec["dispatcher_tick_age_s"] = age(DISPATCH_TICK, now)
+
+def stale(a):
+    return a is None or a > STALE_S
+
+
+flags = [f for f, hit in (("disk-78", used_pct >= 78), ("disk-72", 72 <= used_pct < 78),
+                          ("pacer-stale", stale(rec["pacer_tick_age_s"])),
+                          ("dispatcher-stale", stale(rec["dispatcher_tick_age_s"]))) if hit]
+rec["flags"] = flags
+with open(OUT, "a") as f:
+    f.write(json.dumps(rec, sort_keys=True) + "\n")

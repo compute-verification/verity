@@ -1,0 +1,9 @@
+[Unit]
+Description=infra node sweep (node_sweep.sh): src/.trash leftovers and stale check scratch; never in a timed window
+[Service]
+Type=oneshot
+Nice=19
+IOSchedulingClass=idle
+TimeoutStartSec=3600
+ExecCondition=/bin/grep -qs "timed False" /workspace/pouw/fill/status.txt
+ExecStart=/usr/local/bin/vy-node-sweep

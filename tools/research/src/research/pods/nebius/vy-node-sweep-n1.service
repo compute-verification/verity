@@ -1,0 +1,8 @@
+[Unit]
+Description=infra node sweep (node_sweep.sh): src/.trash leftovers, stale check scratch, failed audits' .lake/packages, old jobs/src; src/ itself is store/evict.py's
+[Service]
+Type=oneshot
+Nice=19
+IOSchedulingClass=idle
+TimeoutStartSec=3600
+ExecStart=/usr/local/bin/vy-node-sweep --jobs-src --lake

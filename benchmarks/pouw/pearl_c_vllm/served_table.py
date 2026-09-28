@@ -11,6 +11,8 @@ Writes ``<out>/table.json`` and ``<out>/table.md``.  A model's row is refused wh
 input's openings failed, or when a verify given for it did not accept its pass (a negative control's, ``control*``, must
 reject).  ``--fresh`` adds a model's ε from fresh-salt trials (``--fresh-draws``) beside the pass-salt one; ``--pending``
 counts trials still running in m, so a table published before them states the limits the finished table will.
+``--window`` adds a salt-to-deadline window's replay diagnostic from its audit (refused unless the audit accepted), with its
+overhead over cuBLASLt beside the proving cost hidden-zk measures (``--proving-cost``; the cell points to hidden-zk until then).
 """
 from __future__ import annotations
 
@@ -71,6 +73,23 @@ def model_row(name: str, inputs: dict, verifies: list[dict], fresh: dict | None,
     return out
 
 
+def window_row(window_run: str, audit_run: str, audit: dict, proving: dict[str, str]) -> dict:
+    """A salt-to-deadline window's row from its audit (`benchmarks/pouw/exhaustion/audit.py`'s audit.json), refused unless
+    every check of the audit held."""
+    if not audit.get("ok"):
+        bad = [c["check"] for c in audit.get("checks", []) if not c["ok"]]
+        raise ValueError(f"window {window_run}: its audit {audit_run} did not accept ({', '.join(bad[:4])})")
+    f = audit["fraction"]
+    claimed = sum(audit["gemms"].values())
+    return {"window_run": window_run, "audit_run": audit_run, "scheme": audit["scheme"], "shape": audit["shape"],
+            "t_s": audit["t_s"], "t_d": audit["t_d"], "verifier_commit": audit["verifier_commit"], "claimed_gemms": claimed,
+            "credited_gemms": f["credited_gemms"], "capacity_gemms": f["capacity_gemms"],
+            "uncertified_fraction": f["uncertified_fraction"], "fraction": f["fraction"], "gamma": f["gamma"], "eps_s": f["eps_s"],
+            "slowdown": f["slowdown"], "tiles": len(audit["tiles"]), "tiles_accepted": sum(t["ok"] for t in audit["tiles"]),
+            "controls": {c["label"]: "REJECT" if not c["ok"] else "ACCEPT" for c in audit["controls"]},
+            "proving_cost": proving.get(audit["scheme"])}
+
+
 def markdown(table: dict) -> str:
     lines = [f"# FP8 served table at cap {table['cap']}", "",
              "| model | pass | m | tile draws | failures | worst share | ε (95% simultaneous) | bound | fresh-salt ε | verify |",
@@ -114,6 +133,30 @@ def markdown(table: dict) -> str:
                       f"({1 / 64:.2%}) of a unit's elements (`FormingP.saltDeadP_card_le`, under its domain conditions) "
                       f"{'covers' if f['unit_rows_covered_by_rho_D'] else 'does not cover'} the tiles that hold all their "
                       f"unit's rows (decode); a prefill tile has the threshold only."]
+    windows = table.get("windows", [])
+    if windows:
+        lines += ["", "## Replay diagnostic: salt-to-deadline windows", "",
+                  "| window | audit | scheme | t_s | credited / claimed GEMMs | cuBLASLt capacity | replay-diagnostic fraction "
+                  "[certified, uncertified] | overhead × cuBLASLt | proving cost | tiles accepted | controls |",
+                  "|---|---|---|---|---:|---:|---:|---:|---|---:|---|"]
+        for w in windows:
+            controls = ", ".join(f"{k} {v}" for k, v in sorted(w["controls"].items()))
+            lines.append(f"| `{w['window_run']}` | `{w['audit_run']}` | {w['scheme']} | {w['t_s']} | "
+                         f"{w['credited_gemms']:,} / {w['claimed_gemms']:,} | {w['capacity_gemms']:,.0f} | "
+                         f"{w['fraction']:.2%} [{w['fraction']:.4f}, {w['uncertified_fraction']:.4f}] | {w['slowdown']:.3f} | "
+                         f"{w['proving_cost'] or '— (hidden-zk)'} | {w['tiles_accepted']} / {w['tiles']} | {controls} |")
+        fr = [w["fraction"] for w in windows]
+        lines += ["", "A replay audit is a diagnostic, not a verification (Daniel, 2026-10-04 4:06 PM PDT): only a sampled "
+                  "proof over C-Flock with ZK verifies a computation. Each window's audit recomputes its drawn tiles on the "
+                  "CPU (`benchmarks/pouw/exhaustion/audit.py`), so its fraction is the replay diagnostic: certified = "
+                  "(1 − γ)(1 − ε_s)·credited / capacity, the lower end at δ_s = 1/20 over the audit's draws; uncertified = "
+                  "credited / capacity, with capacity the cards' fastest cuBLASLt FP8 GEMMs in the window (before and after, "
+                  "averaged). The overhead is capacity / credited, the served kernel's time per GEMM over cuBLASLt's. Proving "
+                  "cost is the cost of the sampled C-Flock ZK proofs over the same work, which hidden-zk measures; "
+                  "'— (hidden-zk)' means it has no number for the scheme yet."]
+        if len(fr) > 1:
+            lines += ["", f"Across the {len(fr)} windows the replay-diagnostic fraction spans {min(fr):.2%} to {max(fr):.2%} "
+                      f"(spread {max(fr) - min(fr):.2%}, {(max(fr) - min(fr)) * 1e4:.1f} basis points)."]
     return "\n".join(lines) + "\n"
 
 
@@ -131,6 +174,10 @@ def main(argv: list[str] | None = None) -> int:
                    help="a model's forming_headroom.py report over its recorded tiles")
     p.add_argument("--quality", nargs=2, action="append", default=[], metavar=("NAME", "QUALITY_JSON"),
                    help="a model's window.sh MODE=perplexity quality.json (every group's gate must have passed)")
+    p.add_argument("--window", nargs=3, action="append", default=[], metavar=("WINDOW_RUN", "AUDIT_RUN", "AUDIT_JSON"),
+                   help="a salt-to-deadline window's run, its audit's run and the audit's audit.json (its replay diagnostic)")
+    p.add_argument("--proving-cost", nargs=2, action="append", default=[], metavar=("SCHEME", "COST"),
+                   help="the proving cost hidden-zk measured for a window scheme, as the cell should read")
     p.add_argument("--cap", default="1/1000")
     p.add_argument("--out", type=Path, required=True)
     a = p.parse_args(argv)
@@ -162,6 +209,9 @@ def main(argv: list[str] | None = None) -> int:
         row["quality"] = {k: doc[k] for k in ("run", "model", "dataset", "windows", "window_tokens", "summary")}
     models += [{"model": name, "absent": reason} for name, reason in a.absent]
     table = {"tool": "pouw_pearl_c_served_table", "cap": a.cap, "m": m, "delta_per_input": 0.05 / m, "models": models}
+    if a.window:
+        proving = dict(a.proving_cost)
+        table["windows"] = [window_row(w, r, json.loads(Path(path).read_text()), proving) for w, r, path in a.window]
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "table.json").write_text(json.dumps(table, indent=1) + "\n")
     (a.out / "table.md").write_text(markdown(table))

@@ -3,8 +3,9 @@
 `research disk-hold --gb N --path P -- CMD...` admits CMD at once when the filesystem holding P would stay at or under HOLD_PCT
 (80) of its size with N more GB used, and otherwise holds it until that falls to RELEASE_PCT (75), the thresholds node 1's
 `vy-disk-guard` uses; then it execs CMD in its own process, so the run's pid is unchanged. The launch doesn't wait: the hold
-happens in the detached process the machine starts, and its lines go to the run's launcher.log. Requests other runs have
-declared but not yet used aren't counted (a follow-up). A machine whose guard holds at another level sets
+happens in the detached process the machine starts, and its lines go to the run's launcher.log. With `--ack FIFO` (the launch's,
+remote.LAUNCH_ACK) a hold acknowledges the launch as it starts, since the runner's own acknowledgement comes only after it.
+Requests other runs have declared but not yet used aren't counted (a follow-up). A machine whose guard holds at another level sets
 RESEARCH_DISK_HOLD_PCT in the run's environment.
 """
 from __future__ import annotations
@@ -25,8 +26,10 @@ GB = 1e9
 
 def hold(gb: float, path: Path, *, hold_pct: float = HOLD_PCT, release_pct: float = RELEASE_PCT, poll_s: float = POLL_S,
          usage: Callable[[Path], tuple[int, int, int]] = shutil.disk_usage, sleep: Callable[[float], None] = time.sleep,
-         log: Callable[[str], None] = lambda s: print(s, file=sys.stderr, flush=True)) -> int:
-    """Return once `gb` more GB fits on `path`'s filesystem by the rule above; the number of polls it was held for."""
+         log: Callable[[str], None] = lambda s: print(s, file=sys.stderr, flush=True),
+         on_hold: Callable[[], None] = lambda: None) -> int:
+    """Return once `gb` more GB fits on `path`'s filesystem by the rule above; the number of polls it was held for.  `on_hold` runs
+    once, when the hold starts."""
     held = 0
     while True:
         total, used, _ = usage(path)
@@ -38,6 +41,7 @@ def hold(gb: float, path: Path, *, hold_pct: float = HOLD_PCT, release_pct: floa
         if not held:
             log(f"research disk-hold: holding: {gb:g} GB more would fill {path}'s filesystem to {after:.1f}% (over {hold_pct:g}%); "
                 f"released at {release_pct:g}% or less, polled every {poll_s:g} s")
+            on_hold()
         held += 1
         sleep(poll_s)
 
@@ -47,14 +51,22 @@ def main(argv: list[str], *, usage: Callable[[Path], tuple[int, int, int]] = shu
     ap = argparse.ArgumentParser(prog="research disk-hold")
     ap.add_argument("--gb", type=float, required=True)
     ap.add_argument("--path", required=True)
+    ap.add_argument("--ack", default=None, metavar="FIFO", help="the launch's acknowledgement FIFO, told when a hold starts")
     ap.add_argument("cmd", nargs=argparse.REMAINDER)
     ns = ap.parse_args(argv)
     cmd = ns.cmd[1:] if ns.cmd[:1] == ["--"] else ns.cmd
     if not cmd:
         print("research disk-hold: give the command after --", file=sys.stderr)
         return 2
+
+    def on_hold() -> None:
+        if ns.ack:
+            from .remote import ack_launch
+
+            ack_launch(ns.ack, "disk-hold")
+
     pct = float(os.environ.get("RESEARCH_DISK_HOLD_PCT", HOLD_PCT))
-    hold(ns.gb, Path(ns.path), hold_pct=pct, release_pct=min(RELEASE_PCT, pct), usage=usage, sleep=sleep)
+    hold(ns.gb, Path(ns.path), hold_pct=pct, release_pct=min(RELEASE_PCT, pct), usage=usage, sleep=sleep, on_hold=on_hold)
     execvp(cmd[0], cmd)
     return 127
 

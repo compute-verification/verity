@@ -22,9 +22,8 @@ the deployments-gpu LocalQueue itself (stopPolicy Hold) unless the next Commit's
 releases its own hold once it does (gate()); the lease pools' GPU holders use their own LocalQueue, so it gates Commits only. With no Commit in flight it always lets one through, outside the 78% latch, so a big one can't starve. It ticks every TICK_S (10) s and logs a tick when its summary changes or once a minute;
 a Job created while GPU quota is free is admitted in the same second, before any tick, so a lane must not resubmit a held Commit. `--dry-run` prints what it would do.
 
-Runs on vy-nebius-1 as research, from the deployed sky/ (tmux `commit-release`):
-    python3 /workspace/jobs/dispatch/infra/nebius/sky/release.py 2>&1 | tee -a ~/commit-release/log
-Its state (released, seen-inactive, no-release, cap-150, gpu-held) is in $VY_PACER_DIR, default ~/commit-release.
+Runs on vy-nebius-1 as research, from the deployed sky/, as the unit vy-commit-release (pods/nebius/units/), which appends its
+output to ~/commit-release/log. Its state (released, seen-inactive, no-release, cap-150, gpu-held) is in $VY_PACER_DIR, default ~/commit-release.
 """
 import json
 import os

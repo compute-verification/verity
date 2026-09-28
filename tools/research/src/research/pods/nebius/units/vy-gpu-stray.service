@@ -1,0 +1,25 @@
+[Unit]
+Description=node 1's GPU stray check: a pool pod's process on a GPU it doesn't lease blocks the pool (gpu_stray.py loop)
+After=network-online.target k3s.service
+Wants=network-online.target
+RequiresMountsFor=/workspace
+StartLimitIntervalSec=1h
+StartLimitBurst=10
+
+[Service]
+User=research
+Group=research
+WorkingDirectory=/home/research
+EnvironmentFile=/etc/environment
+EnvironmentFile=/etc/vy/env/research.env
+EnvironmentFile=/etc/vy/env/%N.env
+ExecStart=/usr/bin/python3 /workspace/verity-guest/bin/gpu_stray.py loop --every 60
+Restart=on-failure
+RestartSec=15
+Nice=0
+IOSchedulingClass=best-effort
+StandardOutput=append:/workspace/verity-guest/gpu-stray.out
+StandardError=inherit
+
+[Install]
+WantedBy=multi-user.target

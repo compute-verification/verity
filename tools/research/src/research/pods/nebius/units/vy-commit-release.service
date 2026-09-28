@@ -1,0 +1,25 @@
+[Unit]
+Description=node 1's Commit pacer: releases suspended Commits within their caps (sky/release.py)
+After=network-online.target k3s.service
+Wants=network-online.target
+RequiresMountsFor=/workspace
+StartLimitIntervalSec=1h
+StartLimitBurst=10
+
+[Service]
+User=research
+Group=research
+WorkingDirectory=/home/research
+EnvironmentFile=/etc/environment
+EnvironmentFile=/etc/vy/env/research.env
+EnvironmentFile=/etc/vy/env/%N.env
+ExecStart=/usr/bin/python3 /workspace/jobs/dispatch/infra/nebius/sky/release.py
+Restart=on-failure
+RestartSec=15
+Nice=0
+IOSchedulingClass=best-effort
+StandardOutput=append:/home/research/commit-release/log
+StandardError=inherit
+
+[Install]
+WantedBy=multi-user.target

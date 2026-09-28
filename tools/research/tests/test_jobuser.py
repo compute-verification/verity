@@ -227,6 +227,7 @@ def test_a_machine_starts_the_runner_with_the_job_user_it_admitted(tmp_path, mon
     monkeypatch.setattr(jobuser, "UNREACHABLE", ())
     started = []
     monkeypatch.setattr(remote.subprocess, "Popen", lambda argv, **kw: started.append(argv) or type("P", (), {"pid": 4242})())
+    monkeypatch.setattr(remote, "await_first_record", lambda proc, fd: remote.FIRST_RECORD)     # the fake runner never acknowledges
     req, _ = _request(tmp_path, "vyjob")
     assert remote.launch_request(req)["started"]
     argv = started[0]

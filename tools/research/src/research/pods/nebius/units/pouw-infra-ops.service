@@ -1,0 +1,20 @@
+# Node 2's OOM guard, status page and alerts, research's user unit (`systemctl --user`, lingering) in place of tmux pouw-infra-ops.
+[Unit]
+Description=node 2's OOM guard, status page and alerts (node_ops.py)
+StartLimitIntervalSec=1h
+StartLimitBurst=10
+
+[Service]
+WorkingDirectory=/home/research
+EnvironmentFile=/etc/environment
+EnvironmentFile=/etc/vy/env/research.env
+EnvironmentFile=/etc/vy/env/%N.env
+ExecStart=/usr/bin/python3 /workspace/pouw/infra/bin/node_ops.py
+Restart=on-failure
+RestartSec=5
+Nice=0
+IOSchedulingClass=best-effort
+StandardError=append:/workspace/pouw/infra/logs/ops.err
+
+[Install]
+WantedBy=default.target
