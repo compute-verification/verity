@@ -48,6 +48,7 @@ from verity.ir.cut import DefinitionCut
 from verity.ir.units import Activation, PartitionUnits, UnitCircuit
 
 from . import circuit as FC
+from . import class_sweep
 from . import gf2
 from . import ir_lower as IL
 from . import partition_units as PU
@@ -203,8 +204,8 @@ def cache_slot_circuits() -> None:
     FC._expanded(IL.layout(hm, ["cv", "pad", "y"], ["bc"]), FC.HM_NET)
 
 
-#: token-select Calls (the samplers), which the table-free sweep leaves for phase 2
-SAMPLER = re.compile(r"^(GumbelTopPTokenSelect|GumbelTokenSelect|TokenSelect|TopPMaskWord)")
+#: token-select Calls (the samplers): `--select` leaves them out
+SAMPLER = class_sweep.SAMPLER
 
 
 def distinct_calls(graph_path: str | None, modules: str | None = None, definitions: dict[str, int] | None = None,
@@ -226,18 +227,8 @@ def distinct_calls(graph_path: str | None, modules: str | None = None, definitio
     g = json.loads(open(graph_path).read()) if graph_path else {"groups": []}
     index = g.get("definitions_index") or {}
     calls: dict[str, int] = dict(definitions or {})
-    for x in g["groups"]:
-        if modules and not x["module"].startswith(modules):
-            continue
-        if x.get("varying"):
-            (axis, (lo, hi)), = x["varying"].items()
-            per = x.get("varying_calls") or {str(v): 1 for v in range(int(lo), int(hi) + 1)}
-            base = x["definition_ids"][0]
-            for v, n in per.items():
-                fid = re.sub(rf"(?<=[{{,]){axis}=\d+", f"{axis}={int(v)}", base)
-                calls[fid] = calls.get(fid, 0) + int(n) * (x["calls"] // max(1, sum(int(c) for c in per.values())))
-        elif x["spec"]:
-            calls[x["spec"]] = calls.get(x["spec"], 0) + x["calls"]
+    for fid, n in class_sweep.graph_calls(g, modules).items():
+        calls[fid] = calls.get(fid, 0) + n
     if exclude is not None:
         calls = {fid: n for fid, n in calls.items() if not exclude.match(fid)}
     fns, prov = [], []
@@ -483,8 +474,8 @@ def _stage_job(s: str) -> dict:
     cc = PU.lower_class(units.activation(cl.definition), uc)
     if cc.circuit is None:
         rec["broke"] = {"at": "lowering", "why": cc.reason, "missing": list(cc.missing)}
-    elif a.table_free and cc.circuit.lookups:
-        rec["skipped"] = "reads"
+    elif (a.select == "table-free" and cc.circuit.lookups) or (a.select == "reads" and not cc.circuit.lookups):
+        rec["skipped"] = "reads" if cc.circuit.lookups else "table-free"
         rec["ands"] = cc.counts["ands"]
         rec["table_reads"] = dict(Counter(t for t, _i, _w in cc.circuit.lookups))
     elif cc.counts["ands"] > a.max_ands:
@@ -570,15 +561,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--batch", default=None, help="'auto': instances per shape = the least of 1024, the row's units of it and 2^29 / its "
                     "ANDs, as a power of two >= 16 (overrides --n)")
     ap.add_argument("--jobs", type=int, default=1, help="shapes staged in parallel (forked workers); proving stays one at a time")
-    ap.add_argument("--table-free", action="store_true", help="leave out the token-select Calls, and record a shape whose unit reads a "
-                    "pinned table as skipped, unstaged")
+    ap.add_argument("--select", choices=["table-free", "reads", "units"], default=None,
+                    help="leave out the token-select Calls, and prove only the shapes whose unit reads no pinned table (table-free), "
+                    "reads one (reads), or either (units); the others are recorded as skipped, unstaged")
     ap.add_argument("--protocol", default="sweep-v0", help="the measurement protocol the result is labelled with (sweep-v0: never a "
                     "table cell)")
     a = ap.parse_args(argv)
     calls: dict[str, int] | None = None
     if a.program_graph or a.definitions:
         defs = json.loads(Path(a.definitions).read_text()) if a.definitions else None
-        program, calls, prov = distinct_calls(a.program_graph, a.modules, defs, SAMPLER if a.table_free else None)
+        program, calls, prov = distinct_calls(a.program_graph, a.modules, defs, SAMPLER if a.select else None)
         Path(a.out).mkdir(parents=True, exist_ok=True)
         (Path(a.out) / "calls.json").write_text(json.dumps({"calls": calls, "provenance": prov}, indent=1))
     elif a.program_module:
@@ -681,11 +673,11 @@ def write_result(results: Path, a) -> None:
     doc = {"schema": "research/result/v0.1", "run_id": os.environ.get("RESEARCH_RUN_ID", ""),
            "workload_fingerprint": {"kind": "class-sweep/v1", "statement": FC.STATEMENT, "scheme": FC.SCHEME, "partition": a.partition,
                                     "gpu": a.gpu, "warm": a.warm, "runs": a.runs, "batch": a.batch or a.n, "seed": a.seed,
-                                    "protocol": a.protocol, "device": _device(a.gpu), "shapes": sorted(r["shape"] for r in recs)},
+                                    "protocol": a.protocol, "select": a.select, "device": _device(a.gpu), "shapes": sorted(r["shape"] for r in recs)},
            "validation": {"status": "failed" if rejected or any(not x.get("all_pass") for x in selftests) else ("passed" if ok else "not_run"),
                           "checker": "flock-circuit loopback verifier (live coins) and selftest",
                           "detail": f"{len(ok)} of {len(recs)} shapes accepted, {len(rejected)} rejected, "
-                                    f"{sum(1 for r in recs if r.get('broke'))} broke, {sum(1 for r in recs if r.get('skipped'))} skipped (table reads); "
+                                    f"{sum(1 for r in recs if r.get('broke'))} broke, {sum(1 for r in recs if r.get('skipped'))} skipped (--select); "
                                     f"selftests {sum(1 for x in selftests if x.get('all_pass'))}/{len(selftests)}",
                           "evidence": ["class-sweep.jsonl"]},
            "measurements": [{"name": "shapes", "value": len(recs), "unit": "count"},
