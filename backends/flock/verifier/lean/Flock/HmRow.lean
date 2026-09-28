@@ -249,7 +249,7 @@ def TEMPLATE_DERIVED : List String :=
 /-- Parse the circuit file (upstream's `Composite::parse`) and check its layout. A typed template's block (`tmpl`, item 1e)
 brings its root and placed layouts' circuits; its wiring is derived. -/
 def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := [])
-    (tmpl : Option Typed.Template := none) : V Circuit := do
+    (tmpl : Option Typed.Template := none) (pre : Array (String × Net) := #[]) : V Circuit := do
   let sha := Sha512.hash bytes
   let text ← match String.fromUTF8? bytes with
     | some s => pure s
@@ -277,7 +277,7 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
     else pure ByteArray.empty
   let mut nets : Array (String × Net) := match tmpl with
     | some t => #[("root", t.root)] ++ t.layouts.map fun (d, n, _) => (d, n)
-    | none => #[]
+    | none => pre
   let mut at_ := 2
   while at_ < lines.size do
     let h := tokens lines[at_]!
@@ -407,16 +407,16 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
   check c tags leafScheme
   return c
 
-/-- A typed statement (item 1e), its rows derived once through `deriveChecked` (`Typed.read`). A flat class is parsed as
-the file with its unit's rows inserted, its digest and class the typed file's own. A template is parsed with its block
-(`parse`'s `tmpl`): the root and placed layouts' circuits, the derived wiring, and Δ in #273's order. -/
+/-- A typed statement (item 1e), its rows derived once through `deriveChecked` (`Typed.read`), every net built from them.
+A flat class is the typed file parsed with its unit's net first (`parse`'s `pre`), where the old statement's `CIRCUIT
+unit` section was. A template is parsed with its block (`parse`'s `tmpl`): the root and placed layouts' circuits, the
+derived wiring, and Δ in #273's order. The circuit carries its class (`Circuit.cls`). -/
 def parseTyped (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) : V Circuit := do
-  match ← Typed.read tags bytes tables with
-  | .inr t => parse tags bytes tables (tmpl := some t)
-  | .inl expanded =>
-    let c ← parse tags expanded tables
-    let classSha ← if c.classSha.isEmpty then pure c.classSha else classOf bytes s!"{tags.fileFormat} {c.name}" c.metaJ
-    return { c with sha := Sha512.hash bytes, classSha }
+  let (k, r) ← Typed.read tags bytes tables
+  let c ← match r with
+    | .inr t => parse tags bytes tables (tmpl := some t)
+    | .inl unit => parse tags bytes tables (pre := #[("unit", unit)])
+  return { c with cls := some k }
 
 /-- The pinned constant column: the first slot of the first range that is not the mask. -/
 def pin (c : Circuit) : V Nat :=

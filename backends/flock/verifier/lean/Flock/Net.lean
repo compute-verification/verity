@@ -93,6 +93,40 @@ private def groups (h : Array String) (at0 : Nat) : V (Array Group × Nat) := do
     at_ := at_ + 3 + np
   return (out, at_)
 
+/-- An expanded circuit from its parts, as `parse` reads them from text or `Flock.Typed` has them from `derive`: its
+useful rows' count, its constant, its port groups, and each useful row's A and B columns. -/
+def ofRows (name : String) (useful constPos : Nat) (inGroups outGroups : Array Group) (ra rb : Array (Array Nat)) :
+    V Net := do
+  if (inGroups ++ outGroups).any (fun g => !(isPow2 g.words && g.col % g.words == 0)) then
+    throw "flock-ir-unit/v2: a port group is not an aligned power of two of words"
+  if outGroups.isEmpty then throw "flock-ir-unit/v2: no output group"
+  if constPos + 1 != useful then throw "flock-ir-unit/v2: the constant is not the last useful column"
+  let inWords := (inGroups.back?.map fun g => g.col + g.words).getD 0
+  let unitLog := max 7 (log2ceil useful)
+  match (List.range (inWords * WORD)).find? fun i =>
+      !((ra.getD i #[] == #[i] && rb.getD i #[] == #[i]) || ((ra.getD i #[]).isEmpty && (rb.getD i #[]).isEmpty)) with
+  | some i => throw s!"flock-ir-unit/v2: row {i} is not an input row"
+  | none => pure ()
+  if ra.getD constPos #[] != #[constPos] || rb.getD constPos #[] != #[constPos] then
+    throw "flock-ir-unit/v2: the constant row is not A = B = [const]"
+  let a ← Sparse.ofRows ra (2 ^ unitLog)
+  let b ← Sparse.ofRows rb (2 ^ unitLog)
+  return { name, useful, constPos, inGroups, outGroups, inWords, a, b, unitLog }
+
+/-- A net `ofRows` builds holds exactly the rows it was given: its A and B are theirs at its slot size, and its size,
+constant and port groups are the ones given. -/
+theorem ofRows_ok {name : String} {useful constPos : Nat} {ig og : Array Group} {ra rb : Array (Array Nat)} {n : Net}
+    (h : ofRows name useful constPos ig og ra rb = .ok n) :
+    n.unitLog = max 7 (log2ceil useful) ∧ Sparse.ofRows ra (2 ^ n.unitLog) = .ok n.a ∧
+      Sparse.ofRows rb (2 ^ n.unitLog) = .ok n.b ∧ n.useful = useful ∧ n.constPos = constPos ∧ n.inGroups = ig ∧
+      n.outGroups = og := by
+  unfold ofRows at h
+  simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
+  repeat' (first | split at h | (injection h with h; subst h))
+  all_goals first
+    | exact absurd h (by simp)
+    | (rename_i ha _ _ hb; exact ⟨rfl, ha, hb, rfl, rfl, rfl, rfl⟩)
+
 /-- Parse one expanded circuit (the lines of a `NET` block). -/
 def parse (lines : Array String) : V Net := do
   let h := tokens (lines.getD 0 "")
@@ -105,8 +139,6 @@ def parse (lines : Array String) : V Net := do
   if at2 != h.size then throw "flock-ir-unit/v2: trailing header fields"
   if outGroups.isEmpty then throw "flock-ir-unit/v2: no output group"
   if constPos + 1 != useful then throw "flock-ir-unit/v2: the constant is not the last useful column"
-  let inWords := (inGroups.back?.map fun g => g.col + g.words).getD 0
-  let unitLog := max 7 (log2ceil useful)
   let mut ra := #[]
   let mut rb := #[]
   for i in [0:useful] do
@@ -118,12 +150,6 @@ def parse (lines : Array String) : V Net := do
     if v.size == 0 || v.size != 2 + na + nb then throw s!"flock-ir-unit/v2: row {i} is malformed"
     ra := ra.push (v.extract 1 (1 + na))
     rb := rb.push (v.extract (2 + na) (2 + na + nb))
-  for i in [0:inWords * WORD] do
-    let ai := ra.getD i #[]
-    let bi := rb.getD i #[]
-    if !((ai == #[i] && bi == #[i]) || (ai.isEmpty && bi.isEmpty)) then throw s!"flock-ir-unit/v2: row {i} is not an input row"
-  if ra.getD constPos #[] != #[constPos] || rb.getD constPos #[] != #[constPos] then
-    throw "flock-ir-unit/v2: the constant row is not A = B = [const]"
   -- after the rows: an optional `LEAVES <json>` line (bound by the pin, not read), and nothing else
   let mut at_ := 1 + useful
   if (lines.getD at_ "").startsWith "LEAVES " then
@@ -133,9 +159,7 @@ def parse (lines : Array String) : V Net := do
   if (lines.getD at_ "").startsWith "CUT " then
     throw s!"{name}: a CUT line (a tail the verifier evaluates); the verifier evaluates no part of the computation"
   if at_ != lines.size then throw "flock-ir-unit/v2: text after the rows that is not its LEAVES line"
-  let a ← Sparse.ofRows ra (2 ^ unitLog)
-  let b ← Sparse.ofRows rb (2 ^ unitLog)
-  return { name, useful, constPos, inGroups, outGroups, inWords, a, b, unitLog }
+  ofRows name useful constPos inGroups outGroups ra rb
 
 end Net
 

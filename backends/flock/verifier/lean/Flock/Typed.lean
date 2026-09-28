@@ -82,10 +82,29 @@ def hold (types : Array (String × CircuitType)) (tables : List (String × ByteA
       out := out.push ⟨sha, bytes, words, Layout.tableInfo words⟩
   return out
 
-/-- META's types and layouts, checked, and their rows through `DeriveAll.deriveChecked` only: every layout's rows, the
-layouts, the unit's layout, its type, and the tables held. -/
-def derivation (mj : Json) (tables : List (String × ByteArray)) :
-    V (Array DeriveAll.D × Array Layout × Nat × CircuitType × Array Held) := do
+/-- The layouts' types by digest. -/
+def typeIn (types : Array (String × CircuitType)) (x : String) : Option CircuitType := (types.find? (·.1 == x)).map (·.2)
+
+/-- The held tables' `TableInfo` by SHA-512. -/
+def infoIn (held : Array Held) (x : String) : Option TableInfo := (held.find? (·.sha512 == x)).map (·.info)
+
+/-- The held tables' words by SHA-512. -/
+def wordsIn (held : Array Held) (x : String) : Option (Array Nat) := (held.find? (·.sha512 == x)).map (·.words)
+
+/-- **A typed statement's unit class,** as the verifier derives it: META's checked types and layouts, the tables it
+holds, the unit's layout, and `deriveChecked`'s rows on exactly those, with the run that returned them (`hd`). An accepted
+typed statement carries it (`Circuit.cls`), and every net the verifier folds for it is built from `done` (`netOfD`). -/
+structure Class where
+  types : Array (String × CircuitType)
+  ls : Array Layout
+  held : Array Held
+  unit : Nat
+  done : Array DeriveAll.D
+  hd : DeriveAll.deriveChecked (typeIn types) ls (infoIn held) (wordsIn held) unit = .ok done
+
+/-- META's types and layouts, checked, and the class's rows through `DeriveAll.deriveChecked` only; with the unit's
+type. -/
+def classOf (mj : Json) (tables : List (String × ByteArray)) : V (Class × CircuitType) := do
   let kvs ← match mj.getObjVal? "types" with
     | .ok (Json.obj kvs) => pure kvs.toArray
     | _ => throw "META: types is not an object"
@@ -94,18 +113,15 @@ def derivation (mj : Json) (tables : List (String × ByteArray)) :
     let t ← CircuitType.ofJson c
     if (← t.digest) != d then throw s!"META: type {d.take 16}… is not its content's digest"
     types := types.push (d, t)
-  let typeOf := fun (x : String) => (types.find? (·.1 == x)).map (·.2)
   for (d, t) in types do
-    if let .error e := CircuitType.check typeOf t then throw s!"META: type {d.take 16}… breaks the rule '{e}'"
+    if let .error e := CircuitType.check (typeIn types) t then throw s!"META: type {d.take 16}… breaks the rule '{e}'"
   let held ← hold types tables
-  let info := fun (x : String) => (held.find? (·.sha512 == x)).map (·.info)
-  let words := fun (x : String) => (held.find? (·.sha512 == x)).map (·.words)
   let ls ← (← J.arr mj "layouts" ctx).mapM fun r => do
     let l ← Layout.ofJson r
     if (← J.str r "sha512" ctx) != (← l.digest) then throw s!"{ctx}: a layout's sha512 is not its record's digest"
     pure l
   let unit ← J.nat mj "unit_layout" ctx
-  if let .error e := Layout.check typeOf ls unit info then throw s!"META: the layouts break the rule '{e}'"
+  if let .error e := Layout.check (typeIn types) ls unit (infoIn held) then throw s!"META: the layouts break the rule '{e}'"
   let some ul := ls[unit]? | throw "META: unit_layout names no layout"
   let some ut := ul.type | throw "META: the unit's layout names no type"
   if (← J.str mj "unit_type" ctx) != ut then throw "META: unit_type is not the unit's layout's type"
@@ -113,11 +129,30 @@ def derivation (mj : Json) (tables : List (String × ByteArray)) :
   if (← J.str mj "policy" ctx) != POLICY then throw s!"META: policy is not {POLICY}"
   if !(← J.arr mj "unit_in" ctx).isEmpty then
     throw "META: unit_in binds the unit's inputs to constants, which this verifier does not derive yet"
-  let some t := typeOf ut | throw "META: unit_type names no type"
-  let done ← match DeriveAll.deriveChecked typeOf ls info words unit with
-    | .ok done => pure done
-    | .error e => throw s!"META: the unit's rows: {e}"
-  return (done, ls, unit, t, held)
+  let some t := typeIn types ut | throw "META: unit_type names no type"
+  match h : DeriveAll.deriveChecked (typeIn types) ls (infoIn held) (wordsIn held) unit with
+  | .ok done => return (⟨types, ls, held, unit, done, h⟩, t)
+  | .error e => throw s!"META: the unit's rows: {e}"
+
+/-- `d`'s rows' A columns, one array per row below its size, in order. -/
+def rowsA (d : DeriveAll.D) : Array (Array Nat) := (Array.range d.size).map fun c => (d.rows.getD c ([], [])).1.toArray
+
+/-- `d`'s rows' B columns, one array per row below its size, in order. -/
+def rowsB (d : DeriveAll.D) : Array (Array Nat) := (Array.range d.size).map fun c => (d.rows.getD c ([], [])).2.toArray
+
+/-- A layout's net, built straight from `derive`'s rows (no text): its size, constant and port groups, and each row's A
+and B columns, as `DeriveAll.netlist` would print them and `Net.parse` read them back. -/
+def netOfD (d : DeriveAll.D) (name : String) : V Net :=
+  let grp := fun (gs : Array (Nat × Nat × Array Nat)) => gs.map fun (col, words, bits) => ({ col, words, bits } : Group)
+  Net.ofRows name d.size d.const (grp d.inGroups) (grp d.outGroups) (rowsA d) (rowsB d)
+
+/-- **The net holds the derived rows:** a net built from `d` has `d`'s rows as its A and B, at its slot size, and `d`'s
+size and constant. -/
+theorem netOfD_ok {d : DeriveAll.D} {name : String} {n : Net} (h : netOfD d name = .ok n) :
+    n.unitLog = max 7 (log2ceil d.size) ∧ Sparse.ofRows (rowsA d) (2 ^ n.unitLog) = .ok n.a ∧
+      Sparse.ofRows (rowsB d) (2 ^ n.unitLog) = .ok n.b ∧ n.useful = d.size ∧ n.constPos = d.const := by
+  obtain ⟨h1, h2, h3, h4, h5, -, -⟩ := Net.ofRows_ok h
+  exact ⟨h1, h2, h3, h4, h5⟩
 
 /-- A flat class's unit: no placed parts, no reads, no Δ but its constant's copy of the block's `one` (which `HmRow.delta`
 pins for every unit slot). -/
@@ -148,8 +183,6 @@ structure Template where
   cross : Array (Nat × Array Nat × Array Nat)
   deriving Inhabited
 
-def netOf (text : String) : V Net := Net.parse ((text.splitOn "\n").toArray.pop)
-
 /-- A placed layout's net: a derived layout's rows as they are; a generated read's (`table/v2`) with its product rows' B
 side read from the held table, at its `READ` record's columns and value bits (`k`, not the table's). -/
 def placedNet (l : Layout) (d : DeriveAll.D) (nm : String) (held : Array Held) : V Net := do
@@ -160,11 +193,11 @@ def placedNet (l : Layout) (d : DeriveAll.D) (nm : String) (held : Array Held) :
       | _ => throw s!"layout {nm}: a generated layout that is not one read"
     if r.table != sha || r.n != n || r.lo != lo then throw s!"layout {nm}: its read is not its record's"
     let some h := held.find? (·.sha512 == sha) | throw s!"layout {nm}: its table is not held"
-    let net ← netOf (DeriveAll.netlist { d with reads := #[] } nm)
+    let net ← netOfD d nm
     return { net with lookup := some ⟨h.bytes, r.n, r.lo, r.k, r.prod0, r.loTop⟩ }
   | .derive =>
     if !d.reads.isEmpty then throw s!"layout {nm}: a placed call that reads a table, which this verifier does not fold yet"
-    netOf (DeriveAll.netlist d nm)
+    netOfD d nm
 
 /-- A template's block from its derivation. -/
 def templateOf (name : String) (done : Array DeriveAll.D) (ls : Array Layout) (unit : Nat) (t : CircuitType)
@@ -174,7 +207,7 @@ def templateOf (name : String) (done : Array DeriveAll.D) (ls : Array Layout) (u
   if u.reads.any (·.prod0 < own) then
     throw "META: the instance type reads a table in its own region, which this verifier's template reading does not fold yet"
   let inOwn := fun (xs : List Nat) => xs.filter (· < own)
-  let root ← netOf (DeriveAll.netlist { u with rows := u.rows.map fun (a, b) => (inOwn a, inOwn b) } name)
+  let root ← netOfD { u with rows := u.rows.map fun (a, b) => (inOwn a, inOwn b) } name
   let digests ← ls.mapM (·.digest)
   let placed := (List.range ls.size).filter fun j => u.parts.any (·.1 == j)
   let layouts ← placed.toArray.mapM fun j => do
@@ -188,22 +221,65 @@ def templateOf (name : String) (done : Array DeriveAll.D) (ls : Array Layout) (u
   return { root, layouts, parts := u.parts.map fun (j, b) => (digests.getD j "", b), own, ins := t.ins, outs := t.outs,
            inCols := u.inCols, bind := u.delta.filterMap fun (r, src) => src.map (r, ·.toArray), cross }
 
-/-- **A typed file, read** (item 1e): its rows derived once, through `deriveChecked`. A flat class is its file with the
-unit's rows as its `CIRCUIT unit` section (`.inl`); a template is its block (`.inr`), which `HmRow.parse` places. -/
-def read (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) : V (ByteArray ⊕ Template) := do
-  let (lines, name, mj) ← split tags bytes
-  let (done, ls, unit, t, held) ← derivation mj tables
-  let u := done.getD unit default
-  if isFlat u then return .inl (expandWith tags lines name u)
-  return .inr (← templateOf name done ls unit t held)
+/-- **A typed file, read** (item 1e): its class, its rows derived once through `deriveChecked`, and the nets built from
+them. A flat class is its unit's net (`.inl`), which `HmRow.parse` places first, where the old statement's `CIRCUIT unit`
+section was; a template is its block (`.inr`). -/
+def read (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) : V (Class × (Net ⊕ Template)) := do
+  let (_, name, mj) ← split tags bytes
+  let (k, t) ← classOf mj tables
+  let u := k.done.getD k.unit default
+  if isFlat u then return (k, .inl (← netOfD u name))
+  return (k, .inr (← templateOf name k.done k.ls k.unit t k.held))
+
+/-- A flat class read: its unit's net is built from the class's own unit rows. -/
+theorem read_flat {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {k : Class} {net : Net}
+    (h : read tags bytes tables = .ok (k, .inl net)) : ∃ name, netOfD (k.done.getD k.unit default) name = .ok net := by
+  unfold read at h
+  simp only [bind, Except.bind, pure, Except.pure] at h
+  split at h
+  · simp at h
+  rename_i s _
+  split at h
+  · simp at h
+  rename_i kt _
+  split at h
+  · split at h
+    · simp at h
+    · rename_i v hv
+      simp only [Except.ok.injEq, Prod.mk.injEq, Sum.inl.injEq] at h
+      obtain ⟨rfl, rfl⟩ := h
+      exact ⟨s.2.1, hv⟩
+  · split at h <;> simp at h
+
+/-- A template read: its block is `templateOf` on the class's own derivation. -/
+theorem read_template {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {k : Class}
+    {t : Template} (h : read tags bytes tables = .ok (k, .inr t)) :
+    ∃ name ty, templateOf name k.done k.ls k.unit ty k.held = .ok t := by
+  unfold read at h
+  simp only [bind, Except.bind, pure, Except.pure] at h
+  split at h
+  · simp at h
+  rename_i s _
+  split at h
+  · simp at h
+  rename_i kt _
+  split at h
+  · split at h <;> simp at h
+  · split at h
+    · simp at h
+    · rename_i v hv
+      simp only [Except.ok.injEq, Prod.mk.injEq, Sum.inr.injEq] at h
+      obtain ⟨rfl, rfl⟩ := h
+      exact ⟨s.2.1, kt.2, hv⟩
 
 /-- A template's rows as the verifier derives them, in the writer's `rows/` formats (`typed-rows`): `root.txt` (the unit's
 own rows, their entries at part columns included), each placed layout's `<digest>.txt` (a read's with its `READ` line),
 and `delta.txt`. -/
 def rows (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)) : V (Array (String × String)) := do
   let (_, name, mj) ← split tags bytes
-  let (done, ls, unit, _, _) ← derivation mj tables
-  let u := done.getD unit default
+  let (k, _) ← classOf mj tables
+  let (done, ls) := (k.done, k.ls)
+  let u := done.getD k.unit default
   let digests ← ls.mapM (·.digest)
   let placed := (List.range ls.size).filter fun j => u.parts.any (·.1 == j)
   let files := placed.toArray.map fun j =>
@@ -211,10 +287,13 @@ def rows (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray))
     (s!"{d}.txt", DeriveAll.netlist (done.getD j default) (d.take 16).toString)
   return #[("root.txt", DeriveAll.netlist u name)] ++ files ++ #[("delta.txt", DeriveAll.deltaText ls digests u)]
 
-/-- A flat class's file with its unit's rows derived (`typed-expand`). -/
+/-- A flat class's file with its unit's rows derived, as text (`typed-expand --out`, for the tests that compare it with the
+old statement byte for byte). -/
 def expand (tags : Tags) (bytes : ByteArray) : V ByteArray := do
-  match ← read tags bytes with
-  | .inl b => pure b
-  | .inr _ => throw "META: the unit has placed parts: a template, whose block `HmRow.parse` places, not a flat class"
+  let (lines, name, mj) ← split tags bytes
+  let (k, _) ← classOf mj []
+  let u := k.done.getD k.unit default
+  if !isFlat u then throw "META: the unit has placed parts: a template, whose block `HmRow.parse` places, not a flat class"
+  return expandWith tags lines name u
 
 end Flock.Typed
