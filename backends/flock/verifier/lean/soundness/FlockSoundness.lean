@@ -152,4 +152,5 @@ import FlockSoundness.Discharge.Placed
 import FlockSoundness.Discharge.Exec
 import FlockSoundness.Discharge.Integrate
 import FlockSoundness.Discharge.ZkSession
+import FlockSoundness.Discharge.DrawWords
 import FlockSoundness.ZK.GK
