@@ -11,8 +11,8 @@ The developer represents its computations as Boolean circuits, which capture the
 
 To verify *faithfulness*, it currently implements a composition of the following protocols:
 
-1. [Sampled proofs](protocols/one_stage/README.md)
-2. Proofs of useful work
+1. [Sampled proofs](protocols/sampled_proofs/README.md)
+2. [Proofs of useful work](protocols/pouw/PROTOCOL.md)
 3. [Proofs of useful space](protocols/pous/README.md)
 
 To verify *inference-only*, it checks that the developer's committed circuits exhibit *bounded cross-episode novel communication intensity*: that is, that each can be partitioned into subcircuits, each of which has a bounded size and reads a bounded amount of novel information, defined as any information other than the models, code and data the developer committed up front. This exploits a fundamental asymmetry between inference and training: each inference episode (e.g., a chat session) depends on only a small amount of novel information (e.g., 100 KB worth of prompt tokens), whereas each training episode (e.g., an RL rollout) depends on an enormous amount of novel information (e.g., 1 TB of new parameters). It is conjectured that circuits with low cross-episode novel communication intensity are unable to advance frontier capabilities on relevant timescales (e.g., years).
@@ -32,7 +32,7 @@ prove the drawn units (C-Flock) --------------->   check the proofs (the Lean ve
                                                    record the integrity profile
 ~~~
 
-The auditor never runs any part of the computation; it only checks proofs. The integrity profile it records bounds how many proof units can be wrong, given the committed values.
+The auditor never runs any part of the computation; it only checks proofs. The integrity profile it records bounds how many proof units are faulty, given the committed values.
 
 ## Architecture
 
@@ -45,6 +45,8 @@ protocols/                    backends/
   one_stage                     flock                    C-Flock and its Lean verifier
   sampled_proofs                gkr, direct, sp1, vole   frozen
   pous
+  pouw
+  network_warden
 ---------------------------------------------------------------------------
 packages/verity, the core library:
   ir, ml, evaluation, commitments, randomness, proofs, claims
@@ -91,14 +93,16 @@ An integration makes Verity work end to end with a real system. The vLLM integra
 - `verity.commitments` and `verity.proofs`, also in [`packages/verity/`](packages/verity/README.md): commitments to the records, the statements a backend proves, and the integrity profile an audit returns
 - [`backends/flock/`](backends/flock/README.md): C-Flock, the proof backend in active development; the frozen backends are listed in [`backends/`](backends/README.md)
 - [`backends/flock/verifier/`](backends/flock/verifier/README.md): the verifier of record, written in Lean
-- [`protocols/one_stage/`](protocols/one_stage/README.md) and [`protocols/sampled_proofs/`](protocols/sampled_proofs/README.md): sampled proofs, as the one-stage audit and the two-stage protocol
+- [`protocols/one_stage/`](protocols/one_stage/README.md) and [`protocols/sampled_proofs/`](protocols/sampled_proofs/README.md): sampled proofs, as the one-stage audit and the two-stage law
 - [`protocols/pous/`](protocols/pous/README.md): proofs of useful space
+- [`protocols/pouw/`](protocols/pouw/PROTOCOL.md): proofs of useful work
+- [`protocols/network_warden/`](protocols/network_warden/README.md): the network warden, network transparency's timing channel
 - [`integrations/vllm/`](integrations/vllm/README.md): the vLLM integration, a hooked vLLM engine that builds each served workload's circuit and commits its values while serving
 - [`tools/research/`](tools/research/README.md): the research harness, for recorded runs on remote pods and the evidence store that keeps their results; it treats every workload as opaque and imports nothing from Verity
 - [`tools/check/`](tools/check/check.py): `check`, the one check a merge requires, and `suites.py`, which runs the test suites
 - `tools/circuit_check/`: `circuit-check`, the property checks every circuit passes ([rules](AGENTS.md#circuits))
 - [`tools/lean/`](tools/lean/README.md): the audit every Lean package passes
-- [`tools/cluster/`](tools/cluster/README.md): `cluster`, the shared machines' description, scheduling rules and allocation ledger
+- [`tools/cluster/`](tools/cluster/README.md): `cluster`, the shared machines' description, a pure per-node planner and the allocation ledger
 - `tools/tc_probe/`, `tools/tc_probe_fp4/`, `tools/native_peak/`: GPU probes that compare tensor-core instructions bit for bit with the primitive circuits' models, and measure native peak throughput
 - `benchmarks/`: reproducible workloads and measurements, including the [one-stage audit end to end](benchmarks/one_stage/README.md)
 - [`census/`](census/README.md): data only: hardware, datatypes, networks, subcircuits, input sets and workloads
@@ -109,10 +113,10 @@ An integration makes Verity work end to end with a real system. The vLLM integra
 Install the workspace with [uv](https://docs.astral.sh/uv/), then run the tests and checks:
 
 ~~~sh
-uv sync --all-packages --all-extras      # the workspace, every package editable, with torch for the vLLM integration's CPU tests
+uv sync --all-packages --extra torch-cpu # the workspace, every package editable, with CPU-only torch (GPU work: a member's `torch` extra)
 uv run tools/check/suites.py             # every test suite whose inputs changed since it last passed; --quick skips slow tests
 uv run circuit-check --all               # the property checks on every registered circuit
-uv run python tools/check/check.py       # the one check a merge requires; its Lean steps need lake
+uv run --extra torch-cpu python tools/check/check.py  # the one check a merge requires; its Lean steps need lake
 ~~~
 
 Each package's tests live in its own `tests/` and run as their own suite; the [testing skill](.agents/skills/testing/SKILL.md) has the rules. Serving, proving and hardware probes run on GPU pods through the research harness (`research run --on ...`), never on a laptop.
@@ -151,7 +155,7 @@ There is no GitHub Actions CI. `check` is the one check, and a merge into `main`
 
 ## Documentation
 
-- Specifications: the [program format](packages/verity/src/verity/ir/PROTOCOL.md), the commitment schemes ([frame-v3](packages/verity/src/verity/commitments/frame_v3/PROTOCOL.md), [vllm-v1](packages/verity/src/verity/commitments/vllm_v1/PROTOCOL.md)), the protocols ([one-stage](protocols/one_stage/PROTOCOL.md), [two-stage](protocols/sampled_proofs/PROTOCOL.md), [proofs of useful space](protocols/pous/PROTOCOL.md)) and [C-Flock's verifier](backends/flock/verifier/PROTOCOL.md)
+- Specifications: the [program format](packages/verity/src/verity/ir/PROTOCOL.md), the commitment schemes ([frame-v3](packages/verity/src/verity/commitments/frame_v3/PROTOCOL.md), [vllm-v1](packages/verity/src/verity/commitments/vllm_v1/PROTOCOL.md)), the protocols ([one-stage](protocols/one_stage/PROTOCOL.md), [two-stage](protocols/sampled_proofs/PROTOCOL.md), [proofs of useful space](protocols/pous/PROTOCOL.md), [proofs of useful work](protocols/pouw/PROTOCOL.md), [the network warden](protocols/network_warden/PROTOCOL.md)) and [C-Flock's verifier](backends/flock/verifier/PROTOCOL.md)
 - Each component's README, linked under Repository structure
 - [AGENTS.md](AGENTS.md) for contributors and agents, and the skills under [`.agents/skills/`](.agents/skills/) for recurring workflows such as Lean proofs
 
