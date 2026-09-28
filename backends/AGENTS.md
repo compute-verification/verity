@@ -2,14 +2,17 @@
 
 Read the root `AGENTS.md` first. This file is the policy shared by every proof
 backend and by the campaign-side numerical work under `backends/numerical/`.
+C-Flock is the family in active development; A-GKR, B-Ligero, D-SP1 and the
+VOLE research backend are frozen: they stay in the tables and under these
+rules, but are not developed.
 
 ## What is fixed
 
 - The subcircuit is `verity.proofs.target.FIRST`. Lanes do not change it.
   The backend transition unit is one 16-product update with arbitrary finite
-  `c`; the Verity VU is `GemmCoordinate<K>` from `c_0 = 0` plus the epilogue.
+  `c`; the proof unit is `GemmCoordinate<K>` from `c_0 = 0` plus the epilogue.
 - Backend families must agree on profile, input/output bitstrings, supported domain,
-  the exact function and VU endpoints. Auxiliary witness layouts are theirs.
+  the exact function and proof-unit endpoints. Auxiliary witness layouts are theirs.
 - Semantic disagreements go into `fixtures/discrepancy_log.json` (an entry
   with an owner), then to the coordinator. Changing a reference
   implementation resolves nothing by itself.
@@ -29,7 +32,7 @@ authentication  included | excluded
 Never compare across `proof_class`, and never compare two numbers that were
 not measured **at the same batch size, on the same hardware, at the same
 soundness target** (`contract.IDENTITY_FIELDS`; `benchmarks/judge.py` refuses
-otherwise). The decision workload is B=4096 K=1536 VUs of one input set on
+otherwise). The decision workload is B=4096 K=1536 proof units of one input set on
 one machine at 2^-128; the canonical comparison is the three frozen tables
 below. Transition-unit and small-B numbers are diagnostics of a
 backend's own scaling, not a comparison. A non-ZK kernel is a diagnostic. An
@@ -157,9 +160,10 @@ beyond symmetric-key), one batch of base oblivious transfers (any public-key
 assumption, post-quantum options exist), and a correlation-robust hash for OT
 extension; no trusted setup, no pairings, no knowledge assumptions; soundness
 of the online phase is statistical given the correlation, and the
-correlation is input-independent (preprocessable). **Pending the user's
-ratification of LPN as an acceptable assumption** before a VOLE build lane
-starts; the earlier "hash-based only" requirement is what excluded it.
+correlation is input-independent (preprocessable). **LPN awaits the user's
+ratification as an acceptable assumption**; the earlier "hash-based only"
+requirement is what excluded it. The VOLE backend built meanwhile
+(`backends/vole`) is frozen.
 
 ## Soundness is a parameter
 
@@ -169,7 +173,7 @@ the application budget (sum over proofs plus the other protocol errors), and
 proof and sub-batch. Reported operating points:
 
 ~~~text
-2^-80        diagnostic / sensitivity point (never the default production claim)
+2^-80        diagnostic / sensitivity point (never the default claim)
 2^-96/-112   optional intermediate sweep
 2^-128       primary matched-security comparison point
 ~~~
@@ -187,8 +191,7 @@ critical path after all available parallelism and batching -- distinct from
 the count of protocol rounds, since independent messages issued before the
 next challenge cost no extra trip); total communication; and predicted or
 measured end-to-end wall time at RTT in {0, 0.1, 1, 10, 50} ms. The network
-floor is depth x RTT. No hard round budget yet: A-GKR may reduce its
-depth and the measurements decide.
+floor is depth x RTT. No hard round budget yet: the measurements decide.
 
 ## Tensor cores are the target machine
 
@@ -219,7 +222,7 @@ first-class consumer is the **tensor core**, not the SIMT core. Consequences:
   commitment layer is chosen so the Merkle hash runs natively (Blake3/SHA on
   SIMT at tens of GB/s is fine when there is no recursion).
 - CPU measurements remain valid **diagnostics** of algorithmic scaling
-  (committed elements per VU, depth, constraint counts); the decision
+  (committed elements per proof unit, depth, constraint counts); the decision
   hardware is a tensor-core GPU, and `overhead.vs_native_peak` is always
   against the proved subcircuit's anchor tensor-core peak (`Target.native_peak`),
   never against the prover's own card.
@@ -246,7 +249,7 @@ returns a level with the exact evidence that satisfies or fails each criterion;
   source-close, autoproof model5, a second compiled path or harness) or every
   disagreement with it is resolved with hardware as arbiter; (b) every
   discrepancy-log entry naming the target is resolved/excluded; (c) relation
-  == model: the checker accepts >= 2,000 honest VUs incl. edge families and
+  == model: the checker accepts >= 2,000 honest proof units incl. edge families and
   rejects >= 100 mutations (`bench-result/v1` validation); (d) hardware-in-the-
   loop: the frozen input set re-executed on the anchor with 0 mismatches
   (`tc-evidence/v1` labelled `family=frozen-instances instances_dataset=<ds>
@@ -275,7 +278,7 @@ next level, the triggers and the procedure; `--publish` writes a
 `instruction`, `level`, `anchor`), pushes `--preserve`, and `Instruction.dossier`
 / `Target.dossier` cite it. Label contract: the docstring of `trust.py`.
 
-## Census, both backend families, same columns
+## Census: every backend family, the same columns
 
 ~~~text
 materialized witness elements   committed elements     bytes encoded
@@ -283,7 +286,7 @@ hash/commit work                field operations       memory passes / bytes mov
 sequential challenge depth      communication          peak memory
 ~~~
 
-A difference in one column (A commits ~4x fewer elements than B) is an
+A difference in one column (A-GKR commits ~4x fewer elements than B-Ligero) is an
 explanatory variable, not the verdict.
 
 ## Workloads and the decision
@@ -296,14 +299,14 @@ K=1536 GemmCoordinate   the architecture decision (handoff section 9.5)
 
 The headline statistic is throughput, `vu.per_second`, and better still
 **overhead**: `overhead.vs_native_peak` = R_native(target) / R_proved, where
-R_proved = 2·K·B / `t.total` is the prover's own FLOP/s over the VUs it
-established (`rate.proved_flop_per_second`, K MACs = 2K FLOP per VU) and
+R_proved = 2·K·B / `t.total` is the prover's own FLOP/s over the proof units it
+established (`rate.proved_flop_per_second`, K MACs = 2K FLOP per unit) and
 R_native is the datasheet dense tensor-core peak of the **proved subcircuit's**
 conformance anchor at FP32 accumulate (`rate.native_peak_flop_per_second`,
 `Target.native_peak`, `contract.native_reference(profile)`): A100 BF16
-312 TFLOPS for FIRST (9.85 ps per K=1536 VU, ~1e11 VU/s), RTX 4090 FP8
+312 TFLOPS for FIRST (9.85 ps per K=1536 proof unit, ~1e11 units/s), RTX 4090 FP8
 330.3 TFLOPS for FP8_ADA_MMA, H100 FP8 1978.9 TFLOPS for FP8_HOPPER_WGMMA.
-Emit all three with `contract.rate_measurements(...)` on every VU-level
+Emit all three with `contract.rate_measurements(...)` on every proof-unit-level
 number under the fingerprint's `profile` (the validator recomputes them);
 the question every run answers is "how many native seconds does one proved
 second buy". Peak is the conservative reference (a real decode step runs
@@ -311,10 +314,10 @@ below peak), so the true overhead is lower than the reported one.
 
 Nothing is selected as the winner on the small cases. The decision is the
 lowest complete numerical-proving cost at matched soundness, privacy and
-domain on the K=1536 VU. A batch may be split into independently committed
-sub-batches; the result then reports both `B` (instances per proof) and
+domain on the K=1536 proof unit. A batch may be split into independently committed
+sub-batches; the result then reports both `B` (proof units per proof) and
 `N_subbatches`, the soundness error is the union bound over them, and the
-per-VU cost includes every sub-batch -- performance is never improved by
+per-unit cost includes every sub-batch -- performance is never improved by
 quoting a per-proof error for a chopped batch. Security parameters are stated
 per run (`security.target` in the result fingerprint); the protocol documents
 are `backends/gkr/PROTOCOL.md` and `backends/direct/PROTOCOL.md`, and the red
@@ -323,9 +326,9 @@ above diagnostic. Report the six timing buckets (witness,
 encoding/commitment, arithmetic, lookup, ZK-additional, serialization), peak
 memory, bytes moved, transcript bytes, rounds, verifier work.
 
-Every A-GKR/B number at K=1536 is measured on the frozen input set
+Every A-GKR/B-Ligero number at K=1536 is measured on the frozen input set
 `bench-instances/v1` (`fixtures/bench-instances/v1/`, loader and recipe
-`verity_numerical.bench.instances`): the `vu-k1536` tier, 4,096 valid VUs
+`verity_numerical.bench.instances`): the `vu-k1536` tier, 4,096 valid proof units
 (3,456 real Qwen2.5-1.5B coordinates including the 24 hardware-confirmed
 captures, 640 adversarial-but-valid corners, interleaved so every prefix is
 representative). B=1, 64, 4096 are the id prefixes `[0:1]`, `[0:64]`,
@@ -354,14 +357,14 @@ optimisation**: the evidence then decides whether further GPU spend is
 justified; nothing is pre-authorised. Foreign `r18-*` pods are outside both
 lifecycle control and campaign accounting.
 
-## SP1 is the system-level reference
+## D-SP1 is the system-level reference
 
 `3.58 s` core and `4.46 s` compressed for K=1536 (`benchmarks/dot_product/baselines.json`)
 are the end-to-end path a numerical backend is eventually compared against, in
-addition to the isolated relation. Do not describe SP1's cost as
+addition to the isolated relation. Do not describe D-SP1's cost as
 authentication-dominated: the measured guest is 82% statement parsing and
 opening-table construction, 4.2% relation, 1.3% authentication hashing
-(`r20260921-224405-22dc`). A true relation-only SP1 diagnostic (statement and
+(`r20260921-224405-22dc`). A true relation-only D-SP1 diagnostic (statement and
 table construction removed too) is wanted for a fair arithmetic baseline; it
 blocks nothing.
 
