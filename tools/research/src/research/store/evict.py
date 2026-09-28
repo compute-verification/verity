@@ -36,6 +36,8 @@ Two kinds of local copy can go, and only these:
   by name), checked once more (renamed back when something uses it, or on any error) and removed READY.json first, one pass at a
   time (`<src>/.evict.lock`).  It fails closed: a condition
   it cannot establish (the repository unlisted, a process it cannot read, a record it cannot read) deletes nothing and says why.
+  The one process it passes over unread is an nginx worker whose configuration cannot name a tree (`_nginx_worker`): RunPod's
+  proxy, which runs as `nobody` on every pod, where the pass has no CAP_SYS_PTRACE.
 
 Never touched: pending (unpushed or unverified) objects, `manifests/`, `attempts/`, `labels/`, `catalog.sqlite`, `scratch/`.
 Artifacts that are flagged `remote` in the catalog but never verified are counted in `held_back_bytes` so the operator can
@@ -400,6 +402,7 @@ READY_FILE = "READY.json"    # remote.READY_FILE: the marker that makes <src>/<s
 LOCK = ".evict.lock"         # <src>/.evict.lock: one pass at a time
 ENDED = TERMINAL_STATES + ("refused",)
 PF_KTHREAD = 0x00200000      # /proc/<pid>/stat flags: a kernel thread, which opens no file of ours
+NGINX_CONF = Path("/etc/nginx/nginx.conf")  # a bare `/usr/sbin/nginx` master's configuration (Debian/Ubuntu build)
 _SHA = re.compile(r"[0-9a-f]{40}")
 
 
@@ -488,10 +491,37 @@ def _proc_texts(base: Path) -> list[str]:
     return [t for t in out if t]
 
 
-def proc_uses(pattern: re.Pattern[str], proc: Path = Path("/proc"), inside: re.Pattern[str] | None = None) -> dict[str, set[str]]:
+def _field(status: str, key: str) -> list[str]:
+    return next((ln.split()[1:] for ln in status.splitlines() if ln.startswith(f"{key}:")), [])
+
+
+def _nginx_worker(proc: Path, pid: str, src_root: Path, conf: Path) -> bool:
+    """Whether unreadable process `pid` is an nginx worker that cannot name a tree: RunPod's proxy (a worker as `nobody` on every
+    pod, which a container without CAP_SYS_PTRACE can't read).  A worker is forked from its master without exec and opens only what
+    the master's configuration names, so it qualifies when it runs as a uid other than root, its parent is readable and is a bare
+    `/usr/sbin/nginx` master (no `-c`, `-p` or `-g`: the configuration is `conf`), and `conf` includes no other file, loads no
+    module and never names the top directory of `src_root`."""
+    status = _quiet((proc / pid / "status").read_text)
+    if not status or _field(status, "Name") != ["nginx"] or "0" in _field(status, "Uid") or not _field(status, "PPid"):
+        return False
+    parent = proc / _field(status, "PPid")[0]
+    try:
+        exe = os.readlink(parent / "exe")
+        title = (parent / "cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace").strip()
+        text = conf.read_text(errors="replace")
+    except OSError:
+        return False
+    tops = {Path(p).parts[1] for p in (os.path.abspath(src_root), os.path.realpath(src_root)) if len(Path(p).parts) > 1}
+    return (exe == "/usr/sbin/nginx" and title == "nginx: master process /usr/sbin/nginx"
+            and not re.search(r"\b(include|load_module)\b", text) and not any(t in text for t in tops))
+
+
+def proc_uses(pattern: re.Pattern[str], proc: Path = Path("/proc"), inside: re.Pattern[str] | None = None,
+              src_root: Path | None = None, nginx_conf: Path = NGINX_CONF) -> dict[str, set[str]]:
     """{sha: reasons} for the trees a live process names; a process whose cwd `inside` matches (<src> or a tree in it) keeps every sha
     it names.  Unestablished when `proc` can't be listed or a live process outside the kernel can't be read: as anyone but root,
-    without CAP_SYS_PTRACE, most can't."""
+    without CAP_SYS_PTRACE, most can't.  Given `src_root`, an unreadable nginx worker that cannot name a tree under it
+    (`_nginx_worker`) is passed over; its master is read like any process."""
     try:
         pids = sorted((p for p in os.listdir(proc) if p.isdigit()), key=int)
     except OSError as e:
@@ -504,6 +534,8 @@ def proc_uses(pattern: re.Pattern[str], proc: Path = Path("/proc"), inside: re.P
             texts = _proc_texts(proc / pid)
             cwd = (_quiet(lambda pid=pid: os.readlink(proc / pid / "cwd")) or "") if texts and inside else ""
         except PermissionError as e:
+            if src_root is not None and _nginx_worker(proc, pid, src_root, nginx_conf):
+                continue
             raise Unestablished(f"2: {proc / pid} is unreadable ({e.strerror}) as uid {os.geteuid()}: the pass needs root or "
                                 "CAP_SYS_PTRACE") from None
         joined = "\n".join(texts)
@@ -811,7 +843,7 @@ def evict_src(src_root: Path, *, origin: str | None = None, dry_run: bool = Fals
               runs_dirs: list[Path] | None = None, requests_dir: Path | None = None, locks_dir: Path | None = None,
               jobs_dirs: list[Path] | None = None, proc: Path = Path("/proc"), keep_s: float = SRC_KEEP_S,
               budget_s: float = SRC_BUDGET_S, now: float | None = None, clock: Callable[[], float] = time.monotonic,
-              log: Callable[[str], None] | None = None) -> dict[str, Any]:
+              log: Callable[[str], None] | None = None, nginx_conf: Path = NGINX_CONF) -> dict[str, Any]:
     """Delete, oldest first, the source trees under `src_root` (`<root>/src`) that meet every condition (module docstring), and the
     `.evicting-*` leftovers of an interrupted pass that nothing uses.  The report lists every tree deleted (inodes, bytes) and every
     tree kept with its reasons, each prefixed by what it is: `1:`/`2:`/`3:` (root's conditions), `recent:`, `record:`, `budget:`;
@@ -850,7 +882,7 @@ def evict_src(src_root: Path, *, origin: str | None = None, dry_run: bool = Fals
     def live(shas: set[str]) -> dict[str, set[str]]:
         """Condition 2 and the run records' part of 3, read afresh."""
         why: dict[str, set[str]] = {}
-        for found in (proc_uses(pattern, proc, inside), record_uses(pattern, runs_dirs, requests_dir, now=t_wall + clock() - t0, keep_s=keep_s),
+        for found in (proc_uses(pattern, proc, inside, src_root, nginx_conf), record_uses(pattern, runs_dirs, requests_dir, now=t_wall + clock() - t0, keep_s=keep_s),
                       slot_uses(pattern, locks_dir, proc)):
             for s, rs in found.items():
                 if s in shas:

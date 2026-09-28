@@ -105,7 +105,7 @@ def _sha256(p: Path) -> str:
 
 #: The runner's own files, always uploaded; everything else is kept only when it matches a declared output (`declared_globs`).
 RUN_FILES = frozenset({"stdout.log", "stderr.log", "launcher.log", "sampler.log", "job.json", "status.json", "events.jsonl", "failure.json",
-                       "result.json", "launch.json", "remote.json", "refused.json"})
+                       "result.json", "launch.json", "remote.json", "refused.json", "slot.json"})
 #: The runner's own files under stamped names (fnmatch on the run-dir-relative path): the stall watch's py-spy dumps (telemetry.run).
 RUN_FILE_GLOBS = ("logs/stall-*.txt",)
 #: The launcher's record of a remote run (remote.py): only on the launching machine, rewritten by every `status` and `fetch`, and never
