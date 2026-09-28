@@ -3,6 +3,7 @@ import Proofs.Flock.Recursive.Multi
 import Proofs.Flock.Soundness.Discharge.ZkReg.Sound
 import Proofs.Flock.Recursive.ZkReg.Vals
 import Proofs.Flock.Recursive.ZkReg.Off
+import Proofs.Flock.Recursive.Finds
 
 /-!
 # Recursion: the outer proof, `--zk --registered` sessions of fixed public verifiers V*
@@ -33,8 +34,11 @@ witness is each session's value layer (`XplurZC`, `ZkOuter.layer`).
   from the layers hold an inner transcript the inner verifier accepts on the hidden circuit's statement `x R ω` at the
   rounds' coins.
 * `zk_sessions_recursive_upto`: `recursive_sound_upto` at V*'s outer proof, its outer term the expected sum over the
-  sessions of each one's `boundCR` (`bound` where its finders satisfy `cr/sha-512`, `ZkOuter.CR`, else `1`) at the
+  sessions of each one's `boundIf` (`bound` where its finders satisfy `cr/sha-512`, `ZkOuter.CR`, else `1`) at the
   registration the prover sends and the strategy it names there (`sumV`).
+* `ZkOuter.Fork`: a run of one of `CR`'s finders or of the link finder, from the prover's own strategy, outputs a
+  SHA-512 collision; with none, `CR` holds at budget `0` (`ZkOuter.cr_of_not_fork`) and `boundIf` there is at most
+  `ZkOuter.boundCR`, the miss and the drawn units' statistical errors (`ZkOuter.boundIf_le`).
 -/
 
 namespace FlockSoundness.Discharge.Recursion
@@ -45,13 +49,13 @@ open scoped ENNReal
 
 set_option genSizeOfSpec false in
 set_option genInjectivity false in
-/-- **V*'s `--zk --registered` session at one history**: what its soundness takes besides the circuit `c` (fixed: V* is
-public), the law `Lv` of V*'s units, the count curve and the prover's strategy. `rd` is the registrant's record of the
-registered reads: the hidden circuit's rows from its registration, the values of the outer proof's registration `R₂`
-(`outerV`), and the values the verifier registers itself (the draw, the coins, the comb `coef`). `hown`: at an accepted
-outcome, the reads at the rows of the drawn units are the verifier's own (`OwnReads`: its ports, at the positions its
-program reads). -/
-structure ZkOuter (mPts nv : ℕ) (Reg' : Type) (c : Flock.Circuit) (hU : Built c.unit) (hscope : Layout.scopeOk c = true)
+/-- **V*'s `--zk --registered` session at one history, but for its record's custody**: what its soundness takes besides
+the circuit `c` (fixed: V* is public), the law `Lv` of V*'s units, the record's custody (`ZkOuter.hRec`), the count
+curve and the prover's strategy. `rd` is the registrant's record of the registered reads: the hidden circuit's rows from
+its registration, the values of the outer proof's registration `R₂` (`outerV`), and the values the verifier registers
+itself (the draw, the coins, the comb `coef`). `hown`: at an accepted outcome, the reads at the rows of the drawn units
+are the verifier's own (`OwnReads`: its ports, at the positions its program reads). -/
+structure ZkOuterD (mPts nv : ℕ) (Reg' : Type) (c : Flock.Circuit) (hU : Built c.unit) (hscope : Layout.scopeOk c = true)
     (Lv : Law nv) where
   I : Inputs
   ht : I.tags.typed = false
@@ -65,11 +69,18 @@ structure ZkOuter (mPts nv : ℕ) (Reg' : Type) (c : Flock.Circuit) (hU : Built 
   hpub : HmRow.loadPublic (zkTags I) c I.publicFile = .ok pub
   hDraw : ∀ ω, DrawOkZK I dj mPts (Lv.draw ω)
   hTags : TagsOk I
-  hRec : RecordsLiveZK I dj wr
   rd : FlockSoundness.Registered.Reads (laySh (Reg := Reg') ht dj y₀ hc hU (pub := pub))
     (rowsSh ht dj y₀ hc hU hpub hscope)
   hown : ∀ ω R' o, LiveAcceptsZKR I own (R', Lv.draw ω, wr (Lv.draw ω) R' o) →
     OwnReads own c pub (wr (Lv.draw ω) R' o) (rd.restrict (rowIn (Lv.draw ω))).isRead rd.port rd.readAt
+
+set_option genSizeOfSpec false in
+set_option genInjectivity false in
+/-- **V*'s `--zk --registered` session at one history**: `ZkOuterD`'s, with the record's custody `hRec` (the record
+`verify --zk` reads is the challenger's of the live session, `RecordsLiveZK`). -/
+structure ZkOuter (mPts nv : ℕ) (Reg' : Type) (c : Flock.Circuit) (hU : Built c.unit) (hscope : Layout.scopeOk c = true)
+    (Lv : Law nv) extends ZkOuterD mPts nv Reg' c hU hscope Lv where
+  hRec : RecordsLiveZK I dj wr
 
 /-- **The names of a session's strategies**: a registration and, at each of the law's coins, a strategy of the live
 table; they read the same at every history. -/
@@ -156,8 +167,61 @@ noncomputable def bound (Lm : Law nv) (k Rw M : ℕ) (ρ t' qF qS qW qR : ℝ) (
 
 open Classical in
 /-- **The outer bound where the strategy's finders satisfy `cr/sha-512`**, else `1`. -/
-noncomputable def boundCR (Lm : Law nv) (k Rw M : ℕ) (ρ t' qF qS qW qR : ℝ) (τ : Strategy (zo.game dg N)) : ℝ≥0∞ :=
+noncomputable def boundIf (Lm : Law nv) (k Rw M : ℕ) (ρ t' qF qS qW qR : ℝ) (τ : Strategy (zo.game dg N)) : ℝ≥0∞ :=
   if zo.CR dg N k Rw qF qS qW qR τ then zo.bound dg N Lm k Rw M ρ t' qF qS qW qR τ else 1
+
+/-- **A fork of the session at the strategy `τ`**: a run of one of `CR`'s finders, or of the link finder, from the
+prover's own continuations in its simulation, outputs a SHA-512 collision: the knowledge finders of a drawn table
+(`TableForkZ`), the registered-value finders (`RegForkZC`), the run that opens a drawn row's registered leaf off the
+registrant's (`Reads.pick`), or the link finder (`LinkForkZC`). -/
+def Fork (k Rw M : ℕ) (τ : Strategy (zo.game dg N)) : Prop :=
+  (∃ ω j, TableForkZ execArith hs512 (planZAt zo.dj zo.y₀ (Lv.draw ω) (reg (zo.sim dg N τ))) j
+      (zcStrat execArith hs512 (planZAt zo.dj zo.y₀) (cont (zo.sim dg N τ) ω))) ∨
+    RegForkZC execArith hs512 ((keyProg c hU nv).partition (Layout.outsOf c hU nv)) (planZAt zo.dj zo.y₀)
+      (tabZAt zo.dj zo.y₀) zo.vb (regOpenZ zo.ht zo.dj zo.y₀ zo.hc hU zo.hpub hscope zo.rd) (reg (zo.sim dg N τ))
+      (cont (zo.sim dg N τ)) k Rw ∨
+    (StrictCR.oneRun (zo.game dg N) τ fun o =>
+      (zo.rd.restrict (rowIn o.2.1)).pick o.1 (regPaths c zo.pub o.2.2 zo.rd.port)).Finds H512 ∨
+    LinkForkZC execArith hs512 ((keyProg c hU nv).partition (Layout.outsOf c hU nv)) (planZAt zo.dj zo.y₀)
+      (tabZAt zo.dj zo.y₀) zo.vb (reg (zo.sim dg N τ)) (cont (zo.sim dg N τ)) k Rw M
+
+/-- **With no fork, the session's finders satisfy `cr/sha-512` at budget `0`** and its link finder `ecr/sha-512` at
+cost `0`. -/
+theorem cr_of_not_fork {k Rw M : ℕ} {τ : Strategy (zo.game dg N)} (h : ¬ zo.Fork dg N k Rw M τ) :
+    zo.CR dg N k Rw 0 0 0 0 τ ∧
+      LinkCRZC execArith hs512 ((keyProg c hU nv).partition (Layout.outsOf c hU nv)) (planZAt zo.dj zo.y₀)
+        (tabZAt zo.dj zo.y₀) zo.vb (reg (zo.sim dg N τ)) (cont (zo.sim dg N τ)) k Rw M 0 :=
+  ⟨⟨fun ω j => tableCRZ_of_not_fork _ _ fun hf => h (Or.inl ⟨ω, j, hf⟩),
+      regCRZC_of_not_fork _ _ _ _ _ _ _ _ _ fun hf => h (Or.inr (Or.inl hf)),
+      Finder.cr_of_not_finds (fun hf => h (Or.inr (Or.inr (Or.inl hf)))) 0⟩,
+    linkCRZC_of_not_fork _ _ _ _ _ _ _ _ fun hf => h (Or.inr (Or.inr (Or.inr hf)))⟩
+
+/-- **The outer bound in fork form**: the model's miss at one bad unit and the drawn units' statistical errors, the
+tables' (`tableErrZ`), the link's (`linkErrZC`) and the waits' (`waitErrZC`); `bound` with no finder budgets and no
+SHA-512 evaluations to count. -/
+noncomputable def boundCR (Lm : Law nv) (k Rw M : ℕ) (ρ : ℝ) (τ : Strategy (zo.game dg N)) : ℝ≥0∞ :=
+  Lm.miss 1 +
+    (tableErrZ (planZAt zo.dj zo.y₀) Lv k (reg (zo.sim dg N τ)) +
+      linkErrZC execArith ((keyProg c hU nv).partition (Layout.outsOf c hU nv)) (planZAt (Reg := Reg') zo.dj zo.y₀)
+        (tabZAt zo.dj zo.y₀) zo.vb Lv k Rw M ρ +
+      waitErrZC execArith ((keyProg c hU nv).partition (Layout.outsOf c hU nv)) (planZAt (Reg := Reg') zo.dj zo.y₀)
+        (tabZAt zo.dj zo.y₀) zo.vb Lv k Rw ρ)
+
+theorem bound_zero (Lm : Law nv) {k Rw M : ℕ} (ρ : ℝ) {τ : Strategy (zo.game dg N)}
+    (h : LinkCRZC execArith hs512 ((keyProg c hU nv).partition (Layout.outsOf c hU nv)) (planZAt zo.dj zo.y₀)
+      (tabZAt zo.dj zo.y₀) zo.vb (reg (zo.sim dg N τ)) (cont (zo.sim dg N τ)) k Rw M 0) :
+    zo.bound dg N Lm k Rw M ρ 0 0 0 0 0 τ = zo.boundCR dg N Lm k Rw M ρ τ := by
+  unfold bound boundCR
+  rw [ksAvgStrictZ_zero, linkBoundZC_zero _ _ _ _ _ _ _ _ h, regTermZC_zero,
+    show (0 : ℝ) ^ 2 / 2 ^ (513 : ℝ) = 0 by simp, ENNReal.ofReal_zero, add_zero]
+
+/-- **With no fork, `boundIf` at no budgets is at most the fork-form bound.** -/
+theorem boundIf_le (Lm : Law nv) {k Rw M : ℕ} (ρ : ℝ) {τ : Strategy (zo.game dg N)} (h : ¬ zo.Fork dg N k Rw M τ) :
+    zo.boundIf dg N Lm k Rw M ρ 0 0 0 0 0 τ ≤ zo.boundCR dg N Lm k Rw M ρ τ := by
+  unfold boundIf
+  split_ifs with hc
+  · exact (zo.bound_zero dg N Lm ρ (zo.cr_of_not_fork dg N h).2).le
+  · exact absurd (zo.cr_of_not_fork dg N h).1 hc
 
 /-- **A layer agrees with the registrant**: every wire a unit reads at a registered read carries the registrant's bit. -/
 def RegAgree (bits : Fin (Layout.keyN c hU nv) → Bool) : Prop :=
@@ -316,6 +380,9 @@ namespace VStmt
 /-- A session of the verifier's circuit at one history. -/
 abbrev Outer (Q : VStmt) (Reg' : Type) := ZkOuter Q.mPts Q.nv Reg' Q.c Q.hU Q.hscope Q.law.live
 
+/-- A session of the verifier's circuit at one history, but for its record's custody. -/
+abbrev OuterD (Q : VStmt) (Reg' : Type) := ZkOuterD Q.mPts Q.nv Reg' Q.c Q.hU Q.hscope Q.law.live
+
 /-- A value layer of the verifier's circuit. -/
 abbrev Bits (Q : VStmt) : Type := Fin (Layout.keyN Q.c Q.hU Q.nv) → Bool
 
@@ -353,7 +420,7 @@ noncomputable def sumS (zs : (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray 
   exG (fun rs => ∑ j, F j ((zs j).ofBase dg N (rs j).1)) (sessions zs dg N) s
 
 /-- **V*'s sessions at one history**: when every outcome at which every session accepts and every layer is `Good`
-satisfies `Q` of the layers, the sessions accept with `Q` failing at most the expected sum of the sessions' `boundCR`
+satisfies `Q` of the layers, the sessions accept with `Q` failing at most the expected sum of the sessions' `boundIf`
 (`accepts_le`, `prob_seqC_exists_le`). -/
 theorem sessions_le
     (hS : ∀ j, Law.ExecStrata (Vs j).law.σs (Vs j).law.ks (Vs j).law.St)
@@ -368,7 +435,7 @@ theorem sessions_le
       Q fun j => (zs j).layer dg N k Rw (τ j))
     (s : Strategy (sessions zs dg N)) :
     prob (fun b => Accepts zs b ∧ ¬ Q (layers zs dg N k Rw b)) (sessions zs dg N) s ≤
-      sumS zs dg N (fun j τ => (zs j).boundCR dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR τ) s := by
+      sumS zs dg N (fun j τ => (zs j).boundIf dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR τ) s := by
   classical
   have hmono : ∀ b : VRec Vs Reg' dg N, Accepts zs b ∧ ¬ Q (layers zs dg N k Rw b) →
       ∃ j, LiveAcceptsZKR (zs j).I (zs j).own (b j).2 ∧
@@ -380,9 +447,9 @@ theorem sessions_le
     exact hno ⟨j, hacc j, hg⟩
   have hB : ∀ j τ₀, prob (fun a => LiveAcceptsZKR (zs j).I (zs j).own a ∧
         ¬ (zs j).Good ((zs j).layer dg N k Rw ((zs j).ofBase dg N τ₀))) ((zs j).game dg N) ((zs j).ofBase dg N τ₀) ≤
-      (zs j).boundCR dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR ((zs j).ofBase dg N τ₀) := by
+      (zs j).boundIf dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR ((zs j).ofBase dg N τ₀) := by
     intro j τ₀
-    unfold ZkOuter.boundCR
+    unfold ZkOuter.boundIf
     split_ifs with hc
     · exact ZkOuter.accepts_le (Vs j).law.σs (Vs j).law.ks (Vs j).law.hks (Vs j).law.St (hS j) (Vs j).law.Kd
         (Vs j).law.pop (Vs j).law.Lb (Vs j).law.src (hA3 j) (zs j) dg N hk hRw hM hρ (hr j) ht' _ hc
@@ -390,7 +457,7 @@ theorem sessions_le
   exact (prob_mono hmono _ _).trans
     (prob_seqC_exists_le S _ _ (fun j r => LiveAcceptsZKR (zs j).I (zs j).own r.2 ∧
         ¬ (zs j).Good ((zs j).layer dg N k Rw ((zs j).ofBase dg N r.1)))
-      (fun j τ₀ => (zs j).boundCR dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR ((zs j).ofBase dg N τ₀)) hB s)
+      (fun j τ₀ => (zs j).boundIf dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR ((zs j).ofBase dg N τ₀)) hB s)
 
 variable {Reg₂ : Type}
 
@@ -438,7 +505,7 @@ theorem outerV_le
       Q fun j => (zs R₂ j).layer dg N k Rw (τ j))
     (s : Strategy (outerV zs dg N)) :
     prob (fun o => AcceptsV zs o ∧ ¬ Q (layers (zs o.1) dg N k Rw o.2)) (outerV zs dg N) s ≤
-      sumV zs dg N (fun R₂ j τ => (zs R₂ j).boundCR dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR τ) s := by
+      sumV zs dg N (fun R₂ j τ => (zs R₂ j).boundIf dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR τ) s := by
   rw [prob_outerV]
   exact sessions_le hS hA3 (zs s.1) dg N hk hRw hM hρ (hr s.1) ht' qF qS qW qR Q (hQ s.1) (sessOf zs dg N s)
 
@@ -496,14 +563,14 @@ theorem zk_sessions_recursive_upto
     prob (fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (x o.1 o.2.1))
         (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
       expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
-          (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundCR dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR τ) s) +
+          (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundIf dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR τ) s) +
         ∑ i ∈ Finset.range I.r,
           (expAt σ (εtr i σ.1) + (∑ pos, κ i pos) * ENNReal.ofReal (Real.sqrt (q i ^ 2 / 2 ^ (513 : ℝ)))) + εin := by
   have h := recursive_sound_upto ob σ (fun R ω t o => AcceptsV (zs R ω t) o) x
     (W := ((j : Fin S) → (Vs j).Bits) × I.Stmt) (fun R ω t _ o => (layers (zs R ω t o.1) dg N k Rw o.2, x R ω))
     Prod.snd (fun w => wmsg w.1) same hsame cmt msg T εtr κ q
     (εo := expAt σ fun ω t s => sumV (zs σ.1 ω t) dg N
-      (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundCR dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR τ) s) (εP := 0)
+      (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundIf dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR τ) s) (εP := 0)
     ?_ ?_ htr hCR hin
   · rwa [add_zero] at h
   · exact avg_mono fun ω => leafAvg_mono (fun t s => outerV_le hS hA3 (zs σ.1 ω t) dg N hk hRw hM hρ (hr σ.1 ω t) ht'
