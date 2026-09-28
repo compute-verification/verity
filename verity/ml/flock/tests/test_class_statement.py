@@ -236,6 +236,27 @@ def test_core_rows_are_core_bit_rows_and_decode_as_the_default_layout(dtype):
     assert len(checked) >= 24 and all(int(word[j]) == ref[j][0] for j in checked)
 
 
+def test_a_class_of_whole_activations_names_its_definition_as_the_circuits_template(monkeypatch, tmp_path: Path):
+    """An unwired class whose unit is one whole activation of its flat Definition (an FP GEMM coordinate) names that Definition
+    in META ``program_digests``, by core's descriptor id with its Program's digest, so that a verifier given the program finds
+    each unit an activation of the circuit's template (f05d's refusal named ``unit-class/…``). The name is a binding: the class
+    digest is the one the class has naming itself, and only the circuit's pin moves."""
+    from verity.ml.circuits.codec import descriptor_id, program_digest
+
+    units, s, cl, act, uc, _groups = _fp_class("e4m3", 128)
+    assert uc.computing == act.graph.n
+    lanes, key = _lanes(units, cl), hashlib.sha256(b"test").digest()
+    meta = lambda d: json.loads((tmp_path / d / "circuit.txt").read_text().split("\n", 2)[1][5:])  # noqa: E731
+    named = CS.stage(units, "q-word", s, cl, lanes, tmp_path / "named", key)
+    assert meta("named")["program_digests"] == {descriptor_id(act.fn): program_digest(Program(act.fn))}
+    shims = CS._shims
+    monkeypatch.setattr(CS, "_shims", lambda name, content, ports=1, definition=None: shims(name, content, ports))
+    own = CS.stage(units, "q-word", s, cl, lanes, tmp_path / "own", key)
+    (template,) = meta("own")["program_digests"]
+    assert template.startswith("unit-class/") and meta("own")["program_sha512"] == meta("named")["program_sha512"]
+    assert own["class_sha512"] == named["class_sha512"] and own["circuit_sha512"] != named["circuit_sha512"]
+
+
 def test_core_rows_stage_and_each_row_recomputes_from_the_prover_file_with_core_alone(tmp_path: Path):
     """E4M3 K=128, the smallest whole-block FP row, staged under FLOCK_CORE_ROWS: META names each row's schema and length in bits
     (the output row's, §16.13, its 64 words') and no single ``row_schema``, its row constants are core's prefixes, and its circuit
