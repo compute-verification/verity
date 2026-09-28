@@ -144,7 +144,7 @@ alone and was forgeable by choosing the claimed words after the challenges -- RE
 
 `security.accounting.ligero_error` (Appendix C, `e = (n - k)/2`, uniform combinations), with `k = l` (no ZK padding;
 `validate()` needs `l < k`, so `k = l + 1` stands in, conservative; `config_for` sizes `t` and `D` at the stand-in too,
-so the reported bound meets the target, ligero-verify DISCREPANCIES BV-D1) and `F_challenge = BabyBear^D`:
+so the reported bound meets the target, `backends/ligero-verify/discrepancies/d1.md`, BV-D1) and `F_challenge = BabyBear^D`:
 
     l = 4096, n = 16384, t = 189, D = 6:
       irs_query (1 - e/n)^t = (5/8)^189 = 2^-128.1    linear_query ((k+l)/n)^t = 2^-189    quadratic_query (2k/n)^t = 2^-189
@@ -170,7 +170,7 @@ setting (no subfield/extension assumption is needed here, since the combinations
 The opened columns dominate (Ligero's `t * m`); `m` is what a cheaper range-check realisation would shrink.
 Chain (m = 3516, + `q`: D (2l - 1) * 4 = 197 KB): 3.14 MB per 42 VUs (75 KB/VU).
 
-## 7b. The chain: the verification unit (`chain.py`, `vu.py`; `compile_unit(chain=True)`)
+## 7b. The chain: the proof unit (`chain.py`, `vu.py`; `compile_unit(chain=True)`)
 
 A VU is 96 units from `c_0 = +0` plus the `Epilogue` (RN-even cast to BF16). Column `j = 96 v + i` holds unit `i` of
 VU `v`; a proof of `l` columns holds `floor(l / 96)` VUs (`l = 4096`: 42 VUs, 64 pad columns = trivial units).
@@ -324,7 +324,7 @@ therefore lists `assumptions = ["hash", "random-oracle (Merkle hiding)"]`.  Salt
 salt_c)`, `salt_c` uniform 32 bytes, opened with the column) would make the commitment statistically hiding and
 remove that item; cost: `+32` bytes hashed per leaf at commit (one extra Blake3 block per column, against `4 M`
 bytes of column already hashed) and `+32 t` bytes per proof in the openings (`+6.3 KB` at `t = 197`, ~0.1 % of the
-transcript) -- not implemented on this branch.
+transcript) -- not implemented.
 
 *Simulator (demonstrated: `redteam/simulator.py`, run against the real `verify()` under the real hash).*  `S`
 receives `c1, c2`, runs `V*` once on a dummy transcript: random `root0`; after `V*` opens `r1` the round-1
@@ -394,7 +394,7 @@ dropped (`pack_public`, 22 bits, `y16_bits = 22`).  The public decode is the rel
 file form is `ligero-statement/v4` (`serialize.py`: `u8 word_bytes | u8 y_bytes | str relation` before the words,
 `u8 has_auth` after; a BF16 Ampere statement stays v2 / v3).  A file verifier must take the tag, the widths and the
 word range from the relation the statement NAMES, never from the file, and must pin the relation's compiled system
-by digest (`backends/ligero-verify/src/relation.rs`; DISCREPANCIES.md D11).
+by digest (`backends/ligero-verify/src/relation.rs`; `backends/ligero-verify/discrepancies/d11.md`, D11).
 
 **Pole redraw.** B-Ligero has no retry-on-bad-challenge path: `Z_H` is invertible on the coset by construction, there
 is no lookup helper with a public pole, and the column challenge is a deterministic rejection of repeats inside the

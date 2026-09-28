@@ -9,7 +9,7 @@ import Mathlib.Tactic.GCongr
 # The bound for `fast100` run twice on one root
 
 For every witness size the profile supports and every statement shape the three statements of
-PROTOCOL.md §16 can take (at most `2^26` bits per block, 1024 public regions and 64 link-point
+PROTOCOL.md §16 can take (at most `2^27` bits per block, 1024 public regions and 64 link-point
 coordinates, well beyond today's statements), `tableError` is at most
 
 * `2^-205` for every `22 ≤ m ≤ 35` (`tableError_le_of_le_33`, `tableError_le_of_34_35`), at the
@@ -259,14 +259,14 @@ theorem ligeritoError_le : ∀ ls : List Level, (∀ l ∈ ls, l.Ok) →
 
 /-! ## The statement ranges -/
 
-/-- The statement shapes covered: at most `2^26` witness bits per block, 1024 public regions,
+/-- The statement shapes covered: at most `2^27` witness bits per block, 1024 public regions,
 64 coordinates per link point. -/
-def Stmt.InRange (st : Stmt) : Prop := st.kLog ≤ 26 ∧ st.nRegions ≤ 1024 ∧ st.mPts ≤ 64
+def Stmt.InRange (st : Stmt) : Prop := st.kLog ≤ 27 ∧ st.nRegions ≤ 1024 ∧ st.mPts ≤ 64
 
 /-- The worst-case numerator of `piopError` over the covered statements. -/
 def piopNumMax (m L₀ : ℕ) : ℕ :=
   (L₀ + 1) * (m - 13) + L₀ * 127 + L₀ * (2 * (m - 6)) + L₀ * m
-    + L₀ * (2 + 2 * 20 + 63) + L₀ * (7 * 2050 + 1) + L₀
+    + L₀ * (2 + 2 * 21 + 63) + L₀ * (7 * 2050 + 1) + L₀
 
 theorem piopError_le (m L₀ : ℕ) (st : Stmt) (hst : st.InRange) :
     piopError m st.kLog st.nClaims L₀ ≤ ((piopNumMax m L₀ : ℚ) / 2 ^ 128 : ℚ) := by
@@ -275,13 +275,13 @@ theorem piopError_le (m L₀ : ℕ) (st : Stmt) (hst : st.InRange) :
   push_cast
   gcongr
   have h1 : m - st.kLog ≤ m := Nat.sub_le _ _
-  have h2 : st.kLog - 6 ≤ 20 := by omega
+  have h2 : st.kLog - 6 ≤ 21 := by omega
   have h3 : st.nClaims ≤ 2050 := by unfold Stmt.nClaims; omega
   unfold piopNumMax
   exact_mod_cast (by gcongr : (L₀ + 1) * (m - 13) + L₀ * 127 + L₀ * (2 * (m - 6))
       + L₀ * (m - st.kLog) + L₀ * (2 + 2 * (st.kLog - 6) + 63) + L₀ * (7 * st.nClaims + 1) + L₀
       ≤ (L₀ + 1) * (m - 13) + L₀ * 127 + L₀ * (2 * (m - 6)) + L₀ * m
-      + L₀ * (2 + 2 * 20 + 63) + L₀ * (7 * 2050 + 1) + L₀)
+      + L₀ * (2 + 2 * 21 + 63) + L₀ * (7 * 2050 + 1) + L₀)
 
 /-- The rational bound on one rep over the covered statements. -/
 def repUp (s : Schedule) : ℚ := (piopNumMax s.m s.listBound₀ : ℚ) / 2 ^ 128 + ligUp s.levels
