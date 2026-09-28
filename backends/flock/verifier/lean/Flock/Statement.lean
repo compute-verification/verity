@@ -127,6 +127,8 @@ theorem checkInRange_ok (kLog nRegions mPts : Nat) :
 inductive Coins where
   | os
   | seed
+  /-- the verifier's keyed coin tree (`Flock.CoinTree`): `Hello`'s `coins` is its spec, with the prover's nonce -/
+  | tree (spec : CoinTree.Spec)
   deriving BEq, Inhabited
 
 /-- Everything a session needs about the statement. -/
@@ -152,11 +154,16 @@ structure Stmt where
   partition : Json := Json.null
   deriving Inhabited
 
+/-- `Hello`, the session parameters S2 compares. A keyed coin tree's `coins` has an empty nonce here: R7 puts the prover's
+in (`CoinTree.checkHello`). -/
 def helloOf (tags : Tags) (sigma : ByteArray) (mPts : Nat) (coins : Coins) : V String :=
   let base := [("profile", Json.str "fast100"), ("reps", Lean.toJson (2 : Nat)), ("flavor", Json.str "rs"),
     ("tables", Json.arr #[Json.str tags.table]),
     ("link", Json.mkObj [("sigma", Json.str (hexOf sigma)), ("m", Lean.toJson mPts), ("points", Lean.toJson (2 : Nat))])]
-  let base := if coins == .seed then base ++ [("coins", Json.str tags.coinScheme)] else base
+  let base := match coins with
+    | .seed => base ++ [("coins", Json.str tags.coinScheme)]
+    | .tree s => base ++ [("coins", s.coins "")]
+    | .os => base
   let base := if tags.hm96Rows then base ++ [("digests", Json.str "sha512")] else base
   canon (Json.mkObj (if tags.retainRounds then base ++ [("rounds", Json.str "bytes retained")] else base))
 
@@ -193,7 +200,7 @@ namespace Stmt
 def spec (st : Stmt) : SessionSpec :=
   { table := st.tags.table, domain := st.tags.domain, sigma := st.sigma, hello := st.hello, mPts := st.mPts,
     retainRounds := st.tags.retainRounds, unitDraw := (st.pub.header.getObjVal? "unit_draw").toOption, instances := st.n,
-    sha512Digests := st.tags.hm96Rows }
+    sha512Digests := st.tags.hm96Rows, coinTree := CoinTree.ofHello st.hello }
 
 /-- `e[s + 64·u] = lw[s] · eq(ρ, u)` for `u < 2^|ρ|`. -/
 def tensor (lw : Array F128) (rho : Array F128) : Array F128 :=
