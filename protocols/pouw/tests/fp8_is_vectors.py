@@ -16,8 +16,8 @@ from verity_pouw.schemes import fp8_is
 
 OUT = Path(__file__).with_name("vectors") / "fp8_is.json"
 #: (case, forming, shape, tile rows, tile cols, index, weight): test-instance shapes and one lead-domain k
-CASES = (("small-d2", "d2-draft", (64, 128, 16), (0, 2), (8, 10), 7, 3),
-         ("small-fpncp", "fpncp-v0", (64, 128, 16), (0, 2), (8, 10), 7, 3),
+CASES = (("small-d2", "d2-draft", (64, 128, 64), (0, 2), (8, 10), 7, 3),
+         ("small-fpncp", "fpncp-v0", (64, 128, 64), (0, 2), (8, 10), 7, 3),
          ("lead-k-d2", "d2-draft", (8192, 8192, 8192), (0, 1), (0, 1), (1 << 64) - 1, 11))
 
 
@@ -55,7 +55,7 @@ def case_vector(case, forming, shape, r, c, index, weight) -> dict:
             "weight": weight, "salt": ctx.salt.hex(), "root_a": ctx.root_a.hex(), "root_b": ctx.root_b.hex(),
             "x_row0": ops.x[0][:16], "y_col0": ops.y[0][:16],
             "trace_sha256": hashlib.sha256(checked.trace).hexdigest(),
-            "cell00_atoms": checked.cells[0][0][0][:4], "cell00_running": checked.cells[0][0][1][:3],
+            "cell00_atoms": checked.cells[0][0][0][:4], "cell00_running": checked.cells[0][0][1][:4],
             "digest": s.digest(ctx, None, checked).hex(),
             "useful_sha256": hashlib.sha256(json.dumps(useful).encode()).hexdigest(), "useful_00": useful[0][0]}
 

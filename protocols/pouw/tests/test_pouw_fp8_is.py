@@ -60,7 +60,7 @@ def test_registry_and_certificates():
 def test_domain():
     s = get("fp8-is-h100-d2-draft")
     s.check(Matmul(0, Shape(8192, 8192, 8192), 1))
-    for bad in (Shape(4096, 8192, 8192), Shape(8192, 8192, 8196), Shape(8200, 8192, 8192), Shape(8192, 8208, 8192), Shape(8192, 1 << 17, 8192)):
+    for bad in (Shape(4096, 8192, 8192), Shape(8192, 8192, 8200), Shape(8192, 8192, 8196), Shape(8200, 8192, 8192), Shape(8192, 8208, 8192), Shape(8192, 1 << 17, 8192)):
         with pytest.raises(DomainError):
             s.check(Matmul(0, bad, 1))
 
@@ -73,10 +73,10 @@ def test_core_against_independent_implementations():
     for _ in range(20):
         x, y = codes(rng, 32 * 12, 0x7E), codes(rng, 32 * 12, 0x7E)
         atoms, running = F.cell_words(x, y)
-        assert len(atoms) == 12 and len(running) == 11
+        assert len(atoms) == len(running) == 12 and running[0] is None
         assert atoms == [tc_dot_total_e4m3(F.ATOM, 0, x[32 * t:32 * t + 32], y[32 * t:32 * t + 32]) for t in range(12)]
         r = as_f32(atoms[0])
-        for i, rt in zip(atoms[1:], running):
+        for i, rt in zip(atoms[1:], running[1:]):
             r = np.float32(r + as_f32(i))
             assert rt == int(np.array([r], dtype=np.float32).view(np.uint32)[0])
 
@@ -183,11 +183,11 @@ def test_d2_draft_keeps_the_spike_slices_dense_and_salted():
 
 
 def test_lifecycle_on_a_test_instance():
-    s = F.FP8IS(F.D2Draft(), mnk_min=16, tile=(64, 8))
+    s = F.FP8IS(F.FpNcpV0(), mnk_min=16, tile=(64, 32))
     rng = random.Random("lifecycle")
-    work = Workload((Matmul(0, Shape(64, 128, 16), 7),))
-    weights = {7: [bytes(codes(rng, 128, s.forming.b_max)) for _ in range(16)]}
-    acts = {0: [bytes(codes(rng, 128, s.forming.a_max)) for _ in range(64)]}
+    work = Workload((Matmul(0, Shape(64, 128, 64), 7),))
+    weights = {7: [bytes(codes(rng, 128, 0x7E)) for _ in range(64)]}
+    acts = {0: [bytes(codes(rng, 128, 0x7E)) for _ in range(64)]}
 
     def corrupt(scheme, ctx, noise, a, b, tiles):
         out = reference_kernel(scheme, ctx, noise, a, b, tiles)
@@ -202,4 +202,43 @@ def test_lifecycle_on_a_test_instance():
         assert [v.check_tile(tr, prover.open(epoch, t.id)).ok for t in v.refs] == [True, ok]
         if ok:
             audit = v.audit(prover, tr, Sampled(2), b"source")
-            assert audit.accepted and audit.profile.work == s.wref(Shape(64, 128, 16))
+            assert audit.accepted and audit.profile.work == s.wref(Shape(64, 128, 64))
+
+
+class SeededNcp(F.FpNcpV0):
+    """A test layer: fpncp-v0 with each cell's R_0 a salt word (a small power of two, so the seed is removed exactly)."""
+
+    name, seeded = "fpncp-v0-seeded", True
+
+    def form(self, ctx, noise, a, b, tile):
+        st = super().form(ctx, noise, a, b, tile)
+        seeds = [[0x3F80_0000 | (F.xof("test/seed", 1, ctx.salt, i, j)[0] << 23 & 0x8000_0000) for j in tile.cols] for i in tile.rows]
+        return F.Stack(st.x, st.y, st.trace_x, st.trace_y, seeds)
+
+
+def test_a_seeded_layer_checks_r1():
+    """Unseeded, R_1 = I_1 is dropped (`c2FirstRunCopy`); a seeded layer checks R_1 = add(R_0, I_1), pays its FADD in wref,
+    and its useful output removes the seed."""
+    rng = random.Random("seeded")
+    k, tile = 128, Tile((0, 1), (0, 1))
+    a, b = [bytes(codes(rng, k, 0x7E)) for _ in range(2)], [bytes(codes(rng, k, 0x7E)) for _ in range(2)]
+    ctx = ctx_of((64, k, 64))
+    plain, seeded = F.FP8IS(F.FpNcpV0(), mnk_min=16), F.FP8IS(SeededNcp(), mnk_min=16)
+    p_ops, s_ops = plain.encode(ctx, plain.noise(ctx), a, b, tile), seeded.encode(ctx, seeded.noise(ctx), a, b, tile)
+    p_chk, s_chk = plain.checked(ctx, p_ops), seeded.checked(ctx, s_ops)
+    for i in range(2):
+        for j in range(2):
+            (pa, pr), (sa, sr) = p_chk.cells[i][j], s_chk.cells[i][j]
+            assert pa == sa and pr[0] is None and sr[0] == F.fp32.add(s_ops.seeds[i][j], sa[0]) != sa[0]
+            assert None not in pr[1:] and None not in sr
+    for got, want in zip(sum(seeded.useful(ctx, None, s_ops, s_chk), []), sum(plain.useful(ctx, None, p_ops, p_chk), [])):
+        assert abs(got - want) <= 1 + abs(want) / 2 ** 20
+    sh = Shape(64, 128, 64)
+    assert seeded.wref(sh) - plain.wref(sh) == 32 * sh.m * sh.n
+
+    class Mislabelled(SeededNcp):
+        seeded = False
+
+    liar = F.FP8IS(Mislabelled(), mnk_min=16)
+    with pytest.raises(DomainError):
+        liar.encode(ctx, liar.noise(ctx), a, b, tile)

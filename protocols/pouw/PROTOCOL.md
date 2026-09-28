@@ -142,7 +142,8 @@ docstring states every parameter.
 
 Genuine FP8 PoUW: the checked computation is the H100's E4M3 tensor-core matmul with FP32 accumulation. The scheme is
 a fixed **core** over a swappable **forming layer**; `fp8-is-h100-<layer>` names the pair. **No certificate names a
-γ_0 yet**: the core's premise is refuted for `fpncp-v0` and not established for `d2-draft`.
+γ_0 yet**: the core's premise is refuted for both layers here. The main line is repaired C-2 (track D's D-3), a new
+layer that drops in with the core unchanged.
 
 ~~~text
 rows      k E4M3 codes, one byte each; 0x7F and 0xFF (NaN) are malformed; the layer may narrow the domain (`admits`)
@@ -150,16 +151,17 @@ forming   the layer gives each tile's stacked operands X̃ (rows) and Ỹ (colum
           and its own checked words for those rows and columns (`Forming.form`)
 atom      I_τ = HOPPER_E4M3_WGMMA_K32.step(+0, X̃[i, S_τ], Ỹ[S_τ, j]), S_τ the τ-th 32-slice of K, ascending
           (wgmma m64nNk32 f32.e4m3.e4m3, pinned on H100 with nonzero accumulators too)
-running   R_1 = I_1, R_τ = add.rn.f32(R_(τ−1), I_τ) for τ ≥ 2   (`verity.ml.tc.fp32.add`: binary32, ties to even, no FTZ)
-checked   the layer's words, then I_1 … I_T and R_2 … R_T; useful = R_T.  R_1 is not checked: from +0 it is I_1
-          exactly, a duplicate in every output (`c2FirstRunCopy`)
+running   R_τ = add.rn.f32(R_(τ−1), I_τ)   (`verity.ml.tc.fp32.add`: binary32, ties to even, no FTZ)
+          R_0 = +0 for an unseeded layer, and then R_1 = I_1 is not checked (a duplicate in every output,
+          `c2FirstRunCopy`); a seeded layer gives each cell a salt word R_0, and R_1 is checked
+checked   the layer's words, then every I_τ and every checked R_τ; useful = R_T (less R_0 when seeded, as glue)
 digest    SHAKE256("verity/pouw/<name>/tile" ‖ 0 ‖ layer words of the tile's rows, then columns ‖ core words)[:32];
-          core words little-endian, step-major, row-major over cells within a step, I_τ before R_τ (τ ≥ 2)
-tiles     64 × 8 (one physical m64n8 atom per slice)
-domain    64 | m, 8 | n, 32 | k, 8,192 ≤ m, k, n ≤ 2^16
-wref      6·m·k·n − 32·m·n (an atom word per cell per slice and an FADD per slice after the first, 32 each on MH100)
-          + f_A·m·k + f_B·n·k
-Ω*        (6N − 32 + f_A + f_B)/(6N − 32 + c_A + c_B) at N = 8,192, c being the part of f spent on the layer's checked words
+          core words little-endian, step-major, row-major over cells within a step, I_τ before R_τ
+tiles     64 × 64 (one m64n64k32 atom per slice: Round 7 measured 32 per word at N ≥ 64, and m64n8 at 22% of peak)
+domain    64 | m, 64 | n, 32 | k, 8,192 ≤ m, k, n ≤ 2^16
+wref      6·m·k·n − d·m·n + f_A·m·k + f_B·n·k: an atom word per cell per slice and an FADD per checked R_τ, 32 each on
+          MH100 nominal; d = 32 unseeded (R_1's FADD), 0 seeded
+Ω*        (6N − d + f_A + f_B)/(6N − d + c_A + c_B) at N = 8,192, c being the part of f spent on the layer's checked words
 γ         1 − (1 − γ_core)/Ω*,  γ_core ≤ ε + μ·(32 − c_k8)/32  (ε from `DistinctLive(ε)`, μ the fraction of credited
           words a sub-32 writer can write, c_k8 its measured price; `distinctWritesMH100`, `distinctWritesLegacy`)
 ~~~
@@ -176,12 +178,15 @@ wref      6·m·k·n − 32·m·n (an atom word per cell per slice and an FADD p
   with every FP32 operation fixed (`FpNcpV0`). **Refuted:** its noise is row-scaled, so it is rounded away on large
   entries (X-C2-B1) and alignment erases everything but a spike (X-D1-1). Kept as the negative control; the tests
   reproduce both attacks bit for bit. Its MH100 trace is 384 units per element per side.
-- **`d2-draft`**: track D's D-2 (`D2Draft`). Each NCP block's operand is a checked FP8 Hadamard transform (block 32,
+- **`d2-draft`**: track D's D-2 (`D2Draft`); **fell in Phase 17b** (X-D2-1 … 8), kept as the worked example of a layer
+  with checked forming words. Each NCP block's operand is a checked FP8 Hadamard transform (block 32,
   α = 1/8 left, β = 1/4 right, αβ·32 = 1), computed as chains of k32 atoms that mix the base and E4M3 noise codes in
   aligned 4-code words, then converted by `cvt.rn.satfinite.e4m3`; block 3 is the three-part transform, and signs sit in
   the transform weights. Its checked words are every transform atom word and every converted code (7 words and 3 codes
   per element: 272 units credited per element per side). The noise-code distribution (`MaxRelativeCodes`, 64 units) is
   a **placeholder** for track D's repair. The domain is |A| ≤ 64 and |B| ≤ 32, so no transform saturates.
+- **Prices.** `wref` uses MH100's nominal table. Round 7 (H100 SXM) measured the atom at 32.00 at N ≥ 64, the FP32 add at
+  33.5 and F2FP e4m3x2 at 66.7 per instruction, and H_32 per class with c = 32 (legacy k8 at 34.0).
 - **Vectors.** `tests/vectors/fp8_is.json` (from `tests/fp8_is_vectors.py`): both layers on a test instance and
   `d2-draft` at k = 8,192. The core is checked against the total FP8 step and numpy's float32 running sum, and D-2's
   exact algebra (before any rounding) against A·Bᵀ.

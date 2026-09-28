@@ -23,10 +23,11 @@ W1 price per element.  Two instances:
 - ``fpncp-v0`` (`FpNcpV0`): C-2's FP-NCP forming as posted, every FP32 operation fixed.  Refuted (X-D1-1, X-C2-B1):
   kept as the negative control that reproduces both attacks.
 - ``d2-draft`` (`D2Draft`): track D's D-2 structure, operands formed by checked FP8 Hadamard-transform atoms over E4M3
-  noise codes, with the noise-code distribution a placeholder (`MaxRelativeCodes`) that track D's repair replaces.
+  noise codes, with a placeholder noise-code distribution (`MaxRelativeCodes`).  D-2 fell in Phase 17b (X-D2-1 … 8);
+  it stays as the worked example of a layer with checked forming words.
 
-Neither certificate names a γ_0: the core's premise (`DistinctLive` of the forming layer) is refuted for the first and
-not established for the second.
+The main line is repaired C-2 (track D's D-3): a new `Forming` that drops in beside these, the core unchanged.  No
+certificate names a γ_0: the core's premise (`DistinctLive` of the forming layer) is refuted for both layers here.
 """
 
 from __future__ import annotations
@@ -64,12 +65,14 @@ def e4m3_row(row: bytes, k: int) -> list[int] | None:
     return list(row)
 
 
-def cell_words(x: Sequence[int], y: Sequence[int]) -> tuple[list[int], list[int]]:
-    """One output cell's checked words over the stacked depth: ``([I_1 … I_T], [R_2 … R_T])``."""
+def cell_words(x: Sequence[int], y: Sequence[int], seed: int | None = None) -> tuple[list[int], list[int | None]]:
+    """One output cell's words over the stacked depth: ``([I_1 … I_T], [R_1 … R_T])``.  Unseeded, R_0 = +0 and R_1 = I_1
+    is not a checked word (``None``); seeded, R_0 is the salt word ``seed`` and R_1 = add(R_0, I_1) is checked."""
     if not x or len(x) != len(y) or len(x) % SLICE:
         raise DomainError(f"the stacked depth is a positive multiple of {SLICE}")
     atoms = [ATOM.step(0, x[s:s + SLICE], y[s:s + SLICE]) for s in range(0, len(x), SLICE)]
-    r, running = atoms[0], []
+    r = atoms[0] if seed is None else fp32.add(seed, atoms[0])
+    running: list[int | None] = [None if seed is None else r]
     for i in atoms[1:]:
         r = fp32.add(r, i)
         running.append(r)
@@ -92,21 +95,25 @@ def f32_float(word: int) -> float:
 
 @dataclass(frozen=True, slots=True)
 class Stack:
-    """A tile's stacked operands (``x[i]`` row i of X̃, ``y[j]`` column j of Ỹ, ``blocks * k`` E4M3 codes each) and the
-    forming layer's checked words for each of those rows and columns, serialized."""
+    """A tile's stacked operands (``x[i]`` row i of X̃, ``y[j]`` column j of Ỹ, ``blocks * k`` E4M3 codes each), the
+    forming layer's checked words for each of those rows and columns, serialized, and, for a seeded layer, each cell's
+    R_0 salt word."""
 
     x: list[list[int]]
     y: list[list[int]]
     trace_x: list[bytes]
     trace_y: list[bytes]
+    seeds: list[list[int]] | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class Checked:
-    """A tile's checked values: the forming layer's words (serialized) and the core's ``cells[i][j] = ([I_τ], [R_τ, τ >= 2])``."""
+    """A tile's checked values: the forming layer's words (serialized) and the core's ``cells[i][j] = ([I_τ], [R_τ])``
+    (R_1 is ``None`` when unseeded), with the seeds they started from."""
 
     trace: bytes
-    cells: list[list[tuple[list[int], list[int]]]]
+    cells: list[list[tuple[list[int], list[int | None]]]]
+    seeds: list[list[int]] | None = None
 
 
 # ---- the forming layer ----------------------------------------------------------------------------------------------
@@ -119,6 +126,9 @@ class Forming(Protocol):
     name: str
     #: The number of stacked blocks (K = blocks·k).
     blocks: int
+    #: Whether `form` gives every cell a salt word R_0 for the running accumulator (then R_1 = add(R_0, I_1) is checked);
+    #: an unseeded layer starts from +0, and R_1 = I_1 is dropped.
+    seeded: bool
     #: W1 units (MH100 nominal) per operand element of the honest forming trace, for an A row and for a B row.
     units: tuple[int, int]
     #: The part of ``units`` spent writing the layer's own checked words, which a lower bound may credit.
@@ -250,6 +260,7 @@ class FpNcpV0:
 
     name = "fpncp-v0"
     blocks = 3
+    seeded = False
     units = (sum(u for _, u in FPNCP_V0_TRACE),) * 2
     credited = (0, 0)
     P_SEED = b"verity/pouw/fp8-is/P/v0"
@@ -367,7 +378,7 @@ class MaxRelativeCodes:
 
 
 class D2Draft:
-    """D-2 (track D): every NCP block's operand is formed by checked FP8 Hadamard transforms, with the noise entering the
+    """D-2 (track D; fell in Phase 17b, kept as the worked example of checked forming words): every NCP block's operand is formed by checked FP8 Hadamard transforms, with the noise entering the
     atoms as E4M3 codes, so no elementwise A + E is ever computed.  Per operand row and 32-entry group g:
 
         left  (A row, scale α = 1/8):   U_1 = Q(α[A|E1]H),  U_2 = Q(α[A|E2]H),  U_3 = Q(−α[A|E1|E2]H)      E2_l = E1_(π(l))
@@ -387,6 +398,7 @@ class D2Draft:
 
     name = "d2-draft"
     blocks = 3
+    seeded = False
     P_SEED = b"verity/pouw/fp8-is/d2/P"
 
     def __init__(self, sampler: MaxRelativeCodes | None = None, a_max: int = 0x68, b_max: int = 0x60):
@@ -446,17 +458,19 @@ FORMINGS = {FpNcpV0.name: FpNcpV0, D2Draft.name: D2Draft}
 # ---- the scheme -----------------------------------------------------------------------------------------------------
 
 class FP8IS:
-    """Fresh-step split-K FP8 on the H100 over a forming layer.  The lead domain is 64 | m, 8 | n, 32 | k and
-    8,192 <= m, k, n <= 2^16, on 64 x 8 tiles (one physical m64n8 atom per slice); smaller bounds or tiles make a test
-    instance.  No certificate names a γ_0 yet (``PROTOCOL.md``)."""
+    """Fresh-step split-K FP8 on the H100 over a forming layer.  The lead domain is 64 | m, 64 | n, 32 | k and
+    8,192 <= m, k, n <= 2^16, on 64 x 64 tiles: one m64n64k32 atom per slice, since Round 7 measured the atom at 32 per
+    word only at N >= 64 (m64n8 runs at 22% of peak).  Smaller bounds or tiles make a test instance.  No certificate names
+    a γ_0 yet (``PROTOCOL.md``)."""
 
-    def __init__(self, forming: Forming | None = None, mnk_min: int = 8192, tile: tuple[int, int] = (64, 8)):
-        self.forming = forming if forming is not None else D2Draft()
+    def __init__(self, forming: Forming, mnk_min: int = 8192, tile: tuple[int, int] = (64, 64)):
+        self.forming = forming
         self.mnk_min, self.tile = mnk_min, tile
-        self.name = f"{PREFIX}-{self.forming.name}"
-        self.credit = self.forming.blocks * (ATOM_UNITS + FADD_UNITS) // SLICE     # core W1 units per useful MAC
-        (f_a, f_b), (c_a, c_b) = self.forming.units, self.forming.credited
-        core = self.credit * mnk_min - FADD_UNITS                                  # per N² at m = n = k = N
+        self.name = f"{PREFIX}-{forming.name}"
+        self.credit = forming.blocks * (ATOM_UNITS + FADD_UNITS) // SLICE          # core W1 units per useful MAC
+        self.dropped = 0 if forming.seeded else FADD_UNITS                           # R_1's FADD, per output cell
+        (f_a, f_b), (c_a, c_b) = forming.units, forming.credited
+        core = self.credit * mnk_min - self.dropped                                  # per N² at m = n = k = N
         self.certificate = Certificate(
             conjecture="tt-fp8-h100-core",
             gamma0=None,
@@ -465,35 +479,35 @@ class FP8IS:
             theorems=("Pouw.Proofs.theorem1", "Pouw.Proofs.workWeightedSampling", "Pouw.Proofs.endToEnd"),
             hypotheses=(
                 "H_32: every MH100 writer, mma.sync small-K shapes, sparse wgmma, b1 paths and memory-side reductions "
-                "included, costs at least the honest atom per 32-bit word it writes (PROTOCOL.md)",
+                "included, costs at least the honest atom per 32-bit word it writes (PROTOCOL.md; Round 7: per class, c = 32)",
                 "DistinctLive(γ_0): for every admitted input, all but a γ_0 fraction of the credited checked words are "
                 "salt-dependent and pairwise distinct as functions of the salt (a property of the forming layer)",
                 "A2_fp: data-dependent control flow, routing and grinding do not beat the per-word count",
                 "AdmitsRef: H_ref runs within wref on an H100",
             ),
             allowances=(
-                f"forming layer {self.forming.name}: DistinctLive is refuted (fpncp-v0: X-D1-1, X-C2-B1) or not established "
-                "(d2-draft: placeholder noise codes); γ_0 is withheld until a repaired layer lands",
-                "forming prices are MH100 nominal; the E4M3 conversion and SWAR rates are unmeasured",
+                f"forming layer {forming.name}: DistinctLive is refuted (fpncp-v0: X-D1-1, X-C2-B1; d2-draft: X-D2-4, "
+                "X-D2-5); γ_0 is withheld until the repaired layer (D-3) lands",
+                "prices are MH100 nominal; Round 7 measured the FP32 add at 33.5 and F2FP e4m3x2 at 66.7 per instruction",
             ),
-            parameters=(("mnk_min", mnk_min), ("tile_m", tile[0]), ("tile_n", tile[1]), ("blocks", self.forming.blocks),
-                        *self.forming.parameters),
+            parameters=(("mnk_min", mnk_min), ("tile_m", tile[0]), ("tile_n", tile[1]), ("blocks", forming.blocks),
+                        ("seeded", int(forming.seeded)), *forming.parameters),
         )
 
     def check(self, matmul: Matmul) -> None:
         s, lo = matmul.shape, self.mnk_min
-        if s.m % 64 or s.n % 8 or s.k % SLICE or not all(lo <= v <= 1 << 16 for v in (s.m, s.k, s.n)):
-            raise DomainError(f"{self.name}: {s} is outside 64 | m, 8 | n, 32 | k, {lo} <= m, k, n <= 2^16")
+        if s.m % 64 or s.n % 64 or s.k % SLICE or not all(lo <= v <= 1 << 16 for v in (s.m, s.k, s.n)):
+            raise DomainError(f"{self.name}: {s} is outside 64 | m, 64 | n, 32 | k, {lo} <= m, k, n <= 2^16")
         self.forming.check(s)
 
     def tiles(self, shape: Shape) -> list[Tile]:
         return grid_tiles(shape, *self.tile)
 
     def wref(self, shape: Shape) -> int:
-        """The core (an atom word per cell per slice, and an FADD for every slice after the first) plus the forming trace
-        on both sides.  The weight side is charged once per matmul; sharing it across matmuls is not credited."""
+        """The core (an atom word per cell per slice, and an FADD per slice, less R_1's when unseeded) plus the forming
+        trace on both sides.  The weight side is charged once per matmul; sharing it across matmuls is not credited."""
         f_a, f_b = self.forming.units
-        core = self.credit * shape.wmm - FADD_UNITS * shape.m * shape.n
+        core = self.credit * shape.wmm - self.dropped * shape.m * shape.n
         return core + f_a * shape.m * shape.k + f_b * shape.n * shape.k
 
     def noise(self, ctx: Context):
@@ -506,22 +520,30 @@ class FP8IS:
             return None
         if any(r is None or not self.forming.admits(r, False) for r in b):
             return None
-        return self.forming.form(ctx, noise, a, b, tile)
+        ops = self.forming.form(ctx, noise, a, b, tile)
+        if (ops.seeds is not None) != self.forming.seeded:
+            raise DomainError(f"{self.forming.name}: a seeded layer gives every cell an R_0, an unseeded one none")
+        return ops
 
     def admissible(self, ctx: Context, ops: Stack) -> bool:
         return True
 
     def checked(self, ctx: Context, ops: Stack) -> Checked:
         """The forming words of the tile's rows then columns, and each cell's core words (`cell_words`)."""
-        return Checked(b"".join(ops.trace_x + ops.trace_y), [[cell_words(x, y) for y in ops.y] for x in ops.x])
+        seed = (lambda i, j: ops.seeds[i][j]) if ops.seeds is not None else (lambda i, j: None)
+        cells = [[cell_words(x, y, seed(i, j)) for j, y in enumerate(ops.y)] for i, x in enumerate(ops.x)]
+        return Checked(b"".join(ops.trace_x + ops.trace_y), cells, ops.seeds)
 
     def digest(self, ctx: Context, noise, checked: Checked) -> bytes:
         cells = [cell for row in checked.cells for cell in row]
         steps = len(cells[0][0]) if cells else 0
-        words = b"".join(struct.pack("<I", atoms[t]) + (struct.pack("<I", running[t - 1]) if t else b"")
+        words = b"".join(struct.pack("<I", atoms[t]) + (b"" if running[t] is None else struct.pack("<I", running[t]))
                          for t in range(steps) for atoms, running in cells)
         return hashlib.shake_256(f"verity/pouw/{self.name}/tile".encode() + b"\0" + checked.trace + words).digest(32)
 
     def useful(self, ctx: Context, noise, ops: Stack, checked: Checked) -> list[list[float]]:
-        """R_T per cell as its FP32 value (≈ α_i·β_j·(A·Bᵀ)_ij for fpncp-v0, ≈ (A·Bᵀ)_ij for d2-draft)."""
-        return [[f32_float(running[-1] if running else atoms[0]) for atoms, running in row] for row in checked.cells]
+        """R_T per cell as its FP32 value, less the seed (one add.rn.f32, glue) for a seeded layer."""
+        def out(i: int, j: int, atoms: list[int], running: list[int | None]) -> float:
+            last = running[-1] if running[-1] is not None else atoms[0]
+            return f32_float(last if checked.seeds is None else fp32.add(last, fp32.neg(checked.seeds[i][j])))
+        return [[out(i, j, *cell) for j, cell in enumerate(row)] for i, row in enumerate(checked.cells)]
