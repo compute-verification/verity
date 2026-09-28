@@ -116,6 +116,52 @@ is 14.4 MB. `params.LEAN_P3_MEETS` (`wc = 37`) is the instance Lean's `p3_meets`
    about 1.5% of honest 132-answer audits fail on the host clock (POUS `docs/p3-gpu-measurements.md`). The network
    allowance defaults to 0 until the verifier's RTT is measured.
 
+## The generic protocol (`protocol`, `schemes`)
+
+The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
+
+- **What a scheme supplies.** It implements `encode_segment(salt, s, w_seg)` and `decode_segment(salt, s, blocks)`, and
+  overrides `respond` only if an honest answer is more than the stored block. It also sets `id` (its byte-format
+  string), `backend` (its reference primitives) and `certificate`.
+- **The registry.** `schemes.get(id, segments)` returns a registered scheme at its own parameters:
+  - `band-chain/d12/v1`, the default;
+  - `dense-chain/v1`;
+  - `p3/v1`.
+- **`protocol.Certificate`** is what an audit at the scheme's parameters establishes, Lean's
+  `Meets S .sequential D Q k ε`. It holds:
+  - `k`, `rounds` (D), `work` (Q), `call_ns`, `rho`, `delta`, `eps_log2`;
+  - `cliff`: the most rounds the structure tolerates at any `k`;
+  - `segments`: how many segments of `W` the theorem is about;
+  - `theorem`, and its open `hypotheses`;
+  - `claims`: ids in `verity.claims`' format.
+
+  At the frozen point, the band is `band_meets_64` given `ChainExPostFactoG`: k 111, D 5, Q 2^20, 483 µs, cliff at
+  `d`, one segment. Dense is `chain_meets_64` given `ChainExPostFacto`, with no cliff. P3 has no certificate, since
+  Lean's P3 `Meets` is about a random-oracle `H`.
+- **`protocol.Verifier`** is `audit.TimedVerifier` at the certificate's `k`. It refuses:
+  - a `k` below the certificate's;
+  - a deadline whose effective D (calls of `call_ns` within `Δ + RTT`) exceeds the certificate's `rounds`: for the
+    band and dense, `Δ + RTT` must stay under 2.898 ms. `TimedVerifier` alone refuses only past the band's cliff, at
+    6.279 ms;
+  - a scheme with no certificate at its parameters.
+
+  `research=True` runs such an audit anyway, except past the cliff.
+- **`protocol.StorageProfile`** is what an accepted audit establishes: a server whose state held fewer than
+  `⌊rho · |C|⌋` bits passes with probability at most `delta + 2^eps_log2`, by the certificate. It also lists the
+  `gaps`, where the certificate does not cover the audit: a refusal run with `research=True`, or more segments of `W`
+  than the theorem is about. The headline `band_meets_64` is about one segment; the 14 GB multi-segment form is the
+  next item. `to_json` writes `verity-pous/storage-profile/v1`.
+- **The rest:**
+  - `protocol.verifier_key(scheme, commitment, salt, mode=PRIVATE or PUBLIC, w=..., encoded=...)` builds `vk`
+    either way;
+  - `commit`, `draw_salt`, `encode`, `decode`, `decode_tensor`, `challenge_key` and `responder` wrap the modules
+    below;
+  - every coin comes from `verity.randomness` through `setup` and `audit`, and a scheme draws none.
+- **Claims.** `protocol.claim(id)` resolves an id from `verity.claims`, or from `protocol.LOCAL_CLAIMS` until core holds
+  it: `ideal-permutation`, `perfect-isolation`, `sequential-step-floor`, `feistel-indifferentiability`.
+- **Tests.** `tests/test_pous_protocol.py` runs one conformance suite over every scheme, plus a toy that implements
+  only the two methods.
+
 ## API
 
 | Module | What it holds |
@@ -133,6 +179,8 @@ is 14.4 MB. `params.LEAN_P3_MEETS` (`wc = 37`) is the instance Lean's `p3_meets`
 | `verifier` | `VerifierKey` (`root` and leaf digests; `build`, `from_leaves`, `from_segments`), `leaf_hash` (whole or chunked blocks), `segment_leaves`, `MerkleTree` (audit paths), `verify_path` |
 | `audit` | `challenge_key`, `HonestResponder`, `TimedVerifier` and `run_timed` (wall clock; `respond` may return `(block, report)`, kept in `Answer.report`), `simulate` (oracle rounds); `k` and the adversary's call time default to the parameters' own (band and dense: 111 and 483 µs); `TimedVerifier` refuses a band deadline past the cliff |
 | `adversary` | holdings (Lean `ColState`), `schedule`, `answer_prog`, strategies, `measure`; `col_round` is Lean's `colRound` |
+| `protocol` | the generic protocol: `Scheme` (abstract), `Certificate`, `Verifier` (refuses what its certificate doesn't cover), `StorageProfile`, `PRIVATE`/`PUBLIC`, `verifier_key`, `commit`, `draw_salt`, `encode`, `decode`, `decode_tensor`, `challenge_key`, `responder`, `claim`, `LOCAL_CLAIMS` |
+| `schemes` | `Band`, `Dense`, `P3` as `protocol.Scheme`s with their certificates; `SCHEMES`, `DEFAULT` (`band-chain/d12/v1`), `get(id, segments)` |
 
 **Large `W`.** Nothing above the codec holds `W` as one integer: encode each segment with `scheme.encode_segment` (the
 segments are independent, so a process pool works), feed the results to `VerifierKey.from_segments`, or pass them to

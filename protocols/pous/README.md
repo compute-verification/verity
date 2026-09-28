@@ -37,6 +37,23 @@ result = audit.run_timed(v, blocks.__getitem__)
 For dense, use `dense.POINT_64K` and `dense.reference`; for P3, `params.OPERATING_POINT` and `primitives.reference`.
 Everything else is the same.
 
+The same lifecycle through the generic protocol. A scheme implements only `encode_segment` and `decode_segment`, and
+the verifier refuses any `k` or deadline its certificate doesn't cover:
+
+~~~python
+from verity_pous import protocol, schemes
+
+scheme = schemes.get("band-chain/d12/v1", segments=layout.params.segments)   # or schemes.Band(layout.params)
+commitment = protocol.commit(scheme, w)
+salt = protocol.draw_salt(verifier_secret, commitment)
+C = protocol.encode(scheme, w, salt)                                           # server
+vk = protocol.verifier_key(scheme, commitment, salt, w=w)                      # PRIVATE: the verifier encodes
+# vk = protocol.verifier_key(scheme, commitment, salt, mode=protocol.PUBLIC, encoded=C)   # the same guarantee
+v = protocol.Verifier(scheme, vk, protocol.challenge_key(audit_secret, vk), rtt_allowance_ns=rtt)
+v.run(protocol.responder(scheme, blocks.__getitem__))
+print(v.profile().statement())                                                 # band_meets_64, given ChainExPostFactoG
+~~~
+
 Tests: `uv run pytest protocols/pous` (about 8 s). P3's 64 KB-label segment vector runs with `VERITY_POUS_SLOW=1`.
 Regenerate the vectors with `python protocols/pous/tests/pous_vectors.py`, and the Lean vectors with
 `tests/lean/generate.sh`.
