@@ -26,8 +26,12 @@ Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for 
 
     pytest          `suites.py`'s own: a suite's pass is reused while its declared inputs are unchanged (`--no-cache` passes
                     `--fresh`)
-    circuit-check   `circuit-check --cache`: a report is reused when every file, directory listing and existence probe the
-                    recorded run made is unchanged, with the checker's own version (`circuit_check.cache`)
+    circuit-check   `circuit-check --cache`, per target: a target's result is reused when every file, directory listing,
+                    existence probe and loaded library its process read is unchanged, with the checker's own version; one after
+                    a read the tracer cannot see (a program it starts) is not stored (`circuit_check.cache`)
+    lean-audit      per package (`lean_audit.py`): a pass is reused while the package, its path dependencies, `tools/lean/`
+                    and its toolchain and manifest are unchanged; a miss is audited on a scratch tree holding only those, so a
+                    read outside them fails there; fetched dependencies stay warm on the machine under manifest + toolchain
     lean-agreement  a pass is reused when everything the job reads is the same (`agreement_key`: backends/flock/verifier/'s
                     tracked files, which pin the upstream build and inputs, the interpreter, the environment)
 
@@ -111,7 +115,7 @@ def agreement_files(out: Path) -> dict[str, Path]:
     return found
 
 
-def lean_steps(out: Path) -> list[tuple[str, list[str] | str, Path]]:
+def lean_steps(out: Path, cache: bool = True) -> list[tuple[str, list[str] | str, Path]]:
     """The Lean steps: nothing on a tree without the verifier (a skip, named); then `lake build`, the Lean partition check's
     conformance with `verity.ir.partition` (`unit_cut_agree.py`), the audit of every Lean package, and the agreement job
     against upstream's Rust verifier on the pinned upstream build (`upstream.json`) when the run has it; without it that step
@@ -132,8 +136,9 @@ def lean_steps(out: Path) -> list[tuple[str, list[str] | str, Path]]:
     return [("lean-build", ["bash", "-c", ELAN + "lake build"], lean),
             ("lean-unit-cut", [sys.executable, str(FLOCK_VERIFIER / "unit_cut_agree.py"), "--lean", str(verify),
                                "--out", str(out / "lean-unit-cut")], ROOT),
-            ("lean-audit", [sys.executable, str(ROOT / "tools" / "lean" / "audit.py"), "--all", "--build", "--root", str(ROOT),
-                            "--out", str(out / "lean-audit")], ROOT),
+            ("lean-audit", [sys.executable, str(ROOT / "tools" / "check" / "lean_audit.py"), "--out", str(out / "lean-audit"),
+                            "--cache", str(cache_dir() / "lean-audit"), "--deps", str(cache_dir() / "lean-deps"),
+                            *([] if cache else ["--fresh"])], ROOT),
             ("lean-agreement", agreement, ROOT)]
 
 
@@ -280,7 +285,7 @@ def groups(out: Path, n: int, cache: bool = True) -> list[list[tuple[str, list[s
               "--skip", "verity-vllm", *commit, "--jobs", str(a), *([] if cache else ["--fresh"])]
     cc = [py, "-m", "circuit_check", "--all", "-q", "--jobs", str(b), "--out", str(out / "circuit-check.json"),
           *(["--cache", str(cache_dir() / "circuit-check")] if cache else [])]
-    return [[("pytest", pytest, ROOT)], [("circuit-check", cc, ROOT)], lean_steps(out)]
+    return [[("pytest", pytest, ROOT)], [("circuit-check", cc, ROOT)], lean_steps(out, cache)]
 
 
 def steps(out: Path, n: int = 1) -> list[tuple[str, list[str] | str, Path]]:

@@ -2,8 +2,10 @@
 
 A cached run records, under the repository root: every file it opened for reading and every directory it listed (an audit
 hook on ``open``, ``os.listdir`` and ``os.scandir``, in forked workers too), every path it only probed (``os.stat``: whether it
-was a file, a directory or absent), and the source file of every module it imported (Python may read a module's bytecode
-without opening its source).  Beside them the key holds the checker's own version (the
+was a file, a directory or absent), the source file of every module it imported (Python may read a module's bytecode
+without opening its source), and every library built in the tree that it loaded (``ctypes.dlopen``: by its bytes).  What it
+cannot see (a program it starts: ``subprocess``, ``os.system``, ``exec``, ``posix_spawn``) makes the process's later results
+uncacheable (`untraced`), so none is stored on reads the tracer missed.  Beside them the key holds the checker's own version (the
 digest of this package's sources), the interpreter, the platform, the installed distributions, the request, and the
 ``VERITY_*`` / ``CIRCUIT_CHECK_*`` environment.  A later run with the same key reuses the report only if every recorded file
 has the same sha256 and every recorded directory the same listing, so a hit means identical inputs.  The tree is git's
@@ -24,8 +26,12 @@ from pathlib import Path
 from typing import Any
 
 SCHEMA = "circuit-check-cache/v1"
-_READS: dict[str, set[str]] = {"files": set(), "dirs": set(), "probes": set()}
+_READS: dict[str, set[str]] = {"files": set(), "dirs": set(), "probes": set(), "libs": set()}
 _ROOT: list[Path] = []
+#: what the tracer cannot see: a program started from here, or a repository library loaded by the dynamic loader
+UNTRACEABLE = ("subprocess.Popen", "os.system", "os.exec", "os.posix_spawn", "os.spawn")
+_UNTRACED: list[str] = []
+_INTERNAL: list[bool] = []
 
 
 def _sha_file(p: Path) -> str:
@@ -53,7 +59,11 @@ def visible(root: Path) -> tuple[frozenset[str], frozenset[str]] | None:
             argv = ["git", "--git-dir", str(root.parent.parent / "git" / "verity.git"), "ls-tree", "-r", "-z", "--name-only", tree]
         else:
             argv = None
-        r = subprocess.run(argv, capture_output=True) if argv else None
+        _INTERNAL.append(True)
+        try:
+            r = subprocess.run(argv, capture_output=True) if argv else None
+        finally:
+            _INTERNAL.pop()
         if r is None or r.returncode:
             _VISIBLE[root] = None
         else:
@@ -95,6 +105,10 @@ def _hook(event: str, args: tuple) -> None:
     elif event in ("os.listdir", "os.scandir"):
         if (rel := _rel(args[0] if args and args[0] is not None else ".")) is not None:
             _READS["dirs"].add(rel)
+    elif event in UNTRACEABLE and not _INTERNAL:
+        _UNTRACED.append(f"{event} {str(args[0] if args else '')[:120]}")
+    elif event == "ctypes.dlopen" and args and args[0] and (rel := _rel(args[0])) is not None:
+        _READS["libs"].add(rel)                        # a library built in the tree: an input by its bytes (`_digests`)
 
 
 def _probing(fn):
@@ -118,6 +132,11 @@ def tracing() -> bool:
     return bool(_ROOT)
 
 
+def untraced() -> list[str]:
+    """What this process did that the tracer cannot see (a verdict after it is not stored)."""
+    return list(_UNTRACED)
+
+
 def reads() -> dict[str, list[str]]:
     """The files and directories read so far, the imported modules' sources included."""
     files = set(_READS["files"])
@@ -125,7 +144,8 @@ def reads() -> dict[str, list[str]]:
         f = getattr(m, "__file__", None)
         if f and (rel := _rel(f)) is not None:
             files.add(rel)
-    return {"files": sorted(files), "dirs": sorted(_READS["dirs"]), "probes": sorted(_READS["probes"] - files - _READS["dirs"])}
+    return {"files": sorted(files), "dirs": sorted(_READS["dirs"]), "probes": sorted(_READS["probes"] - files - _READS["dirs"]),
+            "libs": sorted(_READS["libs"])}
 
 
 def version() -> str:
@@ -141,8 +161,13 @@ def version() -> str:
 def key(request: dict) -> dict:
     from importlib import metadata
 
+    _INTERNAL.append(True)                             # the tracer's own work (`platform` runs `uname`): no input of a check
+    try:
+        plat = platform.platform()
+    finally:
+        _INTERNAL.pop()
     dists = sorted(f"{d.metadata['Name']}=={d.version}" for d in metadata.distributions())
-    return {"schema": SCHEMA, "version": version(), "request": request, "python": sys.version, "platform": platform.platform(),
+    return {"schema": SCHEMA, "version": version(), "request": request, "python": sys.version, "platform": plat,
             "distributions": hashlib.sha256("\n".join(dists).encode()).hexdigest(),
             "environment": {k: v for k, v in sorted(os.environ.items()) if k.startswith(("VERITY_", "CIRCUIT_CHECK_"))}}
 
@@ -156,14 +181,31 @@ def _digests(root: Path, got: dict[str, list[str]]) -> dict[str, dict[str, str |
     a build inside the tree) counts as absent: derived from what git has, it is not an input of its own."""
     v = visible(root)
     seen = (lambda r: True) if v is None else (lambda r: r in v[0] or r in v[1])
-    files = {r: (_sha_file(root / r) if seen(r) and (root / r).is_file() else None) for r in got["files"]}
-    dirs = {r: (_listing(root, r) if seen(r) and (root / r).is_dir() else None) for r in got["dirs"]}
-    return {"files": files, "dirs": dirs, "probes": {r: (_kind(root / r) if seen(r) else None) for r in got.get("probes", [])}}
+
+    def memo(kind: str, r: str, fn):
+        k = (str(root), kind, r)                    # a run changes none of its inputs: each is read once per process
+        if k not in _MEMO:
+            _MEMO[k] = fn()
+        return _MEMO[k]
+
+    files = {r: memo("f", r, lambda r=r: _sha_file(root / r) if seen(r) and (root / r).is_file() else None) for r in got["files"]}
+    dirs = {r: memo("d", r, lambda r=r: _listing(root, r) if seen(r) and (root / r).is_dir() else None) for r in got["dirs"]}
+    probes = {r: memo("p", r, lambda r=r: _kind(root / r) if seen(r) else None) for r in got.get("probes", [])}
+    # a library the dynamic loader mapped is git-ignored (built from its source here), so it counts by its bytes
+    libs = {r: memo("l", r, lambda r=r: _sha_file(root / r) if (root / r).is_file() else None) for r in got.get("libs", [])}
+    return {"files": files, "dirs": dirs, "probes": probes, "libs": libs}
+
+
+_MEMO: dict[tuple[str, str, str], str | None] = {}
+
+
+def _dir(cache: Path, k: dict) -> Path:
+    return Path(cache) / k["version"] / hashlib.sha256(json.dumps(k, sort_keys=True, default=str).encode()).hexdigest()[:32]
 
 
 def lookup(cache: Path, k: dict, root: Path) -> tuple[dict, str] | None:
     """(report, entry id) of an entry with key ``k`` whose every recorded read is unchanged under ``root``, else None."""
-    d = Path(cache) / k["version"]
+    d = _dir(cache, k)
     if not d.is_dir():
         return None
     for p in sorted(d.glob("*.json")):
@@ -184,7 +226,7 @@ def store(cache: Path, k: dict, root: Path, got: dict[str, list[str]], report: d
     e = {"key": k, "reads": _digests(root, got), "report": report}
     body = json.dumps(e, sort_keys=True, separators=(",", ":"), default=str)
     eid = hashlib.sha256(body.encode()).hexdigest()
-    d = Path(cache) / k["version"]
+    d = _dir(cache, k)
     d.mkdir(parents=True, exist_ok=True)
     tmp = d / f".{eid}.tmp"
     tmp.write_text(body)
@@ -192,4 +234,4 @@ def store(cache: Path, k: dict, root: Path, got: dict[str, list[str]], report: d
     return eid
 
 
-__all__ = ["SCHEMA", "key", "lookup", "reads", "store", "trace", "tracing", "version"]
+__all__ = ["SCHEMA", "UNTRACEABLE", "key", "lookup", "reads", "store", "trace", "tracing", "untraced", "version"]

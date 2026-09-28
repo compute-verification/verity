@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -43,9 +44,14 @@ def _one(kind: str, label: str, fn: Callable[[], dict]) -> dict:
     return {**r, "kind": kind, "target": label, "seconds": round(time.time() - t0, 3)}
 
 
-def _work(i: int) -> tuple[int, dict, dict]:
+def _work(i: int) -> tuple[int, dict, dict, list[str]]:
     kind, label, fn = _TASKS[i]
-    return i, _one(kind, label, fn), CC.reads()
+    r = _one(kind, label, fn)
+    return i, r, CC.reads(), CC.untraced()
+
+
+def target_key(kind: str, label: str, opts: CK.Options, as_call: bool | None) -> dict:
+    return CC.key({"target": [kind, label], "as_call": as_call, "options": {k: getattr(opts, k) for k in opts.__dataclass_fields__}})
 
 
 def _tasks(specs: list[str], opts: CK.Options, everything: bool, as_call: bool | None) -> list[tuple[str, str, Callable[[], dict]]]:
@@ -80,34 +86,57 @@ def _init(specs: list[str], opts: CK.Options, everything: bool, as_call: bool | 
 
 
 def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call: bool | None = None, log=print, jobs: int = 1,
-        reads: dict | None = None) -> dict:
+        cache: Path | None = None) -> dict:
     """Every target's checks, in target order; ``jobs`` > 1 runs them in that many worker processes, each started from a fresh
     forkserver (never a fork of this possibly multi-threaded process: under pytest-xdist that deadlocked) and rebuilding the
-    task list with its own memo, so a worker may repeat a Definition another checked: the results are the same.  ``reads``
-    collects what the workers read."""
+    task list with its own memo, so a worker may repeat a Definition another checked: the results are the same.
+
+    With ``cache`` each target's result is reused while everything its check read is unchanged (`circuit_check.cache`). A
+    result is stored with every read its process made up to it (the task list, the modules it imported, the earlier targets
+    whose memoized results it may use), and not at all once that process did something the tracer cannot see."""
+    tracing = cache is not None and CC.tracing()
     tasks = _tasks(specs, opts, everything, as_call)
     out: list[dict | None] = [None] * len(tasks)
+    keys = [target_key(kind, label, opts, as_call) for kind, label, _ in tasks] if tracing else []
+    stats = {"hits": 0, "stored": 0, "untraced": []}
 
-    def done(i: int, r: dict) -> None:
+    def done(i: int, r: dict, got: dict | None = None, untraced: list[str] | None = None) -> None:
         out[i] = r
+        if tracing and got is not None:
+            if untraced:
+                stats["untraced"].append({"target": r["target"], "because": untraced[:3]})
+            else:
+                CC.store(cache, keys[i], REPO, got, r)
+                stats["stored"] += 1
         if log:
             log(f"{'FAIL' if r['failures'] else 'ok  '} {r['kind']:10s} {r['target'][:90]}  failures={len(r['failures'])} "
                 f"warnings={len(r['warnings'])} ({r['seconds']:.1f}s)")
 
-    if jobs > 1 and len(tasks) > 1:
+    todo = list(range(len(tasks)))
+    if tracing:
+        todo = []
+        for i, k in enumerate(keys):
+            if (hit := CC.lookup(cache, k, REPO)) is not None:
+                out[i] = {**hit[0], "cache": {"hit": hit[1]}}
+                stats["hits"] += 1
+            else:
+                todo.append(i)
+    if jobs > 1 and len(todo) > 1:
         import multiprocessing as mp
 
-        init = (specs, opts, everything, as_call, reads is not None and CC.tracing())
-        with mp.get_context("forkserver").Pool(min(jobs, len(tasks)), initializer=_init, initargs=init) as pool:
-            for i, r, got in pool.imap_unordered(_work, range(len(tasks)), chunksize=1):
-                done(i, r)
-                if reads is not None:
-                    for k2, v in got.items():
-                        reads.setdefault(k2, set()).update(v)
+        init = (specs, opts, everything, as_call, tracing)
+        with mp.get_context("forkserver").Pool(min(jobs, len(todo)), initializer=_init, initargs=init) as pool:
+            for i, r, got, untraced in pool.imap_unordered(_work, todo, chunksize=1):
+                done(i, r, got, untraced)
     else:
-        for i, (kind, label, fn) in enumerate(tasks):
-            done(i, _one(kind, label, fn))
-    return CK.report([r for r in out if r is not None], opts)
+        for i in todo:
+            kind, label, fn = tasks[i]
+            r = _one(kind, label, fn)
+            done(i, r, CC.reads() if tracing else None, CC.untraced() if tracing else None)
+    rep = CK.report([r for r in out if r is not None], opts)
+    if tracing:
+        rep["cache"] = stats
+    return rep
 
 
 def update_pins(rep: dict) -> dict:
@@ -144,29 +173,19 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("-q", "--quiet", action="store_true")
     a = ap.parse_args(argv)
     if a.cache and not a.update_pins:
+        # the registries build their C++ twins on first use (g++, untraceable): once, in a process of its own, before tracing
+        subprocess.run([sys.executable, "-c", "from circuit_check import targets; targets.load_registries()"], cwd=REPO,
+                       capture_output=True)
         CC.trace(REPO)
     if not a.targets and not a.all:
         ap.error("give a target or --all")
     jobs = a.jobs or len(os.sched_getaffinity(0))
     opts = _options(a)
-    hit = None
-    if a.cache and not a.update_pins:
-        key = CC.key({"targets": a.targets, "all": a.all, "as_call": a.as_call,
-                      "options": {k: getattr(opts, k) for k in opts.__dataclass_fields__}})
-        hit = CC.lookup(a.cache, key, REPO)
-    if hit is not None:
-        rep, eid = hit
-        rep["cache"] = {"hit": eid}
-        print(f"circuit-check: cache hit {eid[:16]}: every file, listing and probe the recorded run read is unchanged")
-    else:
-        got: dict = {}
-        rep = run(a.targets, opts, everything=a.all, as_call=True if a.as_call else None,
-                  log=None if a.quiet else lambda s: print(s, flush=True), jobs=jobs, reads=got)
-        if a.cache and not a.update_pins:
-            for k2, v in CC.reads().items():
-                got.setdefault(k2, set()).update(v)
-            eid = CC.store(a.cache, key, REPO, {k2: sorted(v) for k2, v in got.items()}, rep)
-            rep = {**rep, "cache": {"stored": eid}}
+    rep = run(a.targets, opts, everything=a.all, as_call=True if a.as_call else None,
+              log=None if a.quiet else lambda s: print(s, flush=True), jobs=jobs, cache=a.cache if a.cache and not a.update_pins else None)
+    if c := rep.get("cache"):
+        print(f"circuit-check: {c['hits']} of {len(rep['targets'])} targets reused (every file, listing and probe their checks read is "
+              f"unchanged), {c['stored']} stored, {len(c['untraced'])} not cacheable (the tracer could not see what they read)")
     if a.update_pins:
         update_pins(rep)
     s = rep["summary"]
