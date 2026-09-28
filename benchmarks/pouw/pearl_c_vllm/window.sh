@@ -48,7 +48,7 @@ p = json.load(open(sys.argv[1]))["flashinfer"]["prebuilt"]["sampling"]
 sys.exit(not (p.startswith(os.environ["FLASHINFER_WORKSPACE_BASE"] + "/") and os.path.exists(p)))' "$WORK/ready.json" \
   || fail SETUP "ready.json's FlashInfer sampling library is not in this build's cache $FLASHINFER_WORKSPACE_BASE: run setup.sh"
 export HF_HOME=${HF_HOME:-/workspace/hf}
-export PYTHONPATH=$PWD:$PWD/catalog:$PWD/kernels:$PWD/experimental:$PWD/integrations/vllm:$PWD/benchmarks/pouw
+export PYTHONPATH=$PWD:$PWD/integrations/vllm:$PWD/benchmarks/pouw
 export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES%%,*} CUDA_DEVICE_ORDER=PCI_BUS_ID
 # NVML ignores CUDA_VISIBLE_DEVICES, so every nvidia-smi query names the leased GPU by its UUID (gpu-lease's first)
 UUID=${GPU_LEASE_UUID:-}; UUID=${UUID%%,*}

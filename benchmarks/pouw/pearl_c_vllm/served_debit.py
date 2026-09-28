@@ -44,7 +44,7 @@ thread a worker (``--jobs`` defaults to the CPUs this process may use)::
   research run --on vy-nebius-2 --queue --phase cpu --cpus 44 --mem-gb 64 --preemptible --custody-r2 --custody-ttl 8h \\
       --project verity --campaign pouw --question Q --declared-output 'out/*' -- bash -c \\
       'export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \\
-         PYTHONPATH=$PWD:$PWD/catalog:$PWD/kernels:$PWD/experimental:$PWD/integrations/vllm:$PWD/benchmarks/pouw
+         PYTHONPATH=$PWD:$PWD/integrations/vllm:$PWD/benchmarks/pouw
        P=/workspace/pouw/mvp-e2e/passes/RUN_ID
        exec nice -n 19 /workspace/pouw/mvp-e2e/venv312/bin/python -u benchmarks/pouw/pearl_c_vllm/served_debit.py \\
          $P/decode/manifest.json $P/prefill/manifest.json --tiles 64 128 --out $RESEARCH_RUN_DIR/out'
