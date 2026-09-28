@@ -152,6 +152,7 @@ GUARD_ENVIRON = "/proc/1/environ"             # RunPod injects RUNPOD_POD_ID and
 DIRECT_GPUS_FILE = "/etc/vy/direct-gpus"      # the Nebius cluster's split (pods/nebius/sky/cluster_up.sh): `none` once Kueue owns every GPU
 DIRECT_CPUS_FILE = "/etc/vy/direct-cpus"      # the CPUs a direct run starts on (a cpu list, e.g. 0-95): the rest are pinned benchmarks'.
                                               # A command may still pin itself elsewhere (taskset -c 128-159 ...); absent: no default
+RUNS_VIA_SLOT_FILE = "/etc/vy/runs-via-slot"  # present: a run starts only through a check slot (pods/nebius/slot_only.py); cpu-1's
 GUARD_SCRIPT = Path(__file__).resolve().parent / "pods" / "sh" / "pod_guard.sh"
 POD_TARGET_RETRIES = 6           # extra GET /pods/{id} reads when a RUNNING pod answers without an ssh mapping
 POD_TARGET_RETRY_S = 2.0
@@ -1256,6 +1257,11 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
     remote = dict(req.get("remote") or {})
     remote["request"] = str(request_path)
     try:
+        if (marker := Path(os.environ.get("RUNS_VIA_SLOT_FILE") or RUNS_VIA_SLOT_FILE)).exists():
+            from .pods.nebius import slot_only
+
+            if not slot_only.through_slot(req["command"]):
+                raise Refused(slot_only.refusal(marker))
         if remote.get("source_sha"):              # a shipped tree executes only from a directory verified READY for the requested identity
             src_dir = remote.get("source_dir") or str(runs_root.parent / "src" / str(remote["source_sha"]))
             require_ready_source(src_dir, str(remote["source_sha"]))

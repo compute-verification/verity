@@ -75,7 +75,7 @@ if ! flock -n 9; then
   exit 0
 fi
 log() { echo "$(date -u +%FT%TZ) $*" | tee -a "$STATE/log"; }
-kube() { KUBECONFIG=$HOME/.kube/config kubectl "$@"; }
+kube() { KUBECONFIG=${KUBECONFIG:-$HOME/.kube/config} kubectl "$@"; }   # as a root unit, root.env's k3s.yaml
 # deadline MAX_S: the seconds a Job started now may run, at most MAX_S: to a minute before the quiet hour (QUIET_AT), less its grace,
 # to the second; 0 in the daily hold
 deadline() {

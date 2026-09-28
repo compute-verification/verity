@@ -321,6 +321,13 @@ def versions(srcs: list[str], *revs: str, since: str | None = None, limit: int |
     return out
 
 
+def contains(ref_commit: str, commit: str, repo: Path = REPO) -> bool:
+    """Whether `commit` is in `ref_commit`'s history: a file installed from it that differs from the ref is behind, not ahead,
+    however far back the ref's HISTORY search stops."""
+    return subprocess.run(["git", "-C", str(repo), "merge-base", "--is-ancestor", commit, ref_commit],
+                          capture_output=True).returncode == 0
+
+
 def origin_branches(commit: str, repo: Path = REPO, most: int = 3) -> list[str]:
     r = subprocess.run(["git", "-C", str(repo), "branch", "-r", "--contains", commit, "--format=%(refname:short)"],
                        capture_output=True, text=True)
@@ -378,13 +385,18 @@ def drift(node: Node, ref: str, run: Runner, repo: Path = REPO) -> dict:
             c, d = old[(rp, got["blob"])]
             state, detail = "stale", f"{ref}'s version of {c[:12]} ({d}); {ref} has changed it since: install it"
         elif rec.get("blob") == got["blob"] and rec.get("commit"):
-            state = "ahead"
-            detail = f"installed {rec.get('at')} by {rec.get('by')} from {rec.get('ref')} @ {rec['commit'][:12]}, which {ref} lacks"
+            how = f"installed {rec.get('at')} by {rec.get('by')} from {rec.get('ref')} @ {rec['commit'][:12]}"
+            if contains(commit, rec["commit"], repo):
+                state, detail = "stale", f"{how}, which {ref} holds; {ref} has changed it since: install it"
+            else:
+                state, detail = "ahead", f"{how}, which {ref} lacks"
         else:
             if recent is None:
                 recent = versions(srcs, "--remotes=origin", since=f"{AHEAD_DAYS}.days", repo=repo)
             hit = recent.get((rp, got["blob"]))
-            if hit:
+            if hit and contains(commit, hit[0], repo):
+                state, detail = "stale", f"{ref}'s version of {hit[0][:12]} ({hit[1]}); {ref} has changed it since: install it"
+            elif hit:
                 state = "ahead"
                 detail = f"commit {hit[0][:12]} ({hit[1]}) on {', '.join(origin_branches(hit[0], repo)) or 'a branch'}, not in {ref}"
             else:

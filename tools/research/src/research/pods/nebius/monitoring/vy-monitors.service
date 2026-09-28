@@ -16,5 +16,5 @@ Environment=PYTHONPATH=/usr/local/lib/vy-monitoring
 Environment=PYTHONDONTWRITEBYTECODE=1
 # VY_MONITORS_SLACK_WEBHOOK, when Slack's incoming webhook is chosen (root-only file; its value is never logged)
 EnvironmentFile=-/etc/vy/monitors.env
-ExecStartPre=+/usr/bin/install -d -o research -g research /workspace/monitoring/alerts-shadow /workspace/monitoring/monitors
-ExecStart=/usr/bin/python3 -m research.monitors run --by vy-monitors@vy-nebius-1 --where node --alerts /workspace/monitoring/alerts-shadow --state /workspace/monitoring/monitors/state-shadow.json
+ExecStartPre=+/usr/bin/install -d -o research -g research /workspace/monitoring/alerts /workspace/monitoring/monitors
+ExecStart=/usr/bin/python3 -m research.monitors run --by vy-monitors@vy-nebius-1 --where node --alerts /workspace/monitoring/alerts --state /workspace/monitoring/monitors/state.json
