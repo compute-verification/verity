@@ -24,7 +24,7 @@
     "    ((instHSub.hSub (instHAdd.hAdd T M) 1).choose M)"
    ],
    "assumptions": [],
-   "type_hash": "000000003f8e42d9"
+   "type_hash": "2c447b9406c398974e946de7d613f86c8811fdc987ca4e6f1b2a6cab00c70158"
   },
   "NetTiming.card_counts_le_le": {
    "signature": [
@@ -33,14 +33,14 @@
     "    ((instHAdd.hAdd T M).choose M)"
    ],
    "assumptions": [],
-   "type_hash": "00000000d130c156"
+   "type_hash": "15a61c3d139dc4ec4de7784d7ad54bf620741fb23c7a2c857608d370e2a2b8f5"
   },
   "NetTiming.card_free": {
    "signature": [
     "NetTiming.card_free (T S : Nat) : Eq (Fintype.card (Fin T → Fin S → Bool)) (instHPow.hPow 2 (instHMul.hMul T S))"
    ],
    "assumptions": [],
-   "type_hash": "00000000b5c0fcc2"
+   "type_hash": "a25bd24a59bb8495cab6e0e26816d83fae080b0013e159606e4f24afe3e33d12"
   },
   "NetTiming.card_leftPacked": {
    "signature": [
@@ -48,7 +48,7 @@
     "  Eq (Fintype.card (Subtype fun P => NetTiming.LeftPacked P)) (instHPow.hPow (instHAdd.hAdd S 1) T)"
    ],
    "assumptions": [],
-   "type_hash": "00000000b50305ed"
+   "type_hash": "6a970c9a31b96ac837e4336b2466428a1fa2ab2f0a081b86c8aa7d0e0f9ef6a9"
   },
   "NetTiming.encard_accSeqs_le_advice": {
    "signature": [
@@ -57,7 +57,7 @@
     "  instLEENat.le (NetTiming.AccSeqs P op n D).encard (instHMul.hMul (Fintype.card Adv) (instHPow.hPow D n)).cast"
    ],
    "assumptions": [],
-   "type_hash": "00000000a1b331f1"
+   "type_hash": "04ab340745f1422ed134fa6faeb44952b0ad86e56ec3e686372137252a3d608d"
   },
   "NetTiming.encard_accSeqs_le_blocks": {
    "signature": [
@@ -73,7 +73,7 @@
     "            ((Finset.filter (fun c => Eq (blk c) β) Finset.univ).prod fun c => Fintype.card (U c)))).cast"
    ],
    "assumptions": [],
-   "type_hash": "000000004c0ef228"
+   "type_hash": "99bd58e32d3f57242e6e3a3853cec95cd1c6b5444a0c511b23a909f2b9b2ed6a"
   },
   "NetTiming.encard_accSeqs_le_blocks_counts": {
    "signature": [
@@ -91,7 +91,7 @@
     "            (instHPow.hPow (instHAdd.hAdd S 1) (Finset.filter (fun c => Eq (blk c) β) Finset.univ).card))).cast"
    ],
    "assumptions": [],
-   "type_hash": "0000000061357c1a"
+   "type_hash": "3d87e4ed1d2613ca9cc6ecc2c61ce65a04c7b92c5654b7f3b117c674602bde24"
   },
   "NetTiming.encard_accSeqs_le_fixedClock": {
    "signature": [
@@ -100,7 +100,7 @@
     "  instLEENat.le (NetTiming.AccSeqs P op n D).encard (instHMul.hMul (Fintype.card Ac) (instHPow.hPow D n)).cast"
    ],
    "assumptions": [],
-   "type_hash": "0000000035fda5fd"
+   "type_hash": "57a7dbf8962cc87eab71c9f17f2f3af7ac0bdc4ea8e944a0a1aa8308b333ea6d"
   },
   "NetTiming.encard_accSeqs_le_sync": {
    "signature": [
@@ -110,7 +110,7 @@
     "    (instHMul.hMul (instHMul.hMul (Fintype.card Ac) (instHPow.hPow (Fintype.card Sync) W)) (instHPow.hPow D n)).cast"
    ],
    "assumptions": [],
-   "type_hash": "00000000e2115d88"
+   "type_hash": "9414ba33bb775ef1797b31e0be2a57999d95d1008638e045a2e55a3c2e7fd69b"
   },
   "NetTiming.encard_acceptedRuns_le": {
    "signature": [
@@ -131,7 +131,7 @@
     "    ((Finset.range n).prod fun t => N t).cast"
    ],
    "assumptions": [],
-   "type_hash": "00000000ac6c3b14"
+   "type_hash": "1e0a484d44569a79e80d6829cd35ea9e19712d69d104920517c3475d1eca4799"
   },
   "NetTiming.encard_decodable_le": {
    "signature": [
@@ -144,7 +144,7 @@
     "    (Set.ofPred fun o => Exists fun z => And (Eq o (I.obsRun z n)) (NetTiming.AcceptedUpTo P I.op n o)).encard"
    ],
    "assumptions": [],
-   "type_hash": "000000008d8b87fd"
+   "type_hash": "2731845b5574d40cf20615deacecd8d0b1112973b85e115e9125811642d846f1"
   },
   "NetTiming.encard_decodable_le_blocks": {
    "signature": [
@@ -164,7 +164,7 @@
     "            ((Finset.filter (fun c => Eq (blk c) β) Finset.univ).prod fun c => Fintype.card (U c)))).cast"
    ],
    "assumptions": [],
-   "type_hash": "0000000079a0e133"
+   "type_hash": "9b84dcfa6aab977c4a809d51908537627adb254fcafb5ded2130c632c049d80b"
   },
   "NetTiming.encard_fifoGrids": {
    "signature": [
@@ -172,7 +172,7 @@
     "  Eq (Set.range fun enq => NetTiming.fifoGrid T S f enq).encard (instHPow.hPow (instHAdd.hAdd S 1) T).cast"
    ],
    "assumptions": [],
-   "type_hash": "00000000a45da021"
+   "type_hash": "dc41a77c26fa0046c45e97e43af044f7d02c2f7fa2dd50f36f45aef485d71785"
   },
   "NetTiming.encard_fifoGrids_le_of_available": {
    "signature": [
@@ -184,7 +184,7 @@
     "    ((instHAdd.hAdd T M).choose M).cast"
    ],
    "assumptions": [],
-   "type_hash": "0000000035e5b9e3"
+   "type_hash": "a94b0328675595e2af2ce0aead15c64c7589395564e1a4acc5d25b68a517a3c7"
   },
   "NetTiming.encard_le_prod_of_branching": {
    "signature": [
@@ -204,7 +204,7 @@
     "  instLEENat.le Sq.encard ((Finset.range n).prod fun t => N t).cast"
    ],
    "assumptions": [],
-   "type_hash": "00000000d5af51fd"
+   "type_hash": "afe01ae89d19082be4026463f2c907606c06cb11ae069ffa243eb3259031495c"
   },
   "NetTiming.encard_obsDecodable_le": {
    "signature": [
@@ -216,7 +216,7 @@
     "    (Set.ofPred fun o => Exists fun z => And (Eq o (I.obsRun z n)) (NetTiming.AcceptedUpTo P I.op n o)).encard"
    ],
    "assumptions": [],
-   "type_hash": "00000000a563c5f9"
+   "type_hash": "7659d6c89762fc007dad0037ad261421ef38aed7c7be0fc1d895e31127096746"
   },
   "NetTiming.exists_fill_of_leftPacked": {
    "signature": [
@@ -224,12 +224,12 @@
     "  (h : NetTiming.LeftPacked (NetTiming.occ g)) : Exists fun f => Exists fun n => Eq g (NetTiming.fill f n)"
    ],
    "assumptions": [],
-   "type_hash": "00000000282c851a"
+   "type_hash": "9c33528e0b2e60296398b7d303f59b52ceb79c47438b86ec5847f7fb1c6df93d"
   },
   "NetTiming.fill_injective": {
    "signature": ["NetTiming.fill_injective {T S : Nat} {F : Type} (f : Nat → F) : Function.Injective (NetTiming.fill f)"],
    "assumptions": [],
-   "type_hash": "00000000f794e211"
+   "type_hash": "4a98e4c065e18006455c876cf457be81a37efe6396d706d0afc833c73d239264"
   },
   "NetTiming.joint_witness": {
    "signature": [
@@ -248,7 +248,7 @@
     "            (∀ (z : Fin 3 → Fin 3), Eq (NetTiming.rDec ((NetTiming.rI 3).wireRun z 3)) z)))))"
    ],
    "assumptions": [],
-   "type_hash": "000000001d5ef5c9"
+   "type_hash": "9e9d0d443fbf20f20b54c25a267d730edfac79bcf57d5013114fe3e612051b86"
   },
   "NetTiming.joint_witness_bound": {
    "signature": [
@@ -262,7 +262,7 @@
     "                Fintype.card (Fin (instHAdd.hAdd 2 1))))).cast)"
    ],
    "assumptions": [],
-   "type_hash": "000000006cf8e428"
+   "type_hash": "4e0a1896f7257c58c36db86aef1c702baa500d316e70b697a770fd48b54df2f6"
   },
   "NetTiming.no_fault_of_accepted": {
    "signature": [
@@ -273,7 +273,7 @@
     "  Not (I.warden.fault (List.instGetElemNatLtLength.getElem (I.actRun z n) i hi))"
    ],
    "assumptions": [],
-   "type_hash": "000000006ab1425d"
+   "type_hash": "d83c5b53b1496679647520bfd2d567a0b7707f55dc2b7c2573a06608a6de6a7c"
   },
   "NetTiming.recorded_row_eq_fill": {
    "signature": [
@@ -282,14 +282,14 @@
     "  Exists fun f => Exists fun c => Eq (fun x => (w.obs k xs as).rows ℓ) (NetTiming.fill f c)"
    ],
    "assumptions": [],
-   "type_hash": "000000001fe4c877"
+   "type_hash": "7ddafebdd5177b25338fc88cb35e4491ee4c507fe5e585698bd18f1f603f7d6c"
   },
   "NetTiming.released_self": {
    "signature": [
     "NetTiming.released_self (S : Nat) (n : Nat → Fin (instHAdd.hAdd S 1)) : Eq (NetTiming.released S fun t => (n t).val) n"
    ],
    "assumptions": [],
-   "type_hash": "000000000bd6b454"
+   "type_hash": "a9ca6f2aa7e7a0ed96edd8a84ce122699d350b7999f720646e85837f834efbb3"
   },
   "NetTiming.sum_released_le": {
    "signature": [
@@ -297,12 +297,12 @@
     "  instLENat.le ((Finset.range T).sum fun t => (NetTiming.released S enq t).val) ((Finset.range T).sum fun t => enq t)"
    ],
    "assumptions": [],
-   "type_hash": "00000000e5604650"
+   "type_hash": "37d3eb3a5bac2f3fee0c6b7c62c23b5bbec3a50b1f86f8307a65aac73d70f22b"
   },
   "NetTiming.toy_leftPacked": {
    "signature": ["NetTiming.toy_leftPacked : Eq (Fintype.card (Subtype fun P => NetTiming.LeftPacked P)) 729"],
    "assumptions": [],
-   "type_hash": "000000003f41fd54"
+   "type_hash": "92f5deef0dfaa89b255653779d68fd58a833fae6bd3dc228c05ddd19d70bc8de"
   },
   "NetTiming.witnessProgram_conditions": {
    "signature": [
@@ -314,7 +314,7 @@
     "      NetTiming.rowCount ((NetTiming.witnessProgram n).rows c.snd.val ins a c.fst))"
    ],
    "assumptions": [],
-   "type_hash": "000000008ae9aae7"
+   "type_hash": "760fbb68167b51d30e7343fb655d17adb9e494d2753281647e48494514d569dc"
   },
   "NetTiming.witnessProgram_timing_matters": {
    "signature": [
@@ -323,7 +323,7 @@
     "    ((NetTiming.witnessProgram 1).rows 0 List.nil { fst := Bool.true, snd := fun x => 1 })"
    ],
    "assumptions": [],
-   "type_hash": "00000000c1b7c851"
+   "type_hash": "d5212140ce592ee005398ea9c697a58cb1f754a86a109ffebcd0c4fc7ce37060"
   },
   "NetTiming.witnessWarden_assumptions": {
    "signature": [
@@ -336,7 +336,7 @@
     "            (NetTiming.JitterBounded NetTiming.witnessWarden 2)))))"
    ],
    "assumptions": [],
-   "type_hash": "00000000005db75c"
+   "type_hash": "7838ad8495eb75f1807ee5055185ef4d05b35ad1304344b99444db73f901ccc0"
   },
   "NetTiming.witnessWarden_jitter_varies": {
    "signature": [
@@ -348,7 +348,7 @@
     "        (List.cons { count := 0, jit := 1, fault := Bool.false } List.nil)).jitter"
    ],
    "assumptions": [],
-   "type_hash": "000000005ed6cc7f"
+   "type_hash": "8a51065e2cf5e9345502f2b220f18be03df9fcc0f21975385c184ecb110db2fe"
   },
   "NetTiming.zP_accepts_one": {
    "signature": [
@@ -356,7 +356,7 @@
     "  Iff (NetTiming.AcceptedUpTo (NetTiming.zP 3) NetTiming.rOp 3 ((NetTiming.rI 3).obsRun z 3)) (Eq z fun x => 0)"
    ],
    "assumptions": [],
-   "type_hash": "00000000aa8b595a"
+   "type_hash": "5da61a0904de11308cfae160cda1cce6e98e3039e4b4148a7c13c211811b5f39"
   },
   "NetTiming.zP_constOp_accepts_one": {
    "signature": [
@@ -364,21 +364,21 @@
     "  Iff (NetTiming.AcceptedUpTo (NetTiming.zP 3) (fun x x_1 => 1) 3 ((NetTiming.rI 3).obsRun z 3)) (Eq z fun x => 1)"
    ],
    "assumptions": [],
-   "type_hash": "0000000098371b90"
+   "type_hash": "50bab8b773dea8ef6341379881a664665871791f0339aeda1ea1aee2f21bc99d"
   }
  },
  "reads": {
   "NetTiming.Assumptions": {
-   "digest": "c466207400754f075e5ebe42bd340439",
+   "digest": "747f7167e0dc24ea6de0fa05ac55a06cfbae5bda05dff22423c4e8fc144bb006",
    "definitions": {
-    "NetTiming.FailClosed": "ca0315d509a1bf7c",
-    "NetTiming.FramesReadNoTimingAdvice": "9e54752f8fb20855",
-    "NetTiming.JitterBounded": "1dc053c5e0d53ab5",
-    "NetTiming.OccupancyReadsOwnBlock": "70e36795ee606665",
-    "NetTiming.Packed": "7c9a3506b76b0d0c",
-    "NetTiming.Padded": "7827ecf2171b735a",
-    "NetTiming.Regenerates": "fade0df34dbfcd3d",
-    "NetTiming.UntimedStatus": "810de05affd36a85"
+    "NetTiming.FailClosed": "535cec2704a42cf1dc9b7c2d69ce7b8dc8305857376f64e2300e02f65cc10bc6",
+    "NetTiming.FramesReadNoTimingAdvice": "fd7a18966dce0b0e94501f13840cbe1a5cd700e5872d74b49775862e57fdcd3f",
+    "NetTiming.JitterBounded": "3d7a2b39677d29793e680af09b356b1ef80f99806ef959d5079c3e45d703fd0f",
+    "NetTiming.OccupancyReadsOwnBlock": "3e0f6592aa67809f7000885433abc0a57646746fa961c9ceb71d982c21bfe373",
+    "NetTiming.Packed": "21464d3f41f87be59967c1c9d1c7860ff4a8681b380a427151db57f5821b9998",
+    "NetTiming.Padded": "dd11f76c7f7c0ec3d6ab32869d3c68e7bf139ba1a2ad78b556691491d3ce40d5",
+    "NetTiming.Regenerates": "0520d939fabb6322356aa0473896aa3e831f7c9109c8948772fe7b7a6fea82b1",
+    "NetTiming.UntimedStatus": "a015b8611413a71d687e892b9f069bc03ab29ce579dd19c9533b7de9b9679c49"
    },
    "pins": [
     "NetTiming.encard_accSeqs_le_blocks",
@@ -393,21 +393,21 @@
    ]
   },
   "NetTiming.Model.Grid": {
-   "digest": "1bcb356042c48b33d8e2d05ca619c48e",
+   "digest": "16bfc1c061060ca8023a429f719748047899b083e1fd89f1e5040ee169a2fc51",
    "definitions": {
-    "NetTiming.Grid": "24b7ceb88922185a",
-    "NetTiming.LeftPacked": "5f00e1bc8816a4a9",
-    "NetTiming.Row": "2714f272c12dcc48",
-    "NetTiming.RowLeftPacked": "178b63e178676b0f",
-    "NetTiming.fifoGrid": "92863c73fe25f967",
-    "NetTiming.fill": "0f2988c5716f5085",
-    "NetTiming.instDecidablePredForallFinBoolRowLeftPacked": "dc6ccea3343d5ad4",
-    "NetTiming.instDecidablePredForallFinForallBoolLeftPacked": "5e5a32dad18c1e07",
-    "NetTiming.occ": "3e1c414d03d1d8e3",
-    "NetTiming.offset": "65178174667ac5c2",
-    "NetTiming.queue": "dd63ec7ac25f828d",
-    "NetTiming.released": "702e9052b3733682",
-    "NetTiming.rowCount": "c97ad12ae86b127c"
+    "NetTiming.Grid": "ffd16cd09146b02e4292cb44d8dce042a44bb60ebf1fd3cb63d668fa528af350",
+    "NetTiming.LeftPacked": "9ff4b6a0aa2c7bcd683de1acf23a739adcecc652cc14d3d17dd5901b7f791cf8",
+    "NetTiming.Row": "ae6048b36e04cb61d4c26bd3d4ad5abf37420c03cea3b6f1c4bb89feeaf6f370",
+    "NetTiming.RowLeftPacked": "e88ad2e420d43d14085e57523cee6175bb20aeedc42045cb9e9ebde38703ce1c",
+    "NetTiming.fifoGrid": "8f8019b57fafeb6dc051337cb56ad7245efc4ebb94f87f0ccfe325612212fc47",
+    "NetTiming.fill": "904f8f7344585631d73f9cfb680ce471134fb2a52faeab7e1ffa90ccf76f3270",
+    "NetTiming.instDecidablePredForallFinBoolRowLeftPacked": "845c7f790e4520dc3b6bfa9b48d2d6d00b4ebb33993f9089f480d2ca9272f739",
+    "NetTiming.instDecidablePredForallFinForallBoolLeftPacked": "8eb7f8feb2aeca95f6a281227db66fda3263b83c421d6e3974df692b35f93d18",
+    "NetTiming.occ": "6717a7d71789e8ae1527b79b801a61f8cb9e0bdcf0c46c90d22117fc91aec8fc",
+    "NetTiming.offset": "c377eb41551b36727e25c9b036e55dae5f80335600104b299d2acaefef174047",
+    "NetTiming.queue": "b9f8bc87219599771624bc8bc675cb63dff16f09e1f33e941911dba6138e3b9e",
+    "NetTiming.released": "5dbceb6ee682c7d972fb16f08ec0c1dfb84ba70b492ba1bb9055d217c9d0a3db",
+    "NetTiming.rowCount": "95cee3532364711f79cb77b0ba21751b405644470a935c9f92c99eda351ab005"
    },
    "pins": [
     "NetTiming.card_leftPacked",
@@ -439,40 +439,40 @@
    ]
   },
   "NetTiming.Model.Run": {
-   "digest": "0dead3cabfe8e5b44354569bb858eabc",
+   "digest": "4662a4e3d403fab6a53218ff15dd0ce2ccf50c8fab14cd76612181617874c55a",
    "definitions": {
-    "NetTiming.AccSeqs": "934ec7954a33ce7e",
-    "NetTiming.Accepted": "f12fb2bd8f7c127b",
-    "NetTiming.AcceptedUpTo": "ddde2e48af085738",
-    "NetTiming.Interaction": "793dbb33c8c1e740",
-    "NetTiming.Interaction.actRun": "9d0df7c441c3aba7",
-    "NetTiming.Interaction.obsRun": "f9b8bce6b2a63b89",
-    "NetTiming.Interaction.op": "49f546f3e6118785",
-    "NetTiming.Interaction.snd": "d9ba2e9bb53cffcc",
-    "NetTiming.Interaction.trace": "8d6e3b4e12115590",
-    "NetTiming.Interaction.warden": "0adcbf619a2b40fc",
-    "NetTiming.Interaction.wireRun": "f8db71380cdf3a0f",
-    "NetTiming.Obs": "c4045488a7b8cf7b",
-    "NetTiming.Obs.jitter": "1c7731ef6c120d77",
-    "NetTiming.Obs.rows": "914555b27a71c632",
-    "NetTiming.Obs.status": "a52611ad131bdf97",
-    "NetTiming.Program": "cda16c55092b5ea0",
-    "NetTiming.Program.rows": "f8f24b68920b9e9a",
-    "NetTiming.Reason": "d939bb5facf876a9",
-    "NetTiming.Reason.coverageNeverEstablished": "820d00d8e898157f",
-    "NetTiming.Reason.deliveryRefused": "ac7794f12425e5c3",
-    "NetTiming.Reason.dropped": "2cc4f06bb16247ff",
-    "NetTiming.Reason.malformed": "afbe8bb4fe993c82",
-    "NetTiming.Reason.monitorUnavailable": "7707ff09404dad1d",
-    "NetTiming.Reason.overflow": "307a11b786fbbff0",
-    "NetTiming.Status": "74487f627e663970",
-    "NetTiming.Status.complete": "ef80b3492cf4af7b",
-    "NetTiming.Status.notEstablished": "6412e2cddf92d3d0",
-    "NetTiming.Warden": "77633bfa7a9caa75",
-    "NetTiming.Warden.fault": "81962584df41e1f7",
-    "NetTiming.Warden.obs": "126a972ecfb10c8b",
-    "NetTiming.Warden.wire": "a2f990416c213fe2",
-    "NetTiming.ingressUpTo": "8329a6346166cb50"
+    "NetTiming.AccSeqs": "b591e011b7f8812e05bb2403572a002909ebd13b5f6d5c84653647dcebcf487e",
+    "NetTiming.Accepted": "37cdec64e608117cac5611dabd35f4224906f64d184ef2dfe8d68ccebc198774",
+    "NetTiming.AcceptedUpTo": "310f208fce13c24995d809d75f36e717d519a690cb6ca0f056a8064689056666",
+    "NetTiming.Interaction": "33aa6148f252db283c63d2387803199b6b194779cd1d978d3ed3b9cc28275712",
+    "NetTiming.Interaction.actRun": "480bfd453c36c083e14666b2bde3d1682bd6e3bfa363f4219cf16401f772bf2a",
+    "NetTiming.Interaction.obsRun": "c0af96a913730ea5a3e22ffc2194f50dc1f74ebb421c11f15833b609b720783d",
+    "NetTiming.Interaction.op": "751767efe187cbe7ba957763bd23eeb976102e5c6a4ef20b2f43b0b621e5eba0",
+    "NetTiming.Interaction.snd": "f9c3eafb62453ff408362a917007a01a13f1848c0c885f682fc2ca77014d521c",
+    "NetTiming.Interaction.trace": "d901c14cef4cca78e0fea06f38318c941bc656235077315649c5dd99b1e7ff53",
+    "NetTiming.Interaction.warden": "e040facd8485b8d3a1649acc17eaaefeaa4cb15c3a439056a5b2709a4a4ac19d",
+    "NetTiming.Interaction.wireRun": "2bb11ba31dc19b73db3721a753998fecfe8232da956f44aa705264312961440b",
+    "NetTiming.Obs": "fa4dd0c7711bb6a8c130b62f7258c4c34f1df7c2e9c6ea926e0cac038cf2ed9b",
+    "NetTiming.Obs.jitter": "4848b10995dcb60cbbd165f4b4379afe368f8acf6d0050a545e01971b8a3fef1",
+    "NetTiming.Obs.rows": "d2df4cf42c2650e672894b4e11f57e55e936e6cd1ec9bfdf4e49301279f1e44d",
+    "NetTiming.Obs.status": "12d1dbe190262787cf682c9d8e65a8c1ba55c7a60f10b589a02c40b19b0fb527",
+    "NetTiming.Program": "8119590ca55382f2e34c26b0662a5d66b3c1fb6060c227786130c5ea08d29476",
+    "NetTiming.Program.rows": "1f5ec4770c8e6985ce9edcd2c26594675c678aef97fc0463ceeafa104cd14a39",
+    "NetTiming.Reason": "251c4bc6f278a08262ecbbcab81fbf6d3b42ed88797681842bd0f6e42841f8ff",
+    "NetTiming.Reason.coverageNeverEstablished": "d039c2a85f0834c567894f1fe18d2cfc5589e4093a044eb4462f2ea3f06d243a",
+    "NetTiming.Reason.deliveryRefused": "9c95edd16d1521f1ca8c48bcfdfa5bd5d1411c4ea3e7dd4dcd185f465d198179",
+    "NetTiming.Reason.dropped": "d5d5d033c4167be0b333aaf76489a97cfc1b2aec3cb4157cc813c39d2ed2b784",
+    "NetTiming.Reason.malformed": "c152ad30dd48f86e31c661b9023a85ecad38eaa69e38494d49de42fa03dc7af8",
+    "NetTiming.Reason.monitorUnavailable": "db6defdb66c6d4feca34273f9341462b202ba432ec50047b6e692652e7126af9",
+    "NetTiming.Reason.overflow": "d14274871843b09cb4cf8ed1bb5d25feace52dd8a868b43022e350e683c37626",
+    "NetTiming.Status": "f564b8e7a6add3e227824d90f843ad5a62d58513f464bc2fc23070b1d594cb72",
+    "NetTiming.Status.complete": "643bd52d9e2e2e5dcb9e73d384c4d3a788d24896a4ab4cfec6fe7dd8c5c59722",
+    "NetTiming.Status.notEstablished": "c3b9bf594ac2ba00b6008c311c1f394accae472e03077a25342f0b6617a533e4",
+    "NetTiming.Warden": "14f25d5888e89e26ee3a1fea354b491254e9ac0e199c387802d3c40d25d28d51",
+    "NetTiming.Warden.fault": "d014f99562b077afd99af9535217e2a6f0454a8eefd3a7071ef01784e70edd1a",
+    "NetTiming.Warden.obs": "36c12440afc208aea78dededa3fcfb9680a825a4246b0477f0d7d5f475ba106a",
+    "NetTiming.Warden.wire": "41756fc4243c14060c4460603106856128fcdcccc3b3ab09943b5d77b910e0f2",
+    "NetTiming.ingressUpTo": "d5d3269d8dd71a353c700722aa08bd635e621d61f95c36aaf14a34ebf1bbafe3"
    },
    "pins": [
     "NetTiming.encard_accSeqs_le_advice",
@@ -496,23 +496,23 @@
    ]
   },
   "NetTiming.Sanity": {
-   "digest": "88c532708ba121cfa8157eb93c84ef36",
+   "digest": "5bf0f8049e429ada84932de15731625af76803a9612875d9c0177049cc9c9b00",
    "definitions": {
-    "NetTiming.WAct": "a39439910086e80d",
-    "NetTiming.WAct.count": "1cf08e9b386b13c3",
-    "NetTiming.WAct.fault": "69b7f4baa46730d7",
-    "NetTiming.WAct.jit": "720dfc07350da6c0",
-    "NetTiming.instInhabitedWAct": "14044400f202a699",
-    "NetTiming.rDec": "dbfb49ed9cb3169f",
-    "NetTiming.rI": "e2b2ce0b8979c20f",
-    "NetTiming.rOp": "5538920d30e4a53c",
-    "NetTiming.rP": "1992d84c7dda000a",
-    "NetTiming.rWarden": "3342fedb698d5352",
-    "NetTiming.winEnd2": "cc33def17f96a76a",
-    "NetTiming.witnessObs": "c872d47ccaae9d15",
-    "NetTiming.witnessProgram": "dd449a342928238a",
-    "NetTiming.witnessWarden": "2f3dfacdc9328594",
-    "NetTiming.zP": "70c9faa9fcfad34f"
+    "NetTiming.WAct": "834ed374482707405f842b1d7e4c840b64bd6b427dc5324c0b01b76e86186209",
+    "NetTiming.WAct.count": "b6d933abcc379a57850a8a501cd73f414f9736caa74a09d3a021103189ca0b31",
+    "NetTiming.WAct.fault": "b83a2c45fde119b8577a283be88fd8135622755c69108c90f68b7b2a080e81e0",
+    "NetTiming.WAct.jit": "e96c6cb62118098029856d1ed061aff541a131bababa7c1464db686f8f6110f1",
+    "NetTiming.instInhabitedWAct": "5d03cd4e9475430a7836944d80e13ef47cf070003ffcf3a38a1abaf9e80a062c",
+    "NetTiming.rDec": "aab20453d3a909b7e73f1720e46436d5eb116b6a72dada75a10451fd4d5e44d6",
+    "NetTiming.rI": "084e1fb77d45fc547cc00598d6d88d2d95d6bbf904982ecac11a9befb67e52b9",
+    "NetTiming.rOp": "141c1a1eaa3ba16f6df26009be353fef96a9a30cb38606b3a25ea5d378daa939",
+    "NetTiming.rP": "c94d20e795e9f7dd9badaef9256ea061e7c267d3b1e2257ebdb1788671e7cab9",
+    "NetTiming.rWarden": "7ec840e0fde88136e0e7513372942fe1f823a8725b255516af1dda9effcd0a2a",
+    "NetTiming.winEnd2": "184fce45a146e0ad5f5591e27ee28ed60c3a6c8c29d2340dff1ff903bbb81705",
+    "NetTiming.witnessObs": "442f08315558824253f8a2d3b78ac164f3163ff796bf40f80139eadbbd2898e9",
+    "NetTiming.witnessProgram": "db6560239be4f108029489cf7378f3826993b25c863a298240c4d244432a6a6d",
+    "NetTiming.witnessWarden": "dea8c3261c551346e1dd084b3524856e9390239cd320a4132a58603983561355",
+    "NetTiming.zP": "94c8c15540f8fdb40fbf52ba5304ca1abb59c5ec6ce408682c8268a5c16e489e"
    },
    "pins": [
     "NetTiming.joint_witness",
