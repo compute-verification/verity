@@ -185,7 +185,8 @@ def job_of(cluster: Cluster, f: dict[str, str], gpus: int, gpu_ids: tuple[int, .
                kind="batch" if max_s is not None else "session", gpus=gpus, cpus=0,
                memory_gib=int(mem[:-1]) if mem.endswith("G") and mem[:-1].isdigit() and int(mem[:-1]) > 0 else 1,
                max_s=max_s, expected_s=None if max_s is not None else EXPECTED_S,
-               preempt="requeue" if pre else "never", quiet=timed, node=node, gpu_ids=gpu_ids, submitted=since)
+               preempt="requeue" if pre else "never", quiet=timed, node=node, gpu_ids=gpu_ids, submitted=since,
+               run=f["run"] if f.get("run", "-") != "-" else None)
 
 
 def allocations(cluster: Cluster, obs: Observation, node: str = NODE) -> list[Allocation]:
