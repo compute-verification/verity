@@ -185,10 +185,12 @@ def circuit967b8d06Selftest : Tags :=
 
 /-- `verity/flock-circuit/types` (item 1e, #225, #273): `verity/flock-circuit`'s statement (with `967b8d06`'s identity text)
 with its unit as circuit types and a layout; the verifier derives the unit's rows (`Flock.Typed`). The identity and the
-statement digest's leading tag name the typed statement, as the prover's do. -/
+statement digest's leading tag name the typed statement, as the prover's do, and it has its own Σ tag and domain (a new
+id gets new tags). -/
 def circuitTypes : Tags :=
   { circuit967b8d06 with
     name := "verity/flock-circuit/types", statement := "verity/flock-circuit/types", fileFormat := "flock-circuit/types",
+    sigmaTag := "verity/flock-circuit/types/sigma", domainPrefix := "flock-circuit-types/fast100x2/rep",
     identity := identityHm96 false true "verity/flock-circuit/types", typed := true }
 
 def circuitTypesSelftest : Tags :=

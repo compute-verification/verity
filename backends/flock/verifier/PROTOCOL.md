@@ -1185,7 +1185,8 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
 `verity_flock.typed_statement` (#225, #273) writes §16.10's statement with its unit as circuit types and layouts instead
 of rows. The first line is `flock-circuit/types NAME`, and META `format` and `statement` name it: `Tags.circuitTypes`,
 and `+seed-injection` for the selftest build. Its identity is `967b8d06`'s text, naming the typed statement. The statement
-digest's leading tag is the statement id, `verity/flock-circuit/types`, as the prover hashes it.
+digest's leading tag is the statement id, `verity/flock-circuit/types`, as the prover hashes it; its Σ tag is
+`verity/flock-circuit/types/sigma` and its domain `flock-circuit-types/fast100x2/rep` ‖ r (a new id gets new tags).
 
 - **No statement carries rows.** A `CIRCUIT unit` or `CIRCUIT root` section is refused. `Typed.read` checks META and
   derives every row once, through `DeriveAll.deriveChecked` (#247) only:
