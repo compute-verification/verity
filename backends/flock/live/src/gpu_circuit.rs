@@ -368,14 +368,17 @@ pub fn prove_circuit(
     let s = statics_for(comp(), &st.circuit.da, &st.circuit.db);
     let (sc, cfg) = sched(pcs);
     let m = pcs.m;
+    // the device reads the schedule through pointers into `sc`: it lives until the prover returns
+    #[cfg(feature = "sha512")]
+    let sc = match &live {
+        Live::Zk { level0, .. } => sc.with_queries0(level0.queries0),
+        Live::Stream(_) => sc,
+    };
     let (params, mut rounds, level0): (ProveParams, Option<Rounds<'_>>, Option<&Level0>) = match live {
         Live::Stream(ch) => (prove_params(s, &sc, &cfg, pcs, &st.flock_digest, domain, st.c.k_log, st.pin, Some(ch)), None, None),
         #[cfg(feature = "sha512")]
-        Live::Zk { level0, rounds } => {
-            let sc = sc.with_queries0(level0.queries0);
-            (prove_params(s, &sc, &cfg, pcs, &st.flock_digest, domain, st.c.k_log, st.pin, None), Some(Rounds { handler: rounds, failed: None }),
-             Some(level0))
-        }
+        Live::Zk { level0, rounds } => (prove_params(s, &sc, &cfg, pcs, &st.flock_digest, domain, st.c.k_log, st.pin, None),
+                                        Some(Rounds { handler: rounds, failed: None, rounds: 0 }), Some(level0)),
     };
     let params = match rounds.as_mut() {
         Some(r) => params.with_rounds(r),

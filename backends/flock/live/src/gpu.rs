@@ -176,16 +176,29 @@ pub(crate) unsafe extern "C" fn live_cb(ctx: *mut c_void, content: *const u8, le
 pub struct Rounds<'a> {
     pub handler: &'a mut dyn FnMut(&[u8], usize) -> Vec<F128>,
     pub failed: Option<String>,
+    pub rounds: usize,
 }
 
 unsafe extern "C" fn rounds_cb(ctx: *mut c_void, content: *const u8, len: usize, n: u32, out: *mut u64) -> i32 {
     let r = unsafe { &mut *(ctx as *mut Rounds<'_>) };
     let c = unsafe { from_raw_parts(content, len) };
+    if std::env::var_os("FC_TRACE_ROUNDS").is_some() {
+        let ops: Vec<(u8, u8, u64)> = (0..).map(|_| ()).scan(0usize, |at, _| {
+            let h = c.get(*at..*at + 16)?;
+            let (op, kind, l) = (h[0], h[1], u64::from_le_bytes(h[8..].try_into().unwrap()));
+            *at += 16 + match op { 0x03 => 16 * l as usize, 0x04 => 0, _ => (l as usize).div_ceil(16) * 16 };
+            Some((op, kind, l))
+        }).take(6).collect();
+        eprintln!("ROUND\t{} {} bytes, {n} coins, failed {}, ops {ops:?}", r.rounds, len, r.failed.is_some());
+    }
+    r.rounds += 1;
     let coins = match r.failed {
         Some(_) => vec![F128::ZERO; n as usize],
         None => catch_unwind(AssertUnwindSafe(|| (r.handler)(c, n as usize))).unwrap_or_else(|e| {
-            r.failed = Some(e.downcast_ref::<String>().cloned().or_else(|| e.downcast_ref::<&str>().map(|s| s.to_string()))
-                .unwrap_or_else(|| "a live round failed".into()));
+            let why = e.downcast_ref::<String>().cloned().or_else(|| e.downcast_ref::<&str>().map(|s| s.to_string()))
+                .unwrap_or_else(|| "a live round failed".into());
+            eprintln!("LIVE-ROUND-FAILED\tround {}: {why} (nothing more is sent; raised when the device returns)", r.rounds - 1);
+            r.failed = Some(why);
             vec![F128::ZERO; n as usize]
         }),
     };

@@ -604,17 +604,77 @@ fn zk_masking<'a>(st: &Arc<Stmt>, ch: &'a mut LiveChallenger, zk: &ZkRep) -> (zk
     (mch, sent)
 }
 
-/// M1's CPU prover: upstream's prover under the masking challenger, then [`zk_finish`].
-fn prove_cpu_zk(st: &Arc<Stmt>, wt: &WitData, lig: LigeritoProfile, hook: Hook<'_>, ch: &mut LiveChallenger, zk: &ZkRep) -> (Vec<u8>, Value) {
+/// Frames every call as the device prover's challenger does (`FsChallenger` under its live hook) and hands each round to
+/// `rounds` at its squeeze: with `FC_ZK_FRAMED`, M1's CPU prover takes the device path's host side (`replay_round` into the
+/// masking challenger), a test of it without a GPU.
+struct Framer<'a> {
+    pending: Vec<u8>,
+    rounds: &'a mut (dyn FnMut(&[u8], usize) -> Vec<F128> + Send),
+}
+
+impl Framer<'_> {
+    fn squeeze(&mut self, kind: u8, n: usize) -> Vec<F128> {
+        push_header(&mut self.pending, OP_SQUEEZE, kind, n as u64);
+        if n == 0 {
+            return Vec::new();
+        }
+        let c = std::mem::take(&mut self.pending);
+        (self.rounds)(&c, n)
+    }
+}
+
+impl flock_transcript::challenger::Challenger for Framer<'_> {
+    fn observe_label(&mut self, l: &[u8]) {
+        push_header(&mut self.pending, OP_LABEL, 0, l.len() as u64);
+        push_padded(&mut self.pending, l);
+    }
+    fn observe_f128(&mut self, v: F128) {
+        push_header(&mut self.pending, OP_OBSERVE, KIND_SCALAR, 1);
+        self.pending.extend_from_slice(&f128_bytes(&[v]));
+    }
+    fn observe_f128_slice(&mut self, vs: &[F128]) {
+        push_header(&mut self.pending, OP_OBSERVE, KIND_SLICE, vs.len() as u64);
+        self.pending.extend_from_slice(&f128_bytes(vs));
+    }
+    fn observe_bytes(&mut self, b: &[u8]) {
+        push_header(&mut self.pending, OP_BYTES, 0, b.len() as u64);
+        push_padded(&mut self.pending, b);
+    }
+    fn sample_f128(&mut self) -> F128 {
+        self.squeeze(KIND_SCALAR, 1)[0]
+    }
+    fn sample_f128_vec(&mut self, n: usize) -> Vec<F128> {
+        self.squeeze(KIND_SLICE, n)
+    }
+    /// the device's live grinding: nonce 0, absorbed like any message
+    fn grind_pow(&mut self, _bits: u32) -> u64 {
+        self.observe_bytes(&0u64.to_le_bytes());
+        0
+    }
+    fn verify_pow(&mut self, _: u64, _: u32) -> bool {
+        unreachable!("the prover's challenger never verifies")
+    }
+    fn fork_from_seed(&self, _: [F128; 2], _: &'static [u8]) -> Self {
+        unreachable!("the single-table prove path does not fork")
+    }
+}
+
+/// M1's CPU prover: upstream's prover under the masking challenger (or, with `FC_ZK_FRAMED`, under a [`Framer`] whose rounds are
+/// replayed into it, as the device's are), then [`zk_finish`].
+#[allow(clippy::too_many_arguments)]
+fn prove_cpu_zk(st: &Arc<Stmt>, wt: &WitData, lig: LigeritoProfile, rep: usize, hook: Hook<'_>, ch: &mut LiveChallenger, zk: &ZkRep) -> (Vec<u8>, Value) {
     #[allow(irrefutable_let_patterns)]
     let WitData::Host((z, a, b, zl)) = wt.clone() else { panic!("M1's CPU prover takes a host witness") };
     let tp = Instant::now();
     let (mut mch, sent) = zk_masking(st, ch, zk);
-    let (proof, commitment) = prove_fast_ligerito_from_witness_extra_zk(
-        &st.r1cs, &params(st.m, lig), z, a, b, zl, &st.circuit,
-        &mut |cm: &Commitment| -> Vec<Vec<F128>> { hook(merkle_digest_bytes(&cm.cap)).into_iter().map(|p| p[6..].to_vec()).collect() },
-        Some(&zk.level0), &mut mch,
-    );
+    let mut hk = |cm: &Commitment| -> Vec<Vec<F128>> { hook(merkle_digest_bytes(&cm.cap)).into_iter().map(|p| p[6..].to_vec()).collect() };
+    let (proof, commitment) = if std::env::var("FC_ZK_FRAMED").is_ok() {
+        let mut rounds = |content: &[u8], n: usize| replay_round(&mut mch, content, n).unwrap_or_else(|e| panic!("LIVE-ERROR replay: {e}"));
+        let mut fr = Framer { pending: frame_domain(&domain(rep)), rounds: &mut rounds };
+        prove_fast_ligerito_from_witness_extra_zk(&st.r1cs, &params(st.m, lig), z, a, b, zl, &st.circuit, &mut hk, Some(&zk.level0), &mut fr)
+    } else {
+        prove_fast_ligerito_from_witness_extra_zk(&st.r1cs, &params(st.m, lig), z, a, b, zl, &st.circuit, &mut hk, Some(&zk.level0), &mut mch)
+    };
     let t_upstream = tp.elapsed().as_secs_f64();
     zk_finish(st, zk, proof, commitment, mch, &sent, tp, t_upstream, json!({}))
 }
@@ -1898,7 +1958,7 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
                         None => prove_gpu(st, wt, lig, rep, &mut hook, &mut lch, &salts),
                     }
                 } else if let Some(z) = &zkrep {
-                    prove_cpu_zk(st, &own(&mut wt0, &mut wt1), lig, &mut hook, &mut lch, z)
+                    prove_cpu_zk(st, &own(&mut wt0, &mut wt1), lig, rep, &mut hook, &mut lch, z)
                 } else {
                     prove_cpu(st, own(&mut wt0, &mut wt1), lig, &mut hook, &mut lch)
                 }
