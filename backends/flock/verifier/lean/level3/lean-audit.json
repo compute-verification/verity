@@ -143,9 +143,9 @@
   },
   "FlockLevel3.build_computes_v2": {
    "signature": [
-    "FlockLevel3.build_computes_v2.{u_1} {K : Type u_1} [Field K] [CharP K 2] [DecidableEq K] {name : String}",
-    "  {table : ByteArray} {n lo bits : ℕ} {library : Bool} {net : Flock.Net}",
-    "  (hb : Flock.Lookup.buildV2 name table n lo bits library = Except.ok net) (hK : net.useful ≤ Flock.Lookup.KONST) :",
+    "FlockLevel3.build_computes_v2.{u_1} {K : Type u_1} [Field K] [CharP K 2] [DecidableEq K] {name sha512 : String}",
+    "  {table : ByteArray} {n lo bits : ℕ} {net : Flock.Net}",
+    "  (hb : Flock.Lookup.buildV2 name sha512 table n lo bits = Except.ok net) (hK : net.useful ≤ Flock.Lookup.KONST) :",
     "  ∃ RA RB lk col,",
     "    Flock.Sparse.ofRows RA (2 ^ net.unitLog) = Except.ok net.a ∧",
     "      Flock.Sparse.ofRows RB (2 ^ net.unitLog) = Except.ok net.b ∧",
@@ -155,7 +155,7 @@
     "              lk.table = table ∧",
     "                lk.n = n ∧",
     "                  lk.lo = lo ∧",
-    "                    (lk.bits = if library = true then Flock.Lookup.varying table n bits else bits) ∧",
+    "                    lk.bits = Flock.Lookup.width sha512 table n bits ∧",
     "                      net.outGroups = #[{ col := col, words := 1, bits := #[bits] }] ∧",
     "                        ∀ (z : ℕ → K),",
     "                          (∀ r < net.useful,",
@@ -173,7 +173,7 @@
     "                                    else 0"
    ],
    "assumptions": [],
-   "type_hash": "00000000dde73c5a"
+   "type_hash": "00000000c54f947b"
   },
   "FlockLevel3.card_F": {
    "signature": ["FlockLevel3.card_F : Fintype.card FlockLevel3.GF128 = 2 ^ 128"],
