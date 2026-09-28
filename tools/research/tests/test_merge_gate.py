@@ -85,6 +85,30 @@ def test_merge_refuses_a_commit_the_target_has_moved_past(tmp_path, monkeypatch,
     assert merge_main(["feat", "--dry-run"]) == 1 and "not main" in capsys.readouterr().err
 
 
+def test_a_train_checked_on_the_one_ahead_lands_after_it_without_a_recheck(tmp_path, monkeypatch, capsys):
+    """B was checked on A's train; A lands as a merge commit B lacks, with A's tree. Merging B then gives B's tree, the checked
+    one, so B's attempt counts; once main gains a change B lacks, it no longer does."""
+    main, _feat, _tip = _repos(tmp_path)
+    _branch(main, "A", "x.txt")
+    _git(main, "checkout", "-q", "-b", "B", "A")
+    (main / "y.txt").write_text("y\n")
+    _git(main, "add", "y.txt")
+    _git(main, "commit", "-q", "-m", "B on A")
+    b = _git(main, "rev-parse", "HEAD")
+    _git(main, "checkout", "-q", "main")
+    _git(main, "worktree", "add", "-q", str(tmp_path / "b"), b)
+    assert _record(tmp_path, tmp_path / "b", monkeypatch, "true") == 0
+    monkeypatch.chdir(main)
+    _git(main, "merge", "-q", "--no-ff", "-m", "A lands", "A")
+    assert merge_main(["B"]) == 0, capsys.readouterr().err
+    assert _git(main, "rev-parse", "HEAD^{tree}") == _git(main, "rev-parse", f"{b}^{{tree}}") and _git(main, "rev-parse", "HEAD^2") == b
+    _git(main, "reset", "-q", "--hard", "HEAD^1")
+    (main / "c.txt").write_text("c\n")
+    _git(main, "add", "c.txt")
+    _git(main, "commit", "-q", "-m", "main moves on its own")
+    assert merge_main(["B"]) == 1 and "main has moved past" in capsys.readouterr().err
+
+
 def _branch(main: Path, name: str, path: str) -> None:
     _git(main, "checkout", "-q", "-b", name, "main")
     (main / path).write_text(name + "\n")
@@ -149,6 +173,48 @@ def test_a_path_rule_requires_its_step_for_a_change_under_the_path(tmp_path, mon
     assert run("passed") == 0
     monkeypatch.chdir(main)
     assert merge_main(["feat", "--dry-run"]) == 0
+
+
+def test_a_stacked_train_meets_the_steps_the_declaration_main_gained_from_the_train_ahead(tmp_path, monkeypatch, capsys):
+    """A adds the rule that `agree` must pass for a change under flock/; C, checked on A, changes flock/. Once A lands, C merges
+    tree-identically, and the steps are read from main's declaration (now A's) against the diff from main's tip (C's flock/
+    change): an attempt of C that skipped `agree` is refused, one where it passed lands."""
+    import sys
+
+    main, _feat, _tip = _repos(tmp_path)
+    decl = "from research.store.tool import Tool\nCHECK = Tool(name='check', version='1'{})\n"
+    (main / "tools" / "check").mkdir(parents=True)
+    (main / "tools" / "check" / "tool.py").write_text(decl.format(""))
+    _git(main, "add", "-A")
+    _git(main, "commit", "-q", "-m", "no rule")
+    _git(main, "checkout", "-q", "-b", "A")
+    (main / "tools" / "check" / "tool.py").write_text(decl.format(", merge_requires={'agree': ['flock/']}"))
+    _git(main, "commit", "-q", "-am", "A: the rule")
+    _git(main, "checkout", "-q", "-b", "C")
+    (main / "flock").mkdir()
+    (main / "flock" / "x.txt").write_text("x\n")
+    _git(main, "add", "-A")
+    _git(main, "commit", "-q", "-m", "C: a flock change, on A")
+    c = _git(main, "rev-parse", "HEAD")
+    _git(main, "checkout", "-q", "main")
+    _git(main, "worktree", "add", "-q", str(tmp_path / "c"), c)
+
+    def run(status: str) -> int:
+        monkeypatch.chdir(tmp_path / "c")
+        return research_main(["run", "--runs-dir", str(tmp_path / "runs"), "--project", "t", "--no-sampler", "--tool", "check",
+                              "--cwd", "source", "--", sys.executable, "-c", _RESULT % status])
+
+    assert run("skipped") == 0
+    monkeypatch.chdir(main)
+    assert merge_main(["C", "--dry-run"]) == 0                  # main's own declaration has no rule yet
+    _git(main, "merge", "-q", "--no-ff", "-m", "A lands", "A")
+    assert subprocess.run(["git", "merge-base", "--is-ancestor", "HEAD", c], cwd=main).returncode == 1    # main moved past C's base
+    assert merge_main(["C", "--dry-run"]) == 1
+    assert "changes flock/, where `check` must have run agree" in capsys.readouterr().err
+    assert run("passed") == 0
+    monkeypatch.chdir(main)
+    assert merge_main(["C"]) == 0, capsys.readouterr().err
+    assert _git(main, "rev-parse", "HEAD^{tree}") == _git(main, "rev-parse", f"{c}^{{tree}}") and _git(main, "rev-parse", "HEAD^2") == c
 
 
 def test_a_path_rule_leaves_out_what_its_patterns_name():

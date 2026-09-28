@@ -5,9 +5,12 @@
 Run in the checkout of the target branch.  It merges the commit REF names (`git merge --no-ff`) only if the evidence store holds
 a passing attempt of the tool (default `check`) for that exact commit: `state` done, rc 0, source commit REF's, tree clean.  With
 a usable remote the catalog's attempts are refreshed first, so an attempt recorded on another machine counts.  Refused as well: a
-target checkout that is not on BRANCH or has tracked changes, and a REF the target has moved past (the target's tip must be an
-ancestor of REF), since then the merged tree is not the one that was checked; merge the target into the branch and check the new
-tip.  The merge commit carries a `Check: <attempt id>` trailer.  Exit 0 merged (or would, with --dry-run), 1 refused, 2 usage.
+target checkout that is not on BRANCH or has tracked changes, and a REF the target has moved past (the target's tip is not an
+ancestor of REF) unless merging REF leaves REF's own tree (`tree_identical`: what the target gained is in REF already, as when a
+train checked on the train ahead of it lands after that one), since otherwise the merged tree is not the one that was checked;
+merge the target into the branch and check the new tip.  The steps a change requires are read from the target's declaration and
+the diff from its tip either way.  The merge commit carries a `Check: <attempt id>` trailer.  Exit 0 merged (or would, with
+--dry-run), 1 refused, 2 usage.
 
 After a history rewrite (`commitmap`: an accepted `commit-map/v1` in the store), an attempt of an old commit counts for its image when
 the rewrite kept the tree, and REF is refused when it holds a commit the rewrite replaced: merging old history would bring it back.
@@ -57,6 +60,14 @@ def passing(store, commit: str, tool: str = "check", *, tree: str | None = None,
     return ids
 
 
+def tree_identical(repo: Path, commit: str) -> bool:
+    """Whether merging ``commit`` into the checkout's HEAD, which it does not contain, gives ``commit``'s own tree: HEAD's
+    changes are all in ``commit`` already (a train checked on the train ahead of it, which landed as a merge commit of the same
+    tree), so the tree that would land is the one that was checked."""
+    r = _git(repo, "merge-tree", "--write-tree", "HEAD", commit, check=False)
+    return r.returncode == 0 and r.stdout.split("\n", 1)[0].strip() == _git(repo, "rev-parse", f"{commit}^{{tree}}").stdout.strip()
+
+
 def gate(repo: Path, ref: str, into: str, store, tool: str = "check", log=print) -> tuple[str, str]:
     """(commit, attempt id) when ``ref`` may be merged into ``into``; `Refused` naming why otherwise."""
     commit = _git(repo, "rev-parse", "--verify", f"{ref}^{{commit}}").stdout.strip()
@@ -65,7 +76,7 @@ def gate(repo: Path, ref: str, into: str, store, tool: str = "check", log=print)
         raise Refused(f"the checkout is on {head or 'a detached HEAD'}, not {into}")
     if _git(repo, "status", "--porcelain", "--untracked-files=no").stdout.strip():
         raise Refused(f"the {into} checkout has uncommitted changes")
-    if _git(repo, "merge-base", "--is-ancestor", "HEAD", commit, check=False).returncode:
+    if _git(repo, "merge-base", "--is-ancestor", "HEAD", commit, check=False).returncode and not tree_identical(repo, commit):
         raise Refused(f"{into} has moved past {commit[:12]}: merge {into} into the branch, then record `{tool}` on its new tip")
     if store.remote is not None:
         try:
