@@ -15,11 +15,11 @@
   "delta": "1/100",
   "eps_log2": -128,
   "hypotheses": [],
-  "k": 88,
+  "k": 105,
   "rho": "18/19",
   "rounds": 0,
   "segments": 8,
-  "theorem": "P2MeetsM1pB19Uncond",
+  "theorem": "Pous.SecurityProofs.P2SlackFamilyUncond",
   "work": 1048576
  },
  "name": "p2-16448/v2",

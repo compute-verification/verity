@@ -7,7 +7,8 @@ A spec-level reference for POUS, proof of useful space for model weights, with t
   budget stays at or below 12 calls (the cliff);
 - **the dense scheme** (`verity_pous.dense`, selectable): the same on the complete DAG (Lean's `chainDense`);
 - **P2** (`verity_pous.schemes.p2`, **experimental**): the squaring-based scheme, proved in abstract M1 under the
-  proposed pin `P2MeetsM1pB19Uncond`, with its instantiation assumption pending Daniel; never the default;
+  pinned `P2SlackFamilyUncond` (k = 105), with its instantiation assumption not accepted; never the default.
+  `p2-16448/v3` has the frozen spec's SHAKE256 keys, `p2-16448/v2` ChaCha8 keys, which the spec does not allow;
 - **P3** (`verity_pous.scheme`, the fast research codec): two layers over the band graph `B(220, 12)` with a transpose
   connector and a tweakable `P` (Lean's `p3Scheme`).
 

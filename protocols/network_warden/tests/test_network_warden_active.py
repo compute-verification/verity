@@ -4,7 +4,9 @@ while a sender that times its writes to signal either leaves the wire byte-ident
 
 import asyncio
 import json
+import math
 import random
+from collections import defaultdict
 
 import pytest
 from verity_network_warden import active
@@ -126,6 +128,31 @@ def test_out_of_set_advice_duplicates_and_overflow_fail_closed():
     assert shaper.warden._fault is Reason.OVERFLOW
 
 
+def test_a_fault_that_drops_a_carried_queue_faults_the_next_window():
+    """Five streams' first frames are due at bucket 2 at r = 1, so the Program's grid carries three into window 1. A
+    fault in window 0 drops them: window 1 is faulted too, with the same reason, not a mismatch, and window 2, which
+    nothing reaches, is complete. With one stream, whose frames are spaced, nothing is carried and window 1 is
+    complete."""
+    P = GridParams(buckets=4, allocation=1, frame_bytes=1)
+    sync_set = SyncSet((0,), (1,))
+    syncs = [ClockSync(0, 1)] * 3
+    for frames, statuses in (([LogicalFrame(bytes([k]), 2, 0) for k in range(5)], [Reason.MONITOR_UNAVAILABLE] * 2),
+                             ([LogicalFrame(bytes([k]), 2, k) for k in range(4)], [Reason.MONITOR_UNAVAILABLE])):
+        shaper, records = Shaper(Warden("responses", P), syncs, sync_set), []
+        for t in range(len(syncs) * P.buckets):
+            if t == 2:
+                for k, frame in enumerate(frames):
+                    shaper.arrive(k, frame, 2)
+            if t == 3:
+                shaper.warden.fault(Reason.MONITOR_UNAVAILABLE)
+            if (record := shaper.tick()[1]) is not None:
+                records.append(record)
+        statuses += [None] * (len(syncs) - len(statuses))
+        assert [r.status.reason for r in records] == statuses
+        expected = expected_grids(frames, syncs, P)
+        assert all(r.grid == expected[r.window] for r in records if r.status.complete)
+
+
 def test_the_bucketer_enqueues_at_the_next_boundary():
     """Frames arriving at bucket time s go out at ⌈s⌉, at most r_in per bucket, FIFO."""
     P = GridParams(buckets=4, allocation=1, frame_bytes=1)
@@ -162,10 +189,10 @@ def request(session: str, n: int) -> bytes:
             b"Content-Length: %d\r\n\r\n" % len(body)) + body
 
 
-def program():
+def program(sessions=SESSIONS):
     """The Program's egress frames, their ready buckets and the honest prover's syncs. Each request goes out in the
     middle of its send bucket a, so the ingress warden releases it at a + 1, its anchor."""
-    rows = [(a + 1 + d, a + 1, name, k, stream, len(ds)) for name, stream, a, ds in SESSIONS for k, d in enumerate(ds)]
+    rows = [(a + 1 + d, a + 1, name, k, stream, len(ds)) for name, stream, a, ds in sessions for k, d in enumerate(ds)]
     rows.sort()
     frames = [LogicalFrame(active.encode_frame(DATA, stream, event(name, k, n, p), B), anchor, k)
               for p, (_, anchor, name, k, stream, n) in enumerate(rows)]
@@ -417,6 +444,120 @@ def test_a_server_that_refuses_a_stream_fails_ingress_closed():
     proxy = asyncio.run(run())
     assert [(r.link, r.window, r.status.reason) for r in proxy.records if r.status.reason is not None] == \
         [("requests", 0, Reason.DELIVERY_REFUSED)]
+
+
+#: x's frames interleave with s's, released a bucket after x's; y's are alone in window 2
+LATE_SESSIONS = [("x", 1, 0, (1, 3, 4, 5)), ("s", 2, 1, (2, 2, 3)), ("y", 3, 13, (1, 2))]
+PAUSE = TAU / 10
+
+
+class ReceiptServer:
+    """A server that numbers its events in the order it writes them, as the trace replay's does: it writes frame k of
+    a request it received in bucket R in the middle of bucket R + d_k − 1, and closes the stream after the last."""
+
+    def __init__(self, clock: VirtualClock, sessions) -> None:
+        self.clock, self.latencies = clock, {name: ds for name, _, _, ds in sessions}
+        self.received: dict[str, int] = {}
+        self.due: dict[int, list] = defaultdict(list)
+        self.position = 0
+        self.changed = asyncio.Event()
+
+    async def handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        head = await reader.readuntil(b"\r\n\r\n")
+        length = int(head.split(b"Content-Length: ")[1].split(b"\r\n")[0])
+        name = json.loads(await reader.readexactly(length))["user"]
+        received = self.received[name] = math.floor(self.clock() / TAU + 1e-9)
+        ds = self.latencies[name]
+        for k, d in enumerate(ds):
+            self.due[received + d - 1].append((received, name, k, len(ds), writer))
+        self.changed.set()
+
+    async def until(self, n: int) -> None:
+        while len(self.received) < n:
+            self.changed.clear()
+            await self.changed.wait()
+
+    def write_due(self, t: int) -> int:
+        due = sorted(self.due.pop(t, []), key=lambda item: item[:3])
+        for _, name, k, n, writer in due:
+            writer.write(event(name, k, n, self.position))
+            self.position += 1
+            if k == n - 1:
+                writer.close()
+        return len(due)
+
+
+async def replay_receipts(sessions, pause_at: int | None = None):
+    """`replay` against a `ReceiptServer`. With `pause_at`, the proxy pauses after that bucket's ticks: the clock jumps
+    to `PAUSE` past the next boundary before the requests released there are written upstream, so no tick is later
+    than the slack but those requests reach the server a bucket late. Returns the proxy, the Program's frames and
+    syncs, and where the server received each request."""
+    frames, _, syncs, _ = program(sessions)
+    clock = VirtualClock(-TAU / 2)
+    server = ReceiptServer(clock, sessions)
+    srv = await asyncio.start_server(server.handle, "127.0.0.1", 0)
+    proxy = Proxy(srv.sockets[0].getsockname()[:2], EGRESS, INGRESS, SYNC_SET, syncs, origin=0.0, clock=clock,
+                  sleep=clock.sleep)
+    accepted: asyncio.Future = asyncio.get_running_loop().create_future()
+    link = await asyncio.start_server(lambda r, w: accepted.set_result(asyncio.create_task(proxy.run(r, w))),
+                                      "127.0.0.1", 0)
+    reader, writer = await asyncio.open_connection(*link.sockets[0].getsockname()[:2])
+
+    async def read_wire() -> None:
+        while await reader.read(1 << 16):
+            pass
+
+    peer = asyncio.create_task(read_wire())
+    running = await accepted
+    sent = written = 0
+    horizon = WINDOWS * EGRESS.buckets
+    for t in range(horizon):
+        clock.advance(t * TAU)
+        await proxy.until(lambda p, t=t: len(p.lateness["egress"]) > t and len(p.lateness["ingress"]) > t)
+        if t == horizon - 1:
+            break
+        if t == pause_at:
+            assert not server.due.get(t) and all(a != t for _, _, a, _ in sessions)
+            clock.advance((t + 1) * TAU + PAUSE)
+            await server.until(proxy.requests_released)
+            continue
+        await server.until(proxy.requests_released)
+        clock.advance(t * TAU + TAU / 2)
+        for name, stream, a, ds in sessions:
+            if a == t:
+                body = request(name, len(ds))
+                writer.write(active.encode_frame(LAST, stream, body, B))
+                sent += 1
+        await proxy.until(lambda p, n=sent: p.link_frames_read >= n)
+        written += server.write_due(t)
+        await proxy.until(lambda p, n=written: len(p.frames) >= n)
+    await running
+    await peer
+    writer.close()
+    for s in (srv, link):
+        s.close()
+    return proxy, frames, syncs, server.received
+
+
+def test_a_request_forwarded_a_bucket_late_fails_closed():
+    """The proxy pauses between two ticks, for less than the slack past the next boundary, after releasing s's request
+    and before writing it upstream (live4's configuration 9). The server receives s a bucket late, so its events are
+    ready a bucket late and the server's numbering of them and of x's interleaved ones isn't the Program's. The
+    windows that would carry them are delivery-refused, ingress and egress, raw and committed; none is a mismatch, no
+    tick is monitor-unavailable, and window 2 is accepted. On time, the same run is accepted."""
+    proxy, frames, syncs, received = asyncio.run(replay_receipts(LATE_SESSIONS))
+    assert received == {"x": 1, "s": 2, "y": 14}
+    raw, committed = audit(proxy, frames, syncs)
+    assert raw == committed == [(link, w, None) for link in ("responses", "requests") for w in range(WINDOWS)]
+
+    proxy, frames, syncs, received = asyncio.run(replay_receipts(LATE_SESSIONS, pause_at=2))
+    assert received == {"x": 1, "s": 3, "y": 14}
+    assert max(max(proxy.lateness["egress"]), max(proxy.lateness["ingress"])) < proxy.slack
+    raw, committed = audit(proxy, frames, syncs)
+    refused = f"status:{Reason.DELIVERY_REFUSED.value}"
+    assert raw == committed
+    assert raw == [("responses", 0, refused), ("responses", 1, refused), ("responses", 2, None),
+                   ("requests", 0, refused), ("requests", 1, None), ("requests", 2, None)]
 
 
 class EmptyReader:
