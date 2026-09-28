@@ -560,6 +560,39 @@ def test_stratified_queries_name_known_strata():
     assert law.worst_counts(law.population) is None and law.miss(law.population) == 0
 
 
+def test_a_profile_drawn_by_strata_reads_its_bounds_off_the_law():
+    """A Stratified draw of the checked level: the profile's bound is the law's exact count bound, its stratum bounds each
+    stratum's own, and its weighted bound the law's.  A one-level Subset is one stratum, and a Bernoulli level has none."""
+    for law in SMALL:
+        a = IntegrityProfile((Level("unit", "q"),), (law.population,), {"unit": law}, 0.1, drawn={"unit": law.k})
+        assert a.strata() is law and a.bound() == law.count_bound(0.1)
+        assert a.stratum_bounds() == {s.name: law.stratum_bound(s.name, 0.1) for s in law.strata}
+        assert a.harm_bound(2.0) == law.harm_bound({s.name: 2.0 for s in law.strata}, 0.1)
+        assert a.to_json()["levels"][0]["draw"] == law.to_json()
+        with pytest.raises(ValueError):
+            a.worst_case(lambda m: m)
+    grouped = IntegrityProfile(("group", "unit"), (2, 5), {"unit": SMALL[1]}, 0.1)
+    assert grouped.bound() == SMALL[1].count_bound(0.1)
+    for n, k, delta in ((1024, 16, 0.01), (6, 2, 0.25), (344, 128, 2.0 ** -20)):
+        one = one_level(n, k, delta)
+        assert one.strata() == Stratified.uniform(n, k) and one.bound() == Stratified.uniform(n, k).count_bound(delta)
+        assert one.bound() == int(one.worst_case(lambda m: m)) and one.stratum_bounds() == {"unit": one.bound()}
+    assert TOY.strata() is None and TOY.stratum_bounds() == {} and TOY.bound() == incorrect_units(TOY)
+    assert TOY.harm_bound(4) == TOY.worst_case(lambda m: 4 * m)
+    with pytest.raises(ValueError):
+        TOY.harm_bound({"check": 4.0})
+
+
+@pytest.mark.parametrize("levels, sizes, draws", [
+    (("group", "unit"), (2, 5), {"group": Bernoulli(Fraction(1, 2)), "unit": SMALL[1]}),   # not the only draw
+    (("unit", "sub"), (10, 1), {"unit": SMALL[1], "sub": Subset(1)}),                     # not the checked level
+    (("unit",), (9,), {"unit": SMALL[1]}),                                                # strata of 10 units, level of 9
+])
+def test_ill_formed_stratified_profiles_are_refused(levels, sizes, draws):
+    with pytest.raises(ValueError):
+        IntegrityProfile(levels, sizes, draws, 0.01)
+
+
 def test_stratified_json_is_the_profile_law():
     assert SMALL[0].to_json() == {"law": "stratified", "strata": [{"name": "a", "size": 4, "k": 2},
                                                                   {"name": "b", "size": 3, "k": 1},
