@@ -195,6 +195,17 @@ fn table_of<'a>(t: &'a crate::ir_tail::Tables, name: &str) -> &'a [u32] {
     }
 }
 
+/// A lookup slot as META's `gen` asks for it, as the verifier's `Circuit.parse` and `HmRow.parse` build it: absent, v1's
+/// rows (`LookupNet::build`); `table/v2`, the v2 generator under the table's own label (`LookupNet::build_v2`); anything
+/// else refused.
+fn lookup_net(name: &str, spec: &serde_json::Value, words: &'static [u32], n: usize, lo: usize) -> Result<(IrUnitNet, LookupNet), String> {
+    match spec.get("gen") {
+        None => Ok(LookupNet::build(name, words, n, lo, 31)),
+        Some(g) if g == "table/v2" => LookupNet::build_v2(name, &crate::lookup::table_sha512(words), words, n, lo, 31),
+        Some(_) => Err(format!("META: {name}'s gen is neither absent nor table/v2")),
+    }
+}
+
 /// Every input (output) port of a circuit: its first column in the slot and its width, groups in order.
 pub fn port_cols(groups: &[crate::ir_block::Group]) -> Vec<(usize, usize)> {
     groups.iter().flat_map(|g| g.bits.iter().scan(g.col * WORD, |a, &w| { let c = *a; *a += w; Some((c, w)) }).collect::<Vec<_>>()).collect()
@@ -361,7 +372,7 @@ impl Composite {
                     return Err(format!("META: lookup {name}'s index is not its table's"));
                 }
                 let words: &'static [u32] = Box::leak(table_of(&t, name).to_vec().into_boxed_slice());
-                let (net, fast) = LookupNet::build(&format!("lookup:{name}"), words, n, lo, 31);
+                let (net, fast) = lookup_net(&format!("lookup:{name}"), spec, words, n, lo)?;
                 nets.push((format!("lookup:{name}"), net));
                 lookups_fast.push((nets.len() - 1, fast));
             }
@@ -1861,6 +1872,21 @@ mod tests {
         // hashlib.sha512(verity.commitments.hm96.SHA512.default_key).hexdigest() (PR #93)
         assert_eq!(super::leaf_scheme()["key_sha512"],
                    "afc5a60c85d8aa75cb4c7f726588d299a1712e1c6a621f09ca64809a5fedd744a0f6b0201d05e82b29cd5b274e6c29670cd4e4ab10831911fb1f9e0c7019df22");
+    }
+
+    /// META `gen`: absent builds v1's rows, `table/v2` the v2 generator under the table's own label (a program table's are
+    /// v1's rows, every bit kept), and anything else, `null` included, is refused.
+    #[test]
+    fn a_lookups_gen_picks_its_generator() {
+        let table: Vec<u32> = (0..1u32 << 8).map(|i| (i.wrapping_mul(2654435761) & 0x000F_FFFF) | 1 << 30).collect();
+        let table: &'static [u32] = Box::leak(table.into_boxed_slice());
+        let (n1, l1) = super::lookup_net("t", &serde_json::json!({}), table, 8, 4).unwrap();
+        let (n2, l2) = super::lookup_net("t", &serde_json::json!({"gen": "table/v2"}), table, 8, 4).unwrap();
+        assert_eq!((l1.k, l2.k), (31, 31));
+        assert!(n1.a == n2.a && n1.b == n2.b && n1.sha256 != n2.sha256);
+        for g in [serde_json::json!("table/v3"), serde_json::Value::Null] {
+            assert!(super::lookup_net("t", &serde_json::json!({"gen": g}), table, 8, 4).is_err());
+        }
     }
 
     /// flock_merkle::hm96 (verity's Flock patch) against core's verity.commitments.hm96 vectors_sha512.json: the key, both
