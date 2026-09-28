@@ -394,6 +394,16 @@
    "assumptions": [],
    "type_hash": "00000000c74db5c9"
   },
+  "FlockSoundness.UProg.rowsL1": {
+   "signature": [
+    "FlockSoundness.UProg.rowsL1 {k one : Nat} (hk : instLTNat.lt one k) {outs : List Nat}",
+    "  (p : FlockSoundness.UProg k one outs) :",
+    "  (FlockSoundness.UProg.P hk p).RowsL1 (FlockSoundness.UProg.PB hk p)",
+    "    (fun vals => Function.comp vals (FlockSoundness.UProg.mapG hk p)) (Finset.instSingleton.singleton ⟨one, ⋯⟩)"
+   ],
+   "assumptions": [],
+   "type_hash": "000000005e4ddc68"
+  },
   "FlockSoundness.execArith_correct": {
    "signature": ["FlockSoundness.execArith_correct : FlockSoundness.execArith.Correct"],
    "assumptions": [],
@@ -620,7 +630,8 @@
     "FlockSoundness.Types.Dag.layout_sound",
     "FlockSoundness.Types.Dag.unit_sound",
     "FlockSoundness.Types.compose_complete",
-    "FlockSoundness.Types.compose_sound"
+    "FlockSoundness.Types.compose_sound",
+    "FlockSoundness.UProg.rowsL1"
    ]
   },
   "Flock.Derive": {
@@ -665,7 +676,8 @@
     "FlockSoundness.Types.Dag.layout_sound",
     "FlockSoundness.Types.Dag.unit_sound",
     "FlockSoundness.Types.compose_complete",
-    "FlockSoundness.Types.compose_sound"
+    "FlockSoundness.Types.compose_sound",
+    "FlockSoundness.UProg.rowsL1"
    ]
   },
   "Flock.DeriveAll": {
@@ -739,7 +751,8 @@
    "pins": [
     "FlockSoundness.Rows.compose_eval_unit",
     "FlockSoundness.Types.Dag.layout_sound",
-    "FlockSoundness.Types.Dag.unit_sound"
+    "FlockSoundness.Types.Dag.unit_sound",
+    "FlockSoundness.UProg.rowsL1"
    ]
   },
   "Flock.DeriveCheck": {
@@ -777,7 +790,8 @@
    "pins": [
     "FlockSoundness.Rows.compose_eval_unit",
     "FlockSoundness.Types.Dag.layout_sound",
-    "FlockSoundness.Types.Dag.unit_sound"
+    "FlockSoundness.Types.Dag.unit_sound",
+    "FlockSoundness.UProg.rowsL1"
    ]
   },
   "Flock.Layout": {
@@ -829,7 +843,8 @@
    "pins": [
     "FlockSoundness.Rows.compose_eval_unit",
     "FlockSoundness.Types.Dag.layout_sound",
-    "FlockSoundness.Types.Dag.unit_sound"
+    "FlockSoundness.Types.Dag.unit_sound",
+    "FlockSoundness.UProg.rowsL1"
    ]
   },
   "Flock.Library": {
@@ -843,7 +858,8 @@
    "pins": [
     "FlockSoundness.Rows.compose_eval_unit",
     "FlockSoundness.Types.Dag.layout_sound",
-    "FlockSoundness.Types.Dag.unit_sound"
+    "FlockSoundness.Types.Dag.unit_sound",
+    "FlockSoundness.UProg.rowsL1"
    ]
   },
   "FlockLevel3.ArithFacts": {
@@ -1131,7 +1147,8 @@
     "FlockSoundness.Types.Dag.layout_sound",
     "FlockSoundness.Types.Dag.unit_sound",
     "FlockSoundness.Types.compose_complete",
-    "FlockSoundness.Types.compose_sound"
+    "FlockSoundness.Types.compose_sound",
+    "FlockSoundness.UProg.rowsL1"
    ]
   },
   "FlockSoundness.Audit.FlockBatched": {
@@ -1296,6 +1313,7 @@
    "pins": [
     "FlockSoundness.Rows.compose_eval",
     "FlockSoundness.Rows.compose_eval_unit",
+    "FlockSoundness.UProg.rowsL1",
     "FlockSoundness.placement_of_realizes"
    ]
   },
@@ -1304,7 +1322,7 @@
    "definitions": {
     "FlockSoundness.Compose.ofBlock": "4cfa2fa118656993"
    },
-   "pins": ["FlockSoundness.Rows.compose_eval_unit"]
+   "pins": ["FlockSoundness.Rows.compose_eval_unit", "FlockSoundness.UProg.rowsL1"]
   },
   "FlockSoundness.Defs": {
    "digest": "1cc2134a37060fbf2b00703ce87a654e",
@@ -1337,7 +1355,11 @@
     "FlockSoundness.Audit.Partition.DerivedPlaces.place": "58c6f4c0c85674a8",
     "FlockSoundness.Audit.Partition.RowsL1": "4a5011fce2192af3"
    },
-   "pins": ["FlockSoundness.Audit.Partition.flock_e2e_count", "FlockSoundness.Audit.Partition.flock_e2e_drawn"]
+   "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
+    "FlockSoundness.UProg.rowsL1"
+   ]
   },
   "FlockSoundness.Extract": {
    "digest": "2e90c25ca1a2d40529a6ce773df8e68e",
@@ -1555,12 +1577,20 @@
    ]
   },
   "FlockSoundness.Lowering": {
-   "digest": "496b54d3803bf220e47ed9b10e6347ed",
+   "digest": "7e300eaf1708bfefef2dd9456f97bd21",
    "definitions": {
+    "FlockSoundness.Audit.Op.lift": "d4ec2a7f3ab8e14b",
     "FlockSoundness.Audit.Partition.IsRowsUnit": "e8fd3a86de155234",
     "FlockSoundness.Audit.Partition.IsRowsUnit.decode": "a6f173a9a2cb273f",
     "FlockSoundness.Audit.Partition.IsRowsUnit.wire": "0091ebc2dc688ed3",
     "FlockSoundness.Placement": "48dda1a1429920d8",
+    "FlockSoundness.Prog": "6ba0087a0ef3b813",
+    "FlockSoundness.Prog.brecOn.go": "deee8933b27dee40",
+    "FlockSoundness.Prog.colWire": "8b5543f16179c4f5",
+    "FlockSoundness.Prog.inputs": "c1447c5714c578b5",
+    "FlockSoundness.Prog.op": "d6d2f66316bece2f",
+    "FlockSoundness.Prog.snoc": "2e0432f8de4472f6",
+    "FlockSoundness.Prog.unit": "25501bb5a149c103",
     "FlockSoundness.Rows": "451bf782963ef6af",
     "FlockSoundness.Rows.Sat": "c13cbb9f1f53f506",
     "FlockSoundness.Rows.a": "83e5a1723bb68a69",
@@ -1583,6 +1613,7 @@
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Rows.compose_eval",
     "FlockSoundness.Rows.compose_eval_unit",
+    "FlockSoundness.UProg.rowsL1",
     "FlockSoundness.placement_of_realizes"
    ]
   },
@@ -2084,6 +2115,84 @@
     "FlockSoundness.Types.compose_complete",
     "FlockSoundness.Types.compose_sound"
    ]
+  },
+  "FlockSoundness.Types.Flatten": {
+   "digest": "f8f16615106d552ff2457507977dc1c8",
+   "definitions": {
+    "FlockSoundness.Types.Flatten.Gate": "ab1f44142b4edb53",
+    "FlockSoundness.Types.Flatten.Gate.and": "a48a057fa3bc4da4",
+    "FlockSoundness.Types.Flatten.Gate.input": "8734ba3b4954e5da",
+    "FlockSoundness.Types.Flatten.Gate.not": "2d36ce9a0d244237",
+    "FlockSoundness.Types.Flatten.Gate.xor": "4565641d0a1ce118",
+    "FlockSoundness.Types.Flatten.bitsGates": "c6dce0019eb0d954",
+    "FlockSoundness.Types.Flatten.decodeGates": "7d20935e568f36ff",
+    "FlockSoundness.Types.Flatten.flatItems": "511a2773c6f77bb1",
+    "FlockSoundness.Types.Flatten.flatten": "71926e0c4922bdbb",
+    "FlockSoundness.Types.Flatten.formGate": "a21e489132f9974b",
+    "FlockSoundness.Types.Flatten.formsGates": "729f94b190437de2",
+    "FlockSoundness.Types.Flatten.minterms": "2b0516a1efe61eff",
+    "FlockSoundness.Types.Flatten.prodGates": "0f9c6a09ce205c88",
+    "FlockSoundness.Types.Flatten.readGates": "bed0a51ae0100455",
+    "FlockSoundness.Types.Flatten.sel": "45e47f614ed7748a",
+    "FlockSoundness.Types.Flatten.xorChain": "4a79adb045e12afb",
+    "FlockSoundness.Types.Flatten.xorGates": "d628210b5ff81d7d"
+   },
+   "pins": ["FlockSoundness.UProg.rowsL1"]
+  },
+  "FlockSoundness.Types.Program": {
+   "digest": "95aa4491a5731d9677f1b7a9ef02e978",
+   "definitions": {
+    "FlockSoundness.Src": "0f56bf598e4dacbd",
+    "FlockSoundness.Src.Valid": "efeed902f7ccaab1",
+    "FlockSoundness.Src.input": "02e8d1d96dca0e5e",
+    "FlockSoundness.Src.out": "cee2ca54b9133f50",
+    "FlockSoundness.UProg": "95913ce5105b7457",
+    "FlockSoundness.UProg.C": "89fdab351e6d0dc5",
+    "FlockSoundness.UProg.CB": "f6540082f3980432",
+    "FlockSoundness.UProg.P": "0f3dc04f6bced069",
+    "FlockSoundness.UProg.PB": "258f23e77d8fb858",
+    "FlockSoundness.UProg.boolN": "e0fda3f0e7981567",
+    "FlockSoundness.UProg.brecOn.go": "e909ce46054e1667",
+    "FlockSoundness.UProg.copyGate": "6b1ff4366ea56b4d",
+    "FlockSoundness.UProg.inputs": "92fccfe2653cdcf0",
+    "FlockSoundness.UProg.insOf": "f3af6b5b8279ef27",
+    "FlockSoundness.UProg.mapG": "27bac8f44e2102b1",
+    "FlockSoundness.UProg.n": "e4ca7d33f7179fda",
+    "FlockSoundness.UProg.oneOf": "7e33302be9a070ca",
+    "FlockSoundness.UProg.opB": "cb35c48f076468b0",
+    "FlockSoundness.UProg.outGate": "782f6f9e6a8ae064",
+    "FlockSoundness.UProg.outsB": "4952365ed75a92cf",
+    "FlockSoundness.UProg.outsC": "abdfc63a672ef19a",
+    "FlockSoundness.UProg.rowsN": "6acbb2aaaa53df3b",
+    "FlockSoundness.UProg.snoc": "0da169401fa4682b",
+    "FlockSoundness.UProg.srcB": "7560184c61ed9e1e",
+    "FlockSoundness.UProg.srcGate": "c4454b9c64491827",
+    "FlockSoundness.UProg.toRows": "d25b98881645c56e",
+    "FlockSoundness.UProg.unitB": "fc6f5c570b356d95",
+    "FlockSoundness.UProg.wireB": "dc5c5b760f75e35d",
+    "FlockSoundness.UProg.wireF": "3b3568adbaa29ac9",
+    "FlockSoundness.UnitSpec": "5f510a9b6de453f7",
+    "FlockSoundness.UnitSpec.F": "2335185ebb407880",
+    "FlockSoundness.UnitSpec.R": "39796f16ee186054",
+    "FlockSoundness.UnitSpec.done": "cc41abf071170ff5",
+    "FlockSoundness.UnitSpec.fsize": "44911c3c2ef0f696",
+    "FlockSoundness.UnitSpec.gs": "ea583d47a4f27bc5",
+    "FlockSoundness.UnitSpec.idx": "5d0bee216dc6227a",
+    "FlockSoundness.UnitSpec.loOf": "62a6f848c5b8440b",
+    "FlockSoundness.UnitSpec.out": "0a5ec45707722116",
+    "FlockSoundness.UnitSpec.t": "b8bde2a01d31ba22",
+    "FlockSoundness.UnitSpec.types": "ecb44d422e69f065",
+    "FlockSoundness.UnitSpec.words": "c02df0ee1cb68fd3"
+   },
+   "pins": ["FlockSoundness.UProg.rowsL1"]
+  },
+  "FlockSoundness.Types.Units": {
+   "digest": "8a287025438e018e2845a537621aa226",
+   "definitions": {
+    "FlockSoundness.Types.Flatten.Gate.lift": "a63cce92ce06c479",
+    "FlockSoundness.Types.Flatten.unitGates": "1ddc92e2a7cd8a42"
+   },
+   "pins": ["FlockSoundness.UProg.rowsL1"]
   }
  },
  "dependencies": {
