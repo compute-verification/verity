@@ -103,6 +103,62 @@ def test_train_case(case):
     run_case(case, vectors=TRAINS)
 
 
+UNREAD = f"{trains.TOOL_PY} on main has no CHECK = Tool(...) this gate can read: one, at module level, of keyword arguments only"
+RULES_UNREAD = f"{trains.TOOL_PY} on main has a merge_requires this gate can't read"
+OK = 'CHECK = Tool(name="check", produces=["check/v1"]'
+
+
+@pytest.mark.parametrize(("tool_py", "pr", "state", "why"), [
+    pytest.param(f"{OK}\n", 2, "stuck", f"{trains.TOOL_PY} on main doesn't parse (", id="unparseable"),
+    pytest.param(f"{OK}, merge_requires=RULES)\n", 2, "stuck", RULES_UNREAD, id="merge_requires-a-name"),
+    pytest.param(f'{OK}, merge_requires={{"lean-agreement": "backends/flock/"}})\n', 2, "stuck", RULES_UNREAD,
+                 id="merge_requires-of-a-string"),
+    pytest.param('CHECK = Tool(name="check", produces=("check/v1",))\n', 2, "stuck",
+                 f"{trains.TOOL_PY} on main has a produces this gate can't read", id="produces-a-tuple"),
+    pytest.param('CHECK = Tool("check", "1", [], [], [], [], [], [], ["check/v1"])\n', 2, "stuck", UNREAD, id="positional"),
+    pytest.param(f"{OK}, **RULES)\n", 6, "stuck", UNREAD, id="splat"),
+    pytest.param(f'{OK}, merge_requires={{}}, merge_requires={{"x": ["b"]}})\n', 2, "stuck", UNREAD, id="repeated-keyword"),
+    pytest.param(f"{OK})\n{OK})\n", 2, "stuck", UNREAD, id="two-checks"),
+    pytest.param(f"if True:\n    {OK})\n", 2, "stuck", UNREAD, id="not-module-level"),
+    pytest.param(f"CHECK = tool.{OK[8:]})\n", 2, "stuck", UNREAD, id="not-Tool"),
+    pytest.param(None, 2, "stuck", f"main has no {trains.TOOL_PY}", id="no-tool-py"),
+    pytest.param(f"{OK})\n", 6, "landed", None, id="no-merge_requires-requires-nothing"),
+])
+def test_the_gate_reads_only_a_check_declaration_it_can_parse(tool_py, pr, state, why):
+    """Python-only beside the vectors: a syntax error's why is Python's own message; a missing `merge_requires` asks for no
+    step, so a backends/flock/ change lands without lean-agreement."""
+    s = service(TRAINS)
+    head = s.github.prs[pr]["head"]
+    run_case({"name": "tool.py", "steps": [
+        {"at": 0, "github_push": {"ref": "main", "sha": "m9", "parents": ["m0"], "files": {trains.TOOL_PY: tool_py}}},
+        {"at": 0, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": [pr]},
+         "expect": {"status": 201, "body": {"tip": f"m9+{head}"}}},
+        {"at": 1, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch",
+         "body": {"worker": "dispatch:rc", "capabilities": {"lease_s": 36000}}, "expect": {"status": 200}, "save": {"L": "lease_token"}},
+        {"at": 2, "req": ["POST", "/api/jobs/1/complete"], "token": "tok-dispatch",
+         "body": {"lease_token": "$L", "outcome": "passed", "run_id": "r9"}, "expect": {"status": 200}},
+        {"at": 3, "store": {"attempts": {"r9": {"id": "r9", "tool": {"name": "check"}, "source": {"commit": f"m9+{head}", "dirty": False},
+                                                "status": {"state": "done", "rc": 0}, "outputs": {"result": "art:r9"}}},
+                            "manifests": {"art:r9": {"kind": "check/v1", "meta": {"steps": [{"step": "suites", "status": "passed"}]}}}}},
+        {"at": 4, "reconcile": True, "expect": {"moved": [1]}},
+    ]}, s, TRAINS)
+    (tr,) = s.trains.values()
+    assert tr.state == state, tr.why
+    assert tr.why is None if why is None else tr.why.startswith(why), tr.why
+    assert s.github.refs["main"] == ("m9" if why else f"m9+{head}")
+
+
+def test_the_repositorys_own_check_declaration_parses_to_what_importing_it_declares():
+    """The regression the patterns had: main's tools/check/tool.py changed its layout (a keyword after merge_requires) and the
+    gate silently read no merge_requires.  This reads the file itself, so a layout the gate can't parse fails here first."""
+    from research.merge import declaration
+
+    repo = Path(__file__).resolve().parents[3]
+    tool = declaration(repo, "check")
+    assert trains.declared((repo / trains.TOOL_PY).read_text()) == (tool.produces, tool.merge_requires)
+    assert tool.produces and tool.merge_requires
+
+
 FORMS = {"req", "tick", "revoke", "retire", "reconcile", "store", "github_push", "github_label", "expect_github"}
 
 

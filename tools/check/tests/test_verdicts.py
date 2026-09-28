@@ -4,6 +4,7 @@ from __future__ import annotations
 import importlib.util
 import io
 import json
+import os
 import sys
 import tarfile
 from pathlib import Path
@@ -47,6 +48,8 @@ def _fill(r: dict[str, Path]) -> None:
     _write(r["check"] / "lean-deps" / "m" / "manifest.json", "{}")           # fetched dependencies
     _write(r["check"] / "lean-audit-scratch-x1" / "p" / "lake-manifest.json", "{}")  # an audit's scratch tree
     _write(r["check"] / "lean-changed" / "p" / "lean-audit.json", "{}")      # lean_changed.py's built tree
+    _write(r["check"] / "lean-changed" / "links.json", "{}")                 # check's early Lean step's tree
+    _write(r["check"] / "lean-records" / "build-0" / "p" / "lean-audit.json", "{}")   # the Lean fast path's
 
 
 VERDICTS = ["check/circuit-check/v1/d/e1.json", "check/lean-agreement/k3.json", "check/lean-audit/k2.json", "tests/k1.json"]
@@ -76,6 +79,26 @@ def test_a_pack_carries_the_verdicts_and_nothing_else_and_never_replaces_an_entr
     assert not (b["check"] / "lean-deps").exists() and not (b["tests"] / "durations.json").exists()
 
 
+def test_the_lean_build_trees_are_never_walked(tmp_path, monkeypatch):
+    """A recorded check snapshots and exports the caches around its steps, and a Lean build tree holds a package's whole
+    dependency copy (some 170k files); its `.json` files (records, `lake-manifest.json`, `links.json`) were packed as verdicts
+    (red team, #966)."""
+    r = _machine(tmp_path, monkeypatch, "a")
+    _fill(r)
+    _write(r["check"] / "lean-audit" / ".lake" / "x.json", "{}")
+    walked = []
+    real = os.walk
+
+    def walk(top, *a, **kw):
+        for d, dirs, names in real(top, *a, **kw):
+            walked.append(Path(d).relative_to(top).as_posix())
+            yield d, dirs, names
+
+    monkeypatch.setattr(V.os, "walk", walk)
+    assert sorted(V.entries()) == VERDICTS and "circuit-check/v1/d" in walked
+    assert not [d for d in walked if V._skipped("check", d.split("/")[0]) or ".lake" in d.split("/")]
+
+
 def test_since_a_snapshot_a_pack_holds_only_what_the_run_stored(tmp_path, monkeypatch):
     r = _machine(tmp_path, monkeypatch, "a")
     _fill(r)
@@ -103,6 +126,7 @@ def test_an_entry_that_goes_away_while_it_is_read_is_left_out(tmp_path, monkeypa
 
 
 @pytest.mark.parametrize("member", ["../escape.json", "/abs.json", "other/x.json", "check/lean-deps/m.json", "tests/logs/a.json",
+                                    "check/lean-changed/links.json", "check/lean-records/build-0/p/lean-audit.json",
                                     "tests/durations.json", "check/.hidden.json", "tests/k.txt", "link",
                                     "check/lean-audit-scratch-x1/p/lake-manifest.json", "check/lean-changed/p/lean-audit.json"])
 def test_a_pack_holding_anything_but_verdict_entries_is_refused_whole(tmp_path, monkeypatch, member):

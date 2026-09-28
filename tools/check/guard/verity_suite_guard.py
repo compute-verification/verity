@@ -49,11 +49,6 @@ _KEY = "verity_suite_guard"
 _ACTIVE = bool(os.environ.get("VERITY_SUITE_ROOT") and os.environ.get("VERITY_SUITE_REPORT"))
 
 _root = os.path.realpath(os.environ.get("VERITY_SUITE_ROOT", ""))
-_paths = [os.path.normpath(os.path.join(_root, p)) for p in json.loads(os.environ.get("VERITY_SUITE_ALLOW", "[]"))]
-_allowed = tuple(os.path.join(p, "") for p in _paths if os.path.isdir(p))
-_allowed += tuple({os.path.join(os.path.realpath(sys.prefix), ""), os.path.join(os.path.abspath(sys.prefix), "")})
-_allowed_files = frozenset(p for p in _paths if not os.path.isdir(p))
-_inside = os.path.join(_root, "")
 _watch = frozenset(os.path.normpath(os.path.join(_root, p)) for p in json.loads(os.environ.get("VERITY_SUITE_WATCH", "[]")))
 _outside: set[str] = set()
 _watched: set[str] = set()
@@ -112,7 +107,7 @@ def _audit(event: str, args: tuple) -> None:
     path = os.path.normpath(path if os.path.isabs(path) else os.path.join(os.getcwd(), path))
     if path in _watch:
         _watched.add(os.path.relpath(path, _root))
-    if path.startswith(_inside) and not path.startswith(_allowed) and path not in _allowed_files:
+    if _tracer.outside(path):
         _outside.add(os.path.relpath(path, _root))
     name = os.path.basename(path)
     if path.startswith(_suite) and name.startswith("test_") and name.endswith(".py"):
