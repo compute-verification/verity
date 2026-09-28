@@ -458,3 +458,30 @@ def test_trimmed_files_are_listed_not_uploaded_and_custody_still_verifies(tmp_pa
     assert CU.verify(st2, d, mark=False)["preserved"]
     (d / "junk.bin").write_bytes(b"k" * 1000)
     assert "changed" in CU.verify(st2, d, mark=False)["error"], "a trimmed file is still pinned by its hash"
+
+
+def test_a_trimmed_listing_too_big_for_the_manifest_goes_in_the_record_and_custody_still_verifies(tmp_path, monkeypatch, capsys):
+    """A check run lists thousands of undeclared files; inline in meta that broke the 256 KiB manifest cap and the attempt never
+    published (r20261001-091202-7aa6)."""
+    vault = tmp_path / "vault"
+    cfg = tmp_path / "store.toml"
+    cfg.write_text(f'[remote]\ntype = "fs"\npath = "{vault}"\n')
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
+    monkeypatch.setattr(CU, "UNDECLARED_CAP_BYTES", 0)
+    runs = tmp_path / "runs"
+    d = _fixture_run(runs)
+    (d / "suites").mkdir()
+    for i in range(3000):
+        (d / "suites" / f"t{i:04d}.log").write_text(str(i))
+    assert data_main(["custody", FIXTURE_RID, "--runs-dir", str(runs), "--publish", "--keep-local"]) == 0
+    capsys.readouterr()
+    st2 = _other_machine(tmp_path, vault, monkeypatch)
+    rr = st2.get_attempt(FIXTURE_RID)["outputs"]["run_record"]
+    m = st2.get_manifest(rr)
+    assert "trimmed" not in m.meta and m.meta["trimmed_listing"] == CU.TRIMMED_LISTING and m.meta["trimmed_files"] == 3002
+    assert {f.path for f in m.payload.files} & {CU.TRIMMED_LISTING, "stdout.log"} == {CU.TRIMMED_LISTING, "stdout.log"}
+    assert len(CU.trimmed_of(st2, rr)) == 3002
+    rep = CU.verify(st2, d, mark=False)
+    assert rep["preserved"] and CU.TRIMMED_LISTING not in rep["gone"]
+    (d / "suites" / "t2999.log").write_text("changed")
+    assert "changed" in CU.verify(st2, d, mark=False)["error"]
