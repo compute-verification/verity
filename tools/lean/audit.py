@@ -241,11 +241,11 @@ def dependency_scans(pkg: Path, oleans: list[str], policy: dict) -> tuple[list[s
     dependency is a package of the repository, audited on its own."""
     fails, seen, read = [], set(), 0
     allowed = policy.get("dependency_unchecked", {})
-    loaded = [Path(o).resolve() for o in oleans]
+    loaded = [os.path.realpath(o) for o in oleans]
     packages_dir = pkg / ".lake" / "packages"
     for d in sorted(packages_dir.iterdir()) if packages_dir.is_dir() else []:
-        lib = (d / ".lake" / "build" / "lib" / "lean").resolve()
-        rels = sorted(o.relative_to(lib).with_suffix(".lean") for o in loaded if o.is_relative_to(lib))
+        lib = os.path.realpath(d / ".lake" / "build" / "lib" / "lean") + os.sep
+        rels = sorted(Path(o[len(lib):]).with_suffix(".lean") for o in loaded if o.startswith(lib))
         if not rels:
             continue
         for key, src in [*((".".join(r.with_suffix("").parts), d / r) for r in rels),
