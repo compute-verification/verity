@@ -4,8 +4,9 @@
     python unit_cut_agree.py --lean BIN --out DIR [--seed S] [--n N]
 
 Each cut is a small circuit with random owners, input gates, reads, outputs, committed gates and recomputes, mostly valid,
-then perturbed so that every failure code occurs. Writes DIR/<i>.json and DIR/result.json; exits 1 unless the Lean
-verifier's codes equal the reference's on every cut.
+then perturbed so that every failure code occurs, and is checked twice: by v1's rule, and by `Q_word` v2's
+(`recompute="report"`, DIR/<i>-v2.json), where the codes and the `recomputed_across` count must agree. Writes DIR/<i>.json and
+DIR/result.json; exits 1 unless the Lean verifier's codes equal the reference's on every cut.
 """
 import argparse, json, random, subprocess, sys
 from pathlib import Path
@@ -62,22 +63,27 @@ def main():
     files, want = [], {}
     for i in range(a.n):
         c = cut(rng)
-        f = a.out / f"{i}.json"
-        f.write_text(json.dumps(c))
-        files.append(str(f))
-        v = validate_unit_cut(c["total_gates"], c["structure_gates"], c["owner"], [tuple(r) for r in c["reads"]], c["outputs"],
-                              c["committed"], c["input_gates"], [tuple(r) for r in c["recomputed"]])
-        want[str(f)] = list(v.codes)
+        for rule, name in (("refuse", f"{i}.json"), ("report", f"{i}-v2.json")):
+            case = c if rule == "refuse" else dict(c, recompute=rule)
+            f = a.out / name
+            f.write_text(json.dumps(case))
+            files.append(str(f))
+            v = validate_unit_cut(c["total_gates"], c["structure_gates"], c["owner"], [tuple(r) for r in c["reads"]], c["outputs"],
+                                  c["committed"], c["input_gates"], [tuple(r) for r in c["recomputed"]], rule)
+            want[str(f)] = (list(v.codes), v.detail["recomputed_across"]["n"] if rule == "report" else None)
     p = subprocess.run([a.lean, "unit-cut", *files], capture_output=True, text=True)
     got = {}
     for line in p.stdout.splitlines():
         if line.startswith("CUT "):
             j = json.loads(line[4:])
-            got[j["file"]] = j.get("codes", ["error: " + j.get("error", "")])
+            got[j["file"]] = (j.get("codes", ["error: " + j.get("error", "")]), j.get("recomputed_across"))
     bad = [f for f in files if got.get(f) != want[f]]
-    seen = sorted({c for f in files for c in want[f]})
+    seen = sorted({c for f in files for c in want[f][0]})
+    v2 = [f for f in files if f.endswith("-v2.json")]
     result = {"seed": a.seed, "cuts": len(files), "agree": len(files) - len(bad), "disagree": bad[:20],
-              "valid": sum(1 for f in files if not want[f]), "codes_seen": seen}
+              "valid": sum(1 for f in files if not want[f][0]), "codes_seen": seen,
+              "v2": {"cuts": len(v2), "reported": sum(1 for f in v2 if want[f][1]),
+                     "refused_by_v1_alone": sum(1 for f in v2 if not want[f][0] and want[f[:-8] + ".json"][0] == ["gate-recomputed"])}}
     (a.out / "result.json").write_text(json.dumps(result, indent=1))
     print(json.dumps(result))
     return 1 if bad else 0

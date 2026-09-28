@@ -80,7 +80,7 @@ def test_the_object_names_the_query(program):
     (lambda o: o.update(owners=[]), "keys"),                                    # nothing derived is stored
     (lambda o: o.update(format="verity/partition/v0"), "format"),
     (lambda o: o.update(program="ab"), "program-digest"),
-    (lambda o: o["query"].update(version=2), "query-unknown"),
+    (lambda o: o["query"].update(version=3), "query-unknown"),
     (lambda o: o["query"].update(name="Q_module_body"), "query-unknown"),
     (lambda o: o["query"]["params"].pop("W"), "query-params"),
     (lambda o: o["query"]["params"].update(EXTRAS=2), "query-params"),
@@ -138,6 +138,30 @@ def test_a_value_two_members_compute_fails_verify():
     assert cut.separable(twice) is not None
     (f,) = PO.verify(PO.build(P), P).detail["cut"]["gates"]
     assert "gate-recomputed" in f["codes"]
+
+
+def test_q_word_v2_reports_a_value_two_members_compute():
+    """v2 accepts what v1 refuses only for `gate-recomputed`, with v1's units, and reports the pair; `check_cut` and
+    `validate_unit_cut` refuse by default (v1's rule), and a recompute inside one unit stays a redundant gate at both."""
+    twice = _c("VTwiceSep", (("x", Array(2, I32)),), Tuple(I32, I32), lambda B, S, x: tuple_of(B.call(I32Add, x[0], x[1]), B.call(I32Add, x[0], x[1])))
+    P = Program(_c("VTop2", (("a", Array(2, I32)),), Tuple(I32, I32), lambda B, S, a: B.call(twice, a)))
+    one, two = PO.build(P), PO.build(P, PO.query(version=2))
+    assert two["query"] == {"name": "Q_word", "version": 2, "params": {"X": 16, "W": 32}} and PO.digest(two) != PO.digest(one)
+    assert PO.owners_digest(PO.evaluate(P, two["query"])) == PO.owners_digest(PO.evaluate(P, one["query"]))
+    v = PO.verify(two, P)
+    assert v.ok and v.detail["recomputed_across"] == {"n": 1, "gates": [{"call": 1, "n": 1, "gates": [[1, 0]]}]}
+    assert "recomputed_across" not in PO.verify(one, P).detail
+    g = cut.CallGraph(twice)
+    own = PO.evaluate(P).owner(0)
+    assert own == [0, 1] and cut.check_cut(g, own).codes == ("gate-recomputed",)
+    r = cut.check_cut(g, own, recompute="report")
+    assert r.ok and r.detail["recomputed_across"] == {"n": 1, "gates": [[1, 0]]} and r.detail["redundant_gates"] == 0
+    r = cut.check_cut(cut.CallGraph(Twice), [0, 0, 0], recompute="report")
+    assert r.ok and r.detail["redundant_gates"] == 1 and r.detail["recomputed_across"]["n"] == 0
+    with pytest.raises(ValueError):
+        cut.check_cut(g, own, recompute="ignore")
+    with pytest.raises(ValueError):
+        PO.query(version=3)
 
 
 def test_the_pinned_vector_bytes_in_graph_and_partition_out(program):
