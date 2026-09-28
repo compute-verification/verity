@@ -51,7 +51,7 @@ The tree order is the format-2 one (first appearance of ``(domain_id, root,
 count)`` over the obligations and their commitments); a leaf is hashed once
 however many positions read words of it.  :func:`check_packed_openings` is the
 reference opening pass for this format, mirrored by ``check_openings_packed``
-in ``backends/sp1/common/src/check.rs``.
+in ``backends/sp1/common/src/kernel/openings.rs``.
 """
 
 from __future__ import annotations
