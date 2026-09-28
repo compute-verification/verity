@@ -39,20 +39,32 @@
   "DivFullScaleA_v1": {
    "and": 1538
   },
+  "DivFullScaleA_v2": {
+   "and": 1542
+  },
   "F2fpBf16_v1": {
    "and": 77
   },
   "F32AddFtz_v1": {
    "and": 944
   },
+  "F32AddFtz_v2": {
+   "and": 913
+  },
   "F32Add_v1": {
    "and": 854
+  },
+  "F32Add_v2": {
+   "and": 823
   },
   "F32BitsShl23_v1": {
    "and": 0
   },
   "F32Div_v1": {
    "and": 2525
+  },
+  "F32Div_v2": {
+   "and": 2493
   },
   "F32Eq_v1": {
    "and": 155
@@ -63,13 +75,25 @@
   "F32FmaFtz_v1": {
    "and": 4618
   },
+  "F32FmaFtz_v2": {
+   "and": 4618
+  },
   "F32FmaRm_v1": {
+   "and": 4531
+  },
+  "F32FmaRm_v2": {
    "and": 4531
   },
   "F32FmaSubFtz_v1": {
    "and": 4618
   },
+  "F32FmaSubFtz_v2": {
+   "and": 4618
+  },
   "F32Fma_v1": {
+   "and": 4498
+  },
+  "F32Fma_v2": {
    "and": 4498
   },
   "F32Fmaxf_v1": {
@@ -90,8 +114,14 @@
   "F32MulFtz_v1": {
    "and": 2528
   },
+  "F32MulFtz_v2": {
+   "and": 2496
+  },
   "F32Mul_v1": {
    "and": 2438
+  },
+  "F32Mul_v2": {
+   "and": 2406
   },
   "F32Neg_v1": {
    "and": 0
@@ -102,7 +132,13 @@
   "F32SubFtz_v1": {
    "and": 1071
   },
+  "F32SubFtz_v2": {
+   "and": 913
+  },
   "F32Sub_v1": {
+   "and": 823
+  },
+  "F32Sub_v2": {
    "and": 823
   },
   "F32ToBf16Rn_v1": {
