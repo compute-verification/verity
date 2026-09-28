@@ -396,7 +396,7 @@ def test_explain_names_what_a_miss_changed(tmp_path):
     assert "pkg: missed; the nearest pass kept here" in p.stdout and "input pkg changed" in p.stdout, p.stdout
     assert "pkg/tests/helpers.py" in p.stdout.split("input pkg changed")[1].split("\n")[0], p.stdout
     assert "per-test: 0 tests of 0 of 4 test modules would be reused" in p.stdout
-    assert "pkg/tests/test_heavy.py: it reaches pkg/tests/helpers.py, which changed" in p.stdout, p.stdout
+    assert "pkg/tests/test_heavy.py: it read pkg/tests/helpers.py, which changed" in p.stdout, p.stdout      # its traced read set
     (tests / "helpers.py").write_text("VALUE = 1\n")
     (tests / "test_shared.py").write_text("X = 1\n\n\ndef test_shared():\n    pass\n")
     p = _run_suite(root, tmp_path, "--explain", "pkg")
@@ -488,3 +488,176 @@ def test_the_child_tracer_hands_on_to_the_interpreter_s_own_sitecustomize(tmp_pa
     p = subprocess.run([sys.executable, "-c", "import builtins, sitecustomize; print(builtins.SYSTEM_SITECUSTOMIZE, sitecustomize.__file__)"],
                        env=env, capture_output=True, text=True)
     assert p.returncode == 0 and p.stdout.startswith("True ") and "guard/child/sitecustomize.py" in p.stdout, p.stdout + p.stderr
+
+
+def _traced_workspace(root: Path) -> None:
+    """A checkout with this runner and a parallel suite `pkg` that depends on a package `lib`: `test_a` imports `lib/used.py`,
+    `test_b` imports nothing, `test_spawn` starts a program that isn't Python, and `test_probe` tries to open `lib/maybe.txt`."""
+    import shutil
+
+    (root / "tools" / "check").mkdir(parents=True)
+    shutil.copy(HERE / "suites.py", root / "tools" / "check" / "suites.py")
+    shutil.copytree(HERE / "guard", root / "tools" / "check" / "guard", ignore=shutil.ignore_patterns("__pycache__"))
+    (root / ".gitignore").write_text("__pycache__/\n")
+    (root / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = ["pkg", "lib"]\n')
+    (root / "lib").mkdir()
+    (root / "lib" / "pyproject.toml").write_text('[project]\nname = "lib"\n')
+    (root / "lib" / "used.py").write_text("VALUE = 1\n")
+    (root / "lib" / "unused.py").write_text("OTHER = 2\n")
+    (root / "pkg" / "tests").mkdir(parents=True)
+    (root / "pkg" / "pyproject.toml").write_text('[project]\nname = "pkg"\ndependencies = ["lib"]\n\n[tool.pytest.ini_options]\n'
+                                                 'testpaths = ["tests"]\n\n[tool.verity.tests]\nparallel = true\n')
+    for name, text in {"conftest.py": "import pathlib, sys\nsys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / 'lib'))\n",
+                       "test_a.py": "from used import VALUE\n\ndef test_a():\n    assert VALUE == 1\n",
+                       "test_b.py": "def test_b():\n    pass\n",
+                       "test_spawn.py": "import subprocess\n\ndef test_spawn():\n    subprocess.run(['sh', '-c', ':'], check=True)\n",
+                       "test_probe.py": "import pathlib\n\ndef test_probe():\n    p = pathlib.Path(__file__).resolve().parents[2] / 'lib' / 'maybe.txt'\n"
+                                        "    try:\n        p.read_text()\n    except FileNotFoundError:\n        pass\n"}.items():
+        (root / "pkg" / "tests" / name).write_text(text)
+    _git(root, "init", "-q")
+    _git(root, "add", ".")
+    _git(root, "commit", "-q", "-m", "shipped")
+
+
+def test_a_traced_pass_is_reused_until_a_file_its_run_read_changes(tmp_path):
+    """The suite depends on `lib` whole, so any edit there misses the suite's key. A module's traced pass misses only when a file
+    or listing its run read moved, or an absent file it looked for appears; a module whose test started a program no tracer sees
+    into is kept on the suite's inputs whole."""
+    import json
+
+    root, lib = tmp_path / "tree", tmp_path / "tree" / "lib"
+    _traced_workspace(root)
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 0 and "4 per-test passes kept" in p.stdout, p.stdout
+    kept = {json.loads(f.read_text())["module"]: json.loads(f.read_text()) for f in (tmp_path / "cache" / "per-test" / "pkg").glob("*.json")}
+    assert sorted(m for m, e in kept.items() if e.get("traced")) == ["pkg/tests/test_a.py", "pkg/tests/test_b.py", "pkg/tests/test_probe.py"]
+    reads = json.loads((tmp_path / "cache" / "per-test" / "pkg" / "traced" / f"{kept['pkg/tests/test_a.py']['traced']}.json").read_text())["reads"]
+    assert "F\tlib/used.py" in reads and "F\tlib/unused.py" not in reads and reads["F\tlib/maybe.txt"] == "absent", sorted(reads)
+    assert not [i for i in reads if i.startswith("F\tpkg/tests/test_")]            # the suite's own test modules: `keep` holds them
+
+    (lib / "unused.py").write_text("OTHER = 3\n")
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 0 and "1 passed, 3 reused" in p.stdout, p.stdout
+    assert _reused(tmp_path) == ["tests/test_a.py::test_a", "tests/test_b.py::test_b", "tests/test_probe.py::test_probe"]
+
+    (lib / "used.py").write_text("VALUE = 1  # read by test_a\n")
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 0 and "4 passed in" in p.stdout and _reused(tmp_path) == [], p.stdout
+
+    (lib / "maybe.txt").write_text("now it's here\n")
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 0 and "4 passed in" in p.stdout, p.stdout
+
+
+def test_the_tracer_names_what_a_key_narrowed_to_the_tests_reads_must_hold(tmp_path, monkeypatch):
+    spec = importlib.util.spec_from_file_location("reads_under_test", HERE / "guard" / "child" / "verity_suite_reads.py")
+    R = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(R)
+    child = str(HERE / "guard" / "child")
+    env = {"VERITY_SUITE_ROOT": str(tmp_path), "VERITY_SUITE_READS": str(tmp_path / "reads"), "VERITY_SUITE_MODULE": "pkg/tests/test_x.py",
+           "PYTHONPATH": child}
+    for k, v in env.items():
+        monkeypatch.setenv(k, v)
+    r = R.Reads()
+    assert r.traced(str(tmp_path / "lib" / "__pycache__" / "used.cpython-314.pyc")) == "lib/used.py"
+    assert r.traced(str(tmp_path / "__pycache__" / "top.cpython-314.opt-1.pyc")) == "top.py"
+    assert r.traced(str(tmp_path / "lib" / "data.json")) == "lib/data.json" and r.traced("/elsewhere/x") is None
+    assert r.traced(str(Path(child) / "sitecustomize.py")) is None
+    assert r.trace("open", (str(tmp_path / "lib" / "a.py"), "r", 0)) == ("F", "lib/a.py")
+    assert r.trace("os.scandir", (str(tmp_path / "lib"),)) == ("L", "lib")
+    assert r.trace("subprocess.Popen", (None, [sys.executable, "-c", "pass"], None, None)) is None
+    assert r.trace("subprocess.Popen", (None, [sys.executable, "-I", "-c", "pass"], None, None)) == ("X", sys.executable)
+    assert r.trace("subprocess.Popen", (None, [sys.executable, "-c", "pass"], None, {"PATH": "/bin"}), ) == ("X", sys.executable)
+    assert r.trace("subprocess.Popen", (None, ["git", "status"], None, None)) == ("X", "git")
+    assert r.trace("subprocess.Popen", (None, ["uv", "run", "python"], None, None)) == ("X", "uv")
+    assert r.trace("os.system", ("ls",)) == ("X", "os.system")
+    assert r.trace("subprocess.Popen", (None, ["uname", "-p"], None, None)) is None       # a machine probe reads no repository file
+    monkeypatch.delenv("VERITY_SUITE_MODULE")                  # outside a test module sitecustomize doesn't trace
+    assert r.trace("subprocess.Popen", (None, [sys.executable, "-c", "pass"], None, None)) == ("X", sys.executable)
+
+
+def _guard(monkeypatch):
+    """The guard module, loaded without its audit hook (which it installs only when `suites.py` runs it)."""
+    monkeypatch.delenv("VERITY_SUITE_ROOT", raising=False)
+    spec = importlib.util.spec_from_file_location("guard_under_test", HERE / "guard" / "verity_suite_guard.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_each_heavy_test_heads_its_own_worker_s_share_under_worksteal(monkeypatch):
+    """The placement matches the split of the pinned pytest-xdist's `worksteal`: each worker is sent a contiguous share at
+    once, and runs it from the head, while steals take from the tail."""
+    from xdist.scheduler.worksteal import WorkStealingScheduling
+
+    G = _guard(monkeypatch)
+    ids = [f"tests/test_{i:02d}.py::test" for i in range(23)]
+    heavy = [ids[22], ids[17], ids[9], "tests/test_gone.py::test"]
+
+    class Node:
+        shutting_down = False
+
+        def __init__(self, i):
+            self.sent, self.gateway = [], type("Gateway", (), {"id": f"gw{i}"})
+
+        def send_runtest_some(self, indices):
+            self.sent += indices
+
+        def shutdown(self):
+            pass
+
+    for workers in (2, 3, 5, 30):
+        order = [ids[i] for i in G.heavy_first(ids, heavy, workers)]
+        assert sorted(order) == sorted(ids)
+        assert [n for n in order if n not in heavy] == [n for n in ids if n not in heavy]
+        sched = WorkStealingScheduling.__new__(WorkStealingScheduling)
+        sched.numnodes, sched.node2collection, sched.node2pending, sched.pending = workers, {}, {}, []
+        sched.collection, sched.log, sched.config, sched.steal_requested_from_node = None, lambda *a: None, None, None
+        nodes = [Node(i) for i in range(workers)]
+        for n in nodes:
+            sched.add_node(n)
+            sched.add_node_collection(n, order)
+        sched.schedule()
+        heads = [order[n.sent[0]] for n in nodes if n.sent]
+        k = min(3, len(heads))
+        assert heads[:k] == heavy[:k], (workers, heads)
+
+
+def test_the_longest_tests_are_read_from_the_newest_kept_passes(tmp_path, monkeypatch):
+    import json
+
+    S = _suites(monkeypatch, tmp_path)
+    monkeypatch.setattr(S, "CACHE", tmp_path / "cache")
+    d = tmp_path / "cache" / "per-test" / "pkg"
+    d.mkdir(parents=True)
+    (d / "a--old.json").write_text(json.dumps({"when": "2026-09-29 10:00", "passed": {"t::a": 90.0, "t::b": 1.0}}))
+    (d / "a--new.json").write_text(json.dumps({"when": "2026-09-30 10:00", "passed": {"t::a": 3.0}}))
+    (d / "b--one.json").write_text(json.dumps({"when": "2026-09-30 09:00", "passed": {"t::c": 5.0, "t::d": 5.0}}))
+    suite = S.Suite("pkg", "pkg", ("pkg",), ())
+    assert S.longest(suite, 3) == ["t::c", "t::d", "t::a"]
+    assert S.longest(S.Suite("other", "other", ("other",), ()), 3) == []
+
+
+def test_a_parallel_suite_starts_the_test_its_kept_pass_says_is_longest(tmp_path):
+    import json
+
+    root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
+    _per_test_workspace(root)
+    (tests / "test_sibling.py").write_text("def test_sibling():\n    assert True\n")
+    (tests / "test_z.py").write_text("import os\n\ndef test_z():\n    pass\n\ndef test_zz():\n    pass\n")
+    for f in tests.glob("test_*.py"):
+        f.write_text(f.read_text() + "\n\nimport os as _os, pytest as _pytest\n\n\n@_pytest.fixture(autouse=True)\n"
+                     "def _order(request):\n    with open(_os.environ['ORDER_LOG'], 'a') as f:\n"
+                     "        f.write(_os.environ.get('PYTEST_XDIST_WORKER', '-') + ' ' + request.node.nodeid + '\\n')\n")
+    kept = tmp_path / "cache" / "per-test" / "pkg"
+    kept.mkdir(parents=True)
+    (kept / "pkg~tests~test_z.py--earlier.json").write_text(json.dumps({"when": "2026-09-30 00:00", "passed": {"tests/test_z.py::test_zz": 120.0}}))
+    log = tmp_path / "order.log"
+    p = _run_suite(root, tmp_path, "--jobs", "2", extra={"ORDER_LOG": str(log)})
+    assert p.returncode == 0 and "on 2 workers" in p.stdout, p.stdout
+    assert json.loads((tmp_path / "logs" / "pkg.heavy.json").read_text())[0] == "tests/test_z.py::test_zz"
+    first = {}
+    for line in log.read_text().splitlines():
+        worker, node = line.split(" ", 1)
+        first.setdefault(worker, node)
+    assert "tests/test_z.py::test_zz" in first.values(), log.read_text()

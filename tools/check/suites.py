@@ -35,7 +35,18 @@ suite's test modules that the module's tests can't reach left out (`Modules.reac
 import or by name in a string, and so on; every test module whose import acts on the process; none left out when a module
 imports by a computed name), and with the other test modules those tests opened recorded beside it (the guard). A run whose
 suite key missed deselects every test whose module's key and recorded reads are as they were, and counts it as reused, so a fix
-to one test module re-runs that module and what can reach it, not the suite. `--per-test-min-s` (or `$VERITY_TEST_CACHE_MIN_S`)
+to one test module re-runs that module and what can reach it, not the suite.
+
+Traced. Where the guard traced the run (every file the suite's processes opened or loaded and every directory they listed, its
+children's included, `child/verity_suite_reads.py`), a module's pass is kept under a narrower key instead (`traced_key`): the suite's
+file inputs, fixtures, runner and configuration whole, its test modules as above, and in place of the directories it depends on the
+run's read set (`TRACED`), each file's object id (a file git doesn't hold by its sha256) and each listed directory's names. Such a pass
+is reused while every read in its set finds what it found, so a change to a package file no test read re-runs nothing. A module
+whose tests started a program no tracer sees into (anything but a Python that loads the tracer) is kept on the suite's inputs whole,
+and so is every module when that happened outside one. What tracing can't see: a test that only stats a path (`exists`) and reads
+outside the repository; `check.py --no-cache`, the nightly `audit-main` run, reports a kept pass a fresh failure contradicts.
+
+`--per-test-min-s` (or `$VERITY_TEST_CACHE_MIN_S`)
 keeps only passes that took at least that long; `--no-per-test` turns it off; `--fresh` reuses nothing, and names what failed
 that a cached pass (the suite's or a test's) answers for: the nightly cold check's signal that a key misses an input
 (`check.py --no-cache`, the nightly `audit-main` job). A stop mid-run (SIGINT) still keeps the passes of runs that finished.
@@ -47,8 +58,9 @@ outputs, the resolved dependencies, the environment, the pytest arguments), and 
 pass kept here, naming a changed directory's files from git's trees, and says per test module what it reaches that moved.
 
 `--jobs` is how many test processes run at once. A suite that declares `[tool.verity.tests] parallel = true` spreads its tests
-over all of them with pytest-xdist, whose workers load the guard too. Parallel suites run first, one at a time, then the
-others side by side, longest first. Without pytest-xdist installed, a parallel suite runs in one process.
+over all of them with pytest-xdist, whose workers load the guard too; each worker's share starts with one of the tests whose
+kept passes took longest (`longest`), so the run doesn't wait on a long test that started late. Parallel suites run first, one
+at a time, then the others side by side, longest first. Without pytest-xdist installed, a parallel suite runs in one process.
 """
 from __future__ import annotations
 
@@ -211,7 +223,7 @@ def worktree() -> str:
         index = Path(tmp) / "index"
         real = ROOT / _git("rev-parse", "--git-path", "index").strip()
         if real.exists():
-            shutil.copyfile(real, index)
+            shutil.copy2(real, index)          # its mtime too: git re-reads an entry as recent as the index (racy git)
         env = dict(os.environ, GIT_INDEX_FILE=str(index))
         _git("add", "-A", env=env)
         return _git("write-tree", env=env).strip()
@@ -374,6 +386,8 @@ PER_TEST = "per-test"
 MIN_S_ENV = "VERITY_TEST_CACHE_MIN_S"
 #: The newest entries kept per test module: an older one only answers for an older tree.
 KEEP_PER_MODULE = 3
+#: Under a suite's per-test directory: the read sets traced entries were kept on (`Traced`), each `<digest>.json`.
+TRACED = "traced"
 #: Calls that import a module by a name computed at run time, or run code from a path: `Modules.reach` can't bound what they load.
 _COMPUTED = frozenset({"import_module", "__import__", "spec_from_file_location", "run_path", "run_module", "exec", "execfile",
                        "reload", "importorskip"})
@@ -513,6 +527,19 @@ def module_key(suite: Suite, module: str, keep: set[str] | None, mods: Modules, 
     return hashlib.sha256(blob.encode()).hexdigest()
 
 
+def traced_key(suite: Suite, module: str, keep: set[str] | None, mods: Modules, ids: dict[str, str], own: dict[str, str], env: dict,
+               args: list[str], deps: dict[str, list] | None) -> str:
+    """A test module's key when its run traced what its tests read (`PerTest`, "Traced"): its suite's file inputs, fixtures and
+    runner whole, its suite's configuration, and the suite's test modules ``keep`` names (all with ``keep`` None); not the
+    directories the suite depends on, whose files a traced entry's read set holds one by one."""
+    config = "pyproject.toml" if suite.path == "." else f"{suite.path}/pyproject.toml"
+    inputs = {p: i for p, i in ids.items() if p != suite.path and not (ROOT / p).is_dir()}
+    inputs.update({f: i for f, i in own.items() if f == config or (mods.narrowable(f) and (keep is None or f in keep))})
+    blob = json.dumps({"schema": "traced/v1", "suite": suite.path, "module": module, "inputs": inputs, "artifacts": artifact_ids(suite),
+                       "resolved": deps or {}, "environment": env, "pytest": args}, sort_keys=True)
+    return hashlib.sha256(blob.encode()).hexdigest()
+
+
 class PerTest:
     """One suite's per-test verdicts for one run: which passes it may reuse (`reusable`), and keeping the passes it earns (`keep`)."""
 
@@ -535,6 +562,11 @@ class PerTest:
         else:
             self.keeps = {m: None for m in sorted(f for f in self.own if f.endswith(".py") and self.mods.narrowable(f))}
         self.keys = {m: [module_key(suite, m, keep, self.mods, ids, self.own, env, a, deps) for a in arg_sets] for m, keep in self.keeps.items()}
+        self.tkeys = {m: [traced_key(suite, m, keep, self.mods, ids, self.own, env, a, deps) for a in arg_sets]
+                      for m, keep in self.keeps.items()} if self.narrow else {}
+        self.fixtures = {p.removeprefix("fixture:"): i for p, i in ids.items() if p.startswith("fixture:")}
+        self._index: tuple[dict[str, str], dict[str, str]] | None = None
+        self._held: dict[str, bool] = {}
         self.components = {"suite_tree": ids.get(suite.path), "outside": {p: i for p, i in ids.items() if p != suite.path},
                            "artifacts": artifact_ids(suite), "environment": _digest(env), "resolved": _digest(deps or {}),
                            "pytest": arg_sets[0]}
@@ -546,9 +578,84 @@ class PerTest:
     def _holds(self, e: dict, lock: dict[str, dict], provided: set[str]) -> bool:
         return all(self.own.get(f, "absent") == i for f, i in (e.get("reads") or {}).items()) and holds(e, self.tree, lock, provided)
 
+    def _tree(self) -> tuple[dict[str, str], dict[str, str]]:
+        """({file: git object id}, {directory: a digest of its entries' names}) for the whole tree, once."""
+        if self._index is None:
+            files = own_ids(self.tree, ".")
+            names: dict[str, set[str]] = {}
+            for f in files:
+                parts = f.split("/")
+                for i in range(len(parts)):
+                    names.setdefault("/".join(parts[:i]) or ".", set()).add(parts[i])
+            self._index = files, {d: _digest(sorted(n)) for d, n in names.items()}
+        return self._index
+
+    def _now(self, item: str) -> str:
+        """What a traced read (`F<tab>file`, `L<tab>directory`) finds now: a file's git object id, a fixture's id, or the sha256 of
+        a file git doesn't hold (a build output); a directory's entry names as git holds them, or as the disk does for one git
+        doesn't hold; `absent`."""
+        kind, path = item.split("\t", 1)
+        files, dirs = self._tree()
+        if kind == "L":
+            if path in dirs:
+                return dirs[path]
+            return _digest(sorted(os.listdir(ROOT / path))) if (ROOT / path).is_dir() else "absent"
+        if path in files:
+            return files[path]
+        for f, art in self.fixtures.items():
+            if path == f or path.startswith(f.rstrip("/") + "/"):
+                return f"{art}:{path[len(f):]}"
+        q = ROOT / path
+        if not q.is_file():
+            return "absent"
+        h = hashlib.sha256()
+        with open(q, "rb") as fh:
+            for chunk in iter(lambda: fh.read(1 << 20), b""):
+                h.update(chunk)
+        return "sha256:" + h.hexdigest()
+
+    def _traced(self, digest: str) -> dict[str, str] | None:
+        try:
+            reads = json.loads((self.dir / TRACED / f"{digest}.json").read_text())["reads"]
+        except (OSError, ValueError, KeyError, TypeError):
+            return None
+        return reads if isinstance(reads, dict) and _digest(reads) == digest else None
+
+    def traced_holds(self, digest: str) -> bool:
+        """Whether every read of the traced read set ``digest`` finds what it found when the set was kept."""
+        if digest not in self._held:
+            reads = self._traced(digest)
+            self._held[digest] = reads is not None and all(self._now(i) == v for i, v in reads.items())
+        return self._held[digest]
+
+    def trace(self, items: set[str]) -> str:
+        """Keep a run's traced reads, the suite's own test modules left out (`keep` and `reads` hold those), as a read set; its
+        digest."""
+        return self.keep_reads({i: self._now(i) for i in sorted(items) if not (i.startswith("F\t") and self.mods.narrowable(i[2:]))})
+
+    def keep_reads(self, reads: dict[str, str]) -> str:
+        """Keep ``reads`` ({traced read: what it found}) as a read set under its digest; the digest."""
+        d = _digest(reads)
+        f = self.dir / TRACED / f"{d}.json"
+        if not f.exists():
+            f.parent.mkdir(parents=True, exist_ok=True)
+            tmp = f.with_name(f".{f.name}.tmp")
+            tmp.write_text(json.dumps({"reads": reads}, indent=0, sort_keys=True) + "\n")
+            os.replace(tmp, f)
+        self._held[d] = True
+        return d
+
     def reusable(self, lock: dict[str, dict], provided: set[str]) -> dict[str, str]:
-        """{node id: the module entry it passed in}, for every kept pass whose module's key and recorded reads are as they were."""
+        """{node id: the module entry it passed in}, for every kept pass whose module's key and recorded reads are as they were:
+        a traced entry's (`traced_key`) with its read set as it was, or else an entry keyed on the suite's inputs whole."""
         out = {}
+        for m, keys in self.tkeys.items():
+            for k in keys:
+                p = self._entry(m, k)
+                if p.exists():
+                    e = json.loads(p.read_text())
+                    if e.get("traced") and self._holds(e, lock, provided) and self.traced_holds(e["traced"]):
+                        out.update(dict.fromkeys((n for n in e["passed"] if n not in e.get("failed", {})), p.name))
         for m, keys in self.keys.items():
             for k in keys:
                 p = self._entry(m, k)
@@ -576,22 +683,30 @@ class PerTest:
         self.dir.mkdir(parents=True, exist_ok=True)
         n = 0
         blind = r.child_outside or {}
+        untraced = r.untraced or {}
+        run_reads = self.trace(r.traced) if self.narrow and r.traced is not None and "*" not in untraced else None
         for m, (passed, failed) in sorted(by_module.items()):
             if m not in self.keys or m in blind or "*" in blind:     # a child read what no key covers: nothing vouches for it
                 continue
             keep = self.keeps[m]
             reads = {f: self.own.get(f, "absent") for f in [*(r.reads or {}).get(m, []), *(r.reads or {}).get("*", [])]
                      if keep is not None and f not in keep and self.mods.narrowable(f)}
-            p = self._entry(m, self.keys[m][0])
+            traced = run_reads if m not in untraced else None       # a program no tracer sees into: the suite's inputs whole
+            k = self.keys[m][0] if traced is None else self.tkeys[m][0]
+            p = self._entry(m, k)
             old = json.loads(p.read_text()) if p.exists() else {}
             n += len(passed)
-            if old.get("reads", {}) == reads or not old:
+            if traced is None and (old.get("reads", {}) == reads or not old):
                 passed, failed = {**old.get("passed", {}), **passed}, {**old.get("failed", {}), **failed}
+            elif traced is not None and old.get("reads", {}) == reads and self.traced_holds(old.get("traced") or ""):
+                # the kept passes answer for their own read set, which still holds: the entry holds both sets from now on
+                passed, failed = {**old.get("passed", {}), **passed}, {**old.get("failed", {}), **failed}
+                traced = self.keep_reads({**self._traced(old["traced"]), **self._traced(traced)})
             self.nondeterministic += sorted(set(passed) & set(failed))
-            doc = {"suite": self.suite.path, "module": m, "key": self.keys[m][0], "commit": head, "when": when,
+            doc = {"suite": self.suite.path, "module": m, "key": k, "commit": head, "when": when,
                    "passed": dict(sorted(passed.items())), "failed": dict(sorted(failed.items())), "reads": reads,
                    "narrowed": keep is not None, "components": {**self.components, "keep": sorted(keep) if keep is not None else None},
-                   **used_now}
+                   **({"traced": traced} if traced is not None else {}), **used_now}
             tmp = p.with_name(f".{p.name}.tmp")
             tmp.write_text(json.dumps(doc, indent=1) + "\n")
             os.replace(tmp, p)
@@ -600,7 +715,22 @@ class PerTest:
                            key=lambda q: q.stat().st_mtime, reverse=True)[KEEP_PER_MODULE:]
             for q in older:
                 q.unlink(missing_ok=True)
+        self._collect()
         return n
+
+    def _collect(self) -> None:
+        """Delete the read sets no entry here names any more."""
+        if not (self.dir / TRACED).is_dir():
+            return
+        named = set()
+        for q in self.dir.glob("*.json"):
+            try:
+                named.add(json.loads(q.read_text()).get("traced"))
+            except (OSError, ValueError, AttributeError):
+                continue
+        for q in (self.dir / TRACED).glob("*.json"):
+            if q.stem not in named:
+                q.unlink(missing_ok=True)
 
     def explain(self, lock: dict[str, dict], provided: set[str]) -> list[str]:
         """Which modules' kept passes a run would reuse now, and for each other module what moved since its newest entry."""
@@ -625,8 +755,13 @@ class PerTest:
         was, now = e.get("components") or {}, {**self.components, "keep": sorted(self.keeps[m]) if self.keeps[m] is not None else None}
         if not was:
             return ["its entry predates recorded components"]
-        why = [f"input {p} changed" for p in sorted(set(was.get("outside", {})) | set(now["outside"]))
-               if was.get("outside", {}).get(p) != now["outside"].get(p)]
+        wide = [p for p in sorted(set(was.get("outside", {})) | set(now["outside"])) if not (e.get("traced") and (ROOT / p).is_dir())]
+        why = [f"input {p} changed" for p in wide if was.get("outside", {}).get(p) != now["outside"].get(p)]
+        if e.get("traced"):
+            reads = self._traced(e["traced"])
+            moved = sorted(i.split("\t", 1)[1] for i, v in (reads or {}).items() if self._now(i) != v)
+            why += (["its read set isn't kept here"] if reads is None else [f"it read {f}, which changed" for f in moved[:5]]
+                    + ([f"and {len(moved) - 5} more"] if len(moved) > 5 else []))
         why += [f"{k} changed" for k in ("artifacts", "environment", "resolved", "pytest") if was.get(k) != now[k]]
         if (was.get("keep") is None) != (now["keep"] is None):
             why.append("narrowing " + ("is now off: it reaches a computed import" if now["keep"] is None else "is now on"))
@@ -638,7 +773,8 @@ class PerTest:
             if files is None:
                 why.append(f"a file under {self.suite.path} changed (its old tree isn't here to list which)")
             else:
-                hit = [f for f in files if now["keep"] is None or f in kept or not self.mods.narrowable(f)]
+                hit = [f for f in files if (now["keep"] is None or f in kept or not self.mods.narrowable(f))
+                       and not (e.get("traced") and not self.mods.narrowable(f))]       # a traced entry's other files: its read set
                 why += [f"it reaches {f}, which changed" for f in hit[:5]] + ([f"and {len(hit) - 5} more"] if len(hit) > 5 else [])
         if not self._holds(e, lock, provided) and not why:
             why.append("what its tests read beside the key moved (a test module they opened, or a metadata file or distribution)")
@@ -731,6 +867,21 @@ def _durations() -> dict[str, float]:
     return json.loads(f.read_text()) if f.exists() else {}
 
 
+def longest(suite: Suite, n: int) -> list[str]:
+    """The ``n`` tests of ``suite`` whose calls took longest when their passes were last kept (`PerTest`), longest first: what
+    the guard starts at the heads of the workers' shares (`heavy_first`). An order only, which no key or verdict reads."""
+    d = CACHE / PER_TEST / (suite.path.replace("/", "_") if suite.path != "." else "repository")
+    last: dict[str, tuple[str, float]] = {}
+    for p in d.glob("*.json") if d.is_dir() else ():
+        try:
+            e = json.loads(p.read_text())
+        except (OSError, ValueError):
+            continue
+        for node, s in (e.get("passed") or {}).items():
+            last[node] = max(last.get(node, ("", 0.0)), (e.get("when") or "", s))
+    return sorted(last, key=lambda node: (-last[node][1], node))[:n]
+
+
 @dataclass
 class Result:
     suite: Suite
@@ -755,6 +906,8 @@ class Result:
     contradicts: list | None = None  # in a fresh run: what failed that a cached pass answers for
     nondeterministic: list | None = None     # tests that both passed and failed under one key
     child_outside: dict | None = None    # test module (or "*") -> what a process its tests started read outside the inputs
+    traced: set | None = None        # "F<tab>file" / "L<tab>directory" every process of the run read (None: the guard traced nothing)
+    untraced: dict | None = None     # test module (or "*") -> programs its tests started that no tracer sees into
 
 
 #: pytest with the guard loaded by name (`-p`), which xdist repeats in each worker, from `guard/`: appended to sys.path, and
@@ -781,6 +934,11 @@ def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: 
     if reuse:
         (logs / f"{slug}.reuse.json").write_text(json.dumps(sorted(reuse)))
         env["VERITY_SUITE_REUSE"] = str(logs / f"{slug}.reuse.json")
+    env.pop("VERITY_SUITE_HEAVY", None)
+    (logs / f"{slug}.heavy.json").unlink(missing_ok=True)
+    if workers > 1 and (first := longest(suite, workers)):
+        (logs / f"{slug}.heavy.json").write_text(json.dumps(first))
+        env["VERITY_SUITE_HEAVY"] = str(logs / f"{slug}.heavy.json")
     spread = ["-n", str(workers), *DIST] if workers > 1 else []
     start = time.monotonic()
     with log.open("w") as out:
@@ -793,18 +951,25 @@ def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: 
     rep = rep or {}
     reported = bool(rep)
     reads, child_outside = {m: set(fs) for m, fs in (rep.get("reads") or {}).items()}, {}
+    traced = set(rep["traced"]) if isinstance(rep.get("traced"), list) else None
+    untraced = {m: set(v) for m, v in (rep.get("untraced") or {}).items()}
     for line in reads_log.read_text().splitlines() if reads_log.exists() else ():
         kind, module, rel = (line.split("\t", 2) + ["", ""])[:3]
         if kind == "R":
             reads.setdefault(module, set()).add(rel)
         elif kind in ("O", "E"):
             child_outside.setdefault(module, []).append(rel)
+        elif kind in ("F", "L") and traced is not None:
+            traced.add(f"{kind}\t{rel}")
+        elif kind == "X":
+            untraced.setdefault(module, set()).add(rel)
     rep["reads"] = {m: sorted(fs) for m, fs in sorted(reads.items())}
     return Result(suite, "passed" if passed else "failed", seconds, rep.get("counts"), rep.get("outside"),
                   rep.get("unmarked_slow"), log, workers=workers, unguarded=rep.get("unguarded"), reported=reported,
                   watched=rep.get("watched"), distributions=rep.get("distributions"), missing=rep.get("missing"),
                   passed=rep.get("passed"), failed_tests=rep.get("failed"), reads=rep.get("reads"), reused=len(reuse),
-                  child_outside={m: sorted(set(fs)) for m, fs in child_outside.items()})
+                  child_outside={m: sorted(set(fs)) for m, fs in child_outside.items()}, traced=traced,
+                  untraced={m: sorted(v) for m, v in untraced.items()})
 
 
 class Slots:
