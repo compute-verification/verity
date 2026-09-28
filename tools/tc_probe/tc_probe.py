@@ -76,7 +76,7 @@ the same families, the same random draws, the same words.
 ``--canary`` (``canary.py``) runs the instruction's fixed canary tile set -- the first tiles of every family under the canary seed
 plus every regression tile of every resolved discrepancy-log entry naming the instruction -- in under a minute, exits 1 on any
 mismatch against a declared model, and marks ``result.json`` (``tc-evidence/v1``) with ``workload_fingerprint.family = canary``
-and ``tc_evidence.canary``; the trust framework (``verity.proofs.trust``) treats a failing canary on the anchor as an
+and ``tc_evidence.canary``; the trust framework (``trust.py``) treats a failing canary on the anchor as an
 invalidation trigger.  Run it after any driver / ptxas / toolkit change on an anchor and on a second device of the SKU.
 """
 

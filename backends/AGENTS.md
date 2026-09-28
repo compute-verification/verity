@@ -228,7 +228,7 @@ first-class consumer is the **tensor core**, not the SIMT core. Consequences:
 
 Decided 2026-09-22 (lane `trust`). For every numerical target (a `Target`: one
 subcircuit's exact tensor-core relation on one architecture) "do we trust this circuit, and why"
-is **computed from evidence, never asserted**: `verity.proofs.trust.assess`
+is **computed from evidence, never asserted**: `assess` in `tools/tc_probe/trust.py`
 evaluates predicates over store artifacts (ids + labels) and repo fixtures and
 returns a level with the exact evidence that satisfies or fails each criterion;
 `Instruction.status` is reported next to it so the two can disagree visibly.
@@ -267,7 +267,7 @@ automatically (an open D-entry blocks TRUSTED, a mismatch on the anchor blocks
 PINNED; nobody edits a level) -> resolve with hardware as arbiter, the tile
 joins `REGRESSION_TILES`, close with `trust_downgrade=resolved:<D-id>`.
 
-Dossier: `python -m verity.proofs.trust <target|instruction|--all>
+Dossier: `python tools/tc_probe/trust.py <target|instruction|--all>
 [--root STORE] [--format md|json] [--publish]` renders the criteria table with
 evidence ids, D-entries, references, SASS/lowering, the missing items to the
 next level, the triggers and the procedure; `--publish` writes a

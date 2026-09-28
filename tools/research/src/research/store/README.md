@@ -547,7 +547,7 @@ telemetry/v1             events.jsonl or resources.jsonl of an attempt
 redteam-findings/v1      meta {findings: [...]}; refs.target
 ledger-row/v1            one frozen overhead-ledger row whose run is not an attempt here: meta = the ledger/v1 row; payload null;
                          the lane's claims are labels on it (`verity_numerical.bench.ledger_to_store`)
-trust-dossier/v1         the computed trust level of one numerical target (`python -m verity.proofs.trust --publish`): meta =
+trust-dossier/v1         the computed trust level of one numerical target (`python tools/tc_probe/trust.py --publish`): meta =
                          the TrustReport (level, criteria with evidence ids, D-entries, references, missing items, triggers, procedure);
                          refs.cited = every artifact it rests on, refs.previous = earlier dossiers; payload null; labels target,
                          instruction, level, anchor
