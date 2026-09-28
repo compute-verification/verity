@@ -50,7 +50,11 @@ point (1,024 heads, 16 drawn): 590 or more wrong heads escape with probability a
 which is what `verity.proofs.profile.Stratified` computes; `stratified_escape_floor`, **a floor catches its whole
 stratum**: with $k_s \ge 1$, a set containing $U_s$ never escapes; `audit_whole_stratum` and
 `extraction_audit_whole_stratum`, the one-stage profile instantiated, so an audit accepts while a whole floored stratum is
-wrong with probability at most the per-unit terms.
+wrong with probability at most the per-unit terms. `stratified_miss_eq_greedy` (`Audit/StratifiedMiss.lean`), **the
+stratified count curve**: a count vector that some $\tau \in (0, 1]$ separates, every escape factor
+$r_s(c) = (n_s - c - k_s)/(n_s - c)$ it takes at least $\tau$ and every one it leaves at most $\tau$, attains
+$\mathrm{miss}(\sum_s a_s) = \prod_s \binom{n_s - a_s}{k_s}/\binom{n_s}{k_s}$. A greedy fill has such a $\tau$, so this is
+`Stratified.miss` and discharges `audit_exfiltration`'s `hk` for a stratified law.
 
 **Theorems, the work law** (`Audit/Work.lean`, the draw law's second version; `../../PROTOCOL.md` §7.3): `Law.work σ w f K`
 is `Law.stratified` with stratum $s$ drawing $k_s = \min(n_s, \max(f_s, \lceil K w_s n_s / W \rceil))$, where $w_s$ is the
@@ -137,6 +141,9 @@ circuit's other outputs, such as commitments and leaves, are not delivered. $K$ 
   meets `audit_influence`'s hypotheses at 0 on an audit that accepts with probability 1 (`A.accepts`); `Gen.harm_witness`
   meets `card_influenceSet_le_harm`'s on any partition and law, with the exits as separators and each unit's exported
   width as its harm.
+  `Two.influence` meets `Refines.twoStage_influence`'s, with `AnchorsSound₂`, on a two-stage audit that accepts with
+  probability 1 (`Two.accepts`), and `Ex.exfil` meets `audit_exfiltration`'s eight hypotheses together, for a one-bit
+  message.
 
 **Tightness and insecurity** (`Audit/Examples.lean`, on `K` chains of `nv` NOT gates, one coarse unit per chain and one
 fine unit per gate, with a uniform `k₂`-subset of each drawn chain's gates in the second stage and an ideal session):

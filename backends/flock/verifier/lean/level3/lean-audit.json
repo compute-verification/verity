@@ -1,8 +1,5 @@
 {
  "roots": ["FlockLevel3"],
- "exempt": {
-  "CheckAxioms": "the #print axioms list backends/flock/tests/test_lean_verifier.py reads; superseded by this audit"
- },
  "pins": {
   "FlockLevel3.F128.poly_add": {
    "signature": [
