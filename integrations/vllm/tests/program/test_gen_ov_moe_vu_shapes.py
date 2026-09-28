@@ -25,7 +25,8 @@ from __future__ import annotations
 import pytest
 
 from verity_vllm.check.replay import vu_query as vq
-from verity_vllm.observe.fold.fold import FoldResult, _replayer
+from verity_vllm.observe.fold.fold import FoldResult
+from verity_vllm.program.replay import replayer
 from verity.ir.defs import Builder, CompositeDefinition, bind
 from verity.ir.program import Program
 from verity.ir.refs import Affine, Coll, array_of, strided_view
@@ -44,7 +45,7 @@ def one_call_result(spec) -> FoldResult:
     B = Builder(params, ret)
     colls = [Coll(t, Affine("p", i, 0, t.leaves)) for i, (_, t) in enumerate(params)]
     body = B.finish(B.call(spec, *colls))
-    defn = CompositeDefinition("Toy", 1, (), lambda S_, _p=params, _r=ret: (_p, _r), _replayer(body), doc="", conformance="derived: test",
+    defn = CompositeDefinition("Toy", 1, (), lambda S_, _p=params, _r=ret: (_p, _r), replayer(body), doc="", conformance="derived: test",
                                register=False)
     top = bind(defn)
     top.set_body(body)

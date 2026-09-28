@@ -46,6 +46,7 @@ from verity.ir.refs import runs as _refs_runs
 from verity.ir.liveness import DeadGateReport, dead_gates as _dead_gates
 from verity.ir.types import Array, Record, Tuple as TupleT, Type, Value
 from verity_vllm.program.frontend.provenance import registry_version
+from verity_vllm.program.replay import replayer
 from verity_vllm.program.frontend.torch_frontend import FRONTEND_VERSION, FrontendError, check_identity, shape_of, type_of_tensor, width_of
 from verity_vllm.program.frontend.rules.base import ANY, InPlaceRule, Rule, RuleSet, StateRule, ViewRule
 
@@ -218,6 +219,29 @@ def module_registrations(module) -> tuple[set[str], dict[str, str]]:
     return paths, canon
 
 
+class _Storage(dict):
+    """node -> storage base node, and `aliases[base]`: the nodes currently mapped to `base` (the group `Ctx.rebind` reads)."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.aliases: dict[Any, dict[Any, None]] = {}
+
+    def __setitem__(self, node, base) -> None:
+        self.pop(node, None)
+        super().__setitem__(node, base)
+        self.aliases.setdefault(base, {})[node] = None
+
+    def setdefault(self, node, base=None):
+        if node not in self:
+            self[node] = base
+        return self[node]
+
+    def pop(self, node, *default):
+        if node in self:
+            self.aliases[dict.__getitem__(self, node)].pop(node, None)
+        return super().pop(node, *default)
+
+
 class Ctx:
     """State of one derivation. Rules read the graph through it and emit through `call` / `define` / `rebind`."""
 
@@ -229,7 +253,7 @@ class Ctx:
         self.user_inputs, self.weights_coll, self.weights = user_inputs, weights_coll, weights
         self.placeholder_to_weight, self.lifted_constants = placeholder_to_weight, lifted_constants
         self.env: dict[Any, Any] = {}
-        self.storage: dict[Any, Any] = {}  # node -> storage base node (alias groups); absent: own storage
+        self.storage: _Storage = _Storage()  # node -> storage base node (alias groups); absent: own storage
         self.stale: dict[Any, str] = {}  # node -> why its value may no longer be read (alias of a mutated tensor)
         self.written_allocs: set = set()
         self.mutation_effects: list[dict] = []
@@ -436,7 +460,7 @@ class Ctx:
             if isinstance(old, Coll):
                 # every other alias whose references overlap the written region can no longer be read
                 base = self.storage_base(node)
-                group = [n for n, b in self.storage.items() if b is base and n is not node]
+                group = [n for n in self.storage.aliases.get(base, ()) if n is not node]
                 if base is not node:
                     group.append(base)
                 old_runs = _runs(old.refs)
@@ -733,38 +757,11 @@ def _derive_flat(source, example_inputs, *, mode, profile, config, allowed_dims,
                   "profile": profile or "", "inputs": [list(shape_of(t)[0]) for _, t in params[:len(user_names)]],
                   "config_sha256": hashlib.sha256(canonical_json(_jsonable(config))).hexdigest()[:16]}
     # the flat program never carries a registered name: identity is claimed only through a verified family match
-    defn = CompositeDefinition(f"Derived[{name}]", 1, ("SRC",), lambda S: (tuple(params), out.type), _replayer(body),
+    defn = CompositeDefinition(f"Derived[{name}]", 1, ("SRC",), lambda S: (tuple(params), out.type), replayer(body),
                                doc=f"derived ({mode}) from {src_static['class']}", conformance="derived: see provenance", register=False)
     sd = ir_bind(defn, SRC=src_static)
     sd.set_body(body)
     return sd, ctx
-
-
-def _substitute(refs, env: dict[tuple[str, int], Any]):
-    """`refs` with every `(space, idx)` run replaced by the corresponding run of `env[(space, idx)]`."""
-    from verity.ir.refs import concat
-    parts = [env[(space, idx)].slice(lo, hi) for space, idx, lo, hi in _runs(refs)]
-    return concat(parts) if parts else refs
-
-
-def _replayer(body):
-    """A body builder that re-emits a recorded flat body over new argument collections (used when the program
-    function is inlined into the root: `Program` calls `defn.body(B, S, *inputs)`)."""
-
-    def replay(B: Builder, S, *args: Coll) -> Coll:
-        env: dict[tuple[str, int], Any] = {("p", i): a.refs for i, a in enumerate(args)}
-        for k, node in enumerate(body.nodes):
-            colls = [Coll(a.type, _substitute(a.refs, env)) for a in node.args]
-            if node.form in ("call", "primitive"):
-                out = B.call(node.fn, *colls, name=node.name)
-            elif node.form == "batch":
-                out = B.batch(node.fn, *colls, axes=node.axes, n=node.n, name=node.name)
-            else:
-                out = B.scan(node.fn, colls[0], xs=colls[1:1 + node.n_xs], shared=colls[1 + node.n_xs:], n=node.n, name=node.name)
-            env[("n", k)] = out.refs
-        return Coll(body.ret_type, _substitute(body.ret, env))
-
-    return replay
 
 
 def _translate(ctx: Ctx) -> Coll:
