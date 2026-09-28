@@ -10,7 +10,7 @@ MCA numerator by a crude closed form (`padMcaA_le`; its terms sit below 2^-200).
 
 At M1's values (#123 at `8d621454`, `backends/flock/live/PROTOCOL.md` §7 item 6: level-0 query
 counts `q₀ = 277, 242, 229` at `m = 25, 26, 27`, padding `t = 2q₀`, a pair of extra lanes per rep),
-every table is sound to `2^-196.5` for every statement shape in range (`padTableError_le_m1`).
+every table is sound to `2^-205` at `η = 1/200` for every statement shape in range (`padTableError_le_m1`).
 The rational checks run in Lean's kernel (`decide +kernel`).
 -/
 
@@ -21,7 +21,7 @@ open Real
 /-! ## Rational bounds on the padded level 0 -/
 
 /-- `(√ρ' + η)^Q`, from a rational upper bound `s̄` on `√ρ'`. -/
-def padQueryUp (l : Level) (sbar : ℚ) : ℚ := (sbar + 1 / 50) ^ l.queries
+def padQueryUp (l : Level) (sbar : ℚ) : ℚ := (sbar + 1 / 200) ^ l.queries
 
 theorem padQueryError_le (l : Level) (t : ℕ) (sbar : ℚ) (h0 : 0 ≤ sbar)
     (hs : l.padRate t ≤ (sbar : ℝ) ^ 2) : l.padQueryError t ≤ (padQueryUp l sbar : ℝ) := by
@@ -32,7 +32,7 @@ theorem padQueryError_le (l : Level) (t : ℕ) (sbar : ℚ) (h0 : 0 ≤ sbar)
   gcongr
 
 /-- A closed-form upper bound on the padded code's MCA numerator at rate `1/2`-length codewords. -/
-def padMcaUp (l : Level) : ℚ := (2 * (101 / 2) ^ 5 + 3 * (101 / 2)) * 4 / 3 * 2 ^ l.logLen + 101
+def padMcaUp (l : Level) : ℚ := (2 * (401 / 2) ^ 5 + 3 * (401 / 2)) * 4 / 3 * 2 ^ l.logLen + 401
 
 /-- **The padded MCA numerator**, for level 0 (`d = cols + 1`) with at least one padding coefficient
 and a positive radius. -/
@@ -67,18 +67,18 @@ theorem padMcaA_bounds (l : Level) (t : ℕ) (ht1 : 1 ≤ t) (hd : l.logLen = l.
     have := Real.rpow_le_rpow_of_exponent_ge hρr_pos hρr_le1 (by norm_num : (3 : ℝ) / 2 ≤ 2)
     simpa [Real.rpow_natCast] using this
   set δ : ℝ := l.padRadius t with hδ_def
-  have hδ : δ = 1 - Real.sqrt ρ - 1 / 50 := by rw [hδ_def, Level.padRadius, eta]
-  have hden : 1 / 50 ≤ 1 - Real.sqrt ρr - δ := by rw [hδ]; linarith
-  have hx : Real.sqrt ρr / (1 - Real.sqrt ρr - δ) ≤ 50 := by
+  have hδ : δ = 1 - Real.sqrt ρ - 1 / 200 := by rw [hδ_def, Level.padRadius, eta]
+  have hden : 1 / 200 ≤ 1 - Real.sqrt ρr - δ := by rw [hδ]; linarith
+  have hx : Real.sqrt ρr / (1 - Real.sqrt ρr - δ) ≤ 200 := by
     rw [div_le_iff₀ (by linarith)]
     have : Real.sqrt ρr ≤ 1 := Real.sqrt_le_one.2 hρr_le1
     linarith
   set mm : ℝ := max (⌈ρr ^ ((1 : ℝ) / 2) / (1 - ρr ^ ((1 : ℝ) / 2) - δ)⌉ : ℝ) 3 with hmm_def
-  have hceil : (⌈ρr ^ ((1 : ℝ) / 2) / (1 - ρr ^ ((1 : ℝ) / 2) - δ)⌉ : ℝ) ≤ 50 := by
+  have hceil : (⌈ρr ^ ((1 : ℝ) / 2) / (1 - ρr ^ ((1 : ℝ) / 2) - δ)⌉ : ℝ) ≤ 200 := by
     rw [hs]
-    have : ⌈Real.sqrt ρr / (1 - Real.sqrt ρr - δ)⌉ ≤ 50 := Int.ceil_le.2 (by exact_mod_cast hx)
+    have : ⌈Real.sqrt ρr / (1 - Real.sqrt ρr - δ)⌉ ≤ 200 := Int.ceil_le.2 (by exact_mod_cast hx)
     exact_mod_cast this
-  have hmm_le : mm ≤ 50 := max_le hceil (by norm_num)
+  have hmm_le : mm ≤ 200 := max_le hceil (by norm_num)
   have hmm_ge : 3 ≤ mm := le_max_right _ _
   have hδ_le1 : δ ≤ 1 := by rw [hδ]; linarith [Real.sqrt_nonneg ρ]
   have hδρ : δ * ρr ≤ 1 := by
@@ -86,13 +86,13 @@ theorem padMcaA_bounds (l : Level) (t : ℕ) (ht1 : 1 ≤ t) (hd : l.logLen = l.
     linarith
   have hδρ0 : 0 ≤ δ * ρr := mul_nonneg hr.le hρr_pos.le
   have hnum : 2 * (mm + 1 / 2) ^ 5 + 3 * (mm + 1 / 2) * δ * ρr ≤
-      2 * (101 / 2) ^ 5 + 3 * (101 / 2) := by
-    have h5 : (mm + 1 / 2) ^ 5 ≤ (101 / 2 : ℝ) ^ 5 := by gcongr; linarith
-    have : 3 * (mm + 1 / 2) * δ * ρr ≤ 3 * (101 / 2) := by
+      2 * (401 / 2) ^ 5 + 3 * (401 / 2) := by
+    have h5 : (mm + 1 / 2) ^ 5 ≤ (401 / 2 : ℝ) ^ 5 := by gcongr; linarith
+    have : 3 * (mm + 1 / 2) * δ * ρr ≤ 3 * (401 / 2) := by
       have hpos : 0 ≤ 3 * (mm + 1 / 2) := by linarith
       calc 3 * (mm + 1 / 2) * δ * ρr = 3 * (mm + 1 / 2) * (δ * ρr) := by ring
         _ ≤ 3 * (mm + 1 / 2) * 1 := mul_le_mul_of_nonneg_left hδρ hpos
-        _ ≤ 3 * (101 / 2) := by linarith
+        _ ≤ 3 * (401 / 2) := by linarith
     linarith
   have hnum_nonneg : 0 ≤ 2 * (mm + 1 / 2) ^ 5 + 3 * (mm + 1 / 2) * δ * ρr := by
     have hpos : 0 ≤ mm + 1 / 2 := by linarith
@@ -100,22 +100,22 @@ theorem padMcaA_bounds (l : Level) (t : ℕ) (ht1 : 1 ≤ t) (hd : l.logLen = l.
     rw [this]
     have := mul_nonneg hpos hδρ0
     positivity
-  have hnum0 : (0 : ℝ) ≤ 2 * (101 / 2) ^ 5 + 3 * (101 / 2) := by norm_num
+  have hnum0 : (0 : ℝ) ≤ 2 * (401 / 2) ^ 5 + 3 * (401 / 2) := by norm_num
   have hρr2 : 1 / 4 ≤ ρr ^ 2 := by nlinarith
   have hT1 : (2 * (mm + 1 / 2) ^ 5 + 3 * (mm + 1 / 2) * δ * ρr) / (3 * ρr ^ ((3 : ℝ) / 2)) * n
-      ≤ (2 * (101 / 2) ^ 5 + 3 * (101 / 2)) * 4 / 3 * n := by
+      ≤ (2 * (401 / 2) ^ 5 + 3 * (401 / 2)) * 4 / 3 * n := by
     have hD : 3 * (1 / 4) ≤ 3 * ρr ^ ((3 : ℝ) / 2) := by linarith
     calc (2 * (mm + 1 / 2) ^ 5 + 3 * (mm + 1 / 2) * δ * ρr) / (3 * ρr ^ ((3 : ℝ) / 2)) * n
-        ≤ (2 * (101 / 2) ^ 5 + 3 * (101 / 2)) / (3 * (1 / 4)) * n := by
+        ≤ (2 * (401 / 2) ^ 5 + 3 * (401 / 2)) / (3 * (1 / 4)) * n := by
           have := div_le_div₀ hnum0 hnum (by norm_num) hD
           gcongr
-      _ = (2 * (101 / 2) ^ 5 + 3 * (101 / 2)) * 4 / 3 * n := by ring
-  have hT2 : (mm + 1 / 2) / ρr ^ ((1 : ℝ) / 2) ≤ 101 := by
+      _ = (2 * (401 / 2) ^ 5 + 3 * (401 / 2)) * 4 / 3 * n := by ring
+  have hT2 : (mm + 1 / 2) / ρr ^ ((1 : ℝ) / 2) ≤ 401 := by
     rw [hs]
     have hsq : 1 / 2 ≤ Real.sqrt ρr := hρr_ge.trans hs_ge
-    calc (mm + 1 / 2) / Real.sqrt ρr ≤ (101 / 2) / Real.sqrt ρr := by gcongr; linarith
-      _ ≤ (101 / 2) / (1 / 2) := div_le_div_of_nonneg_left (by norm_num) (by norm_num) hsq
-      _ = 101 := by norm_num
+    calc (mm + 1 / 2) / Real.sqrt ρr ≤ (401 / 2) / Real.sqrt ρr := by gcongr; linarith
+      _ ≤ (401 / 2) / (1 / 2) := div_le_div_of_nonneg_left (by norm_num) (by norm_num) hsq
+      _ = 401 := by norm_num
   have hT1_nonneg : 0 ≤ (2 * (mm + 1 / 2) ^ 5 + 3 * (mm + 1 / 2) * δ * ρr)
       / (3 * ρr ^ ((3 : ℝ) / 2)) * n :=
     mul_nonneg (div_nonneg hnum_nonneg (by positivity)) hn.le
@@ -124,7 +124,7 @@ theorem padMcaA_bounds (l : Level) (t : ℕ) (ht1 : 1 ≤ t) (hd : l.logLen = l.
     positivity
   have hA : l.padMcaA t = (2 * (mm + 1 / 2) ^ 5 + 3 * (mm + 1 / 2) * δ * ρr) /
       (3 * ρr ^ ((3 : ℝ) / 2)) * n + (mm + 1 / 2) / ρr ^ ((1 : ℝ) / 2) := rfl
-  have hup : ((padMcaUp l : ℚ) : ℝ) = (2 * (101 / 2) ^ 5 + 3 * (101 / 2)) * 4 / 3 * n + 101 := by
+  have hup : ((padMcaUp l : ℚ) : ℝ) = (2 * (401 / 2) ^ 5 + 3 * (401 / 2)) * 4 / 3 * n + 401 := by
     simp only [padMcaUp, hn_def]; push_cast; ring
   rw [hA, hup]
   exact ⟨by linarith, by linarith⟩
@@ -240,21 +240,9 @@ def m1SqrtUp : ℕ → ℚ
 /-- The rational check at `m = 25, 26, 27`. -/
 theorem m1_check : ∀ m, 25 ≤ m → m ≤ 27 →
     padLinkUp (m1Schedule m) (m1Pad m) + padRepUp (m1Schedule m) (m1Pad m) 2 (m1SqrtUp m) ^ 2 ≤
-      (1 / 2) ^ 197 * (141421356 / 10 ^ 8) := by
+      (1 / 2) ^ 205 := by
   intro m h1 h2
   interval_cases m <;> decide +kernel
-
-theorem half_pow_197_mul_sqrt2_le :
-    ((1 / 2 : ℝ) ^ 197 * (141421356 / 10 ^ 8)) ≤ (2 : ℝ) ^ (-(196.5 : ℝ)) := by
-  have h : (2 : ℝ) ^ (-(196.5 : ℝ)) = ((2 : ℝ) ^ (197 : ℕ))⁻¹ * Real.sqrt 2 := by
-    rw [Real.sqrt_eq_rpow, ← Real.rpow_natCast, ← Real.rpow_neg (by norm_num),
-      ← Real.rpow_add (by norm_num)]
-    norm_num
-  rw [h]
-  have hs : (141421356 / 10 ^ 8 : ℝ) ≤ Real.sqrt 2 :=
-    (Real.le_sqrt (by norm_num) (by norm_num)).2 (by norm_num)
-  rw [one_div, inv_pow]
-  exact mul_le_mul_of_nonneg_left hs (by positivity)
 
 theorem m1Schedule_25 : m1Schedule 25 =
     ⟨25, 6, [⟨1, 277, 12, 6⟩, ⟨2, 106, 9, 4⟩, ⟨3, 71, 6, 4⟩, ⟨4, 53, 3, 4⟩], 3⟩ := rfl
@@ -361,15 +349,15 @@ theorem m1_rep_nonneg : ∀ m, 25 ≤ m → m ≤ 27 → ∀ st : Stmt,
   · rw [m1Schedule_27] at hp hok ⊢
     exact padRepError_nonneg _ _ _ _ _ _ _ _ _ hp (fun l hl => hok l (List.mem_cons_of_mem _ hl)) st
 
-/-- **The soundness number with M1's padded level 0**, `m = 25, 26, 27`: at most `2^-196.5` per
+/-- **The soundness number with M1's padded level 0**, `m = 25, 26, 27`: at most `2^-205` per
 table, for every statement shape in range. -/
 theorem padTableError_le_m1 : ∀ m, 25 ≤ m → m ≤ 27 → ∀ st : Stmt, st.InRange →
-    padTableError (m1Schedule m) st (m1Pad m) 2 ≤ (2 : ℝ) ^ (-(196.5 : ℝ)) := by
+    padTableError (m1Schedule m) st (m1Pad m) 2 ≤ (2 : ℝ) ^ (-(205 : ℝ)) := by
   intro m h1 h2 st hst
   have hp := m1_padNumOK m h1 h2
   have hok := m1_levels_ok m h1 h2
   have hc := Rat.cast_le (K := ℝ) |>.2 (m1_check m h1 h2)
-  have hfin := half_pow_197_mul_sqrt2_le
+  have hfin := half_pow_205_le
   interval_cases m
   · rw [m1Schedule_25] at hp hok hc ⊢
     refine (padTableError_le_up _ _ _ _ _ _ _ _ _ hp (fun l hl => hok l
