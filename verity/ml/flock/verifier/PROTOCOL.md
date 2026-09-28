@@ -1224,15 +1224,15 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   no slots would escape the block bound.
 - **The nets the verifier builds.** The `sha512x3` and `hm96` nets must equal the verifier's own, in every field
   (`Flock.HmNets`, D7). So must a unit net whose name starts with `rec-open/` (V*'s opening, `rec_outer.lowering`):
-  - its name must be `rec-open/l<LANES>-h<H>`, with `LANES` a positive multiple of 8 and `1 ≤ H ≤ 16` (`rec_open` builds
-    `0 ≤ H ≤ 32`, reading the side bits above 16 from `dirs`' word 1 and giving `H = 0` one unread `aux` row; this verifier
-    refuses those heights until `Flock.RecOpen` does the same);
-  - its input ports must total `384·LANES + 1024·⌈H/2⌉ + 2048` bits and its output ports 2048, compared before the
-    verifier builds its net (about 4,374 rows a lane), so a name can't make it build a net larger than the file's rows
-    allow;
+  - its name must be `rec-open/l<LANES>-h<H>`, with `LANES` a positive multiple of 8 and `0 ≤ H ≤ 32` (the side bits
+    are `dirs`' words 0 and 1, and at `H = 0` there is no climb);
+  - its input ports must total `384·LANES + 1024·max(1, ⌈H/2⌉) + 2048` bits and its output ports 2048, compared before
+    the verifier builds its net (about 4,374 rows a lane), so a name can't make it build a net larger than the file's
+    rows allow;
   - the net must be `Flock.RecOpen`'s builder of `rec_open._steps` at those parameters, laid out as `ir_lower.layout`
-    lays it out: inputs `row, aux, acc, coef, dirs` of `8·LANES`, `64·⌈H/2⌉`, `64`, `16·LANES` and `64` u16 words, and
-    outputs `out` then `acc_out` of 64 words each, one 16-bit port per word.
+    lays it out: inputs `row, aux, acc, coef, dirs` of `8·LANES`, `64·max(1, ⌈H/2⌉)` (at `H = 0` one row the net does
+    not read), `64`, `16·LANES` and `64` u16 words, and outputs `out` then `acc_out` of 64 words each, one 16-bit port
+    per word.
 
   So must a unit net whose name starts with `rec-residuals/` (a part of V*'s algebra, `rec_residuals.lowering`):
   - its name must be `rec-residuals/m<m>-k<k_log>-c<claims>-p<j>`, with a `fast100` schedule at `m`, `k_log ≥ 6` and

@@ -218,7 +218,7 @@ consistency term at `k = 0, 1` and the rest of `acc`. -/
 theorem unit_recOpen {C : Audit.Circuit} {n : ℕ} {P : Partition C n} {u : Fin n} {net : Flock.Net} (hB : Built net)
     {k : ℕ} (I : P.IsRowsUnit u ((Rows.ofNet hB).stack k)) (X : Fin C.N → Bool) {j : ℕ} (hj : j < k)
     (hone : X (I.wire ((Rows.ofNet hB).stack k).one) = true)
-    (ms : Flock.MerkleScheme) (hms : ∀ l r, ms.node l r = Flock.Sha512.hash (l ++ r)) (LANES H : ℕ) (hH : H ≤ 16)
+    (ms : Flock.MerkleScheme) (hms : ∀ l r, ms.node l r = Flock.Sha512.hash (l ++ r)) (LANES H : ℕ) (hH : H ≤ 32)
     (p : Ports) (outBits : Array ℕ) {name : String}
     (hl : Flock.HmNets.netOf name (recOpenLaid LANES H p outBits) = .ok net)
     (hu : net.unitLog ≤ 32) (hout : (recOpenOuts LANES H p).length ≤ outBits.foldl (· + ·) 0)

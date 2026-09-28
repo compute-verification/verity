@@ -8,6 +8,7 @@ program, partition and registered rows (the verifier's ``coef`` and ``dirs``, th
 opening that does not climb to its top node found before anything is proved."""
 from __future__ import annotations
 
+import hashlib
 import json
 import random
 import shutil
@@ -240,10 +241,8 @@ def test_a_level_of_salted_leaves_is_refused(tmp_path):
         O.stage(level, tmp_path, O.Chain.build(PROGRAM, qs, _coefs(qs)), _coefs(qs), tops)
 
 
-@pytest.mark.slow
-@pytest.mark.skipif(not BIN.exists() or shutil.which("lake") is None, reason="the Lean verifier is not built")
-def test_the_lean_verifier_reads_the_statement_under_the_verifiers_own_files(staged):
-    d = staged[0]
+def _statement(d: Path) -> dict:
+    """The Lean verifier's `statement` on a staged level under the verifier's own files: its first line."""
     p = subprocess.run([str(BIN), "statement", "--statement", "verity/flock-circuit", "--circuit", str(d / "circuit.txt"),
                         "--public", str(d / "pub.bin"), "--partition", str(d / "partition.json"), "--program", str(d / "program.json"),
                         "--registered", str(d / "registered.json")],
@@ -251,5 +250,48 @@ def test_the_lean_verifier_reads_the_statement_under_the_verifiers_own_files(sta
     assert p.returncode == 0, p.stdout + p.stderr
     line = json.loads(p.stdout.splitlines()[0])
     assert line["partition_check"]["units"] == "derived"
+    return line
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(not BIN.exists() or shutil.which("lake") is None, reason="the Lean verifier is not built")
+def test_the_lean_verifier_reads_the_statement_under_the_verifiers_own_files(staged):
+    d = staged[0]
+    line = _statement(d)
     own = json.loads((d / "registered.json").read_text())["ports"]
     assert line["registered"] == {k: {"value": v["value"], "root": v["root"]} for k, v in own.items()}
+
+
+def _sparse(H: int, c: int, positions: list[int], seed: int):
+    """A tree of plain leaves, `H` levels below a top of `2^c` nodes, known at `positions` and random elsewhere: the rows
+    there, each one's siblings bottom up, and the top's nodes."""
+    g = random.Random(seed)
+    rows = {p: [g.getrandbits(128) for _ in range(8)] for p in set(positions)}
+    nodes, sibs = {p: V.leaf(r) for p, r in rows.items()}, {p: [] for p in rows}
+    node = lambda i: nodes.setdefault(i, g.randbytes(64))
+    for h in range(H):
+        for p in sorted(rows):
+            sibs[p].append(node((p >> h) ^ 1))
+        nodes = {i >> 1: hashlib.sha512(node(i & ~1) + node(i | 1)).digest() for i in sorted(nodes)}
+    return rows, sibs, [node(i) for i in range(1 << c)]
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(not BIN.exists() or shutil.which("lake") is None, reason="the Lean verifier is not built")
+@pytest.mark.parametrize("H, positions", [(0, [0, 1, 1, 0]), (17, [5, 1 << 16 | 3, 3 << 16 | 1 << 9, 1 << 17 | 6])])
+def test_the_lean_verifier_reads_a_level_at_either_edge_of_the_climb(H, positions, tmp_path):
+    """`RecOpen_v4` climbs 0 to 32 levels, and the Lean verifier takes a `rec-open/` unit only as its own net and layout at
+    the unit's height (`Flock.RecOpen`). A level staged at H = 0 (``aux`` one row the unit does not read) and at 17 (the
+    first height whose side bits are ``dirs``' word 1, set at two of its four positions) is read under the verifier's own
+    files. Staging H = 17 takes about two minutes; no cheaper test compares the verifier's net with ``rec_open``'s past
+    16 or at 0."""
+    rows, sibs, top = _sparse(H, 1, positions, H)
+    keys = [(0, 0), (0, 1), (1, 0), (1, 1)]
+    qs = [V.Query(rep, 0, j, p, H + 1, 1, top[p >> H], rows[p], None, sibs[p]) for (rep, j), p in zip(keys, positions)]
+    (level,) = O.levels(qs)
+    coefs = _coefs(qs)
+    shared = _top(top, 5)
+    s = O.stage(level, tmp_path, O.Chain.build(PROGRAM, qs, coefs), coefs,
+                O.TopValue.build(PROGRAM, 0, {0: shared, 1: shared}))
+    assert s["template"] == f"RecOpen_v4{{LANES=8,H={H}}}" and s["opened"] == s["summed"] == 4
+    _statement(tmp_path)
