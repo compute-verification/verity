@@ -14,7 +14,9 @@ environment extension loaded, so none of the package's code runs), and replays t
                  `@[extern]`) is not listed in `escapes` with a reason, or a listed one no longer is one
     orphans      a .lean file of the package is neither an audited module nor under an `exempt` prefix
     unchecked    a source file or the lakefile names `debug.skipKernelTC`, an option that turns proofs into `sorry`, a
-                 `bootstrap.*` option, `addDeclWithoutChecking` or `addDeclCore` (comments and docstrings aside)
+                 `bootstrap.*` option, `addDeclWithoutChecking` or `addDeclCore` (comments and docstrings aside); so does
+                 the source of a module the package imports from a fetched package (`.lake/packages/*`), or that
+                 package's lakefile, unless `dependency_unchecked` lists it with a reason
     compile-time a source file runs code while it compiles (an initializer, `#eval`, `run_cmd`, an elaborator or macro:
                  each can do IO) outside a module listed under `compile_time`, or the package has a `lakefile.lean`
     policy       the package has no `lean-audit.json` (the message carries a template)
@@ -99,8 +101,8 @@ FIXTURES = HERE / "tests" / "fixtures"
 #: name components of the declarations Lean generates for a definition (listed under `reads` with it, not by name)
 GENERATED = re.compile(r"^(_.*|match_\d+|proof_\d+|eq_\d+|eq_def|mk|rec|recOn|casesOn|noConfusion|noConfusionType|below|brecOn"
                        r"|binductionOn|ibelow|ctorIdx|inj|injEq|sizeOf_spec)$")
-ORDER = ("roots", "exempt", "axioms", "assumptions", "meaning", "escapes", "compile_time", "layers", "upstream", "pins",
-         "reads", "dependencies")
+ORDER = ("roots", "exempt", "axioms", "assumptions", "meaning", "escapes", "compile_time", "dependency_unchecked", "layers",
+         "upstream", "pins", "reads", "dependencies")
 
 
 def sibling(name: str):
@@ -229,6 +231,46 @@ def scans(pkg: Path, files: dict[str, str], policy: dict) -> list[str]:
         if not any(under([m], f) for f in files):
             hits.append(f"compile-time: `compile_time` lists {m}, which matches no file; remove the entry")
     return hits
+
+
+def dependency_scans(pkg: Path, oleans: list[str], policy: dict) -> tuple[list[str], int]:
+    """(the `unchecked` hits, the number of files read) in what the package's build takes from the packages it fetches
+    (`.lake/packages/*`): the source of each module it imports from one (``oleans``, which `Facts.lean` reports), and the
+    lakefile of each such package, comments aside.  A hit fails unless `dependency_unchecked` lists its module (a lakefile:
+    `<package>/lakefile.lean`) with the reason.  The toolchain, which defines these options, is trusted, and a path
+    dependency is a package of the repository, audited on its own."""
+    fails, seen, read = [], set(), 0
+    allowed = policy.get("dependency_unchecked", {})
+    loaded = [Path(o).resolve() for o in oleans]
+    packages_dir = pkg / ".lake" / "packages"
+    for d in sorted(packages_dir.iterdir()) if packages_dir.is_dir() else []:
+        lib = (d / ".lake" / "build" / "lib" / "lean").resolve()
+        rels = sorted(o.relative_to(lib).with_suffix(".lean") for o in loaded if o.is_relative_to(lib))
+        if not rels:
+            continue
+        for key, src in [*((".".join(r.with_suffix("").parts), d / r) for r in rels),
+                         *((f"{d.name}/{f}", d / f) for f in ("lakefile.toml", "lakefile.lean") if (d / f).exists())]:
+            if not src.is_file():
+                fails.append(f"unchecked: the package imports {key} from {d.name}, whose source {src.relative_to(pkg)} is "
+                             f"missing, so nothing scanned it")
+                continue
+            read += 1
+            raw = src.read_text(errors="replace")
+            # stripping blanks comments out and joins nothing, so a file without a hit has none once stripped
+            if not UNCHECKED.search(raw):
+                continue
+            for i, line in enumerate(strip_comments(raw, toml=src.suffix == ".toml").splitlines(), 1):
+                if not (hit := UNCHECKED.search(line)):
+                    continue
+                seen.add(key)
+                if key not in allowed:
+                    fails.append(f"unchecked: {src.relative_to(pkg)}:{i} ({key}, which the package's build takes from "
+                                 f"{d.name}) names {hit.group(1)}, which lets a declaration skip the kernel or a proof become "
+                                 f"sorry; list {key} under `dependency_unchecked` with the reason if the package must import it")
+    for key in sorted(set(allowed) - seen):
+        fails.append(f"unchecked: `dependency_unchecked` lists {key}, which the package does not import or which names no "
+                     f"such option; remove the entry")
+    return fails, read
 
 
 def facts_of(pkg: Path, policy: dict, work: Path) -> dict:
@@ -549,7 +591,10 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     rep["seconds"]["audit"] = round(time.monotonic() - s, 1)
     files = lean_modules(pkg)
     fails, new = judge(policy, facts, files, update)
-    fails = scans(pkg, files, policy) + fails
+    s = time.monotonic()
+    missed, rep["dependency_sources"] = dependency_scans(pkg, facts["oleans"], policy)
+    rep["seconds"]["dependency-sources"] = round(time.monotonic() - s, 1)
+    fails = scans(pkg, files, policy) + missed + fails
     if "upstream" in policy:
         s = time.monotonic()
         rep["upstream"], missed = sibling("upstream").pinned(pkg, policy["upstream"])
