@@ -33,7 +33,7 @@
     "  Eq (Pous.p₀ β S B 98304) Pous.Accounting.reportP₀.cast"
    ],
    "assumptions": [],
-   "type_hash": "000000003f733f6e"
+   "type_hash": "f6bdf5f4e4d763b03f28a38a69a9e4e2cac7268c2f8078100d9986b51a4294f4"
   },
   "Pous.Accounting.report_k214": {
    "signature": [
@@ -41,7 +41,7 @@
     "  IsLeast (Set.ofPred fun k => Rat.instLE.le (instHPow.hPow Pous.Accounting.reportP₀ k) (1 / 100)) 214"
    ],
    "assumptions": [],
-   "type_hash": "000000003b85ded4"
+   "type_hash": "c2740af40bb88160cac02caae7c55e7403e9cfa14849e7b49145085c88f10952"
   },
   "Pous.honest_seq_accepted": {
    "signature": [
@@ -49,7 +49,7 @@
     "  Eq (Pous.pr (Pous.seqAccepts sch k W (Pous.honestPre sch) (Pous.honestSeq sch))) 1"
    ],
    "assumptions": [],
-   "type_hash": "00000000b73551f7"
+   "type_hash": "3156914802cb7bdb00b86c71bd7e6ce56cb3345f4760a4e4861e6280748882ed"
   },
   "Pous.honest_sim_accepted": {
    "signature": [
@@ -57,24 +57,24 @@
     "  Eq (Pous.pr (Pous.simAccepts sch W (Pous.honestPre sch) (Pous.honestSim sch k))) 1"
    ],
    "assumptions": [],
-   "type_hash": "00000000197a41d9"
+   "type_hash": "e38981fd4bcc2d0e4ae026fa01a773d0d2e929d4fd5b8e293cd1092de05167a1"
   },
   "Pous.junk_correct": {
    "signature": ["Pous.junk_correct : Pous.junk.Correct"],
    "assumptions": [],
-   "type_hash": "00000000eb25defd"
+   "type_hash": "eebed9534d6269b0044ffffed411a319b5fbbef74636f943341ef578a6dffcb1"
   },
   "Pous.junk_not_meets": {
    "signature": [
     "Pous.junk_not_meets (reveal : Pous.Reveal) (D Q k : Nat) (ε : ENNReal) : Not (Pous.Meets Pous.junk reveal D Q k ε)"
    ],
    "assumptions": [],
-   "type_hash": "000000007a48ab8c"
+   "type_hash": "41671f55f2299b3b42c6230e72e8cf7e06faf16b1e11b9c56325e064b0b87aa7"
   },
   "Pous.junk_spaceBound": {
    "signature": ["Pous.junk_spaceBound : Pous.junk.SpaceBound Pous.Params.expansion"],
    "assumptions": [],
-   "type_hash": "00000000e25349e5"
+   "type_hash": "2f3e238dcccc02404934f9d6674956120294a381ccd8cfd34d537bca26ce2940"
   },
   "Pous.k_ge_86": {
    "signature": [
@@ -84,7 +84,7 @@
     "  instLENat.le 86 k"
    ],
    "assumptions": [],
-   "type_hash": "00000000c3dc050f"
+   "type_hash": "e3afb0c350b9311b0247559c164170889177b29ec1d26ff2096a608682d26228"
   },
   "Pous.not_meets_eps_one": {
    "signature": [
@@ -92,7 +92,7 @@
     "  Not (Pous.Meets sch reveal D Q k 1)"
    ],
    "assumptions": [],
-   "type_hash": "0000000075ddc1cd"
+   "type_hash": "d86b4749e2e6a22a4619525664a2e5725ae3a621540122eb7e4c432cc16ff3b7"
   },
   "Pous.not_meets_of_lt_eps": {
    "signature": [
@@ -100,7 +100,7 @@
     "  (hε : ENNReal.instPartialOrder.lt Pous.Params.εMax ε) : Not (Pous.Meets sch reveal D Q k ε)"
    ],
    "assumptions": [],
-   "type_hash": "00000000b3c36b1d"
+   "type_hash": "8d17fb3f06b2f3d2e653e733f48ff89ffb0e23d3c72862be94a6560f9476749f"
   },
   "Pous.plain_short_coins_insecure": {
    "signature": [
@@ -109,7 +109,7 @@
     "  Exists fun A₁ => Exists fun A₂ => ∀ (W : Pous.Bits sch.n), Eq (Pous.pr (Pous.simAccepts sch W A₁ A₂)) 1"
    ],
    "assumptions": [],
-   "type_hash": "00000000ad0805a2"
+   "type_hash": "2cf22fe1dd584f28cb4a88d1acb642ee521ee4cb5c3c450fd74ce17cefdb825c"
   },
   "Pous.raw_seq_accepted": {
    "signature": [
@@ -119,7 +119,7 @@
     "    (Pous.pr (Pous.seqAccepts sch k W (Pous.rawPre sch hm) (Pous.rawSeq sch h D Q)))"
    ],
    "assumptions": [],
-   "type_hash": "000000006d227edd"
+   "type_hash": "feacae788e2a29916119f7b9b0e48704bf26346b6a39147948f8942cf73df581"
   },
   "Pous.raw_sim_accepted": {
    "signature": [
@@ -129,7 +129,7 @@
     "    (Pous.pr (Pous.simAccepts sch W (Pous.rawPre sch hm) (Pous.rawSim sch h D Q k)))"
    ],
    "assumptions": [],
-   "type_hash": "000000009b0d7f23"
+   "type_hash": "3c76052ab3f9ea6abd575006dd2fc06826be9f42a0d5ff62d7c0f1c5eea4d1d1"
   },
   "PousBridge.b5_stacked": {
    "signature": [
@@ -165,7 +165,7 @@
     "        (instHAdd.hAdd (Nat.floor (instHMul.hMul (instHSub.hSub 1 ε) n.cast)) 1)))"
    ],
    "assumptions": [],
-   "type_hash": "000000005b0ac9c7"
+   "type_hash": "407f9dd55399ea1f3cbf84a04bfe0cd603afc85700d3c53280c6002d61340c98"
   },
   "PousDenseReCert.dense_meets_64": {
    "signature": [
@@ -174,7 +174,7 @@
     "    (instHPow.hPow (ENNReal.instInv.inv 2) 128)"
    ],
    "assumptions": [],
-   "type_hash": "000000009c8f81e5"
+   "type_hash": "6ccdb99d475a98b4ea96d59d3aa06989f4d4d9c3ab041828f15f2322b913bba9"
   },
   "PousDenseReCert.domainSep_equiv": {
    "signature": [
@@ -186,7 +186,7 @@
     "          (t (EquivLike.toFunLike.coe (Pous.Dense.segIndexEquiv N B) p)))"
    ],
    "assumptions": [],
-   "type_hash": "00000000bb2e6343"
+   "type_hash": "4f759e307c4d885e75410486b37bb7df705b61b5b96d493b540b5a8426188ad3"
   },
   "PousDenseReCert.segTag_auditSecure": {
    "signature": [
@@ -205,7 +205,7 @@
     "  Pous.AuditSecure (Pous.Dense.segTagScheme N B ℓ salt) Pous.Reveal.sequential S D Q k δ ε"
    ],
    "assumptions": [],
-   "type_hash": "00000000e6ad9deb"
+   "type_hash": "5e34457c8a58bacd118e542fbfb8943a7833c5eb432c74c0c95b074e798580df"
   },
   "PousDenseReCert.segTag_meets_14": {
    "signature": [
@@ -214,7 +214,7 @@
     "    106 (instHPow.hPow (ENNReal.instInv.inv 2) 128)"
    ],
    "assumptions": [],
-   "type_hash": "0000000044e2fec1"
+   "type_hash": "c699c5391a58a661fdcce84bb5b4d30cbed76ab989d902873e1fdd0fcf2b4c37"
   },
   "PousDenseReCert.seg_meets_14": {
    "signature": [
@@ -223,266 +223,266 @@
     "    (instHPow.hPow (ENNReal.instInv.inv 2) 128)"
    ],
    "assumptions": [],
-   "type_hash": "00000000842a3710"
+   "type_hash": "9b439f3cbec8caf7c3cbdbccde8def8203f39b128231004c766f377a3db1e20e"
   },
   "PousDenseReCert.tag_injective_14": {
    "signature": [
     "PousDenseReCert.tag_injective_14 (salt : Pous.Bits 192) : Function.Injective fun s => Pous.Dense.tag salt s.val"
    ],
    "assumptions": [],
-   "type_hash": "000000003e07c3b1"
+   "type_hash": "78a3b5c4a214c89de8600e205823606d0e21b31f5b470228bf221252454f51c3"
   },
   "PousP3Column.band_twoWay_220_12": {
    "signature": ["PousP3Column.band_twoWay_220_12 : Pous.ColumnGame.ColumnHard (PousP3Column.bandGraph 220 12) 10 220 3"],
    "assumptions": [],
-   "type_hash": "0000000026e70b9f"
+   "type_hash": "f23cbb6e5cc76f9ecb6828b174b2f0c1df7a965164a171c3e72771d329c51ff8"
   },
   "PousP3Column.band_twoWay_220_12_d11": {
    "signature": [
     "PousP3Column.band_twoWay_220_12_d11 : Pous.ColumnGame.ColumnHard (PousP3Column.bandGraph 220 12) 11 220 3"
    ],
    "assumptions": [],
-   "type_hash": "0000000038aee1fb"
+   "type_hash": "69493da706e23fde14da6dee8432b546a39b2a00e6c91fb496e95b370b5e6a8c"
   },
   "PousP3Column.band_twoWay_220_16": {
    "signature": ["PousP3Column.band_twoWay_220_16 : Pous.ColumnGame.ColumnHard (PousP3Column.bandGraph 220 16) 12 220 3"],
    "assumptions": [],
-   "type_hash": "000000007e5fa27c"
+   "type_hash": "cb3abdd39c30d43acc51dc1c646bcdd5a813193b86cf120e0c3f11928753dde1"
   },
   "PousProofs.A1CompressionCard": {
    "signature": ["PousProofs.A1CompressionCard : Pous.Pinned.A1CompressionCard"],
    "assumptions": [],
-   "type_hash": "000000008c4da783"
+   "type_hash": "7b2beb602aa15974945f3c55ba994989a05cf73e73c165059fd54c8cae620206"
   },
   "PousProofs.A1CompressionPr": {
    "signature": ["PousProofs.A1CompressionPr : Pous.Pinned.A1CompressionPr"],
    "assumptions": [],
-   "type_hash": "0000000003a86383"
+   "type_hash": "3eed3c877291a66dbc3a83bbd191f8154f919fc5466d4411efa342c1d9d0ef8f"
   },
   "PousProofs.A3Prime": {
    "signature": ["PousProofs.A3Prime : Pous.Pinned.A3Prime"],
    "assumptions": [],
-   "type_hash": "0000000027712fcd"
+   "type_hash": "4bcc6c859f73632b3654fcc13d314a9aea3741f6d2c8c795eb24f78649f72e79"
   },
   "PousProofs.A3PrimeLam": {
    "signature": ["PousProofs.A3PrimeLam : Pous.Pinned.A3PrimeLam"],
    "assumptions": [],
-   "type_hash": "000000001a4a9aff"
+   "type_hash": "4de541c1d947bf033203892ea1b08af7090de34b46f2604bbc3e94257282b68e"
   },
   "PousProofs.A6RederiveTimed": {
    "signature": ["PousProofs.A6RederiveTimed : Pous.Pinned.A6RederiveTimed"],
    "assumptions": [],
-   "type_hash": "000000007bc28151"
+   "type_hash": "4e5fa56666b2c00eeb57e4d0a6ee728bd673ebe909b91b097236145da7be62e5"
   },
   "PousProofs.A6RederiveUntimed": {
    "signature": ["PousProofs.A6RederiveUntimed : Pous.Pinned.A6RederiveUntimed"],
    "assumptions": [],
-   "type_hash": "00000000eb7cac29"
+   "type_hash": "e091942a65637dec897125180820939aa5196dc7fe1ddca940762edc81727a56"
   },
   "PousProofs.B1IndepSet": {
    "signature": ["PousProofs.B1IndepSet : Pous.Pinned.B1IndepSet"],
    "assumptions": [],
-   "type_hash": "000000001a1c06bb"
+   "type_hash": "74583dee2052710bc9e5a67a844a0d3b854274c50d80d5ffa2bbe368f7b26e8e"
   },
   "PousProofs.B2Stacking": {
    "signature": ["PousProofs.B2Stacking : Pous.Pinned.B2Stacking"],
    "assumptions": [],
-   "type_hash": "000000000fedc6a2"
+   "type_hash": "1be5be2f759d0bbb21b92a53c68e22c9c6a073aa05133796f7cf634e164ce1d5"
   },
   "PousProofs.B3Chain": {
    "signature": ["PousProofs.B3Chain : Pous.Pinned.B3Chain"],
    "assumptions": [],
-   "type_hash": "0000000099142a08"
+   "type_hash": "dcb2bde0c5351d7ef24c92eaed4fa9713c97126ceae3466963846020daf7eda3"
   },
   "PousProofs.B5ExPostFacto": {
    "signature": ["PousProofs.B5ExPostFacto : Pous.Pinned.B5ExPostFacto"],
    "assumptions": [],
-   "type_hash": "000000003e4092be"
+   "type_hash": "4044d61a315aa84b7d80103f2504c53a0ea26c57e532a6005f63a3bba707180e"
   },
   "PousProofs.B5ExPostFactoBounded": {
    "signature": ["PousProofs.B5ExPostFactoBounded : Pous.Pinned.B5ExPostFactoBounded"],
    "assumptions": [],
-   "type_hash": "000000007b754934"
+   "type_hash": "6dd56ad705c557d7ca801f704402b64ac373ee60173ef94bfe7f18e16221a401"
   },
   "PousProofs.BandChainMeets64": {
    "signature": ["PousProofs.BandChainMeets64 : Pous.Pinned.BandChainMeets64"],
    "assumptions": [],
-   "type_hash": "0000000088922205"
+   "type_hash": "459cb04c1108b2d8f99c90e85639a5fd6d35e93ff12876146047b31356e00cc7"
   },
   "PousProofs.BandChainMeets64D12": {
    "signature": ["PousProofs.BandChainMeets64D12 : Pous.Pinned.BandChainMeets64D12"],
    "assumptions": [],
-   "type_hash": "00000000bc0db2ce"
+   "type_hash": "0b3fe9ecaa84619a78e95b50dd6a85ab17fd0fd260a1324430dfede6b27ec8ec"
   },
   "PousProofs.BandChainMeets64D5": {
    "signature": ["PousProofs.BandChainMeets64D5 : Pous.Pinned.BandChainMeets64D5"],
    "assumptions": [],
-   "type_hash": "00000000139a2a63"
+   "type_hash": "dff2c9ba1cca41c0846af54474895c5f32f288b85db39400186821b7a267a640"
   },
   "PousProofs.BandMultiMeets14": {
    "signature": ["PousProofs.BandMultiMeets14 : Pous.Pinned.BandMultiMeets14"],
    "assumptions": [],
-   "type_hash": "0000000024d8fc5d"
+   "type_hash": "2a1690f14f07ce6a84683dbfde80e6e15a4761f8d5e0eb59b804764f0e1a07bd"
   },
   "PousProofs.BandMultiMeets14K106": {
    "signature": ["PousProofs.BandMultiMeets14K106 : Pous.Pinned.BandMultiMeets14K106"],
    "assumptions": [],
-   "type_hash": "00000000100502b5"
+   "type_hash": "cbfd12eccdf675c90431cafe42ab7609756f1bb8b93748f2480142b452c7664b"
   },
   "PousProofs.BandMultiMeetsFamily": {
    "signature": ["PousProofs.BandMultiMeetsFamily : Pous.Pinned.BandMultiMeetsFamily"],
    "assumptions": [],
-   "type_hash": "00000000865369be"
+   "type_hash": "00cdf920b400492ba16844f29e476f408bcadeb61ccccf2e29a4876ad2f43716"
   },
   "PousProofs.BandPubMeets14": {
    "signature": ["PousProofs.BandPubMeets14 : Pous.Pinned.BandPubMeets14"],
    "assumptions": [],
-   "type_hash": "000000009ade5a67"
+   "type_hash": "012e327aa84c64a5c1268961e7129993dcaab76b9e57899212938f3db886bcb0"
   },
   "PousProofs.BandPubMeets14Global": {
    "signature": ["PousProofs.BandPubMeets14Global : Pous.Pinned.BandPubMeets14Global"],
    "assumptions": [],
-   "type_hash": "00000000aee84ff5"
+   "type_hash": "fdc285703195e2c7aaddd2099bbf064ef9ecde2580d90a574e1225141c229007"
   },
   "PousProofs.BandPubMeets64": {
    "signature": ["PousProofs.BandPubMeets64 : Pous.Pinned.BandPubMeets64"],
    "assumptions": [],
-   "type_hash": "00000000b52bf5c1"
+   "type_hash": "473ae3e31141495319e546f32186fbb48e99bcfe269af0b795ce256b259ae5dc"
   },
   "PousProofs.ChainDenseMeets111": {
    "signature": ["PousProofs.ChainDenseMeets111 : Pous.Pinned.ChainDenseMeets111"],
    "assumptions": [],
-   "type_hash": "00000000ace5c94c"
+   "type_hash": "8cda61f55870f5ede65b1fbba05dc86bd48bac9920604224853130bfb9f5beb9"
   },
   "PousProofs.ChainDenseMeets64": {
    "signature": ["PousProofs.ChainDenseMeets64 : Pous.Pinned.ChainDenseMeets64"],
    "assumptions": [],
-   "type_hash": "000000004a9209a8"
+   "type_hash": "636cd313c7f9189e0308668303f719ae3fc5e40493aa0c57f27faecbfb8391ac"
   },
   "PousProofs.DenseMeets": {
    "signature": ["PousProofs.DenseMeets : Pous.Pinned.DenseMeets"],
    "assumptions": [],
-   "type_hash": "0000000064f8fda9"
+   "type_hash": "4563a4aeca50cbe9c2e825c86ce6fdd3ab3f9c9186625286ac417f849bf98805"
   },
   "PousProofs.FibreCount": {
    "signature": ["PousProofs.FibreCount : Pous.Pinned.FibreCount"],
    "assumptions": [],
-   "type_hash": "00000000c6af8b17"
+   "type_hash": "2fbb2d2597f97ecdbc3df386a32afe0ab7107e53f50dc355eb727b87c3f296ba"
   },
   "PousProofs.FischClaim13": {
    "signature": ["PousProofs.FischClaim13 : Pous.Pinned.FischClaim13"],
    "assumptions": [],
-   "type_hash": "00000000a56a04fb"
+   "type_hash": "231d8b8827ceea39d7f6b824b549fb7d01145cdae3494c0de2e69161aeea8277"
   },
   "PousProofs.FischClaim14": {
    "signature": ["PousProofs.FischClaim14 : Pous.Pinned.FischClaim14"],
    "assumptions": [],
-   "type_hash": "0000000008c26827"
+   "type_hash": "dfb01f52e3ab41a5af9d8596e6bc87237c95cdc5da482c601d212168c4da9455"
   },
   "PousProofs.KFloor": {
    "signature": ["PousProofs.KFloor : Pous.Pinned.KFloor"],
    "assumptions": [],
-   "type_hash": "00000000e6e79f67"
+   "type_hash": "537bcc1500f3fae623e9123d847d55a6fd52fbeb323157b578298f72e5a818f1"
   },
   "PousProofs.N10Refuted": {
    "signature": ["PousProofs.N10Refuted : Pous.Pinned.N10Refuted"],
    "assumptions": [],
-   "type_hash": "00000000c6f1af22"
+   "type_hash": "58c8e580dd827db0c95acb367b31d26822be7a4e9e3168080a25cad7c446ab2e"
   },
   "PousProofs.P3ConcreteMeets14GB": {
    "signature": ["PousProofs.P3ConcreteMeets14GB : Pous.Pinned.P3ConcreteMeets14GB"],
    "assumptions": [],
-   "type_hash": "000000000b0a1fba"
+   "type_hash": "8236a2aee5f3eaff9b25fd3f57f8d144a23e2d9b63c9aa0c5de0158d443893d1"
   },
   "PousProofs.P3ConcreteMeets64": {
    "signature": ["PousProofs.P3ConcreteMeets64 : Pous.Pinned.P3ConcreteMeets64"],
    "assumptions": [],
-   "type_hash": "000000005311cd09"
+   "type_hash": "d532074710d29c5b53aaf970ef85f0c8f628a724a109eb852a0b2526b1dc9697"
   },
   "PousProofs.P3ConcreteMeets64D12": {
    "signature": ["PousProofs.P3ConcreteMeets64D12 : Pous.Pinned.P3ConcreteMeets64D12"],
    "assumptions": [],
-   "type_hash": "00000000e51bc8c7"
+   "type_hash": "42ed4538ee051918de0a449ab882ad83ac4b4c8e1e01df4da9141e5437500323"
   },
   "PousProofs.ReverseNeedsAllChildren": {
    "signature": ["PousProofs.ReverseNeedsAllChildren : Pous.Pinned.ReverseNeedsAllChildren"],
    "assumptions": [],
-   "type_hash": "000000007982a853"
+   "type_hash": "aa5e8b9947b7021e75aa0cebbf9c5610c6da7cb0cfd02ea9b3e6263c3d2fc3dd"
   },
   "PousProofs.SampledAuditProd": {
    "signature": ["PousProofs.SampledAuditProd : Pous.Pinned.SampledAuditProd"],
    "assumptions": [],
-   "type_hash": "00000000b1c8e43c"
+   "type_hash": "e1854a2c287fe6367b7bcdf8d2c337725df14b7123dc894072c925096715a22a"
   },
   "PousProofs.SampledAuditSeq": {
    "signature": ["PousProofs.SampledAuditSeq : Pous.Pinned.SampledAuditSeq"],
    "assumptions": [],
-   "type_hash": "00000000b5a49822"
+   "type_hash": "0fb51312629e96cccb90d21e9271881fe435e9c5c1272c411cdf402af3d1263e"
   },
   "PousProofs.SampledAuditSim": {
    "signature": ["PousProofs.SampledAuditSim : Pous.Pinned.SampledAuditSim"],
    "assumptions": [],
-   "type_hash": "00000000a169413a"
+   "type_hash": "2bdc6882d7578f6b92ee0cfb773642fdabeb63eaf1207e3a031993372785b2eb"
   },
   "PousProofs.StackedAuditOnePercent": {
    "signature": ["PousProofs.StackedAuditOnePercent : Pous.Pinned.StackedAuditOnePercent"],
    "assumptions": [],
-   "type_hash": "000000004d131ddc"
+   "type_hash": "c741e162d7515087892a0e3d70c49c1b9b934e452ee2e4ef3f9e763df5557f47"
   },
   "PousProofs.StackedAuditSeq": {
    "signature": ["PousProofs.StackedAuditSeq : Pous.Pinned.StackedAuditSeq"],
    "assumptions": [],
-   "type_hash": "00000000a866c338"
+   "type_hash": "dc0b6de6f84ab8646b2b4a35e9b832c787cbbe1b013c767353a39c7f12c63c5e"
   },
   "PousProofs.Theorem1iTimed": {
    "signature": ["PousProofs.Theorem1iTimed : Pous.Pinned.Theorem1iTimed"],
    "assumptions": [],
-   "type_hash": "00000000fa9fb952"
+   "type_hash": "90f886dde662ff2c8ad849e5238e6da9775747bec7705ca09cead38ef6a245d2"
   },
   "PousProofs.Theorem1ii": {
    "signature": ["PousProofs.Theorem1ii : Pous.Pinned.Theorem1ii"],
    "assumptions": [],
-   "type_hash": "000000001e00c225"
+   "type_hash": "e0a45f43ce6898c3653df0a4f338349b9ea24402cb25163c7602809d0ac65cf1"
   },
   "PousProofs.Theorem1iiSeq": {
    "signature": ["PousProofs.Theorem1iiSeq : Pous.Pinned.Theorem1iiSeq"],
    "assumptions": [],
-   "type_hash": "000000000855fb6e"
+   "type_hash": "a9af9d23aa35a4a5ce665a1129787185dda2e7de399e34f15b15967d3c298464"
   },
   "PousProofs.Theorem1iiTimed": {
    "signature": ["PousProofs.Theorem1iiTimed : Pous.Pinned.Theorem1iiTimed"],
    "assumptions": [],
-   "type_hash": "000000000f8e5384"
+   "type_hash": "776de014cc58dd808e559b6b7096ca6ebd9006fe1a00bc6bcb819bdb1fa62128"
   },
   "PousProofs.Theorem1iiiTimed": {
    "signature": ["PousProofs.Theorem1iiiTimed : Pous.Pinned.Theorem1iiiTimed"],
    "assumptions": [],
-   "type_hash": "00000000e79fe1dd"
+   "type_hash": "d671df1e70792ab080e5be1979f793f08c3dd4dac53d7a21eb1b64b10d018bdd"
   },
   "PousProofs.TransposeMixing": {
    "signature": ["PousProofs.TransposeMixing : Pous.Pinned.TransposeMixing"],
    "assumptions": [],
-   "type_hash": "00000000411ceef4"
+   "type_hash": "e94f8f3ccca2b6da0a0e6cd9e91039ecb2947ece93dd7b20fd3ce99d5e44f934"
   }
  },
  "reads": {
   "Pous.Accounting.Numbers": {
-   "digest": "4a9ba0f9daf4ff259b46f9ce4de57b0d14c6d1be5ed662336e1fdce95060ff5e",
+   "digest": "c3e0e039ee4f67955e1ec7df458e92c10ee04d5cdc34ccb108696be0762cb008",
    "definitions": {
-    "Pous.Accounting.reportP₀": "e802c685f5ab6bb8"
+    "Pous.Accounting.reportP₀": "792d2f0ec476e68286d2c1fd38054eb741163a97c24f18b8d49843a0143240de"
    },
    "pins": ["Pous.Accounting.p₀_at_report", "Pous.Accounting.report_k214"]
   },
   "Pous.Accounting.Params": {
-   "digest": "3025397501097eb80df29aafc3d3a90aec29bc6b84ec18299a267ee321d8e119",
+   "digest": "3ae4cf02f914e89aef86f7a97df55e5b99671478c007e62ca89576f23a655e1c",
    "definitions": {
-    "Pous.Meets": "f0df90d41028230a",
-    "Pous.Params.expansion": "a0dd1ff06cebe85a",
-    "Pous.Params.secParam": "a431ca5bdb98ec69",
-    "Pous.Params.δ": "7b84cf95ac898a65",
-    "Pous.Params.εMax": "94f06872f9733d32",
-    "Pous.Params.ρ": "7c5d522be52a37c3",
-    "Pous.Scheme.stateBound": "8d92896441179d36"
+    "Pous.Meets": "96a592d5e07347aaff0460d04510f493eac26566205bf78910bba7f3a0c11943",
+    "Pous.Params.expansion": "83dbe8b0dc9a9a7b214ab100047c39a59326afd9f5a4846ad40612bae601ca06",
+    "Pous.Params.secParam": "17fb43573490864278b68e25faa9172e6c85570940de5daf8bf141ca90e58152",
+    "Pous.Params.δ": "c03f10b1f4edf27583dddc10b1a5af9e293bd36954d3bb8097aff634833f6b0c",
+    "Pous.Params.εMax": "b5cbacbd05103798fd933bb12c0bb9bebea331b156e473a18ff8ae606ddfb374",
+    "Pous.Params.ρ": "44def8edadaf34487bc90e56af018f9151023082e982951a77f82f78d819f9b9",
+    "Pous.Scheme.stateBound": "f219b3199888b8a45eac393ac75becffadc935c7cd567be9198c400bd69c17d1"
    },
    "pins": [
     "Pous.junk_not_meets",
@@ -512,40 +512,40 @@
    ]
   },
   "Pous.Accounting.PubMeets": {
-   "digest": "09589dd1ba8785e6ba1aae10e16542ec82e17c6f49e8573f540bd5c3279c5ca4",
+   "digest": "9d73682b058fde2221effd1541ad95fec48155acc3279fe87c04bc495caa6ee5",
    "definitions": {
-    "Pous.PubMeets": "c05f35222ee0c081"
+    "Pous.PubMeets": "ab8d37a96a8969b4ed4b1836f7d6b1004ee009c78e21d6d9010a0f0fae532827"
    },
    "pins": ["PousProofs.BandPubMeets14", "PousProofs.BandPubMeets14Global", "PousProofs.BandPubMeets64"]
   },
   "Pous.Assumptions": {
-   "digest": "1edc556cf555d2b26a67ad7b996be320b0d469e3e83b63f98ce9937348cb9611",
+   "digest": "e83e8268388becda0664b632b2211456a277ebd793dfc4106a0a74ed5385a59b",
    "definitions": {
-    "Pous.Assumptions.LemmaA": "d2b41d7a6687c022"
+    "Pous.Assumptions.LemmaA": "443085b332aa09cadfa71231d70da316fb946789f2a8eefc024e04651911d8e6"
    },
    "pins": ["PousProofs.A3Prime", "PousProofs.A3PrimeLam"]
   },
   "Pous.Game.Oracle": {
-   "digest": "9bdb2af7bf2df8d71a3ad0d8c90a47930ea07c8d0cc42183a1bde3180f3f438c",
+   "digest": "3d3028385cd2a63e503b4bbce467b1f191203e9fbe059b8dbaffd10c8af7646d",
    "definitions": {
-    "Pous.IdealModel": "0d994494fe5a5d64",
-    "Pous.IdealModel.Ans": "54fb3940cf556f99",
-    "Pous.IdealModel.Qry": "b75ecdb9a83ff57e",
-    "Pous.IdealModel.answer": "2cd8d122b41f6b75",
-    "Pous.IdealModel.fintypeΩ": "18505e821eeecbdc",
-    "Pous.IdealModel.plain": "7a83fe63dfbcc277",
-    "Pous.IdealModel.randomOracle": "4e3130d9b898c372",
-    "Pous.IdealModel.Ω": "9e3eb398145980a6",
-    "Pous.Prog": "b68aa2fb07e7f9e3",
-    "Pous.Prog.Bounded": "21bc99a38d2ef00c",
-    "Pous.Prog.RoundBounded": "e46350db6456bd75",
-    "Pous.Prog.brecOn.go": "1dd5323d8775ddb1",
-    "Pous.Prog.depth": "cf8042c3c2682859",
-    "Pous.Prog.ret": "cc9fbc8ffb9304e0",
-    "Pous.Prog.round": "f313b8126f0f64f4",
-    "Pous.Prog.run": "d9db91029ee3e465",
-    "Pous.Prog.width": "57f41aeffd1726aa",
-    "Pous.Prog.work": "eae6917321472cd2"
+    "Pous.IdealModel": "9d7b6702a9651293498fba88662b0a07a5a4895043fe04c7dcb576631b27b8c3",
+    "Pous.IdealModel.Ans": "9a85561dbf628699eef928a6cbfd6ffd5b0ebb87cf74a6d83cf828ececda3db4",
+    "Pous.IdealModel.Qry": "9f2b4965cd77a0ea5de3953ba6aeac803a714737f2462fbd88b75acd582ba406",
+    "Pous.IdealModel.answer": "ba3d758821fe12868aeebe225fc5ac2c1a6bfc13e1e8b9e749d68128b51385ab",
+    "Pous.IdealModel.fintypeΩ": "3133b07d80fd589b4458a7575b25a94b09c064f861f964574d31ed917768fd48",
+    "Pous.IdealModel.plain": "5a0790c29fbca3736f712a33ef27dd0c0d6b640f280702ab5caca739c265936e",
+    "Pous.IdealModel.randomOracle": "52045ee9636149162040b6e04d57a2632dbbc46a1db6a6de5150bc32e503690d",
+    "Pous.IdealModel.Ω": "36fab9e981180f35ecafff6ec37e6bcb7cd5fad03e8ca990c64cddeee4e11030",
+    "Pous.Prog": "1bd35ee095c28dcee7c9ae29c6852b1a1c37673d4b057c2ce52e36001db339b3",
+    "Pous.Prog.Bounded": "4eaccdb39e04a3ffda69506389dd61a81c05aa0e86791800a88890739da925ec",
+    "Pous.Prog.RoundBounded": "108f8933cd29d15a2095902278019339c890352fa30c6a34f41ed9167b1c6f70",
+    "Pous.Prog.brecOn.go": "3386ef6c3debf3705ea07e943b50f1d95a7776845f3f8aeb124e3af00f46514e",
+    "Pous.Prog.depth": "586b975c2ce2051fd25673f8b746c4b1ecb9ae7830e509b554a6a3e15b86c65f",
+    "Pous.Prog.ret": "d8b5cac8b5ba4ab1cf84a796971fbcd4302b21af0ebb13b90963d7177b7c63b5",
+    "Pous.Prog.round": "39667be7dd6280a1a588fcd513f9e447a539be4f8814290db4b36f2faedeeafe",
+    "Pous.Prog.run": "c0021163e15a15e3d0553d037f1a4752b6e69010f3dae00e0d5181e749eed9da",
+    "Pous.Prog.width": "103b4c4c3498ea759b4f4ca468153cb220c3ada770fa23bf394404c6ffd3fa59",
+    "Pous.Prog.work": "d2d99c0b30b712934b04158c0ded72b0ba662f4a1cc358734c2223d113b94ae3"
    },
    "pins": [
     "Pous.honest_seq_accepted",
@@ -601,10 +601,10 @@
    ]
   },
   "Pous.Game.Prob": {
-   "digest": "99c60b9c0a79cc25d90f2993c5ce4afe2bcebe5ee6d9c2cbed716188d28b3e91",
+   "digest": "423437181081ecd73c837e7d9ddc404d2fc1be7ec8e7b9ff0fd94500071c39f5",
    "definitions": {
-    "Pous.Bits": "1697837f97bdb8cb",
-    "Pous.pr": "b8ad6159fbd1ff9a"
+    "Pous.Bits": "9290fa20f06bfe4423f67acf59109a8e4d14d7a87a9aa1e5085b43ee795a0f68",
+    "Pous.pr": "e2d360abdc3bb446124cc63b9261aab7c0e25149c089edabce91272c925d6edb"
    },
    "pins": [
     "Pous.honest_seq_accepted",
@@ -664,21 +664,21 @@
    ]
   },
   "Pous.Model.Audit": {
-   "digest": "a59e2994e4cdd3ff802a96131fcac7b327af3010603e3cc932352b263e30db52",
+   "digest": "0deff8459141d944b07a9e477dc0ab655b87774c1ed016929a8f1c84b2bc82e3",
    "definitions": {
-    "Pous.AuditSecure": "e41161286e1d4201",
-    "Pous.Outcome": "3fefd5bf7ac6bf61",
-    "Pous.Preprocessor": "54fdb152fe43ed00",
-    "Pous.Reveal": "3d2c5cd7aeefdbe2",
-    "Pous.Reveal.sequential": "58ec16af167cd735",
-    "Pous.Reveal.simultaneous": "9e6682786f8e1daf",
-    "Pous.SeqResponder": "4367128625944414",
-    "Pous.SeqResponder.step": "dcb30831e84cffbd",
-    "Pous.SimResponder": "4703fd51a6ac6198",
-    "Pous.SimResponder.prog": "4f7f3e6fe9e1cdc1",
-    "Pous.seqAccepts": "dd66ac477c919f37",
-    "Pous.seqAnswers": "9287613fd0c0f269",
-    "Pous.simAccepts": "c4a047d9328cabae"
+    "Pous.AuditSecure": "ef3659099abbe356183c134990bd1edac4d9933a8197ba7cce6d9a98e3e8616a",
+    "Pous.Outcome": "8a846063357fda1c64344bf40951e0d962fa4631fe3b7e7630665e6035b9cacd",
+    "Pous.Preprocessor": "4e78a916037f4ca955530f8b8e5df3439c6bf46697b6625f1d95dfc0834c264c",
+    "Pous.Reveal": "652c633968f56390f232f5168c57dd528364fddc7419dfd341aed3bb6fb36abc",
+    "Pous.Reveal.sequential": "0a82b9b23446951f1362179a872bbf8a02b362ab1c69b6ae4dc2ab4dfb15fe09",
+    "Pous.Reveal.simultaneous": "ca1a86ec63df0c64cd9b6310e4fe58c2abd9f34b378ae8ab5f3e4ed3c7ddac7e",
+    "Pous.SeqResponder": "7195c9150fed480a7c8de75fb550ae8503bb6a0104558186fd82e9bf645dd3c1",
+    "Pous.SeqResponder.step": "ad4eec293c4b1453907e92255e0595557783f3430e00414c77997d1addfc1350",
+    "Pous.SimResponder": "2b10904f3c5fa54959453b14991d345d9aaaa9d785070f5b976a79b0a3b20067",
+    "Pous.SimResponder.prog": "616dcc38f1e8fb74da3c4c939245f25c0b3ec4302061a91a76c3b250069804fd",
+    "Pous.seqAccepts": "8d95474dccd06bb88b2f220faf3d067f6678106b209119e7db6d541ae2823699",
+    "Pous.seqAnswers": "fa7d86156927a2653b23b9db3a28c80e980af999c7989217f0f078f60a80fed3",
+    "Pous.simAccepts": "62c4ef9b9565b20f69da1313f95ed2e92d2b3f1f1d2ff63bc1f71c38a804523d"
    },
    "pins": [
     "Pous.honest_seq_accepted",
@@ -725,24 +725,24 @@
    ]
   },
   "Pous.Model.BandChain": {
-   "digest": "8660787d1a51b605496549f8ffddbd583ace4a241575ca3f2b66501c87e30e55",
+   "digest": "33abfec78631bb06d487dcd4e10b15a1914a11f3d7fe58afbf02849f059f7634",
    "definitions": {
-    "Pous.BandChain.absorbedG": "6537d9eb701fdc63",
-    "Pous.BandChain.bandDAG": "e2490d4aac93db15",
-    "Pous.BandChain.chainBand": "ef17672071445e85",
-    "Pous.BandChain.chainScheme": "ae6b561922cf22f3",
-    "Pous.BandChain.labelG": "8206b8624de19c53",
-    "Pous.BandMulti.bandSegDAG": "45c4a735445bf047",
-    "Pous.BandMulti.chainBandSeg": "147d79eb1dde747a",
-    "Pous.BandMulti.segDom": "4e21d3d6f53a4770",
-    "Pous.DenseReCert.tag": "8079e29c45eff7f6",
-    "Pous.DenseReCert.u64": "67c367b100be8194",
-    "Pous.Sponge.absorbed": "17d3e0999cf75bd3",
-    "Pous.Sponge.chainDense": "a8357d43c80c6c70",
-    "Pous.Sponge.dom": "3fc1f9f2537d32d7",
-    "Pous.Sponge.idealPerm": "d6d0d3f9ce8ab41e",
-    "Pous.Sponge.labelOv": "dbf7360dcd7a948b",
-    "Pous.Sponge.parentsNF": "037b07979de50e8d"
+    "Pous.BandChain.absorbedG": "e4b32e44d82743bbdce88b5d81e2b1304caaa8ff147de335b18631cf3df45eb3",
+    "Pous.BandChain.bandDAG": "a437d5db474b34524e3540b207be811b99c2814dd42f8c32548dcb2ad4a5baaf",
+    "Pous.BandChain.chainBand": "366155124741fc817477e223755f5d3433a4de9041e7e60c6287e76c8b22bd86",
+    "Pous.BandChain.chainScheme": "b4ae5dcfdd6d6ab34e2aa430b38f623fb181676c5239e66d3b07432ec2677eab",
+    "Pous.BandChain.labelG": "546bd269b6c169bd5f012ce557630ede0750b3c50603d61ce835e2751fccac66",
+    "Pous.BandMulti.bandSegDAG": "c317fd970c6ebe2738b765a4438bffa6011f204856490821b2262f248dc440b5",
+    "Pous.BandMulti.chainBandSeg": "6fa63c4ffca931b761f4ac94acc1a11ef229465d100b9a9d421a8da88263106f",
+    "Pous.BandMulti.segDom": "1b4ac40cf7ab80550e106ef589dfc6fe6acd0fea5e9abdae2f8c83a8f60ed017",
+    "Pous.DenseReCert.tag": "b656def7614908f5d314d57969b5be2297be7dccd81c0c4a6d2e4ce26e58167c",
+    "Pous.DenseReCert.u64": "b28a8bc00d8182f8c917f228d45cbfcb83fb90faaf27621b773ad12f621326bd",
+    "Pous.Sponge.absorbed": "534eca93d368c00e7b3494bdae26aa57108f81d86951be243b754f53efc25e5e",
+    "Pous.Sponge.chainDense": "29843674a891aa1aa28a98a44dd5c81634f89b50209adc19752d2c81da4ecc23",
+    "Pous.Sponge.dom": "43dbddc26c5df9bb61f17cb0e76c7b98863723226ba3e013f559ce192854fa24",
+    "Pous.Sponge.idealPerm": "2b20088cb3a0d50d0a4595c804a6805364e2501c6d209c7f55fa0f97fc5f9077",
+    "Pous.Sponge.labelOv": "5623d70ee6b9af03c4bf55def1dba451dfcf97daf345d00776a736bcb04b6d75",
+    "Pous.Sponge.parentsNF": "51d3bef2ec734d993123fef15fb08b38752fd81f2371023def33918aed8590e9"
    },
    "pins": [
     "PousProofs.BandChainMeets64",
@@ -759,17 +759,17 @@
    ]
   },
   "Pous.Model.ColumnGame": {
-   "digest": "6c62a2dc4432c9ac4a6e57b29b1f416cdfbe232e350bd5cd9f22d1592fcd2472",
+   "digest": "0bda4d5f739385b6ac93a17aacf2a5e2cc2c482d473b02d22bde0df5de86eaab",
    "definitions": {
-    "Pous.ColumnGame.ColState": "1b6f70c594b629b5",
-    "Pous.ColumnGame.ColState.lowerCol": "7f594f1ad0ec875c",
-    "Pous.ColumnGame.ColState.lowerWhole": "df8a855ddc0bcf4a",
-    "Pous.ColumnGame.ColState.size": "3df92772dfa456aa",
-    "Pous.ColumnGame.ColState.topWhole": "533edd4f09e82504",
-    "Pous.ColumnGame.ColumnHard": "ac13ac9a48184362",
-    "Pous.ColumnGame.basePath": "7d2c5e9aaef2391d",
-    "Pous.ColumnGame.colReach": "1c4a532e93bcdc9f",
-    "Pous.ColumnGame.colRound": "57fcb4c0901e490a"
+    "Pous.ColumnGame.ColState": "9d563c0af5fc5812d6a0ce713ad2959f63fd0bb94de7d8de1a56de6399c41ec4",
+    "Pous.ColumnGame.ColState.lowerCol": "da72a209cc7c1bd8525b0fcced61838bda52c5950dfbe697cdb218fd9de15f20",
+    "Pous.ColumnGame.ColState.lowerWhole": "c6e611e2ef7b0a6b6ad9a706c8cce3b96741808ee7637d53645724787fbe0c13",
+    "Pous.ColumnGame.ColState.size": "90748c0c5d57cfe1a03d4b173c4b52dd6861b5f5c2dd2c66d3c2aa9345e8875a",
+    "Pous.ColumnGame.ColState.topWhole": "bc04a679eef450ca65bc2da3429ca4284db42b95620dbd51845eb37ca62615fa",
+    "Pous.ColumnGame.ColumnHard": "a3c5781cd5f86c23aabed2ddae992f33b68e71fe8a405710675ed573a762b5bb",
+    "Pous.ColumnGame.basePath": "144f2d4aaae8b04401c0a94eec32c42ba05a9c088039e1e9928a1d83eb122b7f",
+    "Pous.ColumnGame.colReach": "8340c9c4a09fe2c29a2c7b09d49cd33b341f4b4dcf7caeb969f031b20be754ee",
+    "Pous.ColumnGame.colRound": "80a8f82080990c7ba7da02b3a97dba9bca3d3a65a5dfc328a829463fb2bfb0ff"
    },
    "pins": [
     "PousP3Column.band_twoWay_220_12",
@@ -778,20 +778,20 @@
    ]
   },
   "Pous.Model.Dense": {
-   "digest": "af368c63f2f97e7bbcc520add197d45cb0c399f3768c4071ab07c983b631c595",
+   "digest": "7324349bf03cf46d87bcdba6f3a6563da13b1f2dc90504cf04533b2de506d429",
    "definitions": {
-    "Pous.Dense.blocks": "a6725d1c65c0d10a",
-    "Pous.Dense.completeDAG": "19f00178376f9067",
-    "Pous.Dense.denseModel": "53c87493a8d7c89b",
-    "Pous.Dense.denseScheme": "9ca3dbb2eba31360",
-    "Pous.Dense.segBlocks": "b2a3f569c91c4948",
-    "Pous.Dense.segDAG": "b5a24cc870fd3ea9",
-    "Pous.Dense.segIndexEquiv": "dc4452dd92fff5a2",
-    "Pous.Dense.segScheme": "b60c31b47dd43de7",
-    "Pous.Dense.segTagScheme": "adf103dc3b44ffc8",
-    "Pous.Dense.tag": "532787597717d64b",
-    "Pous.Dense.tagModel": "8c440dec3e7101de",
-    "Pous.Dense.u64": "ace756ccab2b995d"
+    "Pous.Dense.blocks": "7ec004a481c1997e70cc5f077ecd5f9bd0b7105cfd849982b52d64448cc13960",
+    "Pous.Dense.completeDAG": "5415cc97ade971836f2573e1db68cc9698e1becd6e670cb8a4ebb922ed3f5232",
+    "Pous.Dense.denseModel": "e30abe8a07a2baecaa940a0816abfc793e5cdb70d3da154afab4e511780c4407",
+    "Pous.Dense.denseScheme": "e672668d294592f8647ff418bd5a08131f2b0457420e74b4f66c69e6ff866f5f",
+    "Pous.Dense.segBlocks": "2bd1fd40b471ca30f281971900fc060a2ec482491376f95dbe7412f7e04e4282",
+    "Pous.Dense.segDAG": "ae0fe738da3cc0f822ca79db9fed4827770ecdd9664a3c49b69debe423a37790",
+    "Pous.Dense.segIndexEquiv": "4521622eb0ffa3f7c843bb247200d0ec052c32408b90173ffb13e2be7afe1970",
+    "Pous.Dense.segScheme": "a10da6b3927e247e68d98f96e8f231257da09a14a2017f2a4ee5fd991889dc27",
+    "Pous.Dense.segTagScheme": "e7a874269b95b43cb363b9c988847916c71709ddcc36200bac7248c03f2c325c",
+    "Pous.Dense.tag": "fb6a5b3c448550bf9430418b48305d2ada1afc8036e37cf1c5e1d473f410e799",
+    "Pous.Dense.tagModel": "648fc7fdd08370681c218f9d04ff23cac53a6906775d7532acc024c1f8a0f86c",
+    "Pous.Dense.u64": "f087af4cdf02fed056eab22fed4abd149af1284835f2ee7d90996b77649d71d8"
    },
    "pins": [
     "PousDenseReCert.dense_meets_64",
@@ -815,23 +815,23 @@
    ]
   },
   "Pous.Model.HashChain": {
-   "digest": "57a937513c76dbc57dce300313291c9c1dc3ac69fb44d04d9d7b47034d55a697",
+   "digest": "e5a856998d00a7c438418f62831a53ccbaf75e94ea767358fe03814aaca2f858",
    "definitions": {
-    "Pous.HashChain.chain": "28053bfcb0e1511c"
+    "Pous.HashChain.chain": "affcd1bc396153ec2ab98fd700f822f7c4ad6f8410cbe21f991f36f16cf0d70b"
    },
    "pins": ["PousProofs.B3Chain"]
   },
   "Pous.Model.Inc": {
-   "digest": "f977cb505535bce2a1fdbee1afc73857f0f991910579290d6eb64382aced0d41",
+   "digest": "9352a36a027abdda16eb029eaf0018bccc8853371a51393a70026febf2273918",
    "definitions": {
-    "Pous.INC": "39e93f49d411be27",
-    "Pous.ProdResponder": "1f2e575cd2e66cb5",
-    "Pous.TimedINC": "d0517e43d4dddccd",
-    "Pous.TimedProdResponder": "eafead44b7c47684",
-    "Pous.TimedProdResponder.prog": "ec72649110438823",
-    "Pous.prodAccepts": "72e30c707aa37200",
-    "Pous.p₀": "13f5ca9ac5be614c",
-    "Pous.timedProdAccepts": "8a574225836eac2a"
+    "Pous.INC": "bb50d5b827695932e1efeb2b22c342dfedec18b2d86f9e52c04478a78c2ccbc1",
+    "Pous.ProdResponder": "6c04c8ff94fd1303122c970e88bb689cd63b78f3afeb8edc8711f63f4b4af1d7",
+    "Pous.TimedINC": "0880c3a8f7cc9c2b2af5da033afc3c3a8c096db4fc04620931a57a008181be0d",
+    "Pous.TimedProdResponder": "fd41394d8c007a22eb745da70f05d08f3921db9bbcfb9b27756fa4aace698bf4",
+    "Pous.TimedProdResponder.prog": "54d6e91c95b0eecdf4f198709129e6a5f879473ab04cfaf0985d8b341ba8d78b",
+    "Pous.prodAccepts": "ecacc03438d9f6e8a87375a2150225dd7ecb6999f9cf7569e20b21d016cd0615",
+    "Pous.p₀": "5166f8e0cd663fb60423766493b947b52a62f0977545532db60ca58f2b7973b5",
+    "Pous.timedProdAccepts": "46718a69c664bce0955c57567926dc21f28ea5982381b32dbdbc3d2fabab4719"
    },
    "pins": [
     "Pous.Accounting.p₀_at_report",
@@ -848,23 +848,23 @@
    ]
   },
   "Pous.Model.Invertible": {
-   "digest": "5d2877d72a867424550a1e46f9763f3f120f4bcc331cc117494660828b4939b8",
+   "digest": "af5def84abb731a604cc49c242883fefdc2fc6fa9040fc9e7ad7f7f3886dc198",
    "definitions": {
-    "Pous.Invertible.KQ": "461f7b0a39856e2a",
-    "Pous.Invertible.Lab": "6451b092562337e1",
-    "Pous.Invertible.P3Omega": "b6b72eeceaba87fc",
-    "Pous.Invertible.WhiteGreenHard": "85bb7076bd8c143e",
-    "Pous.Invertible.c1": "a59f9a2c74c5a526",
-    "Pous.Invertible.c2": "a95d4b1878976427",
-    "Pous.Invertible.decodeLower": "497a05e4318f73ae",
-    "Pous.Invertible.drg2": "8551900c98990874",
-    "Pous.Invertible.green2": "e4a6c12f52ad1416",
-    "Pous.Invertible.instFintypeP3Omega": "0139a6956df04db1",
-    "Pous.Invertible.labXor": "d329279ce1abe864",
-    "Pous.Invertible.node2": "eb7506fa18fe159c",
-    "Pous.Invertible.p3Model": "49a1d41be60b0028",
-    "Pous.Invertible.topLabel": "5cf427f8e432221a",
-    "Pous.Invertible.transpose": "c6ad58bb0a1331c9"
+    "Pous.Invertible.KQ": "5a21b8573be690cdeff126868e58f8f7e40832fbfef79d291166bdecd8c0aaad",
+    "Pous.Invertible.Lab": "3f8c16c9809f33bf8adef96149ab3c1347fb2e84eb55084c51e52fc7d1872680",
+    "Pous.Invertible.P3Omega": "89ee46feb7d35f25b2aa39204b2a2aa056bd870522785d3ffa59276dcd498434",
+    "Pous.Invertible.WhiteGreenHard": "78ba0fe67c472e3921392624bb99e246955c82e689496f10ef94c1b7fc399f26",
+    "Pous.Invertible.c1": "017f2eb4b143227b55d374138ab3ae5df3dc6be99b57d400fb17be4d180e51d3",
+    "Pous.Invertible.c2": "a9efbce244012f42bdf35d71c8debf127e172b63f132ab7373bcb6369bdc5da4",
+    "Pous.Invertible.decodeLower": "a739be9c3ba55535fdeda1d8975753bc0398b450b93fbd5022401fe886a66f56",
+    "Pous.Invertible.drg2": "918087c6b53e43314d7402c53ba9e6e636c364c69083e65f79d4fd2c0442cd9b",
+    "Pous.Invertible.green2": "0fb9eb6cc639b537e79e94f1108f8d3881128b1345212c92ee91bc7f367bb3f1",
+    "Pous.Invertible.instFintypeP3Omega": "ed296ecd9803ee69100ba88e12341eae98331cd611503cc8b9bffb4cc9c0721c",
+    "Pous.Invertible.labXor": "57ed5ae0cf5189e307abdfe5870c998448064d9752b627e9c63b8403d108ab89",
+    "Pous.Invertible.node2": "e3539f673d1f049f3d9daf9810144e6a1954643c44b67490b7b9f3b06b47044e",
+    "Pous.Invertible.p3Model": "b6b242b138adab95696e6f6a45f549486a218e09e3543f31d79350d2db813194",
+    "Pous.Invertible.topLabel": "76993478d6f7dcf0b64b52861e2c237b296c90ea2c66221badf2cf094b26a2bc",
+    "Pous.Invertible.transpose": "61a65308a340351b2169d5cfebe2872c952f5019fddff4c68b5750495e1c4e77"
    },
    "pins": [
     "PousProofs.N10Refuted",
@@ -876,15 +876,15 @@
    ]
   },
   "Pous.Model.Labelling": {
-   "digest": "c58bc75afd05a5a3f6f9cdc7700592dce1b39a7c9d955d03c0c7cf82e921a4bf",
+   "digest": "586153788720c61a2317fa973dd0f83534aeceae0f8f7f2f0d2f180e3a427d95",
    "definitions": {
-    "Pous.Labelling.LabelQry": "64606d3ddcdcbb28",
-    "Pous.Labelling.PebblingHard": "ba7be739c06c6dc7",
-    "Pous.Labelling.TopoDAG": "0bc2c6541c701b35",
-    "Pous.Labelling.TopoDAG.par": "d13ffa8e03250c26",
-    "Pous.Labelling.bxor": "1a1b427c0a1b1b31",
-    "Pous.Labelling.label": "b5b81cc56f0f8c31",
-    "Pous.Labelling.reach": "ae31a6c451f13d03"
+    "Pous.Labelling.LabelQry": "483a44587e5c1a37e0d2a44b81aec873534609cbf56dcba313f2ac184ea4a007",
+    "Pous.Labelling.PebblingHard": "312212f6bad9fda3d30731c982bfde696509a16cb9b0804404965b072038f248",
+    "Pous.Labelling.TopoDAG": "f7cc88259b1f9210dd913b37a9f78646194c9c591523f50fae1e8f04312b7b6e",
+    "Pous.Labelling.TopoDAG.par": "70dc9b0b5c9895d4e5acfeaed66ab4cd6d7f36d39aa29493aa2c17e0881d4153",
+    "Pous.Labelling.bxor": "37cce8248a6285cfbb23e38e7ff20aab3636b405b755aa303ddf84adcd562e6b",
+    "Pous.Labelling.label": "de58201dab92cfeba618485ae187fd3ac193920e4948449fc067a2b0c6e5ef7c",
+    "Pous.Labelling.reach": "b203a14adb42ec04bf6fa23cd704174b83eb61688ec5210ae9c7483d8d5af707"
    },
    "pins": [
     "PousBridge.b5_stacked",
@@ -920,9 +920,9 @@
    ]
   },
   "Pous.Model.M1": {
-   "digest": "793949814dfb209f8ed9a2f363a5f9c74a07ce83ed2e6bec82b192a8dd106cda",
+   "digest": "7ce6dced316dccdb1a7c33a4355000aed05bb14df2d6356fc14edc03581b5112",
    "definitions": {
-    "Pous.codeEquiv": "dc5b93fbe58f63e1"
+    "Pous.codeEquiv": "5431e034e408a3add1b4c547c4a73d431438e40ba35a2b2f767ced58e1f174ab"
    },
    "pins": [
     "Pous.honest_seq_accepted",
@@ -951,37 +951,37 @@
    ]
   },
   "Pous.Model.P3Chain": {
-   "digest": "824390f3c6d1cb0ac9a288be11ceca5432b45d9dfcbe0ccfc03c32d8c5c2c4e5",
+   "digest": "78faf5e7f23c2ef302b36981b95b6723e6dd3e0e2b95cae1aec7d0c1f215fa23",
    "definitions": {
-    "Pous.ColumnAware.basePath": "1eae65699965a2ee",
-    "Pous.P3Column.bandExtra": "660477379d1f020e",
-    "Pous.P3Column.bandGraph": "2802a6de16096ef5",
-    "Pous.P3Concrete.decodeC": "796b8514e552ea46",
-    "Pous.P3Concrete.p3SchemeC": "2c1cdf3ae980862a",
-    "Pous.P3Concrete.p3SchemeNC": "b4bd5d293bb0f89c",
-    "Pous.P3Concrete.pInvOf": "314b8a63d001a26d",
-    "Pous.P3Concrete.pi2Of": "2ad5e5296efa8f33",
-    "Pous.P3Meets.WbitsW": "420df55d1481b1d7",
-    "Pous.P3Meets.WlabW": "df5057ae4aeb2f99",
-    "Pous.P3Meets.WsegW": "9a4bc9a3a26a756c",
-    "Pous.P3Meets.tagR": "07be34a75f078872",
-    "Pous.Sponge.P3COmega": "2ac5fc13ddc5d1be",
-    "Pous.Sponge.Tweak": "056f7d2fa911c1ad",
-    "Pous.Sponge.c1c": "da2fc80fe8e5d579",
-    "Pous.Sponge.c2c": "0b9f42814cc6aec1",
-    "Pous.Sponge.domP3": "a7a2ba67a3e46275",
-    "Pous.Sponge.instFintypeP3COmega": "bdedcb7d090de060",
-    "Pous.Sponge.iv": "a12a3002889b17b7",
-    "Pous.Sponge.keyP3c": "e2e37c858f101851",
-    "Pous.Sponge.ovAbsorb": "18e40efb8f56cda3",
-    "Pous.Sponge.ovH": "f13d909536970ac2",
-    "Pous.Sponge.ovKey": "c024acca0d750521",
-    "Pous.Sponge.ovR": "7a32840c66afd785",
-    "Pous.Sponge.ovStep": "edb09a44552cbbab",
-    "Pous.Sponge.p3ChainModel": "0421ff014d3cf229",
-    "Pous.Sponge.padBlk": "1241468dbae811a8",
-    "Pous.Sponge.parentsDesc": "5498d3031c6a5c2d",
-    "Pous.Sponge.topLabelC": "f8b287e203b38329"
+    "Pous.ColumnAware.basePath": "f735fa63a538aa449510c33e8e9359ace187c51300488c662558b236f8ddb7b3",
+    "Pous.P3Column.bandExtra": "90f933ee834881c66270e5410223f2606ed7f7c859635131e767c368566ffa70",
+    "Pous.P3Column.bandGraph": "0fa7f4a0b8b04809c77a2256fd11de8f8ddc06a800753d99ef3c3ab1881df954",
+    "Pous.P3Concrete.decodeC": "65c0bb4a0a77bc9908bad53411ff11f20832a6298ea9260596e2f47524c02ef0",
+    "Pous.P3Concrete.p3SchemeC": "1d3269e86721dfe936d9a919107d1421c818c4ed2a271f168cb8daa395555594",
+    "Pous.P3Concrete.p3SchemeNC": "9139e3ab9b75bb33621230a5aad5fa8d4b0df9de4f4a04faed3396d4af90fa44",
+    "Pous.P3Concrete.pInvOf": "d5c3fd9725bbe5322cc59609bf559f5c650536675e0fdd32f45f9b3c90a2a385",
+    "Pous.P3Concrete.pi2Of": "ad6346a9ad5c7db2be3ab24b514a46b6fd931a50da26c60816d123f0a4cabdbf",
+    "Pous.P3Meets.WbitsW": "dc9b4c2ae80fbb651c9710bf3b16a599f73ffcb55b9e7e3f0c3ae62b6e08c9ce",
+    "Pous.P3Meets.WlabW": "942fd23852cef314c31752587a1536fc5895de5da24c6ddc6af458b480823570",
+    "Pous.P3Meets.WsegW": "ca74d85f6f5ce565e39291b0bf4df57259f1bc87a5df4bfe27daac25433cd4b0",
+    "Pous.P3Meets.tagR": "b8101e2f524bcc3fa890b7aaccbef1941576fc95d34481284825d7ee33d4a0f2",
+    "Pous.Sponge.P3COmega": "8a0e38ae6a638352ce105db2128e0533dd91d87d5bc93262f63b0d8d3f8c56d9",
+    "Pous.Sponge.Tweak": "e2cd7a1b8ffcf562c2f42fc7342bc6219afc17d75e4ff0ba576cac4319d70ffd",
+    "Pous.Sponge.c1c": "a8e835d7281e86bf8cdd9b17d797e70e50c6d2e609a3e00e740e53b3e6fa8b32",
+    "Pous.Sponge.c2c": "dbfc3702a6f800038524f8de98ad1d8ba67e359ec48dc17567bef348c039e02f",
+    "Pous.Sponge.domP3": "66102c889e99458e08903025f411b9a6dbb02fec320986e6ff5b6c39cc900a0e",
+    "Pous.Sponge.instFintypeP3COmega": "678af67f596fd4c918035806e99a87a52b117529614c86c25c597a1664551b3f",
+    "Pous.Sponge.iv": "c0ff6f0f48715e63d4e1c81a400131e9742c4ff27fd42ee605141f83032b8594",
+    "Pous.Sponge.keyP3c": "fe40220370bd4594d7149296a2da67666ce569060560723baa49dec3ad8571ec",
+    "Pous.Sponge.ovAbsorb": "8058e94b1f43c2eb533dee94eb53283427bb6a515fff709dfa789bf3035e1f4d",
+    "Pous.Sponge.ovH": "fecfd73f4341e0bc0e613a015021efaa09aae68c704aeeb7637bf06330a1fd79",
+    "Pous.Sponge.ovKey": "814e5ba6ff0436969d66d9bf8817d5b39db158005caa5bbd1125760393bd76e1",
+    "Pous.Sponge.ovR": "2e442013a9b0cd83d1a678b4d4373e55d6b6fc358c0b3f919cf944c4a4bfd3ce",
+    "Pous.Sponge.ovStep": "25fe840634f3cc0ae5a743ab6ee496b1b5ea39a7be9db2adaffaa9e0c9ed95cc",
+    "Pous.Sponge.p3ChainModel": "87f1f1417ba3af61d5107f2e71da58d4f80d8a63eb93ddc431fc268af3fb162b",
+    "Pous.Sponge.padBlk": "52aca19377e5596e59fe13cebcfe5eb4d852ba8c63c05d3efa3f67d852732944",
+    "Pous.Sponge.parentsDesc": "e0c021c592c36635fb1c492903c3b6f7b37b6a4e6ce8446cde7d429d083ffd52",
+    "Pous.Sponge.topLabelC": "54d4a1ff4b10263de1e6301967dddc8cd6af6187582485dcc71538541fa7d1e8"
    },
    "pins": [
     "PousProofs.BandChainMeets64",
@@ -1001,14 +1001,14 @@
    ]
   },
   "Pous.Model.Pebbling": {
-   "digest": "154f766786cf975e0d391cec3e774aeb16d456758f943e54ed435afc258bc4fc",
+   "digest": "864b3448b88daff3f3f8b9252eca5333451b34c8a78c500664a6fbbe70db2ac9",
    "definitions": {
-    "Pous.DRG.Available": "fc66daf74c73af86",
-    "Pous.DRG.DepthRobust": "f439aabeba4ed14e",
-    "Pous.DRG.DisjointPaths": "b483e193b390c351",
-    "Pous.DRG.IsPebbling": "9bd9ab08eb913794",
-    "Pous.DRG.StackedEdge": "d63e3a48165cec37",
-    "Pous.DRG.Unpebbled": "f56c67ed87e7138d"
+    "Pous.DRG.Available": "9068c55096440718e39e399c586fdfdb9afd43b77865f72ff14f11ac56170076",
+    "Pous.DRG.DepthRobust": "157150cdae327ce085aec7d5e0254ce01f0da1f673788d5e673f0bdce9c31b7a",
+    "Pous.DRG.DisjointPaths": "e24b6d3a1cf52bdc4ade1347f7f5d5257e10fe1c7ee10066611ce78a6baa8164",
+    "Pous.DRG.IsPebbling": "1963b3f8fb6c40830e8245896c29f86531f4a018bc7f3187d3c14194476c51d3",
+    "Pous.DRG.StackedEdge": "582a4c8100b08621574d8334fe0427d24a365e0d3a2b32dd6c73a6c0c91fdbcd",
+    "Pous.DRG.Unpebbled": "ce43ef80457223032674fe507da539b4e1baf5500e5bfa32b413b849e98927a6"
    },
    "pins": [
     "PousBridge.b5_stacked",
@@ -1022,46 +1022,46 @@
    ]
   },
   "Pous.Model.PubEncoder": {
-   "digest": "799fd70ca4ba851d3a79b1f8884a6e20cddb694ea52edc51913068d4b3935f03",
+   "digest": "589bf2820f212f1a21efb4ca39e2627b5b699b4ccdf2d27c08614775caf4e8c2",
    "definitions": {
-    "Pous.PubAuditSecure": "1aa536042de6740f",
-    "Pous.PubEncoder": "9c33a585bd5f229f",
-    "Pous.PubOutcome": "f2b272bb589f9a78",
-    "Pous.PubPreprocessor": "ef1bf32883e4a26a",
-    "Pous.SetupCheck": "a5367fb9c50943a3",
-    "Pous.SetupCheck.Complete": "3d845046f7fb6cae",
-    "Pous.SetupCheck.accepts": "ff3a6785ec5101f1",
-    "Pous.SetupCheck.fintypeΞ": "1f8617209492b455",
-    "Pous.SetupCheck.Ξ": "1cace7782ee9c42e",
-    "Pous.exactCheck": "982352cf2d6195d9",
-    "Pous.pubSeqAccepts": "fb071f1b0d0e276e",
-    "Pous.pubSimAccepts": "33a133a05edfb7e6"
+    "Pous.PubAuditSecure": "bd6a33c8945a27703419ec841056034bbd1dd633f406cf272557cda4b274703b",
+    "Pous.PubEncoder": "6241a28c1f6f7a64e860322f7900151ee25a848b719a73566450efe6c7913763",
+    "Pous.PubOutcome": "de878b644f07bce4ad35aa34090ae3686ef8b68a3a34fbc026f2dbe2e885bd42",
+    "Pous.PubPreprocessor": "0198326e44111c85b417485c9bc0b8a7953452055cd1a4649f5946a4de2716cf",
+    "Pous.SetupCheck": "4a7b4641823c6b69cd168789a34c4c8019cad0fb0b6d6a0a1d93aa04a071f041",
+    "Pous.SetupCheck.Complete": "8d307adb0863ff114a8bd2b85c671ab7332c7188a7d8fa5d6ff655548052bcc1",
+    "Pous.SetupCheck.accepts": "f0013efde16f6e7e2f5d5a297e89376cfa823f8d44cd7a5e59d0d0334cddf2a1",
+    "Pous.SetupCheck.fintypeΞ": "b81b0cb99a55f89817575c79d8429c03feb912c7505de355982512cba5ffebd2",
+    "Pous.SetupCheck.Ξ": "5d15b3ec335bbacb204d2025f2bd0b3cc4fbf2576992ac805a703da9816d71ad",
+    "Pous.exactCheck": "ea8442026ea75e3892c9facb2f9f92e237186064ba53bba397e10176ad12401d",
+    "Pous.pubSeqAccepts": "108d79bc61b4e7373dffe7b8f1cd40ceb835da12f42d8b3b76b6e163f36e10f4",
+    "Pous.pubSimAccepts": "dac6b02c5feb99bfd73bdda4e8a29aedf6706a6f598e542a3f366a1ab4b81fe7"
    },
    "pins": ["PousProofs.BandPubMeets14", "PousProofs.BandPubMeets14Global", "PousProofs.BandPubMeets64"]
   },
   "Pous.Model.SampledAudit": {
-   "digest": "1c8d1564b69446b5d96a70d3f21b39745d2c3f0188442f08f751c2b89a4d22d2",
+   "digest": "b2197a6faf0004dcef1f5f71a8dff752780b8b5295852b27f430de9757ae928a",
    "definitions": {
-    "Pous.Sampled.seqState": "f9de76ea049c7379"
+    "Pous.Sampled.seqState": "88adbf0e6305a1e08df7cbb57d91ffac4191d6f56651083fcc554f67b9dd9231"
    },
    "pins": ["PousProofs.SampledAuditSeq"]
   },
   "Pous.Model.Scheme": {
-   "digest": "57b2200ba2b02d939c913b1ec789db07725e0ae4c8aafbed16cfde558c81ba8b",
+   "digest": "4c2daf388f74e6bbba183a9fe2508c77043e8149d219698b42b37210453cc3d5",
    "definitions": {
-    "Pous.Scheme": "6b729c75f9905ada",
-    "Pous.Scheme.B": "a99a1ddc524df829",
-    "Pous.Scheme.Code": "527fcc5c923ece2f",
-    "Pous.Scheme.CodeHoldsW": "d09f2d93524a4b6b",
-    "Pous.Scheme.Coins": "cc28657c780aa4d5",
-    "Pous.Scheme.Correct": "40e47246d26b0386",
-    "Pous.Scheme.SpaceBound": "adbe749a0966c417",
-    "Pous.Scheme.dec": "bc94b844a59cc600",
-    "Pous.Scheme.enc": "52d413762fda7960",
-    "Pous.Scheme.fintypeCoins": "80eadae58a6c9f9d",
-    "Pous.Scheme.n": "327caee597f08007",
-    "Pous.Scheme.t": "33ec03a565178e5e",
-    "Pous.Scheme.ℓ": "b3551de44600690e"
+    "Pous.Scheme": "1c6f1f50eb3e547e7aa61dc10ef68c4d5d5970fbc62fff0b378fb16702b0eb0f",
+    "Pous.Scheme.B": "e7e6a984711408d28ba827bbc34ffa626adc25976134fd6cb06ae873f367c313",
+    "Pous.Scheme.Code": "30e215de221fd93d95fecbe8bc96b2c9c2b7d99b60ae98c555502a85ca377afa",
+    "Pous.Scheme.CodeHoldsW": "88f43374cd88e3b7a0c6b658875712334cd4909aa572809174787f1778d55b28",
+    "Pous.Scheme.Coins": "3dbf5f98471a97feee7c54383a4b1c2d4d3e649d95df908858e6188192430a3a",
+    "Pous.Scheme.Correct": "c8e4e3c2f08d8d49d5f5814e2f9c9a554ebffecd40824b2b04de3a421980c34e",
+    "Pous.Scheme.SpaceBound": "1f43d8a55deafeed895d11bb979b665eb654b4dd52b0f3baa4a8061b8adf250d",
+    "Pous.Scheme.dec": "d5a478620af22007fb79eda086e8cdd72191bc1050f831eba9b71bc0e5001246",
+    "Pous.Scheme.enc": "5d075face12ab5f62fe2416f900f96df2ea2363458236b523f7341f7c57044c5",
+    "Pous.Scheme.fintypeCoins": "8729f2c239159ac5dee8d46d52d312c3beb82b5c1b818cdc2dd054c348fbf53d",
+    "Pous.Scheme.n": "745708f0b799aa62174f8ade36d3ddd25f903aed8be0d6c0c3745139744118ae",
+    "Pous.Scheme.t": "fc8bee5b18948b88737142fe5ff74f8ed361b46468a87c34a51652defe23b8e1",
+    "Pous.Scheme.ℓ": "cc713501fb08eb0fb1403b0163bb043f5e39683832d9c644e0cf50c5d6000f9c"
    },
    "pins": [
     "Pous.honest_seq_accepted",
@@ -1110,52 +1110,52 @@
    ]
   },
   "Pous.Pinned": {
-   "digest": "720654b7ab980847b4361517f84a293abad0b368fdc00e436725fe18cca86b44",
+   "digest": "500f1c2902abd3d2fc5b6b67ec5c4f803c2d0d5fcc235eb7d3a12b1417375232",
    "definitions": {
-    "Pous.Pinned.A1CompressionCard": "b667ed132ea5f354",
-    "Pous.Pinned.A1CompressionPr": "9af3f56c0d1d520f",
-    "Pous.Pinned.A3Prime": "8b215c650a867ab7",
-    "Pous.Pinned.A3PrimeLam": "ec10b8fb148c5f5e",
-    "Pous.Pinned.A6RederiveTimed": "dd2afee9dd4ab307",
-    "Pous.Pinned.A6RederiveUntimed": "bda499b07b37d2f2",
-    "Pous.Pinned.B1IndepSet": "99ff1ec85b0bac34",
-    "Pous.Pinned.B2Stacking": "1cacbdde58dedae7",
-    "Pous.Pinned.B3Chain": "1d1475906eafa444",
-    "Pous.Pinned.B5ExPostFacto": "1203fd6300410503",
-    "Pous.Pinned.B5ExPostFactoBounded": "7cb57759f31ccb75",
-    "Pous.Pinned.BandChainMeets64": "381f5316ef9fbc97",
-    "Pous.Pinned.BandChainMeets64D12": "438566148a1a0ea6",
-    "Pous.Pinned.BandChainMeets64D5": "87fff0a249486e19",
-    "Pous.Pinned.BandMultiMeets14": "dd324a2f9055c794",
-    "Pous.Pinned.BandMultiMeets14K106": "71fa4a130166922b",
-    "Pous.Pinned.BandMultiMeetsFamily": "388e7f0e58f56e7b",
-    "Pous.Pinned.BandPubMeets14": "bb274761602a1eb2",
-    "Pous.Pinned.BandPubMeets14Global": "f5ddd9bfbd0ed5d8",
-    "Pous.Pinned.BandPubMeets64": "525a4b94b9b90b3d",
-    "Pous.Pinned.ChainDenseMeets111": "5214705b014796f0",
-    "Pous.Pinned.ChainDenseMeets64": "19198f8650b5f5cb",
-    "Pous.Pinned.DenseMeets": "7dda75ad7844a3a9",
-    "Pous.Pinned.FibreCount": "57b81259c8e6804c",
-    "Pous.Pinned.FischClaim13": "06933a18b896c80d",
-    "Pous.Pinned.FischClaim14": "c4304b89f6d10c3c",
-    "Pous.Pinned.InvExPostFactoTwoLayer": "e46a067be6944163",
-    "Pous.Pinned.KFloor": "8208527d0b4a6d3a",
-    "Pous.Pinned.N10Refuted": "d98b4755d629b5dc",
-    "Pous.Pinned.P3ConcreteMeets14GB": "68db55a8415a9406",
-    "Pous.Pinned.P3ConcreteMeets64": "e91760448b7d91f7",
-    "Pous.Pinned.P3ConcreteMeets64D12": "631ab70618648ac0",
-    "Pous.Pinned.ReverseNeedsAllChildren": "b5814c6e87e84bd7",
-    "Pous.Pinned.SampledAuditProd": "a9a870935151a2ae",
-    "Pous.Pinned.SampledAuditSeq": "7a625f39bb343c1f",
-    "Pous.Pinned.SampledAuditSim": "8cfffc16dd48e817",
-    "Pous.Pinned.StackedAuditOnePercent": "738fbd3bd962974f",
-    "Pous.Pinned.StackedAuditSeq": "455696e2afd12ec5",
-    "Pous.Pinned.Theorem1iTimed": "59661966474e0a99",
-    "Pous.Pinned.Theorem1ii": "28db2f4b0940f1b7",
-    "Pous.Pinned.Theorem1iiSeq": "afd4eff92397edb0",
-    "Pous.Pinned.Theorem1iiTimed": "5b2088853e68eafa",
-    "Pous.Pinned.Theorem1iiiTimed": "baa7845942020975",
-    "Pous.Pinned.TransposeMixing": "3cbb4855c8dee6c4"
+    "Pous.Pinned.A1CompressionCard": "949657881bd32b3e7c053dc714f5d3f93abcdd473a5508918efdcd001fc9d863",
+    "Pous.Pinned.A1CompressionPr": "b3aa0709a98bd322230b22da7252e4b082cd44670b74d82b6e62a2e8a417a924",
+    "Pous.Pinned.A3Prime": "5b72606d2b8713d4acc8944532866283d23e5326f6075ae10b0f03202e5aeaf1",
+    "Pous.Pinned.A3PrimeLam": "ff368fc7101918953bdef423b240531c99e9703ab69b24a368e80e1bef3c55d1",
+    "Pous.Pinned.A6RederiveTimed": "297a30c45c06b7e9af071e0f0f900c0df7dcdc291a43255a668451ddb271d2e4",
+    "Pous.Pinned.A6RederiveUntimed": "1396ff95d0a1efb1f508c8c28925440443a94d8f33dcaa279b994f47a2f75ec7",
+    "Pous.Pinned.B1IndepSet": "207b65a33a8f389065273ddd682b8b627d4ee8258d5fa5020ab6d9e3ba27417c",
+    "Pous.Pinned.B2Stacking": "cf4f89cf001103492e1ce2f324930e4b2401f5abf59d31bc131255e7b0a57144",
+    "Pous.Pinned.B3Chain": "f07816a7e07634cd278ac6cf9e3f5c619ba95e0a70f0e78b4e21e8b3c6a88b59",
+    "Pous.Pinned.B5ExPostFacto": "6b37dee6bfb9a76ccb56b68aae1d1d0d6d21ce8fc459dbc9e2455dbd77662698",
+    "Pous.Pinned.B5ExPostFactoBounded": "47a8497b8194507ab4077a04d9a8aa9ec38bd3ec82771075cf926c1f35fbd817",
+    "Pous.Pinned.BandChainMeets64": "c65f0d0a309f87f8fcde7249e1e09b10e30921983ce175bc869c140a44fc5338",
+    "Pous.Pinned.BandChainMeets64D12": "f673d84ab65ab26ccf2eaab316a1545d78e1dcb0e933738d2beb6212da4edba5",
+    "Pous.Pinned.BandChainMeets64D5": "34ba52e7f1254ae5c30c5ed72bd598d4ad13db20c3fc25479343228f90713d40",
+    "Pous.Pinned.BandMultiMeets14": "c110d6e381aaeeab3c4ec09a8b575bd21801b7150d2e80d83cf715a32cb9e476",
+    "Pous.Pinned.BandMultiMeets14K106": "fd937596baecc8a20d2fc5fbf0383b0598982d758dc5df9118de74afc252c61f",
+    "Pous.Pinned.BandMultiMeetsFamily": "8d46051f801c1971c7686fadb7021d7f4b686fc0dcf7510d51f4230d6726ce7a",
+    "Pous.Pinned.BandPubMeets14": "317659b4fe6e3b7abfcf3bb69a22fc788d94bad876d95c7dfc097eaaa435fbf3",
+    "Pous.Pinned.BandPubMeets14Global": "9f64d17b9e89a31d4fd12ec3cf9e7ac3915d40a83be0ff20856c356e5d5db9f5",
+    "Pous.Pinned.BandPubMeets64": "5cab08a92f0ddd8329472f6e29a7543bf94790171e6e663ab766040ab7ed2636",
+    "Pous.Pinned.ChainDenseMeets111": "df0bb906c84b09afd2a98a1008cfc91a97f858ac7c9eb3141a0b5e041567f18c",
+    "Pous.Pinned.ChainDenseMeets64": "f54a07385120c1335801ed6e0fb037239513faf9c50ff2c1083f5c767343129f",
+    "Pous.Pinned.DenseMeets": "2fcf3c0b4ceea09dcbaef09f1dd91203b342a5b078e12f95473147c14f8d84f8",
+    "Pous.Pinned.FibreCount": "feaa76c1e2e96a35c9428d0317eefb571d2d927d798eab25544a0f3a4ee2cfa0",
+    "Pous.Pinned.FischClaim13": "7e157b6dc544ae5c5dcbe74d48e3eebe4f5b4fe54c0f07ff9d0eb4f5a83ffc40",
+    "Pous.Pinned.FischClaim14": "a91017176c6ea250b2fb770015e467ba2bed11edf8537f0f452558d34171ce7a",
+    "Pous.Pinned.InvExPostFactoTwoLayer": "472f346f9eff9b797124356348b9a2df959eb959b9f116aabd05f80229212992",
+    "Pous.Pinned.KFloor": "d60d7c13853caa24d27c0a8e9280e5d6e2669d1247b3e09fd73d38392bb5a33b",
+    "Pous.Pinned.N10Refuted": "c427a31be532e30b7965eda3c1aed29bf13e1890e8d558fb3b4aed8492217fb5",
+    "Pous.Pinned.P3ConcreteMeets14GB": "f0222f4c6401a235fa4671d764e1e249be02dc8bad9c60323bd1f9cc519e9b05",
+    "Pous.Pinned.P3ConcreteMeets64": "78263399a9e7ddf5125b1b07da085176fcfe532eac19586c27492b26e2e4afe5",
+    "Pous.Pinned.P3ConcreteMeets64D12": "11590dcdfef0bd7e37d870575c251c77d62cae2e4ef4d683dd67f41acf2549f3",
+    "Pous.Pinned.ReverseNeedsAllChildren": "75acd0284d7929e119ba405c1485c80b1358b2bbec7ff6f9f81f780970adba5c",
+    "Pous.Pinned.SampledAuditProd": "4aea4abffb1ebf80512c873b9c5f8ef69efbabfaa42a7955b746705b3351ea4b",
+    "Pous.Pinned.SampledAuditSeq": "cfc33a0db75fe6d3c4284b81da6795b28e8a42ffbc984e784d68fdb6e3895752",
+    "Pous.Pinned.SampledAuditSim": "5e31593f66b66eb9e18a8bad43edac080db49f74afa533f689ade6d053c7fbfd",
+    "Pous.Pinned.StackedAuditOnePercent": "da9a447df3bc464fca23012bfa6611ac552ca6443516ea7d9a5d77f10f44bd39",
+    "Pous.Pinned.StackedAuditSeq": "894a07ece13d44bb0cfcb520435bc31dcec577d6b6d651a5e5cdfeb5086b3d51",
+    "Pous.Pinned.Theorem1iTimed": "ed4261b18c7b79c9ea5a91e4a1b3d04aaf925b6f658252cbb2e9bb0d5e23468d",
+    "Pous.Pinned.Theorem1ii": "e8dfff0e55af18270c85bc2d67170a1cb9c9e10b1a9fad2a0fd36523bd4937ff",
+    "Pous.Pinned.Theorem1iiSeq": "14d3091134e1e3fe393a5a34588e3df6af028781e2e3e997de5670efc005c64a",
+    "Pous.Pinned.Theorem1iiTimed": "ccb454cd0b99b99b60efe8ad65ebb60359cb9b88f1f74fe882312c60cc6c2c78",
+    "Pous.Pinned.Theorem1iiiTimed": "403b2a2f99673b13de892f38c7b69bed974c8a6f99b97a2a5e84f23f989ed982",
+    "Pous.Pinned.TransposeMixing": "1f3c5043b68a033e71ec24efc6f18c347bcce0cd7d363d8730d52f274be50e40"
    },
    "pins": [
     "PousProofs.A1CompressionCard",
@@ -1204,18 +1204,18 @@
    ]
   },
   "Pous.Sanity": {
-   "digest": "1793a5d9bef5139d1fe284fa97f5f5b0f00be40bbaab1c095a8859bcc7e4f443",
+   "digest": "78ad317f409b18274d975e800afef43767c9761ae6573f5d0ffca5299e749a6f",
    "definitions": {
-    "Pous.honestPre": "1daf42b059d89bc7",
-    "Pous.honestSeq": "b283a8502f9b0d6a",
-    "Pous.honestSim": "e2329a6de2449d6d",
-    "Pous.junk": "12a773a685e8c9e2",
-    "Pous.pad": "509db65d539c3314",
-    "Pous.rawAnswer": "9bef044d59411166",
-    "Pous.rawPre": "e10c1aea24328eaa",
-    "Pous.rawSeq": "c6b21032ca8f9ec6",
-    "Pous.rawSim": "c58be78e4193bc16",
-    "Pous.trunc": "bdd8a1ef3bffd5a8"
+    "Pous.honestPre": "3f33df7ea214100c605bf5ba0d4f2a945cf8451f31c20fe02e9940df7d1a4838",
+    "Pous.honestSeq": "6a1ca1645cb77d0e34c2543b45ab0cf888186aac3938588e3a16c10eea65be56",
+    "Pous.honestSim": "5d335482f360349965bdeb466d9b1f4bdb799264667d53c49b4d7b25102418bd",
+    "Pous.junk": "23c58d691b8617bb875b7b9e142b0f1aeedcfc7384d7e7f94e8eb7c8fdc180df",
+    "Pous.pad": "939852b64a832be63b00b97e5a7882472228b5e592e6d2ba904f5e16f7808206",
+    "Pous.rawAnswer": "2388c0ee6a92d442e27a34764fa7b5d368046ac52f37684d16ff3a22a16357d8",
+    "Pous.rawPre": "a4b600e88d207530a2dfdfd20d33391b766dc1dbd47381180612d2887ee35e6b",
+    "Pous.rawSeq": "73ac19715a666295eee7f777c32709634c08f4fc5f79fc01b8c370e8bc47ff70",
+    "Pous.rawSim": "ac7add4d21efad06362370b32c5d02533666b0b6aadd997fe0652448d773dd36",
+    "Pous.trunc": "2a0d354abf15043fd47a57f93beba7364912e26f2c47045c1bc0c1a65ef5c673"
    },
    "pins": [
     "Pous.honest_seq_accepted",
@@ -1228,17 +1228,17 @@
    ]
   },
   "PousProofs.Dense.SegTagged": {
-   "digest": "91049b0fade7d958d3e3380c33e76999e5824d9760a954590ea6e32aa509335b",
+   "digest": "a15e23b70da91809dc27f2c5bd9fd390739b36a9cdc4072b5453cec91e9e4026",
    "definitions": {
-    "PousDenseReCert.liftPar": "f84373ab1e9bd60e"
+    "PousDenseReCert.liftPar": "ad4ea847e7e3cd0cb4196503f44b974fc22fcf490d8e5dd3ef20bf17dc115715"
    },
    "pins": ["PousDenseReCert.segTag_auditSecure"]
   },
   "PousProofs.P3.Column.BandComb": {
-   "digest": "30052fd1809960d5b8d00f630e0bf6e2073dcbfa36d9d52e4f4d65c6d24f75e2",
+   "digest": "60a338189f53ebbffb4708d5e3f04b52ca741a5edd3a9cea5828d3456b2de0ca",
    "definitions": {
-    "PousP3Column.bandExtra": "d5dcdcd0a57a8678",
-    "PousP3Column.bandGraph": "ea6c1c38260c4410"
+    "PousP3Column.bandExtra": "926b6bbb6cfba369ffd7d983ab345e93c68d173e31fa0bc54c575a35c9080323",
+    "PousP3Column.bandGraph": "a5ae49163821e67404587ed7150029cd4a8ad5afedb2ae8edf9038e989775884"
    },
    "pins": [
     "PousP3Column.band_twoWay_220_12",
