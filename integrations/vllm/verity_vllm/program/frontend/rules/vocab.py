@@ -134,6 +134,7 @@ from verity_vllm.program.registry import b1_tp2 as TP2
 from verity_vllm.program.registry import pad_prims as PP
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry import sampling as _sampling  # [R15 stoch]
+from verity_vllm.program.registry import topp_words as _topp_words  # the keep word as word gates at a constant S
 
 
 def _norm_v2(role: str):
@@ -283,12 +284,17 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            # temperature, top_p and [R16, coord M-0169] the split count S (= SplitsFor_v1(|live|, num_SMs), a derived value of the workload the
            # request Program reads from its `splits` Input) are OPERANDS).  `rules/vllm_sampling.py` asks for it.  Greedy rows keep `token_select`.
            "token_select_stochastic": lambda V: ir_bind(_sampling.GumbelTopPTokenSelect, V=V),
+           # the same select at a constant split count S (a single-request workload): its top-p keep word as word gates
+           # (registry.topp_words, `GumbelTopPTokenSelect_v2{V,S}`, the same six operands), so a partition query cuts it
+           "token_select_stochastic_split": lambda V, S: ir_bind(_topp_words.GumbelTopPTokenSelectV2, V=V, S=S),
            # [R15 fp8] the block-scaled FP8 linear of a pre-quantised checkpoint on Hopper (registry.fp8, pinned bit-exact on the H100 against
            # _C.per_token_group_fp8_quant and the blockwise _C.cutlass_scaled_mm): the dynamic per-128-group activation quant (both outputs
            # computed) and the scaled GEMM over e4m3 weights with f32 128x128 block scales as Inputs. `rules/vllm_bindings.py` asks for them.
            "fp8_group_quant": lambda K, G: ir_bind(_fp8.Fp8GroupQuant, K=K, G=G),
            "scaled_mm_fp8_block": lambda K, N, G: ir_bind(_fp8.ScaledMmFp8Block, K=K, N=N, G=G)},
     notes={**PROFILE_B1_EAGER.notes, **_PAD_NOTES, **_DNN,
+           "token_select_stochastic_split": "GumbelTopPTokenSelect_v2{V,S}: GumbelTopPTokenSelect_v1{V} at the constant split count S, "
+                                            "its keep word TopPKeepWord_v1{V,S} as word gates (registry.topp_words); equal to v1 at splits = S",
            "token_select_stochastic": "GumbelTopPTokenSelect_v1{V}(logits bf16[V], top_p f32, seed i64, pos i64, temp f32, splits i32) -> i32: f32 "
                                       "widening, div.full.f32 temperature, the S-split top-p mask (_topp_sb_{stats,step,mask}; S = the splits operand "
                                       "= SplitsFor_v1(|live|, num_SMs)), Gumbel-max with key tl.randint(seed, pos), first global maximum "

@@ -159,6 +159,11 @@ class TableInfo:
 
 
 def table_info(words: Sequence[int]) -> TableInfo:
+    if hasattr(words, "dtype"):
+        import numpy as np
+
+        arr = np.asarray(words, dtype=np.uint64)
+        return TableInfo(len(arr), int(np.bitwise_or.reduce(arr ^ arr[0])) if len(arr) else 0)
     w0, diff = words[0], 0
     for w in words:
         diff |= w ^ w0
