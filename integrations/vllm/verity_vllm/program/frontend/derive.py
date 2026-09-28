@@ -608,8 +608,8 @@ def _record_partial(prov: dict, holder: list) -> None:
 
 def _describe_source(source, example_inputs, mode, profile, config, allowed_dims) -> dict:
     if isinstance(source, torch.nn.Module):
-        cls = type(source)
-        d = {"kind": "nn.Module", "class": f"{cls.__module__}.{cls.__qualname__}",
+        cls = type(source)                               # `DERIVE_SOURCE`: the source's declared, versioned id; SRC's class when present
+        d = {"kind": "nn.Module", "class": getattr(source, "DERIVE_SOURCE", None) or f"{cls.__module__}.{cls.__qualname__}", "python_class": f"{cls.__module__}.{cls.__qualname__}",
              "submodules": [f"{n}: {type(m).__qualname__}" for n, m in source.named_modules() if n]}
     else:
         d = {"kind": "callable", "name": getattr(source, "__qualname__", repr(source))}
