@@ -1,6 +1,7 @@
 """`flock-rows --archive`, the verifier's `Flock.DeriveAll.deriveAll` compiled, gives the prover's mirror's rows on
-#203's derive vectors (`derive_vectors.json`): each inner layout's physical rows, the unit's own region, its parts and Δ,
-and the logical list, by SHA-512: calls placed and inlined, exports, and reads inline and placed."""
+#206's derive vectors (`derive_vectors.json`): each inner layout's physical rows, the unit's own region, its parts and Δ,
+and the logical list, by SHA-512: calls placed and inlined, exports, and reads inline and placed. Those rows pass
+`Flock.DeriveAll.deriveChecked`'s check, the one `compose_sound` is proved from."""
 from __future__ import annotations
 
 import hashlib
@@ -39,3 +40,16 @@ def test_flock_rows_matches_the_mirror(built, case, tmp_path):
                              capture_output=True, text=True)
         assert out.returncode == 0, out.stderr
         assert hashlib.sha512(out.stdout.encode()).hexdigest() == want, f"{case['name']}: {part[:16]}"
+
+
+@pytest.mark.parametrize("case", cases(), ids=lambda c: c["name"])
+def test_derived_rows_pass_the_check(built, case, tmp_path):
+    """`deriveChecked` accepts every read-free vector's rows; reads are refused until the check covers them (S3c-2)."""
+    path = tmp_path / "archive.json"
+    path.write_text(json.dumps(case["archive"]))
+    out = subprocess.run([str(LEAN / ".lake/build/bin/flock-rows"), "--archive", str(path), "--part", "check"],
+                         capture_output=True, text=True)
+    if any(item[0] == 4 for t in case["archive"]["types"] for item in t["items"]):
+        assert out.returncode == 1 and "fail the check" in out.stderr, out.stderr
+    else:
+        assert (out.returncode, out.stdout) == (0, "ok\n"), out.stderr

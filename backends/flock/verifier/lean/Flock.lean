@@ -26,4 +26,5 @@ import Flock.HmRow
 import Flock.TemplateQuery
 import Flock.Derive
 import Flock.DeriveAll
+import Flock.DeriveCheck
 import Flock.Rows
