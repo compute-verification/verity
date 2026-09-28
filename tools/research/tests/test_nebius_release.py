@@ -134,6 +134,7 @@ def test_a_succeeded_commits_bundle_teaches_its_model(pacer):
     pacer.tick()
     assert pacer.estimate_gb(B8) == pytest.approx(96.0 / 4 * 1.25)
     assert json.loads(pacer.SIZES.read_text()) == {"phi3-mini": pytest.approx(96.0 / (32 * 1152))}
+    assert pacer.SHARED.read_text() == pacer.SIZES.read_text()      # mirrored where the pack pods read it (commit_pack.py)
 
 
 def test_a_failed_commits_partial_bundle_teaches_nothing(pacer):

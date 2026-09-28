@@ -19,6 +19,9 @@ it by quota and requeues it itself when it is preempted). The Job runs the task'
 image's uid 1000, with /workspace mounted, and the R2 store credentials from the Secret `research-r2` (the templates' `secrets`).
 Tasks of a multi-task template (config-run: build, then gpu) chain: the next task is submitted when the previous one succeeds.
 A task that exits 99 is resubmitted (a chunk that ended early or was told to yield); any other failure ends the item.
+An error while handling one finished Job (routing its next task, labelling it seen) is that Job's: it is logged as
+`item-failed`, the Job stays unseen for the next tick, and the tick goes on to the other Jobs and the ready files; the loop then
+prints `tick failed`, which the steward's failed-tick alert counts (2 Oct: three AlreadyExists stalls in 10 h each stopped every tick).
 An item is pinned to its template's content at its first submit: the item carries `template_sha` (the `name@sha` its submit event
 logs) and a copy is kept at `$VY_DISPATCH_ROOT/templates.by-sha/<sha>/<template>.yaml`. Every later task, resubmission and spooled
 Commit of its chain renders from that copy, never from the live `sky/jobs/`, so a template refreshed mid-chain applies only to items
@@ -1331,7 +1334,56 @@ def job_state(job: dict, pods: dict) -> tuple[str, int | None]:
     return "running", None
 
 
-def tick(dry: bool = False) -> None:
+def end_job(j: dict, key: str, state: str, rc: int | None, pods: dict, inflight: set[str], dry: bool = False) -> None:
+    """A finished Job of this dispatcher's, not yet seen: log its end, then route its chain's next task or end its item, and
+    label it seen."""
+    item = job_item(j)
+    idx, tries = int(j["metadata"]["labels"]["verity.dev/task"]), int(j["metadata"]["labels"]["verity.dev/try"])
+    try:
+        tasks = load_template(item["template"], item["template_sha"])[0]
+    except (OSError, ValueError) as e:
+        print(f"held {j['metadata']['name']} ({key}): {e}", file=sys.stderr)
+        return
+    ntasks, name = len(tasks), j["metadata"]["name"]
+    st = j.get("status") or {}
+    wall = None
+    if st.get("startTime") and st.get("completionTime"):
+        ts = [time.mktime(time.strptime(st[k], "%Y-%m-%dT%H:%M:%SZ")) for k in ("startTime", "completionTime")]
+        wall = int(ts[1] - ts[0])
+    nxt = None
+    if state == "succeeded" and idx + 1 < ntasks:
+        nxt = (idx + 1, 0)
+    elif state == "failed" and rc == REQUEUE_RC and tries + 1 < MAX_TRIES:
+        nxt = (idx, tries + 1)
+    judged = not nxt and bool(item.get("packed")) and (tasks[idx].get("name") or "") == "replay"
+    why, counts = packed_replay(j, state, rc) if judged else (None, {})
+    if dry:
+        then = "the item ends" if not nxt else \
+            f"then {render(item, key, *nxt)['metadata']['name']} (task {nxt[0]} of {ntasks})"
+        verdict = "" if not judged else f"; packed replay {'PASS' if why is None else 'FAIL, would stop ' + model_of(item)}: {counts}"
+        print(f"would end {name} ({key}, {state} rc {rc}) on {item['template']}@{item['template_sha']}: {then}{verdict}")
+        return
+    append("log.jsonl", {"ev": "end", "job": name, "key": key, "task": idx, "try": tries, "state": state,
+                         "rc": rc, "wall_s": wall})
+    if judged:
+        append("log.jsonl", {"ev": "packed-replay", "job": name, "key": key, "pod": item["packed"],
+                             "verdict": "pass" if why is None else "fail", "why": why, **counts})
+    if nxt:
+        route(item, key, *nxt)
+    else:
+        end = {"key": key, "state": state, "rc": rc, "task": idx, "job": name, **({"packed": item["packed"]} if judged else {})}
+        if why:
+            end.update(state="failed", why=f"packed replay: {why}")
+            replay_run, commit_run = run_ids(j, pods.get(name, []))
+            stop_model(model_of(item), key, replay_run, why, commit_run=commit_run, pod=item["packed"], job=name)
+        append("done.jsonl", end)
+        inflight.discard(key)
+    kubectl("label", "job", name, "verity.dev/seen=1", "--overwrite")
+
+
+def tick(dry: bool = False) -> list[str]:
+    """One pass. The finished Jobs whose handling raised (`name: error`): each stays unseen, so the next tick tries it again."""
+    failed: list[str] = []
     jobs = json.loads(kubectl("get", "jobs", "-l", f"{LABEL}=node1", "-o", "json"))["items"]
     pods: dict[str, list] = {}
     pod_list = json.loads(kubectl("get", "pods", "-l", f"{LABEL}=node1", "-o", "json"))["items"]
@@ -1351,48 +1403,14 @@ def tick(dry: bool = False) -> None:
             inflight.add(key)
         if state not in ("succeeded", "failed") or j["metadata"]["labels"].get("verity.dev/seen") == "1":
             continue
-        item = job_item(j)
-        idx, tries = int(j["metadata"]["labels"]["verity.dev/task"]), int(j["metadata"]["labels"]["verity.dev/try"])
         try:
-            tasks = load_template(item["template"], item["template_sha"])[0]
-        except (OSError, ValueError) as e:
-            print(f"held {j['metadata']['name']} ({key}): {e}", file=sys.stderr)
-            continue
-        ntasks, name = len(tasks), j["metadata"]["name"]
-        st = j.get("status") or {}
-        wall = None
-        if st.get("startTime") and st.get("completionTime"):
-            ts = [time.mktime(time.strptime(st[k], "%Y-%m-%dT%H:%M:%SZ")) for k in ("startTime", "completionTime")]
-            wall = int(ts[1] - ts[0])
-        nxt = None
-        if state == "succeeded" and idx + 1 < ntasks:
-            nxt = (idx + 1, 0)
-        elif state == "failed" and rc == REQUEUE_RC and tries + 1 < MAX_TRIES:
-            nxt = (idx, tries + 1)
-        judged = not nxt and bool(item.get("packed")) and (tasks[idx].get("name") or "") == "replay"
-        why, counts = packed_replay(j, state, rc) if judged else (None, {})
-        if dry:
-            then = "the item ends" if not nxt else \
-                f"then {render(item, key, *nxt)['metadata']['name']} (task {nxt[0]} of {ntasks})"
-            verdict = "" if not judged else f"; packed replay {'PASS' if why is None else 'FAIL, would stop ' + model_of(item)}: {counts}"
-            print(f"would end {name} ({key}, {state} rc {rc}) on {item['template']}@{item['template_sha']}: {then}{verdict}")
-        else:
-            append("log.jsonl", {"ev": "end", "job": name, "key": key, "task": idx, "try": tries, "state": state,
-                                 "rc": rc, "wall_s": wall})
-            if judged:
-                append("log.jsonl", {"ev": "packed-replay", "job": name, "key": key, "pod": item["packed"],
-                                     "verdict": "pass" if why is None else "fail", "why": why, **counts})
-            if nxt:
-                route(item, key, *nxt)
-            else:
-                end = {"key": key, "state": state, "rc": rc, "task": idx, "job": name, **({"packed": item["packed"]} if judged else {})}
-                if why:
-                    end.update(state="failed", why=f"packed replay: {why}")
-                    replay_run, commit_run = run_ids(j, pods.get(name, []))
-                    stop_model(model_of(item), key, replay_run, why, commit_run=commit_run, pod=item["packed"], job=name)
-                append("done.jsonl", end)
-                inflight.discard(key)
-            kubectl("label", "job", name, "verity.dev/seen=1", "--overwrite")
+            end_job(j, key, state, rc, pods, inflight, dry)
+        except Exception as e:  # noqa: BLE001  (one Job's error is that Job's: it stays unseen for the next tick, the rest go on)
+            name, why = j["metadata"]["name"], f"{type(e).__name__}: {e}"
+            print(f"item-failed {name} ({key}): {why}", file=sys.stderr, flush=True)
+            failed.append(f"{name}: {why}")
+            if not dry:
+                append("log.jsonl", {"ev": "item-failed", "job": name, "key": key, "why": why})
     if PACK_COMMITS and PACK_ADOPT:
         pack_adopt(jobs, dry)
     pack_hold(jobs, dry)
@@ -1447,6 +1465,7 @@ def tick(dry: bool = False) -> None:
         inflight.add(key)
     if PACK_COMMITS:
         pack_pods(json.loads(kubectl("get", "jobs", "-l", f"{LABEL}=node1", "-o", "json"))["items"], dry)
+    return failed
 
 
 def prom(q: str) -> float | None:
@@ -1548,11 +1567,14 @@ def main(argv: list[str]) -> int:
         tick(ns.dry_run)
     elif ns.cmd == "loop" and ns.once:
         try:
-            tick()
-            print(f"{now_utc()} tick {json.dumps(busy())}", flush=True)
+            failed = tick()
         except Exception as e:  # noqa: BLE001  (a failed tick is retried next time, never the end of the loop)
             print(f"{now_utc()} tick failed: {e}", file=sys.stderr, flush=True)
             return TICK_FAILED
+        if failed:      # the rest of the tick ran; the steward's failed-tick alert counts this line
+            print(f"{now_utc()} tick failed: {len(failed)} Job(s) left unseen: {'; '.join(failed)[:500]}", file=sys.stderr, flush=True)
+            return TICK_FAILED
+        print(f"{now_utc()} tick {json.dumps(busy())}", flush=True)
     elif ns.cmd == "loop":
         while True:
             rc = subprocess.run([sys.executable, str(Path(__file__).resolve()), "loop", "--once"], env=CALLER_ENV).returncode

@@ -273,8 +273,20 @@ def _chain(tree: Path, pins: list[tuple[str, str]], stamp: str) -> list[str]:
     return chain
 
 
-#: what `prepare` runs on a train before pushing it, under this interpreter: check's preflight (`uv.lock`, the repository's lints)
+#: what `prepare` runs on a train before pushing it: check's preflight (`uv.lock`, the repository's lints)
 PREFLIGHT = ["tools/check/check.py", "--preflight"]
+
+
+def preflight_argv() -> list[str]:
+    """`prepare`'s default lint: the preflight under this interpreter when it has pytest, which the lints need and a system
+    python3 lacks, else under `uv run --locked`, as check itself runs."""
+    import importlib.util
+    import shutil
+
+    uv = shutil.which("uv")
+    if importlib.util.find_spec("pytest") is not None or uv is None:
+        return [sys.executable, *PREFLIGHT]
+    return [uv, "run", "--locked", "python", *PREFLIGHT]
 
 
 def prepare(repo: Path, refs: list[str], branch: str, onto: str, remote: str, lint: list[str]) -> tuple[str, str]:
@@ -471,7 +483,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--onto", default=None, metavar="BASE", help="--prepare: the branch on --remote (or commit) the train starts "
                     "from (default --into; a train ahead's prep branch stacks this one on it)")
     ap.add_argument("--lint", default=None, metavar="CMD", help="--prepare: what must pass on the train before it's pushed "
-                    "(default `python tools/check/check.py --preflight` under this interpreter)")
+                    "(default `python tools/check/check.py --preflight`: under this interpreter when it has pytest, else `uv run --locked`)")
     ap.add_argument("--into", default="main", help="the branch checked out here that receives the merge (default main)")
     ap.add_argument("--push", action="store_true", help="once the merge lands, push --into to --remote (never forced), then sweep; "
                     "without it the sweep runs before the push and can close nothing the merge landed")
@@ -508,14 +520,14 @@ def main(argv: list[str]) -> int:
         if not a.train:
             ap.error("--prepare needs --train")
         onto = a.onto or a.into
-        lint = shlex.split(a.lint) if a.lint else [sys.executable, *PREFLIGHT]
+        lint = shlex.split(a.lint) if a.lint else preflight_argv()
         try:
             tip, tree = prepare(repo, a.ref, a.prepare, onto, a.remote, lint)
         except Refused as e:
             print(f"research merge: refused: {e}", file=sys.stderr)
             return 1
         print(f"research merge: train {' '.join(a.ref)} on {onto}: pushed {a.remote}/{a.prepare} = {tip[:12]} (tree {tree[:12]}); "
-              f"check it with `tools/check/train.sh {a.prepare} MACHINE`, land it with `research merge {a.prepare}`")
+              f"check it with `tools/check/train.sh {tip[:12]} MACHINE`, land it with `research merge {a.prepare}`")
         return 0
     if a.train:
         from .store import tools_registry
