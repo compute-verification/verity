@@ -213,8 +213,9 @@ def update_pins(rep: dict) -> dict:
 
 
 #: the memory a worker counts on: a cold `--all` grew six of 23 workers on vy-nebius-cpu-1 to 40-136 GiB (7 Oct), and two
-#: `--all -j 0` runs, ~130 workers each, took 1.4 TB of node 1's 1.6 TB user slice (8 Oct)
-GB_PER_JOB = 128
+#: `--all -j 0` runs, ~130 workers each, took 1.4 TB of node 1's 1.6 TB user slice (8 Oct); a cold `--all` at 7 workers in
+#: vy-n2's 900 GiB session scope grew them to 107-155 GiB and was OOM-killed (r20261009-061009-1b4d, 9 Oct)
+GB_PER_JOB = 160
 
 
 def memory_gb(root: Path = Path("/")) -> int:
