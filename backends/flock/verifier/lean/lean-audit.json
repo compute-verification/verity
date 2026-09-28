@@ -13,7 +13,7 @@
   "Flock.Qword.DCut.locate": "partial def: a unit's path down to a flat cut, recursing through nested parts (Q_word v1, PROTOCOL.md 16.7); no proof is about it, and qword_agree.py covers it",
   "Flock.Qword.evaluate": "partial def: Q_word v1 on an activation, recursing through a separable body's members (PROTOCOL.md 16.7); no proof is about it, and qword_agree.py covers it",
   "Flock.Qword.defOfJson": "partial def: a Def read from JSON, recursing through a separable body's members; no proof is about it, and qword_agree.py covers it",
-  "Flock.Program.domainError": "partial def: the RFC 8785 domain check, recursing through the JSON (verity-ir/descriptor/v1 §1, PROTOCOL.md 16.11); no proof is about it, and qword_program_agree.py covers it",
+  "Flock.Program.domainError": "partial def: the RFC 8785 domain check, recursing through the JSON (verity-ir/descriptor/v1 §1, PROTOCOL.md 16.7); no proof is about it, and qword_program_agree.py covers it",
   "Flock.Program.Ty.beq": "partial def: type equality, recursing through a nested type's arrays and records (descriptor §2); no proof is about it, and qword_program_agree.py covers it",
   "Flock.Program.Ty.leaves": "partial def: a type's leaf count, recursing through its arrays and records (descriptor §2); no proof is about it, and qword_program_agree.py covers it",
   "Flock.Program.Ty.widths": "partial def: a type's leaf widths in leaf order, recursing through its arrays and records (descriptor §2); no proof is about it, and qword_program_agree.py covers it",
