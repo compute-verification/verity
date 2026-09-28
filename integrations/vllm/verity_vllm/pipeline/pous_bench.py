@@ -42,6 +42,9 @@ class Options:
     thread_rows: int = option("--thread-rows", type=int, default=0, help="rows from which a Feistel launch runs a thread per row")
     load_check: bool = option("--no-load-check", action="store_false", default=True, help="skip the load-time bit-exact check")
     codec: str = option("--codec", default="p3/v1", help="the reference codec served (p3/v1, dense-chain/v1)")
+    kernels: str = option("--kernels", default="", help="Feistel dispatch as JSON: word_io, fused, pair, pair_max_rows, coalesced")
+    audit: int = option("--audit", type=int, default=0, help="after timing, this many timed audits against the live server")
+    audit_k: int = option("--audit-k", type=int, default=111, help="challenges per audit")
     unencoded: bool = option("--unencoded", action="store_true", default=False,
                              help="timing only: serve W itself as C (decode costs the same; outputs are garbage)")
     codec_segments: str = option("--codec-segments", default="", help="codec-only decodes, segments:thread_rows, e.g. 11:0,11:1 (pous)")
@@ -129,11 +132,44 @@ def codec_only(segments: list[tuple[int, int]], build_dir: str, name: str) -> li
     return rows
 
 
+def live_audit(engine, out: Path, a: Options) -> dict[str, Any]:
+    """Timed audits by a separate verifier process (`pous-dense-audit`) against the native responder, the server decoding
+    and serving forward passes all the while."""
+    import subprocess
+    import sys
+
+    from vllm import SamplingParams
+
+    llm = engine.llm
+    info = llm.collective_rpc("pous_info")[0]
+    (out / "leaves-audit.bin").write_bytes(llm.collective_rpc("pous_leaves")[0])
+    port = llm.collective_rpc("pous_start_responder", args=("127.0.0.1", 0, 2))[0]
+    spec = json.loads((out / "pous-bench.json").read_text())
+    from verity_vllm.engine.pous import twins
+
+    geometry = twins.reference(a.codec)[1].with_segments(info["segments"])
+    (out / "audit-ready.json").write_text(json.dumps({"port": port, "salt": spec["salt"], "params": geometry.manifest()}))
+    proc = subprocess.Popen([sys.executable, "-m", "verity_vllm.pipeline.cli", "pous-dense-audit", "--ready", str(out / "audit-ready.json"),
+                             "--leaves", str(out / "leaves-audit.bin"), "--out", str(out / "audit.json"), "--k", str(a.audit_k),
+                             "--audits", str(a.audit), "--verifier-cpu", "3"], stdout=(out / "audit.log").open("w"),
+                            stderr=subprocess.STDOUT)
+    forwards = 0
+    while proc.poll() is None:
+        llm.generate([{"prompt_token_ids": prompt(0, a.decode_prompt)}], SamplingParams(temperature=0.0, max_tokens=1),
+                     use_tqdm=False)
+        forwards += 1
+    counts = llm.collective_rpc("pous_stop_responder")[0]
+    doc = json.loads((out / "audit.json").read_text()) if (out / "audit.json").exists() else {}
+    return {"rc": proc.returncode, "forwards_during_audit": forwards, "responder": counts, **doc}
+
+
 def main(a: Options) -> int:
     from verity_vllm.pipeline import pous_run
 
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
+    if a.audit:
+        os.sched_setaffinity(0, set(os.sched_getaffinity(0)) - {2, 3})
     doc: dict[str, Any] = {"mode": a.mode, "case": a.case, "codec": a.codec, "unencoded": a.unencoded, "options": dataclasses.asdict(a)}
     if a.mode == "pous" and a.codec_segments:
         doc["codec_only"] = codec_only([tuple(int(y) for y in x.split(":")) for x in a.codec_segments.split(",")], a.build_dir,
@@ -144,7 +180,7 @@ def main(a: Options) -> int:
         spec.write_text(json.dumps({"safetensors": pous_run.checkpoint_files(a.case), "build_dir": a.build_dir,
                                     "salt": os.urandom(24).hex(), "drop_fraction": 0.0, "layers_per_decode": a.layers_per_decode,
                                     "thread_rows": a.thread_rows, "load_check": a.load_check, "codec": a.codec,
-                                    "unencoded": a.unencoded}))
+                                    "unencoded": a.unencoded, **(json.loads(a.kernels) if a.kernels else {})}))
     batches = [int(x) for x in a.decode.split(",")]
     t0 = time.perf_counter()
     engine = pous_run.build(a.case, spec, max_num_seqs=max(batches + [32]), engine_args={"max_num_batched_tokens": a.max_batched_tokens})
@@ -154,7 +190,7 @@ def main(a: Options) -> int:
         doc["store"] = {k: v for k, v in info().items() if k not in ("checks", "digests", "memory")}
         doc["load_checks"] = info()["checks"]
     rows = []
-    for item in a.prefill.split(","):
+    for item in filter(None, a.prefill.split(",")):
         length, batch = (int(x) for x in item.split("x"))
         rows.append(prefill(engine, length, batch, info))
         print(json.dumps({k: rows[-1][k] for k in ("kind", "length", "batch", "tokens_per_s", "seconds")}), flush=True)
@@ -162,6 +198,18 @@ def main(a: Options) -> int:
         rows.append(decode(engine, batch, a.decode_prompt, a.decode_tokens, info))
         print(json.dumps({k: rows[-1][k] for k in ("kind", "batch", "tokens_per_s", "seconds")}), flush=True)
     doc["rows"] = rows
+    if a.mode == "pous":
+        from vllm import SamplingParams
+
+        before = info()["decodes"]
+        t1 = time.perf_counter()
+        engine.llm.generate([{"prompt_token_ids": prompt(0, a.decode_prompt)}], SamplingParams(temperature=0.0, max_tokens=1),
+                            use_tqdm=False)
+        doc["probe_forward_s"] = time.perf_counter() - t1
+        doc["store"] = {k: v for k, v in info().items() if k not in ("checks", "digests", "memory")}
+        doc["store"]["groups_per_forward"] = doc["store"]["decodes"] - before
+    if a.mode == "pous" and a.audit:
+        doc["audit"] = live_audit(engine, out, a)
     (out / f"bench-{a.mode}.json").write_text(json.dumps(doc, indent=1, default=str))
     if a.result:
         Path(a.result).write_text(json.dumps({

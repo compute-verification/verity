@@ -50,6 +50,8 @@ class Options:
                              help="with --fused, launches not on a lane pair stage every chunk through shared memory")
     gate_segments: int = option("--gate-segments", type=int, default=2, help="segments whose sampled blocks the reference decodes")
     workers: int = option("--workers", type=int, default=12, help="processes for the reference side of G2")
+    segment_sets_from: str | None = option("--segment-sets-from", default=None,
+                                           help="a pous-bench record whose decode log's group sizes to time as full-segment decodes")
     result: str | None = option("--result", default=None, help="also write the research result.json here")
     run_id: str | None = option("--run-id", default=None, help="the research run id result.json names")
 
@@ -256,6 +258,34 @@ def summarize(m: dict[str, Any], nbytes: int, decode: float, calls: int, gemm: d
     return out
 
 
+def predict_vllm(bench: dict[str, Any], reps: int, salt: bytes) -> dict[str, Any]:
+    """The vLLM run's per-forward decode predicted from this benchmark's kernels: each group decode of the run's last forward
+    (its decode log) timed here as a decode of that many full segments."""
+    import torch
+
+    from verity_pous import dense as ref
+
+    from verity_vllm.engine.pous import codec, dense
+
+    store = bench["store"]
+    log = store["decode_log"]
+    per_forward = store["groups_per_forward"]
+    last = log[-per_forward:]
+    b, width = ref.SECURE_FIRST.blocks_per_segment, ref.SECURE_FIRST.block_bytes
+    timed = {}
+    for k in sorted({n for n, _ in last}):
+        c = torch.empty(k * b, width, dtype=torch.uint8, device="cuda")
+        fill(c, f"dense-bench/vllm/{k}")
+        tags = codec.segment_tags(salt, list(range(k)), "cuda")
+        blocks = torch.arange(k * b, device="cuda")
+        timed[k] = statistics.median(_timed(lambda: dense.decode_blocks(c, tags, blocks // b, blocks % b, b), reps, warmup=False))
+        del c
+    predicted = sum(timed[n] for n, _ in last)
+    measured = sum(t for _, t in last)
+    return {"groups": last, "microbench_s": timed, "predicted_decode_s": predicted, "measured_decode_s": measured,
+            "ratio": measured / predicted}
+
+
 def device_facts() -> dict[str, Any]:
     import torch
 
@@ -293,6 +323,8 @@ def main(a: Options) -> int:
     fill(c_probe, "dense-bench/G2")
     doc["gates"]["reference_decode"] = gate_reference(c_probe, codec.segment_tags(salt, list(range(a.gate_segments)), "cuda"), salt,
                                         list(range(a.gate_segments)), a.workers)
+    if a.segment_sets_from:
+        doc["vllm_prediction"] = predict_vllm(json.loads(Path(a.segment_sets_from).read_text()), a.reps, salt)
     clock_mhz = float(doc["device"]["nvidia_smi"].split(",")[3].split()[0])
     for m in doc["models"].values():
         m["integer_share"] = m["keccak_per_s"] * LANE_INSTR_PER_KECCAK / (doc["device"]["sms"] * 64 * clock_mhz * 1e6)

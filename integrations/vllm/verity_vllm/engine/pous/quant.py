@@ -11,7 +11,8 @@ first use in a forward and released after its last; nothing decoded outlives the
 The run's settings are the JSON file vLLM passes as `hf_overrides["quantization_config_file"]`: `safetensors` (the checkpoint
 files), `build_dir` (the native build, `native.load`), `salt` (hex, 24 bytes, drawn by the verifier after the checkpoint
 commitment), `codec` (a reference codec name, `twins.reference`; default P3), `unencoded` (timing only: serve `W` itself
-as `C`, whose decode costs the same and yields garbage), `layers_per_decode`, `thread_rows` (`codec.THREAD_ROWS`), `load_check`
+as `C`, whose decode costs the same and yields garbage), `layers_per_decode`, `thread_rows`, `word_io`, `fused`, `pair`, `pair_max_rows`, `coalesced` (the Feistel kernel dispatch,
+`codec.THREAD_ROWS` ..), `load_check`
 (false skips the load-time check), and
 `drop_fraction` / `drop_source` (the negative control: that fraction of `C`'s blocks, drawn through `verity.randomness` from
 `drop_source`, is zeroed after encoding, and the load-time check is skipped).
@@ -63,6 +64,9 @@ class Store:
         self.checkpoint = layout.read(spec["safetensors"], base)
         self.gpu_encode, self.gpu_decode = twins.twin(self.reference)
         codec.THREAD_ROWS[0] = int(spec.get("thread_rows") or 0)
+        codec.WORD_IO[0], codec.FUSED[0], codec.PAIR[0] = (bool(spec.get(k)) for k in ("word_io", "fused", "pair"))
+        codec.PAIR_MAX_ROWS[0] = int(spec.get("pair_max_rows") or 1 << 62)
+        codec.COALESCED[0] = bool(spec.get("coalesced"))
         self.salt = bytes.fromhex(spec["salt"])
         self.device = torch.device("cuda", torch.cuda.current_device())
         self.c: torch.Tensor | None = None
@@ -118,6 +122,9 @@ class Store:
         self.stats["decodes"] += 1
         self.stats["decode_s"] += time.perf_counter() - t0
         self.stats["decoded_bytes"] += len(segs) * seg_bytes
+        log = self.stats.setdefault("decode_log", [])
+        if len(log) < 64:
+            log.append([len(segs), time.perf_counter() - t0])
         return out
 
     def group_of(self, prefix: str) -> str:
