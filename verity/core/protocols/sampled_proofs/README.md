@@ -191,7 +191,9 @@ named with each. A rule leaves this list in the change whose Lean states it.
 - The receipt is `{"format": "verity/registration-receipt/v1", "registration": <digest>, "verifier": ..., "received":
   "<UTC, %Y-%m-%dT%H:%M:%SZ>"}`, and the draw names it.
 - The verifier holds its own public file (scheme, roots, their domains, its instance count) to the record
-  (`matches_public`).
+  (`matches_public`). That those roots, domains and instance count are the proved rows' is flock-verify's check of the
+  public file (`checkPublic`), stated deterministically by the Lean guarantee
+  `FailClosed.flock_verify_public_ties`; flock-verify reads no `scheme` from the header, only META's.
 - `window` is provenance only: `served` roots are what serving committed, and `stand-in` roots a fresh commitment to
   values captured from serving, whose link to the served root is provenance, not proof.
 - A served root's domain (`served_domain`, agreed with vllm-serving-commit) binds the program, the partition, the port,
