@@ -8,7 +8,8 @@
         head(key)          {"bytes": n, "etag": md5 hex | None} or None
         list(prefix)       every key under `prefix`
 
-`FsRemote(root)` is a directory (also the test double).  `S3Remote` lives in `remote_s3.py`.  `HttpRemote(base_url)` is the read-only
+`FsRemote` and `S3Remote` also have `list_times(prefix, start_after=None)`, `[(key, last modified)]`, which the derived index
+(`bucket_index.py`) lists with.  `FsRemote(root)` is a directory (also the test double).  `S3Remote` lives in `remote_s3.py`.  `HttpRemote(base_url)` is the read-only
 public export (`fetchset.py`): `get` and `head` over anonymous HTTPS at `<base_url>/<key>`, no `put`, no `list`.  `load_remote()` reads
 `~/.research/store.toml` (or `$RESEARCH_STORE_CONFIG`); no file, or no `[remote]` table, means no remote: the local store is the
 only replica and nothing is ever called PRESERVED.  The config names the ENV VARS that hold credentials; it never holds secrets.
@@ -32,6 +33,7 @@ import time
 import tomllib
 import urllib.error
 import urllib.request
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Protocol, runtime_checkable
 
@@ -121,6 +123,11 @@ class FsRemote:
         if progress:
             progress(len(out))
         return out
+
+    def list_times(self, prefix: str, start_after: str | None = None) -> list[tuple[str, str]]:
+        """`[(key, last modified as ISO UTC)]` under `prefix`, after `start_after` when given (the S3 listing's `start-after`)."""
+        return [(k, datetime.fromtimestamp(self._p(k).stat().st_mtime, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))
+                for k in self.list(prefix) if start_after is None or k > start_after]
 
     def list(self, prefix: str) -> list[str]:
         base = self.root
