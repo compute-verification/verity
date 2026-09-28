@@ -12,7 +12,7 @@ process (vLLM keeps device memory until exit):
   ``PEARL_MIN_MINING_TOKENS`` tokens) runs Pearl's four-op mined pipeline against the plugin's dummy job at hard
   difficulty; decode and CUDA-graph replays serve the fallback, as Pearl ships it.
 
-Measured: prefill tokens/s (4 prompts of 2,048 tokens, one scheduler step), decode tokens/s (batch 32, 128 tokens), and
+Measured: prefill tokens/s (4 prompts of 2,048 tokens, one scheduler step; median of 7, since mined steps vary), decode tokens/s (batch 32, 128 tokens), and
 greedy-token agreement with ``bf16`` on 16 prompts.  ``ATTENTION_BACKEND`` (e.g. ``FLASH_ATTN``) overrides vLLM's choice
 in every mode: FlashInfer's TRT-LLM attention JIT needs a full CUDA 13 toolkit, which a pip-only environment lacks.  The ratio of ``pearl-mining`` to ``pearl-fallback`` prefill is Pearl's
 own mining overhead on its own hardware, the calibration point for the RTX 4090 port in ``gemm_bench.py`` and
@@ -69,10 +69,11 @@ def run_mode(model: str, mode: str) -> dict:
     one = SamplingParams(temperature=0.0, max_tokens=1)
     llm.generate(prefill[:1], one, use_tqdm=False)
     times = []
-    for _ in range(3):
+    for _ in range(7):
         t0 = time.perf_counter()
         llm.generate(prefill, one, use_tqdm=False)
         times.append(time.perf_counter() - t0)
+    median = sorted(times)[len(times) // 2]
     decode = [{"prompt_token_ids": torch.randint(100, 20000, (64,), generator=g).tolist()} for _ in range(32)]
     t0 = time.perf_counter()
     llm.generate(decode, SamplingParams(temperature=0.0, max_tokens=128, ignore_eos=True), use_tqdm=False)
