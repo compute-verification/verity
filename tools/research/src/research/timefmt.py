@@ -5,9 +5,12 @@ from __future__ import annotations
 
 import datetime as dt
 import re
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-PACIFIC = ZoneInfo("America/Los_Angeles")
+try:
+    PACIFIC: ZoneInfo | None = ZoneInfo("America/Los_Angeles")
+except ZoneInfoNotFoundError:  # a host with no tz database (the Nebius job images): `both` prints UTC alone
+    PACIFIC = None
 UTC = dt.timezone.utc
 
 #: left alone by `slack_dates`: code blocks and spans, Slack's <...> tokens (links, mentions, dates) and bare URLs
@@ -25,8 +28,11 @@ def _utc(t: dt.datetime | str | float) -> dt.datetime:
 
 
 def both(t: dt.datetime | str | float) -> str:
-    """`1:41 PM PDT (20:41Z)` for an aware datetime (naive is UTC), an ISO string, or a Unix time (a number, or a Slack ts)."""
+    """`1:41 PM PDT (20:41Z)` for an aware datetime (naive is UTC), an ISO string, or a Unix time (a number, or a Slack ts);
+    `20:41Z` where there is no tz database."""
     u = _utc(t)
+    if PACIFIC is None:
+        return f"{u:%H:%M}Z"
     p = u.astimezone(PACIFIC)
     return f"{p:%I:%M %p}".lstrip("0") + f" {p.tzname()} ({u:%H:%M}Z)"
 
