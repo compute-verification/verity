@@ -1227,6 +1227,22 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
     lays it out: inputs `row, aux, acc, coef, dirs` of `8·LANES`, `64·⌈H/2⌉`, `64`, `16·LANES` and `64` u16 words, and
     outputs `out` then `acc_out` of 64 words each, one 16-bit port per word.
 
+  So must a unit net whose name starts with `rec-residuals/` (a part of V*'s algebra, `rec_residuals.lowering`):
+  - its name must be `rec-residuals/m<m>-k<k_log>-c<claims>-p<j>`, with a `fast100` schedule at `m`, `k_log ≥ 6` and
+    `claims ≥ 2`, and neither `k_log` nor `claims` above the unit's input bits, compared before the verifier computes
+    the structure;
+  - the verifier computes `GfResiduals`' S at that shape (`Flock.RecAlgebra.structureOf`, `rec_algebra.structure`) and
+    its row ports (`rec_residuals.spec`: one per round that absorbs elements, then `acc0` and `acc1` of 2), groups its
+    residuals as `rec_residuals.parts` does, each residual in the first part of at most 64 regions, 128 `sha512x3`
+    slots and 16 residuals it fits, and refuses unless the parts hold every residual once; part `j` must exist;
+  - part `j`'s S is the whole S's residuals and the operands their products read, each term renumbered into the part's
+    `w` (its row ports' elements, in order) and `v` (the elements it reads, ascending); a term outside them, or a
+    transposed block not in one run of the part's `w`, is refused, never read as element 0;
+  - its input ports must total the part's (`16·P(n)` bits a row port of `n` elements and `v`, `P(n) = 64·⌈8n/64⌉`) and
+    its output ports 2048, compared before the verifier builds its net;
+  - the net must be `Flock.RecResiduals`' builder of `rec_residuals.unit_circuit` on part `j`'s S, laid out as
+    `ir_lower.layout` lays it out, one 16-bit port per word.
+
   Any other unit is not checked against a builder (D13, §17.1).
 - **Units.** `units_per_vu ≥ 1` (D8, §17.1). The unit range's `vus_per_block × units_per_vu` slots are a power of two only
   when the unit returns the outputs, so a tail that returns them would otherwise pass with no unit in a VU.

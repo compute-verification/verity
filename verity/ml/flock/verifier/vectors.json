@@ -3567,9 +3567,51 @@
     "mutation": "rewrite commitment.params.profile in the rep0 proof to Fast and fix proof_sha256",
     "expect": "reject",
     "why": "params pin (\u00a78)"
+   },
+   {
+    "name": "rec_residuals_misnamed",
+    "mutation": "rename the CIRCUIT unit of a V* rec-residuals/m<m>-k<k>-c<c>-p<j> statement's circuit file rec-residuals/m22-k16-c2-p00",
+    "expect": "reject",
+    "upstream_expect": "accept",
+    "why": "\u00a716.10: not rec-residuals/m<m>-k<k_log>-c<claims>-p<j>, D13"
+   },
+   {
+    "name": "rec_residuals_unscheduled",
+    "mutation": "rename the CIRCUIT unit of a V* rec-residuals/m<m>-k<k>-c<c>-p<j> statement's circuit file rec-residuals/m21-k16-c2-p0 (or k_log 5, or 1 claim)",
+    "expect": "reject",
+    "upstream_expect": "accept",
+    "why": "\u00a716.10: m has a fast100 schedule, k_log is at least 6, claims at least 2, D13"
+   },
+   {
+    "name": "rec_residuals_shape_above_bits",
+    "mutation": "rename the CIRCUIT unit of a V* rec-residuals/m<m>-k<k>-c<c>-p<j> statement's circuit file with claims 1000000000",
+    "expect": "reject",
+    "upstream_expect": "accept",
+    "why": "\u00a716.10: k_log or claims exceed the unit's input bits, refused before the structure is computed, D13"
+   },
+   {
+    "name": "rec_residuals_part_out_of_range",
+    "mutation": "rename the CIRCUIT unit of a V* rec-residuals/m<m>-k<k>-c<c>-p<j> statement's circuit file to p<n>, n the shape's number of parts",
+    "expect": "reject",
+    "upstream_expect": "accept",
+    "why": "\u00a716.10: part n of n, D13"
+   },
+   {
+    "name": "rec_residuals_other_part",
+    "mutation": "rename the CIRCUIT unit of a V* rec-residuals/m<m>-k<k>-c<c>-p<j> statement's circuit file from p0 to p1 at a shape of two parts",
+    "expect": "reject",
+    "upstream_expect": "accept",
+    "why": "\u00a716.10: its input bits are not its part's, or it is not the verifier's net, D13"
+   },
+   {
+    "name": "rec_residuals_net_differs",
+    "mutation": "flip one row of the CIRCUIT unit of a V* rec-residuals/m<m>-k<k>-c<c>-p<j> statement's circuit file",
+    "expect": "reject",
+    "upstream_expect": "accept",
+    "why": "\u00a716.10: not the verifier's rec-residuals/\u2026 (row r differs), D13"
    }
   ],
-  "note": "The first 12 cases ran on two cells with the recorded outcomes; the remaining 8 are new record-level cases this spec adds (their outcome under upstream is recorded in phase 2; upstream_expect marks the two intended divergences D1, D2 of PROTOCOL.md \u00a717.1)."
+  "note": "The first 12 cases ran on two cells with the recorded outcomes; the remaining 8 are new record-level cases this spec adds (their outcome under upstream is recorded in phase 2; upstream_expect marks the two intended divergences D1, D2 of PROTOCOL.md \u00a717.1). The six rec_residuals_* cases (\u00a716.10, D13) refuse a rec-residuals/\u2026 unit that is not the verifier's part net; upstream takes the unit as the file gives it."
  },
  "forgeries": {
   "note": "The red-team forgeries were run in-process against upstream's verifier or the live server; each run stored its harness and a verdict table, not the forged record and proof bytes. Phase 2 materialises them as replayable (record, proofs) pairs with the dump plan below.",

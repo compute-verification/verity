@@ -994,6 +994,7 @@ def test_the_reader_lists_slot_checks_with_a_failed_step_or_a_bad_end_and_each_o
               failure={"class": "CANCELLED_DEADMAN", "why": "no heartbeat for 10 min"})
     write_run(tmp_path, "r20261003-200000-cccc", command=slot, state="done", rc=0, steps=[{"step": "pytest", "status": "passed"}])
     write_run(tmp_path, "r20261003-200000-dddd", command=["python3", "tools/verity/check/check.py"], state="failed")
+    write_run(tmp_path, "r20261003-200000-1111", command=slot, state="failed", rc=M.NOT_STARTED)  # a twin that left its line
     write_run(tmp_path, "r20261003-200000-eeee", command=slot, state="running", rc=None,
               steps=[{"step": "lean-audit", "status": "failed", "log": "lean-audit.log"}],
               logs={"lean-audit.log": "AUDIT x: FAIL; built\n  lean: failed\n    error: dependency 'p' not in manifest\n"})
