@@ -19,7 +19,7 @@ TIER = "T0"
 STRENGTH = "strong"
 INPUTS = ("workloads/<row>.json (in-repo)", "the candidate Attempt manifests (research data show <run-id> --json)")
 
-DEFAULT_QUERY = "Q_module_body_v1"
+DEFAULT_QUERY = "Q_word_v1{X=16,W=32,R=no-recompute}"
 ROW_FIELDS = ("model_tag", "dtype", "hw", "tp", "batch", "input", "output", "arrivals", "sampling", "exec")
 CONFIG_KEYS = ("row", "model", "revision", "query", *ROW_FIELDS)
 STAGE_OUTPUT = {"vllm.build": "build", "vllm.match": "match", "vllm.commit": "verdict"}
