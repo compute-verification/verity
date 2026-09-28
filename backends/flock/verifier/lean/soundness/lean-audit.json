@@ -1,8 +1,5 @@
 {
  "roots": ["FlockSoundness"],
- "exempt": {
-  "FlockSoundness.Check": "the lane's #print axioms list, which this audit supersedes (every declaration is audited)"
- },
  "assumptions": ["FlockSoundness.Assumptions"],
  "meaning": ["FlockSoundness", "FlockLevel3"],
  "upstream": {

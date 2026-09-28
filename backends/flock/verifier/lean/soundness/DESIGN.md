@@ -120,7 +120,7 @@ with `log2(√2·S_m)` = 10.7 at m = 22, 16.3 at m = 33 and 17.3 at m = 35 (§1.
    `Pr[conflict_ℓ] ≤ Adv_ℓ`.
 5. **Rounds.** The kept bytes fix every message before its coins: the `Game` model itself (`send` before `coin`).
 
-Every step depends only on Lean's standard axioms (`Check.lean`).
+Every step depends only on Lean's standard axioms (the Lean audit, `lean-audit.json`).
 
 **Remark: the random-oracle version.** Modeling SHA-512 as a random oracle gives straight-line extraction of the
 committed tables (VCVio's Merkle extraction) and a tight bound, `2^-205 + O(t²/2^512) + t·(cap entries)/2^512`,
