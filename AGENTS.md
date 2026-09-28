@@ -102,10 +102,16 @@ Dependency direction (README "Development"): `ir <- evaluation <- ml`,
 without a frontend or runtime integration.
 
 ~~~text
-uv sync                                   # workspace root; installs research and verity editable
-uv run pytest                             # the root pyproject's testpaths; integrations/vllm keeps its own pytest config
+uv sync --all-packages --all-extras       # the whole workspace, editable, with torch for the vLLM integration's CPU tests
+uv run tools/check/suites.py              # every test suite whose inputs changed since it last passed; --quick skips slow tests
 uv run python tools/check/check.py        # the check a merge requires; --record publishes it as an Attempt
 ~~~
+
+## Tests
+
+Every package's tests live in its own `tests/` and run as one suite, in its own process, cached by input; the repository's
+own suite (`tests/`) holds only invariants of the whole tree. How to run them, what a suite may read (`[tool.verity.tests]
+inputs`), and the rules for slow tests, fixtures and dummy credentials: `.agents/skills/testing/SKILL.md`.
 
 ## Circuits
 
@@ -115,7 +121,8 @@ small binding in `circuit_check.targets`, which the suite enforces.
 
 ## Checking and merging
 
-There is no GitHub Actions CI. `check` (`tools/check/check.py`) is the one check: pytest, `circuit-check --all`, the Lean
+There is no GitHub Actions CI. `check` (`tools/check/check.py`) is the one check: every test suite (`tools/check/suites.py`),
+`circuit-check --all`, the Lean
 verifier's build and its partition check against `verity.ir`, the Lean audit, and the verifier's cross-check against
 upstream's Rust verifier when the run is sent its input bundle (skipped by name otherwise). `--record` runs it through `research run` as an
 Attempt of the checked-out clean commit. Merge into `main` only through `research merge <branch>`, which refuses without a
