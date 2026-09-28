@@ -56,6 +56,8 @@ from . import partition_units as PU
 BLOCK_WORDS = 64
 #: the selftest cases run on a read-bearing class (each re-parses its 1-3 GB circuit): the honest session, and the two witness tamperings
 READ_CASES = ("honest", "unit_internal_bit_flipped", "unit_input_differs_from_its_message_bits")
+#: and with --selftest-gpu, the GPU prover's paths against each other and against the CPU prover (byte-identical proofs)
+GPU_CASES = ("gpu_paths_agree", "gpu_proofs_match_cpu")
 EXPERIMENTAL = "verity/flock/experimental-owners"
 
 
@@ -401,7 +403,7 @@ def prove(binary: str, d: Path, n: int, port: int, selftest: bool | str = False,
     """A loopback session (``serve`` on 127.0.0.1 and ``prove``), or ``selftest``: the LIVE or SELFTEST record."""
     circ, inst, pub = d / "circuit.txt", d / f"inst-{n}.bin", d / f"pub-{n}.bin"
     if selftest:
-        cmd = [binary, "selftest", "--instances", str(inst), "--circuit", str(circ)]
+        cmd = [binary, "selftest", "--instances", str(inst), "--circuit", str(circ)] + (["--gpu"] if gpu else [])
         r = subprocess.run(cmd + (["--only", selftest] if isinstance(selftest, str) else []), capture_output=True, text=True, timeout=timeout)
         lines = [ln for ln in r.stdout.splitlines() if ln.startswith(("SELFTEST", "NEG"))]
         neg = [json.loads(ln.split("\t", 1)[1]) for ln in lines if ln.startswith("NEG")]
@@ -549,6 +551,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--selftest", type=int, default=0, help="also run flock-circuit's selftest (31 cases, negatives included) on every "
                     "Nth provable class and on each flat Definition's largest (0: never)")
+    ap.add_argument("--selftest-gpu", action="store_true", help="run the selftests on the GPU (selftest --gpu; a read-bearing class's "
+                    "subset adds GPU_CASES)")
     ap.add_argument("--max-ands", type=int, default=1 << 24, help="skip classes above this many ANDs (reported)")
     ap.add_argument("--only", default=None, help="comma-separated shape prefixes")
     ap.add_argument("--selftest-only", action="store_true", help="stage and run the selftest cases only (no loopback session), into selftests.jsonl")
@@ -622,12 +626,15 @@ def main(argv: Sequence[str] | None = None) -> int:
                 if not a.selftest_only:
                     rec["live"] = prove(a.binary, d, rec["stage"]["n"], a.port, gpu=a.gpu, warm=a.warm, runs=a.runs)
                 if a.selftest and (len(done) % a.selftest == 0 or s == largest.get(cl.definition.id)):
+                    sb, g = a.selftest_binary or a.binary, a.selftest_gpu
                     if rec["table_reads"]:                       # a read-bearing circuit re-parses per case: a few cases, one process each
-                        runs = [prove(a.selftest_binary or a.binary, d, rec["stage"]["n"], a.port, selftest=c) for c in READ_CASES]
+                        cases = READ_CASES + (GPU_CASES if g else ())
+                        runs = [prove(sb, d, rec["stage"]["n"], a.port, selftest=c, gpu=g) for c in cases]
                         rec["selftest"] = {"all_pass": all(x["all_pass"] for x in runs), "cases": len(runs),
-                                           "failed": [c for c, x in zip(READ_CASES, runs) if not x["all_pass"]], "subset": list(READ_CASES)}
+                                           "failed": [c for c, x in zip(cases, runs) if not x["all_pass"]], "subset": list(cases)}
                     else:
-                        rec["selftest"] = prove(a.selftest_binary or a.binary, d, rec["stage"]["n"], a.port, selftest=True)
+                        rec["selftest"] = prove(sb, d, rec["stage"]["n"], a.port, selftest=True, gpu=g)
+                    rec["selftest"]["gpu"] = g
             except Exception as e:  # noqa: BLE001  (a class that breaks is a result, recorded with where it broke)
                 rec["broke"] = {"at": "prover", "why": f"{type(e).__name__}: {e}"[:400]}
             for f in d.glob("*.bin"):

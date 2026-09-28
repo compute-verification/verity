@@ -33,7 +33,7 @@ FLOCK_PURE = Tool(
 )
 
 
-CLASS_SWEEP_KEYS = ("GRAPH", "DEFS", "SHAPES", "SELECT", "MODULES", "BATCH", "WARM", "RUNS", "SELFTEST", "GPU", "PROTOCOL")
+CLASS_SWEEP_KEYS = ("GRAPH", "DEFS", "SHAPES", "SELECT", "MODULES", "BATCH", "WARM", "RUNS", "SELFTEST", "SELFTEST_GPU", "GPU", "PROTOCOL")
 
 
 def parse_class_sweep(argv: list[str]) -> dict:
