@@ -920,6 +920,23 @@ class S3Remote:
                 return out
             token = root.findtext(f"{S3_NS}NextContinuationToken")
 
+    def list_times(self, prefix: str, start_after: str | None = None) -> list[tuple[str, str]]:
+        """`[(key, LastModified)]` under `prefix`, sorted; with `start_after`, only the keys after it (ListObjectsV2 `start-after`,
+        so a listing of new run ids costs one request rather than one per 1,000 runs)."""
+        out, token = [], None
+        while True:
+            q = {"list-type": "2", "prefix": prefix}
+            if start_after:
+                q["start-after"] = start_after
+            if token:
+                q["continuation-token"] = token
+            with self._request("GET", "", query=q) as r:
+                root = ET.parse(io.BytesIO(r.read())).getroot()
+            out += [(c.findtext(f"{S3_NS}Key"), c.findtext(f"{S3_NS}LastModified")) for c in root.iter(f"{S3_NS}Contents")]
+            if root.findtext(f"{S3_NS}IsTruncated") != "true":
+                return sorted((k, m) for k, m in out if k)
+            token = root.findtext(f"{S3_NS}NextContinuationToken")
+
     def list(self, prefix: str) -> list[str]:
         keys, token = [], None
         while True:
