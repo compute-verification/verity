@@ -246,16 +246,72 @@ def test_status_names_each_slots_holder_or_free(tmp_path, monkeypatch):
     w.write_text("2026-10-01T09:20Z 30\n")
     slots = SLOT.parse(f"a 32-63\nb 64-95\nd 0-47 windows={w}\n")
     held = _hold(tmp_path / "check-a.lock")
-    a, b, d = SLOT.status(slots, tmp_path, NOW)
+    a, b, d, dw = SLOT.status(slots, tmp_path, NOW)
     me = Path(f"/proc/{os.getpid()}/cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace").strip()[:200]
     assert a.startswith(f"a  cores 32-63  held by pid {os.getpid()} since ") and a.endswith(f": {me}")
     assert b == "b  cores 64-95  free"
     assert d.startswith("d  cores 0-47  free; blocked: window 2026-10-01T09:20Z")
+    assert dw == "d  window 2026-10-01T09:20Z (30 min), starts in 20 min"
     os.close(held)
     assert SLOT.status(slots[:1], tmp_path, NOW) == ["a  cores 32-63  free"]
     (tmp_path / "slots").write_text("a 0\n")
     monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
     assert SLOT.main(["--status"], now=lambda: NOW) == 0
+
+
+def test_status_lists_a_windowed_slots_windows_open_now_or_within_six_hours(tmp_path):
+    """A check slot paused for a timed window nobody saw coming (node 2, 3 Oct: a PR sat about 20 min on the 18:05Z window)."""
+    w = tmp_path / "windows"
+    w.write_text("# start UTC, minutes\n"
+                 "2026-10-01T15:01Z 30 # beyond six hours\n"
+                 "2026-10-01T08:00Z 30 # ended at 08:30Z\n"
+                 "2026-10-01T09:25Z 20 # served qwen3-8b timed, compute-accounting: quiet timed FP8 Qwen3-8B pass, 8 GPUs\n"
+                 "2026-10-01T08:50Z 30 # circuits TP8\n"
+                 "2026-10-01T14:59Z 10\n")
+    slot = SLOT.parse(f"d 0-47 windows={w} lead=30")[0]
+    assert SLOT.upcoming(slot, NOW) == [
+        {"start": "2026-10-01T08:50Z", "minutes": 30, "starts_in_min": -10, "note": "circuits TP8"},
+        {"start": "2026-10-01T09:25Z", "minutes": 20, "starts_in_min": 25, "note": "served qwen3-8b timed, compute-accounting: quiet timed ..."},
+        {"start": "2026-10-01T14:59Z", "minutes": 10, "starts_in_min": 359, "note": ""}]
+    assert SLOT.status([slot], tmp_path, NOW) == [
+        "d  cores 0-47  free; blocked: window 2026-10-01T09:25Z (20 min) is open or starts within 30 min",
+        "d  window 2026-10-01T08:50Z (30 min), open now: circuits TP8",
+        "d  window 2026-10-01T09:25Z (20 min), starts in 25 min: served qwen3-8b timed, compute-accounting: quiet timed ...",
+        "d  window 2026-10-01T14:59Z (10 min), starts in 359 min"]
+    assert SLOT.upcoming(SLOT.parse("a 0")[0], NOW) == []
+
+
+def test_status_json_is_the_same_state_as_one_object(tmp_path, monkeypatch, capsys):
+    """`--status --json`, which `check.py --slots` reads from each machine instead of parsing the lines."""
+    w = tmp_path / "windows"
+    w.write_text("2026-10-01T09:20Z 30 # Pearl-C4 row\n")
+    (tmp_path / "slots").write_text(f"a 0\nd 1 windows={w} lead=30\n")
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    held = _hold(tmp_path / "check-a.lock")
+    (tmp_path / "check-a.who").write_text(json.dumps({"pid": os.getpid(), "run": "r-train", "tree": "/src/6b3d704c8", "by": "lander"}))
+    line = tmp_path / SLOT.LINE
+    line.mkdir()
+    waiter = line / f"{SLOT.PRIORITY}{int((NOW.timestamp() - 300) * 1e9):020d}-4242"
+    waiter.write_text(json.dumps({"pid": 4242, "run": "r-waiting", "by": "lander"}))
+    wfd = _hold(waiter)
+    assert SLOT.main(["--status", "--json"], now=lambda: NOW) == 0
+    doc = json.loads(capsys.readouterr().out)
+    a, d = doc["slots"]
+    assert doc["file"] == str(tmp_path / "slots") and doc["now"] == "2026-10-01T09:00Z"
+    assert a["holder"]["pid"] == os.getpid() and (a["holder"]["run"], a["holder"]["by"]) == ("r-train", "lander")
+    assert a["holder"]["cmd"] and a["blocked"] is None and a["upcoming"] == []
+    assert d["holder"] is None and d["blocked"].startswith("window 2026-10-01T09:20Z (30 min)") and d["lead"] == 30
+    assert d["upcoming"] == [{"start": "2026-10-01T09:20Z", "minutes": 30, "starts_in_min": 20, "note": "Pearl-C4 row"}]
+    assert doc["waiters"] == [{"since": "2026-10-01T08:55Z", "minutes": 5, "priority": True, "pid": 4242, "run": "r-waiting",
+                               "by": "lander"}]
+    os.close(held)
+    os.close(wfd)
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "absent")
+    assert SLOT.main(["--status", "--json"], now=lambda: NOW) == 0
+    assert json.loads(capsys.readouterr().out) == {"file": str(tmp_path / "absent"), "now": "2026-10-01T09:00Z", "slots": None,
+                                                    "waiters": []}
+    with pytest.raises(SystemExit, match="usage: slot.py --status"):
+        SLOT.main(["--status", "--yaml"], now=lambda: NOW)
 
 
 def test_status_names_who_asked_for_each_held_slot_and_each_live_waiter(tmp_path):

@@ -24,9 +24,11 @@ lock is not in the line: it takes that slot whenever it frees.
 before every lane waiter's, so it takes the next slot that frees ahead of the lanes' checks already waiting; it never stops a
 running check, and priority waiters keep their own arrival order. Merges unblock everyone (root, 2 Oct).
 
-`python3 tools/check/slot.py --status`: one line per slot, with who holds its lock (the pid in /proc/locks, when that process
-started, its command) or `free`, and the window that blocks it, if any; then one line per live waiter, a priority one marked
-so. A check that came through here also names its run (RESEARCH_RUN_ID), the tree it checks (its working directory, which
+`python3 tools/check/slot.py --status [--json]`: one line per slot, with who holds its lock (the pid in /proc/locks, when that
+process started, its command) or `free`, and the window that blocks it, if any, then a line for each of its windows open now or
+starting within AHEAD_H (6) hours (start, minutes, its comment's first words); then one line per live waiter, a priority one
+marked so. --json prints the same as one JSON object (`status_doc`), which `check.py --slots` reads from every machine. A
+check that came through here also names its run (RESEARCH_RUN_ID), the tree it checks (its working directory, which
 `research run` names by commit) and who asked (`--by NAME`, else RESEARCH_AGENT_URL): a waiter in its ticket, the holder in
 `check-NAME.who` beside the lock, shown only while its pid holds the lock, so a hand-run `flock` is never shown as the check that
 came before it. A waiting check prints the same lines, the waiters before it only, each time its reason to wait changes, so its
@@ -66,18 +68,45 @@ def parse(text: str) -> list[dict]:
     return slots
 
 
+def _windows(slot: dict) -> list[tuple[str, datetime, int, str]]:
+    """`slot`'s windows as its FILE writes them: (start as written, start, minutes, comment)."""
+    out = []
+    for line in Path(slot["windows"]).read_text().splitlines() if slot["windows"] else []:
+        body, _, note = line.partition("#")
+        f = body.split()
+        if len(f) >= 2:
+            out.append((f[0], datetime.fromisoformat(f[0].replace("Z", "+00:00")), int(f[1]), note.strip()))
+    return out
+
+
 def blocked(slot: dict, now: datetime) -> str | None:
     """Why `slot` can't start a check at `now` (a window open or within its lead), or None."""
-    if not slot["windows"]:
-        return None
-    for line in Path(slot["windows"]).read_text().splitlines():
-        f = line.split("#")[0].split()
-        if len(f) < 2:
-            continue
-        start = datetime.fromisoformat(f[0].replace("Z", "+00:00"))
-        if start - timedelta(minutes=slot["lead"]) < now < start + timedelta(minutes=int(f[1])):
-            return f"window {f[0]} ({f[1]} min) is open or starts within {slot['lead']} min"
+    for raw, start, minutes, _note in _windows(slot):
+        if start - timedelta(minutes=slot["lead"]) < now < start + timedelta(minutes=minutes):
+            return f"window {raw} ({minutes} min) is open or starts within {slot['lead']} min"
     return None
+
+
+#: how far ahead `--status` lists a windowed slot's windows, and how many of a window's comment words it shows
+AHEAD_H = 6
+NOTE_WORDS = 6
+
+
+def upcoming(slot: dict, now: datetime, hours: int = AHEAD_H) -> list[dict]:
+    """`slot`'s windows open at `now` or starting within `hours`, by start: when, how long, minutes until it starts (negative
+    while open) and its comment's first NOTE_WORDS words."""
+    out = []
+    for raw, start, minutes, note in sorted(_windows(slot), key=lambda w: w[1]):
+        if now < start + timedelta(minutes=minutes) and start < now + timedelta(hours=hours):
+            words = note.split()
+            out.append({"start": raw, "minutes": minutes, "starts_in_min": int((start - now).total_seconds() // 60),
+                        "note": " ".join(words[:NOTE_WORDS]) + (" ..." if len(words) > NOTE_WORDS else "")})
+    return out
+
+
+def window_text(w: dict) -> str:
+    when = "open now" if w["starts_in_min"] < 0 else f"starts in {w['starts_in_min']} min"
+    return f"window {w['start']} ({w['minutes']} min), {when}" + (f": {w['note']}" if w["note"] else "")
 
 
 def take(slots: list[dict], lock_dir: Path, now: datetime) -> tuple[dict, int] | None:
@@ -140,34 +169,77 @@ def _read(p: Path) -> dict:
         return {}
 
 
+def slot_docs(slots: list[dict], lock_dir: Path, now: datetime, proc: Path = Path("/proc")) -> list[dict]:
+    """Each slot as `--status --json` gives it: its name, cores, `holding`, what blocks it now (`blocked`) and its `upcoming`
+    windows."""
+    return [{"name": s["name"], "cpus": s["cpus"], "windows": s["windows"], "lead": s["lead"],
+             "holder": holding(lock_dir / f"check-{s['name']}.lock", lock_dir / f"check-{s['name']}.who", now, proc),
+             "blocked": blocked(s, now), "upcoming": upcoming(s, now)} for s in slots]
+
+
 def status(slots: list[dict], lock_dir: Path, now: datetime, proc: Path = Path("/proc"), before: str | None = None) -> list[str]:
-    """`--status`'s lines; with `before` (a ticket's name), only the waiters that came before it."""
+    """`--status`'s lines (a windowed slot's `upcoming` windows below it); with `before` (a ticket's name), only the waiters
+    that came before it."""
     out = []
-    for slot in slots:
-        held = held_by(lock_dir / f"check-{slot['name']}.lock", lock_dir / f"check-{slot['name']}.who", now, proc)
-        why = blocked(slot, now)
-        out.append(f"{slot['name']}  cores {slot['cpus']}  {held}" + (f"; blocked: {why}" if why else ""))
+    for s in slot_docs(slots, lock_dir, now, proc):
+        out.append(f"{s['name']}  cores {s['cpus']}  {held_text(s['holder'])}" + (f"; blocked: {s['blocked']}" if s["blocked"] else ""))
+        out += [f"{s['name']}  {window_text(w)}" for w in s["upcoming"]]
     return out + waiters(lock_dir / LINE, now, before)
 
 
-def held_by(lock: Path, who_file: Path, now: datetime, proc: Path = Path("/proc")) -> str:
-    """`free`, or who holds ``lock``: its pid, since when, the run and asker its holder recorded in ``who_file`` (shown only
-    while that pid holds the lock), and its command."""
+def status_doc(now: datetime, proc: Path = Path("/proc")) -> dict:
+    """`--status --json`: SLOTS, each slot (`slot_docs`; null without SLOTS) and the line's live waiters (`waiting`)."""
+    if not SLOTS.exists():
+        return {"file": str(SLOTS), "now": f"{now:%Y-%m-%dT%H:%MZ}", "slots": None, "waiters": []}
+    return {"file": str(SLOTS), "now": f"{now:%Y-%m-%dT%H:%MZ}", "slots": slot_docs(parse(SLOTS.read_text()), SLOTS.parent, now, proc),
+            "waiters": waiting(SLOTS.parent / LINE, now)}
+
+
+def holding(lock: Path, who_file: Path, now: datetime, proc: Path = Path("/proc")) -> dict | None:
+    """Who holds ``lock`` (None while it's free): its pid, since when and for how many minutes, its command, and the run, tree,
+    asker and time taken its holder recorded in ``who_file``, kept only while that pid holds the lock."""
     pid = holder(lock, proc)
     if pid is None:
-        return "free"
+        return None
     t = started(pid, proc)
     try:
         cmd = (proc / str(pid) / "cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace").strip()
     except OSError:
         cmd = "(gone)"
-    since = f" since {t:%Y-%m-%dT%H:%MZ} ({(now - t).total_seconds() / 60:.0f} min)" if t else ""
+    out = {"pid": pid, "since": f"{t:%Y-%m-%dT%H:%MZ}" if t else None,
+           "minutes": round((now - t).total_seconds() / 60) if t else None, "cmd": cmd[:200]}
     who = _read(who_file)
-    return f"held by pid {pid}{since}" + (f" ({describe(who)})" if who.get("pid") == pid and describe(who) else "") + f": {cmd[:200]}"
+    if who.get("pid") == pid:
+        out.update({k: who[k] for k in ("run", "tree", "by", "took") if who.get(k)})
+    return out
+
+
+def held_text(h: dict | None) -> str:
+    if h is None:
+        return "free"
+    since = f" since {h['since']} ({h['minutes']} min)" if h["since"] else ""
+    return f"held by pid {h['pid']}{since}" + (f" ({describe(h)})" if describe(h) else "") + f": {h['cmd']}"
+
+
+def held_by(lock: Path, who_file: Path, now: datetime, proc: Path = Path("/proc")) -> str:
+    """`free`, or who holds ``lock`` (`holding`), as one line."""
+    return held_text(holding(lock, who_file, now, proc))
 
 
 def waiters(line: Path, now: datetime, before: str | None = None) -> list[str]:
-    """One line per live waiter in ``line``, oldest first; with `before` (a ticket's name), only those that came before it."""
+    """One line per live waiter in ``line`` (`waiting`)."""
+    return [waiter_text(w) for w in waiting(line, now, before)]
+
+
+def waiter_text(w: dict) -> str:
+    return (f"waiting since {w['since']} ({w['minutes']} min)" + (" with priority" if w["priority"] else "") + f": pid {w['pid']}"
+            + (f" ({describe(w)})" if describe(w) else ""))
+
+
+def waiting(line: Path, now: datetime, before: str | None = None) -> list[dict]:
+    """Each live waiter in ``line``, oldest first (priority ones first, as they take slots): since when and for how many
+    minutes, whether with priority, and the pid, run, tree and asker its ticket names; with `before` (a ticket's name), only
+    those that came before it."""
     out = []
     for p in sorted(line.iterdir()) if line.is_dir() else []:
         if before is not None and p.name >= before:
@@ -187,9 +259,9 @@ def waiters(line: Path, now: datetime, before: str | None = None) -> list[str]:
             os.close(fd)
         t = datetime.fromtimestamp(int(p.name.lstrip(PRIORITY).split("-")[0]) / 1e9, timezone.utc)
         who = _read(p)
-        out.append(f"waiting since {t:%Y-%m-%dT%H:%MZ} ({(now - t).total_seconds() / 60:.0f} min)"
-                   + (" with priority" if p.name.startswith(PRIORITY) else "") + f": pid {who.get('pid', p.name.split('-')[-1])}"
-                   + (f" ({describe(who)})" if describe(who) else ""))
+        out.append({"since": f"{t:%Y-%m-%dT%H:%MZ}", "minutes": round((now - t).total_seconds() / 60),
+                    "priority": p.name.startswith(PRIORITY), "pid": who.get("pid", int(p.name.split("-")[-1])),
+                    **{k: who[k] for k in ("run", "tree", "by") if who.get(k)}})
     return out
 
 
@@ -259,10 +331,14 @@ def reread(slots: list[dict]) -> list[dict]:
 
 def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sleep) -> int:
     if argv[:1] == ["--status"]:
-        if not SLOTS.exists():
+        if argv[1:] == ["--json"]:
+            print(json.dumps(status_doc(now())))
+        elif argv[1:]:
+            sys.exit("usage: slot.py --status [--json]")
+        elif not SLOTS.exists():
             print(f"no check slots on this machine ({SLOTS})")
-            return 0
-        print("\n".join(status(parse(SLOTS.read_text()), SLOTS.parent, now())))
+        else:
+            print("\n".join(status(parse(SLOTS.read_text()), SLOTS.parent, now())))
         return 0
     opts, cmd = (argv[:argv.index("--")], argv[argv.index("--") + 1:]) if "--" in argv else ([], argv)
     by = opts[opts.index("--by") + 1] if "--by" in opts[:-1] else None

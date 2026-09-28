@@ -1,0 +1,10 @@
+[Unit]
+Description=vy-custody every 10 minutes, between n2-custody's rounds
+
+[Timer]
+OnCalendar=*:5/10
+AccuracySec=30s
+Persistent=false
+
+[Install]
+WantedBy=timers.target

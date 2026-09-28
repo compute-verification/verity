@@ -20,8 +20,8 @@
 # and retried every round, never given up, and the round exits 1, which systemd records (`systemctl --user status n2-custody`).
 # A round is bounded: at most VY_CUSTODY_MAX_RUNS pushes, none started after VY_CUSTODY_PASS_S seconds, runs that failed before
 # going last; the rest wait for the next. A failure no retry can mend is held, with the Job's line, for a person to decide: node 1
-# holds the run's attempt without a run record (the stopgap published it), R2 holds another attempt for its id (its runner's own),
-# or its attempt's run record lacks what the run dir holds now.
+# holds the run's attempt without a run record (the stopgap published it), R2 holds another attempt for its id (its runner's own;
+# node 1's vy-custody --reconcile takes it), or its attempt's run record lacks what the run dir holds now.
 # Only run dirs go home, never a row directory (3 Oct: the stopgap's row sync mirrored 1.2M files to node 1 and overran its window),
 # and a run dir over VY_CUSTODY_MAX_FILES files or VY_CUSTODY_MAX_GB GiB is held instead of mirrored: STATE/held/RUN says why, and the
 # round exits 1 while it is there. Move the bulk out of the run dir (or declare it elsewhere), then remove STATE/held/RUN.
@@ -32,7 +32,7 @@
 # (PASS_S + PUSH_S); else it stops there, with one log line and exit 0, and the next round asks again. Its Jobs run on node 1, so it
 # keeps node 1's daily hold (VY_CUSTODY_QUIET, 12:10-13:30Z, as n1_custody.sh does) the same way, and no Job of it runs into node 1's
 # quiet hour: a push starts only while its rsync and a Job of at least JOB_MIN_S end before 12:30Z, and the Job's
-# activeDeadlineSeconds ends it by then.
+# activeDeadlineSeconds and the grace a stopped pod has (GRACE_S; on SIGTERM its bash exits, and research is killed) end it a minute before.
 set -u
 ROOTS=${VY_CUSTODY_ROOTS:-/workspace/jobs/runs=/workspace/jobs/runs,/workspace/research/runs=/workspace/jobs/runs-n2}
 STATE=${VY_CUSTODY_STATE:-/workspace/research/custody-push}
@@ -41,12 +41,16 @@ MAX_RUNS=${VY_CUSTODY_MAX_RUNS:-20}
 PASS_S=${VY_CUSTODY_PASS_S:-1200}
 MAX_FILES=${VY_CUSTODY_MAX_FILES:-20000}
 MAX_GB=${VY_CUSTODY_MAX_GB:-50}
-SRC=${VY_CUSTODY_SRC:-/workspace/jobs/custody}
+# on node 1, root's alone (as n1_custody.sh's): the research deploy.toml installs and the Python the Jobs run with the Secret
+SRC=${VY_CUSTODY_SRC:-/workspace/custody}
+PYHOME=${VY_CUSTODY_PYHOME:-/workspace/custody/python}
+PY=${VY_CUSTODY_PY:-$PYHOME/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12}
 LOOP=${VY_CUSTODY_LOOP:-$STATE/push.sh}
 FILL=${VY_CUSTODY_FILL:-/workspace/pouw/fill}
 PUSH_S=3600     # the most one push takes: rsync 20 min, the Job's wait 35 min, the calls around them
 RSYNC_S=1200
 JOB_MIN_S=300   # a Job left less time before node 1's quiet hour isn't started
+GRACE_S=10      # a Job's pod stopped at its deadline: SIGTERM, then SIGKILL after this (terminationGracePeriodSeconds)
 QUIET=${VY_CUSTODY_QUIET-1210-1330}     # node 1's daily hold, HHMM-HHMM UTC (dispatch's PACK_HOLD through its quiet hour's end)
 BY=1230                                 # its quiet hour, which no Job runs into
 N1=${VY_N1:-vy-n1}
@@ -119,15 +123,14 @@ if ! why=$(window 2>&1); then
   log "skipped: node 2's timed window: $why; the next round asks again"
   exit 0
 fi
-# n1_left: the seconds a Job started on node 1 now may run before its quiet hour (BY), 0 in its daily hold; to the minute, so a minute
-# less
+# n1_left: the seconds a Job started on node 1 now may run, to a minute before its quiet hour (BY) less its grace, to the second; 0 in
+# its daily hold
 n1_left() {
   [ -n "$QUIET" ] || { echo 86400; return; }
   local t q0 q1 by
-  t=$(date -u +%H%M)
-  t=$((10#${t:0:2} * 60 + 10#${t:2:2})) by=$((10#${BY:0:2} * 60 + 10#${BY:2:2}))
-  q0=$((10#${QUIET:0:2} * 60 + 10#${QUIET:2:2})) q1=$((10#${QUIET:5:2} * 60 + 10#${QUIET:7:2}))
-  if [ "$t" -ge "$q0" ] && [ "$t" -lt "$q1" ]; then echo 0; else echo $(( (by - t + 1440) % 1440 * 60 - 60 )); fi
+  t=$(( $(date -u +%s) % 86400 )) by=$((10#${BY:0:2} * 3600 + 10#${BY:2:2} * 60))
+  q0=$((10#${QUIET:0:2} * 3600 + 10#${QUIET:2:2} * 60)) q1=$((10#${QUIET:5:2} * 3600 + 10#${QUIET:7:2} * 60))
+  if [ "$t" -ge "$q0" ] && [ "$t" -lt "$q1" ]; then echo 0; else echo $(( (by - t + 86400) % 86400 - 60 - GRACE_S )); fi
 }
 HOLD="node 1's daily hold ($QUIET UTC; no Job of it runs past ${BY}Z, where node 1's quiet hour starts)"
 if [ "$DRY" = 0 ] && [ "$(n1_left)" -lt $((RSYNC_S + JOB_MIN_S)) ]; then
@@ -253,7 +256,8 @@ push_run() {  # push_run ROOT DST RUN_ID STATE: 0 on R2 with .custody back, 4 he
     why="$HOLD: ${deadline}s left, the copy waits on node 1"
     return 6
   fi
-  # a failed Job never completes: wait for either condition, then name the failure from its log
+  # a failed Job never completes: wait for either condition, then name the failure from its log. The Job's bash, its container's init,
+  # exits on SIGTERM (trapped) and the kernel SIGKILLs research; a rerun repeats it, as every write is a temp file, then a rename
   if ! timeout 2100 "${SSH[@]}" "$N1" "$start &&
     end=\$((\$(date +%s) + 1800)) && while [ \$(date +%s) -lt \$end ]; do
     c=\$($KUBE get job $name -o jsonpath='{range .status.conditions[*]}{.type}={.status} {end}'); case \$c in
@@ -261,12 +265,12 @@ push_run() {  # push_run ROOT DST RUN_ID STATE: 0 on R2 with .custody back, 4 he
     echo 'Job not done in 30 min' >&2; exit 1" 2> "$STATE/.job.err" << EOF; then
 {"apiVersion": "batch/v1", "kind": "Job", "metadata": {"name": "$name", "labels": {"verity.dev/lane": "n2-custody", "verity.dev/kind": "custody"}},
  "spec": {"backoffLimit": 1, "activeDeadlineSeconds": $deadline, "ttlSecondsAfterFinished": 3600, "template": {"metadata": {"labels": {"verity.dev/lane": "n2-custody"}}, "spec": {
-  "restartPolicy": "Never", "nodeSelector": {"verity.dev/server": "vy-nebius-1"},
+  "restartPolicy": "Never", "terminationGracePeriodSeconds": $GRACE_S, "nodeSelector": {"verity.dev/server": "vy-nebius-1"},
   "tolerations": [{"key": "nvidia.com/gpu", "operator": "Exists", "effect": "NoSchedule"}],
   "securityContext": {"runAsUser": 1000, "runAsGroup": 1000},
   "containers": [{"name": "main", "image": "${VY_DISPATCH_IMAGE:-us-docker.pkg.dev/sky-dev-465/skypilotk8s/skypilot-gpu:202605150216}",
    "imagePullPolicy": "IfNotPresent",
-   "command": ["taskset", "-c", "96-127", "bash", "-c", "cd /workspace/jobs && HOME=/tmp UV_NO_CONFIG=1 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=$SRC/tools/research/src RESEARCH_STORE=/workspace/jobs/store RESEARCH_RUNS=$dst UV_CACHE_DIR=/workspace/jobs/cache/uv UV_PYTHON_INSTALL_DIR=/workspace/jobs/cache/python /workspace/jobs/bin/uv run --no-project --python 3.12 python -m research data custody $dst/$r --publish --keep-local $force"],
+   "command": ["taskset", "-c", "96-127", "bash", "-c", "trap 'exit 143' TERM; cd / || exit 1; HOME=/tmp PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=$SRC/tools/research/src RESEARCH_STORE=/workspace/jobs/store RESEARCH_RUNS=$dst $PY -m research data custody $dst/$r --publish --keep-local $force & wait \$!"],
    "envFrom": [{"secretRef": {"name": "research-r2"}}],
    "resources": {"requests": {"cpu": "1", "memory": "2Gi"}},
    "volumeMounts": [{"name": "workspace", "mountPath": "/workspace"}]}],
@@ -278,8 +282,10 @@ EOF
       *RemoteConflict*|*"DIFFERENT attempt document"*)
         hold="R2 already holds another attempt for $r (an attempt is write-once), so node 1's can never replace it; when its runner's own"
         hold+=" custody pushed that one, $root/$r/.custody names its run record and what the record lacks. Take R2's copy into node 1's"
-        hold+=" store (\`research data reconcile-attempts $r --apply\` there); what R2's record lacks is only in this run dir: keep it, or"
-        hold+=" put it in the store (\`research data put --kind K --file P --preserve\`)" ;;
+        hold+=" store: on node 1, \`sudo -u research vy-custody --reconcile $r --by WHO\` (its Job, with the R2 Secret, runs \`research"
+        hold+=" data reconcile-attempts $r --apply\` and publishes node 1's copy; when that says it is on R2 with its run record, rm"
+        hold+=" $STATE/held/$r instead, and the next round brings its .custody home). What R2's record lacks is only in this run dir:"
+        hold+=" keep it, or put it in the store (\`research data put --kind K --file P --preserve\`)" ;;
       *"not in the run record"*|*"changed since it was taken"*)
         hold="its attempt's run record, taken from an earlier copy of the run dir, lacks what the run dir holds now, and an attempt never"
         hold+=" changes; the rest is on R2 with that record, the difference only in this run dir: keep it, or put it in the store"
@@ -349,9 +355,13 @@ for c in "${fresh[@]}" "${retry[@]}"; do
     continue
   fi
   if [ -z "$src_ok" ]; then
-    timeout 60 "${SSH[@]}" -n "$N1" "test -f $SRC/tools/research/src/research/store/custody.py && test -f $SRC/tools/research/store.pod.toml"
+    # python -m puts the working directory first on sys.path, so the Job runs from /, never the world-writable /workspace/jobs
+    bad=$(timeout 60 "${SSH[@]}" -n "$N1" "test -f $SRC/tools/research/src/research/store/custody.py && test -f $SRC/tools/research/store.pod.toml && test -x $PY || exit 1
+      bad=\$(find $SRC/tools/research $PYHOME -path $PYHOME/.lock -prune -o \\( \\( ! -uid 0 ! -uid \$(id -u) \\) -o \\( -perm /022 ! -type l \\) \\) -print -quit 2>&1)
+      [ -z \"\$bad\" ] || { echo \"\$bad\"; exit 4; }")
     rc=$?
-    [ "$rc" = 1 ] && { log "refused: no research tree at $N1:$SRC (deploy.toml installs it: research deploy install vy-nebius-1 --by WHO $SRC/tools/research/src/research $SRC/tools/research/store.pod.toml)"; exit 3; }
+    [ "$rc" = 1 ] && { log "refused: no research tree at $N1:$SRC, or no $PY (deploy.toml installs the tree: research deploy install vy-nebius-1 --by WHO $SRC/tools/research/src/research $SRC/tools/research/store.pod.toml; the Python: n1_custody.sh)"; exit 3; }
+    [ "$rc" = 4 ] && { log "refused: $N1:$bad could be changed by a uid other than root: the Jobs run $SRC's research and $PY with the Secret research-r2"; exit 3; }
     [ "$rc" = 0 ] || { log "refused: node 1 not reached (\`ssh $N1\` exited $rc)"; exit 3; }
     src_ok=1
   fi

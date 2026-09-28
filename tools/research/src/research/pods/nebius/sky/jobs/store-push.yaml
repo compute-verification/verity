@@ -2,7 +2,9 @@
 # RESEARCH_STORE, from a pod, because the pods' Secret `research-r2` holds the only R2 credentials on node 1: neither host user has
 # a store remote (circuits, 2 Oct 07:57Z). Once a run's files are on the remote, the hourly `vy-store-evict` can drop their local
 # copies. The pod runs as uid 1000, ubuntu, the job store's owner, with `research` from the item's tree (`tree`, a commit's
-# /workspace/research/src/<sha>). Its report is /workspace/jobs/store-push/<MODE>-<UTC stamp>.json. A ready file:
+# /workspace/research/src/<sha>). Its report is /workspace/jobs/store-push/<MODE>-<UTC stamp>.json. The push takes no attempt
+# without a run record (--skip-record-less): R2's write-once key would keep it without its logs, and n1_custody.sh holds those until
+# a person rules. A ready file:
 #   {"template": "store-push", "tree": "/workspace/research/src/<sha>", "env": {"MODE": "pending"}}
 name: store-push
 
@@ -38,7 +40,7 @@ run: |
   echo "store-push: $MODE on $RESEARCH_STORE with research from $SRC; report $out"
   case "$MODE" in
     pending) rc=0; research data pending --json > "$out" || rc=$?; [ "$rc" -le 1 ] ;;   # exit 1: something is pending
-    push) research data push --pending --jobs "$PUSH_JOBS" --json > "$out" ;;
+    push) research data push --pending --jobs "$PUSH_JOBS" --skip-record-less --json > "$out" ;;
     *) echo "store-push: MODE is pending or push, not $MODE" >&2; exit 2 ;;
   esac
   python3 -c 'import json, sys; r = json.load(open(sys.argv[1])); print({k: len(v) if isinstance(v, list) else v for k, v in r.items()} if isinstance(r, dict) else len(r))' "$out"

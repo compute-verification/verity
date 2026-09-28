@@ -161,6 +161,13 @@ def test_the_lean_dependency_urls_leave_the_run_directory_before_any_step(tmp_pa
     assert CHECK.take_lean_deps_urls(tmp_path) == Path("/somewhere/urls.json")
 
 
+def test_custody_deletes_the_lean_dependency_urls_wherever_a_run_leaves_them():
+    """A run of anything else, or a check that ends before `check.py` starts, leaves them in inputs/ for custody to delete."""
+    from research.store.custody import CREDENTIALS
+
+    assert f"inputs/{CHECK.LEAN_DEPS_URLS}" in CREDENTIALS
+
+
 def test_the_agreement_runs_ci_on_the_pinned_binaries_only(tmp_path, monkeypatch):
     import json
 

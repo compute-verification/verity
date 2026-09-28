@@ -157,6 +157,75 @@ def test_a_stray_sigterm_to_the_runner_does_not_cost_the_run_its_record_or_custo
     assert "runner got SIGTERM" in log and "runner got SIGHUP" in log
 
 
+URLS = '{"k": "https://r2.example/objects/sha256/k?X-Amz-Signature=sent-url-that-must-not-leak"}'
+
+
+def _no_url_anywhere(vault: Path) -> None:
+    assert not any(b"sent-url-that-must-not-leak" in p.read_bytes() for p in vault.rglob("*") if p.is_file()), "a URL reached the remote"
+
+
+@pytest.mark.parametrize("command", [
+    ["true"],                                                                       # what the hourly preflight probe runs
+    [PY, "-c", "import os, signal; os.kill(os.getpid(), signal.SIGTERM)"],          # a check cancelled while slot.py waits
+], ids=["probe", "cancelled-before-check"])
+def test_a_sent_credential_is_deleted_before_the_record_is_taken_whatever_the_workload(tmp_path, command):
+    """Only `check.py` takes the Lean bundles' URLs out of inputs/: a run of anything else, or a check that ends before `check.py`
+    starts, leaves them there for custody, which must neither upload them nor fail to vouch for the run dir."""
+    vault = tmp_path / "vault"
+    req, runs = _request(tmp_path, RID, command, vault)
+    (req.parent / "inputs").mkdir()
+    (req.parent / "inputs" / "lean-deps-urls.json").write_text(URLS)
+    (req.parent / "inputs" / ".lean-deps-urls.json.x1y2z3").write_text(URLS)
+    (req.parent / "inputs" / "sent.txt").write_text("x")
+    assert remote.launch_request(req)["started"]
+    d = runs / RID
+    marker = _wait_marker(d)
+    assert marker["preserved"] is True and CU.marker_problem(d) is None
+    assert os.listdir(d / "inputs") == ["sent.txt"] and "inputs/sent.txt" in marker["files"]
+    assert not any("lean-deps-urls" in f for f in marker["files"])
+    _no_url_anywhere(vault)
+
+
+def test_a_repair_publish_deletes_a_sent_credential_too(tmp_path, monkeypatch, capsys):
+    """A runner killed before it published leaves the run dir as the workload left it; `research data custody --publish` takes its
+    record later."""
+    vault = tmp_path / "vault"
+    cfg = tmp_path / "store.toml"
+    cfg.write_text(f'[remote]\ntype = "fs"\npath = "{vault}"\n')
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
+    runs = tmp_path / "runs"
+    d = _fixture_run(runs)
+    (d / "inputs").mkdir()
+    (d / "inputs" / "lean-deps-urls.json").write_text(URLS)
+    assert data_main(["custody", FIXTURE_RID, "--runs-dir", str(runs), "--publish"]) == 0
+    assert not (d / "inputs" / "lean-deps-urls.json").exists() and CU.has_custody(d) == (True, "on the remote (.custody)")
+    _no_url_anywhere(vault)
+
+
+@pytest.mark.parametrize("shape", ["inputs-is-a-file", "credential-is-a-dir", "inputs-is-a-symlink"])
+def test_a_run_dir_of_any_shape_still_gets_its_record(tmp_path, shape):
+    """What a workload leaves at a credential's path is its own: custody deletes only a file there, never through a symlinked inputs/
+    (which `run_files` doesn't follow either), and an odd shape never costs the run its record (red team, #1055 F4)."""
+    run = tmp_path / "runs" / "r1"
+    run.mkdir(parents=True)
+    (run / "stdout.log").write_text("ok\n")
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (elsewhere / "lean-deps-urls.json").write_text("not the run's\n")
+    if shape == "inputs-is-a-file":
+        (run / "inputs").write_text("a workload's own file\n")
+    elif shape == "credential-is-a-dir":
+        (run / "inputs" / "lean-deps-urls.json").mkdir(parents=True)
+        (run / "inputs" / "lean-deps-urls.json" / "x").write_text("x")
+    else:
+        (run / "inputs").symlink_to(elsewhere)
+    st = LocalStore(tmp_path / "store")
+    rr = CU.put_run_record(st, run, "r1")
+    assert rr and (elsewhere / "lean-deps-urls.json").exists()
+    held = {"inputs-is-a-file": {"inputs"}, "credential-is-a-dir": {"inputs/lean-deps-urls.json/x"}, "inputs-is-a-symlink": set()}[shape]
+    assert {f.path for f in st.get_manifest(rr).payload.files} == {"stdout.log", *held}
+
+
 def test_a_failed_publish_leaves_a_negative_marker_forgets_the_key_and_the_guard_refuses(tmp_path, capsys, monkeypatch):
     from research.store import remote_s3
 
@@ -351,9 +420,13 @@ def test_a_refused_claim_deletes_the_staged_key(tmp_path):
     doc = json.loads(req.read_text())
     doc["remote"]["source_sha"] = "f" * 40                    # no READY tree: refused
     req.write_text(json.dumps(doc))
+    (req.parent / "inputs").mkdir()
+    (req.parent / "inputs" / "lean-deps-urls.json").write_text(URLS)
+    (req.parent / "inputs" / ".lean-deps-urls.json.k1ll3d").write_text(URLS)    # a preflight killed between write and replace
     out = remote.launch_request(req)
     assert out["started"] is False and out["fault"] == "SourceNotReady"
     assert not (req.parent / remote.CUSTODY_DIR / CU.CRED_FILE).exists()
+    assert os.listdir(req.parent / "inputs") == [], "nothing will take the sent URLs out of the request dir"
 
 
 # ---- drain / the reaper from any machine ---------------------------------------------------------------------------------------------------
@@ -565,6 +638,64 @@ def test_triage_takes_a_valid_custody_marker_where_the_catalog_cannot_say(tmp_pa
     (d2 / "late.txt").write_text("written after custody")
     (row,) = CU.triage(n2, n2_runs, host=HOST)
     assert row["state"] == "no-custody"
+
+
+def test_the_custody_temp_file_a_killed_publish_leaves_is_no_file_of_the_run(tmp_path, monkeypatch):
+    """A custody Job stopped at its deadline (its bash exits on SIGTERM, and the kernel SIGKILLs research) can leave the
+    `.custody.tmp.<pid>` write_json_atomic writes before its rename. Counted as a run file, verify found it not in the run record,
+    and n1_custody.sh would hold the run as changed after its record, telling a person to waive logs the record holds."""
+    cfg = tmp_path / "store.toml"
+    cfg.write_text(f'[remote]\ntype = "fs"\npath = "{tmp_path / "vault"}"\n')
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
+    d, store = _fixture_run(tmp_path / "runs", "r20260925-010003-cccc"), str(tmp_path / "s")
+    assert data_main(["custody", str(d), "--publish", "--keep-local", "--store", store]) == 0
+    (d / f"{CU.MARKER}.tmp.4242").write_text('{"preserved": tr')
+    assert f"{CU.MARKER}.tmp.4242" not in CU.run_files(d) and CU.marker_problem(d) is None
+    assert CU.verify(LocalStore(store), d)["preserved"]
+
+
+def test_a_remote_holding_another_attempt_document_is_a_conflict_that_triage_reports_with_its_repair(tmp_path, monkeypatch, capsys):
+    """3 Oct: r20261003-174723-7ea5's attempt was already on R2 with other bytes, and an attempt key is write-once, so a node's custody
+    Job failed on it every round. A failed `custody --publish` leaves its verdict in .custody (never over a marker that still vouches
+    for the dir), triage reports the run as `conflict` with the repair, and the repair (reconcile, then --publish) makes it r2."""
+    from research.store import attempt as A
+    from research.store.local import attempt_key
+
+    vault, store = tmp_path / "vault", str(tmp_path / "s")
+    cfg = tmp_path / "store.toml"
+    cfg.write_text(f'[remote]\ntype = "fs"\npath = "{vault}"\n')
+    runs = tmp_path / "runs"
+    ok, d = _fixture_run(runs, "r20260925-010001-aaaa"), _fixture_run(runs, "r20260925-010002-bbbb")
+    offline = LocalStore(store, config_path=tmp_path / "absent.toml")
+    assert A.publish(d, store=offline, remote_push=False, run_record=True)["published"], "published where the remote wasn't visible"
+    first = json.loads(offline.attempt_path(d.name).read_bytes())
+    first["status"]["rc"] = 99
+    (vault / attempt_key(d.name)).parent.mkdir(parents=True)
+    (vault / attempt_key(d.name)).write_text(json.dumps(first, sort_keys=True, separators=(",", ":")))
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
+    assert data_main(["custody", str(ok), "--publish", "--keep-local", "--store", store]) == 0
+    capsys.readouterr()
+
+    assert data_main(["custody", str(d), "--publish", "--keep-local", "--store", store, "--json"]) == 1
+    marker = json.loads((d / CU.MARKER).read_text())
+    assert marker["preserved"] is False and P.DIFFERS in marker["error"] and marker["verified_utc"] and marker["host"]
+    rows = {r["run"]: r for r in CU.triage(LocalStore(store), runs, host=HOST)}
+    assert rows[ok.name]["state"] == "r2" and rows[d.name]["state"] == "conflict" and rows[d.name]["files"] == len(CU.run_files(d))
+    assert P.DIFFERS in rows[d.name]["why"] and f"reconcile-attempts {d.name} --apply" in rows[d.name]["next"]
+    (verified,) = [r for r in CU.triage(LocalStore(store), runs, verify_remote=True, host=HOST) if r["run"] == d.name]
+    assert verified["state"] == "conflict", "--verify asks the remote itself"
+    assert data_main(["custody", "--triage", "--runs-dir", str(runs), "--store", store]) == 1
+    assert "1 need action" in capsys.readouterr().out
+
+    (vault / attempt_key(ok.name)).write_text("{}")
+    assert data_main(["custody", str(ok), "--publish", "--keep-local", "--store", store]) == 1
+    assert CU.marker_problem(ok) is None, "a failed check doesn't overwrite a marker that still vouches for the run dir"
+
+    assert data_main(["reconcile-attempts", d.name, "--apply", "--store", store]) == 0
+    assert data_main(["custody", str(d), "--publish", "--keep-local", "--store", store]) == 0
+    capsys.readouterr()
+    (row,) = [r for r in CU.triage(LocalStore(store), runs, host=HOST) if r["run"] == d.name]
+    assert row["state"] == "r2" and row["files"] is None
 
 
 def test_older_min_counts_only_runs_that_ended_n_minutes_ago_across_every_runs_root(tmp_path, capsys, monkeypatch):
