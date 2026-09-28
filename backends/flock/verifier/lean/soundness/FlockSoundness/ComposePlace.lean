@@ -13,11 +13,12 @@ those facts are one proposition, and they are discharged for a flat statement `S
   verifier's own `deriveChecked` run. `BlockFacts.realizes` turns them into `Realizes` for the unit's composed rows
   (`ofBlock`), and `BlockFacts.placement` is a table class's `placed` at a slot (the soundness lane's `TableClass`).
 - **`Layout.realizes`**: in the model of a statement `setupH` accepted (#177's `Layout`, carried through #257 by #284),
-  at unit slot `s₀` with positions `slot s₀ + c`, `Realizes` holds for every `Logical` whose rows are the parsed unit
-  net's (`Compose.NetRows`). It reads Δ only as #177's `Layout` does, for statements without a typed template.
+  at unit slot `s₀` with positions `slot s₀ + c`, `Realizes` holds for every `Logical` whose rows are the unit net's
+  (`Compose.NetRows`). It reads Δ only as #177's `Layout` does, for statements without a typed template.
 
-`NetRows st.c.unit (ofBlock words done u)` is the link between the net `setupH` parses and the rows the verifier derives.
-For a typed statement it is `Net.parse` of `DeriveAll.netlist`'s text (#236, #277), so it stays a hypothesis here.
+`NetRows st.c.unit (ofBlock words done u)` is the link between the unit net `setupH` accepted and the rows the verifier
+derives. For a typed flat class, whose unit net is built from those rows (`Typed.netOfD`), it is `netRows_flat`
+(`ExecFlatClass.lean`).
 -/
 
 open Flock FlockLevel3
@@ -49,7 +50,7 @@ theorem Realizes.placement {S : Model.Statement} {L : Logical} {pos : ℕ → �
     Placement S (Rows.compose L h) (composePlace S L h pos hr.lt) :=
   placement_of_realizes hr.rowA hr.rowB hr.oneA hr.oneB hr.pinA hr.pinB
 
-/-- **The composed rows are the parsed net's**: every column of the order is at most the net's constant; each computed
+/-- **The composed rows are the net's**: every column of the order is at most the net's constant; each computed
 row that doesn't copy `one` sits between the net's input rows and its constant and is the net's row there, in `A` and in
 `B`; and a row that copies `one` is the net's constant. -/
 structure NetRows (net : Net) (L : Logical) : Prop where
@@ -210,9 +211,9 @@ theorem unit_row_lt {c : ℕ} (hlo : st.c.unit.inWords * WORD ≤ c) (hhi : c < 
   have hn := L.unitRows_nIn
   have hnc := L.unitRows_nIn_nComp
   have hw := L.unitRows_w
-  let i : Fin (unitRows st L.unit_parsed).nComp := ⟨c - (unitRows st L.unit_parsed).nIn, by omega⟩
-  have hi : ((unitRows st L.unit_parsed).comp i).val = c := by
-    show (unitRows st L.unit_parsed).nIn + (c - (unitRows st L.unit_parsed).nIn) = c
+  let i : Fin (unitRows st L.unit_built).nComp := ⟨c - (unitRows st L.unit_built).nIn, by omega⟩
+  have hi : ((unitRows st L.unit_built).comp i).val = c := by
+    show (unitRows st L.unit_built).nIn + (c - (unitRows st L.unit_built).nIn) = c
     omega
   refine ⟨fun x hx => ?_, fun x hx => ?_⟩
   · rw [← hi, ← L.unitRows_a hu i] at hx
@@ -229,17 +230,17 @@ theorem slot_eq {s₀ : ℕ} : st.c.unitRange.slot s₀ = (st.c.unitRange.pos0 +
 theorem placedA_comp {s₀ c : ℕ} (hs : s₀ < st.c.unitRange.count) (hlo : st.c.unit.inWords * WORD ≤ c)
     (hhi : c < st.c.unit.constPos) (r j : Fin (2 ^ st.c.kLog)) (hr : r.val = st.c.unitRange.slot s₀ + c) :
     placedA st r j = ((((st.c.unit.a.row c).toList.map (st.c.unitRange.slot s₀ + ·)).count j.val : ℕ) : ZMod 2) := by
-  have hU := Classical.choose_spec L.unit_parsed
+  have hU := L.unit_built
   show rangesEntry st (slotEntryA st) r.val j.val + deltaEntry st.da r.val j.val = _
   rw [hr, L.rangesEntry_unit hs (lt_trans hhi L.unit_const_lt), L.delta_unit_comp hs hlo hhi, add_zero, L.slot_eq,
     count_map_add_ite (Nat.two_pow_pos _) _ (L.unit_row_lt hlo hhi (L.unitLog_le hs)).1]
-  exact if_congr Iff.rfl (sparseEntry_parsed_a hU _ _) rfl
+  exact if_congr Iff.rfl (sparseEntry_built_a hU _ _) rfl
 
 /-- **The block's `B` at a unit slot's computed row**: the unit net's row, shifted to the slot. -/
 theorem placedB_comp {s₀ c : ℕ} (hs : s₀ < st.c.unitRange.count) (hlo : st.c.unit.inWords * WORD ≤ c)
     (hhi : c < st.c.unit.constPos) (r j : Fin (2 ^ st.c.kLog)) (hr : r.val = st.c.unitRange.slot s₀ + c) :
     placedB st r j = ((((st.c.unit.b.row c).toList.map (st.c.unitRange.slot s₀ + ·)).count j.val : ℕ) : ZMod 2) := by
-  have hU := Classical.choose_spec L.unit_parsed
+  have hU := L.unit_built
   have hlk : (st.c.nets.getD st.c.unitNet default).2.lookup = none := L.unit_lookup
   show rangesEntry st (slotEntryB st) r.val j.val + deltaEntry st.db r.val j.val = _
   rw [L.delta_b, hr, L.rangesEntry_unit hs (lt_trans hhi L.unit_const_lt), L.delta_unit_comp hs hlo hhi, add_zero,
@@ -248,7 +249,7 @@ theorem placedB_comp {s₀ c : ℕ} (hs : s₀ < st.c.unitRange.count) (hlo : st
   show sparseEntry _ _ _ + lookupEntry (st.c.nets.getD st.c.unitNet default).2.lookup _ _ = _
   rw [hlk]
   show sparseEntry st.c.unit.b _ _ + 0 = _
-  rw [add_zero, sparseEntry_parsed_b hU]
+  rw [add_zero, sparseEntry_built_b hU]
 
 /-- **The block's `A` at a unit slot's constant reads the pin.** -/
 theorem placedA_const {s₀ : ℕ} (hs : s₀ < st.c.unitRange.count) (r j : Fin (2 ^ st.c.kLog))

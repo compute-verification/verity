@@ -188,7 +188,8 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
     proved, not assumed (`ExecRows.lean`):
     - `parse_rowOrder`: `Net.parse` accepted means the check passed on the very rows stored as `A` and `B`;
     - `ofRows_row`: the stored sparse rows read back as those rows (columns below `2^32`);
-    - `Rows.ofNet`: the audit's `Rows` for a parsed net, whose computed rows are `net.a.row` and `net.b.row`.
+    - `Rows.ofNet`: the audit's `Rows` for a net `Net.ofRows` built (`Built`: a parsed net, or a typed flat class's
+      `Typed.netOfD`), whose computed rows are `net.a.row` and `net.b.row`.
 
     `test_pinned_rows_read_earlier_columns` stays as a check on the pinned files.
   - **An instance's rows** (`Rows.stack`): a template instance is its VU's `upv` unit slots, so its `Rows` are `upv`
@@ -223,7 +224,7 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
     computed rows only its slot has entries (pairwise-apart spans, `rangesEntry_of_covers`) and Δ has none. At its
     constant Δ's `(k, k)` cancels the row's own entry and `(k, pin)` reads the pin. The pin's row reads itself.
   - `setupH_layout` derives `Layout`:
-    - `HmRow.parse` gives text nets and lookup slots only (`parse_facts`);
+    - `HmRow.parse` gives nets `Net.ofRows` built and lookup slots only (`parse_facts`);
     - `HmRow.check` gives the layout (`check_facts`);
     - `HmRow.pin` gives the pin's range;
     - `HmRow.delta`'s first loop writes exactly the slot constants' pairs, and every later pair is an input bit of a
@@ -248,7 +249,7 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
     and `Realizes.placement` the `Placement` it gives. `Compose.BlockFacts` is 1e's form of the same facts, over the
     unit's block rows (`blockRow`), and `BlockFacts.placement` gives a table class's placement at a slot for the unit's
     composed rows (`ofBlock`) from them. `Layout.realizes` proves `Realizes` at any unit slot of a flat statement
-    `Stmt.setupH` accepted, for composed rows that are the parsed unit net's (`Compose.NetRows`).
+    `Stmt.setupH` accepted, for composed rows that are the unit net's (`Compose.NetRows`).
   - **A typed template's Δ** (`ExecTyped.lean`, #277): `delta_typed` gives Δ_A and Δ_B as the flat entries
     (`delta_split`'s forms), then per VU the input bits' copies of their message bits, the parts' bound rows and the root
     rows' cross entries (`Typed.tail`). `CopyRow` and `ZeroRow` state a block row that reads exactly one column, or none;
@@ -299,8 +300,14 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
       table class's `copy`. The message bit is a column of the block (`setupH_copySrc_lt`): it is in a `sha512x3`
       slot's message port (`msgCol_lt`), and the file has a row, since the instance's inputs are its rows' words
       (`CheckFactsT.ins`) and the unit's inputs its type's (`unit_inCols_size`, `read_template_ty`).
+  - **A typed flat class's unit, placed** (`ExecFlatClass.lean`). A flat class's statement has the layout an untyped
+    statement has (`setupH_flatLayout`): `parseTyped` puts the unit's net, `Typed.netOfD` of `derive`'s rows, where the
+    untyped file has its `CIRCUIT unit` section, and `Layout` reads it as any net `Net.ofRows` built. The unit's composed
+    rows are its net's (`netRows_flat`, `Compose.NetRows`), so `setupH_flatPlacement` is a table class's `placed` at
+    each unit slot. That reads `PastInputs`, the order's columns after the unit's inputs past its net's input rows,
+    which `Typed.read` checks (`Typed.flatNet`, #434).
   - Still to prove:
-    - `NetRows` for a flat typed class, whose unit net #307 builds from `derive`'s rows (`Typed.netOfD_ok`).
+    - the flat class's input copies and forced-zero rows (a table class's `copy` and `zeros`).
 
 ### 1.6 Proved from the libraries, not assumed
 

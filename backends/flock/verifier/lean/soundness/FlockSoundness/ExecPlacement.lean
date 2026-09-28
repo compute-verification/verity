@@ -9,8 +9,8 @@ The verifier's level-0 matrices are `placedA st` and `placedB st` (flock-verifie
 `Placement` for an instance's stacked rows (`Rows.stack`, `placement_stack`) from the layout facts `Layout` names:
 - **the ranges:** their spans are pairwise disjoint (`HmRow.check`'s pairwise test), a net range's slots are its net's
   `2^unitLog` rows, and every net's constant and input rows fit its slot;
-- **the unit range:** `vus_per_block × units_per_vu` slots of the unit net, a `Net.parse` output whose constant row reads
-  itself and whose input rows end before its computed rows;
+- **the unit range:** `vus_per_block × units_per_vu` slots of the unit net, a net `Net.ofRows` built (a text net, or a
+  typed flat class's `Typed.netOfD`) whose constant row reads itself and whose input rows end before its computed rows;
 - **the pin:** the first slot's constant of a range with a slot, whose net's constant row reads itself;
 - **Δ:** every net slot's constant other than the pin gets `(k, k)` and `(k, pin)`, and every other pair's row is an input
   bit of a net slot (`HmRow.delta`, `delta_split`).
@@ -266,14 +266,14 @@ theorem sparseEntry_ofRows {rows : Array (Array ℕ)} {width : ℕ} {m : Sparse}
       simp [Array.getD_eq_getD_getElem?, show ¬ i < m.len.size by omega]
     simp [h1]
 
-theorem sparseEntry_parsed_a {lines : Array String} {net : Net} (h : Net.parse lines = .ok net) (i i' : ℕ) :
+theorem sparseEntry_built_a {net : Net} (h : Built net) (i i' : ℕ) :
     sparseEntry net.a i i' = (((net.a.row i).toList.count i' : ℕ) : ZMod 2) :=
-  let ⟨_, _, _, ha, _⟩ := parse_rowOrder h
+  let ⟨_, _, _, ha, _⟩ := built_rowOrder h
   sparseEntry_ofRows ha i i'
 
-theorem sparseEntry_parsed_b {lines : Array String} {net : Net} (h : Net.parse lines = .ok net) (i i' : ℕ) :
+theorem sparseEntry_built_b {net : Net} (h : Built net) (i i' : ℕ) :
     sparseEntry net.b i i' = (((net.b.row i).toList.count i' : ℕ) : ZMod 2) :=
-  let ⟨_, _, _, _, hb⟩ := parse_rowOrder h
+  let ⟨_, _, _, _, hb⟩ := built_rowOrder h
   sparseEntry_ofRows hb i i'
 
 /-! ## Δ's first loop, and input bits -/
@@ -343,8 +343,8 @@ structure Layout (st : Stmt) : Prop where
   unit_mem : st.c.unitRange ∈ st.c.ranges.toList
   unit_kind : st.c.unitRange.kind = .net st.c.unitNet
   unit_count : st.c.unitRange.count = st.c.g * st.c.upv
-  /-- the unit is a text net (not a lookup slot) -/
-  unit_parsed : ∃ lines, Net.parse lines = .ok st.c.unit
+  /-- the unit is a net `Net.ofRows` built (not a lookup slot): a text net, or a typed flat class's derived net -/
+  unit_built : Built st.c.unit
   unit_lookup : st.c.unit.lookup = none
   unit_in : st.c.unit.inWords * WORD ≤ st.c.unit.constPos
   /-- the unit's constant row reads itself (its rows fit `rd32`'s words when its slot fits the block) -/
@@ -441,8 +441,7 @@ theorem const_row_sum (a x p : ℕ) :
       simp
 
 /-- The unit net's rows, as the audit's `Rows` (`Rows.ofNet`). -/
-noncomputable def unitRows (st : Stmt) (h : ∃ lines, Net.parse lines = .ok st.c.unit) : Rows :=
-  Rows.ofNet (Classical.choose_spec h)
+noncomputable def unitRows (st : Stmt) (h : Built st.c.unit) : Rows := Rows.ofNet h
 
 namespace Layout
 
@@ -451,30 +450,30 @@ include L
 
 theorem unit_const_lt : st.c.unit.constPos < 2 ^ st.c.unit.unitLog := (L.fit st.c.unitNet).1
 
-theorem unitRows_nIn : (unitRows st L.unit_parsed).nIn = st.c.unit.inWords * WORD :=
+theorem unitRows_nIn : (unitRows st L.unit_built).nIn = st.c.unit.inWords * WORD :=
   Nat.min_eq_left L.unit_in
 
 theorem unitRows_nIn_nComp :
-    (unitRows st L.unit_parsed).nIn + (unitRows st L.unit_parsed).nComp = st.c.unit.constPos := by
+    (unitRows st L.unit_built).nIn + (unitRows st L.unit_built).nComp = st.c.unit.constPos := by
   show min _ _ + (_ - min _ _) = _
   have := Nat.min_le_right (st.c.unit.inWords * WORD) st.c.unit.constPos
   omega
 
-theorem unitRows_w : (unitRows st L.unit_parsed).w ≤ 2 ^ st.c.unit.unitLog := by
+theorem unitRows_w : (unitRows st L.unit_built).w ≤ 2 ^ st.c.unit.unitLog := by
   show _ + _ + 1 ≤ _
   rw [L.unitRows_nIn_nComp]
   exact L.unit_const_lt
 
-theorem unitRows_one : (unitRows st L.unit_parsed).one.val = st.c.unit.constPos := Rows.ofNet_one _
+theorem unitRows_one : (unitRows st L.unit_built).one.val = st.c.unit.constPos := Rows.ofNet_one _
 
-theorem unitRows_a (hu : st.c.unit.unitLog ≤ 32) (i : Fin (unitRows st L.unit_parsed).nComp) :
-    ((unitRows st L.unit_parsed).a i).map Fin.val =
-      (st.c.unit.a.row ((unitRows st L.unit_parsed).comp i).val).toList :=
+theorem unitRows_a (hu : st.c.unit.unitLog ≤ 32) (i : Fin (unitRows st L.unit_built).nComp) :
+    ((unitRows st L.unit_built).a i).map Fin.val =
+      (st.c.unit.a.row ((unitRows st L.unit_built).comp i).val).toList :=
   Rows.ofNet_a _ hu i
 
-theorem unitRows_b (hu : st.c.unit.unitLog ≤ 32) (i : Fin (unitRows st L.unit_parsed).nComp) :
-    ((unitRows st L.unit_parsed).b i).map Fin.val =
-      (st.c.unit.b.row ((unitRows st L.unit_parsed).comp i).val).toList :=
+theorem unitRows_b (hu : st.c.unit.unitLog ≤ 32) (i : Fin (unitRows st L.unit_built).nComp) :
+    ((unitRows st L.unit_built).b i).map Fin.val =
+      (st.c.unit.b.row ((unitRows st L.unit_built).comp i).val).toList :=
   Rows.ofNet_b _ hu i
 
 theorem slot_lt {g u : ℕ} (hg : g < st.c.g) (hu : u < st.c.upv) : g * st.c.upv + u < st.c.unitRange.count := by
@@ -507,7 +506,7 @@ theorem pin_lt : st.pin < 2 ^ st.c.kLog := by
 
 theorem hb {g : ℕ} (hg : g < st.c.g) :
     ∀ u < st.c.upv, st.c.unitRange.slot (g * st.c.upv + u) +
-      ((unitRows st L.unit_parsed).nIn + (unitRows st L.unit_parsed).nComp) < 2 ^ st.c.kLog := by
+      ((unitRows st L.unit_built).nIn + (unitRows st L.unit_built).nComp) < 2 ^ st.c.kLog := by
   intro u hu
   rw [L.unitRows_nIn_nComp]
   exact L.unit_slot_lt (L.slot_lt hg hu) L.unit_const_lt
@@ -607,27 +606,27 @@ include L
 `ur.slot (g·upv + u)` for copy `u`, with the shared constant at the pin (`stackPlace`), and the verifier's level-0
 matrices place them there. -/
 theorem placement (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {g : ℕ} (hg : g < st.c.g) :
-    Placement (L.model regs) ((unitRows st L.unit_parsed).stack st.c.upv)
-      (stackPlace (L.model regs) (unitRows st L.unit_parsed) st.c.upv
+    Placement (L.model regs) ((unitRows st L.unit_built).stack st.c.upv)
+      (stackPlace (L.model regs) (unitRows st L.unit_built) st.c.upv
         (fun u => st.c.unitRange.slot (g * st.c.upv + u)) (L.hb hg)) := by
   have hW : 0 < 2 ^ st.c.unit.unitLog := Nat.two_pow_pos _
-  have hU := Classical.choose_spec L.unit_parsed
+  have hU := L.unit_built
   have hshift : ∀ u (hu : u < st.c.upv) c,
-      (posIn (L.model regs) (unitRows st L.unit_parsed) st.c.upv
+      (posIn (L.model regs) (unitRows st L.unit_built) st.c.upv
         (fun u => st.c.unitRange.slot (g * st.c.upv + u)) (L.hb hg) hu c).val =
         (st.c.unitRange.pos0 + (g * st.c.upv + u)) * 2 ^ st.c.unit.unitLog + c.val := by
     intro u hu c
     show st.c.unitRange.slot _ + c.val = _
     unfold Range.slot
     rw [L.unit_slotLog]
-  have hcomp : ∀ i : Fin (unitRows st L.unit_parsed).nComp,
-      st.c.unit.inWords * WORD ≤ ((unitRows st L.unit_parsed).comp i).val ∧
-        ((unitRows st L.unit_parsed).comp i).val < st.c.unit.constPos := by
+  have hcomp : ∀ i : Fin (unitRows st L.unit_built).nComp,
+      st.c.unit.inWords * WORD ≤ ((unitRows st L.unit_built).comp i).val ∧
+        ((unitRows st L.unit_built).comp i).val < st.c.unit.constPos := by
     intro i
     have := L.unitRows_nIn_nComp
     have := L.unitRows_nIn
     have := i.isLt
-    show _ ≤ (unitRows st L.unit_parsed).nIn + i.val ∧ (unitRows st L.unit_parsed).nIn + i.val < _
+    show _ ≤ (unitRows st L.unit_built).nIn + i.val ∧ (unitRows st L.unit_built).nIn + i.val < _
     omega
   have hlk : (st.c.nets.getD st.c.unitNet default).2.lookup = none := L.unit_lookup
   have hS : (L.model regs).pin = (⟨st.pin, L.pin_lt⟩ : Fin (2 ^ (L.model regs).kLog)) := rfl
@@ -635,17 +634,17 @@ theorem placement (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {g :
   · intro u hu i j
     have hs := L.slot_lt hg hu
     show rangesEntry st (slotEntryA st) (st.c.unitRange.slot (g * st.c.upv + u) +
-        ((unitRows st L.unit_parsed).comp i).val) j.val +
-      deltaEntry st.da (st.c.unitRange.slot (g * st.c.upv + u) + ((unitRows st L.unit_parsed).comp i).val) j.val = _
+        ((unitRows st L.unit_built).comp i).val) j.val +
+      deltaEntry st.da (st.c.unitRange.slot (g * st.c.upv + u) + ((unitRows st L.unit_built).comp i).val) j.val = _
     rw [L.rangesEntry_unit hs (lt_trans (hcomp i).2 L.unit_const_lt),
       L.delta_unit_comp hs (hcomp i).1 (hcomp i).2, add_zero,
       count_map_shift hW _ L.unitRows_w _ (hshift u hu) j, L.unitRows_a (L.unitLog_le hs) i]
-    exact if_congr Iff.rfl (sparseEntry_parsed_a hU _ _) rfl
+    exact if_congr Iff.rfl (sparseEntry_built_a hU _ _) rfl
   · intro u hu i j
     have hs := L.slot_lt hg hu
     show rangesEntry st (slotEntryB st) (st.c.unitRange.slot (g * st.c.upv + u) +
-        ((unitRows st L.unit_parsed).comp i).val) j.val +
-      deltaEntry st.db (st.c.unitRange.slot (g * st.c.upv + u) + ((unitRows st L.unit_parsed).comp i).val) j.val = _
+        ((unitRows st L.unit_built).comp i).val) j.val +
+      deltaEntry st.db (st.c.unitRange.slot (g * st.c.upv + u) + ((unitRows st L.unit_built).comp i).val) j.val = _
     rw [L.delta_b, L.rangesEntry_unit hs (lt_trans (hcomp i).2 L.unit_const_lt),
       L.delta_unit_comp hs (hcomp i).1 (hcomp i).2, add_zero,
       count_map_shift hW _ L.unitRows_w _ (hshift u hu) j, L.unitRows_b (L.unitLog_le hs) i]
@@ -653,12 +652,12 @@ theorem placement (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {g :
     show sparseEntry _ _ _ + lookupEntry (st.c.nets.getD st.c.unitNet default).2.lookup _ _ = _
     rw [hlk]
     show sparseEntry st.c.unit.b _ _ + 0 = _
-    rw [add_zero, sparseEntry_parsed_b hU]
+    rw [add_zero, sparseEntry_built_b hU]
   · intro u hu j
     have hs := L.slot_lt hg hu
     show rangesEntry st (slotEntryA st) (st.c.unitRange.slot (g * st.c.upv + u) +
-        (unitRows st L.unit_parsed).one.val) j.val +
-      deltaEntry st.da (st.c.unitRange.slot (g * st.c.upv + u) + (unitRows st L.unit_parsed).one.val) j.val = _
+        (unitRows st L.unit_built).one.val) j.val +
+      deltaEntry st.da (st.c.unitRange.slot (g * st.c.upv + u) + (unitRows st L.unit_built).one.val) j.val = _
     rw [L.unitRows_one, L.rangesEntry_unit hs L.unit_const_lt, L.delta_unit_const hs,
       ite_slot_eq (v := slotEntryA st (.net st.c.unitNet) st.c.unit.constPos) hW L.unit_const_lt
         (L.unit_const (L.unitLog_le hs)).2.1]
@@ -670,8 +669,8 @@ theorem placement (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {g :
   · intro u hu j
     have hs := L.slot_lt hg hu
     show rangesEntry st (slotEntryB st) (st.c.unitRange.slot (g * st.c.upv + u) +
-        (unitRows st L.unit_parsed).one.val) j.val +
-      deltaEntry st.db (st.c.unitRange.slot (g * st.c.upv + u) + (unitRows st L.unit_parsed).one.val) j.val = _
+        (unitRows st L.unit_built).one.val) j.val +
+      deltaEntry st.db (st.c.unitRange.slot (g * st.c.upv + u) + (unitRows st L.unit_built).one.val) j.val = _
     rw [L.delta_b, L.unitRows_one, L.rangesEntry_unit hs L.unit_const_lt, L.delta_unit_const hs,
       ite_slot_eq (v := slotEntryB st (.net st.c.unitNet) st.c.unit.constPos) hW L.unit_const_lt
         (L.unit_const (L.unitLog_le hs)).2.2]
@@ -707,27 +706,27 @@ theorem placement (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {g :
 satisfying the accepted statement: the inputs that `inst` wires to one gate copy one source's position, or forced-zero
 rows (`UnitPlace.aliased`). -/
 def Aliased (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {C : Audit.Circuit} {n : ℕ}
-    {P : Audit.Partition C n} {u : Fin n} (inst : P.IsRowsUnit u ((unitRows st L.unit_parsed).stack st.c.upv))
+    {P : Audit.Partition C n} {u : Fin n} (inst : P.IsRowsUnit u ((unitRows st L.unit_built).stack st.c.upv))
     (o : Fin (2 ^ (L.model regs).nbl)) {g : ℕ} (hg : g < st.c.g) : Prop :=
-  ∀ c c', inst.wire c = inst.wire c' → c.val < ((unitRows st L.unit_parsed).stack st.c.upv).nIn →
-    c'.val < ((unitRows st L.unit_parsed).stack st.c.upv).nIn → ∀ z : Model.Witness (L.model regs).m,
+  ∀ c c', inst.wire c = inst.wire c' → c.val < ((unitRows st L.unit_built).stack st.c.upv).nIn →
+    c'.val < ((unitRows st L.unit_built).stack st.c.upv).nIn → ∀ z : Model.Witness (L.model regs).m,
       (L.model regs).Satisfies z →
-      (L.model regs).block z o (stackPlace (L.model regs) (unitRows st L.unit_parsed) st.c.upv
+      (L.model regs).block z o (stackPlace (L.model regs) (unitRows st L.unit_built) st.c.upv
         (fun u => st.c.unitRange.slot (g * st.c.upv + u)) (L.hb hg) c) =
-      (L.model regs).block z o (stackPlace (L.model regs) (unitRows st L.unit_parsed) st.c.upv
+      (L.model regs).block z o (stackPlace (L.model regs) (unitRows st L.unit_built) st.c.upv
         (fun u => st.c.unitRange.slot (g * st.c.upv + u)) (L.hb hg) c')
 
 /-- **A drawn unit's place in the accepted statement** (#145's `UnitPlace`, which `loweringSoundB_of_place` and #171's
 `_placed` forms take): VU `g`'s stacked unit slots in block `o`, given the unit's instance in the audit circuit
 (`inst`, the circuit side), whose inputs on one gate carry one value there (`hal`). -/
 noncomputable def unitPlace (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {C : Audit.Circuit} {n : ℕ}
-    {P : Audit.Partition C n} {u : Fin n} (inst : P.IsRowsUnit u ((unitRows st L.unit_parsed).stack st.c.upv))
+    {P : Audit.Partition C n} {u : Fin n} (inst : P.IsRowsUnit u ((unitRows st L.unit_built).stack st.c.upv))
     (o : Fin (2 ^ (L.model regs).nbl)) {g : ℕ} (hg : g < st.c.g) (hal : L.Aliased regs inst o hg) :
     UnitPlace P (L.model regs) u where
-  R := (unitRows st L.unit_parsed).stack st.c.upv
+  R := (unitRows st L.unit_built).stack st.c.upv
   inst := inst
   o := o
-  col := stackPlace (L.model regs) (unitRows st L.unit_parsed) st.c.upv
+  col := stackPlace (L.model regs) (unitRows st L.unit_built) st.c.upv
     (fun u => st.c.unitRange.slot (g * st.c.upv + u)) (L.hb hg)
   placed := L.placement regs hg
   aliased := hal

@@ -648,7 +648,7 @@ theorem tmpl_net_facts {tags : Tags} {c : Circuit} (P : ParseFactsT tags t c)
     · obtain ⟨j, hj, -, -, nm, hpl⟩ := layout_at htm hk
       exact key _ hl (placedNet_fit hd hj hpl)
     · obtain ⟨lines, hp⟩ := hp
-      obtain ⟨h1, h2, h3⟩ := netOK_parsed hp
+      obtain ⟨h1, h2, h3⟩ := netOK_built (parse_built hp)
       exact key _ rfl ⟨h1.1, h2, h3⟩
     · obtain ⟨h1, h2, h3⟩ := netOK_lookup hb
       exact key _ rfl ⟨h1.1, h2, h3⟩
@@ -684,7 +684,7 @@ theorem rows_netOK {tags : Tags} {t : Typed.Template} {c : Circuit} (P : ParseFa
   rcases tmpl_nets P hnl with ⟨h0, -⟩ | ⟨k, hk', h1, -⟩ | ⟨-, ⟨lines, hp⟩ | ⟨_, _, _, _, _, hb⟩⟩
   · omega
   · omega
-  · exact (netOK_parsed hp).1
+  · exact (netOK_built (parse_built hp)).1
   · exact (netOK_lookup hb).1
 
 /-- **A message bit's column is in the block**: for any row, byte and bit, it is a column of a `sha512x3` slot's message
@@ -776,7 +776,7 @@ theorem templateLayout_of {tags : Tags} {c : Circuit} (P : ParseFactsT tags t c)
     rcases tmpl_nets P hnl with ⟨h0, -⟩ | ⟨k, hk', h1, -⟩ | ⟨-, ⟨lines, hp⟩ | ⟨_, _, _, _, _, hb⟩⟩
     · omega
     · omega
-    · exact (netOK_parsed hp).1
+    · exact (netOK_built (parse_built hp)).1
     · exact (netOK_lookup hb).1
   obtain ⟨rp, hrp, ip, hkp, hcp, hpv⟩ := pin_spec hpin
   have hip : ip < st.c.nets.size := P.kinds rp hrp ip hkp

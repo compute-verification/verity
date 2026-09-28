@@ -236,10 +236,10 @@ def NetOK (net : Net) : Prop :=
   net.constPos < 2 ^ net.unitLog ∧ net.inWords * WORD ≤ 2 ^ net.unitLog ∧
     ∀ q ∈ (portCols net.inGroups).toList, q.1 + q.2 ≤ net.inWords * WORD
 
-theorem netOK_parsed {lines : Array String} {net : Net} (h : Net.parse lines = .ok net) :
+theorem netOK_built {net : Net} (h : Built net) :
     NetOK net ∧ 7 ≤ net.unitLog ∧ (net.unitLog ≤ 32 → ConstRow net) :=
-  let ⟨h1, h2, h3⟩ := parse_fit h
-  ⟨⟨h1, h2, parse_ports h⟩, h3, parse_constRow h⟩
+  let ⟨h1, h2, h3⟩ := built_fit h
+  ⟨⟨h1, h2, built_ports h⟩, h3, built_constRow h⟩
 
 theorem netOK_lookup {nm : String} {tb : ByteArray} {n lo bits : ℕ} {net : Net}
     (h : Lookup.build nm tb n lo bits = .ok net) :
@@ -269,8 +269,8 @@ theorem nets_ok {tags : Tags} {c : Circuit} (P : ParseFacts tags c) (i : ℕ) :
   · have hmem : c.nets.getD i default ∈ c.nets.toList := by
       rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hi, Option.getD_some]
       exact Array.mem_def.1 (Array.getElem_mem hi)
-    rcases P.nets _ hmem with ⟨_, hp⟩ | ⟨_, _, _, _, _, hb⟩
-    · exact ⟨(netOK_parsed hp).1, fun _ => (netOK_parsed hp).2⟩
+    rcases P.nets _ hmem with hp | ⟨_, _, _, _, _, hb⟩
+    · exact ⟨(netOK_built hp).1, fun _ => (netOK_built hp).2⟩
     · exact ⟨(netOK_lookup hb).1, fun _ => (netOK_lookup hb).2⟩
   · have hd : (c.nets.getD i default).2 = default := by
       rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_none (by omega)]
@@ -281,10 +281,9 @@ theorem nets_ok {tags : Tags} {c : Circuit} (P : ParseFacts tags c) (i : ℕ) :
     rw [this] at hq
     cases hq
 
-/-- **The unit is a text net**: `HmRow.parse`'s nets are text nets and lookup slots, and `HmRow.check` refuses a lookup
-slot as the unit. -/
-theorem unit_parsed {tags : Tags} {c : Circuit} (P : ParseFacts tags c) (C : CheckFacts c) :
-    ∃ lines, Net.parse lines = .ok c.unit := by
+/-- **The unit is a built net**: `HmRow.parse`'s nets are nets `Net.ofRows` built and lookup slots, and `HmRow.check`
+refuses a lookup slot as the unit. -/
+theorem unit_built {tags : Tags} {c : Circuit} (P : ParseFacts tags c) (C : CheckFacts c) : Built c.unit := by
   have hmem : c.nets.getD c.unitNet default ∈ c.nets.toList := by
     rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem P.unitNet, Option.getD_some]
     exact Array.mem_def.1 (Array.getElem_mem P.unitNet)
@@ -413,20 +412,17 @@ theorem slotLog_le {c : Circuit} (C : CheckFacts c) {r : Range} (hr : r ∈ c.ra
   have : 2 ^ r.slotLog ≤ 2 ^ c.kLog := by omega
   exact (Nat.pow_le_pow_iff_right (by norm_num)).1 this
 
-variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
-  {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
-
-/-- **The untyped statement `Stmt.setupH` accepted has the layout the placement reads** (`Layout`): from `HmRow.parse`'s nets,
-`HmRow.check`'s layout, `HmRow.pin` and `HmRow.delta`. -/
-theorem setupH_layout (ht : tags.typed = false) (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) :
-    Layout st := by
-  obtain ⟨hp, hpin, hda, hdb, hm, hk⟩ := setupH_spec ht h
-  have P := parse_facts hp
+/-- **A statement with the circuit `HmRow.parse` accepted has the layout the placement reads** (`Layout`): from its nets,
+`HmRow.check`'s layout, `HmRow.pin` and `HmRow.delta`, for any circuit `HmRow.parse` accepted without a typed template
+(an untyped statement's, or a typed flat class's). -/
+theorem layout_of {tags : Tags} {st : Stmt} (P : ParseFacts tags st.c) (hpin : HmRow.pin st.c = .ok st.pin)
+    (hda : st.da = (HmRow.delta st.c st.pin).1) (hdb : st.db = (HmRow.delta st.c st.pin).2)
+    (hm : st.m = st.c.kLog + st.nbl) (hk : st.c.kLog ≤ 26) : Layout st := by
   obtain ⟨ls, hcheck⟩ := P.check
   have C := check_facts P.typed hcheck
   obtain ⟨hum, huk, huc⟩ := unit_range_facts P C
-  obtain ⟨lines, hU⟩ := unit_parsed P C
-  obtain ⟨hUlk, -, -, hUin, -⟩ := parse_spec hU
+  have hU := unit_built P C
+  obtain ⟨hUlk, -, -, hUin, -⟩ := built_spec hU
   obtain ⟨rp, hrp, ip, hkp, hcp, hpv⟩ := pin_spec hpin
   have hip : ip < st.c.nets.size := P.kinds rp hrp ip hkp
   have hsl := slotLog_le C hrp hcp
@@ -440,10 +436,10 @@ theorem setupH_layout (ht : tags.typed = false) (h : Stmt.setupH tags cf pf coin
     unit_mem := hum
     unit_kind := huk
     unit_count := huc
-    unit_parsed := ⟨lines, hU⟩
+    unit_built := hU
     unit_lookup := hUlk
     unit_in := hUin
-    unit_const := parse_constRow hU
+    unit_const := built_constRow hU
     pin := ⟨rp, hrp, ip, hkp, hcp, hpv, hcr (by omega)⟩
     delta_b := by rw [hdb, hda, delta_snd _ _ P.typed]
     delta := by
@@ -453,14 +449,24 @@ theorem setupH_layout (ht : tags.typed = false) (h : Stmt.setupH tags cf pf coin
     kLog6 := by omega
     m := hm }
 
+variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
+  {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
+
+/-- **The untyped statement `Stmt.setupH` accepted has the layout the placement reads** (`Layout`): from `HmRow.parse`'s nets,
+`HmRow.check`'s layout, `HmRow.pin` and `HmRow.delta`. -/
+theorem setupH_layout (ht : tags.typed = false) (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) :
+    Layout st :=
+  let ⟨hp, hpin, hda, hdb, hm, hk⟩ := setupH_spec ht h
+  layout_of (parse_facts hp) hpin hda hdb hm hk
+
 /-- **The lowering's placement, from the executable's accept step.** When `Stmt.setupH` accepts a statement, every VU
 `g` has its `units_per_vu` unit slots' rows (the unit net's rows stacked, `Rows.stack`) placed at `ur.slot (g·upv + u)`,
 the shared constant at the pin, in the model statement of the level-0 matrices the verifier folds (`placedA`,
 `placedB`). -/
 theorem placement_of_setupH (ht : tags.typed = false) (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st)
     (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {g : ℕ} (hg : g < st.c.g) :
-    Placement ((setupH_layout ht h).model regs) ((unitRows st (setupH_layout ht h).unit_parsed).stack st.c.upv)
-      (stackPlace ((setupH_layout ht h).model regs) (unitRows st (setupH_layout ht h).unit_parsed) st.c.upv
+    Placement ((setupH_layout ht h).model regs) ((unitRows st (setupH_layout ht h).unit_built).stack st.c.upv)
+      (stackPlace ((setupH_layout ht h).model regs) (unitRows st (setupH_layout ht h).unit_built) st.c.upv
         (fun u => st.c.unitRange.slot (g * st.c.upv + u)) ((setupH_layout ht h).hb hg)) :=
   (setupH_layout ht h).placement regs hg
 
@@ -471,7 +477,7 @@ noncomputable def unitPlace_of_setupH (ht : tags.typed = false)
     (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st)
     (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {C : Audit.Circuit} {n : ℕ}
     {P : Audit.Partition C n} {u : Fin n}
-    (inst : P.IsRowsUnit u ((unitRows st (setupH_layout ht h).unit_parsed).stack st.c.upv))
+    (inst : P.IsRowsUnit u ((unitRows st (setupH_layout ht h).unit_built).stack st.c.upv))
     (o : Fin (2 ^ ((setupH_layout ht h).model regs).nbl)) {g : ℕ} (hg : g < st.c.g)
     (hal : (setupH_layout ht h).Aliased regs inst o hg) :
     UnitPlace P ((setupH_layout ht h).model regs) u :=
