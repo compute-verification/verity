@@ -1016,6 +1016,105 @@ def test_train_sh_prints_every_twins_run_id(tmp_path, twins):
     assert p.returncode == 0 and p.stdout.splitlines()[-1] == want, (p.stdout, p.stderr)
 
 
+def _train_repo(tmp_path):
+    """A clone of a local origin with a root commit on main, and train.sh's environment with `uv` and `sleep` stubbed: `uv` records
+    its arguments in ``argv`` and prints a launch line, and `sleep` waits for that launch, not on a clock."""
+    import os
+    import subprocess
+
+    git_env = {"GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_NOSYSTEM": "1", "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
+               "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
+
+    def git(*a, cwd=tmp_path / "repo"):
+        return subprocess.run(["git", *a], cwd=cwd, check=True, capture_output=True, text=True,
+                              env={**os.environ, **git_env}).stdout.strip()
+
+    git("init", "-q", "--bare", "-b", "main", str(tmp_path / "origin.git"), cwd=tmp_path)
+    git("clone", "-q", str(tmp_path / "origin.git"), str(tmp_path / "repo"), cwd=tmp_path)
+    (tmp_path / "repo" / "a").write_text("a\n")
+    git("add", "a")
+    git("commit", "-q", "-m", "root")
+    git("push", "-q", "origin", "HEAD:main")
+    bin_, done, argv = tmp_path / "bin", tmp_path / "launched", tmp_path / "argv"
+    bin_.mkdir()
+    (bin_ / "uv").write_text(f"#!/bin/sh\nprintf '%s\\n' \"$@\" > {argv}\n"
+                             "echo 'research: run r20261009-050001-aaaa launched on vy-x (p) pid=1 -> /r'\n" f"touch {done}\n")
+    (bin_ / "sleep").write_text(f"#!/bin/sh\nwhile [ ! -e {done} ]; do :; done\n")
+    for f in bin_.iterdir():
+        f.chmod(0o755)
+    env = {**os.environ, **git_env, "PATH": f"{bin_}:/usr/bin:/bin", "TMPDIR": str(tmp_path), "AWS_ACCESS_KEY_ID": "dummy",
+           "R2_ENDPOINT": "dummy"}
+    for k in ("VERITY_SKIP_STORE", "AWS_SESSION_TOKEN"):
+        env.pop(k, None)
+
+    def train(*a):
+        return subprocess.run(["bash", str(ROOT / "tools" / "verity" / "check" / "train.sh"), *a], capture_output=True, text=True,
+                              cwd=tmp_path / "repo", env=env)
+
+    return git, train, argv
+
+
+def test_train_sh_refuses_an_empty_commit_one_origin_lacks_and_a_base_that_is_not_its_ancestor(tmp_path):
+    """The two hand-built launches of 9 Oct (one of an empty commit, one without `--cwd source`) are what train.sh removes: it
+    refuses, before launching anything, a commit whose tree is its parent's, one no branch of origin holds (the run ships what
+    origin holds), a BASE that isn't an ancestor of it, and --agreement beside --against."""
+    git, train, argv = _train_repo(tmp_path)
+    root = git("rev-parse", "HEAD")
+    git("commit", "-q", "--allow-empty", "-m", "empty")
+    git("push", "-q", "origin", "HEAD:main")
+    p = train("HEAD", "vy-x")
+    assert p.returncode == 1 and "is empty (its tree is its parent's)" in p.stderr, p.stderr
+
+    (tmp_path / "repo" / "a").write_text("b\n")
+    git("commit", "-q", "-am", "local")
+    p = train("HEAD", "vy-x")
+    assert p.returncode == 1 and "is on no branch of origin" in p.stderr, p.stderr
+
+    git("push", "-q", "origin", "HEAD:main")
+    head = git("rev-parse", "HEAD")
+    git("checkout", "-q", "-b", "side", root)
+    (tmp_path / "repo" / "s").write_text("s\n")
+    git("add", "s")
+    git("commit", "-q", "-m", "side")
+    git("push", "-q", "origin", "side")
+    p = train(head, "vy-x", "--against", "side")
+    assert p.returncode == 1 and "is not an ancestor of" in p.stderr, p.stderr
+
+    p = train(head, "vy-x", "--against", root, "--agreement")
+    assert p.returncode == 2 and "--agreement refused with --against" in p.stderr, p.stderr
+    assert not argv.exists()
+
+
+def test_train_sh_against_launches_the_touched_suites_from_the_source_tree(tmp_path):
+    """`--against BASE` launches `suites.py --changed BASE` (no --quick) through the quick tier's job in a priority slot, as a
+    `research run --cwd source`: the flag the 10:14Z hand-built launch lacked, so the suites ran outside the shipped tree."""
+    git, train, argv = _train_repo(tmp_path)
+    root = git("rev-parse", "HEAD")
+    (tmp_path / "repo" / "a").write_text("b\n")
+    git("commit", "-q", "-am", "change")
+    git("push", "-q", "origin", "HEAD:main")
+    head = git("rev-parse", "HEAD")
+    p = train("HEAD", "vy-x", "--against", root)
+    assert p.returncode == 0 and p.stdout.splitlines()[-1] == "RUN r20261009-050001-aaaa", (p.stdout, p.stderr)
+    a = argv.read_text().splitlines()
+    assert a[:3] == ["run", "-q", "research"] and a[3:5] == ["run", "--on"] and a[5] == "vy-x"
+    assert a[a.index("--cwd") + 1] == "source" and a[a.index("--source") + 1] == str(tmp_path / f"train-{head[:12]}")
+    job = a[-1]
+    assert "slot.py\" --priority" in job and f"--head {head} --base {root} --" in job
+    assert job.endswith("python tools/verity/check/suites.py") and "--quick" not in job
+
+
+def test_train_sh_against_keeps_the_quick_tiers_bounds_and_lean_build():
+    """train.sh is bash, so it copies the quick tier's slot wait, run time and Lean builds from research.queue: this keeps the
+    copies equal."""
+    from research import queue
+
+    text = (ROOT / "tools" / "verity" / "check" / "train.sh").read_text()
+    assert f"wait_s={queue.REMOTE_WAIT_S} run_s={queue.REMOTE_TIMEOUT_S}" in text
+    assert "".join(f" --lean {d}" for d in queue.LEAN_BUILDS) + " --head" in text
+    assert "uv run --locked --extra torch-cpu python tools/verity/check/suites.py" == " ".join(queue.QUICK_TIER[:-1])
+
+
 def test_train_sh_returns_the_exit_of_a_check_that_died_before_launching(tmp_path):
     """check.py killed before it launches a run (the OOM killer, while it gathers verdicts) prints no traceback: train.sh says
     how it exited and returns that, at once, rather than polling the log for ten minutes and saying only that nothing launched."""
