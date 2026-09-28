@@ -27,29 +27,34 @@
  "pins": {
   "Pous.Accounting.p₀_at_report": {
    "signature": [
-    "Pous.Accounting.p₀_at_report (B β S : ℕ) (hB : 0 < B) (hS : ↑S = 18 / 19 * (↑B * 98304))",
-    "  (hβ : ↑β = 31 / 32 * (↑B * 98304)) : Pous.p₀ β S B 98304 = ↑Pous.Accounting.reportP₀"
+    "Pous.Accounting.p₀_at_report (B β S : Nat) (hB : instLTNat.lt 0 B)",
+    "  (hS : Eq S.cast (instHMul.hMul (18 / 19) (instHMul.hMul B.cast 98304)))",
+    "  (hβ : Eq β.cast (instHMul.hMul (31 / 32) (instHMul.hMul B.cast 98304))) :",
+    "  Eq (Pous.p₀ β S B 98304) Pous.Accounting.reportP₀.cast"
    ],
    "assumptions": [],
    "type_hash": "000000003f733f6e"
   },
   "Pous.Accounting.report_k214": {
-   "signature": ["Pous.Accounting.report_k214 : IsLeast {k | Pous.Accounting.reportP₀ ^ k ≤ 1 / 100} 214"],
+   "signature": [
+    "Pous.Accounting.report_k214 :",
+    "  IsLeast (Set.ofPred fun k => Rat.instLE.le (instHPow.hPow Pous.Accounting.reportP₀ k) (1 / 100)) 214"
+   ],
    "assumptions": [],
    "type_hash": "000000003b85ded4"
   },
   "Pous.honest_seq_accepted": {
    "signature": [
-    "Pous.honest_seq_accepted {M : Pous.IdealModel} (sch : Pous.Scheme M) (k : ℕ) (W : Pous.Bits sch.n) :",
-    "  Pous.pr (Pous.seqAccepts sch k W (Pous.honestPre sch) (Pous.honestSeq sch)) = 1"
+    "Pous.honest_seq_accepted {M : Pous.IdealModel} (sch : Pous.Scheme M) (k : Nat) (W : Pous.Bits sch.n) :",
+    "  Eq (Pous.pr (Pous.seqAccepts sch k W (Pous.honestPre sch) (Pous.honestSeq sch))) 1"
    ],
    "assumptions": [],
    "type_hash": "00000000b73551f7"
   },
   "Pous.honest_sim_accepted": {
    "signature": [
-    "Pous.honest_sim_accepted {M : Pous.IdealModel} (sch : Pous.Scheme M) (k : ℕ) (W : Pous.Bits sch.n) :",
-    "  Pous.pr (Pous.simAccepts sch W (Pous.honestPre sch) (Pous.honestSim sch k)) = 1"
+    "Pous.honest_sim_accepted {M : Pous.IdealModel} (sch : Pous.Scheme M) (k : Nat) (W : Pous.Bits sch.n) :",
+    "  Eq (Pous.pr (Pous.simAccepts sch W (Pous.honestPre sch) (Pous.honestSim sch k))) 1"
    ],
    "assumptions": [],
    "type_hash": "00000000197a41d9"
@@ -61,7 +66,7 @@
   },
   "Pous.junk_not_meets": {
    "signature": [
-    "Pous.junk_not_meets (reveal : Pous.Reveal) (D Q k : ℕ) (ε : ENNReal) : ¬Pous.Meets Pous.junk reveal D Q k ε"
+    "Pous.junk_not_meets (reveal : Pous.Reveal) (D Q k : Nat) (ε : ENNReal) : Not (Pous.Meets Pous.junk reveal D Q k ε)"
    ],
    "assumptions": [],
    "type_hash": "000000007a48ab8c"
@@ -73,73 +78,91 @@
   },
   "Pous.k_ge_86": {
    "signature": [
-    "Pous.k_ge_86 {M : Pous.IdealModel} (sch : Pous.Scheme M) (reveal : Pous.Reveal) (D Q k : ℕ) (h19 : 19 ∣ sch.B)",
-    "  (hsec : Pous.AuditSecure sch reveal (sch.stateBound Pous.Params.ρ) D Q k (ENNReal.ofReal ↑Pous.Params.δ) 0) : 86 ≤ k"
+    "Pous.k_ge_86 {M : Pous.IdealModel} (sch : Pous.Scheme M) (reveal : Pous.Reveal) (D Q k : Nat)",
+    "  (h19 : Nat.instDvd.dvd 19 sch.B)",
+    "  (hsec : Pous.AuditSecure sch reveal (sch.stateBound Pous.Params.ρ) D Q k (ENNReal.ofReal Pous.Params.δ.cast) 0) :",
+    "  instLENat.le 86 k"
    ],
    "assumptions": [],
    "type_hash": "00000000c3dc050f"
   },
   "Pous.not_meets_eps_one": {
    "signature": [
-    "Pous.not_meets_eps_one {M : Pous.IdealModel} (sch : Pous.Scheme M) (reveal : Pous.Reveal) (D Q k : ℕ) :",
-    "  ¬Pous.Meets sch reveal D Q k 1"
+    "Pous.not_meets_eps_one {M : Pous.IdealModel} (sch : Pous.Scheme M) (reveal : Pous.Reveal) (D Q k : Nat) :",
+    "  Not (Pous.Meets sch reveal D Q k 1)"
    ],
    "assumptions": [],
    "type_hash": "0000000075ddc1cd"
   },
   "Pous.not_meets_of_lt_eps": {
    "signature": [
-    "Pous.not_meets_of_lt_eps {M : Pous.IdealModel} (sch : Pous.Scheme M) (reveal : Pous.Reveal) (D Q k : ℕ) {ε : ENNReal}",
-    "  (hε : Pous.Params.εMax < ε) : ¬Pous.Meets sch reveal D Q k ε"
+    "Pous.not_meets_of_lt_eps {M : Pous.IdealModel} (sch : Pous.Scheme M) (reveal : Pous.Reveal) (D Q k : Nat) {ε : ENNReal}",
+    "  (hε : ENNReal.instPartialOrder.lt Pous.Params.εMax ε) : Not (Pous.Meets sch reveal D Q k ε)"
    ],
    "assumptions": [],
    "type_hash": "00000000b3c36b1d"
   },
   "Pous.plain_short_coins_insecure": {
    "signature": [
-    "Pous.plain_short_coins_insecure (sch : Pous.Scheme Pous.IdealModel.plain) (S k : ℕ)",
-    "  (hS : Fintype.card sch.Coins ≤ 2 ^ S) : ∃ A₁ A₂, ∀ (W : Pous.Bits sch.n), Pous.pr (Pous.simAccepts sch W A₁ A₂) = 1"
+    "Pous.plain_short_coins_insecure (sch : Pous.Scheme Pous.IdealModel.plain) (S k : Nat)",
+    "  (hS : instLENat.le (Fintype.card sch.Coins) (instHPow.hPow 2 S)) :",
+    "  Exists fun A₁ => Exists fun A₂ => ∀ (W : Pous.Bits sch.n), Eq (Pous.pr (Pous.simAccepts sch W A₁ A₂)) 1"
    ],
    "assumptions": [],
    "type_hash": "00000000ad0805a2"
   },
   "Pous.raw_seq_accepted": {
    "signature": [
-    "Pous.raw_seq_accepted {M : Pous.IdealModel} (sch : Pous.Scheme M) {m S : ℕ} (h : m * sch.ℓ ≤ S) (hm : m ≤ sch.B)",
-    "  (D Q k : ℕ) (W : Pous.Bits sch.n) :",
-    "  (↑m / ↑sch.B) ^ k ≤ Pous.pr (Pous.seqAccepts sch k W (Pous.rawPre sch hm) (Pous.rawSeq sch h D Q))"
+    "Pous.raw_seq_accepted {M : Pous.IdealModel} (sch : Pous.Scheme M) {m S : Nat}",
+    "  (h : instLENat.le (instHMul.hMul m sch.ℓ) S) (hm : instLENat.le m sch.B) (D Q k : Nat) (W : Pous.Bits sch.n) :",
+    "  ENNReal.instLE.le (instHPow.hPow (instHDiv.hDiv m.cast sch.B.cast) k)",
+    "    (Pous.pr (Pous.seqAccepts sch k W (Pous.rawPre sch hm) (Pous.rawSeq sch h D Q)))"
    ],
    "assumptions": [],
    "type_hash": "000000006d227edd"
   },
   "Pous.raw_sim_accepted": {
    "signature": [
-    "Pous.raw_sim_accepted {M : Pous.IdealModel} (sch : Pous.Scheme M) {m S : ℕ} (h : m * sch.ℓ ≤ S) (hm : m ≤ sch.B)",
-    "  (D Q k : ℕ) (W : Pous.Bits sch.n) :",
-    "  (↑m / ↑sch.B) ^ k ≤ Pous.pr (Pous.simAccepts sch W (Pous.rawPre sch hm) (Pous.rawSim sch h D Q k))"
+    "Pous.raw_sim_accepted {M : Pous.IdealModel} (sch : Pous.Scheme M) {m S : Nat}",
+    "  (h : instLENat.le (instHMul.hMul m sch.ℓ) S) (hm : instLENat.le m sch.B) (D Q k : Nat) (W : Pous.Bits sch.n) :",
+    "  ENNReal.instLE.le (instHPow.hPow (instHDiv.hDiv m.cast sch.B.cast) k)",
+    "    (Pous.pr (Pous.simAccepts sch W (Pous.rawPre sch hm) (Pous.rawSim sch h D Q k)))"
    ],
    "assumptions": [],
    "type_hash": "000000009b0d7f23"
   },
   "PousBridge.b5_stacked": {
    "signature": [
-    "PousBridge.b5_stacked {ℓ n N : ℕ} {V : Type} [Fintype V] [DecidableEq V] (α β ε : ℝ) (node : Fin ℓ → Fin n → V)",
+    "PousBridge.b5_stacked {ℓ n N : Nat} {V : Type} [Fintype V] [DecidableEq V] (α β ε : Real) (node : Fin ℓ → Fin n → V)",
     "  (level : V → Fin ℓ) (drg : Fin ℓ → Fin n → Fin n → Prop) (green : V → V → Prop)",
-    "  (hnode : ∀ (i : Fin ℓ), Function.Injective (node i)) (hlevel : ∀ (i : Fin ℓ) (a : Fin n), level (node i a) = i)",
+    "  (hnode : ∀ (i : Fin ℓ), Function.Injective (node i)) (hlevel : ∀ (i : Fin ℓ) (a : Fin n), Eq (level (node i a)) i)",
     "  (hdr : ∀ (i : Fin ℓ), Pous.DRG.DepthRobust n (drg i) α β)",
-    "  (hsc : ∀ (i j : Fin ℓ), ↑j = ↑i + 1 → Pous.DRG.DisjointPaths node level green i j) (hn : 0 < n) (hε : 0 < ε)",
-    "  (hε1 : ε ≤ 1) (hℓ : 1 ≤ (1 - α) * ↑ℓ) (hβ : 1 ≤ β * ↑n) (e : V ≃ Fin N) (G : Pous.Labelling.TopoDAG N)",
-    "  (hG : ∀ (u v : V), e u ∈ G.par (e v) ↔ Pous.DRG.StackedEdge node drg green u v) (t : Fin ℓ) (ht : ↑t + 1 = ℓ)",
-    "  (w m Q : ℕ) (d : Fin N → Pous.Bits w) (A₁ : (Pous.Labelling.LabelQry N w → Pous.Bits w) → Pous.Bits m)",
+    "  (hsc : ∀ (i j : Fin ℓ), Eq j.val (instHAdd.hAdd i.val 1) → Pous.DRG.DisjointPaths node level green i j)",
+    "  (hn : instLTNat.lt 0 n) (hε : Real.instLT.lt 0 ε) (hε1 : Real.instLE.le ε 1)",
+    "  (hℓ : Real.instLE.le 1 (instHMul.hMul (instHSub.hSub 1 α) ℓ.cast)) (hβ : Real.instLE.le 1 (instHMul.hMul β n.cast))",
+    "  (e : Equiv V (Fin N)) (G : Pous.Labelling.TopoDAG N)",
+    "  (hG :",
+    "    ∀ (u v : V),",
+    "      Iff (SetLike.instMembership.mem (G.par (EquivLike.toFunLike.coe e v)) (EquivLike.toFunLike.coe e u))",
+    "        (Pous.DRG.StackedEdge node drg green u v))",
+    "  (t : Fin ℓ) (ht : Eq (instHAdd.hAdd t.val 1) ℓ) (w m Q : Nat) (d : Fin N → Pous.Bits w)",
+    "  (A₁ : (Pous.Labelling.LabelQry N w → Pous.Bits w) → Pous.Bits m)",
     "  (A₂ :",
     "    Pous.Bits m →",
     "      Fin N → Pous.Prog (Pous.IdealModel.randomOracle (Pous.Labelling.LabelQry N w) (Pous.Bits w)) (Pous.Bits w))",
-    "  (hA₂ : ∀ (σ : Pous.Bits m) (c : Fin N), Pous.Prog.Bounded (⌊β * ↑n⌋₊ - 1) Q (A₂ σ c)) :",
-    "  (Pous.pr fun H =>",
-    "      n - ⌈ε / 2 * ↑n⌉₊ + 1 ≤",
-    "        {c ∈ Finset.image (fun b => e (node t b)) Finset.univ |",
-    "            Pous.Prog.run H (A₂ (A₁ H) c) = Pous.Labelling.label G d H c}.card) ≤",
-    "    ↑N * 2 ^ m * (↑((n * (Q + 1) + N) ^ 2) / 2 ^ w) ^ (⌊(1 - ε) * ↑n⌋₊ + 1)"
+    "  (hA₂ :",
+    "    ∀ (σ : Pous.Bits m) (c : Fin N),",
+    "      Pous.Prog.Bounded (instHSub.hSub (Nat.floor (instHMul.hMul β n.cast)) 1) Q (A₂ σ c)) :",
+    "  ENNReal.instLE.le",
+    "    (Pous.pr fun H =>",
+    "      instLENat.le (instHAdd.hAdd (instHSub.hSub n (Nat.ceil (instHMul.hMul (instHDiv.hDiv ε 2) n.cast))) 1)",
+    "        (Finset.filter (fun c => Eq (Pous.Prog.run H (A₂ (A₁ H) c)) (Pous.Labelling.label G d H c))",
+    "            (Finset.image (fun b => EquivLike.toFunLike.coe e (node t b)) Finset.univ)).card)",
+    "    (instHMul.hMul (instHMul.hMul N.cast (instHPow.hPow 2 m))",
+    "      (instHPow.hPow",
+    "        (instHDiv.hDiv (instHPow.hPow (instHAdd.hAdd (instHMul.hMul n (instHAdd.hAdd Q 1)) N) 2).cast",
+    "          (instHPow.hPow 2 w))",
+    "        (instHAdd.hAdd (Nat.floor (instHMul.hMul (instHSub.hSub 1 ε) n.cast)) 1)))"
    ],
    "assumptions": [],
    "type_hash": "000000005b0ac9c7"
@@ -889,5 +912,16 @@
     "PousP3Column.band_twoWay_220_16"
    ]
   }
+ },
+ "dependencies": {
+  "LeanSearchClient": "10aad9bd3954ead737fba8bd3b55709e5171edda2656068ad330158e6ad622c9",
+  "Qq": "7e75bb83a56f636baeb8e63ef3d44e1ac8b33e2ed4bf187462e0cc9bbdb55adf",
+  "aesop": "b36c1fbce9f43510169424e3ec097b69126f0e6afe5a801760e86c4da75f285d",
+  "batteries": "93d037527498f18cb49b52aa08a14febe351a161b47e44ca105e85e935264406",
+  "importGraph": "c2a38b9540d4202c5331616b78727f2aeec0a2ae1b203889c6c6a2c8d6cb2ca3",
+  "mathlib": "2208f9864032acd797c40d1ac8f718e724b3d3d83584d6e791cb0a337f9d15aa",
+  "plausible": "266681444eb79c332dec9abe5201b0811a5963e7093a906ee4455f0825de2559",
+  "proofwidgets": "4edab11dd995fc9c2cbf6c1e03d9a99e1f77e91b6b904838c87c7dad86c9c323",
+  "toolchain": "d95e8a4c480ea108924167135008bc1409c650e2ac659cc2acb8bd8db870d011"
  }
 }

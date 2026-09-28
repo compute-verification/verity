@@ -33,8 +33,7 @@ tests/fixtures/     job_v0.1.json: a record as the harness alone writes it; run_
 commit `df7fbea3d` (branch `lane/r17-mprof`, 2026-09-21) and have since been
 edited here like the rest of the package. `pods/sh/deadline.sh` and
 `rearm.sh` came from the r17 deadman pod (`/root/dm`), where they had never
-been committed. The diffs in `telemetry/patches/` are unapplied cancel-intent
-integrations against veritor's launcher scripts.
+been committed.
 
 `research run` pre-writes `job.json` (the harness keeps an existing one) and
 calls the harness's `run()` directly: one execution engine, one record.

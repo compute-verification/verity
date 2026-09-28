@@ -7,7 +7,7 @@
 //! Parsing (`crate::codec`), description validation, authentication
 //! (`openings`, `crate::frame`, `crate::packed`) and relation evaluation
 //! (`relations`, `crate::gateset` and the numerical modules) all live behind
-//! [`verify`]; the SP1 guest (`zk/sp1/guest/src/main.rs`) is a thin wrapper
+//! [`verify`]; the SP1 guest (`backends/sp1/guest/src/main.rs`) is a thin wrapper
 //! that reads the four input buffers, calls it, commits
 //! [`Decision::public_values`] and halts.
 //!
