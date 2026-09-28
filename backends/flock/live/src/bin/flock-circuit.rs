@@ -1053,8 +1053,9 @@ fn zkaudit(st: &Arc<Stmt>, inst: &Arc<Instances>) {
         let rec = s0.lock().unwrap_or_else(PoisonError::into_inner).record_json();
         (v, p, rec)
     };
-    let (v, proofs, rec) = run(&Plan::default());
-    let (vc, proofs_c, recc) = run(&Plan { zk_zero_pads: true, ..Plan::default() });
+    let gpu = flag("--gpu");
+    let (v, proofs, rec) = run(&Plan { gpu, ..Plan::default() });
+    let (vc, proofs_c, recc) = run(&Plan { gpu, zk_zero_pads: true, ..Plan::default() });
     assert!(v["accepted"] == true && vc["accepted"] == true, "the audit's sessions must be accepted");
     let pts: Vec<Vec<F128>> = rec["link"]["points"].as_array().unwrap().iter().map(|p| p.as_array().unwrap().iter().map(|h| {
         let b = hexb(h.as_str().unwrap()).unwrap();
@@ -2500,8 +2501,9 @@ fn selftest(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) {
         }
         let v = if gpu {
             let out = std::process::Command::new(std::env::current_exe().unwrap())
+                .arg("selftest")
                 .args(if zk_mode() { &["--zk"][..] } else { &[] })
-                .args(["selftest", "--gpu", "--instances", &arg("--instances", ""), "--circuit", &arg("--circuit", ""), "--tables", &arg("--tables", "tables"),
+                .args(["--gpu", "--instances", &arg("--instances", ""), "--circuit", &arg("--circuit", ""), "--tables", &arg("--tables", "tables"),
                        "--forged", &arg("--forged", "circuit-forged.txt"), "--only", name, "--record-dir", &arg("--record-dir", "")])
                 .output()
                 .expect("spawn a case");
