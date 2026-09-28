@@ -102,6 +102,15 @@ Only a repeat whose fix needs money, keys or a claim becomes a question for Dani
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-11 (about 7 PM PDT, relayed by top): check time comes down by a lot, and everyone may do whatever it takes.
+  A change to how `check` runs (a suite's declared inputs, Lean reuse per module or declaration, circuit-check's task
+  list, scheduling, sharding, more slots or machines under a budget line, splitting or cutting a slow test) lands on its
+  own passing check with no review by the file's owner, who is told, not asked. infra owns check time as an outcome,
+  and each lever's owner builds it, or infra does in its place. Only spend past a budget line and moving a part out of
+  the gate that `main`'s passing check covers go to Daniel. The same evening: hand landing is to be automated, and ci
+  owns it. From an owner's ready mark to `main` moving (the prep, the merge check, the landing, the sweep, the spec DM),
+  no agent acts unless the automation refuses; the lander handles what it refuses (a conflict, a failed check, a
+  revert), and infra hosts it.
 - 2026-10-09 (7:04 PM PDT, relayed by top): the end goal is sampled proofs through recursion with hidden unit circuits,
   on four assumptions: record custody, the OS's randomness, the coin server's randomness, and SHA-512 entering only
   through reductions. The partition is hidden from the start. The auditor checks only padded counts. The outer proof
@@ -318,7 +327,8 @@ Newest first. Each is Daniel's unless it names the coordinator.
 - 2026-10-02 (10:27 PM PDT): `hash-derived-key` (`Hm96Hiding` at the pinned key) stays a named assumption. Hiding is
   proved at a fresh uniform key, and nobody works on proving that the pinned key behaves like one.
 - 2026-10-02 (10:27 PM PDT): the lander starts every merge check (`check --record`, `research merge`). The PR captain
-  (`ci`) trial-merges, preflights and hands over train tips, but never starts a merge check itself.
+  (`ci`) trial-merges, preflights and hands over train tips, but never starts a merge check itself. Since 11 Oct, ci's
+  landing automation starts them too.
 - 2026-10-02 (7:23 AM PDT): an overhead reported to Daniel is the `--zk` prover's only (no M0 number and no `--zk`/M0
   ratio), normalized to the chip's peak: prover seconds over the time the computation's FLOPs take at the census's dense
   datasheet peak for its dtype, never over a measured runtime such as a vLLM run's, written to one significant digit
