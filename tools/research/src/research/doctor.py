@@ -287,7 +287,7 @@ SSH_FAILURES = (
 def registry_unread() -> bool:
     """Whether reading the registry would clone the notes repo first (`registry.merged`): synchronously, for up to 15 minutes,
     before any deadline. The doctor reads machines.toml alone then; notes-push names the missing clone."""
-    return registry.REGISTRY_ENV not in os.environ and not remote.machines_path().exists() and not registry.notes_root().exists()
+    return registry.REGISTRY_ENV not in os.environ and not registry.notes_root().exists()
 
 
 def ssh_machines() -> dict[str, dict]:

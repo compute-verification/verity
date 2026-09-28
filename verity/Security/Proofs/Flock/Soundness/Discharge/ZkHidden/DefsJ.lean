@@ -15,9 +15,10 @@ the one-table hidden-output piece (`ZkHidden/Defs.lean`, `SoundBind.lean`, `Soun
   counterpart.
 * `parseH_tagsAt`, `loadPublicH_tagsAt`: `HmOut.parse` (untyped) and `HmOut.loadPublic` read no identity.
 * `DrawSetupZHJ`, `tableZHJ`, `planZHJ`, `tabZHJ`: `DrawSetupZJ`, `tableZJ`, `planZJ`, `tabZJ` with a `DrawSetupH` at
-  table `j`'s inputs (`inputsJ I j`), and the one-table reference setup `y₀ : DrawSetupZKH`'s refused table.
+  table `j`'s inputs (`inputsJ I j`), and the refused table of the reference setup `y₀ : DrawSetupZHJ` at table 0's
+  inputs.
 * `tableShHJ`, `planShHJ`, `tabShHJ`, `sitesShHJ`: the public hidden-output tables (`HiddenExec.TableH`) at the same
-  draws, each at the inputs it is set up on (table `j`'s, or `y₀`'s at a refused table), and their sites.
+  draws, each at the inputs it is set up on (table `j`'s, or table 0's, `y₀`'s, at a refused table), and their sites.
 * `placeZHJ`, `layZHJ`, `rsZHJ`, `rsZHJ_computes`: `keyPlaceH`, `keyLayoutH` and `keyRowsH` at those sites, moved to the
   `--zk` tables (`SoundBind.lean`'s `placeZH`, `layZH`, `rsZH` at `J` tables).
 * `TagsOkZHJ`, `DrawOkZKHJ`, `opnAtZHJ`, `runsZCJH_live`: `TagsOkZJ` with hidden outputs, `DrawOkZKJ` and `opnAtZJ` with
@@ -235,6 +236,10 @@ noncomputable def tabAt (regs : List (Model.Region y.x.st.c.kLog (y.x.st.m - y.x
 /-- The table's `--zk` table: setupHidden's statement at its regions. -/
 noncomputable def table : TabZK 𝔽 mPts := y.tabAt (regionsOf y.x.st) (stmtOf_linkLayout y.x.st y.x.wf.1 y.x.wf.2).1
 
+/-- A refused table's `--zk` table: the statement with `contra`'s regions, which no witness satisfies. -/
+noncomputable def refused : TabZK 𝔽 mPts :=
+  y.tabAt (regionsOf y.x.st ++ Integrate.DrawSetup.contra y.x.st.c.kLog (y.x.st.m - y.x.st.c.kLog)) y.x.refused_wf
+
 /-- A table's `--zk` table is the same at every `DrawSetupZHJ` of it. -/
 theorem table_eq (y₁ y₂ : DrawSetupZHJ I' mPts S d) : y₁.table = y₂.table := by
   obtain ⟨⟨st₁, h₁, D₁, hD₁, hS₁, hg₁, hb₁, m₁, k₁, a₁, b₁, r₁, e₁, hs₁, hm₁, hp₁, w₁⟩, sch₁, t₁, hz₁, _, _, _, _, _, _⟩ :=
@@ -264,11 +269,13 @@ theorem drawSetupZHJ_of {I' : Inputs} {S : Finset (Fin n)} {d : Lean.Json} (x : 
 
 section Shadow
 
-variable {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZKH I mPts S₀ (dj S₀))
+variable {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
+  (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
 
 open Classical in
 /-- **Table `j` at draw `S`, under hidden outputs** (`tableZJ` with `setupHidden`): the table `verify --zk` sets up at
-table `j`'s inputs and draw when it sets one up, and otherwise the reference setup `y₀`'s refused table. -/
+table `j`'s inputs and draw when it sets one up, and otherwise the reference setup `y₀`'s refused table (a setup at
+table 0's inputs, which every session `verify --zk` accepts at a draw `DrawOkZKHJ` admits has: `setupZHJ_of_acceptsZK`). -/
 noncomputable def tableZHJ (S : Finset (Fin n)) (j : Fin (nTab I)) : TabZK 𝔽 mPts :=
   if h : Nonempty (DrawSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)) then
     (Classical.choice h).table
@@ -293,12 +300,12 @@ theorem tabOfZHJ_eq (S : Finset (Fin n)) (R : Reg) (u : Fin n) :
 
 open Classical in
 /-- **The public hidden-output table at table `j`'s draw**, with the inputs it is set up on: its `DrawSetupZHJ`'s
-table at table `j`'s inputs, or `y₀`'s refused one at the session's `--zk` inputs. -/
+table at table `j`'s inputs, or `y₀`'s refused one at table 0's inputs. -/
 noncomputable def tableShHJ (S : Finset (Fin n)) (j : Fin (nTab I)) :
     (I' : Inputs) × TableH I' mPts (partS I (dj S) S j) :=
   if h : Nonempty (DrawSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)) then
     ⟨inputsJ I j, (Classical.choice h).x.table⟩
-  else ⟨zkInputs I, y₀.x.refused _⟩
+  else ⟨inputsJ I 0, y₀.x.refused _⟩
 
 theorem tableShHJ_set {S : Finset (Fin n)} {j : Fin (nTab I)}
     (h : Nonempty (DrawSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j))) :
@@ -308,7 +315,7 @@ theorem tableShHJ_set {S : Finset (Fin n)} {j : Fin (nTab I)}
 
 theorem tableShHJ_refused {S : Finset (Fin n)} {j : Fin (nTab I)}
     (h : ¬ Nonempty (DrawSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j))) :
-    tableShHJ dj y₀ S j = ⟨zkInputs I, y₀.x.refused _⟩ := by
+    tableShHJ dj y₀ S j = ⟨inputsJ I 0, y₀.x.refused _⟩ := by
   unfold tableShHJ
   rw [dite_eq_right_of_eq_false (eq_false h)]
 
@@ -353,7 +360,7 @@ theorem tableShHJ_typed (S : Finset (Fin n)) (j : Fin (nTab I)) : (tableShHJ dj 
   · rw [tableShHJ_set dj y₀ h]
     exact typedJ ht j
   · rw [tableShHJ_refused dj y₀ h]
-    exact zkTyped ht
+    exact typedJ ht 0
 
 variable {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c)
 
@@ -367,7 +374,7 @@ theorem tableShHJ_parse (S : Finset (Fin n)) (j : Fin (nTab I)) :
   · rw [tableShHJ_set dj y₀ h]
     exact (parseH_tagsAt ((zkTags_typed I).trans ht) _ _ _ _).trans hc
   · rw [tableShHJ_refused dj y₀ h]
-    exact hc
+    exact (parseH_tagsAt ((zkTags_typed I).trans ht) _ _ _ _).trans hc
 
 /-- A hidden-output acceptance at `T`, as one at `T' = T`. -/
 def recastAccH {T T' : Model.Statement} (a : AcceptedH T) (e : T = T') : AcceptedH T' := { a with hT := a.hT.trans e }
@@ -531,7 +538,8 @@ session and each of the law's draws setting each table up at `mPts` link points,
 from `root_B[j]`. -/
 theorem runsZCJH_live (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet)
-    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZKH I mPts S₀ (dj S₀))
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
+    (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
     (L : Law n) (hT : TagsOkZHJ I) (hRec : RecordsLiveZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr)
     (hDraw : ∀ ω, DrawOkZKHJ I dj mPts (L.draw ω)) :

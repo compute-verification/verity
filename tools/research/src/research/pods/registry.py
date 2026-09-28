@@ -13,10 +13,11 @@ The registry is a directory with one TOML file per machine, `<dir>/<name>.toml`,
 agents registering two pods write two files, so nothing is ever hand-merged; in the notes repo, `research notes sync` carries
 them to every machine.  `<dir>/_families.toml` carries the `[families.<fam>]` VRAM references `pods check-part` reads.
 
-Where it is read (`registry_dir`): `$RESEARCH_MACHINES_D` when set (`none` turns it off), else `<notes>/machines.d` on a machine
-that has no machines.toml (a cloud VM; with RESEARCH_NOTES_TOKEN set, a missing notes clone is cloned first:
-`notes_sync.ensure_clone`), else nowhere -- the laptop reads machines.toml alone until the switch-over sets the
-variable.  Both sources merge (`merged`); a name both define with different pod ids is dropped from the result, so it is refused
+Where it is read and written (`registry_dir`, the one directory `register`, `unregister`, `registry import` and `research run --on`
+use): `$RESEARCH_MACHINES_D` when set, else `<notes>/machines.d`, whether or not machines.toml exists (with RESEARCH_NOTES_TOKEN
+set, a missing notes clone is cloned first: `notes_sync.ensure_clone`).  `RESEARCH_MACHINES_D=none` turns the registry off: run
+reads machines.toml alone, and the commands that write refuse, since nothing would read what they wrote.
+Both sources merge (`merged`); a name both define with different pod ids is dropped from the result, so it is refused
 as unlisted and the refusal says why, never silently resolved to either pod.  A file that does not parse, names an invalid
 machine, or lacks provider / pod_id (host for an ssh machine) / project is dropped the same way.
 
@@ -58,17 +59,24 @@ def notes_root(environ: dict | None = None) -> Path:
 
 
 def registry_dir(machines_toml: Path, environ: dict | None = None) -> Path | None:
-    """The registry directory to read, or None (module docstring)."""
+    """The registry directory, or None when it is off (module docstring)."""
     env = os.environ if environ is None else environ
     if REGISTRY_ENV in env:
         v = env[REGISTRY_ENV].strip()
         return None if v.lower() in OFF else Path(v).expanduser()
-    return None if machines_toml.exists() else notes_root(env) / "machines.d"
+    return notes_root(env) / "machines.d"
 
 
 def write_dir(machines_toml: Path, environ: dict | None = None) -> Path:
-    """Where `register` writes: the directory `registry_dir` reads, else the notes repo's (register turns the registry on)."""
-    return registry_dir(machines_toml, environ) or notes_root(environ) / "machines.d"
+    """Where `register`, `unregister` and `import` write: the directory `research run --on` reads.  Refused when the registry is
+    off, since nothing would read the file."""
+    from .. import remote
+
+    d = registry_dir(machines_toml, environ)
+    if d is None:
+        raise remote.Refused(f"the registry is off (${REGISTRY_ENV}={(os.environ if environ is None else environ)[REGISTRY_ENV]!r}), "
+                             f"so `research run --on` would not read a machines.d file; unset it or point it at a directory")
+    return d
 
 
 def validate(name: str, entry: Any) -> str | None:
@@ -400,7 +408,7 @@ def main(argv: list[str]) -> int:
                 print(json.dumps(rs, indent=1))
             else:
                 d = registry_dir(mt)
-                print(f"machines.toml: {mt if mt.exists() else '(absent)'}; registry: {d if d else '(off: set ' + REGISTRY_ENV + ')'}")
+                print(f"machines.toml: {mt if mt.exists() else '(absent)'}; registry: {d if d else '(off: ' + REGISTRY_ENV + ' is none)'}")
                 for r in rs:
                     print(f"{r['name']:<36} {r['source']:<13} {r['pod_id'] or '-':<16} {','.join(p for p in r['projects'] if p):<12} "
                           f"{r['problem'] or ''}".rstrip())

@@ -189,8 +189,8 @@ The pod registry (`pods/registry.py`) is the same table as one file per machine,
 hand-merging a shared file: `research pods create --name N --max-hours H ... --register
 --project P`, or `research pods register N --pod-id ID --project P` for an
 existing pod. `register` refuses a pod id the RunPod account doesn't know and
-a pod whose name isn't `N`. It is read where `$RESEARCH_MACHINES_D` points,
-or from `~/.research/notes/machines.d` on a machine without machines.toml.
+a pod whose name isn't `N`. `register` and `run --on` use one directory: `$RESEARCH_MACHINES_D`,
+else `~/.research/notes/machines.d` (`none` turns it off, and `register` refuses).
 The two sources merge, and a name they bind to different pods is refused.
 `create` makes at most one live pod per `--name`, so a retry loop can't duplicate pods. It refuses when a live pod of that
 name exists (exit 4, `--allow-duplicate` overrides). After a failed create call it uses a pod that appeared under the name

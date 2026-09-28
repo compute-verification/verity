@@ -25,7 +25,8 @@ variable {mPts n : ℕ} {Reg : Type}
 layout of `J` tables that is the verifier's own at the draw of the table its unit is drawn into (`OwnReadsHJ`) has its
 registered leaf open the root `own` holds at the position `own` gives, through `regPathsHJ`. -/
 theorem checked_of_acceptsHJ (I : Inputs) (ht : I.tags.typed = false) (own : Array Registered.Port)
-    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZKH I mPts S₀ (dj S₀))
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
+    (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
     {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub) (hscope : Layout.scopeOk c = true)
     (hTags : TagsOkZHJ I) (o : Reg × Finset (Fin n) × Exec.Transcript) (hacc : LiveAcceptsZKR I own o)

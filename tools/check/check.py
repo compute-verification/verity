@@ -340,10 +340,13 @@ def placement(doc: dict, priority: bool = False) -> tuple[bool, int, str]:
     elif not check["slots"]:
         raise ValueError(f"{check['file']} lists no slots")
     else:
-        free = [s for s in check["slots"] if s["holder"] is None and not s["blocked"]]
+        mine = [s for s in check["slots"] if priority or not s.get("trains")]
+        if not mine:
+            raise ValueError(f"every slot in {check['file']} is for train checks (only=trains)")
+        free = [s for s in mine if s["holder"] is None and not s["blocked"]]
         room = len(free) > ahead
         why = "check slots: " + ", ".join(f"{s['name']} " + ("held" if s["holder"] else "blocked" if s["blocked"] else "free")
-                                          for s in check["slots"]) + f"; {waiting}"
+                                          for s in mine) + f"; {waiting}"
     if lean["pools"] is None:
         return room, ahead, f"{why}; no Lean audit cap"
     pool = next((p for p in ("check", "any") if p in lean["pools"]), None)

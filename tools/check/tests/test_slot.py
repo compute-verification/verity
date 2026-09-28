@@ -452,6 +452,37 @@ def test_a_priority_waiter_goes_ahead_of_waiting_lane_checks_and_behind_older_pr
         os.close(fd)
 
 
+def test_a_trains_slot_is_taken_only_by_a_priority_waiter(tmp_path, monkeypatch, capsys):
+    """Node 2, 6 Oct 02:31Z: the lander's train check waited 36 min with priority while quick tiers held both slots; priority
+    orders the line but never frees a slot a lane check is running in."""
+    (tmp_path / "slots").write_text("d 0 only=trains\ne 1\n")
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    assert [s["trains"] for s in SLOT.parse((tmp_path / "slots").read_text())] == [True, False]
+    held = [_hold(tmp_path / "check-e.lock")]
+    ran = {}
+
+    def free(_s):
+        if held:
+            os.close(held.pop())
+
+    def execvpe(f, argv, env):
+        ran.update(slot=env["CHECK_SLOT"])
+        raise Exec
+
+    monkeypatch.setattr(SLOT.os, "sched_setaffinity", lambda pid, cpus: None)
+    monkeypatch.setattr(SLOT.os, "execvpe", execvpe)
+    with pytest.raises(Exec):
+        SLOT.main(["--", "check.py"], now=lambda: NOW, sleep=free)              # a lane check waits for e, though d is free
+    assert ran["slot"] == "e" and "d: for train checks; e: busy" in capsys.readouterr().err
+    with pytest.raises(Exec):
+        SLOT.main(["--priority", "--", "check.py"], now=lambda: NOW, sleep=free)
+    assert ran["slot"] == "d"
+    assert SLOT.status(SLOT.parse("d 0 only=trains\n"), tmp_path, NOW)[0].startswith("d  cores 0  trains only  ")
+    (tmp_path / "slots").write_text("d 0 only=trains\n")
+    with pytest.raises(SystemExit, match="every slot in .* is for train checks"):
+        SLOT.main(["--", "check.py"], now=lambda: NOW, sleep=free)
+
+
 def test_priority_reaches_slot_py_from_record_and_unknown_options_are_refused(monkeypatch):
     spec2 = importlib.util.spec_from_file_location("repo_check_priority", ROOT / "tools" / "check" / "check.py")
     check = importlib.util.module_from_spec(spec2)

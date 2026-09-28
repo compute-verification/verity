@@ -18,8 +18,8 @@ open Flock FlockLevel3 Game Model Accounting Refine Audit ZkSession ZkLink ZkExe
 open FlockSoundness.Discharge.Exec (Inputs)
 open scoped ENNReal
 
-variable {n : ℕ} {I : Inputs} {mPts : ℕ} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-  (y₀ : DrawSetupZKH I mPts S₀ (dj S₀)) {Reg : Type}
+variable {n : ℕ} {I : Inputs} {mPts : ℕ} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
+  (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀) {Reg : Type}
   (ht : I.tags.typed = false) {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c)
   (hscope : Layout.scopeOk c = true)
   (hU : Built c.unit) {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)

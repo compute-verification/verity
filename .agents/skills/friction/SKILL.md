@@ -97,6 +97,17 @@ into a question for Daniel.
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-05 (7:48 PM PDT): every protocol is zero-knowledge, PoUS included: the developer's data and circuit are hidden,
+  and so is anything that reveals them (shapes, row indices, layouts, unsalted digests). Only the minimum is public, each
+  item with its reason, and there is no clear mode. In top's reading (8:15 PM), public items are of four kinds: protocol
+  structure, the protocol's outputs (a verdict, PoUW's credited work), the verifier's own coins and draws, and hiding
+  commitments (a salted root).
+- 2026-10-05 (7:17 PM PDT): the proof layer is one service every accounting protocol uses. A protocol states what is
+  committed, which units need proofs (or the rule that selects them), the public Program each must pass, and what it
+  does with the outcome; the service owns commitments, live coins and the record, the selection, proving, verifying and
+  the integrity profile, and no protocol keeps its own copy of them.
+- 2026-10-05 (7:11 PM PDT): a circuit restatement of a verifier (VBridge's V\*) is proved in one direction, that the
+  circuit accepting implies the verifier of record accepts; completeness stays a test.
 - 2026-10-05: don't resume or re-dispatch a turn cut off by a console drop or a provider outage unless Daniel asks;
   report it to your coordinator and wait.
 - 2026-10-04 (2:21 PM PDT): the repository migration finishes in short serial time. A lead launches workers for every
@@ -143,8 +154,7 @@ Newest first. Each is Daniel's unless it names the coordinator.
   is accepted for conceptual clarity unless it proves a bottleneck.
 - 2026-10-01 (3:32 PM PDT): no protocol deals with public values, so none gets an exemption; PoUW's tile check moves into
   a proof. During development a proof may be replaced by replay, or verification skipped, for research velocity: that's
-  a shortcut, never the protocol. Shapes such as batch size and sequence length may stay public for now: the first
-  protocol decouples values from circuits, and private-circuit protocols come later.
+  a shortcut, never the protocol. Its clause letting shapes stay public is superseded (2026-10-05, 7:48 PM PDT).
 - 2026-10-01 (2:43 PM PDT): a decision Daniel must make goes where Slack notifies him, never only in a note or a lead's
   thread. Use one question per post, with its options, your recommendation, and its deadline or default:
   `research msg ask-daniel` (the card mentions him), or, if the card fails, `research msg send --to @daniel`.

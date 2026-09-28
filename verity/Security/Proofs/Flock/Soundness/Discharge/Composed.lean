@@ -20,6 +20,7 @@ import Proofs.Flock.Soundness.Discharge.Composed.SoundJ
 import Proofs.Flock.Soundness.Discharge.Composed.Custody
 import Proofs.Flock.Soundness.Discharge.Composed.CustodyJ
 import Proofs.Flock.Soundness.Discharge.Composed.CustodyJJson
+import Proofs.Flock.Soundness.Discharge.Composed.NonVacuousJ
 
 /-!
 # One `--zk` sampled session: soundness and zero knowledge composed
@@ -28,4 +29,5 @@ The soundness half is in `Composed/Sound.lean`, its pieces in `Composed/Defs.lea
 `Composed/Headline.lean`, the draw's `Coined` tables in `Composed/Coined.lean`. At `J` tables the soundness half is
 `Composed/SoundJ.lean`, its pieces in `Composed/DefsJ.lean`. `Composed/Custody.lean` and `Composed/CustodyJ.lean` restate
 them under `live-verifier`, and `Composed/CustodyJJson.lean` the latter with the draw file `flock-verify draw` printed.
+`Composed/NonVacuousJ.lean` proves the `J`-table statements' reference setup and draw hypotheses satisfiable together.
 -/
