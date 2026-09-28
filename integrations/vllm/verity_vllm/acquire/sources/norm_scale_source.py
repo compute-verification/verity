@@ -1,5 +1,6 @@
 """The norm scales (`query.norm_scales`) as an acquisition source: one f32 per norm Call per row, committed as `<norm module>/norm_scale` in
-the same step stream and run root as the module's outputs.  Opt-in (commit_delta `--norm-tap-so`, the row's NORM_TAP=1), never the record.
+the same step stream and run root as the module's outputs.  On by default (commit_delta `--norm-tap-so`, passed when the row's manifest
+names norm scales); NORM_TAP=0 leaves it off, for A/B only.
 
 The modules are the required manifest's `norm_scales` op paths.  A forward pre-hook marks the one that runs (the scale tensor takes its
 input's leading shape: tokens, or tokens x heads for a q/k norm) and a forward hook unmarks it.  Inside it the scale is taken where the
