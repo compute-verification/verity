@@ -8,7 +8,7 @@ the scheme the packed-word obligations of the serving path authenticate against.
 
 Two named schemes sit behind ``scheme.CommitmentScheme`` and are selectable by backends, each with a spec
 and conformance vectors beside it: ``frame_v3`` (word leaves and the ``sha256/row/v1`` / ``blake3-keyed/row/v2`` row
-leaves of ``rowleaf``) and ``vllm_v1``, the framing vLLM's production Commit path emits (id, position and ``fa2h``
+leaves of ``rowleaf``) and ``vllm_v1``, the framing vLLM's serving Commit path emits (id, position and ``fa2h``
 leaves, node/lift trees, raw-SHA root bindings).  ``CommitmentScheme.leaf_layout`` is what a backend proves: every
 leaf digest is ``H(prefix || value || suffix)`` with H SHA-256 or BLAKE3 (``blake3`` is a plain-Python reference);
 verifiers check the trees natively.  Both schemes have an opt-in SHA-512 variant, ``frame-v3-sha512`` and ``vllm-v1-sha512``

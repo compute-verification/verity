@@ -1,7 +1,7 @@
 # Flock interactive soundness: design and derivations
 
-This file holds the reasoning behind `ASSUMPTIONS.md`, which lists the theorems and assumptions themselves. Each section
-derives or plans an entry there. The long forms, with sources, are lane notes, cited as `note:<id>`.
+This file holds the reasoning behind `README.md`, which lists the theorems, and `ASSUMPTIONS.md`, which states what they
+assume. Each section derives or plans an entry there. The long forms, with sources, are lane notes, cited as `note:<id>`.
 
 ## 1. The hash: why SHA-512
 
@@ -53,7 +53,7 @@ on the hash's output width `n`.
    them).
 
 The compiled bound is then 2^-205 plus `t·2^{17.3−256}` plus negligible terms, from plain collision resistance, for
-every prover, up to `t ≈ 2^110`. ASSUMPTIONS.md §1.2 states it, and §2 below derives it.
+every prover, up to `t ≈ 2^110`. README.md §1.2 states it, and §2 below derives it.
 
 **Outside the verifier,** the statement's data commitments (frame-v3 roots, row digests, Halevi–Micali leaves hashed
 in the circuit) fall into two cases (the lifetime-soundness desk study, §1 and §3):
@@ -73,7 +73,7 @@ in the circuit) fall into two cases (the lifetime-soundness desk study, §1 and 
 
 ## 2. The compiled theorem: its terms, its number, its proof
 
-The protocol is ASSUMPTIONS.md §1.1's table (the `fast100` profile twice on one root, live `os` coins, a statement of
+The protocol is README.md §1.1's table (the `fast100` profile twice on one root, live `os` coins, a statement of
 §16) in the adopted variant: SHA-512 Merkle caps, and the coin server keeping each round's bytes.
 
 **The committed values of an arbitrary prover.** Let `P*` be any classical prover. Without loss of generality it is
@@ -251,7 +251,7 @@ strict time.
   protocol (CDGSY24).
 - **The random-oracle column** (comparison, lifetime doc §7). The extractor reads the commit strings, the `hm96`
   openings and the tables off the prover's queries, so `δ_tree`, `δ_link` and the knowledge term collapse into one
-  global $t^2/2^{511}$. `ASSUMPTIONS.md` §4 keeps the random oracle as a cross-check only.
+  global $t^2/2^{511}$. `ASSUMPTIONS.md` keeps the random oracle as a cross-check only.
 - **Either way,** the table theorems (`table_sound_compiled`, `table_knowledge_sound_joint`) and `δ_tree` stand as
   proved under strict-time collision resistance. A2 enters only the value layer.
 
@@ -290,7 +290,7 @@ strict time.
 
 ## 6. Zero knowledge: the masked protocol and the reference prover
 
-The targets and expected assumptions are ASSUMPTIONS.md §6.
+The targets and expected assumptions are README.md §3.
 
 **The masked protocol** is lane `flock-netlist`'s M1/M2 (PR #83). It consists of VEIL-style masking of the sumchecks,
 Reed–Solomon padding in Ligerito over GF(2^128), and Halevi–Micali leaf commitments. The model in `Model/*` is written
@@ -329,12 +329,12 @@ We follow the staging and vocabulary, and differ where the setting does.
 
 | a16z stage | What it asks | Here | Follows, or deliberately differs |
 |---|---|---|---|
-| **1a** PIOP soundness | A machine-checked soundness proof of the polynomial IOP | `table_sound` at the oracle layer: the PIOP with Ligerito as an interactive oracle commitment, information-theoretic, per table, against any prover. | Follows, with no named assumption: A1, mutual correlated agreement up to the Johnson bound, is proved from DKT26, which ArkLib proves (#907; ASSUMPTIONS.md §3). |
-| **1b** commitment binding, under a cryptographic assumption or an idealized model | Binding of the polynomial commitment | The Merkle layer: plain SHA-512 collision resistance, for every prover, by rewinding to the plurality table (§2). Ligerito's commitment binds to a list of at most L₀ codewords, not to one polynomial (ASSUMPTIONS.md §2). The random-oracle version is only a cross-check. | Follows. The model is named per result, as a16z asks. |
+| **1a** PIOP soundness | A machine-checked soundness proof of the polynomial IOP | `table_sound` at the oracle layer: the PIOP with Ligerito as an interactive oracle commitment, information-theoretic, per table, against any prover. | Follows, with no named assumption: A1, mutual correlated agreement up to the Johnson bound, is proved from DKT26, which ArkLib proves (#907; README.md §1.6). |
+| **1b** commitment binding, under a cryptographic assumption or an idealized model | Binding of the polynomial commitment | The Merkle layer: plain SHA-512 collision resistance, for every prover, by rewinding to the plurality table (§2). Ligerito's commitment binds to a list of at most L₀ codewords, not to one polynomial (README.md §2). The random-oracle version is only a cross-check. | Follows. The model is named per result, as a16z asks. |
 | **1c** the compiled argument | With Fiat–Shamir, security in the random-oracle model | **Deliberately different: no Fiat–Shamir.** The oracle protocol plus Merkle commitments (1b) plus session binding, which needs no assumption since the coin server keeps each round's bytes. | Differs. No random oracle for coins, avoiding the article's main caveat; a Fiat–Shamir variant is future work (§8). |
 | **1d** constraint system against semantics | The constraint system is equivalent to the VM's semantics | No VM: 1d is the lowering theorem, that the block R1CS (spec §16) is satisfied exactly by correct evaluations of the named circuit (level 3, another lane). | Differs in content, not intent: "the circuit is the meaning". Circuit against hardware is checked by capture replay, outside formal scope. |
 | **1e** glue, and ZK if intended | One theorem, including zero knowledge | One theorem from the verifier's acceptance to "the committed values satisfy the named circuit", for the compiled protocol. Zero knowledge is proved separately (§6). | Follows. **Recursion caveat:** triggered only by the recursion track. Its outer proof must be knowledge-sound (§3), and every component inside it verified. |
-| **2** verifier implementation | The implemented verifier (Rust, Solidity, …) matches the Stage-1 protocol | `Flock.Verify` (lane `flock-verifier`) refines `Model`: if it accepts, the model accepts. | Differs: a Lean-to-Lean refinement; the compiler and runtime are trusted, mitigated by agreement tests (ASSUMPTIONS.md §5). |
+| **2** verifier implementation | The implemented verifier (Rust, Solidity, …) matches the Stage-1 protocol | `Flock.Verify` (lane `flock-verifier`) refines `Model`: if it accepts, the model accepts. | Differs: a Lean-to-Lean refinement; the compiler and runtime are trusted, mitigated by agreement tests (`assumptions/trusted-components.md`). |
 | **3** prover implementation | The prover implementation is proved complete, and zero-knowledge if intended | A Lean reference prover with completeness and zero-knowledge theorems, tied to production by byte-for-byte differential tests (§6). | **Deliberately different: the production prover is not proved.** Untested equivalence is trusted; its failures cost liveness, not soundness. |
 
 **Levels.** Our formal-verification levels (the Lean verifier study) map onto the stages as follows:
@@ -455,7 +455,7 @@ later proof opens that root. Numbers and sources: `note:20260926T2310Z-finding-r
   - So the per-table hash term runs out, not the root. The random-oracle version's hash term is global.
   - **Decision:** state security per table, or as a lifetime budget on `N·t`.
   - For sampled audits the count is audits, not tables, and the composition needs knowledge soundness
-    (ASSUMPTIONS.md §7).
+    (README.md §4).
 - **Binding for the root's life.** Proofs publish the leaves' commit strings and paths, so binding is straight-line
   against the adversary's cumulative work. It must hold as long as anyone relies on the root, disputes about old proofs
   included.
@@ -505,7 +505,7 @@ are in `note:20260927T0015Z-finding-malicious-verifier-zk-options`.
 ### 11.1 The model: batched, serialized sessions
 
 A session carries every table from a time window, and many GPUs or datacenters prove them in parallel. Sessions are
-serialized, and each is arbitrarily large. `ASSUMPTIONS.md` §2 states the rules. Why they give zero knowledge and keep
+serialized, and each is arbitrarily large. `README.md` §2 states the rules. Why they give zero knowledge and keep
 soundness:
 
 1. **Zero knowledge needs only one rewind point** (the "single-rewind" simulator of §9).
@@ -515,7 +515,7 @@ soundness:
      indistinguishable from a real run until the final openings, because every earlier message is masked and those
      openings come after the last coin. It then rewinds only to just after step 0, and simulates every table from the
      extracted coins by SHVZK. The tables' masks are independent, so their simulations compose. Its rewinds, aborts and
-     completion estimate are as `ASSUMPTIONS.md` §6 states them, in expected polynomial time.
+     completion estimate are as `README.md` §3 states them, in expected polynomial time.
    - Serialized sessions compose sequentially (auxiliary-input zero knowledge, Goldreich–Oren 1994).
 2. **Coins committed under one root, per (table, repetition, round).** The commitment is a SHA-512 Merkle root over
    Halevi–Micali commitments to each coin, so each table's stream is a subtree. That keeps soundness to statistical
@@ -553,7 +553,7 @@ If real concurrency is ever needed:
 
 ## 12. The audit layer: the integrity profile
 
-`docs/audit-protocols.md` §4 is the plan and `ASSUMPTIONS.md` §9 the list of theorems. The full rationale is in
+`docs/audit-protocols.md` §4 is the plan and `FlockSoundness/Audit/README.md` the list of theorems. The full rationale is in
 `note:audit-lean/20260927T0736Z-finding-audit-layer-design`. The points a reviewer needs:
 
 - **Strategies, not `value`.** `value` can exceed every strategy's `prob` when a branch has no strategy. So the audit
