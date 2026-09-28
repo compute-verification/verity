@@ -109,9 +109,9 @@ watch list is the `upstream` section of `lean-audit.json`, one entry per stateme
 
 `python tools/lean/upstream.py backends/flock/verifier/lean/soundness` prints each entry's status at the pinned
 revisions: the upstream theorems about it, which are proved, and which nobody has acknowledged. The audit runs that pass
-over ArkLib, with ArkLib's own `sorry` baseline, and fails on a proved theorem no entry acknowledges. `--lean`, the exact
-pass over everything imported (VCVio and CompPoly too), is run at a dependency bump. L1 has no entry: no dependency
-states this repository's rows.
+over ArkLib, with ArkLib's own `sorry` baseline, and fails on a proved theorem no entry acknowledges. `--lean`, the
+exact pass over everything imported (VCVio and CompPoly too), is run at a dependency bump. L1 has no entry: no
+dependency states this repository's rows.
 
 ## Trusted components
 
