@@ -1,0 +1,24 @@
+# The identity hash as a program: streaming SHA-512 over C-Flock's compression, and the tagged SHA-512 identity
+# (`verity/ml/commitments/identity.py`'s `tagged_sha512`, `identity_digest_sha512`), shared by every Lean port that commits
+# to bytes. Lean core and C-Flock's executable primitives only; `identity-difftest` serves the difftest's functions.
+name = "core_identity"
+defaultTargets = ["Identity", "identity-difftest"]
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+
+[[require]]
+name = "flock_verifier"
+path = "../../service/flock"
+
+[[require]]
+name = "verity_difftest"
+path = "../../difftest/lean"
+
+[[lean_lib]]
+name = "Identity"
+
+[[lean_exe]]
+name = "identity-difftest"
+root = "Identity.DifftestMain"
