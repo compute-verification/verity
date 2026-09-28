@@ -1,5 +1,6 @@
 import Proofs.Pouw.PearlC.Fp4IssueGamma
 import Models.Pouw.Assumptions.PearlC.TTOutFp4ChainOnly
+import Models.Pouw.Guarantees.PearlC
 
 /-!
 # Pearl-C4 under the chain-only reading, at any FP32 price and scale path (the price-twins lane's file; staged)
@@ -296,3 +297,7 @@ theorem gammaFp4ChainOnly_sm120Loop_lut256_16384
     norm_num [Fp4Prices.sm120At, Fp4ScalePath.lut256, Params.pi, sh16384]
 
 end Pouw.PearlC
+
+theorem Pouw.SecurityProofs.PearlC.GammaFp4ChainOnlySm120IssueLut256_8192 : Pouw.Guarantees.PearlC.GammaFp4ChainOnlySm120IssueLut256_8192 := @Pouw.PearlC.gammaFp4ChainOnly_sm120Issue_lut256_8192
+
+theorem Pouw.SecurityProofs.PearlC.GammaFp4ChainOnlySm120LoopLut256_8192 : Pouw.Guarantees.PearlC.GammaFp4ChainOnlySm120LoopLut256_8192 := @Pouw.PearlC.gammaFp4ChainOnly_sm120Loop_lut256_8192

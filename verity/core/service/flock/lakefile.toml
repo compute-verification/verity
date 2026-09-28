@@ -1,6 +1,6 @@
 name = "flock_verifier"
 version = "0.1.0"
-defaultTargets = ["flock-verify", "flock-rows"]
+defaultTargets = ["flock-verify", "flock-rows", "flock-firewall"]
 
 [leanOptions]
 autoImplicit = false
@@ -15,3 +15,7 @@ root = "FlockVerify"
 [[lean_exe]]
 name = "flock-rows"
 root = "FlockRows"
+
+[[lean_exe]]
+name = "flock-firewall"
+root = "FlockFirewall"

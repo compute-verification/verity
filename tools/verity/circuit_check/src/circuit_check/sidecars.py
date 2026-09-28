@@ -28,7 +28,8 @@ from . import cache as CC
 
 REPO = Path(__file__).resolve().parents[5]
 #: the packages whose modules may have a sidecar: the ones that define Definitions (`targets._authored`) and the templates'
-PACKAGES = ("verity", "verity.ml.circuits", "verity.ml.kernels", "verity.experimental", "verity_vllm", "verity_numerical")
+PACKAGES = ("verity", "verity.ml.circuits", "verity.ml.kernels", "verity.experimental", "verity_vllm", "verity_numerical",
+            "verity_flock")
 SUFFIX = CC.SUFFIX
 #: the pins of a Definition no module defines
 SHARED_PINS = Path(__file__).with_name("pins.json")
@@ -45,14 +46,17 @@ def _roots() -> list[tuple[str, Path]]:
 
 @cache
 def discover() -> dict[str, dict[str, Path]]:
-    """{module: {"py": its binding file, "json": its pins file}} for every sidecar under `PACKAGES`, by module name."""
+    """{module: {"py": its binding file, "json": its pins file}} for every sidecar under `PACKAGES`, by module name.  A file
+    under two packages' roots (`verity_flock`'s tree is inside `verity`'s) is its module's once, named from the deeper root."""
     out: dict[str, dict[str, Path]] = {}
+    claimed: set[Path] = set()
     with CC.internal():
-        for pkg, root in _roots():
+        for pkg, root in sorted(_roots(), key=lambda r: len(r[1].parts), reverse=True):
             for kind in ("py", "json"):
                 for p in sorted(root.rglob(f"*{SUFFIX}.{kind}")):
-                    if "__pycache__" in p.parts:
+                    if "__pycache__" in p.parts or p in claimed:
                         continue
+                    claimed.add(p)
                     stem = p.name[:-len(f"{SUFFIX}.{kind}")]
                     parts = [pkg, *p.relative_to(root).parent.parts]
                     mod = ".".join(parts if stem == "__init__" else [*parts, stem])

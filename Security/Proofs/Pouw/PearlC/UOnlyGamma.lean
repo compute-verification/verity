@@ -1,5 +1,6 @@
 import Proofs.Pouw.PearlC.DeviceCapGamma
 import Models.Pouw.Assumptions.PearlC.TTOutUOnly
+import Models.Pouw.Guarantees.PearlC
 
 /-!
 # TT_OUT over U alone: it asserts more than the (C̃, U) row, and γ from it (the TT_OUT restatements lane's file)
@@ -170,3 +171,9 @@ theorem pearlCGammaUOnlyUnpromotedCap1000_8192 {Q R S : Type} [Fintype Q] [Decid
     (by norm_num) hTT
 
 end Pouw.PearlC
+
+theorem Pouw.SecurityProofs.PearlC.GammaUOnlySm120Rev1_8192 : Pouw.Guarantees.PearlC.GammaUOnlySm120Rev1_8192 := @Pouw.PearlC.pearlCGammaUOnlySm120Rev1_8192
+
+theorem Pouw.SecurityProofs.PearlC.GammaUOnlyUnpromotedCap1000_8192 : Pouw.Guarantees.PearlC.GammaUOnlyUnpromotedCap1000_8192 := @Pouw.PearlC.pearlCGammaUOnlyUnpromotedCap1000_8192
+
+theorem Pouw.SecurityProofs.PearlC.TTOutPearlCDevRev1OfUOnly : Pouw.Guarantees.PearlC.TTOutPearlCDevRev1OfUOnly := @Pouw.PearlC.ttOutPearlCDevRev1_of_uOnly

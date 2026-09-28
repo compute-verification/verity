@@ -171,8 +171,8 @@ pub(crate) unsafe extern "C" fn live_cb(ctx: *mut c_void, content: *const u8, le
 
 /// Every live round through the caller's handler instead of the rep's `LiveChallenger` (M1: the masking challenger in front of
 /// it, `crate::replay_round`). The device aborts on a refused coin, so a failed round is kept here instead: its message is
-/// recorded, the device gets zero coins, and no later round reaches the handler (nothing more is sent); the caller raises
-/// `failed` when the device returns.
+/// recorded, the device gets zero coins, and no later round reaches the handler (nothing more is sent); when the device returns,
+/// `failed` is the prover's error (`gpu_circuit::prove_circuit`).
 pub struct Rounds<'a> {
     pub handler: &'a mut dyn FnMut(&[u8], usize) -> Vec<F128>,
     pub failed: Option<String>,
@@ -197,7 +197,7 @@ unsafe extern "C" fn rounds_cb(ctx: *mut c_void, content: *const u8, len: usize,
         None => catch_unwind(AssertUnwindSafe(|| (r.handler)(c, n as usize))).unwrap_or_else(|e| {
             let why = e.downcast_ref::<String>().cloned().or_else(|| e.downcast_ref::<&str>().map(|s| s.to_string()))
                 .unwrap_or_else(|| "a live round failed".into());
-            eprintln!("LIVE-ROUND-FAILED\tround {}: {why} (nothing more is sent; raised when the device returns)", r.rounds - 1);
+            eprintln!("LIVE-ROUND-FAILED\tround {}: {why} (nothing more is sent; the prover's error when the device returns)", r.rounds - 1);
             r.failed = Some(why);
             vec![F128::ZERO; n as usize]
         }),
@@ -341,16 +341,20 @@ impl Reader<'_> {
         self.o += std::mem::size_of::<flock_hash::Digest>();
         h
     }
-    /// An opening's hm96-sha512 salts (a u64 count, then 192 bytes each): the circuit statement's SHA-512 build writes them.
+    /// An opening's hm96-sha512 salts (a u64 count, then 192 bytes each): the circuit statement's SHA-512 build writes them
+    /// exactly when the prover installed a salt context (`g_hm96.tree_cb`); `salted` false, the stream has none.
     #[cfg(feature = "sha512")]
-    fn salts(&mut self) -> Vec<flock_merkle::hm96::Salt> {
+    fn salts(&mut self, salted: bool) -> Vec<flock_merkle::hm96::Salt> {
+        if !salted {
+            return Vec::new();
+        }
         let n = self.u64() as usize;
         let s = (0..n).map(|i| flock_merkle::hm96::salt_of(&self.b[self.o + 192 * i..])).collect();
         self.o += 192 * n;
         s
     }
     #[cfg(not(feature = "sha512"))]
-    fn salts(&mut self) {}
+    fn salts(&mut self, _salted: bool) {}
     fn hashes(&mut self) -> Vec<flock_hash::Digest> {
         let n = self.u64() as usize;
         (0..n).map(|_| self.hash()).collect()
@@ -855,13 +859,13 @@ fn run(params: &ProveParams, chunk: &ChunkParams, pcs: &PcsParams, m: usize) -> 
 
 /// The FFI's proof stream as a proof and its commitment.
 pub(crate) fn decode(bytes: &[u8], pcs: &PcsParams) -> (R1csProofLigerito, Commitment) {
-    decode_with(bytes, pcs, false)
+    decode_with(bytes, pcs, false, false)
 }
 
 /// [`decode`]; `zk`: the stream ends in M1's zk section (the circuit prover's `fc_write_zk`): level 0's hiding messages, the
 /// lane phase's record and lincheck's folded comb, as the CPU prover leaves them in the proof (never serialized: the record and
-/// the comb are the prover's own).
-pub(crate) fn decode_with(bytes: &[u8], pcs: &PcsParams, zk: bool) -> (R1csProofLigerito, Commitment) {
+/// the comb are the prover's own). `salted`: the prover was handed hm96 leaf salts, so each opening carries its salts.
+pub(crate) fn decode_with(bytes: &[u8], pcs: &PcsParams, zk: bool, salted: bool) -> (R1csProofLigerito, Commitment) {
     let mut r = Reader { b: bytes, o: 0 };
     let cap = r.hashes();
     let round1_ab = r.f128s();
@@ -884,7 +888,7 @@ pub(crate) fn decode_with(bytes: &[u8], pcs: &PcsParams, zk: bool) -> (R1csProof
     let recursive_caps: Vec<Vec<flock_hash::Digest>> = (0..n_rcaps).map(|_| r.hashes()).collect();
     let n_opens = r.u64() as usize;
     #[allow(clippy::let_unit_value)]
-    let mut opens: Vec<_> = (0..n_opens).map(|_| (r.rows(), r.hashes(), r.salts())).collect();
+    let mut opens: Vec<_> = (0..n_opens).map(|_| (r.rows(), r.hashes(), r.salts(salted))).collect();
     let yr = r.f128s();
     let n_sc = r.u64() as usize;
     let sumcheck_transcript_f256: Vec<SumcheckMessage256> = (0..n_sc).map(|_| SumcheckMessage256 { u_0: r.f256(), u_2: r.f256() }).collect();

@@ -1,5 +1,6 @@
 import Proofs.Pouw.PearlC.DeviceFp4Gamma
 import Definitions.Pouw.PearlC.DeviceFp4Issue
+import Models.Pouw.Guarantees.PearlC
 
 /-!
 # Pearl-C4 at the issue-bound FP32 price (the price-twins lane's file; staged)
@@ -231,3 +232,7 @@ theorem gammaFp4_sm120Loop_lut256_16384
 example : ({ devFp4Sm120 with prices := Fp4Prices.sm120Issue } : Fp4Device).prices = Fp4Prices.sm120Issue := rfl
 
 end Pouw.PearlC
+
+theorem Pouw.SecurityProofs.PearlC.GammaFp4Sm120IssueLut256_16384 : Pouw.Guarantees.PearlC.GammaFp4Sm120IssueLut256_16384 := @Pouw.PearlC.gammaFp4_sm120Issue_lut256_16384
+
+theorem Pouw.SecurityProofs.PearlC.GammaFp4Sm120IssueLut256_8192 : Pouw.Guarantees.PearlC.GammaFp4Sm120IssueLut256_8192 := @Pouw.PearlC.gammaFp4_sm120Issue_lut256_8192

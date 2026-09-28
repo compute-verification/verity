@@ -1,5 +1,6 @@
 import Proofs.Pouw.PearlC.DeviceGamma
 import Models.Pouw.Assumptions.PearlC.TTOutRev1
+import Models.Pouw.Guarantees.PearlC
 
 /-!
 # rev1: it asserts less than the granted TT_OUT, and γ from it (the TT_OUT restatements lane's file)
@@ -305,3 +306,13 @@ theorem pearlCSampledH100Rev1_16384 {Q R S : Type} [Fintype Q] [DecidableEq Q] [
       Costs.adopted, sh16384]) (by norm_num) hTT
 
 end Pouw.PearlC
+
+theorem Pouw.SecurityProofs.PearlC.GammaH100Rev1_16384 : Pouw.Guarantees.PearlC.GammaH100Rev1_16384 := @Pouw.PearlC.pearlCGammaH100Rev1_16384
+
+theorem Pouw.SecurityProofs.PearlC.GammaH100Rev1_8192 : Pouw.Guarantees.PearlC.GammaH100Rev1_8192 := @Pouw.PearlC.pearlCGammaH100Rev1_8192
+
+theorem Pouw.SecurityProofs.PearlC.SampledH100Rev1_16384 : Pouw.Guarantees.PearlC.SampledH100Rev1_16384 := @Pouw.PearlC.pearlCSampledH100Rev1_16384
+
+theorem Pouw.SecurityProofs.PearlC.SampledH100Rev1_8192 : Pouw.Guarantees.PearlC.SampledH100Rev1_8192 := @Pouw.PearlC.pearlCSampledH100Rev1_8192
+
+theorem Pouw.SecurityProofs.PearlC.TTOutPearlCDevRev1OfGranted : Pouw.Guarantees.PearlC.TTOutPearlCDevRev1OfGranted := @Pouw.PearlC.ttOutPearlCDevRev1_of_granted
