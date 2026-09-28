@@ -285,7 +285,10 @@ _BLOCK_CONF = ("exact-model-tested; H100 80GB 2026-09-19 (vLLM d9105ea80, CUTLAS
                "vs descending k: 160/160 ascending, s = FMUL(sfa, sfb) vs the other associations: 240/240) — out/gen/sweep/evidence/fp8/")
 _QUANT_CONF = ("exact-model-tested; H100 80GB 2026-09-19: _C.per_token_group_fp8_quant vs the model on 290,304 e4m3 words and 2,268 group scales "
                "(seven shapes, rows of varying magnitude with outliers), 0 mismatches — out/gen/sweep/evidence/fp8/check_block_gemm.json; "
-               "all at G = 128: G = 64 (QUANT_GROUPS) is the same kernel over narrower groups, not yet compared")
+               "all at G = 128; G = 64 (QUANT_GROUPS) and G = 128 on cc 12.0: property blackwell_fp8_capture on an RTX PRO 6000, run "
+               "r20261003-220018-3f6a, record 0d346c79c642a0a1 (#1000 @ 2fd4e257f), cases "
+               "quant/K4096/G64 and quant/K192/G64 (the fused-MoE experts' inputs, 300 rows each) and quant/K4096/G128 and quant/K1024/G128, "
+               "with every quant call its dense and MoE GEMM cases received, 7,941 rows, 0 mismatches")
 
 
 @composite("Fp8GroupScale", 1, ["G"], lambda S: ((("x", Array(S.G, BF16)),), F32), conformance=_QUANT_CONF)
@@ -437,9 +440,13 @@ def ScaledMmFp8BlockSharedScale(B, S, xq, sx, w, ws):
 # (tests/program/test_fp8_block_dot.py), and hopper keeps binding the v1 forms, so its Programs keep their digests.
 # ---------------------------------------------------------------------------------------------------------
 
-_BLOCK_DOT_CONF = ("model-untested; at DOT = HopperE4m3QgmmaDot32_v1 the function of the version 1 form (tests/program/"
-                   "test_fp8_block_dot.py, every word equal), which is exact-model-tested on Hopper; at DOT = BlackwellE4m3QmmaDot32_v1 "
-                   "(cc 12.0) not yet compared with cc 12.0's blockwise _C.cutlass_scaled_mm (the blackwell_fp8_capture property)")
+_BLOCK_DOT_CONF = ("exact-model-tested; at DOT = HopperE4m3QgmmaDot32_v1 the function of the version 1 form (tests/program/"
+                   "test_fp8_block_dot.py, every word equal), which is exact-model-tested on Hopper; at DOT = BlackwellE4m3QmmaDot32_v1, "
+                   "G = 128 (cc 12.0): property blackwell_fp8_capture on an RTX PRO 6000, run r20261003-220018-3f6a, record "
+                   "0d346c79c642a0a1 (#1000 @ 2fd4e257f), cases cutlass/qkv_proj (K 4096, N 1280) "
+                   "and cutlass/o_proj (K 1024, N 4096) x M in {1, 2, 64, 65, 256, 257, 300}: CutlassFp8BlockScaledMMKernel's blockwise "
+                   "_C.cutlass_scaled_mm in all three cc 12.0 dispatch variants, 5,080,320 words, 0 mismatches; Hopper's step, both Triton "
+                   "scale orders and an unfused mul + add each refuted (30,354, 13,159, 13,278 and 13,222 words)")
 
 
 @composite("ScaledMmFp8BlockCoordinate", 3, ["K", "G", "DOT"], _coordinate_sig, conformance=_BLOCK_DOT_CONF)

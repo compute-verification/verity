@@ -307,6 +307,15 @@ def _moe_ffn_fixed(E: int, TOPK: int, VPT: int, H: int, I: int):
     return ir_bind(_mp.MoeFfnFixedL, E=E, TOPK=TOPK, VPT=VPT, H=H, I=I)
 
 
+def _moe_expert_dot(routed, E, K, N, DOT, G, KB, SWAP):
+    if G is None and KB is None and SWAP is None:
+        return ir_bind(_moe.MoeExpertGemmWV2 if routed else _moe.MoeExpertGemmV2, E=E, K=K, N=N, DOT=DOT)
+    if G is None or KB is None or SWAP is None:
+        raise TypeError("the block-FP8 pair forms take G, KB and SWAP together")
+    from verity_vllm.program.registry import fp8_moe_experts as _x  # noqa: PLC0415
+    return ir_bind(_x.MoeExpertFp8GemmW if routed else _x.MoeExpertFp8Gemm, E=E, K=K, N=N, G=G, KB=KB, SWAP=SWAP, DOT=DOT)
+
+
 def _attention_softcap_dot(T, NH, KVH, D, BN, DOT, INV, FA2_MASKED_FROM, CAP):
     if FA2_MASKED_FROM is None:
         raise TypeError("a softcap off the accepted target is registered only under FA2's per-iteration Check_inf")
@@ -355,8 +364,10 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "moe_expert_gemm_w": lambda E, K, N: ir_bind(_moe.MoeExpertGemmW, E=E, K=K, N=N),
            # the same launches with the k16 step as a static, bound when the active target's fused_moe_kernel runs another step than
            # the Ampere/Ada one (`frontend.targets.moe_expert_dot`); those above keep the `_v1` records' digests
-           "moe_expert_gemm_dot": lambda E, K, N, DOT: ir_bind(_moe.MoeExpertGemmV2, E=E, K=K, N=N, DOT=DOT),
-           "moe_expert_gemm_w_dot": lambda E, K, N, DOT: ir_bind(_moe.MoeExpertGemmWV2, E=E, K=K, N=N, DOT=DOT),
+           # a `G` (with the launch's `KB`, `SWAP`) binds the block-FP8 pair forms with DOT the e4m3 step (`rules/vllm_moe_fp8.py`); optional
+           # statics, so the roles, their notes and this vocabulary's version stay as they were
+           "moe_expert_gemm_dot": lambda E, K, N, DOT, G=None, KB=None, SWAP=None: _moe_expert_dot(False, E, K, N, DOT, G, KB, SWAP),
+           "moe_expert_gemm_w_dot": lambda E, K, N, DOT, G=None, KB=None, SWAP=None: _moe_expert_dot(True, E, K, N, DOT, G, KB, SWAP),
            "moe_sum": lambda TOPK, H: ir_bind(_moe.MoeSum, TOPK=TOPK, H=H),
            # [R17-42 route A (3)] the fused-MoE block under `TargetProfile.moe_construction = "padded"` as ONE kind per token: the fixed-slot
            # construction from the router logits (`registry.moe_pad.MoeFfnFixedL_v1`: ALL E expert bodies on their own weights, the TOPK slot

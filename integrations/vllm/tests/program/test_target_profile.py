@@ -191,6 +191,69 @@ def test_fp8_block_gemm_declares_the_cutlass_kernel_and_keeps_undeclared_digests
     assert profile_mismatches(e, {**applied, "fp8_block_gemm_kernel": "FlashInferFp8DeepGEMMDynamicBlockScaledKernel"}) == []
 
 
+def test_moe_backend_pins_the_triton_experts_and_keeps_undeclared_digests():
+    """`moe_backend='triton'` is the `EngineArgs.moe_backend` the derivation and the engine both apply, and requires every fused-MoE
+    layer's read-back experts class to be `TritonExperts`; an undeclared profile serialises exactly as before."""
+    e = TargetProfile(compute_capability=(12, 0), num_sms=188)
+    assert "moe_backend" not in e.to_json() and e.moe_experts_class() is None and "moe_backend" not in e.engine_args()
+    t = e.with_overrides(moe_backend="triton")
+    assert t.to_json()["moe_backend"] == "triton" and t.digest() != e.digest() and TargetProfile.from_json(t.to_json()) == t
+    assert t.engine_args()["moe_backend"] == "triton" and t.engine_args(execution=False)["moe_backend"] == "triton"
+    assert t.moe_experts_class() == "TritonExperts" and t.execution_label == e.execution_label and t.env() == e.env()
+    assert parse_target_arg('{"moe_backend": "triton"}', base=e) == t
+    for v in ("auto", "deep_gemm", "TRITON"):
+        with pytest.raises(ValueError):
+            TargetProfile(moe_backend=v)
+    applied = _applied(t, moe_experts_class="TritonExperts")
+    assert profile_mismatches(t, applied) == []
+    for got in ("DeepGemmExperts", None, "<mixed>"):
+        assert profile_mismatches(t, {**applied, "moe_experts_class": got}) == [
+            f"moe_backend declared 'triton' (TritonExperts), applied {got!r}"]
+    assert profile_mismatches(t, {k: v for k, v in applied.items() if k != "moe_experts_class"}) == [
+        "moe_backend declared 'triton' (TritonExperts), applied '<absent>'"]
+    assert profile_mismatches(e, {**applied, "moe_experts_class": "DeepGemmExperts"}) == []
+
+
+class _Layer:
+    def __init__(self, experts_cls=None, **attrs):
+        self.quant_method = type("QM", (), {"experts_cls": experts_cls, **attrs})() if experts_cls or attrs else None
+
+
+class _Model:
+    def __init__(self, *layers):
+        self.layers = layers
+
+    def modules(self):
+        return iter((self, *self.layers))
+
+
+def test_moe_experts_class_is_read_back_from_every_fused_moe_layer():
+    from verity_vllm.program.frontend.target_profile import moe_experts_class_of
+    TritonExperts, DeepGemmExperts = type("TritonExperts", (), {}), type("DeepGemmExperts", (), {})
+    linear = _Layer(fp8_linear=object())
+    assert moe_experts_class_of(_Model(linear, _Layer())) is None
+    assert moe_experts_class_of(_Model(linear, _Layer(TritonExperts), _Layer(TritonExperts))) == "TritonExperts"
+    assert moe_experts_class_of(_Model(_Layer(TritonExperts), _Layer(DeepGemmExperts))) == "<mixed>"
+
+
+def test_the_engine_refuses_another_experts_class_than_the_declared_one(monkeypatch):
+    pytest.importorskip("torch")
+    import types
+    from verity_vllm.engine import build as B
+    t = TargetProfile(moe_backend="triton")
+    monkeypatch.setattr(B.torch.cuda, "get_device_properties",
+                        lambda i: types.SimpleNamespace(major=t.compute_capability[0], minor=t.compute_capability[1], multi_processor_count=t.num_sms))
+    monkeypatch.setattr(B, "observed_flash_attn_version", lambda model: t.effective_flash_attn_version())
+    monkeypatch.setattr(B, "compilation_facts", lambda llm: {})
+
+    def engine(*layers):
+        return types.SimpleNamespace(target=t, llm=None, model=_Model(*layers))
+    assert B.target_mismatches(engine(_Layer(type("TritonExperts", (), {})))) == []
+    assert B.target_mismatches(engine(_Layer(type("DeepGemmExperts", (), {})))) == [
+        "moe_backend declared 'triton' (TritonExperts), layers report 'DeepGemmExperts'"]
+    assert B.target_mismatches(engine()) == ["moe_backend declared 'triton' (TritonExperts), layers report None"]
+
+
 def test_parse_target_arg_accepts_the_fp8_field_that_the_default_omits():
     p = parse_target_arg('{"compute_capability": [9, 0], "num_sms": 132, "fp8_block_gemm": "cutlass"}')
     assert p.fp8_block_gemm == "cutlass" and p.env()["VLLM_USE_DEEP_GEMM"] == "0"
