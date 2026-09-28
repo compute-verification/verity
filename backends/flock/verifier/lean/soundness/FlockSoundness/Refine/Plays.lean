@@ -24,7 +24,7 @@ theorem bind {g : Game α} {f : α → Game β} {ms₁ ms₂ : List Msg} {cs₁ 
   induction h₁ with
   | ret a => exact h₂
   | send m _ ih => exact .send m (ih h₂)
-  | coinVec c hc _ ih => exact .coinVec c hc (ih h₂)
+  | coinVec c hc h1 _ ih => exact .coinVec c hc h1 (ih h₂)
   | coinOne c hc _ ih => exact .coinOne c hc (ih h₂)
 
 /-- `bind` with the tapes given by their concatenations. -/
@@ -36,8 +36,8 @@ theorem pure (a : α) : Plays ι (Pure.pure a : Game α) [] [] a := .ret a
 
 theorem recv (M : Type) (m : M) : Plays ι (Game.recv M) [⟨M, m⟩] [] m := .send m (.ret m)
 
-theorem drawVec {n : ℕ} [Fintype (Fin n → F)] [Nonempty (Fin n → F)] (c : Array W) (hc : c.size = n) :
-    Plays ι (Game.draw (Fin n → F)) [] [c] (fun i => ι c[i.val]!) := .coinVec c hc (.ret _)
+theorem drawVec {n : ℕ} [Fintype (Fin n → F)] [Nonempty (Fin n → F)] (c : Array W) (hc : c.size = n)
+    (h1 : n ≠ 1) : Plays ι (Game.draw (Fin n → F)) [] [c] (fun i => ι c[i.val]!) := .coinVec c hc h1 (.ret _)
 
 theorem drawOne [Fintype F] [Nonempty F] (c : Array W) (hc : c.size = 1) :
     Plays ι (Game.draw F) [] [c] (ι c[0]!) := .coinOne c hc (.ret _)
@@ -69,9 +69,9 @@ theorem interleave_first {g₁ : Game α} {g₂ : Game β} {ms₁ ms₂ : List M
       | send m _ ih =>
           obtain ⟨ms, h⟩ := ih
           exact ⟨⟨Bool, true⟩ :: ⟨_, m⟩ :: ms, .send true (.send m h)⟩
-      | coinVec c hc _ ih =>
+      | coinVec c hc h1 _ ih =>
           obtain ⟨ms, h⟩ := ih
-          exact ⟨⟨Bool, true⟩ :: ms, .send true (.coinVec c hc h)⟩
+          exact ⟨⟨Bool, true⟩ :: ms, .send true (.coinVec c hc h1 h)⟩
       | coinOne c hc _ ih =>
           obtain ⟨ms, h⟩ := ih
           exact ⟨⟨Bool, true⟩ :: ms, .send true (.coinOne c hc h)⟩
@@ -81,9 +81,9 @@ theorem interleave_first {g₁ : Game α} {g₂ : Game β} {ms₁ ms₂ : List M
       | send m _ ih =>
           obtain ⟨ms, h⟩ := ih
           exact ⟨⟨Bool, true⟩ :: ⟨_, m⟩ :: ms, .send true (.send m h)⟩
-      | coinVec c hc _ ih =>
+      | coinVec c hc h1 _ ih =>
           obtain ⟨ms, h⟩ := ih
-          exact ⟨⟨Bool, true⟩ :: ms, .send true (.coinVec c hc h)⟩
+          exact ⟨⟨Bool, true⟩ :: ms, .send true (.coinVec c hc h1 h)⟩
       | coinOne c hc _ ih =>
           obtain ⟨ms, h⟩ := ih
           exact ⟨⟨Bool, true⟩ :: ms, .send true (.coinOne c hc h)⟩

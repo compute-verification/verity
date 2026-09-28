@@ -153,4 +153,5 @@ import FlockSoundness.Discharge.Exec
 import FlockSoundness.Discharge.Integrate
 import FlockSoundness.Discharge.ZkSession
 import FlockSoundness.Discharge.DrawWords
+import FlockSoundness.Discharge.PlaysCoin
 import FlockSoundness.ZK.GK

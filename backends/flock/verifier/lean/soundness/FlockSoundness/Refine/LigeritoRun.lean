@@ -214,6 +214,12 @@ theorem LevelSeam.q_ne_zero {lv : Flock.Level} (hl : LevelSeam lv) : lv.q ≠ 0 
   rw [h0] at h
   exact absurd h (by decide)
 
+theorem LevelSeam.q_ne_one {lv : Flock.Level} (hl : LevelSeam lv) : lv.q ≠ 1 := by
+  intro h1
+  have h := hl.2.2.2.1
+  rw [h1] at h
+  exact absurd h (by decide)
+
 theorem positions_size (lv : Flock.Level) (hl : LevelSeam lv) (coins : Array F128) :
     (Flock.positions lv coins).size = lv.q := by
   rw [← Array.length_toList, ← positions_eq lv hl coins]
@@ -391,7 +397,8 @@ out-of-domain sample, the first message and the `k0` folds (`hfold`), the level-
 (`hrec`). -/
 theorem ligeritoC_model (r : ℕ) (sch : Accounting.Schedule) (T : 𝔽) (b : ℕ → 𝔽) (lv₀ lv₁ : Accounting.Level)
     (rest : List Accounting.Level) (hl : sch.levels = lv₀ :: lv₁ :: rest)
-    (z₀ c₀ : Array F128) (hz₀ : z₀.size = sch.m - 7) (hc₀ : c₀.size = 1) (y₀ : F128) (m₀ : F256 × F256)
+    (z₀ c₀ : Array F128) (hz₀ : z₀.size = sch.m - 7) (hm7 : sch.m - 7 ≠ 1) (hc₀ : c₀.size = 1) (y₀ : F128)
+    (m₀ : F256 × F256)
     {msF : List Msg} {csF : List (Array F128)} {ini : List 𝕂} {sF : Opens 𝔽 D → 𝕂} {qF : Opens 𝔽 D → Model.Quad 𝕂}
     (hfold : Plays fOf (Model.foldRoundsC execArith sch.k0
       (fun _ => execArith.embed T + execArith.embed (fOf c₀[0]!) * execArith.embed (fOf y₀))
@@ -401,7 +408,8 @@ theorem ligeritoC_model (r : ℕ) (sch : Accounting.Schedule) (T : 𝔽) (b : �
     {ctxs : List (Model.OodCtx 𝔽)}
     (htwo : Plays fOf (Model.twoOodC execArith (sch.m - 7 - sch.k0 + 1) 0 sF qF) msO csO (sT, qT, ctxs))
     (cw cα cβ : Array F128) (hcw : cw.size = lv₀.queries) (hcα : cα.size = ceilLog2 lv₀.queries)
-    (hcβ : cβ.size = 1) (mq : F256 × F256) {msR : List Msg} {csR : List (Array F128)} {pend : PendL 𝔽 D}
+    (hcβ : cβ.size = 1) (hq1 : lv₀.queries ≠ 1) (hα1 : ceilLog2 lv₀.queries ≠ 1) (mq : F256 × F256)
+    {msR : List Msg} {csR : List (Array F128)} {pend : PendL 𝔽 D}
     (hrec : Plays fOf (Model.recursiveRoundsC execArith r (sch.m - 7) b ini sch.ext (lv₁ :: rest)
       { qbOut r lv₀ ini 0 ⟨sT, qT, sch.m - 7 - sch.k0 + 1, [],
           ⟨List.ofFn (vecOf (sch.m - 7) z₀), fOf c₀[0]!, none⟩ :: ctxs, [], 0, [], [], lv₀⟩ cw cα cβ true mq with
@@ -413,10 +421,10 @@ theorem ligeritoC_model (r : ℕ) (sch : Accounting.Schedule) (T : 𝔽) (b : �
   rw [hl]
   have hqb := queryAndBatchC_plays r lv₀ ini 0
     (⟨sT, qT, sch.m - 7 - sch.k0 + 1, [], ⟨List.ofFn (vecOf (sch.m - 7) z₀), fOf c₀[0]!, none⟩ :: ctxs, [], 0, [], [],
-      lv₀⟩ : LigStateC 𝔽 𝕂 D) cw cα cβ hcw hcα hcβ true mq
+      lv₀⟩ : LigStateC 𝔽 𝕂 D) cw cα cβ hcw hcα hcβ hq1 hα1 true mq
   simp only [ite_true] at hqb
   refine Plays.bind' (ms₂ := fMsg y₀ :: kMsg m₀ :: msF ++ ⟨Cap D, C₁⟩ :: msO ++ [kMsg mq] ++ msR)
-    (cs₂ := c₀ :: csF ++ csO ++ [cw, cα, cβ] ++ csR) (Plays.drawVec z₀ hz₀) ?_ (by simp) (by simp)
+    (cs₂ := c₀ :: csF ++ csO ++ [cw, cα, cβ] ++ csR) (Plays.drawVec z₀ hz₀ hm7) ?_ (by simp) (by simp)
   refine Plays.bind' (ms₂ := kMsg m₀ :: msF ++ ⟨Cap D, C₁⟩ :: msO ++ [kMsg mq] ++ msR)
     (cs₂ := c₀ :: csF ++ csO ++ [cw, cα, cβ] ++ csR) (Plays.recv _ (fOf y₀)) ?_ (by simp [fMsg]) (by simp)
   refine Plays.bind' (ms₂ := kMsg m₀ :: msF ++ ⟨Cap D, C₁⟩ :: msO ++ [kMsg mq] ++ msR)
@@ -434,15 +442,16 @@ theorem ligeritoC_model (r : ℕ) (sch : Accounting.Schedule) (T : 𝔽) (b : �
 
 set_option maxHeartbeats 4000000 in
 /-- **Ligerito's rounds refine the model's** (§13.3). When the executable's Ligerito verifier accepts, from a transcript
-whose rounds are well formed, on a schedule whose dimensions and levels are the model's (`DimSeam`, `LevelSeam`), the
-model's compiled Ligerito, played with the proof's messages and the rounds consumed, ends in a result whose caps are
-the proof's, whose requests passed their Merkle checks, and whose verdict at the openings `o` (the proof's opened rows,
-`ho`) is the model's final check on the executable's final state; and the executable's final check passed on that
-state. -/
+whose rounds are well formed, on a schedule whose dimensions and levels are the model's (`DimSeam`, `LevelSeam`) and
+whose levels' consistency coins are not one word (`ceilLog2 q ≠ 1`, which `fast100_alpha` gives), the model's compiled
+Ligerito, played with the proof's messages and the rounds consumed, ends in a result whose caps are the proof's, whose
+requests passed their Merkle checks, and whose verdict at the openings `o` (the proof's opened rows, `ho`) is the
+model's final check on the executable's final state; and the executable's final check passed on that state. -/
 theorem ligerito_refines (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (cap : Array ByteArray)
     (p : LigeritoProof) (basisAt : Array F256 → ℕ → Array F256) (r : ℕ) (b : ℕ → 𝔽)
     (capD : Array ByteArray → Cap D) (o : Opens 𝔽 D) (hdim : DimSeam sch)
     (hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default))
+    (hα1 : ∀ i < sch.levels.size, ceilLog2 (sch.levels.getD i default).q ≠ 1)
     (ho : ∀ ℓ < sch.levels.size, ∀ j < (sch.levels.getD ℓ default).q,
       (o r ℓ j).1 = ((openAt p (sch.levels.size - 1) ℓ).1)[j]!.toList.map fOf)
     {t t' : Transcript} (hwf : RoundsWF t.rounds) (h : Flock.ligerito ms sch T cap p basisAt t = .ok ((), t')) :
@@ -526,7 +535,7 @@ theorem ligerito_refines (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (
     (t₁₁.rounds[t₁₁.k]!).coins (t₁₁.rounds[t₁₁.k + 1]!).coins (t₁₂.rounds[t₁₂.k]!).coins
     (t₁₂.rounds[t₁₂.k + 1]!).coins (by rw [RoundsWF.get (er₁₁ ▸ hwf), hnA, hn7])
     (by rw [RoundsWF.get (er₁₁ ▸ hwf), hnB]) (by rw [RoundsWF.get (er₁₂ ▸ hwf), hnC, hn7])
-    (by rw [RoundsWF.get (er₁₂ ▸ hwf), hnD]) yA yB mA mB
+    (by rw [RoundsWF.get (er₁₂ ▸ hwf), hnD]) (by omega) yA yB mA mB
   obtain ⟨stM₀, hstM₀⟩ : ∃ x : LigStateC 𝔽 𝕂 D, x =
       { qbOut r (levelOf (sch.levels.getD 0 default)) (initCh.toList.map gOf) 0
           ⟨sT, qT, sch.m - 7 - sch.k0 + 1, [],
@@ -606,7 +615,7 @@ theorem ligerito_refines (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (
     (fun v stE _ pend => LoopFinal ms sch cap p capD o b (initCh.toList.map gOf) v stE pend)
     ?hstep ?hlast (sch.levels.size - 1) 0 _ _ _ out st₁₈ t₁₈ stM₀ (by omega) (by omega) hrel₀ hloop
   case hstep =>
-    clear * - hn7 h2 hl0 hc0 hl4 hcols hext hlv ho
+    clear * - hn7 h2 hl0 hc0 hl4 hcols hext hlv hα1 ho
     intro i v stE tE bv stE' tE' stM hi hrel hb
     obtain ⟨hwfE, hsE, hqE, hsplit, hprev, hsize, hlanes, hlevels, hoods, hcons, hposE, hlevel, hcaps, hreqs⟩ := hrel
     have hc1 := hcols (i + 1) (by omega)
@@ -652,7 +661,7 @@ theorem ligerito_refines (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (
     obtain ⟨sT, qT, htwo, hsT, hqT⟩ := twoOodC_plays o (v.1 - 4 + 1) (i + 1) sM₁ qM₁ _ _ hsM₁ hqM₁
       (t₂.rounds[t₂.k]!).coins (t₂.rounds[t₂.k + 1]!).coins (t₃.rounds[t₃.k]!).coins (t₃.rounds[t₃.k + 1]!).coins
       (by rw [RoundsWF.get (er₂ ▸ hwfE), hnA]) (by rw [RoundsWF.get (er₂ ▸ hwfE), hnB])
-      (by rw [RoundsWF.get (er₃ ▸ hwfE), hnC]) (by rw [RoundsWF.get (er₃ ▸ hwfE), hnD]) yA yB mA mB
+      (by rw [RoundsWF.get (er₃ ▸ hwfE), hnC]) (by rw [RoundsWF.get (er₃ ▸ hwfE), hnD]) (by omega) yA yB mA mB
     have hcapAt : capAt cap p (i + 1) = v.2.1 := by rw [hprev]; simp [capAt]
     have hopen : openAt p (sch.levels.size - 1) (i + 1) =
         (p.recursiveProofs[i]!.rows, p.recursiveProofs[i]!.siblings, p.recursiveProofs[i]!.salts) := by
@@ -750,7 +759,7 @@ theorem ligerito_refines (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (
         (t₄.rounds[t₄.k]!).coins (t₄.rounds[t₄.k + 1]!).coins (t₇.rounds[t₇.k]!).coins
         (by rw [RoundsWF.get (er₄ ▸ hwfE), hnQ]; rfl)
         (by rw [RoundsWF.get (er₄ ▸ hwfE), hnQ']; exact hlvi.2.2.2.1)
-        (by rw [RoundsWF.get (er₇ ▸ hwfE), hn₈]) mq hrec
+        (by rw [RoundsWF.get (er₇ ▸ hwfE), hn₈]) hlvi.q_ne_one (hα1 (i + 1) (by omega)) mq hrec
       have hcs : consumed tE.rounds tE.k tE'.k = consumed tE.rounds tE.k t₁.k ++
           [t₂.rounds[t₂.k]!.coins, t₂.rounds[t₂.k + 1]!.coins, t₃.rounds[t₃.k]!.coins, t₃.rounds[t₃.k + 1]!.coins] ++
           [t₄.rounds[t₄.k]!.coins, t₄.rounds[t₄.k + 1]!.coins, t₇.rounds[t₇.k]!.coins] := by
@@ -762,7 +771,7 @@ theorem ligerito_refines (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (
       simp only [List.append_assoc, List.cons_append, List.nil_append] at hmain ⊢
       exact hmain
   case hlast =>
-    clear * - hn7 h2 hl0 hc0 hl4 hcols hext hlv ho
+    clear * - hn7 h2 hl0 hc0 hl4 hcols hext hlv hα1 ho
     intro i v stE tE bv stE' tE' stM hi hrel hb
     obtain ⟨hwfE, hsE, hqE, hsplit, hprev, hsize, hlanes, hlevels, hoods, hcons, hposE, hlevel, hcaps, hreqs⟩ := hrel
     have hl1 := hl4 (i + 1) (by omega) (by omega)
@@ -839,7 +848,7 @@ theorem ligerito_refines (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (
       (t₂.rounds[t₂.k]!).coins (t₂.rounds[t₂.k + 1]!).coins (t₄.rounds[t₄.k]!).coins
       (by rw [RoundsWF.get (er₂ ▸ hwfE), hnQ]; rfl)
       (by rw [RoundsWF.get (er₂ ▸ hwfE), hnQ']; exact hlvR.2.2.2.1)
-      (by rw [RoundsWF.get (er₄ ▸ hwfE), hn₅])
+      (by rw [RoundsWF.get (er₄ ▸ hwfE), hn₅]) hlvR.q_ne_one (hα1 (sch.levels.size - 1) (by omega))
     have hcs : consumed tE.rounds tE.k tE'.k = consumed tE.rounds tE.k t₁.k ++
         [t₂.rounds[t₂.k]!.coins, t₂.rounds[t₂.k + 1]!.coins, t₄.rounds[t₄.k]!.coins] := by
       rw [er₂, ek₂, er₄, ek₄, ek₅, hk₁,
@@ -915,10 +924,11 @@ theorem ligerito_refines (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (
       levelOf (sch.levels.getD 1 default) :: (sch.levels.toList.map levelOf).drop 2 := drop_levels sch 1 (by omega)
   rw [hd1, hstM₀, hstQ] at hplL
   have hmain := ligeritoC_model r (schedOf sch) (fOf T) b _ _ _ hlv01 (t₃.rounds[t₃.k]!).coins
-    (t₇.rounds[t₇.k]!).coins hz₀ (by rw [RoundsWF.get (er₇ ▸ hwf), hn₈]) y₀ m₀ hfold (capD p.recursiveCaps[0]!) htwo
+    (t₇.rounds[t₇.k]!).coins hz₀ (by show sch.m - 7 ≠ 1; omega) (by rw [RoundsWF.get (er₇ ▸ hwf), hn₈]) y₀ m₀ hfold
+    (capD p.recursiveCaps[0]!) htwo
     (t₁₃.rounds[t₁₃.k]!).coins (t₁₃.rounds[t₁₃.k + 1]!).coins (t₁₆.rounds[t₁₆.k]!).coins
     (by rw [RoundsWF.get (er₁₃ ▸ hwf), hnQ]; rfl) (by rw [RoundsWF.get (er₁₃ ▸ hwf), hnQ']; exact hlv0.2.2.2.1)
-    (by rw [RoundsWF.get (er₁₆ ▸ hwf), hn₁₇]) mq hplL
+    (by rw [RoundsWF.get (er₁₆ ▸ hwf), hn₁₇]) hlv0.q_ne_one (hα1 0 (by omega)) mq hplL
   have hy0 := getElem!_of_getElem? hy₀
   have hm0 := getElem!_of_getElem? hm₀
   have hyA' := getElem!_of_getElem? hyA

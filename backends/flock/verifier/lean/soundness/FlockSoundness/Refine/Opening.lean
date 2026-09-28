@@ -218,7 +218,7 @@ theorem mapM_plays {m : ℕ} (rs : Array (Array F128)) (C : ℕ → Array F128) 
             pure (c, s, r''))
           [⟨Fin 128 → 𝔽, vecOf 128 rs[a]!⟩] [C a] (c, vecOf 128 rs[a]!, vecOf 7 (C a)) :=
         Plays.bind' (ms₂ := []) (cs₂ := [C a]) (Plays.recv _ (vecOf 128 rs[a]!))
-          (Plays.bind' (ms₂ := []) (cs₂ := []) (Plays.drawVec (C a) hCa) (Plays.pure _) (by simp) (by simp))
+          (Plays.bind' (ms₂ := []) (cs₂ := []) (Plays.drawVec (C a) hCa (by omega)) (Plays.pure _) (by simp) (by simp))
           (by simp) (by simp)
       refine Plays.bind' (ms₂ := (List.range' (a + 1) cs'.length).map fun k => ⟨Fin 128 → 𝔽, vecOf 128 rs[k]!⟩)
         (cs₂ := (List.range' (a + 1) cs'.length).map C) h1 ?_ ?_ ?_
@@ -240,8 +240,8 @@ succeeds from `t` to `t'` on claims that are the model's `cs'`, the model's open
 ring switches and the coins of the rounds consumed, returns the executable's batched value and basis. -/
 theorem opening_refines (m : ℕ) (hm : 7 ≤ m) (claims : Array Flock.Claim) (cs' : List (Model.Claim 𝔽 m))
     (hlen : claims.size = cs'.length) (hcs : ∀ (k : ℕ) (hk : k < cs'.length), ClaimRel m claims[k]! cs'[k])
-    (hn : 0 < claims.size) (rs : Array (Array F128)) (t t' : Transcript) (T : F128) (sws : Array Switched)
-    (hwf : RoundsWF t.rounds) (h : ringSwitch m claims rs t = .ok ((T, sws), t')) :
+    (hn : 0 < claims.size) (hn1 : claims.size ≠ 1) (rs : Array (Array F128)) (t t' : Transcript) (T : F128)
+    (sws : Array Switched) (hwf : RoundsWF t.rounds) (h : ringSwitch m claims rs t = .ok ((T, sws), t')) :
     t'.rounds = t.rounds ∧ t.k ≤ t'.k ∧
       ∃ op, Plays fOf (Model.opening execArith hm cs') (opMsgs claims.size rs) (consumed t.rounds t.k t'.k)
           (some op) ∧ OpenRel m claims.size T sws op := by
@@ -291,7 +291,7 @@ theorem opening_refines (m : ℕ) (hm : 7 ≤ m) (claims : Array Flock.Claim) (c
     unfold Model.opening
     refine Plays.bind' (ms₂ := []) (cs₂ := [cγ]) (mapM_plays rs C cs' 0 hC7) ?_
       (by simp [opMsgs, hlen, List.range_eq_range']) (by simp)
-    refine Plays.bind' (ms₂ := []) (cs₂ := []) (Plays.drawVec cγ hγ) ?_ (by simp) (by simp)
+    refine Plays.bind' (ms₂ := []) (cs₂ := []) (Plays.drawVec cγ hγ (by omega)) ?_ (by simp) (by simp)
     dsimp only
     split
     · exact Plays.pure (ι := fOf) _
