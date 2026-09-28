@@ -1,7 +1,9 @@
 /-
 Item 1e (Project doc `verified-lowering-design.md`): the typed statement `verity/flock-circuit/types`
 (`verity_flock.typed_statement`, #225), whose unit is a circuit type and a layout instead of rows. No statement carries the
-unit's rows: the verifier derives them (`Derive.derive`, #199) and places them as the old statement's `unit` slots.
+unit's rows: the verifier derives them and places them as the old statement's `unit` slots. It folds rows only through
+`DeriveAll.deriveChecked` (#247): `deriveAll`'s rows, used once every layout's pass the item-by-item check and the unit's
+are in logical order. `flock-rows --part` prints unchecked rows, so nothing here reads them.
 
 `expand` checks META's new keys and returns the file with the derived rows as its `CIRCUIT unit` section, first, where the
 old statement had it. `HmRow.parseTyped` reads that as it reads any statement, and keeps the typed file's own digest and
@@ -13,9 +15,9 @@ class. The keys:
 * `policy`: `calls/v1`;
 * `unit_in`: the unit's constant-bound inputs, none in this version.
 
-This version covers the flat classes (a unit type of AND items); `derive` refuses any other type.
+This version covers units without placed parts, Δ or reads (the flat classes), whose rows are one `CIRCUIT unit` section.
 -/
-import Flock.Derive
+import Flock.DeriveCheck
 import Flock.Layout
 import Flock.Net
 import Flock.Tags
@@ -75,11 +77,14 @@ def expand (tags : Tags) (bytes : ByteArray) : V ByteArray := do
   if (← J.str mj "policy" ctx) != POLICY then throw s!"META: policy is not {POLICY}"
   if !(← J.arr mj "unit_in" ctx).isEmpty then
     throw "META: unit_in binds the unit's inputs to constants, which this verifier does not derive yet"
-  let some t := typeOf ut | throw "META: unit_type names no type"
-  let d ← match Derive.derive t ul.inSplit.toList ul.outSplit.toList with
-    | .ok d => pure d
+  let done ← match DeriveAll.deriveChecked typeOf ls (fun _ => none) (fun _ => none) unit with
+    | .ok done => pure done
     | .error e => throw s!"META: the unit's rows: {e}"
-  let rows := ((Derive.netlist name d none none).splitOn "\n").toArray.pop
+  let u := done.getD unit default
+  -- the unit's constant copies the block's `one` through Δ, as `HmRow.delta` pins every unit slot's constant today
+  if !(u.parts.isEmpty && u.reads.isEmpty && u.delta.all (fun e => e.1 == u.const && e.2.isNone)) then
+    throw "META: the unit has placed parts, reads or Δ beyond its constant, which this version's unit section does not carry"
+  let rows := ((DeriveAll.netlist u name).splitOn "\n").toArray.pop
   let out := #[lines[0]!, lines[1]!, s!"{tags.blockKeyword} unit {rows.size}"] ++ rows ++ lines.extract 2 lines.size
   return ("\n".intercalate out.toList ++ "\n").toUTF8
 
