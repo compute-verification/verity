@@ -847,9 +847,9 @@ def compare_instances(baseline: Mapping[str, Any] | None, candidate: Mapping[str
     warnings = []
     for who, fp, v in (("baseline", fb, a), ("candidate", fc, b)):
         if INSTANCES_FIELD not in fp:
-            warnings.append(f"{who} does not record instances (pre-{INSTANCES_DATASET} result): not measured on the shared instance set")
+            warnings.append(f"{who} does not record instances (pre-{INSTANCES_DATASET} result): not measured on the shared input set")
         elif v is None:
-            warnings.append(f"{who} instances is null: not measured on the shared instance set")
+            warnings.append(f"{who} instances is null: not measured on the shared input set")
     if a is None or b is None or not isinstance(a, Mapping) or not isinstance(b, Mapping):
         return None, warnings
     if any(a.get(k) != b.get(k) for k in ("dataset", "tier", "manifest_sha256")):

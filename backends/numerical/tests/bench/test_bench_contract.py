@@ -565,7 +565,7 @@ def test_instances_is_required_but_nullable(conforming: dict) -> None:
     assert contract.validate_fingerprint(fp) == []
     assert contract.validate_fingerprint({k: v for k, v in fp.items() if k != "instances"}) == ["workload_fingerprint.instances missing"]
     built = contract.fingerprint(**{k: fp[k] for k in contract.REQUIRED_FIELDS if k != "instances"})
-    assert built["instances"] is None, "always written: null = not measured on the shared instance set"
+    assert built["instances"] is None, "always written: null = not measured on the shared input set"
 
 
 def test_instances_ref_and_its_validation(conforming: dict) -> None:
@@ -605,7 +605,7 @@ def test_compare_instances_conflicts_and_warnings(conforming: dict) -> None:
     assert contract.compare_instances(a, {**b, "B": 4096, "instances": bigger}) == (None, [])
     # null or absent on either side: no conflict, a warning naming the side
     conflict, warnings = contract.compare_instances(a, {**b, "instances": None})
-    assert conflict is None and warnings == ["candidate instances is null: not measured on the shared instance set"]
+    assert conflict is None and warnings == ["candidate instances is null: not measured on the shared input set"]
     conflict, warnings = contract.compare_instances({k: v for k, v in a.items() if k != "instances"}, {**b, "instances": None})
     assert conflict is None and len(warnings) == 2 and warnings[0].startswith("baseline does not record instances")
 
