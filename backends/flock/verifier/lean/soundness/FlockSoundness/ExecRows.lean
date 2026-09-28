@@ -1,5 +1,8 @@
 import FlockSoundness.Lowering
 import Flock.Net
+-- level3 already realizes the lemmas this file's `simp` calls need (`Std.Legacy.Range.mk.congr_simp`), so they are
+-- reused rather than declared a second time, which the audit's kernel replay refuses
+import FlockLevel3.LookupRows
 
 /-!
 # The rows the verifier parses, as the audit's `Rows`
