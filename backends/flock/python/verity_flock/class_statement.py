@@ -552,6 +552,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--partition", default="q-word")
     ap.add_argument("--out", required=True)
     ap.add_argument("--binary", default=os.environ.get("FLOCK_CIRCUIT", "flock-circuit"))
+    ap.add_argument("--selftest-binary", default=None, help="the flock-circuit build with seed injection, for selftests (a proving "
+                    "build never has it; default --binary)")
     ap.add_argument("--n", type=int, default=16, help="instances per class statement (synthetic lanes)")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--selftest", type=int, default=0, help="also run flock-circuit's selftest (31 cases, negatives included) on every "
@@ -629,11 +631,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                     rec["live"] = prove(a.binary, d, rec["stage"]["n"], a.port, gpu=a.gpu, warm=a.warm, runs=a.runs)
                 if a.selftest and (len(done) % a.selftest == 0 or s == largest.get(cl.definition.id)):
                     if rec["table_reads"]:                       # a read-bearing circuit re-parses per case: a few cases, one process each
-                        runs = [prove(a.binary, d, rec["stage"]["n"], a.port, selftest=c) for c in READ_CASES]
+                        runs = [prove(a.selftest_binary or a.binary, d, rec["stage"]["n"], a.port, selftest=c) for c in READ_CASES]
                         rec["selftest"] = {"all_pass": all(x["all_pass"] for x in runs), "cases": len(runs),
                                            "failed": [c for c, x in zip(READ_CASES, runs) if not x["all_pass"]], "subset": list(READ_CASES)}
                     else:
-                        rec["selftest"] = prove(a.binary, d, rec["stage"]["n"], a.port, selftest=True)
+                        rec["selftest"] = prove(a.selftest_binary or a.binary, d, rec["stage"]["n"], a.port, selftest=True)
             except Exception as e:  # noqa: BLE001  (a class that breaks is a result, recorded with where it broke)
                 rec["broke"] = {"at": "prover", "why": f"{type(e).__name__}: {e}"[:400]}
             for f in d.glob("*.bin"):

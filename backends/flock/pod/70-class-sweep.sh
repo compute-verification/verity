@@ -13,10 +13,22 @@ REPO=$(pwd); O=${OUT:-${RESEARCH_RUN_DIR:-/tmp/fcs}/out}; W=/workspace/flock-cir
 G=${GPU:-1}
 SM=${SM:-$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1 | tr -d .)}; SM=${SM:-89}
 if [ -z "${BINARY:-}" ]; then   # BINARY / PYBIN: a prebuilt flock-circuit and a Python with numpy (a local dry run)
-  MODE=build GPU=$G SM=$SM bash backends/flock/pod/60-circuit.sh > $O/build.log 2>&1 || { tail -30 $O/build.log; exit 1; }
-  BINARY=/workspace/flock-gpu-link/flock/target/release/flock-circuit
+  # the proving build never has seed injection; the selftest's harness gets its own build with it. Both are kept per pod, keyed
+  # by the build scripts and patches, so later runs of the same commit's builds skip the compile
+  KEY=$(cat backends/flock/pod/20-gpu-link.sh backends/flock/pod/60-circuit.sh backends/flock/*.patch backends/flock/cuda_*_patch.py | sha256sum | cut -c1-16)
+  BIN=$W/bin-$KEY-g$G-sm$SM; F=/workspace/flock-gpu-link/flock
+  if [ ! -x $BIN/flock-circuit-selftest ]; then
+    MODE=build GPU=$G SM=$SM bash backends/flock/pod/60-circuit.sh > $O/build.log 2>&1 || { tail -30 $O/build.log; exit 1; }
+    mkdir -p $BIN && cp $F/target/release/flock-circuit $BIN/flock-circuit
+    source $HOME/.cargo/env; C13=${CUDA_TK:-/usr/local/cuda-13.3}; export PATH=$C13/bin:$PATH NVCC=$C13/bin/nvcc LD_LIBRARY_PATH=$C13/compat:$C13/lib64:${LD_LIBRARY_PATH:-}
+    FEAT="--features sha512"; [ $G = 1 ] && FEAT="$FEAT --features gpu"
+    (cd $F && CARGO_TARGET_DIR=$F/target-selftest cargo build --release -p flock-live $FEAT --features seed-injection --bin flock-circuit) \
+      > $O/build-selftest.txt 2>&1 || { tail -30 $O/build-selftest.txt; exit 1; }
+    cp $F/target-selftest/release/flock-circuit $BIN/flock-circuit-selftest
+  fi
+  BINARY=$BIN/flock-circuit; SELFTEST_BINARY=$BIN/flock-circuit-selftest
 fi
-B=$BINARY; sha256sum $B | tee $O/binary.sha256
+B=$BINARY; SB=${SELFTEST_BINARY:-$BINARY}; sha256sum $B $SB | tee $O/binary.sha256
 if [ -z "${PYBIN:-}" ]; then
   [ -x $W/py/bin/python ] || { $HOME/.local/bin/uv venv -q --python 3.12 $W/py && $HOME/.local/bin/uv pip install -q --python $W/py/bin/python numpy blake3; }
   PYBIN=$W/py/bin/python3
@@ -24,8 +36,11 @@ fi
 export PYTHONPATH=$REPO/packages/verity/src:$REPO/backends/numerical/python:$REPO/backends/flock/python:$REPO/integrations/vllm:$REPO/tools/circuit_check/src
 nvidia-smi -L 2>/dev/null | tee $O/host.txt; lscpu | grep -E 'Model name|^CPU\(s\)' | tee -a $O/host.txt; free -g | tee -a $O/host.txt
 G_=; [ $G = 1 ] && G_=--gpu
-SRC=(--program-graph "${GRAPH:-}"); [ -n "${DEFS:-}" ] && SRC=(--definitions "$DEFS")
+# a path named at launch that isn't here is the file research run --send shipped to the run dir's inputs/
+inp() { local p=$1; if [ -n "$p" ] && [ ! -e "$p" ] && [ -e "${RESEARCH_RUN_DIR:-/nonexistent}/inputs/$(basename "$p")" ]; then p=$RESEARCH_RUN_DIR/inputs/$(basename "$p"); fi; echo "$p"; }
+GRAPH=$(inp "${GRAPH:-}"); DEFS=$(inp "${DEFS:-}"); SHAPES=$(inp "${SHAPES:-}")
+SRC=(--program-graph "$GRAPH"); [ -n "$DEFS" ] && SRC=(--definitions "$DEFS")
 SEL=(); [ -n "${SHAPES:-}" ] && SEL+=(--shapes "$SHAPES"); [ "${TABLE_FREE:-0}" = 1 ] && SEL+=(--table-free)
 $PYBIN -m verity_flock.class_statement "${SRC[@]}" ${MODULES:+--modules "$MODULES"} --partition q-word --out $O/classes \
-  --binary $B "${SEL[@]}" --batch ${BATCH:-auto} --jobs ${JOBS:-1} --warm ${WARM:-1} --runs ${RUNS:-3} --selftest ${SELFTEST:-25} \
+  --binary $B --selftest-binary $SB "${SEL[@]}" --batch ${BATCH:-auto} --jobs ${JOBS:-1} --warm ${WARM:-1} --runs ${RUNS:-3} --selftest ${SELFTEST:-25} \
   --port ${PORT:-7710} --protocol ${PROTOCOL:-sweep-v0} $G_
