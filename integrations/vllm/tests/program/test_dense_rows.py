@@ -157,20 +157,21 @@ def _w(rng: np.random.Generator, x: np.ndarray) -> tuple[np.ndarray, dict[str, s
     return np.concatenate(list(regimes.values())).astype(np.uint16), out
 
 
-def _reference(x: np.ndarray, w: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    return D.dot_bf16(x[None, :], w)
+def _reference(x: np.ndarray, w: np.ndarray, dot_id: str = "AmpereBF16TcDot16_v2") -> tuple[np.ndarray, np.ndarray]:
+    return D.dot_bf16_for(dot_id)(x[None, :], w)
 
 
-def test_float64_chain_equals_the_int64_chain_in_every_regime():
+@pytest.mark.parametrize("dot_id", sorted(DR.STEPS))
+def test_float64_chain_equals_the_int64_chain_in_every_regime(dot_id):
     rng = np.random.default_rng(5704)
     x = _x(rng)
     w, regime = _w(rng, x)
-    ref, ref_nf = _reference(x, w)
+    ref, ref_nf = _reference(x, w, dot_id)
     for n in (1, 3, 8):
-        out, nf = DR.dot_ampere(x, w, n)
+        out, nf = DR.dot_chain(x, w, dot_id, n)
         assert np.array_equal(out, ref), (n, np.flatnonzero(out != ref)[:8])
         assert np.array_equal(nf, ref_nf)
-    _, handed_back = DR._chain(x, DR.prepared(w), 0, len(w))
+    _, handed_back = DR._chain(x, DR.prepared(w), 0, len(w), DR.STEPS[dot_id])
     claimed = ~(handed_back | DR.prepared(w).bad)
     for name in ("typical", "wide", "cancel", "zeros", "subnormal"):
         assert claimed[regime[name]].all(), name
@@ -182,24 +183,26 @@ def test_float64_chain_equals_the_int64_chain_in_every_regime():
     assert not claimed[regime["nonfinite"]].any()
 
 
-def test_float64_chain_hands_back_every_coordinate_of_a_non_finite_row():
+@pytest.mark.parametrize("dot_id", sorted(DR.STEPS))
+def test_float64_chain_hands_back_every_coordinate_of_a_non_finite_row(dot_id):
     rng = np.random.default_rng(5705)
     x = _x(rng)
     x[3] = 0x7F80
     w, _ = _w(rng, x)
-    out, nf = DR.dot_ampere(x, w, 2)
-    ref, ref_nf = _reference(x, w)
+    out, nf = DR.dot_chain(x, w, dot_id, 2)
+    ref, ref_nf = _reference(x, w, dot_id)
     assert np.array_equal(out, ref) and np.array_equal(nf, ref_nf) and nf.all()
 
 
-def test_float64_chain_on_cancelling_steps_and_exact_zeros():
+@pytest.mark.parametrize("dot_id", sorted(DR.STEPS))
+def test_float64_chain_on_cancelling_steps_and_exact_zeros(dot_id):
     rng = np.random.default_rng(5706)
     x = _x(rng)
     w = np.repeat(_bf16(rng.standard_normal((16, K // 2))), 2, axis=1)
     w[:, :16] = 0
     w[:, 32:] = 0
-    out, _ = DR.dot_ampere(x, w, 1)
-    ref, _ = _reference(x, w)
+    out, _ = DR.dot_chain(x, w, dot_id, 1)
+    ref, _ = _reference(x, w, dot_id)
     assert np.array_equal(out, ref) and (ref == 0).all()
 
 
@@ -235,3 +238,22 @@ def test_gemm_row_kernel_is_the_same_on_either_path(monkeypatch):
     ws = np.stack([w[i:i + 24] for i in (0, 40, 120, 132)])
     sc = self_check(bind(b1.Gemm, K=K, N=24), kernel=rows.KERNEL, inputs=[xs, ws])
     assert sc.ok and sc.declined == 0, str(sc)
+
+
+def test_gemm_v2_row_kernel_takes_the_float64_chain_of_its_dot(monkeypatch):
+    """A `Gemm_v2` row past `FAST_GEMM_WORDS` (Gemma-2's lm_head under the Hopper DOT) takes the float64 chain of ITS step: the same
+    words as the int64 twin, and never the Ampere chain's."""
+    rng = np.random.default_rng(5710)
+    x = _x(rng)
+    w, _ = _w(rng, x)
+    finite = ~_reference(x, w)[1]
+    w = w[finite]
+    statics = {"K": K, "N": len(w), "DOT": '{"fn":"HopperBF16WgmmaDot16_v1"}'}
+    slow = rows.ROWS["Gemm_v2"].fn(statics, [x, w.reshape(-1)])["out"]
+    monkeypatch.setattr(DR, "FAST_GEMM_WORDS", 1)
+    calls = []
+    monkeypatch.setattr(DR, "_chain", lambda *a, _c=DR._chain: calls.append(a[-1]) or _c(*a))
+    fast = rows.ROWS["Gemm_v2"].fn(statics, [x, w.reshape(-1)])["out"]
+    assert calls and set(calls) == {DR.STEPS["HopperBF16WgmmaDot16_v1"]}
+    assert np.array_equal(fast, slow)
+    assert not np.array_equal(DR.dot_chain(x, w, "HopperBF16WgmmaDot16_v1")[0], DR.dot_ampere(x, w)[0])
