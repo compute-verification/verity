@@ -41,7 +41,9 @@ src/cluster/
 ├── agent.py    the node agent: the tick loop (shadow or live), timed windows left alone, stop on exception or a rule broken
 ├── submit.py   the submit path: a declared job's placement and its node executor's wrappers (research run --queue)
 ├── kinds.py    the job-kind registry (kinds/<owner>.toml): a kind's shape, time and question; the held rules as warnings
-└── cli.py      cluster validate | plan | submit | ledger … | agent | shadow replay | shadow evaluate
+├── status.py   each node's running, queued and held jobs by owner and key, GPU-h ready, holds, disk and node 1's
+│               unreplayed bundles (release.py's rule), read over SSH; read-only
+└── cli.py      cluster validate | plan | submit | ledger … | agent | shadow replay | shadow evaluate | status
 descriptions/nebius.toml   vy-nebius-1 and vy-nebius-2 as their owners describe them on 30 Sep 2026
 kinds/<owner>.toml         each owner lane's job kinds, read from the tree a submitter ships (kinds.py's docstring)
 vy-cluster-agent.service   node 2's live agent as a systemd unit: install, pin, stop and restart in its header
@@ -81,4 +83,5 @@ uv run cluster submit tools/cluster/descriptions/nebius.toml --run-id R --now T 
 uv run cluster ledger verify|quiet|failures LEDGER.jsonl ...
 uv run cluster shadow replay tools/cluster/descriptions/nebius.toml --sampler UTIL.jsonl.gz --preempted preempted.log --out DIR
 uv run cluster shadow evaluate DIR --quiet-log quiet.jsonl
+uv run cluster status [--node nebius-1|nebius-2|all] [--owner OWNER] [--json]   # over SSH with ~/.ssh/research_key
 ~~~

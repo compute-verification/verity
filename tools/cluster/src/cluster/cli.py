@@ -13,10 +13,13 @@
   cluster shadow evaluate DIR [--quiet-log QUIET.jsonl[.gz]] [--sampler UTIL.jsonl[.gz]...]  # the pass bar: exit 0 or 2
   cluster submit DESCRIPTION.toml --run-id R --now T --project P --submitter W [--kind K] [--max-s S] [--gpus N ...]
                                                         # the node, wrappers and kind as JSON; exit 3 with {"refused"}
+  cluster status [--node nebius-1|nebius-2|all] [--owner OWNER] [--json]   # each node's jobs, GPU-h ready, holds, disk,
+                                                        # bundles, read over SSH (status.py); exit 1 if a node can't be read
 
 A snapshot is `{"node", "now", "allocations": [...], "queue": [...], "done": [...], "has": [...], "held_locks": [...],
 "last_busy": {alloc: t}, "idle_s": {kind: s}}`, in the shapes `model.allocation_to_dict` and `model.job_to_dict` write.
-Only `agent` reads a clock or touches a node (`agent.py`); `shadow replay` runs the same planner over a day's copied logs.
+Only `agent` reads a clock or touches a node (`agent.py`), and `status`, which only reads them; `shadow replay` runs the
+same planner over a day's copied logs.
 """
 from __future__ import annotations
 
@@ -111,7 +114,15 @@ def main(argv: list[str] | None = None) -> int:
     sb.add_argument("--quiet", action="store_true", default=None)
     sb.add_argument("--node")
     sb.add_argument("--gpu-ids", default="", help="comma-separated GPU indices the job must get")
+    st = sub.add_parser("status", help="each node's running, queued and held jobs, GPU-h ready, holds, disk and bundles")
+    st.add_argument("--node", choices=("nebius-1", "nebius-2", "all"), default="all")
+    st.add_argument("--owner", help="only this owner's jobs (verity.dev/owner, else the workstream; a submitter on node 2)")
+    st.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
+
+    if a.cmd == "status":
+        from . import status
+        return status.main(list(status.NODES.values()) if a.node == "all" else [status.NODES[a.node]], a.owner, a.json)
 
     if a.cmd == "submit":
         from . import kinds, submit
