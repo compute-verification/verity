@@ -705,6 +705,18 @@ def test_parallel_jobs_give_the_serial_report(tmp_path):
     assert strip(cli.run(specs, OPTS, log=None, jobs=3)) == strip(cli.run(specs, OPTS, log=None, jobs=1))
 
 
+def test_an_isolated_target_stays_traced():
+    """`parallel` forks each item from its zygote, and the child keeps the tracer's hook: the fork is the checker's own, so it
+    must not make every isolated target's verdict uncacheable."""
+    import operator
+
+    from circuit_check import cache as CC
+    from circuit_check import cli
+
+    (got,) = [v for _, v, _, _ in cli.parallel(operator.call, [CC.untraced], 1, CC.trace, (cli.REPO,))]
+    assert got == []
+
+
 def test_the_cache_reads_the_tree_as_git_has_it(tmp_path):
     """A build or bytecode inside the tree (ignored by git) changes no recorded read; a new file git sees does."""
     import subprocess
