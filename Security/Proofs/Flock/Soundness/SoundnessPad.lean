@@ -303,7 +303,7 @@ theorem table_sound_pad (A : Arith F K) (hA : A.Correct)
 /-! ## At C-Flock ZK's values -/
 
 /-- C-Flock ZK's schedules have the `fast100` shape. -/
-theorem m1_shape : ∀ m, 25 ≤ m → m ≤ 27 →
+theorem m1_shape : ∀ m, 25 ≤ m → m ≤ 35 →
     2 ≤ (m1Schedule m).levels.length ∧
       ((m1Schedule m).levels.headD default).lanes = (m1Schedule m).k0 ∧
       (m1Schedule m).m - 7 = (m1Schedule m).k0 + ((m1Schedule m).levels.headD default).logCols ∧
@@ -311,13 +311,13 @@ theorem m1_shape : ∀ m, 25 ≤ m → m ≤ 27 →
   intro m h1 h2
   interval_cases m <;> decide +kernel
 
-/-- **The table theorem at C-Flock ZK's values** (#123 at `8d621454`, `backends/flock/live/PROTOCOL.md` §7
-item 6): `m = 25, 26, 27`, level-0 query counts `277, 242, 229`, padding `t = 2q₀`, a pair of extra
-lanes per rep. For every prover strategy, the verifier accepts a table while the committed values
-do not satisfy the statement with probability at most `2^-205`, for every statement shape in
-range. -/
+/-- **The table theorem at C-Flock ZK's values** (`verity/ml/flock/live/PROTOCOL.md` §7 item 6): every `m`
+the verifier serves, `25 ≤ m ≤ 35`, level-0 query counts `277, 242, 229` at `m = 25, 26, 27`, 219 at
+`m = 28..31` and 218 at `m = 32..35`, padding `t = 2q₀`, a pair of extra lanes per rep. For every prover
+strategy, the verifier accepts a table while the committed values do not satisfy the statement with
+probability at most `2^-205`, for every statement shape in range. -/
 theorem table_sound_pad_m1 (A : Arith F K) (hA : A.Correct)
-    (S : Statement) (hm1 : 25 ≤ S.m) (hm2 : S.m ≤ 27) (c₀ : F) (ptLocal mPts : ℕ)
+    (S : Statement) (hm1 : 25 ≤ S.m) (hm2 : S.m ≤ 35) (c₀ : F) (ptLocal mPts : ℕ)
     (hshape : (S.shape mPts).InRange) (hlay : S.LinkLayout ptLocal mPts)
     (σ : Strategy (tablePad A S (m1Schedule S.m) (by omega) (m1Pad S.m) c₀ 2 ptLocal mPts)) :
     prob (fun out => out.1 = true ∧ ¬ CommittedPad A S (m1Schedule S.m) (m1Pad S.m) c₀ out.2)
