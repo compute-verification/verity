@@ -170,7 +170,7 @@ impl StatementVerifier for ChunkVerifier {
 
 fn server(st: &Arc<ChunkStmt>, digests: Vec<[u8; 32]>) -> Server {
     let mut cfg = SessionConfig::flock_128_r2(vec![TableSpec { name: TABLE.into(), binding: Binding::R1cs { statement_digest: st.digest } }]);
-    cfg.link = Some(LinkSpec { sigma: sigma(st, &digests), m: st.m_link, points: 2 });
+    cfg.link = Some(LinkSpec { sigma: sigma(st, &digests).to_vec(), m: st.m_link, points: 2 });
     Server::new(cfg, Box::new(ChunkVerifier { st: st.clone(), digests }))
 }
 
@@ -278,7 +278,7 @@ fn session(st: &ChunkStmt, t: SharedTransport, seed: u64, plan: &Plan) -> (Value
     let (sb, z, b) = instance(st, seed, plan);
     let hello = {
         let mut cfg = SessionConfig::flock_128_r2(vec![TableSpec { name: TABLE.into(), binding: Binding::R1cs { statement_digest: st.digest } }]);
-        cfg.link = Some(LinkSpec { sigma: sigma(st, &leaf_digests(st, &sb)), m: st.m_link, points: 2 });
+        cfg.link = Some(LinkSpec { sigma: sigma(st, &leaf_digests(st, &sb)).to_vec(), m: st.m_link, points: 2 });
         cfg.hello()
     };
     let t0 = Instant::now();

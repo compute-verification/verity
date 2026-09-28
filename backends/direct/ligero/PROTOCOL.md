@@ -170,7 +170,7 @@ setting (no subfield/extension assumption is needed here, since the combinations
 The opened columns dominate (Ligero's `t * m`); `m` is what a cheaper range-check realisation would shrink.
 Chain (m = 3516, + `q`: D (2l - 1) * 4 = 197 KB): 3.14 MB per 42 VUs (75 KB/VU).
 
-## 7b. The chain: the verification unit (`chain.py`, `vu.py`; `compile_unit(chain=True)`)
+## 7b. The chain: the proof unit (`chain.py`, `vu.py`; `compile_unit(chain=True)`)
 
 A VU is 96 units from `c_0 = +0` plus the `Epilogue` (RN-even cast to BF16). Column `j = 96 v + i` holds unit `i` of
 VU `v`; a proof of `l` columns holds `floor(l / 96)` VUs (`l = 4096`: 42 VUs, 64 pad columns = trivial units).
@@ -324,7 +324,7 @@ therefore lists `assumptions = ["hash", "random-oracle (Merkle hiding)"]`.  Salt
 salt_c)`, `salt_c` uniform 32 bytes, opened with the column) would make the commitment statistically hiding and
 remove that item; cost: `+32` bytes hashed per leaf at commit (one extra Blake3 block per column, against `4 M`
 bytes of column already hashed) and `+32 t` bytes per proof in the openings (`+6.3 KB` at `t = 197`, ~0.1 % of the
-transcript) -- not implemented on this branch.
+transcript) -- not implemented.
 
 *Simulator (demonstrated: `redteam/simulator.py`, run against the real `verify()` under the real hash).*  `S`
 receives `c1, c2`, runs `V*` once on a dummy transcript: random `root0`; after `V*` opens `r1` the round-1
