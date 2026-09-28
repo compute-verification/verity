@@ -9,6 +9,12 @@ addressed to its owner, and a "cleared" reply in that thread when it ends:
   go on ticking while the pane shows nothing);
 - node 1 can't be read for 10 minutes: infra.
 
+The same read takes each Kueue ClusterQueue's `spec.resourceGroups`. On 3 Oct node 1's quotas were changed by hand and the
+steward couldn't find who or until when, so each field that changed since the last read becomes one line (the ClusterQueue,
+the field, old -> new, and the managedFields manager that owns `spec.resourceGroups`, with its last write), posted to infra
+and appended to node 1's `quota-changes.log` beside infra's own lines; a ClusterQueue created or deleted is a line too. The
+first read with no saved baseline records it and posts nothing; a failed kubectl keeps the baseline and compares nothing.
+
 The posts go in #agent-coordination, where they ring the owners' doorbells (#agent-alerts rings none). Infra, their author, can't
 be woken by its own post, so its share also goes in its inbox thread. Node 1 holds no Slack credential, so this runs where
 `research msg` works (infra's VM, tmux `n1-alerts`) and stops when that VM is suspended.
@@ -37,11 +43,28 @@ STALL_S = 600
 UNREAD_S = 600
 STAMP = "%Y-%m-%dT%H:%M:%SZ"
 TICK_RE = re.compile(r"^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ) tick(?: failed: (.*)| )")
+KUBECTL = ["sudo", "-n", "k3s", "kubectl"]
+QUOTA_LOG = "/workspace/verity-guest/quota-changes.log"
+QUOTA_WHO = ["infra"]
+UNSET = "(unset)"
 
-# run on node 1 with `python3 -`: the pools' blocked files, and the last ticks in the pane and in loop.log (None when unreadable)
+# run on node 1 with `python3 -`: the pools' blocked files, the last ticks in the pane and in loop.log (None when unreadable),
+# and the ClusterQueues with their spec's managedFields (`queues` None and `queues_error` when kubectl fails)
 REMOTE = f"""
 import json, os, re, subprocess, time
-out = {{"now": time.time(), "blocked": {{}}, "pane": None, "log": None}}
+out = {{"now": time.time(), "blocked": {{}}, "pane": None, "log": None, "queues": None}}
+try:
+    r = subprocess.run({KUBECTL + ["get", "clusterqueues", "-o", "json", "--show-managed-fields"]!r}, capture_output=True,
+                       text=True, timeout=30)
+    if r.returncode:
+        out["queues_error"] = r.stderr.strip()[-300:] or "kubectl exited %d" % r.returncode
+    else:
+        out["queues"] = [{{"metadata": {{"name": q["metadata"]["name"], "managedFields": [
+                              f for f in q["metadata"].get("managedFields") or [] if not f.get("subresource")]}},
+                          "spec": {{"resourceGroups": q["spec"].get("resourceGroups") or []}}}}
+                         for q in json.loads(r.stdout)["items"]]
+except Exception as e:
+    out["queues_error"] = "%s: %s" % (type(e).__name__, e)
 ticks = lambda text: [ln for ln in text.splitlines() if re.match({TICK_RE.pattern!r}, ln)][-{FAILS}:]
 for d in {list(POOLS)!r}:
     p = os.path.join(d, "blocked")
@@ -122,6 +145,97 @@ def step(state: dict, snap: dict | None, now: float, post: Post) -> None:
         del state["open"][key]
 
 
+def flat(v, path: str) -> dict[str, str]:
+    """`spec.resourceGroups` as `{field path: value}`: list items with a `name` (flavors, resources) are keyed by it, the
+    rest by index; values are compared as strings, so `6` and `"6"` (as `kubectl patch` and `apply` write a quantity) agree."""
+    if isinstance(v, list) and v and all(isinstance(x, dict) for x in v):
+        out = {}
+        for i, x in enumerate(v):
+            named = isinstance(x.get("name"), str)
+            out.update(flat({k: y for k, y in x.items() if not (named and k == "name")}, f"{path}[{x['name'] if named else i}]"))
+        return out
+    if isinstance(v, dict):
+        out = {}
+        for k, x in v.items():
+            out.update(flat(x, f"{path}.{k}"))
+        return out
+    return {path: f"[{', '.join(map(str, v))}]" if isinstance(v, list) else str(v)}
+
+
+def writer(fields: list) -> tuple[str, str | None] | None:
+    """The managedFields manager that last wrote a ClusterQueue's `spec.resourceGroups` and its time: the entry that owns that
+    field, else the latest one that wrote any of spec. An entry keeps one time, its manager's latest write to any field it
+    owns (the quiet hour's `stopPolicy` patches move `kubectl-patch`'s), and every `kubectl patch` is `kubectl-patch` unless
+    it names a `--field-manager`."""
+    spec = [f for f in fields if not f.get("subresource") and "f:spec" in (f.get("fieldsV1") or {})]
+    owns = [f for f in spec if "f:resourceGroups" in f["fieldsV1"]["f:spec"]]
+    best = max(owns or spec, key=lambda f: f.get("time") or "", default=None)
+    return None if best is None else (best.get("manager") or "?", best.get("time"))
+
+
+def quotas(items: list) -> dict[str, dict]:
+    """ClusterQueue name -> `{"groups": flat(resourceGroups), "by": writer(managedFields)}`, from `kubectl get -o json`'s
+    items (or REMOTE's trimmed copy of them)."""
+    return {q["metadata"]["name"]: {"groups": flat(q["spec"].get("resourceGroups") or [], "resourceGroups"),
+                                    "by": writer(q["metadata"].get("managedFields") or [])} for q in items}
+
+
+def quota_lines(old: dict, new: dict) -> list[str]:
+    """One line per field of a ClusterQueue that changed between two `quotas()`, and one per ClusterQueue created or deleted."""
+    def by(q: dict) -> str:
+        if not q["by"]:
+            return " (no managedFields entry wrote its spec)"
+        who, at = q["by"]
+        return f" (spec.resourceGroups owner: {who}{f', last write {at}' if at else ''})"
+
+    def had(q: dict) -> str:
+        return ", ".join(f"`{p}` {v}" for p, v in q["groups"].items()) or "no resourceGroups"
+
+    lines = []
+    for name in sorted(old.keys() | new.keys()):
+        o, n = old.get(name), new.get(name)
+        if o is None:
+            lines.append(f"ClusterQueue `{name}` is new: {had(n)}{by(n)}")
+        elif n is None:
+            lines.append(f"ClusterQueue `{name}` was deleted; it had {had(o)}")
+        else:
+            for p in [*n["groups"], *(p for p in o["groups"] if p not in n["groups"])]:
+                a, b = o["groups"].get(p, UNSET), n["groups"].get(p, UNSET)
+                if a != b:
+                    lines.append(f"ClusterQueue `{name}`: `{p}` {a} -> {b}{by(n)}")
+    return lines
+
+
+def watch_quotas(state: dict, snap: dict | None, now: float, post: Post, append: Callable[[list], None]) -> str:
+    """Compare this read's ClusterQueues with `state["quotas"]`; post each change to infra and `append` it to node 1's quota
+    log, stamped. The first read records the baseline and posts nothing; an unread node or a failed kubectl changes nothing.
+    A post or an append that fails is made again at the next read (`state["quota_unsent"]`), the other not. Returns what it
+    did."""
+    if snap is None:
+        return "node 1 unread"
+    if snap.get("queues") is None:
+        return f"kubectl failed ({snap.get('queues_error') or 'no output'}); kept the baseline"
+    new = quotas(snap["queues"])
+    if "quotas" not in state:
+        state["quotas"] = new
+        return f"baseline of {len(new)} ClusterQueues"
+    lines = quota_lines(state["quotas"], new)
+    state["quotas"] = new
+    unsent = state.setdefault("quota_unsent", {"log": [], "post": []})
+    stamp = time.strftime(STAMP, time.gmtime(now))
+    unsent["log"] += [f"{stamp} n1-alerts: {ln}" for ln in lines]
+    unsent["post"] += lines
+    failed = []
+    for key, send in (("log", append), ("post", lambda ls: post(QUOTA_WHO, "\n".join(ls), None))):
+        if unsent[key]:
+            try:
+                send(unsent[key])
+                unsent[key] = []
+            except Exception as e:  # noqa: BLE001
+                failed.append(f"{key} failed, retried at the next read: {type(e).__name__}: {e}")
+    return "; ".join([f"{len(lines)} changed" if lines else "unchanged", *failed])
+
+
 def slack_post(dry: bool) -> Post:
     from research import slack
 
@@ -148,17 +262,30 @@ def read(node: str) -> dict:
     return json.loads(r.stdout)
 
 
+def log_append(node: str, dry: bool) -> Callable[[list], None]:
+    def append(lines: list) -> None:
+        text = "".join(f"{ln}\n" for ln in lines)
+        if dry:
+            print(f"would append to {node}:{QUOTA_LOG}:\n{text}", end="", flush=True)
+            return
+        r = subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", node, f"cat >> {QUOTA_LOG}"], input=text,
+                           capture_output=True, text=True, timeout=60)
+        if r.returncode:
+            raise RuntimeError(f"appending to {QUOTA_LOG}: {r.stderr.strip()[-300:] or f'ssh exited {r.returncode}'}")
+    return append
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="n1_alerts", description=__doc__.split("\n\n")[0])
     ap.add_argument("--node", default="n1", help="node 1's ssh host")
     ap.add_argument("--every", type=float, default=60.0)
     ap.add_argument("--state", default=str(Path.home() / ".research" / "n1-alerts.json"))
     ap.add_argument("--once", action="store_true")
-    ap.add_argument("--dry-run", action="store_true", help="print the posts instead (and keep no state)")
+    ap.add_argument("--dry-run", action="store_true", help="print the posts and quota-log lines instead (and keep no state)")
     ns = ap.parse_args(argv)
     path = Path(ns.state)
     state = json.loads(path.read_text()) if path.exists() else {"open": {}}
-    post = slack_post(ns.dry_run)
+    post, append = slack_post(ns.dry_run), log_append(ns.node, ns.dry_run)
     while True:
         stamp = time.strftime("%H:%M:%SZ", time.gmtime())
         try:
@@ -170,10 +297,14 @@ def main(argv: list[str] | None = None) -> int:
             step(state, snap, time.time(), post)
         except Exception as e:  # noqa: BLE001  (a post that failed is made again at the next read)
             print(f"{stamp} post failed: {type(e).__name__}: {e}", flush=True)
+        try:
+            quota = watch_quotas(state, snap, time.time(), post, append)
+        except Exception as e:  # noqa: BLE001  (a ClusterQueue that doesn't parse leaves the baseline as it was)
+            quota = f"compare failed: {type(e).__name__}: {e}"
         if not ns.dry_run:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(json.dumps(state))
-        print(f"{stamp} open: {', '.join(sorted(state['open'])) or 'none'}", flush=True)
+        print(f"{stamp} open: {', '.join(sorted(state['open'])) or 'none'}; quotas: {quota}", flush=True)
         if ns.once:
             return 0
         time.sleep(ns.every)
