@@ -22,7 +22,8 @@ def load():
             if m.name in ("quarantine", "catalog"):
                 continue
             try:
-                importlib.import_module(f"{package.__name__}.{m.name}")
+                # the literal prefix is how tests/dead_code_census.py sees every registry module reached from here
+                importlib.import_module(f"verity_vllm.program.registry.{m.name}")
             except Exception as e:  # noqa: BLE001  (recorded: the error names the module a lookup then misses)
                 errors.append(f"{package.__name__}.{m.name}: {type(e).__name__}: {e}")
         _LOADED.append((REGISTRY, errors))
