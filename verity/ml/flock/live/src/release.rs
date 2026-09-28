@@ -47,7 +47,17 @@ pub struct Admitted {
 }
 
 /// The outer slot, held until dropped.
-pub struct Slot(#[allow(dead_code)] File);
+pub struct Slot(#[allow(dead_code)] Held);
+
+/// A `flock(2)` lock, held until dropped. Dropping it unlocks it before closing the file, as `verity_flock.firewall` does:
+/// closing alone frees nothing while a child process forked meanwhile shares the open file, until that child execs.
+struct Held(File);
+
+impl Drop for Held {
+    fn drop(&mut self) {
+        let _ = self.0.unlock();
+    }
+}
 
 struct Events {
     path: PathBuf,
@@ -149,6 +159,7 @@ impl Record {
     fn with<T>(&self, f: impl FnOnce(&mut Events) -> io::Result<T>) -> io::Result<T> {
         let lock = self.lock_file("record.lock")?;
         lock.lock()?;
+        let _held = Held(lock);
         let path = self.state.join("record.jsonl");
         let list = match std::fs::read_to_string(&path) {
             Ok(text) => text.lines().filter(|l| !l.is_empty()).map(serde_json::from_str).collect::<Result<_, _>>()
@@ -280,6 +291,7 @@ impl Record {
             }
             Err(TryLockError::Error(e)) => return Err(e),
         }
+        let held = Held(f);
         self.with(|ev| {
             if let Some((seq, s, p)) = orphan(&ev.list) {
                 if ev.stopped(&s).is_none() {
@@ -289,7 +301,7 @@ impl Record {
             }
             ev.append(json!({"event": "slot", "session": session, "part": part}))
         })?;
-        Ok(Slot(f))
+        Ok(Slot(held))
     }
 }
 
@@ -731,5 +743,17 @@ mod tests {
         assert_eq!(kinds, ["slot", "wait", "stop", "slot", "release"]);
         assert_eq!(ev[6]["session"], a.as_str());
         assert_eq!(ev[6]["why"], "the slot's holder ended before its outcome (slot 4)");
+    }
+
+    #[test]
+    fn a_dropped_slot_is_free_while_a_copy_of_its_file_lives() {
+        let rec = scratch("slot-copy");
+        let held = rec.slot("a", "L0", || {}).unwrap();
+        let copy = held.0.0.try_clone().unwrap(); // what a child process forked meanwhile keeps until it execs
+        drop(held);
+        drop(rec.slot("b", "L0", || panic!("the slot outlived its holder")).unwrap());
+        drop(copy);
+        let kinds: Vec<String> = rec.events().unwrap().iter().map(|e| e["event"].as_str().unwrap().into()).collect();
+        assert_eq!(kinds, ["slot", "stop", "slot"]);
     }
 }
