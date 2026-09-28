@@ -31,18 +31,21 @@ Implementations (`IMPLS`), each adding one class:
   - It runs through that tree's frozen harness, `verity-vllm pous-dense-bench`, with the flags of the band's run of
     record (`r20260928-032701-b4a1`, `FROZEN_FLAGS`).
   - Nothing here changes that harness; its `dense-bench.json` is read back.
-* `p2-v1-gpu`: P2 v1, the frozen specification (`p2_v1/`): its reference pinned by the P2 kit's vectors, its GPU library
-  (decode with v1 keys on `p2_gpu/p2dec.cu`'s tuned squaring, encode by two roots) and the same harness steps as `band-gpu`
-  at k = 105, so the two compare side by side (`side_by_side.py`). It is its own scheme (`--scheme` is ignored): P2 v1 is not a
-  `verity.core.protocols.pous` registered scheme, whose P2 is the MVP's `p2-16448/v3` (the spec's SHAKE256 keys, its 24-byte salt and leaves)
-  and `p2-16448/v2` (ChaCha8 keys).
-* `p2-v3-gpu`: the same kernels and steps, under `p2-16448/v3`'s framing (its commitment, salt, key prefix and leaves:
-  `p2_v1/harness.py`'s `V3`), so the device serves v3's blocks, and its audits go through `protocol.TimedAudit` with the v3
+* `p2-v1-gpu`: P2 v4, the specification (`p2_v1/`): its reference pinned by the spec's vectors, its GPU library
+  (decode with per-block keys on `p2_gpu/p2dec.cu`'s tuned squaring, encode by two roots) and the same harness steps as `band-gpu`
+  at k = 105, so the two compare side by side (`side_by_side.py`). It is its own scheme (`--scheme` is ignored): the spec's P2 is
+  not a `verity.core.protocols.pous` registered scheme, whose P2 is the MVP's `p2-16448/v4` (the spec's
+  counter-mode SHA-512 keys, its 24-byte salt and leaves) and `p2-16448/v2` (ChaCha8 keys).
+* `p2-v3-gpu`: the same kernels and steps, under the registered P2's framing (`p2-16448/v4`: its commitment, salt, key prefix and leaves,
+  `p2_v1/harness.py`'s `V3`), so the device serves its blocks, and its audits go through `protocol.TimedAudit` with its
   certificate (`band_gpu/memory_challenger.py --strict`), which refuses any `k` or `Δ + RTT` the certificate does not cover.
 * `p2-v3-mc-gpu`: `p2-v3-gpu` audited by the memory challenger (`memory_challenger/live.py`, `p2_v1/harness.py`'s `MC`) at
   `Δ + RTT_ALLOWANCE_CAP_NS`, with a tampered-block and a bad-signature control beside the others.  Its sessions are signed
   with S1's LMS key in `--mc-lms-key DIR`; without one they are test-signed, so the verdict rejects them all (its
   `fail_closed` gate), and it issues no storage profile.
+* `band-gpu`: the same kernels, moved into `band_gpu/` with no vLLM dependency, the whole-chain decode on lane pairs
+  (`harness.KERNELS`), run by the POUS-only harness (`band_gpu/harness.py`): kernel gates that stop the run when they fail,
+  encode GB/s, `C` resident, decode overhead on a synthetic loop of the weight set's GEMMs (CUDA-graphed where capturable),
 * `band-gpu`: the same kernels, moved into `band_gpu/` with no vLLM dependency, the whole-chain decode on lane pairs
   (`harness.KERNELS`), run by the POUS-only harness (`band_gpu/harness.py`): kernel gates that stop the run when they fail,
   encode GB/s, `C` resident, decode overhead on a synthetic loop of the weight set's GEMMs (CUDA-graphed where capturable),
@@ -329,10 +332,10 @@ class BandGpu:
 # ---------------------------------------------------------------------------------------------------------- p2-v1-gpu
 
 class P2V1Gpu:
-    """P2 v1's GPU kernels (`p2_v1/`) through P2's arm of the POUS-only harness (`p2_v1/harness.py`)."""
+    """P2's GPU kernels (`p2_v1/`) through P2's arm of the POUS-only harness (`p2_v1/harness.py`)."""
 
     name = "p2-v1-gpu"
-    own_scheme = "p2/v1"
+    own_scheme = "p2/v4"
     experimental = "P2 remains experimental: the P2–M1-SGI instantiation assumption is not accepted (spec §10.8)"
 
     def conformance_gate(self) -> dict[str, Any]:
@@ -349,14 +352,20 @@ class P2V1Gpu:
 
 
 class P2V3Gpu(P2V1Gpu):
-    """The same kernels under `p2-16448/v3`'s framing, audited by `protocol.TimedAudit` (`p2_v1/harness.py`'s `V3`)."""
+    """The same kernels under the registered P2's framing (`schemes.p2.P2`, `p2-16448/v4`), audited by `protocol.TimedAudit`
+    (`p2_v1/harness.py`'s `V3`)."""
 
     name = "p2-v3-gpu"
-    own_scheme = "p2-16448/v3"
+
+    @property
+    def own_scheme(self) -> str:
+        from verity.core.protocols.pous.schemes import p2
+
+        return p2.P2().name
 
     def conformance_gate(self) -> dict[str, Any]:
-        """The kit's vectors (the kernels' map and its SHAKE256 streams), and v3's expander given the kit's prefix: its
-        `shake_keys` gives every vector's `K` and `t`, so the two framings differ only in their prefix."""
+        """The spec's vectors (the kernels' map and its SHA-512 streams), and the registered scheme's expander given the
+        spec's prefix: its `sha512_keys` gives every vector's `K` and `t`, so the two framings differ only in their prefix."""
         sys.path.insert(0, str(HERE))
         from p2_v1 import reference
 
@@ -370,9 +379,9 @@ class P2V3Gpu(P2V1Gpu):
             params = p2.P2Params(w, c0, 1 << 16)
             model = bytes.fromhex(v["model_commitment"])
             prefix = reference.expand_prefix(bytes.fromhex(v["setup_salt"]), ref, model)
-            k, t = p2.shake_keys(params, prefix, int(v["segment"]), int(v["block"]))
+            k, t = p2.sha512_keys(params, prefix, int(v["segment"]), int(v["block"]))
             n = params.block_bytes
-            got["checks"][f"v3-expander/{v['id']}"] = k.to_bytes(n, "big").hex() == v["K"] and t.to_bytes(n, "big").hex() == v["t"]
+            got["checks"][f"expander/{v['id']}"] = k.to_bytes(n, "big").hex() == v["K"] and t.to_bytes(n, "big").hex() == v["t"]
         got["passed"] = all(got["checks"].values())
         return got
 

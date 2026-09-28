@@ -1,12 +1,15 @@
 """P2, **experimental**: the squaring-based POUS scheme from the efficient-cryptography campaign (POUS
 `internal/efficient-crypto/p2-verdict.md`; its spec is the POUS store's `docs/efficient-crypto/p2-spec-draft.md`, frozen
 v1 of 29 Sep 2026, relayed in `note:20261004T1836Z-report-relay-p2-spec-v1-frozen`, amended to v1.1 by Daniel's
-ruling of 4 Oct 2026 in `../p2/PROTOCOL.md`, which this module implements).  Every block is independent, and its decode is two big-integer squarings.  Two codecs differ only in how a block's keys are expanded:
+ruling of 4 Oct 2026 and to v4 by his ruling of 6 Oct 2026, one hash, SHA-512, in `../p2/PROTOCOL.md`, which this
+module implements).  Every block is independent, and its decode is two big-integer squarings.  Two codecs differ only
+in how a block's keys are expanded:
 
-- `p2-16448/v3`: SHAKE256 with the spec's v1 framing, the expander its setup assumption P2-EXP-IO names (decision F4).
+- `p2-16448/v4`: counter-mode SHA-512 with the spec's v4 framing, the expander its setup assumption P2-EXP-IO names
+  (decision F4).
 - `p2-16448/v2`: ChaCha8 from a SHAKE256 seed per segment.  It is **nonconforming** to F4, which adds a reduced-round
-  assumption, but its keys cost about 1% of the decode's multiply work on the device against SHAKE256's estimated 12%,
-  and `benchmarks/pous`'s `p2-gpu` arm measures it.  It is kept for that.
+  assumption, but its keys cost about 1% of the decode's multiply work on the device, and `benchmarks/pous`'s `p2-gpu`
+  arm measures it.  It is kept for that.
 
 ~~~text
 p          2^w − c0, prime, p ≡ 3 mod 4           registered: w = 16448, c0 = 21065 (`p2-p16448-c21065`, 2,056-byte blocks)
@@ -20,18 +23,20 @@ decode     m = sq(σ_K(sq(c))) − t mod p           two squarings
 keys       fresh per block j of segment s, drawn after W through the salt, and expanded where they are used (on the
            device), so nothing key-sized is stored.  K is the first w/8-byte big-endian word of a stream, and t the first
            later word below p (exact rejection sampling; a candidate is ≥ p with probability c0 / 2^w).
-  v3       base = frame("verity/pous/p2/expand/v1") ‖ frame("p2/v1") ‖ frame(prime id) ‖ frame(salt) ‖ u64be s ‖ u64be j
-           K from SHAKE256(base ‖ "K"), t from SHAKE256(base ‖ "t")
+  v4       prefix = Z("verity/pous/p2/keys/v4\0" ‖ frame("p2/v4") ‖ frame(prime id) ‖ frame(salt)), Z zero-pads to
+           whole 128-byte blocks;  base = prefix ‖ u64be s ‖ u64be j
+           stream_P = SHA512(base ‖ P ‖ u32be 0) ‖ SHA512(base ‖ P ‖ u32be 1) ‖ …;  K from stream_K, t from stream_t
   v2       seed_s = SHAKE256("verity/pous/p2/seed/v1" ‖ tag_s)[0 : 32],  tag_s = salt ‖ u64 s
            one stream, ChaCha8(key = seed_s, nonce = u64 j, counter 0, 1, …): K, then t's candidates
 ~~~
 
-`frame` is `verity.ml.randomness.frame`, and the prime id is `p2-p{w}-c{c0}`.  Given the same base, v3's keys are the
-spec's byte for byte (`tests/fixtures/schemes/p2-v1-keys.json`, from the P2 kit's `vectors.json`).  The base differs
-from the spec's in one place: where the spec frames the model commitment and its 32-byte setup salt, v3 frames the
-protocol's 24-byte salt, which `setup.draw_salt` derives from the commitment to W.  So the salt still binds the model,
-but the bytes are not the spec's vectors'; that goes with the rest of the spec's setup framing (its leaves and
-challenge derivation), not with the expander.
+`frame` is `verity.ml.randomness.frame`, and the prime id is `p2-p{w}-c{c0}`.  After the prefix's midstate, each
+64-byte chunk is one compression (the base's last 16 bytes, P and the counter are 21 bytes).  Given the same prefix,
+v4's keys are the spec's byte for byte (`tests/fixtures/p2-v4-keys.json`, from `benchmarks/pous/p2_v1/vectors.json`).
+The prefix differs from the spec's in one place: where the spec frames the model commitment and its 32-byte setup salt,
+v4 frames the protocol's 24-byte salt, which `setup.draw_salt` derives from the commitment to W.  So the salt still
+binds the model, but the bytes are not the spec's vectors'; that goes with the rest of the spec's setup framing (its
+leaves and challenge derivation), not with the expander.
 
 **What is proved, and what is not.**
 - The certificate is the pinned `Pous.SecurityProofs.P2SlackFamilyUncond`, its `λ = 128` row at the spec's k = 105
@@ -70,26 +75,26 @@ from ..protocol import Certificate, Scheme
 EXPERIMENTAL = ("abstract-M1 result (pinned P2SlackFamilyUncond); the P2-M1 instantiation assumption is not accepted, "
                 "and the XOR-then-reduce compression attack on it is open")
 
-CHACHA8_NONCONFORMING = "ChaCha8 key expander, nonconforming to the spec's F4 (SHAKE256)"
+CHACHA8_NONCONFORMING = "ChaCha8 key expander, nonconforming to the spec's F4 (counter-mode SHA-512)"
 
-SHAKE256, CHACHA8 = "shake256-v1", "chacha8"
-"""The two key expanders: v3's and v2's."""
+SHA512_CTR, CHACHA8 = "sha512-ctr-v4", "chacha8"
+"""The two key expanders: v4's and v2's."""
 
-EXPAND_LABEL = "verity/pous/p2/expand/v1"
-PROTOCOL_ID = "p2/v1"
+KEYS_TAG = b"verity/pous/p2/keys/v4\0"
+PROTOCOL_ID = "p2/v4"
 SEED_DOMAIN = b"verity/pous/p2/seed/v1"
 
 P2_CLAIMS = ("m1-ideal-permutations", "sms-m1-instantiation", "seq-root", "random-oracle", "perfect-isolation",
-             "cr/sha-256", "live-verifier", "designated-verifier")
+             "cr/sha-512", "live-verifier", "designated-verifier", "trusted-nebius-host")
 """What P2's certificate rests on:
 - abstract M1 (the proof's model);
 - the SMS-to-M1 instantiation (not accepted);
 - SeqRoot;
-- SHAKE256 as a random oracle for the keys (v3's, the spec's P2-EXP-IO), or for v2's segment seeds (whose ChaCha8
-  streams P2-EXP-IO does not name);
+- counter-mode SHA-512 as a random oracle for the keys (v4's, the spec's P2-EXP-IO), or SHAKE256 for v2's segment seeds
+  (whose ChaCha8 streams P2-EXP-IO does not name);
 - perfect isolation;
-- SHA-256 collision resistance for the commitment to W and for `vk`;
-- a live, designated verifier."""
+- SHA-512 collision resistance for the commitment to W and for `vk`;
+- a live, designated verifier, whose memory challenger runs on a Nebius VM that nothing attests (core's `trusted-nebius-host`)."""
 
 POINT = (16448, 21065, 1 << 16)
 """`w`, `c0` and blocks per segment at the registered point.  `2^19` blocks, the certificate's store (1.08 GB), are 8
@@ -123,13 +128,13 @@ alone admits up to `ROOT_CALL_NS − 1`."""
 @dataclass(frozen=True, slots=True)
 class P2Params:
     """`segments` segments of `blocks_per_segment` blocks; each block stores `w` bits and carries `w − 16` bits of W.
-    `expander` is `SHAKE256` (v3) or `CHACHA8` (v2)."""
+    `expander` is `SHA512_CTR` (v4) or `CHACHA8` (v2)."""
 
     w: int
     c0: int
     blocks_per_segment: int
     segments: int = 1
-    expander: str = SHAKE256
+    expander: str = SHA512_CTR
 
     def __post_init__(self) -> None:
         for name in ("w", "c0", "blocks_per_segment", "segments"):
@@ -141,8 +146,8 @@ class P2Params:
             raise ValueError("c0 ≡ 1 mod 4 (so p ≡ 3 mod 4) and below 2^16")
         if self.blocks_per_segment > 1 << 16:
             raise ValueError("block indices within a segment are 16 bits (the verifier's leaves)")
-        if self.expander not in (SHAKE256, CHACHA8):
-            raise ValueError(f"the expander is {SHAKE256!r} (v3) or {CHACHA8!r} (v2)")
+        if self.expander not in (SHA512_CTR, CHACHA8):
+            raise ValueError(f"the expander is {SHA512_CTR!r} (v4) or {CHACHA8!r} (v2)")
 
     @property
     def p(self) -> int:
@@ -183,17 +188,17 @@ class P2Params:
 
     @property
     def codec(self) -> Codec:
-        return Codec(f"p2-{self.w}/{'v3' if self.expander == SHAKE256 else 'v2'}", encode_segment, decode_segment)
+        return Codec(f"p2-{self.w}/{'v4' if self.expander == SHA512_CTR else 'v2'}", encode_segment, decode_segment)
 
     def with_segments(self, segments: int) -> P2Params:
         return P2Params(self.w, self.c0, self.blocks_per_segment, segments, self.expander)
 
     def manifest(self) -> dict[str, int | str]:
-        """v3's names its expander, so the commitments of the two codecs to one W differ; v2's is as it was."""
+        """v4's names its expander, so the commitments of the two codecs to one W differ; v2's is as it was."""
         out: dict[str, int | str] = {"scheme": "p2", "w": self.w, "c0": self.c0, "profile": self.profile,
                                      "blocks_per_segment": self.blocks_per_segment, "segments": self.segments}
-        if self.expander == SHAKE256:
-            out["expander"] = SHAKE256
+        if self.expander == SHA512_CTR:
+            out["expander"] = SHA512_CTR
         return out
 
 
@@ -283,8 +288,21 @@ def segment_seed(salt: bytes, s: int) -> bytes:
 
 
 def expand_prefix(params: P2Params, salt: bytes) -> bytes:
-    """v3: every block's SHAKE256 input before its `u64be(segment) ‖ u64be(block) ‖ purpose`."""
-    return frame(EXPAND_LABEL) + frame(PROTOCOL_ID) + frame(params.prime_id) + frame(_salt(salt))
+    """v4: every chunk's SHA-512 input before its `u64be(segment) ‖ u64be(block) ‖ purpose ‖ u32be(counter)`, zero-padded
+    to whole 128-byte blocks so that a chunk is one compression after the prefix's midstate."""
+    prefix = KEYS_TAG + frame(PROTOCOL_ID) + frame(params.prime_id) + frame(_salt(salt))
+    return prefix + bytes(-len(prefix) % 128)
+
+
+def stream(base: bytes, purpose: bytes, nbytes: int) -> bytes:
+    """The first `nbytes` of `SHA512(base ‖ purpose ‖ u32be(0)) ‖ SHA512(base ‖ purpose ‖ u32be(1)) ‖ …`."""
+    h = hashlib.sha512(base + purpose)
+    out = bytearray()
+    for i in range(-(-nbytes // 64)):
+        c = h.copy()
+        c.update(i.to_bytes(4, "big"))
+        out += c.digest()
+    return bytes(out[:nbytes])
 
 
 def below(p: int, candidates) -> int:
@@ -292,13 +310,12 @@ def below(p: int, candidates) -> int:
     return next(x for x in candidates if x < p)
 
 
-def shake_keys(params: P2Params, prefix: bytes, s: int, j: int) -> tuple[int, int]:
-    """v3: block `j` of segment `s`'s `(K, t)` after `prefix` (`expand_prefix`), the spec's §4 streams: `K` is the first
-    `w/8` bytes of `SHAKE256(base ‖ "K")`, and `t` the first `w/8`-byte word of `SHAKE256(base ‖ "t")` below `p`."""
+def sha512_keys(params: P2Params, prefix: bytes, s: int, j: int) -> tuple[int, int]:
+    """v4: block `j` of segment `s`'s `(K, t)` after `prefix` (`expand_prefix`), the spec's §4 streams: `K` is the first
+    `w/8` bytes of `stream(base, "K")`, and `t` the first `w/8`-byte word of `stream(base, "t")` below `p`."""
     nb, base = params.block_bytes, prefix + s.to_bytes(8, "big") + j.to_bytes(8, "big")
-    k = int.from_bytes(hashlib.shake_256(base + b"K").digest(nb), "big")
-    stream = hashlib.shake_256(base + b"t")
-    return k, below(params.p, (int.from_bytes(stream.digest((i + 1) * nb)[i * nb:], "big") for i in itertools.count()))
+    k = int.from_bytes(stream(base, b"K", nb), "big")
+    return k, below(params.p, (int.from_bytes(stream(base, b"t", (i + 1) * nb)[i * nb:], "big") for i in itertools.count()))
 
 
 def chacha_keys(params: P2Params, seed: bytes, j: int) -> tuple[int, int]:
@@ -324,7 +341,7 @@ def segment_keys(params: P2Params, salt: bytes, s: int) -> Callable[[int], tuple
         seed = segment_seed(salt, s)
         return lambda j: chacha_keys(params, seed, j)
     prefix = expand_prefix(params, salt)
-    return lambda j: shake_keys(params, prefix, s, j)
+    return lambda j: sha512_keys(params, prefix, s, j)
 
 
 def block_keys(params: P2Params, salt: bytes, s: int, j: int) -> tuple[int, int]:
@@ -376,10 +393,10 @@ def decode_segment(params: P2Params, prims, salt: bytes, s: int, blocks: Sequenc
 
 
 class P2(Scheme):
-    """P2 v3 (SHAKE256 keys) at its parameters; experimental, never the default."""
+    """P2 v4 (counter-mode SHA-512 keys) at its parameters; experimental, never the default."""
 
     experimental = EXPERIMENTAL
-    expander = SHAKE256
+    expander = SHA512_CTR
     backend = staticmethod(lambda params: None)
 
     def __init__(self, params: P2Params | None = None, prims=None) -> None:
@@ -425,7 +442,7 @@ class P2ChaCha(P2):
     expander = CHACHA8
 
 
-__all__ = ["CERT_BLOCKS", "CERT_K", "CHACHA8", "CHACHA8_NONCONFORMING", "DELTA_NS", "EXPAND_LABEL", "EXPERIMENTAL", "P2_CLAIMS",
-           "POINT", "PROTOCOL_ID", "ROOT_CALL_NS", "RTT_ALLOWANCE_CAP_NS", "SEED_DOMAIN", "SHAKE256", "P2", "P2ChaCha",
-           "P2Params", "below", "block_keys", "chacha_block", "chacha_keys", "decode_segment", "encode_segment",
-           "expand_prefix", "segment_keys", "segment_seed", "shake_keys"]
+__all__ = ["CERT_BLOCKS", "CERT_K", "CHACHA8", "CHACHA8_NONCONFORMING", "DELTA_NS", "EXPERIMENTAL", "KEYS_TAG", "P2_CLAIMS",
+           "POINT", "PROTOCOL_ID", "ROOT_CALL_NS", "RTT_ALLOWANCE_CAP_NS", "SEED_DOMAIN", "SHA512_CTR", "P2", "P2ChaCha", "P2Params",
+           "below", "block_keys", "chacha_block", "chacha_keys", "decode_segment", "encode_segment", "expand_prefix",
+           "segment_keys", "segment_seed", "sha512_keys", "stream"]

@@ -1,4 +1,4 @@
-"""P2's decode circuit (`pous.decode_circuit`) against `schemes.p2`'s reference decode and `hashlib`'s SHAKE256."""
+"""P2's decode circuit (`pous.decode_circuit`) against `schemes.p2`'s reference decode and `hashlib`'s SHA-512."""
 
 from __future__ import annotations
 
@@ -28,12 +28,21 @@ def _bytes(row) -> bytes:
     return bytes(int(sum(int(row[8 * i + k]) << k for k in range(8))) for i in range(len(row) // 8))
 
 
-@pytest.mark.parametrize(("L", "NB"), [(10, 8), (D.P2_BASE_BYTES, 300), (D.RATE - 2, 1)])
-def test_shake256_is_hashlibs(L, NB):
+@pytest.mark.parametrize(("L", "NB"), [(128, 8), (D.P2_BASE_BYTES, 130), (256 + D.MAX_REST, 64)])
+def test_sha512_ctr_is_hashlibs(L, NB):
+    """The stream from the base's midstate and rest is hashlib's counter-mode SHA-512, with no rest, a 16-byte rest
+    (P2's) and the longest rest one compression takes."""
     msgs = [bytes(RNG.getrandbits(8) for _ in range(L)) for _ in range(3)]
+    M = L // 128
+    mid = EB.evaluate_bits(bind(D.PousSha512Mid, M=M), _bits([m[:128 * M] for m in msgs]))
+    rest = [_bits([m[128 * M:] for m in msgs])] if L % 128 else []
     for purpose in (b"K", b"t"):
-        out = EB.evaluate_bits(bind(D.PousShake256, L=L, D=purpose[0], NB=NB), _bits(msgs))
-        assert [_bytes(r) for r in out] == [hashlib.shake_256(m + purpose).digest(NB) for m in msgs]
+        out = EB.evaluate_bits(bind(D.PousSha512Ctr, L=L, D=purpose[0], NB=NB), mid, *rest)
+        want = [b"".join(hashlib.sha512(m + purpose + i.to_bytes(4, "big")).digest() for i in range(-(-NB // 64)))[:NB]
+                for m in msgs]
+        assert [_bytes(r) for r in out] == want
+    with pytest.raises(ValueError, match="at most"):
+        bind(D.PousSha512Ctr, L=128 + D.MAX_REST + 1, D=75, NB=8).signature()
 
 
 def test_byte_swap_is_wiring():
@@ -59,7 +68,7 @@ def _decode_cases(params: P2.P2Params, n_random: int):
 
 def _reference(params: P2.P2Params, prefix: bytes, j: int, block: bytes) -> tuple[int, bytes | None]:
     f = P2._field(params)
-    k, t = P2.shake_keys(params, prefix, 0, j)
+    k, t = P2.sha512_keys(params, prefix, 0, j)
     c = int.from_bytes(block, "big")
     m = (f.sq(f.sigma(f.sq(c), k)) - t) % f.p
     if c >= f.p or m >> (8 * params.payload_bytes):
@@ -124,17 +133,16 @@ SLOW = pytest.mark.skipif(not os.environ.get("VERITY_POUS_SLOW"), reason="minute
 def test_counts_at_p2():
     """The setup cost model's per-block decode (`decode_circuit`'s docstring)."""
     at = dict(W=P2.POINT[0], C0=P2.POINT[1])
-    assert EB.compile(bind(D.PousP2Decode, L=D.P2_BASE_BYTES, **at)).counts == {"and": 29491425, "xor": 79523062,
-                                                                             "not": 6273466}
+    assert EB.compile(bind(D.PousP2Decode, L=D.P2_BASE_BYTES, **at)).counts == {"and": 31960530, "xor": 93920605, "not": 5381422}
     assert EB.compile(bind(D.PousP2Sq, **at)).counts == {"and": 14073739, "xor": 37860749, "not": 2504496}
-    assert EB.compile(bind(D.PousShake256, L=D.P2_BASE_BYTES, D=ord("K"), NB=2056)).counts == {
-        "and": 614400, "xor": 1843200, "not": 615776}
+    ctr = {"and": 1820247, "xor": 8901166, "not": 166687}
+    assert EB.compile(bind(D.PousSha512Ctr, L=D.P2_BASE_BYTES, D=ord("K"), NB=2056)).counts == ctr
 
 
 @SLOW
 def test_decode_at_p2_is_the_registered_vector():
-    """The registered scheme's pinned small instance (`fixtures/schemes/p2-16448-v3.json`): both blocks decode to W."""
-    v = json.loads((FIXTURES / "schemes" / "p2-16448-v3.json").read_text())["small"]
+    """The registered scheme's pinned small instance (`fixtures/schemes/p2-16448-v4.json`): both blocks decode to W."""
+    v = json.loads((FIXTURES / "schemes" / "p2-16448-v4.json").read_text())["small"]
     params = P2.P2Params(**{k: v["params"][k] for k in ("w", "c0", "blocks_per_segment", "segments")})
     salt, blocks = bytes.fromhex(v["salt"]), [bytes.fromhex(b) for b in v["blocks"][0]]
     prefix = P2.expand_prefix(params, salt)

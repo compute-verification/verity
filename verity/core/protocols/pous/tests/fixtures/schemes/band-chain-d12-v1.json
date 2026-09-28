@@ -32,7 +32,7 @@
    "scheme": "band-chain",
    "segments": 2
   },
-  "root": "a78f5565cb595cb2e0be8ec2d63c2146bdc51c81d003651a05917cfbf5aa4c06",
+  "root": "f1e988882a55d1f7a54c88d2e13532b8d32da2b8a8203596a67992fb16814427c64e2e30f262fbe414d9aeba2ab45befc28ef2747539bcc8d8cf60ea0705ac11",
   "salt": "03cb895d51938e3efd94aa1d50964c5d62e4384f378eae90",
   "segments": [
    "0e9d9da39caa03c6dbcac6cac78fb4bf71650ee806481381f2344aaf6a5778c3",

@@ -60,26 +60,26 @@ Implementations:
   - what re-derives every number: every rep, each audit's challenge source and each answer's time, the clocks, torch,
     CUDA and nvcc versions (`pod.sh` pins torch and records the CPU topology, the NVMe mount and the installed packages).
 
-- `p2-v1-gpu`: P2 v1, the frozen specification (the POUS store's `docs/efficient-crypto/p2-spec-draft.md`), in `p2_v1/`, with
+- `p2-v1-gpu`: P2 v4, the specification (`verity/core/protocols/pous/p2/PROTOCOL.md`), in `p2_v1/`, with
   the same steps, controls and metrics as `band-gpu` so the two compare side by side (`side_by_side.py`):
-  - `reference.py`: the scheme on the CPU on `verity.ml.randomness` (the v1 SHAKE256 key framing, the maps, the RFC 6962 tree over
-    v1 leaves, the mode-0 audit derivation), pinned by the P2 kit's `vectors.json` (the file hash in the spec's §7);
-  - `p2v1.cu`: decode with per-block v1 keys on `p2_gpu/p2dec.cu`'s tuned squaring (keys expanded on the device by
-    `pous_native.shake256_rows` just before use), and encode by two roots (an addition chain for `(p + 1)/4` on CGBN's generic
-    squaring, reduced by `2^W ≡ c0`);
+  - `reference.py`: the scheme on the CPU on `verity.ml.randomness` (the counter-mode SHA-512 keys, the maps, the RFC
+    6962 tree over v4 leaves, the mode-0 audit derivation), pinned by `vectors.json` (the file hash in the spec's §7);
+    `wire.py` is `p2-audit-wire/v4` with its reference verifier, and `vectors.py` regenerates every vector file in one command;
+  - `p2v1.cu`: decode with per-block keys on `p2_gpu/p2dec.cu`'s tuned squaring (keys expanded on the device just before
+    use), and encode by two roots (an addition chain for `(p + 1)/4` on CGBN's generic squaring, reduced by `2^W ≡ c0`);
   - the kernel gates: the pinned vector through the device (keys, encode, decode), the round trip, sampled blocks against the
     reference's decode and keys, no kernel flag; a failed gate stops the run;
-  - audits at k = 105 (`p2_v1/memory_challenger.py`: v1 leaves, `verity/pous/audit-challenge/v2`), against a limit fixed before load (spec
-    v1.1 caps the allowance at 354 µs), with the value, late and recompute controls (one block in ten of all of `C` dropped, each
+  - audits at k = 105 (`p2_v1/memory_challenger.py`: v4 leaves, `verity/pous/p2-audit-challenge/v4`), against a limit fixed before load (spec
+    v4 caps the allowance at 354 µs), with the value, late and recompute controls (one block in ten of all of `C` dropped, each
     re-encoded on demand from its decoded row `Dec(C_i)`, which is `W_i` in the encoded head);
   - encode GB/s over the first `--p2-encode-blocks` blocks (the rest of `C` is random canonical blocks), and one block's two
     roots, the fastest of `--reps` on a pseudo-random block, against twice the limit (SeqRoot; the root is untuned, so an upper
     bound on the fastest GPU root).
-  The transport is the harness's responder wire, not `p2-audit-wire/v1`'s frames.
+  The transport is the harness's responder wire, not `p2-audit-wire/v4`'s frames.
 
 - `p2-gpu`: the efficient-cryptography campaign's tuned P2 kernel (`p2_gpu/`, CGBN) for the **experimental**
-  `p2-16448/v2`, whose ChaCha8 keys the spec does not allow (its F4 names SHAKE256). The registered P2 with the spec's
-  keys is `p2-16448/v3`; `p2-v1-gpu` measures those keys on the device.
+  `p2-16448/v2`, whose ChaCha8 keys the spec does not allow (its F4 names counter-mode SHA-512). The registered P2 with the
+  spec's keys is `p2-16448/v4`; `p2-v1-gpu` measures those keys on the device.
   - The measured build expands fresh per-block keys in the timed kernel, by ChaCha8 from one 32-byte seed per
     segment. That is M1's schedule, the one the pinned P2 theorems are about, and inside the 1.05× space bound.
   - A tweak candidate at or above p (probability c0/2^w per block) stops the kernel with an error instead of drawing
