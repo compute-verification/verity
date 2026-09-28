@@ -765,3 +765,10 @@ def attention_softcap(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dic
 EVALUATORS[softcap_rows.FAMILY] = softcap_rows.EVALUATOR
 _k = ROWS[softcap_rows.FAMILY] = RowKernel(softcap_rows.FAMILY, attention_softcap, ("out",))
 register(softcap_rows.FAMILY, _instance(_k), kernel=KERNEL, domain=DOMAIN, sample=_sample(), check_targets=softcap_rows.check_targets)
+
+from verity_vllm.program.kernels import ir_rows  # noqa: E402
+
+for _f in ir_rows.FAMILIES:
+    EVALUATORS[_f] = ir_rows.EVALUATOR
+    _k = ROWS[_f] = RowKernel(_f, partial(ir_rows.ir_row, _f), ("out",))
+    register(_f, _instance(_k), kernel=KERNEL, domain=DOMAIN, sample=_sample(), check_targets=lambda rng, f=_f: ir_rows.check_targets(f))
