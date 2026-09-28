@@ -3,8 +3,9 @@
     python benchmarks/pouw/gemm_bench.py --out RESULT.json      (on the pod: torch with CUDA, verity and verity_pouw importable)
 
 Gates, before any timing (the run refuses to time a kernel that fails its gate):
-- ``ncp``: the s8 GEMM's every 16-deep checkpoint, dumped at a small lead-domain shape, gives the tile digests of
-  `verity_pouw.schemes.ncp` (the reference), and its output is exactly A·Bᵀ;
+- ``ncp``: the s8 GEMM's every 16-deep checkpoint, dumped at a small lead-domain shape and shifted to route U
+  (`ncp.route_u_shift`), gives the tile digests of `verity_pouw.schemes.ncp` (the reference), and its output is exactly
+  A·Bᵀ;
 - ``pearl``: the e4m3 GEMM on noisy-quantized operands from `verity_pouw.schemes.pearl_kw` equals the reference replay on
   the ``ada`` device, bit for bit.
 
@@ -86,7 +87,8 @@ def gate_ncp(ext) -> dict:
     ok_tiles = []
     for t in tiles:
         ref = s.digest(ctx, None, s.checked(ctx, s.encode(ctx, s.noise(ctx), a, [b[j] for j in t.cols], t)))
-        got_checked = [[[w & 0xFFFFFFFF for w in ck[i, j].tolist()] for j in t.cols] for i in t.rows]
+        unbiased = [[[w & 0xFFFFFFFF for w in ck[i, j].tolist()] for j in t.cols] for i in t.rows]
+        got_checked = ncp.route_u_shift(unbiased, [full.y[j] for j in t.cols], s.beta)
         ok_tiles.append(s.digest(ctx, None, got_checked) == ref)
     return {"shape": [m, k, n], "output_exact": ok_out, "tile_digests_match": ok_tiles, "ok": ok_out and all(ok_tiles)}
 

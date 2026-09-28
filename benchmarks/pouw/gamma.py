@@ -43,21 +43,10 @@ class Term:
     note: str = ""
 
 
-def ncp_terms(m: int, k: int, n: int, route: str = "U") -> list[Term]:
-    """Route U, with sub-word extraction priced (``internal/pouw/new-crypto/ncp-accounting.md``, 03:50Z), or route S.
-
-    Route U checks the biased u8 accumulator, which the Lean does not define yet (``route-u-checkpoints.md``, proposed);
-    route S is the honest program for the unbiased sums that ``Pouw.NCP`` and ``schemes/ncp.checked`` define: s8 x s8 with
-    the three left operands formed by SWAR byte adds (the 00:20Z route-S row, 52 units per position, half skippable).
-    """
-    if route == "S":
-        return [
-            Term("GEMM m x 3k x n, int8 mma (s8 x s8)", 3 * m * k * n * MAC_INT8, True, "the credited work"),
-            Term("E_1 fields from hash output, one LOP3 per 4", 4 * m * k, True),
-            Term("E_3 = E_1 + E_2 and the negation, SWAR byte adds", 24 * m * k, True),
-            Term("A's share of the three operands, SWAR byte adds", 24 * m * k, False, "skippable at zero input"),
-            Term("E_2 = E_1·P (word-granular P: register moves)", 0, True, "free under W1"),
-        ]
+def ncp_terms(m: int, k: int, n: int) -> list[Term]:
+    """Route U at β = 128, f = 24, with sub-word extraction priced (``internal/pouw/new-crypto/ncp-accounting.md``, 03:50Z):
+    the schedule whose biased accumulator is ``ncp-v1``'s checked values (Lean `wrefU 24`).  The retired unbiased sums would
+    cost 36 units per position (γ = 1.08% at n = 2,048; ``route-u-checkpoints.md``)."""
     return [
         Term("GEMM m x 3k x n, int8 mma (u8 x s8)", 3 * m * k * n * MAC_INT8, True, "the credited work"),
         Term("E_1 fields from hash output, one LOP3 per 4", 4 * m * k, True),
@@ -113,12 +102,9 @@ def pct(x: Fraction) -> str:
     return f"{float(x) * 100:.3f}%"
 
 
-NCP_ROUTES = {"ncp-v1": "U", "ncp-v1/route-S": "S"}
-
-
 def row(scheme: str, m: int, k: int, n: int) -> Row:
-    if scheme in NCP_ROUTES:
-        terms, credited, plain = ncp_terms(m, k, n, NCP_ROUTES[scheme]), 3 * m * k * n, m * k * n * MAC_INT8
+    if scheme == "ncp-v1":
+        terms, credited, plain = ncp_terms(m, k, n), 3 * m * k * n, m * k * n * MAC_INT8
         words = ncp_hash_words(m, k, n)
         hashed, hash_units = 4 * words, SHAKE_PER_WORD * words / (m * k * n)
     else:
@@ -127,7 +113,7 @@ def row(scheme: str, m: int, k: int, n: int) -> Row:
     wref = sum(t.units for t in terms)
     skippable = sum(t.units for t in terms if not t.checked)
     omega = Fraction(wref, credited)
-    gamma = 1 - (1 - GAMMA0_NCP) / omega if scheme in NCP_ROUTES else None
+    gamma = 1 - (1 - GAMMA0_NCP) / omega if scheme == "ncp-v1" else None
     return Row(scheme, (m, k, n), wref, credited, f"{float(omega):.5f}", None if gamma is None else pct(gamma),
                pct(Fraction(skippable, wref)), f"{wref / plain:.4f}", hashed / (m * k * n), hash_units, [asdict(t) for t in terms])
 
@@ -146,7 +132,7 @@ def main() -> None:
     args = ap.parse_args()
     work = json.loads(args.workload.read_text())
     shapes = [tuple(s) for s in work["gamma_shapes"]]
-    rows = [row(s, *shape) for s in (*NCP_ROUTES, "pearl-fp8-v4") for shape in shapes]
+    rows = [row(s, *shape) for s in ("ncp-v1", "pearl-fp8-v4") for shape in shapes]
     model = work["model"]
     out = {"schema": "verity-pouw/gamma/v1", "cost_model": "W1 (RTX 4090), sub-word extraction priced", "rows": [asdict(r) for r in rows],
            "model": model["id"], "uncovered_lm_head_fraction": uncovered_fraction(model)}

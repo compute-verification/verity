@@ -18,12 +18,6 @@ def test_ncp_matches_new_crypto():
     assert G.row("ncp-v1", 2048, 2048, 2048).gamma == "0.887%"          # the benchmark model's worst shape
 
 
-def test_ncp_route_s_matches_the_accounting():
-    assert G.row("ncp-v1/route-S", 4096, 4096, 4096).gamma == "0.919%"  # 0.92% at 4,096², 52 units per position
-    assert G.row("ncp-v1/route-S", 4096, 65536, 65536).gamma == "0.526%"  # 0.53% at the milestone
-    assert G.row("ncp-v1/route-S", 2048, 2048, 2048).gamma == "1.335%"  # about 1.3% at n = 2,048
-
-
 def test_ncp_hashing_is_394_per_mac():
     assert round(G.row("ncp-v1", 4096, 4096, 4096).hash_units_per_useful_mac) == 394
 
