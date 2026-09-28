@@ -61,6 +61,15 @@ def test_merkle_paths(count):
             assert not verify_path(t.root, count, (i + 1) % count, leaves[i], t.path(i))
 
 
+def test_a_path_with_a_sibling_that_is_not_a_digest_is_refused():
+    """Every sibling is a 32-byte node digest (the P2 spec's RESPONSE, `sibling[32]`): a path whose sibling has another
+    length is refused even when the root was built from it."""
+    leaf = hashlib.sha256(b"leaf").digest()
+    for sibling in (b"x" * 31, b"x" * 33, b""):
+        assert not verify_path(node_hash(leaf, sibling), 2, 0, leaf, [sibling])
+        assert not verify_path(node_hash(sibling, leaf), 2, 1, leaf, [sibling])
+
+
 def test_vk_is_the_spec(world):
     _, salt, enc, vk = world
     i = PARAMS.n + 5
