@@ -74,6 +74,10 @@ class Options:
     threads: int = option("--threads", type=int, default=8, help="threads opening the weights")
     replay_workers: int | None = option("--replay-workers", type=int, default=None,
                                         help="the forked pool's workers (default: the Commit's own; the draw does not depend on it)")
+    worker_peak_gb: float | None = option("--worker-peak-gb", type=float, default=None,
+                                          help="a forked worker's measured peak memory, GiB (default: the word replay's, admission "
+                                               "commit.c2.replay_workers.small_vu): the workers are capped at the peaks that fit in the "
+                                               "cgroup's memory.max less its use")
 
 
 class Refused(Exception):
@@ -210,6 +214,30 @@ def replay_args(o: Options, ctx: dict[str, Any]) -> SimpleNamespace:
     return SimpleNamespace(**a, replay_cache=False, vu_export_dir=None)
 
 
+CGROUP_MEMORY = ("/sys/fs/cgroup/memory.max", "/sys/fs/cgroup/memory.current")
+
+
+def worker_peak(o: Options) -> int:
+    from verity_vllm.pipeline.telemetry.admission import CALIBRATION
+    return int(o.worker_peak_gb * 2**30) if o.worker_peak_gb else int(CALIBRATION["commit.c2.replay_workers.small_vu"]["value"])
+
+
+def cap_workers(want: int, peak: int) -> tuple[int, str | None]:
+    """`want` workers, or as many `peak`-byte workers as fit in the cgroup's memory.max less its use, and why, when fewer fit."""
+    try:
+        lim, cur = (Path(p).read_text().strip() for p in CGROUP_MEMORY)
+    except OSError:
+        return want, None
+    if not lim.isdigit() or not cur.isdigit():
+        return want, None
+    room = int(lim) - int(cur)
+    fit = max(1, room // peak)
+    if fit >= want:
+        return want, None
+    return fit, (f"{want} requested, capped at {fit}: {fit} x the {peak / 2**30:.2f} GiB measured per-worker peak fit in the cgroup's "
+                 f"memory.max {int(lim) / 2**30:.1f} GiB less the {int(cur) / 2**30:.1f} GiB in use")
+
+
 def engine_of_record(row: dict[str, Any], ctx: dict[str, Any], art: Path) -> None:
     """The replay's `engine_of_record` is the Commit engine's (read in its process, in the bundle); this process's beside it."""
     eng = ctx.get("engine_of_record")
@@ -335,6 +363,11 @@ def replay(o: Options) -> bool | None:
     print(f"[replay] WEIGHTS (pair {pair}): {'OPENED' if wc['equal'] else 'FAIL'} {wc['opened']}/{wc['servable']} registered tensors against the committed "
           f"weights root {str(wc['committed_root'])[:16]} ({wc['opened_by_source']}; unopened {wc['unopened_n']}) in {wc['wall_s']} s"
           + (f" -- {wc['why']}" if wc["why"] else ""), flush=True)
+    want = args.replay_workers if args.replay_workers is not None else max(1, min(32, (os.cpu_count() or 2) // 2))
+    capped, why = cap_workers(int(want), worker_peak(o))
+    if why:
+        args.replay_workers = capped
+        print(f"[replay] WORKERS (pair {pair}): {why}", flush=True)
     vc, consumed, reads = row["commit"]["value_correspondence"], set(), {}
     with SD.touched(store) as touched:
         C2.run(C2.Site(args=args, out=out, pair=pair, com=store, rc=run, row=row, reqs=ctx["requests"], sampling=ctx["sampling"], tokens=ctx["tokens"],
