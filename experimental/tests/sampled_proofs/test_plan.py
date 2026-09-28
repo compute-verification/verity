@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import random
 import sys
 from fractions import Fraction
 from pathlib import Path
@@ -10,9 +11,8 @@ from pathlib import Path
 import pytest
 
 from verity.primitives.circuits import query
-from verity.primitives.circuits.codec import program_digest
 from verity.primitives.circuits.layout import FunctionCall
-from verity_experimental.sampled_proofs.law import Stage, ru_key, select_replay_units
+from verity.protocols.verification.sampled_proofs.two_stage import OwnRandomness, Stage, select_replay_units
 from verity_experimental.sampled_proofs.plan import DEFAULT_CLASS, Obligation, UnconditionalObligation, VerificationPlan, weight_binding_plan
 
 RUNNING_EXAMPLE = Path(__file__).resolve().parents[3] / "verity" / "primitives" / "circuits" / "tests" / "test_running_example.py"
@@ -55,9 +55,10 @@ def test_a_gate_level_plan_samples_through_the_law():
     C = P.circuit
     plan = weight_binding_plan(P, [1], other_rate=Fraction(1, 4))
     units = plan.units(C[0:54])
-    picked = {u.index for u in select_replay_units(ru_key(b"round", {"program": program_digest(P)}), plan.law, units)}
+    picked = {u.index for u in select_replay_units(OwnRandomness(random.Random(1).randbytes), plan.law, units)}
     assert set(range(4, 14)) <= picked                 # every weight Input gate, at p = 1
-    assert picked == {u.index for u in select_replay_units(ru_key(b"round", {"program": program_digest(P)}), plan.law, units)}
+    assert picked == {u.index for u in select_replay_units(OwnRandomness(random.Random(1).randbytes), plan.law, units)}
+    assert picked < set(range(54))
     assert plan.to_json()["classes"][0]["stage"] == {"p": "1", "k": 1} and plan.to_json()["default"] == {"p": "1/4", "k": 1}
 
 

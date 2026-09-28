@@ -136,7 +136,7 @@ def test_readiness_cpu_mode_record(tmp_path: Path) -> None:
 
 def test_bootstrap_writes_the_experimental_pth_and_readiness_checks_it() -> None:
     """Gate and row scripts set their own PYTHONPATH: the venv's site-packages carries a .pth for experimental/, and readiness
-    imports sampled proofs' law (verity_experimental.sampled_proofs.law) with experimental/ removed from PYTHONPATH."""
+    imports sampled proofs' plans (verity_experimental.sampled_proofs.plan) with experimental/ removed from PYTHONPATH."""
     text = SCRIPT.read_text()
     assert 'echo "$CORE/$G" > "$SITE/verity-$G.pth"' in text
     assert text.index('"$SITE/verity-$G.pth"') < text.index("# ---- 5. readiness")
@@ -145,8 +145,8 @@ def test_bootstrap_writes_the_experimental_pth_and_readiness_checks_it() -> None
 
 def test_the_pth_check_passes_on_a_fresh_venv_and_fails_without_the_pth(tmp_path: Path) -> None:
     """A fresh Python 3.12 venv as bootstrap leaves it: verity-experimental.pth in site-packages and a PYTHONPATH (core, research,
-    the integration) that omits experimental/.  The readiness check's function imports sampled proofs' law from the tree through
-    the .pth -- its dependency verity from PYTHONPATH -- and fails once the .pth is removed."""
+    the integration) that omits experimental/.  The readiness check's function imports sampled proofs' plans from the tree
+    through the .pth -- its dependency verity from PYTHONPATH -- and fails once the .pth is removed."""
     uv = shutil.which("uv") or shutil.which(os.path.expanduser("~/.local/bin/uv"))
     if not uv:
         pytest.skip("uv not installed")

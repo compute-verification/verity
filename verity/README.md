@@ -15,7 +15,7 @@ One distribution, one module per concern. Import from the module that owns an ob
 | `verity.primitives.crypto` | Shared hash code (`blake3`, `turboshake`). Under one hash, the BLAKE3 and TurboSHAKE code leaves the served path for `archive/`. |
 | `verity.primitives.randomness` | `derive(source, domain, context)`, the one challenge derivation, and exact samplers over counter-mode streams. Stdlib only, and it imports no other core module. Its byte formats are pinned by `primitives/randomness/tests/vectors.json`. |
 | `verity.protocols.profile` | `IntegrityProfile`: what an accepted audit established (the exhaustive facts, a verifier's law over named levels of a partition hierarchy, and δ). |
-| `verity.protocols.verification.sampled_proofs` | Sampled proofs as the one-stage audit (`one_stage`). The two-stage law, plans and consumers are `verity_experimental.sampled_proofs`. |
+| `verity.protocols.verification.sampled_proofs` | Sampled proofs as the one-stage audit (`one_stage`) and the two-stage law (`two_stage`). Plans and consumers are `verity_experimental.sampled_proofs`. |
 | `verity.protocols.accounting.work.pouw` | Proof of useful work: the `PoUWScheme` interface, its lifecycle (`audit`) and the named schemes (`schemes.get`), each with pinned vectors. |
 | `verity.protocols.accounting.space.pous` | Proof of useful space: the reference codecs, setup, and the memory challenger's timed audit. Its grader is the Lean package `lean/`. |
 | `verity.protocols.accounting.communication.certifier` | The network certifier: its audit and calibration. |

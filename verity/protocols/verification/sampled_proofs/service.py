@@ -25,9 +25,22 @@ rule: it is the service's own, a salted root of a declared Value, or an item the
 One-stage's record always shows N, each root's leaf count and domain, and the window's provenance, so a Spec over it
 declares them; the joint note's §6 step 0 allows that on test prompts, and hiding them is the hidden layout (step 8).
 
-**No retries.** A registration is drawn once, after its receipt (`select`); its proof is delivered once (`deliver`); its
-outcome is final (`outcome`), and nothing redraws. A proof delivered after `Check.proof_deadline` (seconds on the
-challenger's clock, from the draw) is a reject. Each failure is one visible symbol, `reject` or `late`.
+**The draw.** The challenger draws from its own bytes as the Lean verifier's `Flock.Draw.drawWith` does
+(`two_stage.draw_first` over `two_stage.OwnRandomness`), with no hash and no derivation, after the receipt. A work draw
+carries the challenger's closure map's closure (`two_stage.closure_of`), which the proof proves with the drawn units.
+
+**The two-stage rule** (`TwoStage(replay, check="all")`): the Spec's boundary values (committed by serve time) are
+registered first, and the stream draws replay units (RUs) by `replay`; the drawn RUs' interiors (phase `interior`,
+committed after the draw) are then registered once (`register_interiors`), as one-stage's record over the proved RUs in
+ascending order, all of them drawn (`subset:K` at K = their count), logged after the boundary registration, before any
+proof. Every proof unit of a drawn RU is
+checked, so there is no second draw. The outcome accepts only when both registrations' audit records do, and its profile
+is the first stage's law over the RUs (one-stage's profile of the boundary registration).
+
+**No retries.** A registration is drawn once, after its receipt (`select`); its interiors are registered once; its proof
+is delivered once (`deliver`); its outcome is final (`outcome`), and nothing redraws. A proof delivered after
+`Check.proof_deadline` (seconds on the challenger's clock, from the draw) is a reject. Each failure is one visible
+symbol, `reject` or `late`.
 
 **The failure budget.** A stream counts its failures, and at the `budget`-th it stops and refuses further registrations.
 It holds one open registration at a time, so it never ends with more than `budget` failures.
@@ -39,17 +52,16 @@ import os
 import re
 import time
 from dataclasses import dataclass
-from fractions import Fraction
 from typing import Any, Callable, Mapping, Sequence
 
 from verity.primitives.circuits.codec import canonical_json
 from verity.primitives.circuits.defs import SpecializedDefinition
 from verity.primitives.circuits.program import Program
-from verity.primitives.randomness import derive
 from verity.protocols.profile import IntegrityProfile
 
 from .one_stage import audit as A, draw as D, partition as P, registration as R
 from .one_stage.verdict import Verdict, _Collect
+from .two_stage import OwnRandomness, closure_of, draw_first
 
 SCHEME = "frame-v3-sha512/hm96-sha512"
 HIDING = "hm96-sha512/"
@@ -58,7 +70,6 @@ SOURCES = ("parameter", "window")
 PHASES = ("epoch", "serve", "interior", "in-deadline")
 STREAM = "verity/proof-service/stream/v0"
 OUTCOME = "verity/proof-service/outcome/v0"
-DRAW_DOMAIN = "verity/proof-service/draw/v1"
 ACCEPT, REJECT, LATE = "accept", "reject", "late"
 
 _RECORD_KEYS = {"format", "protocol", "program", "query", "partition", "population", "law", "scheme", "roots", "leaf_layer",
@@ -152,7 +163,8 @@ class Law:
 @dataclass(frozen=True)
 class TwoStage:
     """The two-stage law: replay units drawn by `replay`, then `check` proof units in each drawn one (`"all"`, or a count).
-    A `Stream` refuses it until the two-stage driver lands (the joint note's §6 step 7)."""
+    A `Stream` runs `"all"`, each RU one instance of the check's unit; it refuses a count, which needs RUs of several proof
+    units and a second draw after the interiors are registered."""
 
     replay: Law
     check: str | int
@@ -227,7 +239,8 @@ class Check:
 class Spec:
     """What a protocol states: `values` (what is committed), `selection` (its selection rule), `check`, `public` (what the
     auditor may see beyond the service's own items, each with its reason) and `context` (the statement context the
-    stream's records and draws bind)."""
+    stream's digest binds). A two-stage Spec commits its RUs' boundaries by serve time and their interiors (phase
+    `interior`, never registered) after the draw."""
 
     values: tuple[Value, ...]
     selection: Selection
@@ -260,6 +273,13 @@ class Spec:
                 raise ValueError(f"public output {o!r} needs a public item of kind 'output', with its reason")
         if isinstance(self.selection, Sequential) and self.selection.population not in items:
             raise ValueError(f"a sequential rule's population {self.selection.population!r} is a declared public item")
+        if isinstance(self.selection, TwoStage):
+            interior = [v for v in self.values if v.phase == "interior"]
+            if not interior or len(interior) == len(self.values) or any(v.phase == "in-deadline" for v in self.values):
+                raise ValueError("a two-stage spec commits its RUs' boundaries by serve time and their interiors "
+                                 "(phase 'interior') after the draw")
+            if any(v.registered for v in interior):
+                raise ValueError("a registered value is committed once per deployment, never as an RU's interior")
         if not isinstance(self.context, bytes):
             raise ValueError("a spec's context is bytes")
 
@@ -304,8 +324,9 @@ class Outcome:
 
 @dataclass(frozen=True)
 class Registration:
-    """A registration the challenger accepted: one-stage's `record`, its `receipt` and `digest`, and its `order` in the
-    stream (the receipt's `received`; the challenger's clock stays its own)."""
+    """A registration the challenger accepted: one-stage's `record`, its `receipt` and `digest`, and `order`, its audit's
+    index in the stream (a two-stage audit's interiors share it). The receipt's `received` is the record's position in
+    the stream's log; the challenger's clock stays its own."""
 
     record: Mapping[str, Any]
     receipt: Mapping[str, Any]
@@ -316,7 +337,7 @@ class Registration:
 @dataclass(frozen=True)
 class Draw:
     """The challenger's one draw for a registration: `law` (its law, expanded over the challenger's own program) and
-    `draw`, one-stage's draw object, which goes to the firewall."""
+    `draw`, one-stage's draw object (with a work draw's `closure`), which goes to the firewall."""
 
     registration: Registration
     law: Mapping[str, Any]
@@ -325,6 +346,12 @@ class Draw:
     @property
     def units(self) -> list[int]:
         return list(self.draw["units"])
+
+    @property
+    def proved(self) -> list[int]:
+        """The units the proof proves: the drawn ones and their closure, ascending (`draw.proved`). Under `TwoStage`, the
+        RUs whose interiors are registered, unit i of the interior registration being `proved[i]`."""
+        return D.proved(self.draw)
 
 
 class Refused(Exception):
@@ -344,11 +371,13 @@ def _refuse(code: str, detail: Any) -> Refused:
     return Refused(Verdict(False, (code,), {code: detail}))
 
 
-def check_public(spec: Spec, record: Any) -> Verdict:
-    """The public-items rule (the module docstring) on a one-stage registration record. Codes: `keys` (a field one-stage
-    doesn't define), `roots` (a root or registered entry that is not a declared Value's one salted root, such as a per-call
-    root), `unsalted` (a scheme other than `SCHEME`), `query` (not the check's), `undeclared` (observable items the Spec
-    doesn't declare, such as a leaf count or a template's population)."""
+def check_public(spec: Spec, record: Any, values: Sequence[Value] | None = None) -> Verdict:
+    """The public-items rule (the module docstring) on a one-stage registration record whose roots are of `values` (by
+    default every declared Value; under `TwoStage`, a `Stream` passes the boundary values or the interior ones). Codes:
+    `keys` (a field one-stage doesn't define), `roots` (a root or registered entry that is not one of those Values' one
+    salted root, such as a per-call root), `unsalted` (a scheme other than `SCHEME`), `query` (not the check's),
+    `undeclared` (observable items the Spec doesn't declare, such as a leaf count or a template's population)."""
+    values = spec.values if values is None else tuple(values)
     c = _Collect()
     if not isinstance(record, Mapping):
         c.fail("keys", "not a record")
@@ -375,7 +404,7 @@ def check_public(spec: Spec, record: Any) -> Verdict:
         if field_ not in record:
             continue
         entries = record[field_] if isinstance(record[field_], list) else [record[field_]]
-        names = {v.name for v in spec.values if v.registered == registered}
+        names = {v.name for v in values if v.registered == registered}
         seen: set[Any] = set()
         for e in entries:
             name = e.get("value" if registered else "port") if isinstance(e, Mapping) else None
@@ -408,6 +437,8 @@ class _Entry:
     law: Mapping[str, Any]
     draw: Draw | None = None
     drawn_at: float | None = None
+    interior: Registration | None = None
+    interior_draw: dict[str, Any] | None = None
     sessions: list[str] | None = None
     outcome: Outcome | None = None
 
@@ -416,17 +447,21 @@ class Stream:
     """One protocol's stream for one `Spec`, held by the challenger.
 
     `unit` is the challenger's own copy of the per-unit check's Definition: its Program's digest is the check's, and the
-    challenger builds each registration's population program from it and the registration's N. `budget` (b) and `delta`
-    (the profile's) are public parameters of the stream. `coins` is the challenger's own randomness (n bytes a call), and
-    `clock` its clock in seconds; tests inject both. `sampler`, when given, draws instead of the coins (Lean's
-    `flock-verify draw`, say): it takes the challenger's law and N, and its draw is held to them like any other.
+    challenger builds each registration's population program from it and the registration's N (under `TwoStage`, each
+    RU is one instance of it). `budget` (b) and `delta` (the profile's) are public parameters of the stream. `coins` is
+    the challenger's own randomness (n bytes a call, read in order by `OwnRandomness`), and `clock` its clock in seconds;
+    tests inject both. `sampler`, when given, draws instead of the coins (`flock-verify draw` in a process of its own,
+    say): it takes the challenger's law and N, and its draw is held to them like any other.
     """
 
     def __init__(self, spec: Spec, unit: SpecializedDefinition, *, budget: int, delta: float, challenger: str,
                  coins: Callable[[int], bytes] = os.urandom, clock: Callable[[], float] = time.monotonic,
                  sampler: Sampler | None = None) -> None:
-        if isinstance(spec.selection, (TwoStage, Sequential)):
-            raise ValueError(f"the service doesn't run a {type(spec.selection).__name__} selection yet")
+        if isinstance(spec.selection, Sequential):
+            raise ValueError("the service doesn't run a Sequential selection yet")
+        if isinstance(spec.selection, TwoStage) and spec.selection.check != "all":
+            raise ValueError("the service runs a TwoStage selection that checks every proof unit of a drawn RU "
+                             "(check='all'); a count needs a second draw after the interiors are registered")
         if spec.check.window is not None or spec.check.deadline is not None:
             raise ValueError("the service doesn't prove a window statement or run a timed session yet")
         if P.program_sha512(Program(unit)) != spec.check.program:
@@ -442,6 +477,7 @@ class Stream:
         self.digest = _sha512({"format": STREAM, "spec": spec.digest(), "budget": budget, "delta": delta,
                                "challenger": challenger})
         self._entries: list[_Entry] = []
+        self._log: list[dict[str, Any]] = []
         self._records: list[dict[str, Any]] = []
 
     @property
@@ -467,30 +503,41 @@ class Stream:
                  work_table: Mapping[str, Any] | None = None) -> Registration:
         """Receive a registration: the public-items rule (`check_public`), then one-stage's R1-R7 (`registration.check`)
         against the challenger's own copies: the population program it builds from `unit` and the record's N, the check's
-        query, the selection rule's law, `SCHEME`, the stream's log, and the per-registration copies given here (`ports`,
-        `leaf_layer`, `anchors`, `registered`, `work_table`, as `registration.check` takes them). Then the receipt. Raises
-        `Refused`: when the stream has stopped, while an earlier registration has no final outcome, or when either check
-        fails."""
+        query, the selection rule's law (a two-stage rule's `replay`), `SCHEME`, the stream's log, and the per-registration
+        copies given here (`ports`, `leaf_layer`, `anchors`, `registered`, `work_table`, as `registration.check` takes
+        them). Under `TwoStage` its roots are the boundary values'. Then the receipt. Raises `Refused`: when the stream
+        has stopped, while an earlier registration has no final outcome, or when either check fails."""
         if self.stopped:
             raise _refuse("stopped", {"failures": self.failures, "budget": self.budget})
         if self._entries and self._entries[-1].outcome is None:
             raise _refuse("open", {"order": self._entries[-1].registration.order})
-        v = check_public(self.spec, record)
+        v = check_public(self.spec, record, self._values(interior=False))
         if not v.ok:
             raise Refused(v)
         n = record.get("population")
         if not (type(n) is int and n >= 1):
             raise _refuse("population", n)
         program = P.population_program(self.unit, n)
-        law = {"law": "subset", "k": n} if isinstance(self.spec.selection, All) else D.parse_law(self.spec.selection.text)
-        log = [e.registration.record for e in self._entries]
-        v = R.check(record, program, self.spec.check.query, law, SCHEME, ports, leaf_layer, anchors, log, None, work_table,
-                    registered)
+        rule = self.spec.selection
+        law = {"law": "subset", "k": n} if isinstance(rule, All) else D.parse_law(
+            (rule.replay if isinstance(rule, TwoStage) else rule).text)
+        v = R.check(record, program, self.spec.check.query, law, SCHEME, ports, leaf_layer, anchors, self._log, None,
+                    work_table, registered)
         if not v.ok:
             raise Refused(v)
-        order = len(self._entries)
-        reg = Registration(dict(record), R.receipt(record, self.challenger, received=str(order)), R.digest(record), order)
+        reg = self._log_record(record, len(self._entries))
         self._entries.append(_Entry(reg, D.derive(program, self.spec.check.query, law, work_table)))
+        return reg
+
+    def _values(self, *, interior: bool) -> tuple[Value, ...]:
+        if not isinstance(self.spec.selection, TwoStage):
+            return self.spec.values
+        return tuple(v for v in self.spec.values if (v.phase == "interior") == interior)
+
+    def _log_record(self, record: Mapping[str, Any], order: int) -> Registration:
+        reg = Registration(dict(record), R.receipt(record, self.challenger, received=str(len(self._log))), R.digest(record),
+                           order)
+        self._log.append(dict(record))
         return reg
 
     def _entry(self, registration: Registration) -> _Entry:
@@ -499,37 +546,75 @@ class Stream:
             raise _refuse("unknown", {"order": o})
         return self._entries[o]
 
-    def select(self, registration: Registration) -> Draw:
+    def select(self, registration: Registration, *, closure: Mapping[int, Sequence[int]] | None = None) -> Draw:
         """The draw, once per registration, from the challenger's own randomness after the receipt: indices in [0, N) by
-        the selection rule's law. Raises `Refused` for a registration drawn before (nothing redraws), and for a sampler's
-        draw that isn't well formed under the law (`draw.check_draw`)."""
+        the selection rule's law (`All` draws every unit and reads no coins). `closure` is the challenger's closure map
+        (`{unit: [units proved with it]}` over [0, N), from its own layout), for a work law only: the draw carries the
+        drawn units' closure (`two_stage.closure_of`), which `draw.proved` and `draw.check_proved` count. Raises `Refused`
+        for a registration drawn before (nothing redraws), a closure map on another law or outside [0, N) (before any
+        coin is read), and a draw that isn't well formed under the law (`draw.check_draw`)."""
         e = self._entry(registration)
         if e.draw is not None:
             raise _refuse("drawn", {"order": registration.order})
         n = registration.record["population"]
-        units = sorted(int(u) for u in (self._sampler(dict(e.law), n) if self._sampler is not None
-                                        else self._sample(e.law, n, registration)))
+        if closure is not None and not (e.law["law"] == "work" and isinstance(closure, Mapping) and all(
+                type(u) is int and 0 <= u < n and isinstance(cs, Sequence) and all(type(c) is int and 0 <= c < n for c in cs)
+                for u, cs in closure.items())):
+            raise _refuse("closure", f"a closure map {{unit: [units]}} over [0, {n}) widens a work draw only")
+        if isinstance(self.spec.selection, All):
+            units = list(range(n))
+        else:
+            units = sorted(int(u) for u in (self._sampler(dict(e.law), n) if self._sampler is not None
+                                            else self._sample(e.law, n)))
         obj = {**e.law, "population": n, "units": units}
+        if closure is not None and closure_of(closure, units):
+            obj["closure"] = closure_of(closure, units)
         v = D.check_draw(obj, registration.record, e.law)
         if not v.ok:
             raise Refused(v)
         e.draw, e.drawn_at = Draw(registration, e.law, obj), self._clock()
         return e.draw
 
-    def _sample(self, law: Mapping[str, Any], n: int, registration: Registration) -> list[int]:
-        key = derive(self._coins(32), DRAW_DOMAIN, {"stream": self.digest, "registration": registration.digest,
-                                                    "receipt": _sha512(dict(registration.receipt)),
-                                                    "context": self.spec.context})
-        if law["law"] == "subset":
-            return list(key.subset(law["k"], n))
-        if law["law"] == "bernoulli":
-            p = Fraction(law["p"])
-            return [u for u in range(n) if key.bernoulli(p, u)]
-        units: list[int] = []
-        for i, s in enumerate(law["strata"]):
-            members = [u for lo, hi in s["units"] for u in range(lo, hi)]
-            units += [members[j] for j in key.subset(s["k"], len(members), ("stratum", i))]
-        return units
+    def _sample(self, law: Mapping[str, Any], n: int) -> list[int]:
+        return draw_first(OwnRandomness(self._coins), law, n)["units"]
+
+    def register_interiors(self, draw: Draw, record: Mapping[str, Any], ports: Mapping[str, Mapping[str, Any]], *,
+                           leaf_layer: str | None = None, anchors: Sequence[Any] = ()) -> Registration:
+        """Under `TwoStage`: the drawn RUs' interiors, registered once, after the draw and before any proof. `record` is
+        one-stage's record over the K = `len(draw.proved)` proved RUs, unit i being RU `draw.proved[i]`, under `subset:K`
+        (every unit drawn), with the interior values' roots, `previous` the boundary registration's digest, and a window
+        other than the boundary's (R6). It is held to the public-items rule and
+        to one-stage's R1-R7 as `register` holds a registration (`ports`, `leaf_layer` and `anchors` are the challenger's
+        copies), logged after the boundary registration, and receipted. Raises `Refused`: `rule` (not a two-stage
+        stream), `not-drawn`, `final`, `delivered`, `interior-registered` (a second time), `interior-empty` (no RU was
+        drawn), `interior-population` (not the proved RUs), or either check's codes."""
+        if not isinstance(self.spec.selection, TwoStage):
+            raise _refuse("rule", "interiors are registered under a two-stage selection rule")
+        e = self._entry(draw.registration)
+        order = draw.registration.order
+        if e.draw != draw:
+            raise _refuse("not-drawn", {"order": order})
+        if e.outcome is not None:
+            raise _refuse("final", {"order": order})
+        if e.sessions is not None:
+            raise _refuse("delivered", {"order": order})
+        if e.interior is not None:
+            raise _refuse("interior-registered", {"order": order})
+        n = len(draw.proved)
+        if not n:
+            raise _refuse("interior-empty", "a draw of no RUs has no interiors")
+        v = check_public(self.spec, record, self._values(interior=True))
+        if not v.ok:
+            raise Refused(v)
+        if record.get("population") != n:
+            raise _refuse("interior-population", {"registered": record.get("population"), "proved": n})
+        law = {"law": "subset", "k": n}
+        v = R.check(record, P.population_program(self.unit, n), self.spec.check.query, law, SCHEME, ports, leaf_layer,
+                    anchors, self._log)
+        if not v.ok:
+            raise Refused(v)
+        e.interior, e.interior_draw = self._log_record(record, order), {**law, "population": n, "units": list(range(n))}
+        return e.interior
 
     def _late(self, e: _Entry) -> bool:
         d = self.spec.check.proof_deadline
@@ -538,7 +623,8 @@ class Stream:
     def deliver(self, draw: Draw, sessions: Sequence[str]) -> Outcome | None:
         """The firewall delivers the draw's proof, once: `sessions` are its session records' SHA-512, which the outcome
         binds. A proof after the proof deadline is a reject (`late`), returned at once; otherwise None, and the outcome waits
-        on the verifier (`outcome`)."""
+        on the verifier (`outcome`). Under `TwoStage`, a proof before the interiors are registered is refused
+        (`interior`), unless no RU was drawn."""
         e = self._entry(draw.registration)
         if e.draw != draw:
             raise _refuse("not-drawn", {"order": draw.registration.order})
@@ -550,6 +636,8 @@ class Stream:
                 and all(isinstance(s, str) and _DIGEST.match(s) for s in sessions)):
             raise _refuse("sessions", "one or more session records' SHA-512")
         late = self._late(e)
+        if not late and isinstance(self.spec.selection, TwoStage) and e.interior is None and draw.proved:
+            raise _refuse("interior", "the interiors are registered before any proof")
         e.sessions = list(sessions)
         return self._finish(e, LATE, None, {}) if late else None
 
@@ -561,8 +649,10 @@ class Stream:
         `Pending` before. With one: `Pending` until every verdict of record has run (`accepted` not null); each verdict of
         record names the delivered `sessions`; then one-stage's audit record (`audit.audit_record`; `proved_units` and
         `instances` default to the draw's, and `served`, `session_roots` and `session_registered` are its) decides accept
-        or reject. Raises `Refused` for a second outcome, a verdict of record about other sessions, or public outputs the
-        verdicts of record don't report alike."""
+        or reject. Under `TwoStage` with interiors, the interior registration's audit record (all of its units proved, by
+        the same statement and verdicts) must accept too, and `session_roots` (`{port: root}` from the sessions'
+        statements) is split between the two by value. Raises `Refused` for a second outcome, a verdict of record about
+        other sessions, or public outputs the verdicts of record don't report alike."""
         e = self._entry(draw.registration)
         if e.draw != draw:
             raise _refuse("not-drawn", {"order": draw.registration.order})
@@ -587,22 +677,38 @@ class Stream:
                 raise _refuse("public", {"outputs": list(outputs), "reported": reported})
             public = dict(reported[0])
         proved = list(proved_units) if proved_units is not None else D.proved(draw.draw)
-        rec = A.audit_record(draw.registration.record, draw.registration.receipt, draw.draw, draw.law, proved,
-                             len(proved) if instances is None else instances, statement, verdicts, self.delta,
-                             e.sessions, served, session_roots, session_registered)
-        return self._finish(e, ACCEPT if rec["accepted"] else REJECT, rec, public if rec["accepted"] else {})
+        instances = len(proved) if instances is None else instances
+        roots, interior_roots = session_roots, None
+        if session_roots is not None and isinstance(self.spec.selection, TwoStage):
+            inner = {v.name for v in self._values(interior=True)}
+            roots = {p: r for p, r in session_roots.items() if p not in inner}
+            interior_roots = {p: r for p, r in session_roots.items() if p in inner}
+        rec = A.audit_record(draw.registration.record, draw.registration.receipt, draw.draw, draw.law, proved, instances,
+                             statement, verdicts, self.delta, e.sessions, served, roots, session_registered)
+        inner_rec = None
+        if e.interior is not None:
+            assert e.interior_draw is not None
+            inner_rec = A.audit_record(e.interior.record, e.interior.receipt, e.interior_draw, D.law_of(e.interior_draw),
+                                       list(e.interior_draw["units"]), instances, statement, verdicts, self.delta,
+                                       e.sessions, None, interior_roots)
+        accepted = rec["accepted"] and (inner_rec is None or inner_rec["accepted"])
+        return self._finish(e, ACCEPT if accepted else REJECT, rec, public if accepted else {}, inner_rec)
 
-    def _finish(self, e: _Entry, symbol: str, audit: Mapping[str, Any] | None, public: Mapping[str, Any]) -> Outcome:
+    def _finish(self, e: _Entry, symbol: str, audit: Mapping[str, Any] | None, public: Mapping[str, Any],
+                interior: Mapping[str, Any] | None = None) -> Outcome:
         reg, draw = e.registration, e.draw
         assert draw is not None
         body = {"format": OUTCOME, "stream": self.digest, "order": reg.order, "registration": reg.digest,
                 "receipt": _sha512(dict(reg.receipt)), "draw": _sha512(dict(draw.draw)), "sessions": e.sessions or [],
-                "symbol": symbol, "public": dict(public), "audit": None if audit is None else dict(audit)}
+                "symbol": symbol, "public": dict(public), "audit": None if audit is None else dict(audit),
+                "interior": None if e.interior is None else {
+                    "registration": e.interior.digest, "receipt": _sha512(dict(e.interior.receipt)),
+                    "audit": None if interior is None else dict(interior)}}
         accepted = symbol == ACCEPT
         exhaustive = isinstance(self.spec.selection, All)
         e.outcome = Outcome(
             accepted=accepted,
-            verdict=Verdict(True) if accepted else Verdict(False, (symbol,), {symbol: _why(symbol, audit)}),
+            verdict=Verdict(True) if accepted else Verdict(False, (symbol,), {symbol: _why(symbol, audit, interior)}),
             profile=A.profile(reg.record, draw.draw, self.delta) if accepted and not exhaustive else None,
             exhaustive=Exhaustive(len(draw.draw["units"])) if accepted and exhaustive else None,
             terms=Terms(None if exhaustive else self.delta),
@@ -612,12 +718,16 @@ class Stream:
         return e.outcome
 
 
-def _why(symbol: str, audit: Mapping[str, Any] | None) -> Any:
+def _why(symbol: str, audit: Mapping[str, Any] | None, interior: Mapping[str, Any] | None = None) -> Any:
     if symbol == LATE:
         return "the proof was not delivered by the proof deadline"
     assert audit is not None
-    return {"checks": [k for k, c in audit["checks"].items() if not c["ok"]],
-            "verdicts": {k: v.get("accepted") for k, v in audit["verdicts"].items()}}
+    why = {"checks": [k for k, c in audit["checks"].items() if not c["ok"]],
+           "verdicts": {k: v.get("accepted") for k, v in audit["verdicts"].items()}}
+    if interior is not None:
+        why["interior"] = {"accepted": interior["accepted"],
+                           "checks": [k for k, c in interior["checks"].items() if not c["ok"]]}
+    return why
 
 
 __all__ = ["ACCEPT", "All", "Check", "Draw", "Exhaustive", "HIDING", "KINDS", "LATE", "Law", "Outcome", "PHASES", "Pending",

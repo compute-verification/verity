@@ -2,8 +2,9 @@
 
 Moved from ``verity.verification.plan``, now ``verity_sp1.proofs`` (decision 41).  A plan selects and samples gates of a
 Program for checking; it is verification policy, not computation (README "Protocols").  Its
-per-class rates are now `Stage`s of the two-stage law (decision 43): a gate-level plan makes every gate its own replay
-unit, which is the law's Bernoulli case, and `units` hands those replay units to `law.select_replay_units`.
+per-class rates are now `Stage`s of the two-stage law (decision 43, `verity.protocols.verification.sampled_proofs.two_stage`):
+a gate-level plan makes every gate its own replay unit, which is the law's Bernoulli case, and `units` hands those
+replay units to `two_stage.select_replay_units`.
 
 Prescribed inputs are sampled gates (IR §E): `Input[k] : () -> Value<w_k>` is an ordinary one-output gate of the
 fault model.  It belongs to a proof unit under the selected plan and is sampled like any other gate.  WB's
@@ -23,8 +24,7 @@ from typing import Any
 
 from verity.primitives.circuits.layout import FunctionCall, Gate, GateSelection
 from verity.primitives.circuits.program import Program
-
-from .law import ReplayUnit, Stage, TwoStageLaw
+from verity.protocols.verification.sampled_proofs.two_stage import ReplayUnit, Stage, TwoStageLaw
 
 DEFAULT_CLASS = "default"
 

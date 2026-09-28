@@ -195,12 +195,12 @@ check("vllm_commit_d9105ea80", lambda: ("d9105ea80" in __import__("vllm").__vers
 check("verity_from_tree", lambda: under("verity.primitives.circuits", core))
 check("verity_vllm_from_tree", lambda: under("verity_vllm.program.registry", root))
 check("research_telemetry_from_tree", lambda: under("research.telemetry", research))
-check("sampled_proofs_from_tree", lambda: under("verity_experimental.sampled_proofs.law", experimental))   # verity_vllm.commit.challenge imports it
+check("sampled_proofs_from_tree", lambda: under("verity_experimental.sampled_proofs.plan", experimental))   # the program tests import it
 def experimental_without_pythonpath():
     # drop only experimental/ from PYTHONPATH: its .pth must supply it; verity (its dependency) stays on the path
     keep = [p for p in os.environ.get("PYTHONPATH", "").split(os.pathsep) if p and os.path.realpath(p) != os.path.realpath(experimental)]
     env = {**{k: v for k, v in os.environ.items() if k != "PYTHONPATH"}, **({"PYTHONPATH": os.pathsep.join(keep)} if keep else {})}
-    r = subprocess.run([sys.executable, "-c", "import verity_experimental.sampled_proofs.law as m; print(m.__file__)"], capture_output=True, text=True, env=env, timeout=60)
+    r = subprocess.run([sys.executable, "-c", "import verity_experimental.sampled_proofs.plan as m; print(m.__file__)"], capture_output=True, text=True, env=env, timeout=60)
     if r.returncode != 0 or not os.path.realpath(r.stdout.strip()).startswith(os.path.realpath(experimental) + os.sep):
         raise RuntimeError(f"without experimental on PYTHONPATH: rc {r.returncode}, {(r.stdout + r.stderr).strip()[-200:]}")
     return r.stdout.strip()

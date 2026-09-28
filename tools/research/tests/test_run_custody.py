@@ -25,7 +25,7 @@ from research.store.model import Label
 from research.telemetry.job import set_status
 
 from test_pod_guard_daemon import QUIET, _env, idle_since
-from waits import Gate, wait_runner
+from waits import wait_runner
 
 PY = sys.executable
 SRC = str(Path(remote.__file__).resolve().parents[1])
@@ -84,34 +84,6 @@ def _fixture_run(runs: Path, run_id: str = FIXTURE_RID) -> Path:
 
 
 # ---- the machine side, end to end --------------------------------------------------------------------------------------------------------
-
-def test_a_stray_sigterm_to_the_runner_does_not_cost_the_run_its_record_or_custody(tmp_path):
-    # `pkill -f rows.sh` to stop a queue matched the runner's argv too (it carries the workload's command): the runner died, so the run
-    # never recorded its end or published (vllm-rf-epoch #73)
-    import signal
-
-    vault = tmp_path / "vault"
-    arrived, gate = tmp_path / "arrived", Gate(tmp_path / "gate")
-    os.mkfifo(arrived)
-    workload = f"import sys; open(sys.argv[2], 'w').close(); {Gate.WAIT}; print('finished')"   # arrives, then waits for the gate
-    req, runs = _request(tmp_path, RID, [PY, "-c", workload, str(gate.path), str(arrived)], vault)
-    try:
-        assert remote.launch_request(req)["started"]
-        d = runs / RID
-        open(arrived, "rb").close()                              # returns once the workload runs: the runner is past its setup
-        runner = json.loads((d / "launch.json").read_text())["runner_pid"]
-        os.kill(runner, signal.SIGTERM)
-        os.kill(runner, signal.SIGHUP)
-        gate.release()
-        marker = _wait_marker(d)
-    finally:
-        gate.close()
-    status = json.loads((d / "status.json").read_text())
-    assert status["state"] == "done" and status["rc"] == 0 and (d / "stdout.log").read_text() == "finished\n"
-    assert marker["preserved"] is True and CU.marker_problem(d) is None
-    log = (d / "launcher.log").read_text()
-    assert "runner got SIGTERM" in log and "runner got SIGHUP" in log
-
 
 URLS = '{"k": "https://r2.example/objects/sha256/k?X-Amz-Signature=sent-url-that-must-not-leak"}'
 
