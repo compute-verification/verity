@@ -23,14 +23,16 @@ def RES_OUT_WORDS : Nat := 128
 /-- `rec_residuals.port_words`: a port of `n` elements, in whole 64-word rows. -/
 def portWordsOf (n : Nat) : Nat := (8 * n + 63) / 64 * 64
 
-/-- `rec_residuals._check`. -/
-def checkRepS (S : RepS) : Except String Unit := do
+/-- `rec_residuals._check(S, whole)`: one statement's S (`whole` false) also holds at most `RES_OUT_WORDS / 8` residuals,
+which a whole algebra's S (`whole`, `parts`' input) need not. -/
+def checkRepS (S : RepS) (whole : Bool := false) : Except String Unit := do
   let names := S.ports.map (·.1)
   if names.eraseDups.length != names.length || names.contains "v" || S.ports.any (·.2 < 1) then
     throw "InnerRepCheck's row ports are distinct names, not v, each of at least one element"
   let n := (S.ports.map (·.2)).foldl (· + ·) 0
   if n != S.gf.nw then throw s!"row ports of {n} elements for a w of {S.gf.nw}"
-  if 8 * S.gf.res.length > RES_OUT_WORDS then throw s!"{S.gf.res.length} residuals: more than {RES_OUT_WORDS / 8}"
+  if !whole && 8 * S.gf.res.length > RES_OUT_WORDS then
+    throw s!"{S.gf.res.length} residuals: more than {RES_OUT_WORDS / 8}"
 
 /-- `rec_residuals.lowering(S, name)`'s unit: `rec_residuals.unit_circuit`. -/
 def innerUnit (S : RepS) (name : String) : Except String UnitC := do

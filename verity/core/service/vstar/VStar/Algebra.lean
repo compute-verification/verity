@@ -385,7 +385,7 @@ def spec (sh : Shape) : Except String RepS := do
   let mut ports : Array (String × Nat) := #[]
   for i in [0:cx.rounds.size] do ports := ports.push (s!"m{i}", cx.rounds[i]!.size)
   let S : RepS := { gf, ports := ports.toList ++ [("acc0", 2), ("acc1", 2)] }
-  checkRepS S
+  checkRepS S (whole := true)
   pure S
 
 end VStar.Algebra
