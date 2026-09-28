@@ -2,7 +2,8 @@
 (`verity_flock.rec_live.Proxy`), on the transcripts `verity_flock.firewall_transcript` records (`firewall_agree.py`):
 honest sessions accepted by both, the red team's six sessions on #1270 refused by both or sent as the schedule has them,
 tamper controls (firewalls that let out what the contract forbids) refused by the contract, review r6's leaks on #1323
-each cut at its item, and every session `test_firewall_agreement` holds the proxy to `Flock.Firewall.run` on."""
+each cut at its item, every session `test_firewall_agreement` holds the proxy to `Flock.Firewall.run` on, coins that do
+not open the challenger's commitment refused by both, and no salt used twice."""
 from __future__ import annotations
 
 import copy
@@ -60,7 +61,7 @@ def test_a_commit_item_is_the_row_the_coin_server_receives():
     assert all(bytes.fromhex(c["sent"]) in joined for c in commits)
     assert t["exposed"] == {"salts": [], "pads": []} and t["firewall"] == {"accepted": True, "why": None}
     assert "schedule" not in t and "relations" not in t, "the public input is the verifier's, never the transcript's"
-    assert s.public() == FT.public(FA.SCHEDULE)
+    assert s.public() == FT.public(FA.SCHEDULE, coins=s.commitments)
 
 
 def test_the_transcript_is_the_schedule_in_its_order():
@@ -83,7 +84,7 @@ def test_the_contract_and_the_firewall_agree_on_every_case(lean, tmp_path):
     assert FA.main(["--lean", lean, "--out", str(tmp_path), "--cases"]) == 0
     rows = [r.split("\t") for r in (tmp_path / "agreement.tsv").read_text().splitlines()[1:]]
     got = {r[0]: (r[1], r[2]) for r in rows}
-    assert len(rows) == len(FA.cases()) == 22
+    assert len(rows) == len(FA.cases()) == 28
     assert [n for n, v in got.items() if v == ("True", "True")] == ["honest", "honest-pings", "hello-keys-reordered",
                                                                      "gap3-open-reversed", "gap3-open-after-link", "gap3-open-early"]
     gaps = [n for n in got if n.startswith("gap")]
@@ -129,8 +130,8 @@ def test_the_contract_holds_on_every_session_of_the_agreement_test(lean, tmp_pat
 def test_a_firewall_that_lets_out_what_the_contract_forbids_fails_the_check(lean, tmp_path, monkeypatch):
     """Negative control of the check itself: a tamper control expected to agree (as a firewall that reused salts would be,
     if the contract missed it) is a miss, and the check exits 1."""
-    name, reqs, proxy, fresh, _ = next(c for c in FA.cases() if c[0] == "tamper-reused-salt")
-    monkeypatch.setattr(FA, "cases", lambda: [(name, reqs, proxy, fresh, {"firewall": True, "lean": True, "why": None})])
+    name, reqs, proxy, fresh, _, challenger = next(c for c in FA.cases() if c[0] == "tamper-reused-salt")
+    monkeypatch.setattr(FA, "cases", lambda: [(name, reqs, proxy, fresh, {"firewall": True, "lean": True, "why": None}, challenger)])
     assert FA.main(["--lean", lean, "--out", str(tmp_path), "--cases"]) == 1
     missed = json.loads((tmp_path / "result.json").read_text())["missed"]
     assert [m["case"] for m in missed] == [name] and missed[0]["lean"]["why"].startswith("the tape's salts are not pairwise distinct")
@@ -170,9 +171,9 @@ def test_the_contract_reads_a_round_only_in_rec_step3s_form(lean, tmp_path):
     for name, (edit, why) in edits.items():
         p = copy.deepcopy(sched)
         edit(p["rounds"][1])
-        named.append((name, t, FT.public(p)))
+        named.append((name, t, FT.public(p, coins=s.commitments)))
         want.append((at["round:1"], why))
-    named.append(("v0-kind", t, FT.public({**sched, "kind": "rec/inner-transcript/v0/schedule"})))
+    named.append(("v0-kind", t, FT.public({**sched, "kind": "rec/inner-transcript/v0/schedule"}, coins=s.commitments)))
     want.append((at["hello"], f"Hello: the public schedule is not a {RL.KIND}/schedule"))
     got = FA.decide(lean, tmp_path, named)
     assert [(v["accepted"], v["released"]) for v in got] == [(False, n) for n, _ in want], got
@@ -199,3 +200,79 @@ def test_a_recorded_session_replays_to_its_record(lean, tmp_path):
     r, bad = FA.replay(d)
     assert bad is None and r.coins.record() == s.coins.record() and r.accepted()
     assert FA.main(["--lean", lean, "--out", str(tmp_path / "out"), "--sessions", str(d)]) == 0
+
+
+def test_each_coin_item_opens_its_commitment_in_the_public_input():
+    """The challenger commits to every round's coins before the session (`rec_live.CoinServer.commit_coins`): the public
+    input holds one commitment a round, the link points as round 0 of ``link``, and each coin item of the honest
+    transcript opens its own under the salt sent with it (`rec_live.coin_commitment`, `Flock.Firewall.Contract.commitBC` of
+    `coinMsg`). The challenger's salts are its own: none is the firewall's, and none opens two rounds."""
+    s = FA.run_case("honest", FA.requests(), RL.Proxy, None)
+    t, pub = s.transcript(), s.public()
+    items = [i["coins"] for i in t["items"] if "coins" in i]
+    assert [(c["stream"], c["round"]) for c in items] == [(RL.LINK_COINS, 0)] + [(st, k) for st in FA.STREAMS for k in (0, 1)]
+    assert {st: len(cs) for st, cs in pub["coins"].items()} == {RL.LINK_COINS: 1, **{st: 2 for st in FA.STREAMS}}
+    for c in items:
+        want = RL.coin_commitment(c["stream"], c["round"], [int(x, 16) for x in c["coins"]], bytes.fromhex(c["opening"]))
+        assert want.hex() == pub["coins"][c["stream"]][c["round"]] and c["relayed"] == c["coins"]
+    openings = [c["opening"] for c in items]
+    assert len(set(openings)) == len(openings) and not set(openings) & set(t["tape"]["salts"])
+    assert s.coins.commitment_record() == {"kind": RL.COINS_KIND, "coins": pub["coins"],
+                                           "openings": {st: [c["opening"] for c in items if c["stream"] == st] for st in pub["coins"]}}
+
+
+def test_coins_that_do_not_open_the_challengers_commitment_are_refused(lean, tmp_path):
+    """The firewall stops a session whose challenger committed to no coins (at Hello, before anything reaches the coin
+    server), or whose coins come with a salt that does not open their round's commitment, or with none (before those coins
+    reach the workers); the contract refuses each such session, and refuses it at the coin item when a firewall serves it
+    anyway; it accepts the honest committed session."""
+    named = {c[0]: c for c in FA.cases()}
+    stops = {"challenger-uncommitted": "the schedule needs the challenger's coins, and it committed to none",
+             "challenger-wrong-opening": "link round 0: coins that do not open the challenger's commitment",
+             "challenger-no-opening": "circuit/rep0 round 1: coins without the opening of the challenger's commitment"}
+    names = ["honest", *stops, "tamper-uncommitted", "tamper-wrong-opening", "tamper-no-opening"]
+    sessions = []
+    for name in names:
+        _, reqs, proxy, fresh, expect, challenger = named[name]
+        sessions.append((name, FA.run_case(name, reqs, proxy, fresh, challenger=challenger), expect))
+    got = FA.verdicts(lean, tmp_path, [(n, s) for n, s, _ in sessions])
+    for (name, s, expect), v in zip(sessions, got):
+        assert (s.accepted(), v["accepted"]) == (expect["firewall"], expect["lean"]) and (v["why"] or "").startswith(expect["why"] or ""), \
+            (name, v)
+    s = {n: s for n, s, _ in sessions}
+    assert {n: s[n].proxy.stopped for n in stops} == {n: f"rec proxy: FIREWALL-REFUSED: {w}" for n, w in stops.items()}
+    assert s["challenger-uncommitted"].coins.calls == []
+    assert len(s["challenger-wrong-opening"].relayed) == 0 and len(s["challenger-no-opening"].relayed) == 2
+    cut = {n: v for (n, _, _), v in zip(sessions, got)}
+    assert cut["honest"]["accepted"] and cut["tamper-uncommitted"]["released"] == 0
+    for n, (st, k) in {"tamper-wrong-opening": (RL.LINK_COINS, 0), "tamper-no-opening": ("circuit/rep0", 1)}.items():
+        items = json.loads((tmp_path / f"{n}.json").read_text())["items"]
+        assert items[cut[n]["released"]]["coins"]["stream"] == st and items[cut[n]["released"]]["coins"]["round"] == k
+
+
+def test_a_salt_used_twice_in_a_session_is_refused(lean, tmp_path):
+    """Within a session the contract refuses any salt used twice, whoever drew it: a firewall whose salt source repeats (its
+    tape's salts not pairwise distinct), two commitments under one salt number, and one salt's bytes under two numbers."""
+    _, reqs, proxy, fresh, expect, challenger = next(c for c in FA.cases() if c[0] == "tamper-reused-salt")
+    s = FA.run_case("tamper-reused-salt", reqs, proxy, fresh, challenger=challenger)
+    t = s.transcript()
+    assert s.accepted() and len(set(t["tape"]["salts"])) == 1 < len(t["tape"]["salts"])
+    leaks = {n: (t, p, e) for n, t, p, e in FA.leaks() if n in ("salt-number-reused", "salt-bytes-reused")}
+    got = FA.decide(lean, tmp_path, [("reused", t, s.public())] + [(n, t, p) for n, (t, p, _) in leaks.items()])
+    assert got[0]["accepted"] is False and got[0]["released"] == 0 and got[0]["why"].startswith("the tape's salts are not pairwise distinct")
+    assert all(FA.meets(v, e) for v, (_, _, e) in zip(got[1:], leaks.values())), got
+
+
+def test_no_salt_repeats_across_a_thousand_sessions():
+    """Across 1,000 honest sessions, each on the firewall's own salt source (`hm96.SHA512.fresh_salt`, 192 bytes from the
+    operating system's generator) and the challenger's, every salt either drew is distinct from every other: the firewall's
+    tapes and the challenger's openings, within and across sessions."""
+    salts: list[str] = []
+    for _ in range(1000):
+        s = FT.Session(FA.SCHEDULE)
+        for r in FA.requests():
+            s.handle(r)
+        t = s.transcript()
+        assert s.accepted() and t["exposed"] == {"salts": [], "pads": []}
+        salts += t["tape"]["salts"] + [i["coins"]["opening"] for i in t["items"] if "coins" in i]
+    assert len(salts) == 1000 * (6 + 5) and len(set(salts)) == len(salts)
