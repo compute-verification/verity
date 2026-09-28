@@ -569,6 +569,42 @@ struct ZkRep {
     level0: Arc<flock_core::pcs::ligerito::zk::Level0Zk>,
 }
 
+/// A rep's pads and their commitment (M1), the pads tree under salt id `id`, with the session's level-0 hiding and this rep's pair.
+#[allow(clippy::too_many_arguments)]
+fn make_zkrep(st: &Stmt, plan: &Plan, prng: &mut flock_live::zk_hooks::ProverRng, level0: &flock_core::pcs::ligerito::zk::Level0Zk,
+              points: &Arc<Mutex<Vec<Vec<F128>>>>, rep: usize, id: u64, salts: &Mutex<flock_live::zk_hooks::LeafSalts>) -> ZkRep {
+    let tz0 = Instant::now();
+    let lay = zk_layout(st);
+    let mut pads = zkv::Pads::draw(prng, &lay, rep);
+    if plan.zk_zero_pads {
+        pads.h.iter_mut().for_each(|x| *x = F128::ZERO);
+    }
+    let n = zkv::Code::new(lay.len() + zkv::K_PAD).n;
+    let sb = salts.lock().unwrap_or_else(PoisonError::into_inner).expand(id, n);
+    let ic = zkv::InnerCommit::new(&pads, sb);
+    ZkRep { lay, pads, ic, points: points.clone(), pad_mismatch: plan.zk_pad_mismatch, t_commit: tz0.elapsed().as_secs_f64(),
+            level0: Arc::new(flock_core::pcs::ligerito::zk::Level0Zk { rep: if plan.zk_shared_pair { 0 } else { rep }, ..level0.clone() }) }
+}
+
+/// M1 on the device: level 0's hiding and both reps' pads with their commitments, drawn beside the witness build (they depend on
+/// the seed alone). The salt ids are the sequential prover's: rep 0's pads tree takes the next id, rep 1's the one after rep 0's
+/// proof's trees (levels 1 to R), which `session` consumes when rep 1 starts. Returns the level-0 draw's seconds, and each rep's
+/// pads with their tree's salt id.
+fn zk_prepare(st: &Stmt, plan: &Plan, seed: ProverSeed, lig: LigeritoProfile, salts: &Mutex<flock_live::zk_hooks::LeafSalts>,
+              points: &Arc<Mutex<Vec<Vec<F128>>>>) -> (f64, [(ZkRep, u64); 2]) {
+    let mut prng = flock_live::zk_hooks::ProverRng::from_seed(seed);
+    let tl0 = Instant::now();
+    let level0 = level0_zk(st, &mut prng, plan.zk_zero_pads, plan.zk_l0_tamper);
+    let t_level0 = tl0.elapsed().as_secs_f64();
+    let trees = params(st.m, lig).ligerito_prover_config().expect("Ligerito config").recursive_steps as u64;
+    let id0 = salts.lock().unwrap_or_else(PoisonError::into_inner).next_id();
+    let reps = [0usize, 1].map(|rep| {
+        let id = id0 + rep as u64 * (1 + trees);
+        (make_zkrep(st, plan, &mut prng, &level0, points, rep, id, salts), id)
+    });
+    (t_level0, reps)
+}
+
 /// The mask slot's word indices in the packed witness (every block's slot).
 fn mask_words(st: &Stmt) -> Vec<usize> {
     let r = st.c.ranges.iter().find(|r| r.kind == Kind::Mask).expect("a mask slot");
@@ -586,12 +622,12 @@ fn claim_word_points(st: &Stmt, lay: &Layout, coins: &[F128]) -> Result<[Vec<F12
 
 /// A rep's masking challenger (M1) in front of its live stream: the pads it adds (a dishonest prover's other ones), and the
 /// rank check at the opening's label (the prover stops on degenerate coins).
-fn zk_masking<'a>(st: &Arc<Stmt>, ch: &'a mut LiveChallenger, zk: &ZkRep) -> (zkv::Masking<ByRef<'a, LiveChallenger>>, zkv::Pads) {
+fn zk_masking<C: flock_transcript::challenger::Challenger>(st: &Arc<Stmt>, ch: C, zk: &ZkRep) -> (zkv::Masking<C>, zkv::Pads) {
     let mut sent = zkv::Pads { h: zk.pads.h.clone(), mu: vec![], pad_h: vec![], pad_mu: vec![], tau_salt: vec![] };
     if zk.pad_mismatch {
         sent.h[zk.lay.ml(0, 0)] += F128::ONE;
     }
-    let mut mch = zkv::Masking::new(ByRef(ch), &zk.lay, &sent, zk.ic.root());
+    let mut mch = zkv::Masking::new(ch, &zk.lay, &sent, zk.ic.root());
     let (st2, lay, pts, words) = (st.clone(), zk.lay, zk.points.clone(), mask_words(st));
     mch.at_open = Some(Box::new(move |coins: &[F128]| {
         let tr = Instant::now();
@@ -666,7 +702,7 @@ fn prove_cpu_zk(st: &Arc<Stmt>, wt: &WitData, lig: LigeritoProfile, rep: usize, 
     #[allow(irrefutable_let_patterns)]
     let WitData::Host((z, a, b, zl)) = wt.clone() else { panic!("M1's CPU prover takes a host witness") };
     let tp = Instant::now();
-    let (mut mch, sent) = zk_masking(st, ch, zk);
+    let (mut mch, sent) = zk_masking(st, ByRef(ch), zk);
     let mut hk = |cm: &Commitment| -> Vec<Vec<F128>> { hook(merkle_digest_bytes(&cm.cap)).into_iter().map(|p| p[6..].to_vec()).collect() };
     let (proof, commitment) = if std::env::var("FC_ZK_FRAMED").is_ok() {
         let mut rounds = |content: &[u8], n: usize| replay_round(&mut mch, content, n).unwrap_or_else(|e| panic!("LIVE-ERROR replay: {e}"));
@@ -682,9 +718,10 @@ fn prove_cpu_zk(st: &Arc<Stmt>, wt: &WitData, lig: LigeritoProfile, rep: usize, 
 /// After upstream's prover (the CPU's, or the device's with the same unmasked proof, level-0 record and folded comb): the
 /// masked proof, the constraints replayed from the logged coins, and the inner proof on the rep's stream after the opening.
 #[allow(clippy::too_many_arguments)]
-fn zk_finish(st: &Stmt, zk: &ZkRep, mut proof: R1csProofLigerito, commitment: Commitment, mch: zkv::Masking<ByRef<'_, LiveChallenger>>,
-             sent: &zkv::Pads, tp: Instant, t_upstream: f64, mut bk: Value) -> (Vec<u8>, Value) {
-    let (inner_ch, coins, _coins_l0) = mch.finish();
+fn zk_finish<C: flock_transcript::challenger::Challenger>(st: &Stmt, zk: &ZkRep, mut proof: R1csProofLigerito, commitment: Commitment,
+                                                           mch: zkv::Masking<C>, sent: &zkv::Pads, tp: Instant, t_upstream: f64, mut bk: Value)
+                                                           -> (Vec<u8>, Value) {
+    let (mut inner_ch, coins, _coins_l0) = mch.finish();
     let tz = Instant::now();
     let (zc, lc) = zkv::mask_proof(&proof.zerocheck, &proof.lincheck, &zk.lay, &sent.h);
     let rp = zkv::replay(&st.r1cs, &zc, &lc, &st.circuit, &zk.lay, &zk.ic.root(), Some(&proof.lincheck.comb_partial), &mut zkv::Tape::new(&coins))
@@ -704,7 +741,7 @@ fn zk_finish(st: &Stmt, zk: &ZkRep, mut proof: R1csProofLigerito, commitment: Co
     let t_prime = proof.pcs_open.ligerito.zk_level0.as_ref().expect("level 0's hiding messages").t_prime;
     cons.extend(zkv::ligerito_constraints(&zk.lay, &rec, &zkv::ligerito_exposed(&proof.pcs_open.ligerito, &zk.lay), t_prime).unwrap_or_else(|e| panic!("{e}")));
     let fails = zkv::failing(&cons, &zk.pads.h);
-    let mut lch = zkv::Logging { inner: inner_ch.0, coins: Vec::new() };
+    let mut lch = zkv::Logging { inner: &mut inner_ch, coins: Vec::new() };
     let inner = zkv::prove_inner(&zk.ic, &zk.pads, &zk.lay, cons, &mut lch).unwrap_or_else(|e| panic!("{e}"));
     let t_zk = tz.elapsed().as_secs_f64();
     let masked = R1csProofLigerito { zerocheck: zc, lincheck: lc, pcs_open: proof.pcs_open };
@@ -1693,25 +1730,20 @@ fn prove_gpu(st: &Stmt, wt: &WitData, lig: LigeritoProfile, rep: usize, hook: Ho
     (bincode::serialize(&(commitment, proof)).unwrap(), bk)
 }
 
-/// M1 on the device: every live round the device frames is made again through the rep's masking challenger
-/// (`flock_live::replay_round`), so the verifier sees what M1's CPU prover sends; level 0's hiding runs on the device; then
-/// [`zk_finish`] as on the CPU.
+/// M1 on the device, its device part: every live round the device frames goes to `rounds` (the rep's masking challenger, made
+/// again there by `flock_live::replay_round`, so the verifier sees what M1's CPU prover sends); level 0's hiding runs on the device.
+/// The caller finishes the rep with [`zk_finish`], as on the CPU.
 #[cfg(feature = "gpu")]
 #[allow(clippy::too_many_arguments)]
-fn prove_gpu_zk(st: &Arc<Stmt>, wt: &WitData, lig: LigeritoProfile, rep: usize, hook: Hook<'_>, ch: &mut LiveChallenger,
-                salts: &Mutex<flock_live::zk_hooks::LeafSalts>, zk: &ZkRep) -> (Vec<u8>, Value) {
+fn gpu_zk_device(st: &Stmt, wt: &WitData, lig: LigeritoProfile, rep: usize, hook: Hook<'_>, salts: &Mutex<flock_live::zk_hooks::LeafSalts>,
+                 level0: &flock_core::pcs::ligerito::zk::Level0Zk, rounds: &mut dyn FnMut(&[u8], usize) -> Vec<F128>)
+                 -> (R1csProofLigerito, Commitment, Value) {
     use flock_live::gpu_circuit::{Live, prove_circuit};
-    let tp = Instant::now();
-    let (mut mch, sent) = zk_masking(st, ch, zk);
-    let mut rounds = |content: &[u8], n: usize| flock_live::replay_round(&mut mch, content, n).unwrap_or_else(|e| panic!("LIVE-ERROR replay: {e}"));
-    let (proof, commitment, ph, wph) = with_gpu_src(st, wt, |src| {
-        prove_circuit(st, src, &params(st.m, lig), &domain(rep), hook, Live::Zk { level0: &zk.level0, rounds: &mut rounds }, Some(salts))
-    });
-    let t_upstream = tp.elapsed().as_secs_f64();
-    let (bytes, bk) = zk_finish(st, zk, proof, commitment, mch, &sent, tp, t_upstream, gpu_buckets(wt, ph, wph));
-    eprintln!("GPUPHASE\t{}", json!({"t.prove": bk["t.prove"], "t.upstream": t_upstream, "t.zk_inner": bk["t.zk_inner"], "t.zk_replay": bk["t.zk_replay"],
-                                      "t.encoding_commitment": ph[1], "t.ligerito": ph[6], "t.total": ph[7]}));
-    (bytes, bk)
+    let (proof, commitment, ph, wph) =
+        with_gpu_src(st, wt, |src| prove_circuit(st, src, &params(st.m, lig), &domain(rep), hook, Live::Zk { level0, rounds }, Some(salts)));
+    let bk = gpu_buckets(wt, ph, wph);
+    eprintln!("GPUPHASE\t{bk}");
+    (proof, commitment, bk)
 }
 
 #[cfg(not(feature = "gpu"))]
@@ -1722,8 +1754,8 @@ fn prove_gpu(_: &Stmt, _: &WitData, _: LigeritoProfile, _: usize, _: Hook<'_>, _
 
 #[cfg(not(feature = "gpu"))]
 #[allow(clippy::too_many_arguments)]
-fn prove_gpu_zk(_: &Arc<Stmt>, _: &WitData, _: LigeritoProfile, _: usize, _: Hook<'_>, _: &mut LiveChallenger,
-                _: &Mutex<flock_live::zk_hooks::LeafSalts>, _: &ZkRep) -> (Vec<u8>, Value) {
+fn gpu_zk_device(_: &Stmt, _: &WitData, _: LigeritoProfile, _: usize, _: Hook<'_>, _: &Mutex<flock_live::zk_hooks::LeafSalts>,
+                 _: &flock_core::pcs::ligerito::zk::Level0Zk, _: &mut dyn FnMut(&[u8], usize) -> Vec<F128>) -> (R1csProofLigerito, Commitment, Value) {
     panic!("built without the gpu feature")
 }
 
@@ -1847,6 +1879,16 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
     let hello = config(st, inst).hello();
     let mut commit: Vec<F128> = Vec::new();
     let device = plan.gpu && !plan.mask_random && std::env::var("FC_HOST_WITNESS").is_err();
+    let lig = if plan.fast { LigeritoProfile::Fast } else { LigeritoProfile::Fast100 };
+    // hm96-sha512 leaf salts: one ChaCha20 key per proof; the level-0 tree is id 0 (both reps bind one root), every later
+    // tree a fresh id. The device expands its own trees' salts; a CPU proof takes host expansions.
+    let salts = Arc::new(Mutex::new(flock_live::zk_hooks::LeafSalts::for_seed(&seed)));
+    let zk_points = Arc::new(Mutex::new(Vec::new()));
+    // M1 on the device: level 0's hiding and both reps' pads commitments beside the witness build
+    let zk_pre = (plan.gpu && is_zk(st)).then(|| {
+        let (st, plan, salts, points) = (st.clone(), plan.clone(), salts.clone(), zk_points.clone());
+        std::thread::spawn(move || zk_prepare(&st, &plan, seed, lig, &salts, &points))
+    });
     let w0 = wit(st, inst, plan, plan.zero_witness, seed);
     let (wt0, tw0) = witness(st, &w0, device);
     // rep 1 proves from rep 0's witness unless it has its own: the CPU prover consumes a witness, so rep 0 takes a copy and rep 1
@@ -1858,6 +1900,14 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
         (None, 0.0)
     });
     let witness_s = tw0 + tw1;
+    let tj = Instant::now();
+    let mut zk_pre = match zk_pre.map(|h| h.join()) {
+        Some(Ok((_, reps))) => Some(reps.map(Some)),
+        Some(Err(e)) => panic!("M1's randomness: {}", panic_msg(e)),
+        None => None,
+    };
+    // the preparation's time past the witness build (what it adds to the session)
+    let t_zk_pre_wait = tj.elapsed().as_secs_f64();
     let mut prove_s = Vec::new();
     let mut buckets = Vec::new();
     let mut proofs: Vec<Vec<u8>> = Vec::new();
@@ -1870,35 +1920,35 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
             Resp::Coins(c) if c.len() == 4 => commit = c,
             r => return Err(format!("hello: step 0 expects the verifier's seed commitment, got {r:?}")),
         }
-        let lig = if plan.fast { LigeritoProfile::Fast } else { LigeritoProfile::Fast100 };
-        // hm96-sha512 leaf salts: one ChaCha20 key per proof; the level-0 tree is id 0 (both reps bind one root), every later
-        // tree a fresh id. The device expands its own trees' salts; a CPU proof takes host expansions.
-        let salts = Arc::new(Mutex::new(flock_live::zk_hooks::LeafSalts::for_seed(&seed)));
         #[cfg(feature = "sha512")]
         let level0 = (!plan.gpu).then(|| Arc::new(salts.lock().unwrap_or_else(PoisonError::into_inner).expand(0, params(st.m, lig).n_leaves())));
         let mut prng = flock_live::zk_hooks::ProverRng::from_seed(seed);
-        let zk_points = Arc::new(Mutex::new(Vec::new()));
         let tl0 = Instant::now();
-        let zk_level0 = is_zk(st).then(|| Arc::new(level0_zk(st, &mut prng, plan.zk_zero_pads, plan.zk_l0_tamper)));
-        let t_level0 = tl0.elapsed().as_secs_f64();
+        let zk_level0 = (is_zk(st) && zk_pre.is_none()).then(|| level0_zk(st, &mut prng, plan.zk_zero_pads, plan.zk_l0_tamper));
+        let t_level0 = if zk_pre.is_some() { t_zk_pre_wait } else { tl0.elapsed().as_secs_f64() };
+        // M1 on the device: rep 0's replay and inner proof run beside rep 1's device run; rep 1's stream opens (its first round)
+        // after rep 0's last round, so the wire carries the sequential prover's messages in its order
+        let mut rep0_finish: Option<std::thread::JoinHandle<(Vec<u8>, Value)>> = None;
+        let mut rep0_done: Option<(Vec<u8>, Value)> = None;
         for rep in 0..2 {
-            // M1: this rep's pads and their commitment (a fresh salt tree id), drawn before anything of the rep is sent
+            // M1: this rep's pads and their commitment (a fresh salt tree id), drawn before anything of the rep is sent (on the
+            // device path, beside the witness build: rep 1's tree id is consumed here, where the sequential prover takes it)
             let tz0 = Instant::now();
-            let zkrep = is_zk(st).then(|| {
-                let lay = zk_layout(st);
-                let mut pads = zkv::Pads::draw(&mut prng, &lay, rep);
-                if plan.zk_zero_pads {
-                    pads.h.iter_mut().for_each(|x| *x = F128::ZERO);
-                }
-                let n = zkv::Code::new(lay.len() + zkv::K_PAD).n;
-                let sb = { let mut g = salts.lock().unwrap_or_else(PoisonError::into_inner); let id = g.next_id(); g.expand(id, n) };
-                let ic = zkv::InnerCommit::new(&pads, sb);
-                ZkRep { lay, pads, ic, points: zk_points.clone(), pad_mismatch: plan.zk_pad_mismatch, t_commit: tz0.elapsed().as_secs_f64(),
-                        level0: Arc::new(flock_core::pcs::ligerito::zk::Level0Zk { rep: if plan.zk_shared_pair { 0 } else { rep },
-                                                                                   ..(**zk_level0.as_ref().unwrap()).clone() }) }
-            });
-            let t_zk_commit = tz0.elapsed().as_secs_f64() + if rep == 0 { t_level0 } else { 0.0 };
-            let mut lch = LiveChallenger::new(t.clone(), TABLE, rep, &domain(rep))?;
+            let (zkrep, pre_id) = match zk_pre.as_mut() {
+                Some(z) => { let (r, id) = z[rep].take().expect("a rep's pads"); (Some(r), Some(id)) }
+                None => (is_zk(st).then(|| {
+                    let id = salts.lock().unwrap_or_else(PoisonError::into_inner).next_id();
+                    make_zkrep(st, plan, &mut prng, zk_level0.as_ref().unwrap(), &zk_points, rep, id, &salts)
+                }), None),
+            };
+            if let (Some(id), 1) = (pre_id, rep) {
+                let got = salts.lock().unwrap_or_else(PoisonError::into_inner).next_id();
+                assert_eq!(got, id, "rep 1's pads tree takes the salt id after rep 0's proof's trees");
+            }
+            let t_zk_commit = if pre_id.is_some() { if rep == 0 { t_level0 } else { 0.0 } }
+                              else { tz0.elapsed().as_secs_f64() + if rep == 0 { t_level0 } else { 0.0 } };
+            // rep 1's stream on the device path opens at its first round, after rep 0's last one (the order on the wire)
+            let mut lch = if rep0_finish.is_some() { None } else { Some(LiveChallenger::new(t.clone(), TABLE, rep, &domain(rep))?) };
             let tt = t.clone();
             let mut hook = |root: &[u8]| -> Vec<Vec<F128>> {
                 // red-team-hm96 C1: both reps' level-0 trees take salt stream 0, so they must be one tree; stop before rep 1
@@ -1950,17 +2000,62 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
                     g.expand(id, n)
                 }));
             }
+            let mut zkrep = zkrep;
             let proved = catch_unwind(AssertUnwindSafe(|| {
                 if plan.gpu {
                     let wt = if rep == 0 { wt0.as_ref() } else { wt1.as_ref().or(wt0.as_ref()) }.expect("a rep's witness");
-                    match &zkrep {
-                        Some(z) => prove_gpu_zk(st, wt, lig, rep, &mut hook, &mut lch, &salts, z),
-                        None => prove_gpu(st, wt, lig, rep, &mut hook, &mut lch, &salts),
+                    match zkrep.take() {
+                        // M1 on the device, rep 0: the device part, then its replay and inner proof on a thread
+                        Some(z) if rep == 0 => {
+                            let (mut mch, sent) = zk_masking(st, lch.take().expect("rep 0's stream"), &z);
+                            let tp = Instant::now();
+                            let (proof, cm, bk) = {
+                                let mut rounds = |c: &[u8], n: usize| replay_round(&mut mch, c, n).unwrap_or_else(|e| panic!("LIVE-ERROR replay: {e}"));
+                                gpu_zk_device(st, wt, lig, rep, &mut hook, &salts, &z.level0, &mut rounds)
+                            };
+                            let (t_up, st2) = (tp.elapsed().as_secs_f64(), st.clone());
+                            rep0_finish = Some(std::thread::spawn(move || zk_finish(&st2, &z, proof, cm, mch, &sent, tp, t_up, bk)));
+                            (Vec::new(), Value::Null)
+                        }
+                        // rep 1: the device starts now; its first round waits for rep 0's last one, then opens rep 1's stream
+                        Some(z) => {
+                            let mut first = rep0_finish.take();
+                            let mut opened: Option<(zkv::Masking<LiveChallenger>, zkv::Pads)> = None;
+                            let mut r0: Option<Result<(Vec<u8>, Value), String>> = None;
+                            let tp = Instant::now();
+                            let dev = catch_unwind(AssertUnwindSafe(|| {
+                                let mut rounds = |c: &[u8], n: usize| -> Vec<F128> {
+                                    if opened.is_none() {
+                                        let done = first.take().expect("rep 0's replay and inner proof").join().map_err(panic_msg);
+                                        let stop = done.as_ref().err().cloned();
+                                        r0 = Some(done);
+                                        if let Some(e) = stop {
+                                            panic!("{e}");
+                                        }
+                                        let l = LiveChallenger::new(t.clone(), TABLE, rep, &domain(rep)).unwrap_or_else(|e| panic!("LIVE-REFUSED open: {e}"));
+                                        opened = Some(zk_masking(st, l, &z));
+                                    }
+                                    let m = &mut opened.as_mut().expect("rep 1's stream").0;
+                                    replay_round(m, c, n).unwrap_or_else(|e| panic!("LIVE-ERROR replay: {e}"))
+                                };
+                                gpu_zk_device(st, wt, lig, rep, &mut hook, &salts, &z.level0, &mut rounds)
+                            }));
+                            if let Some(h) = first.take() {
+                                r0 = Some(h.join().map_err(panic_msg));
+                            }
+                            // rep 0's stop comes first on the wire, so it is the session's
+                            rep0_done = Some(r0.expect("rep 0 joined").unwrap_or_else(|e| panic!("{e}")));
+                            let (proof, cm, bk) = dev.unwrap_or_else(|e| std::panic::resume_unwind(e));
+                            let t_up = tp.elapsed().as_secs_f64();
+                            let (mch, sent) = opened.take().expect("rep 1's stream opened");
+                            zk_finish(st, &z, proof, cm, mch, &sent, tp, t_up, bk)
+                        }
+                        None => prove_gpu(st, wt, lig, rep, &mut hook, lch.as_mut().expect("the rep's stream"), &salts),
                     }
                 } else if let Some(z) = &zkrep {
-                    prove_cpu_zk(st, &own(&mut wt0, &mut wt1), lig, rep, &mut hook, &mut lch, z)
+                    prove_cpu_zk(st, &own(&mut wt0, &mut wt1), lig, rep, &mut hook, lch.as_mut().expect("the rep's stream"), z)
                 } else {
-                    prove_cpu(st, own(&mut wt0, &mut wt1), lig, &mut hook, &mut lch)
+                    prove_cpu(st, own(&mut wt0, &mut wt1), lig, &mut hook, lch.as_mut().expect("the rep's stream"))
                 }
             }));
             #[cfg(feature = "sha512")]
@@ -1968,6 +2063,15 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
                 flock_merkle::hm96::end();
             }
             let (p, bk) = proved.map_err(|e| stop_why.clone().unwrap_or_else(|| panic_msg(e)))?;
+            if rep0_finish.is_some() {
+                // rep 0 on the device path: its proof comes with rep 1's
+                continue;
+            }
+            if let Some((p0, bk0)) = rep0_done.take() {
+                prove_s.push(bk0["t.prove"].as_f64().unwrap_or(0.0) + t_level0);
+                buckets.push(bk0);
+                proofs.push(p0);
+            }
             prove_s.push(tp.elapsed().as_secs_f64() + t_zk_commit);
             buckets.push(bk);
             proofs.push(p);
