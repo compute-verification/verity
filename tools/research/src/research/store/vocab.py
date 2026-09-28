@@ -263,7 +263,7 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(COMPONENT, GROUP_EVIDENCE, TEXT, "the component a measurement isolates (encoder, hash, lookup, ...)"),
     _k(JOBS, GROUP_EVIDENCE, INT, "the number of jobs a battery or sweep ran"),
     _k(DTYPE, GROUP_EVIDENCE, TEXT, "the operand format a measurement is for (bf16, e4m3, e2m1)"),
-    _k(LEVEL, GROUP_EVIDENCE, TEXT, "a trust dossier's computed trust level for its target (verity.proofs.trust)"),
+    _k(LEVEL, GROUP_EVIDENCE, TEXT, "a trust dossier's computed trust level for its target (tools/tc_probe/trust.py)"),
     _k(ANCHOR, GROUP_EVIDENCE, TEXT, "the anchor family a trust dossier rests on"),
 )}
 

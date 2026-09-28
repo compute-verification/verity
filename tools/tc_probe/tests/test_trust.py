@@ -1,4 +1,4 @@
-"""``verity.proofs.trust``: trust is computed from store evidence and repo fixtures, never asserted.
+"""``tools/tc_probe/trust.py``: trust is computed from store evidence and repo fixtures, never asserted.
 
 Synthetic evidence in an isolated store root lifts one target (FP8_ADA_MMA over ``sm89.mma.m16n8k32.e4m3``, anchor RTX 4090) from
 UNPROBED through HYPOTHESIS and PINNED to TRUSTED and TRUSTED_STABLE as artifacts and labels are added; an open D-entry, a red-team
@@ -18,13 +18,17 @@ import pytest
 pytest.importorskip("research.store.local")
 from research.store.local import LocalStore  # noqa: E402
 
-from verity.proofs import trust  # noqa: E402
-from verity.proofs.trust import (  # noqa: E402
+TC_PROBE = Path(__file__).resolve().parents[1]
+if str(TC_PROBE) not in sys.path:
+    sys.path.insert(0, str(TC_PROBE))
+
+import trust  # noqa: E402
+from trust import (  # noqa: E402
     DOSSIER_KIND, HONEST_MIN, INVALIDATION_TRIGGERS, N_MIN, NEGATIVES_MIN, REGRESSION_TILES, RELITIGATION_PROCEDURE, Level, TrustReport,
     assess, publish, render_markdown,
 )
 
-REPO_ROOT = Path(__file__).resolve().parents[4]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 TARGET = "fp8-ada-mma-draft/2026-09-22"
 INSTRUCTION = "sm89.mma.m16n8k32.e4m3"
 MODEL = "ada_e4m3_m16n8k32"
@@ -538,11 +542,8 @@ def test_the_real_discrepancy_log_has_a_regression_tile_decision_for_every_entry
 
 @pytest.fixture
 def canary():
-    sys.path.insert(0, str(REPO_ROOT / "tools" / "tc_probe"))
-    try:
-        import canary as C
-    finally:
-        sys.path.pop(0)
+    import canary as C
+
     return C
 
 
@@ -618,11 +619,8 @@ def test_run_canary_bookkeeping_without_a_device(canary, tmp_path):
 
 
 def test_tc_probe_tool_declaration_keys_the_canary_flag():
-    sys.path.insert(0, str(REPO_ROOT / "tools" / "tc_probe"))
-    try:
-        import tool as T
-    finally:
-        sys.path.pop(0)
+    import tool as T
+
     with_flag = T.parse(["python", "tools/tc_probe/tc_probe.py", "--instruction", INSTRUCTION, "--out", "x", "--canary"])
     without = T.parse(["python", "tools/tc_probe/tc_probe.py", "--instruction", INSTRUCTION, "--out", "x", "--sweep"])
     assert with_flag["canary"] is True and "canary" not in without

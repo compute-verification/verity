@@ -27,6 +27,6 @@ verity-circuit-check = { workspace = true }
 dev = ["jsonschema>=4.26", "pytest>=8"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "tools/research/tests", "tools/native_peak/tests", "packages/verity/tests", "backends/sp1/tests", "backends/numerical/tests", "backends/gkr/tests", "backends/flock/tests", "tools/circuit_check/tests", "tools/lean/tests", "protocols"]
+testpaths = ["tests", "tools/research/tests", "tools/native_peak/tests", "tools/tc_probe/tests", "packages/verity/tests", "backends/sp1/tests", "backends/numerical/tests", "backends/gkr/tests", "backends/flock/tests", "tools/circuit_check/tests", "tools/lean/tests", "protocols"]
 markers = ["slow: full rechecks that take minutes (bench-instances full recheck); opt in with `--slow`",
            "circuit_suite: one circuit-check target per test (tools/circuit_check); `check` runs these as `circuit-check --all`"]
