@@ -371,7 +371,7 @@ class P2Gpu:
         def m2_decode(g: int, cv: int) -> int:
             return (f.sq(f.sigma(f.sq(cv), shared[0])) - (shared[1] + g * shared[2])) % f.p
 
-        blocks = [c[g].tobytes() for g in range(params.blocks)]
+        blocks = [c[g].tobytes()[::-1] for g in range(params.blocks)]    # the device holds little-endian limbs; the wire is big-endian
         vk = VerifierKey.from_leaves(params, SALT, [leaf_hash(params, SALT, g, b) for g, b in enumerate(blocks)])
         honest = Reference._audits(protocol, scheme, vk, blocks.__getitem__, a.audits, a.rtt_allowance_ns)
         wrong = [bytes(nb) if g % 10 == 0 else b for g, b in enumerate(blocks)]

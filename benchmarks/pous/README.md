@@ -25,9 +25,12 @@ Implementations:
   harness `verity-vllm pous-dense-bench`, with the flags of the band's run of record.
 
 - `p2-gpu`: the efficient-cryptography campaign's tuned P2 kernel (`p2_gpu/`, CGBN) for the **experimental**
-  `p2-16448/v1`.
+  `p2-16448/v2`.
   - The measured build expands fresh per-block keys in the timed kernel, by ChaCha8 from one 32-byte seed per
-    segment. That is M1's schedule, the one `P2MeetsM1Uncond` is about, and inside the 1.05× space bound.
+    segment. That is M1's schedule, the one `P2MeetsM1pB19Uncond` is about, and inside the 1.05× space bound. The
+    spec's setup assumption names SHAKE256, not ChaCha8, for these keys.
+  - A tweak candidate at or above p (probability c0/2^w per block) stops the kernel with an error instead of drawing
+    the next candidate.
   - The campaign's shared-key build (M2) runs on the same C for comparison.
 
 A new one is a class in `bench.py`'s `IMPLS`.

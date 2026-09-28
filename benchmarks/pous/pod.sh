@@ -25,7 +25,7 @@ case "$GPU" in                                            # the census id is the
   *L40S*) HW=${HW:-l40s-48gb/bf16} ;;
   *) [ -n "${HW:-}" ] || { echo "no census id for GPU '$GPU': pass HW=<census/hardware.json id>"; exit 2; } ;;
 esac
-SCHEME=${SCHEME:-$([ "$IMPL" = p2-gpu ] && echo p2-16448/v1 || echo band-chain/d12/v1)}
+SCHEME=${SCHEME:-$([ "$IMPL" = p2-gpu ] && echo p2-16448/v2 || echo band-chain/d12/v1)}
 AUDITS=${AUDITS:-20}
 mkdir -p "$W" "$O/bench"
 nvidia-smi --query-gpu=name,driver_version,clocks.max.sm --format=csv,noheader || true

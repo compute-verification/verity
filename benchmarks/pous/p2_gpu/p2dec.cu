@@ -1,10 +1,11 @@
 // P2 public decode throughput on one GPU, CGBN (NVlabs) multi-precision.
 // From the efficient-cryptography campaign (POUS internal/efficient-crypto/candidates/p2-gpu-decode/, bc-28faaf0e: the
 // tuned kernel of run r20260928-065407-16f0). Added for benchmarks/pous: -DP2_DERIVE expands fresh per-block keys on the
-// device (M1's key schedule, verity_pous.schemes.p2 v1): per segment s a 32-byte seed, per block j of the segment a ChaCha8
-// stream with nonce j, K_j its first W/8 bytes and t_j the next W/8 reduced once below p. Only the seeds cross from the host,
-// so nothing key-sized is stored. The shared K and t_j = t0 + j*step (M2) stay the default build. C may be read from a file
-// (argv[6]) instead of filled on the device.
+// device (M1's key schedule, verity_pous.schemes.p2 v2): per segment s a 32-byte seed, per block j of the segment a ChaCha8
+// stream with nonce j, read as big-endian W/8-byte words: K_j the first and t_j the second. The spec rejection-samples t_j
+// below p; a second word >= p (probability C0/2^W) makes the run exit 3 instead of drawing the third. Only the seeds cross
+// from the host, so nothing key-sized is stored. The shared K and t_j = t0 + j*step (M2) stay the default build. C may be
+// read from a file (argv[6]) instead of filled on the device; on the device it is little-endian 32-bit limbs.
 // Per block j, with p = 2^W - C0 (p = 3 mod 4), public mask K, tweak t_j = t0 + j*step mod p:
 //   s = c^2 mod p, s = p - s if c odd;  r = s^K if s^K < p else s;
 //   y = r^2 mod p, y = p - y if r odd;  m = y - t_j mod p.
@@ -66,8 +67,8 @@ typedef cgbn_mem_t<P2_BITS> mem_t;
 
 struct params_t { mem_t K, t0, step; uint32_t c0; };
 #ifdef P2_DERIVE
-#define KEY_ARGS , const uint32_t *__restrict__ seeds, uint32_t bps
-#define KEY_PASS , dseeds, bps
+#define KEY_ARGS , const uint32_t *__restrict__ seeds, uint32_t bps, uint32_t *__restrict__ reject
+#define KEY_PASS , dseeds, bps, dreject
 #define KEYS "derived"
 #else
 #define KEY_ARGS
@@ -135,6 +136,11 @@ __device__ __forceinline__ void chacha8_block(const uint32_t *__restrict__ key, 
   for (int i = 0; i < 16; i++) out[i] = x[i] + s[i];
 }
 static const uint32_t KSB = (2 * NL + 15) / 16;   // ChaCha blocks per data block: K_j then t_j
+
+// keystream word g lands where cgbn_load finds big-endian K_j (words 0..NL-1) and t_j (NL..2NL-1) as little-endian limbs
+__device__ __forceinline__ uint32_t be_slot(uint32_t g) {
+  return g < NL ? NL - 1 - g : g < 2 * NL ? 3 * NL - 1 - g : g;
+}
 #endif
 
 #if defined(P2_DERIVE) && P2_PARTS == 1
@@ -292,7 +298,12 @@ __global__ void decode_kernel(const params_t *__restrict__ prm, const mem_t *__r
   for (uint32_t j = (blockIdx.x * blockDim.x + threadIdx.x) / P2_TPI; j < n; j += stride) {
 #ifdef P2_DERIVE
     __syncwarp();                                               // the previous block's keys are read
-    for (uint32_t i = lane; i < KSB; i += 32) chacha8_block(&seeds[8 * (j / bps)], i, j % bps, &ks[16 * i]);
+    for (uint32_t i = lane; i < KSB; i += 32) {
+      uint32_t z[16];
+      chacha8_block(&seeds[8 * (j / bps)], i, j % bps, z);
+      #pragma unroll
+      for (int q = 0; q < 16; q++) ks[be_slot(16 * i + q)] = __byte_perm(z[q], 0, 0x0123);
+    }
     __syncwarp();
 #endif
     #pragma unroll
@@ -313,13 +324,12 @@ __global__ void decode_kernel(const params_t *__restrict__ prm, const mem_t *__r
     psqr_fix(e, a, b, c0);                                      // a = y
 #ifdef P2_DERIVE
     #pragma unroll
-    for (int k = 0; k < P2_PARTS; k++) cgbn_load(e, b[k], (pmem_t *)&ks[NL + k * NP]);       // the raw t_j < 2^W
+    for (int k = 0; k < P2_PARTS; k++) cgbn_load(e, b[k], (pmem_t *)&ks[NL + k * NP]);       // b = t_j, if below p
     {
       pbn_t tt[P2_PARTS];
       #pragma unroll
       for (int k = 0; k < P2_PARTS; k++) tt[k] = b[k];
-      uint32_t ge_t = add1_n<P2_PARTS>(e, tt, c0);              // t >= p  <=>  t + c0 >= 2^W; then t - p = t + c0 - 2^W
-      psel<P2_PARTS>(b, ge_t != 0, tt, b);                      // b = t_j
+      if (add1_n<P2_PARTS>(e, tt, c0) && lane == 0) atomicOr(reject, 1u);   // t >= p  <=>  t + c0 >= 2^W
     }
 #else
     uint32_t h = 0, c = 0;                                      // b = j*step, top word h + c
@@ -456,6 +466,9 @@ int main(int argc, char **argv) {
     CK(cudaMalloc(&dseeds, (size_t)segs * 32));
     CK(cudaMemcpy(dseeds, sd.data() + 8, (size_t)segs * 32, cudaMemcpyHostToDevice));
   }
+  uint32_t *dreject;
+  CK(cudaMalloc(&dreject, 4));
+  CK(cudaMemset(dreject, 0, 4));
 #endif
   std::vector<uint64_t> idx;
   for (uint32_t k = 0; k < nspec; k++) {
@@ -491,6 +504,11 @@ int main(int argc, char **argv) {
   CK(cudaFreeHost(hbuf));
   decode_kernel<<<grid, P2_TPB>>>(dp, dc, dm, n KEY_PASS);  // restore outputs overwritten by the copy
   CK(cudaGetLastError()); CK(cudaDeviceSynchronize());
+#ifdef P2_DERIVE
+  uint32_t rejected = 0;
+  CK(cudaMemcpy(&rejected, dreject, 4, cudaMemcpyDeviceToHost));
+  if (rejected) { fprintf(stderr, "a block's t_j word is >= p: the spec draws the next word, which this kernel does not\n"); return 3; }
+#endif
 
   for (uint32_t k = 0; k < 1024 && k < n; k++) idx.push_back(k);
   uint64_t lcg = 12345;
