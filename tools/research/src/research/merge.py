@@ -49,8 +49,8 @@ remote is the main they last ran for, and every `research merge` that can change
 
 A train's ref may be pinned: `N@SHA` (pull request N; quote `#N@SHA`, or the shell reads a comment) or `BRANCH@SHA` is fetched
 from the remote and refused unless its head there is still SHA, so what merges is the head that was reviewed (`pinned`); the gate
-reads each again when the tip lands (`unstacked`); a train member needs no ready mark and no grant, since the train's own check
-is the gate (Daniel, 6 and 8 Oct).
+reads each again when the tip lands (`unstacked`). It reads no ready mark and no grant, since the train's own check is the gate
+(Daniel, 6 and 8 Oct); the owner's ready mark is what admits a PR to a train (`research queue`), not part of this gate.
 A ref whose merge onto the train so far conflicts only on import lines (two PRs adding modules to one root import list) keeps
 both sides, ours first; a conflict on any other line refuses it, and so does a JSON file whose lines git merged into something
 that doesn't parse (`_merge`). Generated files never keep merged text: every merge runs the tree's own
