@@ -93,9 +93,9 @@ def checkpoint_for(case: str, checkpoints_path: str | Path) -> dict[str, Any]:
             raise SystemExit(f"case {case!r}: not in CASES and no checkpoints.json entry with role {case!r}")
         cp = matches[0]
     if not cp.get("downloaded") or not cp.get("local_path"):
-        raise SystemExit(f"{repo} is not downloaded on this pod (manifest says resolve-only)")
+        raise SystemExit(f"{cp['repo']} is not downloaded on this pod (manifest says resolve-only)")
     if not Path(cp["local_path"]).exists():
-        raise SystemExit(f"{repo}: local snapshot {cp['local_path']} missing")
+        raise SystemExit(f"{cp['repo']}: local snapshot {cp['local_path']} missing")
     return cp
 
 
