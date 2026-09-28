@@ -3,7 +3,7 @@ import Proofs.Pous.P3.Column.BandWeights
 import Proofs.Pous.P3.Column.TwoWay
 import Definitions.Pous
 import Models.Pous.Assumptions
-import Models.Pous.Guarantees
+import Proofs.Pous.Statements
 import Proofs.Pous.Sanity
 import Proofs.Pous.Accounting.Numbers
 

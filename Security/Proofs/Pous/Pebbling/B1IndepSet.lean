@@ -3,7 +3,7 @@ import Mathlib.Combinatorics.SimpleGraph.Clique
 import Mathlib.Combinatorics.SimpleGraph.Finite
 import Definitions.Pous
 import Models.Pous.Assumptions
-import Models.Pous.Guarantees
+import Proofs.Pous.Statements
 import Proofs.Pous.Sanity
 import Proofs.Pous.Accounting.Numbers
 
