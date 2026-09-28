@@ -4210,7 +4210,7 @@
      "circuit_sha512": "7674743d65a93e09c19910d3832b119642622783a532b14f231ca617e7f6de667db9aa4fa0936280a4188f785abc23fbe186ba9d56a3d6c4d996ae7a052ffaa2",
      "detail": "RoPE d64, 4 instances at global unit indices [3, 17, 40, 1001]; partition verity/partition/v1 29f27eb0 (Q_word v1 {X: 16, W: 32} over program 57fab977); class 3927f513"
     },
-    "lean_statement": "verity/flock-circuit+seed-injection",
+    "lean_statement": "verity/flock-circuit@e51e2b86+seed-injection",
     "selftest": [
      "art:62afd0ae/rope-head/records-cpu"
     ],
@@ -4228,7 +4228,7 @@
      "circuit_sha512": "d9f93aee013f00493ae22761f71539f4596c61788e540c44ea5e12850882d19174f3114d2a2eba0f294fa5497894702b0af69a8cd668bd33d8134574d6381212",
      "detail": "RoPE d64, 4 instances at [3, 17, 40, 1001]; partition verity/partition/v1 c920dfc8, query Q_template_instance v1 (not evaluated by the verifier: its verdicts say units as stated)"
     },
-    "lean_statement": "verity/flock-circuit+seed-injection",
+    "lean_statement": "verity/flock-circuit@e51e2b86+seed-injection",
     "selftest": [
      "art:3f2298b6/rope-head/records-cpu"
     ],
@@ -4247,7 +4247,7 @@
      "circuit_sha512": "ca5cbd543607882c9fd17506056e7e309369ff4f7feb10e5e0f535384fffbfd67655a6dd4dc86f01b8f85e485013f4d58c530fbf8013ac5ca02e56659a3856cf",
      "detail": "RoPE d64, 4 instances at [3, 17, 40, 1001] of a 2000-unit population; the verdicts' partition finding says units derived"
     },
-    "lean_statement": "verity/flock-circuit+seed-injection",
+    "lean_statement": "verity/flock-circuit@e51e2b86+seed-injection",
     "selftest": [
      "art:e1fb80d2/rope-head/records-cpu"
     ],
@@ -4264,7 +4264,7 @@
      "circuit_sha512": "d504d7390ef20157c669262e85274d9742b4b070fb0f091ad54e07a4f95571358efd6f110123af0c94b2fccaa37317b65232148c8b3e8343a7025db7c29f1f8c",
      "detail": "gemm-coordinate/k1024/sm80-mma-bf16 (synthetic, seed 20260927), 4 instances: 64 tensor-core k-step units per VU (packed), x as 1024 leaf cuts, the tail's stage1 returning the output (out_net); k_log 23, m 26"
     },
-    "lean_statement": "verity/flock-circuit+seed-injection",
+    "lean_statement": "verity/flock-circuit@e51e2b86+seed-injection",
     "selftest": [
      "art:3104c2f9/gemm-k1024/records-cpu"
     ],
@@ -4415,6 +4415,74 @@
     ],
     "selftest_note": "every selftest case (all_pass; 23 sessions recorded); upstream's verdicts are its live ones in each case.json (main's flock-circuit has no replay subcommand)",
     "agreement": "local ci.py --live --sets 1 (2026-09-28T20:07Z, Lean at main ac412eb8): 23/23, 3 accepted"
+   },
+   {
+    "tags": "verity/flock-circuit (hidden outputs, PROTOCOL.md §16.13): RoPE, a stage returns its outputs",
+    "pr83": "455a01049",
+    "generator": "backends/flock/pod/60-circuit.sh MODE=selftest GPU=0 RECORD=1 SELF_N=4 on vy-nebius-1 (r20261002-000747-add2, source 455a01049: --features sha512,glue,seed-injection), staging rope-head/d64/neox-bf16 (synthetic set seed 20260926) with verity_flock.circuit; converted by selftest_records.py",
+    "statement": {
+     "circuit": "art:dae0b537/flat/rope-head/stage/circuit.txt",
+     "public": "art:dae0b537/flat/rope-head/stage/pub-4.bin",
+     "circuit_sha512": "5c33464ccf9279dcd362238a3529b140794d411ab85e53a2e0bce67ed4495f8a77f3c59c967ce260bd02ea678aacf1fc2006264c780d4b15ee74f813493926d6",
+     "detail": "rope-head d64 neox-bf16, 4 instances: every output port an hm96 row hashed in the circuit; the public file holds roots, hiding leaves and structure only"
+    },
+    "lean_statement": "verity/flock-circuit+seed-injection",
+    "selftest": [
+     "art:50de1919/flat/rope-head/records"
+    ],
+    "selftest_note": "every selftest case that runs a session (20: 3 honest; output_claim_false, output_row_committed_false and digest_claim_false each with its own pub.bin, rejected at the proof's openings); upstream's verdicts are its live ones in each case.json",
+    "agreement": "local ci.py --live --sets 2 (2026-10-02T00:38Z, Lean at ce0e60810): 20/20, 3 accepted"
+   },
+   {
+    "tags": "verity/flock-circuit (hidden outputs, PROTOCOL.md §16.13): one BF16 GEMM coordinate, a tail stage returns its one output word in a 64-word row",
+    "pr83": "455a01049",
+    "generator": "backends/flock/pod/60-circuit.sh MODE=selftest GPU=0 RECORD=1 SELF_N=4 on vy-nebius-1 (r20261002-000747-add2, source 455a01049: --features sha512,glue,seed-injection), staging gemm-coordinate/k64/sm80-mma-bf16 (synthetic set seed 20260926) with verity_flock.circuit; converted by selftest_records.py",
+    "statement": {
+     "circuit": "art:dae0b537/flat/gemm-coordinate/stage/circuit.txt",
+     "public": "art:dae0b537/flat/gemm-coordinate/stage/pub-4.bin",
+     "circuit_sha512": "f88a445704e14a17ded1654ca99ce1b132c8965f1e3a19e19fb8a8322dca95691d5a0bbcc3e88f561ea82388bede7a92fced85a2fa9e1eda629d5aaa4b3f9985",
+     "detail": "gemm-coordinate k64 sm80-mma-bf16, 4 instances: the one BF16 output an hm96 row (word 0 the value, the rest forced zero) hashed in the circuit; the public file holds roots, hiding leaves and structure only"
+    },
+    "lean_statement": "verity/flock-circuit+seed-injection",
+    "selftest": [
+     "art:50de1919/flat/gemm-coordinate/records"
+    ],
+    "selftest_note": "every selftest case that runs a session (21: 3 honest; the false statements each with its own pub.bin); upstream's verdicts are its live ones in each case.json",
+    "agreement": "local ci.py --live --sets 3 (2026-10-02T00:38Z, Lean at ce0e60810): 21/21, 3 accepted"
+   },
+   {
+    "tags": "verity/flock-circuit/types (hidden outputs, PROTOCOL.md §16.13): RoPE as a flat class",
+    "pr83": "455a01049",
+    "generator": "backends/flock/pod/60-circuit.sh MODE=selftest GPU=0 RECORD=1 SELF_N=4 TYPED=1 on vy-nebius-1 (r20261002-000809-263e, source 455a01049: --features sha512,glue,seed-injection), staging rope-head/d64/neox-bf16 (synthetic set seed 20260926) with verity_flock.typed_statement; converted by selftest_records.py",
+    "statement": {
+     "circuit": "art:dae0b537/typed/rope-head/stage/circuit.txt",
+     "public": "art:dae0b537/typed/rope-head/stage/pub-4.bin",
+     "circuit_sha512": "35f72614230500feee6f54ba75618965d77a554d9b6be78134b27323a236bafaf3bff0ce0f44d8f1f66d75b79acc9bb383c7f6d875459bb8fa5ccc5b3c021cb6",
+     "detail": "rope-head d64 neox-bf16 typed, 4 instances: every output port an hm96 row hashed in the circuit; the public file holds roots, hiding leaves and structure only"
+    },
+    "lean_statement": "verity/flock-circuit/types+seed-injection",
+    "selftest": [
+     "art:50de1919/typed/rope-head/records"
+    ],
+    "selftest_note": "every selftest case that runs a session (20: 3 honest; the false statements each with its own pub.bin); upstream's verdicts are its live ones in each case.json",
+    "agreement": "local ci.py --live --sets 4 (2026-10-02T00:38Z, Lean at ce0e60810): 20/20, 3 accepted"
+   },
+   {
+    "tags": "verity/flock-circuit/types (hidden outputs, PROTOCOL.md §16.13): one BF16 GEMM coordinate as a template",
+    "pr83": "455a01049",
+    "generator": "backends/flock/pod/60-circuit.sh MODE=selftest GPU=0 RECORD=1 SELF_N=4 TYPED=1 on vy-nebius-1 (r20261002-000809-263e, source 455a01049: --features sha512,glue,seed-injection), staging gemm-coordinate/k64/sm80-mma-bf16 (synthetic set seed 20260926) with verity_flock.typed_statement; converted by selftest_records.py",
+    "statement": {
+     "circuit": "art:dae0b537/typed/gemm-coordinate/stage/circuit.txt",
+     "public": "art:dae0b537/typed/gemm-coordinate/stage/pub-4.bin",
+     "circuit_sha512": "8d28d280ab25dadcd7553b568eccc23e8ac36877653f6d1383edf70369249f87be81fd06811952097285b7a06927004508873d8222830604a80d58514ccd46f7",
+     "detail": "gemm-coordinate k64 sm80-mma-bf16 typed, 4 instances: the one BF16 output an hm96 row hashed in the circuit; the public file holds roots, hiding leaves and structure only"
+    },
+    "lean_statement": "verity/flock-circuit/types+seed-injection",
+    "selftest": [
+     "art:50de1919/typed/gemm-coordinate/records"
+    ],
+    "selftest_note": "every selftest case that runs a session (21: 3 honest; the false statements each with its own pub.bin); the selftest's host_units_match_witness check fails here and on its base (a host-side unit evaluation, not a session), so all_pass is false; upstream's verdicts are its live ones in each case.json",
+    "agreement": "local ci.py --live --sets 5 (2026-10-02T00:38Z, Lean at ce0e60810): 21/21, 3 accepted"
    }
   ]
  }

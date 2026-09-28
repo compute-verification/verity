@@ -437,11 +437,38 @@ FLOCK_CIRCUIT_TYPED_CONFIG = dataclasses.replace(
        + ("; the circuit computes its type (#268's checks)" if TYPED_C2 else ""),
     pin=f"{CIRCUIT_TYPED} pinned circuit file (circuit_format flock-circuit/types, PR #281); compared with the flat statement per "
         "instance only")
+#: M0's hidden-output statements (the Lean verifier's PROTOCOL.md §16.13, PR #757): the same names, every output port an hm96 row
+#: hashed in the circuit, the identity's ``outputs`` saying so.  Before #757 the names meant the public-output forms (``@e51e2b86``,
+#: ``types@210d32e1``), so a result is read by its identity, never by its name, and hidden and public results never share a cell.
+_HIDDEN_PORTS = ("per instance: one query row (attention: one query over T keys) or one output coordinate (GEMM); x, W and y "
+                 "committed, y as hm96-sha512 rows hashed in the circuit (the public file holds no output word); y equal to the IR "
+                 "reference on every proved instance")
+_HIDDEN_ZK = ("No: NON_ZK_PROOF; no privacy claim (M0's transcript is a function of the witness, output rows included: its mask "
+              "slots are zero; and the benchmark's hm96 salts are public)")
+FLOCK_CIRCUIT_HIDDEN_CONFIG = dataclasses.replace(
+    FLOCK_CIRCUIT_CONFIG, id="C-Flock, generic circuit, hidden outputs, SHA-512 in-circuit commitments", ports=_HIDDEN_PORTS,
+    zk=_HIDDEN_ZK, pin="verity/flock-circuit pinned circuit file with hidden outputs (PR #757); the Lean verifier of record "
+                       "(Stmt.setupHidden: no soundness theorem yet)")
+FLOCK_CIRCUIT_TYPED_HIDDEN_CONFIG = dataclasses.replace(
+    FLOCK_CIRCUIT_TYPED_CONFIG, id="C-Flock, typed circuit (verity/flock-circuit/types), hidden outputs, SHA-512 in-circuit commitments",
+    ports=_HIDDEN_PORTS, zk=_HIDDEN_ZK + FLOCK_CIRCUIT_TYPED_CONFIG.zk[len(FLOCK_CIRCUIT_CONFIG.zk):],
+    pin=f"{CIRCUIT_TYPED} pinned circuit file with hidden outputs (PR #757); compared with the flat statement per instance only")
+HIDDEN_NOT_IN_TABLE2 = ("hidden outputs (PR #757): not a Table 2 cell until Table 2 shows hidden-output and public-output statements on "
+                        "separate lines")
 CONFIGURATIONS = (*(dataclasses.replace(c, interaction=_INTERACTION[c.id]) for c in CONFIGURATIONS), FLOCK_CONFIG, FLOCK_VLLM_CONFIG,
-                  FLOCK_CIRCUIT_CONFIG, FLOCK_CIRCUIT_TYPED_CONFIG)
+                  FLOCK_CIRCUIT_CONFIG, FLOCK_CIRCUIT_TYPED_CONFIG, FLOCK_CIRCUIT_HIDDEN_CONFIG, FLOCK_CIRCUIT_TYPED_HIDDEN_CONFIG)
 _CONFIG = {c.id: c for c in CONFIGURATIONS}
-assert set(_CONFIG) == set(D._BY_ID) | {FLOCK_CONFIG.id, FLOCK_VLLM_CONFIG.id, FLOCK_CIRCUIT_CONFIG.id, FLOCK_CIRCUIT_TYPED_CONFIG.id}, \
+assert set(_CONFIG) == set(D._BY_ID) | {FLOCK_CONFIG.id, FLOCK_VLLM_CONFIG.id, FLOCK_CIRCUIT_CONFIG.id, FLOCK_CIRCUIT_TYPED_CONFIG.id,
+                                        FLOCK_CIRCUIT_HIDDEN_CONFIG.id, FLOCK_CIRCUIT_TYPED_HIDDEN_CONFIG.id}, \
     "every drilldown.VARIANTS entry is a declared configuration"
+TYPED_CONFIGS = frozenset({FLOCK_CIRCUIT_TYPED_CONFIG.id, FLOCK_CIRCUIT_TYPED_HIDDEN_CONFIG.id})
+
+
+def outputs_hidden(meta: Mapping[str, Any]) -> bool:
+    """True iff the result's backend identity says its outputs are hidden rows (``outputs: "hidden: ..."``)."""
+    fp = meta.get("workload_fingerprint") if isinstance(meta.get("workload_fingerprint"), Mapping) else {}
+    identity = _get(fp, "software", "backend", "identity")
+    return isinstance(identity, Mapping) and str(identity.get("outputs", "")).startswith("hidden")
 
 TABLE1_COLUMNS = ("Configuration", "Flag", "Statement", "x, W, y", "Commitment scheme", "Hashes (role; property; class)", "ZK and verifier model",
                   "Soundness (whole-proof bound at its cells; dominant term)", "Proximity bounds", "Interaction model", "Transferability",
@@ -461,9 +488,9 @@ def configuration_of(meta: Mapping[str, Any], configurations: Mapping[str, Confi
     if not FLOCK.recognises(name):
         return None
     if fp.get("statement") == CIRCUIT_FLAT:
-        return cfgs.get(FLOCK_CIRCUIT_CONFIG.id)
+        return cfgs.get((FLOCK_CIRCUIT_HIDDEN_CONFIG if outputs_hidden(meta) else FLOCK_CIRCUIT_CONFIG).id)
     if fp.get("statement") == CIRCUIT_TYPED:
-        return cfgs.get(FLOCK_CIRCUIT_TYPED_CONFIG.id)
+        return cfgs.get((FLOCK_CIRCUIT_TYPED_HIDDEN_CONFIG if outputs_hidden(meta) else FLOCK_CIRCUIT_TYPED_CONFIG).id)
     return cfgs.get(FLOCK_VLLM_CONFIG.id if str(name).lower().startswith("flock-vllm-v1") else FLOCK_CONFIG.id)
 
 
@@ -1511,12 +1538,14 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
     pools: dict[Key, list[tuple[Ctx, dict[str, Any]]]] = {}
     unfiltered: dict[Key, list[tuple[Ctx, dict[str, Any]]]] = {}
     for c in entries:
-        if c.config is not None and c.config.id == FLOCK_CIRCUIT_TYPED_CONFIG.id:
-            # never the best of a typed and a flat cell (different statement ids are never merged): out of Table 2 until C2 holds
-            # and Table 2 gives the typed statement lines of its own, whatever TYPED_C2 says
+        if c.config is not None and c.config.id in TYPED_CONFIGS | {FLOCK_CIRCUIT_HIDDEN_CONFIG.id}:
+            # never the best of a typed and a flat cell, or of a hidden-output and a public-output one (different statements are
+            # never merged): out of Table 2 until Table 2 gives them lines of their own (a typed one also until C2 holds, whatever
+            # TYPED_C2 says)
             rid, _ = T._attempt_of(store, c.art)
+            why = TYPED_NOT_IN_TABLE2 if c.config.id in TYPED_CONFIGS else HIDDEN_NOT_IN_TABLE2
             V.rejected.append({"artifact": c.art, "family": c.family.id, "configuration": c.config.id, "line": c.target.name,
-                               "subcircuit": c.subcircuit, "attempt": rid, "codes": [("X", TYPED_NOT_IN_TABLE2)]})
+                               "subcircuit": c.subcircuit, "attempt": rid, "codes": [("X", why)]})
             continue
         codes = reject_codes(store, c, rules, equivs)
         P = throughput(c.meta, rules, c.config is not None and not c.config.transferability.startswith("transferable"))
@@ -2577,7 +2606,7 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
     def result_key(c: ViewCell) -> str:
         """backend x statement x input set x prover hardware; the typed circuit statement is its own statement, so a typed
         result never stands in for a flat one (red-team-flock-3's Q4)."""
-        typed = "+types" if c.configuration == FLOCK_CIRCUIT_TYPED_CONFIG.id else ""
+        typed = "+types" if c.configuration in TYPED_CONFIGS else ""
         return (f"{backend_by_cfg.get(c.configuration or '') or slug(c.column)}@{statement_id(c.line, c.scheme, c.subcircuit)}{typed}"
                 f"@{input_set_id(c)}@{prover_of(c)}")
 
