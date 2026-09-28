@@ -176,6 +176,24 @@ def test_the_gpu_twin_is_chosen_by_reference_codec():
 
 
 @needs_cuda
+def test_band_window_round_trips(ext):
+    """On the band graph (chain over the last `window` blocks), per-block decode inverts the encode, in any block order, and a
+    window of at least B - 1 is the complete DAG."""
+    from verity_vllm.engine.pous import codec, dense
+
+    g = torch.Generator().manual_seed(9)
+    w = torch.randint(0, 256, (2, 8, 64), dtype=torch.uint8, generator=g).cuda()
+    tags = codec.segment_tags(bytes(range(24)), [0, 1], "cuda")
+    band = dense.encode(w, tags, window=3)
+    assert torch.equal(dense.encode(w, tags, window=7), dense.encode(w, tags))
+    assert not torch.equal(band, dense.encode(w, tags))
+    blocks = torch.tensor([7, 0, 3, 5, 1, 6, 2, 4] * 2, device="cuda")
+    segs = torch.tensor([0] * 8 + [1] * 8, device="cuda")
+    got = dense.decode_blocks(band.view(-1, 64), tags, segs, blocks, 8, window=3)
+    assert torch.equal(got, w[segs, blocks])
+
+
+@needs_cuda
 def test_feistel_kernels_agree(ext):
     """The one-warp, one-thread, word-I/O and fused Feistel kernels give the same bits on Π₂ at both schemes' widths, and at a
     width whose half is a whole number of Keccak blocks."""

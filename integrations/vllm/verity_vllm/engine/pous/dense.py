@@ -77,22 +77,24 @@ def _throttle(pending: list, stream) -> None:
 
 
 def decode_blocks(c_flat: torch.Tensor, tags: torch.Tensor, segs: torch.Tensor, blocks: torch.Tensor,
-                  per_segment: int) -> torch.Tensor:
+                  per_segment: int, window: int | None = None) -> torch.Tensor:
     """`W` of the blocks `(segs[r], blocks[r])` alone, from every segment's `C` (`[S * B, L]`, segment-major) and tags
-    (`[S, 32]`): `[R, L]` in the given order.  Block `i` needs only `C_0 .. C_i`; rows are ordered by block so the rows still
-    absorbing at chain step `j` (`i >= j - 1`) are a suffix, and each step gathers their parents `C_{i-j}`."""
+    (`[S, 32]`): `[R, L]` in the given order.  Block `i`'s chain absorbs `C_{i-1}, .., C_{i-n}` with `n = i` on the complete
+    DAG and `n = min(i, window)` on the band graph of in-degree `window`.  Rows are ordered by `n`, so the rows still absorbing
+    at chain step `j` (`n >= j - 1`) are a suffix, and each step gathers their parents `C_{i-j}`."""
     width = c_flat.shape[1]
-    order = torch.argsort(blocks, stable=True)
-    seg, blk = segs[order], blocks[order]
+    length = blocks if window is None else torch.clamp(blocks, max=window)
+    order = torch.argsort(length, stable=True)
+    seg, blk, ln = segs[order], blocks[order], length[order]
     r = len(order)
     state = torch.zeros(r, 2 * width + 64, dtype=torch.uint8, device=c_flat.device)
     state[:, 2 * width:2 * width + 32] = tags[seg]
     state[:, 2 * width + 32] = (blk & 0xFF).to(torch.uint8)
     state[:, 2 * width + 33] = (blk >> 8).to(torch.uint8)
-    starts = torch.searchsorted(blk, torch.arange(int(blk[-1]) + 2, device=blk.device)).tolist()
+    starts = torch.searchsorted(ln, torch.arange(int(ln[-1]) + 2, device=ln.device)).tolist()
     base = seg * per_segment
     pending, stream = [], torch.cuda.current_stream()
-    for j in range(1, int(blk[-1]) + 2):
+    for j in range(1, int(ln[-1]) + 2):
         first = starts[j - 1]
         pad_end = starts[j] if j < len(starts) else r
         suffix = state[first:]
@@ -107,15 +109,16 @@ def decode_blocks(c_flat: torch.Tensor, tags: torch.Tensor, segs: torch.Tensor, 
     return out
 
 
-def encode(w: torch.Tensor, tags: torch.Tensor) -> torch.Tensor:
-    """`C` of `G` segments from `W` (`[G, B, L]`), block by block."""
+def encode(w: torch.Tensor, tags: torch.Tensor, window: int | None = None) -> torch.Tensor:
+    """`C` of `G` segments from `W` (`[G, B, L]`), block by block (`window` as in `decode_blocks`)."""
     g, b, width = w.shape
     c_bm = torch.zeros(b, g, width, dtype=torch.uint8, device=w.device)
     w_bm = w.transpose(0, 1)
     for i in range(b):
+        n = i if window is None else min(i, window)
         state = _initial(tags, i + 1, width)[i * g:].clone()
-        for j in range(1, i + 2):
-            if j <= i:
+        for j in range(1, n + 2):
+            if j <= n:
                 state[:, :width] = c_bm[i - j]
             else:
                 _pad(state, width)
