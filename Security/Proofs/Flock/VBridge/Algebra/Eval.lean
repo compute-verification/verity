@@ -11,7 +11,7 @@ differ by the consistency sums weighted by `kappa`.
   read through the running sums.
 -/
 
-namespace FlockVBridge.Algebra
+namespace Flock.RecAlgebra
 
 open Flock
 
@@ -131,4 +131,4 @@ theorem residuals_eq_run {rounds : Array (Array F128)} {extras : Array Claim} {v
 
 end Eval
 
-end FlockVBridge.Algebra
+end Flock.RecAlgebra

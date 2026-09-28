@@ -51,15 +51,6 @@ def OffAt (d : ob.Dg) (v : V) (os : Finset ob.Op) : Prop := ∃ o ∈ os, ob.com
 
 variable {Cm C Pos β γ : Type} [Fintype C] [Nonempty C]
 
-/-- **The rest of the run from a node**: the remaining round coins, the prover's messages read from its strategy, and then
-the finder `T` at the leaf reached. -/
-noncomputable def contF : (r : ℕ) → (f : List (Cm × C) → Game β) →
-    ((t : List (Cm × C)) → Strategy (f t) → Finder γ) → Strategy (rounds Cm C r f) → Finder γ
-  | 0, _, T, s => T [] s
-  | r + 1, f, T, s =>
-      ⟨.coin C fun ρ => (contF r (fun t => f ((s.1, ρ) :: t)) (fun t => T ((s.1, ρ) :: t)) (s.2 ρ)).g,
-        fun ρ => (contF r (fun t => f ((s.1, ρ) :: t)) (fun t => T ((s.1, ρ) :: t)) (s.2 ρ)).s⟩
-
 open Classical in
 /-- **A fork's output**: an opening from each run, of the digest `d` to different values, as a collision. -/
 noncomputable def forkPick (d : ob.Dg) (os os' : Finset ob.Op) : Pair :=
