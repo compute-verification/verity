@@ -29,6 +29,8 @@ QNAN_MUFU = 0x7FFFFFFF
 INF = 0x7F800000
 ONE_F = 0x3F800000
 DEFAULT_NAN = 0xFFC00000
+#: every NaN result of `__nv_logf` / `__nv_log1pf` (`sampling.LOG_NAN`: the GPU's canonical NaN)
+LOG_NAN = 0x7FFFFFFF
 BIG = 0x7E800000       # 2^126
 TINY = 0x00800000      # 2^-126
 QUARTER = 0x3E800000   # 0.25
@@ -409,8 +411,8 @@ def nv_logf(C, a):
     r = f32_mul_ftz(C, r, f)
     r = f32_fma_ftz(C, r, f, f)
     r = _fma_ftz(C, i2, LN2, r)
-    # a2 >= 0x7F800000 (+inf, a NaN, a negative): fma(a2, inf, inf) is a2 quieted for a NaN, +inf, else the invalid NaN 0xFFC00000
-    special = mux(C, _is_nan(C, a2), a2[:22] + [ONE] + a2[23:], mux(C, a2[31], _c32(0xFFC00000), _c32(INF)))
+    # a2 >= 0x7F800000 (+inf, a NaN, a negative): +inf for +inf, else the NaN
+    special = mux(C, _eq_const(C, a2, INF), _c32(INF), _c32(LOG_NAN))
     r = mux(C, NOT(_ult_const(C, a2, 0x7F800000)), special, r)
     return mux(C, NOT(or_reduce(C, a2[:31])), _c32(0xFF800000), r)
 
@@ -434,7 +436,8 @@ def nv_log1pf(C, a):
     r = f32_fma_ftz(C, r, u, u)
     r = _fma_ftz(C, ef, LN2, r)
     big = NOT(_ult_const(C, a, 0x7F800000))
-    r = mux(C, C.AND(big, _signed_gt_const(C, a, -1082130432)), _fma_ftz(C, a, INF, INF), r)
+    special = mux(C, _eq_const(C, a, INF), _c32(INF), _c32(LOG_NAN))               # a < -1, +inf or a NaN: +inf for +inf, else the NaN
+    r = mux(C, C.AND(big, _signed_gt_const(C, a, -1082130432)), special, r)
     return mux(C, C.AND(big, NOT(or_reduce(C, a[:31]))), _c32(0x80000000), r)
 
 
