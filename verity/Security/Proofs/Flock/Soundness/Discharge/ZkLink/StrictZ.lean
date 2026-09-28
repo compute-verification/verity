@@ -19,8 +19,8 @@ count is a collision of `H` (`opRZ_conflict_collision`, `opPadsZ_conflict_collis
   `JointZC` discharged (`jointZC_ksBound`), and with `ε_ks` in closed form under A1;
 * `zk_flock_countC_execOS_cr`: the same with each unit read at its place, so `ε_ks`, `δ_link` and `δ_tree` rest on A1,
   A2 and A3 alone;
-* `zk_flock_countC_execOS_m1_cr`: the same with every table at M1's parameters, each table's bound at most `2^-203`
-  (`ksAvgStrictZ_le_m1`).
+* `zk_flock_countC_execOS_m1_cr`: the same with every table at C-Flock ZK's parameters, each table's bound at most
+  `2^-203` (`ksAvgStrictZ_le_m1`).
 
 The budgets are the hypotheses' to state: the prover is a strategy, and Lean counts no evaluations.
 -/
@@ -211,10 +211,10 @@ theorem ksAvgZC_le_strict {n : ℕ} {Reg : Type} (planZ : Finset (Fin n) → Reg
 
 end Batch
 
-/-! ## At M1's parameters -/
+/-! ## At C-Flock ZK's parameters -/
 
-/-- **A `--zk` table's knowledge bound at M1's parameters**: `ksStrictZ` with the table's `bound` replaced by `2^-203`
-(`TabZK.bound_le_m1`). -/
+/-- **A `--zk` table's knowledge bound at C-Flock ZK's parameters**: `ksStrictZ` with the table's `bound` replaced by
+`2^-203` (`TabZK.bound_le_m1`). -/
 noncomputable def ksStrictZm1 (ts : List (TabZK F mPts)) (j : Fin ts.length) (k : ℕ) (qF qS : ℝ) : ℝ :=
   2 ^ (-(203 : ℝ)) +
     ∑ _r ∈ Finset.range 2, ∑ ℓ ∈ Finset.Icc 1 (ts.get j).sch.levels.length,
@@ -223,7 +223,8 @@ noncomputable def ksStrictZm1 (ts : List (TabZK F mPts)) (j : Fin ts.length) (k 
     ∑ _r ∈ Finset.range 2, Real.sqrt (qF ^ 2 / 2 ^ (513 : ℝ)) +
     qS ^ 2 / 2 ^ (513 : ℝ) + Real.sqrt (k * (qF ^ 2 / 2 ^ (513 : ℝ)))
 
-/-- **The compiled `--zk` knowledge term at M1's parameters in closed form**: `ksAvgStrictZ` at `ksStrictZm1`. -/
+/-- **The compiled `--zk` knowledge term at C-Flock ZK's parameters in closed form**: `ksAvgStrictZ` at `ksStrictZm1`.
+-/
 noncomputable def ksAvgStrictZm1 {n : ℕ} {Reg : Type} (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
     (L : Law n) (k : ℕ) (qF qS : ℝ) (R : Reg) : ℝ≥0∞ :=
   avg fun ω : L.Ω => ⨆ j : Fin (planZ (L.draw ω) R).length,
@@ -240,8 +241,8 @@ theorem ksStrictZ_le_m1 (hF : Fintype.card F = 2 ^ 128) (ts : List (TabZK F mPts
   gcongr
   exact ENNReal.toReal_le_of_le_ofReal (by positivity) ((ts.get j).bound_le_m1 hF hT)
 
-/-- **The compiled knowledge term's closed form at M1's parameters**: with every table of the plan at M1's parameters,
-`ksAvgStrictZ` is at most `ksAvgStrictZm1`. -/
+/-- **The compiled knowledge term's closed form at C-Flock ZK's parameters**: with every table of the plan at C-Flock
+ZK's parameters, `ksAvgStrictZ` is at most `ksAvgStrictZm1`. -/
 theorem ksAvgStrictZ_le_m1 (hF : Fintype.card F = 2 ^ 128) {n : ℕ} {Reg : Type}
     (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
     (hM1 : ∀ S R (j : Fin (planZ S R).length), ((planZ S R).get j).M1) (L : Law n) (k : ℕ) (qF qS : ℝ) (R : Reg) :
@@ -330,7 +331,7 @@ variable (A : Arith F K) (Hs : Hashes F D Sl) {C : Circuit} {n : ℕ} (P : Parti
 
 /-- **The compiled `--zk` count curve at the live draw, every term on the accepted assumptions**
 (`zk_flock_count_execOS_m1_cr`'s compiled counterpart at any table parameters; `zk_flock_countC_execOS_m1_cr` is the one
-at M1's). Each drawn unit is read from its table at its place (`place`),
+at C-Flock ZK's). Each drawn unit is read from its table at its place (`place`),
 and the committed transcript is the plurality value layer of a binding of wires to registered commit strings (`vb`).
 Then `Pr[execAccept ∧ at least K wrong units] ≤ miss(K) + ε_ks + δ_link + δ_tree`, with `miss(K)` `Law.stratified`'s
 count curve on bytes A3 makes uniform (`hA3`), `ε_ks = ksAvgStrictZ` under A1 for every table's finders after each draw
@@ -363,9 +364,9 @@ theorem zk_flock_countC_execOS_cr (hA : A.Correct)
   zk_flock_countC_execOS_strict A Hs P planZ tab vb hA (loweringSoundZK_of_place A P planZ tab place) σs ks hks St hS
     Kd pop Lb src hA3 hk hRw hM hρ hr ht K σ hCR tr hT
 
-/-- **The compiled `--zk` count curve at the live draw, every table at M1's parameters, every term on the accepted
-assumptions**: `zk_flock_countC_execOS_cr` with each table's bound at most `2^-203` (`hM1`), so `ε_ks = ksAvgStrictZm1`,
-as `zk_flock_count_execOS_m1_cr` has `2^-203` at the interactive-oracle layer. -/
+/-- **The compiled `--zk` count curve at the live draw, every table at C-Flock ZK's parameters, every term on the
+accepted assumptions**: `zk_flock_countC_execOS_cr` with each table's bound at most `2^-203` (`hM1`), so
+`ε_ks = ksAvgStrictZm1`, as `zk_flock_count_execOS_m1_cr` has `2^-203` at the interactive-oracle layer. -/
 theorem zk_flock_countC_execOS_m1_cr (hA : A.Correct)
     (hM1 : ∀ S R (j : Fin (planZ S R).length), ((planZ S R).get j).M1)
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)

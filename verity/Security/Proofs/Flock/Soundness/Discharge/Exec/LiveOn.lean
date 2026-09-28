@@ -84,9 +84,9 @@ theorem execRefines_on (hdec : DecodesOn H E Lf T I wr opn dec one fin capOf L)
 
 variable {N' : ℕ} (p : FlockSoundness.Prog N' n) (outs : Finset (Fin N'))
 
-/-- **The headline at the executable, for one-table sessions of the live coin server.** Let the verifier draw the units
+/-- **The headline at the executable, for one-table sessions of the challenger.** Let the verifier draw the units
 as in `Prog.flock_headline_L` (the live stratified draw under A3), let each draw's session be one table `T S R`, and let
-the live session be `liveTable` (the coin server, its coins uniform per round and drawn after the round's retained
+the live session be `liveTable` (the challenger, its coins uniform per round and drawn after the round's retained
 bytes), written out as a session directory by `wr`. Against any live prover `τ`, flock-verify accepts with at least `K`
 wrong units of the committed values of the simulated prover (`simAuditOn … τ`) with probability at most
 `miss(K) + ε_ks + δ_link`: `Prog.flock_headline_execL` with `hRef` discharged by `execRefines_on`, so `Pr[bad] = 0`.

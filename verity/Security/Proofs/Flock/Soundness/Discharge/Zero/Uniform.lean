@@ -8,12 +8,12 @@ import Proofs.Flock.Soundness.Discharge.Const.Inst
 /-!
 # `hZero` at the circuit's program (e2e, untyped statements)
 
-The untyped statement `Stmt.setupH` accepted places a VU (`upv` stacked copies of the unit net) at each drawn unit's site
+The untyped statement `Stmt.setupH` accepted places a template instance (`upv` stacked copies of the unit net) at each drawn unit's site
 (`Placed.Sites`, `Placed.progPlaces`), and Δ copies into each stacked input the column `Aliased.copyPos` names.
 - `copyPos_zero`: at a stacked input that reads the zero (`ZeroIn`), that column is a unit slot's forced-zero row.
 - `stack_zero_block`, `accepted_zero_block`: so in every block of a satisfying witness the input carries 0
   (`Aliased.copyPos_block`, `Aliased.zeroPos_block`).
-- `zeroCols_uniform`: `hZero` for the program of `n` units of the circuit's VU rows (`Placed.uniform`) at the sites, each
+- `zeroCols_uniform`: `hZero` for the program of `n` units of the circuit's template instance rows (`Placed.uniform`) at the sites, each
   unit's instance the program's own (`Const.Prog.instC`), when every input the program wires to its zero gate reads the
   zero. `zeroCols_circuitProg`: the same on source-indexed input gates (`Placed.circuitProg`), when every input with no
   source reads the zero.
@@ -36,8 +36,8 @@ section copies
 variable {tags : Tags} {st : Stmt} (L : Layout st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
   (F : Aliased.UnitFacts tags st)
 
-/-- **Δ's copy position at a stacked input that reads the zero is a forced-zero row**: VU `g`'s input `x`'s
-(`Aliased.copyPos`) is its slot's forced-zero row (a zero leaf) or the first slot's (a cut bit past 16). -/
+/-- **Δ's copy position at a stacked input that reads the zero is a forced-zero row**: template instance `g`'s input
+`x`'s (`Aliased.copyPos`) is its slot's forced-zero row (a zero leaf) or the first slot's (a cut bit past 16). -/
 theorem copyPos_zero {g : ℕ} (hg : g < st.c.g) {x : ℕ} (hx : x < st.c.upv * (st.c.unit.inWords * WORD))
     (hz : ZeroIn st.c x) : Aliased.IsZeroPos L regs F (Aliased.copyPos L regs F hg x) := by
   have hs := Aliased.stack_copy_lt L hg hx
@@ -50,8 +50,8 @@ theorem copyPos_zero {g : ℕ} (hg : g < st.c.g) {x : ℕ} (hx : x < st.c.upv * 
   · exact ⟨_, hs, rfl⟩
 
 include F in
-/-- **A stacked input that reads the zero carries 0**: at VU `g`'s place (`stackPlace`), in every block of a satisfying
-witness. -/
+/-- **A stacked input that reads the zero carries 0**: at template instance `g`'s place (`stackPlace`), in every block
+of a satisfying witness. -/
 theorem stack_zero_block {g : ℕ} (hg : g < st.c.g) (x : Fin ((unitRows st L.unit_built).stackW st.c.upv))
     (hx : x.val < ((unitRows st L.unit_built).stack st.c.upv).nIn) (hz : ZeroIn st.c x.val)
     {z : Model.Witness (L.model regs).m} (hsat : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) :
@@ -67,8 +67,8 @@ theorem stack_zero_block {g : ℕ} (hg : g < st.c.g) (x : Fin ((unitRows st L.un
 
 end copies
 
-/-- **At an accepted untyped statement, a VU's stacked input that reads the zero carries 0**, at the VU's columns
-(`Placed.Accepted.col`), in every block of a satisfying witness. -/
+/-- **At an accepted untyped statement, a template instance's stacked input that reads the zero carries 0**, at the
+template instance's columns (`Placed.Accepted.col`), in every block of a satisfying witness. -/
 theorem accepted_zero_block {T : Model.Statement} (a : Placed.Accepted T) {g : ℕ} (hg : g < a.st.c.g)
     (x : Fin a.rows.w) (hx : x.val < a.rows.nIn) (hz : ZeroIn a.st.c x.val) {z : Model.Witness T.m}
     (hsat : T.Satisfies z) (o : Fin (2 ^ T.nbl)) : T.block z o (a.col hg x) = 0 := by
@@ -181,11 +181,11 @@ variable {n : ℕ} {Reg : Type} {mPts : ℕ} {plan : Finset (Fin n) → Reg → 
   {k : ℕ} {c : Flock.Circuit} {hU : Built c.unit} {ins : ℕ → Fin (Placed.circuitRows c hU).nIn → Fin k}
   {one : Fin k} {hone : ∀ u x, ins u x ≠ one}
 
-/-- **`hZero` for the circuit's program at the accepted statements' sites.** The program of `n` units of the circuit's VU
-rows (`Placed.uniform`), each drawn unit placed at its site (`si`: its VU and block in its table's accepted untyped
-statement, whose circuit file parses to `c`) with the program's own instance (`Const.Prog.instC`): every column on the
-zero gate carries 0 in every satisfying witness, when every input the program wires to the zero gate reads the zero
-(`hzer`). -/
+/-- **`hZero` for the circuit's program at the accepted statements' sites.** The program of `n` units of the circuit's template instance
+rows (`Placed.uniform`), each drawn unit placed at its site (`si`: its template instance and block in its table's
+accepted untyped statement, whose circuit file parses to `c`) with the program's own instance (`Const.Prog.instC`):
+every column on the zero gate carries 0 in every satisfying witness, when every input the program wires to the zero gate
+reads the zero (`hzer`). -/
 theorem zeroCols_uniform (si : Placed.Sites plan tab)
     (hrows : si.RowsOf (Placed.uniform k (Placed.circuitRows c hU) ins one hone n))
     (hparse : ∀ S R u (h : u ∈ S),

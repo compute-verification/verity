@@ -66,7 +66,7 @@ structure RowLeaf where
   checkLayout : Circuit → V Unit
   /-- Δ of `comp` slot `s` of range `r` beyond its constant wiring (chaining, parent messages), as (A, B) entries -/
   slotDelta : Circuit → Range → Nat → V (Array (Nat × Nat) × Array (Nat × Nat))
-  /-- the block column where VU `g`'s byte `byte` of input port `p` is hashed (the unit's leaf bits copy it): `c g p byte` -/
+  /-- the block column where template instance `g`'s byte `byte` of input port `p` is hashed (the unit's leaf bits copy it): `c g p byte` -/
   messageCol : Circuit → Nat → Nat → Nat → V Nat
   /-- the leaf's regions for `n` instances, with their known bytes -/
   regions : Circuit → Public → V (Array Region)

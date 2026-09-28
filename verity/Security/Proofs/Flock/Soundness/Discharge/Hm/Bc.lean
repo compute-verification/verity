@@ -40,7 +40,7 @@ theorem zero_bit (hupv : 0 < st.c.upv) (hg : 0 < st.c.g) {regs : List (Model.Reg
   rfl
 
 include F in
-/-- **The four copies into VU `g`'s row `p`**, in every block of a satisfying witness of the untyped statement: the first
+/-- **The four copies into template instance `g`'s row `p`**, in every block of a satisfying witness of the untyped statement: the first
 compression's `cv` is the row prefix's midstate, each later compression's `cv` the previous one's output, the `hm96`
 slot's `cv` the last compression's output, and its `pad` the padding block. -/
 theorem row_copies_flat (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < st.c.upv)
@@ -123,7 +123,8 @@ theorem row_bc_flat (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < st.c
 
 end Bc
 
-/-- A unit that returns the outputs has a slot per VU at least: the check's power of two of unit slots. -/
+/-- A unit that returns the outputs has a slot per template instance at least: the check's power of two of unit slots.
+-/
 theorem upv_pos {c : Circuit} (C : CheckFacts c) (ho : c.outNet = c.unitNet) : 0 < c.upv := by
   have h := C.unit_pow2 ho
   rw [C.unit_range.2] at h
@@ -134,7 +135,7 @@ theorem upv_pos {c : Circuit} (C : CheckFacts c) (ho : c.outNet = c.unitNet) : 0
 variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
   {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
 
-/-- **A row's `b ‖ c` at the untyped statement `Stmt.setupH` accepted**: in every block of a satisfying witness, VU `g`'s
+/-- **A row's `b ‖ c` at the untyped statement `Stmt.setupH` accepted**: in every block of a satisfying witness, template instance `g`'s
 row `p`'s `hm96` slot outputs the commit string of the row prefix and message its `sha512x3` slots read, under the salt
 its `hm96` slot reads, when the unit returns the outputs (`ho`) and the rows are `sha512/row/v1` rows (`hv1`). -/
 theorem row_bc_setupH (ht : tags.typed = false)

@@ -158,7 +158,9 @@ def test_the_probe_source_runs_by_itself_in_isolated_mode():
     assert r.returncode == 0 and "vy-lean-sandbox" in r.stdout
 
 
-def test_deps_go_read_only_into_the_packages_lake_and_must_be_readable_by_others(host):
+def test_deps_go_read_only_into_the_packages_lake_deps_and_must_be_readable_by_others(host):
+    """At `.lake/deps`, not `.lake/packages`: Lake's artifact cache writes beside every dependency's artifacts, so the build
+    copies them to `.lake/packages` itself (`cache.py build`)."""
     deps = host.tmp / "deps"
     (deps / "mathlib").mkdir(parents=True)
     (deps / "mathlib" / "A.olean").write_text("o")
@@ -166,9 +168,9 @@ def test_deps_go_read_only_into_the_packages_lake_and_must_be_readable_by_others
         p.chmod(mode)
     run = Systemd()
     assert S.main(args(host, "--deps", f"pkg={deps}"), run=run, **prep()) == S.OK
-    inside = f"{host.tree}/pkg/.lake/packages"
+    inside = f"{host.tree}/pkg/.lake/deps"
     assert f"BindReadOnlyPaths={deps}:{inside}" in _opts(run.calls[1][0], "-p")
-    assert (host.tree / "pkg" / ".lake" / "packages").is_dir() and inside in json.loads(run.calls[0][0][-1])["unwritable"]
+    assert (host.tree / "pkg" / ".lake" / "deps").is_dir() and inside in json.loads(run.calls[0][0][-1])["unwritable"]
 
     (deps / "mathlib" / "B.olean").write_text("o")
     (deps / "mathlib" / "B.olean").chmod(0o600)                 # as Mathlib's cache writes its builds

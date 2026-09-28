@@ -559,6 +559,42 @@ def test_lake_restores_a_build_published_from_another_path(s3, tmp_path):
     assert "Unpacked" in out.stdout and "Built Control" not in out.stdout, out.stdout
 
 
+@pytest.mark.slow
+@pytest.mark.skipif(LAKE is None, reason="no lake")
+def test_a_build_works_on_its_own_copy_of_dependencies_bound_read_only(tmp_path):
+    """With the artifact cache on, Lake writes beside a dependency's built artifacts, so a read-only `.lake/packages`
+    fails the build; the same dependencies bound at `.lake/deps` build, from a copy deleted after."""
+    dep = tmp_path / "dep"
+    dep.mkdir()
+    (dep / "lakefile.toml").write_text('name = "dep"\ndefaultTargets = ["Dep"]\n[[lean_lib]]\nname = "Dep"\n')
+    (dep / "Dep.lean").write_text("def depVal : Nat := 3\n")
+    (dep / "lean-toolchain").write_text((HERE / "fixtures" / "control" / "lean-toolchain").read_text())
+    (dep / ".gitignore").write_text(".lake/\n")
+    sh("git", "init", "-q", "-b", "main", cwd=dep)
+    sh("git", "add", ".", cwd=dep)
+    sh("git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "c", cwd=dep)
+    app = tmp_path / "app"
+    app.mkdir()
+    (app / "lakefile.toml").write_text(f'name = "app"\ndefaultTargets = ["App"]\n[[require]]\nname = "dep"\n'
+                                       f'git = "file://{dep}"\nrev = "main"\n[[lean_lib]]\nname = "App"\n')
+    (app / "App.lean").write_text("import Dep\ntheorem t : depVal = 3 := rfl\n")
+    (app / "lean-toolchain").write_text((dep / "lean-toolchain").read_text())
+    sh(LAKE, "update", cwd=app)
+    sh(LAKE, "build", "Dep", cwd=app)
+    dep.rename(tmp_path / "gone")                              # as offline as the sandbox: Lake can't fetch it again
+    packages = app / ".lake" / "packages"
+    sh("chmod", "-R", "a-w", str(packages))
+    try:
+        assert C.build(app, tmp_path / "out1", [LAKE]) != 0
+        assert "failed to cache artifact" in (tmp_path / "out1" / C.BUILD_LOG).read_text()
+        sh("chmod", "u+w", str(packages.parent))
+        packages.rename(app / ".lake" / C.DEPS_RO)
+        assert C.build(app, tmp_path / "out2", [LAKE]) == 0, (tmp_path / "out2" / C.BUILD_LOG).read_text()
+        assert (tmp_path / "out2" / "stage" / C.MAPPING).is_file() and not packages.exists()
+    finally:
+        sh("chmod", "-R", "u+w", str(app / ".lake"))
+
+
 # ---------------------------------------------------------------- node 1's daily run (run_daily.py)
 
 _spec = importlib.util.spec_from_file_location("lean_run_daily", HERE.parent / "run_daily.py")
@@ -585,6 +621,9 @@ FAKE_BIN = {
     "lean": 'print("Lean (version 4.34.0, x86_64-unknown-linux-gnu, commit 0, Release)")',
     "lake": """import os, pathlib, sys
 a, cache = sys.argv[1:], pathlib.Path(os.environ["LAKE_CACHE_DIR"])
+if a[0] == "build" and os.path.exists("FAIL"):
+    print("error: Definitions/Broken.lean:1:0: unknown identifier")
+    sys.exit(1)
 if a[0] == "build":
     pathlib.Path(a[a.index("-o") + 1]).write_text('"2026-03-17"\\n["aa","bb.ltar"]\\n')
     cache.mkdir(parents=True)
@@ -603,10 +642,14 @@ mkdir -p "$d" && printf olean > "$d/M.olean" && chmod 600 "$d/M.olean" && printf
 """
 
 
-def node(tmp: Path, url: str, run_rc: int = 0, clean_rc: int = 0) -> tuple["D.Node", Path, str]:
-    """Node 1's bare repository with main (`pkg`, and a `setup.sh` that fetches a dependency), a sandbox that runs the
-    build as this user, and the key file; returns the node, the sandbox's log and main's commit."""
+def node(tmp: Path, url: str, run_rc: int = 0, clean_rc: int = 0, extra: dict[str, str] | None = None
+         ) -> tuple["D.Node", Path, str]:
+    """Node 1's bare repository with main (`pkg`, ``extra``'s files, and a `setup.sh` that fetches a dependency), a sandbox
+    that runs the build as this user, and the key file; returns the node, the sandbox's log and main's commit."""
     src, _ = repo(tmp, "src")
+    for f, text in (extra or {}).items():
+        (src / f).parent.mkdir(parents=True, exist_ok=True)
+        (src / f).write_text(text)
     (src / "tools" / "lean").mkdir(parents=True)
     (src / "tools" / "lean" / "setup.sh").write_text(FAKE_SETUP)
     sh("git", "add", ".", cwd=src)
@@ -625,7 +668,7 @@ def node(tmp: Path, url: str, run_rc: int = 0, clean_rc: int = 0) -> tuple["D.No
     key.write_text(f"AWS_ACCESS_KEY_ID={WRITE[0]}\nAWS_SECRET_ACCESS_KEY={WRITE[1]}\nR2_ENDPOINT={url}\n"
                    f"R2_BUCKET=verity-lean-cache\n")
     n = D.Node(bare=tmp / "bare.git", tree=tmp / "build" / "verity", out=tmp / "build" / "out", prep=tmp / "prep",
-               deps=tmp / "var" / "deps", lock=tmp / "lock", sandbox=[sys.executable, str(box)],
+               deps=tmp / "var" / "deps", trusted=tmp, lock=tmp / "lock", sandbox=[sys.executable, str(box)],
                research=["env", f"PATH={path}"], builder=D.pwd.getpwuid(os.getuid()).pw_name, key_file=str(key),
                python=sys.executable)
     return n, tmp / "sandbox.log", subprocess.run(["git", "-C", str(src), "rev-parse", "HEAD"], capture_output=True,
@@ -635,7 +678,7 @@ def node(tmp: Path, url: str, run_rc: int = 0, clean_rc: int = 0) -> tuple["D.No
 def test_the_daily_run_builds_in_the_sandbox_and_publishes_only_after_clean(s3, tmp_path):
     b, url = s3
     n, log, sha = node(tmp_path, url)
-    n.deps.mkdir(mode=0o755, parents=True)                  # not by the umask: `owned_dirs` refuses a group-writable one
+    D.owned_dirs(n.trusted, n.deps / "x")                   # not by the umask: `owned_dirs` refuses a group-writable one
     (n.deps / "stale-key").mkdir()
     lines = []
     assert D.daily(n, lines.append) == 0, "\n".join(lines)
@@ -678,6 +721,54 @@ def test_the_daily_run_refuses_an_out_directory_another_user_could_replace(tmp_p
     (out / "a").chmod(0o777)
     with pytest.raises(SystemExit, match="is not a directory only"):
         D.owned_dirs(out, leaf)
+
+
+SUB = {"pkg/sub/lean-toolchain": "leanprover/lean4:v4.34.0\n", "pkg/sub/lean-audit.json": "{}\n",
+       "pkg/sub/lake-manifest.json": '{"version": "1.2.0", "packages": [], "name": "sub"}\n'}
+
+
+def test_the_daily_run_builds_and_publishes_a_package_inside_another(s3, tmp_path):
+    b, url = s3
+    n, log, sha = node(tmp_path, url, extra=SUB)
+    lines = []
+    assert D.daily(n, lines.append) == 0, "\n".join(lines)
+    assert sorted(p.name for p in n.out.iterdir()) == ["pkg", "pkg%2Fsub"]
+    assert f"--rw {n.out}/pkg%2Fsub " in log.read_text()
+    for pkg in ("pkg", "pkg/sub"):
+        assert C.record_key(C.identity(n.tree, pkg, PLAT), sha) in b.objects
+    assert "2 of 2 packages built; publish exited 0, prune 0" in lines[-1]
+
+
+def test_a_build_that_fails_has_the_end_of_lakes_output_logged(s3, tmp_path):
+    b, url = s3
+    n, _, _ = node(tmp_path, url, extra={**SUB, "pkg/sub/FAIL": ""})
+    lines = []
+    assert D.daily(n, lines.append) == 1
+    failed = next(ln for ln in lines if "pkg/sub didn't build" in ln)
+    assert "error: Definitions/Broken.lean:1:0: unknown identifier" in failed
+    assert "1 of 2 packages built" in lines[-1]
+
+
+def test_the_log_tail_follows_no_link(tmp_path):
+    (tmp_path / "key").write_text("SECRET")
+    (tmp_path / "out").mkdir()
+    (tmp_path / "out" / "build.log").symlink_to(tmp_path / "key")
+    assert D.log_tail(tmp_path / "out", "build.log") == ""
+    (tmp_path / "out" / "build.log").unlink()
+    os.link(tmp_path / "key", tmp_path / "out" / "build.log")
+    assert D.log_tail(tmp_path / "out", "build.log") == ""
+    (tmp_path / "out" / "build.log").unlink()
+    (tmp_path / "out" / "build.log").write_text("x" * 5000 + "the end")
+    assert D.log_tail(tmp_path / "out", "build.log", 7) == "the end"
+
+
+def test_the_daily_run_refuses_dependencies_under_a_directory_another_user_could_write(tmp_path):
+    n, _, _ = node(tmp_path, "http://127.0.0.1:9")
+    (tmp_path / "var").mkdir(mode=0o755)
+    (tmp_path / "var").chmod(0o775)
+    with pytest.raises(SystemExit, match=f"{tmp_path / 'var'} is not a directory only"):
+        D.daily(n, [].append)
+    assert not n.deps.exists()
 
 
 @pytest.mark.parametrize("run_rc, clean_rc, rc, why", [(3, 0, 3, "the sandbox exited 3"), (2, 0, 2, "the sandbox exited 2"),

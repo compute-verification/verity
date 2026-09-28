@@ -105,6 +105,26 @@ def test_the_reference_matches_every_pinned_vector():
                                   "sigma-rejection/w64", "sigma-rejection/w16448"}
 
 
+def test_the_kit_s_derivation_is_randomness_v1():
+    """The kit's `randomness_v1` gives v1's known answers (`randomness_v1_vectors.json`, copied from verity `f5df3bbc`):
+    every frame, and each case's key, stream and uniform draws."""
+    import ast
+    import json
+
+    sys.path.insert(0, str(BENCH))
+    from p2_v1 import randomness_v1 as V1
+
+    doc = json.loads((Path(__file__).with_name("randomness_v1_vectors.json")).read_text())
+    assert [V1.frame(ast.literal_eval(v)).hex() for v, _ in doc["frame"]] == [h for _, h in doc["frame"]]
+    for case in doc["cases"]:
+        ctx = {n: bytes.fromhex(v["bytes"]) if "bytes" in v else v.get("str", v.get("int")) for n, v in case["context"].items()}
+        key = V1.derive(bytes.fromhex(case["source"]), case["domain"], ctx)
+        s = case["stream"]
+        assert key.value.hex() == case["key"], case["domain"]
+        assert key.stream(tuple(s["index"]), len(s["bytes"]) // 2).hex() == s["bytes"], case["domain"]
+        assert [key.uniform(n, i) for n, i, _ in case["uniform"]] == [x for *_, x in case["uniform"]], case["domain"]
+
+
 @pytest.mark.slow
 def test_the_reference_encodes_the_full_width_vector():
     R, _, _ = _p2()

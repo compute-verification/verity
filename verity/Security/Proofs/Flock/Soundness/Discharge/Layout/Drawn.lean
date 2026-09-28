@@ -8,7 +8,7 @@ set_option Elab.async false
 A drawn statement's public file is `HmRow.drawn` of the registered population's (`setupH_drawn`): its instances are the
 draw's proved units, and instance `r`'s `b ‖ c` is proved unit `D.proved[r]`'s in the population (`drawn_digest`, for a
 file without shared rows, whose `b ‖ c` are `n · np` pieces of 128 bytes, `loadPublic_digests`; the draw's units are in
-the population, `ofJson_lt`). So at a proved unit's `hm96` slot, block `o` and VU `g` with `o · c.g + g = r`, a satisfying
+the population, `ofJson_lt`). So at a proved unit's `hm96` slot, block `o` and template instance `g` with `o · c.g + g = r`, a satisfying
 witness holds the population's `b ‖ c` of unit `D.proved[r]` (`bc_drawn`): the registration's, fixed by the public file
 before the draw.
 -/
@@ -200,7 +200,8 @@ theorem drawn_digest {c : Circuit} {pop pub : Public} {d : Lean.Json} {D : Draw.
   rw [hsz, hpopn] at *
   nlinarith
 
-/-- **A drawn statement's `hm96` chunk at block `o`, VU `g`** is, at a proved unit, that unit's population `b ‖ c`. -/
+/-- **A drawn statement's `hm96` chunk at block `o`, template instance `g`** is, at a proved unit, that unit's
+population `b ‖ c`. -/
 theorem bcChunk_drawn {c : Circuit} {pop pub : Public} {d : Lean.Json} {D : Draw.UnitDraw}
     (h : HmRow.drawn c pop d = .ok pub) (hD : Draw.UnitDraw.ofJson d = .ok D) (hpt : pop.tables = none)
     (hsz : pop.digests.size = pop.n * c.ports.size) (hlt : ∀ u ∈ D.proved, u < D.population)
@@ -227,11 +228,11 @@ theorem pop_digest_size {tags : Tags} {c : Circuit} {file : ByteArray} {pop : Pu
   exact h128 _ (Array.getElem_mem hi)
 
 /-- **The `b ‖ c` a satisfying witness of a drawn statement holds at a proved unit's `hm96` slot** is the unit's `b ‖ c`
-in the registered population's public file: at block `o`, VU `g` (below `2^⌊log₂ c.g⌋`), input port `p`, the instance
-`o · c.g + g` is proved unit `D.proved[o · c.g + g]`, and the 128 bytes at `bcAddr` are its population `b ‖ c`. It holds
-in the model's statement at setupH's layout whose regions contain the executable's (`hregs`), for a population file
-without shared rows (`hpt`) and a draw whose proved units are in the population (`hlt`; `proved_lt` without a
-closure). -/
+in the registered population's public file: at block `o`, template instance `g` (below `2^⌊log₂ c.g⌋`), input port `p`,
+the instance `o · c.g + g` is proved unit `D.proved[o · c.g + g]`, and the 128 bytes at `bcAddr` are its population
+`b ‖ c`. It holds in the model's statement at setupH's layout whose regions contain the executable's (`hregs`), for a
+population file without shared rows (`hpt`) and a draw whose proved units are in the population (`hlt`; `proved_lt`
+without a closure). -/
 theorem bc_drawn {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Coins}
     {tables : List (String × ByteArray)} {d : Lean.Json} {partition : Option Lean.Json} {program : Option ByteArray}
     {st : Stmt} (h : Stmt.setupH tags circuitFile publicFile coins tables (some d) partition program = .ok st)

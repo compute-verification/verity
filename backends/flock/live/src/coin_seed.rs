@@ -5,13 +5,13 @@
 //! check that every coin it was sent was fixed before it committed. The commitment scheme is named (`SCHEME`) and swappable:
 //! HM96, as B-Ligero's coin commitment, is the target.
 
-use sha2::{Digest, Sha256, Sha512};
+use sha2::{Digest, Sha512};
 
 pub const SCHEME: &str = "coin-commit/sha512";
 pub const TAG: &[u8] = b"verity/flock-circuit/coin-commit\0";
 pub const DOMAIN: &str = "verity/flock-circuit/coins/v1";
-const DERIVE: &[u8] = b"verity/randomness/derive/v1\0";
-const STREAM: &[u8] = b"verity/randomness/stream/v1\0";
+const DERIVE: &[u8] = b"verity/randomness/derive/v2\0";
+const STREAM: &[u8] = b"verity/randomness/stream/v2\0";
 
 /// A `verity.primitives.randomness` part: bytes, a string or a nonnegative integer.
 pub enum Part<'a> {
@@ -37,29 +37,31 @@ pub fn frame(p: &Part<'_>) -> Vec<u8> {
     out
 }
 
-/// `derive(source, domain, context)` (context keys sorted, as the Python sorts them).
+/// `derive(source, domain, context)`: the first 32 bytes of SHA-512 (context keys sorted, as the Python sorts them).
 pub fn derive(source: &[u8], domain: &str, context: &[(&str, Part<'_>)]) -> [u8; 32] {
     let mut ctx: Vec<(&str, Vec<u8>)> = context.iter().map(|(k, v)| (*k, frame(v))).collect();
     ctx.sort_by(|a, b| a.0.cmp(b.0));
     let flat: Vec<u8> = ctx.into_iter().flat_map(|(k, v)| [frame(&Part::S(k)), v].concat()).collect();
-    let mut h = Sha256::new();
+    let mut h = Sha512::new();
     h.update(DERIVE);
     h.update(frame(&Part::B(source)));
     h.update(frame(&Part::S(domain)));
     h.update(frame(&Part::B(&flat)));
-    h.finalize().into()
+    let mut key = [0u8; 32];
+    key.copy_from_slice(&h.finalize()[..32]);
+    key
 }
 
-/// The first `n` bytes of `Key(key).stream(index)`.
+/// The first `n` bytes of `Key(key).stream(index)`: 64-byte SHA-512 blocks.
 pub fn stream(key: &[u8; 32], index: &[Part<'_>], n: usize) -> Vec<u8> {
     let inner: Vec<u8> = index.iter().flat_map(frame).collect();
     let mut head = STREAM.to_vec();
     head.extend(key);
     head.extend(frame(&Part::B(&inner)));
-    let mut out = Vec::with_capacity(n + 32);
+    let mut out = Vec::with_capacity(n + 64);
     let mut c = 0u64;
     while out.len() < n {
-        let mut h = Sha256::new();
+        let mut h = Sha512::new();
         h.update(&head);
         h.update(c.to_be_bytes());
         out.extend(h.finalize());
@@ -97,8 +99,8 @@ mod tests {
     fn matches_verity_randomness() {
         let src: Vec<u8> = (0..32).collect();
         let k = derive(&src, DOMAIN, &[("statement", Part::B(&[1, 2])), ("sigma", Part::B(&[0; 32]))]);
-        assert_eq!(crate::hex(&k), "057835844f07da44c302a60e06f340a16411903b2986c2dfa99d0316f3d54c32");
+        assert_eq!(crate::hex(&k), "2c94878c91b93e060478a652462c854273d0a24523b6650c9289657d5b821647");
         assert_eq!(crate::hex(&stream(&k, &[Part::S("coins"), Part::I(3)], 48)),
-                   "3a203019480601f98b35f54e72ca90ed41f1b827aeb467c2f6afe26d4aaec8bf783eb184229a8ac3ee258cdd164f6045");
+                   "4455599d610816caad31535d7ffd2d725c1e4bd6eda73637bcc6c2a2b894e4e374d51f8294081f1d0661852ef899ba32");
     }
 }

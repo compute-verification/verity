@@ -151,7 +151,7 @@ theorem hmWireDst_eq {c : Circuit} (h : HmNets.check c = .ok ()) (g p : ℕ) :
   simp only
   rw [(hmIn_cols h).1, Nat.add_zero]
 
-/-- The wires' copies, VU by VU and port by port. -/
+/-- The wires' copies, template instance by template instance and port by port. -/
 def wireF (c : Circuit) (g p : ℕ) : List (ℕ × ℕ) :=
   ((List.range' 1 (((HmRow.rowSlots c.ports).2[p]!).size - 1)).map (chainWire c.ports c.shaNet p) ++
     [hmWire c.ports c.shaNet c.hmNet p]).flatMap fun w =>
@@ -254,8 +254,8 @@ theorem net_off_lt {n : ℕ} (hn : n = c.shaNet ∨ n = c.hmNet) {l : Flock.HmNe
   have := R.fit n
   omega
 
-/-- Bit `t` of port `p`'s compression `k`'s `cv` input, at VU `g`: in the `sha512x3` slot `(at_p + k) / 3`, at
-`1536 · ((at_p + k) % 3) + t`. -/
+/-- Bit `t` of port `p`'s compression `k`'s `cv` input, at template instance `g`: in the `sha512x3` slot
+`(at_p + k) / 3`, at `1536 · ((at_p + k) % 3) + t`. -/
 theorem shaIn_at {g p k t : ℕ} (hg : g < c.g) (hp : p < c.ports.size) (hk : k < c.ports[p]!.chunks) (ht : t < 512) :
     AtSlot c c.shaNet (g * c.perVu.getD c.shaNet 0 + ((HmRow.rowSlots c.ports).2[p]!)[k]!.1)
       (1536 * shaSub c p k + t) (shaBase c g p k + shaIn c (2 * shaSub c p k) + t) := by
@@ -264,7 +264,7 @@ theorem shaIn_at {g p k t : ℕ} (hg : g < c.g) (hp : p < c.ports.size) (hk : k 
     R.net_off_lt (Or.inl rfl) (shaNet_ofRows R.rowNets) (by rw [shaNet_inRows R.rowNets]; unfold shaSub; omega), ?_⟩
   rw [(shaIn_eq R.rowNets (shaSub c p k) hs.2).1, shaBase, Circuit.slotCol, Nat.add_assoc]
 
-/-- Bit `off` of port `p`'s `hm96` slot's inputs, at VU `g`. -/
+/-- Bit `off` of port `p`'s `hm96` slot's inputs, at template instance `g`. -/
 theorem hmIn_at {g p off : ℕ} (hg : g < c.g) (hp : p < c.ports.size) (ho : off < 4096) :
     AtSlot c c.hmNet (g * c.perVu.getD c.hmNet 0 + p) off (c.slotCol c.hmNet g p + off) :=
   ⟨R.slot_lt_count (Or.inr rfl) hg (by rw [R.perVu_hm]; exact lt_of_lt_of_le hp (le_nextPow2 _)),

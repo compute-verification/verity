@@ -6,7 +6,7 @@ import Proofs.Flock.Soundness.ExecPlacement
 The layout facts of an `hm96-sha512/row/v1` circuit that `HmRow.check` checks, as `ExecSetup.lean` uses them: the
 ranges inside the block, pairwise apart, in slots of their nets' rows; the unit a text net with one range of
 `vus_per_block × units_per_vu` slots and a group of 16-bit leaf ports; the row slots' ports; every net range's slots per
-VU; one range per net; the wires' and leaf cuts' bounds; the leaf maps.
+template instance; one range per net; the wires' and leaf cuts' bounds; the leaf maps.
 -/
 
 open Flock FlockLevel3
@@ -412,7 +412,7 @@ theorem check_facts {c : Circuit} {tags : Tags} {ls : Lean.Json} (ht : c.typed =
 
 
 /-- **What `HmRow.check` accepted, for a typed template** (`c.typed = some tb`, #277): the ranges' common facts, one range
-of `G · per_vu` slots per circuit, the root one slot per VU, each placed layout's circuit one slot per part, its slot size
+of `G · per_vu` slots per circuit, the root one slot per template instance, each placed layout's circuit one slot per part, its slot size
 its range's, and a forced-zero row in the root's slot. -/
 structure CheckFactsT (c : Circuit) (tb : TypedBlock) : Prop where
   bound_slotLog : ∀ r ∈ c.ranges.toList, r.start + spanH r ≤ 2 ^ c.kLog ∧

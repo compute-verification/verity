@@ -1,17 +1,17 @@
 import Proofs.Flock.Soundness.Discharge.Aliased.Copies
 
 /-!
-# Δ's source as a key the same at every VU
+# Δ's source as a key the same at every template instance
 
 Δ copies into unit copy `s₀`'s input port bit a column that depends on `s₀` only through its copy index `s₀ % upv` and
-its VU `s₀ / upv` (`flatSrc`). `srcKey c x` names that column for VU-stacked input `x` without the VU: a forced-zero row,
-a message bit of the VU's rows, an output bit of a net's slot in the VU, a fixed column, or (at an input padding row) the
-row itself. `realize` turns a key back into a column at VU `g` (`flatSrc_key`).
+its template instance `s₀ / upv` (`flatSrc`). `srcKey c x` names that column for stacked input `x` without the template instance: a forced-zero row,
+a message bit of the template instance's rows, an output bit of a net's slot in the template instance, a fixed column, or (at an input padding row) the
+row itself. `realize` turns a key back into a column at template instance `g` (`flatSrc_key`).
 
 So `Copies` holds for an instance that puts inputs on one gate only when they have one key (`copies_of_key`), at every
-VU at once: equal keys are one column at VU `g`, or forced-zero rows. `keyIdx` encodes the keys of `n` inputs in
-`Option (Fin n)`, `none` exactly at the zero (`keyIdx_eq_none`), and equal codes are equal keys (`keyIdx_eq`): a
-program can index its input gates by it.
+template instance at once: equal keys are one column at template instance `g`, or forced-zero rows. `keyIdx` encodes the
+keys of `n` inputs in `Option (Fin n)`, `none` exactly at the zero (`keyIdx_eq_none`), and equal codes are equal keys
+(`keyIdx_eq`): a program can index its input gates by it.
 
 A typed flat class's slot is one unit copy, and its input `i` is the port bit `inCols[i]` (`flatKey`). So the class's
 `TableClass.Copies` at slot `g` holds for sources that only join inputs with one key at `g`'s copy index
@@ -22,9 +22,9 @@ open Flock FlockLevel3
 
 namespace FlockSoundness.Discharge.Aliased
 
-/-- **The column Δ copies into a unit input, without the VU**: a forced-zero row, message bit `bit` of byte `byte` of
-row port `p`, output column `col` of net `net`'s slot `slot`, the fixed column `col`, or input padding row `off` of copy
-`k`. -/
+/-- **The column Δ copies into a unit input, without the template instance**: a forced-zero row, message bit `bit` of
+byte `byte` of row port `p`, output column `col` of net `net`'s slot `slot`, the fixed column `col`, or input padding
+row `off` of copy `k`. -/
 inductive Src
   | zero
   | msg (p byte bit : ℕ)
@@ -33,7 +33,7 @@ inductive Src
   | pad (k off : ℕ)
   deriving DecidableEq
 
-/-- Copy index `k`'s input port `p`, bit `t`: `flatSrc`'s source, without the VU. -/
+/-- Copy index `k`'s input port `p`, bit `t`: `flatSrc`'s source, without the template instance. -/
 def srcAt (c : Circuit) (k p t : ℕ) : Src :=
   if p < (c.unit.inGroups.getD 0 default).bits.size then
     if (c.leavesIn.getD k #[])[p]! < 0 then .zero else
@@ -54,7 +54,7 @@ def srcAt (c : Circuit) (k p t : ℕ) : Src :=
           (((portCols (c.nets.getD w.src.1 default).2.outGroups).getD w.src.2.2 default).1 + t)
       | [] => .lit 0
 
-/-- A key's column at VU `g` (a forced-zero row's and a padding row's are not read). -/
+/-- A key's column at template instance `g` (a forced-zero row's and a padding row's are not read). -/
 def realize (c : Circuit) (g : ℕ) : Src → ℕ
   | .msg p byte bit => Typed.msgCol c g p byte bit
   | .wire n i col => c.slotCol n g i + col
@@ -103,7 +103,7 @@ theorem flatSrc_key (c : Circuit) (s₀ p t : ℕ) :
       · exact Or.inr ⟨Src.noConfusion, rfl⟩
       · exact Or.inl ⟨rfl, Or.inr rfl⟩
 
-/-- **VU-stacked input `x`'s key**: copy `x / W`'s input at slot offset `x % W` (`W = inWords · WORD`), `srcAt` at the
+/-- **Stacked input `x`'s key**: copy `x / W`'s input at slot offset `x % W` (`W = inWords · WORD`), `srcAt` at the
 port bit it is, or the padding row it is. -/
 def srcKey (c : Circuit) (x : ℕ) : Src :=
   if x % (c.unit.inWords * WORD) ∈ portBits c.unit.inGroups then
@@ -193,7 +193,7 @@ theorem stack_slot {g x : ℕ} (hx : x < st.c.upv * (st.c.unit.inWords * WORD)) 
   · rw [Nat.add_comm, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt hk]
   · rw [Nat.add_comm, Nat.add_mul_div_right _ _ hu, Nat.div_eq_of_lt hk, Nat.zero_add]
 
-/-- At a port bit, Δ's source at VU `g`'s slot of stacked input `x` is `flatSrc_key`'s at its key. -/
+/-- At a port bit, Δ's source at template instance `g`'s slot of stacked input `x` is `flatSrc_key`'s at its key. -/
 theorem flatSrcAt_key {g x : ℕ} (hx : x < st.c.upv * (st.c.unit.inWords * WORD))
     (hm : x % (st.c.unit.inWords * WORD) ∈ portBits st.c.unit.inGroups) :
     (srcKey st.c x = .zero ∧
@@ -238,8 +238,8 @@ theorem copyPos_zero {g x : ℕ} (hg : g < st.c.g) (hx : x < st.c.upv * (st.c.un
     · exact absurd hz hne
   · exact ⟨_, hs₀, rfl⟩
 
-/-- **A stacked input with a key other than the zero or a padding row copies its key's column at VU `g`**, or a
-forced-zero row when that column lies outside the block. -/
+/-- **A stacked input with a key other than the zero or a padding row copies its key's column at template instance
+`g`**, or a forced-zero row when that column lies outside the block. -/
 theorem copyPos_key {g x : ℕ} (hg : g < st.c.g) (hx : x < st.c.upv * (st.c.unit.inWords * WORD))
     (hz : srcKey st.c x ≠ .zero) (hp : ∀ k off, srcKey st.c x ≠ .pad k off) :
     (copyPos L regs F hg x).val = realize st.c g (srcKey st.c x) ∨
@@ -261,8 +261,8 @@ theorem copyPos_key {g x : ℕ} (hg : g < st.c.g) (hx : x < st.c.upv * (st.c.uni
   · rename_i hlt
     exact Or.inr ⟨he ▸ hlt, _, hs₀, rfl⟩
 
-/-- **`Copies` from keys**: an instance that puts VU `g`'s stacked unit inputs on one gate only when they have one key
-(`srcKey`, the same at every VU) wires them as Δ copies them. -/
+/-- **`Copies` from keys**: an instance that puts template instance `g`'s stacked unit inputs on one gate only when they
+have one key (`srcKey`, the same at every template instance) wires them as Δ copies them. -/
 theorem copies_of_key {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n}
     (inst : P.IsRowsUnit u ((unitRows st L.unit_built).stack st.c.upv)) {g : ℕ} (hg : g < st.c.g)
     (hk : ∀ c c', inst.wire c = inst.wire c' → c.val < ((unitRows st L.unit_built).stack st.c.upv).nIn →
@@ -294,8 +294,8 @@ theorem copies_of_key {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C n} {u
 
 end keys
 
-/-- **`pp.aliased` at the untyped statement `Stmt.setupH` accepted, from keys**: for an instance that puts VU `g`'s
-stacked unit inputs on one gate only when they have one key. -/
+/-- **`pp.aliased` at the untyped statement `Stmt.setupH` accepted, from keys**: for an instance that puts template
+instance `g`'s stacked unit inputs on one gate only when they have one key. -/
 theorem setupH_aliased_of_key {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt} (ht : tags.typed = false)
     (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st)

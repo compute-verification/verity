@@ -88,7 +88,7 @@ part up, and the fallback `T₀` otherwise. -/
 noncomputable def tableJ (T₀ : TabSpec mPts) (d : Json) (j : ℕ) : TabSpec mPts :=
   if h : Nonempty (SetupJ I mPts j (partJson d I.count j)) then (Classical.choice h).spec ht else T₀
 
-/-- **The plan of `J` tables** at the coin server's draws `dj`: at draw `S`, `I.count` tables, table `j` the one
+/-- **The plan of `J` tables** at the challenger's draws `dj`: at draw `S`, `I.count` tables, table `j` the one
 flock-verify sets up at part `j` of `dj S` (`tableJ`), for every registration. -/
 noncomputable def planJ (T₀ : TabSpec mPts) (dj : Finset (Fin n) → Json) {Reg : Type} :
     Finset (Fin n) → Reg → List (TabSpec mPts) :=
@@ -127,7 +127,7 @@ def TagsOkJ : Prop :=
   I.tags.hiddenOutputs = false ∧ I.tags.retainRounds = true ∧ I.tags.merkleLeaf = "hm96-sha512/v1" ∧ 1 < I.count
 
 variable (I) in
-/-- **`wr` is the coin server's record of the live session of `J` tables**: whenever flock-verify accepts what `wr`
+/-- **`wr` is the challenger's record of the live session of `J` tables**: whenever flock-verify accepts what `wr`
 writes for the outcome `o` at draw `S`, the record carries the draw `dj S`, the proof files are `o`'s, and the record
 decodes to a session whose link points are `o`'s and whose table `j`'s `root_B` and rep streams' rounds are `o`'s. -/
 def RecordsLiveJ (dj : Finset (Fin n) → Json) (Jf : Finset (Fin n) → Reg → ℕ)
@@ -141,14 +141,14 @@ def RecordsLiveJ (dj : Finset (Fin n) → Json) (Jf : Finset (Fin n) → Reg →
           some s ∧ s.rounds.toList = o.reps j r
 
 variable (I mPts) in
-/-- **The coin server's draw at `S`, at `J` tables**: wherever setupH sets table `j` up at its part of `dj S`, it does so
+/-- **The challenger's draw at `S`, at `J` tables**: wherever setupH sets table `j` up at its part of `dj S`, it does so
 with `mPts` link points. -/
 def DrawOkJ (dj : Finset (Fin n) → Json) (S : Finset (Fin n)) : Prop :=
   ∀ j < I.count, ∀ st, Stmt.setupH (tagsAt I.tags I.count j) I.circuitFile I.publicFile I.coins I.tables
     (some (partJson (dj S) I.count j)) I.partition I.program = .ok st → st.mPts = mPts
 
-/-- **The decoder is right at `J` tables** (R11b at `--session-tables J`): given the tags, `wr` the coin server's record
-and the coin server's draws setting each table up at `mPts` link points, `DecodesOnJ` holds at the tables flock-verify
+/-- **The decoder is right at `J` tables** (R11b at `--session-tables J`): given the tags, `wr` the challenger's record
+and the challenger's draws setting each table up at `mPts` link points, `DecodesOnJ` holds at the tables flock-verify
 sets up (`planJ`, at any fallback `T₀`) with the decoder `decJ` on each table's two streams, single coins as field
 elements, no final messages, table `j`'s cap from its root `root_B[j]` (`capOfRoot`) and its openings `opnJ`. -/
 def DecodesOnJExec : Prop :=

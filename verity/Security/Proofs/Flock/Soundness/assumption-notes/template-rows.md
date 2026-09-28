@@ -16,7 +16,7 @@ file is the evidence for those premises, template by template.
   - A test in the same file mutates one row and checks that the comparison catches it.
 
   They sample. They don't prove it.
-- **Proved for RoPE** (`FlockSoundness/GateRows.lean`, `FlockSoundness/Rope/`). `Rope.rope_sound`: column values that
+- **Proved for RoPE** (`../GateRows.lean`, `../Rope/`). `Rope.rope_sound`: column values that
   satisfy the pinned `rope-head/neox-bf16/pair` rows (sha256 `9cbdef19…`), with the constant at 1, carry on output
   column `6016 + o` the gate circuit's output `o` on input columns `0 … 63`. The gate circuit is the unit's Boolean
   export (`verity_flock.boolean_export`: 64 inputs; 5,828 AND, 9,747 XOR and 1,717 NOT gates; 32 outputs). The proof

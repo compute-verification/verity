@@ -135,7 +135,7 @@ theorem drawSetup_of_accepts (hh : I.tags.hiddenOutputs = false) (hc1 : I.count 
   exact ⟨st, D, hst, hD, fun hS hm => drawSetup_of_setupH ht hc ho hst hf hD hS hm⟩
 
 /-- **At a draw flock-verify accepts, the headline's table is `stmtOf` of the statement it accepted**: when the
-session's record carries the coin server's draw `dj S`, that draw proves `S`, and setupH's statement at it has link
+session's record carries the challenger's draw `dj S`, that draw proves `S`, and setupH's statement at it has link
 points `mPts`. -/
 theorem tableAt_of_accepts (hh : I.tags.hiddenOutputs = false) (hc1 : I.count ≤ 1) (dj : Finset (Fin n) → Lean.Json)
     {S₀ : Finset (Fin n)}

@@ -40,8 +40,8 @@ noncomputable def treeEquiv {a b : ℕ} (f : Fin a ⊕ Fin b → ℕ) : Fin a �
 
 /-- **A `--zk` table as `ZkView`'s tables**: the statement (its witnesses `Witness S.m` are the tables' witnesses), the
 hidden-value and value-list types, the type of the other coins, the sizes, the mask slot's word indices, the `Coined`
-table at each coin vector (its leaves the executable's: `Coined.tab`), and M1's level-0 padding data (the level-0
-message's `cols` and, at each coin vector, the opened positions `pos`) that `padOnto_M1` reads. -/
+table at each coin vector (its leaves the executable's: `Coined.tab`), and C-Flock ZK's level-0 padding data (the
+level-0 message's `cols` and, at each coin vector, the opened positions `pos`) that `padOnto_M1` reads. -/
 structure CoinedSetup where
   S : Statement
   Hi : Type
@@ -166,7 +166,7 @@ noncomputable def bodyOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : CoinedBody Tz.S (m
 the mask slot's words (`maskWordsOf st`) and `innerOf`'s inner-proof fields, reading their coins (`β`, `ρ`, the rank
 check's weights `eq(p_k, x)`; `embed` the inclusion of F128 in F256). Level 0: `cols` from the table's level 0, the
 opened positions `padPos` of the coins' queries below `2^(cols+1)`, its code at a position `x` the message columns
-`X̂_j(ω^x)` (`j < 2^cols`) and M1's padding columns `κ·X̂_i + X̂_{2^cols+i}` at `κ = PAD_C`, at the opened positions and at
+`X̂_j(ω^x)` (`j < 2^cols`) and C-Flock ZK's padding columns `κ·X̂_i + X̂_{2^cols+i}` at `κ = PAD_C`, at the opened positions and at
 the others (`unPos`). Each rep's pads code (`codeAt`, at `X = p + 1`): pad `i` contributes `X^i` at its layout index
 (`padIdx`), padding symbol `j` contributes `X^(len + j)`, at the opened pads positions `padPos` of the queries below `n`
 and at the others; each tree's positions at their tree indices (`treeEquiv`). The claims' ring-switch messages from the
@@ -230,12 +230,12 @@ noncomputable def coinedOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : CoinedSetup :=
     points := fun c => pointsOf c.rest
     rOuter := fun c r => List.ofFn (c.rest.rOuter r) }
 
-/-- **The structural facts Lemma B reads**, of a `CoinedSetup` at the arithmetic `A` and M1's padding constant `κ`: M1's
-level-0 padding geometry (`cols ≤ 40`, `t_pad ≤ 2^cols`, at most `t_pad` opened positions), and at every coin vector the
-honest prover doesn't refuse (`Admits`): the opened positions distinct and inside `2^(cols+1)`, the table reads its coins (`β`, `ρ`, the rank check's
-weights `eq(p_k, x)` and `embed` the inclusion of F128 in F256), the rank check, M1's padding columns `Gp`, each rep's
-`W^r` bijective, the pads onto, `β ≠ 0`, and the inner relation at every valid witness whose registered values are the
-public ones. -/
+/-- **The structural facts Lemma B reads**, of a `CoinedSetup` at the arithmetic `A` and C-Flock ZK's padding constant
+`κ`: C-Flock ZK's level-0 padding geometry (`cols ≤ 40`, `t_pad ≤ 2^cols`, at most `t_pad` opened positions), and at
+every coin vector the honest prover doesn't refuse (`Admits`): the opened positions distinct and inside `2^(cols+1)`,
+the table reads its coins (`β`, `ρ`, the rank check's weights `eq(p_k, x)` and `embed` the inclusion of F128 in F256),
+the rank check, C-Flock ZK's padding columns `Gp`, each rep's `W^r` bijective, the pads onto, `β ≠ 0`, and the inner
+relation at every valid witness whose registered values are the public ones. -/
 def CoinedOK (A : Arith 𝔽 FlockLevel3.GF256) (κ : 𝔽) (C : CoinedSetup) : Prop :=
   C.cols ≤ 40 ∧ C.z.tpad ≤ 2 ^ C.cols ∧ C.z.nS ≤ C.z.tpad ∧
     ∀ c : CoinsZK C.Rest, C.Admits c →

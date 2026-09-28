@@ -1,8 +1,9 @@
-// verity M1 (lane flock-zk): Ligerito level 0's hiding in the F256 ladder (cuda-ghash/ligerito_f256.cuh), as verity's
-// flock-zk patch adds it to the Rust ladder (flock_core::pcs::ligerito::zk; backends/flock/live/PROTOCOL.md §8). Included
-// by ligerito_f256.cuh before run_ligerito_f256, which calls these at five points when its `zk` argument is set (installed by
-// backends/flock/cuda_circuit_patch.py): the open label after level 0's cap, each OOD pair and lane challenge recorded, the
-// lane phase's hiding step after the last lane fold and before the code switch, and level 0's queries recorded.
+// verity C-Flock ZK (lane flock-zk): Ligerito level 0's hiding in the F256 ladder (cuda-ghash/ligerito_f256.cuh), as
+// verity's flock-zk patch adds it to the Rust ladder (flock_core::pcs::ligerito::zk; backends/flock/live/PROTOCOL.md
+// §8). Included by ligerito_f256.cuh before run_ligerito_f256, which calls these at five points when its `zk` argument
+// is set (installed by backends/flock/cuda_circuit_patch.py): the open label after level 0's cap, each OOD pair and
+// lane challenge recorded, the lane phase's hiding step after the last lane fold and before the code switch, and level
+// 0's queries recorded.
 #pragma once
 
 // The prover's level-0 hiding for one opening: the witness's lanes, every lane's padding (lanes + 4 lanes of t_pad words,

@@ -1,6 +1,6 @@
 //! flock-128-r2 live sessions on the CPU union prover (BLAKE3 table, `n` compressions).
 //!
-//!   flock-live serve    --listen ADDR --out DIR --n N            verifier: coin server + session verifier, one session per connection
+//!   flock-live serve    --listen ADDR --out DIR --n N            verifier: challenger + session verifier, one session per connection
 //!   flock-live prove    --verifier ADDR --n N [--case C]         prover: one session, prints the verifier's verdict
 //!   flock-live selftest --n N                                    every negative against an in-process server (NEG lines)
 //!   flock-live bench    --verifier ADDR --n N --runs R           FS vs live prove time, same process

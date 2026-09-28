@@ -1,4 +1,5 @@
-"""M2 (lane flock-zk): real against Goldreich–Kahan-simulated views of ``flock-circuit --zk`` for malicious verifiers.
+"""C-Flock ZK (lane flock-zk): real against Goldreich–Kahan-simulated views of ``flock-circuit --zk`` for malicious
+verifiers.
 
 Input: the ``ZKVIEW``, ``ZKVIEWP`` and ``ZKREWIND`` lines of ``flock-circuit zkrewind --zk --n N``. Per verifier strategy V*
 (one random tape, so one committed coin schedule; its choices to abort or to answer other coins depend on the prover's

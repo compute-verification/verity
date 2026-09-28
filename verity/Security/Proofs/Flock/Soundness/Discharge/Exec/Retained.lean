@@ -5,7 +5,7 @@ import Proofs.Flock.Soundness.Refine.Frames
 /-!
 # The production statements retain every round's bytes
 
-`liveTable` (`Refine/Live.lean`) is the coin server that keeps each round's framed bytes (`roundOf`'s
+`liveTable` (`Refine/Live.lean`) is the challenger that keeps each round's framed bytes (`roundOf`'s
 `bytes := some b`), and the alignment `DecodesAll` asks for rests on it: with retained bytes, round `k`'s coins answer
 only the framed bytes absorbed since round `k - 1`, exactly (`Transcript.squeeze`, R2). This file shows that every
 `hm96Rows` tag pinned today is of that kind, and that a record flock-verify accepts under it has every round's bytes.

@@ -60,7 +60,7 @@ def params (c : Circuit) : CompRole → Nat × UInt32 × UInt32
   | .parent _ _ k => (0, 64, PARENT ||| KEYED_HASH ||| (if k == 0 then ROOT else 0))
   | .dummyParent => (0, 64, PARENT ||| KEYED_HASH)
 
-/-- Block-local column of the slot holding the last compression of VU `g`'s chunk `ch` of port `p`. -/
+/-- Block-local column of the slot holding the last compression of template instance `g`'s chunk `ch` of port `p`. -/
 def chunkEnd (c : Circuit) (g p ch : Nat) : V Nat := do
   let nb := (c.ports.getD p default).nb
   for r in c.ranges do
@@ -74,7 +74,7 @@ def parentsRange (c : Circuit) (p : Nat) : V Range :=
   | some r => pure r
   | none => throw s!"port {p} has no parent range"
 
-/-- Block-local column of VU `g`'s byte `byte` of port `p`: the message bit where it is hashed. -/
+/-- Block-local column of template instance `g`'s byte `byte` of port `p`: the message bit where it is hashed. -/
 def messageCol (c : Circuit) (g p byte : Nat) : V Nat := do
   let nb := (c.ports.getD p default).nb
   let (ch, rest) := (byte / 1024, byte % 1024)
@@ -105,7 +105,7 @@ def slotDelta (c : Circuit) (r : Range) (s : Nat) : V (Array (Nat × Nat) × Arr
   return (da, #[])
 
 /-- The input ports' chunking, and the compression ranges: `2^14`-bit slots whose roles cover every run and parent of
-every VU exactly once. -/
+every template instance exactly once. -/
 def checkLayout (c : Circuit) : V Unit := do
   for p in c.ports do
     let b := 2 * p.words

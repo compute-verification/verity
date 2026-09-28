@@ -28,7 +28,7 @@ vLLM step ``AmpereBF16TcDot16_v1``; it and core's ``_v2`` evaluate the same func
 ``AMPERE_BF16_M16N8K16``), so both evaluate through core's ``_v2`` (tested on sampled inputs).
 
 Sampling (:meth:`Subcircuit.draw`): draw ``j`` of a synthetic set reads each port's words from the counter stream
-``key.stream((port, j), ...)`` of ``verity.primitives.randomness`` (SHA-256 counter mode, index-addressable), four bytes per word, so
+``key.stream((port, j), ...)`` of ``verity.primitives.randomness`` (SHA-512 counter mode, index-addressable), four bytes per word, so
 draw ``j`` is computable from (key, j) alone in any language.  A BF16 word from 32 bits ``r``: sign ``r & 1``, mantissa
 ``(r >> 1) & 0x7F``, exponent field ``c - h + ((r >> 8) & 0xFFFF) mod (2h + 1)`` for the port's window (centre ``c``,
 half-width ``h`` chosen per draw from the port's classes by ``key.uniform(len, ("class", port, j))``), replaced by an edge

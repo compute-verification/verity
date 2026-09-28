@@ -3,7 +3,7 @@ import Proofs.Flock.Soundness.OpeningPhase
 import Proofs.Flock.Soundness.Game.Union
 
 /-!
-# M1's masked algebraic phase (live/PROTOCOL.md §1, §2, §4)
+# C-Flock ZK's masked algebraic phase (live/PROTOCOL.md §1, §2, §4)
 
 Under `--zk` the prover masks every value the algebraic phase sends (`v' = v + h`, one pad each, §2): zerocheck's
 `round1_ab`, `round1_c`, the residual rounds' `(G(1), G(∞))`, `final_a` and `final_b`; lincheck's rounds' `(q(1), q(∞))`
@@ -429,9 +429,9 @@ noncomputable def afterZcZK (A : Arith F K) {np e : ℕ} (P₀ : Pads0 np e) (PA
     (zc : ZcZK F np S.m) : Game ((Fin 6 → Lin F np) × Bool) :=
   (lincheckZK A S PA zc).bind fun o => (restZK A P₀ PA S sch hm t c₀ r C₀ extra zc o.1).map (consRow o.2.toLin)
 
-/-- **A masked rep** (M1's algebraic phase, then level 0 masked): the masked zerocheck, lincheck and opening, level 0
-(`ligeritoPadZK`) and `final_c'`. Returns its verdict and its seven rows, in order zerocheck final a·b, lincheck final,
-ring switch ab, zerocheck c_eval, ring switch c, and level 0's two lane-phase rows. -/
+/-- **A masked rep** (C-Flock ZK's algebraic phase, then level 0 masked): the masked zerocheck, lincheck and opening,
+level 0 (`ligeritoPadZK`) and `final_c'`. Returns its verdict and its seven rows, in order zerocheck final a·b, lincheck
+final, ring switch ab, zerocheck c_eval, ring switch c, and level 0's two lane-phase rows. -/
 noncomputable def repMaskedZK (A : Arith F K) {np e : ℕ} (P₀ : Pads0 np e) (PA : PadsA np) (tr : Triple np)
     (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F) (r : ℕ) (C₀ : Oracle F)
     (extra : List (Claim F S.m)) : Game ((Fin 7 → Lin F np) × Bool) :=

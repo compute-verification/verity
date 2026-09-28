@@ -8,11 +8,11 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
 * The zerocheck's tail and the lincheck: DecodeZL's `zl_carries` without round 0, which closes at the first coin and
   carries nothing (`carries_drop_coin`, `zl_tail_carries`).
 * The opening: `carries_switch` and `carries_switches` from the ring switches' decoded lengths (`op_carries_sizes`).
-* Ligerito with level 0's hiding (`zk_lig_carries`): M0's rounds (`carriesP_f`, `carriesP_fold'`, `carriesP_mid`),
-  with level 0's pair's sums (`carriesP_ev`), the second `ρ` coin's empty round and the round of `T'`, `ybar`, the
-  last lane message and the level-1 cap (`carriesP_tcap`). The `--zk` schedule is fast100's with level 0 restratified
-  (`zk_schedule_fast100`), so the level loop is `carriesP_levels` at fast100's schedule, whose levels fit its bounds
-  (`fast100_small`; level 0 at `--zk` does not).
+* Ligerito with level 0's hiding (`zk_lig_carries`): the non-ZK session's rounds (`carriesP_f`, `carriesP_fold'`,
+  `carriesP_mid`), with level 0's pair's sums (`carriesP_ev`), the second `ρ` coin's empty round and the round of `T'`,
+  `ybar`, the last lane message and the level-1 cap (`carriesP_tcap`). The `--zk` schedule is fast100's with level 0
+  restratified (`zk_schedule_fast100`), so the level loop is `carriesP_levels` at fast100's schedule, whose levels fit
+  its bounds (`fast100_small`; level 0 at `--zk` does not).
 * The inner proof's four rounds (`carriesP_inner`).
 
 `ligPadShape_pat` is level 0 masked's coin pattern, the rounds' (`isCoin_rec` for the level loop).
@@ -248,7 +248,7 @@ theorem isCoin_foldZ (F K : Type) : ∀ k, (foldShapeZ F K (k + 1)).map isCoin =
 
 /-- **The coin pattern of level 0 masked**: the start's coin, the first out-of-domain value's round, the `k0` lane
 rounds, the pair's sums' round, the second `ρ` coin's, the round of `T'`, `ybar`, the last message and the level-1
-cap, then M0's level 0 queries and level loop. -/
+cap, then the non-ZK session's level 0 queries and level loop. -/
 theorem ligPadShape_pat (sch : Flock.Schedule) (t : ℕ) (hk0 : 1 ≤ sch.k0) (hdim : DimSeam sch) :
     coinPat (ligPadShape 𝔽 𝕂 Dig (schedOf sch) 2 t) = [true] ++ ([false, true] ++
       ((List.replicate (sch.k0 - 1) [false, true]).flatten ++ ([false, true] ++ ([false, true] ++ ([true] ++
@@ -287,10 +287,10 @@ theorem ligPadShape_pat (sch : Flock.Schedule) (t : ℕ) (hk0 : 1 ≤ sch.k0) (h
     List.map_replicate]
   simp [shift_pat, pMid, isCoin]
 
-/-- **Ligerito's rounds with level 0's hiding carry its messages**: M0's rounds (`lig_carries`'s pieces), with the
-pair's sums' round, the second `ρ` coin's and the round of `T'`, `ybar`, the last lane message and the level-1 cap
-between the lane rounds and level 0's queries. The level loop is M0's at fast100's schedule, which differs from the
-`--zk` one only at level 0. -/
+/-- **Ligerito's rounds with level 0's hiding carry its messages**: the non-ZK session's rounds (`lig_carries`'s
+pieces), with the pair's sums' round, the second `ρ` coin's and the round of `T'`, `ybar`, the last lane message and the
+level-1 cap between the lane rounds and level 0's queries. The level loop is the non-ZK session's at fast100's schedule,
+which differs from the `--zk` one only at level 0. -/
 theorem zk_lig_carries (st : Setup) (sch : Flock.Schedule) (tPad : ℕ) (extras : Array Flock.Claim) (zp : Zk.ZkProof)
     (T : F128) (hsch : Zk.schedule st.m = .ok (sch, tPad)) (h64 : st.merkle.digestLen = 64)
     (hs : ProofSizes (shapeZK st sch extras) zp.proof) (hyb : zp.level0.ybar.size = tPad) :

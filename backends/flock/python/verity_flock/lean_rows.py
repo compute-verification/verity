@@ -1,8 +1,9 @@
 """The Lean soundness package's data for a verified lowering: a unit's gate circuit and its pinned rows, as
-`FlockSoundness/Rope/Gates.lean`, `Pinned.lean`, `Checkpoints.lean` and `Chunks.lean`. The kernel checks the derivation
-`FlockSoundness.GateRows.rows` in chunks of `CHUNK` gates (`Chunks.lean`), each from a checkpoint: the next wire, the next
-AND's column, and the forms of the wires still read. `backends/flock/tests/test_lean_rope.py` checks that these files are
-what this module writes, for the netlist `rope_head.PINS` pins.
+`verity/Security/Proofs/Flock/Soundness/Rope/Gates.lean`, `Pinned.lean`, `Checkpoints.lean` and `Chunks.lean`. The
+kernel checks the derivation `FlockSoundness.GateRows.rows` in chunks of `CHUNK` gates (`Chunks.lean`), each from a
+checkpoint: the next wire, the next AND's column, and the forms of the wires still read.
+`backends/flock/tests/test_lean_rope.py` checks that these files are what this module writes, for the netlist
+`rope_head.PINS` pins.
 
 The gate circuit is the committed `Gates.lean` (the Boolean export's gate list when it had one): this module reads it back,
 checks on random inputs that it computes the unit's circuit, and writes the other three files from it and the lowering's
@@ -209,7 +210,7 @@ def rope() -> dict[str, str]:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--out", type=Path, required=True, help="the directory of FlockSoundness/Rope")
+    ap.add_argument("--out", type=Path, required=True, help="the directory of verity/Security/Proofs/Flock/Soundness/Rope")
     args = ap.parse_args()
     data = rope()
     for name in FILES:

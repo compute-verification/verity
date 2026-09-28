@@ -93,7 +93,7 @@ variable {tags : Tags} {st : Stmt} (L : Layout st) (L0 : Layout (flatTwin st)) (
 include L L0 F0 hda hrows
 
 /-- **An output row's message bit holds its copy** in every block of a satisfying witness of the hidden statement, for
-any rows: at VU `g`, output row `j`'s word `k`, bit `t`, what the witness holds at `outSrc`. -/
+any rows: at template instance `g`, output row `j`'s word `k`, bit `t`, what the witness holds at `outSrc`. -/
 theorem msg_copyAll {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
     (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) {g j k t : ℕ} (hg : g < st.c.g)
     (hj : j < st.c.outPorts.size) (hk : k < (st.c.ports.getD (HmOut.nIn st.c + j) default).words) (ht : t < 16) :
@@ -174,8 +174,8 @@ theorem sat_flatAll {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z
     rw [eA, eB]
     exact hz.1 o i
 
-/-- **An output row's message bytes are the output words its VU computes** (`outBytes`), for any rows, in every block
-of a satisfying witness of the hidden statement whose forced-zero row carries 0. -/
+/-- **An output row's message bytes are the output words its template instance computes** (`outBytes`), for any rows, in
+every block of a satisfying witness of the hidden statement whose forced-zero row carries 0. -/
 theorem msg_bytesAll {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
     (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl))
     (hzero : blockBit (L.model regs) z o (zeroCol st.c) = false) {g j : ℕ} (hg : g < st.c.g)

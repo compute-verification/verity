@@ -178,9 +178,9 @@ theorem rowOfH_wire_unit (outs : Finset (Fin (keyN c hU n))) {u u' : Fin n} (x :
 /-! ## Output-row copies at an accepted statement -/
 
 /-- **A returned output's column holds its output row's bit**: in a satisfying witness of an accepted statement on `c`
-whose unit returns the outputs and whose rows are `sha512/row/v1` rows, at block `o` and VU `g`, the VU's column on copy
-`u'`'s output `j`, bit `t` (`Layout.OutColAt`) holds the witness's bit at the message column of its output row's bit
-(`outBitRow`, `out_copyH`). -/
+whose unit returns the outputs and whose rows are `sha512/row/v1` rows, at block `o` and template instance `g`, the
+template instance's column on copy `u'`'s output `j`, bit `t` (`Layout.OutColAt`) holds the witness's bit at the message
+column of its output row's bit (`outBitRow`, `out_copyH`). -/
 theorem out_copy_key {T : Model.Statement} (a : AcceptedH T) (hce : a.st.c = c) (ho : c.outNet = c.unitNet)
     (hv1 : ∀ p ∈ c.ports.toList, p.v2 = false ∧ p.bits = 16 * p.words ∧ 0 < p.chunks)
     {z : Witness T.m} (hz : T.Satisfies z) (o : Fin (2 ^ T.nbl)) {g : ℕ} (hg : g < a.st.c.g) (x : Fin a.rows.w)
@@ -220,7 +220,7 @@ variable {Reg : Type} {mPts : ℕ} {plan : Finset (Fin n) → Reg → List (TabS
   (si : SitesH plan tab)
 
 /-- **Bit `k` of row `q` at a drawn unit's site**: message bit `k % 8` of byte `k / 8` (`Typed.msgCol`) at the unit's
-VU, in its block. -/
+template instance, in its block. -/
 noncomputable def keyRowAddrH (S : Finset (Fin n)) (R : Reg) (u : Fin n) (q : Fin c.ports.size) (k : ℕ) :
     Fin (2 ^ (Partition.tabOf plan tab S R u).S.m) :=
   if h : u ∈ S then
@@ -228,14 +228,16 @@ noncomputable def keyRowAddrH (S : Finset (Fin n)) (R : Reg) (u : Fin n) (q : Fi
       (Typed.msgCol (si.acc S R u h).st.c (si.vu S R u h) q.val (k / 8) (k % 8))
   else ⟨0, Nat.two_pow_pos _⟩
 
-/-- **Row `q`'s `b ‖ c` at a drawn unit's site**: its `hm96` slot's output (`Layout.bcAddr`) at the unit's VU. -/
+/-- **Row `q`'s `b ‖ c` at a drawn unit's site**: its `hm96` slot's output (`Layout.bcAddr`) at the unit's template
+instance. -/
 noncomputable def keyBcAddrH (S : Finset (Fin n)) (R : Reg) (u : Fin n) (q : Fin c.ports.size) (j : Fin 128)
     (t : Fin 8) : Fin (2 ^ (Partition.tabOf plan tab S R u).S.m) :=
   if h : u ∈ S then
     siteAddrH (si.acc S R u h) (si.o S R u h) (Layout.bcAddr (si.acc S R u h).st.c (si.vu S R u h) q.val j.val t.val)
   else ⟨0, Nat.two_pow_pos _⟩
 
-/-- **Row `q`'s salt at a drawn unit's site**: its `hm96` slot's salt input (`Hm.saltCol`) at the unit's VU. -/
+/-- **Row `q`'s salt at a drawn unit's site**: its `hm96` slot's salt input (`Hm.saltCol`) at the unit's template
+instance. -/
 noncomputable def keySaltAddrH (S : Finset (Fin n)) (R : Reg) (u : Fin n)
     (q : (Fin n × Fin c.ports.size) ⊕ Fin (keyN c hU n)) (j : Fin 192) (t : Fin 8) :
     Fin (2 ^ (Partition.tabOf plan tab S R u).S.m) :=
@@ -384,7 +386,8 @@ noncomputable def keyRowsH
 
 /-- **The bytes `sha512/row/v1` hashes for a row at `keyProg`'s places in hidden-output tables** (`Layout.keyRow_enc`):
 at a drawn unit `u`'s site, the value a message holds at row `q` of unit `u'`, `16 · words` bits, has `rowEnc` the row
-prefix of `words` and the `2 · words` bytes the witness holds at the unit's VU's message columns, in its block. -/
+prefix of `words` and the `2 · words` bytes the witness holds at the unit's template instance's message columns, in its
+block. -/
 theorem keyRowH_enc {S : Finset (Fin n)} {R : Reg} {u : Fin n} (hu : u ∈ S) (M : Binding.Msg plan tab S R u)
     (u' : Fin n) (q : Fin c.ports.size) {words : ℕ} (hrw : portRowW c q = 16 * words) :
     Layout.rowEnc ((keyLayoutH hparse outs popOf ho hv1 houts).row S R u M (.inl (u', q))) =

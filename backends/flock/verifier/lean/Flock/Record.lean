@@ -29,7 +29,7 @@ structure SessionSpec where
   hello : String
   mPts : Nat
   points : Nat := 2
-  /-- the statement's coin server retains every round's bytes: each round must carry them (§6.2) -/
+  /-- the statement's challenger retains every round's bytes: each round must carry them (§6.2) -/
   retainRounds : Bool := false
   /-- the session's unit draw (one table's: the public header's `unit_draw`, §7.3; several tables': the draw they split, never
   a table's part) and its instance count -/

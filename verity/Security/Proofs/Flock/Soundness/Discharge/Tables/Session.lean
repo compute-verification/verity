@@ -83,7 +83,7 @@ theorem live_le_sessionBLJ (A : Arith 𝔽 K) (H : List UInt8 → D) (E : Merkle
 variable {n : ℕ} {Reg : Type}
 
 /-- **The live audit's session at a draw**: `liveSession` over the plan's tables, its outcome written out as the
-session directory by `wr` (the record the coin server writes, and the proof files). -/
+session directory by `wr` (the record the challenger writes, and the proof files). -/
 def liveOfJ (dg : ByteArray → ByteArray) (plan : Finset (Fin n) → Reg → List (TabSpec mPts)) (N : ℕ)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (plan S R).length mPts → Transcript)
     (S : Finset (Fin n)) (R : Reg) : Game Transcript :=

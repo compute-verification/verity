@@ -3,7 +3,7 @@ import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOk
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
 
 /-!
-# The coin server's draw at every draw of the live law, at hidden-output `--zk`
+# The challenger's draw at every draw of the live law, at hidden-output `--zk`
 
 `zk_session_soundH` takes `DrawOkZKH I dj mPts` at each of `Law.execOS`'s draws: the draw file `dj S` proves `S`'s units,
 and setupHidden, under the `--zk` tags, sets up at `mPts` link points. As at public outputs (`ZkLink/DrawOk.lean`), the
@@ -48,7 +48,7 @@ theorem setupHidden_mPts_of_proved {c : Circuit} {d : Json} {N₀ : ℕ} (hc : H
 
 variable {n : ℕ}
 
-/-- **The coin server's draw is `DrawOkZKH` at every draw of the live law.** On tags whose circuit file `HmOut.parse`
+/-- **The challenger's draw is `DrawOkZKH` at every draw of the live law.** On tags whose circuit file `HmOut.parse`
 accepts under the `--zk` tags as `c`, with the executable strata `St` describing `σs`'s, each drawing `ks s` of its
 units: when the record's draw file is the verifier's draw under the live law's own stratified law (`DrawFileZK`),
 `DrawOkZKH` holds at `mPtsOf c.g (∑ s, ks s)` link points at every draw of `Law.execOS`, the run that reads past the

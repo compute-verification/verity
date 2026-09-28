@@ -6,7 +6,7 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Facts
 `commitPair_spec`: two different rows' bytes with one commit string `b ‖ c` give a SHA-512 collision, in the row hash when
 the salts agree (the masks then cancel) and in the salt digest when they differ. `outputs_binding_of`: two sessions that
 `OutputsCommitted` covers, on one circuit file, public file and tables, read one registered `b ‖ c` for one unit's output
-row, so when their VUs' output words differ, `commitPair` of the two rows is a collision.
+row, so when their template instances' output words differ, `commitPair` of the two rows is a collision.
 -/
 
 open Flock FlockLevel3

@@ -15,12 +15,12 @@ namespace FlockSoundness.Discharge.Hm
 /-- The unit range's first slot's forced-zero row. -/
 def zeroCol (c : Circuit) : ℕ := c.unitRange.slot 0 + c.unit.useful
 
-/-- VU `g`, port `p`: its first compression's `cv` input's first column. -/
+/-- Template instance `g`, port `p`: its first compression's `cv` input's first column. -/
 def cvCol (c : Circuit) (g p : ℕ) : ℕ :=
   c.slotCol c.shaNet g ((HmRow.rowSlots c.ports).2[p]!)[0]!.1 +
     (portCols (c.nets.getD c.shaNet default).2.inGroups)[2 * ((HmRow.rowSlots c.ports).2[p]!)[0]!.2]!.1
 
-/-- VU `g`, port `p`: its `hm96` slot's `pad` input's first column. -/
+/-- Template instance `g`, port `p`: its `hm96` slot's `pad` input's first column. -/
 def padCol (c : Circuit) (g p : ℕ) : ℕ := c.slotCol c.hmNet g p + (portCols (c.nets.getD c.hmNet default).2.inGroups)[1]!.1
 
 /-- A constant bit's source: the pin for bit 1, the forced-zero row for bit 0. -/
@@ -34,13 +34,13 @@ def rowPairs (c : Circuit) (pin : ℕ) : List (ℕ × ℕ) :=
       (List.range 1024).flatMap fun t => [(padCol c g p + t, padCol c g p + t),
         (padCol c g p + t, constSrc c pin (HmRow.padWords c.ports[p]!.words) t)]
 
-/-- VU `g`, port `p`: its row's first `cv` input's first column, its first compression's or, for a row of no
-compression, its `hm96` slot's. -/
+/-- Template instance `g`, port `p`: its row's first `cv` input's first column, its first compression's or, for a row of
+no compression, its `hm96` slot's. -/
 def cvColOf (c : Circuit) (g p : ℕ) : ℕ :=
   if 0 < ((HmRow.rowSlots c.ports).2[p]!).size then cvCol c g p
   else c.slotCol c.hmNet g p + (portCols (c.nets.getD c.hmNet default).2.inGroups)[0]!.1
 
-/-- VU `g`, port `p`: its compression `k`'s `msg` input's first column. -/
+/-- Template instance `g`, port `p`: its compression `k`'s `msg` input's first column. -/
 def msgColOf (c : Circuit) (g p k : ℕ) : ℕ :=
   c.slotCol c.shaNet g ((HmRow.rowSlots c.ports).2[p]!)[k]!.1 +
     (portCols (c.nets.getD c.shaNet default).2.inGroups)[2 * ((HmRow.rowSlots c.ports).2[p]!)[k]!.2 + 1]!.1
@@ -50,9 +50,9 @@ def bitPairs (c : Circuit) (pin x : ℕ) : Option Bool → List (ℕ × ℕ)
   | some v => [(x, x), (x, if v then pin else zeroCol c)]
   | none => []
 
-/-- Δ's pairs at VU `g`'s row `p`'s constant bits, as `HmRow.delta` writes them: its first `cv` the row prefix's
-midstate, its `hm96` slot's `pad` the constant bits of its last block, and each compression's `msg` from the first that
-holds a bit at or past the row's length its constant bits. -/
+/-- Δ's pairs at template instance `g`'s row `p`'s constant bits, as `HmRow.delta` writes them: its first `cv` the row
+prefix's midstate, its `hm96` slot's `pad` the constant bits of its last block, and each compression's `msg` from the
+first that holds a bit at or past the row's length its constant bits. -/
 def rowPairsOf (c : Circuit) (pin g p : ℕ) : List (ℕ × ℕ) :=
   (List.range 512).flatMap (fun t => [(cvColOf c g p + t, cvColOf c g p + t),
       (cvColOf c g p + t, constSrc c pin (HmRow.midstateOf c.ports[p]!) t)]) ++

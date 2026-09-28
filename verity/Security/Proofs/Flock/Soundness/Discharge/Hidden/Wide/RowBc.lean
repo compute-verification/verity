@@ -179,10 +179,10 @@ theorem inBit_copyAll (hda : st.da = (HmRow.delta st.c st.pin).1) (hrw : RowWire
   have hx : x < 2 ^ (L.model regs).kLog := hat.lt R.bound (R.range (R.rowNet_lt hn)).1
   exact block_of_rows hz o hx fun j => inBit_rows R hn hat hl hself hx hδ j
 
-/-- **The four copies into VU `g`'s row `p`**, for a row of `16 · words` bits in `2 · words = 128 · chunks` bytes and a
-compression or more, in every block of a satisfying witness of the untyped statement: the first compression's `cv` is
-the row prefix's midstate (`HmRow.prefixOf`), each later compression's `cv` the previous one's output, the `hm96`
-slot's `cv` the last compression's output, and its `pad` the padding block. -/
+/-- **The four copies into template instance `g`'s row `p`**, for a row of `16 · words` bits in
+`2 · words = 128 · chunks` bytes and a compression or more, in every block of a satisfying witness of the untyped
+statement: the first compression's `cv` is the row prefix's midstate (`HmRow.prefixOf`), each later compression's `cv`
+the previous one's output, the `hm96` slot's `cv` the last compression's output, and its `pad` the padding block. -/
 theorem row_copies_tgt (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < st.c.upv)
     (hu : ∀ p ∈ st.c.ports.toList, p.segs = none)
     {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
@@ -236,8 +236,8 @@ theorem row_copies_tgt (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < s
       (hmNet_ofRows R.rowNets) (by rw [hmNet_inRows R.rowNets]; omega) (hmLaid_self (by omega)) hf]
     exact blockBit_constSrc _ _ hpin hzero
 
-/-- **The two copies into VU `g`'s row `p` of no compression**, in every block of a satisfying witness of the untyped
-statement: the `hm96` slot's `cv` is the row prefix's midstate, and its `pad` the padding block. -/
+/-- **The two copies into template instance `g`'s row `p` of no compression**, in every block of a satisfying witness of
+the untyped statement: the `hm96` slot's `cv` is the row prefix's midstate, and its `pad` the padding block. -/
 theorem row_copies_tgt0 (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < st.c.upv)
     (hu : ∀ p ∈ st.c.ports.toList, p.segs = none)
     {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}

@@ -4,7 +4,7 @@ import Proofs.Flock.Soundness.ExecParse
 # A typed template's Δ (#277), and the rows it makes copies
 
 `HmRow.delta` writes a flat statement's entries (`delta_split`'s forms), then, for a typed template
-(`c.typed = some tb`), per VU `g`:
+(`c.typed = some tb`), per template instance `g`:
 1. each input bit `w`'s copy of its message bit: `(i, i)` and `(i, src)`, in `A` and `B`;
 2. each part's bound input row `r`: `(i, i)` and `(i, col g x)` for its sources `x`, in `A` and `B`;
 3. each root row's entries at its parts' columns: `A`'s in Δ_A, `B`'s in Δ_B;
@@ -69,8 +69,8 @@ namespace Typed
 def starts (c : Circuit) : Array ℕ :=
   (c.ports.foldl (fun (acc : Array ℕ × ℕ) p => (acc.1.push acc.2, acc.2 + p.words)) (#[], 0)).1
 
-/-- Message bit `t` of byte `byte` of row `p`'s message in VU `g` (`HmRow.delta`'s `msgCol`): in its chain's
-`sha512x3` slot, or past the chain in its hm96 slot's `pad`. -/
+/-- Message bit `t` of byte `byte` of row `p`'s message in template instance `g` (`HmRow.delta`'s `msgCol`): in its
+chain's `sha512x3` slot, or past the chain in its hm96 slot's `pad`. -/
 def msgCol (c : Circuit) (g p byte t : ℕ) : ℕ :=
   let (_, where_) := HmRow.rowSlots c.ports
   let sin := portCols (c.nets.getD c.shaNet default).2.inGroups
@@ -91,21 +91,21 @@ theorem byteAt_none {p : Port} (hs : p.segs = none) (byte : ℕ) : HmRow.byteAt 
   unfold HmRow.byteAt
   rw [hs]
 
-/-- **A unit column's block position** in VU `g` (`HmRow.delta`'s `col`): the root's own columns in its slot, a part's
-in its layout's slot. -/
+/-- **A unit column's block position** in template instance `g` (`HmRow.delta`'s `col`): the root's own columns in its
+slot, a part's in its layout's slot. -/
 def col (c : Circuit) (tb : TypedBlock) (g u : ℕ) : ℕ :=
   if u < tb.own then c.slotCol c.unitNet g 0 + u
   else match tb.parts.toList.reverse.find? (·.2.2 ≤ u) with
     | some (n, q, b) => c.slotCol n g q + (u - b)
     | none => 0
 
-/-- **The message bit input `w` of VU `g` copies**: bit `w % 16` of row word `w / 16`. -/
+/-- **The message bit input `w` of template instance `g` copies**: bit `w % 16` of row word `w / 16`. -/
 def copySrc (c : Circuit) (g w : ℕ) : ℕ :=
   let (leaf, bit) := (w / 16, w % 16)
   let p := ((List.range (starts c).size).reverse.find? (fun q => (starts c)[q]! ≤ leaf)).getD 0
   msgCol c g p (2 * (leaf - (starts c)[p]!) + bit / 8) (bit % 8)
 
-/-- VU `g`'s typed entries, in `A` (`side = true`) or `B`. -/
+/-- Template instance `g`'s typed entries, in `A` (`side = true`) or `B`. -/
 def tailVU (c : Circuit) (tb : TypedBlock) (side : Bool) (g : ℕ) : List (ℕ × ℕ) :=
   ((List.range tb.inCols.size).flatMap fun w =>
       [(col c tb g tb.inCols[w]!, col c tb g tb.inCols[w]!), (col c tb g tb.inCols[w]!, copySrc c g w)]) ++
@@ -113,7 +113,7 @@ def tailVU (c : Circuit) (tb : TypedBlock) (side : Bool) (g : ℕ) : List (ℕ �
       (col c tb g rs.1, col c tb g rs.1) :: rs.2.toList.map fun x => (col c tb g rs.1, col c tb g x)) ++
     tb.cross.toList.flatMap fun e => (if side then e.2.1 else e.2.2).toList.map fun x => (col c tb g e.1, col c tb g x)
 
-/-- **The typed tail**: every VU's typed entries, in `A` (`side = true`) or `B`. -/
+/-- **The typed tail**: every template instance's typed entries, in `A` (`side = true`) or `B`. -/
 def tail (c : Circuit) (tb : TypedBlock) (side : Bool) : List (ℕ × ℕ) := (List.range c.g).flatMap (tailVU c tb side)
 
 end Typed

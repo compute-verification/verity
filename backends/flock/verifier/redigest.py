@@ -11,7 +11,7 @@ against the same coins, and only the check the edit breaks can reject it.
 
 Writes OUT_DIR/<name>/ per mutant and OUT_DIR/mutants.json: name, rep, edit, and the verdict both verifiers must reach
 (`expect`: accept or reject, and the Lean verifier's reason prefix). `--retain` writes the session with every round's
-framed bytes retained (`rounds[k].msg`, hex; the coin server's retained round bytes) and two negatives: rep 0's first
+framed bytes retained (`rounds[k].msg`, hex; the challenger's retained round bytes) and two negatives: rep 0's first
 round bytes edited with its digest rebuilt (the replay's exact comparison rejects), and edited without it (S12 rejects;
 upstream accepts it, divergence D4, unless `--upstream-checks retained_bytes`: PR #83 from 4bceebef checks the bytes
 against the digest).

@@ -5,17 +5,17 @@ import Proofs.Flock.Soundness.Discharge.Exec.Shape
 # The static shape of a compiled `--zk` rep
 
 The coin half of R11b (`Exec.Spine`, and [wave2-plays-coin]'s `decodesOfRunsAt`) needs to know where a rep's coins fall
-among its messages. At M0 every run of a rep follows one spine (`Exec.repC_spine`), because a rep returns at a reject.
-The compiled `--zk` rep (`ZkLink.repZCAt`) does not: at an opening reject (an extra claim's ring-switch sum fails, which
-is the prover's choice) `restZC` returns at once and `repZC` goes on to the inner proof, so that run's steps after the
-opening are the inner proof's, not level 0's. That run ends in a result whose Ligerito part is `PendL.reject`, whose
-verdict is `false`, so no accepted outcome has it.
+among its messages. Without `--zk` every run of a rep follows one spine (`Exec.repC_spine`), because a rep returns at a
+reject. The compiled `--zk` rep (`ZkLink.repZCAt`) does not: at an opening reject (an extra claim's ring-switch sum
+fails, which is the prover's choice) `restZC` returns at once and `repZC` goes on to the inner proof, so that run's
+steps after the opening are the inner proof's, not level 0's. That run ends in a result whose Ligerito part is
+`PendL.reject`, whose verdict is `false`, so no accepted outcome has it.
 
 * `ExactOn g σ P`: every run of `g` that ends in an outcome satisfying `P` takes exactly the steps of the kinds of `σ`.
   `playsT_bind_inv` splits a run of a `bind`, and `ExactOn.bind` composes.
 * `repShapeZ`: a compiled `--zk` rep's shape, which reads only the table's dimensions and schedule and the number of
-  extra claims: the pads root, the masked zerocheck's, lincheck's and opening's shapes (M0's `zcShape`, `lcShape`,
-  `opShape`), level 0 masked with Ligerito's levels compiled (`ligPadShape`), `final_c'`, and the inner proof
+  extra claims: the pads root, the masked zerocheck's, lincheck's and opening's shapes (the non-ZK session's `zcShape`,
+  `lcShape`, `opShape`), level 0 masked with Ligerito's levels compiled (`ligPadShape`), `final_c'`, and the inner proof
   (`innerShape`).
 * `repZCAt_kinds`: every run of rep `r` whose result's Ligerito part is not `PendL.reject` takes exactly the steps of
   `repShapeZ`. `repZCAt_spineAt` is its prefix form at a result (plays-coin's `SpineAt`, unfolded), and
@@ -97,7 +97,7 @@ theorem ExactOn.ret_not {a : α} {σ : List Kind} {P : α → Prop} (h : ¬ P a)
   obtain ⟨-, rfl⟩ := hp.ret_inv
   exact absurd hb h
 
-/-! ## The masked phases (as M0's shapes) -/
+/-! ## The masked phases (as the non-ZK session's shapes) -/
 
 omit [DecidableEq F] in
 theorem residualRoundsZK_exact {np : ℕ} (P : PadsA np) :

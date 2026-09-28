@@ -5,7 +5,7 @@ import Proofs.Flock.Soundness.Audit.FlockLink
 
 The link term is stated under `SHA512CRExpected` (`ecr/sha-512`): its finders stop adaptively, rerunning the prover until
 a rerun reads the commit string. `CROnly` derives that bound, with an explicit loss, from `SHA512CRStrict` (`cr/sha-512`)
-of the same finders stopped at a budget `q` fixed in advance. These are the definitions its pinned statements read.
+of the same finders stopped at a budget `q` fixed in advance. These are the definitions its guarantees read.
 
 * `truncOut`, `truncCost`: a finder stopped once it has made `q` evaluations. It runs as the finder does, so on an
   outcome where the finder makes at most `q` it outputs what the finder outputs, and on any other it stops at `q` and

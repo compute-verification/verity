@@ -2,14 +2,14 @@ import Proofs.Flock.Soundness.Discharge.ZkCoins.Basic
 import Proofs.Flock.Soundness.Discharge.ZkSession.Session
 
 /-!
-# The batched `--zk` session on committed coins (live/PROTOCOL.md §9, M2)
+# The batched `--zk` session on committed coins (live/PROTOCOL.md §9, C-Flock ZK)
 
-`sessionZKC` is `ZkSession.sessionZK` with its coins taken from M2's coin tree: the link points from the session
+`sessionZKC` is `ZkSession.sessionZK` with its coins taken from C-Flock ZK's coin tree: the link points from the session
 stream's round 0 (index `none`), and the `t`-th coin draw of table `j`'s rep `r` from round `t` of stream
-`circuit/rep r` of table `j` (index `some (j, r, t)`), for `t < R` (M2: `R = 2^8` rounds a stream). A draw of type `C`
-reads its value off the round's block through the decoder `dc` gives for `C` (M2: the round's first `n` coins), which
-must be `Balanced`, i.e. uniform on uniform blocks. A draw past round `R`, or of a type `dc` has no decoder for, is a
-live coin (`fresh`).
+`circuit/rep r` of table `j` (index `some (j, r, t)`), for `t < R` (C-Flock ZK: `R = 2^8` rounds a stream). A draw of
+type `C` reads its value off the round's block through the decoder `dc` gives for `C` (C-Flock ZK: the round's first `n`
+coins), which must be `Balanced`, i.e. uniform on uniform blocks. A draw past round `R`, or of a type `dc` has no
+decoder for, is a live coin (`fresh`).
 
 The structure follows `sessionZK`: `TGame.interleave` and `TGame.batch` are `Game.interleave` and `Game.batch`, the two
 reps of a table run concurrently in any order the prover picks, each on its own stream (`tagRep`).

@@ -27,9 +27,9 @@ local notation "𝔽" => FlockLevel3.GF128
 
 variable {N' n : ℕ} (p : FlockSoundness.Prog N' n) (outs : Finset (Fin N')) {Reg : Type} {mPts : ℕ}
 
-/-- **The headline at the executable, for sessions of `J` tables of the live coin server, at the live stratified
+/-- **The headline at the executable, for sessions of `J` tables of the challenger, at the live stratified
 draw.** Let the verifier draw the units as in `Prog.flock_headline_L` (the live stratified draw under A3), let each
-draw's session be the plan's tables `plan S R`, and let the live session be `liveSession` over them (the coin server,
+draw's session be the plan's tables `plan S R`, and let the live session be `liveSession` over them (the challenger,
 its coins uniform per round and drawn after the round's retained bytes, on the `2J` rep streams), written out as a
 session directory by `wr`. Against any live prover `τ`, flock-verify accepts with at least `K` wrong units of the
 committed values of the simulated prover (`simAuditJ … τ`) with probability at most `miss(K) + ε_ks + δ_link`:
@@ -93,7 +93,7 @@ theorem execOS_subset_miss_le (kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype �
     (Law.execOS (n := n) src (.subset kd) n).miss c ≤ (Law.subset n kd hkd).miss c :=
   iSup₂_mono fun B _ => Law.execOS_subset_escape_le n kd hkd Lb src hA3 B
 
-/-- **The headline at the executable, for sessions of `J` tables of the live coin server, at the live subset draw**,
+/-- **The headline at the executable, for sessions of `J` tables of the challenger, at the live subset draw**,
 the draw flock-verify takes at more than one table. As `Prog.flock_headline_live_tables`, with the verifier's draw the
 live `kd`-subset draw of the `n` units under A3 (`hA3`), whose count curve at `K ≤ n` wrong units is
 `C(n − K, kd) / C(n, kd)`. -/

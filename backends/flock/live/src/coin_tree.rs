@@ -1,4 +1,4 @@
-//! The verifier's per-session coin commitment (lane flock-zk, M2; soundness ASSUMPTIONS.md §2 and §6, DESIGN.md §11.1), keyed
+//! The verifier's per-session coin commitment (lane flock-zk, C-Flock ZK; soundness ASSUMPTIONS.md §2 and §6, DESIGN.md §11.1), keyed
 //! (`coin-tree/hm96-sha512/v2`, docs/coin-tree-v2.md).
 //!
 //! At `Hello`, before the prover's first message, the verifier draws every coin of the session and commits to all of them
@@ -62,7 +62,7 @@ impl Spec {
     }
 }
 
-// The scheme's digests are SHA-512's: the SHA-512 build's 64-byte nodes and hm96 leaves. A build without it (M0's older GPU
+// The scheme's digests are SHA-512's: the SHA-512 build's 64-byte nodes and hm96 leaves. A build without it (the circuit prover's older GPU
 // binaries) keeps the types and refuses the scheme.
 #[cfg(feature = "sha512")]
 fn digest(b: &[u8]) -> Hash {

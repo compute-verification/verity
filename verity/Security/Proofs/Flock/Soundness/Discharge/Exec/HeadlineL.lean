@@ -18,7 +18,7 @@ import Proofs.Flock.Soundness.Discharge.Exec.Headline
   of the live audit by the audit with `batchedSessionL H512 enc512 leaf512 plan`. Its hypotheses are
   `Prog.flock_headline_L`'s at `tr := TreeRewind.ofNever` (`δ_tree = 0`), with `hRef` in place of `tr` and `hT`.
 
-What stays open of R11 is `hRef` itself: a strategy `σ` of this audit built from the live prover `τ`, the coin server's
+What stays open of R11 is `hRef` itself: a strategy `σ` of this audit built from the live prover `τ`, the challenger's
 per-round coins (A6) as the audit's coins, and the live event `bad` bounded.
 -/
 

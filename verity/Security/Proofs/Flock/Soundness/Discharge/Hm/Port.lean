@@ -1,5 +1,5 @@
 /-
-A row at its columns: port `p`'s row at VU `g` of a block whose bits are `w`. Its bytes are read at the `sha512x3` slots'
+A row at its columns: port `p`'s row at template instance `g` of a block whose bits are `w`. Its bytes are read at the `sha512x3` slots'
 message inputs (`Typed.msgCol`), its salt at the `hm96` slot's input `y` (`saltCol`) and its `b ‖ c` at that slot's
 output (`bcCol`, the address `HmRow.regions` pins). When the slots' nets hold on the block's bits there and the block
 holds Δ's copies (the first `cv` the midstate, each next `cv` the previous output, the hm96 `cv` the last output, its `pad`
@@ -69,7 +69,7 @@ theorem bytesAt_eq_bytesOf {m N : ℕ} (z : Model.Witness m) (A : ℕ → Fin (2
 
 /-! ## The row's columns -/
 
-/-- Compression `k` of port `p`'s row: its `sha512x3` slot at VU `g`, its first column. -/
+/-- Compression `k` of port `p`'s row: its `sha512x3` slot at template instance `g`, its first column. -/
 def shaBase (c : Circuit) (g p k : ℕ) : ℕ := c.slotCol c.shaNet g ((HmRow.rowSlots c.ports).2[p]!)[k]!.1
 
 /-- Compression `k` of port `p`'s row: its place in its slot (`sub < 3`). -/
@@ -87,11 +87,12 @@ def hmIn (c : Circuit) (i : ℕ) : ℕ := ((portCols (c.nets.getD c.hmNet defaul
 /-- The `hm96` net's output's first column in a slot (`b ‖ c`). -/
 def hmOut (c : Circuit) : ℕ := ((portCols (c.nets.getD c.hmNet default).2.outGroups).getD 0 default).1
 
-/-- **Salt byte `j`, bit `t`** of port `p`'s row at VU `g`: its `hm96` slot's input `y`, bit `8 j + t`. -/
+/-- **Salt byte `j`, bit `t`** of port `p`'s row at template instance `g`: its `hm96` slot's input `y`, bit `8 j + t`.
+-/
 def saltCol (c : Circuit) (g p j t : ℕ) : ℕ := c.slotCol c.hmNet g p + hmIn c 2 + 8 * j + t
 
-/-- **`b ‖ c` byte `j`, bit `t`** of port `p`'s row at VU `g`: its `hm96` slot's output bit `8 j + t`, the address
-`HmRow.regions` pins. -/
+/-- **`b ‖ c` byte `j`, bit `t`** of port `p`'s row at template instance `g`: its `hm96` slot's output bit `8 j + t`,
+the address `HmRow.regions` pins. -/
 def bcCol (c : Circuit) (g p j t : ℕ) : ℕ := c.slotCol c.hmNet g p + hmOut c + 8 * j + t
 
 /-- The row's byte `128 k + o`, bit `t`, is compression `k`'s message input bit `wordBit (8 o + t)`, for a compression
@@ -107,13 +108,13 @@ theorem msgCol_eq (c : Circuit) (g p k : ℕ) {o t : ℕ} (hs : c.ports[p]!.segs
 /-! ## The port -/
 
 /-- **A port's row at its columns.** Port `p` of the circuit `c` has `words` u16 words in `n > 0` chunks
-(`2 · words = 128 n`, `HmRow.parse`'s port check), each a compression of the row's slots (`hslots`). At VU `g` of a
-block whose bits are `w`: suppose the `sha512x3` and `hm96` nets' input ports sit where the generated nets put them
-(`hsin`, `hhin`), each compression `k`'s slot holds the net on an assignment `zs k` that reads the slot's input columns
-and whose output `sub k` the slot's output columns hold, the `hm96` slot likewise on `zh`, and the block holds Δ's copies: the first `cv` the prefix's midstate, each next `cv` the
-previous output, the hm96 `cv` the last output, and its `pad` the padding block. Then the 128 bytes at `bcCol` are
-`commitString (rowPrefix words ‖ row) salt`, where the row is the `2 · words` bytes at `Typed.msgCol` and the salt the
-192 bytes at `saltCol`. -/
+(`2 · words = 128 n`, `HmRow.parse`'s port check), each a compression of the row's slots (`hslots`). At template
+instance `g` of a block whose bits are `w`: suppose the `sha512x3` and `hm96` nets' input ports sit where the generated
+nets put them (`hsin`, `hhin`), each compression `k`'s slot holds the net on an assignment `zs k` that reads the slot's
+input columns and whose output `sub k` the slot's output columns hold, the `hm96` slot likewise on `zh`, and the block
+holds Δ's copies: the first `cv` the prefix's midstate, each next `cv` the previous output, the hm96 `cv` the last
+output, and its `pad` the padding block. Then the 128 bytes at `bcCol` are `commitString (rowPrefix words ‖ row) salt`,
+where the row is the `2 · words` bytes at `Typed.msgCol` and the salt the 192 bytes at `saltCol`. -/
 theorem port_commit (c : Circuit) (w : ℕ → Bool) (g p : ℕ) {words n : ℕ} (hs : c.ports[p]!.segs = none)
     (hn : 0 < n) (hw : 2 * words = 128 * n)
     (hslots : n ≤ ((HmRow.rowSlots c.ports).2[p]!).size) (hsub : ∀ k < n, shaSub c p k < 3)

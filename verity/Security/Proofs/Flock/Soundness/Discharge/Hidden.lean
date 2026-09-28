@@ -26,7 +26,7 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Theorems
 * `Flat`: the flat twin (`HmRow.delta`'s Δ alone), which a satisfying witness also satisfies (`sat_flat`), and an output
   row's message bits as copies of `outSrc` (`msg_copy`);
 * `Committed`: an output row's registered `b ‖ c` at a drawn unit is the commit string of its prefix and the output words
-  its VU computes (`outputs_committed'`);
+  its template instance computes (`outputs_committed'`);
 * `Theorems`: one theorem per frozen statement;
 * `Wide.Defs`, `Wide.Theorems`: `OutputsCommitted` and `OutputsBinding` widened to a tail that returns the outputs
   (`…Tail`), `sha512/row/v2` rows (`…V2`) and shared rows (`…Wide`);
@@ -38,10 +38,10 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Theorems
 * `Wide.V2`: the V2 statements (`outputs_committed_v2'`, `outputs_binding_v2_of`);
 * `Wide.Shared`: a shared-row population's `b ‖ c` at a drawn unit (`bc_drawnW`), and the Wide statements
   (`outputs_committed_wide'`, `outputs_binding_wide_of`);
-* `Wide.Upv`: a unit per VU from acceptance (`check_upv_pos`, `setupHidden_upv_pos`), since `HmRow.check` refuses
-  `units_per_vu = 0`;
-* `Wide.Block`: a VU per block from acceptance (`check_g_pos`, `setupH_g_pos`), since `HmRow.check` refuses
-  `vus_per_block = 0`;
+* `Wide.Upv`: a unit per template instance from acceptance (`check_upv_pos`, `setupHidden_upv_pos`), since `HmRow.check`
+  refuses `units_per_vu = 0`;
+* `Wide.Block`: a template instance per block from acceptance (`check_g_pos`, `setupH_g_pos`), since `HmRow.check`
+  refuses `vus_per_block = 0`;
 * `Wide.Checked`: the six widened statements without `0 < st.c.upv` (`…Checked`), proved in `Wide.Theorems`
   (`…_checked`).
 -/

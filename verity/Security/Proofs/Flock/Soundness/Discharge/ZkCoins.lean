@@ -10,10 +10,10 @@ import Proofs.Flock.Soundness.Discharge.ZkCoins.Reads
 import Proofs.Flock.Soundness.Discharge.ZkCoins.Session
 
 /-!
-# The coin step in the `--zk` session (live/PROTOCOL.md §9, M2)
+# The coin step in the `--zk` session (live/PROTOCOL.md §9, C-Flock ZK)
 
-Under M2 the verifier's coins are committed in the coin tree at Hello and opened round by round. `sessionZKC` is the
-batched `--zk` session on those coins, and `session_coins_hm96` its soundness: table `j`'s bound against live coins,
+Under C-Flock ZK the verifier's coins are committed in the coin tree at Hello and opened round by round. `sessionZKC` is
+the batched `--zk` session on those coins, and `session_coins_hm96` its soundness: table `j`'s bound against live coins,
 `padLinkError + (padRepError + εInner)²`, plus `2^-257` for each committed round, under the session's fresh hm96 key.
 
 The step is a hybrid over committed rounds (`committed_le`), not over the session's rounds: a committed prover's

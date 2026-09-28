@@ -175,8 +175,8 @@ theorem drawn_digestW {tags : Tags} {c : Circuit} {file : ByteArray} {pop pub : 
     rw [hrs, ← hpopn]
     nlinarith
 
-/-- **A drawn statement's `hm96` chunk at block `o`, VU `g`** is, at a proved unit, that unit's population `b ‖ c`,
-with or without shared rows. -/
+/-- **A drawn statement's `hm96` chunk at block `o`, template instance `g`** is, at a proved unit, that unit's
+population `b ‖ c`, with or without shared rows. -/
 theorem bcChunk_drawnW {tags : Tags} {c : Circuit} {file : ByteArray} {pop pub : Public} {d : Lean.Json}
     {D : Draw.UnitDraw} (hload : HmRow.loadPublic tags c file = .ok pop) (h : HmRow.drawn c pop d = .ok pub)
     (hD : Draw.UnitDraw.ofJson d = .ok D) (hlt : ∀ u ∈ D.proved, u < D.population) {o g p : ℕ}

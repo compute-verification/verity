@@ -160,7 +160,7 @@ def AcceptsVerdictHm96Any : Prop :=
 /-- **At a draw flock-verify accepts under hidden outputs, the headline's table is `stmtOf` of the statement it
 accepted** (Integrate's `tableAt_of_accepts` for `tableAtH`): for a one-table session under a tag with hidden outputs
 whose circuit file parses (untyped) to a circuit whose unit returns the outputs, when the session's record carries the
-coin server's draw `dj S`, that draw proves `S`, and setupHidden's statement at it has link points `mPts`. -/
+challenger's draw `dj S`, that draw proves `S`, and setupHidden's statement at it has link points `mPts`. -/
 def TableAtHOfAccepts : Prop :=
   ∀ {I : Exec.Inputs} {mPts n : ℕ} {S : Finset (Fin n)} {c : Flock.Circuit}, I.tags.typed = false →
     HmOut.parse I.tags I.circuitFile I.tables = .ok c → c.outNet = c.unitNet →

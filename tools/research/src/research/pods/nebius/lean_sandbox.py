@@ -8,7 +8,7 @@ node's credentials and nothing writable outside its build tree, probed from insi
     vy-lean-sandbox clean [--tree DIR] [--sha SHA] [--user NAME]
 
 UNIT: --tree DIR[:DEST] (default /build/verity, bound read-write at DEST, the same path by default: a module built at a fixed
-path is byte-identical), --deps PKG=DIR (DIR read-only at DEST/PKG/.lake/packages, restored outside first and readable by
+path is byte-identical), --deps PKG=DIR (DIR read-only at DEST/PKG/.lake/deps, restored outside first and readable by
 others), --ro SRC[:DEST], --rw SRC[:DEST], -E NAME=VALUE (the only variables the build gets, beside PATH, HOME, ELAN_HOME and
 the few below), --elan DIR (default ~research/.elan, read-only at /opt/elan), --cpus LIST (default /etc/vy/direct-cpus),
 --memory SIZE, --max-sec N, --user NAME (default lean-build; never root, research or a member of research, sudo, docker or
@@ -381,12 +381,12 @@ def prepare(ns: argparse.Namespace, geteuid=os.geteuid, getpwnam=pwd.getpwnam, g
         src, _ = _bind(src)
         if bad := unreadable(src):
             raise Refused(f"--deps {d!r}: the build's user can't read {', '.join(bad)}: restore with `chmod -R a+rX` after")
-        mount = Path(tree) / pkg / ".lake" / "packages"
+        mount = Path(tree) / pkg / ".lake" / "deps"
         if not mount.is_dir():
             if not mount.parent.is_dir():
                 raise Refused(f"--deps {d!r}: {mount.parent} isn't a Lake package's .lake (checkout makes one per package)")
             mount.mkdir(mode=0o755)
-        deps.append((src, str(Path(tree_in) / pkg / ".lake" / "packages")))
+        deps.append((src, str(Path(tree_in) / pkg / ".lake" / "deps")))
     for dst in (ELAN_IN, tree_in, *(d for _, d in (*ro, *rw))):
         if not exists(dst):
             raise Refused(f"no mount point {dst}: systemd would make it on the host's disk (`sudo -n vy-lean-build-setup` "

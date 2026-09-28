@@ -6,9 +6,10 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.RunsReplay
 # `repProg` emits a `--zk` rep's frames
 
 `zk_rep_frames`: a run of `repProg` on retained rounds that consumes every round consumed one round per chunk of
-`repFramesZ`, each round retaining its chunk's bytes. The domain, then `replay_emitted`, M0's `ringSwitch_emitted` on
-the two masked claims and the extras, `zkLigerito_frames` and `verifyInner_emitted` on the ten constraints: the
-replay's three, the ring switch's two, the lane phase's two (`ligeritoConstraints_size`) and the triple's three.
+`repFramesZ`, each round retaining its chunk's bytes. The domain, then `replay_emitted`, the non-ZK session's
+`ringSwitch_emitted` on the two masked claims and the extras, `zkLigerito_frames` and `verifyInner_emitted` on the ten
+constraints: the replay's three, the ring switch's two, the lane phase's two (`ligeritoConstraints_size`) and the
+triple's three.
 -/
 
 namespace FlockSoundness.Discharge.ZkExec

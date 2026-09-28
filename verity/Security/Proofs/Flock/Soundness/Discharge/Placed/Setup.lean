@@ -5,14 +5,15 @@ import Proofs.Flock.Soundness.E2E
 # `ProgPlaces` from `Stmt.setupH`'s accept
 
 `Prog.flock_headline` takes each drawn unit's place in its table's statement (`ProgPlaces`). This file builds it from the
-executable's accept step on the untyped path (`tags.typed = false`, the statement production M0 runs):
+executable's accept step on the untyped path (`tags.typed = false`, the statement production the circuit prover runs):
 
 * `Accepted T`: a run of `Stmt.setupH` that accepted, whose statement (`Layout.model`, the level-0 matrices the verifier
-  folds) is `T`. Its VU rows `Accepted.rows` are the unit net's rows stacked `units_per_vu` times, placed at every VU of
-  every block (`Accepted.placement`, from `placement_of_setupH`).
-* `progPlaces`: `ProgPlaces p outs plan tab` from an acceptance for each drawn unit's table, the unit's VU and block, and
-  W6 as `hrows` (the program's unit rows are the VU rows its table placed). `placed` is proved; `inst` and `aliased` are
-  taken (`aliased` in `ProgPlaces`' form, or from `Layout.Aliased` through `Accepted.aliased_of_layout`).
+  folds) is `T`. Its template instance rows `Accepted.rows` are the unit net's rows stacked `units_per_vu` times, placed
+  at every template instance of every block (`Accepted.placement`, from `placement_of_setupH`).
+* `progPlaces`: `ProgPlaces p outs plan tab` from an acceptance for each drawn unit's table, the unit's template instance and block, and
+  W6 as `hrows` (the program's unit rows are the template instance rows its table placed). `placed` is proved; `inst`
+  and `aliased` are taken (`aliased` in `ProgPlaces`' form, or from `Layout.Aliased` through
+  `Accepted.aliased_of_layout`).
 * `uniform`: the program of `n` units with the same rows, each reading only input gates, and `progPlaces_uniform`, where
   W6 is discharged: every table parsed one circuit file, and the program's rows are that circuit's (`circuitRows`).
 
@@ -26,9 +27,10 @@ namespace FlockSoundness.Discharge.Placed
 
 open Model Audit
 
-/-! ## The circuit's VU rows -/
+/-! ## The circuit's template instance rows -/
 
-/-- **A VU's rows for a circuit**: `units_per_vu` copies of the unit net's rows, one shared constant (`Rows.stack`). -/
+/-- **A template instance's rows for a circuit**: `units_per_vu` copies of the unit net's rows, one shared constant
+(`Rows.stack`). -/
 noncomputable def circuitRows (c : Flock.Circuit) (hU : Built c.unit) : Rows := (Rows.ofNet hU).stack c.upv
 
 /-- The unit net's rows depend only on the circuit. -/
@@ -63,7 +65,7 @@ variable {T : Model.Statement} (a : Accepted T)
 /-- The accepted statement's layout (`setupH_layout`). -/
 theorem layout : Layout a.st := setupH_layout a.ht a.h
 
-/-- **The accepted statement's VU rows**: the unit net's rows, stacked `units_per_vu` times. -/
+/-- **The accepted statement's template instance rows**: the unit net's rows, stacked `units_per_vu` times. -/
 noncomputable def rows : Rows := (unitRows a.st a.layout.unit_built).stack a.st.c.upv
 
 theorem kLog_eq : 2 ^ ((setupH_layout a.ht a.h).model a.regs).kLog = 2 ^ T.kLog :=
@@ -72,8 +74,8 @@ theorem kLog_eq : 2 ^ ((setupH_layout a.ht a.h).model a.regs).kLog = 2 ^ T.kLog 
 theorem nbl_eq : 2 ^ ((setupH_layout a.ht a.h).model a.regs).nbl = 2 ^ T.nbl :=
   congrArg (fun S : Model.Statement => 2 ^ S.nbl) a.hT
 
-/-- **VU `g`'s columns in the block**: `stackPlace` at the unit slots `ur.slot (g·upv + i)`, the shared constant at the
-pin. -/
+/-- **Template instance `g`'s columns in the block**: `stackPlace` at the unit slots `ur.slot (g·upv + i)`, the shared
+constant at the pin. -/
 noncomputable def col {g : ℕ} (hg : g < a.st.c.g) (c : Fin a.rows.w) : Fin (2 ^ T.kLog) :=
   Fin.cast a.kLog_eq
     (stackPlace ((setupH_layout a.ht a.h).model a.regs) (unitRows a.st a.layout.unit_built) a.st.c.upv
@@ -85,12 +87,13 @@ theorem placement_cast {S S' : Model.Statement} (hS : S = S') {R : Rows} {col : 
     Placement S' R (fun c => Fin.cast (congrArg (fun S : Model.Statement => 2 ^ S.kLog) hS) (col c)) := by
   subst hS; exact h
 
-/-- **The accepted statement places its VU rows at every VU** (`placement_of_setupH`), in every block. -/
+/-- **The accepted statement places its template instance rows at every template instance** (`placement_of_setupH`), in
+every block. -/
 theorem placement {g : ℕ} (hg : g < a.st.c.g) : Placement T a.rows (a.col hg) :=
   placement_cast a.hT (placement_of_setupH a.ht a.h a.regs hg)
 
-/-- **The VU rows are the parsed circuit's** (W6 on the untyped path, by definition): they depend on the circuit file
-alone, through `HmRow.parse`. -/
+/-- **The template instance rows are the parsed circuit's** (W6 on the untyped path, by definition): they depend on the
+circuit file alone, through `HmRow.parse`. -/
 theorem rows_eq {c : Flock.Circuit} (hp : HmRow.parse a.tags a.cf a.tables = .ok c) (hU : Built c.unit) :
     a.rows = circuitRows c hU := by
   have hc : a.st.c = c := by
@@ -100,8 +103,8 @@ theorem rows_eq {c : Flock.Circuit} (hp : HmRow.parse a.tags a.cf a.tables = .ok
   unfold rows circuitRows unitRows
   rw [ofNet_eq hc a.layout.unit_built hU, hc]
 
-/-- **`Layout.Aliased` in `ProgPlaces`' form**: the accepted layout's aliasing at VU `g` and block `o`, for an instance of
-rows `R` equal to the VU rows, read at `col`. -/
+/-- **`Layout.Aliased` in `ProgPlaces`' form**: the accepted layout's aliasing at template instance `g` and block `o`, for an instance of
+rows `R` equal to the template instance rows, read at `col`. -/
 theorem aliased_of_layout {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n} {R : Rows}
     (hR : R = a.rows) (inst : P.IsRowsUnit u R) (o : Fin (2 ^ T.nbl)) {g : ℕ} (hg : g < a.st.c.g)
     (hal : a.layout.Aliased a.regs (hR ▸ inst) (Fin.cast a.nbl_eq.symm o) hg) :
@@ -128,7 +131,7 @@ variable {N n : ℕ} {Reg : Type} {mPts : ℕ} (plan : Finset (Fin n) → Reg �
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
 
 /-- **Each drawn unit's site**: the acceptance whose statement is the statement of the table unit `u` is drawn into
-(`acc`), and the unit's VU (`vu`, below the statement's `vus_per_block`) and block (`o`) there. -/
+(`acc`), and the unit's template instance (`vu`, below the statement's `vus_per_block`) and block (`o`) there. -/
 structure Sites where
   acc : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n), u ∈ S → Accepted (Partition.tabOf plan tab S R u).S
   vu : ∀ (S : Finset (Fin n)) (_ : Reg) (u : Fin n), u ∈ S → ℕ
@@ -137,24 +140,27 @@ structure Sites where
 
 variable {plan tab}
 
-/-- **W6 at the sites**: each drawn unit's rows in the program are the VU rows its table's acceptance placed. -/
+/-- **W6 at the sites**: each drawn unit's rows in the program are the template instance rows its table's acceptance
+placed. -/
 def Sites.RowsOf (si : Sites plan tab) (p : Prog N n) : Prop :=
   ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S), p.rows u = (si.acc S R u h).rows
 
 variable {p : Prog N n} (si : Sites plan tab) (hrows : si.RowsOf p)
 
-/-- A drawn unit's columns in its table's block: its VU's (`Accepted.col`). -/
+/-- A drawn unit's columns in its table's block: its template instance's (`Accepted.col`). -/
 noncomputable def Sites.col (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S) :
     Fin (p.rows u).w → Fin (2 ^ (Partition.tabOf plan tab S R u).S.kLog) :=
   fun c => (si.acc S R u h).col (si.hvu S R u h) (Fin.cast (congrArg Rows.w (hrows S R u h)) c)
 
-/-- **W6's placement**: the statement of the table each drawn unit is drawn into places the unit's rows at its VU. -/
+/-- **W6's placement**: the statement of the table each drawn unit is drawn into places the unit's rows at its template
+instance. -/
 theorem Sites.placed (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S) :
     Placement (Partition.tabOf plan tab S R u).S (p.rows u) (si.col hrows S R u h) :=
   placement_rows (hrows S R u h) ((si.acc S R u h).placement (si.hvu S R u h))
 
-/-- **`ProgPlaces` from setupH's accept.** Each drawn unit's place is its VU in its table's accepted statement (`si`);
-`placed` holds given W6 (`hrows`). The unit's instance (`inst`) and its inputs' aliasing there (`hal`) are taken. -/
+/-- **`ProgPlaces` from setupH's accept.** Each drawn unit's place is its template instance in its table's accepted
+statement (`si`); `placed` holds given W6 (`hrows`). The unit's instance (`inst`) and its inputs' aliasing there (`hal`)
+are taken. -/
 noncomputable def progPlaces (outs : Finset (Fin N)) (inst : ∀ u, (p.partition outs).IsRowsUnit u (p.rows u))
     (hal : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S), ∀ c c', (inst u).wire c = (inst u).wire c' → c.val < (p.rows u).nIn →
       c'.val < (p.rows u).nIn → ∀ z : Model.Witness (Partition.tabOf plan tab S R u).S.m,
@@ -168,7 +174,8 @@ noncomputable def progPlaces (outs : Finset (Fin N)) (inst : ∀ u, (p.partition
   placed := si.placed hrows
   aliased := hal
 
-/-- **`ProgPlaces` from setupH's accept, its aliasing from `Layout.Aliased`** at each drawn unit's VU and block. -/
+/-- **`ProgPlaces` from setupH's accept, its aliasing from `Layout.Aliased`** at each drawn unit's template instance and
+block. -/
 noncomputable def progPlaces_of_layout (outs : Finset (Fin N))
     (inst : ∀ u, (p.partition outs).IsRowsUnit u (p.rows u))
     (hal : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S), (si.acc S R u h).layout.Aliased (si.acc S R u h).regs
@@ -216,7 +223,7 @@ variable {n : ℕ} {Reg : Type} {mPts : ℕ} {plan : Finset (Fin n) → Reg → 
   (hone : ∀ u c, ins u c ≠ one) (si : Sites plan tab)
 
 /-- **W6 for the circuit's program, by definition**: when every drawn unit's table accepted a circuit file that parses
-to `c`, the program of `c`'s VU rows (`uniform … (circuitRows c hU)`) has, at every drawn unit, the rows its table placed. -/
+to `c`, the program of `c`'s template instance rows (`uniform … (circuitRows c hU)`) has, at every drawn unit, the rows its table placed. -/
 theorem Sites.rowsOf_uniform
     (hparse : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S),
       HmRow.parse (si.acc S R u h).tags (si.acc S R u h).cf (si.acc S R u h).tables = .ok c) :

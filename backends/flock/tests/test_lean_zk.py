@@ -22,7 +22,7 @@ BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 #: sessions/m26 (one table of 32) and sessions/drawn (a subset draw of 16 of 32), each with its server's index.jsonl (all
 #: accepted); its identity's refused_coins name the zerocheck outer coin r_j = 1 (run r20261004-033801-14b6)
 FIXTURE = "art:5542740a"
-STATEMENT = "verity/flock-circuit+seed-injection"
+STATEMENT = "verity/flock-circuit@f5df3bbc+seed-injection"
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 

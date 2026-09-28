@@ -9,7 +9,8 @@
    gets that copy read-only, with no network. PREP's `.lake` directories are kept across runs (only the checkout moves),
    including bundles unpacked there before the first run.
 4. Per package, `vy-lean-sandbox run` builds it as `lean-build` with `cache.py build`. The build writes only the tree's
-   `.lake` directories and `/build/out/<package>`, the one directory below `/build/out` root doesn't own.
+   `.lake` directories and the package's directory in `/build/out` (`cache.out_dir`), the one below `/build/out` root
+   doesn't own. A build that fails has the end of Lake's output logged.
 5. `vy-lean-sandbox clean` must find the tree still the commit's, with no build left running. Only then does root read the
    key, with `cache.py publish` of what built, then `cache.py prune`.
 
@@ -56,6 +57,8 @@ class Node:
     out: Path = Path("/build/out")
     prep: Path = Path("/workspace/research/lean-cache/prep")
     deps: Path = Path("/workspace/lean-build/deps")
+    #: root replaces entries under DEPS, so every directory from here down to DEPS must be one only root writes
+    trusted: Path = Path("/")
     lock: Path = Path("/run/vy-lean-cache-daily.lock")
     sandbox: list[str] = field(default_factory=lambda: ["/usr/local/bin/vy-lean-sandbox"])
     research: list[str] = field(default_factory=as_research)
@@ -82,6 +85,27 @@ def owned_dirs(top: Path, leaf: Path) -> None:
         st = os.lstat(d)
         if not stat.S_ISDIR(st.st_mode) or st.st_uid != os.geteuid() or st.st_mode & 0o022:
             raise SystemExit(f"run-daily: {d} is not a directory only {pwd.getpwuid(os.geteuid()).pw_name} writes")
+
+
+def log_tail(d: Path, name: str, limit: int = 4096) -> str:
+    """The last ``limit`` bytes of ``d/name``, a file the build's user wrote: read without following a link, and only from
+    a regular file with one link, so the build can't point it at the key; "" otherwise."""
+    try:
+        fd = os.open(d, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            f = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=fd)
+        finally:
+            os.close(fd)
+    except OSError:
+        return ""
+    try:
+        st = os.fstat(f)
+        if not stat.S_ISREG(st.st_mode) or st.st_nlink != 1:
+            return ""
+        os.lseek(f, max(0, st.st_size - limit), os.SEEK_SET)
+        return os.read(f, limit).decode(errors="replace")
+    finally:
+        os.close(f)
 
 
 def deps_key(pkg: Path) -> str:
@@ -119,7 +143,7 @@ def prepare(n: Node, sha: str, pkgs: list[str], log) -> dict[str, Path]:
     if _run([*n.research, "git", "-C", n.prep, "-c", "advice.detachedHead=false", "checkout", "-q", "-f", "--detach", sha],
             log) != 0:
         return {}
-    owned_dirs(n.deps, n.deps / "x")
+    owned_dirs(n.trusted, n.deps / "x")
     deps = {}
     for pkg in pkgs:
         src = n.prep / pkg / ".lake" / "packages"
@@ -172,7 +196,7 @@ def _daily(n: Node, log) -> int:
     user = pwd.getpwnam(n.builder)
     built = []
     for pkg in pkgs:
-        o = n.out / pkg
+        o = CACHE.out_dir(n.out, pkg)
         owned_dirs(n.out, o)
         shutil.rmtree(o, ignore_errors=True)
         o.mkdir(mode=0o755)
@@ -186,7 +210,8 @@ def _daily(n: Node, log) -> int:
         if rc == 0:
             built.append(pkg)
         else:
-            log(f"run-daily: {pkg} didn't build (exit {rc}); it isn't published")
+            log(f"run-daily: {pkg} didn't build (exit {rc}); it isn't published. The end of {o / CACHE.BUILD_LOG}:\n"
+                + log_tail(o, CACHE.BUILD_LOG))
     if _run([*n.sandbox, "clean", "--tree", n.tree, "--sha", sha], log) != 0:
         log("run-daily: the tree isn't clean after the builds; nothing published")
         return 1

@@ -2,7 +2,7 @@ import Proofs.Flock.Soundness.Discharge.ZkLink.TablesAt
 import Proofs.Flock.Soundness.Discharge.Exec.LawDraw
 
 /-!
-# The coin server's draw at every draw of the live law, at `--zk`
+# The challenger's draw at every draw of the live law, at `--zk`
 
 `zk_session_sound` takes `DrawOkZK I dj mPts` at each of `Law.execOS`'s draws: the draw file `dj S` proves `S`'s units,
 and setupH, under the `--zk` tags, sets up at `mPts` link points. The first half is what the record carries, so it is
@@ -11,7 +11,7 @@ custody; the second is flock-verify's own arithmetic. This file splits them.
 * `drawOf law pop S`: the verifier's own draw of `S`, as `UnitDraw.ofJson` decodes it: its law and population, `S`'s
   units ascending, no closure.
 * `DrawFileZK dj law pop`: every draw file `dj S` that `UnitDraw.ofJson` decodes decodes to `drawOf law pop S`. It is a
-  property of the file the coin server records, not of flock-verify (DrawWords' `hdj`, with the law).
+  property of the file the challenger records, not of flock-verify (DrawWords' `hdj`, with the law).
 * `drawOkZK_of_exec`: from `DrawFileZK` at the live law's own stratified law, `DrawOkZK` at every draw of `Law.execOS`,
   at `mPtsOf c.g (∑ s, ks s)`. At a run that succeeds the draw has `∑ s, ks s` units (`execOS_draw_card`); at a run that
   reads past the source's bytes the draw is every unit (`execOS_draw_card_or`), and a draw file of every unit that
@@ -161,7 +161,7 @@ theorem sum_ks_of_univ {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (h
   rw [← card_eq_sum_card_fiberwise (fun _ _ => mem_univ _), card_univ, Fintype.card_fin]
 
 
-/-- **The coin server's draw is `DrawOkZK` at every draw of the live law.** On untyped `--statement` tags whose circuit
+/-- **The challenger's draw is `DrawOkZK` at every draw of the live law.** On untyped `--statement` tags whose circuit
 file parses under the `--zk` tags to `c`, with the executable strata `St` describing `σs`'s, each drawing `ks s` of its
 units: when the record's draw file is the verifier's draw under the live law's own stratified law (`DrawFileZK`),
 `DrawOkZK` holds at `mPtsOf c.g (∑ s, ks s)` link points at every draw of `Law.execOS`, the run that reads past the

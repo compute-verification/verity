@@ -6,10 +6,11 @@ set_option Elab.async false
 /-!
 # Where the circuit computes each output word
 
-`HmOut.delta` copies an output row's message bits from `HmOut.outCol c g o`, the first column of output word `o` at VU
-`g`. In an untyped circuit whose unit returns the outputs, that is the unit copy that returns `o`, at the column of its
-returned-output port: `outCol` reads which copy and which port from `ret`, the last write of each output word over the
-copies' leaf maps. That write is the only one, because `HmRow.check` throws on an output word some copy returns twice:
+`HmOut.delta` copies an output row's message bits from `HmOut.outCol c g o`, the first column of output word `o` at
+template instance `g`. In an untyped circuit whose unit returns the outputs, that is the unit copy that returns `o`, at
+the column of its returned-output port: `outCol` reads which copy and which port from `ret`, the last write of each
+output word over the copies' leaf maps. That write is the only one, because `HmRow.check` throws on an output word some
+copy returns twice:
 
 * `check_returned`: `HmRow.check`'s `seen` loop, so the copies' leaf maps, in order, are distinct (`returned`);
 * `ret_leaf`: `ret` at copy `u'`'s output `j` is `(u', j)`;
@@ -248,8 +249,8 @@ theorem outCol_eq {c : Circuit} (ht : c.typed = none) (ho : c.outNet = c.unitNet
 
 /-- **`HmOut.outCol` at copy `u'`'s output `j`**: in an untyped circuit whose unit returns the outputs, its copies'
 leaf maps returning each output word at most once and below `outWords`, its returned-output group's ports 16-bit and
-one per output of each copy, and `upv` slots of the unit per VU, it is the unit slot `g · upv + u'` at column `16 j` of
-the returned-output group. -/
+one per output of each copy, and `upv` slots of the unit per template instance, it is the unit slot `g · upv + u'` at
+column `16 j` of the returned-output group. -/
 theorem outCol_leaf {c : Circuit} (ht : c.typed = none) (ho : c.outNet = c.unitNet)
     (hnd : (returned c (List.range c.upv)).Nodup)
     (hlt : ∀ u < c.upv, ∀ o ∈ (c.leavesOut.getD u #[]).toList, o < c.outWords)

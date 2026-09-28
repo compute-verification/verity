@@ -6,9 +6,10 @@ import Proofs.Flock.Soundness.Types.Parts
 # A typed template's unit, placed (1e for templates, T3)
 
 A template statement (#277) places its unit `u = done[unit]` by parts: the root net (`Typed.rootOf u`, the unit's own
-rows without their part columns) one slot per VU, each placed layout's net one slot per part, and Δ (`delta_typed`): the
-flat entries, then per VU each input's copy of its message bit, each part's bound inputs, and the root rows' entries at
-part columns (`crossOf`). Unit column `x` of VU `g` is at `Typed.col c tb g x`.
+rows without their part columns) one slot per template instance, each placed layout's net one slot per part, and Δ
+(`delta_typed`): the flat entries, then per template instance each input's copy of its message bit, each part's bound
+inputs, and the root rows' entries at part columns (`crossOf`). Unit column `x` of template instance `g` is at
+`Typed.col c tb g x`.
 
 - **`TemplateLayout st tb words done u`**: the matrix-level facts of the accepted statement that this reads: the ranges, the
   root's and the parts' nets and slots, and Δ. A part's net (`PartNet`) is its callee's derived rows, and a generated
@@ -16,8 +17,8 @@ part columns (`crossOf`). Unit column `x` of VU `g` is at `Typed.col c tb g x`.
 - **`UnitShape done u`**: the facts about the unit's rows this reads: its constant row, its order within its own and its
   parts' columns, no Δ entry at an input, and a part's reads its callee's (`deriveChecked` gives each).
 - **`TemplateLayout.blockFacts`**: with those, and #394's part lemmas from `deriveChecked … = .ok done`, the block rows
-  at `col g c` are the unit's `blockRow` there, for every VU `g`: `BlockFacts` at `Typed.col c tb g`, which is a table
-  class's `placed g` (`BlockFacts.placement`).
+  at `col g c` are the unit's `blockRow` there, for every template instance `g`: `BlockFacts` at `Typed.col c tb g`,
+  which is a table class's `placed g` (`BlockFacts.placement`).
 -/
 
 open Flock FlockLevel3
@@ -520,10 +521,10 @@ theorem PartNet.entryB {words : String → Option (Array ℕ)} {d : D} {net : Ne
 
 /-- **The accepted template statement's layout, as T3 reads it**, for the class's unit `u`: the ranges (disjoint, in the
 block, of their nets' slots, `G · per_vu` slots each, one per net); the root (its net `Typed.rootOf u`'s, one slot per
-VU); each part `i` (its net that of its callee `done[u.parts[i].1]`, not the root's or the rows', at its slot `q_i` of
-that net's, no two parts at one slot); the rows' circuits (not the root); Δ (the flat entries, whose other rows are input
-bits of the rows' circuits, then the typed tail); the pin (a net slot's constant, whose row reads itself); and the
-block's size. -/
+template instance); each part `i` (its net that of its callee `done[u.parts[i].1]`, not the root's or the rows', at its
+slot `q_i` of that net's, no two parts at one slot); the rows' circuits (not the root); Δ (the flat entries, whose other
+rows are input bits of the rows' circuits, then the typed tail); the pin (a net slot's constant, whose row reads
+itself); and the block's size. -/
 structure TemplateLayout (st : Stmt) (tb : TypedBlock) (words : String → Option (Array ℕ)) (done : Array D) (u : D) :
     Prop where
   typed : st.c.typed = some tb
@@ -614,7 +615,7 @@ theorem range (T : TemplateLayout st tb words done 𝒖) {n : ℕ} (hn : n < st.
   obtain ⟨hm, hk, -⟩ := rangeOf_spec (T.one_range n hn)
   exact ⟨hm, hk, T.count _ hm _ hk, T.slotLog _ hm _ hk⟩
 
-/-- The root's slot in VU `g` holds its own columns. -/
+/-- The root's slot in template instance `g` holds its own columns. -/
 theorem at_own (T : TemplateLayout st tb words done 𝒖) {g x : ℕ} (hg : g < st.c.g) (hx : x < 𝒖.size) :
     AtSlot st.c st.c.unitNet g x (Typed.col st.c tb g x) := by
   obtain ⟨-, -, hc, hsl⟩ := T.range T.unitNet
@@ -627,7 +628,7 @@ theorem at_own (T : TemplateLayout st tb words done 𝒖) {g x : ℕ} (hg : g < 
     unfold Circuit.slotCol
     rw [T.root_perVu, Nat.mul_one, Nat.add_zero]
 
-/-- Part `i`'s slot in VU `g` holds its callee's columns, from its base. -/
+/-- Part `i`'s slot in template instance `g` holds its callee's columns, from its base. -/
 theorem at_part (hd : deriveChecked types ls info words unit = .ok done) (T : TemplateLayout st tb words done 𝒖) {g x i : ℕ}
     (hg : g < st.c.g) (hi : i < tb.parts.size) (hu : i < 𝒖.parts.size) (hlo : 𝒖.parts[i].2 ≤ x)
     (hhi : x < 𝒖.parts[i].2 + (done.getD 𝒖.parts[i].1 default).size) :
@@ -670,7 +671,7 @@ theorem col_lt (hd : deriveChecked types ls info words unit = .ok done) (T : Tem
   · exact h.lt T.bound (T.range T.unitNet).1
   · exact h.lt T.bound (T.range (T.part i hi hu).2.1).1
 
-/-- **Unit columns are at distinct positions**, across VUs. -/
+/-- **Unit columns are at distinct positions**, across template instances. -/
 theorem col_inj (hd : deriveChecked types ls info words unit = .ok done) (T : TemplateLayout st tb words done 𝒖)
     {g g' x x' : ℕ} (hg : g < st.c.g) (hg' : g' < st.c.g) (hx : InUnit done 𝒖 x) (hx' : InUnit done 𝒖 x')
     (h : Typed.col st.c tb g x = Typed.col st.c tb g' x') : g = g' ∧ x = x' := by
@@ -776,7 +777,8 @@ theorem cross_row (hd : deriveChecked types ls info words unit = .ok done) (T : 
     omega
   · simp at h
 
-/-- **Every row the typed tail writes** is the position of a unit column that is no constant's, in its VU. -/
+/-- **Every row the typed tail writes** is the position of a unit column that is no constant's, in its template
+instance. -/
 theorem tailVU_rows (hd : deriveChecked types ls info words unit = .ok done) (hul : unit < ls.size)
     (T : TemplateLayout st tb words done 𝒖) (U : UnitShape done 𝒖) {side : Bool} {g' : ℕ} {p : ℕ × ℕ}
     (hp : p ∈ Typed.tailVU st.c tb side g') :
@@ -1009,7 +1011,7 @@ theorem bind_sum (y j : ℕ) (l : List ℕ) :
   rw [show (2 : ZMod 2) = 0 from rfl, zero_mul, add_zero]
 
 
-/-! ## The block rows at each VU's unit -/
+/-! ## The block rows at each template instance's unit -/
 
 namespace TemplateLayout
 
@@ -1340,8 +1342,8 @@ theorem rows_at (hd : deriveChecked types ls info words unit = .ok done) (hul : 
         simp only [crossCols, hco, ↓reduceIte, Bool.false_eq_true, List.count_nil, Nat.add_zero]
   · exact T.rows_part hd hul U hg hin' hcU hp hfree hi hu hge hlo hhi hat j
 
-/-- **1e's facts at VU `g` of a template statement** (T3): the block rows at `Typed.col c tb g c` are the unit's block
-row there, for every column of its order past its inputs, and the pin's row reads the pin. -/
+/-- **1e's facts at template instance `g` of a template statement** (T3): the block rows at `Typed.col c tb g c` are the
+unit's block row there, for every column of its order past its inputs, and the pin's row reads the pin. -/
 theorem blockFacts (hd : deriveChecked types ls info words unit = .ok done) (hul : unit < ls.size)
     (T : TemplateLayout st tb words done 𝒖) (U : UnitShape done 𝒖) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
     {g : ℕ} (hg : g < st.c.g) {one : ℕ} (hone : 𝒖.rows.size ≤ one) :
@@ -1361,8 +1363,8 @@ theorem blockFacts (hd : deriveChecked types ls info words unit = .ok done) (hul
   · show rangesEntry st (slotEntryB st) st.pin j.val + deltaEntry st.db st.pin j.val = _
     rw [(T.placed_pin hd hul U j.val).2, if_congr (hpinv j) rfl rfl]
 
-/-- **A template statement's placement at VU `g`**: the unit's composed rows, exactly as #256 and #287 state them,
-placed at `Typed.col c tb g` in the model of the accepted statement. This is a table class's `placed g`. -/
+/-- **A template statement's placement at template instance `g`**: the unit's composed rows, exactly as #256 and #287
+state them, placed at `Typed.col c tb g` in the model of the accepted statement. This is a table class's `placed g`. -/
 theorem placement (hd : deriveChecked types ls info words unit = .ok done) (hul : unit < ls.size)
     (T : TemplateLayout st tb words done 𝒖) (U : UnitShape done 𝒖) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
     {g : ℕ} (hg : g < st.c.g) :

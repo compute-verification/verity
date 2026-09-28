@@ -25,14 +25,14 @@ unit wrong in the committed transcript `Xc` is charged to its table: either the 
 (`link`, `LinkEvZK`). At this layer the oracle is the prover's message, so extraction is the oracle itself and `ε_ks` is
 discharged by `sessionZK_sound` with no assumption (`zk_knowledgeSound`): it is the largest table bound of the plan,
 averaged over the draw (`ksAvgZK`). The lowering comes from each drawn unit's place in its table
-(`loweringSoundZK_of_place`, `UnitPlace`), as at M0.
+(`loweringSoundZK_of_place`, `UnitPlace`), as without `--zk`.
 
 **The count curve** (`zk_flock_count`, and `zk_flock_count_execOS` at the live draw under A3): in the shape of
 `Prog.flock_headline`,
 `Pr[accept ∧ at least K wrong units] ≤ miss(K) + ε_ks^zk + δ_link`, with
 * `miss(K)`: `Law.stratified`'s count curve at the live draw, under A3 (`uniform/io-getrandombytes`);
 * `ε_ks^zk = ksAvgZK`: per table `padLinkError + (padRepError + εInner)²`, proved here;
-* `δ_link`: the named `LinkSound` hypothesis, as `Audit.flock_batched_count` leaves it at M0.
+* `δ_link`: the named `LinkSound` hypothesis, as `Audit.flock_batched_count` leaves it without `--zk`.
 
 **Open guarantees** (what this statement does not cover, each a separate piece of work):
 * *The compiled `--zk` layer.* Here every oracle is a message. Under `--zk` the level-0 table, the pads (`Ch, Cμ`), the
@@ -42,16 +42,16 @@ averaged over the draw (`ksAvgZK`). The lowering comes from each drawn unit's pl
   (`Discharge/Exec/SessionL.lean`) fixes the table's openings to `Opens × Salts`; a version generic over the per-table
   game would carry `TabZK.after`'s compiled form.
 * *The `--zk` executable refinement*: that the executable verifier's `--zk` path runs this protocol (for [e2e-exec],
-  as `verify_refines_hm96` does at M0), and with it the headline's `execAccept`.
+  as `verify_refines_hm96` does without `--zk`), and with it the headline's `execAccept`.
 * *`final_c'`'s place.* The protocol as Lean defines it receives `final_c'` before the inner proof (`restZK`); the live
   verifier never absorbs it, and a prover that picks it after the inner proof's batching coins can cancel the batched
   constraint. This statement describes the live verifier once it absorbs `final_c'` before the inner proof's label.
-* *The coin step in the session.* Coins here are fresh after each prover message (A6's per-round form). M2 draws them
-  from a coin tree committed before the prover's first message; `coin_fresh` / `coinLeaf_fresh` (Coins.lean) bound each
-  round's coins within `δ_hide` of fresh from `Assumptions.Hm96Hiding`, but composing that into this session needs a
-  round-by-round form of the session bound or a committed-coin semantics of `Game`.
-* *M0's structural guarantees*, unchanged: the drawn units' places (`UnitPlace`: W6, `Layout.Aliased`), the
-  constant and zero columns, and the rows' commit (`HmRowComputes`), as the headline takes them.
+* *The coin step in the session.* Coins here are fresh after each prover message (A6's per-round form). C-Flock ZK draws
+  them from a coin tree committed before the prover's first message; `coin_fresh` / `coinLeaf_fresh` (Coins.lean) bound
+  each round's coins within `δ_hide` of fresh from `Assumptions.Hm96Hiding`, but composing that into this session needs
+  a round-by-round form of the session bound or a committed-coin semantics of `Game`.
+* *The non-ZK session's structural guarantees*, unchanged: the drawn units' places (`UnitPlace`: W6, `Layout.Aliased`),
+  the constant and zero columns, and the rows' commit (`HmRowComputes`), as the headline takes them.
 -/
 
 namespace FlockSoundness.Discharge.ZkSession
@@ -241,7 +241,7 @@ noncomputable def decodeOfPlace (place : ∀ S R u, u ∈ S → UnitPlace P (tab
   else fun _ => false
 
 omit [Fintype K] [DecidableEq K] in
-/-- **The lowering from the drawn units' places** (`Lowering.lean`), as `loweringSoundB_of_place` at M0. -/
+/-- **The lowering from the drawn units' places** (`Lowering.lean`), as `loweringSoundB_of_place` without `--zk`. -/
 theorem loweringSoundZK_of_place (place : ∀ S R u, u ∈ S → UnitPlace P (tabOfZ planZ tab S R u).S u) :
     LoweringSoundZK A P planZ tab (decodeOfPlace A P planZ tab place) := by
   intro S R u hu M hM

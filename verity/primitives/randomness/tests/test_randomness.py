@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import hashlib
+import importlib.util
 import json
 from collections import Counter
 from fractions import Fraction
@@ -49,18 +50,27 @@ def test_the_vectors_follow_the_documented_construction():
     fr = lambda tag, body: tag + len(body).to_bytes(8, "big") + body  # noqa: E731
     enc = lambda x: fr(b"b", x) if isinstance(x, bytes) else fr(b"s", x.encode()) if isinstance(x, str) else fr(b"i", x.to_bytes(max(1, (x.bit_length() + 7) // 8), "big"))  # noqa: E731
     body = b"".join(enc(k) + enc(ctx[k]) for k in sorted(ctx))
-    key = hashlib.sha256(b"verity/randomness/derive/v1\0" + enc(bytes.fromhex(case["source"])) + enc(case["domain"]) + enc(body)).digest()
+    key = hashlib.sha512(b"verity/randomness/derive/v2\0" + enc(bytes.fromhex(case["source"])) + enc(case["domain"]) + enc(body)).digest()[:32]
     assert key.hex() == case["key"]
     index = enc(enc("s") + enc(3))
-    stream = b"".join(hashlib.sha256(b"verity/randomness/stream/v1\0" + key + index + c.to_bytes(8, "big")).digest() for c in range(3))
+    stream = b"".join(hashlib.sha512(b"verity/randomness/stream/v2\0" + key + index + c.to_bytes(8, "big")).digest() for c in range(2))
     assert stream[:80].hex() == case["stream"]["bytes"]
+    shard = hashlib.sha512(b"verity/randomness/shard/v2\0" + key + enc(enc(5))).digest()[:32]
+    assert shard.hex() == case["shard"]["key"]
     n, i, want = case["uniform"][2]
     width = (n.bit_length() + 64 + 7) // 8
-    u_stream = b"".join(hashlib.sha256(b"verity/randomness/stream/v1\0" + key + enc(enc("u") + enc(i)) + c.to_bytes(8, "big")).digest()
-                        for c in range(4))
+    u_stream = b"".join(hashlib.sha512(b"verity/randomness/stream/v2\0" + key + enc(enc("u") + enc(i)) + c.to_bytes(8, "big")).digest()
+                        for c in range(2))
     words = [int.from_bytes(u_stream[j:j + width], "big") for j in range(0, len(u_stream) - width + 1, width)]
     limit = 2 ** (8 * width) - 2 ** (8 * width) % n
     assert next(w % n for w in words if w < limit) == want
+
+
+def test_the_vectors_are_the_generators():
+    spec = importlib.util.spec_from_file_location("randomness_vectors", Path(__file__).with_name("vectors.py"))
+    gen = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(gen)
+    assert gen.build() == VECTORS
 
 
 def test_derive_separates_source_domain_and_context():

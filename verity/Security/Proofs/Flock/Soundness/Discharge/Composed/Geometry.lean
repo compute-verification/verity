@@ -4,7 +4,7 @@ import Proofs.Flock.Soundness.Discharge.Composed.Coined
 # The level-0 padding geometry of `CoinedOK`
 
 `geometry_of_padOK`: at `cols` level 0's message columns (`logCols`) and `t_pad` its padding, the padded level 0's
-conditions (`Accounting.PadOK`) and rate `1/2` (`logLen = logCols + 1`) give M1's geometry: `cols ≤ 40`,
+conditions (`Accounting.PadOK`) and rate `1/2` (`logLen = logCols + 1`) give C-Flock ZK's geometry: `cols ≤ 40`,
 `t_pad ≤ 2^cols`, and opened positions inside the codeword are inside `2^(cols+1)`.
 -/
 

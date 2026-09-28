@@ -25,7 +25,7 @@ variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K
 /-- **The compiled `--zk` count curve on the circuit's units, every term on the accepted assumptions.** If
 `execAccept` holds, the probability that at least `K` units of the circuit's program (`keyProg c hU n`) are wrong at
 the committed values (the plurality value layer of the rows' binding) is at most
-`miss(K) + ε_ks + δ_link + δ_tree`, as in `zk_flock_countC_execOS_cr`. Each drawn unit is read at its VU and block in its
+`miss(K) + ε_ks + δ_link + δ_tree`, as in `zk_flock_countC_execOS_cr`. Each drawn unit is read at its template instance and block in its
 `--zk` table's accepted statement (`si`, every such table's circuit file parsing to `c`), and the committed values are
 the rows the drawn tables' witnesses hold under the registered leaves (`lay`, `rs`), bound by `HmRowComputes`
 (`hHm`). -/

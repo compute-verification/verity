@@ -1,5 +1,5 @@
-"""Compose M0's circuit for a template, the verifier's own copy: the lowering comes from an input set of the template, and
-the statement binds the given partition and program digests. Run in M0's tree (its `verity_flock`).
+"""Compose the circuit prover's circuit for a template, the verifier's own copy: the lowering comes from an input set of the template, and
+the statement binds the given partition and program digests. Run in the circuit prover's tree (its `verity_flock`).
 
     python compose_circuit.py --input-set DIR --out FILE [--partition H --program H]
 """

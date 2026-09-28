@@ -5,11 +5,11 @@ import Proofs.Flock.Soundness.Discharge.Const.ConstCols
 /-!
 # `hConst` at the production program's places
 
-The production (untyped) statement's program is `Placed.keyProg c hU n`: `n` units of the circuit's VU rows, each
-input on the gate of its Δ source key, each constant on the one gate `Placed.oneGate` (`Zero.oneGate_uniform`).
-`Placed.Sites.progPlaces_keyProg` places it from the sites and the parse alone, with the program's own instance
-(`Placed.Sites.progPlaces_keyProg_inst`). So only a unit's constant column sits on the one gate: `constCols_keyProg`,
-the twin of `Zero.zeroCols_keyProg`, at the same places and from the same arguments.
+The production (untyped) statement's program is `Placed.keyProg c hU n`: `n` units of the circuit's template instance
+rows, each input on the gate of its Δ source key, each constant on the one gate `Placed.oneGate`
+(`Zero.oneGate_uniform`). `Placed.Sites.progPlaces_keyProg` places it from the sites and the parse alone, with the
+program's own instance (`Placed.Sites.progPlaces_keyProg_inst`). So only a unit's constant column sits on the one gate:
+`constCols_keyProg`, the twin of `Zero.zeroCols_keyProg`, at the same places and from the same arguments.
 -/
 
 namespace FlockSoundness.Discharge.Const

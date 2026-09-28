@@ -7,9 +7,10 @@ import Proofs.Flock.Soundness.Discharge.DecodeZL.Runs
 # `RunsZC`'s decoder half: the `--zk` rep's frames and the messages they carry (statements)
 
 `RunsZC` (`Coin.lean`) asks each rep for a `RepRun` along `repShapeZ`: a run on its rounds' coins whose messages, cut
-at the spine's coins, are the decoder's groups of the rounds. At M0 the decoder reads each round's frames by its wires
-(`DecodeZL.decOf`), and `DecodeZL.repRun_at` glues the phases' chunk lemmas (`zl_carries`, `op_carries`,
-`lig_carries`). Under `--zk` the rep's frames (`repFramesZ`) differ from M0's in four places, and the rest is M0's:
+at the spine's coins, are the decoder's groups of the rounds. Without `--zk` the decoder reads each round's frames by
+its wires (`DecodeZL.decOf`), and `DecodeZL.repRun_at` glues the phases' chunk lemmas (`zl_carries`, `op_carries`,
+`lig_carries`). Under `--zk` the rep's frames (`repFramesZ`) differ from the non-ZK session's in four places, and the
+rest is the non-ZK session's:
 
 * round 0 also absorbs the pads' label and root before the zerocheck's first coin (`zcHeadZ`), so it carries the root;
 * Ligerito absorbs `LABEL_OPEN` after the cap, and its last lane round's coin is followed by level 0's hiding frames
@@ -19,11 +20,12 @@ at the spine's coins, are the decoder's groups of the rounds. At M0 the decoder 
   queries.
 
 The decoder `decZ` reads round 0's root at its fixed place before the closing squeeze (`rootOf`), and every later round
-by its wires (`wRestZ`: M0's after round 0, the opening's, `wLIGZ` and `wInner`).
+by its wires (`wRestZ`: the non-ZK session's after round 0, the opening's, `wLIGZ` and `wInner`).
 
 * `ZkScheduleSeams`: the `--zk` schedule's dimensions are the ones the frames and wires read.
 * `ZkRepFrames`: `repProg` (the transcript program `Zk.verifyRep` runs) emits `repFramesZ`, one chunk per round.
-* `ZkDecodeSizes`: a decoded `--zk` proof has M0's lengths (`DecodeZL.ProofSizes`), and `Y` fewer than `2^64` words.
+* `ZkDecodeSizes`: a decoded `--zk` proof has the non-ZK session's lengths (`DecodeZL.ProofSizes`), and `Y` fewer than
+  `2^64` words.
 * `ZkCarries`: the frames after round 0, read by `wRestZ`, are the messages after the root, cut at the spine's coins.
 * `ZkCut`: on rounds that retained `repFramesZ`'s chunks, the rep's messages, cut along `shapeZE` (`repShapeZ` at the
   executable's dimensions), are `decZ`'s groups of the rounds, with no tail: `RepRun`'s cut.
@@ -44,7 +46,7 @@ def zcHeadZ (digest cap root : ByteArray) : List Frame :=
   [.label "flock-r1cs-v0".toUTF8, .bytes digest, .bytes cap, .label "flock-zerocheck-v0".toUTF8,
     .label Zk.LABEL_PADS.toUTF8, .bytes root, .sq 2 6]
 
-/-- The rest of the masked zerocheck: M0's frames after its first round (`zcFrames`). -/
+/-- The rest of the masked zerocheck: the non-ZK session's frames after its first round (`zcFrames`). -/
 def zcTailZ (m : ℕ) (p : ZerocheckProof) : List Frame :=
   [.sq 2 (m - 13), .vec p.round1ab.toList, .vec p.round1c.toList, .sq 1 1] ++
   (List.range' 0 (m - 6)).flatMap (fun i => [.one (p.rounds[i]!).1, .one (p.rounds[i]!).2, .sq 1 1]) ++
@@ -56,8 +58,8 @@ def l0Fr (z : Zk.Level0Msgs) : List Frame :=
   [.vec [z.e0.c0, z.e0.c1], .vec [z.e1.c0, z.e1.c1], .sq 2 2, .sq 2 2, .label Zk.LABEL_CLOSE.toUTF8,
     .vec [z.tPrime.c0, z.tPrime.c1], .vec (z.ybar.foldl (fun acc v => (acc.push v.c0).push v.c1) #[]).toList]
 
-/-- **A `--zk` Ligerito run's frames** (live PROTOCOL.md §7): M0's (`ligFrames`) with `LABEL_OPEN` after the cap and
-level 0's hiding frames between the last lane round's coin and its message. -/
+/-- **A `--zk` Ligerito run's frames** (live PROTOCOL.md §7): the non-ZK session's (`ligFrames`) with `LABEL_OPEN` after
+the cap and level 0's hiding frames between the last lane round's coin and its message. -/
 def ligFramesZ (sch : Flock.Schedule) (T : F128) (cap : Array ByteArray) (p : LigeritoProof) (z : Zk.Level0Msgs) :
     List Frame :=
   [.label "flock-ligerito-basis-f256-split-v0".toUTF8, .one T, capFr cap, .label Zk.LABEL_OPEN.toUTF8] ++
@@ -96,8 +98,8 @@ def tMsg (z : Zk.Level0Msgs) : Msg := ⟨𝕂, gOf z.tPrime⟩
 /-- The padding's combination `ybar`, `t` elements of `K`, as the model's message. -/
 def ybarMsg (t : ℕ) (z : Zk.Level0Msgs) : Msg := ⟨Fin t → 𝕂, fun i => gOf z.ybar[i.val]!⟩
 
-/-- **The messages of a `--zk` Ligerito run**: M0's (`ligMsgs`) with the pair's sums, `T'` and `ybar` between the
-last lane round's coins and its message. -/
+/-- **The messages of a `--zk` Ligerito run**: the non-ZK session's (`ligMsgs`) with the pair's sums, `T'` and `ybar`
+between the last lane round's coins and its message. -/
 def ligMsgsZ {D : Type} (p : LigeritoProof) (capD : Array ByteArray → Cap D) (sch : Flock.Schedule) (t : ℕ)
     (z : Zk.Level0Msgs) : List Msg :=
   fMsg p.oodValues[0]! :: kMsg p.messages[0]! :: kMsgs p 1 (sch.k0 - 1) ++ evMsg z :: tMsg z :: ybarMsg t z ::
@@ -137,9 +139,9 @@ def wY (t : ℕ) : DecodeZL.Wire := .vals (Fin t → 𝕂) (2 * t) fun vs i => g
 /-- A 64-byte digest, from one byte string. -/
 def wDig : DecodeZL.Wire := .bytes Dig toDig
 
-/-- **The `--zk` Ligerito wires**: M0's (`wLIG`) with the last lane round's coin followed by the pair's sums' round,
-the second `ρ` coin's empty round, and a round that carries `T'` and `ybar` before the round's message and the level-1
-cap. -/
+/-- **The `--zk` Ligerito wires**: the non-ZK session's (`wLIG`) with the last lane round's coin followed by the pair's
+sums' round, the second `ρ` coin's empty round, and a round that carries `T'` and `ybar` before the round's message and
+the level-1 cap. -/
 noncomputable def wLIGZ (s : Accounting.Schedule) (t : ℕ) : List (List DecodeZL.Wire) :=
   [[]] ++ ([[.f]] ++ (List.replicate s.k0 [.kk] ++ ([[wEv], [], [wK, wY t, .kk, .cap]] ++
     (wMid ++ wLev s.ext (s.levels.length - 1)))))
@@ -147,8 +149,9 @@ noncomputable def wLIGZ (s : Accounting.Schedule) (t : ℕ) : List (List DecodeZ
 /-- The inner proof's wires: `final_c'`'s round, `[ρ, σ]`'s, `τ`'s commitment's and `Y`'s (`nY` words). -/
 def wInner (nY : ℕ) : List (List DecodeZL.Wire) := [[.f], [.ff], [wDig], [.v nY]]
 
-/-- **The wires of a `--zk` rep's rounds after round 0**: M0's zerocheck's and lincheck's after round 0, the opening's
-of `n` claims, Ligerito's with level 0's hiding (`ybar` of `t` elements), and the inner proof's on `np` pads. -/
+/-- **The wires of a `--zk` rep's rounds after round 0**: the non-ZK session's zerocheck's and lincheck's after round 0,
+the opening's of `n` claims, Ligerito's with level 0's hiding (`ybar` of `t` elements), and the inner proof's on `np`
+pads. -/
 noncomputable def wRestZ (m kLog n : ℕ) (s : Accounting.Schedule) (t np : ℕ) : List (List DecodeZL.Wire) :=
   (wZL m kLog).tail ++ (wOP n ++ (wLIGZ s t ++ wInner (np + Zk.K_PAD)))
 
@@ -193,8 +196,8 @@ def ZkRepFrames : Prop :=
     ∃ T : F128, (chunks (repFramesZ st sch dom (2 + extras.size) zp T)).1.length = rounds.size ∧
       ∀ k < rounds.size, Retains rounds[k]! (encs ((chunks (repFramesZ st sch dom (2 + extras.size) zp T)).1.getD k []))
 
-/-- **A decoded `--zk` proof's lengths**: the pair's are M0's (`ProofSizes`, PROTOCOL.md §8, read by `Zk.reader` as by
-`decodeProof`), and the inner proof's `Y` has fewer than `2^64` words (its `u64` length). -/
+/-- **A decoded `--zk` proof's lengths**: the pair's are the non-ZK session's (`ProofSizes`, PROTOCOL.md §8, read by
+`Zk.reader` as by `decodeProof`), and the inner proof's `Y` has fewer than `2^64` words (its `u64` length). -/
 def ZkDecodeSizes : Prop :=
   ∀ (sh : Shape) (bytes : ByteArray) (zp : Zk.ZkProof), Zk.decode sh bytes = .ok zp →
     ProofSizes sh zp.proof ∧ zp.inner.y.size < 2 ^ 64

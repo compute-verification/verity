@@ -56,8 +56,8 @@ theorem built_out {n : Net} (hU : Built n) :
   exact this.1
 
 /-- **What `HmRow.check` checks of the returned outputs**, in an untyped circuit whose unit returns them: the unit's
-first output group's ports are 16 bits; there is one leaf map per unit of a VU, each with one output per port, each
-below `nOut`. -/
+first output group's ports are 16 bits; there is one leaf map per unit of a template instance, each with one output per
+port, each below `nOut`. -/
 theorem check_out {c : Circuit} {tags : Tags} {ls : Lean.Json} (ht : c.typed = none) (ho : c.outNet = c.unitNet)
     (h : HmRow.check c tags ls = .ok ()) :
     (∀ b ∈ (c.unit.outGroups.getD 0 default).bits.toList, b = 16) ∧ c.leavesOut.size = c.upv ∧

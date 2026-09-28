@@ -264,8 +264,8 @@ theorem laidRows_flat {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} 
     exact congrArg₂ (· && ·) (hmv l.ra (L.model regs).A₀ (hcols _ _ ha) fun j => (hE j.val).1).symm
       (hmv l.rb (L.model regs).B₀ (hcols _ _ hb) fun j => (hE j.val).2).symm
 
-/-- **VU `g`'s `sha512x3` slot `i` holds the verifier's `sha512x3` rows**, past its 8192 input rows, in every block of a
-satisfying witness of the untyped statement. -/
+/-- **Template instance `g`'s `sha512x3` slot `i` holds the verifier's `sha512x3` rows**, past its 8192 input rows, in
+every block of a satisfying witness of the untyped statement. -/
 theorem shaSlot_flat {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
     (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) {g i : ℕ} (hg : g < st.c.g)
     (hi : i < st.c.perVu.getD st.c.shaNet 0) :
@@ -275,7 +275,7 @@ theorem shaSlot_flat {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {
   rw [shaNet_inRows R.rowNets] at h
   exact h
 
-/-- **VU `g`'s `hm96` slot `i` holds the verifier's `hm96` rows**, past its 4096 input rows. -/
+/-- **Template instance `g`'s `hm96` slot `i` holds the verifier's `hm96` rows**, past its 4096 input rows. -/
 theorem hmSlot_flat {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
     (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) {g i : ℕ} (hg : g < st.c.g)
     (hi : i < st.c.perVu.getD st.c.hmNet 0) :

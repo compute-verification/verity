@@ -9,8 +9,8 @@ level-0 matrices `placedA st`, `placedB st`), with the copy positions of its fla
 the twin's layout `Lf` and unit facts `F`, which read only the circuit). Each unit slot's row reads the same in the
 hidden statement as in its twin (`UnitRowsFlat`), so:
 - `zeroPos_blockH`: each unit slot's forced-zero row carries 0 (`Layout.placed_zero`, at the hidden layout);
-- `copyAt_blockH`, `copyPos_blockH`: each of VU `g`'s stacked unit inputs carries what its copy position carries
-  (`Layout.placed_port`, at the twin, whose Δ is `HmRow.delta`'s);
+- `copyAt_blockH`, `copyPos_blockH`: each of template instance `g`'s stacked unit inputs carries what its copy position
+  carries (`Layout.placed_port`, at the twin, whose Δ is `HmRow.delta`'s);
 - `aliased_of_copiesH`: an instance that wires the inputs as Δ copies them (`Aliased.Copies` at the twin) is aliased in
   the hidden statement (`Layout.Aliased`);
 - `stack_zero_blockH`: a stacked input that reads the zero carries 0.
@@ -100,8 +100,8 @@ theorem copyAt_blockH {s₀ off : ℕ} (hs₀ : s₀ < st.c.unitRange.count) (ho
     exact congrArg _ (Fin.ext hr)
 
 include hR in
-/-- **Each of VU `g`'s stacked unit inputs carries what its copy position carries** in the hidden statement, at its
-place (`stackPlace`, which `Layout.Aliased` reads), in every block of a satisfying witness. -/
+/-- **Each of template instance `g`'s stacked unit inputs carries what its copy position carries** in the hidden
+statement, at its place (`stackPlace`, which `Layout.Aliased` reads), in every block of a satisfying witness. -/
 theorem copyPos_blockH {g : ℕ} (hg : g < st.c.g) (x : Fin ((unitRows st L.unit_built).stackW st.c.upv))
     (hx : x.val < ((unitRows st L.unit_built).stack st.c.upv).nIn) {z : Model.Witness (L.model regs).m}
     (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) :
@@ -122,8 +122,9 @@ theorem copyPos_blockH {g : ℕ} (hg : g < st.c.g) (x : Fin ((unitRows st L.unit
   rw [hn]
 
 include hR in
-/-- **The unit's inputs on one gate carry one value in the hidden statement** (`Layout.Aliased`), at VU `g`'s stacked
-unit slots in every block, for an instance that wires them as Δ copies them in the flat twin (`Aliased.Copies`). -/
+/-- **The unit's inputs on one gate carry one value in the hidden statement** (`Layout.Aliased`), at template instance
+`g`'s stacked unit slots in every block, for an instance that wires them as Δ copies them in the flat twin
+(`Aliased.Copies`). -/
 theorem aliased_of_copiesH {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n}
     (inst : P.IsRowsUnit u ((unitRows st L.unit_built).stack st.c.upv)) {g : ℕ} (hg : g < st.c.g)
     (hcp : Aliased.Copies Lf regs F inst hg) (o : Fin (2 ^ (L.model regs).nbl)) : L.Aliased regs inst o hg := by
@@ -134,7 +135,7 @@ theorem aliased_of_copiesH {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C 
   · rw [he, he', zeroPos_blockH L Lf regs F hs hz o, zeroPos_blockH L Lf regs F hs' hz o]
 
 include Lf F hR in
-/-- **A stacked input that reads the zero carries 0** in the hidden statement: at VU `g`'s place (`stackPlace`), in every
+/-- **A stacked input that reads the zero carries 0** in the hidden statement: at template instance `g`'s place (`stackPlace`), in every
 block of a satisfying witness. -/
 theorem stack_zero_blockH {g : ℕ} (hg : g < st.c.g) (x : Fin ((unitRows st L.unit_built).stackW st.c.upv))
     (hx : x.val < ((unitRows st L.unit_built).stack st.c.upv).nIn) (hz : ZeroIn st.c x.val)

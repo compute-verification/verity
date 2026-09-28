@@ -21,7 +21,7 @@ LEAN = Path(__file__).resolve().parents[1] / "verifier" / "lean"
 VERIFIER = LEAN.parent
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "public-inputs"
-STATEMENT = "verity/flock-circuit+seed-injection"
+STATEMENT = "verity/flock-circuit@f5df3bbc+seed-injection"
 #: PoUW's (H, s, U) stand-in: C-Flock reads none of it
 IDENTIFIER = {"scheme": "test/identifier/v0", "H": "ab" * 32, "s": 7, "U": [3, 1, 2], "nested": {"b": None, "a": True}}
 

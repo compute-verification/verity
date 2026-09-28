@@ -51,8 +51,8 @@ theorem insAt_uniform {k : ℕ} {R : Rows} {ins : ℕ → Fin R.nIn → Fin k} {
       rw [Const.Prog.insAt_castSucc]
       simp [insAt_uniform n v i hi]
 
-/-- **The circuit's program on Δ's source keys**: `n` units of the circuit's VU rows, input `x` of each on the gate of
-its key (`Aliased.keyIdx`), the zero's gate when it reads the zero. -/
+/-- **The circuit's program on Δ's source keys**: `n` units of the circuit's template instance rows, input `x` of each
+on the gate of its key (`Aliased.keyIdx`), the zero's gate when it reads the zero. -/
 noncomputable abbrev keyProg (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ) :
     Prog (gates (inGates n (circuitRows c hU).nIn) (circuitRows c hU) n) n :=
   circuitProg c hU n (circuitRows c hU).nIn (Aliased.keyIdx c (circuitRows c hU).nIn)
@@ -120,8 +120,8 @@ theorem Sites.aliased_keyProg (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u 
   exact (congrArg (fun d => Aliased.srcKey d x.val = Aliased.srcKey d x'.val) hc).mpr hk
 
 /-- **`ProgPlaces` for the circuit's program on Δ's source keys**, from the sites and the parse alone: each drawn unit
-placed at its VU in its table's accepted statement (`placed`, W6 from the parse), its instance the program's own
-(`Const.Prog.instC`), aliased as Δ copies (`Sites.aliased_keyProg`). -/
+placed at its template instance in its table's accepted statement (`placed`, W6 from the parse), its instance the
+program's own (`Const.Prog.instC`), aliased as Δ copies (`Sites.aliased_keyProg`). -/
 noncomputable def Sites.progPlaces_keyProg : ProgPlaces (keyProg c hU n) outs plan tab :=
   progPlaces_of_layout si (Sites.rowsOf_keyProg hU hparse) outs (Const.Prog.instC _ outs)
     (Sites.aliased_keyProg hU hparse outs)

@@ -474,10 +474,10 @@ theorem setupH_layout (ht : tags.typed = false) (h : Stmt.setupH tags cf pf coin
   let ⟨hp, hpin, hda, hdb, hm, hk⟩ := setupH_spec ht h
   layout_of (parse_facts hp) hpin hda hdb hm hk
 
-/-- **The lowering's placement, from the executable's accept step.** When `Stmt.setupH` accepts a statement, every VU
-`g` has its `units_per_vu` unit slots' rows (the unit net's rows stacked, `Rows.stack`) placed at `ur.slot (g·upv + u)`,
-the shared constant at the pin, in the model statement of the level-0 matrices the verifier folds (`placedA`,
-`placedB`). -/
+/-- **The lowering's placement, from the executable's accept step.** When `Stmt.setupH` accepts a statement, every
+template instance `g` has its `units_per_vu` unit slots' rows (the unit net's rows stacked, `Rows.stack`) placed at
+`ur.slot (g·upv + u)`, the shared constant at the pin, in the model statement of the level-0 matrices the verifier folds
+(`placedA`, `placedB`). -/
 theorem placement_of_setupH (ht : tags.typed = false) (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st)
     (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {g : ℕ} (hg : g < st.c.g) :
     Placement ((setupH_layout ht h).model regs) ((unitRows st (setupH_layout ht h).unit_built).stack st.c.upv)
@@ -486,7 +486,7 @@ theorem placement_of_setupH (ht : tags.typed = false) (h : Stmt.setupH tags cf p
   (setupH_layout ht h).placement regs hg
 
 /-- **A drawn unit's place, from the executable's accept step** (#145's `UnitPlace`, which `loweringSoundB_of_place` and
-#171's `_placed` forms take): VU `g`'s stacked unit slots in block `o` of the accepted statement, given the unit's
+#171's `_placed` forms take): template instance `g`'s stacked unit slots in block `o` of the accepted statement, given the unit's
 instance in the audit circuit, whose inputs on one gate carry one value there (`Layout.Aliased`). -/
 noncomputable def unitPlace_of_setupH (ht : tags.typed = false)
     (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st)

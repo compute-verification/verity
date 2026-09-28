@@ -6,7 +6,7 @@ import Mathlib.Tactic.Positivity
 /-!
 # The influence theorems are not vacuous
 
-The statement reviewer's witnesses (bc-89770364: Phase 19g, X-IC-1, and the two-stage and exfiltration instances of
+The witnesses (bc-89770364: Phase 19g, X-IC-1, and the two-stage and exfiltration instances of
 19i, X-IR-4): every hypothesis of the influence theorems can be met, together. `W.lemma47`'s conclusion is also not
 trivial; the others show only that the hypotheses can be met.
 

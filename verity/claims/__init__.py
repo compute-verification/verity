@@ -59,9 +59,9 @@ PROPERTIES: dict[str, Property] = {p.id: p for p in (
     Property("sis", "Ring-SIS binding", "SIS"),
     # A3 in verity/Security/Proofs/Flock/Soundness/ASSUMPTIONS.md, for the unit draw's bytes
     Property("uniform", "Independent uniform output", "Uniform"),
-    # A4 there, for verity.primitives.randomness's keyed streams: SHA-256's compression function as a PRF keyed by its chaining value
-    # (the cascade over prefix-free inputs, Bellare-Canetti-Krawczyk 1996) and as a dual PRF keyed by the secret bytes in its
-    # first message block; its eta is stated there (at most 2^-128 for the chain's tests, for a 32-byte secret)
+    # A4 there, for verity.primitives.randomness's keyed streams (prf/sha-512): SHA-512's compression function as a PRF keyed by
+    # its chaining value (the cascade over prefix-free inputs, Bellare-Canetti-Krawczyk 1996) and as a dual PRF keyed by the
+    # secret bytes in its first message block; its eta is stated there (at most 2^-128 for the chain's tests, for a 32-byte key)
     Property("prf", "Pseudorandom function", "PRF"),
 )}
 

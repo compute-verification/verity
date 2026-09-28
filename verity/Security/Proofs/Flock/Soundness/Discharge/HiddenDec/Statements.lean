@@ -32,7 +32,7 @@ def TagsOkH (I : Inputs) : Prop :=
 
 variable {n mPts : ℕ} {Reg : Type}
 
-/-- **The coin server's draw at `S`, under hidden outputs**: it proves `S`, and setupHidden sets up at it with `mPts`
+/-- **The challenger's draw at `S`, under hidden outputs**: it proves `S`, and setupHidden sets up at it with `mPts`
 link points. -/
 def DrawOkH (I : Inputs) (dj : Finset (Fin n) → Lean.Json) (mPts : ℕ) (S : Finset (Fin n)) : Prop :=
   (∀ D, Draw.UnitDraw.ofJson (dj S) = .ok D → ∀ u ∈ S, u.val ∈ D.proved) ∧
@@ -49,8 +49,8 @@ noncomputable def opnAtH (T : Finset (Fin n) → Reg → TabSpec mPts) (I : Inpu
     | none => default
   | .error _ => default
 
-/-- **The decoder is right at the hidden-output headline's draws** (R11b): given the tags, `wr` the coin server's
-record and the coin server's draws proving their units at `mPts` link points under setupHidden, `DecodesOn` holds at the
+/-- **The decoder is right at the hidden-output headline's draws** (R11b): given the tags, `wr` the challenger's
+record and the challenger's draws proving their units at `mPts` link points under setupHidden, `DecodesOn` holds at the
 hidden tables with the decoder `decAt` at DecodeZL's wires, single coins as field elements, no final messages and
 `capOfRoot`. -/
 def DecodesOnExecH : Prop :=

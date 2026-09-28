@@ -9,10 +9,10 @@ hidden-output statements:
 
 * `AcceptedH T`: a run of `Stmt.setupHidden` that accepted, with a layout `L` of its statement (`Layout`, which
   `Hidden.hidden_layout` gives), whose unit slots' rows are its flat twin's (`UnitRowsFlat`, which `unitRowsFlat` gives),
-  and whose block R1CS `L.model regs` is `T`. Its VU rows are the unit net's rows stacked `units_per_vu` times, placed at
-  every VU (`AcceptedH.placement`); its aliasing comes from Δ's source keys (`AcceptedH.aliased_of_key`, through
-  `aliased_of_copiesH`), and a stacked input that reads the zero carries 0 (`AcceptedH.zero_block`).
-* `SitesH plan tab`: each drawn unit's acceptance, VU and block, as `Placed.Sites`.
+  and whose block R1CS `L.model regs` is `T`. Its template instance rows are the unit net's rows stacked `units_per_vu` times, placed at
+  every template instance (`AcceptedH.placement`); its aliasing comes from Δ's source keys (`AcceptedH.aliased_of_key`,
+  through `aliased_of_copiesH`), and a stacked input that reads the zero carries 0 (`AcceptedH.zero_block`).
+* `SitesH plan tab`: each drawn unit's acceptance, template instance and block, as `Placed.Sites`.
 * `SitesH.progPlaces_keyProg`: `ProgPlaces` for the circuit's program on Δ's source keys (`Placed.keyProg`), from the
   sites and the parse alone; `constCols_keyProgH` and `zeroCols_keyProgH` are its `hConst` and `hZero`.
 -/
@@ -57,7 +57,7 @@ theorem flatLayout : Layout (Hidden.flatTwin a.st) := flat_layout a.ht a.h
 /-- The flat twin's unit facts (`flat_unitFacts`). -/
 theorem unitFacts : Aliased.UnitFacts a.tags (Hidden.flatTwin a.st) := flat_unitFacts a.ht a.h
 
-/-- **The accepted statement's VU rows**: the unit net's rows, stacked `units_per_vu` times. -/
+/-- **The accepted statement's template instance rows**: the unit net's rows, stacked `units_per_vu` times. -/
 noncomputable def rows : Rows := (unitRows a.st a.L.unit_built).stack a.st.c.upv
 
 theorem kLog_eq : 2 ^ (a.L.model a.regs).kLog = 2 ^ T.kLog :=
@@ -66,14 +66,15 @@ theorem kLog_eq : 2 ^ (a.L.model a.regs).kLog = 2 ^ T.kLog :=
 theorem nbl_eq : 2 ^ (a.L.model a.regs).nbl = 2 ^ T.nbl :=
   congrArg (fun S : Model.Statement => 2 ^ S.nbl) a.hT
 
-/-- **VU `g`'s columns in the block**: `stackPlace` at the unit slots `ur.slot (g·upv + i)`, the shared constant at the
-pin. -/
+/-- **Template instance `g`'s columns in the block**: `stackPlace` at the unit slots `ur.slot (g·upv + i)`, the shared
+constant at the pin. -/
 noncomputable def col {g : ℕ} (hg : g < a.st.c.g) (c : Fin a.rows.w) : Fin (2 ^ T.kLog) :=
   Fin.cast a.kLog_eq
     (stackPlace (a.L.model a.regs) (unitRows a.st a.L.unit_built) a.st.c.upv
       (fun u => a.st.c.unitRange.slot (g * a.st.c.upv + u)) (a.L.hb hg) c)
 
-/-- **The accepted statement places its VU rows at every VU** (`Layout.placement`), in every block. -/
+/-- **The accepted statement places its template instance rows at every template instance** (`Layout.placement`), in
+every block. -/
 theorem placement {g : ℕ} (hg : g < a.st.c.g) : Placement T a.rows (a.col hg) :=
   Placed.Accepted.placement_cast a.hT (a.L.placement a.regs hg)
 
@@ -83,7 +84,7 @@ theorem c_eq {c : Flock.Circuit} (hp : HmRow.parse a.tags a.cf a.tables = .ok c)
   rw [hp] at this
   exact (Except.ok.inj this).symm
 
-/-- **The VU rows are the parsed circuit's** (W6 on the untyped path, by definition). -/
+/-- **The template instance rows are the parsed circuit's** (W6 on the untyped path, by definition). -/
 theorem rows_eq {c : Flock.Circuit} (hp : HmRow.parse a.tags a.cf a.tables = .ok c) (hU : Built c.unit) :
     a.rows = Placed.circuitRows c hU := by
   have hc := a.c_eq hp
@@ -102,8 +103,8 @@ theorem aliased_of_layout {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C n
   subst hT
   exact hal
 
-/-- **Aliasing from keys**: an instance that puts VU `g`'s stacked unit inputs on one gate only when they have one key
-(`Aliased.srcKey`) is aliased in the accepted statement. -/
+/-- **Aliasing from keys**: an instance that puts template instance `g`'s stacked unit inputs on one gate only when they
+have one key (`Aliased.srcKey`) is aliased in the accepted statement. -/
 theorem aliased_of_key {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n}
     (inst : P.IsRowsUnit u ((unitRows a.st a.L.unit_built).stack a.st.c.upv))
     (o : Fin (2 ^ (a.L.model a.regs).nbl)) {g : ℕ} (hg : g < a.st.c.g)
@@ -115,8 +116,8 @@ theorem aliased_of_key {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C n} {
   aliased_of_copiesH a.L a.flatLayout a.regs a.unitFacts a.hR inst hg
     (Aliased.copies_of_key a.flatLayout a.regs a.unitFacts inst hg hk) o
 
-/-- **A VU's stacked input that reads the zero carries 0**, at the VU's columns, in every block of a satisfying
-witness (`stack_zero_blockH`). -/
+/-- **A template instance's stacked input that reads the zero carries 0**, at the template instance's columns, in every
+block of a satisfying witness (`stack_zero_blockH`). -/
 theorem zero_block {g : ℕ} (hg : g < a.st.c.g) (x : Fin a.rows.w) (hx : x.val < a.rows.nIn)
     (hz : ZeroIn a.st.c x.val) {z : Model.Witness T.m} (hsat : T.Satisfies z) (o : Fin (2 ^ T.nbl)) :
     T.block z o (a.col hg x) = 0 := by
@@ -134,7 +135,8 @@ variable {N n : ℕ} {Reg : Type} {mPts : ℕ} (plan : Finset (Fin n) → Reg �
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
 
 /-- **Each drawn unit's site**, as `Placed.Sites`: the hidden-output acceptance whose statement is the statement of the
-table unit `u` is drawn into (`acc`), and the unit's VU (`vu`, below `vus_per_block`) and block (`o`) there. -/
+table unit `u` is drawn into (`acc`), and the unit's template instance (`vu`, below `vus_per_block`) and block (`o`)
+there. -/
 structure SitesH where
   acc : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n), u ∈ S → AcceptedH (Partition.tabOf plan tab S R u).S
   vu : ∀ (S : Finset (Fin n)) (_ : Reg) (u : Fin n), u ∈ S → ℕ
@@ -143,23 +145,26 @@ structure SitesH where
 
 variable {plan tab}
 
-/-- **W6 at the sites**: each drawn unit's rows in the program are the VU rows its table's acceptance placed. -/
+/-- **W6 at the sites**: each drawn unit's rows in the program are the template instance rows its table's acceptance
+placed. -/
 def SitesH.RowsOf (si : SitesH plan tab) (p : Prog N n) : Prop :=
   ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S), p.rows u = (si.acc S R u h).rows
 
 variable {p : Prog N n} (si : SitesH plan tab) (hrows : si.RowsOf p)
 
-/-- A drawn unit's columns in its table's block: its VU's (`AcceptedH.col`). -/
+/-- A drawn unit's columns in its table's block: its template instance's (`AcceptedH.col`). -/
 noncomputable def SitesH.col (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S) :
     Fin (p.rows u).w → Fin (2 ^ (Partition.tabOf plan tab S R u).S.kLog) :=
   fun c => (si.acc S R u h).col (si.hvu S R u h) (Fin.cast (congrArg Rows.w (hrows S R u h)) c)
 
-/-- **W6's placement**: the statement of the table each drawn unit is drawn into places the unit's rows at its VU. -/
+/-- **W6's placement**: the statement of the table each drawn unit is drawn into places the unit's rows at its template
+instance. -/
 theorem SitesH.placed (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S) :
     Placement (Partition.tabOf plan tab S R u).S (p.rows u) (si.col hrows S R u h) :=
   Placed.placement_rows (hrows S R u h) ((si.acc S R u h).placement (si.hvu S R u h))
 
-/-- **`ProgPlaces` from setupHidden's accept**, its aliasing from `Layout.Aliased` at each drawn unit's VU and block. -/
+/-- **`ProgPlaces` from setupHidden's accept**, its aliasing from `Layout.Aliased` at each drawn unit's template
+instance and block. -/
 noncomputable def SitesH.progPlaces_of_layout (outs : Finset (Fin N))
     (inst : ∀ u, (p.partition outs).IsRowsUnit u (p.rows u))
     (hal : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S), (si.acc S R u h).L.Aliased (si.acc S R u h).regs
@@ -221,8 +226,8 @@ theorem SitesH.aliased_keyProg (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u
   exact (congrArg (fun d => Aliased.srcKey d x.val = Aliased.srcKey d x'.val) hc).mpr hk
 
 /-- **`ProgPlaces` for the circuit's program on Δ's source keys at hidden-output sites**, from the sites and the parse
-alone: each drawn unit placed at its VU in its table's accepted statement (W6 from the parse), its instance the
-program's own (`Const.Prog.instC`), aliased as Δ copies (`SitesH.aliased_keyProg`). -/
+alone: each drawn unit placed at its template instance in its table's accepted statement (W6 from the parse), its
+instance the program's own (`Const.Prog.instC`), aliased as Δ copies (`SitesH.aliased_keyProg`). -/
 noncomputable def SitesH.progPlaces_keyProg : ProgPlaces (Placed.keyProg c hU n) outs plan tab :=
   si.progPlaces_of_layout (SitesH.rowsOf_keyProg hU hparse) outs (Const.Prog.instC _ outs)
     (SitesH.aliased_keyProg hU hparse outs)

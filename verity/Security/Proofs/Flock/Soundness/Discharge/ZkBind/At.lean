@@ -8,7 +8,7 @@ import Proofs.Flock.Soundness.Discharge.Integrate.Headline
 
 `zk_flock_countC_execOS_keyProg` takes the sites `si`, the parse `hparse`, the layout `lay`, the rows `rs` and
 `HmRowComputes` `hHm`. Here they are built at item 3's `--zk` tables (`ZkLink.tablesAtZK dj y₀`: at each draw `S` the
-table of a `DrawSetupZK` at the coin server's draw `dj S`, a refused table otherwise), as `Integrate.sitesAt`, `layAt`,
+table of a `DrawSetupZK` at the challenger's draw `dj S`, a refused table otherwise), as `Integrate.sitesAt`, `layAt`,
 `rsAt` and `rsAt_computes` are at the public path's `tablesAt`:
 
 * `tableSh`: the public table (`Integrate.Table`) at the same draw: the `DrawSetupZK`'s `DrawSetup` at `zkInputs I` and
@@ -80,7 +80,7 @@ noncomputable def sitesSh : Placed.Sites (planSh (Reg := Reg) ht dj y₀) (tabSh
   hvu S _ u h := (tableSh ht dj y₀ S).hvu u h
   o S _ u h := (tableSh ht dj y₀ S).o u h
 
-/-- **The `--zk` sites**: each drawn unit's acceptance, VU and block are its draw's public table's. -/
+/-- **The `--zk` sites**: each drawn unit's acceptance, template instance and block are its draw's public table's. -/
 noncomputable def sitesZAt : SitesZ (planZAt (Reg := Reg) dj y₀) (tabZAt dj y₀) where
   acc S R u _ := recastAcc (tableSh ht dj y₀ S).acc (planZAt_S ht dj y₀ S R u).symm
   vu S _ u h := (tableSh ht dj y₀ S).vu u h
@@ -114,8 +114,8 @@ theorem sitesSh_parse : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u �
   · rw [dite_eq_right_of_eq_false (eq_false hS)]; exact hc
 
 /-- **Each drawn unit's site at its draw's `DrawSetupZK`**: at a draw `S` that `verify --zk` sets up (`y`), each drawn
-unit's acceptance is setupH's statement at `dj S`, its block and VU its rank `r` among the draw's proved units: block
-`r / c.g`, VU `r % c.g`. -/
+unit's acceptance is setupH's statement at `dj S`, its block and template instance its rank `r` among the draw's proved
+units: block `r / c.g`, template instance `r % c.g`. -/
 theorem sitesZAt_at {S : Finset (Fin n)} (y : DrawSetupZK I mPts S (dj S)) (R : Reg) (u : Fin n) (h : u ∈ S) :
     ((sitesZAt (Reg := Reg) ht dj y₀).acc S R u h).st = y.x.st ∧
       ((sitesZAt (Reg := Reg) ht dj y₀).acc S R u h).draw = some (dj S) ∧

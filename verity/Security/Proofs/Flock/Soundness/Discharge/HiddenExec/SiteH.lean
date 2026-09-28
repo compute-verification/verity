@@ -9,7 +9,7 @@ set_option Elab.async false
 /-!
 # A drawn unit's site in its hidden-output table's accepted statement
 
-`Layout/Site.lean`, `Hm/Site.lean` and `Layout.col_val_comp` at `AcceptedH T`. At VU `g` of block `o`:
+`Layout/Site.lean`, `Hm/Site.lean` and `Layout.col_val_comp` at `AcceptedH T`. At template instance `g` of block `o`:
 
 * `siteAddrH a o x`: in-block column `x` of block `o`, as an address of `T`;
 * `bc_site_ofH`: in a satisfying witness, the 128 bytes at row `p`'s `hm96` output are the population's `b ‖ c` of the
@@ -87,10 +87,10 @@ theorem bytesAt_siteH (a : AcceptedH T) (z : Witness T.m) (o : Fin (2 ^ T.nbl)) 
 
 /-! ## The registered `b ‖ c` at a site -/
 
-/-- **What `bc_site_ofH` reads at a site**: block `o` and VU `g` of an accepted statement whose draw `d` decodes to `D`,
-whose proved units are in its population; whose block R1CS's regions (`a.regs`) contain the executable's; whose
-public file `HmOut.loadPublic` loads to `pop`, with or without shared rows; with `g` below `2^⌊log₂ c.g⌋`; and whose proved
-unit at rank `o · c.g + g` is `u`. -/
+/-- **What `bc_site_ofH` reads at a site**: block `o` and template instance `g` of an accepted statement whose draw `d`
+decodes to `D`, whose proved units are in its population; whose block R1CS's regions (`a.regs`) contain the
+executable's; whose public file `HmOut.loadPublic` loads to `pop`, with or without shared rows; with `g` below
+`2^⌊log₂ c.g⌋`; and whose proved unit at rank `o · c.g + g` is `u`. -/
 def BcSiteH (a : AcceptedH T) (pop : Public) (o : Fin (2 ^ T.nbl)) (g u : ℕ) : Prop :=
   ∃ d D, a.draw = some d ∧ Draw.UnitDraw.ofJson d = .ok D ∧ (∀ v ∈ D.proved, v < D.population) ∧
     (∀ r ∈ a.st.regions.toList, Refine.regionOf a.st.c.kLog (a.st.m - a.st.c.kLog) r ∈ a.regs) ∧
@@ -114,8 +114,9 @@ theorem bc_site_ofH {a : AcceptedH T} {pop : Public} {o : Fin (2 ^ T.nbl)} {g u 
 /-! ## Copies at a site -/
 
 /-- **A drawn unit's message-keyed input holds its row's bit**: in a satisfying witness of an accepted statement, at
-block `o` and VU `g`, the VU's stacked unit input `x` whose Δ key is message bit `bit` of byte `byte` of row `q` holds
-the witness's bit at that message column (`Typed.msgCol`), when the column is in the block. -/
+block `o` and template instance `g`, the template instance's stacked unit input `x` whose Δ key is message bit `bit` of
+byte `byte` of row `q` holds the witness's bit at that message column (`Typed.msgCol`), when the column is in the block.
+-/
 theorem copy_siteH (a : AcceptedH T) {z : Witness T.m} (hz : T.Satisfies z) (o : Fin (2 ^ T.nbl)) {g : ℕ}
     (hg : g < a.st.c.g) (x : Fin a.rows.w) (hx : x.val < a.rows.nIn) {q byte bit : ℕ}
     (hk : Aliased.srcKey a.st.c x.val = .msg q byte bit) (hin : Typed.msgCol a.st.c g q byte bit < 2 ^ a.st.c.kLog) :
@@ -141,8 +142,8 @@ theorem copy_siteH (a : AcceptedH T) {z : Witness T.m} (hz : T.Satisfies z) (o :
     rfl
   · exact absurd (by simp only at hk ⊢; rw [hk]; exact hin) hn
 
-/-- **An accepted statement's VU column of copy `u'`'s computed column `c0`** is column `c0` of the unit slot
-`vu · upv + u'`. -/
+/-- **An accepted statement's template instance column of copy `u'`'s computed column `c0`** is column `c0` of the unit
+slot `vu · upv + u'`. -/
 theorem col_val_compH (a : AcceptedH T) {g : ℕ} (hg : g < a.st.c.g) (x : Fin a.rows.w) {u' c0 : ℕ}
     (hu' : u' < a.st.c.upv) (h1 : (unitRows a.st a.L.unit_built).nIn ≤ c0)
     (h2 : c0 < (unitRows a.st a.L.unit_built).nIn + (unitRows a.st a.L.unit_built).nComp)
@@ -154,10 +155,10 @@ theorem col_val_compH (a : AcceptedH T) {g : ℕ} (hg : g < a.st.c.g) (x : Fin a
   exact Layout.stackPlace_val_comp _ _ _ _ _ hu' h1 h2 x hx
 
 /-- **A drawn unit's returned output holds its output row's message bit**: in a satisfying witness of an accepted
-statement whose unit returns the outputs and whose rows are `sha512/row/v1` rows (`hv1`), at block `o` and VU `g`, copy
-`u'`'s computed column `outCol j t` (its output `j`, bit `t`) holds the witness's bit at output row `nIn + jo`'s message
-column for bit `16 k + t` (`Typed.msgCol`, byte `(16 k + t) / 8`, bit `(16 k + t) % 8`), where the copy's output word
-`lo[j]` is word `k` of output port `jo`. -/
+statement whose unit returns the outputs and whose rows are `sha512/row/v1` rows (`hv1`), at block `o` and template
+instance `g`, copy `u'`'s computed column `outCol j t` (its output `j`, bit `t`) holds the witness's bit at output row
+`nIn + jo`'s message column for bit `16 k + t` (`Typed.msgCol`, byte `(16 k + t) / 8`, bit `(16 k + t) % 8`), where the
+copy's output word `lo[j]` is word `k` of output port `jo`. -/
 theorem out_copyH (a : AcceptedH T) (ho : a.st.c.outNet = a.st.c.unitNet)
     (hv1 : ∀ p ∈ a.st.c.ports.toList, p.v2 = false ∧ p.bits = 16 * p.words ∧ 0 < p.chunks)
     {z : Witness T.m} (hz : T.Satisfies z) (o : Fin (2 ^ T.nbl)) {g : ℕ} (hg : g < a.st.c.g) (x : Fin a.rows.w)
@@ -238,9 +239,9 @@ theorem AcceptedH.row_bc (a : AcceptedH T) (ho : a.st.c.outNet = a.st.c.unitNet)
   exact Hm.row_bc_flat L0 F0 rfl (Hm.upv_pos F0.check ho) hv1 hz0 o hg hp
 
 /-- **A row's `b ‖ c` at a drawn unit's site**: in a satisfying witness of an accepted statement whose unit returns the
-outputs and whose rows are `sha512/row/v1` rows (`hv1`), at block `o`, VU `g` and row `p`, the 128 bytes at the `hm96`
-slot's output (`bcCol`) are the commit string of the row prefix and the `2 · words` bytes at the message columns
-(`Typed.msgCol`), under the 192 bytes at `saltCol`. -/
+outputs and whose rows are `sha512/row/v1` rows (`hv1`), at block `o`, template instance `g` and row `p`, the 128 bytes
+at the `hm96` slot's output (`bcCol`) are the commit string of the row prefix and the `2 · words` bytes at the message
+columns (`Typed.msgCol`), under the 192 bytes at `saltCol`. -/
 theorem bc_site_colH (a : AcceptedH T) (ho : a.st.c.outNet = a.st.c.unitNet)
     (hv1 : ∀ p ∈ a.st.c.ports.toList, p.v2 = false ∧ p.bits = 16 * p.words ∧ 0 < p.chunks)
     {z : Witness T.m} (hz : T.Satisfies z) (o : Fin (2 ^ T.nbl)) {g p : ℕ} (hg : g < a.st.c.g)
