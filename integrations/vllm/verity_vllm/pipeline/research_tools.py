@@ -1,7 +1,7 @@
 """`research` Tool declarations for the vLLM integration sweep stages.
 
-Four Tools — ``vllm.build``, ``vllm.match``, ``vllm.commit``, ``vllm.replay`` (a
-deferred Commit's C2 replay, on CPU) — one per stage of a sweep row.  Each stage runs as one ``research run --tool vllm.<stage>
+Five Tools — ``vllm.build``, ``vllm.plan`` (the Commit's plan, on CPU, before the GPU), ``vllm.match``,
+``vllm.commit``, ``vllm.replay`` (a deferred Commit's C2 replay, on CPU) — one per stage of a sweep row.  Each stage runs as one ``research run --tool vllm.<stage>
 -- verity-vllm row stage <stage> ...`` Attempt and publishes typed Artifacts
 (``verity_vllm.pipeline.research`` writes the ``outputs.json`` the publisher
 consumes).
@@ -71,6 +71,7 @@ ROW_KEY_PARAMS = [
 # so an absent flag hashes identically to its explicit default).
 STAGE_KEY_FLAGS: dict[str, dict[str, Any]] = {
     "build": {},
+    "plan": {},
     "match": {
         "snapshot_steps": "row-default",  # the row's default: "0,1" greedy / "all" stochastic
         "snapshot_max_bytes": None,
@@ -110,6 +111,7 @@ NON_KEY_FLAGS = (
 
 PRODUCES: dict[str, list[str]] = {
     "build": ["vllm-build/v1", "execution-evidence/v1", "run-files/v1"],
+    "plan": ["vllm-commit-plan/v1", "execution-evidence/v1", "run-files/v1"],
     "match": ["vllm-match-record/v1", "execution-evidence/v1", "run-files/v1"],
     "commit": ["vllm-verdict/v1", "execution-evidence/v1", "run-files/v1"],
     "replay": ["vllm-verdict/v1", "execution-evidence/v1", "run-files/v1"],
@@ -286,11 +288,12 @@ def _tool(stage: str) -> Tool:
 
 
 VLLM_BUILD = _tool("build")
+VLLM_PLAN = _tool("plan")
 VLLM_MATCH = _tool("match")
 VLLM_COMMIT = _tool("commit")
 VLLM_REPLAY = _tool("replay")
 
-TOOLS = {t.name: t for t in (VLLM_BUILD, VLLM_MATCH, VLLM_COMMIT, VLLM_REPLAY)}
+TOOLS = {t.name: t for t in (VLLM_BUILD, VLLM_PLAN, VLLM_MATCH, VLLM_COMMIT, VLLM_REPLAY)}
 
 __all__ = [
     "CLOSURE",
@@ -302,6 +305,7 @@ __all__ = [
     "NON_KEY_FLAGS",
     "PRODUCES",
     "VLLM_BUILD",
+    "VLLM_PLAN",
     "VLLM_MATCH",
     "VLLM_COMMIT",
     "VLLM_REPLAY",

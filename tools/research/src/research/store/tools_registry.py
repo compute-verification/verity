@@ -39,6 +39,7 @@ REGISTRY: dict[str, str] = {
     "lean_upstream": "tools.lean.tool:LEAN_UPSTREAM",
     # vLLM integration sweep stages (integration-owned declarations).
     "vllm.build": "integrations.vllm.verity_vllm.pipeline.research_tools:VLLM_BUILD",
+    "vllm.plan": "integrations.vllm.verity_vllm.pipeline.research_tools:VLLM_PLAN",
     "vllm.match": "integrations.vllm.verity_vllm.pipeline.research_tools:VLLM_MATCH",
     "vllm.commit": "integrations.vllm.verity_vllm.pipeline.research_tools:VLLM_COMMIT",
     "vllm.replay": "integrations.vllm.verity_vllm.pipeline.research_tools:VLLM_REPLAY",

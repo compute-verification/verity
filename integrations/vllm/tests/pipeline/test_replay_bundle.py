@@ -3,6 +3,7 @@ that is not the manifest's.  CPU only; the store dump itself is `tests/commit/te
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 
 import pytest
 
@@ -91,6 +92,42 @@ def test_a_changed_missing_or_extra_file_is_refused(tmp_path, tamper, why):
     tamper(b)
     with pytest.raises(ValueError, match=why):
         RB.open_bundle(b)
+
+
+def _deferred(out, **kw):
+    """`defer` of a small committed store, its write started beside the checks (`start`) unless `replay_bundle_overlap=0`."""
+    torch = pytest.importorskip("torch")
+    from tests.check.opened import commit_steps
+    from tests.commit.test_store_dump import STEPS
+    from verity_vllm.pipeline.timeline import Timeline
+
+    com, rc = commit_steps(STEPS)
+    com.weights_tree, com.model = {"root": (rc.weight_registration or {}).get("root"), "names": []}, torch.nn.Module()
+    args = SimpleNamespace(**{"replay_deferred": "full", "replay_bundle_overlap": 1, "retain": "host", "required_manifest": None, "openings": 64, **kw})
+    started, row, deferred = RB.start(out, 1, com, rc, args, None), {"commit": {}}, {}
+    assert RB.defer(out, 1, com, rc, args, tl=Timeline(None), arm="instrumented", versions={}, reqs=[], sampling={}, tokens={}, stop_of_record=None,
+                    ids_full=None, declaration=None, required_classes=[], row=row, deferred=deferred, started=started)
+    return started, deferred[1], {p.relative_to(RB.partial(out, 1)).as_posix(): p.read_bytes() for p in RB.partial(out, 1).rglob("*") if p.is_file()}
+
+
+def test_a_store_written_beside_the_checks_is_the_store_defer_writes(tmp_path):
+    started, ctx, files = _deferred(tmp_path / "beside")
+    inline, ctx0, files0 = _deferred(tmp_path / "inline", replay_bundle_overlap=0)
+    assert started is not None and started.future.done() and inline is None
+    assert files == files0 and ctx[RB.HASHED] == ctx0[RB.HASHED] and set(ctx[RB.HASHED]) == {f for f in files if f.endswith(".bin") and f.startswith("store/")}
+    assert {k: v for k, v in ctx.items() if k != "engine_of_record"} == {k: v for k, v in ctx0.items() if k != "engine_of_record"}
+
+
+@pytest.mark.parametrize("kw", [{"replay_deferred": None}, {"replay_deferred": "slim"}, {"replay_bundle_overlap": 0}, {"retain": "device"},
+                                {"replay_bundle_cap_gb": 0}])
+def test_the_store_is_written_beside_the_checks_only_where_defer_writes_it_in_full(kw):
+    pytest.importorskip("torch")
+    from tests.check.opened import commit_steps
+    from tests.commit.test_store_dump import STEPS
+
+    com, rc = commit_steps(STEPS)
+    args = SimpleNamespace(**{"replay_deferred": "full", "replay_bundle_overlap": 1, "retain": "host", **kw})
+    assert RB.start("/nonexistent", 1, com, rc, args, None) is None
 
 
 def test_a_discarded_bundle_leaves_nothing(tmp_path):

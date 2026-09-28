@@ -193,8 +193,8 @@ def replay_vu(pi: ProgramIndex, store: CommittedStore, weights: Callable[[str, i
 
 
 def plan_vu(pi: ProgramIndex, store: CommittedStore, vu: dict, *, arrive: int) -> str | None:
-    """Reads what `replay_vu` would read of the committed store for `vu` -- its inputs (interior rows included) and its committed output
-    members -- without evaluating it; the first input it cannot resolve, named (the replay will name it too)."""
+    """Reads what `replay_vu` would read of the committed store for `vu` -- its inputs (interior rows included), its committed output
+    members and their plane copies -- without evaluating it; the first input it cannot resolve, named (the replay will name it too)."""
     r = pi.by_i[vu["i"]]
     d = pi.describe(r)
     if d is None:
@@ -207,6 +207,9 @@ def plan_vu(pi: ProgramIndex, store: CommittedStore, vu: dict, *, arrive: int) -
     for m in d["members"]:
         width = int(m[1])
         store.words(vu["request_id"], arrive + d["step"], d["op_path"], m[0], d["row"] * width, (d["row"] + 1) * width)
+    for c in d.get("copies") or []:
+        width = int(c["width"])
+        store.words(vu["request_id"], arrive + d["step"], c["op_path"], c["member"], int(c["row"]) * width, (int(c["row"]) + 1) * width)
     return why
 
 

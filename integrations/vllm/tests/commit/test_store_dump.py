@@ -121,3 +121,15 @@ def test_a_dumped_store_dumps_again_slim(tmp_path):
         want = OC.OpenedReader(store, run)(1, "runner.sampler", 0, 4)
     SD.dump(store, run, tmp_path / "slim", touched=t)
     assert OC.OpenedReader(*SD.load(tmp_path / "slim"))(1, "runner.sampler", 0, 4) == want == b"\x01\x02\x03\x04"
+
+
+def test_touching_a_read_records_what_the_verified_read_opens():
+    com, rc = commit_steps(STEPS)
+    reads = [(0, "model.layers.0.self_attn.qkv_proj", 10, 20), (1, "runner.sampler", 0, 4), (2, "model.layers.0.mlp.down_proj", 900, 2500)]
+    with SD.touched(com) as verified:
+        rd = OC.OpenedReader(com, rc)
+        for r in reads:
+            rd(*r)
+    with SD.touched(com) as touched:
+        SD.touch(com, reads + [(0, "no.such.member", 0, 4)])
+    assert touched.ranges == verified.ranges and touched.nodes == verified.nodes and touched.ranges[2]

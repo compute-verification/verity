@@ -32,23 +32,27 @@ stops_at = "2026-10-07T15:00:00Z"
 system_cpus = "0-7"  # k3s and the system (the steward's CPU map, 07:13Z)
 numa = { 0 = "0-95", 1 = "96-191" }
 # The merge-train check slots: never preempted, never borrowed, never used by other work (research coordinator, 17:22Z).
-pools = { checks = "8-95" }
+# The provers' four 16-CPU slices, the dispatcher's VY_PROVER_CPUS, which no other job may share (Daniel, 11:33 PM PDT 30 Sep);
+# a job naming no pool gets 96-127.
+pools = { checks = "8-95", provers = "128-191" }
+# A GPU job pinned here runs under node 1's gpu-lease, on a GPU n1_lease.py (infra/nebius) lends from a Kueue holder in provers.
+gpu_executor = "n1-lease"
 gpus = [
   { index = 0, numa = 0 }, { index = 1, numa = 0 }, { index = 2, numa = 0 }, { index = 3, numa = 0 },
   { index = 4, numa = 1 }, { index = 5, numa = 1 }, { index = 6, numa = 1 }, { index = 7, numa = 1 },
 ]
 
-# Kueue's GPU quotas on node 1 (kueue.yaml, infra/nebius 900ff195): what a workstream owns it gets back from any borrower.
+# Kueue's GPU quotas on node 1 (kueue.yaml, infra/nebius fc0217812): what a workstream owns it gets back from any borrower.
 [[workstreams]]
-name = "provers"          # never borrows: a bench admitted on borrowed quota was evicted mid-run by a reclaim, twice
+name = "provers"          # borrows every idle GPU; Commits (600) reclaim from it (300) (Daniel, 10:58 PM PDT 30 Sep)
 node = "vy-nebius-1"
-gpus = 3
-borrow_gpus = 0
+gpus = 2
+borrow_gpus = 6
 
 [[workstreams]]
 name = "deployments-gpu"  # borrowable, and borrowed GPUs go back when its Commits arrive
 node = "vy-nebius-1"
-gpus = 5
+gpus = 6
 borrow_gpus = 2
 
 [nodes.vy-nebius-2]

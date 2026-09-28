@@ -64,6 +64,9 @@ KINDS: dict[str, str] = {
     # vLLM integration (integrations/vllm/verity_vllm/pipeline/research_tools.py; one Attempt per sweep stage).
     "vllm-build/v1": "one Build of a row's Program: payload tree = build_summary.json + required-value manifest + descriptor "
                      "files (never the instance set); meta {row, program_digest, correspondence_digest?, stage_status}",
+    "vllm-commit-plan/v1": "one Commit's plan, derived on CPU before the GPU is held (verity_vllm.pipeline.commit_plan): payload tree = "
+                           "plan/commit_plan.json (the key and the producer facts) + the plan stage's logs; meta {row, program_digest, "
+                           "plan_key, stage_status}; refs.build = the vllm-build/v1 planned from",
     "vllm-match-record/v1": "one Match account: payload tree = instances.jsonl, control/tokens.json, capture/tokens.json, "
                             "global_match.json, versions.json (never the raw capture planes); meta {row, program_digest, "
                             "match_ok?}; refs.build = the vllm-build/v1 consumed",

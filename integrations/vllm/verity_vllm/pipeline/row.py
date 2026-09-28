@@ -2,7 +2,8 @@
 
     verity-vllm row run   ROW ROLE REPO REV [--stages build,match,commit] [stage flags]
     verity-vllm row stage STAGE ROW ROLE REPO REV [stage flags]           one stage as one research Attempt
-                                                                          (replay: a config run's deferred C2, on CPU)
+                                                                          (plan: the Commit's plan, on CPU, before the GPU;
+                                                                          replay: a config run's deferred C2, on CPU)
     verity-vllm row chain ROW ROLE REPO REV [--stages ...] [--campaign C] [--project P] [stage flags]
     verity-vllm row shed  [--force]
 
@@ -51,7 +52,7 @@ class _Row:
 class Run(_Row):
     """Run a row's stages in order, stopping at the first FAIL."""
 
-    stages: str = option("--stages", default=STAGES, help="comma list of build, match, commit, replay")
+    stages: str = option("--stages", default=STAGES, help="comma list of build, plan, match, commit, replay")
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -62,7 +63,7 @@ class _Research:
 
 @dataclass(frozen=True, kw_only=True)
 class _StageName:
-    stage: str = option("stage", choices=("build", "match", "commit", "replay"))
+    stage: str = option("stage", choices=("build", "plan", "match", "commit", "replay"))
 
 
 @dataclass(frozen=True, kw_only=True)

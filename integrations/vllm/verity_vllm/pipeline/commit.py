@@ -73,7 +73,7 @@ from verity_vllm.engine import vllm_adapter as va  # noqa: E402
 from verity_vllm.pipeline.timeline import Timeline  # noqa: E402  (torch-free; VERITY_TIMELINE -> append-only JSONL, else a no-op sink)
 from verity_vllm.commit import opened as OV  # noqa: E402
 from verity_vllm.commit import challenge as CH  # noqa: E402
-from verity_vllm.pipeline import admission_planner as AP, c2_replay as C2, replay_bundle as RB  # noqa: E402
+from verity_vllm.pipeline import admission_planner as AP, c2_replay as C2, commit_plan as CP, replay_bundle as RB  # noqa: E402
 from verity_vllm.pipeline.c2_replay import rss_kb  # noqa: E402
 
 SCHEMA = "verity/commit-integ/delta/v1"
@@ -965,45 +965,6 @@ def hot_unsafe_reasons(args: Options) -> list[str]:
     return why
 
 
-def oracle_producers_of_record(args: Options, required_manifest: dict[str, Any] | None, reqs: list[dict[str, Any]],
-                               sampling: dict[str, Any]) -> tuple[dict[tuple[str, str], dict[str, Any]] | None, dict[str, Any]]:
-    """The oracle's producer facts from the Programs of record (`oracle_compare.producers_of_programs`, under the manifest's query) for a
-    manifest the query path built (`query.query_id` in `required.QUERIES`), which carries none: (facts | None, record).  The Programs are
-    the replay's (same lookup, same of-record digest check); None + the named reason for any other manifest, no Program dir or one not of record."""
-    from verity_vllm.check import oracle_compare as OC
-    from verity_vllm.query.manifest import format as MF
-    from verity_vllm.query.required import QUERIES
-    q = required_manifest.get("query") if isinstance(required_manifest, dict) else None
-    if not (isinstance(q, dict) and q.get("query_id") in QUERIES):
-        return None, {"used": False, "why": "manifest is not the query path's: its rows carry the producer annotations"}
-    t0 = time.monotonic()
-    labels = {str(r.get("request_id")): f"r{int(r.get('index', i))}" for i, r in enumerate(reqs)}
-    if getattr(args, "programs_root", None):
-        fx = {"requests": [{"request_id": labels[str(r.get("request_id"))], "prompt_len": len(r["prompt_token_ids"]),
-                            "max_tokens": int(r.get("max_tokens") or sampling.get("max_tokens") or 1)} for r in reqs]}
-        loaded = MF.programs_for(fx, args.programs_root)
-    elif getattr(args, "program_dir", None):
-        one = MF.load_program(args.program_dir)
-        loaded = {labels[str(r.get("request_id"))]: one for r in reqs}
-    else:
-        return None, {"used": False, "why": "no --programs-root / --program-dir: producer facts not derivable"}
-    of_record = {str(args.program_digest)} if getattr(args, "program_digest", None) else set()
-    of_record.update(str(x) for x in (required_manifest or {}).get("component_digests") or [])
-    of_record.update(str(c["program_digest"]) for c in ((required_manifest or {}).get("components") or {}).values()
-                     if isinstance(c, dict) and c.get("program_digest"))
-    digs = {k: str((v.get("result") or {}).get("program_digest") or (v.get("instances") or {}).get("digest") or "") for k, v in loaded.items()}
-    bad = sorted(k for k, d in digs.items() if d not in of_record)
-    if bad:
-        return None, {"used": False, "why": f"Program(s) {bad[:4]} not of record (of-record {sorted(x[:16] for x in of_record)})"}
-    facts = OC.producers_of_programs(loaded, aliases=(required_manifest or {}).get("op_path_aliases"), query=q["query_id"])
-    del loaded
-    return facts, {"used": True, "members": len(facts), "with_operand": sum(1 for f in facts.values() if f.get("operand")),
-                   "with_consumers": sum(1 for f in facts.values() if f.get("consumers")),
-                   "conflicts": sum(1 for f in facts.values() if f.get("conflict")), "wall_s": round(time.monotonic() - t0, 1),
-                   "method": "v1_bridge.population over the Programs of record: producing Call family, first-operand producer family, "
-                             "reading modules outside the producer's module (oracle_compare.producers_of_programs)"}
-
-
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class Options:
     workload: str = option("--workload", default="workloads/workload_cov_b0_b1_c256.json")
@@ -1016,7 +977,7 @@ class Options:
     arena_unchecked: bool = option("--arena-unchecked", default=False, action="store_true", help="NEGATIVE TEST ONLY: skip the X-02 arm-time bound check for an explicit --arena-mb so a " "too-small block reaches the collector (its refusal must then yield Commit FAIL under X-03)")
     arena_mb: int = option("--arena-mb", type=int, default=0, help="device staging block (MB); default 0 = X-02 auto: sized at arm time from the workload envelope " "(B, max prompt, max_num_batched_tokens, max_model_len; + FA2 hidden stream); 2 blocks preallocated, grown on demand (counted). " "An explicit value smaller than the step bound is refused before the run. Memory headroom for the arena comes from " "--engine-arg gpu_memory_utilization=<x> (0.5-0.6 on 48 GB for <=2B models at 1024-token prompts; 0.75 on 80 GB)")
     weights_hash: str = option("--weights-hash", choices=("host", "device", "device-checked"), env="VERITY_WEIGHTS_HASH", default="host", help="[R16 sys SYS-05] where the weights registration hashes: host (default; Python pos_leaf per 256-B leaf, 17-24 s for " "a 1B model, ~120 s for 7B, twice per Commit), device (same leaves + tree on the GPU, verity_vllm.commit.committer.leafhash), " "device-checked (both, per-tensor equality asserted; validation runs).  Recorded in versions.json weights.hash")
-    hash_threads: int = option("--hash-threads", type=int, default=2, help="hashlib worker threads (pod CPU tune 17:30Z: 2 threads x 4 KB = 2.2 GB/s; 8 threads x 4 KB = 0.4 GB/s, GIL thrash)")
+    hash_threads: int = option("--hash-threads", env="HASH_THREADS", type=int, default=2, help="hashlib worker threads (pod CPU tune 17:30Z: 2 threads x 4 KB = 2.2 GB/s; 8 threads x 4 KB = 0.4 GB/s, GIL thrash)")
     openings: int = option("--openings", type=int, default=64)
     max_num_seqs: int = option("--max-num-seqs", type=int, default=8)
     engine_arg: list[str] | None = option("--engine-arg", action="append", default=None)
@@ -1056,6 +1017,7 @@ class Options:
     replay_per_stratum: int = option("--replay-per-stratum", type=int, default=2, help="sampled replay: VUs per stratum (spec x request x phase); default 2")
     replay_cache: bool = option("--replay-cache", default=False, action="store_true", help="[R16 sys, rev M-0051] reuse an earlier pair's C2 sampled-replay + boundary-linkage record within this Commit stage when the FULL key " "(run root, manifest digest, seed, binding map, weights root, sample parameters, code) is identical; the copy carries reused_from and " "evaluated_here=0 (default OFF until coord rules)")
     replay_bundle_cap_gb: float = option("--replay-bundle-cap-gb", type=float, default=300.0, help="--replay-deferred: the largest replay bundle this Commit writes (GB); a larger one is not written and the C2 replay runs in this process")
+    replay_bundle_overlap: int = option("--replay-bundle-overlap", type=int, default=1, choices=(0, 1), help="--replay-deferred full: 1 writes the bundle's store from the moment the run root is fixed, beside the binding and manifest coverage (replay_bundle.start; the same files and digests); 0 writes it at the C2 site, after them")
     replay_deferred: str | None = option("--replay-deferred", nargs="?", const="full", default=None, choices=("full", "slim"), help="the C2 sampled replay + boundary linkage do not run in this process: each instrumented run writes a replay bundle (verity_vllm.pipeline.replay_bundle, <out>/replay_bundle_p<pair>/) and its verdict stays PENDING until the replay runs on CPU from the bundle; exit 0 when every check this process runs passes.  `slim`: the replay's reads are planned here and only the members they open are sealed, with their Merkle paths (the planning adds to the GPU hold)")
     replay_seed: int | None = option("--replay-seed", type=int, default=None, help="sampled replay: a TARGETED sampler seed (negatives / reproduction); default = derived from the run root after commitment (recorded with its source)")
     replay_challenge: str | None = option("--replay-challenge", default=None, help="sampled replay: a VERIFIER-ISSUED post-commitment challenge (hex/string) -- the seed becomes sha256(challenge || run_root) so an " "adaptive prover cannot grind the sample by recommitting (rev-cb M-0572); default = the run root alone (honest-prover measurement)")
@@ -1066,6 +1028,7 @@ class Options:
     replay_workers: int | None = option("--replay-workers", type=int, default=None, help="sampled replay: evaluator threads (default min(16, cpus/2); recorded)")
     vu_export_dir: str | None = option("--vu-export-dir", env="VERITY_VU_EXPORT_DIR", default=None, help="opt-in, not on the record: after pair 0's replay PASSes, export a stratified sample of its VUs as benchmark instance sets into this directory (verity_vllm.pipeline.vu_export; limits.json / provenance.json there are read)")
     serving_rows: str | None = option("--serving-rows", default=None, metavar="REQUEST_JSON", help="opt-in, not on the record: after pair 0's roots are final and before its seed, commit every RoPE head in M0's serving row format (verity_vllm.pipeline.serving_rows; the row stage writes the request: dir, partition, run, committer)")
+    plan: str | None = option("--plan", default=None, metavar="JSON", help="the Commit's plan, derived before the GPU (verity_vllm.pipeline.commit_plan; the row's `plan` stage): the producer facts are taken from it when its key (Program digest, manifest, workload, Programs, code identity, vLLM version) equals this Commit's; else derived here and recorded as plan_recomputed with the reason (verdict.json plan)")
     replay_target: list[str] | None = option("--replay-target", action="append", default=None, metavar="OP_PATH[@STEP]", help="sampled replay: add EVERY VU of a module (at a request-local step) to the sample, outside the cap -- the targeted negatives of record " "(a single-identity fault at a mid-phase step); repeatable; recorded under sample.targeted")
     program_digest: str | None = option("--program-digest", default=None, help="[R15 COORD 5] the Build's Program digest of record (B=1: build_request's program_digest; B>=2: gprog's workload digest): the " "required manifest's program_digest must equal it or the Commit fails closed as wrong-Program; also the binding map's key digest")
     required_manifest: str | None = option("--required-manifest", default=None, help="[R14 MAN-01] the Program/query-derived required-value manifest (verity_vllm.pipeline.cli build ...): every " "identity it lists (step, invocation, op_path, output_member, element range, request, rank) must be covered by a committed " "tensor of every instrumented run (coverage_check); replaces the REL-02 counts+classes source, which stays as the labelled fallback")
@@ -1113,7 +1076,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
         if _unsafe:
             # the worker records this as the restart reason and the client re-runs the job in a fresh process; the engine stays untouched
             raise SystemExit("HOT-UNSAFE: " + "; ".join(_unsafe))
-    RB.refuse(args)
+    _planner = RB.prepare(args)
     compiled_src = None
     fault = os.environ.get("VERITY_FAULT", "").strip()
     compiled_kernels = None
@@ -1322,12 +1285,10 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     # the producer module's body hands down are marked promoted here, so the acquisition below observes them at their first consumer's
     # input rather than at the module's forward output (oracle_compare.promote_handed_down); form (B) reads the same facts every pair
     oracle_producers: tuple[dict | None, dict] | None = None
+    plan_rec: dict | None = None
     if required_manifest is not None and kinds:
         from verity_vllm.check import oracle_compare as _OCP
-        try:
-            oracle_producers = oracle_producers_of_record(args, required_manifest, reqs, sampling)
-        except Exception as _pe:  # noqa: BLE001  -- no facts: the manifest's own entries stand, the reason is on the record
-            oracle_producers = (None, {"used": False, "why": f"producer facts not derived: {_pe!r}"[:300]})
+        oracle_producers, plan_rec = CP.producer_facts(args, required_manifest, reqs, sampling, tl=TL)
         print(f"[delta] form (B) producer facts from the Programs of record: {oracle_producers[1]}", flush=True)
         if oracle_producers[0]:
             _hd = _OCP.promote_handed_down(required_manifest, oracle_producers[0])
@@ -1959,6 +1920,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 row["commit"]["errors_n"] = rc.extra.get("errors_n", len(rc.extra.get("errors") or []))
                 # R14 BIND-01: binding map + identity coverage against the collector-independent expected population, and openings drawn
                 # from that population (the map and its digest are fixed here, before either challenge is derived from them)
+                _rb_started = RB.start(out, pair, com, rc, args, protocols)
                 TL.start("validate.binding_coverage", pair=pair)
                 try:
                     row["commit"]["binding"] = binding_record(com, rc, reqs, sampling, args, pair, served_tokens=r["tokens"], stop=stop_of_record)
@@ -2221,10 +2183,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                                              "max_tokens": r.get("max_tokens") or sampling.get("max_tokens")} for i, r in enumerate(reqs)]}
                         _prod = OC.producers_of(required_manifest)
                         if oracle_producers is None:
-                            try:
-                                oracle_producers = oracle_producers_of_record(args, required_manifest, reqs, sampling)
-                            except Exception as _pe:  # noqa: BLE001  -- no facts: the manifest's own entries stand, the reason is on the record
-                                oracle_producers = (None, {"used": False, "why": f"producer facts not derived: {_pe!r}"[:300]})
+                            oracle_producers = CP.derived(args, required_manifest, reqs, sampling)
                             print(f"[delta] form (B) producer facts from the Programs of record: {oracle_producers[1]}", flush=True)
                         if oracle_producers[0]:
                             _prod = OC.merge_producers(_prod, oracle_producers[0])
@@ -2256,7 +2215,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                           f"equal {oc.get('equal')} mismatch {oc.get('mismatch_n')} steps {oc.get('steps_compared')} not-snapshotted {oc.get('steps_not_snapshotted')} "
                           f"by-family {oc.get('compared_by_family')} not-compared {oc.get('not_compared')}{(' -- ' + str(oc.get('why'))) if oc.get('why') else ''}", flush=True)
                 _c2 = C2.Site(args=args, out=Path(args.out), pair=pair, com=com, rc=rc, row=row, reqs=reqs, sampling=sampling, tokens=r["tokens"], manifest=required_manifest, stop_of_record=stop_of_record, ids_full=_ids_full, versions=versions, components=components, vc_result=vc_result, tl=TL, protocols=protocols, weights_of=lambda p: C2.live_weights(PO.weights_view(protocols, eng.model), p), weights_check=lambda: C2.live_weights_check(lambda: PO.register_weights(protocols, com), com, rc), after_replay=C2.vu_export(args, pair, rc, required_manifest, versions, eng))
-                if not (args.replay_deferred and not C2.live_only(_c2) and RB.defer(out, pair, com, rc, args, tl=TL, arm=arm, versions=versions, reqs=reqs, sampling=sampling, tokens=r["tokens"], stop_of_record=stop_of_record, ids_full=_ids_full, declaration=d, required_classes=required_classes, vc_result=vc_result, plan=(lambda: C2.plan(_c2)) if args.replay_deferred == "slim" else None, row=row, deferred=deferred)) and (getattr(args, "program_dir", None) or getattr(args, "programs_root", None)):
+                if not (args.replay_deferred and not C2.live_only(_c2) and RB.defer(out, pair, com, rc, args, tl=TL, arm=arm, versions=versions, reqs=reqs, sampling=sampling, tokens=r["tokens"], stop_of_record=stop_of_record, ids_full=_ids_full, declaration=d, required_classes=required_classes, vc_result=vc_result, plan=(lambda: C2.plan(_c2, _planner)) if args.replay_deferred == "slim" else None, row=row, deferred=deferred, started=_rb_started)) and (getattr(args, "program_dir", None) or getattr(args, "programs_root", None)):
                     C2.run(_c2, replay_cache)
                 if _wor_rec is not None or _live_wd is not None:
                     # [MAN-09] WEIGHTS PIN: the served parameters the committer registered == the checkpoint of record, field by field
@@ -2455,6 +2414,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                "moe_source": {"mode": args.moe_source, "attached": moe_attached},
                "negatives": ({"flip_weight": flip_weight_rec} if flip_weight_rec else None),        # NEGATIVE TEST flags armed on this run, by name
                "run_roots": [r["commit"]["run_root"] for r in rows if r["arm"] != "control" and r.get("commit")]}
+    verdict.update(CP.verdict_entry(args, plan_rec))
     # [R16 sys / coord M-0090 (5)] replay cache of record: the ORIGINAL pair's artifact lists the pairs that share its replay (root equality
     # explicit); the verdict carries the evaluated-vs-reused count so a reader sees at once that C2 ran once per distinct root
     if getattr(args, "replay_cache", False):

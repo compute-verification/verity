@@ -7,6 +7,8 @@
 from the evidence dir into `$RESEARCH_RUN_DIR/outputs/<name>/` and declared in `$RESEARCH_RUN_DIR/outputs.json`, which
 `research.store.attempt.publish` turns into one artifact per entry:
 
+    plan    -> vllm-commit-plan/v1    plan/commit_plan.json (the Commit's plan: its key and the producer facts), plan.log,
+                                      weights_of_record.log, manifest.log; meta {row, stage, program_digest, plan_key, stage_status}; refs.build
     build   -> vllm-build/v1          build_summary.json, build_workload/workload_program.json, build_request*/ descriptor files (never
                                       instances.json.gz), manifest.json (the required-value manifest, when built), target_family / admission /
                                       source_identity / tree / release records; meta {row, stage, program_digest, workload_digest,
@@ -52,7 +54,7 @@ MAX_FILE = 512 << 20                      # per file; the required-value manifes
 NEVER = ("instances.json.gz", "log.jsonl.gz")
 PLANE_SUFFIXES = (".npy", ".npz", ".pt", ".bin", ".safetensors")
 
-KINDS = {"build": "vllm-build/v1", "match": "vllm-match-record/v1", "commit": "vllm-verdict/v1", "replay": "vllm-verdict/v1"}
+KINDS = {"build": "vllm-build/v1", "plan": "vllm-commit-plan/v1", "match": "vllm-match-record/v1", "commit": "vllm-verdict/v1", "replay": "vllm-verdict/v1"}
 
 BUILD_FILES = ["build_summary.json", "build_workload/workload_program.json", "manifest.json", "target_family.build.json", "target_family.json",
                "admission.json", "source_identity.json", "tree.json", "release.json", "build_request/digest.txt"]
@@ -63,6 +65,7 @@ MATCH_FILES = ["match/instances.jsonl", "match/program.json", "match/run.json", 
                "match/capture/versions.json", "match/control/versions.json"]
 TP_BUILD_GLOBS = ["build/rank*/build_step", "build/rank*/build_request*", "build/rank*/build_workload/workload_program.json"]
 TP_LOG_GLOBS = ["build/rank*/*.log", "match/*.log"]
+PLAN_FILES = ["plan/commit_plan.json", "plan.log", "weights_of_record.log", "manifest.log"]
 COMMIT_FILES = ["verdict.json", "config_record.json", "weights_of_record.log", "manifest.log", "manifest_verify.log"]
 EVIDENCE_FILES = ["timeline.jsonl", "stages.txt", "admission.json", "timeline_report.json"]
 
@@ -193,6 +196,11 @@ def build_outputs(d: Path, row: str, stage: str, run_dir: Path, inputs: dict[str
         present = [r for r in present if not r.endswith("instances.json.gz")]
         meta = {**base_meta, "required_manifest": (d / "manifest.json").is_file(), "precheck": v.get("precheck", (None, ""))[0]}
         e = _entry("build", KINDS[stage], meta, run_dir, d, present, skipped, optional=not passed)
+    elif stage == "plan":
+        present, skipped = _collect(d, PLAN_FILES)
+        plan = _read_json(d / "plan" / "commit_plan.json")
+        meta = {**base_meta, "plan_key": plan.get("key") if isinstance(plan, dict) else None}
+        e = _entry("plan", KINDS[stage], meta, run_dir, d, present, skipped, refs={k: refs[k] for k in ("build",) if k in refs}, optional=not passed)
     elif stage == "match":
         present, skipped = _collect(d, MATCH_FILES)
         gm = _read_json(d / "global_match.json") or {}

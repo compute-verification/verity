@@ -332,6 +332,24 @@ def test_the_plan_reads_every_committed_range_the_replay_reads_and_evaluates_not
     assert seen["replay"] and seen["replay"] <= seen["plan"], sorted(seen["replay"] - seen["plan"])[:4]
 
 
+def test_a_population_prepared_before_the_seed_draws_and_reads_the_same(world):
+    bmap, committed = world.bmap_and_reader()
+    progs, seen = _programs(world), {"cold": [], "warm": []}
+
+    def reader(key):
+        def read(step, name, lo, hi):
+            seen[key].append((step, name, lo, hi))
+            return committed(step, name, lo, hi)
+        return read
+
+    memo: dict = {}
+    SR.populate(progs, [0], {}, {}, None, attention_paths=None, tp=None, program_dirs=None, manifest=None, memo=memo)
+    assert any(k[0] == "population" for k in memo)
+    cold = SR.sampled_replay(progs, bmap, reader("cold"), None, per_stratum=2, seed=3, plan=True)
+    warm = SR.sampled_replay(progs, bmap, reader("warm"), None, per_stratum=2, seed=3, plan=True, memo=memo)
+    assert warm["picked"] == cold["picked"] and seen["warm"] == seen["cold"] and seen["cold"]
+
+
 def test_flipped_committed_output_byte_fails_named_at_the_request_and_row(world):
     def mutate(store, entries):
         k = (0, "model.layers.0.mlp.gate_up_proj/0")
@@ -1389,6 +1407,27 @@ def test_moe_plane_rows_are_addressed_at_their_planes_and_the_honest_program_rep
 def _moe_evaluate_all(w, mutate, *, targets=("moe/L0@0",)):
     bmap, committed = w.bmap_and_reader(mutate=mutate)
     return SR.sampled_replay(_programs(w), bmap, committed, _weights(w), per_stratum=1, seed=5, targets=list(targets), workers=0)
+
+
+def test_the_plan_of_every_moe_vu_reads_what_its_replay_reads_its_sum_plane_copy_too(moe_world):
+    """A MoeSum row's output is read back at its `moe/L<k>/sum` plane copy too (`describe`'s `copies`): a slim bundle planned without it
+    fails those picks as missing-input (OLMoE B8 slim: 17 of 460)."""
+    w = moe_world
+    bmap, committed = w.bmap_and_reader()
+    vus, _, _ = POP.population(w.pi, "r0")
+    assert any(v["family"] == "MoeSum_v1" for v in vus)
+    for vu in vus:
+        seen: dict[str, set] = {"plan": set(), "replay": set()}
+
+        def reader(key):
+            def read(step, name, lo, hi):
+                seen[key].add((step, name, lo, hi))
+                return committed(step, name, lo, hi)
+            return read
+
+        assert EV.plan_vu(w.pi, OP.CommittedStore.of_record(bmap, reader("plan"), None), vu, arrive=0) is None
+        EV.replay_vu(w.pi, OP.CommittedStore.of_record(bmap, reader("replay"), None), _weights(w), vu, arrive=0)
+        assert seen["replay"] and seen["replay"] <= seen["plan"], (vu["family"], sorted(seen["replay"] - seen["plan"])[:4])
 
 
 def _plane_word(store, entries, rid, step, plane, elem, flip=0x0080, op_path="moe/L0"):

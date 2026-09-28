@@ -17,12 +17,14 @@ import gc
 import hashlib
 import inspect
 import json
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
 from verity_vllm.commit import challenge as CH
 from verity_vllm.commit import opened as OV
+from verity_vllm.commit import store_dump as SD
 
 
 class ReplayReused(Exception):
@@ -225,20 +227,37 @@ def seed_of(args: Any, rc: Any) -> tuple[int, str, str, str | None]:
     return _seed, _seed_src, _seed_form, _seed_chal
 
 
-def linkage_requests(s: Site, _rl: dict[str, str], _arr: dict[str, int], _loaded: dict, _progs: dict, _horizons: dict | None) -> list[dict[str, Any]]:
+def linkage_facts(loaded: dict, progs: dict, index: Any) -> dict[str, Any]:
+    """What the linkage reads of the Programs: their steps of record, splits of record and the embedding's op path."""
+    return {"program_steps": program_steps(loaded, progs), "splits": splits_of_record(loaded), "embed_op_path": index.embed_op_path()}
+
+
+def program_steps(loaded: dict, progs: dict) -> dict[str, int | None]:
+    """Each request Program's steps of record: its Build result's T + 1, else its rows' segment steps."""
+    from verity_vllm.query.manifest import format as MF
+
+    return {k: (int(v["result"]["T"]) + 1) if (v.get("result") or {}).get("T") is not None else (len(MF.segment_steps(progs[k]["rows"])) if k in progs else None)
+            for k, v in loaded.items()}
+
+
+def splits_of_record(loaded: dict) -> dict[str, Any]:
+    """Each request Program's split count S of record (`{"derived": num_sms}` under derived S), from its Build result."""
+    out = {}
+    for k, v in loaded.items():
+        smp = (v.get("result") or {}).get("sampling") or {}
+        out[k] = {"derived": (smp.get("geometry") or {}).get("num_sms")} if smp.get("splits") == "derived" else smp.get("splits")
+    return out
+
+
+def linkage_requests(s: Site, _rl: dict[str, str], _arr: dict[str, int], _pi_steps: dict[str, int | None], _horizons: dict | None) -> list[dict[str, Any]]:
     """The DECLARED seed of each request = the SamplingParams.seed the run was asked for (the same per-request /
     sampling-level resolution vllm_adapter.sampling_params uses; None on a greedy row), and the Program's S of record from each request
     Program's Build result -- the prescribed-input linkage reads BOTH from the record, never from the served run.  The linkage horizon is the request's PROGRAM OF RECORD's, not the workload cap: horizon = min(cap,
     Program steps) -- the Program's T from its Build result (result.json T) else its ProgramIndex.n_steps; a request whose committed steps
     are FEWER than its Program of record still fails by name (the chain rule is unchanged inside the horizon).  Recorded per request."""
     from verity_vllm.check.replay import driver as SR
-    from verity_vllm.query.manifest import format as MF
 
     sampling = s.sampling
-    _pi_steps: dict[str, int] = {}
-    for _k, _v in _loaded.items():
-        _t = (_v.get("result") or {}).get("T")
-        _pi_steps[_k] = (int(_t) + 1) if _t is not None else (len(MF.segment_steps(_progs[_k]["rows"])) if _k in _progs else None)
     return [{"request_id": _rl[str(r.get("request_id"))], "arrive_step": _arr[_rl[str(r.get("request_id"))]],
              "prompt_token_ids": list(r["prompt_token_ids"]),
              "seed": (int(r["seed"]) if r.get("seed") is not None else (int(sampling["seed"]) if sampling.get("seed") is not None else None)),
@@ -286,26 +305,28 @@ def live_only(s: Site) -> str | None:
     return next((e for e in entries if e.split(":", 1)[0] == PWC.pouw.NAME and e.split(":", 1)[1] in PWC.PC.C.SCHEMES), None)
 
 
-def plan(s: Site) -> dict[str, Any]:
+def plan(s: Site, planner: Any = None) -> dict[str, Any]:
     """The replay's and the linkage's committed reads made against `s.com` without evaluating anything (what a slim replay bundle must
-    hold, `commit.store_dump.touched`): the same Programs, readers and draw as `run`."""
+    hold, `commit.store_dump.touched`): the same Programs, readers and draw as `run`.  With a ``planner`` (`replay_plan.Planner`) the
+    Programs, their population and the draw are its, prepared while the engine ran; only the reads are made here."""
     held: dict[str, Any] = {}
-    sr, lk = evaluate(s, held, plan=True)
+    sr, lk = evaluate(s, held, plan=True, planner=planner)
     held.clear()
     gc.collect()
     return {"replay": sr, "linkage": lk.get("result")}
 
 
-def evaluate(s: Site, held: dict[str, Any], *, plan: bool = False) -> tuple[dict[str, Any], dict[str, Any]]:
+def evaluate(s: Site, held: dict[str, Any], *, plan: bool = False, planner: Any = None) -> tuple[dict[str, Any], dict[str, Any]]:
     """The replay + linkage records; the Programs and readers they read stay in `held` for `free_programs` to release and measure.
-    ``plan``: the draw's reads only (`plan`)."""
+    ``plan``: the draw's reads only (`plan`), with the Programs and the draw the ``planner``'s when there is one."""
     from verity_vllm.check import executed_prefix as EPX
     from verity_vllm.check.replay import driver as SR
 
     args, rc, reqs, sampling, row, pair = s.args, s.rc, s.reqs, s.sampling, s.row, s.pair
     held["bm"] = _bm = json.loads((s.out / f"binding_map_p{pair}.json").read_text())
     _rl = {str(r.get("request_id")): f"r{int(r.get('index', i))}" for i, r in enumerate(reqs)}
-    held["loaded"], held["digs"] = _loaded, _digs = programs_of_record(s, _rl)
+    facts = planner.ready() if planner is not None else None
+    held["loaded"], held["digs"] = _loaded, _digs = programs_of_record(s, _rl) if facts is None else ({}, {})
     held["progs"] = _progs = {k: v["instances"] for k, v in _loaded.items()}
     _arr = {_rl[str(r.get("request_id"))]: int(r.get("arrive_step") or 0) for r in reqs}
     # [rev M-0570 (1), compiled f3fdaba37] ONE schedule of record for every consumer: when the population was placed on the ENGINE's
@@ -314,10 +335,13 @@ def evaluate(s: Site, held: dict[str, Any], *, plan: bool = False) -> tuple[dict
     _arr, _moved = SR.arrivals_of_record(_arr, _sched_r)
     if _moved:
         print(f"[delta] replay/linkage arrivals follow the engine schedule of record: {_arr} (declared {_sched_r.get('declared_arrive_steps')})", flush=True)
-    _k0 = next(iter(_progs))
-    held["pi0"] = _pi0 = SR.ProgramIndex(_progs[_k0], program_dir=_loaded[_k0].get("dir"))
+    if facts is None:
+        _k0 = next(iter(_progs))
+        held["pi0"] = _pi0 = SR.ProgramIndex(_progs[_k0], program_dir=_loaded[_k0].get("dir"))
+        facts = linkage_facts(_loaded, _progs, _pi0)
     from verity_vllm.pipeline import serving_rows as SRW
-    _wp, held["rd"] = SRW.readers(args.serving_rows, s.com, rc, s.weights_of(_pi0.prefix), _progs, _bm, _arr, _loaded, s.manifest, args.label)
+    _wp, held["rd"] = SRW.readers(args.serving_rows, s.com, rc, s.weights_of(held["pi0"].prefix) if "pi0" in held else None, _progs, _bm, _arr,
+                                  _loaded, s.manifest, args.label)
     _rd = held["rd"]
     _wc = None if plan else s.weights_check()
     _seed, _seed_src, _seed_form, _seed_chal = seed_of(args, rc)
@@ -333,16 +357,21 @@ def evaluate(s: Site, held: dict[str, Any], *, plan: bool = False) -> tuple[dict
     if _epr_r["any_eos_stop"]:
         print(f"[delta] replay/linkage horizons = the executed prefix of record: {_horizons} (LAG {_epr_r['lag']}; "
               f"{'ok' if _epr_r['ok'] else 'PROBLEMS ' + str(_epr_r['problems'][:2])})", flush=True)
-    _wreq = linkage_requests(s, _rl, _arr, _loaded, _progs, _horizons)
-    _spr = {}
-    for _k, _v in _loaded.items():
-        _smp = ((_v.get("result") or {}).get("sampling") or {})
-        _spr[_k] = ({"derived": (_smp.get("geometry") or {}).get("num_sms")} if _smp.get("splits") == "derived" else _smp.get("splits"))
+    _wreq = linkage_requests(s, _rl, _arr, facts["program_steps"], _horizons)
+    _spr = facts["splits"]
     # [rev M-0485; R17-1 / DP-pad-02 (b)] the Program's declared stop rule + LAG = stop_rule_of_record; None = undeclared / unattested ->
     # a request linked over fewer steps than its cap fails closed by name (F-pm-24) -- never the engine value as the rule
     _eos, _lag = s.stop_of_record.get("eos"), s.stop_of_record.get("lag")
-    lk = SR.boundary_linkage(_bm, _rd, _wreq, embed_op_path=_pi0.embed_op_path(), splits_of_record=_spr, eos_of_record=_eos, eos_lag_rows=_lag)
+    lk = SR.boundary_linkage(_bm, _rd, _wreq, embed_op_path=facts["embed_op_path"], splits_of_record=_spr, eos_of_record=_eos, eos_lag_rows=_lag)
     _sr_kw, _ep_facts = executed_prefix_kw(s, _epr_r, lk, _arr, _rl)
+    if planner is not None:
+        t0 = time.perf_counter()
+        got = planner.plan({"binding_map": str(s.out / f"binding_map_p{pair}.json"), "arrivals": _arr, "seed": _seed, "seed_source": _seed_src,
+                            "seed_challenge": _seed_chal, "sr_kw": _sr_kw})
+        t1 = time.perf_counter()
+        SD.touch(s.com, got["reads"])
+        return got["plan"] | {"prepare_s": facts.get("prepare_s"), "reads": len(got["reads"]), "draw_s": round(t1 - t0, 3),
+                              "reads_s": round(time.perf_counter() - t1, 3)}, lk
     sr = (lambda f: f() if plan or s.protocols is None else replayed(s.protocols, f))(lambda: SR.sampled_replay(_progs, _bm, _rd, _wp, arrivals=_arr, per_stratum=int(args.replay_per_stratum), seed=_seed, seed_source=_seed_src,
                            seed_challenge=_seed_chal,
                            max_evaluate=int(args.replay_max), weights_check=_wc, targets=list(getattr(args, "replay_target", None) or []), replay_k=args.replay_k,

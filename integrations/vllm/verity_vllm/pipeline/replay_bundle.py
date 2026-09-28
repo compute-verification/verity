@@ -16,6 +16,8 @@ linkage writes one bundle per instrumented run beside its outputs, `<out>/replay
     MANIFEST.json     {schema, files: {path: {sha256, bytes}}}, written last
 
 It is built under `replay_bundle_p<pair>.partial/` and renamed into place once sealed, so a bundle directory that exists is complete.
+A full store is written from the moment the run root is fixed, beside the binding and manifest coverage (`start`), so the GPU is not
+held for the two in turn; a slim one is written at the C2 site, after the challenge its reads come from.
 `open_bundle` checks every file against the manifest before anything is read from it.
 """
 from __future__ import annotations
@@ -26,8 +28,10 @@ import os
 import shutil
 import time
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
+from dataclasses import dataclass
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 from verity_vllm.commit import store_dump as SD
@@ -72,34 +76,86 @@ def refuse(args: Any) -> None:
         raise SystemExit(f"--replay-deferred: {why}")
 
 
+@dataclass
+class Started:
+    """A full store's write running beside the checks before the C2 site (`start`)."""
+    future: Future
+    hashed: dict[str, str]
+
+
+def start(out: Path, pair: int, com: Any, rc: Any, args: Any, protocols: Any) -> Started | None:
+    """The full store's write, started once the run root is fixed, in a thread beside the binding and manifest coverage that precede the
+    C2 site: the store is final at finalize and every one of those checks only reads it, so `defer` takes the same files and digests
+    without waiting for both in turn.  None when `defer` would not write the full store from here: no deferral, a slim one (its reads come
+    from the challenge), a live-only replay, a retention other than host, or a store over the cap."""
+    if (not args.replay_deferred or args.replay_deferred == "slim" or not getattr(args, "replay_bundle_overlap", 1)
+            or C2.live_only(SimpleNamespace(protocols=protocols)) or C2.retention_of(com, args) != "host"
+            or SD.nbytes(com) > float(getattr(args, "replay_bundle_cap_gb", 300)) * 1e9):
+        return None
+    hashed: dict[str, str] = {}
+    pool = ThreadPoolExecutor(1, thread_name_prefix="replay-bundle")
+
+    def write() -> float:
+        t0 = time.perf_counter()
+        write_store(out, pair, com, rc, digests=hashed)
+        return time.perf_counter() - t0
+
+    fut = pool.submit(write)
+    pool.shutdown(wait=False)
+    return Started(fut, hashed)
+
+
+def prepare(args: Any) -> Any:
+    """`refuse`, then the slim bundle's planner (`replay_plan.Planner`), started now so it prepares while the engine runs."""
+    refuse(args)
+    if args.replay_deferred != "slim":
+        return None
+    from verity_vllm.pipeline.replay_plan import Planner
+
+    return Planner(args)
+
+
 def defer(out: Path, pair: int, com: Any, rc: Any, args: Any, *, tl: Any, arm: str, versions: dict, reqs: list[dict], sampling: dict,
           tokens: dict, stop_of_record: Any, ids_full: Any, declaration: Any, required_classes: Any, vc_result: Any = None,
-          plan: Callable[[], dict[str, Any]] | None = None, row: dict[str, Any], deferred: dict[int, dict]) -> bool:
-    """At the C2 site of a deferred run: writes the bundle's store and weights tree, puts the run's deferred sampled-replay and linkage
-    records on `row` and the bundle's context in `deferred[pair]` (sealed once the run's record is final, after the weights pin and the
-    openings).  ``plan`` makes the replay's committed reads (`c2_replay.plan`); with it the store is SLIM: only the ranges and tree nodes
-    they opened.  False, with nothing written, when the store would exceed `args.replay_bundle_cap_gb`: the replay then runs in process."""
+          plan: Callable[[], dict[str, Any]] | None = None, row: dict[str, Any], deferred: dict[int, dict],
+          started: Started | None = None) -> bool:
+    """At the C2 site of a deferred run: writes the bundle's store and weights tree (or takes the write `start` began), puts the run's
+    deferred sampled-replay and linkage records on `row` and the bundle's context in `deferred[pair]` (sealed once the run's record is
+    final, after the weights pin and the openings).  ``plan`` makes the replay's committed reads (`c2_replay.plan`); with it the store is
+    SLIM: only the ranges and tree nodes they opened.  False, with nothing written, when the store would exceed
+    `args.replay_bundle_cap_gb`: the replay then runs in process."""
     from verity_vllm.check.replay.driver import engine_facts_of_record
 
     tl.start("validate.replay_bundle", pair=pair)
     slim, t = None, None
-    if plan is not None:
+    if started is not None:
         t0 = time.perf_counter()
-        with SD.touched(com) as t:
-            planned = plan()
-        sr_p = planned.get("replay") or {}
-        slim = {"bytes": t.nbytes(), "picked": sr_p.get("picked"), "unresolved_n": sr_p.get("unresolved_n"), "unresolved": sr_p.get("unresolved"),
-                "linkage": planned.get("linkage"), "plan_s": round(time.perf_counter() - t0, 3)}
-        print(f"[delta] REPLAY BUNDLE (pair {pair}): slim -- {slim['picked']} picks + linkage read {slim['bytes'] >> 20} MiB of the store "
-              f"in {slim['plan_s']} s (unresolved {slim['unresolved_n']})", flush=True)
-    size, cap = t.nbytes() if t is not None else SD.nbytes(com), float(getattr(args, "replay_bundle_cap_gb", 300)) * 1e9
-    if size > cap:
-        tl.end("validate.replay_bundle", pair=pair, ok=False)
-        print(f"[delta] REPLAY BUNDLE (pair {pair}): REFUSED -- {size / 1e9:.1f} GB is over the {cap / 1e9:.0f} GB cap (--replay-bundle-cap-gb); "
-              "the C2 replay runs in this process", flush=True)
-        return False
-    hashed: dict[str, str] = {}
-    write_store(out, pair, com, rc, digests=hashed, touched=t)
+        write_s, hashed = started.future.result(), started.hashed
+        print(f"[delta] REPLAY BUNDLE (pair {pair}): store written in {write_s:.1f} s beside the checks before the C2 site "
+              f"(waited {time.perf_counter() - t0:.1f} s here)", flush=True)
+    else:
+        if plan is not None:
+            t0 = time.perf_counter()
+            try:
+                with SD.touched(com) as t:
+                    planned = plan()
+            except Exception as e:  # noqa: BLE001  -- no plan, no slim bundle: the replay runs in this process
+                tl.end("validate.replay_bundle", pair=pair, ok=False)
+                print(f"[delta] REPLAY BUNDLE (pair {pair}): no plan ({e!r:.300}); the C2 replay runs in this process", flush=True)
+                return False
+            sr_p = planned.get("replay") or {}
+            slim = {"bytes": t.nbytes(), "picked": sr_p.get("picked"), "unresolved_n": sr_p.get("unresolved_n"), "unresolved": sr_p.get("unresolved"),
+                    "linkage": planned.get("linkage"), "plan_s": round(time.perf_counter() - t0, 3)}
+            print(f"[delta] REPLAY BUNDLE (pair {pair}): slim -- {slim['picked']} picks + linkage read {slim['bytes'] >> 20} MiB of the store "
+                  f"in {slim['plan_s']} s (unresolved {slim['unresolved_n']})", flush=True)
+        size, cap = t.nbytes() if t is not None else SD.nbytes(com), float(getattr(args, "replay_bundle_cap_gb", 300)) * 1e9
+        if size > cap:
+            tl.end("validate.replay_bundle", pair=pair, ok=False)
+            print(f"[delta] REPLAY BUNDLE (pair {pair}): REFUSED -- {size / 1e9:.1f} GB is over the {cap / 1e9:.0f} GB cap (--replay-bundle-cap-gb); "
+                  "the C2 replay runs in this process", flush=True)
+            return False
+        hashed = {}
+        write_store(out, pair, com, rc, digests=hashed, touched=t)
     caps = {str(q.get("request_id")): int(q.get("max_tokens") or sampling.get("max_tokens") or 1) for q in reqs}
     ctx = {"pair": pair, "arm": arm, "committer": com.name, "run_root": rc.run_root.hex(), "code": versions.get("git_head"),
            "args": {k: getattr(args, k, None) for k in ARGS}, "requests": reqs, "sampling": sampling, "tokens": tokens,
