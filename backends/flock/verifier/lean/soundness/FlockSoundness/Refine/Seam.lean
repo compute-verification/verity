@@ -22,7 +22,7 @@ open Model Accounting
 theorem exec_fast100_none (m : ℕ) (h : 35 < m) : Flock.fast100 m = none := by
   have : (m < 22 || m > 35) = true := by rw [Bool.or_eq_true, decide_eq_true_iff, decide_eq_true_iff]; omega
   unfold Flock.fast100
-  rw [ite_cond_eq_true _ _ (eq_true this)]
+  rw [ite_eq_left_of_eq_true _ _ (eq_true this)]
   rfl
 
 theorem model_fast100_none (m : ℕ) (h : 35 < m) : Accounting.fast100 m = none := by
