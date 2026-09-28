@@ -1,16 +1,26 @@
+import FlockSoundness.Discharge.Composed.Coined
+import FlockSoundness.ZK.Complete
 import FlockSoundness.Discharge.ZkLink.DrawOk
 import FlockSoundness.Discharge.Composed.DefsJ
 
 /-!
 # The `--zk` session's assumptions
 
-The record's custody (`live-verifier`) that `--zk`'s soundness takes: `RecordCustodyZK` at one table, `RecordCustodyZKJ`
-at `J`.
+The instances of `HashDerivedKey` and `PadNonvanishing` that `--zk` headlines take, stated as Prop constants so the
+audit names them, and the record's custody (`live-verifier`) that `--zk`'s soundness takes: `RecordCustodyZK` at one
+table, `RecordCustodyZKJ` at `J`.
 -/
 
 namespace FlockSoundness.Assumptions.Zk
 
 open FlockSoundness
+
+/-- The salt hash keys Hm96 hiding at `2^-193` (`HashDerivedKey` at `ZkView.My`, `ZkView.saltHash`). -/
+def HashDerivedKeyHm96 : Prop := HashDerivedKey Discharge.ZkView.My Discharge.ZkView.saltHash
+
+/-- Every pad of at most 40 columns is nonvanishing under `execArith` at `fOf PAD_C`. -/
+def PadNonvanishing40 : Prop :=
+  ∀ cols ≤ 40, PadNonvanishing execArith cols (Refine.fOf Flock.Zk.PAD_C)
 
 /-- **The record is the live session's** (`live-verifier`; the custody of the verifier's `PROTOCOL.md` §17.2, with A6,
 `uniform/flock-coin-server`, for the coins in it). Nothing in a session record authenticates its writer, and
