@@ -697,6 +697,333 @@ theorem build_computes {name : String} {table : ByteArray} {n lo bits : ℕ} {ne
   · intro x _ hne; simp [Ne.symm hne]
   · intro hh; exact absurd (Finset.mem_range.2 (by rw [hs2]; exact hhighlt)) hh
 
+/-! ### `table/v2` -/
+
+theorem testBit_foldl_or (f : ℕ → ℕ) (j : ℕ) : ∀ (l : List ℕ) (a : ℕ),
+    (l.foldl (fun acc i => acc ||| f i) a).testBit j = (a.testBit j || l.any fun i => (f i).testBit j)
+  | [], a => by simp
+  | x :: l, a => by
+    rw [List.foldl_cons, testBit_foldl_or f j l, Nat.testBit_or]
+    simp [Bool.or_assoc]
+
+/-- **The bits `varying` leaves out are constant:** every output bit `k ≤ j < bits` is the same in every word. -/
+theorem varying_const (table : ByteArray) (n bits j : ℕ) (hk : varying table n bits ≤ j) (hj : j < bits) (i : ℕ)
+    (hi : i < 2 ^ n) : (rd32 table (4 * i)).testBit j = (rd32 table 0).testBit j := by
+  set first := rd32 table 0
+  set diff := (List.range (2 ^ n)).foldl (fun acc i => acc ||| (rd32 table (4 * i) ^^^ first)) 0 with hdiff
+  have hd : (diff &&& (2 ^ bits - 1)).testBit j = false := by
+    unfold varying at hk
+    simp only at hk
+    split at hk
+    · rename_i h0; rw [h0]; simp
+    · apply Nat.testBit_lt_two_pow
+      exact lt_of_lt_of_le Nat.lt_log2_self (Nat.pow_le_pow_right (by norm_num) hk)
+  rw [Nat.testBit_and, Nat.testBit_two_pow_sub_one] at hd
+  simp only [hj, decide_true, Bool.and_true] at hd
+  rw [hdiff, testBit_foldl_or] at hd
+  simp only [Nat.zero_testBit, Bool.false_or, List.any_eq_false, List.mem_range] at hd
+  have := hd i hi
+  rw [Nat.testBit_xor] at this
+  revert this
+  cases (rd32 table (4 * i)).testBit j <;> cases first.testBit j <;> simp
+
+/-- `buildV2`'s output rows: bit `j < k` sums its product rows, times the constant; bit `k ≤ j < bits` is its constant bit
+`c0` has, `A = B = [const]` for 1 and nothing for 0. -/
+def outputRowsV2 (prod0 nh k bits c0 : ℕ) (s : Builder) : Builder :=
+  List.foldl (fun (r : Builder) i => if i < k then
+      { a := r.a.push (Array.map (fun x => prod0 + i * nh + x) (Array.range nh)), b := r.b.push #[KONST] }
+    else if (decide (i < bits) && c0.testBit i) = true then { a := r.a.push #[KONST], b := r.b.push #[KONST] }
+    else { a := r.a.push #[], b := r.b.push #[] }) s (List.range 128)
+
+/-- **`buildV2`, step by step:** `build_spec`'s stages, with product rows for the varying width `k` only and output rows
+`outputRowsV2` (a bit at or above `k` its constant). -/
+theorem build_spec_v2 {name : String} {table : ByteArray} {n lo bits : ℕ} {library : Bool} {net : Net}
+    (h : buildV2 name table n lo bits library = .ok net) :
+    2 ≤ lo ∧ lo < n ∧ bits ≤ 32 ∧ n ≤ 128 ∧ table.size = 4 * 2 ^ n ∧
+    ∃ (d1 d2 : Builder × Array Form × ℕ) (r3 : Builder),
+      d1 = decode (inputRows n) (List.range lo) lo ∧
+      d2 = decode d1.1 ((List.range (n - lo)).map (lo + ·)) (n - lo) ∧
+      d1.2.1.size = 2 ^ lo ∧ d2.2.1.size = 2 ^ (n - lo) ∧
+      (∃ k, r3.a = (productRows d2.2.1 (if library then varying table n bits else bits) d2.1).a ++ (List.replicate k (#[] : Array ℕ)).toArray ∧
+        r3.b = (productRows d2.2.1 (if library then varying table n bits else bits) d2.1).b ++ (List.replicate k (#[] : Array ℕ)).toArray ∧ r3.a.size % 128 = 0) ∧
+      Sparse.ofRows (fixKonst (outputRowsV2 d2.1.a.size d2.2.1.size (if library then varying table n bits else bits) bits (rd32 table 0) r3).a.size
+          ((outputRowsV2 d2.1.a.size d2.2.1.size (if library then varying table n bits else bits) bits (rd32 table 0) r3).a.push #[(outputRowsV2 d2.1.a.size d2.2.1.size (if library then varying table n bits else bits) bits (rd32 table 0) r3).a.size]))
+          (2 ^ net.unitLog) = .ok net.a ∧
+      Sparse.ofRows (fixKonst (outputRowsV2 d2.1.a.size d2.2.1.size (if library then varying table n bits else bits) bits (rd32 table 0) r3).a.size
+          ((outputRowsV2 d2.1.a.size d2.2.1.size (if library then varying table n bits else bits) bits (rd32 table 0) r3).b.push #[(outputRowsV2 d2.1.a.size d2.2.1.size (if library then varying table n bits else bits) bits (rd32 table 0) r3).a.size]))
+          (2 ^ net.unitLog) = .ok net.b ∧
+      net.useful = (outputRowsV2 d2.1.a.size d2.2.1.size (if library then varying table n bits else bits) bits (rd32 table 0) r3).a.size + 1 ∧
+      net.constPos = (outputRowsV2 d2.1.a.size d2.2.1.size (if library then varying table n bits else bits) bits (rd32 table 0) r3).a.size ∧
+      net.outGroups = #[⟨r3.a.size / 128, 1, #[bits]⟩] ∧
+      net.lookup = some ⟨table, n, lo, (if library then varying table n bits else bits), d2.1.a.size, d1.2.2⟩ := by
+  simp only [buildV2] at h
+  split at h
+  · simp [throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
+  rename_i hchk
+  simp only [Bool.or_eq_true, bne_iff_ne, ne_eq, Bool.not_eq_true', Bool.and_eq_false_iff, decide_eq_false_iff_not,
+    decide_eq_true_eq, not_or, not_lt, not_not, not_le] at hchk
+  obtain ⟨⟨⟨hts, hlo, hln⟩, hb32⟩, hn⟩ := hchk
+  refine ⟨hlo, hln, hb32, hn, hts, ?_⟩
+  simp only [forIn_range_foldl, bind, Except.bind] at h
+  set d1 := decode (List.foldl (fun (r : Builder) i => if i < n then { a := r.a.push #[i], b := r.b.push #[i] }
+    else { a := r.a.push #[], b := r.b.push #[] }) { } (List.range 128)) (List.range lo) lo with hd1
+  set d2 := decode d1.1 (List.map (fun x => lo + x) (List.range (n - lo))) (n - lo) with hd2
+  rcases hW : (forIn Lean.Loop.mk (productRows d2.2.1 (if library then varying table n bits else bits) d2.1) fun _ s => if (s.a.size % 128 != 0) = true then
+      pure (ForInStep.yield ({ a := s.a.push #[], b := s.b.push #[] } : Builder)) else pure (ForInStep.done s) :
+      V Builder) with e | r3
+  · rw [productRows] at hW; rw [hW] at h; cases h
+  have hpad := while_pad_spec hW
+  rw [productRows] at hW
+  rw [hW] at h
+  simp only at h
+  split at h
+  · simp [throw, throwThe, MonadExceptOf.throw] at h
+  rename_i hshape
+  simp only [Bool.or_eq_true, bne_iff_ne, ne_eq, not_or, not_not] at hshape
+  set r4 := List.foldl (fun (r : Builder) i => if i < (if library then varying table n bits else bits) then
+      { a := r.a.push (Array.map (fun x => d2.1.a.size + i * d2.2.1.size + x) (Array.range d2.2.1.size)),
+        b := r.b.push #[KONST] }
+    else if (decide (i < bits) && (rd32 table 0).testBit i) = true then { a := r.a.push #[KONST], b := r.b.push #[KONST] }
+    else { a := r.a.push #[], b := r.b.push #[] }) r3 (List.range 128) with hr4
+  rcases hA : Sparse.ofRows (Array.map (fun r => Array.map (fun c => if (c == KONST) = true then r4.a.size else c) r)
+      (r4.a.push #[r4.a.size])) (2 ^ max 7 (log2ceil (r4.a.push #[r4.a.size]).size)) with e | A
+  · rw [hA] at h; cases h
+  rw [hA] at h
+  simp only at h
+  rcases hB : Sparse.ofRows (Array.map (fun r => Array.map (fun c => if (c == KONST) = true then r4.a.size else c) r)
+      (r4.b.push #[r4.a.size])) (2 ^ max 7 (log2ceil (r4.a.push #[r4.a.size]).size)) with e | B
+  · rw [hB] at h; cases h
+  rw [hB] at h
+  simp only [pure, Except.pure, Except.ok.injEq] at h
+  subst h
+  exact ⟨d1, d2, r3, rfl, rfl, hshape.1, hshape.2, hpad, hA, hB, by simp [r4, outputRowsV2], rfl, rfl, rfl⟩
+
+
+
+/-- `outputRowsV2`'s row `j`: `A` and `B`. -/
+def outAV2 (p nh k bits c0 j : ℕ) : Array ℕ :=
+  if j < k then Array.map (fun x => p + j * nh + x) (Array.range nh)
+  else if (decide (j < bits) && c0.testBit j) = true then #[KONST] else #[]
+def outBV2 (k bits c0 j : ℕ) : Array ℕ :=
+  if j < k then #[KONST] else if (decide (j < bits) && c0.testBit j) = true then #[KONST] else #[]
+
+theorem outputRowsV2_eq (p nh k bits c0 : ℕ) (s : Builder) : outputRowsV2 p nh k bits c0 s =
+    { a := s.a ++ ((List.range 128).map (outAV2 p nh k bits c0)).toArray,
+      b := s.b ++ ((List.range 128).map (outBV2 k bits c0)).toArray } := by
+  have : (fun (r : Builder) i => if i < k then
+      ({ a := r.a.push (Array.map (fun x => p + i * nh + x) (Array.range nh)), b := r.b.push #[KONST] } : Builder)
+      else if (decide (i < bits) && c0.testBit i) = true then { a := r.a.push #[KONST], b := r.b.push #[KONST] }
+      else { a := r.a.push #[], b := r.b.push #[] }) =
+      fun (r : Builder) i => ({ a := r.a.push (outAV2 p nh k bits c0 i), b := r.b.push (outBV2 k bits c0 i) } : Builder) := by
+    funext r i
+    unfold outAV2 outBV2
+    split
+    · rfl
+    · split <;> rfl
+  rw [outputRowsV2, this, foldl_push]
+
+/-- **A `table/v2` slot's rows compute `table[index]`** (`build_computes`, for `buildV2`): the same conclusion, for every
+table and index, `library` or `program`. Bits below the varying width `k` are computed as in v1 (the lookup record's
+`bits` is `k`); each bit at or above it is constant over the table (`varying_const`), and its row is that constant. -/
+theorem build_computes_v2 {name : String} {table : ByteArray} {n lo bits : ℕ} {library : Bool} {net : Net}
+    (hb : buildV2 name table n lo bits library = .ok net) (hK : net.useful ≤ KONST) :
+    ∃ (RA RB : Array (Array ℕ)) (lk : LookupTable) (col : ℕ),
+      Sparse.ofRows RA (2 ^ net.unitLog) = .ok net.a ∧ Sparse.ofRows RB (2 ^ net.unitLog) = .ok net.b ∧
+      RA.size = net.useful ∧ RB.size = net.useful ∧ net.lookup = some lk ∧
+      lk.table = table ∧ lk.n = n ∧ lk.lo = lo ∧ lk.bits = (if library then varying table n bits else bits) ∧ net.outGroups = #[⟨col, 1, #[bits]⟩] ∧
+      ∀ z : ℕ → K, (∀ r < net.useful, z r = rowSum z (RA.getD r #[]) * (rowSum z (RB.getD r #[]) + tableB lk z r)) →
+        z net.constPos = 1 →
+        (∀ i < n, z i = 0 ∨ z i = 1) ∧
+        ∀ j < bits, z (128 * col + j) = if (rd32 table (4 * bitsVal z (List.range n))).testBit j then 1 else 0 := by
+  obtain ⟨hlo, hln, hb32, hn, hts, d1, d2, r3, hd1, hd2, hs1, hs2, ⟨k, hr3a, hr3b, hr3m⟩, hA, hB, huse, hconst, hout, hlk⟩ :=
+    build_spec_v2 hb
+  set kw := (if library then varying table n bits else bits) with hKd
+  -- the stages append rows to A and B together
+  have I0 := inputRows_eq n
+  have hI0a : (inputRows n).a.size = 128 := by rw [I0]; simp
+  have hI0b : (inputRows n).b.size = 128 := by rw [I0]; simp
+  have hlo0 : List.range lo ≠ [] := by simp; omega
+  have hhi0 : (List.range (n - lo)).map (lo + ·) ≠ [] := by simp; omega
+  obtain ⟨A1, S1, F1, -⟩ := decode_spec (K := K) (fun _ => 0) lo (inputRows n) (List.range lo) hlo0 (by simp)
+  rw [← hd1] at A1 S1 F1
+  simp only [List.length_range] at S1 F1
+  obtain ⟨A2, S2, -, -⟩ := decode_spec (K := K) (fun _ => 0) (n - lo) d1.1 ((List.range (n - lo)).map (lo + ·)) hhi0
+    (by simp)
+  rw [← hd2] at A2 S2
+  have PE := productRows_eq d2.2.1 kw d2.1
+  set P := productRows d2.2.1 kw d2.1 with hP
+  have AP : Appends d2.1 P := Appends.of_eq _ _ (by rw [PE]) (by rw [PE]) (by simp)
+  have A3 : Appends P r3 := Appends.of_eq _ _ hr3a hr3b rfl
+  set F := outputRowsV2 d2.1.a.size d2.2.1.size kw bits (rd32 table 0) r3 with hF
+  have FE := outputRowsV2_eq d2.1.a.size d2.2.1.size kw bits (rd32 table 0) r3
+  rw [← hF] at FE
+  have AF : Appends r3 F := Appends.of_eq _ _ (by rw [FE]) (by rw [FE]) (by simp)
+  have e0 : (inputRows n).a.size = (inputRows n).b.size := by rw [hI0a, hI0b]
+  have e1 := (A1.size).2 e0
+  have e2 := (A2.size).2 e1
+  have eP := (AP.size).2 e2
+  have e3 := (A3.size).2 eP
+  have eF := (AF.size).2 e3
+  have hPs : P.a.size = d2.1.a.size + kw * d2.2.1.size := by rw [PE]; simp
+  have hFs : F.a.size = r3.a.size + 128 := by rw [FE]; simp
+  have hr3s : P.a.size ≤ r3.a.size := (A3.size).1
+  have h1s := (A1.size).1
+  have h2s := (A2.size).1
+  refine ⟨_, _, _, r3.a.size / 128, hA, hB, by simp [fixKonst, huse], by simp [fixKonst, huse, eF], hlk, rfl, rfl, rfl,
+    rfl, hout, ?_⟩
+  intro z hrow hk
+  set lk : LookupTable := ⟨table, n, lo, kw, d2.1.a.size, d1.2.2⟩ with hlkd
+  have hKs : F.a.size < KONST := by rw [huse] at hK; omega
+  have hk' : z F.a.size = 1 := by rw [← hconst]; exact hk
+  -- every row of `F`, `KONST` read as 1
+  have hrowF : ∀ r < F.a.size,
+      z r = rowVal z (F.a.getD r #[]) * (rowVal z (F.b.getD r #[]) + tableB lk z r) := by
+    intro r hr
+    have := hrow r (by rw [huse]; omega)
+    rw [fixKonst_getD _ _ _ hr, fixKonst_getD _ _ _ (by rw [← eF]; exact hr), rowSum_fix z hk', rowSum_fix z hk'] at this
+    exact this
+  have tB0 : ∀ r, (r < d2.1.a.size ∨ P.a.size ≤ r) → tableB lk z r = 0 := by
+    intro r hr
+    simp only [tableB, hlkd]
+    split
+    · rename_i hc; rw [← hs2, ← hPs] at hc; omega
+    · rfl
+  -- a row of an earlier stage is that row of `F`
+  have AF1 := (A2.trans (AP.trans (A3.trans AF)))
+  have AF0 := A1.trans AF1
+  -- the index bits are bits
+  have hbits : ∀ i < n, z i = 0 ∨ z i = 1 := by
+    intro i hi
+    have hi128 : i < 128 := by omega
+    have e := AF0.getD e0 (by rw [hI0a]; exact hi128)
+    have h := hrowF i (by omega)
+    rw [e.1, e.2, tB0 i (Or.inl (by omega)), I0] at h
+    simp only at h
+    have hK' : i ≠ KONST := by unfold KONST; omega
+    simp [Array.getD_eq_getD_getElem?, hi128, hi, rowVal, colVal, hK'] at h
+    exact bit_of_idem h
+  refine ⟨hbits, ?_⟩
+  -- the decoders' rows hold: they are rows of `F`, before the product rows
+  have hbitsLo : ∀ b ∈ List.range lo, b ≠ KONST ∧ (z b = 0 ∨ z b = 1) := by
+    intro b hb; simp at hb; exact ⟨by unfold KONST; omega, hbits b (by omega)⟩
+  have hbitsHi : ∀ b ∈ (List.range (n - lo)).map (lo + ·), b ≠ KONST ∧ (z b = 0 ∨ z b = 1) := by
+    intro b hb; simp at hb; obtain ⟨x, hx, rfl⟩ := hb; exact ⟨by unfold KONST; omega, hbits _ (by omega)⟩
+  have ok1 : ∀ r, (inputRows n).a.size ≤ r → r < d1.1.a.size → RowOk z d1.1 r := by
+    intro r h1 h2
+    have e := AF1.getD e1 h2
+    have h := hrowF r (by omega)
+    rw [e.1, e.2, tB0 r (Or.inl (by omega)), add_zero] at h
+    exact h
+  have ok2 : ∀ r, d1.1.a.size ≤ r → r < d2.1.a.size → RowOk z d2.1 r := by
+    intro r h1 h2
+    have e := (AP.trans (A3.trans AF)).getD e2 h2
+    have h := hrowF r (by omega)
+    rw [e.1, e.2, tB0 r (Or.inl (by omega)), add_zero] at h
+    exact h
+  have V1 := (decode_spec z lo (inputRows n) (List.range lo) hlo0 (by simp)).2.2.2
+  rw [← hd1] at V1
+  have hLo := V1 e0 hbitsLo (by omega) ok1
+  have V2 := (decode_spec z (n - lo) d1.1 ((List.range (n - lo)).map (lo + ·)) hhi0 (by simp)).2.2.2
+  rw [← hd2] at V2
+  have hHi := V2 e1 hbitsHi (by omega) ok2
+  simp only [List.length_range, List.length_map] at hLo hHi
+  set low := bitsVal z (List.range lo) with hlow
+  set high := bitsVal z ((List.range (n - lo)).map (lo + ·)) with hhigh
+  -- low minterm `l` is the single row `loTop + l`
+  have hLoRow : ∀ l < 2 ^ lo, z (d1.2.2 + l) = if low = l then 1 else 0 := by
+    intro l hl
+    have := hLo l hl
+    rw [(F1 hlo).2 l hl, formVal_row z (by have := (F1 hlo).1; unfold KONST at hKs ⊢; omega)] at this
+    exact this
+  have hlowlt : low < 2 ^ lo := by have := bitsVal_lt z (List.range lo); simpa using this
+  have hhighlt : high < 2 ^ (n - lo) := by have := bitsVal_lt z ((List.range (n - lo)).map (lo + ·)); simpa using this
+  -- the sum over the low minterms picks the low index
+  have hsumLo : ∀ (Q : ℕ → Prop) [DecidablePred Q],
+      (∑ l ∈ Finset.range (2 ^ lo), if Q l then z (d1.2.2 + l) else 0) = if Q low then 1 else 0 := by
+    intro Q _
+    rw [Finset.sum_eq_single low]
+    · rw [hLoRow low hlowlt]; simp
+    · intro l hl hne; rw [hLoRow l (Finset.mem_range.1 hl)]; simp [Ne.symm hne]
+    · intro h; exact absurd (Finset.mem_range.2 hlowlt) h
+  -- product row `prod0 + t`: the high minterm `t % nh` times bit `t / nh` of its table word at the low index
+  have hProd : ∀ t < kw * d2.2.1.size, z (d2.1.a.size + t) =
+      (if high = t % d2.2.1.size then 1 else 0) *
+        (if (word lk (2 ^ lo) (2 ^ kw - 1) (t % d2.2.1.size) low).testBit (t / d2.2.1.size) then 1 else 0) := by
+    intro t ht
+    have hr : d2.1.a.size + t < P.a.size := by omega
+    have e := (A3.trans AF).getD eP hr
+    have h := hrowF (d2.1.a.size + t) (by omega)
+    rw [e.1, e.2, PE] at h
+    simp only at h
+    rw [getD_append_map _ _ _ _ _ ht, e2, getD_append_replicate _ _ _ _ _ ht] at h
+    have hnh0 : 0 < d2.2.1.size := by rw [hs2]; exact Nat.two_pow_pos _
+    have htb : tableB lk z (d2.1.a.size + t) =
+        if (word lk (2 ^ lo) (2 ^ kw - 1) (t % d2.2.1.size) low).testBit (t / d2.2.1.size) then 1 else 0 := by
+      simp only [tableB, hlkd]
+      rw [ite_eq_left_of_eq_true _ _ (eq_true (by rw [← hs2]; omega)), Nat.add_sub_cancel_left, ← hs2]
+      exact hsumLo _
+    rw [← e2, htb] at h
+    rw [h, ← formVal, hHi (t % d2.2.1.size) (by rw [← hs2]; exact Nat.mod_lt _ hnh0)]
+    simp [rowVal]
+  -- output bit `j`: a varying bit is its product rows summed; a constant one is its row's constant
+  intro j hj
+  have hj128 : j < 128 := by omega
+  have hr : r3.a.size + j < F.a.size := by omega
+  have h := hrowF (r3.a.size + j) hr
+  rw [FE] at h
+  simp only at h
+  rw [getD_append_map _ _ _ _ _ hj128, e3, getD_append_map _ _ _ _ _ hj128, ← e3,
+    tB0 _ (Or.inr (by omega)), add_zero] at h
+  rw [show 128 * (r3.a.size / 128) + j = r3.a.size + j by rw [Nat.mul_div_cancel' (Nat.dvd_of_mod_eq_zero hr3m)]]
+  have hKr : rowVal z #[KONST] = 1 := by simp [rowVal, colVal]
+  by_cases hjk : j < kw
+  swap
+  · have hc : (rd32 table (4 * bitsVal z (List.range n))).testBit j = (rd32 table 0).testBit j := by
+      cases library
+      · exact absurd hj (by simpa [hKd] using hjk)
+      · exact varying_const table n bits j (by simpa [hKd] using hjk) hj _ (by simpa using bitsVal_lt z (List.range n))
+    simp only [outAV2, outBV2, hjk, ↓reduceIte, hj, decide_true, Bool.true_and] at h
+    rw [h, hc]
+    by_cases hc0 : (rd32 table 0).testBit j = true
+    · simp only [hc0, ↓reduceIte, hKr, mul_one]
+    · simp [hc0, rowVal]
+  simp only [outAV2, outBV2, hjk, ↓reduceIte] at h
+  rw [hKr, mul_one] at h
+  have hsum : rowVal z (Array.map (fun x => d2.1.a.size + j * d2.2.1.size + x) (Array.range d2.2.1.size)) =
+      ∑ x ∈ Finset.range d2.2.1.size, z (d2.1.a.size + (j * d2.2.1.size + x)) := by
+    simp only [rowVal, Array.toList_map, Array.toList_range, List.map_map]
+    rw [list_sum_range]
+    apply Finset.sum_congr rfl
+    intro x hx
+    simp only [Function.comp, add_assoc]
+    rw [colVal_of_ne]
+    have := Finset.mem_range.1 hx
+    have : j * d2.2.1.size + x < kw * d2.2.1.size := lt_mul_of this hjk
+    unfold KONST at hKs ⊢; omega
+  have hnh0 : 0 < d2.2.1.size := by rw [hs2]; exact Nat.two_pow_pos _
+  rw [hsum] at h
+  have hterm : ∀ x ∈ Finset.range d2.2.1.size, z (d2.1.a.size + (j * d2.2.1.size + x)) =
+      (if high = x then 1 else 0) *
+        (if (word lk (2 ^ lo) (2 ^ kw - 1) x low).testBit j then 1 else 0) := by
+    intro x hx
+    have hx' := Finset.mem_range.1 hx
+    rw [hProd _ (lt_mul_of hx' hjk)]
+    rw [show (j * d2.2.1.size + x) % d2.2.1.size = x by rw [Nat.add_comm, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt hx'],
+      show (j * d2.2.1.size + x) / d2.2.1.size = j by
+        rw [Nat.add_comm, Nat.add_mul_div_right _ _ hnh0, Nat.div_eq_of_lt hx', zero_add]]
+  rw [Finset.sum_congr rfl hterm, Finset.sum_eq_single high] at h
+  · rw [h]
+    simp only [↓reduceIte, one_mul, word, hlkd]
+    rw [testBit_mask _ _ _ hjk]
+    have hidx : bitsVal z (List.range n) = high * 2 ^ lo + low := by
+      rw [show n = lo + (n - lo) by omega, List.range_add, bitsVal_append]
+      simp only [List.length_range]
+      rw [← hlow, ← hhigh]
+      ring
+    rw [hidx]
+  · intro x _ hne; simp [Ne.symm hne]
+  · intro hh; exact absurd (Finset.mem_range.2 (by rw [hs2]; exact hhighlt)) hh
+
 end
 
 end FlockLevel3

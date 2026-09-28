@@ -403,8 +403,32 @@ def templateQueryCmd (paths : List String) : IO UInt32 := do
     IO.println s!"TEMPLATEQUERY {line.compress}"
   return 0
 
+/-- `lookup-rows TABLE n lo bits [--program]`: the `table/v2` slot of a table file (raw `u32` LE words), a `library`
+table unless `--program`: its varying width, shape and rows digest (`Lookup.rowsDigest`), the vectors Rust's and Python's
+generators are held to. One `LOOKUPROWS` line. -/
+def lookupRowsCmd (args : List String) : IO UInt32 := do
+  let (path, n, lo, bits) ← match args with
+    | p :: n :: lo :: bits :: _ => match n.toNat?, lo.toNat?, bits.toNat? with
+      | some n, some lo, some bits => pure (p, n, lo, bits)
+      | _, _, _ => IO.eprintln "lookup-rows TABLE n lo bits [--program]"; return 2
+    | _ => IO.eprintln "lookup-rows TABLE n lo bits [--program]"; return 2
+  let table ← IO.FS.readBinFile path
+  let library := !args.contains "--program"
+  let line := match Lookup.buildV2 "lookup" table n lo bits library with
+    | .error e => Lean.Json.mkObj [("ok", Lean.Json.bool false), ("error", Lean.Json.str e)]
+    | .ok net =>
+      let lk := net.lookup.getD default
+      Lean.Json.mkObj [("ok", Lean.Json.bool true), ("table_sha512", Lean.Json.str (hexOf (Sha512.hash table))),
+        ("n", Lean.toJson n), ("lo", Lean.toJson lo), ("bits", Lean.toJson bits), ("library", Lean.Json.bool library),
+        ("k", Lean.toJson lk.bits), ("useful", Lean.toJson net.useful), ("unit_log", Lean.toJson net.unitLog),
+        ("prod0", Lean.toJson lk.prod0), ("lo_top", Lean.toJson lk.loTop),
+        ("rows_sha512", Lean.Json.str (hexOf (Lookup.rowsDigest net n lo bits)))]
+  IO.println s!"LOOKUPROWS {line.compress}"
+  return (if (line.getObjValAs? Bool "ok").toOption.getD false then 0 else 1)
+
 def main (args : List String) : IO UInt32 := do
   match args with
+  | "lookup-rows" :: rest => lookupRowsCmd rest
   | ["merkle-test", path] => merkleTest path
   | ["hm96-test", path] => hm96Test path
   | ["hm96-test", path, "sha512"] => hm96Test path Hm96.sha512

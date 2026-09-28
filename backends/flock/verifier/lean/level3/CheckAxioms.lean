@@ -53,3 +53,6 @@ import FlockLevel3
 #print axioms FlockLevel3.decode_spec
 #print axioms FlockLevel3.build_spec
 #print axioms FlockLevel3.build_computes
+#print axioms FlockLevel3.varying_const
+#print axioms FlockLevel3.build_spec_v2
+#print axioms FlockLevel3.build_computes_v2
