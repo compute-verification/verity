@@ -3996,6 +3996,70 @@
    "assumptions": [],
    "type_hash": "af5a8e45b86549673e2b52f94630df0c977da99c288e14619ce02f8126933936"
   },
+  "FlockSoundness.ZK.SameDist.pi": {
+   "signature": [
+    "FlockSoundness.ZK.SameDist.pi {J : Nat} {Ω Ω' V : Fin J → Type} [(j : Fin J) → Fintype (Ω j)]",
+    "  [(j : Fin J) → Fintype (Ω' j)] (f : (j : Fin J) → Ω j → V j) (g : (j : Fin J) → Ω' j → V j)",
+    "  (h : ∀ (j : Fin J), FlockSoundness.ZK.SameDist (f j) (g j)) :",
+    "  FlockSoundness.ZK.SameDist (fun ω j => f j (ω j)) fun σ j => g j (σ j)"
+   ],
+   "assumptions": [],
+   "type_hash": "7b540101a30600695fcc1bd69c5e34e6fe04ee1a8e94f5df782a673c4579d685"
+  },
+  "FlockSoundness.ZK.Session.session_prefinal_indep": {
+   "signature": [
+    "FlockSoundness.ZK.Session.session_prefinal_indep {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] {J : Nat}",
+    "  (T : Fin J → FlockSoundness.ZK.Table F K W Salt Seed D Hi VL) [CharP F 2] [AddCommGroup Salt] [AddCommGroup Seed]",
+    "  [AddCommGroup Hi] [Fintype F] [DecidableEq F] [Fintype Salt] [DecidableEq Salt] [Fintype Seed] [DecidableEq Seed]",
+    "  [Fintype Hi] [DecidableEq Hi] (hrank : ∀ (j : Fin J), (T j).Rank)",
+    "  (hW : ∀ (j : Fin J) (r : Fin 2), Function.Bijective fun p => (T j).Wr r p.fst p.snd)",
+    "  (hβ : ∀ (j : Fin J) (r : Fin 2), Ne ((T j).β r) 0) (w w' : Fin J → W)",
+    "  (hreg : ∀ (j : Fin J), Eq ((T j).sReg (w j)) (T j).pubReg)",
+    "  (hreg' : ∀ (j : Fin J), Eq ((T j).sReg (w' j)) (T j).pubReg) :",
+    "  FlockSoundness.ZK.SameDist (FlockSoundness.ZK.Session.preView T w) (FlockSoundness.ZK.Session.preView T w')"
+   ],
+   "assumptions": [],
+   "type_hash": "c357e92df141e1f845838fe2832607b34247ee978c366a1081ebffd47725d27c"
+  },
+  "FlockSoundness.ZK.Session.session_shvzk": {
+   "signature": [
+    "FlockSoundness.ZK.Session.session_shvzk {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] {J : Nat}",
+    "  (T : Fin J → FlockSoundness.ZK.Table F K W Salt Seed D Hi VL) [CharP F 2] [AddCommGroup Salt] [AddCommGroup Seed]",
+    "  [AddCommGroup Hi] [Fintype F] [DecidableEq F] [Fintype K] [DecidableEq K] [Fintype Salt] [DecidableEq Salt]",
+    "  [Fintype Seed] [DecidableEq Seed] [Fintype Hi] [DecidableEq Hi] (hrank : ∀ (j : Fin J), (T j).Rank)",
+    "  (hpad : ∀ (j : Fin J), (T j).PadOnto)",
+    "  (hW : ∀ (j : Fin J) (r : Fin 2), Function.Bijective fun p => (T j).Wr r p.fst p.snd)",
+    "  (hpads : ∀ (j : Fin J), (T j).PadsOnto) (hβ : ∀ (j : Fin J) (r : Fin 2), Ne ((T j).β r) 0) (w : Fin J → W)",
+    "  (hreg : ∀ (j : Fin J), Eq ((T j).sReg (w j)) (T j).pubReg) (hinner : ∀ (j : Fin J), (T j).InnerHolds (w j))",
+    "  (w0 : Fin J → W) :",
+    "  FlockSoundness.ZK.SameDist (FlockSoundness.ZK.Session.view T w) (FlockSoundness.ZK.Session.sim T w0)"
+   ],
+   "assumptions": [],
+   "type_hash": "5e83d86bebd36e5cfe4335ad886f8e7cabab25568561278bdd9591256b8807ed"
+  },
+  "FlockSoundness.ZK.Session.session_shvzk_hm96": {
+   "signature": [
+    "FlockSoundness.ZK.Session.session_shvzk_hm96 {F K W Salt B D Hi VL : Type} [Field F] [Field K] [AddCommGroup B]",
+    "  {J : Nat} (T : Fin J → FlockSoundness.ZK.Table F K W Salt (Prod B Salt) D Hi VL) [CharP F 2] [AddCommGroup Salt]",
+    "  [AddCommGroup Hi] [Fintype F] [DecidableEq F] [Fintype K] [DecidableEq K] [Fintype Salt] [DecidableEq Salt]",
+    "  [Fintype B] [DecidableEq B] [Fintype Hi] [DecidableEq Hi] {C : Type} (M : (j : Fin J) → (T j).Hm96 C) {δ₁ : ENNReal}",
+    "  (hT1 : ∀ (j : Fin J), FlockSoundness.Assumptions.Hm96Hiding (M j).My (M j).cs δ₁) (hrank : ∀ (j : Fin J), (T j).Rank)",
+    "  (hpad : ∀ (j : Fin J), (T j).PadOnto)",
+    "  (hW : ∀ (j : Fin J) (r : Fin 2), Function.Bijective fun p => (T j).Wr r p.fst p.snd)",
+    "  (hpads : ∀ (j : Fin J), (T j).PadsOnto) (hβ : ∀ (j : Fin J) (r : Fin 2), Ne ((T j).β r) 0) (w : Fin J → W)",
+    "  (hreg : ∀ (j : Fin J), Eq ((T j).sReg (w j)) (T j).pubReg) (hinner : ∀ (j : Fin J), (T j).InnerHolds (w j))",
+    "  (w0 : Fin J → W) (E : ((j : Fin J) → (T j).View) → Prop) :",
+    "  And",
+    "    (ENNReal.instLE.le (FlockSoundness.Game.prCoin fun p => E fun j => (M j).viewR (w j) (p j).fst (p j).snd)",
+    "      (instHAdd.hAdd (FlockSoundness.Game.prCoin fun p => E fun j => (M j).simR (w0 j) (p j).fst (p j).snd)",
+    "        (Finset.univ.sum fun j => instHMul.hMul (instHMul.hMul 2 (Fintype.card (T j).Hid).cast) δ₁)))",
+    "    (ENNReal.instLE.le (FlockSoundness.Game.prCoin fun p => E fun j => (M j).simR (w0 j) (p j).fst (p j).snd)",
+    "      (instHAdd.hAdd (FlockSoundness.Game.prCoin fun p => E fun j => (M j).viewR (w j) (p j).fst (p j).snd)",
+    "        (Finset.univ.sum fun j => instHMul.hMul (instHMul.hMul 2 (Fintype.card (T j).Hid).cast) δ₁)))"
+   ],
+   "assumptions": [],
+   "type_hash": "d48e109c9035276d4ede8387b15f923a5ab35dcc4683afc073388b4be192c756"
+  },
   "FlockSoundness.ZK.Table.inner_complete": {
    "signature": [
     "FlockSoundness.ZK.Table.inner_complete {F K : Type} [Field F] [Field K] {W Salt Seed D Hi VL : Type}",
@@ -4401,6 +4465,22 @@
    ],
    "assumptions": [],
    "type_hash": "d97bd15df8c0e8106db21f1eaf89a1d93c87eeb4c7bec3c89ae1aba9a5d55148"
+  },
+  "FlockSoundness.ZK.prCoin_pi_close": {
+   "signature": [
+    "FlockSoundness.ZK.prCoin_pi_close {J : Nat} {Ω Ω' V : Fin J → Type} [(j : Fin J) → Fintype (Ω j)]",
+    "  [∀ (j : Fin J), Nonempty (Ω j)] [(j : Fin J) → Fintype (Ω' j)] [∀ (j : Fin J), Nonempty (Ω' j)]",
+    "  (f : (j : Fin J) → Ω j → V j) (g : (j : Fin J) → Ω' j → V j) (ε : Fin J → ENNReal)",
+    "  (h :",
+    "    ∀ (j : Fin J) (E : V j → Prop),",
+    "      ENNReal.instLE.le (FlockSoundness.Game.prCoin fun ω => E (f j ω))",
+    "        (instHAdd.hAdd (FlockSoundness.Game.prCoin fun σ => E (g j σ)) (ε j)))",
+    "  (E : ((j : Fin J) → V j) → Prop) :",
+    "  ENNReal.instLE.le (FlockSoundness.Game.prCoin fun ω => E fun j => f j (ω j))",
+    "    (instHAdd.hAdd (FlockSoundness.Game.prCoin fun σ => E fun j => g j (σ j)) (Finset.univ.sum fun j => ε j))"
+   ],
+   "assumptions": [],
+   "type_hash": "7709325be9df83ab2e6074558c6dac672a169b79c6ca76f39e84917c7330aae7"
   },
   "FlockSoundness.ZK.run_eq_iff": {
    "signature": [
@@ -5814,6 +5894,7 @@
     "FlockSoundness.UProg.flock_e2e_count_classes_zero",
     "FlockSoundness.UProg.flock_e2e_drawn_classes",
     "FlockSoundness.UProg.flock_e2e_drawn_classes_zero",
+    "FlockSoundness.ZK.Session.session_shvzk_hm96",
     "FlockSoundness.ZK.Table.table_shvzk_hm96",
     "FlockSoundness.ZK.ideal_leaf_swap",
     "FlockSoundness.ZK.ideal_leaves_swap",
@@ -7094,9 +7175,11 @@
     "FlockSoundness.UProg.flock_e2e_count_classes_zero",
     "FlockSoundness.UProg.flock_e2e_drawn_classes",
     "FlockSoundness.UProg.flock_e2e_drawn_classes_zero",
+    "FlockSoundness.ZK.Session.session_shvzk_hm96",
     "FlockSoundness.ZK.Table.table_shvzk_hm96",
     "FlockSoundness.ZK.ideal_leaf_swap",
     "FlockSoundness.ZK.ideal_leaves_swap",
+    "FlockSoundness.ZK.prCoin_pi_close",
     "FlockSoundness.session_knowledge_sound",
     "FlockSoundness.table_knowledge_sound",
     "FlockSoundness.table_knowledge_sound_joint",
@@ -9097,7 +9180,13 @@
    "definitions": {
     "FlockSoundness.ZK.SameDist": "1f0fc339b5a40c20866b6577e9367ad6d930b4a3b3f9c4d6b3c0a39236b4d1c4"
    },
-   "pins": ["FlockSoundness.ZK.Table.table_prefinal_indep", "FlockSoundness.ZK.Table.table_shvzk"]
+   "pins": [
+    "FlockSoundness.ZK.SameDist.pi",
+    "FlockSoundness.ZK.Session.session_prefinal_indep",
+    "FlockSoundness.ZK.Session.session_shvzk",
+    "FlockSoundness.ZK.Table.table_prefinal_indep",
+    "FlockSoundness.ZK.Table.table_shvzk"
+   ]
   },
   "FlockSoundness.ZK.Masking": {
    "digest": "82ae22c34b1a1635a4d28f0eb5c048d8eb903e2b43a6b954ed2ce97931dbf50e",
@@ -9127,7 +9216,7 @@
     "FlockSoundness.ZK.Table.simWith": "d2e66720554f11b308c064bb7831ed5766c0b92e6bd67f36e49fbfe6bdc410a1",
     "FlockSoundness.ZK.Table.viewWith": "30e32432a7020aeb7a0d2f7999124cd1f77796298fd6379204e50be24fb447fc"
    },
-   "pins": ["FlockSoundness.ZK.Table.table_shvzk_hm96"]
+   "pins": ["FlockSoundness.ZK.Session.session_shvzk_hm96", "FlockSoundness.ZK.Table.table_shvzk_hm96"]
   },
   "FlockSoundness.ZK.SHVZK": {
    "digest": "42d8d7afef459a622b4af3924b1954dc04b272de6e4ea5a8c7fd683bc66e1ef9",
@@ -9137,10 +9226,22 @@
     "FlockSoundness.ZK.Table.instFintypeSimRand": "5963bfa0ea5feb5ee9fae03989359dcaf6cdc6ae475a00a27b38249806dc44e6"
    },
    "pins": [
+    "FlockSoundness.ZK.Session.session_prefinal_indep",
+    "FlockSoundness.ZK.Session.session_shvzk",
+    "FlockSoundness.ZK.Session.session_shvzk_hm96",
     "FlockSoundness.ZK.Table.table_prefinal_indep",
     "FlockSoundness.ZK.Table.table_shvzk",
     "FlockSoundness.ZK.Table.table_shvzk_hm96"
    ]
+  },
+  "FlockSoundness.ZK.Session": {
+   "digest": "9a3fb0b6f7f6e2a8e47546deb99a5e7abad3907325fd05f5024547b868be3df0",
+   "definitions": {
+    "FlockSoundness.ZK.Session.preView": "460d0743bc78749e5597027a1f667e30337e5129e4258fbcc4f6ec548b827a3f",
+    "FlockSoundness.ZK.Session.sim": "879644515fc2d065382eb3b7b82dff48ea5b1142984106880f1a05d6ffb4eb7d",
+    "FlockSoundness.ZK.Session.view": "6802ecdd5359b684fbfb96f9fafcbc76621f36f91ff06c665cc3076621623808"
+   },
+   "pins": ["FlockSoundness.ZK.Session.session_prefinal_indep", "FlockSoundness.ZK.Session.session_shvzk"]
   },
   "FlockSoundness.ZK.Table": {
    "digest": "f499e9623366ff84dc7f0dfff07330ec08c82fb5c8629482282546e263b4fec6",
@@ -9233,6 +9334,9 @@
     "FlockSoundness.ZK.Table.ρ": "48a67e2caa102dbbaca7985b7561709f13eafa6af0167ad3ea4a17cc6b16bb7d"
    },
    "pins": [
+    "FlockSoundness.ZK.Session.session_prefinal_indep",
+    "FlockSoundness.ZK.Session.session_shvzk",
+    "FlockSoundness.ZK.Session.session_shvzk_hm96",
     "FlockSoundness.ZK.Table.inner_complete",
     "FlockSoundness.ZK.Table.star",
     "FlockSoundness.ZK.Table.table_prefinal_indep",
