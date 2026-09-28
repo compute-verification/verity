@@ -1080,31 +1080,38 @@ pub fn eq_word(p: &[F128], x: usize) -> F128 {
 /// `s_hat_v^{p}[v]` gets `Σ_x eq(p, x) u_{v,x}` over the mask words `x`, with `u` uniform bits. That is uniform on
 /// `GF(2^128)^k`, independently for each `v`, exactly when the vectors `(eq(p_1, x), ..., eq(p_k, x))` span `GF(2)^{128k}`.
 /// Returns the GF(2)-rank and whether it is full.
+///
+/// The rows are inserted one at a time into an echelon basis (one vector per pivot column, its lowest set bit), each reduced
+/// against it lowest bit first, and evaluated only as they are inserted: the rank can't exceed the `128 k` columns, so once
+/// the basis is full the remaining words are not read. Honest coins fill it within a few blocks' words.
 pub fn mask_rank_ok(points: &[Vec<F128>], mask_words: &[usize]) -> (usize, bool) {
-    let k = points.len();
-    let limbs = 2 * k;
-    let mut rows: Vec<Vec<u64>> = mask_words.iter().map(|&x| {
-        points.iter().flat_map(|p| {
+    let limbs = 2 * points.len();
+    let full = 64 * limbs;
+    let mut basis: Vec<Option<Vec<u64>>> = vec![None; full];
+    let mut rank = 0;
+    for &x in mask_words {
+        if rank == full {
+            break;
+        }
+        let mut row: Vec<u64> = points.iter().flat_map(|p| {
             let e = eq_word(p, x);
             [e.lo, e.hi]
-        }).collect()
-    }).collect();
-    let mut rank = 0;
-    for col in 0..64 * limbs {
-        let (w, b) = (col / 64, col % 64);
-        let Some(piv) = (rank..rows.len()).find(|&r| (rows[r][w] >> b) & 1 == 1) else { continue };
-        rows.swap(rank, piv);
-        let pr = rows[rank].clone();
-        for (r, row) in rows.iter_mut().enumerate() {
-            if r != rank && (row[w] >> b) & 1 == 1 {
-                for (x, y) in row.iter_mut().zip(&pr) {
-                    *x ^= y;
+        }).collect();
+        let mut w = 0;
+        while let Some(at) = (w..limbs).find(|&i| row[i] != 0) {
+            w = at;
+            let col = 64 * w + row[w].trailing_zeros() as usize;
+            match &basis[col] {
+                Some(b) => row[w..].iter_mut().zip(&b[w..]).for_each(|(r, v)| *r ^= v),
+                None => {
+                    basis[col] = Some(row);
+                    rank += 1;
+                    break;
                 }
             }
         }
-        rank += 1;
     }
-    (rank, rank == 64 * limbs)
+    (rank, rank == full)
 }
 
 /// The constraints the honest pads fail (none for an honest prover; a dishonest prover's proof carries on to the verifier).
@@ -1541,5 +1548,110 @@ mod tests {
         assert!(ok, "rank {rank}");
         let (_, ok1) = mask_rank_ok(&pts, &words[..200]);
         assert!(!ok1, "200 words cannot span 256 dimensions");
+    }
+
+    /// The oracle: `mask_rank_ok` as it was before the echelon basis (main at 378453fb3), Gauss–Jordan over every word's row.
+    fn mask_rank_gauss_jordan(points: &[Vec<F128>], mask_words: &[usize]) -> (usize, bool) {
+        let k = points.len();
+        let limbs = 2 * k;
+        let mut rows: Vec<Vec<u64>> = mask_words.iter().map(|&x| {
+            points.iter().flat_map(|p| {
+                let e = eq_word(p, x);
+                [e.lo, e.hi]
+            }).collect()
+        }).collect();
+        let mut rank = 0;
+        for col in 0..64 * limbs {
+            let (w, b) = (col / 64, col % 64);
+            let Some(piv) = (rank..rows.len()).find(|&r| (rows[r][w] >> b) & 1 == 1) else { continue };
+            rows.swap(rank, piv);
+            let pr = rows[rank].clone();
+            for (r, row) in rows.iter_mut().enumerate() {
+                if r != rank && (row[w] >> b) & 1 == 1 {
+                    for (x, y) in row.iter_mut().zip(&pr) {
+                        *x ^= y;
+                    }
+                }
+            }
+            rank += 1;
+        }
+        (rank, rank == 64 * limbs)
+    }
+
+    /// The mask slot's words as the binary's `mask_words` lays them out: `blocks` blocks of `2^block_log` words, the slot's
+    /// 128 words at `w0` in each.
+    fn slot_words(blocks: usize, block_log: usize, w0: usize) -> Vec<usize> {
+        (0..blocks).flat_map(|b| (0..128).map(move |j| (b << block_log) + w0 + j)).collect()
+    }
+
+    /// The echelon basis gives the oracle's rank and verdict on random claim points (1 to 4, each with every word, with one
+    /// word short of the full rank, and with no words), on degenerate ones (a repeated point, the zero point, a Boolean point,
+    /// a point repeated four times), on repeated words, and with no points at all.
+    #[test]
+    fn mask_rank_matches_gauss_jordan() {
+        let mut rng = ProverRng::from_seed(ProverSeed::injected([12; 32]));
+        let d = 19;
+        let words = slot_words(16, 15, 12288);
+        let pt = |rng: &mut ProverRng, i: u64| rng.f128s(1, 200 + i, d);
+        let (p, q, r, s) = (pt(&mut rng, 0), pt(&mut rng, 1), pt(&mut rng, 2), pt(&mut rng, 3));
+        let zero = vec![F128::ZERO; d];
+        let boolean: Vec<F128> = (0..d).map(|i| if i % 3 == 0 { F128::ONE } else { F128::ZERO }).collect();
+        let few = |k: usize| words[..128 * k - 1].to_vec();
+        let cases: Vec<(&str, Vec<Vec<F128>>, Vec<usize>, Option<bool>)> = vec![
+            ("one point", vec![p.clone()], words.clone(), Some(true)),
+            ("two points", vec![p.clone(), q.clone()], words.clone(), Some(true)),
+            ("three points", vec![p.clone(), q.clone(), r.clone()], words.clone(), Some(true)),
+            ("four points", vec![p.clone(), q.clone(), r.clone(), s.clone()], words.clone(), Some(true)),
+            ("one point, one word short", vec![p.clone()], few(1), Some(false)),
+            ("two points, one word short", vec![p.clone(), q.clone()], few(2), Some(false)),
+            ("four points, one word short", vec![p.clone(), q.clone(), r.clone(), s.clone()], few(4), Some(false)),
+            ("four points, one block", vec![p.clone(), q.clone(), r.clone(), s.clone()], words[..128].to_vec(), Some(false)),
+            ("two points, no words", vec![p.clone(), q.clone()], vec![], Some(false)),
+            ("a repeated point", vec![p.clone(), p.clone()], words.clone(), Some(false)),
+            ("a repeated pair", vec![p.clone(), q.clone(), p.clone(), q.clone()], words.clone(), Some(false)),
+            ("one point four times", vec![p.clone(), p.clone(), p.clone(), p.clone()], words.clone(), Some(false)),
+            ("the zero point", vec![zero.clone()], words.clone(), Some(false)),
+            ("the zero point beside a random one", vec![p.clone(), zero.clone()], words.clone(), Some(false)),
+            ("a Boolean point", vec![boolean.clone()], words.clone(), Some(false)),
+            ("a Boolean point beside random ones", vec![p.clone(), boolean, q.clone()], words.clone(), Some(false)),
+            ("one word repeated", vec![p.clone()], vec![words[5]; 300], Some(false)),
+            ("every word twice", vec![p.clone(), q.clone()], words.iter().flat_map(|&w| [w, w]).collect(), Some(true)),
+            ("no points", vec![], words.clone(), Some(true)),
+            ("no points, no words", vec![], vec![], Some(true)),
+        ];
+        for (name, pts, w, want) in cases {
+            let got = mask_rank_ok(&pts, &w);
+            assert_eq!(got, mask_rank_gauss_jordan(&pts, &w), "{name}");
+            if let Some(ok) = want {
+                assert_eq!(got.1, ok, "{name}: rank {} of {}", got.0, 128 * pts.len());
+            }
+        }
+        for k in 1..=4 {
+            for trial in 0..4u64 {
+                let pts: Vec<Vec<F128>> = (0..k as u64).map(|i| pt(&mut rng, 1000 + 16 * trial + i)).collect();
+                for n in [128 * k - 1, 128 * k, 128 * k + 64, words.len()] {
+                    assert_eq!(mask_rank_ok(&pts, &words[..n]), mask_rank_gauss_jordan(&pts, &words[..n]), "{k} points, {n} words, trial {trial}");
+                }
+            }
+        }
+    }
+
+    /// At the proved sizes, the mask slots of K = 4096 (2,048 blocks of 2^17 words: 262,144 mask words) and K = 14,336 (512
+    /// blocks of 2^19: 65,536), with 28-coordinate claim points: the rank check's two calls (2 points, then 4), and a repeated
+    /// pair, which reads every word.
+    #[test]
+    #[cfg_attr(debug_assertions, ignore = "the oracle at the proved sizes takes minutes unoptimised: cargo test --release (check_build.sh test)")]
+    fn mask_rank_matches_gauss_jordan_at_the_proved_sizes() {
+        let mut rng = ProverRng::from_seed(ProverSeed::injected([13; 32]));
+        let pts: Vec<Vec<F128>> = (0..4).map(|i| rng.f128s(1, 300 + i, 28)).collect();
+        for (blocks, block_log) in [(2048, 17), (512, 19)] {
+            let words = slot_words(blocks, block_log, 3 << (block_log - 3));
+            for (name, p) in [("two points", pts[..2].to_vec()), ("four points", pts.clone()),
+                              ("a repeated pair", vec![pts[0].clone(), pts[1].clone(), pts[0].clone(), pts[1].clone()])] {
+                let got = mask_rank_ok(&p, &words);
+                assert_eq!(got, mask_rank_gauss_jordan(&p, &words), "{blocks} blocks: {name}");
+                assert_eq!(got.1, name != "a repeated pair", "{blocks} blocks: {name}");
+            }
+        }
     }
 }

@@ -51,7 +51,7 @@ def test_calibrate_honest_trace():
     (ingress,) = report["ingress"]
     assert ingress["bucket_ms"] == 100  # τ_in's default
     assert ingress["rate_bps"] == capacity.ingress_rate(ingress["allocation"], 100)
-    assert set(report["k_charge"]["share_of_k_by_span"]) == {"60s", "600s", "3600s", "86400s"}
+    assert set(report["k_charge"]) == {"ingress_bps", "memory_after_wipe"}  # no K given, no share of it
 
 
 def test_a_bucket_over_the_queue_capacity_overflows_at_every_allocation():
@@ -321,10 +321,22 @@ def test_cli(tmp_path):
     path.write_text(json.dumps(synthetic_trace()))
     out = io.StringIO()
     with redirect_stdout(out):
-        assert calibration.main([str(path), "--ingress-bucket-ms", "200", "--target-k-share", "0.01"]) == 0
+        assert calibration.main([str(path), "--ingress-bucket-ms", "200", "--k-bits", "9.12e7",
+                                 "--target-k-share", "0.01"]) == 0
     report = json.loads(out.getvalue())
     assert report["ingress"][0]["bucket_ms"] == 200
-    assert "meets_target" in report["k_charge"]["target"]
+    k = report["k_charge"]
+    assert k["k_bits"] == 9.12e7 and set(k["share_of_k_by_span"]) == {"60s", "600s", "3600s", "86400s"}
+    assert k["share_of_k_by_span"]["3600s"] == capacity.k_share(k["ingress_bps"] * 3600, 9.12e7)
+    assert "meets_target" in k["target"]
+
+
+def test_a_target_share_of_k_needs_k(tmp_path, capsys):
+    """K is the caller's (core holds no policy's number), so a target share without K is an argument error."""
+    path = tmp_path / "trace.json"
+    path.write_text(json.dumps(synthetic_trace()))
+    assert calibration.main([str(path), "--target-k-share", "0.01"]) == 2
+    assert "k_bits" in capsys.readouterr().err
 
 
 def test_cli_reports_a_trace_no_allocation_carries(tmp_path, capsys):

@@ -53,6 +53,7 @@ from .vectors import edge_count, flat, instance_args, vectors
 SCHEMA = "verity-circuit-check/v1"
 PINS = Path(__file__).with_name("pins.json")
 _EXAMPLES = 3
+_LIMB = (1 << 64) - 1
 
 
 @dataclass(frozen=True)
@@ -452,8 +453,11 @@ def whole_lowering(t: Any, params: Sequence, arrays: Sequence[np.ndarray], ref: 
     rec: dict[str, Any] = {"lowered": True, "via": "c-flock:ir_lower", "ands": counts["ands"], "compared": T}
     if T:
         got_s, fail = C.evaluate({f"in{j}": IL.slice_words(fin[:, j], w) for j, w in enumerate(widths)}, T)
-        got = np.stack([IL.unslice_words(got_s[f"out{k}"], T) for k in range(len(outs))], axis=1)
-        want = np.asarray([ref[i] for i in rows], dtype=np.uint64)
+        # a lane holds 64 bits, so an output leaf wider than that is compared limb by limb, low limb first
+        cols = [(k, lo) for k, o in enumerate(outs) for lo in range(0, max(len(o), 1), 64)]
+        got = np.stack([IL.unslice_words(got_s[f"out{k}"][lo:lo + 64], T) for k, lo in cols], axis=1)
+        want = np.asarray([[ref[i][k] if len(outs[k]) <= 64 else ref[i][k] >> lo & _LIMB for k, lo in cols] for i in rows],
+                          dtype=np.uint64)
         bad = np.flatnonzero((got != want).any(axis=1)).tolist()
         rec["mismatches"] = len(bad)
         if isinstance(t, PrimitiveDefinition):
