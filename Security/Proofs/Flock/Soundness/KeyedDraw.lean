@@ -1,5 +1,5 @@
 import Proofs.Flock.Soundness.ExecDrawOS
-import Proofs.Flock.Soundness.Randomness
+import Randomness
 import Proofs.Flock.Soundness.PlanDraw
 import Proofs.Flock.Soundness.Audit.Window
 import Proofs.Flock.Soundness.Audit.RegDraw
