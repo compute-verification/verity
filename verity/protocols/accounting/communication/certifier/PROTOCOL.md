@@ -116,6 +116,37 @@ deadline bit set and the parameters digest of `params` and Σ_sync, and compares
 `cr/sha-512`, equal digests mean equal records, so the audit stays exact. A certified record rests on `cr/sha-512`,
 on the signature's unforgeability, and on an honest certifier; not on `cr/sha-256`.
 
+## Through the proof service (`service`)
+
+One link-window's certificates are registered through the proof service (`verity.protocols.verification.sampled_proofs.service`)
+as a `Spec` of its own (`service.LinkWindows`, one per link):
+- **Committed:** one value, `certificates`: the link-window's egress and ingress certified records, leaves 0 and 1, each
+  `hm96-sha512/row/v2` over `service.encode` (the head, then the certificate) with a fresh salt, in one `frame-v3-sha512`
+  tree under one-stage's served domain for the run, the link and the window. The firewall keeps the records and salts
+  (`Opening`). The challenger receives one salted root and never a certificate.
+- **Selection:** `All`. A registration is one link-window, one proof unit, so an accepted outcome is the exhaustive fact.
+  The record's `window` provenance is exactly `{"kind": "served", "window": w}`, and the challenger holds w to the
+  registration's order (`LinkWindows.register`): the receipt keeps the order, and the order is the link-window.
+- **Public:** the population, the window, the value's leaf count, domain and salted root, the parameters digests and
+  the charge (log2 #Σ_sync per window, 7 bits at 16 × 8), both bound by the spec's context with the link, the run and
+  the certifier's key id, and the check's outputs `verdict` and `deadline`. A rejected link-window shows only the
+  service's `reject`; the violation's kind stays in the verifier. A registration with any other field, a second root,
+  a root entry with another key, or anything more in `window` is refused.
+- **The check** is `service.UNIT`, `NetworkLinkWindow` v0: one opaque primitive from the two leaves' committed digests to
+  the verdict bit. It has no gates. Its Program's digest is the check's, so the spec, the stream and each registration
+  bind to it, but nothing proves it in a circuit. Its verifier of record is a host-side stand-in, `LinkWindows.verify`,
+  that reads the opening: it accepts when the opening reproduces the registered root and the audit accepts both
+  records under the certifier's key (`check_link` against the Program's grid under the declared syncs,
+  `check_ingress_link` on the status and parameters). The outcome passes the opening's root as the session's, which
+  one-stage's audit holds to the registered one. An unset deadline bit is a `no-verdict` there, so a reject; a proof
+  after `proof_deadline` is the service's `late`.
+
+What this establishes: the outcome is accept exactly when the audit accepts the registered link-window's records, and
+the outcome record binds the root, the draw and the session. What it doesn't: the stand-in reads the witness, so it is
+not zero-knowledge, and the verifier of record must run where the certificates may go until the check is a Program with a
+proof. One clock per spatial unit across links is not checked (each registration is one link-window, alone), and the
+frames' consistency with the served computation is N3.
+
 ## The Program's logical schedule and the clock-sync advice (`schedule`)
 
 The Program fixes each real frame's content, its **anchor** and its **logical index** λ. The anchor is the recorded
@@ -425,6 +456,10 @@ horizons, so they check the Lean statements on examples and prove nothing. By na
   - a signer whose state is missing or behind refuses, and that link-window is a `no-verdict`; it signs again once its
     state is restored, never reusing a leaf. The signer is a test-only Lamport tree (`tests/toy_signer.py`), not the
     certifier's scheme;
+- **`test_network_certifier_service.py`:** one link-window through the proof service: the round trip to an exhaustive
+  accept, nothing of a certificate or a violation's kind in what the challenger keeps, each refused registration (an
+  extra field, a certificate in the clear, a window other than the order), and each reject (a bad signature, a digest
+  mismatch, another window or link, an unset deadline bit, a late proof, an opening of another root);
 - **`test_network_certifier_calibration.py`:** the calibration tool, and the honest prover's choice against its rule by
   brute force, on one link and on several under one clock;
 - **`test_network_certifier_active.py`:** the active certifier over localhost sockets on an injected clock:

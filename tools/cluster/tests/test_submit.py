@@ -120,6 +120,18 @@ def test_node_1s_gpus_take_a_pinned_job_through_its_own_gpu_lease_only_with_the_
         submit.resolve(c, _job(gpus=1, quiet=True, node="vy-nebius-1"), "r1", T)
 
 
+def test_node_1_refuses_a_lease_that_isnt_preemptible_beyond_the_provers_own_quota():
+    """n1_lease.py borrows past `provers`' nominal quota only for preemptible waiters, so a larger non-preemptible lease would wait
+    in gpu-lease forever (circuits' 8-GPU load-time run, 7 Oct)."""
+    c = model.load(NEBIUS)
+    own = c.workstream(submit.N1_POOL_QUEUE, "vy-nebius-1").gpus
+    with pytest.raises(submit.Refused, match=f"isn't --preemptible at most provers' own quota, {own} GPUs"):
+        submit.resolve(c, _job(gpus=own + 1, memory_gib=64, preempt="never", node="vy-nebius-1"), "r1", T)
+    assert submit.resolve(c, _job(gpus=own, memory_gib=64, preempt="never", node="vy-nebius-1"), "r1", T)["node"] == "vy-nebius-1"
+    assert submit.resolve(c, _job(gpus=8, memory_gib=64, node="vy-nebius-1"), "r1", T)["node"] == "vy-nebius-1", \
+        "a preemptible lease may borrow the rest"
+
+
 def test_an_unpinned_gpu_job_skips_node_1s_pool_which_the_submit_path_cant_see():
     c = model.load(NEBIUS)
     out = submit.resolve(c, _job(gpus=1, cpus=4, memory_gib=64), "r1", T)
