@@ -41,7 +41,8 @@ no GPU). Rust counts are `#[test]` functions. C-Flock's row gives no counts, sin
 | numerical | frozen | `numerical/tests`: 1,059, of which 9 skip | none | none |
 | shared | frozen | none | `shared/hash_gpu/tests`: 132 | none |
 
-Outside `backends/`, the root testpaths also omit `integrations/vllm`, which has its own pytest configuration.
+Outside `backends/`, `check` also runs `integrations/vllm`'s suite on the CPU; its GPU, vLLM-runtime and pod tests skip
+themselves, and its known failures on `main` are listed in `integrations/vllm/tests/conftest.py`.
 
 ## A-GKR and B-Ligero: shared analysis
 

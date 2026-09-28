@@ -1,7 +1,8 @@
 """Repository invariants (AGENTS.md "Where writing goes"): the tree holds executable code, tests, small fixtures and a
-few maintained current-truth documents.  Lane reports, handoffs, findings, drafts and their evidence (explore JSON,
-plots, gate outputs, run results) live in the notes store (``~/.research/notes``), never in Git.  Experimental evidence,
-run outputs and model weights live in artifact storage: every tracked blob stays under ``BLOB_LIMIT`` bytes.
+few maintained current-truth documents.  Lane reports, handoffs, findings and drafts live in the notes (``~/.research/notes``),
+never in Git.  Generated output (rendered tables, reports, plots, evidence copies, run results) is never tracked: it is
+regenerated from code plus the evidence store, or fetched from the store by ``art:`` id.  Model weights live in artifact
+storage too: every tracked blob stays under ``BLOB_LIMIT`` bytes.
 
 Enforced here rather than remembered.  ``.gitignore`` keeps the report-genre paths out of ``git add``; this test is the
 backstop for anything that slips past it.
@@ -35,30 +36,15 @@ ALLOWED_EXTRA = (
 #: detail behind its named assumptions (its ``ASSUMPTIONS.md`` states them in full) and ligero-verify's discrepancies
 #: (indexed by its ``DISCREPANCIES.md``).
 SPLIT_DOCUMENT_DIRS = ("backends/flock/verifier/lean/soundness/assumptions/", "backends/ligero-verify/discrepancies/")
-#: Evidence files that code still reads (``backends/shared/anchor_a100/report.py`` inputs, ``reprice_v2.py --v1``,
-#: ``tensor/fused/bench.py`` PREVIOUS_RUN).  Pinned until those scripts read from the notes store; nothing else may
-#: live under ``reports/`` or ``results/``, or be named ``results_*``.
-PINNED_EVIDENCE = (
-    "backends/direct/encode/results_buckets_r20260922-065537-279b.json",
-    "backends/direct/encode/results_commit_r20260922-064722-07c7.json",
-    "backends/direct/encode/results_lintest_r20260922-073017-0924.json",
-    "backends/direct/encode/results_r20260922-062016-6bdf.json",
-    "backends/shared/hash_gpu/results_r20260922-054241-b966.json",
-    # not read by code: kept with the rest of fixtures/redteam until the red team rules on it
-    "fixtures/redteam/vu-battery/v1/a/results_r20260922-070024-e7d1.jsonl",
-    "backends/numerical/reports/b_measured_4090.json",
-    "backends/numerical/reports/fused_logup_4090.json",
-    "backends/numerical/reports/fused_sumcheck_4090.json",
-    "backends/numerical/reports/packed_sumcheck_h100.json",
-    "backends/numerical/reports/tc_sumcheck_4090.json",
-    "backends/direct/ligero/results/result_unit_b4096.json",
-    "backends/direct/ligero/results/result_vu_42.json",
-    "backends/direct/ligero/results/result_vu_85.json",
-    "backends/gkr/packed/results/r20260922-064917-c293/bench.json",
-    "backends/gkr/packed/results/r20260922-065412-73be/bench.json",
-    "backends/gkr/packed/results/r20260922-073439-1f15/logup_bench.json",
-)
-PINNED_EVIDENCE_DIRS = ("backends/shared/anchor_a100/results/",)
+#: The one evidence file left in the tree: not read by code, kept with the rest of fixtures/redteam until the red team rules
+#: on it.  The frozen campaign evidence that code reads (the overhead ledger, the run results the frozen backends' report
+#: scripts compare against) is in the evidence store (``verity_numerical.bench.frozen``).
+PINNED_EVIDENCE = ("fixtures/redteam/vu-battery/v1/a/results_r20260922-070024-e7d1.jsonl",)
+#: Generated output, by where it sits or what it is: no tracked path has one of these directories, suffixes or stamps.
+GENERATED_DIRS = frozenset({"reports", "results", "renders", "previews", "plots", "evidence", "assets", "outputs"})
+GENERATED_SUFFIXES = frozenset({".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".pdf", ".html", ".htm"})
+#: ``<YYYYMMDDTHHMMZ>-...``: a stamped render (the steward's ``<stamp>-tables.json``) or a lane note.
+STAMPED = re.compile(r"^\d{8}T\d{4}Z[-_.]")
 
 REPORT_GENRE = re.compile(r"handoff|report|urgent|draft|triage|status|^results?_", re.IGNORECASE)
 #: Source files are exempt from the basename rule (``report.py`` is a script, not a report).
@@ -69,14 +55,11 @@ PROTOCOL_SIZE_CAP = 128 * 1024
 BLOB_LIMIT = 256 * 1024  # a tracked file holds at most this, except source code (CODE_SUFFIXES) and ALLOWLIST
 #: Suffixes of source, exempt from BLOB_LIMIT (a generated module or a pinned Lean file can be larger); markdown has its own caps.
 CODE_SUFFIXES = SOURCE_SUFFIXES | {".lean", ".cuh", ".cpp", ".md"}
-#: Data over BLOB_LIMIT that is not a test fixture: runtime tables a module loads, the generated census, three vLLM workload specs,
-#: two vLLM logs and three pinned evidence files (which leave with PINNED_EVIDENCE). Each is capped at its size rounded up to
-#: 64 KiB, so none can grow past that and nothing joins them silently. A test fixture over BLOB_LIMIT is registered in
-#: fixtures/artifacts.json instead and fetched (`research data fetch-fixtures`).
+#: Data over BLOB_LIMIT that is not a test fixture: runtime tables a module loads, the generated census, three vLLM workload specs
+#: and two vLLM logs. Each is capped at its size rounded up to 64 KiB, so none can grow past that and nothing joins them
+#: silently. A test fixture over BLOB_LIMIT is registered in fixtures/artifacts.json instead and fetched
+#: (`research data fetch-fixtures`).
 ALLOWLIST = {
-    "backends/gkr/packed/results/r20260922-064917-c293/bench.json": 448 * 1024,
-    "backends/shared/anchor_a100/results/packed/bench.json": 448 * 1024,
-    "backends/shared/anchor_a100/results/wave2_gkr/packed26/bench.json": 448 * 1024,
     "census/workloads.json": 384 * 1024,
     "integrations/vllm/data/logs/m1.jsonl.gz": 576 * 1024,
     "integrations/vllm/data/logs/m6/log.jsonl.gz": 576 * 1024,
@@ -227,10 +210,6 @@ def _tracked() -> list[str]:
     return [p.decode() for p in out.split(b"\0") if p]
 
 
-def _is_pinned(path: str) -> bool:
-    return path in PINNED_EVIDENCE or path.startswith(PINNED_EVIDENCE_DIRS)
-
-
 def test_tracked_markdown_is_maintained_documentation() -> None:
     offenders = [p for p in _tracked() if p.endswith(".md") and os.path.basename(p) not in ALLOWED_MD_BASENAMES
                  and not p.endswith(".template.md") and p not in ALLOWED_EXTRA
@@ -247,24 +226,39 @@ def test_no_report_genre_basenames() -> None:
     assert not offenders, "report-genre files belong in ~/.research/notes/lanes/<lane>/:\n" + "\n".join(offenders)
 
 
-def test_no_evidence_under_reports_or_results() -> None:
-    offenders = []
-    for p in _tracked():
-        parts = p.split("/")
-        if "results" in parts[:-1] and not _is_pinned(p):
-            offenders.append(p)
-        elif "reports" in parts[:-1]:
-            if re.fullmatch(r".*/reports/ledger/[^/]+\.jsonl", p) or _is_pinned(p):
-                continue
-            offenders.append(p)
+def generated_output(path: str) -> str | None:
+    """Why ``path`` looks like generated output, or None."""
+    parts = path.split("/")
+    if hit := GENERATED_DIRS.intersection(parts[:-1]):
+        return f"under {sorted(hit)[0]}/"
+    if os.path.splitext(path)[1].lower() in GENERATED_SUFFIXES:
+        return f"a {os.path.splitext(path)[1].lower()} render"
+    if STAMPED.match(parts[-1]):
+        return "a stamped render or note"
+    return None
+
+
+def test_generated_output_patterns() -> None:
+    assert generated_output("backends/numerical/reports/ledger/b-zk.jsonl") == "under reports/"
+    assert generated_output("renders/daily/20260927T0857Z-tables.json") == "under renders/"
+    assert generated_output("lanes/x/evidence/run.log") == "under evidence/"
+    assert generated_output("backends/numerical/plot_overhead.png") == "a .png render"
+    assert generated_output("integrations/vllm/20260929T0300Z-tables.json") == "a stamped render or note"
+    assert generated_output("backends/numerical/python/verity_numerical/bench/tables.py") is None
+    assert generated_output("tools/research/tests/fixtures/run_v0.2/out/result.json") is None
+
+
+def test_no_generated_output() -> None:
+    """Rendered tables, reports, plots, evidence copies and run results are regenerated from code plus the evidence store, or
+    fetched from it by ``art:`` id (``research data put --preserve``); none is tracked."""
+    offenders = [f"{p} ({why})" for p in _tracked() if p not in PINNED_EVIDENCE and (why := generated_output(p))]
     assert not offenders, (
-        "evidence under reports/ or results/ belongs in ~/.research/notes/campaigns/<campaign>/assets/ "
-        "(only reports/ledger/*.jsonl and PINNED_EVIDENCE stay):\n" + "\n".join(offenders)
+        "generated output belongs in the evidence store, not Git (AGENTS.md \"Where writing goes\"):\n" + "\n".join(offenders)
     )
 
 
 def test_pinned_evidence_still_exists() -> None:
-    """Drop entries from PINNED_EVIDENCE when the scripts that read them move to the notes store."""
+    """Drop an entry from PINNED_EVIDENCE when its file leaves the tree."""
     tracked = set(_tracked())
     missing = [p for p in PINNED_EVIDENCE if p not in tracked]
     assert not missing, "PINNED_EVIDENCE lists files that are no longer tracked; remove them:\n" + "\n".join(missing)

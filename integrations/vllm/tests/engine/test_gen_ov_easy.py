@@ -230,7 +230,7 @@ def test_run_config_dry_run_resolves_b7_and_forwards_the_engine_arg():
 
 
 # ---------------------------------------------------------------------------------------------------------
-# the untied analytic reference (gen_ov_easy_family): Serve_v4 leaf for leaf, except at the lm_head operands
+# the serving-family reference (gen_ov_easy_family): Serve_v4, whose untied binding reads its own lm_head field
 # ---------------------------------------------------------------------------------------------------------
 
 #: the leaf kinds a `Serve_v4` body expands to under this lane's profiles (the base ids of the derived flat bodies of
@@ -250,33 +250,29 @@ def _weights_intervals(C):
     return iv["embed"], iv["lm_head"]
 
 
-def test_serve_untied_is_not_registered_and_binds_from_the_profile_config():
-    from verity.ir.defs import REGISTRY
+def test_serve_family_is_serve_v4_for_a_tied_and_an_untied_config():
+    """Every dense profile's serving-family reference is the registered `Serve_v4` (compare_structure's default: BN by the FA2 rule,
+    C without BN).  An untied checkpoint (B7) has its own `lm_head` field after `cos_sin` in `b1.weights_type`; a tied one has none."""
     from verity_vllm.engine.profiles import gen_ov_easy_family as F
-    assert not any(k.startswith("ServeUntied") for k in REGISTRY.defs), "a diagnostic reference must not register itself"
-    fam = F.serve_family(B7.C)
-    assert fam.id.startswith("ServeUntied_v1{C=") and fam.id.endswith(",LP=32,STEPS=15,BN=64}"), fam.id
     assert B7.SERVE_FAMILY is F.serve_family
-    # a tied configuration gets exactly compare_structure's default (b1.ServeV4 with BN by the FA2 rule, C without BN)
-    tied = F.serve_family(L.C)
+    untied, tied = F.serve_family(B7.C), F.serve_family(L.C)
+    assert untied.id == b1.ServeV4.bind(C={k: v for k, v in B7.C.items() if k != "BN"}, LP=32, STEPS=15, BN=64).id
     assert tied.id == b1.ServeV4.bind(C={k: v for k, v in L.C.items() if k != "BN"}, LP=32, STEPS=15, BN=128).id
     assert F.serve_family(Q.C, BN=None).id.endswith("BN=128}") and F.serve_family(B7.C, LP=8, STEPS=3).id.endswith("LP=8,STEPS=3,BN=64}")
-    # the weights parameter is the untied record (embed ... lm_head); the tied family types it b1.weights_type (no lm_head)
-    assert [n for n, _ in fam.signature()[0][1][1].fields] == ["embed", "layers", "norm", "cos_sin", "lm_head"]
-    assert [n for n, _ in b1.ServeV4.bind(C={k: v for k, v in B7.C.items() if k != "BN"}, LP=32, STEPS=15, BN=64).signature()[0][1][1].fields] == \
-        ["embed", "layers", "norm", "cos_sin"]
+    assert [n for n, _ in untied.signature()[0][1][1].fields] == ["embed", "layers", "norm", "cos_sin", "lm_head"]
+    assert [n for n, _ in tied.signature()[0][1][1].fields] == ["embed", "layers", "norm", "cos_sin"]
 
 
-def test_serve_untied_differs_from_serve_v4_only_at_the_lm_head_operands():
-    """Expanded to the derived leaf kinds, the untied family is `Serve_v4` node for node (ids, names, every operand) except that
-    its 16 lm_head Gemm leaves read the `lm_head` field where `Serve_v4` reads `embed` -- the divergence that fails the fork
-    point's structure check for B7 (the tied family's `embed` interval cannot map onto a second flat interval)."""
+def test_an_untied_serve_v4_differs_from_the_tied_binding_only_at_the_lm_head_operands():
+    """Expanded to the derived leaf kinds, `Serve_v4` bound to an untied config (B7) is its tied binding node for node (ids, names,
+    every operand) except that its 16 lm_head Gemm leaves read the `lm_head` field where the tied one reads `embed`
+    (`b1.lm_head_of`)."""
     from verity_vllm.program.frontend.rules.family import _runs, expand_leaves
     from verity_vllm.engine.profiles import gen_ov_easy_family as F
     LP, STEPS = 4, 2                                           # small statics: the same construction, seconds on the laptop
     C = {k: v for k, v in B7.C.items() if k != "BN"}
     untied = F.serve_family(B7.C, LP=LP, STEPS=STEPS)
-    tied = b1.ServeV4.bind(C=C, LP=LP, STEPS=STEPS, BN=64)
+    tied = b1.ServeV4.bind(C=dict(C, tie_word_embeddings=True), LP=LP, STEPS=STEPS, BN=64)
     lu, _, pu, ru = expand_leaves(untied, LEAF_BASES)
     lt, _, pt, rt = expand_leaves(tied, LEAF_BASES)
     assert ru == rt and pu[0] == pt[0] and pu[1][0] == pt[1][0] == "weights"
