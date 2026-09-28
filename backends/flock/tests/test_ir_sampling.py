@@ -246,7 +246,7 @@ def test_a_mutated_netlist_is_caught_by_the_ir_comparison():
     rng = random.Random(3)
     vecs = []
     for _ in range(1500):
-        temp = rng.choice([0x3F4CCCCD, 0x7F000000, 5, *f32_words(rng, 1)])
+        temp = rng.choice([0x3F4CCCCD, 0x7F000000, 5, 0x3F800000, *f32_words(rng, 1)])   # 1.0: the kernel's early return
         vecs.append((bf16_words(rng, 1)[0], temp, P.DivFullRcp.evaluate(temp), rng.getrandbits(1), rng.getrandbits(1), rng.getrandbits(1),
                      f32_words(rng, 1)[0], f32_words(rng, 1)[0], rng.getrandbits(32), rng.choice([0, rng.getrandbits(32)])))
     ports = [np.array([v[j] for v in vecs], dtype=np.uint64) for j in range(len(S.IN_PORTS))]

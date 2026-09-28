@@ -60,15 +60,15 @@ def _c(v: int):
 
 def tl_exp(C, x):
     """``topp_split.tl_exp``: MUFU.EX2(x * log2e), with ptxas' non-ftz path (t < -126: EX2(t / 2) squared)."""
-    t = fp.f32_mul(C, x, _c(LOG2E), ir_nan=True)
+    t = fp.f32_mul(C, x, _c(LOG2E))
     small = TP.f32_gt(C, _c(M126), t)[0]
-    e = TP.mufu_ex2(C, mux(C, small, fp.f32_mul(C, t, _c(HALF), ir_nan=True), t))
-    return mux(C, small, fp.f32_mul(C, e, e, ir_nan=True), e)
+    e = TP.mufu_ex2(C, mux(C, small, fp.f32_mul(C, t, _c(HALF)), t))
+    return mux(C, small, fp.f32_mul(C, e, e), e)
 
 
 def tl_div(C, a, b, r):
     """``div.full.f32``'s a / b from ``r = DivFullRcp(b)``: ``F32Mul(DivFullScaleA(a, b), r)``."""
-    return fp.f32_mul(C, TP.div_full_scale_a(C, a, b), r, ir_nan=True)
+    return fp.f32_mul(C, TP.div_full_scale_a(C, a, b), r)
 
 
 def f32_ge(C, a, b):
@@ -129,8 +129,8 @@ def word_eq(C, a, b):
 #: name -> (piece(C, *operands) -> bits, operand kinds, result kind)
 OPS = {
     "sub": (TP.f32_sub, "ff", "f"),
-    "add": (lambda C, a, b: fp.f32_add(C, a, b, ir_nan=True), "ff", "f"),
-    "mul": (lambda C, a, b: fp.f32_mul(C, a, b, ir_nan=True), "ff", "f"),
+    "add": (lambda C, a, b: fp.f32_add(C, a, b), "ff", "f"),
+    "mul": (lambda C, a, b: fp.f32_mul(C, a, b), "ff", "f"),
     "fma": (fp.f32_fma, "fff", "f"),
     "exp": (tl_exp, "f", "f"),
     "rcp": (TP.div_full_rcp, "f", "f"),

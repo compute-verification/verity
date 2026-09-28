@@ -40,7 +40,7 @@ from .gf2 import NOT, Circuit, mux, or_reduce, sub
 
 TEMPLATE = "gumbel-top-p-token-select"
 UNIT = "gumbel-top-p-token-select/fp32/lane"
-PIN = "c9aeca364cb08b68a174fa9811ff505306c6a8f9af7458689ff23e66409cc1b6"
+PIN = "f5e86a88888275269758170264d95ae67bf4640516d033af61b1953801705d32"
 FORMAT = "flock-ir-sampling/v1"
 STATEMENT = "verity/flock-ir-sampling/v1"
 SCHEME = IF.SCHEME

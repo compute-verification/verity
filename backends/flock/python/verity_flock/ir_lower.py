@@ -14,7 +14,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass, field
-from functools import lru_cache, partial
+from functools import lru_cache
 from typing import Callable, Sequence
 
 import numpy as np
@@ -32,14 +32,17 @@ NAN_F2FP = 0x7FFF
 
 # --- pieces per primitive ----------------------------------------------------------------------------------------------
 
+_CAST = fp.F32_QNAN_CAST
+
+
 def _rope_out(C, x, y, c, s):
-    t = fp.f32_mul(C, fp.bf16_to_f32(y), fp.bf16_to_f32(s))
-    return fp.f32_to_bf16(C, fp.f32_fma(C, fp.bf16_to_f32(x), fp.bf16_to_f32(c), fp.f32_neg(t)), NAN_TORCH)
+    t = fp.f32_mul(C, fp.bf16_to_f32(y), fp.bf16_to_f32(s), nan_word=_CAST)
+    return fp.f32_to_bf16(C, fp.f32_fma(C, fp.bf16_to_f32(x), fp.bf16_to_f32(c), fp.f32_neg(t), nan_word=_CAST), NAN_TORCH)
 
 
 def _rope_out_add(C, x, y, c, s):
-    t = fp.f32_mul(C, fp.bf16_to_f32(x), fp.bf16_to_f32(s))
-    return fp.f32_to_bf16(C, fp.f32_fma(C, fp.bf16_to_f32(y), fp.bf16_to_f32(c), t), NAN_TORCH)
+    t = fp.f32_mul(C, fp.bf16_to_f32(x), fp.bf16_to_f32(s), nan_word=_CAST)
+    return fp.f32_to_bf16(C, fp.f32_fma(C, fp.bf16_to_f32(y), fp.bf16_to_f32(c), t, nan_word=_CAST), NAN_TORCH)
 
 
 @lru_cache(maxsize=None)
@@ -52,11 +55,11 @@ def silu_table() -> tuple[int, ...]:
 
 def _silu_mul(C, g, u):
     s = fp.lookup(C, list(g), silu_table(), 16)
-    return fp.f32_to_bf16(C, fp.f32_mul(C, fp.bf16_to_f32(s), fp.bf16_to_f32(u)), NAN_TORCH)
+    return fp.f32_to_bf16(C, fp.f32_mul(C, fp.bf16_to_f32(s), fp.bf16_to_f32(u), nan_word=_CAST), NAN_TORCH)
 
 
 def _bf16_add(nan):
-    return lambda C, a, b: fp.f32_to_bf16(C, fp.f32_add(C, fp.bf16_to_f32(a), fp.bf16_to_f32(b)), nan)
+    return lambda C, a, b: fp.f32_to_bf16(C, fp.f32_add(C, fp.bf16_to_f32(a), fp.bf16_to_f32(b), nan_word=_CAST), nan)
 
 
 def _f32_div(C, a, b):
@@ -65,8 +68,8 @@ def _f32_div(C, a, b):
         k = sum(w.c << i for i, w in enumerate(b))
         e, m = (k >> 23) & 0xFF, k & 0x7FFFFF
         if not m and 1 <= e <= 253:
-            return fp.f32_mul(C, a, fp.f32_const((k & 0x80000000) | ((254 - e) << 23)), ir_nan=True)
-    return fp.f32_div(C, a, b, ir_nan=True)
+            return fp.f32_mul(C, a, fp.f32_const((k & 0x80000000) | ((254 - e) << 23)))
+    return fp.f32_div(C, a, b)
 
 
 #: primitive id -> piece(C, *operand words) -> output word
@@ -74,8 +77,8 @@ PIECES: dict[str, Callable] = {
     "Bf16ToF32_v1": lambda C, a: fp.bf16_to_f32(a),
     "F2fpBf16_v1": lambda C, a: fp.f32_to_bf16(C, a, NAN_F2FP),
     "F32ToBf16Rn_v1": lambda C, a: fp.f32_to_bf16(C, a, NAN_TORCH),
-    "F32Add_v1": partial(fp.f32_add, ir_nan=True),
-    "F32Mul_v1": partial(fp.f32_mul, ir_nan=True),
+    "F32Add_v1": fp.f32_add,
+    "F32Mul_v1": fp.f32_mul,
     "F32Fma_v1": fp.f32_fma,
     "F32Div_v1": _f32_div,
     "Bf16Add_v1": _bf16_add(NAN_TORCH),
