@@ -521,31 +521,32 @@ def _stage_job(s: str) -> dict:
 
 
 def _staged(jobs: list[str], workers: int):
-    """`_stage_job` over ``jobs``, records in order: in this process, or in ``workers`` forked processes at most two shapes each
-    ahead of the prover. A worker that dies (the OOM killer) breaks the pool: the shapes in flight are staged again in a new one,
-    and a shape lost twice is recorded as broken."""
+    """`_stage_job` over ``jobs``: in this process, in order, or in ``workers`` forked processes at most two shapes each ahead of
+    the prover, each record as soon as its shape is staged (a long shape doesn't hold the GPU up). A worker that dies (the OOM
+    killer) breaks the pool: the shapes in flight are staged again in a new one, and a shape lost twice is recorded as broken."""
     if workers <= 1:
         yield from map(_stage_job, jobs)
         return
     import multiprocessing as mp
-    from collections import deque
-    from concurrent.futures import ProcessPoolExecutor
+    from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
     from concurrent.futures.process import BrokenProcessPool
 
     queue, lost = list(reversed(jobs)), Counter()
     while queue:
-        live: deque = deque()
+        live: dict = {}
         with ProcessPoolExecutor(workers, mp_context=mp.get_context("fork")) as ex:
             try:
                 while queue or live:
                     while queue and len(live) < 2 * workers:
                         s = queue.pop()
-                        live.append((s, ex.submit(_stage_job, s)))
-                    rec = live[0][1].result()
-                    live.popleft()
-                    yield rec
+                        live[ex.submit(_stage_job, s)] = s
+                    done, _ = wait(live, return_when=FIRST_COMPLETED)      # the first staged shape proves first
+                    for f in done:
+                        rec = f.result()
+                        del live[f]
+                        yield rec
             except BrokenProcessPool:
-                for s, _f in reversed(live):
+                for _f, s in live.items():
                     lost[s] += 1
                     if lost[s] < 2:
                         queue.append(s)
