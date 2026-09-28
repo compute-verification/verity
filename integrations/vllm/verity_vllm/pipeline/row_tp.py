@@ -9,7 +9,8 @@
   = collective-level only, named), the per-rank fold Match (``tp-fold-match``).
 * **Commit**: the manifest over the W ranks, complete, then ``tp-commit`` with the windowed staging in its environment
   (``VERITY_WINDOW_MB`` / ``VERITY_WINDOW_SLOTS`` / ``VERITY_RETAIN``: flags it does not have) and ``--require-fold-match``
-  when a fold Match is on disk.
+  when a fold Match is on disk.  The ranks run the guarded-max FA2 tap build and every tap the manifest names the family of
+  (``row_records.applicable_taps``), as the single-GPU row does.
 
 Evidence: ``build/rank<r>/``, ``match/``, ``manifest.json``, ``commit/`` under the row dir.  Exit codes: those of the
 single-GPU row (``row_stages``).
@@ -84,7 +85,7 @@ class TpRow(Row):
         if not os.path.isfile(self.path(self.wl)):
             print(f"no manifest {self.wl}")
             raise Stop(2)
-        self.hidden_so = env.hidden_so or env.hidden_so_fa2
+        self.hidden_so = self.hidden_build()
         self.bdir, self.M = f"{self.d}/build", f"{self.d}/match"
         for p in (self.d, self.bdir, self.M, self.ncb):
             os.makedirs(p, exist_ok=True)
@@ -123,6 +124,11 @@ class TpRow(Row):
         if not os.path.isdir(self.ck):
             self.verdict("build", "FAIL", f"no local checkpoint dir for {self.repo} @ {self.rev} (checkpoints.json local_path / HF snapshot absent; HF_HUB_OFFLINE=1)")
             raise Stop(10)
+
+    def hidden_build(self) -> str:
+        """The FA2 tap build the ranks run: the guarded-max one unless GUARDED_MAX_TAP=0 (for A/B only)."""
+        env = self.env
+        return env.hidden_so or (env.hidden_so_fa2_guarded if self.ck_.guarded_max_tap == "1" else env.hidden_so_fa2)
 
     # ------------------------------------------------------------------------------------------------ Build
     def jobs(self, default: int) -> int:
@@ -302,9 +308,6 @@ class TpRow(Row):
         if not os.path.isfile(self.hidden_so):
             self.verdict("commit", "FAIL", f"hidden .so missing: {self.hidden_so}")
             raise Stop(12)
-        if ck.router_tap == "1" and not os.path.isfile(self.env.router_tap_so):
-            self.verdict("commit", "FAIL", f"ROUTER_TAP=1 and the router tap .so is missing: {self.env.router_tap_so} (ops/pod_router_tap.sh)")
-            raise Stop(12)
         for r in range(self.W):
             if not R.tp_rank_workload_digest(self.bdir, r):
                 self.verdict("commit", "FAIL", f"GP-01 workload digest absent for rank {r}: Build first")
@@ -317,25 +320,17 @@ class TpRow(Row):
             self.tl("stage.commit", "end", ("ok", "false"))
             self.tl("row", "end", ("ok", "false"), ("stopped_at", "commit"))
             raise Stop(13)
+        taps = R.applicable_taps(f"{d}/manifest.json", ck)
+        why = R.missing_tap_build(taps, self.env)
+        if why:
+            self.verdict("commit", "FAIL", why)
+            raise Stop(12)
+        self.log(f"taps: {', '.join(taps) or 'none'} (on, and the manifest names their families); guarded max {'on' if ck.guarded_max_tap == '1' else 'off'}")
         if ck.window_mb > 0:
             self.child_env.update({"VERITY_WINDOW_MB": str(ck.window_mb), "VERITY_WINDOW_SLOTS": str(ck.window_slots)})
         self.child_env["VERITY_RETAIN"] = ck.retain
         self.log(f"commit staging: window_mb={ck.window_mb} slots={ck.window_slots} retain={ck.retain}")
-        brk = [a for r in range(self.W) for a in ("--build-rank", self.rank(r))]
-        cmd = self.cli("tp-commit", "--workload", self.wl, "--case", self.role, "--tp", str(self.W), "--committer", "native_collect_v2b",
-                       "--hidden-so", self.hidden_so, "--openings", "64", "--max-num-seqs", str(self.B),
-                       "--engine-arg", f"gpu_memory_utilization={self.commit_util}", *self.engine, *brk,
-                       "--required-manifest", f"{d}/manifest.json", "--match-dir", self.M, "--checkpoint-dir", self.ck, "--checkpoint-model", self.repo,
-                       "--pairs", str(ck.pairs), "--warmup", "2", "--value-check", "--replay-workers", str(ck.replay_workers), "--label", self.row,
-                       "--out", f"{d}/commit")
-        if self.fold_profile and os.path.isfile(f"{self.M}/fold_match/tp2_fold_match.json"):
-            cmd.append("--require-fold-match")
-        if ck.router_tap == "1":
-            cmd += ["--router-tap-so", self.env.router_tap_so]
-        if ck.vocab_tap == "1":
-            cmd.append("--vocab-range")
-        cmd += (ck.extra_commit_args or "").split()
-        rc_k = self.run_tl("commit.tp_commit", to_k, f"{d}/commit.log", cmd)
+        rc_k = self.run_tl("commit.tp_commit", to_k, f"{d}/commit.log", self.commit_cmd(taps))
         keys = ("PASS", "FAIL", "sampled replay", "match oracle", "weights pin", "cross-rank collectives", "fold-Match", "C2 population", "coverage")
         tagged = _grep(f"{d}/commit.log", lambda s: s.startswith("[tp2commit] ") and s[12:].lstrip(" ").startswith(keys))
         with open(f"{d}/row.log", "a") as f:
@@ -350,3 +345,17 @@ class TpRow(Row):
             self.log("COMMIT FAIL -> stop")
             self.tl("row", "end", ("ok", "false"), ("stopped_at", "commit"))
             raise Stop(12)
+
+    def commit_cmd(self, taps: list[str]) -> list[str]:
+        """`tp-commit`'s command line; `taps`: the row's taps that apply to it (`row_records.applicable_taps`), whose sources the ranks attach."""
+        ck, d = self.ck_, self.d
+        brk = [a for r in range(self.W) for a in ("--build-rank", self.rank(r))]
+        cmd = self.cli("tp-commit", "--workload", self.wl, "--case", self.role, "--tp", str(self.W), "--committer", "native_collect_v2b",
+                       "--hidden-so", self.hidden_so, "--openings", "64", "--max-num-seqs", str(self.B),
+                       "--engine-arg", f"gpu_memory_utilization={self.commit_util}", *self.engine, *brk,
+                       "--required-manifest", f"{d}/manifest.json", "--match-dir", self.M, "--checkpoint-dir", self.ck, "--checkpoint-model", self.repo,
+                       "--pairs", str(ck.pairs), "--warmup", "2", "--value-check", "--replay-workers", str(ck.replay_workers), "--label", self.row,
+                       "--out", f"{d}/commit")
+        if self.fold_profile and os.path.isfile(f"{self.M}/fold_match/tp2_fold_match.json"):
+            cmd.append("--require-fold-match")
+        return cmd + R.tap_source_args(taps, self.env) + (ck.extra_commit_args or "").split()

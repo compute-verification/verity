@@ -142,7 +142,8 @@ def test_tampering_is_caught(tmp_path, synthetic):
 
 def test_evaluation_targets_equal_the_definitions():
     """Heads evaluate through a batch Definition that has a kernel; each equals the head's gate reference, and the captured
-    GEMM step AmpereBF16TcDot16_v1 equals core's _v2."""
+    vLLM GEMM step (core's AmpereBF16TcDot16_v2 since the re-baseline re-key; the retired _v1 evaluated the same function) equals the
+    kernel."""
     from verity.evaluation import evaluate_batch
     from verity.ir.defs import REGISTRY, bind
     from verity.ml import gemm
@@ -159,10 +160,10 @@ def test_evaluation_targets_equal_the_definitions():
     sub = TM.subcircuit("gemm-coordinate", K=64)
     draws = [sub.draw(key, j) for j in range(64)]
     x, w = np.stack([d.inputs["x"] for d in draws]), np.stack([d.inputs["w"] for d in draws])
-    import verity_vllm.program.registry.prims  # noqa: F401  (registers AmpereBF16TcDot16_v1)
-    v1 = evaluate_batch(bind(gemm.GemmCoordinate, K=64, DOT=REGISTRY["AmpereBF16TcDot16_v1"]), x, w, kernel="reference")
-    v2 = evaluate_batch(sub.target(), x, w)
-    assert np.array_equal(v1, v2)
+    from verity_vllm.program.registry import prims as VP
+    assert VP.AmpereBF16TcDot16 is REGISTRY["AmpereBF16TcDot16_v2"]
+    ref = evaluate_batch(bind(gemm.GemmCoordinate, K=64, DOT=VP.AmpereBF16TcDot16), x, w, kernel="reference")
+    assert np.array_equal(ref, evaluate_batch(sub.target(), x, w))
 
 
 def test_model_only_gemm_semantics_bind_but_do_not_generate(tmp_path):
