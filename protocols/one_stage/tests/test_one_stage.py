@@ -392,6 +392,10 @@ for _name in ("TAdd32", "TMul32"):
     TEMPLATE_REG.add(PrimitiveDefinition(_name, 1, (("a", V32), ("b", V32)), V32, lambda a, b: (a + b) & 0xFFFFFFFF, register=False))
 
 
+def _template_program(name: str):
+    return codec.decode_program(json.loads(TEMPLATE["descriptors"][name]), TEMPLATE_REG)
+
+
 def _one_stage(program, q) -> dict:
     obj = P.partition(program, q)
     return {"object": codec.canonical_json(obj), "digest": P.digest(obj), "program": P.program_sha512(program),
@@ -419,7 +423,7 @@ def test_the_partition_is_cores_on_the_pinned_q_word_vector():
 @pytest.mark.parametrize("n", range(len(TEMPLATE["cases"])), ids=[c[0] for c in TEMPLATE["cases"]])
 def test_the_partition_is_cores_on_the_pinned_template_vectors(n):
     _label, name, q, want = TEMPLATE["cases"][n]
-    prog = codec.decode_program(json.loads(TEMPLATE["descriptors"][name]), TEMPLATE_REG)
+    prog = _template_program(name)
     pinned = {"object": codec.canonical_json(want["object"]), "digest": want["digest"], "program": want["object"]["program"],
               "population": want["population"], "ranges": [(t, lo, c) for _k, t, lo, c in want["ranges"]]}
     assert _one_stage(prog, q) == pinned == _core(prog, q)
@@ -436,6 +440,41 @@ def test_the_partition_is_cores_on_this_protocols_programs():
     cases.append((P.mixed_population_program(list(zip(temps, sizes))), P.template_instances_query(temps)))
     for prog, q in cases:
         assert _one_stage(prog, q) == _core(prog, q), (prog.root.id, q)
+
+
+@pytest.mark.parametrize("n", range(len(TEMPLATE["refused"])), ids=[r[0] for r in TEMPLATE["refused"]])
+def test_the_partition_refuses_what_core_refuses(n):
+    _label, name, q, _why = TEMPLATE["refused"][n]
+    with pytest.raises(P.QueryRefused):
+        P.units(_template_program(name), q)
+
+
+def test_a_program_that_is_not_topological_has_no_units():
+    """Core's `order_violation`: the population program whose instances read their own outputs is no computation."""
+    d = json.loads(TEMPLATE["descriptors"]["population"])
+    d["definitions"][d["root"]]["body"]["nodes"][2]["args"][0]["refs"] = {"affine": ["n", 2, 0, 6]}
+    looped = codec.decode_program(d, TEMPLATE_REG)
+    q = PO.template_instance_query(TEMPLATE["template_ids"]["TScale descriptor id"])
+    with pytest.raises(P.QueryRefused) as e:
+        P.units(looped, q)
+    assert [e.value.detail] == TEMPLATE["order_refused"][1]
+
+
+@pytest.mark.parametrize("n", range(len(TEMPLATE["malformed"])), ids=[m[0] for m in TEMPLATE["malformed"]])
+def test_a_malformed_query_has_no_units_and_no_digest(n):
+    _label, q, codes = TEMPLATE["malformed"][n]
+    prog = _template_program("population")
+    with pytest.raises(P.QueryRefused) as e:
+        P.units(prog, q)
+    assert e.value.detail["codes"] == codes
+    with pytest.raises(ValueError):
+        P.digest(P.partition(prog, q))
+
+
+def test_registration_check_refuses_a_query_core_does_not_digest():
+    prog, q, rec = _registration(6)
+    v = R.check(rec, prog, {**q, "width_rule": None}, LAW, SCHEME, _ports(prog, q, 6), leaf_layer="ee" * 64)
+    assert {"R2-partition", "R2-query"} <= set(v.codes) and "query-keys" in v.detail["R2-partition"]["verifier"]
 
 
 def test_a_pre_canonical_object_keeps_its_digest():

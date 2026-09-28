@@ -58,9 +58,13 @@ size, independently across strata. `docs/sampling-strategies.md` has the analysi
 
 ## Partition
 
-`{"program": <SHA-512 of the program>, "query": {...}}`, digest `SHA-512("verity/partition/v1\0" ‖ canon(object))`. The
-only query here is `Q_template_instance` v0: each instance of one template in the program's root body is one unit, in
-canonical order, with no width rule. It is a demo query for single-template runs, not the serving partition.
+Core's `verity/partition/v1` (`verity.ir.partition_object`): `{"format": "verity/partition/v1", "program": <SHA-512 of the
+program>, "query": {"name", "version", "params"}}`, digest `SHA-512("verity/partition/v1\0" ‖ canon(object))`. The units
+are core's evaluation of the query, which refuses a malformed query and a program that is not topological. The queries
+applied here are `Q_template_instance` v0 and `Q_template_instances` v0: each instance of a listed template in the
+program's root body is one unit, in canonical order, with no width rule. They are demo queries for template runs, not the
+serving partition. A record made before the canonical envelope names `{"program", "query"}` and keeps that object's
+digest under the same rule (`partition.digest`).
 
 ## Not here yet
 
