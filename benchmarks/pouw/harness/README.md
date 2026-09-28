@@ -14,7 +14,7 @@ sensors, versions, the consistency gate) and #449's primary-context ctypes patte
 | `bench.py` | the run: identity, fill and derive preflights, per shape gates (negative controls at the first shape), the baselines' autotune (its fastest `--finalists` per family and each library's fastest go on to the timing, and at decode each gets a chain), a warm-up to steady state, interleaved timing in items of equal device time, the consistency gate, the report |
 | `chain.py`, `derive.py` | decode as a dependent chain (`--decode-method dependent-chain`, the default): call i+1's A is derived on the device from call i's y, for the plain GEMM and for arms alike; an arm's decode split into before, during and after the GEMM, with and without a side stream; `derive.py` is the derive's bit-exact numpy twin, which gates every chain |
 | `characterize.py` | the card: identity, tensor-core peak rates per MMA kind, DRAM and L2 bandwidth, operand-entropy control, sustained clocks under a held GEMM; the lock-clock sweep only when asked (`--sections lock`), never where someone else fixes the clocks (node 2) |
-| `baselines.py` | the baseline families (BF16, FP8 per-tensor and rowwise, MXFP8, FP8 1×128/128×128, NVFP4, MXFP4, int8): cuBLASLt's top heuristic algorithms (for the families `--lt-enumerate` names, every configuration its capabilities admit at the shape, screened by one graph rep before the tune; a space too big for one run is searched in slices, `--lt-enumerate-range START:STOP`, and its best tuned together, `--lt-enumerate-names FILE`), from each cuBLASLt loaded, and CUTLASS's sm_120 kernels, and the bit-exact gate on ternary operands |
+| `baselines.py` | the baseline families (BF16, FP8 per-tensor and rowwise, MXFP8, FP8 1×128/128×128, NVFP4, MXFP4, int8): cuBLASLt's top heuristic algorithms (for the families `--lt-enumerate` names, every configuration its capabilities admit at the shape, screened by one graph rep before the tune; a space too big for one run is searched in slices, `--lt-enumerate-range START:STOP`, and its best tuned together, `--lt-enumerate-names FILE`), from each cuBLASLt loaded, CUTLASS's sm_120 kernels, and the plain NVFP4 and FP8 GEMMs of `../nvfp4_sm120/nvf4_plain.cu` (#543, #570; source `verity`, `verity_nvf4_256x128*` and `verity_fp8_256x128*`: 256×128 tiles, one persistent CTA an SM, m a multiple of 256, n of 128, k of 128 or for FP8 64, one tile order, a workspace of their own for their tensor maps), and the bit-exact gate on ternary operands |
 | `example_arm.py` | an example arm, **not a PoUW scheme** (plain cuBLASLt FP8 and a stand-in read of D): the smoke test of the arm path and a template |
 | `sass_gate.py` | the SASS gate, before anything is timed: no instruction with `.FTZ` and no FP32 `MUFU` (so no `-ftz=true`, `--use_fast_math` or approximate div/sqrt build) in any binary an arm declares (`binaries` in its build record) or any library with device code mapped into the run, except inside ptxas's IEEE div/sqrt/rcp and integer-division sequences as a ptxas pinned in `sass_pins.json` (version, build, arguments, numeric run) builds them; nvdisasm and `cuobjdump -sass` must agree; also a CLI (`python sass_gate.py BINARY...`, `--pin`) |
 | `ieee_pin.py`, `ieee_pin.cu` | the gate's numeric pin, and where its pins come from: builds `ieee_pin.cu` with each pinned toolkit and flag set and three negative controls, checks each toolkit's `sass_pins.json` entry is what its builds pin, gates them, runs them under `gpu-lease 1` (rcp and sqrt on all 2^32 inputs, div on 2^32 pairs weighted to subnormals, integer division exhaustively or weighted, every subnormal input against the host too) and writes `ieee-pin.json`; its run is each toolkit's `numeric` |
@@ -22,7 +22,7 @@ sensors, versions, the consistency gate) and #449's primary-context ctypes patte
 | `ledger.py` | the attempt ledger: `verify.py` writes one `kernel-attempt/v1` record per arm and shape under the run's `ledger/` (the variant, parent, tier, gate version, metrics, step times, γ, the verifier's lines, the hypothesis) and publishes it with `--publish`; `ledger.py publish RUN_DIR` later, `ledger.py outcome ART OUTCOME --reason ...`, and `ledger.py rows`, what `panel.py` reads beside `attempts.jsonl` |
 | `price_twins.py`, `price_twins.json` | γ's Lean-pinned price twins, read from the POUS Project store's pins (`python price_twins.py STORE_ROOT`): the ledger looks an attempt's γ up at both FP32 prices on the priced path its variant declares, and never takes one typed in |
 | `schedule.py`, `report.py`, `shapes.py`, `identity.py`, `fill.py` | the rules as pure functions (tested on CPU in `../tests/test_harness.py`) |
-| `native/` | `libpouw_harness.so`: fills, flushes, events, graphs, cuBLASLt (`lt.cu`), the CUTLASS kernels (`build.sh`, CUTLASS pinned at v4.8.0); optionally `libpouw_lt2.so`, `lt.cu` alone against a second cuBLASLt |
+| `native/` | `libpouw_harness.so`: fills, flushes, events, graphs, cuBLASLt (`lt.cu`), the CUTLASS kernels (`build.sh`, CUTLASS pinned at v4.8.0) and `../nvfp4_sm120/nvf4_plain.cu`'s in the same registry (`cutlass_api.h`; `PH_NO_CUTLASS=1` builds only these); optionally `libpouw_lt2.so`, `lt.cu` alone against a second cuBLASLt |
 
 Build (no GPU needed; nvcc 12.9, about 7 GB of memory per CUTLASS 3.x unit):
 
@@ -64,7 +64,9 @@ cuBLASLt and runtime wheels, a library built elsewhere (a build directory, or `a
 `research data put --kind pouw-harness-build/v1 --tree DIR --preserve`), and this tree's `verity` and `verity_pouw` on
 `PYTHONPATH`. On node 2, `gpu-lease 1` picks the GPU, so the run names it `--gpu lease` (the one index the lease set, checked
 against `server.md`'s GPU table); a timed run holds the node with `gpu-lease 8 --wait --timed` and times on its first GPU
-(`--timed` pauses the fill queue: without it, fill jobs keep running beside the timed run):
+(`--timed` pauses the fill queue: without it, fill jobs keep running beside the timed run). A timed run also passes
+`research run --no-sampler`, so `research`'s own telemetry sampler (`nvidia-smi` every 5 s) stays off the node while it
+times (server.md 17:27Z); the harness records clocks and the UUID itself:
 
 ```bash
 R='research run --on vy-nebius-2 --project verity --campaign pouw --source . --cwd source --env GPU_LEASE_WHO=<your bc-id>
@@ -73,14 +75,14 @@ H='. benchmarks/pouw/harness/jobs/env.sh "$RESEARCH_RUN_DIR/inputs" && "$PY" ben
    --server-md "$RESEARCH_RUN_DIR/inputs/GPUS.md" --clock-label locked-2100 --shapes headline
    --arm-path benchmarks/pouw/harness --arm example_arm:ExampleFp8 --out "$RESEARCH_RUN_DIR/bench.json"'
 $R -- gpu-lease 1 --wait -- bash -c "$H"                                                           # untimed: gates, autotune
-$R -- gpu-lease 8 --wait --timed -- timeout 1140 bash -c 'export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES%%,*} && '"$H"  # timed
+$R --no-sampler -- gpu-lease 8 --wait --timed -- timeout 1140 bash -c 'export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES%%,*} && '"$H"  # timed
 ```
 
 A measured panel row also needs the verify step in the same run, after the lease, so no GPU waits on the CPU verifier:
 
 ```bash
 V='. benchmarks/pouw/harness/jobs/env.sh "$RESEARCH_RUN_DIR/inputs" && "$PY" benchmarks/pouw/harness/verify.py "$RESEARCH_RUN_DIR/bench.json"'
-$R -- bash -c "gpu-lease 8 --wait --timed -- timeout 1140 bash -c 'export CUDA_VISIBLE_DEVICES=\${CUDA_VISIBLE_DEVICES%%,*} && $H'; b=\$?; $V; v=\$?; exit \$(( b ? b : v ))"
+$R --no-sampler -- bash -c "gpu-lease 8 --wait --timed -- timeout 1140 bash -c 'export CUDA_VISIBLE_DEVICES=\${CUDA_VISIBLE_DEVICES%%,*} && $H'; b=\$?; $V; v=\$?; exit \$(( b ? b : v ))"
 ```
 
 `H` and `V` go to `bash -c`, so each must be one line (`H` is wrapped above for reading).
@@ -98,8 +100,14 @@ and SM clock of the arm's and the baseline's items, rep by rep), `sm_clock_arm` 
 `clock_gap` (medians more than 0.5% apart; server.md 08:50Z).
 
 Decode rows count on the panel only as a dependent chain, which needs a library with the derive kernel (`ph_derive`);
-`--decode-method independent` times the old independent graph with any library. An arm's calls expose `phases` (before, gemm,
-after) to get the split; `arm.py` has the contract.
+`--decode-method independent` times the old independent graph with any library. An arm (`arm.BenchArm`, arm interface v0.6;
+`Arm` is its deprecated alias, since the vLLM API's `Arm` is a serving bench mode) gets the split when its calls expose
+`phases` named by the step groups the executor schedules, `arm.GROUPS` (`a_tree`, `forming`, `gemm`, `cleanup`,
+`tile_hash`, `screen`, as `verity_pouw.serving`'s): the chain times before (a_tree, forming), during (gemm, cleanup) and
+after (tile_hash, screen, the movable groups), and the report's `split_groups` names the groups each time covers. The
+side-stream variant times the served `deferred` schedule (`verity_pouw.serving.DEFERRED`): tile hashing (`arm.DEFERRED`)
+off the main lane, the screen on it. v0.4's `before`, `gemm` and `after` still work, each as its part, and are deprecated;
+their one `after` can't be split that way, so they get no side-stream variant. `arm.py` has the contract.
 
 A search's best, timed later with `--lt-enumerate-names FILE`, needs an `--lt-enumerate-max` that reaches every configuration
 FILE names: the enumeration keeps only its first `--lt-enumerate-max` (8,192) per library and swap, and cuBLASLt 13's FP8
@@ -132,6 +140,15 @@ and when accepted `verifier_commit`, `verifier_accept` (the line verbatim), `tra
 gets `verification` with every command's exit code. It exits 0 only if every panel row was accepted and every command
 exited 0, 1 otherwise, 2 on a usage error (no run id, no commit). An arm without a verifier gets no measured row.
 
+Every gate's record and every negative control carry `wall_s`, the host's seconds in them (a gate's summed over its runs),
+and each shape its `wall_s` by stage (`operands`, `baseline_gates`, then `screen` alone under `--screen-only`, else
+`arm_gates`, `tune`, `chain_gates`, `sass_gate`, `warmup`, `timed`, `transcripts`, `report`), so a lease's idle minutes
+show where they went: operands are filled on the device in milliseconds, while an arm's CPU reference inside its gates can
+take minutes. So `refs.py` gives arms `pool()`, a forked process pool of the job's CPUs (`OMP_NUM_THREADS`, a fill job's
+`cpus=`), for such references, and an arm with `prefetch(dev, call, shape, flags)` (optional, arm interface v0.6) is told
+every call a flag set's gate is about to check before the first of them, so their references compute side by side; the gate still compares against the
+inputs as the device holds them at the gate.
+
 **Poisoned transcripts and the no-write control** (panel rule, server.md 11:50Z). An arm with `dump` (arm interface v0.5)
 lets the harness make its transcripts after the timed items: every buffer the transcript reads (`call.transcript_buffers`,
 default `call.outputs`; never an operand, since poisoning one changes what the call computes, so an overlap is refused and the
@@ -146,8 +163,11 @@ without `dump` still writes its own transcripts, and its record says the harness
 `--tier 2b` for a timed whole-node run (the default, 2a, is a screen that never plots), `--hypothesis`, `--parent`, and
 `--publish` to put the records into the evidence store. The arm's build record names its `variant`
 (`ledger.variant_record`: the sources' digest, the binary's, the priced path) and its `lineage` (parent, approach,
-mechanism tags, hypothesis, panel line and version). γ is looked up from `price_twins.json` on the variant's priced path, at
-both FP32 prices, the larger published; a lineage that types γ in gets no record.
+mechanism tags, hypothesis, panel line and version). A knob that picks code at run time (`PEARLC_A_FORMS`) is part of the
+variant: pass it as `variant_record(..., config={...})`. γ is looked up from `price_twins.json` on the variant's priced path, at
+both FP32 prices, the larger published; a lineage that types γ in gets no record. The records are also declared in the run's
+`outputs.json`, so under `research run --on`, whose workload holds no store key, the runner publishes them with the Attempt;
+`ledger.py publish RUN_DIR --by LANE` afterwards only asserts their outcome labels.
 
 Exit codes: 0 ok; 2 identity or usage; 3 a device, build or harness error; 5 a known-bad variant wasn't rejected; 6 the
 consistency gate rejected an arm; 7 the SASS gate refused a binary. The JSON is written in every case, with every rep, and
