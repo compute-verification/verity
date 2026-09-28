@@ -83,6 +83,9 @@ instead of row-major; smaller decodes keep the row-major kernels, whose warp and
 CHUNKED_MIN_ROWS = [4096]
 CHUNKED_THREADS = [128]
 CHUNKED_SPECIALIZE = [True]
+CHUNKED_MAX_ROWS = [18_000]
+"""Chunk-major launches over more rows run as equal sequential pieces of at most this many: past about one warp per
+scheduler (18k rows on the L40S) a launch's per-row rate collapses (23,744 rows: 93.6 ms at once, 84.7 ms in two)."""
 """Chunk-major launches at the 64 KiB width run the kernel compiled for its half of 8,196 words."""
 """Threads per block of the chunk-major launches (fewer spread a launch over more SMs)."""
 
@@ -148,8 +151,12 @@ class _Chunked:
     def permute(self, row0: int) -> None:
         from verity_vllm.engine.pous import native
 
-        native.ext().feistel_chunked(self.words, row0, self.rows - row0, self.half // 8, codec.PI_DOMAIN, CHUNKED_THREADS[0],
-                                     CHUNKED_SPECIALIZE[0])
+        rows = self.rows - row0
+        pieces = -(-rows // CHUNKED_MAX_ROWS[0])
+        step = -(-rows // pieces)
+        for start in range(row0, self.rows, step):
+            native.ext().feistel_chunked(self.words, start, min(step, self.rows - start), self.half // 8, codec.PI_DOMAIN,
+                                         CHUNKED_THREADS[0], CHUNKED_SPECIALIZE[0])
 
 
 def _decode_chunked(c_flat, seg, blk, ln, tags, base, starts, width: int) -> torch.Tensor:
