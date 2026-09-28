@@ -89,8 +89,12 @@ def _shift(n: int, bits: int) -> int:
     return max(0, n.bit_length() - bits - 1)
 
 
+def _int(n: Any) -> bool:
+    return isinstance(n, int) and not isinstance(n, bool)
+
+
 def _positive(n: Any) -> bool:
-    return isinstance(n, int) and not isinstance(n, bool) and n >= 1
+    return _int(n) and n >= 1
 
 
 def on_grid(n: Any, bits: int = GRID_BITS) -> bool:
@@ -160,23 +164,61 @@ def bucket(real: int, bits: int = GRID_BITS) -> Work:
 
 # ---- the draw -----------------------------------------------------------------------------------------------------------
 
+#: (a/b)^k is compared exactly in integers while k·bitlength(b) is at most this many bits
+EXACT_BITS = 1 << 14
+
+
+def miss_at_most(q: Fraction, k: int, delta: Fraction) -> bool:
+    """(q)^k <= δ, exactly, for 0 <= q < 1, k >= 0 and 0 < δ.  In integers while they are small (and always when
+    k < bitlength(den δ)); otherwise from bounds lo <= q^k·2^P <= hi, square-and-multiply rounding down and up, at a
+    precision P that doubles until they decide.  They do: with q = a/b in lowest terms and b >= 2, q^k = δ needs b^k = den δ,
+    so 2^k <= den δ and k < bitlength(den δ)."""
+    a, b, dn, dd = q.numerator, q.denominator, delta.numerator, delta.denominator
+    if k < dd.bit_length() or k * b.bit_length() <= EXACT_BITS:
+        return a ** k * dd <= dn * b ** k
+    prec = 64 + 2 * k.bit_length() + dd.bit_length()
+    while True:
+        lo, hi = _fixed_pow(a, b, k, prec)
+        if hi * dd <= dn << prec:
+            return True
+        if lo * dd > dn << prec:
+            return False
+        prec *= 2
+
+
+def _fixed_pow(a: int, b: int, k: int, prec: int) -> tuple[int, int]:
+    """(lo, hi) with lo <= (a/b)^k·2^prec <= hi."""
+    one = 1 << prec
+    lo, hi, base_lo, base_hi = one, one, (a << prec) // b, -(-(a << prec) // b)
+    while k:
+        if k & 1:
+            lo, hi = lo * base_lo >> prec, -(-(hi * base_hi) >> prec)
+        k >>= 1
+        if k:
+            base_lo, base_hi = base_lo * base_lo >> prec, -(-(base_hi * base_hi) >> prec)
+    return lo, hi
+
+
 def k_prime(eps: Fraction, delta: Fraction, credited: int, n: int, w_max: int) -> int:
-    """L3's K′: the smallest K with (1 − ε·credited/(n·w_max))^K <= δ, at most n (`credited` the credited work, `n` the tiles,
-    each doing at most `w_max`).  Computed in binary64 logarithms, then K stepped until the inequality holds there."""
+    """L3's K′: the smallest K >= 1 with (1 − p)^K <= δ in rationals, p = ε·credited/(n·w_max), and n if no K <= n has it
+    (`credited` the credited work, `n` the tiles, each doing at most `w_max`); 1 when p = 1.  Exact: the binary64
+    logarithms give only a starting K, which exact comparisons (`miss_at_most`) then step to the answer."""
     eps, delta = Fraction(eps), Fraction(delta)
-    if not (0 < eps <= 1 and 0 < delta < 1 and _positive(n) and _positive(w_max) and 0 < credited <= n * w_max):
+    if not (0 < eps <= 1 and 0 < delta < 1 and _positive(n) and _positive(w_max) and _int(credited)
+            and 0 < credited <= n * w_max):
         raise ValueError(f"k_prime needs 0 < ε <= 1, 0 < δ < 1 and 0 < credited <= n·w_max, not {eps}, {delta}, "
                          f"{credited}, {n}, {w_max}")
     p = eps * credited / (n * w_max)
     if p == 1:
         return 1
     step, target = math.log1p(-float(p)), math.log(float(delta))
-    k = max(1, math.ceil(target / step))
-    while k > 1 and (k - 1) * step <= target:
+    guess = target / step if step < 0 else math.inf
+    k = n if guess >= n else max(1, math.ceil(guess))
+    while k > 1 and miss_at_most(1 - p, k - 1, delta):
         k -= 1
-    while k * step > target:
+    while k < n and not miss_at_most(1 - p, k, delta):
         k += 1
-    return min(k, n)
+    return k
 
 
 def sampling(eps: Fraction, delta: Fraction, work: Work, tile_work: int, bits: int = GRID_BITS) -> dict[str, Any]:
