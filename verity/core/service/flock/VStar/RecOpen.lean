@@ -10,8 +10,9 @@ it reaches, then 512 zero bits, is the first result (`out`); the second (`acc_ou
 `Σ_l coef_r[l] · row[l]` added to its two GF(2^128) elements (`consStructure`, a `GfResiduals` of two residuals), its other
 words as they were. The running sums come first (`rec_open._steps`), then the climb.
 
-Ports, u16 words: `row` `8 LANES`, `aux` `A(H) = 64 ⌈H / 2⌉` (the siblings bottom up, 32 words each), `acc` 64, `coef`
-`16 LANES`, `dirs` 64; `out` 64 and `acc_out` 64.
+Ports, u16 words: `row` `8 LANES`, `aux` `A(H) = 64 max(1, ⌈H / 2⌉)` (the siblings bottom up, 32 words each; at `H = 0`
+one row the unit does not read), `acc` 64, `coef` `16 LANES`, `dirs` 64, whose words 0 and 1 hold the position's `H` low
+bits; `out` 64 and `acc_out` 64.
 -/
 
 namespace VStar
@@ -25,17 +26,17 @@ def ACC_WORDS : Nat := 64
 def DIRS_WORDS : Nat := 64
 
 def rowWords (LANES : Nat) : Nat := 8 * LANES
-def auxWords (H : Nat) : Nat := (NODE_WORDS * H + ROW_BLOCK - 1) / ROW_BLOCK * ROW_BLOCK
+def auxWords (H : Nat) : Nat := max 1 ((NODE_WORDS * H + ROW_BLOCK - 1) / ROW_BLOCK) * ROW_BLOCK
 def coefWords (LANES : Nat) : Nat := 16 * LANES
 
 /-- `rec_open.port_words`: `row`, `aux`, `acc`, `coef`, `dirs`. -/
 def recOpenPorts (LANES H : Nat) : List Nat := [rowWords LANES, auxWords H, ACC_WORDS, coefWords LANES, DIRS_WORDS]
 
-/-- `rec_open._check`: whole SHA-512 blocks of row, and the position's `H` bits in one word. -/
+/-- `rec_open._check`: whole SHA-512 blocks of row, and the position's `H` bits in `dirs`' first two words. -/
 def checkRecOpen (LANES H : Nat) : Except String Unit := do
   if LANES < 8 || LANES % 8 != 0 then
     throw s!"RecOpen's LANES is a positive multiple of 8 (whole SHA-512 blocks of row), not {LANES}"
-  if H < 1 || 16 < H then throw s!"RecOpen's H is 1 to 16 (the position's bits are one word), not {H}"
+  if 32 < H then throw s!"RecOpen's H is 0 to 32 (the position's bits are dirs' first two words), not {H}"
 
 /-- `rec_open.cons_structure`: `w` is the row's LANES elements then acc's two, `v` the coefficients (`c0[l]`, then
 `c1[l]`), and residual `r` is `Σ_l c_r[l] · row[l] + acc_r`. -/
@@ -71,7 +72,7 @@ def climbRow (H : Nat) (row aux d : List Lin) : M (List Lin) := do
 /-- `rec_open._steps` over forms: `(out, acc_out)`'s bits. -/
 def recOpen (LANES H : Nat) (row aux acc coef dirs : List Lin) : M (List Lin × List Lin) := do
   let t ← residualForms (consStructure LANES) (row ++ acc.take 256).toArray coef.toArray
-  let out ← climbRow H row aux (dirs.take 16)
+  let out ← climbRow H row aux (dirs.take 32)
   pure (out, t ++ acc.drop 256)
 
 /-- Consecutive slices of `bits` of `16 w` forms for each `w` of `ws`. -/
