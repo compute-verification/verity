@@ -135,6 +135,8 @@ def test_mufu_pieces_match_on_every_exponent(name):
     ("GumbelStreamKey_v1", (64, 64), lambda r: [r.getrandbits(64), r.choice([r.getrandbits(64), r.randint(0, 5000)])]),
     ("GumbelNoiseLane_v1", (32, 32), lambda r: [r.getrandbits(32), r.choice([0, 1, 0x7FFFFFFF, 0x80000000, 0xFFFFFFFF,
                                                                             r.randint(0, 128255), r.getrandbits(32)])]),
+    ("GumbelNoiseLane_v2", (32, 32), lambda r: [r.getrandbits(32), r.choice([0, 1, 0x7FFFFFFF, 0x80000000, 0xFFFFFFFF,
+                                                                            r.randint(0, 128255), r.getrandbits(32)])]),
     ("F32Eq_v1", (32, 32), lambda r: (lambda v: [v[0], r.choice([v[1], v[0], v[0] ^ 0x80000000])])(f32_words(r, 2))),
     ("BitOr_v1", (1, 1), lambda r: [r.getrandbits(1), r.getrandbits(1)]),
     ("BitNot_v1", (1,), lambda r: [r.getrandbits(1)]),
@@ -146,6 +148,17 @@ def test_sampler_pieces_match_the_ir_primitives(name, widths, gen):
     vecs = [gen(rng) for _ in range(300 if name.startswith("Gumbel") else 3000)]
     ref = _registered()[name].evaluate
     assert [(v, g) for v, g in zip(vecs, run_piece(IL.PIECES[name], widths, 32, vecs)) if g != ref(*v)] == []
+
+
+@pytest.mark.parametrize("name", ["NvLogf_v1", "NvLogf_v2"])
+def test_the_logf_pieces_match_the_ir_primitives_outside_the_domain_too(name):
+    """``_v1``'s NaN (main's pinned 0xFFC00000 for a negative word, a NaN input's payload) and ``_v2``'s (0x7FFFFFFF for both), on
+    negative words, NaNs of both signs and the positive range."""
+    rng = random.Random(name)
+    vecs = [[w] for w in f32_words(rng, 1500)] + [[w | 0x80000000] for w in f32_words(rng, 300)]
+    vecs += [[w] for w in (0x7FC00123, 0xFFC00123, 0x7F800001, 0xFF800001, 0x80000000, 0x80000001, 0xFF800000, 0x7F800000)]
+    ref = _registered()[name].evaluate
+    assert [(v, g) for v, g in zip(vecs, run_piece(IL.PIECES[name], (32,), 32, vecs)) if g != ref(*v)] == []
 
 
 #: the other rows' primitives (tail_pieces): FA3's inverse sum, the greedy argmax, the FP8 linear's quantizer, the MoE router

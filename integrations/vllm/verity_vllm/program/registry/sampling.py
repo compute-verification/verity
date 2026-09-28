@@ -65,9 +65,17 @@ TWO_M23_BITS = 0x34000000
 TWO_P23_BITS = 0x4B000000
 FLT_MIN_BITS = 0x00800000
 ONE_BITS = 0x3F800000
-#: every NaN result of `__nv_logf` / `__nv_log1pf` (an input outside their domain, a < 0 or a < -1, or a NaN): the GPU's canonical
-#: NaN, with no input payload or sign, on the L40S and the H100 in every build (probe art:e5dd6ce9...), not the host's default NaN
+#: `__nv_logf` / `__nv_log1pf` outside their domain (a < 0, a < -1, -inf): their special case's `fma(a, inf, inf)` is -inf + inf,
+#: whose NaN is pinned here rather than left to the host's default NaN (x86 and aarch64 differ in the sign)
+LOG_INVALID_NAN = 0xFFC00000
+#: every NaN result of the `_v2` logs (`nv_logf_gpu`, `nv_log1pf_gpu`): the GPU's canonical NaN, for an input outside the domain and a
+#: NaN input alike, no payload or sign kept (the L40S / H100 probe art:e5dd6ce9..., every build); the `_v1` logs keep `LOG_INVALID_NAN`
+#: and a NaN input's payload
 LOG_NAN = 0x7FFFFFFF
+
+
+def _neg_not_nan(a: int) -> bool:
+    return a >= 0x80000000 and (a & 0x7FFFFFFF) <= 0x7F800000
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -208,7 +216,7 @@ def nv_logf(a: int) -> int:
     r = fma_ftz(r, f, f)
     r = fma_ftz(i2, LN2_BITS, r)
     if a2 >= 0x7F800000:
-        r = 0x7F800000 if a2 == 0x7F800000 else LOG_NAN
+        r = LOG_INVALID_NAN if _neg_not_nan(a2) else fma_ftz(a2, 0x7F800000, 0x7F800000)
     if (a2 & 0x7FFFFFFF) == 0:
         r = 0xFF800000
     return r
@@ -220,6 +228,20 @@ def nv_log1pf(a: int) -> int:
     word of the whole fp32 domain (a = 0x3EFFFFFF, positive) and none in the Gumbel lane's domain a = -u, u in [2^-31', 1):
     `GumbelNoiseLane_v1` is the same function it was (exhaustive, test_sampling_rows)."""
     return _log1pf_from_sum(a & M32, add_rz_ftz(a & M32, ONE_BITS))
+
+
+def _gpu_nan(u: int) -> int:
+    return LOG_NAN if (u & 0x7F800000) == 0x7F800000 and (u & 0x7FFFFF) else u
+
+
+def nv_logf_gpu(a: int) -> int:
+    """`nv_logf` with every NaN result `LOG_NAN`, the GPU's (`NvLogf_v2`); every other word is `nv_logf`'s."""
+    return _gpu_nan(nv_logf(a))
+
+
+def nv_log1pf_gpu(a: int) -> int:
+    """`nv_log1pf` with every NaN result `LOG_NAN`, the GPU's; every other word is `nv_log1pf`'s."""
+    return _gpu_nan(nv_log1pf(a))
 
 
 def nv_log1pf_v1_model(a: int) -> int:
@@ -247,7 +269,7 @@ def _log1pf_from_sum(a: int, s: int) -> int:
     r = fma_ftz(ef, LN2_BITS, r)
     if a >= 0x7F800000:
         if _i32(a) > -1082130432:
-            r = 0x7F800000 if a == 0x7F800000 else LOG_NAN
+            r = LOG_INVALID_NAN if _neg_not_nan(a) else fma_ftz(a, 0x7F800000, 0x7F800000)
         if (a & 0x7FFFFFFF) == 0:
             r = 0x80000000
     return r
@@ -296,6 +318,14 @@ def noise_lane(key: int, v: int) -> int:
     return nv_logf(l1 ^ 0x80000000) ^ 0x80000000
 
 
+def noise_lane_gpu(key: int, v: int) -> int:
+    """`noise_lane` through the GPU-NaN logs (`GumbelNoiseLane_v2`).  The same word on every lane: log1pf sees -u in (-1, 0) and logf a
+    positive word, so neither reaches a NaN result."""
+    u = _rand_lane(key, v)
+    l1 = nv_log1pf_gpu(u ^ 0x80000000)
+    return nv_logf_gpu(l1 ^ 0x80000000) ^ 0x80000000
+
+
 # ---------------------------------------------------------------------------------------------------------
 # primitives
 # ---------------------------------------------------------------------------------------------------------
@@ -310,6 +340,12 @@ GumbelNoiseLane = PrimitiveDefinition(
     doc="g[v] = -__nv_logf(-__nv_log1pf(-max(tl.rand(key, v), 2^-31'))) in fp32 (FTZ): the Gumbel noise the kernel adds to "
         "vocabulary index v; libdevice bodies transcribed from libdevice.10.bc (log1pf's __fadd_rz a true toward-zero add, "
         "F-stoch-r17-01: the word map of this primitive is unchanged by it, exhaustively).",
+    conformance="exact-model-tested")
+
+GumbelNoiseLaneV2 = PrimitiveDefinition(
+    "GumbelNoiseLane", 2, (("key", U32), ("v", I32)), F32, lambda key, v: noise_lane_gpu(key, v),
+    doc="`GumbelNoiseLane_v1` through `NvLogf_v2`'s logs (every NaN result of __nv_logf / __nv_log1pf the GPU's 0x7FFFFFFF): the same "
+        "word on every lane, since the noise never reaches those results; for the re-baseline that moves the logs to `_v2`.",
     conformance="exact-model-tested")
 
 
@@ -566,6 +602,6 @@ def f32_bits(x: float) -> int:
 __all__ = ["SEMANTIC_ID", "GumbelStreamKey", "GumbelNoiseLane", "F32Eq", "BitOr", "BitNot", "TemperatureLane", "TemperatureScale",
            "GumbelSelectStep", "GumbelSelectF32", "GumbelTokenSelect", "stream_key", "noise_lane", "nv_logf", "nv_log1pf", "fma_ftz",
            "add_rz_ftz", "f32_bits", "topp_mask_word", "bit_at", "TopPMaskStep", "TopPMask", "GumbelTopPTokenSelect", "NEG_INF_BITS",
-           "SPLIT_COUNTS",
+           "SPLIT_COUNTS", "LOG_NAN", "GumbelNoiseLaneV2", "nv_logf_gpu", "nv_log1pf_gpu", "noise_lane_gpu",
            # F-stoch-r17-01 witnesses (test-only, not evaluators)
            "add_rz_ftz_v1_model", "nv_log1pf_v1_model"]

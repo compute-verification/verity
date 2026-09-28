@@ -29,7 +29,7 @@ QNAN_MUFU = 0x7FFFFFFF
 INF = 0x7F800000
 ONE_F = 0x3F800000
 DEFAULT_NAN = 0xFFC00000
-#: every NaN result of `__nv_logf` / `__nv_log1pf` (`sampling.LOG_NAN`: the GPU's canonical NaN)
+#: every NaN result of `NvLogf_v2`'s logs (`sampling.LOG_NAN`, the GPU's canonical NaN)
 LOG_NAN = 0x7FFFFFFF
 BIG = 0x7E800000       # 2^126
 TINY = 0x00800000      # 2^-126
@@ -427,8 +427,9 @@ def gumbel_stream_key(C, seed, pos):
     return philox_word0(C, pos[:32], pos[32:64], zero, zero, seed[:32], seed[32:64])
 
 
-def nv_logf(C, a):
-    """libdevice ``__nv_logf`` on an f32 word (FTZ), operation for operation as ``sampling.nv_logf``."""
+def nv_logf(C, a, gpu: bool = False):
+    """libdevice ``__nv_logf`` on an f32 word (FTZ), operation for operation as ``sampling.nv_logf``; with ``gpu`` every NaN result is
+    ``LOG_NAN`` (``sampling.nv_logf_gpu``, ``NvLogf_v2``)."""
     small = OR(C, C.AND(a[31], NOT(_is_nan(C, a))), C.AND(NOT(a[31]), _ult_const(C, a[:31], 0x00800000)))   # a < FLT_MIN
     a2 = mux(C, small, _mul_ftz(C, a, TWO_P23), a)
     i0 = mux(C, small, _c32(0xC1B80000), _c32(0))
@@ -444,15 +445,19 @@ def nv_logf(C, a):
     r = f32_mul_ftz(C, r, f)
     r = f32_fma_ftz(C, r, f, f)
     r = _fma_ftz(C, i2, LN2, r)
-    # a2 >= 0x7F800000 (+inf, a NaN, a negative): +inf for +inf, else the NaN
-    special = mux(C, _eq_const(C, a2, INF), _c32(INF), _c32(LOG_NAN))
+    # a2 >= 0x7F800000 (+inf, a NaN, a negative): fma(a2, inf, inf) is a2 quieted for a NaN, +inf, else the invalid NaN 0xFFC00000;
+    # with gpu, +inf for +inf, else LOG_NAN
+    if gpu:
+        special = mux(C, _eq_const(C, a2, INF), _c32(INF), _c32(LOG_NAN))
+    else:
+        special = mux(C, _is_nan(C, a2), a2[:22] + [ONE] + a2[23:], mux(C, a2[31], _c32(0xFFC00000), _c32(INF)))
     r = mux(C, NOT(_ult_const(C, a2, 0x7F800000)), special, r)
     return mux(C, NOT(or_reduce(C, a2[:31])), _c32(0xFF800000), r)
 
 
-def nv_log1pf(C, a):
+def nv_log1pf(C, a, gpu: bool = False):
     """libdevice ``__nv_log1pf`` (FTZ): ``__fadd_rz(a, 1.0f)`` rounded toward zero, the binade selector, the polynomial, as
-    ``sampling.nv_log1pf``."""
+    ``sampling.nv_log1pf``; with ``gpu`` every NaN result is ``LOG_NAN`` (``sampling.nv_log1pf_gpu``)."""
     s = ftz(C, fp.f32_add(C, ftz(C, a), _c32(ONE_F), rz=True))
     e = sub(C, s, _c32(1061158912), 32)[0]
     e = [ZERO] * 23 + e[23:]
@@ -469,21 +474,21 @@ def nv_log1pf(C, a):
     r = f32_fma_ftz(C, r, u, u)
     r = _fma_ftz(C, ef, LN2, r)
     big = NOT(_ult_const(C, a, 0x7F800000))
-    special = mux(C, _eq_const(C, a, INF), _c32(INF), _c32(LOG_NAN))               # a < -1, +inf or a NaN: +inf for +inf, else the NaN
-    r = mux(C, C.AND(big, _signed_gt_const(C, a, -1082130432)), special, r)
+    outside = C.AND(big, _signed_gt_const(C, a, -1082130432))                    # a < -1, +inf or a NaN
+    r = mux(C, outside, mux(C, _eq_const(C, a, INF), _c32(INF), _c32(LOG_NAN)) if gpu else _fma_ftz(C, a, INF, INF), r)
     return mux(C, C.AND(big, NOT(or_reduce(C, a[:31]))), _c32(0x80000000), r)
 
 
-def gumbel_noise_lane(C, key, v):
+def gumbel_noise_lane(C, key, v, gpu: bool = False):
     """``GumbelNoiseLane_v1``: ``-logf(-log1pf(-max(rand(key, v), 2^-31')))`` in f32 (FTZ); rand is Philox word 0 of counter
-    (v, 0, 0, 0) under key (key, 0), made uniform by ``uint_to_uniform_float``."""
+    (v, 0, 0, 0) under key (key, 0), made uniform by ``uint_to_uniform_float``.  With ``gpu``, ``_v2``: through the GPU-NaN logs."""
     zero = [ZERO] * 32
     w = philox_word0(C, v, zero, zero, zero, key, zero)
     xi = [b ^ w[31] for b in w[:31]] + [ZERO]                   # i32 w, or -w - 1 when negative
     u = f32_mul_ftz(C, _i32_to_f32(C, xi), _c32(TL_RAND_SCALE))
     u = mux(C, _ult_const(C, u[:31], TL_RAND_SCALE), _c32(TL_RAND_SCALE), u)
-    l1 = nv_log1pf(C, u[:31] + [NOT(u[31])])
-    g = nv_logf(C, l1[:31] + [NOT(l1[31])])
+    l1 = nv_log1pf(C, u[:31] + [NOT(u[31])], gpu)
+    g = nv_logf(C, l1[:31] + [NOT(l1[31])], gpu)
     return g[:31] + [NOT(g[31])]
 
 
@@ -646,6 +651,7 @@ PIECES = {
     "SelectBit_v1": lambda C, c, a, b: mux(C, c[0], a, b),
     "I32ToF32_v1": _i32_to_f32,
     "NvLogf_v1": nv_logf,
+    "NvLogf_v2": lambda C, a: nv_logf(C, a, gpu=True),
     "TopPNumkeep_v1": topp_numkeep,
     "MufuRcpFtz_v1": mufu_rcp,
     "Fa2InvSum_v1": fa2_inv_sum,
@@ -659,6 +665,7 @@ PIECES = {
     "I32Add_v1": lambda C, a, b: add(C, a, b, width=32),
     "GumbelStreamKey_v1": gumbel_stream_key,
     "GumbelNoiseLane_v1": gumbel_noise_lane,
+    "GumbelNoiseLane_v2": lambda C, key, v: gumbel_noise_lane(C, key, v, gpu=True),
     "F32Eq_v1": f32_eq,
     "BitNot_v1": lambda C, a: [NOT(a[0])],
     "BitOr_v1": lambda C, a, b: [OR(C, a[0], b[0])],

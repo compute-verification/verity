@@ -193,6 +193,9 @@
    "and": 63
   },
   "GumbelNoiseLane_v1": {
+   "and": 109421
+  },
+  "GumbelNoiseLane_v2": {
    "and": 109391
   },
   "GumbelStreamKey_v1": {
@@ -229,6 +232,9 @@
    "and": 160
   },
   "NvLogf_v1": {
+   "and": 48646
+  },
+  "NvLogf_v2": {
    "and": 48616
   },
   "RopeOutAdd_v1": {
