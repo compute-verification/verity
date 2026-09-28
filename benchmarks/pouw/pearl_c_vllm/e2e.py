@@ -629,9 +629,9 @@ class Coins:
     starts.  A coin opens once; an engine started again in the same epoch (the ABAB blocks) asking for it after the same
     record gets the one opening again, and after any other record a refusal, so nothing redraws."""
 
-    def __init__(self, epoch: int):
+    def __init__(self, epoch: int, entropy=None):
         from verity.core.protocols.pouw.coins import Challenger
-        self.challenger, self.opened = Challenger(epoch), {}
+        self.challenger, self.opened = (Challenger(epoch, entropy) if entropy else Challenger(epoch)), {}
         self.commitment = self.challenger.commitment
 
     def open(self, label: str, after: bytes):
@@ -797,10 +797,31 @@ def split(results: dict) -> dict:
     return out
 
 
+def state_entropy(path: str):
+    """The challenger's entropy held in the file `path` (created from os.urandom when absent, readable only by its owner):
+    the same coins for the controller here and for the challenger process that later draws the window's units
+    (`served_commit.py challenger --state`)."""
+    from verity.core.protocols.pouw.coins import COIN_BYTES, HM96, LABELS
+    p = Path(path)
+    if not p.exists():
+        p.parent.mkdir(parents=True, exist_ok=True)
+        fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "wb") as f:
+            f.write(os.urandom(len(LABELS) * (COIN_BYTES + HM96.salt_bytes)))
+    data, at = p.read_bytes(), [0]
+
+    def take(n: int) -> bytes:
+        at[0] += n
+        return data[at[0] - n:at[0]]
+    return take
+
+
 def epoch_coins(args, epoch: int) -> Coins:
     """The run's epoch coins, committed before any engine starts; with ``--retain`` the commitment is published beside the
-    passes (``coins.json``), where `verify_run.py --coins` reads it."""
-    coins = Coins(epoch)
+    passes (``coins.json``), where `verify_run.py --coins` reads it.  ``POUW_COIN_STATE`` names a file holding the
+    challenger's entropy (`state_entropy`)."""
+    state = os.environ.get("POUW_COIN_STATE")
+    coins = Coins(epoch, state_entropy(state)) if state else Coins(epoch)
     if getattr(args, "retain", None):
         Path(args.retain).mkdir(parents=True, exist_ok=True)
         (Path(args.retain) / "coins.json").write_text(json.dumps(coins.commitment.to_json()) + "\n")

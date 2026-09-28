@@ -3,6 +3,7 @@ import PouwCheck.Inputs
 import PouwCheck.Check
 import PouwCheck.Protocol
 import PouwCheck.Opening
+import PouwCheck.Pass
 
 /-!
 # PoUW's window check as a core protocol
