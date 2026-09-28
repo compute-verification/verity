@@ -1,9 +1,13 @@
 # shellcheck shell=bash disable=SC2034
 # Sourced by launch.sh and teardown.sh: the one Nebius server's names and sizes, and service-account auth.
 #
-# Auth reads the Cursor secrets NEBIUS_SA_ID, NEBIUS_SA_PUBLIC_KEY_ID and NEBIUS_SA_PRIVATE_KEY (the PEM).  The key is written to a
-# mode-600 file in a mode-700 directory made for this process and removed when it exits; the CLI's profile lives there too
-# (`nebius -c`), so nothing is written to ~/.nebius or the repository and no value is ever printed.  Never run these with `bash -x`.
+# Auth reads the Cursor secrets NEBIUS_SA_ID, NEBIUS_SA_PUBLIC_KEY_ID and NEBIUS_SA_PRIVATE_KEY_B64 (the PEM as one line of base64,
+# `base64 -w0 key.pem`).  The key must be one line: a multi-line secret's body lines pass through `env | cut -d= -f1` and escape
+# Cursor's redaction, which is how the old multi-line NEBIUS_SA_PRIVATE_KEY leaked six times by 2 Oct; it is still read when _B64
+# is unset.
+# The key is written to a mode-600 file in a mode-700 directory made for this process and removed when it exits; the CLI's profile
+# lives there too (`nebius -c`), so nothing is written to ~/.nebius or the repository and no value is ever printed.  Never run these
+# with `bash -x`.
 
 NEBIUS_REGION=${NEBIUS_REGION:-uk-south2}
 NEBIUS_PROJECT_ID=${NEBIUS_PROJECT_ID-project-e05mvq7kln00dvsa5xj2mg}   # default-project-uk-south2; the service account is editor there only
@@ -32,19 +36,31 @@ NEBIUS_BIN=${NEBIUS_BIN:-$(command -v nebius || echo "$HOME/.nebius/bin/nebius")
 nebius_auth() {
   [ -x "$NEBIUS_BIN" ] || die "no nebius CLI (curl -sSL https://storage.eu-north1.nebius.cloud/cli/install.sh | bash)"
   local v
-  for v in NEBIUS_SA_ID NEBIUS_SA_PUBLIC_KEY_ID NEBIUS_SA_PRIVATE_KEY; do
+  for v in NEBIUS_SA_ID NEBIUS_SA_PUBLIC_KEY_ID; do
     [ -n "${!v:-}" ] && continue
     case ",${CLOUD_AGENT_INJECTED_SECRET_NAMES:-}," in
       *",$v,"*) die "$v not in this shell though this VM injects it: rerun from a fresh tmux login shell" ;;
       *) die "$v is not set (a Cursor secret: Dashboard -> Cloud Agents -> Secrets)" ;;
     esac
   done
+  if [ -z "${NEBIUS_SA_PRIVATE_KEY_B64:-}${NEBIUS_SA_PRIVATE_KEY:-}" ]; then
+    case ",${CLOUD_AGENT_INJECTED_SECRET_NAMES:-}," in
+      *",NEBIUS_SA_PRIVATE_KEY_B64,"* | *",NEBIUS_SA_PRIVATE_KEY,"*)
+        die "the Nebius key is not in this shell though this VM injects it: rerun from a fresh tmux login shell" ;;
+      *) die "NEBIUS_SA_PRIVATE_KEY_B64 is not set (a Cursor secret, \`base64 -w0 key.pem\`: Dashboard -> Cloud Agents -> Secrets)" ;;
+    esac
+  fi
   NB_DIR=$(mktemp -d "${XDG_RUNTIME_DIR:-/tmp}/nebius-auth.XXXXXX") || die "mktemp failed"
   chmod 700 "$NB_DIR"
   trap 'rm -rf "$NB_DIR"' EXIT
-  local key=$NEBIUS_SA_PRIVATE_KEY
-  case $key in *$'\n'*) ;; *) key=${key//\\n/$'\n'} ;; esac    # a PEM pasted with literal \n
-  (umask 077 && printf '%s\n' "$key" > "$NB_DIR/key.pem")
+  if [ -n "${NEBIUS_SA_PRIVATE_KEY_B64:-}" ]; then
+    (umask 077 && printf '%s' "$NEBIUS_SA_PRIVATE_KEY_B64" | base64 -d > "$NB_DIR/key.pem" 2>/dev/null) \
+      || die "NEBIUS_SA_PRIVATE_KEY_B64 is not base64"
+  else
+    local key=$NEBIUS_SA_PRIVATE_KEY
+    case $key in *$'\n'*) ;; *) key=${key//\\n/$'\n'} ;; esac    # a PEM pasted with literal \n
+    (umask 077 && printf '%s\n' "$key" > "$NB_DIR/key.pem")
+  fi
   "$NEBIUS_BIN" --no-check-update -c "$NB_DIR/config.yaml" profile create sa --endpoint api.nebius.cloud \
     --service-account-id "$NEBIUS_SA_ID" --public-key-id "$NEBIUS_SA_PUBLIC_KEY_ID" \
     --private-key-file-path "$NB_DIR/key.pem" --skip-auth > /dev/null 2>&1 || die "could not write the CLI profile"
@@ -82,7 +98,7 @@ resolve_project() {
   PROJECT_ID=${NEBIUS_PROJECT_ID:-}
   if [ -n "$PROJECT_ID" ]; then
     nb compute instance list --parent-id "$PROJECT_ID" > /dev/null 2>&1 \
-      || die "cannot list VMs in $PROJECT_ID: check that NEBIUS_SA_ID, NEBIUS_SA_PUBLIC_KEY_ID and NEBIUS_SA_PRIVATE_KEY are one current key pair"
+      || die "cannot list VMs in $PROJECT_ID: check that NEBIUS_SA_ID, NEBIUS_SA_PUBLIC_KEY_ID and NEBIUS_SA_PRIVATE_KEY_B64 are one current key pair"
     return 0
   fi
   if [ -z "$TENANT_ID" ]; then
