@@ -60,6 +60,7 @@ theorem setupH_spec {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : 
   bindok pin hpin
   bindok _ -
   bindok _ -
+  bindok _ -
   lets h0
   bindok _ -
   lets h1
