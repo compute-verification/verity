@@ -16,11 +16,16 @@
 //!   that wire's column is the part's input row.
 //! - Every other input row of a part is bound to its form over the unit's columns ([`Instance::bind`]), the block's Δ.
 //! - The unit's own rows read its parts' output columns directly: in the block those entries cross slots.
+//! - A table read (attention's MUFU reads) is a part too, placed in the range of a generated layout: its rows are
+//!   `table/v2`'s (`LookupNet::build_v2`, the verifier's `Lookup.buildV2`) over the held table, its index inputs are always
+//!   bound, and its product rows' B side is the table's, folded from it ([`TableSide`]) and listed empty.
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde_json::{Value, json};
 use sha2::{Digest, Sha512};
+
+use crate::{ir_block::IrUnitNet, lookup::LookupNet};
 
 pub const FORMAT: &str = "flock-circuit/types";
 pub const STATEMENT: &str = "verity/flock-circuit/types";
@@ -43,29 +48,43 @@ enum Item {
     And(Form, Form),
     /// `calls[k]` on its input forms
     Call(usize, Vec<Form>),
+    /// `tables[t]` at its index forms
+    Read(usize, Vec<Form>),
 }
 
-/// A `verity/circuit-type/v1` type of AND items and calls: its ports, items and outputs.
+/// A `verity/circuit-type/v1` type of AND items, calls and table reads: its ports, items and outputs.
 #[derive(Debug)]
 pub struct Type {
     pub ins: Vec<(usize, usize)>,
     pub outs: Vec<(usize, usize)>,
     calls: Vec<String>,
+    /// `(SHA-512 of its raw words, index bits, value bits)` per table
+    tables: Vec<(String, usize, usize)>,
     items: Vec<Item>,
     outputs: Vec<Form>,
 }
 
-/// A `verity/layout/v1` record whose own region is derived: its type, range, port groups and placed calls.
+/// A layout's own region: derived from its type, or a `table/v2` read over a held table.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Own {
+    Derive,
+    Gen { table: String, in_bits: usize, value_bits: usize, lo_bits: usize },
+}
+
+/// A `verity/layout/v1` record: its type (none for a generated read), range, port groups and placed calls and reads.
 #[derive(Debug)]
 pub struct Layout {
     pub sha512: String,
-    pub ty: String,
+    pub ty: Option<String>,
     /// absent for the unit's layout, which the block places
     pub range_log: Option<usize>,
     pub in_split: Vec<usize>,
     pub out_split: Vec<usize>,
+    pub own: Own,
     /// `(item, layout, offset)` per call item, in item order
     calls: Vec<(usize, usize, usize)>,
+    /// `(item, layout, offset)` per read item, in item order
+    reads: Vec<(usize, usize, usize)>,
 }
 
 /// A layout's own region, the constant resolved.
@@ -79,6 +98,8 @@ pub struct Rows {
     /// each input bit's column (a part's input row for an exported bit) and each output bit's copy row
     pub in_cols: Vec<usize>,
     pub out_cols: Vec<usize>,
+    /// a generated read's `READ` record (its product rows' B side, listed empty): table SHA-512, n, lo, k, prod0, lo_top
+    pub read: Option<(String, usize, usize, usize, usize, usize)>,
 }
 
 fn sorted(v: &Value) -> Value {
@@ -151,7 +172,7 @@ impl Type {
         bits(&self.outs).iter().sum()
     }
 
-    /// The type `content` encodes: AND items and calls, no table reads. `callee(digest)` is a called type's
+    /// The type `content` encodes: AND items, calls and table reads. `callee(digest)` is a called type's
     /// `(in bits, out bits)`.
     pub fn parse(content: &Value, callee: &dyn Fn(&str) -> Option<(usize, usize)>) -> Result<Self, String> {
         let keys = ["format", "label", "in", "out", "calls", "tables", "items", "outputs"];
@@ -161,8 +182,20 @@ impl Type {
         if !["library", "program"].iter().any(|l| content["label"] == *l) {
             return Err("a type's label is neither library nor program".into());
         }
-        if content["tables"] != json!([]) {
-            return Err("a type that reads tables: not read yet".into());
+        let tables: Vec<(String, usize, usize)> = content["tables"].as_array().ok_or("a type's tables")?.iter().map(|t| match t.as_array().map(|a| a.as_slice()) {
+            Some([sha, ib, vb]) => {
+                let sha = sha.as_str().filter(|x| x.len() == 128 && x.bytes().all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c)))
+                    .ok_or("a table is not named by its SHA-512")?;
+                let (ib, vb) = (uint(ib, "a table's index bits")?, uint(vb, "a table's value bits")?);
+                if !(1..=32).contains(&ib) || !(1..=32).contains(&vb) {
+                    return Err("a table's index or value bits are not in 1..32".to_string());
+                }
+                Ok((sha.to_string(), ib, vb))
+            }
+            _ => Err("a table is not [sha512, index_bits, value_bits]".to_string()),
+        }).collect::<Result<_, _>>()?;
+        if tables.iter().map(|t| &t.0).collect::<BTreeSet<_>>().len() != tables.len() {
+            return Err("a type lists a table twice".into());
         }
         let calls: Vec<String> = content["calls"].as_array().ok_or("a type's calls")?.iter()
             .map(|d| d.as_str().map(str::to_string).ok_or("a call is not a type digest".to_string())).collect::<Result<_, _>>()?;
@@ -187,14 +220,24 @@ impl Type {
                     items.push(Item::Call(k, args));
                     n += ob;
                 }
-                _ => return Err("an item that is neither an AND nor a call: not read yet".into()),
+                Some([op, t, args]) if op.as_u64() == Some(4) => {
+                    let t = uint(t, "a read's table index")?;
+                    let (ib, vb) = tables.get(t).map(|x| (x.1, x.2)).ok_or("a read of a table its tables do not list")?;
+                    let args = args.as_array().ok_or("a read's index")?.iter().map(|f| form(f, n)).collect::<Result<Vec<_>, _>>()?;
+                    if args.len() != ib {
+                        return Err("a read's index is not its table's index bits".into());
+                    }
+                    items.push(Item::Read(t, args));
+                    n += vb;
+                }
+                _ => return Err("an item that is neither an AND, a call nor a read".into()),
             }
         }
         let outputs = content["outputs"].as_array().ok_or("a type's outputs")?.iter().map(|f| form(f, n)).collect::<Result<Vec<_>, _>>()?;
         if outputs.len() != bits(&outs).iter().sum::<usize>() {
             return Err("a type's outputs are not its out ports' bits".into());
         }
-        Ok(Type { ins, outs, calls, items, outputs })
+        Ok(Type { ins, outs, calls, tables, items, outputs })
     }
 }
 
@@ -227,36 +270,53 @@ fn types(meta: &Value) -> Result<BTreeMap<String, Type>, String> {
 }
 
 impl Layout {
-    /// The layout `rec` records: a derived own region, no reads, every call placed. Its `sha512` must be the record's
-    /// digest.
+    /// The layout `rec` records: a derived own region (of its type) or a generated `table/v2` read (no type, in a range,
+    /// placing nothing); every call and read placed. Its `sha512` must be the record's digest.
     pub fn parse(rec: &Value) -> Result<Self, String> {
         let m = rec.as_object().ok_or("a layout is not an object")?;
         if rec["sha512"].as_str() != Some(layout_digest(rec).as_str()) {
             return Err("a layout's sha512 is not its record's digest".into());
         }
-        let keys = ["sha512", "type", "in_split", "out_split", "own", "calls", "reads"];
-        if m.len() != keys.len() + usize::from(m.contains_key("range_log")) || keys.iter().any(|k| !m.contains_key(*k)) {
+        let keys = ["sha512", "in_split", "out_split", "own", "calls", "reads"];
+        if keys.iter().any(|k| !m.contains_key(*k)) || m.keys().any(|k| !keys.contains(&k.as_str()) && k != "type" && k != "range_log") {
             return Err("a layout record's keys are not verity/layout/v1's".into());
         }
-        if rec["own"] != json!({"derive": "v2"}) || rec["reads"] != json!([]) {
-            return Err("a layout with a generated own region or table reads: not read yet".into());
-        }
+        let own = if rec["own"] == json!({"derive": "v2"}) {
+            Own::Derive
+        } else {
+            let o = rec["own"].as_object().ok_or("a layout's own")?;
+            let gen_keys: BTreeSet<&str> = o.keys().map(String::as_str).collect();
+            if rec["own"]["gen"] != "table/v2" || gen_keys != BTreeSet::from(["gen", "table", "in_bits", "value_bits", "lo_bits"]) {
+                return Err("a layout's own region is neither derive v2 nor gen table/v2".into());
+            }
+            Own::Gen {
+                table: rec["own"]["table"].as_str().ok_or("a generated read's table")?.to_string(), in_bits: uint(&rec["own"]["in_bits"], "in_bits")?,
+                value_bits: uint(&rec["own"]["value_bits"], "value_bits")?, lo_bits: uint(&rec["own"]["lo_bits"], "lo_bits")?,
+            }
+        };
         let range_log = match rec.get("range_log") {
             None => None,
             Some(s) => Some(uint(s, "a layout's range_log").ok().filter(|s| (7..=40).contains(s)).ok_or("a layout's range_log is not in 7..40")?),
         };
-        let calls = rec["calls"].as_array().ok_or("a layout's calls")?.iter().map(|e| {
+        let placed = |k: &str| rec[k].as_array().ok_or(format!("a layout's {k}"))?.iter().map(|e| {
             let keys: BTreeSet<&str> = e.as_object().map(|m| m.keys().map(String::as_str).collect()).unwrap_or_default();
             if keys != BTreeSet::from(["item", "layout", "offset"]) {
-                return Err("a call entry that is not placed (inline): not read yet".to_string());
+                return Err(format!("a {k} entry that is not placed (inline): not read yet"));
             }
-            Ok((uint(&e["item"], "a call's item")?, uint(&e["layout"], "a call's layout")?, uint(&e["offset"], "a call's offset")?))
-        }).collect::<Result<Vec<_>, _>>()?;
+            Ok((uint(&e["item"], "an entry's item")?, uint(&e["layout"], "an entry's layout")?, uint(&e["offset"], "an entry's offset")?))
+        }).collect::<Result<Vec<_>, _>>();
         let split = |k: &str| rec[k].as_array().ok_or(format!("a layout's {k}"))?.iter().map(|x| uint(x, k)).collect::<Result<Vec<_>, _>>();
-        Ok(Layout {
-            sha512: rec["sha512"].as_str().unwrap_or("").to_string(), ty: rec["type"].as_str().ok_or("a layout's type")?.to_string(), range_log,
-            in_split: split("in_split")?, out_split: split("out_split")?, calls,
-        })
+        let lay = Layout {
+            sha512: rec["sha512"].as_str().unwrap_or("").to_string(), ty: rec.get("type").map(|t| t.as_str().map(str::to_string).ok_or("a layout's type")).transpose()?,
+            range_log, in_split: split("in_split")?, out_split: split("out_split")?, own, calls: placed("calls")?, reads: placed("reads")?,
+        };
+        let generated = lay.own != Own::Derive;
+        if generated == lay.ty.is_some() || (generated && (lay.range_log.is_none() || !lay.calls.is_empty() || !lay.reads.is_empty()
+            || !lay.in_split.is_empty() || !lay.out_split.is_empty()))
+        {
+            return Err("a layout is not a type's derived region, nor a generated read in a range placing nothing".into());
+        }
+        Ok(lay)
     }
 }
 
@@ -308,18 +368,27 @@ fn own_region(t: &Type, lay: &Layout, subs: &[(usize, &Rows)]) -> Result<(Rows, 
     let in_bits = t.in_bits();
     // a wire's reads: every item form's and every output's
     let mut uses: BTreeMap<usize, usize> = BTreeMap::new();
-    let forms = t.items.iter().flat_map(|it| match it { Item::And(a, b) => vec![a, b], Item::Call(_, args) => args.iter().collect() });
+    let forms = t.items.iter().flat_map(|it| match it { Item::And(a, b) => vec![a, b], Item::Call(_, args) | Item::Read(_, args) => args.iter().collect() });
     for f in forms.chain(&t.outputs) {
         for &w in &f.wires {
             *uses.entry(w).or_default() += 1;
         }
     }
+    // placed calls and reads, in item order, take `subs` in turn; only a call's arguments are ever exported
+    let placed: Vec<(bool, &Vec<Form>)> = t.items.iter().filter_map(|it| match it {
+        Item::Call(_, a) => Some((true, a)),
+        Item::Read(_, a) => Some((false, a)),
+        Item::And(..) => None,
+    }).collect();
+    if placed.len() != subs.len() {
+        return Err("a layout does not place every call and read of its type".into());
+    }
     let mut export_col: BTreeMap<usize, usize> = BTreeMap::new();
     let mut exported: Vec<BTreeSet<usize>> = Vec::new();
-    for (args, &(base, sub)) in t.items.iter().filter_map(|it| match it { Item::Call(_, a) => Some(a), _ => None }).zip(subs) {
+    for (&(call, args), &(base, sub)) in placed.iter().zip(subs) {
         let mut ex = BTreeSet::new();
         for (bit, f) in args.iter().enumerate() {
-            if !f.c && f.wires.len() == 1 && f.wires[0] < in_bits && uses.get(&f.wires[0]) == Some(&1) {
+            if call && !f.c && f.wires.len() == 1 && f.wires[0] < in_bits && uses.get(&f.wires[0]) == Some(&1) {
                 ex.insert(bit);
                 export_col.insert(f.wires[0], base + sub.in_cols[bit]);
             }
@@ -363,17 +432,14 @@ fn own_region(t: &Type, lay: &Layout, subs: &[(usize, &Rows)]) -> Result<(Rows, 
                 wire.push(Form { wires: vec![rows.len()], c: false });
                 rows.push(row);
             }
-            Item::Call(_, args) => {
+            Item::Call(_, args) | Item::Read(_, args) => {
                 let p = call_forms.len();
-                let (base, sub) = *subs.get(p).ok_or("a call its layout does not place")?;
+                let (base, sub) = subs[p];
                 call_forms.push(args.iter().map(|f| xor(&wire, f)).collect::<Vec<_>>());
                 wire.extend(sub.out_cols.iter().map(|&c| Form { wires: vec![base + c], c: false }));
                 steps.push(Step::Part(p));
             }
         }
-    }
-    if call_forms.len() != subs.len() {
-        return Err("a layout places more calls than its type makes".into());
     }
     let outs: Vec<Form> = t.outputs.iter().map(|f| xor(&wire, f)).collect();
     let ob = bits(&t.outs);
@@ -400,11 +466,11 @@ fn own_region(t: &Type, lay: &Layout, subs: &[(usize, &Rows)]) -> Result<(Rows, 
         forms.into_iter().enumerate().filter(|(bit, _)| !ex.contains(bit)).map(|(bit, f)| (base + sub.in_cols[bit], resolve(entries(&f)))).collect()
     }).collect();
     let rows = rows.into_iter().map(|(a, b)| (resolve(a), resolve(b))).collect();
-    Ok((Rows { rows, konst, in_groups, out_groups, in_cols, out_cols }, steps, binds))
+    Ok((Rows { rows, konst, in_groups, out_groups, in_cols, out_cols, read: None }, steps, binds))
 }
 
-/// The rows as `verity_flock.ir_lower.netlist` writes a unit (`flock-ir-unit/v2`, no `LEAVES` or `CUT` line); entries at
-/// or past `cols` (another slot's columns) left out.
+/// The rows as `verity_flock.ir_lower.netlist` writes a unit (`flock-ir-unit/v2`, no `LEAVES` or `CUT` line), then a
+/// generated read's `READ` line (`verity_flock.derive.netlist`); entries at or past `cols` (another slot's columns) left out.
 pub fn netlist(d: &Rows, name: &str, cols: usize) -> String {
     let mut head = vec!["flock-ir-unit/v2".to_string(), name.to_string(), d.rows.len().to_string(), d.konst.to_string()];
     for groups in [&d.in_groups, &d.out_groups] {
@@ -419,6 +485,9 @@ pub fn netlist(d: &Rows, name: &str, cols: usize) -> String {
         let line: Vec<String> = std::iter::once(a.len()).chain(a).chain(std::iter::once(b.len())).chain(b).map(|x| x.to_string()).collect();
         out += &line.join(" ");
         out.push('\n');
+    }
+    if let Some((sha, n, lo, k, prod0, lo_top)) = &d.read {
+        out += &format!("READ {sha} {n} {lo} {k} {prod0} {lo_top}\n");
     }
     out
 }
@@ -448,109 +517,195 @@ pub fn unit_rows(meta: &Value, name: &str) -> Result<String, String> {
         return Err("META: more than the unit's type and layout (a template with a tail)".into());
     }
     let lay = Layout::parse(&layouts[0])?;
-    if meta["unit_type"].as_str() != Some(lay.ty.as_str()) || lay.range_log.is_some() || !lay.calls.is_empty() {
-        return Err("META: the unit's layout is not of unit_type, or it has a range or placed calls".into());
+    if meta["unit_type"].as_str() != lay.ty.as_deref() || lay.range_log.is_some() || !lay.calls.is_empty() || !lay.reads.is_empty() {
+        return Err("META: the unit's layout is not of unit_type, or it has a range or placed calls or reads".into());
     }
-    let t = types.get(&lay.ty).ok_or("META: the unit's type is not among its types")?;
-    if !t.calls.is_empty() {
-        return Err("META: a flat unit's type makes calls".into());
+    let t = types.get(lay.ty.as_deref().unwrap_or("")).ok_or("META: the unit's type is not among its types")?;
+    if !t.calls.is_empty() || !t.tables.is_empty() {
+        return Err("META: a flat unit's type makes calls or reads tables".into());
     }
     Ok(netlist(&own_region(t, &lay, &[])?.0, name, usize::MAX))
 }
 
 /// A template's instance, typed: its unit's own region and every placed part, in unit coordinates, with the block's Δ
 /// between them.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Instance {
     /// the unit type's ports
     pub ins: Vec<(usize, usize)>,
     pub outs: Vec<(usize, usize)>,
     /// the unit's own region, `[0, own)`; a row may read a part's columns
     pub root: Rows,
-    /// `(layout index, base)` per placed call, in item order
+    /// `(layout index, base)` per placed call and read, in item order
     pub parts: Vec<(usize, usize)>,
     /// each placed layout: its digest, its range's log size, its rows
     pub layouts: BTreeMap<usize, (String, usize, Rows)>,
     /// per part, its bound input rows and their sources (every other input row is exported: an input of the unit)
     pub bind: Vec<Vec<(usize, Vec<usize>)>>,
+    /// each generated read layout's slot, whose fast witness fills its rows
+    pub reads: BTreeMap<usize, LookupNet>,
     steps: Vec<Step>,
     /// the unit coordinates' end
     pub extent: usize,
-    /// the AND items of the unit's type and of every part's
+    /// the AND items of the unit's type and of every part's (a read's: its rows with an entry outside its words)
     pub ands: usize,
     inputs: BTreeMap<usize, Vec<bool>>,
 }
 
-/// The typed instance of a template statement's `META`: its types and layouts held to their digests, the unit's layout
-/// placing every call of its type, each in a range of its callee's layout, which places nothing.
-pub fn instance(meta: &Value) -> Result<Instance, String> {
+/// The table named by `sha`, of `2^n` words, from `dir`: the file `<sha>` (its raw u32 LE words, an archive's `sha512/`), or
+/// for a library table (`lookup::LIBRARY`) its `<name>.u32` (held to its SHA-256 pin); either held to that SHA-512.
+fn held(dir: Option<&str>, sha: &str, n: usize) -> Result<&'static [u32], String> {
+    // once per process: every parse of the statement reads the same words
+    static HELD: std::sync::OnceLock<std::sync::Mutex<BTreeMap<String, &'static [u32]>>> = std::sync::OnceLock::new();
+    let cache = HELD.get_or_init(Default::default);
+    if let Some(&w) = cache.lock().unwrap().get(sha) {
+        return Ok(w);
+    }
+    let dir = dir.ok_or("the statement reads tables: pass --tables DIR")?;
+    let words: Vec<u32> = match std::fs::read(format!("{dir}/{sha}")) {
+        Ok(b) => b.chunks_exact(4).map(|c| u32::from_le_bytes(c.try_into().unwrap())).collect(),
+        Err(_) => {
+            let &(name, ..) = crate::lookup::LIBRARY.iter().find(|t| t.1 == sha).ok_or(format!("table {}.. is not held under {dir}", &sha[..16]))?;
+            let t = crate::ir_tail::Tables::load(dir, &BTreeSet::from([name]))?;
+            match name { "rsq" => t.rsq, "sqrt" => t.sqrt, "rcp" => t.rcp, "ex2" => t.ex2, _ => Vec::new() }
+        }
+    };
+    if words.len() != 1 << n || crate::lookup::table_sha512(&words) != sha {
+        return Err(format!("the held table {}.. is not the one the statement names", &sha[..16]));
+    }
+    let w: &'static [u32] = Box::leak(words.into_boxed_slice());
+    cache.lock().unwrap().insert(sha.to_string(), w);
+    Ok(w)
+}
+
+/// A generated read's slot, `LookupNet::build_v2` over its held table: its rows with the product rows' B side left to the
+/// table (as `verity_flock.derive.gen_read` lists them, with the `READ` record), the slot's net for the block (the same
+/// rows), its fast witness, and its AND rows (every row with an entry, outside its words and constant).
+fn gen_rows(name: &str, sha: &str, words: &'static [u32], n: usize, lo: usize, bits: usize) -> Result<(Rows, IrUnitNet, LookupNet, usize), String> {
+    // once per process and shape: `build_v2` holds the table's side as explicit rows until they're cleared here
+    type Slot = (Rows, IrUnitNet, LookupNet, usize);
+    static BUILT: std::sync::OnceLock<std::sync::Mutex<BTreeMap<(String, usize, usize, usize), Slot>>> = std::sync::OnceLock::new();
+    let key = (sha.to_string(), n, lo, bits);
+    if let Some(x) = BUILT.get_or_init(Default::default).lock().unwrap().get(&key) {
+        return Ok(x.clone());
+    }
+    let (mut net, ln) = LookupNet::build_v2(name, sha, words, n, lo, bits)?;
+    for r in ln.prod0()..ln.prod0() + (ln.k << (n - lo)) {
+        net.b[r] = Vec::new();
+    }
+    let group = |g: &crate::ir_block::Group| (g.col, g.words, g.bits.clone());
+    let out0 = net.out_groups[0].col * WORD;
+    let rows = Rows {
+        rows: net.a.iter().cloned().zip(net.b.iter().cloned()).collect(), konst: net.const_pos,
+        in_groups: net.in_groups.iter().map(group).collect(), out_groups: net.out_groups.iter().map(group).collect(),
+        in_cols: (0..n).collect(), out_cols: (out0..out0 + bits).collect(), read: Some((sha.to_string(), n, lo, ln.k, ln.prod0(), ln.lo_top())),
+    };
+    let word = |r: usize| r < WORD || (out0..out0 + WORD).contains(&r);
+    let ands = (0..net.useful).filter(|&r| r != net.const_pos && !word(r) && !(net.a[r].is_empty() && net.b[r].is_empty())).count();
+    let slot = (rows, net, ln, ands);
+    BUILT.get_or_init(Default::default).lock().unwrap().insert(key, slot.clone());
+    Ok(slot)
+}
+
+/// The typed instance of a template statement's `META`, and each generated read layout's slot net: its types and layouts
+/// held to their digests, the unit's layout placing every call and read of its type, a call in a range of its callee's
+/// layout (which places nothing), a read in a range of its table's generated layout. `tables` holds the tables the reads
+/// name.
+pub fn instance(meta: &Value, tables: Option<&str>) -> Result<(Instance, BTreeMap<usize, IrUnitNet>), String> {
     head_checks(meta)?;
     let types = types(meta)?;
     let layouts = meta["layouts"].as_array().ok_or("META: layouts")?.iter().map(Layout::parse).collect::<Result<Vec<_>, _>>()?;
     let u = uint(&meta["unit_layout"], "META: unit_layout")?;
     let lay = layouts.get(u).ok_or("META: unit_layout is not a layout")?;
-    if meta["unit_type"].as_str() != Some(lay.ty.as_str()) || lay.range_log.is_some() {
-        return Err("META: the unit's layout is not of unit_type, or it has a range".into());
+    if meta["unit_type"].as_str() != lay.ty.as_deref() || lay.range_log.is_some() || lay.own != Own::Derive {
+        return Err("META: the unit's layout is not a derived region of unit_type, placed by the block".into());
     }
-    let t = types.get(&lay.ty).ok_or("META: the unit's type is not among its types")?;
-    let call_items: Vec<(usize, usize)> = t.items.iter().enumerate().filter_map(|(i, it)| match it { Item::Call(k, _) => Some((i, *k)), _ => None }).collect();
-    if lay.calls.len() != call_items.len() {
-        return Err("META: the unit's layout does not place every call of its type".into());
+    let t = types.get(lay.ty.as_deref().unwrap_or("")).ok_or("META: the unit's type is not among its types")?;
+    let items = |call: bool| -> Vec<(usize, usize)> {
+        t.items.iter().enumerate().filter_map(|(i, it)| match it {
+            Item::Call(k, _) if call => Some((i, *k)),
+            Item::Read(k, _) if !call => Some((i, *k)),
+            _ => None,
+        }).collect()
+    };
+    let (call_items, read_items) = (items(true), items(false));
+    if lay.calls.len() != call_items.len() || lay.reads.len() != read_items.len() {
+        return Err("META: the unit's layout does not place every call and read of its type".into());
     }
-    let mut placed: BTreeMap<usize, (String, usize, Rows)> = BTreeMap::new();
-    let mut layout_ands: BTreeMap<usize, usize> = BTreeMap::new();
-    let mut slot: BTreeMap<usize, usize> = BTreeMap::new();
-    for (&(item, j, q), &(i, k)) in lay.calls.iter().zip(&call_items) {
-        let sub = layouts.get(j).filter(|_| j != u).ok_or("META: a call placed by no layout (or by the unit's)")?;
-        let s = slot.entry(j).or_default();
-        if item != i || q != *s || sub.ty != t.calls[k] || !sub.calls.is_empty() {
-            return Err("META: a call entry is not its item's, at its slot, of its callee's type, placing nothing".into());
-        }
-        *s += 1;
-        if let std::collections::btree_map::Entry::Vacant(e) = placed.entry(j) {
-            let st = types.get(&sub.ty).ok_or("META: a callee's type is not among its types")?;
-            let (rows, steps, _) = own_region(st, sub, &[])?;
-            layout_ands.insert(j, steps.len());
-            let s = sub.range_log.ok_or("META: a placed layout has no range")?;
-            if rows.rows.len() > 1 << s {
-                return Err("META: a placed layout's rows overrun its range".into());
+    let (mut placed, mut layout_ands, mut slot, mut reads, mut nets) = (BTreeMap::new(), BTreeMap::new(), BTreeMap::new(), BTreeMap::new(), BTreeMap::new());
+    for (call, entries, its) in [(true, &lay.calls, &call_items), (false, &lay.reads, &read_items)] {
+        for (&(item, j, q), &(i, k)) in entries.iter().zip(its) {
+            let sub = layouts.get(j).filter(|_| j != u).ok_or("META: an entry placed by no layout (or by the unit's)")?;
+            let s = slot.entry(j).or_insert(0usize);
+            let fits = if call {
+                sub.own == Own::Derive && sub.ty.as_deref() == Some(t.calls[k].as_str()) && sub.calls.is_empty() && sub.reads.is_empty()
+            } else {
+                let (sha, ib, vb) = &t.tables[k];
+                matches!(&sub.own, Own::Gen { table, in_bits, value_bits, .. } if table == sha && in_bits == ib && value_bits == vb)
+            };
+            if item != i || q != *s || !fits {
+                return Err("META: an entry is not its item's, at its slot, in its callee's layout or its table's generated one".into());
             }
-            e.insert((sub.sha512.clone(), s, rows));
+            *s += 1;
+            if let std::collections::btree_map::Entry::Vacant(e) = placed.entry(j) {
+                let range_log = sub.range_log.ok_or("META: a placed layout has no range")?;
+                let (rows, ands) = match &sub.own {
+                    Own::Derive => {
+                        let st = types.get(sub.ty.as_deref().unwrap_or("")).ok_or("META: a callee's type is not among its types")?;
+                        let (rows, steps, _) = own_region(st, sub, &[])?;
+                        (rows, steps.len())
+                    }
+                    Own::Gen { table, in_bits, value_bits, lo_bits } => {
+                        let (rows, net, ln, ands) = gen_rows(&sub.sha512[..16], table, held(tables, table, *in_bits)?, *in_bits, *lo_bits, *value_bits)?;
+                        reads.insert(j, ln);
+                        nets.insert(j, net);
+                        (rows, ands)
+                    }
+                };
+                if rows.rows.len() > 1 << range_log {
+                    return Err("META: a placed layout's rows overrun its range".into());
+                }
+                layout_ands.insert(j, ands);
+                e.insert((sub.sha512.clone(), range_log, rows));
+            }
         }
     }
     if layouts.len() != placed.len() + 1 {
         return Err("META: a layout the unit places nowhere".into());
     }
-    let at = |bases: &[usize]| -> Vec<(usize, &Rows)> { lay.calls.iter().zip(bases).map(|(&(_, j, _), &b)| (b, &placed[&j].2)).collect() };
-    let own = own_region(t, lay, &at(&vec![0; lay.calls.len()]))?.0.rows.len();
+    // every placed entry, in item order: the parts
+    let mut entries: Vec<(usize, usize, usize)> = lay.calls.iter().chain(&lay.reads).copied().collect();
+    entries.sort_unstable();
+    let at = |bases: &[usize]| -> Vec<(usize, &Rows)> { entries.iter().zip(bases).map(|(&(_, j, _), &b)| (b, &placed[&j].2)).collect() };
+    let own = own_region(t, lay, &at(&vec![0; entries.len()]))?.0.rows.len();
     let (mut bases, mut cursor) = (Vec::new(), own);
-    for &(_, j, _) in &lay.calls {
+    for &(_, j, _) in &entries {
         let span = 1usize << placed[&j].1;
         let base = cursor.div_ceil(span) * span;
         bases.push(base);
         cursor = base + span;
     }
     let (root, steps, bind) = own_region(t, lay, &at(&bases))?;
-    let parts: Vec<(usize, usize)> = lay.calls.iter().zip(&bases).map(|(&(_, j, _), &b)| (j, b)).collect();
+    let parts: Vec<(usize, usize)> = entries.iter().zip(&bases).map(|(&(_, j, _), &b)| (j, b)).collect();
     let inputs = placed.iter().map(|(&j, (_, _, r))| {
         let mut v = vec![false; r.rows.len()];
         r.in_cols.iter().for_each(|&c| v[c] = true);
         (j, v)
     }).collect();
     let ands = steps.iter().filter(|s| matches!(s, Step::Row(_))).count() + parts.iter().map(|(j, _)| layout_ands[j]).sum::<usize>();
-    let inst = Instance { ins: t.ins.clone(), outs: t.outs.clone(), root, parts, layouts: placed, bind, steps, extent: cursor.max(own), ands, inputs };
+    let inst = Instance { ins: t.ins.clone(), outs: t.outs.clone(), root, parts, layouts: placed, bind, reads, steps, extent: cursor.max(own), ands, inputs };
     inst.check_columns()?;
-    Ok(inst)
+    Ok((inst, nets))
 }
 
 /// The rows the prover derives, as `verity_flock.typed_statement.stage` writes them beside the statement (`rows/`):
 /// `unit.txt` for a flat class; for a template, `root.txt` (in unit coordinates), `<layout digest>.txt` per placed layout
 /// and `delta.txt` (`verity_flock.derive.delta_text`).
-pub fn staged_rows(meta: &Value, name: &str) -> Result<Vec<(String, String)>, String> {
+pub fn staged_rows(meta: &Value, name: &str, tables: Option<&str>) -> Result<Vec<(String, String)>, String> {
     if is_flat(meta) {
         return Ok(vec![("unit.txt".into(), unit_rows(meta, name)?)]);
     }
-    let inst = instance(meta)?;
+    let (inst, _) = instance(meta, tables)?;
     let mut out = vec![("root.txt".to_string(), netlist(&inst.root, name, usize::MAX))];
     out.extend(inst.layouts.iter().map(|(&j, (d, _, _))| (format!("{d}.txt"), inst.layout_text(j))));
     let mut delta: Vec<String> = inst.parts.iter().map(|&(j, base)| format!("PART {} {base}", inst.layouts[&j].0)).collect();
@@ -670,6 +825,23 @@ impl Instance {
                         set(&mut z, &mut a, &mut b, *r, v);
                     }
                     let (j, base) = self.parts[p];
+                    if let Some(ln) = self.reads.get(&j) {
+                        // a read: each lane's rows are its fast witness at the index its bound rows hold
+                        for l in 0..64 {
+                            let idx = (0..ln.n).fold(0usize, |x, bit| x | ((((z[base + bit] >> l) & 1) as usize) << bit));
+                            let (wz, wa, wb) = ln.witness(idx);
+                            for (dst, src) in [(&mut z, &wz), (&mut a, &wa), (&mut b, &wb)] {
+                                for (w, &word) in src.iter().enumerate() {
+                                    let mut x = word;
+                                    while x != 0 {
+                                        dst[base + 64 * w + x.trailing_zeros() as usize] |= 1 << l;
+                                        x &= x - 1;
+                                    }
+                                }
+                            }
+                        }
+                        continue;
+                    }
                     let (rows, is_in) = (&self.layouts[&j].2, &self.inputs[&j]);
                     for (c, rw) in rows.rows.iter().enumerate() {
                         if c != rows.konst && !is_in[c] {
@@ -722,11 +894,11 @@ mod tests {
     #[test]
     fn derives_and_evaluates_a_placed_call() {
         let meta: Value = serde_json::from_str(TAIL).unwrap();
-        let rows = staged_rows(&meta, "t").unwrap();
+        let rows = staged_rows(&meta, "t", None).unwrap();
         assert_eq!(rows.iter().map(|r| r.0.as_str()).collect::<Vec<_>>(),
                    ["root.txt", &format!("{}.txt", meta["layouts"][0]["sha512"].as_str().unwrap()), "delta.txt"]);
         assert_eq!(rows.iter().map(|(_, t)| crate::hex(&Sha256::digest(t.as_bytes()))).collect::<Vec<_>>(), TAIL_SHA256);
-        let inst = instance(&meta).unwrap();
+        let (inst, _) = instance(&meta, None).unwrap();
         let (z, a, b) = inst.eval64(&|w| (0..8).fold(0, |x, l| x | (((l >> w) & 1) << l)), None);
         assert_eq!(inst.root.out_cols.iter().map(|&c| z[c] & 0xff).collect::<Vec<_>>(), [0x80, 0x70]);
         assert!(z.iter().zip(&a).zip(&b).all(|((z, a), b)| *z == a & b));
@@ -736,9 +908,45 @@ mod tests {
         assert!(z2.iter().zip(&a2).zip(&b2).all(|((z, a), b)| *z == a & b) && z2[r] == z[r] ^ 1);
     }
 
+    /// A unit of 8 input bits reading a program table of 2^8 words (5 value bits) at them, placed in its generated layout's
+    /// range: value bits 0 and 1 ANDed, bits 2 and 4 XORed, on 64 indices; every row holds, and the read's rows are listed
+    /// with its product rows' B side empty and its `READ` record.
+    #[test]
+    fn derives_and_evaluates_a_placed_read() {
+        let table: Vec<u32> = (0..256u32).map(|i| (i * 37 + 11) % 32).collect();
+        let sha = crate::lookup::table_sha512(&table);
+        let dir = std::env::temp_dir().join(format!("flock-typed-read-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join(&sha), table.iter().flat_map(|w| w.to_le_bytes()).collect::<Vec<u8>>()).unwrap();
+        let root = json!({"format": TYPE_FORMAT, "label": "program", "in": [[1, 8]], "out": [[1, 2]], "calls": [], "tables": [[sha, 8, 5]],
+                          "items": [[4, 0, (0..8).map(|w| json!([[w], 0])).collect::<Vec<_>>()], [0, [[8], 0], [[9], 0]]],
+                          "outputs": [[[13], 0], [[10, 12], 0]]});
+        let r = type_digest(&root);
+        let with_digest = |mut l: Value| { l["sha512"] = json!(layout_digest(&l)); l };
+        let read_layout = with_digest(json!({"range_log": 10, "in_split": [], "out_split": [], "calls": [], "reads": [],
+                                     "own": {"gen": "table/v2", "table": sha, "in_bits": 8, "value_bits": 5, "lo_bits": 4}}));
+        let unit = with_digest(json!({"type": r, "in_split": [], "out_split": [], "own": {"derive": "v2"}, "calls": [],
+                                      "reads": [{"item": 0, "layout": 0, "offset": 0}]}));
+        let meta = json!({"policy": POLICY, "unit_in": [], "types": {r.clone(): root}, "layouts": [read_layout, unit], "unit_layout": 1, "unit_type": r});
+        let (inst, nets) = instance(&meta, Some(dir.to_str().unwrap())).unwrap();
+        std::fs::remove_dir_all(&dir).unwrap();
+        let idx: Vec<usize> = (0..64).map(|l| (l * 5 + 3) % 256).collect();
+        let (z, a, b) = inst.eval64(&|w| idx.iter().enumerate().fold(0, |x, (l, &i)| x | ((((i >> w) & 1) as u64) << l)), None);
+        let want = |f: &dyn Fn(u32) -> u32| idx.iter().enumerate().fold(0u64, |x, (l, &i)| x | ((f(table[i]) & 1) as u64) << l);
+        assert_eq!(z[inst.root.out_cols[0]], want(&|v| v & (v >> 1)));
+        assert_eq!(z[inst.root.out_cols[1]], want(&|v| (v >> 2) ^ (v >> 4)));
+        assert!(z.iter().zip(&a).zip(&b).all(|((z, a), b)| *z == a & b));
+        let (_, _, rows) = &inst.layouts[&0];
+        let (_, n, lo, k, prod0, lo_top) = rows.read.clone().unwrap();
+        assert_eq!((n, lo, k), (8, 4, 5), "a program table keeps every value bit");
+        assert!(inst.layout_text(0).ends_with(&format!("READ {sha} 8 4 5 {prod0} {lo_top}\n")));
+        assert!((prod0..prod0 + (k << (n - lo))).all(|r| rows.rows[r].1.is_empty() && nets[&0].b[r].is_empty()));
+        assert_eq!(inst.bind[0].len(), 8, "a read's index is bound, never exported");
+    }
+
     #[test]
     fn refuses_columns_outside_the_instance() {
-        let inst = instance(&serde_json::from_str(TAIL).unwrap()).unwrap();
+        let (inst, _) = instance(&serde_json::from_str(TAIL).unwrap(), None).unwrap();
         inst.check_columns().unwrap();
         let (j, base) = inst.parts[0];
         let padding = base + inst.layouts[&j].2.rows.len();
