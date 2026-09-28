@@ -22,9 +22,10 @@
 #
 # Run it where the parent store key is (the Cursor secrets), from a Verity checkout with `machines.d` for MACHINE. It refuses a
 # temporary credential, which cannot mint the run's custody key, a shell that skips the store-backed tests, a COMMIT that is
-# empty (its tree is its first parent's) or that origin doesn't hold, and a BASE that isn't an ancestor of COMMIT.
+# empty (its tree is its base's: BASE, or else where it leaves origin/main, or its parent for a commit on main) or that origin
+# doesn't hold, and a BASE that isn't an ancestor of COMMIT.
 set -euo pipefail
-[ $# -ge 2 ] || { sed -n '2,27p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+[ $# -ge 2 ] || { sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
 commit=$1 machine=$2; shift 2
 pass=() against=
 while [ $# -gt 0 ]; do
@@ -39,21 +40,43 @@ done
 [ -z "${VERITY_SKIP_STORE:-}" ] || { echo "train: VERITY_SKIP_STORE is set; a recorded train runs the store-backed tests" >&2; exit 1; }
 [ -z "${AWS_SESSION_TOKEN:-}" ] || { echo "train: AWS_SESSION_TOKEN is set; a temporary credential cannot mint the custody key" >&2; exit 1; }
 [ -n "${AWS_ACCESS_KEY_ID:-}" ] && [ -n "${R2_ENDPOINT:-}" ] || { echo "train: no parent store key (AWS_ACCESS_KEY_ID, R2_ENDPOINT)" >&2; exit 1; }
+# From here a launch that registers no run says so in the merge thread, with the reason and the log's last lines, as well as
+# exiting nonzero: two launches of 9-10 Oct registered nothing and told nobody for hours.
+why=$(mktemp "${TMPDIR:-/tmp}/train-why.XXXXXX") log=
+die() { echo "train: $*" | tee -a "$why" >&2; exit 1; }
+tell() {
+  local rc=$?
+  if [ "$rc" -ne 0 ]; then
+    { echo "train: ${sha:-$commit} on $machine${against:+ --against $against} registered no run (exit $rc):"
+      tail -n 5 "$why"; [ -z "$log" ] || { echo "$log:"; tail -n 12 "$log" 2>/dev/null; }; } > "$why.post"
+    uv run -q research slack reply --as "${TRAIN_AS:-old-circuits-and-proofs}" --thread "${MERGE_THREAD:-1790957906.278529}" \
+      --file "$why.post" > /dev/null 2>&1 || echo "train: and could not post that to the merge thread" >&2
+  fi
+  rm -f "$why" "$why.post"
+}
+trap tell EXIT
 root=$(git rev-parse --show-toplevel)
-sha=$(git -C "$root" rev-parse --verify "$commit^{commit}")
-git -C "$root" fetch -q origin
-[ "$(git -C "$root" rev-parse "$sha^{tree}")" != "$(git -C "$root" rev-parse -q --verify "$sha^1^{tree}" || true)" ] \
-  || { echo "train: ${sha:0:12} is empty (its tree is its parent's): nothing to check" >&2; exit 1; }
+sha=$(git -C "$root" rev-parse --verify "$commit^{commit}" 2>>"$why") || die "$commit: no such commit"
+# one fetch and worktree at a time per checkout: two launches racing on the fetch both failed (22:51Z, 9 Oct)
+exec 9> "$(git -C "$root" rev-parse --path-format=absolute --git-common-dir)/train.lock"
+flock 9
+git -C "$root" fetch -q origin 2>>"$why" || die "git fetch origin failed"
 [ -n "$(git -C "$root" for-each-ref --contains "$sha" refs/remotes/origin)" ] \
-  || { echo "train: ${sha:0:12} is on no branch of origin: push it first, the run ships what origin holds" >&2; exit 1; }
+  || die "${sha:0:12} is on no branch of origin: push it first, the run ships what origin holds"
 if [ -n "$against" ]; then
-  base=$(git -C "$root" rev-parse --verify "$against^{commit}") || { echo "train: --against $against: no such commit" >&2; exit 1; }
-  git -C "$root" merge-base --is-ancestor "$base" "$sha" \
-    || { echo "train: --against ${base:0:12} is not an ancestor of ${sha:0:12}" >&2; exit 1; }
+  base=$(git -C "$root" rev-parse --verify "$against^{commit}" 2>>"$why") || die "--against $against: no such commit"
+  git -C "$root" merge-base --is-ancestor "$base" "$sha" || die "--against ${base:0:12} is not an ancestor of ${sha:0:12}"
+elif git -C "$root" merge-base --is-ancestor "$sha" refs/remotes/origin/main; then
+  base=$(git -C "$root" rev-parse -q --verify "$sha^1" || true)
+else
+  base=$(git -C "$root" merge-base "$sha" refs/remotes/origin/main) || die "${sha:0:12} shares no history with origin/main"
 fi
+[ -z "$base" ] || [ "$(git -C "$root" rev-parse "$sha^{tree}")" != "$(git -C "$root" rev-parse "$base^{tree}")" ] \
+  || die "${sha:0:12} is empty (its tree is its base ${base:0:12}'s): nothing to check"
 tree="${TMPDIR:-/tmp}/train-${sha:0:12}"
 git -C "$root" worktree remove --force "$tree" 2>/dev/null || true
-git -C "$root" worktree add -q --detach "$tree" "$sha"
+git -C "$root" worktree add -q --detach "$tree" "$sha" 2>>"$why" || die "git worktree add $tree failed"
+exec 9>&-
 log="$tree.log"
 cd "$tree"
 echo "train: ${sha:0:12} on $machine; log $log"
@@ -93,9 +116,9 @@ ids=$(grep -oE 'run r20[0-9]{6}-[0-9]{6}-[0-9a-f]{4} launched' "$log" | cut -d' 
 grep -E "^check:|refused|rror" "$log" | head -5 || true
 if [ -z "${ids// /}" ] && ! kill -0 "$pid" 2>/dev/null; then
   rc=0; wait "$pid" || rc=$?
-  echo "train: $([ -z "$against" ] && echo check.py || echo 'research run') exited $rc before launching a run$([ "$rc" = 137 ] && echo ' (killed: SIGKILL, the OOM killer when memory runs out)'); see $log" >&2
+  echo "train: $([ -z "$against" ] && echo check.py || echo 'research run') exited $rc before launching a run$([ "$rc" = 137 ] && echo ' (killed: SIGKILL, the OOM killer when memory runs out)'); see $log" | tee -a "$why" >&2
   exit $(( rc ? rc : 1 ))
 fi
-[ -n "${ids// /}" ] || { echo "train: no run launched; see $log" >&2; exit 1; }
+[ -n "${ids// /}" ] || die "no run launched; see $log"
 [ "$(wc -w <<<"$ids")" -ge "$want" ] || echo "train: $want twins, but only these launched; see $log" >&2
 echo "RUN ${ids% }"
