@@ -1333,6 +1333,7 @@ source = { editable = "integrations/vllm" }
 dependencies = [
     { name = "numpy" },
     { name = "verity" },
+    { name = "verity-pouw" },
     { name = "verity-sampled-proofs" },
 ]
 
@@ -1346,6 +1347,7 @@ requires-dist = [
     { name = "numpy", specifier = ">=1.26" },
     { name = "torch", marker = "extra == 'torch'", specifier = ">=2.4" },
     { name = "verity", editable = "packages/verity" },
+    { name = "verity-pouw", editable = "protocols/pouw" },
     { name = "verity-sampled-proofs", editable = "protocols/sampled_proofs" },
 ]
 provides-extras = ["torch"]

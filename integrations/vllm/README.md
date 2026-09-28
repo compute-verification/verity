@@ -226,7 +226,9 @@ registered the weights of record.  Adapters install innermost first (PoUW replac
 weights they read, sampled proofs commits what the model computed) and uninstall in reverse, every patch and service through
 `engine/hooks.py` tagged with its option.  The protocol logic is `verity_pouw`, `verity_pous` and `verity_sampled_proofs`';
 the adapters (`pouw.py`, `pous.py`, `sampled_proofs.py`) are thin.  A Commit with an option its Program does not describe
-writes its verdict with `protocols.of_record = false`.
+writes its verdict with `protocols.of_record = false`.  PoUW's settings are `beacon` (hex, at least 32 bytes),
+`retain_steps` and `transcript_dir`; it executes `ncp-v1` and `ncp-v1-shift24` on the host in numpy, and its placeholders
+are listed in its `info()`.
 
 ## Running
 
