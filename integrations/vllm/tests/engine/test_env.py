@@ -44,6 +44,12 @@ def test_a_target_profile_replaces_the_pin(clean) -> None:
     assert env.apply_engine(None)["VLLM_BATCH_INVARIANT"] == "0"
 
 
+def test_hidden_devices_override_what_the_process_inherited(monkeypatch) -> None:
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0,1")
+    env.hide_devices()
+    assert os.environ["CUDA_VISIBLE_DEVICES"] == ""
+
+
 def test_set_since_is_what_the_process_set_or_changed_after_the_snapshot(monkeypatch) -> None:
     monkeypatch.setenv("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
     monkeypatch.setenv("KEPT", "1")

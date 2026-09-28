@@ -24,6 +24,8 @@
   research retention report [--root R] [--depth N] [--json]   # every recorded path and every unowned area, unowned and expired first
   research retention gc [--root R] [--force] [--high-pct 80] [--low-pct 75] [--jobs-dir D]... [--json] [--apply]
                                                  # policy default: delete only what a record allows; a dry run unless --apply (research/retention.py)
+  research retention rm PATH... --approved-by @OWNER --ref REF [--apply]   # delete chosen paths with the owner's yes, which every record
+                                                 # covering them must name; never a `keep`; each --apply decision goes to the deletion log
   research merge REF [--into main] [--tool check] [-m MSG] [--dry-run]   # the merge gate: `git merge --no-ff REF` only with a passing
                                                  # attempt of the tool for that exact commit in the store (research/merge.py)
   research merge --train A B C [--on MACHINE --project P]                # several refs as one candidate, one check, a fast-forward

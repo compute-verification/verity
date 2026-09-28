@@ -277,6 +277,64 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
   and `vk` root. `VERITY_POUS_SLOW=1` also encodes a whole band12 segment through the interface against
   `band/64kb/segment`.
 
+## The continuous audit's verifier (`continuous`)
+
+`continuous.ContinuousVerifier(vk, key, n, late_deadline_ns=Δ_late, max_misses=f₀)` is the verifier of the
+continuous audit's model, `lean/Pous/Protocol/Model/Continuous.lean`, with the guarantee
+`Pous.SecurityProofs.ContinuousAudit` (#954): `n` challenges over time, drawn as the timed audit's indices, accepted
+when at most `f₀` answers miss. A miss is an answer that is wrong or later than `Δ + RTT`. `n` is fixed before the
+stream, so the stream is never stopped or extended on misses, though it may reject early (`exceeded`). The verifier is
+one `audit.TimedVerifier` over the stream with a hard deadline, and it enforces the three requirements that
+`lean/Pous/SecurityProofs/Continuous/Verifier.lean` proves of the model's verifier:
+
+1. **No pipelining.** `challenge()` reveals index `j + 1` only once answer `j` is in or `Δ_late + RTT` has passed since
+   index `j` was revealed, and in that case it first closes challenge `j` as rejected; the close stands even when `j`
+   was the last and `challenge()` then refuses (`run_continuous` closes it with `expire()`). Each deadline runs from the
+   verifier's own clock reading at the reveal; a latency the responder reports (`Answer.report`) is never read. An
+   answer names its challenge (`respond(j, block)`), and an answer to any challenge but the open one is refused,
+   whether that challenge is closed or not yet revealed. So a stale answer is never credited to the next challenge,
+   even when both ask for the same block.
+2. **A hard deadline.** An answer past `Δ_late + RTT` is rejected without its block being checked (`Answer.rejected`).
+   So is a challenge still unanswered by then, closed by `expire()` or by the next `challenge()`. `TimedVerifier`
+   refuses a `Δ_late` below `Δ`, and one whose `D_late` exceeds `audit.LATE_ROUNDS = 12` or the band's `d`, where
+   `D_late` is the number of 241.5 µs calls that fit in `Δ_late + RTT`; at `d = 12`, `Δ_late + RTT` must be under
+   3,139,500 ns. That cap is the graded audit's; `ContinuousAudit` holds at every `D_late`, so for it the cap is only
+   conservative. `ContinuousVerifier` refuses to run without a hard deadline.
+3. **Every late answer counted.** Every challenge closes with exactly one `Answer`, whether it was answered, rejected
+   or expired. `AuditResult.misses` counts every wrong or late answer, and `AuditResult.late` every answer past
+   `Δ + RTT`, rejected ones included.
+
+Run the continuous audit only on `ContinuousVerifier`, never on a bare `TimedVerifier` with `late_deadline_ns`. Its
+`respond(block)` names no challenge, so once challenge `j` expires, an answer to `j` still in flight is credited to
+`j + 1`, a hit when both ask for the same block. That block was on the wire, not in the memory the model measures at
+the send time, so the audit would credit storage the responder does not hold (#954's red team).
+
+**The audit's duration cap.** `audit.AUDIT_CAP = 1,505` (`Pous.Rebuild.auditCap`) is the cap on a graded audit's
+window that `Pous.SecurityProofs.BackgroundRebuildExcluded` requires the verifier to enforce (#953).
+`TimedVerifier(..., audit_cap=...)` and `ContinuousVerifier(..., audit_cap=...)` enforce it on the verifier's clock,
+counted in calls of the parameters' `call_ns` as `D` and `D_late` are, so the limit is 1,505 × 241.5 µs ≈ 363.5 ms.
+- An answer received more than `audit_cap · call_ns` after the first challenge's send is rejected unchecked and aborts
+  the audit (`ends_at`). So does a challenge closed after that time by `expire()` or the next `challenge()`.
+- `closes_at` is never past `ends_at`, so `run_continuous` closes the open challenge there.
+- An aborted audit (`aborted`, `AuditResult.aborted`) never accepts, whatever its misses, and reveals no other index.
+  It is rejected and never retried with fresh challenges, since a retry would let a prover that stalls near its
+  deadlines escape a failing audit.
+- A cap from 1 to 1,505 is accepted.
+
+The cap is off by default. The continuous audit's guarantee measures the memory at each send time and needs no cap,
+and its model's verifier has none. Under the cap, a stream whose arrivals spread over more than 363.5 ms always
+aborts.
+
+`run_continuous(verifier, send, receive, wait=...)` drives the stream over a transport. `wait(j)` returns at arrival
+`j`, `send(j, i)` sends challenge `j`, and `receive(until)` returns the next `Reply(j, block, path, report)`, or None
+once the verifier's clock is past `until`, the open challenge's `closes_at` (its send time plus `Δ_late + RTT`). A
+reply naming any challenge but the open one is dropped. Once the hard deadline has passed, the driver closes the open
+challenge with `expire()`, the last one too, so a silent or slow responder cannot hold the stream open. A transport
+that returns None before the deadline makes `expire()` refuse, and the audit stops with the challenge open. The caller
+chooses the arrival times and `n`, and nothing here draws or checks them. The game needs both to be the verifier's own
+randomness, independent of the setup, the indices and the answers. Without `late_deadline_ns`, `TimedVerifier` is
+unchanged, the single audit's verifier. `tests/test_pous_continuous.py` tests each requirement.
+
 ## API
 
 | Module | What it holds |
