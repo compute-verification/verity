@@ -14,7 +14,8 @@
       "purpose": "Everything between handle holders: asks (tag one handle), announcements (tag some, or none for all), their threads.",
       "subscribers": [
         "old-accounting",
-        "old-circuits-and-proofs"
+        "old-circuits-and-proofs",
+        "console"
       ],
       "routed_by": "the top-level agent (bc-7f347b4b): it reads the channel and forwards each holder in its Project only the posts addressed to it"
     },
@@ -146,6 +147,14 @@
         "Security/Proofs/NetworkCertifier/",
         "benchmarks/network_traces/"
       ]
+    },
+    {
+      "handle": "console",
+      "holder": "new console (bc-7db93002-2a4d-5ec1-8214-3ac6707ea577), on Daniel's laptop",
+      "remit": "The live console and docs site: panels, formats, frontends, and what agents publish to them.",
+      "charter": "Daniel, 2026-10-11 (via top)",
+      "usergroup": "S0C5LSDENA1",
+      "linear": "CON"
     },
     {
       "handle": "ci",
