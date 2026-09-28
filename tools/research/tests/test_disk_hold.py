@@ -29,8 +29,10 @@ def test_it_admits_at_once_up_to_80_percent_and_holds_past_it_until_75():
 
 
 def test_the_command_runs_in_its_place_once_admitted(tmp_path):
-    out = subprocess.run([sys.executable, "-m", "research", "disk-hold", "--gb", "0", "--path", str(tmp_path), "--",
-                          sys.executable, "-c", "print('ran')"], capture_output=True, text=True, env={"PYTHONPATH": SRC})
-    assert out.returncode == 0 and out.stdout.strip() == "ran"
+    events = []
+    rc = disk.main(["--gb", "1000", "--path", str(tmp_path), "--", "echo", "ran"], usage=_disk([7.5, 7.0, 6.6, 6.4]),
+                   sleep=lambda s: events.append("poll"), execvp=lambda f, a: events.append(("exec", f, a)))
+    assert events == ["poll"] * 3 + [("exec", "echo", ["echo", "ran"])], "held for 3 polls, then exec'd in place"
+    assert rc == 127, "execvp returns only when it fails"
     assert subprocess.run([sys.executable, "-m", "research", "disk-hold", "--gb", "0", "--path", str(tmp_path)],
                           capture_output=True, text=True, env={"PYTHONPATH": SRC}).returncode == 2

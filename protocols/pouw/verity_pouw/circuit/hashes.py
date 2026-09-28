@@ -1,12 +1,14 @@
-"""SHA-512 and SHAKE256 in gates, over the 32-bit halves of `words`.
+"""SHA-512, SHAKE256 and TurboSHAKE128 in gates, over the 32-bit halves of `words`.
 
 * `Sha512Compress` (a Definition): one SHA-512 compression, the state and the block as (hi, lo) halves of their 64-bit
   words, big-endian, as FIPS 180-4 has them.
-* `KeccakF1600` (a Definition): the Keccak-f[1600] permutation, lane ``x + 5y`` as its (lo, hi) halves, little-endian.
+* `KeccakF1600` (a Definition): the Keccak-f[1600] permutation, lane ``x + 5y`` as its (lo, hi) halves, little-endian;
+  `KeccakP1600R12` its last 12 rounds, TurboSHAKE's Keccak-p[1600, 12].
 * `sha512(e, words)`: SHA-512 of the message whose big-endian bytes are ``words`` (64-bit words, each half a gate or an int),
   padded as FIPS 180-4 pads it; the digest as 16 halves (hi, lo per word).
-* `shake256(e, lanes, n)`: the first ``n`` bytes of SHAKE256 of the message whose little-endian bytes are ``lanes`` (64-bit
-  lanes, each half a gate or an int), as 4-byte half-lanes in byte order.
+* `shake256(e, lanes, n)`, `turboshake128(e, lanes, n, domain)`: the first ``n`` bytes of SHAKE256 or TurboSHAKE128 of the
+  message whose little-endian bytes are ``lanes`` (64-bit lanes, each half a gate or an int), as 4-byte half-lanes in byte
+  order.
 
 Constant halves are Python ints until a gate reads them; `Emit` turns them into one constant node per value and body.
 Messages here are whole words, so a message's byte length is a multiple of 8.
@@ -154,10 +156,10 @@ KECCAK_ROT = ((0, 36, 3, 41, 18), (1, 44, 10, 45, 2), (62, 6, 43, 15, 61), (28, 
 RATE_LANES = 17                                              # SHAKE256: 136-byte rate
 
 
-def _keccak_body(B, S, s):
+def _keccak_body(B, S, s, first: int = 0):
     e = Emit(B)
     a = [[(s[2 * (x + 5 * y)], s[2 * (x + 5 * y) + 1]) for y in range(5)] for x in range(5)]
-    for r in range(24):
+    for r in range(first, 24):
         # θ: each column's parity folds in lane y = 0 first, so a message whose y = 0 lanes carry a unit's own index makes
         # every gate of the first round depend on that index (no gate a function of values two units share)
         col = []
@@ -183,38 +185,57 @@ KeccakF1600 = bind(CompositeDefinition(
     "PouwKeccakF1600", 1, (), lambda S: ((("state", Array(50, W.U32)),), Array(50, W.U32)), _keccak_body,
     doc="The Keccak-f[1600] permutation (FIPS 202), lane x + 5y as its (lo, hi) halves.", conformance="protocol-defined"))
 
+KeccakP1600R12 = bind(CompositeDefinition(
+    "PouwKeccakP1600R12", 1, (), lambda S: ((("state", Array(50, W.U32)),), Array(50, W.U32)),
+    lambda B, S, s: _keccak_body(B, S, s, 12),
+    doc="Keccak-p[1600, 12], TurboSHAKE128's permutation (RFC 9861): Keccak-f[1600]'s last 12 rounds, lane x + 5y as its "
+        "(lo, hi) halves.", conformance="protocol-defined"))
+TS128_RATE_LANES = 21                                        # TurboSHAKE128: 168-byte rate
+
 
 def _lane(v: int) -> Pair:
     return v & M32, v >> 32
 
 
-def shake256(e: Emit, lanes: Sequence[Pair], n: int) -> list[Half]:
-    """The first ``n`` bytes of SHAKE256 of the little-endian bytes of ``lanes``, as ``ceil(n / 4)`` half-lanes."""
+def _sponge(e: Emit, lanes: Sequence[Pair], n: int, rate: int, pad_byte: int, perm) -> list[Half]:
     msg = list(lanes)
-    at = len(msg) % RATE_LANES
-    pad = [(0, 0)] * (RATE_LANES - at)
+    at = len(msg) % rate
+    pad = [(0, 0)] * (rate - at)
     first = pad[0]
-    pad[0] = (first[0] ^ 0x1F, first[1])
+    pad[0] = (first[0] ^ pad_byte, first[1])
     last = pad[-1]
     pad[-1] = (last[0], last[1] ^ 0x80000000)
     msg += pad
     state: list[Pair] = [(0, 0)] * 25
-    for blk in range(0, len(msg), RATE_LANES):
-        block = msg[blk:blk + RATE_LANES]
+    for blk in range(0, len(msg), rate):
+        block = msg[blk:blk + rate]
         if blk == 0:
-            state = [block[i] if i < RATE_LANES else (0, 0) for i in range(25)]
+            state = [block[i] if i < rate else (0, 0) for i in range(25)]
         else:
-            state = [e.xor(state[i], block[i]) if i < RATE_LANES else state[i] for i in range(25)]
-        out = e.B.call(KeccakF1600, e.array([h for p in state for h in p]))
+            state = [e.xor(state[i], block[i]) if i < rate else state[i] for i in range(25)]
+        out = e.B.call(perm, e.array([h for p in state for h in p]))
         state = [(out[2 * i], out[2 * i + 1]) for i in range(25)]
     halves: list[Half] = []
     while True:
-        for i in range(RATE_LANES):
+        for i in range(rate):
             halves += [state[i][0], state[i][1]]
             if 4 * len(halves) >= n:
                 return halves[:(n + 3) // 4]
-        out = e.B.call(KeccakF1600, e.array([h for p in state for h in p]))
+        out = e.B.call(perm, e.array([h for p in state for h in p]))
         state = [(out[2 * i], out[2 * i + 1]) for i in range(25)]
+
+
+def shake256(e: Emit, lanes: Sequence[Pair], n: int) -> list[Half]:
+    """The first ``n`` bytes of SHAKE256 of the little-endian bytes of ``lanes``, as ``ceil(n / 4)`` half-lanes."""
+    return _sponge(e, lanes, n, RATE_LANES, 0x1F, KeccakF1600)
+
+
+def turboshake128(e: Emit, lanes: Sequence[Pair], n: int, domain: int) -> list[Half]:
+    """The first ``n`` bytes of TurboSHAKE128 (domain byte ``domain``) of the little-endian bytes of ``lanes``, as
+    ``ceil(n / 4)`` half-lanes."""
+    if not 0x01 <= domain <= 0x7F:
+        raise ValueError("TurboSHAKE's domain byte is in 0x01 … 0x7F")
+    return _sponge(e, lanes, n, TS128_RATE_LANES, domain, KeccakP1600R12)
 
 
 def sha_words(data: bytes) -> list[Pair]:
@@ -227,4 +248,5 @@ def keccak_lanes(data: bytes) -> list[Pair]:
     return [_lane(int.from_bytes(data[i:i + 8], "little")) for i in range(0, len(data), 8)]
 
 
-__all__ = ["Emit", "KeccakF1600", "Sha512Compress", "keccak_lanes", "sha512", "sha_words", "shake256"]
+__all__ = ["Emit", "KeccakF1600", "KeccakP1600R12", "Sha512Compress", "keccak_lanes", "sha512", "sha_words", "shake256",
+           "turboshake128"]

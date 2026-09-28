@@ -99,13 +99,10 @@ def statementInputs (args : List String) : IO (Except String (ByteArray × ByteA
       if ← p.pathExists then tables := tables ++ [(t.name, ← IO.FS.readBinFile p)]
     return .ok (c, pb, cm, tables)
 
-/-- An hm96 statement's registered reads (`Registered.check`). A hidden-output statement's registered ports are among its
-input rows: an output row is its instance's own (§16.13). -/
-def checkRegistered (st : Stmt) (registered : Option (Array Registered.Port)) : V Unit := do
-  if st.tags.hiddenOutputs then
-    let outRows := (st.c.ports.extract (HmOut.nIn st.c) st.c.ports.size).map (·.name)
-    if let some reg := (registered.getD #[]).find? (outRows.contains ·.name) then
-      throw s!"registered reads: {reg.name} is an output row, its instance's own, never a registered value's"
+/-- An hm96 statement's registered reads (`Registered.check`). A hidden-output statement's registered ports may be its
+output rows as well as its input rows (§16.13): an output row's table is its instances' own rows, each opened against the
+registered root at the position its unit reads, so the instance's output is that row of the registered value. -/
+def checkRegistered (st : Stmt) (registered : Option (Array Registered.Port)) : V Unit :=
   Registered.check st.c st.pub registered (Registered.derived st.partition)
 
 /-- The statement of `tags` from its inputs; an `hm96-sha512/row/v1` statement needs no compression circuit and, for a drawn

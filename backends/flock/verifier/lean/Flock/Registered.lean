@@ -124,13 +124,16 @@ def badInstance (reg : Port) (t : Tables) (np p rows n : Nat) (positions indices
   (List.range n).find? fun i =>
     !(decide (ref t np p i < rows) && decide (reg.reads[indices.getD i 0]? = some (some (positions.getD (ref t np p i) 0))))
 
-/-- One port of the verifier's registered reads: a port of the circuit, whose rows are the registered rows (`Port.fits`),
-whose table rows all open the registered root, and whose instances each read the row at the position the verifier's
-program reads for their unit. -/
+/-- One port of the verifier's registered reads: a row of the circuit (an input port's, or a hidden-output statement's
+output row, §16.13, whose table is its instances' own rows, instance `i`'s ref `i`), an `hm96-sha512/row/v1` row as the
+registration commits one, whose rows are the registered rows (`Port.fits`), whose table rows all open the registered
+root, and whose instances each read the row at the position the verifier's program reads for their unit. -/
 def checkPort (c : Circuit) (pub : Public) (t : Tables) (indices : Array Nat) (reg : Port) : V Unit := do
   let np := c.ports.size
   let some p := (List.range np).find? (fun p => c.ports[p]!.name == reg.name)
-    | throw s!"registered reads: {reg.name} is not an input port of the circuit"
+    | throw s!"registered reads: {reg.name} is not a row of the circuit (an input port, or an output port's row)"
+  if c.ports[p]!.v2 then
+    throw s!"registered reads: port {reg.name} is a {if c.ports[p]!.segs.isSome then HmRow.ROW_SCHEMA_SEG else HmRow.ROW_SCHEMA_V2} row, and {reg.value}'s registered rows are {HmRow.ROW_SCHEMA} rows"
   if !reg.fits c.ports[p]!.words then
     throw s!"registered reads: port {reg.name}'s rows are {c.ports[p]!.words} u16 words, not {reg.value}'s registered rows of {reg.words.getD 0} {reg.wordBits}-bit leaves"
   let (positions, paths) ← entry pub reg

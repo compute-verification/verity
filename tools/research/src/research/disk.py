@@ -41,7 +41,8 @@ def hold(gb: float, path: Path, *, hold_pct: float = HOLD_PCT, release_pct: floa
         sleep(poll_s)
 
 
-def main(argv: list[str]) -> int:
+def main(argv: list[str], *, usage: Callable[[Path], tuple[int, int, int]] = shutil.disk_usage,
+         sleep: Callable[[float], None] = time.sleep, execvp: Callable[[str, list[str]], None] = os.execvp) -> int:
     ap = argparse.ArgumentParser(prog="research disk-hold")
     ap.add_argument("--gb", type=float, required=True)
     ap.add_argument("--path", required=True)
@@ -51,8 +52,8 @@ def main(argv: list[str]) -> int:
     if not cmd:
         print("research disk-hold: give the command after --", file=sys.stderr)
         return 2
-    hold(ns.gb, Path(ns.path))
-    os.execvp(cmd[0], cmd)
+    hold(ns.gb, Path(ns.path), usage=usage, sleep=sleep)
+    execvp(cmd[0], cmd)
     return 127
 
 

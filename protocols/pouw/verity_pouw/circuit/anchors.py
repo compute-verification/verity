@@ -14,6 +14,16 @@ The verifier builds these inputs itself (`Anchors.call_inputs`, `Anchors.weight_
 (`Anchors.check_call`, `Anchors.check_weight`); it never takes them as stated.  A window's `Ledger` refuses a repeated
 call index, (forward, position): the Lean statement's A11, `UniqueCallIndices`.
 
+The tile checks' (`pc4`, `pc8`) anchored inputs are derived values, not ids: the noise lines E_A, E_B, F_A, F_B and
+G = F_Bᵀ·F_A, which the verifier derives from the scheme's seeds (`TileAnchors`, from `noise(ctx)`: seed_A reads the salt,
+A's root, B's registered root and the matmul index, seed_B the salt and B's root).  The call's Program and the weight's both
+read F_A and F_B; E_A is the call's alone, E_B and G the weight's.  In a unit's proof each is a C-Flock public input region
+(an ``In`` region): the unit's ports (`pc4.PORTS`, `pc8.PORTS`) name it, with its recomputation (`Derivation`: the rule, the
+seed, the domain and the derivation function, `Shape.derivations`; as C-Flock's circuit names it, `public_ports`: the seed's
+label and the rule's versioned id), and the verifier values it from its own `--public-inputs` file
+(`TileAnchors.public_inputs`), whose content for one unit is `TileAnchors.regions`: each region's u16 words
+(`region_words`), every value unpacked, the region whole 128-bit words.
+
 A window's `Receipt` lists every call of the window, each with its anchors, shape and commitment, complete and immutable
 before any key exists. `Ledger.open` derives the window's key from it alone, a fresh source under the receipt's digest,
 and admits only the calls it lists; `Traced.draw` draws only under that key. So the key comes after every call's
@@ -23,9 +33,11 @@ from __future__ import annotations
 
 import dataclasses
 import hashlib
+import json
+import re
 import secrets
-from dataclasses import dataclass, field
-from typing import Any, Sequence
+from dataclasses import dataclass
+from typing import Any, Callable, Sequence
 
 from ..protocol import DomainError
 from .ncp2 import Shape
@@ -86,6 +98,174 @@ class Anchors:
 
     def check_weight(self, fn, args: Sequence[Sequence[int]]) -> None:
         _check(fn, args, self.weight_inputs())
+
+
+#: the tile checks' anchored parameters, by name in their Programs
+ANCHORED = ("ea", "eb", "fa", "fb", "g")
+#: a public input region's word, as C-Flock lays out a unit's input leaves, and the input word a region fills whole
+WORD_BITS, REGION_WORD_BITS = 16, 128
+
+
+#: an anchor's rule id: the scheme, the anchor and the rule's version, never a workload's values or a Python name
+ANCHOR_RULE = re.compile(r"verity/pouw/anchor/[a-z0-9-]+/[a-z0-9]+/v(0|[1-9][0-9]*)")
+
+
+@dataclass(frozen=True)
+class Derivation:
+    """How the verifier recomputes one anchor, which its public input region names: its rule (``rule``, `ANCHOR_RULE`'s
+    form: the id C-Flock's circuit pins, so a new rule is a new version), the seed it reads (``seed``: the scheme's
+    ``noise(ctx).seed_a`` or ``.seed_b``), the scheme's domain separation of it (``domain``), the function that derives it
+    (``fn(shape, seed, index)``: one line for global row ``index`` when ``per_row``, else the whole anchor, flat in its
+    parameter's leaf order) and each value's width in bits."""
+
+    rule: str
+    seed: str
+    domain: str
+    fn: Callable[[Any, bytes, int | None], Sequence[int]]
+    bits: int
+    per_row: bool = False
+
+    def __post_init__(self) -> None:
+        if not (isinstance(self.rule, str) and ANCHOR_RULE.fullmatch(self.rule)):
+            raise ValueError(f"an anchor's rule is a versioned id, verity/pouw/anchor/<scheme>/<anchor>/v<n>: {self.rule!r}")
+
+
+def region_words(values: Sequence[int], bits: int) -> list[int]:
+    """Values of ``bits`` bits as a public input region's u16 words, unpacked as C-Flock lays out a unit's input leaves: each
+    value takes ceil(bits / 16) words, low half first, the bits above it zero.  So bit t of word j is the region's bit
+    16j + t, and its bytes are the words little-endian (`region_bytes`).  The region must fill whole 128-bit words."""
+    if not all(0 <= v < 1 << bits for v in values):
+        raise DomainError(f"a region's values are {bits}-bit")
+    words = [(v >> (WORD_BITS * h)) & 0xFFFF for v in values for h in range(-(-bits // WORD_BITS))]
+    if len(words) * WORD_BITS % REGION_WORD_BITS:
+        raise DomainError(f"a region of {len(words)} u16 words does not fill whole {REGION_WORD_BITS}-bit words")
+    return words
+
+
+def region_bytes(words: Sequence[int]) -> bytes:
+    """A region's u16 words as its bytes, little-endian: C-Flock's ``bytes(region, b)`` for one unit."""
+    return b"".join(w.to_bytes(2, "little") for w in words)
+
+
+#: C-Flock's format of the verifier's own `--public-inputs` file (its PROTOCOL.md §16.10, ``HmIn.checkOwn``)
+PUBLIC_INPUTS_FORMAT = "verity/flock-public-inputs/v1"
+
+
+def public_ports(shape, role: str) -> dict[str, dict[str, str]]:
+    """``role``'s public input ports as C-Flock's circuit names them (``compose``'s ``public_inputs``, META's
+    ``public_inputs``), in the unit's parameter order: each region's seed by the scheme's label for it (``shape.seeds``) and
+    its derivation by its rule id (`Derivation.rule`)."""
+    out = {}
+    for port, anchor in shape.ports[role]["regions"].items():
+        d = shape.derivations[anchor]
+        out[port] = {"seed": shape.seeds[d.seed], "derivation": d.rule}
+    return out
+
+
+@dataclass(frozen=True)
+class TileAnchors:
+    """One tile check's anchored inputs, as the verifier derives them: the scheme's seeds (`noise(ctx)`) and the global
+    indices of the block's rows of A (``rows``) and of B (``cols``), by which each E line is drawn.  ``shape`` is the
+    check's `pc4.Shape` or `pc8.Shape`: its ``derivations`` derive the lines and G on its own record, and its ``ports`` name
+    each unit's public input regions."""
+
+    shape: Any
+    seed_a: bytes
+    seed_b: bytes
+    rows: tuple[int, ...]
+    cols: tuple[int, ...]
+
+    def __post_init__(self) -> None:
+        if len(self.seed_a) != 32 or len(self.seed_b) != 32:
+            raise DomainError("the seeds are 32 bytes")
+        for name, ids, count in (("row", self.rows, self.shape.m), ("column", self.cols, self.shape.n)):
+            if len(ids) != count or len(set(ids)) != count or not all(0 <= v <= M32 for v in ids):
+                raise DomainError(f"the {name} ids are {count} distinct 32-bit global indices")
+
+    @classmethod
+    def of(cls, scheme, ctx, shape, rows: Sequence[int] | None = None, cols: Sequence[int] | None = None) -> "TileAnchors":
+        """The anchors of ``ctx``'s block under ``scheme`` (rows and columns 0.. by default)."""
+        noise = scheme.noise(ctx)
+        rows = tuple(range(shape.m)) if rows is None else tuple(rows)
+        cols = tuple(range(shape.n)) if cols is None else tuple(cols)
+        return cls(shape, noise.seed_a, noise.seed_b, rows, cols)
+
+    def _derive(self, anchor: str, ids: Sequence[int]) -> list[int]:
+        d = self.shape.derivations[anchor]
+        seed = {"seed_a": self.seed_a, "seed_b": self.seed_b}[d.seed]
+        if d.per_row:
+            return [v for i in ids for v in d.fn(self.shape, seed, i)]
+        return list(d.fn(self.shape, seed, None))
+
+    def _ids(self, anchor: str) -> tuple[int, ...]:
+        return {"ea": self.rows, "eb": self.cols}.get(anchor, ())
+
+    def inputs(self, fn) -> dict[str, list[int]]:
+        """``fn``'s anchored inputs, by parameter: those of `ANCHORED` it takes."""
+        return {name: self._derive(name, self._ids(name)) for name, _t in fn.signature()[0] if name in ANCHORED}
+
+    def check_inputs(self, fn, args: Sequence[Sequence[int]]) -> None:
+        """Refuse ``fn``'s flat input leaves whose anchored inputs are not the verifier's."""
+        _check(fn, args, self.inputs(fn))
+
+    def regions(self, role: str, index: int | None = None) -> dict[str, list[int]]:
+        """One unit's `--public-inputs` content: each public input region its ports name (``shape.ports[role]["regions"]``,
+        in the unit's parameter order) as its u16 words (`region_words`), derived from the seeds.  ``role`` and ``index``
+        are the unit's coordinates: a row unit's row in the block (A's for ``row_a``, B's for ``row_b``), whose global id
+        draws its E line; a tile unit has no region."""
+        return {port: self._region(role, port, index) for port in self.shape.ports[role]["regions"]}
+
+    def _region(self, role: str, port: str, index: int | None) -> list[int]:
+        anchor = self.shape.ports[role]["regions"][port]
+        d, ids = self.shape.derivations[anchor], self._ids(anchor)
+        if d.per_row:
+            if not (type(index) is int and 0 <= index < len(ids)):
+                raise DomainError(f"a {role} unit's row is one of the block's {len(ids)}, not {index!r}")
+            ids = (ids[index],)
+        return region_words(self._derive(anchor, ids), d.bits)
+
+    def public_inputs(self, role: str, indexes: Sequence[int]) -> bytes:
+        """The verifier's own `--public-inputs` file for the statement whose instances are ``role``'s units at ``indexes``
+        (rows of the block, in instance order), in `PUBLIC_INPUTS_FORMAT`: a header line ``{format, instances, ports}``, each
+        port with its words, seed and derivation (`public_ports`), then every unit's regions (`regions`), u16 LE,
+        instance-major, the ports in order.  A region the units share (F_A, F_B, G) is derived once and repeated in each."""
+        names = public_ports(self.shape, role)
+        if not names:
+            raise DomainError(f"a {role} unit has no public input region")
+        if not indexes:
+            raise DomainError("a --public-inputs file holds at least one instance")
+        shared = {p: self._region(role, p, None) for p, a in self.shape.ports[role]["regions"].items()
+                  if not self.shape.derivations[a].per_row}
+        units = [{p: shared[p] if p in shared else self._region(role, p, i) for p in names} for i in indexes]
+        ports = [{"port": p, "words": len(units[0][p]), **names[p]} for p in names]
+        head = {"format": PUBLIC_INPUTS_FORMAT, "instances": len(units), "ports": ports}
+        return json.dumps(head, sort_keys=True).encode() + b"\n" + b"".join(region_bytes(u[p]) for u in units for p in names)
+
+    def check_public_inputs(self, role: str, indexes: Sequence[int], data: bytes) -> None:
+        """Refuse a `--public-inputs` file that is not the verifier's own (`public_inputs`), as C-Flock's Lean verifier does
+        (`HmIn.checkOwn`): its header must be the verifier's, and every word its recomputation, each region in the unit's
+        parameter leaf order and the instances in ``indexes``' order.  So a region in another order (C-Flock's read order
+        of a transposed operand) or two instances swapped is refused, at the first word that differs."""
+        own_head, own_body = self.public_inputs(role, indexes).split(b"\n", 1)
+        head, sep, body = data.partition(b"\n")
+        try:
+            same = sep == b"\n" and json.loads(head) == json.loads(own_head)
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            same = False
+        if not same:
+            raise DomainError("--public-inputs: its header (format, instances, ports) is not the verifier's")
+        if len(body) != len(own_body):
+            raise DomainError("--public-inputs: length")
+        if body == own_body:
+            return
+        ports = json.loads(own_head)["ports"]
+        w = next(j for j in range(0, len(body), 2) if body[j:j + 2] != own_body[j:j + 2]) // 2
+        instance, off = divmod(w, sum(p["words"] for p in ports))
+        for p in ports:
+            if off < p["words"]:
+                raise DomainError(f"public input {p['port']}: word {off} of instance {instance} is not the verifier's own "
+                                  f"recomputation (seed {p['seed']}, derivation {p['derivation']})")
+            off -= p["words"]
 
 
 def _check(fn, args, want: dict[str, list[int]]) -> None:
@@ -267,4 +447,5 @@ def replay_key(record: dict[str, str]):
     return derive(bytes.fromhex(record["source"]), DRAW_DOMAIN, {"receipt": bytes.fromhex(record["receipt"])})
 
 
-__all__ = ["Anchors", "Ledger", "Receipt", "replay_key"]
+__all__ = ["ANCHORED", "ANCHOR_RULE", "Anchors", "Derivation", "Ledger", "PUBLIC_INPUTS_FORMAT", "REGION_WORD_BITS", "Receipt",
+           "TileAnchors", "WORD_BITS", "public_ports", "region_bytes", "region_words", "replay_key"]
