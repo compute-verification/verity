@@ -1,10 +1,11 @@
-"""`p2-16448/v1`, **experimental**: P2, the squaring-based POUS scheme from the efficient-cryptography campaign (POUS
-`internal/efficient-crypto/p2-verdict.md`).  Every block is independent, and its decode is two big-integer squarings
-with no hash call.
+"""`p2-16448/v2`, **experimental**: P2, the squaring-based POUS scheme from the efficient-cryptography campaign (POUS
+`internal/efficient-crypto/p2-verdict.md`; its spec is the POUS store's `docs/efficient-crypto/p2-spec-draft.md`, draft
+v0).  Every block is independent, and its decode is two big-integer squarings with no hash call.
 
 ~~~text
-p          2^w − c0, prime, p ≡ 3 mod 4           registered: w = 16448, c0 = 21065 (2,056-byte blocks)
-payload    m < 2^(w−16): 2,054 bytes of W per block, little endian (rate 1.001)
+p          2^w − c0, prime, p ≡ 3 mod 4           registered: w = 16448, c0 = 21065 (`p2-p16448-c21065`, 2,056-byte blocks)
+payload    m < 2^(w−16): 2,054 bytes of W per block, the spec's payload profile `p2-2054B` (rate 1.001)
+integers   every block, payload and key is fixed-width, unsigned and big-endian, as the spec's wire format
 sq(a)      a² mod p, negated (p − a² mod p) when a is odd
 ρ(y)       the parity-canonical root of ±y, so sq(ρ(y)) = y: even iff y is a quadratic residue
 σ_K(r)     r ⊕ K if r ⊕ K < p, else r             an involution on [0, p)
@@ -13,29 +14,36 @@ decode     m = sq(σ_K(sq(c))) − t mod p           two squarings
 keys       fresh per block j of segment s, drawn after W through the salt, and expanded where they are used (on the
            device), so nothing key-sized is stored:
            seed_s = SHAKE256("verity/pous/p2/seed/v1" ‖ tag_s)[0 : 32],  tag_s = salt ‖ u64 s
-           z      = ChaCha8(key = seed_s, nonce = u64 j, counter 0, 1, …)[0 : 2·w/8]
-           K = z[0 : w/8],  t = z[w/8 : 2·w/8] reduced once below p  (bias ≤ c0 / 2^w)
+           z      = ChaCha8(key = seed_s, nonce = u64 j, counter 0, 1, …)
+           K = z[0 : w/8],  t = the first of z[w/8 : 2·w/8], z[2·w/8 : 3·w/8], … below p  (the spec's rejection
+           sampling; a candidate is ≥ p with probability c0 / 2^w)
 ~~~
 
-The keystream is Bernstein's ChaCha with 8 rounds (64-bit counter and nonce), the expander the P2 spec names.  At
-16,448 bits it is 65 ChaCha blocks per data block, about 1% of the decode's multiply work.
+The keystream is Bernstein's ChaCha with 8 rounds (64-bit counter and nonce).  At 16,448 bits it is 65 ChaCha blocks
+per data block, about 1% of the decode's multiply work.  **This expander deviates from the spec**: the spec's setup
+assumption P2-EXP-IO has SHAKE256 standing in for fresh per-block XOF streams, framed per `(segment, block, purpose)`,
+and says nothing of ChaCha8.  SHAKE256 in its place would cost about 12% of device throughput (an estimate).  The
+choice goes to Daniel with P2 Decision 1.
 
 **What is proved, and what is not.**
-- The certificate is `P2MeetsM1Uncond` (POUS `lean/pous/Pous/Pinned.lean`, graded PASS; statement reviewer
-  bc-d1405c07, GO WITH CONDITIONS): `∀ D, Meets (m1 (2^23) 16448) .sequential D (2^20) 88 εMax`. That is **abstract
-  M1**: 2^23 independent forward-only ideal permutations on 16,448 bits, with no hypothesis.
+- The certificate is the proposed pin `P2MeetsM1pB19Uncond` (POUS
+  `lean/submissions/efficient-crypto/p2-domain/`, graded PASS against a scratch copy of the trusted layer; **not yet in
+  the trusted pin set**): for every payload width `b` with `20·16448 ≤ 21·b ≤ 21·16447`, the profile's 16,432 among
+  them, `∀ D, Meets (m1p (2^19) 16448 p b) .sequential D (2^20) 88 εMax`.  That is **abstract M1** on P2's exact
+  domain `[0, p)`: 2^19 independent forward-only uniform permutations of `[0, p)`, with no hypothesis.
 - **The instantiation assumption is pending Daniel.** That square–mask–square with fresh per-block keys instantiates
   M1's slow-inverse permutation is a novel, algebraic assumption, and it is outside Lean.
 - So is SeqRoot: one 16,448-bit root takes longer than twice `Δ + RTT` on the fastest core, with cooperating cores
   excluded. It sets `call_ns`, and the certificate allows no root within the deadline.
 - A shared mask with linear tweaks is model M2, which is not covered; the keys here are per block.
-- The scheme is never the default. Its profile says, plainly, "abstract-M1 result; instantiation assumption pending
-  Daniel".
+- The scheme is never the default. Its profile says so plainly (`EXPERIMENTAL`): an abstract-M1 result, a proposed
+  pin, and an instantiation assumption pending Daniel.
 """
 
 from __future__ import annotations
 
 import hashlib
+import itertools
 import struct
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -46,7 +54,8 @@ from ..labels import salt_value, tag
 from ..params import SALT_BITS
 from ..protocol import Certificate, Scheme
 
-EXPERIMENTAL = "abstract-M1 result; instantiation assumption pending Daniel"
+EXPERIMENTAL = ("abstract-M1 result; its pin P2MeetsM1pB19Uncond is proposed, not yet trusted; instantiation assumption "
+                "pending Daniel")
 
 SEED_DOMAIN = b"verity/pous/p2/seed/v1"
 
@@ -56,14 +65,17 @@ P2_CLAIMS = ("m1-ideal-permutations", "sms-m1-instantiation", "seq-root", "rando
 - abstract M1 (the proof's model);
 - the SMS-to-M1 instantiation (pending Daniel);
 - SeqRoot;
-- SHAKE256 as a random oracle for the per-block keys;
+- SHAKE256 as a random oracle for the segment seeds (the per-block keys come from ChaCha8, which the spec's P2-EXP-IO
+  does not name);
 - perfect isolation;
 - SHA-256 collision resistance for the commitment to W and for `vk`;
 - a live, designated verifier."""
 
 POINT = (16448, 21065, 1 << 16)
-"""`w`, `c0` and blocks per segment at the registered point.  `2^23` blocks, the certificate's store (17.2 GB), are
-128 segments."""
+"""`w`, `c0` and blocks per segment at the registered point.  `2^19` blocks, the certificate's store (1.08 GB), are 8
+segments."""
+
+CERT_BLOCKS = 1 << 19
 
 ROOT_CALL_NS = 2_900_000
 """Half the fastest core's time for one 16,448-bit root: the 2× margin of the timing red team, which sized w = 16,448
@@ -120,15 +132,20 @@ class P2Params:
         return self.segments * self.segment_bytes
 
     @property
+    def profile(self) -> str:
+        """The payload profile: `p2-2054B` at the registered width, whose manifest (and so the commitment) names it."""
+        return f"p2-{self.payload_bytes}B"
+
+    @property
     def codec(self) -> Codec:
-        return Codec(f"p2-{self.w}/v1", encode_segment, decode_segment)
+        return Codec(f"p2-{self.w}/v2", encode_segment, decode_segment)
 
     def with_segments(self, segments: int) -> P2Params:
         return P2Params(self.w, self.c0, self.blocks_per_segment, segments)
 
     def manifest(self) -> dict[str, int | str]:
-        return {"scheme": "p2", "w": self.w, "c0": self.c0, "blocks_per_segment": self.blocks_per_segment,
-                "segments": self.segments}
+        return {"scheme": "p2", "w": self.w, "c0": self.c0, "profile": self.profile,
+                "blocks_per_segment": self.blocks_per_segment, "segments": self.segments}
 
 
 class _Field:
@@ -210,12 +227,26 @@ def segment_seed(salt: bytes, s: int) -> bytes:
     return hashlib.shake_256(SEED_DOMAIN + tag(salt_value(salt), s).to_bytes(32, "little")).digest(32)
 
 
+def below(p: int, candidates) -> int:
+    """The first candidate below `p`: exact rejection sampling, never a reduction mod p."""
+    return next(x for x in candidates if x < p)
+
+
 def expand_keys(params: P2Params, seed: bytes, j: int) -> tuple[int, int]:
-    """Block `j`'s `(K, t)` from its segment's seed: ChaCha8 with nonce `j`, `2·w/8` bytes."""
-    nb = params.block_bytes
-    z = b"".join(chacha_block(seed, i, j) for i in range(-(-2 * nb // 64)))
-    t = int.from_bytes(z[nb:2 * nb], "little")
-    return int.from_bytes(z[:nb], "little"), t - params.p if t >= params.p else t
+    """Block `j`'s `(K, t)` from its segment's seed: the ChaCha8 stream with nonce `j`, read as consecutive big-endian
+    `w/8`-byte words.  `K` is the first, and `t` the first later word below `p`."""
+    nb, blocks = params.block_bytes, (chacha_block(seed, i, j) for i in itertools.count())
+    buf = bytearray()
+
+    def word() -> int:
+        while len(buf) < nb:
+            buf.extend(next(blocks))
+        out = int.from_bytes(buf[:nb], "big")
+        del buf[:nb]
+        return out
+
+    k = word()
+    return k, below(params.p, iter(word, None))
 
 
 def block_keys(params: P2Params, salt: bytes, s: int, j: int) -> tuple[int, int]:
@@ -239,8 +270,8 @@ def encode_segment(params: P2Params, prims, salt: bytes, s: int, w_seg: bytes) -
     seed, out = segment_seed(salt, s), []
     for j in range(params.blocks_per_segment):
         k, t = expand_keys(params, seed, j)
-        m = int.from_bytes(w_seg[j * pb:(j + 1) * pb], "little")
-        out.append(f.rho(f.sigma(f.rho((m + t) % f.p), k)).to_bytes(nb, "little"))
+        m = int.from_bytes(w_seg[j * pb:(j + 1) * pb], "big")
+        out.append(f.rho(f.sigma(f.rho((m + t) % f.p), k)).to_bytes(nb, "big"))
     return out
 
 
@@ -255,14 +286,14 @@ def decode_segment(params: P2Params, prims, salt: bytes, s: int, blocks: Sequenc
     for j, block in enumerate(blocks):
         if len(block) != nb:
             raise ValueError(f"block {j} is not {nb} bytes")
-        c = int.from_bytes(block, "little")
+        c = int.from_bytes(block, "big")
         if c >= f.p:
             raise ValueError(f"block {j} is not below p")
         k, t = expand_keys(params, seed, j)
         m = (f.sq(f.sigma(f.sq(c), k)) - t) % f.p
         if m >> (8 * pb):
             raise ValueError(f"block {j} decodes to more than {8 * pb} bits: not a codeword")
-        out += m.to_bytes(pb, "little")
+        out += m.to_bytes(pb, "big")
     return bytes(out)
 
 
@@ -287,8 +318,8 @@ class P2(Scheme):
         p = self.params
         if (p.w, p.c0, p.blocks_per_segment) != POINT:
             return None
-        return Certificate(k=88, rounds=0, work=1 << 20, call_ns=ROOT_CALL_NS, theorem="P2MeetsM1Uncond",
-                           segments=(1 << 23) // POINT[2], claims=P2_CLAIMS)
+        return Certificate(k=88, rounds=0, work=1 << 20, call_ns=ROOT_CALL_NS, theorem="P2MeetsM1pB19Uncond",
+                           segments=CERT_BLOCKS // POINT[2], claims=P2_CLAIMS)
 
     def encode_segment(self, salt: bytes, s: int, w_seg: bytes) -> list[bytes]:
         return encode_segment(self.params, self.prims, salt, s, w_seg)
@@ -297,5 +328,5 @@ class P2(Scheme):
         return decode_segment(self.params, self.prims, salt, s, blocks)
 
 
-__all__ = ["EXPERIMENTAL", "P2_CLAIMS", "POINT", "ROOT_CALL_NS", "SEED_DOMAIN", "P2", "P2Params", "block_keys",
-           "chacha_block", "decode_segment", "encode_segment", "expand_keys", "segment_seed"]
+__all__ = ["CERT_BLOCKS", "EXPERIMENTAL", "P2_CLAIMS", "POINT", "ROOT_CALL_NS", "SEED_DOMAIN", "P2", "P2Params", "below",
+           "block_keys", "chacha_block", "decode_segment", "encode_segment", "expand_keys", "segment_seed"]

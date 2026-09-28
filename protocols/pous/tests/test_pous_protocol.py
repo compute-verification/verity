@@ -134,9 +134,9 @@ def test_band_through_the_interface_is_the_pinned_band_codec():
 
 
 def test_registry():
-    assert set(schemes.REGISTRY) == {"band-chain/d12/v1", "dense-chain/v1", "p3/v1", "p2-16448/v1"}
+    assert set(schemes.REGISTRY) == {"band-chain/d12/v1", "dense-chain/v1", "p3/v1", "p2-16448/v2"}
     assert schemes.DEFAULT == band.BAND12.name
-    assert schemes.EXPERIMENTAL == {"p2-16448/v1"} and schemes.DEFAULT not in schemes.EXPERIMENTAL
+    assert schemes.EXPERIMENTAL == {"p2-16448/v2"} and schemes.DEFAULT not in schemes.EXPERIMENTAL
     assert schemes.get().experimental is None
     b = schemes.get()
     assert isinstance(b, schemes.Band) and b.params == band.SECURE_FIRST and b.name == "band-chain/d12/v1"
@@ -340,33 +340,36 @@ def test_claims_resolve_and_local_ones_are_not_in_core():
 
 
 def test_p2_is_experimental_and_says_so():
-    """P2 (`p2-16448/v1`) is registered but experimental: the verifier refuses it unless asked, never makes it the
-    default, and its profile states "abstract-M1 result; instantiation assumption pending Daniel"."""
-    sch = schemes.get("p2-16448/v1", segments=128)
-    assert sch.experimental == EXPERIMENTAL == "abstract-M1 result; instantiation assumption pending Daniel"
+    """P2 (`p2-16448/v2`) is registered but experimental: the verifier refuses it unless asked, never makes it the
+    default, and its profile states that it is an abstract-M1 result under a proposed pin, pending Daniel.  The
+    certificate is the proposed 2^19-block pin on P2's exact domain, and the manifest names the payload profile."""
+    sch = schemes.get("p2-16448/v2", segments=8)
+    assert sch.experimental == EXPERIMENTAL == ("abstract-M1 result; its pin P2MeetsM1pB19Uncond is proposed, not yet "
+                                                "trusted; instantiation assumption pending Daniel")
+    assert sch.params.profile == sch.params.manifest()["profile"] == "p2-2054B"
     cert = sch.certificate
-    assert (cert.theorem, cert.k, cert.rounds, cert.work, cert.segments, cert.hypotheses) == ("P2MeetsM1Uncond", 88, 0,
-                                                                                              1 << 20, 128, ())
+    assert (cert.theorem, cert.k, cert.rounds, cert.work, cert.segments, cert.hypotheses) == ("P2MeetsM1pB19Uncond", 88,
+                                                                                              0, 1 << 20, 8, ())
     assert {"m1-ideal-permutations", "sms-m1-instantiation", "seq-root"} <= set(cert.claims)
-    one = schemes.get("p2-16448/v1")
+    one = schemes.get("p2-16448/v2")
     vk = VerifierKey.from_leaves(one.params, SALT, [bytes(32)] * one.params.blocks)
     key = protocol.challenge_key(b"\x00" * 32, vk)
     with pytest.raises(ValueError, match="experimental"):
         protocol.Verifier(one, vk, key)
     v = protocol.Verifier(one, vk, key, experimental=True, rtt_allowance_ns=36_800)
-    assert v.k == 88 and v.gaps == ("W has 1 segments; P2MeetsM1Uncond is about 128",)
+    assert v.k == 88 and v.gaps == ("W has 1 segments; P2MeetsM1pB19Uncond is about 8",)
     with pytest.raises(ValueError, match="covers 0"):
         protocol.Verifier(one, vk, key, experimental=True, rtt_allowance_ns=2_400_000)
     p = protocol.StorageProfile(sch.name, sch.params.manifest(), sch.params.blocks, sch.params.m, 88, 536_800, cert,
                                 experimental=sch.experimental)
-    assert p.certified and p.statement().startswith("EXPERIMENTAL (abstract-M1 result; instantiation assumption pending "
-                                                    "Daniel). ")
-    assert "P2MeetsM1Uncond" in p.statement() and p.to_json()["experimental"] == EXPERIMENTAL
-    assert p.state_bound_bits == (1 << 23) * 16448 * 18 // 19
+    assert p.certified and p.statement().startswith(f"EXPERIMENTAL ({EXPERIMENTAL}). ")
+    assert "P2MeetsM1pB19Uncond" in p.statement() and p.to_json()["experimental"] == EXPERIMENTAL
+    assert p.state_bound_bits == (1 << 19) * 16448 * 18 // 19
 
 
 def test_p2_arithmetic():
-    """sq inverts the parity-canonical root, σ is an involution on [0, p), and a block that is not a codeword is refused."""
+    """sq inverts the parity-canonical root, σ is an involution on [0, p), blocks and payloads are big-endian integers
+    (the spec's wire format), and a block that is not a codeword is refused."""
     from verity_pous.schemes.p2 import _Field, block_keys
 
     f, rng = _Field(128, 173), random.Random(9)
@@ -376,12 +379,17 @@ def test_p2_arithmetic():
     params = P2Params(128, 173, 8, 2)
     assert block_keys(params, SALT, 0, 1) != block_keys(params, SALT, 1, 1) != block_keys(params, SALT, 0, 2)
     sch = schemes.P2(params)
-    c = sch.encode_segment(SALT, 1, bytes(range(112)))
+    w_seg = bytes(range(112))
+    c = sch.encode_segment(SALT, 1, w_seg)
+    for j in (0, 5):
+        k, t = block_keys(params, SALT, 1, j)
+        m = (f.sq(f.sigma(f.sq(int.from_bytes(c[j], "big")), k)) - t) % f.p
+        assert m == int.from_bytes(w_seg[14 * j:14 * (j + 1)], "big")
     with pytest.raises(ValueError, match="below p"):
-        sch.decode_segment(SALT, 1, [(f.p).to_bytes(16, "little")] + c[1:])
+        sch.decode_segment(SALT, 1, [(f.p).to_bytes(16, "big")] + c[1:])
     with pytest.raises(ValueError, match="codeword"):
         sch.decode_segment(SALT, 1, [bytes([7]) + bytes(15)] + c[1:])
-    assert sch.decode_segment(SALT, 1, c) == bytes(range(112))
+    assert sch.decode_segment(SALT, 1, c) == w_seg
 
 
 def test_p2_keys_are_chacha8_from_a_segment_seed():
@@ -398,5 +406,28 @@ def test_p2_keys_are_chacha8_from_a_segment_seed():
     assert len(seed) == 32 and seed != segment_seed(SALT, 2)
     k, t = expand_keys(params, seed, 5)
     z = b"".join(chacha_block(seed, i, 5) for i in range(65))
-    assert k == int.from_bytes(z[:2056], "little") and t == int.from_bytes(z[2056:4112], "little") % params.p
+    assert k == int.from_bytes(z[:2056], "big") and t == int.from_bytes(z[2056:4112], "big") < params.p
     assert expand_keys(params, seed, 6) != (k, t)
+
+
+def test_p2_tweak_is_rejection_sampled():
+    """A tweak candidate at or above p is skipped for the next one, as the spec requires; it is never reduced by one
+    subtraction of p, which would give the values below c0 twice the weight of the rest."""
+    from verity_pous.schemes import p2
+
+    params = P2Params(128, 173, 4)
+    assert p2.below(params.p, iter([params.p, params.p + 5, (1 << 128) - 1, 7])) == 7
+    assert p2.below(params.p, iter([params.p - 1])) == params.p - 1
+    real = p2.chacha_block
+
+    def first_candidate_high(key: bytes, counter: int, nonce: int, rounds: int = 8) -> bytes:
+        out = real(key, counter, nonce, rounds)
+        return b"\xff" * 32 + out[32:] if counter == 0 else out     # K and the first t candidate are 2^128 − 1 ≥ p
+
+    try:
+        p2.chacha_block = first_candidate_high
+        k, t = p2.expand_keys(params, bytes(32), 0)
+    finally:
+        p2.chacha_block = real
+    assert k == (1 << 128) - 1 and t == int.from_bytes(real(bytes(32), 0, 0)[32:48], "big") < params.p
+    assert t != (1 << 128) - 1 - params.p

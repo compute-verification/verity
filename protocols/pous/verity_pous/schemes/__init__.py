@@ -6,8 +6,8 @@ states its certificate at its parameters:
 - `band` (`band-chain/d12/v1`, the default): the secure-first scheme.
 - `dense` (`dense-chain/v1`): selectable.
 - `p3` (`p3/v1`): research.
-- `p2` (`p2-16448/v1`): **experimental**, never the default (an abstract-M1 result whose instantiation assumption is
-  pending Daniel).
+- `p2` (`p2-16448/v2`): **experimental**, never the default (an abstract-M1 result, under a proposed pin, whose
+  instantiation assumption is pending Daniel).
 
 Their conformance vectors are pinned by name under `tests/fixtures/schemes/` (`tests/pous_scheme_vectors.py` writes
 them).

@@ -174,7 +174,7 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
   - `band-chain/d12/v1`, the default;
   - `dense-chain/v1`;
   - `p3/v1`;
-  - `p2-16448/v1`, **experimental**.
+  - `p2-16448/v2`, **experimental**.
 - **`protocol.Certificate`** is what an audit at the scheme's parameters establishes, Lean's
   `Meets S .sequential D Q k ε`. It holds:
   - `k`, `rounds` (D), `work` (Q), `call_ns`, `rho`, `delta`, `eps_log2`;
@@ -193,11 +193,19 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
 
   Dense is `chain_meets_64` given `ChainExPostFacto`, with no cliff. P2 (`schemes/p2.py`) is **experimental**:
   - It is the squaring-based scheme: two big-integer squarings per 2,056-byte block to decode, and no hash call.
+  - It follows the P2 spec (the POUS store's `docs/efficient-crypto/p2-spec-draft.md`, draft v0) except for its
+    expander:
+    - the payload is 2,054 bytes per block, which is the spec's profile `p2-2054B`, and the manifest names it;
+    - every block, payload and key is a fixed-width, unsigned, big-endian integer;
+    - the tweak is rejection-sampled below p, never reduced.
   - Its keys are fresh per block, expanded where they are used: ChaCha8 keyed by a 32-byte seed per segment
     (`SHAKE256("verity/pous/p2/seed/v1" ‖ tag_s)`), with nonce = the block index. Nothing key-sized is stored, which
-    keeps the 1.05× space bound.
-  - Its certificate is `P2MeetsM1Uncond`: k 88 at 2^23 blocks (128 segments of 2^16), with no hypothesis. That is an
-    abstract-M1 result, and the SMS-to-M1 instantiation assumption is pending Daniel.
+    keeps the 1.05× space bound. **The proof's setup assumption, the spec's P2-EXP-IO, names SHAKE256 and not ChaCha8**
+    for these keys. SHAKE256 would cost about 12% of device throughput (an estimate). The choice goes to Daniel with P2
+    Decision 1.
+  - Its certificate is `P2MeetsM1pB19Uncond`: k 88 at 2^19 blocks (8 segments of 2^16), for every payload width in
+    range, `p2-2054B`'s among them, with no hypothesis. It is a **proposed** pin, graded PASS but not yet in the
+    trusted set. It is an abstract-M1 result, and the SMS-to-M1 instantiation assumption is pending Daniel.
   - SeqRoot sets `call_ns`, half the fastest 16,448-bit root, and no root may fit within `Δ + RTT`.
   - `Scheme.experimental` carries that reason. The verifier audits an experimental scheme only with
     `experimental=True`, and its profile's statement begins with it. No experimental scheme is ever the default.
