@@ -17,7 +17,7 @@ consumed rounds' coins.
 
 namespace FlockSoundness.Refine
 
-open Flock FlockLevel3 Game Transcript Model
+open Flock FlockLevel3 Game Transcript Model Accounting
 
 local notation "𝔽" => FlockLevel3.GF128
 local notation "𝕂" => FlockLevel3.GF256
@@ -118,6 +118,260 @@ theorem fold_refines (p : LigeritoProof) (o : Opens 𝔽 D) :
         (Plays.recv _ (gOf m.1, gOf m.2)) ?_ (by simp [kMsgs, List.range'_succ, kMsg, hmE]) (by simp)
       refine Plays.bind' (ms₂ := []) (cs₂ := []) hpl ?_ (by simp) (by simp)
       rw [ofLimbs_coin]
+      exact Plays.pure _
+
+/-- An out-of-domain value of the proof as the model's message. -/
+def fMsg (a : F128) : Msg := ⟨𝔽, fOf a⟩
+
+/-- An executable out-of-domain context as the model's. -/
+def oodOf (c : Flock.OodCtx) : Model.OodCtx 𝔽 := ⟨c.z.toList.map fOf, fOf c.beta, c.split⟩
+
+theorem ofFn_vecOf (n : ℕ) (c : Array F128) (hc : c.size = n) : List.ofFn (fun i : Fin n => fOf c[i.val]!) =
+    c.toList.map fOf := by
+  subst hc
+  refine List.ext_getElem (by simp) fun i h₁ h₂ => ?_
+  simp only [List.getElem_ofFn, List.getElem_map, Array.getElem_toList]
+  rw [getElem!_pos c i (by simpa using h₁)]
+
+/-- One out-of-domain sample's update of the claim and the polynomial (§13.3 step 6), as the executable computes it. -/
+theorem ood_update (sE : F256) (qE : Poly) (y : F128) (m : F256 × F256) (c : Array F128) :
+    gOf (sE + (F256.ofF y).smul (c.getD 0 0)) = gOf sE + execArith.embed (fOf c[0]!) * execArith.embed (fOf y) ∧
+      quadOf (qE.addScaled (Poly.ofMsg m (F256.ofF y)) (c.getD 0 0)) =
+        (quadOf qE).addScaled (Model.fromMsg (gOf m.1, gOf m.2) (execArith.embed (fOf y)))
+          (execArith.embed (fOf c[0]!)) := by
+  refine ⟨?_, ?_⟩
+  · rw [gOf_add, gOf_smul, gOf_ofF, getElem!_eq_getD, mul_comm]; rfl
+  · rw [quadOf_addScaled, quadOf_ofMsg, gOf_ofF, getElem!_eq_getD]; rfl
+
+/-- **Two out-of-domain samples** (§13.3 step 6): the model's `twoOodC`, fed the two points' coins, the two values and
+intro messages, and the two batching coins, updates the claim and the polynomial as the executable does, and records
+the two contexts. -/
+theorem twoOodC_plays (o : Opens 𝔽 D) (dim split : ℕ) (sM : Opens 𝔽 D → 𝕂) (qM : Opens 𝔽 D → Model.Quad 𝕂)
+    (sE : F256) (qE : Poly) (hs : sM o = gOf sE) (hq : qM o = quadOf qE)
+    (z₁ c₁ z₂ c₂ : Array F128) (hz₁ : z₁.size = dim) (hc₁ : c₁.size = 1) (hz₂ : z₂.size = dim) (hc₂ : c₂.size = 1)
+    (y₁ y₂ : F128) (m₁ m₂ : F256 × F256) :
+    ∃ sM' qM', Plays fOf (Model.twoOodC execArith dim split sM qM)
+      [fMsg y₁, kMsg m₁, fMsg y₂, kMsg m₂] [z₁, c₁, z₂, c₂]
+      (sM', qM', [oodOf ⟨z₁, c₁.getD 0 0, some split⟩, oodOf ⟨z₂, c₂.getD 0 0, some split⟩]) ∧
+      sM' o = gOf ((sE + (F256.ofF y₁).smul (c₁.getD 0 0)) + (F256.ofF y₂).smul (c₂.getD 0 0)) ∧
+      qM' o = quadOf (((qE.addScaled (Poly.ofMsg m₁ (F256.ofF y₁)) (c₁.getD 0 0)).addScaled
+        (Poly.ofMsg m₂ (F256.ofF y₂)) (c₂.getD 0 0))) := by
+  obtain ⟨u₁, v₁⟩ := ood_update sE qE y₁ m₁ c₁
+  obtain ⟨u₂, v₂⟩ := ood_update (sE + (F256.ofF y₁).smul (c₁.getD 0 0))
+    (qE.addScaled (Poly.ofMsg m₁ (F256.ofF y₁)) (c₁.getD 0 0)) y₂ m₂ c₂
+  refine ⟨fun o' => sM o' + execArith.embed (fOf c₁[0]!) * execArith.embed (fOf y₁) +
+      execArith.embed (fOf c₂[0]!) * execArith.embed (fOf y₂),
+    fun o' => ((qM o').addScaled (Model.fromMsg (gOf m₁.1, gOf m₁.2) (execArith.embed (fOf y₁)))
+      (execArith.embed (fOf c₁[0]!))).addScaled (Model.fromMsg (gOf m₂.1, gOf m₂.2) (execArith.embed (fOf y₂)))
+      (execArith.embed (fOf c₂[0]!)), ?_, by simp only; rw [hs, ← u₁, ← u₂], by simp only; rw [hq, v₂, v₁]⟩
+  have hctx : [oodOf ⟨z₁, c₁.getD 0 0, some split⟩, oodOf ⟨z₂, c₂.getD 0 0, some split⟩] =
+      [⟨List.ofFn (fun i : Fin dim => fOf z₁[i.val]!), fOf c₁[0]!, some split⟩,
+        ⟨List.ofFn (fun i : Fin dim => fOf z₂[i.val]!), fOf c₂[0]!, some split⟩] := by
+    simp only [oodOf]
+    rw [ofFn_vecOf dim z₁ hz₁, ofFn_vecOf dim z₂ hz₂, getElem!_eq_getD c₁ 0, getElem!_eq_getD c₂ 0]
+  rw [hctx]
+  unfold Model.twoOodC
+  refine Plays.bind' (ms₂ := [fMsg y₁, kMsg m₁, fMsg y₂, kMsg m₂]) (cs₂ := [c₁, z₂, c₂]) (Plays.drawVec z₁ hz₁) ?_
+    (by simp) (by simp)
+  refine Plays.bind' (ms₂ := [kMsg m₁, fMsg y₂, kMsg m₂]) (cs₂ := [c₁, z₂, c₂]) (Plays.recv _ (fOf y₁)) ?_
+    (by simp [fMsg]) (by simp)
+  refine Plays.bind' (ms₂ := [fMsg y₂, kMsg m₂]) (cs₂ := [c₁, z₂, c₂]) (Plays.recv _ (gOf m₁.1, gOf m₁.2)) ?_
+    (by simp [kMsg]) (by simp)
+  refine Plays.bind' (ms₂ := [fMsg y₂, kMsg m₂]) (cs₂ := [z₂, c₂]) (Plays.drawOne c₁ hc₁) ?_ (by simp) (by simp)
+  refine Plays.bind' (ms₂ := [fMsg y₂, kMsg m₂]) (cs₂ := [c₂]) (Plays.drawVec z₂ hz₂) ?_ (by simp) (by simp)
+  refine Plays.bind' (ms₂ := [kMsg m₂]) (cs₂ := [c₂]) (Plays.recv _ (fOf y₂)) ?_ (by simp [fMsg]) (by simp)
+  refine Plays.bind' (ms₂ := []) (cs₂ := [c₂]) (Plays.recv _ (gOf m₂.1, gOf m₂.2)) ?_ (by simp [kMsg]) (by simp)
+  refine Plays.bind' (ms₂ := []) (cs₂ := []) (Plays.drawOne c₂ hc₂) ?_ (by simp) (by simp)
+  exact Plays.pure _
+
+/-! ## Query positions (§13.5) -/
+
+theorem shift_or (a b k : ℕ) (hb : b < 2 ^ k) : (a <<< k) ||| b = a * 2 ^ k + b := by
+  rw [← Nat.shiftLeft_add_eq_or_of_lt hb, Nat.shiftLeft_eq]
+
+/-- The greedy strata of `Q` sum to `Q`: `Σ 2^{c_i} = Q` (§13.5). -/
+theorem strata_go_sum (d : ℕ) : ∀ (fuel rem : ℕ), rem ≤ fuel →
+    ((Model.strata.go d fuel rem).map (2 ^ ·)).sum = rem
+  | 0, rem, h => by simp [Model.strata.go]; omega
+  | fuel + 1, rem, h => by
+      unfold Model.strata.go
+      split_ifs with h0
+      · simp [h0]
+      · have hle : 2 ^ min (Nat.log 2 rem) d ≤ rem :=
+          (Nat.pow_le_pow_right (by norm_num) (min_le_left _ _)).trans (Nat.pow_log_le_self 2 h0)
+        have hpos : 0 < 2 ^ min (Nat.log 2 rem) d := Nat.two_pow_pos _
+        rw [List.map_cons, List.sum_cons, strata_go_sum d fuel (rem - 2 ^ min (Nat.log 2 rem) d) (by omega)]
+        omega
+
+theorem strata_sum (Q d : ℕ) : ((Model.strata Q d).map (2 ^ ·)).sum = Q := strata_go_sum d Q Q le_rfl
+
+/-- The slots `(c, s)` of the strata, stratum by stratum. -/
+def slotsOf (st : List ℕ) : List (ℕ × ℕ) := st.flatMap fun c => (List.range (2 ^ c)).map fun s => (c, s)
+
+theorem slotsOf_length (st : List ℕ) : (slotsOf st).length = (st.map (2 ^ ·)).sum := by
+  induction st with
+  | nil => rfl
+  | cons c st ih => simp_all [slotsOf, List.flatMap_cons]
+
+/-- A slot's position, as the executable computes it. -/
+def posAt (d : ℕ) (coins : Array F128) (x : (ℕ × ℕ) × ℕ) : ℕ :=
+  (x.1.2 <<< (d - x.1.1)) ||| (coins[x.2]!).lo.toNat % 2 ^ (d - x.1.1)
+
+/-- The executable's positions loop, one stratum: push slot `s`'s position for `s < 2^c`, the counter moving on. -/
+theorem positions_inner (d : ℕ) (coins : Array F128) (c : ℕ) :
+    ∀ (n a : ℕ) (out : Array ℕ) (j : ℕ),
+      ((List.range' a n).foldl (fun (b : Array ℕ × ℕ) s =>
+          (b.1.push ((s <<< (d - c)) ||| (coins[b.2]!).lo.toNat % 2 ^ (d - c)), b.2 + 1)) (out, j)).1.toList =
+        out.toList ++ (((List.range' a n).map fun s => (c, s)).zipIdx j).map (posAt d coins) ∧
+      ((List.range' a n).foldl (fun (b : Array ℕ × ℕ) s =>
+          (b.1.push ((s <<< (d - c)) ||| (coins[b.2]!).lo.toNat % 2 ^ (d - c)), b.2 + 1)) (out, j)).2 = j + n
+  | 0, a, out, j => by simp
+  | n + 1, a, out, j => by
+      rw [List.range'_succ, List.foldl_cons]
+      obtain ⟨h1, h2⟩ := positions_inner d coins c n (a + 1) _ (j + 1)
+      refine ⟨?_, by rw [h2]; omega⟩
+      rw [h1]
+      simp [List.zipIdx_cons, posAt]
+
+theorem positions_foldl (d : ℕ) (coins : Array F128) : ∀ (st : List ℕ) (out : Array ℕ) (j : ℕ),
+    (st.foldl (fun (b : Array ℕ × ℕ) c => (List.range' 0 (2 ^ c)).foldl (fun (b : Array ℕ × ℕ) s =>
+        (b.1.push ((s <<< (d - c)) ||| (coins[b.2]!).lo.toNat % 2 ^ (d - c)), b.2 + 1)) b) (out, j)).1.toList =
+      out.toList ++ ((slotsOf st).zipIdx j).map (posAt d coins)
+  | [], out, j => by simp [slotsOf]
+  | c :: st, out, j => by
+      rw [List.foldl_cons]
+      obtain ⟨h1, h2⟩ := positions_inner d coins c (2 ^ c) 0 out j
+      have e : ((List.range' 0 (2 ^ c)).foldl (fun (b : Array ℕ × ℕ) s =>
+          (b.1.push ((s <<< (d - c)) ||| (coins[b.2]!).lo.toNat % 2 ^ (d - c)), b.2 + 1)) (out, j)) =
+          (((List.range' 0 (2 ^ c)).foldl (fun (b : Array ℕ × ℕ) s =>
+            (b.1.push ((s <<< (d - c)) ||| (coins[b.2]!).lo.toNat % 2 ^ (d - c)), b.2 + 1)) (out, j)).1, j + 2 ^ c) :=
+        Prod.ext rfl h2
+      rw [e, positions_foldl d coins st, h1]
+      simp only [slotsOf, List.flatMap_cons, List.zipIdx_append, List.map_append, List.append_assoc,
+        List.length_map, List.length_range', List.range_eq_range']
+
+/-- **The query positions** (§13.5): the executable's `positions` is the model's, at every `fast100` level. -/
+theorem positions_eq (lv : Flock.Level) (hl : LevelSeam lv) (coins : Array F128) :
+    Model.positions execArith (levelOf lv).queries (levelOf lv).logLen (vecOf lv.q coins) =
+      (Flock.positions lv coins).toList := by
+  obtain ⟨hst, -, -, -, hd⟩ := hl
+  have hpos : Flock.positions lv coins = (lv.strata.toList.foldl (fun (b : Array ℕ × ℕ) c =>
+      (List.range' 0 (2 ^ c)).foldl (fun (b : Array ℕ × ℕ) s =>
+        (b.1.push ((s <<< (lv.d - c)) ||| (coins[b.2]!).lo.toNat % 2 ^ (lv.d - c)), b.2 + 1)) b) (#[], 0)).1 := by
+    unfold Flock.positions
+    simp only [Id.run, Std.Legacy.Range.forIn_eq_forIn_range', range_size, List.forIn_pure_yield_eq_foldl, pure_bind,
+      Array.forIn_pure_yield_eq_foldl, ← Array.foldl_toList]
+    rfl
+  rw [hpos, positions_foldl]
+  dsimp only [levelOf, Model.positions]
+  have hd' : ({ logInvRate := lv.rate, queries := lv.q, logCols := lv.cols, lanes := lv.lanes } :
+      Accounting.Level).logLen = lv.d := hd.symm
+  rw [hd', hst]
+  simp only [List.nil_append, slotsOf]
+  refine List.map_congr_left fun x hm => ?_
+  obtain ⟨⟨c, s⟩, j⟩ := x
+  have hj : j < lv.q := by
+    have := (List.mem_zipIdx hm).2.1
+    have hl := slotsOf_length (strata lv.q lv.d)
+    simp only [slotsOf] at hl
+    rw [hl, strata_sum] at this
+    omega
+  simp only [hj, dite_true, vecOf, posAt]
+  rw [shift_or _ _ _ (Nat.mod_lt _ (Nat.two_pow_pos _))]
+  rfl
+
+/-! ## The consistency value (§13.3 step 10) -/
+
+theorem gOf_foldl_row (fold : Array F256) (row : Array F128) : ∀ (n : ℕ) (acc : F256),
+    gOf ((List.range n).foldl (fun acc l => acc + F256.smul (eqTableK fold)[l]! row[l]!) acc) =
+      gOf acc + ∑ l ∈ Finset.range n, gOf (eqTableK fold)[l]! * execArith.embed (fOf row[l]!) := by
+  intro n
+  induction n with
+  | zero => intro acc; simp
+  | succ n ih =>
+      intro acc
+      rw [List.range_succ, List.foldl_append, List.foldl_cons, List.foldl_nil, gOf_add, ih, gOf_smul,
+        Finset.sum_range_succ, add_assoc]
+      rfl
+
+theorem gOf_foldl_cons (g : ℕ → F256) (alpha : Array F128) : ∀ (n : ℕ) (acc : F256),
+    gOf ((List.range n).foldl (fun e j => e + F256.smul (g j) (eqTable alpha)[j]!) acc) =
+      gOf acc + ∑ j ∈ Finset.range n, gOf (g j) * execArith.embed (fOf (eqTable alpha)[j]!) := by
+  intro n
+  induction n with
+  | zero => intro acc; simp
+  | succ n ih =>
+      intro acc
+      rw [List.range_succ, List.foldl_append, List.foldl_cons, List.foldl_nil, gOf_add, ih, gOf_smul,
+        Finset.sum_range_succ, add_assoc]
+      rfl
+
+/-- **The consistency value** (§13.3 step 10): the executable's `consE` is the model's `consValueO` on the opened rows,
+when every opened row has one entry per folded lane and the consistency coins index every query. -/
+theorem consValue_eq (rows : Array (Array F128)) (q : ℕ) (alpha : Array F128) (fold : Array F256) (pos : List ℕ)
+    (hpos : pos.length = q) (hrows : ∀ j < q, rows[j]!.size = 2 ^ fold.size) (halpha : q ≤ 2 ^ alpha.size) :
+    Model.consValueO execArith (alpha.toList.map fOf) (fold.toList.map gOf) (fun j => rows[j]!.toList.map fOf) pos =
+      gOf (consE rows q alpha fold) := by
+  unfold consE Model.consValueO Model.foldColumn
+  rw [gOf_foldl_cons, gOf_zero, zero_add]
+  have hz : (pos.zipIdx).map (fun pj => execArith.embed (Model.eqList (alpha.toList.map fOf) pj.2) *
+      ∑ ℓ ∈ Finset.range (2 ^ (fold.toList.map gOf).length), Model.eqList (fold.toList.map gOf) ℓ *
+        execArith.embed ((rows[pj.2]!.toList.map fOf).getD ℓ 0)) =
+      (List.range q).map fun j => execArith.embed (Model.eqList (alpha.toList.map fOf) j) *
+        ∑ ℓ ∈ Finset.range (2 ^ (fold.toList.map gOf).length), Model.eqList (fold.toList.map gOf) ℓ *
+          execArith.embed ((rows[j]!.toList.map fOf).getD ℓ 0) := by
+    refine List.ext_getElem (by simp [hpos]) fun i h₁ h₂ => ?_
+    simp only [List.getElem_map, List.getElem_zipIdx, List.getElem_range, Nat.zero_add]
+  rw [hz, FlockLevel3.list_sum_range]
+  refine Finset.sum_congr rfl fun j hj => ?_
+  rw [Finset.mem_range] at hj
+  rw [mul_comm, gOf_foldl_row, gOf_zero, zero_add]
+  refine congrArg₂ (· * ·) ?_ ?_
+  · rw [List.length_map, Array.length_toList, ← hrows j hj]
+    refine Finset.sum_congr rfl fun l hl => ?_
+    rw [Finset.mem_range] at hl
+    rw [eqTableK_eqList fold l (by rw [← hrows j hj]; exact hl), List.getD_eq_getElem _ _ (by simpa using hl),
+      List.getElem_map, Array.getElem_toList, getElem!_pos rows[j]! l hl]
+  · rw [eqTable_eqList alpha j (by omega)]
+
+/-! ## Queries and batching (§13.3 steps 7–11) -/
+
+/-- The model's state after `queryAndBatchC` on the coins `cw`, `cα`, `cβ` and, with a message, `m`. -/
+noncomputable def qbOut (r : ℕ) (lv : Accounting.Level) (ch : List 𝕂) (start : ℕ) (stM : LigStateC 𝔽 𝕂 D)
+    (cw cα cβ : Array F128) (withMessage : Bool) (m : F256 × F256) : LigStateC 𝔽 𝕂 D :=
+  let pos := Model.positions execArith lv.queries lv.logLen (vecOf lv.queries cw)
+  let e : Opens 𝔽 D → 𝕂 := fun o =>
+    Model.consValueO execArith (List.ofFn (vecOf (ceilLog2 lv.queries) cα)) ch (fun j => (o r stM.level j).1) pos
+  { stM with
+    s := fun o => stM.s o + execArith.embed (fOf cβ[0]!) * e o
+    q := if withMessage then fun o => (stM.q o).addScaled (Model.fromMsg (gOf m.1, gOf m.2) (e o))
+        (execArith.embed (fOf cβ[0]!)) else stM.q
+    cons := stM.cons ++ [⟨lv.logCols, pos, List.ofFn (vecOf (ceilLog2 lv.queries) cα), fOf cβ[0]!, start⟩]
+    reqs := stM.reqs ++ [⟨stM.level, pos, ch.length, pathLen lv⟩] }
+
+/-- **Queries and batching**: the model's `queryAndBatchC`, fed the query coins, the consistency coins, the message
+when there is one, and the batching coin, ends in `qbOut`. -/
+theorem queryAndBatchC_plays (r : ℕ) (lv : Accounting.Level) (ch : List 𝕂) (start : ℕ) (stM : LigStateC 𝔽 𝕂 D)
+    (cw cα cβ : Array F128) (hcw : cw.size = lv.queries) (hcα : cα.size = ceilLog2 lv.queries) (hcβ : cβ.size = 1)
+    (withMessage : Bool) (m : F256 × F256) :
+    Plays fOf (queryAndBatchC execArith r lv ch start stM withMessage) (if withMessage then [kMsg m] else [])
+      [cw, cα, cβ] (qbOut r lv ch start stM cw cα cβ withMessage m) := by
+  unfold queryAndBatchC
+  refine Plays.bind' (ms₂ := if withMessage then [kMsg m] else []) (cs₂ := [cα, cβ]) (Plays.drawVec cw hcw) ?_
+    (by simp) (by simp)
+  refine Plays.bind' (ms₂ := if withMessage then [kMsg m] else []) (cs₂ := [cβ]) (Plays.drawVec cα hcα) ?_
+    (by simp) (by simp)
+  cases withMessage with
+  | true =>
+      simp only [ite_true]
+      refine Plays.bind' (ms₂ := []) (cs₂ := [cβ]) (Plays.recv _ (gOf m.1, gOf m.2)) ?_ (by simp [kMsg]) (by simp)
+      refine Plays.bind' (ms₂ := []) (cs₂ := [cβ]) (Plays.pure _) ?_ (by simp) (by simp)
+      refine Plays.bind' (ms₂ := []) (cs₂ := []) (Plays.drawOne cβ hcβ) ?_ (by simp) (by simp)
+      exact Plays.pure _
+  | false =>
+      simp only [Bool.false_eq_true, ite_false]
+      refine Plays.bind' (ms₂ := []) (cs₂ := [cβ]) (Plays.pure _) ?_ (by simp) (by simp)
+      refine Plays.bind' (ms₂ := []) (cs₂ := []) (Plays.drawOne cβ hcβ) ?_ (by simp) (by simp)
       exact Plays.pure _
 
 end FlockSoundness.Refine
