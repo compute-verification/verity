@@ -85,17 +85,20 @@ CHUNKED_THREADS = [128]
 """Threads per block of the chunk-major launches (fewer spread a launch over more SMs)."""
 
 CHUNK = 136
+SLOT = 144
+"""A chunk of 136 bytes (one Keccak rate block) in a 16-byte-aligned slot of 144."""
 
 
 class _Chunked:
     """`rows` states of `2L + 64` bytes stored chunk-major: byte `k` of half `h` of row `r` at `[h, k // 136, r, k % 136]`
-    (int64 `[2, nch, rows, 17]` for the kernel), so a launch reads every row's chunk `c` from one contiguous run."""
+    of int64 `[2, nch, rows, 18]` (144-byte slots, the last 8 bytes padding), so a launch reads every row's chunk `c` from
+    one contiguous run."""
 
     def __init__(self, rows: int, width: int, device) -> None:
         self.rows, self.width, self.half = rows, width, width + 32
         self.nch = -(-self.half // CHUNK)
-        self.words = torch.zeros(2, self.nch, rows, CHUNK // 8, dtype=torch.int64, device=device)
-        self.bytes = self.words.view(torch.uint8).view(2, self.nch, rows, CHUNK)
+        self.words = torch.zeros(2, self.nch, rows, SLOT // 8, dtype=torch.int64, device=device)
+        self.bytes = self.words.view(torch.uint8).view(2, self.nch, rows, SLOT)
 
     def _pieces(self, offset: int, length: int):
         k = 0
@@ -114,14 +117,14 @@ class _Chunked:
         """Bytes `offset .. offset + len` of `half` of rows `rows` := `data` (`[n, len]`)."""
         for k, c, b, take in self._pieces(offset, data.shape[1]):
             if take is None:
-                self.bytes[half, c:c + b, rows] = data[:, k:k + b * CHUNK].reshape(-1, b, CHUNK).transpose(0, 1)
+                self.bytes[half, c:c + b, rows, :CHUNK] = data[:, k:k + b * CHUNK].reshape(-1, b, CHUNK).transpose(0, 1)
             else:
                 self.bytes[half, c, rows, b:b + take] = data[:, k:k + take]
 
     def fill(self, half: int, offset: int, length: int, rows: slice, value: int) -> None:
         for _, c, b, take in self._pieces(offset, length):
             if take is None:
-                self.bytes[half, c:c + b, rows] = value
+                self.bytes[half, c:c + b, rows, :CHUNK] = value
             else:
                 self.bytes[half, c, rows, b:b + take] = value
 
@@ -129,7 +132,7 @@ class _Chunked:
         parts = []
         for _, c, b, take in self._pieces(offset, length):
             if take is None:
-                parts.append(self.bytes[half, c:c + b].transpose(0, 1).reshape(self.rows, b * CHUNK))
+                parts.append(self.bytes[half, c:c + b, :, :CHUNK].transpose(0, 1).reshape(self.rows, b * CHUNK))
             else:
                 parts.append(self.bytes[half, c, :, b:b + take])
         return torch.cat(parts, 1)

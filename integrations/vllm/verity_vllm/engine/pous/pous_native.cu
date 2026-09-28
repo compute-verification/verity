@@ -667,9 +667,28 @@ __global__ void feistel_coalesced_kernel(uint8_t* x, int64_t x_stride, int64_t h
   }
 }
 
-// feistel_fused_kernel over a chunk-major state: word w of chunk c (17 words) of half h of row r lives at
-// ((h * nch + c) * pitch + r) * 17 + w, so the rows of a warp read one contiguous run per chunk and a launch sweeps memory
-// chunk by chunk instead of streaming every row's 131 KB at once.  Rows `row0 .. row0 + rows` of a state of `pitch` rows.
+// feistel_fused_kernel over a chunk-major state: the 17 words of chunk c of half h of row r live in a 16-byte-aligned slot of
+// SLOT_WORDS words at ((h * nch + c) * pitch + r) * SLOT_WORDS, so the rows of a warp read one contiguous run per chunk (in
+// 128-bit loads) and a launch sweeps memory chunk by chunk instead of streaming every row's 131 KB at once.  The slot's last
+// word is padding.  Rows `row0 .. row0 + rows` of a state of `pitch` rows; each chunk's load is issued a chunk ahead.
+constexpr int SLOT_WORDS = 18;
+
+__device__ __forceinline__ void slot_load(const uint64_t* p, uint64_t v[RATE_WORDS]) {
+  const ulonglong2* q = reinterpret_cast<const ulonglong2*>(p);
+#pragma unroll
+  for (int k = 0; k < SLOT_WORDS / 2; ++k) {
+    const ulonglong2 x = q[k];
+    v[2 * k] = x.x;
+    if (2 * k + 1 < RATE_WORDS) v[2 * k + 1] = x.y;
+  }
+}
+
+__device__ __forceinline__ void slot_store(uint64_t* p, const uint64_t v[RATE_WORDS]) {
+  ulonglong2* q = reinterpret_cast<ulonglong2*>(p);
+#pragma unroll
+  for (int k = 0; k < SLOT_WORDS / 2; ++k) q[k] = make_ulonglong2(v[2 * k], 2 * k + 1 < RATE_WORDS ? v[2 * k + 1] : 0);
+}
+
 __global__ void feistel_chunked_kernel(uint64_t* st_words, int64_t pitch, int64_t row0, int64_t rows, int64_t hw, int domain) {
   const int64_t n = (int64_t)blockIdx.x * blockDim.x + threadIdx.x;
   if (n >= rows) return;
@@ -679,15 +698,16 @@ __global__ void feistel_chunked_kernel(uint64_t* st_words, int64_t pitch, int64_
   const int64_t full = len / RATE;
   const int tail = (int)(len - full * RATE);
   const int64_t chunks = nch;
-#define CHUNK_AT(h, c) (st_words + (((int64_t)(h) * nch + (c)) * pitch + r) * RATE_WORDS)
+#define CHUNK_AT(h, c) (st_words + (((int64_t)(h) * nch + (c)) * pitch + r) * SLOT_WORDS)
   uint64_t s[25], t[25], vals[RATE_WORDS], nxt[RATE_WORDS];
 #pragma unroll
   for (int k = 0; k < 25; ++k) s[k] = 0;
   uint64_t carry = ((uint64_t)(uint8_t)domain | (1ull << 8)) << 48;
+  slot_load(CHUNK_AT(1, 0), nxt);
   for (int64_t c = 0; c < chunks; ++c) {
-    const uint64_t* src = CHUNK_AT(1, c);
 #pragma unroll
-    for (int w = 0; w < RATE_WORDS; ++w) vals[w] = (c * RATE_WORDS + w < hw) ? src[w] : 0;
+    for (int w = 0; w < RATE_WORDS; ++w) vals[w] = nxt[w];
+    if (c + 1 < chunks) slot_load(CHUNK_AT(1, c + 1), nxt);
     absorb_chunk(s, vals, c, hw, full, tail, carry);
     keccak_f_thread(s);
   }
@@ -702,25 +722,12 @@ __global__ void feistel_chunked_kernel(uint64_t* st_words, int64_t pitch, int64_
 #pragma unroll
     for (int k = 0; k < 25; ++k) t[k] = 0;
     carry = ((uint64_t)(uint8_t)domain | ((uint64_t)(i + 1) << 8)) << 48;
-    {
-      const uint64_t* p0 = CHUNK_AT(h, 0);
-#pragma unroll
-      for (int w = 0; w < RATE_WORDS; ++w) nxt[w] = (w < hw) ? p0[w] : 0;
-    }
+    slot_load(CHUNK_AT(h, 0), nxt);
     for (int64_t c = 0; c < chunks; ++c) {
-      uint64_t* dst = CHUNK_AT(h, c);
 #pragma unroll
-      for (int w = 0; w < RATE_WORDS; ++w) vals[w] = nxt[w];
-      if (c + 1 < chunks) {
-        const uint64_t* pn = CHUNK_AT(h, c + 1);
-#pragma unroll
-        for (int w = 0; w < RATE_WORDS; ++w) nxt[w] = ((c + 1) * RATE_WORDS + w < hw) ? pn[w] : 0;
-      }
-#pragma unroll
-      for (int w = 0; w < RATE_WORDS; ++w) {
-        vals[w] ^= s[w];
-        if (c * RATE_WORDS + w < hw) dst[w] = vals[w];
-      }
+      for (int w = 0; w < RATE_WORDS; ++w) vals[w] = nxt[w] ^ s[w];
+      if (c + 1 < chunks) slot_load(CHUNK_AT(h, c + 1), nxt);
+      slot_store(CHUNK_AT(h, c), vals);
       if (next) absorb_chunk(t, vals, c, hw, full, tail, carry);
       if (c + 1 < chunks && next) keccak_f_pair(s, t);
       else if (c + 1 < chunks) keccak_f_thread(s);
@@ -739,11 +746,12 @@ __global__ void feistel_chunked_kernel(uint64_t* st_words, int64_t pitch, int64_
 }
 
 // Π₂ (untweaked Feistel-10, domain `domain`) on rows `row0 .. row0 + rows` of a chunk-major state (`feistel_chunked_kernel`):
-// `state` is int64 `[2, nch, pitch, 17]` for halves of `hw` words.
+// `state` is int64 `[2, nch, pitch, SLOT_WORDS]` for halves of `hw` words.
 void feistel_chunked(torch::Tensor state, int64_t row0, int64_t rows, int64_t hw, int64_t domain, int64_t threads) {
   TORCH_CHECK(state.is_cuda() && state.scalar_type() == torch::kInt64 && state.is_contiguous() && state.dim() == 4 &&
-              state.size(0) == 2 && state.size(3) == RATE_WORDS && state.size(1) == (hw + RATE_WORDS - 1) / RATE_WORDS,
-              "state must be contiguous int64 [2, nch, pitch, 17]");
+              state.size(0) == 2 && state.size(3) == SLOT_WORDS && state.size(1) == (hw + RATE_WORDS - 1) / RATE_WORDS &&
+              reinterpret_cast<uintptr_t>(state.data_ptr<int64_t>()) % 16 == 0,
+              "state must be contiguous, 16-byte-aligned int64 [2, nch, pitch, SLOT_WORDS]");
   TORCH_CHECK(row0 >= 0 && rows >= 0 && row0 + rows <= state.size(2), "rows out of range");
   if (rows == 0) return;
   c10::cuda::CUDAGuard guard(state.device());
@@ -762,12 +770,12 @@ __global__ void chunked_gather_kernel(uint64_t* st_words, int64_t nch, int64_t p
   const int64_t n = t / words, j = t % words;
   if (n >= n_rows) return;
   const int64_t c = j / RATE_WORDS, w = j % RATE_WORDS;
-  st_words[(c * pitch + row0 + n) * RATE_WORDS + w] = src[index[n] * src_words + j];
+  st_words[(c * pitch + row0 + n) * SLOT_WORDS + w] = src[index[n] * src_words + j];
 }
 
 void chunked_gather(torch::Tensor state, int64_t row0, torch::Tensor src, torch::Tensor index, int64_t words) {
   TORCH_CHECK(state.is_cuda() && state.scalar_type() == torch::kInt64 && state.is_contiguous() && state.dim() == 4 &&
-              state.size(3) == RATE_WORDS, "state must be contiguous int64 [2, nch, pitch, 17]");
+              state.size(3) == SLOT_WORDS, "state must be contiguous int64 [2, nch, pitch, SLOT_WORDS]");
   TORCH_CHECK(src.is_cuda() && src.scalar_type() == torch::kUInt8 && src.is_contiguous() && src.dim() == 2 &&
               src.size(1) % 8 == 0 && words * 8 <= src.size(1), "src must be contiguous uint8 [rows, 8k]");
   TORCH_CHECK(index.is_cuda() && index.scalar_type() == torch::kInt64 && index.is_contiguous(), "index must be int64");
