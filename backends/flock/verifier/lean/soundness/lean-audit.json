@@ -343,6 +343,43 @@
    "assumptions": [],
    "type_hash": "00000000c08c219f"
   },
+  "FlockSoundness.Refine.rep_refines": {
+   "signature": [
+    "FlockSoundness.Refine.rep_refines {D : Type} (st : Flock.Setup) (S : FlockSoundness.Model.Statement) (hm : 13 ≤ S.m)",
+    "  (h14 : 14 ≤ S.m) (sch : Flock.Schedule) (hmS : st.m = S.m) (hkS : st.kLog = S.kLog)",
+    "  (hfold : FlockSoundness.Refine.FoldRealizes st.fold S)",
+    "  (extra : List (FlockSoundness.Model.Claim FlockLevel3.GF128 S.m)) (sess : Flock.Session)",
+    "  (hext : FlockSoundness.Refine.ExtraRealizes st S sess.points extra) (hdim : FlockSoundness.Refine.DimSeam sch)",
+    "  (hlv : ∀ i < sch.levels.size, FlockSoundness.Refine.LevelSeam (sch.levels.getD i default)) (hschm : sch.m = S.m)",
+    "  (hwf : ∀ s ∈ sess.streams.toList, FlockSoundness.Refine.RoundsWF s.rounds) (r : ℕ) (bytes cap : ByteArray)",
+    "  (h : Flock.verifyRep st sch sess r bytes = Except.ok cap) :",
+    "  ∃ stream p,",
+    "    Array.find? (fun x => x.name == toString st.spec.table ++ₕ toString \"/rep\" ++ₕ toString r) sess.streams =",
+    "        some stream ∧",
+    "      Flock.decodeProof (FlockSoundness.Refine.shapeOf st sch extra.length) bytes = Except.ok p ∧",
+    "        cap = Array.foldl (fun x1 x2 => x1 ++ₕ x2) ByteArray.empty p.cap ∧",
+    "          (cap == sess.rootB) = true ∧",
+    "            ∀ (capD : Array ByteArray → FlockSoundness.Model.Cap D)",
+    "              (o : FlockSoundness.Model.Opens FlockLevel3.GF128 D),",
+    "              (∀ ℓ < sch.levels.size,",
+    "                  ∀ j < (sch.levels.getD ℓ default).q,",
+    "                    (o r ℓ j).1 =",
+    "                      List.map FlockSoundness.Refine.fOf",
+    "                        (FlockSoundness.Refine.openAt p.ligerito (sch.levels.size - 1) ℓ).1[j]!.toList) →",
+    "                ∃ pend,",
+    "                  FlockSoundness.Game.Plays FlockSoundness.Refine.fOf",
+    "                      (FlockSoundness.Model.repC FlockSoundness.execArith r S (FlockSoundness.Refine.schedOf sch) hm",
+    "                        extra)",
+    "                      (FlockSoundness.Refine.repMsgs st sch (2 + extra.length) p capD)",
+    "                      (List.map (fun x => x.coins) stream.rounds.toList) pend ∧",
+    "                    pend.caps =",
+    "                        List.map (fun j => capD p.ligerito.recursiveCaps[j]!) (List.range (sch.levels.size - 1)) ∧",
+    "                      (∀ req ∈ pend.reqs, FlockSoundness.Refine.ReqOK st.merkle sch p.cap p.ligerito req) ∧",
+    "                        pend.verdict o = true"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000c7ecbfc1"
+  },
   "FlockSoundness.Refine.zerocheck_refines": {
    "signature": [
     "FlockSoundness.Refine.zerocheck_refines (m : ℕ) (hm : 14 ≤ m) (digest cap : ByteArray) (p : Flock.ZerocheckProof)",
@@ -507,6 +544,7 @@
     "FlockSoundness.Refine.ligerito_refines",
     "FlockSoundness.Refine.lincheck_refines",
     "FlockSoundness.Refine.opening_refines",
+    "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.Refine.zerocheck_refines",
     "FlockSoundness.execArith_correct",
     "FlockSoundness.table_sound_exec",
@@ -528,6 +566,7 @@
     "FlockSoundness.Refine.ligerito_refines",
     "FlockSoundness.Refine.lincheck_refines",
     "FlockSoundness.Refine.opening_refines",
+    "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.Refine.zerocheck_refines",
     "FlockSoundness.execArith_correct",
     "FlockSoundness.table_sound_exec",
@@ -551,6 +590,7 @@
     "FlockSoundness.Refine.ligerito_refines",
     "FlockSoundness.Refine.lincheck_refines",
     "FlockSoundness.Refine.opening_refines",
+    "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.Refine.zerocheck_refines",
     "FlockSoundness.execArith_correct",
     "FlockSoundness.table_sound_exec",
@@ -573,6 +613,7 @@
     "FlockSoundness.Refine.ligerito_refines",
     "FlockSoundness.Refine.lincheck_refines",
     "FlockSoundness.Refine.opening_refines",
+    "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.Refine.zerocheck_refines",
     "FlockSoundness.execArith_correct",
     "FlockSoundness.table_sound_exec",
@@ -594,6 +635,7 @@
     "FlockSoundness.Refine.ligerito_refines",
     "FlockSoundness.Refine.lincheck_refines",
     "FlockSoundness.Refine.opening_refines",
+    "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.Refine.zerocheck_refines",
     "FlockSoundness.execArith_correct",
     "FlockSoundness.table_sound_exec",
@@ -621,6 +663,7 @@
     "FlockSoundness.Refine.ligerito_refines",
     "FlockSoundness.Refine.lincheck_refines",
     "FlockSoundness.Refine.opening_refines",
+    "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.Refine.zerocheck_refines",
     "FlockSoundness.execArith_correct",
     "FlockSoundness.table_sound_exec",
@@ -643,6 +686,7 @@
     "FlockSoundness.Refine.ligerito_refines",
     "FlockSoundness.Refine.lincheck_refines",
     "FlockSoundness.Refine.opening_refines",
+    "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.Refine.zerocheck_refines",
     "FlockSoundness.execArith_correct",
     "FlockSoundness.table_sound_exec",
@@ -665,6 +709,7 @@
     "FlockSoundness.Refine.ligerito_refines",
     "FlockSoundness.Refine.lincheck_refines",
     "FlockSoundness.Refine.opening_refines",
+    "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.Refine.zerocheck_refines",
     "FlockSoundness.execArith_correct",
     "FlockSoundness.table_sound_exec",
@@ -687,6 +732,7 @@
     "FlockSoundness.Refine.ligerito_refines",
     "FlockSoundness.Refine.lincheck_refines",
     "FlockSoundness.Refine.opening_refines",
+    "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.Refine.zerocheck_refines",
     "FlockSoundness.execArith_correct",
     "FlockSoundness.table_sound_exec",
@@ -727,6 +773,7 @@
     "FlockSoundness.Refine.ligerito_accepts",
     "FlockSoundness.Refine.ligerito_accepts_opening",
     "FlockSoundness.Refine.ligerito_refines",
+    "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_compiled",
     "FlockSoundness.table_sound_exec",
@@ -777,6 +824,7 @@
     "FlockSoundness.Refine.ligerito_accepts",
     "FlockSoundness.Refine.ligerito_accepts_opening",
     "FlockSoundness.Refine.ligerito_refines",
+    "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_compiled",
     "FlockSoundness.table_sound_exec",
@@ -882,6 +930,7 @@
     "FlockSoundness.Refine.ligerito_refines",
     "FlockSoundness.Refine.lincheck_refines",
     "FlockSoundness.Refine.opening_refines",
+    "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.Refine.zerocheck_refines",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_compiled",
@@ -956,6 +1005,7 @@
     "FlockSoundness.Refine.ligerito_refines",
     "FlockSoundness.Refine.lincheck_refines",
     "FlockSoundness.Refine.opening_refines",
+    "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.Refine.zerocheck_refines",
     "FlockSoundness.execArith_correct",
     "FlockSoundness.table_sound_exec",
@@ -1028,6 +1078,7 @@
     "FlockSoundness.Refine.ligerito_refines",
     "FlockSoundness.Refine.lincheck_refines",
     "FlockSoundness.Refine.opening_refines",
+    "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.Refine.zerocheck_refines",
     "FlockSoundness.execArith_correct",
     "FlockSoundness.table_sound",
@@ -1088,6 +1139,7 @@
     "FlockSoundness.Refine.ligerito_accepts",
     "FlockSoundness.Refine.ligerito_accepts_opening",
     "FlockSoundness.Refine.ligerito_refines",
+    "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.table_sound_compiled"
    ]
   },
@@ -1142,6 +1194,7 @@
     "FlockSoundness.Refine.ligerito_accepts",
     "FlockSoundness.Refine.ligerito_accepts_opening",
     "FlockSoundness.Refine.ligerito_refines",
+    "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_compiled",
     "FlockSoundness.table_sound_exec",
@@ -1184,6 +1237,7 @@
     "FlockSoundness.Refine.ligerito_accepts_opening",
     "FlockSoundness.Refine.lincheck_refines",
     "FlockSoundness.Refine.opening_refines",
+    "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.Refine.zerocheck_refines",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_compiled",
@@ -1248,6 +1302,7 @@
    "pins": [
     "FlockSoundness.Refine.lincheck_refines",
     "FlockSoundness.Refine.opening_refines",
+    "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_compiled",
     "FlockSoundness.table_sound_exec",
@@ -1267,7 +1322,8 @@
     "FlockSoundness.Refine.final_refines",
     "FlockSoundness.Refine.ligerito_accepts",
     "FlockSoundness.Refine.ligerito_accepts_opening",
-    "FlockSoundness.Refine.ligerito_refines"
+    "FlockSoundness.Refine.ligerito_refines",
+    "FlockSoundness.Refine.rep_refines"
    ]
   },
   "FlockSoundness.Refine.Final": {
@@ -1290,7 +1346,8 @@
     "FlockSoundness.Refine.final_refines",
     "FlockSoundness.Refine.ligerito_accepts",
     "FlockSoundness.Refine.ligerito_accepts_opening",
-    "FlockSoundness.Refine.ligerito_refines"
+    "FlockSoundness.Refine.ligerito_refines",
+    "FlockSoundness.Refine.rep_refines"
    ]
   },
   "FlockSoundness.Refine.LigeritoRun": {
@@ -1309,7 +1366,8 @@
     "FlockSoundness.Refine.final_refines",
     "FlockSoundness.Refine.ligerito_accepts",
     "FlockSoundness.Refine.ligerito_accepts_opening",
-    "FlockSoundness.Refine.ligerito_refines"
+    "FlockSoundness.Refine.ligerito_refines",
+    "FlockSoundness.Refine.rep_refines"
    ]
   },
   "FlockSoundness.Refine.Realizes": {
@@ -1317,7 +1375,16 @@
    "definitions": {
     "FlockSoundness.Refine.FoldRealizes": "0b5160f9a91b928d"
    },
-   "pins": ["FlockSoundness.Refine.lincheck_refines"]
+   "pins": ["FlockSoundness.Refine.lincheck_refines", "FlockSoundness.Refine.rep_refines"]
+  },
+  "FlockSoundness.Refine.Rep": {
+   "digest": "2c6ccf1102c5f506e8dd201e1edab997",
+   "definitions": {
+    "FlockSoundness.Refine.ExtraRealizes": "72a01b053b53777f",
+    "FlockSoundness.Refine.repMsgs": "6b4d0ea6324ee0bf",
+    "FlockSoundness.Refine.shapeOf": "bdaf356e88d0d902"
+   },
+   "pins": ["FlockSoundness.Refine.rep_refines"]
   },
   "FlockSoundness.Refine.Run": {
    "digest": "e553fa3b42e4296cefef94fc4365422d",
@@ -1337,6 +1404,7 @@
     "FlockSoundness.Refine.ligerito_refines",
     "FlockSoundness.Refine.lincheck_refines",
     "FlockSoundness.Refine.opening_refines",
+    "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.Refine.zerocheck_refines"
    ]
   },
@@ -1354,7 +1422,8 @@
     "FlockSoundness.Refine.fast100_schedOf",
     "FlockSoundness.Refine.ligerito_accepts",
     "FlockSoundness.Refine.ligerito_accepts_opening",
-    "FlockSoundness.Refine.ligerito_refines"
+    "FlockSoundness.Refine.ligerito_refines",
+    "FlockSoundness.Refine.rep_refines"
    ]
   },
   "FlockSoundness.Refine.Tapes": {
@@ -1378,6 +1447,7 @@
     "FlockSoundness.Refine.ligerito_refines",
     "FlockSoundness.Refine.lincheck_refines",
     "FlockSoundness.Refine.opening_refines",
+    "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.Refine.zerocheck_refines"
    ]
   },
