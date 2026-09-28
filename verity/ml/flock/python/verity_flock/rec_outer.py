@@ -34,6 +34,11 @@ consistency terms, and V*'s algebra (`verity_flock.rec_residuals`) reads a rep's
 the verifier's (`coefficients`: the final check's κ at the rep's coins times the level's eq(α)[j],
 `verity_flock.rec_algebra.verifier_rows`).
 
+**The claims** (`note:proofs/20261010T1820Z-draft-c3-claim-layout`). Beside ``rec-acc``, under the same program string and its
+own salts, the prover registers each rep's `rec_sparse.RecSparse` claim as the value ``rec-claim`` (`CLAIM_VALUE`), row r rep
+r's (one element, 64 words): RecSparse's instance r reads row r, and the registered opening (`rec_residuals.stage_opening`)
+reads row 0 as ``claim0`` and row 1 as ``claim1``, so the two statements open one root's cells.
+
 With ``link_rows``, the opened rows are not fresh: the prover registers them first, as the value ``rec-rows-L<level>`` under
 its own salts (what it would send before the outer coins), and the statement's ``row`` port reads row ``i`` of that value in
 instance ``i``. The verifier then checks every opened row against that root, which is how another statement can read the
@@ -67,6 +72,7 @@ from .class_statement import ClassDefinition
 
 SESSION_TAG = b"verity/rec-v0/v-star/v0\0"
 ACC_VALUE = "rec-acc"
+CLAIM_VALUE = "rec-claim"
 COEF_VALUE = "rec-coef"
 DIRS_VALUE = "rec-dirs"
 

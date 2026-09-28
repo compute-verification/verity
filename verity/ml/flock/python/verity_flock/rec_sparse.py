@@ -77,7 +77,7 @@ from verity.ml.circuits.ops.boolean.gf2k import mul
 from verity.ml.circuits.boolean.forms import ZERO
 from verity.ml.commitments.gates.sha512 import commit
 
-__all__ = ["Coins", "PRE_ROUNDS", "RecSparse", "RegisteredClaim", "Shape", "ands", "copy_rows", "definition", "inner_points",
+__all__ = ["Coins", "PAD_TO", "PRE_ROUNDS", "RecSparse", "RegisteredClaim", "Shape", "ands", "copy_rows", "definition", "inner_points",
            "lowering", "message_ports", "out_words", "port_words", "ports", "products", "products_structure", "reads",
            "registered_claim", "registrations", "rows", "session_rows", "sparse_ref", "stage", "statement", "subcircuit",
            "unit_circuit", "unit_name", "v_layout", "verifier_row"]
@@ -89,6 +89,8 @@ ROW_BLOCK = 64
 #: H2's rounds: the univariate skip's 6 low row bits
 PRE_ROUNDS = 6
 SKIP = 1 << PRE_ROUNDS
+#: fast100's least m (`rec_algebra.fast100`): `registered_claim` pads a shorter point to it (under --zk, 25: ``pad_to``)
+PAD_TO = 22
 
 
 @dataclass(frozen=True)
@@ -328,20 +330,28 @@ class RegisteredClaim:
     """The claim rep r's instance hands the registered opening: its value is row ``row`` (= r) of the prover's ``claim``
     registration, which the opening reads as a witness element, never as a public value (it depends on the templates), so
     it has no ``value`` and `rec_algebra.run` refuses it as an extra claim; its point is the coins': skip weights
-    ``eq(point[:6], ·)`` and ``x = point[6:]``, ``point = (r_k, ζ_p, ρ_t)``, the stacked table's variables in order."""
+    ``eq(point[:6], ·)`` and ``x = point[6:]``, ``point = (r_k, ζ_p, ρ_t)``, the stacked table's variables in order, then
+    ``pad`` coordinates the shape fixes at zero (`registered_claim`)."""
 
     row: int
     skip: tuple[int, ...]
     x: tuple[int, ...]
     port: str = "claim"
+    pad: int = 0
     value = None
 
 
-def registered_claim(sh: Shape, c: Coins, row: int) -> RegisteredClaim:
+def registered_claim(sh: Shape, c: Coins, row: int, pad_to: int = PAD_TO) -> RegisteredClaim:
+    """Rep ``row``'s claim at the coins' point. A point of fewer than ``pad_to`` coordinates (the stacked table of fewer than
+    fast100's least m variables) is padded with zeros in new high variables, the table with zero rows: ``eq(x || 0, b || c)``
+    vanishes off ``c = 0``, so the claim is the table's at the unpadded point. How many is the shape's, never the prover's,
+    and the opening refuses a padded coordinate that is not zero (`rec_algebra._registered`)."""
     point = list(c.rounds[:sh.NU]) + list(c.zeta_p) + list(c.rho)
     if len(point) < PRE_ROUNDS:
         raise ValueError(f"{sh}: a claim point of {len(point)} coordinates, fewer than the skip's {PRE_ROUNDS}")
-    return RegisteredClaim(row, tuple(eq_table(point[:PRE_ROUNDS])), tuple(point[PRE_ROUNDS:]))
+    pad = max(0, pad_to - len(point))
+    point += [0] * pad
+    return RegisteredClaim(row, tuple(eq_table(point[:PRE_ROUNDS])), tuple(point[PRE_ROUNDS:]), pad=pad)
 
 
 def verifier_row(sh: Shape, c: Coins) -> list[int]:
@@ -742,8 +752,10 @@ def statement(sh: Shape, n: int):
 
 def registrations(sh: Shape, program: str, inst: Sequence[Mapping[str, list[int]]], salts: Mapping | None = None) -> dict:
     """The prover's registered values of the row ports, from `session_rows`' instances: each port as ``rec-sparse-<port>``, row r
-    rep r's, but ``tau``, the session's one row. ``salts``: per port, its rows' salts (default fresh)."""
+    rep r's, but ``tau``, the session's one row, and ``claim``, ``rec-claim`` (`rec_outer.CLAIM_VALUE`, which the registered
+    opening reads too). ``salts``: per port, its rows' salts (default fresh)."""
     from verity.core.protocols.sampled_proofs.one_stage import registered as RG
+    from .rec_outer import CLAIM_VALUE
 
     sh = _shape(sh)
     out = {}
@@ -751,7 +763,7 @@ def registrations(sh: Shape, program: str, inst: Sequence[Mapping[str, list[int]
         if nm == "v":
             continue
         rows = [list(inst[0][nm])] if nm == "tau" else [list(r[nm]) for r in inst]
-        out[nm] = RG.Registered.commit(program, f"rec-sparse-{nm}", rows, (salts or {}).get(nm))
+        out[nm] = RG.Registered.commit(program, CLAIM_VALUE if nm == "claim" else f"rec-sparse-{nm}", rows, (salts or {}).get(nm))
     return out
 
 
