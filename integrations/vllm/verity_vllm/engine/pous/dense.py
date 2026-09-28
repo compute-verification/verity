@@ -41,12 +41,14 @@ def keys(c_block_major: torch.Tensor, tags: torch.Tensor) -> torch.Tensor:
     b, g, width = c_block_major.shape
     state = _initial(tags, b, width)
     parents = c_block_major.reshape(-1, width)
+    pending, stream = [], torch.cuda.current_stream()
     for j in range(1, b + 1):
         suffix = state[(j - 1) * g:]
         _pad(suffix[:g], width)
         if j < b:
             suffix[g:, :width] = parents[:(b - j) * g]
         codec.permute(suffix)
+        _throttle(pending, stream)
     return state[:, :width]
 
 
@@ -57,6 +59,21 @@ def decode(c: torch.Tensor, tags: torch.Tensor) -> torch.Tensor:
     w = keys(c_bm, tags).view(b, g, width)
     w ^= c_bm
     return w.transpose(0, 1).contiguous()
+
+
+IN_FLIGHT = 2
+"""Chain steps a decode keeps queued on the device.  A deeper queue fills the launch queue, and a launch blocked on it holds
+the context against the in-process responder's copies (up to a kernel's duration late)."""
+
+
+def _throttle(pending: list, stream) -> None:
+    import torch
+
+    ev = torch.cuda.Event()
+    ev.record(stream)
+    pending.append(ev)
+    if len(pending) > IN_FLIGHT:
+        pending.pop(0).synchronize()
 
 
 def decode_blocks(c_flat: torch.Tensor, tags: torch.Tensor, segs: torch.Tensor, blocks: torch.Tensor,
@@ -74,6 +91,7 @@ def decode_blocks(c_flat: torch.Tensor, tags: torch.Tensor, segs: torch.Tensor, 
     state[:, 2 * width + 33] = (blk >> 8).to(torch.uint8)
     starts = torch.searchsorted(blk, torch.arange(int(blk[-1]) + 2, device=blk.device)).tolist()
     base = seg * per_segment
+    pending, stream = [], torch.cuda.current_stream()
     for j in range(1, int(blk[-1]) + 2):
         first = starts[j - 1]
         pad_end = starts[j] if j < len(starts) else r
@@ -82,6 +100,7 @@ def decode_blocks(c_flat: torch.Tensor, tags: torch.Tensor, segs: torch.Tensor, 
         if pad_end < r:
             suffix[pad_end - first:, :width] = c_flat[base[pad_end:] + blk[pad_end:] - j]
         codec.permute(suffix)
+        _throttle(pending, stream)
     w = state[:, :width] ^ c_flat[base + blk]
     out = torch.empty_like(w)
     out[order] = w

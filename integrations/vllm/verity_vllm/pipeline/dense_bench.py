@@ -50,6 +50,9 @@ class Options:
                              help="with --fused, launches not on a lane pair stage every chunk through shared memory")
     gate_segments: int = option("--gate-segments", type=int, default=2, help="segments whose sampled blocks the reference decodes")
     workers: int = option("--workers", type=int, default=12, help="processes for the reference side of G2")
+    audit: int = option("--audit", type=int, default=0,
+                        help="timed audits (pous-dense-audit, a separate process) of the first model's C while its passes run")
+    audit_k: int = option("--audit-k", type=int, default=111, help="challenges per audit")
     segment_sets_from: str | None = option("--segment-sets-from", default=None,
                                            help="a pous-bench record whose decode log's group sizes to time as full-segment decodes")
     result: str | None = option("--result", default=None, help="also write the research result.json here")
@@ -188,7 +191,43 @@ def fill(c, label: str) -> None:
         native.ext().shake256_rows(prefix, prefix.new_empty((rows.shape[0], 0)), rows, True)
 
 
-def run_model(name: str, m: dict[str, Any], reps: int, salt: bytes) -> dict[str, Any]:
+def live_audit(c, segments: int, salt: bytes, decode_pass, out: Path, audits: int, k: int) -> dict[str, Any]:
+    """Timed audits by a separate verifier process against the native responder serving `c`, model passes running
+    all the while (responder on core 2, verifier on core 3, this process off both)."""
+    import os
+    import subprocess
+    import sys
+
+    import torch
+    from verity_pous import dense as ref
+    from verity_pous.verifier import leaf_hash
+
+    from verity_vllm.engine.pous import native
+
+    params = ref.DenseParams(ref.SECURE_FIRST.blocks_per_segment, ref.SECURE_FIRST.m, segments)
+    host = c.cpu().numpy()
+    (out / "leaves-audit.bin").write_bytes(b"".join(leaf_hash(params, salt, i, host[i].tobytes()) for i in range(len(host))))
+    os.sched_setaffinity(0, set(os.sched_getaffinity(0)) - {2, 3})
+    responder = native.ext().Responder(c.data_ptr(), c.shape[0], c.shape[1], torch.cuda.current_device(), "127.0.0.1", 0, 2)
+    responder.start()
+    (out / "audit-ready.json").write_text(json.dumps({"port": responder.port(), "salt": salt.hex(), "params": {
+        "blocks_per_segment": params.blocks_per_segment, "m": params.m, "segments": segments}}))
+    proc = subprocess.Popen([sys.executable, "-m", "verity_vllm.pipeline.cli", "pous-dense-audit", "--ready", str(out / "audit-ready.json"),
+                             "--leaves", str(out / "leaves-audit.bin"), "--out", str(out / "audit.json"), "--k", str(k),
+                             "--audits", str(audits), "--verifier-cpu", "3"], stdout=(out / "audit.log").open("w"),
+                            stderr=subprocess.STDOUT)
+    passes = 0
+    while proc.poll() is None:
+        decode_pass()
+        torch.cuda.synchronize()
+        passes += 1
+    responder.stop()
+    doc = json.loads((out / "audit.json").read_text()) if (out / "audit.json").exists() else {}
+    return {"rc": proc.returncode, "passes_during_audit": passes, "answered": int(responder.answered()),
+            "accepted": proc.returncode == 0, **doc}
+
+
+def run_model(name: str, m: dict[str, Any], reps: int, salt: bytes, audit: tuple[Path, int, int] | None = None) -> dict[str, Any]:
     """One model pass per repetition: decode every tile's blocks from `C` (`dense.decode_blocks`, all at once), then each
     shape's GEMM at each T on its freshly decoded weight; and the same GEMMs from plaintext weights.  Also the latency of one
     small tile and of one full-segment tile decoded alone."""
@@ -223,6 +262,8 @@ def run_model(name: str, m: dict[str, Any], reps: int, salt: bytes) -> dict[str,
     torch.cuda.synchronize()
     decode_reps = _timed(decode_pass, reps, warmup=False)
     weights = views(held.pop())
+    audited = live_audit(c, segments, salt, decode_pass, *audit) if audit else None
+    held.clear()
     xs = {t: [torch.randn(t, k, dtype=torch.bfloat16, device="cuda") for _, _, k, _, _ in shapes] for t in BATCHES}
     gemm = {t: statistics.median(_timed(lambda: [torch.nn.functional.linear(x, w) for x, w in zip(xs[t], weights)], reps))
             for t in BATCHES}
@@ -239,7 +280,7 @@ def run_model(name: str, m: dict[str, Any], reps: int, salt: bytes) -> dict[str,
                "first_tile_s": _timed(lambda: dense.decode_blocks(c, tags, small // b, small % b, b), 1, warmup=False)[0],
                "segment_s": _timed(lambda: dense.decode_blocks(c, tags, seg0 // b, seg0 % b, b), 1, warmup=False)[0]}
     print(json.dumps({"model": name, "decode_reps_s": [round(x, 2) for x in decode_reps], **latency}), flush=True)
-    return {"model": name, "segments": segments, "blocks": nblocks, "calls": calls, "weight_bytes": total,
+    return {"model": name, "segments": segments, "blocks": nblocks, "calls": calls, "weight_bytes": total, "audit": audited,
             "decode_reps_s": decode_reps, "gemm_s": gemm, "plain_gemm_s": base, "latency": latency,
             **summarize(m, total, statistics.median(decode_reps), calls, gemm, base)}
 
@@ -312,8 +353,11 @@ def main(a: Options) -> int:
     salt = bytes(range(24))
     table = models(a.shapes)
     doc["models"] = {}
-    for name in (a.models.split(",") if a.models else list(table)):
-        doc["models"][name] = run_model(name, table[name], a.reps, salt)
+    for i, name in enumerate(a.models.split(",") if a.models else list(table)):
+        audit = (out, a.audit, a.audit_k) if a.audit and i == 0 else None
+        doc["models"][name] = run_model(name, table[name], a.reps, salt, audit)
+        if audit:
+            doc["gates"]["timed_audit"] = {"passed": doc["models"][name]["audit"]["accepted"]}
     import torch
 
     from verity_pous import dense as ref
