@@ -131,6 +131,8 @@ of the merged tree. A change under `backends/flock/` also needs `check`'s agreem
 (`lean-agreement`, on the build pinned in `backends/flock/verifier/upstream.json`; not for a `README.md` or `PROTOCOL.md`
 alone, and skipped by name elsewhere): record it with
 `uv run python tools/check/check.py --record --on POD`, which sends that build when the commit touches `backends/flock/`.
+`check` reuses a pass (a test suite, a circuit-check target, a Lean package's audit) only while every input it read is
+unchanged, and keeps each pod's Lean dependencies warm under their manifest and toolchain.
 
 ## Lean
 
