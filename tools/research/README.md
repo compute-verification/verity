@@ -164,6 +164,14 @@ exit 2.
 `research pods registry` lists the merged table, and `registry import
 --apply` seeds `machines.d` from machines.toml.
 
+A machine that isn't a RunPod pod is `provider = "ssh"`: `host`, and optionally `port` (22), `user` (root) and
+`rate_usd_per_hour` (the attempts' cost rate), reached with the same research key. `research pods register NAME --host ADDR
+--user U --rate R --project P` writes it, refusing a host where `hostname` doesn't answer over ssh; `research pods ssh NAME`
+reaches it. The one such machine is the Nebius server `vy-nebius-1` (`pods/nebius/`): `launch.sh` brings it up (`--dry-run`
+needs no credentials), `teardown.sh` stops or deletes it, `check.py` is its bootstrap check, `prefetch.py` fills its weight
+cache from `weights.tsv`, and its lease is `sh/lease.sh` with `LEASE_MACHINE_ID` and a stop command in place of RunPod's key.
+Its runs share its GPUs through `gpu-lease N -- CMD` (`sh/gpu_lease.sh`: one flock per GPU, `CUDA_VISIBLE_DEVICES` set).
+
 An unlisted or foreign machine is refused before anything is contacted. The
 tool ships as a content-addressed source snapshot under `<root>/tool/` and
 runs via `PYTHONPATH`; no pip, no credentials on the machine. The machine

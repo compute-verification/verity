@@ -75,16 +75,20 @@ def _list_pods() -> list[dict]:
 
 
 def ssh_base(target: str) -> list[str]:
-    """`ssh ... root@host` for TARGET, ready for a remote command to be appended."""
+    """`ssh ... user@host` for TARGET, ready for a remote command to be appended."""
+    m = remote.load_machines().get(target)
+    if m is not None and m.get("provider") == "ssh":
+        tgt = remote.ssh_host_target({**m, "name": target})
+        return ssh_for(tgt["host"], tgt["port"], user=tgt["user"])
     pod_id, label = resolve_pod(target)
     tgt = remote.pod_target({"provider": "runpod", "pod_id": pod_id, "name": label})
     return ssh_for(tgt["host"], tgt["port"])
 
 
-def ssh_for(host: str, port: int) -> list[str]:
+def ssh_for(host: str, port: int, *, user: str = "root") -> list[str]:
     from . import runpod
 
-    base = runpod.ssh_command(host, port)
+    base = runpod.ssh_command(host, port, user=user)
     return [*base[:-1], "-o", "LogLevel=ERROR", base[-1]]
 
 

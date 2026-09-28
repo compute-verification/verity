@@ -277,7 +277,7 @@ def ssh_target(pod: dict[str, Any]) -> tuple[str, int] | None:
     return None
 
 
-def ssh_command(host: str, port: int) -> list[str]:
+def ssh_command(host: str, port: int, *, user: str = "root") -> list[str]:
     return [
         "ssh",
         "-i",
@@ -290,7 +290,7 @@ def ssh_command(host: str, port: int) -> list[str]:
         f"UserKnownHostsFile={known_hosts()}",
         "-o",
         "ServerAliveInterval=30",
-        f"root@{host}",
+        f"{user}@{host}",
     ]
 
 
