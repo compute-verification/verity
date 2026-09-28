@@ -76,12 +76,9 @@ theorem rateZ_planZAt_le {L : ℕ} (hL : ZkLogLenCap L) (S : Finset (Fin n)) (R 
   exact div_le_div_of_nonneg_right (pow_le_pow_right₀ (by norm_num) (logLen_tableAtZK_le dj y₀ hL S))
     (by positivity)
 
-/-- **The count curve bounds every planned rate**: under a cap `L`, `2^L ≤ ρ·(e·k)` gives `rateZ … ≤ ρ` at every draw
-`S`, registration `R` and table `i` (the recursive audit's `_hr`, at each session's `dj` and `y₀`). -/
-theorem hr_planZAt {L k : ℕ} {ρ : ℝ} (hL : ZkLogLenCap L) (hkρ : (2 : ℝ) ^ L ≤ ρ * (Real.exp 1 * k))
-    (S : Finset (Fin n)) (R : Reg) (i : Fin (planZAt (Reg := Reg) dj y₀ S R).length) :
-    rateZ (planZAt (Reg := Reg) dj y₀ S R) i k ≤ ρ := by
-  refine (rateZ_planZAt_le dj y₀ hL S R i k).trans ?_
+/-- `2^L ≤ ρ·(e·k)` gives `2^L/(e·k) ≤ ρ`: the step from a cap's rate bound to the count curve's `ρ`. -/
+theorem cap_div_le {L k : ℕ} {ρ : ℝ} (hkρ : (2 : ℝ) ^ L ≤ ρ * (Real.exp 1 * k)) :
+    (2 : ℝ) ^ L / (Real.exp 1 * k) ≤ ρ := by
   have hpos : 0 < Real.exp 1 * k := by
     rcases Nat.eq_zero_or_pos k with rfl | hk
     · have h2 : (0 : ℝ) < 2 ^ L := by positivity
@@ -90,6 +87,14 @@ theorem hr_planZAt {L k : ℕ} {ρ : ℝ} (hL : ZkLogLenCap L) (hkρ : (2 : ℝ)
     · positivity
   rw [div_le_iff₀ hpos]
   exact hkρ
+
+/-- **The count curve bounds every planned rate**: under a cap `L`, `2^L ≤ ρ·(e·k)` gives `rateZ … ≤ ρ` at every draw
+`S`, registration `R` and table `i`. `ZkHidden.hr_planZHJ` is the same at the hidden-output plan of `J` tables, which
+the recursive audit's `_hr` reads. -/
+theorem hr_planZAt {L k : ℕ} {ρ : ℝ} (hL : ZkLogLenCap L) (hkρ : (2 : ℝ) ^ L ≤ ρ * (Real.exp 1 * k))
+    (S : Finset (Fin n)) (R : Reg) (i : Fin (planZAt (Reg := Reg) dj y₀ S R).length) :
+    rateZ (planZAt (Reg := Reg) dj y₀ S R) i k ≤ ρ :=
+  (rateZ_planZAt_le dj y₀ hL S R i k).trans (cap_div_le hkρ)
 
 /-- `hr_planZAt` at the existing cap: `2^23 ≤ ρ·(e·k)` bounds every planned rate by `ρ`. -/
 theorem hr_planZAt_23 {k : ℕ} {ρ : ℝ} (hkρ : (2 : ℝ) ^ 23 ≤ ρ * (Real.exp 1 * k))

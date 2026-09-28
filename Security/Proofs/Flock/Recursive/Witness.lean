@@ -4,7 +4,7 @@ import Proofs.Flock.Recursive.Description
 import Proofs.Flock.Soundness.Discharge.ZkReg.Defs
 import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
 import Proofs.Flock.Soundness.Discharge.DecodeZL.Statements
-import Proofs.Flock.Soundness.Discharge.ZkBind.Rate
+import Proofs.Flock.Soundness.Discharge.ZkHidden.Rate
 import Proofs.Flock.Recursive.PublicAudit
 
 /-!
@@ -16,15 +16,18 @@ state. Each check passing is the model's predicate holding, at `toExec I`, the m
 * `acceptsZKR_ok`: `ZkReg.AcceptsZKR`, the verifier of record's verdict on one of V*'s sessions;
 * `acceptsZKV_ok`: `Recursion.AcceptsZKV`, that verdict and `RecVStar.checkStmt` as V*'s statement `j`;
 * `verifiesVStar_ok`: the event's `VerifiesVStar`, from `acceptsZKV_ok` and `scopeZR_ok` at every session;
-* `scopeZR_ok`, `scopeZ_ok`: `FailClosed.ScopeZR`, the event's statement check, and `FailClosed.ScopeZ`, `Typable`'s;
-* `tagsOk_ok`: `DecodeZL.TagsOk`, `ZkOuterR.hTags`;
+* `scopeZR_ok`, `scopeZ_ok`: `FailClosed.ScopeZR`, the event's statement check and `Typable`'s, and `FailClosed.ScopeZ`,
+  the check without the registered reads, which the fail-closed `--zk` headlines read (`FailClosed/Composed.lean`);
+* `tagsOkZHJ_ok`, `tagsOk_ok`: `ZkHidden.TagsOkZHJ`, `ZkOuterR.hTags`, and `DecodeZL.TagsOk`, the public-output one-table
+  tags;
 * `scopeOk_ok`: the session's circuit as `ZkOuterR` parses it, and `Layout.scopeOk` of it, `VStmt.hscope`;
 * `fullDraw_ok`: the record's draw is the full `subset` draw of every unit of the population, `RecordCustody`'s;
 * `acceptsStmt_ok`, `acceptsPublic_ok`: `Recursion.AcceptsStmt`, and `AcceptsPublic` at the verifier's own partition
   object and program;
 * `shapeOf_eq`, `outerStatementsAt_ok`: the printed inner shape is `innerAt`, and `outer_parts` is `outerStatementsAt`;
 * `acceptsDescription_ok`: `Recursion.AcceptsDescription`, at each of the verifier's own registered reads;
-* `hr_inv_exp`, `inv_exp_lt_one`: `PublicAudit`'s rate premise `_hr` at `k = 2^23` and `ρ = 1/e < 1`, at every session.
+* `hr_inv_exp`, `inv_exp_lt_one`: `PublicAudit`'s rate premise `_hr` at `k = 2^23` and `ρ = 1/e < 1`, for every `zr`
+  (`_hr := hr_inv_exp zr`).
 
 On the F1 gate (`test_lean_witness.py`) the checks pass with V*'s sessions verified as `verity/flock-circuit`, the
 verifier of record's `--zk` identity with the OS's masks #1677 put in it, which the gate's sessions were proved with. So
@@ -82,11 +85,12 @@ theorem acceptsZKV_ok {I : Flock.Witness.Inputs} {own : Array Flock.Registered.P
   obtain ⟨⟨spec, sts⟩, hs, h₂⟩ := bind_ok h₂
   exact ⟨spec, sts, (setupOf_eq I r).symm.trans hs, h₂⟩
 
-/-- **The witness's statement check with the registered reads is `ScopeZR`.** -/
+/-- **The witness's statement check with the registered reads is `ScopeZR`**: the event's statement check, and
+`Typable`'s. -/
 theorem scopeZR_ok {I : Flock.Witness.Inputs} (h : Flock.Witness.scope I true = .ok ()) :
     FailClosed.ScopeZR (toExec I) := h
 
-/-- **The witness's statement check without them is `ScopeZ`.** -/
+/-- **The witness's statement check without them is `ScopeZ`**, the fail-closed `--zk` headlines'. -/
 theorem scopeZ_ok {I : Flock.Witness.Inputs} (h : Flock.Witness.scope I false = .ok ()) :
     FailClosed.ScopeZ (toExec I) := h
 
@@ -110,7 +114,16 @@ theorem verifiesVStar_ok {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} {
   · rw [hI j]
     exact scopeZR_ok (h₃ j)
 
-/-- **The witness's tags check is `TagsOk`.** -/
+/-- **The witness's hidden-output tags check is `TagsOkZHJ`**, `ZkOuterR.hTags`. -/
+theorem tagsOkZHJ_ok {I : Flock.Witness.Inputs} (h : Flock.Witness.tagsOkZHJ I = .ok ()) :
+    ZkHidden.TagsOkZHJ (toExec I) := by
+  unfold Flock.Witness.tagsOkZHJ at h
+  by_cases hc : I.tags.hiddenOutputs = true ∧ I.tags.retainRounds = true ∧ I.tags.merkleLeaf = "hm96-sha512/v1"
+  · exact hc
+  · rw [if_neg hc] at h
+    simp [throw, throwThe, MonadExceptOf.throw] at h
+
+/-- **The witness's public-output tags check is `TagsOk`.** -/
 theorem tagsOk_ok {I : Flock.Witness.Inputs} (h : Flock.Witness.tagsOk I = .ok ()) : DecodeZL.TagsOk (toExec I) := by
   unfold Flock.Witness.tagsOk at h
   by_cases hc : I.tags.hiddenOutputs = false ∧ I.tags.retainRounds = true ∧ I.tags.merkleLeaf = "hm96-sha512/v1" ∧
@@ -222,14 +235,18 @@ theorem acceptsDescription_ok {st : Flock.Stmt} {own : Array Flock.Registered.Po
   obtain ⟨_, h1, _⟩ := bind_ok h
   exact fun rt hrt => ⟨own, hrt, h1⟩
 
-/-- **`PublicAudit`'s rate premise at `k = 2^23` and `ρ = 1/e`**, at every session's plan, draw and table, whatever the
-prover supplies: `Zk.schedule` caps level 0's `logLen` at 23 at every `m` it accepts (`ZkBind.hr_planZAt_23`). The
-witness's `accepts_zkr` lines print each recorded session's level 0, whose `logLen` is under the cap. -/
-theorem hr_inv_exp {n : ℕ} {I : Exec.Inputs} {mPts : ℕ} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    (y₀ : ZkLink.DrawSetupZK I mPts S₀ (dj S₀)) {Reg : Type} (S : Finset (Fin n)) (R : Reg)
-    (i : Fin (ZkBind.planZAt (Reg := Reg) dj y₀ S R).length) :
-    ZkLink.rateZ (ZkBind.planZAt (Reg := Reg) dj y₀ S R) i (2 ^ 23) ≤ (Real.exp 1)⁻¹ :=
-  ZkBind.hr_planZAt_23 dj y₀ (by rw [inv_mul_cancel_left₀ (Real.exp_pos 1).ne']; norm_num) S R i
+/-- **`PublicAudit`'s rate premise `_hr` at `k = 2^23` and `ρ = 1/e`**, for every `zr` the prover supplies: its type is
+`_hr`'s there, so `_hr := hr_inv_exp zr`. At every session `j`, reference setup `y₀`, draw `S'`, registration `R'` and
+table `i` of the hidden-output plan `ZkHidden.planZHJ`, `Zk.schedule` caps level 0's `logLen` at 23 at every `m` it
+accepts (`ZkHidden.hr_planZHJ_23`). The witness's `accepts_zkr` lines print each recorded session's level 0, whose
+`logLen` is under the cap. -/
+theorem hr_inv_exp {S : ℕ} {Vs : Fin S → VStmt} {Reg' : Type} {A B C D : Type*}
+    (zr : A → B → C → D → (j : Fin S) → (Vs j).OuterR Reg') :
+    ∀ R ω t R₂ j S₀ (d₀ : Lean.Json)
+      (y₀ : ZkHidden.DrawSetupZHJ (Composed.inputsJ (zr R ω t R₂ j).I 0) (Vs j).mPts S₀ d₀) S' R' i,
+      ZkLink.rateZ (ZkHidden.planZHJ (Reg := Reg') (zr R ω t R₂ j).dj y₀ S' R') i (2 ^ 23) ≤ (Real.exp 1)⁻¹ :=
+  fun R ω t R₂ j _ _ y₀ S' R' i =>
+    ZkHidden.hr_planZHJ_23 (zr R ω t R₂ j).dj y₀ (by rw [inv_mul_cancel_left₀ (Real.exp_pos 1).ne']; norm_num) S' R' i
 
 theorem inv_exp_lt_one : (Real.exp 1)⁻¹ < 1 := by
   rw [inv_eq_one_div, div_lt_one (Real.exp_pos 1)]
