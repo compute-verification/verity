@@ -1743,11 +1743,14 @@ fn with_gpu_src<R>(st: &Stmt, wt: &WitData, f: impl FnOnce(flock_live::gpu_circu
 }
 
 #[cfg(feature = "gpu")]
-fn gpu_buckets(wt: &WitData, ph: [f64; 8], wph: [f64; 3], reused: bool) -> Value {
+/// A rep's buckets: the device's phases (`t.`), and the host's around it (`h.`: setup, staging the device's inputs, decoding and
+/// serializing the proof), which with `t.total` make up the rep's wall time.
+fn gpu_buckets(wt: &WitData, ph: [f64; 8], wph: [f64; 3], hph: [f64; 3], reused: bool) -> Value {
     json!({"t.witness": ph[0], "t.witness_comp": wph[0], "t.witness_units": wph[1], "t.encoding_commitment": ph[1], "t.link": ph[2],
            "t.zerocheck": ph[3], "t.lincheck": ph[4], "t.ring_switch": ph[5], "t.ligerito": ph[6], "t.total": ph[7],
-           "t.arithmetic": ph[3] + ph[4] + ph[5] + ph[6], "device_witness": !matches!(wt, WitData::Host(..)),
-           "host_units": matches!(wt, WitData::Dev(_, _, i) if i.is_empty()), "rep_reused": reused})
+           "t.arithmetic": ph[3] + ph[4] + ph[5] + ph[6], "h.setup": hph[0], "h.stage": hph[1], "h.decode": hph[2],
+           "device_witness": !matches!(wt, WitData::Host(..)), "host_units": matches!(wt, WitData::Dev(_, _, i) if i.is_empty()),
+           "rep_reused": reused})
 }
 
 /// One rep on the GPU; with `reuse_tag`, rep 0 keeps its witness and level-0 commitment on the device and rep 1 takes them.
@@ -1762,11 +1765,14 @@ fn prove_gpu(st: &Stmt, wt: &WitData, lig: LigeritoProfile, rep: usize, hook: Ho
         (Some(t), _) => Reuse::Take(t),
     };
     let reused = matches!(reuse, Reuse::Take(t) if kept(t));
-    let (proof, commitment, ph, wph) =
+    let (proof, commitment, ph, wph, hph) =
         with_gpu_src(st, wt, |src| prove_circuit(st, src, &params(st.m, lig), &domain(rep), hook, Live::Stream(ch), Some(salts), reuse));
-    let bk = gpu_buckets(wt, ph, wph, reused);
+    let ts = Instant::now();
+    let bytes = bincode::serialize(&(commitment, proof)).unwrap();
+    let mut bk = gpu_buckets(wt, ph, wph, hph, reused);
+    bk["h.serialize"] = json!(ts.elapsed().as_secs_f64());
     eprintln!("GPUPHASE\t{bk}");
-    (bincode::serialize(&(commitment, proof)).unwrap(), bk)
+    (bytes, bk)
 }
 
 /// M1 on the device, its device part: every live round the device frames goes to `rounds` (the rep's masking challenger, made
@@ -1778,10 +1784,10 @@ fn gpu_zk_device(st: &Stmt, wt: &WitData, lig: LigeritoProfile, rep: usize, hook
                  level0: &flock_core::pcs::ligerito::zk::Level0Zk, rounds: &mut dyn FnMut(&[u8], usize) -> Vec<F128>)
                  -> (R1csProofLigerito, Commitment, Value) {
     use flock_live::gpu_circuit::{Live, Reuse, prove_circuit};
-    let (proof, commitment, ph, wph) =
+    let (proof, commitment, ph, wph, hph) =
         with_gpu_src(st, wt, |src| prove_circuit(st, src, &params(st.m, lig), &domain(rep), hook, Live::Zk { level0, rounds }, Some(salts),
                                                  Reuse::None));
-    let bk = gpu_buckets(wt, ph, wph, false);
+    let bk = gpu_buckets(wt, ph, wph, hph, false);
     eprintln!("GPUPHASE\t{bk}");
     (proof, commitment, bk)
 }

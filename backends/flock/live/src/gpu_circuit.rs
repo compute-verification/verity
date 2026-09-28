@@ -3,7 +3,7 @@
 //! inputs and every unit's input words (both computed here from the rows, a few MB), a deep unit's slots here (`deep_unit`);
 //! a tampered witness is uploaded whole. Rep 1 proves from rep 0's witness and level-0 commitment (`Reuse`).
 
-use std::{ffi::c_void, ptr::{null, null_mut}, sync::OnceLock};
+use std::{ffi::c_void, ptr::{null, null_mut}, sync::OnceLock, time::Instant};
 
 use flock_field::F128;
 use flock_prover::{
@@ -388,7 +388,8 @@ pub fn host_slots(st: &Stmt, ni: usize, ins: &[Vec<F128>]) -> Vec<HostSlot> {
 }
 
 /// One rep on the GPU: proof, commitment, and the phase split (witness, commit, link, zerocheck, lincheck, ring switch,
-/// ligerito, total; seconds), plus the device witness's own split (compressions, units). Under M1 (`Live::Zk`) the proof is the
+/// ligerito, total; seconds), the device witness's own split (compressions, units), and the host's around the device (its
+/// setup: parameters and schedule; staging the witness's inputs and host slots; decoding the proof). Under M1 (`Live::Zk`) the proof is the
 /// unmasked one the CPU prover leaves before masking (with level 0's hiding messages and record, and lincheck's folded comb),
 /// and a round the handler refused (the masking's degenerate coins, a refused coin) is raised once the device returns. With
 /// `Reuse::Take` of a kept tag, `src` is not read: the witness and level-0 commitment are rep 0's (never under M1).
@@ -402,7 +403,8 @@ pub fn prove_circuit(
     live: Live<'_>,
     salts: Option<&std::sync::Mutex<crate::zk_hooks::LeafSalts>>,
     reuse: Reuse,
-) -> (R1csProofLigerito, Commitment, [f64; 8], [f64; 3]) {
+) -> (R1csProofLigerito, Commitment, [f64; 8], [f64; 3], [f64; 3]) {
+    let t_setup = Instant::now();
     let s = statics_for(comp(), &st.circuit.da, &st.circuit.db);
     let (sc, cfg) = sched(pcs);
     let m = pcs.m;
@@ -439,6 +441,7 @@ pub fn prove_circuit(
         mctx = Some(MidCtx { mid, n_late: t.sched.late_rows.len(), n_cut: t.sched.cut_rows.len(), at: Vec::new(), words: Vec::new(), zab: Vec::new() });
         src = CircuitSrc::Device { rows, host, inputs };
     }
+    let (h_setup, t_stage) = (t_setup.elapsed().as_secs_f64(), Instant::now());
     let taken = matches!(reuse, Reuse::Take(tag) if kept(tag));
     let mut u_host = 0;
     match &src {
@@ -598,7 +601,9 @@ pub fn prove_circuit(
     }
     let mut out: *mut u8 = null_mut();
     let mut out_len: usize = 0;
+    let h_stage = t_stage.elapsed().as_secs_f64();
     let rc = unsafe { flock_cuda_prove_circuit(&params, &p, &mut out, &mut out_len) };
+    let t_decode = Instant::now();
     drop(mctx);
     #[cfg(feature = "sha512")]
     drop(key_guard);
@@ -613,5 +618,6 @@ pub fn prove_circuit(
     let bytes = unsafe { std::slice::from_raw_parts(out, out_len) }.to_vec();
     unsafe { flock_cuda_free(out) };
     let (proof, commitment) = decode_with(&bytes, pcs, level0.is_some());
-    (proof, commitment, phase, wphase)
+    (proof, commitment, phase, wphase, [h_setup, h_stage, t_decode.elapsed().as_secs_f64()])
 }
+
