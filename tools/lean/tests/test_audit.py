@@ -1,4 +1,4 @@
-"""`tools/lean/audit.py`: its judgement on the facts `Audit.lean` reports (no Lean needed), and the controls when `lake` is
+"""`tools/lean/audit.py`: its judgement on the facts `Facts.lean` reports (no Lean needed), and the controls when `lake` is
 installed (the fixture package passes clean and fails each check once a violation is added)."""
 from __future__ import annotations
 
@@ -118,7 +118,11 @@ def test_update_prints_what_a_statement_reviewer_reads(tmp_path):
     assert text[:5] == ["pin P.t: changed", "  before:", "    P.t (h : P.Hyp) (n : Nat) : P.f n = n", "  after:",
                         "    P.t (h : P.Hyp) (n : Nat) : P.f n ≤ n"]
     assert text[5] == "definition P.f (P.Defs), read by P.t: changed" and text[-1] == "    def f (n : Nat) : Nat := n"
+    assert A.statement_changes(text) == text
     assert A.review(new, new, now, {}) == []
+    reprinted = dict(new["pins"]["P.t"], signature=["P.t (h : P.Hyp) (n : Nat) : LE.le (P.f n) n"])
+    text = A.review(new, dict(new, pins={"P.t": reprinted}), now, {})
+    assert text == [f"pin P.t: {A.REPRINTED}"] and A.statement_changes(text) == []
 
 
 def test_a_closed_hypothesis_must_be_a_named_assumption():
@@ -138,13 +142,55 @@ def test_a_pin_must_be_a_theorem_with_allowed_axioms():
     assert fails == ["pins: P.t uses sorryAx"]
 
 
-def test_the_source_scan_refuses_kernel_bypasses(tmp_path):
+def test_the_source_scan_refuses_kernel_bypasses_but_not_prose(tmp_path):
     (tmp_path / "P").mkdir()
     (tmp_path / "P" / "A.lean").write_text("theorem a : True := trivial\nset_option debug.skipKernelTC true in\n")
-    (tmp_path / "P" / "B.lean").write_text("-- builds the name at run time: only the replay sees this\n")
-    (tmp_path / "lakefile.toml").write_text("[leanOptions]\ndebug.byAsSorry = true\n")
-    hits = A.unchecked(tmp_path, A.lean_modules(tmp_path))
-    assert [h.split(" names ")[0] for h in hits] == ["unchecked: P/A.lean:2", "unchecked: lakefile.toml:2"]
+    (tmp_path / "P" / "B.lean").write_text("/-- A docstring may name debug.skipKernelTC. /- nested -/ -/\n"
+                                           "-- and so may a comment: set_option debug.skipKernelTC true in\n"
+                                           "def s := \"-- not a comment\" -- debug.byAsSorry\n")
+    (tmp_path / "lakefile.toml").write_text("# debug.skipKernelTC in a comment\n[leanOptions]\ndebug.byAsSorry = true\n")
+    hits = A.scans(tmp_path, A.lean_modules(tmp_path), {})
+    assert [h.split(" names ")[0] for h in hits] == ["unchecked: P/A.lean:2", "unchecked: lakefile.toml:3"]
+
+
+def test_code_run_while_compiling_is_refused_unless_listed(tmp_path):
+    (tmp_path / "P").mkdir()
+    (tmp_path / "P" / "A.lean").write_text("import Lean\n@[simp] theorem t : True := trivial\nopen Lean in\nrun_cmd pure ()\n"
+                                           "/-- #eval in prose -/\nlocal macro \"m\" : term => `(1)\n@[elab_as_elim] def e := 1\n")
+    (tmp_path / "P" / "B.lean").write_text("initialize pure ()\n")
+    hits = A.scans(tmp_path, A.lean_modules(tmp_path), {})
+    assert [h.split(" runs code")[0] for h in hits] == ["compile-time: P/A.lean:4", "compile-time: P/A.lean:6",
+                                                        "compile-time: P/B.lean:1"]
+    assert A.scans(tmp_path, A.lean_modules(tmp_path), {"compile_time": {"P.A": "why", "P.B": "why", "P.C": "why"}}) == [
+        "compile-time: `compile_time` lists P.C, which matches no file; remove the entry"]
+    (tmp_path / "lakefile.lean").write_text("import Lake\n")
+    assert A.scans(tmp_path, {}, {})[0].startswith("compile-time: lakefile.lean runs code")
+
+
+def test_a_package_without_a_policy_gets_a_template(tmp_path):
+    pkg = tmp_path / "p"
+    pkg.mkdir()
+    (pkg / "lakefile.toml").write_text('name = "p"\n[[lean_lib]]\nname = "Alpha"\n[[lean_lib]]\nname = "Beta"\n')
+    assert A.packages(tmp_path) == [pkg]
+    rep = A.audit(pkg, tmp_path / "out")
+    assert rep["failures"][0].startswith(f"policy: {pkg} has no lean-audit.json")
+    assert rep["failures"][0].endswith('{"roots": ["Alpha", "Beta"], "pins": {}}')
+
+
+def test_dependency_digests_cover_every_part_of_the_imported_modules_only(tmp_path):
+    lib = tmp_path / "p" / ".lake" / "packages" / "dep" / ".lake" / "build" / "lib" / "lean"
+    (lib / "D").mkdir(parents=True)
+    for rel, text in (("D.olean", "a"), ("D/E.olean", "b"), ("D/E.olean.private", "c"), ("D/E.ilean", "d")):
+        (lib / rel).write_text(text)
+    loaded = [str(lib / "D.olean"), str(lib / "D" / "E.olean"), str(tmp_path / "p" / ".lake" / "build" / "lib" / "P.olean")]
+    digests = lambda: A.dependency_digests(tmp_path / "p", "none/none:none", loaded)
+    before = digests()
+    assert list(before) == ["dep"]
+    (lib / "D" / "E.ilean").write_text("changed")
+    (lib / "D" / "F.olean").write_text("a module the package does not import, built or not")
+    assert digests() == before
+    (lib / "D" / "E.olean.private").write_text("changed")
+    assert digests()["dep"] != before["dep"]
 
 
 def test_package_files_stop_at_nested_packages_and_lake(tmp_path):
@@ -167,7 +213,7 @@ def test_discovery_skips_the_controls(tmp_path):
 
 
 def test_a_file_changed_during_the_run_is_reported(tmp_path):
-    tool, late = tmp_path / "Audit.lean", tmp_path / "lean"
+    tool, late = tmp_path / "Facts.lean", tmp_path / "lean"
     tool.write_text("a")
     seals = {str(tool): A.sha256(tool)}
     assert A.tampered(seals, [late]) == []

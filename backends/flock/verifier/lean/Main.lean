@@ -236,6 +236,33 @@ def statementCmd (args : List String) : IO UInt32 := do
     return 0
   | .error e => IO.println s!"setup: {e}"; return 1
 
+/-- `region-words [--statement ID] --circuit F --public F [--delta Q,COL]...`: the region-word check
+(`HmRow.checkRegionWords`) on an `hm96-sha512` statement, each `--delta` entry `(Q, COL)` added to both Δs. One
+`REGIONWORDS` line: the partial regions' shared columns, and the refusal if any. -/
+def regionWordsCmd (args : List String) : IO UInt32 := do
+  let some tags := Tags.find? ((argOf args "--statement").getD Tags.circuit.name)
+    | IO.eprintln s!"unknown statement; known: {Tags.all.map (·.name)}"; return 2
+  let (circuitB, pubB, _, tables) ← match ← statementInputs args with
+    | .ok x => pure x
+    | .error e => IO.eprintln s!"region-words inputs: {e}"; return 2
+  let extra := (args.zip args.tail).filterMap fun (k, v) => if k != "--delta" then none else
+    match (v.splitOn ",").map String.toNat? with
+    | [some q, some col] => some (q, col)
+    | _ => none
+  let res : V Nat := do
+    let c ← HmRow.parse tags circuitB tables
+    let pub ← HmRow.loadPublic tags c pubB
+    let pin ← HmRow.pin c
+    let (da, db) := HmRow.delta c pin
+    let regions ← HmRow.regions c pub
+    HmRow.checkRegionWords c (da ++ extra.toArray) (db ++ extra.toArray) regions
+    return (HmRow.sharedColumns regions).size
+  let line := match res with
+    | .ok n => Lean.Json.mkObj [("ok", Lean.Json.bool true), ("shared", Lean.toJson n)]
+    | .error e => Lean.Json.mkObj [("ok", Lean.Json.bool false), ("error", Lean.Json.str e)]
+  IO.println s!"REGIONWORDS {line.compress}"
+  return (if (line.getObjValAs? Bool "ok").toOption.getD false then 0 else 1)
+
 /-- `merkle-test FILE`: lines `scheme c d lanes positions rows siblings cap expect` (lists comma-separated, hex; `rows` as
 32-hex F128 words joined by `.` within a row); `expect` 1 = opens, 0 = rejected. -/
 def merkleTest (path : String) : IO UInt32 := do
@@ -433,5 +460,6 @@ def main (args : List String) : IO UInt32 := do
   | "verify" :: rest => verifyCmd rest
   | ["comp-check", path] => compCheck path
   | ["field-test", path] => fieldTest path
+  | "region-words" :: rest => regionWordsCmd rest
   | ["hash-test", path] => hashTest path
   | _ => IO.eprintln "usage: flock-verify field-test FILE"; return 2

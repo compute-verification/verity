@@ -6,7 +6,8 @@ and, for the audit layer, `FlockSoundness/Audit/README.md`. `DESIGN.md` holds th
 
 ## Named assumptions (taken without proof)
 
-There is one, A2, a `Prop` (`Assumptions.SHA512ExpectedTimeCR`) that the link theorem takes as a hypothesis (`hCR`).
+There is one, A2, a `Prop` (`Assumptions.SHA512ExpectedTimeCR`) that the link theorem (`flock_batched_linkSoundE`)
+takes as a hypothesis (`hCR`).
 `README.md` §1.5 names one more, L1, about the lowering, stated below. The development declares no `axiom`. So a
 mis-stated assumption can make a theorem vacuous, but it can never make Lean prove something false.
 
@@ -19,13 +20,15 @@ audit's value layer (Daniel, Sep 27; constant corrected the same day).
 - **Per finder.** Some finder outputs a collision after no evaluations, since collisions exist. So the `Prop` is not
   stated for all finders: the link theorem takes it for the finder it builds from the prover.
 - **Why it is plausible, and where it is used:** `assumptions/a2-sha512-expected-time-cr.md`.
+- **Upstream:** watch entries `collision-resistance`, `keyed-cr` and `rom-cr` (see Upstream status).
 
 - **L1. Each template's rows compute its gates** (named hypothesis). That is, the rows' outputs are the gates' outputs, in
   the program's Boolean circuit, on every input. The audit certifies drawn units against their rows. That says something
   about the program's Boolean circuit only through L1.
   - **The evidence for it, and the path to discharge it:** `assumptions/l1-template-rows.md`.
 
-A1, Reed–Solomon mutual correlated agreement up to the Johnson bound, is proved (`README.md` §1.6).
+A1, Reed–Solomon mutual correlated agreement up to the Johnson bound, is proved: `mcaError_le_bchks25`, from DKT26 in
+ArkLib (`README.md` §1.6; watch entries `A1-johnson-mca` and `udr-mca`).
 
 ## Named hypotheses of the proof
 
@@ -66,14 +69,14 @@ before the session's first coin, not bounds state by state.
   It is the only hash assumption of the compiled theorem: plain collision resistance, for every classical prover.
   The audit's value layer adds A2 (above).
   DESIGN.md §1 explains why SHA-512 rather than SHA-256, and how the bound depends on the hash's width.
-- **No assumption for the rounds.** The coin server keeps each round's bytes, then draws that round's coins, and the
+- **No assumption for the rounds.** The verifier keeps each round's bytes, then draws that round's coins, and the
   replay compares bytes. This replaces the SHA-256 round digests. Keeping the bytes costs about the proof size, 0.7 MB
   per rep.
 - **Statement binding** (the statement digest, Σ and `link_sha256`). These are in round 0's kept bytes, fixed before any
   coin. Their own collision resistance matters to what the statement refers to (registered data, linked proofs), not to
   this theorem.
 - **`os` coins** (the default). Each round's coins are uniform and unknown to the prover before it sent the round. They
-  come from the coin server's `/dev/urandom` (spec §7.1). The randomness is trusted, not proved.
+  come from the verifier's `/dev/urandom` (spec §7.1). The randomness is trusted, not proved.
 - **`seed` coins** (PR #83, `coin-commit/sha256/v1`) add two assumptions: the seed commitment hides the seed, and
   SHA-256 in counter mode is a PRF. They are needed only if the seed mode becomes the verifier of record's source.
 - **The random-oracle model is not used.** Its version of the compiled bound is only a cross-check (DESIGN.md §2).
@@ -81,8 +84,36 @@ before the session's first coin, not bounds state by state.
   compiled protocol is post-quantum sound only asymptotically, and only if SHA-512 is collapsing, which is a conjecture
   (Table 1 would need `collapsing/sha-512`). No concrete post-quantum bound is known at these parameters, and none is
   claimed.
-- **Table 1** cites `computational-soundness` under `cr/sha-512` and `live-verifier`; A1's proof took
-  `rs-proximity-johnson` off. An audit's integrity profile would add A2, a new claim once a render cites it.
+- **Table 1** cites Flock's soundness under the `live-verifier` model and the collision resistance of each row's hashes
+  (`cr/sha-512` in the C-Flock SHA-512 row); A1's proof took `rs-proximity-johnson` off. An audit's integrity profile
+  would add A2 as `ecr/sha-512`, a `verity.claims` id that no row cites yet.
+
+## What is pinned
+
+`lean-audit.json` records each pinned theorem's statement (`pins`) and the definitions it reads (`reads`). The audit
+fails when either changes until the record is rewritten, and a rewritten record needs a named statement reviewer. The
+pins include the table theorems (`README.md` §1.1 and §1.2, with their `_exec` forms), `execArith_correct` and
+`Merkle.opening_binding`; none takes a named assumption. The theorem that takes A2, `flock_batched_linkSoundE`, is not
+pinned, nor are `flock_inputs_sound`, `flock_session_sound`, `lowering_sound` and `mcaError_le_bchks25`. A theorem that
+is not in `pins` is still audited (standard axioms, kernel replay), but a change to its statement would not fail the
+audit.
+
+## Upstream status
+
+Whether a dependency proves what these theorems assume, or what they prove by hand, is computed, not written here. The
+watch list is the `upstream` section of `lean-audit.json`, one entry per statement:
+
+- `A1-johnson-mca` and `udr-mca`: A1 (proved here from DKT26) and its unique-decoding fallback;
+- `collision-resistance`, `keyed-cr` and `rom-cr`: A2, in three forms;
+- `list-size` and `list-size-code`: the Johnson list bound (`ListSize.closeMsgs_card_le`);
+- `tensor-fold`: the fold union in `LigeritoLevels`;
+- `novel-basis`: the novel basis (`Arith.Correct.xhat_poly`, `L ≤ 40`).
+
+`python tools/lean/upstream.py backends/flock/verifier/lean/soundness` prints each entry's status at the pinned
+revisions: the upstream theorems about it, which are proved, and which nobody has acknowledged. The audit runs that pass
+over ArkLib, with ArkLib's own `sorry` baseline, and fails on a proved theorem no entry acknowledges. `--lean`, the
+exact pass over everything imported (VCVio and CompPoly too), is run at a dependency bump. L1 has no entry: no
+dependency states this repository's rows.
 
 ## Trusted components
 
