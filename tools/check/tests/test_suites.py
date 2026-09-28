@@ -41,6 +41,26 @@ def test_a_shipped_tree_is_discovered_and_keyed_from_its_files(tmp_path, monkeyp
     assert S.object_ids(None, ["pkg"], S.digests())["pkg"] != before["pkg"]
 
 
+def test_a_declared_build_output_keys_the_suite(tmp_path, monkeypatch):
+    """Git ignores build outputs, so a suite whose tests run or skip on one declares it (`[tool.verity.tests] artifacts`), and
+    its pass is reused only for the same build."""
+    (tmp_path / "pkg").mkdir()
+    (tmp_path / "pkg" / "pyproject.toml").write_text('[project]\nname = "pkg"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n\n'
+                                                     '[tool.verity.tests]\nartifacts = ["pkg/.lake/build/bin/tool", "pkg/.lake/cache"]\n')
+    S = _suites(monkeypatch, tmp_path)
+    [suite] = S.discover()
+    assert suite.artifacts == ("pkg/.lake/build/bin/tool", "pkg/.lake/cache")
+    keys = [S.key(suite, {}, {}, [])]
+    assert S.artifact_ids(suite) == {"pkg/.lake/build/bin/tool": "absent", "pkg/.lake/cache": "absent"}
+    (tmp_path / "pkg" / ".lake" / "build" / "bin").mkdir(parents=True)
+    (tmp_path / "pkg" / ".lake" / "build" / "bin" / "tool").write_bytes(b"one build")
+    keys.append(S.key(suite, {}, {}, []))
+    (tmp_path / "pkg" / ".lake" / "build" / "bin" / "tool").write_bytes(b"another build")
+    (tmp_path / "pkg" / ".lake" / "cache").mkdir()
+    keys.append(S.key(suite, {}, {}, []))
+    assert len(set(keys)) == 3 and S.artifact_ids(suite)["pkg/.lake/cache"] == "directory"
+
+
 def test_jobs_default_to_the_cpus_this_process_may_use(tmp_path, monkeypatch):
     S = _suites(monkeypatch, tmp_path)
     assert 1 <= S.cpus() <= (len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else os.cpu_count())
@@ -115,7 +135,7 @@ def _run_shipped(root: Path, tmp_path: Path) -> subprocess.CompletedProcess:
     env.update(RESEARCH_STORE=str(tmp_path / "pod-store"), RESEARCH_STORE_CONFIG=str(tmp_path / "absent.toml"),
                RESEARCH_FIXTURES_URL="", VERITY_TEST_CACHE=str(tmp_path / "cache"), VERITY_SKIP_STORE="1")
     return subprocess.run([sys.executable, str(root / "tools" / "check" / "suites.py"), "--fresh", "--jobs", "1"], cwd=root, env=env,
-                          capture_output=True, text=True, timeout=300)
+                          capture_output=True, text=True)
 
 
 def test_a_shipped_tree_with_no_store_runs_the_suites_its_tracked_fixtures_feed(tmp_path):

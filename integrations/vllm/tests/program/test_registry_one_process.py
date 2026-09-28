@@ -54,6 +54,6 @@ def _registry_modules() -> list[str]:
 @pytest.mark.parametrize("core_first", [True, False], ids=["core-first", "integration-first"])
 def test_core_and_every_integration_registry_load_in_one_process(core_first: bool) -> None:
     mods = [*CORE, *_registry_modules()] if core_first else [*_registry_modules(), *CORE]
-    r = subprocess.run([sys.executable, "-c", CHECK, *mods], capture_output=True, text=True, env=dict(os.environ), timeout=900)
+    r = subprocess.run([sys.executable, "-c", CHECK, *mods], capture_output=True, text=True, env=dict(os.environ))
     assert r.returncode == 0, r.stderr[-6000:]
     assert r.stdout.startswith("loaded"), r.stdout

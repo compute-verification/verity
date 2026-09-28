@@ -12,7 +12,6 @@ import shutil
 import signal
 import subprocess
 import sys
-import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -26,7 +25,7 @@ ART = "art:" + "ab" * 32
 
 STAGE = """#!/bin/bash
 # stand-in for the `verity-vllm` launcher: `row run ROW ROLE REPO REV --stages S` is a stage whose behaviour FAKE_<S> names (ok | sleep:
-# FAKE_SLEEP seconds); every other command is the real CLI
+# FAKE_SLEEP seconds), announced on the FIFO STAGE_STARTED when set; every other command is the real CLI
 if [ "$1 $2" = "row run" ]; then
   s=$8; d=$SWEEP_DIR/$3; mkdir -p "$d"; echo "stage $s" >> "$CALLS"
   if [ "$s" = build ]; then
@@ -34,6 +33,7 @@ if [ "$1 $2" = "row run" ]; then
     echo '{"manifest_digest": "m0", "query": {"required_families": ["weights"]}}' > "$d/manifest.json"
   fi
   echo "$s PASS rc=0" >> "$d/stages.txt"
+  [ -n "${STAGE_STARTED:-}" ] && echo "$s" >> "$STAGE_STARTED"
   case "$(eval echo "\\${FAKE_${s^^}:-ok}")" in sleep) exec sleep "${FAKE_SLEEP:-60}";; esac
   exit 0
 fi
@@ -76,8 +76,8 @@ def _job(tmp_path: Path, *, timeout_s: float = 7200, key_after_run_s: float = 72
     return env
 
 
-def _run(env: dict[str, str], timeout: float = 90) -> subprocess.CompletedProcess:
-    return subprocess.run([BASH, str(SCRIPT)], env=env, capture_output=True, text=True, timeout=timeout)
+def _run(env: dict[str, str]) -> subprocess.CompletedProcess:
+    return subprocess.run([BASH, str(SCRIPT)], env=env, capture_output=True, text=True)
 
 
 def _progress(env: dict[str, str]) -> str:
@@ -109,10 +109,8 @@ def test_script_parses() -> None:
 def test_a_stage_deadline_stops_the_stage_stores_preserves_and_exits(tmp_path: Path) -> None:
     env = _job(tmp_path)
     env.update({"FAKE_BUILD": "sleep", "DEADLINE_BUILD": _utc(datetime.now(timezone.utc) + timedelta(seconds=4))})
-    t0 = time.monotonic()
     r = _run(env)
     assert r.returncode == 124, (r.stdout, r.stderr)
-    assert time.monotonic() - t0 < 45
     prog = _progress(env)
     assert "STOP build: deadline" in prog and "stage match" not in _calls(env)
     _stored_then_preserved(env)
@@ -139,15 +137,20 @@ def test_stop_after_build_skips_the_match(tmp_path: Path) -> None:
 
 def test_a_signal_mid_stage_stores_preserves_and_exits(tmp_path: Path) -> None:
     env = _job(tmp_path)
-    env["FAKE_BUILD"] = "sleep"
+    started = tmp_path / "started"
+    os.mkfifo(started)
+    fifo = os.open(started, os.O_RDWR)                  # held for reading and writing: the stand-in's append never waits, a read waits for it
+    env.update({"FAKE_BUILD": "sleep", "STAGE_STARTED": str(started)})
     p = subprocess.Popen([BASH, str(SCRIPT)], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    deadline = time.monotonic() + 30
-    while "stage build" not in _calls(env):
-        assert time.monotonic() < deadline and p.poll() is None, p.communicate()
-        time.sleep(0.2)
-    time.sleep(0.5)
-    p.send_signal(signal.SIGTERM)
-    p.communicate(timeout=60)
+    try:
+        line = b""
+        while not line.endswith(b"\n"):
+            line += os.read(fifo, 1)                    # the build stage is running, under the job's traps
+        assert line == b"build\n"
+        p.send_signal(signal.SIGTERM)
+        p.communicate()
+    finally:
+        os.close(fifo)
     assert p.returncode == 143
     assert "STOP signal TERM" in _progress(env)
     _stored_then_preserved(env)

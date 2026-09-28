@@ -139,6 +139,20 @@ def test_the_groups_split_the_cores_and_run_at_once(tmp_path, monkeypatch):
     assert shipped[shipped.index("--commit") + 1] == "abc123"
     cold = CHECK.groups(tmp_path, 16, cache=False)
     assert lean[0] == "lean" and "--cache" not in cold[1][0][1] and "--fresh" in cold[0][0][1]
+    assert not any(s in pt[1] for s in CHECK.AFTER_LEAN), "without the Lean steps the suites that use Lean run with the rest"
+
+
+def test_the_suites_that_use_lean_run_after_the_lean_steps_have_built_everything(tmp_path, monkeypatch):
+    """Not beside `lake build`: whether their tests run or skip, and what `lake` finds built, must not depend on how far the
+    concurrent Lean group has got (verity-flock passed or failed on build order, r20260929-015410-5a20)."""
+    out, _ = _pinned(tmp_path, monkeypatch)
+    (_, pytest, _), = CHECK.groups(out, 8)[0]
+    lean = CHECK.groups(out, 8)[2]
+    assert [n for n, _, _ in lean] == ["lean-build", "lean-unit-cut", "lean-audit", "lean-suites", "lean-agreement"]
+    assert all(pytest[pytest.index(s) - 1] == "--skip" for s in CHECK.AFTER_LEAN)
+    argv = lean[3][1]
+    assert argv[:2] == ["bash", "-c"] and argv[2].startswith(CHECK.ELAN), "with elan's lake on the PATH, as lean-build has it"
+    assert all(f" {s} " in argv[2] for s in CHECK.AFTER_LEAN) and "suites-lean.json" in argv[2] and "--jobs 4" in argv[2]
 
 
 def test_a_checkouts_files_are_gits_and_the_key_environment_drops_the_tree_path(tmp_path):

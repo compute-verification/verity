@@ -115,6 +115,8 @@ Every package's tests live in its own `tests/` and run as one suite, in its own 
 workers), cached by input; the repository's own suite (`tests/`) holds only invariants of the whole tree. How to run them,
 what a suite may read (`[tool.verity.tests] inputs`), and the rules for slow tests, fixtures and dummy credentials:
 `.agents/skills/testing/SKILL.md`.
+No test depends on wall-clock time (no sleeps, clock readings or timeouts; wait on the event itself or inject the clock):
+`tests/test_no_wall_clock.py` enforces it, and its `ALLOWED` list, one reason per entry, holds the exceptions.
 
 ## Circuits
 

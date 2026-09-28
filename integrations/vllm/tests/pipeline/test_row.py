@@ -19,11 +19,11 @@ from __future__ import annotations
 import gzip
 import json
 import os
+import select
 import shutil
 import signal
 import subprocess
 import sys
-import time
 from pathlib import Path
 
 import pytest
@@ -117,29 +117,37 @@ def test_a_foreign_veritor_repo_is_refused_by_name(tmp_path, capsys):
 
 # ---------------------------------------------------------------------------------------------------------------- cancel
 
-# the stage: a python parent that forks a grandchild; both write their pids and sleep.  A row's fold / commit look like this.
+# the stage: a python parent that forks a grandchild; both write their pids (and the stage its `timeout`'s), close their end of the
+# test's FIFO and block on a pipe nobody writes to, until a signal ends them.  A row's fold / commit look like this.
 STAGE = r'''
-import os, sys, time
+import os, sys
 d = sys.argv[1]
-open(os.path.join(d, "stage.pid"), "w").write(str(os.getpid()))
-pid = os.fork()
-if pid == 0:
+for name, pid in (("stage", os.getpid()), ("timeout", os.getppid())):
+    open(os.path.join(d, name + ".pid"), "w").write(str(pid))
+ready = open(READY, "wb")
+block, _ = os.pipe()
+if os.fork() == 0:
     open(os.path.join(d, "grandchild.pid"), "w").write(str(os.getpid()))
-    time.sleep(600)
-    sys.exit(0)
-time.sleep(600)
+ready.close()
+os.read(block, 1)
 '''
 
+# the row; one byte on fd `registered` once the stage's `timeout` pid is where the signal forwarding finds it
 HARNESS = r'''
 import os, sys
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline.row_driver import Row, Stop
-tmp, to, stage = sys.argv[1:4]
+tmp, to, stage, registered = sys.argv[1:5]
 o = cli.parse("row", ["run", "r", "R", "o/r", "x", "--sweep-dir", tmp, "--py", sys.executable], os.environ)
 row = Row(row="r", role="R", repo="o/r", rev="x", stages="build", env=o.env, proc="row_pod")
 os.makedirs(row.d, exist_ok=True)
 row.child_env = dict(os.environ)
 row.install_signal_forwarding()
+class Announced(set):
+    def add(self, pid):
+        super().add(pid)
+        os.write(int(registered), b".")
+row._running = Announced()
 try:
     rc = row.run_to(int(to), row.d + "/stage.log", [sys.executable, stage, row.d])
 except Stop as s:
@@ -160,38 +168,45 @@ def _alive(pid: int) -> bool:
         return True
 
 
-def _wait_for(pred, seconds: float) -> bool:
-    t_end = time.monotonic() + seconds
-    while time.monotonic() < t_end:
-        if pred():
-            return True
-        time.sleep(0.05)
-    return pred()
+def _wait_exited(fds: list[int]) -> None:
+    for fd in fds:                                                       # a pidfd turns readable once its process has exited
+        select.select([fd], [], [])
+        os.close(fd)
 
 
-def _start(tmp: Path, timeout_s: int, stage_exit: str | None = None) -> tuple[subprocess.Popen, Path]:
-    stage = tmp / "stage.py"
-    stage.write_text(STAGE if stage_exit is None else f"import sys; sys.exit({stage_exit})")
+def _start(tmp: Path, stage_exit: str | None = None) -> tuple[subprocess.Popen, Path]:
+    """The row, running `stage.py` under `timeout 0` (no timer: the expiry test raises it); returns once the row forwards signals to the
+    stage and, for the blocking stage, once the stage and its grandchild have written their pids."""
+    stage, ready = tmp / "stage.py", tmp / "ready"
+    os.mkfifo(ready)
+    stage.write_text(f"READY = {str(ready)!r}\n" + STAGE if stage_exit is None else f"import sys; sys.exit({stage_exit})")
     d = tmp / "r"
     env = {**os.environ, "PYTHONPATH": os.pathsep.join([str(TREE), os.environ.get("PYTHONPATH", "")])}
     env.pop("VERITY_TIMELINE", None)
+    registered_r, registered_w = os.pipe()
     # the research runner starts the row as a session leader and later killpg()s that group -- same here
-    p = subprocess.Popen([sys.executable, "-c", HARNESS, str(tmp), str(timeout_s), str(stage)], start_new_session=True, env=env,
-                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    assert _wait_for(lambda: (d / "grandchild.pid").exists() or (d / "row.log").exists() and "run_to rc" in (d / "row.log").read_text(), 20)
+    p = subprocess.Popen([sys.executable, "-c", HARNESS, str(tmp), "0", str(stage), str(registered_w)], start_new_session=True, env=env,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, pass_fds=(registered_w,))
+    os.close(registered_w)
+    assert os.read(registered_r, 1) == b".", "the row exited before it ran the stage"
+    os.close(registered_r)
+    if stage_exit is None:
+        with open(ready, "rb") as f:
+            assert f.read() == b""                                       # EOF: the stage and its grandchild both closed their ends
     return p, d
 
 
 @pytest.mark.skipif(not _GNU_TIMEOUT, reason="GNU timeout (coreutils) required -- the pods have it, macOS does not")
 @pytest.mark.parametrize("sig,rc", [(signal.SIGTERM, 143), (signal.SIGINT, 130)])
 def test_killpg_on_the_row_takes_the_stage_and_its_grandchild(tmp_path, sig, rc):
-    p, d = _start(tmp_path, 600)
+    p, d = _start(tmp_path)
     stage, grand = int((d / "stage.pid").read_text()), int((d / "grandchild.pid").read_text())
     assert _alive(stage) and _alive(grand)
     assert os.getpgid(stage) != p.pid, "GNU timeout puts the stage in its own process group -- the premise of the forwarding"
+    fds = [os.pidfd_open(stage), os.pidfd_open(grand)]
     os.killpg(p.pid, sig)
-    assert p.wait(timeout=15) == rc
-    assert _wait_for(lambda: not _alive(stage) and not _alive(grand), 10), "stage or its forked worker survived the cancel"
+    assert p.wait() == rc
+    _wait_exited(fds)                                                    # the stage or its forked worker surviving the cancel hangs here
     name = signal.Signals(sig).name
     assert f"CANCELLED by {name}" in (d / "stage.log").read_text()
     row_log = (d / "row.log").read_text()
@@ -203,18 +218,20 @@ def test_killpg_on_the_row_takes_the_stage_and_its_grandchild(tmp_path, sig, rc)
 
 @pytest.mark.skipif(not _GNU_TIMEOUT, reason="GNU timeout (coreutils) required -- the pods have it, macOS does not")
 def test_the_expiry_path_still_kills_the_forked_worker(tmp_path):
-    p, d = _start(tmp_path, 1)
-    stage, grand = int((d / "stage.pid").read_text()), int((d / "grandchild.pid").read_text())
-    assert p.wait(timeout=15) == 124
-    assert _wait_for(lambda: not _alive(stage) and not _alive(grand), 10), "timeout expiry left the forked worker alive"
+    p, d = _start(tmp_path)
+    stage, grand, to = (int((d / f"{n}.pid").read_text()) for n in ("stage", "grandchild", "timeout"))
+    fds = [os.pidfd_open(stage), os.pidfd_open(grand)]
+    os.kill(to, signal.SIGALRM)                                          # what GNU timeout's own timer raises on expiry
+    assert p.wait() == 124
+    _wait_exited(fds)                                                    # timeout expiry leaving the forked worker alive hangs here
     log = (d / "stage.log").read_text()
-    assert "TIMEOUT after 1s" in log and "CANCELLED" not in log
+    assert "TIMEOUT after 0s" in log and "CANCELLED" not in log
 
 
 @pytest.mark.skipif(not _GNU_TIMEOUT, reason="GNU timeout (coreutils) required -- the pods have it, macOS does not")
 def test_a_normal_exit_returns_the_stage_rc_unchanged(tmp_path):
-    p, d = _start(tmp_path, 600, stage_exit="7")
-    assert p.wait(timeout=15) == 7
+    p, d = _start(tmp_path, stage_exit="7")
+    assert p.wait() == 7
     assert "run_to rc=7" in (d / "row.log").read_text() and "cancelled" not in (d / "row.log").read_text()
     assert not (d / "timeline.jsonl").exists()
     assert (d / "stage.log").read_text().startswith(f"$ {sys.executable} ")
@@ -471,6 +488,9 @@ def test_a_tp_row_runs_the_guarded_build_and_every_tap_its_manifest_names(tmp_pa
 
 # ---------------------------------------------------------------------------------------------------------------- Match summary
 
+STAGE_START = 1_600_000_000
+
+
 def _summary_row(tmp_path: Path, *, old: bool, stage_record: bool) -> Path:
     d = tmp_path / "row"
     (d / "match" / "capture").mkdir(parents=True)
@@ -481,9 +501,8 @@ def _summary_row(tmp_path: Path, *, old: bool, stage_record: bool) -> Path:
     (d / "match" / "capture" / "log.jsonl.gz").write_bytes(b"x")
     (d / "match" / "program.json").write_text("{}")
     (d / "match" / "instances.jsonl").write_text("")
-    if old:
-        t = time.time() - 3600
-        os.utime(d / "match" / "capture" / "log.jsonl.gz", (t, t))
+    t = STAGE_START - 3600 if old else STAGE_START
+    os.utime(d / "match" / "capture" / "log.jsonl.gz", (t, t))
     if stage_record:
         (d / "match" / "stages.json").write_text(json.dumps({"stages": [{"stage": "capture", "returncode": 0, "status": "ok"},
                                                                         {"stage": "control", "returncode": 0, "status": "ok"},
@@ -494,7 +513,7 @@ def _summary_row(tmp_path: Path, *, old: bool, stage_record: bool) -> Path:
 
 
 def _summary(d: Path, resumed: bool) -> dict:
-    R.match_summary(str(d), 0, 0, 0, int(time.time()) - 60, -1, resumed)
+    R.match_summary(str(d), 0, 0, 0, STAGE_START, -1, resumed)
     return json.load(open(d / "match_summary.json"))
 
 
