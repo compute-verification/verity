@@ -34,6 +34,8 @@ def _isolated_store(monkeypatch, tmp_path_factory):
     # ... nor its GPU split: gpu-lease and the runner read /etc/vy/direct-gpus, which says `none` on a cut-over Nebius host
     monkeypatch.setenv("GPU_LEASE_ALLOWED_FILE", str(tmp_path_factory.mktemp("gpu-lease") / "absent-direct-gpus"))
     monkeypatch.setenv("DIRECT_CPUS_FILE", str(tmp_path_factory.mktemp("cpus") / "absent-direct-cpus"))     # nor its CPU map
+    # ... nor its learned bundle sizes: on vy-nebius-1 the pacer mirrors them to /workspace/jobs/dispatch/bundle-sizes.json
+    monkeypatch.setenv("VY_BUNDLE_SIZES", str(tmp_path_factory.mktemp("bundle-sizes") / "bundle-sizes.json"))
     # ... nor the agent's Cursor identity: without SLACK_BOT_TOKEN, research slack asks this socket for an OIDC token for its broker
     monkeypatch.setenv("CURSOR_AGENT_SOCKET", str(tmp_path_factory.mktemp("cursor") / "absent.sock"))
 

@@ -225,10 +225,13 @@ def allowed() -> set[int]:
     return os.sched_getaffinity(0)
 
 
+DIRECT_CPUS_FIX = "a `research run` starts on /etc/vy/direct-cpus, so add the slot's cores there (`0-95,128-159`, 2 Oct)"
+
+
 def usable(slots: list[dict]) -> list[dict]:
     """The slots whose every core this process may run on. Pinning onto any other fails (EINVAL), so a check never takes one:
-    on vy-nebius-1 a `research run` session is held to cores 0-127, and slot d on 128-159 killed every check that took it
-    (2 Oct 07:20Z)."""
+    on vy-nebius-1 a `research run` session was held to cores 0-127, and slot d on 128-159 killed every check that took it
+    (2 Oct 07:20Z). A `research run` starts on the host's /etc/vy/direct-cpus, so a slot's cores must be listed there too."""
     mine = allowed()
     return [s for s in slots if cpulist(s["cpus"]) <= mine]
 
@@ -262,9 +265,9 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
     slots = usable(listed)
     if len(slots) < len(listed):
         out = ", ".join(f"{s['name']} ({s['cpus']})" for s in listed if s not in slots)
-        print(f"slot: skipping {out}: outside this process's cores", file=sys.stderr, flush=True)
+        print(f"slot: skipping {out}: outside this process's cores; {DIRECT_CPUS_FIX}", file=sys.stderr, flush=True)
     if not slots:
-        sys.exit(f"slot: none of {SLOTS}'s slots is within this process's cores")
+        sys.exit(f"slot: none of {SLOTS}'s slots is within this process's cores; {DIRECT_CPUS_FIX}")
     ticket, tfd = join(SLOTS.parent, priority="--priority" in opts, who=asker(by))
     told = None
     while True:
