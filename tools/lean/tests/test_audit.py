@@ -190,6 +190,7 @@ def test_moved_declarations_are_compared_under_their_old_names(tmp_path):
     build()
     rep = audit(moved=moved)
     assert rep["failures"] == []
+    assert rep["before"] == {k: json.loads(before)[k] for k in ("pins", "reads")} and rep["pins"] == A.load(pkg)["pins"]
     must = A.statement_changes(rep["review"])
     assert set(rep["review"]) - set(must) == {
         f"pin Control.SecurityProofs.a: moved from Control.a, restated as Control.Guarantees.A: {A.MOVED}",

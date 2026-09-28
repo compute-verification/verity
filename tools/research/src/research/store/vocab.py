@@ -175,6 +175,9 @@ GRANT = "grant"
 GRANT_ROLES = ("red-team", "statement-reviewer", "vllm-coordinator", "review")
 #: The owner's word that a pull request is ready at one head (`research queue ready`); the merge queue admits nothing without it.
 READY = "ready"
+#: An `audit.py --update` report (its audit.json) on a pull request at one head, which stands in for a statement reviewer's grant
+#: where it printed the head's whole lean-audit.json change as the same statements (`research.queue.reviewed`).
+LEAN_REVIEW = "lean_review"
 
 
 def canonical_key(name: str) -> str:
@@ -294,6 +297,8 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(GRANT, GROUP_VERIFICATION, ENUM, "a reviewer's grant on pr:<n>@<head>: the role that reviewed that exact head (the merge queue admits on it)",
        GRANT_ROLES),
     _k(READY, GROUP_VERIFICATION, BOOL, "the owner's word that pr:<n>@<head> is ready for the merge queue (`research queue ready`); a new head needs it again"),
+    _k(LEAN_REVIEW, GROUP_VERIFICATION, TEXT, "on pr:<n>@<head>: the art: id of an `audit.py --update` report (its audit.json); a lean-audit.json "
+       "change it printed whole as the same statements (moved under --moved, printed differently, rehashed) needs no statement-reviewer grant"),
     # evidence
     _k(INSTRUCTION, GROUP_EVIDENCE, TEXT, "the tensor-core instruction probed, as the registry names it (sm89.mma.m16n8k32.e4m3)"),
     _k(MODEL, GROUP_EVIDENCE, TEXT, "the silicon model the capture was compared with"),
