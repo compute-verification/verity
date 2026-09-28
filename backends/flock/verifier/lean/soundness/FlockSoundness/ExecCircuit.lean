@@ -112,7 +112,8 @@ macro "unjp " j:ident : tactic =>
 /-- **What `HmRow.parse` accepted.** -/
 structure ParseFacts (tags : Tags) (c : Circuit) : Prop where
   nets : ∀ x ∈ c.nets.toList,
-    (∃ lines, Net.parse lines = .ok x.2) ∨ ∃ nm tb n lo bits, Lookup.build nm tb n lo bits = .ok x.2
+    (∃ lines, Net.parse lines = .ok x.2) ∨ (∃ nm tb n lo bits, Lookup.build nm tb n lo bits = .ok x.2) ∨
+      ∃ nm sha tb n lo bits, Lookup.buildV2 nm sha tb n lo bits = .ok x.2
   ports : ∀ p ∈ c.ports.toList, 0 < p.chunks
   unitNet : c.unitNet < c.nets.size
   shaNet : c.shaNet < c.nets.size
@@ -295,10 +296,12 @@ theorem parse_facts {tags : Tags} {bytes : ByteArray} {tables : List (String × 
       exact Or.inl ⟨_, rfl, hb⟩
   -- the lookup slots
   have hnets : ∀ x ∈ nets2.toList,
-      (∃ lines, Net.parse lines = .ok x.2) ∨ ∃ nm tb n lo bits, Lookup.build nm tb n lo bits = .ok x.2 := by
+      (∃ lines, Net.parse lines = .ok x.2) ∨ (∃ nm tb n lo bits, Lookup.build nm tb n lo bits = .ok x.2) ∨
+        ∃ nm sha tb n lo bits, Lookup.buildV2 nm sha tb n lo bits = .ok x.2 := by
     rw [← Array.forIn_toList] at hlook
     refine forIn_except_inv (fun nets : Array (String × Net) => ∀ x ∈ nets.toList,
-      (∃ lines, Net.parse lines = .ok x.2) ∨ ∃ nm tb n lo bits, Lookup.build nm tb n lo bits = .ok x.2)
+      (∃ lines, Net.parse lines = .ok x.2) ∨ (∃ nm tb n lo bits, Lookup.build nm tb n lo bits = .ok x.2) ∨
+        ∃ nm sha tb n lo bits, Lookup.buildV2 nm sha tb n lo bits = .ok x.2)
       _ ?_ nets1 s2 (fun x hx => Or.inl (htext x hx)) hlook
     intro a _ b hb s h
     obtain ⟨lname, spec⟩ := a
@@ -320,7 +323,14 @@ theorem parse_facts {tags : Tags} {bytes : ByteArray} {tables : List (String × 
       · lets jpC
         replace h := ite_throw_ok h
         unjp jpC
-        bindok net hbuild
+        lets jpN
+        obtain ⟨net, hbuild, h⟩ : ∃ net, ((∃ nm tb n lo bits, Lookup.build nm tb n lo bits = .ok net) ∨
+            ∃ nm sha tb n lo bits, Lookup.buildV2 nm sha tb n lo bits = .ok net) ∧ jpN net = .ok s := by
+          split at h
+          · obtain ⟨net, hb, h⟩ := except_bind_ok h; exact ⟨net, Or.inl ⟨_, _, _, _, _, hb⟩, h⟩
+          · obtain ⟨net, hb, h⟩ := except_bind_ok h; exact ⟨net, Or.inr ⟨_, _, _, _, _, _, hb⟩, h⟩
+          · obtain ⟨_, hb, -⟩ := except_bind_ok h; cases hb
+        unjp jpN
         lets nets'
         have hs := Except.ok.inj h
         subst hs
@@ -329,7 +339,7 @@ theorem parse_facts {tags : Tags} {bytes : ByteArray} {tables : List (String × 
         simp only [nets', Array.toList_push, List.mem_append, List.mem_singleton] at hx
         rcases hx with hx | rfl
         · exact hb x hx
-        · exact Or.inr ⟨_, _, _, _, _, hbuild⟩
+        · exact Or.inr hbuild
       · bindok w hw
         cases hw
     · bindok w hw
