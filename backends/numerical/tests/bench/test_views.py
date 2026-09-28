@@ -1617,3 +1617,24 @@ def test_circuit_ands_are_labelled_by_their_convention() -> None:
     drawn = V.circuit_facts({"workload_fingerprint": {**new, "unit_draw": "subset:8"}})
     assert drawn["unit_draw"] == "subset:8 (units_per_vu 1: a unit draw counts instances)"
     assert V.circuit_facts({"workload_fingerprint": {"statement": "verity/flock-ir-frame/v3"}}) is None
+
+
+def test_a_typed_circuit_cell_is_never_a_table2_cell(store: LocalStore, monkeypatch) -> None:
+    """Different statement ids are never merged: a typed cell on a flat cell's line is no Table 2 cell (nor admissible, so no
+    headline or result), listed as rejected with the reason, until Table 2 gives the typed statement lines of its own; flipping
+    C2 alone does not admit it."""
+    flat = committed(store, t_total=0.4, commit=0.6, interaction=FLOCK_LIVE, backend="flock union, flock-128-r2 (backends/flock)",
+                     proof_class="NON_ZK_PROOF", security={"target": -128, "achieved_log2": -195.5})
+    doc = hashed("blake3", t_total=0.1)
+    fp = doc["workload_fingerprint"]
+    fp["software"]["backend"]["name"], fp["statement"], fp["proof_class"] = "flock-circuit", V.CIRCUIT_TYPED, "NON_ZK_PROOF"
+    doc["measurements"].append({"name": V.COMMIT, "value": 0.1, "unit": "s"})
+    typed = put(store, doc)
+    assert V.configuration_of(doc) is V.FLOCK_CIRCUIT_TYPED_CONFIG
+    for c2 in (False, True):
+        monkeypatch.setattr(V, "TYPED_C2", c2)
+        views = V.build(store)
+        assert line(views)["cells"]["Flock"].artifact == flat
+        assert all(c.artifact != typed for ln in views.lines for c in ln["cells"].values() if c is not None)
+        assert typed not in {c.artifact for c in views.admissible}
+        assert [r["codes"] for r in views.rejected if r["artifact"] == typed] == [[("X", V.TYPED_NOT_IN_TABLE2)]]

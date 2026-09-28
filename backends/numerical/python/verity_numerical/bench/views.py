@@ -425,6 +425,10 @@ CIRCUIT_FLAT, CIRCUIT_TYPED = "verity/flock-circuit", "verity/flock-circuit/type
 #: red-team-flock-3's C2 for the typed statement (Q4): #277 and #268 on main, and the typed path calling #268's checks.  Until it
 #: holds, no typed cell or row says the circuit computes its type.
 TYPED_C2 = False
+#: Why a typed cell is not a Table 2 cell (nor in the workload headline): until C2 holds and Table 2 gives the typed statement
+#: lines of its own, a typed cell would compete with a flat one for the same line.
+TYPED_NOT_IN_TABLE2 = (f"{CIRCUIT_TYPED}: not a Table 2 cell until C2 holds (#277 and #268 on main, the typed path calling #268's "
+                       "checks) and Table 2 shows typed and flat statements on separate lines")
 #: M0's typed statement (``verity/flock-circuit/types``, PR #281): the same circuit route with typed ports.  Its own row and
 #: backend, so a typed cell is never merged with a flat one (red-team-flock-3's Q4).
 FLOCK_CIRCUIT_TYPED_CONFIG = dataclasses.replace(
@@ -1507,6 +1511,13 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
     pools: dict[Key, list[tuple[Ctx, dict[str, Any]]]] = {}
     unfiltered: dict[Key, list[tuple[Ctx, dict[str, Any]]]] = {}
     for c in entries:
+        if c.config is not None and c.config.id == FLOCK_CIRCUIT_TYPED_CONFIG.id:
+            # never the best of a typed and a flat cell (different statement ids are never merged): out of Table 2 until C2 holds
+            # and Table 2 gives the typed statement lines of its own, whatever TYPED_C2 says
+            rid, _ = T._attempt_of(store, c.art)
+            V.rejected.append({"artifact": c.art, "family": c.family.id, "configuration": c.config.id, "line": c.target.name,
+                               "subcircuit": c.subcircuit, "attempt": rid, "codes": [("X", TYPED_NOT_IN_TABLE2)]})
+            continue
         codes = reject_codes(store, c, rules, equivs)
         P = throughput(c.meta, rules, c.config is not None and not c.config.transferability.startswith("transferable"))
         key = (c.target.name, c.subcircuit, scheme_of(c), _column(c, rules), vkey(c))
