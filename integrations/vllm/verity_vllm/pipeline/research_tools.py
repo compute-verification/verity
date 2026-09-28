@@ -1,7 +1,7 @@
 """`research` Tool declarations for the vLLM integration sweep stages.
 
-Three Tools — ``vllm.build``, ``vllm.match``, ``vllm.commit`` — one per stage
-of a sweep row.  Each stage runs as one ``research run --tool vllm.<stage>
+Four Tools — ``vllm.build``, ``vllm.match``, ``vllm.commit``, ``vllm.replay`` (a
+deferred Commit's C2 replay, on CPU) — one per stage of a sweep row.  Each stage runs as one ``research run --tool vllm.<stage>
 -- verity-vllm row stage <stage> ...`` Attempt and publishes typed Artifacts
 (``verity_vllm.pipeline.research`` writes the ``outputs.json`` the publisher
 consumes).
@@ -83,6 +83,7 @@ STAGE_KEY_FLAGS: dict[str, dict[str, Any]] = {
         "extra_engine_args": None,
         "commit_args": None,
     },
+    "replay": {},
 }
 
 # Output-changing flags keyed only when set (off, they leave the derivation of every run without them as it was).
@@ -111,6 +112,7 @@ PRODUCES: dict[str, list[str]] = {
     "build": ["vllm-build/v1", "execution-evidence/v1", "run-files/v1"],
     "match": ["vllm-match-record/v1", "execution-evidence/v1", "run-files/v1"],
     "commit": ["vllm-verdict/v1", "execution-evidence/v1", "run-files/v1"],
+    "replay": ["vllm-verdict/v1", "execution-evidence/v1", "run-files/v1"],
 }
 
 
@@ -286,8 +288,9 @@ def _tool(stage: str) -> Tool:
 VLLM_BUILD = _tool("build")
 VLLM_MATCH = _tool("match")
 VLLM_COMMIT = _tool("commit")
+VLLM_REPLAY = _tool("replay")
 
-TOOLS = {t.name: t for t in (VLLM_BUILD, VLLM_MATCH, VLLM_COMMIT)}
+TOOLS = {t.name: t for t in (VLLM_BUILD, VLLM_MATCH, VLLM_COMMIT, VLLM_REPLAY)}
 
 __all__ = [
     "CLOSURE",
@@ -301,6 +304,7 @@ __all__ = [
     "VLLM_BUILD",
     "VLLM_MATCH",
     "VLLM_COMMIT",
+    "VLLM_REPLAY",
     "TOOLS",
     "parse",
     "row_config",

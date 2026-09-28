@@ -33,6 +33,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "capture-identities": ("verity_vllm.correspondence.capture_identities", "capture identities vs the canonical B1 circuit"),
     "census": ("verity_vllm.properties.census", "kernel census of a bare run"),
     "commit": ("verity_vllm.pipeline.commit", "Commit stage: pairs protocol, commitment root and overhead"),
+    "commit-replay": ("verity_vllm.pipeline.cpu_replay", "a deferred Commit's C2 replay on CPU, from its sealed replay bundle"),
     "compiled": ("verity_vllm.acquire.compiled", "required-value manifest of an Execution=compiled row"),
     "compiled-merge": ("verity_vllm.pipeline.compiled_merge", "merge control/treatment outputs of a compiled row"),
     "conformance": ("verity_vllm.program.registry.conformance", "conformance record of the registered library"),
