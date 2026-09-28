@@ -808,6 +808,64 @@
       "targets": [
         "circuits"
       ]
+    },
+    {
+      "name": "one emoji may lead the names (`:mega: @a @b`), as Slack stores 📣",
+      "msg": {
+        "ts": "1700000050.000002",
+        "thread_ts": "1700000050.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": ":mega: @proofs <!subteam^SCIRC|@circuits> please reread the rules"
+      },
+      "root": {
+        "ts": "1700000050.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "📣 *Announcement* from @infra to every handle\nrules changed"
+      },
+      "targets": [
+        "proofs",
+        "circuits"
+      ]
+    },
+    {
+      "name": "an emoji followed by a word is not a lead, so a status line keeps routing as one",
+      "msg": {
+        "ts": "1700000050.000003",
+        "thread_ts": "1700000050.000001",
+        "bot_id": "B1",
+        "username": "proofs",
+        "text": ":white_check_mark: done — reread @circuits"
+      },
+      "root": {
+        "ts": "1700000050.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "📣 *Announcement* from @infra to every handle\nrules changed"
+      },
+      "targets": [
+        "infra"
+      ]
+    },
+    {
+      "name": "a reply that names only its author (`proofs: landed`) names no one, so it wakes the root's poster",
+      "msg": {
+        "ts": "1700000050.000004",
+        "thread_ts": "1700000050.000001",
+        "bot_id": "B1",
+        "username": "proofs",
+        "text": "proofs: Landed G as main abc123"
+      },
+      "root": {
+        "ts": "1700000050.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "📣 *Announcement* from @infra to every handle\nrules changed"
+      },
+      "targets": [
+        "infra"
+      ]
     }
   ],
   "subscriptions": {
