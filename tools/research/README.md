@@ -289,7 +289,7 @@ called PRESERVED without a remote; nothing in the store is ever overwritten.
 ### The steward off the laptop
 
 `research notes watch` is the steward: liveness, reaping, deadlines,
-budgets and the daily render (`notes.py`). Three flags let it run on any
+budgets, the daily render and scheduled runs (`notes.py`). Three flags let it run on any
 always-on host (`steward.py`):
 
 - `--liveness git` (or `RESEARCH_LIVENESS=git`): a notes file's time is
@@ -304,6 +304,27 @@ always-on host (`steward.py`):
   read-only and takes over when the lease frees.
 - `research notes service systemd|launchd` prints the service definition
   (restart on exit and after a reboot; `watch --lease --standby`).
+
+Its schedule is `<notes root>/steward.toml`, re-read every pass: `[[render]]` entries (the tables render, `render_lines`) and
+`[[run]]` entries, each a recorded run launched on a machine once a UTC day at or after `at`, or once an ISO week with
+`weekday` (`run_lines`):
+
+~~~toml
+[[run]]
+name = "lean-upstream"                       # its lines' name, and the key of its state
+at = "10:30Z"
+weekday = "mon"                              # weekly; daily without it
+source = "/workspace/steward/verity"         # the tree it is launched from: its cwd, and its workspace on PYTHONPATH
+args = ["--on", "vy-lean-small", "--project", "verity", "--source", ".", "--cwd", "source", "--tool", "lean_upstream", "--",
+        "python", "tools/lean/upstream.py", "backends/flock/verifier/lean/soundness", "--fetch", "--rev", "origin/main"]
+~~~
+
+`args` are `research run`'s and must put the run on a machine (`--on`). The steward runs `research run --id <run id> <args>`,
+which returns once the machine has started the workload detached, so a pass waits for the launch (at most 10 minutes), never
+for the run. It prints `LAUNCHED <name> <run id> on <machine>`, or `RUN-FAILED <name> <run id>: <why>`, and the next launch is
+the next period's; an invalid entry is one `RUN-FAILED <name>: <why>` line. The run's Attempt records what ran and how it
+ended (`research inspect <run id>`). The Lean runs it schedules are declared in `tools/lean/tool.py`: `lean_audit`
+(`audit.py --all --build --fresh`, nightly on `main`) and `lean_upstream` (the entry above, weekly).
 
 ## Not yet built, in order
 

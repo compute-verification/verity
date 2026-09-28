@@ -39,7 +39,8 @@ Every declaration of the package's audited modules (not a list of theorems), fro
 
 `--fresh` also runs `leanchecker --fresh` on each root: the root's whole import closure, Mathlib and core included,
 through the kernel into an empty environment. It needs one module per root and a lot of memory, so it is not part of
-every run.
+every run: the steward runs `audit.py --all --build --fresh` nightly on `main`, and `upstream.py --fetch` against
+ArkLib's head weekly, each as a recorded run on a pod (`tool.py`; `[[run]]` in `tools/research/README.md`).
 
 `--all` first runs the controls: `tests/fixtures/control`, built with each audited package's toolchain, must pass clean
 and fail once for each violation in `tests/fixtures/violations.json`. One of them adds a false theorem through
