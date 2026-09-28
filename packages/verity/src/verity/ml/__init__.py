@@ -6,6 +6,8 @@
     verity.ml.scalar  IR primitives: integer, bit, select and comparison operations; FP32 abs / neg / max / min / cvt.sat
     verity.ml.fp32    IR primitives: FP32 add / mul / fma / div (RN-even), the FTZ family, FA2 max and -inf guard, BF16
                       element-wise add / mul
+    verity.ml.mufu    IR primitives: the MUFU ex2 / rcp / sqrt / rsqrt / tanh approximations over their measured sm_89 tables
+                      (package data), FA2's inverse sum, div.full's range scaling
     verity.ml.gemm    IR composites: DotBf16 / GemmCoordinate / Gemm parameterised by the step; GEMM_AMPERE, GEMM_HOPPER
     verity.ml.kernels numpy batch forms of the steps and GEMM coordinates (BF16, FP8 E4M3, NVFP4 / MXFP4), registered with
                       `verity.evaluation` and self-checked against `verity.ml.tc`
