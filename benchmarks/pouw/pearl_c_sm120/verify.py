@@ -99,7 +99,7 @@ def verify(path: Path, draws: int, commit: str, run: str = "") -> dict:
         if scheme.name != man["scheme"]:
             raise ValueError(f"scheme {man['scheme']!r} is not {scheme.name!r}")
         mm = Matmul(man["matmul"]["index"], Shape(s["m"], s["k"], s["n"]), man["matmul"]["weight"])
-        epoch = Epoch.start(Workload((mm,)), {mm.weight: bytes.fromhex(man["weight_root"])}, bytes.fromhex(man["beacon"]))
+        epoch = Epoch.unverified(Workload((mm,)), {mm.weight: bytes.fromhex(man["weight_root"])}, bytes.fromhex(man["beacon"]))
         if epoch.salt.hex() != man["salt"]:
             raise ValueError("the transcript's salt is not the beacon's and weight root's")
         c = man["commitment"]
