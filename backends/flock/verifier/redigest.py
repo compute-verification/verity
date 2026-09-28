@@ -23,8 +23,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import transcript_check as tc  # noqa: E402
 
 
-def layout(b):
-    """Byte offsets of every field element, hash and nonce of a proof (PROTOCOL.md §8.2), by field."""
+def layout(b, zk=False):
+    """Byte offsets of every field element, hash and nonce of a proof (PROTOCOL.md §8.2), by field; `zk`: a `--zk` proof's
+    (live PROTOCOL.md), whose Ligerito proof ends with level 0's hiding messages and is followed by the inner proof."""
     r, off, sb = tc.R(b, tc.digest_width(b)), {}, tc.salt_bytes(b)
 
     def at(key, n):
@@ -71,6 +72,21 @@ def layout(b):
     vec(lambda: [f("lig.msg") for _ in range(4)])
     for k in ("lig.qn", "lig.ood", "lig.fold", "lig.cbn", "lig.consn"):
         vec(lambda: (f if k == "lig.ood" else u)(k))
+    if zk:
+        at("zk.tag", 1)
+        for k in ("zk.e0", "zk.e1", "zk.tp"):
+            at(k, 32)
+        vec(lambda: at("zk.ybar", 32))
+        at("in.root", r.u64())
+        f("in.rho")
+        f("in.sigma")
+        at("in.tauc", r.u64())
+        at("in.taus", r.u64())
+        f("in.tau")
+        vec(lambda: f("in.y"))
+        vec(lambda: (f("in.open"), f("in.open")))
+        vec(lambda: at("in.salt", 192))
+        vec(lambda: vec(lambda: at("in.path", 64)))
     assert r.i == len(b), (r.i, len(b))
     return off
 
