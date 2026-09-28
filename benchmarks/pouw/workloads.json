@@ -1,0 +1,16 @@
+{
+ "schema": "verity-pouw/workloads/v1",
+ "model": {
+  "id": "Qwen/Qwen2.5-3B-Instruct",
+  "why": "every linear has k in {2048, 11008} and n >= 2048: inside both schemes' domains, with NCP's gamma <= 0.89%",
+  "hidden": 2048,
+  "layers": 36,
+  "vocab": 151936,
+  "linears": {"qkv": [2048, 2560], "o": [2048, 2048], "gate_up": [2048, 22016], "down": [11008, 2048]}
+ },
+ "decode_batches": [1, 8, 32],
+ "prefill_tokens": [512, 2048],
+ "gamma_shapes": [[2048, 2048, 2560], [2048, 2048, 2048], [2048, 2048, 22016], [2048, 11008, 2048],
+                  [4096, 4096, 4096], [4096, 65536, 65536]],
+ "reference_shapes": [[4096, 4096, 4096]]
+}
