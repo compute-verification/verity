@@ -393,6 +393,45 @@ def knows_custody(pkg: Path | None) -> bool:
     return (Path(pkg) / "store" / "custody.py").is_file() and "CUSTODY_DIR" in (Path(pkg) / "remote.py").read_text()
 
 
+def knows_queue(pkg: Path | None) -> bool:
+    """Whether the research package that will run on the machine runs its runner under a queue's wrapper (`--queue`)."""
+    if pkg is None:
+        return True
+    try:
+        return "QUEUE_WORKLOAD_WRAP" in (Path(pkg) / "remote.py").read_text()
+    except OSError:
+        return False
+
+
+QUEUE_WRAP = "wrap"                       # the runner's, custody included: the job's CPU allocation
+QUEUE_WORKLOAD_WRAP = "workload_wrap"     # the workload's alone: a GPU phase's lease
+
+
+def queue_placement(source: Path | None, run_id: str, spec: dict[str, Any]) -> dict[str, Any]:
+    """`research run --queue`: the queue's placement for this job, `{node, machine, why, job, wrap}`, from `cluster submit` and the
+    description in the --source tree (tools/cluster). Refused when the queue refuses the job."""
+    src = Path(source) / "tools" / "cluster" if source is not None else None
+    if src is None or not (src / "src" / "cluster" / "submit.py").is_file():
+        raise Refused("--queue: the --source tree has no tools/cluster with `cluster submit` (the queue's description and client)")
+    env = dict(os.environ)
+    env["PYTHONPATH"] = str(src / "src") + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
+    argv = [sys.executable, "-m", "cluster", "submit", str(src / "descriptions" / "nebius.toml"), "--run-id", run_id,
+            "--now", str(int(time.time()))]
+    for k, v in spec.items():
+        if v is True:
+            argv.append(f"--{k}")
+        elif v not in (None, False):
+            argv += [f"--{k}", str(v)]
+    r = subprocess.run(argv, env=env, capture_output=True, text=True, timeout=60)
+    try:
+        out = json.loads(r.stdout.strip().splitlines()[-1])
+    except (IndexError, ValueError):
+        raise Refused(f"--queue: `cluster submit` failed (exit {r.returncode}): {r.stderr.strip()[-400:]}") from None
+    if "refused" in out:
+        raise Refused(f"the queue refuses the job: {out['refused']}")
+    return out
+
+
 def knows_preflight(pkg: Path | None) -> bool:
     """Whether the research package that will run on the machine runs `--preflight TOOL` (one that predates it would ignore it)."""
     if pkg is None:
@@ -1163,7 +1202,9 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
         argv += ["--exclusive-lock", str(runs_root / ".exclusive.lock")]
     if req.get("custody"):
         argv += ["--custody-dir", str(request_path.parent / CUSTODY_DIR)]
-    argv += [*(req.get("harness_args") or []), "--", *req["command"]]
+    argv += [*(req.get("harness_args") or []), "--", *(req.get(QUEUE_WORKLOAD_WRAP) or []), *req["command"]]
+    if req.get(QUEUE_WRAP):                        # --queue: the runner, custody included, runs inside the job's CPU allocation
+        argv = [*req[QUEUE_WRAP], *argv]
     log = open(run_dir / "launcher.log", "ab")
     try:
         proc = subprocess.Popen(argv, cwd=req.get("cwd") or None, env=env, stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, start_new_session=True)
@@ -1268,12 +1309,15 @@ def workload_cwd(harness_args: list[str], tool_pkg: Path | None) -> str:
 def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, command: list[str], harness_args: list[str],
            source: Path | None, sends: list[Path], cwd: str | None, env: dict[str, str], exclusive: bool,
            mem_gb: float | None = None, mem_wait_s: float = 0.0, custody_ttl: str | None = None,
-           preflight_tool: str | None = None) -> dict[str, Any]:
+           preflight_tool: str | None = None, queue: dict[str, Any] | None = None) -> dict[str, Any]:
     """`custody_ttl` (--custody-r2): mint a delete-free key for that long and stage it for the machine's runner (store.custody).
-    `preflight_tool` (--preflight): run that tool's declared preflight on the machine before this run, whatever the run's --tool."""
+    `preflight_tool` (--preflight): run that tool's declared preflight on the machine before this run, whatever the run's --tool.
+    `queue` (--queue): the queue's placement (queue_placement); the machine runs the runner under its `wrap`, so the allocation
+    is held until the runner, custody included, exits."""
     local_dir.mkdir(parents=True, exist_ok=False)
     rec: dict[str, Any] = {"schema": "research/remote/v0.1", "run_id": run_id, "machine": machine_name, "project": project, "phase": "resolving",
-                           "created_utc": utc_now_ms(), "observed_utc": None, "last_observed": None, "command": command, "launch_args": harness_args}
+                           "created_utc": utc_now_ms(), "observed_utc": None, "last_observed": None, "command": command, "launch_args": harness_args,
+                           **({"queue": queue} if queue else {})}
     write_json_atomic(local_dir / "remote.json", rec)
     try:
         m = resolve_machine(machine_name, project)
@@ -1305,6 +1349,9 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
         if preflight_tool and not knows_preflight(tool_pkg):
             raise Refused(f"--preflight: the research package in {source} predates it, so the machine would not run the preflight.  Commit "
                           f"a tree that has it, or drop --preflight")
+        if queue and not knows_queue(tool_pkg):
+            raise Refused(f"--queue: the research package in {source} predates it, so the machine would run the job outside its "
+                          f"allocation.  Commit a tree that has it")
         tool_dir = ship_tool(ssh, m["root"], tool_pkg)
         rec["tool_from"] = str(tool_pkg) if tool_pkg else "launcher"
         rec["tool_identity"] = tool_identity(tool_pkg)
@@ -1331,6 +1378,7 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
                    "lease_extend_s": lease_extend_s(harness_args),
                    **({"custody": custody_pub} if custody_pub else {}),
                    **({"preflight_tool": preflight_tool} if preflight_tool else {}),
+                   **({QUEUE_WRAP: queue["wrap"], QUEUE_WORKLOAD_WRAP: queue.get("workload_wrap") or [], "queue": queue} if queue else {}),
                    "cost": {"provider": m.get("provider", "runpod"), "pod_id": m.get("pod_id"), "machine": machine_name, "currency": "USD",
                             "rate_usd_per_hour": tgt["cost_per_hr"], "rate_observed_utc": tgt["rate_observed_utc"], "reason": None},
                    "remote": {"machine": machine_name, "pod_id": m.get("pod_id"), "pod_name": tgt["pod_name"], "host": tgt["host"], "port": tgt["port"],

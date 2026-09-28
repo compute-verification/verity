@@ -15,7 +15,10 @@ The rules, each enforced here and checked by `tests/test_simulation.py` on rando
    workstream never runs beyond its GPUs plus its `borrow_gpus`.
 3. **Quiet jobs** (timed windows) run with nothing else active on their node: GPU-holding allocations are evicted (a frozen
    CUDA context still holds its GPU), CPU-only ones frozen and thawed afterwards; only a `quiet_safe` service keeps running.
-   A quiet job blocked by an allocation it may not displace waits, and holds the node's reservation.
+   A quiet job blocked by an allocation it may not displace waits, and holds the node's reservation. A quiet job asking
+   for some but not all of its node's GPUs (a 1-GPU `gpu-lease --timed`) still clears the rest of the node, but starts
+   beside what it may not displace when it fits, as `gpu-lease` starts it: a design divergence kept until the 7 Oct clamp
+   (infra's and PoUW's rulings).
 4. **Reservation and backfill.** The highest-ranked blocked job with a known start (the ends of the allocations it may not
    displace) reserves its node from then. Lower jobs start ahead of it only if they end before then or it may evict them,
    so a whole-node request is never starved and GPUs never idle behind it.
@@ -98,6 +101,8 @@ def static_refusal(cluster: Cluster, node: str, job: Job, now: int) -> str | Non
     if job.node is not None and job.node != node:
         return f"pinned to {job.node}"
     n = cluster.nodes[node]
+    if job.gpus and job.gpu_model and job.gpu_model != n.gpu_model:
+        return f"its GPUs are {n.gpu_model or 'undescribed'}, not {job.gpu_model}"
     standing = cluster.standing(job.project, node)
     if standing is None:
         return f"{job.project} has no share on {node}"
@@ -123,7 +128,7 @@ def static_refusal(cluster: Cluster, node: str, job: Job, now: int) -> str | Non
         return f"would run past {node}'s admission end {ends}"
     if job.pool is not None and job.pool not in n.pools:
         return f"{node} has no CPU pool {job.pool!r}"
-    allowed = _allowed_cpus(cluster, n, job)
+    allowed = allowed_cpus(cluster, n, job)
     if job.gpus > len(n.gpus) or job.cpus > len(allowed) or job.memory_gib > n.memory_gib:
         return f"larger than {node} allows ({job.gpus} GPUs, {job.cpus} CPUs, {job.memory_gib} GiB)"
     if set(job.gpu_ids) - {g.index for g in n.gpus}:
@@ -167,7 +172,7 @@ def fit(cluster: Cluster, node: str, job: Job, occupants: Iterable[Allocation],
         if len(free_gpus) < job.gpus:
             return "no GPUs free"
         gpus = _pick_gpus(n, free_gpus, job.gpus)
-    free_cpus = _allowed_cpus(cluster, n, job) - used_cpus
+    free_cpus = allowed_cpus(cluster, n, job) - used_cpus
     if len(free_cpus) < job.cpus:
         return "no CPUs free"
     return gpus, _pick_cpus(n, free_cpus, job.cpus, gpus)
@@ -318,6 +323,11 @@ def job_in_share(cluster: Cluster, node: str, job: Job, occupants: Iterable[Allo
     return sum(len(a.gpus) for a in occ if a.id in shared and a.job.workstream == w.name) + job.gpus <= w.gpus
 
 
+def whole_quiet(cluster: Cluster, node: str, job: Job) -> bool:
+    """A quiet job that waits for what it may not displace: one of every GPU, or of none (a CPU window); rule 3."""
+    return job.quiet and not 0 < job.gpus < len(cluster.nodes[node].gpus)
+
+
 def _ordinary(cluster, node, job, occ, held_locks, arank, mine, now):
     got = fit(cluster, node, job, occ, held_locks)
     if not isinstance(got, str):
@@ -348,6 +358,9 @@ def _quiet(cluster, node, job, occ, held_locks, arank, mine, now):
             (evict if lower and a.job.preempt == "requeue" else blockers).append(a)
         else:
             (freeze if lower and a.job.preempt in ("freeze", "requeue") else blockers).append(a)
+    if blockers and not whole_quiet(cluster, node, job) and not isinstance(fit(cluster, node, job, _without(occ, evict),
+                                                                                  held_locks), str):
+        blockers = []
     if blockers:
         ends = [a.ends_by for a in blockers]
         start_by = None if None in ends else max(now, *ends)
@@ -381,7 +394,7 @@ def _without(occ, gone):
     return [a for a in occ if a.id not in ids]
 
 
-def _allowed_cpus(cluster: Cluster, n: Node, job: Job) -> frozenset[int]:
+def allowed_cpus(cluster: Cluster, n: Node, job: Job) -> frozenset[int]:
     """A job naming a pool gets that pool's CPUs; any other job gets the CPUs outside every pool. A guest's share narrows
     either."""
     base = n.pools.get(job.pool, frozenset()) if job.pool is not None else n.cpus - n.pooled_cpus
@@ -419,4 +432,4 @@ def _pick_cpus(n: Node, free: frozenset[int], count: int, gpus: tuple[int, ...])
 
 
 __all__ = ["Action", "Evict", "Expire", "Freeze", "Idle", "OWNER", "Refuse", "Start", "Thaw", "Wait", "apply", "fit", "idle",
-           "in_share", "job_in_share", "plan", "static_refusal"]
+           "in_share", "job_in_share", "plan", "static_refusal", "allowed_cpus", "whole_quiet"]

@@ -55,6 +55,15 @@ class Node:
         f.write_text(f"pid={pid} n={n} run=- who=w{pid} since={since}\n")
         self._hold(pid, f)
 
+    def orphan(self, i: int) -> None:
+        """GPU i's lock held under an owner line whose pid is gone: only /proc/locks shows it."""
+        lock = self.gl / f"{i}.lock"
+        lock.touch()
+        (self.gl / f"{i}.owner").write_text("pid=99 run=- who=gone since=2026-09-30T19:00:00Z cmd=x\n")
+        st = os.stat(lock)
+        with (self.proc / "locks").open("a") as f:
+            f.write(f"1: FLOCK  ADVISORY  WRITE 4242 {os.major(st.st_dev):02x}:{os.minor(st.st_dev):02x}:{st.st_ino} 0 EOF\n")
+
     def end(self, pid: int) -> None:
         for p in (self.proc / str(pid) / "fd").iterdir():
             p.unlink()
@@ -170,6 +179,53 @@ def test_live_mode_holds_the_agent_lock_evicts_fill_for_a_window_then_grants_it(
     fd = os.open(node.gl / "agent.lock", os.O_RDONLY)
     fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
     os.close(fd)
+
+
+def test_live_mode_never_grants_a_gpu_whose_lock_a_dead_owners_child_still_holds(c, tmp_path):
+    node = Node(tmp_path)
+    node.orphan(0)
+    node.waiter(20, 1, "2026-09-30T20:00:00Z")
+    ex = agent.Executor(node.gl, kill=lambda pid, sig: pytest.fail("nothing to evict"))
+    run(c, node, tmp_path / "out", Clock(T0), mode="live", executor=ex, until=T0 + 1)
+    assert (node.gl / "grant.20").read_text() == "1\n"
+
+
+def test_live_mode_grants_the_timed_request_of_a_window_the_fill_runner_has_begun_and_nothing_else(c, tmp_path, monkeypatch):
+    """`status.txt` says `timed True` before the timed lease exists; under agent mode gpu-lease queues the timed request to
+    the agent, so the agent keeps reading and grants it (and no other request), then reads nothing but `status.txt`."""
+    node = Node(tmp_path)
+    reads = []
+    real = nebius2.read
+    monkeypatch.setattr(nebius2, "read", lambda t, *a: reads.append(t) or real(t, *a))
+    clock = Clock(T0)
+
+    def ask():
+        node.waiter(21, 1, "2026-09-30T20:00:01Z")
+        f = node.gl / "wait.1.30"
+        f.write_text("pid=30 n=8 run=- who=w30 since=2026-09-30T20:00:03Z max=20 timed=1\n")
+        node._hold(30, f)
+
+    def granted():
+        assert (node.gl / "grant.30").exists() and not (node.gl / "grant.21").exists()
+        node.end(30)
+        node.lease(30, range(8), "2026-09-30T20:00:08Z", "timed=1")
+
+    clock.at = {T0 + 1: lambda: node.set_status(True), T0 + 2: ask, T0 + 8: granted}
+    s = run(c, node, tmp_path / "out", clock, mode="live", until=T0 + 40,
+            executor=agent.Executor(node.gl, kill=lambda pid, sig: pytest.fail("the node is free")))
+    assert (node.gl / "grant.30").read_text() == "0,1,2,3,4,5,6,7\n" and not (node.gl / "grant.21").exists()
+    assert s["windows_seen"] == 1 and s["windows_from_status_only"] == 1
+    assert [t for t in reads if t > T0 + 11] == [], "once the timed lease is there, only status.txt is read"
+
+
+def test_shadow_mode_reads_nothing_in_a_window_the_status_file_began(c, tmp_path, monkeypatch):
+    node = Node(tmp_path)
+    reads = []
+    real = nebius2.read
+    monkeypatch.setattr(nebius2, "read", lambda t, *a: reads.append(t) or real(t, *a))
+    clock = Clock(T0, {T0 + 1: lambda: node.set_status(True)})
+    run(c, node, tmp_path / "out", clock, until=T0 + 30)
+    assert reads == [T0]
 
 
 def test_live_mode_kills_a_lease_still_there_thirty_seconds_after_its_sigterm(c, tmp_path):

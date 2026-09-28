@@ -25,6 +25,7 @@ dev = 100
 fill = 10       # backfill: sweeps, censuses, anything that resumes from checkpoints
 
 [nodes.vy-nebius-1]
+gpu_model = "rtx-pro-6000"
 owner = "verity"
 memory_gib = 1690
 stops_at = "2026-10-07T15:00:00Z"
@@ -51,6 +52,7 @@ gpus = 5
 borrow_gpus = 2
 
 [nodes.vy-nebius-2]
+gpu_model = "rtx-pro-6000"
 owner = "pous"
 memory_gib = 1690
 stops_at = "2026-10-07T15:00:00Z"

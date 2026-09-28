@@ -29,3 +29,6 @@ def test_each_violation_is_named():
                  "g's share of jobs exceeded", "evicted though it isn't preemptible", "evicted by an equal or lower rank"):
         assert want in got, want
     assert invariants.check(c, "n1", [a], T0 + 1000) == [f"n1: {a.id} outlives the admission end"]
+    session = alloc(job("s-1", gpus=1, preempt="never", memory_gib=1), (1,), "7")
+    assert invariants.check(c, "n1", [session, q], T0) == [], "a 1-GPU window may run beside what it may not displace"
+    assert "runs beside quiet q-1" in " ".join(invariants.check(c, "n1", [a, session, q], T0)), "but not beside fill"

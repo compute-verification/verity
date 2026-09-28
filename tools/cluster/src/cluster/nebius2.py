@@ -45,11 +45,13 @@ def fields(line: str) -> dict[str, str]:
 
 @dataclass(frozen=True)
 class Observation:
-    """The node's leases and waiters at `t`: each held GPU's owner line, and each live waiter's line with its file name."""
+    """The node's leases and waiters at `t`: each held GPU's owner line, and each live waiter's line with its file name.
+    `held` lists the GPUs whose lock is held by no owner line's pid (a lease being taken, or a dead holder's child)."""
     t: int
     leases: dict[int, str]
     waits: tuple[tuple[str, str], ...] = ()
     waits_known: bool = True
+    held: tuple[int, ...] = ()
 
 
 def from_sampler(rec: dict[str, Any]) -> Observation:
@@ -64,8 +66,8 @@ def held_by(pid: int, paths: set[Path], proc: Path = Path("/proc")) -> set[Path]
     Empty when the process is gone; None when its descriptors can't be read (another user's process).
 
     `gpu-lease` takes each lock with a short-lived `flock -n -x FD` child on a descriptor its own shell keeps open, so the
-    shell (the owner line's `pid`, the wait file's last name part) holds it; `/proc/locks` hides a lock whose taker has
-    exited, so it can't be read from there."""
+    shell (the owner line's `pid`, the wait file's last name part) holds it; `/proc/locks` names the taker, that child, so
+    the holder can't be read from there (whether anyone holds it can: `locked`)."""
     fd_dir = proc / str(pid) / "fd"
     want = {str(p) for p in paths}
     out: set[Path] = set()
@@ -85,10 +87,29 @@ def held_by(pid: int, paths: set[Path], proc: Path = Path("/proc")) -> set[Path]
     return out
 
 
+def locked(paths: set[Path], proc: Path = Path("/proc")) -> set[Path] | None:
+    """Which of `paths` anyone holds a flock on, from `/proc/locks` by device and inode (its pid is the taker's, which may be
+    long gone); None when it can't be read."""
+    try:
+        text = (proc / "locks").read_text()
+    except OSError:
+        return None
+    held = {p[5] for p in (line.split() for line in text.splitlines()) if len(p) > 5 and p[1] == "FLOCK"}
+    out = set()
+    for path in paths:
+        try:
+            st = os.stat(path)
+        except FileNotFoundError:
+            continue
+        if f"{os.major(st.st_dev):02x}:{os.minor(st.st_dev):02x}:{st.st_ino}" in held:
+            out.add(path)
+    return out
+
+
 def read(t: int, lease_dir: Path = LEASE_DIR, proc: Path = Path("/proc")) -> Observation:
     """The live state of `lease_dir`, read-only and without taking a lock: each GPU whose owner line's pid holds its lock,
-    and each wait file its waiter holds. A held lock under a stale owner line (a lease being taken: `gpu-lease` writes the
-    line after it takes the lock) isn't the named pid's, so it reads as free until the line is written."""
+    and each wait file its waiter holds. A lock held under a line that names another pid (a lease being taken, or a holder
+    that died while a child kept its descriptor) is `held`: busy, and nobody's to move."""
     lease_dir = Path(os.path.realpath(lease_dir))
     leases: dict[int, str] = {}
     waits: list[tuple[str, str]] = []
@@ -115,7 +136,9 @@ def read(t: int, lease_dir: Path = LEASE_DIR, proc: Path = Path("/proc")) -> Obs
         for i, line in lines:
             if held is None or lease_dir / f"{i}.lock" in held:
                 leases[i] = line
-    return Observation(t, leases, tuple(sorted(waits)))
+    gpus = {int(name[:-5]) for name in names if name.endswith(".lock") and name[:-5].isdigit()}
+    busy = locked({lease_dir / f"{i}.lock" for i in gpus - set(leases)}, proc) or set()
+    return Observation(t, leases, tuple(sorted(waits)), held=tuple(sorted(int(p.name[:-5]) for p in busy)))
 
 
 def timed_now(cluster: Cluster, obs: Observation, node: str = NODE) -> bool:
@@ -209,5 +232,5 @@ def preemption(line: str) -> dict[str, Any] | None:
             "requester": head.lstrip("("), "victim": fields(owner)}
 
 
-__all__ = ["NODE", "LEASE_DIR", "Observation", "Lease", "fields", "from_sampler", "held_by", "read", "timed_now",
+__all__ = ["NODE", "LEASE_DIR", "Observation", "Lease", "fields", "from_sampler", "held_by", "locked", "read", "timed_now",
            "leases", "job_of", "allocations", "unowned", "queue", "preemption"]

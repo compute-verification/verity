@@ -59,6 +59,7 @@ class Node:
     drain_s: int = 0
     smt_pairs: bool = True
     pools: dict[str, frozenset[int]] = field(default_factory=dict)
+    gpu_model: str = ""
 
     @property
     def cpus(self) -> frozenset[int]:
@@ -140,6 +141,7 @@ class Job:
     priority: str
     kind: str = "batch"
     gpus: int = 0
+    gpu_model: str | None = None
     cpus: int = 1
     memory_gib: int = 1
     max_s: int | None = None
@@ -245,7 +247,7 @@ def from_dict(d: dict[str, Any]) -> Cluster:
             numa=numa, system_cpus=cpuset.parse(nd.get("system_cpus", "")), memory_gib=int(nd["memory_gib"]),
             stops_at=instant(nd.get("stops_at")), drain_s=int(nd.get("drain_s", meta.get("drain_s", 0))),
             smt_pairs=bool(nd.get("smt_pairs", True)),
-            pools={k: cpuset.parse(v) for k, v in nd.get("pools", {}).items()})
+            pools={k: cpuset.parse(v) for k, v in nd.get("pools", {}).items()}, gpu_model=str(nd.get("gpu_model", "")))
     shares = tuple(
         Share(project=s["project"], node=s["node"], cpus=cpuset.parse(s["cpus"]) if "cpus" in s else None,
               max_gpus=s.get("max_gpus"), max_cpus=s.get("max_cpus"), max_memory_gib=s.get("max_memory_gib"),

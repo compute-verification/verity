@@ -9,6 +9,8 @@
   cluster agent DESCRIPTION.toml --out DIR [--mode shadow|live] [--hours H] [--stop-file P] [--copy-to DIR]
   cluster shadow replay DESCRIPTION.toml --sampler UTIL.jsonl[.gz] --preempted LOG[.gz] --out DIR
   cluster shadow evaluate DIR [--quiet-log QUIET.jsonl[.gz]] [--sampler UTIL.jsonl[.gz]...]  # the pass bar: exit 0 or 2
+  cluster submit DESCRIPTION.toml --run-id R --now T --project P --submitter W --max-s S [--gpus N ...]
+                                                        # the node and executor wrapper as JSON; exit 3 with {"refused"}
 
 A snapshot is `{"node", "now", "allocations": [...], "queue": [...], "done": [...], "has": [...], "held_locks": [...],
 "last_busy": {alloc: t}, "idle_s": {kind: s}}`, in the shapes `model.allocation_to_dict` and `model.job_to_dict` write.
@@ -85,7 +87,39 @@ def main(argv: list[str] | None = None) -> int:
     se.add_argument("--quiet-log")
     se.add_argument("--sampler", nargs="*", default=[], help="the node's util/*.jsonl[.gz] over the same span")
     se.add_argument("--description", default=str(Path(__file__).parents[2] / "descriptions" / "nebius.toml"))
+    sb = sub.add_parser("submit", help="place a job and print its node and executor wrapper as JSON (research run --queue)")
+    sb.add_argument("description")
+    sb.add_argument("--run-id", required=True)
+    sb.add_argument("--now", type=int, required=True, help="epoch seconds (the caller's clock)")
+    sb.add_argument("--project", required=True)
+    sb.add_argument("--submitter", required=True)
+    sb.add_argument("--class", dest="priority", default="work")
+    sb.add_argument("--gpus", type=int, default=0)
+    sb.add_argument("--gpu-model")
+    sb.add_argument("--cpus", type=int, default=1)
+    sb.add_argument("--mem-gb", type=int, default=8)
+    sb.add_argument("--max-s", type=int, required=True)
+    sb.add_argument("--custody-s", type=int, default=0)
+    sb.add_argument("--preempt", choices=("requeue", "never"), default="requeue")
+    sb.add_argument("--quiet", action="store_true")
+    sb.add_argument("--node")
+    sb.add_argument("--gpu-ids", default="", help="comma-separated GPU indices the job must get")
     a = ap.parse_args(argv)
+
+    if a.cmd == "submit":
+        from . import submit
+        c = model.load(a.description)
+        j = submit.job(run_id=a.run_id, project=a.project, submitter=a.submitter, priority=a.priority, gpus=a.gpus,
+                       gpu_model=a.gpu_model, cpus=a.cpus, memory_gib=a.mem_gb, max_s=a.max_s, custody_s=a.custody_s,
+                       preempt=a.preempt, quiet=a.quiet, node=a.node,
+                       gpu_ids=tuple(int(x) for x in a.gpu_ids.split(",") if x), submitted=a.now)
+        try:
+            out = submit.resolve(c, j, a.run_id, a.now)
+        except submit.Refused as e:
+            print(json.dumps({"refused": str(e)}))
+            return 3
+        print(json.dumps(out, sort_keys=True))
+        return 0
 
     if a.cmd == "agent":
         import time
