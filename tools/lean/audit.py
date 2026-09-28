@@ -834,7 +834,8 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     """Audit one package; returns its report (`failures` empty when it passes). ``built`` is called once its build has
     passed, before anything reads it. ``runs`` runs the package's tests (`tests`), ``repo`` the checkout their data's
     `generate` reads. ``moved`` ({old name: new name}, with ``update``) renames the record's pins, and the review compares
-    the build with the records under the old names (`review`)."""
+    the build with the records under the old names (`review`). An update's report holds the review, whether a reviewer must
+    read it (`statement_changes`), and the pins and reads it compared with (`before`) beside those it wrote."""
     rep = {"package": str(pkg), "seconds": {}, "failures": []}
     if not (pkg / POLICY).exists():
         rep["failures"].append(f"policy: {pkg} has no {POLICY}. Start from this one, pin the theorems your documents cite "
@@ -942,6 +943,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         rep["review"] = notes
         must = statement_changes(notes)
         rep["statement_changes"] = bool(must)
+        rep["before"] = {k: policy.get(k, {}) for k in ("pins", "reads")}   # the record the review compared with
         log(f"audit: {pkg}/{POLICY}: pins and reads rewritten from the build" + (
             f"; {len(notes) - len(must)} lines say the same statements, printed differently, rehashed or moved"
             if len(notes) > len(must) else "") + (

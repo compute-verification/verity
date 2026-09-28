@@ -2,6 +2,7 @@
 `research run --tool` in a throwaway repository."""
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
@@ -220,6 +221,157 @@ def test_prepare_refuses_a_moved_head_a_conflict_and_a_failing_lint_and_pushes_n
     assert merge_main(["--train", "--prepare", "train-prep/x", "B", "C", *lint]) == 1
     assert "C does not merge onto the train so far" in capsys.readouterr().err
     assert _git(origin, "for-each-ref", "refs/heads/train-prep") == "" and "research-train" not in _git(main, "worktree", "list")
+
+
+def test_keep_both_imports_takes_ours_then_the_lines_theirs_adds():
+    from research.merge import keep_both_imports
+
+    text = "-- head\n<<<<<<< HEAD\nimport A\nimport B\n\n=======\nimport B\nfrom x import y\n\n>>>>>>> abc1234 (C)\nrest\n"
+    assert keep_both_imports(text) == "-- head\nimport A\nimport B\n\nfrom x import y\nrest\n"
+    assert keep_both_imports(text.replace("from x import y", "def f := 1")) is None
+    assert keep_both_imports("no conflict\n") is None and keep_both_imports("<<<<<<< HEAD\nimport A\n=======\n") is None
+
+
+def _files_branch(main: Path, name: str, files: dict[str, str]) -> str:
+    _git(main, "checkout", "-q", "-b", name, "main")
+    for path, text in files.items():
+        (main / path).write_text(text)
+    _git(main, "add", *files)
+    _git(main, "commit", "-q", "-m", name)
+    _git(main, "checkout", "-q", "main")
+    return _git(main, "rev-parse", name)
+
+
+def _origin_with(tmp_path: Path, main: Path, files: dict[str, str], prs: dict[int, dict[str, str]]) -> tuple[Path, dict[int, str]]:
+    """A bare `origin` holding main with ``files`` added, and pull request N's head adding ``prs[N]`` on that main."""
+    for path, text in files.items():
+        (main / path).write_text(text)
+    _git(main, "add", *files)
+    _git(main, "commit", "-q", "-m", "base")
+    origin = tmp_path / "origin.git"
+    _git(tmp_path, "init", "-q", "--bare", str(origin))
+    _git(main, "remote", "add", "origin", str(origin))
+    heads = {n: _files_branch(main, f"pr{n}", f) for n, f in prs.items()}
+    _git(main, "push", "-q", "origin", "main", *[f"pr{n}:refs/pull/{n}/head" for n in prs])
+    return origin, heads
+
+
+def test_a_conflict_only_on_import_lines_keeps_both_sides_and_any_other_line_refuses(tmp_path, monkeypatch, capsys):
+    """Stacked PRs each adding a module to one root import list (old-circuits-and-proofs resolved #850, #857, #860, #861, #863
+    and #866 on FlockSoundness.lean by hand, 2 Oct): the train keeps ours, then the lines theirs adds, and says so in the
+    merge's `Imports:` trailer; a conflict holding any other line still refuses, and nothing is pushed."""
+    main, _feat, _tip = _repos(tmp_path)
+    tail = "\ntheorem t : True := trivial\n"
+    origin, heads = _origin_with(tmp_path, main, {"Root.lean": "import A\n" + tail}, {
+        8: {"Root.lean": "import A\nimport B\n" + tail, "B.lean": "def b := 1\n"},
+        9: {"Root.lean": "import A\nimport C\n" + tail},
+        10: {"Root.lean": "import A\n-- D's note\nimport D\n" + tail}})
+    monkeypatch.chdir(main)
+    pins = [f"{n}@{heads[n][:9]}" for n in (8, 9, 10)]
+    assert merge_main(["--train", "--prepare", "train-prep/i", *pins[:2], "--lint", "true"]) == 0, capsys.readouterr().err
+    assert _git(origin, "show", "train-prep/i:Root.lean") + "\n" == "import A\nimport B\nimport C\n" + tail
+    assert _git(origin, "log", "-1", "--format=%B", "train-prep/i").endswith("Imports: Root.lean")
+    assert "Imports:" not in _git(origin, "log", "-1", "--format=%B", "train-prep/i^1"), "#8 merged cleanly"
+    capsys.readouterr()
+    assert merge_main(["--train", "--prepare", "train-prep/j", *pins, "--lint", "true"]) == 1
+    assert "#10 does not merge onto the train so far (a conflict in Root.lean holds more than import lines)" in capsys.readouterr().err
+    assert _git(origin, "for-each-ref", "refs/heads/train-prep/j") == "" and "research-train" not in _git(main, "worktree", "list")
+
+
+def test_a_json_file_git_merges_into_a_repeated_key_refuses_the_train(tmp_path, monkeypatch, capsys):
+    """Two PRs pinning a record of the same name in one `lean-audit.json`, a few lines apart: git merges the lines cleanly into
+    an object with the key twice, which `json.loads` would read as the last one silently."""
+    main, _feat, _tip = _repos(tmp_path)
+    audit = '{\n  "pins": {\n    "a": 1,\n    "m": 5,\n    "z": 9\n  }\n}\n'
+    origin, heads = _origin_with(tmp_path, main, {"lean-audit.json": audit}, {
+        11: {"lean-audit.json": audit.replace('"a": 1,\n', '"a": 1,\n    "b": 2,\n')},
+        12: {"lean-audit.json": audit.replace('"m": 5,\n', '"m": 5,\n    "b": 3,\n')}})
+    monkeypatch.chdir(main)
+    assert merge_main(["--train", "--prepare", "train-prep/k", "11@" + heads[11][:9], "12@" + heads[12][:9], "--lint", "true"]) == 1
+    assert "merging #12 onto the train leaves lean-audit.json unparseable as JSON" in capsys.readouterr().err
+    assert _git(origin, "for-each-ref", "refs/heads/train-prep/k") == ""
+
+
+def _store_remote(tmp_path: Path, monkeypatch) -> None:
+    """A store remote (a directory): the gate reads grants and reviews only after pulling the target's labels from one."""
+    cfg = tmp_path / "store.toml"
+    cfg.write_text(f'[remote]\ntype = "fs"\npath = "{tmp_path / "vault"}"\n')
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
+
+
+def test_a_pin_change_goes_into_a_train_only_with_the_statement_reviewer_grant_at_its_head(tmp_path, monkeypatch, capsys):
+    """old-circuits-and-proofs held #828 and #858-#866 out of trains by hand on 2 Oct: each changed a pinned record with no
+    statement reviewer named.  The queue's rule for it refuses such a ref before its train is built (`--prepare`) or checked
+    (`--train`), until the `grant` label is on the pull request's pinned head; a change to another section needs none."""
+    from research.store.local import LocalStore
+
+    _store_remote(tmp_path, monkeypatch)
+    main, _feat, _tip = _repos(tmp_path)
+    audit = {"roots": ["P"], "pins": {"P.t": {"type_hash": "1"}}, "reads": {}}
+    (main / "tools" / "check").mkdir(parents=True)
+    _origin, heads = _origin_with(tmp_path, main, {
+        "tools/check/queue.toml": '[[grant]]\nrole = "statement-reviewer"\nlean_audit = ["pins", "reads"]\n',
+        "lean-audit.json": json.dumps(audit, indent=1)}, {
+        20: {"lean-audit.json": json.dumps({**audit, "pins": {"P.t": {"type_hash": "2"}}}, indent=1)},
+        21: {"lean-audit.json": json.dumps({**audit, "roots": ["P", "Q"]}, indent=1)}})
+    _git(main, "push", "-q", "origin", "pr20:refs/heads/side")
+    monkeypatch.chdir(main)
+    pins, lint = [f"20@{heads[20][:9]}", f"21@{heads[21][:9]}"], ["--lint", "true"]
+    assert merge_main(["--train", "--prepare", "train-prep/g", *pins, *lint]) == 1
+    err = capsys.readouterr().err
+    assert f"#20 needs the statement-reviewer grant at {heads[20][:12]} (tools/check/queue.toml: a named reviewer read" in err
+    assert f"`research data label pr:20@{heads[20]} grant statement-reviewer --by REVIEWER`" in err and "#21" not in err
+    assert merge_main(["--train", "--prepare", "train-prep/g", f"side@{heads[20][:9]}", *lint]) == 1
+    assert "side needs the statement-reviewer grant (tools/check/queue.toml), which only a pull request's pinned head can hold" \
+        in capsys.readouterr().err
+    assert merge_main(["--train", "pr20", "--tool", "mytools.decl_check:T", "--command", "true"]) == 1
+    out, err = capsys.readouterr()
+    assert "pr20 needs the statement-reviewer grant" in err and "nothing was checked" in err and "recorded as" not in out
+    LocalStore().add_label(f"pr:20@{heads[20]}", "grant", "statement-reviewer", "red-team")
+    assert merge_main(["--train", "--prepare", "train-prep/g", *pins, *lint]) == 0, capsys.readouterr().err
+
+
+def test_a_move_audit_py_prints_as_the_same_statements_needs_no_grant_and_a_changed_statement_still_does(tmp_path, monkeypatch, capsys):
+    """Daniel's ruling (#736, AGENTS.md "Lean"): a guarantee that only moved needs no statement reviewer when `audit.py --update
+    --moved` prints it as the same statement under its old names, though the record's hashes change with the names.  The train
+    takes that verdict from the run's audit.json, which a `lean_review` label on the pinned head names: a move it printed whole as
+    the same statements goes in without the grant; a moved record whose statement also changed refuses, and so does the move's
+    report on a head whose record changed after it ran."""
+    from research.store.local import LocalStore
+
+    _store_remote(tmp_path, monkeypatch)
+    main, _feat, _tip = _repos(tmp_path)
+    base = {"roots": ["P"], "pins": {"P.t": {"type_hash": "1"}}, "reads": {"P.Defs": {"hash": "d"}}}
+    moved = {**base, "pins": {"Q.t": {"type_hash": "1q"}}, "reads": {"Q.Defs": {"hash": "dq"}}}
+    restated = {**moved, "pins": {"Q.t": {"type_hash": "2q"}}}
+    (main / "tools" / "check").mkdir(parents=True)
+    (main / "lean").mkdir()
+    _origin, heads = _origin_with(tmp_path, main, {
+        "tools/check/queue.toml": '[[grant]]\nrole = "statement-reviewer"\nlean_audit = ["pins", "reads"]\n',
+        "lean/lean-audit.json": json.dumps(base, indent=1)}, {
+        22: {"lean/lean-audit.json": json.dumps(moved, indent=1)},
+        23: {"lean/lean-audit.json": json.dumps(restated, indent=1)}})
+    store = LocalStore()
+
+    def review(n: int, after: dict, changes: bool) -> None:
+        f = tmp_path / f"audit-{n}-{changes}.json"
+        f.write_text(json.dumps({"passed": True, "failed": [], "packages": [{
+            "package": "/w/verity/lean", "review": [], "statement_changes": changes,
+            "before": {k: base[k] for k in ("pins", "reads")}, "pins": after["pins"], "reads": after["reads"]}]}))
+        store.add_label(f"pr:{n}@{heads[n]}", "lean_review", store.put_artifact("lean-review/v1", {}, file=f), "lean")
+
+    monkeypatch.chdir(main)
+    lint = ["--lint", "true"]
+    review(22, moved, False)
+    assert merge_main(["--train", "--prepare", "train-prep/m", f"22@{heads[22][:9]}", *lint]) == 0, capsys.readouterr().err
+    review(23, restated, True)                       # it printed `pin Q.t: changed (moved from P.t)` for a reviewer
+    assert merge_main(["--train", "--prepare", "train-prep/n", f"23@{heads[23][:9]}", *lint]) == 1
+    err = capsys.readouterr().err
+    assert f"#23 needs the statement-reviewer grant at {heads[23][:12]}" in err
+    assert f"`research data label pr:23@{heads[23]} lean_review ART --by LANE`" in err
+    review(23, moved, False)                         # the move's own report: it never saw the record #23's head holds
+    assert merge_main(["--train", "--prepare", "train-prep/n", f"23@{heads[23][:9]}", *lint]) == 1
+    assert "#23 needs the statement-reviewer grant" in capsys.readouterr().err
 
 
 _RESULT = ("import json, os; d = os.environ['RESEARCH_RUN_DIR']; json.dump({'schema': 'research/result/v0.1', 'kind': 'check/v1', "

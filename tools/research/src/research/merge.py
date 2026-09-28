@@ -27,6 +27,11 @@ The remote's branch, fetched first, is the truth, never the checkout. With --pus
 
 A train's ref may be pinned: `N@SHA` (pull request N; quote `#N@SHA`, or the shell reads a comment) or `BRANCH@SHA` is fetched
 from the remote and refused unless its head there is still SHA, so what merges is the head that was reviewed (`pinned`).
+A ref whose merge onto the train so far conflicts only on import lines (two PRs adding modules to one root import list) keeps
+both sides, ours first; a conflict on any other line refuses it, and so does a JSON file whose lines git merged into something
+that doesn't parse (`_merge`).  Before a train is built, each ref whose change needs the statement-reviewer grant under
+`research queue`'s rules (a change to the `pins` or `reads` of a `lean-audit.json`) is refused until pull request N holds it at
+that head (`ungranted`).
 """
 from __future__ import annotations
 
@@ -260,17 +265,151 @@ def pinned(repo: Path, ref: str, remote: str) -> tuple[str, str]:
     return label, head
 
 
+#: a line a train's merge takes from both sides of a conflict: a Lean or Python import
+IMPORT_LINE = re.compile(r"\s*(import\s|from\s+\S+\s+import\s)")
+
+
+def keep_both_imports(text: str) -> str | None:
+    """``text``, a file git left with conflict markers (`merge` style), with each conflict resolved to both sides, ours and then
+    the lines of theirs ours lacks, when every line on either side of every conflict is an import or blank; None when one holds
+    anything else, or there is no conflict to resolve."""
+    out: list[str] = []
+    ours: list[str] = []
+    theirs: list[str] = []
+    side, hunks = None, 0
+    for line in text.splitlines(keepends=True):
+        if side is None and line.startswith("<<<<<<< "):
+            side, ours, theirs = "ours", [], []
+        elif side == "ours" and line.rstrip("\r\n") == "=======":
+            side = "theirs"
+        elif side == "theirs" and line.startswith(">>>>>>> "):
+            if not all(IMPORT_LINE.match(x) or not x.strip() for x in ours + theirs):
+                return None
+            out += ours
+            seen = {x.rstrip() for x in ours}
+            for x in theirs:
+                if x.rstrip() not in seen:
+                    seen.add(x.rstrip())
+                    out.append(x)
+            side, hunks = None, hunks + 1
+        elif side is None:
+            out.append(line)
+        else:
+            (ours if side == "ours" else theirs).append(line)
+    return "".join(out) if hunks and side is None else None
+
+
+def _strict_json(text: str) -> bool:
+    """Whether ``text`` parses as JSON with no key twice in one object (a text merge of two added records can repeat a key)."""
+    def pairs(kv: list) -> dict:
+        if len({k for k, _ in kv}) != len(kv):
+            raise ValueError("a key repeats")
+        return dict(kv)
+
+    try:
+        json.loads(text, object_pairs_hook=pairs)
+        return True
+    except ValueError:
+        return False
+
+
+def broken_json(tree: Path, theirs: str) -> list[str]:
+    """The JSON files whose text the merge at ``tree``'s HEAD merged (both sides changed them, as two PRs' pins change one
+    `lean-audit.json`) and that don't parse (`_strict_json`) though both sides' did."""
+    mb = _git(tree, "merge-base", "HEAD^1", theirs).stdout.strip()
+    changed = [set(_git(tree, "diff", "--name-only", "-z", mb, rev).stdout.split("\0")) for rev in ("HEAD^1", theirs)]
+
+    def text(rev: str, path: str) -> str | None:
+        r = _git(tree, "show", f"{rev}:{path}", check=False)
+        return None if r.returncode else r.stdout
+
+    bad = []
+    for p in sorted(x for x in changed[0] & changed[1] if x.endswith(".json")):
+        merged = text("HEAD", p)
+        if merged is not None and not _strict_json(merged) and all(
+                _strict_json(t) for t in (text("HEAD^1", p), text(theirs, p)) if t is not None):
+            bad.append(p)
+    return bad
+
+
+def _merge(tree: Path, label: str, sha: str, msg: str) -> None:
+    """Merge ``sha`` onto the worktree ``tree``'s HEAD (`--no-ff`).  A conflict made only of import lines keeps both sides
+    (`keep_both_imports`), named in the commit's `Imports:` trailer; any other refuses.  A merged JSON file must parse
+    (`broken_json`)."""
+    r = _git(tree, "-c", "merge.conflictStyle=merge", "merge", "--no-ff", "-m", msg, sha, check=False)
+    if r.returncode:
+        conflicted = [p for p in _git(tree, "diff", "--name-only", "-z", "--diff-filter=U").stdout.split("\0") if p]
+        resolved = {}
+        for p in conflicted:
+            try:
+                resolved[p] = keep_both_imports((tree / p).read_text())
+            except (OSError, UnicodeDecodeError):
+                resolved[p] = None
+        if not conflicted or None in resolved.values():
+            _git(tree, "merge", "--abort", check=False)
+            other = [p for p, v in resolved.items() if v is None]
+            raise Refused(f"{label} does not merge onto the train so far"
+                          + (f" (a conflict in {', '.join(other)} holds more than import lines)" if other else "")
+                          + f": {(r.stderr or r.stdout).strip()[-300:]}")
+        for p, new in resolved.items():
+            (tree / p).write_text(new)
+        _git(tree, "add", "--", *resolved)
+        _git(tree, "commit", "-q", "-m", f"{msg}\nImports: {', '.join(resolved)}")
+    if bad := broken_json(tree, sha):
+        raise Refused(f"merging {label} onto the train leaves {', '.join(bad)} unparseable as JSON (or with a key twice in one "
+                      "object), though both sides parse: git merged their lines; merge the train so far into it and fix that by hand")
+
+
 def _chain(tree: Path, pins: list[tuple[str, str]], stamp: str) -> list[str]:
-    """Merge each (label, commit) in order onto the worktree ``tree``'s HEAD, one `--no-ff` merge each; the chain's commits, which
-    are the train's prefixes.  Refused at the first that doesn't merge."""
+    """Merge each (label, commit) in order onto the worktree ``tree``'s HEAD, one `--no-ff` merge each (`_merge`); the chain's
+    commits, which are the train's prefixes.  Refused at the first that doesn't merge."""
     chain = []
     for label, sha in pins:
-        r = _git(tree, "merge", "--no-ff", "-m", f"Merge {label} ({sha[:8]})\n\nTrain: {stamp}", sha, check=False)
-        if r.returncode:
-            _git(tree, "merge", "--abort", check=False)
-            raise Refused(f"{label} does not merge onto the train so far: {(r.stderr or r.stdout).strip()[-300:]}")
+        _merge(tree, label, sha, f"Merge {label} ({sha[:8]})\n\nTrain: {stamp}")
         chain.append(_git(tree, "rev-parse", "HEAD").stdout.strip())
     return chain
+
+
+#: the grants of `research queue`'s rules (role: what it attests) a train's pull request must hold at its pinned head before its
+#: check is spent; the lander applies the rules' other grants by hand
+TRAIN_GRANTS = {"statement-reviewer": "a named reviewer read what `tools/lean/audit.py --update` prints for its changed pins and "
+                                      "the definitions they read (lane contract §5)"}
+
+
+def ungranted(repo: Path, pins: list[tuple[str, str]], base: str, store, log=print) -> list[str]:
+    """Why each train ref whose change from ``base`` needs a TRAIN_GRANTS grant under the queue's rules (as ``base`` has them;
+    none when it has no rules file) can't go in: pull request N lacks the `grant` label on `pr:N@SHA` at its pinned head (and,
+    for a lean-audit.json change, a `lean_review` that printed it whole as the same statements: `research.queue.reviewed`), or
+    the ref isn't a pinned pull request, which is all a grant can be on."""
+    from .queue import RULES, RULES_BEFORE_MOVE, QueueError, Rules, StoreGrants, grant_target
+
+    for path in (RULES, RULES_BEFORE_MOVE):
+        r = _git(repo, "show", f"{base}:{path}", check=False)
+        if r.returncode == 0:
+            break
+    else:
+        return []
+    grants = StoreGrants(store, lambda s: log(s.replace("research queue:", "research merge:", 1)))
+    out = []
+    try:
+        rules = Rules.parse(r.stdout, path)
+        lean = {g.role for g in rules.grants if g.lean_audit}
+        for label, sha in pins:
+            pr = int(label[1:]) if label.startswith("#") else None
+            need = sorted(rules.needs(repo, base, sha, (lambda: grants.reviews(pr, sha)) if pr else list) & set(TRAIN_GRANTS))
+            if need and pr is None:
+                out.append(f"{label} needs the {', '.join(need)} grant ({path}), which only a pull request's pinned head can hold: "
+                           f"name it as N@SHA")
+            elif missing := [g for g in need if g not in grants(pr, sha)]:
+                target = grant_target(pr, sha)
+                out += [f"{label} needs the {g} grant at {sha[:12]} ({path}: {TRAIN_GRANTS[g]}); once it has it, "
+                        f"`research data label {target} grant {g} --by REVIEWER` (a new push needs a new one)" + (
+                            f". A change `audit.py --update` (`--moved MOVES.json` for a move) prints only as the same statements "
+                            f"needs none: `research data put --kind lean-review/v1 --file OUT/audit.json`, then `research data "
+                            f"label {target} lean_review ART --by LANE`" if g in lean else "") for g in missing]
+    except QueueError as e:
+        raise Refused(f"the queue's rules ({path}): {e}") from e
+    return out
 
 
 #: what `prepare` runs on a train before pushing it: check's preflight (`uv.lock`, the repository's lints)
@@ -289,14 +428,17 @@ def preflight_argv() -> list[str]:
     return [uv, "run", "--locked", "python", *PREFLIGHT]
 
 
-def prepare(repo: Path, refs: list[str], branch: str, onto: str, remote: str, lint: list[str]) -> tuple[str, str]:
-    """Build a train for its check without recording or landing anything: ``refs`` (`pinned`) merged in order onto ``onto`` as
-    ``remote`` has it (the target, or the prep branch of a train ahead, to stack on it) in a scratch worktree, refused at the first
-    that doesn't merge; ``lint`` run on the result there; its tip pushed to ``remote`` as ``branch``, never forced, and read back.
-    Every step names the scratch worktree or ``repo``'s object store, never its checkout.  Returns (the tip, its tree)."""
+def prepare(repo: Path, refs: list[str], branch: str, onto: str, remote: str, lint: list[str], store) -> tuple[str, str]:
+    """Build a train for its check without recording or landing anything: ``refs`` (`pinned`), refused while one lacks a grant
+    (`ungranted`), merged in order onto ``onto`` as ``remote`` has it (the target, or the prep branch of a train ahead, to stack
+    on it) in a scratch worktree, refused at the first that doesn't merge; ``lint`` run on the result there; its tip pushed to
+    ``remote`` as ``branch``, never forced, and read back.  Every step names the scratch worktree or ``repo``'s object store,
+    never its checkout.  Returns (the tip, its tree)."""
     r = _git(repo, "fetch", "-q", remote, onto, check=False)
     base = _git(repo, "rev-parse", "--verify", f"{'FETCH_HEAD' if r.returncode == 0 else onto}^{{commit}}").stdout.strip()
     pins = [pinned(repo, ref, remote) for ref in refs]
+    if why := ungranted(repo, pins, base, store):
+        raise Refused("; ".join(why) + "; nothing was built")
     stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
     tree = Path(tempfile.mkdtemp(prefix="research-train-"))
     _git(repo, "worktree", "add", "-q", "--detach", str(tree), base)
@@ -325,6 +467,8 @@ def train(repo: Path, refs: list[str], into: str, store, tool: str, command: lis
     if head != into or _git(repo, "status", "--porcelain", "--untracked-files=no").stdout.strip():
         raise Refused(f"the checkout must be a clean {into}")
     pins = [pinned(repo, ref, remote) for ref in refs]
+    if why := ungranted(repo, pins, "HEAD", store, log):
+        raise Refused("; ".join(why) + "; nothing was checked")
     stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
     tree = Path(tempfile.mkdtemp(prefix="research-train-"))
     branch = f"research-train/{stamp}"
@@ -522,7 +666,7 @@ def main(argv: list[str]) -> int:
         onto = a.onto or a.into
         lint = shlex.split(a.lint) if a.lint else preflight_argv()
         try:
-            tip, tree = prepare(repo, a.ref, a.prepare, onto, a.remote, lint)
+            tip, tree = prepare(repo, a.ref, a.prepare, onto, a.remote, lint, LocalStore(a.store))
         except Refused as e:
             print(f"research merge: refused: {e}", file=sys.stderr)
             return 1

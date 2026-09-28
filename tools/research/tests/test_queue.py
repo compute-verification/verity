@@ -191,6 +191,23 @@ def test_grants_follow_paths_and_lean_audit_sections_at_the_exact_head(world):
     assert 1 not in [m.pr for m in members] and entries[1].state == "waiting"     # a new head needs a new grant
 
 
+def test_a_lean_review_covers_only_the_change_it_printed_as_the_same_statements():
+    """`reviewed`: an `audit.py --update` report stands in for the statement reviewer only on its own package, only when it printed
+    nothing a reviewer must read, and only for entries it saw change: one another PR changed on `main` meanwhile isn't covered."""
+    from research.queue import reviewed
+
+    old, new = {"pins": {"P.t": "1", "P.u": "5"}, "reads": None}, {"pins": {"Q.t": "1q", "P.u": "5"}, "reads": {"Q": "d"}}
+    rep = {"package": "lean", "statement_changes": False, "before": {"pins": {"P.t": "1", "P.u": "5"}, "reads": {}},
+           "pins": {"Q.t": "1q", "P.u": "5"}, "reads": {"Q": "d"}}
+    assert reviewed("lean/lean-audit.json", old, new, rep)
+    assert reviewed("lean/lean-audit.json", old, new, rep | {"package": "/w/verity/lean/"})
+    assert not reviewed("other/lean/lean-audit.json", old, new, rep) and not reviewed("lean-audit.json", old, new, rep)
+    assert not reviewed("lean/lean-audit.json", old, new, rep | {"statement_changes": True})
+    assert not reviewed("lean/lean-audit.json", old, new, {k: v for k, v in rep.items() if k != "before"})
+    assert not reviewed("lean/lean-audit.json", {**old, "pins": {"P.t": "1", "P.u": "6"}}, new, rep), "P.u changed on main since"
+    assert not reviewed("lean/lean-audit.json", old, {**new, "reads": "{not json"}, rep)
+
+
 def test_an_ejected_head_stays_out_until_its_pr_is_pushed_again(world):
     for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt")):
         world.gh.put(n, world.change({f: f"{n}\n"}))
