@@ -102,6 +102,14 @@ src = "tools/research/src/research/pods/nebius/runs-via-slot"
 nodes = ["vy-nebius-cpu-1"]
 owner = "infra"
 
+# ---- the shared nodes: how each reaches the other, for a check's twins (`check.py --on auto`, slot.py --twin)
+
+[[file]]
+path = "/etc/vy/peers"
+src = "tools/research/src/research/pods/nebius/peers"
+nodes = ["vy-nebius-1", "vy-nebius-2"]
+owner = "infra"
+
 [[file]]
 path = "/usr/local/lib/vy-monitoring/slot_only.py"
 src = "tools/research/src/research/pods/nebius/slot_only.py"
