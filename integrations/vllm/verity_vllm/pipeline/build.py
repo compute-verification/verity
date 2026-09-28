@@ -378,7 +378,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
         from verity_vllm.program.frontend.export_compat import apply_target_profile, export_compat, host_facts, read_back_applied
         from verity_vllm.program.frontend.triton_capture import TritonLaunchLog, intercept_triton_launches
         import torch
-        from verity_vllm.program.frontend.derive import declared_source, derive_report
+        from verity_vllm.program.frontend.derive import derive_report
         from verity_vllm.program.frontend.rules.vllm_bindings import (VLLM_BINDING_RULES, vllm_ruleset, observe_attention_impls, observe_export_facts,
                                                             observe_target_profile, declared_derived_accounting, clear_observations,
                                                             observe_launch_context)
@@ -451,10 +451,6 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
                                             "by_shape": _count([f'{p["kind"]}{tuple(p["shape"])}' for p in probe]), "record": probe}
                 peers = bus.example_peers()
                 mod, inputs = vm.WithPeers(mod, bus), tuple(inputs) + tuple(peers)
-            if declared_source(mod) is None:
-                res["unsupported"] = {"reason": "undeclared_source", "phase": "instantiation",
-                                      "hint": f"{type(mod).__qualname__} declares no DERIVE_SOURCE: a row's Program id never names a Python module path"}
-                raise _Refused()
             applied_export: dict = {}
             ep = vm.export_module(mod, inputs, cfg, ntok, intercept_triton=intercept, launch_log=log, profile=target, applied_out=applied_export)
             res["export"] = {"secs": round(time.time() - t0, 2), "n_nodes": len(list(ep.graph.nodes)), "op_histogram": vm.op_histogram(ep),

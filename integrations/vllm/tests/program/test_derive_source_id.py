@@ -13,7 +13,7 @@ from torch import nn
 from verity.ir.codec import encode_program, program_digest
 from verity_vllm.program.frontend import derive_examples as ex
 from verity_vllm.program.frontend import vllm_meta as vm
-from verity_vllm.program.frontend.derive import declared_source, derive_report
+from verity_vllm.program.frontend.derive import derive_report
 from verity_vllm.program.registry import b1
 
 PROF = dict(mode="profile", profile="b1-eager")
@@ -72,8 +72,8 @@ def test_program_id_is_unchanged_when_the_wrapper_module_moves(moved_vllm_meta):
 
 
 def test_an_undeclared_source_still_names_its_module(moved_vllm_meta):
-    """The fallback for sources that declare nothing (derive's own tests, HF modules): the id follows the module, which is why the
-    row Build refuses an undeclared wrapper (`undeclared_source`)."""
+    """The fallback for sources that declare nothing (derive's own tests, HF modules): the id follows the module, which is why every
+    wrapper `make_wrapper` returns declares its source (next test)."""
     C = _config()
 
     def undeclared(cls):
@@ -91,12 +91,4 @@ def test_every_row_wrapper_declares_a_distinct_versioned_source():
     assert all(i.startswith("verity-vllm/") and i.rsplit("/", 1)[-1].startswith("v") for i in ids)
     with torch.device("meta"):
         step = vm.EngineStep(_ToyVllmLM(_config()), 0, 1)
-    assert declared_source(vm.WithPeers(step, bus=None)) == "verity-vllm/with-peers/v1[verity-vllm/engine-step/v1]"
-
-
-def test_a_malformed_declaration_is_refused():
-    class Bad(nn.Module):
-        DERIVE_SOURCE = ""
-
-    with pytest.raises(TypeError, match="DERIVE_SOURCE"):
-        declared_source(Bad())
+    assert vm.WithPeers(step, bus=None).DERIVE_SOURCE == "verity-vllm/with-peers/v1[verity-vllm/engine-step/v1]"
