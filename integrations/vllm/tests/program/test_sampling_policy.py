@@ -148,11 +148,11 @@ DERIVED_GEOM_KEYS = {"sampler_batch", "num_sms", "pipeline", "relation", "rule",
 
 
 def test_geometry_is_derived_for_every_batch_and_chronology(tmp_path, monkeypatch):
-    """Every stochastic row -- B1, B2, the uniform B8, the B8 whose live count changes S, staggered arrivals, a shape that is no declared
-    request -- gets the SAME geometry: splits 'derived' + the relation; no schedule, no per-request field, no assumption.  The R15 knob
-    STOCH_DECLARED_CHRONOLOGY_S is dead (set or not: same result)."""
+    """Every stochastic row of several requests -- B2, the uniform B8, the B8 whose live count changes S, staggered arrivals, a shape that
+    is no declared request -- gets the SAME geometry: splits 'derived' + the relation; no schedule, no per-request field, no assumption.
+    The R15 knob STOCH_DECLARED_CHRONOLOGY_S is dead (set or not: same result).  (One request: the constant, below.)"""
     from verity_vllm.pipeline.build import sampler_geometry
-    cases = [dict(n=1), dict(n=2, arrive=[0, 5], caps=[16, 9]), dict(n=8), dict(n=8, caps=[16] * 4 + [3] * 4),
+    cases = [dict(n=2, arrive=[0, 5], caps=[16, 9]), dict(n=8), dict(n=8, caps=[16] * 4 + [3] * 4),
              dict(n=8, arrive=[0, 0, 0, 0, 3, 3, 6, 6], caps=[16] * 8)]
     geoms: dict[int, set] = {}
     for env in (None, "1"):
@@ -168,11 +168,37 @@ def test_geometry_is_derived_for_every_batch_and_chronology(tmp_path, monkeypatc
                 g = pol["geometry"]
                 assert set(g) == DERIVED_GEOM_KEYS, sorted(g)
                 assert g["sampler_batch"] == c["n"] and g["num_sms"] == 142 and g["relation"] == "SplitsFor_v1" and g["live"] == "workload-derived"
-                assert g["splits_range_1_to_B"] == [{1: 32, 2: 32, 8: 16}[c["n"]], 32]
+                assert g["splits_range_1_to_B"] == [{2: 32, 8: 16}[c["n"]], 32]
                 assert "request" not in g and "declared_live_counts" not in g and "assumption" not in g and "experimental" not in g
                 geoms.setdefault(id(c), set()).add(json.dumps(g, sort_keys=True))
     # within one workload every component (every shape, the step wrapper, either env) declares the SAME geometry: GP-01 agreement by construction
     assert all(len(v) == 1 for v in geoms.values()), {k: len(v) for k, v in geoms.items()}
+
+
+@pytest.mark.parametrize("num_sms,S", [(142, 32), (132, 32), (16, 16), (6, 4)])
+def test_a_single_request_takes_the_constant_S_of_its_sm_count(tmp_path, num_sms, S):
+    """[single-request workloads] A workload of one request has |live(t)| = 1 at every sampling event: S = SplitsFor_v1(1, num_SMs),
+    computed from the target's SM count, is a constant of its Program (`sampling["splits"]` the int; no `splits` input), for every
+    wrapper shape and the step wrapper alike."""
+    from verity_vllm.pipeline.build import sampler_geometry
+    from verity_vllm.program.frontend.target_profile import TargetProfile
+    from verity_vllm.program.frontend.vllm_meta import single_request_splits
+    from verity_vllm.program.registry.topp_split import splits_for_v1
+    target = TargetProfile.default().with_overrides(num_sms=num_sms)
+    for lp_t in ((8, 15), (8, 9), (None, None)):
+        pol = sampling_policy(None, _requests_manifest(tmp_path, 1))
+        assert sampler_geometry(pol, target, LP=lp_t[0], T=lp_t[1]) is None
+        assert pol["splits"] == S == splits_for_v1(1, num_sms) and single_request_splits(pol) == S
+        g = pol["geometry"]
+        assert g["sampler_batch"] == 1 and g["num_sms"] == num_sms and g["splits"] == S and g["live"] == "single request"
+        assert "input" not in g and g["relation"] == "SplitsFor_v1"
+    # a policy whose int disagrees with its geometry, or whose geometry is several requests', is no single-request constant
+    assert single_request_splits(dict(pol, splits=S * 2 if S < 32 else 16)) is None
+    assert single_request_splits(dict(pol, geometry=dict(g, sampler_batch=2))) is None
+    # without a workload manifest nothing establishes one request: the derived input stays
+    pol = sampling_policy(None, None)
+    pol.update(kind="stochastic", seeded=True, temperature=0.8, top_p=0.95, top_k=0)
+    assert sampler_geometry(pol, target) is None and pol["splits"] == "derived"
 
 
 def test_geometry_refusals_are_named(tmp_path):
