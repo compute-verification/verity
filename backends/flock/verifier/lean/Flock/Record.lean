@@ -4,6 +4,7 @@ PROTOCOL.md §5: the session record (`flock-live-session/v1`) and the session ch
 import Lean.Data.Json
 import Flock.Transcript
 import Flock.Draw
+import Flock.CoinTree
 
 namespace Flock
 
@@ -33,6 +34,8 @@ structure SessionSpec where
   instances : Nat := 0
   /-- the record's digests are SHA-512 under `_sha512` keys (PR #83's `SessionConfig::sha512_digests`), else SHA-256 -/
   sha512Digests : Bool := false
+  /-- the verifier's keyed coin tree (`coin-tree/hm96-sha512/v2`), when its `Hello` names one: R7 takes the prover's nonce -/
+  coinTree : Option CoinTree.Spec := none
   deriving Inhabited
 
 /-- The record's digest key suffix and hash (`dk`, `dg`). -/
@@ -93,7 +96,12 @@ def decode (spec : SessionSpec) (text : String) : V Session := do
   check ((← str j "kind") == "flock-live-session/v1") "S1: not a flock-live-session/v1 record"
   check (isNull j "aborted") "S1: the live session aborted"
   -- S2
-  check ((← str j "hello") == spec.hello) "S2/R7: the session parameters are not the verifier's"
+  match spec.coinTree with
+  | none => check ((← str j "hello") == spec.hello) "S2/R7: the session parameters are not the verifier's"
+  | some ct =>
+    let some own := (Json.parse spec.hello).toOption | throw "S2/R7: the verifier's Hello is not JSON"
+    let nonce ← CoinTree.checkHello own (← str j "hello")
+    let _ ← CoinTree.checkRecord ct nonce (← fld j "coin_tree")
   -- S3
   let cfg ← fld j "config"
   check ((← fld cfg "require_link") == Json.bool true) "S3/F1: require_link is not true"
