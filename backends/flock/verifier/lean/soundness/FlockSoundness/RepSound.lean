@@ -149,18 +149,18 @@ theorem opening_phase (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Sc
   norm_num
 
 /-- **Ligerito.** Level by level: the folds (sumcheck `2L/|K|` per round; mutual correlated
-agreement from BCHKS25 Theorem 4.6, with the row union of paper Lemma 9), the binding of the next
-level by its two out-of-domain samples, the stratified queries (`(1 − γ)^Q`), and the batching
-coins. Proved in `LigeritoPhase` (`ligerito_sound`) for every schedule of the `fast100` shape
-(`fast100_shape`). -/
-theorem ligerito_phase (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) (hA : A.Correct)
+agreement at BCHKS25's printed bound, `mcaError_le_bchks25`, with the row union of paper
+Lemma 9), the binding of the next level by its two out-of-domain samples, the stratified
+queries (`(1 − γ)^Q`), and the batching coins. Proved in `LigeritoPhase` (`ligerito_sound`) for
+every schedule of the `fast100` shape (`fast100_shape`). -/
+theorem ligerito_phase (A : Arith F K) (hA : A.Correct)
     (S : Statement) (sch : Schedule) (hsch : fast100 S.m = some sch) (C : Oracle F)
     (op : OpenOut F) (hop : DOp A S sch C (some op)) :
     value (fun b => b = true) (ligerito A sch op.T op.b C) ≤ ENNReal.ofReal (εLig sch) := by
   classical
   have hshape := fast100_shape S.m sch hsch
   have hm := fast100_m S.m sch hsch
-  refine (ligerito_sound hMCA A hA sch hshape op.T op.b C fun M hM => ?_).trans (le_of_eq ?_)
+  refine (ligerito_sound A hA sch hshape op.T op.b C fun M hM => ?_).trans (le_of_eq ?_)
   · have hmem : M ∈ closeMsgs A sch C := by
       simp only [closeL, Finset.mem_filter, Finset.mem_univ, true_and] at hM
       exact hM
@@ -178,7 +178,7 @@ theorem ligerito_phase (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) (hA : A
 
 /-- **One rep is sound** (PROTOCOL.md §9–§13): from a doomed start, whatever the prover does,
 the rep accepts with probability at most `repError`. Proved from the four phase lemmas. -/
-theorem rep_sound (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) (hA : A.Correct)
+theorem rep_sound (A : Arith F K) (hA : A.Correct)
     (S : Statement) (sch : Schedule) (hsch : fast100 S.m = some sch) (hm : 13 ≤ S.m)
     (mPts : ℕ) (C : Oracle F) (extra : List (Claim F S.m))
     (hextra : extra.length = 2 * S.regions.length) (hdoom : RepDoomed A S sch C extra) :
@@ -214,7 +214,7 @@ theorem rep_sound (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) (hA : A.Corr
             (fun o₃ ho₃ => ?_)).trans ?_
           · cases o₃ with
             | none => simp
-            | some op => exact ligerito_phase hMCA A hA S sch hsch C op ho₃
+            | some op => exact ligerito_phase A hA S sch hsch C op ho₃
           · exact add_le_add (opening_phase A hA S sch hsch _ mPts C extra hextra zc ab ho₂) le_rfl
       · rw [← add_assoc]
         exact add_le_add (add_le_add (lincheck_phase A hA S sch hsch mPts C extra zc ho) le_rfl)

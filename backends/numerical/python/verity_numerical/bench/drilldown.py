@@ -330,7 +330,7 @@ VARIANTS: tuple[Variant, ...] = (
             "No (NON_ZK_PROOF)", "Yes: x, W committed as keyed-BLAKE3 rows (blake3-keyed/row/v2) proved in Flock; y public",
             "SHA-256 (transcript, root_F, frame-v3 trees), keyed BLAKE3 (row leaves in Flock), SHA-512 (Merkle on the A-GKR Ligero side); "
             "collision resistance is a Table 1 assumption (decision 57)",
-            "2^-130.19 (A-GKR's interactive terms; Flock flock-128-r2 2^-195.5; sigma link 2^-243.9 / 2^-246.4), live coins",
+            "2^-130.19 (A-GKR's interactive terms; Flock flock-128-r2 2^-205; sigma link 2^-243.9 / 2^-246.4), live coins",
             "Yes: A-GKR column (NON_ZK_PROOF), full committed relation over frame-v3/blake3-row",
             "backends/gkr/PROTOCOL.md 17.5-17.6; red-team-flock third to fifth audits (GRANTED WITH CONDITIONS at NON_ZK_PROOF 2^-130.19)"),
     Variant("SP1 stock (relation-only / bare guest)", "SP1", "software.backend.name 'sp1…' without tc-dot",

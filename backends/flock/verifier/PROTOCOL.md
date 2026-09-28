@@ -320,9 +320,25 @@ that runs out is extended and the sampler rerun, so the draw stays exact.
 The draw is the object
 
 ~~~text
-{"law": "subset",    "population": N, "k": K,          "units": [u_0 < u_1 < …]}
-{"law": "bernoulli", "population": N, "p": "num/den",  "units": [u_0 < u_1 < …]}
+{"law": "subset",     "population": N, "k": K,                       "units": [u_0 < u_1 < …]}
+{"law": "bernoulli",  "population": N, "p": "num/den",               "units": [u_0 < u_1 < …]}
+{"law": "stratified", "population": N, "k": K, "strata": [stratum…], "units": [u_0 < u_1 < …]}
 ~~~
+
+**The stratified law** is the default (Daniel, Sep 27; the encoding is `note:20260927T1550Z-handoff-from-stratified-law`,
+the same as `protocols/one_stage/PROTOCOL.md`'s):
+- **Strata.** The verifier derives them from its own program and partition object, never from anyone else
+  (`HmRow.stratifiedLaw`, `flock-verify draw --program P --partition Q --stratified K`). It applies the query, groups the
+  units by the template descriptor id of their root node, and writes each stratum's units as ascending, disjoint, non-empty
+  ranges `[lo, hi)`, adjacent ones merged, the strata in the order of their first unit. Only `Q_template_instance` v0 and
+  `Q_template_instances` v0 define strata; any other query refuses the law.
+- **Sizes.** For `1 ≤ K ≤ N`, stratum `s` of `n_s` units draws `k_s = max(1, ⌊(2 K n_s + N) / (2N)⌋)`: `K n_s / N` rounded
+  half up, never below one. A stratum is `{"template": id, "units": [[lo, hi], …], "k": k_s}`, and `Σ k_s` units are drawn.
+- **The sampler.** Each stratum draws `subset(k_s, n_s)` on its own stream of the verifier's randomness, of
+  `2 k_s · w(n_s) + 64` bytes, extended and rerun on its own when it runs out. Local index `j` is the stratum's `j`-th unit,
+  and the draw is the union, ascending. Given bytes (a test's `--stream`) are cut into consecutive per-stratum segments of
+  those sizes, and aren't extended.
+- A session that proves one template's units is served that template's share as a `subset` draw over its `n_s` units.
 
 The statement carries it as the public header's `unit_draw` (so under `pub.sha` and Σ), instance `i` being unit `u_i`,
 and the record keeps it as `unit_draw`. The offline checks:
@@ -330,8 +346,15 @@ and the record keeps it as `unit_draw`. The offline checks:
 | check | rule |
 |---|---|
 | U1 | the record keeps a draw iff the statement carries one, and they are canonically equal |
-| U2 | the draw is well formed: exactly the law's keys; units ascending, distinct and in `[0, N)`; `subset` has `K ≤ N` units; `bernoulli` has `0 ≤ num ≤ den`, `den > 0`, no unit at `p = 0` and every unit at `p = 1` |
+| U2 | the draw is well formed: exactly the law's keys; units ascending, distinct and in `[0, N)`; `subset` has `K ≤ N` units; `bernoulli` has `0 ≤ num ≤ den`, `den > 0`, no unit at `p = 0` and every unit at `p = 1`; `stratified` has `1 ≤ K ≤ N`, each stratum exactly `{template, units, k}` with a distinct template, its ranges ascending, disjoint, not adjacent and non-empty, its `k` the rule's, the strata's ranges tiling `[0, N)` exactly, and exactly `k_s` units in each. When the verifier holds the program and a template-query partition object, a stratified draw's law must be its own derivation from them, at the draw's `K` |
 | U3 | the statement's `instances` is the number of drawn units |
+
+`stratified_agree.py` checks the Lean verifier against core's (#164's `verity_one_stage.draw`, #161's `Stratified`):
+- the derived law and population, against `draw.derive` and `partition.units`;
+- the units drawn on given bytes, against the sampler written out in Python;
+- every draw, from given bytes or the operating system's, accepted by `check_draw`;
+- U2's verdicts on mutations of accepted draws, against `check_draw`'s;
+- inclusion frequencies over operating-system draws, against `k_s / n_s`.
 
 Offline, the draw's uniformity is not checkable; soundness rests on the verifier's honest draw after registration. A
 session without a draw on either side is unchanged. The live side (PR #83) sends the draw after registration, stages the
@@ -1238,9 +1261,10 @@ rejects explicitly.
 Soundness of a verdict rests on:
 
 - **Statistical:** the Flock protocol's round-by-round errors for `fast100` (§15), squared over two reps on one root with
-  live coins: 2^-195.5 per table. The paper's theorems enter as named axioms in the soundness lane (level 4a): proximity
-  gaps and mutual correlated agreement for Reed–Solomon codes up to the Johnson bound (BCHKS25 Theorem 4.6), soundness of
-  ring switching (Diamond–Posen), Ligerito's list-decoding analysis (paper Appendix C).
+  live coins: 2^-195.5 per table by §15's ledger. The soundness lane proves 2^-205 per table in Lean, at the analysis
+  slack `η = 1/200`, with no named assumption: mutual correlated agreement up to the Johnson bound (BCHKS25 Theorem
+  4.6) is proved from DKT26 in ArkLib, and ring switching and Ligerito's list-decoding analysis are proved there too
+  (`lean/soundness/README.md` §1.1 and §1.6, and its `ASSUMPTIONS.md`).
 - **Coins:** with `os` coins, each coin is uniform and unknown to the prover before it sent the round the coin answers.
   With `seed` coins, additionally: the seed commitment hides the seed, and SHA-256 in counter mode is a PRF (§7.2).
 - **Hashes:** SHA-256 collision resistance for the Merkle trees, the round digests and the statement binding (Table 1:
@@ -1342,6 +1366,17 @@ Level-3 status (`lean/FlockProofs`, kernel-checked; `CheckAxioms.lean` and a tes
     `ofLimbs_bijective`, `lo_balanced`.
 - **1d, the fold, first lemmas** (`Fold.lean`): `slot_factor`, so a slot's in-block tensor is its local tensor times
   `eq(ρ_hi, q)`, which is the reason `Stmt.fold` folds each slot type once; and `foldT_get`, so the sparse fold is `Xᵀe`.
+- **A lookup slot's rows compute `table[index]`** (`LookupRows.lean`, `build_computes`, over any field of characteristic
+  2, for every table and index):
+  - `build` encodes rows `RA`, `RB` into its net (`Sparse.ofRows`). A witness satisfying every row, with the product rows'
+    B side the table's as `Lookup.foldB` folds it (`tableB`), and the constant 1, has:
+    - index bits that are bits (`z = z·z`);
+    - output bit `j < bits` equal to bit `j` of the table word the index bits name.
+  - The decoders are one-hot (`decode_spec`), each product row picks one table bit, and each output row sums them.
+  - `build_spec` walks `build`'s loops.
+  - The one hypothesis on the net is `useful ≤ KONST`, which every table meets: the pinned tables' slots have about 50,000
+    rows, and `KONST` is 2^48 − 1.
+  - `net.a.row r = RA[r]` is `Sparse.ofRows`'s round trip (`ofRows_row`, in the soundness package, #177).
 - Planned: the lookup slots' `foldB`, then the fold theorem itself (`Stmt.fold` is `α·A_0ᵀe + B_0ᵀe` for the statement's
   `A_0`, `B_0` with Δ); the region values; the lowering checkers.
 
