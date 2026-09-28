@@ -30,3 +30,8 @@ What the timings cover:
   SM100 kernel is not portable to the 4090.
 - **The model.** Qwen2.5-3B has every linear inside both schemes' domains. Qwen2.5-0.5B's k = 896 is below them, and
   Qwen2.5-1.5B's n = 1536 puts NCP's γ above 1%.
+
+Native route-U result (`r20260928-120218-f7d7`, RTX 4090, m=16, k=2048, n=256):
+all 16 tile digests and outputs match `ncp-v1.checked()`, the final int32 output is exact, and checkpoint-dump time is
+1.359 ms against 1.348 ms for signed s8 (1.0084× time, 0.9917× throughput).  SASS run `r20260928-120439-c053` contains
+native `IMMA.16816.U8.S8` and the signed `IMMA.16816.S8.S8` control.
