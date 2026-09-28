@@ -113,7 +113,8 @@ SAMPLERS_BOUND = {"greedy": "ArgmaxTokenSelect_v1 (aten.argmax over the bf16 log
                   # `GumbelTopPTokenSelect_v1{V,S}` (registry.sampling: f32 widening -> div.full.f32 temperature -> the S-split top-p mask
                   # `_topp_sb_{stats,step,mask}_kernel` -> Gumbel-max keyed `tl.randint(seed, pos)` -> first maximum).  The seed is a runtime
                   # INPUT of the Program; temperature / top_p / pos are constants; S = SplitsFor_v1(|live(t)|, num_SMs) is a DERIVED input
-                  # (`splits`, request-owned, one entry per sampling event; `sampler_geometry`) -- the 6th operand, never a static.
+                  # (`splits`, request-owned, one entry per sampling event; `sampler_geometry`), or the constant SplitsFor_v1(1, num_SMs)
+                  # of a single-request workload -- the 6th operand, never a static.
                   "stochastic": "GumbelTopPTokenSelect[vllm]_v1 (vllm_iface.gumbel_topp_token_select -> GumbelTopPTokenSelect_v1{V}; seed + derived S Program inputs)"}
 
 
@@ -136,7 +137,8 @@ def _cap_of(r: dict) -> int:
 
 def sampler_geometry(sampling: dict, target, LP: int | None = None, T: int | None = None) -> dict | None:
     """[R15 stoch; R16 coord M-0169] The launch geometry of the pinned stochastic sampler for this row, or the refusal (`unsupported`
-    dict) when the policy has no Definition.  On success `sampling["splits"] = "derived"` and `sampling["geometry"]` records the
+    dict) when the policy has no Definition.  On success `sampling["splits"]` is "derived" (several requests) or the constant S (one
+    request, below) and `sampling["geometry"]` records the
     RELATION -- {num_sms, relation SplitsFor_v1, live workload-derived, sampler_batch B, pipeline} -- and nothing per request, so every
     component of a workload declares the same sampler applicability (GP-01 agreement by construction).
 
@@ -148,8 +150,14 @@ def sampler_geometry(sampling: dict, target, LP: int | None = None, T: int | Non
     `vllm_meta.StochasticRequest`), the 6th operand of `GumbelTopPTokenSelect_v1{V}`.  The Program declares NO S and NO schedule: the
     Match binds each event's entry to the split kernels' constexpr and checks the relation per engine step (GM-01 G6 'sampler
     geometry'; `bench.stoch_recompute --build`).  R15's static S / declared-chronology schedule (`STOCH_DECLARED_CHRONOLOGY_S`) is gone:
-    a Program that declared S could only be right by assumption (every request runs to its cap)."""
-    from verity_vllm.program.registry.topp_split import SPLIT_MAX_BATCH, splits_for
+    a Program that declared S could only be right by assumption (every request runs to its cap).
+
+    The ruling, AMENDED for single-request workloads (the research store records it): a workload of ONE request has |live(t)| = 1 at every
+    sampling event it has (a request that stops has no later event), so S = SplitsFor_v1(1, num_SMs) exactly, with no assumption about
+    the schedule.  Its Program takes S as a per-event CONSTANT (`sampling["splits"]` = that int; `Const32[S]` the select's 6th operand,
+    computed here from the target's SM count, never hard-coded) and has no `splits` input; the circuit then anchors S itself.  A workload
+    of several requests keeps the derived input above."""
+    from verity_vllm.program.registry.topp_split import SPLIT_MAX_BATCH, splits_for, splits_for_v1
     kind = sampling.get("kind")
     if kind != "stochastic":
         return None
@@ -178,6 +186,15 @@ def sampler_geometry(sampling: dict, target, LP: int | None = None, T: int | Non
         return refuse("the target profile declares no num_sms: S_t = SplitsFor_v1(|live(t)|, num_SMs) has no num_SMs to be derived with",
                       reason="sampler_geometry")
     nsm = int(target.num_sms)
+    if wl and len(reqs) == 1:                      # the manifest's one request: the only live request at every event
+        S = int(splits_for_v1(1, nsm))
+        geom = {"sampler_batch": 1, "num_sms": nsm, "pipeline": "_apply_topp_split", "relation": "SplitsFor_v1",
+                "rule": "S = SplitsFor_v1(1, num_SMs) at every sampling event: the workload's one request is the only live one",
+                "live": "single request", "splits": S, "ruling": "the derived-S ruling, amended for single-request workloads",
+                "constant": f"Const32[{S}]: the select's 6th operand at every sampling event (no `splits` input)"}
+        sampling["splits"] = S
+        sampling["geometry"] = geom
+        return None
     geom = {"sampler_batch": B, "num_sms": nsm, "pipeline": "_apply_topp_split", "relation": "SplitsFor_v1",
             "rule": "S_t = SplitsFor_v1(|live(t)|, num_SMs); |live(t)| = requests with a sampled logits row at engine step t (workload-derived)",
             "live": "workload-derived", "splits_range_1_to_B": [int(splits_for(B, nsm)), int(splits_for(1, nsm))],

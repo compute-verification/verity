@@ -146,6 +146,48 @@ def test_literal_splits_is_refused_like_a_literal_seed(S):
     assert r.reason in ("hidden_state", "mutation", "custom_op_without_binding"), (r.reason, r.hint)
 
 
+def _derive_constant(C, LP, STEPS, S, **kw):
+    with torch.device("meta"):
+        m = ex.StochasticServe(C, STEPS, constant_S=S, **kw)
+    return derive_report(m, _inputs(LP, STEPS)[:2], **PROF, config=C, rules=vllm_ruleset(), name="StochServe")
+
+
+@pytest.mark.parametrize("S", [32, 16])
+def test_a_single_request_takes_S_as_a_constant(S):
+    """[single-request workloads] A single-request workload's S = SplitsFor_v1(1, num_SMs) is a constant of its Program: no `splits`
+    parameter, and every select's 6th operand a `Const32[S]` emitted as the row's 4th constant (top_p, pos, temperature, S: the
+    fold's operand order), read by that select alone."""
+    C = _tiny_config()
+    LP, STEPS = 3, 2
+    rep = _derive_constant(C, LP, STEPS, S, temperature=0.8, top_p=0.95)
+    assert rep.ok, rep.unsupported
+    fsd = rep.flat_definition
+    names = [n for n, _ in fsd.signature()[0]]
+    assert names[:2] == ["prompt", "seed"] and "splits" not in names, names
+    nodes = fsd.body.nodes
+    sel = [k for k, n in enumerate(nodes) if _base(n) == "GumbelTopPTokenSelect_v1"]
+    assert len(sel) == STEPS + 1
+    for e, k in enumerate(sel):
+        ref = nodes[k].args[5].refs[0]
+        assert ref[0] == "n" and ref[1] == k - 1, (k, ref)
+        assert [nodes[j].fn.id for j in range(k - 4, k)] == [f"Const32[{_bits(0.95)}]_v1", f"Const64[0x{LP - 1 + e:016x}]_v1",
+                                                             f"Const32[{_bits(0.8)}]_v1", f"Const32[0x{S:08x}]_v1"]
+        assert sum(1 for n in nodes for a in n.args for r in a.refs if r[0] == "n" and r[1] == k - 1) == 1   # read by this select alone
+    apps = [a for a in rep.provenance["applications"] if a["rule"] == "GumbelTopPTokenSelect[vllm]_v1"]
+    assert all(a["preconditions_checked"]["S"].startswith(f"Const32[{S}]") for a in apps)
+    assert rep.digest != _derive(C, LP, STEPS, temperature=0.8, top_p=0.95).digest       # another Program than the derived-S form
+    assert rep.digest == _derive_constant(C, LP, STEPS, S, temperature=0.8, top_p=0.95).digest
+
+
+@pytest.mark.parametrize("S", [0, 3, 64, -32])
+def test_a_constant_S_is_a_launched_split_count(S):
+    C = _tiny_config()
+    with torch.device("meta"):
+        m = ex.StochasticServe(C, 1, constant_S=S)
+    r = derive(m, _inputs(3)[:2], **PROF, config=C, rules=vllm_ruleset())
+    assert isinstance(r, Unsupported) and "launched split count" in r.hint, (r.reason, r.hint)
+
+
 def test_default_ruleset_has_no_binding_for_the_op():
     C = _tiny_config()
     with torch.device("meta"):
