@@ -101,7 +101,6 @@ def parts (S : RepS) (maxRegions := MAX_REGIONS) (maxSlots := MAX_SLOTS) (maxLon
       let rr := res[r]!
       pure ({ mul := rr.mul.map fun (a, b) => (op.getD a 0, op.getD b 0), add := ← rr.add.mapM term } : Res)
     let part : RepS := { gf := { nw := wmap.size, nv := vmap.size, ops := gops, res := gres }, ports := P.toList.map (ports[·]!) }
-    checkRepS part
     out := out.push { S := part, res := R.toList, v := V.toList }
   pure out
 
