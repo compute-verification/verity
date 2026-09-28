@@ -7,10 +7,14 @@ import Flock.Registered
 `VFull` asks that each wire V* reads a stage from be a wire of a unit session `j`'s law draws. V*'s laws are the full
 draw (`VLaw.live`), so that is every unit (`vFull_of_whole`). The verifier's U4 (`Flock.Registered.checkFull`,
 PROTOCOL.md §16.10) refuses a drawn statement unless every unit its own registered reads name for a round's commitment
-(`rec-c<i>`, `rec-top-L<l>`) is drawn in full; under a stratified draw that is the stratum holding it.
+(`rec-c<i>`, `rec-top-L<l>`, R's `rec-opening-c<i>` and `rec-top-stacked-L<l>`, the sparse phase's messages) is drawn
+in full; under a stratified draw that is the stratum holding it.
 
 * `mem_unit`: a unit in one of a stratum's ranges is one of its `size` units (`Stratum.unit`).
 * `drawsInFull_of_checkFull`: U4's pass draws in full each unit that reads a round's commitment.
+* `roundCommitment_indexed`, `roundCommitment_named`: the values `Registered.roundCommitment` names are a round's
+  commitment, a prefix of `roundIndexed` followed by any index; `drawsInFull_of_checkFull_round`: U4's pass draws in full
+  each unit that reads one of them.
 * `full_stratum`: a unit a stratified draw draws in full is in a stratum it draws whole.
 * `vFull_of_whole`: `VFull` under the full draw (`--draw subset:N`), without U4.
 -/
@@ -103,6 +107,55 @@ theorem drawsInFull_of_checkFull {own : Array Flock.Registered.Port} {j : Lean.J
   rw [getElem!_pos p.reads u hlt] at this
   rw [Array.getElem?_eq_getElem hlt] at hu
   simp_all
+
+/-- `roundCommitment`'s test at a prefix passes on the prefix followed by a number's decimal digits. -/
+theorem indexed_digits (pre : String) (n : ℕ) :
+    ((pre ++ toString n).startsWith pre &&
+      (!((pre ++ toString n).drop pre.length).toString.isEmpty &&
+        ((pre ++ toString n).drop pre.length).toString.all Char.isDigit)) = true := by
+  have hn : (toString n).toList = Nat.toDigits 10 n := Nat.toList_repr
+  have hd : ((pre ++ toString n).drop pre.length).toString = toString n := by
+    apply String.toList_injective
+    change ((pre ++ toString n).drop pre.length).copy.toList = _
+    rw [String.toList_copy_drop, String.toList_append]
+    exact List.drop_left' String.length_toList
+  have hpre : (pre ++ toString n).startsWith pre = true :=
+    String.startsWith_string_iff.mpr (by rw [String.toList_append]; exact List.prefix_append _ _)
+  have hne : (!(toString n).isEmpty) = true := by
+    rw [Bool.not_eq_true', String.isEmpty_eq_false_iff, ne_eq, ← String.toList_eq_nil_iff, hn]
+    exact Nat.toDigits_ne_nil
+  have hall : (toString n).all Char.isDigit = true := by
+    rw [String.all_bool_eq, hn, List.all_eq_true]
+    exact fun c hc => Nat.isDigit_of_mem_toDigits (by decide) (by decide) hc
+  rw [Bool.and_eq_true, Bool.and_eq_true, hd]
+  exact ⟨hpre, hne, hall⟩
+
+/-- **A prefix of `roundIndexed` followed by any index is a round's commitment.** -/
+theorem roundCommitment_indexed {pre : String} (h : pre ∈ Flock.Registered.roundIndexed) (n : ℕ) :
+    Flock.Registered.roundCommitment (pre ++ toString n) = true := by
+  unfold Flock.Registered.roundCommitment
+  exact Bool.or_eq_true_iff.mpr (Or.inr (List.any_eq_true.mpr ⟨pre, h, indexed_digits pre n⟩))
+
+/-- **Each of `roundNamed` is a round's commitment.** -/
+theorem roundCommitment_named {v : String} (h : v ∈ Flock.Registered.roundNamed) :
+    Flock.Registered.roundCommitment v = true := by
+  unfold Flock.Registered.roundCommitment
+  exact Bool.or_eq_true_iff.mpr (Or.inl (List.contains_iff_mem.mpr h))
+
+/-- **U4's pass draws in full each unit that reads one of the round commitments `roundCommitment` names**: V*'s
+`rec-c<i>` and `rec-top-L<l>`, R's `rec-opening-c<i>` and `rec-top-stacked-L<l>`, the sparse phase's `rec-sparse-pre<j>`
+and `rec-sparse-sc<j>` (each a prefix of `roundIndexed` and an index), and its `rec-sparse-v2`, `rec-sparse-u` and
+`rec-sparse-vt` (`roundNamed`). -/
+theorem drawsInFull_of_checkFull_round {own : Array Flock.Registered.Port} {j : Lean.Json} {d : Flock.Draw.UnitDraw}
+    (hok : Flock.Registered.checkFull (some own) (some j) = .ok ()) (hd : Flock.Draw.UnitDraw.ofJson j = .ok d)
+    {p : Flock.Registered.Port} (hp : p ∈ own)
+    (hv : (∃ pre ∈ Flock.Registered.roundIndexed, ∃ n : ℕ, p.value = pre ++ toString n) ∨
+      p.value ∈ Flock.Registered.roundNamed)
+    {u x : ℕ} (hu : p.reads[u]? = some (some x)) : Flock.Registered.drawsInFull d u = true := by
+  refine drawsInFull_of_checkFull hok hd hp ?_ hu
+  rcases hv with ⟨pre, hpre, n, hn⟩ | hn
+  · rw [hn]; exact roundCommitment_indexed hpre n
+  · exact roundCommitment_named hn
 
 /-- **The executable stratum of a unit a stratified draw draws in full**: one of `St`'s strata holds `u` in its ranges and
 draws all of its units. -/
