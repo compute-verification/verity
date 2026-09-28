@@ -402,16 +402,19 @@ FLOCK_VLLM_CONFIG = dataclasses.replace(
     soundness="2^-205 per proof for flock-128-r2 (live verifier coins, no grinding credit), union 2^-203 over 4 proofs (the cells "
               "record the earlier, still valid 2^-195.44); "
               "red-team-flock: GRANTED WITH CONDITIONS at ff1c1e3f (VL1 closed at af6aae19)")
-#: M0's generic circuit (statement ``verity/flock-circuit``): one pinned GF(2) circuit per template, the SHA-512 commitments
-#: proved inside it.  The unit wording, the absent privacy claim and the time and AND qualifiers follow red-team-flock-3's
-#: statement review (a plain row would call the attention unit a head, or read the hm96 leaves as hiding).
+#: M0's generic circuit (statement ``verity/flock-circuit``): one pinned GF(2) circuit per template, the hm96-sha512 leaves
+#: proved inside it and the frame-v3-sha512 trees over them recomputed by the verifier (the Lean verifier's PROTOCOL.md
+#: §16.10, ``HmRow.checkPublic``).  The unit wording, the absent privacy claim and the time and AND qualifiers follow
+#: red-team-flock-3's statement review (a plain row would call the attention unit a head, or read the hm96 leaves as hiding).
 FLOCK_CIRCUIT_CONFIG = dataclasses.replace(
     FLOCK_CONFIG, id="C-Flock, generic circuit, SHA-512 in-circuit commitments", scheme="frame-v3-sha512/hm96-sha512",
     ports="per instance: one query row (attention: one query over T keys) or one output coordinate (GEMM); x, W committed; "
           "y public, equal to the IR reference on every proved instance",
-    commitment="frame-v3-sha512 trees over hm96-sha512 leaves, proved in the circuit (the benchmark's salts are "
-               "public); commitment timed separately as serving's hm96-sha512 leaf and tree commitment of the committed values",
-    hashes=(Hash("SHA-512", _STMT, _CR + " (frame-v3-sha512 trees, in circuit)"), Hash("SHA-512", _STMT, _CR + " (hm96-sha512 leaves, in circuit)"),
+    commitment="hm96-sha512 leaves proved in the circuit (the benchmark's salts are public); the frame-v3-sha512 trees over "
+               "them recomputed by the verifier from the public file and held to its header's roots; commitment timed "
+               "separately as serving's hm96-sha512 leaf and tree commitment of the committed values",
+    hashes=(Hash("SHA-512", _STMT, _CR + " (frame-v3-sha512 trees, recomputed by the verifier)"),
+            Hash("SHA-512", _STMT, _CR + " (hm96-sha512 leaves, in circuit)"),
             *FLOCK_CONFIG.hashes[2:3],
             Hash("SHA-512", _COINS, "commit-before-coin binding of the live transcript")),
     zk="No: NON_ZK_PROOF; no privacy claim (M0's mask slots are zero and the benchmark's hm96 salts are public)",
