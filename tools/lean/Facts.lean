@@ -1,0 +1,215 @@
+import Lean
+
+/-!
+# The audit's facts, from the package's `.olean` files as data
+
+`lake env lean --run Facts.lean CONFIG` imports the roots named in `CONFIG` (a JSON file `audit.py` writes) with
+initializers disabled and no environment extension loaded, so none of the package's code runs: no `initialize`, no
+attribute handler, no delaborator. It writes one JSON document to the path `CONFIG` names. It reports facts and makes no
+judgement; `audit.py` holds the policy.
+
+- `modules`: the imported modules under the roots; `imports`: what each imports.
+- `declarations`: how many constants of each kind those modules declare.
+- `axioms`: every axiom any of them uses, found by walking the bodies; `offenders`: each one that uses an axiom outside
+  `allowed`.
+- `declared_axioms`: the `axiom` declarations among them.
+- `escapes`: the `opaque` ones (a `partial def` is one), and the `unsafe`, `@[implemented_by]` and `@[extern]` ones:
+  compiled code with no definition a proof can unfold. The attributes are read from the modules' data.
+- `pins`: for each name in `pins`, its kind, signature, axioms, `Prop` hypotheses, the hash of its type, and the
+  definitions its statement reads, followed through every definition, inductive type and constructor declared under
+  `meaning`, with their source lines. Signatures print with no notation, since no notation is loaded: nothing a package
+  declares can change how its statements read.
+-/
+
+open Lean Meta
+
+namespace LeanAudit
+
+def under (ps : Array Name) (m : Name) : Bool := ps.any (·.isPrefixOf m)
+
+def kind : ConstantInfo → String
+  | .axiomInfo _ => "axiom"
+  | .defnInfo _ => "def"
+  | .thmInfo _ => "theorem"
+  | .opaqueInfo _ => "opaque"
+  | .quotInfo _ => "quot"
+  | .inductInfo _ => "inductive"
+  | .ctorInfo _ => "constructor"
+  | .recInfo _ => "recursor"
+
+def hex (x : UInt64) : String :=
+  let s := (Nat.toDigits 16 x.toNat).foldl String.push ""
+  "".pushn '0' (16 - s.length) ++ s
+
+def valueHash : ConstantInfo → UInt64
+  | .defnInfo v => v.value.hash
+  | .opaqueInfo v => v.value.hash
+  | _ => 0
+
+/-- What a constant's axioms depend on (as `Lean.collectAxioms` walks it). -/
+def uses : ConstantInfo → Array Name
+  | .axiomInfo v => v.type.getUsedConstants
+  | .defnInfo v | .thmInfo v | .opaqueInfo v => v.type.getUsedConstants ++ v.value.getUsedConstants
+  | .inductInfo v => v.type.getUsedConstants ++ v.ctors.toArray
+  | .ctorInfo v => v.type.getUsedConstants
+  | .recInfo v => v.type.getUsedConstants
+  | .quotInfo _ => #[]
+
+/-- What a statement means through a constant: its type, a definition's value, an inductive type's constructors.
+Theorems contribute nothing (a proof is irrelevant to what a statement says). -/
+def meaningDeps : ConstantInfo → Array Name
+  | .thmInfo _ | .quotInfo _ => #[]
+  | ci => uses ci
+
+/-- The axioms each of `names` uses, by walking bodies, memoized. A constant already on the path contributes nothing, as
+in `Lean.collectAxioms` (an inductive type and its constructors). -/
+def axiomsOf (env : Environment) (names : Array Name) : Std.HashMap Name NameSet := Id.run do
+  let own (c : Name) : NameSet := if env.find? c matches some (.axiomInfo _) then NameSet.empty.insert c else {}
+  let deps (c : Name) : Array Name := (env.find? c).map uses |>.getD #[]
+  let mut memo : Std.HashMap Name NameSet := {}
+  for root in names do
+    if memo.contains root then continue
+    let mut stack : Array (Name × Array Name × Nat × NameSet) := #[(root, deps root, 0, own root)]
+    let mut path : NameSet := NameSet.empty.insert root
+    repeat
+      match stack.back? with
+      | none => break
+      | some (c, ds, i, acc) =>
+        if h : i < ds.size then
+          let d := ds[i]
+          stack := stack.set! (stack.size - 1) (c, ds, i + 1, acc)
+          if let some s := memo[d]? then
+            stack := stack.set! (stack.size - 1) (c, ds, i + 1, acc ∪ s)
+          else if !path.contains d then
+            path := path.insert d
+            stack := stack.push (d, deps d, 0, own d)
+        else
+          memo := memo.insert c acc
+          path := path.erase c
+          stack := stack.pop
+          if let some (c', ds', i', acc') := stack.back? then
+            stack := stack.set! (stack.size - 1) (c', ds', i', acc' ∪ acc)
+  return memo
+
+/-- The declarations an extension's entries in one module name, and those entries themselves (`(Name × α)` pairs). -/
+unsafe def entriesOf (α : Type) (data : ModuleData) (ext : Name) : Array (Name × α) :=
+  match data.entries.find? (·.1 == ext) with
+  | some (_, es) => es.map fun e => unsafeCast e
+  | none => #[]
+
+/-- The definitions under `meaning` that the constants `roots` read, transitively. -/
+def reads (env : Environment) (meaning : Array Name) (roots : Array Name) : Array (Name × Name × ConstantInfo) := Id.run do
+  let mut seen : NameSet := {}
+  let mut stack := roots
+  let mut out := #[]
+  repeat
+    match stack.back? with
+    | none => break
+    | some c =>
+      stack := stack.pop
+      if seen.contains c then continue
+      seen := seen.insert c
+      let some ci := env.find? c | continue
+      let some i := env.getModuleIdxFor? c | continue
+      let m := env.header.moduleNames[i.toNat]!
+      if !under meaning m then continue
+      if ci matches .thmInfo _ then continue
+      out := out.push (c, m, ci)
+      stack := stack ++ meaningDeps ci
+  return out
+
+def pinInfo (env : Environment) (meaning : Array Name) (axioms : Std.HashMap Name NameSet)
+    (ranges : Std.HashMap Name DeclarationRanges) (n : Name) : MetaM Json := do
+  let some ci := env.find? n | return Json.mkObj [("kind", "missing")]
+  let moduleOf (c : Name) : Option Name := (env.getModuleIdxFor? c).map fun i => env.header.moduleNames[i.toNat]!
+  let signature := toString (← PrettyPrinter.ppSignature n).fmt
+  let hypotheses ← forallTelescope ci.type fun xs _ => do
+    let mut out := #[]
+    for x in xs do
+      let t ← inferType x
+      unless ← isProp t do continue
+      let named : Option Name := match t with | .const c _ => some c | _ => none
+      out := out.push <| Json.mkObj [("binder", toJson (← x.fvarId!.getDecl).userName.toString),
+        ("type", toJson (toString (← ppExpr t))), ("closed", toJson (!t.hasFVar && !t.hasMVar)),
+        ("named", toJson (named.map toString)), ("module", toJson ((named.bind moduleOf).map toString))]
+    return out
+  let readJson := fun (r : Name × Name × ConstantInfo) =>
+    let (c, m, ci) := r
+    Json.mkObj [("name", toJson c.toString), ("module", toJson m.toString), ("kind", toJson (kind ci)),
+      ("hash", toJson s!"{hex ci.type.hash}{hex (valueHash ci)}"),
+      ("lines", toJson (ranges[c]?.map fun (d : DeclarationRanges) => #[d.range.pos.line, d.range.endPos.line]))]
+  return Json.mkObj [("kind", toJson (kind ci)), ("module", toJson ((moduleOf n).map toString)),
+    ("signature", toJson signature), ("axioms", toJson ((axioms.getD n {}).toArray.qsort Name.lt |>.map toString)),
+    ("hypotheses", toJson hypotheses), ("type_hash", toJson (hex ci.type.hash)),
+    ("reads", toJson ((reads env meaning ci.type.getUsedConstants).map readJson))]
+
+def names (j : Json) (k : String) : Array Name :=
+  ((j.getObjValD k).getArr?.toOption.getD #[]).filterMap fun v => v.getStr?.toOption.map String.toName
+
+end LeanAudit
+
+open LeanAudit in
+unsafe def main (args : List String) : IO UInt32 := do
+  initSearchPath (← findSysroot)
+  let some cfgPath := args.head? | throw <| IO.userError "usage: Facts.lean CONFIG"
+  let cfg ← IO.ofExcept (Json.parse (← IO.FS.readFile cfgPath))
+  let roots := names cfg "roots"
+  let meaning := names cfg "meaning"
+  let allowed := names cfg "allowed"
+  let pins := names cfg "pins"
+  let out := (cfg.getObjValD "out").getStr?.toOption.getD "facts.json"
+  let env ← importModules (roots.map fun r => { module := r }) {} (loadExts := false)
+  let mnames := env.header.moduleNames
+  let mut modules := #[]
+  let mut imports := #[]
+  let mut audited := #[]
+  let mut ranges : Std.HashMap Name DeclarationRanges := {}
+  for h : i in [0:mnames.size] do
+    let m := mnames[i]
+    if !under roots m && !under meaning m then continue
+    let data := env.header.moduleData[i]!
+    for (n, r) in entriesOf DeclarationRanges data declRangeExt.name do
+      ranges := ranges.insert n r
+    if !under roots m then continue
+    modules := modules.push (toJson m.toString)
+    imports := imports.push (m.toString, toJson (data.imports.map (·.module.toString)))
+    audited := audited.push (m, data)
+  let decls := audited.foldl (fun acc (_, data) => acc ++ data.constNames) #[]
+  let axioms := axiomsOf env (decls ++ pins)
+  let mut counts : Std.HashMap String Nat := {}
+  let mut used : NameSet := {}
+  let mut offenders := #[]
+  let mut declared := #[]
+  let mut escapes := #[]
+  for (m, data) in audited do
+    let impl := (entriesOf Name data Compiler.implementedByAttr.ext.name).foldl (fun s (n, _) => s.insert n) NameSet.empty
+    let ext := (entriesOf Unit data externAttr.ext.name).foldl (fun s (n, _) => s.insert n) NameSet.empty
+    for ci in data.constants do
+      let n := ci.name
+      counts := counts.insert (kind ci) (counts.getD (kind ci) 0 + 1)
+      if ci matches .axiomInfo _ then
+        declared := declared.push <| Json.mkObj [("name", toJson n.toString), ("module", toJson m.toString)]
+      let axs := (axioms.getD n {}).toArray
+      used := axs.foldl (·.insert ·) used
+      let bad := axs.filter (!allowed.contains ·)
+      if !bad.isEmpty then
+        offenders := offenders.push <| Json.mkObj [("name", toJson n.toString), ("module", toJson m.toString),
+          ("axioms", toJson (bad.qsort Name.lt |>.map toString))]
+      let why := (if ci matches .opaqueInfo _ then #["opaque"] else #[]) ++ (if ci.isUnsafe then #["unsafe"] else #[]) ++
+        (if impl.contains n then #["implemented_by"] else #[]) ++ (if ext.contains n then #["extern"] else #[])
+      if !why.isEmpty then
+        escapes := escapes.push <| Json.mkObj [("name", toJson n.toString), ("module", toJson m.toString), ("why", toJson why)]
+  let opts : Options := (({} : Options).set `pp.proofs false).set `format.width (100 : Nat)
+  let ctx : Core.Context := { fileName := "<audit>", fileMap := default, maxHeartbeats := 0, options := opts }
+  let (pinned, _) ← (MetaM.run' (pins.mapM fun p => do return (p.toString, ← pinInfo env meaning axioms ranges p))).toIO
+    ctx { env }
+  let mut oleans := #[]
+  for m in mnames do
+    oleans := oleans.push (toString (← findOLean m))
+  let doc := Json.mkObj [("lean", toJson Lean.versionString), ("modules", toJson modules), ("imports", Json.mkObj imports.toList),
+    ("oleans", toJson oleans),
+    ("declarations", Json.mkObj (counts.toList.map fun (k, v) => (k, toJson v))),
+    ("axioms", toJson (used.toArray.qsort Name.lt |>.map toString)), ("offenders", toJson offenders),
+    ("declared_axioms", toJson declared), ("escapes", toJson escapes), ("pins", Json.mkObj pinned.toList)]
+  IO.FS.writeFile out doc.compress
+  return 0
