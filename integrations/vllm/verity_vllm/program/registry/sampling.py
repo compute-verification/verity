@@ -65,9 +65,13 @@ TWO_M23_BITS = 0x34000000
 TWO_P23_BITS = 0x4B000000
 FLT_MIN_BITS = 0x00800000
 ONE_BITS = 0x3F800000
-#: every NaN result of `__nv_logf` / `__nv_log1pf` (an input outside their domain, a < 0 or a < -1, or a NaN): the GPU's canonical
-#: NaN, with no input payload or sign, on the L40S and the H100 in every build (probe art:e5dd6ce9...), not the host's default NaN
-LOG_NAN = 0x7FFFFFFF
+#: `__nv_logf` / `__nv_log1pf` outside their domain (a < 0, a < -1, -inf): their special case's `fma(a, inf, inf)` is -inf + inf,
+#: whose NaN is pinned here rather than left to the host's default NaN (x86 and aarch64 differ in the sign)
+LOG_INVALID_NAN = 0xFFC00000
+
+
+def _neg_not_nan(a: int) -> bool:
+    return a >= 0x80000000 and (a & 0x7FFFFFFF) <= 0x7F800000
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -208,7 +212,7 @@ def nv_logf(a: int) -> int:
     r = fma_ftz(r, f, f)
     r = fma_ftz(i2, LN2_BITS, r)
     if a2 >= 0x7F800000:
-        r = 0x7F800000 if a2 == 0x7F800000 else LOG_NAN
+        r = LOG_INVALID_NAN if _neg_not_nan(a2) else fma_ftz(a2, 0x7F800000, 0x7F800000)
     if (a2 & 0x7FFFFFFF) == 0:
         r = 0xFF800000
     return r
@@ -247,7 +251,7 @@ def _log1pf_from_sum(a: int, s: int) -> int:
     r = fma_ftz(ef, LN2_BITS, r)
     if a >= 0x7F800000:
         if _i32(a) > -1082130432:
-            r = 0x7F800000 if a == 0x7F800000 else LOG_NAN
+            r = LOG_INVALID_NAN if _neg_not_nan(a) else fma_ftz(a, 0x7F800000, 0x7F800000)
         if (a & 0x7FFFFFFF) == 0:
             r = 0x80000000
     return r
