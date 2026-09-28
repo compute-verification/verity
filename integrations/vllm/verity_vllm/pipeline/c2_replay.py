@@ -132,7 +132,10 @@ def cache_key(s: Site) -> str | None:
 
 
 def run(s: Site, replay_cache: dict[str, dict[str, Any]]) -> None:
-    """The replay + linkage of the run on `s`, their artifact (`sampled_replay_p<pair>.json`) and their components on `s.row`."""
+    """The replay + linkage of the run on `s`, their artifact (`sampled_replay_p<pair>.json`) and their components on `s.row`.  A
+    replay this host cannot hold (`driver.PoolDoesNotFit`) is raised, not recorded: it says nothing about the run."""
+    from verity_vllm.check.replay.driver import PoolDoesNotFit
+
     pair, rc = s.pair, s.rc
     _rc_key = cache_key(s)
     _cached = replay_cache.get(_rc_key) if _rc_key is not None else None
@@ -151,6 +154,8 @@ def run(s: Site, replay_cache: dict[str, dict[str, Any]]) -> None:
                                      "seed": (sr.get("sample") or {}).get("seed"), "code": s.versions.get("git_head")}
     except ReplayReused:
         sr, lk = reused(s, _cached, _rc_key)
+    except PoolDoesNotFit:
+        raise
     except Exception as e:  # noqa: BLE001  -- fail closed: an unrunnable replay is 'not evaluated', never PASS
         sr = {"schema": "verity-sweep/sampled-replay/v1", "method": "sampled-exact-replay", "result": None, "grade": "not-evaluated",
               "why": f"sampled replay not run: {e!r}"[:300], "error": repr(e)[:300]}
@@ -374,6 +379,7 @@ def evaluate(s: Site, held: dict[str, Any], *, plan: bool = False, planner: Any 
                ring_slots=(int(args.window_slots) if getattr(args, "window_slots", None) and getattr(args, "window_mb", None) else None),
                # [R17-3 / reqval] Q(P) of record: the replay's reach is reconciled against it identity by identity
                manifest=(s.manifest if isinstance(s.manifest, dict) else None),
+               worker_peak=getattr(args, "replay_worker_peak", None),
                program_dirs={_k: _v["dir"] for _k, _v in _loaded.items() if _v.get("dir")}, **_sr_kw)
     if planner is not None:
         t0 = time.perf_counter()
