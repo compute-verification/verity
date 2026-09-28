@@ -67,7 +67,7 @@ def split_name(name: str) -> tuple[str, str]:
             parts = name.split("/")
             return "/".join(parts[:2]), "/".join(parts[2:]) or "out"       # fa2.m1/L3/g4x64x128/... -> ("fa2.m1/L3", "g4x64x128/...")
     if "/" in name:
-        base, member = name.split("/", 1)
+        base, member = name.rsplit("/", 1)                                 # `<module>/<fx node>/<member>`: a call boundary's op_path has a `/`
         return base, member
     return name, "out"
 
