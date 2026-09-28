@@ -30,7 +30,9 @@ and the certificate that signs it), each in `service.encode`'s bytes, concatenat
     u32be len(signature) ‖ signature
 
 decoded exactly: UTF-8 links, direction 0 or 1, a status code of `STATUS_CODES`, deadline 0 or 1, T counts each at most r,
-nothing left over. Its `digest` is `tagged_sha512("verity-network-certifier/certificates/v2", the commitment's bytes)`.
+nothing left over. Its `digest` is `tagged_sha512("verity-network-certifier/certificates/v2", the commitment's bytes)`
+(`Identity.taggedSha512`), which every commitment under `2 ^ 64` bytes has; a longer one, which Python refuses to hash,
+gets the empty digest, since `Core.Protocol.digest` is total.
 
 **Evidence**: what the prover opens, canonical JSON, one entry per egress link in the order of `egress.links`:
 
@@ -410,7 +412,7 @@ def protocol : Core.Protocol where
   params := paramsOf
   commitment := commitmentOf
   evidence b := do evidenceOf (← Core.canonicalJson b)
-  digest c := taggedSha512 commitmentTag c.bytes
+  digest c := (Identity.taggedSha512 commitmentTag c.bytes).toOption.getD .empty
   check := check
   publicJson _ := Json.mkObj []
   profileJson := profileJson
