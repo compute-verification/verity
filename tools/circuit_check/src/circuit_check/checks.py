@@ -24,7 +24,6 @@ is a warning.
 from __future__ import annotations
 
 import json
-import tempfile
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -508,17 +507,18 @@ def _traced(build: Callable[[], Any]) -> tuple[Any, Any]:
     return BE.trace(build)
 
 
-def _export_counts(C: Any, root: Any, name: str) -> dict:
-    """The Boolean export of one unit circuit (`boolean_export.Registry.analyse`): its AND/XOR/NOT counts, identical subcircuits
-    once, and its gate lists written and checked against the circuit on random inputs (raises on a disagreement)."""
+def _export_counts(build: Callable[[], Any], name: str) -> dict:
+    """The Boolean export of one unit circuit (`boolean_export.Registry.type_of`): its circuit types' AND/XOR/NOT counts, each
+    distinct sub-circuit once, every type validated and the root evaluated against the circuit on random inputs (raises on a
+    disagreement); ``flat_ands`` the circuit's own, fewer by the ANDs it shares across a call (``shared_across_types``)."""
     from verity_flock import boolean_export as BE
 
-    with tempfile.TemporaryDirectory() as d:
-        reg = BE.Registry(Path(d))
-        rid = reg.analyse(C, root, name, "proof-unit")
-        node = reg.nodes[rid]
-        return {"and": node["and"], "xor": node["xor"], "not": node["not"], "subcircuit_types": len(reg.nodes),
-                "gate_lists_verified": reg.verified, "wiring_differs": reg.wiring_differs}
+    reg = BE.Registry()
+    rid = reg.type_of(build, name, "proof-unit")
+    node = reg.nodes[rid]
+    _, flat, typed = reg.shared[-1]
+    return {"and": node["and"], "xor": node["xor"], "not": node["not"], "subcircuit_types": len(reg.types), "flat_ands": flat,
+            "shared_across_types": typed - flat}
 
 
 def template_lowering(sub: Any, st: dict, d: Any, opts: Options, F: Findings, pins: dict) -> dict:
@@ -560,17 +560,17 @@ def template_lowering(sub: Any, st: dict, d: Any, opts: Options, F: Findings, pi
         if pin != digest:
             F.fail("lowering", "digest-mismatch", sub.id, f"[{name}]: {digest[:16]} != pinned {pin[:16]}", pinned=pin, digest=digest)
     if isinstance(low, IL.Lowering):
-        C, root = _traced(low.units.circuit)
+        build = low.units.circuit
     else:
         from verity_flock import ir_sampling as S
 
-        C, root = _traced(lambda: S.lane_circuit(int(sub.params["V"])))
-    counts = _export_counts(C, root, f"{name} unit")
+        def build():
+            return S.lane_circuit(int(sub.params["V"]))
+    C, root = _traced(build)
+    counts = _export_counts(build, f"{name} unit")
     rec["export"] = counts
-    if counts["and"] != rec["ands"]:
-        F.fail("lowering", "export-count", sub.id, f"[{name}]: the export counts {counts['and']} ANDs, the layout {rec['ands']}")
-    if counts["wiring_differs"]:
-        F.fail("lowering", "export-wiring", sub.id, f"[{name}]: {counts['wiring_differs']} subcircuit instance(s) wired unlike their type")
+    if counts["flat_ands"] != rec["ands"]:
+        F.fail("lowering", "export-count", sub.id, f"[{name}]: the export's circuit has {counts['flat_ands']} ANDs, the layout {rec['ands']}")
     rec["pin"] = _counts_against_pin("units", sub.id, {k: counts[k] for k in ("and", "xor", "not")}, pins, F, sub.id)
     red, by = redundant_ands(C, _owner_names(root, len(C.kind)))
     rec["redundant_ands"] = {"count": red, "where": dict(by.most_common())}

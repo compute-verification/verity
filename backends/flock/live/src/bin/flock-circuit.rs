@@ -37,7 +37,6 @@ use serde_json::{Value, json};
 use sha2::{Digest, Sha512};
 
 const TABLE: &str = "circuit";
-const SIGMA_TAG: &[u8] = b"verity/flock-circuit/sigma";
 
 fn arg(k: &str, d: &str) -> String {
     let a: Vec<String> = std::env::args().collect();
@@ -52,8 +51,8 @@ fn f128_bytes(v: &[F128]) -> Vec<u8> {
     v.iter().flat_map(|x| x.lo.to_le_bytes().into_iter().chain(x.hi.to_le_bytes())).collect()
 }
 
-fn domain(rep: usize) -> Vec<u8> {
-    format!("flock-circuit/fast100x2/rep{rep}").into_bytes()
+fn domain(c: &Composite, rep: usize) -> Vec<u8> {
+    format!("{}{rep}", c.tags().domain).into_bytes()
 }
 
 /// The Merkle hash of every Ligerito level: hm96-sha512/v1 leaves under SHA-512 nodes in a production build (feature `sha512`,
@@ -82,10 +81,10 @@ fn identity(c: &Composite) -> Value {
            "hooks": NoMask::new(ProverSeed::from_os()).identity()})
 }
 
-/// Σ = SHA-512(SIGMA_TAG ‖ the circuit's SHA-512 ‖ the statement digest ‖ the public digest).
+/// Σ = SHA-512(the statement's Σ tag ‖ the circuit's SHA-512 ‖ the statement digest ‖ the public digest).
 fn sigma(st: &Stmt, inst: &Instances) -> [u8; 64] {
     let mut h = Sha512::new();
-    h.update(SIGMA_TAG);
+    h.update(st.c.tags().sigma.as_bytes());
     h.update(st.c.sha512);
     h.update(st.digest);
     h.update(inst.public_sha512);
@@ -99,7 +98,7 @@ struct CircuitVerifier {
 
 impl StatementVerifier for CircuitVerifier {
     fn domain(&self, _t: &str, rep: usize) -> Vec<u8> {
-        domain(rep)
+        domain(&self.st.c, rep)
     }
 
     fn verify(&self, _t: &str, _rep: usize, proof: &[u8], ch: &mut ReplayChallenger, link: &LinkCtx<'_>) -> Result<Vec<u8>, String> {
@@ -339,7 +338,7 @@ fn prove_gpu(st: &Stmt, wt: &WitData, lig: LigeritoProfile, rep: usize, hook: Ho
             CircuitSrc::DeviceCut { rows: r, host: h, inputs: i, mid: &mut mid_fn }
         }
     };
-    let (proof, commitment, ph, wph) = prove_circuit(st, src, &params(st.m, lig), &domain(rep), hook, ch, Some(salts));
+    let (proof, commitment, ph, wph) = prove_circuit(st, src, &params(st.m, lig), &domain(&st.c, rep), hook, ch, Some(salts));
     let bk = json!({"t.witness": ph[0], "t.witness_comp": wph[0], "t.witness_units": wph[1], "t.encoding_commitment": ph[1], "t.link": ph[2],
                     "t.zerocheck": ph[3], "t.lincheck": ph[4], "t.ring_switch": ph[5], "t.ligerito": ph[6], "t.total": ph[7],
                     "t.arithmetic": ph[3] + ph[4] + ph[5] + ph[6], "device_witness": !matches!(wt, WitData::Host(..))});
@@ -426,8 +425,12 @@ fn wit(st: &Arc<Stmt>, inst: &Arc<Instances>, plan: &Plan, zero: bool, seed: Pro
     // a typed template's cut words are its parts' bound inputs: the first one of instance 0
     let typed_flip = st.c.typed.as_ref().filter(|_| plan.cut_flip).and_then(|t| t.inst.bind.iter().flatten().next()).map(|b| (0, b.0));
     let nets = if plan.tail_swapped { forged_stages(st) } else { BTreeMap::new() };
-    Wit { rowin, inputs, mask, flip_z: plan.unit_flip.then_some(ur.slot(ur.count.min(6) - 1) + st.c.unit().in_words * 128 + 40), cut_flip,
-          typed_flip, nets: Arc::new(nets) }
+    // a unit's internal row; a typed template's first AND row, the root's (else a part's)
+    let flip_z = match &st.c.typed {
+        Some(t) => t.inst.first_and().map(|u| t.col(&st.c, ur.count.min(6) - 1, u)),
+        None => Some(ur.slot(ur.count.min(6) - 1) + st.c.unit().in_words * 128 + 40),
+    };
+    Wit { rowin, inputs, mask, flip_z: flip_z.filter(|_| plan.unit_flip), cut_flip, typed_flip, nets: Arc::new(nets) }
 }
 
 /// The tail stages of the forged circuit (`--forged`: the same template with every positive tail constant x 4, staged by
@@ -492,7 +495,7 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
         #[cfg(feature = "sha512")]
         let level0 = (!plan.gpu).then(|| Arc::new(salts.lock().unwrap_or_else(PoisonError::into_inner).expand(0, params(st.m, lig).n_leaves())));
         for rep in 0..2 {
-            let mut lch = LiveChallenger::new(t.clone(), TABLE, rep, &domain(rep))?;
+            let mut lch = LiveChallenger::new(t.clone(), TABLE, rep, &domain(&st.c, rep))?;
             let tt = t.clone();
             let mut hook = |root: &[u8]| -> Vec<Vec<F128>> {
                 // red-team-hm96 C1: both reps' level-0 trees take salt stream 0, so they must be one tree; stop before rep 1
@@ -588,11 +591,12 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
     let step0 = if v["accepted"] == true { check_coin_seed(&commit, &hello, &v, &log.lock().unwrap_or_else(PoisonError::into_inner)) } else { Ok(()) };
     let v = if let Err(e) = &step0 { json!({"accepted": false, "why": e, "verdict": v}) } else { v };
     let c = &st.c;
-    let ands = (c.unit().useful as u64, st.n as u64 * c.upv as u64);
+    let (rows_per_vu, ands_per_vu) = c.sizes_per_vu();
     (
         json!({"accepted": v["accepted"], "why": v["why"], "verdict": v, "statement": c.statement(), "scheme": SCHEME,
                "prover": if plan.gpu {"flock-cuda-circuit"} else {"flock-cpu"}, "gpu": plan.gpu, "unit": c.name, "set": inst.header["set"],
-               "subcircuit": inst.header["subcircuit"], "instances": st.n, "vus_per_block": c.g, "units": ands.1, "k_log": c.k_log, "nbl": st.nbl,
+               "subcircuit": inst.header["subcircuit"], "instances": st.n, "vus_per_block": c.g, "units": st.n * c.upv, "rows_per_vu": rows_per_vu,
+               "ands_per_vu": ands_per_vu, "k_log": c.k_log, "nbl": st.nbl,
                "dense_m": st.m, "e2e_s": e2e_s, "witness_s": witness_s, "prove_s": prove_s, "prove_total_s": prove_s.iter().sum::<f64>(),
                "buckets": buckets, "wait_s": wait_s, "wait_e2e_s": wait_e2e_s, "calls": calls, "wire_sent": ws, "wire_recv": wr,
                "proof_bytes": proofs.iter().map(|p| p.len()).collect::<Vec<_>>(), "sigma": hex(&sig), "roots": inst.header["frame_v3"]["roots"],
@@ -1072,7 +1076,7 @@ fn selftest(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) {
     }
     println!("SELFTEST\t{}", json!({"statement": st.c.statement(), "unit": st.c.name, "subcircuit": inst.header["subcircuit"], "instances": st.n,
         "vus_per_block": st.c.g, "k_log": st.c.k_log, "m": st.m, "gpu": gpu, "circuit_sha512": hex(&st.c.sha512),
-        "unit_rows_sha256": hex(&st.c.unit().sha256), "all_pass": all}));
+        "unit_rows_sha256": hex(&st.c.unit().sha256), "rows_per_vu": st.c.sizes_per_vu().0, "ands_per_vu": st.c.sizes_per_vu().1, "all_pass": all}));
 }
 
 fn serve_loop(make: impl Fn() -> Server) {
@@ -1166,6 +1170,10 @@ fn main() {
     }
     let id = identity(&c);
     let st = Arc::new(Stmt::new(c, inst.n, id).unwrap_or_else(|e| refuse(e)));
+    // the device prover holds at most 12 slot types (`gpu_circuit::FC_MAX_TYPES`)
+    if flag("--gpu") && st.circuit.types.len() > 12 {
+        refuse(format!("{} slot types: the GPU prover holds at most 12", st.circuit.types.len()));
+    }
     eprintln!("statement {} instances={} vus_per_block={} blocks={} k_log={} nbl={} m={} regions={} delta={} built in {:.2}s",
               st.c.name, st.n, st.c.g, st.blocks_real, st.c.k_log, st.nbl, st.m, st.regions.len(), st.circuit.da.len() / 2, tb.elapsed().as_secs_f64());
     match cmd.as_str() {

@@ -476,6 +476,8 @@ pub struct Instance {
     steps: Vec<Step>,
     /// the unit coordinates' end
     pub extent: usize,
+    /// the AND items of the unit's type and of every part's
+    pub ands: usize,
     inputs: BTreeMap<usize, Vec<bool>>,
 }
 
@@ -496,6 +498,7 @@ pub fn instance(meta: &Value) -> Result<Instance, String> {
         return Err("META: the unit's layout does not place every call of its type".into());
     }
     let mut placed: BTreeMap<usize, (String, usize, Rows)> = BTreeMap::new();
+    let mut layout_ands: BTreeMap<usize, usize> = BTreeMap::new();
     let mut slot: BTreeMap<usize, usize> = BTreeMap::new();
     for (&(item, j, q), &(i, k)) in lay.calls.iter().zip(&call_items) {
         let sub = layouts.get(j).filter(|_| j != u).ok_or("META: a call placed by no layout (or by the unit's)")?;
@@ -506,7 +509,8 @@ pub fn instance(meta: &Value) -> Result<Instance, String> {
         *s += 1;
         if let std::collections::btree_map::Entry::Vacant(e) = placed.entry(j) {
             let st = types.get(&sub.ty).ok_or("META: a callee's type is not among its types")?;
-            let (rows, _, _) = own_region(st, sub, &[])?;
+            let (rows, steps, _) = own_region(st, sub, &[])?;
+            layout_ands.insert(j, steps.len());
             let s = sub.range_log.ok_or("META: a placed layout has no range")?;
             if rows.rows.len() > 1 << s {
                 return Err("META: a placed layout's rows overrun its range".into());
@@ -533,7 +537,10 @@ pub fn instance(meta: &Value) -> Result<Instance, String> {
         r.in_cols.iter().for_each(|&c| v[c] = true);
         (j, v)
     }).collect();
-    Ok(Instance { ins: t.ins.clone(), outs: t.outs.clone(), root, parts, layouts: placed, bind, steps, extent: cursor.max(own), inputs })
+    let ands = steps.iter().filter(|s| matches!(s, Step::Row(_))).count() + parts.iter().map(|(j, _)| layout_ands[j]).sum::<usize>();
+    let inst = Instance { ins: t.ins.clone(), outs: t.outs.clone(), root, parts, layouts: placed, bind, steps, extent: cursor.max(own), ands, inputs };
+    inst.check_columns()?;
+    Ok(inst)
 }
 
 /// The rows the prover derives, as `verity_flock.typed_statement.stage` writes them beside the statement (`rows/`):
@@ -575,6 +582,44 @@ pub fn relabel(meta: &mut Value) -> Result<(), String> {
 }
 
 impl Instance {
+    /// Whether unit coordinate `u` lies in the own region or in a part's rows (not its range's padding, not past the last).
+    pub fn inside(&self, u: usize) -> bool {
+        u < self.root.rows.len() || self.parts.iter().any(|&(j, base)| (base..base + self.layouts[&j].2.rows.len()).contains(&u))
+    }
+
+    /// Every column the block reads through the instance lies inside it: the own rows' entries (the cross entries
+    /// among them), the inputs' columns, and each binding's row (a part's input row) and sources.
+    fn check_columns(&self) -> Result<(), String> {
+        let bad = |what: &str| Err(format!("META: {what} outside the unit's own region and its parts' rows"));
+        if self.root.rows.iter().any(|(a, b)| a.iter().chain(b).any(|&x| !self.inside(x))) {
+            return bad("an own row's entry");
+        }
+        if self.root.in_cols.iter().any(|&x| !self.inside(x)) {
+            return bad("an input's column");
+        }
+        for (&(j, base), binds) in self.parts.iter().zip(&self.bind) {
+            for (r, src) in binds {
+                if !(base..base + self.inputs[&j].len()).contains(r) || !self.inputs[&j][r - base] {
+                    return Err("META: a binding's row is not an input row of its part".into());
+                }
+                if src.iter().any(|&x| !self.inside(x)) {
+                    return bad("a binding's source");
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// The first AND row (unit coordinates): the own region's, else a part's.
+    pub fn first_and(&self) -> Option<usize> {
+        self.steps.iter().find_map(|s| match s { Step::Row(c) => Some(*c), _ => None }).or_else(|| {
+            self.parts.iter().find_map(|&(j, base)| {
+                let (rows, is_in) = (&self.layouts[&j].2, &self.inputs[&j]);
+                (0..rows.rows.len()).find(|&c| c != rows.konst && !is_in[c] && !rows.rows[c].0.is_empty()).map(|c| base + c)
+            })
+        })
+    }
+
     /// The own region's rows (`[0, own)`), every entry at a part's column left out.
     pub fn root_text(&self, name: &str) -> String {
         netlist(&self.root, name, self.root.rows.len())
@@ -689,6 +734,20 @@ mod tests {
         let r = inst.bind[0][0].0;
         let (z2, a2, b2) = inst.eval64(&|w| (0..8).fold(0, |x, l| x | (((l >> w) & 1) << l)), Some((r, 1)));
         assert!(z2.iter().zip(&a2).zip(&b2).all(|((z, a), b)| *z == a & b) && z2[r] == z[r] ^ 1);
+    }
+
+    #[test]
+    fn refuses_columns_outside_the_instance() {
+        let inst = instance(&serde_json::from_str(TAIL).unwrap()).unwrap();
+        inst.check_columns().unwrap();
+        let (j, base) = inst.parts[0];
+        let padding = base + inst.layouts[&j].2.rows.len();
+        let mut bad = inst.clone();
+        bad.root.rows[inst.root.out_cols[0]].0.push(padding);
+        assert!(bad.check_columns().unwrap_err().contains("an own row's entry"));
+        let mut bad = inst.clone();
+        bad.bind[0][0].1.push(inst.extent);
+        assert!(bad.check_columns().unwrap_err().contains("a binding's source"));
     }
 
     #[test]
