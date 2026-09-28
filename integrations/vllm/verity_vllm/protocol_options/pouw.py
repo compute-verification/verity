@@ -70,6 +70,9 @@ EXECUTES = ("LinearBase.quant_method.apply",)
 EXECUTED = ("ncp-v1", "ncp-v1-shift24", "ncp-v2", *PPD.SCHEMES)
 #: The weight dtypes the executor reads (it quantizes them itself); any other, an FP8 checkpoint's float8 above all, is refused
 UNQUANTIZED = ("bfloat16", "float16", "float32")
+#: A quantized linear's parameters beside (or instead of) its weight: a layer carrying one is refused whatever its weight's
+#: dtype, and a packed one (compressed-tensors' ``weight_packed``) has no ``weight`` to read at all.
+QUANT_PARAMS = ("weight_scale", "weight_scale_inv", "input_scale", "weight_zero_point", "weight_packed")
 #: The pinned int7 quantizer of the FP8 lane's reference (docs/pouw-fp8/reference.md), applied without a basis rotation.
 QUANTIZER = "verity.pouw.symmetric-int7-rowmax-rne-f32/v1"
 KEYS = ("beacon", "retain_steps", "transcript_dir", "draws", "tamper", "device", "kernel", "cubin")
@@ -511,6 +514,11 @@ def _layers(scheme: str, target: Target) -> tuple[Any, list[Any], dict[int, tupl
         raise ValueError(f"{entry}: the model has no linear layer to execute")
     bad, seen, shapes = [], set(), {}
     for w, layer in enumerate(layers):
+        params = [p for p in QUANT_PARAMS if getattr(layer, p, None) is not None]
+        if params:
+            bad.append(f"linear {w}: it carries {', '.join(params)}, a quantized layer's parameters: a quantized (e.g. FP8) "
+                       "layer is refused, not misread")
+            continue
         dtype = str(getattr(layer.weight, "dtype", None)).removeprefix("torch.")
         if dtype not in UNQUANTIZED:
             bad.append(f"linear {w}: its weight is {dtype}, and the executor reads an unquantized weight: a quantized (e.g. FP8) "

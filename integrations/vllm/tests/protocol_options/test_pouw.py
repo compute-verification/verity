@@ -139,6 +139,35 @@ def test_a_quantized_layer_is_refused_at_install_not_misread(quantized):
         PO.install(model, _serve("pouw:ncp-v1"))
     assert hooks.live("pouw:ncp-v1") == () and [layer.quant_method.apply for layer in model.layers] == before
 
+
+class _Packed(Linear):
+    """A stand-in for compressed-tensors' packed linear: ``weight_packed`` and ``weight_scale``, and no ``weight``."""
+
+    def __init__(self, packed, scale):
+        self.weight_packed, self.weight_scale, self.quant_method = packed, scale, Apply()
+
+
+def _scaled(r):
+    layer = Linear(r.standard_normal((N, K), np.float32))
+    layer.weight_scale = np.ones(N, np.float32)
+    return layer
+
+
+@pytest.mark.parametrize("layer", [_scaled, lambda r: _Packed(r.integers(0, 1 << 31, (N, K // 8)).astype(np.int32),
+                                                              np.ones(N, np.float32))],
+                         ids=["float-weight-with-scale", "packed-without-weight"])
+def test_a_layer_carrying_quantization_parameters_is_refused_whatever_its_weight(layer):
+    """A scale beside a float weight, or a packed layer with no ``weight`` to read, is refused by its parameters, at the
+    commitment and at install, and the model is left as it was."""
+    model = Model(_rng().standard_normal((N, K), np.float32))
+    model.layers.append(layer(_rng(3)))
+    before = [m.quant_method.apply for m in model.layers]
+    with pytest.raises(ValueError, match=r"linear 1: it carries weight_\w+.*refused, not misread"):
+        pouw.commit_weights("ncp-v1", types.SimpleNamespace(model=model))
+    with pytest.raises(ValueError, match="refused at install"):
+        PO.install(model, _serve("pouw:ncp-v1"))
+    assert hooks.live("pouw:ncp-v1") == () and [m.quant_method.apply for m in model.layers] == before
+
 # --- install, serve, close ---------------------------------------------------------------------------------------------------
 
 def test_weights_are_committed_before_the_salt_and_the_int7_linear_is_served_exactly(tmp_path):
