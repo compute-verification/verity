@@ -133,7 +133,7 @@ def test_the_executor_is_the_schemes_reference_bit_for_bit():
     rows = [r.tobytes() for r in a]
     ctx = UnitContext(b"\x11" * 32, u, commit_rows(activation_binding(b"\x11" * 32, 7), 7, rows).commitment.root, b"\x22" * 32)
     noise = s.noise(ctx)
-    got = pouw.ncp_tiles(s, ctx, noise, a, b)
+    got = pouw.ncp_tiles(s, ctx, noise, a, pouw.Operands(np.ones(N, np.float32), *pouw.stack_y(s, ctx.salt, u.weight, b, noise)))
     tile = Tile(tuple(range(16)), tuple(range(48, 64)))
     ops = s.encode(ctx, noise, rows, [b[j].tobytes() for j in tile.cols], tile)
     checked = s.checked(ctx, ops)
@@ -142,10 +142,21 @@ def test_the_executor_is_the_schemes_reference_bit_for_bit():
     assert block.tolist() == s.useful(ctx, noise, ops, checked)
 
 
+def test_resident_operands_are_prepared_at_install_and_ignore_the_handed_weight():
+    rng = _rng(4)
+    w = rng.standard_normal((N, K), np.float32)
+    model = Model(w)
+    with PO.install(model, _serve("pouw:ncp-v1")) as comp:
+        assert comp.get("pouw").info()["weight_operands"] == "resident"
+        x = rng.standard_normal((16, K), np.float32)
+        other = types.SimpleNamespace(weight=rng.standard_normal((N, K), np.float32))
+        assert np.array_equal(model.layers[0].quant_method.apply(other, x), _int7_linear(x, w))
+
+
 # --- composition -------------------------------------------------------------------------------------------------------------
 
-def test_under_pous_the_gemm_reads_the_weight_it_is_handed(monkeypatch):
-    """A POUS stand-in outside PoUW stores W + 100 and hands the inner apply a layer holding the decoded weight."""
+def _fake_pous(monkeypatch):
+    """A POUS stand-in outside PoUW: it stores W + 100 and hands the inner apply a layer holding the decoded weight."""
     mod = types.ModuleType("verity_vllm.protocol_options.fake_pous")
     mod.NAME, mod.schemes, mod.refusals = "pous", lambda: ("band-chain/d12/v1",), lambda scheme, ctx: ()
 
@@ -160,10 +171,27 @@ def test_under_pous_the_gemm_reads_the_weight_it_is_handed(monkeypatch):
     monkeypatch.setitem(sys.modules, mod.__name__, mod)
     monkeypatch.setitem(PO.ADAPTERS, "pous", "fake_pous")
 
+
+def test_keeps_weight_copy_follows_weight_operands():
+    assert pouw.keeps_weight_copy("ncp-v1", _serve("pouw:ncp-v1"))
+    assert not pouw.keeps_weight_copy("ncp-v1", _serve("pouw:ncp-v1", settings={"pouw": {"weight_operands": "per-forward"}}))
+    assert "one of resident, per-forward" in pouw.refusals("ncp-v1", _serve("pouw:ncp-v1", settings={"pouw": {"weight_operands": "x"}}))[0]
+
+
+def test_the_selector_refuses_pous_beside_resident_operands(monkeypatch):
+    _fake_pous(monkeypatch)
+    enabled = ("pouw:ncp-v1", "pous:band-chain/d12/v1")
+    assert any("keeps a weight-derived copy" in r for r in PO.refusals(_serve(*enabled)))
+    assert PO.refusals(_serve(*enabled, settings={"pouw": {"weight_operands": "per-forward"}})) == ()
+
+
+def test_under_pous_the_gemm_reads_the_weight_it_is_handed(monkeypatch):
+    _fake_pous(monkeypatch)
     rng = _rng(3)
     w = rng.standard_normal((N, K), np.float32)
     model = Model(w)
-    with PO.install(model, _serve("pouw:ncp-v1", "pous:band-chain/d12/v1")) as comp:
+    settings = {"pouw": {"beacon": BEACON, "weight_operands": "per-forward"}}
+    with PO.install(model, _serve("pouw:ncp-v1", "pous:band-chain/d12/v1", settings=settings)) as comp:
         assert comp.entries == ("pouw:ncp-v1", "pous:band-chain/d12/v1")
         layer = model.layers[0]
         layer.weight = None                                  # POUS released the plaintext: only its decode can serve

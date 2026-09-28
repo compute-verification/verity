@@ -6,16 +6,19 @@ anything it commits every layer's int7 weight rows (`verity_pouw.audit.commit_ro
 beacon (`verity_pouw.audit.Epoch.start`): the weights are committed before the salt exists and before any outer option
 changes the model.  Each call of a wrapped ``apply(layer, x, bias)`` is one unit of the run's workload:
 
-1. quantize x's rows to int7 per row, and the weight *of the layer it is handed* to int7 per output channel
-   (`quantize`).  Under POUS the GEMM therefore reads POUS's decoded weight, and PoUW keeps no weight-derived copy between
-   forwards;
+1. quantize x's rows to int7 per row (`quantize`), and take the weight operands (`weight_operands`: the int7 weight per
+   output channel with the epoch's noise, Y = [B + F₁ ; B + F₂ ; B + F₃], and c₀).  The setting ``weight_operands`` says
+   where they come from: ``"resident"`` (the default) prepares them once at install and keeps them, so
+   `keeps_weight_copy` is True and the selector refuses POUS beside it; ``"per-forward"`` prepares them from the weight
+   of the layer each call is handed, so under POUS the GEMM reads POUS's decoded weight;
 2. commit the unit's activation rows, derive its noise and compute every 16 x 16 tile's route-U checked values and
    digest (`ncp_tiles`, gated bit for bit against the scheme's reference in the tests); the digests join the transcript;
 3. return the useful output, the final checkpoint A·Bᵀ, dequantized by the row and column scales, plus the bias.
 
 `commitment` is the scheme, the salt, the weight roots and, once closed, the transcript root with its unit and tile
-counts.  The audit (drawing tiles, opening them) is `verity_pouw.audit`'s, after the run.  What is a placeholder is
-listed in `info` (``placeholder``).
+counts.  The audit (drawing tiles, opening them) is `verity_pouw.audit`'s, after the run; sampled proofs' replay does not
+re-check PoUW's GEMMs (PoUW's tile audit only, pending the design's open question 2).  What is a placeholder is listed in
+`info` (``placeholder``).
 """
 from __future__ import annotations
 
@@ -44,12 +47,13 @@ DEFAULT_SCHEME = "ncp-v1"
 EXECUTED = ("ncp-v1", "ncp-v1-shift24")
 #: The pinned int7 quantizer of the FP8 lane's reference (docs/pouw-fp8/reference.md), applied without a basis rotation.
 QUANTIZER = "verity.pouw.symmetric-int7-rowmax-rne-f32/v1"
-KEYS = ("beacon", "retain_steps", "transcript_dir")
+KEYS = ("beacon", "retain_steps", "transcript_dir", "weight_operands")
+WEIGHT_OPERANDS = ("resident", "per-forward")
 OUTSIDE_PROGRAM = ("PoUW replaces each linear layer's GEMM by its scheme's noised 3k-deep int8 GEMM; the useful output is "
                    "the int7 linear (quantize, exact int32 GEMM, dequantize), which no Definition of the Program describes yet")
 PLACEHOLDER = (
     "without a `beacon` setting the salt comes from 32 zero bytes, so it is predictable",
-    "a forward's weight is not re-checked against the root committed at install",
+    "with weight_operands = per-forward, a forward's weight is not re-checked against the root committed at install",
     "tile openings need the activation rows, kept only for the last `retain_steps` units",
     "the executor runs on the host in numpy, not a native route-U kernel",
 )
@@ -66,6 +70,7 @@ class Settings:
     beacon: bytes | None = None
     retain_steps: int = 0
     transcript_dir: str | None = None
+    weight_operands: str = "resident"
 
     @classmethod
     def of(cls, raw: Mapping[str, Any]) -> Settings:
@@ -87,7 +92,18 @@ class Settings:
         tdir = raw.get("transcript_dir")
         if tdir is not None and not isinstance(tdir, str):
             raise ValueError("pouw setting 'transcript_dir' is a path string")
-        return cls(beacon, retain, tdir)
+        operands = raw.get("weight_operands", "resident")
+        if operands not in WEIGHT_OPERANDS:
+            raise ValueError(f"pouw setting 'weight_operands' is one of {', '.join(WEIGHT_OPERANDS)}")
+        return cls(beacon, retain, tdir, operands)
+
+
+def keeps_weight_copy(scheme: str, ctx: Context) -> bool:
+    """True when the weight operands stay resident across forwards (``weight_operands = "resident"``, the default)."""
+    try:
+        return Settings.of(ctx.settings_of(NAME)).weight_operands == "resident"
+    except ValueError:
+        return True
 
 
 def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
@@ -130,25 +146,49 @@ def _noise(tag: str, count: int, k: int, parts) -> np.ndarray:
     return np.stack([np.frombuffer(ncp.xof(tag, k, *parts(i)), dtype=np.uint8).astype(np.int64) % 64 - 31 for i in range(count)])
 
 
-def ncp_tiles(scheme: Any, ctx: UnitContext, noise: tuple, a: np.ndarray, b: np.ndarray,
-              chunk: int = 256) -> dict[tuple[int, int], tuple[bytes, np.ndarray]]:
-    """One unit's tiles as the scheme's Prover kernel contract gives them: (first row, first column) -> (digest, int32
-    output tile), for int7 ``a`` (m x k) and ``b`` (n x k).  X + β and Y are formed as `ncp.assemble` forms them, the
-    accumulator starts at c₀ = −β·Σ_l Y[l][j] (Lean `mmWU β`), and a tile's digest covers every depth-16 checkpoint,
-    step-major and row-major within a step (`NCP.digest`).  Float64 products are exact here: every partial sum is an
-    integer under 2^53."""
-    u, beta = ctx.matmul, scheme.beta
-    (m, k), n = a.shape, b.shape[0]
+@dataclass(frozen=True)
+class Operands:
+    """One weight's operands for an epoch: its column scales, Y = [B + F₁ ; B + F₂ ; B + F₃] as n rows of 3k, and
+    c₀ = −β·Σ_l Y[l][j], the route-U accumulator's initial value (Lean `initU`)."""
+
+    scales: np.ndarray
+    y: np.ndarray
+    c0: np.ndarray
+
+
+def stack_y(scheme: Any, salt: bytes, w: int, b: np.ndarray, noise: tuple) -> tuple[np.ndarray, np.ndarray]:
+    """Y (as int8 rows: every entry lies in [−128, 127], Lean `rangeU`) and c₀ for the int7 weight ``b`` (n x k), with F₁
+    from the epoch salt (per epoch and weight, as `ncp.stack` draws it), F₂ = −P·F₁ and F₃ = F₁ + F₂ (`ncp.assemble`)."""
+    n, k = b.shape
     pi, sigma = np.asarray(noise[0]), np.asarray(noise[1], dtype=np.int64)
-    a, b = a.astype(np.int64), b.astype(np.int64)
-    e1 = _noise("verity/pouw/ncp/E1/v1", m, k, lambda i: (ctx.salt, u.index, ctx.root_a, u.weight, i))
-    f1 = _noise("verity/pouw/ncp/F1/v1", n, k, lambda j: (ctx.salt, u.weight, j))
-    e2 = e1[:, pi] * sigma
+    f1 = _noise("verity/pouw/ncp/F1/v1", n, k, lambda j: (salt, w, j))
     f2 = np.empty_like(f1)
     f2[:, pi] = -(f1 * sigma)
-    x = np.concatenate([a + e1, a + e2, -(a + e1 + e2)], axis=1) + beta
+    b = b.astype(np.int64)
     y = np.concatenate([b + f1, b + f2, b + f1 + f2], axis=1)
-    c0 = (-beta * y.sum(axis=1)).astype(np.float64)
+    return y.astype(np.int8), (-scheme.beta * y.sum(axis=1)).astype(np.float64)
+
+
+def weight_operands(scheme: Any, salt: bytes, w: int, weight: np.ndarray, noise: tuple) -> Operands:
+    """``weight`` (n x k) quantized per output channel (`quantize`) and stacked (`stack_y`)."""
+    b, scales = quantize(weight)
+    return Operands(scales, *stack_y(scheme, salt, w, b, noise))
+
+
+def ncp_tiles(scheme: Any, ctx: UnitContext, noise: tuple, a: np.ndarray, ops: Operands,
+              chunk: int = 256) -> dict[tuple[int, int], tuple[bytes, np.ndarray]]:
+    """One unit's tiles as the scheme's Prover kernel contract gives them: (first row, first column) -> (digest, int32
+    output tile), for int7 ``a`` (m x k) and the weight's `Operands`.  X + β is formed as `ncp.assemble` forms X, the
+    accumulator starts at c₀ (Lean `mmWU β`), and a tile's digest covers every depth-16 checkpoint, step-major and
+    row-major within a step (`NCP.digest`).  Float64 products are exact here: every partial sum is an integer under 2^53."""
+    u = ctx.matmul
+    (m, k), n = a.shape, ops.y.shape[0]
+    pi, sigma = np.asarray(noise[0]), np.asarray(noise[1], dtype=np.int64)
+    a = a.astype(np.int64)
+    e1 = _noise("verity/pouw/ncp/E1/v1", m, k, lambda i: (ctx.salt, u.index, ctx.root_a, u.weight, i))
+    e2 = e1[:, pi] * sigma
+    x = np.concatenate([a + e1, a + e2, -(a + e1 + e2)], axis=1) + scheme.beta
+    y, c0 = ops.y, ops.c0
     steps = 3 * k // ncp.D
     out: dict[tuple[int, int], tuple[bytes, np.ndarray]] = {}
     for r in range(0, m, 16):
@@ -187,6 +227,7 @@ class _Run:
         self.roots_a: list[bytes] = []
         self.leaves: list[bytes] = []
         self.retained: deque = deque(maxlen=settings.retain_steps)
+        self.resident: dict[int, Operands] | None = None
         cert = scheme.certificate
         self.commits: dict[str, Any] = {
             "scheme": scheme.name, "salt": salt.hex(), "weight_roots": {str(w): r.hex() for w, r in weight_roots.items()},
@@ -196,15 +237,28 @@ class _Run:
             "certificate": {"conjecture": cert.conjecture, "gamma": None if cert.gamma is None else str(cert.gamma),
                             "parameters": dict(cert.parameters)},
             "beacon": "given" if settings.beacon else "placeholder: 32 zero bytes",
+            "weight_operands": settings.weight_operands,
             "units": 0, "tiles": 0, "padded_rows": 0, "uncovered": "every GEMM outside LinearBase (lm_head, attention)",
             "placeholder": list(PLACEHOLDER)}
 
+    def noise_of(self, w: int, n: int, k: int) -> tuple:
+        """The scheme's permutation at depth k (its noise before the salt-derived rows)."""
+        return self.scheme.noise(UnitContext(self.salt, Matmul(0, Shape(16, k, n), w), b"", self.weight_roots[w]))
+
+    def operands(self, w: int, weight: Any) -> Operands:
+        """The resident operands, or ``weight``'s, prepared now (``weight_operands = "per-forward"``)."""
+        if self.resident is not None:
+            return self.resident[w]
+        ws = _host(weight)
+        return weight_operands(self.scheme, self.salt, w, ws, self.noise_of(w, *ws.shape))
+
     def gemm(self, w: int, x: Any, weight: Any, bias: Any) -> Any:
-        xs, ws = _host(x), _host(weight)
-        n, k = ws.shape
+        ops = self.operands(w, weight)
+        n, k = ops.y.shape[0], ops.y.shape[1] // 3
+        xs = _host(x)
         lead = xs.shape[:-1]
         a, s = quantize(xs.reshape(-1, k))
-        b, t = quantize(ws)
+        t = ops.scales
         m = a.shape[0]
         mp = max(16, -(-m // 16) * 16)
         if mp > m:
@@ -214,7 +268,7 @@ class _Run:
         self.scheme.check(u)
         root_a = commit_rows(activation_binding(self.salt, u.index), u.index, rows).commitment.root
         ctx = UnitContext(self.salt, u, root_a, self.weight_roots[w])
-        tiles = ncp_tiles(self.scheme, ctx, self.scheme.noise(ctx), a, b)
+        tiles = ncp_tiles(self.scheme, ctx, self.scheme.noise(ctx), a, ops)
         z = np.empty((mp, n), np.int64)
         for tile in self.scheme.tiles(u.shape):
             digest, block = tiles[(tile.rows[0], tile.cols[0])]
@@ -279,6 +333,9 @@ def install(scheme: str, target: Target) -> Option:
     declared = Workload(tuple(Matmul(w, Shape(16, k, n), w) for w, (n, k) in shapes.items()))
     salt = Epoch.start(declared, roots, settings.beacon or bytes(32)).salt
     run = _Run(s, entry, settings, roots, salt)
+    if settings.weight_operands == "resident":
+        run.resident = {w: weight_operands(s, salt, w, _host(layer.weight), run.noise_of(w, *shapes[w]))
+                        for w, layer in enumerate(layers)}
     h = target.hooks(entry)
     for w, layer in enumerate(layers):
         h.wrap(layer.quant_method, "apply", lambda orig, w=w: _executor(run, w))
