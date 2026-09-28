@@ -46,7 +46,8 @@ Uncommitted edits count. Only passes are cached, in `~/.cache/verity/tests`.
 
 ## What a suite may read
 
-The runner's guard (`tools/check/suite_guard.py`) fails a suite whose tests open a repository file outside its inputs. That
+The runner's guard (`tools/check/guard/verity_suite_guard.py`) fails a suite whose tests open a repository file outside its
+inputs, in every process of the suite, including pytest-xdist workers and `conftest.py` imports. That
 keeps the cache sound: a pass is only reused while everything the tests read is unchanged. When it fails:
 
 - **The package imports another at run time:** add it to `[project] dependencies` (with a `[tool.uv.sources]` workspace entry).
@@ -68,6 +69,11 @@ a `sys.path` entry another test file added: every suite runs alone.
 - **GPU, pod and vLLM tests skip themselves** when the hardware or the runtime is absent. Their real runs are recorded runs
   on a pod (`research run --on ...`), never a laptop.
 - A suite's quick tier should finish in about a minute. When it doesn't, make the slow tests smaller before marking more.
+- **A suite over a few minutes declares `parallel = true`** under `[tool.verity.tests]`. The runner then spreads its tests over
+  every `--jobs` slot with pytest-xdist (`--dist worksteal`), and runs parallel suites first, one at a time. C-Flock does
+  (637 s in one process, 209 s on four). Its tests must then run in any order and in any process. Session and module
+  fixtures are built once per worker, so keep them cheap. Declare it only after the suite passes
+  `uv run tools/check/suites.py SUITE --fresh` a few times.
 
 ## Write tests that mean something
 

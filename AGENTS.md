@@ -109,9 +109,10 @@ uv run python tools/check/check.py        # the check a merge requires; --record
 
 ## Tests
 
-Every package's tests live in its own `tests/` and run as one suite, in its own process, cached by input; the repository's
-own suite (`tests/`) holds only invariants of the whole tree. How to run them, what a suite may read (`[tool.verity.tests]
-inputs`), and the rules for slow tests, fixtures and dummy credentials: `.agents/skills/testing/SKILL.md`.
+Every package's tests live in its own `tests/` and run as one suite, in its own process (a `parallel` suite in pytest-xdist
+workers), cached by input; the repository's own suite (`tests/`) holds only invariants of the whole tree. How to run them,
+what a suite may read (`[tool.verity.tests] inputs`), and the rules for slow tests, fixtures and dummy credentials:
+`.agents/skills/testing/SKILL.md`.
 
 ## Circuits
 
