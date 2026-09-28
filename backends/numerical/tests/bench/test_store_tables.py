@@ -4,6 +4,7 @@ the row-by-row agreement with the ledger-built table (every row as a ledger-row 
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -13,6 +14,10 @@ from verity_numerical.bench import ledger, ledger_to_store as L2S, store_tables 
 
 pytest.importorskip("research.store.local", reason="research.store (tools/research) is not importable")
 from research.store.local import LocalStore  # noqa: E402
+
+#: The frozen campaign ledger lives in the evidence store (`bench.frozen`): its first fetch needs the store's remote.
+needs_frozen_ledger = pytest.mark.skipif(not os.environ.get("VERITY_NUMERICAL_STORE"),
+                                         reason="reads the frozen ledger from the evidence store (network and credentials): VERITY_NUMERICAL_STORE=1")
 
 
 def _entry(lane: str, label: str, run_id: str | None, proof_class: str = "NON_ZK_PROOF_DIAGNOSTIC", **kw) -> dict:
@@ -97,7 +102,9 @@ def test_import_targets_labels_and_idempotency(store: LocalStore, tmp_path: Path
 
 def test_ts_and_ref_helpers(tmp_path: Path) -> None:
     assert L2S.ts_z("2026-09-22T09:20:19+00:00") == "2026-09-22T09:20:19Z" and L2S.ts_z("2026-09-22T11:20:19+02:00") == "2026-09-22T09:20:19Z"
-    assert L2S.ledger_ref(ledger.DIR / "b-zk.jsonl", 4) == "backends/numerical/reports/ledger/b-zk.jsonl:4"
+    fetched = tmp_path / "trees" / "abc" / ledger.REL                   # the frozen ledger as the store lays out a fetched tree
+    fetched.mkdir(parents=True)
+    assert L2S.ledger_ref(fetched / "b-zk.jsonl", 4) == "backends/numerical/reports/ledger/b-zk.jsonl:4"
     assert L2S.ledger_ref(tmp_path / "x.jsonl", 2) == f"{tmp_path.resolve().as_posix()}/x.jsonl:2"
 
 
@@ -128,16 +135,16 @@ def test_diff_tables_compares_label_by_class() -> None:
     assert (ok, n) == (1, 2) and len(diffs) == 1 and "[label]: store='X' ledger='Y'" in diffs[0]
 
 
-@pytest.mark.skipif(not ledger.DIR.is_dir(), reason="campaign ledger not present")
+@needs_frozen_ledger
 @pytest.mark.slow
 def test_campaign_ledger_round_trips_through_a_fresh_store(store: LocalStore) -> None:
     """No attempts at all: every row is a ledger-row artifact, the red-team verdicts land on those, and the like-for-like table
     rebuilt from the store matches decision_tables' ledger-built table row for row under the red-team policy -- and differs from it
     exactly on the rows the campaign carried as label overrides without the policy."""
-    stats = L2S.import_ledger(store, ledger.DIR)
-    entries = DT._entries(ledger.DIR)
+    stats = L2S.import_ledger(store, ledger.frozen_dir())
+    entries = DT._entries(ledger.frozen_dir())
     assert stats["rows"] == len(entries) and stats["on_attempts"] == 0 and stats["on_artifacts"] == len(entries) and stats["redteam_added"] > 0
-    assert L2S.import_ledger(store, ledger.DIR)["labels_added"] == 0
+    assert L2S.import_ledger(store, ledger.frozen_dir())["labels_added"] == 0
     theirs = DT.render_like_for_like(entries)
     ok, n, diffs = ST.diff_tables(ST.render_like_for_like(store.index, "red-team-*"), theirs)
     assert (ok, n, diffs) == (len(DT.LIKE_FOR_LIKE), len(DT.LIKE_FOR_LIKE), [])
@@ -146,13 +153,13 @@ def test_campaign_ledger_round_trips_through_a_fresh_store(store: LocalStore) ->
     assert ok2 == n - overridden and len(diffs2) == overridden and all("[label]" in d for d in diffs2)
 
 
-@pytest.mark.skipif(not ledger.DIR.is_dir(), reason="campaign ledger not present")
+@needs_frozen_ledger
 def test_every_label_the_ledger_import_writes_is_on_the_vocabulary() -> None:
     """The frozen ledger and its red-team verdicts are the labels the repo records.  Every one passes `vocab.check` (no unknown key,
     old spelling, string-typed bool / int or off-enum value), so a change to the vocabulary that would invalidate one fails here."""
     from research.store import vocab
 
-    labels = [(k, v) for _, _, row in L2S._rows(ledger.DIR) for k, v in L2S.row_labels(row).items()]
+    labels = [(k, v) for _, _, row in L2S._rows(ledger.frozen_dir()) for k, v in L2S.row_labels(row).items()]
     labels += [kv for verdict in L2S.REDTEAM for kv in verdict["labels"]]
     off = sorted({f"{k}={v!r}: {why}" for k, v in labels if (why := vocab.check(k, v))})
     assert len(labels) > 1000 and not off, off

@@ -3,8 +3,8 @@
     research notes sync [--path P]... [-m MSG] [--retries N] [--remote NAME] [--root DIR]
     research notes scan [--max-bytes N] [--json] [--root DIR]
 
-`sync` commits the caller's changes (every change, or only under `--path`; files over 1 MB and the steward's own state stay out,
-as with `snapshot`), then fetches, rebases onto the remote branch, and pushes; a push that loses a race fetches, rebases and pushes
+`sync` commits the caller's changes (every change, or only under `--path`; files over 1 MB, evidence and renders, and the
+steward's own state stay out, as with `snapshot`), then fetches, rebases onto the remote branch, and pushes; a push that loses a race fetches, rebases and pushes
 again, at most `--retries` times.  A rebase conflict never drops either side: the rebase is aborted, the local commit stays, the
 exit is 3 and the conflicted files are named.  Before anything is pushed, the outgoing commits' added lines are scanned for key
 material (`KEY_PATTERNS`, and the value of any secret-named environment variable); a hit refuses the push (exit 4), naming the
@@ -15,7 +15,11 @@ path new since HEAD) or its front matter's `created:` (new or changed since HEAD
 clock: one `SYNC-REFUSED <path>: ...` line each, with the value `date -u` gives now, the rest synced, exit 5 when nothing else
 failed.  What HEAD already has is never re-checked, and a stamp stops being ahead once the clock passes it.
 
-The same goes for a note (`lanes/**/*.md`, `kb/**/*.md`) whose front matter is broken: opened with `---` and never closed, a line
+Evidence and renders never enter the notes' history: a file added or changed under `renders/`, `campaigns/*/assets/` or
+`lanes/*/evidence/` stays out of the commit and is named in the report; it belongs in the evidence store (`research data put
+... --preserve`), cited by its `art:` id.  Deleting one commits like any other change.
+
+A note (`lanes/**/*.md`, `kb/**/*.md`) whose front matter is broken also stays out: opened with `---` and never closed, a line
 that is not `key: value` (or a list item, an indented continuation, a comment), or a `created:` that is not a UTC time (the stamp
 check above cannot read it).  Front matter is optional: a note without it is fine, since its lane, kind and time are in its path.
 `SYNC-WARN <path>: ...` lines (committed anyway) name a `lane:` that is not the note's folder (a handoff's lane is its recipient)
@@ -63,6 +67,12 @@ KEY_PATTERNS = {
 }
 SECRET_ENV_RE = re.compile(r"(KEY|SECRET|TOKEN|PASSWORD)", re.I)
 NEVER_COMMIT = ("steward-state.json", ".steward-state.json.tmp")
+EVIDENCE_PATH = re.compile(r"^(?:renders/|campaigns/[^/]+/assets/|lanes/[^/]+/evidence/)")
+
+
+def is_evidence(path: str) -> bool:
+    """A path under the notes' evidence and render locations, which never enter its history."""
+    return bool(EVIDENCE_PATH.match(path))
 FRONT_LINE_RE = re.compile(r"^(?:[A-Za-z_][\w.-]*:(?:[ \t].*)?|[ \t]+\S.*|-(?:[ \t].*)?|#.*|[ \t]*)$")
 FRONT_LANE_RE = re.compile(r"^lane:[ \t]*[\"'`]?([^\s\"'`]+)", re.M)
 MAIL_RE = re.compile(r"handoff|asks|reply")
@@ -98,11 +108,11 @@ def find_keys(text: str, secrets: list[str]) -> list[str]:
     return hits + (["env-secret"] if any(s in text for s in secrets) else [])
 
 
-def _changed(root: Path, paths: list[str] | None, max_bytes: int) -> tuple[list[str], list[str], dict[str, str]]:
-    """(paths to commit, paths skipped as over max_bytes, {staged rename's new path: its old path}) among the working tree's
-    changes, limited to `paths` when given."""
+def _changed(root: Path, paths: list[str] | None, max_bytes: int) -> tuple[list[str], list[str], list[str], dict[str, str]]:
+    """(paths to commit, paths skipped as over max_bytes, evidence files left out, {staged rename's new path: its old path}) among
+    the working tree's changes, limited to `paths` when given."""
     st = _out(root, "status", "--porcelain=v1", "-z", "--untracked-files=all", "--", *(paths or []))
-    entries, keep, big, renames, i = (st or "").split("\0"), [], [], {}, 0
+    entries, keep, big, evidence, renames, i = (st or "").split("\0"), [], [], [], {}, 0
     while i < len(entries):
         e = entries[i]
         i += 1
@@ -117,8 +127,11 @@ def _changed(root: Path, paths: list[str] | None, max_bytes: int) -> tuple[list[
         if path in NEVER_COMMIT:
             continue
         p = root / path
+        if p.is_file() and is_evidence(path):
+            evidence.append(path)
+            continue
         (big if p.is_file() and p.stat().st_size > max_bytes else keep).append(path)
-    return keep, big, renames
+    return keep, big, evidence, renames
 
 
 def _utcnow() -> dt.datetime:
@@ -227,19 +240,19 @@ def header_problems(root: Path, paths: list[str], now: dt.datetime) -> tuple[dic
 
 def commit(root: Path, paths: list[str] | None = None, message: str | None = None, max_bytes: int = MAX_BYTES,
            now: dt.datetime | None = None) -> dict:
-    """Commit the caller's changes (all, or under `paths`) but lane notes stamped ahead of `now` (`future`: `path: why`) and notes
-    with a broken header (`header`: `path: why`); `warn` lists `path: warning`.  Retries a held index lock (another writer on this
-    machine) briefly."""
-    keep, big, renames = _changed(root, paths, max_bytes)
+    """Commit the caller's changes (all, or under `paths`) but evidence and renders (`evidence`), lane notes stamped ahead of `now`
+    (`future`: `path: why`) and notes with a broken header (`header`: `path: why`); `warn` lists `path: warning`.  Retries a held
+    index lock (another writer on this machine) briefly."""
+    keep, big, evidence, renames = _changed(root, paths, max_bytes)
     now = now or _utcnow()
     future = future_stamps(root, keep, now)
     header, warn = header_problems(root, [p for p in keep if p not in future], now)
-    if future or header:
-        out = {*future, *header}
-        out |= {renames[p] for p in out if p in renames}                  # a note left out keeps its old path: never half a move
+    if future or header or evidence:
+        out = {*future, *header, *evidence}
+        out |= {renames[p] for p in out if p in renames}                  # a file left out keeps its old path: never half a move
         keep = [p for p in keep if p not in out]
         _run(root, "--literal-pathspecs", "reset", "-q", "--", *sorted(out))  # a staged copy would be committed anyway
-    left = {"skipped": big, "future": [f"{p}: {why}" for p, why in future.items()],
+    left = {"skipped": big, "evidence": evidence, "future": [f"{p}: {why}" for p, why in future.items()],
             "header": [f"{p}: {why}" for p, why in header.items()], "warn": warn}
     if not keep:
         return {"commit": None, "paths": 0, **left}
@@ -370,8 +383,9 @@ def citation_warnings(cites: dict[str, list[str]], remote=None) -> list[str]:
 def sync(root: Path, paths: list[str] | None = None, message: str | None = None, retries: int = 5, remote: str = "origin",
          max_bytes: int = MAX_BYTES, secrets: list[str] | None = None, now: dt.datetime | None = None) -> dict:
     """Commit, then fetch / rebase / push with bounded retries (module docstring).  The report: `commit`, `paths`, `skipped`,
-    `future` (notes left out, stamped ahead of `now`), `header` (notes left out, broken front matter), `warn` (SYNC-WARN lines: front
-    matter, and once pushed, citations the store lacks), `pushed` (bool), `attempts`, and on failure `error` plus `conflict` (files)
+    `evidence` (evidence and renders left out), `future` (notes left out, stamped ahead of `now`), `header` (notes left out, broken
+    front matter), `warn` (SYNC-WARN lines: front matter, and once pushed, citations the store lacks), `pushed` (bool), `attempts`,
+    and on failure `error` plus `conflict` (files)
     or `keys` (hits); `rc` is the exit code."""
     root = Path(root)
     if _out(root, "rev-parse", "--git-dir") is None:
@@ -467,6 +481,9 @@ def render_sync(rep: dict) -> str:
     parts = [head]
     if rep.get("skipped"):
         parts.append(f"skipped {len(rep['skipped'])} over 1 MB (put them in the store): {', '.join(rep['skipped'][:3])}")
+    if rep.get("evidence"):
+        parts.append(f"left out {len(rep['evidence'])} evidence/render files (the evidence store holds them: research data put ... "
+                     f"--preserve, cite the art: id): {', '.join(rep['evidence'][:3])}")
     if rep.get("future"):
         parts.append(f"left out {len(rep['future'])} stamped ahead of the clock (SYNC-REFUSED)")
     if rep.get("header"):

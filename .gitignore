@@ -26,36 +26,22 @@ runs/
 **/*DRAFT*.md
 **/*TRIAGE*.md
 **/*STATUS*.md
-**/reports/*.md
-**/reports/*.json
-**/reports/plots/
-**/reports/gate*/
-**/results/**
+# generated output (rendered tables, reports, plots, evidence copies, run results) is regenerated from code plus the evidence
+# store, or fetched from it by art: id; tests/test_repository.py::test_no_generated_output is the backstop
+**/reports/
+**/results/
 **/results_*.json*
-!**/reports/ledger/
-# evidence still read by code, pinned in the repo until those scripts read from the notes store:
-# backends/shared/anchor_a100/report.py, backends/direct/encode/reprice_v2.py, backends/gkr/tensor/fused/bench.py
-!backends/direct/encode/results_buckets_r20260922-065537-279b.json
-!backends/direct/encode/results_commit_r20260922-064722-07c7.json
-!backends/direct/encode/results_lintest_r20260922-073017-0924.json
-!backends/direct/encode/results_r20260922-062016-6bdf.json
-!backends/shared/hash_gpu/results_r20260922-054241-b966.json
+**/renders/
+**/previews/
+**/plots/
+**/evidence/
+**/assets/
+**/outputs/
+*.png
+*.pdf
+*.html
+# not read by code: kept with the rest of fixtures/redteam until the red team rules on it
 !fixtures/redteam/vu-battery/v1/a/results_r20260922-070024-e7d1.jsonl
-!backends/numerical/reports/b_measured_4090.json
-!backends/numerical/reports/fused_logup_4090.json
-!backends/numerical/reports/fused_sumcheck_4090.json
-!backends/numerical/reports/packed_sumcheck_h100.json
-!backends/numerical/reports/tc_sumcheck_4090.json
-!backends/direct/ligero/results/result_unit_b4096.json
-!backends/direct/ligero/results/result_vu_42.json
-!backends/direct/ligero/results/result_vu_85.json
-!backends/gkr/packed/results/r20260922-064917-c293/
-!backends/gkr/packed/results/r20260922-064917-c293/bench.json
-!backends/gkr/packed/results/r20260922-065412-73be/
-!backends/gkr/packed/results/r20260922-065412-73be/bench.json
-!backends/gkr/packed/results/r20260922-073439-1f15/
-!backends/gkr/packed/results/r20260922-073439-1f15/logup_bench.json
-!backends/shared/anchor_a100/results/**
 .bench-cell/
 
 # Lean build outputs (lake)

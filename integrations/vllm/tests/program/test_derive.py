@@ -406,7 +406,8 @@ def test_s3_untied_lm_head_loses_sharing_and_is_refused_by_family():
     rep = derive_report(m, (_meta(3, dtype=torch.int32),), **PROF, config=C, name="ServeUntied")
     assert rep.ok, rep.unsupported
     assert not rep.family  # Serve_v1 reads `embed` for both the embedding and the LM head: two tensors cannot bind one role
-    assert rep.program.input_gates > _serve_inputs(C, 3)
+    tied = _serve_inputs(dict(C, tie_word_embeddings=True), 3)
+    assert rep.program.input_gates == _serve_inputs(C, 3) == tied + C["V"] * C["H"]   # the lm_head is a [V][H] tensor of its own
 
 
 def _serve_inputs(C, LP):

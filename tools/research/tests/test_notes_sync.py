@@ -182,6 +182,30 @@ def _tree(origin: Path) -> list[str]:
     return _git(origin, "ls-tree", "-r", "--name-only", "main").split()
 
 
+def test_evidence_and_renders_stay_out_of_the_notes_and_their_removal_syncs(machines):
+    """A file added or changed under renders/, campaigns/*/assets/ or lanes/*/evidence/ is left out, staged or not, and named with
+    where it belongs; the rest syncs, and deleting one that history already holds is pushed like any change."""
+    origin, a, _ = machines
+    (a / "lanes" / "x" / "evidence").mkdir(parents=True)
+    (a / "lanes" / "x" / "evidence" / "old.json").write_text("{}\n")
+    _git(a, "add", "-A")
+    _git(a, "commit", "-qm", "history from before the rule")
+    _git(a, "push", "-q", "origin", "HEAD:main")
+    ev = ["campaigns/c/assets/x/run.json", "lanes/x/evidence/run.log", "renders/daily/20260928T0642Z-tables.json"]
+    for rel in ev:
+        (a / rel).parent.mkdir(parents=True, exist_ok=True)
+        (a / rel).write_text("output\n")
+    _git(a, "add", "renders")
+    (a / "lanes" / "x" / "20260928T0640Z-report-x.md").write_text("CHECKPOINT none (06:40Z) [open] ran\n")
+    rep = NS.sync(a, secrets=[], now=NOW)
+    assert (rep["rc"], rep["pushed"], rep["paths"], sorted(rep["evidence"])) == (0, True, 1, sorted(ev))
+    assert set(_tree(origin)) == {DOC, "lanes/x/evidence/old.json", "lanes/x/20260928T0640Z-report-x.md"}
+    assert "left out 3 evidence/render files (the evidence store holds them: research data put" in NS.render_sync(rep)
+    (a / "lanes" / "x" / "evidence" / "old.json").unlink()
+    rep = NS.sync(a, secrets=[], now=NOW)
+    assert rep["pushed"] and "lanes/x/evidence/old.json" not in _tree(origin) and len(rep["evidence"]) == 3
+
+
 def test_a_lane_note_stamped_over_5_min_ahead_is_left_out_and_the_rest_sync(machines):
     origin, a, _ = machines
     six, five, created = ("lanes/x/20260928T0648Z-report-x.md", "lanes/y/20260928T0647Z-report-y.md",

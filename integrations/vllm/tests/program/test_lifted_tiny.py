@@ -353,7 +353,7 @@ def test_lstep_live_continuation_relation():
     assert L.l_step_live(1).evaluate(17, 17) == 0 and L.l_step_live(1).evaluate(16, 17) == 1
 
 
-def test_specified_list_is_closed():
+def _check_specified_list():
     """Only the specified families — the five of v0.4 (+ the labelled PAD-04 candidate `LSplitsForSMS`), the two Continuation_v1 members
     (R17-32, SPEC B6) and `LFixedSelect<E>x<w>` (R17-42 §3, MOE-PAD-SPEC §2; STAGE1-GAPS G2) — are non-strict; everything registered as
     `Lifted[…]` is the strict wrapper.  The Continuation members and LFixedSelect are materialised here so the list is checked with them in it."""
@@ -370,6 +370,15 @@ def test_specified_list_is_closed():
             else:
                 assert getattr(d, "lift_class", None) == "strict", fid
     assert PP.BitAnd.id not in L.specified_ids() and L.lifted_prim(PP.BitAnd).lift_class == "strict"
+
+
+def test_specified_list_is_closed():
+    """`_check_specified_list` in a fresh interpreter: the registry is process-global, so a lifted relation another test in this process
+    resolved would be checked with the ones this module materialises."""
+    import subprocess
+    code = "from tests.program.test_lifted_tiny import _check_specified_list; _check_specified_list()"
+    p = subprocess.run([sys.executable, "-c", code], cwd=Path(__file__).resolve().parents[2], capture_output=True, text=True)
+    assert p.returncode == 0, p.stderr[-4000:]
 
 
 # ---------------------------------------------------------------------------------------------------------

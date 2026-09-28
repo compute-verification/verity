@@ -145,7 +145,9 @@ renders the switch digest (`backends/numerical/CHANGELOG.md`). Since
 the steward's entry is `published = "entities"`, which renders only the
 entities JSON `<stamp>-tables.json` (the site's input, mirrored to the
 Project store's `internal/tables-render/latest.json`) and runs `--parity` as an
-internal correctness gate that publishes nothing.
+internal correctness gate that publishes nothing. Renders land outside the
+notes (the entry's `out`, absolute or under `$RESEARCH_RENDERS`): they are
+regenerated from the store on demand, never committed.
 
 ## Proof model: interactive is fine, transferability is not required
 
