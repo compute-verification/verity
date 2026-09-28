@@ -1,10 +1,163 @@
 {
  "schema": "verity-pouw/fp8-is-vectors/v1",
  "perm_sha256": {
+  "d3-v0": "b4d73260254663756f188893641a3fbf8e865f1b2491cf8dec433a24f6fbf830",
   "fpncp-v0": "e8dad8e594fc659334c726afa5fa203d2608793255b36f70ea3afdde4e214f6c",
   "d2-draft": "915cc09f89e924ffb52cd5500fcb2e75e5caa24c333e4cb847d987c31f9d63e3"
  },
  "cases": [
+  {
+   "case": "small-d3",
+   "scheme": "fp8-is-h100-d3-v0",
+   "shape": [
+    64,
+    128,
+    64
+   ],
+   "tile": {
+    "rows": [
+     0,
+     2
+    ],
+    "cols": [
+     8,
+     10
+    ]
+   },
+   "index": 7,
+   "weight": 3,
+   "salt": "f97bfeb9f1d250f48e79e11135bb6cb2dd522ad0298a2a71cd50d1ebee6312ae",
+   "root_a": "da8b2c0808c97dd85c96bfc9b016a55cdfa47fb38b58631f2185efcbfe93c459",
+   "root_b": "3a109308f56fa56dec81a4178a0b4beaca14944b8da89e4734a1eb7eb57f422a",
+   "x_row0": [
+    82,
+    109,
+    53,
+    204,
+    68,
+    215,
+    186,
+    68,
+    75,
+    194,
+    91,
+    202,
+    110,
+    111,
+    110,
+    64
+   ],
+   "y_col0": [
+    214,
+    204,
+    173,
+    202,
+    74,
+    34,
+    81,
+    76,
+    93,
+    187,
+    74,
+    203,
+    77,
+    57,
+    214,
+    68
+   ],
+   "trace_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "cell00_atoms": [
+    1158988800,
+    3236429824,
+    3333957632,
+    3325427712
+   ],
+   "cell00_running": [
+    null,
+    1158959104,
+    3332742656,
+    3338686208
+   ],
+   "digest": "8eb39ce0e86ebefbd0e0fcab143955a8486aac618ebdc0c9213f6831149f4f11",
+   "useful_sha256": "5203b428974967ede62fa6fa98cbbc2d736c0334e4c72084edad7fd675638bff",
+   "useful_00": -27450.25
+  },
+  {
+   "case": "lead-k-d3",
+   "scheme": "fp8-is-h100-d3-v0",
+   "shape": [
+    8192,
+    8192,
+    8192
+   ],
+   "tile": {
+    "rows": [
+     0,
+     1
+    ],
+    "cols": [
+     0,
+     1
+    ]
+   },
+   "index": 18446744073709551615,
+   "weight": 11,
+   "salt": "e542b71bd227dec3509d60b9277d6ab0d509556e0fdbb6e52e9aac1488df1a91",
+   "root_a": "24023ab07fb3f0029c6fd977d143804766ee98bfb207c99369d67acac6168351",
+   "root_b": "52a548a7f1494cdf857b1ead308afef3b7e426a43eed93041485b47a108edfe4",
+   "x_row0": [
+    162,
+    202,
+    76,
+    75,
+    76,
+    214,
+    67,
+    198,
+    198,
+    202,
+    73,
+    55,
+    72,
+    242,
+    104,
+    59
+   ],
+   "y_col0": [
+    109,
+    66,
+    85,
+    82,
+    183,
+    112,
+    66,
+    68,
+    186,
+    74,
+    176,
+    200,
+    72,
+    80,
+    212,
+    236
+   ],
+   "trace_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "cell00_atoms": [
+    1194634240,
+    3339157504,
+    1144762368,
+    1167109120
+   ],
+   "cell00_running": [
+    null,
+    1177858048,
+    1178626816,
+    1183080576
+   ],
+   "digest": "ea7487c488080ece9efb8b9bf187c9e8102c4c1cd8763c4a9a7c5639b2b47734",
+   "useful_sha256": "ab2d3880b6cf29ce059e1fc9077964edd9ad2bfaa3df3e4ac5042970fcc0b205",
+   "useful_00": -219232.53125
+  },
   {
    "case": "small-d2",
    "scheme": "fp8-is-h100-d2-draft",

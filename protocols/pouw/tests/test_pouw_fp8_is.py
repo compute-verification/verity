@@ -242,3 +242,95 @@ def test_a_seeded_layer_checks_r1():
     liar = F.FP8IS(Mislabelled(), mnk_min=16)
     with pytest.raises(DomainError):
         liar.encode(ctx, liar.noise(ctx), a, b, tile)
+
+
+# ---- d3-v0: repaired C-2 --------------------------------------------------------------------------------------------
+
+def f16_value(w: int) -> Fraction:
+    neg, m, e = F.fp16.decode(w)
+    v = Fraction(m) * Fraction(2) ** e
+    return -v if neg else v
+
+
+def test_d3_registry_price_and_domain():
+    s = get("fp8-is-h100-d3-v0")
+    assert isinstance(s.forming, F.D3) and not s.forming.seeded and s.dropped == 32
+    assert s.forming.units == (372, 372) and s.forming.measured_units == Fraction(9893, 20)
+    assert dict(s.certificate.parameters)["trace_units"] == 372
+    claimed = F.FP8IS(F.D3(form_units=192))
+    assert claimed.certificate.omega == Fraction(6 * 8192 - 32 + 384, 6 * 8192 - 32)
+    s.check(Matmul(0, Shape(8192, 8192, 16384), 1))
+
+
+def test_d3_exact_algebra_is_the_scaled_product():
+    """Before any rounding: with the scheme's own f16 noise E1 (partner-max, per-entry) and F1 (column-keyed),
+    E2 = E1·P, F2 = −P·F1 and exact E3, F3, the three blocks multiply to (αa)·(βb) exactly."""
+    layer, k = F.D3(), 128
+    pi, inv = F.ncp_perm(k, layer.P_SEED)
+    rng = random.Random("d3-algebra")
+    a, b = codes(rng, k, 0x7E), codes(rng, k, 0x7E)
+    ctx = ctx_of((64, k, 64))
+
+    def noise(row, stream, left):
+        h = [F.fp16.from_e4m3(c) for c in row]
+        alpha, sigma = layer.scale(h)
+        y = [f16_value(F.fp16.mul(alpha, w)) for w in h]
+        st = [F.fp16.max_(F.fp16.mul(alpha, w) & 0x7C00, F.F16_2_POW_M6) for w in h]
+        partner = inv if left else pi
+        s = [F.fp16.max_(st[l], st[partner[l]]) for l in range(k)]
+        two_sigma, c = F.fp16.mul(sigma, 0x4000), F.fp16.mul(sigma, 0xC200)
+        e = []
+        for l in range(k):
+            w = int.from_bytes(stream[4 * l:4 * l + 4], "little")
+            su = F.fp16.fma(two_sigma, F.F16_ONE | (w & 0x3FF), c)
+            e.append(f16_value(F.fp16.fma(s[l], F.fp16.fma(F.F16_TWO_INV4, F.F16_ONE | ((w >> 16) & 0x3FF), F.F16_MINUS_3_8), su)))
+            assert f16_value(s[l]) >= 8 * Fraction(1, 512)          # s·v/8 spans at least one E4M3 cell
+        return y, e
+
+    y, e1 = noise(a, F.xof("verity/pouw/fp8-is/d3/E1", 4 * k, ctx.salt, 3, ctx.root_a, 5, 0), True)
+    z, f1 = noise(b, F.xof("verity/pouw/fp8-is/d3/F1", 4 * k, ctx.salt, 5, 0), False)
+    e2 = [e1[pi[l]] for l in range(k)]
+    f2 = [-f1[inv[l]] for l in range(k)]
+    blocks = ((e1, f1, 1), (e2, f2, 1), ([p + q for p, q in zip(e1, e2)], [p + q for p, q in zip(f1, f2)], -1))
+    total = sum(sign * (y[l] + e[l]) * (z[l] + f[l]) for e, f, sign in blocks for l in range(k))
+    assert total == sum(p * q for p, q in zip(y, z))
+
+
+def test_d3_repairs_both_refuted_inputs():
+    """X-C2-B1's absorbed-noise row and X-D1-1's one spike, which `fpncp-v0` leaves salt-independent, give salt-dependent
+    codes and words under d3-v0."""
+    layer, k = F.D3(), 4096
+    row = [0x7E] + [0x61] * (32 * 14 - 1) + [0] * (k - 32 * 14)
+    stacks = [layer.form(c, layer.noise(c), [row], [row], Tile((0,), (0,)))
+              for c in (ctx_of((64, k, 64), salt=bytes([s])) for s in range(3))]
+    for blk in (0, 1):
+        assert len({tuple(st.x[0][blk * k + 32:blk * k + 32 * 14]) for st in stacks}) == 3
+    runs = spike_slice_words(layer, k, 0x7E, 0x7E, salts=3)
+    assert len({tuple(w for w, _ in run) for run in runs}) == 3
+
+
+def test_d3_identical_weight_columns_are_distinct():
+    """X-D2-5: weight noise is keyed per column, so two identical committed weight rows give different formed columns."""
+    layer, k = F.D3(), 128
+    rng = random.Random("d3-columns")
+    w, act = codes(rng, k, 0x7E), codes(rng, k, 0x7E)
+    ctx = ctx_of((64, k, 64))
+    st = layer.form(ctx, layer.noise(ctx), [act], [w, w], Tile((0,), (0, 1)))
+    assert st.y[0] != st.y[1]
+    assert F.cell_words(st.x[0], st.y[0]) != F.cell_words(st.x[0], st.y[1])
+
+
+def test_d3_useful_output_tracks_the_product():
+    s, k = F.FP8IS(F.D3(), mnk_min=16, tile=(2, 2)), 256
+    rng = random.Random("d3-useful")
+    a, b = [codes(rng, k, 0x6E) for _ in range(2)], [codes(rng, k, 0x6E) for _ in range(2)]
+    ctx, tile = ctx_of((64, k, 64)), Tile((0, 1), (0, 1))
+    ops = s.encode(ctx, s.noise(ctx), [bytes(r) for r in a], [bytes(r) for r in b], tile)
+    got = s.useful(ctx, None, ops, s.checked(ctx, ops))
+    for i in range(2):
+        for j in range(2):
+            scale = f16_value(s.forming.scale([F.fp16.from_e4m3(c) for c in a[i]])[0]) * \
+                    f16_value(s.forming.scale([F.fp16.from_e4m3(c) for c in b[j]])[0])
+            want = sum(value(p) * value(q) for p, q in zip(a[i], b[j]))
+            bound = sum(abs(value(p) * value(q)) for p, q in zip(a[i], b[j]))
+            assert abs(Fraction(got[i][j]) / scale - want) < bound / 8

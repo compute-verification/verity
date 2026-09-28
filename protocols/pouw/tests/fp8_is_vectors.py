@@ -16,7 +16,9 @@ from verity_pouw.schemes import fp8_is
 
 OUT = Path(__file__).with_name("vectors") / "fp8_is.json"
 #: (case, forming, shape, tile rows, tile cols, index, weight): test-instance shapes and one lead-domain k
-CASES = (("small-d2", "d2-draft", (64, 128, 64), (0, 2), (8, 10), 7, 3),
+CASES = (("small-d3", "d3-v0", (64, 128, 64), (0, 2), (8, 10), 7, 3),
+         ("lead-k-d3", "d3-v0", (8192, 8192, 8192), (0, 1), (0, 1), (1 << 64) - 1, 11),
+         ("small-d2", "d2-draft", (64, 128, 64), (0, 2), (8, 10), 7, 3),
          ("small-fpncp", "fpncp-v0", (64, 128, 64), (0, 2), (8, 10), 7, 3),
          ("lead-k-d2", "d2-draft", (8192, 8192, 8192), (0, 1), (0, 1), (1 << 64) - 1, 11))
 

@@ -40,7 +40,7 @@ from fractions import Fraction
 from functools import lru_cache
 from typing import Any, Protocol, runtime_checkable
 
-from verity.ml.tc import fp32
+from verity.ml.tc import fp16, fp32
 from verity.ml.tc.cast import f32_to_e4m3_sat_word
 from verity.ml.tc.total_fp8 import HOPPER_E4M3_WGMMA_K32
 from verity.randomness import Part, frame
@@ -452,7 +452,153 @@ class D2Draft:
         return Stack([o for o, _ in xs], [o for o, _ in ys], [t for _, t in xs], [t for _, t in ys])
 
 
-FORMINGS = {FpNcpV0.name: FpNcpV0, D2Draft.name: D2Draft}
+# ---- d3-v0: repaired C-2 (track D's D-3), the main line ----------------------------------------------------------------
+
+F16_ONE, F16_TWO_INV4, F16_MINUS_3_8 = 0x3C00, 0x3400, 0xB600      # 1, 1/4, −3/8
+F16_2_POW_M6 = 0x2400                                               # 2^−6: eight times E4M3's subnormal step
+
+#: Per-element W1 trace of `D3` on MH100 (one operand row), nominal and at Round 7's measured prices
+#: (half2 40.1 and INT 64 per instruction, F2FP 66.7 per x2 instruction, FADD 33.5).
+D3_TRACE = (
+    # (operation, nominal units, measured units)
+    ("unpack e4m3x2 -> f16x2 (1 per 2 codes)", 16, Fraction(667, 20)),
+    ("row max |h| (HMNMX2)", 16, Fraction(401, 20)),
+    ("z = h·2^-p (HMUL2)", 16, Fraction(401, 20)),
+    ("sum of z² (HFMA2; a widen and an FADD per 16 per lane)", 20, Fraction(401, 20) + Fraction(401 + 335, 160)),
+    ("y = α·h (HMUL2, α a power of two)", 16, Fraction(401, 20)),
+    ("exponent mask of y (LOP3 on half2)", 32, 32),
+    ("clamp at the subnormal step (HMNMX2)", 16, Fraction(401, 20)),
+    ("partner max (HMNMX2)", 16, Fraction(401, 20)),
+    ("two 10-bit noise fields (one LOP3)", 64, 64),
+    ("σ·u, v/8 and s·v + σ·u (three HFMA2)", 48, Fraction(1203, 20)),
+    ("e3 = e1 + e2 (HADD2; e2 a free word move)", 16, Fraction(401, 20)),
+    ("three y ± e_b (HADD2)", 48, Fraction(1203, 20)),
+    ("three cvt.rn.satfinite.e4m3x2.f16x2 (1 per 2 codes each)", 48, Fraction(2001, 20)),
+)
+
+
+class D3:
+    """Repaired C-2 (track D's D-3): C-2's three NCP blocks with **partner-max full-cell noise** and **column-keyed weight
+    streams**, formed in binary16 (`verity.ml.tc.fp16`, the half2 pipe).  Per operand row of k E4M3 codes:
+
+        h_l   = the code's f16 value (exact);  inf = max |h_l|;  p = ⌊log₂ inf⌋
+        ss    = Σ (h_l·2^−p)² in 64 lanes (l mod 64): each lane chains fma.f16 over 16 of its entries, widens the chain to
+                f32 and adds it; then an f32 butterfly over the lanes (h = 32 … 1)
+        rms   = sqrt(ss / k)·2^p (f32);  den = (9/8)·inf + 2δ·rms (f32)
+        α     = the largest power of two with α·den <= 448, at most 2^15;  σ = α·δ·rms, rounded to f16
+        y_l   = α·h_l (f16, exact)
+        st_l  = max(2^⌊log₂|y_l|⌋, 2^−6), 0 ↦ 2^−6: eight E4M3 cells at |y_l| (one subnormal step below the normal range)
+        s_l   = max(st_l, st_(partner l)): A rows partner l with π⁻¹(l), where block 2 reads e1_l; B rows with π(l)
+        t, t' = f16 in [1, 2) from the row's XOF: 0x3C00 | (w & 0x3FF), for the low and the high 16 bits of word l
+        e1_l  = fma(s_l, (2t'_l − 3)/8, σ·u_l),  σ·u_l = fma(2σ, t_l, RN(−3σ))       (u, v uniform on [−1, 1))
+        A:  e2_l = e1_(π(l)),  e3 = e1 + e2;   X̃ = [Q(y + e1) | Q(y + e2) | Q(−y − e3)]
+        B:  f2_l = −f1_(π⁻¹(l)), f3 = f1 + f2;  Ỹ = [Q(y + f1); Q(y + f2); Q(y + f3)]
+
+    with Q = cvt.rn.satfinite.e4m3x2.f16x2 and δ = 2^−delta_log2.  So every entry carries at least one full local E4M3
+    cell of noise amplitude in both blocks that read it (the X-C2-B1 repair), and NCP's cancellation is unchanged (it
+    holds for any E1, F1).  E₁'s row i is SHAKE256("verity/pouw/fp8-is/d3/E1", salt, index, root_A, weight, i); F₁'s
+    row j is SHAKE256("verity/pouw/fp8-is/d3/F1", salt, weight, j), one stream per weight column (X-D2-5), 4k bytes.
+    The core runs unseeded: R_1 = I_1 is dropped.  An all-zero row has α = 1 and σ = 224.
+    """
+
+    name = "d3-v0"
+    blocks = 3
+    seeded = False
+    credited = (0, 0)
+    P_SEED = b"verity/pouw/fp8-is/d3/P"
+    LANES, CHAIN = 64, 16
+
+    def __init__(self, delta_log2: int = 3, form_units: int | None = None):
+        self.delta_log2 = delta_log2
+        self.delta = f32_word(Fraction(1, 1 << delta_log2))
+        self.two_delta = f32_word(Fraction(2, 1 << delta_log2))
+        self.trace_units = sum(u for _, u, _ in D3_TRACE)
+        self.measured_units = sum(m for _, _, m in D3_TRACE)
+        f = self.trace_units if form_units is None else form_units
+        self.units = (f, f)
+        self.parameters = (("delta_log2", delta_log2), ("form_units", f), ("trace_units", self.trace_units))
+
+    def check(self, shape: Shape) -> None:
+        if shape.k % SLICE or shape.k > 1 << 16:
+            raise DomainError(f"{self.name}: k is a multiple of {SLICE} and at most 2^16")
+        ncp_perm(shape.k, self.P_SEED)
+
+    def admits(self, codes: Sequence[int], left: bool) -> bool:
+        return True
+
+    def noise(self, ctx: Context) -> tuple[tuple[int, ...], tuple[int, ...]]:
+        return ncp_perm(ctx.matmul.shape.k, self.P_SEED)
+
+    def scale(self, h: Sequence[int]) -> tuple[int, int]:
+        """The row's (α, σ) as f16 words."""
+        inf = max(w & 0x7FFF for w in h)                 # non-negative finite f16 words order as their values
+        if inf == 0:
+            return F16_ONE, fp16.round_to_f16(False, 224, 0)
+        p = ((inf >> 10) & 0x1F) - 15
+        down = fp16.round_to_f16(False, 1, -p)
+        z = [fp16.mul(w, down) for w in h]
+        lanes = [0] * self.LANES
+        for t in range(self.LANES):
+            entries = z[t::self.LANES]
+            for g in range(0, len(entries), self.CHAIN):
+                q = 0
+                for w in entries[g:g + self.CHAIN]:
+                    q = fp16.fma(w, w, q)
+                lanes[t] = fp32.add(lanes[t], fp16.to_f32(q))
+        half = self.LANES // 2
+        while half:
+            for t in range(half):
+                lanes[t] = fp32.add(lanes[t], lanes[t + half])
+            half //= 2
+        rms = fp32.mul(fp32.sqrt(fp32.div(lanes[0], f32_word(len(h)))), fp32.round_to_f32(False, 1, p))
+        den = fp32.add(fp32.mul(fp16.to_f32(inf), f32_word(Fraction(9, 8))), fp32.mul(rms, self.two_delta))
+        _, dm, de = fp32.decode(den)
+        top = dm.bit_length() - 1 + de                   # den = d·2^top, 1 <= d < 2
+        j = min((8 if Fraction(dm, 1 << (dm.bit_length() - 1)) <= Fraction(7, 4) else 7) - top, 15)
+        alpha32 = fp32.round_to_f32(False, 1, j)
+        sigma = fp32.mul(fp32.mul(alpha32, self.delta), rms)
+        neg_s, sm, se = fp32.decode(sigma)
+        return fp16.round_to_f16(False, 1, j), fp16.round_to_f16(neg_s, sm, se)
+
+    def side(self, codes: Sequence[int], stream: bytes, pi: Sequence[int], inv: Sequence[int], left: bool) -> list[int]:
+        """One stacked row of X̃ (``left``) or column of Ỹ: 3k codes."""
+        k = len(codes)
+        h = [fp16.from_e4m3(c) for c in codes]
+        alpha, sigma = self.scale(h)
+        y = [fp16.mul(alpha, w) for w in h]
+        st = [fp16.max_(w & 0x7C00, F16_2_POW_M6) for w in y]
+        partner = inv if left else pi
+        s = [fp16.max_(st[l], st[partner[l]]) for l in range(k)]
+        two_sigma = fp16.mul(sigma, 0x4000)
+        c = fp16.mul(sigma, 0xC200)                      # RN(−3σ)
+        e1 = []
+        for l in range(k):
+            w = int.from_bytes(stream[4 * l:4 * l + 4], "little")
+            t, tp = F16_ONE | (w & 0x3FF), F16_ONE | ((w >> 16) & 0x3FF)
+            su = fp16.fma(two_sigma, t, c)
+            v8 = fp16.fma(F16_TWO_INV4, tp, F16_MINUS_3_8)
+            e1.append(fp16.fma(s[l], v8, su))
+        q = fp16.to_e4m3
+        if left:
+            e2 = [e1[pi[l]] for l in range(k)]
+            e3 = [fp16.add(a, b) for a, b in zip(e1, e2)]
+            return ([q(fp16.add(v, e)) for v, e in zip(y, e1)] + [q(fp16.add(v, e)) for v, e in zip(y, e2)]
+                    + [q(fp16.add(fp16.neg(v), fp16.neg(e))) for v, e in zip(y, e3)])
+        f2 = [fp16.neg(e1[inv[l]]) for l in range(k)]
+        f3 = [fp16.add(a, b) for a, b in zip(e1, f2)]
+        return [q(fp16.add(v, f)) for f_blk in (e1, f2, f3) for v, f in zip(y, f_blk)]
+
+    def form(self, ctx: Context, noise, a: list[list[int]], b: list[list[int]], tile: Tile) -> Stack:
+        pi, inv = noise
+        u, k = ctx.matmul, ctx.matmul.shape.k
+        x = [self.side(r, xof("verity/pouw/fp8-is/d3/E1", 4 * k, ctx.salt, u.index, ctx.root_a, u.weight, i), pi, inv, True)
+             for r, i in zip(a, tile.rows)]
+        y = [self.side(r, xof("verity/pouw/fp8-is/d3/F1", 4 * k, ctx.salt, u.weight, j), pi, inv, False)
+             for r, j in zip(b, tile.cols)]
+        return Stack(x, y, [b""] * len(x), [b""] * len(y))
+
+
+FORMINGS = {D3.name: D3, FpNcpV0.name: FpNcpV0, D2Draft.name: D2Draft}
 
 
 # ---- the scheme -----------------------------------------------------------------------------------------------------

@@ -33,6 +33,7 @@ SCHEMES: dict[str, Callable[..., PoUWScheme]] = {
     "ncp-v1": _ncp("word"),
     "ncp-v1-shift24": _ncp("shift24"),
     "pearl-fp8-v4": _pearl,
+    "fp8-is-h100-d3-v0": _fp8_is("d3-v0"),
     "fp8-is-h100-d2-draft": _fp8_is("d2-draft"),
     "fp8-is-h100-fpncp-v0": _fp8_is("fpncp-v0"),
 }
