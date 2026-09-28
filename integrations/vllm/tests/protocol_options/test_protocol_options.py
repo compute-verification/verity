@@ -365,3 +365,49 @@ def test_run_row_refuses_first_and_hands_the_set_to_the_stages(monkeypatch, tmp_
 
 def test_every_protocol_has_an_adapter_module_name():
     assert tuple(PO.ADAPTERS) == config.PROTOCOLS
+
+
+def test_every_site_nests_in_install_order():
+    for site, outermost_first in PO.SITES.items():
+        rank = [config.PROTOCOLS.index(n) for n in outermost_first]
+        assert rank == sorted(rank, reverse=True), site
+
+
+APPLY = "LinearBase.quant_method.apply"
+
+
+def test_a_site_has_one_executor_and_sampled_proofs_needs_its_definition(monkeypatch):
+    pouw = _fake_adapter(monkeypatch, "pouw", _pouw([]), schemes=("ncp-v1", "pearl-fp8-v4"))
+    pouw.EXECUTES = (APPLY,)
+    pous = _fake_adapter(monkeypatch, "pous", _pous([]), schemes=("band-chain/d12/v1",))
+    assert PO.refusals(_serve("pouw:ncp-v1", "pous:band-chain/d12/v1")) == ()
+    pous.EXECUTES = (APPLY,)
+    assert PO.refusals(_serve("pouw:ncp-v1", "pous:band-chain/d12/v1")) == \
+        (f"pous:band-chain/d12/v1: {APPLY} already has an executor, pouw:ncp-v1; a site has one",)
+    del pous.EXECUTES
+    commit = PO.Context(stage="commit", enabled=("pouw:ncp-v1", "sampled-proofs:vllm-v1"))
+    got = PO.refusals(commit)
+    assert len(got) == 1 and got[0].startswith(f"pouw:ncp-v1: executes {APPLY}, and the Program has no Definition")
+    pouw.traced_as = lambda scheme, ctx: "Int7Linear{K,N}" if scheme == "ncp-v1" else None
+    assert PO.refusals(commit) == ()
+    got = PO.refusals(PO.Context(stage="commit", enabled=("pouw:pearl-fp8-v4", "sampled-proofs:vllm-v1")))
+    assert len(got) == 1 and "no Definition" in got[0]
+    assert PO.refusals(_serve("pouw:pearl-fp8-v4")) == ()
+
+
+def test_every_option_commits_to_the_weights_before_any_installs(monkeypatch):
+    log: list[str] = []
+
+    def adapter(name):
+        def install(scheme, target):
+            log.append(f"install {name} seeing {sorted(target.weight_commitments)}")
+            return PO.Option(name=f"{name}:{scheme}", hooks=target.hooks(f"{name}:{scheme}"))
+        mod = _fake_adapter(monkeypatch, name, install)
+        mod.commit_weights = lambda scheme, target: log.append(f"commit {name}") or {"root": f"{name}-w"}
+
+    adapter("pouw")
+    adapter("pous")
+    with PO.install(Model(), _serve("pouw:s1", "pous:s1")) as comp:
+        pass
+    assert log == ["commit pouw", "commit pous", "install pouw seeing ['pous:s1', 'pouw:s1']", "install pous seeing ['pous:s1', 'pouw:s1']"]
+    assert [p.get("weights") for p in comp.record()["protocols"]] == [{"root": "pouw-w"}, {"root": "pous-w"}]

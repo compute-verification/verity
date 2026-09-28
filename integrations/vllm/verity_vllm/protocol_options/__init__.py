@@ -7,21 +7,25 @@ A row refuses a set it cannot run before any stage starts (`at_row`); the Commit
 (`commit_guard`).  Each protocol has one adapter module here (`interface`), imported only when it is enabled.  The
 protocol logic is its package's (`verity_pouw`, `verity_pous`, `verity_sampled_proofs`), never this package's.
 
-**Order.**  Adapters install in `config.PROTOCOLS` order, innermost first, and uninstall in reverse:
+**Order.**  The nesting at each site is stated in `SITES`.  Adapters install in `config.PROTOCOLS` order, innermost
+first, and uninstall in reverse:
 
-1. ``pouw`` wraps each linear layer's ``quant_method.apply`` and replaces its GEMM, reading the weight from the layer it
-   is called with;
+1. ``pouw`` executes at each linear layer's ``quant_method.apply``: it replaces the GEMM, reading the weight from the
+   layer it is called with;
 2. ``pous`` wraps the same ``apply`` around it: it decodes the weight from its encoded store and calls the inner
    ``apply`` with a layer holding the decoded weight, so the GEMMs read what POUS stores; its responder starts last;
 3. ``sampled-proofs`` is outermost: the Commit's committer and taps commit the values the model produced.
 
-Nothing changes the model before every enabled protocol has committed to the plaintext weights of record, so a Commit
-installs its composition after its committers registered them (`at_commit`).
+**Phases.**  First every enabled option commits to the plaintext weights of record (``commit_weights``), with the model
+untouched and no beacon read; then each installs.  A Commit installs its composition after its committers registered the
+weights (`at_commit`), and after its warm-ups, so every ``apply`` an executor sees is serving.
 
 **Refused** (`refusals`): an unknown protocol; a scheme its package does not register, or an adapter not on this tree;
 a protocols config naming a protocol the run does not enable; a set at TP > 1 (each rank would install its own, which is
-not wired); with ``pous`` on, an option that keeps a weight-derived copy resident across forwards (its adapter's
-``keeps_weight_copy``); and whatever an adapter refuses for its context (sampled proofs outside the Commit stage, for one).
+not wired); two executors at one site; beside sampled proofs, an executor whose computation the Program has no
+Definition for (``traced_as``: PoUW until the int7 linear is registered, and Pearl's noise-dependent output for good);
+with ``pous`` on, an option that keeps a weight-derived copy resident across forwards (``keeps_weight_copy``); and
+whatever an adapter refuses for its context (sampled proofs outside the Commit stage, for one).
 
 **Weights of record.**  An option that releases weights from the model (POUS) returns their plaintext from
 ``Installed.weights()``; the Commit's replay reads and re-registers the live weights through `weights_view` /
@@ -46,12 +50,17 @@ from verity_vllm import config
 from verity_vllm.engine import hooks
 from verity_vllm.protocol_options.interface import Context, Installed, Option, Target
 
-__all__ = ["ADAPTERS", "RECORD_SCHEMA", "Composition", "Context", "Installed", "Option", "Refused", "Target", "adapter",
+__all__ = ["ADAPTERS", "RECORD_SCHEMA", "SITES", "Composition", "Context", "Installed", "Option", "Refused", "Target", "adapter",
            "WeightsView", "at_commit", "at_row", "commit_context", "commit_guard", "install", "into_verdict", "load_settings",
            "parse", "refusals", "register_weights", "undeclared", "weights_view"]
 
 #: protocol -> its adapter module in this package
 ADAPTERS = {"pouw": "pouw", "pous": "pous", "sampled-proofs": "sampled_proofs"}
+#: Each hook site and who is at it, outermost first; the last may execute there (``EXECUTES``), the others wrap.  At a
+#: linear layer's ``apply`` POUS hands the decoded weight inward and PoUW replaces the GEMM.  Sampled proofs commits at the
+#: module boundary, outside every site, and its replay evaluates Definitions, never an executor.  `config.PROTOCOLS`, the
+#: install order, is innermost first at every site.
+SITES = {"LinearBase.quant_method.apply": ("pous", "pouw")}
 RECORD_SCHEMA = "verity-vllm/protocol-composition/v0"
 
 parse = config.parse_protocols
@@ -98,6 +107,7 @@ def refusals(ctx: Context) -> tuple[str, ...]:
     stray = sorted(set(ctx.settings) - set(names))
     if stray:
         out.append(f"the protocols config names {stray}, which this run does not enable")
+    executors: dict[str, str] = {}
     for entry, name in zip(ctx.enabled, names):
         scheme = entry.partition(":")[2]
         try:
@@ -110,6 +120,14 @@ def refusals(ctx: Context) -> tuple[str, ...]:
             out.append(f"{entry}: {name} registers no scheme {scheme!r} (registered: {', '.join(known) or 'none'})")
             continue
         out.extend(f"{entry}: {r}" for r in mod.refusals(scheme, ctx))
+        sites = tuple(getattr(mod, "EXECUTES", ()))
+        for site in sites:
+            if site in executors:
+                out.append(f"{entry}: {site} already has an executor, {executors[site]}; a site has one")
+            executors.setdefault(site, entry)
+        if sites and ctx.scheme("sampled-proofs") is not None and not getattr(mod, "traced_as", lambda s, c: None)(scheme, ctx):
+            out.append(f"{entry}: executes {', '.join(sites)}, and the Program has no Definition for what it computes there, so "
+                       f"sampled proofs would trace it as the stock computation (refused until the option names one: traced_as)")
         if ctx.scheme("pous") is not None and name != "pous" and getattr(mod, "keeps_weight_copy", lambda s, c: False)(scheme, ctx):
             out.append(f"{entry}: keeps a weight-derived copy resident across forwards, so with pous on its GEMMs would not read "
                        f"what POUS stores (prepare its weight operands per forward from the weight it is handed)")
@@ -123,6 +141,7 @@ class Composition:
     def __init__(self, ctx: Context) -> None:
         self.context = ctx
         self.installed: list[Installed] = []
+        self.weight_commitments: dict[str, Any] = {}
         self.closed = False
 
     @property
@@ -173,7 +192,9 @@ class Composition:
 
     def record(self, profile_digest: str | None = None) -> dict[str, Any]:
         body = {"schema": RECORD_SCHEMA, "stage": self.context.stage, "profile_digest": profile_digest,
-                "protocols": [{"entry": i.name, "commitment": i.commitment()} for i in self.installed]}
+                "protocols": [{"entry": i.name, "commitment": i.commitment(),
+                               **({"weights": dict(self.weight_commitments[i.name])} if i.name in self.weight_commitments else {})}
+                              for i in self.installed]}
         canon = json.dumps(body, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
         return {**body, "digest": hashlib.sha256(canon).hexdigest()}
 
@@ -205,8 +226,14 @@ def install(model: Any, ctx: Context, *, rank: int = 0) -> Composition:
         raise Refused([f"options installed outside this composition are live: {list(stray)}"])
     comp = Composition(ctx)
     target = Target(model, ctx, rank)
+    comp.weight_commitments = target.weight_commitments
+    for entry in ctx.enabled:                          # phase 1: every commitment to the plaintext weights, model untouched
+        name, _, scheme = entry.partition(":")
+        commit = getattr(adapter(name), "commit_weights", None)
+        if commit is not None:
+            target.weight_commitments[entry] = dict(commit(scheme, target))
     try:
-        for entry in ctx.enabled:
+        for entry in ctx.enabled:                      # phase 2: install, innermost first
             name, _, scheme = entry.partition(":")
             opt = adapter(name).install(scheme, target)
             comp.installed.append(opt)
