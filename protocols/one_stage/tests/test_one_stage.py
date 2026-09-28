@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from fractions import Fraction
+from itertools import islice
 from math import comb
 
 import pytest
@@ -170,7 +172,59 @@ def test_profile_counts_wrong_units():
     p = audit.profile(rec, d, 0.25)
     assert p.sizes == (6,) and p.drawn == {"unit": 2} and p.levels[0].query == rec["partition"]
     assert p.accept(1) == Fraction(comb(5, 2), comb(6, 2)) and p.accept(5) == 0
-    assert 0 < audit.wrong_units_bound(p) < 6
+    assert 0 < p.bound() < 6
+
+
+def _v0(registration, draw, delta):
+    """The record's `profile` and `wrong_units` as `audit.py` computed them before the profile was one type (`main` at
+    6746f408), kept as the oracle for the bytes recorded runs hold."""
+    from verity.ir.partition import Level
+    from verity.proofs.profile import Bernoulli, IntegrityProfile, Stratified, Stratum, Subset
+    n, law = registration["population"], D.law_of(draw)
+    core = (Stratified.uniform(n, law["k"]) if law["law"] == "subset" else Stratified(tuple(
+        Stratum(s["template"], sum(hi - lo for lo, hi in s["units"]), s["k"]) for s in law["strata"]))
+        if law["law"] == "stratified" else None)
+    if draw["law"] == "stratified":
+        drawn = {s["template"]: sum(1 for u in draw["units"] if any(lo <= u < hi for lo, hi in s["units"]))
+                 for s in draw["strata"]}
+        prof = {**core.to_json(), "delta": delta, "drawn": drawn}
+        single = None
+    else:
+        single = IntegrityProfile((Level("unit", registration["partition"]),), (n,),
+                                  {"unit": Subset(draw["k"]) if draw["law"] == "subset" else Bernoulli(Fraction(draw["p"]))},
+                                  delta, programs=(registration["program"],), drawn={"unit": len(draw["units"])})
+        prof = single.to_json()
+    out = {"delta": delta, "of": n}
+    rule = "except with probability delta, an accepted transcript has at most `bound` wrong units"
+    if core is None:
+        out["bound"], out["rule"] = single.worst_case(lambda m: float(m)), rule
+    else:
+        out["bound"], out["rule"] = core.count_bound(delta), rule
+        if draw["law"] == "stratified":
+            out["per_template"] = {s.name: core.stratum_bound(s.name, delta) for s in core.strata}
+            out["rule"] += ", and at most `per_template[t]` of them in template t"
+    return prof, out
+
+
+def test_the_record_states_the_one_profile_in_its_recorded_bytes():
+    """One profile type for every law leaves the record's `profile` and `wrong_units` byte for byte as before (`_v0`)."""
+    lean = {"accepted": True, "of_record": True, "digest": "dd" * 64}
+    _, _, rec = _registration(6)
+    d = {"law": "subset", "population": 6, "k": 2, "units": [1, 4]}
+    r = audit.audit_record(rec, R.receipt(rec, "verifier-test"), d, LAW, [1, 4], 2, {}, {"lean": lean}, 0.25)
+    assert json.dumps([r["profile"], r["wrong_units"]]) == json.dumps(list(_v0(rec, d, 0.25)))
+    prog, q, rule, srec = _stratified_registration()
+    law = D.derive(prog, q, rule)
+    sd = {"law": "stratified", "population": 6, "k": 4, "strata": law["strata"], "units": [1, 3, 4, 5]}
+    r = audit.audit_record(srec, R.receipt(srec, "verifier-test"), sd, law, [1, 3, 4, 5], 4, {}, {"lean": lean}, 0.25)
+    assert json.dumps([r["profile"], r["wrong_units"]]) == json.dumps(list(_v0(srec, sd, 0.25)))
+    for p in ("1/3", "1/2", "1"):
+        bd = {"law": "bernoulli", "population": 6, "p": p, "units": [0, 2]}
+        for delta in (0.25, 0.01):
+            new = [audit.profile(rec, bd, delta).to_json(), audit.wrong_units(rec, bd, delta)]
+            assert json.dumps(new) == json.dumps(list(_v0(rec, bd, delta))), (p, delta)
+    with pytest.raises(ValueError):
+        audit.profile(rec, {"law": "nested", "units": []}, 0.25)
 
 
 def test_audit_record_needs_every_check_and_verdict():
@@ -226,15 +280,14 @@ def test_a_record_over_an_explicit_partition_object():
 
 
 def test_the_wrong_unit_bound_matches_worst_case_and_scales():
-    """The direct Subset(k) bound equals the generic worst_case where that one can run, and serves N = 183,680."""
+    """The profile's Subset(k) bound is the exact count, the generic worst_case rounded down, and serves N = 183,680."""
     from verity.ir.partition import Level
     from verity.proofs.profile import IntegrityProfile, Subset
     for n, k, delta in ((1024, 256, 2.0 ** -20), (1024, 16, 0.01), (344, 128, 2.0 ** -20), (6, 2, 0.25), (50, 50, 0.01)):
         p = IntegrityProfile((Level("unit"),), (n,), {"unit": Subset(k)}, delta)
-        assert abs(audit.wrong_units_bound(p) - p.worst_case(lambda m: float(m))) < 1e-6, (n, k, delta)
+        assert p.bound() == int(p.worst_case(lambda m: float(m))), (n, k, delta)
     big = IntegrityProfile((Level("unit"),), (183680,), {"unit": Subset(256)}, 2.0 ** -20)
-    b = audit.wrong_units_bound(big)
-    assert 9600 < b < 9750   # (1 - f)^256 = 2^-20 gives f ~ 5.27%, ~9,680 of 183,680
+    assert 9600 < big.bound() < 9750   # (1 - f)^256 = 2^-20 gives f ~ 5.27%, ~9,680 of 183,680
 
 
 # ---- the stratified law: strata per template, k_s = max(1, round(k n_s / n)) ---------------------------------------
@@ -372,3 +425,11 @@ def test_a4_under_the_stratified_rule():
     core = audit.core_law(law, sum(sizes))
     assert core.count_bound(2.0 ** -20) == 91_063 and core.stratum_bound(temps[0].id, 2.0 ** -20) == 286
     assert core.escape({temps[0].id: 287}) == 0
+    reg = {"population": sum(sizes), "partition": "00" * 64, "program": "11" * 64}
+    units = sorted(u for s in law["strata"] for u in islice((u for lo, hi in s["units"] for u in range(lo, hi)), s["k"]))
+    d = {**law, "population": sum(sizes), "units": units}
+    p = audit.profile(reg, d, 2.0 ** -20)
+    assert p.strata() == core and p.drawn == {"unit": 1027}
+    got = audit.wrong_units(reg, d, 2.0 ** -20)
+    assert json.dumps(got) == json.dumps(_v0(reg, d, 2.0 ** -20)[1])
+    assert got["bound"] == 91_063 and list(got["per_template"].values()) == [286, 91_016, 11_468, 286, 286, 84_773]
