@@ -76,6 +76,89 @@ def _throttle(pending: list, stream) -> None:
         pending.pop(0).synchronize()
 
 
+CHUNKED = [False]
+"""`decode_blocks` keeps its state chunk-major (`_Chunked`, `feistel_chunked_kernel`) instead of row-major."""
+
+CHUNK = 136
+
+
+class _Chunked:
+    """`rows` states of `2L + 64` bytes stored chunk-major: byte `k` of half `h` of row `r` at `[h, k // 136, r, k % 136]`
+    (int64 `[2, nch, rows, 17]` for the kernel), so a launch reads every row's chunk `c` from one contiguous run."""
+
+    def __init__(self, rows: int, width: int, device) -> None:
+        self.rows, self.width, self.half = rows, width, width + 32
+        self.nch = -(-self.half // CHUNK)
+        self.words = torch.zeros(2, self.nch, rows, CHUNK // 8, dtype=torch.int64, device=device)
+        self.bytes = self.words.view(torch.uint8).view(2, self.nch, rows, CHUNK)
+
+    def _pieces(self, offset: int, length: int):
+        k = 0
+        while k < length:
+            c, b = divmod(offset + k, CHUNK)
+            if b == 0 and length - k >= CHUNK:
+                n = (length - k) // CHUNK
+                yield k, c, n, None
+                k += n * CHUNK
+            else:
+                take = min(CHUNK - b, length - k)
+                yield k, c, b, take
+                k += take
+
+    def put(self, half: int, offset: int, rows: slice, data: torch.Tensor) -> None:
+        """Bytes `offset .. offset + len` of `half` of rows `rows` := `data` (`[n, len]`)."""
+        for k, c, b, take in self._pieces(offset, data.shape[1]):
+            if take is None:
+                self.bytes[half, c:c + b, rows] = data[:, k:k + b * CHUNK].reshape(-1, b, CHUNK).transpose(0, 1)
+            else:
+                self.bytes[half, c, rows, b:b + take] = data[:, k:k + take]
+
+    def fill(self, half: int, offset: int, length: int, rows: slice, value: int) -> None:
+        for _, c, b, take in self._pieces(offset, length):
+            if take is None:
+                self.bytes[half, c:c + b, rows] = value
+            else:
+                self.bytes[half, c, rows, b:b + take] = value
+
+    def get(self, half: int, offset: int, length: int) -> torch.Tensor:
+        parts = []
+        for _, c, b, take in self._pieces(offset, length):
+            if take is None:
+                parts.append(self.bytes[half, c:c + b].transpose(0, 1).reshape(self.rows, b * CHUNK))
+            else:
+                parts.append(self.bytes[half, c, :, b:b + take])
+        return torch.cat(parts, 1)
+
+    def pad(self, rows: slice) -> None:
+        self.fill(0, 0, self.width, rows, 0)
+        self.bytes[0, 0, rows, 0] = 0x01
+        c, b = divmod(self.width - 1, CHUNK)
+        self.bytes[0, c, rows, b] = 0x80
+
+    def permute(self, row0: int) -> None:
+        from verity_vllm.engine.pous import native
+
+        native.ext().feistel_chunked(self.words, row0, self.rows - row0, self.half // 8, codec.PI_DOMAIN)
+
+
+def _decode_chunked(c_flat, seg, blk, ln, tags, base, starts, width: int) -> torch.Tensor:
+    r = len(blk)
+    st = _Chunked(r, width, c_flat.device)
+    st.put(1, width - 32, slice(None), tags[seg])
+    dom = torch.zeros(r, 32, dtype=torch.uint8, device=c_flat.device)
+    dom[:, 0], dom[:, 1] = (blk & 0xFF).to(torch.uint8), (blk >> 8).to(torch.uint8)
+    st.put(1, width, slice(None), dom)
+    pending, stream = [], torch.cuda.current_stream()
+    for j in range(1, int(ln[-1]) + 2):
+        first, pad_end = starts[j - 1], starts[j]
+        st.pad(slice(first, pad_end))
+        if pad_end < r:
+            st.put(0, 0, slice(pad_end, r), c_flat[base[pad_end:] + blk[pad_end:] - j])
+        st.permute(first)
+        _throttle(pending, stream)
+    return st.get(0, 0, width)
+
+
 def decode_blocks(c_flat: torch.Tensor, tags: torch.Tensor, segs: torch.Tensor, blocks: torch.Tensor,
                   per_segment: int, window: int | None = None) -> torch.Tensor:
     """`W` of the blocks `(segs[r], blocks[r])` alone, from every segment's `C` (`[S * B, L]`, segment-major) and tags
@@ -93,6 +176,11 @@ def decode_blocks(c_flat: torch.Tensor, tags: torch.Tensor, segs: torch.Tensor, 
     state[:, 2 * width + 33] = (blk >> 8).to(torch.uint8)
     starts = torch.searchsorted(ln, torch.arange(int(ln[-1]) + 2, device=ln.device)).tolist()
     base = seg * per_segment
+    if CHUNKED[0]:
+        w = _decode_chunked(c_flat, seg, blk, ln, tags, base, starts, width) ^ c_flat[base + blk]
+        out = torch.empty_like(w)
+        out[order] = w
+        return out
     pending, stream = [], torch.cuda.current_stream()
     for j in range(1, int(ln[-1]) + 2):
         first = starts[j - 1]

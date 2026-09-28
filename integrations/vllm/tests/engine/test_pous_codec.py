@@ -194,6 +194,26 @@ def test_band_window_round_trips(ext):
 
 
 @needs_cuda
+@pytest.mark.parametrize("window", [None, 12])
+def test_chunked_decode_matches_row_major(ext, window):
+    """The chunk-major decode (`dense.CHUNKED`) gives the row-major decode's bits at the secure point's width, dense and band."""
+    from verity_vllm.engine.pous import codec, dense
+
+    g = torch.Generator().manual_seed(10)
+    c = torch.randint(0, 256, (2 * 20, 65_536), dtype=torch.uint8, generator=g).cuda()
+    tags = codec.segment_tags(bytes(range(24)), [0, 1], "cuda")
+    blocks = torch.tensor([19, 0, 3, 12, 13, 1, 18, 7] * 2, device="cuda")
+    segs = torch.tensor([0] * 8 + [1] * 8, device="cuda")
+    want = dense.decode_blocks(c, tags, segs, blocks, 20, window=window)
+    dense.CHUNKED[0] = True
+    try:
+        got = dense.decode_blocks(c, tags, segs, blocks, 20, window=window)
+    finally:
+        dense.CHUNKED[0] = False
+    assert torch.equal(got, want)
+
+
+@needs_cuda
 def test_feistel_kernels_agree(ext):
     """The one-warp, one-thread, word-I/O and fused Feistel kernels give the same bits on Π₂ at both schemes' widths, and at a
     width whose half is a whole number of Keccak blocks."""

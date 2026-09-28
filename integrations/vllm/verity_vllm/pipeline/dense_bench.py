@@ -50,6 +50,8 @@ class Options:
                              help="with --fused, launches not on a lane pair stage every chunk through shared memory")
     gate_segments: int = option("--gate-segments", type=int, default=2, help="segments whose sampled blocks the reference decodes")
     workers: int = option("--workers", type=int, default=12, help="processes for the reference side of G2")
+    chunked: bool = option("--chunked", action="store_true", default=False, help="chunk-major decode state (dense.CHUNKED)")
+    window: int | None = option("--window", type=int, default=None, help="band graph of this in-degree instead of dense")
     audit: int = option("--audit", type=int, default=0,
                         help="timed audits (pous-dense-audit, a separate process) of the first model's C while its passes run")
     audit_k: int = option("--audit-k", type=int, default=111, help="challenges per audit")
@@ -248,7 +250,7 @@ def run_model(name: str, m: dict[str, Any], reps: int, salt: bytes, audit: tuple
     nblocks = -(-total // width)
     blocks = torch.arange(nblocks, device="cuda")
     segs, blks = blocks // b, blocks % b
-    calls = int((blks + 1).sum())
+    calls = int(((blks if WINDOW[0] is None else blks.clamp(max=WINDOW[0])) + 1).sum())
 
     def views(flat):
         return [flat[off:off + nbytes].view(torch.bfloat16).view(o, k) for _, o, k, off, nbytes in shapes]
@@ -257,7 +259,7 @@ def run_model(name: str, m: dict[str, Any], reps: int, salt: bytes, audit: tuple
 
     def decode_pass():
         held[:] = [None]
-        held[:] = [dense.decode_blocks(c, tags, segs, blks, b).view(-1)]
+        held[:] = [dense.decode_blocks(c, tags, segs, blks, b, WINDOW[0]).view(-1)]
 
     torch.cuda.synchronize()
     decode_reps = _timed(decode_pass, reps, warmup=False)
@@ -277,8 +279,8 @@ def run_model(name: str, m: dict[str, Any], reps: int, salt: bytes, audit: tuple
     small = torch.arange(off // width, (off + nbytes - 1) // width + 1, device="cuda")
     seg0 = torch.arange(b, device="cuda")
     latency = {"first_tile_blocks": int(small.numel()),
-               "first_tile_s": _timed(lambda: dense.decode_blocks(c, tags, small // b, small % b, b), 1, warmup=False)[0],
-               "segment_s": _timed(lambda: dense.decode_blocks(c, tags, seg0 // b, seg0 % b, b), 1, warmup=False)[0]}
+               "first_tile_s": _timed(lambda: dense.decode_blocks(c, tags, small // b, small % b, b, WINDOW[0]), 1, warmup=False)[0],
+               "segment_s": _timed(lambda: dense.decode_blocks(c, tags, seg0 // b, seg0 % b, b, WINDOW[0]), 1, warmup=False)[0]}
     print(json.dumps({"model": name, "decode_reps_s": [round(x, 2) for x in decode_reps], **latency}), flush=True)
     return {"model": name, "segments": segments, "blocks": nblocks, "calls": calls, "weight_bytes": total, "audit": audited,
             "decode_reps_s": decode_reps, "gemm_s": gemm, "plain_gemm_s": base, "latency": latency,
@@ -319,7 +321,8 @@ def predict_vllm(bench: dict[str, Any], reps: int, salt: bytes) -> dict[str, Any
         fill(c, f"dense-bench/vllm/{k}")
         tags = codec.segment_tags(salt, list(range(k)), "cuda")
         blocks = torch.arange(k * b, device="cuda")
-        timed[k] = statistics.median(_timed(lambda: dense.decode_blocks(c, tags, blocks // b, blocks % b, b), reps, warmup=False))
+        timed[k] = statistics.median(_timed(lambda: dense.decode_blocks(c, tags, blocks // b, blocks % b, b, WINDOW[0]), reps,
+                                            warmup=False))
         del c
     predicted = sum(timed[n] for n, _ in last)
     measured = sum(t for _, t in last)
@@ -337,8 +340,11 @@ def device_facts() -> dict[str, Any]:
     return {"nvidia_smi": smi, "torch": torch.__version__, "cuda": torch.version.cuda, "nvcc": nvcc, "sms": props.multi_processor_count}
 
 
+WINDOW: list[int | None] = [None]
+
+
 def main(a: Options) -> int:
-    from verity_vllm.engine.pous import codec, native
+    from verity_vllm.engine.pous import codec, dense, native
 
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -349,6 +355,8 @@ def main(a: Options) -> int:
     codec.PAIR[0] = a.pair
     codec.PAIR_MAX_ROWS[0] = a.pair_max_rows
     codec.COALESCED[0] = a.coalesced
+    dense.CHUNKED[0] = a.chunked
+    WINDOW[0] = a.window
     doc: dict[str, Any] = {"options": dataclasses.asdict(a), "device": device_facts(), "gates": {"vectors": gate_vectors()}}
     salt = bytes(range(24))
     table = models(a.shapes)
@@ -385,7 +393,8 @@ def main(a: Options) -> int:
             "schema": "research/result/v0.1", "run_id": a.run_id,
             "workload_fingerprint": {"benchmark": "dense-decode/v1", "models": list(doc["models"]), "thread_rows": a.thread_rows,
                                      "word_io": a.word_io, "fused": a.fused,
-                                     "pair": a.pair, "pair_max_rows": a.pair_max_rows, "coalesced": a.coalesced},
+                                     "pair": a.pair, "pair_max_rows": a.pair_max_rows, "coalesced": a.coalesced,
+                                     "chunked": a.chunked, "window": a.window},
             "validation": {"status": "passed" if passed else "failed", "checker": "verity-vllm pous-dense-bench gates",
                            "detail": json.dumps({k: v["passed"] for k, v in doc["gates"].items()}), "evidence": ["dense-bench.json"]},
             "measurements": rows, "measurement_files": ["dense-bench.json"], "artifacts": ["dense-bench.json"]}, indent=1))
