@@ -1,0 +1,9954 @@
+{
+ "about": "derive vectors: each archive (flock-verify layout's format) with the SHA-512 of the rows the prover's derive (verity_flock.derive) gives it: each inner layout's physical rows and the unit's own region as flock-ir-unit/v2 text with READ lines (derive.netlist), the unit's parts and \u0394 (derive.delta_text), and the logical list (derive.logical_text). Written by test_derive.py --write.",
+ "cases": [
+  {
+   "name": "full adder, flat",
+   "archive": {
+    "types": [
+     {
+      "format": "verity/circuit-type/v1",
+      "label": "program",
+      "in": [
+       [
+        3,
+        1
+       ]
+      ],
+      "out": [
+       [
+        2,
+        1
+       ]
+      ],
+      "calls": [],
+      "tables": [],
+      "items": [
+       [
+        0,
+        [
+         [
+          0
+         ],
+         0
+        ],
+        [
+         [
+          1
+         ],
+         0
+        ]
+       ],
+       [
+        0,
+        [
+         [
+          2
+         ],
+         0
+        ],
+        [
+         [
+          0,
+          1
+         ],
+         0
+        ]
+       ]
+      ],
+      "outputs": [
+       [
+        [
+         0,
+         1,
+         2
+        ],
+        0
+       ],
+       [
+        [
+         3,
+         4
+        ],
+        0
+       ]
+      ]
+     }
+    ],
+    "tables": {},
+    "layouts": [
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "derive": "v2"
+      },
+      "calls": [],
+      "reads": [],
+      "type": "ba2be60be168f983051a58cb5228676c10b87f5be4f7d1272692eb6fe7efe86600c1139b9be3319ee51680f92832795a5169936d51df4922e889522543270f06",
+      "sha512": "ec1189d5003e4ae3cd1bc06d006ebd67dc96517a48f2c367d70fafa4ddbbb0b2182b1a5238181d6e3ccab8d733dfbbcc209a5f77c0a625a6cb2150aed59ab525"
+     }
+    ],
+    "unit_layout": 0
+   },
+   "physical": {
+    "layouts": {},
+    "unit": {
+     "rows": 385,
+     "sha512": "1b4f3fb3c4a1a1c02e5db74981a063e72fd5acf7bad7ff8c746ba75253558ec1e353dae0022891f5f761ff20a91d898aab88cb540b5d397f5c5239e6a5c969c3"
+    },
+    "delta": "770162acbf228e9c5c763fc325ee13dbb8af885efc3caa279fcbaf1580bf49170f9f7fc5c6724128d94c3126997c40862d01fbce74b3bcf9db7729b029ee9148"
+   },
+   "logical": {
+    "rows": 9,
+    "sha512": "0f7c2ebb263efefd4025ed601f2fc001e6a7c71a7e51eb39670b384d6ea2709bb205a3419bc6ede9217e0a55e674dac7556d16fc152ee33e6762521e3fc8c44a"
+   }
+  },
+  {
+   "name": "4-bit adder, calls in block slots (all inputs exported)",
+   "archive": {
+    "types": [
+     {
+      "format": "verity/circuit-type/v1",
+      "label": "program",
+      "in": [
+       [
+        3,
+        1
+       ]
+      ],
+      "out": [
+       [
+        2,
+        1
+       ]
+      ],
+      "calls": [],
+      "tables": [],
+      "items": [
+       [
+        0,
+        [
+         [
+          0
+         ],
+         0
+        ],
+        [
+         [
+          1
+         ],
+         0
+        ]
+       ],
+       [
+        0,
+        [
+         [
+          2
+         ],
+         0
+        ],
+        [
+         [
+          0,
+          1
+         ],
+         0
+        ]
+       ]
+      ],
+      "outputs": [
+       [
+        [
+         0,
+         1,
+         2
+        ],
+        0
+       ],
+       [
+        [
+         3,
+         4
+        ],
+        0
+       ]
+      ]
+     },
+     {
+      "format": "verity/circuit-type/v1",
+      "label": "program",
+      "in": [
+       [
+        4,
+        1
+       ],
+       [
+        4,
+        1
+       ]
+      ],
+      "out": [
+       [
+        5,
+        1
+       ]
+      ],
+      "calls": [
+       "ba2be60be168f983051a58cb5228676c10b87f5be4f7d1272692eb6fe7efe86600c1139b9be3319ee51680f92832795a5169936d51df4922e889522543270f06"
+      ],
+      "tables": [],
+      "items": [
+       [
+        3,
+        0,
+        [
+         [
+          [
+           0
+          ],
+          0
+         ],
+         [
+          [
+           4
+          ],
+          0
+         ],
+         [
+          [],
+          0
+         ]
+        ]
+       ],
+       [
+        3,
+        0,
+        [
+         [
+          [
+           1
+          ],
+          0
+         ],
+         [
+          [
+           5
+          ],
+          0
+         ],
+         [
+          [
+           9
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        3,
+        0,
+        [
+         [
+          [
+           2
+          ],
+          0
+         ],
+         [
+          [
+           6
+          ],
+          0
+         ],
+         [
+          [
+           11
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        3,
+        0,
+        [
+         [
+          [
+           3
+          ],
+          0
+         ],
+         [
+          [
+           7
+          ],
+          0
+         ],
+         [
+          [
+           13
+          ],
+          0
+         ]
+        ]
+       ]
+      ],
+      "outputs": [
+       [
+        [
+         8
+        ],
+        0
+       ],
+       [
+        [
+         10
+        ],
+        0
+       ],
+       [
+        [
+         12
+        ],
+        0
+       ],
+       [
+        [
+         14
+        ],
+        0
+       ],
+       [
+        [
+         15
+        ],
+        0
+       ]
+      ]
+     },
+     {
+      "format": "verity/circuit-type/v1",
+      "label": "program",
+      "in": [
+       [
+        8,
+        1
+       ]
+      ],
+      "out": [
+       [
+        5,
+        1
+       ]
+      ],
+      "calls": [
+       "4de09e0040be340421690c5a0902d95ef79dc7bab787a88581f68f4a789f2a1206cb703f8506bbf7d1b06bbaf0c7f74baee94365ee64f0c925a711f8ec70743c"
+      ],
+      "tables": [],
+      "items": [
+       [
+        3,
+        0,
+        [
+         [
+          [
+           0
+          ],
+          0
+         ],
+         [
+          [
+           1
+          ],
+          0
+         ],
+         [
+          [
+           2
+          ],
+          0
+         ],
+         [
+          [
+           3
+          ],
+          0
+         ],
+         [
+          [
+           4
+          ],
+          0
+         ],
+         [
+          [
+           5
+          ],
+          0
+         ],
+         [
+          [
+           6
+          ],
+          0
+         ],
+         [
+          [
+           7
+          ],
+          0
+         ]
+        ]
+       ]
+      ],
+      "outputs": [
+       [
+        [
+         8
+        ],
+        0
+       ],
+       [
+        [
+         9
+        ],
+        0
+       ],
+       [
+        [
+         10
+        ],
+        0
+       ],
+       [
+        [
+         11
+        ],
+        0
+       ],
+       [
+        [
+         12
+        ],
+        0
+       ]
+      ]
+     }
+    ],
+    "tables": {},
+    "layouts": [
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "derive": "v2"
+      },
+      "calls": [],
+      "reads": [],
+      "type": "ba2be60be168f983051a58cb5228676c10b87f5be4f7d1272692eb6fe7efe86600c1139b9be3319ee51680f92832795a5169936d51df4922e889522543270f06",
+      "range_log": 9,
+      "sha512": "3ecd14928dbe081190361b9aa7e5d32566e2600c7335e9dbb0544e1fe15af019663fe641e44289062a92c316d7393db3467a32fd7b5fa174164eb46723bcc933"
+     },
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "derive": "v2"
+      },
+      "calls": [
+       {
+        "item": 0,
+        "layout": 0,
+        "offset": 0
+       },
+       {
+        "item": 1,
+        "layout": 0,
+        "offset": 1
+       },
+       {
+        "item": 2,
+        "layout": 0,
+        "offset": 2
+       },
+       {
+        "item": 3,
+        "layout": 0,
+        "offset": 3
+       }
+      ],
+      "reads": [],
+      "type": "4de09e0040be340421690c5a0902d95ef79dc7bab787a88581f68f4a789f2a1206cb703f8506bbf7d1b06bbaf0c7f74baee94365ee64f0c925a711f8ec70743c",
+      "sha512": "eea853d3071c8cafffcd7615775d228d8a3204d971dcc4f700c0508f4b2fbd354138208f1132bd3810fc05755ce9a3c6d958a35bf4e49a5c0d1c2ee8fb26ee0d"
+     }
+    ],
+    "unit_layout": 1
+   },
+   "physical": {
+    "layouts": {
+     "3ecd14928dbe081190361b9aa7e5d32566e2600c7335e9dbb0544e1fe15af019663fe641e44289062a92c316d7393db3467a32fd7b5fa174164eb46723bcc933": {
+      "rows": 385,
+      "sha512": "eed5e2f9af367d054190d23b992eb30bbd4b4017a856eeb08106464e518e4bc97941c2b1c12e2cfac12fe27da77f2ee24edbc6beb3d9ef6bc9d02c9fa9a70e18"
+     }
+    },
+    "unit": {
+     "rows": 257,
+     "sha512": "c30d225da4ede2e9b731114f4896cbf48d1674b603bfe21982ab50be01f174421e08ce6288334a8c3499ae3af42a14182485f915c6632fa90506848b3e500dde"
+    },
+    "delta": "7221f236a2e2c7a493cdc9589741ccf27599287fde12f0c4e0205f0c5a0f2788dee2de5cd0b6a7cb1f43f3ec0d194bf1f9a1acf7d0695cdea31d02dab764bdf3"
+   },
+   "logical": {
+    "rows": 39,
+    "sha512": "b8c4a2bc4297771254543a10c85c6ed2ec6fb6a4b8c58b8ebf19d7525013f8a5db5e5bd4af940059bc8149a644fc1d341880543e3245e6d65c0705130200847c"
+   }
+  },
+  {
+   "name": "4-bit adder, calls inlined",
+   "archive": {
+    "types": [
+     {
+      "format": "verity/circuit-type/v1",
+      "label": "program",
+      "in": [
+       [
+        3,
+        1
+       ]
+      ],
+      "out": [
+       [
+        2,
+        1
+       ]
+      ],
+      "calls": [],
+      "tables": [],
+      "items": [
+       [
+        0,
+        [
+         [
+          0
+         ],
+         0
+        ],
+        [
+         [
+          1
+         ],
+         0
+        ]
+       ],
+       [
+        0,
+        [
+         [
+          2
+         ],
+         0
+        ],
+        [
+         [
+          0,
+          1
+         ],
+         0
+        ]
+       ]
+      ],
+      "outputs": [
+       [
+        [
+         0,
+         1,
+         2
+        ],
+        0
+       ],
+       [
+        [
+         3,
+         4
+        ],
+        0
+       ]
+      ]
+     },
+     {
+      "format": "verity/circuit-type/v1",
+      "label": "program",
+      "in": [
+       [
+        4,
+        1
+       ],
+       [
+        4,
+        1
+       ]
+      ],
+      "out": [
+       [
+        5,
+        1
+       ]
+      ],
+      "calls": [
+       "ba2be60be168f983051a58cb5228676c10b87f5be4f7d1272692eb6fe7efe86600c1139b9be3319ee51680f92832795a5169936d51df4922e889522543270f06"
+      ],
+      "tables": [],
+      "items": [
+       [
+        3,
+        0,
+        [
+         [
+          [
+           0
+          ],
+          0
+         ],
+         [
+          [
+           4
+          ],
+          0
+         ],
+         [
+          [],
+          0
+         ]
+        ]
+       ],
+       [
+        3,
+        0,
+        [
+         [
+          [
+           1
+          ],
+          0
+         ],
+         [
+          [
+           5
+          ],
+          0
+         ],
+         [
+          [
+           9
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        3,
+        0,
+        [
+         [
+          [
+           2
+          ],
+          0
+         ],
+         [
+          [
+           6
+          ],
+          0
+         ],
+         [
+          [
+           11
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        3,
+        0,
+        [
+         [
+          [
+           3
+          ],
+          0
+         ],
+         [
+          [
+           7
+          ],
+          0
+         ],
+         [
+          [
+           13
+          ],
+          0
+         ]
+        ]
+       ]
+      ],
+      "outputs": [
+       [
+        [
+         8
+        ],
+        0
+       ],
+       [
+        [
+         10
+        ],
+        0
+       ],
+       [
+        [
+         12
+        ],
+        0
+       ],
+       [
+        [
+         14
+        ],
+        0
+       ],
+       [
+        [
+         15
+        ],
+        0
+       ]
+      ]
+     },
+     {
+      "format": "verity/circuit-type/v1",
+      "label": "program",
+      "in": [
+       [
+        8,
+        1
+       ]
+      ],
+      "out": [
+       [
+        5,
+        1
+       ]
+      ],
+      "calls": [
+       "4de09e0040be340421690c5a0902d95ef79dc7bab787a88581f68f4a789f2a1206cb703f8506bbf7d1b06bbaf0c7f74baee94365ee64f0c925a711f8ec70743c"
+      ],
+      "tables": [],
+      "items": [
+       [
+        3,
+        0,
+        [
+         [
+          [
+           0
+          ],
+          0
+         ],
+         [
+          [
+           1
+          ],
+          0
+         ],
+         [
+          [
+           2
+          ],
+          0
+         ],
+         [
+          [
+           3
+          ],
+          0
+         ],
+         [
+          [
+           4
+          ],
+          0
+         ],
+         [
+          [
+           5
+          ],
+          0
+         ],
+         [
+          [
+           6
+          ],
+          0
+         ],
+         [
+          [
+           7
+          ],
+          0
+         ]
+        ]
+       ]
+      ],
+      "outputs": [
+       [
+        [
+         8
+        ],
+        0
+       ],
+       [
+        [
+         9
+        ],
+        0
+       ],
+       [
+        [
+         10
+        ],
+        0
+       ],
+       [
+        [
+         11
+        ],
+        0
+       ],
+       [
+        [
+         12
+        ],
+        0
+       ]
+      ]
+     }
+    ],
+    "tables": {},
+    "layouts": [
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "derive": "v2"
+      },
+      "calls": [],
+      "reads": [],
+      "type": "ba2be60be168f983051a58cb5228676c10b87f5be4f7d1272692eb6fe7efe86600c1139b9be3319ee51680f92832795a5169936d51df4922e889522543270f06",
+      "range_log": 9,
+      "sha512": "3ecd14928dbe081190361b9aa7e5d32566e2600c7335e9dbb0544e1fe15af019663fe641e44289062a92c316d7393db3467a32fd7b5fa174164eb46723bcc933"
+     },
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "derive": "v2"
+      },
+      "calls": [
+       {
+        "item": 0,
+        "layout": 0,
+        "inline": true
+       },
+       {
+        "item": 1,
+        "layout": 0,
+        "inline": true
+       },
+       {
+        "item": 2,
+        "layout": 0,
+        "inline": true
+       },
+       {
+        "item": 3,
+        "layout": 0,
+        "inline": true
+       }
+      ],
+      "reads": [],
+      "type": "4de09e0040be340421690c5a0902d95ef79dc7bab787a88581f68f4a789f2a1206cb703f8506bbf7d1b06bbaf0c7f74baee94365ee64f0c925a711f8ec70743c",
+      "sha512": "45f24cc8bbb53ae87a8dd356146094accaa42016e3b4b691809ed19f2ac9b4b2d4ad11f34579310227e4a875ea7d515aab37e61459ee6cd31dc24e76a960905a"
+     }
+    ],
+    "unit_layout": 1
+   },
+   "physical": {
+    "layouts": {
+     "3ecd14928dbe081190361b9aa7e5d32566e2600c7335e9dbb0544e1fe15af019663fe641e44289062a92c316d7393db3467a32fd7b5fa174164eb46723bcc933": {
+      "rows": 385,
+      "sha512": "eed5e2f9af367d054190d23b992eb30bbd4b4017a856eeb08106464e518e4bc97941c2b1c12e2cfac12fe27da77f2ee24edbc6beb3d9ef6bc9d02c9fa9a70e18"
+     }
+    },
+    "unit": {
+     "rows": 385,
+     "sha512": "99c22c1c3e5c68a517afb2db8eae4fa89ada8f2faff236294a58019e5b1ac4c753dcefb138872e33181d26bf1fdf961421d0cb1aa87303e75fdfbfcb5febfe05"
+    },
+    "delta": "770162acbf228e9c5c763fc325ee13dbb8af885efc3caa279fcbaf1580bf49170f9f7fc5c6724128d94c3126997c40862d01fbce74b3bcf9db7729b029ee9148"
+   },
+   "logical": {
+    "rows": 23,
+    "sha512": "bc40ed1f0d5ed5594f7ec64fa2fba6ef23caaa7e7a929f85315e10e2828e13ee0d0f7711ab58b5469f1a87b9c80fd244cc4d7e01b64c1f492d7e458ab6f0424d"
+   }
+  },
+  {
+   "name": "wrapper over the 4-bit adder, nested placement",
+   "archive": {
+    "types": [
+     {
+      "format": "verity/circuit-type/v1",
+      "label": "program",
+      "in": [
+       [
+        3,
+        1
+       ]
+      ],
+      "out": [
+       [
+        2,
+        1
+       ]
+      ],
+      "calls": [],
+      "tables": [],
+      "items": [
+       [
+        0,
+        [
+         [
+          0
+         ],
+         0
+        ],
+        [
+         [
+          1
+         ],
+         0
+        ]
+       ],
+       [
+        0,
+        [
+         [
+          2
+         ],
+         0
+        ],
+        [
+         [
+          0,
+          1
+         ],
+         0
+        ]
+       ]
+      ],
+      "outputs": [
+       [
+        [
+         0,
+         1,
+         2
+        ],
+        0
+       ],
+       [
+        [
+         3,
+         4
+        ],
+        0
+       ]
+      ]
+     },
+     {
+      "format": "verity/circuit-type/v1",
+      "label": "program",
+      "in": [
+       [
+        4,
+        1
+       ],
+       [
+        4,
+        1
+       ]
+      ],
+      "out": [
+       [
+        5,
+        1
+       ]
+      ],
+      "calls": [
+       "ba2be60be168f983051a58cb5228676c10b87f5be4f7d1272692eb6fe7efe86600c1139b9be3319ee51680f92832795a5169936d51df4922e889522543270f06"
+      ],
+      "tables": [],
+      "items": [
+       [
+        3,
+        0,
+        [
+         [
+          [
+           0
+          ],
+          0
+         ],
+         [
+          [
+           4
+          ],
+          0
+         ],
+         [
+          [],
+          0
+         ]
+        ]
+       ],
+       [
+        3,
+        0,
+        [
+         [
+          [
+           1
+          ],
+          0
+         ],
+         [
+          [
+           5
+          ],
+          0
+         ],
+         [
+          [
+           9
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        3,
+        0,
+        [
+         [
+          [
+           2
+          ],
+          0
+         ],
+         [
+          [
+           6
+          ],
+          0
+         ],
+         [
+          [
+           11
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        3,
+        0,
+        [
+         [
+          [
+           3
+          ],
+          0
+         ],
+         [
+          [
+           7
+          ],
+          0
+         ],
+         [
+          [
+           13
+          ],
+          0
+         ]
+        ]
+       ]
+      ],
+      "outputs": [
+       [
+        [
+         8
+        ],
+        0
+       ],
+       [
+        [
+         10
+        ],
+        0
+       ],
+       [
+        [
+         12
+        ],
+        0
+       ],
+       [
+        [
+         14
+        ],
+        0
+       ],
+       [
+        [
+         15
+        ],
+        0
+       ]
+      ]
+     },
+     {
+      "format": "verity/circuit-type/v1",
+      "label": "program",
+      "in": [
+       [
+        8,
+        1
+       ]
+      ],
+      "out": [
+       [
+        5,
+        1
+       ]
+      ],
+      "calls": [
+       "4de09e0040be340421690c5a0902d95ef79dc7bab787a88581f68f4a789f2a1206cb703f8506bbf7d1b06bbaf0c7f74baee94365ee64f0c925a711f8ec70743c"
+      ],
+      "tables": [],
+      "items": [
+       [
+        3,
+        0,
+        [
+         [
+          [
+           0
+          ],
+          0
+         ],
+         [
+          [
+           1
+          ],
+          0
+         ],
+         [
+          [
+           2
+          ],
+          0
+         ],
+         [
+          [
+           3
+          ],
+          0
+         ],
+         [
+          [
+           4
+          ],
+          0
+         ],
+         [
+          [
+           5
+          ],
+          0
+         ],
+         [
+          [
+           6
+          ],
+          0
+         ],
+         [
+          [
+           7
+          ],
+          0
+         ]
+        ]
+       ]
+      ],
+      "outputs": [
+       [
+        [
+         8
+        ],
+        0
+       ],
+       [
+        [
+         9
+        ],
+        0
+       ],
+       [
+        [
+         10
+        ],
+        0
+       ],
+       [
+        [
+         11
+        ],
+        0
+       ],
+       [
+        [
+         12
+        ],
+        0
+       ]
+      ]
+     }
+    ],
+    "tables": {},
+    "layouts": [
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "derive": "v2"
+      },
+      "calls": [],
+      "reads": [],
+      "type": "ba2be60be168f983051a58cb5228676c10b87f5be4f7d1272692eb6fe7efe86600c1139b9be3319ee51680f92832795a5169936d51df4922e889522543270f06",
+      "range_log": 9,
+      "sha512": "3ecd14928dbe081190361b9aa7e5d32566e2600c7335e9dbb0544e1fe15af019663fe641e44289062a92c316d7393db3467a32fd7b5fa174164eb46723bcc933"
+     },
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "derive": "v2"
+      },
+      "calls": [
+       {
+        "item": 0,
+        "layout": 0,
+        "offset": 1
+       },
+       {
+        "item": 1,
+        "layout": 0,
+        "offset": 2
+       },
+       {
+        "item": 2,
+        "layout": 0,
+        "offset": 3
+       },
+       {
+        "item": 3,
+        "layout": 0,
+        "offset": 4
+       }
+      ],
+      "reads": [],
+      "type": "4de09e0040be340421690c5a0902d95ef79dc7bab787a88581f68f4a789f2a1206cb703f8506bbf7d1b06bbaf0c7f74baee94365ee64f0c925a711f8ec70743c",
+      "range_log": 12,
+      "sha512": "a758c334a80bc983e0b84911d566fdf3cc24e92047d719ba86fe45a3d94d35d1d1f837d0cddaf52c9ccc0444de880dbc8af94fc9415db941898777d9aa983d1b"
+     },
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "derive": "v2"
+      },
+      "calls": [
+       {
+        "item": 0,
+        "layout": 1,
+        "offset": 0
+       }
+      ],
+      "reads": [],
+      "type": "359a6124ccf214d0660af38e83d42ac8c027fd61e271f5a98f284afffcd3e066e4ab7b3a0967a1b48222e12eace71bfb24dad4e0ab07070093cc6e5e4bf90f8a",
+      "sha512": "56c616b00feef5916df4b224e1d1a46ac0052b4fc03f03ccdc874e612b639cd412cd307640b416c71d64e624a0ee7a06c20c4b227cccd8320c416d01a23f71d6"
+     }
+    ],
+    "unit_layout": 2
+   },
+   "physical": {
+    "layouts": {
+     "3ecd14928dbe081190361b9aa7e5d32566e2600c7335e9dbb0544e1fe15af019663fe641e44289062a92c316d7393db3467a32fd7b5fa174164eb46723bcc933": {
+      "rows": 385,
+      "sha512": "eed5e2f9af367d054190d23b992eb30bbd4b4017a856eeb08106464e518e4bc97941c2b1c12e2cfac12fe27da77f2ee24edbc6beb3d9ef6bc9d02c9fa9a70e18"
+     },
+     "a758c334a80bc983e0b84911d566fdf3cc24e92047d719ba86fe45a3d94d35d1d1f837d0cddaf52c9ccc0444de880dbc8af94fc9415db941898777d9aa983d1b": {
+      "rows": 2560,
+      "sha512": "29ee4b424a3e9dd1be0521543e753c1863d0db01843703f78929e50bf8f5222d2c62a335d6e4bfac1c817729ab8860d6bad894eff5e88301bb92ffed53fb11c7"
+     }
+    },
+    "unit": {
+     "rows": 257,
+     "sha512": "137885554832fef3a782efa0493760abe5461c1d8491c4cc22c6d7df5b0a9b87b679aef26eaa39399c9c1bf488ab73b199054ada4fabb4761d7ae06203ea9610"
+    },
+    "delta": "295719c047f43e8fa67c73a83e89036a4f86f9d948594e233ff04956ae36f2df6b790c045cb5ad4947733af1bc8454aa184c674fbcd86c34c5d5617cc152916f"
+   },
+   "logical": {
+    "rows": 45,
+    "sha512": "af7c16a3cd1a6261e1e01fa6b76af9e8638db65fb80909f044df6fb7db003554debf24bec8f86f6a228cea5abb4bdb9d9fabff50a6871ee8e8c49e9fd560159d"
+   }
+  },
+  {
+   "name": "wrapper over the 4-bit adder, both levels inlined",
+   "archive": {
+    "types": [
+     {
+      "format": "verity/circuit-type/v1",
+      "label": "program",
+      "in": [
+       [
+        3,
+        1
+       ]
+      ],
+      "out": [
+       [
+        2,
+        1
+       ]
+      ],
+      "calls": [],
+      "tables": [],
+      "items": [
+       [
+        0,
+        [
+         [
+          0
+         ],
+         0
+        ],
+        [
+         [
+          1
+         ],
+         0
+        ]
+       ],
+       [
+        0,
+        [
+         [
+          2
+         ],
+         0
+        ],
+        [
+         [
+          0,
+          1
+         ],
+         0
+        ]
+       ]
+      ],
+      "outputs": [
+       [
+        [
+         0,
+         1,
+         2
+        ],
+        0
+       ],
+       [
+        [
+         3,
+         4
+        ],
+        0
+       ]
+      ]
+     },
+     {
+      "format": "verity/circuit-type/v1",
+      "label": "program",
+      "in": [
+       [
+        4,
+        1
+       ],
+       [
+        4,
+        1
+       ]
+      ],
+      "out": [
+       [
+        5,
+        1
+       ]
+      ],
+      "calls": [
+       "ba2be60be168f983051a58cb5228676c10b87f5be4f7d1272692eb6fe7efe86600c1139b9be3319ee51680f92832795a5169936d51df4922e889522543270f06"
+      ],
+      "tables": [],
+      "items": [
+       [
+        3,
+        0,
+        [
+         [
+          [
+           0
+          ],
+          0
+         ],
+         [
+          [
+           4
+          ],
+          0
+         ],
+         [
+          [],
+          0
+         ]
+        ]
+       ],
+       [
+        3,
+        0,
+        [
+         [
+          [
+           1
+          ],
+          0
+         ],
+         [
+          [
+           5
+          ],
+          0
+         ],
+         [
+          [
+           9
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        3,
+        0,
+        [
+         [
+          [
+           2
+          ],
+          0
+         ],
+         [
+          [
+           6
+          ],
+          0
+         ],
+         [
+          [
+           11
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        3,
+        0,
+        [
+         [
+          [
+           3
+          ],
+          0
+         ],
+         [
+          [
+           7
+          ],
+          0
+         ],
+         [
+          [
+           13
+          ],
+          0
+         ]
+        ]
+       ]
+      ],
+      "outputs": [
+       [
+        [
+         8
+        ],
+        0
+       ],
+       [
+        [
+         10
+        ],
+        0
+       ],
+       [
+        [
+         12
+        ],
+        0
+       ],
+       [
+        [
+         14
+        ],
+        0
+       ],
+       [
+        [
+         15
+        ],
+        0
+       ]
+      ]
+     },
+     {
+      "format": "verity/circuit-type/v1",
+      "label": "program",
+      "in": [
+       [
+        8,
+        1
+       ]
+      ],
+      "out": [
+       [
+        5,
+        1
+       ]
+      ],
+      "calls": [
+       "4de09e0040be340421690c5a0902d95ef79dc7bab787a88581f68f4a789f2a1206cb703f8506bbf7d1b06bbaf0c7f74baee94365ee64f0c925a711f8ec70743c"
+      ],
+      "tables": [],
+      "items": [
+       [
+        3,
+        0,
+        [
+         [
+          [
+           0
+          ],
+          0
+         ],
+         [
+          [
+           1
+          ],
+          0
+         ],
+         [
+          [
+           2
+          ],
+          0
+         ],
+         [
+          [
+           3
+          ],
+          0
+         ],
+         [
+          [
+           4
+          ],
+          0
+         ],
+         [
+          [
+           5
+          ],
+          0
+         ],
+         [
+          [
+           6
+          ],
+          0
+         ],
+         [
+          [
+           7
+          ],
+          0
+         ]
+        ]
+       ]
+      ],
+      "outputs": [
+       [
+        [
+         8
+        ],
+        0
+       ],
+       [
+        [
+         9
+        ],
+        0
+       ],
+       [
+        [
+         10
+        ],
+        0
+       ],
+       [
+        [
+         11
+        ],
+        0
+       ],
+       [
+        [
+         12
+        ],
+        0
+       ]
+      ]
+     }
+    ],
+    "tables": {},
+    "layouts": [
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "derive": "v2"
+      },
+      "calls": [],
+      "reads": [],
+      "type": "ba2be60be168f983051a58cb5228676c10b87f5be4f7d1272692eb6fe7efe86600c1139b9be3319ee51680f92832795a5169936d51df4922e889522543270f06",
+      "range_log": 9,
+      "sha512": "3ecd14928dbe081190361b9aa7e5d32566e2600c7335e9dbb0544e1fe15af019663fe641e44289062a92c316d7393db3467a32fd7b5fa174164eb46723bcc933"
+     },
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "derive": "v2"
+      },
+      "calls": [
+       {
+        "item": 0,
+        "layout": 0,
+        "inline": true
+       },
+       {
+        "item": 1,
+        "layout": 0,
+        "inline": true
+       },
+       {
+        "item": 2,
+        "layout": 0,
+        "inline": true
+       },
+       {
+        "item": 3,
+        "layout": 0,
+        "inline": true
+       }
+      ],
+      "reads": [],
+      "type": "4de09e0040be340421690c5a0902d95ef79dc7bab787a88581f68f4a789f2a1206cb703f8506bbf7d1b06bbaf0c7f74baee94365ee64f0c925a711f8ec70743c",
+      "range_log": 9,
+      "sha512": "554109cb7ca8c50dbc931e6b91a1a211403ab7ab5e7d5399ce30712299e8cfe85231482ea00b3c20fd2c296d6c5f47b80e8571dd80cf82929efe06dd29fa5e87"
+     },
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "derive": "v2"
+      },
+      "calls": [
+       {
+        "item": 0,
+        "layout": 1,
+        "inline": true
+       }
+      ],
+      "reads": [],
+      "type": "359a6124ccf214d0660af38e83d42ac8c027fd61e271f5a98f284afffcd3e066e4ab7b3a0967a1b48222e12eace71bfb24dad4e0ab07070093cc6e5e4bf90f8a",
+      "sha512": "31b1e5dea2ee18e69c3e74e49ac10fac9aeadf3a3617b2bb98fd17ed6c653b631c4f0a824aee9533fc05540e55b401f3f3b77c0ab4e80f4466676deaf870870a"
+     }
+    ],
+    "unit_layout": 2
+   },
+   "physical": {
+    "layouts": {
+     "3ecd14928dbe081190361b9aa7e5d32566e2600c7335e9dbb0544e1fe15af019663fe641e44289062a92c316d7393db3467a32fd7b5fa174164eb46723bcc933": {
+      "rows": 385,
+      "sha512": "eed5e2f9af367d054190d23b992eb30bbd4b4017a856eeb08106464e518e4bc97941c2b1c12e2cfac12fe27da77f2ee24edbc6beb3d9ef6bc9d02c9fa9a70e18"
+     },
+     "554109cb7ca8c50dbc931e6b91a1a211403ab7ab5e7d5399ce30712299e8cfe85231482ea00b3c20fd2c296d6c5f47b80e8571dd80cf82929efe06dd29fa5e87": {
+      "rows": 385,
+      "sha512": "728676ca460e080b93d622afb8aad7489f35289967c96903cde6420b347cf8be651f36fc9d6d3fbf9fa514ac5aa5221b95495043967c133952a1c804114d0e96"
+     }
+    },
+    "unit": {
+     "rows": 385,
+     "sha512": "8786bd7ff57f43838c6ec8b0c34da121596688113ab7388b4fae445ed346d8c52e73f0765716f6e357b51b1fbf54b109a4a8ee110663e1be394671040cf8c6e9"
+    },
+    "delta": "770162acbf228e9c5c763fc325ee13dbb8af885efc3caa279fcbaf1580bf49170f9f7fc5c6724128d94c3126997c40862d01fbce74b3bcf9db7729b029ee9148"
+   },
+   "logical": {
+    "rows": 23,
+    "sha512": "bc40ed1f0d5ed5594f7ec64fa2fba6ef23caaa7e7a929f85315e10e2828e13ee0d0f7711ab58b5469f1a87b9c80fd244cc4d7e01b64c1f492d7e458ab6f0424d"
+   }
+  },
+  {
+   "name": "a read inline",
+   "archive": {
+    "types": [
+     {
+      "format": "verity/circuit-type/v1",
+      "label": "program",
+      "in": [
+       [
+        6,
+        1
+       ]
+      ],
+      "out": [
+       [
+        9,
+        1
+       ]
+      ],
+      "calls": [],
+      "tables": [
+       [
+        "841db0e4984c3e5f5fbd3fea8b910a907211a27b159e485b0d529bce2ebfea3c5da899f8ae8a571326a52614f1ae37657277f8707baee6cc4e2fa5c9bc4cf7d9",
+        6,
+        8
+       ]
+      ],
+      "items": [
+       [
+        0,
+        [
+         [
+          0
+         ],
+         0
+        ],
+        [
+         [
+          1
+         ],
+         1
+        ]
+       ],
+       [
+        4,
+        0,
+        [
+         [
+          [
+           0,
+           6
+          ],
+          0
+         ],
+         [
+          [
+           1
+          ],
+          0
+         ],
+         [
+          [
+           2
+          ],
+          0
+         ],
+         [
+          [
+           3
+          ],
+          0
+         ],
+         [
+          [
+           4
+          ],
+          0
+         ],
+         [
+          [
+           5
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        0,
+        [
+         [
+          7
+         ],
+         0
+        ],
+        [
+         [
+          14
+         ],
+         0
+        ]
+       ]
+      ],
+      "outputs": [
+       [
+        [
+         7
+        ],
+        0
+       ],
+       [
+        [
+         8
+        ],
+        1
+       ],
+       [
+        [
+         9
+        ],
+        0
+       ],
+       [
+        [
+         10
+        ],
+        1
+       ],
+       [
+        [
+         11
+        ],
+        0
+       ],
+       [
+        [
+         12
+        ],
+        1
+       ],
+       [
+        [
+         13
+        ],
+        0
+       ],
+       [
+        [
+         14
+        ],
+        1
+       ],
+       [
+        [
+         15
+        ],
+        0
+       ]
+      ]
+     }
+    ],
+    "tables": {
+     "841db0e4984c3e5f5fbd3fea8b910a907211a27b159e485b0d529bce2ebfea3c5da899f8ae8a571326a52614f1ae37657277f8707baee6cc4e2fa5c9bc4cf7d9": {
+      "words": [
+       92,
+       119,
+       99,
+       118,
+       123,
+       113,
+       93,
+       92,
+       96,
+       118,
+       101,
+       76,
+       75,
+       115,
+       96,
+       94,
+       104,
+       103,
+       114,
+       75,
+       70,
+       92,
+       83,
+       73,
+       69,
+       98,
+       115,
+       120,
+       108,
+       104,
+       66,
+       102,
+       126,
+       89,
+       125,
+       92,
+       105,
+       111,
+       103,
+       105,
+       74,
+       103,
+       64,
+       117,
+       97,
+       68,
+       67,
+       66,
+       76,
+       120,
+       79,
+       102,
+       65,
+       113,
+       93,
+       84,
+       92,
+       101,
+       117,
+       76,
+       97,
+       78,
+       104,
+       82
+      ]
+     }
+    },
+    "layouts": [
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "derive": "v2"
+      },
+      "calls": [],
+      "reads": [
+       {
+        "item": 1,
+        "inline": {
+         "lo_bits": 3
+        }
+       }
+      ],
+      "type": "0748f4f225edb9ca8f979e54f631092ac70c2ccac2da03b59b6c7e9487f63322f15ac92da8db178fbdd60dbd0ed933be183944685c14c144e416f708fc0e3f6b",
+      "sha512": "e9b8baf6965ce2f1e2cf0c1eed1e24168d1722ec98fe12ee45471bb5f90072eea5421d4d343d8eded41191a3e701bf736e6c9199b93084cbfdc752a904530902"
+     }
+    ],
+    "unit_layout": 0
+   },
+   "physical": {
+    "layouts": {},
+    "unit": {
+     "rows": 385,
+     "sha512": "052db24e37f42125657ce32ac1a65968eff0a3d3513d2fc4af3742902e5a6c20e3498655ee48ca96c0114257a00c77beb1058850bfbe4863a0d645c6c2be10df"
+    },
+    "delta": "770162acbf228e9c5c763fc325ee13dbb8af885efc3caa279fcbaf1580bf49170f9f7fc5c6724128d94c3126997c40862d01fbce74b3bcf9db7729b029ee9148"
+   },
+   "logical": {
+    "rows": 115,
+    "sha512": "7bc028fc57a3ea23359ce2f3d99f6588be5bee8d74d44910688e6d66a16e46d50f48a72f506f6231f4d03a3b802e53c45f09227bbf47f04225dd1aebdbbb06aa"
+   }
+  },
+  {
+   "name": "a read placed in a block slot",
+   "archive": {
+    "types": [
+     {
+      "format": "verity/circuit-type/v1",
+      "label": "program",
+      "in": [
+       [
+        6,
+        1
+       ]
+      ],
+      "out": [
+       [
+        9,
+        1
+       ]
+      ],
+      "calls": [],
+      "tables": [
+       [
+        "841db0e4984c3e5f5fbd3fea8b910a907211a27b159e485b0d529bce2ebfea3c5da899f8ae8a571326a52614f1ae37657277f8707baee6cc4e2fa5c9bc4cf7d9",
+        6,
+        8
+       ]
+      ],
+      "items": [
+       [
+        0,
+        [
+         [
+          0
+         ],
+         0
+        ],
+        [
+         [
+          1
+         ],
+         1
+        ]
+       ],
+       [
+        4,
+        0,
+        [
+         [
+          [
+           0,
+           6
+          ],
+          0
+         ],
+         [
+          [
+           1
+          ],
+          0
+         ],
+         [
+          [
+           2
+          ],
+          0
+         ],
+         [
+          [
+           3
+          ],
+          0
+         ],
+         [
+          [
+           4
+          ],
+          0
+         ],
+         [
+          [
+           5
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        0,
+        [
+         [
+          7
+         ],
+         0
+        ],
+        [
+         [
+          14
+         ],
+         0
+        ]
+       ]
+      ],
+      "outputs": [
+       [
+        [
+         7
+        ],
+        0
+       ],
+       [
+        [
+         8
+        ],
+        1
+       ],
+       [
+        [
+         9
+        ],
+        0
+       ],
+       [
+        [
+         10
+        ],
+        1
+       ],
+       [
+        [
+         11
+        ],
+        0
+       ],
+       [
+        [
+         12
+        ],
+        1
+       ],
+       [
+        [
+         13
+        ],
+        0
+       ],
+       [
+        [
+         14
+        ],
+        1
+       ],
+       [
+        [
+         15
+        ],
+        0
+       ]
+      ]
+     }
+    ],
+    "tables": {
+     "841db0e4984c3e5f5fbd3fea8b910a907211a27b159e485b0d529bce2ebfea3c5da899f8ae8a571326a52614f1ae37657277f8707baee6cc4e2fa5c9bc4cf7d9": {
+      "words": [
+       92,
+       119,
+       99,
+       118,
+       123,
+       113,
+       93,
+       92,
+       96,
+       118,
+       101,
+       76,
+       75,
+       115,
+       96,
+       94,
+       104,
+       103,
+       114,
+       75,
+       70,
+       92,
+       83,
+       73,
+       69,
+       98,
+       115,
+       120,
+       108,
+       104,
+       66,
+       102,
+       126,
+       89,
+       125,
+       92,
+       105,
+       111,
+       103,
+       105,
+       74,
+       103,
+       64,
+       117,
+       97,
+       68,
+       67,
+       66,
+       76,
+       120,
+       79,
+       102,
+       65,
+       113,
+       93,
+       84,
+       92,
+       101,
+       117,
+       76,
+       97,
+       78,
+       104,
+       82
+      ]
+     }
+    },
+    "layouts": [
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "gen": "table/v2",
+       "table": "841db0e4984c3e5f5fbd3fea8b910a907211a27b159e485b0d529bce2ebfea3c5da899f8ae8a571326a52614f1ae37657277f8707baee6cc4e2fa5c9bc4cf7d9",
+       "in_bits": 6,
+       "value_bits": 8,
+       "lo_bits": 3
+      },
+      "calls": [],
+      "reads": [],
+      "range_log": 9,
+      "sha512": "dfbba3e18433a1832b8cfc90715018759207b8b1dd4418362f85b9e2d42992c11153ac758e10f76f197a5ac3e747801c54f37f84ff5e719c07077e7d144d4d39"
+     },
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "derive": "v2"
+      },
+      "calls": [],
+      "reads": [
+       {
+        "item": 1,
+        "layout": 0,
+        "offset": 0
+       }
+      ],
+      "type": "0748f4f225edb9ca8f979e54f631092ac70c2ccac2da03b59b6c7e9487f63322f15ac92da8db178fbdd60dbd0ed933be183944685c14c144e416f708fc0e3f6b",
+      "sha512": "8187521f13063ae0107af8ebd854ad001a3745079164dcef6f3e1449c4c9d2637da275420af86ae67173eddc51aacf7af76c8ebe5aae518054117314d8403c70"
+     }
+    ],
+    "unit_layout": 1
+   },
+   "physical": {
+    "layouts": {
+     "dfbba3e18433a1832b8cfc90715018759207b8b1dd4418362f85b9e2d42992c11153ac758e10f76f197a5ac3e747801c54f37f84ff5e719c07077e7d144d4d39": {
+      "rows": 385,
+      "sha512": "83a22f97bfa45e996c3494d1e99c2e35c5b98fea2810f3adc3f82d7e087f6ddd5203bffde4c06c994e6711ff3b622143a59ca874ea498b2929253449fdd33eb1"
+     }
+    },
+    "unit": {
+     "rows": 385,
+     "sha512": "27d2a6d4e9f7501aed5757f39ff3da3d6d6a390b1d6d786ed77a8ab06b25e2774d368c066064988fd8270bfa8a96e25e346c00bb77fdc7c65af99e1773a71217"
+    },
+    "delta": "fd6c8b9f4730852d9026a09c0ec5811ad3ab5fc5c9d61705cfa43605d2197885ccdcdddc6a25b326ea0ade890059cfdd7b63f17847cb7d0a500f91b1973ed009"
+   },
+   "logical": {
+    "rows": 122,
+    "sha512": "a2c3864fd8166ef2079eb99f3e5c8141431d0952e26719826d2c7b6361d6dada7c1bfd04c8e46e6eb5573ea466d658cd90e2d19cf9789ca35a0728ac48a2ed42"
+   }
+  },
+  {
+   "name": "a read placed inside a placed callee",
+   "archive": {
+    "types": [
+     {
+      "format": "verity/circuit-type/v1",
+      "label": "program",
+      "in": [
+       [
+        6,
+        1
+       ]
+      ],
+      "out": [
+       [
+        9,
+        1
+       ]
+      ],
+      "calls": [],
+      "tables": [
+       [
+        "841db0e4984c3e5f5fbd3fea8b910a907211a27b159e485b0d529bce2ebfea3c5da899f8ae8a571326a52614f1ae37657277f8707baee6cc4e2fa5c9bc4cf7d9",
+        6,
+        8
+       ]
+      ],
+      "items": [
+       [
+        0,
+        [
+         [
+          0
+         ],
+         0
+        ],
+        [
+         [
+          1
+         ],
+         1
+        ]
+       ],
+       [
+        4,
+        0,
+        [
+         [
+          [
+           0,
+           6
+          ],
+          0
+         ],
+         [
+          [
+           1
+          ],
+          0
+         ],
+         [
+          [
+           2
+          ],
+          0
+         ],
+         [
+          [
+           3
+          ],
+          0
+         ],
+         [
+          [
+           4
+          ],
+          0
+         ],
+         [
+          [
+           5
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        0,
+        [
+         [
+          7
+         ],
+         0
+        ],
+        [
+         [
+          14
+         ],
+         0
+        ]
+       ]
+      ],
+      "outputs": [
+       [
+        [
+         7
+        ],
+        0
+       ],
+       [
+        [
+         8
+        ],
+        1
+       ],
+       [
+        [
+         9
+        ],
+        0
+       ],
+       [
+        [
+         10
+        ],
+        1
+       ],
+       [
+        [
+         11
+        ],
+        0
+       ],
+       [
+        [
+         12
+        ],
+        1
+       ],
+       [
+        [
+         13
+        ],
+        0
+       ],
+       [
+        [
+         14
+        ],
+        1
+       ],
+       [
+        [
+         15
+        ],
+        0
+       ]
+      ]
+     },
+     {
+      "format": "verity/circuit-type/v1",
+      "label": "program",
+      "in": [
+       [
+        6,
+        1
+       ]
+      ],
+      "out": [
+       [
+        9,
+        1
+       ]
+      ],
+      "calls": [
+       "0748f4f225edb9ca8f979e54f631092ac70c2ccac2da03b59b6c7e9487f63322f15ac92da8db178fbdd60dbd0ed933be183944685c14c144e416f708fc0e3f6b"
+      ],
+      "tables": [],
+      "items": [
+       [
+        3,
+        0,
+        [
+         [
+          [
+           0
+          ],
+          0
+         ],
+         [
+          [
+           1
+          ],
+          0
+         ],
+         [
+          [
+           2
+          ],
+          0
+         ],
+         [
+          [
+           3
+          ],
+          0
+         ],
+         [
+          [
+           4
+          ],
+          0
+         ],
+         [
+          [
+           5
+          ],
+          0
+         ]
+        ]
+       ]
+      ],
+      "outputs": [
+       [
+        [
+         6
+        ],
+        0
+       ],
+       [
+        [
+         7
+        ],
+        0
+       ],
+       [
+        [
+         8
+        ],
+        0
+       ],
+       [
+        [
+         9
+        ],
+        0
+       ],
+       [
+        [
+         10
+        ],
+        0
+       ],
+       [
+        [
+         11
+        ],
+        0
+       ],
+       [
+        [
+         12
+        ],
+        0
+       ],
+       [
+        [
+         13
+        ],
+        0
+       ],
+       [
+        [
+         14
+        ],
+        0
+       ]
+      ]
+     }
+    ],
+    "tables": {
+     "841db0e4984c3e5f5fbd3fea8b910a907211a27b159e485b0d529bce2ebfea3c5da899f8ae8a571326a52614f1ae37657277f8707baee6cc4e2fa5c9bc4cf7d9": {
+      "words": [
+       92,
+       119,
+       99,
+       118,
+       123,
+       113,
+       93,
+       92,
+       96,
+       118,
+       101,
+       76,
+       75,
+       115,
+       96,
+       94,
+       104,
+       103,
+       114,
+       75,
+       70,
+       92,
+       83,
+       73,
+       69,
+       98,
+       115,
+       120,
+       108,
+       104,
+       66,
+       102,
+       126,
+       89,
+       125,
+       92,
+       105,
+       111,
+       103,
+       105,
+       74,
+       103,
+       64,
+       117,
+       97,
+       68,
+       67,
+       66,
+       76,
+       120,
+       79,
+       102,
+       65,
+       113,
+       93,
+       84,
+       92,
+       101,
+       117,
+       76,
+       97,
+       78,
+       104,
+       82
+      ]
+     }
+    },
+    "layouts": [
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "gen": "table/v2",
+       "table": "841db0e4984c3e5f5fbd3fea8b910a907211a27b159e485b0d529bce2ebfea3c5da899f8ae8a571326a52614f1ae37657277f8707baee6cc4e2fa5c9bc4cf7d9",
+       "in_bits": 6,
+       "value_bits": 8,
+       "lo_bits": 2
+      },
+      "calls": [],
+      "reads": [],
+      "range_log": 10,
+      "sha512": "a74147f24c6483987b645e06a3c010f2dea7dc667dc52c1dabd5f3f0bee86191ff4505db90fd1753f8ab9496732b870132ceb1ed4df085c84f0dbd8f5e67eb7e"
+     },
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "derive": "v2"
+      },
+      "calls": [],
+      "reads": [
+       {
+        "item": 1,
+        "layout": 0,
+        "offset": 1
+       }
+      ],
+      "type": "0748f4f225edb9ca8f979e54f631092ac70c2ccac2da03b59b6c7e9487f63322f15ac92da8db178fbdd60dbd0ed933be183944685c14c144e416f708fc0e3f6b",
+      "range_log": 11,
+      "sha512": "a5b6a167a1e1cd196ab5b3de9e5fe2370a86c38e32323d8cbefc5d4b22853d10c53eea4a98a18b147f9e9d6560717a6944805b9cf1a00728b31706d1451ee490"
+     },
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "derive": "v2"
+      },
+      "calls": [
+       {
+        "item": 0,
+        "layout": 1,
+        "offset": 0
+       }
+      ],
+      "reads": [],
+      "type": "b2f7c0baf6a93deb3d216cd468bf3dba952aee06f91f281e048983f5adfe857de1f76c92207d0f3f89961e068d762eaf754be472fb398acebfca12a1302b352f",
+      "sha512": "f76b98ef02dfb56a41ef8f0be57ae99048007072e5385b558329d5ec5175a08a0b852dbb51fa8a100fd5f5e1a6b306df37dd9ad24f144a293cab2cc52bb11536"
+     }
+    ],
+    "unit_layout": 2
+   },
+   "physical": {
+    "layouts": {
+     "a74147f24c6483987b645e06a3c010f2dea7dc667dc52c1dabd5f3f0bee86191ff4505db90fd1753f8ab9496732b870132ceb1ed4df085c84f0dbd8f5e67eb7e": {
+      "rows": 513,
+      "sha512": "1ea8f636732870232a8ee1f4c8f2c5800bb4ffbb979fcbedb707f82e65b63e27aff005cbde199045c19a174678e5dfa2b26cbefddfde647ab4d95c9700c03f3a"
+     },
+     "a5b6a167a1e1cd196ab5b3de9e5fe2370a86c38e32323d8cbefc5d4b22853d10c53eea4a98a18b147f9e9d6560717a6944805b9cf1a00728b31706d1451ee490": {
+      "rows": 2048,
+      "sha512": "dc3808deda9f6fb277e91f9e9a64cf5cf4562d33c275ed8a9173a4858ed3e75fd481b9363082502e4daf2d3e47e7c6c7f08db67eb9b00e8772db8a253ff96cee"
+     }
+    },
+    "unit": {
+     "rows": 257,
+     "sha512": "207926e31729ea384d544c91399e2aca6fe9b2de1e5d03e6a762456c824a95490c247954b6d4ab96f7d50fed44df834e498a247d189181517708e084bd130182"
+    },
+    "delta": "2ed7c575f5110113c3f05f2301f4190cdc300e7167868751b3ccf39351ded47887af4b576ea0e5e8ccacdf2f4f3113514efcc7517f2a797f05970513916c8e19"
+   },
+   "logical": {
+    "rows": 200,
+    "sha512": "7f02dd971824397177bca92456394cfb91567c167ce5ee1c7df387a3576efa4bb7737d984471b9d0abaf20e907c37c78b993d21def1b58d2486ab93a9d7b1570"
+   }
+  },
+  {
+   "name": "fan-out 20 calls, 20 reads",
+   "archive": {
+    "types": [
+     {
+      "format": "verity/circuit-type/v1",
+      "label": "program",
+      "in": [
+       [
+        1,
+        1
+       ]
+      ],
+      "out": [
+       [
+        1,
+        1
+       ]
+      ],
+      "calls": [],
+      "tables": [],
+      "items": [
+       [
+        0,
+        [
+         [
+          0
+         ],
+         0
+        ],
+        [
+         [
+          0
+         ],
+         1
+        ]
+       ]
+      ],
+      "outputs": [
+       [
+        [
+         1
+        ],
+        0
+       ]
+      ]
+     },
+     {
+      "format": "verity/circuit-type/v1",
+      "label": "program",
+      "in": [
+       [
+        20,
+        1
+       ]
+      ],
+      "out": [
+       [
+        100,
+        1
+       ]
+      ],
+      "calls": [
+       "a36e94ebfdc905fc6ac97f668a1e5734f990aa95d5788806840e2400006ea9b3b4dee8a59bad8a8967a8e7c62cced2e139fc383f2f89b3e156c17091a1fb60f7"
+      ],
+      "tables": [
+       [
+        "1c4dd8294921ce64ca7518335c157bcd20bbbe6340da9f1a9c8367c9bbba5d2a6c1728b5c9f5c82f02ccad589d7c9057221da64139f930c9fcc6f76e100c44c9",
+        4,
+        4
+       ]
+      ],
+      "items": [
+       [
+        3,
+        0,
+        [
+         [
+          [
+           0
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        3,
+        0,
+        [
+         [
+          [
+           1
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        3,
+        0,
+        [
+         [
+          [
+           2
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        3,
+        0,
+        [
+         [
+          [
+           3
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        3,
+        0,
+        [
+         [
+          [
+           4
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        3,
+        0,
+        [
+         [
+          [
+           5
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        3,
+        0,
+        [
+         [
+          [
+           6
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        3,
+        0,
+        [
+         [
+          [
+           7
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        3,
+        0,
+        [
+         [
+          [
+           8
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        3,
+        0,
+        [
+         [
+          [
+           9
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        3,
+        0,
+        [
+         [
+          [
+           10
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        3,
+        0,
+        [
+         [
+          [
+           11
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        3,
+        0,
+        [
+         [
+          [
+           12
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        3,
+        0,
+        [
+         [
+          [
+           13
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        3,
+        0,
+        [
+         [
+          [
+           14
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        3,
+        0,
+        [
+         [
+          [
+           15
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        3,
+        0,
+        [
+         [
+          [
+           16
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        3,
+        0,
+        [
+         [
+          [
+           17
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        3,
+        0,
+        [
+         [
+          [
+           18
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        3,
+        0,
+        [
+         [
+          [
+           19
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        4,
+        0,
+        [
+         [
+          [
+           0
+          ],
+          0
+         ],
+         [
+          [
+           0
+          ],
+          0
+         ],
+         [
+          [
+           0
+          ],
+          0
+         ],
+         [
+          [
+           0
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        4,
+        0,
+        [
+         [
+          [
+           1
+          ],
+          0
+         ],
+         [
+          [
+           1
+          ],
+          0
+         ],
+         [
+          [
+           1
+          ],
+          0
+         ],
+         [
+          [
+           1
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        4,
+        0,
+        [
+         [
+          [
+           2
+          ],
+          0
+         ],
+         [
+          [
+           2
+          ],
+          0
+         ],
+         [
+          [
+           2
+          ],
+          0
+         ],
+         [
+          [
+           2
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        4,
+        0,
+        [
+         [
+          [
+           3
+          ],
+          0
+         ],
+         [
+          [
+           3
+          ],
+          0
+         ],
+         [
+          [
+           3
+          ],
+          0
+         ],
+         [
+          [
+           3
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        4,
+        0,
+        [
+         [
+          [
+           4
+          ],
+          0
+         ],
+         [
+          [
+           4
+          ],
+          0
+         ],
+         [
+          [
+           4
+          ],
+          0
+         ],
+         [
+          [
+           4
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        4,
+        0,
+        [
+         [
+          [
+           5
+          ],
+          0
+         ],
+         [
+          [
+           5
+          ],
+          0
+         ],
+         [
+          [
+           5
+          ],
+          0
+         ],
+         [
+          [
+           5
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        4,
+        0,
+        [
+         [
+          [
+           6
+          ],
+          0
+         ],
+         [
+          [
+           6
+          ],
+          0
+         ],
+         [
+          [
+           6
+          ],
+          0
+         ],
+         [
+          [
+           6
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        4,
+        0,
+        [
+         [
+          [
+           7
+          ],
+          0
+         ],
+         [
+          [
+           7
+          ],
+          0
+         ],
+         [
+          [
+           7
+          ],
+          0
+         ],
+         [
+          [
+           7
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        4,
+        0,
+        [
+         [
+          [
+           8
+          ],
+          0
+         ],
+         [
+          [
+           8
+          ],
+          0
+         ],
+         [
+          [
+           8
+          ],
+          0
+         ],
+         [
+          [
+           8
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        4,
+        0,
+        [
+         [
+          [
+           9
+          ],
+          0
+         ],
+         [
+          [
+           9
+          ],
+          0
+         ],
+         [
+          [
+           9
+          ],
+          0
+         ],
+         [
+          [
+           9
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        4,
+        0,
+        [
+         [
+          [
+           10
+          ],
+          0
+         ],
+         [
+          [
+           10
+          ],
+          0
+         ],
+         [
+          [
+           10
+          ],
+          0
+         ],
+         [
+          [
+           10
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        4,
+        0,
+        [
+         [
+          [
+           11
+          ],
+          0
+         ],
+         [
+          [
+           11
+          ],
+          0
+         ],
+         [
+          [
+           11
+          ],
+          0
+         ],
+         [
+          [
+           11
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        4,
+        0,
+        [
+         [
+          [
+           12
+          ],
+          0
+         ],
+         [
+          [
+           12
+          ],
+          0
+         ],
+         [
+          [
+           12
+          ],
+          0
+         ],
+         [
+          [
+           12
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        4,
+        0,
+        [
+         [
+          [
+           13
+          ],
+          0
+         ],
+         [
+          [
+           13
+          ],
+          0
+         ],
+         [
+          [
+           13
+          ],
+          0
+         ],
+         [
+          [
+           13
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        4,
+        0,
+        [
+         [
+          [
+           14
+          ],
+          0
+         ],
+         [
+          [
+           14
+          ],
+          0
+         ],
+         [
+          [
+           14
+          ],
+          0
+         ],
+         [
+          [
+           14
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        4,
+        0,
+        [
+         [
+          [
+           15
+          ],
+          0
+         ],
+         [
+          [
+           15
+          ],
+          0
+         ],
+         [
+          [
+           15
+          ],
+          0
+         ],
+         [
+          [
+           15
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        4,
+        0,
+        [
+         [
+          [
+           16
+          ],
+          0
+         ],
+         [
+          [
+           16
+          ],
+          0
+         ],
+         [
+          [
+           16
+          ],
+          0
+         ],
+         [
+          [
+           16
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        4,
+        0,
+        [
+         [
+          [
+           17
+          ],
+          0
+         ],
+         [
+          [
+           17
+          ],
+          0
+         ],
+         [
+          [
+           17
+          ],
+          0
+         ],
+         [
+          [
+           17
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        4,
+        0,
+        [
+         [
+          [
+           18
+          ],
+          0
+         ],
+         [
+          [
+           18
+          ],
+          0
+         ],
+         [
+          [
+           18
+          ],
+          0
+         ],
+         [
+          [
+           18
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        4,
+        0,
+        [
+         [
+          [
+           19
+          ],
+          0
+         ],
+         [
+          [
+           19
+          ],
+          0
+         ],
+         [
+          [
+           19
+          ],
+          0
+         ],
+         [
+          [
+           19
+          ],
+          0
+         ]
+        ]
+       ]
+      ],
+      "outputs": [
+       [
+        [
+         20
+        ],
+        0
+       ],
+       [
+        [
+         21
+        ],
+        0
+       ],
+       [
+        [
+         22
+        ],
+        0
+       ],
+       [
+        [
+         23
+        ],
+        0
+       ],
+       [
+        [
+         24
+        ],
+        0
+       ],
+       [
+        [
+         25
+        ],
+        0
+       ],
+       [
+        [
+         26
+        ],
+        0
+       ],
+       [
+        [
+         27
+        ],
+        0
+       ],
+       [
+        [
+         28
+        ],
+        0
+       ],
+       [
+        [
+         29
+        ],
+        0
+       ],
+       [
+        [
+         30
+        ],
+        0
+       ],
+       [
+        [
+         31
+        ],
+        0
+       ],
+       [
+        [
+         32
+        ],
+        0
+       ],
+       [
+        [
+         33
+        ],
+        0
+       ],
+       [
+        [
+         34
+        ],
+        0
+       ],
+       [
+        [
+         35
+        ],
+        0
+       ],
+       [
+        [
+         36
+        ],
+        0
+       ],
+       [
+        [
+         37
+        ],
+        0
+       ],
+       [
+        [
+         38
+        ],
+        0
+       ],
+       [
+        [
+         39
+        ],
+        0
+       ],
+       [
+        [
+         40
+        ],
+        0
+       ],
+       [
+        [
+         41
+        ],
+        0
+       ],
+       [
+        [
+         42
+        ],
+        0
+       ],
+       [
+        [
+         43
+        ],
+        0
+       ],
+       [
+        [
+         44
+        ],
+        0
+       ],
+       [
+        [
+         45
+        ],
+        0
+       ],
+       [
+        [
+         46
+        ],
+        0
+       ],
+       [
+        [
+         47
+        ],
+        0
+       ],
+       [
+        [
+         48
+        ],
+        0
+       ],
+       [
+        [
+         49
+        ],
+        0
+       ],
+       [
+        [
+         50
+        ],
+        0
+       ],
+       [
+        [
+         51
+        ],
+        0
+       ],
+       [
+        [
+         52
+        ],
+        0
+       ],
+       [
+        [
+         53
+        ],
+        0
+       ],
+       [
+        [
+         54
+        ],
+        0
+       ],
+       [
+        [
+         55
+        ],
+        0
+       ],
+       [
+        [
+         56
+        ],
+        0
+       ],
+       [
+        [
+         57
+        ],
+        0
+       ],
+       [
+        [
+         58
+        ],
+        0
+       ],
+       [
+        [
+         59
+        ],
+        0
+       ],
+       [
+        [
+         60
+        ],
+        0
+       ],
+       [
+        [
+         61
+        ],
+        0
+       ],
+       [
+        [
+         62
+        ],
+        0
+       ],
+       [
+        [
+         63
+        ],
+        0
+       ],
+       [
+        [
+         64
+        ],
+        0
+       ],
+       [
+        [
+         65
+        ],
+        0
+       ],
+       [
+        [
+         66
+        ],
+        0
+       ],
+       [
+        [
+         67
+        ],
+        0
+       ],
+       [
+        [
+         68
+        ],
+        0
+       ],
+       [
+        [
+         69
+        ],
+        0
+       ],
+       [
+        [
+         70
+        ],
+        0
+       ],
+       [
+        [
+         71
+        ],
+        0
+       ],
+       [
+        [
+         72
+        ],
+        0
+       ],
+       [
+        [
+         73
+        ],
+        0
+       ],
+       [
+        [
+         74
+        ],
+        0
+       ],
+       [
+        [
+         75
+        ],
+        0
+       ],
+       [
+        [
+         76
+        ],
+        0
+       ],
+       [
+        [
+         77
+        ],
+        0
+       ],
+       [
+        [
+         78
+        ],
+        0
+       ],
+       [
+        [
+         79
+        ],
+        0
+       ],
+       [
+        [
+         80
+        ],
+        0
+       ],
+       [
+        [
+         81
+        ],
+        0
+       ],
+       [
+        [
+         82
+        ],
+        0
+       ],
+       [
+        [
+         83
+        ],
+        0
+       ],
+       [
+        [
+         84
+        ],
+        0
+       ],
+       [
+        [
+         85
+        ],
+        0
+       ],
+       [
+        [
+         86
+        ],
+        0
+       ],
+       [
+        [
+         87
+        ],
+        0
+       ],
+       [
+        [
+         88
+        ],
+        0
+       ],
+       [
+        [
+         89
+        ],
+        0
+       ],
+       [
+        [
+         90
+        ],
+        0
+       ],
+       [
+        [
+         91
+        ],
+        0
+       ],
+       [
+        [
+         92
+        ],
+        0
+       ],
+       [
+        [
+         93
+        ],
+        0
+       ],
+       [
+        [
+         94
+        ],
+        0
+       ],
+       [
+        [
+         95
+        ],
+        0
+       ],
+       [
+        [
+         96
+        ],
+        0
+       ],
+       [
+        [
+         97
+        ],
+        0
+       ],
+       [
+        [
+         98
+        ],
+        0
+       ],
+       [
+        [
+         99
+        ],
+        0
+       ],
+       [
+        [
+         100
+        ],
+        0
+       ],
+       [
+        [
+         101
+        ],
+        0
+       ],
+       [
+        [
+         102
+        ],
+        0
+       ],
+       [
+        [
+         103
+        ],
+        0
+       ],
+       [
+        [
+         104
+        ],
+        0
+       ],
+       [
+        [
+         105
+        ],
+        0
+       ],
+       [
+        [
+         106
+        ],
+        0
+       ],
+       [
+        [
+         107
+        ],
+        0
+       ],
+       [
+        [
+         108
+        ],
+        0
+       ],
+       [
+        [
+         109
+        ],
+        0
+       ],
+       [
+        [
+         110
+        ],
+        0
+       ],
+       [
+        [
+         111
+        ],
+        0
+       ],
+       [
+        [
+         112
+        ],
+        0
+       ],
+       [
+        [
+         113
+        ],
+        0
+       ],
+       [
+        [
+         114
+        ],
+        0
+       ],
+       [
+        [
+         115
+        ],
+        0
+       ],
+       [
+        [
+         116
+        ],
+        0
+       ],
+       [
+        [
+         117
+        ],
+        0
+       ],
+       [
+        [
+         118
+        ],
+        0
+       ],
+       [
+        [
+         119
+        ],
+        0
+       ]
+      ]
+     }
+    ],
+    "tables": {
+     "1c4dd8294921ce64ca7518335c157bcd20bbbe6340da9f1a9c8367c9bbba5d2a6c1728b5c9f5c82f02ccad589d7c9057221da64139f930c9fcc6f76e100c44c9": {
+      "words": [
+       3,
+       10,
+       1,
+       8,
+       15,
+       6,
+       13,
+       4,
+       11,
+       2,
+       9,
+       0,
+       7,
+       14,
+       5,
+       12
+      ]
+     }
+    },
+    "layouts": [
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "derive": "v2"
+      },
+      "calls": [],
+      "reads": [],
+      "type": "a36e94ebfdc905fc6ac97f668a1e5734f990aa95d5788806840e2400006ea9b3b4dee8a59bad8a8967a8e7c62cced2e139fc383f2f89b3e156c17091a1fb60f7",
+      "range_log": 10,
+      "sha512": "8c0092e20c669731e2834069389d39c2364bf51d7989e99f8fd1fb1fad662062babd074dd2b04d1fa2b0754972d0f5b81ca4ecf4397e44405d4eff056bbdfca8"
+     },
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "gen": "table/v2",
+       "table": "1c4dd8294921ce64ca7518335c157bcd20bbbe6340da9f1a9c8367c9bbba5d2a6c1728b5c9f5c82f02ccad589d7c9057221da64139f930c9fcc6f76e100c44c9",
+       "in_bits": 4,
+       "value_bits": 4,
+       "lo_bits": 2
+      },
+      "calls": [],
+      "reads": [],
+      "range_log": 10,
+      "sha512": "330e28a3764a75fb5dc6a0187a6ac72a659e60f214262292f8033ed51a832256e66bb4d79702bea37379462783d5944e74bf2c3923e4c4683fc4c03b3743c3cd"
+     },
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "derive": "v2"
+      },
+      "calls": [
+       {
+        "item": 0,
+        "layout": 0,
+        "offset": 0
+       },
+       {
+        "item": 1,
+        "layout": 0,
+        "offset": 1
+       },
+       {
+        "item": 2,
+        "layout": 0,
+        "offset": 2
+       },
+       {
+        "item": 3,
+        "layout": 0,
+        "offset": 3
+       },
+       {
+        "item": 4,
+        "layout": 0,
+        "offset": 4
+       },
+       {
+        "item": 5,
+        "layout": 0,
+        "offset": 5
+       },
+       {
+        "item": 6,
+        "layout": 0,
+        "offset": 6
+       },
+       {
+        "item": 7,
+        "layout": 0,
+        "offset": 7
+       },
+       {
+        "item": 8,
+        "layout": 0,
+        "offset": 8
+       },
+       {
+        "item": 9,
+        "layout": 0,
+        "offset": 9
+       },
+       {
+        "item": 10,
+        "layout": 0,
+        "offset": 10
+       },
+       {
+        "item": 11,
+        "layout": 0,
+        "offset": 11
+       },
+       {
+        "item": 12,
+        "layout": 0,
+        "offset": 12
+       },
+       {
+        "item": 13,
+        "layout": 0,
+        "offset": 13
+       },
+       {
+        "item": 14,
+        "layout": 0,
+        "offset": 14
+       },
+       {
+        "item": 15,
+        "layout": 0,
+        "offset": 15
+       },
+       {
+        "item": 16,
+        "layout": 0,
+        "offset": 16
+       },
+       {
+        "item": 17,
+        "layout": 0,
+        "offset": 17
+       },
+       {
+        "item": 18,
+        "layout": 0,
+        "offset": 18
+       },
+       {
+        "item": 19,
+        "layout": 0,
+        "offset": 19
+       }
+      ],
+      "reads": [
+       {
+        "item": 20,
+        "layout": 1,
+        "offset": 0
+       },
+       {
+        "item": 21,
+        "layout": 1,
+        "offset": 1
+       },
+       {
+        "item": 22,
+        "layout": 1,
+        "offset": 2
+       },
+       {
+        "item": 23,
+        "layout": 1,
+        "offset": 3
+       },
+       {
+        "item": 24,
+        "layout": 1,
+        "offset": 4
+       },
+       {
+        "item": 25,
+        "layout": 1,
+        "offset": 5
+       },
+       {
+        "item": 26,
+        "layout": 1,
+        "offset": 6
+       },
+       {
+        "item": 27,
+        "layout": 1,
+        "offset": 7
+       },
+       {
+        "item": 28,
+        "layout": 1,
+        "offset": 8
+       },
+       {
+        "item": 29,
+        "layout": 1,
+        "offset": 9
+       },
+       {
+        "item": 30,
+        "layout": 1,
+        "offset": 10
+       },
+       {
+        "item": 31,
+        "layout": 1,
+        "offset": 11
+       },
+       {
+        "item": 32,
+        "layout": 1,
+        "offset": 12
+       },
+       {
+        "item": 33,
+        "layout": 1,
+        "offset": 13
+       },
+       {
+        "item": 34,
+        "layout": 1,
+        "offset": 14
+       },
+       {
+        "item": 35,
+        "layout": 1,
+        "offset": 15
+       },
+       {
+        "item": 36,
+        "layout": 1,
+        "offset": 16
+       },
+       {
+        "item": 37,
+        "layout": 1,
+        "offset": 17
+       },
+       {
+        "item": 38,
+        "layout": 1,
+        "offset": 18
+       },
+       {
+        "item": 39,
+        "layout": 1,
+        "offset": 19
+       }
+      ],
+      "type": "6354238d3e461fcac5f7095a4594f47a9721a392f2d6a2ad503fcc181b9327fb3397b58d849313ac461bc0ae972cf7955fb21e04057117b7c83a59c97addb684",
+      "sha512": "c015ce1f3fb0d27e646d9f462077555fed537367c7664a23317d158715f8ee5a1d4c96f6d72effd86918c05fdeb52c40b4187e19b0f996f12dc4adac8c49bdf3"
+     }
+    ],
+    "unit_layout": 2
+   },
+   "physical": {
+    "layouts": {
+     "8c0092e20c669731e2834069389d39c2364bf51d7989e99f8fd1fb1fad662062babd074dd2b04d1fa2b0754972d0f5b81ca4ecf4397e44405d4eff056bbdfca8": {
+      "rows": 385,
+      "sha512": "e62464c5ea3d4069d6eaee12a13ab1ca65634ce64bc7992d1817ff67a7808ee96c56dda350b95fd33aa06eb7582aa690a6c5334fc6f6f72714ed220a97f4c551"
+     },
+     "330e28a3764a75fb5dc6a0187a6ac72a659e60f214262292f8033ed51a832256e66bb4d79702bea37379462783d5944e74bf2c3923e4c4683fc4c03b3743c3cd": {
+      "rows": 385,
+      "sha512": "1883671505ede41e3ffcbd3ddd4c0c33469ca88c091279f14c0544a8ac3dc240fcc2d2f1e961e2060c3f675eeb58a414b4082bc4e94e5d1e93e33f23233faa20"
+     }
+    },
+    "unit": {
+     "rows": 257,
+     "sha512": "26e92a6249db78d4b2266a3574bbcd78d09b14bc57cd87a3f7b0d6107f7871ddde69eeee15532e765c8bba3a52deecc18cf4bbf822eb91be5bbd6ad71346a17b"
+    },
+    "delta": "bba3608965ccccd8a9f9dfafe56cf2060bb3bc2962b7c7055851a5b24621a663576cf3dde3d1d16e3a4ed703d48b647262a37f11f509ac91018a9b358d9c22f6"
+   },
+   "logical": {
+    "rows": 862,
+    "sha512": "0cf034019ffbf086ec7e99106f6983a9cc916f79541a0b98fd03a2d04b8b6d4cdb4dfcafeee2167c1b8fadebd6180f8058192157fddb001b2581713d0175dd68"
+   }
+  },
+  {
+   "name": "random 2026.0",
+   "archive": {
+    "types": [
+     {
+      "format": "verity/circuit-type/v1",
+      "label": "program",
+      "in": [
+       [
+        6,
+        1
+       ]
+      ],
+      "out": [
+       [
+        1,
+        1
+       ]
+      ],
+      "calls": [],
+      "tables": [],
+      "items": [
+       [
+        0,
+        [
+         [
+          4
+         ],
+         1
+        ],
+        [
+         [
+          1,
+          3
+         ],
+         1
+        ]
+       ]
+      ],
+      "outputs": [
+       [
+        [
+         6
+        ],
+        0
+       ]
+      ]
+     },
+     {
+      "format": "verity/circuit-type/v1",
+      "label": "program",
+      "in": [
+       [
+        4,
+        1
+       ]
+      ],
+      "out": [
+       [
+        2,
+        1
+       ]
+      ],
+      "calls": [
+       "7c7eb89e1bb32b9feae6a5d6d8cdbafbff0854e0444c37d3d618ef226db9ad4896981389590df72aee0f545103f32550602a1b7009eafc4c6e57b1a5517ce9aa"
+      ],
+      "tables": [],
+      "items": [
+       [
+        3,
+        0,
+        [
+         [
+          [
+           3
+          ],
+          0
+         ],
+         [
+          [
+           0,
+           1,
+           2
+          ],
+          0
+         ],
+         [
+          [
+           1,
+           2,
+           3
+          ],
+          0
+         ],
+         [
+          [
+           2
+          ],
+          1
+         ],
+         [
+          [
+           0,
+           1,
+           2
+          ],
+          1
+         ],
+         [
+          [
+           1,
+           2,
+           3
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        0,
+        [
+         [
+          1,
+          4
+         ],
+         1
+        ],
+        [
+         [
+          0,
+          3,
+          4
+         ],
+         0
+        ]
+       ]
+      ],
+      "outputs": [
+       [
+        [
+         4
+        ],
+        0
+       ],
+       [
+        [
+         5
+        ],
+        0
+       ]
+      ]
+     },
+     {
+      "format": "verity/circuit-type/v1",
+      "label": "program",
+      "in": [
+       [
+        4,
+        1
+       ]
+      ],
+      "out": [
+       [
+        2,
+        1
+       ]
+      ],
+      "calls": [
+       "ff74b899a1872cce657c2297443a25a123c23f18599ce0cb73da469a3a4b99cca47150046ce6112bc9f785682ae3a2d6fbb4d27f4789780211ca07648c519c9c"
+      ],
+      "tables": [],
+      "items": [
+       [
+        3,
+        0,
+        [
+         [
+          [
+           0
+          ],
+          0
+         ],
+         [
+          [
+           1
+          ],
+          0
+         ],
+         [
+          [
+           2
+          ],
+          0
+         ],
+         [
+          [
+           3
+          ],
+          0
+         ]
+        ]
+       ]
+      ],
+      "outputs": [
+       [
+        [
+         4
+        ],
+        0
+       ],
+       [
+        [
+         5
+        ],
+        0
+       ]
+      ]
+     }
+    ],
+    "tables": {
+     "766d8783db845b720d8482b09d03dee85e475603ca7401f42439d24f1a01d2afe190369aeaf38a19e8b9c1a29022c84bdd2eb4e3667761340fac460dc2e2e910": {
+      "words": [
+       0,
+       1,
+       2,
+       3,
+       2,
+       2,
+       3,
+       3
+      ]
+     },
+     "62c10c955d2b38323a7447a8bc0f29519d9807d8c3c9c092f903275618540c964ae8b41e34e7e67a6b7a1565c8587e81dbd8cb1656b027b37f11c2ab143af546": {
+      "words": [
+       1,
+       14,
+       3,
+       14,
+       9,
+       9,
+       8,
+       6,
+       12,
+       9,
+       8,
+       13,
+       11,
+       12,
+       12,
+       7
+      ]
+     },
+     "9563bb828c402cbb9a3ee94afcf4898b7f84842929e25f36e80f94b2f79138821f8a9779bce23d47c70d2e2880879cb00604a0e546123525542f918d42004368": {
+      "words": [
+       48,
+       49,
+       37,
+       28,
+       15,
+       0,
+       39,
+       5,
+       7,
+       18,
+       52,
+       6,
+       28,
+       0,
+       52,
+       57,
+       43,
+       31,
+       43,
+       20,
+       13,
+       25,
+       16,
+       22,
+       62,
+       63,
+       59,
+       22,
+       51,
+       24,
+       63,
+       47
+      ]
+     }
+    },
+    "layouts": [
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "derive": "v2"
+      },
+      "calls": [],
+      "reads": [],
+      "type": "7c7eb89e1bb32b9feae6a5d6d8cdbafbff0854e0444c37d3d618ef226db9ad4896981389590df72aee0f545103f32550602a1b7009eafc4c6e57b1a5517ce9aa",
+      "range_log": 9,
+      "sha512": "f0f64fad0fff6966c1fd7ff4e3d77b8fab3f57b9f0118eb6cfe5c08d2b7f32bc261f70d90af730a9420ee1488c2317bd883053a95d6ba5382f243ab8408d2120"
+     },
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "derive": "v2"
+      },
+      "calls": [
+       {
+        "item": 0,
+        "layout": 0,
+        "offset": 1
+       }
+      ],
+      "reads": [],
+      "type": "ff74b899a1872cce657c2297443a25a123c23f18599ce0cb73da469a3a4b99cca47150046ce6112bc9f785682ae3a2d6fbb4d27f4789780211ca07648c519c9c",
+      "range_log": 10,
+      "sha512": "03a25a8c6a1396b0d7ecf8f873f9ced268a824a5dd57a63a3651b8e18182c87568d90d2362def8fd355c9718faab789f116da7e3c618e4f847f379b9889c6a4d"
+     },
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "derive": "v2"
+      },
+      "calls": [
+       {
+        "item": 0,
+        "layout": 1,
+        "offset": 0
+       }
+      ],
+      "reads": [],
+      "type": "b30a7754d71bf9214dcb5b75a76825ecefd19946c16d788e059ada1bc60a9d1827b464cb279de25bc7c98be47a925ad59c66a13e88380cd3a662b7cf2e0f17a5",
+      "sha512": "aab554934d7c6ef7dc40dce770aed749749bf67ec00ef5e41ac0f01de4f495dfce3b2c7985039d6a9a0152f36831d05bca36357a9b73298329276105002868f9"
+     }
+    ],
+    "unit_layout": 2
+   },
+   "physical": {
+    "layouts": {
+     "f0f64fad0fff6966c1fd7ff4e3d77b8fab3f57b9f0118eb6cfe5c08d2b7f32bc261f70d90af730a9420ee1488c2317bd883053a95d6ba5382f243ab8408d2120": {
+      "rows": 385,
+      "sha512": "49ab069591c7ad9bb9548710935a36026fe32710791e47aaaec6321c2169ed1c217b093457db8b0b1ae233360b33b541a56c6c33bfc161e521cb09ed0cb6d4a7"
+     },
+     "03a25a8c6a1396b0d7ecf8f873f9ced268a824a5dd57a63a3651b8e18182c87568d90d2362def8fd355c9718faab789f116da7e3c618e4f847f379b9889c6a4d": {
+      "rows": 1024,
+      "sha512": "9374006c128df17faa75aaebaf00f7ed87d49ca3dc73b2c2b40ffab790304fa47e760dcad591a3d0827934b82932866229cff0b7e4e388c54c3320073bb2ccba"
+     }
+    },
+    "unit": {
+     "rows": 257,
+     "sha512": "65e62ca85456e67da1dbf24c75b2b5cc5cb052d38ebcc3a4da2b5b21eb7ef4ebfc99ca15afa95215d4ee788e3d9cb6a244d116242f317d7e892e43f3b8031671"
+    },
+    "delta": "d53144e05a2f8655960d6cc427b05d5978d0575282966bc24428e521dcd71a1ca47ffd8f7c5efad3c9e4ee325466d7b687b2bbac3477344262ada01aa287b241"
+   },
+   "logical": {
+    "rows": 21,
+    "sha512": "3e11dc32dfc6ef5bff215da3f2ec60643b7f45e66d99420c6273d3179030d48284b30fde359fb0988fce7c9fcffcf30d4e3cd6ae78d4ddccd1adc2ab81c4f606"
+   }
+  },
+  {
+   "name": "random 2026.1",
+   "archive": {
+    "types": [
+     {
+      "format": "verity/circuit-type/v1",
+      "label": "program",
+      "in": [
+       [
+        5,
+        1
+       ]
+      ],
+      "out": [
+       [
+        3,
+        1
+       ]
+      ],
+      "calls": [],
+      "tables": [
+       [
+        "012b7bff34ba25c1d17783c92ea806a87e81c5b59b2ca5f35a40514b974d53d7d0012b786be8133a93f160463420ad187d89e3fb310bdb30dbb650a524df7651",
+        3,
+        4
+       ],
+       [
+        "eb527013e05ae382c003de39a8b2ec0b80af15441d5c0a01ae5b0605529d5a583efd54de0b59dcc0b14b49208f70655398bf5b9d48f7c8f5be637df601de79f2",
+        4,
+        6
+       ]
+      ],
+      "items": [
+       [
+        0,
+        [
+         [
+          0
+         ],
+         1
+        ],
+        [
+         [
+          3
+         ],
+         0
+        ]
+       ],
+       [
+        4,
+        0,
+        [
+         [
+          [
+           1,
+           5
+          ],
+          0
+         ],
+         [
+          [
+           0,
+           2,
+           5
+          ],
+          1
+         ],
+         [
+          [
+           1,
+           2
+          ],
+          1
+         ]
+        ]
+       ],
+       [
+        4,
+        1,
+        [
+         [
+          [
+           0,
+           6
+          ],
+          0
+         ],
+         [
+          [
+           3
+          ],
+          0
+         ],
+         [
+          [
+           1,
+           9
+          ],
+          1
+         ],
+         [
+          [
+           0,
+           7
+          ],
+          1
+         ]
+        ]
+       ]
+      ],
+      "outputs": [
+       [
+        [
+         5
+        ],
+        1
+       ],
+       [
+        [
+         9
+        ],
+        0
+       ],
+       [
+        [
+         15
+        ],
+        1
+       ]
+      ]
+     },
+     {
+      "format": "verity/circuit-type/v1",
+      "label": "program",
+      "in": [
+       [
+        4,
+        1
+       ]
+      ],
+      "out": [
+       [
+        6,
+        1
+       ]
+      ],
+      "calls": [],
+      "tables": [
+       [
+        "3ede728cd02840f785f2783bb979ee28185aeb9c23744cf42a5c8c6012f0f54c3f29fadca92bd308fc1349028808caf52c86186605cc77d92cdad5b038e520ed",
+        5,
+        8
+       ]
+      ],
+      "items": [
+       [
+        0,
+        [
+         [
+          1,
+          2,
+          3
+         ],
+         1
+        ],
+        [
+         [
+          0,
+          2
+         ],
+         1
+        ]
+       ],
+       [
+        0,
+        [
+         [
+          2,
+          4
+         ],
+         0
+        ],
+        [
+         [
+          2,
+          3
+         ],
+         0
+        ]
+       ],
+       [
+        0,
+        [
+         [
+          1,
+          4
+         ],
+         0
+        ],
+        [
+         [
+          0,
+          1,
+          5
+         ],
+         0
+        ]
+       ],
+       [
+        4,
+        0,
+        [
+         [
+          [
+           4,
+           5
+          ],
+          1
+         ],
+         [
+          [
+           3
+          ],
+          0
+         ],
+         [
+          [
+           3,
+           6
+          ],
+          1
+         ],
+         [
+          [
+           6
+          ],
+          1
+         ],
+         [
+          [
+           1,
+           5,
+           6
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        0,
+        [
+         [
+          6,
+          8,
+          10
+         ],
+         1
+        ],
+        [
+         [
+          3
+         ],
+         0
+        ]
+       ],
+       [
+        4,
+        0,
+        [
+         [
+          [
+           4,
+           13
+          ],
+          1
+         ],
+         [
+          [
+           2
+          ],
+          0
+         ],
+         [
+          [
+           1,
+           10,
+           13
+          ],
+          1
+         ],
+         [
+          [
+           0,
+           10
+          ],
+          0
+         ],
+         [
+          [
+           0,
+           7,
+           15
+          ],
+          0
+         ]
+        ]
+       ]
+      ],
+      "outputs": [
+       [
+        [
+         4
+        ],
+        0
+       ],
+       [
+        [
+         5
+        ],
+        1
+       ],
+       [
+        [
+         6
+        ],
+        1
+       ],
+       [
+        [
+         14
+        ],
+        0
+       ],
+       [
+        [
+         15
+        ],
+        1
+       ],
+       [
+        [
+         23
+        ],
+        1
+       ]
+      ]
+     },
+     {
+      "format": "verity/circuit-type/v1",
+      "label": "program",
+      "in": [
+       [
+        2,
+        1
+       ]
+      ],
+      "out": [
+       [
+        3,
+        1
+       ]
+      ],
+      "calls": [
+       "6747fb7db3b4a8a47bf13b6e2bb6bcf23d803035f39cdfd7353d5051b11f4c15f60da6b51a43b3792e2f49bcdb0bb0d4f0d1845bffefcb5c8a24aa9c8398f81a",
+       "800a1e22c13eb1d20594ca01a13a6a7fb40f09418f88aad301e2119eec45767ffd9037c2ec2488f925e5220727a3650beacbd158dfa132aabffc14a9bc66648b"
+      ],
+      "tables": [],
+      "items": [
+       [
+        3,
+        0,
+        [
+         [
+          [
+           0,
+           1
+          ],
+          1
+         ],
+         [
+          [
+           0
+          ],
+          1
+         ],
+         [
+          [
+           1
+          ],
+          0
+         ],
+         [
+          [
+           0,
+           1
+          ],
+          0
+         ],
+         [
+          [
+           1
+          ],
+          1
+         ]
+        ]
+       ],
+       [
+        3,
+        1,
+        [
+         [
+          [
+           1,
+           2,
+           4
+          ],
+          0
+         ],
+         [
+          [
+           4
+          ],
+          0
+         ],
+         [
+          [
+           2,
+           3,
+           4
+          ],
+          0
+         ],
+         [
+          [
+           1,
+           3
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        0,
+        [
+         [
+          2
+         ],
+         1
+        ],
+        [
+         [
+          4,
+          8
+         ],
+         1
+        ]
+       ]
+      ],
+      "outputs": [
+       [
+        [
+         4
+        ],
+        0
+       ],
+       [
+        [
+         10
+        ],
+        0
+       ],
+       [
+        [
+         11
+        ],
+        0
+       ]
+      ]
+     },
+     {
+      "format": "verity/circuit-type/v1",
+      "label": "program",
+      "in": [
+       [
+        2,
+        1
+       ]
+      ],
+      "out": [
+       [
+        3,
+        1
+       ]
+      ],
+      "calls": [
+       "865bd1adecc1516f224c17a1c19b8ac52070f44c68226cd0a204d52dbc631a039c15b7cd159c2a1cf327f478b25e683cb50c7dedfc897f1dd646ccd2b4fe5870"
+      ],
+      "tables": [],
+      "items": [
+       [
+        3,
+        0,
+        [
+         [
+          [
+           0
+          ],
+          0
+         ],
+         [
+          [
+           1
+          ],
+          0
+         ]
+        ]
+       ]
+      ],
+      "outputs": [
+       [
+        [
+         2
+        ],
+        0
+       ],
+       [
+        [
+         3
+        ],
+        0
+       ],
+       [
+        [
+         4
+        ],
+        0
+       ]
+      ]
+     }
+    ],
+    "tables": {
+     "012b7bff34ba25c1d17783c92ea806a87e81c5b59b2ca5f35a40514b974d53d7d0012b786be8133a93f160463420ad187d89e3fb310bdb30dbb650a524df7651": {
+      "words": [
+       1,
+       3,
+       0,
+       0,
+       3,
+       1,
+       2,
+       1
+      ]
+     },
+     "eb527013e05ae382c003de39a8b2ec0b80af15441d5c0a01ae5b0605529d5a583efd54de0b59dcc0b14b49208f70655398bf5b9d48f7c8f5be637df601de79f2": {
+      "words": [
+       14,
+       12,
+       15,
+       0,
+       0,
+       8,
+       7,
+       5,
+       10,
+       4,
+       7,
+       5,
+       14,
+       1,
+       7,
+       15
+      ]
+     },
+     "3ede728cd02840f785f2783bb979ee28185aeb9c23744cf42a5c8c6012f0f54c3f29fadca92bd308fc1349028808caf52c86186605cc77d92cdad5b038e520ed": {
+      "words": [
+       29,
+       36,
+       39,
+       51,
+       10,
+       9,
+       37,
+       33,
+       13,
+       27,
+       39,
+       21,
+       29,
+       38,
+       14,
+       43,
+       45,
+       4,
+       35,
+       25,
+       2,
+       12,
+       41,
+       58,
+       11,
+       2,
+       41,
+       34,
+       59,
+       53,
+       3,
+       28
+      ]
+     }
+    },
+    "layouts": [
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "derive": "v2"
+      },
+      "calls": [],
+      "reads": [
+       {
+        "item": 1,
+        "inline": {
+         "lo_bits": 2
+        }
+       },
+       {
+        "item": 2,
+        "inline": {
+         "lo_bits": 3
+        }
+       }
+      ],
+      "type": "6747fb7db3b4a8a47bf13b6e2bb6bcf23d803035f39cdfd7353d5051b11f4c15f60da6b51a43b3792e2f49bcdb0bb0d4f0d1845bffefcb5c8a24aa9c8398f81a",
+      "range_log": 9,
+      "sha512": "c12e801e85b0605e7df2e1c997181c3c3991d80dfbb1c02d788b21c130e9227b522de858730f7ee239b6494ac94ce5b30d9647d23e5512122c972cb46da923d9"
+     },
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "derive": "v2"
+      },
+      "calls": [],
+      "reads": [
+       {
+        "item": 3,
+        "inline": {
+         "lo_bits": 3
+        }
+       },
+       {
+        "item": 5,
+        "inline": {
+         "lo_bits": 3
+        }
+       }
+      ],
+      "type": "800a1e22c13eb1d20594ca01a13a6a7fb40f09418f88aad301e2119eec45767ffd9037c2ec2488f925e5220727a3650beacbd158dfa132aabffc14a9bc66648b",
+      "range_log": 9,
+      "sha512": "82e56a93b6484c834e00419ea7734a0e9847b59377ca308c686faf393f86ca4120eb135de99794efdd0a8d8fbd947f333d0510c074c26c348c7043074b832ca9"
+     },
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "derive": "v2"
+      },
+      "calls": [
+       {
+        "item": 0,
+        "layout": 0,
+        "offset": 1
+       },
+       {
+        "item": 1,
+        "layout": 1,
+        "inline": true
+       }
+      ],
+      "reads": [],
+      "type": "865bd1adecc1516f224c17a1c19b8ac52070f44c68226cd0a204d52dbc631a039c15b7cd159c2a1cf327f478b25e683cb50c7dedfc897f1dd646ccd2b4fe5870",
+      "range_log": 10,
+      "sha512": "6b5d54334ec3656bc13b9e838b7724181f5cefa485f8ae571ea45074c9457784f671fd556e783c927f96114904c5e62e78ef4103bb9ef80216991c26bccff5ab"
+     },
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "derive": "v2"
+      },
+      "calls": [
+       {
+        "item": 0,
+        "layout": 2,
+        "offset": 0
+       }
+      ],
+      "reads": [],
+      "type": "89861450b95c0c8bee12539def545cf8518734e43573ca7c5243f6a6756ea8630fedf4d1ea15aef6d2ea1a70743eb830b001c17feb44728f9ef5acbba00b5653",
+      "sha512": "54e0147534db9dd85b9da0b903f3da754141273eae3dbf40656f91ace81f15ebb0a8fd308ba3ad53448fa73e06b8e63ecc51724d0f8baa87c80f1af1aa9dd66f"
+     }
+    ],
+    "unit_layout": 3
+   },
+   "physical": {
+    "layouts": {
+     "c12e801e85b0605e7df2e1c997181c3c3991d80dfbb1c02d788b21c130e9227b522de858730f7ee239b6494ac94ce5b30d9647d23e5512122c972cb46da923d9": {
+      "rows": 385,
+      "sha512": "63240f1e1a388a1ea959b8b0e4d00fa9f595f36a11bdd75597d265f6f73fb33b992c37e96e1ba255ae6d6bf2fb6884cbb00c001ed2b00f0a97215ce7cea59fa3"
+     },
+     "82e56a93b6484c834e00419ea7734a0e9847b59377ca308c686faf393f86ca4120eb135de99794efdd0a8d8fbd947f333d0510c074c26c348c7043074b832ca9": {
+      "rows": 385,
+      "sha512": "7f5a0fb95fb92af4e6f7ad6f08150b9fc275bd5854037de831af302ac023e2ca7f827b30234a955b3b3a7ea3e02d61e78d89a9164117412b91b10e21b4c4a672"
+     },
+     "6b5d54334ec3656bc13b9e838b7724181f5cefa485f8ae571ea45074c9457784f671fd556e783c927f96114904c5e62e78ef4103bb9ef80216991c26bccff5ab": {
+      "rows": 1024,
+      "sha512": "b5fb882f97511ee7f38861dd0912c1867cdc3f586fed2097aff49f0910d5f18feba0eaa3046f8d8bd03d7585461dbff4629d4e5ca170134f65ceb889d71302b1"
+     }
+    },
+    "unit": {
+     "rows": 257,
+     "sha512": "596c78a94102b604c50dfa84d0f34eedba97f54a836c05fe1f5afd16453924f06714eea7423fedc7e54662e6fa827572297b142e945fccafe9640c8ac4450cf2"
+    },
+    "delta": "c3a3bb925f2b6e9b7dd5d6cb71e0206f54aba319b081e420d37f49c6dfadef7002a3391591342a32520495ff4a404cf7a793f5419566aec166a45ef11608be63"
+   },
+   "logical": {
+    "rows": 184,
+    "sha512": "98087a3451f9598927bb7323502f982820ef8cd28718103363bc135a013159441bd6d0de54b226e3e5c6b43944df999d00836113c48f12bc57af2a3137b55374"
+   }
+  },
+  {
+   "name": "random 2026.2",
+   "archive": {
+    "types": [
+     {
+      "format": "verity/circuit-type/v1",
+      "label": "program",
+      "in": [
+       [
+        5,
+        1
+       ]
+      ],
+      "out": [
+       [
+        6,
+        1
+       ]
+      ],
+      "calls": [],
+      "tables": [
+       [
+        "677d840f59f2829bb88c35d31601abd6a35cae7c60323dc95baf980022ef146ac7024c8dade28329cadd38035c2623e4c3aeba38a31d494f959b2e6a95461eaf",
+        5,
+        8
+       ],
+       [
+        "dd8c520232f47162defa90d2afb5b48361f57d8a60053eb56bc6e81d973701e6198d85637bdd7affef3a9b24bdcb3de058f04af176c00987a5d5ea7e4d55d7a9",
+        4,
+        6
+       ]
+      ],
+      "items": [
+       [
+        0,
+        [
+         [
+          2,
+          3
+         ],
+         0
+        ],
+        [
+         [
+          1
+         ],
+         0
+        ]
+       ],
+       [
+        0,
+        [
+         [
+          0,
+          2
+         ],
+         0
+        ],
+        [
+         [
+          2,
+          4
+         ],
+         1
+        ]
+       ],
+       [
+        4,
+        0,
+        [
+         [
+          [
+           4
+          ],
+          0
+         ],
+         [
+          [
+           1
+          ],
+          1
+         ],
+         [
+          [
+           3
+          ],
+          0
+         ],
+         [
+          [
+           1,
+           2,
+           5
+          ],
+          0
+         ],
+         [
+          [
+           3,
+           4,
+           5
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        4,
+        1,
+        [
+         [
+          [
+           0,
+           2
+          ],
+          0
+         ],
+         [
+          [
+           10,
+           14
+          ],
+          1
+         ],
+         [
+          [
+           5,
+           14
+          ],
+          1
+         ],
+         [
+          [
+           5,
+           7
+          ],
+          1
+         ]
+        ]
+       ],
+       [
+        4,
+        1,
+        [
+         [
+          [
+           0
+          ],
+          1
+         ],
+         [
+          [
+           8,
+           14
+          ],
+          0
+         ],
+         [
+          [
+           8,
+           16
+          ],
+          1
+         ],
+         [
+          [
+           6,
+           18
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        0,
+        [
+         [
+          23
+         ],
+         1
+        ],
+        [
+         [
+          2,
+          19
+         ],
+         1
+        ]
+       ]
+      ],
+      "outputs": [
+       [
+        [
+         5
+        ],
+        1
+       ],
+       [
+        [
+         6
+        ],
+        1
+       ],
+       [
+        [
+         14
+        ],
+        1
+       ],
+       [
+        [
+         20
+        ],
+        1
+       ],
+       [
+        [
+         26
+        ],
+        0
+       ],
+       [
+        [
+         27
+        ],
+        0
+       ]
+      ]
+     },
+     {
+      "format": "verity/circuit-type/v1",
+      "label": "program",
+      "in": [
+       [
+        5,
+        1
+       ]
+      ],
+      "out": [
+       [
+        2,
+        1
+       ]
+      ],
+      "calls": [],
+      "tables": [
+       [
+        "677d840f59f2829bb88c35d31601abd6a35cae7c60323dc95baf980022ef146ac7024c8dade28329cadd38035c2623e4c3aeba38a31d494f959b2e6a95461eaf",
+        5,
+        8
+       ]
+      ],
+      "items": [
+       [
+        0,
+        [
+         [
+          2,
+          3,
+          4
+         ],
+         0
+        ],
+        [
+         [
+          0,
+          1,
+          4
+         ],
+         0
+        ]
+       ],
+       [
+        4,
+        0,
+        [
+         [
+          [
+           1,
+           4,
+           5
+          ],
+          1
+         ],
+         [
+          [
+           1,
+           2,
+           3
+          ],
+          1
+         ],
+         [
+          [
+           1,
+           3,
+           4
+          ],
+          0
+         ],
+         [
+          [
+           1,
+           4,
+           5
+          ],
+          0
+         ],
+         [
+          [
+           0,
+           4,
+           5
+          ],
+          1
+         ]
+        ]
+       ]
+      ],
+      "outputs": [
+       [
+        [
+         5
+        ],
+        1
+       ],
+       [
+        [
+         13
+        ],
+        0
+       ]
+      ]
+     },
+     {
+      "format": "verity/circuit-type/v1",
+      "label": "program",
+      "in": [
+       [
+        2,
+        1
+       ]
+      ],
+      "out": [
+       [
+        3,
+        1
+       ]
+      ],
+      "calls": [
+       "4c96354960c11d347a1b035d27bbdd235f84c66e4b24638e9d238425e80d3c44715dbf39a060e8accbf7e207c03db039147e0d84572c77b33ebcdc718d9f3e30",
+       "f59a01571769426d41d33914da7692c9a1640e4f6b8da9825a4037b5c528df12939bae5f80f2c6d5da175d3c5a72647c8eb4f9e070fe1e684325a5e55a4ed102"
+      ],
+      "tables": [],
+      "items": [
+       [
+        3,
+        0,
+        [
+         [
+          [
+           0,
+           1
+          ],
+          1
+         ],
+         [
+          [
+           0
+          ],
+          0
+         ],
+         [
+          [
+           0
+          ],
+          1
+         ],
+         [
+          [
+           0,
+           1
+          ],
+          1
+         ],
+         [
+          [
+           1
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        3,
+        1,
+        [
+         [
+          [
+           0,
+           1,
+           3
+          ],
+          0
+         ],
+         [
+          [
+           0,
+           1,
+           3
+          ],
+          0
+         ],
+         [
+          [
+           2
+          ],
+          1
+         ],
+         [
+          [
+           0,
+           3
+          ],
+          0
+         ],
+         [
+          [
+           3
+          ],
+          1
+         ]
+        ]
+       ],
+       [
+        0,
+        [
+         [
+          2
+         ],
+         0
+        ],
+        [
+         [
+          7
+         ],
+         0
+        ]
+       ]
+      ],
+      "outputs": [
+       [
+        [
+         3
+        ],
+        0
+       ],
+       [
+        [
+         9
+        ],
+        0
+       ],
+       [
+        [
+         10
+        ],
+        0
+       ]
+      ]
+     },
+     {
+      "format": "verity/circuit-type/v1",
+      "label": "program",
+      "in": [
+       [
+        2,
+        1
+       ]
+      ],
+      "out": [
+       [
+        3,
+        1
+       ]
+      ],
+      "calls": [
+       "bc08d296833c3290724e81be5c36c79dccac2edf8d1e6dd5b974be0adaf85bdc33bfcc8af41c6ec4cd7520ed35f2fdc7185da03cf0247e50a72ddfa0d142e2ed"
+      ],
+      "tables": [],
+      "items": [
+       [
+        3,
+        0,
+        [
+         [
+          [
+           0
+          ],
+          0
+         ],
+         [
+          [
+           1
+          ],
+          0
+         ]
+        ]
+       ]
+      ],
+      "outputs": [
+       [
+        [
+         2
+        ],
+        0
+       ],
+       [
+        [
+         3
+        ],
+        0
+       ],
+       [
+        [
+         4
+        ],
+        0
+       ]
+      ]
+     }
+    ],
+    "tables": {
+     "a205fb94220e9ecb5b216c2b9d3139f4c84674ba468c8dca944397e655ad825b6c875256eaae21808c8dbdc886baa645680b29f8f7aa9ab4f001345a5967922c": {
+      "words": [
+       2,
+       2,
+       1,
+       3,
+       1,
+       1,
+       3,
+       3
+      ]
+     },
+     "dd8c520232f47162defa90d2afb5b48361f57d8a60053eb56bc6e81d973701e6198d85637bdd7affef3a9b24bdcb3de058f04af176c00987a5d5ea7e4d55d7a9": {
+      "words": [
+       14,
+       12,
+       15,
+       14,
+       15,
+       8,
+       2,
+       11,
+       8,
+       0,
+       2,
+       5,
+       8,
+       2,
+       2,
+       0
+      ]
+     },
+     "677d840f59f2829bb88c35d31601abd6a35cae7c60323dc95baf980022ef146ac7024c8dade28329cadd38035c2623e4c3aeba38a31d494f959b2e6a95461eaf": {
+      "words": [
+       56,
+       7,
+       32,
+       42,
+       56,
+       45,
+       41,
+       49,
+       0,
+       53,
+       23,
+       4,
+       23,
+       19,
+       13,
+       34,
+       9,
+       38,
+       39,
+       15,
+       8,
+       6,
+       63,
+       20,
+       31,
+       6,
+       55,
+       53,
+       46,
+       4,
+       24,
+       16
+      ]
+     }
+    },
+    "layouts": [
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "gen": "table/v2",
+       "table": "677d840f59f2829bb88c35d31601abd6a35cae7c60323dc95baf980022ef146ac7024c8dade28329cadd38035c2623e4c3aeba38a31d494f959b2e6a95461eaf",
+       "in_bits": 5,
+       "value_bits": 8,
+       "lo_bits": 4
+      },
+      "calls": [],
+      "reads": [],
+      "range_log": 9,
+      "sha512": "75ed5f6b04b8a8680b5e1ed0aee52aca7eb8c16336ace144f26f283e706a1e83fbe3317330aed94ec3f09b3cbc26562c58ac9ea0e55a0b0760327956f575c682"
+     },
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "gen": "table/v2",
+       "table": "dd8c520232f47162defa90d2afb5b48361f57d8a60053eb56bc6e81d973701e6198d85637bdd7affef3a9b24bdcb3de058f04af176c00987a5d5ea7e4d55d7a9",
+       "in_bits": 4,
+       "value_bits": 6,
+       "lo_bits": 3
+      },
+      "calls": [],
+      "reads": [],
+      "range_log": 9,
+      "sha512": "7549dee26bf7e65858b9d3cbdffe4cf277a20aed30419cb5cd0dbc5c058a0e095d2ad359fd3fa17108feafd282711826a21806f71366197538ba2c77a5608896"
+     },
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "derive": "v2"
+      },
+      "calls": [],
+      "reads": [
+       {
+        "item": 2,
+        "layout": 0,
+        "offset": 1
+       },
+       {
+        "item": 3,
+        "layout": 1,
+        "offset": 2
+       },
+       {
+        "item": 4,
+        "layout": 1,
+        "offset": 3
+       }
+      ],
+      "type": "f59a01571769426d41d33914da7692c9a1640e4f6b8da9825a4037b5c528df12939bae5f80f2c6d5da175d3c5a72647c8eb4f9e070fe1e684325a5e55a4ed102",
+      "range_log": 11,
+      "sha512": "ef1c082cf02cc1fad794abae91339abec44b1334cd28f0b84c88c821f655b71fce9e70b64311416ab69f0c00b332b6eea4158b131dc64002921f35cdf94e32d0"
+     },
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "derive": "v2"
+      },
+      "calls": [],
+      "reads": [
+       {
+        "item": 1,
+        "inline": {
+         "lo_bits": 4
+        }
+       }
+      ],
+      "type": "4c96354960c11d347a1b035d27bbdd235f84c66e4b24638e9d238425e80d3c44715dbf39a060e8accbf7e207c03db039147e0d84572c77b33ebcdc718d9f3e30",
+      "range_log": 9,
+      "sha512": "b85bbc8387e4ce9dd4f1149190ff3c66ddb5cd0f0ad795ecb3802bfa26ed873c29bd3fd28b3da4355ce7b574bc84b0aa97370b0f747c6505320f600cbf085fa4"
+     },
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "derive": "v2"
+      },
+      "calls": [
+       {
+        "item": 0,
+        "layout": 3,
+        "inline": true
+       },
+       {
+        "item": 1,
+        "layout": 2,
+        "offset": 1
+       }
+      ],
+      "reads": [],
+      "type": "bc08d296833c3290724e81be5c36c79dccac2edf8d1e6dd5b974be0adaf85bdc33bfcc8af41c6ec4cd7520ed35f2fdc7185da03cf0247e50a72ddfa0d142e2ed",
+      "range_log": 12,
+      "sha512": "7ded156e77b72cd5ce622ccf35852accd4262f9af9137d264d50c57c6bd47bbd4d6172fc0a0a623dda4d8bc3ec1f9163df030bdff21f358530f685da50f7fa9c"
+     },
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "derive": "v2"
+      },
+      "calls": [
+       {
+        "item": 0,
+        "layout": 4,
+        "offset": 0
+       }
+      ],
+      "reads": [],
+      "type": "9833ede2718c873ae76cf8f00961ad7200f63b501917bebbf0a519bbfef624d550470bfc40497b131abb1ec9c7e31c7afd0273dfb98f4404908a836000e96913",
+      "sha512": "1c4b81016a93eaf8d8a735a64465a9fe0563d43f85069b6617912891dcc98d07529a9996a077f0c4a1aaa1faa8a91f7ffa8a9469f88eacc27acbddfae8e18cbc"
+     }
+    ],
+    "unit_layout": 5
+   },
+   "physical": {
+    "layouts": {
+     "75ed5f6b04b8a8680b5e1ed0aee52aca7eb8c16336ace144f26f283e706a1e83fbe3317330aed94ec3f09b3cbc26562c58ac9ea0e55a0b0760327956f575c682": {
+      "rows": 385,
+      "sha512": "21a002094437605d2b30aecff84b7747d7c5e40261cb2987bd7b440035d2d971db08fa49a796dd9b80c877ea006f0df519970d18f523dfea137ed19529972c28"
+     },
+     "7549dee26bf7e65858b9d3cbdffe4cf277a20aed30419cb5cd0dbc5c058a0e095d2ad359fd3fa17108feafd282711826a21806f71366197538ba2c77a5608896": {
+      "rows": 385,
+      "sha512": "7bc305e22155f12ff9f2e1b6d36d9655d2450b40a1c6455f824161cd262ad0457f9ebd03135bfed28ebcc1934024bea2f37c924896c17be702560e9a9fc7d974"
+     },
+     "ef1c082cf02cc1fad794abae91339abec44b1334cd28f0b84c88c821f655b71fce9e70b64311416ab69f0c00b332b6eea4158b131dc64002921f35cdf94e32d0": {
+      "rows": 2048,
+      "sha512": "c99202dd4d4b0944032f3ef4ebee64a8f3d16064f467f1012e0015be1cfc2a9f840b82976f3aa8fb21ea5e521c1adea8a8da4d68413a5b673b263ca2397d81a9"
+     },
+     "b85bbc8387e4ce9dd4f1149190ff3c66ddb5cd0f0ad795ecb3802bfa26ed873c29bd3fd28b3da4355ce7b574bc84b0aa97370b0f747c6505320f600cbf085fa4": {
+      "rows": 385,
+      "sha512": "45602fd9c7d8cd83d0d3f219378ea5a2ec765a8aa61aeae1d242dc637664ca95be701bf33794cdde823a4056030aab5c3b9b17eef674d9a71888156af2564b55"
+     },
+     "7ded156e77b72cd5ce622ccf35852accd4262f9af9137d264d50c57c6bd47bbd4d6172fc0a0a623dda4d8bc3ec1f9163df030bdff21f358530f685da50f7fa9c": {
+      "rows": 4096,
+      "sha512": "17ef79c32b7d24bb04ef7440fb0e60fa8fc769cab08ab30ade4322d401eaced16bec04e2f3c33afb17a13a1f541c591c8505101670f6e0887d332fe5c80fefdc"
+     }
+    },
+    "unit": {
+     "rows": 257,
+     "sha512": "f6046fe2da2eae90a3fe38bd4afbd82159266bf8268c86e5d6810bd9e215efd92093d887cca88dcbff0f24b54954c29340f91063181cf3e5730822c2f97078aa"
+    },
+    "delta": "5b8b237af04ae756ae57b944dda7b51cc344d6bbf33adeaabc7b91a720b9a37b436bdab9b3614d7c78ec54e3a24755bede8fa872ce508651c2d34b99bfeec60d"
+   },
+   "logical": {
+    "rows": 200,
+    "sha512": "ea3da555165f93bebeb4563175e80bac6bd83458419c1d7178f85a46896809585ccb0efaed7e777c58363bc375b84ef5ad4af08d9c0f5bf06ab8d241c8e10602"
+   }
+  },
+  {
+   "name": "random 2026.3",
+   "archive": {
+    "types": [
+     {
+      "format": "verity/circuit-type/v1",
+      "label": "program",
+      "in": [
+       [
+        1,
+        1
+       ]
+      ],
+      "out": [
+       [
+        2,
+        1
+       ]
+      ],
+      "calls": [],
+      "tables": [],
+      "items": [
+       [
+        0,
+        [
+         [
+          0
+         ],
+         1
+        ],
+        [
+         [
+          0
+         ],
+         1
+        ]
+       ],
+       [
+        0,
+        [
+         [
+          0,
+          1
+         ],
+         1
+        ],
+        [
+         [
+          0,
+          1
+         ],
+         1
+        ]
+       ]
+      ],
+      "outputs": [
+       [
+        [
+         1
+        ],
+        0
+       ],
+       [
+        [
+         2
+        ],
+        0
+       ]
+      ]
+     },
+     {
+      "format": "verity/circuit-type/v1",
+      "label": "program",
+      "in": [
+       [
+        5,
+        1
+       ]
+      ],
+      "out": [
+       [
+        2,
+        1
+       ]
+      ],
+      "calls": [
+       "ce62476bf6b443dc64fca87cc830addaf2834e84c139d6975d4a9189c6868e6f80066940b4159b74310fddbd4d2d837e2fe9ad10205ae98ae73e15fde93d36ce"
+      ],
+      "tables": [],
+      "items": [
+       [
+        3,
+        0,
+        [
+         [
+          [
+           0,
+           1,
+           3
+          ],
+          1
+         ]
+        ]
+       ],
+       [
+        0,
+        [
+         [
+          0,
+          3,
+          4
+         ],
+         0
+        ],
+        [
+         [
+          0,
+          1
+         ],
+         0
+        ]
+       ]
+      ],
+      "outputs": [
+       [
+        [
+         6
+        ],
+        0
+       ],
+       [
+        [
+         7
+        ],
+        0
+       ]
+      ]
+     },
+     {
+      "format": "verity/circuit-type/v1",
+      "label": "program",
+      "in": [
+       [
+        5,
+        1
+       ]
+      ],
+      "out": [
+       [
+        2,
+        1
+       ]
+      ],
+      "calls": [
+       "4a7d49b88bd99ce0566286f862129e30f39c1a57ac7bc4f0fb2e6ef5d0817a83c5bc643f3457d7d86c59b37f8f1f4e62c251bc10c3f45e4ba0a97f09ba6ddaea"
+      ],
+      "tables": [],
+      "items": [
+       [
+        3,
+        0,
+        [
+         [
+          [
+           0
+          ],
+          0
+         ],
+         [
+          [
+           1
+          ],
+          0
+         ],
+         [
+          [
+           2
+          ],
+          0
+         ],
+         [
+          [
+           3
+          ],
+          0
+         ],
+         [
+          [
+           4
+          ],
+          0
+         ]
+        ]
+       ]
+      ],
+      "outputs": [
+       [
+        [
+         5
+        ],
+        0
+       ],
+       [
+        [
+         6
+        ],
+        0
+       ]
+      ]
+     }
+    ],
+    "tables": {
+     "08b186a31887705b4108ec38a8f1cca2170553b64cf9a2516a63c31fd165ddf8150d3a31f66a9abe3d2ade97102fa3be0826ceffdc564e8372de6e82c526038f": {
+      "words": [
+       2,
+       1,
+       3,
+       3,
+       2,
+       2,
+       1,
+       0
+      ]
+     },
+     "7db67bdb21a89b4224e162a40297efc5ac5190acf7a433b52367b02e75105c89764aad3f253da4eac29945dbf1884271d498e887976a893e156771657df06ccb": {
+      "words": [
+       14,
+       14,
+       3,
+       11,
+       3,
+       1,
+       12,
+       1,
+       5,
+       11,
+       10,
+       9,
+       11,
+       2,
+       1,
+       2
+      ]
+     },
+     "f773460cbcaf53974a7d3cd7cd31aafbaff04c6521942a7dd8f58f6241239f288dfbbfed515dc48fc02167a55be7e8d0bbd4eb9d0bca0e29c8aa8c2f46789032": {
+      "words": [
+       13,
+       41,
+       27,
+       12,
+       57,
+       60,
+       61,
+       62,
+       27,
+       1,
+       35,
+       62,
+       9,
+       41,
+       57,
+       58,
+       40,
+       50,
+       17,
+       18,
+       47,
+       23,
+       25,
+       0,
+       30,
+       33,
+       29,
+       56,
+       17,
+       53,
+       22,
+       31
+      ]
+     }
+    },
+    "layouts": [
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "derive": "v2"
+      },
+      "calls": [],
+      "reads": [],
+      "type": "ce62476bf6b443dc64fca87cc830addaf2834e84c139d6975d4a9189c6868e6f80066940b4159b74310fddbd4d2d837e2fe9ad10205ae98ae73e15fde93d36ce",
+      "range_log": 9,
+      "sha512": "6c96659c67b8a6e4d1d1cf1451ba32787f96d13aed4758301e03d848fed42248d66af944876ce09d485309bf6af87b61d69e962e50d5ff547c3bcc9ae1ae1fc3"
+     },
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "derive": "v2"
+      },
+      "calls": [
+       {
+        "item": 0,
+        "layout": 0,
+        "inline": true
+       }
+      ],
+      "reads": [],
+      "type": "4a7d49b88bd99ce0566286f862129e30f39c1a57ac7bc4f0fb2e6ef5d0817a83c5bc643f3457d7d86c59b37f8f1f4e62c251bc10c3f45e4ba0a97f09ba6ddaea",
+      "range_log": 9,
+      "sha512": "33f43e9ad9f7dd089a6dacc3655b449ff470b5120d1e9525d28d8c1adf03e7464f3ea962ac291f7e342ee813701f99e2e2e8de15b3260906fdf4f8a822fe7b7c"
+     },
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "derive": "v2"
+      },
+      "calls": [
+       {
+        "item": 0,
+        "layout": 1,
+        "offset": 0
+       }
+      ],
+      "reads": [],
+      "type": "1e31222aeeb0dcb2b3b1b26fcfb72fc4ff3f7c8dc16969f40108b43b5414e93315e967c2bb9eef59e909e20b4240e71e25c09ff5b8e92c6c72f71396be63954c",
+      "sha512": "d53e600bf24f6fa585c25f5bdfdc49878aa47e166f098874e10b899fe6d17d927d2cd2e102f1a1232337ea5ab787cf2cbe5b9bdcbe03548018513e76acd80f90"
+     }
+    ],
+    "unit_layout": 2
+   },
+   "physical": {
+    "layouts": {
+     "6c96659c67b8a6e4d1d1cf1451ba32787f96d13aed4758301e03d848fed42248d66af944876ce09d485309bf6af87b61d69e962e50d5ff547c3bcc9ae1ae1fc3": {
+      "rows": 385,
+      "sha512": "6626f3d01aa2ea45940dad5737df7f78cac51a74bcfbf6074756e046a71ad84e8c4fe89d519ab258e59c3dfb8eb464bfebb88db206c90f6f3f117708bbeb88e5"
+     },
+     "33f43e9ad9f7dd089a6dacc3655b449ff470b5120d1e9525d28d8c1adf03e7464f3ea962ac291f7e342ee813701f99e2e2e8de15b3260906fdf4f8a822fe7b7c": {
+      "rows": 385,
+      "sha512": "e86c0fc3c8a68e16d7c9b71496f5808c88994f91f95181107dbd55e9b22c0459462935ed109778e9732a96a5fcbcb36b7654d0dc1a8e86a3ffa6e7019d2f0d8a"
+     }
+    },
+    "unit": {
+     "rows": 257,
+     "sha512": "d738d40d2f0a2aa79983424f738695cc26b60c92424b90fa8aa35ed2559b3965d5708bd8656952c492e5655e6d85dc022860d6107c3ad9fd3d76067d03e6d94a"
+    },
+    "delta": "917affaf815a0eaf34dcd42a53a90be01eb29ac96e3c926dfffb6123dad7fa9460ee2e54cdc4d9eb50d65257ed57d4cc63e5d2b88c48f6c5963fe01c6853156d"
+   },
+   "logical": {
+    "rows": 15,
+    "sha512": "ed6bf49cbde3b99427e62b3f4e27dcd92d4f3895f6f664b5f8b3155fc5b041220f9aa45776e7a78d9b4c8e1727522da213ccb9015a48a2a650d663df3dbc2bc4"
+   }
+  },
+  {
+   "name": "random 2026.4",
+   "archive": {
+    "types": [
+     {
+      "format": "verity/circuit-type/v1",
+      "label": "program",
+      "in": [
+       [
+        4,
+        1
+       ]
+      ],
+      "out": [
+       [
+        2,
+        1
+       ]
+      ],
+      "calls": [],
+      "tables": [],
+      "items": [
+       [
+        0,
+        [
+         [
+          1,
+          2,
+          3
+         ],
+         0
+        ],
+        [
+         [
+          1,
+          2
+         ],
+         0
+        ]
+       ],
+       [
+        0,
+        [
+         [
+          4
+         ],
+         0
+        ],
+        [
+         [
+          1,
+          3,
+          4
+         ],
+         0
+        ]
+       ]
+      ],
+      "outputs": [
+       [
+        [
+         4
+        ],
+        0
+       ],
+       [
+        [
+         5
+        ],
+        1
+       ]
+      ]
+     },
+     {
+      "format": "verity/circuit-type/v1",
+      "label": "program",
+      "in": [
+       [
+        6,
+        1
+       ]
+      ],
+      "out": [
+       [
+        3,
+        1
+       ]
+      ],
+      "calls": [
+       "b4b50cf43f555976af33a802a181ee738616c378bc31b73ae9d62e45786d24de77cc7236c7e0d55ed5cb79f380dffab37b30b4198f827670dca176a5e49b6cc1"
+      ],
+      "tables": [],
+      "items": [
+       [
+        3,
+        0,
+        [
+         [
+          [
+           0,
+           3,
+           4
+          ],
+          0
+         ],
+         [
+          [
+           0
+          ],
+          1
+         ],
+         [
+          [
+           3
+          ],
+          1
+         ],
+         [
+          [
+           3
+          ],
+          1
+         ]
+        ]
+       ],
+       [
+        3,
+        0,
+        [
+         [
+          [
+           0,
+           3
+          ],
+          0
+         ],
+         [
+          [
+           3
+          ],
+          1
+         ],
+         [
+          [
+           1,
+           6
+          ],
+          1
+         ],
+         [
+          [
+           6,
+           7
+          ],
+          1
+         ]
+        ]
+       ],
+       [
+        0,
+        [
+         [
+          4,
+          7,
+          9
+         ],
+         1
+        ],
+        [
+         [
+          4,
+          5
+         ],
+         0
+        ]
+       ]
+      ],
+      "outputs": [
+       [
+        [
+         7
+        ],
+        0
+       ],
+       [
+        [
+         9
+        ],
+        0
+       ],
+       [
+        [
+         10
+        ],
+        0
+       ]
+      ]
+     },
+     {
+      "format": "verity/circuit-type/v1",
+      "label": "program",
+      "in": [
+       [
+        6,
+        1
+       ]
+      ],
+      "out": [
+       [
+        3,
+        1
+       ]
+      ],
+      "calls": [
+       "4f831e6322571bd4ad0776b153f3abca2f5c875e4866d3b7604d51e0ffc403ee3d4a1d36a07a3f71abfb0dff2dd8129b4d0369e6a68aa8e2277648252bcd8623"
+      ],
+      "tables": [],
+      "items": [
+       [
+        3,
+        0,
+        [
+         [
+          [
+           0
+          ],
+          0
+         ],
+         [
+          [
+           1
+          ],
+          0
+         ],
+         [
+          [
+           2
+          ],
+          0
+         ],
+         [
+          [
+           3
+          ],
+          0
+         ],
+         [
+          [
+           4
+          ],
+          0
+         ],
+         [
+          [
+           5
+          ],
+          0
+         ]
+        ]
+       ]
+      ],
+      "outputs": [
+       [
+        [
+         6
+        ],
+        0
+       ],
+       [
+        [
+         7
+        ],
+        0
+       ],
+       [
+        [
+         8
+        ],
+        0
+       ]
+      ]
+     }
+    ],
+    "tables": {
+     "0630e1d167cf0e01f541a61dbe06d63414703a72ad28c3747891b89ad6b9b1221a4abbf67ec49bf2fb8fc51781864720c4a7f1a2857c7e8bacfcc9fb2e6349d8": {
+      "words": [
+       0,
+       3,
+       0,
+       2,
+       3,
+       0,
+       3,
+       2
+      ]
+     },
+     "f1f7cdf8bc5e03ac2f963640ca1102f0a6f5287e4506fa96346a794407b1d9a34ad64ae05dfc2707b0a53bd4b79c5a75f5518300a99ef0754f9109b86820691b": {
+      "words": [
+       8,
+       1,
+       11,
+       15,
+       13,
+       14,
+       5,
+       11,
+       2,
+       4,
+       15,
+       7,
+       3,
+       5,
+       11,
+       14
+      ]
+     },
+     "b98107fefb893e930e966c01501eb20b893481472264ce43d2f3db6e53976befebc4921e72de38e41324f33072603cfcbd86d4a00d347fa1c758f716ddd37626": {
+      "words": [
+       29,
+       44,
+       15,
+       25,
+       15,
+       32,
+       55,
+       54,
+       20,
+       26,
+       2,
+       31,
+       15,
+       38,
+       11,
+       28,
+       12,
+       49,
+       7,
+       37,
+       30,
+       37,
+       24,
+       30,
+       33,
+       1,
+       31,
+       60,
+       13,
+       24,
+       46,
+       2
+      ]
+     }
+    },
+    "layouts": [
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "derive": "v2"
+      },
+      "calls": [],
+      "reads": [],
+      "type": "b4b50cf43f555976af33a802a181ee738616c378bc31b73ae9d62e45786d24de77cc7236c7e0d55ed5cb79f380dffab37b30b4198f827670dca176a5e49b6cc1",
+      "range_log": 9,
+      "sha512": "42e77a883ec8bfbf91017110915dbc97ed0755db4bfed21a3bf6241bb2a252f8ceecd03f050992863414d13cf2f373013a292fd09d383d46768e05129a765f51"
+     },
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "derive": "v2"
+      },
+      "calls": [
+       {
+        "item": 0,
+        "layout": 0,
+        "offset": 1
+       },
+       {
+        "item": 1,
+        "layout": 0,
+        "inline": true
+       }
+      ],
+      "reads": [],
+      "type": "4f831e6322571bd4ad0776b153f3abca2f5c875e4866d3b7604d51e0ffc403ee3d4a1d36a07a3f71abfb0dff2dd8129b4d0369e6a68aa8e2277648252bcd8623",
+      "range_log": 10,
+      "sha512": "769ea734d004252b3df3c964698cf67bdae3361efdd71076a84090f244e4a8a9a4f174912aa2f66fd43f2b6c0e4672baa7108673b97c6c658fd8534413b2be4b"
+     },
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "derive": "v2"
+      },
+      "calls": [
+       {
+        "item": 0,
+        "layout": 1,
+        "offset": 0
+       }
+      ],
+      "reads": [],
+      "type": "6d36c14fce7178483e34896916ec1d9bc0dc1a8a8cfac377910a2a6b7cf901260d1055a773d851172ee905c810f2518187b8978840865c4613812360ecd0a747",
+      "sha512": "b91c9981888c2d0e35b4fd057a30fd0505ec48b4dc31d403355bcc267593cba6194e28398eaf156848ed3f382473e8fe9986897ccce24b11ae93edad7effd1c3"
+     }
+    ],
+    "unit_layout": 2
+   },
+   "physical": {
+    "layouts": {
+     "42e77a883ec8bfbf91017110915dbc97ed0755db4bfed21a3bf6241bb2a252f8ceecd03f050992863414d13cf2f373013a292fd09d383d46768e05129a765f51": {
+      "rows": 385,
+      "sha512": "7d2991430c6746f3ad1760ef68e76bf5176a3494570446bedde444bbec0f54826f5e209ba4045f16414928189539f3563c3da69dc095b302f8acfa677c8b5381"
+     },
+     "769ea734d004252b3df3c964698cf67bdae3361efdd71076a84090f244e4a8a9a4f174912aa2f66fd43f2b6c0e4672baa7108673b97c6c658fd8534413b2be4b": {
+      "rows": 1024,
+      "sha512": "ff1e1739cfd6f3f76de2a7fc95229f3ecc3bb8db568a7e52ee3d9cb26486b47c9c939b4cad7ff5eb216fac03b8d5b20ed8bb1fe47915c821c848f32874b6257e"
+     }
+    },
+    "unit": {
+     "rows": 257,
+     "sha512": "0cd772d4607802c72b52ea504a206838daf683018f2b240f54dcb3b00aced241cf70207806e85a9a45c6ce3a1d50134be5bf5f6ff1a8e0daa6e23801ed122dc5"
+    },
+    "delta": "c43f1f40e2f6f03316239c716eb464bbb0d6cf57c24a9a9d16262501acfa9e411fe34402dfe32070f3e8f07aff2d59d643d535ae59b74be0129e7f0cdcc2d012"
+   },
+   "logical": {
+    "rows": 27,
+    "sha512": "efa045f7907d0e5e0ecd44a0535931338e8d82841acc164daf668b510a518e956ea2394e96ea0e17047fb6945bde7f6e3348f6973d251ac75063eed2e582e791"
+   }
+  },
+  {
+   "name": "random 2026.5",
+   "archive": {
+    "types": [
+     {
+      "format": "verity/circuit-type/v1",
+      "label": "program",
+      "in": [
+       [
+        6,
+        1
+       ]
+      ],
+      "out": [
+       [
+        4,
+        1
+       ]
+      ],
+      "calls": [],
+      "tables": [
+       [
+        "5f42cbe4008a3249dc1b4375aef13fc515b0922630379be0cd3af09baad06075958c377edabb5cafa677899c23af4f1d50d998d3a4f2b976dcea3d3d60cd91e8",
+        4,
+        6
+       ]
+      ],
+      "items": [
+       [
+        0,
+        [
+         [
+          0,
+          2,
+          5
+         ],
+         1
+        ],
+        [
+         [
+          1,
+          4
+         ],
+         1
+        ]
+       ],
+       [
+        0,
+        [
+         [
+          2,
+          4,
+          5
+         ],
+         1
+        ],
+        [
+         [
+          0,
+          1,
+          3
+         ],
+         1
+        ]
+       ],
+       [
+        0,
+        [
+         [
+          3,
+          4
+         ],
+         1
+        ],
+        [
+         [
+          0,
+          7
+         ],
+         0
+        ]
+       ],
+       [
+        4,
+        0,
+        [
+         [
+          [
+           6,
+           7,
+           8
+          ],
+          0
+         ],
+         [
+          [
+           3,
+           8
+          ],
+          1
+         ],
+         [
+          [
+           8
+          ],
+          0
+         ],
+         [
+          [
+           1
+          ],
+          0
+         ]
+        ]
+       ]
+      ],
+      "outputs": [
+       [
+        [
+         6
+        ],
+        1
+       ],
+       [
+        [
+         7
+        ],
+        0
+       ],
+       [
+        [
+         8
+        ],
+        1
+       ],
+       [
+        [
+         14
+        ],
+        1
+       ]
+      ]
+     },
+     {
+      "format": "verity/circuit-type/v1",
+      "label": "program",
+      "in": [
+       [
+        6,
+        1
+       ]
+      ],
+      "out": [
+       [
+        5,
+        1
+       ]
+      ],
+      "calls": [],
+      "tables": [],
+      "items": [
+       [
+        0,
+        [
+         [
+          0,
+          1,
+          3
+         ],
+         1
+        ],
+        [
+         [
+          0,
+          5
+         ],
+         0
+        ]
+       ],
+       [
+        0,
+        [
+         [
+          1,
+          3,
+          5
+         ],
+         0
+        ],
+        [
+         [
+          0,
+          1,
+          4
+         ],
+         1
+        ]
+       ],
+       [
+        0,
+        [
+         [
+          1
+         ],
+         0
+        ],
+        [
+         [
+          1,
+          3
+         ],
+         1
+        ]
+       ],
+       [
+        0,
+        [
+         [
+          8
+         ],
+         1
+        ],
+        [
+         [
+          1
+         ],
+         0
+        ]
+       ],
+       [
+        0,
+        [
+         [
+          1,
+          7
+         ],
+         1
+        ],
+        [
+         [
+          7
+         ],
+         1
+        ]
+       ]
+      ],
+      "outputs": [
+       [
+        [
+         6
+        ],
+        1
+       ],
+       [
+        [
+         7
+        ],
+        0
+       ],
+       [
+        [
+         8
+        ],
+        0
+       ],
+       [
+        [
+         9
+        ],
+        1
+       ],
+       [
+        [
+         10
+        ],
+        0
+       ]
+      ]
+     },
+     {
+      "format": "verity/circuit-type/v1",
+      "label": "program",
+      "in": [
+       [
+        4,
+        1
+       ]
+      ],
+      "out": [
+       [
+        4,
+        1
+       ]
+      ],
+      "calls": [
+       "75a4ab815266388d0e9fb274d27b2473bacdf97b68f392407479a866090a5146f293297559e29e8cac1481cfaf03a1f947f305733b4a637fb4108caae34051a9",
+       "f6df936d311d089a8eacacbfcf82e5feba4b50a7a346c784d7ac25ddab29b90eb6cf32c9b33e6daefd62c663d368a782e8a71a302eac0c2f605e87436fa02ac5"
+      ],
+      "tables": [],
+      "items": [
+       [
+        3,
+        0,
+        [
+         [
+          [
+           1,
+           3
+          ],
+          0
+         ],
+         [
+          [
+           0,
+           1
+          ],
+          0
+         ],
+         [
+          [
+           1,
+           2,
+           3
+          ],
+          0
+         ],
+         [
+          [
+           0,
+           1,
+           3
+          ],
+          1
+         ],
+         [
+          [
+           0,
+           1,
+           2
+          ],
+          1
+         ],
+         [
+          [
+           0,
+           2
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        3,
+        1,
+        [
+         [
+          [
+           0,
+           4
+          ],
+          1
+         ],
+         [
+          [
+           2,
+           3,
+           7
+          ],
+          1
+         ],
+         [
+          [
+           7
+          ],
+          0
+         ],
+         [
+          [
+           2,
+           4
+          ],
+          1
+         ],
+         [
+          [
+           3
+          ],
+          0
+         ],
+         [
+          [
+           5
+          ],
+          1
+         ]
+        ]
+       ],
+       [
+        3,
+        0,
+        [
+         [
+          [
+           5,
+           6,
+           10
+          ],
+          1
+         ],
+         [
+          [
+           6,
+           7,
+           9
+          ],
+          0
+         ],
+         [
+          [
+           6,
+           10
+          ],
+          1
+         ],
+         [
+          [
+           5,
+           6,
+           9
+          ],
+          1
+         ],
+         [
+          [
+           12
+          ],
+          1
+         ],
+         [
+          [
+           5,
+           11
+          ],
+          1
+         ]
+        ]
+       ],
+       [
+        0,
+        [
+         [
+          0,
+          11
+         ],
+         1
+        ],
+        [
+         [
+          0,
+          1
+         ],
+         1
+        ]
+       ]
+      ],
+      "outputs": [
+       [
+        [
+         7
+        ],
+        0
+       ],
+       [
+        [
+         12
+        ],
+        0
+       ],
+       [
+        [
+         16
+        ],
+        0
+       ],
+       [
+        [
+         17
+        ],
+        0
+       ]
+      ]
+     }
+    ],
+    "tables": {
+     "94f0220a3ae8aaa047393eedf4a06759eb7b20c4a8f7425f96d8f98f1c1e5a1ef785ccb6db735d7a8bc918a21480e18aaeb908f5f3dd607efc29d7a813986f68": {
+      "words": [
+       3,
+       2,
+       1,
+       2,
+       3,
+       3,
+       3,
+       1
+      ]
+     },
+     "5f42cbe4008a3249dc1b4375aef13fc515b0922630379be0cd3af09baad06075958c377edabb5cafa677899c23af4f1d50d998d3a4f2b976dcea3d3d60cd91e8": {
+      "words": [
+       3,
+       13,
+       11,
+       10,
+       5,
+       2,
+       12,
+       1,
+       3,
+       6,
+       2,
+       9,
+       5,
+       10,
+       8,
+       6
+      ]
+     },
+     "aba98b45b0e2e79961d7989cf897b6501b4bb44dbb92fe8dd9c44d2d9103941f5543d139b4ad8ca5d6834e820566b45c127bf1ecd6a4c9afbc4df85d6297d64d": {
+      "words": [
+       13,
+       39,
+       35,
+       19,
+       58,
+       34,
+       34,
+       62,
+       24,
+       44,
+       16,
+       22,
+       55,
+       59,
+       28,
+       15,
+       11,
+       32,
+       19,
+       2,
+       47,
+       39,
+       52,
+       12,
+       19,
+       10,
+       54,
+       27,
+       42,
+       37,
+       8,
+       28
+      ]
+     }
+    },
+    "layouts": [
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "derive": "v2"
+      },
+      "calls": [],
+      "reads": [
+       {
+        "item": 3,
+        "inline": {
+         "lo_bits": 2
+        }
+       }
+      ],
+      "type": "75a4ab815266388d0e9fb274d27b2473bacdf97b68f392407479a866090a5146f293297559e29e8cac1481cfaf03a1f947f305733b4a637fb4108caae34051a9",
+      "range_log": 9,
+      "sha512": "ab77723672aa6a63135bb33890415d6dda4d7da4adaae8e81af4c44cecb92a94cfb3b199dbf166b228a4fb0d3afc3f68b2359b86ce24f5e9383497420e38e79e"
+     },
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "derive": "v2"
+      },
+      "calls": [],
+      "reads": [],
+      "type": "f6df936d311d089a8eacacbfcf82e5feba4b50a7a346c784d7ac25ddab29b90eb6cf32c9b33e6daefd62c663d368a782e8a71a302eac0c2f605e87436fa02ac5",
+      "range_log": 9,
+      "sha512": "d62d19c0c5160e8d4bf4b6191a744291711699cd93322dbc6d727e16d4e0c5c0a8870cde81da9153b713c5dbc2ffcd29e7f884591f10a043eda28b8669cc3561"
+     },
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "derive": "v2"
+      },
+      "calls": [
+       {
+        "item": 0,
+        "layout": 0,
+        "inline": true
+       },
+       {
+        "item": 1,
+        "layout": 1,
+        "inline": true
+       },
+       {
+        "item": 2,
+        "layout": 0,
+        "inline": true
+       }
+      ],
+      "reads": [],
+      "type": "769ef1cf66675cbb3e52c29b6bfea75004a867ab5c7a901fd648e2ac5683539bccd309309d414e16e288f94227be29e8268f1d87416fbb3c2177569502f8bd0a",
+      "sha512": "bcdebcf5128935164dbb7e21205ffd1b9fea96a5bf1a628deb211953814f9a462750341ab0ccc9f8fdbf44a47be58a43aa4a62d70af23bfd46e143004cefb868"
+     }
+    ],
+    "unit_layout": 2
+   },
+   "physical": {
+    "layouts": {
+     "ab77723672aa6a63135bb33890415d6dda4d7da4adaae8e81af4c44cecb92a94cfb3b199dbf166b228a4fb0d3afc3f68b2359b86ce24f5e9383497420e38e79e": {
+      "rows": 385,
+      "sha512": "8bf2fc99ea2dafd40c5420261494c7a4f788cfb819f5a7bcc5f6ccd8246be351b3c8ad103a3ff5093a1c924abce2499f9b656eaf90df7203a3daf4839eb179f7"
+     },
+     "d62d19c0c5160e8d4bf4b6191a744291711699cd93322dbc6d727e16d4e0c5c0a8870cde81da9153b713c5dbc2ffcd29e7f884591f10a043eda28b8669cc3561": {
+      "rows": 385,
+      "sha512": "043c7d38d03e4106bed7e48433aa35cac190fdb9ed5aa45444ee8e2e95bd51073adf3df9e962c1cde08a9069a12345569ddaac8c0939695c798f0070429b13ec"
+     }
+    },
+    "unit": {
+     "rows": 385,
+     "sha512": "0a8776e546b5bc00330fdfe557ffcc5a499a982c9db80ffc5697cabb54bef6f6c239331d8cf8f93dd97460917310a8848de7bd17611d6445a32eb71ab9f6ced9"
+    },
+    "delta": "770162acbf228e9c5c763fc325ee13dbb8af885efc3caa279fcbaf1580bf49170f9f7fc5c6724128d94c3126997c40862d01fbce74b3bcf9db7729b029ee9148"
+   },
+   "logical": {
+    "rows": 98,
+    "sha512": "5534a38e5dbf20c16a58524e833d912860a343d8d57a5d7583c27f004f43cb317cc11000cf41d6e18043b9c1f8fb6d9d924630791466afe1641bf97a69057df9"
+   }
+  },
+  {
+   "name": "random 2026.6",
+   "archive": {
+    "types": [
+     {
+      "format": "verity/circuit-type/v1",
+      "label": "program",
+      "in": [
+       [
+        3,
+        1
+       ]
+      ],
+      "out": [
+       [
+        4,
+        1
+       ]
+      ],
+      "calls": [],
+      "tables": [
+       [
+        "58656b896721df38f3de8181c05fa7a90e1c8d3719f2a217bff06be34617ce372e6a3262eea19e9cf03d633224c159a8d5cf0735324c70815f88f48d07016950",
+        5,
+        8
+       ]
+      ],
+      "items": [
+       [
+        0,
+        [
+         [
+          0,
+          1,
+          2
+         ],
+         0
+        ],
+        [
+         [
+          0,
+          1
+         ],
+         1
+        ]
+       ],
+       [
+        0,
+        [
+         [
+          1,
+          2,
+          3
+         ],
+         0
+        ],
+        [
+         [
+          3
+         ],
+         1
+        ]
+       ],
+       [
+        0,
+        [
+         [
+          0,
+          1
+         ],
+         1
+        ],
+        [
+         [
+          1
+         ],
+         1
+        ]
+       ],
+       [
+        4,
+        0,
+        [
+         [
+          [
+           4,
+           5
+          ],
+          0
+         ],
+         [
+          [
+           2
+          ],
+          0
+         ],
+         [
+          [
+           0,
+           2,
+           4
+          ],
+          0
+         ],
+         [
+          [
+           0,
+           3
+          ],
+          1
+         ],
+         [
+          [
+           0,
+           5
+          ],
+          1
+         ]
+        ]
+       ]
+      ],
+      "outputs": [
+       [
+        [
+         3
+        ],
+        0
+       ],
+       [
+        [
+         4
+        ],
+        1
+       ],
+       [
+        [
+         5
+        ],
+        0
+       ],
+       [
+        [
+         13
+        ],
+        0
+       ]
+      ]
+     },
+     {
+      "format": "verity/circuit-type/v1",
+      "label": "program",
+      "in": [
+       [
+        3,
+        1
+       ]
+      ],
+      "out": [
+       [
+        3,
+        1
+       ]
+      ],
+      "calls": [
+       "72be18e80b7a0b9eb62588e23fcfae9d4ac785cb732bfec80b7dc832bf8b590849f23f7e1789745de0515c674fd16115501d0fd94057cc5031bf785d01325bcb"
+      ],
+      "tables": [],
+      "items": [
+       [
+        3,
+        0,
+        [
+         [
+          [
+           0,
+           2
+          ],
+          0
+         ],
+         [
+          [
+           0,
+           1,
+           2
+          ],
+          0
+         ],
+         [
+          [
+           0
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        3,
+        0,
+        [
+         [
+          [
+           0,
+           2,
+           3
+          ],
+          1
+         ],
+         [
+          [
+           1,
+           6
+          ],
+          0
+         ],
+         [
+          [
+           0,
+           3
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        0,
+        [
+         [
+          0,
+          4,
+          8
+         ],
+         1
+        ],
+        [
+         [
+          4
+         ],
+         1
+        ]
+       ]
+      ],
+      "outputs": [
+       [
+        [
+         6
+        ],
+        0
+       ],
+       [
+        [
+         10
+        ],
+        0
+       ],
+       [
+        [
+         11
+        ],
+        0
+       ]
+      ]
+     }
+    ],
+    "tables": {
+     "81747a80eca30b1310d14189f46507cd29bca5977516462ebcbedf2475926317190ebff2b833f702624c9dfd404065127e27322ac18e11e05063e9cb26f0b711": {
+      "words": [
+       3,
+       3,
+       2,
+       1,
+       0,
+       0,
+       0,
+       0
+      ]
+     },
+     "21db0a30280bd12ea36e919190e093b008e9aa198ce371116015bea17b332e10574160c60e685a816b0c89e38006bd4558037bae8c373c1d013f89cafbc68c72": {
+      "words": [
+       1,
+       3,
+       2,
+       0,
+       11,
+       5,
+       14,
+       13,
+       15,
+       9,
+       8,
+       7,
+       1,
+       10,
+       9,
+       8
+      ]
+     },
+     "58656b896721df38f3de8181c05fa7a90e1c8d3719f2a217bff06be34617ce372e6a3262eea19e9cf03d633224c159a8d5cf0735324c70815f88f48d07016950": {
+      "words": [
+       33,
+       40,
+       39,
+       3,
+       18,
+       8,
+       6,
+       55,
+       26,
+       14,
+       7,
+       44,
+       63,
+       4,
+       58,
+       6,
+       50,
+       50,
+       4,
+       63,
+       37,
+       55,
+       47,
+       46,
+       24,
+       2,
+       8,
+       28,
+       62,
+       53,
+       35,
+       47
+      ]
+     }
+    },
+    "layouts": [
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "gen": "table/v2",
+       "table": "58656b896721df38f3de8181c05fa7a90e1c8d3719f2a217bff06be34617ce372e6a3262eea19e9cf03d633224c159a8d5cf0735324c70815f88f48d07016950",
+       "in_bits": 5,
+       "value_bits": 8,
+       "lo_bits": 2
+      },
+      "calls": [],
+      "reads": [],
+      "range_log": 9,
+      "sha512": "15ee580b22b3cd4ac388a494e8f7a6116d5e7669702a25fe7da8a72b38f4655352aa13f2e4863bb1890f87caf4da26c5d9e1f6d60908f82d7831b2d2a8579403"
+     },
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "derive": "v2"
+      },
+      "calls": [],
+      "reads": [
+       {
+        "item": 3,
+        "layout": 0,
+        "offset": 1
+       }
+      ],
+      "type": "72be18e80b7a0b9eb62588e23fcfae9d4ac785cb732bfec80b7dc832bf8b590849f23f7e1789745de0515c674fd16115501d0fd94057cc5031bf785d01325bcb",
+      "range_log": 10,
+      "sha512": "4048ba7d0ad6084735adb87c7dad6b3b890a26bdf04eb4bb7968acfe68d1c7fe72491a45a256026653b74fa76d905eb9e0c946eab25d352f5c9e04709ec6b9de"
+     },
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "derive": "v2"
+      },
+      "calls": [
+       {
+        "item": 0,
+        "layout": 1,
+        "offset": 0
+       },
+       {
+        "item": 1,
+        "layout": 1,
+        "offset": 1
+       }
+      ],
+      "reads": [],
+      "type": "9d4ff13eac76042b6847827350120987c0a190c02fbe05e16b8b2e1cb8d58fa0b66f9669cbd7302111c1f233e307d341352adb2d3a7553b0c90f20677cff19f0",
+      "sha512": "926c420623913426e6351cf03e22e73bec6cb45ef505bbf173204923f655d3851dfb2d3fc7eb8a2b9a92b89f8b92ee0130bc690d318719a143f5887f55e89c0b"
+     }
+    ],
+    "unit_layout": 2
+   },
+   "physical": {
+    "layouts": {
+     "15ee580b22b3cd4ac388a494e8f7a6116d5e7669702a25fe7da8a72b38f4655352aa13f2e4863bb1890f87caf4da26c5d9e1f6d60908f82d7831b2d2a8579403": {
+      "rows": 385,
+      "sha512": "dcace2bd77c03322370ade320c358af8143d286e44f9d65a941f8d3beb38c53ebd3eb549fa6891596356e71ab21a8a1edce1f640d78713c36fb31e4810351f2a"
+     },
+     "4048ba7d0ad6084735adb87c7dad6b3b890a26bdf04eb4bb7968acfe68d1c7fe72491a45a256026653b74fa76d905eb9e0c946eab25d352f5c9e04709ec6b9de": {
+      "rows": 1024,
+      "sha512": "957244dc52776070a1bb2d5d4b0103143357fe1e4d331e08a4adf9879cd9ad1612d4291ece56cfa1f76904fc97ffe8e698d6b153b777c3474871dd4fbe7cc397"
+     }
+    },
+    "unit": {
+     "rows": 385,
+     "sha512": "9b302da0419cba7e25bfd17358e04e390e55a2e2f700d8deb561a5d4b41c939c56cdce2773e40b3294d5309a370c93791c930d5cc5d9dc5dd2a9ac1bbbc531dc"
+    },
+    "delta": "bb565878c16d4ea0ffe43ae9aa51c61e38887a5da6ca72616dee9a47785178c15e1ca4eea6f684394f4c58823240110904324f4eb54226af46c6dc1a883ebb8e"
+   },
+   "logical": {
+    "rows": 219,
+    "sha512": "c076080dfce675a9031d26734d57c8264dcae9cb4de24c8e7b28bd6962f3d7d20a0696a49b770c53d8d704f8011a4882fa135a99642b31c0385111b7a55a724a"
+   }
+  },
+  {
+   "name": "random 2026.7",
+   "archive": {
+    "types": [
+     {
+      "format": "verity/circuit-type/v1",
+      "label": "program",
+      "in": [
+       [
+        4,
+        1
+       ]
+      ],
+      "out": [
+       [
+        1,
+        1
+       ]
+      ],
+      "calls": [],
+      "tables": [],
+      "items": [
+       [
+        0,
+        [
+         [
+          0,
+          1,
+          2
+         ],
+         0
+        ],
+        [
+         [
+          3
+         ],
+         0
+        ]
+       ]
+      ],
+      "outputs": [
+       [
+        [
+         4
+        ],
+        0
+       ]
+      ]
+     },
+     {
+      "format": "verity/circuit-type/v1",
+      "label": "program",
+      "in": [
+       [
+        3,
+        1
+       ]
+      ],
+      "out": [
+       [
+        2,
+        1
+       ]
+      ],
+      "calls": [
+       "c7562c0ab6751c91491e33dbb0c85ffce8ffb0a7e4e9d70af514ceb18d73763bf24018250ad334eb92e997d2bdb8814740c8e28f850ec1463c07dcf726857859"
+      ],
+      "tables": [],
+      "items": [
+       [
+        3,
+        0,
+        [
+         [
+          [
+           0,
+           1,
+           2
+          ],
+          1
+         ],
+         [
+          [
+           0,
+           1
+          ],
+          0
+         ],
+         [
+          [
+           2
+          ],
+          1
+         ],
+         [
+          [
+           1
+          ],
+          1
+         ]
+        ]
+       ],
+       [
+        0,
+        [
+         [
+          1,
+          3
+         ],
+         1
+        ],
+        [
+         [
+          0
+         ],
+         1
+        ]
+       ]
+      ],
+      "outputs": [
+       [
+        [
+         3
+        ],
+        0
+       ],
+       [
+        [
+         4
+        ],
+        0
+       ]
+      ]
+     },
+     {
+      "format": "verity/circuit-type/v1",
+      "label": "program",
+      "in": [
+       [
+        3,
+        1
+       ]
+      ],
+      "out": [
+       [
+        2,
+        1
+       ]
+      ],
+      "calls": [
+       "3aaeee5474e72569ce35c7550683ded3fde15a30fadedf2a1259bc89ae7dda9db03706cccd2180fa60e800a248ec8c1bec29fa7d6e7001b5f28e0b802ae92512"
+      ],
+      "tables": [],
+      "items": [
+       [
+        3,
+        0,
+        [
+         [
+          [
+           0
+          ],
+          0
+         ],
+         [
+          [
+           1
+          ],
+          0
+         ],
+         [
+          [
+           2
+          ],
+          0
+         ]
+        ]
+       ]
+      ],
+      "outputs": [
+       [
+        [
+         3
+        ],
+        0
+       ],
+       [
+        [
+         4
+        ],
+        0
+       ]
+      ]
+     }
+    ],
+    "tables": {
+     "18aa6e015d883ddcde1d3277304cd82ad9af34faf8130dbd2814ae82803c045abd79abdf227c7c90a3b2e0c3c0b7c6380e27e5717db9986f8b7845b5d5f4cb89": {
+      "words": [
+       0,
+       1,
+       1,
+       1,
+       3,
+       3,
+       3,
+       3
+      ]
+     },
+     "823757fd70a95e2407e3b56f7717437c98ff6a26fe34202d3dfa1eab068f4fc2bef337cbf09b6ab364fef16bd9fdd726b3686f55fb54c5c28c7007ed774255ca": {
+      "words": [
+       11,
+       1,
+       3,
+       4,
+       1,
+       4,
+       15,
+       10,
+       13,
+       6,
+       1,
+       7,
+       5,
+       4,
+       4,
+       2
+      ]
+     },
+     "202c939558b3d6a6a6e6de407d0e43c844c691d2fed29419d072805a725b5b2d22f69a9d869be9447dc6e6ff8d70f746cb1b2e243b1cf2c939d15bfaee8461cf": {
+      "words": [
+       62,
+       60,
+       44,
+       58,
+       53,
+       3,
+       59,
+       4,
+       18,
+       48,
+       27,
+       5,
+       56,
+       12,
+       41,
+       12,
+       59,
+       34,
+       0,
+       1,
+       63,
+       20,
+       12,
+       1,
+       40,
+       53,
+       20,
+       6,
+       16,
+       31,
+       62,
+       33
+      ]
+     }
+    },
+    "layouts": [
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "derive": "v2"
+      },
+      "calls": [],
+      "reads": [],
+      "type": "c7562c0ab6751c91491e33dbb0c85ffce8ffb0a7e4e9d70af514ceb18d73763bf24018250ad334eb92e997d2bdb8814740c8e28f850ec1463c07dcf726857859",
+      "range_log": 9,
+      "sha512": "51767aa94370412feb7eff6f4b2254f87dc29fa84b6a4061a79cbc23854c268cac51e591a7625b598b9830191bce2b95a2d6c883ad58a0116c5587c6e6b040bb"
+     },
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "derive": "v2"
+      },
+      "calls": [
+       {
+        "item": 0,
+        "layout": 0,
+        "inline": true
+       }
+      ],
+      "reads": [],
+      "type": "3aaeee5474e72569ce35c7550683ded3fde15a30fadedf2a1259bc89ae7dda9db03706cccd2180fa60e800a248ec8c1bec29fa7d6e7001b5f28e0b802ae92512",
+      "range_log": 9,
+      "sha512": "724d369c6818134360e77384f23bf342608b436d1819109224e7d1d8f9a125d053e62866c9ead92dffffd0a18bbd9118ba7b549d3f68210a0edaf29755ad268a"
+     },
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "derive": "v2"
+      },
+      "calls": [
+       {
+        "item": 0,
+        "layout": 1,
+        "inline": true
+       }
+      ],
+      "reads": [],
+      "type": "a33e4af8c3f9881fa2bbeb0d0036b0865cd07e0edcc54d70e4b4e3c364a237b4363eb1a43f3214b6694870ce25f342b6ea1d88fdd3f31f04bf3cce012c70dd74",
+      "sha512": "2b5f5a7e06f286c6f759b30bf559e20b7ecda2f9ae35882b9de4d1578782a5f3570dba7f9f6f2ee1b71813c9ec1717d530cd86431c503ba88c7f7327052fd23c"
+     }
+    ],
+    "unit_layout": 2
+   },
+   "physical": {
+    "layouts": {
+     "51767aa94370412feb7eff6f4b2254f87dc29fa84b6a4061a79cbc23854c268cac51e591a7625b598b9830191bce2b95a2d6c883ad58a0116c5587c6e6b040bb": {
+      "rows": 385,
+      "sha512": "ad9213f72b36813ac7d9ff86cf01be2842b1e5bafdcab2106dd24525bc5a2d18cea65f2caed47f2f9171b4d9cd6c58efd9bcb5eded0972f0449e99e3205caefd"
+     },
+     "724d369c6818134360e77384f23bf342608b436d1819109224e7d1d8f9a125d053e62866c9ead92dffffd0a18bbd9118ba7b549d3f68210a0edaf29755ad268a": {
+      "rows": 385,
+      "sha512": "429c64f92e2d48a1fd0a947e1d096836a0fd98d8ba4268dd11dbbeabf0f66ceea8896688e7c4329e6ad96e2668953c317643b295852d7b897c6f7d3bfd5038de"
+     }
+    },
+    "unit": {
+     "rows": 385,
+     "sha512": "62423496549f7cb171eacc382f34dfd7c9e8f7ce7727fbe8f4a6b6148549155131c72557fb40bda1fdb281ee88aa9b1e74353e4133cbfbb1ff53e78d78594240"
+    },
+    "delta": "770162acbf228e9c5c763fc325ee13dbb8af885efc3caa279fcbaf1580bf49170f9f7fc5c6724128d94c3126997c40862d01fbce74b3bcf9db7729b029ee9148"
+   },
+   "logical": {
+    "rows": 9,
+    "sha512": "fb74b64114b1a7d3e7d9b636f684f023e025debea953c44ad09dd3b7cf6708c0b1356e944062448982bef3049d72f51b4f68f43bc40771a06d1861a1715ed879"
+   }
+  },
+  {
+   "name": "random 2026.8",
+   "archive": {
+    "types": [
+     {
+      "format": "verity/circuit-type/v1",
+      "label": "program",
+      "in": [
+       [
+        3,
+        1
+       ]
+      ],
+      "out": [
+       [
+        6,
+        1
+       ]
+      ],
+      "calls": [],
+      "tables": [
+       [
+        "9de0d161a7297afae7cd7d31bc01e39f4a653f45c9dbd24218abdcca4559fa756f850b90490ec958e6d0617fcdd4ad572c96bbec21246c2a9c6f6ca7b7031556",
+        3,
+        4
+       ]
+      ],
+      "items": [
+       [
+        0,
+        [
+         [
+          1,
+          2
+         ],
+         1
+        ],
+        [
+         [
+          0,
+          2
+         ],
+         1
+        ]
+       ],
+       [
+        4,
+        0,
+        [
+         [
+          [
+           0,
+           1,
+           3
+          ],
+          1
+         ],
+         [
+          [
+           2
+          ],
+          1
+         ],
+         [
+          [
+           2
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        0,
+        [
+         [
+          2,
+          7
+         ],
+         1
+        ],
+        [
+         [
+          1,
+          4,
+          6
+         ],
+         0
+        ]
+       ],
+       [
+        0,
+        [
+         [
+          0,
+          6
+         ],
+         0
+        ],
+        [
+         [
+          1,
+          5
+         ],
+         1
+        ]
+       ],
+       [
+        0,
+        [
+         [
+          0,
+          8,
+          9
+         ],
+         0
+        ],
+        [
+         [
+          0
+         ],
+         0
+        ]
+       ],
+       [
+        0,
+        [
+         [
+          0,
+          2,
+          9
+         ],
+         1
+        ],
+        [
+         [
+          0
+         ],
+         0
+        ]
+       ]
+      ],
+      "outputs": [
+       [
+        [
+         3
+        ],
+        1
+       ],
+       [
+        [
+         7
+        ],
+        0
+       ],
+       [
+        [
+         8
+        ],
+        0
+       ],
+       [
+        [
+         9
+        ],
+        0
+       ],
+       [
+        [
+         10
+        ],
+        1
+       ],
+       [
+        [
+         11
+        ],
+        0
+       ]
+      ]
+     },
+     {
+      "format": "verity/circuit-type/v1",
+      "label": "program",
+      "in": [
+       [
+        6,
+        1
+       ]
+      ],
+      "out": [
+       [
+        3,
+        1
+       ]
+      ],
+      "calls": [
+       "55f9a05bb709b541f5bda36926deb89af26da36cd00f32b7095c51bbc8d4944fe54b2597dc687425562c5fd50360120134cb5e873dbae90e8a1a3301f72004fd"
+      ],
+      "tables": [],
+      "items": [
+       [
+        3,
+        0,
+        [
+         [
+          [
+           2
+          ],
+          1
+         ],
+         [
+          [
+           2
+          ],
+          0
+         ],
+         [
+          [
+           0
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        3,
+        0,
+        [
+         [
+          [
+           8
+          ],
+          0
+         ],
+         [
+          [
+           0
+          ],
+          1
+         ],
+         [
+          [
+           10
+          ],
+          0
+         ]
+        ]
+       ],
+       [
+        0,
+        [
+         [
+          0
+         ],
+         1
+        ],
+        [
+         [
+          12
+         ],
+         0
+        ]
+       ]
+      ],
+      "outputs": [
+       [
+        [
+         11
+        ],
+        0
+       ],
+       [
+        [
+         17
+        ],
+        0
+       ],
+       [
+        [
+         18
+        ],
+        0
+       ]
+      ]
+     }
+    ],
+    "tables": {
+     "9de0d161a7297afae7cd7d31bc01e39f4a653f45c9dbd24218abdcca4559fa756f850b90490ec958e6d0617fcdd4ad572c96bbec21246c2a9c6f6ca7b7031556": {
+      "words": [
+       2,
+       2,
+       2,
+       2,
+       3,
+       2,
+       3,
+       1
+      ]
+     },
+     "4e2a9158d98b56248063d5bbb34086276daae2d72f0db3b26efa1dd94b9c95c9efa25e1e61db9436432afb907e578163607f8487b22dba38ec7dce990ba76eac": {
+      "words": [
+       4,
+       12,
+       5,
+       15,
+       11,
+       3,
+       11,
+       14,
+       12,
+       11,
+       13,
+       12,
+       5,
+       8,
+       1,
+       13
+      ]
+     },
+     "e52adfc11791c2ccb338e7c6f5c69a46aabf637dbd4fbb0ad00b605dfe8cee3a3ec3d464ffbc54241271cfe85094c893d42c25959dd19fbb0fb5e0a72aeb13c5": {
+      "words": [
+       12,
+       47,
+       17,
+       11,
+       5,
+       29,
+       11,
+       14,
+       46,
+       49,
+       14,
+       59,
+       19,
+       39,
+       26,
+       29,
+       53,
+       29,
+       2,
+       60,
+       17,
+       54,
+       61,
+       46,
+       56,
+       52,
+       18,
+       44,
+       5,
+       40,
+       2,
+       17
+      ]
+     }
+    },
+    "layouts": [
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "gen": "table/v2",
+       "table": "9de0d161a7297afae7cd7d31bc01e39f4a653f45c9dbd24218abdcca4559fa756f850b90490ec958e6d0617fcdd4ad572c96bbec21246c2a9c6f6ca7b7031556",
+       "in_bits": 3,
+       "value_bits": 4,
+       "lo_bits": 2
+      },
+      "calls": [],
+      "reads": [],
+      "range_log": 9,
+      "sha512": "e0a90d53f5af4d4cf1c50763ba62dbccf2efa60c2be81ed2dd9922686e55129fe0ed1116986d92daa1bea735dac624b88a1b25a0b4b6d1b63d36933cd4e1ca10"
+     },
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "derive": "v2"
+      },
+      "calls": [],
+      "reads": [
+       {
+        "item": 1,
+        "layout": 0,
+        "offset": 1
+       }
+      ],
+      "type": "55f9a05bb709b541f5bda36926deb89af26da36cd00f32b7095c51bbc8d4944fe54b2597dc687425562c5fd50360120134cb5e873dbae90e8a1a3301f72004fd",
+      "range_log": 10,
+      "sha512": "fca14b6b83530ad12e9de921b30493f93a3250eda7cbe07ea27adc59631316c3a7166927fd04ea1cb343691286bc6d0475355a4cf6e29b4e070a63fc9f09ac40"
+     },
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "derive": "v2"
+      },
+      "calls": [
+       {
+        "item": 0,
+        "layout": 1,
+        "offset": 0
+       },
+       {
+        "item": 1,
+        "layout": 1,
+        "offset": 1
+       }
+      ],
+      "reads": [],
+      "type": "2650c2baab87ae39c48365285427115733356557da245b24a622c8037ef84fd2e73e22b95d4d56aecbc33771a1f1770dd5c2725f5d02dbdbc1be26db4674feac",
+      "sha512": "d867524d5e8af1b1be3d4bb541035a448daeedae202963f59c6ee2de56c1e34df0049efa904f70a455fef636e8e2455a3e0e0fe18f437b580031eb16bb479338"
+     }
+    ],
+    "unit_layout": 2
+   },
+   "physical": {
+    "layouts": {
+     "e0a90d53f5af4d4cf1c50763ba62dbccf2efa60c2be81ed2dd9922686e55129fe0ed1116986d92daa1bea735dac624b88a1b25a0b4b6d1b63d36933cd4e1ca10": {
+      "rows": 385,
+      "sha512": "67b76a704863c0af8d433d6060991a201c590fee86667e737668443ca8380448ea75e77662fbdc6187c61c4846faada452acdf7e4b11f7f47d5e251296aacd96"
+     },
+     "fca14b6b83530ad12e9de921b30493f93a3250eda7cbe07ea27adc59631316c3a7166927fd04ea1cb343691286bc6d0475355a4cf6e29b4e070a63fc9f09ac40": {
+      "rows": 1024,
+      "sha512": "3634ba6b8e3fff68e61bc08dfe8c8b054d582fbb95d6244783171ad70504228d4c3349259c9b5b2558aa789de821111b798a6e8e2df9b9790633daac3533ced5"
+     }
+    },
+    "unit": {
+     "rows": 385,
+     "sha512": "63bc0cd6abe1b3bf6b410b9939a6cb66a93e0b875d0cc8b454bd71eec9e128688995a17e95ce14dc68cf2754db5dc07c1f4d123fa88d2cb3c48f7aef6bccfe36"
+    },
+    "delta": "9460c0e42870923d255b17b2ba40a27a20e1f451b526059d9ca3b2fd01cf90a5b9023312d711f8e8279513d94e9bb1bef88620adcdd5e8e952a2e7cd73b4beec"
+   },
+   "logical": {
+    "rows": 82,
+    "sha512": "5e13770ed07ea4a2b6e38a9c4e746ea2da1a06dcffbe1e01c713cf1fe6468ce2b3dac0192eb51b76bb0416dc0da791ee113624f51b3289b4441a5e479550363e"
+   }
+  },
+  {
+   "name": "random 2026.9",
+   "archive": {
+    "types": [
+     {
+      "format": "verity/circuit-type/v1",
+      "label": "program",
+      "in": [
+       [
+        4,
+        1
+       ]
+      ],
+      "out": [
+       [
+        1,
+        1
+       ]
+      ],
+      "calls": [],
+      "tables": [],
+      "items": [
+       [
+        0,
+        [
+         [
+          1,
+          2
+         ],
+         1
+        ],
+        [
+         [
+          0,
+          1,
+          2
+         ],
+         1
+        ]
+       ]
+      ],
+      "outputs": [
+       [
+        [
+         4
+        ],
+        0
+       ]
+      ]
+     },
+     {
+      "format": "verity/circuit-type/v1",
+      "label": "program",
+      "in": [
+       [
+        3,
+        1
+       ]
+      ],
+      "out": [
+       [
+        2,
+        1
+       ]
+      ],
+      "calls": [
+       "2cbd47b64979e162724eab2b08ae67485eee16fb00df55e8cef887ffbd816c0a9d061c232adec40174488960973b34132f36db870f9f2f1873e68c1cfc1a404e"
+      ],
+      "tables": [],
+      "items": [
+       [
+        3,
+        0,
+        [
+         [
+          [
+           0,
+           1
+          ],
+          1
+         ],
+         [
+          [
+           0,
+           1,
+           2
+          ],
+          0
+         ],
+         [
+          [
+           1
+          ],
+          0
+         ],
+         [
+          [
+           0,
+           2
+          ],
+          1
+         ]
+        ]
+       ],
+       [
+        0,
+        [
+         [
+          1,
+          2
+         ],
+         1
+        ],
+        [
+         [
+          1,
+          2
+         ],
+         0
+        ]
+       ]
+      ],
+      "outputs": [
+       [
+        [
+         3
+        ],
+        0
+       ],
+       [
+        [
+         4
+        ],
+        0
+       ]
+      ]
+     }
+    ],
+    "tables": {
+     "f737133f5898ae3fd5caba11e3c5a9ea0aec3c75ca1ebb9e7d8bf7d54855a48df746657dedec2ae25dee56d5dceec4f32c07713d23985cd7635fdc0ee0a7285e": {
+      "words": [
+       1,
+       0,
+       1,
+       3,
+       1,
+       0,
+       3,
+       2
+      ]
+     },
+     "cd66fc8443d2f911d09e05fabb1e2a4da6a0ca1dea6e6e6756429af840f66ddeb5da15ec08e62c6c60ff7cd3391f7b0e52383cb58b0083a08a06980431a66bda": {
+      "words": [
+       3,
+       14,
+       0,
+       1,
+       14,
+       15,
+       2,
+       6,
+       7,
+       0,
+       8,
+       11,
+       1,
+       12,
+       2,
+       12
+      ]
+     },
+     "be781f704e061919b624decca227a75ee7b3b516dd56ff7299424dfd342d15e542a380e0b3640cada0fb6c4fd44da1267b7da21a8cc0a6f858fa14ae161ab920": {
+      "words": [
+       38,
+       55,
+       51,
+       28,
+       30,
+       1,
+       55,
+       21,
+       50,
+       31,
+       38,
+       46,
+       11,
+       37,
+       45,
+       39,
+       10,
+       13,
+       38,
+       54,
+       32,
+       4,
+       47,
+       56,
+       57,
+       12,
+       12,
+       31,
+       3,
+       53,
+       8,
+       63
+      ]
+     }
+    },
+    "layouts": [
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "derive": "v2"
+      },
+      "calls": [],
+      "reads": [],
+      "type": "2cbd47b64979e162724eab2b08ae67485eee16fb00df55e8cef887ffbd816c0a9d061c232adec40174488960973b34132f36db870f9f2f1873e68c1cfc1a404e",
+      "range_log": 9,
+      "sha512": "dc3de939e38326f6d49128475b25f7dfc2876724df56574c82ec6bd687243b17c202a61a19bdcd3af4031c038d607ced22ae9e124ad38efea2ec7842425afb70"
+     },
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "derive": "v2"
+      },
+      "calls": [
+       {
+        "item": 0,
+        "layout": 0,
+        "offset": 0
+       }
+      ],
+      "reads": [],
+      "type": "478dc91b9751fdb76e0282d4a28b86bb0786071db2cd1cd1b1bfabcf5bb1fe3ee564d8b64645d27ad9ff9ea2550b1da63e88048c1126a79cae5513b18d0e14e7",
+      "sha512": "23ee72713bb5e54aea129d51e85084760eeabd34f50a5a11a6fc15a44596afbcb9ef6336b84a0843f05f04ca10ffd8bdafdfdd433c269edc52a90f21a8411846"
+     }
+    ],
+    "unit_layout": 1
+   },
+   "physical": {
+    "layouts": {
+     "dc3de939e38326f6d49128475b25f7dfc2876724df56574c82ec6bd687243b17c202a61a19bdcd3af4031c038d607ced22ae9e124ad38efea2ec7842425afb70": {
+      "rows": 385,
+      "sha512": "a91b473bdb1aac7900aec8b8e2a249955c1900b297dd11f337c9f4e209181919c35576ac5d766a418e6c730608e543e321bc2f90d19093acc7f4b513b83802ea"
+     }
+    },
+    "unit": {
+     "rows": 385,
+     "sha512": "7c1830787027b46903d7f66588c954d75fac87601c1de48a6550f0ad853ceb6ef8f8a28607ca255a06555dc472ff50926e2c0df4df3a674d435dc93aeb67e459"
+    },
+    "delta": "fa74c499e569125ccccd5805ff33c5404edaa509ba1edacab5fb358fe8f75f1e1c8099e76f171afca3dfb866eb1ce8fa77c5c616e3229b05f19ede26525ae3a5"
+   },
+   "logical": {
+    "rows": 15,
+    "sha512": "8717a90f4a5d170734ed7b08ec9094f4bf34d12636132f564f04808046cb69d7844940b60ebc8528e4b84e415aa6fadd7a0a3ae36be058f498a596563a9f0f9c"
+   }
+  },
+  {
+   "name": "random 2026.10",
+   "archive": {
+    "types": [
+     {
+      "format": "verity/circuit-type/v1",
+      "label": "program",
+      "in": [
+       [
+        1,
+        1
+       ]
+      ],
+      "out": [
+       [
+        4,
+        1
+       ]
+      ],
+      "calls": [],
+      "tables": [],
+      "items": [
+       [
+        0,
+        [
+         [
+          0
+         ],
+         0
+        ],
+        [
+         [
+          0
+         ],
+         1
+        ]
+       ],
+       [
+        0,
+        [
+         [
+          0,
+          1
+         ],
+         0
+        ],
+        [
+         [
+          0,
+          1
+         ],
+         1
+        ]
+       ],
+       [
+        0,
+        [
+         [
+          2
+         ],
+         0
+        ],
+        [
+         [
+          2
+         ],
+         1
+        ]
+       ],
+       [
+        0,
+        [
+         [
+          0
+         ],
+         0
+        ],
+        [
+         [
+          0,
+          1,
+          2
+         ],
+         1
+        ]
+       ]
+      ],
+      "outputs": [
+       [
+        [
+         1
+        ],
+        0
+       ],
+       [
+        [
+         2
+        ],
+        0
+       ],
+       [
+        [
+         3
+        ],
+        0
+       ],
+       [
+        [
+         4
+        ],
+        0
+       ]
+      ]
+     },
+     {
+      "format": "verity/circuit-type/v1",
+      "label": "program",
+      "in": [
+       [
+        5,
+        1
+       ]
+      ],
+      "out": [
+       [
+        2,
+        1
+       ]
+      ],
+      "calls": [
+       "083a9857a2bd3c3d7383cff7bdcd76ebd4944719407e1315bd8e8c87be09c873b7ea00d43d6b194760739042bf83f77e56ddc4dca84ce98fd58d2ae85d8bcc31"
+      ],
+      "tables": [],
+      "items": [
+       [
+        3,
+        0,
+        [
+         [
+          [
+           4
+          ],
+          1
+         ]
+        ]
+       ],
+       [
+        0,
+        [
+         [
+          1,
+          2,
+          3
+         ],
+         0
+        ],
+        [
+         [
+          1,
+          2,
+          8
+         ],
+         0
+        ]
+       ]
+      ],
+      "outputs": [
+       [
+        [
+         8
+        ],
+        0
+       ],
+       [
+        [
+         9
+        ],
+        0
+       ]
+      ]
+     }
+    ],
+    "tables": {
+     "60e519e0dd9ac2290c1ce16877cba7d0c769f9e38304cd830f76ddda94d33e3de56155d31795f35847a2dd5cdd3b75ebcdc357b3bbfbacd32c70c1126ae0c111": {
+      "words": [
+       3,
+       2,
+       3,
+       3,
+       0,
+       0,
+       2,
+       2
+      ]
+     },
+     "ec9e1e23ead009124d6f3a272d845c1440e174e6412799406ff98db9f4380d8e818a35324511a53f749f29233ff6a77afb3b14da3fe7bc6fdcaaad8c03604dc0": {
+      "words": [
+       14,
+       11,
+       14,
+       2,
+       11,
+       11,
+       4,
+       2,
+       10,
+       2,
+       0,
+       11,
+       4,
+       2,
+       6,
+       2
+      ]
+     },
+     "66caea44c8280ad4d3e37b2c21918d0b4b5927c8085217af2fcbdd530d2ceac4015b2a4265f24d030afcd89a3fa14e1857f5c50bde2948742f5ca58c885ba104": {
+      "words": [
+       33,
+       14,
+       60,
+       29,
+       44,
+       62,
+       1,
+       50,
+       56,
+       43,
+       51,
+       38,
+       40,
+       44,
+       23,
+       2,
+       24,
+       3,
+       56,
+       63,
+       41,
+       7,
+       34,
+       63,
+       33,
+       37,
+       42,
+       35,
+       28,
+       0,
+       19,
+       7
+      ]
+     }
+    },
+    "layouts": [
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "derive": "v2"
+      },
+      "calls": [],
+      "reads": [],
+      "type": "083a9857a2bd3c3d7383cff7bdcd76ebd4944719407e1315bd8e8c87be09c873b7ea00d43d6b194760739042bf83f77e56ddc4dca84ce98fd58d2ae85d8bcc31",
+      "range_log": 9,
+      "sha512": "c85e02f3fb13797d122fcf40f6973b4453847813668877ebbe2537e72054f15938e303fa3d28ce0fcb5964a763e7c9a8b104e0f549eb9494769f9ae4946eeb92"
+     },
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "derive": "v2"
+      },
+      "calls": [
+       {
+        "item": 0,
+        "layout": 0,
+        "offset": 0
+       }
+      ],
+      "reads": [],
+      "type": "dea16af82cfd9abe22e8513798c47bddac3e67c4147272cd7810db1f8ca68870f428073e4936f1ebc4776630bf5830562d73b780bcd6c3a5215710b877ae40d8",
+      "sha512": "351c3efa35b8551dab78761b31510ba8aed91de6465a9e84f8fbb89dddeb51f677edf94bd37039e65a242b472abdf26819a126e26b954433f88ac88a38a6b81f"
+     }
+    ],
+    "unit_layout": 1
+   },
+   "physical": {
+    "layouts": {
+     "c85e02f3fb13797d122fcf40f6973b4453847813668877ebbe2537e72054f15938e303fa3d28ce0fcb5964a763e7c9a8b104e0f549eb9494769f9ae4946eeb92": {
+      "rows": 385,
+      "sha512": "1f9c781f4ed72b4473b2f2d3a5460b6094641c8b0e3f1c49065e37294732a2b9d8a031d9a53570972bc128e6bf055c1563b7700835d54c04dbd4d5316466f8ab"
+     }
+    },
+    "unit": {
+     "rows": 385,
+     "sha512": "5f95c49cb4a57e84b86991b13bc1bad1ec7ca37b845fcb4daba92d8f2ded046b03ce2172736c05738ea96d01122b25559bcdec0f48dad4d783ef5036ad4e40e4"
+    },
+    "delta": "f40c2b477e2c67dc670a6b47212348d7b8c0f3623b115b96e236c5fcac43c7a9776f6bdb82e384a34d888c66a2a6283096d3194bf96fb1dda894e284a8aed8ba"
+   },
+   "logical": {
+    "rows": 20,
+    "sha512": "678d5d3c515e5486b5be71a1cf3aa794bf80b5e06837813b5da6e653251e1827cf33664896febfa865dcde19b407698a46c649edaad413902d2f77ae42f4a897"
+   }
+  },
+  {
+   "name": "random 2026.11",
+   "archive": {
+    "types": [
+     {
+      "format": "verity/circuit-type/v1",
+      "label": "program",
+      "in": [
+       [
+        5,
+        1
+       ]
+      ],
+      "out": [
+       [
+        2,
+        1
+       ]
+      ],
+      "calls": [],
+      "tables": [],
+      "items": [
+       [
+        0,
+        [
+         [
+          3
+         ],
+         1
+        ],
+        [
+         [
+          0,
+          1,
+          3
+         ],
+         1
+        ]
+       ],
+       [
+        0,
+        [
+         [
+          0,
+          2
+         ],
+         1
+        ],
+        [
+         [
+          0,
+          2,
+          4
+         ],
+         1
+        ]
+       ]
+      ],
+      "outputs": [
+       [
+        [
+         5
+        ],
+        0
+       ],
+       [
+        [
+         6
+        ],
+        0
+       ]
+      ]
+     },
+     {
+      "format": "verity/circuit-type/v1",
+      "label": "program",
+      "in": [
+       [
+        6,
+        1
+       ]
+      ],
+      "out": [
+       [
+        2,
+        1
+       ]
+      ],
+      "calls": [
+       "17bd5a95c97e419cffad41e2b013ca4bdecf85749d79de72e70ee5fa608f45c06b4d4cbb4a45c18a2c6b08fa11bd839d6a40740cc87abfaec570dd05cee54a96"
+      ],
+      "tables": [],
+      "items": [
+       [
+        3,
+        0,
+        [
+         [
+          [
+           1
+          ],
+          0
+         ],
+         [
+          [
+           3,
+           4,
+           5
+          ],
+          1
+         ],
+         [
+          [
+           1,
+           2,
+           3
+          ],
+          0
+         ],
+         [
+          [
+           0
+          ],
+          0
+         ],
+         [
+          [
+           3,
+           4,
+           5
+          ],
+          1
+         ]
+        ]
+       ],
+       [
+        0,
+        [
+         [
+          0,
+          1,
+          7
+         ],
+         0
+        ],
+        [
+         [
+          0
+         ],
+         1
+        ]
+       ]
+      ],
+      "outputs": [
+       [
+        [
+         7
+        ],
+        0
+       ],
+       [
+        [
+         8
+        ],
+        0
+       ]
+      ]
+     },
+     {
+      "format": "verity/circuit-type/v1",
+      "label": "program",
+      "in": [
+       [
+        6,
+        1
+       ]
+      ],
+      "out": [
+       [
+        2,
+        1
+       ]
+      ],
+      "calls": [
+       "73f50a30a9a5fac3dafe8f764f21357939c5915c2512401e146dc9e836589a32f360603575ae388742d5657aa3d42acc3d9ef2908eea54bddd4f554a6da6b96c"
+      ],
+      "tables": [],
+      "items": [
+       [
+        3,
+        0,
+        [
+         [
+          [
+           0
+          ],
+          0
+         ],
+         [
+          [
+           1
+          ],
+          0
+         ],
+         [
+          [
+           2
+          ],
+          0
+         ],
+         [
+          [
+           3
+          ],
+          0
+         ],
+         [
+          [
+           4
+          ],
+          0
+         ],
+         [
+          [
+           5
+          ],
+          0
+         ]
+        ]
+       ]
+      ],
+      "outputs": [
+       [
+        [
+         6
+        ],
+        0
+       ],
+       [
+        [
+         7
+        ],
+        0
+       ]
+      ]
+     }
+    ],
+    "tables": {
+     "c8cb33b71f54585fa2105f02c893ad56cce0bb565517f1d632f05461ff03a3bddafaf18998ff919813787a467ce165a9d60e622c35989859465c5717292adeaa": {
+      "words": [
+       3,
+       2,
+       3,
+       2,
+       2,
+       1,
+       0,
+       1
+      ]
+     },
+     "d921fecd7a3979a8681dd60d460472c3abc6c7d01349b51752052979f9ae0cca353066cf11bdf7b0d7ed6f581004f5c53f0cc44f5e1decb9e68155eb9ea74d22": {
+      "words": [
+       12,
+       14,
+       15,
+       12,
+       8,
+       7,
+       7,
+       6,
+       0,
+       4,
+       11,
+       0,
+       5,
+       4,
+       14,
+       2
+      ]
+     },
+     "5b3fb9be53f286fd709eb57fa749f537a34fb5f789e0c5f89b6027642bf65588de01a802ea9368ef16e7a2b1fc5dcd51169ccca574cf86a0cb5e8ceac58584b4": {
+      "words": [
+       18,
+       53,
+       24,
+       33,
+       44,
+       20,
+       18,
+       43,
+       9,
+       16,
+       8,
+       48,
+       28,
+       27,
+       17,
+       53,
+       57,
+       4,
+       40,
+       45,
+       10,
+       39,
+       51,
+       57,
+       54,
+       40,
+       56,
+       31,
+       19,
+       16,
+       46,
+       40
+      ]
+     }
+    },
+    "layouts": [
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "derive": "v2"
+      },
+      "calls": [],
+      "reads": [],
+      "type": "17bd5a95c97e419cffad41e2b013ca4bdecf85749d79de72e70ee5fa608f45c06b4d4cbb4a45c18a2c6b08fa11bd839d6a40740cc87abfaec570dd05cee54a96",
+      "range_log": 9,
+      "sha512": "60fc8916d35946482f896452ae3862011e1bf70db15fbb0dd432824d4977186589931d5bc54896f31df2e94f5b2b7cf2169ea109e1dfa81d4e4c2a9014f845c6"
+     },
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "derive": "v2"
+      },
+      "calls": [
+       {
+        "item": 0,
+        "layout": 0,
+        "inline": true
+       }
+      ],
+      "reads": [],
+      "type": "73f50a30a9a5fac3dafe8f764f21357939c5915c2512401e146dc9e836589a32f360603575ae388742d5657aa3d42acc3d9ef2908eea54bddd4f554a6da6b96c",
+      "range_log": 9,
+      "sha512": "e25641a9c281fd46c1447f420beff5b53daf141a244f7bba9e6fc9b295786896e36400ce0841b703afeac16a8955e38a42ff6f8572dbef22c5f47b79c85525c5"
+     },
+     {
+      "in_split": [],
+      "out_split": [],
+      "own": {
+       "derive": "v2"
+      },
+      "calls": [
+       {
+        "item": 0,
+        "layout": 1,
+        "offset": 0
+       }
+      ],
+      "reads": [],
+      "type": "aa760747402ddc7818b08a371ef81fe93cb6700e33fa3f55afb06a68afe8e3d2f9dedc9540eaf5438eba4e0866aa62f497021b77e72e92c64764fe205b5bf5bd",
+      "sha512": "ee3b03beb8728a4501347c5bcef3ff29aae8daa3477ce3d0de27aec16b15e14ee06c3138dd99e6271c0bf572fa728cb316e361630340920a8a63006b001db577"
+     }
+    ],
+    "unit_layout": 2
+   },
+   "physical": {
+    "layouts": {
+     "60fc8916d35946482f896452ae3862011e1bf70db15fbb0dd432824d4977186589931d5bc54896f31df2e94f5b2b7cf2169ea109e1dfa81d4e4c2a9014f845c6": {
+      "rows": 385,
+      "sha512": "25d547315f9390c0d054b228ed2233e6e3eb6b3f842577e2eed7b0d2329b7e18b0bb415f37a19e905c93c25f102166878cb2d80753eddb434b0b4774a920f142"
+     },
+     "e25641a9c281fd46c1447f420beff5b53daf141a244f7bba9e6fc9b295786896e36400ce0841b703afeac16a8955e38a42ff6f8572dbef22c5f47b79c85525c5": {
+      "rows": 385,
+      "sha512": "6bee40177fad64a4e57ae2a62ec77aeb1ddd7a6e4b53f85140bd60b2a1144c51fabb84020811c7b9a08de920aa5310251f2761a59a77fadf70447d8082d53cfb"
+     }
+    },
+    "unit": {
+     "rows": 257,
+     "sha512": "0a281ae758971bfb62e3dd9957eccee43defc7289975c32fe82f70bbd007b97c8702527fcd45b8785289cb9234bf7539edd09ad0b68a7547430842652d0b8974"
+    },
+    "delta": "a398fad7e9e32fb2f4edaf533a45745c6fc0c8085ef8ec3beda691a68f6ca02537d1d8a21f38bed2a489c0f2132fe87025ff407fd5f4ce92a230eb0554af0e8a"
+   },
+   "logical": {
+    "rows": 16,
+    "sha512": "f65002a43f1373b3ae34671b45731f9ac4ec1eda486d7f8de8d0916054d3aeed8360a2e897216016efd97da59a3481070446e8aac4159c4293d9bad5ce43e058"
+   }
+  }
+ ]
+}
