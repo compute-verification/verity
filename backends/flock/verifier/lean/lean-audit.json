@@ -13,7 +13,7 @@
   "Flock.CircuitType.check_ok": {
    "signature": [
     "Flock.CircuitType.check_ok {callee : String → Option Flock.CircuitType} {t : Flock.CircuitType}",
-    "  (h : Flock.CircuitType.check callee t = Except.ok ()) : Flock.CircuitType.WellFormed callee t"
+    "  (h : Eq (Flock.CircuitType.check callee t) (Except.ok Unit.unit)) : Flock.CircuitType.WellFormed callee t"
    ],
    "assumptions": [],
    "type_hash": "00000000cf966ae0"

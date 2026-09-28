@@ -247,23 +247,26 @@
   },
   "FlockSoundness.Types.compose_complete": {
    "signature": [
-    "FlockSoundness.Types.compose_complete {t : Flock.CircuitType} {inSplit outSplit : List ℕ} {d : Flock.Derive.Derived}",
-    "  (hd : Flock.Derive.derive t inSplit outSplit = Except.ok d) (x : ℕ → Bool) :",
-    "  FlockSoundness.Types.Sat d.rows (FlockSoundness.Types.honest t d.geo x) ∧",
-    "    FlockSoundness.Types.honest t d.geo x d.geo.const = true ∧",
-    "      (∀ i < t.inBits, FlockSoundness.Types.honest t d.geo x (d.inCol i) = x i) ∧",
-    "        ∀ o < t.outputs.size,",
-    "          FlockSoundness.Types.honest t d.geo x (d.outCol o) = (FlockSoundness.Types.eval t x).getD o false"
+    "FlockSoundness.Types.compose_complete {t : Flock.CircuitType} {inSplit outSplit : List Nat} {d : Flock.Derive.Derived}",
+    "  (hd : Eq (Flock.Derive.derive t inSplit outSplit) (Except.ok d)) (x : Nat → Bool) :",
+    "  And (FlockSoundness.Types.Sat d.rows (FlockSoundness.Types.honest t d.geo x))",
+    "    (And (Eq (FlockSoundness.Types.honest t d.geo x d.geo.const) Bool.true)",
+    "      (And (∀ (i : Nat), instLTNat.lt i t.inBits → Eq (FlockSoundness.Types.honest t d.geo x (d.inCol i)) (x i))",
+    "        (∀ (o : Nat),",
+    "          instLTNat.lt o t.outputs.size →",
+    "            Eq (FlockSoundness.Types.honest t d.geo x (d.outCol o))",
+    "              ((FlockSoundness.Types.eval t x).getD o Bool.false))))"
    ],
    "assumptions": [],
    "type_hash": "000000008624e1aa"
   },
   "FlockSoundness.Types.compose_sound": {
    "signature": [
-    "FlockSoundness.Types.compose_sound {t : Flock.CircuitType} {inSplit outSplit : List ℕ} {d : Flock.Derive.Derived}",
-    "  (hd : Flock.Derive.derive t inSplit outSplit = Except.ok d) (z : ℕ → Bool) (hz : FlockSoundness.Types.Sat d.rows z)",
-    "  (h1 : z d.geo.const = true) (o : ℕ) (ho : o < t.outputs.size) :",
-    "  z (d.outCol o) = (FlockSoundness.Types.eval t fun i => z (d.inCol i)).getD o false"
+    "FlockSoundness.Types.compose_sound {t : Flock.CircuitType} {inSplit outSplit : List Nat} {d : Flock.Derive.Derived}",
+    "  (hd : Eq (Flock.Derive.derive t inSplit outSplit) (Except.ok d)) (z : Nat → Bool)",
+    "  (hz : FlockSoundness.Types.Sat d.rows z) (h1 : Eq (z d.geo.const) Bool.true) (o : Nat)",
+    "  (ho : instLTNat.lt o t.outputs.size) :",
+    "  Eq (z (d.outCol o)) ((FlockSoundness.Types.eval t fun i => z (d.inCol i)).getD o Bool.false)"
    ],
    "assumptions": [],
    "type_hash": "00000000c74db5c9"
