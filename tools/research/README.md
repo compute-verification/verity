@@ -3,11 +3,11 @@
 Shared tooling for executing, observing, and coordinating computational work
 during development. One installable package, one CLI (`research`), stdlib
 only. It runs commands and records what happened; it imports nothing from
-Verity's `packages/` (enforced by `tests/test_cli.py::test_no_packages_import`).
+Verity's packages (enforced by `tests/test_cli.py::test_no_packages_import`).
 
 The user-facing procedure (when to record a run, how to find one, how to hand
-off) is the repo-level skill at `.agents/skills/research/SKILL.md`, once it
-exists. This file is for people changing the tool.
+off) will be a repo-level skill, once it exists. This file is for people changing
+the tool.
 
 ## Layout and provenance
 
@@ -30,7 +30,7 @@ tests/              pure-Python; the machine side of --on is exercised locally (
 tests/fixtures/     job_v0.1.json: a record as the harness alone writes it; run_v0.2/: a finished run dir with a `store` section (state.json -> status.json at test time)
 ~~~
 
-`telemetry/` and `pods/` were promoted from `veritor` `zk/campaign/` at
+The `telemetry` and `pods` packages were promoted from `veritor` `zk/campaign/` at
 commit `df7fbea3d` (branch `lane/r17-mprof`, 2026-09-21) and have since been
 edited here like the rest of the package.
 
@@ -153,7 +153,7 @@ regression's manifest rebuilds, which label the landing's check attempt.
 label alone lands nothing; ask the train runner on Slack as well until the queue lands a full train.
 
 `research queue` is the merge queue: `next` is `main` plus every admitted PR, one `--no-ff` merge commit each, and `land`
-fast-forwards `main` to the newest commit on `next` that the same gate accepts. A PR is admitted when it's open (draft state is ignored),
+fast-forwards `main` to the newest commit on `next` that the same gate accepts. A PR is admitted when it's open (drafts too),
 names its owner (a `Lane {name}` line, else its Cursor agent id), has no hold label, is marked ready at its head (`research queue
 ready PR`, a `ready` label on `pr:{n}@{head}`, by hand for a train member), and has the grants the rules file
 (`ci/queue.toml`) requires of its change: `grant` labels on `pr:{n}@{head}`, or on an older head it only
@@ -185,7 +185,7 @@ root = "/workspace/research"
 python = "python3"
 ~~~
 
-The pod registry (`pods/registry.py`) is the same table as one file per machine,
+The pod registry (`src/research/pods/registry.py`) is the same table as one file per machine,
 `machines.d/<name>.toml` in the notes repo, so creating a pod never means
 hand-merging a shared file: `research pods create --name N --max-hours H ... --register
 --project P`, or `research pods register N --pod-id ID --project P` for an
@@ -203,15 +203,15 @@ exit 2.
 A machine that isn't a RunPod pod is `provider = "ssh"`: `host`, and optionally `port` (22), `user` (root) and
 `rate_usd_per_hour` (the attempts' cost rate), reached with the same research key. `research pods register NAME --host ADDR
 --user U --rate R --project P` writes it, refusing a host where `hostname` doesn't answer over ssh; `research pods ssh NAME`
-reaches it. The one such machine is the Nebius server `vy-nebius-1` (`pods/nebius/`): `launch.sh` brings it up (`--dry-run`
+reaches it. The one such machine is the Nebius server `vy-nebius-1` (`src/research/pods/nebius/`): `launch.sh` brings it up (`--dry-run`
 needs no credentials), `teardown.sh` stops or deletes it, `check.py` is its bootstrap check, `prefetch.py` fills its weight
 cache from `weights.tsv`, and its lease is `sh/lease.sh` with `LEASE_MACHINE_ID` and a stop command in place of RunPod's key.
 Its runs share its GPUs through `gpu-lease N -- CMD` (`sh/gpu_lease.sh`: one flock per GPU, `CUDA_VISIBLE_DEVICES` set).
 
-What runs on the Nebius nodes outside a run (infra's loops and the files they read) is listed in `pods/nebius/deploy.toml`,
+What runs on the Nebius nodes outside a run (infra's loops and the files they read) is listed in `src/research/pods/nebius/deploy.toml`,
 each with its repository file and owner (a Slack handle), and goes there only through `research deploy install NODE --by WHO
 [PATH ...] --apply` (else a dry run) from a pushed commit (`main`, or a PR's head for a hotfix). Each loop is a systemd unit
-(`pods/nebius/units/`, settings in `pods/nebius/env/`), never tmux; `install` restarts a running service whose unit, env file
+(`units/` beside the manifest, settings in `env/`), never tmux; `install` restarts a running service whose unit, env file
 or running file changed, once the node is `quiet`. A `hold` entry is reported, never installed.
 `research deploy drift` reads each node and names every file that isn't main's (`stale`, `ahead`, `unknown`,
 `missing`), every process running a file replaced since it started (`restart`), and every file in a managed directory
@@ -326,13 +326,14 @@ evidence is on the machine. Provisioning is a separate, explicit act; `--on` nev
 ### Standing campaign targets: `research keeper`
 
 `research keeper set|stop|status NAME --on NODE` keeps N chunks of a command leased on a Nebius node until a deadline, so no agent
-VM stays awake to relaunch them (`pods/nebius/keeper.py`).
+VM stays awake to relaunch them (`src/research/pods/nebius/keeper.py`).
 
 ### Pods bound themselves: leases, one budget file, one guard
 
 Nothing that bounds spend may depend on an agent VM, which can be suspended at any moment, or on one guard process staying alive.
+The code is in `src/research/pods/`.
 
-- **A lease on every pod** (`pods/lease.py`, `pods/sh/lease.sh`). `research pods create --max-hours H` puts the expiry in the pod's
+- **A lease on every pod** (`lease.py`, `sh/lease.sh`). `research pods create --max-hours H` puts the expiry in the pod's
   environment, then, once sshd answers, arms the lease loop over ssh with the lease file and starts the idle guard (`pod_guard.sh
   daemon`: `--first-idle-min`, default 20, before the pod's first run; `--idle-min 0` arms none, for a pool pod kept up idle);
   `--boot-lease` also runs the loop from a RunPod image's start
@@ -341,11 +342,11 @@ Nothing that bounds spend may depend on an agent VM, which can be suspended at a
   with the pod's own key (GraphQL `podTerminate`). A pod that cannot be armed is terminated by `create`. `research run --on` extends
   the lease to cover the run's `--timeout` plus 15 minutes; `research pods extend TARGET --hours H` extends it by hand (never
   shortens it), `research pods lease TARGET` shows it.
-- **One budget file** (`pods/budgets.py`): `budgets.toml` at the notes repo's root; each line is a prefix with `cap_usd` (total),
+- **One budget file** (`budgets.py`): `budgets.toml` at the notes repo's root; each line is a prefix with `cap_usd` (total),
   `cap_usd_per_day` (any rolling 24 hours; its trip clears as the window moves) or both, `expires`, `max_pod_hours` and `by`. `research pods create` reads the guard's state from its host (one ssh call) and refuses (exit 6) unless
   the guard polled in the last 3 minutes and its budgets have a live, untripped line covering the name with `max_pod_hours` at least
   `--max-hours`.
-- **One guard** (`research pods guard`, `pods/guard.py`; its docstring is the contract) on the control pod re-reads `budgets.toml`
+- **One guard** (`research pods guard`, `guard.py`; its docstring is the contract) on the control pod re-reads `budgets.toml`
   from the notes origin every poll: per-line caps (a tripped line's pods terminated, new creates refused until the cap is raised),
   the account balance floor, each line's max pod age, and project pods no line covers. It never trips on the clock. It never fails
   open: it decides and terminates from memory before it records, every write is best effort, a failed read keeps the last value,

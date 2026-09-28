@@ -1,0 +1,46 @@
+{
+ "definitions": {
+  "MoeRouterBiasTopK_v1{E=8,TOPK=2,SCALE=2.5,KERNEL='block'}": {
+   "and": 11371
+  },
+  "MoeRouterBiasTopK_v1{E=8,TOPK=2,SCALE=2.5,KERNEL='warp'}": {
+   "and": 12914
+  },
+  "MoeRouterNormalize_v1{E=8,VPT=4}": {
+   "and": 26738
+  },
+  "MoeRouterSelect_v1{E=8,TOPK=2}": {
+   "and": 2261
+  },
+  "MoeRouterShift_v1{E=8,VPT=4}": {
+   "and": 6268
+  },
+  "MoeRouterSigmoidIn_v1": {
+   "and": 23369
+  },
+  "MoeRouterSigmoidMid_v1": {
+   "and": 719
+  },
+  "MoeRouterSigmoidOut_v1": {
+   "and": 4776
+  },
+  "MoeRouterSigmoidScore_v2": {
+   "and": 30795
+  },
+  "MoeSumCoordinate_v2{TOPK=8}": {
+   "and": 5222
+  },
+  "MoeSum_v2{TOPK=8,H=8}": {
+   "and": 41776
+  },
+  "NvExpfIn_v1": {
+   "and": 9556
+  },
+  "NvExpfOut_v1": {
+   "and": 743
+  },
+  "NvExpf_v2": {
+   "and": 11371
+  }
+ }
+}

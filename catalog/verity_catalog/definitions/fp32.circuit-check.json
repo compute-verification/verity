@@ -1,0 +1,70 @@
+{
+ "pieces": {
+  "Bf16AddF2fp_v1": {
+   "and": 754
+  },
+  "Bf16Add_v1": {
+   "and": 754
+  },
+  "F32AddFtz_v1": {
+   "and": 944
+  },
+  "F32AddFtz_v2": {
+   "and": 913
+  },
+  "F32Add_v1": {
+   "and": 854
+  },
+  "F32Add_v2": {
+   "and": 823
+  },
+  "F32Div_v1": {
+   "and": 2525
+  },
+  "F32Div_v2": {
+   "and": 2493
+  },
+  "F32FmaFtz_v1": {
+   "and": 4618
+  },
+  "F32FmaFtz_v2": {
+   "and": 4618
+  },
+  "F32FmaSubFtz_v1": {
+   "and": 4618
+  },
+  "F32FmaSubFtz_v2": {
+   "and": 4618
+  },
+  "F32Fma_v1": {
+   "and": 4498
+  },
+  "F32Fma_v2": {
+   "and": 4498
+  },
+  "F32Max_v1": {
+   "and": 283
+  },
+  "F32MulFtz_v1": {
+   "and": 2528
+  },
+  "F32MulFtz_v2": {
+   "and": 2496
+  },
+  "F32Mul_v1": {
+   "and": 2438
+  },
+  "F32Mul_v2": {
+   "and": 2406
+  },
+  "F32SubFtz_v1": {
+   "and": 1071
+  },
+  "F32SubFtz_v2": {
+   "and": 913
+  },
+  "GuardNegInfZero_v1": {
+   "and": 63
+  }
+ }
+}

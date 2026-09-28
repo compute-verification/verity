@@ -1,0 +1,44 @@
+{
+ "units": {
+  "attention-head/d64-bn128/sm80-fa2-bf16": {
+   "and": 8660,
+   "not": 2041,
+   "xor": 55268
+  },
+  "gemm-coordinate/k64/sm80-mma-bf16": {
+   "and": 8660,
+   "not": 2041,
+   "xor": 55268
+  },
+  "gemm-coordinate/k64/sm90-wgmma-bf16": {
+   "and": 8250,
+   "not": 1791,
+   "xor": 55973
+  },
+  "gumbel-top-p-token-select/v64/fp32": {
+   "and": 5043,
+   "not": 1159,
+   "xor": 44455
+  },
+  "rmsnorm-fused-cuda/n2048-eps1e-05/bf16": {
+   "and": 328453,
+   "not": 62814,
+   "xor": 2165677
+  },
+  "rmsnorm-triton/n128-eps1e-06/bf16": {
+   "and": 148173,
+   "not": 22942,
+   "xor": 1029829
+  },
+  "rope-head/d64/neox-bf16": {
+   "and": 6036,
+   "not": 1031,
+   "xor": 42802
+  },
+  "silu-mul/i8192/bf16": {
+   "and": 2633,
+   "not": 172,
+   "xor": 54087
+  }
+ }
+}

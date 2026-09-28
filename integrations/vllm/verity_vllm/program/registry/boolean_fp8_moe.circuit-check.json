@@ -1,0 +1,19 @@
+{
+ "definitions": {
+  "MoeExpertFp8BlockCoordinateW_v2{K=64,G=32,KB=32,SWAP=True}": {
+   "and": 28533
+  },
+  "MoeExpertFp8BlockCoordinate_v2{K=64,G=32,KB=32,SWAP=False}": {
+   "and": 26103
+  },
+  "MoeExpertFp8BlockCoordinate_v2{K=64,G=64,KB=32,SWAP=True}": {
+   "and": 26103
+  },
+  "MoeExpertFp8BlockCoordinate_v2{K=64,G=64,KB=64,SWAP=False}": {
+   "and": 19391
+  },
+  "SiluMulFp8BlockQuantResult_v2": {
+   "and": 16899
+  }
+ }
+}

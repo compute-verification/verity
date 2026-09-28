@@ -1,4 +1,4 @@
-# Network transparency: the bucketed timing channel
+# Network accounting: the bucketed timing channel
 
 A spatial unit is the machines behind network certifiers. The question is how much a covert sender can move across its
 boundary through **when** frames leave, once the content and order of every frame are fixed by the declared Program.

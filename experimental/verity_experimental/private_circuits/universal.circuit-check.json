@@ -1,0 +1,10 @@
+{
+ "definitions": {
+  "UniversalUnit_v1{G=16,N_IN=16,N_OUT=8}": {
+   "and": 1066
+  },
+  "UniversalUnit_v1{G=64,N_IN=64,N_OUT=32}": {
+   "and": 16674
+  }
+ }
+}

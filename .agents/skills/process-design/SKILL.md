@@ -65,7 +65,7 @@ Ask each of these of a proposed process. A "no" costs velocity unless the propos
    to their Python in the week of Sep 22–29.
 3. **Is it code, with the fix in its failure message?** A check costs nothing until it fires, and it teaches when it
    does. Prose taxes every agent's context and is followed unreliably; the lane contract says it: "a rule you can't see
-   enforced is not protection". Good: the Lean audit's `escapes` list; `verity/tests/test_boundaries.py`.
+   enforced is not protection". Good: the Lean check's `escapes` list; `verity/tests/test_boundaries.py`.
 4. **Does it label rather than block, unless the error would pass unnoticed?** A label lets work go on and lets readers
    filter. Block only for errors nobody would notice until they cost a lot: #118 made `merkle_binding` vacuous by
    redefining `MerkleScheme.Collision`, the axiom audit passed it, and only the guarantees' records and a person reading

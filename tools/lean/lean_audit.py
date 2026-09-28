@@ -752,10 +752,14 @@ def pin(run_id: str) -> int:
         print(f"lean_audit: {run_id} has no run record (launch it with --custody-r2)", file=sys.stderr)
         return 1
     files = {f.path: f for f in st.get_manifest(rr).payload.files or []}
-    listing = next((p for p in files if p.endswith("/lean-deps.json") or p == "lean-deps.json"), None)
-    if listing is None:
-        print(f"lean_audit: {run_id} exported no bundle (`--export`)", file=sys.stderr)
+    # the audit's own copy of the pin file is a `lean-deps.json` too; the export's listing is the one beside its bundles
+    beside = {q.rpartition("/")[0] for q in files if q.endswith(".tar.gz")}
+    listings = [p for p in files if p.rpartition("/")[2] == "lean-deps.json" and p.rpartition("/")[0] in beside]
+    if len(listings) != 1:
+        print(f"lean_audit: {run_id} " + (f"has {len(listings)} bundle listings ({', '.join(sorted(listings))}); not pinned"
+                                          if listings else "exported no bundle (`--export`)"), file=sys.stderr)
         return 1
+    listing = listings[0]
     with tempfile.TemporaryDirectory() as d:
         got = json.loads((st.fetch(rr, Path(d), paths=[listing]) / listing).read_text())["deps"]
     base = listing[: -len("lean-deps.json")]

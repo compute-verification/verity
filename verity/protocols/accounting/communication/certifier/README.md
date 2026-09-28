@@ -1,6 +1,6 @@
 # Network certifier (`verity.protocols.accounting.communication.certifier`)
 
-A spec-level reference for network transparency's timing channel:
+A spec-level reference for network accounting's timing channel:
 - the constant-rate, left-packed certifier;
 - the Program's logical schedule, with its clock-sync advice (δ, ρ);
 - the exact audit with record-and-reject, on raw records, records committed by hash (padding elided), or network

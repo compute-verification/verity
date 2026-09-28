@@ -183,9 +183,9 @@ tags and the tree walk are imported from here; the position leaf and the level f
 these tags, with a pluggable hash for benchmarks. Every committer, the opening verifiers (`hidden_stream.py`,
 `native_host.py`, `native_ranges.py`) and `padding_steps.py` hash through it, and
 `hashing.py` / `merkle.py` re-export the id-leaf rules of `verity.primitives.commitments.leaves`.
-`tests/commit/test_production_vectors.py` checks it against every vector, the weights root included.
+`integrations/vllm/tests/commit/test_production_vectors.py` checks it against every vector, the weights root included.
 
-**CUDA** (checked against the vectors by the pod-marked `tests/commit/test_scheme_cuda.py`):
+**CUDA** (checked against the vectors by the pod-marked `integrations/vllm/tests/commit/test_scheme_cuda.py`):
 
 - `verity_vllm/commit/committer/native_tree.cu`: `fa2h` chunk leaves and the node/lift levels. Words 8 and 9 of its
   header are hard-wired to 0, so it can only reproduce the legacy-tile chunk vectors.

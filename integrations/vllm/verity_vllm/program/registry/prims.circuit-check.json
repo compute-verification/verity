@@ -1,0 +1,49 @@
+{
+ "pieces": {
+  "DivFullScaleA_v2": {
+   "and": 1542
+  },
+  "F32Sub_v2": {
+   "and": 823
+  },
+  "GatherBf16x16_v1": {
+   "and": 283
+  },
+  "GatherBf16x19_v1": {
+   "and": 335
+  },
+  "GatherBf16x1_v1": {
+   "and": 47
+  },
+  "GatherBf16x2_v1": {
+   "and": 62
+  },
+  "GatherBf16x32_v1": {
+   "and": 538
+  },
+  "GatherBf16x3_v1": {
+   "and": 79
+  },
+  "GatherBf16x4_v1": {
+   "and": 93
+  },
+  "GatherBf16x5_v1": {
+   "and": 111
+  },
+  "GatherBf16x64_v1": {
+   "and": 1049
+  },
+  "GatherBf16x8_v1": {
+   "and": 156
+  },
+  "RopeOutAdd_v1": {
+   "and": 2998
+  },
+  "RopeOut_v1": {
+   "and": 2998
+  },
+  "SiluMulBf16_v1": {
+   "and": 2699
+  }
+ }
+}

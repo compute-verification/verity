@@ -106,7 +106,7 @@ a `sys.path` entry another test file added: every suite runs alone.
   runner fails a run in which the tests changed a file of the repository, and names the files.
 - **Exact:** for bit-exact code, compare words, digests and pinned vectors, not approximations. A negative checks that the
   code rejects by name, not merely that it raises.
-- **Small fixtures** sit beside the tests (`tests/fixtures/`). Shared ones go under the root `fixtures/`, registered in
+- **Small fixtures** sit beside the tests, in a `fixtures/` directory of the suite's own. Shared ones go under the root `fixtures/`, registered in
   `fixtures/artifacts.json`. `tests/test_repository.py` caps a tracked file at 256 KiB (source code aside). A larger
   fixture is registered there and gitignored instead: `research data put --kind fixture/v1 --file|--tree PATH --preserve`,
   add the id and path to the registry and the path to `.gitignore`, then `research data export`. `suites.py` fetches it

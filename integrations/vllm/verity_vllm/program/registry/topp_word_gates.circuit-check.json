@@ -1,0 +1,25 @@
+{
+ "pieces": {
+  "BitXor_v1": {
+   "and": 0
+  },
+  "I32ToF32_v1": {
+   "and": 368
+  },
+  "NvLogf_v1": {
+   "and": 48646
+  },
+  "NvLogf_v2": {
+   "and": 48616
+  },
+  "SelectBit_v1": {
+   "and": 1
+  },
+  "TopPNumkeep_v1": {
+   "and": 425
+  },
+  "U32Xor_v1": {
+   "and": 0
+  }
+ }
+}

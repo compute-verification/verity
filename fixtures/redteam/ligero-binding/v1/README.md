@@ -1,10 +1,10 @@
-# Statement-binding fixtures for the direct Ligero GPU prover (`backends/direct/ligero`)
+# Statement-binding fixtures for the direct Ligero GPU prover (`archive/direct/ligero`)
 
 The red team's checklist (`note:r20-proof/red-team-vu/20260922T1042Z-report-redteam-vu`, F1 / F2 / F19) applied to the b-ligero prover,
 lane `b-ligero2`.  `binding.json` is the output of
 
 ~~~text
-python -m backends.direct.ligero.redteam_binding --device cuda --out binding.json      # vy-g3 (L40S)
+python -m archive.direct.ligero.redteam_binding --device cuda --out binding.json      # vy-g3 (L40S)
 ~~~
 
 | case | what | pre-fix (`main` 799ec36) | post-fix |

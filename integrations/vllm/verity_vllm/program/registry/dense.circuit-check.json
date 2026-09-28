@@ -1,0 +1,10 @@
+{
+ "pieces": {
+  "GeluTanhMulBf16_v1": {
+   "and": 1051
+  },
+  "TanhF32Rn_v1": {
+   "and": 182
+  }
+ }
+}

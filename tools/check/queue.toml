@@ -13,8 +13,7 @@ role = "vllm-coordinator"
 paths = ["integrations/vllm/", "!README.md"]
 by = "the vLLM coordinator"
 
-# A change to what a guarantee says waits on nobody: Daniel gets a DM when it lands (AGENTS.md "Lean"). A grant with
-# `lean_audit = ["guarantees", "reads"]` would make it wait for a statement reviewer again.
+# A change to what a guarantee says waits on nobody: Daniel gets a DM when it lands (AGENTS.md "Lean").
 
 # The red team for changes to what C-Flock proves: the prover's circuits, the verifier of record, and its proofs (soundness,
 # level3 and the verifier's, under the security analysis's proofs since the Lean move).

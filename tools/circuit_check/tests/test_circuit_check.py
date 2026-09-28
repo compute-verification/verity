@@ -45,7 +45,7 @@ def _clean(entry: dict) -> None:
 
 def test_every_registered_definition_is_checked():
     """Every registered Definition family is checked at a binding the catalog reaches, and every catalog root builds: a new
-    Definition without one fails here by name (add its binding to `circuit_check.targets`)."""
+    Definition without one fails here by name (add its binding to its module's sidecar, `circuit_check.sidecars`)."""
     assert not TG.ROOT_ERRORS, TG.ROOT_ERRORS
     assert len(TG.REGISTERED) > 200
     checked = {TG.family(fn) for fn in SUITE.values()}
