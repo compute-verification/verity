@@ -64,4 +64,28 @@ def srow (cs : InnerCommits) (value : String) (x : Nat) (sh : Option Flock.RecSp
 -- the other values are read as before with a shape
 #guard srow ics "rec-c1" 0 == ok 2
 
+/-! R's shape: `stackedRounds` is `rec_live.stacked_rounds` (36 rounds at m 22 to 24, the binding round first, the cap 128
+nodes; the three differ past it), and an R opening unit is held to the shape R's stream was. -/
+
+def r23 : StackedShape := ⟨23, 2⟩
+
+#guard [22, 23, 24].all fun m => ((stackedRounds ⟨m, 2⟩).map (·.size)) == some 36
+#guard ((stackedRounds r23).bind (·[0]?)) == some (7, #[128], 0, true)
+#guard ((stackedRounds r23).bind (·[3]?)) == some (16, #[], 1, true)
+#guard stackedRounds ⟨22, 2⟩ != stackedRounds r23 && stackedRounds ⟨24, 2⟩ != stackedRounds r23
+#guard stackedRounds ⟨23, 1⟩ != stackedRounds r23 && stackedRounds ⟨21, 2⟩ == none
+
+def held (sh : Option StackedShape) : InnerCommits := { ic with stacked := sh }
+
+def why (x : Flock.V Unit) : Option String := match x with | .error e => some e | .ok _ => none
+
+#guard (checkOpeningShape "rec-opening/m23-c2-p0" (held (some r23))).toOption.isSome
+#guard (checkOpeningShape "rec-opening/m23-c2-p3" (held (some r23))).toOption.isSome
+#guard why (checkOpeningShape "rec-opening/m24-c2-p0" (held (some r23))) == some
+  "FIREWALL-REFUSED: registration: rec-opening/m24-c2-p0 opens R at (m 24, claims 2), not at the shape staging committed R at (m 23, claims 2, META's stacked)"
+#guard (checkOpeningShape "rec-opening/m23-c3-p0" (held (some r23))).toOption.isNone
+#guard why (checkOpeningShape "rec-opening/m23-c2-p0" (held none)) == some
+  "FIREWALL-REFUSED: registration: rec-opening/m23-c2-p0 opens R at (m 23, claims 2), not at the shape staging committed R at (no shape, META's stacked)"
+#guard (checkOpeningShape "rec-sparse/n18-e13-s6-t0" (held none)).toOption.isSome
+
 end Flock.Test.InnerStreams
