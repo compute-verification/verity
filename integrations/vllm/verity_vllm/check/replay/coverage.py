@@ -62,7 +62,7 @@ QUERY_FAMILY_MECHANISM: dict[str, str] = {
                     "vocabulary-range exactness property (properties.vocab_range_exactness)"),
 }
 #: the query families whose identities ARE produced by Program rows (a VU or a named non-evaluable row must address each of them)
-QUERY_FAMILIES_WITH_ROWS = ("instance_outputs", "sampled_token_ids", "moe_block_stream", "tp_rank_partials")
+QUERY_FAMILIES_WITH_ROWS = ("instance_outputs", "sampled_token_ids", "moe_block_stream", "tp_rank_partials", "call_boundaries")
 
 
 def _address_family(op: str, member: str, a: dict[str, Any]) -> str:

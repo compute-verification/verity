@@ -12,22 +12,34 @@ from verity_vllm.check.replay import (compare as CMP, coverage as COV, driver as
                                       opening as OP, population as POP, replay_codes as RC, sample as SM)
 from verity_vllm.program.kernels import rows as RK
 from verity_vllm.query.manifest import format as RM
+from verity_vllm.query.required import Q_MODULE_BODY_ID
 
 EPS = '{"f64":"0x1.4f8b588e368f1p-17"}'
 V, H, I, LP, T = 8, 16, 16, 2, 2          # vocab, hidden, intermediate, prompt len, decode steps (steps = LP-prefill + T decode = 1 + T)
 IMPL = ("model.layers.0.input_layernorm",)  # an observed implementation path: the Program's wrapper prefix is `model.`
 
 
+
+@pytest.fixture(scope="module", autouse=True)
+def _under_module_body():
+    """These worlds exercise the replay's composition of interior rows (a pre-bias Gemm, the root's embedding scale): Values interior to a
+    module body, which only `Q_module_body_v1` has.  Under the query of record every Call boundary is committed and nothing is composed."""
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(IX, "DEFAULT_QUERY", Q_MODULE_BODY_ID)
+        yield
+
 def v2_manifest(inst: dict, request_ids=("r0",), *, digest: str = "t" * 64) -> dict:
     """The required-value manifest of record (`verity_vllm.query`) of `inst` for each request id: one request manifest, or (several requests of
     the same Program, arriving together at engine step 0) their global composition, as `query.cli build-global` writes it."""
     from verity_vllm.correspondence.reader_for_query import Correspondence
     from verity_vllm.query.program_view import from_instances
-    from verity_vllm.query.required import compose_global, request_manifest
+    from verity_vllm.query.compose import compose_global
+    from verity_vllm.query.required import request_manifest
     res = {"program": {"digest": digest, "function": "Derived[vLLMRequest[Test]]"}, "wrapper": "request", "LP": LP, "T": T,
            "target": {"declared": {"compute_capability": [8, 9]}}}
     P = from_instances(inst)
-    parts = {rid: request_manifest(P, Correspondence(P, implementation_paths=IMPL), res, request_id=rid).manifest for rid in request_ids}
+    parts = {rid: request_manifest(P, Correspondence(P, implementation_paths=IMPL), res, request_id=rid, query=Q_MODULE_BODY_ID).manifest
+             for rid in request_ids}
     if len(parts) == 1:
         return next(iter(parts.values()))
     reqs = [{"request_id": rid, "workload_request_id": rid, "index": k, "prompt_len": LP, "max_tokens": len(parts[rid]["steps"]), "arrive_step": 0}

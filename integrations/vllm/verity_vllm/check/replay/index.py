@@ -75,17 +75,19 @@ def parse_struct(type_str: str) -> list[tuple[str, int, list[int], int]]:
 
 #: the query engine whose population addresses a Call's committed output (`addresses.rule` on the record)
 V2_QUERY = "v2-query"
+#: the query a `ProgramIndex` addresses under when its caller names none (None: the query of record)
+DEFAULT_QUERY: str | None = None
 
 
 class ProgramIndex:
     """The Program's rows with their manifest addresses: (op_path, member, request-local step, request-local row) per output slice.
 
     A row's members come from the v2 query's population of the SAME Program (`verity_vllm.query.required.Population.members_of`: the
-    required Values a Call produces under `Q_module_body_v1` + the policy, the rows the manifest counts), read with the correspondence of
-    its Build dir (`program_dir`; without one, the rows' recorded names)."""
+    required Values a Call produces under `query` -- the manifest's; the query of record by default -- + the policy, the rows the manifest
+    counts), read with the correspondence of its Build dir (`program_dir`; without one, the rows' recorded names)."""
 
     def __init__(self, inst: dict[str, Any], *, prefix: str | None = None, attention_paths: list[str] | None = None, tp: dict[str, Any] | None = None,
-                 program_dir: str | None = None):
+                 program_dir: str | None = None, query: str | None = None):
         self.rows: list[dict] = list(inst["rows"])
         # [tp TP-08d] a RANK Program (derive_step --tp W --rank r; result.json `tp` = {"world": W, "rank": r}): its population carries the
         # TP-04 policy (the rank-local partials `part_rank<r>` / `shard_rank<r>` beside every collective output), the one the rank's
@@ -101,7 +103,7 @@ class ProgramIndex:
         from verity_vllm.query.required import population
         P = from_instances(inst)
         corr = Correspondence.of(P, program_dir, implementation_paths=attention_paths or ())
-        pop = population(P, corr, tp=self.tp)
+        pop = population(P, corr, tp=self.tp, **({"query": q} if (q := query or DEFAULT_QUERY) else {}))
         for cid in pop.producers():
             mem = pop.members_of(cid)
             if mem:

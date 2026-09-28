@@ -14,7 +14,7 @@ The rule (no recomputes):
   * **Width** counts bits (`verity.ir.cut.fits`): a unit's boundary gates (read by another unit, or returned) total at most X declared
     bits (16), or the unit has exactly ONE boundary value, of at most W bits (32: float interiors such as a norm scale, attention's
     max, sum and inverse sum).  No dtype is read.
-  * It refines `Q_module_body_v1` without moving its boundary: a Call's inputs and outputs are the bridge's required values.
+  * It is the query of record (`required.QUERY_OF_RECORD`): a Call's inputs and outputs are the bridge's required values.
 
 The cut of one Call (`partition`), on its computing gates (`Graph`, core's `verity.ir.cut.CallGraph`: wiring and constants removed,
 reads through them re-pointed):
@@ -285,6 +285,10 @@ def tap_kernel(scope: str | None, head: str | None = None) -> str:
     return _TAP_KERNEL.get(fam, f"the {fam} kernel")
 
 
+#: unit rules by (Definition id, X, W, extras), shared by every check in the process: a row's request Programs share most specializations
+_RULES: dict = {}
+
+
 def check_calls(groups: Iterable[dict[str, Any]], X: int = 16, W: int = 32, extras: int = 0, *, strict: bool = True,
                 specialize: Callable[[str, dict], Any] = specialization,
                 acquired: Mapping[str, int | Callable[[dict], int]] | None = None) -> dict[str, Any]:
@@ -297,7 +301,7 @@ def check_calls(groups: Iterable[dict[str, Any]], X: int = 16, W: int = 32, extr
     of the Call's statics for a tap whose words depend on them, `query.router_softmax.TAP_WORDS`): those interior values are committed
     boundaries too.  Each group of such a family reports `acquired_interior_words`, and one whose
     partition commits another number of interior words per Call is an `interior-not-acquired` violation."""
-    memo: dict = {}
+    memo = _RULES
     out: list[dict[str, Any]] = []
     agg: dict[tuple[str, str], dict[str, Any]] = {}
 

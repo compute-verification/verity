@@ -20,6 +20,7 @@ import time
 import traceback
 from dataclasses import dataclass
 
+from verity.ir.partition_object import program_sha512
 from verity_vllm.config import option
 from verity_vllm.engine import env as engine_env, hooks
 from verity_vllm.program.frontend.inputs_trace import InputsTrace
@@ -499,7 +500,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             with gzip.open(os.path.join(out, "descriptor.json.gz"), "wb") as f:
                 f.write(raw)
             corr_doc = (desc.get("annotations") or {}).get(CORR_NS) or {}
-            res["program"] = {"function": program.fn.id, "digest": digest, "gates": program.gates, "input_gates": program.input_gates,
+            res["program"] = {"function": program.fn.id, "digest": digest, "sha512": program_sha512(desc), "gates": program.gates, "input_gates": program.input_gates,
                               "n_root_nodes": len(program.fn.body.nodes), "descriptor_bytes": descriptor_size(desc),
                               "descriptor_sha256": hashlib.sha256(raw).hexdigest(), "dead_gates": rep.dead.total if rep.dead else None,
                               "correspondence_digest": corr_digest,

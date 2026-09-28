@@ -554,7 +554,7 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
     workload requests/steps/ranks), the identity-coverage verdict, and openings drawn from the EXPECTED population (incl. the last step
     and every family) verified against the original roots.  Requests: `r<i>` in workload order; B>1 needs the per-step request->row map
     from the global Program (gprog/manifest) -- without it the map binds everything to r0 and the coverage of r1.. FAILS (fail-closed)."""
-    from verity_vllm.commit import binding as B
+    from verity_vllm.commit import binding as B, partition as PT
     from verity_vllm.check import executed_prefix as EP
 
     # [R15 manbind / COORD 5] the map's key `program_digest` is the Program of record = the required manifest's (the Build's digest; at B>=2
@@ -581,7 +581,7 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
     derived_splits = stochastic and ("sampler_splits" in _man_fams or sampling.get("splits") == "derived")
     structure = B.structure_of(com, stochastic=stochastic, derived_splits=derived_splits)
     collector = {"variant": com.name, "retention": getattr(com, "retain", None), "window_mb": args.window_mb, "window_slots": getattr(args, "window_slots", None),
-                 "arena_mb": args.arena_mb, "layout": args.layout, "gpu_tree": bool(args.gpu_tree)}
+                 "arena_mb": args.arena_mb, "layout": args.layout, "gpu_tree": bool(args.gpu_tree), **PT.partition_entry(_hdr if getattr(args, "required_manifest", None) else None)}
     # [R18 tap, F-r17-23] the FA2 tap's bounded-residency record (cap, the one allocation, peaks, split counts) beside the collector variant
     for _s in getattr(com, "sources", []) or []:
         if hasattr(_s, "tap_cap_bytes"):
@@ -743,7 +743,7 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
         ok = [com.verify(rc, o) for o in ops]
     rec = {"rules_version": B.RULES_VERSION, "map_schema": bmap["schema"], "map_digest": bmap["digest"], "map_entries_n": bmap["entries_n"], "layout": bmap["layout"],
            "program_digest": pd, "program_digest_source": ("required-manifest" if man_hdr is not None else "committer"), "root_program_digest": root_pd,
-           "collector": collector, "population": {"source": ("required-manifest (lane manifest: Q_module(P) -- module-boundary population over the Program, families selected by the canonical VU query; R17-9 (ii))" if man_hdr else
+           "collector": collector, "population": {"source": (f"required-manifest (lane manifest: {((man_hdr or {}).get('query') or {}).get('query_id') or 'Q(P)'} over the Program, families selected by the canonical VU query; R17-9 (ii))" if man_hdr else
                                                              "structure(model modules x MEMBER_RULES) x workload(requests, steps=max_new, ranks)"), "manifest": man_hdr,
                                                   "digest": pop_digest, "n": pop_n, "requests": n_req, "steps": horizon, "ranks": 1, "step_rows_recorded": len(step_rows), "step_rows_why": getattr(com, "step_rows_why", None), "step_rows_src": getattr(com, "step_rows_src", None),
                                                   "modules": len(structure["modules"]), "attention_layers": len(structure["attention_layers"]), "hidden": structure["hidden"]},
@@ -1176,9 +1176,9 @@ def main(args: Options, argv: list[str] | None = None) -> None:
         from verity_vllm.commit.binding import require_build_program_digest
         require_build_program_digest(args.required_manifest, args.program_digest)          # [COORD M-0205 (C1)] named refusal, before any engine
         from verity_vllm.query.manifest.format import coverage_check as manifest_coverage_check
-        required_manifest = json.load(open(args.required_manifest))
-        print(f"[delta] required-value manifest {args.required_manifest}: {required_manifest['populations']['identities']} identities "
-              f"{required_manifest['populations']['by_family']} digest {required_manifest['manifest_digest'][:16]} (Program {str(required_manifest['program_digest'])[:16]})", flush=True)
+        from verity_vllm.commit.partition import require_partition
+        required_manifest = require_partition(json.load(open(args.required_manifest)), args.programs_root, args.program_dir)
+        print(f"[delta] required-value manifest {args.required_manifest}: {required_manifest['populations']['identities']} identities {required_manifest['populations']['by_family']} digest {required_manifest['manifest_digest'][:16]} (Program {str(required_manifest['program_digest'])[:16]})", flush=True)
         if args.compiled_taps == "kernels":
             compiled_kernels.set_role_maps(required_manifest)          # BEFORE the engine compiles: capture-time copies + eager acquisitions bind the manifest's roles
             print(f"[delta] compiled kernel taps: argument roles from the manifest's role_maps {compiled_kernels.hooks_info.get('role_maps')} "
