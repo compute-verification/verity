@@ -2,15 +2,16 @@
 rank's vocabulary range (`vocab_range_source`).  One entry point for the single-rank Commit (`pipeline.commit`: `attach`) and for the
 rank workers of a TP Commit: `pipeline.tp.commit` hands `for_ranks(...)` to `engine.rank_worker.tp2_commit_make` through the RPC, each
 rank calls it with its own committer and its rows of the merged manifest, and `require_on_every_rank` fails the Commit closed unless
-every rank attached every tap that is on."""
+every rank attached every tap that is on.  The single-rank `attach` also attaches the call-boundary source (`call_boundary_source`)
+whenever the manifest names `call_boundaries` identities."""
 from __future__ import annotations
 
 import json
 from functools import partial
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
-from verity_vllm.acquire.sources import router_softmax_source, vocab_range_source
+from verity_vllm.acquire.sources import call_boundary_source, router_softmax_source, vocab_range_source
 from verity_vllm.query import router_softmax as RS
 from verity_vllm.query import vocab_range as VR
 
@@ -19,11 +20,14 @@ SOURCES = (("router_softmax_source", router_softmax_source, RS.FAMILY), ("vocab_
 
 
 def attach(com: Any, manifest: Mapping[str, Any] | None, required_classes: tuple[str, ...], *, router_tap_so: str | None = None,
-           vocab_range: bool = False, explicit_classes: bool = False, model: Any = None) -> tuple[str, ...]:
-    """Attach each tap that is on to `com` (each refuses a manifest that does not name its family, exit 3); returns the required classes
-    with the taps' families added unless the caller gave them explicitly."""
+           vocab_range: bool = False, explicit_classes: bool = False, model: Any = None, programs: Sequence[str | None] = ()) -> tuple[str, ...]:
+    """Attach each tap that is on to `com` (each refuses a manifest that does not name its family, exit 3), and the call-boundary source
+    when the manifest names call boundaries (its Program found under `programs`); returns the required classes with their families added
+    unless the caller gave them explicitly."""
     for (_key, mod, _fam), arg in zip(SOURCES, (router_tap_so, vocab_range)):
         required_classes, _src = mod.attach(com, arg, manifest, required_classes, explicit_classes=explicit_classes, model=model)
+    required_classes, _src = call_boundary_source.attach(com, bool(call_boundary_source.manifest_sites(manifest)), manifest, required_classes,
+                                                         explicit_classes=explicit_classes, model=model, programs=programs)
     return required_classes
 
 

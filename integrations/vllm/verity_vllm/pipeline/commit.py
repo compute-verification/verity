@@ -1397,7 +1397,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                       f"telemetry {_hsrc.telemetry_path}", flush=True)
         from verity_vllm.acquire.sources import norm_scale_source as _NSS, taps as _TAPS
         required_classes = _NSS.attach(com, args, required_manifest, required_classes)     # --norm-tap-so only: the norm scales (opt-in, never the record)
-        required_classes = _TAPS.attach(com, required_manifest, required_classes, router_tap_so=args.router_tap_so, vocab_range=args.vocab_range, explicit_classes=required_classes_cli)
+        required_classes = _TAPS.attach(com, required_manifest, required_classes, router_tap_so=args.router_tap_so, vocab_range=args.vocab_range, explicit_classes=required_classes_cli, programs=(args.program_dir, args.programs_root))
         # [R17-42 route A, moe: found on the first padded Commit (cp-moe 04:37Z, rc 139)] the MoE block source stages six planes per MoE layer
         # per step by NAME (moe/L<k>/<plane>); the gather collector lays the arena out from the required-value MANIFEST, so a plane the manifest
         # does not name has no slot and the stage is a wild write (SIGSEGV in Collector::push_desc).  Under the PADDED construction the
