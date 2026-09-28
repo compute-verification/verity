@@ -7,9 +7,18 @@ An adapter is one module of this package (`sampled_proofs`, `pous`, `pouw`) that
 * ``refusals(scheme, ctx) -> tuple[str, ...]``: why this run cannot enable it (empty: it can), decided from the `Context`
   alone, before the engine is built;
 * ``install(scheme, target) -> Installed``: install it on the built model;
+* optionally ``EXECUTES: tuple[str, ...]``: the sites where the option replaces the computation rather than wrapping
+  it (PoUW: ``LinearBase.quant_method.apply``).  A site has at most one executor, innermost; the others wrap it from
+  outside (`protocol_options.SITES`);
+* optionally ``traced_as(scheme, ctx) -> str | None``: the Definition sampled proofs traces an executed site as (for
+  ``ncp-v1``, the declared int7 linear: quantize, exact int32 GEMM, dequantize), None when the Program has none.  An
+  executor without one is refused beside sampled proofs: it would be traced as the stock computation;
 * optionally ``keeps_weight_copy(scheme, ctx) -> bool``: True when the installed option keeps a weight-derived copy
   (PoUW's prepared int7 or FP10 operands) resident across forwards.  With POUS enabled, the selector refuses such an
-  option (`protocol_options.refusals`): its GEMMs would read the copy, not what POUS stores.  Absent means False.
+  option (`protocol_options.refusals`): its GEMMs would read the copy, not what POUS stores.  Absent means False;
+* optionally ``commit_weights(scheme, target) -> Mapping``: its commitment to the plaintext weights of record, made in
+  the composition's first phase, before any option changes the model or reads a beacon (`install`).  ``install`` then
+  finds every option's in ``target.weight_commitments``.
 
 An adapter holds no protocol logic: the scheme, its commitments, the salt and the audit are its protocol package's
 (`verity_pouw`, `verity_pous`, `verity_sampled_proofs`), which never import this one.  It finds its hook sites by type,
@@ -55,12 +64,14 @@ class Context:
 @dataclass(frozen=True)
 class Target:
     """What an adapter installs onto: the served model (on this rank) and the run's `Context`.  ``made`` keeps every
-    `Hooks` handed out, so an install that raises halfway leaves nothing behind."""
+    `Hooks` handed out, so an install that raises halfway leaves nothing behind; ``weight_commitments`` holds every
+    option's commitment to the plaintext weights, by entry, made before any install."""
 
     model: Any
     context: Context
     rank: int = 0
     made: list[Hooks] = field(default_factory=list)
+    weight_commitments: dict[str, Mapping[str, Any]] = field(default_factory=dict)
 
     def hooks(self, entry: str) -> Hooks:
         """A fresh `Hooks` tagged with ``entry`` (``pous:band-chain/d12/v1``), for every patch and service the option makes."""
