@@ -98,8 +98,9 @@ class Params:
 
 
 OPERATING_POINT = Params(n=220, wc=2384, k=12)
-"""The secure-first point (`docs/p3-scheme.md` §2c, `docs/p3-instantiation.md` §1): `B(220, 12)`, labels of 220
-components of 298 B, `m = 65560` B, so a segment is 14.4 MB."""
+"""P3's operating point (`docs/p3-scheme.md` §2c, `docs/p3-instantiation.md` §1): `B(220, 12)`, labels of 220
+components of 298 B, `m = 65560` B, so a segment is 14.4 MB.  P3 is the research codec; the secure-first default is
+the band (`band.SECURE_FIRST`)."""
 
 LEAN_P3_MEETS = Params(n=220, wc=37, k=12)
 """Lean's `p3Scheme`: one segment of `B(220, 12)`, labels of `220 * 37 = 8140` bits."""
