@@ -122,11 +122,15 @@ small binding in `circuit_check.targets`, which the suite enforces.
 ## Checking and merging
 
 There is no GitHub Actions CI. `check` (`tools/check/check.py`) is the one check: every test suite (`tools/check/suites.py`),
-`circuit-check --all`, the Lean
-verifier's build and its partition check against `verity.ir`, the Lean audit, and the verifier's cross-check against
-upstream's Rust verifier when the run is sent its input bundle (skipped by name otherwise). `--record` runs it through `research run` as an
-Attempt of the checked-out clean commit. Merge into `main` only through `research merge <branch>`, which refuses without a
-passing `check` of that exact commit in the evidence store, or when `main` has moved past it.
+`circuit-check --all`, the Lean verifier's build and its partition check against `verity.ir`, the Lean audit, and the
+verifier's cross-check against upstream's Rust verifier, at once on a multi-core CPU pod, with caches that hit only on
+identical inputs. `--record` runs it through `research run` as an Attempt of the checked-out clean commit. Merge into `main`
+only through `research merge <branch>`, which refuses without a passing `check` of that exact commit in the evidence store, or
+when `main` has moved past it; `research merge --train A B C --on POD --project verity` lands several at once on one `check`
+of the merged tree. A change under `backends/flock/` also needs `check`'s agreement with upstream's verifier
+(`lean-agreement`, on the build pinned in `backends/flock/verifier/upstream.json`; not for a `README.md` or `PROTOCOL.md`
+alone, and skipped by name elsewhere): record it with
+`uv run python tools/check/check.py --record --on POD`, which sends that build when the commit touches `backends/flock/`.
 
 ## Lean
 
