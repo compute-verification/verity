@@ -75,8 +75,9 @@ wref     3·m·k·n + f·m·k, f = 24   (route U under W1 with sub-word moves pr
   proved modulo V₀ transfers. The unbiased sums (`checked_unbiased`) are retired as checked values; their honest program
   would cost 36 units per position (γ = 1.08% at n = 2,048).
 - **β = 129** (f = 20, γ ≈ 0.91% at n₀ = 1,600, 0.82% at n = 2,048; `gammaFromTTNCP_U_C2`) needs an unsigned P and a
-  SASS check that the IADD3 with two negated sources is one instruction. `ncp-v1` stays at β = 128 until a route-U
-  forming kernel exists to check.
+  SASS check that the IADD3 with two negated sources is one instruction. The native route-U kernel
+  (`kernels/pouw_gemm.cu`, `ncp_route_u`) reads X + β already formed, so its SASS shows the u8 × s8 `IMMA` but not the
+  forming step; `ncp-v1` stays at β = 128.
 - **γ is conditional on TTNCP_U(0.5%).** The red team found that A2, as first written, required the model program to
   reproduce every output, not only the checked words. Restricted to the checked words, A2 makes the Theorem D chain
   equivalent to TT_NCP rather than a reduction to milder assumptions (`a2WordsIff`). So TTNCP_U, TT_NCP over the route-U
