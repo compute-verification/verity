@@ -61,6 +61,7 @@ from typing import Any
 from verity_vllm.check import gates as G
 from verity_vllm.config import UsageError, option
 from verity_vllm.pipeline import experiment as EXP
+from verity_vllm.program.sampling_event import program_sampler_construction
 
 DEFAULT_SNAPSHOT_STEPS = "all"        # evidence for every specialization (h1: attention T at non-snapshot steps was uncovered)
 DEFAULT_TIER_B_STEPS = "0,1,2,3"       # --full-replay (diagnostic): prefill + three decode steps
@@ -214,10 +215,10 @@ class Plan:
             if g:
                 c += ["--safetensors", g]
             return c
-        # [R17-42 route A (4)] the fold folds the MoE scope under the workload's DECLARED construction (manifest target.moe_construction,
-        # a Program static of record; default indexed-read): passed down explicitly, never read off the trace
-        mc = _workload_moe_construction(a.workload)
-        MC = ["--moe-construction", mc] if mc else []
+        # [R17-42 route A (4)] the fold folds the MoE scope under the workload's DECLARED construction (manifest target.moe_construction) and the top-p
+        # select under the one the Build's Programs declare (--program-dir: a single-request select has no shared-greedy form); never off the trace
+        mc, sc = _workload_moe_construction(a.workload), program_sampler_construction(a.program_dir or ())
+        MC = (["--moe-construction", mc] if mc else []) + (["--sampler-construction", sc] if sc else [])
         if stage in ("fold", "fold_2"):
             return [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "match", "--worker", "fold", "--log", str(self.log), "--profile", a.profile,
                     "--out", str(self.p("fold_summary" if stage == "fold" else "fold_summary_2"))] + MC + \
@@ -620,6 +621,8 @@ class Options:
     seed: int | None = option("--seed", type=int, default=None, help="the replay sample's seed (replay_a, replay_chain: required when they run)")
     no_program: bool = option("--no-program", default=False, action="store_true", help="(--worker fold) skip Program(): no digest")
     persist_dir: str | None = option("--persist-dir", default=None, help="(--worker fold) write program.json + instances.jsonl + accesses.jsonl.gz here (D85)")
+    program_dir: list[str] | None = option("--program-dir", action="append", default=None, help="the Build's Program dir(s) the Match compares against; the fold binds the top-p select under the construction they declare (sampling_event.program_sampler_construction)")
+    sampler_construction: str | None = option("--sampler-construction", default=None, help="(--worker fold) the Programs' sampler construction (the driver passes it from --program-dir)")
     moe_construction: str | None = option("--moe-construction", default=None, help="(--worker fold) [R17-42 route A (4)] the workload's DECLARED MoE construction " "(manifest target.moe_construction: indexed-read | indexed-read-ordered | padded); the driver passes it from --workload")
 
 
@@ -932,17 +935,13 @@ def _max_rss_gb() -> float:
     return ru / (1024 ** 3) if sys.platform == "darwin" else ru / (1024 ** 2)
 
 
-def fold_summary(log_path: str | Path, profile_name: str, *, with_program: bool = True) -> dict:
-    """Fold one log and build the `gates.FOLD_SUMMARY_SCHEMA` document."""
-    return fold_summary_result(log_path, profile_name, with_program=with_program)[0]
-
-
-def fold_summary_result(log_path: str | Path, profile_name: str, *, with_program: bool = True, moe_construction: str | None = None) -> tuple[dict, Any]:
-    """`fold_summary` plus the live `FoldResult` (for `persist_program`).  `moe_construction` [R17-42 route A (4)]: the workload's DECLARED
-    construction; a profile without a `with_moe_construction` hook cannot fold a non-default one -- that FAILS here by name (never another)."""
+def fold_summary_result(log_path: str | Path, profile_name: str, *, with_program: bool = True, moe_construction: str | None = None, sampler_construction: str | None = None) -> tuple[dict, Any]:
+    """Fold one log: the `gates.FOLD_SUMMARY_SCHEMA` document and the live `FoldResult` (for `persist_program`).  `moe_construction` [R17-42 route A (4)]: the workload's
+    DECLARED construction, which a profile without a `with_moe_construction` hook cannot fold (FAILS by name); `sampler_construction`: the Programs' (`--program-dir`)."""
     from verity_vllm.check.fold_compare import load_profile, summarize
     from verity_vllm.observe.events import Root, RunHeader
     from verity_vllm.observe.fold.fold import fold
+    from verity_vllm.observe.fold.patterns.sampling import with_sampler_construction
     from verity_vllm.observe.log import read_log
     from verity_vllm.program.frontend.target_profile import TargetProfile
 
@@ -955,6 +954,7 @@ def fold_summary_result(log_path: str | Path, profile_name: str, *, with_program
             raise SystemExit(f"workload declares moe_construction={moe_construction!r} but profile {profile_name} has no with_moe_construction hook: "
                              f"it cannot fold that construction (refused by name; the MOE-01 fold is NOT a substitute)")
         profile = hook(profile, moe_construction)
+    profile = with_sampler_construction(profile, sampler_construction)
     events = list(read_log(log_path))
     header = next((e for e in events if isinstance(e, RunHeader)), None)
     result = fold(events, profile, strict=None, with_program=with_program)
@@ -1004,7 +1004,7 @@ def fold_summary_result(log_path: str | Path, profile_name: str, *, with_program
         "schema": G.FOLD_SUMMARY_SCHEMA, "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "log": str(log_path),
         "profile": profile_name, "profile_id": profile.id, "with_program": with_program, "digest": result.digest, "spec": summ.get("spec"),
         # [R17-42 route A (4)] the DECLARED construction the scope folded under (None = undeclared = indexed-read) and the pattern that did
-        "moe_construction": moe_construction, "moe_scope_pattern": scope_pattern,
+        "moe_construction": moe_construction, "moe_scope_pattern": scope_pattern, "sampler_construction": sampler_construction,
         "n_instances": len(result.instances), "n_steps": len(per_step), "unsupported": result.report.unsupported,
         "unresolved": result.unresolved, "opaque_fallbacks": opaque, "errors": len(result.errors), "error_classes": summ.get("error_classes"),
         "error_examples": summ.get("error_examples"), "unknown_roots": unknown, "root_classes": dict(classes), "unbound_roots": unbound,
@@ -1158,7 +1158,7 @@ def fold_worker(a: Options) -> int:
             raise SystemExit(f"--worker fold needs --{req}")
     from verity_vllm.pipeline.gc_tuning import tune as _gc_tune   # process-level; content-neutral (VERITY_GC_THRESHOLDS)
     _gc_tune()
-    doc, result = fold_summary_result(a.log, a.profile, with_program=not a.no_program, moe_construction=getattr(a, "moe_construction", None))
+    doc, result = fold_summary_result(a.log, a.profile, with_program=not a.no_program, moe_construction=getattr(a, "moe_construction", None), sampler_construction=getattr(a, "sampler_construction", None))
     out = Path(a.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     if getattr(a, "persist_dir", None):
