@@ -234,7 +234,12 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
     if 2 ^ n != size || !(2 ≤ lo && lo < n) then throw s!"META: lookup {name}'s index is not its table's"
     let some (_, words) := tables.find? (·.1 == name) | throw s!"the circuit has a lookup of {name}: its table is not given"
     if words.size != 4 * size || hexOf (Sha512.hash words) != pinned.sha512 then throw s!"MUFU table {name}: not the pinned table"
-    nets := nets.push (s!"lookup:{name}", ← Lookup.build s!"lookup:{name}" words n lo 31)
+    -- META `gen`: absent, v1's rows (`Lookup.build`); `table/v2`, the v2 generator (`Lookup.buildV2`, a library table)
+    let net ← match (spec.getObjVal? "gen").toOption with
+      | none => Lookup.build s!"lookup:{name}" words n lo 31
+      | some (Json.str "table/v2") => Lookup.buildV2 s!"lookup:{name}" words n lo 31 true
+      | some _ => throw s!"META: lookup {name}'s gen is neither absent nor table/v2"
+    nets := nets.push (s!"lookup:{name}", net)
   let ports ← (← J.arr mj "ports" ctx).mapM fun p => do
     let a ← J.asArr p s!"{ctx}: a port"
     if a.size != 4 then throw s!"{ctx}: a port is not [name, words, chunks, nb]"
