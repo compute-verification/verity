@@ -40,7 +40,8 @@ FAMILIES = ("input_token_ids", "instance_outputs", "sampled_token_ids", "weights
             "sampler_splits",                   # [R16 reqval REQ-03, stoch M-0254 derived S] additive: only a Program whose `splits` Input a stochastic selector reads
             "norm_scales",                      # opt-in (query.norm_scales): one f32 per norm Call per row, `<norm module>/scale`; never the record
             "router_softmax",                   # opt-in (query.router_softmax): the ordered router's softmax per token row, `moe/L<k>/router_softmax`
-            "vocab_range")                      # opt-in (query.vocab_range): a TP rank's range values per token row, `<embedding module>/vocab_range`
+            "vocab_range",                      # opt-in (query.vocab_range): a TP rank's range values per token row, `<embedding module>/vocab_range`
+            "scale_products")                   # additive (query.scale_products): a shared-scale FP8 GEMM's products per row, `<linear module>/scale_products`
 
 TP_PARTIAL_MEMBER = "part_rank{rank}"
 

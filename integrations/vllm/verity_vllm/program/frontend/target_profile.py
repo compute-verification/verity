@@ -123,6 +123,10 @@ class TargetProfile:
                            and Gumbel select each compute `temp == 0`; `"shared-greedy"` (the default when None) binds their
                            `registry.sampling.SHARED_GREEDY` entry (the same function), which computes it once for both.  Omitted from
                            `to_json()` when None.
+    fp8_scale_construction -> how the blockwise FP8 GEMM's scale products `sx[kb] * sw[nb][kb]` are constructed (a Program static,
+                           declared-and-bound, never attested).  `"shared-per-block"` (the default when None) binds
+                           `ScaledMmFp8BlockSharedScale_v1`: each weight block's K/G products once, read by its G coordinates.
+                           `"per-coordinate"` binds `ScaledMmFp8Block_v1`, whose every coordinate forms its own.  Omitted from `to_json()` when None.
 
     Derived (not fields; one rule each, `verity_vllm.program.registry.targets` consumes them): `tensor_core_family` (the registered k16
     tensor-core step of the capability: `ampere` for sm_8x, `hopper` for sm_90) and `tuned_gemm_arch_family` (vLLM's tuned
@@ -164,10 +168,15 @@ class TargetProfile:
     #: the stochastic token select's construction (None = "shared-greedy"; see the doc); never attested
     sampler_construction: str | None = None
 
+    #: the blockwise FP8 GEMM's scale-product construction (None = "shared-per-block"; see the doc); never attested
+    fp8_scale_construction: str | None = None
+
     WEIGHT_ONLY_CALLS = ("per-forward", "once")
     DEFAULT_WEIGHT_ONLY_CALLS = "once"
     SAMPLER_CONSTRUCTIONS = ("greedy-check-per-stage", "shared-greedy")
     DEFAULT_SAMPLER_CONSTRUCTION = "shared-greedy"
+    FP8_SCALE_CONSTRUCTIONS = ("per-coordinate", "shared-per-block")
+    DEFAULT_FP8_SCALE_CONSTRUCTION = "shared-per-block"
 
     # the registered block-scaled FP8 GEMM selections: value -> the vLLM kernel class the selector must have taken
     FP8_BLOCK_GEMM_KERNELS = {"cutlass": "CutlassFp8BlockScaledMMKernel"}
@@ -245,6 +254,9 @@ class TargetProfile:
         if self.sampler_construction is not None and self.sampler_construction not in self.SAMPLER_CONSTRUCTIONS:
             raise ValueError(f"sampler_construction must be None ({self.DEFAULT_SAMPLER_CONSTRUCTION}) or one of "
                              f"{list(self.SAMPLER_CONSTRUCTIONS)}; got {self.sampler_construction!r}")
+        if self.fp8_scale_construction is not None and self.fp8_scale_construction not in self.FP8_SCALE_CONSTRUCTIONS:
+            raise ValueError(f"fp8_scale_construction must be None ({self.DEFAULT_FP8_SCALE_CONSTRUCTION}) or one of "
+                             f"{list(self.FP8_SCALE_CONSTRUCTIONS)}; got {self.fp8_scale_construction!r}")
 
     # -- derived facts (one rule each; no second table anywhere) ---------------------------------------------------------
     def effective_moe_construction(self) -> str:
@@ -262,6 +274,10 @@ class TargetProfile:
     def effective_sampler_construction(self) -> str:
         """The stochastic token select's construction: the declared knob, else `shared-greedy`."""
         return self.sampler_construction if self.sampler_construction is not None else self.DEFAULT_SAMPLER_CONSTRUCTION
+
+    def effective_fp8_scale_construction(self) -> str:
+        """The blockwise FP8 GEMM's scale-product construction: the declared knob, else `shared-per-block`."""
+        return self.fp8_scale_construction if self.fp8_scale_construction is not None else self.DEFAULT_FP8_SCALE_CONSTRUCTION
 
     def moe_construction_declaration(self) -> dict:
         """[R17-42] The construction block GP-01 writes into the workload Program header: value, whether it was declared explicitly, the
@@ -391,6 +407,8 @@ class TargetProfile:
             d.pop("weight_only_calls", None)  # absent = DEFAULT_WEIGHT_ONLY_CALLS; every earlier profile digest unchanged
         if d.get("sampler_construction") is None:
             d.pop("sampler_construction", None)
+        if d.get("fp8_scale_construction") is None:
+            d.pop("fp8_scale_construction", None)  # absent = shared-per-block; every earlier profile digest unchanged
         return d
 
     def fp8_block_gemm_kernel(self) -> str | None:

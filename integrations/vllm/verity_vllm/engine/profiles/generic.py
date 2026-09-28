@@ -439,7 +439,8 @@ def build_profile(role: str, world: int = 1, *, moe_construction: str | None = N
                         "kernels": ["_C.per_token_group_fp8_quant (per_token_group_quant_8bit_kernel)",
                                     "_C.cutlass_scaled_mm blockwise (cutlass_3x_gemm_fp8_blockwise<bf16>, sm90)"],
                         "env": ["VLLM_USE_DEEP_GEMM=0 (the DeepGEMM JIT path is not modelled)", "VLLM_USE_FLASHINFER_SAMPLER=0"],
-                        "families": ["Fp8GroupQuant_v1{K,G}", "ScaledMmFp8Block_v1{K,N,G}"], "quantization_config": C.get("quantization_config")}
+                        "families": ["Fp8GroupQuant_v1{K,G}", "ScaledMmFp8BlockSharedScale_v1{K,N,G} (fp8_scale_construction per-coordinate: "
+                                     "ScaledMmFp8Block_v1{K,N,G})"], "quantization_config": C.get("quantization_config")}
     if arch == "moe":
         moe = next(p for p in patterns if isinstance(p, MoEFusedExperts))
         E, T, I, H = C["NUM_EXPERTS"], C["TOPK"], C["I"], C["H"]

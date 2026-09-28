@@ -88,6 +88,8 @@ EVALUATORS = {
     "Fp8GroupQuant_v1": "verity_vllm.program.kernels.derived_rows.fp8_group_quant_row (per-token-group(128) e4m3 quant: exact fmaxf fold from eps, div.rn, cvt.rn.satfinite.e4m3)",
     "ScaledMmFp8Block_v1": "verity_vllm.program.kernels.derived_rows.scaled_mm_fp8_block_row (ascending k: G/32 HopperE4m3QgmmaDot32 steps from +0 per 128-block, "
                            "FFMA(temp, FMUL(sx, sw), acc), cvt.rn.bf16.f32) on the composed Fp8GroupQuant output + the registered e4m3 / f32 weight slices",
+    "ScaledMmFp8BlockSharedScale_v1": "verity_vllm.program.kernels.derived_rows.scaled_mm_fp8_block_row (ScaledMmFp8Block_v1's function and signature: "
+                                      "each weight block's scale products once, registry.fp8.ScaledMmFp8BlockSharedScale)",
     # [MAN-06f v3 unit 2, moe R16] the fused-MoE block relations (verity_vllm.program.registry.moe bodies; R13 moe_kernel_xcheck = the reference against
     # the real kernels): every plane word is PRODUCED by an evaluated relation over committed plane words + registered expert weights
     "MoeRouterTopK_v1": "verity_vllm.program.registry.moe.MoeRouterTopK evaluated per token with the registry's scalar primitives (f32 softmax in the kernel's "
@@ -143,7 +145,8 @@ _FP8_TWIN_PROVENANCE = {
     "definitions": "verity_vllm/program/registry/fp8.py: Fp8GroupQuant_v1{K,G}, ScaledMmFp8Block_v1{K,N,G}, HopperE4m3QgmmaDot32_v1 (the reference; the twins are checked against them, never the other way round)",
 }
 #: family -> provenance of its evaluator when it is a fitted twin (a family absent here is evaluated by the registry's own derived rows)
-EVALUATOR_PROVENANCE: dict[str, dict] = {"Fp8GroupQuant_v1": _FP8_TWIN_PROVENANCE, "ScaledMmFp8Block_v1": _FP8_TWIN_PROVENANCE}
+EVALUATOR_PROVENANCE: dict[str, dict] = {"Fp8GroupQuant_v1": _FP8_TWIN_PROVENANCE, "ScaledMmFp8Block_v1": _FP8_TWIN_PROVENANCE,
+                                          "ScaledMmFp8BlockSharedScale_v1": _FP8_TWIN_PROVENANCE}
 
 GEMM_CHUNK = 4096                       # Gemm coordinates evaluated per vectorised k16 chain (bounds the int64 temporaries to ~0.5 GB)
 SAMPLED_MEMBER = "sampled_token_ids"
@@ -702,6 +705,7 @@ def _check_targets() -> dict[str, list]:
         "GumbelTopPTokenSelectSharedGreedy_v1": [bind(sampling.GumbelTopPTokenSelectSharedGreedy, V=16)],
         "Fp8GroupQuant_v1": [bind(fp8.Fp8GroupQuant, K=256, G=128)],
         "ScaledMmFp8Block_v1": [bind(fp8.ScaledMmFp8Block, K=128, N=128, G=128)],
+        "ScaledMmFp8BlockSharedScale_v1": [bind(fp8.ScaledMmFp8BlockSharedScale, K=128, N=128, G=128)],
         "MoeRouterTopK_v1": [bind(moe.MoeRouterTopK, **router)],
         "MoeRouterTopKNorm_v1": [bind(moe.MoeRouterTopKNorm, **router)],
         "MoeRouterTopKOrdered_v1": [bind(moe.MoeRouterTopKOrdered, **router)],
@@ -737,6 +741,7 @@ _row("GumbelTopPTokenSelect_v1", gumbel_topp, (SAMPLED_MEMBER,), _sample_gumbel)
 _row("GumbelTopPTokenSelectSharedGreedy_v1", gumbel_topp, (SAMPLED_MEMBER,), _sample_gumbel)
 _row("Fp8GroupQuant_v1", fp8_group_quant, ("0", "1"))
 _row("ScaledMmFp8Block_v1", scaled_mm_fp8_block, ("0",))
+_row("ScaledMmFp8BlockSharedScale_v1", scaled_mm_fp8_block, ("0",))
 _row("MoeRouterTopK_v1", partial(moe_router, renormalize=False), ("router_w", "router_ids"))
 _row("MoeRouterTopKNorm_v1", partial(moe_router, renormalize=True), ("router_w", "router_ids"))
 _row("MoeRouterTopKOrdered_v1", partial(moe_router, renormalize=False), ("router_w", "router_ids"))

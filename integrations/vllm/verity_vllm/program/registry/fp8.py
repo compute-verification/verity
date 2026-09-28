@@ -297,7 +297,7 @@ def ScaledMmFp8Block(B, S, xq, sx, w, ws):
 
 
 # ---------------------------------------------------------------------------------------------------------
-# the same blockwise GEMM with each weight block's scale products computed once (opt-in: nothing binds it until the re-baseline).
+# the same blockwise GEMM with each weight block's scale products computed once (`TargetProfile.fp8_scale_construction`, the default).
 # `ScaledMmFp8Block_v1` forms `s = FMUL(sx[kb], sw[kb])` inside every coordinate, so the G coordinates of one weight block compute
 # the same K/G products in G units: G - 1 recomputes of each.  Here a weight block's products are one node its G coordinates read,
 # and the partition commits them: K/G f32 words per weight block, N/G * K/G per Call.
@@ -345,7 +345,7 @@ def ScaledMmFp8BlockSharedScale(B, S, xq, sx, w, ws):
     return _Coll(Array(N, BF16), out.refs)
 
 
-#: each restated GEMM by the Definition it restates (the re-baseline binds these instead)
+#: each restated GEMM by the Definition it restates (bound instead under `fp8_scale_construction = shared-per-block`)
 SHARED_SCALE = {"ScaledMmFp8Block_v1": ScaledMmFp8BlockSharedScale}
 
 
