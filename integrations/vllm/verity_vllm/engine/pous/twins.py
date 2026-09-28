@@ -14,7 +14,7 @@ def reference(name: str) -> tuple[Codec, Geometry]:
     if name == P3.name:
         return P3, OPERATING_POINT
     if name == dense_ref.DENSE.name:
-        return dense_ref.DENSE, dense_ref.SECURE_FIRST
+        return dense_ref.DENSE, dense_ref.POINT_64K
     raise NotImplementedError(f"no reference codec {name!r} (have {P3.name!r}, {dense_ref.DENSE.name!r})")
 
 

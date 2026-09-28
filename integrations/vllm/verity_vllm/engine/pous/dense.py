@@ -1,6 +1,6 @@
 """The GPU twin of `verity_pous.dense.DENSE`: one layer on the complete DAG, the overwrite chain over `Pi2`, no `P`.
 
-Per segment `s` with `tag_s = salt || u64(s)`, block `i` of `B` blocks of `L` bytes (`dense.SECURE_FIRST`: 512 of 65,536):
+Per segment `s` with `tag_s = salt || u64(s)`, block `i` of `B` blocks of `L` bytes (`dense.POINT_64K`: 512 of 65,536):
 
     h_0   = 0^L || tag_s || u256(i)                  (the chaining value is `L + 64` bytes; `dom` fills its last 64)
     key_i = r of the last (r, h) <- Pi2(B || h) over C_{i-1}, ..., C_0, pad        pad = 0x01 || 0 .. 0 || 0x80 (L bytes)
