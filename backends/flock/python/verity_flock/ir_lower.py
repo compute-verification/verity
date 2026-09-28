@@ -373,9 +373,9 @@ def units(target, cut: Callable | None = None, group: int = 1) -> Units:
 #: tensor-core k-step primitive -> fp.tc_dot16's (groups, W, F): verity.ml.tc.models AMPERE_BF16_M16N8K16 / HOPPER_BF16_WGMMA_K16.
 #: The Ampere step has two ids, the vLLM registry's _v1 and core's _v2 (verity.ml.prims): one measured total function.
 TC_STEPS = {"AmpereBF16TcDot16_v1": ((8, 8), 25, -132), "AmpereBF16TcDot16_v2": ((8, 8), 25, -132), "HopperBF16WgmmaDot16_v1": ((16,), 26, -133)}
-#: the FP8 step -> fp.tc_dot_e4m3's (groups, W, F): verity.ml.tc.total_fp8 HOPPER_E4M3_WGMMA_K32 (a GEMM's FP8 coordinate is walked,
-#: not unit-lowered)
-TC_STEPS_FP8 = {"HopperE4m3QgmmaDot32_v1": ((32,), 14, -139)}
+#: the FP8 steps -> fp.tc_dot_e4m3's (groups, W, F): verity.ml.tc.total_fp8 HOPPER_E4M3_WGMMA_K32 and models.BLACKWELL_SM120_E4M3_M16N8K32
+#: (a GEMM's FP8 coordinate is walked, not unit-lowered)
+TC_STEPS_FP8 = {"HopperE4m3QgmmaDot32_v1": ((32,), 14, -139), "BlackwellE4m3QmmaDot32_v1": ((32,), 26, -133)}
 
 
 def tc_units(target, prim: str | None = None) -> Units:

@@ -86,6 +86,7 @@ from __future__ import annotations
 
 import argparse
 import ctypes
+import hashlib
 import json
 import math
 import multiprocessing as mp
@@ -446,7 +447,17 @@ def build(tu: str, arch: str, out: Path) -> tuple[Path, str]:
     nvcc_bin = cuda_bin("nvcc")
     nvcc = subprocess.run([nvcc_bin, "--version"], capture_output=True, text=True, check=True).stdout.strip().splitlines()[-2:]
     subprocess.run([nvcc_bin, "-O2", f"-arch={arch}", "-Xcompiler", "-fPIC", "-shared", "-o", str(so), str(HERE / tu)], check=True)
-    return so, " / ".join(line.strip() for line in nvcc)
+    ident = " / ".join(line.strip() for line in nvcc)
+    Path(f"{so}.nvcc").write_text(ident + "\n")
+    return so, ident
+
+
+def prebuilt(path: str) -> tuple[Path, str]:
+    """A library `build` produced on another host (``--library``): the path and its toolchain identity (``<path>.nvcc``) plus sha256."""
+    so = Path(path)
+    sidecar = Path(f"{so}.nvcc")
+    ident = sidecar.read_text().strip() if sidecar.exists() else "unknown toolchain"
+    return so, f"{ident} (prebuilt {so.name}, sha256 {hashlib.sha256(so.read_bytes()).hexdigest()})"
 
 
 MMA_SASS = re.compile(r"\b((?:[A-Z]{1,2})?MMA(?:\.[A-Za-z0-9_.]+)?)\b")
@@ -1131,7 +1142,7 @@ def _init_floors(desc, floors):
     import dataclasses
 
     pname, prod, declared, lowering = desc
-    base = S.PIPELINES[pname]
+    base = TCM.MODELS[pname]
     _FLOOR_MODELS = [Model(dataclasses.replace(base, name=f"{base.name}@floor{f}", zero_exponent=f), prod, declared, lowering) for f in floors]
 
 
@@ -1693,6 +1704,8 @@ def main() -> int:
     ap.add_argument("--families", default=None, help="comma list (default all)")
     ap.add_argument("--sass-check", action="store_true", help="cuobjdump -sass the built library and count MMA-class instructions in the tile kernel")
     ap.add_argument("--compile-only", action="store_true", help="build + SASS check only (any GPU or none); --instruction may be a comma list")
+    ap.add_argument("--library", default=None, help="load this library (a --compile-only build of the same instruction and arch, e.g. on a "
+                    "host with the CUDA toolkit) instead of compiling; its toolchain identity is read from <library>.nvcc")
     ap.add_argument("--canary", action="store_true", help="the fixed canary tile set (canary.py): the first tiles of every family + every resolved "
                     "discrepancy-log regression tile; < 1 min; exit 1 on any mismatch; result.json is tc-evidence/v1 with family=canary")
     args = ap.parse_args()
@@ -1725,7 +1738,7 @@ def main() -> int:
             extra.append(Model(TCM.MODELS[name], declared=False, total=mode == "total"))
         ins = dataclasses.replace(ins, models=ins.models + tuple(extra))
 
-    so, nvcc = build(ins.tu, arch, out)
+    so, nvcc = prebuilt(args.library) if args.library else build(ins.tu, arch, out)
     results: dict = {"schema": "wp1/tc-probe/v0", "instruction": ins.describe()}
     if args.sass_check:
         results["sass"] = sass_check(so, ins.entry(args.a_source), out, ins.sass_mma)

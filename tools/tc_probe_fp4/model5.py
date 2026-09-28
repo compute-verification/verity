@@ -142,7 +142,12 @@ def tile_eval(A: np.ndarray, Bt: np.ndarray, SFA: np.ndarray, SFB: np.ndarray, C
     b = E2M1_NUM[Bt.astype(np.int64) & 0xF].reshape(8, ng, group)
     gd = np.einsum("igk,jgk->ijg", a, b)  # exact: |gd| <= 16*144
     live = np.einsum("igk,jgk->ijg", (a != 0).astype(np.int64), (b != 0).astype(np.int64)) > 0
-    dec = SCALE_DECODE[scale_kind]
+    def dec(code: int):
+        try:
+            return SCALE_DECODE[scale_kind](code)
+        except AssertionError:  # an invalid scale code (UE8M0 0xFF): outside the model, for the elements that read it
+            return None
+
     nblk = SFA.shape[1] if SFA.ndim == 2 and SFA.shape[1] else 1
     gpb = ng // nblk  # groups per scale block
     sa = [[dec(int(SFA[i, g // gpb])) if SFA.size else (1, 0) for g in range(ng)] for i in range(16)]
@@ -153,6 +158,9 @@ def tile_eval(A: np.ndarray, Bt: np.ndarray, SFA: np.ndarray, SFB: np.ndarray, C
     err = np.zeros((16, 8), np.bool_)
     for i in range(16):
         for j in range(8):
+            if any(s is None for s in sa[i] + sb[j]):
+                err[i, j] = True
+                continue
             terms = []
             hot = False
             for g in range(ng):
