@@ -1,7 +1,7 @@
 """`research notes`: lane checkpoints and the coordinator's liveness table.
 
   research notes checkpoint LANE STATE TEXT... [--commit SHA] [--keep-pod WHY] [--root DIR]   # STATE = open | blocked | final | superseded
-  research notes inbox LANE [--peek]
+  research notes inbox LANE [--peek] [--urgent]   # --urgent: exit 1 unless an unread handoff's file name says `urgent`
   research notes bind LANE [--branch B] [--worktree DIR] [--pod NAME] [--succeeds LANE] [--brief PATH] [--final HH:MMZ] [--budget TEXT]
   research notes relaunch LANE [--as SUCCESSOR] [--why TEXT] [--brief PATH] [--final HH:MMZ] [--budget TEXT]   # contract §C in one command
   research notes status [--root DIR] [--repo DIR] [--pods] [--stale-min 30] [--since-hours 24] [--all] [--lane GLOB] [--exclude GLOB] [--json]
@@ -1942,6 +1942,9 @@ def _main(argv: list[str]) -> int:
     ib = sub.add_parser("inbox", help="the lane's handoffs it has not been shown yet (its own dir and its predecessors')")
     ib.add_argument("lane")
     ib.add_argument("--peek", action="store_true", help="do not mark them read (someone else looking)")
+    ib.add_argument("--urgent", action="store_true",
+                    help="only unread handoffs with `urgent` in the file name, never marked read; exit 1 when there are none "
+                         "(a worker's timer runs it)")
     ib.add_argument("--root", type=Path, default=None)
     bd = sub.add_parser("bind", help="record the lane's branch / worktree / pod (a successor that took over a predecessor's)")
     bd.add_argument("lane")
@@ -2020,6 +2023,10 @@ def _main(argv: list[str]) -> int:
             if ns.state == "superseded":                    # written by whoever relaunched it: the mail is the successor's
                 return 0
         items = inbox(root, ns.lane)
+        if getattr(ns, "urgent", False):
+            urgent = [x for x in items if "urgent" in x["path"].name.lower()]
+            print(render_inbox(ns.lane, urgent))
+            return 0 if urgent else 1
         print(render_inbox(ns.lane, items))
         if not getattr(ns, "peek", False):
             mark_seen(root, ns.lane, items)
