@@ -192,6 +192,10 @@ hypotheses of the theorems that use them, never `axiom` declarations, so they ca
 #print axioms FlockSoundness.compose_ordered
 #print axioms FlockSoundness.Compose.sat_physical
 #print axioms FlockSoundness.Rows.compose_eval
+-- over the type DAG: the unit's rows as the block holds them (Compose.ofBlock), ordered and computing the unit type
+#print axioms FlockSoundness.ofBlock_ordered
+#print axioms FlockSoundness.outCols_mem
+#print axioms FlockSoundness.Rows.compose_eval_unit
 -- the audit layer: strategy-level probabilities, draw laws, partitions, the one-stage profile
 #print axioms FlockSoundness.Game.prob_or_le
 #print axioms FlockSoundness.Game.prob_map

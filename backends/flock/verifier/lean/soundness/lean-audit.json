@@ -312,6 +312,31 @@
    "assumptions": [],
    "type_hash": "00000000ba2f91ed"
   },
+  "FlockSoundness.Rows.compose_eval_unit": {
+   "signature": [
+    "FlockSoundness.Rows.compose_eval_unit {types : String → Option Flock.CircuitType} {ls : Array Flock.Layout}",
+    "  {info : String → Option Flock.TableInfo} {words : String → Option (Array ℕ)} {unit : ℕ}",
+    "  {done : Array Flock.DeriveAll.D} (hd : Flock.DeriveAll.deriveChecked types ls info words unit = Except.ok done)",
+    "  {t : Flock.CircuitType} (ht : (ls.getD unit default).type.bind types = some t)",
+    "  {h : FlockSoundness.Compose.Ordered (FlockSoundness.Compose.ofBlock done (done.getD unit default))}",
+    "  {z : Fin (FlockSoundness.Rows.compose (FlockSoundness.Compose.ofBlock done (done.getD unit default)) h).w → Bool}",
+    "  (hz : (FlockSoundness.Rows.compose (FlockSoundness.Compose.ofBlock done (done.getD unit default)) h).Sat z)",
+    "  (h1 : z (FlockSoundness.Rows.compose (FlockSoundness.Compose.ofBlock done (done.getD unit default)) h).one = true)",
+    "  {x : ℕ → Bool}",
+    "  (hx :",
+    "    ∀ (i : Fin (FlockSoundness.Rows.compose (FlockSoundness.Compose.ofBlock done (done.getD unit default)) h).w),",
+    "      ↑i < (done.getD unit default).inCols.size → x ↑i = z i)",
+    "  (F : ℕ) (hF : unit < F) {o : ℕ} (ho : o < t.outputs.size)",
+    "  (ℓ : Fin (FlockSoundness.Rows.compose (FlockSoundness.Compose.ofBlock done (done.getD unit default)) h).w)",
+    "  (hℓ :",
+    "    ↑ℓ =",
+    "      FlockSoundness.Compose.lidx (FlockSoundness.Compose.ofBlock done (done.getD unit default))",
+    "        ((done.getD unit default).outCols.getD o 0)) :",
+    "  z ℓ = (FlockSoundness.Types.Dag.evalT types words F t x).getD o false"
+   ],
+   "assumptions": [],
+   "type_hash": "000000008918e468"
+  },
   "FlockSoundness.Types.Dag.layout_sound": {
    "signature": [
     "FlockSoundness.Types.Dag.layout_sound {types : String → Option Flock.CircuitType} {ls : Array Flock.Layout}",
@@ -523,17 +548,20 @@
  },
  "reads": {
   "Flock.CircuitType": {
-   "digest": "f8cd42a1f33eb743c97ab383222e7acf",
+   "digest": "bc8a8aee1518d4662eebba652825aafc",
    "definitions": {
     "Flock.CircuitType": "789208e06955f6aa",
+    "Flock.CircuitType.calls": "c514a2c006743ee7",
     "Flock.CircuitType.formOk": "a7f2ec83835e1240",
     "Flock.CircuitType.inBits": "449654f95da7d293",
     "Flock.CircuitType.ins": "e7ab560baf422e62",
+    "Flock.CircuitType.itemForms": "d2d22a0c20b6c8a3",
     "Flock.CircuitType.items": "5a0559e90fb11c31",
     "Flock.CircuitType.outBits": "0bf4fa25a5dd0d1f",
     "Flock.CircuitType.outputs": "b1dd4e5f7f730011",
     "Flock.CircuitType.outs": "7a26346e90ec9f1a",
     "Flock.CircuitType.portBits": "bb67dc48fe863148",
+    "Flock.CircuitType.tables": "624bd84d30d3bc9d",
     "Flock.Form": "c244759a14e4dfa8",
     "Flock.Form.c": "dd2357bc27cf6e90",
     "Flock.Form.ws": "2e0b992d9e47c1e2",
@@ -543,10 +571,16 @@
     "Flock.Item.call": "485ffae42b86792f",
     "Flock.Item.read": "5241d29e3aa5f3f1",
     "Flock.instInhabitedForm": "050907a42f7191a6",
-    "Flock.instInhabitedForm.default": "39565b89558a96ad"
+    "Flock.instInhabitedForm.default": "39565b89558a96ad",
+    "Flock.instInhabitedItem": "3e9d7ad7c51b7f32",
+    "Flock.instInhabitedItem.default": "abc98ad87f061274",
+    "Flock.instReprItem.repr": "40f7876e1442c0cd"
    },
    "pins": [
     "FlockSoundness.Rows.compose_eval",
+    "FlockSoundness.Rows.compose_eval_unit",
+    "FlockSoundness.Types.Dag.layout_sound",
+    "FlockSoundness.Types.Dag.unit_sound",
     "FlockSoundness.Types.compose_complete",
     "FlockSoundness.Types.compose_sound"
    ]
@@ -589,6 +623,9 @@
    },
    "pins": [
     "FlockSoundness.Rows.compose_eval",
+    "FlockSoundness.Rows.compose_eval_unit",
+    "FlockSoundness.Types.Dag.layout_sound",
+    "FlockSoundness.Types.Dag.unit_sound",
     "FlockSoundness.Types.compose_complete",
     "FlockSoundness.Types.compose_sound"
    ]
@@ -658,6 +695,7 @@
     "Flock.DeriveAll.xorCols": "e1914f95bd70621c"
    },
    "pins": [
+    "FlockSoundness.Rows.compose_eval_unit",
     "FlockSoundness.Types.Dag.layout_sound",
     "FlockSoundness.Types.Dag.unit_sound"
    ]
@@ -684,6 +722,7 @@
     "Flock.DeriveAll.walk": "29aaa6f1e93aae7e"
    },
    "pins": [
+    "FlockSoundness.Rows.compose_eval_unit",
     "FlockSoundness.Types.Dag.layout_sound",
     "FlockSoundness.Types.Dag.unit_sound"
    ]
@@ -734,6 +773,7 @@
     "Flock.instInhabitedTableInfo.default": "e9539c9f77df741b"
    },
    "pins": [
+    "FlockSoundness.Rows.compose_eval_unit",
     "FlockSoundness.Types.Dag.layout_sound",
     "FlockSoundness.Types.Dag.unit_sound"
    ]
@@ -747,6 +787,7 @@
     "Flock.libraryTable?": "65be82d231b7d443"
    },
    "pins": [
+    "FlockSoundness.Rows.compose_eval_unit",
     "FlockSoundness.Types.Dag.layout_sound",
     "FlockSoundness.Types.Dag.unit_sound"
    ]
@@ -989,6 +1030,9 @@
    },
    "pins": [
     "FlockSoundness.Rows.compose_eval",
+    "FlockSoundness.Rows.compose_eval_unit",
+    "FlockSoundness.Types.Dag.layout_sound",
+    "FlockSoundness.Types.Dag.unit_sound",
     "FlockSoundness.Types.compose_complete",
     "FlockSoundness.Types.compose_sound"
    ]
@@ -1168,7 +1212,17 @@
    },
    "pins": [
     "FlockSoundness.Rows.compose_eval",
+    "FlockSoundness.Rows.compose_eval_unit",
     "FlockSoundness.placement_of_realizes"
+   ]
+  },
+  "FlockSoundness.ComposeDag": {
+   "digest": "56df6bfb01c426d3a169042a42083f70",
+   "definitions": {
+    "FlockSoundness.Compose.ofBlock": "56df6bfb01c426d3"
+   },
+   "pins": [
+    "FlockSoundness.Rows.compose_eval_unit"
    ]
   },
   "FlockSoundness.Defs": {
@@ -1443,6 +1497,7 @@
    },
    "pins": [
     "FlockSoundness.Rows.compose_eval",
+    "FlockSoundness.Rows.compose_eval_unit",
     "FlockSoundness.placement_of_realizes"
    ]
   },
@@ -1922,6 +1977,7 @@
     "FlockSoundness.Types.Dag.runT": "d4cbf85202cccd40"
    },
    "pins": [
+    "FlockSoundness.Rows.compose_eval_unit",
     "FlockSoundness.Types.Dag.layout_sound",
     "FlockSoundness.Types.Dag.unit_sound"
    ]
@@ -1938,6 +1994,9 @@
    },
    "pins": [
     "FlockSoundness.Rows.compose_eval",
+    "FlockSoundness.Rows.compose_eval_unit",
+    "FlockSoundness.Types.Dag.layout_sound",
+    "FlockSoundness.Types.Dag.unit_sound",
     "FlockSoundness.Types.compose_complete",
     "FlockSoundness.Types.compose_sound"
    ]
