@@ -11,8 +11,8 @@ first use in a forward and released after its last; nothing decoded outlives the
 The run's settings are the JSON file vLLM passes as `hf_overrides["quantization_config_file"]`: `safetensors` (the checkpoint
 files), `build_dir` (the native build, `native.load`), `salt` (hex, 24 bytes, drawn by the verifier after the checkpoint
 commitment), `codec` (a reference codec name, `twins.reference`; default P3), `unencoded` (timing only: serve `W` itself
-as `C`, whose decode costs the same and yields garbage), `layers_per_decode`, `thread_rows`, `word_io`, `fused`, `pair`, `pair_max_rows`, `coalesced` (the Feistel kernel dispatch,
-`codec.THREAD_ROWS` ..), `load_check`
+as `C`, whose decode costs the same and yields garbage), `layers_per_decode`, `thread_rows`, `word_io`, `fused`, `pair`, `pair_max_rows`, `coalesced`, `chunked`, `chunked_threads`
+(the Feistel kernel dispatch, `codec.THREAD_ROWS` .., `dense.CHUNKED` ..), `load_check`
 (false skips the load-time check), and
 `drop_fraction` / `drop_source` (the negative control: that fraction of `C`'s blocks, drawn through `verity.randomness` from
 `drop_source`, is zeroed after encoding, and the load-time check is skipped).
@@ -34,7 +34,7 @@ from vllm.model_executor.layers.quantization import register_quantization_config
 from vllm.model_executor.layers.quantization.base_config import QuantizationConfig
 from vllm.model_executor.layers.vocab_parallel_embedding import UnquantizedEmbeddingMethod, VocabParallelEmbedding
 
-from verity_vllm.engine.pous import codec, layout, native, twins
+from verity_vllm.engine.pous import codec, dense, layout, native, twins
 
 DROP_DOMAIN = "verity/pous-vllm/negative-control-drop/v1"
 DTYPES = {"BF16": torch.bfloat16, "F16": torch.float16, "F32": torch.float32}
@@ -67,6 +67,8 @@ class Store:
         codec.WORD_IO[0], codec.FUSED[0], codec.PAIR[0] = (bool(spec.get(k)) for k in ("word_io", "fused", "pair"))
         codec.PAIR_MAX_ROWS[0] = int(spec.get("pair_max_rows") or 1 << 62)
         codec.COALESCED[0] = bool(spec.get("coalesced"))
+        dense.CHUNKED[0] = bool(spec.get("chunked"))
+        dense.CHUNKED_THREADS[0] = int(spec.get("chunked_threads") or 128)
         self.salt = bytes.fromhex(spec["salt"])
         self.device = torch.device("cuda", torch.cuda.current_device())
         self.c: torch.Tensor | None = None

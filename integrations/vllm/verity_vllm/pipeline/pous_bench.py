@@ -42,7 +42,7 @@ class Options:
     thread_rows: int = option("--thread-rows", type=int, default=0, help="rows from which a Feistel launch runs a thread per row")
     load_check: bool = option("--no-load-check", action="store_false", default=True, help="skip the load-time bit-exact check")
     codec: str = option("--codec", default="p3/v1", help="the reference codec served (p3/v1, dense-chain/v1)")
-    kernels: str = option("--kernels", default="", help="Feistel dispatch as JSON: word_io, fused, pair, pair_max_rows, coalesced")
+    kernels: str = option("--kernels", default="", help="Feistel dispatch as JSON: word_io, fused, pair, pair_max_rows, coalesced, chunked, chunked_threads")
     audit: int = option("--audit", type=int, default=0, help="after timing, this many timed audits against the live server")
     audit_k: int = option("--audit-k", type=int, default=111, help="challenges per audit")
     unencoded: bool = option("--unencoded", action="store_true", default=False,
