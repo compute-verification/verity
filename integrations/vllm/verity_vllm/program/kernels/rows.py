@@ -68,7 +68,7 @@ EVALUATORS = {
                     "k16 steps = registry.tc_total hopper_bf16_wgmma_k16 family v1 / ampere_bf16_m16n8k16 total family v3",
     "Attention_v4": "verity_vllm.program.kernels.derived_rows.attention_rows (Attention_v4{T,NH,KVH,D,BN,DOT,INV,MASKED_FROM}: Attention_v2's evaluator "
                     "with block b guarding a running max of -inf only when b >= MASKED_FROM -- FA3's per-iteration Check_inf, "
-                    "registry.fa3_check_inf; opt-in, TargetProfile.fa3_construction)",
+                    "registry.fa3_check_inf; TargetProfile.fa3_construction)",
     "RMSNormTriton_v1": "verity_vllm.program.kernels.derived_rows.rmsnorm_triton_rows",
     "RMSNormFusedCuda_v2": "verity_vllm.program.kernels.derived_rows.rmsnorm_fused_v2_rows",
     "SiluMul_v1": "verity_vllm.program.kernels.derived_rows.silu_mul_rows",

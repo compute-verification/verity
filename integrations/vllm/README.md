@@ -56,8 +56,7 @@ lifted / padded Programs (`lifting/`), `workload.py` / `compact.py`, `model.py` 
 and `kernels/`, the independent kernel models the Definitions wrap (numpy / C++ / CUDA models, twins, relation checkers and
 their tables).  Entrypoints: `program.frontend.derive`, `program.registry`.  Never: module paths as identity, hook sets,
 VU policy, model-name tables (`registry/quarantine/` is the by-name residue and only shrinks).  `registry/fa3_check_inf.py` is FA3's
-per-iteration `Check_inf` chain (`Attention_v4`), bound only under `TargetProfile.fa3_construction = "check-inf-per-iteration"` until the
-re-baseline epoch switches the record to it.
+per-iteration `Check_inf` chain (`Attention_v4`), bound under `TargetProfile.fa3_construction = "check-inf-per-iteration"` (the default).
 
 **`query/`** implements the *verification query*: `module_body.py` (Q_module_body_v1), `program_view.py`, `manifest/` (the
 required-value manifest: `format.py` the shared vocabulary, `verify.py` the rebuild-and-compare check of record),

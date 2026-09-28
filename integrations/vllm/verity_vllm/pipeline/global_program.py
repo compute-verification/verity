@@ -229,6 +229,7 @@ def workload_lag(manifest: dict, shapes: dict) -> dict:
 
 #: [R17-42] the Definition ids (name prefixes of `spec_histogram` keys) that identify each construction's binding of the fused-MoE block
 _MOE_CONSTRUCTION_SPECS = {"indexed-read": ("MoeExpertGemm_v1", "MoeExpertGemmW_v1", "MoeRouterTopK_v1", "MoeRouterTopKNorm_v1", "MoeSum_v1"),
+                           "indexed-read-ordered": ("MoeExpertGemm_v1", "MoeExpertGemmW_v1", "MoeRouterTopKOrdered_v1", "MoeRouterTopKOrderedNorm_v1", "MoeSum_v1"),
                            "padded": ("MoeFfnFixedL_v1",)}
 
 
@@ -246,7 +247,7 @@ def component_spec_histogram(d: str) -> dict | None:
 
 def workload_moe_construction(manifest: dict, shapes: dict) -> dict:
     """[R17-42 / R17-45 (a) route A (3)] The workload Program's `moe_construction` header block: the fused-MoE construction the row's
-    declared target binds (`TargetProfile.effective_moe_construction()`: `indexed-read` = MOE-01, `padded` = one `MoeFfnFixedL_v1` per token),
+    declared target binds (`TargetProfile.effective_moe_construction()`: `indexed-read[-ordered]` = MOE-01, `padded` = one `MoeFfnFixedL_v1` per token),
     a Program STATIC that is declared-and-bound and NEVER attested (the record is construction-agnostic; two Programs of the same trace differ
     in digest by construction).  Coupling checks (fail closed, named): every component's derive-time `target.declared` resolves to the SAME
     construction as the manifest's target, and every component that binds a fused-MoE block binds it with THAT construction's Definitions
@@ -257,8 +258,7 @@ def workload_moe_construction(manifest: dict, shapes: dict) -> dict:
     try:
         tp = workload_target(manifest)
     except (TypeError, ValueError) as e:
-        return {"schema": "verity/workload-program/v1/moe_construction", "value": None,
-                "refusal": f"the manifest's target block does not parse as a TargetProfile: {e}"}
+        return {"schema": "verity/workload-program/v1/moe_construction", "value": None, "refusal": f"the manifest's target block does not parse as a TargetProfile: {e}"}
     decl = tp.moe_construction_declaration()
     out = {"schema": "verity/workload-program/v1/moe_construction", **decl,
            "rule": "R17-42 / R17-45 (a): the fused-MoE construction is a declared-and-bound Program static (TargetProfile.moe_construction; "
@@ -266,7 +266,7 @@ def workload_moe_construction(manifest: dict, shapes: dict) -> dict:
                    "binds the declared construction only, the digest differs by construction on the same trace, GP-01 refuses components of "
                    "another construction by name; never attested by the record, never inferred from it (moe M-1066 (2a))",
            "components": {}, "moe_block_present": False, "refusal": None}
-    own, other = _MOE_CONSTRUCTION_SPECS[decl["value"]], [s for k, v in _MOE_CONSTRUCTION_SPECS.items() if k != decl["value"] for s in v]
+    own, other = _MOE_CONSTRUCTION_SPECS[decl["value"]], {s for v in _MOE_CONSTRUCTION_SPECS.values() for s in v} - set(_MOE_CONSTRUCTION_SPECS[decl["value"]])
     for s, d in sorted(shapes.items()):
         key = f"{s[0]},{s[1]}"
         ct = component_declared_target(d)
@@ -294,7 +294,7 @@ def workload_moe_construction(manifest: dict, shapes: dict) -> dict:
             comp["note"] = "component carries no target.declared (pre-v3 derive): the construction is read from its Definitions only"
         if has_other:
             out["refusal"] = (f"component (LP={s[0]}, T={s[1]}) {d} binds the fused-MoE block with {has_other} -- the "
-                              f"{'indexed-read' if decl['value'] == 'padded' else 'padded'} construction -- while the workload declares "
+                              f"{'/'.join(k for k, v in _MOE_CONSTRUCTION_SPECS.items() if set(has_other) & set(v))} construction -- while the workload declares "
                               f"{decl['value']!r}: refused by name (a Program is of one construction; the digest would be another row's)")
             out["components"][key] = comp
             return out
@@ -305,7 +305,7 @@ def workload_moe_construction(manifest: dict, shapes: dict) -> dict:
                           "an idle declaration is not a construction -- refused (a dense workload has nothing to pad; do not declare it)")
         return out
     out["population_label"] = (("padded fixed-slot MoE: |Q(Lift(P_fixed-slot))|, labelled with its ACTUAL population (R17-45 (1))" if decl["value"] == "padded"
-                                else "indexed-read MoE (MOE-01): |Q(P)|") if out["moe_block_present"] else "no fused-MoE block (dense workload)")
+                                else f"{decl['value']} MoE (MOE-01): |Q(P)|") if out["moe_block_present"] else "no fused-MoE block (dense workload)")
     return out
 
 

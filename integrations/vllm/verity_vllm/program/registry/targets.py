@@ -131,7 +131,7 @@ def fa3_tile_m(D: int, seqlen_q: int, qh_per_kvh: int) -> int:
 
 def fa3_check_inf(profile) -> bool:
     """True when the target builds FA3's attention rows with the per-iteration `Check_inf` chain (`Attention_v4`):
-    an effective FA3 target declaring `fa3_construction = "check-inf-per-iteration"`."""
+    an effective FA3 target whose effective `fa3_construction` is `"check-inf-per-iteration"` (the default)."""
     construction = getattr(profile, "effective_fa3_construction", None)
     return profile.effective_flash_attn_version() == 3 and construction is not None and construction() == "check-inf-per-iteration"
 
