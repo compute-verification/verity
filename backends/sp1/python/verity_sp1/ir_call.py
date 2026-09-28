@@ -87,6 +87,7 @@ OPS: Mapping[str, str] = {
 TC_OPS: Mapping[str, str] = {
     "AmpereBF16TcDot16_v1": "tc_dot16",
     "AmpereBF16TcDot16_v2": "tc_dot16",
+    "AmpereBF16TcDot16_v2": "tc_dot16",
     "Bf16ToF32_v1": "bf16_to_f32",
     "F2fpBf16_v1": "f32_to_bf16",
 }

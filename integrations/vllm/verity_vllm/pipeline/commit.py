@@ -62,7 +62,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.config import option
+from verity_vllm.acquire.sources import taps as TAPS
+from verity_vllm.config import group, option
 from verity_vllm.engine import engine_profile as prof  # noqa: F401
 
 prof.apply_env()
@@ -554,7 +555,7 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
     workload requests/steps/ranks), the identity-coverage verdict, and openings drawn from the EXPECTED population (incl. the last step
     and every family) verified against the original roots.  Requests: `r<i>` in workload order; B>1 needs the per-step request->row map
     from the global Program (gprog/manifest) -- without it the map binds everything to r0 and the coverage of r1.. FAILS (fail-closed)."""
-    from verity_vllm.commit import binding as B
+    from verity_vllm.commit import binding as B, partition as PT
     from verity_vllm.check import executed_prefix as EP
 
     # [R15 manbind / COORD 5] the map's key `program_digest` is the Program of record = the required manifest's (the Build's digest; at B>=2
@@ -581,7 +582,7 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
     derived_splits = stochastic and ("sampler_splits" in _man_fams or sampling.get("splits") == "derived")
     structure = B.structure_of(com, stochastic=stochastic, derived_splits=derived_splits)
     collector = {"variant": com.name, "retention": getattr(com, "retain", None), "window_mb": args.window_mb, "window_slots": getattr(args, "window_slots", None),
-                 "arena_mb": args.arena_mb, "layout": args.layout, "gpu_tree": bool(args.gpu_tree)}
+                 "arena_mb": args.arena_mb, "layout": args.layout, "gpu_tree": bool(args.gpu_tree), **PT.partition_entry(_hdr if getattr(args, "required_manifest", None) else None)}
     # [R18 tap, F-r17-23] the FA2 tap's bounded-residency record (cap, the one allocation, peaks, split counts) beside the collector variant
     for _s in getattr(com, "sources", []) or []:
         if hasattr(_s, "tap_cap_bytes"):
@@ -743,7 +744,7 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
         ok = [com.verify(rc, o) for o in ops]
     rec = {"rules_version": B.RULES_VERSION, "map_schema": bmap["schema"], "map_digest": bmap["digest"], "map_entries_n": bmap["entries_n"], "layout": bmap["layout"],
            "program_digest": pd, "program_digest_source": ("required-manifest" if man_hdr is not None else "committer"), "root_program_digest": root_pd,
-           "collector": collector, "population": {"source": ("required-manifest (lane manifest: Q_module(P) -- module-boundary population over the Program, families selected by the canonical VU query; R17-9 (ii))" if man_hdr else
+           "collector": collector, "population": {"source": (f"required-manifest (lane manifest: {((man_hdr or {}).get('query') or {}).get('query_id') or 'Q(P)'} over the Program, families selected by the canonical VU query; R17-9 (ii))" if man_hdr else
                                                              "structure(model modules x MEMBER_RULES) x workload(requests, steps=max_new, ranks)"), "manifest": man_hdr,
                                                   "digest": pop_digest, "n": pop_n, "requests": n_req, "steps": horizon, "ranks": 1, "step_rows_recorded": len(step_rows), "step_rows_why": getattr(com, "step_rows_why", None), "step_rows_src": getattr(com, "step_rows_src", None),
                                                   "modules": len(structure["modules"]), "attention_layers": len(structure["attention_layers"]), "hidden": structure["hidden"]},
@@ -1054,9 +1055,7 @@ class Options:
     hidden_so: str | None = option("--hidden-so", default=None, help="CMT-2 M1 tap FA2 extension (.so): bind the FA2 hidden stream (rows R5-R8) into the same run root")
     hidden_ns: str | None = option("--hidden-ns", default=None, help="torch.ops namespace of the tapped .so (default verity_fa2_matAll; verity_fa2_matReq for the src-59 build)")
     tap_cap_mb: int | None = option("--tap-cap-mb", type=int, default=None, help="[R18 tap, F-r17-23] cap (MiB) on the FA2 M1 tap's device buffer: a multi-sequence launch whose padded tap buffer exceeds it is " "split into sequence groups tapped one after another into ONE bounded buffer (names/bytes/roots unchanged); default 2048 " "(VERITY_FA2_TAP_CAP_MB); 0 = the unbounded per-geometry buffers (B64 llama 1024: 24.53 GiB, the r17_0738 OOM)")
-    norm_tap_so: str | None = option("--norm-tap-so", default=None, help="opt-in, never the record: the norm-scale tap op (ops/pod_norm_tap.sh) -- commit `<norm module>/norm_scale` for every norm_scales identity of the required manifest (manifest build --norm-scales; acquire.sources.norm_scale_source)")
-    router_tap_so: str | None = option("--router-tap-so", default=None, help="opt-in, never the record: the router-softmax tap op (ops/pod_router_tap.sh) -- commit `moe/L<k>/router_softmax` for every router_softmax identity of the required manifest (manifest build --router-softmax; acquire.sources.router_softmax_source)")
-    vocab_range: bool = option("--vocab-range", default=False, action="store_true", help="opt-in, never the record: commit `<embedding module>/vocab_range` for every vocab_range identity of the required manifest (manifest build --vocab-range; acquire.sources.vocab_range_source)")
+    tap_sources: TAPS.TapSources = group(TAPS.TapSources)
     value_check: bool = option("--value-check", default=False, action="store_true", help="one extra instrumented run with reference taps + re-execution (value_check.json)")
     arms: str | None = option("--arms", default=None, help="R10: comma-separated committer kinds run as separate treatment arms in one process, interleaved with the control (order rotates per round)")
     profile_hooks: bool = option("--profile-hooks", default=False, action="store_true", help="native_collect: time the hook bodies (perf_counter per call) -- profiling run, not a headline timing")
@@ -1176,9 +1175,9 @@ def main(args: Options, argv: list[str] | None = None) -> None:
         from verity_vllm.commit.binding import require_build_program_digest
         require_build_program_digest(args.required_manifest, args.program_digest)          # [COORD M-0205 (C1)] named refusal, before any engine
         from verity_vllm.query.manifest.format import coverage_check as manifest_coverage_check
-        required_manifest = json.load(open(args.required_manifest))
-        print(f"[delta] required-value manifest {args.required_manifest}: {required_manifest['populations']['identities']} identities "
-              f"{required_manifest['populations']['by_family']} digest {required_manifest['manifest_digest'][:16]} (Program {str(required_manifest['program_digest'])[:16]})", flush=True)
+        from verity_vllm.commit.partition import require_partition
+        required_manifest = require_partition(json.load(open(args.required_manifest)), args.programs_root, args.program_dir)
+        print(f"[delta] required-value manifest {args.required_manifest}: {required_manifest['populations']['identities']} identities {required_manifest['populations']['by_family']} digest {required_manifest['manifest_digest'][:16]} (Program {str(required_manifest['program_digest'])[:16]})", flush=True)
         if args.compiled_taps == "kernels":
             compiled_kernels.set_role_maps(required_manifest)          # BEFORE the engine compiles: capture-time copies + eager acquisitions bind the manifest's roles
             print(f"[delta] compiled kernel taps: argument roles from the manifest's role_maps {compiled_kernels.hooks_info.get('role_maps')} "
@@ -1395,9 +1394,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 print(f"[delta] fa2 tap bound (F-r17-23): cap {_hsrc.tap_cap_bytes >> 20} MiB "
                       f"({'ONE bounded device buffer; launches above it are split into sequence groups' if _hsrc.tap_cap_bytes else 'OFF: unbounded per-geometry buffers'}); "
                       f"telemetry {_hsrc.telemetry_path}", flush=True)
-        from verity_vllm.acquire.sources import norm_scale_source as _NSS, taps as _TAPS
-        required_classes = _NSS.attach(com, args, required_manifest, required_classes)     # --norm-tap-so only: the norm scales (opt-in, never the record)
-        required_classes = _TAPS.attach(com, required_manifest, required_classes, router_tap_so=args.router_tap_so, vocab_range=args.vocab_range, explicit_classes=required_classes_cli)
+        required_classes = TAPS.attach(com, required_manifest, required_classes, args.tap_sources, explicit_classes=required_classes_cli)
         # [R17-42 route A, moe: found on the first padded Commit (cp-moe 04:37Z, rc 139)] the MoE block source stages six planes per MoE layer
         # per step by NAME (moe/L<k>/<plane>); the gather collector lays the arena out from the required-value MANIFEST, so a plane the manifest
         # does not name has no slot and the stage is a wild write (SIGSEGV in Collector::push_desc).  Under the PADDED construction the
