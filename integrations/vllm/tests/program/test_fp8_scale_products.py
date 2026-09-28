@@ -53,7 +53,7 @@ def test_the_pairs_reach_every_case_and_the_operand_order_matters():
     ref = {(a, b): _ref(a, b) for a in EDGE for b in EDGE}
     two_nan = [(a, b) for a, b in ref if _is_nan(a) and _is_nan(b) and a != b]
     assert any((a ^ b) & 0x80000000 for a, b in two_nan) and any((a ^ b) & 0x7FFFFFFF for a, b in two_nan)   # signs and payloads differ
-    assert any(ref[a, b] != ref[b, a] for a, b in two_nan)       # which NaN F32Mul_v1 returns depends on the order: (x_s, w_s), never swapped
+    assert all(ref[a, b] == ref[b, a] == 0x7FFFFFFF for a, b in two_nan)   # every NaN product the GPU's canonical NaN, either order
     for a in NAN:                                                # NaN against finite, zero and infinity: a NaN
         assert all(_is_nan(ref[a, b]) and _is_nan(ref[b, a]) for b in FINITE + INF)
     fin = {_class(ref[a, b]) for a in FINITE for b in FINITE}

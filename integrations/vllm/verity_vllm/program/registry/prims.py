@@ -168,14 +168,13 @@ def DivFullRcp(b: int) -> int:
 
 @primitive("DivFullScaleA", 1, [("a", F32), ("b", F32)], F32, conformance="exact-model-tested")
 def DivFullScaleA(a: int, b: int) -> int:
-    """`div.full.f32` numerator range scaling: a*0.25 when |b| > 2^126, a*2^24 when |b| < 2^-126, else a."""
-    fb = f32_of(b)
-    ab = abs(fb)
-    fa = f32_of(a)
+    """`div.full.f32` numerator range scaling: a*0.25 when |b| > 2^126, a*2^24 when |b| < 2^-126 (each an FMUL, `F32Mul`'s
+    NaN rule), else a."""
+    ab = abs(f32_of(b))
     if ab > np.float32(8.507059173023462e37):
-        return bits_of(np.float32(fa * np.float32(0.25)))
+        return f32_mul_bits(a, 0x3E800000)
     if ab < np.float32(1.1754943508222875e-38):
-        return bits_of(np.float32(fa * np.float32(16777216.0)))
+        return f32_mul_bits(a, 0x4B800000)
     return a & 0xFFFFFFFF
 
 

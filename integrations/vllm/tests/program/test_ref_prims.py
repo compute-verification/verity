@@ -702,7 +702,7 @@ def test_transcendental_specials():
         assert f(0x7FC00000) == P.F32_NAN and f(0x41200000) == 0x3F800000 and f(0xC1200000) == 0xBF800000  # ±10 -> ±1
     assert R.F32Sqrt.evaluate(0xBF800000) == P.F32_NAN and R.F32Sqrt.evaluate(0x80000000) == 0x80000000
     assert R.F32MaxRef.evaluate(0x7FC00000, 0) == P.F32_NAN and R.F32MaxRef.evaluate(0x3F800000, 0x40000000) == 0x40000000
-    assert R.F32Sub.evaluate(0x7F800000, 0x7F800000) == P.F32_NAN
+    assert R.F32Sub.evaluate(0x7F800000, 0x7F800000) == R.F32Sub.evaluate(0xFFC00001, 0) == 0x7FFFFFFF   # FSUB: the GPU's NaN
     assert R.gather_f32(4).evaluate(7, 1, 2, 3, 4) == P.F32_NAN and R.gather_f32(4).evaluate(2, 1, 2, 3, 4) == 3
 
 
