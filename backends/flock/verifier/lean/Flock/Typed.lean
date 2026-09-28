@@ -197,20 +197,19 @@ def read (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) 
   if isFlat u then return .inl (expandWith tags lines name u)
   return .inr (← templateOf name done ls unit t held)
 
-/-- A template's rows as the verifier derives them, in the writer's `rows/` formats (`typed-rows`): `root.txt`, each placed
-layout's `<digest>.txt` (a read's with its `READ` line), and `delta.txt`. -/
+/-- A template's rows as the verifier derives them, in the writer's `rows/` formats (`typed-rows`): `root.txt` (the unit's
+own rows, their entries at part columns included), each placed layout's `<digest>.txt` (a read's with its `READ` line),
+and `delta.txt`. -/
 def rows (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)) : V (Array (String × String)) := do
   let (_, name, mj) ← split tags bytes
   let (done, ls, unit, _, _) ← derivation mj tables
   let u := done.getD unit default
-  let inOwn := fun (xs : List Nat) => xs.filter (· < u.size)
   let digests ← ls.mapM (·.digest)
   let placed := (List.range ls.size).filter fun j => u.parts.any (·.1 == j)
   let files := placed.toArray.map fun j =>
     let d := digests.getD j ""
     (s!"{d}.txt", DeriveAll.netlist (done.getD j default) (d.take 16).toString)
-  return #[("root.txt", DeriveAll.netlist { u with rows := u.rows.map fun (a, b) => (inOwn a, inOwn b) } name)] ++ files ++
-    #[("delta.txt", DeriveAll.deltaText ls digests u)]
+  return #[("root.txt", DeriveAll.netlist u name)] ++ files ++ #[("delta.txt", DeriveAll.deltaText ls digests u)]
 
 /-- A flat class's file with its unit's rows derived (`typed-expand`). -/
 def expand (tags : Tags) (bytes : ByteArray) : V ByteArray := do

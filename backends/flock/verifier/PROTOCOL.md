@@ -1216,7 +1216,18 @@ digest's leading tag is the statement id, `verity/flock-circuit/types`, as the p
   - **Regions:** the digests, then `Out` over the root's output group.
   - **Tested** on #273's GEMM (`test_lean_typed_template.py`): of the prover's 20 recorded CPU selftest sessions, the
     verifier accepts the 3 honest ones, so its statement digest and Σ are the prover's, and it refuses the 17 negatives.
-- **Not yet:** a template's table reads (attention), and `unit_in`'s constant bindings.
+- **Reads** (attention): a placed read is a part whose layout `table/v2` generates (`own: {gen: "table/v2", …}`), placed
+  and bound as a call is.
+  - **Tables:** the statement names each table by the SHA-512 of its raw `u32` LE words and never carries them. The
+    verifier holds its own copy (`Typed.hold`): a library table (`LIBRARY_TABLES`, by that SHA-512), read from the
+    verifier's file under the library's name (`--tables DIR/<name>.u32`), of `2^index_bits` words whose SHA-512 is the
+    name, checked before any use. Anything else is refused.
+  - **A read's slot:** its generated rows. Its product rows' B side is read from the held table in the fold
+    (`Lookup.foldB`), at its `READ` record's `prod0`, `lo_top` and `k` (not the table's value bits).
+  - A read inside the root's own region, or inside a placed call, is refused.
+  - **Rows only through `deriveChecked`:** its check covers `and` and call items, so a statement with a read is refused
+    until it covers reads.
+- **Not yet:** `unit_in`'s constant bindings.
 
 ## 17. Acceptance, assumptions and trust
 

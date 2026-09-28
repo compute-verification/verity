@@ -67,6 +67,19 @@ def test_it_gives_the_rust_provers_sessions_their_verdicts(gemm, tmp_path):
     assert sum(want.values()) == 3 and len(want) == 20
 
 
+def test_the_verifiers_rows_are_the_writers(gemm, tmp_path):
+    """The rows the verifier derives through `deriveChecked` (`typed-rows`) are the writer's `rows/` byte for byte: the
+    root, the placed layout and `delta.txt`."""
+    root, _ = gemm
+    p = subprocess.run([str(BIN), "typed-rows", str(root / "stage" / "circuit.txt"), "--out", str(tmp_path / "rows")],
+                       capture_output=True, text=True)
+    assert p.returncode == 0, p.stderr
+    want = sorted((root / "stage" / "rows").iterdir())
+    assert [f.name for f in want] == sorted(f.name for f in (tmp_path / "rows").iterdir())
+    for f in want:
+        assert (tmp_path / "rows" / f.name).read_bytes() == f.read_bytes(), f.name
+
+
 def _rewrite(root: Path, out: Path, edit_meta=None, extra: str = "") -> Path:
     head, meta, rest = (root / "stage" / "circuit.txt").read_text().split("\n", 2)
     m = json.loads(meta[len("META "):])
