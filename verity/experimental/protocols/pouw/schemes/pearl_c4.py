@@ -11,11 +11,13 @@ theory lane has stated and nobody has proved.
 
 ~~~text
 seeds     seed_A = H_"seed-A"(salt ‖ root_A ‖ root_B ‖ index u64 LE);  seed_B = H_"seed-B"(salt ‖ root_B);
-          H_ℓ(x) = SHA-512(pearl-c4/v1/ℓ ‖ \0, zero-padded to one 128-byte block ‖ x), its first 32 bytes (`labelled`)
+          H_ℓ(x) = SHA-512(ℓ's label ‖ \0, zero-padded to one 128-byte block ‖ x), its first 32 bytes (`labelled`);
+          the labels are pearl-c4/v1/seed-A and pearl-c4/v1/seed-B (`LABELS`)
 stats     s = max|x|, ρ = pearl_c's every-8th RMS in its pinned order;  σ = ρ·δ (δ = 1/4);  t = s + 4σ
           nvfp4: α = 2688 / max(t, 2^-32)       mxfp4: α = that, floored to a power of two (its mantissa bits cleared)
           β_row = (σ·α)·f32(16/√2346.125);  a_E = ue4m3(β_row)                     (FP32 nearest even, in that order)
-lines     32 uniform E2M1 codes per line: TurboSHAKE128(seed ‖ role ‖ index u32 LE, D = 0x24), 16 bytes, low nibble first.
+lines     32 uniform E2M1 codes per line, 16 bytes low nibble first: bytes 16·(index mod 4) to 16·(index mod 4) + 15 of
+          SHA-512(pearl-c4/v2/line ‖ \0, zero-padded to one 128-byte block ‖ seed ‖ role ‖ ⌊index/4⌋ u32 LE), all 64 bytes
           E_A (row i, seed_A), F_A and F_B (position t), E_B (row j) from seed_B
           (-h3: row i's E_A is line 0 of its own seed, `row_seed` over the row's SHA-512 digest; the tickets keep seed_A)
 atom      D_t = NVF4.step(C = α·x_t, E ‖ 0^32 at scale a_E, F_t ‖ 0^32 at scale 2^-4)    (one k64 atom per element)
@@ -111,7 +113,6 @@ from dataclasses import dataclass
 from fractions import Fraction
 from functools import lru_cache
 
-from verity.ml.crypto.turboshake import turboshake128
 from verity.errors import InvalidArtifact
 from verity.ml.circuits.silicon import fp32
 from verity.ml.circuits.silicon.models import BLACKWELL_SM120_MXF4, BLACKWELL_SM120_NVF4, HOPPER_BF16_M16N8K16, BlockScaledAlignAdd
@@ -126,11 +127,10 @@ ATOM = 64
 ALIGN_K = 128
 PEEL_K = 2 * R
 TILE = C.TILE
-D_LINE = 0x24                      # TurboSHAKE128 domain byte of the noise lines
 ROLE_EA, ROLE_FA, ROLE_EB, ROLE_FB = 0, 1, 2, 3
-LABELS = {r: f"pearl-c4/v1/{r}".encode() for r in ("seed-A", "seed-B")}
-#: the seeds' H_ℓ(x) = SHA-512(ℓ ‖ \0 zero-padded to one 128-byte block ‖ x), its first 32 bytes: `pearl_c.s512`'s
-#: construction under Pearl-C4's labels
+LABELS = {"seed-A": b"pearl-c4/v1/seed-A", "seed-B": b"pearl-c4/v1/seed-B", "line": b"pearl-c4/v2/line"}
+#: SHA-512(ℓ ‖ \0 zero-padded to one 128-byte block ‖ x): `pearl_c.s512`'s construction under Pearl-C4's labels, the
+#: block a precomputed first compression.  The seeds keep its first 32 bytes; a line block keeps all 64 (four lines)
 LABEL_BLOCKS = {r: (label + b"\0").ljust(128, b"\0") for r, label in LABELS.items()}
 
 DELTA = 0x3E800000                 # δ = 1/4
@@ -285,10 +285,22 @@ def stats(fmt: Fmt, x: Sequence[int]) -> tuple[int, int, int, int, int]:
     return s, rho, alpha, beta, ue4m3(beta)
 
 
-def line(seed: bytes, role: int, index: int) -> list[int]:
-    """One noise line: 32 E2M1 codes, uniform over the 16 nibbles."""
-    raw = turboshake128(seed + bytes([role]) + index.to_bytes(4, "little"), D_LINE, R // 2)
+LINES_PER_BLOCK = 4
+
+
+def line_block(seed: bytes, role: int, c: int) -> bytes:
+    """Lines 4c to 4c + 3 of (seed, role), 16 bytes each: SHA-512 under the line label of seed ‖ role ‖ c u32 LE."""
+    return hashlib.sha512(LABEL_BLOCKS["line"] + seed + bytes([role]) + c.to_bytes(4, "little")).digest()
+
+
+def _codes(raw: bytes) -> list[int]:
     return [b >> s & 0xF for b in raw for s in (0, 4)]
+
+
+def line(seed: bytes, role: int, index: int) -> list[int]:
+    """One noise line: 32 E2M1 codes, uniform over the 16 nibbles, quarter index mod 4 of `line_block` ⌊index/4⌋."""
+    q = index % LINES_PER_BLOCK * (R // 2)
+    return _codes(line_block(seed, role, index // LINES_PER_BLOCK)[q:q + R // 2])
 
 
 def labelled(role: str, message: bytes) -> bytes:
@@ -323,7 +335,8 @@ def seed_b(salt: bytes, root_b: bytes) -> bytes:
 def basis(seed_b: bytes, role: int, k: int) -> tuple[tuple[int, ...], ...]:
     """F_A (ROLE_FA) or F_B (ROLE_FB): k lines of 32 codes, line t for position t.  Cached: one costs about three rows'
     F1′ to derive at k = 4,096, and `r1_row` forms one row at a time."""
-    return tuple(tuple(line(seed_b, role, t)) for t in range(k))
+    raw = b"".join(line_block(seed_b, role, c) for c in range(-(-k // LINES_PER_BLOCK)))
+    return tuple(tuple(_codes(raw[t * (R // 2):(t + 1) * (R // 2)])) for t in range(k))
 
 
 def column(f: Sequence[Sequence[int]], p: int) -> list[int]:
@@ -1340,5 +1353,5 @@ class PearlC4:
 
 
 __all__ = ["FORMATS", "HASHINGS", "MXFP4", "NAMES", "NVFP4", "Debit", "PearlC4", "check_registration", "clean", "dnf", "e2m1",
-           "form", "hw_scales", "labelled", "line", "row_passes", "row_seed", "salt_dead", "scale_bytes_ok", "seed_b", "tile_debit",
+           "form", "hw_scales", "labelled", "line", "line_block", "row_passes", "row_seed", "salt_dead", "scale_bytes_ok", "seed_b", "tile_debit",
            "unit_seed_a", "word_replay"]

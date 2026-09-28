@@ -480,15 +480,21 @@ def _segment_of(basis):
     return lambda shape, seed, j: basis(shape, seed)[R * shape.row_k * j:R * shape.row_k * (j + 1)]
 
 
-def _slices(today: dict, scheme: str) -> dict:
-    return {f"{a}-slice": A.Derivation(f"verity/pouw/anchor/{scheme}/{a}/slice/v1", today[a].seed,
+def _slice_rule(rule: str) -> str:
+    """The slice rule of an anchor's rule, at its version: ``…/<anchor>/v<n>`` -> ``…/<anchor>/slice/v<n>``."""
+    head, version = rule.rsplit("/", 1)
+    return f"{head}/slice/{version}"
+
+
+def _slices(today: dict) -> dict:
+    return {f"{a}-slice": A.Derivation(_slice_rule(today[a].rule), today[a].seed,
                                        today[a].domain + "; segment j of it: its lines for j·row_k <= t < (j+1)·row_k",
                                        _segment_of(today[a].fn), today[a].bits, per_segment=True) for a in ("fa", "fb")}
 
 
 #: each anchor's recomputation under the cut: today's, and each form's segment of F_A and F_B under its slice rule
-DERIVATIONS8 = pc8.DERIVATIONS | _slices(pc8.DERIVATIONS, "pearl-c")
-DERIVATIONS4 = pc4.DERIVATIONS | _slices(pc4.DERIVATIONS, "pearl-c4")
+DERIVATIONS8 = pc8.DERIVATIONS | _slices(pc8.DERIVATIONS)
+DERIVATIONS4 = pc4.DERIVATIONS | _slices(pc4.DERIVATIONS)
 
 
 __all__ = ["CARRY4", "CARRY8", "DERIVATIONS4", "DERIVATIONS8", "FILL8", "FORMS", "HEAD4", "HEAD4_OUT", "HEAD8", "HEAD8_OUT",

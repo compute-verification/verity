@@ -1,6 +1,7 @@
 // FIPS 180-4 SHA-512's compression on the device, every word big-endian: the round constants, the IV and one block's
 // compression over 16 message words (w is the schedule's ring, overwritten), with the byte-order helpers that load a
-// message word from two little-endian u32.  hash_h3.cuh (Pearl-C's -h3) and pearl_c4.cu (Pearl-C4's seeds) include it.
+// message word from two little-endian u32.  hash_h3.cuh (Pearl-C's -h3) and pearl_c4.cu (Pearl-C4's seeds and noise lines)
+// include it.
 #pragma once
 #include <cstdint>
 
