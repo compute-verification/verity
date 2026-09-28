@@ -4,9 +4,10 @@ import FlockSoundness.Types.Dag
 /-!
 # A unit's rows in logical order, over the type DAG (verified-lowering phase 1, 1d step 2)
 
-`Compose.ofBlock done u` is the unit's `Logical` from `deriveChecked`'s layouts: `Flock.DeriveAll.order` (the list
-`logicalText` prints), and each column's row as the block holds it, as `logicalText` prints it: Δ's constant copies copy
-`one`, a Δ binding `src` is `src · src`, and any other column its derived row.
+`Compose.ofBlock words done u` is the unit's `Logical` from `deriveChecked`'s layouts: `Flock.DeriveAll.order` (the list
+`logicalText` prints), and each column's row as the block holds it: Δ's constant copies copy `one`, a Δ binding `src` is
+`src · src`, and any other column its row as the verifier folds it (`Flock.DeriveAll.fullRow`: the derived row, a read's
+product row with its table-direct side from its record).
 
 For every statement `deriveChecked` accepts:
 - `ofBlock_ordered`: the rows are `Ordered` (`Types.Dag.order_sound`, through `Compose.ordered_of_take`);
@@ -24,21 +25,22 @@ open Audit Types.Dag
 namespace Compose
 
 /-- **The unit's rows in logical order**, over the type DAG: `order done u`, and each column's row as the block holds it:
-Δ's constant copies copy `one`, a Δ binding `src` reads `src · src`, and any other column its derived row. -/
-abbrev ofBlock (done : Array D) (u : D) : Logical :=
+Δ's constant copies copy `one`, a Δ binding `src` reads `src · src`, and any other column its row as the verifier folds it
+(`fullRow`, a read's product row with its table-direct side), the tables' words by SHA-512 in `words`. -/
+abbrev ofBlock (words : String → Option (Array ℕ)) (done : Array D) (u : D) : Logical :=
   ⟨u.inCols.size, order done u, fun c =>
     match u.delta.find? (·.1 == c) with
     | some (_, none) => none
     | some (_, some s) => some (s, s)
-    | none => some (u.rows[c]?.getD ([], []))⟩
+    | none => some ((fullRow words u c).getD ([], []))⟩
 
 /-- `ofBlock`'s rows are `blockRow`'s, whatever `one` is: a copy of `one`, the same row, or no row (then a zero row). -/
-theorem ofBlock_cases (done : Array D) (u : D) (c : ℕ) :
-    ((ofBlock done u).row c = none ∧ ∀ one, blockRow u one c = some ([one], [one])) ∨
-    (∃ p, (ofBlock done u).row c = some p ∧ ∀ one, blockRow u one c = some p) ∨
-    ((ofBlock done u).row c = some ([], []) ∧ ∀ one, blockRow u one c = none) := by
+theorem ofBlock_cases (words : String → Option (Array ℕ)) (done : Array D) (u : D) (c : ℕ) :
+    ((ofBlock words done u).row c = none ∧ ∀ one, blockRow words u one c = some ([one], [one])) ∨
+    (∃ p, (ofBlock words done u).row c = some p ∧ ∀ one, blockRow words u one c = some p) ∨
+    ((ofBlock words done u).row c = some ([], []) ∧ ∀ one, blockRow words u one c = none) := by
   rcases hf : u.delta.find? (·.1 == c) with _ | ⟨x, _ | s⟩
-  · rcases hr : u.rows[c]? with _ | r
+  · rcases hr : fullRow words u c with _ | r
     · exact Or.inr (Or.inr ⟨by simp [hf, hr], fun _ => by simp [blockRow, hf, hr]⟩)
     · exact Or.inr (Or.inl ⟨r, by simp [hf, hr], fun _ => by simp [blockRow, hf, hr]⟩)
   · exact Or.inl ⟨by simp [hf], fun _ => by simp [blockRow, hf]⟩
@@ -88,7 +90,7 @@ variable {types : String → Option CircuitType} {ls : Array Layout} {info : Str
 
 /-- **The unit's composed rows read only earlier columns**, or `one`. -/
 theorem ofBlock_ordered (hd : deriveChecked types ls info words unit = .ok done) :
-    Ordered (ofBlock done (done.getD unit default)) := by
+    Ordered (ofBlock words done (done.getD unit default)) := by
   have hs := fun one => order_sound hd one
   generalize done.getD unit default = u at *
   obtain ⟨-, -, htake, -, -⟩ := hs 0
@@ -97,9 +99,9 @@ theorem ofBlock_ordered (hd : deriveChecked types ls info words unit = .ok done)
     simp only [List.length_take, Array.length_toList] at this
     show u.inCols.size ≤ (order done u).length
     omega
-  · have hp' : (ofBlock done u).row ((order done u).getD ℓ 0) = some p := hp
+  · have hp' : (ofBlock words done u).row ((order done u).getD ℓ 0) = some p := hp
     have hℓ' : ℓ < (order done u).length := hℓ
-    rcases ofBlock_cases done u ((order done u).getD ℓ 0) with ⟨hr, -⟩ | ⟨p', hr, hb⟩ | ⟨hr, -⟩
+    rcases ofBlock_cases words done u ((order done u).getD ℓ 0) with ⟨hr, -⟩ | ⟨p', hr, hb⟩ | ⟨hr, -⟩
     · rw [hr] at hp'; cases hp'
     · rw [hr, Option.some.injEq] at hp'
       subst hp'
@@ -113,13 +115,11 @@ theorem ofBlock_ordered (hd : deriveChecked types ls info words unit = .ok done)
 theorem outCols_mem (hd : deriveChecked types ls info words unit = .ok done) {t : CircuitType}
     (ht : (ls.getD unit default).type.bind types = some t) {o : ℕ} (ho : o < t.outputs.size) :
     (done.getD unit default).outCols.getD o 0 ∈ order done (done.getD unit default) := by
-  obtain ⟨t', ht', -, -, -, -, -, -, wire, -, hout⟩ := checkLayout_spec (deriveChecked_all hd unit (lt_of_type ht))
-  rw [ht] at ht'
-  cases ht'
+  obtain ⟨-, -, -, -, -, -, wire, -, hout⟩ := checkLayout_spec (deriveChecked_all hd unit (lt_of_type ht)) ht
   have hk : (unit == unit) = true := by simp
   have hout' := hout o ho
   rw [hk] at hout'
-  have hrow := rowIs_unit hout' 0
+  have hrow := rowIs_unit words hout' 0
   obtain ⟨-, -, -, -, hz⟩ := order_sound hd 0
   by_contra hm
   have := hz _ _ hm hrow
@@ -128,28 +128,26 @@ theorem outCols_mem (hd : deriveChecked types ls info words unit = .ok done) {t 
 /-- **The unit's composed rows compute its type.** Column values that satisfy `Rows.compose` of the unit's rows, with
 `one` at 1, carry on output `o`'s logical column the unit type's output `o` (`evalT`) on the input columns' values. -/
 theorem Rows.compose_eval_unit (hd : deriveChecked types ls info words unit = .ok done) {t : CircuitType}
-    (ht : (ls.getD unit default).type.bind types = some t) {h : Ordered (ofBlock done (done.getD unit default))}
-    {z : Fin (Rows.compose (ofBlock done (done.getD unit default)) h).w → Bool}
-    (hz : (Rows.compose (ofBlock done (done.getD unit default)) h).Sat z)
-    (h1 : z (Rows.compose (ofBlock done (done.getD unit default)) h).one = true) {x : ℕ → Bool}
-    (hx : ∀ i : Fin (Rows.compose (ofBlock done (done.getD unit default)) h).w,
+    (ht : (ls.getD unit default).type.bind types = some t) {h : Ordered (ofBlock words done (done.getD unit default))}
+    {z : Fin (Rows.compose (ofBlock words done (done.getD unit default)) h).w → Bool}
+    (hz : (Rows.compose (ofBlock words done (done.getD unit default)) h).Sat z)
+    (h1 : z (Rows.compose (ofBlock words done (done.getD unit default)) h).one = true) {x : ℕ → Bool}
+    (hx : ∀ i : Fin (Rows.compose (ofBlock words done (done.getD unit default)) h).w,
       i.val < (done.getD unit default).inCols.size → x i.val = z i)
     (F : ℕ) (hF : unit < F) {o : ℕ} (ho : o < t.outputs.size)
-    (ℓ : Fin (Rows.compose (ofBlock done (done.getD unit default)) h).w)
-    (hℓ : ℓ.val = lidx (ofBlock done (done.getD unit default)) ((done.getD unit default).outCols.getD o 0)) :
+    (ℓ : Fin (Rows.compose (ofBlock words done (done.getD unit default)) h).w)
+    (hℓ : ℓ.val = lidx (ofBlock words done (done.getD unit default)) ((done.getD unit default).outCols.getD o 0)) :
     z ℓ = (evalT types words F t x).getD o false := by
   have hmo := outCols_mem hd ht ho
   have hsound := unit_sound hd ht (done.getD unit default).rows.size
   have hins := inputs_self hd ht (done.getD unit default).rows.size
   obtain ⟨hn, hlt, htake, -, hzero⟩ := order_sound hd (done.getD unit default).rows.size
-  obtain ⟨t', ht', -, -, hin, -⟩ := checkLayout_spec (deriveChecked_all hd unit (lt_of_type ht))
-  rw [ht] at ht'
-  cases ht'
+  obtain ⟨-, -, hin, -⟩ := checkLayout_spec (deriveChecked_all hd unit (lt_of_type ht)) ht
   have hΔ : ∀ e ∈ (done.getD unit default).delta, e.1 ∈ order done (done.getD unit default) := by
     have ho' := (deriveChecked_spec hd).2
     unfold orderChecked at ho'
     simp only [Bool.and_eq_true] at ho'
-    exact (outsideOk_spec ho'.2).2
+    exact (outsideOk_spec ho'.2).2.1
   generalize done.getD unit default = u at *
   have hle := h.le
   -- the physical values, with `one` (past every row) at 1
@@ -158,20 +156,21 @@ theorem Rows.compose_eval_unit (hd : deriveChecked types ls info words unit = .o
     have := hlt c hc
     simp only [v]
     rw [ite_eq_right (by omega)]
-  have hsat : SatAt (blockRow u u.rows.size) v := by
+  have hsat : SatAt (blockRow words u u.rows.size) v := by
     intro c r hr
     by_cases hc1 : c = u.rows.size
     · exfalso
       subst hc1
-      unfold blockRow at hr
       have hf : u.delta.find? (·.1 == u.rows.size) = none := by
         rw [Array.find?_eq_none]
         intro e he hee
         have := hlt _ (hΔ e he)
         simp only [beq_iff_eq] at hee
         omega
-      rw [hf] at hr
-      simp at hr
+      have hfr : fullRow words u u.rows.size = none := by
+        unfold fullRow
+        split <;> simp
+      simp [blockRow, hf, hfr] at hr
     by_cases hm : c ∈ order done u
     · have hlc := List.idxOf_lt_length_iff.2 hm
       obtain ⟨ℓ, hℓ, rfl⟩ : ∃ ℓ, ℓ < (order done u).length ∧ (order done u).getD ℓ 0 = c :=
@@ -183,10 +182,10 @@ theorem Rows.compose_eval_unit (hd : deriveChecked types ls info words unit = .o
         subst hr
         simp [xorSum]
       · obtain ⟨k, rfl⟩ : ∃ k, ℓ = u.inCols.size + k := ⟨ℓ - u.inCols.size, by omega⟩
-        have hk : k < (Rows.compose (ofBlock done u) h).nComp := by
+        have hk : k < (Rows.compose (ofBlock words done u) h).nComp := by
           show k < (order done u).length - u.inCols.size; omega
         rw [hv _ hm, physical_getD hn z hℓ]
-        rcases ofBlock_cases done u ((order done u).getD (u.inCols.size + k) 0) with ⟨hr', hb⟩ | ⟨p, hr', hb⟩ |
+        rcases ofBlock_cases words done u ((order done u).getD (u.inCols.size + k) 0) with ⟨hr', hb⟩ | ⟨p, hr', hb⟩ |
           ⟨hr', hb⟩
         · rw [hb, Option.some.injEq] at hr
           subst hr
@@ -212,7 +211,7 @@ theorem Rows.compose_eval_unit (hd : deriveChecked types ls info words unit = .o
       rfl
   have hmain := hsound v hsat (by simp [v]) F hF o ho
   rw [hv _ hmo, physical_of_mem z hmo] at hmain
-  have hb : lidx (ofBlock done u) (u.outCols.getD o 0) < (Rows.compose (ofBlock done u) h).w := by
+  have hb : lidx (ofBlock words done u) (u.outCols.getD o 0) < (Rows.compose (ofBlock words done u) h).w := by
     rw [Rows.compose_w]; exact Nat.lt_succ_of_lt (List.idxOf_lt_length_iff.2 hmo)
   rw [show ℓ = ⟨_, hb⟩ from Fin.ext hℓ, hmain]
   congr 1

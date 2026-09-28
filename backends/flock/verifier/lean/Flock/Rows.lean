@@ -28,8 +28,8 @@ def usage : String :=
 def readLine? (f : Option String) : IO (Option String) :=
   f.mapM fun p => return (← IO.FS.readFile p).trimAsciiEnd.toString
 
-/-- `flock-rows --archive FILE --part unit|delta|logical|check|DIGEST`: that part of the archive's derivation
-(`deriveAll`), or `ok` when its rows pass `deriveChecked`'s check. -/
+/-- `flock-rows --archive FILE --part unit|delta|logical|check|DIGEST`: that part of the archive's derivation, once its
+rows pass `deriveChecked`'s check, or `ok` when they do. -/
 def archiveCmd (path part : String) : IO UInt32 := do
   let run := fun j => if part == "check" then DeriveAll.archiveCheck j else DeriveAll.archivePart j part
   match Json.parse (← IO.FS.readFile path) >>= run with
