@@ -146,11 +146,13 @@ def Derived.inCol (d : Derived) (i : Nat) : Nat := (colOf d.geo.ins i).getD 0
 /-- Output bit `o`'s column. -/
 def Derived.outCol (d : Derived) (o : Nat) : Nat := (colOf d.geo.outs o).getD 0
 
-/-- **The columns in logical order:** the input bits, the computed rows (one per AND item in item order, then the
-output copy rows in output order), and the constant last. Each row reads only earlier columns here, or the constant. -/
+/-- **The columns in logical order:** the input bits, then the unit's segment: its constant first, one row per AND item
+in item order, and the output copy rows in output order. The block's `one`, which the constant copies through Δ, comes
+after them all. Each row reads only earlier columns here, or `one` (as settled with audit-lean's 1d plan and the constant
+rollout). -/
 def Derived.order (d : Derived) : List Nat :=
-  (List.range d.nIn).map d.inCol ++ (List.range d.geo.nAnd).map (d.geo.andBase + ·) ++
-    (List.range d.nOut).map d.outCol ++ [d.geo.const]
+  (List.range d.nIn).map d.inCol ++ [d.geo.const] ++ (List.range d.geo.nAnd).map (d.geo.andBase + ·) ++
+    (List.range d.nOut).map d.outCol
 
 /-- **The rows in logical order**, each with its physical column: the dense rows at `order`'s columns. The audit's
 composed rows (`Rows.compose`) are defined from this list, so the two can't drift. -/
@@ -165,6 +167,18 @@ def derive (t : CircuitType) (inSplit outSplit : List Nat) : Except String Deriv
     let G := geo t inSplit outSplit
     if !geoOk t G then .error "derive: the port groups do not lay out"
     else .ok ⟨G, t.inBits, t.outBits, (List.range (G.const + 1)).map (G.rowAt t)⟩
+
+/-- The logical list as the prover's mirror writes it (`verity_flock.derive.logical_text`): per column in `order`,
+`column |A| A.. |B| B..`, the constant's row as the block holds it (a copy of `one`, through Δ), then `one` itself. -/
+def logicalText (d : Derived) : String :=
+  let line := fun (c : String) (a b : List String) =>
+    " ".intercalate ([c, toString a.length] ++ a ++ [toString b.length] ++ b)
+  let rows := d.order.map fun c =>
+    if c = d.geo.const then line (toString c) ["one"] ["one"]
+    else
+      let p := d.rows.getD c ([], [])
+      line (toString c) (p.1.map toString) (p.2.map toString)
+  "\n".intercalate (rows ++ [line "one" ["one"] ["one"]]) ++ "\n"
 
 /-! ## `flock-ir-unit/v2` -/
 
