@@ -1,15 +1,17 @@
 // P2 public decode throughput on one GPU, CGBN (NVlabs) multi-precision.
 // From the efficient-cryptography campaign (POUS internal/efficient-crypto/candidates/p2-gpu-decode/, bc-28faaf0e: the
-// tuned kernel of run r20260928-065407-16f0). Added for benchmarks/pous: -DP2_KEYS reads fresh per-block keys K_j, t_j from
-// device arrays (M1's key schedule, verity_pous.schemes.p2) instead of the shared K and t_j = t0 + j*step (M2), and C may be
-// read from a file (argv[6]) instead of filled on the device.
+// tuned kernel of run r20260928-065407-16f0). Added for benchmarks/pous: -DP2_DERIVE expands fresh per-block keys on the
+// device (M1's key schedule, verity_pous.schemes.p2 v1): per segment s a 32-byte seed, per block j of the segment a ChaCha8
+// stream with nonce j, K_j its first W/8 bytes and t_j the next W/8 reduced once below p. Only the seeds cross from the host,
+// so nothing key-sized is stored. The shared K and t_j = t0 + j*step (M2) stay the default build. C may be read from a file
+// (argv[6]) instead of filled on the device.
 // Per block j, with p = 2^W - C0 (p = 3 mod 4), public mask K, tweak t_j = t0 + j*step mod p:
 //   s = c^2 mod p, s = p - s if c odd;  r = s^K if s^K < p else s;
 //   y = r^2 mod p, y = p - y if r odd;  m = y - t_j mod p.
 // Build: nvcc -O3 -arch=sm_89 -DP2_BITS=5504 -DP2_TPI=8 [-DXMP_IMAD] [-DP2_PARTS=2|4 [-DP2_SYM]] -I CGBN/include -o p2dec p2dec.cu
 //   P2_PARTS=1 (default) squares with CGBN's cgbn_sqr_wide; 2 or 4 is the tuned Karatsuba path below.
-// Run:   p2dec params.bin specials.bin sample.bin payload_bytes reps [c.bin [keys.bin]]   (keys.bin with -DP2_KEYS:
-//        u32 n, then n K_j and n t_j, each W/8 bytes little endian)
+// Run:   p2dec params.bin specials.bin sample.bin payload_bytes reps [c.bin [seeds.bin]]   (seeds.bin with -DP2_DERIVE:
+//        u32 segments, u32 blocks per segment, then 32 bytes per segment)
 #include <cstdio>
 #include <cstdlib>
 #include <cstdint>
@@ -63,10 +65,10 @@ typedef env_t::cgbn_wide_t bnw_t;
 typedef cgbn_mem_t<P2_BITS> mem_t;
 
 struct params_t { mem_t K, t0, step; uint32_t c0; };
-#ifdef P2_KEYS
-#define KEY_ARGS , const mem_t *__restrict__ kj, const mem_t *__restrict__ tj
-#define KEY_PASS , dk, dt
-#define KEYS "per-block"
+#ifdef P2_DERIVE
+#define KEY_ARGS , const uint32_t *__restrict__ seeds, uint32_t bps
+#define KEY_PASS , dseeds, bps
+#define KEYS "derived"
 #else
 #define KEY_ARGS
 #define KEY_PASS
@@ -113,6 +115,31 @@ __device__ __forceinline__ void sqr_fix(env_t &env, bn_t &r, const bn_t &a, uint
 
 #endif
 
+#ifdef P2_DERIVE
+// ChaCha8 (Bernstein: 64-bit block counter, then 64-bit nonce), one 64-byte block into out[16]
+#define P2_ROTL(v, n) (((v) << (n)) | ((v) >> (32 - (n))))
+#define P2_QR(a, b, c, d) x[a] += x[b]; x[d] ^= x[a]; x[d] = P2_ROTL(x[d], 16); x[c] += x[d]; x[b] ^= x[c]; x[b] = P2_ROTL(x[b], 12); \
+                          x[a] += x[b]; x[d] ^= x[a]; x[d] = P2_ROTL(x[d], 8);  x[c] += x[d]; x[b] ^= x[c]; x[b] = P2_ROTL(x[b], 7);
+__device__ __forceinline__ void chacha8_block(const uint32_t *__restrict__ key, uint64_t ctr, uint64_t nonce, uint32_t *out) {
+  uint32_t x[16] = {0x61707865u, 0x3320646eu, 0x79622d32u, 0x6b206574u, key[0], key[1], key[2], key[3], key[4], key[5], key[6],
+                    key[7], (uint32_t)ctr, (uint32_t)(ctr >> 32), (uint32_t)nonce, (uint32_t)(nonce >> 32)};
+  uint32_t s[16];
+  #pragma unroll
+  for (int i = 0; i < 16; i++) s[i] = x[i];
+  #pragma unroll
+  for (int r = 0; r < 4; r++) {
+    P2_QR(0, 4, 8, 12) P2_QR(1, 5, 9, 13) P2_QR(2, 6, 10, 14) P2_QR(3, 7, 11, 15)
+    P2_QR(0, 5, 10, 15) P2_QR(1, 6, 11, 12) P2_QR(2, 7, 8, 13) P2_QR(3, 4, 9, 14)
+  }
+  #pragma unroll
+  for (int i = 0; i < 16; i++) out[i] = x[i] + s[i];
+}
+static const uint32_t KSB = (2 * NL + 15) / 16;   // ChaCha blocks per data block: K_j then t_j
+#endif
+
+#if defined(P2_DERIVE) && P2_PARTS == 1
+#error "P2_DERIVE is the tuned path's (P2_PARTS 2 or 4)"
+#endif
 #if P2_PARTS > 1
 // Tuned path: every w-bit value is P2_PARTS parts of w/P bits, each a CGBN number of the part env (same TPI), so the
 // squaring can split without moving limbs between threads. a^2 is Karatsuba on parts, recursively:
@@ -256,14 +283,25 @@ __global__ void decode_kernel(const params_t *__restrict__ prm, const mem_t *__r
   const uint32_t c0 = prm->c0;
   pbn_t a[P2_PARTS], b[P2_PARTS], x[P2_PARTS];
   const uint32_t stride = (gridDim.x * blockDim.x) / P2_TPI;
+#ifdef P2_DERIVE
+  static_assert(P2_TPI == 32, "P2_DERIVE: one instance per warp");
+  __shared__ uint32_t ksm[P2_TPB / 32][KSB * 16];
+  uint32_t *ks = ksm[threadIdx.x / 32];
+  const uint32_t lane = threadIdx.x % 32;
+#endif
   for (uint32_t j = (blockIdx.x * blockDim.x + threadIdx.x) / P2_TPI; j < n; j += stride) {
+#ifdef P2_DERIVE
+    __syncwarp();                                               // the previous block's keys are read
+    for (uint32_t i = lane; i < KSB; i += 32) chacha8_block(&seeds[8 * (j / bps)], i, j % bps, &ks[16 * i]);
+    __syncwarp();
+#endif
     #pragma unroll
     for (int k = 0; k < P2_PARTS; k++) cgbn_load(e, a[k], (pmem_t *)&cin[j]._limbs[k * NP]);
     psqr_fix(e, b, a, c0);                                      // b = s
     #pragma unroll
     for (int k = 0; k < P2_PARTS; k++) {
-#ifdef P2_KEYS
-      cgbn_load(e, x[k], (pmem_t *)&kj[j]._limbs[k * NP]);
+#ifdef P2_DERIVE
+      cgbn_load(e, x[k], (pmem_t *)&ks[k * NP]);               // K_j
 #else
       cgbn_load(e, x[k], (pmem_t *)&prm->K._limbs[k * NP]);
 #endif
@@ -273,9 +311,16 @@ __global__ void decode_kernel(const params_t *__restrict__ prm, const mem_t *__r
     uint32_t ge_p = add1_n<P2_PARTS>(e, a, c0);                 // s^K >= p  <=>  (s^K) + c0 >= 2^W
     psel<P2_PARTS>(b, ge_p == 0, x, b);                         // b = r
     psqr_fix(e, a, b, c0);                                      // a = y
-#ifdef P2_KEYS
+#ifdef P2_DERIVE
     #pragma unroll
-    for (int k = 0; k < P2_PARTS; k++) cgbn_load(e, b[k], (pmem_t *)&tj[j]._limbs[k * NP]);   // b = t_j
+    for (int k = 0; k < P2_PARTS; k++) cgbn_load(e, b[k], (pmem_t *)&ks[NL + k * NP]);       // the raw t_j < 2^W
+    {
+      pbn_t tt[P2_PARTS];
+      #pragma unroll
+      for (int k = 0; k < P2_PARTS; k++) tt[k] = b[k];
+      uint32_t ge_t = add1_n<P2_PARTS>(e, tt, c0);              // t >= p  <=>  t + c0 >= 2^W; then t - p = t + c0 - 2^W
+      psel<P2_PARTS>(b, ge_t != 0, tt, b);                      // b = t_j
+    }
 #else
     uint32_t h = 0, c = 0;                                      // b = j*step, top word h + c
     #pragma unroll
@@ -316,25 +361,17 @@ __global__ void decode_kernel(const params_t *__restrict__ prm, const mem_t *__r
   for (uint32_t j = (blockIdx.x * blockDim.x + threadIdx.x) / P2_TPI; j < n; j += stride) {
     cgbn_load(env, a, (mem_t *)&cin[j]);
     sqr_fix(env, b, a, c0);                          // b = s
-#ifdef P2_KEYS
-    cgbn_load(env, x, (mem_t *)&kj[j]);
-#else
     cgbn_load(env, x, (mem_t *)&prm->K);
-#endif
     cgbn_bitwise_xor(env, x, b, x);
     int32_t ge_p = cgbn_add_ui32(env, a, x, c0);     // s^K >= p  <=>  (s^K) + c0 >= 2^W
     sel(b, ge_p == 0, x, b);                         // b = r
     sqr_fix(env, a, b, c0);                          // a = y
-#ifdef P2_KEYS
-    cgbn_load(env, b, (mem_t *)&tj[j]);              // t_j
-#else
     cgbn_load(env, x, (mem_t *)&prm->step);          // t_j = t0 + j*step mod p
     uint32_t hi = cgbn_mul_ui32(env, b, x, j);
     fold64(env, b, (uint64_t)hi * c0, c0);
     cgbn_load(env, x, (mem_t *)&prm->t0);
     int32_t carry = cgbn_add(env, b, b, x);
     fold32(env, b, carry ? c0 : 0, c0);
-#endif
     int32_t borrow = cgbn_sub(env, a, a, b);         // m = y - t_j mod p
     cgbn_sub_ui32(env, x, a, c0);                    // (y - t + 2^W) - c0 = y - t + p
     sel(a, borrow != 0, x, a);
@@ -372,7 +409,7 @@ static void read_all(const char *path, std::vector<uint8_t> &buf) {
 }
 
 int main(int argc, char **argv) {
-  if (argc < 6) { fprintf(stderr, "usage: %s params.bin specials.bin sample.bin payload_bytes reps [c.bin [keys.bin]]\n", argv[0]); return 2; }
+  if (argc < 6) { fprintf(stderr, "usage: %s params.bin specials.bin sample.bin payload_bytes reps [c.bin [seeds.bin]]\n", argv[0]); return 2; }
   std::vector<uint8_t> pb, sb;
   read_all(argv[1], pb);
   read_all(argv[2], sb);
@@ -407,16 +444,17 @@ int main(int argc, char **argv) {
     fill_kernel<<<prop.multiProcessorCount * 8, 256>>>(dc, n, 0x5032474055ull ^ P2_BITS);
     CK(cudaGetLastError());
   }
-#ifdef P2_KEYS
-  if (argc < 8) { fprintf(stderr, "-DP2_KEYS needs c.bin and keys.bin\n"); return 2; }
-  mem_t *dk, *dt;
+#ifdef P2_DERIVE
+  if (argc < 8) { fprintf(stderr, "-DP2_DERIVE needs c.bin and seeds.bin\n"); return 2; }
+  uint32_t *dseeds, bps;
   {
-    std::vector<uint8_t> kb; read_all(argv[7], kb);
-    uint32_t nk; memcpy(&nk, kb.data(), 4);
-    if (nk != n || kb.size() != 4 + 2 * bytes) { fprintf(stderr, "keys.bin: %u keys, %zu bytes, for %u blocks\n", nk, kb.size(), n); return 2; }
-    CK(cudaMalloc(&dk, bytes)); CK(cudaMalloc(&dt, bytes));
-    CK(cudaMemcpy(dk, kb.data() + 4, bytes, cudaMemcpyHostToDevice));
-    CK(cudaMemcpy(dt, kb.data() + 4 + bytes, bytes, cudaMemcpyHostToDevice));
+    std::vector<uint8_t> sd; read_all(argv[7], sd);
+    uint32_t segs; memcpy(&segs, sd.data(), 4); memcpy(&bps, sd.data() + 4, 4);
+    if (sd.size() != 8 + (size_t)segs * 32 || bps == 0 || (uint64_t)segs * bps < n) {
+      fprintf(stderr, "seeds.bin: %u segments of %u blocks, %zu bytes, for %u blocks\n", segs, bps, sd.size(), n); return 2;
+    }
+    CK(cudaMalloc(&dseeds, (size_t)segs * 32));
+    CK(cudaMemcpy(dseeds, sd.data() + 8, (size_t)segs * 32, cudaMemcpyHostToDevice));
   }
 #endif
   std::vector<uint64_t> idx;

@@ -25,11 +25,10 @@ Implementations:
   harness `verity-vllm pous-dense-bench`, with the flags of the band's run of record.
 
 - `p2-gpu`: the efficient-cryptography campaign's tuned P2 kernel (`p2_gpu/`, CGBN) for the **experimental**
-  `p2-16448/v0`.
-  - The measured build reads fresh per-block keys from device memory: M1's schedule, the one `P2MeetsM1Uncond` is
-    about.
+  `p2-16448/v1`.
+  - The measured build expands fresh per-block keys in the timed kernel, by ChaCha8 from one 32-byte seed per
+    segment. That is M1's schedule, the one `P2MeetsM1Uncond` is about, and inside the 1.05× space bound.
   - The campaign's shared-key build (M2) runs on the same C for comparison.
-  - The keys are derived on the host and excluded from the timed kernel.
 
 A new one is a class in `bench.py`'s `IMPLS`.
 

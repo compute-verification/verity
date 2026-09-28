@@ -280,9 +280,9 @@ class P2Gpu:
     """P2's GPU decode (`benchmarks/pous/p2_gpu/`, the efficient-cryptography campaign's tuned CGBN kernel, bc-28faaf0e).
 
     Two builds run on the same C:
-    - `-DP2_KEYS`, the scheme's own key schedule (M1: fresh per-block `K_j, t_j`), whose rate is the result. The keys
-      are derived on the host with `verity_pous.schemes.p2.block_keys` and read from device memory. Deriving them on the
-      device (two SHAKE256 calls per block, about 0.016 Keccak-f per byte) is not in the timed kernel.
+    - `-DP2_DERIVE`, the scheme's own key schedule (M1: fresh per-block `K_j, t_j`), whose rate is the result. The keys
+      are expanded in the timed kernel, by ChaCha8 from one 32-byte seed per segment, so only the seeds cross from the
+      host and nothing key-sized is stored (the 1.05× space bound).
     - The campaign's shared-key build (M2, not covered by `P2MeetsM1Uncond`), for comparison only.
 
     C is random blocks below p, with four blocks encoded by the reference planted in it. The kernel's sampled outputs
@@ -325,13 +325,8 @@ class P2Gpu:
             planted[g] = m
         encode_s = (time.perf_counter() - t0) / len(planted)
         (work / "c.bin").write_bytes(c.tobytes())
-        t0 = time.perf_counter()
-        keys = [p2.block_keys(params, SALT, *divmod(g, bps)) for g in range(n)]
-        keys_s = time.perf_counter() - t0
-        with (work / "keys.bin").open("wb") as fk:
-            fk.write(n.to_bytes(4, "little"))
-            fk.write(b"".join(k.to_bytes(nb, "little") for k, _ in keys))
-            fk.write(b"".join(tj.to_bytes(nb, "little") for _, tj in keys))
+        seeds = [p2.segment_seed(SALT, s) for s in range(params.segments)]
+        (work / "seeds.bin").write_bytes(params.segments.to_bytes(4, "little") + bps.to_bytes(4, "little") + b"".join(seeds))
         shared = [int.from_bytes(hashlib.shake_256(f"verity-pous/bench/p2/shared/{x}".encode()).digest(nb + 8), "little")
                   for x in ("K", "t0", "step")]
         shared = [shared[0] % (1 << params.w), shared[1] % f.p, shared[2] % f.p]
@@ -350,7 +345,7 @@ class P2Gpu:
                 raise SystemExit(f"{binary} exited {proc.returncode}: {proc.stderr[-400:]}")
             return json.loads(proc.stdout.strip().splitlines()[-1])
 
-        m1 = kernel("p2dec_16448_32_s2_keys", "specials.bin", out / "sample-m1.bin", [str(work / "keys.bin")])
+        m1 = kernel("p2dec_16448_32_s2_derive", "specials.bin", out / "sample-m1.bin", [str(work / "seeds.bin")])
         m2 = kernel("p2dec_16448_32_s2", "nospec.bin", out / "sample-m2.bin", [])
 
         def check(sample: Path, decode, expect: dict[int, int]) -> dict[str, Any]:
@@ -370,7 +365,7 @@ class P2Gpu:
                     "mismatches": bad, "planted": sum(g in seen for g in expect), "planted_of": len(expect)}
 
         def m1_decode(g: int, cv: int) -> int:
-            k, tj = keys[g]
+            k, tj = p2.expand_keys(params, seeds[g // bps], g % bps)
             return (f.sq(f.sigma(f.sq(cv), k)) - tj) % f.p
 
         def m2_decode(g: int, cv: int) -> int:
@@ -386,7 +381,7 @@ class P2Gpu:
         pass_s = m1["ms_med"] / 1e3
         return {
             "implementation": {"name": self.name, "commit": a.impl_commit, "kernel": "benchmarks/pous/p2_gpu s2, TPI 32, 64-thread blocks",
-                               "keys": "per block, derived on the host (verity_pous.schemes.p2.block_keys), read from device memory"},
+                               "keys": "per block, expanded on the device by ChaCha8 from a 32-byte seed per segment"},
             "device": {"gpu": m1.get("gpu"), "sms": m1.get("sms"), "regs": m1.get("regs")},
             "segments": params.segments, "blocks": n, "weight_bytes": n * pb,
             "gates": {"reference_decode": check(out / "sample-m1.bin", m1_decode, planted),
@@ -398,7 +393,7 @@ class P2Gpu:
             "metrics": {"decode_pass_s": pass_s, "ewb": n * pb / pass_s, "stored_GBps": m1["GBps_stored_med"],
                         "m2_shared_key": {"decode_pass_s": m2["ms_med"] / 1e3, "ewb": n * pb / (m2["ms_med"] / 1e3),
                                           "stored_GBps": m2["GBps_stored_med"]},
-                        "h2d_GBps": m1.get("h2d_GBps"), "host_keys_s": keys_s, "reference_encode_s_per_block": encode_s,
+                        "h2d_GBps": m1.get("h2d_GBps"), "reference_encode_s_per_block": encode_s,
                         "audit": honest, "negative_audit": negative, "kernel": {"m1": m1, "m2": m2}},
             "profile": profile_json(scheme, honest["k"], honest["limit_ns"], gaps) if honest["accepted"] else None,
         }

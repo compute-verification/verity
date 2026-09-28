@@ -15,7 +15,7 @@ for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 REPO=$(pwd); I=$RESEARCH_RUN_DIR/inputs; O=$RESEARCH_RUN_DIR; W=${WORK:-/workspace}/pous-bench
 IMPL=${IMPL:-vllm-gpu}; WS=${WS:-qwen2.5-0.5b/linears+head}; HW=${HW:-l40s-48gb/bf16}
-SCHEME=${SCHEME:-$([ "$IMPL" = p2-gpu ] && echo p2-16448/v0 || echo band-chain/d12/v1)}
+SCHEME=${SCHEME:-$([ "$IMPL" = p2-gpu ] && echo p2-16448/v1 || echo band-chain/d12/v1)}
 AUDITS=${AUDITS:-20}
 mkdir -p "$W" "$O/bench"
 nvidia-smi --query-gpu=name,driver_version,clocks.max.sm --format=csv,noheader || true
