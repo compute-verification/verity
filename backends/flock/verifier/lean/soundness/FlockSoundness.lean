@@ -158,6 +158,7 @@ import FlockSoundness.Discharge.DrawWords
 import FlockSoundness.Discharge.PlaysCoin
 import FlockSoundness.Discharge.ZkExec
 import FlockSoundness.Discharge.Tables
+import FlockSoundness.Discharge.DecodeZLJ
 import FlockSoundness.ZK.GK
 import FlockSoundness.Discharge.Hidden
 import FlockSoundness.Discharge.ZkCoins
