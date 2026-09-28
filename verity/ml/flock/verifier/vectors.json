@@ -3609,9 +3609,86 @@
     "expect": "reject",
     "upstream_expect": "accept",
     "why": "\u00a716.10: not the verifier's rec-residuals/\u2026 (row r differs), D13"
+   },
+   {
+    "name": "rec_sparse_misnamed",
+    "mutation": "rename the CIRCUIT unit of a rec_sparse.stage statement's circuit file rec-sparse/n2-e6-s0 (no -t<T_LOG>, or a number with a leading zero)",
+    "expect": "reject",
+    "upstream_expect": "accept",
+    "why": "\u00a716.10: not rec-sparse/n<NU>-e<ELL>-s<S_LOG>-t<T_LOG>, D13"
+   },
+   {
+    "name": "rec_sparse_shape_invalid",
+    "mutation": "rename the CIRCUIT unit of a rec_sparse.stage statement's circuit file rec-sparse/n2-e5-s0-t1 (or NU 0, or T_LOG 17)",
+    "expect": "reject",
+    "upstream_expect": "accept",
+    "why": "\u00a716.10: NU is at least 1, ELL at least 6 and T_LOG at most 16, D13"
+   },
+   {
+    "name": "rec_sparse_shape_above_bits",
+    "mutation": "rename the CIRCUIT unit of a rec_sparse.stage statement's circuit file with NU 1000000000",
+    "expect": "reject",
+    "upstream_expect": "accept",
+    "why": "\u00a716.10: the shape exceeds the unit's input bits, refused before any of the shape's sizes is computed, D13"
+   },
+   {
+    "name": "rec_sparse_other_shape",
+    "mutation": "rename the CIRCUIT unit of a rec_sparse.stage statement's circuit file from rec-sparse/n2-e6-s0-t1 to rec-sparse/n2-e6-s1-t1",
+    "expect": "reject",
+    "upstream_expect": "accept",
+    "why": "\u00a716.10: its input and output bits are not the shape's, refused before the shape's net is built, D13"
+   },
+   {
+    "name": "rec_sparse_net_differs",
+    "mutation": "swap the operands of one AND row of the CIRCUIT unit of a rec_sparse.stage statement's circuit file",
+    "expect": "reject",
+    "upstream_expect": "accept",
+    "why": "\u00a716.10: not the verifier's rec-sparse/\u2026 (row r differs), D13"
+   },
+   {
+    "name": "rec_opening_misnamed",
+    "mutation": "rename the CIRCUIT unit of a rec_residuals.stage_opening statement's circuit file rec-opening/m22-c2 (no -p<j>, or a number with a leading zero)",
+    "expect": "reject",
+    "upstream_expect": "accept",
+    "why": "\u00a716.10: not rec-opening/m<m>-c<claims>-p<j>, D13"
+   },
+   {
+    "name": "rec_opening_unscheduled",
+    "mutation": "rename the CIRCUIT unit of a rec_residuals.stage_opening statement's circuit file rec-opening/m21-c2-p0 (or 0 claims)",
+    "expect": "reject",
+    "upstream_expect": "accept",
+    "why": "\u00a716.10: m has a fast100 schedule, claims at least 1, D13"
+   },
+   {
+    "name": "rec_opening_claims_above_bits",
+    "mutation": "rename the CIRCUIT unit of a rec_residuals.stage_opening statement's circuit file with claims 1000000000",
+    "expect": "reject",
+    "upstream_expect": "accept",
+    "why": "\u00a716.10: the claims exceed the unit's input bits, refused before the structure is computed, D13"
+   },
+   {
+    "name": "rec_opening_part_out_of_range",
+    "mutation": "rename the CIRCUIT unit of a rec_residuals.stage_opening statement's circuit file from rec-opening/m22-c2-p0 to rec-opening/m22-c2-p1 (m = 22 at 2 claims has one part)",
+    "expect": "reject",
+    "upstream_expect": "accept",
+    "why": "\u00a716.10: part 1 of 1, D13"
+   },
+   {
+    "name": "rec_opening_other_claims",
+    "mutation": "rename the CIRCUIT unit of a rec_residuals.stage_opening statement's circuit file from rec-opening/m22-c2-p0 to rec-opening/m22-c3-p0",
+    "expect": "reject",
+    "upstream_expect": "accept",
+    "why": "\u00a716.10: its input bits are not its part's, refused before the part's net is built, D13"
+   },
+   {
+    "name": "rec_opening_net_differs",
+    "mutation": "swap the two forms of one AND row of the CIRCUIT unit of a rec_residuals.stage_opening statement's circuit file",
+    "expect": "reject",
+    "upstream_expect": "accept",
+    "why": "\u00a716.10: not the verifier's rec-opening/\u2026 (row r differs), D13"
    }
   ],
-  "note": "The first 12 cases ran on two cells with the recorded outcomes; the remaining 8 are new record-level cases this spec adds (their outcome under upstream is recorded in phase 2; upstream_expect marks the two intended divergences D1, D2 of PROTOCOL.md \u00a717.1). The six rec_residuals_* cases (\u00a716.10, D13) refuse a rec-residuals/\u2026 unit that is not the verifier's part net; upstream takes the unit as the file gives it."
+  "note": "The first 12 cases ran on two cells with the recorded outcomes; the remaining 8 are new record-level cases this spec adds (their outcome under upstream is recorded in phase 2; upstream_expect marks the two intended divergences D1, D2 of PROTOCOL.md \u00a717.1). The six rec_residuals_* cases (\u00a716.10, D13) refuse a rec-residuals/\u2026 unit that is not the verifier's part net, the five rec_sparse_* cases a rec-sparse/\u2026 unit that is not the verifier's sparse-phase net, and the six rec_opening_* cases a rec-opening/\u2026 unit that is not the verifier's opening part net; upstream takes the unit as the file gives it."
  },
  "forgeries": {
   "note": "The red-team forgeries were run in-process against upstream's verifier or the live server; each run stored its harness and a verdict table, not the forged record and proof bytes. Phase 2 materialises them as replayable (record, proofs) pairs with the dump plan below.",

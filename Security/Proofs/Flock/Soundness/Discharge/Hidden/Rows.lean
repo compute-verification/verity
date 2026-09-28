@@ -236,6 +236,8 @@ theorem parse_rowPorts {tags : Tags} {bytes : ByteArray} {tables : List (String 
   (have hh := except_bind_ok h; clear h; obtain ⟨w', hrows, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
+  (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
+  (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   have hc : c0 = c := Except.ok.inj h
   subst hc
   exact ⟨⟨_, tags.typed, hrp⟩, hsum⟩

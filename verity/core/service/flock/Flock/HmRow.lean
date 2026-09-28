@@ -23,6 +23,8 @@ import Flock.Qcall
 import Flock.HmNets
 import Flock.RecOpen
 import Flock.RecResiduals
+import Flock.RecSparse
+import Flock.RecOpening
 
 namespace Flock
 
@@ -544,8 +546,8 @@ def rowPorts (mj : Json) (typed : Bool) : V (Array Port) := do
   return ports
 
 /-- Parse the circuit file (upstream's `Composite::parse`), check its layout, and refuse `sha512x3` and `hm96` nets other
-than the verifier's (`HmNets.check`), and a `rec-open/…` or `rec-residuals/…` unit other than the verifier's
-(`RecOpen.check`, `RecResiduals.check`). A typed
+than the verifier's (`HmNets.check`), and a `rec-open/…`, `rec-residuals/…`, `rec-sparse/…` or `rec-opening/…` unit
+other than the verifier's (`RecOpen.check`, `RecResiduals.check`, `RecSparse.check`, `RecOpening.check`). A typed
 template's block (`tmpl`, item 1e) brings its root and placed layouts' circuits; its wiring is derived. -/
 def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := [])
     (tmpl : Option Typed.Template := none) (pre : Array (String × Net) := #[]) : V Circuit := do
@@ -699,6 +701,8 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
   HmNets.check c
   RecOpen.check c
   RecResiduals.check c
+  RecSparse.check c
+  RecOpening.check c
   return c
 
 /-- A typed statement (item 1e), its rows derived once through `deriveChecked` (`Typed.read`), every net built from them.
