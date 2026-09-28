@@ -726,6 +726,87 @@ theorem order_sound {types : String → Option CircuitType} {ls : Array Layout} 
       exact (Option.some.inj hp).symm
 
 
+/-- **With `one` past every row, `[one]·[one]` rows are exactly Δ's constant copies.** -/
+theorem blockRow_one_iff {types : String → Option CircuitType} {ls : Array Layout} {info : String → Option TableInfo}
+    {words : String → Option (Array Nat)} {unit : Nat} {done : Array D}
+    (hd : deriveChecked types ls info words unit = .ok done) {t : CircuitType}
+    (ht : (ls.getD unit default).type.bind types = some t) {one : Nat}
+    (hone : (done.getD unit default).rows.size ≤ one) (c : Nat) :
+    blockRow (done.getD unit default) one c = some ([one], [one]) ↔
+      (done.getD unit default).delta.find? (·.1 == c) = some (c, none) := by
+  have hall := (deriveChecked_spec hd).1
+  have ho := (deriveChecked_spec hd).2
+  have hu : unit < ls.size := by
+    by_cases h : unit < ls.size
+    · exact h
+    · have : ls.getD unit default = default := by simp [Array.getD, h]
+      rw [this] at ht; cases ht
+  obtain ⟨t', ht', -, -, hin, -, -, hins, -⟩ := checkLayout_spec (hall unit hu)
+  rw [ht] at ht'
+  cases ht'
+  have hk : (unit == unit) = true := by simp
+  rw [hk] at hins
+  unfold orderChecked at ho
+  simp only [Bool.and_eq_true] at ho
+  generalize done.getD unit default = u at *
+  obtain ⟨-, hlt, hrd⟩ := orderOk_spec u u.inCols.size (order done u) 0 {} [] (by simp [Std.HashSet.contains_empty])
+    rfl List.nodup_nil ho.1
+  obtain ⟨hz, hdel⟩ := outsideOk_spec ho.2
+  have hpre : ∀ ℓ (hℓ : ℓ < (order done u).length), ℓ < u.inCols.size → (order done u)[ℓ] = u.inCols.getD ℓ 0 := by
+    intro ℓ hℓ hin'
+    simp [order, List.getElem_append_left (by simpa using hin' : ℓ < u.inCols.toList.length), Array.getD, hin']
+  -- a column past every row is in no row the order reads
+  have hnot : ∀ ℓ (hℓ : ℓ < (order done u).length), u.inCols.size ≤ ℓ → one ∉ readsOf u (order done u)[ℓ] := by
+    intro ℓ hℓ hn hm
+    have := hrd ℓ hℓ (by omega) one hm
+    have := hlt one (List.mem_of_mem_take (by simpa using this))
+    omega
+  constructor
+  · intro h
+    cases hf : u.delta.find? (·.1 == c) with
+    | none =>
+      exfalso
+      have hr : u.rows[c]? = some ([one], [one]) := by simpa [blockRow, hf] using h
+      have hcs : c < u.rows.size := (Array.getElem?_eq_some_iff.mp hr).1
+      by_cases hco : c ∈ order done u
+      · obtain ⟨ℓ, hℓ, hcℓ⟩ := List.getElem_of_mem hco
+        by_cases hin' : ℓ < u.inCols.size
+        · have hs := hins ℓ (by omega)
+          simp only [Chk.rowIs, Bool.and_eq_true, beq_iff_eq] at hs
+          rw [← hpre ℓ hℓ hin', hcℓ, hr] at hs
+          have : one = c := by simpa using hs.1
+          omega
+        · have := hnot ℓ hℓ (by omega)
+          rw [hcℓ] at this
+          simp [readsOf, hf, hr] at this
+      · have := hz c hcs hco
+        rw [hr] at this
+        simp at this
+    | some e =>
+      obtain ⟨x, s⟩ := e
+      have hx : x = c := by simpa using Array.find?_some hf
+      subst hx
+      cases s with
+      | none => rfl
+      | some s =>
+        exfalso
+        have hss : s = [one] := by
+          have : (s, s) = ([one], [one]) := by simpa [blockRow, hf] using h
+          simpa using this
+        have hco : x ∈ order done u := hdel _ (Array.mem_of_find?_eq_some hf)
+        obtain ⟨ℓ, hℓ, hcℓ⟩ := List.getElem_of_mem hco
+        by_cases hin' : ℓ < u.inCols.size
+        · have hs := hins ℓ (by omega)
+          simp only [Chk.rowIs, Bool.and_eq_true, beq_iff_eq, Bool.not_true, Bool.false_or,
+            Option.isNone_iff_eq_none] at hs
+          rw [← hpre ℓ hℓ hin', hcℓ, hf] at hs
+          cases hs.2
+        · have := hnot ℓ hℓ (by omega)
+          rw [hcℓ] at this
+          simp [readsOf, hf, hss] at this
+  · intro h
+    simp [blockRow, h]
+
 /-! ## The statements -/
 
 theorem lt_of_type {ls : Array Layout} {types : String → Option CircuitType} {j : ℕ} {t : CircuitType}
