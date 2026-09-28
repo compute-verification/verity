@@ -1001,6 +1001,10 @@ included. Claims are listed region-major, then point 0 before point 1.
   predate it and use `os` coins.
 - Shape: `blocks_real = ⌈n / G⌉`, `nbl = max(3, ⌈log2 blocks_real⌉)`, `k_log ≤ 26`, `m = k_log + nbl`; the spec rejects
   `m > 35` (no Fast100 schedule exists above it).
+- **The proved range** (`checkInRange`, in `setup` and `setupH` for every statement). The statement must lie in the
+  soundness package's `Stmt.InRange`: `k_log ≤ 26`, at most 1024 regions, and `m_pts = 24 + nbl ≤ 64`. So the verifier,
+  and not only the writer, accepts only statements the proved bound covers. `checkInRange_ok` (pinned) states that the
+  check accepts exactly that range.
 
 ### 16.6 frame-v3 roots
 
