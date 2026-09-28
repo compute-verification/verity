@@ -198,7 +198,7 @@ def test_hopper_recipes_match_the_relation_registry():
     try:
         from backends.direct.ligero import relations, relchain
     except ImportError:
-        pytest.skip("lane b-hopper's relation registry is not in this tree")
+        pytest.skip("B-Ligero's relation registry (backends.direct.ligero.relations) does not import here")
     for syn, name in ((IH.BF16_HOPPER_SYNTHETIC, "bf16-hopper"), (IH.FP8_HOPPER_SYNTHETIC, "fp8-hopper"), (IH.FP8_ADA_SYNTHETIC, "fp8-ada")):
         rel = relations.relation(name)
         assert (syn.dataset, syn.tier, syn.target) == (rel.instances_dataset, rel.instances_tier, rel.target.name)

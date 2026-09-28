@@ -1,7 +1,7 @@
 [project]
 name = "verity"
 version = "0.1.0"
-description = "Verity core: IR (computation representation), exact ML/hardware semantics, verification obligations, commitments, resource accounting."
+description = "Verity core: IR (programs, partitions), the evaluator, exact tensor-core semantics, challenge randomness, single statements and integrity profiles, commitment schemes, claim ids."
 requires-python = ">=3.12"
 dependencies = ["numpy>=1.26"]
 

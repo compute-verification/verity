@@ -3,6 +3,9 @@
   "AmpereBF16TcDot16_v1": {
    "and": 8623
   },
+  "AmpereBF16TcDot16_v2": {
+   "and": 8623
+  },
   "Bf16AddF2fp_v1": {
    "and": 754
   },
