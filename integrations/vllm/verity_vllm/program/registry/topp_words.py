@@ -22,6 +22,7 @@ evaluates the Definition with the IR's evaluator against `topp_split`. `TopPMask
 """
 from __future__ import annotations
 
+import hashlib
 import struct
 from collections import Counter
 from contextlib import contextmanager
@@ -772,6 +773,10 @@ def _refs(codes: np.ndarray):
     return concat(parts) if len(parts) > 1 else parts[0]
 
 
+#: a call of at most this many elements is also value-numbered element by element
+SMALL = 64
+
+
 class _VCalls:
     """An expansion's calls on m elements at once (`IREngine.vcall`)."""
 
@@ -797,6 +802,7 @@ class IREngine(Engine):
         #: (operation, constant operands, operand references) -> the gate that computes it: an operation the builder repeats on
         #: the same operands (a round's stop test) is computed once, so the partition finds no recomputed value
         self._made: dict = {}
+        self._small: dict = {}
 
     def _const(self, w: int, v: int) -> Coll:
         key = (32 if w == CW else w, int(v))
@@ -828,43 +834,51 @@ class IREngine(Engine):
 
     def vcall(self, prim: PrimitiveDefinition, ops: list, m: int):
         """``prim`` on m elements; an operand is ``("c", value, width)`` or an array of m references. Returns the m references, or a
-        constant when every operand is one."""
+        constant when every operand is one. The same call on the same operand arrays, and a repeated element within a call, reuse
+        the gates made: a vector operation the builder repeats (a round's stop test), or two expansions share (the NaN test of
+        numpy's max and min), is computed once."""
         if all(isinstance(o, tuple) for o in ops):
             v = int(prim.evaluate(*(o[1] for o in ops)))
             return ("c", v, prim.ret.w)
-        cols = [np.full(m, -2 - o[1], np.int64) if isinstance(o, tuple) else o for o in ops]
-        made = self._made.setdefault(prim.id, {})
-        keys = list(zip(*[c.tolist() for c in cols]))
-        out = np.zeros(m, np.int64)
-        todo, dups, first = [], [], {}
-        for t, kk in enumerate(keys):
-            if kk in made:
-                out[t] = made[kk]
-            elif kk in first:
-                dups.append((t, first[kk]))
+        cols = [np.full(m, -2 - o[1], np.int64) if isinstance(o, tuple) else np.asarray(o, np.int64) for o in ops]
+        grid = np.ascontiguousarray(np.stack(cols, 1))
+        key = (prim.id, hashlib.sha256(grid.tobytes()).digest())
+        hit = self._made.get(key)
+        if hit is not None:
+            return hit.copy()
+        uniq, first, inv = np.unique(grid, axis=0, return_index=True, return_inverse=True)
+        inv = inv.reshape(-1)
+        made = np.zeros(m, np.int64)
+        old = np.zeros(m, bool)
+        if m <= SMALL:                     # a scalar-sized call (a warp half's flags): elements an earlier small call made
+            for t in first.tolist():
+                hit = self._small.get((prim.id, tuple(grid[t].tolist())))
+                if hit is not None:
+                    made[t], old[t] = hit, True
+        todo = np.sort(first[~old[first]])
+        if not len(todo):
+            out = made[first[inv]]
+            self._made[key] = out
+            return out.copy()
+        colls, axes = [], []
+        for o, (_n, t) in zip(ops, prim.params):
+            if isinstance(o, tuple):
+                colls.append(self._const(o[2], o[1]))
+                axes.append(None)
             else:
-                first[kk] = t
-                todo.append(t)
-        if todo:
-            todo = np.array(todo, np.int64)
-            colls, axes = [], []
-            for o, (_n, t) in zip(ops, prim.params):
-                if isinstance(o, tuple):
-                    colls.append(self._const(o[2], o[1]))
-                    axes.append(None)
-                else:
-                    colls.append(Coll(Array(len(todo), t), _refs(o[todo])))
-                    axes.append(0)
-            res = self.B.batch(prim, *colls, axes=tuple(axes))
-            if isinstance(res.refs, Affine) and res.refs.space == "n":
-                out[todo] = (np.int64(res.refs.idx) << 32) | (res.refs.base + np.arange(len(todo), dtype=np.int64))
-            else:
-                out[todo] = [_code(x) for x in res.refs]
+                colls.append(Coll(Array(len(todo), t), _refs(np.asarray(o, np.int64)[todo])))
+                axes.append(0)
+        res = self.B.batch(prim, *colls, axes=tuple(axes))
+        if isinstance(res.refs, Affine) and res.refs.space == "n":
+            made[todo] = (np.int64(res.refs.idx) << 32) | (res.refs.base + np.arange(len(todo), dtype=np.int64))
+        else:
+            made[todo] = [_code(x) for x in res.refs]
+        if m <= SMALL:
             for t in todo.tolist():
-                made[keys[t]] = out[t]
-        for t, src in dups:
-            out[t] = out[src]
-        return out
+                self._small[(prim.id, tuple(grid[t].tolist()))] = made[t]
+        out = made[first[inv]]
+        self._made[key] = out
+        return out.copy()
 
     def result(self, v: Vec, w: int) -> Coll:
         codes = v.r.copy()
