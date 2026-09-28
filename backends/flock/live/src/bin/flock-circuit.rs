@@ -1884,8 +1884,10 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
     // tree a fresh id. The device expands its own trees' salts; a CPU proof takes host expansions.
     let salts = Arc::new(Mutex::new(flock_live::zk_hooks::LeafSalts::for_seed(&seed)));
     let zk_points = Arc::new(Mutex::new(Vec::new()));
-    // M1 on the device: level 0's hiding and both reps' pads commitments beside the witness build
-    let zk_pre = (plan.gpu && is_zk(st)).then(|| {
+    // M1 on the device: level 0's hiding and both reps' pads commitments beside the witness build, and rep 0's replay and inner
+    // proof beside rep 1's device run (FC_ZK_SEQUENTIAL: neither, the reference for the overlap's gain)
+    let overlap = std::env::var_os("FC_ZK_SEQUENTIAL").is_none();
+    let zk_pre = (plan.gpu && is_zk(st) && overlap).then(|| {
         let (st, plan, salts, points) = (st.clone(), plan.clone(), salts.clone(), zk_points.clone());
         std::thread::spawn(move || zk_prepare(&st, &plan, seed, lig, &salts, &points))
     });
@@ -2006,7 +2008,7 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
                     let wt = if rep == 0 { wt0.as_ref() } else { wt1.as_ref().or(wt0.as_ref()) }.expect("a rep's witness");
                     match zkrep.take() {
                         // M1 on the device, rep 0: the device part, then its replay and inner proof on a thread
-                        Some(z) if rep == 0 => {
+                        Some(z) if rep == 0 && overlap => {
                             let (mut mch, sent) = zk_masking(st, lch.take().expect("rep 0's stream"), &z);
                             let tp = Instant::now();
                             let (proof, cm, bk) = {
@@ -2017,10 +2019,11 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
                             rep0_finish = Some(std::thread::spawn(move || zk_finish(&st2, &z, proof, cm, mch, &sent, tp, t_up, bk)));
                             (Vec::new(), Value::Null)
                         }
-                        // rep 1: the device starts now; its first round waits for rep 0's last one, then opens rep 1's stream
+                        // rep 1 beside rep 0's finish: the device starts now, its first round waits for rep 0's last one and then
+                        // opens rep 1's stream; otherwise (sequential) the rep's stream is open already
                         Some(z) => {
                             let mut first = rep0_finish.take();
-                            let mut opened: Option<(zkv::Masking<LiveChallenger>, zkv::Pads)> = None;
+                            let mut opened: Option<(zkv::Masking<LiveChallenger>, zkv::Pads)> = lch.take().map(|l| zk_masking(st, l, &z));
                             let mut r0: Option<Result<(Vec<u8>, Value), String>> = None;
                             let tp = Instant::now();
                             let dev = catch_unwind(AssertUnwindSafe(|| {
@@ -2044,7 +2047,9 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
                                 r0 = Some(h.join().map_err(panic_msg));
                             }
                             // rep 0's stop comes first on the wire, so it is the session's
-                            rep0_done = Some(r0.expect("rep 0 joined").unwrap_or_else(|e| panic!("{e}")));
+                            if let Some(r) = r0 {
+                                rep0_done = Some(r.unwrap_or_else(|e| panic!("{e}")));
+                            }
                             let (proof, cm, bk) = dev.unwrap_or_else(|e| std::panic::resume_unwind(e));
                             let t_up = tp.elapsed().as_secs_f64();
                             let (mch, sent) = opened.take().expect("rep 1's stream opened");

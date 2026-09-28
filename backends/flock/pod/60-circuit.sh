@@ -7,7 +7,8 @@
 #   MODE=build      nothing more
 # env: SELF_N=4  POINTS="64 256"  WARM=1 RUNS=3  GPU=1  SM (from nvidia-smi)  CPU_SELF=1 (0: skip the CPU selftest)
 #      RECORD=1 (selftest: every case's server record and proofs under out/<set>/records-{cpu,gpu})
-#      ZK=1 (selftest: M1's --zk statement, and zkaudit on the device's proofs)  MODES="m0 zk" (bench: each point in each mode)
+#      ZK=1 (selftest: M1's --zk statement, and zkaudit on the device's proofs)  MODES="m0 zk" (bench: each point in each mode;
+#      zkseq: --zk with the host's zk work not overlapped, FC_ZK_SEQUENTIAL)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 REPO=$(pwd); I=${RESEARCH_RUN_DIR:-/tmp/fc}/inputs; O=${RESEARCH_RUN_DIR:-/tmp/fc}/out; W=/workspace/flock-circuit; mkdir -p $O $W
@@ -55,12 +56,12 @@ for tarf in $I/*.tar; do
     python3 -m verity_flock.circuit --input-set $SET --n ${POINTS:-64} --out $D/stage | tee $D/stage.json || exit 1
     PIN=$(sha512sum $D/stage/circuit.txt | cut -d' ' -f1)
     for n in ${POINTS:-64}; do for md in ${MODES:-m0}; do
-      Zb=; [ $md = zk ] && Zb=--zk
+      Zb=; [ $md = zk ] && Zb=--zk; ENVP=; [ $md = zkseq ] && { Zb=--zk; ENVP=FC_ZK_SEQUENTIAL=1; }
       $B serve $Zb --listen 127.0.0.1:7501 --out $D/sessions-$n-$md --instances $D/stage/pub-$n.bin --circuit $D/stage/circuit.txt --tables $D/stage/tables --pin $PIN --operator loopback > $D/serve-$n-$md.log 2>&1 &
       SP=$!
       for i in $(seq 900); do grep -q SERVING $D/serve-$n-$md.log && break; sleep 1; done
       G_=; [ $G = 1 ] && G_=--gpu
-      $B prove $Zb --verifier 127.0.0.1:7501 --instances $D/stage/inst-$n.bin --circuit $D/stage/circuit.txt --tables $D/stage/tables $G_ --warm ${WARM:-1} --runs ${RUNS:-3} > $D/prove-$n-$md.txt 2> $D/prove-$n-$md.err
+      env $ENVP $B prove $Zb --verifier 127.0.0.1:7501 --instances $D/stage/inst-$n.bin --circuit $D/stage/circuit.txt --tables $D/stage/tables $G_ --warm ${WARM:-1} --runs ${RUNS:-3} > $D/prove-$n-$md.txt 2> $D/prove-$n-$md.err
       grep -h "^LIVE" $D/prove-$n-$md.txt | python3 -c "
 import json, sys
 for l in sys.stdin:
