@@ -120,7 +120,10 @@ simp with that.
   the moves as a JSON object of old names to new ones, a declaration or a namespace each, and run
   `audit.py --update --moved MOVES.json PKG` on the record as it was before the move. A pin that says what its record
   says, renamed or restated as a `Guarantees` definition, and the definitions the same under their old names, each get
-  one line that needs no reviewer; the rest prints in full. Moving a definition to another module needs no map.
+  one line that needs no reviewer; the rest prints in full. Moving a definition to another module needs no map. For the
+  merge gates (`research merge --train`, `research queue`), a run that printed nothing a reviewer must read stands in for
+  the grant: `research data put --kind lean-review/v1 --file OUT/audit.json`, then `research data label pr:N@SHA
+  lean_review art:ID --by LANE` (a new push needs a new label).
 
 ## Before the PR
 
