@@ -17,7 +17,8 @@ minutes: a check there would run into a whole-node timed measurement. A slot wit
 reads the key as unknown and the slot as any other). A slot with mem=GB is skipped while less than GB is free to this process
 (`memory_gb`: the least of MemAvailable and what each cgroup v2 memory limit over it leaves, the user slice's on a VM), so a
 check starts only when its measured peak fits and queues instead of being killed with the others under the slice (node 1,
-8 Oct 02:00Z: two OOM kills at 1,605 of 1,716 GB across ~8 runs).  With every slot busy it retries every POLL_S, reading
+8 Oct 02:00Z: two OOM kills at 1,605 of 1,716 GB across ~8 runs); while the check runs, the slot holds a research.mem reservation
+of GB (`reserve`), so `research run --mem-gb` admits nothing that needs what the check may still take.  With every slot busy it retries every POLL_S, reading
 SLOTS again each time, so a slot added while checks wait is taken by them; with no slots file, CMD runs as it is. A slot
 with a core outside this process's own (os.sched_getaffinity) is skipped, since pinning onto it fails. Stdlib only: it runs before uv.
 
@@ -79,6 +80,8 @@ USAGE = "usage: slot.py [--priority] [--by NAME] [--twin PAIR[@HOME]] [--wait-ma
 TWINS = "twins"
 #: machine name, then the ssh destination and options with which this machine's research user reaches it (`--twin PAIR@HOME`)
 PEERS = Path(os.environ.get("CHECK_PEERS", "/etc/vy/peers"))
+#: research.mem's reservations (its RAMLOCK_DIR, which `research mem` reads from the same variable)
+RAMLOCK = Path(os.environ.get("RESEARCH_RAMLOCK_DIR", "/workspace/ramlock"))
 #: how often a waiting twin whose claims are on another machine looks there for its twin's claim
 TWIN_PEEK_S = 120
 TWIN_SSH_S = 30
@@ -122,6 +125,33 @@ def memory_gb(root: Path = Path("/")) -> int:
                 if (m := read(c / "memory.max")).isdigit():
                     left.append(int(m) - int(read(c / "memory.current") or 0))
     return max(0, min(left)) >> 30 if left else 0
+
+
+def reserve(slot: dict, now: datetime) -> str | None:
+    """A slot with mem=GB holds a research.mem reservation of that size while its check runs: `check-NAME.json` in RAMLOCK, in
+    research.mem's format and under its admission lock, naming this process (CMD, after the exec) and its run. research.mem counts
+    the GB less what the check's process tree holds, and stops counting it when that pid is gone or the run ended. Without it,
+    research.mem admitted work beside two full checks until node 1 ran out of memory (8:21Z, 10 Oct). The line to print, or None
+    for a slot without mem=."""
+    if not slot.get("mem"):
+        return None
+    gb = round(slot["mem"] * 2 ** 30 / 1e9, 1)                  # mem= is in GiB (`memory_gb`), research.mem's GB are 10^9 bytes
+    path = RAMLOCK / f"check-{slot['name']}.json"
+    run_dir = os.environ.get("RESEARCH_RUN_DIR")
+    doc = {"owner": "check", "gb": gb, "started": f"{now:%Y-%m-%dT%H:%M:%SZ}", "pid": os.getpid(),
+           "note": f"check slot {slot['name']}: {os.environ.get('RESEARCH_RUN_ID') or os.getcwd()}",
+           **({"run_id": os.environ.get("RESEARCH_RUN_ID"), "run_dir": run_dir} if run_dir else {})}
+    try:
+        RAMLOCK.mkdir(parents=True, exist_ok=True)
+        with open(RAMLOCK / ".admission.lock", "a") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            tmp = path.with_name(f".{path.name}.{os.getpid()}")
+            tmp.write_text(json.dumps(doc) + "\n")
+            tmp.chmod(0o664)
+            os.replace(tmp, path)
+    except OSError as e:
+        return f"slot: no research.mem reservation for slot {slot['name']} ({e}): research.mem won't count this check's peak"
+    return f"slot: holds a {gb:g} GB research.mem reservation ({path}) while the check runs"
 
 
 def _windows(slot: dict) -> list[tuple[str, datetime, int, str]]:
@@ -587,6 +617,8 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
     env.update(LEASE_DEADLINE_FILE="/nonexistent/research-deadline", CHECK_SLOT=slot["name"],
                VERITY_TEST_CACHE=str(Path.home() / ".cache" / "verity" / f"tests-slot-{slot['name']}"))
     print(f"slot: check slot {slot['name']} (cores {slot['cpus']})", file=sys.stderr, flush=True)
+    if said := reserve(slot, now()):
+        print(said, file=sys.stderr, flush=True)
     if run_max is not None:
         print(limit_run(run_max, slot["name"], os.environ.get("RESEARCH_RUN_DIR")), file=sys.stderr, flush=True)
     os.execvpe(cmd[0], cmd, env)
