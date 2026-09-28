@@ -1139,14 +1139,12 @@ def tool_preflight(harness_args: list[str], tree: Path | str | None, asked: str 
         return None
     from .store import tools_registry
 
-    module, _, attr = tools_registry.REGISTRY.get(spec, spec).rpartition(":")
-    rel = Path(*module.split(".")) if module else None
-    if rel is None or not any((Path(tree) / c).is_file() for c in (rel.with_suffix(".py"), rel / "__init__.py")):
+    if tools_registry.locate(spec, Path(tree)) is None:
         if asked:
             raise PreflightFailed(f"--preflight {asked}: {tree} does not declare that tool; nothing started")
         return None
     try:
-        decl = tools_registry._from_file(module, attr, Path(tree))
+        decl = tools_registry.from_tree(spec, Path(tree))
     except Exception as e:  # noqa: BLE001
         raise PreflightFailed(f"{flag} {spec}: its declaration in {tree} cannot be read ({type(e).__name__}: {e}), so its preflight is "
                               f"unknown; nothing started") from None

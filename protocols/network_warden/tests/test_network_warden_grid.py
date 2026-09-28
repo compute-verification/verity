@@ -1,4 +1,4 @@
-"""Proposition 2 and the warden's semantics. By name, the tests mirror Proposition 2's ten guarantees
+"""Proposition 2 and the warden's semantics. By name, the tests mirror Proposition 2's ten statements
 (`NetTiming.SecurityProofs.CardFree` and the rest, proved in `NetTiming.SecurityProofs.Occupancy`) and that module's
 three proved lemmas without a record, `occ_fill`, `leftPacked_occ_fill` and `leftPacked_fifoGrid`. The warden tests
 check the behaviour `NetTiming.Assumptions` takes as hypotheses (W4 packing, W5's untimed status, W6 fail-closed)."""

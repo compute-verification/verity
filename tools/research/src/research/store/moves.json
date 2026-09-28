@@ -1,0 +1,4 @@
+{
+  "about": "Each layout move's renamed paths (old: new, a file or a directory), oldest first, so a tree from before a move still holds a tool's declaration: tools_registry.former_modules. The move's generator appends its entry; it is data, never rewritten by one.",
+  "moves": []
+}

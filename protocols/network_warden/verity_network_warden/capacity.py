@@ -1,4 +1,4 @@
-"""The counts the Lean package pins, and the capacity bounds built on them.
+"""The counts the Lean package proves, and the capacity bounds built on them.
 
 All logarithms are base 2, and all bounds hold on accepted runs unless a docstring says otherwise.
 """

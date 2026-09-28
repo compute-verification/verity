@@ -1,4 +1,4 @@
-"""Theorems 1(b) and 3 on small grids. By name, the tests mirror nine of their guarantees (`NetTiming.SecurityProofs`,
+"""Theorems 1(b) and 3 on small grids. By name, the tests mirror nine of their statements (`NetTiming.SecurityProofs`,
 proved in its `Counting`, `Advice` and `Schedule`): `SecurityProofs.EncardLeProdOfBranching`,
 `SecurityProofs.EncardObsDecodableLe`, `SecurityProofs.EncardAccSeqsLeSync`, `SecurityProofs.EncardAccSeqsLeFixedClock`,
 `SecurityProofs.EncardAccSeqsLeBlocks`, and for the constant-rate Program `SecurityProofs.EncardAccSeqsLeConstantRate`,

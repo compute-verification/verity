@@ -1,7 +1,7 @@
 import NetTiming
 open NetTiming
 
--- The 51 guarantees (`lean-audit.json`'s `guarantees`): the 35 from `NetTiming.Guarantees`, then the 16 witnesses.
+-- The 35 statements' proofs (four of them `lean-audit.json`'s `guarantees`), then the 16 witnesses.
 #print axioms SecurityProofs.CardFree
 #print axioms SecurityProofs.CardLeftPacked
 #print axioms SecurityProofs.FillInjective

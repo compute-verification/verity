@@ -29,4 +29,9 @@ def root() -> Path:
 
 
 def path(rel: str) -> Path:
-    return root() / rel
+    """``rel`` in the frozen tree; FileNotFoundError when the tree has no such path (a directory that isn't there would read
+    as empty). The paths are where the files were on 2026-09-29: a layout move doesn't rewrite them."""
+    p = root() / rel
+    if not p.exists():
+        raise FileNotFoundError(f"{rel} is not in the frozen evidence {EVIDENCE}, which keeps the former repository paths")
+    return p
