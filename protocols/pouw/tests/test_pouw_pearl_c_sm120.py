@@ -11,6 +11,8 @@ from fractions import Fraction
 
 import pytest
 
+import quicknet as Q
+
 import pearl_c_u_vectors as UV
 import pearl_c_vectors as CV
 import test_pouw_pearl_c_debit as TD
@@ -127,13 +129,12 @@ def test_sm120_lifecycle_and_work_audit():
     rows_a, rows_b = CV.rows_f32("life", "A", 32, k), CV.rows_f32("life", "B", 16, k)
     work = Workload((Matmul(3, Shape(32, k, 16), 9),))
     prover = Prover(s, {9: rows_b})
-    epoch = Epoch.start(work, prover.weight_roots, b"beacon")
+    epoch = Epoch.unverified(work, prover.weight_roots, b"beacon")
     tr = prover.prove(epoch, {3: rows_a})
     assert Verifier(s, epoch).audit(prover, tr, Sampled(2), b"verifier").accepted
     splits = {9: W.Split(k)}
     records = W.declare(s, epoch, {3: rows_a}, {9: rows_b}, splits)
-    committed = 7
-    res = W.audit(s, epoch, prover, tr, splits, records, committed, W.Beacon(committed + 1, b"round"), 3)
+    res = W.audit(s, epoch, prover, tr, splits, records, Q.recorded_before(Q.LATEST), Q.LATEST, 3)
     assert res.audit.accepted and res.audit.profile.scheme == "pearl-c-sm120-v1"
 
 
