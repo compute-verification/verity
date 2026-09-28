@@ -63,10 +63,26 @@ is 14.4 MB. `params.LEAN_P3_MEETS` (`wc = 37`) is the instance Lean's `p3_meets`
    `W`).
 2. **Salt.** The verifier draws the 24-byte salt after the commitment (`setup.draw_salt`, through `verity.randomness`
    from its own secret or a later beacon round).
-3. **Encode.** The server computes `C = Enc(W, salt)` (`scheme.encode`). The verifier computes `vk` from its *own*
-   encoding (`setup.verifier_key`) and never accepts it from the server. Comparing roots (`setup.check_server_root`)
-   catches a wrong encoding at setup. The encoder is deterministic and public, so the server running it changes
-   nothing in the timed game. A server-chosen or predictable salt would break the model's "`W` before coins" order.
+3. **Encode.** The server computes `C* = Enc(W, salt)` and sends it segment by segment. The verifier builds `vk` by
+   `setup.verifier_setup`, one of two ways.
+   - **Public encoder, the default** (`setup.PUBLIC_ENCODER = True`; POUS `docs/public-encoder/protocol.md`, milestone
+     1). `setup.verifier_key_from_encoding` checks each segment's size and block count against the verifier's own
+     `params`, decodes it (`params.codec.decode_segment`), streams the result into `commit`'s framing byte for byte,
+     and keeps only the segment's leaf digests. It accepts iff the digest equals the commitment, and then builds `vk`
+     from those leaves alone. Any mismatch, in any byte, block count or segment count, raises `ValueError`: there is
+     no `vk` and no audit. It calls no encoder, reads no root or leaf from the server, and holds one segment at a
+     time, never `W`.
+   - **Private encoder** (`public_encoder=False`). The verifier encodes `W` itself (`setup.verifier_key`). Comparing
+     roots (`setup.check_server_root`) catches a wrong server encoding at setup.
+
+   Lean (POUS `lean/submissions/public-encoder/`) proves that acceptance forces `C* = Enc(W, salt)` for the dense
+   codec (`chainDense_encDec`). It also proves that the public game is equivalent to the private one
+   (`pubAuditSecure_exact_iff`), so the certificates carry over at `k = 111`: `dense_pub_meets_64`,
+   `seg_pub_meets_14`, and `chain_pub_meets_64`, the last given `ChainExPostFacto`. An accept-all check provably fails
+   (`acceptAll_fails_dense`). P3 goes through the same code, but its encode-after-decode lemma is not proved.
+
+   The encoder is deterministic and public, so the server running it changes nothing in the timed game. A
+   server-chosen or predictable salt would break the model's "`W` before coins" order.
 4. **Serve.** `layout.decode_tensor` decodes one tensor from the segments it overlaps.
 5. **Audit.** The verifier reveals `k` indices one at a time (`audit.TimedVerifier`, uniform with replacement, keyed
    by `audit.challenge_key` and bound to `vk`'s root). Each block must arrive within `Δ = 0.5 ms` plus
@@ -86,7 +102,7 @@ is 14.4 MB. `params.LEAN_P3_MEETS` (`wc = 37`) is the instance Lean's `p3_meets`
 | `dense` | `DenseParams(blocks_per_segment, m, segments)`, `SECURE_FIRST`; `encode_segment` and `decode_segment` on bytes; `DENSE`, the two as a codec; `DenseChain` (its `H`), `reference`, `ideal`; the `*_prog` oracle programs |
 | `scheme` | P3's `encode_segment(params, prims, salt, s, w_seg) -> blocks` and `decode_segment(params, prims, salt, s, blocks) -> w_seg` on bytes; `P3`, the two as a codec; `encode` and `decode` over all of `W`, segment by segment; the `*_prog` oracle programs |
 | `layout` | `Layout.of(params, [(name, size)], align)`, `Layout.of_ranges(params, [(name, offset, size)])`, `pack`, `decode_tensor(..., codec=params.codec)` |
-| `setup` | `commit` (streamed over segments), `draw_salt`, `verifier_key(params, prims, W or its segments, commitment, salt, encoded=None, codec=params.codec)`, `server_root`, `check_server_root` |
+| `setup` | `commit` (streamed over segments), `draw_salt`; `verifier_setup(params, prims, commitment, salt, encoded=C*, w=None, public_encoder=PUBLIC_ENCODER)`, which picks `verifier_key_from_encoding(params, prims, commitment, salt, C*, codec=params.codec)` (public encoder, the default) or `verifier_key(params, prims, W or its segments, commitment, salt, encoded=None, codec=params.codec)` (the verifier encodes); `server_root`, `check_server_root` |
 | `verifier` | `VerifierKey` (`root` and leaf digests; `build`, `from_leaves`, `from_segments`), `leaf_hash` (whole or chunked blocks), `segment_leaves`, `MerkleTree` (audit paths), `verify_path` |
 | `audit` | `challenge_key`, `HonestResponder`, `TimedVerifier` and `run_timed` (wall clock; `respond` may return `(block, report)`, kept in `Answer.report`), `simulate` (oracle rounds); `k` and the adversary's call time default to the parameters' own (dense: 111 and 483 µs) |
 | `adversary` | holdings (Lean `ColState`), `schedule`, `answer_prog`, strategies, `measure`; `col_round` is Lean's `colRound` |
@@ -171,6 +187,8 @@ column storage, whole lower labels as separators, meet in the middle through `P�
 - per-tensor decode;
 - replayed holdings;
 - the narrow-state attack, which compresses `C` with SHAKE-256 as `H` and fails against the overwrite chain;
+- the public-encoder setup (`test_pous_public_encoder.py`): the spec's seven tests (honest, a flipped byte, corrupt and
+  continue, wrong sizes, server data unused, no encoder, the Lean vectors), negative controls, and the flag;
 - the two-labels-from-one-item attacks (`test_pous_two_for_one.py`), bit-exact on real labels: they succeed on the XOR
   sponge and on Miyaguchi–Preneel over band rows, and fail on the overwrite chain. The designer's state game
   (`pous_state_game.py`, from `internal/p3-instantiation/overwrite-state-game.py`) agrees on dense and band rows;

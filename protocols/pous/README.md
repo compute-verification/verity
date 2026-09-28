@@ -22,9 +22,9 @@ params, prims = layout.params, dense.reference(layout.params)
 w = layout.pack({"w1": b1, "w2": b2})
 commitment = setup.commit(params, w)                                   # server, before any salt exists
 salt = setup.draw_salt(verifier_secret, commitment)                    # verifier
-segs = list(codec.split(params, w))
-C = [params.codec.encode_segment(params, prims, salt, s, g) for s, g in enumerate(segs)]   # per segment
-vk = setup.verifier_key(params, prims, segs, commitment, salt, encoded=C)            # the verifier's own encoding
+C = [params.codec.encode_segment(params, prims, salt, s, g)             # server: C*, per segment
+     for s, g in enumerate(codec.split(params, w))]
+vk = setup.verifier_setup(params, prims, commitment, salt, encoded=C)   # verifier: decodes C*, checks the commitment
 blocks = [b for seg in C for b in seg]
 w1 = decode_tensor(layout, prims, salt, "w1", blocks.__getitem__)      # decode one tensor
 v = audit.TimedVerifier(vk, audit.challenge_key(audit_secret, vk))     # k = 111, Δ = 0.5 ms (+ rtt_allowance_ns)
