@@ -4,7 +4,7 @@
   "FlockSoundness.Check": "the lane's #print axioms list, which this audit supersedes (every declaration is audited)"
  },
  "assumptions": ["FlockSoundness.Assumptions"],
- "meaning": ["FlockSoundness", "FlockLevel3"],
+ "meaning": ["FlockSoundness", "FlockLevel3", "Flock.Derive", "Flock.CircuitType"],
  "upstream": {
   "scan": {
    "Arklib": {
@@ -145,6 +145,29 @@
    ],
    "assumptions": [],
    "type_hash": "00000000deee5660"
+  },
+  "FlockSoundness.Types.compose_complete": {
+   "signature": [
+    "FlockSoundness.Types.compose_complete {t : Flock.CircuitType} {inSplit outSplit : List ℕ} {d : Flock.Derive.Derived}",
+    "  (hd : Flock.Derive.derive t inSplit outSplit = Except.ok d) (x : ℕ → Bool) :",
+    "  FlockSoundness.Types.Sat d.rows (FlockSoundness.Types.honest t d.geo x) ∧",
+    "    FlockSoundness.Types.honest t d.geo x d.geo.const = true ∧",
+    "      (∀ i < t.inBits, FlockSoundness.Types.honest t d.geo x (d.inCol i) = x i) ∧",
+    "        ∀ o < t.outputs.size,",
+    "          FlockSoundness.Types.honest t d.geo x (d.outCol o) = (FlockSoundness.Types.eval t x).getD o false"
+   ],
+   "assumptions": [],
+   "type_hash": "000000008624e1aa"
+  },
+  "FlockSoundness.Types.compose_sound": {
+   "signature": [
+    "FlockSoundness.Types.compose_sound {t : Flock.CircuitType} {inSplit outSplit : List ℕ} {d : Flock.Derive.Derived}",
+    "  (hd : Flock.Derive.derive t inSplit outSplit = Except.ok d) (z : ℕ → Bool) (hz : FlockSoundness.Types.Sat d.rows z)",
+    "  (h1 : z d.geo.const = true) (o : ℕ) (ho : o < t.outputs.size) :",
+    "  z (d.outCol o) = (FlockSoundness.Types.eval t fun i => z (d.inCol i)).getD o false"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000c74db5c9"
   },
   "FlockSoundness.execArith_correct": {
    "signature": ["FlockSoundness.execArith_correct : FlockSoundness.execArith.Correct"],
@@ -297,6 +320,66 @@
   }
  },
  "reads": {
+  "Flock.CircuitType": {
+   "digest": "f8cd42a1f33eb743c97ab383222e7acf",
+   "definitions": {
+    "Flock.CircuitType": "789208e06955f6aa",
+    "Flock.CircuitType.formOk": "a7f2ec83835e1240",
+    "Flock.CircuitType.inBits": "449654f95da7d293",
+    "Flock.CircuitType.ins": "e7ab560baf422e62",
+    "Flock.CircuitType.items": "5a0559e90fb11c31",
+    "Flock.CircuitType.outBits": "0bf4fa25a5dd0d1f",
+    "Flock.CircuitType.outputs": "b1dd4e5f7f730011",
+    "Flock.CircuitType.outs": "7a26346e90ec9f1a",
+    "Flock.CircuitType.portBits": "bb67dc48fe863148",
+    "Flock.Form": "c244759a14e4dfa8",
+    "Flock.Form.c": "dd2357bc27cf6e90",
+    "Flock.Form.ws": "2e0b992d9e47c1e2",
+    "Flock.Item": "d0c4d7c2fdd321de",
+    "Flock.Item.and": "7e339b454ab4a3ab",
+    "Flock.Item.bad": "4d2a83fd44450a73",
+    "Flock.Item.call": "485ffae42b86792f",
+    "Flock.Item.read": "5241d29e3aa5f3f1",
+    "Flock.instInhabitedForm": "050907a42f7191a6",
+    "Flock.instInhabitedForm.default": "39565b89558a96ad"
+   },
+   "pins": ["FlockSoundness.Types.compose_complete", "FlockSoundness.Types.compose_sound"]
+  },
+  "Flock.Derive": {
+   "digest": "94474b9e76ca37076bd0f53ed60950b8",
+   "definitions": {
+    "Flock.Derive.Derived": "a6762e6e37f98189",
+    "Flock.Derive.Derived.geo": "e3d354d1d10c263a",
+    "Flock.Derive.Derived.inCol": "31fae78edbf8950f",
+    "Flock.Derive.Derived.outCol": "f01ed56965f501cf",
+    "Flock.Derive.Derived.rows": "ccbb7fa9aeaa2134",
+    "Flock.Derive.Geo": "3bbb554207b1f6aa",
+    "Flock.Derive.Geo.andBase": "0afc125a2aefe2f9",
+    "Flock.Derive.Geo.col": "92360d6ea3865a19",
+    "Flock.Derive.Geo.const": "2df2c99b4eaf7453",
+    "Flock.Derive.Geo.formCols": "d07da890cb20b524",
+    "Flock.Derive.Geo.ins": "dc9d69b777b7cec0",
+    "Flock.Derive.Geo.nAnd": "dff303f109a5aa79",
+    "Flock.Derive.Geo.outs": "d9f61fdbf4950287",
+    "Flock.Derive.Geo.rowAt": "46bd33341cf06187",
+    "Flock.Derive.Group": "9b6bea67aca1da47",
+    "Flock.Derive.Group.bits": "cd83676da2ae9939",
+    "Flock.Derive.Group.word": "019f901887f1c5b2",
+    "Flock.Derive.WORD": "1869ed82d0e16932",
+    "Flock.Derive.bitAt": "a9507766648ebb33",
+    "Flock.Derive.ceilPow2": "710e96a71e88c187",
+    "Flock.Derive.colOf": "b2072b09e7fde6f8",
+    "Flock.Derive.derive": "284e81fda87183bc",
+    "Flock.Derive.flatOk": "a608ccf9380eceaf",
+    "Flock.Derive.geo": "8397e087b3cc5a56",
+    "Flock.Derive.geoOk": "224e56c38acc2717",
+    "Flock.Derive.groupsOf": "f978fea0641a8a4e",
+    "Flock.Derive.place": "ca6a3bd0be2b5da2",
+    "Flock.Derive.portBits": "5eff0dceeddb69c6",
+    "Flock.Derive.splitOk": "8d00f60c06da8b61"
+   },
+   "pins": ["FlockSoundness.Types.compose_complete", "FlockSoundness.Types.compose_sound"]
+  },
   "FlockLevel3.ArithFacts": {
    "digest": "16108cbf154c708038a30c392f4fd5b1",
    "definitions": {
@@ -517,6 +600,13 @@
     "FlockSoundness.table_sound_fast100",
     "FlockSoundness.table_sound_fast100_34_35"
    ]
+  },
+  "FlockSoundness.Audit.Circuit": {
+   "digest": "05493c94f08c51532df94b847f41e713",
+   "definitions": {
+    "FlockSoundness.Audit.xorSum": "05493c94f08c5153"
+   },
+   "pins": ["FlockSoundness.Types.compose_complete", "FlockSoundness.Types.compose_sound"]
   },
   "FlockSoundness.CompiledLock": {
    "digest": "703ed11cb8289e0e443a40539e2782a6",
@@ -954,6 +1044,18 @@
     "FlockSoundness.Rewinding.ConflictAt": "4d9e617c66a3a013"
    },
    "pins": ["FlockSoundness.table_sound_compiled"]
+  },
+  "FlockSoundness.Types.Flat": {
+   "digest": "e2aa14726fee06a1623d37ada4bbb718",
+   "definitions": {
+    "FlockSoundness.Types.Sat": "63ea6d65eed6f206",
+    "FlockSoundness.Types.eval": "c2ba7ace50108d3b",
+    "FlockSoundness.Types.formVal": "641e77cb5e7878bf",
+    "FlockSoundness.Types.honest": "0df472bb1d85074d",
+    "FlockSoundness.Types.itemVal": "eea953cd787b21b4",
+    "FlockSoundness.Types.run": "3db25427c60d5a29"
+   },
+   "pins": ["FlockSoundness.Types.compose_complete", "FlockSoundness.Types.compose_sound"]
   }
  },
  "dependencies": {

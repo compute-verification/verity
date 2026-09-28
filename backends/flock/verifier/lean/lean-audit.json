@@ -1,14 +1,23 @@
 {
  "roots": ["Flock", "FlockProofs", "Main"],
  "exempt": {
-  "CheckAxioms": "the #print axioms list backends/flock/tests/test_lean_verifier.py reads; superseded by this audit"
+  "CheckAxioms": "the #print axioms list backends/flock/tests/test_lean_verifier.py reads; superseded by this audit",
+  "FlockRows": "the flock-rows executable's entry point, one line; its command is Flock.Rows.cmd, audited under Flock"
  },
- "meaning": ["FlockProofs"],
+ "meaning": ["FlockProofs", "Flock.CircuitType", "Flock.Library"],
  "escapes": {
   "Flock.canon": "partial def: canonical JSON of the statement's objects (PROTOCOL.md 16.8); no proof is about it, and the agreement tests (17.1) cover it",
   "Flock.TemplateQuery.Desc.gates": "partial def: a descriptor definition's gate count, recursing through its callees (the template query, PROTOCOL.md 16.10); no proof is about it, and template_query_agree.py covers it"
  },
  "pins": {
+  "Flock.CircuitType.check_ok": {
+   "signature": [
+    "Flock.CircuitType.check_ok {callee : String → Option Flock.CircuitType} {t : Flock.CircuitType}",
+    "  (h : Flock.CircuitType.check callee t = Except.ok ()) : Flock.CircuitType.WellFormed callee t"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000cf966ae0"
+  },
   "Flock.MerklePair.hm96_inputs": {
    "signature": [
     "Flock.MerklePair.hm96_inputs (p : Flock.MerklePair) (h : Flock.MerklePair.Collides Flock.MerkleScheme.hm96Sha512 p) :",
@@ -133,6 +142,70 @@
   }
  },
  "reads": {
+  "Flock.CircuitType": {
+   "digest": "b74f92053cae9332e8fd332211e90e35",
+   "definitions": {
+    "Flock.CircuitType": "789208e06955f6aa",
+    "Flock.CircuitType.WellFormed": "7ffd5e0c871107c0",
+    "Flock.CircuitType.calls": "c514a2c006743ee7",
+    "Flock.CircuitType.callsOk": "a86cc74fd978756e",
+    "Flock.CircuitType.check": "edb6d6cd914782d2",
+    "Flock.CircuitType.distinct": "6c3e9f989efda3ee",
+    "Flock.CircuitType.failure": "b96002f594ba3b9f",
+    "Flock.CircuitType.firstUseOk": "a45089ee9e260005",
+    "Flock.CircuitType.firstUses": "e0f32e9f06d4fec7",
+    "Flock.CircuitType.formOk": "a7f2ec83835e1240",
+    "Flock.CircuitType.inBits": "449654f95da7d293",
+    "Flock.CircuitType.ins": "e7ab560baf422e62",
+    "Flock.CircuitType.instDecidableWellFormed": "830eb7626bc21e84",
+    "Flock.CircuitType.isHex128": "a378d1746184a06b",
+    "Flock.CircuitType.itemForms": "d2d22a0c20b6c8a3",
+    "Flock.CircuitType.items": "5a0559e90fb11c31",
+    "Flock.CircuitType.itemsOk": "f15ddab5ba6ca272",
+    "Flock.CircuitType.label": "4b1cf65e2665da6c",
+    "Flock.CircuitType.labelOk": "b610ec01099a7407",
+    "Flock.CircuitType.liveOk": "e2d37a90137bf465",
+    "Flock.CircuitType.outBits": "0bf4fa25a5dd0d1f",
+    "Flock.CircuitType.outputs": "b1dd4e5f7f730011",
+    "Flock.CircuitType.outputsOk": "809b989b50907bf9",
+    "Flock.CircuitType.outs": "7a26346e90ec9f1a",
+    "Flock.CircuitType.portBits": "bb67dc48fe863148",
+    "Flock.CircuitType.portsOk": "800bdfa99a237d61",
+    "Flock.CircuitType.resolves": "c65cd21537c7ed35",
+    "Flock.CircuitType.spans": "3bb48c451040988f",
+    "Flock.CircuitType.tables": "624bd84d30d3bc9d",
+    "Flock.CircuitType.tablesOk": "6897e962354b3c34",
+    "Flock.CircuitType.width": "cc04312d8430fae1",
+    "Flock.Form": "c244759a14e4dfa8",
+    "Flock.Form.c": "dd2357bc27cf6e90",
+    "Flock.Form.ws": "2e0b992d9e47c1e2",
+    "Flock.Item": "d0c4d7c2fdd321de",
+    "Flock.Item.and": "7e339b454ab4a3ab",
+    "Flock.Item.bad": "4d2a83fd44450a73",
+    "Flock.Item.call": "485ffae42b86792f",
+    "Flock.Item.read": "5241d29e3aa5f3f1",
+    "Flock.instInhabitedForm": "050907a42f7191a6",
+    "Flock.instInhabitedForm.default": "39565b89558a96ad",
+    "Flock.instInhabitedItem": "3e9d7ad7c51b7f32",
+    "Flock.instInhabitedItem.default": "abc98ad87f061274",
+    "Flock.instReprItem.repr": "40f7876e1442c0cd"
+   },
+   "pins": ["Flock.CircuitType.check_ok"]
+  },
+  "Flock.Library": {
+   "digest": "b62132b0455e4e5dc92047b7c1518c4a",
+   "definitions": {
+    "Flock.LIBRARY": "aa184a8e630011a7",
+    "Flock.LIBRARY_TABLES": "e1ee76c308f54ecb",
+    "Flock.LibraryTable": "9cc34748c1191f0f",
+    "Flock.LibraryTable.indexBits": "393d5a06ac303c39",
+    "Flock.LibraryTable.sha512": "5b8af8681d4530bc",
+    "Flock.LibraryTable.valueBits": "a5457a0045b2a906",
+    "Flock.PROGRAM": "a79ffefa17353144",
+    "Flock.libraryTable?": "65be82d231b7d443"
+   },
+   "pins": ["Flock.CircuitType.check_ok"]
+  },
   "FlockProofs.Hash": {
    "digest": "a481dc312234461e46ba285cadf4b271",
    "definitions": {
