@@ -354,6 +354,24 @@ def test_region_refuses_a_repeated_free_bit(tmp_path):
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_pin_is_a_column_of_the_block(tmp_path):
+    """Both statements' pin is a column of the block, whatever the layout checks before it established (R9c's refinement
+    uses it as a local fact): a first range starting at `2^k_log` gives a pin outside the block, refused."""
+    subprocess.run(["lake", "build", "Flock"], cwd=LEAN, check=True, capture_output=True)
+    f = tmp_path / "Pin.lean"
+    f.write_text("import Flock\nopen Flock\n"
+                 "def at_ (pos0 : Nat) : Circuit :=\n  { (default : Circuit) with\n    kLog := 10, nets := #[(\"u\", default)],\n"
+                 "    ranges := #[{ kind := .net 0, slotLog := 7, pos0, count := 0, role := .none, packed := true }] }\n"
+                 "def show_ : V Nat → String | .ok p => s!\"ok {p}\" | .error e => e\n"
+                 "#eval (show_ (HmRow.pin (at_ 8)), show_ ((at_ 8).pin default))\n"
+                 "#eval (show_ (HmRow.pin (at_ 7)), show_ ((at_ 7).pin default))\n")
+    p = subprocess.run(["lake", "env", "lean", str(f)], cwd=LEAN, capture_output=True, text=True)
+    assert p.returncode == 0, p.stdout + p.stderr
+    out = '"the pinned constant column is outside the block"'
+    assert p.stdout.split("\n")[:2] == [f"({out}, {out})", '("ok 896", "ok 896")'], p.stdout
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_hm96_range_slots_are_words_inside_the_block(tmp_path):
     """`HmRow.check` refuses a range whose slots are smaller than a 128-bit word (below 64 bits the fold is no
     `αA₀ᵀe + B₀ᵀe`) or larger than the block (a packed range of no slots would escape the `k_log` bound), as the BLAKE3

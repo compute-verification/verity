@@ -851,7 +851,8 @@ Every statement proves one block R1CS: `A·z ∘ B·z = z` over F2 with `A = I_{
    removes the base input row `i` (which was `A = [i]`), pushing `(i, src)` makes it read `z_src`. "Both" pushes into A and
    B (so `z_i = z_src · z_src = z_src`); "A only" pushes into A with B left at the pinned constant column (so
    `z_i = z_src · 1`). Constants are wired as `A = [bits · pin]`.
-3. **The pin.** One column fixed to 1 (`const_pin`); every slot's own constant column is wired to it.
+3. **The pin.** One column fixed to 1 (`const_pin`); every slot's own constant column is wired to it. The verifier refuses a
+   pin outside the block (`pin ≥ 2^{k_log}`).
 
 The verifier needs `Â_0` and `B̂_0` at one point per rep (§10). Any algorithm that computes the multilinear extension of
 the assembled sparse matrices is correct. Upstream's evaluates each slot type once on the first slot's eq tensor and

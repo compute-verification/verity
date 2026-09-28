@@ -15,14 +15,17 @@ open Lean (Json)
 
 namespace Circuit
 
-/-- The pinned constant column: the constant of the first slot of the first range that is not the mask. -/
-def pin (c : Circuit) (leaf : RowLeaf) : V Nat :=
-  match c.ranges.find? (·.kind != Kind.mask) with
-  | some r => match r.kind with
-    | .comp => pure (r.start + leaf.comp.spec.zConst)
-    | .net i => pure (r.start + (c.nets.getD i default).2.constPos)
-    | .mask => throw "no pin"
-  | none => throw "circuit: no range with a constant"
+/-- The pinned constant column: the constant of the first slot of the first range that is not the mask, a column of the
+block. -/
+def pin (c : Circuit) (leaf : RowLeaf) : V Nat := do
+  let p ← match c.ranges.find? (·.kind != Kind.mask) with
+    | some r => match r.kind with
+      | .comp => pure (r.start + leaf.comp.spec.zConst)
+      | .net i => pure (r.start + (c.nets.getD i default).2.constPos)
+      | .mask => throw "no pin"
+    | none => throw "circuit: no range with a constant"
+  if p ≥ 2 ^ c.kLog then throw "the pinned constant column is outside the block"
+  return p
 
 /-- Δ (§16.1), `(row, col)` pairs XORed into A and into B, in the order the statement digest binds: per range and slot,
 the slot's constant wired to the pin, then the row leaf's own entries for its slots; then every unit's leaf bits copied from
