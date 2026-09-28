@@ -1,7 +1,7 @@
 {
  "DT": "f32",
  "definition": {
-  "ref_vocab_digest": "82fd6a281c1b999ad2929c0c05a701614a5e322bfe2a92141dd77ec2af8f8e52",
+  "ref_vocab_digest": "791320f527c1dd79fcbc3360f965911a09a0b753cd9bb7de57bbc67540cc6842",
   "ref_vocab_version": "verity-ref-vocab/1"
  },
  "domain": {
@@ -23,19 +23,19 @@
  "notes": "Two torch matmuls (blocked accumulation) and a softmax (Sleef exp, vectorised sum) vs sequential fma chains and the correctly rounded exp.",
  "oracle": {
   "device": "cpu",
-  "machine": "arm64",
+  "machine": "x86_64",
   "numpy": "2.5.3",
   "op": "HF eager_attention_forward on one query row (matmul, *scaling or /sqrt(D), softmax(f32).to(dt), matmul)",
-  "platform": "macOS-26.5.1-arm64-arm-64bit-Mach-O",
-  "python": "3.13.5",
-  "torch": "2.14.0"
+  "platform": "Linux-6.12.94+-x86_64-with-glibc2.39",
+  "python": "3.12.3",
+  "torch": "2.14.0+cu130"
  },
  "result": {
-  "exact_fraction": 0.1875,
-  "exact_words": 120,
-  "max_abs_err": 4.470348358154297e-07,
-  "max_normalised_err": 0.004358353488754989,
-  "max_ulp": 969,
+  "exact_fraction": 0.2015625,
+  "exact_words": 129,
+  "max_abs_err": 5.364418029785156e-07,
+  "max_normalised_err": 0.00224601052513275,
+  "max_ulp": 744,
   "per_shape": [
    {
     "D": 16,
@@ -60,53 +60,53 @@
    {
     "D": 16,
     "T": 5,
-    "exact_fraction": 0.21875,
-    "exact_words": 14,
-    "max_abs_err": 2.384185791015625e-07,
-    "max_normalised_err": 0.004358353488754989,
+    "exact_fraction": 0.3125,
+    "exact_words": 20,
+    "max_abs_err": 1.1920928955078125e-07,
+    "max_normalised_err": 0.00224601052513275,
     "max_ulp": 9,
     "tolerance": "16*(T+D+2)*u32*max_row|v| + ulp_DT(ref)",
     "ulp_histogram_capped_8": {
-     "0": 14,
-     "1": 31,
+     "0": 20,
+     "1": 25,
      "2": 9,
-     "3": 4,
-     "5": 2,
-     "6": 3,
+     "3": 7,
+     "4": 1,
+     "7": 1,
      "8": 1
     },
     "words": 64,
     "worst": {
-     "index": 24,
-     "oracle": 1.3492857217788696,
-     "ref": 1.3492854833602905,
-     "tol": 5.4703818705093e-05
+     "index": 33,
+     "oracle": 0.6343520283699036,
+     "ref": 0.6343521475791931,
+     "tol": 5.307601554704888e-05
     }
    },
    {
     "D": 64,
     "T": 64,
-    "exact_fraction": 0.125,
-    "exact_words": 32,
-    "max_abs_err": 2.384185791015625e-07,
-    "max_normalised_err": 0.0005705890268747956,
-    "max_ulp": 85,
+    "exact_fraction": 0.15625,
+    "exact_words": 40,
+    "max_abs_err": 1.9371509552001953e-07,
+    "max_normalised_err": 0.00046360358433577143,
+    "max_ulp": 237,
     "tolerance": "16*(T+D+2)*u32*max_row|v| + ulp_DT(ref)",
     "ulp_histogram_capped_8": {
-     "0": 32,
-     "1": 51,
-     "2": 41,
-     "3": 34,
-     "4": 25,
-     "5": 9,
-     "6": 14,
+     "0": 40,
+     "1": 40,
+     "2": 47,
+     "3": 35,
+     "4": 20,
+     "5": 16,
+     "6": 9,
      "7": 8,
-     "8": 42
+     "8": 41
     },
     "words": 256,
     "worst": {
      "index": 194,
-     "oracle": 0.18386216461658478,
+     "oracle": 0.1838621199131012,
      "ref": 0.18386192619800568,
      "tol": 0.00041784641462072614
     }
@@ -114,50 +114,50 @@
    {
     "D": 64,
     "T": 130,
-    "exact_fraction": 0.0390625,
-    "exact_words": 10,
-    "max_abs_err": 4.470348358154297e-07,
-    "max_normalised_err": 0.0005399167854572571,
-    "max_ulp": 969,
+    "exact_fraction": 0.01953125,
+    "exact_words": 5,
+    "max_abs_err": 5.364418029785156e-07,
+    "max_normalised_err": 0.0006479001425487084,
+    "max_ulp": 744,
     "tolerance": "16*(T+D+2)*u32*max_row|v| + ulp_DT(ref)",
     "ulp_histogram_capped_8": {
-     "0": 10,
-     "1": 22,
-     "2": 24,
-     "3": 32,
-     "4": 22,
-     "5": 14,
-     "6": 15,
-     "7": 8,
-     "8": 109
+     "0": 5,
+     "1": 33,
+     "2": 21,
+     "3": 20,
+     "4": 28,
+     "5": 18,
+     "6": 17,
+     "7": 10,
+     "8": 104
     },
     "words": 256,
     "worst": {
-     "index": 66,
-     "oracle": 0.38225728273391724,
-     "ref": 0.3822568356990814,
+     "index": 102,
+     "oracle": -0.4202539920806885,
+     "ref": -0.4202534556388855,
      "tol": 0.0008279698795377044
     }
    }
   ],
   "tolerance": "16*(T+D+2)*u32*max_row|v| + ulp_DT(ref)",
   "ulp_histogram_capped_8": {
-   "0": 120,
-   "1": 104,
-   "2": 74,
-   "3": 70,
-   "4": 47,
-   "5": 25,
-   "6": 32,
-   "7": 16,
-   "8": 152
+   "0": 129,
+   "1": 98,
+   "2": 77,
+   "3": 62,
+   "4": 49,
+   "5": 34,
+   "6": 26,
+   "7": 19,
+   "8": 146
   },
   "words": 640,
   "worst": {
-   "index": 88,
-   "oracle": 1.3492857217788696,
-   "ref": 1.3492854833602905,
-   "tol": 5.4703818705093e-05
+   "index": 97,
+   "oracle": 0.6343520283699036,
+   "ref": 0.6343521475791931,
+   "tol": 5.307601554704888e-05
   }
  },
  "schema": "verity-ir/ref-prims-conformance/v0",

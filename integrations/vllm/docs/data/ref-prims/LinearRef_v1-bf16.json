@@ -1,7 +1,7 @@
 {
  "DT": "bf16",
  "definition": {
-  "ref_vocab_digest": "82fd6a281c1b999ad2929c0c05a701614a5e322bfe2a92141dd77ec2af8f8e52",
+  "ref_vocab_digest": "791320f527c1dd79fcbc3360f965911a09a0b753cd9bb7de57bbc67540cc6842",
   "ref_vocab_version": "verity-ref-vocab/1"
  },
  "domain": {
@@ -26,12 +26,12 @@
  "notes": "torch CPU accumulates in a blocked order (oneDNN/MKL or cpublas fallback); the reference is the sequential IEEE fma chain from +0. Disagreements are reassociation differences within the a-priori bound; output-ulp distance is large only where the dot product nearly cancels.",
  "oracle": {
   "device": "cpu",
-  "machine": "arm64",
+  "machine": "x86_64",
   "numpy": "2.5.3",
   "op": "torch.nn.functional.linear",
-  "platform": "macOS-26.5.1-arm64-arm-64bit-Mach-O",
-  "python": "3.13.5",
-  "torch": "2.14.0"
+  "platform": "Linux-6.12.94+-x86_64-with-glibc2.39",
+  "python": "3.12.3",
+  "torch": "2.14.0+cu130"
  },
  "result": {
   "exact_fraction": 1.0,
