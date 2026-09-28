@@ -128,7 +128,8 @@ identical inputs. `--record` runs it through `research run` as an Attempt of the
 only through `research merge <branch>`, which refuses without a passing `check` of that exact commit in the evidence store, or
 when `main` has moved past it; `research merge --train A B C --on POD --project verity` lands several at once on one `check`
 of the merged tree. A change under `backends/flock/` also needs `check`'s agreement with upstream's verifier
-(`lean-agreement`, on the build pinned in `backends/flock/verifier/upstream.json`; skipped by name elsewhere): record it with
+(`lean-agreement`, on the build pinned in `backends/flock/verifier/upstream.json`; not for a `README.md` or `PROTOCOL.md`
+alone, and skipped by name elsewhere): record it with
 `uv run python tools/check/check.py --record --on POD`, which sends that build when the commit touches `backends/flock/`.
 
 ## Lean

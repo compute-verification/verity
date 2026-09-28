@@ -223,7 +223,8 @@ class Tool:
     conditions: Callable[[dict], dict] | None = None          # extra keys, recorded under tool.<name>.<key>
     spec: str | None = None                                   # `dotted.module:NAME` this declaration was loaded from (set by the registry)
     #: `research merge`: result steps (``result.json`` ``steps[].step``) that must have passed when a merge changes a path under
-    #: one of their prefixes; an attempt where such a step was skipped does not admit that merge
+    #: one of their prefixes, less the paths a `!` pattern names (`merge.rule_touches`); an attempt where such a step was skipped
+    #: does not admit that merge
     merge_requires: dict[str, list[str]] = field(default_factory=dict)
 
     def identity(self) -> dict[str, Any]:

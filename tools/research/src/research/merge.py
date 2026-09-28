@@ -87,11 +87,25 @@ def required_steps(repo: Path, base: str, commit: str, tool: str) -> dict[str, l
         return {}
     changed = [p for p in _git(repo, "diff", "--name-only", base, commit).stdout.splitlines() if p]
     out = {}
-    for step, prefixes in rules.items():
-        hit = [p for p in prefixes if any(c == p.rstrip("/") or c.startswith(p.rstrip("/") + "/") for c in changed)]
-        if hit:
+    for step, rule in rules.items():
+        if hit := rule_touches(rule, changed):
             out[step] = hit
     return out
+
+
+def rule_touches(rule: list[str], changed: list[str]) -> list[str]:
+    """The prefixes of a `Tool.merge_requires` rule that ``changed`` touches.  A rule is path prefixes and `!` patterns: a
+    changed file counts when it is under a prefix and matches no pattern (one without a `/` is matched against the file's name,
+    one with a `/` against its path), so `["backends/flock/", "!README.md"]` leaves out every README.md there."""
+    import fnmatch
+
+    prefixes = [r for r in rule if not r.startswith("!")]
+    ignored = [r[1:] for r in rule if r.startswith("!")]
+
+    def counts(c: str) -> bool:
+        return not any(fnmatch.fnmatchcase(c if "/" in g else c.rsplit("/", 1)[-1], g) for g in ignored)
+
+    return [p for p in prefixes if any((c == p.rstrip("/") or c.startswith(p.rstrip("/") + "/")) and counts(c) for c in changed)]
 
 
 def step_status(store, run_id: str, step: str) -> str:

@@ -95,7 +95,9 @@ the longest prefix that passed.
 
 A tool's declaration may name result steps a merge needs by path (`Tool.merge_requires`, `{step: [path prefixes]}`, read from
 the target's checkout): when the merge's diff touches a prefix, only an attempt whose `result.json` `steps` show that step
-`passed` admits it. `check` requires `lean-agreement` for `backends/flock/`; `--train --send FILE` ships what such a step needs.
+`passed` admits it; `!` patterns leave paths out (`!README.md`: every file of that name under the prefixes). `check` requires
+`lean-agreement` for `backends/flock/`, less its README.md and PROTOCOL.md files; `--train --send FILE` ships what such a step
+needs.
 
 The workload receives `RESEARCH_RUN_ID` and `RESEARCH_RUN_DIR` and may write
 `$RESEARCH_RUN_DIR/result.json` (see `result.py` for the envelope). A local

@@ -242,7 +242,9 @@ def record(argv: list[str]) -> int:
     spec.loader.exec_module(tool)
     base = base or "origin/main"
     changed = subprocess.run(["git", "diff", "--name-only", base, "HEAD"], cwd=ROOT, capture_output=True, text=True, check=True).stdout.split()
-    need = [s for s, ps in tool.CHECK.merge_requires.items() if any(c.startswith(p) for p in ps for c in changed)]
+    from research.merge import rule_touches
+
+    need = [s for s, rule in tool.CHECK.merge_requires.items() if rule_touches(rule, changed)]
     cmd = [sys.executable, "-m", "research", "run", "--tool", "check", "--project", "verity", "--cwd", "source"]
     env = dict(os.environ)
     if "lean-agreement" in need:

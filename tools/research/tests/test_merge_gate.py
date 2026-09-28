@@ -149,3 +149,13 @@ def test_a_path_rule_requires_its_step_for_a_change_under_the_path(tmp_path, mon
     assert run("passed") == 0
     monkeypatch.chdir(main)
     assert merge_main(["feat", "--dry-run"]) == 0
+
+
+def test_a_path_rule_leaves_out_what_its_patterns_name():
+    from research.merge import rule_touches
+
+    rule = ["flock/", "!README.md", "!docs/*.md"]
+    assert rule_touches(rule, ["flock/README.md", "flock/sub/README.md", "docs/x.md"]) == []
+    assert rule_touches(rule, ["flock/README.md", "flock/a.rs"]) == ["flock/"]
+    assert rule_touches(rule, ["flockish/a.rs", "other/README.md"]) == []
+    assert rule_touches(["flock/"], ["flock/README.md"]) == ["flock/"]            # no pattern, no exception

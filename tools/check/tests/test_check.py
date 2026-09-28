@@ -88,7 +88,7 @@ def test_the_rule_the_gate_reads(monkeypatch):
     spec2 = importlib.util.spec_from_file_location("check_tool", ROOT / "tools" / "check" / "tool.py")
     tool = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(tool)
-    assert tool.CHECK.merge_requires == {"lean-agreement": ["backends/flock/"]}
+    assert tool.CHECK.merge_requires == {"lean-agreement": ["backends/flock/", "!README.md", "!PROTOCOL.md"]}
     pin = __import__("json").loads((ROOT / "backends" / "flock" / "verifier" / "upstream.json").read_text())
     assert set(pin["upstream"]["binaries"]) == {s["pr83"] for s in __import__("json").loads(
         (ROOT / "backends" / "flock" / "verifier" / "vectors.json").read_text())["replayable"]["sets"]}
@@ -165,6 +165,24 @@ def test_a_shipped_trees_files_are_its_commits(tmp_path):
     (shipped / "READY.json").write_text(json.dumps({"tree": tree}))
     (shipped / "built.bin").write_bytes(b"x")
     assert CHECK.tracked_files(shipped) == ["a.txt"]
+
+
+def test_the_agreement_is_not_required_for_docs_alone():
+    """README.md and PROTOCOL.md under backends/flock/ are docs the agreement never reads: alone they do not require it."""
+    from research.merge import rule_touches
+
+    spec2 = importlib.util.spec_from_file_location("check_tool", ROOT / "tools" / "check" / "tool.py")
+    tool = importlib.util.module_from_spec(spec2)
+    spec2.loader.exec_module(tool)
+    rule = tool.CHECK.merge_requires["lean-agreement"]
+    docs = ["backends/flock/verifier/PROTOCOL.md", "backends/flock/verifier/README.md", "backends/flock/README.md", "AGENTS.md"]
+    assert rule_touches(rule, docs) == []
+    assert rule_touches(rule, [*docs, "backends/flock/verifier/ci.py"]) == ["backends/flock/"]
+    assert rule_touches(rule, ["backends/flock/verifier/DESIGN.md"]) == ["backends/flock/"]      # only the two names are left out
+    for f in ("ci.py", "agree.py", "fuzz.py", "redigest.py", "transcript_check.py", "selftest_records.py"):   # cited, never read
+        reads = [line for line in (ROOT / "backends" / "flock" / "verifier" / f).read_text().splitlines()
+                 if any(r in line for r in ("open(", "read_text", "read_bytes")) and any(d in line for d in ("README", "PROTOCOL"))]
+        assert not reads, f"{f} reads a doc the agreement trigger leaves out: {reads}"
 
 
 def test_the_agreement_scripts_import_only_the_standard_library_and_each_other():
