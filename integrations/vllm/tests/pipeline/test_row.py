@@ -289,8 +289,10 @@ def test_a_manifest_of_other_policies_is_rebuilt_either_way(tmp_path):
                                                                                                 "guarded_max"]
 
 
-def _record_manifest(path: Path, query_id: str) -> None:
+def _record_manifest(path: Path, query_id: str, *, word_check: bool = True) -> None:
     query = {"query_id": query_id, **{k: {} for k in ("norm_scales", "router_softmax", "vocab_range", "guarded_max")}}
+    if word_check:
+        query["word_check"] = {"query": query_id, "strict": True, "ok": True, "violations": 0}
     path.write_text(json.dumps({"query": query, "identities": [{"family": "instance_outputs"}]}))
 
 
@@ -320,8 +322,24 @@ def test_a_manifest_of_record_under_the_query_of_record_is_reused_and_one_of_ano
     _record_manifest(Path(r.d) / "manifest.json", Q_MODULE_BODY_ID)
     assert r.manifest_of_record() == f"{r.d}/manifest.json" and built == ["commit"]
     aside = list(Path(r.d).glob("manifest.other-query-*.json"))
-    assert len(aside) == 1 and R.manifest_query(str(aside[0])) == Q_MODULE_BODY_ID
-    assert R.manifest_query(f"{r.d}/manifest.json") == R.QUERY_OF_RECORD
+    assert len(aside) == 1 and R.manifest_header(str(aside[0]))["query_id"] == Q_MODULE_BODY_ID
+    assert R.manifest_header(f"{r.d}/manifest.json")["query_id"] == R.QUERY_OF_RECORD
+
+
+def test_a_manifest_of_record_without_a_passing_word_check_is_rebuilt_not_handed_to_the_commit(tmp_path, monkeypatch):
+    """The Commit refuses a Q_word manifest that records no passing word check (`commit.partition.word_check_refusal`), so the row
+    rebuilds one (a Build of before the header recorded it, or one built with --word-check off) instead of starting a Commit that refuses."""
+    r = _row(tmp_path)
+    (Path(r.d) / "build_request").mkdir()
+    (Path(r.d) / "build_request" / "instances.json.gz").write_bytes(b"")
+    built: list[str] = []
+    monkeypatch.setattr(r, "required_manifest", lambda stage: built.append(stage) or _record_manifest(Path(r.d) / "manifest.json", R.QUERY_OF_RECORD) or 0)
+    _record_manifest(Path(r.d) / "manifest.json", R.QUERY_OF_RECORD, word_check=False)
+    assert r.manifest_of_record() == f"{r.d}/manifest.json" and built == ["commit"]
+    aside = list(Path(r.d).glob("manifest.unchecked-*.json"))
+    assert len(aside) == 1 and "word_check" not in R.manifest_header(str(aside[0]))
+    assert "does not record a passing word check (no word check recorded" in (Path(r.d) / "row.log").read_text()
+    assert R.manifest_header(f"{r.d}/manifest.json")["word_check"]["ok"] is True
 
 
 def test_a_dense_tp1_row_attaches_the_norm_tap_only(tmp_path):

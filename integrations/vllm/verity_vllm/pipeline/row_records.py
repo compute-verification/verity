@@ -318,13 +318,13 @@ def served_shape(d: str) -> str:
 QUERY_OF_RECORD = "Q_word_v1{X=16,W=32,R=no-recompute}"
 
 
-def manifest_query(path: str) -> str:
-    """The query a manifest's header names (``query.query_id``), "" when unreadable or when it names none."""
+def manifest_header(path: str) -> dict[str, Any]:
+    """A manifest's query header (``query``: its ``query_id``, partition, word check and policies), {} when unreadable or absent."""
     try:
         q = json.load(open(path)).get("query")
     except (OSError, ValueError, AttributeError):
-        return ""
-    return str(q.get("query_id") or "") if isinstance(q, dict) else ""
+        return {}
+    return q if isinstance(q, dict) else {}
 
 
 #: the taps a row runs by default, NORM_TAP=0 etc. opting out for A/B only: (CommitConfig field, manifest build / verify flag, the query
