@@ -83,11 +83,27 @@ wref     3·m·k·n + 24·m·k   (route U under W1 with sub-word moves priced; t
 ## `pearl-fp8-v4`: Pearl's FP8 scheme (`schemes/pearl_kw.py`)
 
 Pearl's certificate-v4 FP8 scheme, as published: the whitepaper "Pearl Floating Point Scheme Specification" (Sep 2026)
-and pearl-research-labs/pearl PR #311 at `284b147b`, whose verifier code rules where the two differ. Its conformance
-vectors come from Pearl's own Rust (`tests/vectors/pearl_kw.json`, with the generator's commit). Its conjecture is
-Pearl's Assumption 1 with the jackpot policy; it names no γ_0, so its profile carries only the sampling half and the
-policy's allowances. The section `schemes/pearl_kw.py`'s docstring states the parameters and what the protocol replaces
-(the chain headers by the salt, Pearl's keyed-BLAKE3 Merkle openings by the protocol's trees; the seed order is kept).
+and pearl-research-labs/pearl PR #311 at `284b147b`, whose verifier code rules where the two differ. The module's
+docstring states every parameter.
+
+- **Conformance.** `tests/vectors/pearl_kw.json` holds Pearl's own outputs, computed by its Rust at `284b147b` from
+  inputs `tests/pearl_vectors.py` derives; the generator is `tests/pearl_vectors.rs`. For both of Pearl's devices, H100
+  and B200, the reference reproduces:
+  - the labelled hashes, the noise lines and the BF16 operations;
+  - the device matmul and its partials;
+  - the census (λ, the grid, the skip);
+  - the lane layout;
+  - on whole 16 × 16 tiles at k = 1,024: the FP10 norms, the noise, the quantized codes and the per-row scales, the
+    accumulator, the extract, J, and the jackpot policy's verdict (one tile approved, one rejected for dead entries).
+- **The RTX 4090.** Pearl's whitelist has no Ada device, so `ada` is ours: Verity's pinned `sm89.mma.m16n8k32.e4m3`
+  atom (`verity.ml.tc`), with H100's structure (a fresh accumulator every 128 products, promoted by one FP32 add), δ = 1
+  and W = 13. With plain chained `mma.sync` instead, the 14-bit adder anchored at the running sum fails Pearl's
+  unpredictable-summands census on honest inputs.
+- **What the protocol replaces.** The chain headers become the salt. The activation and weight roots stand in for
+  Pearl's keyed-BLAKE3 Merkle openings. The seed order is kept.
+- **The conjecture.** Pearl's Assumption 1 with the jackpot policy. It names no γ_0, so the profile carries only the
+  sampling half and the policy's allowances (5% skippable summands, 1/64 dead entries per side, the unchecked peel).
+- **Its differences from milestone 1's D1**, the hardened KW transcript: see the module docstring.
 
 ## Not here yet
 
