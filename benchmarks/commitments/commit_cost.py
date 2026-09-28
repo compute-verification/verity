@@ -19,7 +19,7 @@ Schemes (``--scheme``, repeatable, or ``all``):
 Every scheme runs through ``CommitmentScheme``: the leaf phase is ``leaf_layout(...).digest(value)`` then
 ``tree_leaf`` (what a prover's digest plus the verifier's native step cost together), the tree phase is ``root``.
 All run the plain-Python references, so the numbers are the cost of the *framing* on one CPU core under
-``hashlib``, not of any production fast path (GPU trees, thread pools).  Each rep times the leaf phase and the tree
+``hashlib``, not of any serving fast path (GPU trees, thread pools).  Each rep times the leaf phase and the tree
 phase separately; the reported value is the median.  After timing, one opening per scheme is produced and checked
 through the scheme's ``verify_path``, and the validation status says whether all of them verified.
 
