@@ -14,7 +14,10 @@ A package's verdict is reused while everything its audit reads is unchanged. Its
 When one package misses, the audit runs on a scratch tree holding only the missed packages' inputs, from that tree's own copy of
 `tools/lean`. So a read of anything outside a key finds nothing, and the audit fails there instead of a stale pass being kept
 (the counterpart of `suites.py`'s read guard). Every package in the scratch tree is audited, the controls first. Each pass is
-stored under its key, and a failure is never stored.
+stored under its key, and a failure is never stored. One read is outside the scratch tree: a package test's `generate` (`runs`
+in `lean-audit.json`) reads this checkout (`audit.py --repo`). Its output is used only with the SHA-256 the record holds for
+it, and the key covers the record, so it cannot pass a test on other data. The package's own Python tests check that the
+generator still writes that data.
 
 A package's fetched dependencies (`.lake/packages`: Mathlib's cache, ArkLib's build) are kept on this machine under
 `lake-manifest.json` plus `lean-toolchain`. They're moved into the scratch package's own `.lake` before its build (the only place
@@ -247,20 +250,29 @@ class WarmDeps:
         return f
 
     def take(self, pkg: Path, log=print) -> None:
+        """Move ``pkg``'s kept dependencies in; when another package of this run with the same manifest and toolchain holds
+        them, copy its tree (taken before either builds), never shared: each build may write in its own."""
         if (k := deps_key(pkg)) is None:
             return
         dst = pkg / ".lake" / "packages"
         with self._lock(k):
             src = self.store / k
-            if not src.is_dir() and not dst.exists() and k in self.urls and (pin := pins().get(k)):
+            twin = next((p for p, h in list(self.held.items()) if h.name == k and (p / ".lake" / "packages").is_dir()), None)
+            if not src.is_dir() and not dst.exists() and twin is None and k in self.urls and (pin := pins().get(k)):
                 restore(self.store, k, self.urls[k], pin, pkg.name, log)
             if src.is_dir() and not dst.exists():
                 dst.parent.mkdir(parents=True, exist_ok=True)
                 _move(src, dst)
                 log(f"lean-audit: {pkg.name}: dependencies warm ({k[:12]})")
+            elif twin is not None and not dst.exists():
+                t0 = time.monotonic()
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copytree(twin / ".lake" / "packages", dst, symlinks=True)
+                log(f"lean-audit: {pkg.name}: dependencies warm ({k[:12]}), copied from {twin.name}'s in "
+                    f"{time.monotonic() - t0:.0f} s")
             else:
                 log(f"lean-audit: {pkg.name}: dependencies cold ({k[:12]})")
-        self.held[pkg] = self.store / k
+            self.held[pkg] = self.store / k
 
     def give_back(self, passed: set[Path]) -> None:
         """Keep the dependencies of the packages in ``passed`` (an audit that passed, whose imported `.olean` files matched
@@ -342,7 +354,7 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
         t0 = time.monotonic()
         (out / "audit.json").unlink(missing_ok=True)
         r = subprocess.run([sys.executable, str(work / "tools" / "lean" / "audit.py"), "--all", "--build", "--root", str(work),
-                            "--out", str(out)], cwd=work, env=env)
+                            "--repo", str(ROOT), "--out", str(out)], cwd=work, env=env)
         log(f"lean-audit: {', '.join(audited)} audited in {time.monotonic() - t0:.0f} s (exit {r.returncode})")
         doc = json.loads((out / "audit.json").read_text()) if (out / "audit.json").exists() else {"failed": ["audit.py"]}
         failed = [os.path.relpath(f, work) if f.startswith(str(work)) else f for f in doc.get("failed", [])]

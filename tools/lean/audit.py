@@ -42,6 +42,9 @@ environment extension loaded, so none of the package's code runs), and replays t
                  a bump that brings such a proof fails until someone has looked at it
     fresh        (`--fresh` only) `leanchecker --fresh` on a root rejects a declaration of its whole import closure,
                  Mathlib and core included
+    runs         a test under `runs` (an exempt module: compiled evaluation, not a proof), run after the replay by
+                 `lake env lean --run` in the sandbox, exits nonzero, or a data file it reads (the package's own, or what
+                 its `generate` command writes) has a SHA-256 other than the record's (`--update` records it)
     tamper       this tool's files, the toolchain's `lean`, `lake` or `leanchecker`, or the `.olean` files of a package
                  built earlier in the run changed during it; the Lean files are run from a copy taken before the first build
 
@@ -69,6 +72,7 @@ from __future__ import annotations
 
 import argparse
 import difflib
+import gzip
 import hashlib
 import json
 import os
@@ -116,7 +120,7 @@ FIXTURES = HERE / "tests" / "fixtures"
 #: name components of the declarations Lean generates for a definition (listed under `reads` with it, not by name)
 GENERATED = re.compile(r"^(_.*|match_\d+|proof_\d+|eq_\d+|eq_def|mk|rec|recOn|casesOn|noConfusion|noConfusionType|below|brecOn"
                        r"|binductionOn|ibelow|ctorIdx|inj|injEq|sizeOf_spec)$")
-ORDER = ("roots", "exempt", "axioms", "assumptions", "meaning", "escapes", "compile_time", "dependency_unchecked", "layers",
+ORDER = ("roots", "exempt", "runs", "axioms", "assumptions", "meaning", "escapes", "compile_time", "dependency_unchecked", "layers",
          "upstream", "pins", "reads", "dependencies")
 
 
@@ -675,6 +679,68 @@ def dependency_digests(pkg: Path, toolchain: str, oleans: list[str]) -> dict[str
     return dict(sorted(out.items()))
 
 
+def unpacked(src: Path, dst: Path) -> Path:
+    """``src``, or its contents at ``dst`` when it is gzipped."""
+    if src.suffix != ".gz":
+        return src
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    with gzip.open(src) as f, open(dst, "wb") as g:
+        shutil.copyfileobj(f, g)
+    return dst
+
+
+def tests(pkg: Path, policy: dict, files: dict[str, str], work: Path, repo: Path, update: bool) -> tuple[list[str], dict]:
+    """(failures, the `runs` section with each data file's SHA-256 as found): run each test under `runs` on its data, after
+    the kernel's verdicts. A test is an exempt module, run by `lake env lean --run` in the sandbox with its `args`, where
+    an argument `{NAME}` is the path of data file NAME. The data is what `generate` writes (run here, outside the sandbox,
+    with ``repo`` for `{repo}` and the directory it writes for `{out}`), else the package's own files; a file may be
+    gzipped (NAME.gz). A file whose SHA-256 is not the record's fails the test unrun, and `--update` records it instead."""
+    fails, now = [], {}
+    for mod, entry in sorted(policy.get("runs", {}).items()):
+        now[mod] = entry
+        if mod not in files:
+            fails.append(f"runs: {mod} is not a module of the package")
+            continue
+        if not under(policy.get("exempt", {}), mod):
+            fails.append(f"runs: {mod} is not under `exempt`: a run is a test, not a proof the audit reads")
+            continue
+        home = pkg / ".lake" / "runs" / mod             # writable in the sandbox, which hides a /tmp outside it
+        shutil.rmtree(home, ignore_errors=True)
+        base = pkg
+        if gen := entry.get("generate"):
+            base = home / "generated"
+            base.mkdir(parents=True)
+            argv = [sys.executable if i == 0 and a == "python3" else a.replace("{repo}", str(repo)).replace("{out}", str(base))
+                    for i, a in enumerate(gen)]
+            rc, text = run(argv, pkg, work / f"generate-{mod}.log")
+            if rc:
+                fails.append(f"runs: {mod}'s `generate` exited {rc}:\n{text[-2000:]}")
+                continue
+        paths, data, bad = {}, {}, []
+        for name, want in sorted(entry.get("data", {}).items()):
+            src = next((p for p in (base / name, base / f"{name}.gz") if p.is_file()), None)
+            if src is None:
+                bad.append(f"runs: {mod}'s data {name} is missing from {base}")
+                continue
+            paths[name] = unpacked(src, home / "data" / name)
+            data[name] = sha256(paths[name])
+            if data[name] != want and not update:
+                bad.append(f"runs: {mod}'s data {name} has SHA-256 {data[name]}, not the record's {want or '(none)'}: run "
+                           f"`audit.py --update` when the data changed on purpose")
+        now[mod] = entry | {"data": data} if update else entry
+        if bad:
+            fails += bad
+            continue
+        args = [str(paths[a[1:-1]]) if a.startswith("{") and a.endswith("}") and a[1:-1] in paths else a
+                for a in entry.get("args", [])]
+        rc, text = run(in_sandbox(pkg, ["lake", "env", "lean", "--run", files[mod], *args]), pkg, work / f"run-{mod}.log")
+        if killed(rc):
+            fails.append(f"runs: {mod} was killed (exit {rc}; out of memory?): rerun it\n{text[-1000:]}")
+        elif rc:
+            fails.append(f"runs: {mod} exited {rc}:\n{text[-2000:]}")
+    return fails, now
+
+
 def template(pkg: Path) -> dict:
     """A minimal policy for a package without one: its libraries as roots, nothing pinned yet."""
     libs = []
@@ -685,9 +751,10 @@ def template(pkg: Path) -> dict:
 
 
 def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, replay: bool = True, fresh: bool = False,
-          log=print, built=lambda: None) -> dict:
+          log=print, built=lambda: None, runs: bool = True, repo: Path = ROOT) -> dict:
     """Audit one package; returns its report (`failures` empty when it passes). ``built`` is called once its build has
-    passed, before anything reads it."""
+    passed, before anything reads it. ``runs`` runs the package's tests (`tests`), ``repo`` the checkout their data's
+    `generate` reads."""
     rep = {"package": str(pkg), "seconds": {}, "failures": []}
     if not (pkg / POLICY).exists():
         rep["failures"].append(f"policy: {pkg} has no {POLICY}. Start from this one, pin the theorems your documents cite "
@@ -770,6 +837,13 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
             elif rc:
                 fails.append(f"fresh: the kernel rejected a declaration in the closure of {r} (exit {rc}):\n{text[-2000:]}")
         rep["seconds"]["fresh"] = round(time.monotonic() - s, 1)
+    if runs and policy.get("runs"):
+        s = time.monotonic()
+        rfails, ran = tests(pkg, policy, files, work, repo, update)
+        fails += rfails
+        if update:
+            new["runs"] = ran
+        rep["seconds"]["runs"] = round(time.monotonic() - s, 1)
     lfails, listed, lnotes = listings(pkg, files, policy, facts, update)
     fails += lfails
     if update and listed:
@@ -909,6 +983,9 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--no-replay", action="store_true", help="skip the kernel replay (`Replay.lean`)")
     ap.add_argument("--fresh", action="store_true", help="also `leanchecker --fresh` each root: its whole closure, Mathlib and core "
                     "included, through the kernel (slow: see README)")
+    ap.add_argument("--no-runs", action="store_true", help="skip the packages' tests (`runs`)")
+    ap.add_argument("--repo", type=Path, default=ROOT, help="the checkout a test's `generate` reads as {repo} (default: the "
+                    "one this file is in)")
     ap.add_argument("--out", type=Path, default=None, help="where the reports and logs go (default $RESEARCH_RUN_DIR/lean-audit in a "
                     "recorded run, else a temporary directory)")
     a = ap.parse_args(argv)
@@ -955,7 +1032,8 @@ def main(argv: list[str]) -> int:
         for d in needs[pkg]:
             built[d].wait()
         try:
-            rep = audit(pkg, out, a.build, a.update, not a.no_replay, a.fresh, built=lambda: seal(pkg))
+            rep = audit(pkg, out, a.build, a.update, not a.no_replay, a.fresh, built=lambda: seal(pkg), runs=not a.no_runs,
+                        repo=a.repo.resolve())
         finally:
             if not built[pkg].is_set():
                 seal(pkg)

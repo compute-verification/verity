@@ -135,6 +135,11 @@ class TargetProfile:
                            the default spelled out is refused (declare None).  The Commit installs the other protocols beside its
                            committer (`protocol_options.at_commit`) and refuses any it cannot trace (an executor needs the Definition
                            of what it computes).  Omitted from `to_json()` when None.
+    ir                  -> the IR the Program is written in (a Program static, declared-and-bound, never attested).  None = word
+                           (every Call of the Definition its derive rule binds, on w-bit values).  `"boolean"` = the same Calls,
+                           each of the Boolean version of that Definition, on bits (`verity_vllm.program.boolean.derived`); the
+                           Build refuses by name every Definition with no Boolean version.  Declaring `"word"` is refused (declare None).
+                           Omitted from `to_json()` when None.
 
     Derived (not fields; one rule each, `verity_vllm.program.registry.targets` consumes them): `tensor_core_family` (the registered k16
     tensor-core step of the capability: `ampere` for sm_8x, `hopper` for sm_90, `blackwell_consumer` for sm_120) and `tuned_gemm_arch_family` (vLLM's tuned
@@ -180,7 +185,10 @@ class TargetProfile:
     fp8_scale_construction: str | None = None
     #: the protocol set the run executes (None = sampled proofs alone; see the doc); declared, never attested
     protocols: tuple[str, ...] | None = None
+    #: the IR the Program is written in (None = word; see the doc); declared, never attested
+    ir: str | None = None
 
+    IRS = ("boolean",)
     WEIGHT_ONLY_CALLS = ("per-forward", "once")
     DEFAULT_WEIGHT_ONLY_CALLS = "once"
     SAMPLER_CONSTRUCTIONS = ("greedy-check-per-stage", "shared-greedy")
@@ -279,6 +287,8 @@ class TargetProfile:
             if canon == DEFAULT_ROW_PROTOCOLS:
                 raise ValueError(f"protocols {list(canon)} is the default (sampled proofs alone): declare None")
             object.__setattr__(self, "protocols", canon)
+        if self.ir is not None and self.ir not in self.IRS:
+            raise ValueError(f"ir must be None (word) or one of {list(self.IRS)}; got {self.ir!r}")
 
     # -- derived facts (one rule each; no second table anywhere) ---------------------------------------------------------
     def effective_moe_construction(self) -> str:
@@ -438,6 +448,8 @@ class TargetProfile:
             d.pop("protocols", None)               # absent = sampled proofs alone; every earlier profile digest unchanged
         else:
             d["protocols"] = list(d["protocols"])
+        if d.get("ir") is None:
+            d.pop("ir", None)                      # absent = word; every earlier profile digest unchanged
         return d
 
     def fp8_block_gemm_kernel(self) -> str | None:

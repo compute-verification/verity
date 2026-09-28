@@ -101,5 +101,17 @@
   "policy": {"compile_time": {"Control.Defs": {"why": "a listing where a pinned statement reads",
    "digest": "fabe4581b46bc415cac5ac6fbd8cbba3c7bd4c497031f984cb49effabdfdf556"}}},
   "fails": "compile-time: Control.Defs is listed under `compile_time`, and pinned statements are declared or read there"
+ },
+ "run_exit": {
+  "replace": {"RunOk.lean": ["then 0 else 1", "then 3 else 1"]},
+  "fails": "runs: RunOk exited 3"
+ },
+ "run_data": {
+  "write": {"run.txt": "ok \n"},
+  "fails": "runs: RunOk's data run.txt has SHA-256"
+ },
+ "run_not_exempt": {
+  "policy": {"exempt": {"Scratch": "a scratch file, built by nobody"}},
+  "fails": "runs: RunOk is not under `exempt`"
  }
 }

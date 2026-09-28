@@ -66,7 +66,7 @@ from verity_vllm.program.kernels.rows import EVALUATOR_PROVENANCE, EVALUATORS
 from verity_vllm.check.replay.index import V2_QUERY, ProgramIndex
 from verity_vllm.query import norm_scales
 from verity_vllm.check.replay.opening import CommittedStore, model_weights_provider
-from verity_vllm.check.replay.evaluate import INTERIOR_DEPTH, plan_vu, replay_vu
+from verity_vllm.check.replay.evaluate import INTERIOR_DEPTH, ROW_EVALUATORS, plan_vu, replay_vu
 from verity_vllm.check.replay.population import (executed_prefix_of_record, moe_plane_alias_check, phase_anchor, population,
                                                 split_not_executed)
 from verity_vllm.check.replay.coverage import _uncovered_mechanisms, controller_rows_of, query_population
@@ -163,6 +163,8 @@ def _prewarm_evaluators(picked: list[dict]) -> dict[str, str]:
     fams = {str(vu.get("spec") or "").split("{", 1)[0] for vu in picked}
     need = {lib for f in fams for lib in _FAMILY_LIBS.get(f, ())}
     out: dict[str, str] = {}
+    for ev in ROW_EVALUATORS[-1:]:                                  # an evaluator on another IR compiles what the sample reaches
+        out.update(getattr(ev, "prewarm", lambda _p: {})(picked))
     if "rms" in need:
         try:
             from verity_vllm.program.registry import prims as _prims
@@ -221,7 +223,8 @@ def _parallel_replay(fn: Callable[[dict], tuple[dict, dict, float]], picked: lis
                  " (VERITY_REPLAY_FORK_GC_FREEZE=0: the children may copy the parent's C2 heap on write, F-r17-24 (b))"), flush=True)
         with fork_pool(workers) as pool:
             res = pool.map_async(_fork_worker, range(len(picked)), chunksize=max(1, len(picked) // (workers * 8)))
-            out = res.get(timeout=max(300.0, 3.0 * len(picked)))
+            per_vu = max([3.0] + [float(getattr(ev, "seconds_per_vu", 3.0)) for ev in ROW_EVALUATORS[-1:]])
+            out = res.get(timeout=max(300.0, per_vu * len(picked)))
         return out
     finally:
         if frozen:

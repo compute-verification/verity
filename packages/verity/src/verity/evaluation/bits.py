@@ -4,7 +4,8 @@
 constant 0, wire 1 the constant 1, then its parameter leaves, then each node's output leaves). A run of consecutive gate nodes
 is grouped by depth and kind, so a group is one numpy operation (``&``, ``^``, ``~``) over rows of ``uint64``; a call runs its
 callee's program on the rows of its arguments, the members of a batch of a composite run as one program over their rows side by
-side, and a scan runs its step once per iteration. Memory is one body's wires at a time, not the flattened circuit's.
+side (as many at a time as keep the callee's wires within `_ROW_BUDGET`), and a scan runs its step once per iteration. Memory is
+one body's wires at a time, not the flattened circuit's.
 
     evaluate_bits(target, *inputs)    the Definition's own signature: one 0/1 array per parameter, `evaluate_batch`'s shapes
     evaluate_words(target, *inputs)   its word view (`boolean.word_type`): element j of a port is one word, least significant
@@ -189,10 +190,13 @@ def _run(c: Compiled, args: np.ndarray) -> np.ndarray:
                     W[out] = ~W[a]
         elif step[0] == "call":
             _, child, members, base, w = step
-            n = len(members)
-            rows = W[members].transpose(1, 0, 2).reshape(members.shape[1], n * words)
-            out = _run(child, rows).reshape(w, n, words).transpose(1, 0, 2).reshape(n * w, words)
-            W[base:base + n * w] = out
+            per = max(1, _ROW_BUDGET // (8 * child.size * words))
+            for lo in range(0, len(members), per):
+                m = members[lo:lo + per]
+                n = len(m)
+                rows = W[m].transpose(1, 0, 2).reshape(m.shape[1], n * words)
+                out = _run(child, rows).reshape(w, n, words).transpose(1, 0, 2).reshape(n * w, words)
+                W[base + lo * w:base + (lo + n) * w] = out
         else:
             _, child, init, xs, shared, n, cl, base = step
             carry = W[init]
@@ -212,10 +216,9 @@ def _run(c: Compiled, args: np.ndarray) -> np.ndarray:
 def _pack(bits: np.ndarray) -> np.ndarray:
     """(N, leaves) of 0/1 -> (leaves, ceil(N / 64)) uint64, instance i at bit i % 64 of word i // 64."""
     n = bits.shape[0]
-    words = -(-n // 64)
-    b = np.zeros((bits.shape[1], words * 64), dtype=np.uint8)
-    b[:, :n] = bits.T
-    return np.packbits(b, axis=1, bitorder="little").view("<u8").astype(np.uint64, copy=False)
+    b = np.zeros((bits.shape[1], -(-n // 64) * 8), dtype=np.uint8)
+    b[:, :-(-n // 8)] = np.packbits(bits.T, axis=1, bitorder="little")
+    return b.view("<u8").astype(np.uint64, copy=False)
 
 
 def _unpack(rows: np.ndarray, n: int) -> np.ndarray:

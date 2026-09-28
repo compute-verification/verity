@@ -14,7 +14,7 @@ What it rests on, all named:
   (`hCR : LinkCR … (reg σ) (cont σ) …`);
 * `ValueBinding`, the binding of wires to registered commit strings, which M0's `hm96-sha512` leaf layout discharges;
 * the lowering, `LoweringSoundB`, or in the `_placed` forms each drawn unit's place in its table (`UnitPlace`: the row
-  placement of #154 and, through the audit circuit's rows, L1).
+  placement of #154).
 
 The numeric side conditions are `N₀/(ek) ≤ ρ < 1` for every table (`hr`, `hρ`) and `t'`, the SHA-512 evaluations of one
 session run.
@@ -100,8 +100,7 @@ noncomputable def placeDecoder (place : ∀ S R u, u ∈ S → UnitPlace P (tabO
   else fun _ => false
 
 /-- **The compiled-layer count curve from the drawn units' places**: `flock_batched_count_linked` with the lowering
-discharged by each drawn unit's place in its table (`UnitPlace`: the row placement and, through the audit circuit's
-rows, L1). What remains named is A2, `ValueBinding` and the places. -/
+discharged by each drawn unit's place in its table (`UnitPlace`: the row placement). What remains named is A2, `ValueBinding` and the places. -/
 theorem flock_batched_count_placed
     (place : ∀ S R u, u ∈ S → UnitPlace P (tabOf plan tab S R u).S u) {Dh : Type} {Hc : List UInt8 → Dh}
     (vb : P.ValueBinding plan tab (P.placeDecoder plan tab place) Hc)

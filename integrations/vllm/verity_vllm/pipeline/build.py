@@ -23,6 +23,7 @@ from dataclasses import dataclass
 from verity.ir.partition_object import program_sha512
 from verity_vllm.config import option
 from verity_vllm.engine import env as engine_env, hooks
+from verity_vllm.program.boolean import derived
 from verity_vllm.program.frontend.inputs_trace import InputsTrace
 
 
@@ -101,6 +102,8 @@ _CONSTRUCTION_SOURCES = ("verity_vllm/program/frontend/export_compat.py", "verit
                          "verity_vllm/program/frontend/export_ops.py", "verity_vllm/program/registry/b1_tp2.py",
                          # [R15 stoch] the stochastic token-select rule (the sampler Definitions are registry digests in the descriptor)
                          "verity_vllm/program/frontend/rules/vllm_sampling.py",
+                         # `TargetProfile.ir == "boolean"`: the derived Program on bits (the Boolean Definitions are digests in the descriptor)
+                         "verity_vllm/program/boolean.py",
                          # the vLLM switches the meta instantiation pins (engine.env.EXPORT)
                          "verity_vllm/engine/env.py")
 
@@ -414,6 +417,9 @@ def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool
     return _finish(out, res, t_start)
 
 
+_WRAPPER_NAMES = {"step": "vLLMStep", "request": "vLLMRequest", "padded": "vLLMPaddedRequest"}
+
+
 class _Refused(Exception):
     """The construction refused before derive (target profile mismatch, unbound sampler); `res["unsupported"]` carries the verbatim reason."""
 
@@ -521,11 +527,11 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             res["declared_derived"] = declared_derived_accounting(target, applied)
             # derive: the wrapper module IS the source, derived from the export above (same module, same example input, same shims)
             t1 = time.time()
-            names = {"step": "vLLMStep", "request": "vLLMRequest", "padded": "vLLMPaddedRequest"}
             with torch.no_grad(), vm.fake_forward_context(cfg, ntok), torch.device("meta"), export_compat(target, model), intercept_triton_launches():
                 # the rank coordinate goes to the runtime correspondence only (`annotations["correspondence"].rank`): the Program is unchanged
-                rep = derive_report(mod, inputs, mode="profile", profile=profile, rules=vllm_ruleset(), name=f"{names[wrapper]}[{res['model_class'].rsplit('.', 1)[-1]}]",
+                rep = derive_report(mod, inputs, mode="profile", profile=profile, rules=vllm_ruleset(), name=f"{_WRAPPER_NAMES[wrapper]}[{res['model_class'].rsplit('.', 1)[-1]}]",
                                     check_registry=True, rank=(tp, rank) if tp > 1 else None, exported=ep)
+            rep = derived(rep) if target.ir == "boolean" else rep
         res["derive_secs"] = round(time.time() - t1, 2)
         res["bindings_rules"] = [r.info.to_json() for r in VLLM_BINDING_RULES]
         res["ok"] = rep.ok

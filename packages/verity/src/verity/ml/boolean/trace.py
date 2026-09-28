@@ -10,9 +10,9 @@ XORs and NOTs the builder made it by (identical forms share one wire), or, for a
 forms, as a balanced XOR tree over its bits. So the gate circuit has exactly the builder's live ANDs, and its XOR and NOT gates
 are the builder's own linear work.
 
-`definition` wraps a builder as a `CompositeDefinition` whose body is the traced circuit, laid out level by level: each node is
-a batch of one gate kind over gates of equal depth, its operands named explicitly. The body is traced on first use, not on
-import. A Boolean Definition names the word Definition it computes as its ``word`` (a Definition, or for one with statics a
+`emit` writes a traced circuit into a body, laid out level by level: each node is a batch of one gate kind over gates of equal
+depth, its operands named explicitly. `definition` wraps a builder as a `CompositeDefinition` whose body is its traced circuit,
+emitted; the body is traced on first use, not on import. A Boolean Definition names the word Definition it computes as its ``word`` (a Definition, or for one with statics a
 function of its bindings); `word_of` reads it.
 """
 from __future__ import annotations
@@ -27,7 +27,7 @@ from verity.ir.types import Array, Type
 
 from .forms import Circuit, L
 
-__all__ = ["TL", "Traced", "TracingCircuit", "definition", "trace", "word_of"]
+__all__ = ["TL", "Traced", "TracingCircuit", "definition", "emit", "trace", "word_of"]
 
 
 class TL(L):
@@ -249,7 +249,9 @@ def _refs(refs: list[Ref]) -> Any:
     return concat(parts)
 
 
-def _body(T: Traced, params: Sequence[Type], ret: Type, B, *colls):
+def emit(T: Traced, params: Sequence[Type], ret: Type, B, *colls) -> Coll:
+    """The circuit ``T`` written into the body ``B`` over operands ``colls`` of types ``params``: a batch per gate kind and depth,
+    its outputs as one ``ret``."""
     ref: dict[int, Ref] = {}
     w = 2
     for i, t in enumerate(params):
@@ -295,7 +297,7 @@ def definition(name: str, version: int, build: Callable, params: Sequence[tuple[
     def body(B, S, *colls):
         if not traced:
             traced.append(trace(build, types, ret))
-        return _body(traced[0], types, ret, B, *colls)
+        return emit(traced[0], types, ret, B, *colls)
 
     d = CompositeDefinition(name, version, (), lambda S: (tuple(params), ret), body, doc=doc, conformance=conformance,
                             register=register)

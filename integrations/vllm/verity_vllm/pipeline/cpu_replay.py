@@ -72,6 +72,8 @@ class Options:
     required_manifest: str | None = option("--required-manifest", default=None,
                                            help="the Commit's required manifest (default: its recorded path, else <row-dir>/manifest.json)")
     threads: int = option("--threads", type=int, default=8, help="threads opening the weights")
+    replay_workers: int | None = option("--replay-workers", type=int, default=None,
+                                        help="the forked pool's workers (default: the Commit's own; the draw does not depend on it)")
 
 
 class Refused(Exception):
@@ -203,6 +205,8 @@ def replay_args(o: Options, ctx: dict[str, Any]) -> SimpleNamespace:
     a = dict(ctx["args"])
     a["programs_root"] = o.row_dir if a.get("programs_root") else None
     a["program_dir"] = os.path.join(o.row_dir, "build_request") if a.get("program_dir") else None
+    if o.replay_workers is not None:
+        a["replay_workers"] = o.replay_workers
     return SimpleNamespace(**a, replay_cache=False, vu_export_dir=None)
 
 

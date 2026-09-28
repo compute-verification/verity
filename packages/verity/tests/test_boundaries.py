@@ -38,8 +38,8 @@ ALLOWED = {
 }
 #: Import names core never imports or names as a string: the other workspace distributions (backends, integrations,
 #: protocols, tools), external runtimes, and the repository's own directories.
-FORBIDDEN_EXTERNAL = ("verity_sp1", "verity_vllm", "verity_numerical", "verity_flock", "verity_sampled_proofs", "verity_one_stage",
-                      "verity_pous", "verity_torch", "circuit_check", "research", "sp1", "vllm", "torch", "jax", "onnx",
+FORBIDDEN_EXTERNAL = ("verity_sp1", "verity_vllm", "verity_numerical", "verity_flock", "verity_sampled_proofs", "verity_pous",
+                      "verity_torch", "circuit_check", "research", "sp1", "vllm", "torch", "jax", "onnx",
                       "backends", "frontends", "integrations", "protocols", "tools", "veritor")
 #: Core's third-party dependencies (``packages/verity/pyproject.toml``); anything else it imports is the stdlib or ``verity``.
 DEPENDENCIES = {"numpy"}

@@ -1,5 +1,5 @@
 """`verity.ml.boolean.attention`: the Boolean softmax operations agree with their word primitives (`trace.word_of`) on every
-pair of special words and on random words, carry exactly their builders' live ANDs, and are pinned by gate count and program
+pair of special words and on random words (the inverse sum also on every mantissa), carry exactly their builders' live ANDs, and are pinned by gate count and program
 digest."""
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ from verity.ml.boolean import attention as BA
 from verity.ml.boolean import trace as TR
 from verity.ml.boolean.forms import Circuit
 
-DEFS = [BA.F32AddFtz, BA.F32SubFtz, BA.F32MulFtz, BA.F32FmaFtz, BA.F32FmaSubFtz, BA.F32Max, BA.GuardNegInfZero]
+DEFS = [BA.F32AddFtz, BA.F32SubFtz, BA.F32MulFtz, BA.F32FmaFtz, BA.F32FmaSubFtz, BA.F32Max, BA.GuardNegInfZero, BA.Fa2InvSum]
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
@@ -31,6 +31,7 @@ PINS = {
     "F32FmaSubFtz_v3": (4584, 7877, 268, "c40a13e35744d2326b4c46690191d4aefbd92a6ac20e835fa376457c22b4ac46"),
     "F32Max_v2": (237, 408, 70, "51cbd51389f3a835b06a9d18aede9466d22a6a4b8c3072559c6d15e8331b0958"),
     "GuardNegInfZero_v2": (63, 0, 24, "cecb89db1b7296e52d903a278f0a5a4321ff61bca24bda4c28c7c921c96db130"),
+    "Fa2InvSum_v2": (947, 4866, 109, "8a134c216e0888fee6993aaac41a9ef07185b70712ab9581a5066dc95307408e"),
 }
 
 #: signed zeros, subnormals (the FTZ boundary), the normal range's ends, ones, infinities, NaNs of both signs and kinds, and
@@ -78,6 +79,8 @@ def test_agrees_with_its_word_primitive(d) -> None:
     word = TR.word_of(target)
     assert (word.name, word.version) == (d.name, 1)
     inputs = _inputs(len(d.signature(None)[0]), np.random.default_rng(zlib.crc32(d.name.encode())))
+    if d is BA.Fa2InvSum:
+        inputs = [np.concatenate([inputs[0], np.arange(1 << 23, dtype=np.uint32) | np.uint32(0x3F800000)])]
     got = BS.evaluate_words(target, *inputs).astype(np.uint64).reshape(-1)
     ref = E.evaluate_batch(word, *inputs).astype(np.uint64).reshape(-1)
     bad = np.flatnonzero(got != ref)
