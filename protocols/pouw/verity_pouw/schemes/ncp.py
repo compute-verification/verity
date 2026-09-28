@@ -13,9 +13,10 @@ the last is A·B (Lean `Pouw.NCP.Proofs.cancel`, `stacked`, `wrap`).  Each noise
 31, exactly uniform on [−31, 32].  A tile's digest is SHAKE256 over its checked words, little-endian, step by step and
 row-major within a step (the order an accumulator produces them).
 
-``ncp-v1`` uses the word-granular production P (`word_perm`: it moves aligned 4-entry words and keeps the order inside
-each, so forming E₂ is a free word move under W1 with byte moves priced); its checkpoint independence is certified by the
-fingerprint rank (`benchmarks/pouw/certify_p.py`), not in Lean.  ``ncp-v1-shift24`` uses the shift by 24, admissible with
+``ncp-v1`` uses the word-granular production P v1.1 (`word_perm`: it moves aligned 4-entry words and keeps the order
+inside each, so forming E₂ is a free word move under W1 with byte moves priced).  The red team certified it independently
+(independence rank T − 1, λ₃ = 32, MinRank 16 at k = 1,088, 2,048, 4,096 and 11,008); ``tests/test_pouw_word_p.py``
+re-checks the rejection rule, minrank.md's hypotheses and λ₃ ≥ 16 at the k the MVP uses.  ``ncp-v1-shift24`` uses the shift by 24, admissible with
 independent checkpoints for every k >= 1024 with 16 | k (Lean `shiftBy24_admissible`, `independentWitness`), which the
 Lean calls a witness, not a proposal.
 """
@@ -54,9 +55,27 @@ def shift_perm(k: int, c: int = 24) -> tuple[tuple[int, ...], tuple[int, ...]]:
     return tuple((j + c) % k for j in range(k)), (1,) * k
 
 
+def inside_cycles(p: Sequence[int], wps: int = 4) -> set[int]:
+    """The words on a cycle of the arcs w -> p[p[w]] that stay inside w's step (a 2-cycle of p is such a cycle)."""
+    nxt = {w: p[p[w]] for w in range(len(p)) if p[p[w]] // wps == w // wps}
+    bad: set[int] = set()
+    done: set[int] = set()
+    for s in nxt:
+        path, x = [], s
+        while x in nxt and x not in done and x not in path:
+            path.append(x)
+            x = nxt[x]
+        if x in path:
+            bad.update(path[path.index(x):])
+        done.update(path)
+    return bad
+
+
 def word_perm(k: int, seed: bytes = WORD_P_SEED, g: int = 4) -> tuple[tuple[int, ...], tuple[int, ...]]:
-    """The word-granular production P: a SHAKE256 Fisher-Yates over the k/g aligned words, then the deterministic repair so
-    no word lands in its own 16-step; the order inside each word is kept and every sign is +1."""
+    """The word-granular production P, v1.1 (``pword-repair2.py``): a SHAKE256 Fisher-Yates over the k/g aligned words;
+    repair 1 so no word lands in its own 16-step; repair 2 so no cycle of π² stays inside one step (hence no 2-cycle).
+    The order inside each word is kept and every sign is +1.  Neither repair guards the rejection rule's other clauses or
+    λ₃ ≥ 16, which are certified per k in ``tests/test_pouw_word_p.py``."""
     w, wps = k // g, D // g
 
     def words(s: bytes, n: int):
@@ -80,6 +99,14 @@ def word_perm(k: int, seed: bytes = WORD_P_SEED, g: int = 4) -> tuple[tuple[int,
             r = uniform(ws, w)
             if p[r] // wps != j // wps and p[j] // wps != r // wps:
                 p[j], p[r] = p[r], p[j]
+    ws = words(seed + b"/repair2", 64 * w)
+    try:
+        while bad := inside_cycles(p, wps):
+            j, r = min(bad), uniform(ws, w)
+            if p[r] // wps != j // wps and p[j] // wps != r // wps:
+                p[j], p[r] = p[r], p[j]
+    except StopIteration:
+        raise DomainError(f"the word P's second repair exhausts its stream at k = {k}") from None
     return tuple(g * p[a] + b for a in range(w) for b in range(g)), (1,) * k
 
 

@@ -1,8 +1,8 @@
 {
  "schema": "verity-pouw/ncp-vectors/v1",
  "word_p_sha256": {
-  "1088": "e0f2bbaee7e2a30df6304bae3aebe17c2b42c2529ae56e9bfb7abd57c8bbd99d",
-  "2048": "56183aacda4f5c8a3754af986a17f6cc4ca54fe25ab62f92f7bfe661c3d27531",
+  "1088": "536757a293b17fdbecab9cca20d9a4ed76331d12424f6f47855190345b92546f",
+  "2048": "7f00a9b74d4bd8b36019e74ee31ae12d918dd65861957c94cfc8af8699139732",
   "4096": "24e68f30edbe538e2842266ac6b917a8a0ccf3ee0b4f8bf2cb1d8fe5c5943854",
   "11008": "a57ea054ea3e404469f0c5b9055a0f6789fb1b2ce4c02b2fe83914828c040eb8"
  },
@@ -192,7 +192,7 @@
     24,
     31
    ],
-   "digest": "da1a7930a8a007933aa0cf200cc997b30f5d97cf6d1e4cc41c0019e2a34e3a13",
+   "digest": "7537cf43c09b2c4165d3782a98d4ade50bb7488e538bcfe0e28e7e7a8cf528cf",
    "useful_sha256": "c6bb1c8b3fbf54e52cfeb4923bf655bc697d7ab0f4dc90a230f0c3d86b6eba85",
    "useful_00": -89144
   }
