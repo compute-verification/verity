@@ -1,0 +1,10 @@
+[Unit]
+Description=node 2's ended runs to node 1's store and R2, through node 1's Job (n2_custody.sh)
+
+[Service]
+Type=oneshot
+Nice=19
+IOSchedulingClass=idle
+CPUQuota=50%
+TimeoutStartSec=6h
+ExecStart=/bin/bash /workspace/pouw/infra/bin/n2_custody.sh

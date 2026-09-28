@@ -51,6 +51,8 @@ Every POLL_S seconds the runner:
     off the cores, keeps the GPU as if in keep-free and starts no job on the cores; a job the glob names runs on that GPU alone,
     pinned to those cores, with max_min up to the minutes (still stopped, like any fill job, for a window or a waiter).
 Status: FILL_DIR/status.txt; every start, stop and exit: FILL_DIR/events.jsonl.
+A bare `fill_runner.py` is the runner, which exits at once while another holds FILL_DIR/.runner.lock; any argument but `fence`
+prints the usage.
 """
 from __future__ import annotations
 
@@ -886,7 +888,18 @@ def fence(argv: list[str], t: float | None = None) -> int:
     return 0
 
 
+USAGE = """usage: fill_runner.py                 the runner: one per node, held by FILL_DIR/.runner.lock
+       fill_runner.py fence OWNER ...   write or release OWNER's fence (`fill_runner.py fence --help`)"""
+
+
 def main() -> None:
+    FILL.mkdir(parents=True, exist_ok=True)
+    # held for the process's life; not inherited (PEP 446), so jobs that outlive a runner leave the next one free to adopt them
+    lock = open(FILL / ".runner.lock", "a")
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        sys.exit(f"fill_runner.py: another runner holds {FILL / '.runner.lock'}; one runs per node")
     for d in ("queue", "running", "done", "failed", "logs", HELD):
         (FILL / d).mkdir(parents=True, exist_ok=True)
     adopt()
@@ -902,4 +915,9 @@ def main() -> None:
 if __name__ == "__main__":
     if sys.argv[1:2] == ["fence"]:
         sys.exit(fence(sys.argv[2:]))
+    if sys.argv[1:] in (["-h"], ["--help"]):
+        print(USAGE)
+        sys.exit(0)
+    if sys.argv[1:]:
+        sys.exit(f"{USAGE}\nfill_runner.py: unknown arguments {' '.join(sys.argv[1:])!r}")
     main()

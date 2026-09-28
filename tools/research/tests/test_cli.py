@@ -76,6 +76,55 @@ def test_machine_side_records_the_requests_env(tmp_path):
     assert _request_env(json.dumps({"request": str(tmp_path / "absent.json")})) == {}
 
 
+def _local_run(tmp_path, *opts):
+    return main(["run", "--runs-dir", str(tmp_path / "runs"), "--project", "t", "--no-sampler", *opts, "--",
+                 sys.executable, "-c", "open('ran', 'w')"])
+
+
+def test_a_local_run_whose_store_has_no_remote_refuses_before_it_starts(tmp_path, monkeypatch, capsys):
+    """Without a remote a local run used to publish its attempt into this disk's store and stop: on 2-3 Oct a night of TP8 and
+    Qwen3-235B runs on vy-nebius-2 sat there until a push loop took them. Every way of having no usable remote refuses, a remote
+    that fails to load included."""
+    monkeypatch.delenv("RESEARCH_LOCAL_ONLY")
+    assert _local_run(tmp_path) == 3
+    err = capsys.readouterr().err
+    assert "refused" in err and "absent-store.toml, which does not exist" in err and "--on MACHINE" in err and "--local-only" in err
+    cfg = tmp_path / "store.toml"
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
+    for text, why in (("", "has no [remote] table"),
+                      ('[remote]\ntype = "s3"\nbucket = "b"\nendpoint = "https://e"\naccess_key_id_env = "AWS_ACCESS_KEY_ID"\n'
+                       'secret_access_key_env = "AWS_SECRET_ACCESS_KEY"\n', "credentials env vars AWS_ACCESS_KEY_ID"),
+                      ("[remote\n", "ConfigError")):
+        cfg.write_text(text)
+        assert _local_run(tmp_path) == 3
+        assert why in capsys.readouterr().err
+    assert not (tmp_path / "runs").exists() or not list((tmp_path / "runs").iterdir()), "no run dir, no workload"
+
+
+def test_local_only_runs_without_a_remote_and_records_why(tmp_path, monkeypatch, capsys):
+    monkeypatch.delenv("RESEARCH_LOCAL_ONLY")
+    assert _local_run(tmp_path, "--local-only", "n2_commit.sh takes it to node 1") == 0
+    run_dir = next((tmp_path / "runs").iterdir())
+    assert (run_dir / "ran").exists()
+    rec = json.loads((run_dir / "job.json").read_text())["store"]["local_only"]
+    assert rec["reason"] == "n2_commit.sh takes it to node 1" and "absent-store.toml" in rec["no_remote"]
+    err = capsys.readouterr().err
+    assert "--local-only: n2_commit.sh takes it to node 1" in err and "local only" in err
+    monkeypatch.setenv("RESEARCH_LOCAL_ONLY", "from the environment")
+    assert _local_run(tmp_path) == 0
+
+
+def test_a_local_run_with_a_remote_needs_no_reason_and_is_preserved(tmp_path, monkeypatch, capsys):
+    monkeypatch.delenv("RESEARCH_LOCAL_ONLY")
+    cfg = tmp_path / "store.toml"
+    cfg.write_text(f'[remote]\ntype = "fs"\npath = "{tmp_path / "vault"}"\n')
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
+    assert _local_run(tmp_path) == 0
+    run_dir = next((tmp_path / "runs").iterdir())
+    assert "local_only" not in json.loads((run_dir / "job.json").read_text())["store"]
+    assert "PRESERVED on the remote" in capsys.readouterr().err
+
+
 def test_run_requires_separator_and_command(tmp_path):
     assert main(["run", "--runs-dir", str(tmp_path), "echo", "x"]) == 2
     assert main(["run", "--runs-dir", str(tmp_path), "--"]) == 2

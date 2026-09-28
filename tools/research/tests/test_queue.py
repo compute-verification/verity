@@ -27,6 +27,7 @@ hold_label = "hold"
 [[grant]]
 role = "vllm-coordinator"
 paths = ["integrations/vllm/"]
+by = "the vLLM coordinator"
 
 [[grant]]
 role = "statement-reviewer"
@@ -166,7 +167,9 @@ def test_a_pr_containing_another_goes_in_after_it_and_waits_while_it_waits(world
     world.gh.put(4, world.change({"c.txt": "stacked\n"}, base=parent))
     q = world.queue()
     members, entries = q.sync()
-    assert members == [] and entries[5].why == f"waiting for the vllm-coordinator grant at {parent[:8]}"
+    assert members == [] and entries[5].why == (
+        f"waiting for the vllm-coordinator grant at {parent[:8]}: vllm-coordinator from the vLLM coordinator; granted with "
+        f"`research data label pr:5@{parent} grant ROLE --by LANE` (ci/queue.toml)"), "who gives it, and the label that does"
     assert entries[4].state == "waiting" and entries[4].after == (5,)      # it carries #5's change, grant included
     world.grants[(5, parent)] = {"vllm-coordinator"}
     world.grants[(4, world.gh.prs[4].head)] = {"vllm-coordinator"}     # #4 carries #5's change, so it needs the grant too
@@ -183,6 +186,7 @@ def test_grants_follow_paths_and_lean_audit_sections_at_the_exact_head(world):
     _, entries = q.sync()
     assert entries[1].why.startswith("waiting for the vllm-coordinator grant")
     assert entries[2].why.startswith("waiting for the statement-reviewer grant")
+    assert "statement-reviewer (no `by` in ci/queue.toml)" in entries[2].why
     assert entries[3].state == "queued"                         # a dependency digest isn't a statement
     world.grants[(1, world.gh.prs[1].head)] = {"vllm-coordinator"}
     assert 1 in [m.pr for m in q.sync()[0]]
@@ -502,7 +506,8 @@ import json, os, sys
 from pathlib import Path
 a = sys.argv[1:]
 Path(os.environ["FAKE_SEEN"]).write_text(json.dumps({"argv": a, "files": sorted(p.name for p in Path.cwd().iterdir()),
-                                                     "pythonpath": os.environ.get("PYTHONPATH")}))
+                                                     "pythonpath": os.environ.get("PYTHONPATH"),
+                                                     "built": Path("backends/flock/verifier/lean/.lake/built").is_file()}))
 fail = os.environ.get("FAKE_FAIL")
 Path(a[a.index("--json") + 1]).write_text(json.dumps([{"name": "pkg", "suite": "pkg", "status": "failed" if fail else "passed",
                                                        "failed_tests": [fail] if fail else None}]))
@@ -549,3 +554,36 @@ def test_the_quick_tier_runs_the_suites_a_pr_changes_from_a_clean_checkout_at_it
     world.gh.put(1, h3, ready=False)
     assert tier(world.gh.prs[1]) is None
     assert json.loads(seen.read_text())["argv"][:2] == ["--quick", "--json"]     # a runner from before --changed: every suite
+
+
+def test_the_quick_tier_builds_the_lean_verifier_before_its_tests_and_keeps_that_build_warm(world, monkeypatch):
+    """The flock suite's workers each run `lake build` in the verifier; from the cold checkout `git clean` leaves, they collided."""
+    from research import queue as Q
+
+    world.with_store_remote()
+    main = world.change({"tools/check/suites.py": FAKE_SUITES, "backends/flock/verifier/lean/lakefile.toml": "name = \"flock\"\n"})
+    _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
+    h1 = world.change({"a.txt": "a1\n"})
+    world.gh.put(1, h1, ready=False)
+    bin_, seen, ran = world.tmp / "bin", world.tmp / "seen.json", world.tmp / "lake.log"
+    bin_.mkdir()
+    (bin_ / "lake").write_text('#!/bin/sh\necho "$PWD $*" >> "$FAKE_LAKE_LOG"\n[ -z "$FAKE_LAKE_FAIL" ] || exit 1\n'
+                               'mkdir -p .lake && echo built > .lake/built\n')
+    (bin_ / "lake").chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/check/suites.py", "--quick"])
+    monkeypatch.setenv("FAKE_SEEN", str(seen))
+    monkeypatch.setenv("FAKE_LAKE_LOG", str(ran))
+    monkeypatch.delenv("FAKE_FAIL", raising=False)
+    monkeypatch.delenv("FAKE_LAKE_FAIL", raising=False)
+    tier = Q.QuickTier(world.dev, str(world.origin), root=world.tmp / "ready")
+
+    assert tier(world.gh.prs[1]) is None and json.loads(seen.read_text())["built"]
+    [wt] = [p for p in (world.tmp / "ready").iterdir() if p.is_dir() and p.name != "logs"]
+    lean = wt / "backends" / "flock" / "verifier" / "lean"
+    assert ran.read_text().split("\n") == [f"{lean} build", ""]
+    (lean / ".lake" / "built").write_text("from the last PR\n")
+    (lean / "stray.olean").write_text("left by the last PR\n")
+    monkeypatch.setenv("FAKE_LAKE_FAIL", "1")
+    assert tier(world.gh.prs[1]) == "`lake build` in backends/flock/verifier/lean exited 1 (its output is above)"
+    assert (lean / ".lake" / "built").read_text() == "from the last PR\n" and not (lean / "stray.olean").exists()

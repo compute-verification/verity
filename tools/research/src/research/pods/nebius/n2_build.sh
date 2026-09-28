@@ -159,6 +159,8 @@ run() {
     GUARD_PRESERVE_FILE=/workspace/jobs/dm/guard.preserve BUILD_JOBS=auto \
     VERITY_UNIT_RULE_CACHE=/workspace/jobs/cache/unit-rules UV_CACHE_DIR=/workspace/jobs/cache/uv UV_PYTHON_INSTALL_DIR=/workspace/jobs/cache/python \
     CAMPAIGN=nebius-sweep
+  # node 2's store has no remote, so `research run` refuses without this (n2_commit.sh's load_item says why it is a variable)
+  export RESEARCH_LOCAL_ONLY="node 2's n2-custody timer (n2_custody.sh) takes every ended run under /workspace/jobs/runs to node 1's store and R2"
   eval "$(python3 - "$item" << 'EOF'
 import json, shlex, sys
 d = json.load(open(sys.argv[1]))
