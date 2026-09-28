@@ -84,17 +84,31 @@ def LevelsServed : Prop :=
 /-- A window of 8192 real tiles registers level 87: credited 8192, padded to 9216. -/
 def Bucket8192 : Prop := bucket gridBits 8192 = ⟨87, 8192, 9216⟩
 
-/-- Python's grid functions on any integer answer only on their domain (`n ≥ 1` for a tile count, a grid point for
-`level`, `ℓ ≥ 0` for a level; `levels` needs both ends), and what they answer is the function on naturals. -/
-def GridRefusals : Prop :=
-  ∀ bits (n lo : Int),
-    (∀ g, floorPoint? bits n = .ok g → 1 ≤ n ∧ g = floorPoint bits n.toNat) ∧
-    (∀ g, pad? bits n = .ok g → 1 ≤ n ∧ g = pad bits n.toNat) ∧
-    (∀ w, bucket? bits n = .ok w → 1 ≤ n ∧ w = bucket bits n.toNat) ∧
-    (∀ ℓ, level? bits n = .ok ℓ → 1 ≤ n ∧ onGrid bits n.toNat = true ∧ ℓ = level bits n.toNat) ∧
-    (∀ g, point? bits n = .ok g → 0 ≤ n ∧ g = point bits n.toNat) ∧
-    (∀ w, Work.at? bits n = .ok w → 0 ≤ n ∧ w = Work.at bits n.toNat) ∧
-    (∀ k, levels? bits lo n = .ok k → 1 ≤ lo ∧ 1 ≤ n ∧ k = levels bits lo.toNat n.toNat)
+/-! Python's grid functions on any integer answer only on their domain, and what they answer is the function on
+naturals. -/
+
+/-- `floor_point(n)` answers only for a tile count `n ≥ 1`, and answers `floorPoint` of it. -/
+def FloorPointRefuses : Prop := ∀ bits (n : Int) g, floorPoint? bits n = .ok g → 1 ≤ n ∧ g = floorPoint bits n.toNat
+
+/-- `pad(n)` answers only for a tile count `n ≥ 1`, and answers `pad` of it. -/
+def PadRefuses : Prop := ∀ bits (n : Int) g, pad? bits n = .ok g → 1 ≤ n ∧ g = pad bits n.toNat
+
+/-- `bucket(n)` answers only for a tile count `n ≥ 1`, and answers `bucket` of it. -/
+def BucketRefuses : Prop := ∀ bits (n : Int) w, bucket? bits n = .ok w → 1 ≤ n ∧ w = bucket bits n.toNat
+
+/-- `level(n)` answers only for a grid point `n`, and answers `level` of it. -/
+def LevelRefuses : Prop :=
+  ∀ bits (n : Int) ℓ, level? bits n = .ok ℓ → 1 ≤ n ∧ onGrid bits n.toNat = true ∧ ℓ = level bits n.toNat
+
+/-- `point(ℓ)` answers only for a level `ℓ ≥ 0`, and answers `point` of it. -/
+def PointRefuses : Prop := ∀ bits (ℓ : Int) g, point? bits ℓ = .ok g → 0 ≤ ℓ ∧ g = point bits ℓ.toNat
+
+/-- `Work.at(ℓ)` answers only for a level `ℓ ≥ 0`, and answers `Work.at` of it. -/
+def WorkAtRefuses : Prop := ∀ bits (ℓ : Int) w, Work.at? bits ℓ = .ok w → 0 ≤ ℓ ∧ w = Work.at bits ℓ.toNat
+
+/-- `levels(lo, hi)` answers only for tile counts `lo, hi ≥ 1`, and answers `levels` of them. -/
+def LevelsRefuses : Prop :=
+  ∀ bits (lo hi : Int) k, levels? bits lo hi = .ok k → 1 ≤ lo ∧ 1 ≤ hi ∧ k = levels bits lo.toNat hi.toNat
 
 /-! ## The draw (L3) -/
 

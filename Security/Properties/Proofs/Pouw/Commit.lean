@@ -87,8 +87,11 @@ theorem leaf_isOk (d : RowsDomain) (rank : Nat) (schema : String) (v : ByteArray
   cases hm <;> cases dg <;> by_cases h1 : v.size < 192 <;> by_cases h2 : v.size = 256 <;>
     simp [h1, h2, HM96_SALT, e] <;> first | rfl | omega
 
-theorem leafRefusals : LeafRefusals := fun d rank schema v _ hx =>
-  of_decide_eq_true ((leaf_isOk d rank schema v).symm.trans (isOk_of_ok hx))
+theorem leafRefusals : LeafRefusals :=
+  ⟨fun frame digests rank schema v _ hx =>
+      (of_decide_eq_true ((leaf_isOk ⟨frame, true, digests⟩ rank schema v).symm.trans (isOk_of_ok hx)) rfl).1,
+    fun frame rank schema v _ hx =>
+      (of_decide_eq_true ((leaf_isOk ⟨frame, true, true⟩ rank schema v).symm.trans (isOk_of_ok hx)) rfl).2 rfl⟩
 
 theorem idx_labels (label : String) (rank : Nat) :
     List.idxOf? label ["salt", "draw"] = some rank ↔ (label = "salt" ∧ rank = 0) ∨ (label = "draw" ∧ rank = 1) := by
