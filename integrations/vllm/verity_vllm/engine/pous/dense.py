@@ -89,6 +89,9 @@ CHUNKED_SPLIT_MAX_ROWS = [9_500]
 (`feistel_split_kernel`): 25.9 against 39.1 ms at 4,608 rows on the L40S, but 63.9 against 47.3 ms at 15,075, where the
 unsplit kernel already fills the GPU and the pair's shuffles cost more than its parallelism buys."""
 
+CHUNKED_FUSED_X = [False]
+"""Unsplit chunk-major decodes read each step's parents (and the pad) inside the Feistel launch instead of gathering them."""
+
 CHUNKED_MAX_ROWS = [18_000]
 """Chunk-major launches over more rows run as equal sequential pieces of at most this many: past about one warp per
 scheduler (18k rows on the L40S) a launch's per-row rate collapses (23,744 rows: 93.6 ms at once, 84.7 ms in two)."""
@@ -154,16 +157,21 @@ class _Chunked:
         c, b = divmod(self.width - 1, CHUNK)
         self.bytes[0, c, rows, b] = 0x80
 
-    def permute(self, row0: int) -> None:
-        from verity_vllm.engine.pous import native
-
+    def launches(self, row0: int, allow_split: bool = True) -> list[tuple[int, int, bool]]:
+        """`(start, rows, split)` of the launches covering rows `row0 ..`: pieces of at most `CHUNKED_MAX_ROWS`."""
         rows = self.rows - row0
         pieces = -(-rows // CHUNKED_MAX_ROWS[0])
         step = -(-rows // pieces)
-        for start in range(row0, self.rows, step):
-            native.ext().feistel_chunked(self.words, start, min(step, self.rows - start), self.half // 8, codec.PI_DOMAIN,
-                                         CHUNKED_THREADS[0], CHUNKED_SPECIALIZE[0],
-                                         CHUNKED_SPLIT[0] and step < CHUNKED_SPLIT_MAX_ROWS[0])
+        split = allow_split and CHUNKED_SPLIT[0] and step < CHUNKED_SPLIT_MAX_ROWS[0]
+        return [(start, min(step, self.rows - start), split) for start in range(row0, self.rows, step)]
+
+    def permute(self, row0: int, xsrc: torch.Tensor | None = None, xidx: torch.Tensor | None = None) -> None:
+        """Π₂ on rows `row0 ..`; with `xsrc`, round 1 reads each row's X from row `xidx[r]` of `xsrc` (the pad where < 0)."""
+        from verity_vllm.engine.pous import native
+
+        for start, n, split in self.launches(row0, allow_split=xsrc is None):
+            native.ext().feistel_chunked(self.words, start, n, self.half // 8, codec.PI_DOMAIN, CHUNKED_THREADS[0],
+                                         CHUNKED_SPECIALIZE[0], split, xsrc, xidx)
 
 
 def _decode_chunked(c_flat, seg, blk, ln, tags, base, starts, width: int) -> torch.Tensor:
@@ -174,14 +182,23 @@ def _decode_chunked(c_flat, seg, blk, ln, tags, base, starts, width: int) -> tor
     dom[:, 0], dom[:, 1] = (blk & 0xFF).to(torch.uint8), (blk >> 8).to(torch.uint8)
     st.put(1, width, slice(None), dom)
     pending, stream = [], torch.cuda.current_stream()
+    fused = CHUNKED_FUSED_X[0] and not any(split for _, _, split in st.launches(0)) and c_flat.is_contiguous()
+    xidx = torch.full((r,), -1, dtype=torch.int64, device=c_flat.device) if fused else None
     for j in range(1, int(ln[-1]) + 2):
         first, pad_end = starts[j - 1], starts[j]
-        st.pad(slice(first, pad_end))
-        if pad_end < r:
-            from verity_vllm.engine.pous import native
+        if fused:
+            xidx[first:pad_end] = -1
+            if pad_end < r:
+                xidx[pad_end:] = base[pad_end:] + blk[pad_end:] - j
+            st.permute(first, c_flat, xidx)
+        else:
+            st.pad(slice(first, pad_end))
+            if pad_end < r:
+                from verity_vllm.engine.pous import native
 
-            native.ext().chunked_gather(st.words, pad_end, c_flat, (base[pad_end:] + blk[pad_end:] - j).contiguous(), width // 8)
-        st.permute(first)
+                native.ext().chunked_gather(st.words, pad_end, c_flat, (base[pad_end:] + blk[pad_end:] - j).contiguous(),
+                                            width // 8)
+            st.permute(first)
         _throttle(pending, stream)
     return st.get(0, 0, width)
 

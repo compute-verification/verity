@@ -56,6 +56,8 @@ class Options:
     workers: int = option("--workers", type=int, default=12, help="processes for the reference side of G2")
     chunked: bool = option("--chunked", action="store_true", default=False, help="chunk-major decode state (dense.CHUNKED)")
     chunked_threads: int = option("--chunked-threads", type=int, default=128, help="threads per block of chunk-major launches")
+    fused_x: bool = option("--fused-x", action="store_true", default=False,
+                           help="unsplit chunk-major launches read each step's parents themselves (dense.CHUNKED_FUSED_X)")
     split: bool = option("--split", action="store_true", default=False,
                          help="chunk-major launches split every Keccak state across a lane pair")
     segment_vector: bool = option("--segment-vector", action="store_true", default=False,
@@ -479,6 +481,7 @@ def main(a: Options) -> int:
     dense.CHUNKED[0] = a.chunked
     dense.CHUNKED_THREADS[0] = a.chunked_threads
     dense.CHUNKED_SPLIT[0] = a.split
+    dense.CHUNKED_FUSED_X[0] = a.fused_x
     SCHEME[:] = [Scheme.of(a.codec)]
     doc: dict[str, Any] = {"options": dataclasses.asdict(a), "device": device_facts(), "gates": {"vectors": gate_vectors(SCHEME[0])},
                            "scheme": {"codec": a.codec, "geometry": SCHEME[0].geometry.manifest(), "window": SCHEME[0].window}}
@@ -523,6 +526,7 @@ def main(a: Options) -> int:
                                      "word_io": a.word_io, "fused": a.fused,
                                      "pair": a.pair, "pair_max_rows": a.pair_max_rows, "coalesced": a.coalesced,
                                      "chunked": a.chunked, "chunked_threads": a.chunked_threads, "split": a.split,
+                                     "fused_x": a.fused_x,
                                      "codec": a.codec, "window": SCHEME[0].window},
             "validation": {"status": "passed" if passed else "failed", "checker": "verity-vllm pous-dense-bench gates",
                            "detail": json.dumps({k: v["passed"] for k, v in doc["gates"].items()}), "evidence": ["dense-bench.json"]},

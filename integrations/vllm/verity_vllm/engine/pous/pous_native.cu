@@ -693,9 +693,22 @@ __device__ __forceinline__ void slot_store(uint64_t* p, const uint64_t v[RATE_WO
 }
 
 // HW_FIXED != 0 compiles the kernel for halves of exactly HW_FIXED words, folding every bound and per-word check.
+// Round 1's destination (half 0) holds the chain's input block X in its first `xwords` words.  With `xsrc`, those words are
+// not read from the state but from row `xidx[r]` of the row-major `xsrc` (`xwords` words per row), or are the pad block
+// 0x01 || 0 .. 0 || 0x80 where `xidx[r] < 0`: the parent gather and the pad fused into the launch.
+__device__ __forceinline__ void x_chunk_load(const uint64_t* slot, const uint64_t* xrow, int64_t c, int64_t xwords,
+                                             uint64_t v[RATE_WORDS]) {
+  slot_load(slot, v);
+#pragma unroll
+  for (int w = 0; w < RATE_WORDS; ++w) {
+    const int64_t j = c * RATE_WORDS + w;
+    if (j < xwords) v[w] = xrow ? xrow[j] : (j == 0 ? 0x01ull : (j == xwords - 1 ? 0x80ull << 56 : 0ull));
+  }
+}
+
 template <int64_t HW_FIXED>
 __global__ void feistel_chunked_kernel(uint64_t* st_words, int64_t pitch, int64_t row0, int64_t rows, int64_t hw_arg,
-                                       int domain) {
+                                       int domain, const uint64_t* xsrc, const int64_t* xidx, int64_t xwords) {
   const int64_t n = (int64_t)blockIdx.x * blockDim.x + threadIdx.x;
   if (n >= rows) return;
   const int64_t hw = HW_FIXED ? HW_FIXED : hw_arg;
@@ -729,11 +742,18 @@ __global__ void feistel_chunked_kernel(uint64_t* st_words, int64_t pitch, int64_
 #pragma unroll
     for (int k = 0; k < 25; ++k) t[k] = 0;
     carry = ((uint64_t)(uint8_t)domain | ((uint64_t)(i + 1) << 8)) << 48;
-    slot_load(CHUNK_AT(h, 0), nxt);
+    const bool fused_x = xsrc != nullptr && i == 1;
+    const int64_t xi = fused_x ? xidx[r] : -1;
+    const uint64_t* xrow = xi >= 0 ? xsrc + xi * xwords : nullptr;
+    if (fused_x) x_chunk_load(CHUNK_AT(h, 0), xrow, 0, xwords, nxt);
+    else slot_load(CHUNK_AT(h, 0), nxt);
     for (int64_t c = 0; c < chunks; ++c) {
 #pragma unroll
       for (int w = 0; w < RATE_WORDS; ++w) vals[w] = nxt[w] ^ s[w];
-      if (c + 1 < chunks) slot_load(CHUNK_AT(h, c + 1), nxt);
+      if (c + 1 < chunks) {
+        if (fused_x && (c + 1) * RATE_WORDS < xwords) x_chunk_load(CHUNK_AT(h, c + 1), xrow, c + 1, xwords, nxt);
+        else slot_load(CHUNK_AT(h, c + 1), nxt);
+      }
       slot_store(CHUNK_AT(h, c), vals);
       if (next) absorb_chunk(t, vals, c, hw, full, tail, carry);
       if (c + 1 < chunks && next) keccak_f_pair(s, t);
@@ -948,7 +968,20 @@ __global__ void feistel_split_kernel(uint64_t* st_words, int64_t pitch, int64_t 
 // Π₂ (untweaked Feistel-10, domain `domain`) on rows `row0 .. row0 + rows` of a chunk-major state (`feistel_chunked_kernel`):
 // `state` is int64 `[2, nch, pitch, SLOT_WORDS]` for halves of `hw` words.
 void feistel_chunked(torch::Tensor state, int64_t row0, int64_t rows, int64_t hw, int64_t domain, int64_t threads,
-                     bool specialize, bool split) {
+                     bool specialize, bool split, c10::optional<torch::Tensor> xsrc, c10::optional<torch::Tensor> xidx) {
+  const uint64_t* xs = nullptr;
+  const int64_t* xi = nullptr;
+  int64_t xwords = 0;
+  if (xsrc.has_value()) {
+    TORCH_CHECK(!split, "the fused parent read is not in the split kernel");
+    TORCH_CHECK(xsrc->is_cuda() && xsrc->scalar_type() == torch::kUInt8 && xsrc->is_contiguous() && xsrc->dim() == 2 &&
+                xsrc->size(1) % 8 == 0 && xsrc->size(1) / 8 <= hw, "xsrc must be contiguous uint8 [rows, 8k]");
+    TORCH_CHECK(xidx.has_value() && xidx->is_cuda() && xidx->scalar_type() == torch::kInt64 && xidx->is_contiguous() &&
+                xidx->numel() == state.size(2), "xidx must be int64 with one entry per state row");
+    xs = reinterpret_cast<const uint64_t*>(xsrc->data_ptr<uint8_t>());
+    xi = xidx->data_ptr<int64_t>();
+    xwords = xsrc->size(1) / 8;
+  }
   TORCH_CHECK(state.is_cuda() && state.scalar_type() == torch::kInt64 && state.is_contiguous() && state.dim() == 4 &&
               state.size(0) == 2 && state.size(3) == SLOT_WORDS && state.size(1) == (hw + RATE_WORDS - 1) / RATE_WORDS &&
               reinterpret_cast<uintptr_t>(state.data_ptr<int64_t>()) % 16 == 0,
@@ -964,9 +997,11 @@ void feistel_chunked(torch::Tensor state, int64_t row0, int64_t rows, int64_t hw
     feistel_split_kernel<<<(unsigned)((2 * rows + threads - 1) / threads), (unsigned)threads, 0, stream>>>(
         words, state.size(2), row0, rows, (int)domain);
   } else if (specialize && hw == 8196)
-    feistel_chunked_kernel<8196><<<blocks, (unsigned)threads, 0, stream>>>(words, state.size(2), row0, rows, hw, (int)domain);
+    feistel_chunked_kernel<8196><<<blocks, (unsigned)threads, 0, stream>>>(words, state.size(2), row0, rows, hw, (int)domain,
+                                                                            xs, xi, xwords);
   else
-    feistel_chunked_kernel<0><<<blocks, (unsigned)threads, 0, stream>>>(words, state.size(2), row0, rows, hw, (int)domain);
+    feistel_chunked_kernel<0><<<blocks, (unsigned)threads, 0, stream>>>(words, state.size(2), row0, rows, hw, (int)domain, xs,
+                                                                         xi, xwords);
   C10_CUDA_KERNEL_LAUNCH_CHECK();
 }
 
@@ -1245,7 +1280,8 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
         pybind11::arg("row0"), pybind11::arg("src"), pybind11::arg("index"), pybind11::arg("words"));
   m.def("feistel_chunked", &feistel_chunked, "Π₂ on rows of a chunk-major state", pybind11::arg("state"), pybind11::arg("row0"),
         pybind11::arg("rows"), pybind11::arg("hw"), pybind11::arg("domain"), pybind11::arg("threads") = 128,
-        pybind11::arg("specialize") = true, pybind11::arg("split") = false);
+        pybind11::arg("specialize") = true, pybind11::arg("split") = false, pybind11::arg("xsrc") = pybind11::none(),
+        pybind11::arg("xidx") = pybind11::none());
   m.def("feistel_rows", &feistel_rows, "Feistel-10 in place, SHAKE256 round functions under a domain byte and per-row tweak",
         pybind11::arg("x"), pybind11::arg("tweak"), pybind11::arg("domain"), pybind11::arg("inverse"), pybind11::arg("thread_rows") = 0,
         pybind11::arg("word_io") = false, pybind11::arg("fused") = false, pybind11::arg("pair") = false,
