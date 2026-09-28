@@ -93,6 +93,9 @@ def test_the_dependencies_are_kept_by_manifest_and_toolchain(tmp_path, monkeypat
     (root / "pkg/b/lean-audit.json").write_text("{}")
     _run(tmp_path, 1)
     assert (tmp_path / "cache" / "lean-deps" / k / "dep" / "built").exists()   # moved back after the run
+    (root / "pkg/a/lean-audit.json").write_text(json.dumps({"reads": ["nowhere.txt"]}))     # a fails its audit this time
+    rc, ran, _doc = _run(tmp_path, 2)
+    assert rc == 1 and "pkg/a warm" in ran and not (tmp_path / "cache" / "lean-deps" / k).exists()   # dropped, not kept
     (root / "pkg/a/lean-toolchain").write_text("v2\n")
     assert LA.deps_key(root / "pkg/a") != k
 

@@ -14,8 +14,10 @@ When one package misses, the audit runs on a scratch tree holding only the misse
 stored under its key, and a failure is never stored.
 
 A package's fetched dependencies (`.lake/packages`: Mathlib's cache, ArkLib's build) are kept on this machine under
-`lake-manifest.json` plus `lean-toolchain`. They're moved into the scratch package before its build and back afterwards, so Lake
-rebuilds nothing it built in an earlier run. The audit's `dependencies` check still compares their `.olean` files with the
+`lake-manifest.json` plus `lean-toolchain`. They're moved into the scratch package's own `.lake` before its build (the only place
+its sandbox lets it write, never a shared symlink) and back afterwards only when that package's audit passed; after a failure
+they're dropped, so a run's compile-time code cannot leave the next run a cache it wrote. Lake rebuilds nothing it built in an
+earlier passing run. The audit's `dependencies` check still compares their `.olean` files with the
 package's record, and the kernel replay still covers the package's own modules. Lean gets this machine's CPUs
 (`LEAN_NUM_THREADS`): inside a pod, its default counts the host's.
 """
@@ -128,10 +130,12 @@ class WarmDeps:
                 log(f"lean-audit: {pkg.name}: dependencies cold ({k[:12]})")
         self.held[pkg] = self.store / k
 
-    def give_back(self) -> None:
+    def give_back(self, passed: set[Path]) -> None:
+        """Keep the dependencies of the packages whose audit passed (their imported `.olean` files matched the record), and
+        drop the others': a run's compile-time code may write in them, so only a passing audit vouches for what comes back."""
         for pkg, home in self.held.items():
             src = pkg / ".lake" / "packages"
-            if not src.is_dir():
+            if not src.is_dir() or pkg not in passed:
                 continue
             with self._lock(home.name):
                 if home.exists():
@@ -179,6 +183,7 @@ def run(out: Path, cache: Path, deps: Path, fresh: bool = False, log=print) -> i
         deps.mkdir(parents=True, exist_ok=True)
         work = Path(tempfile.mkdtemp(prefix="lean-audit-scratch-", dir=deps.parent))    # beside the dependencies: moves, not copies
         warm = WarmDeps(deps)
+        passed: set[Path] = set()
         try:
             union = sorted({f for p in missed for f in inputs(p, files)})
             scratch_tree(work, union)
@@ -204,8 +209,9 @@ def run(out: Path, cache: Path, deps: Path, fresh: bool = False, log=print) -> i
                     os.replace(tmp, cache / f"{keys[p]}.json")
             if r.returncode not in (0, 1) and not failed:
                 failed = [f"audit.py exit {r.returncode}"]
+            passed = {work / p for p, rep in reports.items() if controls_ok and not rep.get("failures")}
         finally:
-            warm.give_back()
+            warm.give_back(passed)
             shutil.rmtree(work, ignore_errors=True)
     failed += [p for p in pkgs if p not in reports and p not in failed]
     (out / "audit.json").write_text(json.dumps({"passed": not failed, "failed": failed, "cached": cached,
