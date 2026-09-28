@@ -377,6 +377,8 @@ def test_a_definition_past_the_reference_bound_is_its_row_kernels_alone(dense, m
     assert len(com.errors) == 1 + T and all(f"the row kernel of Gemm_v1{{K={H},N={V}}} declines an instance" in e for e in com.errors)
     assert com.acquired and not any(n.startswith("logits_processor") for _s, n, _t in com.acquired)
     monkeypatch.setattr(CP, "REFERENCE_LEAVES", 12)
+    from verity_vllm.program.kernels import kernel_registry
+    monkeypatch.delitem(kernel_registry._REGISTERED, ("Bf16DivScalar_v1", "rows"))
     why = " ".join(CB.plan_of(dense.man, dense.pdir).uncovered)
     assert "Bf16DivScalar_v1" in why and "past the reference's bound, and no rows kernel registered" in why
 
