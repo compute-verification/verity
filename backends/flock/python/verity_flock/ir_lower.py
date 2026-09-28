@@ -59,14 +59,15 @@ def _bf16_add(nan):
     return lambda C, a, b: fp.f32_to_bf16(C, fp.f32_add(C, fp.bf16_to_f32(a), fp.bf16_to_f32(b)), nan)
 
 
-def _f32_div(C, a, b):
-    """``F32Div_v1``: a multiply by the exact reciprocal for a constant power-of-two divisor, else the divider."""
+def _f32_div(C, a, b, **nan):
+    """``F32Div_v1`` (``ir_nan=True``) or ``_v2`` (``nan_word=F32_NAN_PTX``): a multiply by the exact reciprocal for a constant
+    power-of-two divisor, else the divider."""
     if all(w.is_const() for w in b):
         k = sum(w.c << i for i, w in enumerate(b))
         e, m = (k >> 23) & 0xFF, k & 0x7FFFFF
         if not m and 1 <= e <= 253:
-            return fp.f32_mul(C, a, fp.f32_const((k & 0x80000000) | ((254 - e) << 23)), ir_nan=True)
-    return fp.f32_div(C, a, b, ir_nan=True)
+            return fp.f32_mul(C, a, fp.f32_const((k & 0x80000000) | ((254 - e) << 23)), **nan)
+    return fp.f32_div(C, a, b, **nan)
 
 
 #: primitive id -> piece(C, *operand words) -> output word
@@ -77,7 +78,11 @@ PIECES: dict[str, Callable] = {
     "F32Add_v1": partial(fp.f32_add, ir_nan=True),
     "F32Mul_v1": partial(fp.f32_mul, ir_nan=True),
     "F32Fma_v1": fp.f32_fma,
-    "F32Div_v1": _f32_div,
+    "F32Div_v1": partial(_f32_div, ir_nan=True),
+    "F32Add_v2": partial(fp.f32_add, nan_word=fp.F32_NAN_PTX),
+    "F32Mul_v2": partial(fp.f32_mul, nan_word=fp.F32_NAN_PTX),
+    "F32Fma_v2": partial(fp.f32_fma, nan_word=fp.F32_NAN_PTX),
+    "F32Div_v2": partial(_f32_div, nan_word=fp.F32_NAN_PTX),
     "Bf16Add_v1": _bf16_add(NAN_TORCH),
     "Bf16AddF2fp_v1": _bf16_add(NAN_F2FP),
     "RopeOut_v1": _rope_out,

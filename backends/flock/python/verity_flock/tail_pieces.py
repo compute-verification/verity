@@ -338,6 +338,39 @@ def div_full_scale_a(C, a, b):
                mux(C, small, fp.f32_mul(C, a, fp.f32_const(TWO24), ir_nan=True), list(a)))
 
 
+# --- the `_v2` FP32 primitives: every NaN result the GPU's 0x7FFFFFFF (fp.F32_NAN_PTX), no operand's payload or sign ----------
+_V2 = {"nan_word": fp.F32_NAN_PTX}
+
+
+def f32_add_ftz_v2(C, a, b):
+    return ftz(C, fp.f32_add(C, ftz(C, a), ftz(C, b), **_V2))
+
+
+def f32_sub_ftz_v2(C, a, b):
+    return ftz(C, fp.f32_sub(C, ftz(C, a), ftz(C, b), **_V2))
+
+
+def f32_mul_ftz_v2(C, a, b):
+    return ftz(C, fp.f32_mul(C, ftz(C, a), ftz(C, b), **_V2))
+
+
+def f32_fma_ftz_v2(C, a, b, c):
+    return ftz(C, fp.f32_fma(C, ftz(C, a), ftz(C, b), ftz(C, c), **_V2))
+
+
+def f32_fma_sub_ftz_v2(C, a, b, c):
+    return ftz(C, fp.f32_fma(C, ftz(C, a), ftz(C, b), fp.f32_neg(ftz(C, c)), **_V2))
+
+
+def div_full_scale_a_v2(C, a, b):
+    """``DivFullScaleA_v2``: as ``_v1``, each scaling FMUL's NaN 0x7FFFFFFF; an unscaled a (a NaN included) passes through."""
+    mag = b[:31]
+    big = C.AND(NOT(_ult_const(C, mag, 0x7E800001)), _ult_const(C, mag, 0x7F800001))
+    small = _ult_const(C, mag, 0x00800000)
+    return mux(C, big, fp.f32_mul(C, a, fp.f32_const(QUARTER), **_V2),
+               mux(C, small, fp.f32_mul(C, a, fp.f32_const(TWO24), **_V2), list(a)))
+
+
 # --- the sampler: Philox, the Gumbel noise (libdevice logf / log1pf), the row's bit logic -----------------------------------
 
 PHILOX_KEY_A, PHILOX_KEY_B = 0x9E3779B9, 0xBB67AE85
@@ -639,6 +672,14 @@ PIECES = {
     "F32ToE4m3Sat_v1": f32_to_e4m3_sat,
     "F32Sub_v1": fp.f32_sub,
     "F32FmaRm_v1": lambda C, a, b, c: fp.f32_fma(C, a, b, c, rm=True),
+    "F32AddFtz_v2": f32_add_ftz_v2,
+    "F32SubFtz_v2": f32_sub_ftz_v2,
+    "F32MulFtz_v2": f32_mul_ftz_v2,
+    "F32FmaFtz_v2": f32_fma_ftz_v2,
+    "F32FmaSubFtz_v2": f32_fma_sub_ftz_v2,
+    "DivFullScaleA_v2": div_full_scale_a_v2,
+    "F32Sub_v2": lambda C, a, b: fp.f32_sub(C, a, b, **_V2),
+    "F32FmaRm_v2": lambda C, a, b, c: fp.f32_fma(C, a, b, c, rm=True, **_V2),
     "F32Sat_v1": f32_sat,
     "F32BitsShl23_v1": lambda C, a: [ZERO] * 23 + list(a[:9]),
     "F32IsFinite_v1": lambda C, a: [NOT(and_reduce(C, a[23:31]))],
