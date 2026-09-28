@@ -1126,14 +1126,17 @@ theorem tablesAtZK_eq {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : F
   rw [tableAtZK, dif_pos ⟨y⟩]
   exact tableZK_eq _ _
 
-/-- **The inner relation at a `--zk` table of a setup** (`innerOf_holds` at any table `Tz` over `st`'s statement at its
-regions, `st` a `MaskSetup` that avoids the mask slot): at every coin vector the honest prover doesn't refuse, every valid
-witness whose registered values are the public ones satisfies `Table.InnerHolds`. -/
-theorem innerOf_holds_of (Tz : TabZK FlockLevel3.GF128 mPts) (st : Stmt) (hwf : StmtWF st) (hS : Tz.S = stmtOf st hwf (regionsOf st))
-    (M : MaskSetup st) (hdm : avoidsMask st = true) :
+/-- **The inner relation at one rep of a `--zk` table of a setup** (`innerOf_holds_of` at rep `r`): at every coin vector
+whose rep-`r` outer coins aren't `1` (`Admits`' last clause at `r`, the only part of `Admits` rep `r`'s constraint
+reads), every valid witness whose registered values are the public ones satisfies rep `r`'s batched constraint at every
+draw. -/
+theorem innerOf_holds_rep_of (Tz : TabZK FlockLevel3.GF128 mPts) (st : Stmt) (hwf : StmtWF st)
+    (hS : Tz.S = stmtOf st hwf (regionsOf st)) (M : MaskSetup st) (hdm : avoidsMask st = true) :
     let C := coinedOf P Tz st
-    ∀ c, C.Admits c → ∀ w, C.Valid w → (C.T c).tab.sReg w = (C.T c).tab.pubReg → (C.T c).tab.InnerHolds w := by
-  intro C c hc w hw hreg ω r
+    ∀ c (r : Fin 2), (∀ x ∈ C.rOuter c r, x ≠ 1) → ∀ w, C.Valid w → (C.T c).tab.sReg w = (C.T c).tab.pubReg →
+      ∀ ω, ∑ i, (C.T c).tab.lam r ((C.T c).tab.view w ω).pre i * (C.T c).tab.hFull (ω.2.2.1 r) i =
+        (C.T c).tab.theta r ((C.T c).tab.view w ω).pre := by
+  intro C c r hr w hw hreg ω
   apply batch_of_rows
   intro k
   have hE : (layOf (Tz) st).hab = (C.T c).tab.nE := by
@@ -1234,7 +1237,7 @@ theorem innerOf_holds_of (Tz : TabZK FlockLevel3.GF128 mPts) (st : Stmt) (hwf : 
     · exact absurd h2r ‹_›
   rw [hv, hinner]
   refine rows_honest (Tz) st c r (zWith st w ω.1) (ω.2.1.2.1 r) _ hE hmS hkS ?hw
-    (rF_ne_one _ _ c r (hc.2.2.2 r)) ?hA ?hB _ hs0 hs1 ?hk0 ?hL ?hT ((C.T c).tab.y1' w ω.1 ω.2.1.2.1 r)
+    (rF_ne_one _ _ c r hr) ?hA ?hB _ hs0 hs1 ?hk0 ?hL ?hT ((C.T c).tab.y1' w ω.1 ω.2.1.2.1 r)
     (fun _ => rfl) hab htw' k
   -- the executable statement's sizes are the table's, and the schedule's lane split
   case hk0 =>
@@ -1323,6 +1326,15 @@ theorem innerOf_holds_of (Tz : TabZK FlockLevel3.GF128 mPts) (st : Stmt) (hwf : 
       (fun k y' => Model.phi execArith (fun i => fOf (c.rest.rpp r k i))
         (Model.eqAt (claimX (Tz) st c r k.val) y'))
 
+/-- **The inner relation at a `--zk` table of a setup** (`innerOf_holds` at any table `Tz` over `st`'s statement at its
+regions, `st` a `MaskSetup` that avoids the mask slot): at every coin vector the honest prover doesn't refuse, every valid
+witness whose registered values are the public ones satisfies `Table.InnerHolds`. -/
+theorem innerOf_holds_of (Tz : TabZK FlockLevel3.GF128 mPts) (st : Stmt) (hwf : StmtWF st) (hS : Tz.S = stmtOf st hwf (regionsOf st))
+    (M : MaskSetup st) (hdm : avoidsMask st = true) :
+    let C := coinedOf P Tz st
+    ∀ c, C.Admits c → ∀ w, C.Valid w → (C.T c).tab.sReg w = (C.T c).tab.pubReg → (C.T c).tab.InnerHolds w := by
+  intro C c hc w hw hreg ω r
+  exact innerOf_holds_rep_of P Tz st hwf hS M hdm c r (hc.2.2.2 r) w hw hreg ω
 
 /-- **The inner relation at the draw** (open, inner lane): at every coin vector the honest prover doesn't refuse, every
 valid witness whose registered values are the public ones satisfies `Table.InnerHolds` (§2.4 line 16's ten

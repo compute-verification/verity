@@ -67,7 +67,7 @@ def _tree(tmp: Path, monkeypatch) -> Path:
     root = tmp / "repo"
     files = {
         "tools/verity/lean/check.py": FAKE_AUDIT, "tools/verity/lean/README.md": "", "tools/verity/lean/tests/fixtures/control.lean": "",
-        "tools/verity/lean/lean_audit.py": "", "tools/verity/check/common.py": "", "tools/verity/check/check.py": "",
+        "tools/verity/lean/lean_audit.py": "", "tools/verity/lean/lean-deps.json": "{}", "tools/verity/check/common.py": "", "tools/verity/check/check.py": "",
         "pkg/a/lakefile.toml": "", "pkg/a/lean-toolchain": "v1\n", "pkg/a/A.lean": "theorem a : True := trivial\n",
         "pkg/a/lake-manifest.json": json.dumps({"packages": [{"name": "dep", "type": "git", "rev": "abc"}]}),
         "pkg/a/lean-audit.json": "{}",
@@ -206,11 +206,13 @@ def test_a_package_that_may_read_beyond_its_directory_is_keyed_by_its_path(tmp_p
 
 def test_the_controls_and_the_docs_are_no_input(tmp_path, monkeypatch):
     """b201 (r20261004-150518-b201) audited all 8 packages again, 69 min, partly on edits to `tools/verity/lean/README.md` and
-    `tools/verity/lean/tests/`, which no audit reads. They stay out of the scratch tree too, so an audit that read one would fail."""
+    `tools/verity/lean/tests/`, which no audit reads, and so is the pin file `lean-deps.json` (preflight's, read before the
+    audit). They stay out of the scratch tree too, so an audit that read one would fail."""
     root = _tree(tmp_path, monkeypatch)
     (root / "pkg/b/lean-audit.json").write_text("{}")
     assert _run(tmp_path, 1)[0] == 0
     (root / "tools/verity/lean/README.md").write_text("reworded\n")
+    (root / "tools/verity/lean/lean-deps.json").write_text('{"deps": {"k": {}}}')
     (root / "tools/verity/lean/tests/fixtures/control.lean").write_text("theorem c : True := trivial\n")
     rc, ran, doc = _run(tmp_path, 2)
     assert rc == 0 and ran == [] and sorted(doc["cached"]) == ["pkg/a", "pkg/b"]

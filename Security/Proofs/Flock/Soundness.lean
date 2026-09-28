@@ -140,6 +140,7 @@ import Proofs.Flock.Soundness.ZK.Adaptivity
 import Proofs.Flock.Soundness.ZK.CoinBinding
 import Proofs.Flock.Soundness.ZK.Complete
 import Proofs.Flock.Soundness.ZK.Hiding
+import Proofs.Flock.Soundness.ZK.HidingAdaptive
 import Proofs.Flock.Soundness.ZK.RealLeaves
 import Proofs.Flock.Soundness.ZK.Session
 import Proofs.Flock.Soundness.ZK.AdaptivePrefinal
@@ -156,6 +157,7 @@ import Proofs.Flock.Soundness.Discharge.ZkLink
 import Proofs.Flock.Soundness.Discharge.ZkBind
 import Proofs.Flock.Soundness.Discharge.DecodeZL
 import Proofs.Flock.Soundness.Discharge.ZkView
+import Proofs.Flock.Soundness.Discharge.ZkView.OsSalts
 import Proofs.Flock.Soundness.Discharge.DrawWords
 import Proofs.Flock.Soundness.Discharge.PlaysCoin
 import Proofs.Flock.Soundness.Discharge.ZkExec

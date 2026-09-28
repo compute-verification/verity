@@ -70,13 +70,15 @@ def pool() -> tuple[list, list, list, list]:
     """(transcripts the contract accepts under the honest public input, the others, public inputs, ones that don't
     decode): the honest public input first."""
     FA = R.firewall_agree()
-    # every case under the honest case's challenger, so that one public input holds every session's commitments
+    # every case on the honest case's coins and challenger's salts, so that the committed cases share one public input
     sessions = [(FA.run_case(n, r, p, f, rand=FA._rand(b"honest"), coin_salt=FA._salts(b"challenger:honest"), challenger=c), e)
                 for n, r, p, f, e, c in FA.cases()]
     leaks = FA.leaks()
-    honest = [s.transcript() for s, e in sessions if e["lean"]]
-    others = [s.transcript() for s, e in sessions if not e["lean"]] + [t for _, t, _, _ in leaks]
-    h, pub = honest[0], sessions[0][0].public()
+    pub = sessions[0][0].public()
+    accepted = [e["lean"] and s.public() == pub for s, e in sessions]
+    honest = [s.transcript() for (s, _), a in zip(sessions, accepted) if a]
+    others = [s.transcript() for (s, _), a in zip(sessions, accepted) if not a] + [t for _, t, _, _ in leaks]
+    h = honest[0]
     others += [{"kind": "nope"}, {k: v for k, v in h.items() if k != "items"}, h | {"items": [7]},
                h | {"tape": {"pads": [], "salts": ["zz"]}}, 7, []]
     pubs = list({D.canonical(p): p for p in [pub] + [p for _, _, p, _ in leaks]}.values())
