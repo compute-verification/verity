@@ -221,6 +221,26 @@
    "assumptions": [],
    "type_hash": "000000001b21e2ca"
   },
+  "FlockSoundness.ZK.coin_opening_binding_keyed": {
+   "signature": [
+    "FlockSoundness.ZK.coin_opening_binding_keyed {D Coin Salt : Type} (H : List UInt8 → D)",
+    "  (E : FlockSoundness.ZK.CoinEnc D Coin Salt) (ν : List UInt8) (mix : D → Salt → D)",
+    "  (hmix : ∀ (y : Salt), Function.Injective fun x => mix x y) (chainTag roundTag pos lp sp : List UInt8) (root : D)",
+    "  (idx : ℕ) (cs cs' : List Coin) (Tn Tn' : D) (y y' : Salt) (sibs sibs' : List D) (hlen : cs.length = cs'.length)",
+    "  (hne : cs ≠ cs') (hsibs : sibs.length = sibs'.length) (MerkleE : FlockSoundness.Merkle.Enc Unit D)",
+    "  (h :",
+    "    FlockSoundness.Merkle.walk (fun m => H (ν ++ₕ m)) MerkleE idx",
+    "        (FlockSoundness.ZK.coinLeaf (fun m => H (ν ++ₕ m)) E mix chainTag roundTag pos lp sp Tn cs y) sibs =",
+    "      root)",
+    "  (h' :",
+    "    FlockSoundness.Merkle.walk (fun m => H (ν ++ₕ m)) MerkleE idx",
+    "        (FlockSoundness.ZK.coinLeaf (fun m => H (ν ++ₕ m)) E mix chainTag roundTag pos lp sp Tn' cs' y') sibs' =",
+    "      root) :",
+    "  ∃ m m', m ≠ m' ∧ H (ν ++ₕ m) = H (ν ++ₕ m')"
+   ],
+   "assumptions": [],
+   "type_hash": "0000000029cf704f"
+  },
   "FlockSoundness.ZK.gk_ratio_le_third": {
    "signature": [
     "FlockSoundness.ZK.gk_ratio_le_third (p : ℝ) (hp1 : p ≤ 1) : 3 * (p * (1 - p / 2) ^ 4) ≤ 1 - (1 - p) * (1 - p / 2) ^ 4"
@@ -843,6 +863,7 @@
    "pins": [
     "FlockSoundness.Merkle.opening_binding",
     "FlockSoundness.ZK.coin_opening_binding",
+    "FlockSoundness.ZK.coin_opening_binding_keyed",
     "FlockSoundness.table_sound_compiled"
    ]
   },
@@ -1114,7 +1135,7 @@
     "FlockSoundness.ZK.chainTop": "36060f6fb53d446b",
     "FlockSoundness.ZK.coinLeaf": "a9b43e35d9ec4419"
    },
-   "pins": ["FlockSoundness.ZK.coin_opening_binding"]
+   "pins": ["FlockSoundness.ZK.coin_opening_binding", "FlockSoundness.ZK.coin_opening_binding_keyed"]
   },
   "FlockSoundness.ZK.Masking": {
    "digest": "a85b27f6b49288a085d1c5c6976cab6a",

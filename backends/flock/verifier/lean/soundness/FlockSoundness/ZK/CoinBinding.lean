@@ -104,4 +104,23 @@ theorem coin_opening_binding (mix : D → Salt → D) (hmix : ∀ y, Function.In
   · -- the leaves differ but the walks meet: a node collides
     exact walk_binding H MerkleE sibs sibs' idx _ _ hsibs hleaf (h.trans h'.symm)
 
+/-- **T6 for the keyed coin tree, `coin-tree/hm96-sha512/v2`** (`docs/coin-tree-v2.md` in the Project store). Every hash of
+the v2 tree is SHA-512 of the prover's session nonce `ν` followed by v1's input, so v2 is this file's model with the hash
+`fun m => H (ν ++ m)`. If two openings of one position, with equally many coins and a coin on which they disagree, both walk
+to one root, then `H` has a collision under the prefix `ν`: `m ≠ m'` with `H (ν ++ m) = H (ν ++ m')`. `lp` and `mix` stand
+for the verifier's session key, any key; the two openings share it, as the key comes with the root, before any coin. -/
+theorem coin_opening_binding_keyed (ν : List UInt8) (mix : D → Salt → D) (hmix : ∀ y, Function.Injective (fun x => mix x y))
+    (chainTag roundTag pos lp sp : List UInt8) (root : D) (idx : ℕ)
+    (cs cs' : List Coin) (Tn Tn' : D) (y y' : Salt) (sibs sibs' : List D)
+    (hlen : cs.length = cs'.length) (hne : cs ≠ cs') (hsibs : sibs.length = sibs'.length)
+    (MerkleE : Enc Unit D)
+    (h : walk (fun m => H (ν ++ m)) MerkleE idx
+      (coinLeaf (fun m => H (ν ++ m)) E mix chainTag roundTag pos lp sp Tn cs y) sibs = root)
+    (h' : walk (fun m => H (ν ++ m)) MerkleE idx
+      (coinLeaf (fun m => H (ν ++ m)) E mix chainTag roundTag pos lp sp Tn' cs' y') sibs' = root) :
+    ∃ m m' : List UInt8, m ≠ m' ∧ H (ν ++ m) = H (ν ++ m') := by
+  obtain ⟨m, m', hne', heq⟩ := coin_opening_binding (fun m => H (ν ++ m)) E mix hmix chainTag roundTag pos lp sp root idx
+    cs cs' Tn Tn' y y' sibs sibs' hlen hne hsibs MerkleE h h'
+  exact ⟨m, m', hne', heq⟩
+
 end FlockSoundness.ZK
