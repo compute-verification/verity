@@ -1,0 +1,27 @@
+{
+ "roots": ["NetworkCheck"],
+ "exempt": {
+  "NetworkCheck.DifftestMain": "the difftest against certificate.py, under `runs`: compiled evaluation of NetworkCheck.Difftest.main, audited under NetworkCheck, a test and not a proof"
+ },
+ "runs": {
+  "NetworkCheck.DifftestMain": {
+   "why": "2,000 random instances on which NetworkCheck.Certificate gives what verity/experimental/protocols/certifier/certificate.py gives, byte for byte: depth, E_0 … E_D, real_frames, frame_leaf, frames_root, open_frame, verify_frame on openings and tampered ones, parameters_digest and its canonical JSON, record_head and RecordHead's encoding and digest, certificate_message and node, with each ValueError a refusal",
+   "args": ["{difftest/instances.jsonl}", "{difftest/python.jsonl}", "2000"],
+   "data": {
+    "difftest/instances.jsonl": "14d0e95610f1801ff19d7c90c4b5c0cdff601921eb8d980f0bbf8e54ae2736dc",
+    "difftest/python.jsonl": "2f4e531f3b962cc95fc5f9d798648b0022840f9309c09f1554cc6ec3c63ec250"
+   },
+   "generate": ["python3", "scripts/difftest_vectors.py", "{repo}", "--out", "{out}"]
+  }
+ },
+ "layers": {
+  "NetworkCheck.Certificate": {
+   "imports": ["Flock.Hash", "Flock.Bytes", "Flock.Canon"],
+   "except": [],
+   "why": "the encodings are code: Lean core and C-Flock's hashes, bytes and canonical JSON only, no Mathlib and nothing of Security"
+  }
+ },
+ "dependencies": {
+  "toolchain": "e16fb11255b56483f31d77272ec1ba8ef5aac027c8f7eab845542983b9840af9"
+ }
+}

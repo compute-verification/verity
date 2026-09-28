@@ -160,7 +160,7 @@ ml.randomness, ml.crypto, experimental.claims: import no other module of verity
 
 `tests/test_boundaries.py` enforces these rules. Import each object from the module that owns it (`from verity.ml.circuits import Program`); `verity` itself re-exports nothing.
 
-There is no GitHub Actions CI. `check` is the one check, and a merge into `main` goes through `research merge`, which refuses without a passing `check` of that exact commit. [AGENTS.md](AGENTS.md) has the full rules for contributors and agents: commands, circuits, checking and merging, Lean, and where writing goes.
+There is no GitHub Actions CI. `check` is the one check, and `main` always passes it, kept fast by reusing a part's verdict while its declared inputs are unchanged. Until that reuse exists, a change lands once the parts it touches pass, and a full `check` of `main` follows; a landing it fails is reverted at once. [AGENTS.md](AGENTS.md) has the full rules for contributors and agents: commands, circuits, checking and merging, Lean, and where writing goes.
 
 ## Documentation
 
