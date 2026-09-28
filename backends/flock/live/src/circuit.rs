@@ -61,6 +61,20 @@ pub const IN_RANGE_REGIONS: usize = 1024;
 pub const IN_RANGE_M_PTS: usize = 64;
 pub const M_MAX: usize = 35;
 
+/// A range of a `2^k_log`-bit block, checked before any shift by its `slot_log`: its slots at least one 128-bit word and at
+/// most the block, and all of them inside the block (`pos0 + count <= 2^(k_log - slot_log)`, as the Lean check's unbounded
+/// arithmetic requires).
+pub fn range_in_block(k_log: usize, r: &Range) -> Result<(), String> {
+    if !(7..=k_log).contains(&r.slot_log) {
+        return Err(format!("slot_log {} is not in [7, k_log = {k_log}]", r.slot_log));
+    }
+    let slots = 1usize << (k_log - r.slot_log);
+    if r.pos0 > slots || r.count > slots - r.pos0 {
+        return Err(format!("slots [{}, {} + {}) are not inside the block's {slots}", r.pos0, r.pos0, r.count));
+    }
+    Ok(())
+}
+
 /// A circuit file's block, before its regions are built from it: the block size (`Stmt.InRange`), the hm96 slots' size
 /// (at least one 128-bit word, at most the block) and the pinned constant's column inside the block.
 pub fn block_in_range(k_log: usize, hm_slot_log: usize, pin: usize) -> Result<(), String> {
@@ -510,6 +524,14 @@ impl Composite {
     /// The layout's shape: aligned, disjoint ranges inside the block; the comp ranges' roles cover every run and parent of
     /// every VU exactly once; the unit ranges hold `g x units_per_vu` units whose leaf maps are the unit's expanded circuit's ports.
     fn check(&self) -> Result<(), String> {
+        // first, before anything shifts by them (as HmRow.check): the block and every range's slots bounded, so an empty packed
+        // range can't carry an oversized slot_log and no shift or span below overflows
+        if !(7..=IN_RANGE_K_LOG).contains(&self.k_log) {
+            return Err(format!("k_log {}: not in [7, {IN_RANGE_K_LOG}] (Stmt.InRange)", self.k_log));
+        }
+        for (i, r) in self.ranges.iter().enumerate() {
+            range_in_block(self.k_log, r).map_err(|e| format!("range {i}: {e}"))?;
+        }
         let mut spans: Vec<(usize, usize)> = Vec::new();
         for r in &self.ranges {
             let (span, align) = if r.packed { (r.count << r.slot_log, 1 << r.slot_log) } else { (r.count.next_power_of_two() << r.slot_log, r.count.next_power_of_two() << r.slot_log) };
@@ -1885,6 +1907,21 @@ mod tests {
         assert!(block_in_range(20, 7, 0).is_ok() && block_in_range(20, 20, 0).is_ok());
         assert!(block_in_range(20, 6, 0).unwrap_err().contains("hm96"));
         assert!(block_in_range(20, 21, 0).unwrap_err().contains("hm96"));
+    }
+
+    #[test]
+    fn every_range_slot_log_and_slots_are_bounded_before_any_shift() {
+        let r = |slot_log: usize, pos0: usize, count: usize, packed: bool| Range { kind: Kind::Mask, slot_log, pos0, count, packed };
+        assert!(range_in_block(20, &r(7, 0, 1 << 13, true)).is_ok() && range_in_block(20, &r(20, 0, 1, false)).is_ok());
+        assert!(range_in_block(20, &r(6, 0, 1, false)).unwrap_err().contains("slot_log"));
+        // an empty packed range with an oversized slot_log (its span is 0, so the overrun check alone passed it)
+        assert!(range_in_block(20, &r(40, 0, 0, true)).unwrap_err().contains("slot_log"));
+        // a shift of 64 or more: refused, not a panic (debug) or a wrap (release)
+        assert!(range_in_block(20, &r(64, 1, 1, false)).unwrap_err().contains("slot_log"));
+        // slots past the block, including a pos0 whose shift would drop bits
+        assert!(range_in_block(20, &r(18, 3, 2, false)).unwrap_err().contains("inside the block"));
+        assert!(range_in_block(20, &r(18, 1 << 60, 0, true)).unwrap_err().contains("inside the block"));
+        assert!(range_in_block(20, &r(18, 4, 0, true)).is_ok());
     }
 
     #[test]
