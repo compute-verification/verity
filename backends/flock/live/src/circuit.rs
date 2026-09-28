@@ -117,6 +117,25 @@ pub fn shape_in_range(m: usize, m_pts: usize) -> Result<(), String> {
     Ok(())
 }
 
+/// No slot reads one source port on two of its wired inputs (as `HmRow.wiresReadDistinct`; PROTOCOL.md §16.10).
+pub fn wires_read_distinct(wires: &[Wire]) -> Result<(), String> {
+    let mut seen = std::collections::BTreeSet::new();
+    if wires.iter().all(|w| seen.insert((w.dst.0, w.dst.1, w.src))) { Ok(()) } else { Err("a slot reads one source port on two inputs".into()) }
+}
+
+/// Unit `u`'s leaf map (`leaves`) and leaf cuts (`cuts`, `(input port, row word)`) read each row word at most once, and no leaf is
+/// a zero leaf (`-1`, whose 16 bits Δ would copy from one forced-zero row), as `HmRow.check` (PROTOCOL.md §16.10).
+pub fn unit_reads_distinct(u: usize, leaves: &[i64], cuts: &[(usize, usize)]) -> Result<(), String> {
+    if leaves.iter().any(|&x| x < 0) {
+        return Err(format!("unit {u} reads a zero leaf: a unit input reads a row word, never a constant"));
+    }
+    let mut seen = std::collections::BTreeSet::new();
+    if !leaves.iter().map(|&x| x as usize).chain(cuts.iter().map(|&(_, w)| w)).all(|w| seen.insert(w)) {
+        return Err(format!("unit {u} reads one row word on two inputs"));
+    }
+    Ok(())
+}
+
 pub const PARTITION_V1: &str = "verity/partition/v1";
 pub const PARTITION_PROVISIONAL: &str = "flock-circuit/unit-cover/v0";
 pub const SALT_BYTES: usize = 192;
@@ -602,6 +621,7 @@ impl Composite {
                 return Err(format!("circuit {nm} has {ranges} ranges, not one"));
             }
         }
+        wires_read_distinct(&self.wires)?;
         // every input port of every slot is wired exactly once: the unit's leaf ports by its leaf map, the rest by a wire
         let mut wired: BTreeMap<(usize, usize, usize), usize> = BTreeMap::new();
         for w in &self.wires {
@@ -650,6 +670,7 @@ impl Composite {
             {
                 return Err(format!("unit {u}'s leaf maps are not its circuit's ports"));
             }
+            unit_reads_distinct(u, &self.leaves_in[u], &self.leaf_cuts_of[u])?;
             for &o in &self.leaves_out[u] {
                 if o >= n_out || std::mem::replace(&mut seen_out[o], true) {
                     return Err(format!("output leaf {o} is outside the outputs or returned twice"));
@@ -1987,6 +2008,28 @@ impl Stmt {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_zero_leaf_is_refused() {
+        assert!(unit_reads_distinct(0, &[0, 1, 2], &[]).is_ok());
+        assert!(unit_reads_distinct(3, &[0, -1, 2], &[]).unwrap_err().contains("unit 3 reads a zero leaf"));
+    }
+
+    #[test]
+    fn a_unit_reading_one_row_word_twice_is_refused() {
+        assert!(unit_reads_distinct(1, &[4, 5], &[(2, 6)]).is_ok());
+        assert!(unit_reads_distinct(1, &[4, 5, 4], &[]).unwrap_err().contains("unit 1 reads one row word on two inputs"));
+        // across its leaf map and its leaf cuts
+        assert!(unit_reads_distinct(1, &[4, 5], &[(2, 5)]).unwrap_err().contains("unit 1 reads one row word on two inputs"));
+    }
+
+    #[test]
+    fn a_slot_reading_one_source_port_on_two_inputs_is_refused() {
+        let w = |dst, src| Wire { dst, src };
+        // one source into two slots, and two sources into one slot's two inputs
+        assert!(wires_read_distinct(&[w((2, 0, 1), (0, 0, 3)), w((2, 1, 1), (0, 0, 3)), w((2, 0, 2), (0, 0, 4))]).is_ok());
+        assert!(wires_read_distinct(&[w((2, 0, 1), (0, 0, 3)), w((2, 0, 2), (0, 0, 3))]).unwrap_err().contains("two inputs"));
+    }
 
     #[test]
     fn k_log_past_in_range_is_refused() {
