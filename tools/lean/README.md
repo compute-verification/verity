@@ -1,0 +1,121 @@
+# tools/lean: the Lean audit
+
+One audit for every Lake package, run by `check` (`python tools/lean/audit.py --all --build`). It needs the standard
+library, `lake` and the toolchain's `lean`; nothing here imports Verity, so another repository can copy the directory
+(`audit.py`, `Audit.lean`, `Replay.lean`, `upstream.py`, `Upstream.lean`, `setup.sh`, `tests/`) and point it at its own
+packages.
+
+~~~text
+bash tools/lean/setup.sh PKG                      elan, PKG's lean-toolchain, Mathlib's cache when Mathlib is a dependency
+python tools/lean/audit.py [--build] PKG...       audit these packages (--build: setup.sh and lake build first)
+python tools/lean/audit.py --update PKG...        write the pins' records from the build; commit the diff
+python tools/lean/audit.py --all [--root DIR]     the controls, then every package under DIR with a lean-audit.json
+python tools/lean/upstream.py PKG [--lean]        what the pinned dependencies prove about PKG's watched statements
+~~~
+
+## What it checks
+
+Every declaration of the package's audited modules (not a list of theorems), from the environment Lean builds:
+
+- only the allowed axioms (default `propext`, `Classical.choice`, `Quot.sound`): no `sorry`, no `native_decide`;
+- no `axiom` declaration: an assumption is a named `Prop`, taken as a hypothesis;
+- every declaration a proof cannot unfold (`opaque`, which a `partial def` is, `unsafe`, `@[implemented_by]`,
+  `@[extern]`) is listed with a reason;
+- every `.lean` file of the package is imported by a root, or exempt with a reason;
+- no source file or lakefile names `debug.skipKernelTC`, an option that turns proofs into `sorry`, a `bootstrap.*`
+  option, `addDeclWithoutChecking` or `addDeclCore`;
+- each `layers` rule holds: the modules under a prefix import only the listed prefixes;
+- the pinned theorems say what their records say (below);
+- no dependency the `upstream` section scans proves, at the revision `lake-manifest.json` pins, a theorem about a watched
+  statement that nobody has acknowledged (below);
+- the kernel accepts every declaration again (`Replay.lean`, on one import of the package's dependencies): a declaration
+  that skipped the kernel shows no axiom, and only the replay catches it. The replay also walks the environment it
+  checked for the axioms the package uses, and the audit fails if they differ from the sets the `.olean` files recorded.
+  No `#print axioms` output is parsed anywhere. A replay killed by a signal (out of memory) is reported as a kill, not
+  as a verdict;
+- nothing changes this directory or the toolchain's `lean`, `lake` and `leanchecker` while the audit runs: a build runs
+  arbitrary code, so the Lean files run from a copy taken before the first build, and everything is sealed and checked
+  after each package.
+
+`--fresh` also runs `leanchecker --fresh` on each root: the root's whole import closure, Mathlib and core included,
+through the kernel into an empty environment. It needs one module per root and a lot of memory, so it is not part of
+every run.
+
+`--all` first runs the controls: `tests/fixtures/control`, built with each audited package's toolchain, must pass clean
+and fail once for each violation in `tests/fixtures/violations.json`. One of them adds a false theorem through
+`debug.skipKernelTC`, spelled so that no scan finds it: it must pass every check but the replay, and fail the replay.
+
+## The policy: `lean-audit.json`, beside the lakefile
+
+~~~json
+{
+ "roots": ["Pkg"],
+ "exempt": {"Pkg.Scratch": "why nothing needs to build it"},
+ "axioms": ["Classical.choice", "Quot.sound", "propext"],
+ "assumptions": ["Pkg.Assumptions"],
+ "meaning": ["Pkg"],
+ "escapes": {"Pkg.loop": "why compiled code no proof sees is acceptable here"},
+ "layers": {"Pkg.Model": {"imports": ["Mathlib", "Pkg.Model"], "except": [], "why": "definitions import no proofs"}},
+ "pins": {"Pkg.main_theorem": {}}
+}
+~~~
+
+- `roots`: the modules the audit imports; every module under them is audited. `axioms` is optional.
+- `assumptions`: the modules whose `Prop` constants may appear as closed hypotheses of a pinned theorem.
+- `meaning` (default `roots`): the modules whose definitions a pinned statement's meaning is followed through. What a
+  statement is about (an executable, Mathlib) stays outside.
+- `pins`: the theorems a document or a PR cites as proved. `--update` fills each record, and a `reads` section, from the
+  build: the signature, the named assumptions among the hypotheses, a hash of the type, and for each module the
+  definitions the pinned statements read, with a hash each. Without `--update` the audit fails on any difference, so a
+  statement, or a definition it depends on, cannot change without a visible diff of this file. A record holds the
+  statement, not the proof: pin a `sorry` stub, and the pin passes once a proof with allowed axioms replaces it.
+
+**A changed pin needs a named statement reviewer.** A weakened definition leaves every proof valid, so the axiom checks
+and the replay pass it: only the pins see it, and only a person can judge it. (A redefinition of `Collision` once made
+a Merkle binding theorem vacuous for unsalted schemes; the pins flagged it and review caught it.) `--update` records the
+change and prints what the reviewer reads: each changed pin's signature before and after, and each changed definition a
+pin reads, with the pins that read it and its source now (also in `review.txt` among the reports). The merge handoff
+names the reviewer and the pins they read.
+
+## Noticing when a dependency proves what we assume: `upstream.py`
+
+A named assumption, or a lemma we prove by hand, may be proved upstream one day, and the proof may arrive as a different
+theorem, with a different constant, under a name nobody watches. So the watch list names what a statement is about, and
+the status comes from the dependency, not from a document. It is the `upstream` section of the package's policy:
+
+~~~json
+"upstream": {
+ "scan": {"Arklib": {"baseline": "scripts/axiom_baseline.json", "sources": ["ArkLib"]}},
+ "imports": ["ArkLib", "VCVio.CryptoFoundations.HardnessAssumptions.CollisionResistance"],
+ "watch": {
+  "A1-johnson-mca": {"about": "Assumptions.BCHKS25Thm46 (A1)",
+                     "mentions": ["CoreDefinitions.mcaError", "CoreDefinitions.AffineLineGenerator", "ReedSolomon.code"],
+                     "ack": ["ReedSolomon.mcaError_affineLine_johnson_le"]}
+ }
+}
+~~~
+
+A hit is a theorem whose statement mentions every constant under `mentions`. There are two passes.
+
+- **No build.** The pass reads each `scan` package's sources with `git show`, in its checkout under `.lake/packages/`, at
+  the pinned revision. It matches the constants' last components as words in each theorem's statement (comments aside),
+  and takes proved or not from the package's own transitive baseline. ArkLib keeps `scripts/axiom_baseline.json` current
+  with its `validate.sh --axioms` gate. The audit runs this pass for every package with an `upstream` section: a bump
+  that brings a proof about a watched statement fails the audit until the proof is acknowledged. It takes a few seconds.
+- **Exact.** `upstream.py PKG --lean` builds `imports` and runs `Upstream.lean`. That matches the constants in the
+  elaborated types of everything imported, and walks each hit's proof for its axioms. It covers packages without a
+  baseline (VCVio, CompPoly), and catches what text matching misses. Run it at a bump. The first build of all of ArkLib
+  takes a while; after that the pass takes about half a minute.
+
+A proved hit not under its entry's `ack` is new, and the exit code is 1. Someone checks whether it discharges the
+assumption or replaces the hand proof, then records it with `--ack`: the list says what has been looked at, not what was
+used. To see what upstream has proved since the pin, run `upstream.py PKG --fetch --rev origin/main`; a weekly
+`research run` of it tells us when a bump would gain something. A document's "status upstream" line cites this output
+instead of asserting a status.
+
+## Using it from another repository
+
+Copy this directory at a commit of Verity's `main` and record the commit beside it. Write a `lean-audit.json` for each
+package, run `audit.py --update` once on the trusted statements, review and commit the records, and run
+`audit.py --all --build` wherever the repository runs its checks. Build submissions from a clean tree in a sandbox:
+elaborating a Lean file runs arbitrary code, and the audit reads the `.olean` files the build wrote.
