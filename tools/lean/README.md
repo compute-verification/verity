@@ -1,6 +1,7 @@
 # tools/lean: the Lean audit
 
-One audit for every Lake package, run by `check` (`python tools/lean/audit.py --all --build`). It needs the standard
+One audit for every Lake package (`python tools/lean/audit.py --all --build`), which `check` runs on the packages whose inputs
+changed (`audit.py --build PKG...`, `tools/check/lean_audit.py`). It needs the standard
 library, `lake` and the toolchain's `lean`; nothing here imports Verity, so another repository can copy the directory
 (`audit.py`, `Facts.lean`, `Replay.lean`, `upstream.py`, `Upstream.lean`, `merge.py`, `sandbox.sh`, `setup.sh`, `tests/`) and
 point it at its own packages.
