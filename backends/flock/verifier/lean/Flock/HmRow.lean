@@ -101,6 +101,7 @@ exactly once, the leaf maps, the pinned dummy values. -/
 def check (c : Circuit) (tags : Tags) (leafScheme : Json) : V Unit := do
   let mut spans : Array (Nat × Nat) := #[]
   for r in c.ranges do
+    if r.slotLog < 7 || r.slotLog > c.kLog then throw "a range's slots are smaller than a word or larger than the block"
     let (span, align) := if r.packed then (r.count * 2 ^ r.slotLog, 2 ^ r.slotLog)
       else (nextPow2 r.count * 2 ^ r.slotLog, nextPow2 r.count * 2 ^ r.slotLog)
     if r.packed && (r.kind == Kind.net c.hmNet || r.kind == Kind.net c.outNet || r.kind == Kind.mask) then
@@ -350,13 +351,15 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
   check c tags leafScheme
   return c
 
-/-- The pinned constant column: the first slot of the first range that is not the mask. -/
-def pin (c : Circuit) : V Nat :=
-  match c.ranges.find? (·.kind != Kind.mask) with
-  | some r => match r.kind with
-    | .net i => pure (r.start + (c.nets.getD i default).2.constPos)
-    | _ => throw "no pin"
-  | none => throw "circuit: no range with a constant"
+/-- The pinned constant column: the first slot of the first range that is not the mask, a column of the block. -/
+def pin (c : Circuit) : V Nat := do
+  let p ← match c.ranges.find? (·.kind != Kind.mask) with
+    | some r => match r.kind with
+      | .net i => pure (r.start + (c.nets.getD i default).2.constPos)
+      | _ => throw "no pin"
+    | none => throw "circuit: no range with a constant"
+  if p ≥ 2 ^ c.kLog then throw "the pinned constant column is outside the block"
+  return p
 
 /-- Δ (A and B, upstream's `delta`): every slot's constant from the pin; the rows' constants (each row's first `cv` the
 prefix's midstate, its hm96 slot's `pad` the padding block: bit 1 from the pin, bit 0 from the unit range's first slot's
