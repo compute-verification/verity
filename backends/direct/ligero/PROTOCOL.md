@@ -324,7 +324,7 @@ therefore lists `assumptions = ["hash", "random-oracle (Merkle hiding)"]`.  Salt
 salt_c)`, `salt_c` uniform 32 bytes, opened with the column) would make the commitment statistically hiding and
 remove that item; cost: `+32` bytes hashed per leaf at commit (one extra Blake3 block per column, against `4 M`
 bytes of column already hashed) and `+32 t` bytes per proof in the openings (`+6.3 KB` at `t = 197`, ~0.1 % of the
-transcript) -- not implemented on this branch.
+transcript) -- not implemented.
 
 *Simulator (demonstrated: `redteam/simulator.py`, run against the real `verify()` under the real hash).*  `S`
 receives `c1, c2`, runs `V*` once on a dummy transcript: random `root0`; after `V*` opens `r1` the round-1

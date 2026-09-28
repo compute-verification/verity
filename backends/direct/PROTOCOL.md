@@ -1,6 +1,7 @@
 # B-Ligero — direct local constraints in an interactive hash-based ZK Ligero argument
 
-Status: **specification / proposed parameterisation**. Nothing here is implemented or measured. The argument is
+Status: **specification**. B-Ligero is frozen; `README.md` (the Plonky3 diagnostic) and `ligero/README.md` (the Ligero
+prover) say which parts are built and measured. The argument is
 AHIV22's interactive ZKIPCP-plus-CRH construction applied to the census constraints of one 16-product update,
 with logUp lookups (Hab22) as a second commitment round. Same tags as `backends/gkr/PROTOCOL.md`: **[source]**,
 **[derivation]**, **[proposal]**, **[assumption]**.
@@ -636,7 +637,7 @@ is unchanged (its `lt_pow` is the product form, which bounds both sides). Gate a
 | verify / proof / peak RSS | 0.425 s / 3.45 MB / 30.6 GB | 0.426 s / 3.47 MB / 30.9 GB |
 | FRI bound (166 queries, PoW 16) | 2^-128.6 proven | 2^-128.6 proven |
 
-Ledger: `reports/ledger/b-lookup.jsonl`, label `SOUNDNESS FIX: LT_DIRECT; BabyBear AIR 2^-128, B=4096`.
+Ledger: `backends/numerical/reports/ledger/b-lookup.jsonl`, label `SOUNDNESS FIX: LT_DIRECT; BabyBear AIR 2^-128, B=4096`.
 
 ## 14. Range lookups instead of 2-bit limbs: LogUp inside the AIR (b-lookup, 2026-09-22) **[implemented, diagnostic PCS]**
 
@@ -929,7 +930,7 @@ Gate run `r20260922-091130-525e` (before the p3-fri patch; the same gate is repe
 52/52 rejected in all four (field × realisation) modes; `vu-bench` 64 VUs bound in all four modes plus BabyBear^5
 LogUp and `--bind-operands` in both realisations, the wrong-word / wrong-\(B\) / substituted-table rejections
 asserted inline; `run_battery.sh` exit 0 (36 B cases 0 FORGED, A 14/14); the babybear-rules battery in `--lookup`
-mode 83/83 rejected, 87/87 controls, 6/6 extras. Records: `results/b-bind/`.
+mode 83/83 rejected, 87/87 controls, 6/6 extras.
 
 Run `r20260922-094310-af1a` (the p3-fri patch of 12.6 applied) repeated the whole gate -- identical counts, all green
 -- and then timed the LogUp realisation at 4096 VUs, bound and unbound back to back, twice, on the same box
