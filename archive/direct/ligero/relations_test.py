@@ -21,8 +21,8 @@ import pytest
 torch = pytest.importorskip("torch")
 pytest.importorskip("blake3")
 from verity.errors import InvalidArtifact
-from verity_catalog.silicon.cast import f32_to_bf16_word
-from verity_catalog.silicon.models import ADA_E4M3_M16N8K32, AMPERE_BF16_M16N8K16, tc_dot_chain
+from verity.ml.circuits.silicon.cast import f32_to_bf16_word
+from verity.ml.circuits.silicon.models import ADA_E4M3_M16N8K32, AMPERE_BF16_M16N8K16, tc_dot_chain
 
 from . import protocol as protocol_mod
 from .compile import P

@@ -66,7 +66,7 @@ export HZ_CASES=${HZ_CASES:-honest message_byte_differs_from_the_committed_row o
 source "$SRC/benchmarks/pouw/hidden_zk/job.sh"
 WORK=${WORK:-/workspace/pouw/mvp-e2e}
 PASSES=$WORK/passes/${SERVED_RUN:?serve.sh run id}
-export PYTHONPATH=$SRC:$SRC/catalog:$SRC/kernels:$SRC/experimental:$SRC/integrations/vllm:$SRC/benchmarks/pouw:$SRC/backends/flock/python
+export PYTHONPATH=$SRC:$SRC/catalog:$SRC/kernels:$SRC/experimental:$SRC/integrations/vllm:$SRC/benchmarks/pouw:$SRC/verity/ml/flock/python
 SC="$Z/served_commit.py"
 VPY=${SZ_PYTHON:-$WORK/venv312/bin/python}
 
@@ -124,7 +124,7 @@ ask() {          # ask CHECK JSON: one request; its reply line in $OUT/CHECK.out
 req() { "$PY" -c "import json, sys; a = sys.argv[1:]; print(json.dumps(dict(zip(a[::2], a[1::2]))))" "$@"; }
 ask coins "$(req op coins)"
 expect coins COINS "$REPLY"
-WR=$("$PY" -c "import json, sys; from verity.protocols.accounting.work.pouw.audit import weights_root; m = json.load(open(sys.argv[1])); \
+WR=$("$PY" -c "import json, sys; from verity.experimental.protocols.pouw.audit import weights_root; m = json.load(open(sys.argv[1])); \
 print(weights_root({int(w): bytes.fromhex(v['root']) for w, v in m['weights'].items()}).hex())" "$MAN")
 ask coin-salt "$(req op salt after "$WR" out "$OUT/salt-opening.json")"
 expect coin-salt OPENED "$REPLY"

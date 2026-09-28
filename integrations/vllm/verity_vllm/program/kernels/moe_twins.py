@@ -2,7 +2,7 @@
 encoding, the probes' and tests' reference for `NvExpf_v1` and `NvSigmoid_v1`."""
 from __future__ import annotations
 
-from verity_catalog.definitions.scalar import F32BitsShl23, F32Neg, F32Sat
+from verity.ml.circuits.ops.scalar import F32BitsShl23, F32Neg, F32Sat
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry.moe import F32FmaRm
 from verity_vllm.program.registry.prims import bits_of, f32_of

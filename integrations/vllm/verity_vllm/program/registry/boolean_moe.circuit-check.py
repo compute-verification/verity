@@ -9,7 +9,7 @@ def _boolean_roots() -> list[Any]:
     """OLMoE's routed sum at TOPK = 8 over 8 columns and its router at 8 experts, 2 slots, 4 values per thread, and GLM-5.3's
     sigmoid `noaux_tc` router at 8 experts, 2 slots, on both of its kernels, on bits (its word view is
     `registry.moe.MoeRouterSigmoidBias_v1`)."""
-    from verity.primitives.circuits.defs import bind
+    from verity.ml.circuits.defs import bind
     from verity_vllm.program.registry import boolean_moe as BMOE
     from verity_vllm.program.registry import moe as M
 

@@ -52,7 +52,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from verity.primitives.commitments.identity import canonical_json_bytes, tagged_sha256
+from verity.ml.commitments.identity import canonical_json_bytes, tagged_sha256
 
 from .gateset import GateSet
 from .statement import CommitmentRef, GateOp, KindProgram, PositionRange, PositionRef, Statement
@@ -792,7 +792,7 @@ def check_relations(
 
 
 def lower_subcircuit(sub: Any) -> dict:
-    """Lowering adapter: a supported IR subcircuit (``verity.primitives.circuits.layout.GateSelection``) -> the legacy backend's local
+    """Lowering adapter: a supported IR subcircuit (``verity.ml.circuits.layout.GateSelection``) -> the legacy backend's local
     straight-line program (the `typed-obligation/v0` lowering section). Semantics: gates read `port k` (k-th
     distinct boundary-in value, ascending producing-gate index) or `local i` (i-th gate of the subcircuit in
     canonical order); `outputs` are the local indices of the subcircuit's `out` boundary. An `Input` gate inside the subcircuit lowers to a `port` whose expected

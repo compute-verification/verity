@@ -6,7 +6,7 @@ from __future__ import annotations
 import json
 
 import pytest
-from verity.primitives.commitments.leaves import DIGEST_BYTES, leaf_hash, path_shape, tree_depth
+from verity.ml.commitments.leaves import DIGEST_BYTES, leaf_hash, path_shape, tree_depth
 from verity_sp1.proofs.packed import decode_packed_witness
 from verity_numerical.explore import authentication as auth
 
@@ -35,7 +35,7 @@ def test_fixture_leaf_and_opening_structure():
 def test_fixture_witness_hashes_to_the_recorded_leaves():
     """The recorded witness carries the three leaves' bytes; their leaf hashes fold to the object's roots under the
     reference scheme -- what any in-circuit option (a)/(c) must reproduce."""
-    from verity.primitives.commitments.leaves import fold_path
+    from verity.ml.commitments.leaves import fold_path
 
     doc = json.loads(auth.FIXTURE.read_text())
     roots = {r["id"]: r for r in doc["object"]["roots"]}

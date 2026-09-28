@@ -36,7 +36,7 @@ def test_every_bound_subcircuit_id_is_the_spines():
 
 
 def test_fa3_head_equals_its_definition():
-    from verity.primitives.circuits.evaluation import evaluate_batch
+    from verity.ml.circuits.evaluation import evaluate_batch
 
     sub = TM.subcircuit("attention-head", D=16, BN=16, T="17:40", semantics="sm90.fa3.bf16")
     assert sub.relation["definition"] == "Attention_v2" and sub.set_name == "attention-head-hopper-bf16-wgmma-fa3invsum_v1-d16-bn16"
@@ -49,7 +49,7 @@ def test_fa3_head_equals_its_definition():
 @pytest.mark.parametrize("weighted", [False, True])
 def test_expert_coordinate_equals_its_definition(weighted):
     """The slab path (MoeExpertGemm(W)_v1{N=1}) equals MoeExpertCoordinate(W)_v1's gate reference on the same slab."""
-    from verity.primitives.circuits.evaluation import evaluate_batch
+    from verity.ml.circuits.evaluation import evaluate_batch
 
     sub = TM.subcircuit("moe-expert-coordinate-weighted" if weighted else "moe-expert-coordinate", E=3, K=32)
     draws = _draws(sub, 6)
@@ -66,7 +66,7 @@ def test_expert_coordinate_equals_its_definition(weighted):
 
 
 def test_embedding_equals_its_definition():
-    from verity.primitives.circuits.evaluation import evaluate_batch
+    from verity.ml.circuits.evaluation import evaluate_batch
 
     sub = TM.subcircuit("embedding-row", V=40, H=6)
     draws = _draws(sub, 8)

@@ -30,7 +30,7 @@ index is the position's own.  The statement bytes therefore fix the word: a
 prover cannot choose which word of the leaf stands for the value.
 
 The leaf scheme -- ``H``, the leaf/node/lift hashes, the sibling-or-lift path
-shape -- is :mod:`verity.primitives.commitments.leaves` (the Verity protocol's commitment
+shape -- is :mod:`verity.ml.commitments.leaves` (the Verity protocol's commitment
 to runtime values); this module only reads words out of authenticated leaves.
 An authentication path is one step per level: a sibling digest, or ``None``
 where the node was lifted; the sibling/lift pattern is a function of
@@ -58,7 +58,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from verity.primitives.commitments.leaves import (
+from verity.ml.commitments.leaves import (
     H,
     fold_path,
     ids_digest,
@@ -133,7 +133,7 @@ def extract_word(schema: PackedSchema, value: bytes) -> int:
     return word
 
 
-# --- the leaf scheme (owned by verity.primitives.commitments.leaves; the names below are kept for the callers) --------
+# --- the leaf scheme (owned by verity.ml.commitments.leaves; the names below are kept for the callers) --------
 
 vllm_hash = H
 vllm_leaf_hash = leaf_hash

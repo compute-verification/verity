@@ -1,4 +1,4 @@
-"""``commit_cost.py --impl gpu``: the same four schemes committed on the GPU (``kernels/hash_gpu/frame_v3.py``),
+"""``commit_cost.py --impl gpu``: the same four schemes committed on the GPU (``verity/ml/kernels/hash_gpu/frame_v3.py``),
 each root checked against the plain-Python reference's before its time counts.
 
 Per rep, synchronised around each phase: ``h2d_s`` the leaf values to the device (pageable host memory), ``leaf_s``
@@ -19,7 +19,7 @@ from typing import Any
 
 import numpy as np
 
-_SHARED = Path(__file__).resolve().parents[2] / "kernels"
+_SHARED = Path(__file__).resolve().parents[2] / "verity" / "ml" / "kernels"
 if str(_SHARED) not in sys.path:
     sys.path.insert(0, str(_SHARED))
 
@@ -56,8 +56,8 @@ def _reference(impl, scheme: str, vals: np.ndarray) -> tuple[bytes, list[bytes]]
 def measure(scheme: str, n: int, nbytes: int, reps: int, setup) -> dict[str, Any]:
     import cupy as cp
     from hash_gpu import frame_v3 as fv3
-    from verity.primitives.commitments import vllm_v1
-    from verity.primitives.commitments.rowleaf import ROLE_X, blake3_row_key, sha256_row_prefix
+    from verity.ml.commitments import vllm_v1
+    from verity.ml.commitments.rowleaf import ROLE_X, blake3_row_key, sha256_row_prefix
 
     impl = setup(scheme, n, nbytes)
     host = values_array(n, nbytes)

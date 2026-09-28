@@ -1,7 +1,7 @@
 """The per-workload headline: for each served workload in the census and each backend, the share of the run's native work
 that published, cleared cells cover, and the work-weighted overhead over that covered share.
 
-A workload's template mix (``catalog/census/workloads.json``: VUs x subcircuits per VU, per bound subcircuit) gives the units; each
+A workload's template mix (``benchmarks/census/workloads.json``: VUs x subcircuits per VU, per bound subcircuit) gives the units; each
 template's census work model gives the native seconds per unit on the served hardware line, under two bases:
 
 * ``tensor-peak`` -- the GEMM-like templates (:data:`TENSOR_TEMPLATES`) at the line's dense tensor-core peak (``ops_per_input``
@@ -488,7 +488,7 @@ def render_markdown(records: Sequence[Mapping[str, Any]]) -> list[str]:
     """The headline section's markdown lines."""
     tp, mb = BASES
     out = ["## Workload headline — share of a served run's native work covered, and its work-weighted overhead", "",
-           "Per served workload (`catalog/census/workloads.json`) and backend. Units = VUs × subcircuits per VU, per bound subcircuit (the "
+           "Per served workload (`benchmarks/census/workloads.json`) and backend. Units = VUs × subcircuits per VU, per bound subcircuit (the "
            "workload's template mix). Native work = units × the template's census work model on the served hardware line, in two bases: "
            f"**{tp.label}**: {tp.description}; **{mb.label}**: {mb.description}. A subcircuit is covered when the backend has an "
            "admissible result on exactly that subcircuit (template and bound parameters, the semantics included), cleared (not "

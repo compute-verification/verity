@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from verity_catalog.silicon import relation as R
-from verity_catalog.silicon.silicon import AMPERE_BF16_M16N8K16 as AMP
-from verity_catalog.silicon.total import HOPPER_BF16_WGMMA_K16 as HOP
+from verity.ml.circuits.silicon import relation as R
+from verity.ml.circuits.silicon.silicon import AMPERE_BF16_M16N8K16 as AMP
+from verity.ml.circuits.silicon.total import HOPPER_BF16_WGMMA_K16 as HOP
 from verity_numerical.redteam import cases as C
 from verity_numerical.redteam import forge as F
 from verity_numerical.redteam import relation_target as RT

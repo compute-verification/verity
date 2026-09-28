@@ -1,0 +1,105 @@
+# The jobs `check` runs, written as data: who owns each, which group it runs in, and what its failure means for the run.
+# `declaration.py` reads this file without running any of the commit's code. check.py takes its groups, their order and
+# what halts the run from here, builds each job's command, and refuses a job this file doesn't declare. This file is the
+# first step of the CI job API (owners declare their jobs, CI runs them).
+schema = "ci/v0"
+
+# Group 1: the test suites (tools/verity/check/suites.py), each suite owned by its package.
+[[job]]
+name = "pytest"
+owner = "ci"
+part = "tests"
+group = 1
+
+# Group 2: C-Flock's Rust build and tests, and the property checks every circuit passes.
+[[job]]
+name = "flock-circuit-build"
+owner = "proofs"
+part = "circuits"
+group = 2
+halts_on = "error: could not compile"
+
+[[job]]
+name = "circuit-check"
+owner = "circuits"
+part = "circuits"
+group = 2
+
+[[job]]
+name = "flock-rust-tests"
+owner = "proofs"
+part = "circuits"
+group = 2
+needs = ["flock-circuit-build"]
+
+# Group 3: the Lean verifier, its partition check, then the agreement with upstream's Rust verifier.
+[[job]]
+name = "lean-build"
+owner = "proofs"
+part = "lean"
+group = 3
+
+[[job]]
+name = "lean-unit-cut"
+owner = "proofs"
+part = "lean"
+group = 3
+needs = ["lean-build"]
+
+[[job]]
+name = "lean-agreement"
+owner = "proofs"
+part = "lean"
+group = 3
+needs = ["lean-build"]
+merge_requires = ["verity/ml/flock/", "verity/core/service/flock/", "!README.md", "!PROTOCOL.md"]
+
+# Group 4: every Lake package's audit. It builds only in scratch trees of its own, so nothing in group 3 waits on it.
+[[job]]
+name = "lean-audit"
+owner = "lean"
+part = "lean"
+group = 4
+
+# Group 5: the early Lean check on a merge (stale records, broken builds); its failure stops the whole run.
+[[job]]
+name = "lean-changed"
+owner = "lean"
+part = "lean"
+group = 5
+halts = true
+
+# Group 6: the suites that use Lean, on the verifier lean-build built, beside the partition check and the agreement.
+[[job]]
+name = "lean-suites"
+owner = "ci"
+part = "tests"
+group = 6
+after = "lean-build"
+
+# The shard plans: `check.py --record --shard K/N --on POD` runs shard K of the plan with N shards, on a pod of the lander's
+# choosing, and `check.py --record --combine RUN...` records their union as the commit's check (`research merge` re-reads the
+# shards). Balanced on a cold check's costs on one pod (lean-audit 46 min, soundness alone 45-70 of it; pytest 27, lean-suites
+# 22, circuit-check about 48 on half the cores), so the wall time is about the soundness audit's.
+# lean-audit runs on a scratch tree, so a shard audits without lean-build; the jobs that read lean-build's binaries `needs`
+# it, or run `after` it, and a shard holds both.
+# Security and its proofs (Security/Proofs, which its `proved_in` names) are audited together, from one build
+# of the proofs, so they share a shard.
+
+# 3 pods: the security analysis's audit beside the suites; the rest of the Lean; the Rust build and the circuits.
+[[plan]]
+shards = [
+    ["lean-audit:Security", "lean-audit:Security/Proofs", "pytest"],
+    ["lean-build", "lean-unit-cut", "lean-audit:*", "lean-suites", "lean-agreement", "lean-changed"],
+    ["flock-circuit-build", "circuit-check", "flock-rust-tests"],
+]
+
+# 5 pods: each of those apart.
+[[plan]]
+shards = [
+    ["lean-audit:Security", "lean-audit:Security/Proofs"],
+    ["lean-audit:*", "lean-changed"],
+    ["lean-build", "lean-unit-cut", "lean-suites", "lean-agreement"],
+    ["pytest"],
+    ["flock-circuit-build", "circuit-check", "flock-rust-tests"],
+]

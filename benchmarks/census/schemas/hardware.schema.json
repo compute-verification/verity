@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "benchmarks/census/schemas/hardware.schema.json",
+  "title": "Census hardware lines: a device running one operand dtype, with its dense tensor-core peak",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "id",
+      "name",
+      "device",
+      "dtype",
+      "rate",
+      "flop_per_second",
+      "accumulate",
+      "memory_bytes",
+      "sources",
+      "methodology"
+    ],
+    "properties": {
+      "id": {
+        "type": "string",
+        "pattern": "^[a-z0-9]+(-[a-z0-9]+)*/[a-z0-9]+$",
+        "description": "<device slug>/<dtype>"
+      },
+      "name": {
+        "type": "string",
+        "minLength": 1,
+        "description": "short display name, e.g. 'H100 SXM5'"
+      },
+      "device": {
+        "type": "string",
+        "minLength": 1,
+        "description": "the datasheet part"
+      },
+      "dtype": {
+        "type": "string",
+        "pattern": "^[a-z0-9]+$",
+        "description": "a benchmarks/census/datatypes.json id (bf16, e4m3, e2m1)"
+      },
+      "rate": {
+        "type": "string",
+        "minLength": 1
+      },
+      "flop_per_second": {
+        "type": "number",
+        "exclusiveMinimum": 0,
+        "description": "dense peak; an FMA counts as two FLOP"
+      },
+      "accumulate": {
+        "type": "string",
+        "enum": [
+          "fp32"
+        ]
+      },
+      "memory_bytes": {
+        "type": [
+          "integer",
+          "null"
+        ],
+        "minimum": 1
+      },
+      "sources": {
+        "type": "array",
+        "minItems": 1,
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "label"
+          ],
+          "properties": {
+            "label": {
+              "type": "string",
+              "minLength": 1
+            },
+            "href": {
+              "type": "string",
+              "format": "uri"
+            }
+          }
+        }
+      },
+      "methodology": {
+        "type": "string",
+        "minLength": 1
+      },
+      "memory_bytes_per_second": {
+        "type": "number",
+        "exclusiveMinimum": 0,
+        "description": "datasheet memory bandwidth (bytes per second), the denominator of a memory-bandwidth work model"
+      },
+      "memory_sources": {
+        "type": "array",
+        "minItems": 1,
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "label"
+          ],
+          "properties": {
+            "label": {
+              "type": "string",
+              "minLength": 1
+            },
+            "href": {
+              "type": "string",
+              "format": "uri"
+            }
+          }
+        }
+      }
+    }
+  }
+}

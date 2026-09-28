@@ -4,7 +4,7 @@ Lane `b-verifier` (track B), 2026-09-22.  The verifier is `archive/ligero-verify
 dependencies: its own BabyBear, NTT / coset code, BLAKE3, BLAKE2b-256, SHAKE-256, `ligero-*/v1` parsers, and the
 proximity / linear / quadratic / chain tests), written from `archive/direct/ligero/PROTOCOL.md` + `HANDOFF.md` +
 `note:r20-proof/red-team-vu/20260922T1042Z-report-redteam-vu` F1-F3, with the Python sources read as the reference of record wherever the document is silent.
-Every such place is an entry below.  Statuses follow `catalog/verity_catalog/silicon/discrepancy_log.json` (`open` / `resolved` /
+Every such place is an entry below.  Statuses follow `verity/ml/circuits/silicon/discrepancy_log.json` (`open` / `resolved` /
 `excluded`); each entry also carries a structured block (`id`, `issue`, `document`, `code`, `verifier`, `status`,
 `owner`, `evidence`) so the coordinator can lift it into the campaign log.
 

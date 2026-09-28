@@ -13,13 +13,13 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.primitives.commitments import hm96
-from verity.primitives.commitments.frame_v3 import FrameV3, Port, RowLeaf
-from verity.primitives.commitments.identity import identity_digest_sha512
-from verity.primitives.commitments.indexed import RangeIndexedDomain
-from verity.primitives.commitments.merkle import CommitmentDomain
-from verity.primitives.commitments.rowleaf import ROLE_X, row_leaf, sha512_row_layout
-from verity.protocols.verification.sampled_proofs.one_stage import registration as R
+from verity.ml.commitments import hm96
+from verity.ml.commitments.frame_v3 import FrameV3, Port, RowLeaf
+from verity.ml.commitments.identity import identity_digest_sha512
+from verity.ml.commitments.indexed import RangeIndexedDomain
+from verity.ml.commitments.merkle import CommitmentDomain
+from verity.ml.commitments.rowleaf import ROLE_X, row_leaf, sha512_row_layout
+from verity.experimental.protocols.sampled_proofs.one_stage import registration as R
 from verity_vllm.commit import serving_rows as SR
 
 VECTOR = json.loads((Path(__file__).parent / "serving_row_leaf_vector.json").read_text())

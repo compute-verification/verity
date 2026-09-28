@@ -1,6 +1,6 @@
 """The source-close evaluator: Hawkeye's Ampere BF16 simulator as defined integer operations.
 
-A line-by-line port of the pinned simulator (``catalog/verity_catalog/silicon/hawkeye/PIN.json``: https://github.com/badasherez/gpu-simulator at
+A line-by-line port of the pinned simulator (``verity/ml/circuits/silicon/hawkeye/PIN.json``: https://github.com/badasherez/gpu-simulator at
 ``30703fcb309c943a6df5eee0277cb81815deb8f4``) restricted to the routines the transition unit uses:
 
 * ``utils/utils.cpp::multiply_bfloat16_to_gfloat``          -> :func:`multiply_bfloat16_to_gfloat`

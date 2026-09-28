@@ -64,7 +64,7 @@ for name, (q, h) in {"gemm_plain": (4, 0), "gemm_fast": (4, 0), "gemm_ct": (4, 0
     r = funcs[name]
     if r["QGMMA"] < q or r["QGMMA"] % q or r["HGMMA"] != h:
         problems.append(f"{name}: {r['QGMMA']} QGMMA, {r['HGMMA']} HGMMA (want a multiple of {q}, and {h})")
-json.dump({"kernels": funcs, "problems": problems}, open(f"{out}/sass.json", "w"), indent=1)
+json.dump({"verity/ml/kernels": funcs, "problems": problems}, open(f"{out}/sass.json", "w"), indent=1)
 if problems:
     sys.exit("REFUSED: " + "; ".join(problems))
 print(f"pearl_c.cubin: {len(funcs)} kernels; GEMMs " + ", ".join(f"{n} {funcs[n]['regs']} regs {funcs[n]['QGMMA']} QGMMA"
@@ -90,6 +90,6 @@ echo ".FTZ gate: only nvcc $NV's pinned div, rcp and sqrt sequences; the --use_f
 (cd "$ROOT" && uv run python benchmarks/pouw/pearl_c/fixture.py "$OUT/check")
 cp "$HERE/run.py" "$HERE/bench.py" "$HERE/bench.json" "$HERE/run.sh" "$HERE/vendor.py" "$OUT/"
 { "$C9/bin/nvcc" --version | tail -2; echo "flags: $FLAGS (sm_90a pearl_c.cubin, sm_120a hash_sm120a.cubin)"; } > "$OUT/toolchain.txt"
-{ git -C "$ROOT" rev-parse HEAD; git -C "$ROOT" status --porcelain -- benchmarks/pouw/pearl_c verity/protocols/accounting/work/pouw verity; } > "$OUT/source.txt"
+{ git -C "$ROOT" rev-parse HEAD; git -C "$ROOT" status --porcelain -- benchmarks/pouw/pearl_c verity/experimental/protocols/pouw verity; } > "$OUT/source.txt"
 (cd "$OUT" && find . -type f ! -name MANIFEST.sha256 | LC_ALL=C sort | xargs sha256sum > MANIFEST.sha256)
 du -sh "$OUT" | cut -f1 | xargs echo "tree:"

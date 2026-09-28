@@ -15,16 +15,16 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.primitives.circuits.evaluation import evaluate, evaluate_words
-from verity.primitives.circuits import boolean as BL
-from verity.primitives.circuits.codec import _spec_id
-from verity.primitives.circuits.defs import Builder, CompositeDefinition, PrimitiveDefinition, bind
-from verity.primitives.circuits.program import Program
-from verity.primitives.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Strided, coll_concat
-from verity.primitives.circuits.types import Array, Record, Tuple as TupleT, Value
-from verity_catalog.definitions import fp32 as W
-from verity_catalog.definitions import gemm as G
-from verity_catalog.definitions import prims as MP
+from verity.ml.circuits.evaluation import evaluate, evaluate_words
+from verity.ml.circuits import boolean as BL
+from verity.ml.circuits.codec import _spec_id
+from verity.ml.circuits.defs import Builder, CompositeDefinition, PrimitiveDefinition, bind
+from verity.ml.circuits.program import Program
+from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Strided, coll_concat
+from verity.ml.circuits.types import Array, Record, Tuple as TupleT, Value
+from verity.ml.circuits.ops import fp32 as W
+from verity.ml.circuits.ops import gemm as G
+from verity.ml.circuits.ops import prims as MP
 from verity_vllm.program import boolean as BB
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile
 from verity_vllm.program.replay import replayer
@@ -74,7 +74,7 @@ def _inputs(n: int, seed: int = 7):
 
 
 def test_the_table_reads_the_boolean_definitions_word_links():
-    from verity_catalog.definitions.boolean import attention as BA, gemm as BG
+    from verity.ml.circuits.ops.boolean import attention as BA, gemm as BG
     assert BB.boolean_version(W.F32AddFtz) is bind(BA.F32AddFtz)
     assert BB.boolean_version(MP.F2fpBf16) is bind(BG.F2fpBf16)
     word = bind(G.DotBf16, K=64, DOT=MP.HopperBF16WgmmaDot16)
@@ -82,7 +82,7 @@ def test_the_table_reads_the_boolean_definitions_word_links():
 
 
 def test_a_static_the_word_lacks_is_bound_to_the_boolean_version_of_its_word_statics_entry(monkeypatch):
-    from verity.primitives.circuits.boolean.trace import word_of
+    from verity.ml.circuits.boolean.trace import word_of
 
     sig = lambda t: lambda S: ((("x", Array(S.N, t)),), Array(S.N, t))  # noqa: E731
     word = CompositeDefinition("Twice", 1, ("N",), sig(F32), lambda B, S, x: B.batch(W.F32AddFtz, x, x, axes=(0, 0)), register=False)
@@ -112,7 +112,7 @@ def test_a_static_the_word_lacks_is_bound_to_the_boolean_version_of_its_word_sta
 
 
 def test_the_served_norms_bind_their_mufu_statics_to_mufus_boolean_versions():
-    from verity_catalog.definitions.boolean import mufu as BM
+    from verity.ml.circuits.ops.boolean import mufu as BM
     from verity_vllm.program.registry import b1, boolean_norms as BN
     cuda = BB.boolean_version(bind(b1.RMSNormFusedCuda, N=16, EPS=1e-5))
     triton = BB.boolean_version(bind(b1.RMSNormTriton, N=16, EPS=1e-5))
@@ -152,7 +152,7 @@ def test_the_lifted_program_is_bits_throughout_and_the_word_program_is_not():
 
 
 def test_a_word_derivation_report_becomes_its_program_on_bits():
-    from verity.primitives.circuits.codec import encode_program, program_digest
+    from verity.ml.circuits.codec import encode_program, program_digest
     from verity_vllm.program.frontend.derive import DeriveReport
 
     P = Program(_derived(), annotations={"note": "carried"})

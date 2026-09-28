@@ -22,10 +22,10 @@ import importlib
 import numpy as np
 import pytest
 
-from verity.primitives.circuits.defs import bind
-from verity.primitives.circuits.evaluate import evaluate_region
-from verity.primitives.circuits.layout import resolve
-from verity.primitives.circuits.program import Program
+from verity.ml.circuits.defs import bind
+from verity.ml.circuits.evaluate import evaluate_region
+from verity.ml.circuits.layout import resolve
+from verity.ml.circuits.program import Program
 from verity_vllm.program import model as analytic
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StepStart, TritonLaunch, ViewDesc
 from verity_vllm.observe.fold.patterns import TokenSelectArgmax, TokenSelectGumbelTwoStage

@@ -28,7 +28,7 @@ from typing import Any
 
 import numpy as np
 
-from verity_catalog.definitions import mufu
+from verity.ml.circuits.ops import mufu
 from verity_vllm.program.kernels import fa2_model as FA
 
 try:  # share W4b's node adaptation + error base when its module imports (it needs veritor.core.silicon, Python >= 3.12)
@@ -112,7 +112,7 @@ _TABLES: dict[str, FA.MufuTables] = {}
 
 
 def tables_dir() -> str:
-    """Where the MUFU.EX2 / MUFU.RCP delta tables live: core's (``verity_catalog.definitions.mufu.TABLE_DIR``), pinned by :data:`TABLE_SHA256`."""
+    """Where the MUFU.EX2 / MUFU.RCP delta tables live: core's (``verity.ml.circuits.ops.mufu.TABLE_DIR``), pinned by :data:`TABLE_SHA256`."""
     return mufu.TABLE_DIR
 
 

@@ -51,10 +51,10 @@ FILES = {
     "integrations/vllm/pyproject.toml": '[project]\nname = "verity-vllm"\n\n[tool.verity.tests]\n# Test-only: fixtures.\n'
                                         'inputs = ["fixtures/artifacts.json",\n          ".gitignore"]\n',
     f"{REG}/__init__.py": "",
-    f"{REG}/b1.py": ('from verity.primitives.circuits.defs import composite\n\n\n@composite("Old", 1, ["N"], None)\ndef OldV1(S, x):\n    return x\n\n\n'
+    f"{REG}/b1.py": ('from verity.ml.circuits.defs import composite\n\n\n@composite("Old", 1, ["N"], None)\ndef OldV1(S, x):\n    return x\n\n\n'
                      '@composite("Old", 2, ["N"], None)\ndef Old(S, x):\n    return x\n'),
     f"{REG}/vocab.py": f"from {Q}.ln import norm as LN\n",
-    f"{REG}/act.py": "from verity.primitives.circuits.defs import composite\n\nBF16 = 16\n\n\ndef silu(x):\n    return x\n",
+    f"{REG}/act.py": "from verity.ml.circuits.defs import composite\n\nBF16 = 16\n\n\ndef silu(x):\n    return x\n",
     f"{QDIR}/__init__.py": '"""the old quarantine"""\n',
     f"{QDIR}/act/__init__.py": f"from {Q}.act import silu_mul  # noqa: F401\n",
     f"{QDIR}/act/silu_mul.py": 'SEMANTIC_ID = "act/SiluMul@v2"\n',
@@ -63,9 +63,9 @@ FILES = {
     f"{QDIR}/ov_moe/__init__.py": "",
     f"{QDIR}/ln/__init__.py": f"from {Q}.ln import gelu, norm  # noqa: F401\n\nALL = [norm.Norm, gelu.Gelu]\n",
     f"{QDIR}/ln/_common.py": "BF16 = 16\n",
-    f"{QDIR}/ln/norm.py": (f'"""the norm"""\nfrom verity.primitives.circuits.defs import composite\nfrom {Q}.ln._common import BF16\n\n'
+    f"{QDIR}/ln/norm.py": (f'"""the norm"""\nfrom verity.ml.circuits.defs import composite\nfrom {Q}.ln._common import BF16\n\n'
                            'SEMANTIC_ID = "ln/Norm@v1"\n\n\n@composite("Norm", 1, ["N"], None)\ndef Norm(B, S, x):\n    return BF16\n'),
-    f"{QDIR}/ln/gelu.py": (f'"""the erf GELU"""\nfrom verity.primitives.circuits.defs import composite\nfrom {Q}.ln._common import BF16\n\n'
+    f"{QDIR}/ln/gelu.py": (f'"""the erf GELU"""\nfrom verity.ml.circuits.defs import composite\nfrom {Q}.ln._common import BF16\n\n'
                            'SEMANTIC_ID = "ln/Gelu@v1"\n\n\n# one word\n@composite("Gelu", 1, [], None)\ndef Gelu(B, S, x):\n'
                            '    return BF16\n\n\n__all__ = ["Gelu"]\n'),
     "integrations/vllm/tests/test_lanes.py": (f"from {Q}.act import silu_mul as S\nfrom {Q} import collective as QC\n"
@@ -83,11 +83,11 @@ FILES = {
     "integrations/vllm/tests/dead_code_keep.json": (f'{{\n "modules": {{\n  "verity_vllm.linear": "kept",\n  "{Q}.ln.norm": "promoted",\n'
                                                     f'  "{Q}.act.silu_mul": "moves"\n }}\n}}\n'),
     "integrations/vllm/verity_vllm/engine/profiles/quarantine/REC.json": f'{{"adapter": "{Q}.act.silu_mul_difftest"}}\n',
-    "tools/circuit_check/src/circuit_check/targets.py": ('def _model_roots():\n    from verity_vllm.program.registry import b1\n'
+    "tools/verity/circuit_check/src/circuit_check/targets.py": ('def _model_roots():\n    from verity_vllm.program.registry import b1\n'
                                                          '    return [\n        # the superseded one\n'
                                                          '        ("Old_v1", lambda: bind(b1.OldV1, N=8)),\n'
                                                          '        ("Old_v2", lambda: bind(b1.Old, N=8)),\n    ]\n'),
-    "tools/circuit_check/src/circuit_check/pins.json": json.dumps(
+    "tools/verity/circuit_check/src/circuit_check/pins.json": json.dumps(
         {"definitions": {"Old_v1{N=8}": {"and": 3}, "Old_v2{N=8}": {"and": 4}}}, indent=1, sort_keys=True) + "\n",
 }
 
@@ -138,8 +138,8 @@ def test_promote_only_promotes_and_moves_no_lane(tmp_path, capsys):
 
 
 def test_promote_only_reads_the_unqualified_names_the_destination_binds(tmp_path, monkeypatch, capsys):
-    gelu = FILES[f"{QDIR}/ln/gelu.py"].replace("from verity.primitives.circuits.defs import composite\n",
-                                                "from verity.primitives.circuits.defs import composite\nimport prims as P\n")
+    gelu = FILES[f"{QDIR}/ln/gelu.py"].replace("from verity.ml.circuits.defs import composite\n",
+                                                "from verity.ml.circuits.defs import composite\nimport prims as P\n")
     gelu = gelu.replace("    return BF16\n\n\n__all__", "    return P.BF16\n\n\n__all__")
     monkeypatch.setattr(M, "PROMOTE", (PROMOTE[0], M.Promotion("ln/gelu.py", "act.py", unqualify=("P",))))
     root = _tree(tmp_path, {f"{QDIR}/ln/gelu.py": gelu})
@@ -253,8 +253,8 @@ def test_apply_refuses_an_import_of_moved_and_other_lanes_together(tmp_path, cap
     ({f"{QDIR}/ln/extra.py": "X = 1\n"}, EDITS, f"lane ln keeps {QDIR}/ln/extra.py, which is not promoted"),
     ({"integrations/vllm/README.md": "see `registry/quarantine/ln/norm.py`\n"}, EDITS,
      "would still name a promoted lane:\n  integrations/vllm/README.md:1: see `registry/quarantine/ln/norm.py`"),
-    ({f"{REG}/act.py": "from verity.primitives.circuits.defs import composite\nBF16 = 16\nGelu = None\n"}, EDITS, "Gelu already bound in act.py"),
-    ({f"{REG}/act.py": "from verity.primitives.circuits.defs import composite\n"}, EDITS, "act.py does not bind BF16"),
+    ({f"{REG}/act.py": "from verity.ml.circuits.defs import composite\nBF16 = 16\nGelu = None\n"}, EDITS, "Gelu already bound in act.py"),
+    ({f"{REG}/act.py": "from verity.ml.circuits.defs import composite\n"}, EDITS, "act.py does not bind BF16"),
     ({}, (("integrations/vllm/tests/test_ln.py", "no such text", ""),), "expected one 'no such text', found 0"),
 ])
 def test_apply_refuses_a_promotion_that_would_leave_a_name_behind_or_clash(tmp_path, monkeypatch, capsys, extra, edits, says):
@@ -303,9 +303,9 @@ def test_delete_removes_the_definition_its_circuit_check_binding_and_its_pins(tm
     assert _apply(root, "Old_v1") == 0
     b1 = (root / REG / "b1.py").read_text()
     assert "OldV1" not in b1 and '@composite("Old", 2' in b1
-    targets = (root / "tools/circuit_check/src/circuit_check/targets.py").read_text()
+    targets = (root / "tools/verity/circuit_check/src/circuit_check/targets.py").read_text()
     assert "Old_v1" not in targets and "superseded one" not in targets and '("Old_v2"' in targets
-    assert json.loads((root / "tools/circuit_check/src/circuit_check/pins.json").read_text())["definitions"] == {"Old_v2{N=8}": {"and": 4}}
+    assert json.loads((root / "tools/verity/circuit_check/src/circuit_check/pins.json").read_text())["definitions"] == {"Old_v2{N=8}": {"and": 4}}
 
 
 def test_delete_refuses_a_version_something_still_references(tmp_path, monkeypatch, capsys):

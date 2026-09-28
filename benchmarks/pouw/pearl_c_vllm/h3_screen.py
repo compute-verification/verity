@@ -39,8 +39,8 @@ PASSES = {"eager": (False, ()), "graphs": (True, ()), "omit-seeds": (False, ("se
 
 def capture(args) -> int:
     import torch
-    from verity.protocols.accounting.work.pouw.audit import weights_root
-    from verity.protocols.accounting.work.pouw.coins import Challenger
+    from verity.experimental.protocols.pouw.audit import weights_root
+    from verity.experimental.protocols.pouw.coins import Challenger
     from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
 
     out, dev = Path(args.out), torch.device("cuda")
@@ -93,8 +93,8 @@ def _scheme(man: dict):
 def _calls(d: Path) -> dict:
     """An eager pass's calls held to the reference: the row seeds, E_A's committed rows and its padding rows."""
     import verify_run as VR
-    from verity.protocols.accounting.work.pouw.protocol import Context, Matmul, Shape
-    from verity.protocols.accounting.work.pouw.schemes import pearl_c as C
+    from verity.experimental.protocols.pouw.protocol import Context, Matmul, Shape
+    from verity.experimental.protocols.pouw.schemes import pearl_c as C
 
     man = json.loads((d / "manifest.json").read_text())
     s, files, out = _scheme(man), VR.Files(d), []
@@ -132,10 +132,10 @@ def _tile(tid: int) -> tuple[int, bool, str | None]:
 def _tiles(d: Path, jobs: int) -> dict:
     """Every tile of a pass under `Verifier.check_tile`: its openings, then its leaf recomputed by the reference."""
     import verify_run as VR
-    from verity.primitives.commitments import Commitment
-    from verity.protocols.accounting.work.pouw.audit import Transcript, Verifier
-    from verity.protocols.accounting.work.pouw.coins import CoinCommitment
-    from verity.protocols.accounting.work.pouw.schemes import pearl_c_work as PW
+    from verity.ml.commitments import Commitment
+    from verity.experimental.protocols.pouw.audit import Transcript, Verifier
+    from verity.experimental.protocols.pouw.coins import CoinCommitment
+    from verity.experimental.protocols.pouw.schemes import pearl_c_work as PW
     from verity_vllm.protocol_options import pouw_pearl_c_manifest as PM
 
     man = json.loads((d / "manifest.json").read_text())

@@ -1,5 +1,5 @@
 """Every (Definition, kernel) pair registered through `verity_vllm.program.kernels.kernel_registry` — the replay row
-kernels (`rows`) and the twins — against the reference by core `verity.primitives.circuits.evaluation.self_check`, on each of the kernel's
+kernels (`rows`) and the twins — against the reference by core `verity.ml.circuits.evaluation.self_check`, on each of the kernel's
 check specialisations: no mismatch, and not every instance declined."""
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import zlib
 import numpy as np
 import pytest
 
-from verity.primitives.circuits.evaluation import kernels, self_check
+from verity.ml.circuits.evaluation import kernels, self_check
 from verity_vllm.program.kernels import kernel_registry as KR
 from verity_vllm.program.kernels import rows, twins
 
@@ -40,8 +40,8 @@ def test_attention_kernels_on_scores_below_two_to_the_minus_63(monkeypatch):
     2^-87 <= |x| < 2^-63, where the C rule's shift count reached 64 (undefined; the host took it mod 64) and MUFU.EX2 reads
     T[0] = 1.0.  The twin and the row kernel equal the reference there, and the reference equals the same instance with
     q = 0, whose every ex2 input is 0."""
-    from verity.primitives.circuits.evaluation import evaluate
-    from verity.primitives.circuits.defs import bind
+    from verity.ml.circuits.evaluation import evaluate
+    from verity.ml.circuits.defs import bind
     from verity_vllm.program.kernels import derived_rows as DR
     from verity_vllm.program.registry import b1
 

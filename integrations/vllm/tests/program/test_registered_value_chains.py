@@ -9,11 +9,11 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.primitives.circuits.evaluation import evaluate
-from verity.primitives.circuits.codec import encode_program, program_digest
-from verity.primitives.circuits.constants import program_data
-from verity.primitives.circuits.defs import bind
-from verity.primitives.circuits.program import Program
+from verity.ml.circuits.evaluation import evaluate
+from verity.ml.circuits.codec import encode_program, program_digest
+from verity.ml.circuits.constants import program_data
+from verity.ml.circuits.defs import bind
+from verity.ml.circuits.program import Program
 from verity_vllm.program.registry import b1, dense as DN, fa2_softcap as F2S, fa3_check_inf as F3, hopper
 from verity_vllm.program.registry import prims as P, ref_prims as RP
 from verity_vllm.program.registry import value_inputs as VI

@@ -88,7 +88,7 @@ def lifted_vu_use_document(query: Any, program: Any, verdict: Any, *, w_max_lift
     w_max: it binds the query to Lift(P)'s digest).  `gates.gate_G8` refuses this document by name (`use.kind != "vu-partition"`): a
     lifted verdict never reads as an active-reference G8 pass."""
     from verity_vllm.query import query_artifact as QA
-    from verity.primitives.circuits.query_ast import evaluate
+    from verity.ml.circuits.query_ast import evaluate
     qdoc, use = QA.vu_use_document(query, program, verdict, w_max=int(w_max_lifted), utc=utc)
     use["use"] = {"kind": USE_KIND_LIFTED, "w_max": int(w_max_lifted), "rules_version": LIFTED_RULES_VERSION,
                   "w_max_active_reference": W_MAX, "w_max_lifted_status": W_MAX_LIFTED_STATUS}

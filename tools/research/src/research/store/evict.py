@@ -593,7 +593,7 @@ def record_uses(pattern: re.Pattern[str], runs_dirs: list[Path], requests_dir: P
 
 
 def slot_uses(pattern: re.Pattern[str], locks: Path, proc: Path = Path("/proc")) -> dict[str, set[str]]:
-    """{sha: reasons} from the check and Lean slots (`tools/check/slot.py`, `lean_slot.py`): a holder's `<locks>/*.who` and a waiter's
+    """{sha: reasons} from the check and Lean slots (`tools/verity/check/slot.py`, `lean_slot.py`): a holder's `<locks>/*.who` and a waiter's
     ticket in `<locks>/*line*/`, each `{"pid", "run", "tree", "by"}`, while its pid lives (a pid reused since only keeps more)."""
     files = [locks / n for n in _entries(locks) if n.endswith(".who")]
     files += [locks / d / n for d in _entries(locks) if "line" in d and (locks / d).is_dir() for n in _entries(locks / d)]

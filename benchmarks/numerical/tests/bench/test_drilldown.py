@@ -11,7 +11,7 @@ from typing import Any
 
 import pytest
 
-from verity_catalog.targets.target import FIRST, FP8_ADA_MMA
+from verity.ml.circuits.targets.target import FIRST, FP8_ADA_MMA
 from verity_numerical.bench import contract
 from verity_numerical.bench import drilldown as D
 from verity_numerical.bench import tables as T

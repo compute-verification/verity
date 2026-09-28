@@ -1,0 +1,56 @@
+# Dropped into a flock b684b12 checkout as crates/flock-live (verity/ml/flock/pod/*.sh do it) and added to its
+# workspace members; the path dependencies are relative to that location.
+[package]
+name = "flock-live"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Live-coin sessions for Flock (flock-128-r2): a forwarding prover challenger, the challenger's live-coin part, and the replaying session verifier"
+
+[features]
+# GPU tables built from the binary-census unit's expanded circuit (crates/flock-prover/src/r1cs_hashes/verity_unit.rs, which
+# flock-bench's 22-gpu-unit.sh installs into the checkout).
+verity-unit = []
+# Flock-CUDA for the chunk statement (verity/ml/flock/cuda_chunk_patch.py must have been applied to the checkout).
+gpu = ["dep:flock-cuda-ffi", "flock-cuda-ffi/gpu"]
+# Test harnesses only (selftests): inject the prover's seed and the verifier's step-0 seed. A proving build never enables it, so
+# no fixed seed is reachable from its entry points.
+seed-injection = []
+# The circuit statement's Merkle trees on SHA-512, leaves and nodes (verity/ml/flock/flock-sha512-b684b12.patch and
+# cuda_sha512_patch.py must have been applied to the checkout: 64-byte digests throughout).
+sha512 = []
+# Multi-table statements (`tables`): the union's glue hook (verity/ml/flock/flock-glue-b684b12.patch must have been applied after
+# the SHA-512 patch).
+glue = []
+
+[dependencies]
+flock-core = { path = "../flock-core" }
+flock-prover = { path = "../flock-prover" }
+flock-transcript = { workspace = true }
+flock-field = { workspace = true }
+sha2 = { workspace = true }
+serde_json = { workspace = true }
+serde = { workspace = true }
+bincode = { workspace = true }
+flock-hash = { workspace = true }
+flock-merkle = { workspace = true }
+blake3 = { workspace = true }
+rayon = { workspace = true }
+flock-cuda-ffi = { path = "../flock-cuda-ffi", optional = true }
+getrandom = "0.3"
+rand_chacha = "0.9"
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "flock-pure"
+path = "src/bin/flock-pure.rs"
+required-features = ["verity-unit"]
+
+# The circuit statement's rows are hm96-sha512 leaves (its Merkle trees on SHA-512), and its --zk mode needs Ligerito level
+# 0's hiding: both come with the sha512 patches (flock-sha512 and flock-zk, applied together by pod/60-circuit.sh).
+[[bin]]
+name = "flock-circuit"
+path = "src/bin/flock-circuit.rs"
+required-features = ["sha512"]

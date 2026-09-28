@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from verity_vllm.program.registry.prims import I32
-from verity.primitives.circuits.types import Array
+from verity.ml.circuits.types import Array
 
 REPO = Path(__file__).resolve().parents[2]
 LOG = REPO / "data" / "logs" / "m1.jsonl.gz"

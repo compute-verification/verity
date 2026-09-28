@@ -11,7 +11,7 @@ and compares every buffer the kernels write with the fixture, the rows' commitme
 object per line on stdout.  Exit 3: identity refused; 4: a buffer differs.
 
 The host supplies only public inputs: the operands, the epoch's salt and each commitment's domain id (`dom_a`, `dom_b`: the
-32-byte ids verity.primitives.commitments derives from the salt, the matmul's index and the row count).  The device commits A's and
+32-byte ids verity.ml.commitments derives from the salt, the matmul's index and the row count).  The device commits A's and
 B's rows as the verifier checks them (`commit_rows`) and derives the seeds from the roots; self-timing takes labels for the
 salt and the domain ids.
 

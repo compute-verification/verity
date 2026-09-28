@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from verity.primitives.circuits.refs import Coll
+from verity.ml.circuits.refs import Coll
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
 from verity_vllm.program.frontend.rules.common import from_rows, norm_kind, rows_of, shape
 from verity_vllm.program.frontend.rules.vllm_bindings.operands import _row_value, aten

@@ -1,6 +1,6 @@
 """Widths of the transition unit as data, so that every gadget, contract and search is parametric.
 
-``REAL`` is the frozen target (:data:`verity_catalog.silicon.silicon.AMPERE_BF16_M16N8K16` seen through the checker's
+``REAL`` is the frozen target (:data:`verity.ml.circuits.silicon.silicon.AMPERE_BF16_M16N8K16` seen through the checker's
 decomposition); ``TOY`` and ``TINY`` are reduced widths for exhaustive search.  Every derived quantity below is a
 *bound* used by a contract; the bounds are conservative (a table may have a few rows nobody reaches) and are the
 same formulas at every width.
@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:  # pragma: no cover
-    from verity_catalog.silicon.models import Model
+    from verity.ml.circuits.silicon.models import Model
 
 
 class Reject(Exception):
@@ -53,12 +53,12 @@ class Params:
 
     @classmethod
     def from_model(cls, model: Model) -> Params:
-        """The checker's widths of a :class:`verity_catalog.silicon.models.GroupSum` (FP32 accumulator).
+        """The checker's widths of a :class:`verity.ml.circuits.silicon.models.GroupSum` (FP32 accumulator).
 
         ``Params.from_model(AMPERE_BF16_M16N8K16) == REAL``; ``HOPPER_E4M3_K32`` / ``ADA_E4M3_M16N8K32`` give the
         lossy FP8 parameters.  Block-scaled models have no grouped-sum decomposition and are refused."""
-        from verity_catalog.silicon.models import GroupSum
-        from verity_catalog.silicon.term import FORMATS
+        from verity.ml.circuits.silicon.models import GroupSum
+        from verity.ml.circuits.silicon.term import FORMATS
 
         if not isinstance(model, GroupSum):
             raise ValueError(f"{getattr(model, 'name', model)!r} is not a GroupSum: the checker has no gadgets for it")

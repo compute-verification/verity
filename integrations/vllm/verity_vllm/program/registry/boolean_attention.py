@@ -2,27 +2,27 @@
 the v3 and v2 bodies (`b1`) and the v5 and v4 bodies (`fa2_check_inf`, `fa3_check_inf`) line for line over Boolean
 Definitions, so their word views are those chains at the same statics.
 
-Every word is its bits (`verity.primitives.circuits.boolean.word_type`): a bf16 word `Array<16, Value<1>>`, an f32 word `Array<32, Value<1>>`. The
-callees are the Boolean versions of the word chains': `DotBf16_v3{K=D, DOT}` and `DOT` itself (`verity_catalog.definitions.boolean.gemm`;
+Every word is its bits (`verity.ml.circuits.boolean.word_type`): a bf16 word `Array<16, Value<1>>`, an f32 word `Array<32, Value<1>>`. The
+callees are the Boolean versions of the word chains': `DotBf16_v3{K=D, DOT}` and `DOT` itself (`verity.ml.circuits.ops.boolean.gemm`;
 v6's is `AmpereBF16TcDot16_v3`), `F2fpBf16_v2`, the FTZ f32 operations, `F32Max_v2`, `GuardNegInfZero_v2` and the inverse sum
 (v6's `Fa2InvSum_v2`; v7's, v8's and v9's `INV`: `Fa2InvSum_v2` or `Fa3InvSum_v2`, FA3's, here) and `MufuEx2Ftz_v2`
-(`verity_catalog.definitions.boolean.mufu`). The word constants (zero, `_scale_log2_bits(D)`) are written with the constant bits. v4 and v5 are
+(`verity.ml.circuits.ops.boolean.mufu`). The word constants (zero, `_scale_log2_bits(D)`) are written with the constant bits. v4 and v5 are
 the FA3 / FA2 per-iteration `Check_inf` chains (`fa3_check_inf`, `fa2_check_inf`); v8 is v5's, whose unguarded blocks
 (`CHECK` false, below `MASKED_FROM`) rescale by the running max as it is; v9 is v4's, whose unguarded blocks read it as it
 is for `max * scale` too.
 """
 from __future__ import annotations
 
-from verity.primitives.circuits import boolean as BL
+from verity.ml.circuits import boolean as BL
 from collections.abc import Callable
 
-from verity.primitives.circuits.defs import CompositeDefinition, bind
-from verity.primitives.circuits.refs import Coll, Explicit, array_of, concat, strided_view, tuple_of
-from verity.primitives.circuits.types import Array, Tuple
-from verity_catalog.definitions.boolean import attention as BA
-from verity_catalog.definitions.boolean import gemm as BG
-from verity_catalog.definitions.boolean import mufu as BM
-from verity.primitives.circuits.boolean.trace import definition, word_of
+from verity.ml.circuits.defs import CompositeDefinition, bind
+from verity.ml.circuits.refs import Coll, Explicit, array_of, concat, strided_view, tuple_of
+from verity.ml.circuits.types import Array, Tuple
+from verity.ml.circuits.ops.boolean import attention as BA
+from verity.ml.circuits.ops.boolean import gemm as BG
+from verity.ml.circuits.ops.boolean import mufu as BM
+from verity.ml.circuits.boolean.trace import definition, word_of
 from verity_vllm.program.registry import hopper
 from verity_vllm.program.registry.b1 import (AttentionHeadV2, AttentionHeadV3, AttentionV2, AttentionV3, AttnBlockV2, AttnBlockV3,
                                              _lane, _scale_log2_bits)

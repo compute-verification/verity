@@ -1,7 +1,7 @@
-"""Poseidon2 over BabyBear (width 24, Plonky3 parameters): the Ligero side of the ``verity.primitives.commitments`` reference.
+"""Poseidon2 over BabyBear (width 24, Plonky3 parameters): the Ligero side of the ``verity.ml.commitments`` reference.
 
 The permutation, its constants (pinned by ``CONSTANTS_SHA256``), the known-answer vector, the scalar sponge and the
-operand packing live in :mod:`verity.primitives.commitments.poseidon2_babybear` (standard library only: the package boundary
+operand packing live in :mod:`verity.ml.commitments.poseidon2_babybear` (standard library only: the package boundary
 test forbids numpy there) so the committer (``leaf/v2h``) and the in-relation gadget (``hashchain.py``) are literally the
 same code; ``permute_ring`` evaluates the permutation over any ring (Python ints, numpy / torch arrays, or the
 compiler's affine ``Expr`` with the S-box supplied as product rows).  This module re-exports it and adds the numpy
@@ -11,9 +11,9 @@ row-vectorised evaluations the committer and the tests use: :func:`permute_np`, 
 from __future__ import annotations
 
 import numpy as np
-from verity.primitives.commitments.poseidon2_babybear import *  # noqa: F401,F403
-from verity.primitives.commitments.poseidon2_babybear import __all__ as _ALL, _external_layer, _internal_layer  # noqa: F401
-from verity.primitives.commitments.poseidon2_babybear import CAPACITY, IV, LANE_BITS, OUT, P, RATE, WIDTH, permute_ring
+from verity.ml.commitments.poseidon2_babybear import *  # noqa: F401,F403
+from verity.ml.commitments.poseidon2_babybear import __all__ as _ALL, _external_layer, _internal_layer  # noqa: F401
+from verity.ml.commitments.poseidon2_babybear import CAPACITY, IV, LANE_BITS, OUT, P, RATE, WIDTH, permute_ring
 
 __all__ = list(_ALL) + ["hash_rows_np", "pack_words_np", "permute_np", "row_digests"]
 
@@ -68,5 +68,5 @@ def hash_rows_np(words: np.ndarray, word_bits: int, role: int) -> np.ndarray:
 
 
 def row_digests(rows, word_bits: int, role: int) -> np.ndarray:
-    """``leaf/v2h`` (``verity.primitives.commitments.rowleaf``) for many rows: (count, n_words) -> (count, 8) digests."""
+    """``leaf/v2h`` (``verity.ml.commitments.rowleaf``) for many rows: (count, n_words) -> (count, 8) digests."""
     return hash_rows_np(np.asarray(rows, dtype=np.int64), word_bits, role)

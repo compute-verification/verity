@@ -17,14 +17,14 @@ import zlib
 import numpy as np
 import pytest
 
-from verity.primitives.circuits.evaluation import bits as BS
-from verity.primitives.circuits.evaluation.batch import type_shape
-from verity.primitives.circuits.evaluation.reference import standalone_call
-from verity.primitives.circuits import boolean as BL
-from verity.primitives.circuits import codec
-from verity.primitives.circuits.defs import PrimitiveDefinition, bind
-from verity_catalog.definitions.boolean import mufu as MU
-from verity.primitives.circuits.boolean import trace as TR
+from verity.ml.circuits.evaluation import bits as BS
+from verity.ml.circuits.evaluation.batch import type_shape
+from verity.ml.circuits.evaluation.reference import standalone_call
+from verity.ml.circuits import boolean as BL
+from verity.ml.circuits import codec
+from verity.ml.circuits.defs import PrimitiveDefinition, bind
+from verity.ml.circuits.ops.boolean import mufu as MU
+from verity.ml.circuits.boolean import trace as TR
 from verity_vllm.program.boolean import boolean_version
 from verity_vllm.program.registry import boolean_dense as BD
 from verity_vllm.program.registry import boolean_dense_norm as DN

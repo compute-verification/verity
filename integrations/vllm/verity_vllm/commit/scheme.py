@@ -1,4 +1,4 @@
-"""The commitment scheme of the Commit path: ``vllm-v1`` (:mod:`verity.primitives.commitments.vllm_v1`, spec ``PROTOCOL.md`` beside it).
+"""The commitment scheme of the Commit path: ``vllm-v1`` (:mod:`verity.ml.commitments.vllm_v1`, spec ``PROTOCOL.md`` beside it).
 
 Every leaf and root rule the integration hashes comes from here.  Headers, root bindings, tags and the tree walk are core's.
 The two rules that run once per leaf keep a prefix-once form over core's tags -- the position leaf (one hash per
@@ -18,8 +18,8 @@ import operator
 from collections.abc import Callable, Sequence
 from typing import Any
 
-from verity.primitives.commitments import leaves as core_tree
-from verity.primitives.commitments import vllm_v1 as V
+from verity.ml.commitments import leaves as core_tree
+from verity.ml.commitments import vllm_v1 as V
 
 __all__ = ["FA2H_KIND_CHUNK", "FA2H_TAG", "FA2H_VERSION", "LIFT_PREFIX", "NAME", "NODE_PREFIX", "POS_LEAF_TAG", "U64_32", "chunk_header", "chunk_leaf",
            "empty_root", "fold", "fold_levels", "fold_path", "names_digest", "path_in_levels", "path_shape", "pos_leaf", "run_root",

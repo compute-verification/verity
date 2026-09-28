@@ -18,8 +18,8 @@ from typing import Any
 
 from . import scopemem
 
-#: the cluster's description beside this package (tools/cluster), for node 1's lease-pool quotas
-DESCRIPTION = Path(__file__).resolve().parents[3] / "cluster" / "descriptions" / "nebius.toml"
+#: the cluster's description beside this package (infra/cluster), for node 1's lease-pool quotas
+DESCRIPTION = Path(__file__).resolve().parents[4] / "infra" / "cluster" / "descriptions" / "nebius.toml"
 NODE1 = "vy-nebius-1"
 DEFAULT_LEASE_DIR = "/run/gpu-lease"
 

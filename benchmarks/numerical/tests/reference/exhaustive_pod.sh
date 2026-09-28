@@ -4,7 +4,7 @@
 #   uv run research run --on vy-sp1 --project verity --source . --exclusive --stage wp1.exhaustive --require-result \
 #     -- bash benchmarks/numerical/tests/reference/exhaustive_pod.sh
 #
-# 1. clones Hawkeye's simulator at the pinned commit (catalog/verity_catalog/silicon/hawkeye/PIN.json) and checks the eight blob shas with git hash-object;
+# 1. clones Hawkeye's simulator at the pinned commit (verity/ml/circuits/silicon/hawkeye/PIN.json) and checks the eight blob shas with git hash-object;
 # 2. makes a Python 3.12 venv with a CPU libtorch (the pinned sources include <torch/torch.h>), pytest and z3;
 # 3. compiles hawkeye_harness.cpp against the unmodified pinned sources;
 # 4. runs exhaustive_driver.py (the fast suite first, then steps a-g) writing wp1_exhaustive.json and result.json to $RESEARCH_RUN_DIR.
@@ -15,7 +15,7 @@ UV=${WP1_UV:-/root/.local/bin/uv}
 WORK=${WP1_WORK:-/workspace/wp1}
 OUT=${RESEARCH_RUN_DIR:-/tmp/wp1}
 RANDOM_CASES=${WP1_RANDOM:-1000000}
-PIN=catalog/verity_catalog/silicon/hawkeye/PIN.json
+PIN=verity/ml/circuits/silicon/hawkeye/PIN.json
 HERE=benchmarks/numerical/tests/reference
 mkdir -p "$WORK" "$OUT"
 

@@ -1,4 +1,4 @@
-"""`verity.primitives.circuits.refs.runs` (the reference-run decomposition the derivation frontend and program families share) is
+"""`verity.ml.circuits.refs.runs` (the reference-run decomposition the derivation frontend and program families share) is
 pure and lives in `refs`, so `verity_vllm.program.frontend.rules.family.match_program` imports without torch."""
 
 from __future__ import annotations
@@ -7,7 +7,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from verity.primitives.circuits.refs import Affine, Concat, Explicit, Strided, runs
+from verity.ml.circuits.refs import Affine, Concat, Explicit, Strided, runs
 
 
 def test_runs_merges_adjacent_and_keeps_order():
@@ -26,7 +26,7 @@ def test_family_imports_without_torch():
     code = ("import sys; sys.modules['torch'] = None\n"
             "from verity_vllm.program.frontend.rules.family import match_program, expand_leaves\n"
             "from verity_vllm.program.frontend.rules.family import _runs\n"
-            "from verity.primitives.circuits.refs import runs\n"
+            "from verity.ml.circuits.refs import runs\n"
             "assert _runs is runs\n"
             "print('ok')")
     repo = Path(__file__).resolve().parents[2]

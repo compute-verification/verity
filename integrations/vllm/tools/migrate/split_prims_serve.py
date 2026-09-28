@@ -26,7 +26,7 @@ anything, on a tree it cannot split (a module in both places or neither, a part 
 
 `verify --before REV` builds circuit-check's task list, the registered ids and the descriptor digest of every target on REV and on
 this tree and fails on any difference; `pin` writes the family's slice of a snapshot to the fixture
-`tools/circuit_check/tests/fixtures/split/prims_serve.json`, which `tools/circuit_check/tests/test_split_prims_serve.py` holds
+`tools/verity/circuit_check/tests/fixtures/split/prims_serve.json`, which `tools/verity/circuit_check/tests/test_split_prims_serve.py` holds
 the tree to. `inventory` prints each family module's top-level names by kind and every `verity_vllm` import of a Definition module.
 
     python integrations/vllm/tools/migrate/split_prims_serve.py plan
@@ -56,13 +56,13 @@ VLLM = "integrations/vllm"
 PKG = "verity_vllm"
 REG = f"{PKG}.program.registry"
 TOOL = f"{VLLM}/tools/migrate/split_prims_serve.py"
-FIXTURE = "tools/circuit_check/tests/fixtures/split/prims_serve.json"
+FIXTURE = "tools/verity/circuit_check/tests/fixtures/split/prims_serve.json"
 
 #: the family's Definition modules: they stay, and import only `verity` and Definition modules
 DEFINITION_MODULES = ("__init__", "catalog", "prims", "ref_prims", "pad_prims", "lifted", "tables", "value_inputs", "operand_widths",
                       "b1", "b1_tp2", "serve3", "spec", "pouw_rows")
 #: a Definition module's import of a Definition module outside the registry, with the reason it stays
-BOUNDARY_EXCEPTIONS = {("pouw_rows", "verity.protocols.accounting.work.pouw.circuit.ncp2"): "NcpDequant is PoUW's own Definition (`verity.protocols.accounting.work.pouw`), which this "
+BOUNDARY_EXCEPTIONS = {("pouw_rows", "verity.experimental.protocols.pouw.circuit.ncp2"): "NcpDequant is PoUW's own Definition (`verity.experimental.protocols.pouw`), which this "
                        "row binds; the catalog will import it from PoUW, not from the integration"}
 
 
@@ -178,7 +178,7 @@ NEW_PACKAGES = {f"{PKG}.properties.difftests": '"""Difftest adapters (`verity_vl
 
 #: never rewritten: this tool, its tests and fixture name the old modules on purpose, and history stays as it was written
 EXCLUDE_PREFIX = (f"{VLLM}/tools/migrate/", FIXTURE)
-EXCLUDE_FILES = ("tools/circuit_check/tests/test_split_prims_serve.py", f"{VLLM}/tests/program/test_split_prims_serve.py")
+EXCLUDE_FILES = ("tools/verity/circuit_check/tests/test_split_prims_serve.py", f"{VLLM}/tests/program/test_split_prims_serve.py")
 TEXT_SUFFIXES = (".md", ".txt", ".toml", ".sh", ".cfg", ".ini", ".yaml", ".yml", ".rst")
 LINT_ALLOWLISTS = f"{VLLM}/tests/lint/allowlists"
 ROOTS = f"{VLLM}/tests/census_roots.txt"
@@ -1361,10 +1361,10 @@ def apply(root: Path = REPO, log=print) -> dict:
 def _digest(fn) -> str | None:
     """The descriptor digest of a circuit-check target: a specialization's Program digest; a primitive's descriptor entry inside
     a one-Call wrapper (which is not registered)."""
-    from verity.primitives.circuits import codec
-    from verity.primitives.circuits.annotations import definition_digest
-    from verity.primitives.circuits.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
-    from verity.primitives.circuits.program import Program
+    from verity.ml.circuits import codec
+    from verity.ml.circuits.annotations import definition_digest
+    from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
+    from verity.ml.circuits.program import Program
 
     if isinstance(fn, SpecializedDefinition):
         return codec.program_digest(codec.encode_program(Program(fn)))
@@ -1379,7 +1379,7 @@ def family_ids() -> dict[str, str]:
     """Each Definition family (`Name_vN`) a family Definition module defines (not one it imports), by that module."""
     import importlib
 
-    from verity.primitives.circuits.defs import CompositeDefinition, PrimitiveDefinition
+    from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition
 
     out: dict[str, str] = {}
     for name in DEFINITION_MODULES:
@@ -1505,7 +1505,7 @@ def inventory(root: Path = REPO) -> str:
     and every `verity_vllm` import of a Definition module with where it points."""
     import importlib
 
-    from verity.primitives.circuits.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition
+    from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition
 
     rows = []
     moved = {(p.src, n): p for p in PARTS for n in p.names}
@@ -1543,7 +1543,7 @@ def inventory(root: Path = REPO) -> str:
                 if isinstance(n, (ast.Import, ast.ImportFrom)):
                     mods = [a.name for a in n.names] if isinstance(n, ast.Import) else [_absolute(n, REG)]
                     for m in mods:
-                        if m.startswith(PKG) or m.startswith("verity.protocols.accounting.work.pouw"):
+                        if m.startswith(PKG) or m.startswith("verity.experimental.protocols.pouw"):
                             where = next((f"{p.kind}, moves to `{p.dst[len(PKG) + 1:]}`" for p in PARTS if p.src == name
                                           and any(n.lineno >= s.lineno and n.end_lineno <= s.end_lineno for s in tree.body
                                                   if _defined(s) & set(p.names))), None)

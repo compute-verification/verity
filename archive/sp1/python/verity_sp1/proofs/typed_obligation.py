@@ -74,7 +74,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
 
-from verity.primitives.commitments.identity import canonical_json_bytes, tagged_sha256
+from verity.ml.commitments.identity import canonical_json_bytes, tagged_sha256
 
 from .families import make_tc_ampere_bf16_gate_set, make_tensor_core_gate_set
 from .gateset import GateSet, make_isa_gate_set, make_word_gate_set

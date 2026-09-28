@@ -21,8 +21,8 @@ from typing import Any
 
 import torch
 
-from verity.primitives.circuits.refs import Affine, Coll, Concat, Strided, prefix_runs
-from verity.primitives.circuits.types import Record
+from verity.ml.circuits.refs import Affine, Coll, Concat, Strided, prefix_runs
+from verity.ml.circuits.types import Record
 from verity_vllm.program.frontend.torch_frontend import flat_types
 from verity_vllm.correspondence.runtime import NAMESPACE, SCHEMA
 
@@ -34,7 +34,7 @@ MAX_RUNS = 1 << 16   # a reference sequence with more contiguous runs than this 
 
 
 def _runs(refs, max_runs: int = MAX_RUNS) -> list[tuple[str, int, int, int]] | None:
-    """`verity.primitives.circuits.refs.runs` with a budget: the maximal contiguous runs `(space, idx, lo, hi)` of `refs` in sequence order, or None
+    """`verity.ml.circuits.refs.runs` with a budget: the maximal contiguous runs `(space, idx, lo, hi)` of `refs` in sequence order, or None
     once more than `max_runs` runs would be produced (the walk stops there instead of enumerating leaves)."""
     out: list[tuple[str, int, int, int]] = []
 

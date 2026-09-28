@@ -25,15 +25,15 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from verity.primitives.circuits import Program, bind  # noqa: E402
-from verity.primitives.circuits.defs import REGISTRY  # noqa: E402
+from verity.ml.circuits import Program, bind  # noqa: E402
+from verity.ml.circuits.defs import REGISTRY  # noqa: E402
 from verity_vllm.program.registry import b1, lifted as L, pad_prims as PP, prims as P  # noqa: E402
 from verity_vllm.program.lifting import lifted_records
 from verity_vllm.program.lifting import lifted_compose
 from verity_vllm.program.kernels import serve3_reference as ref  # noqa: E402
 from verity_vllm.program.registry.b1 import weights_type  # noqa: E402
 from tests.program.test_serve3 import D_MAX, LP, TINY, _inputs  # noqa: E402
-from verity.primitives.circuits.types import Array, Value  # noqa: E402
+from verity.ml.circuits.types import Array, Value  # noqa: E402
 from verity_vllm.pipeline import global_program as GP  # noqa: E402
 
 I32, BF16 = Value(32), Value(16)
@@ -268,7 +268,7 @@ def test_a3_5_boundaries_reject_random_noncanonical_words_by_name():
 
 
 def test_a4_true_widths_admissibility_is_the_unchanged_validator_at_w_max_lifted():
-    from verity.primitives.circuits import partition as PT
+    from verity.ml.circuits import partition as PT
     TSEL = bind(b1.TokenSelect, V=64)  # 32-bit token / index arithmetic: lifted leaves are 33 bits
     P0, P1 = Program(TSEL), Program(L.lift_def(TSEL))
     v0 = PT.validate_vu_partition(P0, f"default({L.W_MAX})", L.W_MAX)
@@ -282,7 +282,7 @@ def test_a4_true_widths_admissibility_is_the_unchanged_validator_at_w_max_lifted
     assert v1.width.max_seen is not None and v1.width.max_seen > 32  # a true lifted width above 32 was ADMITTED, not hidden
     assert v1.width.max_seen == v0.width.max_seen + (v1.width.max_seen - v0.width.max_seen) and v1.width.max_seen <= 2 * v0.width.max_seen
     # the helper wraps exactly that: the verdict at W_MAX_LIFTED is the lifted verdict; the 32 verdict is information beside it
-    from verity.primitives.circuits.query_ast import evaluate
+    from verity.ml.circuits.query_ast import evaluate
     fam = evaluate(P1, f"default({L.W_MAX_LIFTED})")
     adm = L.lifted_width_admissibility(P1, fam)
     assert adm["ok"] is True and adm["kind"] == "vu-partition-lifted" and adm["rules_version"] == "lifted-v1" and adm["w_max_lifted"] == 64
@@ -326,7 +326,7 @@ def test_a4_true_widths_admissibility_is_the_unchanged_validator_at_w_max_lifted
 
 
 def test_a5_lifted_use_document_carries_its_own_kind_and_rules_version_and_gate_g8_refuses_it_by_name(tmp_path):
-    from verity.primitives.circuits import partition as PT
+    from verity.ml.circuits import partition as PT
     from verity_vllm.query import query_artifact as QA
     from verity_vllm.check import gates as G
     TSEL = bind(b1.TokenSelect, V=64)

@@ -18,7 +18,7 @@ PROTOCOL SUMMARY (Build stage: the lowering rules that turn vLLM's exported ATen
   Invariants: rules decide structurally (`applies(node, ctx)`), never by op name alone; exactly one applicable rule translates a node;
     a refusal names one of derive.REASONS (mutation, decomposition, custom_op_without_binding, side_input, dynamic_control_flow,
     numerics_unregistered, hidden_state, unsupported_view, shape, export, identity); the rule set + versions go into the Program's
-    provenance (`annotations["derive"]`), which `verity.primitives.circuits.codec.program_digest` EXCLUDES -- the digest covers the dataflow only.
+    provenance (`annotations["derive"]`), which `verity.ml.circuits.codec.program_digest` EXCLUDES -- the digest covers the dataflow only.
   Protocol spec: Notion -> "vLLM integration — protocol spec (Build · Match · Commit)"."""
 
 from __future__ import annotations

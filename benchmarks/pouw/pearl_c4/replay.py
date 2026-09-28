@@ -50,13 +50,13 @@ from functools import partial
 from multiprocessing import get_context
 from pathlib import Path
 
-from verity.primitives.commitments import Commitment, MerkleTree, Opening
+from verity.ml.commitments import Commitment, MerkleTree, Opening
 
-from verity.protocols.accounting.work.pouw import audit as au
-from verity.protocols.accounting.work.pouw.protocol import Context, Matmul, Shape, tagged
-from verity.protocols.accounting.work.pouw.schemes import get
-from verity.protocols.accounting.work.pouw.schemes import pearl_c4 as F
-from verity.protocols.accounting.work.pouw.schemes import pearl_c_work as W
+from verity.experimental.protocols.pouw import audit as au
+from verity.experimental.protocols.pouw.protocol import Context, Matmul, Shape, tagged
+from verity.experimental.protocols.pouw.schemes import get
+from verity.experimental.protocols.pouw.schemes import pearl_c4 as F
+from verity.experimental.protocols.pouw.schemes import pearl_c_work as W
 
 FORMAT = "verity/pouw/pearl-c4-transcript/v0"
 REPORT = "verity/pouw/pearl-c4-replay/v0"

@@ -153,7 +153,7 @@ def is_str(node: ast.AST | None) -> bool:
 
 
 class Aliases:
-    """Where the names bound by a file's imports come from: ``np`` -> ``numpy``, ``defs`` -> ``verity.primitives.circuits.defs``.
+    """Where the names bound by a file's imports come from: ``np`` -> ``numpy``, ``defs`` -> ``verity.ml.circuits.defs``.
 
     Also records ``name = importlib.import_module("pkg.mod")``, ``name = sys.modules["pkg.mod"]`` and
     ``name = __import__("pkg.mod", ...)`` with literal module names.  Scope-insensitive: one map per file.

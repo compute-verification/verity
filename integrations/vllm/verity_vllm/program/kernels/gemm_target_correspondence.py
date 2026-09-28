@@ -16,7 +16,7 @@ rows and columns is stored: ``w_<n>.npz`` (the sampled weight rows) once per sha
 
 ``check`` (any host): ``cpu_model.gemm_model`` with the target's step parameters on the stored operands, compared word for word.
 The step is cross-checked on a sample of every case's coordinates against the registered primitive itself
-(``verity.primitives.circuits.evaluation.evaluate_batch``).  One inexact coordinate refuses the correspondence; there is no tolerance.  A bias case
+(``verity.ml.circuits.evaluation.evaluate_batch``).  One inexact coordinate refuses the correspondence; there is no tolerance.  A bias case
 is compared under both epilogues the GEMM relations know (FP32 bias add before the rounding, as a cuBLASLt epilogue does, and
 a bf16 add after it, as vLLM's Triton linear does) and reports which one holds.
 
@@ -244,8 +244,8 @@ def capture(a: CaptureOptions) -> int:
 
 def step_model(dot: str):
     """``(the registered step primitive, a cpu_model TCModel with its parameters)`` for a ``GemmTarget.dot`` name."""
-    from verity_catalog.silicon.silicon import AMPERE_BF16_M16N8K16
-    from verity_catalog.silicon.total import HOPPER_BF16_WGMMA_K16
+    from verity.ml.circuits.silicon.silicon import AMPERE_BF16_M16N8K16
+    from verity.ml.circuits.silicon.total import HOPPER_BF16_WGMMA_K16
     from verity_vllm.program.kernels.mma import TCModel
     from verity_vllm.program.frontend.targets import DOTS
 
@@ -259,7 +259,7 @@ def step_model(dot: str):
 def crosscheck(prim, model, x: np.ndarray, w: np.ndarray, rows: int, cols: int) -> tuple[int, int]:
     """``(exact, attempted)``: the FP32 chain of ``cpu_model`` against the registered primitive's own evaluation on the first
     ``rows`` x ``cols`` coordinates."""
-    from verity.primitives.circuits.evaluation import evaluate_batch
+    from verity.ml.circuits.evaluation import evaluate_batch
     from verity_vllm.program.kernels import cpu_model as CM
 
     xs, ws = x[:rows], w[:cols]

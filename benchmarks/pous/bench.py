@@ -12,8 +12,8 @@ Every implementation passes the same gates and reports the same metrics, written
 (`verity-pous/bench-result/v1`) and, under `research run`, to `$RESEARCH_RUN_DIR/result.json`:
 
 * **Gates.**
-  - The scheme's pinned conformance vectors (`verity/protocols/accounting/space/pous/tests/fixtures/schemes/<name>.json`), through
-    `verity.protocols.accounting.space.pous.protocol`.
+  - The scheme's pinned conformance vectors (`verity/experimental/protocols/pous/tests/fixtures/schemes/<name>.json`), through
+    `verity.experimental.protocols.pous.protocol`.
   - The implementation's own gates: known answers, and decoded blocks equal to the reference's.
   - The timed audit, and a negative control where one block in ten is wrong.
   - `certificate`: the scheme's certificate covers the audit's k and deadline.
@@ -25,7 +25,7 @@ Every implementation passes the same gates and reports the same metrics, written
 
 Implementations (`IMPLS`), each adding one class:
 
-* `reference`: `verity.protocols.accounting.space.pous` itself, the specification, over CPU processes. W is filled deterministically, since the
+* `reference`: `verity.experimental.protocols.pous` itself, the specification, over CPU processes. W is filled deterministically, since the
   decode's cost does not depend on its bytes.
 * `vllm-gpu`: the GPU twins and kernels of `verity_vllm.engine.pous` (#172, #188), from `--impl-tree`.
   - It runs through that tree's frozen harness, `verity-vllm pous-dense-bench`, with the flags of the band's run of
@@ -34,7 +34,7 @@ Implementations (`IMPLS`), each adding one class:
 * `p2-v1-gpu`: P2 v1, the frozen specification (`p2_v1/`): its reference pinned by the P2 kit's vectors, its GPU library
   (decode with v1 keys on `p2_gpu/p2dec.cu`'s tuned squaring, encode by two roots) and the same harness steps as `band-gpu`
   at k = 105, so the two compare side by side (`side_by_side.py`). It is its own scheme (`--scheme` is ignored): P2 v1 is not a
-  `verity.protocols.accounting.space.pous` registered scheme, whose P2 is the MVP's `p2-16448/v3` (the spec's SHAKE256 keys, its 24-byte salt and leaves)
+  `verity.experimental.protocols.pous` registered scheme, whose P2 is the MVP's `p2-16448/v3` (the spec's SHAKE256 keys, its 24-byte salt and leaves)
   and `p2-16448/v2` (ChaCha8 keys).
 * `band-gpu`: the same kernels, moved into `band_gpu/` with no vLLM dependency, the whole-chain decode on lane pairs
   (`harness.KERNELS`), run by the POUS-only harness (`band_gpu/harness.py`): kernel gates that stop the run when they fail,
@@ -92,8 +92,8 @@ def weight_set(ws_id: str) -> dict[str, Any]:
 
 
 def conformance_gate(name: str) -> dict[str, Any]:
-    """The scheme's pinned vectors, recomputed through `verity.protocols.accounting.space.pous.protocol` (the conformance suite's own check)."""
-    sys.path.insert(0, str(ROOT / "verity" / "protocols" / "accounting" / "space" / "pous" / "tests"))
+    """The scheme's pinned vectors, recomputed through `verity.experimental.protocols.pous.protocol` (the conformance suite's own check)."""
+    sys.path.insert(0, str(ROOT / "verity" / "experimental" / "protocols" / "pous" / "tests"))
     import pous_scheme_vectors as sv
 
     pinned = json.loads(sv.path(name).read_text())
@@ -110,7 +110,7 @@ def tags_gate(tags: list[bytes], segments: int) -> dict[str, Any]:
     """The implementation's segment tags equal the reference's `tag_s = salt ‖ u64 s` and are injective across all
     segments: with a shared domain, identical segments get identical labels and the audit accepts with probability 1
     (Lean `shared_domain_breaks`)."""
-    from verity.protocols.accounting.space.pous.labels import salt_value, tag
+    from verity.experimental.protocols.pous.labels import salt_value, tag
 
     ref = [tag(salt_value(SALT), s).to_bytes(32, "little") for s in range(segments)]
     injective, equal = len(set(tags)) == segments, tags == ref
@@ -130,7 +130,7 @@ def certificate_gate(scheme, k: int, limit_ns: int) -> tuple[dict[str, Any], tup
 
 
 def profile_json(scheme, k: int, limit_ns: int, gaps: tuple[str, ...]) -> dict[str, Any]:
-    from verity.protocols.accounting.space.pous.protocol import StorageProfile
+    from verity.experimental.protocols.pous.protocol import StorageProfile
 
     p = scheme.params
     return StorageProfile(scheme.name, p.manifest(), p.blocks, p.m, k, limit_ns, scheme.certificate, gaps,
@@ -147,7 +147,7 @@ def _w_segment(label: str, s: int, size: int, used: int) -> bytes:
 
 
 def _encode_job(job: tuple[str, int, str, int, int]) -> tuple[int, list[bytes], float]:
-    from verity.protocols.accounting.space.pous import schemes
+    from verity.experimental.protocols.pous import schemes
 
     name, segments, label, s, used = job
     scheme = schemes.get(name, segments=segments)
@@ -158,7 +158,7 @@ def _encode_job(job: tuple[str, int, str, int, int]) -> tuple[int, list[bytes], 
 
 
 def _decode_job(job: tuple[str, int, str, int, int, list[bytes]]) -> tuple[int, bool, float]:
-    from verity.protocols.accounting.space.pous import schemes
+    from verity.experimental.protocols.pous import schemes
 
     name, segments, label, s, used, blocks = job
     scheme = schemes.get(name, segments=segments)
@@ -169,12 +169,12 @@ def _decode_job(job: tuple[str, int, str, int, int, list[bytes]]) -> tuple[int, 
 
 
 class Reference:
-    """`verity.protocols.accounting.space.pous` itself: encode and decode on CPU processes, `vk` and the timed audit through `verity.protocols.accounting.space.pous.protocol`."""
+    """`verity.experimental.protocols.pous` itself: encode and decode on CPU processes, `vk` and the timed audit through `verity.experimental.protocols.pous.protocol`."""
 
     name = "reference"
 
     def run(self, a: argparse.Namespace, ws: dict[str, Any], out: Path) -> dict[str, Any]:
-        from verity.protocols.accounting.space.pous import protocol, schemes
+        from verity.experimental.protocols.pous import protocol, schemes
 
         base = schemes.get(a.scheme)
         segments = -(-ws["bytes"] // base.params.segment_bytes)
@@ -201,7 +201,7 @@ class Reference:
         negative = self._audits(protocol, scheme, vk, wrong.__getitem__, a.audits, a.rtt_allowance_ns)
         k, limit = honest["k"], honest["limit_ns"]
         gate, gaps = certificate_gate(scheme, k, limit)
-        from verity.protocols.accounting.space.pous import dense as dense_codec
+        from verity.experimental.protocols.pous import dense as dense_codec
 
         nt = max(n, TAG_SEGMENTS)
         wide = scheme.params.with_segments(nt)
@@ -240,7 +240,7 @@ class VllmGpu:
     MODELS = {"qwen2.5-0.5b/linears+head": "Qwen/Qwen2.5-0.5B", "qwen2.5-7b/layer0+head": "Qwen/Qwen2.5-7B"}
 
     def run(self, a: argparse.Namespace, ws: dict[str, Any], out: Path) -> dict[str, Any]:
-        from verity.protocols.accounting.space.pous import schemes
+        from verity.experimental.protocols.pous import schemes
 
         if ws["id"] not in self.MODELS:
             raise SystemExit(f"vllm-gpu: its frozen harness runs only {sorted(self.MODELS)}, not {ws['id']!r}")
@@ -248,8 +248,8 @@ class VllmGpu:
         model = self.MODELS[ws["id"]]
         impl_out = out / "impl"
         impl_out.mkdir(parents=True, exist_ok=True)
-        paths = [tree / "integrations" / "vllm", tree, tree / "verity" / "protocols" / "accounting" / "space" / "pous",
-                 tree / "verity" / "protocols" / "verification" / "sampled_proofs", tree / "tools" / "research" / "src"]
+        paths = [tree / "integrations" / "vllm", tree, tree / "verity" / "experimental" / "protocols" / "pous",
+                 tree / "verity" / "experimental" / "protocols" / "sampled_proofs", tree / "tools" / "research" / "src"]
         env = {**os.environ, "PYTHONPATH": ":".join(map(str, paths)), "VLLM_ENABLE_V1_MULTIPROCESSING": "0"}
         cmd = [a.python, "-m", "verity_vllm.pipeline.cli", "pous-dense-bench", "--codec", a.scheme, "--out", str(impl_out),
                "--shapes", str(tree / "integrations/vllm/workloads/dense_decode_shapes.json"), "--build-dir", a.build_dir,
@@ -354,17 +354,17 @@ class P2Gpu:
 
     C is random blocks below p, with four blocks encoded by the reference planted in it. The kernel's sampled outputs
     (the first 1,024 blocks, 1,024 pseudo-random ones, the last, and the planted ones) are checked against the
-    reference's decode.  The timed audit and its negative control run on the same C through `verity.protocols.accounting.space.pous.protocol`."""
+    reference's decode.  The timed audit and its negative control run on the same C through `verity.experimental.protocols.pous.protocol`."""
 
     name = "p2-gpu"
 
     def run(self, a: argparse.Namespace, ws: dict[str, Any], out: Path) -> dict[str, Any]:
         import numpy as np
 
-        from verity.protocols.accounting.space.pous import protocol, schemes
-        from verity.protocols.accounting.space.pous.labels import salt_value, tag
-        from verity.protocols.accounting.space.pous.schemes import p2
-        from verity.protocols.accounting.space.pous.verifier import VerifierKey, leaf_hash
+        from verity.experimental.protocols.pous import protocol, schemes
+        from verity.experimental.protocols.pous.labels import salt_value, tag
+        from verity.experimental.protocols.pous.schemes import p2
+        from verity.experimental.protocols.pous.verifier import VerifierKey, leaf_hash
 
         base = schemes.get(a.scheme)
         if not isinstance(base, schemes.P2) or base.params.expander != p2.CHACHA8:
@@ -471,10 +471,10 @@ IMPLS = {c.name: c for c in (Reference, VllmGpu, BandGpu, P2V1Gpu, P2Gpu)}
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--scheme", default="band-chain/d12/v1", help="a registered name (verity.protocols.accounting.space.pous.schemes)")
+    ap.add_argument("--scheme", default="band-chain/d12/v1", help="a registered name (verity.experimental.protocols.pous.schemes)")
     ap.add_argument("--impl", required=True, choices=sorted(IMPLS))
     ap.add_argument("--weight-set", required=True, help="an id of benchmarks/pous/weight_sets.json")
-    ap.add_argument("--hardware", required=True, help="a census hardware id (catalog/census/hardware.json), e.g. l40s-48gb/bf16")
+    ap.add_argument("--hardware", required=True, help="a census hardware id (benchmarks/census/hardware.json), e.g. l40s-48gb/bf16")
     ap.add_argument("--out", required=True)
     ap.add_argument("--audits", type=int, default=20,
                     help="timed audits per round; 0 (band-gpu, p2-v1-gpu): an untimed placement, which runs the gates, encode, "
@@ -491,7 +491,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--kernels", default="", help="band-gpu: kernel settings over harness.KERNELS, as JSON (harness.SWITCHES)")
     ap.add_argument("--tokens", default="1,8,32,2048", help="band-gpu, p2-v1-gpu: the synthetic loop's token counts T")
     ap.add_argument("--reps", type=int, default=20, help="band-gpu, p2-v1-gpu: timed repetitions after one warm-up; every rep is recorded")
-    ap.add_argument("--reference-segments", type=int, default=2, help="band-gpu: segments of C checked against verity.protocols.accounting.space.pous")
+    ap.add_argument("--reference-segments", type=int, default=2, help="band-gpu: segments of C checked against verity.experimental.protocols.pous")
     ap.add_argument("--pings", type=int, default=5000, help="band-gpu, p2-v1-gpu: round-trip calibration pings before and after the audits")
     ap.add_argument("--k", type=int, default=0, help="band-gpu, p2-v1-gpu: challenges per audit (0: the certificate's)")
     ap.add_argument("--allowance", default="p99.9", choices=["p50", "p99.9", "max"],
@@ -518,7 +518,7 @@ def main(argv: list[str] | None = None) -> int:
     out.mkdir(parents=True, exist_ok=True)
     ws = weight_set(a.weight_set)
     t = time.perf_counter()
-    from verity.protocols.accounting.space.pous import schemes as _schemes
+    from verity.experimental.protocols.pous import schemes as _schemes
 
     if a.audits < 0 or (a.audits == 0 and a.impl not in ("band-gpu", "p2-v1-gpu")):
         raise SystemExit(f"--audits {a.audits}: only band-gpu and p2-v1-gpu run untimed (--audits 0)")

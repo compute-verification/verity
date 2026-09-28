@@ -47,11 +47,11 @@ def test_plan_wraps_the_flock_cell_script():
         assert cmd[:4] == ["bash", "-c", C.PROBE_WRAP, "cell-job"] and cmd[4] == ("10.0.0.2:7400" if j["role"] == "prover" else "")
         assert cmd[5] == ""                                  # a 10.x address, not a .runpod.internal name: no RTT target
         cmd = cmd[6:]
-        assert cmd == j["command"] and cmd[:2] == ["bash", "backends/flock/pod/30-cell.sh"] and "REL=bf16-hopper" in cmd and "RUNS=5" in cmd
+        assert cmd == j["command"] and cmd[:2] == ["bash", "verity/ml/flock/pod/30-cell.sh"] and "REL=bf16-hopper" in cmd and "RUNS=5" in cmd
         assert f"POINTS={C.DEFAULT_POINTS}" in cmd
     assert "ROLE=verifier" in v["command"]
     assert {"ROLE=prover", "VERIFIER=10.0.0.2:7400", "RTT_TARGET=10.0.0.2:22", "LOOPBACK=1"} <= set(p["command"])
-    assert (Path(C.LW.REPO) / "backends/flock/pod/30-cell.sh").is_file()
+    assert (Path(C.LW.REPO) / "verity/ml/flock/pod/30-cell.sh").is_file()
     assert C.launch(cell, dry_run=True) == [{"role": "verifier", "argv": v["argv"]}, {"role": "prover", "argv": p["argv"]}]
     assert C.Cell(**json.loads(cell.to_json())) == cell
 

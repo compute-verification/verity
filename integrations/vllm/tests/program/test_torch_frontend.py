@@ -8,7 +8,7 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from verity.primitives.circuits import Program, bind, encode_program, program_digest, query  # noqa: E402
+from verity.ml.circuits import Program, bind, encode_program, program_digest, query  # noqa: E402
 from verity_vllm.program.frontend import FrontendError, export, function, Arr, batch, ops  # noqa: E402
 from verity_vllm.program.frontend import examples as ex  # noqa: E402
 

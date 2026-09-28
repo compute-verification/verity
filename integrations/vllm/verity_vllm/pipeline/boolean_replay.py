@@ -1,6 +1,6 @@
 """The Boolean re-verification of a deferred Commit: the Commit's own C2 replay from its sealed bundle (`pipeline.cpu_replay`), with
 every picked row evaluated by the Boolean version of its Definition (`verity_vllm.program.boolean.boolean_version`, the switch's
-one table) on the committed inputs, bit-sliced (`verity.primitives.circuits.evaluation.bits.evaluate_bits`), and compared with the committed outputs.
+one table) on the committed inputs, bit-sliced (`verity.ml.circuits.evaluation.bits.evaluate_bits`), and compared with the committed outputs.
 
     verity-vllm boolean-replay BUNDLE|KEEP --row-dir D --checkpoint-dir CK --out OUT [--checkpoints-manifest M --model REPO
                                --revision REV] [--word]
@@ -36,8 +36,8 @@ from typing import Any
 
 import numpy as np
 
-from verity.primitives.circuits import boolean as BL
-from verity.primitives.circuits.codec import descriptor_id
+from verity.ml.circuits import boolean as BL
+from verity.ml.circuits.codec import descriptor_id
 from verity_vllm.check.replay import evaluate as EV
 from verity_vllm.config import option
 from verity_vllm.pipeline import cpu_replay as CR
@@ -137,7 +137,7 @@ class BooleanRows:
         return self._fn[spec]
 
     def __call__(self, pi: Any, r: dict, d: dict, ops: Any) -> dict[str, np.ndarray]:
-        from verity.primitives.circuits.evaluation.bits import evaluate_bits
+        from verity.ml.circuits.evaluation.bits import evaluate_bits
 
         t0, i = time.perf_counter(), int(r["i"])
         nd, line = self.nodes[self.K + i], {"i": i, "spec": r["spec"]}
@@ -159,7 +159,7 @@ class BooleanRows:
         each conversion's element-width list and one run's temporaries (`to_bits`), the bit-sliced evaluation (`bits.peak_bytes`), and
         the output's words (`to_words`).  Its operands are views of the weights or a few committed words, and are not counted; a row
         with no Boolean version is declined before it allocates (0)."""
-        from verity.primitives.circuits.evaluation.bits import peak_bytes
+        from verity.ml.circuits.evaluation.bits import peak_bytes
 
         nd = self.nodes[self.K + int(vu["i"])]
         try:
@@ -178,7 +178,7 @@ class BooleanRows:
 
     def prewarm(self, picked: list[dict]) -> dict[str, str]:
         """Each picked spec's Boolean version compiled in the parent, before the replay forks (`driver._prewarm_evaluators`)."""
-        from verity.primitives.circuits.evaluation.bits import compile as compile_bits
+        from verity.ml.circuits.evaluation.bits import compile as compile_bits
 
         out = {}
         for spec in sorted({str(vu.get("spec")) for vu in picked}):

@@ -402,7 +402,7 @@ def step_cases(n_golden: int = 12, seed: int = 0) -> list[tuple[str, Any]]:
     """Structured Ampere cases plus a sample of golden records, as ``(name, (c, a, b))``."""
     import random
 
-    from verity_catalog.silicon.silicon import AMPERE_BF16_M16N8K16 as AMP
+    from verity.ml.circuits.silicon.silicon import AMPERE_BF16_M16N8K16 as AMP
 
     from . import cases as C
 

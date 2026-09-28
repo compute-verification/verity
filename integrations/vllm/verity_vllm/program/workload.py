@@ -26,12 +26,12 @@ import json
 from dataclasses import dataclass, field
 from typing import Any
 
-from verity.primitives.circuits.codec import _spec_id, decode_program, encode_program, program_digest
-from verity.primitives.circuits.defs import Body, CompositeDefinition, Node, SpecializedDefinition
-from verity.primitives.circuits.constants import REGISTRATION
-from verity.primitives.circuits.program import Program, is_input
-from verity.primitives.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Refs, Strided, coll_concat, concat
-from verity.primitives.circuits.types import Tuple as TupleT, Type
+from verity.ml.circuits.codec import _spec_id, decode_program, encode_program, program_digest
+from verity.ml.circuits.defs import Body, CompositeDefinition, Node, SpecializedDefinition
+from verity.ml.circuits.constants import REGISTRATION
+from verity.ml.circuits.program import Program, is_input
+from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Refs, Strided, coll_concat, concat
+from verity.ml.circuits.types import Tuple as TupleT, Type
 from verity_vllm.program.sampling_event import is_sampling_event
 
 SCHEMA = "verity/workload-program/v1"
@@ -136,7 +136,7 @@ class RequestComponent:
     groups: tuple[str, ...] = ()  # original request-wrapper parameter each component parameter (Input batch) belongs to
     step_nodes: tuple[tuple[int, int], ...] = ()  # request-relative step s -> body node range [lo, hi) (segments ending at TokenSelect_v1, X-09's unit)
     step_gates: tuple[tuple[int, int], ...] = ()  # the same in component-local gates
-    bindings: tuple[str, ...] = ()  # each component parameter's binding time (`verity.primitives.circuits.constants`: registration or run)
+    bindings: tuple[str, ...] = ()  # each component parameter's binding time (`verity.ml.circuits.constants`: registration or run)
 
     def to_json(self) -> dict:
         return {"specialization": _spec_id(self.fn), "program_digest": self.program_digest, "program_fn": self.program_fn,
@@ -159,8 +159,8 @@ def _canonicalize(dp, canon: dict[str, tuple[Any, dict]] | None = None) -> None:
     encoded ONCE (v0, self-contained), compared with the canonical one under its id (fail-closed: a different body under the
     same id is `IdentityConflict`, never first-wins), and every reference to it (node callees, function-valued statics) is
     re-pointed to the canonical object. Primitives come from the registry and are already shared."""
-    from verity.primitives.circuits.codec import _encode_definition
-    from verity.primitives.circuits.defs import IdentityConflict, PrimitiveDefinition
+    from verity.ml.circuits.codec import _encode_definition
+    from verity.ml.circuits.defs import IdentityConflict, PrimitiveDefinition
 
     if canon is None:
         canon = _CANON
@@ -205,7 +205,7 @@ def _repoint(fn, subst: dict[str, Any]) -> None:
 
 
 def _subst_static(v, subst):
-    from verity.primitives.circuits.defs import PrimitiveDefinition, SpecializedDefinition
+    from verity.ml.circuits.defs import PrimitiveDefinition, SpecializedDefinition
     if isinstance(v, SpecializedDefinition):
         return subst.get(_spec_id(v), v)
     if isinstance(v, PrimitiveDefinition):
@@ -517,7 +517,7 @@ class WorkloadProgram:
         return {"schema": SCHEMA + "/address-map", "workload_digest": self.digest, "gates": body.gates, "input_gates": body.offsets[self._K],
                 "shared": {"group": self.shared_group, "root_nodes": [0, S], "gates": shared_gates, "n_batches": S,
                            **({} if self.shared_positions_uniform else {"component_params_by_request": [list(x) for x in self.shared_by_request]})},
-                "convention": "gate index in the canonical layout of the workload root (verity.primitives.circuits.layout.Circuit); hierarchical path "
+                "convention": "gate index in the canonical layout of the workload root (verity.ml.circuits.layout.Circuit); hierarchical path "
                               "root/node[k]/node[i]... for instances; Input gates first in root-parameter order (the shared group once, "
                               "then each request's own), then one call node per request in manifest order",
                 "inputs": inputs, "requests": reqs}

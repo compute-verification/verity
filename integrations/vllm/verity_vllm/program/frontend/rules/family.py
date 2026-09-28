@@ -26,12 +26,12 @@ import time
 from dataclasses import dataclass, field
 from typing import Callable
 
-from verity.primitives.circuits.codec import _spec_id
-from verity.primitives.circuits.defs import Body, CompositeDefinition, SpecializedDefinition
-from verity.primitives.circuits.defs import bind as ir_bind
-from verity.primitives.circuits.refs import Affine, Refs, concat
-from verity.primitives.circuits.refs import runs as _runs  # pure (was `..derive._runs`): this module must import without torch (capture fold M4 comparison)
-from verity.primitives.circuits.types import Array, Record, Tuple as TupleT, Type
+from verity.ml.circuits.codec import _spec_id
+from verity.ml.circuits.defs import Body, CompositeDefinition, SpecializedDefinition
+from verity.ml.circuits.defs import bind as ir_bind
+from verity.ml.circuits.refs import Affine, Refs, concat
+from verity.ml.circuits.refs import runs as _runs  # pure (was `..derive._runs`): this module must import without torch (capture fold M4 comparison)
+from verity.ml.circuits.types import Array, Record, Tuple as TupleT, Type
 from verity_vllm.program.frontend.rules.base import FamilyRule, RuleInfo
 
 Run = tuple[str, int, int, int]  # (space, idx, lo, hi)
@@ -520,14 +520,14 @@ SERVE_V3_FAMILY = RegisteredFamily("Family[Serve_v3]", 1, _serve3.ServeV3, _serv
 
 def _layer_weights_with_table(C: dict) -> Record:
     lw = _b1.layer_weights_type(C)
-    from verity.primitives.circuits.types import Value
+    from verity.ml.circuits.types import Value
     return Record(*(list(lw.fields) + [("cos_sin", Array(C["MAX_POS"], Array(C["D"], Value(16))))]))
 
 
 def _decoder_layer_sig(S):
     C = S.C
     H = C["H"]
-    from verity.primitives.circuits.types import Value
+    from verity.ml.circuits.types import Value
     BF = Value(16)
     rows = Array(S.T, Array(H, BF))
     params = [("h", rows)] + ([] if S.L0 else [("res", rows)]) + [("w", _layer_weights_with_table(C))]
@@ -539,7 +539,7 @@ def _decoder_layer_body(B, S, h, *rest):
     K/V rows, LayerPost x T. Layer 0 (`L0`) takes no residual (the residual is `h`)."""
     C, T, T0 = S.C, S.T, S.T0
     res, w = (h, rest[0]) if S.L0 else (rest[0], rest[1])
-    from verity.primitives.circuits.refs import Coll as _Coll, array_of as _array_of, tuple_of
+    from verity.ml.circuits.refs import Coll as _Coll, array_of as _array_of, tuple_of
     lw = _Coll(_b1.layer_weights_type(C), w.refs.slice(0, _b1.layer_weights_type(C).leaves))
     cs = w["cos_sin"]
     pre = [B.call(ir_bind(_b1.LayerPre, C=C, L0=S.L0), h[i], res[i], lw, cs[T0 + i], name=f"t={T0 + i}/pre") for i in range(T)]

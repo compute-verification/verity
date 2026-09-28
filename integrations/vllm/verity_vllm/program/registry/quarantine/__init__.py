@@ -15,5 +15,5 @@ Admission (gate G4 + `verity_vllm.properties.quarantine_lint` + `verity_vllm.pro
   5. every specialization of the definition that appears in the target run is compared at least once by Tier A (replay);
   6. only then may an accepted profile use the definition.  Promotion out of quarantine into `b1.py` is an integrator move.
 
-Lane sub-packages must import only `verity.primitives.circuits.*` and the standard library's math / dataclasses / typing.
+Lane sub-packages must import only `verity.ml.circuits.*` and the standard library's math / dataclasses / typing.
 """

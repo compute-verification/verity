@@ -6,8 +6,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.primitives.circuits.evaluation.reference import evaluate
-from verity.primitives.circuits.defs import bind
+from verity.ml.circuits.evaluation.reference import evaluate
+from verity.ml.circuits.defs import bind
 from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.kernels import derived_rows as DR
 from verity_vllm.program.registry import b1, hopper

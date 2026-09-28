@@ -1,4 +1,4 @@
-// Pearl-C on the H100 (sm_90a): the kernels of `pearl-c-h100-v0` (verity/protocols/accounting/work/pouw/schemes/pearl_c.py) and the
+// Pearl-C on the H100 (sm_90a): the kernels of `pearl-c-h100-v0` (verity/experimental/protocols/pouw/schemes/pearl_c.py) and the
 // plain FP8 baseline, for run.py.  Every kernel takes one Args by value: 16 pointers p[] and 16 ints i[].
 //
 // Tiled operand layout (both GEMM operands, the forming inputs E and F, and the peel factors): rows are cut into blocks of

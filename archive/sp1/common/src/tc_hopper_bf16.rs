@@ -1,6 +1,6 @@
 //! The H100 BF16 Table 2 row (`bf16-hopper`): `GemmCoordinate<1536>` over
 //! `mma.sync.m16n8k16.bf16` on the H100, bit for bit as
-//! `verity_catalog.silicon.models.HOPPER_BF16_M16N8K16` computes it -- one group of 16
+//! `verity.ml.circuits.silicon.models.HOPPER_BF16_M16N8K16` computes it -- one group of 16
 //! products, a 26-bit adder, exponent floor `-133` (Hawkeye's Hopper
 //! parameters, re-measured on the mma.sync path by lane tc-probe-fp8) -- then
 //! the software round-to-nearest-even cast to BF16 (`cast.f32_to_bf16_word`,

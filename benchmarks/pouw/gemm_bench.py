@@ -1,12 +1,12 @@
 """Overhead of each PoUW scheme's honest GEMM against the plain GEMM of its datatype, on one RTX 4090.
 
-    python benchmarks/pouw/gemm_bench.py --out RESULT.json      (on the pod: torch with CUDA, verity and verity.protocols.accounting.work.pouw importable)
+    python benchmarks/pouw/gemm_bench.py --out RESULT.json      (on the pod: torch with CUDA, verity and verity.experimental.protocols.pouw importable)
 
 Gates, before any timing (the run refuses to time a kernel that fails its gate):
 - ``ncp``: the s8 GEMM's every 16-deep checkpoint, dumped at a small lead-domain shape and shifted to route U
-  (`ncp.route_u_shift`), gives the tile digests of `verity.protocols.accounting.work.pouw.schemes.ncp` (the reference), and its output is exactly
+  (`ncp.route_u_shift`), gives the tile digests of `verity.experimental.protocols.pouw.schemes.ncp` (the reference), and its output is exactly
   A·Bᵀ;
-- ``pearl``: the e4m3 GEMM on noisy-quantized operands from `verity.protocols.accounting.work.pouw.schemes.pearl_kw` equals the reference replay on
+- ``pearl``: the e4m3 GEMM on noisy-quantized operands from `verity.experimental.protocols.pouw.schemes.pearl_kw` equals the reference replay on
   the ``ada`` device, bit for bit.
 
 Timings, per workload shape (m, k, n), median of CUDA-event timed repetitions:
@@ -65,8 +65,8 @@ def s8(t: torch.Tensor) -> torch.Tensor:
 
 
 def gate_ncp(ext) -> dict:
-    from verity.protocols.accounting.work.pouw.protocol import Context, Matmul, Shape, Tile
-    from verity.protocols.accounting.work.pouw.schemes import ncp
+    from verity.experimental.protocols.pouw.protocol import Context, Matmul, Shape, Tile
+    from verity.experimental.protocols.pouw.schemes import ncp
 
     m, k, n = 16, 1088, 256
     s, rng = ncp.NCP(n_min=64), random.Random(7)
@@ -99,8 +99,8 @@ def gate_ncp(ext) -> dict:
 
 
 def gate_pearl(ext) -> dict:
-    from verity.protocols.accounting.work.pouw.protocol import Context, Matmul, Shape, Tile
-    from verity.protocols.accounting.work.pouw.schemes import pearl_kw as P
+    from verity.experimental.protocols.pouw.protocol import Context, Matmul, Shape, Tile
+    from verity.experimental.protocols.pouw.schemes import pearl_kw as P
 
     m, k, n = 16, 1024, 128
     rng = random.Random(11)

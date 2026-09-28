@@ -43,8 +43,8 @@ M1 = FIX / "M1-0c9af072e5a9-20260907T2128Z"
 B0_DIV = FIX / "B0-divergence-20260907T1604Z"
 TC_HOPPER = Path(os.environ.get("VERITY_HP_ARCHIVE", Path.home() / "veritor-artifacts" / "hp")) / "tc-hopper" / "r1"
 
-from verity.primitives.circuits import Program, bind  # noqa: E402
-from verity.primitives.circuits.evaluate import evaluate_call  # noqa: E402
+from verity.ml.circuits import Program, bind  # noqa: E402
+from verity.ml.circuits.evaluate import evaluate_call  # noqa: E402
 from verity_vllm.program.frontend.correspond import correspond, correspond_rebound  # noqa: E402
 from verity_vllm.program.registry import b1, hopper as H, prims as P  # noqa: E402
 from verity_vllm.program.frontend import serve_families
@@ -89,7 +89,7 @@ def _hp_config() -> dict:
 
 def test_factored_definitions_are_new_versions_beside_the_old():
     """Registry version discipline: every factored definition is `Name_v2`, every v1 (and HP's `*Hopper_v1`) is untouched."""
-    from verity.primitives.circuits.defs import REGISTRY
+    from verity.ml.circuits.defs import REGISTRY
     for v1, v2 in b1.FACTORED_FROM.items():
         assert v2.name == v1.name and v2.version == v1.version + 1
         assert REGISTRY[v1.id] is v1 and REGISTRY[v2.id] is v2
@@ -187,7 +187,7 @@ def test_partial_specialisations_are_not_static_values():
     """The limit the factoring works within (composition.md §2, finding F1): a composite with unbound statics cannot be
     a static value (the codec has no identity for it), so the attention *algorithm* is selected through leaf statics
     on one body, not by passing `AttentionFA3{...}` as a value."""
-    from verity.primitives.circuits.codec import encode_program
+    from verity.ml.circuits.codec import encode_program
     with pytest.raises(TypeError):
         encode_program(Program(bind(b1.ServeV2, C=TINY, LP=1, STEPS=0, GEMM=b1.GEMM_AMPERE, ATTENTION=b1.ATTENTION_FA2,
                                     NORM={"L0": b1.RMSNormTriton, "FUSED": b1.RMSNormFusedCuda})))
@@ -460,7 +460,7 @@ def test_fa2_kblock_n_is_the_pinned_kernels_align_rule():
 def test_serve_v1_is_untouched_and_serve_v4_is_registered_beside_it():
     """Registry version discipline: `Serve_v1`'s chain still reads the constant (its pinned digests must keep reproducing);
     the corrected chain is a new set of versions, resolvable through `SERVE_FAMILIES`."""
-    from verity.primitives.circuits.defs import REGISTRY
+    from verity.ml.circuits.defs import REGISTRY
     for d, ver in ((b1.AttnBlock, 1), (b1.AttentionHead, 1), (b1.Attention, 1), (b1.Serve, 1),
                    (b1.AttnBlockV3, 3), (b1.AttentionHeadV3, 3), (b1.AttentionV3, 3), (b1.ServeV4, 4)):
         assert REGISTRY[d.id] is d and d.version == ver

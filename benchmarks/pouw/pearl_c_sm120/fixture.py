@@ -2,15 +2,15 @@
 pearl_c_sm120.cu's kernels write, in its row-major layout (A' and B~'s codes and the transposed F lines in K32 order along k,
 `k32`; every product over k is the unpermuted operands'), for forming v1 on `pearl_c_device.SM120` (G = 4) and
 `SM120_UNPROMOTED`, hashing format -h3 (SHA-512 throughout).  Forming, lines and hashes come from
-`verity.protocols.accounting.work.pouw.schemes.pearl_c` on the device record; the products over every cell are batched in
-numpy (the chains window by window, the peel with `verity_kernels.tc.group_sum_total_batch`
+`verity.experimental.protocols.pouw.schemes.pearl_c` on the device record; the products over every cell are batched in
+numpy (the chains window by window, the peel with `verity.ml.kernels.tc.group_sum_total_batch`
 on the record's peel step), and one whole 64 x 64 tile per variant is recomputed by the scheme (`encode`, `checked`,
 `digest`) and must agree.  Pearl's tickets are not part of `pearl-c-sm120` (no PoUW check reads them), so nothing here
 computes them.  run.py compares the device's buffers with these bytes before it times anything.
 
   uv run python benchmarks/pouw/pearl_c_sm120/fixture.py OUT_DIR [m n k]     (default 256 384 1024; m, n multiples of 128)
 
-The instance is a one-unit epoch as `verity.protocols.accounting.work.pouw.audit` starts it: B's `audit.HM96` row tree under a
+The instance is a one-unit epoch as `verity.experimental.protocols.pouw.audit` starts it: B's `audit.HM96` row tree under a
 fixed prover salt key (`SALT_KEY`), the salt from the salt coin of the gate's test challenger (`test_challenger`,
 `Epoch.start`) opened after B's root, A's HM96 row tree, seed_A from A's committed root (so E_A's padding line key is an
 output the device derives, `line_a`) and each row's seed and line key from its SHA-512 row digest.  Writes
@@ -35,21 +35,21 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
-sys.path.insert(0, str(ROOT / "verity" / "protocols" / "accounting" / "work" / "pouw" / "tests"))
+sys.path.insert(0, str(ROOT / "verity" / "experimental" / "protocols" / "pouw" / "tests"))
 
 
 import pearl_c_vectors as CV  # noqa: E402
-from verity.primitives.commitments.merkle import tree_levels  # noqa: E402
-from verity_catalog.silicon import fp32  # noqa: E402
-from verity_kernels.tc import group_sum_total_batch  # noqa: E402
-from verity.protocols.accounting.work.pouw.audit import (HM96, HM96_TRANSCRIPT, HM96_WEIGHTS, ROW_SCHEMA, TILE_SCHEMA,  # noqa: E402
+from verity.ml.commitments.merkle import tree_levels  # noqa: E402
+from verity.ml.circuits.silicon import fp32  # noqa: E402
+from verity.ml.kernels.tc import group_sum_total_batch  # noqa: E402
+from verity.experimental.protocols.pouw.audit import (HM96, HM96_TRANSCRIPT, HM96_WEIGHTS, ROW_SCHEMA, TILE_SCHEMA,  # noqa: E402
                                                          Epoch, Workload, activation_binding, commit_rows, hm96_kernel_constants,
                                                          hm96_salt, rows_domain, transcript_domain, weight_binding, weights_root)
-from verity.protocols.accounting.work.pouw.coins import Challenger, CoinOpening  # noqa: E402
-from verity.protocols.accounting.work.pouw.protocol import Context, Matmul, Shape, Tile  # noqa: E402
-from verity.protocols.accounting.work.pouw.schemes import pearl_c as C  # noqa: E402
-from verity.protocols.accounting.work.pouw.schemes import pearl_kw as P  # noqa: E402
-from verity.protocols.accounting.work.pouw.schemes.pearl_c_device import (  # noqa: E402
+from verity.experimental.protocols.pouw.coins import Challenger, CoinOpening  # noqa: E402
+from verity.experimental.protocols.pouw.protocol import Context, Matmul, Shape, Tile  # noqa: E402
+from verity.experimental.protocols.pouw.schemes import pearl_c as C  # noqa: E402
+from verity.experimental.protocols.pouw.schemes import pearl_kw as P  # noqa: E402
+from verity.experimental.protocols.pouw.schemes.pearl_c_device import (  # noqa: E402
     DEVICES,
     SM120,
     SM120_UNPROMOTED,
@@ -92,7 +92,7 @@ def tree_bytes(domain, values: list[bytes], schema: str, salt_key: bytes, nonce:
 
 def epoch_of(matmul: Matmul, b_rows: list[bytes], coins: Challenger, salt_key: bytes
              ) -> tuple[Epoch, CoinOpening, bytes, bytes]:
-    """A one-unit epoch on B's rows as `verity.protocols.accounting.work.pouw.audit` starts it, from `coins`' salt coin
+    """A one-unit epoch on B's rows as `verity.experimental.protocols.pouw.audit` starts it, from `coins`' salt coin
     opened after B's root: (epoch, the salt coin's opening, B's tree bytes, its root)."""
     dom_b = rows_domain(weight_binding(matmul.weight), -2, len(b_rows), HM96)
     tree_b = tree_bytes(dom_b, b_rows, ROW_SCHEMA, salt_key, HM96_WEIGHTS + matmul.weight)

@@ -1,11 +1,11 @@
 """The served Program on bits: the Boolean version of each Definition a derived Program calls, and how far a Program is from
 pure bits.
 
-A Definition is Boolean (`verity.primitives.circuits.boolean.is_boolean`) when it computes on 1-bit wires with And/Xor/Not gates and constant bits
-only, through every sub-Call.  A Boolean Definition names the word Definition it computes (`verity.primitives.circuits.boolean.trace.word_of`: its
+A Definition is Boolean (`verity.ml.circuits.boolean.is_boolean`) when it computes on 1-bit wires with And/Xor/Not gates and constant bits
+only, through every sub-Call.  A Boolean Definition names the word Definition it computes (`verity.ml.circuits.boolean.trace.word_of`: its
 ``word``, a Definition, or for one with statics a function of its bindings, in which case it carries its word's name).  Those
 links are the one table this module reads: `boolean_version(fn)` is the registered Boolean Definition whose word is ``fn``,
-looked up among every module of `verity_catalog.definitions.boolean` and of `verity_vllm.program.registry` (`registry.catalog`), and
+looked up among every module of `verity.ml.circuits.ops.boolean` and of `verity_vllm.program.registry` (`registry.catalog`), and
 `NoBooleanVersion` names each Definition it finds none for.  A function-valued static is bound to its own Boolean version; a
 static the word has no counterpart for, to the Boolean version of the word Definition the Boolean Definition's ``word_statics``
 names for it.
@@ -34,11 +34,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-from verity.primitives.circuits import boolean as BL
-from verity.primitives.circuits.codec import descriptor_id
-from verity.primitives.circuits.defs import REGISTRY, Body, Builder, CompositeDefinition, FunctionDefinition, PrimitiveDefinition, SpecializedDefinition, bind
-from verity.primitives.circuits.refs import Coll, PartLog, concat, prefix_runs, runs
-from verity.primitives.circuits.types import Array, Record, Tuple, Type, Value
+from verity.ml.circuits import boolean as BL
+from verity.ml.circuits.codec import descriptor_id
+from verity.ml.circuits.defs import REGISTRY, Body, Builder, CompositeDefinition, FunctionDefinition, PrimitiveDefinition, SpecializedDefinition, bind
+from verity.ml.circuits.refs import Coll, PartLog, concat, prefix_runs, runs
+from verity.ml.circuits.types import Array, Record, Tuple, Type, Value
 from verity_vllm.config import option
 
 SCHEMA = "verity-vllm/boolean-purity/v1"
@@ -77,12 +77,12 @@ def _load() -> tuple[dict[str, list], dict[str, list], list[str]]:
     from verity_vllm.program.registry.catalog import load as load_registry
     _, errors = load_registry()
     errors = list(errors)
-    core = importlib.import_module("verity_catalog.definitions.boolean")
+    core = importlib.import_module("verity.ml.circuits.ops.boolean")
     for m in sorted(pkgutil.iter_modules(core.__path__), key=lambda m: m.name):
         try:
-            importlib.import_module(f"verity_catalog.definitions.boolean.{m.name}")
+            importlib.import_module(f"verity.ml.circuits.ops.boolean.{m.name}")
         except Exception as e:  # noqa: BLE001  (named in every gap: a module that fails to import serves nothing)
-            errors.append(f"verity_catalog.definitions.boolean.{m.name}: {type(e).__name__}: {e}")
+            errors.append(f"verity.ml.circuits.ops.boolean.{m.name}: {type(e).__name__}: {e}")
     exact: dict[str, list] = {}
     by_name: dict[str, list] = {}
     for d in list(REGISTRY.defs.values()):
@@ -140,7 +140,7 @@ def _find(fn: FunctionDefinition, fid: str) -> FunctionDefinition:
     bindings = getattr(fn, "bindings", None) or {}
     notes: list[str] = []
     if isinstance(fn, SpecializedDefinition) and bindings:
-        from verity.primitives.circuits.boolean.trace import word_of
+        from verity.ml.circuits.boolean.trace import word_of
         for d in by_name.get(fn.name, ()):
             # ``word_statics``: the statics its word has no counterpart for, as the word Definitions they compute, each bound to its
             # Boolean version (`RMSNormFusedCuda_v3`'s RSQRT computes `RsqrtApprox_v1`)
@@ -348,9 +348,9 @@ def derived(rep, *, check_registry: bool = True):
     digest in its provenance (``ir``); a refusal (``numerics_unregistered``) names every Call with no Boolean version."""
     from dataclasses import replace
 
-    from verity.primitives.circuits.codec import encode_program, program_digest
-    from verity.primitives.circuits.liveness import dead_gates
-    from verity.primitives.circuits.program import Program
+    from verity.ml.circuits.codec import encode_program, program_digest
+    from verity.ml.circuits.liveness import dead_gates
+    from verity.ml.circuits.program import Program
     from verity_vllm.program.frontend.derive import DeriveReport, Unsupported
     from verity_vllm.program.frontend.torch_frontend import check_identity
 
@@ -483,7 +483,7 @@ class Options:
 
 
 def load_program(path: Path):
-    from verity.primitives.circuits.codec import decode_program, program_digest
+    from verity.ml.circuits.codec import decode_program, program_digest
     from verity_vllm.program.registry.catalog import load as load_registry
     opener = gzip.open if str(path).endswith(".gz") else open
     with opener(path, "rt") as f:

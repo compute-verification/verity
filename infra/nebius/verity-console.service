@@ -6,7 +6,7 @@ Type=oneshot
 User=research
 WorkingDirectory=/workspace/research/console
 Environment=HOME=/home/research KUBECONFIG=/home/research/.kube/config
-# Node 1's CPU map leaves 0-7 to k3s and the system (tools/cluster/descriptions/nebius.toml): no check slot or pod runs there, so a
+# Node 1's CPU map leaves 0-7 to k3s and the system (infra/cluster/descriptions/nebius.toml): no check slot or pod runs there, so a
 # pass on a full node isn't queued behind them. The weights win the disk and whatever else runs on 0-7.
 AllowedCPUs=0-7
 CPUWeight=1000

@@ -164,7 +164,7 @@ def test_permute_torch_matches_numpy_and_kat() -> None:
 
 def test_numpy_vectorised_poseidon2_equals_the_scalar_reference() -> None:
     """``poseidon2.permute_np`` / ``hash_rows_np`` / ``pack_words_np`` / ``row_digests`` (the committer's numpy paths, kept
-    out of ``verity.primitives.commitments`` by the package boundary) are the scalar reference lane for lane, row for row."""
+    out of ``verity.ml.commitments`` by the package boundary) are the scalar reference lane for lane, row for row."""
     inp, out = h2.KAT_24
     assert h2.permute_np(np.asarray(inp, dtype=np.int64)[:, None])[:, 0].tolist() == list(out)
     rng = np.random.default_rng(11)
@@ -276,8 +276,8 @@ def test_row_sponge_kernel_permute_is_the_permutation() -> None:
 def test_batch_merkle_framing_is_the_domain_framing() -> None:
     """``auth.leaf_hashes`` / ``_node_chunk`` / ``_pad_chunk`` (one hashed prefix per domain) hash the bytes
     ``CommitmentDomain.leaf`` / ``.node`` and the pad leaf do; ``leaf_bytes_many`` is ``row_leaf_value`` per row."""
-    from verity.primitives.commitments.merkle import _PAD, _hash, _uint
-    from verity.primitives.commitments.rowleaf import row_leaf_value
+    from verity.ml.commitments.merkle import _PAD, _hash, _uint
+    from verity.ml.commitments.rowleaf import row_leaf_value
 
     from . import auth
     from .leaf.poseidon2 import Poseidon2Leaf

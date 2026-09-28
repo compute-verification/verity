@@ -11,9 +11,9 @@ GLM-4.7-Flash's 20 heads, 5 per rank at TP4, GLM-5.3's 64 and 8 per rank at TP8,
 few other head widths."""
 from __future__ import annotations
 
-from verity.primitives.circuits.defs import CompositeDefinition, bind
-from verity.primitives.circuits.refs import tuple_of
-from verity.primitives.circuits.types import Array, Tuple
+from verity.ml.circuits.defs import CompositeDefinition, bind
+from verity.ml.circuits.refs import tuple_of
+from verity.ml.circuits.types import Array, Tuple
 from verity_vllm.program.registry import boolean_rope
 from verity_vllm.program.registry.prims import BF16
 

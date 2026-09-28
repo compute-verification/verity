@@ -281,7 +281,7 @@ GEMM101 = ("gemm-coordinate/k2048/sm80-mma-bf16", "gemm-coordinate/k8192/sm80-mm
 
 
 def test_l40s_cells_land_on_the_l40s_line_with_101s_statement_ids(store: LocalStore) -> None:
-    from verity_catalog.targets.target import FIRST
+    from verity.ml.circuits.targets.target import FIRST
 
     gemm = {sub: l40s_cell(store, sub, profile=FIRST.name, relation="bf16-ampere") for sub in GEMM101}
     elem = {sub: l40s_cell(store, sub, profile=FIRST.name) for sub in NONGEMM}               # the prover GPU picks the line
@@ -315,7 +315,7 @@ def test_l40s_cells_land_on_the_l40s_line_with_101s_statement_ids(store: LocalSt
 
 
 def test_an_l40s_sampling_cell_with_no_tensor_datatype_finds_the_l40s_line(store: LocalStore) -> None:
-    from verity_catalog.targets.target import FIRST
+    from verity.ml.circuits.targets.target import FIRST
 
     art = l40s_cell(store, "gumbel-top-p-token-select/v128256/fp32", profile=FIRST.name)
     views = V.build(store, SPEC)
@@ -325,7 +325,7 @@ def test_an_l40s_sampling_cell_with_no_tensor_datatype_finds_the_l40s_line(store
 
 
 def test_an_l40s_cell_is_still_red_team_gated_and_an_h100_profile_does_not_pull_it_off_its_device(store: LocalStore) -> None:
-    from verity_catalog.targets.target import BF16_HOPPER
+    from verity.ml.circuits.targets.target import BF16_HOPPER
 
     uncleared = l40s_cell(store, NONGEMM[1], profile=BF16_HOPPER.name, redteam=False)
     profiled = l40s_cell(store, NONGEMM[2], profile=BF16_HOPPER.name)                       # a stale H100 profile on an L40S proof
@@ -497,7 +497,7 @@ def test_without_per_key_count_counts_attention_cells_are_not_extrapolated(store
 
 
 def test_sampling_stays_uncounted_until_the_one_verifier_evaluated_switch(store: LocalStore) -> None:
-    from verity_catalog.targets.target import FIRST
+    from verity.ml.circuits.targets.target import FIRST
 
     gumbel = "gumbel-top-p-token-select/v128256/fp32"
     art = l40s_cell(store, gumbel, profile=FIRST.name)
@@ -576,7 +576,7 @@ def test_a_broken_class_cell_is_rejected_not_guessed(store: LocalStore) -> None:
 def test_the_strict_verifier_preview_leaves_every_verifier_evaluated_template_uncovered(store: LocalStore) -> None:
     """Daniel's standing rule (2026-09-26), as a preview: the verifier evaluates no part of the computation, so attention (the
     softmax), the RMSNorms (the row tail) and sampling are not covered; RoPE, which leaves nothing to the verifier, still is."""
-    from verity_catalog.targets.target import FIRST
+    from verity.ml.circuits.targets.target import FIRST
 
     rms = "rmsnorm-fused-cuda/n2048-eps1e-05/bf16"
     l40s_cell(store, ATT, T=4)

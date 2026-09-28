@@ -2,7 +2,7 @@
 2026-09-22).  Report: ``backends/numerical/reports/auth_integration.md``; JSON: ``reports/auth_integration.json``.
 
 Every ledger number so far says ``authentication = excluded``.  This module makes the *complete* number knowable: it
-prices five ways of authenticating the proved operands against ``verity.primitives.commitments`` roots and plugs the best into
+prices five ways of authenticating the proved operands against ``verity.ml.commitments`` roots and plugs the best into
 ``explore.tensor`` through its ``authentication`` knob, so that ``price_design(..., zk="malicious",
 authentication=<x>)`` is the complete Verity proof per design.  Everything is a cost-model ESTIMATE on the same footing
 as ``tensor.md`` (limb MACs at H100 INT8 peak x 0.172, SIMT field mults, hash bytes at a stated rate); the only

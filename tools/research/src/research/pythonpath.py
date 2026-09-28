@@ -161,12 +161,16 @@ def package_dirs(tree: Path | str, name: str) -> list[str]:
     """Where `tree` ships the import package `name`, relative to the tree: the package itself when it sits at the workspace root
     (a `shim` entry), then `<root>/<name>` for each workspace import root that holds it, in member order.  One directory for a
     regular package, one per member for a namespace split across members.  A closure, a dirty check or a source identity over a
-    package names these, so a member that moves or splits stays covered.  Raises LookupError when no root holds `name`, so a
-    caller never gets a list over nothing."""
+    package names these, so a member that moves or splits stays covered.  A dotted `name` (`verity.ml.circuits`) is that
+    subpackage's directory in each of its top-level package's.  Raises LookupError when no root holds `name`, so a caller
+    never gets a list over nothing."""
     t = Path(tree)
+    top, _, sub = name.partition(".")
     derived = import_roots_dir(t)
-    dirs = [p for p in derived["shim"] if posixpath.basename(p) == name and (t / p).is_dir()]
-    dirs += [posixpath.join(r, name) for r in derived["roots"] if (t / r / name).is_dir()]
+    dirs = [p for p in derived["shim"] if posixpath.basename(p) == top and (t / p).is_dir()]
+    dirs += [posixpath.join(r, top) for r in derived["roots"] if (t / r / top).is_dir()]
+    if sub:
+        dirs = [posixpath.join(d, *sub.split(".")) for d in dirs if (t / d / sub.replace(".", "/")).is_dir()]
     if not dirs:
         raise LookupError(f"no workspace import root of {t} holds a package {name!r}")
     return dirs

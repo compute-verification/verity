@@ -1,17 +1,17 @@
-"""``veritor.tc-ampere-bf16@1`` / ``@2``: the tensor-core gate families a checker recomputes, over ``verity_catalog.silicon``.
+"""``veritor.tc-ampere-bf16@1`` / ``@2``: the tensor-core gate families a checker recomputes, over ``verity.ml.circuits.silicon``.
 
 A gate family is the checker-facing vocabulary of a lowered relation: the ``op`` names a ``KindProgram`` may use,
 each with an arity, argument widths, an output width and executable semantics, and an identity digest the guest
 refuses to check a statement against unless it equals the digest of the table it is about to apply
-(``archive/sp1/common/src/gateset.rs``).  The semantics themselves are ``verity_catalog.silicon``'s; nothing here
+(``archive/sp1/common/src/gateset.rs``).  The semantics themselves are ``verity.ml.circuits.silicon``'s; nothing here
 redefines a tensor-core step.
 
 The family is L1's pinned Ampere step plus the two casts, with 16-bit sources:
 
 * ``tc_dot16`` (``[acc, a0..a15, b0..b15]`` -> FP32 word) and ``tc_dot16_0`` (``[a0..a15, b0..b15]`` -> FP32 word):
-  :func:`verity_catalog.silicon.silicon.tc_dot` on the Ampere pipeline, bit for bit.  This is the **finite-domain** relation:
+  :func:`verity.ml.circuits.silicon.silicon.tc_dot` on the Ampere pipeline, bit for bit.  This is the **finite-domain** relation:
   a non-finite operand or accumulator raises and the checker rejects the obligation (the same verdict as the
-  Rust ``tc.rs`` and the Lean ``TCB.lean``).  ``verity_catalog.definitions.prims.AmpereBF16TcDot16`` (v2) is the *total* extension
+  Rust ``tc.rs`` and the Lean ``TCB.lean``).  ``verity.ml.circuits.ops.prims.AmpereBF16TcDot16`` (v2) is the *total* extension
   of the same step; the two agree on every finite input, and no registered family binds the total semantics yet
   (``tc_total.rs`` exists in the guest crate without a gate set).  Which relation Verity declares for a sampled
   step is a protocol decision, not a backend one.
@@ -32,9 +32,9 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from verity_catalog.silicon.cast import bf16_to_f32_word, f32_to_bf16_hw_word, f32_to_bf16_word
-from verity_catalog.silicon.silicon import AMPERE_BF16_M16N8K16, Pipeline, tc_dot
-from verity_catalog.targets.target import TC_AMPERE_BF16_NAME, TC_AMPERE_BF16_VERSION, TC_BF16_NAME_PREFIX, TC_BF16_VERSION
+from verity.ml.circuits.silicon.cast import bf16_to_f32_word, f32_to_bf16_hw_word, f32_to_bf16_word
+from verity.ml.circuits.silicon.silicon import AMPERE_BF16_M16N8K16, Pipeline, tc_dot
+from verity.ml.circuits.targets.target import TC_AMPERE_BF16_NAME, TC_AMPERE_BF16_VERSION, TC_BF16_NAME_PREFIX, TC_BF16_VERSION
 
 from .gateset import INPUT_SOURCE, WEIGHT_SOURCE, Gate, GateSet
 

@@ -1,12 +1,12 @@
 # PoUW benchmark harness
 
-The shared harness for `verity/protocols/accounting/work/pouw`'s schemes (`ncp-v1`, `pearl-fp8-v4`): one workload file, one set of kernels, the
+The shared harness for `verity/experimental/protocols/pouw`'s schemes (`ncp-v1`, `pearl-fp8-v4`): one workload file, one set of kernels, the
 same gates for every scheme. The cost model is W1 on an RTX 4090 (the PoUW problem statement §3.1).
 
 | Script | Runs on | What |
 |---|---|---|
 | `gamma.py` | CPU | γ accounting: each scheme's honest reference priced term by term under W1, split into checked and unchecked work; Ω, γ where the conjecture names γ_0, γ's floor from unchecked work, and hashing per useful MAC |
-| `gemm_bench.py` | RTX 4090 | Each scheme's honest GEMM against the plain GEMM of its datatype (cuBLASLt int8, FP8, BF16), at the workload's shapes. It first gates each kernel bit for bit against the `verity.protocols.accounting.work.pouw` reference, and refuses to time a kernel that fails |
+| `gemm_bench.py` | RTX 4090 | Each scheme's honest GEMM against the plain GEMM of its datatype (cuBLASLt int8, FP8, BF16), at the workload's shapes. It first gates each kernel bit for bit against the `verity.experimental.protocols.pouw` reference, and refuses to time a kernel that fails |
 | `route_u_bench.py` | RTX 4090 | Native NCP route-U gate against `checked()` on every 16x16 tile, then throughput against the signed-s8 checkpoint-dump kernel |
 | `vllm_bench.py` | RTX 4090 | Overhead against plain vLLM (Qwen2.5-3B-Instruct): BF16, stock FP8, W7A7 (int7 without PoUW), NCP and Pearl, all by wrapping every `LinearBase` layer's `quant_method.apply`, the vLLM adapter's hook site. NCP's greedy tokens must equal W7A7's |
 | `e2e_audit.py` | RTX 4090 | The protocol end to end: the GPU kernels prove, the pure-Python reference verifies the work-weighted draws; an honest prover is accepted, and a prover that corrupts half the tiles is rejected |
@@ -17,7 +17,7 @@ same gates for every scheme. The cost model is W1 on an RTX 4090 (the PoUW probl
 
 ~~~bash
 uv run python benchmarks/pouw/gamma.py                                   # CPU
-# on a 4090 pod, with torch and vLLM, verity and verity.protocols.accounting.work.pouw on PYTHONPATH:
+# on a 4090 pod, with torch and vLLM, verity and verity.experimental.protocols.pouw on PYTHONPATH:
 python benchmarks/pouw/gemm_bench.py --out gemm.json
 python benchmarks/pouw/route_u_bench.py --out route_u.json
 VLLM_USE_FLASHINFER_SAMPLER=0 python benchmarks/pouw/vllm_bench.py --model /path/to/Qwen2.5-3B-Instruct --out vllm.json

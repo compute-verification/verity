@@ -1,0 +1,15 @@
+# The PoUS grader: a program that imports only Lean. What it grades against is `Security`'s trusted text.
+name = "pous_grader"
+defaultTargets = ["Grader", "pous-grader"]
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+
+[[lean_lib]]
+name = "Grader"
+roots = ["Grader.Registry"]
+
+[[lean_exe]]
+name = "pous-grader"
+root = "Grader.Main"

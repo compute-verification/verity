@@ -19,10 +19,10 @@ from verity_vllm.engine.profiles.gen_ov_moe_patterns import FUSED_MOE_PINS, MoEF
 OV = importlib.import_module("verity_vllm.engine.profiles.derived_OLMOE")
 from verity_vllm.observe.fold.resolver import Compute, Group, StepContext, Transparent, Unsupported, resolve_step
 from verity_vllm.observe.fold.tree import step_events
-from verity.primitives.circuits.defs import bind
-from verity.primitives.circuits.evaluate import evaluate_region
-from verity.primitives.circuits.layout import resolve
-from verity.primitives.circuits.program import Program
+from verity.ml.circuits.defs import bind
+from verity.ml.circuits.evaluate import evaluate_region
+from verity.ml.circuits.layout import resolve
+from verity.ml.circuits.program import Program
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry.quarantine.ov_moe import moe as Q

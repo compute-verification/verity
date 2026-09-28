@@ -1,4 +1,4 @@
-"""Profile a serialised descriptor (`verity.primitives.circuits.codec`) by field: where the bytes go.
+"""Profile a serialised descriptor (`verity.ml.circuits.codec`) by field: where the bytes go.
 
 Bytes are measured as `canonical_json` bytes (the digest encoding: sorted keys, compact separators) of each
 sub-object, so a definition's parts sum to its total up to the JSON structure around them (keys, braces,
@@ -40,7 +40,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity.primitives.circuits.codec import canonical_json, encode_program, program_digest
+from verity.ml.circuits.codec import canonical_json, encode_program, program_digest
 
 from verity_vllm.config import UsageError, option
 
@@ -225,8 +225,8 @@ def profile(desc: dict) -> dict:
 
 
 def build(config: str, LP: int, STEPS: int) -> dict:
-    from verity.primitives.circuits.program import Program
-    from verity.primitives.circuits.defs import bind
+    from verity.ml.circuits.program import Program
+    from verity.ml.circuits.defs import bind
     from verity_vllm.program.registry import b1
     C = {"B1": b1.B1_CONFIG, "B0": b1.B0_CONFIG}[config]
     t0 = time.time()

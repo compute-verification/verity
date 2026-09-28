@@ -54,11 +54,11 @@ from verity_vllm.observe.events import DispatchEnter, DispatchExit, TritonLaunch
 from verity_vllm.observe.log import read_log
 from verity_vllm.observe.fold.views import byte_extent, collapsed_dims, element_runs, row_view
 
-Run = tuple[str, int, int, int]      # (space, idx, lo, hi) — the same runs `verity.primitives.circuits.refs.runs` yields
+Run = tuple[str, int, int, int]      # (space, idx, lo, hi) — the same runs `verity.ml.circuits.refs.runs` yields
 
 
 # ---------------------------------------------------------------------------------------------------------
-# run arithmetic (independent of verity.primitives.circuits.refs)
+# run arithmetic (independent of verity.ml.circuits.refs)
 # ---------------------------------------------------------------------------------------------------------
 
 

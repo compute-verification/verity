@@ -1,5 +1,5 @@
 """The bit link's prime side in sigma form (PROTOCOL.md §17; the red team's S1, NON_ZK_PROOF only), against the live
-Flock session of route (a) (``backends/flock/live``, ``flock-link cell-prove``).
+Flock session of route (a) (``verity/ml/flock/live``, ``flock-link cell-prove``).
 
 The unit commits the bits of every operand word it consumes (``tools/link_stub.extend_unit``: booleanity and
 recomposition per bit).  After the GKR layers:

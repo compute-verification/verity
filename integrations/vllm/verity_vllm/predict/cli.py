@@ -56,7 +56,7 @@ def main(a) -> int:
             f.write(gzip.compress(data) if a.out.endswith(".gz") else data)
         print(f"[predict] inventory: {len(inv['rows'])} rows -> {a.out}", file=sys.stderr)
         return 0
-    from verity.primitives.circuits.codec import canonical_json
+    from verity.ml.circuits.codec import canonical_json
     from .build import build_program
     from .phi import load_phi
     if os.path.exists(os.path.join(a.out, "build_summary.json")) or os.path.basename(os.path.normpath(a.out)).startswith("build_"):

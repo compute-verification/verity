@@ -34,7 +34,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parent / "lean"))
+sys.path.insert(0, str(HERE.parent / "verity" / "lean"))
 import layout as L  # noqa: E402
 
 POLICY = "lean-audit.json"
@@ -496,7 +496,7 @@ def rekey_bundles(m: Map, root: Path, old_keys: dict, LA) -> dict:
 # ------------------------------------------------------------------------------------------------------------- step 5
 
 def merge_locks(m: Map, root: Path, locks: dict, code_thms: dict, dry: bool):
-    import audit as A
+    import check as A
     sec = {"roots": ["Definitions", "Specs"], "proved_in": ["Proofs"], "assumptions": [], "meaning": [],
            "layers": {}, "reads_exempt": {}, "guarantees": {}, "reads": {}, "dependencies": {}}
     prf = {"roots": [f"Proofs.{a}" for a in AREAS], "exempt": {}, "runs": {}, "compile_time": {},

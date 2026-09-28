@@ -1,8 +1,8 @@
 """Reference implementation of the proposed ``verity-vllm/leaf/v2`` algebraic leaf (auth-integration lane, 2026-09-22).
 
-**Status: proposal.**  The live protocol is ``verity.primitives.commitments.leaves`` (``leaf/v1``: SHA-256 over the whole tensor's
+**Status: proposal.**  The live protocol is ``verity.ml.commitments.leaves`` (``leaf/v1``: SHA-256 over the whole tensor's
 bytes) and is not touched.  The specification this module implements is
-``verity/primitives/commitments/LEAF_V2.md``; the costing that motivates it is
+``verity/ml/commitments/LEAF_V2.md``; the costing that motivates it is
 ``backends/numerical/reports/auth_integration.md`` (option (d), "algebraic binding").  Stdlib + ``verity`` only.
 
 What a v2 leaf is
@@ -64,7 +64,7 @@ import secrets
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 
-from verity.primitives.commitments.leaves import (
+from verity.ml.commitments.leaves import (
     DIGEST_BYTES,
     H,
     LeafTree,

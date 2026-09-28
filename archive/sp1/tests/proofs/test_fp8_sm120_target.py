@@ -1,4 +1,4 @@
-"""The sm_120 FP8 draft target (``verity_catalog.targets.target.FP8_SM120_MMA``): its family, its model-replay vectors, and its conformance
+"""The sm_120 FP8 draft target (``verity.ml.circuits.targets.target.FP8_SM120_MMA``): its family, its model-replay vectors, and its conformance
 device (the RTX PRO 6000, not the arch's default anchor)."""
 from __future__ import annotations
 
@@ -7,11 +7,11 @@ from pathlib import Path
 
 import pytest
 
-from verity_catalog.silicon.instructions import INSTRUCTIONS
-from verity_catalog.silicon.models import BLACKWELL_SM120_E4M3_M16N8K32
+from verity.ml.circuits.silicon.instructions import INSTRUCTIONS
+from verity.ml.circuits.silicon.models import BLACKWELL_SM120_E4M3_M16N8K32
 from verity_sp1.proofs.families import make_tensor_core_gate_set
 from verity_sp1.proofs.programs import gemm_accumulator_fp8
-from verity_catalog.targets.target import FP8_ADA_MMA, FP8_SM120_MMA, TARGETS, TC_VECTORS
+from verity.ml.circuits.targets.target import FP8_ADA_MMA, FP8_SM120_MMA, TARGETS, TC_VECTORS
 
 ROOT = next(p for p in Path(__file__).resolve().parents if (p / "uv.lock").exists())
 T = FP8_SM120_MMA

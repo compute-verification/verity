@@ -1,7 +1,7 @@
 """The exact NVFP4 transition unit (``BLACKWELL_SM120_NVF4.step``: one ``mma.sync kind::mxf4nvf4`` firing, 64 E2M1 codes and
 4 UE4M3 scale bytes per operand, an FP32 accumulator in and out) as a unit-uniform B-Ligero constraint system.
 
-The model (``verity_catalog.silicon.models.BlockScaledAlignAdd``, lane fp4-re, RTX 5090, 0 mismatches / 24M words):
+The model (``verity.ml.circuits.silicon.models.BlockScaledAlignAdd``, lane fp4-re, RTX 5090, 0 mismatches / 24M words):
 
 1. the four group dots ``gd_g = sum_{i in g} na_i nb_i`` are exact integers (numerators in halves: |n| <= 12, |gd| <= 2304);
 2. each is scaled losslessly by its two UE4M3 block scales: ``mant_g = gd_g * ma_g * mb_g`` (|mant| < 2^19) at the unit weight

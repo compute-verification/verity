@@ -1,6 +1,6 @@
 # SP1 backend: where the approved guest and the IR disagree
 
-Statuses follow `catalog/verity_catalog/silicon/discrepancy_log.json` (`open` / `resolved` / `excluded`). That log is scoped to tensor-core
+Statuses follow `verity/ml/circuits/silicon/discrepancy_log.json` (`open` / `resolved` / `excluded`). That log is scoped to tensor-core
 targets and instructions, so entries about the guest's other gate families live here until the log takes non-tensor-core
 entries.
 

@@ -13,22 +13,22 @@ set -uxo pipefail
 REPO=$(pwd); O=$RESEARCH_RUN_DIR/out; W=${FLOCK_WORK:-/workspace/jobs/pc-flock}; mkdir -p $O $W/bin
 nproc; free -g | head -2; lscpu | grep -E 'Model name|^CPU\(s\)' | tee $O/host.txt; echo "threads $(nproc)" | tee -a $O/host.txt
 
-KEY=$(cat backends/flock/pod/20-gpu-link.sh backends/flock/pod/60-circuit.sh backends/flock/*.patch backends/flock/cuda_*_patch.py \
-  $(find backends/flock/cuda backends/flock/live -type f | LC_ALL=C sort) | sha256sum | cut -c1-16)
-LKEY=$(cd backends/flock/verifier/lean && find . -path ./.lake -prune -o -type f -print | LC_ALL=C sort | xargs cat | sha256sum | cut -c1-16)
+KEY=$(cat verity/ml/flock/pod/20-gpu-link.sh verity/ml/flock/pod/60-circuit.sh verity/ml/flock/*.patch verity/ml/flock/cuda_*_patch.py \
+  $(find verity/ml/flock/cuda verity/ml/flock/live -type f | LC_ALL=C sort) | sha256sum | cut -c1-16)
+LKEY=$(cd verity/core/service/flock && find . -path ./.lake -prune -o -type f -print | LC_ALL=C sort | xargs cat | sha256sum | cut -c1-16)
 B=$W/bin/flock-circuit-$KEY; L=$W/bin/flock-verify-$LKEY
 exec 8>$W/build.lock; flock 8
 (
   export PATH=$HOME/.elan/bin:$PATH
   command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
   if [ ! -x $L ]; then
-    rm -rf $W/lean && cp -r backends/flock/verifier/lean $W/lean && rm -rf $W/lean/.lake
+    rm -rf $W/lean && cp -r verity/core/service/flock $W/lean && rm -rf $W/lean/.lake
     cd $W/lean && lake build flock-verify && cp .lake/build/bin/flock-verify $L
   fi
 ) > $O/build-lean.log 2>&1 &
 LP=$!
 if [ ! -x $B ]; then
-  FLOCK_WORK=$W MODE=build GPU=0 SM=0 bash backends/flock/pod/60-circuit.sh > $O/build-circuit.log 2>&1 || { tail -40 $O/build-circuit.log; exit 1; }
+  FLOCK_WORK=$W MODE=build GPU=0 SM=0 bash verity/ml/flock/pod/60-circuit.sh > $O/build-circuit.log 2>&1 || { tail -40 $O/build-circuit.log; exit 1; }
   cp $W/flock-gpu-link/flock/target/release/flock-circuit $B
 fi
 wait $LP || { tail -40 $O/build-lean.log; exit 1; }
@@ -39,7 +39,7 @@ sha256sum $B $L | tee $O/binaries.sha256
 [ -x $HOME/.local/bin/uv ] || curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
 [ -x $W/py/bin/python ] || { $HOME/.local/bin/uv venv -q --python 3.12 $W/py && $HOME/.local/bin/uv pip install -q --python $W/py/bin/python numpy blake3; }
 export RAYON_NUM_THREADS=$(nproc)
-export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/backends/flock/python:$REPO/integrations/vllm:$REPO/tools/circuit_check/src
+export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/integrations/vllm:$REPO/tools/verity/circuit_check/src
 ARGS=(); for c in ${CLS:-16,16,8 64,64,32}; do ARGS+=(--cls "$c"); done
 [ -n "${WIRED:-}" ] && ARGS+=(--wired)
 $W/py/bin/python benchmarks/private_circuit/universal.py "${ARGS[@]}" --n ${N:-64} --warm ${WARM:-1} --runs ${RUNS:-3} --seed ${SEED:-0} \

@@ -1,5 +1,5 @@
 """The WP2-checker census (``security.census``): pinned counts per transition unit and per K = 1536 VU, the layered
-shape A-GKR's accountant derives from it, and the diff against ``verity_catalog.silicon.relation.vu_census``."""
+shape A-GKR's accountant derives from it, and the diff against ``verity.ml.circuits.silicon.relation.vu_census``."""
 
 from __future__ import annotations
 

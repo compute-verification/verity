@@ -29,13 +29,13 @@ ALLOWED_EXTRA = (
     "archive/direct/V2_AIR.md",
     "archive/direct/encode/V2_SHAPE.md",
     "archive/vole/ASSUMPTIONS.md",
-    "verity/Security/Proofs/Flock/Soundness/ASSUMPTIONS.md",
+    "Security/Proofs/Flock/Soundness/ASSUMPTIONS.md",
     "benchmarks/numerical/python/verity_numerical/redteam/TRANSCRIPT_CHECKLIST.md",
 )
 #: One file per entry behind an index document, so that no one document outgrows its cap: {directory: its index}. C-Flock
 #: soundness's detail behind its named assumptions (its ``ASSUMPTIONS.md`` states them in full) and ligero-verify's
 #: discrepancies (indexed by its ``DISCREPANCIES.md``).
-SPLIT_DOCUMENT_DIRS = {"verity/Security/Proofs/Flock/Soundness/assumption-notes/": "verity/Security/Proofs/Flock/Soundness/ASSUMPTIONS.md",
+SPLIT_DOCUMENT_DIRS = {"Security/Proofs/Flock/Soundness/assumption-notes/": "Security/Proofs/Flock/Soundness/ASSUMPTIONS.md",
                        "archive/ligero-verify/discrepancies/": "archive/ligero-verify/DISCREPANCIES.md"}
 #: The one evidence file left in the tree: not read by code, kept with the rest of fixtures/redteam until the red team rules
 #: on it.  The frozen campaign evidence that code reads (the overhead ledger, the run results the frozen backends' report
@@ -61,19 +61,19 @@ CODE_SUFFIXES = SOURCE_SUFFIXES | {".lean", ".cuh", ".cpp", ".md"}
 #: silently. A test fixture over BLOB_LIMIT is registered in fixtures/artifacts.json instead and fetched
 #: (`research data fetch-fixtures`).
 ALLOWLIST = {
-    "catalog/census/workloads.json": 384 * 1024,
+    "benchmarks/census/workloads.json": 384 * 1024,
     "integrations/vllm/data/logs/m1.jsonl.gz": 576 * 1024,
     "integrations/vllm/data/logs/m6/log.jsonl.gz": 576 * 1024,
     "integrations/vllm/verity_vllm/check/tables/B0-divergence-20260907T1604Z/cos_sin_cache.npy": 1088 * 1024,
     "integrations/vllm/workloads/llama32-1b__bf16__l40s__tp1__b128__i1024__o128__mixed__greedy__bi-eager.json": 512 * 1024,
     "integrations/vllm/workloads/olmoe-1b-7b__bf16__l40s__tp1__b128__i1024__o128__mixed__greedy__bi-eager.json": 512 * 1024,
     "integrations/vllm/workloads/qwen25-15b__bf16__l40s__tp1__b128__i1024__o128__mixed__greedy__bi-eager.json": 512 * 1024,
-    "catalog/verity_catalog/definitions/tables/mufu_tanh_sm89.xzblocks": 448 * 1024,
+    "verity/ml/circuits/ops/tables/mufu_tanh_sm89.xzblocks": 448 * 1024,
 }
 AUDIT_RECORD = "lean-audit.json"
 #: A Lean package's audit record must stay in Git, since the audit compares the build against it and `--update`'s diff is
 #: what Daniel is shown when a guarantee changes; it grows 3-5 KiB per pin and with every definition under `meaning` (following the whole
-#: executable verifier, `Flock`, took soundness's record past 2 MiB, and `verity/Security`'s holds every package's guarantees).
+#: executable verifier, `Flock`, took soundness's record past 2 MiB, and `Security`'s holds every package's guarantees).
 AUDIT_RECORD_LIMIT = 6 * 1024 * 1024
 #: Tracked data (everything but CODE_SUFFIXES) in the whole tree, so that many small files cannot
 #: add up to what one large one may not be.
@@ -156,7 +156,7 @@ def markdown_over_cap(path: str, size: int) -> str | None:
 
 
 def test_markdown_over_cap_says_by_how_much_and_where_detail_goes() -> None:
-    soundness = "verity/Security/Proofs/Flock/Soundness/"
+    soundness = "Security/Proofs/Flock/Soundness/"
     assert markdown_over_cap("README.md", MD_SIZE_CAP) is None and markdown_over_cap("a/PROTOCOL.md", MD_SIZE_CAP + 1) is None
     assert markdown_over_cap("a/README.md", MD_SIZE_CAP + 100) == (
         "a/README.md: 48 KB > 48 KB, 100 bytes over; move detail to the notes store (cite it by note:<id>)")
@@ -181,7 +181,7 @@ def test_markdown_size_caps() -> None:
 
 
 #: Frozen backends whose other test files need torch, a GPU or cargo, and were never part of `check` (archive/README.md).
-UNSUITED_TEST_DIRS = ("archive/direct/", "archive/gkr/", "kernels/")
+UNSUITED_TEST_DIRS = ("archive/direct/", "archive/gkr/", "verity/ml/kernels/")
 
 
 def _testpaths(tracked: list[str]) -> list[str]:
@@ -196,7 +196,7 @@ def _testpaths(tracked: list[str]) -> list[str]:
 
 
 def test_every_test_file_is_in_a_suite() -> None:
-    """`tools/check/suites.py` runs suites, so a test file outside every suite's testpaths would never run. A suite is a
+    """`tools/verity/check/suites.py` runs suites, so a test file outside every suite's testpaths would never run. A suite is a
     directory whose pyproject.toml configures pytest; give a new package one, or put the test in the package it tests."""
     tracked = _tracked()
     testpaths = _testpaths(tracked)

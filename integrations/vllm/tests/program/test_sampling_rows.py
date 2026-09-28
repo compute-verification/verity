@@ -318,7 +318,7 @@ def test_philox_stream_key_and_the_noise_row_match_the_scalar_registry_lane_for_
 def test_the_registry_keeps_one_gumbel_chain_at_version_1_and_its_evaluator_is_the_true_rz_lane():
     """No version bump: GumbelNoiseLane_v1's word map did not move (exhaustive), so the chain stays at v1 with one evaluator; the
     witness functions are not registered and not exported as evaluators."""
-    from verity.primitives.circuits.defs import bind
+    from verity.ml.circuits.defs import bind
     assert SP.GumbelNoiseLane.id == "GumbelNoiseLane_v1" and SP.GumbelSelectF32.id == "GumbelSelectF32_v1"
     assert SP.GumbelTokenSelect.id == "GumbelTokenSelect_v1" and SP.GumbelTopPTokenSelect.id == "GumbelTopPTokenSelect_v1"
     assert [n for n in SP.__all__ if n.endswith(("V2", "_v2"))] == ["GumbelNoiseLaneV2"], SP.__all__   # the GPU-NaN logs' lane

@@ -9,8 +9,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from verity.primitives.circuits.constants import program_data
-from verity.primitives.circuits.program import Program
+from verity.ml.circuits.constants import program_data
+from verity.ml.circuits.program import Program
 from verity_vllm.program.frontend.derive import derive_report
 from verity_vllm.program.frontend.rules.vllm_bindings import clear_observations, vllm_ruleset
 from verity_vllm.program.registry import dense as DN

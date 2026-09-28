@@ -32,7 +32,7 @@ from typing import Any, Iterable, Sequence
 
 import numpy as np
 
-from verity.primitives.circuits.defs import bind
+from verity.ml.circuits.defs import bind
 
 from verity_vllm.config import option
 from verity_vllm.correspondence.reader_for_query import Correspondence
@@ -447,11 +447,11 @@ _specialization = word_query.specialization
 
 
 def _encoded(fn) -> tuple[str, dict[str, dict[str, Any]]]:
-    """(the specialization's id, every definition it uses in the codec's v0 form): `verity.primitives.circuits.codec.encode_program` of a one-node
+    """(the specialization's id, every definition it uses in the codec's v0 form): `verity.ml.circuits.codec.encode_program` of a one-node
     Program that calls it, keeping the definitions reachable from it (not the wrapper, its lowered root or their Input gates)."""
-    from verity.primitives.circuits.codec import SCHEMA_V0, encode_program
-    from verity.primitives.circuits.defs import CompositeDefinition, PrimitiveDefinition
-    from verity.primitives.circuits.program import Program
+    from verity.ml.circuits.codec import SCHEMA_V0, encode_program
+    from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition
+    from verity.ml.circuits.program import Program
     if isinstance(fn, PrimitiveDefinition):
         return fn.id, {fn.id: {"form": "primitive", "id": fn.id}}
     params, ret = fn.signature()
@@ -514,7 +514,7 @@ def with_definitions(g: dict[str, Any]) -> dict[str, Any]:
         x["definition_ids"] = ids[lo:lo + n]
     g["definitions"] = defs
     g.setdefault("rules", {})["definitions"] = ("one entry per distinct specialization the groups use, down to primitives, in the codec's v0 node form "
-                                                 "(verity.primitives.circuits.codec.encode_program) with fold hints: runs of >= 3 consecutive nodes of one callee, "
+                                                 "(verity.ml.circuits.codec.encode_program) with fold hints: runs of >= 3 consecutive nodes of one callee, "
                                                  "chained when each reads the one before; a varying group names its smallest and largest representative")
     return g
 
@@ -648,8 +648,8 @@ def with_word_rules(g: dict[str, Any], X: int = 16, W: int = 32, extras: int = 0
 
 
 def definition_digest(d: dict[str, Any]) -> str:
-    """sha256 of a definition's canonical JSON (`verity.primitives.circuits.codec.canonical_json`), fold hints excluded."""
-    from verity.primitives.circuits.codec import canonical_json
+    """sha256 of a definition's canonical JSON (`verity.ml.circuits.codec.canonical_json`), fold hints excluded."""
+    from verity.ml.circuits.codec import canonical_json
     return hashlib.sha256(canonical_json({k: v for k, v in d.items() if k != "fold"})).hexdigest()
 
 
@@ -704,7 +704,7 @@ def catalog(graph_dir: str | Path) -> dict[str, Any]:
         with gzip.open(root / "definitions" / f"{p2}.json.gz", "wt") as fh:
             json.dump(m, fh, separators=(",", ":"))
     (root / "definitions" / "index.json").write_text(json.dumps({"schema": f"{SCHEMA}/definitions", "shard": "definitions/<digest[:2]>.json.gz",
-                                                                 "digest": "sha256 of the definition's canonical JSON (verity.primitives.circuits.codec.canonical_json), fold hints excluded",
+                                                                 "digest": "sha256 of the definition's canonical JSON (verity.ml.circuits.codec.canonical_json), fold hints excluded",
                                                                  "definitions": index}, separators=(",", ":")) + "\n")
     return index
 

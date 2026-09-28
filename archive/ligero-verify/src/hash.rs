@@ -298,7 +298,7 @@ pub fn unhex32(s: &str) -> [u8; 32] {
 }
 
 // ---------------------------------------------------------------------------------------------------- SHA-256 ----
-// FIPS 180-4, written from the standard.  The commitments layer (`verity.primitives.commitments.merkle`, `identity.py`) hashes
+// FIPS 180-4, written from the standard.  The commitments layer (`verity.ml.commitments.merkle`, `identity.py`) hashes
 // every leaf, node and domain identity with SHA-256 under the `veritor/protocol/merkle/frame/v3` framing (auth.rs);
 // this is the only place the B-Ligero verifier needs it (authentication = included).
 

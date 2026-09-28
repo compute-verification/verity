@@ -1,6 +1,6 @@
 """vLLM integration v2, Phase 2: the module-body query over a derived Program and the bridge to v1's identity encoding.
 
-    program_view   a `verity_vllm.query.units.Program` view of a derived Program: from its descriptor (verity.primitives.circuits codec) or
+    program_view   a `verity_vllm.query.units.Program` view of a derived Program: from its descriptor (verity.ml.circuits codec) or
                    from the Build's instance sequence (`instances.json.gz`: the same flat body, one row per Call, names inline)
     correspondence the per-Call runtime-correspondence annotations (owning module path, fx node, member hint, row) read off
                    the descriptor's `node_hints` / the instance names, and the Program-path -> implementation-path map

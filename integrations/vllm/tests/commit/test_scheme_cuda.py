@@ -1,4 +1,4 @@
-"""The CUDA copies of the ``vllm-v1`` rules hash the conformance vectors' bytes (``verity.primitives.commitments.vllm_v1``).
+"""The CUDA copies of the ``vllm-v1`` rules hash the conformance vectors' bytes (``verity.ml.commitments.vllm_v1``).
 
 Four copies, each checked on every vector its rule covers:
 
@@ -28,7 +28,7 @@ torch = pytest.importorskip("torch")
 if not torch.cuda.is_available():
     pytest.skip("the CUDA copies need a GPU", allow_module_level=True)
 
-from verity.primitives.commitments.vllm_v1 import vectors as VEC  # noqa: E402
+from verity.ml.commitments.vllm_v1 import vectors as VEC  # noqa: E402
 from verity_vllm.commit import scheme  # noqa: E402
 
 V = VEC.load()

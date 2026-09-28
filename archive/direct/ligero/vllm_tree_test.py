@@ -9,7 +9,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from verity.primitives.commitments import vllm_v1 as core
+from verity.ml.commitments import vllm_v1 as core
 
 from . import hashauth, vllm_tree
 from .leaf import vllm_v1 as lv

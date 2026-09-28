@@ -232,7 +232,7 @@ def main(argv: list[str] | None = None) -> int:
     dev = _dev(args.device)
     nvf4 = args.relation == "fp4-nvf4"
     if nvf4:
-        from verity_catalog.targets.target import NVFP4_SM120
+        from verity.ml.circuits.targets.target import NVFP4_SM120
 
         if str(src_root) not in sys.path:
             sys.path.insert(0, str(src_root))

@@ -9,7 +9,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from verity.primitives.circuits.types import Array, Record
+from verity.ml.circuits.types import Array, Record
 from verity_vllm.check import root_policy
 from verity_vllm.engine import run_facts
 from verity_vllm.observe.events import DispatchEnter, Root, RunHeader, TritonLaunch, ViewDesc

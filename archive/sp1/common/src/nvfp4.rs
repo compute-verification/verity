@@ -1,7 +1,7 @@
 //! The RTX 5090 NVFP4 Table 2 row (`fp4-nvf4`): `GemmAccumulator<1536>` over
 //! `mma.sync kind::mxf4nvf4.block_scale.scale_vec::4X.m16n8k64` (E2M1 elements,
 //! one UE4M3 scale byte per 16 elements, FP32 accumulator) on sm_120, bit for
-//! bit as `verity_catalog.silicon.models.BLACKWELL_SM120_NVF4` computes it
+//! bit as `verity.ml.circuits.silicon.models.BLACKWELL_SM120_NVF4` computes it
 //! (`BlockScaledAlignAdd`: `frac_bits = 27`, `acc_window = 36`,
 //! `grid_floor = -174`, `underflow_zero = "positive"`).
 //!

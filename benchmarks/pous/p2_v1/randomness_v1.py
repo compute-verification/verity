@@ -1,4 +1,4 @@
-"""P2 v1.1's frozen derivation: `verity.primitives.randomness` v1 (SHA-256, as of verity `f5df3bbc`), kept here so the kit's
+"""P2 v1.1's frozen derivation: `verity.ml.randomness` v1 (SHA-256, as of verity `f5df3bbc`), kept here so the kit's
 §7 vectors and every pin of them hold after core moved to SHA-512; memory-accounting's P2 v4 retires it.
 
 The parts the kit reads, with v1's bytes and behaviour (stdlib only):

@@ -3,7 +3,7 @@ name = "verity-direct"
 version = "0.0.0"
 description = "B-Ligero, frozen: its Python provers and tests."
 requires-python = ">=3.12"
-dependencies = ["research", "verity", "verity-numerical", "numpy", "blake3>=1.0", "verity-catalog", "verity-experimental", "verity-kernels"]
+dependencies = ["research", "verity", "verity-numerical", "numpy", "blake3>=1.0"]
 
 [project.optional-dependencies]
 torch = ["torch>=2.4"]
@@ -24,4 +24,4 @@ testpaths = ["ligero/tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-inputs = ["archive/ligero-verify", "catalog/census"]
+inputs = ["archive/ligero-verify", "benchmarks/census"]

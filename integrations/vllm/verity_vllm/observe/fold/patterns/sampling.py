@@ -8,7 +8,7 @@ import math
 from dataclasses import dataclass, replace
 from typing import Any
 
-from verity.primitives.circuits.defs import bind
+from verity.ml.circuits.defs import bind
 from verity_vllm.program.registry import b1
 
 from verity_vllm.observe.events import ViewDesc

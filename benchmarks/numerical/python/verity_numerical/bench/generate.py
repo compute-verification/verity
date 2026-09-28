@@ -5,9 +5,9 @@
         --n 4096 --seed 20260926 --out DIR [--procs P] [--register]
     python -m verity_numerical.bench.generate --subcircuit rope-head/d64/neox-bf16 --n 1024 --seed 1 --out DIR
 
-The key is ``verity.primitives.randomness.derive(SOURCE, DOMAIN, {"subcircuit": id, "seed": seed})``; draw ``j`` is
+The key is ``verity.ml.randomness.derive(SOURCE, DOMAIN, {"subcircuit": id, "seed": seed})``; draw ``j`` is
 ``Subcircuit.draw(key, j)`` (``templates``: every port's words from the counter stream at ``(port, j)``), evaluated by
-``verity.primitives.circuits.evaluation.evaluate_batch`` on the subcircuit's IR target.  A draw is admitted when its outputs are inside the
+``verity.ml.circuits.evaluation.evaluate_batch`` on the subcircuit's IR target.  A draw is admitted when its outputs are inside the
 subcircuit's domain (``Subcircuit.admitted``: every BF16 output word finite), and instance ``i`` is the ``i``-th admitted draw
 (``index.json`` ``sub.draw``), so a larger set extends a smaller one of the same key: the first ``n`` instances are the same.
 The set is written in the captured sets' layout (``input_sets``, schema ``input-set/v1``) under ``<out>/sets/<name>/``, its
@@ -30,7 +30,7 @@ from typing import Any, Iterable, Mapping
 
 import numpy as np
 
-from verity.primitives.randomness import Key, derive
+from verity.ml.randomness import Key, derive
 
 from . import input_sets as IS
 from . import templates as TM
@@ -110,7 +110,7 @@ def generate(sub: TM.Subcircuit, n: int, seed: int, out: str | Path, *, procs: i
     ports.update({p.name: [o[p.name] for _j, _d, o in kept] for p in sub.outputs})
     rows = [[i, None, None, None, None, None, None, "synthetic", {"draw": jj, **d.sub}] for i, (jj, d, _o) in enumerate(kept)]
     recipe = {"generator": "verity_numerical.bench.generate", "template": sub.template.id, "subcircuit": sub.id, "parameters": sub.params,
-              "seed": int(seed), "n": n, "key": f"verity.primitives.randomness.derive({SOURCE!r}, {DOMAIN!r}, {{'subcircuit': {sub.id!r}, 'seed': {int(seed)}}})",
+              "seed": int(seed), "n": n, "key": f"verity.ml.randomness.derive({SOURCE!r}, {DOMAIN!r}, {{'subcircuit': {sub.id!r}, 'seed': {int(seed)}}})",
               "draw": "templates.Subcircuit.draw(key, j): each port's words from key.stream((port, j), 4 bytes per word)",
               "samplers": sub.recipe, "admission": "every BF16 output word finite (Subcircuit.admitted); instance i = the i-th admitted draw",
               "draws": draws_used, "rejected": len(rejected), "rejected_draws": rejected[:64]}
@@ -157,7 +157,7 @@ WORKLOAD_ROWS = (39, 57, 60, 67, 73, 74)
 
 
 def workload_suite(rows: tuple[int, ...] = WORKLOAD_ROWS) -> list[tuple[str, dict[str, Any], int]]:
-    """One set per census-bound subcircuit of the workloads of vLLM ``rows`` (``catalog/census/workloads.json``, ``headline.groups``), in
+    """One set per census-bound subcircuit of the workloads of vLLM ``rows`` (``benchmarks/census/workloads.json``, ``headline.groups``), in
     id order; an attention head's T range is its census ``variable_ranges.T``."""
     from . import census
     from . import headline as H

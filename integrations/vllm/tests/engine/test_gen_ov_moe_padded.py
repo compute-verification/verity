@@ -21,7 +21,7 @@ OV = importlib.import_module("verity_vllm.engine.profiles.derived_OLMOE")
 from verity_vllm.observe.fold.resolver import Compute, Group, StepContext, Transparent, Unsupported, resolve_step
 from tests.engine.test_gen_ov_moe import C, E, H, I, TOPK, _ctx, _start, moe_scope_events
 from verity_vllm.observe.fold.tree import step_events
-from verity.primitives.circuits.defs import bind
+from verity.ml.circuits.defs import bind
 from verity_vllm.program.registry import moe_pad as MP
 
 PADDED = OV.with_moe_construction(OV.PROFILE, "padded")

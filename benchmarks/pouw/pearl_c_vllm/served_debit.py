@@ -77,14 +77,14 @@ sys.path.insert(0, str(HERE.parent))
 import fast_tile as FT  # noqa: E402
 import run_result  # noqa: E402
 import verify_run as VR  # noqa: E402
-from verity.primitives.commitments import Commitment  # noqa: E402
-from verity.primitives.commitments import verify_opening  # noqa: E402
-from verity.primitives.randomness import derive  # noqa: E402
-from verity.protocols.accounting.work.pouw.audit import (ROW_SCHEMA, Transcript, Verifier, activation_binding, commitment_hash,  # noqa: E402
+from verity.ml.commitments import Commitment  # noqa: E402
+from verity.ml.commitments import verify_opening  # noqa: E402
+from verity.ml.randomness import derive  # noqa: E402
+from verity.experimental.protocols.pouw.audit import (ROW_SCHEMA, Transcript, Verifier, activation_binding, commitment_hash,  # noqa: E402
                                opened_value, rows_domain, weight_binding)
-from verity.protocols.accounting.work.pouw.coins import CoinCommitment  # noqa: E402
-from verity.protocols.accounting.work.pouw.protocol import Context, Matmul, Shape  # noqa: E402
-from verity.protocols.accounting.work.pouw.schemes import pearl_c_work as PW  # noqa: E402
+from verity.experimental.protocols.pouw.coins import CoinCommitment  # noqa: E402
+from verity.experimental.protocols.pouw.protocol import Context, Matmul, Shape  # noqa: E402
+from verity.experimental.protocols.pouw.schemes import pearl_c_work as PW  # noqa: E402
 from verity_vllm.protocol_options import pouw_pearl_c_device as PD  # noqa: E402
 
 CAPS = {"1/400": Fraction(1, 400), "1/600": Fraction(1, 600), "1/1000": Fraction(1, 1000)}
@@ -601,7 +601,7 @@ def write_inputs(rows: list[dict], seed: int, census_max: int, draws: int, out_d
                            "points of its own)", "inputs": rows}
     if fresh:
         doc |= fresh | {"independence": "each trial is a work-weighted draw of the input's tiles under a salt of its own, both "
-                                        "derived from fresh_source after the pass (verity.primitives.randomness.derive, " + FRESH + "): "
+                                        "derived from fresh_source after the pass (verity.ml.randomness.derive, " + FRESH + "): "
                                         "independent Bernoulli trials of the input's rate, the activations fixed"}
     path = out_dir / "inputs.json"
     path.write_text(json.dumps(doc, indent=1) + "\n")

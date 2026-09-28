@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import numpy as np
 import torch
-from verity_catalog.silicon.silicon import ADA_E4M3_M16N8K32, tc_dot
+from verity.ml.circuits.silicon.silicon import ADA_E4M3_M16N8K32, tc_dot
 
 from ..compile import System
 from .relation import ACC_FRAC, ADA, FP8Params

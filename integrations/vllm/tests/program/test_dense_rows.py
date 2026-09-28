@@ -1,4 +1,4 @@
-"""`verity_vllm.program.kernels.dense_rows`: the dense chain's kernels equal the reference (`verity.primitives.circuits.evaluation`) on seeded, edge and
+"""`verity_vllm.program.kernels.dense_rows`: the dense chain's kernels equal the reference (`verity.ml.circuits.evaluation`) on seeded, edge and
 exhaustive bf16 words, claiming every finite instance; the k16 chain, by `cpp/k16_chain.cpp` and by `_chain` in numpy, equals
 `derived_rows.dot_bf16` word for word on the coordinates it claims and on those it hands back (subnormal and overflowing steps,
 non-finite operands), for any thread count; and `Gemm_v1`'s row kernel is the same on either path and against the reference."""
@@ -12,8 +12,8 @@ import sys
 import numpy as np
 import pytest
 
-from verity.primitives.circuits.evaluation import self_check
-from verity.primitives.circuits.defs import bind
+from verity.ml.circuits.evaluation import self_check
+from verity.ml.circuits.defs import bind
 from verity_vllm.program.kernels import dense_rows as DR
 from verity_vllm.program.kernels import derived_rows as D
 from verity_vllm.program.kernels import rows

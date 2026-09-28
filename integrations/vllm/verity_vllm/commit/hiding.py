@@ -1,4 +1,4 @@
-"""The host committer's ``hm96-sha256/v1`` hiding leaves (``verity.primitives.commitments.hm96``, spec ``PROTOCOL.md`` beside it), batched
+"""The host committer's ``hm96-sha256/v1`` hiding leaves (``verity.ml.commitments.hm96``, spec ``PROTOCOL.md`` beside it), batched
 over one step's unsalted leaf digests, and the committer's choice of leaf rule (:class:`LeafSchemeRule`, opt-in, off by default).
 ``tests/commit/test_hiding.py`` pins it to core's reference and vectors.
 
@@ -14,7 +14,7 @@ from collections.abc import Sequence
 
 import numpy as np
 
-from verity.primitives.commitments import hm96, vllm_v1
+from verity.ml.commitments import hm96, vllm_v1
 
 NAME = hm96.NAME
 SALT_BYTES = hm96.SALT_BYTES

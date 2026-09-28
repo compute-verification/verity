@@ -5,8 +5,8 @@ from __future__ import annotations
 import numpy as np
 
 from tests.acquire.call_boundary_programs import DENSE, LP, PF, build_dir, dense_program
-from verity.primitives.circuits.evaluation import evaluate
-from verity.primitives.circuits.defs import bind
+from verity.ml.circuits.evaluation import evaluate
+from verity.ml.circuits.defs import bind
 from verity_vllm.check.replay import coverage as COV
 from verity_vllm.check.replay.driver import manifest_query
 from verity_vllm.check.replay.index import ProgramIndex

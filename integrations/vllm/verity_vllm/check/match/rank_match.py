@@ -80,7 +80,7 @@ def own_producers(result: Any) -> dict[tuple[int, int], list[str]]:
     """From an in-memory FoldResult: for every collective (step, k) the spec ids of the instances that PRODUCED the own-partial rows
     (the node-space runs of operand 0 of each collective row instance).  A row whose own part is not a node output (a parameter or an
     unwritten read) yields the marker `<not-a-node>`."""
-    from verity.primitives.circuits.refs import runs
+    from verity.ml.circuits.refs import runs
     out: dict[tuple[int, int], list[str]] = {}
     node_spec = {}
     for i, n in enumerate(result.body.nodes):

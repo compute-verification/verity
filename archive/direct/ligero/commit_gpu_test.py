@@ -1,4 +1,4 @@
-"""``commit_gpu`` (the protocol-specialised Blake3 Merkle kernels) against ``kernels/hash_gpu`` and the
+"""``commit_gpu`` (the protocol-specialised Blake3 Merkle kernels) against ``verity/ml/kernels/hash_gpu`` and the
 ``blake3`` package: every level, every leaf, the root, and the openings ``merkle.open_device`` produces -- at the
 prover's shapes (bf16-hopper 3328 x 65536, fp8-hopper 3432, bf16-ampere 3552, fp4 1619 x 16384) and at the edges
 (one chunk, a partial last chunk, tiny trees)."""

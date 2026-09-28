@@ -1,4 +1,4 @@
-"""The Hopper BF16 draft target (``verity_catalog.targets.target.BF16_HOPPER``) and its pinned vectors.
+"""The Hopper BF16 draft target (``verity.ml.circuits.targets.target.BF16_HOPPER``) and its pinned vectors.
 
 FIRST's program and epilogue (``GemmCoordinate<K>``, ``f32_to_bf16``) with the steps on ``HOPPER_BF16_M16N8K16`` (one
 group of 16, the 26-bit adder, floor -133) under the family ``veritor.tc-bf16.hopper_bf16_m16n8k16@1``.  The vectors
@@ -13,13 +13,13 @@ from pathlib import Path
 
 import pytest
 
-from verity_catalog.silicon.cast import f32_to_bf16_word
-from verity_catalog.silicon.errors import InvalidArtifact
-from verity_catalog.silicon.instructions import INSTRUCTIONS
-from verity_catalog.silicon.models import AMPERE_BF16_M16N8K16, HOPPER_BF16_M16N8K16
+from verity.ml.circuits.silicon.cast import f32_to_bf16_word
+from verity.ml.circuits.silicon.errors import InvalidArtifact
+from verity.ml.circuits.silicon.instructions import INSTRUCTIONS
+from verity.ml.circuits.silicon.models import AMPERE_BF16_M16N8K16, HOPPER_BF16_M16N8K16
 from verity_sp1.proofs.families import make_tc_ampere_bf16_gate_set, make_tc_bf16_gate_set
 from verity_sp1.proofs.programs import gemm_coordinate
-from verity_catalog.targets.target import BF16_HOPPER, FIRST, TARGETS, TC_VECTORS
+from verity.ml.circuits.targets.target import BF16_HOPPER, FIRST, TARGETS, TC_VECTORS
 
 ROOT = next(p for p in Path(__file__).resolve().parents if (p / "uv.lock").exists())
 

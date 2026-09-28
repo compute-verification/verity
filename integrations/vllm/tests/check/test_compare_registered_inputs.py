@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from verity.primitives.circuits.codec import encode_program
-from verity.primitives.circuits.defs import CompositeDefinition, bind
-from verity.primitives.circuits.program import Program
-from verity.primitives.circuits.types import Array, Value
+from verity.ml.circuits.codec import encode_program
+from verity.ml.circuits.defs import CompositeDefinition, bind
+from verity.ml.circuits.program import Program
+from verity.ml.circuits.types import Array, Value
 from verity_vllm.check.match import program_compare as C
 from verity_vllm.program.registry import prims as P
 

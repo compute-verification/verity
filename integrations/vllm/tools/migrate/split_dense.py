@@ -13,7 +13,7 @@ and docs, file paths in the lint allowlists. It is idempotent: on a tree where t
 fails by name, changing nothing, on a tree it cannot split (a module in both places or in neither, a reference form it cannot
 rewrite). `verify --before REV` regenerates circuit-check's task list and the descriptor digest of every target on REV and on
 this tree and fails on any difference; `pin` writes the family's targets and digests from a snapshot to the fixture
-`tools/circuit_check/tests/fixtures/split/dense.json`.
+`tools/verity/circuit_check/tests/fixtures/split/dense.json`.
 
     uv run python integrations/vllm/tools/migrate/split_dense.py plan
     uv run python integrations/vllm/tools/migrate/split_dense.py apply
@@ -83,7 +83,7 @@ EXCLUDE = (f"{VLLM}/tools/migrate/", f"{VLLM}/tests/tools/test_split_dense.py", 
 #: prose kept as written, so never rewritten, and refused if it imports a moved module: `b1.py` cites the sweep in two
 #: `conformance=` strings, which `frontend.provenance.registry_version()` reads
 KEPT = (f"{VLLM}/{PKG}/program/registry/b1.py",)
-FIXTURE = "tools/circuit_check/tests/fixtures/split/dense.json"
+FIXTURE = "tools/verity/circuit_check/tests/fixtures/split/dense.json"
 ROOTS = f"{VLLM}/tests/census_roots.txt"
 BY_NAME = f"{VLLM}/tests/by_name_allowlist.json"
 #: `tests/test_no_by_name_rules.py`'s SKIP_DIRS: a moved file under one leaves that scan, and its entries go stale
@@ -294,11 +294,11 @@ def apply(root: Path = REPO, log=print) -> dict:
 # --- the invariants ---------------------------------------------------------------------------------------------------------
 
 def _digest(fn) -> str | None:
-    """A circuit-check target's canonical descriptor digest: `verity.primitives.circuits.codec.program_digest` of the one-call Program at its
+    """A circuit-check target's canonical descriptor digest: `verity.ml.circuits.codec.program_digest` of the one-call Program at its
     statics (the shell `pipeline.program_graph._encoded` builds), for a primitive and a specialization alike."""
-    from verity.primitives.circuits import codec
-    from verity.primitives.circuits.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
-    from verity.primitives.circuits.program import Program
+    from verity.ml.circuits import codec
+    from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
+    from verity.ml.circuits.program import Program
 
     if not isinstance(fn, (SpecializedDefinition, PrimitiveDefinition)):
         return None
@@ -312,7 +312,7 @@ def family_ids() -> dict[str, str]:
     """Each Definition family (`Name_vN`) a family module defines (not one it imports), by the module that defines it."""
     import importlib
 
-    from verity.primitives.circuits.defs import CompositeDefinition, PrimitiveDefinition
+    from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition
 
     out = {}
     for name in DEFINITION_MODULES:

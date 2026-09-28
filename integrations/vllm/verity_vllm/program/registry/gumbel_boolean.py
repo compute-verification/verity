@@ -27,7 +27,7 @@ vocabulary size:
     GumbelSetup_v1{N}              (key, temp) -> the key's lane values (`lane_keys`, `round2_lows` for N = min(V, 64)
                                    offsets) and ``temp != 0``: every value the lanes share, so no two lanes compute one
     GumbelNoise_v1{V}              the noisy row: lanes in groups of G = 64 (`GumbelNoiseGroup_v1{G}`), each lane one member Call
-                                   (`GumbelLane_v1`); every level's nodes read only its parameters (`verity.primitives.circuits.cut.separable`)
+                                   (`GumbelLane_v1`); every level's nodes read only its parameters (`verity.ml.circuits.cut.separable`)
     F32ArgmaxStage_v1{V,L}         the first maximum of the noisy row (`sampling_boolean`'s tree over f32 keys)
 
 A served Program calls them at its root (`gumbel_select_calls`), as `token_select_calls` the greedy path's stages. Lane
@@ -40,15 +40,15 @@ group).
 """
 from __future__ import annotations
 
-from verity.primitives.circuits import boolean as BL
-from verity.primitives.circuits.defs import CompositeDefinition, bind
-from verity.primitives.circuits.refs import Coll, Explicit, concat
-from verity.primitives.circuits.types import Array, Tuple
-from verity_catalog.silicon import fp
-from verity.primitives.circuits.boolean.forms import NOT, OR, ZERO, add, and_reduce, const_bits, multiply, mux, or_reduce, sub
-from verity_catalog.definitions.boolean.scalar import gt_u, select
-from verity_catalog.definitions.boolean.softmax import f32_add_ftz, f32_fma_ftz, f32_mul_ftz, ftz
-from verity.primitives.circuits.boolean.trace import definition
+from verity.ml.circuits import boolean as BL
+from verity.ml.circuits.defs import CompositeDefinition, bind
+from verity.ml.circuits.refs import Coll, Explicit, concat
+from verity.ml.circuits.types import Array, Tuple
+from verity.ml.circuits.silicon import fp
+from verity.ml.circuits.boolean.forms import NOT, OR, ZERO, add, and_reduce, const_bits, multiply, mux, or_reduce, sub
+from verity.ml.circuits.ops.boolean.scalar import gt_u, select
+from verity.ml.circuits.ops.boolean.softmax import f32_add_ftz, f32_fma_ftz, f32_mul_ftz, ftz
+from verity.ml.circuits.boolean.trace import definition
 from verity_vllm.program.registry import sampling as SM
 from verity_vllm.program.registry import topp_word_gates as TG
 from verity_vllm.program.registry.sampling_boolean import F32ArgmaxStage, G, GB, argmax_calls, traced_family

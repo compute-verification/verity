@@ -1,6 +1,6 @@
 """[R17 mfast, BRIEF §5 step 2 -- compact representation] Operand references as RUN PROGRESSIONS instead of one tuple per run.
 
-The checker of record holds every instance operand as its list of MAXIMAL CONTIGUOUS RUNS `(space, idx, lo, hi)` (verity.primitives.circuits.refs.runs).
+The checker of record holds every instance operand as its list of MAXIMAL CONTIGUOUS RUNS `(space, idx, lo, hi)` (verity.ml.circuits.refs.runs).
 On a real fold 91 % of all runs are the K/V gathers of Attention (mprof M-0125, llama B8 256/32: 3.52 M runs, 200 per Attention
 instance): the SAME window [lo, hi) read from an ARITHMETIC SEQUENCE OF PRODUCER NODES -- one K-projection node per cached position,
 consecutive in a prefill (idx delta 1), one per decode step later (idx delta = the step's instance count).  Every per-instance pass of
@@ -146,12 +146,12 @@ def from_json(j, alias: Callable[[int, int], list[Prog]] | None = None) -> list[
 
 
 def _walk_refs(acc: _Acc, r) -> None:
-    """`_walk` over the fold's own Refs OBJECTS (verity.primitives.circuits.refs: Affine / Strided / Concat / Explicit -- a fold body has no alias
+    """`_walk` over the fold's own Refs OBJECTS (verity.ml.circuits.refs: Affine / Strided / Concat / Explicit -- a fold body has no alias
     references, those are a descriptor's), the same greedy rule, without the `to_json()` dict tree in between.  A Concat's run of
     consecutive Affine parts (the real shape: the alias-spliced K/V gathers are one Affine per cached position, mprof M-1098 (i)) is
     folded by ONE local loop that inlines `_Acc.run` + `_Acc._close` -- no method call, no tuple arithmetic per run; the accumulator's
     state is taken into locals at entry and written back at exit, so a non-Affine part in the middle simply hands over and resumes."""
-    from verity.primitives.circuits.refs import Affine, Concat, Explicit, Strided
+    from verity.ml.circuits.refs import Affine, Concat, Explicit, Strided
     tr = type(r)
     if tr is Affine:
         if r.count > 0:
@@ -413,7 +413,7 @@ def lean_root(desc: dict, registry) -> dict:
     `_spec_id`, so the spec strings are the record's).  Returns {"nodes": [(k, fid, form, args, out_str, n)], "n_nodes", "params"}.
     Root-body semantics mirrored from codec.decode_program: v1 `alias` = the compact operand of an earlier node (flattened concat
     parts and nesting do not change the run sequence); v0 descriptors have no aliases."""
-    from verity.primitives.circuits.codec import (SCHEMA_V0, SCHEMAS, Body, Coll, CompositeDefinition, Node, SpecializedDefinition, _decode_refs,
+    from verity.ml.circuits.codec import (SCHEMA_V0, SCHEMAS, Body, Coll, CompositeDefinition, Node, SpecializedDefinition, _decode_refs,
                                  _lookup_primitive, _spec_id, _statics_order, type_from_json)
     schema = desc.get("schema")
     if schema not in SCHEMAS:

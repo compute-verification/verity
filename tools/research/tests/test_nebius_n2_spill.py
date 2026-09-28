@@ -81,7 +81,7 @@ def dispatch(tmp_path, monkeypatch):
 
 def _item(tree: Path, **n2) -> dict:
     return {"id": "nvf4", "template": "prover-bench", "tree": str(tree), "queue": "provers",
-            "env": {"CMD": "bash backends/flock/pod/74-gemm-hill.sh DTYPE=nvf4 K=16384 CPUS=16", "QUESTION": "q"},
+            "env": {"CMD": "bash verity/ml/flock/pod/74-gemm-hill.sh DTYPE=nvf4 K=16384 CPUS=16", "QUESTION": "q"},
             "resources": {"prover-bench": {"cpus": 16, "memory": 96, "gpus": 1}},
             "n2": {"cmd": "true", "owner": "bc-8416bc72", "max_min": 25, "cpus": 16, "mem_gb": 96, **n2}}
 

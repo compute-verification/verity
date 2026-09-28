@@ -4,14 +4,14 @@ from __future__ import annotations
 from verity_vllm.properties import quarantine_lint
 
 GOOD = '''
-from verity.primitives.circuits.defs import CompositeDefinition
-from verity.primitives.circuits.types import Array
+from verity.ml.circuits.defs import CompositeDefinition
+from verity.ml.circuits.types import Array
 SEMANTIC_ID = "gen-x/Gelu@v1"
 Gelu = CompositeDefinition("Gelu", 1, ("N",), lambda S: ((("x", Array(S.N, None)),), Array(S.N, None)), lambda B, S, x: x, register=False)
 '''
 BAD = '''
 import os, time
-from verity.primitives.circuits.defs import CompositeDefinition
+from verity.ml.circuits.defs import CompositeDefinition
 Gelu = CompositeDefinition("Gelu", 0, ("N",), lambda S: (), lambda B, S, x: x)
 def f():
     global Gelu

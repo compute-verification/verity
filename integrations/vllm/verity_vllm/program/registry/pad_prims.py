@@ -3,17 +3,17 @@ GUIDANCE §29.
 
 The padded circuit carries one live/finished bit per decode step and selects, at decode-step granularity,
 between the step's computed outputs and the canonical pad values.  The gates this takes are boolean algebra
-on `Value<1>` plus typed two-way selects, all of them core's basic primitives (`verity_catalog.definitions.scalar`), cited here,
+on `Value<1>` plus typed two-way selects, all of them core's basic primitives (`verity.ml.circuits.ops.scalar`), cited here,
 not redefined (spec §9: "Existing, reused — not new, do not re-register"):
 
   spec name (§9)   registered id   where
   --------------   -------------   -----
-  I32Eq_v1         I32Eq_v1        verity_catalog.definitions.scalar (1 iff the two 32-bit words are equal)
-  SelectI32_v1     SelectI32_v1    verity_catalog.definitions.scalar (c ? a : b on encodings)
-  SelectBf16_v1    SelectBf16_v1   verity_catalog.definitions.scalar
-  SelectF32_v1     SelectF32_v1    verity_catalog.definitions.scalar (unused by Serve@3 v1 itself, spec §15 Q5)
-  BitAnd_v1        BitAnd_v1       verity_catalog.definitions.scalar (the spec's new gate)
-  BitNot_v1        BitNot_v1       verity_catalog.definitions.scalar (the spec's new gate)
+  I32Eq_v1         I32Eq_v1        verity.ml.circuits.ops.scalar (1 iff the two 32-bit words are equal)
+  SelectI32_v1     SelectI32_v1    verity.ml.circuits.ops.scalar (c ? a : b on encodings)
+  SelectBf16_v1    SelectBf16_v1   verity.ml.circuits.ops.scalar
+  SelectF32_v1     SelectF32_v1    verity.ml.circuits.ops.scalar (unused by Serve@3 v1 itself, spec §15 Q5)
+  BitAnd_v1        BitAnd_v1       verity.ml.circuits.ops.scalar (the spec's new gate)
+  BitNot_v1        BitNot_v1       verity.ml.circuits.ops.scalar (the spec's new gate)
 
 Bit-exact semantics (total on encodings; `Value<1>` has exactly the encodings {0, 1}):
   * `BitAnd_v1(a, b) = (a & b) & 1` — absorbing for the finished chain: `BitAnd(0, x) = 0` for every `x`,
@@ -37,7 +37,7 @@ modified anywhere.
 
 from __future__ import annotations
 
-from verity_catalog.definitions.scalar import BitAnd, BitNot
+from verity.ml.circuits.ops.scalar import BitAnd, BitNot
 from verity_vllm.program.registry import prims as P
 
 ALL_NEW = [BitAnd, BitNot]

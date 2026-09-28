@@ -29,7 +29,7 @@ leaf      for each tile row r and each 32-column chunk h: d_rh = TurboSHAKE128(l
           D = 0x21); leaf = TurboSHAKE128(d_00 ‖ d_01 ‖ d_10 ‖ … , D = 0x22), 32 bytes each
           (hashing format -h1: BLAKE3 keyed by blake3("pearl-c/h1/message") and blake3("pearl-c/h1/leaf") in their places;
           -h3s: the leaf is `sha512/row-seg/v1` over the messages themselves, 64 bytes)
-trees     A's rows, B's rows and the tile leaves: `verity.protocols.accounting.work.pouw.audit`'s framed SHA-256 Merkle trees
+trees     A's rows, B's rows and the tile leaves: `verity.experimental.protocols.pouw.audit`'s framed SHA-256 Merkle trees
           (-h1: `frame-b3`, BLAKE3 keyed by the domain id, each row leaf through BLAKE3's chunk tree;
           -h2: `frame-b3s`, -h1 with each leaf a tree over its value's 256-byte segments, each segment's key binding its
           position, the value's length and the leaf's rank, position and schema;
@@ -83,10 +83,10 @@ from dataclasses import dataclass
 from fractions import Fraction
 from functools import lru_cache
 
-from verity.primitives.commitments.rowleaf import sha512_row_seg_digest
-from verity.primitives.crypto.blake3 import blake3, keyed
-from verity.primitives.crypto.turboshake import turboshake128
-from verity_catalog.silicon import fp32
+from verity.ml.commitments.rowleaf import sha512_row_seg_digest
+from verity.ml.crypto.blake3 import blake3, keyed
+from verity.ml.crypto.turboshake import turboshake128
+from verity.ml.circuits.silicon import fp32
 
 from ..audit import ROW_SCHEMA, activation_binding, rows_domain
 from ..protocol import Certificate, Context, DomainError, Matmul, Shape, Tile, grid_tiles
@@ -104,7 +104,7 @@ TILE = 64
 CHUNK = 32                         # columns per ticket message
 D_MESSAGE, D_LEAF = 0x21, 0x22     # TurboSHAKE128 domain bytes
 LABELS = {r: f"pearl-c/v0/{r}".encode() for r in ("seed-A", "seed-B")}
-#: The hashing formats this scheme implements, of the one table (`verity.protocols.accounting.work.pouw.serving.HASH_FORMATS`): h0 (TurboSHAKE128
+#: The hashing formats this scheme implements, of the one table (`verity.experimental.protocols.pouw.serving.HASH_FORMATS`): h0 (TurboSHAKE128
 #: messages and leaf, SHA-256 trees), h1 (BLAKE3 throughout, for decode latency) and h2 (h1's messages and leaf; every tree
 #: `frame-b3s`, 256-byte segments under each leaf, for a shallower A commitment), h3 (h2, with E_A seeded per row from the
 #: row's leaf) and h3s (h3 through SHA-512: `s512` seeds, lines and tickets, a `sha512/row-seg/v1` tile leaf and `audit.HM96`
@@ -112,7 +112,7 @@ LABELS = {r: f"pearl-c/v0/{r}".encode() for r in ("seed-A", "seed-B")}
 HASHINGS = ("h0", "h1", "h2", "h3", "h3s")
 #: the formats whose rows seed their own E_A lines (`HashFormat.seed_a` ``row``)
 ROW_SEEDED = tuple(h for h in HASHINGS if HASH_FORMATS[h].seed_a == "row")
-#: each hashing format's frame hash for the row and transcript trees (`verity.primitives.commitments.merkle`), from the one table
+#: each hashing format's frame hash for the row and transcript trees (`verity.ml.commitments.merkle`), from the one table
 TREE_HASH = {h: HASH_FORMATS[h].tree_hash for h in HASHINGS}
 #: each hashing format's BLAKE3 keys of the message digests and the tile leaf, from the one table, built once (h2 shares h1's
 #: labels, so their keys are equal)

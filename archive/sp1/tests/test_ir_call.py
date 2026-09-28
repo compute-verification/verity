@@ -9,10 +9,10 @@ constant, so the constants leaf, the arguments and a tuple of returns are all ex
 from __future__ import annotations
 
 import pytest
-from verity.primitives.circuits.defs import CompositeDefinition, bind
-from verity.primitives.circuits.refs import tuple_of
-from verity.primitives.circuits.types import Array, Tuple
-from verity_catalog.definitions.prims import BF16, Bf16ToF32, F2fpBf16, const
+from verity.ml.circuits.defs import CompositeDefinition, bind
+from verity.ml.circuits.refs import tuple_of
+from verity.ml.circuits.types import Array, Tuple
+from verity.ml.circuits.ops.prims import BF16, Bf16ToF32, F2fpBf16, const
 from verity_sp1.proofs.lowering import check_relations
 from verity_sp1.proofs.packed import check_packed_openings, decode_packed_witness
 from verity_sp1.proofs.typed_obligation import validate

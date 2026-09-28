@@ -147,7 +147,7 @@ GPU_RTX4090 = Gpu("NVIDIA GeForce RTX 4090", 660.6, 165.2, 82.6, 1.008e12, 1.0e1
                   "NVIDIA Ada GPU architecture whitepaper / RTX 4090 datasheet: INT8 660.6 TOPS dense, BF16 165.2 TFLOPS, FP32 82.6 TFLOPS, 1,008 GB/s")
 
 #: Merkle-hash rates (bytes hashed per second) on SIMT cores.  Three stated values; none measured by this lane -- the
-#: hash-gpu lane's measured 4090 rates are in ``reports/hash_gpu.json`` and applied by ``kernels/hash_gpu/reprice.py``
+#: hash-gpu lane's measured 4090 rates are in ``reports/hash_gpu.json`` and applied by ``verity/ml/kernels/hash_gpu/reprice.py``
 #: (or ``--hash-rate`` below).
 HASH_RATES: dict[str, dict] = {
     "blake3_simt_conservative": {"bytes_per_s": 10e9, "basis": "explore.pcs indicative GPU hash rate (10 GB/s); conservative"},

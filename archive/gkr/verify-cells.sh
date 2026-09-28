@@ -16,10 +16,10 @@ NT=$(( Q > 0 ? Q / PER : $(nproc) )); [ "$NT" -lt 1 ] && NT=1; export RAYON_NUM_
 export PYTHONPATH="$REPO:$REPO/benchmarks/numerical/python:$REPO/tools/research/src:$REPO:$REPO/archive/gkr:$REPO/archive/gkr/tools"
 F=/workspace/flock-link/flock; B=$W/bin/flock-link; VB=$W/bin/verity-gkr-verify
 say "build flock-link + verity-gkr-verify ($NT threads)"
-bash backends/flock/pod/00-setup-cpu.sh > $O/flock-setup.log 2>&1
+bash verity/ml/flock/pod/00-setup-cpu.sh > $O/flock-setup.log 2>&1
 source $HOME/.cargo/env; export PATH="$HOME/.cargo/bin:$PATH"
-( cd $F && git checkout -q b684b12 && git checkout -q -- . && git clean -qfd crates && git apply $REPO/backends/flock/flock-link-b684b12.patch \
-  && git apply $REPO/backends/flock/flock-gpu-link-b684b12.patch && cp -r $REPO/backends/flock/live crates/flock-live \
+( cd $F && git checkout -q b684b12 && git checkout -q -- . && git clean -qfd crates && git apply $REPO/verity/ml/flock/flock-link-b684b12.patch \
+  && git apply $REPO/verity/ml/flock/flock-gpu-link-b684b12.patch && cp -r $REPO/verity/ml/flock/live crates/flock-live \
   && { grep -q '"crates/flock-live"' Cargo.toml || sed -i 's|    "crates/flock-transcript",|    "crates/flock-transcript",\n    "crates/flock-live",|' Cargo.toml; } \
   && cargo build --release -p flock-live --bin flock-link -j $NT 2>&1 | grep -E '^error|Finished' | head -5 ) && cp $F/target/release/flock-link $B || { echo BUILD FAILED; exit 1; }
 ( cd archive/gkr/verifier && cargo build --release -j $NT 2>&1 | grep -E '^error|Finished' | head -3 && cp target/release/verity-gkr-verify $VB \

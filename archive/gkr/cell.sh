@@ -34,11 +34,11 @@ export PATH="$HOME/.cargo/bin:$PATH"
 F=$W/flock-link/flock; B=$W/bin/flock-link-live; VB=$W/bin/verity-gkr-verify-live
 
 build_flock() {
-  bash backends/flock/pod/00-setup-cpu.sh > $RD/flock-setup.log 2>&1
+  bash verity/ml/flock/pod/00-setup-cpu.sh > $RD/flock-setup.log 2>&1
   source $HOME/.cargo/env
-  # the live crate on main needs both Flock patches (backends/flock/pod/20-pure.sh's recipe)
-  ( cd $F && git checkout -q b684b12 && git checkout -q -- . && git clean -qfd crates && git apply $REPO/backends/flock/flock-link-b684b12.patch \
-    && git apply $REPO/backends/flock/flock-gpu-link-b684b12.patch && cp -r $REPO/backends/flock/live crates/flock-live \
+  # the live crate on main needs both Flock patches (verity/ml/flock/pod/20-pure.sh's recipe)
+  ( cd $F && git checkout -q b684b12 && git checkout -q -- . && git clean -qfd crates && git apply $REPO/verity/ml/flock/flock-link-b684b12.patch \
+    && git apply $REPO/verity/ml/flock/flock-gpu-link-b684b12.patch && cp -r $REPO/verity/ml/flock/live crates/flock-live \
     && { grep -q '"crates/flock-live"' Cargo.toml || sed -i 's|    "crates/flock-transcript",|    "crates/flock-transcript",\n    "crates/flock-live",|' Cargo.toml; } \
     && cargo build --release -p flock-live --bin flock-link -j $NT 2>&1 | grep -E '^error|-->|Finished' | head -20 ) || return 1
   cp ${CARGO_TARGET_DIR:-$F/target}/release/flock-link $B || return 1

@@ -459,7 +459,7 @@ def tc_dot16(acc: np.ndarray, a: np.ndarray, b: np.ndarray) -> tuple[np.ndarray,
 # `wgmma.mma_async.sync.aligned.m64n{N}k16.f32.bf16.bf16` (SASS HGMMA.64xNx16.F32.BF16) as `veritor.core.silicon_total.
 # HOPPER_BF16_WGMMA_K16` defines it -- one group of all sixteen products plus the accumulator, 26-bit adder, exponent floor
 # -133 (lane HP's H100 re-measurement, docs/data/tc-hopper-2026-09-07: 307,281,920 output words, 0 mismatches; `scale-d = 0`
-# measured equal to acc = +0).  The registered scalar primitive is `verity_catalog.definitions.prims.HopperBF16WgmmaDot16`; this twin
+# measured equal to acc = +0).  The registered scalar primitive is `verity.ml.circuits.ops.prims.HopperBF16WgmmaDot16`; this twin
 # is checked word for word against it in tests/program/test_derived_rows.py.
 #
 # The k-CHAIN of the Hopper GEMM of record (`Gemm_v2{K,N,DOT=HopperBF16WgmmaDot16_v1}`, gemm_targets.REGISTERED['hopper']) is

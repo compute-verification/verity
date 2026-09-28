@@ -1,8 +1,0 @@
-# The suite of verity/tests: invariants of the whole of `verity` (what it may import, a package in every directory). The root's
-# pyproject.toml is the `verity` distribution; each directory under verity/ with tests is a suite of its own.
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
-
-[tool.verity.tests]
-parallel = true

@@ -15,5 +15,5 @@ here.
 | `exhaustion/` | the salt-to-deadline window of `pearl-c-sm120-v1-h1` / `-h2` on node 2's cards, and its audit |
 | `pouw_pearl_c_host.py`, `pouw_pearl_c_device.py` | the vLLM device path as it stood at d9820913f, with native BLAKE3 keys and the -h1, -h2 and -h3 schemes |
 
-The BLAKE3 in core (`verity.primitives.crypto.blake3`), Pearl-C4's BLAKE3 seeds at -h0 and the frozen backends' CUDA
-hashing (`kernels/hash_gpu/`) stayed where they were.
+The BLAKE3 in core (`verity.ml.crypto.blake3`), Pearl-C4's BLAKE3 seeds at -h0 and the frozen backends' CUDA
+hashing (`verity/ml/kernels/hash_gpu/`) stayed where they were.

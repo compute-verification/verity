@@ -57,7 +57,7 @@ def _gate_repo(tmp_path: Path) -> tuple[Path, Path, str]:
     main = tmp_path / "main"
     (main / "mytools").mkdir(parents=True)
     (main / "mytools" / "decl_check.py").write_text("from research.store.tool import Tool\nT = Tool(name='check', version='1')\n")
-    (main / "tools" / "check").mkdir(parents=True)
+    (main / "tools" / "verity" / "check").mkdir(parents=True)
     for rel, text in CHECK_FILES.items():
         (main / rel).write_text(text)
     (main / ".gitignore").write_text("__pycache__/\n")

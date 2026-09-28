@@ -49,10 +49,10 @@ from typing import Any, Iterator
 
 import numpy as np
 
-from verity.primitives.circuits.defs import PrimitiveDefinition
-from verity.primitives.circuits.evaluate import evaluate_call
-from verity.primitives.circuits.layout import FunctionCall, Scope, resolve
-from verity.primitives.circuits.refs import Affine, Concat, Refs, Strided, runs
+from verity.ml.circuits.defs import PrimitiveDefinition
+from verity.ml.circuits.evaluate import evaluate_call
+from verity.ml.circuits.layout import FunctionCall, Scope, resolve
+from verity.ml.circuits.refs import Affine, Concat, Refs, Strided, runs
 
 from verity_vllm.check.fold_compare import SnapshotStore, WeightSource
 from verity_vllm.observe.fold.fold import FoldResult

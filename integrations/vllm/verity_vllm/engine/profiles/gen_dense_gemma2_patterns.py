@@ -43,7 +43,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from verity.primitives.circuits.defs import bind
+from verity.ml.circuits.defs import bind
 from verity_vllm.program.registry.quarantine.dense import (add_scalar_bf16, add_scalar_f32, add_widened_bf16, bf16_div_scalar,
                                                 bf16_mul_scalar, bf16_mul_scalar_tensor, bf16_tanh, gelu_tanh_mul, mean_triton,
                                                 mul_vec_f32, narrow_f32_bf16, rsqrt_f32, scale_row_bf16, scale_row_f32,

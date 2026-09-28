@@ -213,11 +213,11 @@ def _mufu(op: str, x):
 
 
 def mufu_probe(out: Path, device: str) -> dict:
-    """MUFU.EX2 and MUFU.RCP on this GPU against core's sm_89 tables (`verity_catalog.definitions.mufu`): ex2 on [0, 1) at every 2^-23 step and
+    """MUFU.EX2 and MUFU.RCP on this GPU against core's sm_89 tables (`verity.ml.circuits.ops.mufu`): ex2 on [0, 1) at every 2^-23 step and
     rcp on every mantissa of [1, 2), plus ex2 / lg2 (ftz and not) on a sweep of 2^20 words; the words are stored."""
     import torch
 
-    from verity_catalog.definitions import mufu as MU
+    from verity.ml.circuits.ops import mufu as MU
 
     rep = {}
     j = np.arange(1 << 23, dtype=np.uint32)
@@ -327,8 +327,8 @@ def _bits_groups(d: Path, man: dict, tmin: int | None, tmax: int | None) -> dict
     instance one token); a combine key one case (a row and an instance are one token)."""
     from collections import defaultdict
 
-    from verity.primitives.circuits.evaluation import bits as BS
-    from verity.primitives.circuits.defs import bind
+    from verity.ml.circuits.evaluation import bits as BS
+    from verity.ml.circuits.defs import bind
     from verity_vllm.program.registry import mla as M
 
     G = M.GLM47_FLASH
@@ -400,7 +400,7 @@ def _check_key(d: Path, key: str, tmin: int | None, tmax: int | None) -> tuple[i
 
 def check_bits(d: Path, tmax: int | None = None, worker: int = 0, workers: int = 1, out: Path | None = None,
                tmin: int | None = None, skip: set[str] = frozenset(), fresh: bool = False) -> dict:
-    """The Boolean Definitions on bits (`verity.primitives.circuits.evaluation.bits`) at GLM-4.7-Flash's statics against the captured words:
+    """The Boolean Definitions on bits (`verity.ml.circuits.evaluation.bits`) at GLM-4.7-Flash's statics against the captured words:
     `mla.TritonMlaDecodeHead` against `o` of every one-split decode row with tmin <= T <= tmax (one evaluation per distinct
     T), `mla.MlaBmm` against `c` and `mla.MoeSharedCombine` against `out` (one evaluation per case). The keys not in `skip`
     are dealt to `workers` shares by cost (largest first) and this call takes share `worker`; each finished key is written

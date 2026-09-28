@@ -465,7 +465,7 @@ in both verifiers (`batch: n_proofs mismatch (...)`, `batch: union bound 2^-x ov
 
 ## 8d. `authentication = included-hash`: the operand rows hashed inside the relation (lane hash-relation)
 
-`authentication = included` (D9) bound the published operand words to `verity.primitives.commitments` roots by having the
+`authentication = included` (D9) bound the published operand words to `verity.ml.commitments` roots by having the
 *verifier* re-hash every word as a SHA-256 leaf: the words are public and the verifier pays 3.6 s per 4096 VUs.
 `included-hash` keeps the words **private** (witness rows under the ZK masking of 8b) and moves the hashing into the
 relation: every VU's x row and W column are hashed with **Poseidon2 over BabyBear** by constraints, the two digests
@@ -485,7 +485,7 @@ editing their compilers; bf16-ampere and fp4-nvf4 are not composed):
    `inverse_nonzero`).  The intervals the pins declared are theorems of these rows, so the unit compiler's audit
    stands.  18 rows per BF16 word, 13 per E4M3 byte.
 2. *Two sponges along the chain.*  Poseidon2-BabyBear width 24, rate 16, capacity 8, S-box x^7, R_F = 8, R_P = 21,
-   Plonky3's constants and permutation order (`verity.primitives.commitments.poseidon2_babybear`; the constants, the internal
+   Plonky3's constants and permutation order (`verity.ml.commitments.poseidon2_babybear`; the constants, the internal
    diagonal and M4 are pinned by `CONSTANTS_SHA256 = 0b81af1c...`, known-answer vector `KAT_24` from Plonky3's
    `test_default_babybear_poseidon2_width_24`).  Padding-free overwrite-mode sponge: capacity initialised to
    `IV(role, word_bits, n_words) = (role, word_bits, K, 0, ...)` with `role = 1` for x rows and `2` for W columns
@@ -516,9 +516,9 @@ note (no protocol content): the sponges' 1704 S-box rows per unit are written by
 in registers) rather than by the fused witness program evaluating the linear layers as ~74k-term affine forms; the
 witness is identical, so the proofs are.
 
-**Committer** (`verity.primitives.commitments.rowleaf`, `leaf/v2h`; `hashauth.py`): tree `a` = one leaf per x row (the row's
+**Committer** (`verity.ml.commitments.rowleaf`, `leaf/v2h`; `hashauth.py`): tree `a` = one leaf per x row (the row's
 Poseidon2 digest as 32 big-endian bytes, schema `poseidon2-babybear-w24/row/v2h`), tree `b` = one leaf per W column,
-tree `y` = the output words as in D9; the SHA-256 ids tree, framing, domains and multiproofs of `verity.primitives.commitments`
+tree `y` = the output words as in D9; the SHA-256 ids tree, framing, domains and multiproofs of `verity.ml.commitments`
 are unchanged.  Gadget digest == committer digest on the same words (tested on random rows for all three relations).
 
 **Statement v5** (`LIGSTM05`, `serialize.py`): the v4 header (K = words per committed row = steps x operands per
@@ -536,7 +536,7 @@ leaves and the multiproofs open every leaf (~depth siblings per distinct row, 28
 `included-hash` every VU still hashes its own two rows; `included-hash-shared` (8e) hashes each distinct row once per
 sub-batch.
 
-* Merkle: `kernels/hash_gpu` Blake3 on the device (merged from main during the night; bit-exact with the
+* Merkle: `verity/ml/kernels/hash_gpu` Blake3 on the device (merged from main during the night; bit-exact with the
   host `blake3`, so `verify_path` is unchanged and the host path remains the CPU fallback). Before it, the transfer
   of `U` to the host (0.37 s) and host hashing (0.28 s) were 65% of the GPU-side prover; now 2 ms.
 * Hints: `hints_torch.py` vectorises `gen_step` (20 ms per 4096 units vs 2.6 s in Python); the gate asserts equality

@@ -29,8 +29,8 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from verity.primitives.circuits import Program, program_digest  # noqa: E402
-from verity.primitives.circuits.evaluate import MissingValue, evaluate_region  # noqa: E402
+from verity.ml.circuits import Program, program_digest  # noqa: E402
+from verity.ml.circuits.evaluate import MissingValue, evaluate_region  # noqa: E402
 from verity_vllm.program.frontend.provenance import registry_version  # noqa: E402
 
 from tests.program.test_derive_negative import IMPORTER_NAME, Outcome, _DERIVE, _input_gate_ranges, run_importer  # noqa: E402
@@ -283,7 +283,7 @@ def _input_map(out: Outcome, module: nn.Module, inputs: tuple) -> list[tuple[str
 
 def _flatten_like(t: Any, T) -> list[tuple[torch.Tensor, int]]:
     """Leaf tensors of a (possibly record) argument, paired with the width of the corresponding type leaves."""
-    from verity.primitives.circuits.types import Array, Record, Tuple as TupleT, Value
+    from verity.ml.circuits.types import Array, Record, Tuple as TupleT, Value
     if isinstance(t, torch.Tensor):
         tt = T
         while isinstance(tt, Array):

@@ -75,7 +75,7 @@ HOW TO RUN.  Skipped unless `VERITY_REGRESSION=1`.  Inputs resolve per `resolver
 the recorded live paths (tp2), or the data store (`store_io.fetch` of the `fixture/v1` trees named in fixtures.toml; snapshot
 `r19-reference-v1`).  A recorded `check` sets `VERITY_REGRESSION=1` and runs the T0 tier less the checks that recompute from a
 row's Programs (`REBUILD = True`, marked `rebuild`: manifest_digest, step_segmentation and the #57 negative), which
-`tools/check/post_train.py` runs after each train on main with `VERITY_REGRESSION_REBUILD=1` (`-m "regression and rebuild"`).  Under `VERITY_STORE_REQUIRED=1` (both of them) an input fixtures.toml names that does not resolve, or
+`tools/verity/check/post_train.py` runs after each train on main with `VERITY_REGRESSION_REBUILD=1` (`-m "regression and rebuild"`).  Under `VERITY_STORE_REQUIRED=1` (both of them) an input fixtures.toml names that does not resolve, or
 an absent `expected/<row>.json`, FAILS: the only skips are a tier not asked for, a check that does not apply to the row, and a check
 retired on the row (`[rows.<row>.retired.<check>]`: `reason`, `since`, `needs`; `python -m tests.regression.decisions` lists them).
 Self-check (the current code against its own records):
@@ -145,7 +145,7 @@ def _unresolved(why: str) -> NoReturn:
 def _skip_rebuild(what: str, candidate: str | None) -> None:
     if not resolver.rebuilds() and not candidate:
         pytest.skip(f"{what} recomputes from the row's Programs (CPU minutes to half an hour a row): it runs after each train on "
-                    f"main (`tools/check/post_train.py`), not in `check`; {resolver.REBUILD_ENV}=1 runs it here")
+                    f"main (`tools/verity/check/post_train.py`), not in `check`; {resolver.REBUILD_ENV}=1 runs it here")
 
 
 def _skip_retired(row: resolver.Row, check_name: str, record_property) -> None:

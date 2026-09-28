@@ -35,12 +35,12 @@ from verity_vllm.observe.fold.fold import FoldError, fold
 from verity_vllm.observe.fold.resolver import Compute, PerRow, Profile, Shared, Transparent, Gather
 from verity_vllm.check.match import rank_match as RM
 from verity_vllm.observe.fold.patterns.collectives import TpCollective
-from verity.primitives.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
-from verity.primitives.circuits.program import Program
-from verity.primitives.circuits.refs import Coll, array_of, concat, runs
+from verity.ml.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
+from verity.ml.circuits.program import Program
+from verity.ml.circuits.refs import Coll, array_of, concat, runs
 from verity_vllm.program.registry import b1, b1_tp2
 from verity_vllm.pipeline import cli
-from verity.primitives.circuits.types import Array, Record, Value
+from verity.ml.circuits.types import Array, Record, Value
 
 BF16, I32 = Value(16), Value(32)
 BF, I32D, I64D = "bfloat16", "int32", "int64"
@@ -358,7 +358,7 @@ def rank_program(rank: int, *, swap_parts: bool = False, peer_of: dict[int, int]
 
 def write_derived(d, spec: SpecializedDefinition, rank: int, *, links_mut: dict | None = None):
     """descriptor.json.gz + derive-report.json + tp_links.json as derive_step writes them (the fields cb_a.compare reads)."""
-    from verity.primitives.circuits import codec
+    from verity.ml.circuits import codec
     prog = Program(spec)
     desc = codec.encode_program(prog)
     with gzip.open(d / "descriptor.json.gz", "wt") as f:

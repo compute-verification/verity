@@ -1,5 +1,5 @@
 // Pearl-C4 on sm_120a (RTX PRO 6000, RTX 5090): the kernels of `pearl-c-nvfp4-v0` and `pearl-c-mxfp4-v0`
-// (verity/protocols/accounting/work/pouw/schemes/pearl_c4.py), for dev.py.  Every kernel takes one Args by value: 16 pointers p[] and
+// (verity/experimental/protocols/pouw/schemes/pearl_c4.py), for dev.py.  Every kernel takes one Args by value: 16 pointers p[] and
 // 16 ints i[].  FMT 0 is NVFP4 (E2M1, UE4M3 per 16 along k), FMT 1 MXFP4 (E2M1, UE8M0 per 32).  Hashing is GPU 2's
 // pouw_hash.cuh (TurboSHAKE128, BLAKE3), included from the pinned commit build.sh names.
 //
@@ -68,7 +68,7 @@ DEV float e2m1f(uint32_t c) {
   return mag[c & 7];
 }
 
-// ---------------------------------------------------------------- mma.sync (fragment layouts: tools/tc_probe_fp4/mma_fp4.cu)
+// ---------------------------------------------------------------- mma.sync (fragment layouts: benchmarks/tc_probe_fp4/mma_fp4.cu)
 template <int FMT> DEV void mma_fp4(float d[4], const uint32_t a[4], uint32_t b0, uint32_t b1, const float c[4], uint32_t sfa,
                                     uint32_t sfb) {
   if constexpr (FMT == NVFP4)
@@ -138,7 +138,7 @@ extern "C" __global__ void __launch_bounds__(256) transpose(const Args a) {
 }
 
 // ---------------------------------------------------------------- the rows' commitments and the seeds
-// audit.commit_rows as the verifier checks it: verity.primitives.commitments.merkle's SHA-256 tree over a RangeIndexedDomain, with
+// audit.commit_rows as the verifier checks it: verity.ml.commitments.merkle's SHA-256 tree over a RangeIndexedDomain, with
 // H(tag, parts) = SHA-256(FRAME ‖ |tag| u32 BE ‖ tag ‖ (|part| u64 BE ‖ part) ...), FRAME = "veritor/protocol/merkle/frame/v3\0",
 // uint(v) = v big-endian in its fewest bytes (at least one), dom = the domain id (32 B, from the host: public before A exists),
 //   leaf(i) = H("leaf", dom, uint(i), uint(i), "verity/pouw/row/v1", row i)      pad(r) = H("pad", dom, uint(r))

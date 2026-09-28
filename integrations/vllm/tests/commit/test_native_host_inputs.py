@@ -1,7 +1,7 @@
-"""The committer names the Program inputs its classes cover by binding and leaf width (`verity.primitives.circuits.program.input_prim`), never by literal id."""
+"""The committer names the Program inputs its classes cover by binding and leaf width (`verity.ml.circuits.program.input_prim`), never by literal id."""
 from __future__ import annotations
 
-from verity.primitives.circuits.program import REGISTRATION, RUN
+from verity.ml.circuits.program import REGISTRATION, RUN
 from verity_vllm.commit.committer.input_classes import weights_inputs
 
 

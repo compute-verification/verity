@@ -6,7 +6,7 @@ Not on the record: the Commit stage calls `vu_store.after_replay` once pair 0's 
 is recorded (`--vu-export-dir`, env `VERITY_VU_EXPORT_DIR`; on by default under `verity-vllm row`).  `limits.json` (the `Limits`
 fields) and `provenance.json` (extra provenance: the row, the research run) in that directory are read when present.  The draw is a
 stratified sample over the population the replay samples (every evaluable VU of the executed prefix, the replay's strata), keyed by
-`verity.primitives.randomness.derive` from the run root.  It is a benchmark selection, not a verifier challenge: fixed by the commitment and
+`verity.ml.randomness.derive` from the run root.  It is a benchmark selection, not a verifier challenge: fixed by the commitment and
 independent of the replay's own sample, nothing more.  Each drawn VU is
 evaluated exactly as the replay evaluates it (`check.replay.evaluate.replay_vu`: committed operands read through the binding map,
 registered weights, the family's row kernel), with an evaluation tap recording the operands and outputs of every row it
@@ -47,7 +47,7 @@ from typing import Any, Callable, Iterator
 
 import numpy as np
 
-from verity.primitives.randomness import Key, derive
+from verity.ml.randomness import Key, derive
 
 from verity_vllm.check.replay import evaluate as EV
 from verity_vllm.check.replay.index import ProgramIndex

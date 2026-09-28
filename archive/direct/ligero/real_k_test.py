@@ -40,7 +40,7 @@ def test_set_instances_reproduce_the_sets_outputs(tmp_path, name, semantics) -> 
     """The prover's instances of an input set: the set's rows, column-end accumulators recorded by the relation's model
     (every fold-th step of ``tc_dot``), whose last casts to each recorded output -- the Hopper mma model reproduces the
     wgmma set word for word (PR #49)."""
-    from verity_catalog.silicon.silicon import tc_dot
+    from verity.ml.circuits.silicon.silicon import tc_dot
     from verity_numerical.bench.input_sets import InputSet
 
     from .relchain import set_instances, set_ref

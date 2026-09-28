@@ -1,13 +1,13 @@
 """DEVELOPMENT BINDING, NOT FOR REVIEW: scratch C-Flock pieces for the PoUW word primitives Keccak-f[1600] is written in
-(`verity.protocols.accounting.work.pouw.circuit.words`: PouwXor32_v1, PouwChi32_v1, PouwRotl64Lo_v1, PouwRotl64Hi_v1), which C-Flock has no piece for
+(`verity.experimental.protocols.pouw.circuit.words`: PouwXor32_v1, PouwChi32_v1, PouwRotl64Lo_v1, PouwRotl64Hi_v1), which C-Flock has no piece for
 on this branch. `stage.py` puts them in `ir_lower.PIECES` for the hiding tile only, and every result staged with them is
 labelled 'hash scratch'. Xor is free, χ is 32 ANDs and 32 committed bits, and a rotation by a constant is wiring; a rotation by a variable count
 is refused (Keccak's are constants). χ's output is committed (`sha512_circuit.commit`, one row a bit), or the XOR forms
 would compound round over round. `check()` holds each to its primitive on random words."""
 import random
 
-from verity.primitives.commitments.gates.sha512 import commit
-from verity.protocols.accounting.work.pouw.circuit import words as W
+from verity.ml.commitments.gates.sha512 import commit
+from verity.experimental.protocols.pouw.circuit import words as W
 
 
 def _const(word) -> int:
@@ -28,7 +28,7 @@ PIECES = {"PouwXor32_v1": lambda C, a, b: [x ^ y for x, y in zip(a, b)],
 
 
 def check(n: int = 512, seed: int = 20261003) -> dict:
-    from verity.primitives.circuits.boolean.forms import const_bits
+    from verity.ml.circuits.boolean.forms import const_bits
     from verity_flock import gf2
     from verity_flock import ir_lower as IL
 

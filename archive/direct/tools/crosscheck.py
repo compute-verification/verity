@@ -14,7 +14,7 @@ import json
 import random
 import sys
 
-from verity_catalog.silicon.silicon import AMPERE_BF16_M16N8K16, tc_dot
+from verity.ml.circuits.silicon.silicon import AMPERE_BF16_M16N8K16, tc_dot
 from verity_numerical.checker import REAL, check_step, gen_step
 
 P = REAL

@@ -42,15 +42,15 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Callable, Iterable
 
-from verity.primitives.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.primitives.circuits.layout import Scope, GateSelection
-from verity.primitives.circuits.parts import Item, Part, n_members
-from verity.primitives.circuits.program import Program
-from verity.primitives.circuits.refs import array_of, tuple_of
+from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.ml.circuits.layout import Scope, GateSelection
+from verity.ml.circuits.parts import Item, Part, n_members
+from verity.ml.circuits.program import Program
+from verity.ml.circuits.refs import array_of, tuple_of
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry.prims import BF16, F32, I32
-from verity.primitives.circuits.types import Array, Tuple
+from verity.ml.circuits.types import Array, Tuple
 
 # ---------------------------------------------------------------------------------------------------------
 # registry programs (small statics)
@@ -493,7 +493,7 @@ def interface_w_out_bound(part: Part) -> int:
 
 
 def _type_widths(t) -> list[int]:
-    from verity.primitives.circuits.types import Record, Value
+    from verity.ml.circuits.types import Record, Value
     if isinstance(t, Value):
         return [t.w]
     if isinstance(t, Array):

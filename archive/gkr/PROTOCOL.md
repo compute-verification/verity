@@ -37,7 +37,7 @@ simulator of section 5.5 is written out so that the argument does not rest on th
 
 | symbol | value / meaning | public? |
 |---|---|---|
-| profile | `AMPERE_BF16_M16N8K16`, align `div` (`verity_catalog.silicon.silicon`) | yes |
+| profile | `AMPERE_BF16_M16N8K16`, align `div` (`verity.ml.circuits.silicon.silicon`) | yes |
 | \(K\) | dot-product length; decision workload \(K=1536\) | yes |
 | \(B\) | instances per proof (padded batch; real count also public); `N_subbatches` independently committed sub-batches → union bound (`union_over_proofs`) | yes |
 | \(U=B\cdot K/16\) | transition units (one 16-product update each); \(K=1536\): \(U=96B\) | yes |
@@ -50,7 +50,7 @@ simulator of section 5.5 is written out so that the argument does not rest on th
 
 **Census source (2026-09-21).** The counts are taken from the WP2 checker (`verity_numerical.checker`: `step.py`'s
 composed unit executed once on symbolic values through the five predicates `rng`/`eq`/`boolean`/`lookup`/`lt_pow`,
-hint widths from every gadget's `contract()`), **not** from `verity_catalog.silicon.relation.census`, which is forgeable as
+hint widths from every gadget's `contract()`), **not** from `verity.ml.circuits.silicon.relation.census`, which is forgeable as
 written (red team: `magW` never range-checked; WP2 F1/F2: remainders and quotient bounds) and counts none of the
 repairs. Conventions (`security.census` docstring): a product of two non-constant expressions is one `mul`;
 `boolean` is one `mul`; a \(w\)-bit range check is \(\lceil w/16\rceil\) lookups into the one 16-bit table (a
@@ -1158,7 +1158,7 @@ columns of every unit ARE those operands (Table 2's "same full relation", user d
   requires its circuit files to be a pinned set of `R` and `instances.txt` to name `R+bound`, whose entry pins the
   instance files.  `--relation R` refuses a statement with a `bind.txt`, `--relation R+bound` one without.
 * Not the full relation (user, 2026-09-25): the verifier holds the operands.  The target statement commits x, W and y
-  (`verity.primitives.commitments` leaf/v2h) and binds the commitments in the proof; this section is its public-input intermediate.
+  (`verity.ml.commitments` leaf/v2h) and binds the commitments in the proof; this section is its public-input intermediate.
 
 ### 16.2 Protocol **[implemented: `gpu/prover.py::add_bind`, `verify.rs` `bind_u` / `bind_mats`]**
 
@@ -1245,7 +1245,7 @@ link cell, dropped booleanity) is rejected by both verifiers.
 
 ### 17.5 Route (a) in one live session (v2, lane agkr-flock-cell; supersedes 17.1's stand-in and 17.2's point)
 
-The binary side is Flock (`backends/flock/live`, `flock-link cell-prove` / `cell-serve`, flock-128-r2) in the same live
+The binary side is Flock (`verity/ml/flock/live`, `flock-link cell-prove` / `cell-serve`, flock-128-r2) in the same live
 session as this proof; the red-team-flock third audit's P1-P3 and E0-E1 are what this section implements.
 
 * **Scheme (P3):** `bf16-ampere+blake3`, frame-v3 with `blake3-keyed/row/v2` row leaves, the leaf Flock proves (its chunk
@@ -1290,7 +1290,7 @@ serves them, so the whole cell is the interactive object of §0 and the bound is
   the link's rho with the batching coins after it (`open_coins`: the functionals, geo, the bind pair, Ligero's row
   coefficient), and the Ligero query set (t + 8). Nothing is derived under live coins: `challenge_bytes` is refused, and
   the graphed LogUp tree (device-side Fiat–Shamir) is off.
-* **Order (server, `backends/flock/live`):** `Prime` is refused before `Hello`, and between `Commit` and y (R5 for the
+* **Order (server, `verity/ml/flock/live`):** `Prime` is refused before `Hello`, and between `Commit` and y (R5 for the
   prime half: rho and the Ligero queries follow the points and y); `Commit` is refused before any prime round (root_F
   must follow live GKR coins); `Hello` pins `prime: live-coins/v1` (R7). No coin follows the verdict. The record keeps
   every round (state, n, words) and `before_commit`; the verdict requires at least one round on each side of `Commit`.

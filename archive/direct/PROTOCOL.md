@@ -45,7 +45,7 @@ Same public data as `archive/gkr/PROTOCOL.md` section 1 (profile, \(K\), \(B\), 
 
 **Census source.** The counts come from the WP2 checker contracts (`verity_numerical.security.census`; Candidate
 A section 1 gives the conventions, the per-width range table, the layered shape, the diff against
-`verity_catalog.silicon.relation.vu_census` — +212 `mul`, +33 `lin`, +134 lookups per unit — and the two unit variants).
+`verity.ml.circuits.silicon.relation.vu_census` — +212 `mul`, +33 `lin`, +134 lookups per unit — and the two unit variants).
 For B-Ligero the relevant difference between the transition unit and the VU is nil (\(<0.01\%\): `step.py`
 decodes and packs the word in every unit).
 
@@ -1187,7 +1187,7 @@ tableau 2 to ~700 rows and is the first thing to port.
 5. **Chain** (position-dependent, section 12's general linear test): \(x_*[j+1] = y_*[j]\) inside a VU, \(x_* =\)
    zero state at VU starts and pads, `ovf = 0` on non-last units, \(y16[\text{last}] = \) the claimed word; one
    \(q\) of degree \(< 2l - 1\).
-6. **Openings**: \(t\) columns of both tableaux with Blake3 Merkle paths (GPU Blake3 from `kernels/hash_gpu`,
+6. **Openings**: \(t\) columns of both tableaux with Blake3 Merkle paths (GPU Blake3 from `verity/ml/kernels/hash_gpu`,
    bit-exact with the host verifier's).
 
 Statement binding (F1-F3): the digest absorbs the domain tag, the checker params, \((l, n, t, \text{steps}, n_{vus})\),
