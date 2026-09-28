@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import sys
 from pathlib import Path
 
@@ -37,6 +38,11 @@ def test_a_shipped_tree_is_discovered_and_keyed_from_its_files(tmp_path, monkeyp
     assert S.object_ids(None, ["pkg", "uv.lock"], S.digests()) == before
     (tmp_path / "pkg" / "tests" / "test_a.py").write_text("def test_a():\n    assert True\n")
     assert S.object_ids(None, ["pkg"], S.digests())["pkg"] != before["pkg"]
+
+
+def test_jobs_default_to_the_cpus_this_process_may_use(tmp_path, monkeypatch):
+    S = _suites(monkeypatch, tmp_path)
+    assert 1 <= S.cpus() <= (len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else os.cpu_count())
 
 
 def test_a_shipped_tree_reports_writes_as_git_would(tmp_path, monkeypatch):
