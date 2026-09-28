@@ -155,16 +155,30 @@ class Options:
                                               "written (default: $ACQUIRE_MANIFEST)")
 
 
+def adapter_revision(args: Options) -> str:
+    """`--adapter-revision`, else the exported tree's commit (EXPORT.json), else "unknown"."""
+    if args.adapter_revision is not None:
+        return args.adapter_revision
+    try:
+        return json.loads(Path("EXPORT.json").read_text()).get("commit", "unknown")
+    except (OSError, ValueError, AttributeError):
+        return "unknown"
+
+
+def capture_protocols(wl: dict, args: Options, model: object) -> tuple[object | None, list[str]]:
+    """The target's executors (PoUW) and their entries. Installed after the warm-up as in the Commit, they serve both arms, so the
+    observed run executes what the Commit serves and records each executed call as its executor's own op (`protocol_options.at_capture`)."""
+    from verity_vllm import protocol_options as PO
+
+    protocols = PO.at_capture(va.target_of_workload(wl, args.target), model, wl.get("protocols_config"))
+    return protocols, list(protocols.entries) if protocols is not None else []
+
+
 def main(args: Options) -> None:
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     wl = va.load_workload(args.workload, args.max_tokens)
-    revision = args.adapter_revision
-    if revision is None:
-        try:
-            revision = json.loads(Path("EXPORT.json").read_text()).get("commit", "unknown")
-        except Exception:  # noqa: BLE001
-            revision = "unknown"
+    revision = adapter_revision(args)
 
     case = va.case_of(wl, args.case)
     # [R16 sys, BRIEF §5/§10] stage telemetry of this process (m1_capture = one engine per arm: `capture` / `control` are separate processes)
@@ -220,6 +234,7 @@ def main(args: Options) -> None:
 
     stats = None
     header = None
+    protocols, protocol_entries = capture_protocols(wl, args, eng.model)
     if args.no_observer:
         t0 = time.perf_counter()
         with tl.span("work.control_run"):
@@ -230,7 +245,8 @@ def main(args: Options) -> None:
         tl.start("work.capture_run")
         snap = parse_steps(args.snapshot_steps)
         header = va.make_header(eng, wl, adapter_revision=revision, wheel_sha256=args.wheel_sha256, vllm_commit=args.vllm_commit,
-                                extra_notes={"argv": sys.argv, "snapshot_steps": sorted(snap), "weights_verified": bool(args.verify_weights)})
+                                extra_notes={"argv": sys.argv, "snapshot_steps": sorted(snap), "weights_verified": bool(args.verify_weights),
+                                             "protocols": protocol_entries})
         cfg = va.ObserverConfig(mode="record", reenter=not args.no_reenter, triton=not args.no_triton,
                                 module_hooks=not args.no_module_hooks, write_log=True, snapshot_steps=snap,
                                 snapshot_dir=out if snap else None, snapshot_max_bytes=args.snapshot_max_bytes,
@@ -272,7 +288,9 @@ def main(args: Options) -> None:
         except OSError:
             pass
 
-    doc = {"requests": [], "per_step_sampled": per_step, "timing": timing, "observer": not args.no_observer,
+    if protocols is not None:
+        protocols.close()
+    doc = {"requests": [], "per_step_sampled": per_step, "timing": timing, "observer": not args.no_observer, "protocols": protocol_entries,
            "profile_id": header.profile_id if header is not None else None, "case": case, "model": eng.cp["repo"],
            # [coverage D87] the serving profile / context class the workload declares and the realized shape of this run
            "serving_profile": wl.get("serving_profile"), "context_class": wl.get("context_class"),
