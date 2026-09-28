@@ -17,14 +17,14 @@ judged through the proof service (`sampled_proofs.service`, P1: a `Stream`'s `re
 - **The window** is SZ_CALLS of the pass's ``o_proj``-shaped calls (k = n = `K`), picked from ``os.urandom`` unless
   ``--call`` names them.  Each call's A rows (the pass's retained activations, BF16 widened to FP32) and its weight's B rows
   are formed on the CPU as `pearl_c` forms them under the pass's epoch (`PearlC.noise`, forming v1, the peel factors), and
-  become the statement's fp8-p rows (A′_i ‖ P_A,i of role X, ``hm96-sha512/row-seg/v1``; B̃_j ‖ P_B,j of role W,
-  ``hm96-sha512/row/v2``; `leaves.words_fp8_p`), each followed by its place in the call, I or J, as a u32 in one 128-bit
-  word (`pouw.window.side_row`).  A row whose forming the scheme refuses is no tile's.
+  become the statement's fp8-pi rows: fp8-p rows (A′_i ‖ P_A,i of role X, ``hm96-sha512/row-seg/v1``; B̃_j ‖ P_B,j of
+  role W, ``hm96-sha512/row/v2``; `leaves.words_fp8_p`), each followed by its place in the call, I or J, as a u32 in one
+  128-bit word (`pouw.window.side_row`, `leaves.words_fp8_pi`), which the tile unit reads.  A row whose forming the scheme refuses is no tile's.
 - **The tiles** are each call's kept rows' products, then filler tiles up to the padded count: the window's N_real real
   tiles register the grid level of `pouw.window.bucket`, credited g_ℓ <= N_real tiles and padded to N = g_(ℓ+1).  A filler
   tile is a tile of the same template on zero rows (both sides), committed like any row, so its proof has the shape of
   every other tile's.  Unit t is `pouw.window.tile_at` of the advice: the population is
-  `population_program(Pc8TileHidden{K,1,1,sm120}, N)` under `Q_template_instance`.
+  `population_program(Pc8TileSide{K,1,1,sm120}, N)` under `Q_template_instance`.
 - **The commitment** is C-Flock's: each row's b ‖ c is hm96-sha512 over its row digest under a fresh 192-byte salt.  Each
   side of each entry (a call, or the filler) is one frame-v3-sha512 tree of its kept rows only, in order, padded to 2^D
   leaves under the window's side domain (`pouw.window.side_domain` of the window root's domain, one-stage's served domain
@@ -139,7 +139,7 @@ EPS, DELTA = "1/2", "1/10"
 # ---- the window's parameters and its spec ---------------------------------------------------------------------------------
 
 def template(k: int):
-    return pc8.templates(k, TILE, DEV, hidden=True)["tile"]
+    return pc8.side_tile(k, TILE, DEV)
 
 
 def tile_work(params: dict) -> int:
@@ -218,7 +218,7 @@ def window_domain(params: dict, ell: int) -> CommitmentDomain:
 
 def side_domain(params: dict, ell: int, side: str) -> tuple[CommitmentDomain, str]:
     """The domain of the window's side-`side` trees at level `ell` and their rows' schema."""
-    return Wd.side_domain(window_domain(params, ell).domain_id, side), L.ROW_SCHEMA["fp8-p", SIDES[side]]
+    return Wd.side_domain(window_domain(params, ell).domain_id, side), L.ROW_SCHEMA["fp8-pi", SIDES[side]]
 
 
 def weights_domain(params: dict) -> CommitmentDomain:
@@ -339,7 +339,7 @@ def _salts(n: int) -> list[bytes]:
 
 
 def commit_side(dom: CommitmentDomain, schema: str, side: str, words: list[list[int]], salts: list[bytes]) -> tuple[str, dict]:
-    bcs = [L.commit("fp8-p", SIDES[side], w, s) for w, s in zip(words, salts)]
+    bcs = [L.commit("fp8-pi", SIDES[side], w, s) for w, s in zip(words, salts)]
     return Wd.side_levels(dom, side_leaves(dom, schema, bcs))[-1][0].hex(), {"words": np.array(words, dtype=np.uint16),
                                                                              "salts": salts, "bcs": bcs}
 
