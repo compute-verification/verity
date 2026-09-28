@@ -48,6 +48,20 @@ _T_RE = re.compile(r"\{T=\d+,")
 _CONST_RE = re.compile(r"^Const(\d+)\[0x([0-9a-fA-F]+)\]_v1$")
 SPLITS_OPERAND = 5
 _TOPP_SELECT = "GumbelTopPTokenSelect_v1"
+#: the select specialised on its split count S (registry.topp_words: the keep word as word gates, a single-request Program's form,
+#: the same operands); it compares as `GumbelTopPTokenSelect_v1{V}` with S held to the event's bound `Const32[S]`
+_TOPP_SELECT_V2 = re.compile(r"((?:[^:]*:)?)GumbelTopPTokenSelect_v2\{V=(\d+),S=(\d+)\}")
+
+
+def _as_v1_selects(inst: list[dict]) -> dict[int, int]:
+    """Rewrite each `GumbelTopPTokenSelect_v2{V,S}` instance's spec to `GumbelTopPTokenSelect_v1{V}` (in place); {node k: S}."""
+    out = {}
+    for r in inst:
+        m = _TOPP_SELECT_V2.fullmatch(r["spec"])
+        if m:
+            r["spec"] = f"{m.group(1)}{_TOPP_SELECT}{{V={m.group(2)}}}"
+            out[r["k"]] = int(m.group(3))
+    return out
 
 
 def const_value(spec: str) -> tuple[int, int] | None:
@@ -143,9 +157,12 @@ class Prog:
         # `peers_layout`).  A read canonicalises as ("PEER", k, lo, hi) with lo/hi relative to the field on BOTH sides.  Set by the loaders.
         self.peer_fields: dict[int, list[tuple[int, int]]] = {}
         self.peer_index: dict[int, int] = {}       # fold side: peers Input node -> request index (batch_decomp ownership)
+        self.split_statics = _as_v1_selects(self.inst)
         self.k2i = {r["k"]: i for i, r in enumerate(self.inst)}
         self.oracle_rows = oracle_rows
         self._bind_splits()
+        # a select specialised on its split count must read that count: its bound Const32[S] (the Program's own constant) is S
+        self.split_static_mismatch = sorted(k for k, S in self.split_statics.items() if self.splits_values.get(k) != S)
         self._segment()
 
     def _node_functions(self):   # the run-form decode's per-node spec id and operand runs; a subclass may return functions equal to these
@@ -752,6 +769,11 @@ def compare_steps(A: Prog, B: Prog, unfold_a: bool = False, *, canon_step_relati
     res["canonical_sha256"]["equal"] = res["canonical_sha256"]["a"] == res["canonical_sha256"]["b"]
     if (sv := constant_splits_agree(A, B)) is not None:       # a single-request Program's own Const32[S], held equal per event
         res["splits_values"], res["canonical_sha256"]["equal"] = sv, res["canonical_sha256"]["equal"] and sv["equal"]
+    sta, stb = getattr(A, "split_statics", {}), getattr(B, "split_statics", {})
+    if sta or stb:                                            # a select specialised on S compared as v1: S is its bound constant's value
+        bad = {"a": getattr(A, "split_static_mismatch", []), "b": getattr(B, "split_static_mismatch", [])}
+        res["split_statics"] = {"a": len(sta), "b": len(stb), "mismatch": bad}
+        res["canonical_sha256"]["equal"] = res["canonical_sha256"]["equal"] and not (bad["a"] or bad["b"])
     return res
 
 
