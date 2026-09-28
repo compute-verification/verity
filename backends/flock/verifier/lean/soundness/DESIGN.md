@@ -479,14 +479,14 @@ A session carries every table from a time window, and many GPUs or datacenters p
 serialized, and each is arbitrarily large. `ASSUMPTIONS.md` §2 states the rules. Why they give zero knowledge and keep
 soundness:
 
-1. **Zero knowledge needs only the single-rewind simulator.**
-   - A session has one coin commitment, however many tables and machines it spans. What forces repeated rewinding is
-     several commitments interleaved in time.
+1. **Zero knowledge needs only one rewind point** (the "single-rewind" simulator of §9).
+   - A session has one coin commitment, however many tables and machines it spans. What forces rewinding to several
+     points is several commitments interleaved in time.
    - The Goldreich–Kahan simulator makes one extraction phase: an honest prover on a dummy witness. That is
      indistinguishable from a real run until the final openings, because every earlier message is masked and those
-     openings come after the last coin. It then rewinds once, to just after step 0, and simulates every table from the
-     extracted coins by SHVZK. The tables' masks are independent, so their simulations compose. The simulator runs in
-     expected polynomial time, handling aborts as Goldreich–Kahan do.
+     openings come after the last coin. It then rewinds only to just after step 0, and simulates every table from the
+     extracted coins by SHVZK. The tables' masks are independent, so their simulations compose. Its rewinds, aborts and
+     completion estimate are as `ASSUMPTIONS.md` §6 states them, in expected polynomial time.
    - Serialized sessions compose sequentially (auxiliary-input zero knowledge, Goldreich–Oren 1994).
 2. **Coins committed under one root, per (table, repetition, round).** The commitment is a SHA-512 Merkle root over
    Halevi–Micali commitments to each coin, so each table's stream is a subtree. That keeps soundness to statistical

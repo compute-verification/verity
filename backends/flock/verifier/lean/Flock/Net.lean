@@ -120,6 +120,7 @@ def parse (lines : Array String) : V Net := do
   if inGroups.any (fun g => g.bits.foldl (· + ·) 0 > g.words * WORD || g.col + g.words > inWords)
       || outGroups.any (fun g => g.bits.foldl (· + ·) 0 > g.words * WORD) then
     throw "flock-ir-unit/v2: a port group's ports overrun its words, or an input group the input rows"
+  if inWords * WORD > constPos then throw "flock-ir-unit/v2: the input rows reach the constant"
   let unitLog := max 7 (log2ceil useful)
   let mut ra := #[]
   let mut rb := #[]

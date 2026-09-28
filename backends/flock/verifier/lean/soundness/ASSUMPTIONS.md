@@ -32,6 +32,23 @@ at most `tableError(fast100 m, shape)`:
   `Arith.Correct` from `execArith_correct`, so BCHKS25 Theorem 4.6 is their only hypothesis.
 - **For the optimal prover** (`table_value_sound`): the same bound on `value`, which `table_sound` specializes to each
   strategy. This form composes across the tables of a batched session (§9, `value_batch_le`).
+- **With M1's padded level 0** (`table_sound_pad`, `SoundnessPad.lean`; the model is `Model/LigeritoPad.lean`). M1 (#123,
+  `backends/flock/live/PROTOCOL.md` §7) pads every level-0 lane with `t` coefficients, so level 0's code is
+  `RS[2^d, 2^cols + t]`, of rate `ρ' = (2^cols + t)/2^d`. Each rep also folds its own `e` extra lanes with fresh coins.
+  - **The bound is a function of `t` and `e`** (`padTableError`). It is `tableError` with level 0's radius, list size,
+    queries and MCA numerator taken at `ρ'`, plus one MCA line and one coin on the restarted claim per extra lane.
+  - **At #123's values** (`8d621454`): `q₀ = 277, 242, 229` at `m = 25, 26, 27`, `t = 2q₀`, and a pair of extra lanes per
+    rep. The bound is at most **2^-196.5 per table** (`table_sound_pad_m1`).
+  - **The committed values** are the witness lanes' messages `a − c₀·pad` of lane families within the padded radius
+    (`CommittedPad`).
+  - **The model is M1 in the clear.** The verifier computes the restarted claim `s + Σ_i ρ_i·e_i` itself. M1 masks the
+    lane rounds and `e`, and its inner proof enforces the restart. That is the inner proof's soundness, a separate
+    statement.
+  - **New in the proof:**
+    - the novel basis's degree structure, `deg X̂_c ≤ c` (`NovelBasis.lean`, derived from `Arith.Correct.xhat_poly`);
+    - the padded code's list size, MCA and decoding (`PadCode.lean`, `LigeritoPadDecode.lean`);
+    - the phases before Ligerito over any list of messages (`zerocheck_phase_of_list` and its three siblings, which
+      the `…_of_card` wrappers instantiate at the close messages).
 
 ### 1.2 Compiled soundness (`table_sound_compiled`)
 
@@ -117,6 +134,8 @@ link term per audit.
 | The list size: at most `L₀` codewords near the committed table (ArkLib's Johnson bound) | 1a | `closeMsgs_card_le` (`ListSize.lean`) | proved |
 | Phase lemma: Ligerito, level by level: the folds (sumcheck and MCA), the next level's OOD binding, the queries and batching coins, the final check | 1a | `ligerito_phase` (`RepSound.lean`), `ligerito_sound` (`LigeritoPhase.lean`) | proved |
 | The link points reduce region checks to opened claims | 1a | `link_sound` (`Soundness.lean`), `link_sound_of_card` (`LinkSound.lean`) | proved |
+| M1's padded level 0 (§1.1): Ligerito with the padded code and the extra lanes, and the table theorem for any padding `t` and extra lanes `e` | 1a | `ligeritoPad_sound`, `table_sound_pad` (`LigeritoPad*.lean`, `SoundnessPad.lean`) | proved; the inner proof's soundness separately |
+| The padded bound at #123's values: 2^-196.5 per table at m = 25–27 | 1a | `table_sound_pad_m1` (`Accounting/PaddedNumbers.lean`) | proved |
 | Merkle binding: two verified openings of one position with different columns give a SHA-512 collision | 1b | `Merkle.opening_binding` | proved |
 | Rewinding: openings off the plurality table cost collisions, `#bad² ≤ N·Q·#conflict` | 1b | `Rewinding.bad_sq_le`, `prBad_le` | proved |
 | Compilation step: the oracle bound plus the rewinding term, for a table committed before any coin or after a prefix | 1c | `Compiled.compile_step`, `compile_step_prefix` | proved |
@@ -329,24 +348,30 @@ The masked protocol and the reference prover are in DESIGN.md §6, and the sessi
 The verifier is malicious (two nations checking each other), so honest-verifier zero knowledge is not an acceptable
 fallback anywhere.
 
-**The theorem** (to prove): single-rewind simulation of one batched session (§2). For every malicious verifier with
-auxiliary input, a Goldreich–Kahan simulator produces a view indistinguishable from the verifier's view of one batched
-session, from the tables' public statements alone. It makes one extraction run (an honest prover on a dummy witness),
-one rewind to just after the coin commitment, and runs in expected polynomial time.
+**The theorem** (to prove): Goldreich–Kahan simulation of one batched session (§2). For every malicious verifier with
+auxiliary input, a simulator produces a view indistinguishable from the verifier's view of one batched session, from the
+tables' public statements alone, and runs in expected polynomial time. The simulator:
+
+1. makes one extraction run, an honest prover on a dummy witness;
+2. estimates the verifier's completion probability `p̃` from fresh runs only, never counting the extraction run;
+3. rewinds only to just after the coin commitment, at most `t/p̃` times, where `t` grows with the security parameter;
+4. uses a fresh dummy opening in every rewind.
 
 - **It rests on** special honest-verifier ZK of masked Flock: a simulator for every fixed coin sequence, which is VEIL's
-  notion and the first zero-knowledge lemma to prove. The simulations of a session's tables compose, because their
-  masks are independent.
+  notion and the first zero-knowledge lemma to prove. The lemma is statistical. Its only caveat is ChaCha20 standing in
+  for uniform prover randomness. The simulations of a session's tables compose, because their masks are independent.
 - **Serialized sessions** then compose sequentially (Goldreich–Oren 1994).
 - **Reserve, if concurrency is ever needed:** a single registered verifier key, or a Prabhakaran–Rosen–Sahai preamble
   (DESIGN.md §11.2).
 
 **Expected assumptions** (to be confirmed against M1's spec):
 
-- **Uniform prover randomness.** The masks, padding and leaf salts are uniform and independent. In production they come
-  from the operating system and ChaCha; their quality is trusted.
-- **Leaf hiding.** Halevi–Micali leaves are statistically hiding (`N·2^-256` for N leaves with a fresh key, §7) and
-  binding under collision resistance of their hash, SHA-512 in the adopted variant.
+- **Uniform prover randomness.** The masks, padding and leaf salts are uniform and independent. In production they are
+  ChaCha20 output under a seed from the operating system. Treating that output as uniform is the one caveat to the
+  lemma's statistical zero knowledge, and the seed's quality is trusted.
+- **Leaf hiding.** Halevi–Micali leaves are statistically hiding in the standard model, by the leftover hash lemma, with
+  no random oracle (`N·2^-256` for N leaves with a fresh key, §7). They are binding under collision resistance of their
+  hash, SHA-512 in the adopted variant.
 - **Binding of the verifier's coin commitment** (§2: a SHA-512 Merkle root over Halevi–Micali coin commitments), under
   SHA-512 collision resistance. Against quantum verifiers it needs a collapse-binding commitment (DESIGN.md §9).
 - **Uniformity of opened columns** of a padded Reed–Solomon codeword when the queries are at most the padding (the
@@ -385,7 +410,7 @@ The weights are committed once and every later proof opens that root. The analys
 2. **Stage 2, refinement to `Flock.Verify`** (with lane `flock-verifier`): the executable verifier accepts only if the
    model accepts.
 3. **Stages 1e and 3, zero knowledge and the reference prover** (§6), after M1's masking spec: first the special
-   honest-verifier ZK lemma, then single-rewind simulation of one batched session.
+   honest-verifier ZK lemma, then Goldreich–Kahan simulation of one batched session.
 4. **Stage 1d, the lowering theorem**, which belongs to level 3 in another lane. Stage 1e then glues everything into
    one theorem from the verifier's acceptance to "the committed values satisfy the named circuit".
 

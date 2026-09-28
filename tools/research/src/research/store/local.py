@@ -802,17 +802,19 @@ class LocalStore:
 
     def refresh(self, *, jobs: int = REFRESH_JOBS, log: Callable[[str], None] | None = None,
                 progress: Callable[[str, int, int], None] | None = None, payload_kinds: Sequence[str] = (),
-                payload_max_bytes: int = REFRESH_PAYLOAD_MAX) -> dict:
+                payload_max_bytes: int = REFRESH_PAYLOAD_MAX, attempts_only: bool = False) -> dict:
         """Bring this store up to date from the remote without wiping anything: list `manifests/`, `attempts/` and `labels/`, fetch
         only what is missing (`jobs` concurrent GETs; each manifest re-hashed to its id, each attempt parsed and named by its id),
         and index just those.  The way a fresh machine builds its catalog from the remote alone.  `payload_kinds`: also make
         local the file payloads (at most `payload_max_bytes` each) of every catalogued artifact of those kinds whose blob is not
-        here yet -- what a reader of payloads (a render) needs; the count is `payloads`."""
+        here yet -- what a reader of payloads (a render) needs; the count is `payloads`.  `attempts_only`: the attempts alone (what
+        `research merge` reads), one listing instead of three."""
         from . import labels_sync as LS  # noqa: PLC0415
 
         t0 = time.monotonic()
         r = self._require_remote()
-        want_m = [k for k in r.list("manifests/") if k.endswith(".json") and ids.is_sha256(k[len("manifests/"):-len(".json")])]
+        want_m = [] if attempts_only else \
+            [k for k in r.list("manifests/") if k.endswith(".json") and ids.is_sha256(k[len("manifests/"):-len(".json")])]
         want_m = [k for k in want_m if not (self.root / k).exists()]
         want_a = [k for k in r.list("attempts/") if k.endswith(".json") and ids.is_run_id(k[len("attempts/"):-len(".json")])]
         want_a = [k for k in want_a if not (self.root / k).exists()]
@@ -862,9 +864,10 @@ class LocalStore:
                 write_once(self.attempt_path(rid), data)
                 self.index.index_attempt(doc)
                 rep["attempts"] += 1
-        tick("labels", 0, 0)
-        lrep = LS.sync(self, push=False, pull=True, jobs=jobs, log=log)
-        rep["labels"], rep["errors"] = len(lrep["pulled"]), rep["errors"] + lrep["bad"]
+        if not attempts_only:
+            tick("labels", 0, 0)
+            lrep = LS.sync(self, push=False, pull=True, jobs=jobs, log=log)
+            rep["labels"], rep["errors"] = len(lrep["pulled"]), rep["errors"] + lrep["bad"]
         if payload_kinds:
             got, errs = self.fetch_payloads(payload_kinds, max_bytes=payload_max_bytes, jobs=jobs)
             rep["payloads"], rep["errors"] = got, rep["errors"] + errs

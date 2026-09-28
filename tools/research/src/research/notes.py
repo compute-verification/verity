@@ -775,6 +775,21 @@ def finish(root: Path, lane: str, repo: Path | None, keep_pod: str | None = None
 # ---- history: the notes tree is its own git repo, committed by one writer ------------------------------------------------------------------
 
 SNAPSHOT_MAX_BYTES = 1 << 20
+#: git data of any repository never goes in notes (the notes repo is public; code moves only through verity branches)
+GIT_DATA_SUFFIXES = (".bundle", ".pack", ".idx", ".rev")
+GIT_DATA_MAGIC = (b"# v2 git bundle", b"# v3 git bundle", b"PACK")
+
+
+def is_git_data(p: Path) -> bool:
+    """A git bundle, pack, pack index or `.git` file, by name or by its first bytes."""
+    if p.suffix in GIT_DATA_SUFFIXES or p.name == "packed-refs" or ".git" in p.parts:
+        return True
+    try:
+        with open(p, "rb") as f:
+            head = f.read(16)
+    except OSError:
+        return False
+    return head.startswith(GIT_DATA_MAGIC)
 
 
 def snapshot(root: Path, max_bytes: int = SNAPSHOT_MAX_BYTES, now: dt.datetime | None = None) -> dict | None:
@@ -785,7 +800,7 @@ def snapshot(root: Path, max_bytes: int = SNAPSHOT_MAX_BYTES, now: dt.datetime |
     st = _git(root, "status", "--porcelain=v1", "-z", "--untracked-files=all")
     if st is None:
         return None
-    entries, paths, big = st.split("\0"), [], []
+    entries, paths, big, refused = st.split("\0"), [], [], []
     i = 0
     while i < len(entries):
         e = entries[i]
@@ -799,16 +814,21 @@ def snapshot(root: Path, max_bytes: int = SNAPSHOT_MAX_BYTES, now: dt.datetime |
         if path in (STATE_FILE, f".{STATE_FILE}.tmp"):        # the watcher's own memory, rewritten every pass: not history
             continue
         p = root / path
+        if p.is_file() and is_git_data(p):
+            refused.append(path)
+            continue
         (big if p.is_file() and p.stat().st_size > max_bytes else paths).append(path)
     if not paths:
-        return {"commit": None, "paths": 0, "skipped": big} if big else None
+        return {"commit": None, "paths": 0, "skipped": big, "refused": refused} if big or refused else None
     subprocess.run(["git", "--literal-pathspecs", "-C", str(root), "add", "-A", "--pathspec-from-file=-", "--pathspec-file-nul"],
                    input="\0".join(paths), text=True, check=True, capture_output=True, timeout=120)
     now = now or _utcnow()
-    msg = f"snapshot {now:%Y-%m-%dT%H:%MZ}: {len(paths)} paths" + (f"; {len(big)} too big, not committed" if big else "")
+    msg = (f"snapshot {now:%Y-%m-%dT%H:%MZ}: {len(paths)} paths" + (f"; {len(big)} too big, not committed" if big else "")
+           + (f"; {len(refused)} git data refused" if refused else ""))
     if subprocess.run(["git", "-C", str(root), "commit", "-q", "--no-verify", "-m", msg], capture_output=True, timeout=60).returncode:
-        return {"commit": None, "paths": 0, "skipped": big}
-    return {"commit": (_git(root, "rev-parse", "--short", "HEAD") or "").strip(), "paths": len(paths), "skipped": big}
+        return {"commit": None, "paths": 0, "skipped": big, "refused": refused}
+    return {"commit": (_git(root, "rev-parse", "--short", "HEAD") or "").strip(), "paths": len(paths), "skipped": big,
+            "refused": refused}
 
 
 # ---- rendering and the watch loop ----------------------------------------------------------------------------------------------------------
@@ -885,6 +905,9 @@ def _snapshot_line(snap: dict) -> str:
     skipped = snap["skipped"]
     tail = f"; skipped {len(skipped)} over 1 MB (put them in the store): {', '.join(skipped[:3])}{' ...' if len(skipped) > 3 else ''}" \
         if skipped else ""
+    refused = snap.get("refused") or []
+    if refused:
+        tail += f"; REFUSED {len(refused)} git data (code moves only through verity branches): {', '.join(refused[:3])}"
     return f"notes snapshot {snap['commit'] or '(none)'}: {snap['paths']} paths{tail}"
 
 

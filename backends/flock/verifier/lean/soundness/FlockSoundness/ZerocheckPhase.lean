@@ -772,20 +772,20 @@ theorem prCoin_req_one_le (m : ℕ) :
         rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul, mul_one_div]
 
 open Classical in
-/-- **The zerocheck phase** (§9.2), for a list of at most `L` codewords near the committed table:
-from a doomed start, the zerocheck ends undoomed with probability at most
+/-- **The zerocheck phase** (§9.2), for a list `W` of at most `L` messages: from a doomed start over
+`W`, the zerocheck ends undoomed with probability at most
 `(m − 13)/|F| + L·(m − 13 + 127 + 2(m − 6) + (m − k_log))/|F|`. -/
-theorem zerocheck_phase_of_card (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Schedule)
-    (hm : 13 ≤ S.m) (C : Oracle F) (extra : List (Claim F S.m))
-    (hdoom : RepDoomed A S sch C extra) (L : ℕ)
-    (hL : (Finset.univ.filter fun M => M ∈ closeMsgs A sch C).card ≤ L) :
-    value (fun o => ¬ DZc A S sch C extra o) (zerocheck A S.m) ≤
+theorem zerocheck_phase_of_list (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Schedule)
+    (hm : 13 ≤ S.m) (W : Set (Message F sch.k0 sch.level₀.logCols)) (extra : List (Claim F S.m))
+    (hdoom : RepDoomedW A S sch W extra) (L : ℕ)
+    (hL : (Finset.univ.filter fun M => M ∈ W).card ≤ L) :
+    value (fun o => ¬ DZcW A S sch W extra o) (zerocheck A S.m) ≤
       ((S.m - 13 : ℕ) : ℝ≥0∞) / Fintype.card F +
         L * (((S.m - 13 + 127 + 2 * (S.m - 6) + (S.m - S.kLog) : ℕ) : ℝ≥0∞) / Fintype.card F) := by
   classical
   have := hA.charTwo
   have h6 : 6 ≤ S.m := le_trans (by norm_num) hm
-  set s := Finset.univ.filter fun M => M ∈ closeMsgs A sch C
+  set s := Finset.univ.filter fun M => M ∈ W
   let E : Message F sch.k0 sch.level₀.logCols → Option (ZcOut F S.m) → Prop := fun M o =>
     ∃ zc, o = some zc ∧ ((⟨zc.va, A.lagS zc.z, zc.ρ⟩ : Claim F S.m).Holds (aVec S (wit A S sch M))
       ∧ (⟨zc.vb, A.lagS zc.z, zc.ρ⟩ : Claim F S.m).Holds (bVec S (wit A S sch M))
@@ -805,13 +805,13 @@ theorem zerocheck_phase_of_card (A : Arith F K) (hA : A.Correct) (S : Statement)
             prCoin_mono fun rs h => hr h.1
         _ = 0 := by simp [prCoin, avg]
         _ ≤ _ := zero_le
-  calc value (fun o => ¬ DZc A S sch C extra o) (zerocheck A S.m)
+  calc value (fun o => ¬ DZcW A S sch W extra o) (zerocheck A S.m)
       ≤ value (fun o => ∃ M ∈ s, E M o) (zerocheck A S.m) := by
         refine value_mono (fun o h => ?_) _
         cases o with
         | none => exact absurd trivial h
         | some zc =>
-          simp only [DZc, not_forall, not_not] at h
+          simp only [DZcW, not_forall, not_not] at h
           obtain ⟨M, hM, hall⟩ := h
           exact ⟨M, by simp [s, hM], zc, rfl, hall⟩
     _ ≤ avg (fun rs : Fin (S.m - 13) → F =>
@@ -827,7 +827,7 @@ theorem zerocheck_phase_of_card (A : Arith F K) (hA : A.Correct) (S : Statement)
           · simp only [hB, if_true]; exact (value_le_one _ _).trans le_self_add
           · simp only [hB, if_false, zero_add]
             by_cases hext : ∀ e ∈ extra, e.Holds (wit A S sch M)
-            · have hMc : M ∈ closeMsgs A sch C := by simpa [s] using hM
+            · have hMc : M ∈ W := by simpa [s] using hM
               have hdM := hdoom M hMc
               by_cases hr : R1CSFails S (wit A S sch M)
               · obtain ⟨s₀, hs₀⟩ : ∃ s₀ : Fin 64, ∑ x : Fin (2 ^ (S.m - 6)),
@@ -882,5 +882,18 @@ theorem zerocheck_phase_of_card (A : Arith F K) (hA : A.Correct) (S : Statement)
         push_cast
         ring_nf
         exact le_rfl
+
+open Classical in
+/-- **The zerocheck phase** for the codewords near the committed table: `zerocheck_phase_of_list`
+at `closeMsgs`. -/
+theorem zerocheck_phase_of_card (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Schedule)
+    (hm : 13 ≤ S.m) (C : Oracle F) (extra : List (Claim F S.m))
+    (hdoom : RepDoomed A S sch C extra) (L : ℕ)
+    (hL : (Finset.univ.filter fun M => M ∈ closeMsgs A sch C).card ≤ L) :
+    value (fun o => ¬ DZc A S sch C extra o) (zerocheck A S.m) ≤
+      ((S.m - 13 : ℕ) : ℝ≥0∞) / Fintype.card F +
+        L * (((S.m - 13 + 127 + 2 * (S.m - 6) + (S.m - S.kLog) : ℕ) : ℝ≥0∞) / Fintype.card F) := by
+  simp only [dZc_eq]
+  exact zerocheck_phase_of_list A hA S sch hm _ extra ((repDoomed_iff A S sch C extra).1 hdoom) L hL
 
 end FlockSoundness
