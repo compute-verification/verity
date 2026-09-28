@@ -95,13 +95,13 @@ first-frame latency, the capacity per day, and the K charge by span.
 ## Tests
 
 `uv run pytest protocols/network_timing`. The tests mirror the Lean package's pinned statements:
-- **`test_grid.py`:** the counts, `fill`, tightness and the fixed-M bounds, by enumeration, plus the warden's
+- **`test_network_timing_grid.py`:** the counts, `fill`, tightness and the fixed-M bounds, by enumeration, plus the warden's
   semantics;
-- **`test_capacity.py`:**
+- **`test_network_timing_capacity.py`:**
   - the tree lemma;
   - accepted grids at most `#Σ_sync^W`, over every sender and declaration on a small horizon;
   - the fixed clock's single accepted grid;
   - a reacting operator;
   - the block bound on random Programs;
-- **`test_audit.py`:** record-and-reject;
-- **`test_calibration.py`:** the calibration tool.
+- **`test_network_timing_audit.py`:** record-and-reject;
+- **`test_network_timing_calibration.py`:** the calibration tool.
