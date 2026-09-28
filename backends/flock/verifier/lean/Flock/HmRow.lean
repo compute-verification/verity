@@ -12,6 +12,7 @@ import Flock.Statement
 import Flock.TemplateQuery
 import Flock.Typed
 import Flock.Extract
+import Flock.Qcall
 
 namespace Flock
 
@@ -585,10 +586,13 @@ def unitsEntry (c : Circuit) (indices : Array Nat) : Json :=
 /-- The queries the verifier can evaluate itself (`Flock.Qword`), given the program's Call graphs. -/
 def EVALUABLE : List (String × Nat) := [("Q_word", 1), ("Q_word", 2)]
 
+/-- `Q_call` v1, which the verifier evaluates itself (`Flock.Qcall`). -/
+def Q_CALL : String × Nat := ("Q_call", 1)
+
 /-- A `verity/partition/v1` object's form (#111's canonical form, open query names): exactly `format`, `program`, `query`; a
 SHA-512 program; a query of exactly `name` (a non-empty string), `version` (a natural number) and `params` (an object). For a
-query the verifier evaluates, its parameters too (`Q_word` v1 and v2: exactly `X`, `W`, positive integers). The query's name
-and version. -/
+query the verifier evaluates, its parameters too (`Q_word` v1 and v2: exactly `X`, `W`, positive integers; `Q_call` v1: exactly
+`X`, an integer in 1..2^16). The query's name and version. -/
 def checkPartitionObject (obj : Json) : V (String × Nat) := do
   let keys := fun (j : Json) => match j with
     | .obj kvs => (kvs.toArray.map (·.1)).qsort (· < ·)
@@ -613,6 +617,13 @@ def checkPartitionObject (obj : Json) : V (String × Nat) := do
       match (ps.getObjVal? k).toOption with
       | some (.num n) => if !(n.exponent == 0 && n.mantissa > 0) then throw s!"partition: {k} is not a positive integer"
       | _ => throw s!"partition: {k} is not a positive integer"
+  if (name, version) == Q_CALL then
+    if keys ps != #["X"] then throw "partition: Q_call v1's parameters are not X"
+    match (ps.getObjVal? "X").toOption with
+    | some (.num n) =>
+      if !(n.exponent == 0 && n.mantissa > 0 && n.mantissa ≤ Qcall.PARAM_MAX) then
+        throw s!"partition: X is not an integer in 1..{Qcall.PARAM_MAX}"
+    | _ => throw s!"partition: X is not an integer in 1..{Qcall.PARAM_MAX}"
   if let some ts := TemplateQuery.templatesOf name version ps then discard ts
   return (name, version)
 
@@ -692,14 +703,44 @@ def deriveQwordUnits (c : Circuit) (obj : Json) (program : ByteArray) (indices :
   | .ok note => return s!"units derived: Q_word v{version} {"{"}X: {X}, W: {W}{"}"} over the verifier's program ({note}); every Call's cut holds the partition invariant and the width rule{across}"
   | .error e => throw s!"partition: {e}"
 
+/-- `Q_call` v1's units, derived from the verifier's own program: the program is the object's, the query evaluates on it
+(`Flock.Qcall`), every unit the statement claims (`indices`) is one whole activation of the circuit's template, and every Call's
+cut holds the partition invariant and at most X bits out of every unit, a value computed in two units reported, not refused
+(as `partition_object.verify` checks them). -/
+def deriveQcallUnits (c : Circuit) (obj : Json) (program : ByteArray) (indices : Array Nat) : V String := do
+  let q := (obj.getObjVal? "query").toOption.getD Json.null
+  let X := ((q.getObjVal? "params").toOption.getD Json.null |>.getObjValAs? Nat "X").toOption.getD 0
+  let P ← Program.decode program
+  if (obj.getObjValAs? String "program").toOption != some (hexOf P.sha512) then
+    throw "partition: the verifier's program is not the one the partition object names"
+  let calls ← match Qcall.evaluate P X with
+    | .ok cs => pure cs
+    | .error e => throw s!"partition: {e}"
+  let some t := circuitTemplate c | throw "partition: META program_digests does not name the circuit's one template"
+  let mut across := 0
+  let mut seen : Array Nat := #[]
+  for x in calls do
+    let r := Qcall.check x.c X
+    if !r.codes.isEmpty then
+      throw s!"partition: cut: Call {x.k}'s cut fails {r.codes}{if r.wide.isEmpty then "" else s!" (too wide, (unit, bits): {(r.wide.extract 0 4).toList})"}"
+    if !seen.contains x.d then
+      seen := seen.push x.d
+      across := across + r.across.size
+  match Qcall.claimedUnits P calls t indices with
+  | .ok note => return s!"units derived: Q_call v1 {"{"}X: {X}{"}"} over the verifier's program ({note}); every Call's cut holds the partition invariant and the width rule; values computed in two units, reported, not refused: {across} pair(s) over its Definitions"
+  | .error e => throw s!"partition: {e}"
+
 /-- The partition finding of a query the template queries don't cover, given the verifier's program: `Q_word` v1's or v2's
-units derived (`deriveQwordUnits`), any other query's finding as it stands. -/
+units derived (`deriveQwordUnits`), `Q_call` v1's (`deriveQcallUnits`), any other query's finding as it stands. -/
 def qwordFinding (c : Circuit) (pub : Public) (obj : Json) (program : ByteArray) (f : PartitionFinding) :
     V (Option PartitionFinding) := do
   let q := (obj.getObjVal? "query").toOption.getD Json.null
   if EVALUABLE.contains ((q.getObjValAs? String "name").toOption.getD "", (q.getObjValAs? Nat "version").toOption.getD 0) then
     let indices ← (← J.arr (← J.get pub.header "units" "public file") "indices" "public file").mapM (J.asNat · "a unit index")
     pure (some { f with derived := true, note := ← deriveQwordUnits c obj program indices })
+  else if ((q.getObjValAs? String "name").toOption.getD "", (q.getObjValAs? Nat "version").toOption.getD 0) == Q_CALL then
+    let indices ← (← J.arr (← J.get pub.header "units" "public file") "indices" "public file").mapM (J.asNat · "a unit index")
+    pure (some { f with derived := true, note := ← deriveQcallUnits c obj program indices })
   else pure (some f)
 
 /-- The circuit's partition binding against the verifier's own copy of the partition object: a `verity/partition/v1` binding
@@ -720,7 +761,7 @@ def checkPartition (c : Circuit) (obj : Option Json) : V PartitionFinding := do
       throw "partition: the partition object is over another program than META's program_sha512"
     let note := if (TemplateQuery.templatesOf name version Json.null).isSome then
         s!"units taken as stated, not derived: the verifier's copy of the program was not given (--program) to evaluate {name} v{version}"
-      else if EVALUABLE.contains (name, version) then
+      else if EVALUABLE.contains (name, version) || (name, version) == Q_CALL then
         s!"units taken as stated, not derived: the verifier's copy of the program was not given (--program) to evaluate {name} v{version}"
       else s!"units taken as stated, not derived: the verifier does not evaluate {name} v{version}"
     return { rule, query := s!"{name} v{version}", digest, derived := false, note }

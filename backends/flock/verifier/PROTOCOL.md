@@ -1159,6 +1159,13 @@ The algorithm step by step and the agreement evidence (`cut_check_agree.py`, `qw
 every pinned vector, all of #101's Definitions, the LM-head `Gemm` in 100 s at 9 GB) are in
 `note:20260929T1052Z-report-flock-verifier-qword-cut-check`.
 
+An input node is `Input<w>_v1` (bound per run) or `RegisteredInput<w>_v1` (bound at registration; core's PROTOCOL.md §5):
+`Program.inputId?` records the binding time; both are inputs to every query, never Calls.
+
+**`Q_call` v1** (`Flock.Qcall`, `flock-verify qcall-program`; core's PROTOCOL.md §11) is core's evaluation, refusals and cut
+check, as `Flock.Qcall` documents them. `qcall_agree.py` checks it against `qcall_vectors.json` field for field, with
+`format_vectors.json`'s input ids and a program with registered inputs.
+
 Still ahead: the leaf positions.
 
 ### 16.8 Objects by content
@@ -1284,7 +1291,7 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   of the partition object (`--partition`, by path or archive digest). Its form is #111's canonical one with open query names:
   exactly `format`, `program`, `query`; a SHA-512 program; a query of exactly `name` (a non-empty string), `version` (a
   natural number) and `params` (an object), and for a query the verifier evaluates, its parameters too (`Q_word` v1 and v2:
-  exactly `X`, `W`, positive integers). Its tagged digest `SHA-512("verity/partition/v1\0" ‖ canon(object))` must be META's, and its
+  exactly `X`, `W`, positive integers; `Q_call` v1: exactly `X`, an integer in 1..2^16). Its tagged digest `SHA-512("verity/partition/v1\0" ‖ canon(object))` must be META's, and its
   `program` must be META's `program_sha512`. The provisional unit cover takes no object.
 - **Tail outputs, packed ranges and leaf cuts (from PR #83 `15260468`, GEMM).** META may name `out_net`, the circuit whose
   output group holds the returned outputs (default `unit`), with `out_net_ports`, and `leaf_cuts`, `[unit, u, port, leaf]`.
@@ -1311,8 +1318,10 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   `units` is `derived` when the verifier derived the statement's units itself, given `--program`: for the template
   queries (above), and for `Q_word` v1 and v2 (§16.7) when the program is the object's, the query applies, every claimed unit is
   one whole activation of the circuit's template (the innermost Definition on its `locate` path, whose cut is one unit),
-  and every Call's cut holds the invariant and the width rule. A failing cut refuses the partition, naming the Call and
-  its codes. Set 10's object, over RoPE's own program (a root batch), is refused with `--program`, as core's `evaluate`
+  and every Call's cut holds the invariant and the width rule. Likewise for `Q_call` v1 (§16.7): every claimed unit is one
+  whole activation of the template (the Definition its path ends at, and not a batch's or scan's members taken together),
+  and every Call's cut holds the invariant and `X`, a value computed in two units counted in `note`, not refused. A
+  failing cut refuses the partition, naming the Call and its codes. Set 10's object, over RoPE's own program (a root batch), is refused with `--program`, as core's `evaluate`
   refuses it. For any other query, or without `--program`, `units` is `as stated`, with the reason in `note`, which an
   audit reports as a gap.
 - **Proof.** The Merkle trees are `hm96-sha512/v1` (`PcsParams.merkle_hash = 3`, 64-byte digests): every level's openings
