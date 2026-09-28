@@ -9,7 +9,7 @@ dependencies = ["research", "verity", "verity-sp1", "verity-numerical", "verity-
 package = false
 
 [tool.uv.workspace]
-members = ["tools/research", "packages/verity", "backends/sp1", "backends/numerical", "integrations/vllm", "protocols/sampled_proofs", "protocols/pous", "protocols/one_stage", "protocols/pouw", "backends/flock", "tools/circuit_check", "tools/check", "tools/lean", "tools/native_peak", "tools/tc_probe", "benchmarks/commitments", "backends/gkr", "backends/direct"]
+members = ["tools/research", "packages/verity", "backends/sp1", "backends/numerical", "integrations/vllm", "protocols/sampled_proofs", "protocols/pous", "protocols/one_stage", "protocols/pouw", "backends/flock", "tools/circuit_check", "tools/check", "tools/lean", "tools/native_peak", "tools/tc_probe", "benchmarks/commitments", "benchmarks/pouw", "backends/gkr", "backends/direct"]
 
 [tool.uv.sources]
 research = { workspace = true }

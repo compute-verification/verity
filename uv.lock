@@ -18,6 +18,7 @@ members = [
     "verity-one-stage",
     "verity-pous",
     "verity-pouw",
+    "verity-pouw-benchmarks",
     "verity-sampled-proofs",
     "verity-sp1",
     "verity-tc-probe",
@@ -1439,6 +1440,23 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [{ name = "verity", editable = "packages/verity" }]
+
+[[package]]
+name = "verity-pouw-benchmarks"
+version = "0.0.0"
+source = { virtual = "benchmarks/pouw" }
+dependencies = [
+    { name = "numpy" },
+    { name = "verity" },
+    { name = "verity-pouw" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "numpy" },
+    { name = "verity", editable = "packages/verity" },
+    { name = "verity-pouw", editable = "protocols/pouw" },
+]
 
 [[package]]
 name = "verity-sampled-proofs"

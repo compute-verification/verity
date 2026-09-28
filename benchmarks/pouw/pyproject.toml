@@ -1,0 +1,18 @@
+[project]
+name = "verity-pouw-benchmarks"
+version = "0.0.0"
+description = "The PoUW benchmark harness: gamma accounting, the RTX 4090 kernels and their gates, and the recorded Tools."
+requires-python = ">=3.12"
+dependencies = ["verity", "verity-pouw", "numpy"]
+
+# Not an installable package: a workspace member so that its tests run in the workspace environment.
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+verity = { workspace = true }
+verity-pouw = { workspace = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]

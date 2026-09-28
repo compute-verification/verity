@@ -92,6 +92,7 @@ def side(c: dict, dev: P.Device) -> tuple[P.Built, list, bytes, bytes]:
     return P.noisy_quantize(dev, clean, norms, e, f), norms, bytes(x for row in e for x in row), bytes(x for row in f for x in row)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("dev,key", [(P.B200, "tiles"), (P.H100, "tiles_h100")], ids=["b200", "h100"])
 @pytest.mark.parametrize("t", [0, 1])
 def test_tile_matches_pearl(t, dev, key):
@@ -126,6 +127,7 @@ def test_interface_and_domain():
         s.check(Matmul(0, Shape(16, k, n), 0))
 
 
+@pytest.mark.slow
 def test_ada_tile_through_the_protocol():
     """One honest 16 x 16 tile on the 4090's device: admissible, digest reproducible, useful output near A·Bᵀ."""
     from verity_pouw.audit import Epoch, Prover, Sampled, Verifier, Workload
