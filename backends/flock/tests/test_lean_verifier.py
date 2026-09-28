@@ -71,6 +71,7 @@ def test_unit_cut_agrees_with_the_reference(tmp_path):
     p = subprocess.run(["python3", str(LEAN.parent / "unit_cut_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
                         "--out", str(tmp_path), "--n", "300"], capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr
+    assert json.loads(p.stdout.strip().splitlines()[-1])["v2"]["refused_by_v1_alone"] > 0       # Q_word v2's rule is exercised
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -578,6 +579,7 @@ def test_check_cut_agrees_with_the_reference(tmp_path):
     p = subprocess.run(["python3", str(LEAN.parent / "cut_check_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
                         "--out", str(tmp_path), "--n", "300"], capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr
+    assert json.loads(p.stdout.strip().splitlines()[-1])["v2"]["refused_by_v1_alone"] > 0       # Q_word v2's rule is exercised
 
 
 def _qword_vector_file():
@@ -594,13 +596,15 @@ def _qword_vector_file():
                     reason="no Lean toolchain or no qword_vectors.json in core (PR #111)")
 def test_qword_cuts_agree_with_core_verify(tmp_path):
     """Every Call's cut on its whole graph (`qword-program --cuts`: the partition invariant and the width rule), against core's
-    `partition_object.verify`: its pinned cut refusals, and each of its programs at several (X, W)."""
+    `partition_object.verify`: its pinned cut refusals, and each of its programs at several (X, W), under `Q_word` v1 and v2
+    (v2's evaluations, refusals, the program it accepts that v1 refuses, and the recompute it reports)."""
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
     p = subprocess.run(["python3", str(LEAN.parent / "qword_program_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
                         "--out", str(tmp_path), "--qword-vectors", str(_qword_vector_file())], capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr
     r = json.loads(p.stdout.strip().splitlines()[-1])["qword_vectors"]
-    assert r["cut_refusals"] == 3 and r["cuts"] == 50, r
+    assert r["cut_refusals"] == 3 and r["cuts"] == 100, r
+    assert r["v2"] == {"evaluations": 9, "cut": 2, "accepted": 1, "inapplicable": 2}, r
 
 
 def _qword_vectors():
