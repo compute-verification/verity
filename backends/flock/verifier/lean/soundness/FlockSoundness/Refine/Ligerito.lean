@@ -374,4 +374,97 @@ theorem queryAndBatchC_plays (r : ℕ) (lv : Accounting.Level) (ch : List 𝕂) 
       refine Plays.bind' (ms₂ := []) (cs₂ := []) (Plays.drawOne cβ hcβ) ?_ (by simp) (by simp)
       exact Plays.pure _
 
+/-! ## The recursive rounds (§13.3) -/
+
+/-- **A non-last recursive round of the model** (§13.3), composed from its parts: the folds (`hfold`), the next
+level's cap `C'`, the two out-of-domain samples (`htwo`), the queries with their message (`queryAndBatchC_plays`), and
+any run of the remaining rounds from the resulting state (`hrec`). -/
+theorem iterNL_model (r n : ℕ) (b : ℕ → 𝔽) (initial : List 𝕂) (ext : ℕ) (lv lv' : Accounting.Level)
+    (rest : List Accounting.Level) (stM : LigStateC 𝔽 𝕂 D)
+    {msF : List Msg} {csF : List (Array F128)} {rs : List 𝕂} {sM' : Opens 𝔽 D → 𝕂} {qM' : Opens 𝔽 D → Model.Quad 𝕂}
+    (hfold : Plays fOf (Model.foldRoundsC execArith lv.lanes stM.s stM.q) msF csF (rs, sM', qM'))
+    (C' : Cap D) {msO : List Msg} {csO : List (Array F128)} {sT : Opens 𝔽 D → 𝕂} {qT : Opens 𝔽 D → Model.Quad 𝕂}
+    {ctxs : List (Model.OodCtx 𝔽)}
+    (htwo : Plays fOf (Model.twoOodC execArith (lv'.logCols + lv'.lanes) (stM.levels ++ [rs]).length sM' qM')
+      msO csO (sT, qT, ctxs))
+    (cw cα cβ : Array F128) (hcw : cw.size = lv.queries) (hcα : cα.size = ceilLog2 lv.queries) (hcβ : cβ.size = 1)
+    (mq : F256 × F256) {msR : List Msg} {csR : List (Array F128)} {pend : PendL 𝔽 D}
+    (hrec : Plays fOf (Model.recursiveRoundsC execArith r n b initial ext (lv' :: rest)
+      { qbOut r lv rs (stM.levels ++ [rs]).length
+          { stM with s := sT, q := qT, levels := stM.levels ++ [rs], oods := stM.oods ++ ctxs } cw cα cβ true mq with
+        level := stM.level + 1, caps := stM.caps ++ [C'], prevLevel := lv' }) msR csR pend) :
+    Plays fOf (Model.recursiveRoundsC execArith r n b initial ext (lv :: lv' :: rest) stM)
+      (msF ++ ⟨Cap D, C'⟩ :: msO ++ [kMsg mq] ++ msR) (csF ++ csO ++ [cw, cα, cβ] ++ csR) pend := by
+  rw [Model.recursiveRoundsC]
+  have hqb := queryAndBatchC_plays r lv rs (stM.levels ++ [rs]).length
+    { stM with s := sT, q := qT, levels := stM.levels ++ [rs], oods := stM.oods ++ ctxs } cw cα cβ hcw hcα hcβ true mq
+  simp only [ite_true] at hqb
+  refine Plays.bind' (ms₂ := ⟨Cap D, C'⟩ :: msO ++ [kMsg mq] ++ msR) (cs₂ := csO ++ [cw, cα, cβ] ++ csR) hfold ?_
+    (by simp) (by simp)
+  refine Plays.bind' (ms₂ := msO ++ [kMsg mq] ++ msR) (cs₂ := csO ++ [cw, cα, cβ] ++ csR) (Plays.recv _ C') ?_
+    (by simp) (by simp)
+  refine Plays.bind' (ms₂ := [kMsg mq] ++ msR) (cs₂ := [cw, cα, cβ] ++ csR) htwo ?_ (by simp) (by simp)
+  exact Plays.bind' hqb hrec rfl rfl
+
+/-- **The last recursive round of the model** (§13.3, §13.6), composed from its parts: the folds, the clear residual
+`yr`, and the final queries (no message). Its verdict is the final check on the resulting state. -/
+theorem iterLast_model (r n : ℕ) (b : ℕ → 𝔽) (initial : List 𝕂) (ext : ℕ) (lv : Accounting.Level)
+    (stM : LigStateC 𝔽 𝕂 D)
+    {msF : List Msg} {csF : List (Array F128)} {rs : List 𝕂} {sM' : Opens 𝔽 D → 𝕂} {qM' : Opens 𝔽 D → Model.Quad 𝕂}
+    (hfold : Plays fOf (Model.foldRoundsC execArith lv.lanes stM.s stM.q) msF csF (rs, sM', qM'))
+    (yr : Fin (2 ^ (ext + 1)) → 𝔽)
+    (cw cα cβ : Array F128) (hcw : cw.size = lv.queries) (hcα : cα.size = ceilLog2 lv.queries) (hcβ : cβ.size = 1) :
+    Plays fOf (Model.recursiveRoundsC execArith r n b initial ext [lv] stM)
+      (msF ++ [⟨Fin (2 ^ (ext + 1)) → 𝔽, yr⟩]) (csF ++ [cw, cα, cβ])
+      (let stF := qbOut r lv rs (stM.levels ++ [rs]).length
+          { stM with s := sM', q := qM', levels := stM.levels ++ [rs] } cw cα cβ false (0, 0)
+       ⟨fun o => Model.finalCheck execArith n b initial stF.levels stF.oods stF.cons ext yr (stF.s o),
+         stF.caps, stF.reqs⟩) := by
+  rw [Model.recursiveRoundsC]
+  have hqb := queryAndBatchC_plays r lv rs (stM.levels ++ [rs]).length
+    { stM with s := sM', q := qM', levels := stM.levels ++ [rs] } cw cα cβ hcw hcα hcβ false (0, 0)
+  simp only [Bool.false_eq_true, ite_false] at hqb
+  refine Plays.bind' (ms₂ := [⟨Fin (2 ^ (ext + 1)) → 𝔽, yr⟩]) (cs₂ := [cw, cα, cβ]) hfold ?_ (by simp) (by simp)
+  refine Plays.bind' (ms₂ := []) (cs₂ := [cw, cα, cβ]) (Plays.recv _ yr) ?_ (by simp) (by simp)
+  exact Plays.bind' hqb (Plays.pure _) (by simp) (by simp)
+
+/-- **The level loop, composed** (§13.3): iterations `i, …, R − 1` of the executable's loop are the model's rounds
+from `i` on (`G i`), when each non-last iteration extends any run of the rounds after it (`hstep`) and the last one is a
+run of the last round (`hlast`). -/
+theorem loop_compose {σ : Type} (body : ℕ → σ → LM (ForInStep σ)) (R : ℕ)
+    (G : ℕ → LigStateC 𝔽 𝕂 D → Game (PendL 𝔽 D))
+    (Rel : ℕ → σ → LState → Transcript → LigStateC 𝔽 𝕂 D → Prop)
+    (tape : ℕ → LState → List Msg) (Final : σ → LState → Transcript → PendL 𝔽 D → Prop)
+    (hstep : ∀ i s stE t b stE' t' stM, i + 1 < R → Rel i s stE t stM → body i s stE t = .ok ((b, stE'), t') →
+      ∃ s' stM' msS, b = .yield s' ∧ Rel (i + 1) s' stE' t' stM' ∧ t'.rounds = t.rounds ∧ t.k ≤ t'.k ∧
+        tape i stE = msS ++ tape (i + 1) stE' ∧
+        ∀ msR csR pend, Plays fOf (G (i + 1) stM') msR csR pend →
+          Plays fOf (G i stM) (msS ++ msR) (consumed t.rounds t.k t'.k ++ csR) pend)
+    (hlast : ∀ i s stE t b stE' t' stM, i + 1 = R → Rel i s stE t stM → body i s stE t = .ok ((b, stE'), t') →
+      ∃ s' pend, b = .yield s' ∧ t'.rounds = t.rounds ∧ t.k ≤ t'.k ∧
+        Plays fOf (G i stM) (tape i stE) (consumed t.rounds t.k t'.k) pend ∧ Final s' stE' t' pend) :
+    ∀ left i s stE t out stE' t' stM, 0 < left → i + left = R → Rel i s stE t stM →
+      forIn (List.range' i left) s body stE t = .ok ((out, stE'), t') →
+      ∃ pend, t'.rounds = t.rounds ∧ t.k ≤ t'.k ∧
+        Plays fOf (G i stM) (tape i stE) (consumed t.rounds t.k t'.k) pend ∧ Final out stE' t' pend
+  | 0, _, _, _, _, _, _, _, _, h0, _, _, _ => absurd h0 (lt_irrefl 0)
+  | 1, i, s, stE, t, out, stE', t', stM, _, hR, hrel, h => by
+      rw [List.range'_succ, List.forIn_cons] at h
+      obtain ⟨b, st₁, t₁, h₁, h₂⟩ := lbind_ok h
+      obtain ⟨s', pend, rfl, hr, hk, hpl, hfin⟩ := hlast i s stE t b st₁ t₁ stM hR hrel h₁
+      simp only [List.range'_zero, List.forIn_nil] at h₂
+      obtain ⟨rfl, rfl, rfl⟩ := lpure_ok h₂
+      exact ⟨pend, hr, hk, hpl, hfin⟩
+  | left + 2, i, s, stE, t, out, stE', t', stM, _, hR, hrel, h => by
+      rw [List.range'_succ, List.forIn_cons] at h
+      obtain ⟨b, st₁, t₁, h₁, h₂⟩ := lbind_ok h
+      obtain ⟨s', stM', msS, rfl, hrel', hr₁, hk₁, htape, hext⟩ := hstep i s stE t b st₁ t₁ stM (by omega) hrel h₁
+      obtain ⟨pend, hr, hk, hpl, hfin⟩ :=
+        loop_compose body R G Rel tape Final hstep hlast (left + 1) (i + 1) s' st₁ t₁ out stE' t' stM' (by omega)
+          (by omega) hrel' h₂
+      refine ⟨pend, hr.trans hr₁, hk₁.trans hk, ?_, hfin⟩
+      rw [hr₁] at hpl
+      rw [htape, consumed_append t.rounds hk₁ hk]
+      exact hext _ _ _ hpl
+
 end FlockSoundness.Refine
