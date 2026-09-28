@@ -64,11 +64,12 @@ def _piece(pid, widths):
 
 @pytest.mark.parametrize("pid,widths", [("F32Add_v1", [32, 32]), ("F32Mul_v1", [32, 32]), ("F32Fma_v1", [32, 32, 32])])
 def test_modules_expand_to_the_subcircuits_gates(pid, widths):
-    """Every instance's module checks one level against the circuit and equals its type's; expanded from the modules alone, a
-    piece is its circuit (checked in ``analyse``) with the tree's counts, the shared ANDs read through taps."""
+    """Every instance's module checks one level against the circuit; expanded from the modules alone, a piece is its circuit
+    (checked in ``analyse``) with the tree's counts, the shared ANDs read through taps."""
     reg, rid = _piece(pid, widths)
-    rec, gl = reg.nodes[rid], BX.expand_module(reg, rid)
-    assert reg.module_instances > len(reg.modules) and not reg.module_differs and reg.expanded_verified
+    (mid,) = reg.modules_of[rid]
+    rec, gl = reg.nodes[rid], BX.expand_module(reg, mid)
+    assert reg.module_instances > len(reg.modules) and reg.expanded_verified
     assert (gl["counts"]["and"], gl["counts"]["xor"], gl["counts"]["not"]) == (rec["and"], rec["xor"], rec["not"])
     assert BX.module_count_differs(reg) == []
     assert BX.DEAD not in gl["outputs"]
@@ -78,7 +79,8 @@ def test_a_table_reads_module_counts_m0s_circuit():
     """A table read is one module item; expanded, the piece's ANDs and NOTs are the tree's with the table read counting M0's
     circuit, and its XORs are more by the table index's (the tree leaves those out)."""
     reg, rid = _piece("MufuEx2Ftz_v1", [32])
-    rec, gl = reg.nodes[rid], BX.expand_module(reg, rid)
+    (mid,) = reg.modules_of[rid]
+    rec, gl = reg.nodes[rid], BX.expand_module(reg, mid)
     (t,) = gl["tables"]
     slot = BX.table_gates(t["table"])
     assert t["table"] == "ex2" and t["width"] == 31
@@ -91,8 +93,10 @@ def test_the_modules_file_round_trips():
     path = Path(tempfile.mkdtemp()) / "modules.json.gz"
     BX.write_modules(reg, path)
     doc = json.loads(gzip.decompress(path.read_bytes()))
+    (mid,) = reg.modules_of[rid]
     assert doc["schema"].endswith("/modules") and set(doc["modules"]) == set(reg.modules)
-    assert doc["modules"][rid]["items"] == reg.modules[rid]["items"].tolist()
+    assert doc["modules"][mid]["items"] == reg.modules[mid]["items"].tolist() and doc["of"][rid] == [mid]
+    assert all(BX.module_digest(m) == h for h, m in doc["modules"].items())
 
 
 def test_the_gather_matches_the_ir_primitive():
