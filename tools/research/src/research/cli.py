@@ -98,6 +98,7 @@ import json
 import math
 import os
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 from . import clone
@@ -1060,7 +1061,33 @@ def cmd_cancel(argv: list[str]) -> int:
         return 1
     print(f"research cancel: {run_dir.name}: SIGTERM to its workload's process group {out['pgid']} ({out['processes']} process(es)), "
           f"recorded as a manual cancel; the runner records the exit and publishes custody (`research fetch {run_dir.name}`)")
+    if ran := _ran_text(R.summarize(run_dir), datetime.now(timezone.utc)):
+        print(f"research cancel: {run_dir.name} {ran}")
     return 0
+
+
+def _utc(text: str | None) -> datetime | None:
+    try:
+        return datetime.fromisoformat(text).astimezone(timezone.utc) if text else None
+    except ValueError:
+        return None
+
+
+def _ran_text(s: dict, now: datetime) -> str:
+    """How long a run ran, and how much of that its check waited for a check slot (runs.SLOT_FILE): its state reads `running` from
+    launch, so a check that waited 95 min for a slot and checked 12 was taken for 107 min in (af2d, 10 Oct)."""
+    if not (start := _utc(s.get("started_utc"))):
+        return ""
+    sl, mins = s.get("slot") or {}, lambda a, b: f"{max(0.0, (b - a).total_seconds()) / 60:.0f} min"
+    text = f"ran {mins(start, now)} since {start:%Y-%m-%dT%H:%MZ}"
+    since, took = _utc(sl.get("since")), _utc(sl.get("took"))
+    if sl.get("state") == "held" and since and took:
+        return f"{text}: waited {mins(since, took)} for a check slot, then checked {mins(took, now)} in slot {sl.get('slot')}"
+    if sl.get("state") == "waiting" and since:
+        return f"{text}: waiting for a check slot since {since:%H:%MZ} ({mins(since, now)}), so its check never started"
+    if sl.get("state") == "left":
+        return f"{text}: left the check line without a slot ({sl.get('why')}), so its check never started"
+    return text
 
 
 def cmd_compare(argv: list[str]) -> int:
