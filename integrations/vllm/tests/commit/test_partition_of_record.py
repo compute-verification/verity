@@ -1,13 +1,14 @@
 """The Commit binds the manifest's partition of record (`binding.partition_of_record`): under Q_word the manifest names each Program's
 `verity/partition/v1` object and digest, and the Commit refuses, before any engine, a partition that is malformed, carries another
-digest, or names a Program that is not of record."""
+digest, or names a Program that is not of record, and a manifest that records no passing strict word check for every part."""
 from __future__ import annotations
 
 import json
+import re
 
 import pytest
 
-from verity_vllm.commit.partition import partition_of_record, program_sha512s
+from verity_vllm.commit.partition import partition_of_record, program_sha512s, require_partition, word_check_refusal
 from verity_vllm.pipeline import research_tools
 from verity_vllm.query.compose import _with_partitions
 from verity_vllm.query.required import Q_MODULE_BODY_ID, Q_WORD_ID, QUERY_OF_RECORD, partition_of
@@ -57,6 +58,41 @@ def test_composed_manifests_name_every_parts_partition():
         partition_of_record({"query": merged}, {SHA_B} - {SHA_B} | {SHA_A})
 
 
+def _checked(query=Q_WORD_ID, **kw) -> dict:
+    return {"query": query, "strict": True, "ok": True, "violations": 0, "calls": 9, "units": 40, "gates": 900, **kw}
+
+
+def test_the_commit_takes_a_q_word_manifest_that_records_a_passing_word_check_for_every_part():
+    one = _man(partition_of(SHA_A))
+    one["query"]["word_check"] = _checked()
+    assert require_partition(one, None, None) is one and word_check_refusal(one["query"]) is None
+    q = _with_partitions({"query_id": Q_WORD_ID}, "by_component", {"r0": {"partition": partition_of(SHA_A), "word_check": _checked()},
+                                                                  "r1": {"partition": partition_of(SHA_B), "word_check": _checked()}})
+    assert q["word_check"] == {"by_component": {"r0": _checked(), "r1": _checked()}} and word_check_refusal(q) is None
+    assert word_check_refusal(_with_partitions(dict(q), "by_rank", {"0": q, "1": q})) is None
+    body = _man(query=Q_MODULE_BODY_ID)                                  # A/B only: no partition, and no word check is required
+    assert require_partition(body, None, None) is body
+
+
+@pytest.mark.parametrize("check, why", [
+    (None, "no word check recorded"),
+    (_checked(ok=False, violations=1), "ok=False violations=1"),
+    (_checked(strict=False), "strict=False"),
+    (_checked(query="Q_word_v1{X=8,W=32,R=no-recompute}"), "X=8"),
+    ({"by_component": {"r0": _checked()}}, "by_component/r1: no word check"),
+    ({"by_component": {"r0": {"nope": 1}}}, "neither a word check nor a composition"),
+])
+def test_the_commit_refuses_a_q_word_manifest_without_a_passing_word_check_by_name(check, why):
+    parts = {"r0": {"partition": partition_of(SHA_A)}, "r1": {"partition": partition_of(SHA_B)}}
+    if isinstance(check, dict) and "by_component" in check:
+        q = dict(_with_partitions({"query_id": Q_WORD_ID}, "by_component", parts), word_check=check)
+    else:
+        q = dict(_man(partition_of(SHA_A))["query"], **({"word_check": check} if check else {}))
+    assert why in word_check_refusal(q)
+    with pytest.raises(SystemExit, match=re.escape(why)):
+        require_partition({"query": q}, None, None)
+
+
 def test_the_commit_reads_the_programs_the_builds_recorded(tmp_path):
     for name, sha in (("build_request_LP8_T2", SHA_A), ("build/rank1/build_request_LP8_T2", SHA_B), ("build_step", None)):
         d = tmp_path / name
@@ -67,7 +103,8 @@ def test_the_commit_reads_the_programs_the_builds_recorded(tmp_path):
 
 def test_every_entry_point_records_the_query_of_record():
     from tests.regression.checks import attempt_provenance
+    from verity_vllm.pipeline import row_records
     from verity_vllm.pipeline.row import _Row
     import dataclasses
     row_default = next(f.default for f in dataclasses.fields(_Row) if f.name == "query")
-    assert QUERY_OF_RECORD == Q_WORD_ID == research_tools.DEFAULT_QUERY == attempt_provenance.DEFAULT_QUERY == row_default
+    assert QUERY_OF_RECORD == Q_WORD_ID == research_tools.DEFAULT_QUERY == attempt_provenance.DEFAULT_QUERY == row_default == row_records.QUERY_OF_RECORD
