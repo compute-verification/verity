@@ -1,7 +1,8 @@
 {
   "rule": "P9 (dependency direction, one patch owner)",
   "entries": [
-    {"file": "verity_vllm", "kind": "module-cycle", "symbol": "<package>", "detail": "check.match.attribution <-> check.match.batch_decomp <-> check.match.chronology <-> check.match.declaration <-> check.match.engine_steps <-> check.match.global_match <-> check.match.global_match_fast <-> check.match.match_run <-> check.match.per_request <-> check.match.program_compare <-> check.match.sampler_geometry <-> pipeline.global_program <-> program.registry.lifted <-> program.registry.moe_pad"},
+    {"file": "verity_vllm", "kind": "module-cycle", "symbol": "<package>", "detail": "check.match.attribution <-> check.match.batch_decomp <-> check.match.chronology <-> check.match.declaration <-> check.match.engine_steps <-> check.match.global_match <-> check.match.global_match_fast <-> check.match.match_run <-> check.match.per_request <-> pipeline.global_program"},
+    {"file": "verity_vllm", "kind": "module-cycle", "symbol": "<package>", "detail": "check.match.program_compare <-> check.match.sampler_geometry"},
     {"file": "verity_vllm", "kind": "module-cycle", "symbol": "<package>", "detail": "check.replay.replay <-> check.replay.vu_query"},
     {"file": "verity_vllm", "kind": "module-cycle", "symbol": "<package>", "detail": "commit.committer.leafhash <-> commit.committer.native_collect <-> commit.committer.native_host"},
     {"file": "verity_vllm", "kind": "module-cycle", "symbol": "<package>", "detail": "engine.profiles.dense_generic <-> engine.profiles.generic"},

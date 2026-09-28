@@ -30,6 +30,7 @@ import gzip
 import json
 import os
 import re
+import sys
 import time
 from dataclasses import dataclass
 
@@ -58,24 +59,13 @@ def const_value(spec: str) -> tuple[int, int] | None:
 
 
 def _registry():
-    from verity.ir.defs import REGISTRY
-    from verity_vllm.program.registry import b1, moe, pad_prims, serve3  # noqa: F401  (moe: [R13 MOE-01] the fused-MoE Definitions + ref_prims they use)
-    from verity_vllm.program.registry import dense  # noqa: F401  [R15 dense] the unfused norm chain / GeGLU / softcap Definitions (Gemma-2 programs)
-    from verity_vllm.program.registry import sampling  # noqa: F401  [R15 stoch] GumbelTopPTokenSelect_v1 / TopPMask_v1 / GumbelSelectF32_v1 (+ codec lazy prims)
-    try:  # [R13 hopper] target-keyed programs (Hopper: HopperBF16WgmmaDot16_v1, Fa3InvSum_v1) decode through the same registry
-        from verity_vllm.program.registry import hopper  # noqa: F401
-    except Exception as e:  # noqa: BLE001  (veritor.core needs Python >= 3.12; a Hopper program then fails to decode, with this reason)
-        print(f"[compare] hopper registry unavailable ({e!r}): Hopper-target programs will not decode", file=sys.stderr)
-    try:  # [R15 fp8] block-scaled FP8 programs (Fp8GroupQuant_v1, ScaledMmFp8Block_v1 and their f32 / e4m3 primitives)
-        from verity_vllm.program.registry import fp8  # noqa: F401
-    except Exception as e:  # noqa: BLE001  (the FP8 module needs the hopper registry: same Python >= 3.12 condition)
-        print(f"[compare] fp8 registry unavailable ({e!r}): FP8 programs will not decode", file=sys.stderr)
-    try:  # [R17-42 route A (3)] the PADDED MoE construction (MoeFfnFixedL_v1 per token; `target.moe_construction = padded`) decodes through
-        # the same registry as MOE-01 -- a padded component's descriptor names Definitions no other module registers
-        from verity_vllm.program.registry import moe_pad  # noqa: F401
-    except Exception as e:  # noqa: BLE001
-        print(f"[compare] moe_pad registry unavailable ({e!r}): padded-construction programs will not decode", file=sys.stderr)
-    return REGISTRY
+    """The registry every module loaded (`verity_vllm.program.registry.load`); a module that fails to import is named on stderr (its
+    Programs, e.g. Hopper's under Python < 3.12, then fail to decode with that reason)."""
+    from verity_vllm.program.registry.catalog import load
+    reg, errors = load()
+    for e in errors:
+        print(f"[compare] registry module unavailable ({e}): Programs naming its Definitions will not decode", file=sys.stderr)
+    return reg
 
 
 class Prog:
