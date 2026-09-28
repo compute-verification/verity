@@ -247,13 +247,41 @@ def test_a_composed_commit_records_its_options_and_writes_a_verdict_not_of_recor
                                    "commitment": {"run_roots": ["ab" * 32], "program_digest": "cd" * 32, "manifest_digest": "ef" * 32}}
 
 
-def test_the_default_commit_imports_no_adapter():
-    code = ("import sys; from verity_vllm import protocol_options as PO; "
-            "from verity_vllm.program.frontend.target_profile import TargetProfile; "
-            "assert PO.commit_context(TargetProfile()) is None; "
-            "loaded = sorted(m for m in sys.modules if m.startswith('verity_vllm.protocol_options.') and not m.endswith('.interface')); "
-            "assert not loaded, loaded")
-    subprocess.run([sys.executable, "-c", code], check=True, cwd=config.ROOT)
+DEFAULT_PATH = """
+import json, sys
+from verity_vllm import protocol_options as PO
+from verity_vllm.program.frontend.target_profile import TargetProfile
+
+p, model, versions = TargetProfile(), object(), {"engine_kwargs": {}}
+assert p.protocols is None and PO.commit_guard(p) is p and PO.at_row(None, {}) is None
+protocols = PO.at_commit(p, model, versions, None)
+assert protocols is None and versions == {"engine_kwargs": {}}
+assert PO.weights_view(protocols, model) is model
+
+class Com:
+    def __init__(self):
+        self.model = model
+
+    def register_weights(self):
+        return {"root": "w"}
+
+com = Com()
+assert PO.register_weights(protocols, com) == {"root": "w"} and com.model is model
+verdict = {"commit_pass": True, "run_roots": ["ab" * 32], "required_manifest": None}
+before = json.dumps(verdict, indent=1)
+PO.into_verdict(protocols, verdict, sys.argv[1], p, program_digest="cd" * 32, manifest={"manifest_digest": "ef" * 32})
+assert json.dumps(verdict, indent=1) == before
+loaded = sorted(m for m in sys.modules if m.startswith("verity_vllm.protocol_options.") and m != "verity_vllm.protocol_options.interface")
+assert not loaded, loaded
+"""
+
+
+def test_with_no_protocols_the_commit_path_is_a_no_op(tmp_path):
+    """With `target.protocols` unset: `at_commit` is None and imports no adapter, `into_verdict` leaves the verdict
+    byte-identical and writes nothing, and `weights_view` is the model itself.  In a fresh process, so no other test's
+    imports count."""
+    subprocess.run([sys.executable, "-c", DEFAULT_PATH, str(tmp_path)], check=True, cwd=config.ROOT)
+    assert list(tmp_path.iterdir()) == []
 
 
 class Params:
