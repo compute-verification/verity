@@ -287,6 +287,11 @@ pinned list `verity/operations` v1 (`verity.ml.operations.OPERATIONS`, `digest()
 operation is a listed composite as the registry holds it, bound only to functions that hold no data, so a decoded Program's
 composites are no operations and their constants are listed.
 
+The guard therefore runs at registration, on the producer's registry. A verifier that receives a descriptor cannot run it: a
+decoded Program matches no operation, since the match is the registry's own Definition object, not a descriptor. A
+verifier-side check needs operations matched by descriptor digest, under a new `verity/operations` version; that is a later
+step.
+
 No statement or table claims that a Program's values are always hidden until the guard returns {} for it.
 `Program(fn, strict=guard)` refuses a Program that holds data; it is off by default until programs move their data to inputs.
 The format does not refuse a program that holds data: a descriptor's bytes and digests mean what they meant, and programs move
