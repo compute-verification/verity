@@ -680,7 +680,7 @@ def d3_trace(law: str, route: str, prices: dict[str, Fraction], chain: int,
         widen = (("widen h to f32 once (HADD2.F32)", prices["widen_once"]),)
     else:
         cast = (("three block values h + e_b in f16 (HADD2)", 3 * h2),
-                ("three casts f16 -> e4m3 (F2FP.F16 + PRMT)", 3 * prices["f2fp_f16"] / 2))
+                ("three casts f16 -> e4m3 (F2FP.F16; a PRMT per pair under ptxas 12.4)", 3 * prices["f2fp_f16"] / 2))
         widen = ()
     statistic = (("prescale h·2^-8 (HMUL2 a·K; 448² overflows f16)", prices["hmul2_imm"] / 2),
                  ("sum of squares (HFMA2; a widen and an FADD per chain)",
