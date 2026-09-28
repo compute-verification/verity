@@ -5,6 +5,9 @@
  },
  "assumptions": ["FlockSoundness.Assumptions"],
  "meaning": ["FlockSoundness", "FlockLevel3"],
+ "compile_time": {
+  "FlockSoundness.Refine.Walk": "walk_step, the tactic that steps through a successful computation of the executable by its head (Refine/Setup.lean's proofs of the setups' well-formedness). It runs only inside the elaborator and does no IO, and the kernel replays every proof it builds."
+ },
  "upstream": {
   "scan": {
    "Arklib": {
@@ -542,6 +545,36 @@
    "assumptions": [],
    "type_hash": "0000000015db0441"
   },
+  "FlockSoundness.Refine.setupH_wf": {
+   "signature": [
+    "FlockSoundness.Refine.setupH_wf {tags : Flock.Tags} {circuitFile publicFile : ByteArray} {coins : Flock.Coins}",
+    "  {tables : List (Prod String ByteArray)} {draw partition : Option Lean.Json} {program : Option ByteArray}",
+    "  {st : Flock.Stmt}",
+    "  (h : Eq (Flock.Stmt.setupH tags circuitFile publicFile coins tables draw partition program) (Except.ok st)) :",
+    "  And (FlockSoundness.Refine.StmtWF st) (FlockSoundness.Refine.RegionsWF st)"
+   ],
+   "assumptions": [],
+   "type_hash": "000000005af42be9"
+  },
+  "FlockSoundness.Refine.setup_wf": {
+   "signature": [
+    "FlockSoundness.Refine.setup_wf {tags : Flock.Tags} {comp : Flock.Comp} {circuitFile publicFile : ByteArray}",
+    "  {coins : Flock.Coins} {tables : List (Prod String ByteArray)} {st : Flock.Stmt}",
+    "  (h : Eq (Flock.Stmt.setup tags (Flock.Blake3Row.leaf comp) circuitFile publicFile coins tables) (Except.ok st)) :",
+    "  And (FlockSoundness.Refine.StmtWF st) (FlockSoundness.Refine.RegionsWF st)"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000c9bea615"
+  },
+  "FlockSoundness.Refine.stmtOf_linkLayout": {
+   "signature": [
+    "FlockSoundness.Refine.stmtOf_linkLayout (st : Flock.Stmt) (hwf : FlockSoundness.Refine.StmtWF st)",
+    "  (hr : FlockSoundness.Refine.RegionsWF st) :",
+    "  (FlockSoundness.Refine.stmtOf st hwf (FlockSoundness.Refine.regionsOf st)).LinkLayout Flock.PT_LOCAL st.mPts"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000dd3fe808"
+  },
   "FlockSoundness.Refine.verify_refines": {
    "signature": [
     "FlockSoundness.Refine.verify_refines (st : Flock.Setup) (S : FlockSoundness.Model.Statement) (hm : instLENat.le 13 S.m)",
@@ -1037,6 +1070,7 @@
    "pins": [
     "FlockSoundness.Refine.ofCircuit_extra",
     "FlockSoundness.Refine.ofCircuit_fold",
+    "FlockSoundness.Refine.stmtOf_linkLayout",
     "FlockSoundness.Refine.verify_refines_ofCircuit"
    ]
   },
@@ -1537,6 +1571,7 @@
     "FlockSoundness.Model.Statement.LinkLayout": "6c32c076a0c9c1cc"
    },
    "pins": [
+    "FlockSoundness.Refine.stmtOf_linkLayout",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_compiled",
     "FlockSoundness.table_sound_exec",
@@ -1841,6 +1876,7 @@
     "FlockSoundness.Refine.ofCircuit_fold",
     "FlockSoundness.Refine.opening_refines",
     "FlockSoundness.Refine.rep_refines",
+    "FlockSoundness.Refine.stmtOf_linkLayout",
     "FlockSoundness.Refine.verify_refines",
     "FlockSoundness.Refine.verify_refines_ofCircuit",
     "FlockSoundness.Refine.verify_tableAfter",
@@ -1960,7 +1996,13 @@
     "FlockSoundness.Refine.regionOf": "c2c6137c5dc0126b",
     "FlockSoundness.Refine.regionsOf": "cac820d20e8bde9c"
    },
-   "pins": ["FlockSoundness.Refine.ofCircuit_extra", "FlockSoundness.Refine.verify_refines_ofCircuit"]
+   "pins": [
+    "FlockSoundness.Refine.ofCircuit_extra",
+    "FlockSoundness.Refine.setupH_wf",
+    "FlockSoundness.Refine.setup_wf",
+    "FlockSoundness.Refine.stmtOf_linkLayout",
+    "FlockSoundness.Refine.verify_refines_ofCircuit"
+   ]
   },
   "FlockSoundness.Refine.Rep": {
    "digest": "2c6ccf1102c5f506e8dd201e1edab997",
@@ -2043,6 +2085,9 @@
    "pins": [
     "FlockSoundness.Refine.ofCircuit_extra",
     "FlockSoundness.Refine.ofCircuit_fold",
+    "FlockSoundness.Refine.setupH_wf",
+    "FlockSoundness.Refine.setup_wf",
+    "FlockSoundness.Refine.stmtOf_linkLayout",
     "FlockSoundness.Refine.verify_refines_ofCircuit"
    ]
   },
