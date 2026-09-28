@@ -16,7 +16,10 @@ own-region size, the count `derive`'s v2 rule makes; `check_ok` says acceptance 
   the slots `0, 1, …` among its placed entries of one layout, in item order.
 - **A placed call's input bit is exported** when its form is one input wire of the caller that nothing else there reads.
 - **An inlined call names its callee's layout,** which places nothing.
-- **A read's rows are `table/v2`'s,** with product rows for the table's low `k` varying bits only.
+- **A read is tied to its type's table entry** `[sha512, index_bits, value_bits]`: the held table has exactly
+  `2^index_bits` words, and a placed read's generated layout has that index and value width.
+- **A read's rows are `table/v2`'s,** with product rows for its low `k` value bits: a library table's up to its highest
+  varying bit (the rest are constant, and wired), a program table's all, so no shape depends on a program table's values.
 -/
 import Lean.Data.Json
 import Flock.Canon
@@ -30,7 +33,7 @@ open Lean (Json)
 /-- A layout's own rows: derived by the v2 rule from its type, or a generated `table/v2` read. -/
 inductive Own where
   | derive
-  | gen (table : String) (inBits loBits : Nat)
+  | gen (table : String) (inBits valueBits loBits : Nat)
   deriving Inhabited, Repr, BEq
 
 /-- A call entry: its item, the callee's layout, and its offset (`none`: inlined). -/
@@ -57,11 +60,10 @@ structure Layout where
   reads : Array ReadE
   deriving Inhabited, Repr
 
-/-- A held table: index and value widths, and `k`, one more than its highest value bit that varies. -/
+/-- A held table's facts: its word count, and the OR over its words of each word XOR the first. -/
 structure TableInfo where
-  indexBits : Nat
-  valueBits : Nat
-  k : Nat
+  size : Nat
+  diff : Nat
   deriving Inhabited, Repr
 
 namespace Layout
@@ -85,9 +87,10 @@ def ofJson (j : Json) : V Layout := do
   let own ← if hasOnly ownJ ["derive"] && J.has ownJ "derive" then do
       if (← J.str ownJ "derive" ctx) != "v2" then throw s!"{ctx}: own is not derive v2"
       pure Own.derive
-    else if hasOnly ownJ ["gen", "table", "in_bits", "lo_bits"] then do
+    else if hasOnly ownJ ["gen", "table", "in_bits", "value_bits", "lo_bits"] then do
       if (← J.str ownJ "gen" ctx) != "table/v2" then throw s!"{ctx}: own is not gen table/v2"
-      pure (Own.gen (← J.str ownJ "table" ctx) (← J.nat ownJ "in_bits" ctx) (← J.nat ownJ "lo_bits" ctx))
+      pure (Own.gen (← J.str ownJ "table" ctx) (← J.nat ownJ "in_bits" ctx) (← J.nat ownJ "value_bits" ctx)
+        (← J.nat ownJ "lo_bits" ctx))
     else throw s!"{ctx}: own is neither derive nor gen"
   let calls ← (← J.arr j "calls" ctx).mapM fun e => do
     if hasOnly e ["item", "layout", "offset"] && J.has e "offset" then
@@ -113,8 +116,8 @@ def ofJson (j : Json) : V Layout := do
 def record (l : Layout) : Json :=
   let own := match l.own with
     | .derive => Json.mkObj [("derive", Json.str "v2")]
-    | .gen t n lo => Json.mkObj [("gen", Json.str "table/v2"), ("table", Json.str t), ("in_bits", Lean.toJson n),
-                                 ("lo_bits", Lean.toJson lo)]
+    | .gen t n vb lo => Json.mkObj [("gen", Json.str "table/v2"), ("table", Json.str t), ("in_bits", Lean.toJson n),
+                                    ("value_bits", Lean.toJson vb), ("lo_bits", Lean.toJson lo)]
   let calls := l.calls.map fun e => match e.offset with
     | some q => Json.mkObj [("item", Lean.toJson e.item), ("layout", Lean.toJson e.layout), ("offset", Lean.toJson q)]
     | none => Json.mkObj [("item", Lean.toJson e.item), ("layout", Lean.toJson e.layout), ("inline", Json.bool true)]
@@ -150,11 +153,17 @@ def readRowsPlaced (n lo k : Nat) : Nat :=
   let body := WORD + decodeRows lo + decodeRows (n - lo) + k * 2 ^ (n - lo)
   (body + WORD - 1) / WORD * WORD + WORD + 1
 
-/-- `k` of a table given as words: one more than its highest value bit that isn't constant. -/
-def liveBits (words : Array Nat) (valueBits : Nat) : Nat :=
+/-- A held table's facts, from its words. -/
+def tableInfo (words : Array Nat) : TableInfo :=
   let w0 := words.getD 0 0
-  let diff := words.foldl (fun d w => d ||| (w ^^^ w0)) 0 &&& (2 ^ valueBits - 1)
-  if diff == 0 then 0 else Nat.log2 diff + 1
+  ⟨words.size, words.foldl (fun d w => d ||| (w ^^^ w0)) 0⟩
+
+/-- The value bits a read gives product rows: a library table's up to its highest varying bit, a program table's all. -/
+def kOf (sha : String) (valueBits : Nat) (ti : TableInfo) : Nat :=
+  if (libraryTable? sha).isSome then
+    let d := ti.diff &&& (2 ^ valueBits - 1)
+    if d == 0 then 0 else Nat.log2 d + 1
+  else valueBits
 
 /-- Each group's (first bit, bit count) over ports of the given bit widths, split at port indices. -/
 def groups (bits : Array Nat) (split : Array Nat) : Array (Nat × Nat) := Id.run do
@@ -221,8 +230,8 @@ def itemsRows (types : String → Option CircuitType) (ls : Array Layout) (info 
         let e := l.reads.getD r default
         r := r + 1
         if e.placed.isNone then
-          let (sha, ib, _) := t.tables.getD k ("", 0, 0)
-          n := n + readRowsInline ib e.lo ((info sha).map (·.k) |>.getD 0)
+          let (sha, ib, vb) := t.tables.getD k ("", 0, 0)
+          n := n + readRowsInline ib e.lo (kOf sha vb ((info sha).getD default))
       | .bad _ => pure ()
     return n
 
@@ -230,7 +239,7 @@ def itemsRows (types : String → Option CircuitType) (ls : Array Layout) (info 
 def ownSize (types : String → Option CircuitType) (ls : Array Layout) (info : String → Option TableInfo) (j : Nat) : Nat :=
   let l := ls.getD j default
   match l.own with
-  | .gen sha n lo => readRowsPlaced n lo ((info sha).map (·.k) |>.getD 0)
+  | .gen sha n vb lo => readRowsPlaced n lo (kOf sha vb ((info sha).getD default))
   | .derive =>
     match l.type.bind types with
     | none => 0
@@ -260,24 +269,16 @@ def placesNothing (ls : Array Layout) : Nat → Nat → Bool
 def increasing (xs : Array Nat) (lo hi : Nat) : Bool :=
   xs.all (fun x => lo ≤ x && x < hi) && (List.range (xs.size - 1)).all fun i => xs[i]! < xs[i + 1]!
 
-/-- Every layout is reached from the unit's, through call and placed-read entries. -/
-def reachOk (ls : Array Layout) (unit : Nat) : Bool := Id.run do
-  let mut seen := Array.replicate ls.size false
-  let mut stack := #[unit]
-  let mut fuel := ls.size * (ls.size + 1) + 1
-  while !stack.isEmpty && fuel > 0 do
-    fuel := fuel - 1
-    let j := stack.back!
-    stack := stack.pop
-    if j < ls.size && !seen[j]! then
-      seen := seen.set! j true
-      let l := ls[j]!
-      for e in l.calls do stack := stack.push e.layout
-      for e in l.reads do
-        match e.placed with
-        | some (jj, _) => stack := stack.push jj
-        | none => pure ()
-  return unit < ls.size && seen.all id
+/-- The layouts an entry names: every call's, and every placed read's. -/
+def named (l : Layout) : Array Nat := l.calls.map (·.layout) ++ l.reads.filterMap (·.placed.map (·.1))
+
+/-- Every layout is reached from the unit's. Entries name layouts listed before them, so one downward sweep marks every
+reached layout: mark the unit's, then each marked layout's entries below it. -/
+def reachOk (ls : Array Layout) (unit : Nat) : Bool :=
+  let marked := (List.range ls.size).reverse.foldl (fun (m : Array Bool) j =>
+      if m.getD j false then (named ls[j]!).foldl (fun m jj => if jj < j then m.set! jj true else m) m else m)
+    ((Array.replicate ls.size false).set! unit true)
+  unit < ls.size && marked.all id
 
 /-- A range on every layout but the unit's, in 7..40. -/
 def rangeOk (ls : Array Layout) (unit j : Nat) : Bool :=
@@ -285,17 +286,20 @@ def rangeOk (ls : Array Layout) (unit j : Nat) : Bool :=
   | none => j == unit
   | some s => j != unit && 7 ≤ s && s ≤ 40
 
-/-- A generated read: no type, entries or port groups, not the unit's; a held table of its index width, a split in
-range, and its rows inside its range. -/
+/-- A generated read: no type, entries or port groups, not the unit's; widths in 1..32 and a split in range; a
+library table in the library's shape; a held table of exactly `2^in_bits` words; its rows inside its range. -/
 def genOk (ls : Array Layout) (info : String → Option TableInfo) (unit j : Nat) : Bool :=
   let l := ls.getD j default
   match l.own with
   | .derive => true
-  | .gen sha n lo =>
+  | .gen sha n vb lo =>
     l.type.isNone && j != unit && l.calls.isEmpty && l.reads.isEmpty && l.inSplit.isEmpty && l.outSplit.isEmpty &&
-      CircuitType.isHex128 sha &&
+      CircuitType.isHex128 sha && 1 ≤ n && n ≤ 32 && 1 ≤ vb && vb ≤ 32 && 2 ≤ lo && lo < n &&
+      (match libraryTable? sha with
+       | some lt => lt.indexBits == n && lt.valueBits == vb
+       | none => true) &&
       match info sha with
-      | some ti => n == ti.indexBits && 2 ≤ lo && lo < n && readRowsPlaced n lo ti.k ≤ 2 ^ (l.rangeLog.getD 0)
+      | some ti => ti.size == 2 ^ n && readRowsPlaced n lo (kOf sha vb ti) ≤ 2 ^ (l.rangeLog.getD 0)
       | none => false
 
 def callItems (t : CircuitType) : Array Nat :=
@@ -306,11 +310,12 @@ def readItems (t : CircuitType) : Array Nat :=
 
 /-- A derived layout's entries: its type held; port groups increasing inside the ports; one entry per call and read item,
 naming it; each call's layout listed before it and of the callee's type, and an inlined one placing nothing; each read's
-table held, inline with its split in range or placed at a generated read of that table listed before it. -/
+table held with exactly `2^index_bits` words for the type's entry, and either inline with its split in range, or placed
+at a generated read listed before it of that table, index width and value width. -/
 def entriesOk (types : String → Option CircuitType) (ls : Array Layout) (info : String → Option TableInfo) (j : Nat) : Bool :=
   let l := ls.getD j default
   match l.own with
-  | .gen _ _ _ => true
+  | .gen _ _ _ _ => true
   | .derive =>
     match l.type.bind types with
     | none => false
@@ -327,12 +332,12 @@ def entriesOk (types : String → Option CircuitType) (ls : Array Layout) (info 
             (e.offset.isSome || placesNothing ls ls.size e.layout)) &&
         (List.range ri.size).all (fun r =>
           let e := l.reads[r]!
-          let (sha, ib, _) := match t.items[ri[r]!]! with | .read k _ => t.tables.getD k ("", 0, 0) | _ => ("", 0, 0)
-          e.item == ri[r]! && (info sha).isSome &&
+          let (sha, ib, vb) := match t.items[ri[r]!]! with | .read k _ => t.tables.getD k ("", 0, 0) | _ => ("", 0, 0)
+          e.item == ri[r]! && ((info sha).map (·.size) == some (2 ^ ib)) &&
             match e.placed with
             | none => 2 ≤ e.lo && e.lo < ib
             | some (jj, _) => jj < j && match (ls.getD jj default).own with
-              | .gen s _ _ => s == sha
+              | .gen s n v _ => s == sha && n == ib && v == vb
               | .derive => false)
 
 /-- The placed entries of a layout, as (layout, offset), calls then reads in item order. -/
@@ -349,7 +354,7 @@ def geometryOk (types : String → Option CircuitType) (ls : Array Layout) (info
     Bool :=
   let l := ls.getD j default
   match l.own with
-  | .gen _ _ _ => true
+  | .gen _ _ _ _ => true
   | .derive =>
     let p := placedOf l
     if j == unit then slotsOk p else
@@ -397,8 +402,8 @@ theorem check_ok {types : String → Option CircuitType} {ls : Array Layout} {un
 private def wordsBytes (ws : Array Nat) : ByteArray :=
   ws.foldl (fun b w => b ++ le32 w.toUInt32) ByteArray.empty
 
-/-- One archive: `{"types": [content, ...], "tables": {sha512: {"words": [...], "value_bits": v}}, "layouts": [record,
-...], "unit_layout": k}`. Types are checked callees first, tables against their SHA-512, then the layouts. -/
+/-- One archive: `{"types": [content, ...], "tables": {sha512: {"words": [...]}}, "layouts": [record, ...],
+"unit_layout": k}`. Types are checked callees first, tables against their SHA-512, then the layouts. -/
 def checkFile (j : Json) : V (Array String × Array Nat) := do
   let mut known : Array (String × CircuitType) := #[]
   for c in ← J.arr j "types" ctx do
@@ -414,8 +419,7 @@ def checkFile (j : Json) : V (Array String × Array Nat) := do
     for (sha, spec) in kvs.toArray do
       let ws ← (← J.arr spec "words" ctx).mapM (J.asNat · s!"{ctx}: a table word")
       if hexOf (Sha512.hash (wordsBytes ws)) != sha then throw s!"table {sha.take 16}: its words are not its SHA-512"
-      let vb ← J.nat spec "value_bits" ctx
-      tabs := tabs.push (sha, ⟨Nat.log2 ws.size, vb, liveBits ws vb⟩)
+      tabs := tabs.push (sha, tableInfo ws)
   | _ => throw s!"{ctx}: tables is not an object"
   let ls ← (← J.arr j "layouts" ctx).mapM fun r => do
     let l ← ofJson r

@@ -5,8 +5,9 @@
 
 Each case is an archive: random flat types (ANDs, reads of toy program tables) under random callers, one layout per type
 (calls placed or inlined, reads placed at a generated `table/v2` layout or inline, callees packed at aligned offsets past
-the own region), the unit's placed by the block; and one mutation per rule of each. Writes DIR/<i>.json and
-DIR/result.json; exits 1 unless the Lean verifier agrees with the reference on every archive.
+the own region), the unit's placed by the block; one mutation per rule of each; wide units up to attention's 1,092 calls
+and 131 reads; and reads whose held table doesn't match the reading type's entry. Writes DIR/<i>.json and DIR/result.json;
+exits 1 unless the Lean verifier agrees with the reference on every archive.
 """
 from __future__ import annotations
 
@@ -22,6 +23,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 from circuit_type_agree import flat, toy_table, tree, _width  # noqa: E402
 
+from verity.ml import library  # noqa: E402
 from verity_flock import circuit_types as CT  # noqa: E402
 from verity_flock import layouts as LY  # noqa: E402
 
@@ -49,15 +51,15 @@ def make_layouts(rng, types, order, unit_digest, info):
                 inline = LY._places_nothing(layouts, jj) and rng.random() < 0.4
                 calls.append((i, jj, None if inline else 0))
             elif it[0] == CT.READ:
-                sha, ib, _ = t.tables[it[1]]
+                sha, ib, vb = t.tables[it[1]]
                 lo = rng.randint(2, ib - 1)
                 if rng.random() < 0.5:
                     reads.append((i, None, lo))
                 else:
-                    key = (sha, ib, lo)
+                    key = (sha, ib, vb, lo)
                     if key not in gens:
-                        n = LY.read_rows_placed(ib, lo, info(sha).k)
-                        layouts.append(LY.Layout(None, ceil_log2(n), (), (), ("gen", sha, ib, lo), (), ()))
+                        n = LY.read_rows_placed(ib, lo, LY.k_of(sha, vb, info(sha)))
+                        layouts.append(LY.Layout(None, ceil_log2(n), (), (), ("gen", sha, ib, vb, lo), (), ()))
                         gens[key] = len(layouts) - 1
                     reads.append((i, gens[key], 0))
         lay = LY.Layout(d, None if is_unit else 7, (), (), ("derive",), tuple(calls), tuple(reads))
@@ -93,7 +95,7 @@ def make_layouts(rng, types, order, unit_digest, info):
 
 def archive(types_order, types, tables, layouts, unit):
     return {"types": [types[d].content() for d in types_order],
-            "tables": {sha: {"words": ws, "value_bits": vb} for sha, (ws, vb) in tables.items()},
+            "tables": {sha: {"words": ws} for sha, ws in tables.items()},
             "layouts": [l.to_json() for l in layouts], "unit_layout": unit}
 
 
@@ -110,7 +112,7 @@ def reference(a):
             ws = spec["words"]
             if hashlib.sha512(b"".join(w.to_bytes(4, "little") for w in ws)).hexdigest() != sha:
                 raise LY.InvalidLayout("table words")
-            tabs[sha] = LY.TableInfo((len(ws)).bit_length() - 1, spec["value_bits"], LY.live_bits(ws, spec["value_bits"]))
+            tabs[sha] = LY.table_info(ws)
         layouts = [LY.from_json(r) for r in a["layouts"]]
         sizes = LY.validate(types, layouts, a["unit_layout"], tabs.get)
         return True, [l.digest() for l in layouts], sizes
@@ -159,11 +161,50 @@ def mutations(a, rng):
     for j, r in enumerate(L):
         if "gen" in r["own"]:
             out.append(("gen-width", with_layout(j, own={**r["own"], "in_bits": r["own"]["in_bits"] + 1})))
+            out.append(("gen-value-width", with_layout(j, own={**r["own"], "value_bits": r["own"]["value_bits"] + 1})))
             out.append(("gen-range", with_layout(j, range_log=7) if r.get("range_log", 7) > 7 else with_layout(j, own={**r["own"], "lo_bits": 1})))
             break
     if a["tables"]:
         out.append(("table-not-held", {**a, "tables": {}}))
     out.append(("split", with_layout(u, in_split=[5])))
+    return out
+
+
+def _table(ws):
+    return hashlib.sha512(b"".join(w.to_bytes(4, "little") for w in ws)).hexdigest()
+
+
+def fanout(m, r):
+    """The red team's reach_fanout (review of #200): a unit calling one small type m times and reading a 16-word table r
+    times through one placed generated read, over 3 layouts."""
+    callee = CT.CircuitType(library.PROGRAM, ((1, 1),), ((1, 1),), (), (), ((CT.AND, ((0,), 0), ((0,), 1)),), (((1,), 0),))
+    ws = [(i * 7 + 3) & 0xF for i in range(16)]
+    sha = _table(ws)
+    items = [(CT.CALL, 0, (((i,), 0),)) for i in range(m)] + [(CT.READ, 0, tuple(((i % m,), 0) for _ in range(4))) for i in range(r)]
+    outs = [((m + i,), 0) for i in range(m)] + [((2 * m + 4 * i + b,), 0) for i in range(r) for b in range(4)]
+    unit = CT.CircuitType(library.PROGRAM, ((m, 1),), ((len(outs), 1),), (callee.digest(),), ((sha, 4, 4),), tuple(items), tuple(outs))
+    layouts = [LY.Layout(callee.digest(), 10, (), (), ("derive",), (), ()), LY.Layout(None, 10, (), (), ("gen", sha, 4, 4, 2), (), ()),
+               LY.Layout(unit.digest(), None, (), (), ("derive",), tuple((i, 0, i) for i in range(m)), tuple((m + i, 1, i) for i in range(r)))]
+    return archive([callee.digest(), unit.digest()], {callee.digest(): callee, unit.digest(): unit}, {sha: ws}, layouts, 2)
+
+
+def shape_cases():
+    """Reads whose held table doesn't match the reading type's entry (the red team's ib_mismatch and shape_mismatch):
+    a 3-bit index declared for a 16-word table, placed and inline; a 12-word table; a generated read of the wrong value
+    width. Each must be refused."""
+    ws16 = [(i * 7 + 3) & 0xF for i in range(16)]
+    ws12 = ws16[:12]
+    out = []
+    for ws, ib, vb, gen in ((ws16, 3, 4, (4, 4)), (ws16, 3, 4, None), (ws12, 4, 4, None), (ws16, 4, 4, (4, 2))):
+        sha = _table(ws)
+        t = CT.CircuitType(library.PROGRAM, ((ib, 1),), ((vb, 1),), (), ((sha, ib, vb),),
+                           ((CT.READ, 0, tuple(((b,), 0) for b in range(ib))),), tuple(((ib + b,), 0) for b in range(vb)))
+        if gen:
+            layouts = [LY.Layout(None, 10, (), (), ("gen", sha, gen[0], gen[1], 2), (), ()),
+                       LY.Layout(t.digest(), None, (), (), ("derive",), (), ((0, 0, 0),))]
+            out.append(archive([t.digest()], {t.digest(): t}, {sha: ws}, layouts, 1))
+        else:
+            out.append(archive([t.digest()], {t.digest(): t}, {sha: ws}, [LY.Layout(t.digest(), None, (), (), ("derive",), (), ((0, None, 2),))], 0))
     return out
 
 
@@ -182,16 +223,16 @@ def main() -> int:
     rng = random.Random(a.seed)
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    cases = []
+    cases = [fanout(m, r) for m, r in ((2, 2), (6, 6), (20, 20), (200, 40), (1092, 131))] + shape_cases()
     for _ in range(a.n):
         tables = {}
         tlist = []
         for ib, vb in ((3, 4), (4, 6), (5, 8)):
             ws = words_of(rng, ib, vb)
-            sha = hashlib.sha512(b"".join(w.to_bytes(4, "little") for w in ws)).hexdigest()
-            tables[sha] = (ws, vb)
+            sha = _table(ws)
+            tables[sha] = ws
             tlist.append((sha, ib, vb))
-        info = {sha: LY.TableInfo(ib, vb, LY.live_bits(tables[sha][0], vb)) for sha, ib, vb in tlist}.get
+        info = {sha: LY.table_info(tables[sha]) for sha, _ib, _vb in tlist}.get
         pool = [flat(rng, tlist) for _ in range(rng.randint(1, 3))]
         for u in pool:
             _width[u.digest()] = u.out_bits
