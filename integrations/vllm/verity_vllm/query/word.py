@@ -316,7 +316,8 @@ def tap_kernel(scope: str | None, head: str | None = None) -> str:
     return _TAP_KERNEL.get(fam, f"the {fam} kernel")
 
 
-#: unit rules by (Definition id, X, W, extras), shared by every check in the process: a row's request Programs share most specializations
+#: unit rules by gate limits, then (Definition id, X, W, extras), shared by every check in the process: a row's request Programs share
+#: most specializations
 _RULES: dict = {}
 
 
@@ -334,8 +335,8 @@ def check_calls(groups: Iterable[dict[str, Any]], X: int = 16, W: int = 32, extr
     partition commits another number of interior words per Call is an `interior-not-acquired` violation.
 
     `max_gates` (`gate_limits`): the run's gate limits; the query, and so `res["query"]`, is the same under any."""
-    memo = _RULES
     limits = gate_limits(max_gates)
+    memo = _RULES.setdefault(tuple(sorted(limits.items())), {})
     out: list[dict[str, Any]] = []
     agg: dict[tuple[str, str], dict[str, Any]] = {}
 
