@@ -47,7 +47,8 @@ def test_every_census_file_validates_against_its_schema_with_unique_ids(name: st
 
 
 def test_the_census_encodes_no_units() -> None:
-    """The census holds workloads and subcircuits, never replay or verification units (docs: units design)."""
+    """The census holds workloads and subcircuits, never replay or proof units, which applications choose per run
+    (``census/README.md``)."""
     text = " ".join((census.ROOT / f"{n}.json").read_text(encoding="utf-8") for n in FILES)
     ids = [e["id"] for n in FILES for e in census.raw(n)]
     assert not [i for i in ids if re.search(r"(^|[-/])(vu|ru)([-/]|$)", i)] and "verification unit" not in text.lower()
@@ -169,7 +170,7 @@ def test_the_h100_bf16_cells_and_input_set_stand_for_the_wgmma_bf16_subcircuit()
 
 
 def test_workloads_are_the_regression_rows_template_mix() -> None:
-    """Each workload is a served vLLM configuration with its template mix: the verification units per VU family and bound
+    """Each workload is a served vLLM configuration with its template mix: the proof units per family and bound
     parameters, read from its regression row's replay partition (the counts the coverage audit cites).  The file is kept equal
     to those expectations, and only families the census has a template for name one."""
     import collections
