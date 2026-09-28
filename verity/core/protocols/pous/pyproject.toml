@@ -10,4 +10,5 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/ml/crypto", "verity/ml/randomness",
           "Security/Definitions/Pous.lean", "Security/Definitions/Pous", "Security/Models/Pous", "Security/Proofs/Pous",
           "Security/lean-audit.json", "Security/lakefile.toml", "Security/lake-manifest.json", "Security/lean-toolchain",
-          "Security/Proofs/lakefile.toml", "Security/Proofs/lake-manifest.json"]
+          "Security/Proofs/lakefile.toml", "Security/Proofs/lake-manifest.json",
+          "verity/core/protocols/pous/lean/README.md"]
