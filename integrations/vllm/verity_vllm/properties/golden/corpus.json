@@ -26,23 +26,23 @@
    "name": "qwen2.5-1.5b-m6",
    "log": "data/logs/m6/log.jsonl.gz",
    "profile": "vllm_d9105ea80_sm89_eager_qwen15",
-   "digest": "074e6caba4f1e1884fa336c1bf8798f845b3f6e06224462d7aa313f5488dd89c",
-   "attribution_sha": "c926d65ca202e1777350acb9b95b1a919fa071d259df990237223d8dcaa882e8",
-   "n_instances": 14602,
+   "digest": "096f3b1e9db6ef51a9d3f05a5394218fd261ea2ecb478920739b14507e6836a9",
+   "attribution_sha": "4993b9d624c1aa1e5a58816288fd6059af543b124d9e1ce9d9121df9a38cd559",
+   "n_instances": 13286,
    "n_steps": 16,
    "patterns": [
     "act.silu_and_mul",
     "attention.fa2_varlen_fwd",
-    "bias_add.aten_add",
     "embedding.aten_embedding",
     "gemm.matmul_kernel_persistent",
+    "gemm_bias.fused",
     "rmsnorm.fused_add_rms_norm",
     "rmsnorm.triton_rms_norm_kernel",
     "rope.rotary_embedding",
     "sample.gumbel_two_stage"
    ],
-   "recorded_utc": "2026-09-28T09:05:32Z",
-   "decision": "rebaseline-2026-09-28 (Daniel: re-baseline epoch; AmpereBF16TcDot16_v1 -> core v2 re-key, G0c)"
+   "recorded_utc": "2026-10-05T03:20:51Z",
+   "decision": "fold-fuses-the-qkv-bias-2026-10-05 (vllm-coordinator ruling (c), 2026-10-05: b0b4b438f, on main at e1ac94661, lets the qkv GEMM's pre-bias aten.empty pass the GemmBias fusion, 1316 instances Gemm_v1{K=1536,N=2048} + BiasAdd_v1{N=2048} -> GemmBias_v1{K=1536,N=2048}; with #961's fold-binds-the-build-vocabulary-2026-10-04, on main at 5049de02f, 1316 instances SiluMul_v1{I=8960} -> SiluMul_v2{I=8960}; nothing else moves)"
   }
  ]
 }

@@ -80,6 +80,13 @@ def test_block_scales():
     assert s == 128 and r == P.f32_bits(0.5)
 
 
+def test_nvfp4_blocks_keep_the_sign_of_minus_zero():
+    """`fp32.mul(−0, r)` is −0, so a −0 word's code is 0x8 and a +0 word's 0x0. The Lean's `nvf4Block` pins the same
+    block (`DeviceFp4Gamma.nvf4Block_signedZero`)."""
+    d = [0x80000000, P.f32_bits(1.0)] + [0] * 13 + [0x80000000]
+    assert F.quantize(F.NVFP4, d) == ([8, 7] + [0] * 13 + [8], [0x23])
+
+
 def test_lines_are_turboshake_nibbles():
     seed = bytes(range(32))
     raw = turboshake128(seed + bytes([2]) + (5).to_bytes(4, "little"), F.D_LINE, 16)
@@ -258,6 +265,59 @@ def test_dnf_rejects_a_negative_beta_whose_byte_would_be_zero_noise():
             beta, ae = F.stats(f, x)[3:]
             assert not beta >> 31
             assert F.row_passes(f, x) == (ae >= F.UE4M3_NORMAL)
+
+
+@pytest.mark.parametrize("fmt", FMTS)
+def test_row_passes_asks_finite_widened_bf16_words(fmt):
+    """`row_passes` refuses a row with a word whose low 16 bits are not zero (`0x3F800001`, 1 + 2⁻²³, finite and not a
+    widened BF16 word) and a row with a non-finite word, which `parse_row` never writes, as the Lean's
+    `Fp4Sem.RowOK` and `OperandOK` refuse them (`rowOK4_notBf16`, `rowOK4_nonFinite`); the honest row passes."""
+    f = F.FORMATS[fmt]
+    x = F.parse_row(V.rows("rules", "A", 1, 1024)[0], 1024)
+    assert F.row_passes(f, x)
+    assert not F.row_passes(f, [0x3F800001 if p == 1 else w for p, w in enumerate(x)])
+    assert not F.row_passes(f, [0x7F800000 if p == 1 else w for p, w in enumerate(x)])
+
+
+def tolerant_kernel(scheme, ctx, noise, a, b, tiles):
+    """`reference_kernel`, with a zero digest for a tile the scheme does not encode, so a weight with a refused row
+    still commits."""
+    out = []
+    for t in tiles:
+        ops = scheme.encode(ctx, noise, [a[i] for i in t.rows], [b[j] for j in t.cols], t)
+        if ops is None:
+            out.append((bytes(32), [[0.0] * len(t.cols) for _ in t.rows]))
+            continue
+        c = scheme.checked(ctx, ops)
+        out.append((scheme.digest(ctx, noise, c), scheme.useful(ctx, noise, ops, c)))
+    return out
+
+
+@pytest.mark.parametrize("clause", [None, "finite", "admit"])
+def test_check_tile_refuses_a_weight_row_outside_the_rules(clause):
+    """`check_tile` refuses a tile one of whose weight rows fails a clause of `OperandOK`, as Lean's `TileCheck.Accepts`
+    asks each of the tile's weight rows to pass the protocol's `weightOK` (`Fp4Sem.RowOK`). One row per clause: a
+    non-finite word (Lean's `rowOK4_nonFinite`), and every 8th word `2¹²⁶`, which `RowAdmit4` refuses since β is not
+    finite (`pc4Sem_squaresOverflow`). The word clause's widened-BF16 half holds of every opened row, which is BF16 words
+    (`parse_row`); `test_row_passes_asks_finite_widened_bf16_words` checks it on `row_passes`. The tile beside it, whose
+    weight rows pass, is accepted, and so are both on the honest weight."""
+    from verity_pouw.audit import Verifier
+
+    s = V.scheme("nvfp4", True)
+    rows_a, rows_b = V.rows("weight-rule", "A", 16, K), V.rows("weight-rule", "B", 32, K)
+    w = [x >> 16 for x in F.parse_row(rows_b[0], K)]
+    if clause == "finite":
+        rows_b[0] = F.bf16_row([0x7F80 if t == 1 else v for t, v in enumerate(w)])
+    elif clause == "admit":
+        rows_b[0] = F.bf16_row([0x7E80 if t % 8 == 0 else v for t, v in enumerate(w)])
+    prover = Prover(s, {9: rows_b}, tolerant_kernel)
+    epoch = Epoch.unverified(Workload((Matmul(3, Shape(16, K, 32), 9),)), prover.weight_roots, b"beacon")
+    tr = prover.prove(epoch, {3: rows_a})
+    v = Verifier(s, epoch)
+    assert [0 in r.tile.cols for r in v.refs] == [True, False]
+    verdicts = [v.check_tile(tr, prover.open(epoch, r.id)) for r in v.refs]
+    assert [(x.ok, x.reason) for x in verdicts] == [(clause is None, "" if clause is None else "inadmissible inputs"),
+                                                    (True, "")]
 
 
 @pytest.mark.parametrize("fmt", FMTS)

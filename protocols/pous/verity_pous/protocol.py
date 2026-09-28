@@ -259,8 +259,9 @@ def verifier_key(scheme: Scheme, commitment: bytes, salt: bytes, *, mode: str = 
 
 
 def challenge_key(source: bytes, vk: VerifierKey) -> Key:
-    """The audit's key, bound to `vk`'s root and salt; `source` is the verifier's secret or a beacon round after `vk`
-    is fixed, never the prover's (`audit.challenge_key`)."""
+    """The audit's key, bound to `vk`'s root and salt; `source` is the verifier's own secret, kept secret until the
+    audit starts, never a public beacon or the prover's (`audit.challenge_key`). A public source lets a prover compute
+    the challenged indices before the audit and rebuild only those blocks within the deadline."""
     return audit.challenge_key(source, vk)
 
 

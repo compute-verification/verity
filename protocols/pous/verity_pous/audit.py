@@ -79,7 +79,9 @@ def _challenges(vk: VerifierKey) -> int:
 
 
 def challenge_key(source: bytes, vk: VerifierKey) -> Key:
-    """The audit's key: `source` is the verifier's secret or a beacon round, never the prover's root."""
+    """The audit's key: `source` is the verifier's own secret, kept secret until the audit starts, never a public
+    beacon or the prover's root. A public source makes every challenged index computable before the audit, so a prover
+    holding little of `C` can rebuild only the challenged blocks within the deadline and pass."""
     return derive(source, CHALLENGE_DOMAIN, {"root": vk.root, "salt": vk.salt})
 
 

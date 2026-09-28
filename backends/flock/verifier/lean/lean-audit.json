@@ -35,7 +35,7 @@
   "Flock": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "FlockProofs": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
  },
- "pins": {
+ "guarantees": {
   "Flock.CircuitType.check_ok": {
    "owner": "@proofs",
    "signature": [
@@ -369,7 +369,7 @@
     "Flock.le64": "c0b88475a415d0be81672b73a7d600ecf219becff19bd4748dd852c900992458",
     "Flock.unhex": "a0a0e6fc12acba945d0040b0472350264b198316683185f534afeec2fedac5e8"
    },
-   "pins": [
+   "guarantees": [
     "Flock.HmNets.check_ok",
     "Flock.HmNets.hm96Net_get",
     "Flock.HmNets.hmLaid_eq",
@@ -397,7 +397,7 @@
     "Flock.J.get": "b9713926f46759187e8644c994f413c55b938954c67e17c896bc28271d5b02ef",
     "Flock.J.str": "e3b64bf9e865f4b684f547639349e4d4af1dca863e4b32aa1becab9980d2fdaa"
    },
-   "pins": ["Flock.Registered.check_ok"]
+   "guarantees": ["Flock.Registered.check_ok"]
   },
   "Flock.Circuit": {
    "digest": "a6eb06b9b9b03d597c2d2bac7381be0769605d079656690bad6fbbdad3d181fa",
@@ -426,7 +426,7 @@
     "Flock.instInhabitedPort": "426557d5addbb6b3e55506469c7f4f38a72a242ebd819f2537f3d3a6384c827f",
     "Flock.instInhabitedPort.default": "da6a909dbf98165317ef82d3edf34f59e57a59d56f775900b370ecbfc69d4ef4"
    },
-   "pins": ["Flock.HmNets.check_ok", "Flock.Registered.check_ok"]
+   "guarantees": ["Flock.HmNets.check_ok", "Flock.Registered.check_ok"]
   },
   "Flock.CircuitType": {
    "digest": "9914c589c24f68f5a634b61dcc5a41da20e2a1b38ea31cee908b8ad934d3e503",
@@ -476,7 +476,7 @@
     "Flock.instInhabitedItem.default": "067656864f12b6b0af12bf41bf4daf264ce9c3a43cf88b9cc253d5a0e3cbea44",
     "Flock.instReprItem.repr": "7fc49b35cf29bc03dd0033497992ec607f4b3a5ae8daa4fd06659e0c13a9ae9d"
    },
-   "pins": [
+   "guarantees": [
     "Flock.CircuitType.check_ok",
     "Flock.HmNets.check_ok",
     "Flock.Layout.check_ok",
@@ -497,7 +497,7 @@
     "Flock.pushLe32": "198969711c1055d6fc4cb8c86806c497533718281dc0dc1e3e89319eef3b2a61",
     "Flock.rd32": "1023ca573b2f5767610f1a96d09b95c162b412865dc098ab0b52fcfc817c3098"
    },
-   "pins": [
+   "guarantees": [
     "Flock.HmNets.check_ok",
     "Flock.HmNets.hm96Net_get",
     "Flock.HmNets.sha512x3Net_get",
@@ -509,7 +509,7 @@
    "definitions": {
     "Flock.Derive.ceilPow2": "cff16037ede34ed07b6b641f362f23fe908fb00ef0a5c361b12c3d6a4c1df4e0"
    },
-   "pins": ["Flock.HmNets.check_ok", "Flock.Registered.check_ok"]
+   "guarantees": ["Flock.HmNets.check_ok", "Flock.Registered.check_ok"]
   },
   "Flock.DeriveAll": {
    "digest": "f5c681d802aae832cd4a237ccd181de4c7685fe64281e4ea0be41bb4c3d2fc71",
@@ -581,7 +581,7 @@
     "Flock.DeriveAll.xorCF": "41be3484a8e909202ab65dbc3a42d9ec59459f1e221cde2c1e46596f53a70d29",
     "Flock.DeriveAll.xorCols": "8513b9a13c7edc534fcea36661c4bb85f82d4a03bbf60a1be1a24956d344412e"
    },
-   "pins": ["Flock.HmNets.check_ok", "Flock.Registered.check_ok"]
+   "guarantees": ["Flock.HmNets.check_ok", "Flock.Registered.check_ok"]
   },
   "Flock.DeriveCheck": {
    "digest": "f31b6de0f1f7337481a812f21bf5b6baa9a7c02d12a183ee51c7df3c42c3e667",
@@ -622,7 +622,7 @@
     "Flock.DeriveAll.shiftRow": "36c581cbd24310cb8d8bc612ca1b667040c1548ca41b9f1355892942d3fc3b93",
     "Flock.DeriveAll.walk": "61369559eae0ff16ddc99593e9a40f1132aafe6eede1c393c7aa0e951be6ae0c"
    },
-   "pins": ["Flock.HmNets.check_ok", "Flock.Registered.check_ok"]
+   "guarantees": ["Flock.HmNets.check_ok", "Flock.Registered.check_ok"]
   },
   "Flock.Field": {
    "digest": "22303c3aee8bcc287e55cba20d73253ba648a74a42c94fe85682b94e7f0c0f04",
@@ -633,7 +633,7 @@
     "Flock.F128.pushBytes": "725ea57d3593c4b374414936889849bf6442eeb0c38cef3a1c502025ba0edba4",
     "Flock.F128.toBytes": "b0c562ef4919b8c848181562177e6b6c76b85438b8a538f7c8be6bd3bf7a33c1"
    },
-   "pins": [
+   "guarantees": [
     "Flock.MerklePair.hm96_inputs",
     "Flock.MerklePair.sha256_inputs",
     "Flock.MerklePair.sha512_inputs",
@@ -662,7 +662,7 @@
     "Flock.Sha512.k": "da498b32594a0b1a4c2a2f530afba05bbe3d5cfb74500e02f338bb3f8ad29992",
     "Flock.Sha512.rotr": "c2cd7489ff2877fb65640d82519ba0815a2815bf1dfd3106f95568aeed0b3ec1"
    },
-   "pins": [
+   "guarantees": [
     "Flock.HmNets.check_ok",
     "Flock.HmNets.hm96Net_get",
     "Flock.HmNets.hmLaid_eq",
@@ -709,7 +709,7 @@
     "_private.Flock.Hm96.0.Flock.Hm96.Default512.keyBit": "8093b686534510973e90360c1868f8d33f1d8209b2471ad540d17f90fe41c0ff",
     "_private.Flock.Hm96.0.Flock.Hm96.tag": "824dbcae40eb3817e77d8bdc91e1a12f0b1fe7ccbebc0be5d3097e7c4fc436eb"
    },
-   "pins": [
+   "guarantees": [
     "Flock.HmNets.check_ok",
     "Flock.HmNets.hm96Net_get",
     "Flock.HmNets.hmLaid_eq",
@@ -824,7 +824,7 @@
     "Flock.HmNets.xor3": "140777d0a8403e9bb1e0087fa646740acfefc1d6a68db88534cf0b022e5ec8f3",
     "Flock.HmNets.xorW": "8dc4538d76c03337e641b8cb730139b3debc541f18f34aa95d0d5de93f4aee17"
    },
-   "pins": [
+   "guarantees": [
     "Flock.HmNets.check_ok",
     "Flock.HmNets.col_and",
     "Flock.HmNets.col_input",
@@ -842,7 +842,7 @@
     "Flock.HmRow.ROW_SCHEMA_SEG": "6db64657e5bbbe4a31f3de267bfa666018c91a08ef5ce79602392ddce59cbe4a",
     "Flock.HmRow.ROW_SCHEMA_V2": "cfe82a5bc7e3883c307918ec91d6eb64043d76c39908450f944ab3e435e76318"
    },
-   "pins": ["Flock.Registered.check_ok", "Flock.Registered.opensLeaf_binding"]
+   "guarantees": ["Flock.Registered.check_ok", "Flock.Registered.opensLeaf_binding"]
   },
   "Flock.Layout": {
    "digest": "a598bcfd64c585e65d6d24d53f3b3d04a4fbb4afeb6eecfbbbd7bb290d67f4b1",
@@ -913,7 +913,7 @@
     "Flock.instInhabitedTableInfo.default": "e67b573ff15e1d5c400ef00e23f86c3e00427fba5030339ac9edc4b4780a9cc4",
     "Flock.instReprOwn.repr": "0e02bea7bb36c9ffd1b95f0d7e86ee9168609384b05b5ea5103f79bd66948d5c"
    },
-   "pins": ["Flock.HmNets.check_ok", "Flock.Layout.check_ok", "Flock.Registered.check_ok"]
+   "guarantees": ["Flock.HmNets.check_ok", "Flock.Layout.check_ok", "Flock.Registered.check_ok"]
   },
   "Flock.Library": {
    "digest": "00d347b8ee55dd8a44f3fcc0f4d47af873172df956a1004f35cf92fb3ab8666a",
@@ -927,7 +927,7 @@
     "Flock.PROGRAM": "c99c53d92441afd40576841770e56932f2b9b05e283272027c566cdcc35053d3",
     "Flock.libraryTable?": "2e4f5eb96b2eaa7ac47dad86353794bc75e4ba83998eb37a6b6780b50bc321cf"
    },
-   "pins": [
+   "guarantees": [
     "Flock.CircuitType.check_ok",
     "Flock.HmNets.check_ok",
     "Flock.Layout.check_ok",
@@ -953,7 +953,7 @@
     "Flock.saltCount": "c42dfc1f52527d7e39b77ea010fb9e005266ba9f1ec9d69bc9b37ae54a13085f",
     "Flock.sibsOf": "35ad17c257b59414cec25e4a24c9bcbcf4d5fc94e6451016d84fff8ba8cd403b"
    },
-   "pins": [
+   "guarantees": [
     "Flock.MerklePair.hm96_inputs",
     "Flock.MerklePair.sha256_inputs",
     "Flock.MerklePair.sha512_inputs",
@@ -994,7 +994,7 @@
     "Flock.nextPow2": "672248e8c4c082f39e900d47584890b871bb09171798a196ac4378253b873524",
     "_private.Flock.Net.0.Flock.Net.num": "069b167640a5c84f3c62147d950afbccee16c464a09ef3cef177ec145e710372"
    },
-   "pins": [
+   "guarantees": [
     "Flock.HmNets.check_ok",
     "Flock.HmNets.hm96Net_get",
     "Flock.HmNets.hmLaid_eq",
@@ -1023,7 +1023,7 @@
     "Flock.Tables.refs": "0601241d9226aa8eead0d12246fc77a58b46f0cb35e82b9efbdf3979b40bc8ee",
     "Flock.Tables.starts": "8fa5c9b6245d49913beb0c5613028dad1e813246e5b57d17687e8ae2688d7eee"
    },
-   "pins": ["Flock.Registered.check_ok", "Flock.Registered.opensLeaf_binding"]
+   "guarantees": ["Flock.Registered.check_ok", "Flock.Registered.opensLeaf_binding"]
   },
   "Flock.Registered": {
    "digest": "e98fe9615367e8931d84ab5292719159277236ec9f2e1026e5b0d4499362f234",
@@ -1056,7 +1056,7 @@
     "Flock.Registered.tableRow": "d282b834f17e1c68b1a02f3e11d6eccad176108d6236f9ee3bd6bf55eb99b8ec",
     "Flock.Registered.unitIndices": "4f5d727b9688ad178fa4bdc618244d345d29ab47a0bc03ef4d00419ba6494a22"
    },
-   "pins": ["Flock.Registered.check_ok", "Flock.Registered.opensLeaf_binding"]
+   "guarantees": ["Flock.Registered.check_ok", "Flock.Registered.opensLeaf_binding"]
   },
   "Flock.RowLeaf": {
    "digest": "c6a355452998a8f172a847da58bc1b6eed0655c74a3d2af36a51980237acb20a",
@@ -1066,14 +1066,14 @@
     "Flock.Region.free": "c7bec1a51d6bdeaf562b5a71bc0e281028a4fe7a282cedff3d99aefa7af20225",
     "Flock.mkRegion": "5f114dc12db36808d8d8d876a67e06d165ba81c44eb0ca2cd345fdadd66b5188"
    },
-   "pins": ["Flock.mkRegion_ok"]
+   "guarantees": ["Flock.mkRegion_ok"]
   },
   "Flock.Statement": {
    "digest": "0d6f823de4eb5e6ff5ed36018e20c64b71d8ea1521b8f8efb674f07e1f1f1d4a",
    "definitions": {
     "Flock.checkInRange": "af916f3d8a80fd126a8ab2c23e640312ee6e2805bf9c39038e26b57296a5ef41"
    },
-   "pins": ["Flock.checkInRange_ok"]
+   "guarantees": ["Flock.checkInRange_ok"]
   },
   "Flock.Transcript": {
    "digest": "127822e2af168217cf9985e0954a936546c8e8d4a8c5bf3ac094faf45d82c776",
@@ -1095,7 +1095,7 @@
     "Flock.Transcript.squeeze": "df5db5dd5fe3ab778bc220715e6112629025fe65d1596197775401d8c1d8670c",
     "_private.Flock.Transcript.0.Flock.Round.answers.match_1.splitter": "4b402e2ea389f69e2be9145428adfb21ec78ecf6124db4edb1970ee2a421d2af"
    },
-   "pins": ["Flock.squeeze_answers", "Flock.squeeze_retained"]
+   "guarantees": ["Flock.squeeze_answers", "Flock.squeeze_retained"]
   },
   "Flock.Typed": {
    "digest": "15cd22b6206d1090eae73329225326d4e02d812a8a2c347545e5980b8c6d9fc5",
@@ -1109,7 +1109,7 @@
     "Flock.Typed.typeIn": "4c10bfa65523398c554a39c64bd4333f1425618bec15e2644be4c13572bf397b",
     "Flock.Typed.wordsIn": "3ffd7ac29f7f5340588d0abad6a3d03fb6923d39e72756713531e04159dbc6e9"
    },
-   "pins": ["Flock.HmNets.check_ok", "Flock.Registered.check_ok"]
+   "guarantees": ["Flock.HmNets.check_ok", "Flock.Registered.check_ok"]
   },
   "FlockProofs.Hash": {
    "digest": "d6d1e8b248f3eb42f59dc34dc27f0fcfd6283a88ba7e68b82990f6f603201997",
@@ -1119,7 +1119,7 @@
     "Flock.Sha256.Collision": "f2415055b517166b9bc91fa8d4b7af92dee0514f26219ce5d153c9b455da2987",
     "Flock.Sha512.Collision": "79d676366da96d6f932a1f29f871a3c2c81a4a36c7b8876fae219645b9666b0f"
    },
-   "pins": ["Flock.MerklePair.hm96_inputs", "Flock.MerkleScheme.collision_hash"]
+   "guarantees": ["Flock.MerklePair.hm96_inputs", "Flock.MerkleScheme.collision_hash"]
   },
   "FlockProofs.Merkle": {
    "digest": "2c1fa23569a986c0c8d6877a21427df24b4c64c5d6271930c2d8c1d4f23e9d40",
@@ -1137,7 +1137,7 @@
     "Flock.merklePair": "527f829d67116703755b5e8b6ea00c123605de9306242d8052e04e61be1cccbd",
     "Flock.opensPair": "c712b8b55bcb2e0bdf37ff96e8465220bca98a0a46b057b14a4bb942988533bf"
    },
-   "pins": [
+   "guarantees": [
     "Flock.MerklePair.hm96_inputs",
     "Flock.MerklePair.sha256_inputs",
     "Flock.MerklePair.sha512_inputs",
@@ -1159,7 +1159,7 @@
     "Flock.Registered.openPair": "1a27def4ba8c855d5d2fb2762d1783bee0cae8f47cca495efab779a5da5af649",
     "Flock.Registered.step": "a5cb6e7f8cd2c7dd88acc56c4b2d2cc545b45c269069225b0f43be9aa6366332"
    },
-   "pins": ["Flock.Registered.opensLeaf_binding"]
+   "guarantees": ["Flock.Registered.opensLeaf_binding"]
   }
  },
  "dependencies": {

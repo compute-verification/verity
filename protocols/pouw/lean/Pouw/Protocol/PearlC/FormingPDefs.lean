@@ -10,7 +10,7 @@ chain and predicate beside Π's. At `hopperE4m3K32` both are Π's: `atomMixP hop
 named protocol may read it.
 
 * **The chain** (`atomMixP p`): one step of `p`, `D = p.step(C, E′, F)`, with accumulator input `C = f32(α·x)`, the
-  noise line `E′ = lineCodes β e` and the `F` row's E4M3 codes; the cast reads `D`.
+  noise line `E′ = lineCodes β e` and the `F` row's codes; the cast reads `D`.
 * **The predicate** (`saltDeadP p alpha beta`): `SaltDead.saltDead` with `atomMixP p` for the atom-mix, on the same
   support (`SaltDead.support`, the flat pairs).
 -/
@@ -19,10 +19,10 @@ namespace Pouw.PearlC.FormingP
 
 open Pouw.Fp8Atom
 
-/-- **§5's atom-mix on the step `p`**: `D = p.step(f32(α·x), E′, F)` with `E′ = lineCodes β e` and `F`'s E4M3 codes,
-read by the cast. -/
+/-- **§5's atom-mix on the step `p`**: `D = p.step(f32(α·x), E′, F)` with `E′ = lineCodes β e` and `F`'s codes, read by
+the cast. -/
 def atomMixP (p : Pipeline) : FormChain 32 :=
-  ⟨fun α x β e f => wordVal (p.step (f32Word (α * x)) (List.ofFn (lineCodes β e)) (List.ofFn fun t => e4m3 (f t)))⟩
+  ⟨fun α x β e f => wordVal (p.step (f32Word (α * x)) (List.ofFn (lineCodes β e)) (List.ofFn f))⟩
 
 /-- **P3's salt-dead predicate on the step `p`**, of `PearlCSem.saltDead`'s type: element `l` of row `x` is salt-dead
 when its code under `atomMixP p` has the same value at every pair of `SaltDead.support`. -/

@@ -27,8 +27,8 @@ are `RowSem`'s formulas on the row's inputs:
 * words read back as values: a step's word is `f32Word` of its value (`f32Word_wordVal`), and the cast of a word that
   is neither NaN nor a signed zero is `e4m3` of its value (`e4m3_wordVal`), so a code is `e4m3` of its formed word's
   value where the cast is `e4m3Word`'s (`code8W_e4m3`), and `pc8Form` at step words' values is `form8` at the words
-  (`pc8Form_value`); with a code that is neither NaN nor `−0` `e4m3` of its value (`e4m3_codeVal`), each code on RowA
-  and RowB is `e4m3` of `pc8Form` at its row's values (`codes8_sem`, `row8A_code_sem`, `row8B_code_sem`), and
+  (`pc8Form_value`); with the noise' and basis' codes read off their gates as they are (`gateCodes`), each code on
+  RowA and RowB is `e4m3` of `pc8Form` at its row's values and codes (`codes8_sem`, `row8A_code_sem`, `row8B_code_sem`), and
   `pc8Sem`'s `α`, `β` and floor at a row of step words are the table's words read as values (`pc8Sem_scales`).
 -/
 
@@ -1372,30 +1372,21 @@ theorem code8W_e4m3 (hcast : ∀ u, ops.f32ToE4m3Sat u = (e4m3Word u).val) (p : 
 
 /-- **`pc8Form` at the values of step words** is the formed word `form8` at those words, read as a value. -/
 theorem pc8Form_value (p : Pipeline) {a x b : ℕ} (ha : AccumProofs.StepWord a) (hx : AccumProofs.StepWord x)
-    (hb : AccumProofs.StepWord b) (e f : Fin Params.pi.r → ℚ) :
+    (hb : AccumProofs.StepWord b) (e f : Fin Params.pi.r → Code) :
     (pc8Form ops p).value (wordVal a) (wordVal x) (wordVal b) e f =
       wordVal (form8 ops p a x (fun l => eTilde8 ops b (encCodes e l)) (encCodes f)) := by
   simp only [pc8Form, f32Word_wordVal ha, f32Word_wordVal hx, f32Word_wordVal hb]
 
-/-- **A code is `e4m3` of its value** unless it is a NaN or `−0`. -/
-theorem e4m3_codeVal : ∀ c : Code, c.isNaN = false → c.val ≠ 0x80 → e4m3 (codeVal c) = c := by
-  decide +kernel
-
-/-- An E4M3 code on a gate: below `256`, neither a NaN nor `−0`. -/
-def CodeWord (v : ℕ) : Prop := v < 256 ∧ v % 128 ≠ 127 ∧ v ≠ 0x80
-
 /-- A word the cast reads as its value (`e4m3_wordVal`): not a NaN, and not a zero with its sign bit set. -/
 def CastWord (w : ℕ) : Prop := ((w >>> 23) % 256 = 255 → w % 2 ^ 23 = 0) ∧ (wordQ w = some 0 → (w >>> 31) % 2 = 0)
 
-/-- The values of the `r` codes on the gates from `o`. -/
-def lineVals (V : ℕ → ℕ) (o : ℕ) : Fin Params.pi.r → ℚ := fun l => codeVal ⟨V (o + l) % 256, Nat.mod_lt _ (by decide)⟩
+/-- The `r` codes on the gates from `o`. -/
+def gateCodes (V : ℕ → ℕ) (o : ℕ) : Fin Params.pi.r → Code := fun l => ⟨V (o + l) % 256, Nat.mod_lt _ (by decide)⟩
 
-theorem encCodes_lineVals {V : ℕ → ℕ} {o : ℕ} (h : ∀ l < Params.pi.r, CodeWord (V (o + l))) {l : ℕ}
-    (hl : l < Params.pi.r) : encCodes (lineVals V o) l = V (o + l) := by
-  obtain ⟨h1, h2, h3⟩ := h l hl
-  simp only [encCodes, hl, ↓reduceDIte, lineVals]
-  rw [e4m3_codeVal _ (by simp [Code.isNaN, Nat.mod_eq_of_lt h1, h2]) (by simp [Nat.mod_eq_of_lt h1, h3])]
-  exact Nat.mod_eq_of_lt h1
+theorem encCodes_gateCodes {V : ℕ → ℕ} {o : ℕ} (h : ∀ l < Params.pi.r, V (o + l) < 256) {l : ℕ}
+    (hl : l < Params.pi.r) : encCodes (gateCodes V o) l = V (o + l) := by
+  simp only [encCodes, hl, ↓reduceDIte, gateCodes]
+  exact Nat.mod_eq_of_lt (h l hl)
 
 theorem form8_congr (p : Pipeline) (α x : ℕ) {et et' f f' : ℕ → ℕ} (he : ∀ l < 32, et l = et' l)
     (hf : ∀ l < 32, f l = f' l) : form8 ops p α x et f = form8 ops p α x et' f' := by
@@ -1404,32 +1395,32 @@ theorem form8_congr (p : Pipeline) (α x : ℕ) {et et' f f' : ℕ → ℕ} (he 
     List.map_congr_left (fun l hl => hf l (List.mem_range.1 hl))]
 
 /-- **`code8W` is `pc8Sem`'s forming code** on a row's words, where the cast is `e4m3Word`'s, `α`, `x_t` and `β` are
-step words, the noise' and basis' codes are neither NaN nor `−0`, and the formed word is a `CastWord`. -/
+step words, the noise' and basis' codes are below `256`, and the formed word is a `CastWord`. -/
 theorem codes8_sem (hcast : ∀ u, ops.f32ToE4m3Sat u = (e4m3Word u).val) (p : Pipeline) (V : ℕ → ℕ) (K t : ℕ)
     (ha : AccumProofs.StepWord (alpha8 ops V K)) (hx : AccumProofs.StepWord (V t))
-    (hb : AccumProofs.StepWord (beta8 ops V K)) (he : ∀ l < Params.pi.r, CodeWord (V (K + l)))
-    (hf : ∀ l < Params.pi.r, CodeWord (V (K + 32 + 32 * t + l)))
+    (hb : AccumProofs.StepWord (beta8 ops V K)) (he : ∀ l < Params.pi.r, V (K + l) < 256)
+    (hf : ∀ l < Params.pi.r, V (K + 32 + 32 * t + l) < 256)
     (hD : CastWord (form8 ops p (alpha8 ops V K) (V t) (fun l => eTilde8 ops (beta8 ops V K) (V (K + l)))
       (fun l => V (K + 32 + 32 * t + l)))) :
     code8W ops p (alpha8 ops V K) (V t) (fun l => eTilde8 ops (beta8 ops V K) (V (K + l)))
         (fun l => V (K + 32 + 32 * t + l)) =
       (e4m3 ((pc8Form ops p).value (wordVal (alpha8 ops V K)) (wordVal (V t)) (wordVal (beta8 ops V K))
-        (lineVals V K) (lineVals V (K + 32 + 32 * t)))).val := by
+        (gateCodes V K) (gateCodes V (K + 32 + 32 * t)))).val := by
   rw [code8W_e4m3 ops hcast p _ _ _ _ hD.1 hD.2, pc8Form_value ops p ha hx hb,
-    form8_congr ops p _ _ (fun l hl => by rw [encCodes_lineVals he hl]) (fun l hl => encCodes_lineVals hf hl)]
+    form8_congr ops p _ _ (fun l hl => by rw [encCodes_gateCodes he hl]) (fun l hl => encCodes_gateCodes hf hl)]
 
-/-- **RowA's codes are `pc8Sem`'s**: `e4m3` of `pc8Form` at `α`, `x_t`, `β`, the noise line and `F_t` read as values,
-under `codes8_sem`'s conditions. -/
+/-- **RowA's codes are `pc8Sem`'s**: `e4m3` of `pc8Form` at `α`, `x_t` and `β` read as values and the noise line's and
+`F_t`'s codes, under `codes8_sem`'s conditions. -/
 theorem row8A_code_sem (hcast : ∀ u, ops.f32ToE4m3Sat u = (e4m3Word u).val) (p : Pipeline) {K : ℕ} (hK : 8 ≤ K)
     (X : ((row8A p K).spec ops).toCircuit.Transcript) (hX : ((row8A p K).spec ops).part.Correct X 0) {t : ℕ}
     (ht : t < K) (ha : AccumProofs.StepWord (alpha8 ops (val X) K)) (hx : AccumProofs.StepWord (val X t))
-    (hb : AccumProofs.StepWord (beta8 ops (val X) K)) (he : ∀ l < Params.pi.r, CodeWord (val X (K + l)))
-    (hf : ∀ l < Params.pi.r, CodeWord (val X (K + 32 + 32 * t + l)))
+    (hb : AccumProofs.StepWord (beta8 ops (val X) K)) (he : ∀ l < Params.pi.r, val X (K + l) < 256)
+    (hf : ∀ l < Params.pi.r, val X (K + 32 + 32 * t + l) < 256)
     (hD : CastWord (form8 ops p (alpha8 ops (val X) K) (val X t)
       (fun l => eTilde8 ops (beta8 ops (val X) K) (val X (K + l))) (fun l => val X (K + 32 + 32 * t + l)))) :
     val X (code8 K (rowIn K false) t) =
       (e4m3 ((pc8Form ops p).value (wordVal (alpha8 ops (val X) K)) (wordVal (val X t))
-        (wordVal (beta8 ops (val X) K)) (lineVals (val X) K) (lineVals (val X) (K + 32 + 32 * t)))).val := by
+        (wordVal (beta8 ops (val X) K)) (gateCodes (val X) K) (gateCodes (val X) (K + 32 + 32 * t)))).val := by
   rw [row8A_code (ops := ops) p hK X hX ht]
   exact codes8_sem ops hcast p (val X) K t ha hx hb he hf hD
 
@@ -1437,13 +1428,13 @@ theorem row8A_code_sem (hcast : ∀ u, ops.f32ToE4m3Sat u = (e4m3Word u).val) (p
 theorem row8B_code_sem (hcast : ∀ u, ops.f32ToE4m3Sat u = (e4m3Word u).val) (p : Pipeline) {K : ℕ} (hK : 8 ≤ K)
     (X : ((row8B p K).spec ops).toCircuit.Transcript) (hX : ((row8B p K).spec ops).part.Correct X 0) {t : ℕ}
     (ht : t < K) (ha : AccumProofs.StepWord (alpha8 ops (val X) K)) (hx : AccumProofs.StepWord (val X t))
-    (hb : AccumProofs.StepWord (beta8 ops (val X) K)) (he : ∀ l < Params.pi.r, CodeWord (val X (K + l)))
-    (hf : ∀ l < Params.pi.r, CodeWord (val X (K + 32 + 32 * t + l)))
+    (hb : AccumProofs.StepWord (beta8 ops (val X) K)) (he : ∀ l < Params.pi.r, val X (K + l) < 256)
+    (hf : ∀ l < Params.pi.r, val X (K + 32 + 32 * t + l) < 256)
     (hD : CastWord (form8 ops p (alpha8 ops (val X) K) (val X t)
       (fun l => eTilde8 ops (beta8 ops (val X) K) (val X (K + l))) (fun l => val X (K + 32 + 32 * t + l)))) :
     val X (code8 K (rowIn K true) t) =
       (e4m3 ((pc8Form ops p).value (wordVal (alpha8 ops (val X) K)) (wordVal (val X t))
-        (wordVal (beta8 ops (val X) K)) (lineVals (val X) K) (lineVals (val X) (K + 32 + 32 * t)))).val := by
+        (wordVal (beta8 ops (val X) K)) (gateCodes (val X) K) (gateCodes (val X) (K + 32 + 32 * t)))).val := by
   rw [row8B_code (ops := ops) p hK X hX ht]
   exact codes8_sem ops hcast p (val X) K t ha hx hb he hf hD
 
@@ -1456,18 +1447,86 @@ theorem encRow_rowVals {V : ℕ → ℕ} {K : ℕ} (hV : ∀ l < K, AccumProofs.
   simp only [encRow, hl, ↓reduceDIte, rowVals, f32Word_wordVal (hV l hl)]
 
 /-- **`pc8Sem`'s `α`, `β` and floor at a row of step words** are the table's `alpha8`, `beta8` and `floor8` words read
-as values (the floor plus one). -/
+as values (the floor plus one where `rowRho`'s word is finite, else `0`). -/
 theorem pc8Sem_scales {Q R S : Type} (p : Pipeline)
     (noise : (Q → R) → S → (U : Workload) → (u : ℕ) → Codes →
       Noise (U.layout.shape u).m (U.layout.shape u).n (U.layout.shape u).k Params.pi.r)
     {V : ℕ → ℕ} {K : ℕ} (hK : 8 ≤ K) (hV : ∀ l < K, AccumProofs.StepWord (V l)) :
     (pc8Sem ops p noise).alpha K (rowVals V K) = wordVal (alpha8 ops V K) ∧
       (pc8Sem ops p noise).beta K (rowVals V K) = wordVal (beta8 ops V K) ∧
-      (pc8Sem ops p noise).floor K (rowVals V K) = wordVal (floor8 ops V K) + 1 := by
+      (pc8Sem ops p noise).floor K (rowVals V K) =
+        if (wordQ (rowRho ops .id V K)).isSome then wordVal (floor8 ops V K) + 1 else 0 := by
   have h := encRow_rowVals hV
   exact ⟨by simp only [pc8Sem, alpha8_congr (ops := ops) hK h], by simp only [pc8Sem, beta8_congr (ops := ops) hK h],
-    by simp only [pc8Sem, floor8_congr (ops := ops) hK h]⟩
+    by simp only [pc8Sem, floor8_congr (ops := ops) hK h, rowRho_congr (ops := ops) hK h]⟩
 
 end RoundTrip
+
+/-! ## E4M3 and FP32 words are never NaN -/
+
+section NotNaN
+
+open Pouw.Fp8Atom.Proofs
+
+theorem roundEven_le_of_lt {m : ℚ} {n : ℤ} (h : m < n + 1 / 2) : roundEven m ≤ n := by
+  have hf : ⌊m⌋ < n + 1 := Int.floor_lt.2 (by push_cast; linarith)
+  rcases (show ⌊m⌋ < n ∨ ⌊m⌋ = n by omega) with hl | he
+  · have := roundEven_le m; omega
+  · unfold roundEven; dsimp only
+    rw [he, ite_eq_left (by linarith)]
+
+/-- `e4m3`'s magnitude bits on a non-negative value are at most `126` (`448`). -/
+theorem e4m3Mag_le {t : ℚ} (ht : 0 ≤ t) : e4m3Mag t ≤ 126 := by
+  rcases ht.lt_or_eq with ht | rfl
+  swap
+  · simp [e4m3Mag]
+  unfold e4m3Mag
+  rw [ite_eq_right ht.ne']
+  by_cases h464 : 464 ≤ t
+  · rw [ite_eq_left h464]
+  rw [ite_eq_right h464]
+  rw [not_le] at h464
+  dsimp only
+  obtain ⟨hb1, hb2⟩ := binade_spec ht
+  have hb9 : binade t < 9 := by
+    have : (2 : ℚ) ^ binade t < 2 ^ (9 : ℤ) := lt_of_le_of_lt hb1 (by norm_num; linarith)
+    exact (zpow_lt_zpow_iff_right₀ (one_lt_two (α := ℚ))).1 this
+  have hE8 : max (binade t) (-6) ≤ 8 := max_le (by omega) (by norm_num)
+  have hu : (0 : ℚ) < 2 ^ (max (binade t) (-6) - 3) := two_zpow_pos _
+  have k16 : (2 : ℚ) ^ (max (binade t) (-6) - 3) * 16 = 2 ^ (max (binade t) (-6) + 1) := by
+    rw [show (16 : ℚ) = 2 ^ (4 : ℤ) by norm_num, ← zpow_add₀ two_ne_zero]; congr 1; ring
+  have hlt : t < 2 ^ (max (binade t) (-6) + 1) :=
+    lt_of_lt_of_le hb2 (zpow_le_zpow_right₀ one_le_two (by omega))
+  have h16 : t / 2 ^ (max (binade t) (-6) - 3) < ((16 : ℤ) : ℚ) + 1 / 2 := by
+    rw [div_lt_iff₀ hu]; push_cast; linarith
+  have hR := roundEven_le_of_lt h16
+  rcases (show max (binade t) (-6) ≤ 7 ∨ max (binade t) (-6) = 8 by omega) with h7 | h8
+  · omega
+  · have h14 : t / 2 ^ (max (binade t) (-6) - 3) < ((14 : ℤ) : ℚ) + 1 / 2 := by
+      rw [h8, div_lt_iff₀ (by norm_num)]; norm_num; linarith
+    have := roundEven_le_of_lt h14
+    omega
+
+/-- `f32Word` never writes a NaN. -/
+theorem f32Word_notNaN (y : ℚ) : (f32Word y >>> 23) % 256 = 255 → f32Word y % 2 ^ 23 = 0 := by
+  unfold f32Word
+  dsimp only
+  by_cases h0 : |y| = 0
+  · rw [ite_eq_left h0]; simp
+  rw [ite_eq_right h0]
+  have hN := f32Word_N (lt_of_le_of_ne (abs_nonneg y) (Ne.symm h0))
+  generalize (roundEven (|y| / 2 ^ (max (binade |y|) (-126) - 23))).toNat = N₀ at hN ⊢
+  generalize max (binade |y|) (-126) = E₀
+  simp only [Nat.shiftRight_eq_div_pow]
+  split_ifs <;> omega
+
+/-- `e4m3` of a value is never the E4M3 NaN. -/
+theorem e4m3_notNaN (v : ℚ) : (e4m3 v).val % 128 ≠ 127 := by
+  have h := e4m3Mag_le (abs_nonneg v)
+  unfold e4m3
+  dsimp only
+  split_ifs <;> omega
+
+end NotNaN
 
 end Pouw.PearlC.RowCircuit

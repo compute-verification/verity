@@ -553,12 +553,12 @@ def wB120 (z : Noise 1 1 32 32) : Matrix (Fin 1) (Fin 32) Code :=
 /-- The served U's entry at the witness under the salt whose noise is `z`, at sm_120 in windows of `G`:
 `peelExactValP sm120E4m3 G` on sm_120's atom-mix operands, the bases' codes and v1's noise words. -/
 def wServed120 (G : Nat) (z : Noise 1 1 32 32) : Option ℚ :=
-  peelExactValP sm120E4m3 G (wA120 z) (wB120 z) (fun l t => e4m3 (z.FA l t)) (fun l t => e4m3 (z.FB l t))
+  peelExactValP sm120E4m3 G (wA120 z) (wB120 z) (fun l t => z.FA l t) (fun l t => z.FB l t)
     (beV1 (fun _ => 1) z.EA) (beV1 (fun _ => 1 / 3) z.EB) 0 0
 
 theorem wServed120_eq (G : Nat) (a b : ℚ) (cA cB : Code)
-    (hA : (FormingP.atomMixP sm120E4m3).elem 1 0 1 ((wNoise a b).EA 0) (fun _ => 1) = cA)
-    (hB : (FormingP.atomMixP sm120E4m3).elem 1 0 (1 / 3) ((wNoise a b).EB 0) (fun _ => 1) = cB) :
+    (hA : (FormingP.atomMixP sm120E4m3).elem 1 0 1 ((wNoise a b).EA 0) (fun _ => e4m3 1) = cA)
+    (hB : (FormingP.atomMixP sm120E4m3).elem 1 0 (1 / 3) ((wNoise a b).EB 0) (fun _ => e4m3 1) = cB) :
     wServed120 G (wNoise a b) =
       (peelExactP (k := 32) sm120E4m3 G (fun _ _ => cA) (fun _ _ => cB) (fun _ _ => e4m3 1) (fun _ _ => e4m3 1)
         (beV1 (fun _ => 1) (wNoise a b).EA) (beV1 (fun _ => 1 / 3) (wNoise a b).EB) 0 0).bind wordQ := by
