@@ -237,20 +237,21 @@ class NormScaleSource:
                               "bit-identical to the installed kernels and every scale == the IR model's: verity_vllm.properties.norm_tap_exactness")}]
 
 
-def attach(com: Any, args: Any, manifest: Mapping[str, Any] | None, required_classes: tuple[str, ...]) -> tuple[str, ...]:
-    """commit_delta: attach the source to `com` when `--norm-tap-so` is given (the required manifest must name `norm_scales` identities,
-    else the Commit is refused, exit 3); returns the required classes with `norm_scales` added unless `--required-classes` named them."""
-    so = getattr(args, "norm_tap_so", None)
+def attach(com: Any, so: str | None, manifest: Mapping[str, Any] | None, required_classes: tuple[str, ...], *,
+           explicit_classes: bool = False, model: Any = None) -> tuple[tuple[str, ...], NormScaleSource | None]:
+    """Attach the source to `com` when `so` (the tap build) is given; the required manifest must name `norm_scales` identities, else the
+    Commit is refused (exit 3).  Returns the required classes with `norm_scales` added unless they were given explicitly."""
     if not so:
-        return required_classes
+        return required_classes, None
     modules = NS.manifest_modules(manifest)
     if not modules:
         print("[delta] REFUSE: --norm-tap-so but the required-value manifest names no norm_scales identity (manifest build --norm-scales)", flush=True)
         raise SystemExit(3)
-    src = NormScaleSource(com, getattr(com, "model", None), modules, so, words_per_token=NS.words_per_token(manifest) or None)
+    src = NormScaleSource(com, model if model is not None else getattr(com, "model", None), modules, so,
+                          words_per_token=NS.words_per_token(manifest) or None)
     com.attach_source(src)
     print(f"[delta] norm-scale source attached: {len(modules)} norm modules (sites {', '.join(src.kinds)}), {src.words_per_token} words per "
           f"token, tap {so} -> committer {com.name}", flush=True)
-    if getattr(args, "required_classes", None) is None and NS.FAMILY not in required_classes:
-        return (*required_classes, NS.FAMILY)
-    return required_classes
+    if not explicit_classes and NS.FAMILY not in required_classes:
+        return (*required_classes, NS.FAMILY), src
+    return required_classes, src
