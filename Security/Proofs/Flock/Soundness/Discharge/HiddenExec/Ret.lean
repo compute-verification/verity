@@ -298,23 +298,22 @@ theorem outPortOf_spec (c : Circuit) {o : ℕ} (ho : o < c.outWords) :
 
 /-! ## An output row's words -/
 
-/-- **Each output row's words hold its port's** (`HmOut.checkRows`: a `sha512/row/v1` row's are the port's, zero-padded
-to whole SHA-512 blocks). -/
+/-- **Each output row's words hold its port's** (`HmOut.checkRows`: a padded lone port's are the port's, zero-padded to
+whole SHA-512 blocks; a bit row of `16 · words` bits holds exactly its port's). -/
 theorem checkRows_words {c : Circuit} (h : HmOut.checkRows c = .ok ())
-    (hr : c.outRowPorts = Array.replicate c.outPorts.size 1) (hu : ∀ p ∈ c.ports.toList, p.segs = none)
-    (hv : ∀ p ∈ c.ports.toList, p.v2 = false) {j : ℕ} (hj : j < c.outPorts.size) :
+    (hr : c.outRowPorts = Array.replicate c.outPorts.size 1)
+    (hb : ∀ p ∈ c.ports.toList, p.bits = 16 * p.words) {j : ℕ} (hj : j < c.outPorts.size) :
     (c.outPorts.getD j default).2 ≤ (c.ports.getD (HmOut.nIn c + j) default).words := by
   have hj' : j < c.outRowPorts.size := by rw [hr, Array.size_replicate]; exact hj
   obtain ⟨hlt, hrow⟩ := Hidden.checkRows_out h hj'
   have hmem : c.ports.getD (HmOut.nIn c + j) default ∈ c.ports.toList := by
     rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hlt, Option.getD_some]
     exact Array.getElem_mem_toList hlt
-  have := hrow.elim (fun h => h.2.1) fun ⟨hs, _⟩ => by
-    rw [hu _ hmem, hv _ hmem] at hs
-    simp at hs
-  rw [Hidden.outGroup_single hr hj] at this
-  rw [this]
-  dsimp only
-  omega
+  rw [Hidden.outGroup_single hr hj] at hrow
+  dsimp only at hrow
+  have := hb _ hmem
+  rcases hrow with ⟨-, hw, -⟩ | ⟨-, hb'⟩
+  · rw [hw]; omega
+  · omega
 
 end FlockSoundness.Discharge.HiddenExec

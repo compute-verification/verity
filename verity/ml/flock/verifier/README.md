@@ -21,7 +21,8 @@ with `refused: <why>: a statement form the soundness proof does not cover` (`Flo
 has passed, so a session that fails a check keeps that check's reason. That refuses every version before `hm96-sha512`
 rows, the typed statements, public input ports, several tables without `--zk`, shared-row public files (except under
 `--zk` at hidden outputs with the verifier's own `--registered F`, which `FailClosed.SoundZHJR` covers), and circuits
-outside `Layout.scopeOk` (a unit reading more than one input group, a tail that computes the outputs, among others).
+outside `Layout.scopeOk` (`Layout.scopeOkH` under hidden outputs, which also covers unsegmented `sha512/row/v2` rows: a unit
+reading more than one input group, a tail that computes the outputs, a segmented row, among others).
 Those statements still parse, set up and verify (`statement` prints their digest and Σ), and the agreement check
 compares a session refused for its form alone as accepted (D12, `vectors.json`'s `lean_refuses`). A session drawn by a
 sampling design no soundness claim draws by is refused at setup, with
