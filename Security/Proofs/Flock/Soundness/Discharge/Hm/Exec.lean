@@ -1,11 +1,11 @@
 /-
-The verifier's SHA-512 compression (`Flock.Sha512.compress`, imperative loops over `UInt64`) is `Spec.compressV`: its
-three loops as folds (`compress_unfold`), then each fold against the spec by induction.
+The verifier's SHA-512 compression (`Flock.Sha512.compress`, straight-line over `UInt64` locals) is `Spec.compressV`:
+FIPS 180-4's three loops as folds (`compress_unfold`), then each fold against the spec by induction.
 -/
 import Mathlib.Tactic
 import Proofs.Flock.Soundness.Discharge.Hm.Spec
--- `compress_unfold`'s `simp` needs `Std.Legacy.Range.mk.congr_simp`, which `FlockLevel3.LookupRows` already realizes;
--- a second copy here is refused by the audit's kernel replay.
+-- `hash_eq`'s `simp` over `Sha512.hash`'s loops (`Hm.Hash`) needs `Std.Legacy.Range.mk.congr_simp`, which
+-- `FlockLevel3.LookupRows` already realizes; a second copy there is refused by the audit's kernel replay.
 import Proofs.Flock.Level3.LookupRows
 
 namespace FlockSoundness.Discharge.Hm
@@ -37,31 +37,34 @@ def roundU (w : Array UInt64) (s : U8) (i : ℕ) : U8 :=
         Sha512.k[i]! + w[i]!),
     s.2.2.2.2.1, s.2.2.2.2.2.1, s.2.2.2.2.2.2.1)
 
-theorem loop1_eq (data : ByteArray) (off : ℕ) : (List.foldl (fun (b : Array UInt64) (a : ℕ) => b.push (List.foldl (fun (b : UInt64) (a_1 : ℕ) => b <<< 8 ||| (data.get! (off + 8 * a + a_1)).toUInt64) 0 (List.range' 0 8))) (Array.mkEmpty 80) (List.range' 0 16)) = (List.range' 0 16).foldl (fun w i => w.push (wordBE data off i)) (Array.mkEmpty 80) := rfl
+theorem wordBE_eq (data : ByteArray) (off i : ℕ) : wordBE data off i = Sha512.word data (off + 8 * i) := rfl
 
-theorem loop2_eq (w0 : Array UInt64) : List.foldl
-                          (fun b a =>
-                            b.push
-                              (b[a - 16]! +
-                                    (Sha512.rotr b[a - 15]! 1 ^^^ Sha512.rotr b[a - 15]! 8 ^^^ b[a - 15]! >>> 7) +
-                                  b[a - 7]! +
-                                (Sha512.rotr b[a - 2]! 19 ^^^ Sha512.rotr b[a - 2]! 61 ^^^ b[a - 2]! >>> 6))) w0 (List.range' 16 64) = List.foldl schedU w0 (List.range' 16 64) := rfl
+theorem schedU_eq (w : Array UInt64) (i : ℕ) :
+    schedU w i = w.push (Sha512.sched w[i - 16]! w[i - 15]! w[i - 7]! w[i - 2]!) := rfl
 
-theorem loop3_eq (w : Array UInt64) (s : U8) : List.foldl
-              (fun b a =>
-                (b.2.2.2.2.2.2.2 +
-                            (Sha512.rotr b.2.2.2.2.1 14 ^^^ Sha512.rotr b.2.2.2.2.1 18 ^^^ Sha512.rotr b.2.2.2.2.1 41) +
-                          (b.2.2.2.2.1 &&& b.2.2.2.2.2.1 ^^^ ~~~b.2.2.2.2.1 &&& b.2.2.2.2.2.2.1) +
-                        Sha512.k[a]! + w[a]! +
-                    ((Sha512.rotr b.1 28 ^^^ Sha512.rotr b.1 34 ^^^ Sha512.rotr b.1 39) +
-                      (b.1 &&& b.2.1 ^^^ b.1 &&& b.2.2.1 ^^^ b.2.1 &&& b.2.2.1)),
-                  b.1, b.2.1, b.2.2.1,
-                  b.2.2.2.1 +
-                    (b.2.2.2.2.2.2.2 +
-                            (Sha512.rotr b.2.2.2.2.1 14 ^^^ Sha512.rotr b.2.2.2.2.1 18 ^^^ Sha512.rotr b.2.2.2.2.1 41) +
-                          (b.2.2.2.2.1 &&& b.2.2.2.2.2.1 ^^^ ~~~b.2.2.2.2.1 &&& b.2.2.2.2.2.2.1) +
-                        Sha512.k[a]! + w[a]!),
-                  b.2.2.2.2.1, b.2.2.2.2.2.1, b.2.2.2.2.2.2.1)) s (List.range' 0 80) = List.foldl (roundU w) s (List.range' 0 80) := rfl
+theorem roundU_eq (w : Array UInt64) (s : U8) (i : ℕ) : roundU w s i = Sha512.round s i w[i]! := rfl
+
+theorem getElem!_mapRange (f : ℕ → UInt64) {m i : ℕ} (hi : i < m) : ((List.range m).map f).toArray[i]! = f i := by
+  simp [hi]
+
+/-- The schedule loop over the words `f 0, …, f 15` gives `f 0, …, f (16 + n - 1)` when `f` follows the recurrence. -/
+theorem sched_fold (f : ℕ → UInt64)
+    (hf : ∀ i, 16 ≤ i → i < 80 → f i = Sha512.sched (f (i - 16)) (f (i - 15)) (f (i - 7)) (f (i - 2))) :
+    ∀ n ≤ 64, (List.range' 16 n).foldl schedU ((List.range 16).map f).toArray = ((List.range (16 + n)).map f).toArray
+  | 0, _ => rfl
+  | n + 1, hn => by
+      rw [List.range'_concat, List.foldl_append, sched_fold f hf n (by omega), List.foldl_cons, List.foldl_nil,
+        schedU_eq, Nat.one_mul, getElem!_mapRange f (by omega), getElem!_mapRange f (by omega),
+        getElem!_mapRange f (by omega), getElem!_mapRange f (by omega), ← hf _ (by omega) (by omega),
+        ← Nat.add_assoc, List.range_succ, List.map_append, List.map_singleton, ← List.push_toArray]
+
+/-- The round loop from `S 0` gives `S n` when each `S (i + 1)` is round `i` of `S i`. -/
+theorem round_fold (w : Array UInt64) (S : ℕ → U8) (hS : ∀ i < 80, S (i + 1) = Sha512.round (S i) i w[i]!) :
+    ∀ n ≤ 80, (List.range' 0 n).foldl (roundU w) (S 0) = S n
+  | 0, _ => rfl
+  | n + 1, hn => by
+      rw [List.range'_concat, List.foldl_append, round_fold w S hS n (by omega), List.foldl_cons, List.foldl_nil,
+        roundU_eq, Nat.zero_add, Nat.one_mul, hS n (by omega)]
 
 theorem compress_unfold (h : Array UInt64) (data : ByteArray) (off : ℕ) :
     Sha512.compress h data off =
@@ -70,10 +73,34 @@ theorem compress_unfold (h : Array UInt64) (data : ByteArray) (off : ℕ) :
       let s := (List.range' 0 80).foldl (roundU w) (h[0]!, h[1]!, h[2]!, h[3]!, h[4]!, h[5]!, h[6]!, h[7]!)
       #[h[0]! + s.1, h[1]! + s.2.1, h[2]! + s.2.2.1, h[3]! + s.2.2.2.1, h[4]! + s.2.2.2.2.1,
         h[5]! + s.2.2.2.2.2.1, h[6]! + s.2.2.2.2.2.2.1, h[7]! + s.2.2.2.2.2.2.2] := by
-  simp only [Sha512.compress, Id.run, Std.Legacy.Range.forIn_eq_forIn_range', List.forIn_pure_yield_eq_foldl,
-    bind_pure_comp, map_pure, Std.Legacy.Range.size, Nat.reduceSub, Nat.reduceAdd, Nat.reduceDiv, loop1_eq, loop2_eq,
-    loop3_eq]
-  rfl
+  unfold Sha512.compress
+  extract_lets w0 w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20 w21 w22 w23 w24 w25
+    w26 w27 w28 w29 w30 w31 w32 w33 w34 w35 w36 w37 w38 w39 w40 w41 w42 w43 w44 w45 w46 w47 w48 w49 w50 w51
+    w52 w53 w54 w55 w56 w57 w58 w59 w60 w61 w62 w63 w64 w65 w66 w67 w68 w69 w70 w71 w72 w73 w74 w75 w76 w77
+    w78 w79 s0 s1 s2 s3 s4 s5 s6 s7 s8 s9 s10 s11 s12 s13 s14 s15 s16 s17 s18 s19 s20 s21 s22 s23 s24 s25 s26
+    s27 s28 s29 s30 s31 s32 s33 s34 s35 s36 s37 s38 s39 s40 s41 s42 s43 s44 s45 s46 s47 s48 s49 s50 s51 s52
+    s53 s54 s55 s56 s57 s58 s59 s60 s61 s62 s63 s64 s65 s66 s67 s68 s69 s70 s71 s72 s73 s74 s75 s76 s77 s78
+    s79 s80 W sR
+  let f : ℕ → UInt64 := fun i => [
+    w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, w10, w11, w12, w13, w14, w15, w16, w17, w18, w19, w20, w21, w22,
+    w23, w24, w25, w26, w27, w28, w29, w30, w31, w32, w33, w34, w35, w36, w37, w38, w39, w40, w41, w42, w43,
+    w44, w45, w46, w47, w48, w49, w50, w51, w52, w53, w54, w55, w56, w57, w58, w59, w60, w61, w62, w63, w64,
+    w65, w66, w67, w68, w69, w70, w71, w72, w73, w74, w75, w76, w77, w78, w79].getD i 0
+  have h1 : (List.range' 0 16).foldl (fun w i => w.push (wordBE data off i)) (Array.mkEmpty 80) =
+      ((List.range 16).map f).toArray := rfl
+  have hW : W = ((List.range 80).map f).toArray :=
+    (congrArg (fun a => (List.range' 16 64).foldl schedU a) h1).trans
+      (sched_fold f (fun i _ _ => by interval_cases i <;> rfl) 64 le_rfl)
+  let S : ℕ → U8 := fun i => [
+    s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, s19, s20, s21, s22,
+    s23, s24, s25, s26, s27, s28, s29, s30, s31, s32, s33, s34, s35, s36, s37, s38, s39, s40, s41, s42, s43,
+    s44, s45, s46, s47, s48, s49, s50, s51, s52, s53, s54, s55, s56, s57, s58, s59, s60, s61, s62, s63, s64,
+    s65, s66, s67, s68, s69, s70, s71, s72, s73, s74, s75, s76, s77, s78, s79, s80].getD i default
+  have hs : sR = s80 := by
+    show (List.range' 0 80).foldl (roundU W) _ = _
+    rw [hW]
+    exact round_fold _ S (fun i _ => by interval_cases i <;> rfl) 80 le_rfl
+  rw [hs]
 
 /-! ## The loops are the spec -/
 
