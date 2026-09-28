@@ -405,5 +405,35 @@ def _compose_flat(low: IL.Lowering, sub, **kw) -> Typed:
     return Typed(head + body, rows, types, layouts, {"unit": rows}, {}, dv)
 
 
-__all__ = ["FORMAT", "GEN_LO", "Instance", "POLICY", "STATEMENT", "Typed", "compose", "instance_type", "sections", "unit_layout",
-           "unit_type"]
+def stage(low: IL.Lowering, input_set, lo: int, hi: int, out_dir, public_only: bool = False, salt_key: bytes | None = None,
+          indices: list | None = None, partition: str | None = None, program: str | None = None, share_rows: bool = False):
+    """:func:`circuit.stage` for the typed statement. ``<out_dir>/circuit.txt`` is the statement. ``rows/`` is the prover's
+    copy of the rows the verifier derives: ``unit.txt`` for a flat class; for a template with a tail, ``root.txt``,
+    ``<layout digest>.txt`` per placed layout and ``delta.txt``. ``tables/`` holds the pinned tables its reads need, and
+    ``circuit-forged.txt`` (a tail's constants x 4) is the negatives' statement. The instance files are
+    :func:`circuit.write`'s, naming the typed statement."""
+    from pathlib import Path
+
+    if public_only and salt_key is None:
+        raise ValueError("a verifier stages its own public file only from the prover's staging salt key (salts are otherwise fresh)")
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    statics = C.set_statics(input_set)
+    typed = compose(low, input_set.subcircuit, partition=partition, program=program, statics=statics)
+    (out / "circuit.txt").write_text(typed.text)
+    rows = out / "rows"
+    rows.mkdir(exist_ok=True)
+    for name, text in typed.rows.items():
+        (rows / f"{name}.txt").write_text(text)
+    if low.units.cut:
+        IL.write_tables(out / "tables")
+        if not (out / "circuit-forged.txt").exists():
+            forged = compose(low, input_set.subcircuit, forged=True, partition=partition, program=program, statics=statics)
+            (out / "circuit-forged.txt").write_text(forged.text)
+    inst, pub = out / f"inst-{hi - lo}.bin", out / f"pub-{hi - lo}.bin"
+    C.write(typed.text, input_set, lo, hi, None if public_only else inst, pub, salt_key, indices, share_rows=share_rows)
+    return pub if public_only else inst
+
+
+__all__ = ["FORMAT", "GEN_LO", "Instance", "POLICY", "STATEMENT", "Typed", "compose", "instance_type", "sections", "stage",
+           "unit_layout", "unit_type"]
