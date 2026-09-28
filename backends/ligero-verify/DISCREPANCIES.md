@@ -304,7 +304,7 @@ verifier needs (the code is the reference; PROTOCOL.md still describes the BF16 
   statement").  `--allow-any-system` lifts it and every verdict then carries `system_pinned = false` -- an unpinned
   accept is a statement about the system file, not about the relation.  The digests: laptop compilations from the
   checked-in Python (main aecc298 for `bf16-ampere` / `fp8-ada`; the lane b-hopper tree at a39de82 for `bf16-hopper` /
-  `fp8-hopper`, whose `relations.py` / `wide.py` are not on main), twice each, byte-identical; `fp8-ada` also equal to
+  `fp8-hopper`, whose `relations.py` / `wide.py` have since merged to main), twice each, byte-identical; `fp8-ada` also equal to
   the pod `system.bin` of every ada-fp8-dumps run.  The Hopper pair awaits its first pod dump (`h100-dumps-v1`).
 * **Public decode.**  E4M3 (`public_vectors_fp8`): `t = (w >> 3) & 15`, `f = w & 7`, `m = f + [t != 0] 8`,
   `e = t - [t != 0] - 6`, `s = w >> 7`; the NaN codes `0x7F / 0xFF` are rejected, the all-ones exponent field is
