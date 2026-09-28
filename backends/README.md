@@ -27,11 +27,12 @@ its partition check against `verity.ir.partition` on random cuts, and audit ever
 agreement with upstream's Rust verifier runs only when the run is sent its input bundle.
 
 Python counts are pytest's collected items on a CPU machine after the root `uv sync` (no torch, no GPU), invoked as
-`check` invokes it (`python -m pytest`). Rust counts are `#[test]` functions.
+`check` invokes it (`python -m pytest`). Rust counts are `#[test]` functions. C-Flock's row gives no counts, since most
+C-Flock PRs change them; `python -m pytest --collect-only -q backends/flock/tests | tail -1` gives the current one.
 
 | family | status | Python tests `check` collects | Python tests outside `check` | Rust tests (`check` runs none) |
 |---|---|---|---|---|
-| C-Flock | active | `flock/tests`: 181, of which 10 skip without `lake` on the PATH, 5 without `FLOCK_IR_SLOW=1` and 1 without a captured sampling set (`VERITY_CAPTURED_101_GUMBEL`) | none | `flock/live`: 12 |
+| C-Flock | active | `flock/tests`, of which the Lean-backed tests skip without `lake` on the PATH, the 2^19/2^21-row units without `FLOCK_IR_SLOW=1` and one without a captured sampling set (`VERITY_CAPTURED_101_GUMBEL`) | none | `flock/live` |
 | A-GKR | frozen | `gkr/tests`: 50, one of which skips without torch; `test_live_coins.py` skips whole without torch | `gkr/packed/tests` 17, `gkr/gpu/v2/tests` 9, `gkr/tensor/tests` 22, `gkr/tensor/fused/tests` 25; 3 more files need torch to import | `gkr`: 23; `gkr/verifier`: 43 |
 | B-Ligero | frozen | the root `tests/test_ligero_auth.py`: 7, one of which skips without torch; `tests/test_ligero_batch_bound.py` and `tests/test_ligero_dump_artifacts.py` skip whole without torch | `direct/`: 427; 14 more files need torch to import | `direct`: 47 (157 more in vendored Plonky3); `ligero-verify`: 74; `ligerito-verify`: 99 |
 | D-SP1 | frozen | `sp1/tests`: 10, of which 3 skip without `VERITY_SP1_RELATION_ONLY_HOST` or `VERITY_SP1_PROVE=1`; `test_typed.py` skips whole without a built host | none | `sp1/common`: 135; `sp1/host`: 1 |

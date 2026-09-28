@@ -19,7 +19,7 @@ import, and keeps the plain-integer references (`verity.ir`, `verity.ml.tc`, `ve
 of numpy.
 
 ~~~sh
-uv run pytest packages/verity/tests            # 1,297 tests, in `check`
+uv run pytest packages/verity/tests            # in `check`
 ~~~
 
 The byte formats are pinned by vector files beside the tests: `tests/ir/format_vectors.json` (the program format),

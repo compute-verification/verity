@@ -41,10 +41,10 @@ C-Flock's circuit prover is M0 in the Layout above (module `verity_flock.circuit
 ## Tests
 
 ~~~sh
-uv run pytest backends/flock/tests                          # 181 tests, in `check`; several minutes on 4 cores
+uv run pytest backends/flock/tests                          # in `check`; several minutes on 4 cores
 FLOCK_IR_SLOW=1 uv run pytest backends/flock/tests/test_ir_lowering.py   # the five 2^19/2^21-row units
 cd backends/flock/verifier/lean && lake build               # the Lean verifier; `check` builds and audits it
 ~~~
 
-`tests/test_lean_verifier.py` skips its ten Lean-backed tests without `lake` on the PATH. `check` runs none of the
+`tests/test_lean_verifier.py` skips its Lean-backed tests without `lake` on the PATH. `check` runs none of the
 `live/` crate's Rust tests; they build only inside the upstream checkout.
