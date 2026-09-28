@@ -2,7 +2,7 @@
 PROTOCOL.md §16.10: `verity/flock-circuit` from PR #83 `eb90718f`. Serving rows are `hm96-sha512/row/v1` leaves proved in
 the circuit: per VU, each input port's row is hashed by SHA-512 compressions in `sha512x3` slots (three per slot, chained from
 the prefix's midstate) and closed by an `hm96` slot (the padding compression, then `b ‖ c` from the row's private salt). Both
-slot circuits are sections of the circuit file. Every identity and binding digest is SHA-512: the circuit pin, the public
+slot circuits are sections of the circuit file, which must be the nets the verifier generates (`Flock.HmNets`). Every identity and binding digest is SHA-512: the circuit pin, the public
 digest, the statement digest (Flock's own 32-byte slot is its first half), Σ and the record's digests.
 
 A port's rows are `sha512/row/v1` rows of whole SHA-512 blocks or, when META names each port's `row_schemas`, core's bit
@@ -20,6 +20,7 @@ import Flock.TemplateQuery
 import Flock.Typed
 import Flock.Extract
 import Flock.Qcall
+import Flock.HmNets
 
 namespace Flock
 
@@ -402,8 +403,9 @@ def rowPorts (mj : Json) (typed : Bool) : V (Array Port) := do
     throw s!"META: no row has a compression before its last block (the {SHA_NET} range, the pin's, holds no slot)"
   return ports
 
-/-- Parse the circuit file (upstream's `Composite::parse`) and check its layout. A typed template's block (`tmpl`, item 1e)
-brings its root and placed layouts' circuits; its wiring is derived. -/
+/-- Parse the circuit file (upstream's `Composite::parse`), check its layout, and refuse `sha512x3` and `hm96` nets other
+than the verifier's (`HmNets.check`). A typed template's block (`tmpl`, item 1e) brings its root and placed layouts'
+circuits; its wiring is derived. -/
 def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := [])
     (tmpl : Option Typed.Template := none) (pre : Array (String × Net) := #[]) : V Circuit := do
   let sha := Sha512.hash bytes
@@ -543,6 +545,7 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
                        shaNet, hmNet, classSha, metaJ := mj, outNet, outNetPorts, leafCuts,
                        typed := ← tmpl.mapM fun t => pure (blockOf t) }
   check c tags leafScheme
+  HmNets.check c
   return c
 
 /-- A typed statement (item 1e), its rows derived once through `deriveChecked` (`Typed.read`), every net built from them.
