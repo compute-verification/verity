@@ -317,7 +317,7 @@ def test_the_leaf_scheme_is_the_lean_verifiers_and_the_provers():
     rust = _body(flock / "live" / "src" / "circuit.rs", "pub fn leaf_scheme()")
     copies = {"Flock.Tags.leafSchemeHm96Os": re.findall(lean, _body(service / "flock" / "Flock" / "Tags.lean",
                                                                     "def leafSchemeHm96Os")),
-              "VStar.leafScheme": re.findall(lean, _body(service / "vstar" / "VStar" / "Compose.lean", "def leafScheme")),
+              "VStar.leafScheme": re.findall(lean, _body(service / "flock" / "VStar" / "Compose.lean", "def leafScheme")),
               "circuit.rs leaf_scheme": [("id", re.search(r'\{ \("([^"]+)", 192\) \}', rust)[1]),
                                          *re.findall(r'"(\w+)": "([^"]*)"', rust)]}
     for name, pairs in copies.items():
