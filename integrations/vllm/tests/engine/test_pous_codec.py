@@ -233,7 +233,7 @@ def test_chunked_decode_matches_row_major(ext, window, split):
     try:
         got = dense.decode_blocks(c, tags, segs, blocks, 20, window=window)
     finally:
-        dense.CHUNKED[0], dense.CHUNKED_MIN_ROWS[0], dense.CHUNKED_THREADS[0], dense.CHUNKED_SPLIT[0] = False, 4096, 128, False
+        dense.CHUNKED[0], dense.CHUNKED_MIN_ROWS[0], dense.CHUNKED_THREADS[0], dense.CHUNKED_SPLIT[0] = False, 1024, 128, False
     assert torch.equal(got, want)
 
 

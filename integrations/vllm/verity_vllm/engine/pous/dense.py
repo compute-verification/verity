@@ -80,11 +80,14 @@ CHUNKED = [False]
 """`decode_blocks` of at least `CHUNKED_MIN_ROWS` blocks keeps its state chunk-major (`_Chunked`, `feistel_chunked_kernel`)
 instead of row-major; smaller decodes keep the row-major kernels, whose warp and lane-pair launches have the lower latency."""
 
-CHUNKED_MIN_ROWS = [4096]
+CHUNKED_MIN_ROWS = [1024]
 CHUNKED_THREADS = [128]
 CHUNKED_SPECIALIZE = [True]
 CHUNKED_SPLIT = [False]
-"""Chunk-major launches at the 64 KiB width split every Keccak state across a lane pair (`feistel_split_kernel`)."""
+CHUNKED_SPLIT_MAX_ROWS = [9_500]
+"""Chunk-major launches at the 64 KiB width below `CHUNKED_SPLIT_MAX_ROWS` rows split every Keccak state across a lane pair
+(`feistel_split_kernel`): 25.9 against 39.1 ms at 4,608 rows on the L40S, but 63.9 against 47.3 ms at 15,075, where the
+unsplit kernel already fills the GPU and the pair's shuffles cost more than its parallelism buys."""
 
 CHUNKED_MAX_ROWS = [18_000]
 """Chunk-major launches over more rows run as equal sequential pieces of at most this many: past about one warp per
@@ -159,7 +162,8 @@ class _Chunked:
         step = -(-rows // pieces)
         for start in range(row0, self.rows, step):
             native.ext().feistel_chunked(self.words, start, min(step, self.rows - start), self.half // 8, codec.PI_DOMAIN,
-                                         CHUNKED_THREADS[0], CHUNKED_SPECIALIZE[0], CHUNKED_SPLIT[0])
+                                         CHUNKED_THREADS[0], CHUNKED_SPECIALIZE[0],
+                                         CHUNKED_SPLIT[0] and step < CHUNKED_SPLIT_MAX_ROWS[0])
 
 
 def _decode_chunked(c_flat, seg, blk, ln, tags, base, starts, width: int) -> torch.Tensor:
