@@ -524,6 +524,17 @@ class Layout:
     def out_port_cols(self) -> list[int]:
         return self._cols(self.out_groups)
 
+    def nonzeros(self) -> tuple[np.ndarray, np.ndarray]:
+        """A₀'s and B₀'s nonzeros in the unit's own coordinates: each an ``(nnz, 2)`` int64 array of ``(row, column)``, rows
+        ascending and each row's columns as laid out, ``counts["nnz_a"]`` and ``counts["nnz_b"]`` long. Every row and column is
+        below ``useful``, so inside the unit's slot of ``2^unit_log`` cells, the block's ``A = I ⊗ A₀ + Δ``."""
+        out = []
+        for rows in (self.rows_a, self.rows_b):
+            cols = [np.asarray(_cols_of(r), dtype=np.int64) for r in rows]
+            at = np.repeat(np.arange(len(rows), dtype=np.int64), [len(c) for c in cols])
+            out.append(np.stack([at, np.concatenate(cols)], axis=1))
+        return out[0], out[1]
+
 
 def _groups(names: Sequence[str], split: Sequence[int] | None) -> list[list[str]]:
     cuts = [0, *(split or []), len(names)]

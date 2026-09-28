@@ -393,8 +393,10 @@ PARTS = st.one_of(
 
 REPS = st.one_of(rep_s(), rep_s(valid=False), JSON)
 DIGEST = st.text(HEX, min_size=128, max_size=128)
-BINDING = st.one_of(DIGEST, st.sampled_from(["a" * 128, "A" * 128, "a" * 127, "a" * 129, "g" * 128]))
 DIGESTS = st.dictionaries(st.text(max_size=12), st.text(HEX, max_size=64), max_size=2) | JSON
+#: `compose`'s inputs under bindings that are digests (`test_inner_circuit_agrees` replays ones that are not)
+INNER = st.fixed_dictionaries({"S": rep_s(), "name": NAME, "partition": DIGEST, "program": DIGEST,
+                               "program_digests": DIGESTS})
 
 
 def port(fn: str, reference, inputs) -> D.Port:
@@ -510,11 +512,18 @@ def test_rec_open_unit_agrees(server):
 
 @pytest.mark.slow
 def test_inner_circuit_agrees(server):
-    """`compose` on small InnerRepCheck units under drawn bindings, invalid ones included: META, the zero instance's
-    outputs and `b ‖ c`, the slot ranges and the block size."""
-    inputs = st.fixed_dictionaries({"S": rep_s(), "name": NAME, "partition": BINDING, "program": BINDING,
-                                    "program_digests": DIGESTS})
-    stats = D.run(port("inner_circuit", inner_circuit, inputs), examples=5, seed=SEED, server=server)
+    """`compose` on small InnerRepCheck units under drawn bindings: META, the zero instance's outputs and `b ‖ c`, the slot
+    ranges and the block size. A binding that is not a digest is replayed in each place, not drawn: drawn, it refused
+    most of the five units, and which ones moved with the source of modules the reference loads (Hypothesis draws their
+    constants too)."""
+    p = port("inner_circuit", inner_circuit, INNER)
+    good = {"S": {"gf": {"nv": 1, "nw": 1, "ops": [], "res": []}, "ports": [["row0", 1]]}, "name": "row0",
+            "partition": "a" * 128, "program": "b" * 128, "program_digests": {}}
+    assert D.replay(p, good, server)[0] == "output"
+    for key in ("partition", "program"):
+        for bad in ("A" * 128, "a" * 127, "a" * 129, "g" * 128):
+            assert D.replay(p, {**good, key: bad}, server)[0] == "reject", (key, bad)
+    stats = D.run(p, examples=5, seed=SEED, server=server)
     assert stats.outputs >= 2 and stats.rejects >= 1, stats
 
 
