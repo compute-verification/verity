@@ -39,6 +39,24 @@
    "configFile": "lakefile.toml"
   },
   {
+   "type": "path",
+   "scope": "",
+   "name": "core_vstar",
+   "manifestFile": "lake-manifest.json",
+   "inherited": false,
+   "dir": "../../verity/experimental/core/service/vstar",
+   "configFile": "lakefile.toml"
+  },
+  {
+   "type": "path",
+   "scope": "",
+   "name": "verity_difftest",
+   "manifestFile": "lake-manifest.json",
+   "inherited": true,
+   "dir": "../../verity/experimental/core/service/vstar/../../difftest/lean",
+   "configFile": "lakefile.toml"
+  },
+  {
    "url": "https://github.com/Verified-zkEVM/ArkLib",
    "type": "git",
    "subDir": null,
