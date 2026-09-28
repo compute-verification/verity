@@ -2,7 +2,7 @@ import FlockSoundness.CompiledTable
 import FlockSoundness.Extract
 
 /-!
-# Knowledge soundness of one table (ASSUMPTIONS.md §1.3)
+# Knowledge soundness of one table (README.md §1.3)
 
 **The extractor.** It reruns the compiled prover `P*` after its level-0 cap `K` times on fresh coins
 (`expectN`), and takes at each level-0 position the first verifying opening one of its runs made
