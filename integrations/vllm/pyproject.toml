@@ -49,6 +49,8 @@ markers = [
 ]
 
 [tool.verity.tests]
-# Test-only: tests/pipeline checks the fixtures this package registers.
-inputs = ["fixtures/artifacts.json", ".gitignore"]
+# Test-only: tests/pipeline checks the fixtures this package registers; tests/program/test_fp8_moe.py replays the Hopper e4m3
+# k32 step's pinned vectors through the block-scaled GEMMs.
+inputs = ["fixtures/artifacts.json", ".gitignore", "fixtures/tc/vectors/fp8-hopper-wgmma-k1536.json",
+          "fixtures/tc/vectors/fp8-hopper-wgmma-k32.json"]
 parallel = true

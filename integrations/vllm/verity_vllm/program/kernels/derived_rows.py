@@ -633,18 +633,18 @@ def tc_dot32_e4m3(acc: np.ndarray, a: np.ndarray, b: np.ndarray) -> tuple[np.nda
 def scaled_mm_fp8_block_row(xq: np.ndarray, sx: np.ndarray, w: np.ndarray, ws: np.ndarray, *, G: int = 128,
                             chunk: int = 4096) -> tuple[np.ndarray, np.ndarray]:
     """`ScaledMmFp8Block_v1{K,N,G}` on ONE token row (`_C.cutlass_scaled_mm` blockwise, CutlassFp8BlockScaledMMKernel): xq (K,) e4m3
-    bytes, sx (K/G,) f32 words, w (N, K) e4m3 bytes, ws (N/G, K/G) f32 words -> (N bf16 words, nonfinite mask).  Per output column n
-    (`ScaledMmFp8BlockCoordinate`): for kb ascending, `temp` = G/32 `tc_dot32_e4m3` steps from +0 over the tile's bytes, `s` =
-    FMUL(sx[kb], ws[n // G][kb]), `acc` = FFMA(temp, s, acc) from +0 (the f32 promotion pinned by the adversarial operands: FFMA, not
-    mul+add; ascending k), then `cvt.rn.bf16.f32`.  Vectorised over <= `chunk` columns at a time (bounds the int64 temporaries)."""
+    bytes, sx (K/G,) f32 words, w (N, K) e4m3 bytes, ws (cdiv(N, G), K/G) f32 words -> (N bf16 words, nonfinite mask).  Per output
+    column n (`ScaledMmFp8BlockCoordinate`): for kb ascending, `temp` = G/32 `tc_dot32_e4m3` steps from +0 over the tile's bytes, `s` =
+    FMUL(sx[kb], ws[n // G][kb]), `acc` = FFMA(temp, s, acc) from +0 (FFMA, not mul+add; ascending k), then `cvt.rn.bf16.f32`.  The
+    last weight block may be partial (`fp8.weight_blocks`).  Vectorised over <= `chunk` columns (bounds the int64 temporaries)."""
     xq = np.asarray(xq, dtype=np.uint8).reshape(-1)
     K = xq.size
     w = np.asarray(w, dtype=np.uint8).reshape(-1, K)
     N = w.shape[0]
-    if K % G or N % G or G % 32:
-        raise ValueError(f"ScaledMmFp8Block: K={K} N={N} must be multiples of G={G} (G a multiple of 32)")
+    if K % G or G % 32:
+        raise ValueError(f"ScaledMmFp8Block: K={K} must be a multiple of G={G} (G a multiple of 32)")
     sx = np.asarray(sx, dtype=np.uint32).reshape(K // G)
-    ws = np.asarray(ws, dtype=np.uint32).reshape(N // G, K // G)
+    ws = np.asarray(ws, dtype=np.uint32).reshape(-(-N // G), K // G)
     out = np.empty(N, dtype=np.uint16)
     nonfin = np.zeros(N, dtype=bool)
     for n0 in range(0, N, chunk):
