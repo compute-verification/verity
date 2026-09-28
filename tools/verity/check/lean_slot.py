@@ -5,8 +5,8 @@ A Lean audit builds its packages against Mathlib on every core it gets, so a nod
 a cap of 4, kept by hand and overrun). The steward sets the cap in SLOTS (`/workspace/research/locks/lean-slots`; LEAN_SLOTS
 overrides), one pool per line, which it may rewrite at any time:
 
-    NAME N      # e.g. `check 2` (check's lean-audit step), `audit 2` (`audit.py --build` run by hand) and `build 2`
-                # (`lean_changed.py --records`, the fast path)
+    NAME N      # e.g. `check 2` (check's lean-audit step), `audit 2` (`tools/verity/lean/check.py --build` run by
+                # hand) and `build 2` (`lean_changed.py --records`, the fast path)
 
 A request takes a slot of its pool (--pool, else LEAN_SLOT_POOL, else `audit`), or of pool `any` when SLOTS doesn't list its
 own; SLOTS listing neither refuses it, naming the fix. Slot I of pool P is a `flock` on `lean-P-I.lock` beside SLOTS, I < N.
@@ -22,9 +22,9 @@ else RESEARCH_LANE, else whoever holds the check slot this runs in (slot.py's `c
 `python3 tools/verity/check/lean_slot.py --status [--json]`: each pool's slots and holders, then its waiters; --json, the same as one
 JSON object (`status_doc`), which `check.py --slots` reads from every machine. Stdlib only: it runs before uv.
 
-From Python (`audit.py --build`): `hold(pool)` takes a slot for the calling process and returns its descriptor, which the
-process keeps open until it exits (None: no cap here, or a slot is held already); `hold(pool, or_any=False)` never takes
-pool `any`'s.
+From Python (`tools/verity/lean/check.py --build`, `lean_changed.py --records`): `hold(pool)` takes a slot for the calling
+process and returns its descriptor, which the process keeps open until it exits (None: no cap here, or a slot is held
+already); `hold(pool, or_any=False)` never takes pool `any`'s.
 """
 from __future__ import annotations
 
