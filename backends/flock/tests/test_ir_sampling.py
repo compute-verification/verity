@@ -252,13 +252,13 @@ def test_a_mutated_netlist_is_caught_by_the_ir_comparison():
     first = low.layout.in_words * IL.WORD
     ands = list(range(first + 1, first + low.layout.counts["ands"]))
     caught = 0
-    for k in ands[::len(ands) // 12][:12]:
+    for k in ands[::len(ands) // 48][:48]:
         lay = IL.Layout(list(low.layout.rows_a), list(low.layout.rows_b), low.layout.const, low.layout.in_groups, low.layout.out_groups,
                         low.layout.counts)
         lay.rows_b[k] = sorted(set(lay.rows_b[k]) ^ {k - 1})
         outs, _ = IL.evaluate_layout(lay, ports, len(vecs))
         caught += sum([int(o[n]) for o in outs] != w for n, w in enumerate(want)) > 0
-    assert caught >= 5
+    assert caught >= 16                               # a third of the spread-out mutations (the rest sit in rare paths)
 
 
 CAPTURED = os.environ.get("VERITY_CAPTURED_101_GUMBEL")

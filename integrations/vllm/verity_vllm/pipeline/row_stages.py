@@ -192,15 +192,23 @@ class SingleRow(Row):
         """The row runs the norm-scale tap (NORM_TAP=1): opt-in, never the record."""
         return self.ck_.norm_tap == "1"
 
+    def router_tap(self) -> bool:
+        """The row runs the router-softmax tap (ROUTER_TAP=1): opt-in, never the record."""
+        return self.ck_.router_tap == "1"
+
+    def vocab_tap(self) -> bool:
+        """The row runs the vocabulary-range source (VOCAB_TAP=1): opt-in, never the record."""
+        return self.ck_.vocab_tap == "1"
+
     def guarded_max(self) -> bool:
         """The row runs the guarded-max tap build (GUARDED_MAX_TAP=1): opt-in, never the record."""
         return self.ck_.guarded_max_tap == "1"
 
     def required_manifest(self, stage: str) -> int:
-        """Build the required-value manifest of record (Q_module_body_v1 over the Build's request Programs; under NORM_TAP=1 /
-        GUARDED_MAX_TAP=1 the norm-scale / guarded-max policies too) -> 0 | 3 | 1."""
+        """Build the required-value manifest of record (Q_module_body_v1 over the Build's request Programs; under NORM_TAP=1,
+        GUARDED_MAX_TAP=1, ROUTER_TAP=1 or VOCAB_TAP=1 the tap's policy too) -> 0 | 3 | 1."""
         wd = ""
-        policy = (["--norm-scales"] if self.norm_tap() else []) + (["--guarded-max"] if self.guarded_max() else [])
+        policy = R.tap_policy_flags(self.ck_) + (["--guarded-max"] if self.guarded_max() else [])
         self.tl(f"{stage}.required_manifest", "start", ("engine", "v2-query"))
         if self.B > 1 and glob.glob(f"{self.d}/build_request_LP*_T*"):
             wd = R.workload_digest(self.d)
@@ -533,8 +541,14 @@ class SingleRow(Row):
             cmd += ["--required-classes", ck.required_classes]
         if ck.vu_export != "0":
             cmd += ["--vu-export-dir", self.vu_export_dir()]
+        if ck.serving_rows:
+            cmd += ["--serving-rows", self.serving_rows_request(ck.serving_rows)]
         if self.norm_tap():
             cmd += ["--norm-tap-so", self.env.norm_tap_so]
+        if self.router_tap():
+            cmd += ["--router-tap-so", self.env.router_tap_so]
+        if self.vocab_tap():
+            cmd.append("--vocab-range")
         return cmd
 
     def vu_export_dir(self) -> str:
@@ -549,6 +563,18 @@ class SingleRow(Row):
                                   "dirty": False if self.env.environ.get("RESEARCH_SOURCE_SHA") else None}}, f)
         return d
 
+    def serving_rows_request(self, partition: str) -> str:
+        """The Commit's serving-rows request (`pipeline.serving_rows`): its directory inside the research run dir when there is one,
+        so the run's custody preserves it, the verifier's partition file, and the run id and source the roots' domains bind."""
+        rd = self.env.research_run_dir
+        d = os.path.join(rd, "serving-rows", self.row) if rd else f"{self.d}/serving-rows"
+        os.makedirs(d, exist_ok=True)
+        req = os.path.join(d, "request.json")
+        with open(req, "w") as f:
+            json.dump({"dir": d, "partition": partition, "run": self.env.environ.get("RESEARCH_RUN_ID") or self.row,
+                       "committer": {"source": self.env.environ.get("RESEARCH_SOURCE_SHA")}}, f)
+        return req
+
     def manifest_of_record(self) -> str:
         """The required-value manifest the Commit runs over: the one named, else the Build's when the query path built it
         (a pre-query manifest is moved aside, never used), else rebuilt here from the Build's request Programs."""
@@ -556,10 +582,11 @@ class SingleRow(Row):
         man = self.ck_.required_manifest or ""
         if not man and os.path.isfile(f"{d}/manifest.json"):
             eng = R.manifest_engine(f"{d}/manifest.json")
-            if eng == "v2-query" and self.norm_tap() and not R.manifest_norm_scales(f"{d}/manifest.json"):
-                prev = f"{d}/manifest.no-norm-scales-{_stamp()}.json"
+            missing = R.manifest_missing_policies(f"{d}/manifest.json", self.ck_) if eng == "v2-query" else []
+            if missing:
+                prev = f"{d}/manifest.no-{'-'.join(missing).replace('_', '-')}-{_stamp()}.json"
                 os.replace(f"{d}/manifest.json", prev)
-                self.log(f"manifest.json beside the Build was built without the norm-scale policy and this Commit runs NORM_TAP=1: moved aside "
+                self.log(f"manifest.json beside the Build was built without the {', '.join(missing)} policy and this Commit runs its tap: moved aside "
                          f"({os.path.basename(prev)}), rebuilding the manifest under the policy")
             elif eng == "v2-query" and self.guarded_max() != R.manifest_guarded_max(f"{d}/manifest.json"):
                 prev = f"{d}/manifest.guarded-max-{int(not self.guarded_max())}-{_stamp()}.json"
@@ -648,8 +675,7 @@ class SingleRow(Row):
             cmd += ["--fixture", self.wl, "--programs-root", d, *(["--workload-digest", wd] if wd else [])]
         else:
             cmd += ["--program", f"{d}/build_request", "--workload", self.wl]
-        if self.norm_tap():
-            cmd.append("--norm-scales")
+        cmd += R.tap_policy_flags(self.ck_)
         if self.guarded_max():
             cmd.append("--guarded-max")
         self.tl("validate.manifest_verify", "start")
@@ -672,6 +698,8 @@ class SingleRow(Row):
             self.commit_stop(12, f"hidden .so missing: {self.hidden_so}")
         if self.norm_tap() and not os.path.isfile(self.env.norm_tap_so):
             self.commit_stop(12, f"NORM_TAP=1 and the norm tap .so is missing: {self.env.norm_tap_so} (ops/pod_norm_tap.sh)")
+        if self.router_tap() and not os.path.isfile(self.env.router_tap_so):
+            self.commit_stop(12, f"ROUTER_TAP=1 and the router tap .so is missing: {self.env.router_tap_so} (ops/pod_router_tap.sh)")
         self.tl("commit.prepare", "start")
         cmd = self.commit_cmd()
         pd_req = f"{d}/build_request"

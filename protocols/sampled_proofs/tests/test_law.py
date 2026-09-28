@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from math import comb
 
 import pytest
 
-from verity.proofs.profile import Bernoulli, IntegrityProfile, Subset
+from verity.ir.partition import Level
+from verity.proofs.profile import Bernoulli, IntegrityProfile
 from verity_sampled_proofs.law import (CHECK, REPLAY, ReplayUnit, Stage, TwoStageLaw, check_probability, ru_key,
                                        select_replay_units, select_verification_units, vu_key)
 
@@ -71,8 +73,9 @@ def test_indices_must_be_distinct_and_classes_known():
         select_replay_units(key, LAW, [ReplayUnit(0, "nope", 2)])
 
 
-def test_detection_matches_the_profile_law():
-    """Empirically, an RU with m incorrect VUs escapes both stages at the rate IntegrityProfile.accept(m) states."""
+def test_detection_matches_the_per_ru_law_and_the_profile_bounds_it():
+    """Empirically, an RU with m incorrect VUs escapes both stages at 1 - p + p C(n_v - m, k) / C(n_v, k); a wrong RU
+    (m >= 1) escapes at most at the profile's accept(1) = 1 - p k / n_v, with equality at m = 1."""
     law = TwoStageLaw({"u": Stage(Fraction(1, 2), 2)})
     profile = law.profile("u", n_r=1, n_v=4, delta=0.01)
     unit = [ReplayUnit(0, "u", 4)]
@@ -85,8 +88,10 @@ def test_detection_matches_the_profile_law():
                 escaped += 1
             elif not set(select_verification_units(vu_key(b"vu", bind), law, unit)[0]) & set(range(m)):
                 escaped += 1
-        a = float(profile.accept(m))
+        a = float(1 - Fraction(1, 2) + Fraction(1, 2) * Fraction(comb(4 - m, 2), comb(4, 2)))
         assert abs(escaped / trials - a) < 5 * (a * (1 - a) / trials) ** 0.5 + 1e-9
+        if m:
+            assert a <= float(profile.accept(1)) and (m > 1 or a == float(profile.accept(1)))
 
 
 def test_bernoulli_is_the_single_unit_law():
@@ -95,20 +100,61 @@ def test_bernoulli_is_the_single_unit_law():
     assert check_probability(law, "x", 1) == Fraction(1, 10)
     assert check_probability(LAW, "decode", 6) == Fraction(1, 4) * Fraction(2, 6)
     a = law.profile("x", n_r=100, n_v=1, delta=0.01)
-    assert (a.sizes[1], a.draws[CHECK].k, a.draws[REPLAY].p) == (1, 1, Fraction(1, 10))
+    assert (a.levels, a.sizes, a.draws[REPLAY].p) == ((Level(REPLAY),), (100,), Fraction(1, 10))
 
 
 def test_profile_carries_the_class_law_and_covered_families():
     a = LAW.profile("decode", n_r=512, n_v=6, delta=0.01, covered=["Input"])
-    assert (*a.sizes, a.draws[REPLAY].p, a.draws[CHECK].k, a.delta, a.covered) == (512, 6, Fraction(1, 4), 2, 0.01,
-                                                                                  frozenset({"Input"}))
-    assert LAW.profile("prefill", n_r=3, n_v=5, delta=0.01).draws[CHECK].k == 5
+    assert (*a.sizes, a.draws[REPLAY].p, a.delta, a.covered) == (512, Fraction(1, 4) * Fraction(2, 6), 0.01, frozenset({"Input"}))
+    assert LAW.profile("prefill", n_r=3, n_v=5, delta=0.01).draws[REPLAY].p == 1
     assert LAW.to_json()["decode"] == {"p": "1/4", "k": 2}
 
 
-def test_the_profile_is_two_named_levels_and_keeps_the_prototype_numbers():
-    """The protocol prototype's composed toy through the law: 26.6 incorrect VUs for PoUW, 16.0 touched RUs for KV."""
-    a = TwoStageLaw({"u": Stage(Fraction(1, 2), 2)}).profile("u", n_r=512, n_v=4, delta=0.01, drawn={REPLAY: 3, CHECK: 6})
-    assert a == IntegrityProfile((REPLAY, CHECK), (512, 4), {REPLAY: Bernoulli(Fraction(1, 2)), CHECK: Subset(2)}, 0.01,
-                                 drawn={REPLAY: 3, CHECK: 6})
-    assert round(a.worst_case(lambda m: m), 1) == 26.6 and round(a.worst_case(lambda m: 1), 1) == 16.0
+TOY = TwoStageLaw({"u": Stage(Fraction(1, 2), 2)})
+
+
+def test_toy_attack_is_admitted():
+    """docs/audit-protocols.md §2.9 and §3.4 row 6, at the prototype's TOY (512 RUs of 4 VUs, p = 1/2, k = 2, delta = 0.01).
+    The interiors are committed after the RU draw, so a prover skipping 16 whole RUs (64 VUs of work) replays each drawn
+    one honestly but for one wrong VU: each skipped RU escapes with probability 1 - p k / n_v = 3/4, and all 16 with
+    0.75^16 >= 0.01.  The profile must give a fully skipped RU at least that escape, and certify the 64 skipped VUs."""
+    a = TOY.profile("u", n_r=512, n_v=4, delta=0.01)
+    achieved = 1 - Fraction(1, 2) * Fraction(2, 4)
+    assert achieved ** 16 >= Fraction(1, 100)
+    skipped_ru = a.accept(a.count(a.levels[-1].name, a.levels[0].name))   # every checked member of one RU wrong
+    assert skipped_ru >= achieved
+    assert a.worst_case(lambda m: 4 * m) >= 64
+
+
+def test_the_profile_is_over_replay_units():
+    """TOY's profile: one level of RUs at rate p k / n_v = 1/4; at delta = 0.01 it admits 16.0 wrong (and touched) RUs,
+    so 64 VUs of skipped work, where the old two-level profile certified 26.6."""
+    a = TOY.profile("u", n_r=512, n_v=4, delta=0.01, drawn={REPLAY: 3})
+    assert a == IntegrityProfile((REPLAY,), (512,), {REPLAY: Bernoulli(Fraction(1, 4))}, 0.01, drawn={REPLAY: 3})
+    assert round(a.worst_case(lambda m: m), 1) == 16.0 and round(a.worst_case(lambda m: 1), 1) == 16.0
+    assert round(a.worst_case(lambda m: 4 * m), 1) == 64.0
+    with pytest.raises(ValueError):
+        TOY.profile("u", n_r=512, n_v=4, delta=0.01, drawn={REPLAY: 3, CHECK: 6})
+    with pytest.raises(ValueError):
+        TOY.profile("u", n_r=512, n_v=0, delta=0.01)
+
+
+def test_a_mixed_class_is_profiled_at_its_largest_replay_unit():
+    """red-team-flock-3's C1 on #121: p = 1/2, k = 2, delta = 0.01, a class of 4-VU and 8-VU RUs.  An 8-VU RU escapes at
+    1 - 1/8, so an adaptive prover leaves 34 of them wrong and passes with probability (7/8)^34 >= 0.01; profiled at
+    n_v = 4 the class would admit only 16.  From its RUs the profile takes n_v = 8 and certifies 34.49."""
+    units = [ReplayUnit(i, "u", 4) for i in range(200)] + [ReplayUnit(200 + i, "u", 8) for i in range(200)]
+    units.append(ReplayUnit(1000, "other", 64))
+    assert (1 - Fraction(1, 2) * Fraction(2, 8)) ** 34 >= Fraction(1, 100)
+    a = TOY.profile("u", units, delta=0.01)
+    assert a.sizes == (400,) and a.draws[REPLAY].p == Fraction(1, 8)
+    assert a.worst_case(lambda m: m) >= 34 and round(a.worst_case(lambda m: m), 2) == 34.49
+    assert a == TOY.profile("u", units, n_r=400, n_v=8, delta=0.01)
+    assert TOY.profile("u", units, n_v=16, delta=0.01).draws[REPLAY].p == Fraction(1, 16)
+    for bad in (dict(n_v=4), dict(n_r=399)):
+        with pytest.raises(ValueError):
+            TOY.profile("u", units, delta=0.01, **bad)
+    with pytest.raises(ValueError):
+        TOY.profile("u", [ReplayUnit(0, "other", 4)], delta=0.01)
+    with pytest.raises(ValueError):
+        TOY.profile("u", delta=0.01)

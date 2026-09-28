@@ -125,6 +125,7 @@ def test_import_seeds_the_registry_from_machines_toml(reg, tmp_path):
 
 
 def test_g1_create_register_then_run_on_needs_no_hand_edit(reg, monkeypatch, capsys):
+    monkeypatch.setattr(runpod, "_request", lambda method, path, body=None: [])      # create_once's live-pod lookup: none of the name
     monkeypatch.setattr(runpod, "create", lambda ns: {"id": POD["id"]})
     monkeypatch.setattr(runpod, "wait_ssh", lambda pod_id: ("203.0.113.7", 40123))
     monkeypatch.setattr(runpod, "get", pods(POD))

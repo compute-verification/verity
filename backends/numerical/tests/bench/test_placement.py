@@ -436,3 +436,64 @@ def test_the_co_resident_pair_is_still_refused():
     a = PL.assess({**CORESIDENT["prover"], **metal, "machine_id": "m-a"}, {**CORESIDENT["verifier"], **metal, "machine_id": "m-b"}, bridge)
     assert any("share boot_id k" in x for x in a["problems"]) and any("host bridge" in x for x in a["problems"])
     assert PL.is_host_bridge("172.24.0.3") and PL.is_host_bridge("127.0.0.1") and not PL.is_host_bridge("10.65.0.12")
+
+
+def test_pod_env_falls_back_to_the_container_init_environment(monkeypatch, tmp_path):
+    from verity_numerical.bench import placement as PL
+    monkeypatch.delenv("RUNPOD_POD_ID", raising=False)
+    env = tmp_path / "environ"
+    env.write_bytes(b"PATH=/bin\0RUNPOD_POD_ID=abc123\0")
+    real = PL.Path
+
+    def fake(p, *a):
+        return real(env) if str(p) == "/proc/1/environ" else real(p, *a)
+    monkeypatch.setattr(PL, "Path", fake)
+    assert PL._pod_env("RUNPOD_POD_ID") == "abc123"
+    monkeypatch.setenv("RUNPOD_POD_ID", "fromenv")
+    assert PL._pod_env("RUNPOD_POD_ID") == "fromenv"
+
+
+def _init_environ(monkeypatch, tmp_path, content):
+    """``/proc/1/environ`` as ``content`` (bytes), or unreadable (None); every other path is the real one."""
+    real = PL.Path
+
+    def path(p, *a):
+        if str(p) != "/proc/1/environ":
+            return real(p, *a)
+        if content is None:
+            return real("/nonexistent/proc/1/environ")
+        f = real(tmp_path) / "environ"
+        f.write_bytes(content)
+        return f
+
+    monkeypatch.setattr(PL, "Path", path)
+
+
+def test_an_ssh_started_probe_records_the_pod_from_the_container_init_environment(monkeypatch, tmp_path):
+    """A job started over ssh has no RUNPOD_* (flock-backend 03:11Z): the probe reads the pod id, public IP and datacenter from
+    the container's init process, so the shared-NAT re-check at register finds the pod id.  Only those keys are read."""
+    for k in ("RUNPOD_POD_ID", "RUNPOD_PUBLIC_IP", "RUNPOD_DC_ID"):
+        monkeypatch.delenv(k, raising=False)
+    _init_environ(monkeypatch, tmp_path, b"PATH=/bin\0RUNPOD_POD_ID=w3joukypegsto7\0RUNPOD_PUBLIC_IP=91.199.227.82\0RUNPOD_DC_ID=EU-NL-1\0"
+                               b"RUNPOD_API_KEY=not-to-be-copied\0RUNPOD_EMPTY=\0")
+    rec = PL.probe()
+    assert (rec["pod_id"], rec["public_ip"], rec["datacenter"]) == ("w3joukypegsto7", "91.199.227.82", "EU-NL-1")
+    assert "not-to-be-copied" not in json.dumps(rec)
+    assert PL._pod_env("RUNPOD_EMPTY") is None and PL._pod_env("RUNPOD_MISSING") is None
+    monkeypatch.setenv("RUNPOD_POD_ID", "from-the-job")                       # the job's own environment wins
+    assert PL.probe()["pod_id"] == "from-the-job"
+    monkeypatch.delenv("RUNPOD_POD_ID")
+    _init_environ(monkeypatch, tmp_path, None)                                          # not readable: not recorded, as before
+    assert PL.probe()["pod_id"] is None
+
+
+def test_a_run_whose_probe_found_the_pod_passes_the_nat_recheck(tmp_path, probes, monkeypatch):
+    """The failure the fix addresses: placement.json with a null pod id refuses registration under a shared IP; with the pod id
+    the probe now recovers, the same runs register."""
+    q, w = _nat_runs(tmp_path / "a", {"pod_id": None})
+    res = C.register(_nat_cell(), str(q), str(w), tmp_path / "wa", dry_run=True)
+    assert res.get("refused") and any("the prover run did not record pod_id" in x for x in res["problems"])
+    monkeypatch.delenv("RUNPOD_POD_ID", raising=False)
+    _init_environ(monkeypatch, tmp_path, b"RUNPOD_POD_ID=pod-p\0")
+    q, w = _nat_runs(tmp_path / "b", {"pod_id": PL.probe()["pod_id"]})
+    assert C.register(_nat_cell(), str(q), str(w), tmp_path / "wb", dry_run=True)["problems"] == []

@@ -38,7 +38,9 @@ KIND_THREAD = 2             # per-thread per-block leaf computed inside the kern
 KBLOCK_N = 128
 KBLOCK_M = 64
 CLASSES = ("S", "P", "RP", "ROW", "O", "FIN")
-SRC_BITS = {"S": 1, "P": 2, "RP": 4, "ROW": 8, "O": 16, "FIN": 32}
+#: MS (64): the seventh class, appended after FIN only by the guarded-max tap builds (`VERITY_MAT_SRC & 64`, `query.guarded_max`): one f32
+#: per (slab, row, key block), the `max * scale` that block's exp2 FMAs read.  Without it the layout, digest and bytes are the six classes'.
+SRC_BITS = {"S": 1, "P": 2, "RP": 4, "ROW": 8, "O": 16, "FIN": 32, "MS": 64}
 #: ROW word 3: never written, except by the guarded-max tap builds (`verity_tap_row3() == 1`, `query.guarded_max`), which store
 #: GuardNegInfZero(row_max) there at every key block after a row's first and 0 at the first
 ROW_GUARD_FIELD = 3
@@ -51,13 +53,15 @@ class StreamLayout:
     R13 lane fa2 (tap layout v8): the layout is arithmetic in the kernel tile -- `BN` = kBlockN of the launched kernel (128 for head
     dim 64, 64 for 96/128/256 on the num_splits == 1 kernel; `hidden_source.fa2_kblock_n`) and `D` = head_dim (the O plane's row
     width).  The defaults reproduce the R9 hd-64 layout, digest and chunk header word for word; other tiles enter the digest and the
-    spare header words 8/9, so a chunk of a (64, 128) stream can never verify against a (128, 64) declaration."""
+    spare header words 8/9, so a chunk of a (64, 128) stream can never verify against a (128, 64) declaration.  `ms` appends the MS
+    class after FIN (and enters the digest); without it every offset, the total and the digest are the six classes'."""
 
     HB: int
     M: int
     NB: int
     BN: int = KBLOCK_N
     D: int = 64
+    ms: bool = False
 
     @property
     def N(self) -> int:
@@ -72,7 +76,11 @@ class StreamLayout:
         off_row = off_rp + HB * M * (N // 2)
         off_o = off_row + HB * M * NB * 8
         off_fin = off_o + HB * M * NB * D
-        return {"S": off_s, "P": off_p, "RP": off_rp, "ROW": off_row, "O": off_o, "FIN": off_fin, "total": off_fin + HB * M * 4}
+        o = {"S": off_s, "P": off_p, "RP": off_rp, "ROW": off_row, "O": off_o, "FIN": off_fin, "total": off_fin + HB * M * 4}
+        if self.ms:
+            o["MS"] = o["total"]
+            o["total"] = o["MS"] + HB * M * NB
+        return o
 
     @property
     def legacy_tile(self) -> bool:
@@ -89,7 +97,7 @@ class StreamLayout:
     def word_index(self, cls: str, slab: int, row: int, *, col: int | None = None, block: int | None = None,
                    lane: int | None = None, d: int | None = None, field: int | None = None) -> int:
         """Canonical position -> word index.  ROW fields: 0 row_max, 1 rescale, 2 step, 3 the guarded max (`ROW_GUARD_FIELD`),
-        4+lane l_lane.  FIN: 0 sum, 1 inv_sum, 2 final row_max, 3 lse."""
+        4+lane l_lane.  FIN: 0 sum, 1 inv_sum, 2 final row_max, 3 lse.  MS (with `ms`): one word per block."""
         o = self.offsets
         if not (0 <= slab < self.HB and 0 <= row < self.M):
             raise ValueError("position outside the layout")
@@ -108,6 +116,9 @@ class StreamLayout:
             return o["O"] + ((slab * self.M + row) * self.NB + block) * self.D + d
         if cls == "FIN":
             return o["FIN"] + (slab * self.M + row) * 4 + field
+        if cls == "MS" and self.ms:
+            assert block is not None and 0 <= block < self.NB
+            return o["MS"] + (slab * self.M + row) * self.NB + block
         raise ValueError(cls)
 
     def unrank(self, word: int) -> dict[str, Any]:
@@ -129,6 +140,9 @@ class StreamLayout:
         if word < o["FIN"]:
             i = word - o["O"]; srb, d = divmod(i, self.D); sr, block = divmod(srb, self.NB); slab, row = divmod(sr, self.M)
             return {"cls": "O", "slab": slab, "row": row, "block": block, "d": d}
+        if self.ms and word >= o["MS"]:
+            sr, block = divmod(word - o["MS"], self.NB); slab, row = divmod(sr, self.M)
+            return {"cls": "MS", "slab": slab, "row": row, "block": block}
         i = word - o["FIN"]; sr, f = divmod(i, 4); slab, row = divmod(sr, self.M)
         return {"cls": "FIN", "slab": slab, "row": row, "field": f}
 
@@ -136,6 +150,8 @@ class StreamLayout:
         d = {"kind": "fa2-hidden-m1", "v": VERSION, "HB": self.HB, "M": self.M, "NB": self.NB}
         if not self.legacy_tile:
             d.update({"BN": self.BN, "D": self.D})
+        if self.ms:
+            d["ms"] = True
         return hashlib.sha256(json.dumps(d, sort_keys=True).encode()).digest()
 
 

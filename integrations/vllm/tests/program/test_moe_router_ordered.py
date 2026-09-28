@@ -1,6 +1,8 @@
-"""The MoE router in its selection order (`registry.moe.MoeRouterTopKOrdered_v1` / `...OrderedNorm_v1`): the same function as the
-kernel-order Definitions bit for bit (ties, NaN, +-inf, +-0), and opt-in only (no digest of record moves).  Its partition (the softmax
-committed once, nothing computed twice) is checked with the no-recompute rule, `tests/query/test_word.py`."""
+"""The MoE router in its selection order (`registry.moe.MoeRouterTopKOrdered_v1` / `...OrderedNorm_v1`): its outputs (weights and ids)
+equal the kernel-order Definitions' bit for bit (ties, NaN, +-inf, +-0), and it is opt-in only (no digest of record moves).  The interior
+words it commits are `topkGating`'s own through `MoeRouterProbs` (the `fmaxf` row max, NaN exponentials and reciprocal as 0x7FFFFFFF),
+which the kernel-order statement's interior is not: `tests/properties/test_router_tap_exactness.py` and the router-tap exactness record.
+Its partition (the softmax committed once, nothing computed twice) is checked with the no-recompute rule, `tests/query/test_word.py`."""
 from __future__ import annotations
 
 import hashlib
