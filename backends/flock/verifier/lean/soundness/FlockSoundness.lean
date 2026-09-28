@@ -70,6 +70,7 @@ import FlockSoundness.LinkFinder
 import FlockSoundness.Lowering
 import FlockSoundness.Types.Flat
 import FlockSoundness.Types.Dag
+import FlockSoundness.Compose
 import FlockSoundness.Game.Prob
 import FlockSoundness.Audit.Law
 import FlockSoundness.Audit.Circuit

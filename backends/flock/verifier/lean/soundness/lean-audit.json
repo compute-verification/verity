@@ -155,6 +155,21 @@
    "assumptions": [],
    "type_hash": "00000000deee5660"
   },
+  "FlockSoundness.Rows.compose_eval": {
+   "signature": [
+    "FlockSoundness.Rows.compose_eval {t : Flock.CircuitType} {inSplit outSplit : List ℕ} {d : Flock.Derive.Derived}",
+    "  (hd : Flock.Derive.derive t inSplit outSplit = Except.ok d)",
+    "  {h : FlockSoundness.Compose.Ordered (FlockSoundness.Compose.ofDerived d)}",
+    "  {z : Fin (FlockSoundness.Rows.compose (FlockSoundness.Compose.ofDerived d) h).w → Bool}",
+    "  (hz : (FlockSoundness.Rows.compose (FlockSoundness.Compose.ofDerived d) h).Sat z)",
+    "  (h1 : z (FlockSoundness.Rows.compose (FlockSoundness.Compose.ofDerived d) h).one = true) {x : ℕ → Bool}",
+    "  (hx : ∀ (i : Fin (FlockSoundness.Rows.compose (FlockSoundness.Compose.ofDerived d) h).w), ↑i < d.nIn → x ↑i = z i)",
+    "  {o : ℕ} (ho : o < t.outputs.size) (ℓ : Fin (FlockSoundness.Rows.compose (FlockSoundness.Compose.ofDerived d) h).w)",
+    "  (hℓ : ↑ℓ = d.nIn + 1 + d.geo.nAnd + o) : z ℓ = (FlockSoundness.Types.eval t x).getD o false"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000ba2f91ed"
+  },
   "FlockSoundness.Types.Dag.layout_sound": {
    "signature": [
     "FlockSoundness.Types.Dag.layout_sound {types : String → Option Flock.CircuitType} {ls : Array Flock.Layout}",
@@ -210,6 +225,37 @@
    "signature": ["FlockSoundness.execArith_correct : FlockSoundness.execArith.Correct"],
    "assumptions": [],
    "type_hash": "00000000f4d0def7"
+  },
+  "FlockSoundness.placement_of_realizes": {
+   "signature": [
+    "FlockSoundness.placement_of_realizes {S : FlockSoundness.Model.Statement} {L : FlockSoundness.Compose.Logical}",
+    "  {h : FlockSoundness.Compose.Ordered L} {pos : ℕ → ℕ} {hb : ∀ ℓ < L.order.length, pos (L.order.getD ℓ 0) < 2 ^ S.kLog}",
+    "  (hrowA :",
+    "    ∀ k < L.order.length - L.nIn,",
+    "      ∀ (p : List ℕ × List ℕ),",
+    "        L.row (L.order.getD (L.nIn + k) 0) = some p →",
+    "          ∀ (r j : Fin (2 ^ S.kLog)),",
+    "            ↑r = pos (L.order.getD (L.nIn + k) 0) → S.A₀ r j = ↑(List.count (↑j) (List.map pos p.1)))",
+    "  (hrowB :",
+    "    ∀ k < L.order.length - L.nIn,",
+    "      ∀ (p : List ℕ × List ℕ),",
+    "        L.row (L.order.getD (L.nIn + k) 0) = some p →",
+    "          ∀ (r j : Fin (2 ^ S.kLog)),",
+    "            ↑r = pos (L.order.getD (L.nIn + k) 0) → S.B₀ r j = ↑(List.count (↑j) (List.map pos p.2)))",
+    "  (honeA :",
+    "    ∀ k < L.order.length - L.nIn,",
+    "      L.row (L.order.getD (L.nIn + k) 0) = none →",
+    "        ∀ (r j : Fin (2 ^ S.kLog)), ↑r = pos (L.order.getD (L.nIn + k) 0) → S.A₀ r j = if j = S.pin then 1 else 0)",
+    "  (honeB :",
+    "    ∀ k < L.order.length - L.nIn,",
+    "      L.row (L.order.getD (L.nIn + k) 0) = none →",
+    "        ∀ (r j : Fin (2 ^ S.kLog)), ↑r = pos (L.order.getD (L.nIn + k) 0) → S.B₀ r j = if j = S.pin then 1 else 0)",
+    "  (hpinA : ∀ (j : Fin (2 ^ S.kLog)), S.A₀ S.pin j = if j = S.pin then 1 else 0)",
+    "  (hpinB : ∀ (j : Fin (2 ^ S.kLog)), S.B₀ S.pin j = if j = S.pin then 1 else 0) :",
+    "  FlockSoundness.Placement S (FlockSoundness.Rows.compose L h) (FlockSoundness.composePlace S L h pos hb)"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000456de154"
   },
   "FlockSoundness.table_sound": {
    "signature": [
@@ -362,6 +408,7 @@
     "Flock.instReprItem.repr": "40f7876e1442c0cd"
    },
    "pins": [
+    "FlockSoundness.Rows.compose_eval",
     "FlockSoundness.Types.Dag.layout_sound",
     "FlockSoundness.Types.Dag.unit_sound",
     "FlockSoundness.Types.compose_complete",
@@ -369,11 +416,14 @@
    ]
   },
   "Flock.Derive": {
-   "digest": "94474b9e76ca37076bd0f53ed60950b8",
+   "digest": "81612958b180ff3f7cb1b55cb0cc5bd5",
    "definitions": {
     "Flock.Derive.Derived": "a6762e6e37f98189",
     "Flock.Derive.Derived.geo": "e3d354d1d10c263a",
     "Flock.Derive.Derived.inCol": "31fae78edbf8950f",
+    "Flock.Derive.Derived.nIn": "8b55ab2d51d31988",
+    "Flock.Derive.Derived.nOut": "6f905d5b33fc9967",
+    "Flock.Derive.Derived.order": "3e945d221bd70744",
     "Flock.Derive.Derived.outCol": "f01ed56965f501cf",
     "Flock.Derive.Derived.rows": "ccbb7fa9aeaa2134",
     "Flock.Derive.Geo": "3bbb554207b1f6aa",
@@ -402,6 +452,7 @@
     "Flock.Derive.splitOk": "8d00f60c06da8b61"
    },
    "pins": [
+    "FlockSoundness.Rows.compose_eval",
     "FlockSoundness.Types.Dag.layout_sound",
     "FlockSoundness.Types.Dag.unit_sound",
     "FlockSoundness.Types.compose_complete",
@@ -781,6 +832,7 @@
     "FlockSoundness.Audit.xorSum": "05493c94f08c5153"
    },
    "pins": [
+    "FlockSoundness.Rows.compose_eval",
     "FlockSoundness.Types.Dag.layout_sound",
     "FlockSoundness.Types.Dag.unit_sound",
     "FlockSoundness.Types.compose_complete",
@@ -838,6 +890,22 @@
     "FlockSoundness.tabOf": "6b8f77cd3962baad"
    },
    "pins": ["FlockSoundness.table_sound_compiled"]
+  },
+  "FlockSoundness.Compose": {
+   "digest": "f60ebcc8ff901bdccaaec3a7793a1b61",
+   "definitions": {
+    "FlockSoundness.Compose.Logical": "69fbb649a1937ca6",
+    "FlockSoundness.Compose.Logical.nIn": "9bce623cd94d829b",
+    "FlockSoundness.Compose.Logical.order": "3ee96014455fe06f",
+    "FlockSoundness.Compose.Logical.row": "f6dd19dac6b5460a",
+    "FlockSoundness.Compose.Ordered": "1ecfd07683bf3dd8",
+    "FlockSoundness.Compose.lidx": "c6e4fbfe9ceb4099",
+    "FlockSoundness.Compose.lrow": "ca600e7f9ec538ee",
+    "FlockSoundness.Compose.ofDerived": "cdd7dcaaef6a3360",
+    "FlockSoundness.Rows.compose": "b272db07ea78bf64",
+    "FlockSoundness.composePlace": "732f3c44ab8946ab"
+   },
+   "pins": ["FlockSoundness.Rows.compose_eval", "FlockSoundness.placement_of_realizes"]
   },
   "FlockSoundness.Defs": {
    "digest": "1cc2134a37060fbf2b00703ce87a654e",
@@ -972,6 +1040,22 @@
     "FlockSoundness.table_sound_fast100",
     "FlockSoundness.table_sound_fast100_34_35"
    ]
+  },
+  "FlockSoundness.Lowering": {
+   "digest": "8ad9f9eb868b30a9023eb1e072176e53",
+   "definitions": {
+    "FlockSoundness.Placement": "48dda1a1429920d8",
+    "FlockSoundness.Rows": "451bf782963ef6af",
+    "FlockSoundness.Rows.Sat": "c13cbb9f1f53f506",
+    "FlockSoundness.Rows.a": "83e5a1723bb68a69",
+    "FlockSoundness.Rows.b": "736dab133b244b1c",
+    "FlockSoundness.Rows.comp": "11cf48e4964d93c9",
+    "FlockSoundness.Rows.nComp": "95cc405951a17f39",
+    "FlockSoundness.Rows.nIn": "c068cb69891d4646",
+    "FlockSoundness.Rows.one": "2f294e1490520e33",
+    "FlockSoundness.Rows.w": "fbe53e17a6cfd83e"
+   },
+   "pins": ["FlockSoundness.Rows.compose_eval", "FlockSoundness.placement_of_realizes"]
   },
   "FlockSoundness.Merkle": {
    "digest": "84a6380af28fe8d0d3144cd777760087",
@@ -1208,6 +1292,7 @@
     "FlockSoundness.Model.witnessOf": "f422b8c5d9c2023b"
    },
    "pins": [
+    "FlockSoundness.placement_of_realizes",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_compiled",
     "FlockSoundness.table_sound_exec",
@@ -1246,6 +1331,7 @@
     "FlockSoundness.Types.run": "3db25427c60d5a29"
    },
    "pins": [
+    "FlockSoundness.Rows.compose_eval",
     "FlockSoundness.Types.Dag.layout_sound",
     "FlockSoundness.Types.Dag.unit_sound",
     "FlockSoundness.Types.compose_complete",
