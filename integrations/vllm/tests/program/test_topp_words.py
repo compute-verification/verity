@@ -1,16 +1,26 @@
 """The top-p keep word as word gates (`registry.topp_words`): `TopPKeepWord_v1{V,S}` is `topp_keep(x, p, S)` on every row, as the IR's
-evaluator computes it from its word gates; `GumbelTopPTokenSelect_v2{V,S}` is v1 wherever `splits` is S; `Q_word` cuts the keep word into
-word-sized units with no recomputed value; the new word gates are exact."""
+evaluator computes it from its word gates, including #169's constructed rows whose warp halves disagree on stopping;
+`GumbelTopPTokenSelect_v2{V,S}` is v1 wherever `splits` is S; `Q_word` cuts the keep word into word-sized units with no recomputed
+value; the new word gates are exact."""
 from __future__ import annotations
 
 import numpy as np
 import pytest
 
 from verity.evaluation import evaluate
-from verity.ir.defs import bind
+from verity.ir.defs import CompositeDefinition, bind
+from verity.ir.types import Array
 from verity_vllm.program.registry import sampling as SM
+from verity_vllm.program.registry import topp_split as TS
+from verity_vllm.program.registry import topp_keep_builder as TKB
 from verity_vllm.program.registry import topp_word_gates as TWGates
 from verity_vllm.program.registry import topp_words as TWG
+from verity_vllm.program.registry.prims import BIT, F32
+
+f32 = np.float32
+#: #169's constructed rows (`test_topp_split_halves`): ordinary logits at V = 3000, S = 16, p = 0.5, the step kernels' partials
+#: constructed so that each warp half's own scalars decide `nomask`; {seed: the halves' stops}, both orders
+HALVES = {35: [False, True], 50: [False, True], 17: [True, False], 47: [True, False]}
 
 
 def _rows(V, n, seed):
@@ -34,12 +44,43 @@ def _rows(V, n, seed):
     return out
 
 
-@pytest.mark.parametrize("V,S,n", [(16, 4, 10), (64, 32, 8), (300, 8, 8), (1025, 32, 6)])
-def test_the_keep_word_as_word_gates_is_topp_keep(V, S, n):
-    fn = bind(TWG.TopPKeepWord, V=V, S=S)
-    for x, p in _rows(V, n, V + S):
+def _halves(monkeypatch):
+    """The keep word's own body (`topp_words.keep_word_body`) with #169's partials in place of its step kernels', and the rows,
+    `topp_split`'s step kernels given the same partials."""
+    V, S, P = 3000, 16, f32(0.5)
+    parts = np.zeros((TS.SPLIT_ROUNDS, S, TS.SPLIT_FANOUT, 3), f32)
+    parts[..., 0], parts[..., 1], parts[..., 2] = f32(1.0 / S), f32(1e-12), f32(1.0)
+
+    def step(x, stats, parts_, p, ROUND, S_, F_, R_, BLOCK, cfg):
+        parts_[...] = parts
+
+    def parts_of(E, r, S_):
+        n = TKB.F * S_
+        return [E.const([int(f32(1.0 / S_).view(np.uint32))] * n), E.const([int(f32(1e-12).view(np.uint32))] * n),
+                E.const([1] * n, TWGates.CW)]
+
+    monkeypatch.setattr(TS, "step_kernel", step)
+    rows = []
+    for seed, stopped in HALVES.items():
+        x = (-np.random.default_rng(seed).random(V) * f32(2.5e-5)).astype(f32)
+        assert TS.topp_split_row(x, float(P), S)[3]["stopped"] == stopped
+        rows.append((x, P))
+    fn = CompositeDefinition("TopPKeepWordHalves", 1, (), lambda st: ((("logits", Array(V, F32)), ("top_p", F32)), Array(V, BIT)),
+                             lambda B, st, logits, top_p: TWG.keep_word_body(B, S, logits, top_p, parts_of), register=False)
+    return bind(fn), rows, S
+
+
+@pytest.mark.parametrize("V,S,n", [(16, 4, 10), (64, 32, 8), (300, 8, 8), (1025, 32, 6), (3000, 16, "halves")])
+def test_the_keep_word_as_word_gates_is_topp_keep(V, S, n, monkeypatch):
+    if n == "halves":
+        fn, rows, S = _halves(monkeypatch)
+    else:
+        fn, rows = bind(TWG.TopPKeepWord, V=V, S=S), _rows(V, n, V + S)
+    for x, p in rows:
         got = np.array(evaluate(fn, [int(w) for w in x.view(np.uint32)], int(p.view(np.uint32))), dtype=bool)
-        assert (got == SM.topp_keep(x, float(p), S)).all(), (V, S, float(p))
+        ref = SM.topp_keep(x, float(p), S)
+        assert (got == ref).all(), (V, S, float(p))
+        assert n != "halves" or (ref.any() and not ref.all())
 
 
 def test_the_select_at_a_constant_split_count_is_v1_there():
