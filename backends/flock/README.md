@@ -31,7 +31,8 @@ C-Flock's circuit prover (M0: the module `verity_flock.circuit`, CLI `flock-circ
 comes with PR #192, and its multi-table statement (`verity/flock-tables`) with PR #193. Its consumers are on `main`: the
 Lean verifier reads its format, serving writes rows in it (`verity_vllm.commit.serving_rows`), and `benchmarks/one_stage`
 runs it (from a checkout of #192's branch until #192 merges). C-Flock ZK (M1/M2) is on draft PRs #123 and #138, stacked
-on #192.
+on #192. `flock-circuit` also reads the typed statement (`verity/flock-circuit/types`, `verity_flock.typed_statement`) of a
+flat class: `live/src/typed.rs` derives the unit's rows from its type and layout, as the verifier does.
 
 ## Tests
 

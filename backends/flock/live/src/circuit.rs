@@ -301,11 +301,17 @@ impl Composite {
         let sha512: [u8; 64] = Sha512::digest(text.as_bytes()).into();
         let mut lines = text.split_inclusive('\n');
         let head = lines.next().ok_or("empty circuit")?.trim_end();
-        let name = head.strip_prefix("flock-circuit ").ok_or("not a flock-circuit circuit")?.to_string();
+        // a typed statement (`crate::typed`) carries its unit as types; the prover derives its rows
+        let (name, typed) = match (head.strip_prefix("flock-circuit "), head.strip_prefix("flock-circuit/types ")) {
+            (Some(n), _) => (n.to_string(), false),
+            (_, Some(n)) => (n.to_string(), true),
+            _ => return Err("not a flock-circuit circuit".into()),
+        };
         let meta: Value = serde_json::from_str(lines.next().and_then(|l| l.trim_end().strip_prefix("META ")).ok_or("no META line")?)
             .map_err(|e| format!("META: {e}"))?;
-        if meta["format"] != FORMAT || meta["statement"] != STATEMENT {
-            return Err("META: not verity/flock-circuit".into());
+        let (format, statement) = if typed { (crate::typed::FORMAT, crate::typed::STATEMENT) } else { (FORMAT, STATEMENT) };
+        if meta["format"] != format || meta["statement"] != statement {
+            return Err(format!("META: not {statement}"));
         }
         let class_sha512: [u8; 64] = {
             let mut m = meta.clone();
@@ -324,11 +330,18 @@ impl Composite {
             return Err(format!("META: the partition is not a {PARTITION_V1} (or the provisional {PARTITION_PROVISIONAL}) SHA-512 digest"));
         }
         let mut nets = Vec::new();
+        if typed {
+            let rows = crate::typed::unit_rows(&meta, &name)?;
+            nets.push(("unit".to_string(), std::panic::catch_unwind(|| IrUnitNet::parse(&rows)).map_err(|_| "the unit's derived rows do not parse")?));
+        }
         let mut lookups_fast: Vec<(usize, LookupNet)> = Vec::new();
         while let Some(l) = lines.next() {
             let h: Vec<&str> = l.split_whitespace().collect();
             if h.len() != 3 || h[0] != "CIRCUIT" {
                 return Err(format!("circuit: expected a CIRCUIT line, found {:?}", l.chars().take(40).collect::<String>()));
+            }
+            if typed && h[1] == "unit" {
+                return Err("CIRCUIT unit: a typed statement's unit is its types, never rows".into());
             }
             let n: usize = h[2].parse().map_err(|_| "CIRCUIT sections count")?;
             let body: String = (0..n).map(|_| lines.next().unwrap_or("")).collect();
@@ -610,6 +623,11 @@ impl Composite {
         &self.nets[self.unit_net].1
     }
 
+    /// `verity/flock-circuit`, or `verity/flock-circuit/types` for a typed statement
+    pub fn statement(&self) -> &str {
+        self.meta["statement"].as_str().unwrap_or(STATEMENT)
+    }
+
     pub fn unit_range(&self) -> &Range {
         self.ranges.iter().find(|r| r.kind == Kind::Net(self.unit_net)).unwrap()
     }
@@ -777,8 +795,8 @@ impl Instances {
         let b = std::fs::read(path).map_err(|e| format!("instances: {e}"))?;
         let nl = b.iter().position(|&x| x == b'\n').ok_or("no header line")?;
         let mut header: Value = serde_json::from_slice(&b[..nl]).map_err(|e| format!("header: {e}"))?;
-        if header["format"] != INST_FORMAT || header["statement"] != STATEMENT {
-            return Err("not a flock-circuit-inputs file".into());
+        if header["format"] != INST_FORMAT || header["statement"] != c.statement() {
+            return Err(format!("not a flock-circuit-inputs file of a {} statement", c.statement()));
         }
         if header["circuit_sha512"].as_str() != Some(crate::hex(&c.sha512).as_str()) {
             return Err("the instance file was staged for another circuit".into());

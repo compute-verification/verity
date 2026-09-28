@@ -69,7 +69,7 @@ fn params(m: usize, lig: LigeritoProfile) -> PcsParams {
 
 /// The backend identity the statement digest pins (so a NON_ZK and a ZK cell never share one).
 fn identity(c: &Composite) -> Value {
-    json!({"statement": STATEMENT, "backend": "C-interactive", "proof_class": "NON_ZK_PROOF", "profile": "fast100", "reps": 2,
+    json!({"statement": c.statement(), "backend": "C-interactive", "proof_class": "NON_ZK_PROOF", "profile": "fast100", "reps": 2,
            "commitments": "one root, both reps (R1)", "flavor": "rs", "leaf_scheme": c.leaf_scheme,
            // a selftest build injects seeds (the determinism check); a proving build never has the feature
            "seed_injection": cfg!(feature = "seed-injection"),
@@ -586,7 +586,7 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
     let c = &st.c;
     let ands = (c.unit().useful as u64, st.n as u64 * c.upv as u64);
     (
-        json!({"accepted": v["accepted"], "why": v["why"], "verdict": v, "statement": STATEMENT, "scheme": SCHEME,
+        json!({"accepted": v["accepted"], "why": v["why"], "verdict": v, "statement": c.statement(), "scheme": SCHEME,
                "prover": if plan.gpu {"flock-cuda-circuit"} else {"flock-cpu"}, "gpu": plan.gpu, "unit": c.name, "set": inst.header["set"],
                "subcircuit": inst.header["subcircuit"], "instances": st.n, "vus_per_block": c.g, "units": ands.1, "k_log": c.k_log, "nbl": st.nbl,
                "dense_m": st.m, "e2e_s": e2e_s, "witness_s": witness_s, "prove_s": prove_s, "prove_total_s": prove_s.iter().sum::<f64>(),
@@ -627,6 +627,7 @@ const CASES: &[(&str, bool, bool)] = &[
     ("leaf_salts_from_prover_seed_refused", false, false),
     ("device_salts_match_host", true, false),
     ("leaf_key_witness_refused", false, false),
+    ("typed_statement_altered_refused", false, false),
     ("private_cut_word_tampered", false, true),
     ("tail_swapped", false, true),
     ("tail_swapped_circuit_refused", false, false),
@@ -872,6 +873,28 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         return json!({"case": name, "expect": "refused at parse (not the pinned leaf-commitment scheme)", "pass": why.iter().all(Option::is_some),
                       "why": why});
     }
+    if name == "typed_statement_altered_refused" {
+        // the unit's type altered under its digest; the unit's layout altered under its sha512; the unit's rows in the statement
+        if st.c.statement() != flock_live::typed::STATEMENT {
+            return json!({"case": name, "pass": true, "skipped": "a check of a typed statement"});
+        }
+        let text = std::fs::read_to_string(arg("--circuit", "")).unwrap();
+        let lines: Vec<String> = text.split('\n').map(str::to_string).collect();
+        let meta: Value = serde_json::from_str(&lines[1][5..]).unwrap();
+        let with_meta = |m: &Value| { let mut l = lines.clone(); l[1] = format!("META {}", serde_json::to_string(m).unwrap()); l.join("\n") };
+        let mut type_altered = meta.clone();
+        let c = &mut type_altered["types"][meta["unit_type"].as_str().unwrap_or("")]["items"][0][1][1];
+        *c = json!(1 - c.as_u64().unwrap_or(0));
+        let mut layout_altered = meta.clone();
+        let split = if meta["layouts"][0]["in_split"] == json!([]) { json!([1]) } else { json!([]) };
+        layout_altered["layouts"][0]["in_split"] = split;
+        let rows = flock_live::typed::unit_rows(&meta, &st.c.name).unwrap();
+        let with_rows = format!("{text}CIRCUIT unit {}\n{rows}", rows.lines().count());
+        let why: Vec<Option<String>> = [with_meta(&type_altered), with_meta(&layout_altered), with_rows].iter()
+            .map(|t| Composite::parse(t, Some(&arg("--tables", "tables"))).err()).collect();
+        return json!({"case": name, "expect": "refused at parse (a type or a layout not its digest; the unit's rows in the statement)",
+                      "pass": why.iter().all(Option::is_some), "why": why});
+    }
     let mut plan = plan_of(name, gpu);
     if name == "cross_session_replay_both_reps" {
         let s0 = Arc::new(Mutex::new(server(st, inst)));
@@ -908,7 +931,7 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
     let (v, proofs) = session(&pst, &pinst, shared(InProc(s.clone())), &plan, ProverSeed::from_os());
     let acc = v["accepted"].as_bool().unwrap_or(false);
     let rec = s.lock().unwrap_or_else(PoisonError::into_inner).record_json();
-    record_case(name, want.1, &v, &rec, &proofs);
+    record_case(st.c.statement(), name, want.1, &v, &rec, &proofs);
     let reps: Vec<Value> = rec["verdict"]["reps"].as_array().cloned().unwrap_or_default().iter().map(|r| json!([r["stream"], r["ok"], r["why"]])).collect();
     let both = reps.len() == 2 && reps.iter().all(|r| r[1] == false);
     let stopped = v["prover_stopped"].as_str().is_some_and(|x| x.contains("level-0 root"));
@@ -934,13 +957,13 @@ fn flip_salt(p: &[u8]) -> Vec<u8> {
 
 /// `--record-dir DIR`: the case's session as the verifier recorded it (`DIR/<case>.json`: the expectation, the prover's result,
 /// the server record) and the proofs the prover produced (`DIR/<case>.rep<r>.proof`), for replaying verifiers' vectors.
-fn record_case(name: &str, expect_accept: bool, v: &Value, rec: &Value, proofs: &[Vec<u8>]) {
+fn record_case(statement: &str, name: &str, expect_accept: bool, v: &Value, rec: &Value, proofs: &[Vec<u8>]) {
     let dir = arg("--record-dir", "");
     if dir.is_empty() {
         return;
     }
     let _ = std::fs::create_dir_all(&dir);
-    let doc = json!({"case": name, "statement": STATEMENT, "expect": if expect_accept {"accept"} else {"reject"}, "accepted": v["accepted"],
+    let doc = json!({"case": name, "statement": statement, "expect": if expect_accept {"accept"} else {"reject"}, "accepted": v["accepted"],
                      "why": v["why"], "prover_stopped": v["prover_stopped"], "record": rec});
     let _ = std::fs::write(format!("{dir}/{name}.json"), serde_json::to_vec_pretty(&doc).unwrap_or_default());
     for (r, p) in proofs.iter().enumerate() {
@@ -952,11 +975,12 @@ fn record_case(name: &str, expect_accept: bool, v: &Value, rec: &Value, proofs: 
 /// native tail: the 36-op RMSNorm row tail's shape, one F32Add over two cut words), and META with a `tail` program.
 fn with_tail(text: &str) -> (String, String) {
     let lines: Vec<&str> = text.split('\n').collect();
-    let at = lines.iter().position(|l| l.starts_with("CIRCUIT unit ")).unwrap();
-    let n: usize = lines[at].split_whitespace().nth(2).unwrap().parse().unwrap();
+    // the unit's section, or a typed statement's first (it has none): a CUT line is refused in any
+    let at = lines.iter().position(|l| l.starts_with("CIRCUIT unit ")).or_else(|| lines.iter().position(|l| l.starts_with("CIRCUIT "))).unwrap();
+    let (sec, n) = { let h: Vec<&str> = lines[at].split_whitespace().collect(); (h[1].to_string(), h[2].parse::<usize>().unwrap()) };
     let cut = r#"CUT {"in":[],"out":[],"tail":[[2,"F32Add_v1",0,1]],"words":2}"#;
     let mut a: Vec<String> = lines.iter().map(|s| s.to_string()).collect();
-    a[at] = format!("CIRCUIT unit {}", n + 1);
+    a[at] = format!("CIRCUIT {sec} {}", n + 1);
     a.insert(at + 1 + n, cut.to_string());
     let mut meta: Value = serde_json::from_str(&lines[1][5..]).unwrap();
     meta["tail"] = json!([[2, "F32Add_v1", 0, 1]]);
@@ -1034,8 +1058,9 @@ fn selftest(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) {
         all &= v["pass"] == true;
         println!("NEG\t{v}");
     }
-    println!("SELFTEST\t{}", json!({"statement": STATEMENT, "unit": st.c.name, "subcircuit": inst.header["subcircuit"], "instances": st.n,
-        "vus_per_block": st.c.g, "k_log": st.c.k_log, "m": st.m, "gpu": gpu, "circuit_sha512": hex(&st.c.sha512), "all_pass": all}));
+    println!("SELFTEST\t{}", json!({"statement": st.c.statement(), "unit": st.c.name, "subcircuit": inst.header["subcircuit"], "instances": st.n,
+        "vus_per_block": st.c.g, "k_log": st.c.k_log, "m": st.m, "gpu": gpu, "circuit_sha512": hex(&st.c.sha512),
+        "unit_rows_sha256": hex(&st.c.unit().sha256), "all_pass": all}));
 }
 
 fn serve_loop(make: impl Fn() -> Server) {
