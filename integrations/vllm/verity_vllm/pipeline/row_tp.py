@@ -14,7 +14,7 @@
   (``row_records.applicable_taps``), as the single-GPU row does.  A leased item's ``tp-commit`` holds the task's GPUs from right
   before its engine to its last run's finalize (``Row.run_gpu``, `pipeline.tp.lease`); such a row has no Match (its processes see no GPU).
 
-A **config run** (``--config-run 1``, world 2 only: ``row.run_row`` refuses a larger one): the Build, the strict word check of its
+A **config run** (``--config-run 1``): the Build, the strict word check of its
 manifest over the W ranks' components, ONE instrumented ``tp-commit`` (``--pairs 1 --warmup 1 --only-arm instrumented --replay-k K``:
 K units over the world, split across the ranks; bounded staging) with no Match directory, no fold Match and no value check, and
 ``config_record.json`` (``pipeline.config_record``, per rank and in total), written however the run ends.

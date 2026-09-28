@@ -198,15 +198,17 @@ def rank_shape(C: ModelShape, world: int) -> ModelShape:
     if world == 1:
         return C
     facts = []
-    if C.NH % world or C.KVH % world:
-        facts.append(f"{C.NH} query and {C.KVH} key/value heads over {world} ranks (an even split, no replicated key/value heads)")
+    replicated_kv = C.KVH < world and world % C.KVH == 0          # QKVParallelLinear: a key/value head on world // KVH ranks
+    if C.NH % world or (C.KVH % world and not replicated_kv):
+        facts.append(f"{C.NH} query and {C.KVH} key/value heads over {world} ranks (an even split, or each key/value head on "
+                     f"world // KVH ranks)")
     if C.I % world:
         facts.append(f"an MLP width of {C.I} over {world} ranks")
     if C.V % VOCAB_PADDING or C.V % world:
         facts.append(f"a vocabulary of {C.V} over {world} ranks (padded to a multiple of {VOCAB_PADDING}: the padding rows' trim)")
     if facts:
         raise Unexpressible("vocabulary cannot express: " + "; ".join(facts))
-    return replace(C, NH=C.NH // world, KVH=C.KVH // world, I=C.I // world)
+    return replace(C, NH=C.NH // world, KVH=1 if replicated_kv else C.KVH // world, I=C.I // world)
 
 
 def _arr(shape: tuple[int, ...], w: int) -> Type:
