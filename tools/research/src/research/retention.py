@@ -6,7 +6,7 @@
     research retention report [--root R] [--depth N] [--json]
     research retention gc [--root R] [--policy default] [--high-pct 80] [--low-pct 75] [--force] [--jobs-dir D]... [--store S] [--json]
                           [--apply]
-    research retention rm PATH... --approved-by @OWNER --ref REF [--by URL] [--root R] [--jobs-dir D]... [--json] [--apply]
+    research retention rm PATH... --approved-by @OWNER --ref REF [--by URL] [--root R] [--jobs-dir D]... [--store S] [--json] [--apply]
 
 A record is a sidecar: `<dir>/.retention.json` for a directory, `<file>.retention.json` beside a file, so it travels with its data
 and `cat` reads it. A directory its owner made read-only has its record beside it, `<dir>.retention.json`; one with both is invalid. It covers everything beneath its path: the walk never descends into a recorded path. Its fields are FIELDS:
@@ -27,7 +27,9 @@ dir (`custody.marker_problem`). A path holding a nested record is left whole. A 
 `rm` deletes the paths it is given, with their owner's yes, for a cleanup the policy doesn't reach. A path qualifies only when a
 record covers it (its own or an ancestor's), that record and every record beneath it (sidecars and implicit ones) are valid, name
 the --approved-by handle as owner and are not `keep`, no job script names it, and nothing in it is read-only or a mount. A path no
-record covers has nobody to say yes, so it is never deleted. Each record is read again just before --apply deletes, and every
+record covers has nobody to say yes, so it is never deleted. A path that is, holds or lies under a `passes` directory (PASSES) also
+needs its covering record's `preserved` artifact to hold that record's whole path, PRESERVED on the remote (`store_check`, just
+before --apply deletes): a yes alone never deletes retained passes. Each record is read again just before --apply deletes, and every
 decision of an --apply goes to the node's deletion log, `<root>/LOG`, with who deleted, the approver and --ref. A dry run (the
 default) deletes and logs nothing.
 """
@@ -63,6 +65,7 @@ POLICY = "default/v0"
 POLICIES = ("default",)
 KIND = "node-data/v1"
 LOG = Path("research/retention/deletions.jsonl")
+PASSES = "passes"
 LOG_SCHEMA = "research/retention-log/v1"
 RM_SCHEMA = "research/retention-rm/v0"
 OWNER_RE = re.compile(r"^@[A-Za-z0-9][A-Za-z0-9._-]*$")
@@ -775,19 +778,34 @@ def _refusal(path: Path, root: Path, approved_by: str, top: Found | None, below:
         return f"in use: {u}"
     try:
         ro = _read_only_dir(path) if os.path.isdir(path) and not os.path.islink(path) else None
+        passes = _holds_passes(path, root)
     except OSError as e:
         return f"can't read all of it ({e}), so what it holds is unknown"
     if ro:
         return f"{ro} is read-only: its owner makes it writable first"
+    if passes and not top.record.get("preserved"):
+        return (f"it holds retained passes and {_kept(top, root)} names no preserved artifact: passes are deleted only once "
+                f"preserved (`research keep {top.path} ... --preserve`), never on a yes alone")
     return None
+
+
+def _holds_passes(path: Path, root: Path) -> bool:
+    """Whether `path` is, holds or lies under a PASSES directory."""
+    if PASSES in relative(path, root).split("/"):
+        return True
+    if not os.path.isdir(path) or os.path.islink(path):
+        return False
+    return any(PASSES in dirs for _base, dirs, _files in os.walk(path, onerror=_raise))
 
 
 def rm(paths: Sequence[Path | str], *, approved_by: str, ref: str, root: Path | str = DEFAULT_ROOT, apply: bool = False,
        by: str | None = None, in_use: Callable[[Path], str | None] | None = None, now: Callable[[], datetime] = utc_now,
-       node: str | None = None, log: Path | str | None = None) -> dict[str, Any]:
+       node: str | None = None, log: Path | str | None = None, remote_check: Callable[[str, Path], str | None] | None = None,
+       store_root: str | None = None) -> dict[str, Any]:
     """`research retention rm` (module docstring): the plan for `paths`, and with `apply` their deletions, every decision a line in the
-    deletion log (`log`, default `root/LOG`). `in_use` None is `JobScripts` over the DEFAULT_JOBS_DIRS that exist. RecordError when
-    --approved-by is not a handle or --ref is empty, and with `apply` when `by` is missing or the log can't be written."""
+    deletion log (`log`, default `root/LOG`). `in_use` None is `JobScripts` over the DEFAULT_JOBS_DIRS that exist; `remote_check` None
+    is `store_check(store_root)`, read only by an --apply that deletes passes. RecordError when --approved-by is not a handle or --ref
+    is empty, and with `apply` when `by` is missing or the log can't be written."""
     root = Path(os.path.abspath(root))
     if not OWNER_RE.match(approved_by or ""):
         raise RecordError(f"--approved-by {approved_by!r}: give the owner's lane handle, such as @compute-accounting")
@@ -854,6 +872,11 @@ def rm(paths: Sequence[Path | str], *, approved_by: str, ref: str, root: Path | 
                 act["error"] = "its records changed during rm: run it again"
             if not act["error"] and (u := in_use(p)):
                 act["error"] = f"in use: {u}"
+            if not act["error"] and _holds_passes(p, root):
+                art = top.record["preserved"]
+                remote_check = remote_check or store_check(store_root)
+                if r := remote_check(art, top.path):
+                    act["error"] = f"it holds retained passes, and preserved {art} is not verified on the remote: {r}"
             act["error"] = act["error"] or _delete(root, p)
             if act["error"]:
                 act["action"] = "failed"
@@ -1066,6 +1089,7 @@ def main(argv: list[str]) -> int:
         ap.add_argument("--root", default=str(DEFAULT_ROOT))
         ap.add_argument("--jobs-dir", action="append", default=[], metavar="D", help="more job-script directories (beside "
                         + " and ".join(map(str, DEFAULT_JOBS_DIRS)) + " when they exist): a path a file there names is in use")
+        ap.add_argument("--store", default=None, help="the evidence store a deletion of passes checks its artifact against")
         ap.add_argument("--json", action="store_true")
         ap.add_argument("--apply", action="store_true", help=f"delete, and log each decision to <root>/{LOG}; without it nothing "
                                                              "is deleted or logged")
@@ -1076,7 +1100,7 @@ def main(argv: list[str]) -> int:
         jobs = [d for d in DEFAULT_JOBS_DIRS if d.is_dir()] + [Path(d) for d in ns.jobs_dir]
         try:
             plan = rm(ns.paths, approved_by=ns.approved_by, ref=ns.ref, root=ns.root, apply=ns.apply, by=ns.by,
-                      in_use=JobScripts(jobs, ns.root), now=utc_now)
+                      in_use=JobScripts(jobs, ns.root), now=utc_now, store_root=ns.store)
         except RecordError as e:
             print(f"research retention rm: {e}", file=sys.stderr)
             return 2
