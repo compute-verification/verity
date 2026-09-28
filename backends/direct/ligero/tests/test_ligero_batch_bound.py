@@ -18,7 +18,7 @@ pytest.importorskip("blake3")
 
 from backends.direct.ligero import protocol, serialize  # noqa: E402
 
-FIXTURES = Path(__file__).resolve().parents[1] / "backends" / "ligero-verify" / "fixtures"
+FIXTURES = Path(__file__).resolve().parents[4] / "backends" / "ligero-verify" / "fixtures"
 N_PROOFS_OFF = 42       # ligero-statement/v2: magic 8 | layout 4 | l n D t 16 | target 8 | zk 1 | t_pad 4 | mode 1 | n_proofs
 
 
@@ -66,6 +66,7 @@ def _copies(tmp_path: Path, name: str, n: int, claimed: int) -> Path:
 
 
 @pytest.mark.skipif(not (FIXTURES / "b1.proof").is_file(), reason="no committed fixture")
+@pytest.mark.slow
 def test_python_file_batch_verifier_enforces_the_rule(tmp_path):
     # the statement's n_proofs is not in the statement digest: relabelling it leaves the proof valid, so copies of the
     # fixture are a batch of independently accepted sub-batches whose accounting is whatever the rule says

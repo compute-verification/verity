@@ -275,6 +275,7 @@ def _cases(V: int, n: int, seed: int):
 
 
 @needs_tables
+@pytest.mark.slow
 def test_the_whole_row_equals_the_lane_walk_evaluate_spec_over_temps_top_p_split_counts_ties_masks_and_nan():
     from verity_vllm.properties.admission import evaluate_spec
     from verity_vllm.program.registry import sampling_topp_difftest as D
@@ -289,6 +290,7 @@ def test_the_whole_row_equals_the_lane_walk_evaluate_spec_over_temps_top_p_split
 
 
 @needs_tables
+@pytest.mark.slow
 def test_the_r16_gpu_fixture_rows_device_token_masked_row_and_lane_walk_all_agree_with_the_vectorised_row():
     """Three real rows of the llama B8 stoch record (`fstoch01_rows.npz`, cp-dev1 L40S, vLLM d9105ea80): the device's served token,
     the kernel-consumed masked row, seed / pos / temperature / top_p as the kernel read them.  The vectorised row reproduces the

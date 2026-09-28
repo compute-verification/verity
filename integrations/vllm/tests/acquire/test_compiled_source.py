@@ -78,6 +78,7 @@ def _wrap(src: cs.CompiledGraphSource, m: torch.nn.Module):
         src.wrapped.append(name)
 
 
+@pytest.mark.slow
 def test_renumber_assigns_invocations_per_call_site():
     cs._register_op()
     src = cs.CompiledGraphSource(rows=4)
