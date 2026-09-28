@@ -853,8 +853,8 @@ RELATION_SEMANTICS = {"bf16-ampere": "sm80.mma.m16n8k16.bf16", "bf16-hopper": "s
 INPUT_SET_KINDS = ("input-set/v1", "vllm-vu-set/v1")
 
 
-#: Hardware lines no target anchors: a target's instruction on another device (docs ontology, "A result": hardware is its own
-#: axis).  #101 was served on an L40S, whose BF16 GEMM is the Ampere-class mma the first target states.  Every result on such
+#: Hardware lines no target anchors: a target's instruction on another device (``README.md``'s Glossary, "Cell": prover
+#: hardware is its own axis).  #101 was served on an L40S, whose BF16 GEMM is the Ampere-class mma the first target states.  Every result on such
 #: a line is a statement of its own (:func:`result_subcircuit`), so the line has rows only where it has results.
 L40S_BF16 = dataclasses.replace(FIRST, name="l40s-48gb/bf16/sm80.mma.m16n8k16.bf16", anchor_device="NVIDIA L40S 48GB", status="draft", dossier=None)
 #: Every Table 2 line by name: the targets, then the hardware-only lines.
@@ -880,7 +880,7 @@ def _sem_slug(semantics: str) -> str:
 
 def result_subcircuit(meta: Mapping[str, Any], target: Target) -> str | None:
     """The census subcircuit of a result's statement when it is not its target's own -- a statement of its own, so a Table 2
-    row of its own (docs ontology, "A result": K and the semantics are part of the subcircuit) -- else ``None``.
+    row of its own (``README.md``'s Glossary, "Subcircuit": K and the semantics are part of it) -- else ``None``.
 
     K is the fingerprint's.  The semantics are the ``bench.cell`` stamp's subcircuit, else the result's ``relation``
     (:data:`RELATION_SEMANTICS`), else the target's instruction.  Semantics the census records as one (``stood_for_by``) are
@@ -2159,7 +2159,7 @@ def column_header(col: str) -> str:
     return FAMILY_NAMES[fid] + col[len(fid):] if fid else col
 
 
-#: Composed backends with their own id (docs ontology, "Presentation rules"): route (a) renders in the A-GKR column, and its
+#: Composed backends with their own id (``README.md``'s Glossary, "Backend"): route (a) renders in the A-GKR column, and its
 #: profile adds C-Flock's assumptions and the sigma link's.
 COMPOSED = {ROUTE_A: "A-route-a"}
 

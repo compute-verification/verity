@@ -47,7 +47,8 @@ def test_every_census_file_validates_against_its_schema_with_unique_ids(name: st
 
 
 def test_the_census_encodes_no_units() -> None:
-    """The census holds workloads and subcircuits, never replay or proof units (docs: units design)."""
+    """The census holds workloads and subcircuits, never replay or proof units, which applications choose per run
+    (``census/README.md``)."""
     text = " ".join((census.ROOT / f"{n}.json").read_text(encoding="utf-8") for n in FILES)
     ids = [e["id"] for n in FILES for e in census.raw(n)]
     assert not [i for i in ids if re.search(r"(^|[-/])(vu|ru)([-/]|$)", i)] and "verification unit" not in text.lower()
