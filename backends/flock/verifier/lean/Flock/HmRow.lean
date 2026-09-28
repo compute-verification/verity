@@ -93,6 +93,10 @@ def zeroRowBc (words : Nat) : ByteArray :=
 
 private def ctx := "circuit META"
 
+/-- No slot reads one source port on two of its wired inputs. -/
+def wiresReadDistinct (wires : Array Wire) : Bool :=
+  wires.all fun w => (wires.filter fun x => x.dst.1 == w.dst.1 && x.dst.2.1 == w.dst.2.1 && x.src == w.src).size == 1
+
 private def intLists (j : Json) (k : String) : V (Array (Array Int)) := do
   (← J.arr j k ctx).mapM fun u => do (← J.asArr u s!"{ctx}.{k}").mapM fun x => J.asInt x s!"{ctx}.{k}"
 
@@ -149,6 +153,7 @@ def check (c : Circuit) (tags : Tags) (leafScheme : Json) : V Unit := do
       if r.count != c.g * c.perVu.getD n 0 then throw s!"a range of {(c.nets.getD n default).1} is not {c.perVu.getD n 0} slots per VU"
   for n in [0:c.nets.size] do
     if (c.ranges.filter (·.kind == Kind.net n)).size != 1 then throw s!"circuit {(c.nets.getD n default).1} has not exactly one range"
+  if !wiresReadDistinct c.wires then throw "a slot reads one source port on two inputs"
   let mut wired : Array ((Nat × Nat × Nat) × Nat) := #[]
   for w in c.wires do
     let (dn, di, dp) := w.dst
@@ -190,6 +195,9 @@ def check (c : Circuit) (tags : Tags) (leafScheme : Json) : V Unit := do
     let lo := c.leavesOut[u]!
     if li.size != g0in.bits.size || li.any (fun x => x < -1 || x ≥ (nIn : Int)) || (!tailOut && lo.size != g0out.bits.size) then
       throw s!"unit {u}'s leaf maps are not its circuit's ports"
+    if li.any (· < 0) then throw s!"unit {u} reads a zero leaf: a unit input reads a row word, never a constant"
+    let srcs := li.toList.map Int.toNat ++ ((c.leafCuts.filter (·.1 == u)).map (·.2.2)).toList
+    if !decide srcs.Nodup then throw s!"unit {u} reads one row word on two inputs"
     for o in lo do
       if o ≥ nOut || seen[o]! then throw s!"output leaf {o} is outside the outputs or returned twice"
       seen := seen.set! o true

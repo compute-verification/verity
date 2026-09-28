@@ -1105,6 +1105,12 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   no slots would escape the block bound.
 - **Wires.** META `wires` begins with the row wires, which the verifier derives and compares: compression `k`'s `cv` from
   compression `k − 1`'s `out`, and hm96 slot `p`'s `cv` from the row's last compression. No other wire touches a row slot.
+- **Distinct sources** (a program of units needs them).
+  - A unit's leaf map and its leaf cuts read each row word at most once, and no leaf is a zero leaf (`-1`, whose 16
+    bits Δ would copy from one forced-zero row).
+  - No slot reads one source port on two of its wired inputs.
+  - A typed template (§16.11) meets both by construction: its instance type reads the rows' words, bit `w` from bit
+    `w % 16` of row word `w / 16`, and states no leaf map, cut or wire.
 - **Δ,** in this order: every slot's constant from the pin; per VU and port, the first compression's `cv` bits (the
   midstate) and the hm96 slot's `pad` bits (the padding block), each bit from the pin (1) or the unit range's first slot's
   forced-zero row (0); every unit's leaf bit `t` of the u16 word at row byte `B` from the message bit of byte `B + t/8`,
