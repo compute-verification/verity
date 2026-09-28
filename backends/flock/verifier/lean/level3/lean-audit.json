@@ -631,17 +631,17 @@
    ]
   },
   "Flock.Circuit": {
-   "digest": "0aebfc0f02e613e4f4b1cc0e3b849d0eb757d8c8b69e467e44424c62927e710a",
+   "digest": "3932fcae8a6d2a75d275978fbbc7774abbf65e02a651cf5246cfe238fd446ae5",
    "definitions": {
-    "Flock.Circuit": "789aad17295c2c156932bc3a83abc10659f8c6d8bd4cfd3fc6044747c3c6b232",
-    "Flock.Circuit.kLog": "648725baa985a4c5adbc57a1b740234efcee20b4621b55ce07e5a092f3c61ce6",
+    "Flock.Circuit": "c857293e3edc24f9d4631e64d4bb35c1aa2ce94e525378926b1196ddd4ebf5f1",
+    "Flock.Circuit.kLog": "e4c2d17e24a3f7587fd3f0e7ad475fee728f8b5700336f99bead13f153568d3c",
     "Flock.Circuit.nets": "160bae4dbfddd29c098494ac4d32aceb20e724f780a5e60224a1bc0b90461ab6",
     "Flock.Circuit.ranges": "12a66772bdb6e68e817dc442af7cee7df99ccadf7ccec215669d9822a2eb5b32",
     "Flock.Kind": "e445ef36073224521562092cd80d3862ff0640b2e0b14d2a368e600a28bf5226",
     "Flock.Kind.comp": "9e425beea52b8adb23e43092eaec06f4000bf4a2b3c8dc451a07caffe560871f",
     "Flock.Kind.mask": "7406a2e934d2dcf57a6866543cfc7ec9a35611c9ba680d917fc8cd2a7378f960",
     "Flock.Kind.net": "ac6c22e781a7abec2083631c6e89e995d53d254c3141dc14f3dad16434d95143",
-    "Flock.Port": "19fb70537d441daa8a51ddb3f7bb45b1908e8caf42e923349e56d7baa885fbc0",
+    "Flock.Port": "566ccec6b23fee8c9cfaac4d0eb037b9074e270c9903928a8a2b4ae8c91d5ba4",
     "Flock.Range": "558d65b6b5476afe0abcbe44240c1eb4d16b550a32d9a9ae81bd9a335da770dc",
     "Flock.Range.count": "b0e1c2f200bfa98f7218c1ee3b122444e65cca6e6142385cd0772d6972935297",
     "Flock.Range.kind": "167a341f06b49623666f02c75f94abd87c6b0031e1e19a2ceca7a5f9d39fcad4",

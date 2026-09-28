@@ -61,6 +61,8 @@ theorem row_copies_flat (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < 
   have R := RowRanges.ofL L F.parse F.check
   have hrw : RowWires st.c := F.parse.rowWires
   have hpos : ∀ q < st.c.ports.size, 0 < st.c.ports[q]!.chunks := fun q hq => (hv1 _ (getElem_mem_toList' hq)).2.2
+  have hseg : ∀ q < st.c.ports.size, st.c.ports[q]!.segs = none := fun q hq =>
+    F.parse.v1Segs _ (getElem_mem_toList' hq) (hv1 _ (getElem_mem_toList' hq)).1
   have h0 := hpos p hp
   have hpin := pin_bit L hz o
   have hzero := zero_bit L F hupv (by omega) hz o
@@ -70,18 +72,18 @@ theorem row_copies_flat (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < 
         wireCopiesOf st.c (HmRow.rowWires st.c.ports st.c.shaNet st.c.hmNet).toList).filter
           (fun e => e.1 = shaBase st.c g p 0 + shaIn st.c (2 * shaSub st.c p 0) + t) =
         [(shaBase st.c g p 0 + shaIn st.c (2 * shaSub st.c p 0) + t,
-          constSrc st.c st.pin (HmRow.midstate st.c.ports[p]!.words) t)] := R.cv0_filter hpos hg hp ht
+          constSrc st.c st.pin (HmRow.midstate st.c.ports[p]!.words) t)] := R.cv0_filter hpos hseg hg hp ht
     rw [inBit_copyL L F hv1 hda hrw hz o (Or.inl rfl) (R.shaIn_at hg hp h0 ht) (shaNet_ofRows R.rowNets)
       (by rw [shaNet_inRows R.rowNets]; omega) (shaLaid_self (by omega)) hf]
     exact blockBit_constSrc _ _ hpin hzero
   · have hs : shaSub st.c p (k + 1) < 3 := (rowSlot_lt hp hk).2
-    have hf := R.chain_filter hpos (pin := st.pin) (k := k + 1) hg hp (by omega) hk ht
+    have hf := R.chain_filter hpos hseg (pin := st.pin) (k := k + 1) hg hp (by omega) hk ht
     rw [chainDst_eq R.rowNets hs] at hf
     rw [inBit_copyL L F hv1 hda hrw hz o (Or.inl rfl) (R.shaIn_at hg hp hk ht) (shaNet_ofRows R.rowNets)
       (by rw [shaNet_inRows R.rowNets]; omega) (shaLaid_self (by omega)) hf]
     rfl
   · rw [(hmIn_eq R.rowNets).1, Nat.add_zero]
-    have hf := R.hmcv_filter hpos (pin := st.pin) hg hp ht
+    have hf := R.hmcv_filter hpos hseg (pin := st.pin) hg hp ht
     have hx : Flat.wireDst st.c g (hmWire st.c.ports st.c.shaNet st.c.hmNet p) = st.c.slotCol st.c.hmNet g p :=
       hmWireDst_eq R.rowNets g p
     rw [hx] at hf
@@ -90,7 +92,7 @@ theorem row_copies_flat (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < 
     unfold Flat.wireSrc hmWire shaBase shaOut shaSub
     simp only [rowSlots_size hp]
   · rw [(hmIn_eq R.rowNets).2.1, Nat.add_assoc]
-    have hf := R.pad_filter hpos (pin := st.pin) hg hp ht
+    have hf := R.pad_filter hpos hseg (pin := st.pin) hg hp ht
     have hx : padCol st.c g p + t = st.c.slotCol st.c.hmNet g p + (512 + t) := by
       rw [padCol_eq R.rowNets, Nat.add_assoc]
     rw [hx] at hf
@@ -113,7 +115,8 @@ theorem row_bc_flat (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < st.c
   have R := RowRanges.ofL L F.parse F.check
   obtain ⟨hcv0, hchain, hcvh, hpad⟩ := row_copies_flat L F hda hupv hv1 hz o hg hp
   obtain ⟨hv, -, hn⟩ := hv1 _ (getElem_mem_toList' hp)
-  refine port_commit_rows st.c _ g p hn (F.parse.portWords _ (getElem_mem_toList' hp) hv) (rowSlots_size hp).ge R.rowNets
+  refine port_commit_rows st.c _ g p (F.parse.v1Segs _ (getElem_mem_toList' hp) hv) hn
+    (F.parse.portWords _ (getElem_mem_toList' hp) hv) (rowSlots_size hp).ge R.rowNets
     (fun k hk => (rowSlot_lt hp hk).2) (fun k hk => ?_) ?_ hcv0 hchain hcvh hpad
   · exact shaSlot_flat L F hz o hg (by rw [R.perVu_sha]; exact (rowSlot_lt hp hk).1)
   · exact hmSlot_flat L F hz o hg (by rw [R.perVu_hm]; exact lt_of_lt_of_le hp (le_nextPow2 _))
