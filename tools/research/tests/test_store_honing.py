@@ -99,6 +99,27 @@ def test_evict_store_only_verified_blobs_largest_first_and_honest_presence(store
     assert json.loads(capsys.readouterr().out)["store"]["reached_target"] is False
 
 
+def test_evict_keeps_every_blob_a_registry_artifact_holds(store, fs_remote, tmp_path, capsys):
+    """Node 1's runs fetch fixtures only from the public export, which lacked rec-coins on 11 Oct: a blob any artifact of the
+    registry holds stays, even when another, unlisted artifact shares it."""
+    from research.store import evict as EV
+
+    blob = tmp_path / "coins.bin"
+    blob.write_bytes(os.urandom(3000))
+    fixture = store.put_artifact("proof/v1", {"n": 1}, file=blob)
+    other = store.put_artifact("proof/v1", {"n": 2}, file=blob)
+    loose = store.put_artifact("proof/v1", {"n": 3}, file=_tree(tmp_path / "l", {"l.bin": os.urandom(2000)}) / "l.bin")
+    assert all(store.push(a)["preserved"] for a in (fixture, other, loose))
+    plan = EV.plan_store(store, min_bytes=1000, keep=frozenset({fixture}))
+    assert [c[0] for c in plan["candidates"]] == [2000] and plan["kept_bytes"] == 3000
+    reg = tmp_path / "artifacts.json"
+    reg.write_text(json.dumps({fixture: "verity/ml/flock/tests/fixtures/rec-coins", "previous": {}}))
+    assert main(["evict", "--target-free-gb", "99999", "--min-mb", "0.001", "--keep-registry", str(reg), "--json"]) == 1
+    rep = json.loads(capsys.readouterr().out)["store"]
+    assert [b["artifacts"] for b in rep["evicted_blobs"]] == [[loose]] and rep["kept_bytes"] == 3000
+    assert store.has_local(fixture) and store.has_local(other) and not store.has_local(loose)
+
+
 def test_evict_leaves_a_tree_someone_fetched_within_a_day(store, tmp_path):
     """Node 1's hourly eviction runs below its mark all day, so clearing trees/ whole took the files a run's view links into
     from under the run (the vLLM regression's #11 rebuild, r20261003-173418-89e5): only entries nobody fetched within

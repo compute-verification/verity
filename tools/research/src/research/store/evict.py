@@ -6,6 +6,7 @@ Two kinds of local copy can go, and only these:
   `verified_utc` in the catalog (PRESERVED), the local object has the manifest's size, and the blob is at least `min_bytes`.
   Largest first, until the target free space is reached.  `LocalStore._resolve_blob` re-fetches an evicted blob on demand;
   `has_local` / `where` report the eviction honestly, and `index.set_presence(local=...)` is refreshed for every touched artifact.
+  A blob any artifact in `keep` holds stays (`--keep-registry`: the fixture registry, for a node that can't refetch from the remote).
   `trees/` (materialised tree copies) is a pure cache: its entries nobody fetched within `TREE_KEEP_S` go unless `keep_trees`
   (a fresher one may be open in a run's view; the node's hourly eviction runs below its mark all day).
 * **run-directory files** (`~/.research/runs/<run>/...`, `evict_runs`): the big files of a finished run that appear, with the same
@@ -85,9 +86,11 @@ def flagged_remote(store: LocalStore) -> set[str]:
     return {r[0] for r in store.index.db.execute("SELECT id FROM artifacts WHERE remote=1")}
 
 
-def plan_store(store: LocalStore, *, min_bytes: int = MIN_BYTES, log: Callable[[str], None] | None = None) -> dict[str, Any]:
+def plan_store(store: LocalStore, *, min_bytes: int = MIN_BYTES, keep: frozenset[str] = frozenset(),
+               log: Callable[[str], None] | None = None) -> dict[str, Any]:
     """What could go: `candidates` = [(bytes, hex, holders)] largest first, `trees_bytes`, `held_back_bytes` (local blobs of
-    artifacts flagged remote but not verified), `skipped` (size mismatch / unreadable manifest)."""
+    artifacts flagged remote but not verified), `kept_bytes` (local blobs an artifact in `keep` holds), `skipped` (size mismatch /
+    unreadable manifest)."""
     say = log or (lambda s: None)
     verified, flagged = verified_remote(store), flagged_remote(store)
     holders: dict[str, set[str]] = {}
@@ -104,10 +107,13 @@ def plan_store(store: LocalStore, *, min_bytes: int = MIN_BYTES, log: Callable[[
             holders.setdefault(h, set()).add(art)
             sizes[h] = n
     cands: list[tuple[int, str, set[str]]] = []
-    held_back = 0
+    held_back = kept = 0
     for h, arts in holders.items():
         p = store.object_path(h)
         if not p.exists() or sizes[h] < min_bytes:
+            continue
+        if arts & keep:
+            kept += sizes[h]
             continue
         if not arts <= verified:
             if arts <= (verified | flagged):
@@ -122,7 +128,7 @@ def plan_store(store: LocalStore, *, min_bytes: int = MIN_BYTES, log: Callable[[
     trees = store.root / "trees"
     trees_bytes = sum(os.path.getsize(os.path.join(dp, f)) for dp, _, fs in os.walk(trees) for f in fs) if trees.is_dir() else 0
     return {"candidates": cands, "evictable_bytes": sum(c[0] for c in cands), "trees_bytes": trees_bytes, "held_back_bytes": held_back,
-            "skipped": skipped, "verified_artifacts": len(verified)}
+            "kept_bytes": kept, "skipped": skipped, "verified_artifacts": len(verified)}
 
 
 def stale_trees(store: LocalStore, now: float) -> tuple[list[str], int, int]:
@@ -143,15 +149,16 @@ def stale_trees(store: LocalStore, now: float) -> tuple[list[str], int, int]:
 
 
 def evict_store(store: LocalStore, *, target_free_bytes: int, dry_run: bool = False, min_bytes: int = MIN_BYTES, keep_trees: bool = False,
-                free_fn: Callable[[], int] | None = None, log: Callable[[str], None] | None = None,
+                keep: frozenset[str] = frozenset(), free_fn: Callable[[], int] | None = None, log: Callable[[str], None] | None = None,
                 now: float | None = None) -> dict[str, Any]:
     """Evict verified-remote blobs (largest first) and the `trees/` entries not fetched within TREE_KEEP_S until `free_fn()` >=
     `target_free_bytes`.  The report says what was (or, with `dry_run`, would be) removed; nothing else is touched."""
     say = log or (lambda s: None)
     free = free_fn or (lambda: free_bytes(store.root))
-    plan = plan_store(store, min_bytes=min_bytes, log=log)
+    plan = plan_store(store, min_bytes=min_bytes, keep=keep, log=log)
     rep: dict[str, Any] = {"store": str(store.root), "dry_run": dry_run, "target_free_bytes": target_free_bytes, "free_before": free(),
                            "evictable_bytes": plan["evictable_bytes"], "evictable_blobs": len(plan["candidates"]), "held_back_bytes": plan["held_back_bytes"],
+                           "kept_bytes": plan["kept_bytes"],
                            "trees_bytes": plan["trees_bytes"], "trees_removed": False, "evicted_bytes": 0, "evicted_blobs": [], "artifacts_touched": [],
                            "skipped": plan["skipped"], "reached_target": False}
     say(f"free {rep['free_before'] / 1e9:.2f} GB, target {target_free_bytes / 1e9:.2f} GB; {len(plan['candidates'])} evictable blobs "
