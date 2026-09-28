@@ -34,6 +34,7 @@ import random
 import signal
 import statistics
 import sys
+import time
 import traceback
 from dataclasses import dataclass, field
 from fractions import Fraction
@@ -45,6 +46,7 @@ import chain as CH
 import derive as DV
 import fill as F
 import identity as I
+import refs as RF
 import report as R
 import sass_gate as SG
 import schedule as S
@@ -167,11 +169,24 @@ def bad_throttle(sample: dict) -> int:
     return int(sample.get("throttle", "0x0"), 16) & sum(BAD_THROTTLE)
 
 
-class Bench:
-    """The run's gates, negative controls and timings. `require` stands before every timed item."""
+class Stages:
+    """A shape's host seconds by stage: each `mark(name)` is the time since the last (`clock` is the Bench's)."""
 
-    def __init__(self, dev, sensors, reps: int, methods: tuple[str, ...], log=None):
-        self.dev, self.timer, self.ledger = dev, Timer(dev, sensors), S.GateLedger()
+    def __init__(self, clock):
+        self.clock, self.t, self.wall_s = clock, clock(), {}
+
+    def mark(self, name: str) -> None:
+        t = self.clock()
+        self.wall_s[name] = self.wall_s.get(name, 0.0) + t - self.t
+        self.t = t
+
+
+class Bench:
+    """The run's gates, negative controls and timings. `require` stands before every timed item. `clock` (seconds) times
+    the host's part of each gate, control and stage (`wall_s`), where a lease can sit idle."""
+
+    def __init__(self, dev, sensors, reps: int, methods: tuple[str, ...], log=None, clock=time.monotonic):
+        self.dev, self.timer, self.ledger, self.clock = dev, Timer(dev, sensors), S.GateLedger(), clock
         self.reps, self.methods, self.log = reps, tuple(methods), log or (lambda s: None)
         self.negatives: list[dict] = []
         self.dropped: list[dict] = []
@@ -185,24 +200,27 @@ class Bench:
 
     def gate(self, key: tuple, fn) -> bool:
         """Runs a gate (`fn() -> (ok, detail)`) and records it; a gate that raises has failed."""
+        t0 = self.clock()
         try:
             ok, detail = fn()
         except S.GateError:
             raise
         except Exception as ex:  # noqa: BLE001 - a crashing gate is a failed gate, recorded with its error
             ok, detail = False, {"error": f"{type(ex).__name__}: {ex}"}
-        self.ledger.record(key, ok, detail)
+        self.ledger.record(key, ok, detail, wall_s=self.clock() - t0)
         self.log(f"gate {'pass' if ok else 'FAIL'} {'/'.join(map(str, key))}")
         return ok
 
     def negative(self, key: tuple, fn) -> None:
         """A known-bad variant (`fn() -> (ok, detail)`): its gate must reject it, or the run stops."""
+        t0 = self.clock()
         try:
             ok, detail = fn()
         except Exception as ex:  # noqa: BLE001 - a control that can't run shows nothing; the run stops
-            self.negatives.append({"key": list(key), "rejected": None, "error": f"{type(ex).__name__}: {ex}"})
+            self.negatives.append({"key": list(key), "rejected": None, "error": f"{type(ex).__name__}: {ex}",
+                                   "wall_s": self.clock() - t0})
             raise NegativeControlFailed(f"{'/'.join(map(str, key))} couldn't run: {ex}") from ex
-        self.negatives.append({"key": list(key), "rejected": not ok, "detail": detail})
+        self.negatives.append({"key": list(key), "rejected": not ok, "detail": detail, "wall_s": self.clock() - t0})
         self.log(f"negative control {'rejected' if not ok else 'PASSED'} {'/'.join(map(str, key))}")
         if ok:
             raise NegativeControlFailed(f"{'/'.join(map(str, key))} passed its gate")
@@ -334,6 +352,7 @@ def _known_bad(arm, dev, shape, ops):
 def _arm_gate(dev, arm, shape, flags, calls, sets: list[int]):
     def run():
         out = {}
+        RF.prefetch(arm, dev, [calls[i] for i in sets], shape, flags)
         for i in sets:
             calls[i].launch(dev.stream)
             dev.sync()
@@ -726,7 +745,8 @@ def chain_entries(bench: Bench, dev, shape, timed: list[Entry], arms: list, arm_
             if links is None:
                 unchained[f"{a.name}/{role}"] = why
                 continue
-            variants = ["full"] + (list(CH.SPLIT_VARIANTS) if role == "hash" and CH.has_phases(links) else [])
+            variants = ["full"] + ([v for v in CH.SPLIT_VARIANTS if v != "side" or CH.has_side(links)]
+                                   if role == "hash" and CH.has_phases(links) else [])
             for v in variants:
                 add(("chain", shape.label, a.name, role, v), links, DV.INPUT_KIND[a.inputs], v, e.key, a,
                     a.flag_sets[role])
@@ -784,18 +804,23 @@ def chain_report(shape, fams, arms, entries: list[Entry], med: dict, methods: tu
         var = {e.meta["variant"]: med[e.key] for e in ch if e.key[2] == a.name and e.key[3] == "hash"}
         d = derive_ms.get(DV.INPUT_KIND[a.inputs], {})
         split = {}
-        if set(CH.SPLIT_VARIANTS) <= set(var):
+        if {"full", "gemm", "before-gemm"} <= set(var):
             for m in methods:
-                full, g, bg, side = (var[v].get(m) for v in ("full", *CH.SPLIT_VARIANTS))
-                if None in (full, g, bg, side):
+                full, g, bg = (var[v].get(m) for v in ("full", "gemm", "before-gemm"))
+                side = var.get("side", {}).get(m)
+                if None in (full, g, bg):
                     continue
                 split[m] = {"derive_ms": d.get(m), "before_ms": bg - g, "during_ms": g - (d.get(m) or 0.0),
-                            "after_ms": full - bg, "full_ms": full, "side_ms": side, "after_exposed_side_ms": side - bg,
-                            "hidden_by_side_ms": full - side}
+                            "after_ms": full - bg, "full_ms": full}
+                if side is not None:
+                    split[m] |= {"side_ms": side, "after_exposed_side_ms": side - bg, "hidden_by_side_ms": full - side}
                 if m in r and r[m].get("baseline_ms"):
                     base = r[m]["baseline_ms"]
-                    split[m] |= {"full_x": full / base, "side_x": side / base}
-        r["split"] = split or "the arm's calls expose no phases (before, gemm, after)"
+                    split[m] |= {"full_x": full / base} | ({"side_x": side / base} if side is not None else {})
+        r["split"] = split or "the arm's calls expose no phases (step groups, arm.GROUPS)"
+        if split:
+            r["split_groups"] = CH.split_groups(next(e.chain.links for e in ch if e.key[2] == a.name
+                                                     and e.meta["variant"] == "before-gemm"))
         out["arms"][a.name] = r
     return out
 
@@ -844,11 +869,13 @@ def run_shape(bench: Bench, dev, shape, fams: list[B.Family], arms: list, first:
     if plan["memory_bytes"] > MEMORY_SHARE * free_bytes:
         row["skipped"] = f"operands need {plan['memory_bytes']} bytes; {free_bytes} free"
         return row
+    st = Stages(bench.clock)
     sf: dict[str, tuple[int, int]] = {}
     for f in alloc:
         ok, _ = B.cutlass_candidates(dev, f, shape, kernels)
         sf[f.name] = (max([c.sf_bytes[0] for c in ok], default=0), max([c.sf_bytes[1] for c in ok], default=0))
     so = B.allocate(dev, shape, alloc, plan["sets"], args.seed, sf, extra)
+    st.mark("operands")
     entries: list[Entry] = []
     gated: dict = {}
     unchained: dict = {}
@@ -856,21 +883,25 @@ def run_shape(bench: Bench, dev, shape, fams: list[B.Family], arms: list, first:
         gated = gate_baselines(bench, dev, shape, fams, so, kernels, lt_ws, first, args.lt_candidates, args.seed,
                                frozenset(getattr(args, "lt_enumerate", None) or ()), lt_pick(args),
                                frozenset(getattr(args, "cutlass_sched", None) or ()))
+        st.mark("baseline_gates")
         if getattr(args, "screen_only", False):
             for fam in fams:
                 wide = [c for c in gated[fam.name]["gated"] if searched(c)]
                 ms = screen(bench, dev, shape, fam, so, wide, lt_ws, plan["burst"]) if wide else {}
                 gated[fam.name]["screen_ms"] = dict(sorted(ms.items(), key=lambda kv: kv[1]))
             row["screen_only"] = True
+            st.mark("screen")
             return row
         arm_ents, arm_sets = [], {}
         for a in arms:
             arm_sets[a.name] = arm_operand_sets(dev, a, so)
             arm_ents += arm_entries(bench, dev, a, shape, arm_sets[a.name], first)
+        st.mark("arm_gates")
         entries = tune_baselines(bench, dev, shape, fams, so, gated, lt_ws, plan["burst"], args.tune_reps, args.finalists,
                                  getattr(args, "screen_keep", SCREEN_KEEP))
         entries += bench.capture(arm_ents, plan["burst"])
         free_entries(bench, [e for e in arm_ents if e not in entries])
+        st.mark("tune")
         if chained(args, shape):
             chains, unchained = chain_entries(bench, dev, shape, entries, arms, arm_sets, plan["sets"], not bench.chained)
             bench.chained = True
@@ -880,20 +911,27 @@ def run_shape(bench: Bench, dev, shape, fams: list[B.Family], arms: list, first:
                     e.chain.release()
             entries += kept
             row["decode_method"] = "dependent-chain"
+            st.mark("chain_gates")
         if bench.sass is not None:
             bench.sass.check(bench.sass.discover(), "mapped")
+        st.mark("sass_gate")
         warm = bench.warmup(entries, plan["burst"], B.hash_seed(f"{args.seed}/{shape.label}/warmup"),
                             1e3 * getattr(args, "warmup_s", WARMUP_MS / 1e3),
                             1e3 * getattr(args, "warmup_max_s", WARMUP_MAX_MS / 1e3))
         row["warmup"] = {k: v for k, v in warm.items() if k != "per_call"}
         row["sizing"] = bench.equalize(entries, warm["per_call"], plan["burst"], getattr(args, "item_ms", ITEM_MS))
+        st.mark("warmup")
         order_seed = B.hash_seed(f"{args.seed}/{shape.label}/order")
         row["order_seed"] = order_seed
         per = bench.timed(entries, plan["burst"], order_seed)
-        row["summary"] = summarize(per, bench.items)
+        st.mark("timed")
         row["poisoning"] = dump_transcripts(bench, dev, shape, arms, entries, args.out.parent, arm_sets)
+        st.mark("transcripts")
+        row["summary"] = summarize(per, bench.items)
         row.update(shape_report(shape, fams, arms, entries, per, bench, unchained))
+        st.mark("report")
     finally:
+        row["wall_s"] = st.wall_s
         free_entries(bench, entries)
         for g in gated.values():
             B.release_plans(dev, g["all"])
@@ -973,7 +1011,7 @@ def shape_report(shape, fams, arms, entries: list[Entry], per: dict, bench: Benc
                           "baseline": g["baseline"], "baseline_kernel": chain["baselines"][g["baseline"]]["graph"]["kernel"],
                           "baseline_ms": g["baseline_ms"], "chain_length": chain["length"]}
             side = c["split"].get("graph") if isinstance(c["split"], dict) else None
-            if side:
+            if side and "side_x" in side:
                 r["panel"]["slowdown_side_stream"] = round(side["side_x"], 4)
             r["panel"] |= panel_reps(bench.items, ("chain", shape.label, a.name, "hash", "full"),
                                      ("chain", shape.label, g["baseline"], r["panel"]["baseline_kernel"], "full"))

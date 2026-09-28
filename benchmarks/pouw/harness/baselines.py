@@ -26,6 +26,8 @@ import numpy as np
 from arm import Buffer, Shape
 
 LT_WORKSPACE = 32 << 20
+#: a verity entry's workspace at least: its two 128-byte CUtensorMaps (cutlass_api.h)
+PLAIN_WORKSPACE = 256
 LT_CANDIDATES = 32
 LT_ENUMERATED_MAX = 8192
 #: a cuBLASLt configuration's identity (with the library and the fp8-blk128 swap)
@@ -98,7 +100,8 @@ def fill_units(fmt: int, nbytes: int) -> int:
 
 @dataclass
 class Candidate:
-    """One kernel of one family at one shape: its source (cublaslt | cutlass), id and config."""
+    """One kernel of one family at one shape: its source (cublaslt; cutlass, or verity for nvf4_plain.cu's entries in the
+    same registry), id and config."""
 
     family: str
     source: str
@@ -123,25 +126,33 @@ class Operands:
 
 
 class BaselineCall:
-    """A candidate prepared on one operand set, with the arm interface's `Call` members."""
+    """A candidate prepared on one operand set, with the arm interface's `Call` members. A verity entry keeps its tensor maps
+    in its workspace from prepare to every launch, so it gets a workspace of its own; the others share `lt_ws`."""
 
     def __init__(self, dev, cand: Candidate, shape: Shape, ops: Operands, lt_ws: Buffer):
         self.dev, self.cand, self.shape, self.ops = dev, cand, shape, ops
         self.outputs = {"d": ops.d}
-        self._h = None
-        if cand.source == "cutlass":
+        self._h, self._own_ws = None, None
+        if cand.cutlass is not None:
+            ws = lt_ws
+            if cand.source == "verity":
+                ws = self._own_ws = dev.alloc(max(cand.ws, PLAIN_WORKSPACE))
             h = C.c_void_p()
             sw, r = cand.config.get("swizzle", 0), cand.config.get("raster", 0)
             dims = (cand.cutlass, shape.m, shape.n, shape.k) + ((sw, r) if sw or r else ())
             prepare = dev.lib.ph_cutlass_prepare_sched if sw or r else dev.lib.ph_cutlass_prepare
-            dev.ck(prepare(*dims, ops.a.ptr, ops.b.ptr, ops.sa.ptr if ops.sa else None, ops.sb.ptr if ops.sb else None,
-                           ops.d.ptr, lt_ws.ptr, lt_ws.nbytes, dev.stream, C.byref(h)), f"cutlass prepare {cand.name}")
+            try:
+                dev.ck(prepare(*dims, ops.a.ptr, ops.b.ptr, ops.sa.ptr if ops.sa else None, ops.sb.ptr if ops.sb else None,
+                               ops.d.ptr, ws.ptr, ws.nbytes, dev.stream, C.byref(h)), f"{cand.source} prepare {cand.name}")
+            except Exception:
+                self.free()
+                raise
             self._h = h.value
         self._ws = lt_ws
 
     def launch(self, stream: int) -> None:
         d, o = self.dev, self.ops
-        if self.cand.source == "cutlass":
+        if self.cand.cutlass is not None:
             d.ck(d.lib.ph_cutlass_launch(C.c_void_p(self._h), C.c_void_p(stream)), self.cand.name)
         else:
             plan, c = self.cand.lt
@@ -156,6 +167,9 @@ class BaselineCall:
         if self._h:
             self.dev.lib.ph_cutlass_release(C.c_void_p(self._h))
             self._h = None
+        if self._own_ws is not None:
+            self.dev.free(self._own_ws)
+            self._own_ws = None
 
 
 def _lt_plans(dev, fam: Family, shape: Shape, lt, ld: int | None):
@@ -342,6 +356,11 @@ def cutlass_swizzles(tile: tuple[int, int], shape: Shape, swap: int) -> list[int
     return [s for s, need in zip(CUTLASS_SWIZZLES, (2, 3, 6)) if short >= need]
 
 
+def registry_source(name: str) -> str:
+    """A registry kernel's source: ``verity`` for nvf4_plain.cu's (#543's NVFP4, #570's FP8), else ``cutlass``."""
+    return "verity" if name.startswith("verity_") else "cutlass"
+
+
 def cutlass_sched_name(name: str, swizzle: int, raster: int) -> str:
     return name + (f"_raster{'MN'[raster - 1]}" if raster else "") + (f"_sw{swizzle}" if swizzle else "")
 
@@ -370,8 +389,8 @@ def cutlass_candidates(dev, fam: Family, shape: Shape, kernels: list[dict],
                 no.append({"name": name, "status": st})
                 continue
             cfg = {"swap": kr["swap"], "workspace": ws.value} | ({"swizzle": sw, "raster": r} if (sw, r) != (0, 0) else {})
-            ok.append(Candidate(fam.name, "cutlass", name, cfg, cutlass=kr["index"], sf_bytes=(sfa.value, sfb.value),
-                                ws=ws.value))
+            ok.append(Candidate(fam.name, registry_source(kr["name"]), name, cfg, cutlass=kr["index"],
+                                sf_bytes=(sfa.value, sfb.value), ws=ws.value))
     return ok, no
 
 

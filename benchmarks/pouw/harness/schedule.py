@@ -55,10 +55,14 @@ class GateLedger:
 
     records: dict = field(default_factory=dict)
 
-    def record(self, key: tuple, ok: bool, detail: dict | None = None) -> None:
+    def record(self, key: tuple, ok: bool, detail: dict | None = None, wall_s: float | None = None) -> None:
+        """`wall_s`: the host's seconds in this run of the gate, summed into the key's over every run of it."""
         if key in self.records and self.records[key]["ok"] and not ok:
             raise GateError(f"{key}: a gate failed after one passed")
+        before = self.records.get(key, {}).get("wall_s")
         self.records[key] = {"ok": bool(ok), "detail": detail or {}}
+        if wall_s is not None:
+            self.records[key]["wall_s"] = (before or 0.0) + wall_s
 
     def passed(self, key: tuple) -> bool:
         return self.records.get(key, {}).get("ok", False)

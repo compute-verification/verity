@@ -202,7 +202,34 @@ def opsets(dev, n=3):
 
 def bench(reps=S.MIN_REPS, methods=H.METHODS):
     dev = FakeDevice()
-    return H.Bench(dev, FakeSensors(), reps, methods), dev
+    return H.Bench(dev, FakeSensors(), reps, methods, clock=lambda: dev.t / 1e3), dev
+
+
+def test_the_host_seconds_of_each_gate_control_and_stage_are_recorded_where_a_lease_can_sit_idle():
+    b, dev = bench()
+
+    def costs(ms, ok=True):
+        def run():
+            dev.t += ms
+            return ok, {"x": 1}
+        return run
+
+    key = ("arm", "s", "a", "hash")
+    assert b.gate(key, costs(1500.0)) and b.ledger.records[key] == {"ok": True, "detail": {"x": 1}, "wall_s": 1.5}
+    assert b.gate(key, costs(500.0)) and b.ledger.records[key]["wall_s"] == pytest.approx(2.0)
+    b.negative(("known-bad", "s", "a", "flip"), costs(250.0, ok=False))
+    assert b.negatives[-1]["rejected"] and b.negatives[-1]["wall_s"] == pytest.approx(0.25)
+    with pytest.raises(H.NegativeControlFailed):
+        b.negative(("known-bad", "s", "a", "raise"), lambda: (dev.__setattr__("t", dev.t + 100.0), 1 / 0))
+    assert b.negatives[-1]["rejected"] is None and b.negatives[-1]["wall_s"] == pytest.approx(0.1)
+    st = H.Stages(b.clock)
+    dev.t += 3000.0
+    st.mark("operands")
+    dev.t += 7000.0
+    st.mark("arm_gates")
+    dev.t += 1000.0
+    st.mark("arm_gates")
+    assert st.wall_s == pytest.approx({"operands": 3.0, "arm_gates": 8.0})
 
 
 def entry(dev, key, ms, sets=3):
@@ -805,10 +832,68 @@ def test_a_screen_only_run_screens_every_searched_candidate_and_times_nothing(mo
     monkeypatch.setattr(H, "tune_baselines", no_tune)
     dev = argparse.Namespace(l2=128 << 20, mem_info=lambda: (1 << 40, 1 << 40))
     args = argparse.Namespace(screen_only=True, seed=1, lt_candidates=32)
-    row = H.run_shape(None, dev, SHAPE, [B.FAMILIES["nvfp4"]], [], True, args, [], None)
+    row = H.run_shape(bench()[0], dev, SHAPE, [B.FAMILIES["nvfp4"]], [], True, args, [], None)
     assert row["screen_only"] and screened_ == [enum.name, order.name]
+    assert list(row["wall_s"]) == ["operands", "baseline_gates", "screen"]
     bc = row["baseline_candidates"]["nvfp4"]
     assert list(bc["screen_ms"]) == [order.name, enum.name] and bc["gated"] == [enum.name, plain.name, order.name]
+
+
+def test_a_verity_registry_entry_is_its_own_source_in_one_tile_order_with_a_workspace_of_its_own():
+    native = Path(__file__).parents[1] / "harness" / "native"
+    plain = (native.parents[1] / "nvfp4_sm120" / "nvf4_plain.cu").read_text()
+    entries = re.findall(r'\{"(verity_[^"]+)", (\d), 0, (query\w*),', plain)
+    assert {(n, int(k)) for n, k, _ in entries} >= {("verity_nvf4_256x128_o_ew", 5), ("verity_fp8_256x128_o_ew", 1)}
+    assert {q for *_, q in entries} == {"query", "query_fp8"}  # the (m, n, k) form: query_fixed
+    registry = (native / "cutlass_registry.cu").read_text()
+    assert re.search(r"#endif\s+phc_table_nvf4, phc_table_fp8\}", registry)  # in a no-CUTLASS build too
+    assert '"$PLAIN - nvf4_plain 0"' in (native / "build.sh").read_text()
+
+    kernels = [{"index": 0, "name": "cutlass3x_nvfp4_256x128x128_coop", "kind": 5, "swap": 0},
+               {"index": 1, "name": "verity_nvf4_256x128_o_ew", "kind": 5, "swap": 0},
+               {"index": 2, "name": "verity_fp8_256x128_o_ew", "kind": 1, "swap": 0}]
+
+    class Lib(FakeCutlassLib):
+        def ph_cutlass_prepare(self, i, m, n, k, a, b, sa, sb, d, ws, ws_bytes, stream, h):
+            self.calls.append(("prepare", i, ws, ws_bytes))
+            return 0 if i != 2 or ws_bytes < 1 << 20 else 2
+
+    lib, mem = Lib(kernels), {}
+
+    def alloc(n):
+        buf = A.Buffer(0x100000 * (len(mem) + 1), n)
+        mem[buf.ptr] = buf
+        return buf
+
+    def ck(r, what):
+        if r:
+            raise RuntimeError(what)
+
+    dev = argparse.Namespace(lib=lib, ck=ck, stream=7, alloc=alloc, free=lambda b: mem.pop(b.ptr))
+    big = A.Shape("big", 8192, 8192, 8192)
+    ok, no = B.cutlass_candidates(dev, B.FAMILIES["nvfp4"], big, kernels, sched=True)
+    got = {c.name: c for c in ok}
+    assert not no and got["verity_nvf4_256x128_o_ew"].source == "verity"
+    assert {c.source for c in ok if c.cutlass == 0} == {"cutlass"} and [c.name for c in ok if c.cutlass == 1] == [
+        "verity_nvf4_256x128_o_ew"]
+    assert not any(call[2:] != (0, 0) for call in lib.calls if call[0] == "query" and call[1] == 1)
+
+    lt_ws = A.Buffer(0x1000, B.LT_WORKSPACE)
+    ops = B.Operands(lt_ws, lt_ws, None, None, lt_ws)
+    cut = B.BaselineCall(dev, got["cutlass3x_nvfp4_256x128x128_coop"], big, ops, lt_ws)
+    own = B.BaselineCall(dev, got["verity_nvf4_256x128_o_ew"], big, ops, lt_ws)
+    (_, _, ws_cut, _), (_, _, ws_own, own_bytes) = lib.calls[-2:]
+    assert ws_cut == lt_ws.ptr and ws_own != lt_ws.ptr and own_bytes >= B.PLAIN_WORKSPACE and list(mem) == [ws_own]
+    own.free()
+    cut.free()
+    assert not mem and own._own_ws is None
+
+    fp8 = B.cutlass_candidates(dev, B.FAMILIES["fp8-e4m3"], big, kernels)[0]
+    assert [(c.name, c.source) for c in fp8] == [("verity_fp8_256x128_o_ew", "verity")]
+    fp8[0].ws = 1 << 20  # the fake refuses a workspace this large: the call frees its own before it raises
+    with pytest.raises(RuntimeError, match="verity prepare verity_fp8_256x128_o_ew"):
+        B.BaselineCall(dev, fp8[0], big, ops, lt_ws)
+    assert not mem
 
 
 def test_the_help_formats(capsys):
@@ -1071,7 +1156,8 @@ def test_block_scales_land_in_the_128x4_tiled_layout():
 
 class FakeGemm:
     """A GEMM stand-in on the fake device: y (m x n BF16) a function of A's E4M3 codes, `ms` of virtual time; with
-    `phases`, before and after of their own cost."""
+    `phases`, before and after of their own cost: v0.4's names, or with ``phases="groups"`` step groups (a_tree and forming
+    splitting before, cleanup 0.1 after the GEMM, tile_hash and screen splitting after)."""
 
     def __init__(self, dev, shape, ms=1.0, phases=False, before=0.2, after=0.3):
         m, n, k = shape.m, shape.n, shape.k
@@ -1080,8 +1166,13 @@ class FakeGemm:
         dev.write(self.ops.a.ptr, F.fill(F.E4M3, m * k, id(self) & 0xFFFF))
         self.outputs = {"y": self.ops.d}
         self.launches = 0
-        if phases:
-            self.phases = {"before": lambda s: self._cost(before), "gemm": self._gemm, "after": lambda s: self._cost(after)}
+        cost = lambda ms: lambda s: self._cost(ms)  # noqa: E731
+        if phases == "groups":
+            self.phases = {"a_tree": cost(before / 4), "forming": cost(before * 3 / 4), "gemm": self._gemm,
+                           "cleanup": cost(0.1), "tile_hash": cost(after / 3), "screen": cost(after * 2 / 3)}
+            self.launch = lambda s: [self.phases[g](s) for g in A.GROUPS]
+        elif phases:
+            self.phases = {"before": cost(before), "gemm": self._gemm, "after": cost(after)}
             self.launch = lambda s: [self.phases[p](s) for p in CH.PHASES]
 
     def _cost(self, ms):
@@ -1133,7 +1224,7 @@ def test_a_chain_derives_each_call_from_the_previous_calls_y_and_wraps():
 
 
 def test_the_side_stream_chain_guards_set_reuse_and_joins_at_its_end():
-    b, dev, e = chain_bench(phases=True)
+    b, dev, e = chain_bench(phases="groups")
     links = CH.baseline_links(e, B.FAMILIES["fp8-e4m3"])
     ch = CH.Chain(dev, SMALL, links, "e4m3", "side")
     dev.log.clear()
@@ -1201,15 +1292,18 @@ class FakeChainArm(FakeArm):
         return A.Gate(dev.read(call.outputs["y"].ptr, m * n * 2) == want, {"y": "all"})
 
 
-def test_chain_report_gives_the_divisor_the_split_and_a_dependent_chain_panel_row(monkeypatch):
+@pytest.mark.parametrize("phases", ["groups", True])
+def test_chain_report_gives_the_divisor_the_split_and_a_dependent_chain_panel_row(monkeypatch, phases):
     monkeypatch.setitem(SH.HEADLINE, "decode", SMALL.label)
     b, dev, e = chain_bench(ms=0.5)
-    arm = FakeChainArm()
+    arm = FakeChainArm(phases)
+    cleanup = 0.1 if phases == "groups" else 0.0
     sets = [A.OperandSet(i, i, i, c.ops.a, c.ops.b) for i, c in enumerate(e.calls)]
     arm_es = H.arm_entries(b, dev, arm, SMALL, sets, first=False)
     got, unchained = H.chain_entries(b, dev, SMALL, [e, *arm_es], [arm], {arm.name: sets}, 3, first=False)
     variants = sorted(x.key[3:] for x in got if x.key[2] == arm.name)
-    assert variants == [("hash", "before-gemm"), ("hash", "full"), ("hash", "gemm"), ("hash", "side"), ("nohash", "full")]
+    side = [("hash", "side")] if phases == "groups" else []
+    assert variants == [("hash", "before-gemm"), ("hash", "full"), ("hash", "gemm"), *side, ("nohash", "full")]
     assert "arm_gate" in b.ledger.records[("chain", SMALL.label, arm.name, "hash", "full")]["detail"]
     es = [e, *arm_es, *got]
     b.capture(es, 4)
@@ -1220,11 +1314,68 @@ def test_chain_report_gives_the_divisor_the_split_and_a_dependent_chain_panel_ro
     assert base["derive_ms"] == pytest.approx(0.1) and base["kernel"] == "k"
     split = rep["chain"]["arms"][arm.name]["split"]["graph"]
     assert split["derive_ms"] == pytest.approx(0.1) and split["before_ms"] == pytest.approx(0.2)
-    assert split["during_ms"] == pytest.approx(1.0) and split["after_ms"] == pytest.approx(0.3)
+    assert split["during_ms"] == pytest.approx(1.0 + cleanup) and split["after_ms"] == pytest.approx(0.3)
+    groups = rep["chain"]["arms"][arm.name]["split_groups"]
+    if phases == "groups":
+        assert groups == {"before_ms": ["a_tree", "forming"], "during_ms": ["gemm", "cleanup"],
+                          "after_ms": ["tile_hash", "screen"], "side_stream": ["tile_hash"]}
+        assert "side_ms" in split
+    else:
+        assert groups.startswith("v0.4 phases") and "side_ms" not in split and "side_x" not in split
     panel = rep["arms"][arm.name]["panel"]
     assert panel["decode_method"] == "dependent-chain" and panel["baseline_kernel"] == "k"
-    assert panel["slowdown"] == pytest.approx(round(1.6 / 0.6, 4)) and panel["hash_free"] == pytest.approx(round(1.5 / 0.6, 4))
-    assert panel["chain_length"] == 66 and "slowdown_side_stream" in panel
+    assert panel["slowdown"] == pytest.approx(round((1.6 + cleanup) / 0.6, 4))
+    assert panel["hash_free"] == pytest.approx(round((1.5 + cleanup) / 0.6, 4))
+    assert panel["chain_length"] == 66 and ("slowdown_side_stream" in panel) == (phases == "groups")
+
+
+def test_phases_are_step_groups_or_v04s_names_never_both_and_the_side_stream_takes_the_served_deferred_groups():
+    """The side stream takes what the served deferred schedule moves (tile hashing) and leaves the screen on the main lane;
+    v0.4's one ``after`` can't be split that way, so it gets no side chain."""
+    assert A.Arm is A.BenchArm and isinstance(FakeArm(), A.BenchArm) and A.VERSION == "v0.6"
+    assert set(A.PARTS["after"]) == A.MOVABLE and sum(A.PARTS.values(), ()) == A.GROUPS and A.DEFERRED <= A.MOVABLE
+    try:
+        from verity_pouw import serving
+    except ImportError:
+        serving = None
+    if serving is not None:
+        assert (A.GROUPS, A.MOVABLE) == (serving.GROUPS, serving.MOVABLE)
+        assert A.DEFERRED == serving.DEFERRED.side
+    f = {g: (lambda s, g=g: g) for g in A.GROUPS + ("before", "after", "hash")}
+    parts, named = A.phase_parts({g: f[g] for g in ("forming", "gemm", "screen")})
+    assert named and {p: [fn(0) for fn in fns] for p, fns in parts.items()} == {
+        "before": ["forming"], "gemm": ["gemm"], "after": ["screen"]}
+    parts, named = A.phase_parts({p: f[p] for p in ("before", "gemm", "after")})
+    assert not named and [fn(0) for fn in parts["after"]] == ["after"]
+    kept, deferred = A.side_split({g: f[g] for g in A.GROUPS})
+    assert ([fn(0) for fn in kept], [fn(0) for fn in deferred]) == (["screen"], ["tile_hash"])
+    assert A.side_split({p: f[p] for p in ("before", "gemm", "after")}) is None
+    assert A.side_split({g: f[g] for g in ("forming", "gemm", "screen")}) is None and A.side_split(None) is None
+    assert A.phase_parts(None) is None and A.phase_parts({"before": f["before"], "gemm": f["gemm"]}) is None
+    for bad, why in (({"before": 0, "gemm": 0, "after": 0, "a_tree": 0}, "mix"), ({"gemm": 0, "hash": 0}, "unknown"),
+                     ({"forming": 0, "screen": 0}, "gemm among them")):
+        with pytest.raises(A.ArmError, match=why):
+            A.phase_parts(bad)
+
+    b, dev, e = chain_bench()
+    arm = FakeChainArm("groups")
+    sets = [A.OperandSet(i, i, i, c.ops.a, c.ops.b) for i, c in enumerate(e.calls)]
+    arm_es = H.arm_entries(b, dev, arm, SMALL, sets, first=False)
+    links, _ = CH.arm_links(next(x for x in arm_es if x.key[3] == "hash"), arm, sets, SMALL)
+    moved = []
+    for c in (ln.call for ln in links):
+        for g in ("tile_hash", "screen"):
+            c.phases[g] = lambda s, g=g, run=c.phases[g]: (moved.append((g, s)), run(s))
+    ch = CH.Chain(dev, SMALL, links, "e4m3", "side")
+    ch.enqueue(dev.stream, 3)
+    assert moved == [("tile_hash", dev.side_stream), ("screen", dev.stream)] * 3
+    v04 = chain_bench(phases=True)
+    with pytest.raises(A.ArmError, match="deferred group"):
+        CH.Chain(v04[1], SMALL, CH.baseline_links(v04[2], B.FAMILIES["fp8-e4m3"]), "e4m3", "side")
+    links[1].call.phases["hash"] = f["hash"]
+    got, unchained = H.chain_entries(b, dev, SMALL, [e, *arm_es], [arm], {arm.name: sets}, 3, first=False)
+    assert "unknown ['hash']" in unchained[f"{arm.name}/hash"]
+    assert [x.key[3:] for x in got if x.key[2] == arm.name] == [("nohash", "full")]
 
 
 def test_an_arm_without_a_y_output_is_not_chained():

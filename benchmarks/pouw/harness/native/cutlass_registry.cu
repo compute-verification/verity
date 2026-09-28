@@ -1,5 +1,5 @@
-// The C ABI over the CUTLASS baselines' tables (cutlass_3x.cu, cutlass_2x.cu).  Built with -DPH_NO_CUTLASS it has no
-// kernels, so the harness still loads where CUTLASS isn't built.
+// The C ABI over the baselines' tables (cutlass_3x.cu, cutlass_2x.cu, nvf4_plain.cu).  Built with -DPH_NO_CUTLASS it has
+// only nvf4_plain.cu's, so the harness still loads where CUTLASS isn't built.
 #include <cuda_runtime.h>
 
 #include <cstdio>
@@ -7,16 +7,14 @@
 #include "cutlass_api.h"
 
 namespace {
-#ifdef PH_NO_CUTLASS
-const phc_entry* entry(int, int* total) {
-  *total = 0;
-  return nullptr;
-}
-#else
 const phc_entry* entry(int i, int* total) {
   using table = const phc_entry* (*)(int*);
-  const table tables[] = {phc_table_3x_0, phc_table_3x_1, phc_table_3x_2, phc_table_3x_3, phc_table_3x_4, phc_table_2x,
-                          phc_table_3x_5, phc_table_3x_6};
+  const table tables[] = {
+#ifndef PH_NO_CUTLASS
+      phc_table_3x_0, phc_table_3x_1, phc_table_3x_2, phc_table_3x_3, phc_table_3x_4, phc_table_2x, phc_table_3x_5,
+      phc_table_3x_6,
+#endif
+      phc_table_nvf4, phc_table_fp8};
   const phc_entry* found = nullptr;
   *total = 0;
   for (table t : tables) {
@@ -27,10 +25,15 @@ const phc_entry* entry(int i, int* total) {
   }
   return found;
 }
-#endif
 
 bool sched_ok(int swizzle, int raster) {
   return (swizzle == 0 || swizzle == 1 || swizzle == 2 || swizzle == 4 || swizzle == 8) && raster >= 0 && raster <= 2;
+}
+
+int query(const phc_entry* e, const phc_args* a, size_t* ws, size_t* sfa_bytes, size_t* sfb_bytes) {
+  if (e->query) return e->query(a, ws, sfa_bytes, sfb_bytes);
+  if (a->swizzle || a->raster) return -3;  // its tile order is its own
+  return e->query_fixed(a->m, a->n, a->k, ws, sfa_bytes, sfb_bytes);
 }
 }  // namespace
 
@@ -53,7 +56,8 @@ int ph_cutlass_describe(int i, const char** name, int* kind, int* swap) {
   return 0;
 }
 
-// swizzle and raster as phc_args has them; -2 for a value outside those.
+// swizzle and raster as phc_args has them; -2 for a value outside those, -3 for an order a kernel of its own order doesn't
+// take.
 int ph_cutlass_query_sched(int i, int m, int n, int k, int swizzle, int raster, size_t* ws, size_t* sfa_bytes,
                            size_t* sfb_bytes) {
   int total = 0;
@@ -61,7 +65,7 @@ int ph_cutlass_query_sched(int i, int m, int n, int k, int swizzle, int raster, 
   if (!e) return -1;
   if (!sched_ok(swizzle, raster)) return -2;
   phc_args a{m, n, k, nullptr, nullptr, nullptr, nullptr, nullptr, swizzle, raster};
-  return e->query(&a, ws, sfa_bytes, sfb_bytes);
+  return query(e, &a, ws, sfa_bytes, sfb_bytes);
 }
 
 int ph_cutlass_query(int i, int m, int n, int k, size_t* ws, size_t* sfa_bytes, size_t* sfb_bytes) {
@@ -76,6 +80,7 @@ int ph_cutlass_prepare_sched(int i, int m, int n, int k, int swizzle, int raster
   const phc_entry* e = entry(i, &total);
   if (!e) return -1;
   if (!sched_ok(swizzle, raster)) return -2;
+  if (!e->query && (swizzle || raster)) return -3;
   phc_args a{m, n, k, A, B, sfa, sfb, D, swizzle, raster};
   phc_prepared* p = nullptr;
   int r = e->prepare(&a, ws, ws_bytes, stream, &p);
