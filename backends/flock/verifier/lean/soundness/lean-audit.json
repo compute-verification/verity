@@ -479,7 +479,7 @@
    "pins": ["FlockSoundness.Types.Dag.layout_sound", "FlockSoundness.Types.Dag.unit_sound"]
   },
   "Flock.DeriveCheck": {
-   "digest": "ef6de9193d520995b3447679fa893b5b",
+   "digest": "178f624d4096fa9b1a86685fc78b0891",
    "definitions": {
     "Flock.DeriveAll.Chk": "151ea8aaea236e59",
     "Flock.DeriveAll.Chk.bindAt": "86eb8746f8ac415b",
@@ -491,11 +491,13 @@
     "Flock.DeriveAll.ReadRec.covers": "e49d3e072b2efafd",
     "Flock.DeriveAll.blockRow": "a53fcf0d7bc6047a",
     "Flock.DeriveAll.blockRows": "2662cb370862cfa8",
-    "Flock.DeriveAll.checkLayout": "d8408e21fe7ecf08",
+    "Flock.DeriveAll.checkLayout": "958daaa574aa442d",
     "Flock.DeriveAll.chkDecode": "d148225f81443f39",
     "Flock.DeriveAll.colSet": "50da0a8eb7d303c6",
     "Flock.DeriveAll.deriveChecked": "9becb22bbb3c5c15",
     "Flock.DeriveAll.fullRow": "7de91b23c8fa735e",
+    "Flock.DeriveAll.genOk": "71f98dc26325138d",
+    "Flock.DeriveAll.genOuts": "516379ddb6627629",
     "Flock.DeriveAll.orderChecked": "fea41fd751371b71",
     "Flock.DeriveAll.orderOk": "4af817ede5db2de6",
     "Flock.DeriveAll.outRows": "d7fde6a8eac7f371",
@@ -506,7 +508,7 @@
     "Flock.DeriveAll.readSide": "8d8a6160f11e447c",
     "Flock.DeriveAll.readsOf": "4d13811fface13c1",
     "Flock.DeriveAll.shiftRow": "54585bbd4270157a",
-    "Flock.DeriveAll.walk": "615b02580a3cce11"
+    "Flock.DeriveAll.walk": "f76b037af32a4239"
    },
    "pins": ["FlockSoundness.Types.Dag.layout_sound", "FlockSoundness.Types.Dag.unit_sound"]
   },
