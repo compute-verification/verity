@@ -68,7 +68,8 @@ def test_selftest_gpu_runs_the_selftest_on_the_gpu(monkeypatch, tmp_path: Path):
         return CS.subprocess.CompletedProcess(cmd, 0, stdout='NEG\t{"case": "gpu_paths_agree", "pass": true}\n', stderr="")
 
     monkeypatch.setattr(CS.subprocess, "run", run)
-    assert CS.prove("flock-circuit", tmp_path, 4, 0, selftest="gpu_paths_agree", gpu=True)["all_pass"] is True
+    gpu = CS.prove("flock-circuit", tmp_path, 4, 0, selftest="gpu_paths_agree", gpu=True)
+    assert gpu["all_pass"] is True and gpu["gpu_cases"] == [{"case": "gpu_paths_agree", "pass": True}]
     assert CS.prove("flock-circuit", tmp_path, 4, 0, selftest="honest")["all_pass"] is True
     assert "--gpu" in seen[0] and seen[0][-2:] == ["--only", "gpu_paths_agree"]
     assert "--gpu" not in seen[1]
