@@ -154,6 +154,13 @@ def test_gpu_lease_caps_busy_and_sampled_time_at_the_held_time(tmp_path):
 FILL_RUNNER = GPU_LEASE.parent.parent / "nebius" / "fill_runner.py"
 
 
+@pytest.fixture(autouse=True)
+def _no_host_yield_lock(tmp_path, monkeypatch):
+    """fill_runner pauses cpu-sets jobs while a check holds FILL_YIELD_LOCK, by default the node's slot-d lock, which the train
+    check running these tests on a node may hold itself (r20261002-072246-b9fe, -073629-eb44): no test sees the host's."""
+    monkeypatch.setenv("FILL_YIELD_LOCK", str(tmp_path / "check-d.lock"))
+
+
 @needs_flock
 def test_fill_runner_counts_a_queued_waiter_but_not_a_lease_that_holds_its_gpus_with_wait_in_its_argv(tmp_path, monkeypatch):
     """A `gpu-lease 1 --wait` that holds its GPU keeps `--wait` in its argv. Counting it as a waiter froze fill across node 2 for as
