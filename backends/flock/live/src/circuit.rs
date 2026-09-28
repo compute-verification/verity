@@ -264,10 +264,10 @@ pub fn port_cols(groups: &[crate::ir_block::Group]) -> Vec<(usize, usize)> {
     groups.iter().flat_map(|g| g.bits.iter().scan(g.col * WORD, |a, &w| { let c = *a; *a += w; Some((c, w)) }).collect::<Vec<_>>()).collect()
 }
 
-const SHA512_IV: [u64; 8] = [0x6a09e667f3bcc908, 0xbb67ae8584caa73b, 0x3c6ef372fe94f82b, 0xa54ff53a5f1d36f1,
+pub(crate) const SHA512_IV: [u64; 8] = [0x6a09e667f3bcc908, 0xbb67ae8584caa73b, 0x3c6ef372fe94f82b, 0xa54ff53a5f1d36f1,
                               0x510e527fade682d1, 0x9b05688c2b3e6c1f, 0x1f83d9abfb41bd6b, 0x5be0cd19137e2179];
 
-const SHA512_K: [u64; 80] = [
+pub(crate) const SHA512_K: [u64; 80] = [
     0x428a2f98d728ae22, 0x7137449123ef65cd, 0xb5c0fbcfec4d3b2f, 0xe9b5dba58189dbbc,
     0x3956c25bf348b538, 0x59f111f1b605d019, 0x923f82a4af194f9b, 0xab1c5ed5da6d8118,
     0xd807aa98a3030242, 0x12835b0145706fbe, 0x243185be4ee4b28c, 0x550c7dc3d5ffb4e2,
@@ -1417,7 +1417,7 @@ fn set_bit(w: &mut F128, t: usize) {
 }
 
 /// A 64 × 64 bit transpose: afterwards bit i of `m[j]` is what bit j of `m[i]` was.
-fn transpose64(m: &mut [u64; 64]) {
+pub(crate) fn transpose64(m: &mut [u64; 64]) {
     let (mut j, mut mask) = (32, 0x0000_0000_ffff_ffffu64);
     while j != 0 {
         for k in (0..64).step_by(2 * j) {
@@ -1433,7 +1433,7 @@ fn transpose64(m: &mut [u64; 64]) {
 }
 
 /// Bit-sliced rows (`v[row]` bit l is lane l's bit) as the first `n` lanes' packed words, `uw` each.
-fn lanes(v: &[u64], n: usize, uw: usize) -> Vec<Vec<F128>> {
+pub(crate) fn lanes(v: &[u64], n: usize, uw: usize) -> Vec<Vec<F128>> {
     let mut out = vec![vec![F128::ZERO; uw]; n];
     for (blk, rows) in v.chunks(64).enumerate() {
         let mut t = [0u64; 64];
