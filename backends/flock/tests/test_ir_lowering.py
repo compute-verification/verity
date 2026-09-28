@@ -23,13 +23,9 @@ REG = lowerings.registry("C-Flock")
 LOWERED = {"rope-head": {"D": 64}, "silu-mul": {"I": 8192}}
 
 
-def _isnan(w: int, bits: int = 32) -> bool:
-    e, m = (0xFF, 23) if bits == 32 else (0xFF, 7)
-    return (w >> m) & e == e and w & ((1 << m) - 1) != 0
-
-
 def f32_words(rng: random.Random, n: int) -> list[int]:
-    special = [0, 0x80000000, 0x7F800000, 0xFF800000, 0x7FC00000, 1, 0x80000001, 0x7FFFFF, 0x800000, 0x7F7FFFFF, 0x3F800000, 0xBF800000]
+    special = [0, 0x80000000, 0x7F800000, 0xFF800000, 1, 0x80000001, 0x7FFFFF, 0x800000, 0x7F7FFFFF, 0x3F800000, 0xBF800000,
+               0x7FC00000, 0xFFC00000, 0x7FC00001, 0xFFC12345, 0x7F800001, 0xFF812345, 0x7FFFFFFF, 0xFFBFFFFF]   # quiet and signalling NaNs
     out = []
     for _ in range(n):
         r, s = rng.random(), rng.getrandbits(1) << 31
@@ -77,6 +73,14 @@ PIECES = [
     ("F2fpBf16_v1", (32,), 16, lambda C, a: IL.PIECES["F2fpBf16_v1"](C, a), P.F2fpBf16.evaluate),
     ("F32ToBf16Rn_v1", (32,), 16, lambda C, a: IL.PIECES["F32ToBf16Rn_v1"](C, a), P.F32ToBf16Rn.evaluate),
 ]
+from verity_flock.boolean_export import prims as _registered  # noqa: E402
+
+#: the tail primitives (tail_pieces): attention's softmax, the norms' row scalars, the sampler lane's F32 ops
+TAIL = {"F32AddFtz_v1": 2, "F32SubFtz_v1": 2, "F32MulFtz_v1": 2, "F32FmaFtz_v1": 3, "F32FmaSubFtz_v1": 3, "F32Max_v1": 2,
+        "GuardNegInfZero_v1": 1, "MufuEx2Ftz_v1": 1, "MufuRcpFtz_v1": 1, "Fa2InvSum_v1": 1, "RsqrtApprox_v1": 1,
+        "MufuSqrtFtz_v1": 1, "DivFullRcp_v1": 1, "DivFullScaleA_v1": 2, "F32GtStrict_v1": 2}
+PIECES += [(name, (32,) * k, 1 if name == "F32GtStrict_v1" else 32, IL.PIECES[name], _registered()[name].evaluate)
+           for name, k in TAIL.items()]
 
 
 @pytest.mark.parametrize("name,widths,out,piece,ref", PIECES, ids=[p[0] for p in PIECES])
@@ -91,8 +95,141 @@ def test_pieces_match_the_ir_primitives(name, widths, out, piece, ref):
             v[2] = near(rng, P.f32_mul_bits(v[0], v[1]))
         vecs.append(v)
     got = run_piece(piece, widths, out, vecs)
-    bad = [(v, g) for v, g in zip(vecs, got) if not (g == ref(*v) or (_isnan(g, out) and _isnan(ref(*v), out)))]
-    assert bad == []
+    bad = [(v, g) for v, g in zip(vecs, got) if g != ref(*v)]
+    assert bad == []                                  # exact bits: a NaN's sign and payload too
+
+
+@pytest.mark.parametrize("name", ["MufuEx2Ftz_v1", "MufuRcpFtz_v1", "Fa2InvSum_v1", "RsqrtApprox_v1", "MufuSqrtFtz_v1",
+                                  "DivFullRcp_v1"])
+def test_mufu_pieces_match_on_every_exponent(name):
+    """Each MUFU piece (a table read inside exponent logic) against its primitive on every exponent, both signs, the
+    mantissa's edges and random mantissas; the reads come from the pinned tables."""
+    rng = random.Random(5)
+    vecs = [[(s << 31) | (e << 23) | (rng.getrandbits(23) if k > 2 else [0, 1, 0x7FFFFF][k])] for e in range(256) for s in (0, 1)
+            for k in range(24)]
+    from verity_flock.boolean_export import prims
+    ref = prims()[name].evaluate
+    assert [g for v, g in zip(vecs, run_piece(IL.PIECES[name], (32,), 32, vecs)) if g != ref(*v)] == []
+
+
+@pytest.mark.parametrize("name,widths,gen", [
+    ("GumbelStreamKey_v1", (64, 64), lambda r: [r.getrandbits(64), r.choice([r.getrandbits(64), r.randint(0, 5000)])]),
+    ("GumbelNoiseLane_v1", (32, 32), lambda r: [r.getrandbits(32), r.choice([0, 1, 0x7FFFFFFF, 0x80000000, 0xFFFFFFFF,
+                                                                            r.randint(0, 128255), r.getrandbits(32)])]),
+    ("F32Eq_v1", (32, 32), lambda r: (lambda v: [v[0], r.choice([v[1], v[0], v[0] ^ 0x80000000])])(f32_words(r, 2))),
+    ("BitOr_v1", (1, 1), lambda r: [r.getrandbits(1), r.getrandbits(1)]),
+    ("BitNot_v1", (1,), lambda r: [r.getrandbits(1)]),
+])
+def test_sampler_pieces_match_the_ir_primitives(name, widths, gen):
+    """The sampler's Philox stream key and Gumbel noise lane (libdevice logf / log1pf, its true toward-zero add) and the row's
+    bit logic, exact bits."""
+    rng = random.Random(9)
+    vecs = [gen(rng) for _ in range(300 if name.startswith("Gumbel") else 3000)]
+    ref = _registered()[name].evaluate
+    assert [(v, g) for v, g in zip(vecs, run_piece(IL.PIECES[name], widths, 32, vecs)) if g != ref(*v)] == []
+
+
+#: the other rows' primitives (tail_pieces): FA3's inverse sum, the greedy argmax, the FP8 linear's quantizer, the MoE router
+MORE = ["Fa3InvSum_v1", "Bf16GtStrict_v1", "SelectBf16_v1", "F32Fabs_v1", "F32Neg_v1", "F32Fmaxf_v1", "F32Fminf_v1", "F32ToE4m3Sat_v1",
+        "F32Div_v1", "F32Sub_v1", "F32FmaRm_v1", "F32Sat_v1", "F32BitsShl23_v1", "F32IsFinite_v1", "I32Eq_v1"]
+
+
+@pytest.mark.parametrize("name", MORE)
+def test_the_other_rows_pieces_match_the_ir_primitives(name):
+    """Exact bits, NaN payloads included, on each operand kind's specials and random words (f32 operands near each other so
+    sums cancel, the e4m3 grid's edges for the quantizer, divisors of every magnitude)."""
+    p = _registered()[name]
+    widths = [w for _, t in p.params for w in t.leaf_widths()]
+    rng = random.Random(31)
+    vecs = []
+    for i in range(6000):
+        v = []
+        for w in widths:
+            v.append(rng.getrandbits(1) if w == 1 else bf16_words(rng, 1)[0] if w == 16 else f32_words(rng, 1)[0])
+        f = [j for j, w in enumerate(widths) if w == 32]
+        if len(f) >= 2 and rng.random() < 0.3:
+            v[f[1]] = near(rng, v[f[0]])
+        if name == "F32ToE4m3Sat_v1" and i % 2:
+            v[0] = (rng.getrandbits(1) << 31) | (rng.randint(110, 140) << 23) | rng.choice([0, 0x080000, 0x100000, rng.getrandbits(23)])
+        if name == "F32FmaRm_v1" and rng.random() < 0.3:
+            v[2] = near(rng, P.f32_mul_bits(v[0], v[1]))
+        if name == "I32Eq_v1" and rng.random() < 0.3:
+            v[1] = v[0]
+        vecs.append(v)
+    got = run_piece(IL.PIECES[name], widths, sum(p.ret.leaf_widths()), vecs)
+    assert [(v, g) for v, g in zip(vecs, got) if g != p.evaluate(*v)] == []
+
+
+def test_the_fp8_tensor_core_step_matches_the_ir_on_every_encoding():
+    """``fp.tc_dot_e4m3`` = ``HopperE4m3QgmmaDot32`` (the total model): E4M3 NaNs (0x7F, 0xFF), zeros, subnormals, the largest
+    magnitudes, accumulators of every class (the 14-bit adder truncates them too), bit for bit."""
+    from verity.ml.prims import HopperE4m3QgmmaDot32 as Q
+
+    rng = random.Random(12)
+    specials8 = [0x00, 0x80, 0x7F, 0xFF, 0x01, 0x81, 0x07, 0x7E, 0xFE, 0x08, 0x38]
+    specials32 = [0, 0x80000000, 0x7F800000, 0xFF800000, 0x7FC00000, 0x7F7FFFFF, 0xFF7FFFFF, 1, 0x00800000]
+
+    def e4(small):
+        r = rng.random()
+        return rng.choice(specials8) if r < (0.01 if small else 0.08) else (rng.getrandbits(1) << 7) | (rng.randint(4, 10) << 3) \
+            | rng.getrandbits(3) if small else rng.getrandbits(8) & (0x7E if r < 0.5 else 0xFF)
+
+    vecs = []
+    for i in range(1500):
+        small = i % 3 == 0
+        acc = (rng.getrandbits(1) << 31) | (rng.randint(110, 140) << 23) | rng.getrandbits(23) if small else \
+            rng.choice(specials32) if rng.random() < 0.1 else rng.getrandbits(32)
+        vecs.append([acc] + [e4(small) for _ in range(64)])
+    got = run_piece(IL.PIECES["HopperE4m3QgmmaDot32_v1"], [32] + [8] * 64, 32, vecs)
+    assert [(v, g) for v, g in zip(vecs, got) if g != Q.evaluate(*v)] == []
+
+
+@pytest.mark.parametrize("name,table", [("MufuTanh_v1", "tanh_mufu"), ("TanhF32Rn_v1", "tanh_rn")])
+def test_the_tanh_pieces_match_the_ir_primitives(name, table):
+    """Gemma's tanh (a table read over |x|): each region's bounds and their neighbours, both signs, NaNs and infinities, and random
+    words across the table's region, exact bits."""
+    from verity_flock import tail_pieces as TP
+
+    lo, hi = TP.TANH_BOUNDS[table]
+    rng = random.Random(8)
+    words = [lo - 1, lo, lo + 1, hi - 1, hi, hi + 1, 0, 1, 0x7F800000, 0x7F800001, 0x7FC00000, 0x7FFFFFFF, 0x3F800000, 0x41200000]
+    words += [rng.randrange(lo, hi) for _ in range(6000)] + [rng.randrange(0, 0x7F800000) for _ in range(1000)]
+    vecs = [[w | (rng.getrandbits(1) << 31)] for w in words] + [[w | 0x80000000] for w in words[:14]]
+    ref = _registered()[name].evaluate
+    assert [(v, g) for v, g in zip(vecs, run_piece(IL.PIECES[name], (32,), 32, vecs)) if g != ref(*v)] == []
+
+
+def test_the_gelu_piece_matches_the_ir_primitive_on_every_gate_word():
+    """``GeluTanhMulBf16``: every bf16 gate word (the activation table's whole domain), each with a random up word, exact bits."""
+    rng = random.Random(3)
+    ups = bf16_words(rng, 1 << 16)
+    vecs = [[g, u] for g, u in zip(range(1 << 16), ups)]
+    ref = _registered()["GeluTanhMulBf16_v1"].evaluate
+    assert [(v, g) for v, g in zip(vecs, run_piece(IL.PIECES["GeluTanhMulBf16_v1"], (16, 16), 16, vecs)) if g != ref(*v)] == []
+
+
+def test_bit_at_selects_the_bit_or_zero():
+    """``BitAtx{W}`` (a width family ``ir_lower.PIECES`` resolves): bit i of the word, 0 for i outside [0, W)."""
+    from verity_vllm.program.registry.sampling import bit_at
+    rng = random.Random(4)
+    W = 1000
+    vecs = [[rng.getrandbits(W), rng.choice([rng.randint(0, W - 1), 0, W - 1, W, 0xFFFFFFFF, 0x80000000])] for _ in range(64)]
+    C = gf2.Circuit()
+    word, i = C.input("w", W), C.input("i", 32)
+    C.output("o", IL.PIECES[f"BitAtx{W}_v1"](C, word, i))
+    outs, _ = C.evaluate({"w": [sum(((v[0] >> b) & 1) << t for t, v in enumerate(vecs)) for b in range(W)],
+                          "i": IL.slice_words([v[1] for v in vecs], 32)}, len(vecs))
+    assert [int(x) for x in IL.unslice_words(outs["o"], len(vecs))] == [bit_at(W).evaluate(*v) for v in vecs]
+
+
+def test_a_lookup_is_never_laid_out():
+    """A table read is a lookup, which a Flock unit's expanded circuit does not express: the layout refuses it."""
+    C = gf2.Circuit()
+    x = C.input("in0", 32)
+    C.output("out0", IL.PIECES["MufuRcpFtz_v1"](C, x))
+    assert C.counts()["lookups"] == 1
+    with pytest.raises(AssertionError):
+        IL.layout(C, ["in0"], ["out0"])
 
 
 @pytest.mark.parametrize("prim", ["Bf16Add_v1", "Bf16AddF2fp_v1"])
@@ -605,7 +742,7 @@ def test_attention_units_are_tensor_core_steps():
     (T,) = {len(x) // 64 for x in s.port("k")}
     low = IL.lowering(sub.definition(T), f"attention-head/tc-step/t{T}", unit_fn=IL.tc_units)
     U = low.units
-    assert (T, U.n, len(U.public), low.layout.useful) == (129, 4 * 129 + 64 * 9, 64, 9857)
+    assert (T, U.n, len(U.public), low.layout.useful) == (129, 4 * 129 + 64 * 9, 64, 9473)
     assert sum(k == "zero" for u in U.in_src for k, _ in u) == 64 * 15
     assert low.leaves["out"] == [[]] * U.n and low.cut["outputs"] and len(low.cut["outputs"]) == 64
     fin = np.stack([np.concatenate([s.port("q")[i], s.port("k")[i], s.port("v")[i]]).astype(np.uint64) for i in range(s.n)])
