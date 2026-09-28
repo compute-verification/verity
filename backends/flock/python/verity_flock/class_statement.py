@@ -244,7 +244,8 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
             "circuit_sha512": FC.digest(text), "class_sha512": FC.class_digest(text)}
 
 
-def prove(binary: str, d: Path, n: int, port: int, selftest: bool | str = False, timeout: int = 3600) -> dict:
+def prove(binary: str, d: Path, n: int, port: int, selftest: bool | str = False, timeout: int = 3600, gpu: bool = False,
+          warm: int = 0, runs: int = 1) -> dict:
     """A loopback session (``serve`` on 127.0.0.1 and ``prove``), or ``selftest``: the LIVE or SELFTEST record."""
     circ, inst, pub = d / "circuit.txt", d / f"inst-{n}.bin", d / f"pub-{n}.bin"
     if selftest:
@@ -268,7 +269,7 @@ def prove(binary: str, d: Path, n: int, port: int, selftest: bool | str = False,
         with open(d / "prove.out", "w") as fo, open(d / "prove.err", "w") as fe:
             timer = ["/usr/bin/time", "-f", "%M", "-o", str(d / "prove.maxrss")] if os.path.exists("/usr/bin/time") else []
             pr = subprocess.Popen(timer + [binary, "prove", "--verifier", f"127.0.0.1:{port}", "--instances", str(inst), "--circuit", str(circ),
-                                           "--runs", "1"], stdout=fo, stderr=fe)
+                                           "--runs", str(runs), "--warm", str(warm)] + (["--gpu"] if gpu else []), stdout=fo, stderr=fe)
             pr.wait()
         prover_gb = int((d / "prove.maxrss").read_text().split()[-1]) / 2**20 if timer else None   # the prover's own peak, KB
         verifier_gb = _vm_hwm(srv.pid)
@@ -279,10 +280,13 @@ def prove(binary: str, d: Path, n: int, port: int, selftest: bool | str = False,
     live = [json.loads(ln[5:]) for ln in out.splitlines() if ln.startswith("LIVE")]
     if not live:
         return {"accepted": False, "why": (err or out)[-400:]}
-    v = live[-1]
+    timed = [x for x in live if not x.get("warm")] or live
+    v = sorted(timed, key=lambda x: x.get("prove_total_s") or 0)[len(timed) // 2]      # the median timed run
     return {k: v.get(k) for k in ("accepted", "why", "prover", "instances", "vus_per_block", "k_log", "nbl", "dense_m", "e2e_s",
                                   "witness_s", "prove_s", "prove_total_s", "proof_bytes", "wire_sent", "wire_recv", "statement_digest")} | \
-        {"prover_peak_gb": round(prover_gb, 2) if prover_gb else None, "verifier_peak_gb": verifier_gb}
+        {"prover_peak_gb": round(prover_gb, 2) if prover_gb else None, "verifier_peak_gb": verifier_gb,
+         "verify_s": (v.get("verdict") or {}).get("verify_s"), "timed_runs": len(timed),
+         "prove_total_s_runs": [x.get("prove_total_s") for x in timed]}
 
 
 def _vm_hwm(pid: int) -> float | None:
@@ -316,6 +320,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--selftest-only", action="store_true", help="stage and run the selftest cases only (no loopback session), into selftests.jsonl")
     ap.add_argument("--sample", type=int, default=0, help="prove only this many classes, drawn by a seeded hash of their shapes (0: all)")
     ap.add_argument("--port", type=int, default=7610)
+    ap.add_argument("--gpu", action="store_true", help="prove on the GPU (flock-circuit prove --gpu)")
+    ap.add_argument("--warm", type=int, default=0)
+    ap.add_argument("--runs", type=int, default=1, help="timed runs per shape; the record is the median")
+    ap.add_argument("--shapes", default=None, help="a file of shape digests (or prefixes), one per line: prove only these")
+    ap.add_argument("--batch", default=None, help="'auto': instances per shape = min(1024, the row's units of it) as a power of two "
+                    ">= 16, 256 above 10^6 ANDs (overrides --n)")
     a = ap.parse_args(argv)
     calls: dict[str, int] | None = None
     if a.program_graph:
@@ -350,6 +360,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             for sh, c in units._count(cut, fn).items():
                 row_units[sh] = row_units.get(sh, 0) + c * calls[descriptor_id(fn)]
     order = sorted(classes.items(), key=lambda kv: len(kv[1].representative.gates))
+    wanted = [ln.strip() for ln in Path(a.shapes).read_text().split() if ln.strip()] if a.shapes else None
     if a.sample:
         keep = set(sorted(classes, key=lambda sh: hashlib.sha256(f"{a.seed}/{sh}".encode()).digest())[:a.sample])
         order = [kv for kv in order if kv[0] in keep]
@@ -357,7 +368,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     for sh, cl in order:
         largest[cl.definition.id if hasattr(cl.definition, "id") else cl.definition] = sh
     for s, cl in order:
-        if s in done or (a.only and not any(s.startswith(p) for p in a.only.split(","))):
+        if s in done or (a.only and not any(s.startswith(p) for p in a.only.split(","))) or (wanted is not None and not any(s.startswith(p) for p in wanted)):
             continue
         rec: dict[str, Any] = {"shape": s, "definition": cl.representative.definition, "unit": cl.representative.unit,
                                "units": cl.units, "row_units": row_units.get(s), "word_gates": len(cl.representative.gates), "in_bits": sum(cl.representative.in_widths),
@@ -371,7 +382,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             rec["ands"] = cc.counts["ands"]
         else:
             try:
-                lanes_ = PU.lanes(units.activation(cl.definition), [cl.representative], key, a.n)[(cl.representative.definition, cl.representative.unit)]
+                n = a.n
+                if a.batch == "auto":
+                    have = row_units.get(s) or cl.units
+                    n = 256 if cc.counts["ands"] > 10**6 else max(16, min(1024, 1 << max(0, have.bit_length() - 1)))
+                lanes_ = PU.lanes(units.activation(cl.definition), [cl.representative], key, n)[(cl.representative.definition, cl.representative.unit)]
                 d = out / s[:16]
                 rec["ands"] = cc.counts["ands"]
                 rec["table_reads"] = dict(Counter(t for t, _i, _w in cc.circuit.lookups))
@@ -379,7 +394,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 rec["stage_py_maxrss_gb"] = round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 2)
                 rec["stage_s"] = round(time.time() - t0, 3)
                 if not a.selftest_only:
-                    rec["live"] = prove(a.binary, d, rec["stage"]["n"], a.port)
+                    rec["live"] = prove(a.binary, d, rec["stage"]["n"], a.port, gpu=a.gpu, warm=a.warm, runs=a.runs)
                 if a.selftest and (len(done) % a.selftest == 0 or s == largest.get(cl.definition.id)):
                     if rec["table_reads"]:                       # a read-bearing circuit re-parses per case: a few cases, one process each
                         runs = [prove(a.binary, d, rec["stage"]["n"], a.port, selftest=c) for c in READ_CASES]
@@ -398,7 +413,24 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(json.dumps({k: rec.get(k) for k in ("shape", "definition", "units", "word_gates", "broke")} |
                          ({"accepted": rec["live"].get("accepted"), "prove_s": rec["live"].get("prove_total_s"),
                            "proof_bytes": rec["live"].get("proof_bytes"), "k_log": rec["live"].get("k_log")} if "live" in rec else {})), flush=True)
+    write_result(results, a)
     return 0
+
+
+def write_result(results: Path, a) -> None:
+    """``$RESEARCH_RUN_DIR/result.json`` (kind ``class-sweep/v1``) when run under ``research run``: every shape's record of this
+    output directory, keyed by shape digest, with the settings that produced them."""
+    run_dir = os.environ.get("RESEARCH_RUN_DIR")
+    if not run_dir or not results.exists():
+        return
+    recs = [json.loads(ln) for ln in results.read_text().splitlines() if ln.strip()]
+    doc = {"kind": "class-sweep/v1", "statement": FC.STATEMENT, "scheme": FC.SCHEME, "partition": a.partition,
+           "settings": {"gpu": a.gpu, "warm": a.warm, "runs": a.runs, "batch": a.batch or a.n, "seed": a.seed,
+                        "program_graph": getattr(a, "program_graph", None), "modules": getattr(a, "modules", None)},
+           "shapes": {r["shape"]: r for r in recs},
+           "summary": {"shapes": len(recs), "accepted": sum(1 for r in recs if (r.get("live") or {}).get("accepted")),
+                       "broke": sum(1 for r in recs if r.get("broke"))}}
+    Path(run_dir, "result.json").write_text(json.dumps(doc, sort_keys=True))
 
 
 if __name__ == "__main__":
