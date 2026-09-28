@@ -148,7 +148,8 @@ def live_audit(engine, out: Path, a: Options) -> dict[str, Any]:
     from verity_vllm.engine.pous import twins
 
     geometry = twins.reference(a.codec)[1].with_segments(info["segments"])
-    (out / "audit-ready.json").write_text(json.dumps({"port": port, "salt": spec["salt"], "params": geometry.manifest()}))
+    (out / "audit-ready.json").write_text(json.dumps({"port": port, "salt": spec["salt"], "codec": a.codec,
+                                                     "segments": geometry.segments}))
     proc = subprocess.Popen([sys.executable, "-m", "verity_vllm.pipeline.cli", "pous-dense-audit", "--ready", str(out / "audit-ready.json"),
                              "--leaves", str(out / "leaves-audit.bin"), "--out", str(out / "audit.json"), "--k", str(a.audit_k),
                              "--audits", str(a.audit), "--verifier-cpu", "3"], stdout=(out / "audit.log").open("w"),

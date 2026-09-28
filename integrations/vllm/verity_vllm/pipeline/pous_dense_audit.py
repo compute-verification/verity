@@ -2,7 +2,7 @@
 
     verity-vllm pous-dense-audit --ready READY.json --leaves LEAVES.bin --out AUDIT.json [--k 111] [--audits N] [--verifier-cpu C]
 
-`READY.json` names the responder's port, the salt and the dense geometry; `vk` is `VerifierKey.from_leaves` over the served
+`READY.json` names the responder's port, the salt, the reference codec and the segment count; `vk` is `VerifierKey.from_leaves` over the served
 `C`'s leaves (a timing-path audit: `vk` comes from `C`, not from an independent encoding).  The audits are
 `pipeline/pous_verifier.run` (`TimedVerifier`, Δ = 0.5 ms plus the p99.9 round trip).
 """
@@ -29,14 +29,14 @@ class Options:
 
 
 def main(a: Options) -> int:
-    from verity_pous import dense
     from verity_pous.verifier import VerifierKey
 
+    from verity_vllm.engine.pous import twins
     from verity_vllm.pipeline import pous_verifier as pv
 
     ready = json.loads(Path(a.ready).read_text())
     raw = Path(a.leaves).read_bytes()
-    params = dense.DenseParams(**{k: ready["params"][k] for k in ("blocks_per_segment", "m", "segments")})
+    params = twins.reference(ready["codec"])[1].with_segments(ready["segments"])
     vk = VerifierKey.from_leaves(params, bytes.fromhex(ready["salt"]), [raw[i:i + 32] for i in range(0, len(raw), 32)])
     doc = {"root": vk.root.hex(), **pv.run("127.0.0.1", ready["port"], vk, audits=a.audits, pings=a.pings, k=a.k, cpu=a.verifier_cpu)}
     Path(a.out).write_text(json.dumps(doc, indent=1, default=str))

@@ -2,7 +2,8 @@
 
     verity-vllm pous-dense-bench --out DIR --shapes workloads/dense_decode_shapes.json --build-dir DIR [--models M] [--reps 3]
 
-Scheme: `verity_pous.dense.DENSE` at `dense.SECURE_FIRST` (512 blocks of 64 KiB per segment).  Workload: each model's linear
+Scheme: the reference codec `--codec` at its secure point (`twins.reference`): `dense-chain/v1` (`dense.DENSE` at
+`dense.SECURE_FIRST`, 512 blocks of 64 KiB per segment, the complete DAG), or a band graph on the same chain.  Workload: each model's linear
 weights (vLLM's merged shapes, bf16) laid out back to back into segments; one model pass decodes every tile's blocks of `C`
 (`dense.decode_blocks`, on the device clock), then runs each shape's `y = x W^T` at T = 1, 8, 32 and 2048 tokens on its fresh
 weight, against the same GEMMs from plaintext weights.  `C` is pseudo-random bytes (any `C` is the encoding of its decode) under a fixed salt.
@@ -36,6 +37,8 @@ class Options:
     """the frozen dense-decode microbenchmark: encoded tile -> plaintext -> GEMM, against plaintext GEMMs"""
 
     out: str = option("--out", required=True, help="where dense-bench.json goes")
+    codec: str = option("--codec", default="dense-chain/v1", help="the reference codec benchmarked (twins.reference): its geometry "
+                        "and graph (the complete DAG, or a band of in-degree d) fix the scheme")
     shapes: str = option("--shapes", required=True, help="the workload's shapes (integrations/vllm/workloads/dense_decode_shapes.json)")
     build_dir: str = option("--build-dir", required=True, help="parent directory of the pous_native JIT build")
     models: str = option("--models", default="", help="models of workloads/dense_decode_shapes.json, comma separated (default all)")
@@ -52,7 +55,6 @@ class Options:
     workers: int = option("--workers", type=int, default=12, help="processes for the reference side of G2")
     chunked: bool = option("--chunked", action="store_true", default=False, help="chunk-major decode state (dense.CHUNKED)")
     chunked_threads: int = option("--chunked-threads", type=int, default=128, help="threads per block of chunk-major launches")
-    window: int | None = option("--window", type=int, default=None, help="band graph of this in-degree instead of dense")
     audit: int = option("--audit", type=int, default=0,
                         help="timed audits (pous-dense-audit, a separate process) of the first model's C while its passes run")
     audit_k: int = option("--audit-k", type=int, default=111, help="challenges per audit")
@@ -64,6 +66,35 @@ class Options:
 
 def models(path: str) -> dict[str, dict[str, Any]]:
     return json.loads(Path(path).read_text())["models"]
+
+
+@dataclasses.dataclass(frozen=True)
+class Scheme:
+    """The benchmarked reference codec: its module (for `reference(params)`), its secure-point geometry, and the in-degree of
+    its single-layer graph (`parents(i) = range(max(0, i - window), i)`; `B - 1` is the complete DAG)."""
+
+    name: str
+    module: Any
+    geometry: Any
+    window: int
+
+    @classmethod
+    def of(cls, name: str) -> Scheme:
+        from verity_vllm.engine.pous import twins
+
+        ref, geometry = twins.reference(name)
+        b = geometry.blocks_per_segment
+        window = len(geometry.parents(b - 1))
+        for i in range(b):
+            if list(geometry.parents(i)) != list(range(max(0, i - window), i)):
+                raise NotImplementedError(f"{name}: block {i}'s parents are not the band of in-degree {window}")
+        return cls(name, importlib.import_module(ref.encode.__module__), geometry, window)
+
+    def calls(self, i: int) -> int:
+        return len(self.geometry.parents(i)) + 1
+
+
+SCHEME: list[Scheme] = []
 
 
 def model_shapes(m: dict[str, Any]) -> list[tuple[str, int, int]]:
@@ -91,57 +122,74 @@ def _vectors_module():
     return mod, json.loads((path.parent / "fixtures" / "vectors.json").read_text())
 
 
-def gate_vectors() -> dict[str, Any]:
-    """The GPU encode reproduces the reference's dense known-answer vectors, and decodes back."""
+VECTORS = {"dense-chain/v1": ("dense", "dense-small-w", "dense-w")}
+"""Per codec: the prefix of its known-answer vectors in #166's `vectors.json` (`<prefix>/small/blocks` at its small point,
+`<prefix>/64kb/prefix16` the first 16 blocks of segment 0 at the secure point), and the `pous_vectors._bytes` labels of their
+inputs."""
+
+
+def small_point(scheme: Scheme):
+    """The small geometry of the codec's `<prefix>/small/blocks` vector (`pous_vectors.vectors`)."""
+    if scheme.name == "dense-chain/v1":
+        return scheme.module.DenseParams(8, 64, 2)
+    raise NotImplementedError(f"no known-answer small point for {scheme.name!r}")
+
+
+def gate_vectors(scheme: Scheme) -> dict[str, Any]:
+    """The GPU encode reproduces the reference's known-answer vectors for the codec, and decodes back."""
     import torch
-    from verity_pous import dense as ref
 
     from verity_vllm.engine.pous import codec, dense
 
     mod, fixtures = _vectors_module()
-    small = ref.DenseParams(8, 64, 2)
-    w, salt = mod._bytes("dense-small-w", small.w_bytes), mod._bytes("salt", 24)
-    wt = torch.tensor(list(w), dtype=torch.uint8, device="cuda").view(2, 8, 8)
-    tags = codec.segment_tags(salt, [0, 1], "cuda")
-    c = dense.encode(wt, tags)
-    small_ok = [bytes(r) for r in c.view(-1, 8).cpu().tolist()] == [bytes.fromhex(x) for x in fixtures["dense/small/blocks"]]
-    small_back = torch.equal(dense.decode(c, tags), wt)
-    sf = ref.SECURE_FIRST
-    w16 = mod._bytes("dense-w", 16 * sf.block_bytes)
+    prefix, small_label, big_label = VECTORS[scheme.name]
+    small = small_point(scheme)
+    b, g, width = small.blocks_per_segment, small.segments, small.block_bytes
+    small_window = len(small.parents(b - 1))
+    w, salt = mod._bytes(small_label, b * width * g), mod._bytes("salt", 24)
+    wt = torch.tensor(list(w), dtype=torch.uint8, device="cuda").view(g, b, width)
+    tags = codec.segment_tags(salt, list(range(g)), "cuda")
+    c = dense.encode(wt, tags, small_window)
+    small_ok = [bytes(r) for r in c.view(-1, width).cpu().tolist()] == [bytes.fromhex(x) for x in fixtures[f"{prefix}/small/blocks"]]
+    segs, blks = torch.arange(g * b, device="cuda") // b, torch.arange(g * b, device="cuda") % b
+    small_back = torch.equal(dense.decode_blocks(c.view(-1, width), tags, segs, blks, b, small_window), wt.view(-1, width))
+    sf = scheme.geometry
+    w16 = mod._bytes(big_label, 16 * sf.block_bytes)
     wt = torch.tensor(list(w16), dtype=torch.uint8, device="cuda").view(1, 16, sf.block_bytes)
     tags = codec.segment_tags(mod._bytes("salt", 24), [0], "cuda")
     torch.cuda.synchronize()
     t0 = time.perf_counter()
-    c = dense.encode(wt, tags)
+    c = dense.encode(wt, tags, scheme.window)
     torch.cuda.synchronize()
     enc_s = time.perf_counter() - t0
-    prefix_ok = hashlib.sha256(c.cpu().numpy().tobytes()).hexdigest() == fixtures["dense/64kb/prefix16"]
-    prefix_back = torch.equal(dense.decode(c, tags), wt)
-    calls = 16 * 17 // 2
-    per_call = enc_s / calls
+    prefix_ok = hashlib.sha256(c.cpu().numpy().tobytes()).hexdigest() == fixtures[f"{prefix}/64kb/prefix16"]
+    blocks = torch.arange(16, device="cuda")
+    prefix_back = torch.equal(dense.decode_blocks(c.view(-1, sf.block_bytes), tags, blocks * 0, blocks, sf.blocks_per_segment,
+                                                  scheme.window), wt.view(-1, sf.block_bytes))
+    per_call = enc_s / sum(scheme.calls(i) for i in range(16))
     return {"small_blocks": small_ok, "small_decodes_back": small_back, "prefix16": prefix_ok, "prefix16_decodes_back": prefix_back,
             "prefix16_encode_s": enc_s, "encode_per_call_s": per_call,
-            "encode_segment_s_extrapolated": per_call * sf.blocks_per_segment * (sf.blocks_per_segment + 1) // 2,
+            "encode_segment_s_extrapolated": per_call * sum(scheme.calls(i) for i in range(sf.blocks_per_segment)),
             "passed": small_ok and small_back and prefix_ok and prefix_back}
 
 
-def _reference_block(job: tuple[bytes, int, int, list[bytes]]) -> bytes:
-    from verity_pous import dense as ref
+def _reference_block(job: tuple[str, bytes, int, int, list[bytes]]) -> bytes:
     from verity_pous.labels import salt_value, tag
     from verity_pous.oracle import KeyQuery
     from verity_pous.oracle import run as run_prog
     from verity_pous.primitives import key_program
 
-    salt, s, i, blocks = job
-    params = ref.SECURE_FIRST
-    prims = ref.reference(params)
+    name, salt, s, i, blocks = job
+    scheme = Scheme.of(name)
+    params = scheme.geometry
+    prims = scheme.module.reference(params)
     ints = [int.from_bytes(b, "little") for b in blocks]
-    q = KeyQuery(tag(salt_value(salt), s), 0, i, tuple((u, ints[u]) for u in range(i)))
+    q = KeyQuery(tag(salt_value(salt), s), 0, i, tuple((u, ints[u]) for u in params.parents(i)))
     key, _ = run_prog(key_program(prims.h, q), prims)
     return (key ^ ints[i]).to_bytes(params.block_bytes, "little")
 
 
-def gate_reference(c_flat, tags, salt: bytes, segments: list[int], workers: int) -> dict[str, Any]:
+def gate_reference(scheme: Scheme, c_flat, tags, salt: bytes, segments: list[int], workers: int) -> dict[str, Any]:
     """The GPU decode of sampled blocks of `segments` equals the reference's."""
     import torch
 
@@ -154,10 +202,10 @@ def gate_reference(c_flat, tags, salt: bytes, segments: list[int], workers: int)
         picks += [(s, i) for i in sorted({0, 1, b - 1, *(int.from_bytes(rng[2 * k:2 * k + 2], "little") % b for k in range(5))})]
     segs = torch.tensor([p[0] for p in picks], device=c_flat.device)
     blks = torch.tensor([p[1] for p in picks], device=c_flat.device)
-    gpu = dense.decode_blocks(c_flat, tags, segs, blks, b).cpu().numpy()
+    gpu = dense.decode_blocks(c_flat, tags, segs, blks, b, scheme.window).cpu().numpy()
     host = {s: [bytes(r) for r in c_flat[s * b:(s + 1) * b].cpu().numpy()] for s in segments}
     with ProcessPoolExecutor(max_workers=workers) as pool:
-        ref = list(pool.map(_reference_block, [(salt, s, i, host[s][:i + 1]) for s, i in picks]))
+        ref = list(pool.map(_reference_block, [(scheme.name, salt, s, i, host[s][:i + 1]) for s, i in picks]))
     same = [gpu[k].tobytes() == ref[k] for k in range(len(picks))]
     return {"blocks": [list(p) for p in picks], "equal": same, "passed": all(same)}
 
@@ -207,14 +255,14 @@ def live_audit(c, segments: int, salt: bytes, decode_pass, out: Path, audits: in
 
     from verity_vllm.engine.pous import native
 
-    params = ref.DenseParams(ref.SECURE_FIRST.blocks_per_segment, ref.SECURE_FIRST.m, segments)
+    params = SCHEME[0].geometry.with_segments(segments)
     host = c.cpu().numpy()
     (out / "leaves-audit.bin").write_bytes(b"".join(leaf_hash(params, salt, i, host[i].tobytes()) for i in range(len(host))))
     os.sched_setaffinity(0, set(os.sched_getaffinity(0)) - {2, 3})
     responder = native.ext().Responder(c.data_ptr(), c.shape[0], c.shape[1], torch.cuda.current_device(), "127.0.0.1", 0, 2)
     responder.start()
-    (out / "audit-ready.json").write_text(json.dumps({"port": responder.port(), "salt": salt.hex(), "params": {
-        "blocks_per_segment": params.blocks_per_segment, "m": params.m, "segments": segments}}))
+    (out / "audit-ready.json").write_text(json.dumps({"port": responder.port(), "salt": salt.hex(), "codec": SCHEME[0].name,
+                                                     "segments": segments}))
     proc = subprocess.Popen([sys.executable, "-m", "verity_vllm.pipeline.cli", "pous-dense-audit", "--ready", str(out / "audit-ready.json"),
                              "--leaves", str(out / "leaves-audit.bin"), "--out", str(out / "audit.json"), "--k", str(k),
                              "--audits", str(audits), "--verifier-cpu", "3"], stdout=(out / "audit.log").open("w"),
@@ -240,7 +288,8 @@ def run_model(name: str, m: dict[str, Any], reps: int, salt: bytes, audit: tuple
 
     from verity_vllm.engine.pous import codec, dense
 
-    params = ref.SECURE_FIRST
+    params = SCHEME[0].geometry
+    window = SCHEME[0].window
     b, width = params.blocks_per_segment, params.block_bytes
     shapes = placements(model_shapes(m))
     total = shapes[-1][3] + shapes[-1][4]
@@ -251,7 +300,7 @@ def run_model(name: str, m: dict[str, Any], reps: int, salt: bytes, audit: tuple
     nblocks = -(-total // width)
     blocks = torch.arange(nblocks, device="cuda")
     segs, blks = blocks // b, blocks % b
-    calls = int(((blks if WINDOW[0] is None else blks.clamp(max=WINDOW[0])) + 1).sum())
+    calls = int((blks.clamp(max=window) + 1).sum())
 
     def views(flat):
         return [flat[off:off + nbytes].view(torch.bfloat16).view(o, k) for _, o, k, off, nbytes in shapes]
@@ -260,7 +309,7 @@ def run_model(name: str, m: dict[str, Any], reps: int, salt: bytes, audit: tuple
 
     def decode_pass():
         held[:] = [None]
-        held[:] = [dense.decode_blocks(c, tags, segs, blks, b, WINDOW[0]).view(-1)]
+        held[:] = [dense.decode_blocks(c, tags, segs, blks, b, window).view(-1)]
 
     torch.cuda.synchronize()
     decode_reps = _timed(decode_pass, reps, warmup=False)
@@ -280,8 +329,8 @@ def run_model(name: str, m: dict[str, Any], reps: int, salt: bytes, audit: tuple
     small = torch.arange(off // width, (off + nbytes - 1) // width + 1, device="cuda")
     seg0 = torch.arange(b, device="cuda")
     latency = {"first_tile_blocks": int(small.numel()),
-               "first_tile_s": _timed(lambda: dense.decode_blocks(c, tags, small // b, small % b, b, WINDOW[0]), 1, warmup=False)[0],
-               "segment_s": _timed(lambda: dense.decode_blocks(c, tags, seg0 // b, seg0 % b, b, WINDOW[0]), 1, warmup=False)[0]}
+               "first_tile_s": _timed(lambda: dense.decode_blocks(c, tags, small // b, small % b, b, window), 1, warmup=False)[0],
+               "segment_s": _timed(lambda: dense.decode_blocks(c, tags, seg0 // b, seg0 % b, b, window), 1, warmup=False)[0]}
     print(json.dumps({"model": name, "decode_reps_s": [round(x, 2) for x in decode_reps], **latency}), flush=True)
     return {"model": name, "segments": segments, "blocks": nblocks, "calls": calls, "weight_bytes": total, "audit": audited,
             "decode_reps_s": decode_reps, "gemm_s": gemm, "plain_gemm_s": base, "latency": latency,
@@ -315,14 +364,14 @@ def predict_vllm(bench: dict[str, Any], reps: int, salt: bytes) -> dict[str, Any
     log = store["decode_log"]
     per_forward = store["groups_per_forward"]
     last = log[-per_forward:]
-    b, width = ref.SECURE_FIRST.blocks_per_segment, ref.SECURE_FIRST.block_bytes
+    b, width = SCHEME[0].geometry.blocks_per_segment, SCHEME[0].geometry.block_bytes
     timed = {}
     for k in sorted({n for n, _ in last}):
         c = torch.empty(k * b, width, dtype=torch.uint8, device="cuda")
         fill(c, f"dense-bench/vllm/{k}")
         tags = codec.segment_tags(salt, list(range(k)), "cuda")
         blocks = torch.arange(k * b, device="cuda")
-        timed[k] = statistics.median(_timed(lambda: dense.decode_blocks(c, tags, blocks // b, blocks % b, b, WINDOW[0]), reps,
+        timed[k] = statistics.median(_timed(lambda: dense.decode_blocks(c, tags, blocks // b, blocks % b, b, SCHEME[0].window), reps,
                                             warmup=False))
         del c
     predicted = sum(timed[n] for n, _ in last)
@@ -341,9 +390,6 @@ def device_facts() -> dict[str, Any]:
     return {"nvidia_smi": smi, "torch": torch.__version__, "cuda": torch.version.cuda, "nvcc": nvcc, "sms": props.multi_processor_count}
 
 
-WINDOW: list[int | None] = [None]
-
-
 def main(a: Options) -> int:
     from verity_vllm.engine.pous import codec, dense, native
 
@@ -358,8 +404,9 @@ def main(a: Options) -> int:
     codec.COALESCED[0] = a.coalesced
     dense.CHUNKED[0] = a.chunked
     dense.CHUNKED_THREADS[0] = a.chunked_threads
-    WINDOW[0] = a.window
-    doc: dict[str, Any] = {"options": dataclasses.asdict(a), "device": device_facts(), "gates": {"vectors": gate_vectors()}}
+    SCHEME[:] = [Scheme.of(a.codec)]
+    doc: dict[str, Any] = {"options": dataclasses.asdict(a), "device": device_facts(), "gates": {"vectors": gate_vectors(SCHEME[0])},
+                           "scheme": {"codec": a.codec, "geometry": SCHEME[0].geometry.manifest(), "window": SCHEME[0].window}}
     salt = bytes(range(24))
     table = models(a.shapes)
     doc["models"] = {}
@@ -372,10 +419,11 @@ def main(a: Options) -> int:
 
     from verity_pous import dense as ref
 
-    c_probe = torch.empty(a.gate_segments * ref.SECURE_FIRST.blocks_per_segment, ref.SECURE_FIRST.block_bytes, dtype=torch.uint8,
+    geo = SCHEME[0].geometry
+    c_probe = torch.empty(a.gate_segments * geo.blocks_per_segment, geo.block_bytes, dtype=torch.uint8,
                           device="cuda")
     fill(c_probe, "dense-bench/G2")
-    doc["gates"]["reference_decode"] = gate_reference(c_probe, codec.segment_tags(salt, list(range(a.gate_segments)), "cuda"), salt,
+    doc["gates"]["reference_decode"] = gate_reference(SCHEME[0], c_probe, codec.segment_tags(salt, list(range(a.gate_segments)), "cuda"), salt,
                                         list(range(a.gate_segments)), a.workers)
     if a.segment_sets_from:
         doc["vllm_prediction"] = predict_vllm(json.loads(Path(a.segment_sets_from).read_text()), a.reps, salt)
@@ -397,7 +445,7 @@ def main(a: Options) -> int:
                                      "word_io": a.word_io, "fused": a.fused,
                                      "pair": a.pair, "pair_max_rows": a.pair_max_rows, "coalesced": a.coalesced,
                                      "chunked": a.chunked, "chunked_threads": a.chunked_threads,
-                                     "window": a.window},
+                                     "codec": a.codec, "window": SCHEME[0].window},
             "validation": {"status": "passed" if passed else "failed", "checker": "verity-vllm pous-dense-bench gates",
                            "detail": json.dumps({k: v["passed"] for k, v in doc["gates"].items()}), "evidence": ["dense-bench.json"]},
             "measurements": rows, "measurement_files": ["dense-bench.json"], "artifacts": ["dense-bench.json"]}, indent=1))
