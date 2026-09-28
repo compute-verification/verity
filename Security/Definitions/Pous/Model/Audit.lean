@@ -7,7 +7,7 @@ import Definitions.Pous.Model.Scheme
 2. Setup draws the primitive `ω` and the coins `r` uniformly; `(pp, C) := enc W ω r`.
 3. Preprocessing `A₁` is any function of `(W, pp, C, ω)` with an `S`-bit output `σ`. Nothing else survives: this
    is perfect isolation.
-4. The verifier draws `k` indices `I : Fin k → Fin B`, uniform and with replacement.
+4. The memory challenger draws `k` indices `I : Fin k → Fin B`, uniform and with replacement.
 5. The responder returns raw blocks, from `(W, pp)` (free) and its `S`-bit state, as a `(D, Q)`-bounded `Prog`.
    The audit accepts iff every returned block equals the true one.
 

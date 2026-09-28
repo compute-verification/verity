@@ -1,8 +1,9 @@
 """The POUS-only harness (`benchmarks/pous/band_gpu/harness.py`, `bench.py --impl band-gpu`) on CPU: the band's reference codec
-stands in for the GPU twin on CPU tensors, a Python thread for the native responder (its wire format), and the verifier is the
-harness's own `memory_challenger.py` process.  The harness's timer is injected and the verifier runs on its logical clock (`--clock
-logical`: each answer's time is the responder's reported one), so no outcome here depends on a clock or on the machine's
-load: what is checked is that each step runs and each gate and control decides, not the numbers."""
+stands in for the GPU twin on CPU tensors, a Python thread for the native responder (its wire format), and the memory
+challenger is the harness's own `memory_challenger.py` process.  The harness's timer is injected and the memory
+challenger runs on its logical clock (`--clock logical`: each answer's time is the responder's reported one), so no
+outcome here depends on a clock or on the machine's load: what is checked is that each step runs and each gate and
+control decides, not the numbers."""
 from __future__ import annotations
 
 import hashlib
