@@ -207,6 +207,10 @@ replay pass it: only the records see it, and only a person can judge it. (A rede
 Merkle binding guarantee vacuous for unsalted schemes; the records flagged it and a review caught it.) `--update` records
 the change and prints it: each changed guarantee's signature before and after, and each changed definition a guarantee
 reads, with the guarantees that read it and its source now (also in `review.txt` among the reports). Say so in the PR.
+An audit without `--update` whose only failures are record differences (a guarantee's signature, named assumptions or
+type hash, a `reads` group, an assumption's digest: what a train's merge of two PRs, each recorded on its own side, can
+leave) writes the `lean-audit.json` and `review.txt` that `--update` would among its reports, and its `report.json`'s
+`regenerated` names that file; a missing record or name, an owner or any other failure writes none.
 When the change lands on `main` (`research merge --push`, `research queue land`), Daniel gets a DM with each new, removed
 or changed guarantee and each changed definition (`research.spec_alert`); nobody approves it first. A guarantee whose
 statement is the same but prints differently (the same type hash and named assumptions, after a toolchain bump or a change
