@@ -9,6 +9,7 @@
                                                             (default origin/main), and presigned URLs for the pinned Lean
                                                             dependency bundles; with --on, in a free check slot of M
                                                             (`tools/check/slot.py`), the lock and cores the train checks take;
+                                                            --priority takes the next free slot ahead of waiting lane checks;
                                                             --agreement sends the upstream build whatever the commit changes
                                                             (a train that changes a pinned guarantee elsewhere: `train.sh`);
                                                             a warning first when the commit can't land on REF as it is
@@ -368,7 +369,7 @@ def record(argv: list[str]) -> int:
     (default origin/main, fetched first), or whenever --agreement is given. A commit that can't land on REF as it is
     (`landable`) gets a warning and is checked anyway."""
     on = base = None
-    agreement = False
+    agreement = priority = False
     rest = []
     it = iter(argv)
     for x in it:
@@ -378,6 +379,8 @@ def record(argv: list[str]) -> int:
             base = next(it)
         elif x == "--agreement":
             agreement = True
+        elif x == "--priority":
+            priority = True
         else:
             rest.append(x)
     spec = importlib.util.spec_from_file_location("check_tool", ROOT / "tools" / "check" / "tool.py")
@@ -423,7 +426,8 @@ def record(argv: list[str]) -> int:
         cmd += ["--on", on, "--source", "."]
         if "--verdicts-in" in rest:                    # the pack travels with the run; on the machine it's found in the run's inputs/
             cmd += ["--send", str(Path(rest[rest.index("--verdicts-in") + 1]).resolve())]
-    cmd += ["--", *(SLOT_WRAP if on else []), *tool.CHECK.command, *rest]
+    wrap = [*SLOT_WRAP[:-1], "--priority", SLOT_WRAP[-1]] if priority else SLOT_WRAP
+    cmd += ["--", *(wrap if on else []), *tool.CHECK.command, *rest]
     try:
         return subprocess.run(cmd, cwd=ROOT, env=env).returncode
     finally:

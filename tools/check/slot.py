@@ -19,6 +19,10 @@ Waiters take slots in the order they came: each holds a locked ticket in LINE be
 live one may take a slot (a ticket nobody holds is a waiter that died, and is removed). The lander's own `flock` of a slot's
 lock is not in the line: it takes that slot whenever it frees.
 
+`python3 tools/check/slot.py --priority -- CMD...`: the lander's train checks (`train.sh`). A priority waiter's ticket sorts
+before every lane waiter's, so it takes the next slot that frees ahead of the lanes' checks already waiting; it never stops a
+running check, and priority waiters keep their own arrival order. Merges unblock everyone (root, 2 Oct).
+
 `python3 tools/check/slot.py --status`: one line per slot, with who holds its lock (the pid in /proc/locks, when that process
 started, its command) or `free`, and the window that blocks it, if any.
 """
@@ -127,11 +131,16 @@ def status(slots: list[dict], lock_dir: Path, now: datetime, proc: Path = Path("
     return out
 
 
-def join(lock_dir: Path) -> tuple[Path, int]:
-    """This waiter's ticket in the line and the descriptor holding its lock; named by arrival, and locked before it is visible."""
+#: a priority waiter's ticket starts with this, which sorts before every digit (and before "." of a ticket being made)
+PRIORITY = "!"
+
+
+def join(lock_dir: Path, priority: bool = False) -> tuple[Path, int]:
+    """This waiter's ticket in the line and the descriptor holding its lock; named by arrival (after every priority ticket
+    unless it is one), and locked before it is visible."""
     d = lock_dir / LINE
     d.mkdir(exist_ok=True)
-    name = f"{time.time_ns():020d}-{os.getpid()}"
+    name = f"{PRIORITY if priority else ''}{time.time_ns():020d}-{os.getpid()}"
     fd = os.open(d / f".{name}", os.O_RDWR | os.O_CREAT, 0o664)
     fcntl.flock(fd, fcntl.LOCK_EX)
     os.rename(d / f".{name}", d / name)
@@ -167,16 +176,17 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
             return 0
         print("\n".join(status(parse(SLOTS.read_text()), SLOTS.parent, now())))
         return 0
+    opts = argv[:argv.index("--")] if "--" in argv else []
     cmd = argv[argv.index("--") + 1:] if "--" in argv else argv
-    if not cmd:
-        sys.exit("usage: slot.py -- CMD...")
+    if not cmd or set(opts) - {"--priority"}:
+        sys.exit("usage: slot.py [--priority] -- CMD...")
     if not SLOTS.exists():
         print(f"slot: no check slots on this machine ({SLOTS}); running unpinned", file=sys.stderr, flush=True)
         os.execvp(cmd[0], cmd)
     slots = parse(SLOTS.read_text())
     if not slots:
         sys.exit(f"slot: {SLOTS} lists no slots")
-    ticket, tfd = join(SLOTS.parent)
+    ticket, tfd = join(SLOTS.parent, priority="--priority" in opts)
     told = None
     while True:
         n = ahead(ticket)

@@ -209,3 +209,33 @@ def test_agreement_sends_the_upstream_build_whatever_the_commit_changes(monkeypa
     cmd = calls[-1]
     assert [cmd[i + 1].split("=")[0] for i, x in enumerate(cmd) if x == "--input"] == ["flock_upstream", "flock_inputs"]
     assert "--agreement" not in cmd
+
+
+def test_a_priority_waiter_goes_ahead_of_waiting_lane_checks_and_behind_older_priority_ones(tmp_path):
+    """Merges unblock everyone (root, 2 Oct): the lander's train check takes the next slot that frees ahead of lane checks
+    already waiting, never one a check is running in, and priority waiters keep their own arrival order."""
+    line = tmp_path / SLOT.LINE
+    line.mkdir()
+    lane = _hold(line / f"{1:020d}-1")                                       # a lane check that has waited longest
+    train, tfd = SLOT.join(tmp_path, priority=True)
+    assert train.name.startswith(SLOT.PRIORITY) and SLOT.ahead(train) == 0  # the lane waiter is no obstacle
+    lane2, lfd = SLOT.join(tmp_path)
+    assert SLOT.ahead(lane2) == 2                                            # behind the train and the older lane waiter
+    train2, t2 = SLOT.join(tmp_path, priority=True)
+    assert SLOT.ahead(train2) == 1                                           # behind the older train only
+    for fd in (lane, tfd, lfd, t2):
+        os.close(fd)
+
+
+def test_priority_reaches_slot_py_from_record_and_unknown_options_are_refused(monkeypatch):
+    spec2 = importlib.util.spec_from_file_location("repo_check_priority", ROOT / "tools" / "check" / "check.py")
+    check = importlib.util.module_from_spec(spec2)
+    spec2.loader.exec_module(check)
+    calls = []
+    monkeypatch.setattr(check.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or subprocess.CompletedProcess(cmd, 0, "", ""))
+    monkeypatch.setattr(check, "lean_deps_url_file", lambda d: None)
+    assert check.record(["--on", "vy-nebius-1", "--priority"]) == 0
+    remote = calls[-1][calls[-1].index("--") + 1:]
+    assert remote[:4] == ["python3", "tools/check/slot.py", "--priority", "--"] and "--priority" not in remote[4:]
+    with pytest.raises(SystemExit):
+        SLOT.main(["--fast", "--", "true"])
