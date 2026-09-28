@@ -220,3 +220,17 @@ def test_live_mode_grants_through_gpu_lease_agent_mode_and_observes_the_lease_it
         p.terminate()
         p.wait()
         os.close(lock)
+
+
+def test_a_waiter_pinned_to_more_gpus_than_it_asks_for_is_granted_only_from_them(c, tmp_path):
+    """5:55 PM PDT on 30 Sep: a `gpu-lease 1 --on 2,3,4,5,6,7` request read without its `on=` was granted GPU 0, which gpu-lease
+    can't take, and the node sat idle behind it. `on=` naming more GPUs than the request is its pool."""
+    from cluster.plan import Start, plan
+    line = "pid=355694 n=1 on=2,3,4,5,6,7 run=r1 who=w since=2026-10-01T00:51:49Z max=20 preempt=1"
+    [(j, _)] = nebius2.queue(c, nebius2.Observation(0, {}, (("wait.1.355694", line),)))
+    assert (j.gpus, j.gpu_ids, j.gpu_pool) == (1, (), (2, 3, 4, 5, 6, 7)) and not j.problems(c)
+    [s] = [a for a in plan(c, "vy-nebius-2", [], [j], epoch("2026-10-01T00:52:00Z")) if isinstance(a, Start)]
+    assert s.alloc.gpus[0] in (2, 3, 4, 5, 6, 7)
+    exact = "pid=7 n=2 on=3,5 run=r2 who=w since=2026-10-01T00:51:49Z"
+    [(k, _)] = nebius2.queue(c, nebius2.Observation(0, {}, (("wait.1.7", exact),)))
+    assert (k.gpu_ids, k.gpu_pool) == ((3, 5), ())

@@ -151,6 +151,7 @@ class Job:
     quiet_safe: bool = False
     node: str | None = None
     gpu_ids: tuple[int, ...] = ()
+    gpu_pool: tuple[int, ...] = ()
     locks: frozenset[str] = frozenset()
     inputs: frozenset[str] = frozenset()
     after: tuple[str, ...] = ()
@@ -199,6 +200,8 @@ class Job:
             out.append("only a batch job or a session may be quiet")
         if self.gpu_ids and len(self.gpu_ids) != self.gpus:
             out.append(f"gpu_ids names {len(self.gpu_ids)} GPUs for a job of {self.gpus}")
+        if self.gpu_pool and len(set(self.gpu_pool)) < self.gpus:
+            out.append(f"gpu_pool offers {len(set(self.gpu_pool))} GPUs for a job of {self.gpus}")
         if self.node is not None and self.node not in cluster.nodes:
             out.append(f"unknown node {self.node!r}")
         if self.workstream is not None and not any(w.name == self.workstream for w in cluster.workstreams):
@@ -327,7 +330,7 @@ def job_from_dict(d: dict[str, Any]) -> Job:
     for k in ("locks", "inputs"):
         if k in d:
             d[k] = frozenset(d[k])
-    for k in ("gpu_ids", "after"):
+    for k in ("gpu_ids", "gpu_pool", "after"):
         if k in d:
             d[k] = tuple(d[k])
     if "submitted" in d:

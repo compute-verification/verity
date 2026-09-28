@@ -15,12 +15,13 @@ id `gl-<pid>` (a waiter's job id too, so a start takes its request out of the qu
 request, is a quiet job of class `timed`; anything else is a `session` nobody preempts. `--max-min` is `max_s`; without it
 a lease is a session expected to take `GPU_LEASE_MAX_MIN` (30 minutes, `gpu-lease`'s own backfill rule), never enforced.
 A wait file doesn't say `--max-min`, `--preemptible` or `--timed`, so a waiter is read as a session, or a timed window when
-it asks for the whole node.
+it asks for the whole node. A wait file's `on=` naming exactly the GPUs it asks for pins them (`gpu_ids`); naming
+more is `gpu_pool`, the only GPUs it may be granted, as `gpu-lease --on` means.
 """
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -219,7 +220,8 @@ def queue(cluster: Cluster, obs: Observation, node: str = NODE) -> list[tuple[Jo
             continue
         want = int(f["n"])
         on = tuple(int(x) for x in f.get("on", "").split(",") if x.isdigit())
-        out.append((job_of(cluster, f, want, on if len(on) == want else (), node, whole_node=want == n), name))
+        job = job_of(cluster, f, want, on if len(on) == want else (), node, whole_node=want == n)
+        out.append((replace(job, gpu_pool=on) if on and len(on) != want else job, name))
     return out
 
 
