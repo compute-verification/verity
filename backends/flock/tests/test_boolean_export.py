@@ -1,5 +1,7 @@
 """The Boolean export's sizings of what is not one listed circuit: a constant-table read (M0's gate circuit), a wide gather as a
-multiplexer, each against the circuit it counts."""
+multiplexer, each against the circuit it counts; and its modules, expanded, against the circuits they rebuild."""
+import gzip
+import json
 import random
 import tempfile
 from pathlib import Path
@@ -47,6 +49,50 @@ def test_a_wide_gather_is_its_muxes_counted(monkeypatch):
     whole = reg.nodes[BX.Walker(reg, None, {}).gather(V)["ref"]]
     assert (composed["and"], composed["xor"], composed["not"]) == (whole["and"], whole["xor"], whole["not"])
     assert composed["and"] == 16 * (V - 1) + reg.nodes[composed["children"][1]["ref"]]["and"]
+
+
+def _piece(pid, widths):
+    def build():
+        C = gf2.Circuit(cse=True)
+        C.output("out0", IL.PIECES[pid](C, *[C.input(f"in{i}", w) for i, w in enumerate(widths)]))
+        return C
+
+    reg = BX.Registry(Path(tempfile.mkdtemp()))
+    C, root = BX.trace(build)
+    return reg, reg.analyse(C, root, pid, "piece", list_root=True)
+
+
+@pytest.mark.parametrize("pid,widths", [("F32Add_v1", [32, 32]), ("F32Mul_v1", [32, 32]), ("F32Fma_v1", [32, 32, 32])])
+def test_modules_expand_to_the_subcircuits_gates(pid, widths):
+    """Every instance's module checks one level against the circuit and equals its type's; expanded from the modules alone, a
+    piece is its circuit (checked in ``analyse``) with the tree's counts, the shared ANDs read through taps."""
+    reg, rid = _piece(pid, widths)
+    rec, gl = reg.nodes[rid], BX.expand_module(reg, rid)
+    assert reg.module_instances > len(reg.modules) and not reg.module_differs and reg.expanded_verified
+    assert (gl["counts"]["and"], gl["counts"]["xor"], gl["counts"]["not"]) == (rec["and"], rec["xor"], rec["not"])
+    assert BX.module_count_differs(reg) == []
+    assert BX.DEAD not in gl["outputs"]
+
+
+def test_a_table_reads_module_counts_m0s_circuit():
+    """A table read is one module item; expanded, the piece's ANDs and NOTs are the tree's with the table read counting M0's
+    circuit, and its XORs are more by the table index's (the tree leaves those out)."""
+    reg, rid = _piece("MufuEx2Ftz_v1", [32])
+    rec, gl = reg.nodes[rid], BX.expand_module(reg, rid)
+    (t,) = gl["tables"]
+    slot = BX.table_gates(t["table"])
+    assert t["table"] == "ex2" and t["width"] == 31
+    assert gl["counts"]["and"] + slot["and"] == rec["and"] and gl["counts"]["not"] + slot["not"] == rec["not"]
+    assert 0 < gl["counts"]["xor"] + slot["xor"] - rec["xor"] <= len(t["index"])
+
+
+def test_the_modules_file_round_trips():
+    reg, rid = _piece("F32Add_v1", [32, 32])
+    path = Path(tempfile.mkdtemp()) / "modules.json.gz"
+    BX.write_modules(reg, path)
+    doc = json.loads(gzip.decompress(path.read_bytes()))
+    assert doc["schema"].endswith("/modules") and set(doc["modules"]) == set(reg.modules)
+    assert doc["modules"][rid]["items"] == reg.modules[rid]["items"].tolist()
 
 
 def test_the_gather_matches_the_ir_primitive():

@@ -14,17 +14,23 @@ are the gates live in the unit (they sum to the unit's committed ANDs). Identica
 one node, referenced with instance counts. A subcircuit with children records its parts in order and the wiring between them
 (:func:`_wiring`); a gate list tags each gate with the scope of the innermost named subcircuit that made it.
 
+Every subcircuit type also has a module (:func:`_module`): its own gates, table reads and part calls in the order the
+lowering made them, with each call's inputs bound to the module's wires. Expanding a module (:func:`expand_module`) rebuilds
+the subcircuit's gates to any depth from the modules alone, so no size limit applies to them.
+
     python -m verity_flock.boolean_export --program-graph ROW.program.json --out DIR
 """
 from __future__ import annotations
 
 import argparse
+import array
 import bisect
 import dataclasses
 import gc
 import gzip
 import hashlib
 import inspect
+import io
 import json
 import random
 import re
@@ -44,6 +50,19 @@ GATHER_INLINE = 4096
 GATE_LIMIT = 20000
 OP = {"AND": 0, "XOR": 1, "NOT": 2}
 CONST0, CONST1 = -1, -2
+#: a module wire whose value no live gate uses (an output of a subcircuit that only dead gates would compute)
+DEAD = -3
+M_AND, M_XOR, M_NOT, M_CALL, M_TABLE, M_TAP = 0, 1, 2, 3, 4, 5
+MODULE_RULE = ("a module is one subcircuit type: wires 0..n_in-1 are its inputs (args[i] = the input bit wire i carries, -1 = a "
+               "value from outside it that is not one of its inputs), each item appends wires, -1 = 0, -2 = 1, -3 = unused (no "
+               "live gate reads it); items is a flat int stream: [0|1|2, a, b] an AND / XOR / NOT gate (b = -1 for NOT; one "
+               "wire), [3, part, n, arg_1..arg_n] a call of parts[part] with its n inputs (its out_bits wires), "
+               "[4, table, n, index_1..index_n, width] a read of tables[table] (width wires), [5, part, offset] a tap: the AND "
+               "or table bit at var offset `offset` inside parts[part] (one wire; the circuit's AND sharing gave another part "
+               "that bit without it being an output); outputs are its out_bits wires. offsets[j] is the var offset of the j-th "
+               "AND or table bit the module makes, spans the [offset, length] of each part's vars. counts are the module's own "
+               "gates; expanded, a module's gates equal its subcircuit's and / xor / not, a table read counting M0's circuit "
+               "(a table read's index XORs excepted: the subcircuit counts leave them out)")
 
 #: traced function -> display name (the id is structural; renaming a display name changes no id)
 DISPLAY = {
@@ -314,6 +333,9 @@ class Registry:
         self.gates_dir.mkdir(parents=True, exist_ok=True)
         self.verified = self.tag_scopes = self.tag_and_differs = 0
         self.wiring_compared = self.wiring_differs = 0
+        self.modules: dict[str, dict] = {}
+        self.module_instances = self.module_dead_args = self.expanded_verified = 0
+        self.module_differs: set[str] = set()
 
     def _tag_ands(self, gl) -> int:
         """Tag scopes whose subtree's tagged ANDs differ from their subcircuit's ``and`` (a list holds every gate its outputs
@@ -344,8 +366,9 @@ class Registry:
             own_range(k)
         xn: dict[int, list[int]] = {}
         seen: set[int] = set()
+        tls: dict[int, list] = {}
 
-        def charge(f, user):
+        def charge(f, user, count=True):
             stack = [(f, user)]
             while stack:
                 x, u = stack.pop()
@@ -353,12 +376,18 @@ class Registry:
                     continue
                 seen.add(id(x))
                 if isinstance(x, TL):
+                    tls.setdefault(id(x.nd), []).append(x)
+                    if not count:
+                        stack.append((x.p1, x.nd))
+                        if x.p2 is not None:
+                            stack.append((x.p2, x.nd))
+                        continue
                     e = xn.setdefault(id(x.nd), [0, 0])
                     e[0 if x.op == "XOR" else 1] += 1
                     stack.append((x.p1, x.nd))
                     if x.p2 is not None:
                         stack.append((x.p2, x.nd))
-                elif len(x.s) > 1 or (x.s and x.c):
+                elif count and (len(x.s) > 1 or (x.s and x.c)):
                     e = xn.setdefault(id(u), [0, 0])
                     e[0] += len(x.s) - 1
                     e[1] += x.c
@@ -369,6 +398,40 @@ class Registry:
         for bits in C.outputs.values():
             for f in bits:
                 charge(f, root)
+        ands: dict[int, list[int]] = {}
+        lks: dict[int, list[tuple[int, int]]] = {}
+        looked: set[int] = set()
+        for v in live:
+            if is_and[v]:
+                ands.setdefault(id(owner[v]), []).append(v)
+            elif C.kind[v] == "lookup" and data[v][0] not in looked:
+                looked.add(data[v][0])
+                t0 = v - data[v][1]
+                lks.setdefault(id(owner[t0]), []).append((data[v][0], t0))
+                # a table read's index: live gates the counts above leave out; its module still makes them
+                for f in C.lookups[data[v][0]][1]:
+                    charge(f, owner[t0], count=False)
+        cx = {"ands": ands, "tls": tls, "lks": lks, "live": live, "root": root, "iface": {}, "dead": {}, "rep": {}, "val": None}
+
+        def modules(node, hid):
+            mod, iface, side = _module(C, node, cx)
+            if cx["val"] is None:
+                cx["val"] = _evaluate_all(C, 64)
+            dead, dead_args = _check_module(C, node, mod, iface, side, cx)
+            if node is root and any(dead):
+                raise AssertionError(f"module of {name}: an output of the circuit is an unused value")
+            self.module_dead_args += dead_args
+            self.module_instances += 1
+            for k in node.kids:
+                cx["iface"].pop(id(k), None)
+                cx["dead"].pop(id(k), None)
+            cx["iface"][id(node)], cx["dead"][id(node)] = iface, dead
+            if memo[hid] is node:
+                cx["rep"][hid] = iface, dead
+            if hid not in self.modules:
+                self.modules[hid] = mod
+            elif self.modules[hid] != mod:
+                self.module_differs.add(hid)
 
         def visit(node):
             kid_ids = [visit(k) for k in node.kids]
@@ -440,16 +503,17 @@ class Registry:
                     else:
                         rec["wiring"] = merged
             memo.setdefault(hid, node)
+            modules(node, hid)
             return hid, (n_and, n_xor, n_not)
 
         hid_of: dict[int, str] = {}
         rid, _ = visit(root)
         rec = self.nodes[rid]
         rec["name"], rec["kind"] = name, kind
-        self._gate_lists(C, root, rid, memo, owner, hid_of, list_root)
+        self._gate_lists(C, root, rid, memo, owner, hid_of, list_root, cx)
         return rid
 
-    def _gate_lists(self, C, root, rid, memo, owner, hid_of, list_root=False):
+    def _gate_lists(self, C, root, rid, memo, owner, hid_of, list_root=False, cx=None):
         """Write the gate list of every node type that is at most GATE_LIMIT gates and whose parent is larger (or is a root),
         once, and with ``list_root`` also the root's (and its lone child's, when that is the whole root) whatever the size;
         verify each against the circuit on random inputs."""
@@ -486,6 +550,9 @@ class Registry:
                 vals = _evaluate_all(C, 64)
             _check(gl, node, vals, C)
             self.verified += 1
+            if cx is not None and h in cx["rep"] and h not in self.module_differs:
+                _check_expanded(self, h, node, *cx["rep"][h], vals, C)
+                self.expanded_verified += 1
             self.tag_scopes += len(gl["tag_scopes"])
             self.tag_and_differs += self._tag_ands(gl)
             bundle[h] = gl
@@ -811,6 +878,468 @@ def _check(gl, node, val, C: Circuit | None = None, T: int = 64):
     want = [_ev(f, val, mask) for f in node.outs]
     if got != want:
         raise AssertionError(f"gate list of {node.fn} disagrees with the circuit")
+
+
+# --- modules: each subcircuit type once, its own gates and the calls of its parts --------------------------------------
+
+def _module(C: Circuit, node: _Call, cx: dict) -> tuple[dict, list, list[int]]:
+    """``node``'s module (:data:`MODULE_RULE`): its inputs, then its own gates live in the unit, its table reads, its part
+    calls and its taps in the order the lowering made them, then its outputs. A part's output is read by its linear form; a
+    committed bit made inside a part that the part does not return (the circuit's AND sharing hands one part's AND to
+    another) by a tap; a form a part made that it does not return is rebuilt from its bits. A form of values from outside the
+    node that no part returns is an input as a whole, one mixing inside and outside values a chain of XORs where it is used.
+    Returns the module, its inputs as ``(key, form)`` in wire order, and per table read and tap in order its first lookup
+    bit / the tapped bit."""
+    kind, data, cseq, lookups, live = C.kind, C.data, C.seq, C.lookups, cx["live"]
+    lo, hi, s0, s1 = node.start, node.end, node.seq0, node.seq1
+    kids = node.kids
+    seq_spans = [(k.seq0, k.seq1, m) for m, k in enumerate(kids) if k.seq1 > k.seq0]
+    bit_spans = [(k.start, k.end, m) for m, k in enumerate(kids) if k.end > k.start]
+    seq_lows, bit_lows = [e[0] for e in seq_spans], [e[0] for e in bit_spans]
+
+    def span(spans, lows, v):
+        i = bisect.bisect_right(lows, v) - 1
+        return spans[i][2] if i >= 0 and v < spans[i][1] else None
+
+    items: list[int] = []
+    cnt, made = [0, 0, 0], [0]
+    tl_wire: dict[int, int] = {}
+    and_wire: dict[int, int] = {}
+    lk_wire: dict[int, int] = {}
+    chain: dict = {}
+    sib: dict = {}
+    kid_out: dict = {}
+    taps: dict[int, int] = {}
+    idx: dict = {}
+    iface: list = []
+    tables: list[str] = []
+    offs: list[int] = []
+    side: list[int] = []
+
+    def inp(key, form):
+        i = idx.get(key)
+        if i is None:
+            i = idx[key] = len(iface)
+            iface.append((key, form))
+        return -10 - i
+
+    def external(t):
+        return not lo <= t < hi or kind[t] not in ("and", "lookup")
+
+    def gate(op, a, b=-1):
+        if a == DEAD or b == DEAD:
+            return DEAD
+        items.extend((op, a, b))
+        cnt[op] += 1
+        made[0] += 1
+        return made[0] - 1
+
+    def tap(m, t):
+        w = taps.get(t)
+        if w is None:
+            items.extend((M_TAP, m, t - kids[m].start))
+            side.append(t)
+            w = taps[t] = made[0]
+            made[0] += 1
+        return w
+
+    def from_kid(m, k):
+        w = kid_out.get((m, k))
+        return sib.get(k) if w is None else w
+
+    def bit(t):
+        if external(t):
+            return inp(("b", t), L(frozenset((t,)), 0))
+        w = and_wire.get(t)
+        if w is None:
+            w = lk_wire.get(t)
+        if w is not None:
+            return w
+        m = span(bit_spans, bit_lows, t)
+        if m is None or t not in live:
+            return DEAD
+        w = from_kid(m, (frozenset((t,)), 0))
+        return tap(m, t) if w is None else w
+
+    def form(s, c, out=False):
+        if not s:
+            return CONST1 if c else CONST0
+        if len(s) == 1 and c == 0:
+            return bit(next(iter(s)))
+        k = (s, c)
+        w = sib.get(k)
+        if w is not None:
+            return w
+        if out and node is not cx["root"]:
+            return DEAD
+        w = chain.get(k)
+        if w is None:
+            ts = sorted(s)
+            w = bit(ts[0])
+            for t in ts[1:]:
+                w = gate(M_XOR, w, bit(t))
+            if c:
+                w = gate(M_NOT, w)
+            chain[k] = w
+        return w
+
+    def wire(x, out=False):
+        if isinstance(x, TL):
+            w = tl_wire.get(id(x))
+            if w is not None:
+                return w
+            if not s0 <= x.seq < s1:
+                return inp(("f", id(x)), x)
+            m = span(seq_spans, seq_lows, x.seq)
+            if m is None:
+                return DEAD
+            w = from_kid(m, (x.s, x.c))
+            return form(x.s, x.c, out) if w is None else w
+        return form(x.s, x.c, out)
+
+    ev = [(cseq[v], 1, 0, v) for v in cx["ands"].get(id(node), ())]
+    ev.extend((x.seq, 1, 1, x) for x in cx["tls"].get(id(node), ()))
+    ev.extend((cseq[t0], 1, 2, (g, t0)) for g, t0 in cx["lks"].get(id(node), ()))
+    ev.extend((k.seq0, 0, 3, m) for m, k in enumerate(kids))
+    ev.sort(key=lambda e: (e[0], e[1], e[3] if e[2] == 3 else 0))
+    for _, _, typ, x in ev:
+        if typ == 0:
+            a, b = data[x]
+            w = gate(M_AND, wire(a), wire(b))
+            if w == DEAD:
+                raise AssertionError(f"module of {node.fn}: a live AND reads an unused value")
+            and_wire[x] = w
+            offs.append(x - lo)
+        elif typ == 1:
+            tl_wire[id(x)] = gate(M_XOR, wire(x.p1), wire(x.p2)) if x.op == "XOR" else gate(M_NOT, wire(x.p1))
+        elif typ == 2:
+            g, t0 = x
+            name, forms, width = lookups[g]
+            ix = [wire(f) for f in forms]
+            if name not in tables:
+                tables.append(name)
+            items.extend((M_TABLE, tables.index(name), len(ix), *ix, width))
+            side.append(t0)
+            for j in range(width):
+                lk_wire[t0 + j] = made[0] + j
+                offs.append(t0 + j - lo)
+            made[0] += width
+        else:
+            k = kids[x]
+            args = [wire(f) for _, f in cx["iface"][id(k)]]
+            items.extend((M_CALL, x, len(args), *args))
+            for j, (f, dead) in enumerate(zip(k.outs, cx["dead"][id(k)])):
+                if not dead:
+                    kk = (f.s, f.c)
+                    kid_out.setdefault((x, kk), made[0] + j)
+                    sib.setdefault(kk, made[0] + j)
+            made[0] += len(k.outs)
+    outs = [wire(f, out=True) for f in node.outs]
+
+    def key_of(f):
+        if isinstance(f, TL):
+            return ("f", id(f)) if not s0 <= f.seq < s1 else None
+        if len(f.s) == 1 and f.c == 0:
+            t = next(iter(f.s))
+            return ("b", t) if external(t) else None
+        return None
+
+    order, args, used = [], [], set()
+    for i, f in enumerate(node.ins):
+        k = key_of(f)
+        if k is not None and k in idx and k not in used:
+            used.add(k)
+            order.append(idx[k])
+            args.append(i)
+    for j, (k, _) in enumerate(iface):
+        if k not in used:
+            order.append(j)
+            args.append(-1)
+    n_in = len(order)
+    pos = [0] * n_in
+    for new, old in enumerate(order):
+        pos[old] = new
+
+    def fix(w):
+        return n_in + w if w >= 0 else pos[-10 - w] if w <= -10 else w
+
+    out = array.array("i")
+    i = 0
+    while i < len(items):
+        op = items[i]
+        if op <= M_NOT:
+            out.extend((op, fix(items[i + 1]), fix(items[i + 2])))
+            i += 3
+        elif op == M_TAP:
+            out.extend(items[i:i + 3])
+            i += 3
+        else:
+            n = items[i + 2]
+            out.extend((op, items[i + 1], n))
+            out.extend(fix(w) for w in items[i + 3:i + 3 + n])
+            if op == M_TABLE:
+                out.append(items[i + 3 + n])
+                i += 1
+            i += 3 + n
+    mod = {"n_in": n_in, "args": array.array("i", args), "items": out, "outputs": array.array("i", (fix(w) for w in outs)),
+           "offsets": array.array("i", offs), "counts": {"and": cnt[0], "xor": cnt[1], "not": cnt[2]}}
+    if kids:
+        mod["spans"] = array.array("i", (x for k in kids for x in (k.start - lo, k.end - k.start)))
+    if tables:
+        mod["tables"] = tables
+    return mod, [iface[j] for j in order], side
+
+
+def _check_module(C: Circuit, node: _Call, mod: dict, iface: list, side: list[int], cx: dict, T: int = 64) -> tuple[list[bool], int]:
+    """One level of ``node``'s module against the circuit on its random vectors: from the values of its inputs, its parts'
+    outputs, its table reads' values and its taps, each of its ANDs equals the circuit's, and its gates give the node's
+    outputs; each call gets its part's inputs and each table read its index. Returns which outputs are unused and how many
+    call inputs are unused values."""
+    val, mask, lo = cx["val"], (1 << T) - 1, node.start
+    w = [_ev(f, val, mask) for _, f in iface]
+    offs = mod["offsets"]
+
+    def v(x):
+        return mask if x == CONST1 else 0 if x == CONST0 else None if x == DEAD else w[x]
+
+    items, i, si, oi, dead_args = mod["items"], 0, 0, 0, 0
+    while i < len(items):
+        op = items[i]
+        if op <= M_NOT:
+            a, b = v(items[i + 1]), (v(items[i + 2]) if op != M_NOT else 0)
+            if a is None or b is None:
+                raise AssertionError(f"module of {node.fn}: a gate reads an unused value")
+            r = a & b if op == M_AND else a ^ b if op == M_XOR else a ^ mask
+            if op == M_AND:
+                if r != val[lo + offs[oi]]:
+                    raise AssertionError(f"module of {node.fn}: an AND disagrees with the circuit")
+                oi += 1
+            w.append(r)
+            i += 3
+        elif op == M_CALL:
+            m, n = items[i + 1], items[i + 2]
+            k = node.kids[m]
+            for x, (_, f) in zip(items[i + 3:i + 3 + n], cx["iface"][id(k)]):
+                got = v(x)
+                if got is None:
+                    dead_args += 1
+                elif got != _ev(f, val, mask):
+                    raise AssertionError(f"module of {node.fn}: a call of {k.fn} gets an input that disagrees with the circuit")
+            w.extend(None if d else _ev(f, val, mask) for d, f in zip(cx["dead"][id(k)], k.outs))
+            i += 3 + n
+        elif op == M_TABLE:
+            n, t0 = items[i + 2], side[si]
+            si += 1
+            forms = C.lookups[C.data[t0][0]][1]
+            if [v(x) for x in items[i + 3:i + 3 + n]] != [_ev(f, val, mask) for f in forms]:
+                raise AssertionError(f"module of {node.fn}: a table read's index disagrees with the circuit")
+            for j in range(items[i + 3 + n]):
+                if lo + offs[oi] != t0 + j:
+                    raise AssertionError(f"module of {node.fn}: a table bit's offset is wrong")
+                oi += 1
+                w.append(val[t0 + j])
+            i += 4 + n
+        else:
+            t = side[si]
+            si += 1
+            if node.kids[items[i + 1]].start + items[i + 2] != t:
+                raise AssertionError(f"module of {node.fn}: a tap's offset is wrong")
+            w.append(val[t])
+            i += 3
+    dead = []
+    for x, f in zip(mod["outputs"], node.outs):
+        got = v(x)
+        dead.append(got is None)
+        if got is not None and got != _ev(f, val, mask):
+            raise AssertionError(f"module of {node.fn} disagrees with the circuit")
+    return dead, dead_args
+
+
+def _taps(items) -> list[tuple[int, int]]:
+    out, i = [], 0
+    while i < len(items):
+        op = items[i]
+        if op <= M_NOT:
+            i += 3
+        elif op == M_TAP:
+            out.append((items[i + 1], items[i + 2]))
+            i += 3
+        else:
+            i += 3 + items[i + 2] + (op == M_TABLE)
+    return out
+
+
+def expand_module(reg: "Registry", h: str) -> dict:
+    """Subcircuit ``h``'s gates rebuilt from the modules alone, as a gate list: wires 0..inputs-1 are its module's inputs, a
+    table read's value bits are op-3 wires ``[3, read, bit]`` (``tables[read]``: its table, index wires and width), -3 an
+    unused value; ``tags`` / ``tag_scopes`` as in a gate list."""
+    gates: list[int] = []
+    tags: list[int] = []
+    scopes: list[list] = []
+    tables: list[dict] = []
+    n_in = reg.modules[h]["n_in"]
+    nxt = [n_in]
+
+    def emit(op, a, b, sc):
+        gates.extend((op, a, b))
+        tags.append(sc)
+        nxt[0] += 1
+        return nxt[0] - 1
+
+    def run(h, ins, parent, part, want):
+        """``h`` on input wires ``ins``: its output wires, and the wires of the vars at the offsets in ``want``."""
+        sc = len(scopes)
+        scopes.append([h, parent, part])
+        mod, rec = reg.modules[h], reg.nodes[h]
+        items, offs, spans = mod["items"], mod["offsets"], mod.get("spans", ())
+        starts = spans[0::2]
+        sub: dict[int, set] = {}
+        for d in want:
+            m = bisect.bisect_right(starts, d) - 1
+            if m < 0 or d >= spans[2 * m] + spans[2 * m + 1]:
+                continue
+            sub.setdefault(m, set()).add(d - spans[2 * m])
+        for m, d in _taps(items):
+            sub.setdefault(m, set()).add(d)
+        w, got, tapped = list(ins), {}, {}
+
+        def v(x):
+            return x if x < 0 else w[x]
+
+        i = oi = 0
+        while i < len(items):
+            op = items[i]
+            if op <= M_NOT:
+                a, b = v(items[i + 1]), (v(items[i + 2]) if op != M_NOT else -1)
+                r = DEAD if DEAD in (a, b) else emit(op, a, b, sc)
+                w.append(r)
+                if op == M_AND:
+                    if offs[oi] in want:
+                        got[offs[oi]] = r
+                    oi += 1
+                i += 3
+            elif op == M_CALL:
+                m, n = items[i + 1], items[i + 2]
+                outs, cg = run(rec["children"][rec["parts"][m]]["ref"], [v(x) for x in items[i + 3:i + 3 + n]], sc, m, sub.get(m, ()))
+                w.extend(outs)
+                for d, r in cg.items():
+                    tapped[(m, d)] = r
+                    if spans[2 * m] + d in want:
+                        got[spans[2 * m] + d] = r
+                i += 3 + n
+            elif op == M_TABLE:
+                ti, n = items[i + 1], items[i + 2]
+                width = items[i + 3 + n]
+                r0 = len(tables)
+                tables.append({"table": mod["tables"][ti], "index": [v(x) for x in items[i + 3:i + 3 + n]], "width": width})
+                for j in range(width):
+                    r = emit(3, r0, j, sc)
+                    w.append(r)
+                    if offs[oi] in want:
+                        got[offs[oi]] = r
+                    oi += 1
+                i += 4 + n
+            else:
+                w.append(tapped[(items[i + 1], items[i + 2])])
+                i += 3
+        return [v(x) for x in mod["outputs"]], got
+
+    outs, _ = run(h, list(range(n_in)), -1, -1, ())
+    cnt = {"and": 0, "xor": 0, "not": 0}
+    for i in range(0, len(gates), 3):
+        if gates[i] < 3:
+            cnt[("and", "xor", "not")[gates[i]]] += 1
+    return {"inputs": n_in, "outputs": outs, "gates": gates, "tags": tags, "tag_scopes": scopes, "tables": tables, "counts": cnt}
+
+
+def _table_values(name: str, index_vals: list[int], width: int, T: int) -> list[int]:
+    import numpy as np
+
+    nb = (T + 7) // 8
+
+    def unpack(x):
+        return np.unpackbits(np.frombuffer(x.to_bytes(nb, "little"), dtype=np.uint8), bitorder="little")[:T].astype(np.int64)
+
+    ix = np.zeros(T, dtype=np.int64)
+    for b, x in enumerate(index_vals):
+        ix |= unpack(x) << b
+    words = np.asarray(gf2.table(name))[ix].astype(np.int64)
+    return [int.from_bytes(np.packbits(((words >> j) & 1).astype(np.uint8), bitorder="little").tobytes(), "little") for j in range(width)]
+
+
+def _check_expanded(reg: "Registry", h: str, node: _Call, iface: list, dead: list[bool], val: list[int], C: Circuit,
+                    T: int = 64) -> None:
+    """``h`` expanded from the modules against the circuit on its random vectors (``node`` an instance, ``iface`` its inputs,
+    ``dead`` its unused outputs): the unused outputs are the instance's and the others equal the circuit's."""
+    gl, mask = expand_module(reg, h), (1 << T) - 1
+    w = [_ev(f, val, mask) for _, f in iface]
+    read: dict[int, list[int]] = {}
+    g = gl["gates"]
+    for i in range(0, len(g), 3):
+        op, a, b = g[i], g[i + 1], g[i + 2]
+        if op == 3:
+            if a not in read:
+                t = gl["tables"][a]
+                idx = [mask if x == CONST1 else 0 if x == CONST0 else w[x] for x in t["index"]]
+                read[a] = _table_values(t["table"], idx, t["width"], T)
+            w.append(read[a][b])
+            continue
+        va = mask if a == CONST1 else 0 if a == CONST0 else w[a]
+        if op == 2:
+            w.append(va ^ mask)
+            continue
+        vb = mask if b == CONST1 else 0 if b == CONST0 else w[b]
+        w.append(va & vb if op == 0 else va ^ vb)
+    for o, f, d in zip(gl["outputs"], node.outs, dead):
+        if (o == DEAD) != d:
+            raise AssertionError(f"expanded module of {node.fn}: its unused outputs are not the instance's")
+        if d:
+            continue
+        got = mask if o == CONST1 else 0 if o == CONST0 else w[o]
+        if got != _ev(f, val, mask):
+            raise AssertionError(f"expanded module of {node.fn} disagrees with the circuit")
+
+
+def module_count_differs(reg: "Registry") -> list[str]:
+    """Types whose module, expanded, has other AND / XOR / NOT counts than the subcircuit (a table read counts M0's circuit)."""
+    memo: dict[str, tuple] = {}
+
+    def total(h):
+        if h in memo:
+            return memo[h]
+        mod, rec = reg.modules[h], reg.nodes[h]
+        c = [mod["counts"]["and"], mod["counts"]["xor"], mod["counts"]["not"]]
+        items, i = mod["items"], 0
+        while i < len(items):
+            op = items[i]
+            if op <= M_NOT or op == M_TAP:
+                i += 3
+                continue
+            n = items[i + 2]
+            if op == M_CALL:
+                sub = total(rec["children"][rec["parts"][items[i + 1]]]["ref"])
+                i += 3 + n
+            else:
+                t = table_gates(mod["tables"][items[i + 1]])
+                sub = (t["and"], t["xor"], t["not"])
+                i += 4 + n
+            c = [x + y for x, y in zip(c, sub)]
+        memo[h] = tuple(c)
+        return memo[h]
+
+    return sorted(h for h in reg.modules if total(h) != (reg.nodes[h]["and"], reg.nodes[h]["xor"], reg.nodes[h]["not"]))
+
+
+def write_modules(reg: "Registry", path: Path) -> int:
+    """``modules.json.gz``: ``{schema, rule, modules: {subcircuit id: module}}``, streamed; returns its bytes."""
+    with open(path, "wb") as raw, gzip.GzipFile(fileobj=raw, mode="wb", compresslevel=6, mtime=0) as gz, \
+            io.TextIOWrapper(gz, encoding="utf-8") as f:
+        f.write(json.dumps({"schema": SCHEMA + "/modules", "rule": MODULE_RULE})[:-1] + ',"modules":{')
+        for n, (h, mod) in enumerate(sorted(reg.modules.items())):
+            m = {k: (v.tolist() if isinstance(v, array.array) else v) for k, v in mod.items()}
+            f.write(("," if n else "") + json.dumps(h) + ":" + json.dumps(m, separators=(",", ":")))
+        f.write("}}")
+    return path.stat().st_size
 
 
 # --- the definition walker (templates without a C-Flock unit lowering, attention per T, GEMM coordinates) ---------------
@@ -1925,6 +2454,8 @@ def main(argv=None) -> int:
                                 "definitions": walker.defs}, separators=(",", ":")))
     (out / "subcircuits.json").write_text(json.dumps({"schema": SCHEMA + "/subcircuits", "gate_limit": GATE_LIMIT, "nodes": reg.nodes},
                                                      separators=(",", ":")))
+    module_bytes = write_modules(reg, out / "modules.json.gz")
+    count_differs = module_count_differs(reg)
     from verity_vllm.query.word import query_id
     (out / "commitments.json").write_text(json.dumps({"schema": SCHEMA + "/commitments", "query": query_id(X_BITS, W_BITS),
                                                       "code": f"verity_vllm.query.word at verity {_git_head()}", "mark_kinds": MARK_KINDS,
@@ -1951,6 +2482,7 @@ def main(argv=None) -> int:
              "source": "internal/datasets/program-graphs/<row>.program.json (its groups' templates)",
              "rows": rows, "files": {"row": "<row_key>.boolean.json", "templates": "templates.json", "subcircuits": "subcircuits.json",
                                      "gates": "gates/<circuit root id>.json.gz: {lists: {subcircuit id: gate list}}",
+                                     "modules": "modules.json.gz: {modules: {subcircuit id: module}}",
                                      "commitments": "commitments.json: {records: {Call descriptor id: its cut}}"},
              "gate_list_rule": "wires 0..inputs-1 are the inputs; each gate appends one wire; -1 = 0, -2 = 1; gates = flat [op, a, b], "
                                "op 0 AND, 1 XOR, 2 NOT (b = -1); tags[g] indexes tag_scopes = [subcircuit id, parent scope, part index] "
@@ -1969,6 +2501,18 @@ def main(argv=None) -> int:
                                     f"{sum(any(e[0] == -2 and e[1] == -1 for e in n.get('wiring', ())) for n in reg.nodes.values())} "
                                     f"types have a constant input whose value differs between instances (port -1)",
              "tag_scopes": reg.tag_scopes, "tag_scopes_whose_tagged_ands_differ_from_the_tree": reg.tag_and_differs,
+             "module_rule": MODULE_RULE,
+             "modules": {"types": len(reg.modules), "taps": sum(len(_taps(m["items"])) for m in reg.modules.values()),
+                         "bytes": module_bytes, "gates": sum(sum(m["counts"].values()) for m in reg.modules.values()),
+                         "verification": f"every instance's module evaluated one level against its circuit (from its inputs, its "
+                                         f"parts' outputs, its table reads' values and its taps, each of its ANDs equals the "
+                                         f"circuit's and its gates give its outputs; each call gets its part's inputs; 64 random "
+                                         f"vectors): {reg.module_instances} instances checked, 0 differ; "
+                                         f"every listed subcircuit expanded from the modules and evaluated against its circuit: "
+                                         f"{reg.expanded_verified} checked, 0 differ",
+                         "instances_whose_module_differs_from_their_types": sorted(reg.module_differs),
+                         "call_inputs_unused": reg.module_dead_args,
+                         "types_whose_expanded_counts_differ_from_the_tree": {"count": len(count_differs), "ids": count_differs[:50]}},
              "commitments": {"query": query_id(X_BITS, W_BITS), "records": len(cm.records),
                              "check": f"each Call's cut against its program graph's q_word_v1 (units, gates, structure gates, committed "
                                       f"interior words per Call): {len(checks['agree'])} agree, {len(checks['differ'])} differ",
@@ -1989,7 +2533,9 @@ def main(argv=None) -> int:
         raise SystemExit(f"cross-check failed: {fails[:10]}")
     print(json.dumps({"rows": rows, "subcircuits": len(reg.nodes), "gate_lists_verified": reg.verified,
                       "wiring_compared": reg.wiring_compared, "wiring_differs": reg.wiring_differs,
-                      "tag_and_differs": reg.tag_and_differs}))
+                      "tag_and_differs": reg.tag_and_differs, "modules": len(reg.modules), "module_instances": reg.module_instances,
+                      "module_differs": len(reg.module_differs), "expanded_verified": reg.expanded_verified,
+                      "module_count_differs": len(count_differs)}))
     return 0
 
 
