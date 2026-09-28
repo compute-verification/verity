@@ -784,17 +784,22 @@ def Stmt.setupTables (tags : Tags) (circuitFile publicFile : ByteArray) (coins :
     return (st.spec, #[st])
   let some tt := tags.manyTables | throw s!"{tags.name}: one table per session"
   if count > Tags.MAX_TABLES then throw s!"tables: at most {Tags.MAX_TABLES} per session, not {count}"
+  let splits := fun (n : Nat) => if n == 0 || n % count != 0 then throw s!"tables: {n} units do not split into {count} equal tables"
+    else (pure () : V Unit)
+  -- the draw's law and count are refused before the circuit is read
+  let u? ← draw.mapM Draw.UnitDraw.ofJson
+  if let some u := u? then
+    match u.law with
+    | .subset _ => splits u.units.size
+    | _ => throw "tables: several tables need a subset draw (a Bernoulli draw's unit count is random, so the tables could not split it evenly)"
   let c ← HmRow.parse tags circuitFile tables
   let pop ← HmRow.loadPublic tags c publicFile
-  let units ← match draw with
+  let units ← match u? with
     | none => pure (Array.range pop.n)
-    | some d => do
-      let u ← Draw.UnitDraw.ofJson d
+    | some u => do
       if u.population != pop.n then throw "U: the draw's population is not this registered population"
-      match u.law with
-      | .subset _ => pure u.units
-      | _ => throw "tables: several tables need a subset draw (a Bernoulli draw's unit count is random, so the tables could not split it evenly)"
-  if units.size == 0 || units.size % count != 0 then throw s!"tables: {units.size} units do not split into {count} equal tables"
+      pure u.units
+  splits units.size
   let k := units.size / count
   let sts ← (Array.range count).mapM fun j =>
     let part := Json.mkObj [("law", Json.str "subset"), ("population", Lean.toJson pop.n), ("k", Lean.toJson k),

@@ -186,25 +186,24 @@ def verifyCmd (args : List String) : IO UInt32 := do
     match buildSession tags circuitB pubB compB coins tables count draw partition program with
     | .ok (spec, sts) => Except.ok (spec, sts.map Setup.ofCircuit, (sts[0]?.map (·.partition)).getD Lean.Json.null)
     | .error e => Except.error s!"setup: {e}"
-  let setup := setupOf none
-  IO.eprintln s!"setup: {(← IO.monoMsNow) - t0} ms"
-  let mut drawn : Array (String × Except String (SessionSpec × Array Setup × Lean.Json)) := #[]
+  IO.eprintln s!"inputs: {(← IO.monoMsNow) - t0} ms"
+  -- each statement is set up once, when a session first needs it: the population's, and each draw's
+  let mut setups : Array (Option String × Except String (SessionSpec × Array Setup × Lean.Json)) := #[]
   let mut all := true
   for dir in dirs do
     let t1 ← IO.monoMsNow
     let record ← try pure (Except.ok (← IO.FS.readFile (dir ++ "/session.json")))
       catch e => pure (Except.error s!"session files: {e}")
     -- a drawn session is verified against the drawn units' statement (Σ covers the draw); several tables split the draw
-    let mut st := setup
-    if tags.hm96Rows then
-      if let .ok r := record then
-        if let some d := recordDraw r then
-          let key := (canon d).toOption.getD ""
-          match drawn.find? (·.1 == key) with
-          | some (_, s) => st := s
-          | none =>
-            st := setupOf (some d)
-            drawn := drawn.push (key, st)
+    let draw := if tags.hm96Rows then record.toOption.bind recordDraw else none
+    let key := draw.map fun d => (canon d).toOption.getD ""
+    let mut st : Except String (SessionSpec × Array Setup × Lean.Json) := .error "setup: none"
+    match setups.find? (·.1 == key) with
+    | some (_, s) => st := s
+    | none =>
+      st := setupOf draw
+      setups := setups.push (key, st)
+      IO.eprintln s!"setup{if draw.isSome then " (drawn)" else ""}: {(← IO.monoMsNow) - t1} ms"
     let files ← match record, st with
       | .ok r, .ok (spec, _, _) =>
         try pure (Except.ok (r, ← spec.repStreams.mapM fun (_, _, w) => IO.FS.readBinFile s!"{dir}/{w.replace "/" "."}.bin"))
