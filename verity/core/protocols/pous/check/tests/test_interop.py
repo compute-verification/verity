@@ -44,3 +44,19 @@ def test_a_difference_is_reported(compared, capsys):
     out = capsys.readouterr().out
     assert f"MISMATCH transcript {results[0]['id']}" in out and out.endswith(f"{expected} transcripts, 1 mismatches\n")
     assert interop.report(results[1:], expected) == 1
+
+
+def test_the_red_team_sessions_agree_word_for_word():
+    """`difftest_vectors.redteam_audits` (a store whose payloads are not all below p, 2^79 blocks, a beacon round named
+    twice, manifest floats), held to `wire.py` with every message, which the difftest's codes alone don't compare."""
+    gen = interop._generator()
+    py = gen._python(interop.ROOT)
+    insts = gen.redteam_audits(py)
+    with interop.Server([str(interop.build(interop.HERE, "pous-audit-difftest")), "serve"]) as lean:
+        results = [{"id": i["name"], "kind": "transcript", "python": interop._python_side(interop.transcript, gen, py[1], i),
+                    "lean": interop._lean_side(lean, "transcript", i)} for i in insts]
+    assert interop.report(results, len(insts)) == 0
+    setups = [json.loads(r["python"])["setup"] for r in results]
+    assert sum(s.get("message") == "no P2 prime: every payload is below p" for s in setups) == 8
+    assert sum(s.get("message") == "manifest holds a value canonical JSON cannot" for s in setups) == 5
+    assert sum(s.get("message") == "setup block count disagrees with manifest" for s in setups) == 3
