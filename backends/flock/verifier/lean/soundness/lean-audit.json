@@ -6284,6 +6284,41 @@
    "assumptions": [],
    "type_hash": "607a4a9eaee30e48aec21d8fb83f079600f24e67df47b6a7bd73e81444d3d4d6"
   },
+  "FlockSoundness.Discharge.Hidden.commitPair_spec": {
+   "signature": ["FlockSoundness.Discharge.Hidden.commitPair_spec : FlockSoundness.Discharge.Hidden.CommitPairSpec"],
+   "assumptions": [],
+   "type_hash": "a28dab48bd0fc5fee48a0dfeb2fa97cc9cedbf7e175e232cac0bbe877037140a"
+  },
+  "FlockSoundness.Discharge.Hidden.hidden_delta": {
+   "signature": ["FlockSoundness.Discharge.Hidden.hidden_delta : FlockSoundness.Discharge.Hidden.HiddenDelta"],
+   "assumptions": [],
+   "type_hash": "b1801691264fe87adeba39a0d78052871113ef8bbcf86c383955dcf92dc7a71c"
+  },
+  "FlockSoundness.Discharge.Hidden.hidden_layout": {
+   "signature": ["FlockSoundness.Discharge.Hidden.hidden_layout : FlockSoundness.Discharge.Hidden.HiddenLayout"],
+   "assumptions": [],
+   "type_hash": "63e3d160ac63981d6913d67e42ccf0f0bd95216ef1798d7aad3a2dc0cbc6a772"
+  },
+  "FlockSoundness.Discharge.Hidden.outputs_binding": {
+   "signature": ["FlockSoundness.Discharge.Hidden.outputs_binding : FlockSoundness.Discharge.Hidden.OutputsBinding"],
+   "assumptions": [],
+   "type_hash": "d9e3d9269e686b094d3d9fdd10e4d3ddeac667ee2f1710f6f036f8f57d4b0646"
+  },
+  "FlockSoundness.Discharge.Hidden.outputs_committed": {
+   "signature": ["FlockSoundness.Discharge.Hidden.outputs_committed : FlockSoundness.Discharge.Hidden.OutputsCommitted"],
+   "assumptions": [],
+   "type_hash": "686c4a68e8dd09e90bf1e86157d569151977deaba2c943182c385e6b70d7e5e6"
+  },
+  "FlockSoundness.Discharge.Hidden.public_exposes": {
+   "signature": ["FlockSoundness.Discharge.Hidden.public_exposes : FlockSoundness.Discharge.Hidden.PublicExposes"],
+   "assumptions": [],
+   "type_hash": "7b099b9cb3ad2e10ac594f2361acad091b14100e72ba778fc557546a91e943c9"
+  },
+  "FlockSoundness.Discharge.Hidden.setupHidden_spec": {
+   "signature": ["FlockSoundness.Discharge.Hidden.setupHidden_spec : FlockSoundness.Discharge.Hidden.SetupHiddenSpec"],
+   "assumptions": [],
+   "type_hash": "8196be5fb7e2f8fb6184ec5f389ffcd2d1ce2da7a65959dd12907179c064f88c"
+  },
   "FlockSoundness.Discharge.Hm.bc_site_col": {
    "signature": [
     "FlockSoundness.Discharge.Hm.bc_site_col {T : FlockSoundness.Model.Statement}",
@@ -14164,6 +14199,8 @@
     "FlockSoundness.Discharge.Exec.stratified_card",
     "FlockSoundness.Discharge.Exec.stratified_sub",
     "FlockSoundness.Discharge.Exec.subset_spec",
+    "FlockSoundness.Discharge.Hidden.outputs_binding",
+    "FlockSoundness.Discharge.Hidden.outputs_committed",
     "FlockSoundness.Discharge.Hm.keyedRowsOuts_computes",
     "FlockSoundness.Discharge.Integrate.DrawSetup.table_site_inj",
     "FlockSoundness.Discharge.Integrate.drawSetup_of_accepts",
@@ -14613,6 +14650,8 @@
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96_of_leaf",
     "FlockSoundness.Discharge.Exec.accepts_verdict_hm96",
     "FlockSoundness.Discharge.Exec.verify_cap_ofCircuit_hm96",
+    "FlockSoundness.Discharge.Hidden.outputs_binding",
+    "FlockSoundness.Discharge.Hidden.outputs_committed",
     "FlockSoundness.Discharge.Hm.bc_site_col",
     "FlockSoundness.Discharge.Hm.bc_site_commit",
     "FlockSoundness.Discharge.Hm.keyedRowsOuts_computes",
@@ -14866,6 +14905,8 @@
     "FlockSoundness.Discharge.Exec.table_verdict_hm96",
     "FlockSoundness.Discharge.Exec.verify_cap_hm96",
     "FlockSoundness.Discharge.Exec.verify_cap_ofCircuit_hm96",
+    "FlockSoundness.Discharge.Hidden.commitPair_spec",
+    "FlockSoundness.Discharge.Hidden.outputs_committed",
     "FlockSoundness.Discharge.Hm.bc_site_col",
     "FlockSoundness.Discharge.Hm.bc_site_commit",
     "FlockSoundness.Discharge.Hm.hm96_commit",
@@ -15452,6 +15493,9 @@
     "FlockSoundness.Discharge.Const.UProg.constCols_progPlaces_of_setupH",
     "FlockSoundness.Discharge.Const.constCols_keyProg",
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
+    "FlockSoundness.Discharge.Hidden.hidden_layout",
+    "FlockSoundness.Discharge.Hidden.outputs_binding",
+    "FlockSoundness.Discharge.Hidden.outputs_committed",
     "FlockSoundness.Discharge.Hm.bc_site_col",
     "FlockSoundness.Discharge.Hm.bc_site_commit",
     "FlockSoundness.Discharge.Hm.keyedRowsOuts_computes",
@@ -17519,6 +17563,8 @@
     "FlockSoundness.CROnly.flock_headline",
     "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.flock_e2e_count_hm96L",
+    "FlockSoundness.Discharge.Hidden.outputs_binding",
+    "FlockSoundness.Discharge.Hidden.outputs_committed",
     "FlockSoundness.Discharge.Hm.bc_site_col",
     "FlockSoundness.Discharge.Hm.bc_site_commit",
     "FlockSoundness.Discharge.Hm.keyedRowsOuts_computes",
@@ -17597,6 +17643,9 @@
     "FlockSoundness.CROnly.flock_headline",
     "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.flock_e2e_count_hm96L",
+    "FlockSoundness.Discharge.Hidden.commitPair_spec",
+    "FlockSoundness.Discharge.Hidden.outputs_binding",
+    "FlockSoundness.Discharge.Hidden.outputs_committed",
     "FlockSoundness.Discharge.Hm.bc_site_col",
     "FlockSoundness.Discharge.Hm.bc_site_commit",
     "FlockSoundness.Discharge.Hm.hm96_commit",
@@ -18828,6 +18877,41 @@
     "FlockSoundness.Discharge.Exec.table_verdict_hm96"
    ]
   },
+  "FlockSoundness.Discharge.Hidden.Defs": {
+   "digest": "3db08e4cbeef0a9fe71efa5b671c926ad1da0708a16b0c984766d395afe20f34",
+   "definitions": {
+    "FlockSoundness.Discharge.Hidden.CommitPairSpec": "4ceb460df145ac8736fbea13f161e9735ba67ae044fefbcda334322bdbf0b430",
+    "FlockSoundness.Discharge.Hidden.HiddenDelta": "62ceb2d2cfb1c92e5df4f38932560f8a76dbb6ff4971a06f96a854f21b04017b",
+    "FlockSoundness.Discharge.Hidden.HiddenLayout": "563415366b14c049ac7e8a48c5cc80d18db68fe6ee3ae48a838d8b887eb7f451",
+    "FlockSoundness.Discharge.Hidden.OutputsBinding": "13a529b3146269c719e5f5d2dcb5db9e3282a708ceb1cece31626a319e63bcf0",
+    "FlockSoundness.Discharge.Hidden.OutputsCommitted": "d7aa76671f3f52b59427b4a5dd7014bd542fd87dd087a6e40baf4a2d73316984",
+    "FlockSoundness.Discharge.Hidden.PublicExposes": "fb7daae8c58d946861fcf4f1d6de04c0ed51365acb809647e4d1773ff8f55bcd",
+    "FlockSoundness.Discharge.Hidden.SetupHiddenSpec": "556f92f8b3f30ec1cb1331f06a659e7234bf916e59055215b90d3fea212e3c83",
+    "FlockSoundness.Discharge.Hidden.Spec": "27ff7beecbad78478785bec7cc9dc4bd4a388bbe5bfa836e09b3c54fb5777e10",
+    "FlockSoundness.Discharge.Hidden.commitPair": "9c14f0373461f5208ae53ad25ebed957edb39626305a32366c30fba6028855bf",
+    "FlockSoundness.Discharge.Hidden.deltaMsgCol": "414484dcbf2a0803cf9be39f3fbaeb3d5988e3ab452b727334587f647f717685",
+    "FlockSoundness.Discharge.Hidden.outAt": "d25ef6df5a3c8ca52a01818bc7ffb4a6368dc9bbe62194648196cf8c54a9cd9f",
+    "FlockSoundness.Discharge.Hidden.outBytes": "6d4ffc1f96159fc34a92b1bdb99bad719f97e9d0d9d0a0903645b0d7c49ef987",
+    "FlockSoundness.Discharge.Hidden.outPairs": "8f95914bfd03c8e574f336021fd837e262bb01ecb2f815d6b6b3ed0e5eb9c15e",
+    "FlockSoundness.Discharge.Hidden.outSrc": "516f3fc459da48285c72d71509a63a90b9b2c68ed54f04e226751378e33d6ea8"
+   },
+   "pins": [
+    "FlockSoundness.Discharge.Hidden.commitPair_spec",
+    "FlockSoundness.Discharge.Hidden.hidden_delta",
+    "FlockSoundness.Discharge.Hidden.hidden_layout",
+    "FlockSoundness.Discharge.Hidden.outputs_binding",
+    "FlockSoundness.Discharge.Hidden.outputs_committed",
+    "FlockSoundness.Discharge.Hidden.public_exposes",
+    "FlockSoundness.Discharge.Hidden.setupHidden_spec"
+   ]
+  },
+  "FlockSoundness.Discharge.Hm.Delta": {
+   "digest": "805eb2a0ee473b1ab4153ef56d252c67b832ace490f1031d62972b10e9e9211d",
+   "definitions": {
+    "FlockSoundness.Discharge.Hm.zeroCol": "6453d03af8ccb10b2be3b56c2deb05cc846eb41a0bace3fc36ab07b026e463c2"
+   },
+   "pins": ["FlockSoundness.Discharge.Hidden.hidden_delta"]
+  },
   "FlockSoundness.Discharge.Hm.Exec": {
    "digest": "281a7df049b142499ac63a96ecbbfe1be9697a08762ede5567af68cc66c61fca",
    "definitions": {
@@ -18887,7 +18971,12 @@
    "definitions": {
     "FlockSoundness.Discharge.Hm.blockBit": "43f8f5cb29f186fc14b7ef280779fc6c57d080821f01991295317a9fea24828b"
    },
-   "pins": ["FlockSoundness.Discharge.Hm.row_bc_flat", "FlockSoundness.Discharge.Hm.row_bc_setupH"]
+   "pins": [
+    "FlockSoundness.Discharge.Hidden.outputs_binding",
+    "FlockSoundness.Discharge.Hidden.outputs_committed",
+    "FlockSoundness.Discharge.Hm.row_bc_flat",
+    "FlockSoundness.Discharge.Hm.row_bc_setupH"
+   ]
   },
   "FlockSoundness.Discharge.Hm.Port": {
    "digest": "662a1941818b36a424999437c970c8d2a1c29928ec7b070b9ef6d3e7971942a8",
@@ -18903,6 +18992,8 @@
     "FlockSoundness.Discharge.Hm.shaSub": "2afcef0118bebb5e3615c6b27e21173b09037525779000c3061e84883b6ee745"
    },
    "pins": [
+    "FlockSoundness.Discharge.Hidden.outputs_binding",
+    "FlockSoundness.Discharge.Hidden.outputs_committed",
     "FlockSoundness.Discharge.Hm.bc_site_col",
     "FlockSoundness.Discharge.Hm.bc_site_commit",
     "FlockSoundness.Discharge.Hm.keyedRowsOuts_computes",
@@ -19039,14 +19130,17 @@
    ]
   },
   "FlockSoundness.Discharge.Layout.HmRegion": {
-   "digest": "fe62e59bb103905f286f541870a644e9959ebca990774a1e1c107e8cf5f1fd70",
+   "digest": "65431faf58c1abfae9dae7765e912d1a8c7c0888fa4ed25d8f2a946c5ee9807a",
    "definitions": {
     "FlockSoundness.Discharge.Layout.bcAddr": "3e38f334d4f411cad0fbc47d7d864b6cfec0466f245134dd3b955d59df2ab847",
     "FlockSoundness.Discharge.Layout.bcChunk": "4f1de1976143691ab34cdb6467c7e6ec8c864bd9d21f2a5f67765a8ee1913efd",
+    "FlockSoundness.Discharge.Layout.hmBytes": "47e7d7770eab2237aff60906db99da92653ffa0f1dada4d08c46d0791602f11a",
     "FlockSoundness.Discharge.Layout.hmFixed": "0fe0bc46a5c53a30466489a9c87a0811f1540edd6687bc1d3300a151d59f2ce5",
+    "FlockSoundness.Discharge.Layout.hmFree": "1de3cd5d4df1a406777cea1c8caabe3cf385b769db979b2ae527afb70087cc51",
     "FlockSoundness.Discharge.Layout.inBlockOr": "796471326c0a4141ed0f649e5afb4ca16a24dc7bcb66847bc483bde39b7eddfe"
    },
    "pins": [
+    "FlockSoundness.Discharge.Hidden.public_exposes",
     "FlockSoundness.Discharge.Hm.bc_site_col",
     "FlockSoundness.Discharge.Hm.bc_site_commit",
     "FlockSoundness.Discharge.Hm.keyedRowsOuts_computes",
@@ -20177,6 +20271,9 @@
     "FlockSoundness.Discharge.Const.UProg.constCols_progPlaces_of_setupH",
     "FlockSoundness.Discharge.Const.constCols_keyProg",
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
+    "FlockSoundness.Discharge.Hidden.hidden_layout",
+    "FlockSoundness.Discharge.Hidden.outputs_binding",
+    "FlockSoundness.Discharge.Hidden.outputs_committed",
     "FlockSoundness.Discharge.Hm.bc_site_col",
     "FlockSoundness.Discharge.Hm.bc_site_commit",
     "FlockSoundness.Discharge.Hm.keyedRowsOuts_computes",
@@ -20259,6 +20356,9 @@
     "FlockSoundness.Discharge.Const.UProg.constCols_progPlaces_of_setupH",
     "FlockSoundness.Discharge.Const.constCols_keyProg",
     "FlockSoundness.Discharge.DecodeZL.decodesOn_exec",
+    "FlockSoundness.Discharge.Hidden.hidden_layout",
+    "FlockSoundness.Discharge.Hidden.outputs_binding",
+    "FlockSoundness.Discharge.Hidden.outputs_committed",
     "FlockSoundness.Discharge.Hm.bc_site_col",
     "FlockSoundness.Discharge.Hm.bc_site_commit",
     "FlockSoundness.Discharge.Hm.keyedRowsOuts_computes",
@@ -21954,6 +22054,8 @@
     "FlockSoundness.Discharge.Const.image_oneWire",
     "FlockSoundness.Discharge.DrawWords.headline_card",
     "FlockSoundness.Discharge.Exec.flock_e2e_count_hm96L",
+    "FlockSoundness.Discharge.Hidden.outputs_binding",
+    "FlockSoundness.Discharge.Hidden.outputs_committed",
     "FlockSoundness.Discharge.Hm.bc_site_col",
     "FlockSoundness.Discharge.Hm.bc_site_commit",
     "FlockSoundness.Discharge.Hm.keyedRowsOuts_computes",
@@ -22126,6 +22228,9 @@
     "FlockSoundness.Discharge.Exec.simAudit_eq_on",
     "FlockSoundness.Discharge.Exec.table_sound_compiledL",
     "FlockSoundness.Discharge.Exec.table_verdict_hm96",
+    "FlockSoundness.Discharge.Hidden.commitPair_spec",
+    "FlockSoundness.Discharge.Hidden.outputs_binding",
+    "FlockSoundness.Discharge.Hidden.outputs_committed",
     "FlockSoundness.Discharge.Hm.bc_site_col",
     "FlockSoundness.Discharge.Hm.bc_site_commit",
     "FlockSoundness.Discharge.Hm.hm96_commit",
@@ -23084,6 +23189,8 @@
     "FlockSoundness.Discharge.Exec.table_verdict_hm96",
     "FlockSoundness.Discharge.Exec.verify_cap_hm96",
     "FlockSoundness.Discharge.Exec.verify_cap_ofCircuit_hm96",
+    "FlockSoundness.Discharge.Hidden.outputs_binding",
+    "FlockSoundness.Discharge.Hidden.outputs_committed",
     "FlockSoundness.Discharge.Hm.bc_site_col",
     "FlockSoundness.Discharge.Hm.bc_site_commit",
     "FlockSoundness.Discharge.Hm.keyedRowsOuts_computes",
@@ -23617,6 +23724,9 @@
     "FlockSoundness.Discharge.Exec.verify_cap_hm96",
     "FlockSoundness.Discharge.Exec.verify_cap_ofCircuit_hm96",
     "FlockSoundness.Discharge.Exec.zerocheck_emitted",
+    "FlockSoundness.Discharge.Hidden.commitPair_spec",
+    "FlockSoundness.Discharge.Hidden.outputs_binding",
+    "FlockSoundness.Discharge.Hidden.outputs_committed",
     "FlockSoundness.Discharge.Hm.bc_site_col",
     "FlockSoundness.Discharge.Hm.bc_site_commit",
     "FlockSoundness.Discharge.Hm.hm96_commit",
@@ -23690,6 +23800,8 @@
     "FlockSoundness.Discharge.Exec.accepts_tables_hm96_of_leaf",
     "FlockSoundness.Discharge.Exec.accepts_verdict_hm96",
     "FlockSoundness.Discharge.Exec.verify_cap_ofCircuit_hm96",
+    "FlockSoundness.Discharge.Hidden.outputs_binding",
+    "FlockSoundness.Discharge.Hidden.outputs_committed",
     "FlockSoundness.Discharge.Hm.keyedRowsOuts_computes",
     "FlockSoundness.Discharge.Integrate.DrawSetup.table_site_inj",
     "FlockSoundness.Discharge.Integrate.flock_headline_exec",
@@ -23848,6 +23960,9 @@
     "FlockSoundness.Discharge.Exec.flock_e2e_count_hm96L",
     "FlockSoundness.Discharge.Exec.opnOf_pair",
     "FlockSoundness.Discharge.Exec.table_verdict_hm96",
+    "FlockSoundness.Discharge.Hidden.commitPair_spec",
+    "FlockSoundness.Discharge.Hidden.outputs_binding",
+    "FlockSoundness.Discharge.Hidden.outputs_committed",
     "FlockSoundness.Discharge.Hm.bc_site_col",
     "FlockSoundness.Discharge.Hm.bc_site_commit",
     "FlockSoundness.Discharge.Hm.hm96_commit",
