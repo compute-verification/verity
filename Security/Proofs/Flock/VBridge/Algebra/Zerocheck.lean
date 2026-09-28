@@ -15,7 +15,7 @@ rep: when `GfResiduals`' residuals on the S `structureOf` builds and the v `veri
 hold on the messages w holds (`decoded`), at the points `verifierRows` returns.
 -/
 
-namespace FlockVBridge.Algebra
+namespace Flock.RecAlgebra
 
 open Flock FlockSoundness.Refine
 
@@ -301,4 +301,4 @@ theorem zerocheck_of_residuals {sh : Shape} {w comb : Array F128} {cons : Nat �
   obtain ⟨hsab, hsc, hszc⟩ := decoded_sizes sh w comb cons
   exact zerocheck_checks h0 (hzero r0 (by rw [hrs]; simp)) hp hsab hsc hszc hC
 
-end FlockVBridge.Algebra
+end Flock.RecAlgebra
