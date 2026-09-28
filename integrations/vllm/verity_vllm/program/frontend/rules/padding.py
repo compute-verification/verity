@@ -1,4 +1,4 @@
-"""Padded-serving rules (profile mode; PAD-INT stage-1 requirements, `docs/vllm-poc/serve3-spec.md` §4–§7).
+"""Padded-serving rules (profile mode; PAD-INT stage-1 requirements, PAD-SPEC v1 §4–§7).
 
 A padded serving module represents the realized generation length as *values*: a per-event live bit derived from
 EOS detection, token slots muxed against the pad token, and every decode step's appended K/V row muxed against one

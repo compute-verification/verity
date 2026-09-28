@@ -381,7 +381,7 @@ class Ctx:
         if fn is None:
             refuse("numerics_unregistered", node or self.current, self.module_path(node or self.current),
                    f"the {self.mode} vocabulary {self.vocab.name!r} has no registered kind for role {role!r} with {statics}; "
-                   f"a NUMERIC kind is needed (see docs/vllm-poc/derive-requests.md)")
+                   f"a NUMERIC kind is needed")
         return fn
 
     def call(self, fn, *args: Coll, node=None, rule: Rule | None = None, name: str | None = None) -> Coll:

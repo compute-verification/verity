@@ -1,5 +1,5 @@
-"""Negative and adversarial tests for the automatic importer (lane XFER, GUIDANCE §43.1; mandate
-`docs/vllm-poc/mandate-derive-2026-09-08.md` §"Test generality and failure behavior").
+"""Negative and adversarial tests for the automatic importer (lane XFER, GUIDANCE §43.1; the derive
+mandate's "Test generality and failure behavior").
 
 Contract under test (frontend design §4.3 / GUIDANCE §43.3): `derive(...)` returns a complete `Program` or
 `Unsupported(reason, node, module_path, hint)` (returned or raised) / a `FrontendError` code — never a partial

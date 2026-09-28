@@ -1,4 +1,4 @@
-"""The §8 rulings in the torch frontend (docs/frontend-pytorch-2026-09-07.md §8/§9), one test each.
+"""The §8 rulings in the torch frontend (frontend design §8/§9), one test each.
 Needs torch (the pod); skips cleanly without it."""
 
 from __future__ import annotations

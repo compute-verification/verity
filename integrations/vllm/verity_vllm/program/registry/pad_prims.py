@@ -1,5 +1,5 @@
-"""Primitives of the padded serving circuit (`Serve@3`) — lane PAD-IMPL, spec §9 of
-`docs/vllm-poc/serve3-spec.md` (PAD-SPEC v1), GUIDANCE §29.
+"""Primitives of the padded serving circuit (`Serve@3`) — lane PAD-IMPL, §9 of PAD-SPEC v1,
+GUIDANCE §29.
 
 The padded circuit carries one live/finished bit per decode step and selects, at decode-step granularity,
 between the step's computed outputs and the canonical pad values.  The gates this takes are boolean algebra

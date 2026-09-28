@@ -62,9 +62,8 @@ strings) and the object digest is ``tagged_sha256("veritor/typed-obligation/v0",
 bytes)``.
 
 :func:`validate` accepts an object or raises :class:`InterfaceReject` with
-the first applicable :class:`Code`, in the fixed order documented in
-``docs/interface/typed-obligation-v0.md`` -- so that every implementation of
-the rules reports the same code for the same object.
+the first applicable :class:`Code`, in a fixed order -- so that every
+implementation of the rules reports the same code for the same object.
 """
 
 from __future__ import annotations

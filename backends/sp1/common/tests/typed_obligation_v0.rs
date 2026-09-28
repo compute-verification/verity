@@ -7,9 +7,9 @@
 //! 1. re-derives the canonical JSON bytes and the tagged digest;
 //! 2. parses and validates the Verity-level object (subcircuits of one-output
 //!    gates, boundaries of value references, obligations; IR §F) with an
-//!    independent implementation of the interface's rules
-//!    (`docs/interface/typed-obligation-v0.md` §11), in the same order, and
-//!    compares verdict and code;
+//!    independent implementation of the interface's rules, in the order
+//!    `verity.proofs.typed_obligation.validate` applies them, and compares
+//!    verdict and code;
 //! 3. for an accepted object, recomputes the lowering -- the legacy
 //!    `KindProgram` bodies, slots and pins behind the lowering boundary -- and
 //!    compares it with the vector's `lowering` record and `statement` bytes,

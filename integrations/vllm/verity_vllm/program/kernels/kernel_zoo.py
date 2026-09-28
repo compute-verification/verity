@@ -1,5 +1,5 @@
 """Resolved GEMM launch signatures on the A100 (sm_80) and the CPU model that reproduced each one
-bit-exactly (``docs/vllm-poc/numerics.md`` §4; raw evidence under
+bit-exactly (raw evidence under
 ``fixtures/results/numerics-a100-*/raw/gemm_cublas.json`` and ``cublas_probe.json``).
 
 The POC profile (``VLLM_BATCH_INVARIANT=1``) never reaches cuBLAS: every GEMM of the engine is

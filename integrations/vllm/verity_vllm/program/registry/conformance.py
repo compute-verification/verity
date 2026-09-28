@@ -51,9 +51,8 @@ DIVERGENCES = {
     ],
 }
 
-# The f32 -> bf16 conversion the production programs bind and its NaN rule (lane L8,
-# docs/verified-backend/l8-nan-primitive.md). `F32ToBf16Rn_v1` (NaN -> 0x7FC0, the software canonicalisation and
-# `veritor.tc-ampere-bf16@1`'s gate) stays registered and unchanged; B0/B1 bind `F2fpBf16_v1` (NaN -> 0x7FFF, the
+# The f32 -> bf16 conversion the production programs bind and its NaN rule (lane L8). `F32ToBf16Rn_v1` (NaN -> 0x7FC0,
+# the software canonicalisation and `veritor.tc-ampere-bf16@1`'s gate) stays registered and unchanged; B0/B1 bind `F2fpBf16_v1` (NaN -> 0x7FFF, the
 # measured `cvt.rn.bf16.f32` word; `veritor.tc-ampere-bf16@2`'s gate). The two are equal on every non-NaN word, so a
 # recorded trace without NaN words at conversion outputs is evidence about either binding.
 NAN_CANONICALISATION = {

@@ -26,7 +26,7 @@ IntraWGOverlap=true, PackGQA=true, Split=false, V_colmajor=false>>``, kBlockM 12
 num_splits = 1 (``VLLM_BATCH_INVARIANT``), no ``FlashAttnFwdCombine``.
 
 Measured (typed program `AttentionFA3@1` = this arithmetic gate for gate, correspondence against the H100 production
-capture, request 917b9faa, positions 0..526, layers 0/1/13/27): see docs/vllm-poc/hopper-profile.md.  Exactness
+capture, request 917b9faa, positions 0..526, layers 0/1/13/27).  Exactness
 against this module is checked by tests/test_fa3_model.py (model vs the typed composite on random operands).
 """
 
