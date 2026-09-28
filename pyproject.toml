@@ -3,13 +3,13 @@ name = "verity-workspace"
 version = "0.0.0"
 description = "Verity monorepo root; a uv workspace, not a package."
 requires-python = ">=3.12"
-dependencies = ["research", "verity", "verity-sp1", "verity-numerical", "verity-vllm", "verity-sampled-proofs", "verity-pous", "verity-one-stage", "verity-flock", "verity-circuit-check"]
+dependencies = ["research", "verity", "verity-sp1", "verity-numerical", "verity-vllm", "verity-sampled-proofs", "verity-pous", "verity-one-stage", "verity-pouw", "verity-flock", "verity-circuit-check"]
 
 [tool.uv]
 package = false
 
 [tool.uv.workspace]
-members = ["tools/research", "packages/verity", "backends/sp1", "backends/numerical", "integrations/vllm", "protocols/sampled_proofs", "protocols/pous", "protocols/one_stage", "backends/flock", "tools/circuit_check", "tools/check", "tools/lean", "tools/native_peak", "tools/tc_probe", "benchmarks/commitments", "backends/gkr", "backends/direct"]
+members = ["tools/research", "packages/verity", "backends/sp1", "backends/numerical", "integrations/vllm", "protocols/sampled_proofs", "protocols/pous", "protocols/one_stage", "protocols/pouw", "backends/flock", "tools/circuit_check", "tools/check", "tools/lean", "tools/native_peak", "tools/tc_probe", "benchmarks/commitments", "backends/gkr", "backends/direct"]
 
 [tool.uv.sources]
 research = { workspace = true }
@@ -20,6 +20,7 @@ verity-vllm = { workspace = true }
 verity-sampled-proofs = { workspace = true }
 verity-pous = { workspace = true }
 verity-one-stage = { workspace = true }
+verity-pouw = { workspace = true }
 verity-flock = { workspace = true }
 verity-circuit-check = { workspace = true }
 
