@@ -41,10 +41,22 @@ use sha2::{Digest, Sha512};
 
 use crate::{chunk::log2ceil, ir_block::IrUnitNet, lookup::LookupNet};
 
-pub const TAG: &[u8] = b"verity/flock-circuit";
 pub const FORMAT: &str = "flock-circuit";
 pub const INST_FORMAT: &str = "flock-circuit-inputs";
 pub const STATEMENT: &str = "verity/flock-circuit";
+
+/// The strings a circuit statement hashes byte for byte, by its id (PROTOCOL.md §16.5's table, the Lean `Flock.Tags`): the
+/// id is also the statement digest's tag, and each id has its own Σ tag and stream domain.
+pub struct Tags {
+    pub statement: &'static str,
+    pub sigma: &'static str,
+    /// a rep's domain is this, then the rep's decimal index
+    pub domain: &'static str,
+}
+
+pub const TAGS: Tags = Tags { statement: STATEMENT, sigma: "verity/flock-circuit/sigma", domain: "flock-circuit/fast100x2/rep" };
+pub const TYPED_TAGS: Tags =
+    Tags { statement: crate::typed::STATEMENT, sigma: "verity/flock-circuit/types/sigma", domain: "flock-circuit-types/fast100x2/rep" };
 pub const SCHEME: &str = "frame-v3-sha512/hm96-sha512";
 pub const ROW_SCHEMA: &str = "hm96-sha512/row/v1";
 pub const SHA_NET: &str = "sha512x3";
@@ -734,6 +746,11 @@ impl Composite {
     /// `verity/flock-circuit`, or `verity/flock-circuit/types` for a typed statement
     pub fn statement(&self) -> &str {
         self.meta["statement"].as_str().unwrap_or(STATEMENT)
+    }
+
+    /// Its statement's tags.
+    pub fn tags(&self) -> &'static Tags {
+        if self.statement() == crate::typed::STATEMENT { &TYPED_TAGS } else { &TAGS }
     }
 
     pub fn unit_range(&self) -> &Range {
@@ -1510,7 +1527,7 @@ impl Stmt {
         }
         let regions = Self::regions(&c)?;
         let mut h = Sha512::new();
-        h.update(TAG);
+        h.update(c.tags().statement.as_bytes());
         h.update(c.sha512);
         h.update(serde_json::to_vec(&sorted(&identity)).unwrap());
         for x in [n, blocks_real, nbl, m, k_log, pin, regions.len(), c.g] {
@@ -2061,6 +2078,15 @@ mod tests {
     use std::collections::BTreeSet;
 
     use super::*;
+
+    /// PROTOCOL.md §16.5: the statement digest's tag is the statement id. The flat statement keeps its tags; the typed id
+    /// has its own.
+    #[test]
+    fn tags_follow_the_statement_id() {
+        assert_eq!((TAGS.statement, TAGS.sigma, TAGS.domain), ("verity/flock-circuit", "verity/flock-circuit/sigma", "flock-circuit/fast100x2/rep"));
+        assert_eq!((TYPED_TAGS.statement, TYPED_TAGS.sigma, TYPED_TAGS.domain),
+                   ("verity/flock-circuit/types", "verity/flock-circuit/types/sigma", "flock-circuit-types/fast100x2/rep"));
+    }
 
     #[test]
     fn headers_serialize_key_sorted_as_they_are() {
