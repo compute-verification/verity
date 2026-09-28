@@ -1,4 +1,4 @@
-"""The verification unit (chain of 96 units + epilogue) on the Ligero prover: gate and measurement.
+"""The proof unit (chain of 96 units + epilogue) on the Ligero prover: gate and measurement.
 
     python -m backends.direct.ligero.run gate-vu  --root fixtures/bench-instances/v1 --device cuda --vus 64
     python -m backends.direct.ligero.run bench-vu --root fixtures/bench-instances/v1 --device cuda --reps 5 --out result.json

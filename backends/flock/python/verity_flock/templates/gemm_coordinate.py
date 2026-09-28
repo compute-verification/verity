@@ -39,6 +39,18 @@ def supports(subcircuit, scheme):
     return None
 
 
+def circuit_lowering(subcircuit):
+    """The coordinate for ``verity/flock-circuit``: every tensor-core k-step one unit (``ir_lower.tc_units``: the 2^14 slot, its
+    b operands the W column's leaves, its a operands the x row's words as leaf cuts, the accumulator chained through cut
+    words), the tail the zero accumulator and the output cast. Ampere bf16 only (``AmpereBF16TcDot16``)."""
+    from verity_flock import ir_lower
+
+    sem = subcircuit.params.get("semantics")
+    if sem != "sm80.mma.m16n8k16.bf16":
+        raise NotImplementedError(f"verity/flock-circuit lowers the Ampere bf16 step only, not {sem}")
+    return ir_lower.lowering(subcircuit.definition(), f"gemm-coordinate/tc-step/k{subcircuit.params['K']}/sm80-bf16", unit_fn=ir_lower.tc_units)
+
+
 def relation(subcircuit, scheme):
     return RELATIONS[subcircuit.params["semantics"]]
 

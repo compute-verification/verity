@@ -1,4 +1,4 @@
-"""The v2 transition unit and verification unit, same signatures as ``checker.step`` (v1) plus the state-chained
+"""The v2 transition unit and proof unit, same signatures as ``checker.step`` (v1) plus the state-chained
 forms.
 
     check_step_expr(ctx, p, c, a, b, h)         word in, word out: the backend transition unit (arbitrary finite c)
@@ -156,7 +156,7 @@ def step_output(p: Params, c: int, a: Sequence[int], b: Sequence[int]) -> int:
 
 
 # ---------------------------------------------------------------------------------------------------------------------
-# The verification unit
+# The proof unit
 # ---------------------------------------------------------------------------------------------------------------------
 
 def gen_vu(p: Params, a: Sequence[int], b: Sequence[int]) -> dict:

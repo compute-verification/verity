@@ -1,8 +1,8 @@
-"""Partition and width validation of a query result *used* as a VU decomposition.
+"""Partition and width validation of a query result *used* as a proof-unit decomposition.
 
 Partitionhood is not a property of queries: a `Family` (an ordered sequence of `GateSet`s, `query_ast`) may overlap or
 omit gates, and nothing in the query model forbids it.  It is a property checked here, when a family is used as the
-decomposition of a Program into verification units.  Three checks, one verdict each, composed by `validate_vu_partition`:
+decomposition of a Program into proof units.  Three checks, one verdict each, composed by `validate_vu_partition`:
 
 * `validate_partition` -- every gate of the Program (Input and constant gates included) in exactly one set.
   Fast path (tier A, design §4): the family's structural description `Family.tiling()` is checked by per-body
@@ -22,7 +22,7 @@ decomposition of a Program into verification units.  Three checks, one verdict e
   the boundary condition; 32 is a protocol parameter (`w_max`), not a language constant.
 
 A decomposition may have several levels, coarse to fine (a `Hierarchy` of named `Level`s, e.g. replay units and the
-verification units inside them).  `validate_refinement` checks that each level's sets nest inside the level above and
+proof units inside them).  `validate_refinement` checks that each level's sets nest inside the level above and
 counts them per parent (`members_per_parent`); `validate_partition(..., within=S)` checks a level that partitions only
 the gates S (a level leaving out Inputs checked elsewhere).
 
