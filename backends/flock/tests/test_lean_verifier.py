@@ -359,3 +359,23 @@ def test_merkle_extractor_computes_a_collision(tmp_path):
     assert p.returncode == 0, p.stdout + p.stderr
     assert p.stdout.split("\n")[:4] == ["(true, true, true)", '"node 01 05 | 02 04"',
         '"leaf 01000000000000000000000000000000  | 01010000000000000000000000000000 "', "(true, true)"], p.stdout
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_table_v2_generator_reproduces_its_vectors(tmp_path):
+    """`flock-verify lookup-rows` (the `table/v2` generator, `Lookup.buildV2`) reproduces `lookup_v2_vectors.json`, the
+    digests Rust's and Python's generators are held to: library tables keep product rows for their varying bits only (every
+    other bit its constant), program tables every bit."""
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    p = subprocess.run(["python3", str(LEAN.parent / "lookup_v2_vectors.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify")],
+                       capture_output=True, text=True)
+    assert p.returncode == 0, p.stdout + p.stderr
+    r = json.loads(p.stdout.strip().splitlines()[-1])
+    assert r["small"] == 12 and r["disagree"] == [], r
+    v = json.loads((LEAN.parent / "lookup_v2_vectors.json").read_text())
+    by = {(e["label"], e["library"]): e for e in v["small"]}
+    assert by[("all-constant", True)]["k"] == 0 and by[("all-constant", False)]["k"] == 16
+    assert by[("low5-const-high", True)]["k"] == 5 and by[("low5-const-high", False)]["k"] == 12
+    mufu = {(e["label"], e["library"]): e for e in v["mufu"]}
+    assert [mufu[(t, True)]["k"] for t in ("rcp", "ex2", "rsq", "sqrt")] == [24, 23, 24, 23]
+    assert mufu[("rcp", True)]["useful"] == 29953 and mufu[("rcp", True)]["unit_log"] == 15

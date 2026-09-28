@@ -1347,6 +1347,15 @@ Level-3 status (`lean/FlockProofs`, kernel-checked; `CheckAxioms.lean` and a tes
   - The one hypothesis on the net is `useful ≤ KONST`, which every table meets: the pinned tables' slots have about 50,000
     rows, and `KONST` is 2^48 − 1.
   - `net.a.row r = RA[r]` is `Sparse.ofRows`'s round trip (`ofRows_row`, in the soundness package, #177).
+- **`table/v2`, the read generator** (`Lookup.buildV2`, the one specification: Rust's `lookup.rs` and Python mirror it,
+  held to `lookup_v2_vectors.json` by `Lookup.rowsDigest`):
+  - v1's rows over the varying width `k = Lookup.varying`: one more than the highest output bit not constant over the
+    table, for a `library` table, and `bits` for a `program` one.
+  - Output bits `k ≤ j < bits` are their constant, `A = B = [const]` for 1 and an empty row for 0.
+  - The lookup record's `bits` is `k`, so `foldB` and `foldB_get` are v1's.
+  - `build_computes_v2` has `build_computes`'s conclusion for every table and index (`varying_const`: each bit at or
+    above `k` is the same in every word).
+  - For the MUFU tables at `lo = 14`, `k` is 24 (rcp, rsq) and 23 (ex2, sqrt), and rcp's slot is 29,953 rows in `2^15`.
 - Planned: the lookup slots' `foldB`, then the fold theorem itself (`Stmt.fold` is `α·A_0ᵀe + B_0ᵀe` for the statement's
   `A_0`, `B_0` with Δ); the region values; the lowering checkers.
 
