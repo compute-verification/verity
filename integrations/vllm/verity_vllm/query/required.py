@@ -373,8 +373,11 @@ class Population:
         protocol.update(self.partial_of)                                        # TP-04: the rank-local partials
         self.policy = Policy(prescribed_inputs=prescribed, protocol_required=frozenset(protocol))
         self.required = RequiredValues(B.values, self.policy.prescribed_inputs, self.policy.protocol_required)
-        self.interior = frozenset(v for v in B.values if v.call >= 0 and v not in B_module.values and v not in self.policy.protocol_required
-                                  and fmt.moe_plane_kind(P.call(v.call).family, corr.module_of(v.call)) is None)   # a MoE block row: its plane
+        inside = [v for v in B.values if v.call >= 0 and v not in B_module.values and v not in self.policy.protocol_required]
+        # a MoE block row's Value inside its body is committed as the row's `moe_block_stream` plane: no member (a member of the body's
+        # `out` would be a second producer beside the block's own output, or beside its AllReduce's on a rank Program)
+        self.plane_fed = frozenset(v for v in inside if fmt.moe_plane_kind(P.call(v.call).family, corr.module_of(v.call)) is not None)
+        self.interior = frozenset(inside) - self.plane_fed
         # (required_values() would recompute the boundary; the policy is validated the same way here)
         known_inputs = frozenset(P.inputs)
         for v in self.policy.prescribed_inputs:
@@ -484,7 +487,7 @@ class Population:
         c = self.P.call(cid)
         if c.family in SAMPLING_EVENTS:
             return []
-        out = [self.member(ValueRef(cid, p)) for p in self._ports().get(cid, ())]
+        out = [self.member(ValueRef(cid, p)) for p in self._ports().get(cid, ()) if ValueRef(cid, p) not in self.plane_fed]
         if cid in self.carries:
             port = c.port_table[0]
             width = port.elems if self.collectives[cid] == "all_reduce" else port.elems // self.world
