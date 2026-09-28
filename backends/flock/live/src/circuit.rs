@@ -1182,6 +1182,54 @@ pub struct RegionShape {
     pub fixed: u32,
 }
 
+/// Every column that shares a 128-bit word with a partial region's columns without being one of them, as (region, column): a
+/// region is partial when some in-word bit (0 to 6) is not free; its covered words are those whose bits above 6 agree with its
+/// fixed bits.
+pub fn region_shared_columns(regions: &[RegionShape]) -> Vec<(usize, usize)> {
+    let mut out = Vec::new();
+    for (ri, r) in regions.iter().enumerate().filter(|(_, r)| !(0..7).all(|b| r.free.contains(&b))) {
+        let high: Vec<usize> = r.free.iter().copied().filter(|&b| b >= 7).collect();
+        for a in 0..1usize << high.len() {
+            let w = (r.fixed as usize & !0x7f) | high.iter().enumerate().fold(0, |x, (i, &b)| x | (((a >> i) & 1) << b));
+            out.extend((w..w + 128).filter(|&q| q as u32 & r.mask != r.fixed).map(|q| (ri, q)));
+        }
+    }
+    out
+}
+
+/// H_reg, the region-word check (docs/region-word-check.md, the red team's C3 on the public-circuit ZK proof): a region claim's
+/// ring-switch message carries all 128 bits of every word the region covers, in the clear, so a column sharing a word with a
+/// region's columns must be one of them or be forced to zero, its rows in the combined A and B both empty (`0·0 = z_q`). The
+/// combined row q is the row of the slot type placed at q, in block columns, plus every Δ entry `(q, col)`, summed over GF(2)
+/// (an entry that appears twice cancels). The first offending column, as the refusal.
+pub fn region_word_violation(c: &Composite, regions: &[RegionShape], da: &[(u32, u32)], db: &[(u32, u32)]) -> Option<String> {
+    let by_row = |d: &[(u32, u32)]| {
+        let mut m: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
+        for &(q, col) in d {
+            m.entry(q as usize).or_default().push(col as usize);
+        }
+        m
+    };
+    let (ra, rb) = (by_row(da), by_row(db));
+    let empty = |q: usize, delta: &BTreeMap<usize, Vec<usize>>, a: bool| -> bool {
+        let mut cols = delta.get(&q).cloned().unwrap_or_default();
+        if let Some(r) = c.ranges.iter().find(|r| q >= r.start() && q < r.start() + (r.count << r.slot_log)) {
+            let slot0 = q & !((1usize << r.slot_log) - 1);
+            match r.kind {
+                Kind::Net(i) => {
+                    let net = &c.nets[i].1;
+                    cols.extend((if a { &net.a } else { &net.b }).get(q - slot0).into_iter().flatten().map(|&k| slot0 + k));
+                }
+                Kind::Mask => cols.push(q),
+            }
+        }
+        cols.sort_unstable();
+        cols.chunk_by(|x, y| x == y).all(|run| run.len() % 2 == 0)
+    };
+    region_shared_columns(regions).into_iter().find(|&(_, q)| !(empty(q, &ra, true) && empty(q, &rb, false)))
+        .map(|(ri, q)| format!("region {:?}: column {q} shares a word with the region's bits and is not forced to zero", regions[ri].region))
+}
+
 pub struct BlockCircuit {
     pub k_log: usize,
     pub pin: usize,
@@ -1410,6 +1458,9 @@ impl Stmt {
             ranges.push((t, r.pos0, r.count));
         }
         let regions = Self::regions(&c)?;
+        if let Some(e) = region_word_violation(&c, &regions, &da, &db) {
+            return Err(e);
+        }
         let mut h = Sha512::new();
         h.update(TAG);
         h.update(c.sha512);
@@ -1884,6 +1935,47 @@ impl Stmt {
         self.extra_points(pts).into_iter().zip(values)
             .map(|(pt, value)| ExtraClaim { value, skip_weights: eq_skip_weights(&pt[..6]), x_full: pt[6..].to_vec() })
             .collect()
+    }
+
+    /// A region claim's ring-switch partial evaluations from the public region data alone: `s[v] = Σ_x eq(p[7..], x) z[128 x + v]`
+    /// over the region's cells at its point `p` (M1's audit: a region claim's `s_hat_v` reveals nothing but public data).
+    pub fn region_s_hat_v(&self, reg: &RegionShape, r: &[F128], inst: &Instances) -> Vec<F128> {
+        let p = self.region_point(reg, r);
+        let kl = self.c.k_log;
+        let fixed = (reg.fixed & reg.mask) as usize;
+        (0..self.blocks()).into_par_iter().map(|b| {
+            let bytes = self.region_bytes(&reg.region, inst, b);
+            let mut s = vec![F128::ZERO; 128];
+            for a in 0..(1usize << reg.free.len()) {
+                if (bytes[a / 8] >> (a % 8)) & 1 == 0 {
+                    continue;
+                }
+                let i = reg.free.iter().enumerate().fold(fixed, |i, (t, &j)| i | (((a >> t) & 1) << j)) | (b << kl);
+                let x = i >> 7;
+                s[i & 127] += (7..self.m).fold(F128::ONE, |acc, j| acc * if (x >> (j - 7)) & 1 == 1 { p[j] } else { F128::ONE + p[j] });
+            }
+            s
+        }).reduce(|| vec![F128::ZERO; 128], |a, b| a.iter().zip(&b).map(|(x, y)| *x + *y).collect())
+    }
+
+    /// Sets every public region's bits of the packed witness `z` to the public data (as [`Self::region_s_hat_v`] reads them): a
+    /// dummy witness whose region claims are the public ones (M2's extraction run).
+    pub fn write_regions(&self, z: &mut [F128], inst: &Instances) {
+        let kl = self.c.k_log;
+        for reg in &self.regions {
+            let fixed = (reg.fixed & reg.mask) as usize;
+            for b in 0..self.blocks() {
+                let bytes = self.region_bytes(&reg.region, inst, b);
+                for a in 0..(1usize << reg.free.len()) {
+                    let i = reg.free.iter().enumerate().fold(fixed, |i, (t, &j)| i | (((a >> t) & 1) << j)) | (b << kl);
+                    let (w, bit) = (&mut z[i >> 7], i & 127);
+                    let on = (bytes[a / 8] >> (a % 8)) & 1 == 1;
+                    let m = 1u64 << (bit % 64);
+                    let half = if bit < 64 { &mut w.lo } else { &mut w.hi };
+                    *half = if on { *half | m } else { *half & !m };
+                }
+            }
+        }
     }
 
     /// Words per block the device witness needs for the unit slots: every unit's input words, block-major.
