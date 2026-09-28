@@ -16,7 +16,7 @@ Segment `s` is `chainBand B d ℓ 512 (dom tag_s)`.
 **Deployment condition (the cliff, POUS `docs/band-vs-dense.md`).** The effective `D`, the sequential `Π₂` calls an
 adversary completes within `Δ + RTT`, must not exceed `d`.  With `d ≥ D′` the band is exactly as hard as dense at
 `D′` (`band_chain_hard`); at `D′ = d + 1` the gap attack (`band_gap_attack`, `band_cliff_d12`) frees every
-`(d + 1)`-th block and the audit accepts with probability 1.  `audit.MemoryChallenger` refuses a deadline whose effective
+`(d + 1)`-th block and the audit accepts with probability 1.  `audit.UnsignedRounds` refuses a deadline whose effective
 `D` exceeds `d`.  The effective `D` counts whole `Π₂` calls, the ideal-permutation model's unit; at the reference
 Feistel-SHAKE256 `Π₂` a prover answers without completing a call (`primitives.pi2_keccak_f`).
 """

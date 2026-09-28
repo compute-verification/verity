@@ -6,33 +6,34 @@ import Definitions.Pous.Model.Audit
 # The continuous audit: a memory challenger, and a responder that runs on its clock
 
 Added on 3 Oct 2026, with `Pous.Guarantees.PerAnswer` and `Pous.Guarantees.ContinuousAudit`; the arrivals and the
-memory at every time (the last section) with `Pous.Guarantees.ContinuousTimeAverage`. Statement reviewer:
-needed. Red team: needed. It replaces PR #896's round-structured draft, which assumed three requirements on the protocol
-(no pipelining, a hard deadline, every answer past `Δ` counted late). Here the verifier is explicit and enforces each
-rule. The responder may try to break any of them, and no statement takes a hypothesis about its timing.
+memory at every time (the last section) with `Pous.Guarantees.ContinuousTimeAverage`. Red team: needed. It replaces
+PR #896's round-structured draft, which assumed three requirements on the protocol (no pipelining, a hard deadline,
+every answer past `Δ` counted late). Here the memory challenger is explicit and enforces each rule. The responder may
+try to break any of them, and no statement takes a hypothesis about its timing.
 
 **Time.** One unit is one round of parallel queries to the primitive (`Prog.depth`), as in the sequential audit. `D`
 units and `Q` queries fit in the deadline `Δ` plus the round trip, and `D_late` units and `Q_late` queries in the hard
-deadline `Δ_late` plus the round trip. The verifier's arrival times `arr j` are in the same units.
+deadline `Δ_late` plus the round trip. The memory challenger's arrival times `arr j` are in the same units.
 
-**The responder** (`ContMachine`) is a machine on the verifier's clock, with a memory of any length.
+**The responder** (`ContMachine`) is a machine on the memory challenger's clock, with a memory of any length.
 
 * When a challenge is sent at time `t`, its memory is `rest W pp C ω h t m`. That is any function of `W`, `pp`, the
   codeword, the whole primitive, the indices sent before (`h`), `t`, and its memory `m` when the last round closed.
   Between rounds it may recompute anything, for as long as it likes.
-* During a round it runs one `step` per unit on `W`, `pp`, `h`, its memory and the verifier's message: the index at
-  the round's first unit, `none` after. A step either answers, or sends one round of queries and replaces its memory
-  by any function of their answers. During a round the responder sees neither `C` nor `ω` whole and reaches the
+* During a round it runs one `step` per unit on `W`, `pp`, `h`, its memory and the memory challenger's message: the
+  index at the round's first unit, `none` after. A step either answers, or sends one round of queries and replaces its
+  memory by any function of their answers. During a round the responder sees neither `C` nor `ω` whole and reaches the
   primitive only through queries.
 
-**The verifier.** For `j = 0, 1, …` (with the names of `verity_pous.continuous.ContinuousMemoryChallenger`, which enforces
-the same rules on `audit.MemoryChallenger`):
+**The memory challenger.** For `j = 0, 1, …` (with the names of
+`verity.protocols.accounting.space.pous.continuous.ContinuousMemoryChallenger`, which enforces the same rules on
+`audit.UnsignedRounds`):
 
 1. It sends index `i_j` at `max(arr j, c_{j−1})` (`contSend`), where `arr j` is challenge `j`'s arrival
    (`run_continuous`'s `wait(j)`), `c_{j−1}` is the time round `j − 1` closed and `c_{−1} = 0`. A challenge is never
-   outstanding when the next is sent: `MemoryChallenger.challenge()` refuses while one is open within its hard deadline.
+   outstanding when the next is sent: `UnsignedRounds.challenge()` refuses while one is open within its hard deadline.
 2. It times the answer from its own send time. The answer's delay is the number of units the machine took, the depth
-   of the round's program (`contProg`), as `MemoryChallenger.respond()` measures `stop − start` from `challenge()`. A
+   of the round's program (`contProg`), as `UnsignedRounds.respond()` measures `stop − start` from `challenge()`. A
    round's answer is the answer to its own index, as `ContinuousMemoryChallenger.respond(j, …)` refuses an answer to any
    challenge but the open one and `run_continuous` drops a reply naming any other.
 3. It waits at most `D_late` units. The round closes at the answer, or after `D_late` units with no answer
@@ -46,15 +47,15 @@ the same rules on `audit.MemoryChallenger`):
    `ContinuousMemoryChallenger.accepted` compares `AuditResult.misses` with `max_misses`.
 
 `contRecords` runs rules 1–4 over the indices. Each round's record holds its verdict and the length of the responder's
-memory at the send time. The memory length is the game's measurement, which the verifier never sees.
+memory at the send time. The memory length is the game's measurement, which the memory challenger never sees.
 
-A verifier that closes a round later than rule 3 (`run_continuous` closes a silent round with `expire()` once its
-transport reports nothing by the hard deadline, which may be a little after it) only sends the next index later. That
-gives the responder nothing `rest` lacks: `rest` may compute anything between rounds, so a machine whose `rest` returns
-the memory the responder would hold at the later send time has the same records.
+A memory challenger that closes a round later than rule 3 (`run_continuous` closes a silent round with `expire()` once
+its transport reports nothing by the hard deadline, which may be a little after it) only sends the next index later.
+That gives the responder nothing `rest` lacks: `rest` may compute anything between rounds, so a machine whose `rest`
+returns the memory the responder would hold at the later send time has the same records.
 
-**The three requirements are theorems about this verifier.** `Pous/SecurityProofs/Continuous/Verifier.lean` proves
-each one for every machine:
+**The three requirements are theorems about this memory challenger.**
+`Security/Proofs/Pous/Continuous/Verifier.lean` proves each one for every machine:
 
 1. **No pipelining** (rule 1; `PousContinuous.no_pipelining`, `PousContinuous.close_le_send`). Round `j`'s record
    depends only on `i_0, …, i_j`, and round `j + 1` is sent no earlier than round `j` closed.
@@ -64,19 +65,19 @@ each one for every machine:
 3. **Every answer past `Δ` is counted** (rule 4; `PousContinuous.hit_on_time`). A hit took at most `D` units and `Q`
    queries, so an answer past `Δ` is late or rejected, never a hit.
 
-The continuous bound holds at every `(D_late, Q_late)`, so it does not need the hard deadline, which the verifier
-enforces anyway. A late answer is already a miss, and the memory is measured at each send time whatever the machine
-did before. No cap like the graded audit's `D_late ≤ 12` (`audit.LATE_ROUNDS`) is a hypothesis here.
+The continuous bound holds at every `(D_late, Q_late)`, so it does not need the hard deadline, which the memory
+challenger enforces anyway. A late answer is already a miss, and the memory is measured at each send time whatever the
+machine did before. No cap like the graded audit's `D_late ≤ 12` (`audit.LATE_ROUNDS`) is a hypothesis here.
 
 **What is measured.** `ε_j = 1 − |m_j|/|C|` (`contFreed`), where `m_j` is the memory at challenge `j`'s send time
 (`contMem`). `ContinuousAudit` bounds `Σ_j max(ε_j − ε_proof, 0)`, with `ε_proof = 1 − (β − B)/|C|` (`epsProof`).
 
 **What a reader takes from the implementation.** These are not timing rules but the scope of the bound:
 
-* **The arrival process is the verifier's own randomness.** It must be independent of the setup, the indices and the
-  answers (a Poisson process from its own `verity.randomness` domain, say). The number of challenges `N` must not
-  adapt to the misses, though rejecting early is fine. `PerAnswer` and `ContinuousAudit` hold for every fixed
-  schedule `arr`, so they hold conditional on the arrivals. Per challenge, normalize by the realized `N`, never by
+* **The arrival process is the memory challenger's own randomness.** It must be independent of the setup, the indices
+  and the answers (a Poisson process from its own `verity.primitives.randomness` domain, say). The number of challenges
+  `N` must not adapt to the misses, though rejecting early is fine. `PerAnswer` and `ContinuousAudit` hold for every
+  fixed schedule `arr`, so they hold conditional on the arrivals. Per challenge, normalize by the realized `N`, never by
   `λT`. The responder may know every arrival time in advance, and a queued challenge is sent when the last round
   closes, which the responder controls. Both only help it, and those statements hold for every machine.
   `ContinuousTimeAverage` (the last section) draws the arrivals in the game instead: the responder does not know them
@@ -91,11 +92,11 @@ did before. No cap like the graded audit's `D_late ≤ 12` (`audit.LATE_ROUNDS`)
   Data the responder keeps outside its memory, on the wire say, and reads back during a round is outside help, which
   the deployment must exclude from each send to its close.
 * **Indices secret until sent** (`audit.challenge_key`), uniform and independent of the setup.
-* **Work is modeled.** The verifier sees only time. `(D, Q)` and `(D_late, Q_late)` are what the adversary completes
-  within `Δ` and `Δ_late`, the sequential audit's convention.
+* **Work is modeled.** The memory challenger sees only time. `(D, Q)` and `(D_late, Q_late)` are what the adversary
+  completes within `Δ` and `Δ_late`, the sequential audit's convention.
 * **Wrong and rejected answers count as misses** rather than rejecting the run, as `AuditResult.misses` counts them. A
-  verifier that rejects the run on either, or past a cap on the audit's duration (`audit_cap`), accepts fewer runs, so
-  the bound covers it too.
+  memory challenger that rejects the run on either, or past a cap on the audit's duration (`audit_cap`), accepts fewer
+  runs, so the bound covers it too.
 -/
 
 namespace Pous
@@ -126,7 +127,7 @@ def ContMachine.round {sch : Scheme M} (mach : ContMachine sch) (W : Bits sch.n)
     | .inl a => .ret (some a, m)
     | .inr (qs, k) => .round qs fun as => mach.round W pp h T (k as) none
 
-/-- The verifier's verdict on one round. -/
+/-- The memory challenger's verdict on one round. -/
 inductive ContVerdict : Type
   /-- Within `D` units and `Q` queries, with the right block. -/
   | hit
@@ -150,8 +151,8 @@ def contVerdict {ℓ : ℕ} {σ : Type} (D Q Q_late : ℕ) (f : M.Qry → M.Ans)
     else if D < p.depth f ∨ Q < p.work f then .late
     else if a = c then .hit else .wrong
 
-/-- The verifier and the responder between rounds: the indices sent so far (oldest first), the time the last round
-closed, and the responder's memory then. -/
+/-- The memory challenger and the responder between rounds: the indices sent so far (oldest first), the time the last
+round closed, and the responder's memory then. -/
 structure ContState (B : ℕ) : Type where
   sent : List (Fin B)
   closed : ℕ
@@ -187,7 +188,7 @@ def contAfter {sch : Scheme M} (mach : ContMachine sch) (D_late : ℕ) (W : Bits
   h.foldl (contNext mach D_late W pp C ω arr) .start
 
 /-- What the audit records of one round: the length of the responder's memory at the send time (the game's
-measurement, which the verifier never sees) and the verdict. -/
+measurement, which the memory challenger never sees) and the verdict. -/
 structure ContRecord : Type where
   held : ℕ
   verdict : ContVerdict
@@ -205,7 +206,8 @@ def contRecords {sch : Scheme M} (mach : ContMachine sch) (D Q D_late Q_late : �
   | s, i :: is => contRecord mach D Q D_late Q_late W pp C ω arr s i ::
       contRecords mach D Q D_late Q_late W pp C ω arr (contNext mach D_late W pp C ω arr s i) is
 
-/-- Rule 5: with tolerance `f₀` the verifier accepts iff at most `f₀` rounds are not hits (rejected, late or wrong). -/
+/-- Rule 5: with tolerance `f₀` the memory challenger accepts iff at most `f₀` rounds are not hits (rejected, late or
+wrong). -/
 def contAccepts (f₀ : ℝ) (rs : List ContRecord) : Prop :=
   ((rs.filter fun r => r.verdict ≠ .hit).length : ℝ) ≤ f₀
 
@@ -219,22 +221,23 @@ noncomputable def contFreed (sch : Scheme M) (held : ℕ) : ℝ :=
 noncomputable def epsProof (sch : Scheme M) (β : ℕ) : ℝ :=
   1 - ((β : ℝ) - sch.B) / (sch.B * sch.ℓ)
 
-/-! ## Arrivals drawn by the verifier, and the memory at every time
+/-! ## Arrivals drawn by the memory challenger, and the memory at every time
 
-Added on 3 Oct 2026, with `Pous.Guarantees.ContinuousTimeAverage`. Statement reviewer: needed. Red team: needed.
+Added on 3 Oct 2026, with `Pous.Guarantees.ContinuousTimeAverage`. Red team: needed.
 
-The verifier draws the arrivals itself. Time is cut into `T` slots of one unit each, the unit of `Prog.depth` and of
-`arr` above. At slot `t` the verifier draws `x t = (c, i) ∈ Fin b × Fin B`, uniform and independent of everything
-else. A challenge arrives at `t` iff `c < a` (probability `a/b`): a Bernoulli process, at most one arrival per slot,
-standing in for a Poisson process at `λ = (a/b)/call_ns`. A deployment is inside the statements only if it draws its
-arrivals this way, one coin per slot from its own randomness. The `j`-th arrival's index is the `i` drawn at its slot
-(`histAt`), and its arrival time is
-`arrAt a x j`. Rules 1–5 are unchanged: `contRecords` with `arr := arrAt a x` runs the verifier on these arrivals.
+The memory challenger draws the arrivals itself. Time is cut into `T` slots of one unit each, the unit of `Prog.depth`
+and of `arr` above. At slot `t` the memory challenger draws `x t = (c, i) ∈ Fin b × Fin B`, uniform and independent of
+everything else. A challenge arrives at `t` iff `c < a` (probability `a/b`): a Bernoulli process, at most one arrival
+per slot, standing in for a Poisson process at `λ = (a/b)/call_ns`. A deployment is inside the statements only if it
+draws its arrivals this way, one coin per slot from its own randomness. The `j`-th arrival's index is the `i` drawn at
+its slot (`histAt`), and its arrival time is
+`arrAt a x j`. Rules 1–5 are unchanged: `contRecords` with `arr := arrAt a x` runs the memory challenger on these
+arrivals.
 
 **Arrivals queue.** Rule 1 sends challenge `j` at `max(arrAt a x j, c_{j−1})`, so a challenge that arrives while a
 round is open waits for it to close. None is dropped. This is load-bearing: at an idle slot (below) the indices sent
-so far are `histAt a x t`, a function of the verifier's draws alone. A verifier that dropped arrivals during an open
-round would send a history that depends on the rounds' depths, and so on the primitive.
+so far are `histAt a x t`, a function of the memory challenger's draws alone. A memory challenger that dropped arrivals
+during an open round would send a history that depends on the rounds' depths, and so on the primitive.
 
 **Idle slots.** Slot `t` is idle (`contIdle`) when every challenge that arrived before `t` has closed by `t`, so a
 challenge arriving at `t` is sent at `t`. At a busy slot a round is open or a challenge is queued, and
@@ -253,7 +256,7 @@ the rest by the next idle slot.
 **The memory at time `t`** (`contHeldAt`) is `rest W pp C ω h t m` after the challenges that arrived before `t`: what
 the responder would present if a challenge were sent at `t`. At an idle slot it is the memory a challenge arriving at
 `t` meets. `rest` takes no argument about future arrivals, so the memory at `t` cannot depend on whether a challenge
-arrives at `t` (the model's PASTA property, by construction). The verifier never sees it; it is the game's
+arrives at `t` (the model's PASTA property, by construction). The memory challenger never sees it; it is the game's
 measurement, as `ContRecord.held` is.
 -/
 

@@ -66,6 +66,8 @@ class Params:
             raise ValueError("P2 needs w a multiple of 32 bits and c0 = 1 mod 4 with p = 2^w - c0 = 3 mod 4")
         if not 0 < self.payload_bytes < self.width_bytes:
             raise ValueError("a payload is fewer bytes than a block")
+        if self.p <= 1 << 8 * self.payload_bytes:
+            raise ValueError("every payload is below p")
 
     @property
     def p(self) -> int:
@@ -108,8 +110,14 @@ def expand_prefix(salt: bytes, params: Params, model: bytes) -> bytes:
 
 def keys(salt: bytes, params: Params, model: bytes, segment: int, block: int) -> tuple[int, int, int]:
     """Block `(segment, block)`'s full-width mask `K`, its tweak `t` (uniform below `p`) and `t`'s candidate index."""
+    return keys_after(expand_prefix(salt, params, model), params, segment, block)
+
+
+def keys_after(prefix: bytes, params: Params, segment: int, block: int) -> tuple[int, int, int]:
+    """`keys` after any framing's `prefix`: v1's (`expand_prefix`), or `p2-16448/v3`'s, whose prefix frames the protocol's
+    24-byte salt and no model commitment (`verity...schemes.p2.expand_prefix`)."""
     n = params.width_bytes
-    base = expand_prefix(salt, params, model) + segment.to_bytes(8, "big") + block.to_bytes(8, "big")
+    base = prefix + segment.to_bytes(8, "big") + block.to_bytes(8, "big")
     k = int.from_bytes(hashlib.shake_256(base + b"K").digest(n), "big")
     stream = hashlib.shake_256(base + b"t")
     attempt = 0

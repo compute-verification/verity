@@ -52,7 +52,7 @@ ALLOWED = {
     # The two-stage law samples the verifier's own bytes as the Lean verifier does (`two_stage`), and the proof
     # service's challenger draws with it (`service.Stream.select`).
     "experimental.protocols.sampled_proofs": {"ml.circuits", "ml.commitments", "ml.randomness", "experimental.protocols.profile"},
-    "experimental.protocols.pous": {"experimental.claims", "ml.circuits", "ml.commitments", "ml.randomness"},
+    "experimental.protocols.pous": {"experimental.claims", "ml.circuits", "ml.commitments", "ml.crypto", "ml.randomness"},
     # 2026-10-03 (Daniel, `.agents/skills/friction/SKILL.md`): PoUW's tile check is a sampled proof.  Its schemes and
     # circuits are stated over the catalog's silicon models and Definitions (the tensor-core steps, FP32 and the casts its
     # verifier recomputes): the one edge into the catalog.

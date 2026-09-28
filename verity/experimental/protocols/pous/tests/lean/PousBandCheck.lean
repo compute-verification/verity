@@ -3,7 +3,7 @@ import BandEncDec
 import BandPubEncoder
 
 /-!
-# Lean-evaluated vectors for `verity_pous.band`
+# Lean-evaluated vectors for `verity.protocols.accounting.space.pous.band`
 
 Evaluates `chainBand`'s own definitions (`lean/submissions/band-chain/BandChainModel.lean`) on small cases and prints
 them as JSON (`tests/fixtures/lean_band_vectors.json`): the band's parents newest first (`parentsDesc (bandDAG B d)`),
