@@ -11,19 +11,19 @@ the set's expected (model-computed) word: every intermediate accumulator where t
 Input sets (``--instances DATASET/TIER``; the instruction defaults to the target's and may be overridden with ``--instruction``
 to run the same words through another architecture's instruction of the same shape)::
 
-    bench-instances/v1/vu-k1536        FIRST (sm80.mma.m16n8k16.bf16)   4,096 VUs x 96 steps from c_0 = +0, expected acc after every
+    bench-instances/v1/vu-k1536        FIRST (sm80.mma.m16n8k16.bf16)   4,096 inputs x 96 steps from c_0 = +0, expected acc after every
                                                                          step (vu-k1536.acc.u32) and y = f32_to_bf16 RNE (vu-k1536.y.u16)
     bench-instances/v1/tu-k16          FIRST                             4,096 transitions (c, a[16], b[16]) -> out (tu-k16.out.u32)
-    bench-instances/v1/vu-k1536-neg    FIRST                             52 claimed-WRONG or out-of-domain (reject) VUs: the harness must
+    bench-instances/v1/vu-k1536-neg    FIRST                             52 claimed-WRONG or out-of-domain (reject) inputs: the harness must
                                                                          detect every one (hardware word != claimed, or the domain check)
-    fp8-ada-synthetic/vu-k1536-fp8     FP8_ADA_MMA (sm89.mma.m16n8k32.e4m3)  4,096 VUs x 48 steps of uniform finite E4M3 bytes from
+    fp8-ada-synthetic/vu-k1536-fp8     FP8_ADA_MMA (sm89.mma.m16n8k32.e4m3)  4,096 inputs x 48 steps of uniform finite E4M3 bytes from
                                                                        seed 20260922 (backends.direct.ligero.fp8.chain.instances_fp8,
                                                                        regenerated here from the same recipe), accumulators recorded
                                                                        by ADA_E4M3_M16N8K32, no epilogue (the bare FP32 word)
-    bench-instances-bf16-hopper/v1/vu-k1536-bf16-hopper   BF16_HOPPER (sm90.mma.m16n8k16.bf16)  4,096 VUs x 96 steps of random_finite_bf16
+    bench-instances-bf16-hopper/v1/vu-k1536-bf16-hopper   BF16_HOPPER (sm90.mma.m16n8k16.bf16)  4,096 inputs x 96 steps of random_finite_bf16
                                                                        words from seed 20260922, HOPPER_BF16_M16N8K16 accumulators,
                                                                        f32_to_bf16 epilogue (relchain.instances, lane b-hopper)
-    bench-instances-fp8-hopper/v1/vu-k1536-fp8-hopper     FP8_HOPPER_WGMMA (sm90.wgmma.m64n8k32.e4m3)  4,096 VUs x 48 E4M3 steps from
+    bench-instances-fp8-hopper/v1/vu-k1536-fp8-hopper     FP8_HOPPER_WGMMA (sm90.wgmma.m64n8k32.e4m3)  4,096 inputs x 48 E4M3 steps from
                                                                        seed 20260922, HOPPER_E4M3_K32 accumulators, bare FP32 word
 
 ``bench-instances/v1`` is loaded from ``--root`` (the built arrays; ``python -m verity_numerical.bench.instances build``) after every
@@ -231,7 +231,7 @@ def bf16_random_finite_operands(rng: np.random.Generator, shape) -> np.ndarray:
 @dataclass(frozen=True)
 class Synthetic:
     """A seeded synthetic set of a ligero chain relation (``backends.direct.ligero.relchain.instances`` / ``instances_digest``,
-    and before it ``fp8.chain.instances_fp8``): VU ``i`` draws ``rng = default_rng([seed, i])``, ``a`` then ``b`` (``K_VU`` words
+    and before it ``fp8.chain.instances_fp8``): input ``i`` draws ``rng = default_rng([seed, i])``, ``a`` then ``b`` (``K_VU`` words
     each) with ``operands``, and records ``tc_dot(model)`` chained from ``+0`` after every step.  The set has no files: its
     ``manifest_sha256`` is ``sha256("<relation> synthetic|seed=<seed>|n=<n>|K=1536")``."""
 
@@ -301,7 +301,7 @@ SYNTHETIC = {s.spec: s for s in (FP8_ADA_SYNTHETIC, BF16_HOPPER_SYNTHETIC, FP8_H
 
 
 def fp8_instance(i: int, seed: int = FP8_ADA_SEED) -> tuple[np.ndarray, np.ndarray, list[int]]:
-    """VU ``i`` of the FP8 Ada synthetic set: ``(a (1536,), b (1536,), accs (48,))`` exactly as ``instances_fp8`` forms it."""
+    """Input ``i`` of the FP8 Ada synthetic set: ``(a (1536,), b (1536,), accs (48,))`` exactly as ``instances_fp8`` forms it."""
 
     return FP8_ADA_SYNTHETIC.instance(i, seed)
 
@@ -361,18 +361,18 @@ def load_fp8_ada(lo: int | None = None, hi: int | None = None, only_ids: list[in
 
 
 DATASETS = {
-    f"{BENCH_INSTANCES}/vu-k1536": "FIRST: 4,096 VUs x 96 BF16 steps, per-step accumulators + f32_to_bf16 epilogue",
+    f"{BENCH_INSTANCES}/vu-k1536": "FIRST: 4,096 inputs x 96 BF16 steps, per-step accumulators + f32_to_bf16 epilogue",
     f"{BENCH_INSTANCES}/tu-k16": "FIRST: 4,096 single transitions with arbitrary finite c",
-    f"{BENCH_INSTANCES}/vu-k1536-neg": "FIRST: 52 claimed-wrong / out-of-domain VUs (the harness must detect all)",
-    FP8_ADA_SYNTHETIC.spec: "FP8_ADA_MMA: 4,096 VUs x 48 E4M3 steps generated from seed 20260922, bare FP32 word",
-    BF16_HOPPER_SYNTHETIC.spec: "BF16_HOPPER: 4,096 VUs x 96 BF16 steps generated from seed 20260922, f32_to_bf16 epilogue (lane b-hopper)",
-    FP8_HOPPER_SYNTHETIC.spec: "FP8_HOPPER_WGMMA: 4,096 VUs x 48 E4M3 steps generated from seed 20260922, bare FP32 word (lane b-hopper)",
+    f"{BENCH_INSTANCES}/vu-k1536-neg": "FIRST: 52 claimed-wrong / out-of-domain inputs (the harness must detect all)",
+    FP8_ADA_SYNTHETIC.spec: "FP8_ADA_MMA: 4,096 inputs x 48 E4M3 steps generated from seed 20260922, bare FP32 word",
+    BF16_HOPPER_SYNTHETIC.spec: "BF16_HOPPER: 4,096 inputs x 96 BF16 steps generated from seed 20260922, f32_to_bf16 epilogue (lane b-hopper)",
+    FP8_HOPPER_SYNTHETIC.spec: "FP8_HOPPER_WGMMA: 4,096 inputs x 48 E4M3 steps generated from seed 20260922, bare FP32 word (lane b-hopper)",
 }
 
 
 def load_instances(spec: str, args) -> InstanceSet:
     if spec not in DATASETS:
-        raise SystemExit(f"unknown instance set {spec!r}; known: {', '.join(DATASETS)}")
+        raise SystemExit(f"unknown input set {spec!r}; known: {', '.join(DATASETS)}")
     dataset, _, tier = spec.rpartition("/")
     lo, hi = (None, None)
     if args.range:
@@ -384,7 +384,7 @@ def load_instances(spec: str, args) -> InstanceSet:
         return load_bench_instances(tier, Path(args.root) if args.root else None, manifest, lo, hi, only)
     if spec in SYNTHETIC:
         return load_synthetic(SYNTHETIC[spec], lo, hi, only, procs=args.procs)
-    raise SystemExit(f"unknown instance set {spec!r}; known: {', '.join(DATASETS)}")
+    raise SystemExit(f"unknown input set {spec!r}; known: {', '.join(DATASETS)}")
 
 
 # --- the replay ------------------------------------------------------------------------------------------------------------------------
@@ -545,7 +545,7 @@ def negative_verdicts(inst: InstanceSet, y_hw: np.ndarray, out_of_domain: np.nda
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="frozen instance sets on silicon (see the module docstring)")
+    ap = argparse.ArgumentParser(description="frozen input sets on silicon (see the module docstring)")
     ap.add_argument("--instances", required=True, metavar="DATASET/TIER", help=", ".join(DATASETS))
     ap.add_argument("--instruction", default=None, help="instruction id (default: the set's target's; see tc_probe.INSTRUCTIONS)")
     ap.add_argument("--arch", default=None, help="override the instruction's nvcc arch")

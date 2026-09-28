@@ -106,7 +106,7 @@ def test_ir_evaluation_is_the_direct_chain() -> None:
 
 
 def test_gemm_coordinate_circuit_shape() -> None:
-    """One VU = K/16 step gates + one cast gate (+ the zero constant): the shape the census counts over."""
+    """One proof unit = K/16 step gates + one cast gate (+ the zero constant): the shape the census counts over."""
     prog, call = _standalone(bind(G.GemmCoordinate, K=1536, DOT=P.AmpereBF16TcDot16))
     circ = prog.circuit
     ids: dict[str, int] = {}
