@@ -48,7 +48,7 @@ Everything else is the protocol's (`audit`), the same for every scheme.
 never the prover's root). A scheme's noise is its own derivation from the salt and the prover's roots, Fiat-Shamir inside
 the scheme, whose grinding is inside the conjecture's error term.
 
-## `ncp-v1`: noise-cancelling polarization under TT_NCP(0.5%)
+## `ncp-v1`: noise-cancelling polarization under TTNCP_U(0.5%), route U at β = 128
 
 For int7 A and B (entries in [−64, 63], one two's-complement byte each):
 
@@ -58,21 +58,29 @@ F₁ ∈ [−31, 32]^(k×n)   per (epoch, weight); column j from SHAKE256("verit
 R                      signed permutation with R[π(j)][j] = σ_j:  E₂[i][j] = σ_j·E₁[i][π(j)],  F₂[π(l)][j] = −σ_l·F₁[l][j]
 E₃ = E₁ + E₂,  F₃ = F₁ + F₂
 X = [A + E₁ | A + E₂ | −(A + E₃)],   Y = [B + F₁ ; B + F₂ ; B + F₃],   X·Y = A·Bᵀ
-checked  running sums of X·Y after every 16-deep step, mod 2^32 (3k/16 per output entry); the last is A·Bᵀ
+β        128: X + β is u8 and Y is s8 on the int7 domain (Lean `rangeU`, `biasU8Iff`)
+c₀[j]    −β·Σ_{l<3k} Y[l][j]   (−3β·colsum(B) for an unsigned P), the accumulator's initial value
+checked  C^U_t = c₀ + Σ_{l<16t} (X + β)[:, l]·Y[l, :] mod 2^32, t = 1 … 3k/16 (Lean `mmWU 128`); the last is A·Bᵀ
 digest   SHAKE256("verity/pouw/ncp/tile/v1" ‖ 0 ‖ words)[:32], words little-endian, step-major, row-major within a step
 tiles    16 × 16
-domain   16 | m;  64 | k, n;  1,088 ≤ k ≤ 2^16  (γ_0 = 1/200 ≥ 16/(3k));  1,600 ≤ n ≤ 2^16  (Ω* = 1 + 8/n ≤ 1.005)
-wref     3·m·k·n + 24·m·k   (route U under W1 with sub-word moves priced; the per-weight forming of B + F_i is left out)
-γ        1 − (199/200)/(1608/1600) ≈ 0.995% over the whole domain; ≈ 0.89% at n = 2,048; ≈ 0.69% at 4,096²
+domain   16 | m;  64 | k, n;  1,088 ≤ k ≤ 2^16  (γ_0 = 1/200 ≥ 16/(3k));  n₀ = 1,600 ≤ n ≤ 2^16  (Ω* = 1 + f/(3n₀) ≤ 1.005)
+wref     3·m·k·n + f·m·k, f = 24   (route U under W1 with sub-word moves priced, Lean `wrefU 24`; the per-weight forming of
+         B + F_i is left out)
+γ        1 − (199/200)/(1 + 8/n₀) ≈ 0.995% over the whole domain (`gammaFromTTNCP_U_v1`); ≈ 0.89% at n = 2,048; ≈ 0.69% at
+         4,096²; the same formula gives 1.27% at n = 1,024, so the certificate records n₀ with β and f
 ~~~
 
-- **γ is not yet citable for a real machine.** The red team found that A2, as written, requires the model program to
-  reproduce every output rather than only the checked words; the fix restricting A2 to the checked words is being applied.
-  TT_NCP(0.5%) itself, the named conjecture, is unaffected.
-- **Route.** `wref` prices route U (biased u8 operands, the bias in the accumulator's initial value), but `checked()` is
-  the unbiased running sums the Lean defines, which route S computes (52 units per position: γ ≈ 1.34% at n = 2,048,
-  ≈ 0.92% at 4,096²). Route U's biased checkpoints await the research coordinator's decision
-  (`route-u-checkpoints.md`).
+- **Checked values.** Route U's accumulator, the u8 × s8 tensor-core schedule the W1 accounting prices. It equals the
+  unbiased running sums shifted by public data, C^U_t = C_t − β·Σ_{l ≥ 16t} Y[l][j] (`checkedU_eq`), so every bound
+  proved modulo V₀ transfers. The unbiased sums (`checked_unbiased`) are retired as checked values; their honest program
+  would cost 36 units per position (γ = 1.08% at n = 2,048).
+- **β = 129** (f = 20, γ ≈ 0.91% at n₀ = 1,600, 0.82% at n = 2,048; `gammaFromTTNCP_U_C2`) needs an unsigned P and a
+  SASS check that the IADD3 with two negated sources is one instruction. `ncp-v1` stays at β = 128 until a route-U
+  forming kernel exists to check.
+- **γ is conditional on TTNCP_U(0.5%).** The red team found that A2, as first written, required the model program to
+  reproduce every output, not only the checked words. Restricted to the checked words, A2 makes the Theorem D chain
+  equivalent to TT_NCP rather than a reduction to milder assumptions (`a2WordsIff`). So TTNCP_U, TT_NCP over the route-U
+  checked values, stays the named conjecture, and every γ here holds only under it.
 
 - **P.** `ncp-v1` uses the word-granular production P v1.1: a SHAKE256 Fisher-Yates over the k/4 aligned words from
   seed `pous-pouw-ncp-Pword-v1`; repair 1 (seed + `/repair`) so that no word lands in its own 16-step; repair 2 (seed +
@@ -85,12 +93,18 @@ wref     3·m·k·n + 24·m·k   (route U under W1 with sub-word moves priced; t
   `tests/test_pouw_word_p.py` certifies all of them exactly at the k the MVP uses (1,088, 2,048, 11,008).
   `ncp-v1-shift24` uses the shift by 24 instead, admissible with independent checkpoints for every k ≥ 1,024 with
   16 ∣ k (Lean `shiftBy24_admissible`, `independentWitness`).
-- **Lean.** Proved: the barrier (`Pouw.Barrier.Proofs.generic`), the algebra (`Pouw.NCP.Proofs.cancel`, `stacked`,
-  `wrap`, `range`), the reduction to TT_NCP (`Pouw.NCP.GameProofs.gammaFromTTNCP`), the chain to the checked values
-  (`Pouw.NCP.ChainProofs.int7Int32`, `wrapFinalOnlyInd`), the restricted-model floor (`ncpWordFloorInd`) and the generic
-  game (`theorem1`, `workWeightedSampling`, `endToEnd`). Assumed: TT_NCP(0.5%). Not proved: that M_4090 runs H_ref within
-  `wref` (`AdmitsRef`), and the byte-level noise expansion here (the Lean takes any expansion of H's answers with the
-  stated ranges).
+- **Lean** (the certificate's pins, all approved by the red team, Phase 13):
+  - the reduction: `Pouw.NCP.RouteUProofs.gammaFromTTNCP_U_v1` (β = 128, f = 24, n₀ ≤ n), from the named assumption
+    `Pouw.NCP.Assumptions.TTNCP_U`, with `ttncpUIff` (it is TT_NCP over the route-U checked set) and `ttncpUWitness`;
+  - the algebra: `Pouw.NCP.Proofs.cancel` and `stacked` (the unbiased stack, which the final checkpoint equals), and
+    `Pouw.NCP.RouteUProofs.checkedU_eq`, `checkedU_final`, `wrapU`, `rangeU`, `mmWUExact`, `yuChecked`;
+  - the chain to the checked words: `Pouw.NCP.RouteUWordProofs.int7Int32UPos` (k ≤ 2^16 for an unsigned P, 2^15 for a
+    signed one), `ncpWordFloorIndU`, `wrapFinalOnlyIndU`, `wrapWordFloorIndU`;
+  - the barrier and the generic game: `Pouw.Barrier.Proofs.generic`, `theorem1`, `workWeightedSampling`, `endToEnd`.
+
+  Assumed: TTNCP_U(0.5%); `Word.NzNCP` of the route-U words (the floors' hypothesis). Not proved: that M_4090 runs H_ref
+  within `wref` (`AdmitsRef`), and the byte-level noise expansion here (the Lean takes any expansion of H's answers with
+  the stated ranges).
 
 ## `pearl-fp8-v4`: Pearl's FP8 scheme (`schemes/pearl_kw.py`)
 
@@ -117,9 +131,11 @@ docstring states every parameter.
   sampling half and the policy's allowances (5% skippable summands, 1/64 dead entries per side, the unchecked peel).
 - **Its differences from milestone 1's D1**, the hardened KW transcript: see the module docstring.
 
-- **Vectors.** The reference equals Lean's own `#eval` of `mmW (blockEnd 16 (3k) t) (stackX k A E₁ R) (stackY k B R F₁)`
-  at every checkpoint, for the word-granular P, the shift by 24 and a random signed permutation
-  (`tests/vectors/ncp_lean.json`, from `tests/ncp_lean.py`), and its own pinned vectors (`tests/vectors/ncp.json`).
+- **Vectors.** `ncp-v1`'s checked values equal, bit for bit, Lean's own `#eval` of
+  `mmWU 128 k A B E₁ F₁ R (blockEnd 16 (3k) t)` at every checkpoint, and the retired unbiased form equals Lean's
+  `mmW (blockEnd 16 (3k) t) (stackX k A E₁ R) (stackY k B R F₁)`, for the word-granular P, the shift by 24 and a random
+  signed permutation (`tests/vectors/ncp_lean.json`, from `tests/ncp_lean.py` on the integrated package, with the Lean
+  sources' SHA-256). The scheme's own pinned vectors are `tests/vectors/ncp.json`.
 
 ## Not here yet
 

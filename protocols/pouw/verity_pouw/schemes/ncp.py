@@ -8,9 +8,11 @@ For int7 activations ``A`` (m x k) and weights ``B`` (committed as its n rows al
     E₂ = E₁·R,  F₂ = −R·F₁,  E₃ = E₁ + E₂,  F₃ = F₁ + F₂
     X = [A + E₁ | A + E₂ | −(A + E₃)]   (m x 3k),   Y = [B + F₁ ; B + F₂ ; B + F₃]   (3k x n)
 
-The checked values are the running sums of X·Y after every 16-deep step, mod 2^32 (block-major, 3k/16 per output entry);
-the last is A·B (Lean `Pouw.NCP.Proofs.cancel`, `stacked`, `wrap`).  Each noise entry is one XOF byte's low six bits minus
-31, exactly uniform on [−31, 32].  A tile's digest is SHAKE256 over its checked words, little-endian, step by step and
+The checked values are route U's (Lean `Pouw.NCP.mmWU β` at β = 128): an accumulator started at c₀ = −β·Σ_l Y[l][j] that
+adds (X + β)·Y, read after every 16-deep step, mod 2^32 (3k/16 per output entry).  X + β is u8 and Y is s8 (`rangeU`), so
+this is the u8 x s8 tensor-core schedule the W1 accounting prices; the last value is A·B (`checkedU_final`, `wrapU`).  The
+unbiased running sums (`checked_unbiased`, Lean `mmW`) are retired as checked values.  Each noise entry is one XOF byte's
+low six bits minus 31, exactly uniform on [−31, 32].  A tile's digest is SHAKE256 over its checked words, little-endian, step by step and
 row-major within a step (the order an accumulator produces them).
 
 ``ncp-v1`` uses the word-granular production P v1.1 (`word_perm`: it moves aligned 4-entry words and keeps the order
@@ -38,7 +40,9 @@ NAME_SHIFT24 = "ncp-v1-shift24"
 D = 16
 M32 = (1 << 32) - 1
 WORD_P_SEED = b"pous-pouw-ncp-Pword-v1"
-#: W1 units per activation position for forming the operands on route U (``ncp-accounting.md``, 03:35Z W1)
+#: Route U's bias: X + β is u8 on the int7 domain for 127 <= β <= 129 with an unsigned P (Lean `biasU8Iff`)
+BETA = 128
+#: f: W1 units per activation position for forming the operands on route U (``ncp-accounting.md``, 03:35Z W1)
 FORM_UNITS = 24
 
 
@@ -168,6 +172,44 @@ def assemble(a: list[list[int]], b: list[list[int]], e1: list[list[int]], f1: li
     return Ops(x, y)
 
 
+def checked_route_u(ops: Ops, beta: int = BETA) -> list[list[list[int]]]:
+    """Route U's checked values (Lean `mmWU β`): the accumulator starts at c₀ = −β·Σ_l Y[l][j] and adds (X + β)·Y; entry
+    ``[i][j][t]`` is its value after step t, mod 2^32.  The last is A·B (`checkedU_final`, `wrapU`)."""
+    out = []
+    for xi in ops.x:
+        xb = [v + beta for v in xi]
+        row = []
+        for yj in ops.y:
+            acc, sums = -beta * sum(yj), []
+            for t in range(0, len(xb), D):
+                acc += sum(p * q for p, q in zip(xb[t:t + D], yj[t:t + D]))
+                sums.append(acc & M32)
+            row.append(sums)
+        out.append(row)
+    return out
+
+
+def checked_unbiased(ops: Ops) -> list[list[list[int]]]:
+    """The unbiased running sums of X·Y (Lean `mmW`), mod 2^32: retired as NCP's checked values, kept for comparison."""
+    return checked_route_u(ops, 0)
+
+
+def route_u_shift(unbiased: list[list[list[int]]], y: Sequence[Sequence[int]], beta: int = BETA) -> list[list[list[int]]]:
+    """Route U's values from the unbiased ones (`checkedU_eq`, checkpoints t = 1 … 3k/16): C^U_t = C_t − β·Σ_{l >= 16t} Y[l][j],
+    mod 2^32."""
+    out = []
+    for row in unbiased:
+        new = []
+        for j, sums in enumerate(row):
+            suffix, tail = [], 0
+            for t in range(len(sums) - 1, -1, -1):
+                suffix.append(tail)
+                tail += sum(y[j][D * t:D * (t + 1)])
+            new.append([(c - beta * s) & M32 for c, s in zip(sums, reversed(suffix))])
+        out.append(new)
+    return out
+
+
 def stack(ctx: Context, pi: Sequence[int], sigma: Sequence[int], a: list[list[int]], b: list[list[int]], tile: Tile) -> Ops:
     u, k = ctx.matmul, ctx.matmul.shape.k
     e1 = [noise_row("verity/pouw/ncp/E1/v1", k, ctx.salt, u.index, ctx.root_a, u.weight, i) for i in tile.rows]
@@ -185,21 +227,29 @@ class NCP:
             raise ValueError("perm is 'word' or 'shift24'")
         self.perm, self.k_min, self.n_min, self.tile = perm, k_min, n_min, tile
         self.name = NAME if perm == "word" else NAME_SHIFT24
+        self.beta = BETA
         lead = k_min >= 1088 and n_min >= 1600
         self.certificate = Certificate(
-            conjecture="tt-ncp",
+            conjecture="tt-ncp-u",
             gamma0=Fraction(1, 200) if lead else None,
-            omega=Fraction(n_min + FORM_UNITS // 3, n_min),
-            claims=("tt-ncp", "random-oracle", "xof/shake-256", "cr/sha-256", "w1-cost-model", "beacon-unpredictability"),
-            theorems=("Pouw.NCP.GameProofs.gammaFromTTNCP", "Pouw.Proofs.theorem1", "Pouw.Proofs.workWeightedSampling",
-                      "Pouw.Proofs.endToEnd", "Pouw.NCP.Proofs.cancel", "Pouw.NCP.Proofs.stacked", "Pouw.NCP.Proofs.wrap",
-                      "Pouw.NCP.Proofs.range", "Pouw.NCP.ChainProofs.int7Int32", "Pouw.NCP.ChainProofs.wrapFinalOnlyInd",
-                      "Pouw.NCP.RelationWitness.ncpWordFloorInd", "Pouw.Barrier.Proofs.generic",
-                      *(("Pouw.NCP.GameProofs.shiftBy24_admissible", "Pouw.NCP.RelationWitness.independentWitness")
-                        if perm == "shift24" else ())),
-            hypotheses=("TT_NCP(γ_0) in M_4090 under W1 with sub-word moves priced", "AdmitsRef: H_ref runs within wref",
-                        *(("P's checkpoint independence at each k (fingerprint rank; not in Lean)",) if perm == "word" else ())),
+            omega=Fraction(3 * n_min + FORM_UNITS, 3 * n_min),
+            claims=("tt-ncp-u", "random-oracle", "xof/shake-256", "cr/sha-256", "w1-cost-model", "beacon-unpredictability"),
+            theorems=("Pouw.NCP.RouteUProofs.gammaFromTTNCP_U_v1", "Pouw.NCP.RouteUProofs.ttncpUIff",
+                      "Pouw.NCP.RouteUProofs.ttncpUWitness", "Pouw.Proofs.theorem1", "Pouw.Proofs.workWeightedSampling",
+                      "Pouw.Proofs.endToEnd", "Pouw.NCP.Proofs.cancel", "Pouw.NCP.Proofs.stacked",
+                      "Pouw.NCP.RouteUProofs.checkedU_eq", "Pouw.NCP.RouteUProofs.checkedU_final", "Pouw.NCP.RouteUProofs.wrapU",
+                      "Pouw.NCP.RouteUProofs.rangeU", "Pouw.NCP.RouteUProofs.mmWUExact", "Pouw.NCP.RouteUProofs.yuChecked",
+                      "Pouw.NCP.RouteUWordProofs.int7Int32UPos", "Pouw.NCP.RouteUWordProofs.ncpWordFloorIndU",
+                      "Pouw.NCP.RouteUWordProofs.wrapFinalOnlyIndU", "Pouw.NCP.RouteUWordProofs.wrapWordFloorIndU",
+                      "Pouw.Barrier.Proofs.generic",
+                      *(("Pouw.NCP.RelationWitness.independentWitness",) if perm == "shift24" else ())),
+            hypotheses=("TTNCP_U(β, γ_0) in M_4090 under W1 with sub-word moves priced (Pouw.NCP.Assumptions.TTNCP_U)",
+                        "AdmitsRef: H_ref runs within wref",
+                        "Word.NzNCP of the wrapped route-U values (the word floors' hypothesis)",
+                        *(("P v1.1's checkpoint independence and MinRank 16 at each k (script-certified; not in Lean)",)
+                          if perm == "word" else ())),
             allowances=("the free final value, d/(3k) per output entry, inside γ_0",),
+            parameters=(("beta", BETA), ("f", FORM_UNITS), ("n0", n_min), ("k_max", 1 << 16)),
         )
 
     def check(self, matmul: Matmul) -> None:
@@ -236,18 +286,8 @@ class NCP:
         return True
 
     def checked(self, ctx: Context, ops: Ops) -> list[list[list[int]]]:
-        """``checked[i][j][t]``: entry (i, j)'s running sum after step t, mod 2^32."""
-        out = []
-        for xi in ops.x:
-            row = []
-            for yj in ops.y:
-                acc, sums = 0, []
-                for t in range(0, len(xi), D):
-                    acc += sum(p * q for p, q in zip(xi[t:t + D], yj[t:t + D]))
-                    sums.append(acc & M32)
-                row.append(sums)
-            out.append(row)
-        return out
+        """``checked[i][j][t]``: entry (i, j)'s route-U accumulator after step t, mod 2^32 (`checked_route_u`)."""
+        return checked_route_u(ops, self.beta)
 
     def digest(self, ctx: Context, noise, checked: list[list[list[int]]]) -> bytes:
         steps = len(checked[0][0]) if checked and checked[0] else 0

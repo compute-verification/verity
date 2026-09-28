@@ -96,7 +96,8 @@ class Certificate:
     TT_NCP); ``gamma = 1 − (1 − gamma0)/omega`` is the conservative reduction (Lean `gammaFromTT`, `gammaFromTTNCP`).  A
     scheme whose conjecture names no target has ``gamma0 = None`` and no gamma.  ``claims`` are `verity.claims` ids, or ids
     in the same format that no render cites yet; ``theorems`` are pinned Lean declarations; ``allowances`` are gaps the
-    scheme admits by design."""
+    scheme admits by design; ``parameters`` are the values the theorems are instantiated at, including the domain bounds
+    their γ holds on."""
 
     conjecture: str
     gamma0: Fraction | None
@@ -105,6 +106,7 @@ class Certificate:
     theorems: tuple[str, ...] = ()
     hypotheses: tuple[str, ...] = ()
     allowances: tuple[str, ...] = ()
+    parameters: tuple[tuple[str, int], ...] = ()
 
     @property
     def gamma(self) -> Fraction | None:

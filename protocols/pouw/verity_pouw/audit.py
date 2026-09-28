@@ -264,7 +264,7 @@ class WorkProfile:
         return {"scheme": self.scheme, "work": self.work, "drawn": self.drawn, "sampled": self.sampled,
                 "conjecture": c.conjecture, "gamma0": None if c.gamma0 is None else str(c.gamma0), "omega": str(c.omega),
                 "gamma": None if c.gamma is None else str(c.gamma), "claims": list(c.claims), "theorems": list(c.theorems),
-                "hypotheses": list(c.hypotheses), "allowances": list(c.allowances)}
+                "hypotheses": list(c.hypotheses), "allowances": list(c.allowances), "parameters": dict(c.parameters)}
 
 
 @dataclass(frozen=True, slots=True)
