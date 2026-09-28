@@ -1112,6 +1112,9 @@ SLOT_WRAPPER = "check/slot.py"
 CHECK_LINE = "/workspace/research/locks/check-line"     # slot.py's LINE beside its SLOTS: a waiter's ticket, locked while it waits
 NOT_STARTED = 75        # slot.py's exit when CMD never ran: a waiter past --wait-max, or a twin whose twin took a slot first
 FAILED_RECENT_S = 6 * 3600
+#: how long a run that ended before any step failed may lack its failure.json: `research run` classifies the end a few seconds
+#: after status.json says so, and a post read in between said "unclassified: no reason recorded" of a hand cancel (dc04, 12 Oct)
+CLASSIFY_S = 120
 TRAIN_RE = re.compile(r"^Merge #(\d+) \(([0-9a-f]+)\)")
 TRAIN_MAIN_RE = re.compile(r"^Merge main \([0-9a-f]+\)")
 BC_ID_RE = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")
@@ -1209,6 +1212,8 @@ for n in names:
     if bad is None and (state not in ("failed", "cancelled") or last.get("rc") == A["not_started"]):
         continue
     fail = load(os.path.join(d, "failure.json"))
+    if bad is None and not fail and now - max(ts) < A["classify_s"]:
+        continue
     sha, cwd = (req.get("remote") or {}).get("source_sha"), req.get("cwd") or ""
     row = {"run": n, "state": state, "rc": last.get("rc"), "ended": last.get("ended_utc"), "class": fail.get("class"),
            "why": (fail.get("why") or "")[:300], "by": req.get("submitted_by") or "", "sha": sha, "subjects": []}
@@ -1249,7 +1254,7 @@ print(json.dumps({"rows": rows, "waiting": waiting}))
 def failed_reader(now: float, *, runs: str = RUNS, requests: str = REQUESTS, line: str = CHECK_LINE) -> str:
     days = sorted({time.strftime("%Y%m%d", time.gmtime(now - s)) for s in (0, FAILED_RECENT_S)})
     args = {"runs": runs, "requests": requests, "line": line, "days": days, "recent_s": FAILED_RECENT_S, "wrapper": SLOT_WRAPPER,
-            "pick": list(FAILING), "log_bytes": 8 << 20, "not_started": NOT_STARTED}
+            "pick": list(FAILING), "log_bytes": 8 << 20, "not_started": NOT_STARTED, "classify_s": CLASSIFY_S}
     return FAILED_READER.replace("__ARGS__", repr(json.dumps(args)))
 
 
