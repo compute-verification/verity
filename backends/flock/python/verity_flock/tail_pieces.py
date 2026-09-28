@@ -48,16 +48,17 @@ def _load_table(name: str):
     if name in TABLE_SHA256:
         arr = np.ascontiguousarray(_DERIVED[name](), dtype="<u4")
     else:
-        from verity.ml import mufu
-        arr = np.ascontiguousarray(mufu.table(name), dtype="<u4")
+        from verity_vllm.program.kernels import fa2_relation, rms_relation
+        t = fa2_relation.tables() if name == "ex2" else rms_relation.tables("cuda")
+        arr = np.ascontiguousarray(getattr(t, name), dtype="<u4")
     if hashlib.sha256(arr.tobytes()).hexdigest() != table_sha256(name):
         raise ValueError(f"the {name} table is not the pinned one ({table_sha256(name)})")
     return arr
 
 
 #: [identity below, saturated from) on |x| of each tanh table: the words its table holds. MUFU.TANH's are the IR's measured rules
-#: (``verity.ml.mufu.MUFU_TANH_RULES``); RN32(math.tanh)'s come from evaluating it on every word below 10.0 of both signs: x
-#: itself below 0x39B89BA3, 1.0 from 0x41102CB4, odd everywhere
+#: (``prims.MUFU_TANH_RULES``); RN32(math.tanh)'s come from evaluating it on every word below 10.0 of both signs: x itself below
+#: 0x39B89BA3, 1.0 from 0x41102CB4, odd everywhere
 TANH_BOUNDS = {"tanh_mufu": (0x3B800001, 0x41000000), "tanh_rn": (0x39B89BA3, 0x41102CB4)}
 
 
@@ -66,14 +67,14 @@ def _tanh_index(lo: int, hi: int):
 
 
 def _mufu_tanh_table():
-    """``MufuTanh_v1``'s measured table (``verity.ml.mufu._tanh_shards``) at every positive word of [identity_below, saturate_from),
-    by the word's low 27 bits."""
+    """``MufuTanh_v1``'s measured table (``prims._tanh_shards``) at every positive word of [identity_below, saturate_from), by the
+    word's low 27 bits."""
     import numpy as np
-    from verity.ml import mufu
+    from verity_vllm.program.registry import prims as RP
 
     lo, hi = TANH_BOUNDS["tanh_mufu"]
-    assert (lo, hi) == (mufu.MUFU_TANH_RULES["identity_below"], mufu.MUFU_TANH_RULES["saturate_from"])
-    (sh,) = mufu._tanh_shards()
+    assert (lo, hi) == (RP.MUFU_TANH_RULES["identity_below"], RP.MUFU_TANH_RULES["saturate_from"])
+    (sh,) = RP._tanh_shards()
     out = np.zeros(1 << 27, np.uint32)
     for k in range((lo - sh.lo) // sh.block_words, (hi - 1 - sh.lo) // sh.block_words + 1):
         b = sh.block(k)
