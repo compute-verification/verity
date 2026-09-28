@@ -137,6 +137,26 @@ structure Derived where
   geo : Geo
   rows : List (List Nat × List Nat)
 
+/-- Input bit `i`'s column. -/
+def Derived.inCol (d : Derived) (i : Nat) : Nat := (colOf d.geo.ins i).getD 0
+
+/-- Output bit `o`'s column. -/
+def Derived.outCol (d : Derived) (o : Nat) : Nat := (colOf d.geo.outs o).getD 0
+
+/-- The port bits a side's groups lay out. -/
+def groupBits (gs : List Group) : Nat := (gs.map fun g => g.bits.sum).sum
+
+/-- **The columns in logical order:** the input bits, the computed rows (one per AND item in item order, then the
+output copy rows in output order), and the constant last. Each row reads only earlier columns here, or the constant. -/
+def Derived.order (d : Derived) : List Nat :=
+  (List.range (groupBits d.geo.ins)).map d.inCol ++ (List.range d.geo.nAnd).map (d.geo.andBase + ·) ++
+    (List.range (groupBits d.geo.outs)).map d.outCol ++ [d.geo.const]
+
+/-- **The rows in logical order**, each with its physical column: the dense rows at `order`'s columns. The audit's
+composed rows (`Rows.compose`) are defined from this list, so the two can't drift. -/
+def Derived.logical (d : Derived) : List (Nat × (List Nat × List Nat)) :=
+  d.order.map fun c => (c, d.rows.getD c ([], []))
+
 /-- **The rows of a flat type** by the v2 rule, with its port groups cut at `inSplit` and `outSplit`. -/
 def derive (t : CircuitType) (inSplit outSplit : List Nat) : Except String Derived :=
   if !flatOk t then .error "derive: not a flat type of AND items over earlier wires"
