@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+import ncp_lean as NL
 import pouw_vectors as MV
 from verity_pouw.protocol import DomainError, Matmul, PoUWScheme, Shape, Tile
 from verity_pouw.schemes import get, ncp
@@ -17,6 +18,18 @@ PINNED = json.loads((Path(__file__).with_name("vectors") / "ncp.json").read_text
 
 def test_vectors_are_pinned():
     assert MV.vectors() == PINNED
+
+
+@pytest.mark.parametrize("kind", NL.CASES)
+def test_reference_equals_leans_own_evaluation(kind):
+    """`tests/vectors/ncp_lean.json` is Lean's `#eval` of `mmW (blockEnd 16 (3k) t) (stackX k A E₁ R) (stackY k B R F₁)` at
+    every checkpoint (`tests/ncp_lean.py`); the reference assembles and accumulates the same inputs."""
+    pinned = json.loads(NL.PINNED.read_text())
+    assert pinned["toolchain"] == "leanprover/lean4:v4.34.0" and pinned["shape"] == [NL.M, NL.K, NL.N]
+    got = NL.python_checked(kind)
+    assert got == pinned["cases"][kind]
+    x = NL.inputs(kind)
+    assert [[s[-1] for s in row] for row in got] == [[sum(p * q for p, q in zip(a, b)) for b in x["b"]] for a in x["a"]]
 
 
 def test_production_p_is_the_research_stores():

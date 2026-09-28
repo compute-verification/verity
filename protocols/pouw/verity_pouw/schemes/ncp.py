@@ -123,22 +123,29 @@ class Ops:
     y: list[list[int]]      # the tile's columns of Y (length 3k)
 
 
-def stack(ctx: Context, pi: Sequence[int], sigma: Sequence[int], a: list[list[int]], b: list[list[int]], tile: Tile) -> Ops:
-    u, k = ctx.matmul, ctx.matmul.shape.k
+def assemble(a: list[list[int]], b: list[list[int]], e1: list[list[int]], f1: list[list[int]],
+             pi: Sequence[int], sigma: Sequence[int]) -> Ops:
+    """Lean `stackX` / `stackY` from explicit noise: `a`, `e1` are rows of A and E₁; `b`, `f1` are columns of B and F₁
+    (B's committed rows)."""
+    k = len(pi)
     x = []
-    for i, ai in zip(tile.rows, a):
-        e1 = noise_row("verity/pouw/ncp/E1/v1", k, ctx.salt, u.index, ctx.root_a, u.weight, i)
-        e2 = [sigma[j] * e1[pi[j]] for j in range(k)]
-        x.append([p + q for p, q in zip(ai, e1)] + [p + q for p, q in zip(ai, e2)]
-                 + [-(p + q + r) for p, q, r in zip(ai, e1, e2)])
+    for ai, e in zip(a, e1):
+        e2 = [sigma[j] * e[pi[j]] for j in range(k)]
+        x.append([p + q for p, q in zip(ai, e)] + [p + q for p, q in zip(ai, e2)] + [-(p + q + r) for p, q, r in zip(ai, e, e2)])
     y = []
-    for j, bj in zip(tile.cols, b):
-        f1 = noise_row("verity/pouw/ncp/F1/v1", k, ctx.salt, u.weight, j)
+    for bj, f in zip(b, f1):
         f2 = [0] * k
         for l in range(k):
-            f2[pi[l]] = -sigma[l] * f1[l]
-        y.append([p + q for p, q in zip(bj, f1)] + [p + q for p, q in zip(bj, f2)] + [p + q + r for p, q, r in zip(bj, f1, f2)])
+            f2[pi[l]] = -sigma[l] * f[l]
+        y.append([p + q for p, q in zip(bj, f)] + [p + q for p, q in zip(bj, f2)] + [p + q + r for p, q, r in zip(bj, f, f2)])
     return Ops(x, y)
+
+
+def stack(ctx: Context, pi: Sequence[int], sigma: Sequence[int], a: list[list[int]], b: list[list[int]], tile: Tile) -> Ops:
+    u, k = ctx.matmul, ctx.matmul.shape.k
+    e1 = [noise_row("verity/pouw/ncp/E1/v1", k, ctx.salt, u.index, ctx.root_a, u.weight, i) for i in tile.rows]
+    f1 = [noise_row("verity/pouw/ncp/F1/v1", k, ctx.salt, u.weight, j) for j in tile.cols]
+    return assemble(a, b, e1, f1, pi, sigma)
 
 
 class NCP:
