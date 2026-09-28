@@ -432,6 +432,53 @@ def MoeExpertGemmW(B, S, x, e, g, w):
 
 
 # ---------------------------------------------------------------------------------------------------------
+# the expert GEMMs with the k16 tensor-core step as a static: `fused_moe_kernel`'s `tl.dot` on a target whose step is not the
+# Ampere/Ada one (`registry.targets.moe_expert_dot`); the bodies are the `_v1` ones with `DotBf16_v2{K,DOT}` for `DotBf16_v1`
+# ---------------------------------------------------------------------------------------------------------
+
+SM120_EVIDENCE = ("RTX PRO 6000 (cc 12.0, 188 SMs), vLLM d9105ea80 fused_experts under VLLM_BATCH_INVARIANT=1 (BLOCK 64/64/32, GROUP_SIZE_M 8): "
+                  "DOT=HopperBF16WgmmaDot16_v1 reproduces every w13 and w2 output of run r20260930-032412-1313's 16 cases at "
+                  "E=8, TOPK=2, H=2048, I=1024, M=16 (1,048,576 words per launch) where the Ampere step differs in 428 and 286")
+
+
+@composite("MoeExpertCoordinate", 2, ["E", "K", "DOT"],
+           lambda S: ((("x", Array(S.K, BF16)), ("e", I32), ("slab", Array(S.E, Array(S.K, BF16)))), BF16),
+           conformance="exact-model-tested: " + SM120_EVIDENCE)
+def MoeExpertCoordinateV2(B, S, x, e, slab):
+    """`MoeExpertCoordinate_v1` with the k16 step `DOT`: `bf16_rne(DotBf16_v2{K,DOT}(x_t, W13[e][n, :]))`."""
+    wrow = B.call(bind(MoeExpertRow, E=S.E, K=S.K), e, slab)
+    return B.call(bind(b1.GemmCoordinateV2, K=S.K, DOT=S.DOT), x, wrow)
+
+
+@composite("MoeExpertGemm", 2, ["E", "K", "N", "DOT"],
+           lambda S: ((("x", Array(S.K, BF16)), ("e", I32), ("w", Array(S.E, Array(S.N, Array(S.K, BF16))))), Array(S.N, BF16)),
+           conformance="exact-model-tested: " + SM120_EVIDENCE)
+def MoeExpertGemmV2(B, S, x, e, w):
+    """`MoeExpertGemm_v1` with the k16 step `DOT` (the w13 launch)."""
+    return B.batch(bind(MoeExpertCoordinateV2, E=S.E, K=S.K, DOT=S.DOT), x, e, coordinate_major(w, S.E, S.N, S.K), axes=(None, None, 0))
+
+
+@composite("MoeExpertCoordinateW", 2, ["E", "K", "DOT"],
+           lambda S: ((("x", Array(S.K, BF16)), ("e", I32), ("g", F32), ("slab", Array(S.E, Array(S.K, BF16)))), BF16),
+           conformance="exact-model-tested: " + SM120_EVIDENCE)
+def MoeExpertCoordinateWV2(B, S, x, e, g, slab):
+    """`MoeExpertCoordinateW_v1` with the k16 step `DOT`: `bf16_rne(f32mul(DotBf16_v2{K,DOT}(x, W2[e][n, :]), g))`."""
+    wrow = B.call(bind(MoeExpertRow, E=S.E, K=S.K), e, slab)
+    acc = B.call(bind(b1.DotBf16V2, K=S.K, DOT=S.DOT), x, wrow)
+    return B.call(P.F2fpBf16, B.call(P.F32Mul, acc, g))
+
+
+@composite("MoeExpertGemmW", 2, ["E", "K", "N", "DOT"],
+           lambda S: ((("x", Array(S.K, BF16)), ("e", I32), ("g", F32), ("w", Array(S.E, Array(S.N, Array(S.K, BF16))))),
+                      Array(S.N, BF16)),
+           conformance="exact-model-tested: " + SM120_EVIDENCE)
+def MoeExpertGemmWV2(B, S, x, e, g, w):
+    """`MoeExpertGemmW_v1` with the k16 step `DOT` (the w2 launch)."""
+    return B.batch(bind(MoeExpertCoordinateWV2, E=S.E, K=S.K, DOT=S.DOT), x, e, g, coordinate_major(w, S.E, S.N, S.K),
+                   axes=(None, None, None, 0))
+
+
+# ---------------------------------------------------------------------------------------------------------
 # routed sum over the TOPK slots of a token (`moe_sum_vec_kernel<bf16, int, TOPK, false>`)
 # ---------------------------------------------------------------------------------------------------------
 
@@ -455,4 +502,5 @@ def MoeSum(B, S, y):
 
 ALL = [F32Sat, F32FmaRm, F32Neg, F32BitsShl23, NvExpf, F32IsFinite, RouterArgmaxStep, MoeRouterTopK, MoeRouterTopKNorm, MoeRouterProbs,
        MoeRouterFirst, MoeRouterNext, MoeRouterPick, MoeRouterTopKOrdered, MoeRouterTopKOrderedNorm, MoeExpertRow,
-       MoeExpertCoordinate, MoeExpertGemm, MoeExpertCoordinateW, MoeExpertGemmW, MoeSumCoordinate, MoeSum]
+       MoeExpertCoordinate, MoeExpertGemm, MoeExpertCoordinateW, MoeExpertGemmW, MoeExpertCoordinateV2, MoeExpertGemmV2,
+       MoeExpertCoordinateWV2, MoeExpertGemmWV2, MoeSumCoordinate, MoeSum]

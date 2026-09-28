@@ -51,6 +51,29 @@ def _target_kinds():
     return T.uses_accepted_kinds(tp), T.tensor_core_dot(tp)
 
 
+def moe_expert_role(routed: bool) -> tuple[str, dict]:
+    """(vocabulary role, its extra statics) of a `fused_moe_kernel` launch's per-pair Definition on the active target: the `_v1` kinds,
+    or the `_dot` ones with the target's k16 step (`registry.targets.moe_expert_dot`)."""
+    from verity_vllm.program.registry import targets as T
+    dot = T.moe_expert_dot(active_target_profile())
+    role = "moe_expert_gemm_w" if routed else "moe_expert_gemm"
+    return (role, {}) if dot is None else (role + "_dot", {"DOT": dot})
+
+
+def moe_expert_refusal(padded: bool = False) -> str | None:
+    """None when the active target binds the fused-MoE block's expert GEMMs under the construction, else the refusal: a target without
+    a registered step, or the padded construction on a target whose expert GEMMs take the `_v2{DOT}` Definitions."""
+    from verity_vllm.program.registry import targets as T
+    try:
+        dot = T.moe_expert_dot(active_target_profile())
+    except T.UnregisteredTarget as e:
+        return f"numerics_unregistered: {e}"
+    if padded and dot is not None:
+        return (f"numerics_unregistered: the active target's fused_moe_kernel runs the k16 step {dot.id}; MoeFfnFixedL_v1's expert bodies "
+                "run the Ampere one and no padded Definition takes the step as a static")
+    return None
+
+
 def gemm_pins_for(M: int, N: int, K: int) -> tuple[dict, str]:
     """The pins a bf16 `[M,K] x [K,N]` launch must match on the active target: vLLM's `_get_matmul_config` picks a tabled (N, K) row's
     M-bucket tiling when the target's arch family has a tuned table, else the default — `GemmTarget.launch_config` of the registered

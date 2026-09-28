@@ -26,6 +26,7 @@ import numpy as np
 
 from verity.evaluation.batch import type_dtype, type_shape
 from verity_vllm.program.kernels.kernel_registry import Declined, register
+from verity_vllm.program.kernels.moe_router_rows import moe_router_topk
 
 #: spec family -> the registry reference that evaluates its relation (recorded in every report)
 EVALUATORS = {
@@ -109,6 +110,12 @@ EVALUATORS = {
                         "router_ids word + f2fp_bf16 (MoeExpertCoordinate_v1: the w13 launch, MUL_ROUTED_WEIGHT=False) -> up",
     "MoeExpertGemmW_v1": "dot_bf16 over W2[e] gathered by the committed router_ids word, the committed routed weight multiplied into the f32 "
                          "accumulator (one F32Mul) before the single f2fp_bf16 (MoeExpertCoordinateW_v1: the w2 launch, MUL_ROUTED_WEIGHT=True) -> down",
+    # the same rows with the k16 step read from the DOT static (registry.moe MoeExpertGemm_v2 / MoeExpertGemmW_v2: a target whose
+    # fused_moe_kernel tl.dot is not the Ampere/Ada step, registry.targets.moe_expert_dot); an unregistered DOT is declined by name
+    "MoeExpertGemm_v2": "derived_rows.dot_bf16_for(DOT) (DotBf16_v2{K,DOT}) over W13[e] gathered by the committed router_ids word + f2fp_bf16 "
+                        "(MoeExpertCoordinate_v2) -> up",
+    "MoeExpertGemmW_v2": "derived_rows.dot_bf16_for(DOT) over W2[e], the committed routed weight into the f32 accumulator (one F32Mul), then "
+                         "f2fp_bf16 (MoeExpertCoordinateW_v2) -> down",
     # [reqval 287783ec6 / 9f7a75f6b; moe MOE-PAD-SPEC route A (3)] the PADDED fixed-slot block, one row per token (verity_vllm/program/registry/moe_pad.py
     # `_fixed_core`, node for node): MoeRouterTopK on the row's logits input (MoeFfnFixed_v1: on f2fp(dot_bf16(x, wg)) first); per slot e the
     # routed weight g_e = alpha_j where ids[j] == e else 0.0f (SelectF32 chain); EVERY slot body on its own fixed weights -- up = f2fp(dot_bf16(x,
@@ -444,10 +451,19 @@ def moe_router(statics: dict[str, Any], ops: Sequence[np.ndarray], *, renormaliz
     return {"router_w": w, "router_ids": ids}
 
 
-def moe_expert_gemm(statics: dict[str, Any], ops: Sequence[np.ndarray], *, routed: bool) -> dict[str, np.ndarray]:
+def moe_expert_gemm(statics: dict[str, Any], ops: Sequence[np.ndarray], *, routed: bool, dotted: bool = False) -> dict[str, np.ndarray]:
     """`MoeExpertGemm_v1(x, e, W13)` (up) and, `routed`, `MoeExpertGemmW_v1(x, e, g, W2)` (down): dot_bf16 over the expert row gathered
-    by the committed router_ids word, the routed weight multiplied into the f32 accumulator before the one bf16 conversion."""
+    by the committed router_ids word, the routed weight multiplied into the f32 accumulator before the one bf16 conversion.  `dotted`:
+    the `_v2{E,K,N,DOT}` rows, the chain of the DOT static's step; an unregistered DOT and a non-finite lane are declined by name."""
     from verity_vllm.program.kernels import derived_rows as D
+    dot = D.dot_bf16
+    if dotted:
+        fam = "MoeExpertGemmW_v2" if routed else "MoeExpertGemm_v2"
+        dot_id = prim_static(statics, "DOT", fam)
+        try:
+            dot = D.dot_bf16_for(dot_id)
+        except KeyError:
+            raise Declined(f"no registered evaluator for {fam} with DOT={dot_id} (k16 step twins: {sorted(D.TC_DOT16_BY_PRIM)})") from None
     E, K, N = int(statics["E"]), int(statics["K"]), int(statics["N"])
     x = np.asarray(ops[0], dtype=np.uint16).reshape(K)
     e = int(np.asarray(ops[1]).reshape(-1)[0])
@@ -461,7 +477,10 @@ def moe_expert_gemm(statics: dict[str, Any], ops: Sequence[np.ndarray], *, route
     gw = np.asarray(ops[2]).reshape(-1)[0] if routed else None
     out = np.empty(N, dtype=np.uint16)
     for n0 in range(0, N, GEMM_CHUNK):
-        acc, _nf = D.dot_bf16(x[None, :], w[n0:n0 + GEMM_CHUNK])
+        acc, nf = dot(x[None, :], w[n0:n0 + GEMM_CHUNK])
+        if dotted and nf.any():
+            raise Declined(f"{fam}: {int(nf.sum())} output coordinates have a non-finite bf16 operand or accumulator "
+                           "(outside the vectorised k16 twin's domain)")
         if gw is not None:                                                    # routed weight into the f32 accumulator BEFORE the one bf16 conversion
             acc = D.mul_rn(acc, np.full(acc.shape, int(gw) & 0xFFFFFFFF, dtype=np.uint32))
         out[n0:n0 + GEMM_CHUNK] = D.f2fp_bf16(acc).astype(np.uint16)
@@ -563,73 +582,6 @@ def padded_moe_block(statics: dict[str, Any], args: list[np.ndarray], *, router_
         _PADDED_BLOCK_MEMO.popitem(last=False)
     return res
 
-
-def moe_router_topk(logits: np.ndarray, *, E: int, TOPK: int, VPT: int, renormalize: bool = False) -> tuple[np.ndarray, np.ndarray]:
-    """`MoeRouterTopK_v1{E,TOPK,VPT}` (`_moe_C.topk_softmax`, one token row) evaluated with the registry's scalar primitives, statement for
-    statement the body of `verity_vllm.program.registry.moe.MoeRouterTopK`: E bf16 logits -> f32 (Bf16ToF32); thread t of E/VPT holds columns
-    t*VPT .. t*VPT+VPT-1: thread max (F32Max, ascending), warp butterfly xor T/2 .. 1 (lane 0); `ex_i = NvExpf(x_i - max)` (F32Sub, the
-    CUDA math-library expf sequence, MUFU.EX2 from the measured table); thread sum from 0.f (F32Add, ascending), butterfly; `rcp = 1.f / sum`
-    (F32Div, IEEE); `p_i = ex_i * rcp` (F32Mul), non-finite -> +0; TOPK rounds: lowest-index strict argmax (F32GtStrict scan from p[0]),
-    the winner masked to -10000.f.  `renormalize` (MoeRouterTopKNorm_v1, MOE-04): selected sum ascending from 0.f, denom = sum > 0 ? sum :
-    1.f, scale = 1.f / denom (F32Div), w_k = w_k * scale (F32Mul).  Returns (router_w f32 words [TOPK] u32, router_ids i32 words [TOPK] u32)."""
-    from verity_vllm.program.registry import moe as RMOE
-    from verity_vllm.program.registry import prims as P
-    from verity_vllm.program.registry import ref_prims as R
-
-    if E % VPT:
-        raise ValueError(f"E = {E} is not a multiple of VPT = {VPT}")
-    T = E // VPT
-    x = [P.Bf16ToF32.evaluate(int(v)) for v in np.asarray(logits, dtype=np.uint16).reshape(E)]
-
-    def butterfly(op, vals: list[int]) -> int:
-        mask = len(vals) // 2
-        while mask >= 1:
-            vals = [op(vals[t], vals[t ^ mask]) for t in range(len(vals))]
-            mask //= 2
-        return vals[0]
-
-    tmax = []
-    for t in range(T):
-        m = x[t * VPT]
-        for j in range(1, VPT):
-            m = P.F32Max.evaluate(m, x[t * VPT + j])
-        tmax.append(m)
-    rmax = butterfly(P.F32Max.evaluate, tmax)
-    ex = [RMOE.nv_expf_bits(R.F32Sub.evaluate(x[i], rmax)) for i in range(E)]
-    tsum = []
-    for t in range(T):
-        s = 0
-        for j in range(VPT):
-            s = P.F32Add.evaluate(s, ex[t * VPT + j])
-        tsum.append(s)
-    rsum = butterfly(P.F32Add.evaluate, tsum)
-    one = 0x3F800000
-    rcp = P.F32Div.evaluate(one, rsum)
-    p = []
-    for i in range(E):
-        q = P.F32Mul.evaluate(ex[i], rcp)
-        p.append(q if RMOE.F32IsFinite.evaluate(q) else 0)
-    neg_big = 0xC61C4000                                                          # -10000.f
-    weights, ids = [], []
-    for _ in range(TOPK):
-        best, best_i = p[0], 0
-        for i in range(1, E):
-            if R.F32GtStrict.evaluate(p[i], best):
-                best, best_i = p[i], i
-        weights.append(best)
-        ids.append(best_i)
-        p = [neg_big if i == best_i else p[i] for i in range(E)]
-    if renormalize:
-        acc = 0
-        for k in range(TOPK):
-            acc = P.F32Add.evaluate(acc, weights[k])
-        denom = acc if R.F32GtStrict.evaluate(acc, 0) else one
-        scale = P.F32Div.evaluate(one, denom)
-        weights = [P.F32Mul.evaluate(w, scale) for w in weights]
-    return (np.asarray([w & 0xFFFFFFFF for w in weights], dtype=np.uint32), np.asarray([i & 0xFFFFFFFF for i in ids], dtype=np.uint32))
-
-
-# ---------------------------------------------------------------------------------------------------------------- registration
 
 @dataclass(frozen=True)
 class RowKernel:
@@ -754,6 +706,8 @@ def _check_targets() -> dict[str, list]:
         "MoeRouterTopKOrderedNorm_v1": [bind(moe.MoeRouterTopKOrderedNorm, **router)],
         "MoeExpertGemm_v1": [bind(moe.MoeExpertGemm, E=2, K=32, N=3)],
         "MoeExpertGemmW_v1": [bind(moe.MoeExpertGemmW, E=2, K=32, N=3)],
+        "MoeExpertGemm_v2": [bind(moe.MoeExpertGemmV2, E=2, K=32, N=3, DOT=d) for d in (P.AmpereBF16TcDot16, hopper.HopperBF16WgmmaDot16)],
+        "MoeExpertGemmW_v2": [bind(moe.MoeExpertGemmWV2, E=2, K=32, N=3, DOT=d) for d in (P.AmpereBF16TcDot16, hopper.HopperBF16WgmmaDot16)],
         "MoeFfnFixedL_v1": [bind(moe_pad.MoeFfnFixedL, **router, H=16, I=16)],
         "MoeFfnFixed_v1": [bind(moe_pad.MoeFfnFixed, **router, H=16, I=16)],
         "MoeSum_v1": [bind(moe.MoeSum, TOPK=2, H=8)],
@@ -793,6 +747,8 @@ _row("MoeRouterTopKOrdered_v1", partial(moe_router, renormalize=False), ("router
 _row("MoeRouterTopKOrderedNorm_v1", partial(moe_router, renormalize=True), ("router_w", "router_ids"))
 _row("MoeExpertGemm_v1", partial(moe_expert_gemm, routed=False), ("up",), _sample({1: "E"}))
 _row("MoeExpertGemmW_v1", partial(moe_expert_gemm, routed=True), ("down",), _sample({1: "E"}))
+_row("MoeExpertGemm_v2", partial(moe_expert_gemm, routed=False, dotted=True), ("up",), _sample({1: "E"}))
+_row("MoeExpertGemmW_v2", partial(moe_expert_gemm, routed=True, dotted=True), ("down",), _sample({1: "E"}))
 _row("MoeFfnFixedL_v1", partial(moe_ffn_fixed, router_gemm=False), ("out",))
 _row("MoeFfnFixed_v1", partial(moe_ffn_fixed, router_gemm=True), ("out",))
 _row("MoeSum_v1", moe_sum, ("sum",))

@@ -136,6 +136,17 @@ def test_gpu_fixture_every_split_geometry_bit_exact():
     assert all(d["rows_ok"] == d["B"] for d in rep["drain"])
 
 
+@pytest.mark.parametrize("num_sm,added", [(142, {35, 36}), (188, {11, 12, 23, 24, 47, 48}), (132, {16, 33, 34})])
+def test_drain_crosses_every_split_boundary_of_the_devices_sm_count(num_sm, added):
+    from verity_vllm.pipeline.topp_split_probe import DRAIN_BATCHES, drain_batches
+    bs = drain_batches(num_sm)
+    assert list(bs) == sorted(bs, reverse=True) and set(bs) - set(DRAIN_BATCHES) == added
+    for n in range(1, TS.SPLIT_MAX_BATCH):
+        if TS.splits_for(n, num_sm) != TS.splits_for(n + 1, num_sm):
+            assert {n, n + 1} <= set(bs), (num_sm, n)
+    assert {TS.splits_for(b, num_sm) for b in bs} == {TS.splits_for(n, num_sm) for n in range(1, TS.SPLIT_MAX_BATCH + 1)}
+
+
 def test_multi_block_slice_stats_are_fma_accumulated():
     """S <= 8 at V = 128256 spans > 1 BLOCK per slice: `exp_sum * rescale + tl.sum(e)` is fma-contracted (7/7 fixture rows);
     the single-block case (S = 16 / 32) is unaffected -- fma(0, 0, se) == se."""
