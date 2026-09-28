@@ -54,7 +54,8 @@ Three codecs share everything above the scheme (setup, layout, `vk`, audits):
   `Pous.Model.Invertible`.
 
 The concrete primitives are those of POUS `docs/p3-instantiation.md`. Each set of parameters names its codec
-(`params.codec`), and every function that takes a codec defaults to it.
+(`params.codec`), and every function that takes a codec defaults to it. P2 (`schemes/p2.py`, experimental) is a
+`protocol.Scheme` and not a codec: see "The generic protocol".
 
 The secure-first scheme is the band graph with in-degree `d = 12` (Daniel, 28 Sep 2026, 01:10Z; POUS
 `docs/band-vs-dense.md`), superseding the dense choice of `docs/scheme-choice-e2e.md`. Dense stays selectable
@@ -160,6 +161,94 @@ is 14.4 MB. `params.LEAN_P3_MEETS` (`wc = 37`) is the instance Lean's `p3_meets`
    about 1.5% of honest 132-answer audits fail on the host clock (POUS `docs/p3-gpu-measurements.md`). The network
    allowance defaults to 0 until the verifier's RTT is measured.
 
+## The generic protocol (`protocol`, `schemes`)
+
+The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
+
+- **What a scheme supplies.** It implements `encode_segment(salt, s, w_seg)` and `decode_segment(salt, s, blocks)`, and
+  overrides `respond` only if an honest answer is more than the stored block. It also sets `name` (its byte-format
+  string), `backend` (its reference primitives) and `certificate`. As with `verity.commitments.scheme.CommitmentScheme`,
+  a scheme is named and versioned, looked up by name, and has conformance vectors pinned under its name.
+- **The registry.** `schemes.get(name, segments)` returns a registered scheme at its own parameters, or at
+  `params=` of the same name. Each scheme is one module, `schemes/<name>.py`:
+  - `band-chain/d12/v1`, the default;
+  - `dense-chain/v1`;
+  - `p3/v1`;
+  - `p2-16448/v2`, **experimental**.
+- **`protocol.Certificate`** is what an audit at the scheme's parameters establishes, Lean's
+  `Meets S .sequential D Q k ε`. It holds:
+  - `k`, `rounds` (D), `work` (Q), `call_ns`, `rho`, `delta`, `eps_log2`;
+  - `cliff`: the most rounds the structure tolerates at any `k`;
+  - `segments`: how many segments of `W` the theorem is about;
+  - `theorem`, and its open `hypotheses`;
+  - `claims`: ids in `verity.claims`' format.
+
+  At the frozen point, the band's certificates are given `ChainExPostFactoG`: k 111, D 5, Q 2^20, 483 µs, cliff at
+  `d`.
+  - One segment is `band_meets_64`.
+  - 448 segments (14 GB) is `band_meets_14`, from POUS `lean/submissions/band-multi/`, red team §47 GO. It is one
+    `Meets` for the whole store: challenges are uniform over all its blocks, the state bound is the whole store's, and
+    one permutation serves every segment.
+  - Other segment counts are gaps in the storage profile.
+
+  Dense is `chain_meets_64` given `ChainExPostFacto`, with no cliff. P2 (`schemes/p2.py`) is **experimental**:
+  - It is the squaring-based scheme: two big-integer squarings per 2,056-byte block to decode, and no hash call.
+  - It follows the P2 spec (the POUS store's `docs/efficient-crypto/p2-spec-draft.md`, draft v0) except for its
+    expander:
+    - the payload is 2,054 bytes per block, which is the spec's profile `p2-2054B`, and the manifest names it;
+    - every block, payload and key is a fixed-width, unsigned, big-endian integer;
+    - the tweak is rejection-sampled below p, never reduced.
+  - Its keys are fresh per block, expanded where they are used: ChaCha8 keyed by a 32-byte seed per segment
+    (`SHAKE256("verity/pous/p2/seed/v1" ‖ tag_s)`), with nonce = the block index. Nothing key-sized is stored, which
+    keeps the 1.05× space bound. **The proof's setup assumption, the spec's P2-EXP-IO, names SHAKE256 and not ChaCha8**
+    for these keys. SHAKE256 would cost about 12% of device throughput (an estimate). The choice goes to Daniel with P2
+    Decision 1.
+  - Its certificate is `P2MeetsM1pB19Uncond`: k 88 at 2^19 blocks (8 segments of 2^16), for every payload width in
+    range, `p2-2054B`'s among them, with no hypothesis. It is a **proposed** pin, graded PASS but not yet in the
+    trusted set. It is an abstract-M1 result, and the SMS-to-M1 instantiation assumption is pending Daniel.
+  - SeqRoot sets `call_ns`, half the fastest 16,448-bit root, and no root may fit within `Δ + RTT`.
+  - `Scheme.experimental` carries that reason. The verifier audits an experimental scheme only with
+    `experimental=True`, and its profile's statement begins with it. No experimental scheme is ever the default.
+
+  P3 has no certificate for the
+  implemented `H`. Lean's `p3_meets_64_D10_final` and `p3_meets_multi_64_D10_final` (k 117, D 10, 64 KB and 971
+  segments) are about a random-oracle `H` and an ideal tweakable `P`, while the code's `H` is the overwrite chain.
+- **`protocol.Verifier`** is `audit.TimedVerifier` at the certificate's `k`. It refuses:
+  - a `k` below the certificate's;
+  - a deadline whose effective D (calls of `call_ns` within `Δ + RTT`) exceeds the certificate's `rounds`: for the
+    band and dense, `Δ + RTT` must stay under 2.898 ms. `TimedVerifier` alone refuses only past the band's cliff, at
+    6.279 ms;
+  - a scheme with no certificate at its parameters.
+
+  `research=True` runs such an audit anyway, except past the cliff.
+- **`protocol.StorageProfile`** is what an accepted audit establishes: a server whose state held fewer than
+  `⌊rho · |C|⌋` bits passes with probability at most `delta + 2^eps_log2`, by the certificate. It also lists the
+  `gaps`, where the certificate does not cover the audit: a refusal run with `research=True`, or a segment count of `W`
+  other than the theorem's. The band's certificate is `band_meets_64` at one segment and `band_meets_14` at 448.
+  `to_json` writes `verity-pous/storage-profile/v1`.
+- **The rest:**
+  - `protocol.verifier_key(scheme, commitment, salt, mode=PRIVATE or PUBLIC, w=..., encoded=...)` builds `vk`
+    either way;
+  - `commit`, `draw_salt`, `encode`, `decode`, `decode_tensor`, `challenge_key` and `responder` wrap the modules
+    below;
+  - every coin comes from `verity.randomness` through `setup` and `audit`, and a scheme draws none.
+- **Segment tags must be injective across all segments.** This is a hard requirement of every implementation:
+  segment `s` is keyed by `tag_s = salt ‖ u64 s` (`labels.tag`), or by one salt with global indices.
+  - With a shared domain, identical segments get identical labels. An adversary storing one of them then answers every
+    challenge, and the audit accepts with probability 1: Lean's `shared_domain_breaks` makes `Meets` false for every D,
+    Q, k and ε.
+  - `segDom_inj` is the certificates' hypothesis.
+  - `tests/test_pous_protocol.py` checks it for every scheme, and replays the attack on real labels.
+  - `benchmarks/pous` gates every implementation's tags against `salt ‖ u64 s` over 448 segments.
+- **Claims.** `protocol.claim(id)` resolves an id from `verity.claims`, or from `protocol.LOCAL_CLAIMS` until core holds
+  it: `ideal-permutation`, `perfect-isolation`, `sequential-step-floor`, `feistel-indifferentiability`, and P2's
+  `m1-ideal-permutations`, `sms-m1-instantiation`, `seq-root`.
+- **Tests.** `tests/test_pous_protocol.py` runs one conformance suite over every scheme, plus a toy that implements
+  only the two methods. Each registered scheme's vectors are pinned in `tests/fixtures/schemes/<name>.json`, written
+  by `tests/pous_scheme_vectors.py`: the certificate at the registered point, and a small instance's segment digests
+  and `vk` root. `VERITY_POUS_SLOW=1` also encodes a whole band12 segment through the interface against
+  `band/64kb/segment`.
+
 ## API
 
 | Module | What it holds |
@@ -177,6 +266,8 @@ is 14.4 MB. `params.LEAN_P3_MEETS` (`wc = 37`) is the instance Lean's `p3_meets`
 | `verifier` | `VerifierKey` (`root` and leaf digests; `build`, `from_leaves`, `from_segments`), `leaf_hash` (whole or chunked blocks), `segment_leaves`, `MerkleTree` (audit paths), `verify_path` |
 | `audit` | `challenge_key`, `HonestResponder`, `TimedVerifier` and `run_timed` (wall clock; `respond` may return `(block, report)`, kept in `Answer.report`), `simulate` (oracle rounds); `k` and the adversary's call time default to the parameters' own (band and dense: 111 and 483 µs); `TimedVerifier` refuses a band deadline past the cliff |
 | `adversary` | holdings (Lean `ColState`), `schedule`, `answer_prog`, strategies, `measure`; `col_round` is Lean's `colRound` |
+| `protocol` | the generic protocol: `Scheme` (abstract), `Certificate`, `Verifier` (refuses what its certificate doesn't cover), `StorageProfile`, `PRIVATE`/`PUBLIC`, `verifier_key`, `commit`, `draw_salt`, `encode`, `decode`, `decode_tensor`, `challenge_key`, `responder`, `claim`, `LOCAL_CLAIMS` |
+| `schemes` | `band.Band`, `dense.Dense`, `p3.P3`, `p2.P2` (experimental; one module each) as `protocol.Scheme`s with their certificates; `REGISTRY`, `DEFAULT` (`band-chain/d12/v1`), `get(name, segments, params)` |
 
 **Large `W`.** Nothing above the codec holds `W` as one integer: encode each segment with `scheme.encode_segment` (the
 segments are independent, so a process pool works), feed the results to `VerifierKey.from_segments`, or pass them to
