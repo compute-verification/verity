@@ -10,7 +10,7 @@ from fractions import Fraction
 import pytest
 
 from verity_network_warden import calibration, capacity
-from verity_network_warden.schedule import ClockSync, LogicalFrame, SyncSet
+from verity_network_warden.schedule import ClockSync, LogicalFrame, SyncSet, eligible
 
 
 def synthetic_trace(seed=0, sessions=40, window_buckets=20, frames_per_session=6, gap=1, latency=(1, 4)):
@@ -107,7 +107,7 @@ def test_prover_does_not_trade_pace_for_one_bucket_of_offset():
     the 40th frame 29 buckets."""
     frames = [LogicalFrame(b"", 10, i) for i in range(40)]
     ready = [12] + [13 + i // 4 for i in range(1, 40)]
-    syncs, hands, misses = calibration.choose_syncs(frames, ready, SyncSet(tuple(range(6)), (1, 4)), 600)
+    syncs, (hands,), misses = calibration.choose_syncs([(frames, ready)], SyncSet(tuple(range(6)), (1, 4)), 600)
     assert misses == 0 and syncs == [ClockSync(3, 4)]
     assert max(h - r for h, r in zip(hands, ready)) <= 1
 
@@ -179,11 +179,124 @@ def test_step_major_order_interleaves_windows():
     assert sync["honest_miss_rate"] == 0
     assert sync["first_frame_latency_ms"]["p99"] <= 200
     lf = [LogicalFrame(b"", f["anchor"], f["index"]) for f in frames]
-    syncs, hands, misses = calibration.choose_syncs(lf, [f["ready"] for f in frames],
-                                                    SyncSet((0, 1, 2), (Fraction(1, 2), 1)), 20)
+    syncs, (hands,), misses = calibration.choose_syncs([(lf, [f["ready"] for f in frames])],
+                                                       SyncSet((0, 1, 2), (Fraction(1, 2), 1)), 20)
     assert misses == 0 and len(syncs) == 2
     assert all(h >= f["ready"] for h, f in zip(hands, frames))
     assert hands[frames.index(next(f for f in frames if f["session"] == "b"))] <= 27
+
+
+def honest_choice(links, sync_set, window_buckets):
+    """The honest prover's rule, by brute force: window by window, every value of Σ_sync, with earlier windows as chosen
+    and later ones at their most eager value. It takes the value met on every link with the least total hand time over
+    the window's frames, ties to the smaller δ and then the larger ρ, and the most lenient value when none is met."""
+    win = [[f.anchor // window_buckets for f in frames] for frames, _ in links]
+    windows = 1 + max((w for ws in win for w in ws), default=-1)
+    syncs = [ClockSync(min(sync_set.deltas), max(sync_set.rhos))] * windows
+    misses = 0
+
+    def hand_times(syncs):
+        out = []
+        for frames, _ in links:
+            h, hs = 0, []
+            for f in frames:
+                h = max(eligible(f, syncs[f.anchor // window_buckets]), h)
+                hs.append(h)
+            out.append(hs)
+        return out
+
+    for w in range(windows):
+        if not any(w in ws for ws in win):
+            continue
+        best = None
+        for s in sync_set:
+            hands = hand_times(syncs[:w] + [s] + syncs[w + 1 :])
+            mine = [(h, r) for (_, ready), hs, ws in zip(links, hands, win) for h, r, x in zip(hs, ready, ws) if x == w]
+            if all(r <= h for h, r in mine) and (best is None or (sum(h for h, _ in mine), s.delta, -s.rho) < best[0]):
+                best = ((sum(h for h, _ in mine), s.delta, -s.rho), s)
+        misses += best is None
+        syncs[w] = ClockSync(max(sync_set.deltas), min(sync_set.rhos)) if best is None else best[1]
+    actual = []
+    for (_, ready), hs in zip(links, hand_times(syncs)):
+        a, out = 0, []
+        for h, r in zip(hs, ready):
+            a = max(h, r, a)
+            out.append(a)
+        actual.append(out)
+    return syncs, actual, misses
+
+
+def random_link(rng, window_buckets):
+    """One egress link's frames in step-major order: sessions admitted in anchor order, each producing one frame per step
+    from its anchor, ready after a random latency and random gaps, with an occasional stall."""
+    frames = []
+    for s, anchor in enumerate(sorted(rng.randrange(3 * window_buckets) for _ in range(rng.randint(0, 5)))):
+        ready = anchor + rng.randint(0, 3)
+        for i in range(rng.randint(1, 6)):
+            if i:
+                ready += rng.choice((0, 1, 1, 2, 3)) + (rng.randint(4, 9) if rng.random() < 0.1 else 0)
+            frames.append((anchor + i, s, LogicalFrame(b"", anchor, i), ready))
+    frames.sort(key=lambda x: x[:2])
+    return [f for _, _, f, _ in frames], [r for *_, r in frames]
+
+
+def test_the_prover_follows_its_rule_on_random_units():
+    """`choose_syncs` gives `honest_choice`'s syncs, hand times and misses on random step-major units of one to three
+    egress links, stalls included. On one link, as in every configuration of the recorded traces, the rule is the
+    per-link rule it replaced; on several, some link's own choice differs from the joint one."""
+    rng = random.Random(12)
+    rhos = (Fraction(1, 3), Fraction(1, 2), Fraction(2, 3), Fraction(1), Fraction(3, 2), Fraction(2))
+    missed = moved = 0
+    for _ in range(400):
+        T = rng.randint(2, 6)
+        sync_set = SyncSet(tuple(rng.sample(range(6), rng.randint(1, 3))), tuple(rng.sample(rhos, rng.randint(1, 3))))
+        links = [random_link(rng, T) for _ in range(rng.randint(1, 3))]
+        syncs, hands, misses = calibration.choose_syncs(links, sync_set, T)
+        assert (syncs, hands, misses) == honest_choice(links, sync_set, T)
+        missed += misses > 0
+        for frames, ready in links:
+            alone = calibration.choose_syncs([(frames, ready)], sync_set, T)[0]
+            moved += any(alone[w] != syncs[w] for w in {f.anchor // T for f in frames})
+    assert missed > 20 and moved > 20
+
+
+def two_link_trace():
+    """One configuration with two egress links, a and b, at T = 2, and a second configuration that fixes Σ_sync's top ρ
+    at 1. At 2 offsets and 2 rates Σ_sync is δ ∈ {0, 1}, ρ ∈ {2/3, 1}.
+    - a's one frame is ready a bucket after its anchor, so window 0 needs δ = 1 on a.
+    - b's first session (window 0) is met by (0, 2/3), its least hand time alone, which hands its last frame at 6; or
+      by (1, 1), which hands it at 5. Its second session (window 1) has its second frame ready at 6, and window 1's
+      values reach only bucket 4 for it, so it is met only behind a frame handed at 6."""
+    b = ([{"session": "b1", "index": i, "anchor": 0, "ready": r} for i, r in enumerate([0, 1, 2, 3, 5])]
+         + [{"session": "b2", "index": i, "anchor": 2, "ready": r} for i, r in enumerate([3, 6, 6, 7, 9])])
+    unit = {"name": "unit", "egress": [{"link": "a", "frames": [{"session": "a1", "index": 0, "anchor": 0, "ready": 1}]},
+                                       {"link": "b", "frames": b}]}
+    return {"bucket_ms": 100, "window_buckets": 2, "frame_bytes": 4096, "queue_capacity": 4096,
+            "configurations": [unit, paced_configuration("pace", Fraction(1), 3, window_buckets=2)]}
+
+
+def test_one_clock_for_two_links_raises_the_miss_rate():
+    """The prover picks one sync per window for all of a configuration's egress links. Link by link, a takes (1, 1) and
+    b takes (0, 2/3) in window 0, and neither misses. Together they take (1, 1), the value met on both with the least
+    total hand time. That hands b's last window-0 frame at 5, not 6, so window 1 misses. Over the two configurations'
+    6 windows the reported miss rate is 1/6, where link by link it was 0."""
+    trace = two_link_trace()
+    report = calibration.calibrate(trace, n_delta=2, n_rho=2)
+    sync = report["clock_sync"]
+    assert sync["deltas"] == [0, 1] and sync["rhos"] == ["2/3", "1"]
+    sync_set = SyncSet((0, 1), (Fraction(2, 3), 1))
+    a, b = [([LogicalFrame(b"", f["anchor"], f["index"]) for f in link["frames"]], [f["ready"] for f in link["frames"]])
+            for link in trace["configurations"][0]["egress"]]
+    assert calibration.choose_syncs([a], sync_set, 2) == ([ClockSync(1, 1)], [[1]], 0)
+    alone, (b_alone,), b_misses = calibration.choose_syncs([b], sync_set, 2)
+    assert alone == [ClockSync(0, Fraction(2, 3)), ClockSync(1, Fraction(2, 3))] and b_misses == 0
+    assert b_alone[4] == 6
+    syncs, (_, b_hands), misses = calibration.choose_syncs([a, b], sync_set, 2)
+    assert syncs == [ClockSync(1, 1), ClockSync(1, Fraction(2, 3))] and misses == 1
+    assert b_hands[4] == 5
+    assert sync["honest_miss_rate"] == 1 / 6 and not sync["meets_target"]
+    per_link = {e["link"]: (e["honest_windows"], e["honest_misses"]) for e in report["egress"]}
+    assert per_link == {"a": (2, 1), "b": (2, 1), "responses": (4, 0)}
 
 
 def test_ingress_from_timestamps():

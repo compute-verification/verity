@@ -13,6 +13,7 @@ import itertools
 import math
 import random
 from fractions import Fraction
+from types import SimpleNamespace
 
 import pytest
 
@@ -128,6 +129,19 @@ def test_window_grid_reads_only_earlier_syncs():
             assert expected_grids(frames, syncs[: w + 1] + later, params)[w] == grids[w]
 
 
+def test_a_negative_logical_index_is_rejected():
+    """Lean's index is a ℕ, and SecurityProofs.ExpectedRowCausal needs it. A frame anchored in window 1 with λ = −2 is
+    eligible at T + δ − 2 at ρ = 1, so window 0's grid would read window 1's sync: here it holds the frame under δ = 0
+    and not under δ = 2. `LogicalFrame` rejects that index."""
+    with pytest.raises(ValueError, match="logical index is non-negative"):
+        LogicalFrame(b"x", P.buckets, -2)
+    unchecked = SimpleNamespace(payload=b"x", anchor=P.buckets, index=-2)
+    window0 = {tuple(expected_grids([unchecked], [ClockSync(0, 1), later], P)[0])
+               for later in (ClockSync(0, 1), ClockSync(2, 1))}
+    assert len(window0) == 2
+    assert LogicalFrame(b"x", P.buckets, 0).index == 0
+
+
 def test_fixed_clock_zero_capacity():
     """SecurityProofs.EncardAccSeqsLeFixedClock, for the constant-rate Program
     SecurityProofs.EncardAccSeqsLeConstantRateFixedClock: with a fixed clock, every accepted run shows the same grids."""
@@ -232,6 +246,9 @@ def test_sync_set_lists_each_value_once():
 def test_doc_numbers():
     s = SyncSet(tuple(range(16)), tuple(range(1, 9)))
     assert s.size == 128 and s.bits == 7
+    # the block cap with one block: below the advice cap at T = 2, r = 1, W = 3, and far above it at T = 600
+    assert capacity.left_packed_patterns(2, 1) ** 3 == 64 < s.size**3 == 2_097_152
+    assert capacity.envelope_bits(600, 1) == 600 > s.bits == capacity.envelope_bits(7, 1)
     assert math.isclose(capacity.ingress_rate(64), 60.2, rel_tol=1e-3)
     assert math.isclose(capacity.ingress_rate(64, 1000), 6.02, rel_tol=1e-3)
     two_links_hour = (capacity.ingress_rate(64) + capacity.ingress_rate(1024)) * 3600
