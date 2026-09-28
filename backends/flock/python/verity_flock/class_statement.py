@@ -21,8 +21,9 @@ M0's statement proves a template's identical units with every instance's input r
   digest and the program's SHA-512 (an owner-function partition, which no record can name, binds the SHA-512 of its description
   under the tag ``verity/flock/experimental-owners``).
 
-This is a synthetic layout, not the scheme's layout rule over the partition (which is not specified yet), and M0's statement
-publishes the declared outputs, where a partition's unit outputs are committed values.  Every class is one plain
+This is a synthetic layout, not the scheme's layout rule over the partition (which is not specified yet). M0's statement commits
+the outputs as hidden rows like the inputs (one ``out`` row per instance, its ``b || c`` public), so a partition's unit outputs
+are committed values whose row a reading unit can open.  Every class is one plain
 Boolean circuit, with no slot type other than M0's row slots: a unit's pinned-table reads (MUFU) are laid out inline as ordinary
 rows by `ir_lower.layout` (the one-hot construction; 154-309 M matrix entries per read, about 20 B of prover memory each), and each
 record carries the class's table reads and its unit's matrix entries.  `distinct_calls` builds a served row's workload from its program graph:

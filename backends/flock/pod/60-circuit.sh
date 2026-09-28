@@ -6,7 +6,7 @@
 #   MODE=bench      loopback sessions (a verifier process on 127.0.0.1 serving its own public file) at each of POINTS
 #   MODE=build      nothing more
 # env: SELF_N=4  POINTS="64 256"  WARM=1 RUNS=3  GPU=1  SM (from nvidia-smi)  CPU_SELF=1 (0: skip the CPU selftest)
-#      RECORD=1 (selftest: every case's server record and proofs under out/<set>/records-{cpu,gpu})
+#      RECORD=1 (selftest: every case's server record and proofs under out/<set>/records-{cpu,gpu})  TYPED=1 (the typed statement)
 #      ZK=1 (selftest: M1's --zk statement, and zkaudit on the device's proofs)  MODES="m0 zk" (bench: each point in each mode;
 #      zkseq: --zk with the host's zk work not overlapped, FC_ZK_SEQUENTIAL)  FC_COINS=os (bench: m0's sessions on per-round OS
 #      coins, no seed and no PRF; seed: the binary's default; a selftest build always seeds)
@@ -14,7 +14,7 @@ for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 export FC_COINS=${FC_COINS:-os}
 REPO=$(pwd); I=${RESEARCH_RUN_DIR:-/tmp/fc}/inputs; O=${RESEARCH_RUN_DIR:-/tmp/fc}/out; W=${FLOCK_WORK:-/workspace}/flock-circuit; mkdir -p $O $W
-MODE=${MODE:-selftest}; G=${GPU:-1}; Z=; [ "${ZK:-0}" = 1 ] && Z=--zk
+MODE=${MODE:-selftest}; G=${GPU:-1}; Z=; [ "${ZK:-0}" = 1 ] && Z=--zk; TY=; [ "${TYPED:-0}" = 1 ] && TY=--typed
 SM=${SM:-$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1 | tr -d .)}; SM=${SM:-90}
 MODE=build GPU=$G SM=$SM bash backends/flock/pod/20-gpu-link.sh > $O/build.log 2>&1 || { tail -30 $O/build.log; exit 1; }
 source $HOME/.cargo/env; C13=${CUDA_TK:-/usr/local/cuda-13.3}; export PATH=$C13/bin:$PATH NVCC=$C13/bin/nvcc LD_LIBRARY_PATH=$C13/compat:$C13/lib64:${LD_LIBRARY_PATH:-}
@@ -44,7 +44,7 @@ for tarf in $I/*.tar; do
   SET=$(dirname $(find $S -name manifest.json | head -1)); D=$O/$t; mkdir -p $D
   if [ "$MODE" = selftest ]; then
     N=${SELF_N:-4}
-    python3 -m verity_flock.circuit --input-set $SET --n $N --out $D/stage > $D/stage.json 2> $D/stage.err || { tail -3 $D/stage.err; continue; }; cat $D/stage.json
+    python3 -m verity_flock.circuit $TY --input-set $SET --n $N --out $D/stage > $D/stage.json 2> $D/stage.err || { tail -3 $D/stage.err; continue; }; cat $D/stage.json
     if [ "${CPU_SELF:-1}" = 1 ]; then
       $B selftest $Z --instances $D/stage/inst-$N.bin --circuit $D/stage/circuit.txt --tables $D/stage/tables --forged $D/stage/circuit-forged.txt ${RECORD:+--record-dir $D/records-cpu} > $D/selftest-cpu.txt 2> $D/selftest-cpu.err
       grep SELFTEST $D/selftest-cpu.txt; grep '"pass":false' $D/selftest-cpu.txt | cut -c1-300
@@ -57,7 +57,7 @@ for tarf in $I/*.tar; do
     fi
   fi
   if [ "$MODE" = bench ]; then
-    python3 -m verity_flock.circuit --input-set $SET --n ${POINTS:-64} --out $D/stage | tee $D/stage.json || exit 1
+    python3 -m verity_flock.circuit $TY --input-set $SET --n ${POINTS:-64} --out $D/stage | tee $D/stage.json || exit 1
     PIN=$(sha512sum $D/stage/circuit.txt | cut -d' ' -f1)
     for n in ${POINTS:-64}; do for md in ${MODES:-m0}; do
       Zb=; [ $md = zk ] && Zb=--zk; ENVP=; [ $md = zkseq ] && { Zb=--zk; ENVP=FC_ZK_SEQUENTIAL=1; }
