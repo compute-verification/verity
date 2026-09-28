@@ -470,6 +470,22 @@ def test_a_recorded_run_refuses_to_skip_the_store(monkeypatch):
     monkeypatch.setenv("VERITY_SKIP_STORE", "1")
     assert CHECK.main([]) == 2
 
+def test_circuit_check_has_the_whole_slot_only_when_neither_pytest_nor_lean_runs_beside_it(tmp_path, monkeypatch):
+    """12 Oct 17:41Z: an unsharded check (r20261012-155204-6475) gave circuit-check the slot's whole 560 GiB while pytest and
+    lean-audit held 160 to 350 GiB beside it, and the kernel OOM-killed a 141 GiB circuit-check worker."""
+    monkeypatch.setattr(CHECK, "FLOCK_LEAN", tmp_path / "verifier-lean")
+    monkeypatch.setattr(CHECK, "memory_gb", lambda: 2048)
+    monkeypatch.setenv(CHECK.SLOT.SLOT_MEM_ENV, "560")
+
+    def mem(only):
+        [cc] = [s for g in CHECK.groups(tmp_path, 16, only=only) for s in g if s[0] == "circuit-check"]
+        return cc[1][cc[1].index("--mem-gb") + 1]
+
+    assert mem(None) == mem(["circuit-check", "pytest"]) == mem(["circuit-check", "lean-build"]) == "210"
+    assert mem(["flock-circuit-build", "circuit-check", "flock-rust-tests"]) == "560"
+    assert CHECK.cc_mem_gb(400, True) == 100 and CHECK.cc_mem_gb(100, True) == 25
+
+
 def test_the_groups_split_the_cores_and_run_at_once(tmp_path, monkeypatch):
     monkeypatch.setattr(CHECK, "FLOCK_LEAN", tmp_path / "verifier-lean")
     monkeypatch.setattr(CHECK, "memory_gb", lambda: 2048)
@@ -477,7 +493,7 @@ def test_the_groups_split_the_cores_and_run_at_once(tmp_path, monkeypatch):
     assert "--mem-gb" not in CHECK.groups(tmp_path, 16)[1][1][1]
     monkeypatch.setenv(CHECK.SLOT.SLOT_MEM_ENV, "560")
     (pt,), (build, cc, rust), (lean,) = CHECK.groups(tmp_path, 16)
-    assert cc[1][cc[1].index("--mem-gb") + 1] == "560", "a slot's mem= caps circuit-check's own budget"
+    assert cc[1][cc[1].index("--mem-gb") + 1] == "210", "a slot's mem=, less what pytest and Lean hold beside it, caps circuit-check"
     assert build[0] == "flock-circuit-build" and build[1][-1].endswith("verity/ml/flock/check_build.sh")
     assert rust[0] == "flock-rust-tests" and rust[1][-2:] == [build[1][-1], "test"] and "CARGO_BUILD_JOBS=8" in rust[1]
     assert pt[1][1].endswith("tools/verity/check/suites.py") and pt[1][pt[1].index("--jobs") + 1] == "8" and "--fresh" not in pt[1]
@@ -724,6 +740,47 @@ def test_a_build_that_fails_without_compiling_does_not_halt(tmp_path, monkeypatc
     _fake_run(monkeypatch, [[("flock-circuit-build", build, tmp_path)]])
     passed, (rec,) = CHECK.run(tmp_path, 1, keep_going=True)
     assert not passed and rec["status"] == "failed" and "halts" not in rec
+
+
+def test_a_cancelled_recorded_check_still_publishes_the_passes_its_steps_stored(tmp_path, monkeypatch):
+    """`research cancel`'s SIGTERM while `slow` runs (the FIFO): `slow` is stopped, `after-slow` never starts, and the run still
+    writes its result, `not_run`, with the pack of the pass `passes` stored before it, and exits 143.  Before, the signal killed
+    check.py, and a cancelled check's passes (6f10's 26 minutes, 12 Oct) were run again."""
+    import json
+    import os
+    import signal
+    import tarfile
+    import threading
+
+    gate, marker = _gate(tmp_path, monkeypatch), tmp_path / "never-ran"
+    run_dir, cache = tmp_path / "run", tmp_path / "tests-cache"
+    run_dir.mkdir()
+    for k, v in (("RESEARCH_RUN_DIR", run_dir), ("RESEARCH_RUN_ID", "r20261012-000000-abcd"), ("VERITY_TEST_CACHE", cache),
+                 ("CHECK_CACHE", tmp_path / "check-cache")):
+        monkeypatch.setenv(k, str(v))
+    monkeypatch.setattr(CHECK.SUITES, "foreign", lambda members, env: None)
+    passes = _py("import pathlib, sys\np = pathlib.Path(sys.argv[1])\np.parent.mkdir(parents=True)\np.write_text('{}')",
+                 cache / "pkg" / "k1.json")
+    slow = _py("import signal, sys\nwith open(sys.argv[1], 'w') as f:\n    f.write('x')\nsignal.pause()", gate)
+    _fake_run(monkeypatch, [[("passes", passes, tmp_path), ("slow", slow, tmp_path),
+                             ("after-slow", _py("open(__import__('sys').argv[1], 'w')", marker), tmp_path)]])
+
+    def cancel():
+        with open(gate) as f:
+            f.read(1)
+        os.kill(os.getpid(), signal.SIGTERM)
+
+    threading.Thread(target=cancel, daemon=True).start()
+    assert CHECK.main([]) == 143
+    assert signal.getsignal(signal.SIGTERM) is not CHECK._terminated
+    doc = json.loads((run_dir / "result.json").read_text())
+    by = {s["step"]: s for s in doc["steps"]}
+    assert by["passes"]["status"] == "passed" and by["slow"]["status"] == "stopped"
+    assert by["slow"]["detail"] == "stopped: check got SIGTERM" and "after-slow" not in by and not marker.exists()
+    assert doc["validation"]["status"] == "not_run" and doc["validation"]["detail"].startswith("stopped by SIGTERM: ")
+    assert "verdicts.tar.gz" in doc["artifacts"] and doc["verdicts"]["out"]["entries"] == 1
+    with tarfile.open(run_dir / "verdicts.tar.gz") as tar:
+        assert tar.getnames() == ["tests/pkg/k1.json"]
 
 
 def test_under_keep_going_only_a_halting_step_stops_the_run_and_it_is_named(tmp_path):
