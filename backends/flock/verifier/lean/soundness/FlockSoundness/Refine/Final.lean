@@ -586,4 +586,32 @@ theorem final_refines {p : LigeritoProof} {basisAt : Array F256 → ℕ → Arra
     rw [gOf_consTerm (n + 1) ext levels hl cs y hy hc (by omega) (hpos cs hcs')]
     simp only [consOf]
 
+/-- **Ligerito refines the model's** (§13.3–§13.6). When the executable's Ligerito verifier accepts, and its basis
+`basisAt` is the model's `bHat` of `b` at every original point with the schedule's residual (`hbasis`), the model's
+compiled Ligerito, played with the proof's messages and the rounds consumed, accepts at the openings `o`: its verdict
+there is true, its caps are the proof's, and every request passed the executable's Merkle check. -/
+theorem ligerito_accepts {D : Type} (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (cap : Array ByteArray)
+    (p : LigeritoProof) (basisAt : Array F256 → ℕ → Array F256) (r : ℕ) (b : ℕ → 𝔽)
+    (capD : Array ByteArray → Cap D) (o : Opens 𝔽 D) (hdim : DimSeam sch)
+    (hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default))
+    (ho : ∀ ℓ < sch.levels.size, ∀ j < (sch.levels.getD ℓ default).q,
+      (o r ℓ j).1 = ((openAt p (sch.levels.size - 1) ℓ).1)[j]!.toList.map fOf)
+    (hbasis : ∀ (orig : Array F256) (y : ℕ), orig.size + sch.ext = sch.m - 7 → y < 2 ^ sch.ext →
+      gOf (basisAt orig sch.ext)[y]! = Model.bHat execArith (sch.m - 7) b (orig.toList.map gOf ++ bitsK sch.ext y))
+    {t t' : Transcript} (hwf : RoundsWF t.rounds) (h : Flock.ligerito ms sch T cap p basisAt t = .ok ((), t')) :
+    ∃ pend : PendL 𝔽 D, t'.rounds = t.rounds ∧ t.k ≤ t'.k ∧
+      Plays fOf (Model.ligeritoC execArith r (schedOf sch) (fOf T) b) (ligMsgs p capD sch)
+        (consumed t.rounds t.k t'.k) pend ∧
+      pend.caps = (List.range (sch.levels.size - 1)).map (fun j => capD p.recursiveCaps[j]!) ∧
+      (∀ req ∈ pend.reqs, ReqOK ms sch cap p req) ∧ pend.verdict o = true := by
+  obtain ⟨pend, initCh, levels, stF, stF', tF, hr, hk, hpl, hcaps, hreqs, -, -, hlanes, hyr, hpos, hfin, hver⟩ :=
+    ligerito_refines ms sch T cap p basisAt r b capD o hdim hlv ho hwf h
+  have hn7 := hdim.1
+  obtain ⟨-, -, horig, -⟩ := finalProg_ok hfin
+  obtain ⟨rfl, hfc⟩ := final_refines (n := sch.n) b hlanes hyr hpos
+    (fun y hy => by rw [hn7]; exact hbasis _ y (by omega) hy) hfin
+  refine ⟨pend, hr, hk, hpl, hcaps, hreqs, ?_⟩
+  rw [hver, ← hn7]
+  exact hfc
+
 end FlockSoundness.Refine
