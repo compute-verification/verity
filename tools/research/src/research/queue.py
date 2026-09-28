@@ -17,7 +17,8 @@ on a `Lane {name}` line, else the Cursor agent id its body carries.  The rules f
 `main`, `tools/check/queue.toml` until the repository move, or `--rules`) says which grants a change needs: a role for changed files
 under listed paths (`merge_requires`' syntax, `!` patterns included), or for a change to listed sections of any `lean-audit.json`
 (`pins`, `reads`).  A grant is a store label `grant = {role}` on the target `pr:{number}@{head sha}`, so a new push needs new
-grants.
+grants.  Grants and ready are read after pulling the target's labels from the store's remote; when that pull fails the local
+labels decide, so a grant only the remote has keeps the PR waiting.
 
 `next`.  Its first-parent chain above `main` is the queue, and each merge commit's trailers name its PR, head and owner: git holds
 the queue's state.  A sync keeps the longest prefix of that chain which still matches the admitted PRs (same PR, same head, same
@@ -212,11 +213,7 @@ class StoreGrants:
         from .store import labels_sync
 
         target = grant_target(pr, head)
-        if self.store.remote is not None:
-            try:
-                labels_sync.pull_targets(self.store, [target])
-            except Exception as e:  # noqa: BLE001  (the local labels still answer; say they may be behind)
-                self.log(f"research queue: pulling the labels of {target} failed ({type(e).__name__}: {e}); using the local labels")
+        labels_sync.read_through(self.store, [target], lambda s: self.log(f"research queue: {s}"))
         return self.store.labels(target, key=key)
 
 

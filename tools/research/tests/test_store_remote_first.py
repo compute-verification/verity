@@ -424,3 +424,31 @@ def test_a_replica_head_that_fails_every_try_is_named_by_key(env, monkeypatch):
     rep = PA.run(here.root, env / "fresh")
     why = rep["replicas"]["not_confirmed"][art]
     assert not rep["ok"] and why.startswith("objects/sha256/") and "HEAD failed after its retries" in why
+
+
+def test_labels_pulls_the_targets_assertions_first_and_an_unreachable_remote_answers_from_local(env, monkeypatch, capsys):
+    head = "0123456789abcdef" * 2 + "01234567"
+    pr12, pr13 = f"pr:12@{head}", f"pr:13@{head}"
+    reviewer = LocalStore(env / "reviewer")
+    for t in (pr12, pr13):
+        reviewer.add_label(t, "grant", "red-team", "red-team-flock-3", ts="2026-09-29T05:30:00Z")
+    assert LS.push_targets(reviewer, [pr12, pr13])["failed"] == []
+    LocalStore().add_label(pr12, "ready", True, "lane-12", ts="2026-09-29T05:31:00Z")         # asserted here, never pushed
+    assert main(["labels", pr12]) == 0
+    out = capsys.readouterr()
+    assert out.out.splitlines() == ["2026-09-29T05:30:00Z  grant=red-team  by red-team-flock-3", "2026-09-29T05:31:00Z  ready=true  by lane-12"]
+    assert out.err == ""
+    assert main(["labels", pr12, "--json"]) == 0 and len(json.loads(capsys.readouterr().out)) == 2, "pulled once, nothing doubled"
+    assert sorted(lab.key for lab in LocalStore().labels(pr12)) == ["grant", "ready"] and LocalStore().labels(pr13) == []
+
+    real = LocalStore.remote.fget
+    monkeypatch.setattr(LocalStore, "remote", property(lambda self: Broken(real(self))))
+    assert main(["labels", pr13]) == 0
+    err = capsys.readouterr().err
+    assert f"labels of {pr13}: pulling from fs:" in err and "failed (OSError: injected: endpoint unreachable); answering from the local labels" in err
+    assert f"no labels on {pr13}" in err
+    monkeypatch.setattr(LocalStore, "remote", property(real))
+    (env / "store.toml").write_text("[remote\n")
+    assert main(["labels", pr12]) == 0
+    out = capsys.readouterr()
+    assert "the remote is unusable here (" in out.err and "ready=true  by lane-12" in out.out

@@ -204,6 +204,25 @@ def pull_targets(store: LocalStore, targets: list[str]) -> dict:
     return rep
 
 
+def read_through(store: LocalStore, targets: list[str], warn: Callable[[str], None]) -> dict | None:
+    """Before an answer from the local labels of `targets` (`research data labels`, the merge queue's grants): `pull_targets` from
+    the remote.  The report, or None with a warning when the pull failed or the configured remote is unusable here, and None with
+    no remote configured.  A failed pull never adds anything, so a gate deciding on what is local stays exactly as strict."""
+    r = store.remote
+    if r is None:
+        if why := getattr(store, "remote_error", None):
+            warn(f"labels of {', '.join(targets)}: the remote is unusable here ({why}); answering from the local labels")
+        return None
+    try:
+        rep = pull_targets(store, targets)
+    except Exception as e:  # noqa: BLE001  (an unreachable remote: the local labels still answer)
+        warn(f"labels of {', '.join(targets)}: pulling from {r.describe()} failed ({type(e).__name__}: {e}); answering from the local labels")
+        return None
+    for bad in rep["bad"]:
+        warn(f"labels: skipped a bad remote assertion: {bad}")
+    return rep
+
+
 def verify_targets(store: LocalStore, targets: list[str]) -> dict:
     """The labels leg of the durability gate: for each target, every local assertion must be listed on the remote and HEAD back with
     its canonical size.  Nothing is uploaded.  Assertions that exist only on the remote count as `remote_only` (not a failure: another

@@ -23,6 +23,7 @@
   research data select [--kind K] [--where meta.key=value]... [--tool T] [--derivation D] [--attempt R] [--label k=v]... [--json]
   research data snapshot --name NAME (--members art:... | --select <select flags>) [--note TEXT]   -> art id
   research data labels TARGET [--history] [--key K] [--by PAT] [--remote] [--json]
+                                                   first pulls TARGET's assertions the remote has and this store lacks (unreachable: a warning, the local ones);
                                                    --remote: each assertion marked both / LOCAL ONLY (not durable) / REMOTE ONLY; exit 1 if any local only
   research data label  TARGET KEY VALUE --by WHO [--ref REF] [--value-json] [--off-vocab]
                                                    writes the canonical key/spelling in the vocabulary's form (zk true -> a real boolean, batch -> B,
@@ -415,9 +416,10 @@ def _fmt_label_value(v) -> str:
 
 
 def cmd_labels(argv: list[str]) -> int:
-    """`--remote` is the durability view (`labels_sync.compare`): every assertion about TARGET on either side, marked `both`,
-    `LOCAL ONLY` (not durable: `research data push` repairs) or `REMOTE ONLY` (asserted elsewhere; `labels-sync` / `reindex --remote`
-    brings it here).  Exit 1 when any local assertion is not on the remote."""
+    """TARGET's assertions, after pulling the ones the remote has and this store lacks (`labels_sync.read_through`; unreachable:
+    a warning, and the local ones).  `--remote` is the durability view (`labels_sync.compare`): every assertion about TARGET on
+    either side, marked `both`, `LOCAL ONLY` (not durable: `research data push` repairs) or `REMOTE ONLY` (asserted elsewhere;
+    `labels-sync` / `reindex --remote` brings it here).  Exit 1 when any local assertion is not on the remote."""
     ap = _ap("labels")
     ap.add_argument("target")
     ap.add_argument("--history", action="store_true", help="every assertion in ts order (default: the latest per key and asserter)")
@@ -446,7 +448,11 @@ def cmd_labels(argv: list[str]) -> int:
             print(f"{ns.target}: {n['both']} on both, {n['local']} local only, {n['remote']} remote only ({st.remote.describe()})"
                   + ("  -- NOT durable: `research data push` repairs" if n["local"] else ""), file=sys.stderr)
         return 1 if n["local"] else 0
-    labs = LocalStore(ns.store).labels(ns.target, key=ns.key, by_glob=ns.by)
+    from . import labels_sync as LS  # noqa: PLC0415
+
+    st = LocalStore(ns.store)
+    LS.read_through(st, [ns.target], lambda s: print(f"research data labels: {s}", file=sys.stderr))
+    labs = st.labels(ns.target, key=ns.key, by_glob=ns.by)
     if not ns.history:
         latest = {}
         for lab in labs:
