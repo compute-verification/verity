@@ -402,18 +402,19 @@ def test_archived_and_unsupported_configurations(store: LocalStore) -> None:
 
 
 def test_table1_carries_the_security_properties(store: LocalStore) -> None:
-    assert {c.id for c in V.CONFIGURATIONS} == {v.id for v in V.D.VARIANTS} | {V.FLOCK_CONFIG.id, V.FLOCK_VLLM_CONFIG.id, V.FLOCK_CIRCUIT_CONFIG.id}
+    assert {c.id for c in V.CONFIGURATIONS} == {v.id for v in V.D.VARIANTS} | {V.FLOCK_CONFIG.id, V.FLOCK_VLLM_CONFIG.id, V.FLOCK_CIRCUIT_CONFIG.id,
+                                                                         V.FLOCK_CIRCUIT_TYPED_CONFIG.id}
     full = {c.id for c in V.CONFIGURATIONS if c.full_relation}
     assert full == {"B-Ligero + Poseidon2 per row", "B-Ligero + Poseidon2 shared 64x64 tile", "B-Ligero + BLAKE3 in circuit",
                     "B-Ligero + SHA-256 in circuit", "B-Ligero + vllm-v1 SHA-256 in circuit", "B-Ligero + Ajtai n=64",
                     "B-Ligero + Ajtai n=128", "SP1 stock, committed (frame-v3 SHA-256 rows)",
                     "SP1 stock, committed (vllm-v1 SHA-256 position leaves)", "Flock (flock-128-r2, live coins)", V.ROUTE_A,
-                    V.FLOCK_VLLM_CONFIG.id, V.FLOCK_CIRCUIT_CONFIG.id}
+                    V.FLOCK_VLLM_CONFIG.id, V.FLOCK_CIRCUIT_CONFIG.id, V.FLOCK_CIRCUIT_TYPED_CONFIG.id}
     assert [c.id for c in V.CONFIGURATIONS if c.full_relation and not c.scheme_problem()] == [
         "B-Ligero + Poseidon2 per row", "B-Ligero + BLAKE3 in circuit", "B-Ligero + SHA-256 in circuit",
         "B-Ligero + vllm-v1 SHA-256 in circuit", V.ROUTE_A, "SP1 stock, committed (frame-v3 SHA-256 rows)",
         "SP1 stock, committed (vllm-v1 SHA-256 position leaves)", "Flock (flock-128-r2, live coins)", V.FLOCK_VLLM_CONFIG.id,
-        V.FLOCK_CIRCUIT_CONFIG.id]
+        V.FLOCK_CIRCUIT_CONFIG.id, V.FLOCK_CIRCUIT_TYPED_CONFIG.id]
     assert all(c.interaction for c in V.CONFIGURATIONS)
     assert all(x.basis.startswith(("proven", V.MACHINE_CHECKED, "conjectured")) for c in V.CONFIGURATIONS for x in c.proximity)
     assert all(c.proximity and c.hashes and c.dominant_term for c in V.CONFIGURATIONS)
@@ -1577,3 +1578,42 @@ def test_m0_generic_circuit_cells_take_their_own_c_flock_row() -> None:
     assert "one query row" in cfg.ports and "one output coordinate" in cfg.ports
     words = " ".join((cfg.ports, cfg.commitment, cfg.zk)).lower()
     assert "private" not in words and "hiding" not in words
+
+
+def test_a_typed_circuit_cell_takes_its_own_row_and_backend() -> None:
+    """red-team-flock-3's Q4 (#281): the typed id has its own row naming the id and its pin, and names its verifier; it is the
+    same C-Flock interactive backend proving another statement."""
+    typed, flat = V.FLOCK_CIRCUIT_TYPED_CONFIG, V.FLOCK_CIRCUIT_CONFIG
+    fp = {"statement": V.CIRCUIT_TYPED, "software": {"backend": {"name": "flock-circuit", "circuit_format": "flock-circuit/types"}}}
+    assert V.configuration_of({"workload_fingerprint": fp}) is typed
+    assert V.configuration_of({"workload_fingerprint": {**fp, "statement": V.CIRCUIT_FLAT}}) is flat
+    assert typed.family == flat.family and typed.full_relation and typed.scheme_problem() is None
+    assert V.CIRCUIT_TYPED in typed.id and V.CIRCUIT_TYPED in typed.pin and "per instance" in typed.pin
+    assert V.backend_of(typed) == V.backend_of(flat) == "C-interactive"      # one backend, two statements
+    assert "Rust live verifier" in typed.zk and "no Lean replay" in typed.zk
+
+
+def test_no_typed_cell_says_it_computes_its_type_before_c2() -> None:
+    """C2 (#277 and #268 on main, the typed path calling #268's checks) is not met: nothing rendered claims it."""
+    assert V.TYPED_C2 is False
+    rendered = V.render_markdown(V.Views(rules=V.SPEC)) + repr(V.FLOCK_CIRCUIT_TYPED_CONFIG)
+    assert "computes its type" not in rendered
+    fp = {"statement": V.CIRCUIT_TYPED, "ands_per_instance": 33117, "ands_counted": "tensor-core units + tail",
+          "verifier": {"accepted_by": "flock-circuit serve: the Rust live verifier (flock-live R1-R8); no Lean replay in this run"}}
+    assert V.circuit_facts({"workload_fingerprint": fp})["computes_its_type"] is False
+
+
+def test_circuit_ands_are_labelled_by_their_convention() -> None:
+    """ANDs per instance are the tensor-core units + tail on both statements since #281 (GEMM k64: 33,117); a flat result recorded
+    before it counted the units only (33,040) and says so; the rows' SHA-512 and hm96 are proved but not counted."""
+    new = {"statement": V.CIRCUIT_TYPED, "ands_per_instance": 33117, "rows_per_instance": 52, "ands_counted": "tensor-core units + tail: ...",
+           "verifier": {"accepted_by": "flock-circuit serve: the Rust live verifier (flock-live R1-R8); no Lean replay in this run"}}
+    f = V.circuit_facts({"workload_fingerprint": new})
+    assert (f["ands_per_instance"], f["ands_label"]) == (33117, "ANDs per instance: tensor-core units + tail")
+    assert f["accepted_by"].startswith("flock-circuit serve: the Rust live verifier") and "proved but not counted" in f["not_counted"]
+    assert "unit_draw" not in f
+    old = V.circuit_facts({"workload_fingerprint": {"statement": V.CIRCUIT_FLAT, "ands_per_instance": 33040}})
+    assert old["ands_label"] == "ANDs per instance: units only (recorded before #281)" and old["computes_its_type"] is None
+    drawn = V.circuit_facts({"workload_fingerprint": {**new, "unit_draw": "subset:8"}})
+    assert drawn["unit_draw"] == "subset:8 (units_per_vu 1: a unit draw counts instances)"
+    assert V.circuit_facts({"workload_fingerprint": {"statement": "verity/flock-ir-frame/v3"}}) is None
