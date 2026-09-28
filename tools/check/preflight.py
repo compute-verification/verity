@@ -112,26 +112,32 @@ def pins(root: Path) -> dict[str, dict]:
 
 def lean_deps(root: Path, packages: list[str], cache: Path, urls: dict[str, str]) -> tuple[list[str], list[str], list[dict]]:
     """(facts, failures, the bundles the audit will restore from the store): each package's dependencies, warm here under
-    ``cache``/lean-deps or restorable through a sent URL, the pinned bundle's."""
+    ``cache``/lean-deps or restorable through a sent URL, the pinned bundle's. Packages that share one tree (`lean_audit.share`,
+    where there is no build sandbox) count once, under the shared tree's key."""
     facts, fails, restore, seen = [], [], [], set()
     pinned = pins(root)
+    group = LA.share(packages, root)
+    if group and LA._sandboxed():
+        group = None
     for p in packages:
-        k = LA.deps_key(root / p)
+        shared = bool(group) and p in group[1]
+        k = group[0] if shared else LA.deps_key(root / p)
         if k is None or k in seen:
             continue
         seen.add(k)
+        who = f"{', '.join(group[1])} (one shared tree)" if shared else p
         pin = pinned.get(k)
         if (cache / "lean-deps" / k).is_dir():
-            facts.append(f"{p}: Lean dependencies warm here ({k[:12]})")
+            facts.append(f"{who}: Lean dependencies warm here ({k[:12]})")
         elif pin is None:
-            fails.append(f"{p}: {LA.PIN} pins no bundle for its manifest and toolchain ({k[:12]}) and none is warm here, so its audit "
+            fails.append(f"{who}: {LA.PIN} pins no bundle for its manifest and toolchain ({k[:12]}) and none is warm here, so its audit "
                          f"would clone them from GitHub: pin one (`lean_audit.py --pin RUN` after a cold `--export` run)")
         elif k not in urls:
-            fails.append(f"{p}: its Lean dependencies ({k[:12]}) are not warm here and the run carries no URL for their bundle: send "
+            fails.append(f"{who}: its Lean dependencies ({k[:12]}) are not warm here and the run carries no URL for their bundle: send "
                          f"`$(uv run python tools/check/check.py --lean-deps-files)`")
         else:
-            restore.append({"name": f"{p}'s Lean bundle {k[:12]}", "key": k, "sha256": pin["sha256"], "bytes": pin["bytes"]})
-            facts.append(f"{p}: Lean dependencies restorable from the store ({k[:12]}, {pin['bytes'] >> 20} MiB)")
+            restore.append({"name": f"{who}'s Lean bundle {k[:12]}", "key": k, "sha256": pin["sha256"], "bytes": pin["bytes"]})
+            facts.append(f"{who}: Lean dependencies restorable from the store ({k[:12]}, {pin['bytes'] >> 20} MiB)")
     return facts, fails, restore
 
 

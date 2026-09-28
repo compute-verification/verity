@@ -245,3 +245,33 @@ def test_the_check_tool_declares_this_preflight():
     tool = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(tool)
     assert tool.CHECK.preflight == ["tools/check/preflight.py"] and (ROOT / tool.CHECK.preflight[0]).is_file()
+
+
+def test_packages_that_share_one_lean_tree_restore_it_once(tmp_path, path, monkeypatch):
+    """`lean_audit.share`: pkg/b pins everything pkg/a pins, so a cold pod restores pkg/b's one tree for both, and the disk floor
+    counts one tree. Where the build has a sandbox, each package keeps its own tree, and both count."""
+    tree = _tree(tmp_path)
+    b = tree / "pkg" / "b"
+    b.mkdir(parents=True)
+    for f in ("lakefile.toml", "lean-toolchain", "lean-audit.json"):
+        shutil.copy(tree / "pkg" / "a" / f, b / f)
+    (b / "lake-manifest.json").write_text(json.dumps({"packages": [{"type": "git", "name": "mathlib", "rev": "r1"},
+                                                                   {"type": "git", "name": "arklib", "rev": "r2"}]}))
+    ka, kb = _key(tree), PF.LA.deps_key(b)
+    pin = {"sha256": _sha(BUNDLE), "bytes": len(BUNDLE), "run": "r1"}
+    (tree / "tools" / "check" / "lean-deps.json").write_text(json.dumps({"schema": "lean-deps-pin/v1", "deps": {
+        ka: {"package": "pkg/a", **pin}, kb: {"package": "pkg/b", **pin}}}))
+    for args in (["add", "."], ["commit", "-q", "-m", "pkg/b"]):
+        subprocess.run([GIT, "-c", "user.email=t@t", "-c", "user.name=t", *args], cwd=tree, check=True, capture_output=True,
+                       env={**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"})
+    (tmp_path / "bundle").write_bytes(BUNDLE)
+    url = (tmp_path / "bundle").as_uri()
+    monkeypatch.setattr(PF.LA, "_sandboxed", lambda: False)
+    assert PF.LA.share(["pkg/a", "pkg/b"], tree) == (kb, ["pkg/a", "pkg/b"])
+    facts, fails = _run(tmp_path, tree, inputs=_inputs(tmp_path, {kb: url}), warm=False)
+    assert fails == [] and f"pkg/a, pkg/b (one shared tree): Lean dependencies restorable from the store ({kb[:12]}, 0 MiB)" in facts
+    assert any("needs 58 GB (1 Lean dependency tree(s) to restore)" in f for f in facts)
+    monkeypatch.setattr(PF.LA, "_sandboxed", lambda: True)
+    (tmp_path / "sb").mkdir()
+    facts, fails = _run(tmp_path / "sb", tree, inputs=_inputs(tmp_path / "sb", {ka: url, kb: url}), warm=False)
+    assert fails == [] and any("2 Lean dependency tree(s) to restore" in f for f in facts)

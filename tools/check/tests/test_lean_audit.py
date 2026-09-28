@@ -305,3 +305,41 @@ def test_the_launcher_signs_only_this_trees_pinned_bundles(tmp_path, monkeypatch
     p = LA.url_file(tmp_path, ttl_s=60)
     assert json.loads(p.read_text()) == {k: f"https://r2/objects/sha256/{'ab' * 32}?sig"} and signed == [(f"objects/sha256/{'ab' * 32}", 60)]
     assert p.name == LA.URLS and p.stat().st_mode & 0o777 == 0o600
+
+
+def test_the_real_packages_share_soundness_tree():
+    got = LA.share(LA.packages(LA.COMMON.tracked_files()))
+    soundness = "backends/flock/verifier/lean/soundness"
+    assert got[0] == LA.deps_key(ROOT / soundness)
+    assert {"backends/flock/verifier/lean/level3", soundness, "protocols/pous/lean"} <= set(got[1])
+
+
+def test_packages_whose_dependencies_one_pins_all_of_share_its_tree(tmp_path, monkeypatch):
+    root = _tree(tmp_path, monkeypatch)
+    monkeypatch.setattr(LA, "_sandboxed", lambda: False)
+    (root / "pkg/b/lean-audit.json").write_text("{}")
+    c = {"pkg/c/lakefile.toml": "", "pkg/c/lean-toolchain": "v1\n", "pkg/c/C.lean": "", "pkg/c/lean-audit.json": "{}",
+         "pkg/c/lake-manifest.json": json.dumps({"packages": [{"name": "dep", "type": "git", "rev": "abc"},
+                                                              {"name": "more", "type": "git", "rev": "x"}]})}
+    for f, text in c.items():
+        (root / f).write_text(text) if (root / f).parent.exists() else ((root / f).parent.mkdir(parents=True), (root / f).write_text(text))
+    files = sorted({*LA.COMMON.tracked_files(), *c})
+    monkeypatch.setattr(LA.COMMON, "tracked_files", lambda r=None: files)
+    k = LA.deps_key(root / "pkg/c")
+    assert LA.share(LA.packages(files)) == (k, ["pkg/a", "pkg/c"])
+    stale = tmp_path / "cache" / "lean-deps" / LA.deps_key(root / "pkg/a")
+    stale.mkdir(parents=True)                                            # a's own tree, from before it shared c's
+    rc, ran, _doc = _run(tmp_path, 1)
+    assert rc == 0 and sorted(ran) == ["pkg/a cold", "pkg/b cold", "pkg/c warm"]      # c reads what a's build put in the tree
+    assert sorted(p.name for p in (tmp_path / "cache" / "lean-deps").iterdir() if not p.name.endswith(".lock")) == [k]
+    (root / "pkg/a/A.lean").write_text("theorem a : True := by trivial\n")
+    (root / "pkg/c/lean-audit.json").write_text(json.dumps({"reads": ["nowhere.txt"]}))   # c fails: the shared tree is dropped
+    rc, ran, _doc = _run(tmp_path, 2)
+    assert rc == 1 and "pkg/a warm" in ran and not (tmp_path / "cache" / "lean-deps" / k).exists()
+    monkeypatch.setattr(LA, "_sandboxed", lambda: True)                 # in the sandbox each package keeps its own tree
+    (root / "pkg/c/lean-audit.json").write_text("{}")
+    (root / "pkg/c/C.lean").write_text("-- changed\n")
+    (root / "pkg/a/A.lean").write_text("theorem a : True := by exact trivial\n")
+    rc, ran, _doc = _run(tmp_path, 3)
+    assert rc == 0 and sorted(ran) == ["pkg/a cold", "pkg/b cold", "pkg/c cold"]
+    assert {LA.deps_key(root / "pkg/a"), k} <= {p.name for p in (tmp_path / "cache" / "lean-deps").iterdir()}

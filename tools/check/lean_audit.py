@@ -24,6 +24,12 @@ earlier passing run. The audit's `dependencies` check still compares their `.ole
 package's record, and the kernel replay still covers the package's own modules. Lean gets this machine's CPUs
 (`LEAN_NUM_THREADS`): inside a pod, its default counts the host's.
 
+Packages whose pinned git dependencies one of them pins all of, at the same revisions and toolchain, share that package's
+tree (`share`): Soundness pins everything level3 and POUS pin, so Mathlib is unpacked once instead of once per package. The
+first audited package holds it and the others reach it through a symlink, so this happens only where `audit.py` has no build
+sandbox (a pod): in the sandbox a build writes only its own `.lake`, and each package keeps its own tree. A shared tree comes
+back only when every package that used it passed.
+
 A machine without a package's dependencies restores them from the evidence store instead of cloning them from GitHub, which
 throttles anonymous clones from shared addresses. `lean-deps.json` pins one bundle per `lake-manifest.json` + `lean-toolchain`
 by sha256; the launcher sends a presigned URL for each (`--urls`, `check.py --record`), and a bundle is used only when its
@@ -162,6 +168,35 @@ def deps_key(pkg: Path) -> str | None:
     return hashlib.sha256(m.read_bytes() + b"\0" + (pkg / "lean-toolchain").read_bytes()).hexdigest()
 
 
+def git_deps(pkg: Path) -> dict[str, list]:
+    """{name: [url, rev]} of the git packages a package's manifest pins."""
+    m = pkg / "lake-manifest.json"
+    return {d["name"]: [d.get("url"), d.get("rev")] for d in json.loads(m.read_text()).get("packages", [])
+            if d.get("type") == "git"} if m.exists() else {}
+
+
+def share(pkgs: list[str], root: Path | None = None) -> tuple[str, list[str]] | None:
+    """The packages that can use one dependency tree, and its key: those whose pinned git packages are all pinned, at the same
+    revisions and with the same toolchain, by one of them, whose tree it is (a superset: Lake leaves unnamed packages alone,
+    and the `dependencies` check reads only what a package imports). None when no two packages can share one."""
+    root = root or ROOT
+    deps = {p: git_deps(root / p) for p in pkgs}
+    tc = {p: (root / p / "lean-toolchain").read_bytes() for p in deps if deps[p]}
+
+    def under(q: str, p: str) -> bool:
+        return tc[q] == tc[p] and all(deps[p].get(n) == v for n, v in deps[q].items())
+
+    best = max(((sorted(q for q in tc if under(q, p)), p) for p in sorted(tc)), key=lambda g: (len(g[0]), len(deps[g[1]])),
+               default=None)
+    return (deps_key(root / best[1]), best[0]) if best and len(best[0]) > 1 else None
+
+
+def _sandboxed() -> bool:
+    """Whether `audit.py` builds in its sandbox here, where a build may write only its own package's `.lake`: a tree
+    shared through a symlink would then be read-only to all but one of its packages."""
+    return bool(_module(ROOT / "tools" / "lean" / "audit.py", "lean_audit_sandbox").sandboxed())
+
+
 PIN = "tools/check/lean-deps.json"
 #: the presigned URLs sent with a recorded run, {deps_key: URL}; `check.py` moves the file out of the run directory
 URLS = "lean-deps-urls.json"
@@ -239,6 +274,7 @@ class WarmDeps:
     def __init__(self, store: Path, urls: dict[str, str] | None = None):
         self.store, self.urls = store, urls or {}
         self.held: dict[Path, Path] = {}
+        self.sharers: dict[Path, list[Path]] = {}
 
     def _lock(self, k: str):
         self.store.mkdir(parents=True, exist_ok=True)
@@ -246,11 +282,15 @@ class WarmDeps:
         fcntl.flock(f, fcntl.LOCK_EX)
         return f
 
-    def take(self, pkg: Path, log=print) -> None:
-        if (k := deps_key(pkg)) is None:
+    def take(self, pkg: Path, log=print, key: str | None = None, sharers: list[Path] = (), drop: list[str] = ()) -> None:
+        """Move the tree under ``key`` (default the package's own `deps_key`) in as ``pkg``'s `.lake/packages`, from the store
+        when this machine lacks it. ``sharers`` get a symlink to it; ``drop``: store entries it supersedes."""
+        if (k := key or deps_key(pkg)) is None:
             return
         dst = pkg / ".lake" / "packages"
         with self._lock(k):
+            for d in drop:
+                shutil.rmtree(self.store / d, ignore_errors=True)
             src = self.store / k
             if not src.is_dir() and not dst.exists() and k in self.urls and (pin := pins().get(k)):
                 restore(self.store, k, self.urls[k], pin, pkg.name, log)
@@ -260,15 +300,20 @@ class WarmDeps:
                 log(f"lean-audit: {pkg.name}: dependencies warm ({k[:12]})")
             else:
                 log(f"lean-audit: {pkg.name}: dependencies cold ({k[:12]})")
-        self.held[pkg] = self.store / k
+        for q in sharers:
+            (q / ".lake").mkdir(parents=True, exist_ok=True)
+            (q / ".lake" / "packages").symlink_to(os.path.relpath(dst, q / ".lake"), target_is_directory=True)
+            log(f"lean-audit: {q.name}: dependencies shared with {pkg.name} ({k[:12]})")
+        self.held[pkg], self.sharers[pkg] = self.store / k, list(sharers)
 
     def give_back(self, passed: set[Path]) -> None:
         """Keep the dependencies of the packages in ``passed`` (an audit that passed, whose imported `.olean` files matched
         the record, or one that failed before compiling anything, on fetching a dependency) and drop the others': a run's
-        compile-time code may write in them, so only such a run vouches for what comes back."""
+        compile-time code may write in them, so only such a run vouches for what comes back. A shared tree comes back only
+        when every package that used it is in ``passed``."""
         for pkg, home in self.held.items():
             src = pkg / ".lake" / "packages"
-            if not src.is_dir() or pkg not in passed:
+            if not src.is_dir() or pkg not in passed or not passed.issuperset(self.sharers.get(pkg, ())):
                 continue
             with self._lock(home.name):
                 if home.exists():
@@ -334,8 +379,16 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
         union = sorted({f for p in missed for f in inputs(p, files)})
         scratch_tree(work, union)
         audited = packages(union)
-        with ThreadPoolExecutor(max_workers=max(1, len(audited))) as ex:
-            list(ex.map(lambda p: warm.take(work / p, log), audited))
+        group = share(packages(files))
+        shared = [p for p in audited if group and p in group[1]]
+        if shared and _sandboxed():
+            shared = []
+        takes = [(work / p, None, [], []) for p in audited if p not in shared]
+        if shared:
+            takes.append((work / shared[0], group[0], [work / q for q in shared[1:]],
+                          sorted({deps_key(ROOT / q) for q in group[1]} - {group[0]})))
+        with ThreadPoolExecutor(max_workers=max(1, len(takes))) as ex:
+            list(ex.map(lambda t: warm.take(t[0], log, *t[1:]), takes))
         env = {**os.environ, "LEAN_NUM_THREADS": str(COMMON.cores())}
         t0 = time.monotonic()
         (out / "audit.json").unlink(missing_ok=True)
