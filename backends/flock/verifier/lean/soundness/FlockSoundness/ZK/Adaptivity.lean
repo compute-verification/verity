@@ -15,7 +15,8 @@ the proof uses them.
   randomness for the other by translating each block by an amount that reads only earlier blocks. `triShift_bijective`:
   such a triangular translation is a bijection of the (finite) randomness space. `card_fiber_eq_of_triShift`: so two views
   that agree along it take every value equally often, which is Lemma A's conclusion from its construction. The
-  construction itself (which blocks, which amounts) is protocol-specific and stays on paper.
+  construction itself (which blocks, which amounts) is protocol-specific: `Table.table_prefinal_translate`, and
+  `Table.table_prefinal_translate_cut` where the prover refuses.
 * **Adaptivity** (T5). A prover strategy's `i`-th message reads its randomness and the verifier's answers `j < i`; a
   deterministic verifier's `i`-th answer reads the messages `j ≤ i`. Answers are arbitrary values, so an abort, an invalid
   or a different valid coin opening, and the verifier's choice of which stream to serve next are all answers. `run` is the

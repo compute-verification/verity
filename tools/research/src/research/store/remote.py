@@ -35,6 +35,8 @@ import urllib.request
 from pathlib import Path
 from typing import Callable, Protocol, runtime_checkable
 
+from ..secret_hint import lost
+
 
 POD_CONFIG = Path(__file__).resolve().parents[3] / "store.pod.toml"   # pins the store's bucket by sha256; the environment fallback must match it
 
@@ -218,7 +220,9 @@ def env_remote_config(environ: dict | None = None) -> dict | None:
     if not endpoint and not bucket:
         return None
     if not endpoint or not bucket:
-        raise ConfigError(f"environment remote: {'R2_BUCKET' if endpoint else 'R2_ENDPOINT'} is not set")
+        missing = "R2_BUCKET" if endpoint else "R2_ENDPOINT"
+        hint = lost(missing)
+        raise ConfigError(f"environment remote: {missing} is not set" + (f" ({hint})" if hint else ""))
     if bucket_digest(bucket) != expected_bucket_digest():
         raise ConfigError(f"environment remote: R2_BUCKET is not the research store's bucket (its sha256 is not the one {POD_CONFIG.name} pins)")
     return {"type": "s3", "bucket": bucket, "endpoint": endpoint, "region": "auto",
@@ -298,7 +302,9 @@ def _remote_from(r: dict, p: Path | str) -> Remote:
             raise ConfigError(f"{p}: the bucket is not the one [remote] bucket_sha256 pins")
         ak, sk = os.environ.get(r["access_key_id_env"]), os.environ.get(r["secret_access_key_env"])
         if not ak or not sk:
-            raise ConfigError(f"{p}: credentials env vars {r['access_key_id_env']} / {r['secret_access_key_env']} are not set")
+            hint = lost(r["access_key_id_env"], r["secret_access_key_env"])
+            raise ConfigError(f"{p}: credentials env vars {r['access_key_id_env']} / {r['secret_access_key_env']} are not set"
+                              + (f" ({hint})" if hint else ""))
         # a temporary credential (README §7) has a third part; its env var is optional in the config and optional in the environment
         token = os.environ.get(r.get("session_token_env") or "AWS_SESSION_TOKEN") or None
         extra = {}
