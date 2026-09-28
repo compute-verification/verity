@@ -139,6 +139,15 @@
   }
  },
  "pins": {
+  "FlockSoundness.Game.Sim.prob_le": {
+   "signature": [
+    "FlockSoundness.Game.Sim.prob_le {α β : Type} {pL : β → Prop} {pg : α → Prop} {L : FlockSoundness.Game β}",
+    "  {g : FlockSoundness.Game α} (d : FlockSoundness.Game.Sim pL pg L g) (s : L.Strategy) :",
+    "  ENNReal.instLE.le (FlockSoundness.Game.prob pL L s) (FlockSoundness.Game.prob pg g (d.strategy s))"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000d6a859e2"
+  },
   "FlockSoundness.Merkle.opening_binding": {
    "signature": [
     "FlockSoundness.Merkle.opening_binding {Col D : Type} (H : List UInt8 → D) (E : FlockSoundness.Merkle.Enc Col D)",
@@ -1462,6 +1471,7 @@
     "FlockSoundness.Game.send": "ca27d021bc348230"
    },
    "pins": [
+    "FlockSoundness.Game.Sim.prob_le",
     "FlockSoundness.Refine.ligerito_accepts",
     "FlockSoundness.Refine.ligerito_accepts_opening",
     "FlockSoundness.Refine.ligerito_refines",
@@ -1954,6 +1964,20 @@
     "FlockSoundness.Refine.verify_refines_ofCircuit",
     "FlockSoundness.Refine.verify_tableAfter"
    ]
+  },
+  "FlockSoundness.Refine.Live": {
+   "digest": "9c0c85f6845dd5b93d97598dda6bdbdb",
+   "definitions": {
+    "FlockSoundness.Game.Sim": "9a76eae78635b137",
+    "FlockSoundness.Game.Sim.brecOn.go": "ca604d162598f77c",
+    "FlockSoundness.Game.Sim.coin": "1d798a87756f3dc7",
+    "FlockSoundness.Game.Sim.dead": "becf302f9a6955e3",
+    "FlockSoundness.Game.Sim.live": "db296dd7c5ab29c3",
+    "FlockSoundness.Game.Sim.model": "41e14af6842051b8",
+    "FlockSoundness.Game.Sim.ret": "c60a5e1a1ab85824",
+    "FlockSoundness.Game.Sim.strategy": "2c16b9618937897c"
+   },
+   "pins": ["FlockSoundness.Game.Sim.prob_le"]
   },
   "FlockSoundness.Refine.Paths": {
    "digest": "56fbd975296b992b9028b03887bb530c",
