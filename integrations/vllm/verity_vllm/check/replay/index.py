@@ -13,6 +13,7 @@ from typing import Any
 import numpy as np
 
 from verity_vllm.query.manifest import format as RM
+from verity_vllm.query.manifest.format import moe_plane_kind
 from verity_vllm.program.kernels.rows import SAMPLED_MEMBER
 
 
@@ -368,25 +369,6 @@ class ProgramIndex:
             if name == field:
                 return int(bits) or 16
         return 16
-
-
-def moe_plane_kind(family: str, module: str) -> str | None:
-    """[MAN-06f v3] the fused-MoE block row kinds whose values the collector commits as `moe_block_stream` PLANES (MOE-03: six planes per
-    MoE layer per step, pair-major) rather than as module outputs: `router` (MoeRouterTopK / MoeRouterTopKNorm: router_w + router_ids
-    per token), `up` (MoeExpertGemm: the w13 launch per pair), `act` (the SiluMul rows under the MoE runner module `...experts`: the
-    silu_and_mul per pair), `down` (MoeExpertGemmW: the w2 launch per pair), `sum` (MoeSum per token).  None for every other row.  From the
-    Program's spec family + module name alone."""
-    if family.startswith("MoeRouterTopK"):
-        return "router"
-    if family.startswith("MoeExpertGemmW"):
-        return "down"
-    if family.startswith("MoeExpertGemm"):
-        return "up"
-    if family.startswith("MoeSum"):
-        return "sum"
-    if family.startswith("SiluMul") and module.rsplit(".", 1)[-1] == RM.MOE_LEAF:
-        return "act"
-    return None
 
 
 #: the `moe_block_stream` address schema (the manifest / `binding.py` write `moe/L<layer>` as the op_path of the six

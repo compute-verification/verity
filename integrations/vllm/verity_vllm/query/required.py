@@ -310,7 +310,8 @@ class Population:
     (a collective site reading a slice of it) names the partial itself, beside its output.
 
     `query` is the query of record (`Q_WORD_ID`: the boundary is every Call's) or `Q_MODULE_BODY_ID` (A/B only: module bodies).  Under
-    Q_word a Value two Calls of one module body exchange is required too (`interior`, family `call_boundaries`), spelt under
+    Q_word a Value two Calls of one module body exchange is required too (`interior`, family `call_boundaries`; a fused-MoE block row's
+    Values are committed as its `moe_block_stream` plane, `format.moe_plane_kind`), spelt under
     `<module>/<fx node>` with its structural member: serving acquires module outputs, so such a Value needs a source of its own.  TENSOR-RETURN reads the module-body boundary under
     either query: it is what a module returns."""
 
@@ -372,7 +373,8 @@ class Population:
         protocol.update(self.partial_of)                                        # TP-04: the rank-local partials
         self.policy = Policy(prescribed_inputs=prescribed, protocol_required=frozenset(protocol))
         self.required = RequiredValues(B.values, self.policy.prescribed_inputs, self.policy.protocol_required)
-        self.interior = frozenset(v for v in B.values if v.call >= 0 and v not in B_module.values and v not in self.policy.protocol_required)
+        self.interior = frozenset(v for v in B.values if v.call >= 0 and v not in B_module.values and v not in self.policy.protocol_required
+                                  and fmt.moe_plane_kind(P.call(v.call).family, corr.module_of(v.call)) is None)   # a MoE block row: its plane
         # (required_values() would recompute the boundary; the policy is validated the same way here)
         known_inputs = frozenset(P.inputs)
         for v in self.policy.prescribed_inputs:

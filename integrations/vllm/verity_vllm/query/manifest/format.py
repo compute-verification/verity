@@ -264,6 +264,25 @@ def moe_geometry(seg_rows: Iterable[dict]) -> dict[str, dict[str, Any]]:
     return geo
 
 
+def moe_plane_kind(family: str, module: str) -> str | None:
+    """[MAN-06f v3] the fused-MoE block row kinds whose values the collector commits as `moe_block_stream` PLANES (MOE-03: six planes per
+    MoE layer per step, pair-major) rather than as module outputs: `router` (MoeRouterTopK / MoeRouterTopKNorm: router_w + router_ids
+    per token), `up` (MoeExpertGemm: the w13 launch per pair), `act` (the SiluMul rows under the MoE runner module `...experts`: the
+    silu_and_mul per pair), `down` (MoeExpertGemmW: the w2 launch per pair), `sum` (MoeSum per token).  None for every other row.  From the
+    Program's spec family + module name alone."""
+    if family.startswith("MoeRouterTopK"):
+        return "router"
+    if family.startswith("MoeExpertGemmW"):
+        return "down"
+    if family.startswith("MoeExpertGemm"):
+        return "up"
+    if family.startswith("MoeSum"):
+        return "sum"
+    if family.startswith("SiluMul") and module.rsplit(".", 1)[-1] == MOE_LEAF:
+        return "act"
+    return None
+
+
 def moe_identities(g: dict[str, Any]) -> list[tuple[str, int, str]]:
     """(plane, elements, dtype) of the six block-stream tensors for one MoE layer in one step."""
     M, K, H, I, N = g["M"], g["TOPK"], g["H"], g["I"], g["N_up"]
