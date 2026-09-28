@@ -849,7 +849,9 @@ def sweep(repo: Path, into: str = "main", remote: str = "origin", dry_run: bool 
 
     local = _git(repo, "rev-parse", "--verify", "-q", f"refs/heads/{into}", check=False).stdout.strip()
     if local and not on(local):
-        log(f"research merge: {into} has commits {remote}/{into} lacks; push it, then `research merge --sweep` closes what they land")
+        log(f"research merge: {into} has commits {remote}/{into} lacks; push it with `research merge --push`, not `git push`, which "
+            f"skips Daniel's spec-change DM (`spec_alert.alert`) and the after-landing job (`tools/check/post_train.py`); "
+            f"then `research merge --sweep` closes what they land")
     prs = sorted(json.loads(gh("pr", "list", "--state", "open", "--limit", "1000", "--json",
                                "number,headRefName,headRefOid,baseRefName")), key=lambda p: p["number"])
     done = [p for p in prs if p["headRefName"] != into and on(p["headRefOid"])]

@@ -160,7 +160,7 @@ def test_a_merge_sweeps_after_it_lands_and_says_to_push_first(tmp_path, monkeypa
     capsys.readouterr()
     assert M.main(["C"]) == 0
     out = capsys.readouterr().out
-    assert "merged C" in out and "push it, then `research merge --sweep`" in out and sorted(gh.open) == [3, 4, 5]
+    assert "merged C" in out and "push it with `research merge --push`, not `git push`" in out and sorted(gh.open) == [3, 4, 5]
     _git(repo, "push", "-q", "origin", "main")
     assert M.main(["--sweep", "--dry-run"]) == 0 and sorted(gh.open) == [3, 4, 5]
     assert M.main(["--sweep"]) == 0
