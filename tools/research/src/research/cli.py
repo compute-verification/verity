@@ -2,6 +2,8 @@
 
   research run [--project P] [--stage S] [--timeout T] [--expect K=V ...] [--require-result] [--runs-dir D] [harness flags] -- CMD...
   research run [--tool NAME|module:NAME] [--scratch NAME ...] [--campaign C] [...] -- CMD...   # evidence store: derivation before, attempt after
+  research run --queue --source GITDIR --project P --mem-gb G (--max-min M | --timeout T) [--gpus N] [--cpus N] [--class P] [--kind K] [--phase cpu|gpu] [--preemptible] [--quiet] [--on NODE] -- CMD...
+                                                 # the one queue (tools/cluster) places the job and runs it under its node's executor
   research run --on MACHINE --project P [--source GITDIR] [--send FILE ...] [--env K=V ...] [--exclusive] [--mem-gb N [--mem-wait S]]
                [--custody-ttl 6h | --no-custody-r2] [--preflight TOOL] [...] -- CMD...   # run custody on the store's remote is the default
                                                  # with --on; a --tool's declared preflight (or --preflight TOOL's) runs on the machine first
@@ -61,6 +63,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import sys
 from pathlib import Path
@@ -141,6 +144,23 @@ def cmd_run(argv: list[str]) -> int:
     ap.add_argument("--preflight", default=None, metavar="TOOL",
                     help="with --on --source: run TOOL's declared preflight (Tool.preflight) on the machine before this run, as a --tool TOOL "
                          "run does, and refuse the run when it fails")
+    q = ap.add_argument_group("the queue (--queue): the one queue over the shared nodes (tools/cluster) places and runs the job; "
+                                   "--on then pins its node, and --mem-gb is its memory")
+    q.add_argument("--queue", action="store_true", help="hand the job to the queue instead of running it on a named machine (needs --source)")
+    q.add_argument("--class", dest="queue_class", default="work", metavar="P", help="its priority class (the description's [priorities]; default work)")
+    q.add_argument("--gpus", type=int, default=0, metavar="N")
+    q.add_argument("--gpu-model", default=None, metavar="M", help="e.g. rtx-pro-6000; a node with other GPUs is never chosen")
+    q.add_argument("--cpus", type=int, default=1, metavar="N")
+    q.add_argument("--max-min", type=int, default=None, metavar="M",
+                   help="its longest run in minutes, which the GPU lease enforces (--timeout if not given; one of them is required); "
+                        "without --timeout, a GPU job's runner also allows GPU_WAIT_MIN for the lease to be granted")
+    q.add_argument("--kind", dest="queue_kind", default="adhoc", metavar="K", help="what the job is, recorded (e.g. vllm.build; default adhoc)")
+    q.add_argument("--phase", dest="queue_phase", choices=("cpu", "gpu"), default=None,
+                   help="the phase this run is (default: gpu with --gpus, else cpu); a GPU is booked only for a gpu phase, and only "
+                        "around the workload, so the runner's custody runs in the CPU allocation")
+    q.add_argument("--preemptible", action="store_true", help="it may be stopped for higher-ranked work and requeued (a guest's must be)")
+    q.add_argument("--quiet", action="store_true", help="a timed job: the node is kept quiet while it runs (the node's owner only)")
+    q.add_argument("--gpu-ids", default=None, metavar="LIST", help="the GPU indices it must get, comma-separated")
     ap.add_argument("--id", default=None, help="use this run id instead of allocating one")
     ap.add_argument("--claimed", action="store_true", help=argparse.SUPPRESS)          # machine side: the dir was created by launch-request
     ap.add_argument("--cost-json", default=None, help=argparse.SUPPRESS)
@@ -169,6 +189,13 @@ def cmd_run(argv: list[str]) -> int:
     if ns.claimed:
         _survive_stray_signals()
     mem_reservation = os.environ.pop("RESEARCH_MEM_RESERVATION", None) if ns.claimed else None    # research.mem: this runner's, not the workload's
+    if ns.queue:
+        try:
+            harness_opts = _normalize_timeout(harness_opts)
+        except ValueError as e:
+            print(f"research run: --timeout: {e}", file=sys.stderr)
+            return 2
+        return _run_queued(ns, harness_opts, command)
     if ns.mem_gb is not None and not ns.on:
         print("research run: --mem-gb admits a run on a shared machine (--on MACHINE); a local run has no reservation to take", file=sys.stderr)
         return 2
@@ -538,7 +565,54 @@ def _source_identity_hint(git_dir: Path) -> dict | None:
     return {"commit": src["source.commit"], "tree": src["source.tree"], "dirty": src["source.dirty"], "dirty_digest": src["source.dirty_digest"]}
 
 
-def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts: list[str], command: list[str]) -> int:
+GPU_WAIT_MIN = 120
+
+
+def _run_queued(ns: argparse.Namespace, harness_opts: list[str], command: list[str]) -> int:
+    """`research run --queue`: the queue places the job (`cluster submit`), then it launches as `--on` the placed machine does, with
+    the runner inside the job's CPU allocation and a gpu phase's workload alone inside its GPU lease. Its records, status and logs
+    are an `--on` run's."""
+    if not ns.source or not ns.project or ns.mem_gb is None:
+        print("research run --queue: --source GITDIR (the tree with tools/cluster), --project and --mem-gb (the job's memory, "
+              "its cap) are required", file=sys.stderr)
+        return 2
+    timeout = remote.timeout_seconds(remote.flag_value(harness_opts, "--timeout"))
+    if ns.max_min is None and not timeout:
+        print("research run --queue: give the job's longest run, --max-min M or --timeout", file=sys.stderr)
+        return 2
+    phase = ns.queue_phase or ("gpu" if ns.gpus else "cpu")
+    if (phase == "gpu") != bool(ns.gpus):
+        print(f"research run --queue: a {phase} phase {'needs --gpus N' if phase == 'gpu' else 'takes no --gpus'}", file=sys.stderr)
+        return 2
+    max_s = int(ns.max_min * 60 if ns.max_min is not None else timeout)
+    if timeout is None:
+        harness_opts = [*harness_opts, "--timeout", str(max_s + (GPU_WAIT_MIN * 60 if ns.gpus else 0))]
+    from .pods.lease import RUN_MARGIN_S
+
+    root = R.runs_root(ns.runs_dir)
+    run_id = ns.id or R.new_run_id()
+    spec = {"project": ns.project, "submitter": os.environ.get("RESEARCH_LANE") or os.environ.get("USER") or "-",
+            "class": ns.queue_class, "gpus": ns.gpus, "gpu-model": ns.gpu_model, "cpus": ns.cpus,
+            "mem-gb": math.ceil(ns.mem_gb), "max-s": max_s, "custody-s": RUN_MARGIN_S,
+            "preempt": "requeue" if ns.preemptible else "never", "quiet": ns.quiet, "node": ns.on, "gpu-ids": ns.gpu_ids}
+    try:
+        placed = remote.queue_placement(Path(ns.source).expanduser(), run_id, spec)
+    except remote.Refused as e:
+        print(f"research run --queue: refused: {e}", file=sys.stderr)
+        return 3
+    placed.update(kind=ns.queue_kind, phase=phase)
+    print(f"research: the queue places run {run_id} ({ns.queue_kind}, {phase} phase) on {placed['machine']} ({placed['why']})",
+          file=sys.stderr)
+    ns.on, ns.mem_gb = placed["machine"], None
+    if ns.custody_r2 is not False and (why := _custody_ttl_problem(ns.custody_ttl, harness_opts)):
+        print(f"research run: {why}", file=sys.stderr)
+        return 2
+    harness_opts = ["--project", ns.project, *harness_opts]
+    return _run_remote(ns, run_id, root / run_id, harness_opts, command, queue=placed)
+
+
+def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts: list[str], command: list[str],
+                queue: dict | None = None) -> int:
     if not ns.project:
         print("research run --on: --project is required (the machine is bound to a project)", file=sys.stderr)
         return 2
@@ -592,7 +666,7 @@ def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts
         rec = remote.launch(run_id=run_id, local_dir=run_dir, machine_name=ns.on, project=ns.project, command=command, harness_args=harness_args,
                             source=Path(ns.source).expanduser() if ns.source else None, sends=[Path(s).expanduser() for s in ns.send],
                             cwd=None, env=env, exclusive=ns.exclusive, mem_gb=ns.mem_gb, mem_wait_s=ns.mem_wait,
-                            custody_ttl=(ns.custody_ttl or "6h") if custody else None, preflight_tool=ns.preflight)
+                            custody_ttl=(ns.custody_ttl or "6h") if custody else None, preflight_tool=ns.preflight, queue=queue)
     except remote.Refused as e:
         print(f"research run --on {ns.on}: refused: {e}", file=sys.stderr)
         return 3

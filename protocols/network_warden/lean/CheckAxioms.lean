@@ -1,15 +1,14 @@
 import NetTiming
 open NetTiming
+
+-- The 31 pinned theorems (`lean-audit.json`'s `pins`).
 #print axioms card_free
 #print axioms card_leftPacked
-#print axioms occ_fill
-#print axioms leftPacked_occ_fill
 #print axioms fill_injective
 #print axioms exists_fill_of_leftPacked
 #print axioms card_counts_eq_le
 #print axioms card_counts_le_le
 #print axioms released_self
-#print axioms leftPacked_fifoGrid
 #print axioms encard_fifoGrids
 #print axioms encard_le_prod_of_branching
 #print axioms encard_acceptedRuns_le
@@ -34,3 +33,8 @@ open NetTiming
 #print axioms joint_witness_bound
 #print axioms zP_accepts_one
 #print axioms zP_constOp_accepts_one
+
+-- Proved and audited, not pinned: no record in `lean-audit.json`, so not citable as pinned.
+#print axioms occ_fill
+#print axioms leftPacked_occ_fill
+#print axioms leftPacked_fifoGrid
