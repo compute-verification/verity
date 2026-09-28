@@ -1,4 +1,4 @@
-import Models.Pous.Guarantees
+import Proofs.Pous.Statements
 
 /-! The grader's positive control: a proof of `Pous.Guarantees.KFloor`. -/
 

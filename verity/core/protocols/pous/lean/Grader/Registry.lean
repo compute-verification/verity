@@ -13,24 +13,15 @@ open Lean
 never axioms (Verity's policy), so this list does not grow. -/
 def allowedAxioms : List Name := [``propext, ``Classical.choice, ``Quot.sound]
 
-/-- The statements a submission may prove. Each must also be a `Prop`-valued definition in `Pous.Guarantees` of the
-trusted environment. -/
+/-- The statements a submission may prove: the frozen statements of `Security/Models/Pous/Guarantees.lean` and the files
+under `Security/Models/Pous/Guarantees/`, and five of the lemmas of `Security/Proofs/Pous/Statements.lean`, `KFloor` and
+`Theorem1ii` (`check.sh`'s controls) and the open `A2LemmaAM1`, `A5RabinGcd` and `A7Params`. Each must also be a
+`Prop`-valued definition in `Pous.Guarantees` of the trusted environment. -/
 def pinnedTargets : List Name := [
   `Pous.Guarantees.KFloor,
   `Pous.Guarantees.Theorem1ii,
-  `Pous.Guarantees.Theorem1iiTimed,
-  `Pous.Guarantees.Theorem1iTimed,
-  `Pous.Guarantees.Theorem1iiSeq,
-  `Pous.Guarantees.Theorem1iiiTimed,
-  `Pous.Guarantees.FibreCount,
-  `Pous.Guarantees.A1CompressionCard,
-  `Pous.Guarantees.A1CompressionPr,
   `Pous.Guarantees.A2LemmaAM1,
-  `Pous.Guarantees.A3Prime,
-  `Pous.Guarantees.A3PrimeLam,
   `Pous.Guarantees.A5RabinGcd,
-  `Pous.Guarantees.A6RederiveUntimed,
-  `Pous.Guarantees.A6RederiveTimed,
   `Pous.Guarantees.A7Params,
   `Pous.Guarantees.M1Meets,
   `Pous.Guarantees.P3ConcreteMeets64,
@@ -56,14 +47,9 @@ def pinnedTargets : List Name := [
   `Pous.Guarantees.BandPubMeetsFamilyD1,
   `Pous.Guarantees.ChainDenseMeets111,
   `Pous.Guarantees.BandGradedMeetsFamily,
-  `Pous.Guarantees.PerAnswer,
   `Pous.Guarantees.ContinuousAudit,
   `Pous.Guarantees.BackgroundRebuildExcluded,
-  `Pous.Guarantees.ContinuousComplete,
-  `Pous.Guarantees.ContinuousTimeAverage,
   `Pous.Guarantees.BandFamilyContinuousTimeAverage,
-  `Pous.Guarantees.DigestAU,
-  `Pous.Guarantees.SecureErasureMeets,
   `Pous.Guarantees.SecureErasureMeetsFamily,
   `Pous.Guarantees.SecureErasureMeets96GiB,
   `Pous.Guarantees.P2MeetsM1pB19Uncond,
@@ -72,19 +58,4 @@ def pinnedTargets : List Name := [
   `Pous.Guarantees.P2SlackB19Uncond,
   `Pous.Guarantees.P2SlackFamilyUncond,
   `Pous.Guarantees.P2ErrorSplitB19Uncond,
-  `Pous.Guarantees.B1IndepSet,
-  `Pous.Guarantees.B2Stacking,
-  `Pous.Guarantees.B3Chain,
-  `Pous.Guarantees.FischClaim13,
-  `Pous.Guarantees.FischClaim14,
-  `Pous.Guarantees.B5ExPostFactoBounded,
-  `Pous.Guarantees.B5ExPostFacto,
-  `Pous.Guarantees.TransposeMixing,
-  `Pous.Guarantees.ReverseNeedsAllChildren,
-  `Pous.Guarantees.N10Refuted,
-  `Pous.Guarantees.SampledAuditProd,
-  `Pous.Guarantees.SampledAuditSeq,
-  `Pous.Guarantees.SampledAuditSim,
-  `Pous.Guarantees.StackedAuditSeq,
-  `Pous.Guarantees.StackedAuditOnePercent,
   `Pous.Guarantees.DenseMeets]
