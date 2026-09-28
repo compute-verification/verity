@@ -76,10 +76,12 @@ V_VALUE = "rec-v"
 # a part's regions, at most: each region is two claims, each claim a round of the rep's coin stream, and a rep's other rounds
 # (about 107 to 122 at m = 29 to 32) must fit beside them in --zk's committed schedule of 256 (`coin_spec_of`)
 MAX_REGIONS = 64
-# a part's sha512x3 slots per instance, at most (`slots`): 2^25 bits of compressions beside its hm96 slots' 2^24 (at most
-# MAX_REGIONS) leave its unit 2^24 of a 2^26 block, below circuit.K_MAX's 2^27 (`circuit.compose` refuses a larger one); K =
-# 4096's units are 2^22, and without the bound v's compressions (about nv / 8) put its first part at 2^27
-MAX_SLOTS = 128
+# a part's sha512x3 slots per instance, at most (`slots`): 160 slots of 2^18 bits (2^25.32) beside its hm96 slots' 2^24 (at
+# most MAX_REGIONS) leave room for a 2^22 unit in a 2^26 block (for a 2^23 unit, as at 12 claims, 159 do), below
+# circuit.K_MAX's 2^27 (`circuit.compose` refuses a larger one); K = 4096's units are 2^22, and without the bound v's
+# compressions (about nv / 8) put its first part at 2^27. A shape's widest residual reads about 10.75 slots a claim, so 160
+# holds up to 14 claims (12 claims: 130)
+MAX_SLOTS = 160
 
 
 def port_words(n: int) -> int:
@@ -98,7 +100,7 @@ def spec(sh) -> dict:
     gf, lay = A.structure(sh)
     ports = [[f"m{i}", len(r)] for i, r in enumerate(A.rounds(sh))] + [["acc0", 2], ["acc1", 2]]
     S = {"gf": gf, "ports": ports}
-    _check(S)
+    _check(S, whole=True)
     if lay.w[-4:] != A.ACC_NAMES:
         raise AssertionError("w does not end with the running sums")
     return S
@@ -123,7 +125,7 @@ def parts(S: dict, max_regions: int = MAX_REGIONS, max_slots: int = MAX_SLOTS) -
     reads the row ports its residuals touch (in S's order, under their names) and the v elements they touch (in v's order),
     w and v renumbered; ``res`` and ``v`` are their indices in S. Every residual of S is one of a part's, so the algebra
     holds exactly when every part does."""
-    _check(S)
+    _check(S, whole=True)
     gf = S["gf"]
     starts = [0]
     for _, n in S["ports"]:
@@ -183,7 +185,9 @@ def parts(S: dict, max_regions: int = MAX_REGIONS, max_slots: int = MAX_SLOTS) -
     return out
 
 
-def _check(S: dict) -> None:
+def _check(S: dict, whole: bool = False) -> None:
+    """S is an InnerRepCheck S; one statement's (``whole`` False) also holds at most ``OUT_WORDS / 8`` residuals, which a
+    whole algebra's S (``whole``, `parts`' input) need not."""
     if not isinstance(S, dict) or set(S) != {"gf", "ports"}:
         raise TypeError("InnerRepCheck's S is {'gf': GfResiduals' S, 'ports': [[name, elements], ...]}")
     names = [nm for nm, _ in S["ports"]]
@@ -191,7 +195,7 @@ def _check(S: dict) -> None:
         raise ValueError("InnerRepCheck's row ports are distinct names, not v, each of at least one element")
     if sum(n for _, n in S["ports"]) != S["gf"]["nw"]:
         raise ValueError(f"row ports of {sum(n for _, n in S['ports'])} elements for a w of {S['gf']['nw']}")
-    if F_WORDS * len(S["gf"]["res"]) > OUT_WORDS:
+    if not whole and F_WORDS * len(S["gf"]["res"]) > OUT_WORDS:
         raise ValueError(f"{len(S['gf']['res'])} residuals: more than {OUT_WORDS // F_WORDS}")
 
 
