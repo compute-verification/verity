@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import inspect
 import re
-from typing import Any
+from typing import Any, Callable
 
 from .defs import Body, Builder, CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
 from .layout import Circuit
@@ -94,10 +94,13 @@ def _lower_input(B: Builder, t: Type, name: str, binding: str = RUN) -> Coll:
 
 class Program:
     """`Program(fn)` where `fn` is a fully-bound `SpecializedDefinition` (or a static-free `CompositeDefinition`).
-    `registered`: the names of `fn`'s parameters bound at registration; every other parameter is bound per run."""
+    `registered`: the names of `fn`'s parameters bound at registration; every other parameter is bound per run.
+    `strict`: a guard (`verity.ml.operations.program_data`, root -> the data it holds); the Program is refused when it holds
+    any. Off by default until programs move their data to inputs."""
 
     def __init__(self, fn: SpecializedDefinition | CompositeDefinition, annotations: dict[str, Any] | None = None,
-                 registered: tuple[str, ...] | list[str] | frozenset[str] = ()) -> None:
+                 registered: tuple[str, ...] | list[str] | frozenset[str] = (),
+                 strict: Callable[[Any], dict] | None = None) -> None:
         if isinstance(fn, CompositeDefinition):
             fn = bind(fn)
         if not fn.complete:
@@ -112,6 +115,9 @@ class Program:
         self.root = _lower_root(fn, self.bindings)
         _refuse_inner_inputs(self.root)
         self._circuit: Circuit | None = None
+        if strict is not None and (held := strict(self.root)):
+            raise ValueError(f"program function {fn.id} holds data, which a strict Program refuses: "
+                             + "; ".join(f"{d}: {len(v)} ({', '.join(sorted({x for _g, x in v})[:3])})" for d, v in held.items()))
 
     @property
     def circuit(self) -> Circuit:

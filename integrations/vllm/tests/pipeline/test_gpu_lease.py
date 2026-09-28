@@ -171,6 +171,14 @@ def test_a_commit_that_never_got_its_gpu_records_no_start(tmp_path):
     assert rc == 75 and rec["started"] is None and rec["requested"] is None and rec["held_min"] is None and rec["waited_min"] is None
 
 
+@pytest.mark.parametrize("item,seen", [({}, "device"), ({GL.WEIGHTS_HASH: "host"}, "host"), ({GL.WEIGHTS_HASH: "device-checked"}, "device-checked")])
+def test_a_leased_commit_hashes_its_weights_on_its_gpu_unless_the_item_says_how(tmp_path, item, seen):
+    env, got = {"GPU_LEASE": "/l/gpu-lease", **item}, []
+    GL.run(str(tmp_path), str(tmp_path / "commit.log"), ["true"], 60, env, lambda to, argv: got.append(env.get(GL.WEIGHTS_HASH)) or 0,
+           clock=lambda: 0.0)
+    assert got == [seen] and env == {"GPU_LEASE": "/l/gpu-lease", **item}
+
+
 class _Ticks(threading.Event):
     """An event whose wait returns `n` times without being set (one heartbeat each), then as if set."""
 

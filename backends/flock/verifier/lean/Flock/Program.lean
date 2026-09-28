@@ -1,11 +1,12 @@
 /-
 PROTOCOL.md §16.7: the program format `verity-ir/descriptor/v1` (core's `verity/ir/PROTOCOL.md`, PR #120), as the verifier
 reads its own copy of a Program: the canonical JSON domain and the program's SHA-512 (§1), types and leaves (§2), reference
-sequences (§3), the descriptor and what the decoder refuses (§4), Input nodes (§5), the canonical layout (§6) and scope
+sequences (§3), the descriptor and what the decoder refuses (§4), input nodes (§5), the canonical layout (§6) and scope
 resolution (§7).
 
 The verifier evaluates no primitive, so it holds no registry: a primitive is taken as the descriptor declares it (its parameters
-and return type are under the program's SHA-512), and an `Input<w>_v1` must declare no parameters and `Value<w>`. Definitions
+and return type are under the program's SHA-512), and an input (`Input<w>_v1`, bound per run, or `RegisteredInput<w>_v1`,
+bound at registration; §5.2) must declare no parameters and `Value<w>`. Definitions
 are decoded on demand from the root and from the functions `program_fn`'s record names, as core decodes them, and each callee
 gets a smaller index than its callers.
 -/
@@ -284,6 +285,8 @@ structure Defn where
   prim : Bool
   params : Array (String × Ty)
   ret : Ty
+  /-- an input primitive's binding time (`inputId?`), else none -/
+  binding : Option String := none
   body : Body := default
   gates : Nat
   paramLeaves : Nat
@@ -299,13 +302,24 @@ structure Prog where
   sha512 : ByteArray
   deriving Inhabited
 
-/-- `program.INPUT_ID`: `^Input([1-9][0-9]*)_v1$`, the width. -/
-def inputWidth? (id : String) : Option Nat :=
-  if !(id.startsWith "Input" && id.endsWith "_v1") then none else
-  let w := ((id.drop 5).dropEnd 3).toString
+def RUN : String := "run"
+def REGISTRATION : String := "registration"
+
+private def widthAfter? (pre id : String) : Option Nat :=
+  if !(id.startsWith pre && id.endsWith "_v1") then none else
+  let w := ((id.drop pre.length).dropEnd 3).toString
   if w.length > 0 && w.all Char.isDigit && w.front != '0' then w.toNat? else none
 
-def isInputId (id : String) : Bool := (inputWidth? id).isSome
+/-- `program.input_id`: an input id's binding time and width: `run` for `^Input([1-9][0-9]*)_v1$` (`program.INPUT_ID`),
+`registration` for `^RegisteredInput([1-9][0-9]*)_v1$` (`program.REGISTERED_ID`); none for any other id. -/
+def inputId? (id : String) : Option (String × Nat) :=
+  match widthAfter? "Input" id with
+  | some w => some (RUN, w)
+  | none => (widthAfter? "RegisteredInput" id).map (REGISTRATION, ·)
+
+def inputWidth? (id : String) : Option Nat := (inputId? id).map (·.2)
+
+def isInputId (id : String) : Bool := (inputId? id).isSome
 
 /-- The `k=<canonical json>` pairs' keys of a specialization id `Name_vN{k1=..,k2=..}`, in id order (`codec._split_record`). -/
 def recordPairs (fid : String) : Array (String × String) := Id.run do
@@ -452,10 +466,11 @@ private partial def getDef (desc : Desc) (fid : String) : D Nat := do
       let params ← liftV (paramsOf ((d.getObjVal? "params").toOption.getD Json.null) s!"primitive {fid}")
       let ret ← liftV (Ty.ofJson ((d.getObjVal? "ret").toOption.getD Json.null))
       let .value w := ret | throw s!"a primitive returns exactly one Value<w>; {fid} declares {ret.render}"
-      if let some iw := inputWidth? fid then
+      let input := inputId? fid
+      if let some (_, iw) := input then
         if !(params.isEmpty && w == iw) then throw s!"primitive {fid} signature differs from the registry"
-      pure ({ key := fid, id, prim := true, params, ret, gates := 1, paramLeaves := params.foldl (· + ·.2.leaves) 0,
-              outLeaves := 1 } : Defn)
+      pure ({ key := fid, id, prim := true, params, ret, binding := input.map (·.1), gates := 1,
+              paramLeaves := params.foldl (· + ·.2.leaves) 0, outLeaves := 1 } : Defn)
     else composite desc fid d form id
   let s ← get
   set { s with defs := s.defs.push defn, index := s.index.insert fid s.defs.size, busy := s.busy.erase fid }
@@ -708,7 +723,7 @@ def Prog.orderViolation (P : Prog) : Option Json := Id.run do
       todo := todo.push node.fn
   return none
 
-/-- The root body's Calls (`partition_object.calls`): every node that is not an Input node, with its root-body index. -/
+/-- The root body's Calls (`partition_object.calls`): every node that is not an input node, with its root-body index. -/
 def Prog.calls (P : Prog) : Array Nat :=
   let nodes := (P.defs[P.root]!).body.nodes
   (Array.range nodes.size).filter fun k => let f := P.defs[nodes[k]!.fn]!; !(f.prim && isInputId f.key)

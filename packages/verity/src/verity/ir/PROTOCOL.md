@@ -266,17 +266,36 @@ key, Input nodes, Input gate count and Calls); `binding_ids` (id, its binding ti
 
 ### 5.3 What a Program holds
 
-An operation's own definition is gates: the constants of the floating-point formats, SHA-512's, and the measured GPU tables of
-exp2, rcp and tanh. Everything a program or a request brings is a value: a program's weights, constants and tables (a norm's
+An operation's own definition is gates: the constants of the floating-point formats, the round constants of SHA-512 and
+Keccak-f, and every measured MUFU table (exp2, rcp, sqrt, rsq and tanh). Everything a program or a request brings is a value: a program's weights, constants and tables (a norm's
 epsilon, the attention scale, a softcap, `gelu_tanh_bf16`, `tanh_rn`) are registered inputs, and a request's data and parameters
 (temperature, top-p, the Philox positions) are run inputs. A constant primitive (`Const<w>[0x…]_v1`) is therefore an operation's
 own bits, and a Program holds no data.
 
-`constants.program_data(root, operation)` lists the constants a Program still holds as data, by the Definition that holds them:
-every constant of the root body, and a constant inside a Definition unless an enclosing Definition is an operation, which the
-caller names (`verity.ir` names none). A table a primitive's evaluator reads by index is no gate of the program and is not
-listed. The format does not refuse a program that holds data: a descriptor's bytes and digests mean what they meant, and
-programs move to registered inputs under new ids.
+`constants.program_data(root, operation, library)` lists the data a Program still holds, by the Definition that holds it:
+
+- every constant of the root body;
+- a constant inside a Definition, unless an enclosing Definition is an operation. A Definition reached first under an
+  operation is not visited there, so a later path to it outside any operation lists its constants;
+- a table a primitive reads by index (its evaluator, or the circuit that proves it). Such a table is no gate of the program,
+  so the primitive declares it (`PrimitiveDefinition.tables`) as a `library` object or a `registered` input that the
+  primitive still holds. Outside an operation, a `registered` table is always listed, and a `library` one unless the library
+  lists it.
+
+`verity.ir` names no operations and no library tables, so the guard is `verity.ml.operations.program_data`. It passes in the
+pinned list `verity/operations` v1 (`verity.ml.operations.OPERATIONS`, `digest()`) and the tables of `verity/library` v1. An
+operation is a listed composite as the registry holds it, bound only to functions that hold no data, so a decoded Program's
+composites are no operations and their constants are listed.
+
+The guard therefore runs at registration, on the producer's registry. A verifier that receives a descriptor cannot run it: a
+decoded Program matches no operation, since the match is the registry's own Definition object, not a descriptor. A
+verifier-side check needs operations matched by descriptor digest, under a new `verity/operations` version; that is a later
+step.
+
+No statement or table claims that a Program's values are always hidden until the guard returns {} for it.
+`Program(fn, strict=guard)` refuses a Program that holds data; it is off by default until programs move their data to inputs.
+The format does not refuse a program that holds data: a descriptor's bytes and digests mean what they meant, and programs move
+to registered inputs under new ids.
 
 ## 6. The canonical layout
 

@@ -121,7 +121,7 @@ BARE_LEAD_RE = re.compile(r"^\s*([a-z0-9][a-z0-9._-]*):\s")
 NAME_TOKEN_RE = re.compile(r"@([a-z0-9][a-z0-9._-]*)|<!subteam\^([A-Z0-9]+)(?:\|@?([^>]*))?>")
 AGENT_ID_RE = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}|bc-[0-9a-f]{8}")
 QUIET = "(quiet)"                                                # in a post: ring no doorbell
-CAP_PER_HOUR = 6                                                 # doorbells into one inbox from one author in one thread
+CAP_PER_HOUR = 20                                                # doorbells into one inbox from one author in one thread
 DOORBELL_MAX = 600                                               # characters of the post a doorbell carries
 INBOX_HEAD = "Inbox for @"
 TAG_SEP = " \u00b7 "
@@ -777,14 +777,16 @@ def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, link: str
     """Deliver the post `msg` (just posted at `link`): ring the doorbell of each name it wakes; a digest delivery waits for
     its reader.  One line per name saying what happened."""
     log = log or sys.stderr
-    if routes.server_delivers():
-        print("route: the router delivers it", file=log)
-        return []
     thread = msg.get("thread_ts") if msg.get("thread_ts") not in (None, msg.get("ts")) else None
     root = api.root(ch, thread) if thread else None
     for n in lead_names(msg.get("text", ""), reg):
         routes.get_route(n, fresh=n not in routes.local)            # a name new since the clone was pulled
     inboxes = routes.inboxes()
+    if routes.server_delivers():
+        names = route_targets(msg, root, reg, inboxes)
+        print(f"route: the router rings {' '.join('@' + n for n in names)}" if names else
+              "route: this rings no one", file=log)
+        return []
     author = poster(msg, reg) or "?"
     urgent = urgent or "urgent" in tags_of(msg.get("text", ""))
     src, lines = thread or msg.get("ts") or "", []
@@ -962,6 +964,13 @@ def cmd_announce(ns: argparse.Namespace, reg: dict) -> int:
     return 0
 
 
+def _quiet_ok(ns: argparse.Namespace, reg: dict, body: str, to: list[dict] = ()) -> None:
+    """`--quiet` rings no doorbell, so on a post that names someone it would leave them unaware of it."""
+    names = [t["handle"] for t in to] + lead_names(body, reg)
+    if ns.quiet and names:
+        raise SlackError(f"--quiet rings no doorbell, so @{names[0]} would never see this: drop --quiet, or the names")
+
+
 def cmd_send(ns: argparse.Namespace, reg: dict) -> int:
     """The one way to post: top-level (a new thread) or into `--thread`.  The `--to` names lead it, which is what routes it;
     `--kind` rides in the footer, where subscriptions filter on it.  An announcement (`--kind announce`) gets its header,
@@ -974,6 +983,7 @@ def cmd_send(ns: argparse.Namespace, reg: dict) -> int:
     if any(t["handle"] == h["handle"] for t in to):
         raise SlackError("--to names someone else")
     body = _body(ns)
+    _quiet_ok(ns, reg, body, to)
     if kind == "announce":
         if ns.thread:
             raise SlackError("an announcement starts its own thread: drop --thread")
@@ -1058,7 +1068,9 @@ def cmd_subscribe(ns: argparse.Namespace, reg: dict) -> int:
 def cmd_reply(ns: argparse.Namespace, reg: dict) -> int:
     h = name_entry(ns, reg, ns.handle)
     ch = channel_id(ns, reg)
-    body = _body(ns) + (f" {QUIET}" if ns.quiet else "")
+    body = _body(ns)
+    _quiet_ok(ns, reg, body)
+    body += f" {QUIET}" if ns.quiet else ""
     _post(client(ns), ch, h["handle"], body, ns.thread, route=_route(ns, reg, ch), urgent=ns.urgent)
     return 0
 
@@ -1742,7 +1754,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
                    help="a word the footer carries for subscriptions (ask, the default top-level with --to; announce; fyi; ...)")
     p.add_argument("--verify", default=None, metavar="CMD", help="announce: a required action, and the command that shows it took")
     p.add_argument("--ships", action="append", default=[], metavar="URL#sha256=HEX|git:SHA", help="announce: code it runs, pinned")
-    p.add_argument("--quiet", action="store_true", help="wake no one (digests still get it)")
+    p.add_argument("--quiet", action="store_true", help="wake no one (digests still get it); refused on a post that names someone")
     p.add_argument("--urgent", action="store_true", help="the doorbells say URGENT, and `read --as` lists them first")
     p = cmd("close", "close a thread you were asked in: a status line (done, or --declined WHY), and the root's reaction",
             as_=True, thread=True, url=True)

@@ -81,6 +81,24 @@
    "assumptions": [],
    "type_hash": "ee014b79708a48d123ada1fabd7045af3e7f99eceb015b486b49506b378311ab"
   },
+  "FlockLevel3.RowV2.enc_inj": {
+   "signature": ["FlockLevel3.RowV2.enc_inj : Function.Injective fun r => FlockLevel3.RowV2.enc r.val"],
+   "assumptions": [],
+   "type_hash": "eb485a237d27b3e8fd83e415b6c5e255f449a0db43713a3100f5869ccf775455"
+  },
+  "FlockLevel3.RowV2.packBits_length": {
+   "signature": [
+    "FlockLevel3.RowV2.packBits_length (bs : List Bool) :",
+    "  Eq (Flock.HmRow.packBits bs).length (instHDiv.hDiv (instHAdd.hAdd bs.length 7) 8)"
+   ],
+   "assumptions": [],
+   "type_hash": "42235c01d6d3171dd03c6d6f625a8b54b12bae8a5373c70a0de0c6f65584f2cd"
+  },
+  "FlockLevel3.RowV2.prefix_size": {
+   "signature": ["FlockLevel3.RowV2.prefix_size (l : Nat) : Eq (Flock.HmRow.rowPrefixV2 l).size 128"],
+   "assumptions": [],
+   "type_hash": "1450d2499d3fca0680fdae44619236a165fd1ad601cd9eb2c5035c522b41502c"
+  },
   "FlockLevel3.T_xK": {
    "signature": ["FlockLevel3.T_xK : Eq (FlockLevel3.T FlockLevel3.xK) 1"],
    "assumptions": [],
@@ -920,6 +938,13 @@
     "FlockLevel3.eqAtPinned": "f2d1353f742bc78ebccce359b713fa4ebba650e3309ff23614fb29575952cff4"
    },
    "pins": ["FlockLevel3.pinned_indep"]
+  },
+  "FlockLevel3.RowV2": {
+   "digest": "833d0970d2d09ce12457506c3c063a7862eae4975d1346fa094c48204807f4ef",
+   "definitions": {
+    "FlockLevel3.RowV2.enc": "21f076dccb57bb3668c1758c8cdbbf66a023c49098d2849f05164bc05e5ef8b9"
+   },
+   "pins": ["FlockLevel3.RowV2.enc_inj"]
   },
   "FlockLevel3.Seam": {
    "digest": "8b148ac1964b8642981b91d2696fb33aa0d43cd9fea308f21d563ed85a6d868f",

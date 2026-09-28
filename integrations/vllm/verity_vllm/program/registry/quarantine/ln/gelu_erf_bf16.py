@@ -31,7 +31,8 @@ def gelu_erf_bf16_bits(x: int) -> int:
 
 @primitive("GeluErfBf16", 1, [("x", BF16)], BF16,
            conformance="quarantine (lane cov-ln): exhaustive measured table (65,536/65,536 bf16 words, torch 2.13.0+cu129 aten.gelu on "
-                       "sm_89); difftest vs torch.nn.functional.gelu on the pod")
+                       "sm_89); difftest vs torch.nn.functional.gelu on the pod",
+           tables=(("gelu_erf_bf16", "registered"),))
 def GeluErfBf16(x: int) -> int:
     """`bf16((f * 0.5f) * (1.0f + erff(f * M_SQRT1_2)))`, `f = (float)x` — as the pinned kernel computes it (measured table)."""
     return gelu_erf_bf16_bits(x)
