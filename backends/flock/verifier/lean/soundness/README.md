@@ -284,7 +284,13 @@ tables' public statements alone, and runs in expected polynomial time. The simul
 - **Binding of the verifier's coin commitment** (§2: a SHA-512 Merkle root over Halevi–Micali coin commitments), under
   SHA-512 collision resistance. Against quantum verifiers it needs a collapse-binding commitment (DESIGN.md §9).
 - **Uniformity of opened columns** of a padded Reed–Solomon codeword when the queries are at most the padding (the
-  AHIV22 Lemma 4.15 condition). This is to be proved, not assumed.
+  AHIV22 Lemma 4.15 condition). **Proved** (`FlockSoundness/ZK/Masking.lean`), with the standard axioms only:
+  - `padded_openings_uniform`: at distinct points where the padding's factor doesn't vanish, every vector of opened
+    values is reached by the same number of paddings, whatever the message is;
+  - `level0_openings_uniform`: the same at M1's level 0, whose padding `(X_L + κ)·μ` combines the first `t_pad`
+    novel-basis polynomials;
+  - `card_translate_fiber`: any value masked by the image of uniform randomness under a surjective additive map is
+    uniform. The pads, the mask slot, the extra-lane pairs and the paddings are all instances.
 
 ## 4. One root across many proofs
 

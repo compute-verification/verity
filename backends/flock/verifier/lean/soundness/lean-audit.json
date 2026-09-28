@@ -146,6 +146,63 @@
    "assumptions": [],
    "type_hash": "00000000deee5660"
   },
+  "FlockSoundness.ZK.card_translate_fiber": {
+   "signature": [
+    "FlockSoundness.ZK.card_translate_fiber.{u_1, u_2} {A : Type u_1} {B : Type u_2} [AddCommGroup A] [Fintype A]",
+    "  [AddCommGroup B] [Fintype B] [DecidableEq B] (Φ : A →+ B) (hΦ : Function.Surjective ⇑Φ) (base y : B) :",
+    "  {a | base + Φ a = y}.card * Fintype.card B = Fintype.card A"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000cece4880"
+  },
+  "FlockSoundness.ZK.gk_ratio_le_third": {
+   "signature": [
+    "FlockSoundness.ZK.gk_ratio_le_third (p : ℝ) (hp1 : p ≤ 1) : 3 * (p * (1 - p / 2) ^ 4) ≤ 1 - (1 - p) * (1 - p / 2) ^ 4"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000080cb634"
+  },
+  "FlockSoundness.ZK.level0_openings_uniform": {
+   "signature": [
+    "FlockSoundness.ZK.level0_openings_uniform {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]",
+    "  [DecidableEq K] (A : FlockSoundness.Model.Arith F K) (hA : A.Correct) (L : ℕ) (hL : L ≤ 40) (t : ℕ) (ht : t ≤ 2 ^ L)",
+    "  {ι : Type} [Fintype ι] [DecidableEq ι] (hι : Fintype.card ι ≤ t) (x : ι → F) (hx : Function.Injective x) (g : ι → F)",
+    "  (hg : ∀ (i : ι), g i ≠ 0) (base y : ι → F) :",
+    "  {μ |",
+    "          ∀ (i : ι),",
+    "            base i +",
+    "                g i * Polynomial.eval (x i) (∑ k, Polynomial.C (μ k) * FlockSoundness.xP A hA L hL (Fin.castLE ht k)) =",
+    "              y i}.card *",
+    "      Fintype.card F ^ Fintype.card ι =",
+    "    Fintype.card F ^ t"
+   ],
+   "assumptions": [],
+   "type_hash": "000000007f400662"
+  },
+  "FlockSoundness.ZK.padded_openings_uniform": {
+   "signature": [
+    "FlockSoundness.ZK.padded_openings_uniform.{u_1, u_2} {F : Type u_1} {ι : Type u_2} [Field F] [Fintype F] [DecidableEq F]",
+    "  [Fintype ι] [DecidableEq ι] {t : ℕ} (b : Fin t → Polynomial F) (x : ι → F) (hx : Function.Injective x) (g : ι → F)",
+    "  (hg : ∀ (i : ι), g i ≠ 0)",
+    "  (hspan : ∀ (P : Polynomial F), P.degree < ↑(Fintype.card ι) → ∃ m, ∑ k, Polynomial.C (m k) * b k = P)",
+    "  (base y : ι → F) :",
+    "  {μ | ∀ (i : ι), base i + g i * Polynomial.eval (x i) (∑ k, Polynomial.C (μ k) * b k) = y i}.card *",
+    "      Fintype.card F ^ Fintype.card ι =",
+    "    Fintype.card F ^ t"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000006d8bd7"
+  },
+  "FlockSoundness.ZK.padding_surjective": {
+   "signature": [
+    "FlockSoundness.ZK.padding_surjective.{u_1, u_2} {F : Type u_1} {ι : Type u_2} [Field F] [Fintype ι] [DecidableEq ι]",
+    "  {t : ℕ} (b : Fin t → Polynomial F) (x : ι → F) (hx : Function.Injective x) (g : ι → F) (hg : ∀ (i : ι), g i ≠ 0)",
+    "  (hspan : ∀ (P : Polynomial F), P.degree < ↑(Fintype.card ι) → ∃ m, ∑ k, Polynomial.C (m k) * b k = P) :",
+    "  Function.Surjective ⇑(FlockSoundness.ZK.paddingMap b x g)"
+   ],
+   "assumptions": [],
+   "type_hash": "000000005a260fa1"
+  },
   "FlockSoundness.execArith_correct": {
    "signature": ["FlockSoundness.execArith_correct : FlockSoundness.execArith.Correct"],
    "assumptions": [],
@@ -557,6 +614,7 @@
     "FlockSoundness.instDecidableFits": "c58796efd6440472"
    },
    "pins": [
+    "FlockSoundness.ZK.level0_openings_uniform",
     "FlockSoundness.execArith_correct",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_compiled",
@@ -679,6 +737,13 @@
     "FlockSoundness.table_sound_fast100_34_35"
    ]
   },
+  "FlockSoundness.ListSize": {
+   "digest": "1eee190fa8bc553a76257284331e74f0",
+   "definitions": {
+    "FlockSoundness.xP": "1eee190fa8bc553a"
+   },
+   "pins": ["FlockSoundness.ZK.level0_openings_uniform"]
+  },
   "FlockSoundness.Merkle": {
    "digest": "84a6380af28fe8d0d3144cd777760087",
    "definitions": {
@@ -714,6 +779,7 @@
     "FlockSoundness.Model.eqAt": "2cc1488397babdef"
    },
    "pins": [
+    "FlockSoundness.ZK.level0_openings_uniform",
     "FlockSoundness.execArith_correct",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_compiled",
@@ -929,6 +995,13 @@
     "FlockSoundness.Rewinding.ConflictAt": "4d9e617c66a3a013"
    },
    "pins": ["FlockSoundness.table_sound_compiled"]
+  },
+  "FlockSoundness.ZK.Masking": {
+   "digest": "a85b27f6b49288a085d1c5c6976cab6a",
+   "definitions": {
+    "FlockSoundness.ZK.paddingMap": "a85b27f6b49288a0"
+   },
+   "pins": ["FlockSoundness.ZK.padding_surjective"]
   }
  }
 }
