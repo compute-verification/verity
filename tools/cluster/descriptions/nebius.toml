@@ -32,7 +32,9 @@ stops_at = "2026-10-07T15:00:00Z"
 system_cpus = "0-7"  # k3s and the system (the steward's CPU map, 07:13Z)
 numa = { 0 = "0-95", 1 = "96-191" }
 # The merge-train check slots: never preempted, never borrowed, never used by other work (research coordinator, 17:22Z).
-pools = { checks = "8-95" }
+# The provers' four 16-CPU slices, the dispatcher's VY_PROVER_CPUS, which no other job may share (Daniel, 11:33 PM PDT 30 Sep);
+# a job naming no pool gets 96-127.
+pools = { checks = "8-95", provers = "128-191" }
 gpus = [
   { index = 0, numa = 0 }, { index = 1, numa = 0 }, { index = 2, numa = 0 }, { index = 3, numa = 0 },
   { index = 4, numa = 1 }, { index = 5, numa = 1 }, { index = 6, numa = 1 }, { index = 7, numa = 1 },

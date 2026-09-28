@@ -79,7 +79,7 @@ def test_the_loop_ends_the_pod_only_after_the_expiry_and_its_grace(tmp_path):
 def test_a_deadline_clamps_every_extension_and_ends_the_machine_without_grace(tmp_path):
     env = lease_env(tmp_path, LEASE_NOW=str(NOW), LEASE_ONCE="1")
     deadline = NOW + 10_000
-    (tmp_path / "deadline").write_text(f"{deadline} 2026-10-02T05:02:26Z launch\n")
+    (tmp_path / "deadline").write_text(f"{deadline} 2026-10-07T15:00:00Z launch\n")
     cap = deadline - 300
     out = lease_sh(env, "extend", "86400", "run-r1").stdout.split()
     assert out[0] == str(cap) and out[2] == "run-r1(clamped-to-deadline)"

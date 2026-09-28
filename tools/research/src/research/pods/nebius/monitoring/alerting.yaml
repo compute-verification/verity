@@ -1,0 +1,108 @@
+# Grafana-managed alerts on vy-nebius-1 (the GPU postmortem's action 5), provisioned from this file by grafana.yaml.
+# Busy is DCGM's engine-active ratio (DCGM_FI_PROF_GR_ENGINE_ACTIVE): the exporter's default set has no SM-activity field (1002).
+# Work waiting is Kueue's pending workloads plus the dispatcher's ready files (vy_exporter.py). Every notification goes to
+# alert_sink.py on 127.0.0.1:9403, which writes a markdown note for root's lane. Notifications are grouped per rule; a new idle GPU
+# joins its rule's group within 30 min, a standing one repeats every 4 h, and the quiet hour is muted.
+apiVersion: 1
+contactPoints:
+  - orgId: 1
+    name: markdown-files
+    receivers:
+      - uid: markdown-files
+        type: webhook
+        disableResolveMessage: false
+        settings:
+          url: http://127.0.0.1:9403/grafana
+          httpMethod: POST
+policies:
+  - orgId: 1
+    receiver: markdown-files
+    group_by: [alertname]
+    group_wait: 1m
+    group_interval: 30m
+    repeat_interval: 4h
+    routes:
+      - receiver: markdown-files
+        object_matchers: [["server", "=", "vy-nebius-1"]]
+        group_by: [alertname]
+        mute_time_intervals: [quiet-hour]
+muteTimes:
+  - orgId: 1
+    name: quiet-hour
+    time_intervals:
+      - times:
+          - start_time: "12:30"
+            end_time: "13:30"
+        location: UTC
+groups:
+  - orgId: 1
+    name: nebius-gpu-idle
+    folder: Nebius
+    interval: 1m
+    rules:
+      - uid: nebius-gpu-idle-work-waiting
+        title: GPU idle while work is waiting
+        condition: C
+        for: 15m
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: warning, server: vy-nebius-1}
+        annotations:
+          summary: GPU {{ $labels.gpu }} under 5% busy for 15 min while work waits
+          description: >-
+            GPU {{ $labels.gpu }} has been under 5% busy (DCGM engine-active, now {{ humanize $values.B.Value }}%) for 15 minutes
+            while {{ humanize $values.V.Value }} Kueue workloads or ready jobs wait. The dispatcher refills the queue; root checks
+            after 30 minutes.
+        data:
+          - refId: A
+            relativeTimeRange: {from: 300, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: 100 * max by (gpu) (DCGM_FI_PROF_GR_ENGINE_ACTIVE{service="nvidia-dcgm-exporter"})
+              instant: true
+              range: false
+          - refId: W
+            relativeTimeRange: {from: 300, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: W
+              expr: (sum(vy_queue_pending) or vector(0)) + (sum(vy_ready_jobs) or vector(0))
+              instant: true
+              range: false
+          - refId: B
+            datasourceUid: __expr__
+            model: {refId: B, type: reduce, expression: A, reducer: last}
+          - refId: V
+            datasourceUid: __expr__
+            model: {refId: V, type: reduce, expression: W, reducer: last}
+          - refId: C
+            datasourceUid: __expr__
+            model: {refId: C, type: math, expression: "$B < 5 && $V > 0"}
+      - uid: nebius-gpu-held-at-zero
+        title: Pod holds a GPU at 0%
+        condition: C
+        for: 10m
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: warning, server: vy-nebius-1}
+        annotations:
+          summary: "{{ $labels.namespace }}/{{ $labels.pod }} holds GPU {{ $labels.gpu }} at 0%"
+          description: >-
+            Pod {{ $labels.namespace }}/{{ $labels.pod }} has held GPU {{ $labels.gpu }} at 0% utilization for 10 minutes: a job
+            holding a GPU through a CPU phase, a lock or a rebuild. CPU stages belong in 0-GPU tasks.
+        data:
+          - refId: A
+            relativeTimeRange: {from: 300, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: max by (gpu, pod, namespace) (DCGM_FI_DEV_GPU_UTIL{service="nvidia-dcgm-exporter", pod!=""})
+              instant: true
+              range: false
+          - refId: B
+            datasourceUid: __expr__
+            model: {refId: B, type: reduce, expression: A, reducer: last}
+          - refId: C
+            datasourceUid: __expr__
+            model: {refId: C, type: threshold, expression: B, conditions: [{evaluator: {type: lt, params: [1]}}]}

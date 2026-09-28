@@ -4,7 +4,7 @@
 #   launch.sh --dry-run                          print the cloud-init and the VM spec; needs no credentials, touches nothing
 #   launch.sh --max-hours H --yes [--register] [--deadline UTC]
 #                                                find or create each piece below, start the VM, arm its lease for H hours; --deadline
-#                                                (e.g. 2026-10-02T05:02:26Z, the end of the spend authorization) writes the VM's
+#                                                (e.g. 2026-10-07T15:00:00Z, the end of the spend authorization) writes the VM's
 #                                                /etc/research/deadline, a hard cap no lease extension or restart passes (vm_setup.sh)
 #
 # Idempotent: every resource is looked up by name first, so a rerun after a failure (or on a stopped VM) resumes; nothing is
@@ -44,7 +44,7 @@ if [ "$dry" = 0 ]; then
 fi
 deadline_epoch=""
 if [ -n "$deadline" ]; then
-  deadline_epoch=$(date -u -d "$deadline" +%s 2> /dev/null) || die "--deadline $deadline is not a UTC time (2026-10-02T05:02:26Z)"
+  deadline_epoch=$(date -u -d "$deadline" +%s 2> /dev/null) || die "--deadline $deadline is not a UTC time (2026-10-07T15:00:00Z)"
   [ "$deadline_epoch" -gt "$(date +%s)" ] || die "--deadline $deadline has passed"
 fi
 
