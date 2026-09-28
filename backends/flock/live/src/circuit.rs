@@ -184,6 +184,32 @@ pub struct Composite {
     pub wires: Vec<Wire>,
     /// the lookup slot types' fast witnesses, by circuit index
     pub lookups: BTreeMap<usize, LookupNet>,
+    /// a typed template's instance (`crate::typed::Instance`): the unit is its root, one slot per VU, beside its parts
+    pub typed: Option<TypedBlock>,
+}
+
+/// A typed template's block: the instance, and each part's circuit and slot among its layout's slots in the VU.
+#[derive(Clone)]
+pub struct TypedBlock {
+    pub inst: crate::typed::Instance,
+    pub parts: Vec<(usize, usize)>,
+}
+
+impl TypedBlock {
+    /// The block column of unit coordinate `u` in VU `g`.
+    pub fn col(&self, c: &Composite, g: usize, u: usize) -> usize {
+        if u < self.inst.root.rows.len() {
+            return c.slot_col(c.unit_net, g, 0) + u;
+        }
+        let p = self.inst.parts.partition_point(|&(_, base)| base <= u) - 1;
+        let (net, q) = self.parts[p];
+        c.slot_col(net, g, q) + u - self.inst.parts[p].1
+    }
+
+    /// Whether circuit `n` is the root's or a part's (the instance's evaluation fills its slots).
+    pub fn fills(&self, c: &Composite, n: usize) -> bool {
+        n == c.unit_net || self.parts.iter().any(|p| p.0 == n)
+    }
 }
 
 fn table_of<'a>(t: &'a crate::ir_tail::Tables, name: &str) -> &'a [u32] {
@@ -330,9 +356,22 @@ impl Composite {
             return Err(format!("META: the partition is not a {PARTITION_V1} (or the provisional {PARTITION_PROVISIONAL}) SHA-512 digest"));
         }
         let mut nets = Vec::new();
-        if typed {
-            let rows = crate::typed::unit_rows(&meta, &name)?;
-            nets.push(("unit".to_string(), std::panic::catch_unwind(|| IrUnitNet::parse(&rows)).map_err(|_| "the unit's derived rows do not parse")?));
+        let parse_net = |t: &str| std::panic::catch_unwind(|| IrUnitNet::parse(t)).map_err(|_| "a derived circuit's rows do not parse".to_string());
+        let mut instance = None;
+        if typed && crate::typed::is_flat(&meta) {
+            nets.push(("unit".to_string(), parse_net(&crate::typed::unit_rows(&meta, &name)?)?));
+        } else if typed {
+            for k in ["unit_log", "units_per_vu", "leaves_in", "leaves_out", "wires", "leaf_cuts", "out_net", "out_net_ports", "lookups"] {
+                if meta.get(k).is_some() {
+                    return Err(format!("META: {k:?}: a typed template's block wiring is derived from its types, never stated"));
+                }
+            }
+            let inst = crate::typed::instance(&meta)?;
+            nets.push(("root".to_string(), parse_net(&inst.root_text(&name))?));
+            for (&j, (d, _, _)) in &inst.layouts {
+                nets.push((d.clone(), parse_net(&inst.layout_text(j))?));
+            }
+            instance = Some(inst);
         }
         let mut lookups_fast: Vec<(usize, LookupNet)> = Vec::new();
         while let Some(l) = lines.next() {
@@ -409,8 +448,9 @@ impl Composite {
             return Err("META: the rows' hm96 key is not hm96-sha512/v1's default key".into());
         }
         let g = us(&meta, "vus_per_block")?;
-        let upv = us(&meta, "units_per_vu")?;
-        let unit_net = nets.iter().position(|n| n.0 == "unit").ok_or("no unit's expanded circuit")?;
+        // a typed template's unit is its instance's root, one per VU
+        let upv = if instance.is_some() { 1 } else { us(&meta, "units_per_vu")? };
+        let unit_net = nets.iter().position(|n| n.0 == if instance.is_some() { "root" } else { "unit" }).ok_or("no unit's expanded circuit")?;
         let mut ranges = Vec::new();
         for r in meta["ranges"].as_array().ok_or("META: ranges")? {
             let kind = match r["type"].as_str() {
@@ -422,8 +462,11 @@ impl Composite {
             ranges.push(Range { kind, slot_log: us(r, "slot_log")?, pos0: us(r, "pos0")?, count: us(r, "count")?, packed });
         }
         let ints = |v: &Value| -> Vec<Vec<i64>> { v.as_array().map(|a| a.iter().map(|u| u.as_array().map(|x| x.iter().filter_map(|y| y.as_i64()).collect()).unwrap_or_default()).collect()).unwrap_or_default() };
-        let leaves_in = ints(&meta["leaves_in"]);
-        let leaves_out: Vec<Vec<usize>> = ints(&meta["leaves_out"]).into_iter().map(|u| u.into_iter().map(|x| x as usize).collect()).collect();
+        let (leaves_in, leaves_out): (Vec<Vec<i64>>, Vec<Vec<usize>>) = if instance.is_some() {
+            (vec![Vec::new()], vec![Vec::new()])
+        } else {
+            (ints(&meta["leaves_in"]), ints(&meta["leaves_out"]).into_iter().map(|u| u.into_iter().map(|x| x as usize).collect()).collect())
+        };
         let dummy_bc = meta["dummy"]["bc"].as_array().ok_or("META: dummy bc")?.iter()
             .map(|d| hexb(d.as_str().unwrap_or("")).and_then(|b| b.try_into().map_err(|_| "b || c length".to_string()))).collect::<Result<Vec<[u8; BC_BYTES]>, String>>()?;
         let dummy_outputs = meta["dummy"]["outputs"].as_array().ok_or("META: dummy outputs")?.iter().map(|x| x.as_u64().unwrap_or(u64::MAX) as u16).collect();
@@ -437,7 +480,7 @@ impl Composite {
             }
         }
         let (sha_net, hm_net) = (net_of(SHA_NET)?, net_of(HM_NET)?);
-        let out_net = net_of(meta["out_net"].as_str().unwrap_or("unit"))?;
+        let out_net = if instance.is_some() { unit_net } else { net_of(meta["out_net"].as_str().unwrap_or("unit"))? };
         let out_ports: Vec<usize> = meta["out_net_ports"].as_array().map(|a| a.iter().filter_map(|x| x.as_u64()).map(|x| x as usize).collect()).unwrap_or_default();
         let leaf_cuts: Vec<(usize, usize, usize)> = meta["leaf_cuts"].as_array().map(|a| a.iter().map(|w| {
             (w[1].as_u64().unwrap_or(u64::MAX) as usize, w[2].as_u64().unwrap_or(u64::MAX) as usize, w[3].as_u64().unwrap_or(u64::MAX) as usize)
@@ -445,7 +488,7 @@ impl Composite {
         if meta["leaf_cuts"].as_array().is_some_and(|a| a.iter().any(|w| w[0] != "unit")) {
             return Err("META: a leaf cut into anything but a unit".into());
         }
-        let mut wires = Vec::new();
+        let mut wires = if instance.is_some() { row_wires(&ports, sha_net, hm_net) } else { Vec::new() };
         for w in meta["wires"].as_array().map(|a| a.as_slice()).unwrap_or(&[]) {
             let n = |i: usize| w[i].as_str().ok_or("a wire's circuit".to_string()).and_then(net_of);
             let u = |i: usize| w[i].as_u64().map(|x| x as usize).ok_or("a wire's index".to_string());
@@ -462,8 +505,19 @@ impl Composite {
             name, sha512, class_sha512, k_log: us(&meta, "k_log")?, leaf_scheme: meta["leaf_scheme"].clone(), meta, nets, ranges, ports,
             leaf_cuts_of: { let mut v = vec![Vec::new(); upv]; for &(u, j, l) in &leaf_cuts { if u < upv { v[u].push((j, l)); } } v },
             out_words, g, upv, unit_net, leaves_in, leaves_out, rows, sha_net, hm_net, out_net, out_ports, leaf_cuts, dummy_bc, dummy_outputs, per_vu, wires,
-            lookups: lookups_fast.into_iter().collect(),
+            lookups: lookups_fast.into_iter().collect(), typed: None,
         };
+        let typed = instance.map(|inst| {
+            let mut seen: BTreeMap<usize, usize> = BTreeMap::new();
+            let parts = inst.parts.iter().map(|&(j, _)| {
+                let n = c.nets.iter().position(|x| x.0 == inst.layouts[&j].0).unwrap();
+                let q = seen.entry(j).or_default();
+                *q += 1;
+                (n, *q - 1)
+            }).collect();
+            TypedBlock { inst, parts }
+        });
+        let c = Composite { typed, ..c };
         c.check()?;
         Ok(c)
     }
@@ -506,6 +560,22 @@ impl Composite {
         {
             return Err("the sha512x3 and hm96 circuits' ports are not (cv, msg) x 3 -> out x 3 and (cv, pad, y) -> bc".into());
         }
+        for (i, r) in self.ranges.iter().enumerate() {
+            if let Kind::Net(n) = r.kind
+                && r.count != self.g * self.per_vu[n]
+            {
+                return Err(format!("range {i} of {}: {} slots, not {} per VU", self.nets[n].0, r.count, self.per_vu[n]));
+            }
+        }
+        for (n, (nm, _)) in self.nets.iter().enumerate() {
+            let ranges = self.ranges.iter().filter(|r| r.kind == Kind::Net(n)).count();
+            if ranges != 1 {
+                return Err(format!("circuit {nm} has {ranges} ranges, not one"));
+            }
+        }
+        if let Some(t) = &self.typed {
+            return self.check_typed(t);
+        }
         let unit = &self.nets[self.unit_net].1;
         let ur: Vec<&Range> = self.ranges.iter().filter(|r| r.kind == Kind::Net(self.unit_net)).collect();
         if ur.len() != 1 || ur[0].count != self.g * self.upv || (self.out_net == self.unit_net && !ur[0].count.is_power_of_two()) {
@@ -526,19 +596,6 @@ impl Composite {
                 || self.leaves_out.iter().any(|l| !l.is_empty())
             {
                 return Err("the returned outputs are not the last stage's only output group: one 16-bit port per output word".into());
-            }
-        }
-        for (i, r) in self.ranges.iter().enumerate() {
-            if let Kind::Net(n) = r.kind
-                && r.count != self.g * self.per_vu[n]
-            {
-                return Err(format!("range {i} of {}: {} slots, not {} per VU", self.nets[n].0, r.count, self.per_vu[n]));
-            }
-        }
-        for (n, (nm, _)) in self.nets.iter().enumerate() {
-            let ranges = self.ranges.iter().filter(|r| r.kind == Kind::Net(n)).count();
-            if ranges != 1 {
-                return Err(format!("circuit {nm} has {ranges} ranges, not one"));
             }
         }
         // every input port of every slot is wired exactly once: the unit's leaf ports by its leaf map, the rest by a wire
@@ -600,6 +657,38 @@ impl Composite {
         }
         if unit.useful >= 1 << unit.unit_log {
             return Err("the unit fills its slot: no forced-zero row for a zero leaf".into());
+        }
+        if self.dummy_bc.len() != self.ports.len() || self.dummy_outputs.len() != n_out {
+            return Err("the pinned dummy values are not one per port and output leaf".into());
+        }
+        if self.leaf_scheme != leaf_scheme() {
+            return Err(format!("leaf-commitment scheme {} is not the one this verifier implements", self.leaf_scheme));
+        }
+        Ok(())
+    }
+
+    /// A typed template's block: the root one slot per VU, its inputs the rows' words and its outputs the output words
+    /// (16 bits each, one output group); each placed layout's slots its parts; a forced-zero row in the root's slot.
+    fn check_typed(&self, t: &TypedBlock) -> Result<(), String> {
+        let root = &self.nets[self.unit_net].1;
+        let n_out: usize = self.out_words.iter().sum();
+        if self.per_vu[self.unit_net] != 1 {
+            return Err("the instance's root is not one slot per VU".into());
+        }
+        if t.inst.ins != self.ports.iter().map(|p| (p.words, 16)).collect::<Vec<_>>() || t.inst.outs != self.out_words.iter().map(|&w| (w, 16)).collect::<Vec<_>>() {
+            return Err("the instance type's ports are not the rows' words and the output words".into());
+        }
+        if root.out_groups.len() != 1 || root.out_groups[0].bits.iter().sum::<usize>() != 16 * n_out || !(16 * n_out).is_power_of_two() {
+            return Err("the instance's outputs are not one output group of the output words".into());
+        }
+        for (&j, (d, s, _)) in &t.inst.layouts {
+            let n = self.nets.iter().position(|x| &x.0 == d).unwrap();
+            if self.per_vu[n] != t.inst.parts.iter().filter(|p| p.0 == j).count() || self.nets[n].1.unit_log != *s {
+                return Err(format!("layout {}..: not one slot of its range per part", &d[..16]));
+            }
+        }
+        if root.useful >= 1 << root.unit_log {
+            return Err("the instance's root fills its slot: no forced-zero row for a zero bit".into());
         }
         if self.dummy_bc.len() != self.ports.len() || self.dummy_outputs.len() != n_out {
             return Err("the pinned dummy values are not one per port and output leaf".into());
@@ -726,6 +815,31 @@ pub fn delta(c: &Composite, pin: usize) -> (Vec<(u32, u32)>, Vec<(u32, u32)>) {
             let (dst, src) = (c.slot_col(w.dst.0, g, w.dst.1) + dc.0, c.slot_col(w.src.0, g, w.src.1) + sc.0);
             for t in 0..dc.1 {
                 both(&mut da, &mut db, dst + t, src + t);
+            }
+        }
+    }
+    // a typed template, per VU: each input of the instance a copy of its message bit (input w: bit w % 16 of row word
+    // w / 16); each part's bound input rows their forms over the unit's columns, in A and B; the root's rows' entries at
+    // its parts' columns
+    if let Some(t) = &c.typed {
+        let cross = t.inst.cross();
+        for g in 0..c.g {
+            for (w, &u) in t.inst.root.in_cols.iter().enumerate() {
+                let (leaf, bit) = (w / 16, w % 16);
+                let p = starts.iter().rposition(|&s| s <= leaf).unwrap();
+                both(&mut da, &mut db, t.col(c, g, u), msg_col(g, p, 2 * (leaf - starts[p]) + bit / 8, bit % 8));
+            }
+            for (r, src) in t.inst.bind.iter().flatten() {
+                let i = t.col(c, g, *r) as u32;
+                for d in [&mut da, &mut db] {
+                    d.push((i, i));
+                    d.extend(src.iter().map(|&x| (i, t.col(c, g, x) as u32)));
+                }
+            }
+            for (r, xa, xb) in &cross {
+                let i = t.col(c, g, *r) as u32;
+                da.extend(xa.iter().map(|&x| (i, t.col(c, g, x) as u32)));
+                db.extend(xb.iter().map(|&x| (i, t.col(c, g, x) as u32)));
             }
         }
     }
@@ -1405,8 +1519,8 @@ impl Stmt {
         for p in 0..c.ports.len() {
             out.push(mk(Region::Digest(p), [bits(0, 10), bits(hr.slot_log + lp, lg)].concat(), hr.start() + (p << hr.slot_log) + bc0)?);
         }
-        if c.out_net != c.unit_net {
-            // the last stage's output group is the output words (one slot per VU)
+        if c.out_net != c.unit_net || c.typed.is_some() {
+            // the last stage's (or a typed instance's root's) output group is the output words (one slot per VU)
             let (net, r) = (&c.nets[c.out_net].1, c.range_of(c.out_net));
             let nbits = 16 * c.out_words.iter().sum::<usize>();
             out.push(mk(Region::Out, [bits(0, nbits.trailing_zeros() as usize), bits(r.slot_log, r.count.trailing_zeros() as usize)].concat(),
@@ -1493,8 +1607,21 @@ impl Stmt {
     }
 
     /// Unit slot `k` of block `b`'s input words (its leaf ports, from the rows; zeros for a padding instance or a zero leaf).
+    /// A typed template's: its instance's input bits, the rows' words in order (16 bits each).
     pub fn unit_inputs(&self, rows: Option<&[u8]>, b: usize, k: usize) -> Vec<F128> {
         let c = &self.c;
+        if c.typed.is_some() {
+            let words = c.ports.iter().map(|p| p.words).sum::<usize>();
+            let mut w = vec![F128::ZERO; (16 * words).div_ceil(WORD)];
+            let (Some(rows), Some(i)) = (rows, self.inst_of(b, k)) else { return w };
+            let rb = c.row_bytes();
+            for leaf in 0..words {
+                let v = u16::from_le_bytes([rows[i * rb + 2 * leaf], rows[i * rb + 2 * leaf + 1]]) as u64;
+                let col = 16 * leaf;
+                if col % WORD < 64 { w[col / WORD].lo |= v << (col % WORD) } else { w[col / WORD].hi |= v << (col % WORD - 64) }
+            }
+            return w;
+        }
         let unit = c.unit();
         let (g, u) = (k / c.upv, k % c.upv);
         let mut w = vec![F128::ZERO; unit.in_words];
@@ -1648,6 +1775,14 @@ impl Stmt {
     #[allow(clippy::type_complexity)]
     pub fn witness(&self, ins: &[Vec<Vec<F128>>], mask: &(dyn Fn(usize) -> Vec<F128> + Sync), nets: &BTreeMap<usize, &IrUnitNet>)
         -> (Vec<F128>, Vec<F128>, Vec<F128>, Vec<u8>) {
+        self.witness_with(ins, mask, nets, None)
+    }
+
+    /// [`Stmt::witness`], a typed template's root instance `flip.0` with its bound input row `flip.1` (unit coordinates)
+    /// flipped and everything downstream of it evaluated from the flipped bit.
+    #[allow(clippy::type_complexity)]
+    pub fn witness_with(&self, ins: &[Vec<Vec<F128>>], mask: &(dyn Fn(usize) -> Vec<F128> + Sync), nets: &BTreeMap<usize, &IrUnitNet>,
+                        flip: Option<(usize, usize)>) -> (Vec<F128>, Vec<F128>, Vec<F128>, Vec<u8>) {
         let c = &self.c;
         let kl = c.k_log;
         let n = 1usize << (self.m - 7);
@@ -1663,6 +1798,9 @@ impl Stmt {
             }
         });
         for (ni, (_, pinned)) in c.nets.iter().enumerate() {
+            if c.typed.as_ref().is_some_and(|t| t.fills(c, ni)) {
+                continue;
+            }
             let r = c.range_of(ni);
             let uw = 1usize << (pinned.unit_log - 7);
             for (x, uz, ua, ub) in self.slot_zab(ni, nets.get(&ni).copied().unwrap_or(pinned), &ins[ni]) {
@@ -1673,8 +1811,49 @@ impl Stmt {
                 bb[at..at + uw].copy_from_slice(&ub);
             }
         }
+        if let Some(t) = &c.typed {
+            for (at, uz, ua, ub) in self.typed_zab(t, &ins[c.unit_net], flip) {
+                z[at..at + uz.len()].copy_from_slice(&uz);
+                a[at..at + ua.len()].copy_from_slice(&ua);
+                bb[at..at + ub.len()].copy_from_slice(&ub);
+            }
+        }
         let zl = pack_z_lincheck_from_packed(&z, self.m, kl);
         (z, a, bb, zl)
+    }
+
+    /// A typed template's root and part slots: `(absolute F128 word offset, z, a, b)`, each VU evaluated from its root's
+    /// input words `ins` (`unit_inputs`) by [`crate::typed::Instance::eval64`], 64 at once.
+    #[allow(clippy::type_complexity)]
+    pub fn typed_zab(&self, t: &TypedBlock, ins: &[Vec<F128>], flip: Option<(usize, usize)>) -> Vec<(usize, Vec<F128>, Vec<F128>, Vec<F128>)> {
+        let c = &self.c;
+        let (wpb, rr) = (1usize << (c.k_log - 7), c.range_of(c.unit_net));
+        let (own, root_rows) = (t.inst.root.rows.len(), 1usize << c.nets[c.unit_net].1.unit_log);
+        let xs: Vec<usize> = (0..ins.len()).collect();
+        xs.par_chunks(64).flat_map_iter(|grp| {
+            let lanes = flip.filter(|f| grp.contains(&f.0)).map(|f| (f.1, 1u64 << (f.0 % 64)));
+            let (zz, aa, bq) = t.inst.eval64(&|w| grp.iter().enumerate().fold(0u64, |x, (l, &i)| x | (bit(&ins[i][w / WORD], w % WORD) << l)), lanes);
+            grp.iter().enumerate().flat_map(|(l, &x)| {
+                let (blk, g) = (x / rr.count, x % rr.count);
+                // lane l's bits `[lo, lo + used)` into a slot of `rows` rows
+                let pack = |v: &Vec<u64>, lo: usize, used: usize, rows: usize| -> Vec<F128> {
+                    let mut o = vec![F128::ZERO; rows / WORD];
+                    for r in 0..used {
+                        if (v[lo + r] >> l) & 1 == 1 {
+                            set_bit(&mut o[r / WORD], r % WORD);
+                        }
+                    }
+                    o
+                };
+                let mut out = vec![(blk * wpb + c.slot_col(c.unit_net, g, 0) / WORD, pack(&zz, 0, own, root_rows), pack(&aa, 0, own, root_rows), pack(&bq, 0, own, root_rows))];
+                for (p, &(j, base)) in t.inst.parts.iter().enumerate() {
+                    let (net, q) = t.parts[p];
+                    let (span, used) = (1usize << t.inst.layouts[&j].1, t.inst.layouts[&j].2.rows.len());
+                    out.push((blk * wpb + c.slot_col(net, g, q) / WORD, pack(&zz, base, used, span), pack(&aa, base, used, span), pack(&bq, base, used, span)));
+                }
+                out
+            }).collect::<Vec<_>>()
+        }).collect()
     }
 
     /// Every slot of circuit `ni`'s `(instance, z, a, b)` words from its input words (a lookup: its fast witness).
@@ -1760,7 +1939,7 @@ impl Stmt {
         let np = c.ports.len();
         match reg {
             Region::Digest(p) => (0..c.g).flat_map(|g| match self.inst_of(b, g) { Some(i) => inst.bc(i, *p, np), None => c.dummy_bc[*p] }).collect(),
-            Region::Out if c.out_net != c.unit_net => {
+            Region::Out if c.out_net != c.unit_net || c.typed.is_some() => {
                 let n_out = c.out_words.iter().sum::<usize>();
                 (0..c.g).flat_map(|g| (0..n_out).flat_map(move |o| match self.inst_of(b, g) { Some(i) => inst.outputs[i * n_out + o], None => c.dummy_outputs[o] }.to_le_bytes()))
                     .collect()

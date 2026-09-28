@@ -242,6 +242,8 @@ struct Wit {
     flip_z: Option<usize>,
     /// after the inputs converge: flip this bit of a unit's cut input (net, instance, column) — a tampered private cut word
     cut_flip: Option<(usize, usize, usize)>,
+    /// a typed template's: a part's bound input row (root instance, unit coordinate) flipped as it's evaluated
+    typed_flip: Option<(usize, usize)>,
     /// evaluate these circuits instead of the pinned ones (a swapped tail)
     nets: Arc<BTreeMap<usize, &'static flock_live::ir_block::IrUnitNet>>,
 }
@@ -266,7 +268,7 @@ fn witness(st: &Stmt, w: &Wit, device: bool) -> (WitData, f64) {
     let t = Instant::now();
     #[cfg(feature = "gpu")]
     // a tail that returns the outputs interleaves with the units round by round: the device's two passes cannot follow it
-    if device && w.flip_z.is_none() && w.cut_flip.is_none() && w.nets.is_empty() && st.c.out_net == st.c.unit_net {
+    if device && w.flip_z.is_none() && w.cut_flip.is_none() && w.nets.is_empty() && st.c.out_net == st.c.unit_net && st.c.typed.is_none() {
         use rayon::prelude::*;
         let ur = st.c.unit_range();
         let ri: Vec<_> = (0..st.blocks()).into_par_iter().map(|b| (w.rowin)(b)).collect();
@@ -282,7 +284,7 @@ fn witness(st: &Stmt, w: &Wit, device: bool) -> (WitData, f64) {
     #[cfg(feature = "gpu")]
     // a tail that returns the outputs (a chain of units, the tail's stages): the host converges every slot's inputs and computes
     // the stages and lookups; the device the compressions, and the units from their converged inputs
-    if device && w.flip_z.is_none() && w.cut_flip.is_none() && w.nets.is_empty() {
+    if device && w.flip_z.is_none() && w.cut_flip.is_none() && w.nets.is_empty() && st.c.typed.is_none() {
         use rayon::prelude::*;
         let c = &st.c;
         let ri: Vec<_> = (0..st.blocks()).into_par_iter().map(|b| (w.rowin)(b)).collect();
@@ -302,7 +304,7 @@ fn witness(st: &Stmt, w: &Wit, device: bool) -> (WitData, f64) {
         let word = &mut ins[n][x][col / 128];
         if col % 128 < 64 { word.lo ^= 1 << (col % 128) } else { word.hi ^= 1 << (col % 128 - 64) }
     }
-    let (mut z, a, b, zl) = st.witness(&ins, &*w.mask, &w.nets);
+    let (mut z, a, b, zl) = st.witness_with(&ins, &*w.mask, &w.nets, w.typed_flip);
     if let Some(bit) = w.flip_z {
         z[bit / 128] = z[bit / 128] + if bit % 128 < 64 { F128::new(1 << (bit % 128), 0) } else { F128::new(0, 1 << (bit % 128 - 64)) };
     }
@@ -420,10 +422,12 @@ fn wit(st: &Arc<Stmt>, inst: &Arc<Instances>, plan: &Plan, zero: bool, seed: Pro
     });
     let ur = st.c.unit_range();
     let unit = st.c.unit();
-    let cut_flip = (plan.cut_flip && unit.in_groups.len() > 1).then(|| (st.c.unit_net, 0, unit.in_groups[1].col * 128 + 3));
+    let cut_flip = (plan.cut_flip && unit.in_groups.len() > 1 && st.c.typed.is_none()).then(|| (st.c.unit_net, 0, unit.in_groups[1].col * 128 + 3));
+    // a typed template's cut words are its parts' bound inputs: the first one of instance 0
+    let typed_flip = st.c.typed.as_ref().filter(|_| plan.cut_flip).and_then(|t| t.inst.bind.iter().flatten().next()).map(|b| (0, b.0));
     let nets = if plan.tail_swapped { forged_stages(st) } else { BTreeMap::new() };
     Wit { rowin, inputs, mask, flip_z: plan.unit_flip.then_some(ur.slot(ur.count.min(6) - 1) + st.c.unit().in_words * 128 + 40), cut_flip,
-          nets: Arc::new(nets) }
+          typed_flip, nets: Arc::new(nets) }
 }
 
 /// The tail stages of the forged circuit (`--forged`: the same template with every positive tail constant x 4, staged by
@@ -643,7 +647,8 @@ const CASES: &[(&str, bool, bool)] = &[
 
 fn skipped(st: &Stmt, name: &str) -> bool {
     let multi_block = st.c.ports.iter().any(|p| p.comps > 1);
-    let cut = st.c.wires.iter().any(|w| w.dst.0 != st.c.sha_net && w.dst.0 != st.c.hm_net);
+    let cut = st.c.wires.iter().any(|w| w.dst.0 != st.c.sha_net && w.dst.0 != st.c.hm_net)
+        || st.c.typed.as_ref().is_some_and(|t| t.inst.bind.iter().any(|b| !b.is_empty()));
     // a tail with no positive constant to forge (GEMM's: the zero accumulator and the cast) forges to itself: nothing to swap
     let forged_same = std::fs::read_to_string(arg("--forged", "circuit-forged.txt"))
         .map(|f| f == std::fs::read_to_string(arg("--circuit", "")).unwrap_or_default()).unwrap_or(true);
@@ -883,12 +888,16 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         let meta: Value = serde_json::from_str(&lines[1][5..]).unwrap();
         let with_meta = |m: &Value| { let mut l = lines.clone(); l[1] = format!("META {}", serde_json::to_string(m).unwrap()); l.join("\n") };
         let mut type_altered = meta.clone();
-        let c = &mut type_altered["types"][meta["unit_type"].as_str().unwrap_or("")]["items"][0][1][1];
+        let ut = meta["unit_type"].as_str().unwrap_or("");
+        let and = meta["types"][ut]["items"].as_array().and_then(|a| a.iter().position(|it| it[0] == 0)).unwrap_or(0);
+        let c = &mut type_altered["types"][ut]["items"][and][1][1];
         *c = json!(1 - c.as_u64().unwrap_or(0));
         let mut layout_altered = meta.clone();
         let split = if meta["layouts"][0]["in_split"] == json!([]) { json!([1]) } else { json!([]) };
         layout_altered["layouts"][0]["in_split"] = split;
-        let rows = flock_live::typed::unit_rows(&meta, &st.c.name).unwrap();
+        let rows = if flock_live::typed::is_flat(&meta) { flock_live::typed::unit_rows(&meta, &st.c.name) } else {
+            flock_live::typed::instance(&meta).map(|i| i.root_text(&st.c.name))
+        }.unwrap();
         let with_rows = format!("{text}CIRCUIT unit {}\n{rows}", rows.lines().count());
         let why: Vec<Option<String>> = [with_meta(&type_altered), with_meta(&layout_altered), with_rows].iter()
             .map(|t| Composite::parse(t, Some(&arg("--tables", "tables"))).err()).collect();
@@ -1019,8 +1028,11 @@ fn determinism_case(_: &Arc<Stmt>, _: &Arc<Instances>, _: bool) -> Value {
 fn relabel(text: &str) -> String {
     let mut lines: Vec<String> = text.split('\n').map(|s| s.to_string()).collect();
     let mut meta: Value = serde_json::from_str(&lines[1][5..]).unwrap();
-    let l = meta["leaves_in"][0].as_array_mut().unwrap();
-    l.swap(0, 1);
+    // a unit's first two leaves swapped; a typed template (no leaf maps) its instance's first two outputs
+    match meta.get_mut("leaves_in").and_then(|l| l.get_mut(0)).and_then(Value::as_array_mut) {
+        Some(l) => l.swap(0, 1),
+        None => flock_live::typed::relabel(&mut meta).unwrap(),
+    }
     lines[1] = format!("META {}", serde_json::to_string(&meta).unwrap());
     lines.join("\n")
 }
@@ -1129,6 +1141,15 @@ fn main() {
     }
     let tb = Instant::now();
     let c = load_composite(&arg("--circuit", "circuit.txt"));
+    if cmd == "rows" {
+        // a typed statement's rows as this prover derives them, laid out as staging's rows/ (to diff the two mirrors)
+        let out = arg("--out", "rows");
+        std::fs::create_dir_all(&out).expect("--out");
+        for (f, text) in flock_live::typed::staged_rows(&c.meta, &c.name).unwrap_or_else(|e| refuse(e)) {
+            std::fs::write(format!("{out}/{f}"), text).expect("rows");
+        }
+        return;
+    }
     let pin = arg("--pin", "");
     if cmd == "serve" && pin.is_empty() {
         refuse("serve needs --pin (the pinned circuit's SHA-512)".into());
