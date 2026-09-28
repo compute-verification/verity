@@ -7,12 +7,12 @@ import Proofs.Flock.Soundness.Discharge.Exec.LawDraw
 
 `zk_sessions_recursive_upto` takes one `Openings` for every history and stage, while the value binding of a session of
 V* at a history (`ZkOuter.vb`) is built from that history's inputs. What the openings read is fixed by the session's
-circuit `c`: the commit strings (`PosK`: unit `u`'s row of port `q`, or a single gate), their values (`ValK`: bit
-strings up to the widest row) and each one's leaf scheme (`schemeK`: `hm96-sha512/row/v1` of `rowEnc` at a row,
-`SHA-512(bitCode v)` at a single gate). `obK` is those openings, and the value binding's openings at each history are
-`obK` by definition (`ZkOuter.openingsOf_vb`); what a history's inputs change is only the registered digests
-(`ValueBindingZ.cs`, from the public file). V*'s sessions together open `obS`: session `j`'s `obK`, tagged by `j`
-(`Openings.sigma`).
+circuit `c`: the commit strings (`PosK`: unit `u`'s row of port `q`, input or output, or a single gate), their values
+(`ValK`: bit strings up to the widest row) and each one's leaf scheme (`schemeK`: `hm96X` of the row's port's bytes,
+`HiddenExec.encKeyH`, at a row, `SHA-512(bitCode v)` at a single gate). `obK` is those openings, and the value
+binding's openings at each history are `obK` by definition (`ZkOuter.openingsOf_vb`); what a history's inputs change is
+only the registered digests (`ValueBindingZ.cs`, from the public file). V*'s sessions together open `obS`: session
+`j`'s `obK`, tagged by `j` (`Openings.sigma`).
 
 * `candWeightK`: `candWeightZC` read off a session's law alone (`ZkOuter.candWeight_vb`);
 * `ZkOuter.candTransfer`: `zk_session_candValsR` with `candTermZC_le` at one session, the trial for each commit string a
@@ -40,6 +40,7 @@ namespace FlockSoundness.Discharge.Recursion
 
 open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed StrictCR
   DecodeZL Composed ZkReg
+open ZkHidden (planZHJ tabZHJ)
 open scoped ENNReal
 
 section Fixed
@@ -47,16 +48,18 @@ section Fixed
 variable (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ)
 
 /-- **V*'s commit strings**: unit `u`'s row of port `q`, or a single gate (`Readers.ofRows`' positions at
-`keyReaders`). -/
+`HiddenExec.keyReadersH`). -/
 abbrev PosK : Type := (Fin n × Fin c.ports.size) ⊕ Fin ((keyProg c hU n).circuit (Layout.outsOf c hU n)).N
 
 /-- **Their values**: bit strings of at most the widest row's `16 · words` bits, with their width. -/
 abbrev ValK : Type := Layout.BitVal (Finset.univ.sup (Layout.portRowW c) + 1)
 
-/-- **Each commit string's leaf scheme**: `hm96-sha512/row/v1` of `rowEnc` at a row, `SHA-512(bitCode v)` at a single
+/-- **Each commit string's leaf scheme**: `hm96X` of the bytes its port's hash reads (`HiddenExec.encKeyH`:
+`sha512/row/v1`'s, `/row/v2`'s or `/row-seg/v1`'s, `HiddenExec.encPortH`) at a row, `SHA-512(bitCode v)` at a single
 gate. -/
 noncomputable def schemeK (p : PosK c hU n) : Binding.ExplicitLeaf (ValK c) :=
-  if p.isLeft = true then Binding.ExplicitLeaf.hm96 Layout.rowEnc Layout.rowEnc_inj
+  if p.isLeft = true then
+    Binding.ExplicitLeaf.hm96X (HiddenExec.encKeyH c p) (HiddenExec.extKeyH c p) (HiddenExec.extKeyH_spec c p)
   else Binding.ExplicitLeaf.plain Layout.bitCode Layout.bitCode_inj
 
 /-- **V*'s openings**: a commit string, a value and a salt, opening the commit string's leaf of the value under the
@@ -74,9 +77,10 @@ noncomputable def obK : Openings H512 (ValK c) where
     obtain ⟨rfl, hl⟩ := hc
     exact (schemeK c hU n p).pair_spec v y v' y' hv hl
 
-/-- The commit string holding wire `g` (`Readers.ofRows`' `pos`): its row when `keyRowOf` has one, else its own. -/
+/-- The commit string holding wire `g` (`Readers.ofRows`' `pos`): its row when `HiddenExec.rowOfH` has one (an input
+row's bit, or a returned output's bit of its output row), else its own. -/
 noncomputable def posK (g : Fin ((keyProg c hU n).circuit (Layout.outsOf c hU n)).N) : PosK c hU n :=
-  match Layout.keyRowOf c hU n (Layout.portRowW c) g with
+  match HiddenExec.rowOfH c hU n (Layout.outsOf c hU n) g with
   | some (u, ⟨q, _⟩) => .inl (u, q)
   | none => .inr g
 
@@ -84,7 +88,7 @@ noncomputable def posK (g : Fin ((keyProg c hU n).circuit (Layout.outsOf c hU n)
 only bit. -/
 noncomputable def idxK (g : Fin ((keyProg c hU n).circuit (Layout.outsOf c hU n)).N) :
     Fin (Finset.univ.sup (Layout.portRowW c) + 1) :=
-  match Layout.keyRowOf c hU n (Layout.portRowW c) g with
+  match HiddenExec.rowOfH c hU n (Layout.outsOf c hU n) g with
   | some (_, ⟨q, k⟩) => Fin.castLE ((Finset.le_sup (Finset.mem_univ q)).trans (Nat.le_succ _)) k
   | none => ⟨0, Nat.succ_pos _⟩
 
@@ -168,27 +172,27 @@ theorem execOS_subset_full_mem {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] 
 
 namespace ZkOuter
 
-variable {mPts nv : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
-  {Lv : Law nv} (zo : ZkOuter mPts nv Reg' c hU hscope Lv) (dg : ByteArray → ByteArray) (N : ℕ)
+variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
+  {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv) (dg : ByteArray → ByteArray) (N : ℕ)
 
 /-- **The value binding's openings are `obK` at every history.** -/
 theorem openingsOf_vb :
-    openingsOf execArith ((keyProg c hU nv).partition (Layout.outsOf c hU nv)) (planZAt zo.dj zo.y₀)
-      (tabZAt zo.dj zo.y₀) zo.vb = obK c hU nv := rfl
+    openingsOf execArith ((keyProg c hU nv).partition (Layout.outsOf c hU nv)) (planZHJ zo.dj zo.y₀)
+      (tabZHJ zo.dj zo.y₀) zo.vb = obK c hU nv := rfl
 
 /-- **The trial for commit string `pos`** of V*'s session at the strategy `τ`, as a finder of `obK`'s openings. -/
 noncomputable def trial (k Rw : ℕ) (τ : Strategy (zo.game dg N)) (pos : PosK c hU nv) :
     Finder (Finset (obK c hU nv).Op) :=
-  trialFinderZC execArith hs512 ((keyProg c hU nv).partition (Layout.outsOf c hU nv)) (planZAt zo.dj zo.y₀)
-    (tabZAt zo.dj zo.y₀) zo.vb (reg (zo.sim dg N τ)) (cont (zo.sim dg N τ)) k Rw pos
+  trialFinderZC execArith hs512 ((keyProg c hU nv).partition (Layout.outsOf c hU nv)) (planZHJ zo.dj zo.y₀)
+    (tabZHJ zo.dj zo.y₀) zo.vb (reg (zo.sim dg N τ)) (cont (zo.sim dg N τ)) k Rw pos
 
 /-- **A stage's slack at the strategy `τ`**: `ksAvgStrictZ + linkBoundZC + candSlackZC` of V*'s session. -/
 noncomputable def stageSlack (k Rw M : ℕ) (ρ t' qF qS : ℝ) (τ : Strategy (zo.game dg N)) : ℝ≥0∞ :=
-  ksAvgStrictZ (planZAt zo.dj zo.y₀) Lv k qF qS (reg (zo.sim dg N τ)) +
-    linkBoundZC execArith hs512 ((keyProg c hU nv).partition (Layout.outsOf c hU nv)) (planZAt zo.dj zo.y₀)
-      (tabZAt zo.dj zo.y₀) zo.vb k Rw M ρ t' (reg (zo.sim dg N τ)) (cont (zo.sim dg N τ)) +
-    candSlackZC (L := Lv) execArith ((keyProg c hU nv).partition (Layout.outsOf c hU nv)) (planZAt zo.dj zo.y₀)
-      (tabZAt zo.dj zo.y₀) zo.vb k Rw ρ
+  ksAvgStrictZ (planZHJ zo.dj zo.y₀) Lv k qF qS (reg (zo.sim dg N τ)) +
+    linkBoundZC execArith hs512 ((keyProg c hU nv).partition (Layout.outsOf c hU nv)) (planZHJ zo.dj zo.y₀)
+      (tabZHJ zo.dj zo.y₀) zo.vb k Rw M ρ t' (reg (zo.sim dg N τ)) (cont (zo.sim dg N τ)) +
+    candSlackZC (L := Lv) execArith ((keyProg c hU nv).partition (Layout.outsOf c hU nv)) (planZHJ zo.dj zo.y₀)
+      (tabZHJ zo.dj zo.y₀) zo.vb k Rw ρ
 
 open Classical in
 /-- **A stage's slack where the strategy's knowledge finders satisfy `cr/sha-512`** (`TabCR`), else `1`. -/
@@ -198,11 +202,11 @@ noncomputable def slackIf (k Rw M : ℕ) (ρ t' qF qS : ℝ) (τ : Strategy (zo.
 /-- **A stage's slack in fork form**: the drawn units' statistical errors, the tables' (`tableErrZ`), the link's
 (`linkErrZC`) and the waits' (`waitErrZC`); `stageSlack` with no finder budgets and no SHA-512 evaluations to count. -/
 noncomputable def slackCR (k Rw M : ℕ) (ρ : ℝ) (τ : Strategy (zo.game dg N)) : ℝ≥0∞ :=
-  tableErrZ (planZAt zo.dj zo.y₀) Lv k (reg (zo.sim dg N τ)) +
-    linkErrZC execArith ((keyProg c hU nv).partition (Layout.outsOf c hU nv)) (planZAt (Reg := Reg') zo.dj zo.y₀)
-      (tabZAt zo.dj zo.y₀) zo.vb Lv k Rw M ρ +
-    waitErrZC execArith ((keyProg c hU nv).partition (Layout.outsOf c hU nv)) (planZAt (Reg := Reg') zo.dj zo.y₀)
-      (tabZAt zo.dj zo.y₀) zo.vb Lv k Rw ρ
+  tableErrZ (planZHJ zo.dj zo.y₀) Lv k (reg (zo.sim dg N τ)) +
+    linkErrZC execArith ((keyProg c hU nv).partition (Layout.outsOf c hU nv)) (planZHJ (Reg := Reg') zo.dj zo.y₀)
+      (tabZHJ zo.dj zo.y₀) zo.vb Lv k Rw M ρ +
+    waitErrZC execArith ((keyProg c hU nv).partition (Layout.outsOf c hU nv)) (planZHJ (Reg := Reg') zo.dj zo.y₀)
+      (tabZHJ zo.dj zo.y₀) zo.vb Lv k Rw ρ
 
 /-- **With no fork, `slackIf` at no budgets is the fork-form slack.** -/
 theorem slackIf_le {k Rw M : ℕ} (ρ : ℝ) {τ : Strategy (zo.game dg N)} (h : ¬ zo.Fork dg N k Rw M τ) :
@@ -216,26 +220,27 @@ theorem slackIf_le {k Rw M : ℕ} (ρ : ℝ) {τ : Strategy (zo.game dg N)} (h :
 
 /-- The value binding's commit string of each wire is `posK`'s. -/
 theorem vb_pos (g : Fin ((keyProg c hU nv).circuit (Layout.outsOf c hU nv)).N) : zo.vb.pos g = posK c hU nv g := by
-  dsimp only [vb, HmRowsZ.bindingZ, LayoutZ.bindingZ, layZAt, LayoutZ.ofShadow, Layout.keyedLayout, Layout.keyLayout,
-    Layout.Readers.layout, Layout.ofBits, Layout.keyReaders]
+  dsimp only [vb, vbHJ, rsZHJS, HmRowsZX.bindingZ, LayoutZ.bindingZ, ZkHidden.layZHJ, LayoutZ.ofShadow,
+    ZkHidden.layShHJ, HiddenExec.keyLayoutH, Layout.Readers.layout, Layout.ofBits, HiddenExec.keyReadersH]
   unfold posK
-  rcases h : Layout.keyRowOf c hU nv (Layout.portRowW c) g with _ | ⟨u, q, k⟩
+  rcases h : HiddenExec.rowOfH c hU nv (Layout.outsOf c hU nv) g with _ | ⟨u, q, k⟩
   · exact Layout.ofRows_pos_none _ h
   · exact Layout.ofRows_pos_some _ h
 
 /-- The value binding's bit of each wire is `bitK`'s. -/
 theorem vb_bit (v : ValK c) (g : Fin ((keyProg c hU nv).circuit (Layout.outsOf c hU nv)).N) :
     zo.vb.bit v g = bitK c hU nv v g := by
-  dsimp only [vb, HmRowsZ.bindingZ, LayoutZ.bindingZ, layZAt, LayoutZ.ofShadow, Layout.keyedLayout, Layout.keyLayout,
-    Layout.Readers.layout, Layout.ofBits, Layout.keyReaders, Layout.Readers.ofRows]
+  dsimp only [vb, vbHJ, rsZHJS, HmRowsZX.bindingZ, LayoutZ.bindingZ, ZkHidden.layZHJ, LayoutZ.ofShadow,
+    ZkHidden.layShHJ, HiddenExec.keyLayoutH, Layout.Readers.layout, Layout.ofBits, HiddenExec.keyReadersH,
+    Layout.Readers.ofRows]
   unfold bitK idxK
-  rcases Layout.keyRowOf c hU nv (Layout.portRowW c) g with _ | ⟨u, q, k⟩ <;> rfl
+  rcases HiddenExec.rowOfH c hU nv (Layout.outsOf c hU nv) g with _ | ⟨u, q, k⟩ <;> rfl
 
 open Classical in
 /-- **`candWeightZC` of V*'s session reads only V*'s law**: it is `candWeightK`. -/
 theorem candWeight_vb (Sk : Finset (PosK c hU nv)) (ρ : ℝ) (pos : PosK c hU nv) :
-    candWeightZC (L := Lv) execArith ((keyProg c hU nv).partition (Layout.outsOf c hU nv)) (planZAt zo.dj zo.y₀)
-      (tabZAt zo.dj zo.y₀) zo.vb Sk ρ pos = candWeightK c hU nv Lv Sk ρ pos := by
+    candWeightZC (L := Lv) execArith ((keyProg c hU nv).partition (Layout.outsOf c hU nv)) (planZHJ zo.dj zo.y₀)
+      (tabZHJ zo.dj zo.y₀) zo.vb Sk ρ pos = candWeightK c hU nv Lv Sk ρ pos := by
   unfold candWeightZC candWeightK
   split_ifs with h1 h2 h2
   · exact congrArg (fun x : ℕ => ENNReal.ofReal ((x : ℝ) / Fintype.card Lv.Ω / (1 - ρ)))
@@ -251,18 +256,19 @@ theorem candWeight_vb (Sk : Finset (PosK c hU nv)) (ρ : ℝ) (pos : PosK c hU n
 whose layer bit is not wv's] ≤ stageSlack + Σ_pos candWeightK pos · Pr[the trial for pos opens pos's registered digest
 to a value other than wv pos]`; `zk_session_candValsR` with `candTermZC_le`. -/
 theorem candTransfer {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
-    (hr : ∀ S R j, rateZ (planZAt (Reg := Reg') zo.dj zo.y₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t')
+    (hr : ∀ S R j, rateZ (planZHJ (Reg := Reg') zo.dj zo.y₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t')
     (τ : Strategy (zo.game dg N)) {qF qS : ℝ} (hCR : zo.TabCR dg N qF qS τ)
     (Sk : Finset (PosK c hU nv)) (wv : PosK c hU nv → ValK c) :
     prob (fun o => LiveAcceptsZKR zo.I zo.own o ∧
         ∃ u ∈ o.2.1, ∃ g ∈ ((keyProg c hU nv).partition (Layout.outsOf c hU nv)).io u,
-          CandBadZ execArith ((keyProg c hU nv).partition (Layout.outsOf c hU nv)) (planZAt zo.dj zo.y₀)
-            (tabZAt zo.dj zo.y₀) zo.vb Sk wv (zo.layer dg N k Rw τ) g) (zo.game dg N) τ ≤
+          CandBadZ execArith ((keyProg c hU nv).partition (Layout.outsOf c hU nv)) (planZHJ zo.dj zo.y₀)
+            (tabZHJ zo.dj zo.y₀) zo.vb Sk wv (zo.layer dg N k Rw τ) g) (zo.game dg N) τ ≤
       zo.stageSlack dg N k Rw M ρ t' qF qS τ +
         ∑ pos, candWeightK c hU nv Lv Sk ρ pos *
           prob (OffAt (obK c hU nv) (zo.vb.cs (reg (zo.sim dg N τ)) pos) (wv pos)) (zo.trial dg N k Rw τ pos).g
             (zo.trial dg N k Rw τ pos).s := by
-  refine ((zk_session_candValsR zo.I zo.ht zo.own zo.dj zo.y₀ zo.wr dg N zo.hc hU zo.hpub hscope Lv
+  refine ((zk_session_candValsR zo.I zo.ht zo.own zo.dj zo.y₀ zo.wr dg N zo.hcH hU zo.hpub
+    (Layout.scopeOkH_of_scopeOk hscope) Lv
     zo.hDraw zo.hTags zo.hRec hk hRw hM hρ hr ht' Sk wv τ hCR).trans (add_le_add le_rfl
       (candTermZC_le execArith hs512 _ _ _ zo.vb Sk wv _ _ k Rw hρ))).trans_eq ?_
   rw [← add_assoc]
@@ -392,7 +398,7 @@ is read at every draw (`hfull`, `vCovers_full`). -/
 theorem sessions_stage_le
     (zs : (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray → ByteArray) (N : ℕ)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
-    (hr : ∀ j S' R' i, rateZ (planZAt (Reg := Reg') (zs j).dj (zs j).y₀ S' R') i k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t')
+    (hr : ∀ j S' R' i, rateZ (planZHJ (Reg := Reg') (zs j).dj (zs j).y₀ S' R') i k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t')
     (qF qS : ℝ) (Sk : (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
     (hfull : ∀ j g, posK (Vs j).c (Vs j).hU (Vs j).nv g ∈ Sk j →
       ∃ u, g ∈ ((keyProg (Vs j).c (Vs j).hU (Vs j).nv).partition (Layout.outsOf (Vs j).c (Vs j).hU (Vs j).nv)).io u)
@@ -478,7 +484,7 @@ registered digests at `Sk j` being `cs j` at every registration where it accepts
 theorem outerV_stage_le
     (zs : Reg₂ → (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray → ByteArray) (N : ℕ)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
-    (hr : ∀ R₂ j S' R' i, rateZ (planZAt (Reg := Reg') (zs R₂ j).dj (zs R₂ j).y₀ S' R') i k ≤ ρ) {t' : ℝ}
+    (hr : ∀ R₂ j S' R' i, rateZ (planZHJ (Reg := Reg') (zs R₂ j).dj (zs R₂ j).y₀ S' R') i k ≤ ρ) {t' : ℝ}
     (ht' : 0 ≤ t') (qF qS : ℝ) (Sk : (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
     (hfull : ∀ j g, posK (Vs j).c (Vs j).hU (Vs j).nv g ∈ Sk j →
       ∃ u, g ∈ ((keyProg (Vs j).c (Vs j).hU (Vs j).nv).partition (Layout.outsOf (Vs j).c (Vs j).hU (Vs j).nv)).io u)
@@ -571,7 +577,7 @@ theorem zk_sessions_recursive_full
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the count curve's parameters, and the finders' budgets
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
-    (hr : ∀ R ω t R₂ j S' R' i, rateZ (planZAt (Reg := Reg') (zs R ω t R₂ j).dj (zs R ω t R₂ j).y₀ S' R') i k ≤ ρ)
+    (hr : ∀ R ω t R₂ j S' R' i, rateZ (planZHJ (Reg := Reg') (zs R ω t R₂ j).dj (zs R ω t R₂ j).y₀ S' R') i k ≤ ρ)
     {t' : ℝ} (ht' : 0 ≤ t') (qF qS qW qR : ℝ)
     -- the recursive prover
     (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N))
@@ -643,7 +649,7 @@ theorem zk_sessions_recursive_fork
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
-    (hr : ∀ R ω t R₂ j S' R' i, rateZ (planZAt (Reg := Reg') (zs R ω t R₂ j).dj (zs R ω t R₂ j).y₀ S' R') i k ≤ ρ)
+    (hr : ∀ R ω t R₂ j S' R' i, rateZ (planZHJ (Reg := Reg') (zs R ω t R₂ j).dj (zs R ω t R₂ j).y₀ S' R') i k ≤ ρ)
     (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N))
     (x : Reg → L.Ω → I.Stmt) (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg)
     (hbr : VBridge zs dg N k Rw x wmsg)

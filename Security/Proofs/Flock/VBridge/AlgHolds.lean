@@ -76,8 +76,8 @@ section Decode
 open FlockSoundness FlockSoundness.Audit FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
 open FlockVBridge.Decode
 
-variable {mPts nU : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
-  {Lv : Law nU} (zo : ZkOuter mPts nU Reg' c hU hscope Lv)
+variable {mPts nU J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
+  {Lv : Law nU} (zo : ZkOuter mPts nU J Reg' c hU hscope Lv)
 
 /-- **A part the verifier pinned computes its residuals at its group's indices** (`decode_check`, its `hwI` and `hV`
 from `part_sizes`): copy `j`'s row ports registered bits of `w` at `wIdx` of group `p`'s ports and its `v` port of the
@@ -144,8 +144,8 @@ open FlockSoundness FlockSoundness.Audit FlockSoundness.Discharge FlockSoundness
 open FlockVBridge.Decode
 open FlockVBridge.AccChain (RegOut copyVal_regOut)
 
-variable {mPts nU : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
-  {Lv : Law nU} (zo : ZkOuter mPts nU Reg' c hU hscope Lv)
+variable {mPts nU J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
+  {Lv : Law nU} (zo : ZkOuter mPts nU J Reg' c hU hscope Lv)
 
 /-- **Copy `j` of unit `u` is part `p` of the groups `gs`, its outputs registered zero**: `decode_part`'s facts about
 one copy, with every output column of the part (`16 · RES_OUT_WORDS` bits) a registered 0 (`RegOut`), as V* registers

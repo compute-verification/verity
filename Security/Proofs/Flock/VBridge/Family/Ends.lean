@@ -36,8 +36,8 @@ open FlockSoundness.Discharge.Hm (bitL)
 
 section Keyed
 
-variable {mPts nv : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
-  {Lv : Law nv} (zo : ZkOuter mPts nv Reg' c hU hscope Lv)
+variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
+  {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
 
 /-- **Copy 0's input column `col` of unit `u` is keyed by bit `k` of a row `own` names, at the registered root `pa` and
 position `pos`**: its Δ key (`Aliased.srcKey`) is bit `k` of row port `q`, the session's reads file names `q`, and
@@ -261,12 +261,12 @@ def OpenKeys (pa : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → Flock
           (r.val * F.nOpen + ((List.range ℓ).map F.q).sum + j) ∧
         ReadCol (Rows.ofNet (F.Vs (F.sessO ℓ)).hU) (accCol (levelLanes F.sh ℓ) (F.depth ℓ) + b)
 
-/-- Obligation: discharged by acceptance once the layout keys an output gate to its output row (`Layout.keyRowOf` is
-`some` only at input gates, KeyProg.lean:202-203), which makes `RegOut` hold at `acc_out`'s columns.
+/-- Obligation: to be discharged by acceptance, now that the layout keys a returned output gate to its output row
+(`HiddenExec.rowOfH`), which makes `RegOut` hold at `acc_out`'s columns where they are registered reads.
 **The openings' `acc_out` in the layers are `V`'s next rows** (`HAccRows`' second half): at every accepted outer
 proof, the first two elements of opening `j` of level `ℓ` of rep `r`'s `acc_out` output, in the layer, are those of
 `V`'s row after the opening's chain position. V*'s level sessions register `acc_out` as a read of `rec-acc`'s row
-`p + 1` (rec_outer.py:238, 242); acceptance does not reach the layer's outputs (`not_accOut`). -/
+`p + 1` (rec_outer.py:238, 242); acceptance reaches the layer's outputs only through those reads (`RegAgree`). -/
 def AccOutL (V : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → ℕ → Array F128) : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ r : Fin 2, ∀ ℓ < F.sh.sched.levels.size,
     ∀ j < F.q ℓ, ∀ i < 2,

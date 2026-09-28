@@ -35,28 +35,28 @@ open Flock FlockLevel3 FlockVBridge.Compiled FlockVBridge.InnerAccepts FlockVBri
 
 /-- **The digest a session's value binding registers at a row** is the leaf of the public file's `b ‖ c` of unit `u`'s
 row `q` (`keyReaders`' `regBc`, `Readers.regLeaf` at a row), at every registration. -/
-theorem vb_cs_inl {mPts nv : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit}
-    {hscope : Layout.scopeOk c = true} {Lv : Law nv} (zo : ZkOuter mPts nv Reg' c hU hscope Lv) (R' : Reg')
+theorem vb_cs_inl {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit}
+    {hscope : Layout.scopeOk c = true} {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv) (R' : Reg')
     (u : Fin nv) (q : Fin c.ports.size) :
     zo.vb.cs R' (Sum.inl (u, q) : PosK c hU nv) =
       ((Sum.inl (u, q) : PosK c hU nv),
         Refine.H512 (Refine.K512.leafPrefix ++ (zo.pub.digest u.val q.val c.ports.size).data.toList)) :=
   rfl
 
-/-- **A wire of unit `u`'s row is a wire of unit `u` alone**: a unit whose committed wires hold it reads it as an input
-column of its own instance (`keyRowOf_wire`). -/
+/-- **A wire of unit `u`'s row is a wire of unit `u` alone**: a unit whose committed wires hold it reads it as a column
+of its own instance, an input row's or a returned output row's (`rowOfH_wire_unit`). -/
 theorem unit_of_io {c : Flock.Circuit} {hU : Built c.unit} {nv : ℕ}
     {g : Fin ((Placed.keyProg c hU nv).circuit (Layout.outsOf c hU nv)).N} {u u' : Fin nv} {q : Fin c.ports.size}
     (hg : posK c hU nv g = .inl (u, q))
     (hio : g ∈ ((Placed.keyProg c hU nv).partition (Layout.outsOf c hU nv)).io u') : u' = u := by
   unfold posK at hg
-  rcases h : Layout.keyRowOf c hU nv (Layout.portRowW c) g with _ | ⟨u₀, q₀, k⟩ <;> rw [h] at hg
+  rcases h : HiddenExec.rowOfH c hU nv (Layout.outsOf c hU nv) g with _ | ⟨u₀, q₀, k⟩ <;> rw [h] at hg
   · simp at hg
   · simp only [Sum.inl.injEq, Prod.mk.injEq] at hg
     obtain ⟨rfl, -⟩ := hg
     obtain ⟨x, rfl⟩ :=
       (Const.Prog.instC (Placed.keyProg c hU nv) (Layout.outsOf c hU nv) u').exists_wire_of_mem_io hio
-    exact (Layout.keyRowOf_wire (Layout.outsOf c hU nv) x h).1.symm
+    exact (HiddenExec.rowOfH_wire_unit (Layout.outsOf c hU nv) x h).symm
 
 /-! ## The definitions -/
 

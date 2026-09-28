@@ -328,8 +328,8 @@ section Decode
 open FlockSoundness FlockSoundness.Audit FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
 open FlockVBridge.Decode
 
-variable {mPts nU : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
-  {Lv : Law nU} (zo : ZkOuter mPts nU Reg' c hU hscope Lv)
+variable {mPts nU J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
+  {Lv : Law nU} (zo : ZkOuter mPts nU J Reg' c hU hscope Lv)
 
 /-- **The verifier's `rec-residuals` unit computes its residuals in a layer agreeing with the registrant** (`unit_part`
 at `fill`). Let the verifier build `c`'s unit net from `RecResiduals.unitLaid S ns nv` (`netOf`), and let the layer

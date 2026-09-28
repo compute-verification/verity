@@ -1070,6 +1070,11 @@ def test_train_sh_prints_every_twins_run_id(tmp_path, twins):
     assert p.returncode == 0 and p.stdout.splitlines()[-1] == want, (p.stdout, p.stderr)
 
 
+#: the stubbed `uv`'s answer to train.sh's post to the merge thread: the post's body is copied to {posted}, and nothing launches
+_POST_STUB = ('case "$*" in *"slack reply"*) f=; p=; for a; do [ "$p" = --file ] && f=$a; p=$a; done; cp "$f" {posted}; exit 0;; '
+              'esac\n')
+
+
 def _train_repo(tmp_path):
     """A clone of a local origin with a root commit on main, and train.sh's environment with `uv` and `sleep` stubbed: `uv` records
     its arguments in ``argv`` and prints a launch line, and `sleep` waits for that launch, not on a clock."""
@@ -1091,7 +1096,7 @@ def _train_repo(tmp_path):
     git("push", "-q", "origin", "HEAD:main")
     bin_, done, argv = tmp_path / "bin", tmp_path / "launched", tmp_path / "argv"
     bin_.mkdir()
-    (bin_ / "uv").write_text(f"#!/bin/sh\nprintf '%s\\n' \"$@\" > {argv}\n"
+    (bin_ / "uv").write_text(f"#!/bin/sh\n{_POST_STUB.format(posted=tmp_path / 'posted')}printf '%s\\n' \"$@\" > {argv}\n"
                              "echo 'research: run r20261009-050001-aaaa launched on vy-x (p) pid=1 -> /r'\n" f"touch {done}\n")
     (bin_ / "sleep").write_text(f"#!/bin/sh\nwhile [ ! -e {done} ]; do :; done\n")
     for f in bin_.iterdir():
@@ -1117,7 +1122,9 @@ def test_train_sh_refuses_an_empty_commit_one_origin_lacks_and_a_base_that_is_no
     git("commit", "-q", "--allow-empty", "-m", "empty")
     git("push", "-q", "origin", "HEAD:main")
     p = train("HEAD", "vy-x")
-    assert p.returncode == 1 and "is empty (its tree is its parent's)" in p.stderr, p.stderr
+    assert p.returncode == 1 and "is empty (its tree is its base" in p.stderr, p.stderr
+    posted = tmp_path / "posted"
+    assert "registered no run (exit 1)" in posted.read_text() and "is empty (its tree is its base" in posted.read_text()
 
     (tmp_path / "repo" / "a").write_text("b\n")
     git("commit", "-q", "-am", "local")
@@ -1134,8 +1141,64 @@ def test_train_sh_refuses_an_empty_commit_one_origin_lacks_and_a_base_that_is_no
     p = train(head, "vy-x", "--against", "side")
     assert p.returncode == 1 and "is not an ancestor of" in p.stderr, p.stderr
 
+    posted.unlink()
     p = train(head, "vy-x", "--against", root, "--agreement")
     assert p.returncode == 2 and "--agreement refused with --against" in p.stderr, p.stderr
+    assert not argv.exists() and not posted.exists()
+
+
+def test_train_sh_posts_a_launch_that_registered_nothing_and_stays_quiet_on_one_that_did(tmp_path):
+    """Two launches registered no run and told nobody: two racing on the fetch (22:51Z, 9 Oct), and d7e946defc3f, refused by the
+    read guard and found two hours later (10:42Z, 10 Oct). A failed fetch is posted to the merge thread with git's reason, as the
+    `refused` in a launch's log is with the log's last lines; a launch that registers its run posts nothing."""
+    git, train, argv = _train_repo(tmp_path)
+    (tmp_path / "repo" / "a").write_text("b\n")
+    git("commit", "-q", "-am", "change")
+    git("push", "-q", "origin", "HEAD:main")
+    p = train("HEAD", "vy-x")
+    assert p.returncode == 0 and p.stdout.splitlines()[-1] == "RUN r20261009-050001-aaaa", (p.stdout, p.stderr)
+    assert not (tmp_path / "posted").exists()
+
+    (tmp_path / "origin.git").rename(tmp_path / "gone.git")
+    p = train("HEAD", "vy-x")
+    posted = (tmp_path / "posted").read_text()
+    assert p.returncode == 1 and "git fetch origin failed" in p.stderr, p.stderr
+    assert "registered no run (exit 1)" in posted and "git fetch origin failed" in posted, posted
+    (tmp_path / "gone.git").rename(tmp_path / "origin.git")
+
+    (tmp_path / "bin" / "uv").write_text(f"#!/bin/sh\n{_POST_STUB.format(posted=tmp_path / 'posted')}"
+                                         "echo 'check: read guard: refused: b0f68e798 reads outside its inputs'\n")
+    p = train("HEAD", "vy-x")
+    posted = (tmp_path / "posted").read_text()
+    assert p.returncode == 1 and "read guard: refused" in posted and "exited 0 before launching a run" in posted, posted
+
+
+def test_train_sh_takes_a_restack_by_merge_head_and_refuses_one_with_mains_tree(tmp_path):
+    """#1585's head 13df320192c2 merged main into a commit that already held main's change: its tree is its first parent's, yet
+    it differs from main, and train.sh refused it as empty (22:23Z, 9 Oct). Empty means the tree is main's, where it leaves main."""
+    git, train, argv = _train_repo(tmp_path)
+    root = git("rev-parse", "HEAD")
+    (tmp_path / "repo" / "m").write_text("m\n")
+    git("add", "m")
+    git("commit", "-q", "-m", "main")
+    git("push", "-q", "origin", "HEAD:main")
+    for branch, files in (("pr", ("m", "p")), ("same", ("m",))):
+        git("checkout", "-q", "-b", branch, root)
+        for f in files:
+            (tmp_path / "repo" / f).write_text(f"{f}\n")
+            git("add", f)
+        git("commit", "-q", "-m", branch)
+        git("merge", "-q", "--no-edit", "origin/main")
+        git("push", "-q", "origin", branch)
+    head = git("rev-parse", "pr")
+    assert git("rev-parse", "pr^{tree}") == git("rev-parse", "pr^1^{tree}") != git("rev-parse", "origin/main^{tree}")
+    p = train(head, "vy-x")
+    assert p.returncode == 0 and p.stdout.splitlines()[-1] == "RUN r20261009-050001-aaaa", (p.stdout, p.stderr)
+    argv.unlink()
+
+    assert git("rev-parse", "same^{tree}") == git("rev-parse", "origin/main^{tree}")
+    p = train(git("rev-parse", "same"), "vy-x")
+    assert p.returncode == 1 and "is empty (its tree is its base" in p.stderr, p.stderr
     assert not argv.exists()
 
 
@@ -1190,7 +1253,8 @@ def test_train_sh_returns_the_exit_of_a_check_that_died_before_launching(tmp_pat
     git("push", "-q", "origin", "HEAD:main")
     bin_, pidf = tmp_path / "bin", tmp_path / "pid"
     bin_.mkdir()
-    (bin_ / "uv").write_text(f"#!/bin/sh\necho 'check: verdicts: gathering'\necho $$ > {pidf}.tmp\nmv {pidf}.tmp {pidf}\nexit 137\n")
+    (bin_ / "uv").write_text(f"#!/bin/sh\n{_POST_STUB.format(posted=tmp_path / 'posted')}echo 'check: verdicts: gathering'\n"
+                             f"echo $$ > {pidf}.tmp\nmv {pidf}.tmp {pidf}\nexit 137\n")
     # waits until check.py has exited, not on a clock
     (bin_ / "sleep").write_text(f"#!/bin/sh\nuntil [ -e {pidf} ]; do :; done\nwhile kill -0 $(cat {pidf}) 2>/dev/null; do :; done\n")
     for f in bin_.iterdir():
@@ -1203,3 +1267,6 @@ def test_train_sh_returns_the_exit_of_a_check_that_died_before_launching(tmp_pat
                        capture_output=True, text=True, cwd=tmp_path / "repo", env=env)
     assert p.returncode == 137 and "train: check.py exited 137 before launching a run (killed" in p.stderr, (p.stdout, p.stderr)
     assert "RUN" not in p.stdout
+    posted = (tmp_path / "posted").read_text()
+    assert "registered no run (exit 137)" in posted and "exited 137 before launching a run" in posted, posted
+    assert "check: verdicts: gathering" in posted, posted

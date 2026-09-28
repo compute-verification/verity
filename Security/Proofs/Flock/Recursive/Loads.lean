@@ -13,13 +13,13 @@ equation:
 * `VStmt.Loads Q I`: the inputs load `Q`: their circuit is `Q`'s (`circZ I = Q.c`) and their registered population has
   `Q`'s `nv` units (`(pubZ I).n = Q.nv`). If V*'s statements fix only their unit, by name, and what the VBridge reads,
   this definition is what changes.
-* `loads_of_check`, `loads_of_verifiesV`: at V*'s tags and no lookup tables (`zkTags_vstar`), a session whose file
+* `loads_of_check`, `loads_of_verifiesV`: at V*'s tags and no lookup tables (`parse_zkTags_vstar`), a session whose file
   parses to `Q`'s circuit and whose population is `Q`'s loads `Q`; a session `AcceptsZKV` accepts as statement `j` under
   `bind j` has statement `j`'s file and no lookup tables (`vstarFile_of_accepts`), which parses to `Vs j`'s circuit
   (`VStarParses`, an obligation until gap 4). The verifier compares the tags by name only; the inputs' tags are the
   statement their name names (`TagsFound`, an obligation on our code), so they are V*'s (`find?_circuit`).
 * `typable_of_accepts`: a session that accepts and loads `Q` types (`ZkOuterR.Typable`): `Loads` gives its circuit and
-  population, and the record's draw sets it up (`setupZ_of_verifiesZK`, at the record's custody).
+  population, and the record's draw sets table 0 up (`setupZHJ_of_acceptsZK`, at the record's custody).
 * `prob_sessionsR_untypable`, `prob_recT_le`: where a session of some index never types, the raw sessions' event is
   empty when every session accepts as V*'s statement of its index; elsewhere the raw recursive audit's event is no
   likelier than the typed sessions' (`zsOf`) at the transported strategy (`recT`).
@@ -29,6 +29,7 @@ namespace FlockSoundness.Discharge.Recursion
 
 open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed StrictCR
   DecodeZL Composed ZkReg FailClosed
+open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 
 /-- **The inputs `I` load V*'s statement `Q`**: their circuit is `Q`'s and their registered population has `Q`'s
@@ -36,26 +37,28 @@ units. -/
 def VStmt.Loads (Q : VStmt) (I : Inputs) : Prop :=
   circZ I = Q.c ∧ (pubZ I).n = Q.nv
 
-/-- **`--zk`'s tags at V*'s statement are a constant of the circuit file**: at `--statement` `t₀` and at most one table
-(`TagsOk`), the coin tree's tables are `#[t₀.table]` (`tableNames`) and the identity's hooks are one table's
-(`Zk.tags` reads only `count > 1`). -/
-theorem zkTags_vstar {I : Inputs} {t₀ : Flock.Tags} (hT : I.tags = t₀) (hc : I.count ≤ 1) :
-    zkTags I = Flock.Zk.tags (t₀.withCoins (.tree (Flock.Zk.coinSpec #[t₀.table]))) (Flock.Zk.maskLogOf I.circuitFile)
-      1 := by
+/-- **`--zk`'s parse at V*'s statement is a constant of the circuit file**: at `--statement` `t₀`, `--zk`'s tags are
+`t₀`'s but for the identity (`withCoins` on a coin tree leaves the tags as they are, `withCoins_tree`), which
+`HmRow.parse` does not read (`parse_identity`), whatever the table count. -/
+theorem parse_zkTags_vstar {I : Inputs} {t₀ : Flock.Tags} (hT : I.tags = t₀) (b : ByteArray)
+    (tb : List (String × ByteArray)) :
+    HmRow.parse (zkTags I) b tb = HmRow.parse (Flock.Zk.tags (t₀.withCoins (.tree (Flock.Zk.coinSpec #[t₀.table])))
+      (Flock.Zk.maskLogOf I.circuitFile) 1) b tb := by
   subst hT
-  have h1 : ¬ (1 < I.count) := by omega
-  simp only [zkTags, zkCoins, Flock.Zk.tags, Flock.Tags.tableNames, if_pos hc, gt_iff_lt, h1, Nat.lt_irrefl]
+  simp only [zkTags, zkCoins, Flock.Zk.tags, withCoins_tree, parse_identity]
 
 /-- **A session of V*'s statement `Q` loads it**, at V*'s tags and no lookup tables, when its circuit file parses at
 the file's constant tags to `Q`'s circuit and its registered population has `Q`'s units: the session's circuit is the
-file's parse at `zkTags I` (`ScopeZ.parse`), which is that constant (`zkTags_vstar`). -/
+file's parse at `zkTags I` (`ScopeZR.parseH`, untyped: `Hidden.parse_untyped`), which is that constant
+(`parse_zkTags_vstar`). -/
 theorem loads_of_check {t₀ : Flock.Tags} {Q : VStmt} {Reg' : Type} (x : Q.OuterR Reg') (hck : ScopeZR x.I)
     (hT : x.I.tags = t₀) (htab : x.I.tables = [])
     (hp : HmRow.parse (Flock.Zk.tags (t₀.withCoins (.tree (Flock.Zk.coinSpec #[t₀.table])))
       (Flock.Zk.maskLogOf x.I.circuitFile) 1) x.I.circuitFile [] = .ok Q.c) (hn : (pubZ x.I).n = Q.nv) :
     Q.Loads x.I := by
-  have hZ := (hck.scopeZ x.hTags.1).parse x.hTags.1
-  rw [zkTags_vstar hT x.hTags.2.2.2, htab, hp] at hZ
+  have hZ : HmRow.parse (zkTags x.I) x.I.circuitFile x.I.tables = .ok (circZ x.I) :=
+    (Hidden.parse_untyped (zkTyped hck.typed) (hck.parseH x.hTags.1)).1
+  rw [parse_zkTags_vstar hT, htab, hp] at hZ
   exact ⟨(Except.ok.inj hZ).symm, hn⟩
 
 /-- **A session the verifier of record accepts as V*'s statement `j`, under the family's bindings for it, loads
@@ -77,23 +80,23 @@ theorem loads_of_verifiesV {S : ℕ} {i : RecVStar.Inner} {bind : Fin S → VSta
   exact loads_of_check x hck hT htab hp (hn.trans hnv.symm)
 
 /-- **A session the verifier of record accepts types**, where its inputs pass the statement check and load V*'s
-statement (`hL`): the record carries the draw (custody), at which the session sets up (`setupZ_of_verifiesZK`). -/
-theorem typable_of_accepts {Q : VStmt} {Reg' : Type} (x : Q.OuterR Reg') (hRec : RecordsLiveZK x.I x.dj x.wr)
-    (ω : Q.law.live.Ω) (R : Reg') (o : LiveOut Q.mPts)
+statement (`hL`): the record carries the draw (custody), at which table 0 sets up (`setupZHJ_of_acceptsZK`). -/
+theorem typable_of_accepts {Q : VStmt} {Reg' : Type} (x : Q.OuterR Reg')
+    (hRec : RecordsLiveZKJ x.I x.dj (fun _ _ => Q.J) x.wr) (ω : Q.law.live.Ω) (R : Reg') (o : LiveOutJ Q.J Q.mPts)
     (hacc : AcceptsZKR x.I x.own (x.wr (Q.law.live.draw ω) R o)) (hck : ScopeZR x.I) (hL : Q.Loads x.I) :
     x.Typable := by
   have hacc' := acceptsZK_of_R hacc
-  have hck' := hck.scopeZ x.hTags.1
-  exact ⟨hck', hL.1, hL.2, _, setupZ_of_verifiesZK x.I x.hTags.1 x.hTags.2.2.2 x.dj ⟨hacc', hck'⟩
-    (hRec _ R o hacc').1 (x.hDraw ω)⟩
+  exact ⟨hck, hL.1, hL.2, _, _, ZkHidden.setupZHJ_of_acceptsZK x.I x.hTags.1 hck.typed (hck.parseH x.hTags.1)
+    (Checks.outNet hck) x.dj hacc' (hRec _ R o hacc').1 (x.hDraw ω) ⟨0, nTab_pos _⟩⟩
 
 /-- **A session that never types accepts nowhere** where its inputs pass the statement check, for an event at which it
 accepts and loads V*'s statement: an acceptance would type it (`typable_of_accepts`). -/
-theorem prob_game_untypable {Q : VStmt} {Reg' : Type} (x : Q.OuterR Reg') (hRec : RecordsLiveZK x.I x.dj x.wr)
+theorem prob_game_untypable {Q : VStmt} {Reg' : Type} (x : Q.OuterR Reg')
+    (hRec : RecordsLiveZKJ x.I x.dj (fun _ _ => Q.J) x.wr)
     (hx : ¬ x.Typable) (hck : ScopeZR x.I) {P : Reg' × Finset (Fin Q.nv) × Exec.Transcript → Prop}
     (hP : ∀ o, P o → LiveAcceptsZKR x.I x.own o ∧ Q.Loads x.I) (dg : ByteArray → ByteArray) (N : ℕ)
     (τ : Strategy (x.game dg N)) : prob P (x.game dg N) τ = 0 :=
-  le_antisymm ((prob_auditLive_liveOf_mono dg N x.wr τ (p := P) (q := fun _ => False)
+  le_antisymm ((prob_auditLive_liveJ_mono dg N x.wr τ (p := P) (q := fun _ => False)
     fun ω o' h => hx (typable_of_accepts x hRec ω τ.1 o' (hP _ h).1 hck (hP _ h).2)).trans (prob_false _ _).le)
     (zero_le ..)
 
@@ -105,7 +108,7 @@ tags their name names (`TagsFound`): the event is `j₀`'s acceptance, at which 
 theorem prob_sessionsR_untypable {S : ℕ} {Vs : Fin S → VStmt} {Reg' : Type} {dg : ByteArray → ByteArray} {N : ℕ}
     {i : RecVStar.Inner} {bind : Fin S → VStar.Bindings}
     {rows : Option (Array Flock.Registered.Port)} (hob : VStarParses Flock.Tags.circuit i bind Vs)
-    (zr : (j : Fin S) → (Vs j).OuterR Reg') (hRec : ∀ j, RecordsLiveZK (zr j).I (zr j).dj (zr j).wr)
+    (zr : (j : Fin S) → (Vs j).OuterR Reg') (hRec : ∀ j, RecordsLiveZKJ (zr j).I (zr j).dj (fun _ _ => (Vs j).J) (zr j).wr)
     (hF : ∀ j, TagsFound (zr j).I) (j₀ : Fin S) (hx : ¬ (zr j₀).Typable) (p : VRec Vs Reg' dg N → Prop)
     (hp : ∀ b, p b → AcceptsRV i bind rows zr b ∧ ∀ j, ScopeZR (zr j).I) (s : Strategy (sessionsR zr dg N)) :
     prob p (sessionsR zr dg N) s = 0 := by
@@ -138,7 +141,8 @@ theorem prob_recT_le {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} {dg :
     {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {i : RecVStar.Inner} {bind : Fin S → VStar.Bindings}
     {rows : Option (Array Flock.Registered.Port)} (hob : VStarParses Flock.Tags.circuit i bind Vs)
     (zr : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).OuterR Reg')
-    (hRec : ∀ R ω t R₂ j, RecordsLiveZK (zr R ω t R₂ j).I (zr R ω t R₂ j).dj (zr R ω t R₂ j).wr) (h : Typed zr)
+    (hRec : ∀ R ω t R₂ j, RecordsLiveZKJ (zr R ω t R₂ j).I (zr R ω t R₂ j).dj (fun _ _ => (Vs j).J)
+      (zr R ω t R₂ j).wr) (h : Typed zr)
     (hF : ∀ R ω t R₂ j, TagsFound (zr R ω t R₂ j).I)
     (σ : Strategy (recGame L Reg I Cm fun R ω t => outerVR (zr R ω t) dg N))
     (p q : Reg × L.Ω × List (Cm × I.Coin) × (Reg₂ × VRec Vs Reg' dg N) → Prop)
@@ -162,7 +166,8 @@ theorem prob_recT_le {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} {dg :
 where the raw ones do**: each is its build (`zsOf_pos`), with the raw session's inputs and own ports. -/
 theorem verifies_zsOf {S : ℕ} {Vs : Fin S → VStmt} {Reg' A B C D : Type} {dg : ByteArray → ByteArray} {N : ℕ}
     (zr : A → B → C → D → (j : Fin S) → (Vs j).OuterR Reg')
-    (hRec : ∀ R ω t R₂ j, RecordsLiveZK (zr R ω t R₂ j).I (zr R ω t R₂ j).dj (zr R ω t R₂ j).wr) (h : Typed zr)
+    (hRec : ∀ R ω t R₂ j, RecordsLiveZKJ (zr R ω t R₂ j).I (zr R ω t R₂ j).dj (fun _ _ => (Vs j).J)
+      (zr R ω t R₂ j).wr) (h : Typed zr)
     (R : A) (ω : B) (t : C) (o : D × VRec Vs Reg' dg N) (hall : ∀ j, (zr R ω t o.1 j).Typable)
     (hacc : AcceptsVR (zr R ω t) o) (hck : ∀ j, ScopeZR (zr R ω t o.1 j).I) :
     AcceptsV (zsOf zr hRec h R ω t) o ∧ ∀ j, ScopeZR (zsOf zr hRec h R ω t o.1 j).I := by
