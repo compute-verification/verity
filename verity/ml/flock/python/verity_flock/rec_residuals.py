@@ -21,6 +21,10 @@ then zero words.
 * ``acc0``, ``acc1``: the rep's running sums before its first opening and after its last (two F elements, then the 48 words
   `rec_open` carries): rows of the prover's ``rec-acc`` registration, which the opening statements read too
   (`verity_flock.rec_outer.Chain`), so the final check sees the consistency sums the openings added.
+* ``claim<k>`` (an opening-only shape, the registered opening, `stage_opening`): row k of the prover's ``rec-claim``
+  (`verity_flock.rec_outer.CLAIM_VALUE`), RecSparse's rep k's claim, one element read as a w element (an add term of claim
+  k's ring switch). The opening is one instance, ``rec-opening/m<m>-c<claims>-p<j>``, its rounds' messages one-row
+  registrations.
 * ``v``: the coefficients and constants at the rep's coins, then ``z_partial``'s comb, the inner circuit's fold at the rep's
   point (§10), which the verifier computes from the inner session's public record and the inner statement
   (`rec_algebra.verifier_rows`; the extra claims and the comb `verity_flock.rec_vstage` computes), as a row port of
@@ -62,8 +66,8 @@ from . import circuit as FC
 from . import ir_lower as IL
 from .class_statement import ClassDefinition
 
-__all__ = ["InnerRepCheck", "MAX_LONE_SLOTS", "MAX_REGIONS", "MAX_SLOTS", "OUT_WORDS", "commits_entry", "definition", "parts", "port_words", "regions",
-           "residual_forms", "residual_words", "slots", "spec",
+__all__ = ["InnerRepCheck", "MAX_LONE_SLOTS", "MAX_REGIONS", "MAX_SLOTS", "OUT_WORDS", "commits_entry", "definition", "parts", "port_words",
+           "regions", "opening_rows", "residual_forms", "residual_words", "slots", "spec", "stage_opening",
            "statement", "unit_circuit", "write", "write_rows"]
 
 U16 = Array(16, BL.BIT)
@@ -103,15 +107,18 @@ def v_words(S: dict) -> int:
 
 def spec(sh) -> dict:
     """``InnerRepCheck``'s S for a `rec_algebra.Shape`: the structure, a port per round that absorbs elements, and the running
-    sums' two ports (w's layout, `rec_algebra.structure`)."""
+    sums' two ports (w's layout, `rec_algebra.structure`); an opening-only shape's then a port ``claim<k>`` per registered
+    claim (`rec_algebra.claim_names`)."""
     from . import rec_algebra as A
 
     gf, lay = A.structure(sh)
+    claims = A.claim_names(sh)
     ports = [[f"m{i}", len(r)] for i, r in enumerate(A.rounds(sh))] + [["acc0", 2], ["acc1", 2]]
+    ports += [[f"claim{k}", 1] for _, k in claims]
     S = {"gf": gf, "ports": ports}
     _check(S, whole=True)
-    if lay.w[-4:] != A.ACC_NAMES:
-        raise AssertionError("w does not end with the running sums")
+    if lay.w[len(lay.w) - len(claims) - 4:] != A.ACC_NAMES + claims:
+        raise AssertionError("w does not end with the running sums and the registered claims")
     return S
 
 
@@ -503,3 +510,46 @@ def write_rows(st: SimpleNamespace, reads: dict, vrows: list[list[int]], out_dir
             "unit_log": meta["unit_log"], "k_log": meta["k_log"], "vus_per_block": meta["vus_per_block"], "per_vu": meta["per_vu"],
             "circuit_sha512": FC.digest(text), "circuit_bytes": len(text), "program_sha512": st.prog,
             "partition_digest": P.digest(st.part), "zero_root": zero.root.hex(), "build_s": st.build_s}
+
+
+# --- the registered opening -------------------------------------------------------------------------------------------------
+
+def opening_rows(sh, w: list[int]) -> dict[str, list[int]]:
+    """An opening-only shape's row of each port (`spec`'s, by name) from its w (`rec_algebra.witness`): the port's elements as
+    words, zero words up to ``P(n)``."""
+    S = spec(sh)
+    if not sh.opening_only or len(w) != S["gf"]["nw"]:
+        raise ValueError(f"{sh}: rows of a registered opening's w, {S['gf']['nw']} elements")
+    out, at = {}, 0
+    for nm, n in S["ports"]:
+        out[nm] = words(w[at:at + n], port_words(n))
+        at += n
+    return out
+
+
+def stage_opening(sh, regs: dict, acc: tuple, v: list[int], out_dir, evaluate: bool = True, own: dict | None = None) -> list[dict]:
+    """The registered opening (an opening-only `rec_algebra.Shape`) as ``InnerRepCheck_v2`` statements of one instance, one per
+    part (`parts`), each unit ``rec-opening/m<m>-c<claims>-p<j>``, written to ``out_dir/p<j>`` (`write`).
+
+    ``regs``: per round port ``m<i>``, the prover's one-row registration of the round's message, and under ``claim`` the
+    prover's ``rec-claim`` (`rec_outer.CLAIM_VALUE`): ``claim<k>`` reads its row k. ``acc``: the ``rec-acc`` registration and
+    the rows ``acc0`` and ``acc1`` read. ``v``: the opening's v (`rec_algebra.verifier_rows`), its claims' points from the
+    coins. ``own``: per row port the verifier's own entry its reads file names."""
+    from .rec_outer import CLAIM_VALUE
+
+    if not sh.opening_only:
+        raise ValueError(f"{sh} is not a registered opening")
+    if regs["claim"].value != CLAIM_VALUE or len(regs["claim"].rows) != sh.claims:
+        raise ValueError(f"the claims are {sh.claims} rows of {CLAIM_VALUE}, not {len(regs['claim'].rows)} of "
+                         f"{regs['claim'].value}")
+    reads = {nm: (regs[nm], [0]) for nm in regs if nm != "claim"}
+    reads["acc0"], reads["acc1"] = (acc[0], [acc[1]]), (acc[0], [acc[2]])
+    reads.update({f"claim{k}": (regs["claim"], [k]) for k in range(sh.claims)})
+    out = []
+    for j, p in enumerate(parts(spec(sh))):
+        st = statement(p.S, f"rec-opening/m{sh.m}-c{sh.claims}-p{j}", 1)
+        names = [nm for nm, _ in p.S["ports"]]
+        s = write(st, {nm: reads[nm] for nm in names}, [[v[i] for i in p.v]], Path(out_dir) / f"p{j}", evaluate=evaluate,
+                  own={nm: (own or {})[nm] for nm in names if nm in (own or {})})
+        out.append({**s, "part": j, "of_residuals": p.res, "regions": regions(p.S["ports"])})
+    return out
