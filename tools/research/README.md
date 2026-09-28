@@ -285,6 +285,17 @@ called PRESERVED without a remote; nothing in the store is ever overwritten.
 - `research data lookup --tool T [--param k=v]... [--condition k=v]...
   [--source-tree SHA | --any-source] [-- ARGV...]` answers "have we done this?"
 
+### Notes stamped ahead of the clock
+
+`research notes sync` (`notes_sync.py`; `checkpoint`, `bind` and `relaunch` run it with `RESEARCH_NOTES_SYNC=1`) leaves out any
+lane note it would add or change whose filename stamp (a new path) or front matter `created:` (a new value) is more than 5 minutes
+ahead of the clock, syncs the rest, and exits 5. Each note left out gets one line, from the steward's watch pass too, every
+pass until the note is renamed or the clock passes its stamp:
+
+~~~text
+SYNC-REFUSED lanes/x/20260928T0700Z-report-x.md: stamp 20260928T0700Z is 18 min ahead; use 20260928T0642Z (date -u +%Y%m%dT%H%MZ)
+~~~
+
 ### The steward off the laptop
 
 `research notes watch` is the steward: liveness, reaping, deadlines,
