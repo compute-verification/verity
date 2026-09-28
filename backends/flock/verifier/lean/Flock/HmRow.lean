@@ -411,7 +411,7 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
 the file with its unit's rows inserted, its digest and class the typed file's own. A template is parsed with its block
 (`parse`'s `tmpl`): the root and placed layouts' circuits, the derived wiring, and Δ in #273's order. -/
 def parseTyped (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) : V Circuit := do
-  match ← Typed.read tags bytes with
+  match ← Typed.read tags bytes tables with
   | .inr t => parse tags bytes tables (tmpl := some t)
   | .inl expanded =>
     let c ← parse tags expanded tables

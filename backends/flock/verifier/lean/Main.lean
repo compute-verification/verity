@@ -318,6 +318,19 @@ def typedExpandCmd (args : List String) : IO UInt32 := do
   IO.println s!"TYPED {line.compress}"
   return (if (line.getObjValAs? Bool "ok").toOption.getD false then 0 else 1)
 
+
+/-- `typed-rows FILE [--tables DIR] --out DIR`: a typed template's rows as the verifier derives them, through
+`deriveChecked` with its tables held (`Typed.rows`), written in the writer's `rows/` formats. -/
+def typedRowsCmd (args : List String) : IO UInt32 := do
+  let (some path, some out) := (args.head?, argOf args "--out") | IO.eprintln "typed-rows FILE [--tables DIR] --out DIR"; return 2
+  match Typed.rows Tags.circuitTypes (← IO.FS.readBinFile path) (← readTables args) with
+  | .error e => IO.eprintln s!"typed-rows: {e}"; return 1
+  | .ok files =>
+    IO.FS.createDirAll out
+    for (n, text) in files do IO.FS.writeFile (out ++ "/" ++ n) text
+    IO.println s!"TYPED-ROWS {files.size}"
+    return 0
+
 /-- `--program P --partition Q --stratified K`: the stratified law the verifier derives from its own program and partition
 object (`HmRow.stratifiedLaw`), and the population; none without `--stratified`. -/
 def stratifiedInput (args : List String) : IO (Except String (Option (Draw.Law × Nat))) := do
@@ -440,6 +453,7 @@ def main (args : List String) : IO UInt32 := do
   | ["field-test", path] => fieldTest path
   | ["hash-test", path] => hashTest path
   | "typed-expand" :: rest => typedExpandCmd rest
+  | "typed-rows" :: rest => typedRowsCmd rest
   | "circuit-type" :: paths => CircuitType.cmd paths
   | "layout" :: paths => Layout.cmd paths
   | _ => IO.eprintln "usage: flock-verify field-test FILE"; return 2
