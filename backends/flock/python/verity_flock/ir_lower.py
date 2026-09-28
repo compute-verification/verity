@@ -14,12 +14,13 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass, field
-from functools import lru_cache
+from functools import lru_cache, partial
 from typing import Callable, Sequence
 
 import numpy as np
 
 from . import fp
+from . import tail_pieces
 from .fp import ceil_pow2
 from .gf2 import Circuit, L, const_bits
 
@@ -59,9 +60,13 @@ def _bf16_add(nan):
 
 
 def _f32_div(C, a, b):
-    if not all(w.is_const() for w in b):
-        raise NotImplementedError("F32Div by a non-constant divisor has no piece yet")
-    return fp.f32_div_const(C, a, sum(w.c << i for i, w in enumerate(b)))
+    """``F32Div_v1``: a multiply by the exact reciprocal for a constant power-of-two divisor, else the divider."""
+    if all(w.is_const() for w in b):
+        k = sum(w.c << i for i, w in enumerate(b))
+        e, m = (k >> 23) & 0xFF, k & 0x7FFFFF
+        if not m and 1 <= e <= 253:
+            return fp.f32_mul(C, a, fp.f32_const((k & 0x80000000) | ((254 - e) << 23)), ir_nan=True)
+    return fp.f32_div(C, a, b, ir_nan=True)
 
 
 #: primitive id -> piece(C, *operand words) -> output word
@@ -69,8 +74,8 @@ PIECES: dict[str, Callable] = {
     "Bf16ToF32_v1": lambda C, a: fp.bf16_to_f32(a),
     "F2fpBf16_v1": lambda C, a: fp.f32_to_bf16(C, a, NAN_F2FP),
     "F32ToBf16Rn_v1": lambda C, a: fp.f32_to_bf16(C, a, NAN_TORCH),
-    "F32Add_v1": fp.f32_add,
-    "F32Mul_v1": fp.f32_mul,
+    "F32Add_v1": partial(fp.f32_add, ir_nan=True),
+    "F32Mul_v1": partial(fp.f32_mul, ir_nan=True),
     "F32Fma_v1": fp.f32_fma,
     "F32Div_v1": _f32_div,
     "Bf16Add_v1": _bf16_add(NAN_TORCH),
@@ -82,6 +87,38 @@ PIECES: dict[str, Callable] = {
     # verity.ml.tc.models.HOPPER_BF16_WGMMA_K16: one group of 16, 26-bit adder, exponent floor -133 (the same total rules)
     "HopperBF16WgmmaDot16_v1": lambda C, acc, *ab: fp.tc_dot16(C, acc, list(ab[:16]), list(ab[16:]), groups=(16,), W=26, F=-133),
 }
+PIECES.update(tail_pieces.PIECES)
+
+
+class _Pieces(dict):
+    """:data:`PIECES`, which also resolves a primitive whose id carries a width (``tail_pieces.FAMILIES``: ``BitAtx{W}_v1``);
+    ``wrap`` (the Boolean export's tracer) wraps a piece resolved later like the rest."""
+
+    wrap = None
+
+    def _resolve(self, key):
+        import re
+
+        for pat, fn in tail_pieces.FAMILIES.items():
+            if isinstance(key, str) and re.fullmatch(pat, key):
+                self[key] = self.wrap(key, fn) if self.wrap else fn
+                return self[key]
+        return None
+
+    def __missing__(self, key):
+        fn = self._resolve(key)
+        if fn is None:
+            raise KeyError(key)
+        return fn
+
+    def __contains__(self, key):
+        return dict.__contains__(self, key) or self._resolve(key) is not None
+
+    def get(self, key, default=None):
+        return self[key] if key in self else default
+
+
+PIECES = _Pieces(PIECES)
 
 
 class NoPiece(NotImplementedError):
@@ -196,7 +233,7 @@ class Units:
         """The unit circuit: inputs ``in0 .. in{k-1}``, outputs ``out0 ..`` (one word per port)."""
         if self.builder is not None:
             return self.builder()
-        C = Circuit()
+        C = Circuit(cse=True)
         ins = [C.input(f"in{j}", w) for j, w in enumerate(self.in_widths)]
         wires = dict(zip(self.arg_gates, ins))
         lower_gates(C, self.gates, wires)
@@ -330,6 +367,9 @@ def units(target, cut: Callable | None = None, group: int = 1) -> Units:
 TC_PRIM = "AmpereBF16TcDot16_v1"
 #: tensor-core k-step primitive -> fp.tc_dot16's (groups, W, F): verity.ml.tc.models AMPERE_BF16_M16N8K16 / HOPPER_BF16_WGMMA_K16
 TC_STEPS = {"AmpereBF16TcDot16_v1": ((8, 8), 25, -132), "HopperBF16WgmmaDot16_v1": ((16,), 26, -133)}
+#: the FP8 step -> fp.tc_dot_e4m3's (groups, W, F): verity.ml.tc.total_fp8 HOPPER_E4M3_WGMMA_K32 (a GEMM's FP8 coordinate is walked,
+#: not unit-lowered)
+TC_STEPS_FP8 = {"HopperE4m3QgmmaDot32_v1": ((32,), 14, -139)}
 
 
 def tc_units(target, prim: str = TC_PRIM) -> Units:
@@ -372,7 +412,7 @@ def tc_units(target, prim: str = TC_PRIM) -> Units:
     outs = [[("cut", kpos[g.index])] for g in tcs]
 
     def builder() -> Circuit:
-        C = Circuit()
+        C = Circuit(cse=True)
         b = [C.input(f"in{j}", 16) for j in range(16)]
         a = [C.input(f"in{16 + j}", 16) for j in range(16)]
         acc = C.input("in32", 32)
@@ -648,6 +688,12 @@ class Lowering:
     units: Units
     circuit: Circuit
     layout: Layout
+
+    @property
+    def domain(self) -> str:
+        """The operand domain the statement covers (vocab ``domain``): ``total`` when the unit asserts nothing, so every input
+        encoding is proven to give the IR's own output, else ``finite-only``."""
+        return "finite-only" if self.circuit.asserts else "total"
 
     @property
     def cut(self) -> dict | None:

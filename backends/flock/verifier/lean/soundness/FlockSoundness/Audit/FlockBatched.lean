@@ -29,8 +29,8 @@ each drawn unit's place in its table (`UnitPlace`), with `C` the rows the verifi
 
 **The discharge** (`flock_batched_knowledgeSound`): per draw, the unit's table's
 `ε_c⁻ + K·Adv₀ + N₀/(eK)`, computed in the session (`joint_le_B'`, from `session_knowledge_sound`),
-bounded by the largest over the plan's tables, and averaged over the draw (`ksAvgB`). BCHKS25
-Theorem 4.6 is its only named assumption; `δ_link` stays named (`LinkSound`).
+bounded by the largest over the plan's tables, and averaged over the draw (`ksAvgB`), with no
+named assumption; `δ_link` stays named (`LinkSound`).
 
 `flock_batched_count`: `Pr[accept ∧ at least K wrong units] ≤ miss K + ε_ks(σ) + δ_link(σ)`.
 -/
@@ -144,21 +144,21 @@ noncomputable def ksAvgB (Kr : ℕ) (R : Reg) (τ : Cont L Reg (batchedSession H
   avg fun ω => ⨆ j : Fin (plan (L.draw ω) R).length,
     ENNReal.ofReal (ksBoundB execArith H E (plan (L.draw ω) R) j Kr (batchStrat H E plan (τ ω)))
 
-/-- **`ε_ks` is discharged for sessions of several tables**, given BCHKS25 Theorem 4.6. -/
-theorem flock_batched_knowledgeSound (hMCA : Assumptions.BCHKS25Thm46)
+/-- **`ε_ks` is discharged for sessions of several tables.** -/
+theorem flock_batched_knowledgeSound
     (decode : DecoderB (C := C) (Reg := Reg) plan tab)
     (Xc : (R : Reg) → Cont L Reg (batchedSession H E plan) R → (Fin C.N → Bool)) {Kr : ℕ}
     (hK : 1 ≤ Kr) (hlow : P.LoweringSoundB plan tab decode) :
     (P.analysisB H E plan tab decode Xc Kr hlow).KnowledgeSound (ksAvgB H E plan Kr) := by
   intro R τ tgt
   refine avg_mono fun ω => atTgt_le (fun u _ => ?_) (tgt ω)
-  exact (joint_le_B' hMCA execArith execArith_correct H E (plan (L.draw ω) R) (tab (L.draw ω) R u)
+  exact (joint_le_B' execArith execArith_correct H E (plan (L.draw ω) R) (tab (L.draw ω) R u)
     Kr hK (batchStrat H E plan (τ ω))).trans (le_iSup (fun j : Fin (plan (L.draw ω) R).length =>
       ENNReal.ofReal (ksBoundB execArith H E (plan (L.draw ω) R) j Kr (batchStrat H E plan (τ ω))))
       (tab (L.draw ω) R u))
 
 /-- **The batched Flock audit's count curve**: `δ(K) = miss K + ε_ks(σ) + δ_link(σ)`. -/
-theorem flock_batched_count (hMCA : Assumptions.BCHKS25Thm46)
+theorem flock_batched_count
     (decode : DecoderB (C := C) (Reg := Reg) plan tab)
     (Xc : (R : Reg) → Cont L Reg (batchedSession H E plan) R → (Fin C.N → Bool)) {Kr : ℕ}
     (hK : 1 ≤ Kr) (hlow : P.LoweringSoundB plan tab decode)
@@ -169,10 +169,10 @@ theorem flock_batched_count (hMCA : Assumptions.BCHKS25Thm46)
         (audit L Reg (batchedSession H E plan)) σ ≤
       L.miss K + ksAvgB H E plan Kr (reg σ) (cont σ) + δlink (reg σ) (cont σ) :=
   extraction_audit_count (P.analysisB H E plan tab decode Xc Kr hlow)
-    (P.flock_batched_knowledgeSound H E plan tab hMCA decode Xc hK hlow) hlink K σ
+    (P.flock_batched_knowledgeSound H E plan tab decode Xc hK hlow) hlink K σ
 
 /-- **Drawn units of the batched Flock audit** are correct up to `ε_ks(σ) + δ_link(σ)`. -/
-theorem flock_batched_drawn (hMCA : Assumptions.BCHKS25Thm46)
+theorem flock_batched_drawn
     (decode : DecoderB (C := C) (Reg := Reg) plan tab)
     (Xc : (R : Reg) → Cont L Reg (batchedSession H E plan) R → (Fin C.N → Bool)) {Kr : ℕ}
     (hK : 1 ≤ Kr) (hlow : P.LoweringSoundB plan tab decode)
@@ -183,7 +183,7 @@ theorem flock_batched_drawn (hMCA : Assumptions.BCHKS25Thm46)
         (audit L Reg (batchedSession H E plan)) σ ≤
       ksAvgB H E plan Kr (reg σ) (cont σ) + δlink (reg σ) (cont σ) :=
   extraction_audit_drawn (P.analysisB H E plan tab decode Xc Kr hlow)
-    (P.flock_batched_knowledgeSound H E plan tab hMCA decode Xc hK hlow) hlink σ
+    (P.flock_batched_knowledgeSound H E plan tab decode Xc hK hlow) hlink σ
 
 end Partition
 
