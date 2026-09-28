@@ -68,8 +68,8 @@ output rows hold their ports' words (`HmOut.checkRows`), each of its 16 bits is 
 theorem outBitRow_ne_none (hcr : HmOut.checkRows c = .ok ()) (hrows : Hidden.OutRows c) (u : Fin n)
     {d : ℕ × ℕ × ℕ} (hw : outWordOf c d < c.outWords) (ht : d.2.2 < 16) : outBitRow c u d ≠ none := by
   obtain ⟨hjo, -, hk⟩ := outPortOf_spec c hw
-  have hle := checkRows_words hcr hjo
-  obtain ⟨hq, -⟩ := hrows _ hjo
+  have hle := checkRows_words hcr hrows.2.1 hrows.1 hjo
+  obtain ⟨hq, -⟩ := hrows.2.2 _ hjo
   have hpw : portRowW c ⟨_, hq⟩ = 16 * (c.ports.getD (HmOut.nIn c + outPortOf c (outWordOf c d)) default).words := by
     unfold portRowW
     rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hq, Option.getD_some]
@@ -323,7 +323,7 @@ theorem keyProgH_bcPinned
   simp only [hu, ↓reduceDIte]
   exact this
 
-include hparse ho houts in
+include hparse ho hv1 houts in
 /-- **The single gates at `keyProg`'s sites in hidden-output tables are the constant and the zero**: when every input a
 row reads has the zero or a row bit as its key (`KeysRow`), a committed gate that is no row's bit is the zero, the
 constant, or a computed gate (`Layout.single_gate`); a computed one is a returned output's (`OutsOut`), so an output
@@ -359,7 +359,7 @@ theorem keyProgH_valPinned (hkeys : KeysRow c hU (portRowW c)) :
       refine (hlo u'' hu').2 _ ?_
       rw [← hget]
       exact Array.getElem_mem_toList _
-    exact outBitRow_ne_none hcr (fun j hj => Hidden.out_chunks (hparse S R u hu) hcr hj) u hwlt ht hno'
+    exact outBitRow_ne_none hcr (Hidden.out_rows_v1 (hparse S R u hu) hcr fun p hp => (hv1 p hp).1) u hwlt ht hno'
 
 /-- **`lay` at `keyProg`'s places in hidden-output tables**: the readers' layout (`Layout.Readers.layout`), with
 `bitCode` for the single gates and Δ's copies from `keyProgH_copies`. -/
@@ -378,7 +378,7 @@ noncomputable def keyRowsH
     Binding.HmRows (keyLayoutH hparse outs popOf ho hv1 houts) :=
   (keyReadersH hparse outs popOf).rows (keyPlaceH hparse outs) Layout.rowEnc Layout.rowEnc_inj Layout.bitCode
     Layout.bitCode_inj (keyProgH_copies hparse outs popOf ho hv1 houts) (keyProgH_bcPinned hparse outs popOf hsite)
-    (keyProgH_valPinned hparse outs popOf ho houts hkeys)
+    (keyProgH_valPinned hparse outs popOf ho hv1 houts hkeys)
 
 /-- **The bytes `sha512/row/v1` hashes for a row at `keyProg`'s places in hidden-output tables** (`Layout.keyRow_enc`):
 at a drawn unit `u`'s site, the value a message holds at row `q` of unit `u'`, `16 · words` bits, has `rowEnc` the row

@@ -371,18 +371,18 @@
    "pins": ["Flock.Registered.check_ok"]
   },
   "Flock.Circuit": {
-   "digest": "9c68d3b2980f4a598bc55ed8f65d6274a53e76b0b8bd147acc26fa0d0b8301a7",
+   "digest": "80c87381817c6ad3b0bb2dfca40aeec965fb79f4551fccda2a55238e23425f63",
    "definitions": {
-    "Flock.Circuit": "789aad17295c2c156932bc3a83abc10659f8c6d8bd4cfd3fc6044747c3c6b232",
-    "Flock.Circuit.hmNet": "9306f9f07dc68c4530311c9ced3060fcc83aab59471286f73909106fd0b6cd91",
+    "Flock.Circuit": "c857293e3edc24f9d4631e64d4bb35c1aa2ce94e525378926b1196ddd4ebf5f1",
+    "Flock.Circuit.hmNet": "0d61799e40eee7d4c6650f055b1b93252c7522fe048127f5e1e8a9bee0bc3b0e",
     "Flock.Circuit.nets": "160bae4dbfddd29c098494ac4d32aceb20e724f780a5e60224a1bc0b90461ab6",
     "Flock.Circuit.ports": "3b62e728cf48917fe1bbafbeea3165a879484ad21eb08f7a5be828779b078430",
-    "Flock.Circuit.shaNet": "b1d9edd4b824ace393a01eba257feee02e8d67780490e3ea15589d3196fee6a1",
+    "Flock.Circuit.shaNet": "6b85c174d7daa6e5727d170d3859c10a12e1952db4f2a4b43623140c0ac9cc9a",
     "Flock.Kind": "e3024d993bdb02301a16721f812646484a1a7d19955a12495c64245e1823f88e",
     "Flock.Kind.comp": "9e425beea52b8adb23e43092eaec06f4000bf4a2b3c8dc451a07caffe560871f",
     "Flock.Kind.mask": "7406a2e934d2dcf57a6866543cfc7ec9a35611c9ba680d917fc8cd2a7378f960",
     "Flock.Kind.net": "ac6c22e781a7abec2083631c6e89e995d53d254c3141dc14f3dad16434d95143",
-    "Flock.Port": "19fb70537d441daa8a51ddb3f7bb45b1908e8caf42e923349e56d7baa885fbc0",
+    "Flock.Port": "566ccec6b23fee8c9cfaac4d0eb037b9074e270c9903928a8a2b4ae8c91d5ba4",
     "Flock.Port.name": "af41bae38c908cdc63b0021d77c2aaa0f730da201575d248e63c7159c3b3c268",
     "Flock.Port.words": "5981040a4c808891ecefad04414ebe1002a6d0e9cbdad349931b8b354609d60c",
     "Flock.Range": "558d65b6b5476afe0abcbe44240c1eb4d16b550a32d9a9ae81bd9a335da770dc",
@@ -393,7 +393,7 @@
     "Flock.TypedBlock": "7a17e80ec2e8b82d15bcc423ae7bedd8e79cce65ae215abde22fab1949546eaa",
     "Flock.Wire": "2ca6fdbbbd3a421bf23a68c2d1cec3e04cafb285b36c757d0bfafbc9f7c23aba",
     "Flock.instInhabitedPort": "426557d5addbb6b3e55506469c7f4f38a72a242ebd819f2537f3d3a6384c827f",
-    "Flock.instInhabitedPort.default": "fd8dda9e73eb98ad0b0524227ccc8d50f1eaa64e7efa6c6bfadd51b00440f67a"
+    "Flock.instInhabitedPort.default": "da6a909dbf98165317ef82d3edf34f59e57a59d56f775900b370ecbfc69d4ef4"
    },
    "pins": ["Flock.HmNets.check_ok", "Flock.Registered.check_ok"]
   },
