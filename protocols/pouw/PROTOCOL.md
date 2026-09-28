@@ -449,7 +449,7 @@ useful    U/(α_A·α_B), glue
     which is exactly the bound claimed.
   - On an opened tile the verifier checks that filler rows are zero, that every row is zero past the kept width, that
     credited rows pass the per-row rules and excluded rows fail them, and that the replayed debit over the credited words
-    is at most ρ times those cells' credit, with ρ = 1/400.
+    is at most ρ times those cells' credit. ρ is the device record's cap (`Device.cap`): 1/400 on the H100.
   - That credit is the cells' share of the unit's `creditOf` at the kept width, |rows|·|cols|/(m·n) (the per-tile
     statement's `tileShare`). A row's forming and A′·F_B are so charged once across its row band, a |cols|/n share in
     each tile. `creditOf` of the tile's own shape would charge them whole in every tile: at 8,192³ that cap is 2.17×
@@ -476,6 +476,19 @@ function's default, so every `pearl-c-h100-*` output and vector above is unchang
 - **The atom is the card's captured step**, `BLACKWELL_SM120_E4M3_M16N8K32`: `mma.sync` `kind::f8f6f4` m16n8k32 E4M3 as one
   group of all 32 products and the accumulator in a 26-bit adder (Lean's `Pipeline ⟨[32], 26, −133⟩`), where the H100's
   and Ada's FP8 adders are 14 bits wide.
+- **The cap is ρ = 1/1,000** (Daniel, 9:43 AM PDT on 2 Oct), the record's `cap`; the H100's stays 1/400.
+  - The verifier rejects a drawn tile whose replayed debit passes 1/1,000 of its credited cells' credit, and an accepted
+    unit is credited (1 − 1/1,000)·`creditOf`. `volunteer` reads the same cap. The certificate states TT_OUT(1/1000) and
+    names the cap among its parameters.
+  - γ at the headline record (FP32 at 8.376, the packed cast at 8.72, rev1's credit) is 0.36949% at 8,192³ and 0.35973%
+    at 16,384³, per unit and per audit tile (Lean `pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_8192`, `_16384` and their
+    `pearlCSampled…` twins). Per unit it follows from rev1 at 1/400 alone (`…Cap1000_8192_of_cap400`); per tile, TT_OUT
+    at 1/1,000 is the assumption. At the issue-bound FP32 add (8.00) it is 0.36901% and 0.35949%
+    (`pearlCGammaSm120v1Cast8p72Rev1Cap1000_8192`, `_16384` and their `pearlCSampled…` twins, from TT_OUT at 1/1,000);
+    the ledger publishes the larger of the two prices, the in-loop add's.
+  - `credit_of` and `wref` here are still `creditDev` and `wrefDev`: they keep the first promotion add of every word
+    that rev1 takes out (m·n FADDs per unit, 0.090% of the credit at 8,192³ and 0.045% at 16,384³), so the cap and
+    the credit they give are that much above rev1's.
 - **Every other field of `SM120` is a stand-in**, and `standins` names each one; the certificate lists them as hypotheses.
   - The peel is `HOPPER_BF16_M16N8K16`, which matched the RTX 5090's `mma.sync` m16n8k16 BF16.
   - G = 4, the H100's W1 prices and k ≤ 2^16 are the H100's. They are statement parameters, changed through the

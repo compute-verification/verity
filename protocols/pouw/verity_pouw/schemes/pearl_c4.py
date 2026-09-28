@@ -1095,6 +1095,7 @@ class PearlC4:
     test instance."""
 
     tickets = C.PearlC.tickets
+    cap = CAP
 
     def __init__(self, fmt: str = "nvfp4", k_min: int = 1024, tile: tuple[int, int] = (TILE, TILE),
                  f1: RowF1 | None = None, n_min: int = B_OVF_MIN_N):

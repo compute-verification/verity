@@ -186,6 +186,17 @@ def test_a_commit_of_a_model_with_no_size_admitted_on_arrival_holds_the_queue_fo
     assert active(pacer) == ["cov-u1"] and pacer.cluster["policy"] == "None"
 
 
+def test_a_tp_commit_writes_no_bundle_so_its_model_needs_no_size_and_holds_nothing(pacer):
+    """3 Oct: cov-gm359, a TP2 qwen3-14b Commit, held the queue for 45 min as a model with no size while 5 of node 1's 8 GPUs
+    were free; a TP Commit replays in its own process and writes no replay bundle, so it never teaches one either."""
+    tp2 = "qwen3-14b__bf16__rtxpro6000__tp2__b8__i1024__o128__g"
+    commit(pacer, "cov-t", tp2, admitted=True)
+    commit(pacer, "cov-u", YI.format(0), active=False)
+    pacer.tick()
+    assert pacer.estimate_gb(tp2) == 0.0 and pacer.cluster["policy"] == "None" and active(pacer) == ["cov-t", "cov-u"]
+    assert not pacer.sized(tp2.replace("__tp2__", "__tp1__")), "its TP1 rows write bundles, and still teach the size first"
+
+
 def test_the_lease_pool_holders_go_to_their_own_local_queue_on_the_same_cluster_queue(monkeypatch):
     monkeypatch.setenv("VY_POOL_QUEUE", "deployments-gpu")
     monkeypatch.setenv("VY_POOL_LOCAL_QUEUE", "deployments-gpu-pool")

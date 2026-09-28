@@ -656,7 +656,7 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
     non_ids = pop.peer_inputs                                   # a rank Program's received peer partials are not token ids
     for c in P.calls:
         m = corr.module_of(c.id)
-        if not m:
+        if not m or c.family in SAMPLING_EVENTS:            # a selector's runtime inputs are the sampler's (above), wherever it sits (TP: `inner`)
             continue
         # a non-weight prescribed input (the prompt ids) or a sampling event's output among the reads
         if any(r not in record_fields and r not in non_ids and r not in pop.supplied for r in param_reads(c)) or reads_any_of(c, event_set):

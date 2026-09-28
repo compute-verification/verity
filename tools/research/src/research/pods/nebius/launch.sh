@@ -66,6 +66,7 @@ env = (f"VY_USER={os.environ['VY_USER']}\nVY_DATA_DEVICE_ID={os.environ['VY_DEV'
 files = [("/etc/vy/vy.env", "0644", base64.b64encode(gzip.compress(env.encode(), mtime=0)).decode()),
          ("/usr/local/sbin/vy-setup", "0755", blob(f"{nebius}/vm_setup.sh")),
          ("/usr/local/sbin/vy-nebius-stop", "0755", blob(f"{nebius}/vm_stop.sh")),
+         ("/etc/systemd/system/user@.service.d/vy-cpuset.conf", "0644", blob(f"{nebius}/user-cpuset.conf")),
          ("/usr/local/share/vy/lease.sh", "0755", blob(f"{sh}/lease.sh")),
          ("/usr/local/bin/gpu-lease", "0755", blob(f"{sh}/gpu_lease.sh"))]
 out = ["#cloud-config", "users:", f"  - name: {os.environ['VY_USER']}", "    sudo: ALL=(ALL) NOPASSWD:ALL", "    shell: /bin/bash",

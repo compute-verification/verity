@@ -6,6 +6,8 @@ and a strict mark that passed there would fail `check`. Fix the test or the code
 """
 from __future__ import annotations
 
+import os
+
 import pytest
 
 KNOWN_FAILURES = {
@@ -52,7 +54,13 @@ def pytest_configure(config) -> None:
     """Make this process's first MKL VML call on one thread, before any test.  torch's CPU `exp`, `log`, `tanh`, `erf` and the
     other VML functions run in the MKL it links statically, whose first-call initialisation races when several threads call at
     once: one intra-op thread then computes its whole chunk at about 2e-4 relative error (the `exp` reference against torch,
-    max ULP 1771, in some 6% of fresh processes).  Any VML call initialises all of them."""
+    max ULP 1771, in some 6% of fresh processes).  Any VML call initialises all of them.
+
+    And keep oneDNN, which runs torch's CPU bf16 matmuls, off AMX, set before its first primitive reads it.  On a KVM guest
+    with AMX (the cloud agent VMs) a preempted bf16 matmul now and then returns one batch entry's rows wrong, single-threaded
+    too: 49 of 16,000 `(4, 1, 130) @ (4, 130, 64)` matmuls under 16 busy processes, and none with AMX off
+    (`test_eager_attention_head_ref_vs_torch[div-bf16]`, normalised error 779)."""
+    os.environ.setdefault("ONEDNN_MAX_CPU_ISA", "AVX512_CORE_BF16")
     try:
         import torch
     except ImportError:

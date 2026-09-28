@@ -22,6 +22,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
+from verity_vllm.check.replay.linkage import splits_of_record
 from verity_vllm.commit import challenge as CH
 from verity_vllm.commit import opened as OV
 from verity_vllm.commit import store_dump as SD
@@ -251,15 +252,6 @@ def program_steps(loaded: dict, progs: dict) -> dict[str, int | None]:
 
     return {k: (int(v["result"]["T"]) + 1) if (v.get("result") or {}).get("T") is not None else (len(MF.segment_steps(progs[k]["rows"])) if k in progs else None)
             for k, v in loaded.items()}
-
-
-def splits_of_record(loaded: dict) -> dict[str, Any]:
-    """Each request Program's split count S of record (`{"derived": num_sms}` under derived S), from its Build result."""
-    out = {}
-    for k, v in loaded.items():
-        smp = (v.get("result") or {}).get("sampling") or {}
-        out[k] = {"derived": (smp.get("geometry") or {}).get("num_sms")} if smp.get("splits") == "derived" else smp.get("splits")
-    return out
 
 
 def linkage_requests(s: Site, _rl: dict[str, str], _arr: dict[str, int], _pi_steps: dict[str, int | None], _horizons: dict | None) -> list[dict[str, Any]]:

@@ -16,7 +16,6 @@ from test_pouw_pearl_c_debit import spiked_rows
 from verity_pouw.audit import Epoch, Prover, Workload
 from verity_pouw.protocol import Matmul, Shape, Tile
 from verity_pouw.schemes import pearl_c as C
-from verity_pouw.schemes import pearl_c_debit as D
 from verity_pouw.schemes import pearl_c_work as W
 from verity_pouw.schemes import pearl_kw as P
 
@@ -57,7 +56,7 @@ def test_credit_is_per_row_on_kept_cells_at_leans_accounting():
     assert W.tile_weight(S, r, tiles[(0, 0)]) == cell * 15 * 16 and W.tile_weight(S, r, tiles[(0, 16)]) == cell * 15 * 15
     assert W.tile_weight(S, r, tiles[(16, 16)]) == cell * 4 * 15 and W.tile_weight(S, record(real=16), tiles[(16, 0)]) == 0
     wref, credit = W.work(S, [r])
-    assert wref == cell * 19 * 31 and credit == (1 - D.CAP) * W.cell_credit(S, r) * 19 * 31
+    assert wref == cell * 19 * 31 and credit == (1 - S.cap) * W.cell_credit(S, r) * 19 * 31
     assert W.work(S, [record(kept=64)])[0] == Fraction(S.wref(Shape(20, 64, 32)))
     picks = W.draw(S, [r], AFTER, bytes(32), bytes(32), bytes(32), 200)
     assert {(t.rows[0], t.cols[0]) for _, t in picks} == set(tiles) and all(r.credited(t)[0] for _, t in picks)
@@ -77,16 +76,16 @@ def test_tile_cap_is_the_cells_share_of_the_units_credit():
         for t in scheme.tiles(s):
             rows, cols = r.credited(t)
             _, cap = W.tile_cap(scheme, r, [[0] * s.k] * len(rows), [[0] * s.k] * len(cols))
-            assert cap == D.CAP * scheme.credit_of(Shape(s.m, kept, s.n)) * Fraction(len(rows) * len(cols), s.m * s.n)
-            assert cap < D.CAP * scheme.credit_of(Shape(len(rows), kept, len(cols)))
+            assert cap == scheme.cap * scheme.credit_of(Shape(s.m, kept, s.n)) * Fraction(len(rows) * len(cols), s.m * s.n)
+            assert cap < scheme.cap * scheme.credit_of(Shape(len(rows), kept, len(cols)))
             total += cap
-        assert total == D.CAP * scheme.credit_of(Shape(s.m, kept, s.n))
+        assert total == scheme.cap * scheme.credit_of(Shape(s.m, kept, s.n))
     assert sm120.credit_of(Shape(32, K, 32)) < S.credit_of(Shape(32, K, 32))
     r = record(excluded_a=(3,), excluded_b=(20,))
     tile = next(t for t in S.tiles(r.matmul.shape) if (t.rows[0], t.cols[0]) == (0, 16))
     rows, cols = r.credited(tile)
     assert (len(rows), len(cols)) == (15, 15)
-    assert W.tile_cap(S, r, [[0] * K] * 15, [[0] * K] * 15)[1] == D.CAP * W.cell_credit(S, r) * 15 * 15
+    assert W.tile_cap(S, r, [[0] * K] * 15, [[0] * K] * 15)[1] == S.cap * W.cell_credit(S, r) * 15 * 15
 
 
 def test_records_bind_every_field_and_the_splits():
@@ -171,7 +170,7 @@ def test_audit_credits_real_rows_and_checks_the_excluded_ones():
     out = W.audit(S, epoch, prover, tr, SPLITS, records, BEFORE, AFTER, 8)
     assert out.audit.accepted and len(out.audit.verdicts) == 9 and out.audit.selected[-1] == 0
     assert out.wref == W.cell_wref(S, records[0]) * 19 * 16 and out.audit.profile.work == int(out.wref)
-    assert out.credit == (1 - D.CAP) * W.cell_credit(S, records[0]) * 19 * 16 and out.job == S.job_cost(16, K)
+    assert out.credit == (1 - S.cap) * W.cell_credit(S, records[0]) * 19 * 16 and out.job == S.job_cost(16, K)
 
 
 def test_r1_is_a_no_op_on_pearl_c():

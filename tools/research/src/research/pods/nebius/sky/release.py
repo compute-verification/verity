@@ -189,15 +189,24 @@ def share(table):
         _share_failed = True
 
 
+def tp(row):
+    m = re.search(r"__tp(\d+)__", row)
+    return int(m.group(1)) if m else 1
+
+
 def sized(row):
     """Whether the pacer has a size for `row`'s model it trusts: a rate learned from a succeeded Commit, or the formula's own
-    row (HIDDEN_X_LAYERS). Any other model is estimated as Phi-3-mini, a guess."""
-    return model(row) in learned() or any(row.startswith(k + "__") for k in HIDDEN_X_LAYERS)
+    row (HIDDEN_X_LAYERS), or a TP row's, which has no bundle (estimate_gb). Any other model is estimated as Phi-3-mini, a guess."""
+    return tp(row) > 1 or model(row) in learned() or any(row.startswith(k + "__") for k in HIDDEN_X_LAYERS)
 
 
 def estimate_gb(row):
-    """A Commit's bundle, GB: from the largest bundle of its model a succeeded Commit wrote (learn()) with LEARN_MARGIN, else
-    infra's formula scaled from Phi-3-mini, which runs 4-9x over the grid's small models (Oct 1: 51 and 107 GB against 480)."""
+    """A Commit's bundle, GB: none for a TP row, whose Commit replays in its own process and writes no replay bundle (none of
+    node 1's 72 TP2 rows had one on Oct 3, and cov-gm359's qwen3-14b held the queue as a model with no size); else from the
+    largest bundle of its model a succeeded Commit wrote (learn()) with LEARN_MARGIN, else infra's formula scaled from
+    Phi-3-mini, which runs 4-9x over the grid's small models (Oct 1: 51 and 107 GB against 480)."""
+    if tp(row) > 1:
+        return 0.0
     rate = learned().get(model(row))
     if rate:
         return max(10.0, rate * max(batch(row), 1) * tokens(row) * LEARN_MARGIN)

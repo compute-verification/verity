@@ -3,8 +3,8 @@ checked, on the H100 and on the RTX PRO 6000 Blackwell.
 
 The design is the cheap-binding lane's (research store ``docs/pouw/cheap-binding.md`` §1): Pearl's H100 product and its
 output tickets, plus #311's noisy clean-up ("peel") pinned bit for bit, so that the useful output U is a checked value
-and no part of the clean-up can be skipped at a degenerate input.  γ rests on the named conjecture TT_OUT(1/400); nothing
-here is proved by counting.  Pearl's own pieces (noise lines, BF16 compute ops, norms, the noisy quantization, the H100
+and no part of the clean-up can be skipped at a degenerate input.  γ rests on the named conjecture TT_OUT(ρ) at the device
+record's cap ρ (`Device.cap`: 1/400 on the H100, 1/1,000 on sm_120); nothing here is proved by counting.  Pearl's own pieces (noise lines, BF16 compute ops, norms, the noisy quantization, the H100
 reset-and-promote replay) are `pearl_kw`'s ports of pearl-research-labs/pearl PR #311 and its ``zk-pow`` verifier.
 
 **The scheme, per 64 x 64 tile** (rows I of A, rows J of B, full k; both operands stored as rows along k):
@@ -398,22 +398,25 @@ class PearlC:
         self.name = ((NAME if forming == "v0" else f"pearl-c-{device.name}-v1") + ("" if hashing == "h0" else f"-{hashing}")
                      + ("" if prices == device.prices else f"@{prices.device}"))
         self.k_min, self.tile, self.forming, self.device, self.hashing, self.prices = k_min, tile, forming, device, hashing, prices
+        #: ρ, the device record's: the tile rule's debit cap and the credit's (1 − ρ) (`pearl_c_work`)
+        self.cap = device.cap
         self.commitment_hash, self.digest_keys = TREE_HASH[hashing], digest_keys(hashing)
         self.line_norm = P.NOISE_NORM if forming == "v0" else LINE_NORM_V1
         allowance = ("forming v0 is #311's as ported (FP10 decode and exact norms depend on A alone and are skippable, "
                      "X-PC-2); pearl-c-h100-v1 has the reworked forming") if forming == "v0" else (
                      "forming v1 is §5's: ρ over every 8th position depends on A alone (about 4 units per element) and is "
                      "not credited; the model adopts s, ρ and α as its own FP8 quantizer (Costs.adopted)")
+        rho, honest = device.cap, f"{float(100 * (1 - device.cap)):g}%"
         if device == H100:
-            hardware = ("TT_OUT(1/400) for Pearl-C's Π and domain (δ = 1, promotion every 4 atoms, k <= 2^16): no H100 W1 "
-                        "program outputs correct C̃ and U words for less than 99.75% of their honest cost (research store "
+            hardware = (f"TT_OUT({rho}) for Pearl-C's Π and domain (δ = 1, promotion every 4 atoms, k <= 2^16): no H100 W1 "
+                        f"program outputs correct C̃ and U words for less than {honest} of their honest cost (research store "
                         "docs/pouw/cheap-binding.md §1); a conjecture, not proved by counting",
                         "the H100's FP8 wgmma and BF16 wgmma are reproduced exactly (HOPPER_E4M3_K32, HOPPER_BF16_WGMMA_K16)")
         else:
             promotion = f"promotion every {device.g} atoms" if device.g else "no promotion"
-            hardware = (f"TT_OUT(1/400) for Pearl-C's Π and domain on {device.name} (δ = 1, {promotion}, "
+            hardware = (f"TT_OUT({rho}) for Pearl-C's Π and domain on {device.name} (δ = 1, {promotion}, "
                         f"k <= {device.k_max}): no {device.name} W1 program outputs correct C̃ and U words for less than "
-                        "99.75% of their honest cost; a conjecture stated for the H100 (research store "
+                        f"{honest} of their honest cost; a conjecture stated for the H100 (research store "
                         "docs/pouw/cheap-binding.md §1), not yet re-derived on this device's atom",
                         f"the {device.name} FP8 and BF16 mma steps are reproduced exactly ({device.atom.name}, "
                         f"{device.peel.name})",
@@ -431,7 +434,7 @@ class PearlC:
             parameters=(("k_min", k_min), ("tile_m", tile[0]), ("tile_n", tile[1]), ("rank", R), ("window", device.window),
                         ("forming", forming), ("line_norm_f", self.line_norm), ("device", device.name),
                         ("atom", device.atom.name), ("peel", device.peel.name), ("g", device.g), ("hashing", hashing),
-                        ("prices", prices.device)),
+                        ("prices", prices.device), ("cap", str(device.cap))),
         )
 
     def check(self, matmul: Matmul) -> None:

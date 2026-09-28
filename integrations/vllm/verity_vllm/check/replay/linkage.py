@@ -179,6 +179,15 @@ SEED_RULE = "committed runner.sampler/seed word == the DECLARED workload seed of
 SPLITS_RULE = "committed runner.sampler/splits word at step s == SplitsFor_v1(#requests with a committed sampled id at s, num_SMs of record) (REQ-03 derived S)"
 
 
+def splits_of_record(loaded: dict) -> dict[str, Any]:
+    """Each request Program's split count S of record (`{"derived": num_sms}` under derived S), from its Build result."""
+    out = {}
+    for k, v in loaded.items():
+        smp = (v.get("result") or {}).get("sampling") or {}
+        out[k] = {"derived": (smp.get("geometry") or {}).get("num_sms")} if smp.get("splits") == "derived" else smp.get("splits")
+    return out
+
+
 def _word_int(w: np.ndarray) -> int:
     a = np.asarray(w).reshape(-1)
     return int(a.view(np.int64)[0]) if a.dtype.itemsize == 8 else int(a.astype(np.int64)[0])
