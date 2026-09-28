@@ -20,8 +20,10 @@ The check also covers the unit's logical order (`Flock.DeriveAll.order`, the lis
 after them reads only earlier columns (and `one`), and every column outside the order has a zero row or none.
 
 So all of this holds of whatever `deriveAll` builds: nothing here is about how it builds. The flat case is `compose_sound`
-(`Types/Flat.lean`). Inline reads are checked (the decoders' one-hot minterms, the product rows' table-direct side, the
-output rows, bits constant across the table); placed reads (generated `table/v2` layouts) are refused for now.
+(`Types/Flat.lean`). Reads are checked inline (the decoders' one-hot minterms, the product rows' table-direct side, the
+output rows, bits constant across the table) and placed: a placed read's segment embeds a generated `table/v2` layout,
+checked the same way in its own coordinates, and **`genOk_sound`** gives that its output columns carry the table's bits
+at the index its input columns spell.
 -/
 
 namespace FlockSoundness.Types.Dag
@@ -214,6 +216,9 @@ theorem Inv.formOf {z : ℕ → Bool} {wire : Array CF} {vals : List Bool} (h : 
 
 /-! ## What the check's row tests give -/
 
+/-- On column values `z` that satisfy a layout's rows as the verifier folds them: each tested row's equation, each
+product row's with its table-direct side, each constant copy at 1, each binding copy equal to its source once the callee's
+constant is 1, and the layout's constant at 1. -/
 structure Facts (words : String → Option (Array Nat)) (k : Chk) (z : ℕ → Bool) : Prop where
   row : ∀ c r, k.rowIs c r = true → z c = (xorSum r.1 z && xorSum r.2 z)
   prod : ∀ c a rec, k.prodIs c a rec = true →
@@ -311,8 +316,9 @@ theorem getD_of_getElem? {α : Type} {a : Array α} {i : Nat} {x d : α} (h : a[
   simp [Array.getD, hi, hx]
 
 theorem checkLayout_spec {types : String → Option CircuitType} {words : String → Option (Array Nat)}
-    {ls : Array Layout} {done : Array D} {unit jj : Nat} (h : checkLayout types words ls done unit jj = true) :
-    ∃ t, (ls.getD jj default).type.bind types = some t ∧ t.outputs.size = t.outBits ∧
+    {ls : Array Layout} {done : Array D} {unit jj : Nat} (h : checkLayout types words ls done unit jj = true)
+    {t : CircuitType} (ht : (ls.getD jj default).type.bind types = some t) :
+    t.outputs.size = t.outBits ∧
       (∀ o (ho : o < t.outputs.size), t.outputs[o].c ≤ 1) ∧
       (done.getD jj default).inCols.size = t.inBits ∧ (done.getD jj default).outCols.size = t.outputs.size ∧
       Chk.oneAt ⟨done.getD jj default, jj == unit⟩ (done.getD jj default).const = true ∧
@@ -327,15 +333,51 @@ theorem checkLayout_spec {types : String → Option CircuitType} {words : String
   unfold checkLayout at h
   dsimp only at h
   split at h
-  · rename_i t _ ht
+  · rename_i t' _ ht'
+    rw [ht] at ht'
+    cases ht'
     simp only [Bool.and_eq_true, beq_iff_eq, List.all_eq_true, List.mem_range] at h
     obtain ⟨⟨⟨⟨⟨⟨hos, hoc⟩, hin⟩, hout⟩, hone⟩, hins⟩, hw⟩ := h
-    refine ⟨t, ht, hos, fun o ho => by simpa using (Array.all_eq_true.mp hoc) o ho, hin, hout, hone, hins, ?_⟩
+    refine ⟨hos, fun o ho => by simpa using (Array.all_eq_true.mp hoc) o ho, hin, hout, hone, hins, ?_⟩
     split at hw
     · rename_i _ wire hwk
       exact ⟨wire, hwk, fun o ho => List.all_eq_true.mp hw o (List.mem_range.mpr ho)⟩
     · cases hw
+  · rename_i hn
+    rw [ht] at hn
+    cases hn
   · cases h
+
+/-- A generated read layout's check: it is not the unit, and its rows pass `genOk`. -/
+theorem genLayout_spec {types : String → Option CircuitType} {words : String → Option (Array Nat)}
+    {ls : Array Layout} {done : Array D} {unit jj : Nat} (h : checkLayout types words ls done unit jj = true)
+    {sha : String} {n vb lo : Nat} (hown : (ls.getD jj default).own = .gen sha n vb lo) :
+    jj ≠ unit ∧ genOk words ⟨done.getD jj default, false⟩ sha n vb lo = true := by
+  unfold checkLayout at h
+  dsimp only at h
+  split at h
+  · rename_i heq _
+    rw [hown] at heq
+    cases heq
+  · rename_i heq _
+    rw [hown] at heq
+    cases heq
+    simp only [Bool.and_eq_true, bne_iff_ne, ne_eq] at h
+    obtain ⟨hne, hg⟩ := h
+    have hk : (jj == unit) = false := by simp [hne]
+    rw [hk] at hg
+    exact ⟨hne, hg⟩
+  · cases h
+
+theorem genOk_facts {words : String → Option (Array Nat)} {d : D} {u : Bool} {sha : String} {n vb lo : Nat}
+    (h : genOk words ⟨d, u⟩ sha n vb lo = true) :
+    d.inCols = Array.range n ∧ d.outCols.size = vb ∧ Chk.oneAt ⟨d, u⟩ d.const = true ∧
+      ((words sha).getD #[]).size = 2 ^ n ∧ 2 ≤ lo ∧ lo < n ∧ ∀ i < n, Chk.rowIs ⟨d, u⟩ i ([i], [i]) = true := by
+  unfold genOk at h
+  dsimp only at h
+  simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq, List.all_eq_true, List.mem_range] at h
+  obtain ⟨⟨⟨⟨⟨⟨⟨hin, hout⟩, hone⟩, hws⟩, hlo⟩, hn⟩, hins⟩, -⟩ := h
+  exact ⟨hin, hout, hone, hws, hlo, hn, hins⟩
 
 /-! ## A placed call -/
 
@@ -366,31 +408,23 @@ theorem readSide_shift (ws : Array Nat) (r : ReadRec) (base c : Nat) :
   simp only [Function.comp]
   omega
 
-theorem placed_sound {types : String → Option CircuitType} {words : String → Option (Array Nat)} {ls : Array Layout}
-    {done : Array D} {unit : Nat} {k : Chk} {z : ℕ → Bool} (hf : Facts words k z) {jj base : Nat} {ex : List Nat}
-    {wire : Array CF} {vals : List Bool} (hinv : Inv z wire vals) {args : Array Form} {u : CircuitType}
-    (hcheck : checkLayout types words ls done unit jj = true) (hjj : jj ≠ unit)
-    (hty : (ls.getD jj default).type.bind types = some u) (hsound : LayoutSound types words ls done jj)
-    (hsz : args.size = u.inBits) (hargs : ∀ i (hi : i < args.size), args[i].c ≤ 1)
-    (hout : (done.getD jj default).outCols.size = u.outBits)
-    (hp : placedOk k (done.getD jj default) base ex wire args = true) (F : Nat) (hF : jj < F) (o : Nat) :
-    cfVal z (((done.getD jj default).outCols.map fun col => (([base + col], 0) : CF)).getD o ([], 0)) =
-      ((List.range u.outBits).map fun o =>
-        (evalT types words F u fun i => formVal (vals.getD · false) (args.getD i default)).getD o false).getD o false := by
-  obtain ⟨u', hty', hos', -, -, -, hone', hins', -⟩ := checkLayout_spec hcheck
-  rw [hty] at hty'
-  cases hty'
-  have hjj' : (jj == unit) = false := by simp [hjj]
-  rw [hjj'] at hone' hins'
-  unfold LayoutSound at hsound
-  generalize done.getD jj default = sub at *
+/-- **A placed callee's rows, as `placedOk` embeds them**: they hold at its base, its constant is 1 there, and each bound
+input carries the call's input form. -/
+theorem placed_core {words : String → Option (Array Nat)} {k : Chk} {z : ℕ → Bool} (hf : Facts words k z) {sub : D}
+    {base : Nat} {ex : List Nat} {wire : Array CF} {vals : List Bool} (hinv : Inv z wire vals) {args : Array Form}
+    (hargs : ∀ i (hi : i < args.size), args[i].c ≤ 1) (hone' : Chk.oneAt ⟨sub, false⟩ sub.const = true)
+    (hins' : ∀ w < args.size, Chk.rowIs ⟨sub, false⟩ (sub.inCols.getD w 0)
+      ([sub.inCols.getD w 0], [sub.inCols.getD w 0]) = true)
+    (hp : placedOk k sub base ex wire args = true) :
+    SatAt (fullRow words sub) (fun c => z (c + base)) ∧ z (sub.const + base) = true ∧
+      ∀ i < args.size, z (sub.inCols.getD i 0 + base) = formVal (vals.getD · false) (args.getD i default) := by
   unfold placedOk at hp
   simp only [Bool.and_eq_true, List.all_eq_true, List.mem_range] at hp
   obtain ⟨⟨hcb, hbind⟩, hemb⟩ := hp
   have hcb1 : z (base + sub.const) = true := hf.one _ hcb
+  refine ⟨?_, by rw [Nat.add_comm]; exact hcb1, ?_⟩
   -- the callee's rows hold at its base
-  have hsat : SatAt (fullRow words sub) fun c => z (c + base) := by
-    intro c r hr
+  · intro c r hr
     have hrows : ∃ p, sub.rows[c]? = some p := by
       unfold fullRow at hr
       split at hr
@@ -431,11 +465,11 @@ theorem placed_sound {types : String → Option CircuitType} {words : String →
         rw [Nat.add_comm, hf.row _ _ hrow]
         simp only [shiftRow, xorSum_map]
         rfl
-  have hS := hsound u hty _ hsat (by rw [Nat.add_comm]; exact hcb1) F hF
   -- its inputs carry the call's input forms
-  have hx : ∀ i < u.inBits, z (sub.inCols.getD i 0 + base) = formVal (vals.getD · false) (args.getD i default) := by
-    intro i hi
+  · intro i hi
     have hbi := hbind i (by omega)
+    have hgi : args.getD i default = args[i] := by simp [Array.getD, hi]
+    rw [hgi] at hbi ⊢
     rw [Nat.add_comm]
     split at hbi
     · split at hbi
@@ -450,11 +484,30 @@ theorem placed_sound {types : String → Option CircuitType} {words : String →
         simp [xorSum]
       · cases hbi
     · rw [hf.bind _ _ _ hbi hcb1, xorSum_resolve z _ hf.const _ (formOf_snd_lt _ _)]
-      exact hinv.formOf _ (by rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem (by omega)]; exact hargs i (by omega))
+      exact hinv.formOf _ (hargs i hi)
+
+theorem placed_sound {types : String → Option CircuitType} {words : String → Option (Array Nat)} {ls : Array Layout}
+    {done : Array D} {unit : Nat} {k : Chk} {z : ℕ → Bool} (hf : Facts words k z) {jj base : Nat} {ex : List Nat}
+    {wire : Array CF} {vals : List Bool} (hinv : Inv z wire vals) {args : Array Form} {u : CircuitType}
+    (hcheck : checkLayout types words ls done unit jj = true) (hjj : jj ≠ unit)
+    (hty : (ls.getD jj default).type.bind types = some u) (hsound : LayoutSound types words ls done jj)
+    (hsz : args.size = u.inBits) (hargs : ∀ i (hi : i < args.size), args[i].c ≤ 1)
+    (hout : (done.getD jj default).outCols.size = u.outBits)
+    (hp : placedOk k (done.getD jj default) base ex wire args = true) (F : Nat) (hF : jj < F) (o : Nat) :
+    cfVal z (((done.getD jj default).outCols.map fun col => (([base + col], 0) : CF)).getD o ([], 0)) =
+      ((List.range u.outBits).map fun o =>
+        (evalT types words F u fun i => formVal (vals.getD · false) (args.getD i default)).getD o false).getD o false := by
+  obtain ⟨hos', -, -, -, hone', hins', -⟩ := checkLayout_spec hcheck hty
+  have hjj' : (jj == unit) = false := by simp [hjj]
+  rw [hjj'] at hone' hins'
+  unfold LayoutSound at hsound
+  generalize done.getD jj default = sub at *
+  obtain ⟨hsat, hcb1, hx⟩ := placed_core hf hinv hargs hone' (fun w hw => hins' w (by omega)) hp
+  have hS := hsound u hty _ hsat hcb1 F hF
   rw [getD_map_col, list_getD_map_range]
   by_cases ho : o < sub.outCols.size
   · rw [ite_eq_left ho, ite_eq_left (by omega), cfVal_col, Nat.add_comm, hS o (by omega)]
-    exact congrArg (fun l => List.getD l o false) (evalT_congr types words F u hx)
+    exact congrArg (fun l => List.getD l o false) (evalT_congr types words F u fun i hi => hx i (by omega))
   · rw [ite_eq_right ho, ite_eq_right (by omega)]
     rfl
 
@@ -794,6 +847,48 @@ theorem xorSum_outRow (r : ReadRec) {z : ℕ → Bool} (j : Nat) (q : ℕ → Bo
   refine (xorSum_congr (w := fun h => decide (hi = h) && q h) fun h hh => ?_).trans (xorSum_select hhi q)
   exact hp h (List.mem_range.mp hh)
 
+/-- **A read's product rows**: with its high minterms one-hot at `hiIdx` and its low minterms (its record's columns
+`loTop + l`) one-hot at `loIdx`, bit `j`'s product rows sum to bit `j` of word `loIdx + 2^lo · hiIdx` of the table. -/
+theorem prod_sums (words : String → Option (Array Nat)) (k : Chk) (z : ℕ → Bool) (hf : Facts words k z)
+    (rec : ReadRec) (ws : Array Nat) (hws : (words rec.table).getD #[] = ws) {n lo : Nat} (hrn : rec.n = n)
+    (hrlo : rec.lo = lo) (loM hiM : Array CF) {loIdx hiIdx : Nat} (hloI : loIdx < 2 ^ lo)
+    (hhiI : hiIdx < 2 ^ (n - lo))
+    (hloM : ∀ l < 2 ^ lo, cfVal z (loM.getD l ([], 0)) = decide (loIdx = l))
+    (hhiM : ∀ h < 2 ^ (n - lo), cfVal z (hiM.getD h ([], 0)) = decide (hiIdx = h))
+    (hhi2 : ∀ a, (hiM.getD a ([], 0)).2 < 2)
+    (hlocols : ∀ l < 2 ^ lo, loM.getD l ([], 0) = ([rec.loTop + l], 0)) {kk : Nat} {refs refs' : List Ref}
+    (hpr : prodRows k rec hiM (2 ^ (n - lo)) (kk * 2 ^ (n - lo)) 0 refs = some refs') :
+    ∀ j < kk, xorSum ((List.range (2 ^ (n - lo))).map (rec.prod0 + j * 2 ^ (n - lo) + ·)) z =
+      (ws.getD (loIdx + 2 ^ lo * hiIdx) 0).testBit j := by
+  have hp := prodRows_spec words k z hf rec hiM _ hhi2 _ 0 _ refs' hpr
+  have hloc : ∀ l, l < 2 ^ rec.lo → z (rec.loTop + l) = decide (loIdx = l) := by
+    intro l hl
+    rw [hrlo] at hl
+    have := hloM l hl
+    rw [hlocols l hl, cfVal_col] at this
+    exact this
+  have hprod : ∀ j < kk, ∀ h < 2 ^ (n - lo),
+      z (rec.prod0 + j * 2 ^ (n - lo) + h) = (decide (hiIdx = h) && (ws.getD (h * 2 ^ lo + loIdx) 0).testBit j) := by
+    intro j hj h hh
+    have hx := hp (j * 2 ^ (n - lo) + h) (by
+      have : j * 2 ^ (n - lo) + h < (j + 1) * 2 ^ (n - lo) := by rw [Nat.succ_mul]; omega
+      calc j * 2 ^ (n - lo) + h < (j + 1) * 2 ^ (n - lo) := this
+        _ ≤ kk * 2 ^ (n - lo) := Nat.mul_le_mul_right _ hj)
+    rw [Nat.zero_add, show (j * 2 ^ (n - lo) + h) % 2 ^ (n - lo) = h by
+      rw [Nat.add_comm, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt hh], hhiM h hh, ← Nat.add_assoc] at hx
+    rw [hx, hws]
+    congr 1
+    have hn' : rec.n - rec.lo = n - lo := by rw [hrn, hrlo]
+    have := xorSum_readSide ws rec (lo := loIdx) (by rw [hrlo]; exact hloI) hloc (j := j) (h := h)
+      (by rw [hn']; exact hh)
+    rw [hn', hrlo] at this
+    exact this
+  intro j hj
+  have := xorSum_outRow rec j (fun h => (ws.getD (h * 2 ^ lo + loIdx) 0).testBit j) (hi := hiIdx)
+    (by rw [hrn, hrlo]; exact hhiI) (fun h hh => by rw [hrn, hrlo] at hh ⊢; exact hprod j hj h hh)
+  rw [hrn, hrlo] at this
+  rw [this, Nat.mul_comm hiIdx, Nat.add_comm]
+
 /-- **An inline read's outputs.** If its decoders' minterms are one-hot at `loIdx` and `hiIdx`, the read's product and
 output rows (`readOk`) carry bits `0 … vb − 1` of word `loIdx + 2^lo · hiIdx` of the table. -/
 theorem readOk_spec (words : String → Option (Array Nat)) (k : Chk) (z : ℕ → Bool) (hf : Facts words k z)
@@ -839,42 +934,154 @@ theorem readOk_spec (words : String → Option (Array Nat)) (k : Chk) (z : ℕ �
           split at hr
           · cases hr
           · rename_i refs'' hpr
-            -- the product rows, one-hot in the high minterm, the table-direct side at the low one
             have hwsr : (words rec.table).getD #[] = ws := by rw [htab]; exact hws
-            have hp := prodRows_spec words k z hf rec hiM _ hhi2 _ 0 _ refs'' hpr
-            have hloc : ∀ l, l < 2 ^ rec.lo → z (rec.loTop + l) = decide (loIdx = l) := by
-              intro l hl
-              rw [hrlo] at hl
-              have := hloM l hl
-              rw [show loM.getD l ([], 0) = ([rec.loTop + l], 0) from by simpa using hlocols l hl, cfVal_col] at this
-              exact this
-            have hprod : ∀ j < Layout.kOf sha vb (Layout.tableInfo ws), ∀ h < 2 ^ (n - lo),
-                z (rec.prod0 + j * 2 ^ (n - lo) + h) =
-                  (decide (hiIdx = h) && (ws.getD (h * 2 ^ lo + loIdx) 0).testBit j) := by
-              intro j hj h hh
-              have hx := hp (j * 2 ^ (n - lo) + h) (by
-                have : j * 2 ^ (n - lo) + h < (j + 1) * 2 ^ (n - lo) := by rw [Nat.succ_mul]; omega
-                calc j * 2 ^ (n - lo) + h < (j + 1) * 2 ^ (n - lo) := this
-                  _ ≤ Layout.kOf sha vb (Layout.tableInfo ws) * 2 ^ (n - lo) := Nat.mul_le_mul_right _ hj)
-              rw [Nat.zero_add, show (j * 2 ^ (n - lo) + h) % 2 ^ (n - lo) = h by
-                rw [Nat.add_comm, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt hh], hhiM h hh, ← Nat.add_assoc] at hx
-              rw [hx, hwsr]
-              congr 1
-              have hn' : rec.n - rec.lo = n - lo := by rw [hrn, hrlo]
-              have := xorSum_readSide ws rec (lo := loIdx) (by rw [hrlo]; exact hloI) hloc (j := j) (h := h)
-                (by rw [hn']; exact hh)
-              rw [hn', hrlo] at this
-              exact this
             obtain ⟨h1, -, h3⟩ := outRows_spec k z words hf rec ws _ _
-              (fun j => (ws.getD (loIdx + 2 ^ lo * hiIdx) 0).testBit j) (fun j hj => by
-                have := xorSum_outRow rec j (fun h => (ws.getD (h * 2 ^ lo + loIdx) 0).testBit j) (hi := hiIdx)
-                  (by rw [hrn, hrlo]; exact hhiI) (fun h hh => by rw [hrn, hrlo] at hh ⊢; exact hprod j hj h hh)
-                rw [hrn, hrlo] at this
-                rw [this, Nat.mul_comm hiIdx, Nat.add_comm])
+              (fun j => (ws.getD (loIdx + 2 ^ lo * hiIdx) 0).testBit j)
+              (prod_sums words k z hf rec ws hwsr hrn hrlo loM hiM hloI hhiI hloM hhiM hhi2
+                (fun l hl => by simpa using hlocols l hl) hpr)
               (fun j _ h => hconst j h) vb 0 refs'' #[] outs refs' hr
             exact ⟨by simpa using h1, fun j hj => by simpa using h3 j (by simpa using hj)⟩
         · cases hr
     · cases hr
+
+/-! ## S3c-2b: placed reads -/
+
+theorem genOuts_spec (words : String → Option (Array Nat)) (k : Chk) (z : ℕ → Bool) (hf : Facts words k z)
+    (rec : ReadRec) (ws : Array Nat) (vb kk nh : Nat) (q : ℕ → Bool)
+    (hq : ∀ j < kk, xorSum ((List.range nh).map (rec.prod0 + j * nh + ·)) z = q j)
+    (hconst : ∀ j, kk ≤ j → (∀ i < ws.size, (ws.getD i 0).testBit j = (ws.getD 0 0).testBit j) →
+      (ws.getD 0 0).testBit j = q j)
+    (h : genOuts k ws rec vb kk nh = true) : ∀ j < vb, z (k.d.outCols.getD j 0) = q j := by
+  intro j hj
+  unfold genOuts at h
+  have hjj := List.all_eq_true.mp h j (List.mem_range.mpr hj)
+  dsimp only at hjj
+  split at hjj
+  · rename_i hjk
+    have hz := hf.row _ _ hjj
+    simp only at hz
+    rw [hz, hq j hjk]
+    simp [xorSum, hf.const]
+  · rename_i hjk
+    simp only [Bool.and_eq_true, List.all_eq_true, List.mem_range, beq_iff_eq] at hjj
+    obtain ⟨hall, hrow⟩ := hjj
+    rw [hf.row _ _ hrow, ← hconst j (by omega) hall]
+    cases (ws.getD 0 0).testBit j <;> simp [xorSum, hf.const]
+
+/-- **A generated read layout computes its table**: on column values that satisfy its rows as the verifier folds them,
+with its constant at 1, output bit `o` is bit `o` of the table's word that its input columns `0 … n − 1` index. -/
+theorem genOk_sound (words : String → Option (Array Nat)) (d : D) {sha : String} {n vb lo : Nat}
+    (h : genOk words ⟨d, false⟩ sha n vb lo = true) {z : ℕ → Bool} (hz : SatAt (fullRow words d) z)
+    (h1 : z d.const = true) :
+    ∀ o < vb, z (d.outCols.getD o 0) = (((words sha).getD #[]).getD (bitsIdx ((List.range n).map z)) 0).testBit o := by
+  have hf := facts_inner hz h1
+  obtain ⟨-, -, -, hws, hlo2, hlon, -⟩ := genOk_facts h
+  -- the index: its low bits, then its high bits
+  have hidx : bitsIdx ((List.range n).map z) =
+      bitsIdx ((List.range lo).map z) + 2 ^ lo * bitsIdx ((List.range (n - lo)).map fun i => z (lo + i)) := by
+    have hn : n = lo + (n - lo) := by omega
+    conv => lhs; rw [hn]
+    simp only [List.range_add, List.map_append, bitsIdx_append, List.map_map, List.length_map, List.length_range,
+      Function.comp_def]
+  unfold genOk at h
+  dsimp only at h
+  simp only [Bool.and_eq_true] at h
+  obtain ⟨-, hm⟩ := h
+  generalize hwsd : (words sha).getD #[] = ws at hm hws ⊢
+  split at hm
+  · cases hm
+  · rename_i loM refs1 hdlo
+    split at hm
+    · cases hm
+    · rename_i hiM refs2 hdhi
+      have hlv1 : ∀ a, (((Array.range lo).map fun i => (([i], 0) : CF)).getD a ([], 0)).2 < 2 := by
+        intro a; by_cases ha : a < lo <;> simp [Array.getD, ha]
+      have hlv2 : ∀ a, (((Array.range (n - lo)).map fun i => (([lo + i], 0) : CF)).getD a ([], 0)).2 < 2 := by
+        intro a; by_cases ha : a < n - lo <;> simp [Array.getD, ha]
+      obtain ⟨dl1, -, dl3⟩ := chkDecode_spec words _ z hf _ _ rfl _ loM refs1 hlv1 hdlo
+      obtain ⟨dh1, dh2, dh3⟩ := chkDecode_spec words _ z hf _ _ rfl _ hiM refs2 hlv2 hdhi
+      simp only [Array.size_map, Array.size_range] at dl1 dh1
+      rw [show max lo 1 = lo by omega] at dl1
+      rw [show max (n - lo) 1 = n - lo by omega] at dh1
+      have hv1 : ((Array.range lo).map fun i => (([i], 0) : CF)).toList.map (cfVal z) = (List.range lo).map z := by
+        simp [cfVal_col]
+      have hv2 : ((Array.range (n - lo)).map fun i => (([lo + i], 0) : CF)).toList.map (cfVal z) =
+          (List.range (n - lo)).map fun i => z (lo + i) := by
+        simp [cfVal_col]
+      rw [hv1] at dl3
+      rw [hv2] at dh3
+      obtain ⟨loIdx, hloDef⟩ : ∃ x, bitsIdx ((List.range lo).map z) = x := ⟨_, rfl⟩
+      obtain ⟨hiIdx, hhiDef⟩ : ∃ x, bitsIdx ((List.range (n - lo)).map fun i => z (lo + i)) = x := ⟨_, rfl⟩
+      have hloI : loIdx < 2 ^ lo := by rw [← hloDef]; simpa using bitsIdx_lt ((List.range lo).map z)
+      have hhiI : hiIdx < 2 ^ (n - lo) := by
+        rw [← hhiDef]; simpa using bitsIdx_lt ((List.range (n - lo)).map fun i => z (lo + i))
+      rw [hloDef] at dl3
+      rw [hhiDef] at dh3
+      rw [hloDef, hhiDef] at hidx
+      have hidxlt : loIdx + 2 ^ lo * hiIdx < ws.size := by
+        rw [← hidx, hws]; simpa using bitsIdx_lt ((List.range n).map z)
+      have hconst : ∀ j, (∀ i < ws.size, (ws.getD i 0).testBit j = (ws.getD 0 0).testBit j) →
+          (ws.getD 0 0).testBit j = (ws.getD (loIdx + 2 ^ lo * hiIdx) 0).testBit j := fun j h => (h _ hidxlt).symm
+      intro o ho
+      rw [hidx]
+      split at hm
+      · simp only [Bool.and_eq_true] at hm
+        exact genOuts_spec words _ z hf default ws vb 0 _ (fun j => (ws.getD (loIdx + 2 ^ lo * hiIdx) 0).testBit j)
+          (fun j hj => absurd hj (Nat.not_lt_zero _)) (fun j _ h => hconst j h) hm.2 o ho
+      · split at hm
+        · rename_i prod0 _
+          split at hm
+          · cases hm
+          · rename_i rec hrec
+            simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq, List.all_eq_true, List.mem_range] at hm
+            obtain ⟨⟨⟨⟨⟨⟨⟨⟨htab, hrn⟩, hrlo⟩, hrk⟩, hrp⟩, hkv⟩, hlocols⟩, hpr⟩, hg⟩ := hm
+            split at hpr
+            · rename_i hpr'
+              have hwsr : (words rec.table).getD #[] = ws := by rw [htab]; exact hwsd
+              exact genOuts_spec words _ z hf rec ws vb _ _ (fun j => (ws.getD (loIdx + 2 ^ lo * hiIdx) 0).testBit j)
+                (prod_sums words _ z hf rec ws hwsr hrn hrlo loM hiM hloI hhiI
+                  (fun l hl => dl3 l (by rw [dl1]; exact hl)) (fun h hh => dh3 h (by rw [dh1]; exact hh)) dh2
+                  (fun l hl => by simpa using hlocols l hl) hpr')
+                (fun j _ h => hconst j h) hg o ho
+            · cases hpr
+        · cases hm
+
+/-- **A placed read's outputs**: its segment embeds a generated read layout (`placedOk`, every index bit bound), so its
+output columns carry the table's bits at the index its forms spell. -/
+theorem placed_read_sound {types : String → Option CircuitType} {words : String → Option (Array Nat)}
+    {ls : Array Layout} {done : Array D} {unit : Nat} {k : Chk} {z : ℕ → Bool} (hf : Facts words k z)
+    {jj base : Nat} {wire : Array CF} {vals : List Bool} (hinv : Inv z wire vals) {idx : Array Form} {sha : String}
+    {n vb lo : Nat} (hcheck : checkLayout types words ls done unit jj = true)
+    (hown : (ls.getD jj default).own = .gen sha n vb lo) (hsz : idx.size = n)
+    (hargs : ∀ i (hi : i < idx.size), idx[i].c ≤ 1)
+    (hp : placedOk k (done.getD jj default) base [] wire idx = true) (o : Nat) :
+    cfVal z (((done.getD jj default).outCols.map fun col => (([base + col], 0) : CF)).getD o ([], 0)) =
+      ((List.range vb).map fun j =>
+        (((words sha).getD #[]).getD (bitsIdx (idx.toList.map (formVal (vals.getD · false)))) 0).testBit j).getD o
+        false := by
+  obtain ⟨-, hg⟩ := genLayout_spec hcheck hown
+  obtain ⟨hin, hout, hone, -, -, -, hins⟩ := genOk_facts hg
+  generalize done.getD jj default = sub at *
+  have hcol : ∀ i < n, sub.inCols.getD i 0 = i := by
+    intro i hi
+    rw [hin]
+    simp [Array.getD, hi]
+  obtain ⟨hsat, hcb1, hx⟩ := placed_core hf hinv hargs hone
+    (fun w hw => by rw [hcol w (by omega)]; exact hins w (by omega)) hp
+  have hS := genOk_sound words sub hg hsat hcb1
+  have hvals : ((List.range n).map fun c => z (c + base)) = idx.toList.map (formVal (vals.getD · false)) := by
+    apply List.ext_getElem (by simp [hsz])
+    intro i h1 h2
+    simp only [List.length_map, List.length_range] at h1
+    have := hx i (by omega)
+    rw [hcol i h1] at this
+    simp [this, Array.getD, show i < idx.size by omega]
+  rw [getD_map_col, list_getD_map_range]
+  by_cases ho : o < sub.outCols.size
+  · rw [ite_eq_left ho, ite_eq_left (by omega), cfVal_col, Nat.add_comm base]
+    rw [hS o (by omega), hvals]
+  · rw [ite_eq_right ho, ite_eq_right (by omega)]
+    rfl
 
 /-! ## The walk -/
 
@@ -979,7 +1186,25 @@ theorem walk_sound {types : String → Option CircuitType} {words : String → O
       · rename_i sha n vb htab
         dsimp only at h
         split at h
-        · cases h
+        · rename_i jj _ _
+          split at h
+          · rename_i jj' base ex refs''
+            split at h
+            · rename_i sha' n' vb' lo' hown
+              split at h
+              · rename_i hc
+                simp only [Bool.and_eq_true, beq_iff_eq, bne_iff_ne, ne_eq, decide_eq_true_eq, Array.all_eq_true]
+                  at hc
+                obtain ⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨htop', -⟩, hjjl⟩, hjju⟩, hsha⟩, hn⟩, hvb⟩, -⟩, hsz⟩, hargs⟩, hout⟩, hp⟩ := hc
+                subst hsha hn hvb
+                obtain ⟨hchk, -⟩ := hcallee jj hjjl hjju
+                simp only [runT, itemOut, htab]
+                refine ih _ _ _ _ _ _ h F hF htop _
+                  (hinv.append (by rw [Array.size_map, List.length_map, List.length_range]; exact hout) fun o => ?_)
+                exact placed_read_sound hf hinv hchk hown hsz hargs hp o
+              · cases h
+            · cases h
+          · cases h
         · split at h
           · rename_i hc
             simp only [Bool.and_eq_true, beq_iff_eq, Array.all_eq_true, decide_eq_true_eq] at hc
@@ -1070,9 +1295,7 @@ theorem checked_sound {types : String → Option CircuitType} {words : String �
     (F : Nat) (hF : jj < F) (o : Nat) (ho : o < t.outputs.size) :
     z ((done.getD jj default).outCols.getD o 0) =
       (evalT types words F t fun i => z ((done.getD jj default).inCols.getD i 0)).getD o false := by
-  obtain ⟨t', ht', -, hoc, -, -, -, -, wire, hw, hrows⟩ := checkLayout_spec hcheck
-  rw [ht] at ht'
-  cases ht'
+  obtain ⟨-, hoc, -, -, -, -, wire, hw, hrows⟩ := checkLayout_spec hcheck ht
   obtain ⟨F', rfl⟩ : ∃ F', F = F' + 1 := ⟨F - 1, by omega⟩
   have hinv0 : Inv z ((Array.range t.inBits).map fun w => ([(done.getD jj default).inCols.getD w 0], 0))
       ((List.range t.inBits).map fun i => z ((done.getD jj default).inCols.getD i 0)) := by
@@ -1115,7 +1338,7 @@ theorem unit_sound_of {types : String → Option CircuitType} {words : String �
     (h1 : z one = true) (F : Nat) (hF : unit < F) (o : Nat) (ho : o < t.outputs.size) :
     z ((done.getD unit default).outCols.getD o 0) =
       (evalT types words F t fun i => z ((done.getD unit default).inCols.getD i 0)).getD o false := by
-  obtain ⟨-, -, -, -, -, -, hone, -⟩ := checkLayout_spec (hall unit hu)
+  obtain ⟨-, -, -, -, hone, -⟩ := checkLayout_spec (hall unit hu) ht
   have hk : (unit == unit) = true := by simp
   rw [hk] at hone
   exact checked_sound (hall unit hu) ht (by rw [hk]; exact facts_unit hz h1 hone)
@@ -1256,9 +1479,7 @@ theorem inputs_self_of {types : String → Option CircuitType} {words : String �
     ∀ i < (done.getD unit default).inCols.size,
       blockRow words (done.getD unit default) one ((done.getD unit default).inCols.getD i 0) =
         some ([(done.getD unit default).inCols.getD i 0], [(done.getD unit default).inCols.getD i 0]) := by
-  obtain ⟨t', ht', -, -, hin, -, -, hins, -⟩ := checkLayout_spec (hall unit hu)
-  rw [ht] at ht'
-  cases ht'
+  obtain ⟨-, -, hin, -, -, hins, -⟩ := checkLayout_spec (hall unit hu) ht
   have hk : (unit == unit) = true := by simp
   rw [hk] at hins
   intro i hi
@@ -1307,7 +1528,6 @@ theorem order_sound {types : String → Option CircuitType} {ls : Array Layout} 
       rw [hz c hcs hc] at hp
       exact (Option.some.inj hp).symm
 
-
 /-! ## The statements -/
 
 theorem lt_of_type {ls : Array Layout} {types : String → Option CircuitType} {j : ℕ} {t : CircuitType}
@@ -1331,8 +1551,8 @@ theorem unit_sound {types : String → Option CircuitType} {ls : Array Layout} {
   unit_sound_of (deriveChecked_all hd) (lt_of_type ht) ht one hz h1 F hF o ho
 
 /-- **Every other layout's derived rows compute its type.** If `deriveChecked` accepts the layouts, column values that
-satisfy layout `j`'s rows as the verifier folds them (a placed or inlined callee's, in its own coordinates), with its constant at 1, carry on each
-output column its type's output on its input columns. -/
+satisfy layout `j`'s rows as the verifier folds them (a placed or inlined callee's, in its own coordinates), with its
+constant at 1, carry on each output column its type's output on its input columns. -/
 theorem layout_sound {types : String → Option CircuitType} {ls : Array Layout} {info : String → Option TableInfo}
     {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D}
     (hd : deriveChecked types ls info words unit = .ok done) {j : ℕ} (hj : j ≠ unit) {t : CircuitType}

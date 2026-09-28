@@ -14,11 +14,13 @@ the inputs first; each row after them reads only earlier columns; every row outs
 
 An inline read is checked as `table/v2` lays it out: its decoders' rows (`chkDecode`), its product rows, each a high minterm
 times the table-direct side its record gives (`readSide`, the side `Lookup.foldB` folds), and its output rows; a value bit
-past the product bits must be the same in every word of the table. The rows a layout's soundness is stated over are
-`fullRow`, the derived rows with each product row's table-direct side, and for the unit `blockRow`, those with Δ applied.
+past the product bits must be the same in every word of the table. A placed read is its entry's segment, embedded as a
+placed call's is (every index bit bound); its callee is a generated layout, checked the same way in its own coordinates
+(`genOk`: inputs `0 … n − 1`, the decoders over them, the product rows, the output rows at its output columns). The rows a
+layout's soundness is stated over are `fullRow`, the derived rows with each product row's table-direct side, and for the
+unit `blockRow`, those with Δ applied.
 
-`compose_sound` (soundness package) is proved from the walk alone, so it holds of whatever `deriveAll` builds. Placed reads
-(generated `table/v2` layouts) are refused for now; S3c-2b checks them.
+`compose_sound` (soundness package) is proved from the walk alone, so it holds of whatever `deriveAll` builds.
 -/
 import Std.Data.HashSet
 import Flock.DeriveAll
@@ -177,6 +179,45 @@ def readOk (k : Chk) (ws : Array Nat) (sha : String) (n lo vb : Nat) (loM hiM : 
         else none
     | _ => none
 
+/-- A generated read layout's output rows, at its output columns: bit `j < kk` is `Σ_h product(j, h) · [const]`; any other
+bit is the same in every word of the table, its row `[const] · [const]` when set and a zero row when not. -/
+def genOuts (k : Chk) (ws : Array Nat) (rec : ReadRec) (vb kk nh : Nat) : Bool :=
+  (List.range vb).all fun j =>
+    let col := k.d.outCols.getD j 0
+    if j < kk then k.rowIs col ((List.range nh).map (rec.prod0 + j * nh + ·), [k.d.const])
+    else (List.range ws.size).all (fun i => (ws.getD i 0).testBit j == (ws.getD 0 0).testBit j) &&
+      k.rowIs col (if (ws.getD 0 0).testBit j then ([k.d.const], [k.d.const]) else ([], []))
+
+/-- A generated read layout's rows (`table/v2`, the callee of a placed read): its inputs are columns `0 … n − 1`, self rows;
+its refs are its decoders over them and its product rows, the side from its record; its outputs are `genOuts`; its
+constant copies itself. -/
+def genOk (words : String → Option (Array Nat)) (k : Chk) (sha : String) (n vb lo : Nat) : Bool :=
+  let d := k.d
+  let ws := (words sha).getD #[]
+  let kk := Layout.kOf sha vb (Layout.tableInfo ws)
+  let nh := 2 ^ (n - lo)
+  d.inCols == Array.range n && d.outCols.size == vb && k.oneAt d.const && ws.size == 2 ^ n && 2 ≤ lo && lo < n &&
+    (List.range n).all (fun i => k.rowIs i ([i], [i])) &&
+    match chkDecode k ((Array.range lo).map fun i => ([i], 0)) d.items.toList with
+    | none => false
+    | some (loM, refs1) =>
+      match chkDecode k ((Array.range (n - lo)).map fun i => ([lo + i], 0)) refs1 with
+      | none => false
+      | some (hiM, refs2) =>
+        if kk = 0 then refs2.isEmpty && genOuts k ws default vb 0 nh
+        else
+          match refs2 with
+          | .row prod0 :: _ =>
+            match d.reads.find? (·.covers prod0) with
+            | none => false
+            | some rec =>
+              rec.table == sha && rec.n == n && rec.lo == lo && rec.k == kk && rec.prod0 == prod0 && kk ≤ vb &&
+                (List.range (2 ^ lo)).all (fun l => loM.getD l ([], 0) == ([rec.loTop + l], 0)) &&
+                (match prodRows k rec hiM nh (kk * nh) 0 refs2 with
+                 | some [] => true
+                 | _ => false) && genOuts k ws rec vb kk nh
+          | _ => false
+
 set_option maxRecDepth 4096 in
 /-- Walk the items of type `t` under layout `l`, its call entries from `c` on and its read entries from `r` on, against
 `refs`, from the wires `wire`. `jl` is the layout whose items these are; an inlined callee's layout is listed before it,
@@ -228,7 +269,19 @@ def walk (types : String → Option CircuitType) (words : String → Option (Arr
     | some (sha, n, vb) =>
       let e := l.reads.getD r default
       match e.placed with
-      | some _ => none
+      | some (jj, _) =>
+        match refs with
+        | .seg jj' base ex :: refs' =>
+          let sub := done.getD jj default
+          match (ls.getD jj default).own with
+          | .gen sha' n' vb' _ =>
+            if top && jj' == jj && jj < j && jj != unit && sha' == sha && n' == n && vb' == vb && ex.isEmpty &&
+                idx.size == n && idx.all (·.c ≤ 1) && sub.outCols.size == vb && placedOk k sub base [] wire idx then
+              walk types words ls done unit j k jl top t l rest c (r + 1)
+                (wire ++ sub.outCols.map fun col => ([base + col], 0)) refs'
+            else none
+          | _ => none
+        | _ => none
       | none =>
         let ws := (words sha).getD #[]
         if idx.size == n && idx.all (·.c ≤ 1) && 2 ≤ e.lo && e.lo < n && ws.size == 2 ^ n then
@@ -266,6 +319,7 @@ def checkLayout (types : String → Option CircuitType) (words : String → Opti
       | some (wire, []) => (List.range t.outputs.size).all fun o =>
           k.rowIs (d.outCols.getD o 0) (resolve d.const (ent (formOf wire (t.outputs.getD o default))), [d.const])
       | _ => false
+  | .gen sha n vb lo, none => j != unit && genOk words k sha n vb lo
   | _, _ => false
 
 /-! ## The unit's logical order -/
