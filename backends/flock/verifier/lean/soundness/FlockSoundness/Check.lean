@@ -176,6 +176,13 @@ hypotheses of the theorems that use them, never `axiom` declarations, so they ca
 #print axioms FlockSoundness.Types.compose_complete
 #print axioms FlockSoundness.Types.order_nodup
 #print axioms FlockSoundness.Types.order_covers
+-- a unit's rows in logical order (Rows.compose): placed at their block positions, and for a flat type, ordered and
+-- computing the type
+#print axioms FlockSoundness.Rows.compose
+#print axioms FlockSoundness.placement_of_realizes
+#print axioms FlockSoundness.compose_ordered
+#print axioms FlockSoundness.Compose.sat_physical
+#print axioms FlockSoundness.Rows.compose_eval
 -- the audit layer: strategy-level probabilities, draw laws, partitions, the one-stage profile
 #print axioms FlockSoundness.Game.prob_or_le
 #print axioms FlockSoundness.Game.prob_map

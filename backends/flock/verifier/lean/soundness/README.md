@@ -148,7 +148,7 @@ link term per audit.
 | Session binding: the coin server keeps each round's bytes, so they are fixed before the round's coins | 1c | the `Game` model (`send` before `coin`) | by construction; no hash |
 | The compiled table theorem (§1.2): the compiled game (caps, openings at the end of the proof), the lockstep coupling with the plurality prover, rewinding at every cap | 1c, interactive | `table_sound_compiled` (`Model/Compiled.lean`, `Game/Lock.lean`, `CompiledLock.lean`, `CompiledSound.lean`) | proved |
 | Knowledge soundness (§1.3): extract the committed witness, then Halevi–Micali binding to registered data | 1c, 1e | `table_knowledge_sound`, `table_knowledge_sound_joint` (`Knowledge.lean`); `registered_weights` | the table theorems and the link theorem (A2) proved; `registered_weights` **to write**; required for sampled audits (§4) |
-| The block R1CS means the named circuit (the lowering theorem) | 1d | level 3, another lane; its generic step `Lowering.lean` (§1.5) | the generic step proved; the placement and L1 remain |
+| The block R1CS means the named circuit (the lowering theorem) | 1d | level 3, another lane; its generic step `Lowering.lean`, the derived rows' placement `Compose.lean` (§1.5) | the generic step proved; for flat types, the placement from the block matrices and L1 proved; the placement from `setupH` and the type DAG remain |
 | The executable Lean verifier refines the model | 2 | with `flock-verifier` | **to write** |
 | Reference prover: completeness and zero knowledge | 3, 1e | after M1 (§3) | planned |
 | Sampled audits: the integrity profile over any partition and draw law, two-stage and its relations, minimax, tightness and insecurity (`FlockSoundness/Audit/README.md`) | (composition) | `Audit/*` | proved; per-unit terms named |
@@ -186,6 +186,16 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
     share a wire hold it in different columns. The link, not the lowering, makes them agree.
 - **The placement is the statement builder's job.** `Placement` states it. Proving it for the executable's statement
   (the slots with Δ XORed in, spec §16.1) is part of the level-3 refinement (`assumptions/trusted-components.md`).
+- **The rows the verifier derives, read as `Rows`** (`Compose.lean`; verified-lowering phase 1, item 1d).
+  - `Rows.compose` reads a unit's rows in logical order from a `Compose.Logical`: the columns in order, the input bits
+    first, and each column's row as the block holds it, or a copy of `one` (the unit's constant, which Δ binds to the
+    pin).
+  - `placement_of_realizes` gives `Placement` when the block matrices, at each row's position, read its columns'
+    positions, and the rows that copy `one` and the pin's row read the pin.
+  - For a flat type, `derive`'s rows (`Compose.ofDerived`) are in that order (`compose_ordered`), and satisfied composed
+    rows carry the type's outputs (`Rows.compose_eval`, from `Types.compose_sound`).
+  - Still to prove: the matrices' reads from the executable's `setupH` (1e), and the type DAG with placed calls and
+    reads (S3).
 - **L1, each template's rows compute its gates,** is a named hypothesis (`ASSUMPTIONS.md`).
 
 ### 1.6 Proved from the libraries, not assumed
