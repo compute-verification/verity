@@ -8,7 +8,7 @@ instance in the committed circuit, a block and the columns there at which the ta
 program of units (`Types.Program`) the rows and the instance are the program's own:
 - `UProg.spec u` is unit `u`'s spec, `UProg.rowsOf u` its composed rows and `UProg.instOf u` their instance in `p.P`;
 - `UProg.derivedPlaces` is `DerivedPlaces` from a block and columns per drawn unit at which its table holds its rows
-  (`RowsAt`).
+  (`RowsAt`), and carries one value on the unit's inputs that share a gate (`RowsAt.Aliased`).
 
 `TableClass` is what a table's accepted statement gives (1d and 1e): the verifier's derivation of its unit class and the
 class's rows placed at each slot. `UProg.derivedPlaces_of_classes` places each drawn unit at a slot of its table's class,
@@ -29,6 +29,12 @@ structure RowsAt (St : Statement) (R : Rows) where
 
 /-- The same place, for equal rows. -/
 def RowsAt.cast {St : Statement} {R R' : Rows} (e : R = R') (a : RowsAt St R) : RowsAt St R' := e ▸ a
+
+/-- **The place carries one value on inputs that share a gate**: in every witness satisfying `St`, the input columns on
+one gate of `wire` hold one value. -/
+def RowsAt.Aliased {St : Statement} {R : Rows} {N : ℕ} (a : RowsAt St R) (wire : Fin R.w → Fin N) : Prop :=
+  ∀ c c', wire c = wire c' → c.val < R.nIn → c'.val < R.nIn → ∀ z : Witness St.m, St.Satisfies z →
+    St.block z a.o (a.col c) = St.block z a.o (a.col c')
 
 /-- **A table's unit class, placed at each slot**: the verifier's run of `deriveChecked` on the class's layouts, and
 statement `St`'s level-0 matrices holding the class's composed rows at each slot's columns. -/
@@ -96,44 +102,48 @@ noncomputable def instOf (hk : one < k) {outs : List ℕ} (p : UProg k one outs)
   (p.pairs hk u).rows
 
 theorem spec_last (hk : one < k) {outs : List ℕ} (p : UProg k one outs) (s : UnitSpec) (src : ℕ → Src)
-    (valid : ∀ i < s.t.inBits, (src i).Valid k one outs)
-    (inj : ∀ i < s.t.inBits, ∀ j < s.t.inBits, src i = src j → i = j) :
-    (snoc p s src valid inj).spec hk (Fin.last p.n) = s := by
+    (valid : ∀ i < s.t.inBits, (src i).Valid k one outs) :
+    (snoc p s src valid).spec hk (Fin.last p.n) = s := by
   unfold spec
   rw [pairs, Fin.lastCases_last]
   rfl
 
 theorem spec_castSucc (hk : one < k) {outs : List ℕ} (p : UProg k one outs) (s : UnitSpec) (src : ℕ → Src)
-    (valid : ∀ i < s.t.inBits, (src i).Valid k one outs)
-    (inj : ∀ i < s.t.inBits, ∀ j < s.t.inBits, src i = src j → i = j) (v : Fin p.n) :
-    (snoc p s src valid inj).spec hk v.castSucc = p.spec hk v := by
+    (valid : ∀ i < s.t.inBits, (src i).Valid k one outs) (v : Fin p.n) :
+    (snoc p s src valid).spec hk v.castSucc = p.spec hk v := by
   unfold spec
   rw [pairs, Fin.lastCases_castSucc]
   rfl
 
 variable {Reg : Type} {mPts : ℕ}
 
-/-- **Each drawn unit's place, from its rows' place in its table.** -/
+/-- **Each drawn unit's place, from its rows' place in its table**, which carries one value on the unit's inputs that
+share a gate. -/
 noncomputable def derivedPlaces (hk : one < k) {outs : List ℕ} (p : UProg k one outs)
     (plan : Finset (Fin p.n) → Reg → List (TabSpec mPts))
     (tab : (S : Finset (Fin p.n)) → (R : Reg) → Fin p.n → Fin (plan S R).length)
-    (at_ : ∀ S R u, u ∈ S → RowsAt (Partition.tabOf plan tab S R u).S (p.rowsOf hk u)) :
+    (at_ : ∀ S R u, u ∈ S → RowsAt (Partition.tabOf plan tab S R u).S (p.rowsOf hk u))
+    (hal : ∀ S R u (h : u ∈ S), (at_ S R u h).Aliased (p.instOf hk u).wire) :
     (p.P hk).DerivedPlaces plan tab (p.rowsOf hk) where
-  place S R u h := ⟨p.rowsOf hk u, p.instOf hk u, (at_ S R u h).o, (at_ S R u h).col, (at_ S R u h).placed⟩
+  place S R u h :=
+    ⟨p.rowsOf hk u, p.instOf hk u, (at_ S R u h).o, (at_ S R u h).col, (at_ S R u h).placed, hal S R u h⟩
   rows _ _ _ _ := rfl
 
 /-- **Each drawn unit's place, from its table's class**: unit `u`, drawn in `S` under `R`, at slot `slot` of block `o`
-of its table's class `cls`, whose derivation inputs it reads. -/
+of its table's class `cls`, whose derivation inputs it reads, the slot carrying one value on its inputs that share a
+gate. -/
 noncomputable def derivedPlaces_of_classes (hk : one < k) {outs : List ℕ} (p : UProg k one outs)
     (plan : Finset (Fin p.n) → Reg → List (TabSpec mPts))
     (tab : (S : Finset (Fin p.n)) → (R : Reg) → Fin p.n → Fin (plan S R).length)
     (cls : ∀ S R u, u ∈ S → TableClass (Partition.tabOf plan tab S R u).S)
     (slot : ∀ S R u (h : u ∈ S), Fin (cls S R u h).slots)
     (o : ∀ S R u, u ∈ S → Fin (2 ^ (Partition.tabOf plan tab S R u).S.nbl))
-    (hr : ∀ S R u (h : u ∈ S), (p.spec hk u).Reads (cls S R u h)) :
+    (hr : ∀ S R u (h : u ∈ S), (p.spec hk u).Reads (cls S R u h))
+    (hal : ∀ S R u (h : u ∈ S), (((cls S R u h).atSlot (slot S R u h) (o S R u h)).cast
+      (UnitSpec.R_eq_of_reads (hr S R u h)).symm).Aliased (p.instOf hk u).wire) :
     (p.P hk).DerivedPlaces plan tab (p.rowsOf hk) :=
-  p.derivedPlaces hk plan tab fun S R u h =>
-    ((cls S R u h).atSlot (slot S R u h) (o S R u h)).cast (UnitSpec.R_eq_of_reads (hr S R u h)).symm
+  p.derivedPlaces hk plan tab (fun S R u h =>
+    ((cls S R u h).atSlot (slot S R u h) (o S R u h)).cast (UnitSpec.R_eq_of_reads (hr S R u h)).symm) hal
 
 end UProg
 

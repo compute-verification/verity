@@ -6,7 +6,9 @@ import FlockSoundness.Lowering
 
 A program (`UProg`) is `k` inputs, input `one` the constant, then units in order. A unit (`UnitSpec`) is the verifier's
 derivation for its layout, `deriveChecked` on a type `t`. Each input bit of a unit reads a
-source (`Src`): a program input other than the constant, or an earlier unit's output. From it:
+source (`Src`): a program input other than the constant, or an earlier unit's output. Several bits of a unit may read one
+source. The statement's zero, which its forced-zero rows carry, is a program input like `one`, a constant of the
+statement and no unit's gate: a zero leaf's bits, and a leaf cut's bits past its leaf, read it. From it:
 - `toRows`, its rows circuit `C` (a `Lowering.Prog`): each unit's composed rows, its input columns on their sources' output
   rows, its constant on `one`;
 - `CB`, its Boolean circuit: each unit's unit gates (`Types.Flatten.unitGates`), its inputs on their sources' copies, its
@@ -357,13 +359,12 @@ def Src.Valid (k one : ℕ) (outs : List ℕ) : Src → Prop
   | .out v o => v < outs.length ∧ o < outs.getD v 0
 
 /-- **A program of units over circuit types**: `k` inputs, input `one` the constant, then units in order. Each input bit
-of each unit reads a program input other than the constant or an earlier unit's output, no two bits of a unit the same
+of each unit reads a program input other than the constant or an earlier unit's output, several bits possibly the same
 source. The index lists the units' output counts. -/
 inductive UProg (k one : ℕ) : List ℕ → Type
   | inputs : UProg k one []
   | snoc {outs : List ℕ} (p : UProg k one outs) (s : UnitSpec) (src : ℕ → Src)
-      (valid : ∀ i < s.t.inBits, (src i).Valid k one outs)
-      (inj : ∀ i < s.t.inBits, ∀ j < s.t.inBits, src i = src j → i = j) : UProg k one (outs ++ [s.t.outputs.size])
+      (valid : ∀ i < s.t.inBits, (src i).Valid k one outs) : UProg k one (outs ++ [s.t.outputs.size])
 
 namespace UProg
 
@@ -487,13 +488,6 @@ def insOf {outs : List ℕ} (p : UProg k one outs) (s : UnitSpec) (src : ℕ →
     (valid : ∀ i < s.t.inBits, (src i).Valid k one outs) : Fin s.R.nIn → Fin p.rowsN :=
   fun c => ⟨p.srcGate (src c.val), p.srcGate_lt (valid c.val (by rw [← s.nIn_eq]; exact c.isLt))⟩
 
-theorem insOf_inj {outs : List ℕ} (p : UProg k one outs) (s : UnitSpec) (src : ℕ → Src)
-    (valid : ∀ i < s.t.inBits, (src i).Valid k one outs)
-    (inj : ∀ i < s.t.inBits, ∀ j < s.t.inBits, src i = src j → i = j) : Function.Injective (p.insOf s src valid) :=
-  fun c c' h => Fin.ext (inj _ (by rw [← s.nIn_eq]; exact c.isLt) _ (by rw [← s.nIn_eq]; exact c'.isLt)
-    (p.srcGate_inj (valid _ (by rw [← s.nIn_eq]; exact c.isLt)) (valid _ (by rw [← s.nIn_eq]; exact c'.isLt))
-      (congrArg Fin.val h)))
-
 /-- The constant's gate. -/
 def oneOf (hk : one < k) {outs : List ℕ} (p : UProg k one outs) : Fin p.rowsN :=
   ⟨one, Nat.lt_of_lt_of_le hk p.k_le_rowsN⟩
@@ -506,8 +500,8 @@ theorem insOf_ne (hk : one < k) {outs : List ℕ} (p : UProg k one outs) (s : Un
 sources' gates and its constant to `one`. -/
 def toRows (hk : one < k) : {outs : List ℕ} → (p : UProg k one outs) → Prog p.rowsN p.n
   | _, .inputs => .inputs k
-  | _, .snoc p s src valid inj =>
-    .snoc (p.toRows hk) s.R (p.insOf s src valid) (p.oneOf hk) (p.insOf_inj s src valid inj) (p.insOf_ne hk s src valid)
+  | _, .snoc p s src valid =>
+    .snoc (p.toRows hk) s.R (p.insOf s src valid) (p.oneOf hk) (p.insOf_ne hk s src valid)
 
 /-! ### The Boolean circuit -/
 
@@ -599,7 +593,7 @@ theorem gs_bound {outs : List ℕ} (p : UProg k one outs) (s : UnitSpec) {g : �
 theorem topoB (hk : one < k) : ∀ {outs : List ℕ} (p : UProg k one outs) (g : Fin p.boolN),
     ∀ a ∈ (p.opB hk g).args, a < g
   | _, .inputs, _, _, ha => by simp [opB, Op.args] at ha
-  | _, .snoc p s src valid _, g, a, ha => by
+  | _, .snoc p s src valid, g, a, ha => by
     by_cases h : g.val < p.boolN
     · simp only [opB, h, dite_true, Audit.Op.args_lift] at ha
       obtain ⟨a', ha', rfl⟩ := List.mem_map.1 ha
@@ -697,7 +691,7 @@ theorem mapG_input (hk : one < k) : ∀ {outs : List ℕ} (p : UProg k one outs)
 theorem mapG_copy (hk : one < k) : ∀ {outs : List ℕ} (p : UProg k one outs) {v o : ℕ} (hv : v < outs.length)
     (ho : o < outs.getD v 0), (p.mapG hk ⟨p.copyGate v o, (p.copyGate_spec hv ho).2⟩).val = p.outGate v o
   | _, .inputs, _, _, hv, _ => absurd hv (by simp)
-  | _, .snoc (outs := outs) p s src valid inj, v, o, hv, ho => by
+  | _, .snoc (outs := outs) p s src valid, v, o, hv, ho => by
     have hn := n_eq p
     by_cases hvn : v = p.n
     · subst hvn
@@ -705,7 +699,7 @@ theorem mapG_copy (hk : one < k) : ∀ {outs : List ℕ} (p : UProg k one outs) 
       rw [hn, List.getD_append_right _ _ _ _ (le_refl _)] at ho'
       simp only [Nat.sub_self, List.getD_cons_zero] at ho'
       have hf := s.fsize_ge
-      have hc : (snoc p s src valid inj).copyGate p.n o = p.boolN + (s.fsize + o - (s.t.inBits + 1)) := by
+      have hc : (snoc p s src valid).copyGate p.n o = p.boolN + (s.fsize + o - (s.t.inBits + 1)) := by
         simp [copyGate]
       have hj : p.boolN + (s.fsize + o - (s.t.inBits + 1)) - p.boolN + (s.t.inBits + 1) - s.fsize = o := by omega
       simp only [mapG]
@@ -713,7 +707,7 @@ theorem mapG_copy (hk : one < k) : ∀ {outs : List ℕ} (p : UProg k one outs) 
       simp only [outGate, ite_true, hc, hj]
     · have hv' : v < outs.length := by simp at hv; omega
       rw [List.getD_append _ _ _ _ hv'] at ho
-      have hc : (snoc p s src valid inj).copyGate v o = p.copyGate v o := by simp [copyGate, hvn]
+      have hc : (snoc p s src valid).copyGate v o = p.copyGate v o := by simp [copyGate, hvn]
       have hlt := (p.copyGate_spec hv' ho).2
       simp only [mapG]
       rw [dite_eq_left (by rw [hc]; exact hlt)]
@@ -739,35 +733,35 @@ theorem unitB_input (hk : one < k) : ∀ {outs : List ℕ} (p : UProg k one outs
     exact unitB_input hk p hlt hak
 
 theorem unitB_old {outs : List ℕ} {p : UProg k one outs} {s : UnitSpec} {src : ℕ → Src}
-    {valid : ∀ i < s.t.inBits, (src i).Valid k one outs} {inj : ∀ i < s.t.inBits, ∀ j < s.t.inBits, src i = src j → i = j}
-    {g : Fin (snoc p s src valid inj).boolN} (h : g.val < p.boolN) :
-    (snoc p s src valid inj).unitB g = (p.unitB ⟨g.val, h⟩).map Fin.castSucc := by
+    {valid : ∀ i < s.t.inBits, (src i).Valid k one outs}
+    {g : Fin (snoc p s src valid).boolN} (h : g.val < p.boolN) :
+    (snoc p s src valid).unitB g = (p.unitB ⟨g.val, h⟩).map Fin.castSucc := by
   simp only [unitB, h, dite_true]
 
 theorem unitB_new {outs : List ℕ} {p : UProg k one outs} {s : UnitSpec} {src : ℕ → Src}
-    {valid : ∀ i < s.t.inBits, (src i).Valid k one outs} {inj : ∀ i < s.t.inBits, ∀ j < s.t.inBits, src i = src j → i = j}
-    {g : Fin (snoc p s src valid inj).boolN} (h : ¬ g.val < p.boolN) :
-    (snoc p s src valid inj).unitB g = some (Fin.last p.n) := by
+    {valid : ∀ i < s.t.inBits, (src i).Valid k one outs}
+    {g : Fin (snoc p s src valid).boolN} (h : ¬ g.val < p.boolN) :
+    (snoc p s src valid).unitB g = some (Fin.last p.n) := by
   simp only [unitB, h, dite_false]
 
 theorem lt_of_unitB_castSucc {outs : List ℕ} {p : UProg k one outs} {s : UnitSpec} {src : ℕ → Src}
-    {valid : ∀ i < s.t.inBits, (src i).Valid k one outs} {inj : ∀ i < s.t.inBits, ∀ j < s.t.inBits, src i = src j → i = j}
-    {g : Fin (snoc p s src valid inj).boolN} {v : Fin p.n} (hg : (snoc p s src valid inj).unitB g = some v.castSucc) :
+    {valid : ∀ i < s.t.inBits, (src i).Valid k one outs}
+    {g : Fin (snoc p s src valid).boolN} {v : Fin p.n} (hg : (snoc p s src valid).unitB g = some v.castSucc) :
     g.val < p.boolN := by
   by_contra h
   rw [unitB_new h] at hg
   exact Fin.castSucc_ne_last v (Option.some.inj hg).symm
 
 theorem opB_old (hk : one < k) {outs : List ℕ} {p : UProg k one outs} {s : UnitSpec} {src : ℕ → Src}
-    {valid : ∀ i < s.t.inBits, (src i).Valid k one outs} {inj : ∀ i < s.t.inBits, ∀ j < s.t.inBits, src i = src j → i = j}
-    {g : Fin (snoc p s src valid inj).boolN} (h : g.val < p.boolN) :
-    (snoc p s src valid inj).opB hk g = (p.opB hk ⟨g.val, h⟩).lift (Fin.castAdd _) := by
+    {valid : ∀ i < s.t.inBits, (src i).Valid k one outs}
+    {g : Fin (snoc p s src valid).boolN} (h : g.val < p.boolN) :
+    (snoc p s src valid).opB hk g = (p.opB hk ⟨g.val, h⟩).lift (Fin.castAdd _) := by
   simp only [opB, h, dite_true]
 
 theorem opB_new (hk : one < k) {outs : List ℕ} {p : UProg k one outs} {s : UnitSpec} {src : ℕ → Src}
-    {valid : ∀ i < s.t.inBits, (src i).Valid k one outs} {inj : ∀ i < s.t.inBits, ∀ j < s.t.inBits, src i = src j → i = j}
-    {g : Fin (snoc p s src valid inj).boolN} (h : ¬ g.val < p.boolN) :
-    (snoc p s src valid inj).opB hk g =
+    {valid : ∀ i < s.t.inBits, (src i).Valid k one outs}
+    {g : Fin (snoc p s src valid).boolN} (h : ¬ g.val < p.boolN) :
+    (snoc p s src valid).opB hk g =
       (s.gs[g.val - p.boolN + (s.t.inBits + 1)]'(p.gs_bound s g.isLt h)).lift (p.wireF hk s src) := by
   simp only [opB, h, dite_false, p.gs_bound s g.isLt h, dite_true]
 
@@ -775,9 +769,8 @@ theorem opB_new (hk : one < k) {outs : List ℕ} {p : UProg k one outs} {s : Uni
 
 /-- The new unit is an instance of its unit gates, through `wireF`. -/
 def gatesLast (hk : one < k) {outs : List ℕ} (p : UProg k one outs) (s : UnitSpec) (src : ℕ → Src)
-    (valid : ∀ i < s.t.inBits, (src i).Valid k one outs)
-    (inj : ∀ i < s.t.inBits, ∀ j < s.t.inBits, src i = src j → i = j) :
-    ((snoc p s src valid inj).PB hk).IsGatesUnit (Fin.last p.n) s.gs (s.t.inBits + 1) where
+    (valid : ∀ i < s.t.inBits, (src i).Valid k one outs) :
+    ((snoc p s src valid).PB hk).IsGatesUnit (Fin.last p.n) s.gs (s.t.inBits + 1) where
   wire := p.wireF hk s src
   input j hj hjk := (unitGates_input_iff _ _ _ _ _ hj).2 hjk
   outside j hj := by
@@ -788,7 +781,7 @@ def gatesLast (hk : one < k) {outs : List ℕ} (p : UProg k one outs) (s : UnitS
       split
       · rename_i h; exact p.srcB_lt (valid j h)
       · rw [ite_eq_left (by omega)]; have := p.k_le_boolN; omega
-    show (snoc p s src valid inj).unitB _ ≠ _
+    show (snoc p s src valid).unitB _ ≠ _
     rw [unitB_old hlt]
     intro h
     obtain ⟨v, -, hv⟩ := Option.map_eq_some_iff.1 h
@@ -796,18 +789,18 @@ def gatesLast (hk : one < k) {outs : List ℕ} (p : UProg k one outs) (s : UnitS
   mem j hj hkj := by
     have hw : (p.wireF hk s src j).val = p.boolN + (j - (s.t.inBits + 1)) := by
       rw [p.wireF_val hk valid hj]; unfold wireB; rw [ite_eq_right (by omega), ite_eq_right (by omega)]
-    show (snoc p s src valid inj).unitB _ = _
+    show (snoc p s src valid).unitB _ = _
     exact unitB_new (by omega)
   op j hj hkj := by
     have hw : (p.wireF hk s src j).val = p.boolN + (j - (s.t.inBits + 1)) := by
       rw [p.wireF_val hk valid hj]; unfold wireB; rw [ite_eq_right (by omega), ite_eq_right (by omega)]
-    show (snoc p s src valid inj).opB hk _ = _
+    show (snoc p s src valid).opB hk _ = _
     rw [opB_new hk (by omega)]
     have hj' : (p.wireF hk s src j).val - p.boolN + (s.t.inBits + 1) = j := by rw [hw]; omega
     congr 1
     simp only [hj']
   onto g hg := by
-    change (snoc p s src valid inj).unitB g = _ at hg
+    change (snoc p s src valid).unitB g = _ at hg
     have hge : p.boolN ≤ g.val := by
       by_contra hlt
       push Not at hlt
@@ -823,26 +816,25 @@ def gatesLast (hk : one < k) {outs : List ℕ} (p : UProg k one outs) (s : UnitS
 
 /-- An earlier unit's instance, after a unit is appended. -/
 def gatesSnoc (hk : one < k) {outs : List ℕ} (p : UProg k one outs) (s : UnitSpec) (src : ℕ → Src)
-    (valid : ∀ i < s.t.inBits, (src i).Valid k one outs)
-    (inj : ∀ i < s.t.inBits, ∀ j < s.t.inBits, src i = src j → i = j) {v : Fin p.n} {gs : Array Gate} {kk : ℕ}
-    (W : (p.PB hk).IsGatesUnit v gs kk) : ((snoc p s src valid inj).PB hk).IsGatesUnit v.castSucc gs kk where
+    (valid : ∀ i < s.t.inBits, (src i).Valid k one outs) {v : Fin p.n} {gs : Array Gate} {kk : ℕ}
+    (W : (p.PB hk).IsGatesUnit v gs kk) : ((snoc p s src valid).PB hk).IsGatesUnit v.castSucc gs kk where
   wire j := Fin.castAdd _ (W.wire j)
   input := W.input
   outside j hj := by
-    show (snoc p s src valid inj).unitB _ ≠ _
+    show (snoc p s src valid).unitB _ ≠ _
     rw [unitB_old (by simp)]
     intro h
     obtain ⟨v', hv', hvv⟩ := Option.map_eq_some_iff.1 h
     rw [Fin.castSucc_inj.1 hvv] at hv'
     exact W.outside j hj (by simpa using hv')
   mem j hj hkj := by
-    show (snoc p s src valid inj).unitB _ = _
+    show (snoc p s src valid).unitB _ = _
     rw [unitB_old (by simp)]
     have := W.mem j hj hkj
     simp only [Fin.val_castAdd, Fin.eta]
     exact (congrArg (Option.map Fin.castSucc) this).trans rfl
   op j hj hkj := by
-    show (snoc p s src valid inj).opB hk _ = _
+    show (snoc p s src valid).opB hk _ = _
     rw [opB_old hk (by simp)]
     simp only [Fin.val_castAdd, Fin.eta]
     have := W.op j hj hkj
@@ -850,7 +842,7 @@ def gatesSnoc (hk : one < k) {outs : List ℕ} (p : UProg k one outs) (s : UnitS
     rw [this, Types.Flatten.Gate.lift_lift]
     rfl
   onto g hg := by
-    change (snoc p s src valid inj).unitB g = _ at hg
+    change (snoc p s src valid).unitB g = _ at hg
     have hlt := lt_of_unitB_castSucc hg
     rw [unitB_old hlt] at hg
     obtain ⟨v', hv', hvv⟩ := Option.map_eq_some_iff.1 hg
@@ -861,16 +853,15 @@ def gatesSnoc (hk : one < k) {outs : List ℕ} (p : UProg k one outs) (s : UnitS
 /-- A `Prog`-level instance from the audit's. -/
 def rowsWireOf {N m : ℕ} {q : Prog N m} {os : Finset (Fin N)} {u : Fin m} {R : Rows}
     (I : (q.partition os).IsRowsUnit u R) : q.RowsWire u R :=
-  ⟨I.wire, I.wire_inj, I.mem, I.op, I.outside, I.onto⟩
+  ⟨I.wire, I.shared, I.mem, I.op, I.outside, I.onto⟩
 
 /-! ### Committed gates -/
 
 /-- A committed gate of an earlier unit was committed before the unit was appended. -/
 theorem committedB_old (hk : one < k) {outs : List ℕ} (p : UProg k one outs) (s : UnitSpec) (src : ℕ → Src)
-    (valid : ∀ i < s.t.inBits, (src i).Valid k one outs)
-    (inj : ∀ i < s.t.inBits, ∀ j < s.t.inBits, src i = src j → i = j) {g : Fin (snoc p s src valid inj).boolN}
-    {v : Fin p.n} (hg : g ∈ ((snoc p s src valid inj).PB hk).committed)
-    (hv : (snoc p s src valid inj).unitB g = some v.castSucc) :
+    (valid : ∀ i < s.t.inBits, (src i).Valid k one outs) {g : Fin (snoc p s src valid).boolN}
+    {v : Fin p.n} (hg : g ∈ ((snoc p s src valid).PB hk).committed)
+    (hv : (snoc p s src valid).unitB g = some v.castSucc) :
     (⟨g.val, lt_of_unitB_castSucc hv⟩ : Fin p.boolN) ∈ (p.PB hk).committed := by
   classical
   have hlt := lt_of_unitB_castSucc hv
@@ -884,8 +875,8 @@ theorem committedB_old (hk : one < k) {outs : List ℕ} (p : UProg k one outs) (
   refine (Partition.mem_committed_iff _ _).2 ?_
   rcases hg with hg | hg | ⟨h, hga, hne⟩
   · exfalso
-    have := ((snoc p s src valid inj).input_iffB hk g).2 hg
-    change (snoc p s src valid inj).unitB g = none at this
+    have := ((snoc p s src valid).input_iffB hk g).2 hg
+    change (snoc p s src valid).unitB g = none at this
     rw [hv] at this
     cases this
   · refine Or.inr (Or.inl ?_)
@@ -903,18 +894,18 @@ theorem committedB_old (hk : one < k) {outs : List ℕ} (p : UProg k one outs) (
       exact ⟨v', o', hv'', ho', he⟩
   · by_cases hh : h.val < p.boolN
     · refine Or.inr (Or.inr ⟨⟨h.val, hh⟩, ?_, ?_⟩)
-      · change g ∈ ((snoc p s src valid inj).opB hk h).args at hga
+      · change g ∈ ((snoc p s src valid).opB hk h).args at hga
         rw [opB_old hk hh, Audit.Op.args_lift] at hga
         obtain ⟨a, ha, hae⟩ := List.mem_map.1 hga
         have hav : a.val = g.val := by have := congrArg Fin.val hae; simpa using this
         have : a = ⟨g.val, hlt⟩ := Fin.ext hav
         rw [← this]
         exact ha
-      · change (snoc p s src valid inj).unitB h ≠ (snoc p s src valid inj).unitB g at hne
+      · change (snoc p s src valid).unitB h ≠ (snoc p s src valid).unitB g at hne
         rw [unitB_old hh, unitB_old hlt] at hne
         exact fun he => hne (congrArg (Option.map Fin.castSucc) he)
     · refine Or.inr (Or.inl ?_)
-      change g ∈ ((snoc p s src valid inj).opB hk h).args at hga
+      change g ∈ ((snoc p s src valid).opB hk h).args at hga
       rw [opB_new hk hh, Types.Flatten.Gate.lift_args] at hga
       obtain ⟨b, hb, hbe⟩ := List.mem_map.1 hga
       have hbj := unitGates_topo _ _ _ _ _ _ (p.gs_bound s h.isLt hh) b hb
@@ -942,10 +933,9 @@ theorem committedB_old (hk : one < k) {outs : List ℕ} (p : UProg k one outs) (
 
 /-- A committed gate of the new unit is one of its copies. -/
 theorem committedB_last (hk : one < k) {outs : List ℕ} (p : UProg k one outs) (s : UnitSpec) (src : ℕ → Src)
-    (valid : ∀ i < s.t.inBits, (src i).Valid k one outs)
-    (inj : ∀ i < s.t.inBits, ∀ j < s.t.inBits, src i = src j → i = j) {g : Fin (snoc p s src valid inj).boolN}
-    (hg : g ∈ ((snoc p s src valid inj).PB hk).committed)
-    (hv : (snoc p s src valid inj).unitB g = some (Fin.last p.n)) :
+    (valid : ∀ i < s.t.inBits, (src i).Valid k one outs) {g : Fin (snoc p s src valid).boolN}
+    (hg : g ∈ ((snoc p s src valid).PB hk).committed)
+    (hv : (snoc p s src valid).unitB g = some (Fin.last p.n)) :
     ∃ o < s.t.outputs.size, g.val = p.boolN + (s.fsize + o - (s.t.inBits + 1)) := by
   classical
   have hn := n_eq p
@@ -958,8 +948,8 @@ theorem committedB_last (hk : one < k) {outs : List ℕ} (p : UProg k one outs) 
   replace hg := (Partition.mem_committed_iff _ _).1 hg
   rcases hg with hg | hg | ⟨h, hga, hne⟩
   · exfalso
-    have := ((snoc p s src valid inj).input_iffB hk g).2 hg
-    change (snoc p s src valid inj).unitB g = none at this
+    have := ((snoc p s src valid).input_iffB hk g).2 hg
+    change (snoc p s src valid).unitB g = none at this
     rw [hv] at this
     cases this
   · change _ ∈ outsB _ at hg
@@ -978,28 +968,27 @@ theorem committedB_last (hk : one < k) {outs : List ℕ} (p : UProg k one outs) 
       omega
   · exfalso
     by_cases hh : h.val < p.boolN
-    · change g ∈ ((snoc p s src valid inj).opB hk h).args at hga
+    · change g ∈ ((snoc p s src valid).opB hk h).args at hga
       rw [opB_old hk hh, Audit.Op.args_lift] at hga
       obtain ⟨a, -, hae⟩ := List.mem_map.1 hga
       have : g.val = a.val := by rw [← hae]; simp
       have := a.isLt
       omega
-    · change (snoc p s src valid inj).unitB h ≠ (snoc p s src valid inj).unitB g at hne
+    · change (snoc p s src valid).unitB h ≠ (snoc p s src valid).unitB g at hne
       rw [unitB_new hh, hv] at hne
       exact hne rfl
 
 /-- A committed gate of the rows circuit stays committed when a unit is appended. -/
 theorem committedC_old (hk : one < k) {outs : List ℕ} (p : UProg k one outs) (s : UnitSpec) (src : ℕ → Src)
-    (valid : ∀ i < s.t.inBits, (src i).Valid k one outs)
-    (inj : ∀ i < s.t.inBits, ∀ j < s.t.inBits, src i = src j → i = j) {g : Fin p.rowsN}
-    (hg : g ∈ (p.P hk).committed) : Fin.castAdd s.R.nComp g ∈ ((snoc p s src valid inj).P hk).committed := by
+    (valid : ∀ i < s.t.inBits, (src i).Valid k one outs) {g : Fin p.rowsN}
+    (hg : g ∈ (p.P hk).committed) : Fin.castAdd s.R.nComp g ∈ ((snoc p s src valid).P hk).committed := by
   classical
   have hn := n_eq p
   replace hg := (Partition.mem_committed_iff _ _).1 hg
   refine (Partition.mem_committed_iff _ _).2 ?_
   rcases hg with hg | hg | ⟨h, hga, hne⟩
   · left
-    change (((snoc p s src valid inj).toRows hk).op _).isInput = true
+    change (((snoc p s src valid).toRows hk).op _).isInput = true
     change ((p.toRows hk).op g).isInput = true at hg
     simp only [toRows]
     rw [Prog.op_castAdd, Audit.Op.isInput_lift]
@@ -1013,12 +1002,12 @@ theorem committedC_old (hk : one < k) {outs : List ℕ} (p : UProg k one outs) (
     simp only [Fin.val_castAdd, outGate, show v ≠ p.n by omega, ite_false]
     exact he
   · refine Or.inr (Or.inr ⟨Fin.castAdd s.R.nComp h, ?_, ?_⟩)
-    · change _ ∈ (((snoc p s src valid inj).toRows hk).op _).args
+    · change _ ∈ (((snoc p s src valid).toRows hk).op _).args
       change g ∈ ((p.toRows hk).op h).args at hga
       simp only [toRows]
       rw [Prog.op_castAdd, Audit.Op.args_lift]
       exact List.mem_map_of_mem hga
-    · change ((snoc p s src valid inj).toRows hk).unit _ ≠ ((snoc p s src valid inj).toRows hk).unit _
+    · change ((snoc p s src valid).toRows hk).unit _ ≠ ((snoc p s src valid).toRows hk).unit _
       change (p.toRows hk).unit h ≠ (p.toRows hk).unit g at hne
       simp only [toRows]
       rw [Prog.unit_castAdd, Prog.unit_castAdd]
@@ -1030,9 +1019,8 @@ theorem committedC_old (hk : one < k) {outs : List ℕ} (p : UProg k one outs) (
 /-- **The new unit's pair**: its composed rows, its unit gates, its inputs and `one` on the same sources, and each
 committed copy read off its output's row. -/
 noncomputable def lastPair (hk : one < k) {outs : List ℕ} (p : UProg k one outs) (s : UnitSpec) (src : ℕ → Src)
-    (valid : ∀ i < s.t.inBits, (src i).Valid k one outs)
-    (inj : ∀ i < s.t.inBits, ∀ j < s.t.inBits, src i = src j → i = j) :
-    UnitPair ((snoc p s src valid inj).P hk) ((snoc p s src valid inj).PB hk) ((snoc p s src valid inj).mapG hk)
+    (valid : ∀ i < s.t.inBits, (src i).Valid k one outs) :
+    UnitPair ((snoc p s src valid).P hk) ((snoc p s src valid).PB hk) ((snoc p s src valid).mapG hk)
       (Fin.last p.n) where
   types := s.types
   ls := s.ls
@@ -1044,18 +1032,18 @@ noncomputable def lastPair (hk : one < k) {outs : List ℕ} (p : UProg k one out
   t := s.t
   ht := s.ht
   ord := ofBlock_ordered s.hd
-  rows := (Prog.rowsWire_last (p.toRows hk) s.R _ _ _ _).toIsRowsUnit _
+  rows := (Prog.rowsWire_last (p.toRows hk) s.R _ _ _).toIsRowsUnit _
   loOf := s.loOf
   F := s.F
   hF := s.hF
-  gates := gatesLast hk p s src valid inj
+  gates := gatesLast hk p s src valid
   ins c hc := by
     apply Fin.ext
     have hcs : c.val < s.gs.size := by have := s.gs_size; have := s.fsize_ge; omega
     have hw : (p.wireF hk s src c.val).val = p.srcB (src c.val) := by
       rw [p.wireF_val hk valid hcs]; simp [wireB, hc]
     have hlt : (p.wireF hk s src c.val).val < p.boolN := by rw [hw]; exact p.srcB_lt (valid _ hc)
-    change ((snoc p s src valid inj).mapG hk (p.wireF hk s src c.val)).val = (Prog.colWire s.R _ _ c).val
+    change ((snoc p s src valid).mapG hk (p.wireF hk s src c.val)).val = (Prog.colWire s.R _ _ c).val
     simp only [mapG, hlt, dite_true, Fin.val_castAdd]
     rw [show (⟨(p.wireF hk s src c.val).val, hlt⟩ : Fin p.boolN) = ⟨p.srcB (src c.val), p.srcB_lt (valid _ hc)⟩ from
       Fin.ext hw, p.mapG_srcB hk (valid _ hc), Prog.colWire_val, dite_eq_left (by rw [s.nIn_eq]; exact hc)]
@@ -1066,13 +1054,13 @@ noncomputable def lastPair (hk : one < k) {outs : List ℕ} (p : UProg k one out
     have hw : (p.wireF hk s src s.t.inBits).val = one := by
       rw [p.wireF_val hk valid (by have := s.gs_size; omega)]; simp [wireB]
     have hlt : (p.wireF hk s src s.t.inBits).val < p.boolN := by rw [hw]; have := p.k_le_boolN; omega
-    change ((snoc p s src valid inj).mapG hk (p.wireF hk s src s.t.inBits)).val = (Prog.colWire s.R _ _ s.R.one).val
+    change ((snoc p s src valid).mapG hk (p.wireF hk s src s.t.inBits)).val = (Prog.colWire s.R _ _ s.R.one).val
     simp only [mapG, hlt, dite_true, Fin.val_castAdd]
     rw [show (⟨(p.wireF hk s src s.t.inBits).val, hlt⟩ : Fin p.boolN) = ⟨one, Nat.lt_of_lt_of_le hk p.k_le_boolN⟩ from Fin.ext hw,
       p.mapG_input hk _ hk, Prog.colWire_val]
     simp [Rows.one, oneOf]
   out g hg hgu := by
-    obtain ⟨o, ho, hgo⟩ := p.committedB_last hk s src valid inj hg hgu
+    obtain ⟨o, ho, hgo⟩ := p.committedB_last hk s src valid hg hgu
     have hs := s.fsize_ge
     have hsz := s.gs_size
     have hlo := s.out_lt ho
@@ -1083,7 +1071,7 @@ noncomputable def lastPair (hk : one < k) {outs : List ℕ} (p : UProg k one out
     have hv : p.n < (outs ++ [s.t.outputs.size]).length := by simp [hn]
     have ho' : o < (outs ++ [s.t.outputs.size]).getD p.n 0 := by
       rw [hn, List.getD_append_right _ _ _ _ (le_refl _)]; simpa using ho
-    have hcg : g = ⟨(snoc p s src valid inj).copyGate p.n o, ((snoc p s src valid inj).copyGate_spec hv ho').2⟩ :=
+    have hcg : g = ⟨(snoc p s src valid).copyGate p.n o, ((snoc p s src valid).copyGate_spec hv ho').2⟩ :=
       Fin.ext (by simp [copyGate, hgo])
     have hi : (⟨s.out o, hwl⟩ : Fin s.R.w) = s.R.comp ⟨s.out o - s.R.nIn, by rw [s.nIn_eq, hnc]; omega⟩ :=
       Fin.ext (by simp [Rows.comp, s.nIn_eq]; omega)
@@ -1096,8 +1084,8 @@ noncomputable def lastPair (hk : one < k) {outs : List ℕ} (p : UProg k one out
       rw [p.wireF_val hk valid (by omega), hgo]
       unfold wireB
       rw [ite_eq_right (by omega), ite_eq_right (by omega)]
-    · change ((snoc p s src valid inj).mapG hk g).val = (Prog.colWire s.R _ _ ⟨s.out o, hwl⟩).val
-      rw [hcg, (snoc p s src valid inj).mapG_copy hk hv ho', hrow]
+    · change ((snoc p s src valid).mapG hk g).val = (Prog.colWire s.R _ _ ⟨s.out o, hwl⟩).val
+      rw [hcg, (snoc p s src valid).mapG_copy hk hv ho', hrow]
       simp [outGate]
     · classical
       refine Partition.mem_committed_of_output _ ?_
@@ -1113,10 +1101,9 @@ noncomputable def lastPair (hk : one < k) {outs : List ℕ} (p : UProg k one out
 /-- **An earlier unit's pair, after a unit is appended**: the same derivation, its instances shifted, and its committed
 gates as before. -/
 noncomputable def snocPair (hk : one < k) {outs : List ℕ} (p : UProg k one outs) (s : UnitSpec) (src : ℕ → Src)
-    (valid : ∀ i < s.t.inBits, (src i).Valid k one outs)
-    (inj : ∀ i < s.t.inBits, ∀ j < s.t.inBits, src i = src j → i = j) {v : Fin p.n}
+    (valid : ∀ i < s.t.inBits, (src i).Valid k one outs) {v : Fin p.n}
     (U : UnitPair (p.P hk) (p.PB hk) (p.mapG hk) v) :
-    UnitPair ((snoc p s src valid inj).P hk) ((snoc p s src valid inj).PB hk) ((snoc p s src valid inj).mapG hk)
+    UnitPair ((snoc p s src valid).P hk) ((snoc p s src valid).PB hk) ((snoc p s src valid).mapG hk)
       v.castSucc where
   types := U.types
   ls := U.ls
@@ -1128,27 +1115,27 @@ noncomputable def snocPair (hk : one < k) {outs : List ℕ} (p : UProg k one out
   t := U.t
   ht := U.ht
   ord := U.ord
-  rows := (Prog.rowsWire_snoc (p.toRows hk) s.R _ _ _ _ (rowsWireOf U.rows)).toIsRowsUnit _
+  rows := (Prog.rowsWire_snoc (p.toRows hk) s.R _ _ _ (rowsWireOf U.rows)).toIsRowsUnit _
   loOf := U.loOf
   F := U.F
   hF := U.hF
-  gates := gatesSnoc hk p s src valid inj U.gates
+  gates := gatesSnoc hk p s src valid U.gates
   ins c hc := by
     apply Fin.ext
-    change ((snoc p s src valid inj).mapG hk (Fin.castAdd _ (U.gates.wire c.val))).val = (Fin.castAdd _ (U.rows.wire c)).val
+    change ((snoc p s src valid).mapG hk (Fin.castAdd _ (U.gates.wire c.val))).val = (Fin.castAdd _ (U.rows.wire c)).val
     simp only [mapG, Fin.val_castAdd, (U.gates.wire c.val).isLt, dite_true, Fin.eta]
     rw [U.ins c hc]
   one := by
     apply Fin.ext
-    change ((snoc p s src valid inj).mapG hk (Fin.castAdd _ (U.gates.wire U.t.inBits))).val =
+    change ((snoc p s src valid).mapG hk (Fin.castAdd _ (U.gates.wire U.t.inBits))).val =
       (Fin.castAdd _ (U.rows.wire (Rows.compose (ofBlock U.words U.done (U.done.getD U.idx default)) U.ord).one)).val
     simp only [mapG, Fin.val_castAdd, (U.gates.wire U.t.inBits).isLt, dite_true, Fin.eta]
     rw [U.one]
   out g hg hgu := by
     have hlt := lt_of_unitB_castSucc hgu
-    have hc := p.committedB_old hk s src valid inj hg hgu
+    have hc := p.committedB_old hk s src valid hg hgu
     have hu : (p.PB hk).unit ⟨g.val, hlt⟩ = some v := by
-      change (snoc p s src valid inj).unitB g = _ at hgu
+      change (snoc p s src valid).unitB g = _ at hgu
       rw [unitB_old hlt] at hgu
       obtain ⟨v', hv', hvv⟩ := Option.map_eq_some_iff.1 hgu
       rw [Fin.castSucc_inj.1 hvv] at hv'
@@ -1157,11 +1144,11 @@ noncomputable def snocPair (hk : one < k) {outs : List ℕ} (p : UProg k one out
     refine ⟨o, ho, Fin.ext ?_, ℓ, hℓ, Fin.ext ?_, ?_, ?_⟩
     · change g.val = (U.gates.wire _).val
       rw [← hgo]
-    · change ((snoc p s src valid inj).mapG hk g).val = (U.rows.wire ℓ).val
+    · change ((snoc p s src valid).mapG hk g).val = (U.rows.wire ℓ).val
       simp only [mapG, hlt, dite_true, Fin.val_castAdd]
       rw [hm]
-    · exact p.committedC_old hk s src valid inj hcom
-    · change (Prog.snoc (p.toRows hk) s.R _ _ _ _).unit (Fin.castAdd _ (U.rows.wire ℓ)) = _
+    · exact p.committedC_old hk s src valid hcom
+    · change (Prog.snoc (p.toRows hk) s.R _ _ _).unit (Fin.castAdd _ (U.rows.wire ℓ)) = _
       rw [Prog.unit_castAdd]
       change (p.P hk).unit (U.rows.wire ℓ) = some v at hℓu
       change (p.toRows hk).unit (U.rows.wire ℓ) = some v at hℓu
@@ -1172,23 +1159,23 @@ noncomputable def snocPair (hk : one < k) {outs : List ℕ} (p : UProg k one out
 noncomputable def pairs (hk : one < k) : {outs : List ℕ} → (p : UProg k one outs) → (u : Fin p.n) →
     UnitPair (p.P hk) (p.PB hk) (p.mapG hk) u
   | _, .inputs, u => u.elim0
-  | _, .snoc p s src valid inj, u =>
-    Fin.lastCases (motive := fun u => UnitPair ((snoc p s src valid inj).P hk) ((snoc p s src valid inj).PB hk)
-        ((snoc p s src valid inj).mapG hk) u)
-      (lastPair hk p s src valid inj) (fun v => snocPair hk p s src valid inj (pairs hk p v)) u
+  | _, .snoc p s src valid, u =>
+    Fin.lastCases (motive := fun u => UnitPair ((snoc p s src valid).P hk) ((snoc p s src valid).PB hk)
+        ((snoc p s src valid).mapG hk) u)
+      (lastPair hk p s src valid) (fun v => snocPair hk p s src valid (pairs hk p v)) u
 
 theorem pairs_oneGate (hk : one < k) : ∀ {outs : List ℕ} (p : UProg k one outs) (u : Fin p.n),
     ((p.pairs hk u).oneGate).val = one
   | _, .inputs, u => u.elim0
-  | _, .snoc p s src valid inj, u => by
+  | _, .snoc p s src valid, u => by
     refine Fin.lastCases ?_ (fun v => ?_) u
-    · have e : (snoc p s src valid inj).pairs hk (Fin.last p.n) = lastPair hk p s src valid inj := by
+    · have e : (snoc p s src valid).pairs hk (Fin.last p.n) = lastPair hk p s src valid := by
         unfold pairs; exact Fin.lastCases_last
       rw [e]
       change (Prog.colWire s.R (p.insOf s src valid) (p.oneOf hk) s.R.one).val = one
       rw [Prog.colWire_val]
       simp [Rows.one, oneOf]
-    · have e : (snoc p s src valid inj).pairs hk v.castSucc = snocPair hk p s src valid inj (p.pairs hk v) := by
+    · have e : (snoc p s src valid).pairs hk v.castSucc = snocPair hk p s src valid (p.pairs hk v) := by
         rw [pairs, Fin.lastCases_castSucc]
       rw [e]
       change (Fin.castAdd _ (UnitPair.oneGate (p.pairs hk v))).val = one

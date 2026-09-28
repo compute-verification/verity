@@ -85,9 +85,11 @@ theorem _root_.FlockSoundness.UProg.flock_e2e_count_classes
     (slot : ∀ S R u (h : u ∈ S), Fin (cls S R u h).slots)
     (blk : ∀ S R u, u ∈ S → Fin (2 ^ (tabOf plan tab S R u).S.nbl))
     (hrd : ∀ S R u (h : u ∈ S), (p.spec hone u).Reads (cls S R u h))
+    (hal : ∀ S R u (h : u ∈ S), (((cls S R u h).atSlot (slot S R u h) (blk S R u h)).cast
+      (UnitSpec.R_eq_of_reads (hrd S R u h)).symm).Aliased (p.instOf hone u).wire)
     {Dh : Type} {Hc : List UInt8 → Dh}
     (vb : (p.P hone).ValueBinding plan tab
-      ((p.P hone).placeDecoder plan tab (p.derivedPlaces_of_classes hone plan tab cls slot blk hrd).place) Hc)
+      ((p.P hone).placeDecoder plan tab (p.derivedPlaces_of_classes hone plan tab cls slot blk hrd hal).place) Hc)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateB (plan S R) j k ≤ ρ) {t' : ℝ} (ht : 0 ≤ t')
     (hCR : ∀ (R : Reg) (τ : Cont L Reg (batchedSession H E plan) R) (c : vb.Pos)
@@ -101,7 +103,7 @@ theorem _root_.FlockSoundness.UProg.flock_e2e_count_classes
         K ≤ ((p.PB hone).wrong ((p.P hone).Xplur H E plan tab vb (reg σ) (cont σ) k Rw ∘ p.mapG hone)).card)
         (audit L Reg (batchedSession H E plan)) σ ≤
       L.miss K + ksAvgBE H E plan k (reg σ) (cont σ) + (p.P hone).linkBoundE (L := L) plan tab vb k Rw M ρ t' :=
-  UProg.flock_e2e_count hone p H E plan tab hExec (p.derivedPlaces_of_classes hone plan tab cls slot blk hrd) vb hk
+  UProg.flock_e2e_count hone p H E plan tab hExec (p.derivedPlaces_of_classes hone plan tab cls slot blk hrd hal) vb hk
     hRw hM hρ hr ht hCR K σ hOne
 
 /-- **The end-to-end drawn-unit bound on a program of units, from its tables' classes.** `UProg.flock_e2e_drawn` with
@@ -112,9 +114,11 @@ theorem _root_.FlockSoundness.UProg.flock_e2e_drawn_classes
     (slot : ∀ S R u (h : u ∈ S), Fin (cls S R u h).slots)
     (blk : ∀ S R u, u ∈ S → Fin (2 ^ (tabOf plan tab S R u).S.nbl))
     (hrd : ∀ S R u (h : u ∈ S), (p.spec hone u).Reads (cls S R u h))
+    (hal : ∀ S R u (h : u ∈ S), (((cls S R u h).atSlot (slot S R u h) (blk S R u h)).cast
+      (UnitSpec.R_eq_of_reads (hrd S R u h)).symm).Aliased (p.instOf hone u).wire)
     {Dh : Type} {Hc : List UInt8 → Dh}
     (vb : (p.P hone).ValueBinding plan tab
-      ((p.P hone).placeDecoder plan tab (p.derivedPlaces_of_classes hone plan tab cls slot blk hrd).place) Hc)
+      ((p.P hone).placeDecoder plan tab (p.derivedPlaces_of_classes hone plan tab cls slot blk hrd hal).place) Hc)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateB (plan S R) j k ≤ ρ) {t' : ℝ} (ht : 0 ≤ t')
     (hCR : ∀ (R : Reg) (τ : Cont L Reg (batchedSession H E plan) R) (c : vb.Pos)
@@ -128,7 +132,7 @@ theorem _root_.FlockSoundness.UProg.flock_e2e_drawn_classes
         ¬ Disjoint ((p.PB hone).wrong ((p.P hone).Xplur H E plan tab vb (reg σ) (cont σ) k Rw ∘ p.mapG hone)) o.2)
         (audit L Reg (batchedSession H E plan)) σ ≤
       ksAvgBE H E plan k (reg σ) (cont σ) + (p.P hone).linkBoundE (L := L) plan tab vb k Rw M ρ t' :=
-  UProg.flock_e2e_drawn hone p H E plan tab hExec (p.derivedPlaces_of_classes hone plan tab cls slot blk hrd) vb hk
+  UProg.flock_e2e_drawn hone p H E plan tab hExec (p.derivedPlaces_of_classes hone plan tab cls slot blk hrd hal) vb hk
     hRw hM hρ hr ht hCR σ hOne
 
 end Partition
