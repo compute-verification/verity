@@ -113,10 +113,10 @@ SHA-512 on every commitment path; re-baseline prerequisite E4). It is opt-in:
 - `leaf_prefix` is the same prefix over the 64-byte domain id, so `leaf = SHA-512(prefix ‖ value)`.
 
 **The binding.** `binding` is the caller's identity digest of what the commitment may not outlive: a header, a replay phase or a
-weights tag. It is an identity from the protocol and the IR, not something the frame computes. Under `frame-v3-sha512` it is 64
-bytes, an `identity_digest_sha512` (Daniel's one-hash ruling: one hash, SHA-512), or 32 bytes, a SHA-256 identity digest as recorded
-statements carry it; every other frame takes 32 bytes only. The domain message frames every part with its u64be length, so a 64-byte
-binding and a 32-byte one never give the same message, and the frame version does not change. `binding64_trees` in
+weights tag. It is an identity from the protocol and the IR, not something the frame computes. Under every frame it is 64 bytes, an
+`identity_digest_sha512` or another SHA-512 digest (Daniel's one-hash ruling: one hash, SHA-512), or 32 bytes, a SHA-256 identity
+digest as recorded statements carry it. The domain message frames every part with its u64be length, so a 64-byte binding and a
+32-byte one never give the same message, and the frame version does not change. `binding64_trees` in
 `vectors_sha512.json` gives row trees over 64-byte bindings, each with its identity's tag and document, the positions' SHA-512
 identity and the domain message; the other groups are unchanged.
 
@@ -249,9 +249,9 @@ and `test_rowleaf_bits.py` check them.
 - **What rests on `cr/sha-512`.** Table 1 lists SHA-512 under collision resistance for everything the SHA-512 frame computes: the
   domain id, the positions' identity, leaves, pads, nodes and roots. Binding a value to a position inside a verifier-held domain
   rests on `cr/sha-512` alone.
-- **What still rests on SHA-256.** Which statement and which session a root belongs to also rests on `binding`, a 32-byte SHA-256
-  identity digest from the protocol and the IR. Until the re-baseline moves identities to SHA-512, a Table 1 row that cites this
-  frame cites `cr/sha-256` beside `cr/sha-512`.
+- **What may still rest on SHA-256.** Which statement and which session a root belongs to also rests on `binding`. A 64-byte binding
+  rests on `cr/sha-512`; a 32-byte SHA-256 identity digest from the protocol or the IR does not, and a Table 1 row that cites this
+  frame over one cites `cr/sha-256` beside `cr/sha-512`.
 
 ## 7. `frame-b3`
 
@@ -277,5 +277,5 @@ hashes no index, and a leaf (its own tag) and a node (its level's key) cannot co
   (`test_frame_v3.py`). Pearl-C's BLAKE3 device kernels, checked against this reference on the host while Pearl-C hashed
   with BLAKE3, are kept unmaintained in `archive/pouw-blake3/pearl_c/` (`hash.cuh`).
 - **Hashes.** Binding a value to a position rests on `cr/blake3`. As in §6, which statement and session a root belongs to
-  also rests on `binding` and the positions' identity, both SHA-256 identity digests, so a Table 1 row citing this mode
-  cites `cr/sha-256` beside `cr/blake3`.
+  also rests on `binding` (64 or 32 bytes, as in §6) and the positions' identity, a SHA-256 identity digest, so a Table 1 row
+  citing this mode cites `cr/sha-256` beside `cr/blake3`, and `cr/sha-512` for a 64-byte binding.

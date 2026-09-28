@@ -1,6 +1,11 @@
 """summarize.py OUT: each config's numbers (OUT/<role>-k<K>/summary.json) and all of them (OUT/summary.json), from what job.sh
 leaves there: stage.json and the *.time files, the prover's LIVE lines, the selftests' NEG lines and the Lean verifier's
 VERDICT lines, each Lean check judged against the verdict it must give, and the HZ_LEAN globs that picked the checks run.
+A row unit's checks pass `--public-inputs`, a form flock-verify refuses until its soundness proof covers it (T4): each is
+REFUSED, its anchor controls too (a refused statement is never accepted, so they say nothing of the anchors), and passes
+when not accepted, an honest check only with the refusal as its reason. A tile's rows (row-seg/v1, row/v2) are a form the
+proof does not cover either, refused once every check has passed: an honest tile check passes only with a form's refusal
+as its reason (REFUSED), and every other only when a check rejects it.
 Under HZ_STAGE_ONLY=1 nothing is proved or verified, so a config is `stage_only` and its `all_pass` and `lean_checks` are null."""
 import json
 import os
@@ -10,6 +15,8 @@ from pathlib import Path
 
 OUT = Path(sys.argv[1])
 EXPECT = {"honest-own": True, "honest-wrong": False, "honest-chosen": False, "st-honest": True}
+REFUSAL = "refused: public input ports (--public-inputs): a statement form the soundness proof does not cover"
+FORM = ": a statement form the soundness proof does not cover"
 
 
 def load(p: Path):
@@ -68,18 +75,23 @@ def selftests(d: Path) -> dict:
     return out
 
 
-def lean(d: Path) -> dict:
+def lean(d: Path, refused: bool) -> dict:
     out = {}
     for f in sorted(d.glob("lean-*.out")):
         tag = f.stem[len("lean-"):]
         t = load(f.with_suffix(".time")) or {}
         verdict = [json.loads(ln[8:]) for ln in f.read_text(errors="replace").splitlines() if ln.startswith("VERDICT ")]
         accepted = verdict[0].get("accepted") if verdict else None
-        expect = EXPECT.get(tag, False)
-        out[tag] = {"expect": "ACCEPT" if expect else "REJECT",
-                    "verdict": None if accepted is None else ("ACCEPT" if accepted else "REJECT"),
-                    "pass": accepted is not None and accepted == expect,
-                    "why": (verdict[0].get("why") or "")[:300] if verdict else tail(f.with_suffix(".err"), 2),
+        why = (verdict[0].get("why") or "") if verdict else ""
+        if refused:
+            got = None if accepted is None else "ACCEPT" if accepted else "REFUSED" if why == REFUSAL else "REJECT"
+            expect, ok = "REFUSED", got == "REFUSED" or (got == "REJECT" and not EXPECT.get(tag, False))
+        else:
+            got = None if accepted is None else "ACCEPT" if accepted else "REFUSED" if why.endswith(FORM) else "REJECT"
+            expect = "REFUSED" if EXPECT.get(tag, False) else "REJECT"
+            ok = got == expect
+        out[tag] = {"expect": expect, "verdict": got, "pass": ok,
+                    "why": why[:300] if verdict else tail(f.with_suffix(".err"), 2),
                     "exit": t.get("exit"), "wall_s": t.get("wall_s"), "maxrss_gb": gb(t) if t else None}
     return out
 
@@ -93,7 +105,9 @@ def one(d: Path) -> dict:
                                            "circuit_bytes", "circuit_sha512", "public_inputs", "own_bytes", "own_sha256",
                                            "flipped", "inst_bytes", "pub_bytes", "seconds")},
                    stage_maxrss_gb=gb(t), stage_wall_s=(t or {}).get("wall_s"))
-    rec.update(zk=session(d), controls=selftests(d), lean=lean(d), lean_checks=os.environ.get("HZ_LEAN") or "*")
+    role = (st or {}).get("role") or d.name
+    rec.update(zk=session(d), controls=selftests(d), lean=lean(d, not role.startswith(("tile", "hidden"))),
+               lean_checks=os.environ.get("HZ_LEAN") or "*")
     rec["all_pass"] = bool(rec["zk"] and rec["zk"].get("accepted") and rec["lean"]
                            and all(v["pass"] for v in rec["lean"].values()) and all(v["pass"] for v in rec["controls"].values()))
     if os.environ.get("HZ_STAGE_ONLY", "0") == "1":

@@ -104,20 +104,20 @@ def test_frame_binding64_vectors_spell_out_the_domain(case: dict) -> None:
     assert hashlib.sha512(message).hexdigest() == doc["domain_id"] == _domain(doc).domain_id.hex()
 
 
-def test_a_sha512_frame_binds_a_64_byte_identity_and_no_other_frame_does() -> None:
+def test_every_frame_binds_a_64_byte_identity_apart_from_its_halves() -> None:
     b64 = identity_digest_sha512("verity/test/binding/v1", {"x": 1})
     positions = RangeIndexedDomain(4)
     d = CommitmentDomain(b64, -1, positions, hash="sha512")
     assert d.domain_id == _hash(b"domain", b64, _uint(1), positions.identity_sha512(), _uint(4), hash="sha512")
-    assert d.domain_id != CommitmentDomain(b64[:32], -1, positions, hash="sha512").domain_id
-    assert d.domain_id != CommitmentDomain(b64[32:], -1, positions, hash="sha512").domain_id
-    for other in ("sha256", "blake3", "blake3-s256"):
-        CommitmentDomain(b64[:32], -1, positions, hash=other)
-        with pytest.raises(ProtocolError, match="binding"):
-            CommitmentDomain(b64, -1, positions, hash=other)
-    for width in (0, 31, 33, 63, 65, 128):
-        with pytest.raises(ProtocolError, match="binding"):
-            CommitmentDomain(bytes(width), -1, positions, hash="sha512")
+    s = CommitmentDomain(b64, -1, positions, hash="sha256")
+    assert s.domain_id == _hash(b"domain", b64, _uint(1), bytes.fromhex(positions.identity_digest), _uint(4))
+    for h in ("sha512", "sha256", "blake3", "blake3-s256"):
+        whole = CommitmentDomain(b64, -1, positions, hash=h).domain_id
+        assert whole != CommitmentDomain(b64[:32], -1, positions, hash=h).domain_id
+        assert whole != CommitmentDomain(b64[32:], -1, positions, hash=h).domain_id
+        for width in (0, 31, 33, 63, 65, 128):
+            with pytest.raises(ProtocolError, match="binding"):
+                CommitmentDomain(bytes(width), -1, positions, hash=h)
     with pytest.raises(ProtocolError, match="binding"):
         CommitmentDomain(bytearray(b64), -1, positions, hash="sha512")   # type: ignore[arg-type]
 

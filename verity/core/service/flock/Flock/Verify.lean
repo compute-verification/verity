@@ -22,7 +22,7 @@ structure Setup where
   /-- the proof's Merkle trees (§14) -/
   merkle : MerkleScheme
   /-- every opening carries `opened_salts`, empty for an unsalted scheme, as PR #83's prover writes it from `2908d078` on
-  (§16.15); its earlier unsalted openings carry none -/
+  (§16.16); its earlier unsalted openings carry none -/
   openedSalts : Bool := false
   deriving Inhabited
 

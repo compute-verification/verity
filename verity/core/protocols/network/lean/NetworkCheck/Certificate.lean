@@ -10,7 +10,10 @@ frame tree (`frameLeaf`, `node`, `empty`, `depth`, `framesRoot`, `openFrame`, `v
 (`realFrames`), the parameters digest (`parametersDigest`, canonical JSON through `Flock.canon`), the record head's
 encoding and digest (`RecordHead.encode`, `RecordHead.digest`, `recordHead`), and the message a certificate signs
 (`certificateMessage`, `verity.ml.crypto.lms.certificate_message`). A Python `ValueError` is an `Except.error` here.
-SHA-512 is `Flock.Sha512.hash`. `NetworkCheck.Difftest` holds these to the Python on generated inputs.
+SHA-512 is `Flock.Sha512.hash`, and what each call hashes has a name of its own (`taggedInput`, `leafInput`, `nodeInput`,
+`emptyInput`, `messageInput`), as the properties (`Security/Properties/NetworkCertifier.lean`) name the strings a run
+hashes. The tree climbs by structural recursion (`pairs`, `climb`, `top`). `NetworkCheck.Difftest` holds these to the
+Python on generated inputs.
 -/
 
 namespace NetworkCheck
@@ -42,11 +45,13 @@ def block (x : ByteArray) : E ByteArray :=
   if x.size ≤ 128 then pure (x ++ ⟨Array.replicate (128 - x.size) 0⟩)
   else throw "a tag block is one 128-byte SHA-512 block"
 
-/-- `tagged_sha512` (`verity/ml/commitments/identity.py`): SHA-512 of
-`"verity/tagged-sha512/v1\0" ‖ u32be len(tag) ‖ tag ‖ u64be len(payload) ‖ payload`. -/
-def taggedSha512 (tag : String) (payload : ByteArray) : ByteArray :=
+/-- What `tagged_sha512` hashes: `"verity/tagged-sha512/v1\0" ‖ u32be len(tag) ‖ tag ‖ u64be len(payload) ‖ payload`. -/
+def taggedInput (tag : String) (payload : ByteArray) : ByteArray :=
   let t := tag.toUTF8
-  Sha512.hash ("verity/tagged-sha512/v1\x00".toUTF8 ++ be32 t.size.toUInt32 ++ t ++ be64 payload.size.toUInt64 ++ payload)
+  "verity/tagged-sha512/v1\x00".toUTF8 ++ be32 t.size.toUInt32 ++ t ++ be64 payload.size.toUInt64 ++ payload
+
+/-- `tagged_sha512` (`verity/ml/commitments/identity.py`): SHA-512 of `taggedInput`. -/
+def taggedSha512 (tag : String) (payload : ByteArray) : ByteArray := Sha512.hash (taggedInput tag payload)
 
 /-- The grid parameters a record reads (`grid.GridParams`): T, r, B, τ_b and Q. -/
 structure Params where
@@ -56,19 +61,28 @@ structure Params where
   bucketMs : Nat
   queueCapacity : Nat
 
-/-- `leaf(f) = SHA-512(block(FRAME_TAG ‖ u32be B) ‖ f)`, refused unless `f` has B bytes. -/
-def frameLeaf (frame : ByteArray) (frameBytes : Nat) : E ByteArray := do
+/-- What a leaf hashes, `block(FRAME_TAG ‖ u32be B) ‖ f`, refused unless `f` has B bytes. -/
+def leafInput (frame : ByteArray) (frameBytes : Nat) : E ByteArray := do
   if frame.size ≠ frameBytes then throw s!"frames are {frameBytes} bytes, not {frame.size}"
-  pure (Sha512.hash ((← block (frameTag ++ (← uBE 4 frameBytes "B"))) ++ frame))
+  pure ((← block (frameTag ++ (← uBE 4 frameBytes "B"))) ++ frame)
+
+/-- `leaf(f) = SHA-512(block(FRAME_TAG ‖ u32be B) ‖ f)`, refused unless `f` has B bytes. -/
+def frameLeaf (frame : ByteArray) (frameBytes : Nat) : E ByteArray := Sha512.hash <$> leafInput frame frameBytes
 
 def nodeBlock : ByteArray := nodeTag ++ ⟨Array.replicate (128 - nodeTag.size) 0⟩
 
+/-- What a node hashes, `block(NODE_TAG) ‖ a ‖ b`. -/
+def nodeInput (left right : ByteArray) : ByteArray := nodeBlock ++ left ++ right
+
 /-- `node(a, b) = SHA-512(block(NODE_TAG) ‖ a ‖ b)`. -/
-def node (left right : ByteArray) : ByteArray := Sha512.hash (nodeBlock ++ left ++ right)
+def node (left right : ByteArray) : ByteArray := Sha512.hash (nodeInput left right)
+
+/-- What `E_0` hashes, `block(EMPTY_TAG)`. -/
+def emptyInput : ByteArray := emptyTag ++ ⟨Array.replicate (128 - emptyTag.size) 0⟩
 
 /-- `E_level`: `E_0 = SHA-512(block(EMPTY_TAG))`, `E_{l+1} = node(E_l, E_l)`. -/
 def empty : Nat → ByteArray
-  | 0 => Sha512.hash (emptyTag ++ ⟨Array.replicate (128 - emptyTag.size) 0⟩)
+  | 0 => Sha512.hash emptyInput
   | l + 1 => let e := empty l; node e e
 
 /-- Python's `int.bit_length` on a natural number. -/
@@ -77,31 +91,48 @@ def bitLength (n : Nat) : Nat := if n = 0 then 0 else Nat.log2 n + 1
 /-- `D = ⌈log2(T·r)⌉`, computed as Python does: `(T·r − 1).bit_length()`. -/
 def depth (p : Params) : Nat := bitLength (p.buckets * p.allocation - 1)
 
+/-- The real frames of rows of `allocation` slots, row by row, refused at the first row of another size or that isn't
+left-packed. -/
+def rowFrames (allocation : Nat) : List (Array (Option ByteArray)) → E (Array ByteArray)
+  | [] => pure #[]
+  | row :: rows => do
+    if row.size ≠ allocation then throw s!"a row has {allocation} slots, not {row.size}"
+    let n := (row.filter Option.isSome).size
+    unless (row.extract 0 n).all Option.isSome do throw "a row that isn't left-packed has no encoding (W4)"
+    pure (row.filterMap id ++ (← rowFrames allocation rows))
+
 /-- The window's real frames in `grid.fill`'s order, refused unless the grid has T rows of r slots, each left-packed. -/
 def realFrames (grid : Array (Array (Option ByteArray))) (p : Params) : E (Array ByteArray) := do
   if grid.size ≠ p.buckets then throw s!"a grid has {p.buckets} rows, not {grid.size}"
-  let mut out := #[]
-  for row in grid do
-    if row.size ≠ p.allocation then throw s!"a row has {p.allocation} slots, not {row.size}"
-    let n := (row.filter Option.isSome).size
-    unless (row.extract 0 n).all Option.isSome do throw "a row that isn't left-packed has no encoding (W4)"
-    out := out ++ row.filterMap id
-  pure out
+  rowFrames p.allocation grid.toList
+
+/-- One level up from level `lv`: the node of each pair, the last of an odd level paired with `E_lv`. -/
+def pairs (lv : Nat) : List ByteArray → List ByteArray
+  | a :: b :: rest => node a b :: pairs lv rest
+  | [a] => [node a (empty lv)]
+  | [] => []
+
+/-- The levels from `level`, at level `lv`, up `k` levels. -/
+def climb : Nat → Nat → List ByteArray → List (List ByteArray)
+  | _, 0, level => [level]
+  | lv, k + 1, level => level :: climb (lv + 1) k (pairs lv level)
+
+/-- The top of `climb`: the level `k` levels up from `level`, at level `lv`. -/
+def top : Nat → Nat → List ByteArray → List ByteArray
+  | _, 0, level => level
+  | lv, k + 1, level => top (lv + 1) k (pairs lv level)
+
+/-- The leaves of the window's frames, refused past T·r frames or at a frame of other than B bytes. -/
+def leaves (frames : Array ByteArray) (p : Params) : E (Array ByteArray) := do
+  if frames.size > p.buckets * p.allocation then throw "more frames than the window has slots"
+  frames.mapM (frameLeaf · p.frameBytes)
 
 /-- The tree's non-empty prefix at each level, leaves first; every node to its right is the level's `E`. -/
 def levels (frames : Array ByteArray) (p : Params) : E (Array (Array ByteArray)) := do
-  if frames.size > p.buckets * p.allocation then throw "more frames than the window has slots"
-  let mut level ← frames.mapM (frameLeaf · p.frameBytes)
-  let mut out := #[level]
-  for lv in [0:depth p] do
-    if level.size % 2 = 1 then level := level.push (empty lv)
-    level := (List.range (level.size / 2)).toArray.map fun i => node level[2 * i]! level[2 * i + 1]!
-    out := out.push level
-  pure out
+  pure ((climb 0 (depth p) (← leaves frames p).toList).map List.toArray).toArray
 
 def framesRoot (frames : Array ByteArray) (p : Params) : E ByteArray := do
-  let top := (← levels frames p).back!
-  pure (if h : 0 < top.size then top[0] else empty (depth p))
+  pure ((top 0 (depth p) (← leaves frames p).toList).headD (empty (depth p)))
 
 /-- Frame k's authentication path: D siblings, leaf level first. -/
 def openFrame (frames : Array ByteArray) (p : Params) (k : Int) : E (Array ByteArray) := do
@@ -157,7 +188,7 @@ def parametersDigest (p : Params) (ss : Option SyncSet) : E ByteArray := do
 inductive Direction where
   | egress
   | ingress
-  deriving BEq, Inhabited
+  deriving DecidableEq, Inhabited
 
 def Direction.value : Direction → String
   | .egress => "egress"
@@ -227,15 +258,21 @@ def recordHead (link : String) (direction : Direction) (window : Int) (grid : Ar
 /-- `[x] = u64be len(x) ‖ x` (`lms._field`). -/
 def field (b : ByteArray) : ByteArray := be64 b.size.toUInt64 ++ b
 
-/-- `certificate_message` (`certificate.py` and `verity.ml.crypto.lms`): SHA-512 of
-`[tag] ‖ I ‖ [[link] ‖ [direction] ‖ u64be window] ‖ [record digest]`, the tag `verity/network-certificate/v1`; refused
+/-- What `certificate_message` hashes: `[tag] ‖ I ‖ [[link] ‖ [direction] ‖ u64be window] ‖ [record digest]`, refused
 unless the digest is 64 bytes, I is 16 and the window a u64. -/
-def certificateMessage (keyId : ByteArray) (link : String) (direction : Direction) (window : Int) (digest : ByteArray) :
+def messageInput (keyId : ByteArray) (link : String) (direction : Direction) (window : Int) (digest : ByteArray) :
     E ByteArray := do
   if digest.size ≠ digestBytes then throw "a record digest is 64 bytes"
   let w ← uBE 8 window "window"
   if keyId.size ≠ 16 then throw s!"an LMS identifier is 16 bytes, not {keyId.size}"
   let context := field link.toUTF8 ++ field direction.value.toUTF8 ++ w
-  pure (Sha512.hash (field "verity/network-certificate/v1".toUTF8 ++ keyId ++ field context ++ field digest))
+  pure (field "verity/network-certificate/v1".toUTF8 ++ keyId ++ field context ++ field digest)
+
+/-- `certificate_message` (`certificate.py` and `verity.ml.crypto.lms`): SHA-512 of
+`[tag] ‖ I ‖ [[link] ‖ [direction] ‖ u64be window] ‖ [record digest]`, the tag `verity/network-certificate/v1`; refused
+unless the digest is 64 bytes, I is 16 and the window a u64. -/
+def certificateMessage (keyId : ByteArray) (link : String) (direction : Direction) (window : Int) (digest : ByteArray) :
+    E ByteArray :=
+  Sha512.hash <$> messageInput keyId link direction window digest
 
 end NetworkCheck

@@ -10,7 +10,11 @@ For each set (in `vectors.json` `replayable.sets`) whose PR #83 commit has an up
 - for a set that names `mutants`, regenerates the proof mutants (`redigest.py`), the retained-bytes sessions
   (`redigest.py --retain`) and `N` fuzz cases (`fuzz.py --seed S`) from its honest session;
 - adds the set's stored forgeries, if it has any;
-- runs `agree.py` on all of them.
+- runs `agree.py` on all of them, with `--lean-refuses` for a set marked `lean_refuses` (D12: a statement form the soundness
+  proof does not cover, which the Lean verifier refuses whatever the session, once every check has passed),
+  `--lean-refuses-drawn` for one marked `lean_refuses_drawn` (D12 at its drawn sessions' law, which no soundness claim draws
+  by, refused at setup), and `--lean-refuses-drawless` for one marked `lean_refuses_drawless` (D12 at its sessions without
+  a draw, refused once every check has passed). A session refused last, and for nothing else, passed every check.
 
 `--live` runs `live.sets` instead: sets with no upstream binary, whose upstream verdicts are the live server's in each
 case's `case.json` (`agree.py --upstream live`).
@@ -113,6 +117,12 @@ def run_set(i, s, a, ups, store):
            "--out", w / "agree", "--jobs", a.session_jobs, "--sessions", *sessions]
     if tables:
         cmd += ["--tables", tables]
+    if "lean_refuses" in s:
+        cmd += ["--lean-refuses", s["lean_refuses"]]
+    if "lean_refuses_drawn" in s:
+        cmd += ["--lean-refuses-drawn", s["lean_refuses_drawn"]]
+    if "lean_refuses_drawless" in s:
+        cmd += ["--lean-refuses-drawless", s["lean_refuses_drawless"]]
     # in-process: every set's verifier processes draw on one budget (SLOTS), so a long set takes the slots short ones free
     rc = agree.main([str(x) for x in cmd[2:]], slots=SLOTS, quiet=True)
     r = json.loads((w / "agree" / "result.json").read_text())
@@ -190,11 +200,16 @@ def main():
                                      "bundle": os.environ.get("CI_BUNDLE_SHA256"),
                                      "sets": [r["set"] for r in ran]},
             "validation": {"status": "failed" if bad else "passed", "checker": "verity/ml/flock/verifier/agree.py",
-                           "detail": "; ".join(f"set {r['set']} ({r['pr83']}): {r['agree']}/{r['sessions']} agree" for r in ran),
+                           "detail": "; ".join(f"set {r['set']} ({r['pr83']}): {r['agree']}/{r['sessions']} agree, "
+                                               f"{r['accepted']} accepted, {r['passed_every_check']} passed every check"
+                                               for r in ran),
                            "evidence": ["ci/sets.json"]},
             "measurements": [{"name": "sessions", "value": sum(r["sessions"] for r in ran), "unit": "count"},
                              {"name": "agree", "value": sum(r["agree"] for r in ran), "unit": "count"},
-                             {"name": "disagree", "value": sum(len(r["disagree"]) for r in ran), "unit": "count"}],
+                             {"name": "disagree", "value": sum(len(r["disagree"]) for r in ran), "unit": "count"},
+                             {"name": "accepted", "value": sum(r["accepted"] for r in ran), "unit": "count"},
+                             {"name": "passed_every_check", "value": sum(r["passed_every_check"] for r in ran),
+                              "unit": "count"}],
             "measurement_files": ["ci/sets.json"],
             "artifacts": ["ci/"],
         }

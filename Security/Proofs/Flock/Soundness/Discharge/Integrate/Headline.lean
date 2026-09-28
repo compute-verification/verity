@@ -19,6 +19,9 @@ session's inputs (`planAt`, `Sites.lean`), with:
 * `lay := Layout.keyedLayout` (`layAt`) and `rs := Layout.keyedRowsOuts` (`rsAt`) at row widths `16 · words` and the
   rows' salt columns `Discharge.Hm.saltCol`, with `hsite` from `sitesAt_bcSite`;
 * `hHm := Discharge.Hm.keyedRowsOuts_computes` (`rsAt_computes`).
+
+Its hypotheses on the statement's form (`ht`, `hc`, `hU`, `hpub`, `hpt`, `hscope`) are ones flock-verify refuses a statement
+failing (PROTOCOL.md §16.15), and `FailClosed.flock_headline_exec` takes none of them.
 -/
 
 namespace FlockSoundness.Discharge.Integrate
@@ -100,8 +103,8 @@ is whatever the verifier passes as `--statement`: a session counts when
 `flock-verify verify --statement verity/flock-circuit@967b8d06 --coins os` accepts it with one table, so the headline
 covers only public-output `@967b8d06` sessions, from builds before #757. Since #757, main's prover always writes the
 hidden-output statement (`verity/flock-circuit`, the default `--statement`, `hiddenOutputs = true`), under which
-`setupTables` calls `setupHidden`, which has no soundness theorem; the headline makes no claim about those sessions,
-which are every session main's prover writes from now on. Sessions of more than one table are outside it (the circuit
+`setupTables` calls `setupHidden`, which this headline does not cover: `HiddenExec.flock_headline_exec_hidden`
+does, and `FailClosed.flock_verify_sound` states both. Sessions of more than one table are outside it (the circuit
 prover's default is one). -/
 theorem flock_headline_exec
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)

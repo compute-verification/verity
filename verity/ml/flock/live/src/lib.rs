@@ -37,6 +37,7 @@ pub mod firewall;
 #[cfg(feature = "sha512")]
 pub mod firewall_transcript;
 pub mod glue;
+pub mod proved_scope;
 pub mod pure_block;
 pub mod release;
 #[cfg(feature = "glue")]
@@ -1074,6 +1075,10 @@ pub trait StatementVerifier: Send {
     fn take_phases(&self) -> Option<Value> {
         None
     }
+    /// Why the statement is one this verifier refuses whatever its sessions hold ([`proved_scope`]), or `None`.
+    fn refusal(&self) -> Option<String> {
+        None
+    }
 }
 
 /// What the verifier's record holds for one table when its proofs are replayed: the link points it drew, the y the
@@ -1715,6 +1720,14 @@ impl Server {
                 ok = false;
             }
         }
+        // the Lean verifier's verdict on a statement it refuses is the refusal, whatever the session; the verdict keeps the one
+        // the session would otherwise get, for the selftest's checks of everything else
+        let mut without_refusal = None;
+        if let Some(e) = self.verifier.refusal() {
+            without_refusal = Some(json!({"accepted": ok, "why": why}));
+            ok = false;
+            why = e;
+        }
         let rounds: usize = self.streams.values().map(|s| s.rounds.len()).sum();
         let empty: usize = self.streams.values().map(|s| s.rounds.iter().filter(|r| r.len <= 16).count()).sum();
         let v = json!({
@@ -1727,6 +1740,9 @@ impl Server {
         if let Some((seed, nonce, c, _, k)) = &self.seed {
             v["coin_seed"] = json!({"scheme": coin_seed::SCHEME, "domain": coin_seed::DOMAIN, "commitment": hex(c), "seed": hex(seed),
                                     "nonce": hex(nonce), "coin_requests": k});
+        }
+        if let Some(w) = without_refusal {
+            v["without_refusal"] = w;
         }
         self.verdict = Some(v.clone());
         v
