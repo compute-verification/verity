@@ -2,8 +2,9 @@
 calibration, and the reference's timed sequential audit against the live server's native responder (`engine/pous/worker.py`;
 wire format in `engine/pous/pous_native.cu`).
 
-The scheme is a reference `verity_pous.codec.Codec` (`scheme.P3` today).  The verifier encodes `W` with the codec's byte-level
-`encode_segment`, one segment per task in a process pool, and `setup.verifier_key(..., encoded=, codec=)` checks the commitment
+The scheme is a reference `verity_pous.codec.Codec` that `engine/pous/twins.reference` serves (`scheme.P3` by default; the band
+and dense chains too).  The verifier encodes `W` with the codec's byte-level `encode_segment`, one segment per task in a process
+pool (each task names the codec, which its worker resolves), and `setup.verifier_key(..., encoded=, codec=)` checks the commitment
 and builds `vk` from those segments.  The audit is `verity_pous.audit.TimedVerifier` + `run_timed`: `k` indices from
 `verity.randomness` under the verifier's secret, bound to `vk`, revealed one at a time, each answer correct and within
 `Δ = 0.5 ms` plus `rtt_allowance_ns` on the verifier's clock, with the responder's own device and server times kept as each
@@ -39,28 +40,36 @@ def quantiles(xs: list[float]) -> dict[str, float]:
     return {"n": len(s), "min": s[0], "p50": at(0.5), "p99": at(0.99), "p99.9": at(0.999), "max": s[-1]}
 
 
-def _encode_one(job: tuple[Codec, Geometry, bytes, int, bytes]) -> list[bytes]:
-    codec, params, salt, s, w_seg = job
-    return codec.encode_segment(params, reference(params), salt, s, w_seg)
+def _codec(name: str) -> Codec:
+    """The reference codec ``name``, resolved in the worker: a codec's functions may be closures (the band's are), which
+    do not pickle, so a task carries the name (`engine/pous/twins.reference`)."""
+    from verity_vllm.engine.pous import twins
+
+    return twins.reference(name)[0]
+
+
+def _encode_one(job: tuple[str, Geometry, bytes, int, bytes]) -> list[bytes]:
+    name, params, salt, s, w_seg = job
+    return _codec(name).encode_segment(params, reference(params), salt, s, w_seg)
 
 
 def encode(params: Geometry, w: bytes, salt: bytes, workers: int, codec: Codec = P3) -> list[list[bytes]]:
     """The verifier's own reference encoding of `W`: each segment's blocks, one segment per task."""
-    jobs = [(codec, params, salt, s, seg) for s, seg in enumerate(split(params, w))]
+    jobs = [(codec.name, params, salt, s, seg) for s, seg in enumerate(split(params, w))]
     with ProcessPoolExecutor(max_workers=workers) as pool:
         return list(pool.map(_encode_one, jobs))
 
 
-def _decode_one(job: tuple[Codec, Layout, bytes, str, dict[int, bytes]]) -> tuple[str, bytes]:
-    codec, lay, salt, name, blocks = job
-    return name, decode_tensor(lay, reference(lay.params), salt, name, blocks.__getitem__, codec)
+def _decode_one(job: tuple[str, Layout, bytes, str, dict[int, bytes]]) -> tuple[str, bytes]:
+    codec_name, lay, salt, name, blocks = job
+    return name, decode_tensor(lay, reference(lay.params), salt, name, blocks.__getitem__, _codec(codec_name))
 
 
 def reference_decode(lay: Layout, segments: list[list[bytes]], salt: bytes, names: list[str], workers: int,
                      codec: Codec = P3) -> dict[str, bytes]:
     """`verity_pous.layout.decode_tensor` of each of `names` from the encoded `segments`, one tensor per task."""
     n = lay.params.blocks_per_segment
-    jobs = [(codec, lay, salt, name, {i: segments[i // n][i % n] for i in lay.blocks(name)}) for name in names]
+    jobs = [(codec.name, lay, salt, name, {i: segments[i // n][i % n] for i in lay.blocks(name)}) for name in names]
     with ProcessPoolExecutor(max_workers=workers) as pool:
         return dict(pool.map(_decode_one, jobs))
 
