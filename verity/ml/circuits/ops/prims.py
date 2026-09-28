@@ -221,11 +221,18 @@ def E4m3ToF32(x: int) -> int:
 # ---- constants: one primitive per (width, bits), materialised on demand and decodable by id -------------------------------------------
 
 _CONSTS: dict[tuple[int, int], PrimitiveDefinition] = {}
+#: the constant family's ids, of which the decoder takes only the spelling `const` writes
+CONST_ID = r"^Const([1-9][0-9]*)\[0x([0-9a-f]+)\]_v1$"
 
 
 def const(w: int, bits: int) -> PrimitiveDefinition:
-    """`Const<w>[0x..] : () -> Value<w>`: a gate with a fixed correct output (a constant of the program)."""
-    if w == 1 and bits in (0, 1):
+    """`Const<w>[0x..] : () -> Value<w>`: a gate with a fixed correct output (a constant of the program), for w >= 1 and
+    0 <= bits < 2^w. Its id spells w in decimal and bits in lowercase hex zero-padded to w // 4 digits (`PROTOCOL.md` §9)."""
+    if isinstance(w, bool) or not isinstance(w, int) or w < 1:
+        raise ValueError(f"a constant has a width w >= 1, not {w!r}")
+    if isinstance(bits, bool) or not isinstance(bits, int) or not 0 <= bits < 1 << w:
+        raise ValueError(f"a {w}-bit constant is in [0, 2^{w}), not {bits!r}")
+    if w == 1:
         from verity.ml.circuits.boolean import constant
 
         return constant(bits)
@@ -245,7 +252,7 @@ ZERO32 = const(32, 0)
 def _register_lazy_families() -> None:
     from verity.ml.circuits.codec import register_lazy_family
 
-    register_lazy_family(r"^Const(\d+)\[0x([0-9a-fA-F]+)\]_v1$", lambda m: const(int(m[1]), int(m[2], 16)))
+    register_lazy_family(CONST_ID, lambda m: const(int(m[1]), int(m[2], 16)))
 
 
 _register_lazy_families()

@@ -15,6 +15,7 @@ from verity.ml.circuits import boolean as BL
 from verity.ml.circuits import codec
 from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, Registry, bind
 from verity.ml.circuits.evaluate import evaluate_call
+from verity.ml.circuits.ops import prims as P
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Coll, concat
 from verity.ml.circuits.types import Array, Record, Tuple, Value, type_from_json
@@ -59,6 +60,17 @@ PROGRAM = CompositeDefinition("ExampleAdd2Program", 1, (), lambda S: ADD2.signat
 
 WORD_VIEW_TYPES = [BIT, Array(16, BIT), Array(4, Array(16, BIT)), Tuple(Array(32, BIT), BIT, Array(2, Array(8, BIT))),
                    Record(("acc", Array(32, BIT)), ("mask", Array(3, BIT)))]
+#: gate ids and near misses: a member's one spelling, matched in full
+GATE_IDS = ["And2_v1", "Xor3_v1", "And10_v1", "Not_v1", "And2_v1\n", "Not_v1\n", "And02_v1", "Xor010_v1", "And1_v1", "And0_v1",
+            "and2_v1", "AND2_v1", "And2_v2", "And2", " And2_v1"]
+#: constant ids and near misses: `Const<w>[0x<hex>]_v1` as `prims.const` spells it (§9), its value below 2^w
+CONSTANT_IDS = ["Const1[0x0]_v1", "Const1[0x1]_v1", "Const32[0x3f800000]_v1", "Const16[0x3f80]_v1", "Const8[0xff]_v1",
+                "Const5[0x5]_v1", "Const5[0x1f]_v1", "Const6[0x3f]_v1", "Const64[0x0000000000000000]_v1",
+                "Const1[0x2]_v1", "Const8[0x100]_v1", "Const5[0x20]_v1", "Const32[0x100000000]_v1",
+                "Const1[0x00]_v1", "Const32[0x0]_v1", "Const32[0x03f800000]_v1", "Const16[0x0003f80]_v1", "Const5[0x05]_v1",
+                "Const5[0x01f]_v1", "Const32[0x3F800000]_v1", "Const32[0X3f800000]_v1", "Const01[0x1]_v1", "Const032[0x3f800000]_v1",
+                "Const0[0x0]_v1", "Const32[0x]_v1", "Const32[3f800000]_v1", "Const32[0x-1]_v1", "Const32[0x3f800000]_v2",
+                "Const32[0x3f800000]", "Const32[0x3f800000]_v1\n", "const32[0x3f800000]_v1"]
 
 
 def _words(bits: list[int], widths: list[int]) -> list[int]:
@@ -67,6 +79,24 @@ def _words(bits: list[int], widths: list[int]) -> list[int]:
         out.append(sum(b << j for j, b in enumerate(bits[i:i + w])))
         i += w
     return out
+
+
+def _by_id(fid: str) -> PrimitiveDefinition | None:
+    try:
+        return codec.lookup_primitive(REGISTRY, fid)
+    except (KeyError, ValueError):
+        return None
+
+
+def _gate_id(fid: str) -> list | None:
+    p = _by_id(fid)
+    k = BL.gate_kind(p) if p is not None else None
+    return list(k) if k else None
+
+
+def _constant_id(fid: str) -> list[int] | None:
+    p = _by_id(fid)
+    return [p.ret.to_json()[1], p.evaluate()] if p is not None and getattr(p, "family", None) == "Const" else None
 
 
 def build() -> dict:
@@ -87,6 +117,8 @@ def build() -> dict:
                    [[list(a), g.evaluate(*a)] for a in itertools.product((0, 1), repeat=BL.gate_kind(g)[1])]]
                   for g in (BL.AND, BL.XOR, BL.NOT, BL.and_gate(3), BL.xor_gate(3))],
         "constants": [[c.id, c.evaluate()] for c in BL.CONSTANTS],
+        "gate_ids": [[i, _gate_id(i)] for i in GATE_IDS],
+        "constant_ids": [[i, _constant_id(i)] for i in CONSTANT_IDS],
         "word_view": [[t.to_json(), BL.elements(t), BL.word_type(t).to_json()] for t in WORD_VIEW_TYPES],
         "program": {"descriptor": codec.canonical_json(desc).decode(), "program_digest": codec.program_digest(desc),
                     "is_boolean": BL.is_boolean(prog.root), "gates": gates, "words": table},
@@ -131,6 +163,27 @@ def test_an_n_input_gate_decodes_by_id():
     assert [g.prim for g in map(D.circuit.gate, range(D.circuit.size)) if g.prim.id != "Input1_v1"] == [BL.and_gate(5)]
     with pytest.raises(KeyError):
         codec.decode_program(json.loads(text.replace("And5_v1", "And05_v1")), Registry())
+
+
+def test_a_family_member_has_one_spelling(pinned):
+    """A gate or constant id decodes only as the member's own id: a near miss of the pattern, a value of 2^w or more, and
+    every other spelling of the hex or the width are refused, in the decoder too."""
+    assert [i for i, k in pinned["gate_ids"] if k] == ["And2_v1", "Xor3_v1", "And10_v1", "Not_v1"]
+    assert [i for i, c in pinned["constant_ids"] if c] == CONSTANT_IDS[:9]
+    for fid, wb in pinned["constant_ids"]:
+        if wb:
+            assert P.const(*wb).id == fid
+    for bad in ((1, 2), (8, 256), (0, 0), (8, -1), (True, 1), (8, True)):
+        with pytest.raises(ValueError):
+            P.const(*bad)
+    desc = json.loads(pinned["program"]["descriptor"])
+    for old, new in (("Const1[0x0]_v1", "Const1[0x00]_v1"), ("And2_v1", "And2_v1\n"), ("Xor3_v1", "Xor03_v1"),
+                     ("Input1_v1", "Input1_v1\n")):
+        d = json.loads(json.dumps(desc))
+        d["definitions"][new] = dict(d["definitions"].pop(old), id=new)
+        d["callees"][d["callees"].index(old)] = new
+        with pytest.raises(KeyError, match="is not in the registry"):
+            codec.decode_program(d, REGISTRY)
 
 
 def test_a_constant_bit_is_0_or_1():

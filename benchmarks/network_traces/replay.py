@@ -15,12 +15,11 @@ unit, so it gets its own `audit.Audit` and one clock:
 - **the ingress certifier** is a `grid.Certifier` at the report's r_in and τ_in. A frame is enqueued at the first ingress
   bucket boundary after it arrives (`calibration.size_ingress_ms`'s model);
 - **the published records** are the raw network certificates, their commitments (`commitment.commit`) and their network
-  certificates (`certificate.Issuer`), signed by `DigestSigner`;
+  certificates (`certificate.Issuer`), signed by `ReplaySigner`;
 - **the verifier** is `Audit.check_link` on egress and `Audit.check_ingress_link` on ingress, once on the raw records,
   once on the committed ones and once on the certified ones. The three must agree on every link-window.
 
-`DigestSigner` is a stand-in that anyone could forge: its signature is the message's SHA-512. The replay compares the
-audits' verdicts on record digests, and the certifier's certificate tests check signatures.
+`ReplaySigner` is a stand-in: real LMS signatures under a toy key (`REPLAY_LMS`), leaves reused, as no certifier may.
 
 A frame's content is its position in its link's canonical order, as 8 bytes (`REPLAY_FRAME_BYTES`), so the release
 bucket of every frame is read back from the records. Frames of the report's B (4 KiB) would hold gigabytes per window.
@@ -46,6 +45,7 @@ It writes `verdicts.jsonl`, one line per link-window, and `summary.json`.
 from __future__ import annotations
 
 import argparse
+import functools
 import gzip
 import hashlib
 import json
@@ -56,33 +56,47 @@ from collections.abc import Iterable, Sequence
 from fractions import Fraction
 from pathlib import Path
 
+from verity.ml.crypto import lms
 from verity.core.protocols.certifier import online
-from verity.core.protocols.certifier.audit import Audit
+from verity.core.protocols.certifier.lean_audit import Audit
 from verity.core.protocols.certifier.calibration import choose_syncs
-from verity.core.protocols.certifier.certificate import Direction, Issuer, parameters_digest
+from verity.core.protocols.certifier.certificate import Direction, Issuer, LmsKey, parameters_digest
 from verity.core.protocols.certifier.commitment import commit
 from verity.core.protocols.certifier.grid import GridParams, Record, Certifier
 from verity.core.protocols.certifier.schedule import ClockSync, LogicalFrame, SyncSet, expected_grids, handing_buckets, run_shaper
 
 REPLAY_FRAME_BYTES = 8
+REPLAY_LMS = lms.Params(8, 2, 2, toy=True)
 PERCENTILES = (50, 99, 99.9)
 AUDITS = ("raw", "committed", "certified")
 
 
-class DigestSigner:
-    """The replay's signer and public key at once: the signature is the message's SHA-512, so anyone can forge it."""
+class ReplaySigner:
+    """The replay's signer: its n-th signature is at leaf n mod 2^H of the toy key (the module docstring)."""
 
-    key_id = hashlib.sha512(b"verity-network-traces/replay").digest()[:16]
+    def __init__(self) -> None:
+        self.key, self.n = _replay_key(), 0
+
+    @property
+    def key_id(self) -> bytes:
+        return self.key.I
+
+    def public_key(self) -> LmsKey:
+        return LmsKey(self.key.params, lms.public_key(self.key))
 
     def sign(self, message: bytes) -> bytes:
-        return hashlib.sha512(message).digest()
-
-    def verify(self, message: bytes, signature: bytes) -> bool:
-        return signature == hashlib.sha512(message).digest()
+        self.n += 1
+        return lms.sign_at(self.key, (self.n - 1) % 2 ** self.key.params.H, message).encode()
 
 
-def certify(records: Sequence[Record], direction: Direction, params: GridParams, parameters: bytes) -> list:
-    issuer = Issuer(DigestSigner())
+@functools.cache
+def _replay_key() -> lms.PrivateKey:
+    return lms.keygen(REPLAY_LMS, hashlib.sha512(b"verity-network-traces/replay").digest()[:REPLAY_LMS.N])
+
+
+def certify(records: Sequence[Record], direction: Direction, params: GridParams, parameters: bytes,
+            signer: ReplaySigner) -> list:
+    issuer = Issuer(signer)
     return [c for r in records if (c := issuer.certify(r, direction, params, parameters)) is not None]
 
 
@@ -172,15 +186,17 @@ def diagnose(w: int, buckets: int, own_late: int, deviating: Sequence[tuple[int,
 
 
 def replay_configuration(cfg: dict, setup: Setup, syncs: str = "hindsight", prior: Sequence[online.Past] = (),
-                         lag: int = 0) -> tuple[list[dict], dict, list[online.Past]]:
+                         lag: int = 0, *, audit=Audit) -> tuple[list[dict], dict, list[online.Past]]:
     """One configuration through prover, shaper, certifier, records and audit, raw, committed and certified. The prover's
     syncs are `syncs` (`parse_sync_policy`), and an online rule starts from `prior` and reads the frames ready by `lag`
-    buckets before each window (`online.declare`). Returns one row per link-window, the configuration's tallies and the
-    online prover's history (empty for the other policies)."""
+    buckets before each window (`online.declare`). The verifier is `audit` (a class with `audit.Audit`'s interface).
+    Returns one row per link-window, the configuration's tallies and the online prover's history (empty for the other
+    policies)."""
     sync_set = setup.sync_set
     eager = ClockSync(min(sync_set.deltas), max(sync_set.rhos))
-    raw, committed, certified = Audit(), Audit(), Audit()
-    key = DigestSigner()
+    raw, committed, certified = audit(), audit(), audit()
+    signer = ReplaySigner()
+    key = signer.public_key()
     rows: list[dict] = []
     tally = new_tally()
     run = cfg.get("labels", {}).get("run")
@@ -214,7 +230,7 @@ def replay_configuration(cfg: dict, setup: Setup, syncs: str = "hindsight", prio
         own_late = Counter(f.anchor // T for f, h, r in zip(frames, logical, ready, strict=True) if r > h)
         records = run_shaper(frames, ready, syncs, Certifier(name, params))
         published = [commit(r, params) for r in records]
-        signed = certify(records, Direction.EGRESS, params, parameters_digest(params, sync_set))
+        signed = certify(records, Direction.EGRESS, params, parameters_digest(params, sync_set), signer)
         v_raw = raw.check_link(name, records, frames, syncs, sync_set, params)
         v_com = committed.check_link(name, published, frames, syncs, sync_set, params)
         v_cer = certified.check_link(name, signed, frames, syncs, sync_set, params, key=key)
@@ -272,7 +288,7 @@ def replay_configuration(cfg: dict, setup: Setup, syncs: str = "hindsight", prio
             if (t + 1) % params.buckets == 0:
                 records.append(certifier.close_window())
         published = [commit(r, params) for r in records]
-        signed = certify(records, Direction.INGRESS, params, parameters_digest(params))
+        signed = certify(records, Direction.INGRESS, params, parameters_digest(params), signer)
         v_raw = raw.check_ingress_link(name, records, windows)
         v_com = committed.check_ingress_link(name, published, windows)
         v_cer = certified.check_ingress_link(name, signed, windows, key=key, params=params)

@@ -347,6 +347,9 @@ REFUSE = [
     ("a gate declared with another parameter name",
      lambda d: d["definitions"][_first_gate(d)]["params"][0].__setitem__(0, "y"), None),
     ("a gate id with a leading zero", lambda d: _rename(d, _first_gate(d), _first_gate(d).replace("2", "02").replace("3", "03")), None),
+    ("a gate id with a trailing newline", lambda d: _rename(d, _first_gate(d), _first_gate(d) + "\n"), None),
+    ("Not_v1 with a trailing newline", lambda d: _rename(d, "Not_v1", "Not_v1\n"), None),
+    ("an Input id with a trailing newline", lambda d: _rename(d, "Input1_v1", "Input1_v1\n"), None),
     ("an unknown primitive", lambda d: _rename(d, _first_gate(d), "Or2_v1"), None),
     ("a constant declared with a parameter", lambda d: _rename(d, "Not_v1", "Const1[0x3]_v1"), None),
     ("a forward reference", _forward, None),
@@ -463,7 +466,7 @@ def test_refusals(server):
         d, x = _mutated(desc, [[0] * n for n in leaves], k)
         assert "reject" in python_answer(d, x), label
         cases.append(request(d, x))
-    assert agree(server, cases) == (0, len(cases)) == (0, 17)
+    assert agree(server, cases) == (0, len(cases)) == (0, 20)
 
 
 def test_a_registered_input_binds_like_a_run_input(server):
@@ -614,15 +617,15 @@ def test_constants(server):
     assert agree(server, cases) == (len(cases), 0) == (41, 0)
 
 
-#: renamings of a constant both sides read alike: `^Const(\d+)\[0x([0-9a-fA-F]+)\]_v1$` takes either case, leading zeros in
-#: the width and the bits, and bits beyond the width, which the gate outputs as they are; and those both refuse
+#: renamings of a constant both sides read alike: only the spelling `prims.const` gives a member (`PROTOCOL.md` §9) is read,
+#: so a short, uppercase or zero-led hex, a zero-led width and bits beyond the width are refused, as is every malformed id
 CONST_IDS = [
-    ("Const32[0x5]_v1", None, [5]),
-    ("Const32[0xABCDEF01]_v1", None, [0xABCDEF01]),
-    ("Const032[0x00000005]_v1", None, [5]),
-    ("Const32[0x1ffffffff]_v1", None, [0x1FFFFFFFF]),
-    ("Const1[0x2]_v1", ["Value", 1], [2]),
     ("Const16[0x8000]_v1", ["Value", 16], [0x8000]),
+    ("Const32[0x5]_v1", None, None),
+    ("Const32[0xABCDEF01]_v1", None, None),
+    ("Const032[0x00000005]_v1", None, None),
+    ("Const32[0x1ffffffff]_v1", None, None),
+    ("Const1[0x2]_v1", ["Value", 1], None),
     ("Const32[0x]_v1", None, None),
     ("Const[0x1]_v1", None, None),
     ("Const32[1]_v1", None, None),
@@ -648,7 +651,7 @@ def test_constant_ids(server):
         assert got == {"output": want} if want is not None else "reject" in got, (new, got)
         cases.append(request(d, []))
     outputs = sum(w is not None for _, _, w in CONST_IDS)
-    assert agree(server, cases) == (outputs, len(cases) - outputs) == (6, 10)
+    assert agree(server, cases) == (outputs, len(cases) - outputs) == (1, 15)
 
 
 # ---- E2: the FP32 and BF16 arithmetic and the casts ---------------------------------------------------------------------
@@ -1900,7 +1903,8 @@ def test_gelu_v3_reads_the_registered_table(server):
 
 def test_tables_bound_otherwise_are_refused(server):
     """A table named for a run input, for a parameter of another size, by a name no table has, or in an object with another
-    key; and a table read too wide for a row (`TableRead5x1`), with too many index bits or an entry that splits a row."""
+    key; and a table read too wide for a row (`TableRead5x1`), with too many index bits or an entry that splits a row, or
+    spelled with a zero-led number."""
     desc = json.loads(_with_table_text("TanhF32Rn_v2", 2))
     run = copy.deepcopy(desc)
     run["callees"] = ["Input16_v1" if c == "RegisteredInput16_v1" else c for c in run["callees"]]
@@ -1910,11 +1914,12 @@ def test_tables_bound_otherwise_are_refused(server):
              request(desc, [[0, 0], {"table": "tanh"}]),
              request(desc, [[0, 0], {"table": "tanh_rn", "rows": 1}]),
              request(desc, [[0, 0], {"name": "tanh_rn"}])]
-    for fid in ("TableRead5x1_v1", "TableRead33x1_v1", "TableRead0x64_v1", "TableRead6x3_v1"):
+    for fid in ("TableRead5x1_v1", "TableRead33x1_v1", "TableRead0x64_v1", "TableRead6x3_v1", "TableRead06x1_v1",
+                "TableRead6x01_v1"):
         d = copy.deepcopy(json.loads(_batch_text("TableRead6x1_v1", 1)))
         _rename(d, "TableRead6x1_v1", fid)
         cases.append(request(d, [[0], [0] * 64]))
-    assert agree(server, cases) == (0, len(cases)) == (0, 9)
+    assert agree(server, cases) == (0, len(cases)) == (0, 11)
 
 
 #: the lazy families on their one-call Programs: table reads of each index width and entry size up to a row, and gathers of

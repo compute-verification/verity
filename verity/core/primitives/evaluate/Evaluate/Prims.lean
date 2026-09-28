@@ -58,18 +58,23 @@ private def arity? (pre id : String) : Option Nat :=
 private def hexDigit? (c : Char) : Option Nat :=
   if c.isDigit then some (c.toNat - '0'.toNat)
   else if 'a' ≤ c ∧ c ≤ 'f' then some (c.toNat - 'a'.toNat + 10)
-  else if 'A' ≤ c ∧ c ≤ 'F' then some (c.toNat - 'A'.toNat + 10)
   else none
 
-/-- `(w, bits)` of the constant family's id, `^Const(\d+)\[0x([0-9a-fA-F]+)\]_v1$` (`prims._register_lazy_families`):
-`int(m[1])` and `int(m[2], 16)`, leading zeros and either case allowed. -/
+/-- `(w, bits)` of the constant family's id in the one spelling `prims.const(w, bits)` gives it and the decoder takes
+(`verity/ml/circuits/PROTOCOL.md` §9, `prims.CONST_ID`): `Const<w>[0x<h>]_v1` with `w ≥ 1` in decimal without a leading
+zero, `bits < 2^w`, and `h` the lowercase hex of `bits` zero-padded to `w / 4` digits, at least one
+(`f"{bits:0{w // 4}x}"`). -/
 def constId? (id : String) : Option (Nat × Nat) := do
   guard (id.startsWith "Const" && id.endsWith "]_v1")
   let inner := ((id.drop 5).dropEnd 4).toString
   let [w, hex] := inner.splitOn "[0x" | none
-  guard (w.length > 0 && w.all Char.isDigit && hex.length > 0)
+  guard (w.length > 0 && w.all Char.isDigit && w.front != '0' && hex.length > 0)
+  let w ← w.toNat?
   let bits ← hex.toList.foldlM (fun acc c => (acc * 16 + ·) <$> hexDigit? c) 0
-  return (← w.toNat?, bits)
+  let ds := Nat.toDigits 16 bits
+  guard (bits >>> w == 0 && hex.length == max (w / 4) ds.length
+    && hex.toList == List.replicate (hex.length - ds.length) '0' ++ ds)
+  return (w, bits)
 
 private def bit := Ty.value 1
 private def f32 := Ty.value 32
@@ -255,11 +260,12 @@ def activations : List (String × Array (String × Ty) × Ty × (Array Nat → N
    ("TanhF32Rn_v1", #[("x", f32)], f32, unary tanhF32), ("GeluTanhMulBf16_v1", gu, bf16, binary geluTanhMulBf16),
    ("GeluErfBf16_v1", #[("x", bf16)], bf16, unary geluErfBf16)]
 
-private def digits? (s : String) : Option Nat := if s.length > 0 && s.all Char.isDigit then s.toNat? else none
+/-- A number in canonical decimal, as `str(n)` writes it: the decoder takes a family member only by the id its maker gives it. -/
+private def digits? (s : String) : Option Nat := s.toNat?.filter (toString · == s)
 
 /-- The lazy families by id, `^TableRead(\d+)x(\d+)_v1$` (`tables.table_read`, which refuses an index width and entry size
 that do not fill rows of 64 words), `^GatherBf16x(\d+)_v1$` (`prims.gather_bf16`) and `^GatherF32x(\d+)_v1$`
-(`ref_prims.gather_f32`), with the signatures their makers give them. -/
+(`ref_prims.gather_f32`), each number in canonical decimal, with the signatures their makers give them. -/
 def lazyFamily? (id : String) : Option (Prim × Array (String × Ty) × Ty) := do
   guard (id.endsWith "_v1")
   let s := (id.dropEnd 3).toString

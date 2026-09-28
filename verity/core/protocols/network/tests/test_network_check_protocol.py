@@ -299,8 +299,26 @@ def _grid_json(g: GridParams) -> dict:
             "queue_capacity": g.queue_capacity}
 
 
+@dataclasses.dataclass
+class Drawn:
+    """A generated spatial unit before it is encoded: the change `m` (drawn with `n`), its parameters as JSON, the
+    certified records, each link-window's raw record and grid by `(direction, link, window)`, the egress links' frames and
+    syncs, and the link-window the change aims at (`target`, and an egress one, `egress_target`, when there is one)."""
+
+    m: str
+    n: int
+    params: dict
+    records: list[CertifiedRecord]
+    raws: dict[tuple[str, str, int], tuple[Record, GridParams]]
+    egress: list[str]
+    frames: dict[str, list[LogicalFrame]]
+    syncs: dict[str, list[ClockSync]]
+    target: tuple[str, str, int]
+    egress_target: tuple[str, int] | None
+
+
 @st.composite
-def cases(draw, only: tuple[str, ...] = tuple(MUTATIONS)) -> dict:
+def units(draw, only: tuple[str, ...] = tuple(MUTATIONS), need_egress: bool = False) -> Drawn:
     m = draw(st.sampled_from(only))
     n = draw(st.integers(0, 1 << 16))
     carries = m in ("late", "frames")
@@ -314,7 +332,7 @@ def cases(draw, only: tuple[str, ...] = tuple(MUTATIONS)) -> dict:
     ss = SyncSet(tuple(deltas), tuple(rhos))
     names = draw(st.permutations(["a", "b", "c", "dé"]))
     ne = draw(st.integers(2 if m in ("advice-unit", "replay-link") else
-                          1 if m in ("late", "frames", "advice-outside", "replay-direction") else 0, 2))
+                          1 if need_egress or m in ("late", "frames", "advice-outside", "replay-direction") else 0, 2))
     ni = draw(st.integers(1 if m in ("ingress-grid", "replay-direction") else 0, 2))
     if ne + ni == 0:
         ne = 1
@@ -387,9 +405,11 @@ def cases(draw, only: tuple[str, ...] = tuple(MUTATIONS)) -> dict:
     signer = _Signer(key)
     issuer = Issuer(signer)
     records: list[CertifiedRecord] = []
+    raws: dict[tuple[str, str, int], tuple[Record, GridParams]] = {}
 
     def certify(record, direction, g, parameters):
         lw = (direction.value, record.link, record.window)
+        raws[lw] = (record, g)
         signer.refuse = lw in refuse
         r = issuer.certify(record, direction, g, parameters, deadline=lw not in unsettled)
         if r is not None:
@@ -458,6 +478,7 @@ def cases(draw, only: tuple[str, ...] = tuple(MUTATIONS)) -> dict:
         empty = tuple((None,) * grid.allocation for _ in range(grid.buckets))
         extra = draw(st.sampled_from([Record("zz", 0, empty, COMPLETE), Record(tl, W, empty, COMPLETE)]))
         r = issuer.certify(extra, draw(st.sampled_from([EGRESS, INGRESS])), grid, parameters_digest(grid, ss))
+        raws[(r.direction.value, extra.link, extra.window)] = (extra, grid)
         records.insert(n % (len(records) + 1), r)
     if m == "shuffled" or draw(st.booleans()):
         records = draw(st.permutations(records))
@@ -467,14 +488,21 @@ def cases(draw, only: tuple[str, ...] = tuple(MUTATIONS)) -> dict:
                    "key": lms.public_key(key).hex(), "lms": {"H": KEYS[ki][2], "N": KEYS[ki][0], "W": KEYS[ki][1],
                                                               "toy": KEYS[ki][3]},
                    "sync_set": {"deltas": deltas, "rhos": [[r.numerator, r.denominator] for r in rhos]}, "windows": W}
-    case_commitment = b"".join(encode(r) for r in records)
-    case_evidence = {"links": [{"frames": [[f.payload.hex(), f.anchor, f.index] for f in frames[l]],
-                                "syncs": [_sync_json(s) for s in syncs[l]]} for l in egress]}
-    case_evidence = D.canonical(case_evidence).encode()
+    return Drawn(m, n, case_params, list(records), raws, egress, frames, syncs, target, egress_target)
+
+
+def evidence_bytes(d: Drawn) -> bytes:
+    return D.canonical({"links": [{"frames": [[f.payload.hex(), f.anchor, f.index] for f in d.frames[l]],
+                                   "syncs": [_sync_json(s) for s in d.syncs[l]]} for l in d.egress]}).encode()
+
+
+def malformed(draw, m: str, n: int, case_params: dict, case_commitment: bytes, case_evidence: bytes, bad_commitments) -> dict:
+    """The case, with the change `m` makes to its framing: bad parameters, commitment (one of `bad_commitments()`),
+    evidence or case."""
     if m == "params":
         case_params = draw(st.sampled_from(_bad_params(case_params, n)))
     elif m == "commitment":
-        case_commitment = draw(st.sampled_from(_bad_commitments(case_commitment, records, n)))
+        case_commitment = draw(st.sampled_from(bad_commitments()))
     elif m == "evidence":
         case_evidence = draw(st.sampled_from(_bad_evidence(case_evidence, n)))
     case = {"commitment": case_commitment.hex(), "evidence": case_evidence.hex(), "params": case_params}
@@ -482,7 +510,15 @@ def cases(draw, only: tuple[str, ...] = tuple(MUTATIONS)) -> dict:
         case = draw(st.sampled_from([case | {"commitment": case["commitment"].upper() or "0"},
                                      case | {"evidence": case["evidence"] + "0"},
                                      {k: v for k, v in case.items() if k != "params"}]))
-    TAGS[D.canonical(case)] = m
+    return case
+
+
+@st.composite
+def cases(draw, only: tuple[str, ...] = tuple(MUTATIONS)) -> dict:
+    d = draw(units(only))
+    c = b"".join(encode(r) for r in d.records)
+    case = malformed(draw, d.m, d.n, d.params, c, evidence_bytes(d), lambda: _bad_commitments(c, d.records, d.n))
+    TAGS[D.canonical(case)] = d.m
     return case
 
 

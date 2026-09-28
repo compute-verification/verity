@@ -16,9 +16,11 @@ content and order. Conventions follow POUS's package (`verity/core/protocols/pou
                                Program it gives (constantRate)
 ../../Models/NetworkCertifier/Assumptions.lean     trusted: the named hypotheses W2–W6 (W4's allocation among them), J, and Theorem 3's two
                                dataflow conditions
-../../Models/NetworkCertifier/Guarantees.lean      trusted: each guarantee as a `def G : Prop` (Proposition 2, Theorem 1(b), Theorem 3,
-                               Theorem 3 for the constant-rate Program, the ingress bound)
-../NetworkCertifier.lean  proved: `SecurityProofs.G : Guarantees.G` for each guarantee, from the lemmas below
+../../Models/NetworkCertifier/Guarantees.lean      trusted: each guarantee as a `def G : Prop` (Proposition 2, Theorem 3, Theorem 3 for
+                               the constant-rate Program, the ingress bound)
+Lemmas.lean     the statements that are only steps of the guarantees' proofs, Theorem 1(b) among them,
+                               each a `def G : Prop` under the same namespace (`Guarantees.G`)
+../NetworkCertifier.lean  proved: `SecurityProofs.G : Guarantees.G` for each guarantee and lemma, from the modules below
 Occupancy.lean  Proposition 2 (the occupancy counts, fill, and the FIFO certifier's tightness)
 Counting.lean   Theorem 1(b) (the tree lemma on accepted runs, zero error, W6 on accepted runs)
 Advice.lean     Theorem 3 (the 2^A cap, one clock-sync value per window, the fixed clock, the
@@ -125,14 +127,30 @@ that bound exactly, below the 27 of `r = S` (`allocated_witness_tight`), so `All
 
 ## The records
 
-The lock (`lean-audit.json`'s `guarantees`) holds four guarantees: the theorems whose bounds the calibration reports
-(`verity.core.protocols.certifier.calibration`, `PROTOCOL.md`'s "Capacity"), each listed as `NetTiming.SecurityProofs.G` and
-proved by the lemma of the same statement whose name it spells in UpperCamelCase:
+The lock (`lean-audit.json`'s `guarantees`) holds the 22 statements of `Guarantees.lean`, each listed as
+`NetTiming.SecurityProofs.G` and proved by the lemma of the same statement whose name it spells in UpperCamelCase. All 22
+are under `shape.frozen` as `frozen (no-function)`: each is stated over the model (an arbitrary `Interaction`, an abstract
+`Program`'s `AccSeqs`, `expectedRow`, or the grids themselves), not over the network check's code, and an accepted run
+reaches them through `AcceptedRunsAreProgramRuns`. Four are the theorems whose bounds the calibration reports
+(`verity.core.protocols.certifier.calibration`, `PROTOCOL.md`'s "Capacity"):
 
 - egress, for the shipped schedule (`NetTiming.SecurityProofs.Schedule`, `NetTiming.SecurityProofs.PerWindow`):
   `EncardDecodableLeConstantRate` and `EncardDecodableLeConstantRatePerWindow`;
 - ingress, the K charge (`NetTiming.SecurityProofs.Ingress`, `NetTiming.SecurityProofs.PerWindow`):
   `EncardIngressObsDecodableLe` and `EncardIngressObsDecodableLePerWindow`.
+
+The other 18 are the rest of the Capacity table's bounds and the schedule's causality rule:
+
+- **Proposition 2** (`NetTiming.SecurityProofs.Occupancy`): `CardFree`, `CardLeftPacked`, `CardCountsEqLe`,
+  `EncardFifoGridsLeOfAvailable`, `EncardFifoGrids`.
+- **Theorem 3** (`NetTiming.SecurityProofs.Advice`): `EncardAccSeqsLeSync`, `EncardAccSeqsLeFixedClock`,
+  `EncardAccSeqsLeBlocks`, `EncardAccSeqsLeBlocksCounts`.
+- **Theorem 3 for the constant-rate Program** (`NetTiming.SecurityProofs.Schedule`, `NetTiming.SecurityProofs.PerWindow`):
+  `EncardAccSeqsLeConstantRate`, `EncardAccSeqsLeConstantRateFixedClock`, `ExpectedRowCausal`,
+  `EncardAccSeqsLeConstantRateWindows`, `EncardAccSeqsLeConstantRatePerWindow`.
+- **The ingress bound** (`NetTiming.SecurityProofs.Ingress`, `NetTiming.SecurityProofs.PerWindow`):
+  `EncardIngressDecodableLe`, `EncardIngressObsDecodableLeContents`, `EncardIngressDecodableLeContents`,
+  `EncardIngressObsDecodableLeContentsPerWindow`.
 
 **The program's agreements, proved and audited, not guarantees.** Four theorems tie the difftest to these definitions
 (`NetTiming.SecurityProofs.Code`): the difftest holds the Python audit
@@ -154,23 +172,16 @@ They aren't guarantees because `four_names` holds every `NetTiming` guarantee to
 and a `Guarantees` module can't state them: it would have to import the program. They are built and checked like every
 declaration, and no citation may call them guarantees.
 
-**Proved and audited, not guarantees.** The other 31 statements in `Guarantees.lean` are lemmas: nothing relies on them
-as proved (README "Glossary"), so they have no record. Each is still `SecurityProofs.G : Guarantees.G`, built and checked
-like every declaration:
+**Proved and audited, not guarantees.** The 13 statements that are only steps of these proofs are lemmas, in
+`Lemmas.lean` under their old names (`Guarantees.G`): nothing relies on them as proved (README "Glossary"), so they have
+no record. Each is still `SecurityProofs.G : Guarantees.G`, built and checked like every declaration:
 
-- **Proposition 2** (`NetTiming.SecurityProofs.Occupancy`): `CardFree`, `CardLeftPacked`, `FillInjective`,
-  `ExistsFillOfLeftPacked`, `CardCountsEqLe`, `CardCountsLeLe`, `SumReleasedLe`, `EncardFifoGridsLeOfAvailable`,
-  `ReleasedSelf`, `EncardFifoGrids`.
+- **Proposition 2** (`NetTiming.SecurityProofs.Occupancy`): `FillInjective`, `ExistsFillOfLeftPacked`, `CardCountsLeLe`,
+  `ReleasedSelf`, `SumReleasedLe`.
 - **Theorem 1(b)** (`NetTiming.SecurityProofs.Counting`): `EncardLeProdOfBranching`, `EncardAcceptedRunsLe`,
   `EncardObsDecodableLe`, `EncardDecodableLe`, `NoFaultOfAccepted`.
-- **Theorem 3** (`NetTiming.SecurityProofs.Advice`): `RecordedRowEqFill`, `EncardAccSeqsLeAdvice`, `EncardAccSeqsLeSync`,
-  `EncardAccSeqsLeFixedClock`, `EncardAccSeqsLeBlocks`, `EncardAccSeqsLeBlocksCounts`, `EncardDecodableLeBlocks`.
-- **Theorem 3 for the constant-rate Program** (`NetTiming.SecurityProofs.Schedule`): `EncardAccSeqsLeConstantRate`,
-  `EncardAccSeqsLeConstantRateFixedClock`, `ExpectedRowCausal`, `EncardAccSeqsLeConstantRateWindows`.
-- **The ingress bound** (`NetTiming.SecurityProofs.Ingress`): `EncardIngressDecodableLe`,
-  `EncardIngressObsDecodableLeContents`, `EncardIngressDecodableLeContents`.
-- **Per window** (`NetTiming.SecurityProofs.PerWindow`): `EncardAccSeqsLeConstantRatePerWindow`,
-  `EncardIngressObsDecodableLeContentsPerWindow`.
+- **Theorem 3** (`NetTiming.SecurityProofs.Advice`): `RecordedRowEqFill`, `EncardAccSeqsLeAdvice`,
+  `EncardDecodableLeBlocks`.
 
 So are the 16 witnesses, checked tests rather than guarantees, under their own names (`NetTiming.SecurityProofs.Sanity`,
 and the last three in `NetTiming.SecurityProofs.Schedule`):
@@ -187,7 +198,7 @@ ingress bound's statements were frozen before their proofs as well; the review o
 that added them (danielreuter/verity#894), and the review of the content versions is on the one stacked on it. The
 constant-rate Program's five statements and the definitions they read were frozen on `sorry` stubs and recorded before
 their proofs. Their statement review, on danielreuter/verity#949, gave GO with one change: the four counts take
-`n ≤ W·T`. All 35 statements and 16 witnesses are proved. The reference
+`n ≤ W·T`. All 35 statements (22 guarantees, 13 lemmas) and 16 witnesses are proved. The reference
 implementation, `verity/core/protocols/certifier` (`verity.core.protocols.certifier`), mirrors 19 of the statements and the three
 lemmas by name in its tests; its `PROTOCOL.md` lists them per test file. The witnesses have no Python counterpart.
 

@@ -1,5 +1,5 @@
 name = "network_check"
-defaultTargets = ["NetworkCheck", "network-check-difftest", "network-check"]
+defaultTargets = ["NetworkCheck", "network-check-difftest", "network-check", "network-records"]
 
 [leanOptions]
 autoImplicit = false
@@ -38,3 +38,7 @@ root = "NetworkCheck.DifftestMain"
 [[lean_exe]]
 name = "network-check"
 root = "NetworkCheck.Main"
+
+[[lean_exe]]
+name = "network-records"
+root = "NetworkCheck.RecordsMain"

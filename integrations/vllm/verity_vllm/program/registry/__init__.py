@@ -61,7 +61,7 @@ def _register_lazy_families() -> None:
         from verity_vllm.program.registry import topp_word_gates
         return topp_word_gates
 
-    register_lazy_family(r"^Const(\d+)\[0x([0-9a-fA-F]+)\]_v1$", lambda m: _b1().const(int(m[1]), int(m[2], 16)))
+    register_lazy_family(r"^Const([1-9][0-9]*)\[0x([0-9a-f]+)\]_v1$", lambda m: _b1().const(int(m[1]), int(m[2], 16)))  # prims.CONST_ID
     register_lazy_family(r"^GatherBf16x(\d+)_v1$", lambda m: _prims().gather_bf16(int(m[1])))
     # [R15 stoch] the top-p keep word (one per vocabulary; [R16] the split count S is its i32 `splits` OPERAND) and the bit extractor
     register_lazy_family(r"^TopPMaskWordx(\d+)_v1$", lambda m: _sampling().topp_mask_word(int(m[1])))
