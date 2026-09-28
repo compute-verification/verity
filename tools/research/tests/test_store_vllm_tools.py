@@ -278,7 +278,26 @@ def no_dirty_digest(monkeypatch):
     monkeypatch.setattr(E, "_dirty_digest", lambda root: None)
 
 
-@pytest.mark.usefixtures("no_dirty_digest")
+PINNED = {"hw.family": "l40s", "torch": "2.9.0", "vllm": "0.11.0"}
+
+
+@pytest.fixture
+def pinned_probes(monkeypatch):
+    """The probes behind the key conditions answer as an L40S host with the workload interpreter's torch and vllm: `hw.family`
+    (nvidia-smi) and the vLLM Tools' own `tool.vllm.<stage>.torch|vllm` (a `$PY` subprocess). Each probe gives None when it
+    times out, so on a loaded machine one of two identical requests could see None and get another derivation (train T640's
+    `check` on vy-nebius-1, 1 Oct 2026). Pinned to values, not None, so a caller that skips a probe gets another derivation."""
+    from research import env as E
+    monkeypatch.setattr(E, "_nvidia_smi", lambda: {"hw.sku": "NVIDIA L40S", "hw.count": 1, "hw.vram_mb": 46068, "rt.driver": None, "rt.cuda": None})
+    for stage in ("build", "match", "commit", "replay"):
+        monkeypatch.setattr(tools_registry.load(f"vllm.{stage}", REPO), "conditions", lambda env: {"torch": PINNED["torch"], "vllm": PINNED["vllm"]})
+
+
+def _pinned(stage: str) -> dict:
+    return {"hw.family": PINNED["hw.family"], f"tool.vllm.{stage}.torch": PINNED["torch"], f"tool.vllm.{stage}.vllm": PINNED["vllm"]}
+
+
+@pytest.mark.usefixtures("no_dirty_digest", "pinned_probes")
 def test_run_input_by_artifact_id_enters_the_derivation(tmp_path, monkeypatch):
     """`research run --tool vllm.match --input build=art:...`: a store id names the input directly; it lands in `inputs`
     (hence the derivation), not as a hashed path."""
@@ -294,6 +313,7 @@ def test_run_input_by_artifact_id_enters_the_derivation(tmp_path, monkeypatch):
     prep = RC._prepare_store(ns, a, cmd, "r20260922-000000-0001", tmp_path / "run")
     sec = prep["section"]
     assert "error" not in sec, sec
+    assert {k: sec["conditions"][k] for k in sec["key_conditions"]} == _pinned("match")
     assert sec["inputs"] == {"build": art} and "input.build" not in sec["key_params_resolved"]
     other = RC._prepare_store(ns, a, cmd, "r20260922-000000-0002", tmp_path / "run2")["section"]
     assert other["derivation"] == sec["derivation"], "same tool, params, inputs, conditions: same derivation"
@@ -304,7 +324,7 @@ def test_run_input_by_artifact_id_enters_the_derivation(tmp_path, monkeypatch):
     assert ref["artifact"] == art and ref["sha256"] is None and "store id" in ref["sha256_reason"]
 
 
-@pytest.mark.usefixtures("no_dirty_digest")
+@pytest.mark.usefixtures("no_dirty_digest", "pinned_probes")
 def test_lookup_computes_the_derivation_the_runner_records(tmp_path, monkeypatch, capsys):
     """`research data lookup --tool vllm.build -- ARGV` fills the Tool's own key conditions (`tool.vllm.build.torch|vllm`, its probe) the
     way `research run --tool` records them, so the derivation it looks up is the one an attempt was published under."""
@@ -322,6 +342,7 @@ def test_lookup_computes_the_derivation_the_runner_records(tmp_path, monkeypatch
     assert rc == 0
     doc = json.loads(capsys.readouterr().out)
     assert doc["derivation"] == sec["derivation"], (doc["key_conditions"], {k: sec["conditions"].get(k) for k in doc["key_conditions"]})
+    assert doc["key_conditions"] == _pinned("build"), "lookup fills hw.family and the Tool's own probe"
     assert doc["attempts"] == [] and doc["key_params"]["row"] == ROW
 
 
