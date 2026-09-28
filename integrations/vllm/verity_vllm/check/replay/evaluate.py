@@ -218,6 +218,8 @@ def _replay_vu(pi: ProgramIndex, store: CommittedStore, weights: Callable[[str, 
             alias = _tp_member_alias(got, member)
             if alias is None and d.get("copies") and len(got) == 1:
                 alias = next(iter(got.values()))                                 # [F-r19-int-24] `<experts>/out` = the MoeSum relation's one output
+            if alias is None and len(d["members"]) == 1 and len({id(v) for v in got.values()}) == 1:
+                alias = next(iter(got.values()))                                 # a one-output relation's words ARE the row's one member, however spelt
             if alias is not None:
                 got[member] = alias
         if member not in got:
