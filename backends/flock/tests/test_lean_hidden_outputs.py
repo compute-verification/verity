@@ -98,3 +98,22 @@ def test_a_tail_with_no_unit_is_refused(store, tmp_path):
     p = subprocess.run([str(BIN), "statement", "--statement", SETS["flat", "gemm-coordinate"], "--circuit", str(bad),
                         "--public", str(d / "pub-4.bin")], capture_output=True, text=True)
     assert p.returncode == 1 and "units_per_vu is 0: a VU of no unit" in p.stdout, (p.stdout, p.stderr)
+
+
+def test_a_block_with_no_vu_is_refused(store, tmp_path):
+    """`vus_per_block = 0` is refused as the circuit is read (PROTOCOL.md §16.10, D9; the Rust side is `circuit.rs`'s
+    `a_block_with_no_vu_is_refused`). Flat GEMM's tail returns the outputs, so its unit count need not be a power of two;
+    the rest is kept consistent: every range has no slot."""
+    d = store / "flat" / "gemm-coordinate" / "stage"
+    head, meta, rest = (d / "circuit.txt").read_text().split("\n", 2)
+    m = json.loads(meta[len("META "):])
+    assert m["vus_per_block"] > 0 and m["out_net"] != "unit"
+    m["vus_per_block"] = 0
+    for r in m["ranges"]:
+        if r["type"] == "unit":
+            r["count"] = 0
+    bad = tmp_path / "circuit.txt"
+    bad.write_text(head + "\nMETA " + json.dumps(m, sort_keys=True, separators=(",", ":")) + "\n" + rest)
+    p = subprocess.run([str(BIN), "statement", "--statement", SETS["flat", "gemm-coordinate"], "--circuit", str(bad),
+                        "--public", str(d / "pub-4.bin")], capture_output=True, text=True)
+    assert p.returncode == 1 and "vus_per_block is 0: a block of no VU" in p.stdout, (p.stdout, p.stderr)

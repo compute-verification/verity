@@ -81,7 +81,7 @@ theorem setupTables_retain (hh : tags.hiddenOutputs = false)
   all_goals
     simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
     obtain ⟨rfl, rfl⟩ := h
-  · exact congrArg Tags.retainRounds (setupH_tags (by assumption))
+  · exact congrArg Tags.retainRounds (setupH_tags (ok_of_refuse (by assumption)))
   all_goals rfl
 
 set_option maxHeartbeats 1000000 in
