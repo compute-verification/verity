@@ -987,6 +987,18 @@ impl SessionConfig {
     }
 
     pub fn hello(&self) -> String {
+        self.hello_value().to_string()
+    }
+
+    /// The `Hello` of a session under the keyed coin tree (`coin_tree::SCHEME`): the prover's fresh nonce in `coins.nonce`, 64
+    /// lowercase hex digits; the verifier's own `Hello` with it is what R7 compares byte for byte.
+    pub fn hello_with_nonce(&self, nonce: &[u8; coin_tree::NONCE_BYTES]) -> String {
+        let mut h = self.hello_value();
+        h["coins"]["nonce"] = json!(hex(nonce));
+        h.to_string()
+    }
+
+    fn hello_value(&self) -> Value {
         let mut h = json!({"profile": self.profile, "reps": self.reps, "flavor": self.flavor,
                "tables": self.tables.iter().map(|t| t.name.clone()).collect::<Vec<_>>()});
         if let Some(l) = &self.link {
@@ -1007,7 +1019,7 @@ impl SessionConfig {
         if self.sha512_digests {
             h["digests"] = json!("sha512");
         }
-        h.to_string()
+        h
     }
 }
 
@@ -1103,6 +1115,8 @@ pub struct Server {
     /// M2: the committed coin schedule (drawn at `Hello`), and a test harness's random tape for it (the verifier's coins as a
     /// function of the tape: the simulator's rewinding model)
     coin_tree: Option<coin_tree::CoinTree>,
+    /// the prover's nonce from its `Hello` (the keyed coin tree's prefix; in the record)
+    coin_nonce: Option<[u8; coin_tree::NONCE_BYTES]>,
     coin_tape: Option<[u8; 32]>,
     /// a test harness's malicious verifier: its edit of the committed blocks (`coin_tree::CoinTree::draw_with`)
     coin_edit: Option<CoinEdit>,
@@ -1159,6 +1173,7 @@ impl Server {
             on_draw: None,
             seed_inject: None,
             coin_tree: None,
+            coin_nonce: None,
             coin_tape: None,
             coin_edit: None,
             t0: std::time::Instant::now(),
@@ -1346,11 +1361,24 @@ impl Server {
                 }
             }
             Req::Hello(h) => {
-                let want = self.cfg.hello();
+                // one Hello per session: the coin tree's session key is drawn for it alone, never reused
+                if self.hello.is_some() {
+                    return self.refuse("R7: a second Hello in one session".into());
+                }
+                // the keyed coin tree: the prover's nonce is the one field the verifier's own Hello lacks
+                let nonce = match self.cfg.coin_tree.is_some().then(|| coin_tree::hello_nonce(&h)) {
+                    Some(Err(e)) => return self.refuse(format!("R7: {e}")),
+                    Some(Ok(n)) => Some(n),
+                    None => None,
+                };
+                let want = match &nonce {
+                    Some(n) => self.cfg.hello_with_nonce(n),
+                    None => self.cfg.hello(),
+                };
                 if h != want {
                     return self.refuse(format!("R7: session parameters {h} differ from the verifier's {want}"));
                 }
-                if let Some(spec) = self.cfg.coin_tree.clone()
+                if let (Some(spec), Some(nonce)) = (self.cfg.coin_tree.clone(), nonce)
                     && self.urandom.is_some()
                 {
                     let edit: &dyn Fn(&str, usize, &mut [F128]) = match &self.coin_edit { Some(e) => e.as_ref(), None => &|_, _, _| {} };
@@ -1358,15 +1386,17 @@ impl Server {
                         Some(t) => {
                             use rand_chacha::{ChaCha20Rng, rand_core::{RngCore, SeedableRng}};
                             let mut r = ChaCha20Rng::from_seed(t);
-                            coin_tree::CoinTree::draw_with(spec, &mut |b: &mut [u8]| r.fill_bytes(b), edit)
+                            coin_tree::CoinTree::draw_with(spec, &nonce, &mut |b: &mut [u8]| r.fill_bytes(b), edit)
                         }
                         None => {
                             let mut f = File::open("/dev/urandom").expect("/dev/urandom");
-                            coin_tree::CoinTree::draw_with(spec, &mut |b: &mut [u8]| f.read_exact(b).expect("urandom"), edit)
+                            coin_tree::CoinTree::draw_with(spec, &nonce, &mut |b: &mut [u8]| f.read_exact(b).expect("urandom"), edit)
                         }
                     };
-                    let w = tree.root_words();
+                    // the session key leaves the verifier here, with the root, and not before
+                    let w = tree.answer_words();
                     self.coin_tree = Some(tree);
+                    self.coin_nonce = Some(nonce);
                     self.hello = Some(h);
                     return Resp::Coins(w);
                 }
@@ -1731,7 +1761,8 @@ impl Server {
                        "tables": self.cfg.tables.iter().map(|t| json!({"name": t.name, "binding": format!("{:?}", t.binding)})).collect::<Vec<_>>()},
             "unit_draw": self.cfg.unit_draw,
             "aborted": self.aborted, "verdict": self.verdict, "streams": streams, "prime": prime,
-            "coin_tree": self.coin_tree.as_ref().map(|t| json!({"spec": t.spec.to_json(), "root": hex(&t.root())})),
+            "coin_tree": self.coin_tree.as_ref().map(|t| json!({"spec": t.spec.to_json(), "nonce": self.coin_nonce.map(|n| hex(&n)),
+                                                                 "key": hex(t.key()), "root": hex(&t.root())})),
             "coin_seed": self.seed.as_ref().map(|(seed, nonce, c, _, k)| {
                 let mut v = json!({"scheme": coin_seed::SCHEME, "domain": coin_seed::DOMAIN, "context": {"hello": self.hello}, "commitment": hex(c),
                                    "requests": k});

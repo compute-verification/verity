@@ -32,6 +32,8 @@ use serde_json::{Value, json};
 pub const STREAM_MASK: u64 = 1;
 pub const STREAM_PAD: u64 = 2;
 pub const STREAM_SALT: u64 = 3;
+/// An injected seed's coin-tree nonce (`coin_tree::SCHEME`); a proving build draws the nonce from the OS.
+pub const STREAM_COIN_NONCE: u64 = 8;
 /// Bytes per `hm96-sha512/v1` leaf salt.
 pub const SALT_BYTES: usize = 192;
 
@@ -66,6 +68,20 @@ pub struct LeafSalts {
     /// on the heap, so moving a `LeafSalts` copies no key byte
     key: Box<[u8; 32]>,
     next: u64,
+}
+
+/// The coin-tree nonce the prover sends in `Hello` (docs/coin-tree-v2.md §3): 32 fresh bytes from the OS, once per session,
+/// never derived from the verifier's messages; an injected seed (a test harness) derives it, so a harness's sessions repeat.
+pub fn coin_nonce(seed: &ProverSeed) -> [u8; 32] {
+    let mut n = [0u8; 32];
+    if seed.injected {
+        let mut r = ChaCha20Rng::from_seed(seed.seed);
+        r.set_stream(STREAM_COIN_NONCE);
+        r.fill_bytes(&mut n);
+    } else {
+        getrandom::fill(&mut n).expect("the OS random generator failed: refusing to send Hello without a fresh nonce");
+    }
+    n
 }
 
 impl LeafSalts {

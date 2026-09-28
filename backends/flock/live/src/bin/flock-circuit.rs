@@ -126,7 +126,8 @@ fn level0_zk(st: &Stmt, rng: &mut flock_live::zk_hooks::ProverRng, zero: bool, t
 /// M1's hooks identity: what is masked, and what is not yet (the statement is not zero knowledge until the list is empty).
 fn zk_identity(c: &Composite) -> Value {
     json!({"zk": true, "stage": "m2-prototype (committed verifier coins, CPU)", "compiler": "veil (ePrint 2026/683 §4.1, Remark 4.4) over gf(2^128)",
-           "verifier_coins": format!("committed before the prover's first message ({}, root in hello); every coin opened against it, or the prover stops",
+           "verifier_coins": format!("committed before the prover's first message ({}): the prover's fresh nonce in hello; the root and the \
+                                      verifier's session key in its answer; every coin opened against them, or the prover stops",
                                      flock_live::coin_tree::SCHEME),
            "pads": "zerocheck and lincheck: every sent value + a pad (prover ChaCha20 stream 4); pads committed before the zerocheck's first coin",
            "pads_commitment": format!("rs over gf(2^128), {} padding symbols, rate 1/{}, {} queries, hm96-sha512/v1 leaves, sha512 nodes",
@@ -1356,27 +1357,42 @@ fn complete(view: &View) -> bool {
 /// Per rep, its rounds' coins as V* opened them in a view, each opening checked against V*'s commitment as the prover checks
 /// it; and the link points.
 fn extracted(st: &Stmt, view: &View) -> Result<(Vec<Vec<F128>>, Vec<Vec<Vec<F128>>>), String> {
-    use flock_live::coin_tree::check;
+    use flock_live::coin_tree::{KEY_BYTES, Rules, check, hello_nonce};
     let spec = coin_spec();
-    let (mut root, mut points, mut reps): (Option<[u8; 64]>, Vec<Vec<F128>>, Vec<Vec<Vec<F128>>>) = (None, Vec::new(), vec![Vec::new(), Vec::new()]);
+    let mut tree: Option<([u8; 64], Rules)> = None;
+    let (mut points, mut reps): (Vec<Vec<F128>>, Vec<Vec<Vec<F128>>>) = (Vec::new(), vec![Vec::new(), Vec::new()]);
     for (req, resp) in view {
         let Resp::Coins(w) = resp else { continue };
         match req {
-            Req::Hello(_) => root = Some(f128_bytes(w).try_into().map_err(|_| "V*'s commitment is not 64 bytes")?),
+            // the prover's nonce from its Hello, V*'s root and session key from the answer
+            Req::Hello(h) => {
+                let b = f128_bytes(w);
+                if b.len() != 64 + KEY_BYTES {
+                    return Err(format!("V*'s answer to Hello is {} bytes, not the root and the session key", b.len()));
+                }
+                tree = Some((b[..64].try_into().unwrap(), Rules::v2(&hello_nonce(h)?, &b[64..].try_into().unwrap())));
+            }
             Req::Commit { .. } => {
+                let (root, rules) = tree.as_ref().ok_or("coins before the commitment")?;
                 let n = w.len().checked_sub(spec.opening_words(0)).ok_or("a short link-point opening")?;
-                points = check(&spec, root.as_ref().ok_or("coins before the commitment")?, 0, 0, n, w)?.chunks(st.m_pts).map(|p| p.to_vec()).collect();
+                points = check(&spec, rules, root, 0, 0, n, w)?.chunks(st.m_pts).map(|p| p.to_vec()).collect();
             }
             Req::Round { stream, n, .. } => {
+                let (root, rules) = tree.as_ref().ok_or("coins before the commitment")?;
                 let rep = (0..2).find(|&r| *stream == rep_stream(TABLE, r)).ok_or(format!("a round of {stream}"))?;
                 let si = spec.stream_index(stream).ok_or(format!("{stream} is outside the schedule"))?;
                 let k = reps[rep].len();
-                reps[rep].push(check(&spec, root.as_ref().ok_or("coins before the commitment")?, si, k, *n as usize, w)?);
+                reps[rep].push(check(&spec, rules, root, si, k, *n as usize, w)?);
             }
             _ => {}
         }
     }
     Ok((points, reps))
+}
+
+/// The `Hello` a view's session sent (its coin-tree nonce: the simulator's rewinds restart after it).
+fn view_hello(view: &View) -> Result<String, String> {
+    view.iter().find_map(|(req, _)| if let Req::Hello(h) = req { Some(h.clone()) } else { None }).ok_or("the view has no Hello".into())
 }
 
 #[cfg(feature = "seed-injection")]
@@ -1393,7 +1409,7 @@ enum Rewound {
 /// just after step 0); every coin V* answers is checked against its commitment and must be the extracted one (else the
 /// commitment's binding failed: an error).
 #[allow(clippy::too_many_arguments)]
-fn rewind(st: &Stmt, inst: &Instances, v: impl Transport + 'static, points: &[Vec<F128>], coins: &[Vec<Vec<F128>>], dummy: &[Vec<u8>],
+fn rewind(st: &Stmt, inst: &Instances, v: impl Transport + 'static, hello: &str, points: &[Vec<F128>], coins: &[Vec<Vec<F128>>], dummy: &[Vec<u8>],
           rng: &mut flock_live::zk_hooks::ProverRng, index: u64) -> Result<Rewound, String> {
     let mut sims = Vec::new();
     for rep in 0..2 {
@@ -1415,7 +1431,7 @@ fn rewind(st: &Stmt, inst: &Instances, v: impl Transport + 'static, points: &[Ve
         };
     }
     expect!(Req::Register, Resp::Draw(_));
-    expect!(Req::Hello(config(st, inst).hello()), Resp::Coins(_));
+    expect!(Req::Hello(hello.to_string()), Resp::Coins(_));
     for rep in 0..2 {
         expect!(Req::Open { stream: rep_stream(TABLE, rep), parent: String::new(), label: domain(rep), at: 0 }, Resp::Ok);
         if rep == 0 {
@@ -1473,22 +1489,27 @@ fn fresh_dummy(st: &Arc<Stmt>, inst: &Arc<Instances>, points: &[Vec<F128>], coin
 ///    or if V* opens another coin than it did in step 1 (a binding failure), the simulator fails.
 #[cfg(feature = "seed-injection")]
 fn gk_simulate(st: &Arc<Stmt>, inst: &Arc<Instances>, make: &dyn Fn() -> VStar, t: usize) -> (View, Value) {
-    let dummy_run = || -> View {
+    // the extraction run draws the coin-tree nonce as the prover does; every later run restarts after its Hello
+    let dummy_run = |nonce: Option<[u8; 32]>| -> View {
         let v = make();
         let view = v.view.clone();
-        session(st, inst, shared(v), &Plan { zero_witness: true, ..Plan::default() }, ProverSeed::from_os());
+        session(st, inst, shared(v), &Plan { zero_witness: true, coin_nonce: nonce, ..Plan::default() }, ProverSeed::from_os());
         let log = view.lock().unwrap_or_else(PoisonError::into_inner).clone();
         log
     };
-    let view = dummy_run();
+    let view = dummy_run(None);
     if !complete(&view) {
         return (view, json!({"extraction_complete": false}));
     }
-    let (points, coins) = match extracted(st, &view) {
+    let (points, coins, hello, nonce) = match extracted(st, &view).and_then(|(p, c)| {
+        let h = view_hello(&view)?;
+        let n = flock_live::coin_tree::hello_nonce(&h)?;
+        Ok((p, c, h, n))
+    }) {
         Ok(x) => x,
         Err(e) => return (Vec::new(), json!({"extraction_complete": true, "fail": format!("extraction: {e}")})),
     };
-    let runs = zkv::gk_estimate(t, || complete(&dummy_run()));
+    let runs = zkv::gk_estimate(t, || complete(&dummy_run(Some(nonce))));
     let bound = zkv::gk_rewinds(runs);
     let mut rng = flock_live::zk_hooks::ProverRng::from_os();
     let stats = |rewinds: usize, fail: Option<String>| json!({"extraction_complete": true, "estimation_runs": runs, "estimation_complete": t,
@@ -1500,7 +1521,7 @@ fn gk_simulate(st: &Arc<Stmt>, inst: &Arc<Instances>, make: &dyn Fn() -> VStar, 
         };
         let v = make();
         let view = v.view.clone();
-        match rewind(st, inst, v, &points, &coins, &dummy, &mut rng, attempt as u64) {
+        match rewind(st, inst, v, &hello, &points, &coins, &dummy, &mut rng, attempt as u64) {
             Ok(Rewound::Complete) => return (view.lock().unwrap_or_else(PoisonError::into_inner).clone(), stats(attempt + 1, None)),
             Ok(Rewound::Aborted) => continue,
             Err(e) => return (Vec::new(), stats(attempt + 1, Some(e))),
@@ -1670,8 +1691,9 @@ fn zkgk(st: &Arc<Stmt>, inst: &Arc<Instances>) {
             }
         };
         let (points, coins) = extracted(st, &view).unwrap_or_else(|e| refuse(e));
+        let hello = view_hello(&view).unwrap_or_else(|e| refuse(e));
         let mut rng = flock_live::zk_hooks::ProverRng::from_os();
-        let mut done = |dummy: &[Vec<u8>], a: u64| matches!(rewind(st, inst, make(), &points, &coins, dummy, &mut rng, a), Ok(Rewound::Complete));
+        let mut done = |dummy: &[Vec<u8>], a: u64| matches!(rewind(st, inst, make(), &hello, &points, &coins, dummy, &mut rng, a), Ok(Rewound::Complete));
         let fresh = (0..attempts).filter(|&a| done(&fresh_dummy(st, inst, &points, &coins).unwrap_or_else(|e| refuse(e)), a as u64)).count();
         let reused = flag("--reuse-dummy").then(|| (0..attempts).filter(|&a| done(&dummy, 1000 + a as u64)).count());
         println!("ZKGK\t{}", json!({"strategy": name, "eps": eps as f64 / 65536.0, "attempts": attempts, "real_complete": real,
@@ -1793,6 +1815,9 @@ struct Plan {
     zk_shared_pair: bool,
     /// prove a dummy witness: all zero but the public regions (M2's extraction run; M1's simulator takes its opening)
     zero_witness: bool,
+    /// the coin-tree nonce `Hello` carries, instead of the prover's own fresh one: the simulator's, drawn once per simulated
+    /// session, so every run restarts after the same `Hello`
+    coin_nonce: Option<[u8; 32]>,
 }
 
 fn call(t: &SharedTransport, r: Req) -> Result<Resp, String> {
@@ -1876,7 +1901,11 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
     };
     let (st, inst) = match &drawn_st { Some((a, b)) => (a, b), None => (st, inst) };
     let sig = sigma(st, inst);
-    let hello = config(st, inst).hello();
+    let hello = if is_zk(st) {
+        config(st, inst).hello_with_nonce(&plan.coin_nonce.unwrap_or_else(|| flock_live::zk_hooks::coin_nonce(&seed)))
+    } else {
+        config(st, inst).hello()
+    };
     let mut commit: Vec<F128> = Vec::new();
     let device = plan.gpu && !plan.mask_random && std::env::var("FC_HOST_WITNESS").is_err();
     let lig = if plan.fast { LigeritoProfile::Fast } else { LigeritoProfile::Fast100 };
@@ -1919,7 +1948,8 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
     let tp0 = Instant::now();
     let res: Result<(), String> = (|| {
         match call(&t, Req::Hello(hello.clone()))? {
-            Resp::Coins(c) if c.len() == 4 => commit = c,
+            // M0's seed commitment (4 words), or the keyed coin tree's root and session key (20; `coin_tree::Checked` checked them)
+            Resp::Coins(c) if c.len() == if is_zk(st) { 20 } else { 4 } => commit = c,
             r => return Err(format!("hello: step 0 expects the verifier's seed commitment, got {r:?}")),
         }
         #[cfg(feature = "sha512")]
