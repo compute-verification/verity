@@ -872,6 +872,7 @@ def _many_files(root: Path, n: int, seed: int = 0) -> Path:
     return root
 
 
+@pytest.mark.slow
 def test_push_is_concurrent_conditional_and_verified_by_etag(fake_s3, tmp_path):
     """300 blobs with 16 workers: every object lands, every PUT is a conditional create, the manifest's PUT comes after the last blob's,
     and the report is deterministic.  A second push HEADs everything, uploads nothing and is still PRESERVED (`etag-md5`).  A key that

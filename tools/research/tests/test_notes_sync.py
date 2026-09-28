@@ -112,6 +112,7 @@ def test_the_watcher_reports_a_failed_sync_as_sync_failed_with_its_lag_every_pas
     assert notes.sync_lines(a, NS.sync(a, secrets=[]), now) == []                                    # a clean pass says nothing
 
 
+@pytest.mark.slow
 def test_key_material_is_refused_before_anything_is_pushed(machines):
     origin, a, _ = machines
     before = _git(origin, "rev-parse", "main")
@@ -221,6 +222,7 @@ def test_notes_already_committed_are_not_rechecked_but_a_changed_created_is(mach
         f"{old}: created: 2026-09-28T09:00Z is 138 min ahead; use 2026-09-28T06:42Z (date -u +%Y-%m-%dT%H:%MZ)"]
 
 
+@pytest.mark.slow
 def test_sync_and_checkpoint_exit_5_naming_the_note_and_the_stamp_to_use(machines, monkeypatch, capsys):
     origin, a, _ = machines
     monkeypatch.setattr(NS, "_utcnow", lambda: NOW)
