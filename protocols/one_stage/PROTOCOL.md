@@ -19,9 +19,12 @@ drawn units are proved. The two-stage protocol (replay, then a second draw) is `
    are the drawn units, in order).
 5. **Verification** by each verifier that runs, the Lean verifier of record among them.
 6. **The audit record** (`audit.audit_record`): the registration, its receipt, the draw, the law, the proved units, the
-   statement's digests, every verdict, and, when every check and verdict that ran accepted, the profile in two forms: the
-   core `IntegrityProfile` (one level `unit` with `sizes = (population,)`, drawn by the law, and the bound on wrong units at
-   delta) and `verity/integrity-profile/v1` (§0.2), whose ε terms come from the soundness analysis and stay null here.
+   statement's digests, every verdict, and, when every check and verdict that ran accepted, the integrity profile. The
+   profile (`audit.profile`) is core's `IntegrityProfile` of one level `unit` with `sizes = (population,)`, drawn by the law
+   under every law, with delta: per-stratum bounds on wrong units, nothing weighted. The record states it as recorded
+   runs hold it: `profile` (its JSON; a stratified law keeps the v0 form, the law's JSON with delta and the count drawn
+   per template), `wrong_units` (its bounds) and `verity/integrity-profile/v1` (§0.2), whose ε terms come from the
+   soundness analysis and stay null here.
 
 ## The stratified law
 
@@ -55,6 +58,14 @@ size, independently across strata. `docs/sampling-strategies.md` has the analysi
   audit record's `wrong_units.bound` is core's exact `Stratified.count_bound` at delta, and `per_template` gives each
   template's own bound. A template wrong in every unit is never missed. `subset:K` is one stratum and gets the same exact
   bound.
+
+## Consumers
+
+Applications read the profile, and it is neither of them (`consumers`). Each weights wrong units by what one costs it,
+through the profile's generic weighted bound (`IntegrityProfile.harm_bound`), at the profile's delta:
+
+- **Exfiltration security** (`exfiltration_bound`): wrong units weighted by their output bits, which the prover chose.
+- **Compute security** (`compute_bound`): wrong units weighted by their work, which the prover could have skipped.
 
 ## Partition
 
