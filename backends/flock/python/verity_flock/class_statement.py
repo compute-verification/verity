@@ -418,19 +418,36 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 def write_result(results: Path, a) -> None:
-    """``$RESEARCH_RUN_DIR/result.json`` (kind ``class-sweep/v1``) when run under ``research run``: every shape's record of this
-    output directory, keyed by shape digest, with the settings that produced them."""
+    """``$RESEARCH_RUN_DIR/result.json`` (research/result/v0.1) when run under ``research run``: the settings as the fingerprint, the
+    shapes' counts and summed timings as measurements, and every shape's record (keyed by shape digest) in ``results.jsonl``, copied
+    beside it as the measurement file."""
     run_dir = os.environ.get("RESEARCH_RUN_DIR")
     if not run_dir or not results.exists():
         return
+    import shutil
+
     recs = [json.loads(ln) for ln in results.read_text().splitlines() if ln.strip()]
-    doc = {"kind": "class-sweep/v1", "statement": FC.STATEMENT, "scheme": FC.SCHEME, "partition": a.partition,
-           "settings": {"gpu": a.gpu, "warm": a.warm, "runs": a.runs, "batch": a.batch or a.n, "seed": a.seed,
-                        "program_graph": getattr(a, "program_graph", None), "modules": getattr(a, "modules", None)},
-           "shapes": {r["shape"]: r for r in recs},
-           "summary": {"shapes": len(recs), "accepted": sum(1 for r in recs if (r.get("live") or {}).get("accepted")),
-                       "broke": sum(1 for r in recs if r.get("broke"))}}
-    Path(run_dir, "result.json").write_text(json.dumps(doc, sort_keys=True))
+    shutil.copy(results, Path(run_dir, "class-sweep.jsonl"))
+    ok = [r for r in recs if (r.get("live") or {}).get("accepted")]
+    rejected = [r for r in recs if r.get("live") and not r["live"].get("accepted")]
+    selftests = [r["selftest"] for r in recs if r.get("selftest")]
+    doc = {"schema": "research/result/v0.1", "run_id": os.environ.get("RESEARCH_RUN_ID", ""),
+           "workload_fingerprint": {"kind": "class-sweep/v1", "statement": FC.STATEMENT, "scheme": FC.SCHEME, "partition": a.partition,
+                                    "gpu": a.gpu, "warm": a.warm, "runs": a.runs, "batch": a.batch or a.n, "seed": a.seed,
+                                    "shapes": sorted(r["shape"] for r in recs)},
+           "validation": {"status": "failed" if rejected or any(not x.get("all_pass") for x in selftests) else ("passed" if ok else "not_run"),
+                          "checker": "flock-circuit loopback verifier (live coins) and selftest",
+                          "detail": f"{len(ok)} of {len(recs)} shapes accepted, {len(rejected)} rejected, "
+                                    f"{sum(1 for r in recs if r.get('broke'))} broke; selftests {sum(1 for x in selftests if x.get('all_pass'))}/{len(selftests)}",
+                          "evidence": ["class-sweep.jsonl"]},
+           "measurements": [{"name": "shapes", "value": len(recs), "unit": "count"},
+                            {"name": "shapes_accepted", "value": len(ok), "unit": "count"},
+                            {"name": "prove_total_s_sum", "value": round(sum(r["live"]["prove_total_s"] for r in ok), 3), "unit": "s"},
+                            {"name": "proof_bytes_sum", "value": sum(sum(r["live"]["proof_bytes"]) for r in ok), "unit": "B"}],
+           "measurement_files": ["class-sweep.jsonl"], "artifacts": []}
+    tmp = Path(run_dir, "result.json.tmp")
+    tmp.write_text(json.dumps(doc, sort_keys=True))
+    os.replace(tmp, Path(run_dir, "result.json"))
 
 
 if __name__ == "__main__":
