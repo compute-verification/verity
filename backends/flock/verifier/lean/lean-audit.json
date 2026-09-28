@@ -3,7 +3,7 @@
  "exempt": {
   "CheckAxioms": "the #print axioms list backends/flock/tests/test_lean_verifier.py reads; superseded by this audit"
  },
- "meaning": ["FlockProofs", "Flock.CircuitType", "Flock.Library"],
+ "meaning": ["FlockProofs", "Flock.CircuitType", "Flock.Library", "Flock.Layout"],
  "escapes": {
   "Flock.canon": "partial def: canonical JSON of the statement's objects (PROTOCOL.md 16.8); no proof is about it, and the agreement tests (17.1) cover it",
   "Flock.TemplateQuery.Desc.gates": "partial def: a descriptor definition's gate count, recursing through its callees (the template query, PROTOCOL.md 16.10); no proof is about it, and template_query_agree.py covers it"
@@ -16,6 +16,15 @@
    ],
    "assumptions": [],
    "type_hash": "00000000cf966ae0"
+  },
+  "Flock.Layout.check_ok": {
+   "signature": [
+    "Flock.Layout.check_ok {types : String → Option Flock.CircuitType} {ls : Array Flock.Layout} {unit : Nat}",
+    "  {info : String → Option Flock.TableInfo} {sizes : Array Nat}",
+    "  (h : Flock.Layout.check types ls unit info = Except.ok sizes) : Flock.Layout.WellFormed types ls unit info"
+   ],
+   "assumptions": [],
+   "type_hash": "0000000051c2a27d"
   },
   "Flock.MerklePair.hm96_inputs": {
    "signature": [
@@ -178,7 +187,73 @@
     "Flock.instInhabitedItem.default": "abc98ad87f061274",
     "Flock.instReprItem.repr": "40f7876e1442c0cd"
    },
-   "pins": ["Flock.CircuitType.check_ok"]
+   "pins": ["Flock.CircuitType.check_ok", "Flock.Layout.check_ok"]
+  },
+  "Flock.Layout": {
+   "digest": "61cd601aa839963a08866bbf4942c9d3",
+   "definitions": {
+    "Flock.CallE": "09ea8b20b96d349c",
+    "Flock.CallE.item": "3cf478bee07bca87",
+    "Flock.CallE.layout": "2d0473dfcdd24d6f",
+    "Flock.CallE.offset": "b410e46c6938d78c",
+    "Flock.Layout": "63b4caa560adfe7d",
+    "Flock.Layout.WORD": "977038791b15ef01",
+    "Flock.Layout.WellFormed": "f201969971fc61ff",
+    "Flock.Layout.callItems": "9efa52507333cfd6",
+    "Flock.Layout.calls": "eff1b148fe07d574",
+    "Flock.Layout.ceilPow2": "1214052a786782a0",
+    "Flock.Layout.check": "daaadbe4bff45c2d",
+    "Flock.Layout.decodeRows": "860b9a41430cb8ee",
+    "Flock.Layout.entriesOk": "169fc0ebf0fc013d",
+    "Flock.Layout.exported": "ac9737e51205f9ba",
+    "Flock.Layout.failure": "f2e90a85a7959cf8",
+    "Flock.Layout.genOk": "5114e0e5f6837fef",
+    "Flock.Layout.geometryOk": "4993f6d251468264",
+    "Flock.Layout.groups": "09ced23e6724208a",
+    "Flock.Layout.inSplit": "8e91399f75e4ef5c",
+    "Flock.Layout.increasing": "2d73e22d32a3dc37",
+    "Flock.Layout.instDecidableWellFormed": "5498847dce77baef",
+    "Flock.Layout.itemsRows": "88857a3011a6a683",
+    "Flock.Layout.outSplit": "131cc9526259fd7e",
+    "Flock.Layout.own": "bcdc62e6aa8832f3",
+    "Flock.Layout.ownSize": "081228f0f6e35aa0",
+    "Flock.Layout.placedOf": "74f873d1b2a5bc87",
+    "Flock.Layout.placesNothing": "4aadf47875cc19c7",
+    "Flock.Layout.portBits": "4eda6b43e97d5b10",
+    "Flock.Layout.rangeLog": "2c99c555c8b43658",
+    "Flock.Layout.rangeOk": "a4e6f13eafbe0ee8",
+    "Flock.Layout.reachOk": "18c5d6317191b871",
+    "Flock.Layout.readItems": "8ba7b81701fea84a",
+    "Flock.Layout.readRowsInline": "4494cf139e8b06d1",
+    "Flock.Layout.readRowsPlaced": "2a47a0725ec85e5b",
+    "Flock.Layout.reads": "d6b2851ed341a375",
+    "Flock.Layout.record": "125f3fae1d66e655",
+    "Flock.Layout.slotsOk": "0e60f76117b3f13f",
+    "Flock.Layout.type": "0fb3b63e47c59b39",
+    "Flock.Layout.uses": "1ed68db4cfe3c899",
+    "Flock.Own": "788b6f437b5428a9",
+    "Flock.Own.derive": "217a857b1f24fa7b",
+    "Flock.Own.gen": "2556227bb6f094b4",
+    "Flock.ReadE": "226bc79bed8a098d",
+    "Flock.ReadE.item": "ea5a96958a596a06",
+    "Flock.ReadE.lo": "029b550e68f12ad3",
+    "Flock.ReadE.placed": "1f5b9e0dfa11cdbf",
+    "Flock.TableInfo": "e2cfbcf89ba46ed5",
+    "Flock.TableInfo.indexBits": "2330f94e81e5373e",
+    "Flock.TableInfo.k": "624dbf2bdb7a5a57",
+    "Flock.instBEqOwn": "e02d9c4da88eb50a",
+    "Flock.instBEqOwn.beq": "638cf74df208a900",
+    "Flock.instInhabitedCallE": "ef97fba11f4f1d0b",
+    "Flock.instInhabitedCallE.default": "4c573fba6fa260a3",
+    "Flock.instInhabitedLayout": "3b30a272d8372ddd",
+    "Flock.instInhabitedLayout.default": "62a6b88ed2b03528",
+    "Flock.instInhabitedOwn": "cb02b13557c1f983",
+    "Flock.instInhabitedOwn.default": "e4cfd5a0d8ea61d3",
+    "Flock.instInhabitedReadE": "41004c4ee8c6b3a1",
+    "Flock.instInhabitedReadE.default": "b761859cdafe2894",
+    "Flock.instReprOwn.repr": "57e00a298b87db07"
+   },
+   "pins": ["Flock.Layout.check_ok"]
   },
   "Flock.Library": {
    "digest": "b62132b0455e4e5dc92047b7c1518c4a",
