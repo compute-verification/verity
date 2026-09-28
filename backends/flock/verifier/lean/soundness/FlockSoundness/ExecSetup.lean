@@ -30,6 +30,15 @@ theorem setupH_spec {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : 
   obtain ⟨pub, h⟩ : ∃ pub, jpB pub = .ok st := by
     split at h <;> (obtain ⟨p, -, h⟩ := except_bind_ok h; exact ⟨p, h⟩)
   unjp jpB
+  lets jpU
+  obtain ⟨u0, h⟩ : ∃ u, jpU u = .ok st := by
+    split at h
+    · split at h
+      · obtain ⟨_, -, h⟩ := except_bind_ok h
+        exact ⟨(), ite_throw_ok h⟩
+      · exact ⟨(), h⟩
+    · exact ⟨(), h⟩
+  unjp jpU
   bindok _ -
   lets jpC
   obtain ⟨finding, h⟩ : ∃ f, jpC f = .ok st := by
