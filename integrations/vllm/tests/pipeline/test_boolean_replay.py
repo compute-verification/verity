@@ -142,3 +142,21 @@ def test_the_picks_are_tabulated_by_family() -> None:
     o = BR.outcome(art)
     assert o["by_family"] == {"RoPE_v1": {"picked": 3, "evaluated": 3, "mismatch": 1}, "Gemm_v2": {"picked": 1, "evaluated": 0, "mismatch": 0}}
     assert (o["seed"], o["picked"], o["equal"], o["grade"]) == (7, 4, 2, "partial")
+
+
+def test_the_uniform_draws_picks_are_tabulated_by_family_not_by_its_one_stratum() -> None:
+    sr = {"result": False, "grade": "mismatch", "why": "x",
+          "sample": {"strata_by": "uniform", "k": 5, "picked": 5, "evaluated": 4, "equal": 3, "mismatch_n": 1, "not_evaluated_n": 1},
+          "timing": {"per_family_n": {"RoPE_v1": 3, "Gemm_v2": 2}},
+          "strata": {"all|all|all|all|all|all": {"population": 99, "sampled": 5, "evaluated": 4, "mismatch": 1}},
+          "mismatch_by": {"by_family": {"Gemm_v2": 1}}, "not_evaluated": [{"spec": "RoPE_v1{D=64}"}]}
+    assert BR.outcome({"sampled_replay": sr})["by_family"] == {"RoPE_v1": {"picked": 3, "evaluated": 2, "mismatch": 0},
+                                                              "Gemm_v2": {"picked": 2, "evaluated": 2, "mismatch": 1}}
+    sr["sample"]["not_evaluated_n"] = 13
+    assert BR.outcome({"sampled_replay": sr})["by_family"]["Gemm_v2"] == {"picked": 2, "evaluated": None, "mismatch": 1}
+
+
+def test_a_replay_that_did_not_run_is_an_outcome_with_its_reason() -> None:
+    why = "sampled replay not run: KeyError('tree node 1 of step 0 level 0 is not in the slim dumped store')"
+    o = BR.outcome({"sampled_replay": {"result": None, "grade": "not-evaluated", "why": why, "error": "KeyError(...)"}})
+    assert (o["result"], o["grade"], o["why"], o["picked"], o["evaluated"], o["by_family"], o["wall_s"]) == (None, "not-evaluated", why, None, None, {}, None)

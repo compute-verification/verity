@@ -409,13 +409,20 @@ def manifest_query(manifest: dict[str, Any] | None) -> str | None:
     return q if q in QUERIES else None
 
 
-def family_strata(vus: list[dict], k: int | None, per_stratum: int = 2) -> tuple[list[dict], int]:
-    """With `k` (the config run), every VU re-keyed to its family's one stratum (`family|all|all|all|all|all`, the key's fields kept) and
-    `k` picks per family: with the cap at `k`, the round-robin order of `sample` then takes k units in all, one per family first, a small
-    family used up before the others, the rest split evenly.  Without `k`, the VUs and `per_stratum` as given."""
+DRAWS = ("family", "uniform")
+
+
+def family_strata(vus: list[dict], k: int | None, per_stratum: int = 2, draw: str = "family") -> tuple[list[dict], int]:
+    """With `k` (the config run), every VU re-keyed to one stratum per `draw` (the key's fields kept) and `k` picks per stratum.
+    `uniform`: one stratum (`all|all|all|all|all|all`), so the k units are a uniform draw without replacement from every unit.
+    `family`: one stratum per family (`family|all|all|all|all|all`); with the cap at `k`, the round-robin order of `sample` then takes
+    k units in all, one per family first, a small family used up before the others, the rest split evenly.  Without `k`, the VUs and
+    `per_stratum` as given.  Any other `draw` is refused by name."""
+    if draw not in DRAWS:
+        raise ValueError(f"replay draw {draw!r} is not one of {DRAWS}")
     if not k:
         return vus, per_stratum
-    return [dict(v, stratum=f"{v['family']}|all|all|all|all|all") for v in vus], int(k)
+    return [dict(v, stratum=f"{'all' if draw == 'uniform' else v['family']}|all|all|all|all|all") for v in vus], int(k)
 
 
 def populate(programs: dict[str, dict[str, Any]], ranks: list[int], arrivals: dict[str, int], executed_prefix: dict[str, dict] | None,
@@ -498,7 +505,7 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
                    weights_check: dict[str, Any] | None = None, targets: list[str] | None = None, workers: int | None = None, worker_peak: int | None = None,
                    ring_slots: int | None = None, retention: str | None = None, seed_challenge: str | None = None,
                    manifest: dict[str, Any] | None = None, executed_prefix: dict[str, dict] | None = None,
-                   program_dirs: dict[str, str] | None = None, challenge_key: Key | None = None, replay_k: int | None = None, plan: bool = False, memo: dict | None = None) -> dict[str, Any]:
+                   program_dirs: dict[str, str] | None = None, challenge_key: Key | None = None, replay_k: int | None = None, replay_draw: str = "family", plan: bool = False, memo: dict | None = None) -> dict[str, Any]:
     """C2 of record.  `challenge_key` (off legacy, `challenge.replay_key`) draws the sample in place of `seed`.  `executed_prefix` [COORD R17-26]: request -> `executed_prefix_of_record(...)` from the Commit's own committed tokens;
     rows at request-relative steps >= n_exec leave the sampling pool into the named class `population.not_executed_by_rule` (never a
     stratum that grades 'not evaluated'); a request with prefix faults is not classified and fails `query_checks` by name.  `programs`: request label -> Program instances doc ({"rows", "params", ...}; requests sharing a shape share it).
@@ -507,7 +514,7 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
     `weights_check`: the caller's proof that the weight slices the relations consume are the COMMITTED weights ({"equal": bool, ...}; rev-cb
     M-0411 O5) -- `equal` False fails the replay by name; None is recorded as 'by reference, unverified at replay'.
     `max_evaluate` caps the stratified sample but never below one VU per stratum (round-robin order; the effective cap is recorded);
-    `targets` (`<op_path>[@<step>]`) add every VU of a module to the sample (targeted negatives; not subject to the cap); `replay_k` (the config run): that many units stratified by family (`family_strata`).
+    `targets` (`<op_path>[@<step>]`) add every VU of a module to the sample (targeted negatives; not subject to the cap); `replay_k` (the config run): that many units, drawn by `replay_draw` (`family_strata`).
     Addresses: the v2 query's population; a request's Build dir (`program_dirs`: request label -> dir) supplies the correspondence the
     manifest was built with (recorded as `addresses`).
     Result: True = every sampled VU replays bit-exactly and every non-empty stratum was evaluated; False = a mismatch (named);
@@ -521,7 +528,7 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
     all_vus, not_ev, not_ev_fam, indices, codes, addresses, anchors, addr_rec = populate(
         programs, ranks, arrivals, executed_prefix, ring_slots, attention_paths=attention_paths, tp=tp, program_dirs=program_dirs, manifest=manifest, memo=memo)
     pool_vus, not_exec_vus = _kept(split_not_executed(all_vus, executed_prefix), indices, all_vus)   # [R17-26] classified out of the pool
-    picked_all, strata, tgt = sample(*family_strata(pool_vus, replay_k, per_stratum), seed, targets=targets, key=challenge_key)
+    picked_all, strata, tgt = sample(*family_strata(pool_vus, replay_k, per_stratum, replay_draw), seed, targets=targets, key=challenge_key)
     targeted, n_targeted, n_strat = tgt["hits"], int(tgt["added"]), int(tgt["stratified"])
     cap = max(int(replay_k or max_evaluate), len(strata))                         # never below one VU per stratum
     picked = picked_all[:min(cap, n_strat)] + picked_all[n_strat:]                # targeted VUs are outside the cap
@@ -642,7 +649,7 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
                            "uncovered_identities": qpop["uncovered_identities"], "controller": qpop.get("controller"),   # [R4] the lifted controller, by name
                            "query_checks": qpop["query_checks"], "scope": qpop["scope"]},
             "addresses": addr_rec,
-            "sample": {"per_stratum": int(replay_k or per_stratum), "seed": int(seed), "seed_source": seed_source, "strata_by": "family" if replay_k else "unit", **({"k": int(replay_k)} if replay_k else {}),
+            "sample": {"per_stratum": int(replay_k or per_stratum), "seed": int(seed), "seed_source": seed_source, "strata_by": replay_draw if replay_k else "unit", **({"k": int(replay_k)} if replay_k else {}),
                        # [R16 rev M-0600 / F-r16-23] under the verifier-challenge form the FULL challenge is on the record: a reader recomputes
                        # sha256(challenge|run_root)[:8] (challenge_seed) as a fact -- the source text alone (challenge[:16], repr) cannot be
                        **({"challenge": str(seed_challenge)} if seed_challenge is not None else {}),

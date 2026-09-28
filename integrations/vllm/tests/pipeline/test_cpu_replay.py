@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import struct
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -284,6 +285,32 @@ def test_a_record_not_decided_by_the_keep_s_bundle_is_refused(tmp_path):
     (out / "verdict.json").write_text(json.dumps(v))
     with pytest.raises(CPU.Refused, match="not decided by a replay of the bundle"):
         CPU.of_record(CPU.open_keep(CPU.slim_path(out, 1)), out)
+
+
+def test_a_keep_replays_only_under_the_draw_it_was_kept_for(tmp_path, monkeypatch):
+    from verity_vllm.pipeline import c2_replay as C2
+
+    out, _ = _decided(tmp_path)
+    slim = CPU.open_keep(CPU.slim_path(out, 1))["keep"]
+    site = C2.Site(args=SimpleNamespace(replay_draw="uniform"), out=out, pair=1, com=None, rc=None, row={}, reqs=[], sampling={}, tokens={},
+                   manifest=None, stop_of_record={}, ids_full={}, versions={}, components={}, vc_result=None, weights_of=None,
+                   weights_check=None, tl=None)
+    drawn = {"picks": [tuple(p) for p in slim["picks"]]}
+    monkeypatch.setattr(C2, "plan", lambda s: {"replay": drawn})
+    CPU.kept_draw(site, slim)
+    drawn["picks"] = drawn["picks"][::-1]
+    with pytest.raises(CPU.Refused, match=r"shares 2 of the keep's 2 picks \(2 drawn\); the record draws by 'uniform'"):
+        CPU.kept_draw(site, slim)
+    drawn["picks"] = [["r0", 9, 9, "model.embed_tokens"], *slim["picks"][:1]]
+    with pytest.raises(CPU.Refused, match=r"shares 1 of the keep's 2 picks"):
+        CPU.kept_draw(site, slim)
+
+    def lacks(s):
+        raise KeyError("tree node 1 of step 0 level 0 is not in the slim dumped store")
+
+    monkeypatch.setattr(C2, "plan", lacks)
+    with pytest.raises(CPU.Refused, match="reads what the keep does not hold .*tree node 1 of step 0"):
+        CPU.kept_draw(site, slim)
 
 
 def test_the_replay_s_engine_of_record_is_the_commit_engine_s(tmp_path):

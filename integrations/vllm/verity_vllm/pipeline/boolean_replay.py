@@ -219,19 +219,27 @@ def scratch(bundle: Path, out: Path) -> Path:
 
 
 def outcome(art: dict[str, Any]) -> dict[str, Any]:
-    """The replay's picks by family (picked, evaluated, mismatched) and its grade, from its `sampled_replay` record."""
+    """The replay's picks by family (picked, evaluated, mismatched) and its grade, from its `sampled_replay` record.  The uniform draw's
+    one stratum names no family: a family's evaluated count is then its picks less its not-evaluated ones, known only while the record
+    lists every not-evaluated pick (it lists at most 12; None past that), and its mismatches are `mismatch_by`'s, which counts them all."""
     sr = art["sampled_replay"]
-    s, fam = sr["sample"], {}
-    for f, n in (sr["timing"].get("per_family_n") or {}).items():
+    s, t, fam = sr.get("sample") or {}, sr.get("timing") or {}, {}
+    for f, n in (t.get("per_family_n") or {}).items():
         fam[f] = {"picked": int(n), "evaluated": 0, "mismatch": 0}
-    for key, st in (sr.get("strata") or {}).items():
-        f = fam.setdefault(key.split("|")[0].split("{")[0], {"picked": 0, "evaluated": 0, "mismatch": 0})
-        f["evaluated"] += int(st.get("evaluated", 0))
-        f["mismatch"] += int(st.get("mismatch", 0))
+    if s.get("strata_by") == "uniform":
+        ne, wrong = sr.get("not_evaluated") or [], (sr.get("mismatch_by") or {}).get("by_family") or {}
+        gone = Counter(str(x.get("spec")).split("{")[0] for x in ne) if len(ne) == int(s.get("not_evaluated_n") or 0) else None
+        for f, d in fam.items():
+            d["evaluated"], d["mismatch"] = None if gone is None else d["picked"] - gone[f], int(wrong.get(f, 0))
+    else:
+        for key, st in (sr.get("strata") or {}).items():
+            f = fam.setdefault(key.split("|")[0].split("{")[0], {"picked": 0, "evaluated": 0, "mismatch": 0})
+            f["evaluated"] += int(st.get("evaluated", 0))
+            f["mismatch"] += int(st.get("mismatch", 0))
     return {"result": sr["result"], "grade": sr["grade"], "why": sr["why"],
             **{k: s.get(k) for k in ("seed", "seed_source", "k", "picked", "evaluated", "equal", "mismatch_n", "not_evaluated_n")},
             "by_family": fam, "not_evaluated": sr.get("not_evaluated"), "mismatch": sr.get("mismatch"),
-            "wall_s": sr["timing"]["wall_s"], "workers": sr["timing"]["workers"]}
+            "wall_s": t.get("wall_s"), "workers": t.get("workers")}
 
 
 def _replay(o: Options, link: Path) -> dict[str, Any]:

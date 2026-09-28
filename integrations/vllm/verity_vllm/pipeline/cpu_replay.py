@@ -29,7 +29,8 @@ without serving again (the sample is seeded from the run root, so it draws the s
 
 BUNDLE may be that keep (`open_keep`): its files are checked against `slim.json`, and the record beside it, decided by a replay of the
 bundle the keep was cut from (the verdict's `replayed` names that bundle's manifest sha256), is read back in its deferred state
-(`undecided`), so the replay decides the run again from its own draw.  A replay from a keep writes no keep.
+(`undecided`), so the replay decides the run again from its own draw.  It is refused before anything is evaluated unless this code's
+draw is the keep's picks in order (`kept_draw`).  A replay from a keep writes no keep.
 """
 from __future__ import annotations
 
@@ -383,6 +384,22 @@ def keep(out: Path, b: dict[str, Any], store: Any, run: Any, touched: SD.Touched
     return doc
 
 
+def kept_draw(s: C2.Site, slim: dict[str, Any]) -> None:
+    """Refused unless this code draws the keep's picks from it, in order (`C2.plan`, read only).  A keep holds only its picks' reads,
+    so another draw (a sampler that changed, or a record's `replay_draw` this code does not make) would stop on a node it lacks."""
+    try:
+        got, why = json.loads(json.dumps(C2.plan(s)["replay"].get("picks"))), None
+    except KeyError as e:
+        got, why = None, repr(e)[:200]
+    want = slim["picks"]
+    if got == want:
+        return
+    draw = getattr(s.args, "replay_draw", None)
+    seen = (f"reads what the keep does not hold ({why})" if why else
+            f"shares {len({tuple(p) for p in want} & {tuple(p) for p in got or ()})} of the keep's {len(want)} picks ({len(got or ())} drawn)")
+    raise Refused(f"this code's draw from the keep {seen}" + (f"; the record draws by {draw!r}" if draw else ""))
+
+
 def replay(o: Options) -> bool | None:
     """The bundle's C2 replay and the run's verdict on the record; the verdict's commit_pass."""
     from verity_vllm.check import weights_of_record as WR
@@ -407,11 +424,14 @@ def replay(o: Options) -> bool | None:
           + (f" -- {wc['why']}" if wc["why"] else ""), flush=True)
     args.replay_worker_peak = worker_peak(o)
     vc, consumed, reads = row["commit"]["value_correspondence"], set(), {}
+    site = C2.Site(args=args, out=out, pair=pair, com=store, rc=run, row=row, reqs=ctx["requests"], sampling=ctx["sampling"], tokens=ctx["tokens"],
+                   manifest=man, stop_of_record=ctx["stop_of_record"], ids_full=ctx["ids_full"], versions={"git_head": ctx.get("code")},
+                   components=vc.setdefault("components", {}), vc_result=ctx.get("vc_result"), weights_of=lambda p: provider(words, p, consumed),
+                   weights_check=lambda: dict(wc), tl=tl, reads=reads)
+    if "keep" in b:
+        kept_draw(site, b["keep"])
     with SD.touched(store) as touched:
-        C2.run(C2.Site(args=args, out=out, pair=pair, com=store, rc=run, row=row, reqs=ctx["requests"], sampling=ctx["sampling"], tokens=ctx["tokens"],
-                       manifest=man, stop_of_record=ctx["stop_of_record"], ids_full=ctx["ids_full"], versions={"git_head": ctx.get("code")},
-                       components=vc.setdefault("components", {}), vc_result=ctx.get("vc_result"), weights_of=lambda p: provider(words, p, consumed),
-                       weights_check=lambda: dict(wc), tl=tl, reads=reads), {})
+        C2.run(site, {})
     engine_of_record(row, ctx, out / f"sampled_replay_p{pair}.json")
     decide(row, ctx, wc, b, consumed, words, tree.get("extra") or {})
     if "keep" not in b:
