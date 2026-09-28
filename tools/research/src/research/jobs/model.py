@@ -178,6 +178,11 @@ class JobService:
 
     def request(self, method: str, path: str, token: str | None, body: dict | None, now: float) -> tuple[int, dict]:
         try:
+            if body is not None and not isinstance(body, dict):
+                raise Refused(400, "the body must be a JSON object")
+            for k in ("slot", "run_id", "summary"):
+                if (body or {}).get(k) is not None and not isinstance(body[k], str):
+                    raise Refused(400, f"{k} must be a string")
             return self._route(method, path.split("?")[0], _query(path), token, body or {}, now)
         except Refused as r:
             return r.status, {"error": r.error}
