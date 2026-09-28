@@ -1,6 +1,7 @@
 """The Lean soundness package's RoPE data (`FlockSoundness/Rope/`: the gates, the pinned rows, the checkpoints and the
-chunk checks) is the unit's Boolean export and its pinned rows: regenerated here, byte for byte, for the netlist
-`rope_head.PINS` pins. `FlockSoundness.Rope.pinned_eq` checks the rest in the kernel."""
+chunk checks): the committed gate circuit computes the unit's circuit (on random inputs), and the rest is regenerated
+here from it and the pinned rows, byte for byte, for the netlist `rope_head.PINS` pins. `FlockSoundness.Rope.pinned_eq`
+checks the rest in the kernel."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -24,7 +25,7 @@ def test_the_encoders_refuse_what_the_lean_decoders_cannot_read():
         lean_rows._gate_code(1, (1 << 17) - 2, 0)
 
 
-def test_rope_data_is_the_export_and_the_pinned_rows():
+def test_rope_data_is_the_unit_and_the_pinned_rows():
     data = lean_rows.rope()
     assert data["sha256"] == rope_head.PINS[64]
     for name in lean_rows.FILES:
