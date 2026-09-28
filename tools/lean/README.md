@@ -27,7 +27,7 @@ python tools/lean/audit.py --update PKG...        write the guarantees' records 
 python tools/lean/audit.py --update --owner @lane PKG...   the same, with @lane as the owner of each new guarantee
 python tools/lean/audit.py --all [--root DIR]     the controls, then every package under DIR with a lean-audit.json
 python tools/lean/audit.py --name-instances PKG...  write each anonymous instance's name, the one Lean gave it, into its
-                                                  declaration (no record changes)
+                                                  declaration (no record changes); it fails until you build and audit again
 python tools/lean/audit.py --lift LIFTS.json PKG  write each guarantee {"X.t": {"as": "X.Guarantees.G", "into": MODULE}}
                                                   as `def G : Prop` in MODULE and `theorem X.SecurityProofs.G :
                                                   X.Guarantees.G := @X.t` beside its proof (or in the module
