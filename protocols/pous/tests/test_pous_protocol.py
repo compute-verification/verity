@@ -176,6 +176,74 @@ def test_band12_segment_at_the_registered_point():
     assert hashlib.sha256(b"".join(blocks)).hexdigest() == pinned
 
 
+def test_segment_tags_are_salt_then_u64_segment():
+    """`tag_s = salt ‖ u64 s` (Lean `segDom`, `PousDenseReCert.tag`): the 24-byte salt, then the segment index, little
+    endian, injective in `s` over all 2^64 segments (`segDom_inj`).  The GPU path builds the same bytes
+    (`verity_vllm.engine.pous.codec.segment_tags`; `benchmarks/pous` gates it against these)."""
+    from verity_pous.labels import salt_value, tag
+
+    seen = set()
+    for s in (0, 1, 2, 511, 512, 2**32, 2**64 - 1):
+        t = tag(salt_value(SALT), s).to_bytes(32, "little")
+        assert t == SALT + s.to_bytes(8, "little")
+        seen.add(t)
+    assert len(seen) == 7
+    with pytest.raises(ValueError):
+        tag(salt_value(SALT), 2**64)
+
+
+@pytest.mark.parametrize("name", sorted(SMALL))
+def test_identical_segments_encode_differently(name):
+    """The hard requirement behind `band_meets_14` and `shared_domain_breaks`: segments with the same bytes of `W`
+    must encode to different blocks, because each segment is keyed by its own tag."""
+    base = SMALL[name]()
+    sch = type(base)(base.params.with_segments(3))
+    seg = random.Random(5).randbytes(sch.params.segment_bytes)
+    c = protocol.encode(sch, seg * 3, SALT)
+    for a, b in itertools.combinations(range(3), 2):
+        assert all(x != y for x, y in zip(c[a], c[b])), f"segments {a} and {b} share a block"
+    vk = protocol.verifier_key(sch, protocol.commit(sch, seg * 3), SALT, w=seg * 3)
+    assert len(set(vk.leaves)) == len(vk.leaves)
+    assert protocol.decode(sch, SALT, c) == seg * 3
+
+
+@pytest.mark.parametrize("name", sorted(SMALL))
+def test_a_shared_domain_breaks_the_audit(name):
+    """`shared_domain_breaks`, replayed on real labels: encode every segment under segment 0's domain, and an
+    adversary holding segment 0 alone answers every challenge from it; the audit accepts.  With the scheme's own
+    tags the same holding fails."""
+    base = SMALL[name]()
+    sch = type(base)(base.params.with_segments(3))
+    seg = random.Random(6).randbytes(sch.params.segment_bytes)
+    b = sch.params.blocks_per_segment
+    shared = [sch.encode_segment(SALT, 0, seg) for _ in range(3)]
+    vk_shared = VerifierKey.from_segments(sch.params, SALT, shared)
+    held = shared[0]
+    v = protocol.Verifier(sch, vk_shared, protocol.challenge_key(b"audit", vk_shared), k=40, research=True, clock=_ticks())
+    assert v.run(lambda i: held[i % b]).accepted
+    own = protocol.encode(sch, seg * 3, SALT)
+    vk = VerifierKey.from_segments(sch.params, SALT, own)
+    v = protocol.Verifier(sch, vk, protocol.challenge_key(b"audit", vk), k=40, research=True, clock=_ticks())
+    assert not v.run(lambda i: own[0][i % b]).accepted
+
+
+def test_the_14_gb_certificate():
+    """`band_meets_14`: one `Meets` for 448 segments (14 GB) at k = 111, the same hypothesis as one segment; other
+    segment counts keep the gap."""
+    sch = schemes.get(segments=448)
+    cert = sch.certificate
+    assert (cert.theorem, cert.segments, cert.k, cert.rounds, cert.hypotheses) == ("band_meets_14", 448, 111, 5,
+                                                                                    ("ChainExPostFactoG",))
+    vk = VerifierKey.from_leaves(sch.params, SALT, [bytes(32)] * sch.params.blocks)
+    v = protocol.Verifier(sch, vk, protocol.challenge_key(b"\x00" * 32, vk))
+    assert v.gaps == ()
+    p = protocol.StorageProfile(sch.name, sch.params.manifest(), sch.params.blocks, sch.params.m, 111, 536_800, cert)
+    assert p.certified and p.state_bound_bits == 113_929_658_799
+    assert schemes.get(segments=30).certificate.theorem == "band_meets_64"
+    v30 = protocol.Verifier(schemes.get(segments=30), _fake_vk(schemes.get(segments=30)), protocol.challenge_key(b"\x00" * 32, vk))
+    assert v30.gaps == ("W has 30 segments; band_meets_64 is about 1",)
+
+
 def test_certificates_at_their_points():
     b = schemes.get().certificate
     assert (b.k, b.rounds, b.work, b.call_ns, b.cliff, b.segments) == (111, 5, 1 << 20, 483_000, 12, 1)

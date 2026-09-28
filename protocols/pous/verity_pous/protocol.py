@@ -77,7 +77,7 @@ class Certificate:
     most `delta + 2^eps_log2`.  This is `theorem`, given the open named `hypotheses`, under `claims`.
 
     `cliff` is the most rounds the structure tolerates at any `k`, or None when security degrades gracefully past
-    `rounds`.  The band has its cliff at its in-degree `d`.  `segments` is the most segments of `W` the theorem is
+    `rounds`.  The band has its cliff at its in-degree `d`.  `segments` is the number of segments of `W` the theorem is
     about, or None for any number."""
 
     k: int
@@ -136,7 +136,12 @@ class Scheme(ABC):
     up by name (`schemes.get`), with its conformance vectors pinned under the name (`tests/fixtures/schemes/`).  A
     subclass sets `name` (its byte-format version string), `backend` (the reference primitives for its parameters) and
     `certificate`.  It implements `encode_segment` and `decode_segment`, and `respond` only when an honest answer is
-    more than the stored block."""
+    more than the stored block.
+
+    **Segment `s` must be keyed injectively in `s`**, across every segment of `W`: `tag_s = salt ‖ u64 s`
+    (`labels.tag`), or one salt with global indices.  With a shared domain, identical segments get identical labels,
+    and an adversary storing one of them passes every audit (Lean `shared_domain_breaks`; `segDom_inj` is the
+    certificates' hypothesis).  The conformance suite checks it for every registered scheme."""
 
     name: ClassVar[str] = ""
     backend: ClassVar[Callable[[Any], Primitives]]
@@ -314,7 +319,7 @@ class Verifier:
         else:
             k = cert.k if k is None else k
             refused = cert.refusals(k, limit)
-            if cert.segments is not None and scheme.params.segments > cert.segments:
+            if cert.segments is not None and scheme.params.segments != cert.segments:
                 uncovered = (f"W has {scheme.params.segments} segments; {cert.theorem} is about {cert.segments}",)
         if refused and not research:
             raise ValueError(f"the audit is outside the certificate: {'; '.join(refused)} (research=True runs it anyway)")

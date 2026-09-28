@@ -88,6 +88,21 @@ def conformance_gate(name: str) -> dict[str, Any]:
     return {"passed": got == pinned, "vector": str(sv.path(name).relative_to(ROOT)), "root": got["small"]["root"]}
 
 
+TAG_SEGMENTS = 448
+"""Segment tags are gated over at least this many segments (`band_meets_14`'s 14 GB store)."""
+
+
+def tags_gate(tags: list[bytes], segments: int) -> dict[str, Any]:
+    """The implementation's segment tags equal the reference's `tag_s = salt ‖ u64 s` and are injective across all
+    segments: with a shared domain, identical segments get identical labels and the audit accepts with probability 1
+    (Lean `shared_domain_breaks`)."""
+    from verity_pous.labels import salt_value, tag
+
+    ref = [tag(salt_value(SALT), s).to_bytes(32, "little") for s in range(segments)]
+    injective, equal = len(set(tags)) == segments, tags == ref
+    return {"passed": injective and equal, "segments": segments, "injective": injective, "equal_to_reference": equal}
+
+
 def certificate_gate(scheme, k: int, limit_ns: int) -> tuple[dict[str, Any], tuple[str, ...]]:
     """Whether the certificate covers an audit of `k` challenges within `limit_ns`, and the profile's gaps."""
     cert = scheme.certificate
@@ -95,7 +110,7 @@ def certificate_gate(scheme, k: int, limit_ns: int) -> tuple[dict[str, Any], tup
         return {"passed": False, "reason": f"{scheme.name} has no certificate at {scheme.params.manifest()}"}, ("no certificate",)
     refused = cert.refusals(k, limit_ns)
     gaps = refused
-    if cert.segments is not None and scheme.params.segments > cert.segments:
+    if cert.segments is not None and scheme.params.segments != cert.segments:
         gaps += (f"W has {scheme.params.segments} segments; {cert.theorem} is about {cert.segments}",)
     return {"passed": not refused, "refusals": list(refused), "effective_rounds": cert.effective_rounds(limit_ns)}, gaps
 
@@ -171,10 +186,15 @@ class Reference:
         negative = self._audits(protocol, scheme, vk, wrong.__getitem__, a.audits, a.rtt_allowance_ns)
         k, limit = honest["k"], honest["limit_ns"]
         gate, gaps = certificate_gate(scheme, k, limit)
+        from verity_pous import dense as dense_codec
+
+        nt = max(n, TAG_SEGMENTS)
+        wide = scheme.params.with_segments(nt)
+        tags = tags_gate([dense_codec._check(wide, SALT, s).to_bytes(32, "little") for s in range(nt)], nt)   # encode_segment's own tag
         return {
             "implementation": {"name": self.name, "commit": a.impl_commit, "workers": a.workers},
             "segments": n, "segments_of_weight_set": segments, "blocks": scheme.params.blocks, "weight_bytes": used,
-            "gates": {"round_trip": {"passed": all(ok for _, ok, _ in dec)}, "certificate": gate,
+            "gates": {"round_trip": {"passed": all(ok for _, ok, _ in dec)}, "certificate": gate, "segment_tags": tags,
                       "timed_audit": {"passed": honest["accepted"] == honest["audits"]},
                       "negative_control": {"passed": negative["accepted"] == 0, "accepted": negative["accepted"]}},
             "metrics": {"decode_pass_s": decode_wall, "ewb": used / decode_wall,
@@ -230,6 +250,13 @@ class VllmGpu:
         gate, gaps = certificate_gate(scheme, k, limit)
         gates = {g: {"passed": bool(v.get("passed"))} for g, v in doc["gates"].items()}
         gates["certificate"] = gate
+        n = max(m["segments"], TAG_SEGMENTS)
+        probe = ("import sys; from verity_vllm.engine.pous import codec; "
+                 "t = codec.segment_tags(bytes.fromhex(sys.argv[1]), list(range(int(sys.argv[2]))), 'cpu'); "
+                 "sys.stdout.write(bytes(t.flatten().tolist()).hex())")
+        raw = bytes.fromhex(subprocess.run([a.python, "-c", probe, SALT.hex(), str(n)], cwd=tree, env=env, check=True,
+                                           capture_output=True, text=True).stdout)
+        gates["segment_tags"] = tags_gate([raw[i * 32:(i + 1) * 32] for i in range(n)], n)
         accepted = bool(audit.get("accepted"))
         return {
             "implementation": {"name": self.name, "commit": a.impl_commit, "harness": "verity-vllm pous-dense-bench",
