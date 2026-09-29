@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import math
 import time
-from typing import Any, Callable, Mapping, Sequence
+from typing import Any, Callable, Collection, Mapping, Sequence
 
 import numpy as np
 
@@ -29,14 +29,21 @@ from verity_vllm.acquire.sources.call_boundary_plan import FAMILY, WORD_DTYPES, 
 
 _SIGNED = {1: "uint8", 2: "int16", 4: "int32", 8: "int64"}
 
-#: other sources' claims on `call_boundaries` identities (identity -> the claiming source's name, or None): a claimed identity is that
-#: source's to acquire (a tap of a Value the runtime already holds, like a pre-bias GEMM output) and is never evaluated here
+#: other sources' claims on `call_boundaries` identities (identity -> the claiming source's `short_name`, or None): a claimed identity is
+#: that source's to acquire (a tap of a Value the runtime already holds, like a pre-bias GEMM output) and is never evaluated here
 CLAIMS: list[Callable[[Mapping[str, Any]], str | None]] = []
 
 
 def claimed(r: Mapping[str, Any]) -> str | None:
     """The source that claims identity `r` (`CLAIMS`), or None: this source evaluates it."""
     return next((c for f in CLAIMS if (c := f(r))), None)
+
+
+def unattached(manifest: Mapping[str, Any] | None, attached: Collection[str]) -> list[str]:
+    """The `call_boundaries` identities of `manifest` whose claimant is not among `attached` (the sources the Commit attaches), each named
+    with it: no source acquires them."""
+    return [f"{CP._label(r)}: claimed by {s}, a source the Commit does not attach" for r in (manifest or {}).get("identities") or []
+            if r.get("family") == FAMILY and (s := claimed(r)) is not None and s not in attached]
 
 
 def manifest_sites(manifest: Mapping[str, Any] | None) -> list[Mapping[str, Any]]:
@@ -285,4 +292,5 @@ def attach(com: Any, enabled: bool, manifest: Mapping[str, Any] | None, required
     return required_classes, src
 
 
-__all__ = ["FAMILY", "WORD_DTYPES", "CLAIMS", "CallBoundarySource", "claimed", "manifest_sites", "plan_of", "words", "operand_words", "attach"]
+__all__ = ["FAMILY", "WORD_DTYPES", "CLAIMS", "CallBoundarySource", "claimed", "unattached", "manifest_sites", "plan_of", "words",
+           "operand_words", "attach"]
