@@ -87,6 +87,32 @@ def test_the_program_evaluates_to_the_reference_on_an_unbalanced_tree():
     assert words == ref.words
 
 
+def test_the_weight_program_evaluates_to_the_reference():
+    """`NcpWeight` commits each column's Y and c₀ as `schemes.ncp.assemble` has them, which the call reads."""
+    call = F.call(32, 64, 32)
+    ys, c0s = R.weight_outputs(call)
+    assert list(evaluate(ncp2.weight(ncp2.Shape(32, 64, 32)), *call.weight_args())) == [v for col in ys for v in col] + c0s
+
+
+@pytest.mark.slow
+def test_a_window_evaluates_to_its_calls():
+    """Two calls on one weight in one root (`NcpWindow`) give each call's reference outputs."""
+    shape = ncp2.Shape(16, 64, 16)
+    one = F.call(16, 64, 16, seed=3)
+    two = R.Call(**{**F.call(16, 64, 16, seed=4).__dict__, "b": one.b, "t": one.t, "bias": one.bias, "salt": one.salt,
+                    "weight": one.weight, "colids": one.colids, "forward": one.forward + 1})
+    args = one.weight_args()[:4] + [list(one.t), list(one.bias), [x & 0x7F for c in (one, two) for r in c.a for x in r],
+                                    [v for c in (one, two) for v in c.s]]
+    args += [[w for c in (one, two) for w in (c.forward & 0xFFFFFFFF, c.forward >> 32)],
+             [w for c in (one, two) for w in (c.position & 0xFFFFFFFF, c.position >> 32)], [i for c in (one, two) for i in c.rowids]]
+    out = evaluate(ncp2.window(shape, 2), *args)
+    mn, per = 256, (shape.steps - 1) * 256
+    for j, c in enumerate((one, two)):
+        ref = R.evaluate(c)
+        assert list(out[j * mn:(j + 1) * mn]) == [v for row in ref.y for v in row]
+        assert list(out[2 * mn + j * per:2 * mn + (j + 1) * per]) == ref.words[0]
+
+
 def test_shapes_outside_the_circuit_are_refused():
     with pytest.raises(DomainError):
         ncp2.linear(ncp2.Shape(24, 64, 32))

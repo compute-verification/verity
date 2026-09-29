@@ -178,11 +178,12 @@ def templates() -> list[tuple[str, Any, list[dict]]]:
 
 
 def _pouw_roots() -> list[Any]:
-    """PoUW's `ncp-v2` unit templates at k = 64 and the smallest whole call (`verity_pouw.circuit.ncp2`); the package's own
-    tests check the call's template partition and its Z separator."""
+    """PoUW's `ncp-v2` unit templates at k = 64, and the smallest whole call, its weight side and a window of two calls on
+    it (`verity_pouw.circuit.ncp2`); the package's own tests check their template partitions and the Z separator."""
     from verity_pouw.circuit import ncp2
 
-    return list(ncp2.templates(64, "shift24").values()) + [ncp2.linear(ncp2.Shape(16, 64, 16))]
+    shape = ncp2.Shape(16, 64, 16)
+    return list(ncp2.templates(64, "shift24").values()) + [ncp2.linear(shape), ncp2.weight(shape), ncp2.window(shape, 2)]
 
 
 def _core_roots() -> list[Any]:
