@@ -11,8 +11,6 @@ import pytest
 KNOWN_FAILURES = {
     "tests/acquire/test_compiled_source.py::test_renumber_assigns_invocations_per_call_site":
         "CPU torch: `Tried to instantiate dummy base class _cuda_isCurrentStreamCapturing` (owner vllm-epoch-prep)",
-    "tests/check/test_fold_sampler_construction.py::test_101s_records_fold_canonical_equal_under_the_programs_construction":
-        "the store fetch of *match_compare.json returns nothing off the check pod (owner vllm-epoch-prep)",
     "tests/engine/test_profiles_generic.py::test_generic_profile_equals_its_fixture[derived_B0]":
         "#321 added TokenSelectGumbelTopP.construction; the canonical profile fixtures predate it (re-pin with `verity-vllm canonical-profiles --write`; owner vllm-epoch-prep)",
     "tests/engine/test_profiles_generic.py::test_generic_profile_equals_its_fixture[derived_B1]":
