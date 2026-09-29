@@ -241,7 +241,7 @@ __global__ void k_ceiling(int iters, uint64_t* sink) {
       sha256_compress(h, w);
       w[0] ^= h[0];
     }
-    acc = h[0];
+    acc = ((uint64_t)h[0] << 32 | h[1]) ^ ((uint64_t)h[2] << 32 | h[3]) ^ ((uint64_t)h[4] << 32 | h[5]) ^ ((uint64_t)h[6] << 32 | h[7]);
   } else if (KIND == 1) {
     uint64_t h[8], w[16];
 #pragma unroll
@@ -252,15 +252,16 @@ __global__ void k_ceiling(int iters, uint64_t* sink) {
       sha512_compress(h, w);
       w[0] ^= h[0];
     }
-    acc = h[0];
+    acc = h[0] ^ h[1] ^ h[2] ^ h[3] ^ h[4] ^ h[5] ^ h[6] ^ h[7];
   } else {
     uint64_t st[25];
 #pragma unroll
     for (int i = 0; i < 25; ++i) st[i] = seed + i;
     for (int it = 0; it < iters; ++it) keccak_p<KIND == 2 ? 24 : 12>(st);
-    acc = st[0];
+#pragma unroll
+    for (int i = 0; i < 25; ++i) acc ^= st[i];
   }
-  if (acc == 0x5A5A5A5A5A5A5A5Aull) sink[0] = acc;
+  if (acc == 0x5A5A5A5A5A5A5A5Aull) sink[0] = acc;       // never true, but the compiler cannot know: the work is kept
 }
 
 static void ceiling(int kind, int grid, int threads, int iters, uint64_t* sink) {
