@@ -233,6 +233,15 @@ def test_the_cut_holds_on_a_padded_tree():
     assert P.circuit_separator(c, uc).ok and P.circuit_width_rule(c, uc=uc).ok
 
 
+@pytest.mark.slow
+def test_the_cut_holds_past_255():
+    """272 rows: two digest and two form-X bindings, 15 two-byte pad strips. A row's rank and its stream line are separate
+    anchored inputs: read as one, the leaf and the X̃ row place its two bytes by the same gate, a value of two units."""
+    c, uc = _check(fp8.Shape(272, 96, 16))
+    assert uc.verdict.ok, uc.verdict.codes
+    assert P.circuit_separator(c, uc).ok and P.circuit_width_rule(c, uc=uc).ok
+
+
 def test_delivered_words_fail_the_width_rule():
     """Were the tiles' words served beside y, the tiles would reach a served output other than through Z, and fail."""
     c, uc = _check(fp8.Shape(16, 96, 16))

@@ -401,9 +401,11 @@ A hash block whose inputs are all call-wide or all the row's own is one call of 
 `PouwSha256Compress`); a mixed block is expanded into primitives. Without the split, two rows recompute the streams'
 prefix (`test_without_hoisting_two_rows_recompute_the_streams_prefix`).
 
-**Index binding.** The index, the weight id, the row, column and pad ranks and the upper nodes' (level, index) are Program
-inputs, anchored like the salt. Their encodings are minimal big-endian (`frame`, `merkle._uint`), so byte lengths are
-template parameters:
+**Index binding.** The index, the weight id, the row ranks, the rows' stream lines, the column lines, the pad ranks and
+the upper nodes' (level, index) are Program inputs, anchored like the salt. A row's rank (the tree's) and its line (E₁'s)
+are equal but separate inputs: read as one, the digest and the X unit place its bytes by the same gate once they take two
+bytes, and that value would be computed in two units. The encodings are minimal big-endian (`frame`, `merkle._uint`), so
+byte lengths are template parameters:
 - per call, the index's (IL), index + 2's (OL, the domain's owner) and the weight id's (WL), `fp8.Lengths.of(index, weight)`;
 - per binding, a strip's ranks and its nodes' indices (`fp8.strip_lengths`), an upper node's index, and a row's or
   column's line. Past 255 they take two bytes, so strips are batched in runs of one byte-length signature, and the domain

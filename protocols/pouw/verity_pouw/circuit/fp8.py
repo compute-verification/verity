@@ -27,8 +27,9 @@ One linear call ``A·Bᵀ`` (A: m × k activation rows as the model's E4M3 codes
 
 **Hoisting** (`hoist`): the streams' and the tree's messages share call-wide prefixes, so each per-row function is split,
 its call-wide gates computed once in `NcpFp8Domain` (the tree's) and `NcpFp8Key` (the streams'), each returning its frontier, and
-its row gates in the row's unit.  **Index binding**: the index, the weight id, the row, column and pad ranks and the upper
-nodes' (level, index) are Program inputs, anchored like the salt.  Their encodings are minimal big-endian
+its row gates in the row's unit.  **Index binding**: the index, the weight id, the row ranks, the rows' stream lines, the
+column lines, the pad ranks and the upper nodes' (level, index) are Program inputs, anchored like the salt.  A row's rank
+(the tree's) and its line (E₁'s) are equal but separate inputs, so that no two units place the same input's bytes alike.  Their encodings are minimal big-endian
 (`verity.randomness.frame`, `verity.commitments.merkle._uint`), so byte lengths are template parameters: the index's (IL),
 index + 2's, the domain's owner (OL), and the weight id's (WL) per call; a strip's ranks and its nodes' indices
 (`strip_lengths`), an upper node's index, and a row's or column's line per binding.  Strips and forming strips are batched
@@ -651,13 +652,13 @@ def _linear_sig(S):
     pads, ups = shape.width - m, len(upper_nodes(shape))
     params = [("a", Array(m, Array(k, U8))), ("s", Array(m, F32)), ("b", Array(n, Array(k, U8))), ("t", Array(n, F32)),
               ("bias", Array(n, BF16)), ("salt", Array(32, U8)), ("index", PAIR), ("weight", PAIR),
-              ("rowids", Array(m, U32)), ("colids", Array(n, U32))]
+              ("rowids", Array(m, U32)), ("lines", Array(m, U32)), ("colids", Array(n, U32))]
     params += [("padids", Array(pads, U32))] if pads else []
     params += [("nodeids", Array(ups, Array(2, U32)))] if ups else []
     return tuple(params), Tuple(Array(m, Array(n, BF16)), Array((m // D) * (n // D), Array(D * D * tile_words(k), U32)))
 
 
-def _linear_body(B, S, a, s, b, t, bias, salt, index, weight, rid, cid, *rest):
+def _linear_body(B, S, a, s, b, t, bias, salt, index, weight, rid, lines, cid, *rest):
     m, k, n = S.M, S.K, S.N
     shape = Shape(m, k, n)
     ms, ns, pads = m // D, n // D, shape.width - m
@@ -700,8 +701,9 @@ def _linear_body(B, S, a, s, b, t, bias, salt, index, weight, rid, cid, *rest):
         ys = B.batch(form_template(False, k, S.SUMS, lg, ll), kfront[("y", ll)], wrows[lo:hi], cols_id[lo:hi], axes=(None, 0, 0))
         y_strips += [ys[j] for j in range(hi - lo)]
     x_strips = []
+    lines_id = lines.reshape(Array(ms, Array(D, U32)))
     for lo, hi, ll in _runs([_ulen(D * s_) for s_ in range(ms)]):
-        xs = B.batch(form_template(True, k, S.SUMS, lg, ll), kfront[("x", ll)], strips_a[lo:hi], rows_id[lo:hi], axes=(None, 0, 0))
+        xs = B.batch(form_template(True, k, S.SUMS, lg, ll), kfront[("x", ll)], strips_a[lo:hi], lines_id[lo:hi], axes=(None, 0, 0))
         x_strips += [xs[j] for j in range(hi - lo)]
     y_all = array_of(y_strips)
     tile_t = tile_template(k)

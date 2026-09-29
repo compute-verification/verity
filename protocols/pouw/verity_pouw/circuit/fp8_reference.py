@@ -46,7 +46,7 @@ class Call:
         m, n = self.shape.m, self.shape.n
         out = [[x for r in self.a for x in r], list(self.s), [x for r in self.b for x in r], list(self.t), list(self.bias),
                list(self.salt), [self.index >> 32, self.index & M32], [self.weight >> 32, self.weight & M32],
-               list(range(m)), list(range(n))]
+               list(range(m)), list(range(m)), list(range(n))]
         if self.shape.width > m:
             out.append(list(range(m, self.shape.width)))
         if upper_nodes(self.shape):
