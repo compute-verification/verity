@@ -1061,7 +1061,8 @@ included. Claims are listed region-major, then point 0 before point 1.
     the constant `A = B = [const]`, the last useful column. Every computed row, between them, reads in A and in B only
     earlier columns that are not input padding, or the constant (topological order: the soundness package's `Rows.topo`).
     So every column a row reads is below `useful`.
-  - Each port group's ports fit its words, and each input group lies within the input rows.
+  - Each port group's ports fit its words, and each input group lies within the input rows. The input groups ascend and
+    are disjoint, and every input port bit's row is `[i]` (only padding past a group's ports is empty): one copy each.
   - The input rows end before the constant (`128 · inWords ≤ constPos`, 128 rows per input word). Otherwise an input
     port could cover the constant's column, and Δ's input copies would rewrite the slot's constant row, leaving the
     unit's constant free.
