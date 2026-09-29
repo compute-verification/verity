@@ -270,18 +270,21 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
     `Stmt.setupH` accepted for a template (`Typed.read`'s class and block). It uses the template's parse and check,
     `templateOf_spec`, and #398's `blockOf_spec`, `slotOf_lt` and `slotOf_lt_of_lt`. `setupH_blockFacts` is then
     `BlockFacts` at every VU of the accepted statement.
-    - It keeps two hypotheses: every part places a derived layout (no table read), and the rows' circuits come after the
-      root and the placed layouts' circuits.
+    - The rows' circuits come after the root and the placed layouts' circuits, by `checkTyped` (#405,
+      `CheckFactsT.rows_after`). The unit's shape comes from `deriveChecked` (`unitShape_of_class`, with #404's
+      `unit_const_row` and `order_cols`).
+    - What remains is T3's scope: every part places a derived layout, and the unit reads no table.
     - Supporting lemmas: the class's unit is one of its layouts (`unit_lt`), and Δ's other flat rows are input bits of
       the rows' circuits' slots (`deltaIn_rows`).
     - The unit's own check makes its inputs self rows with no Δ entry (`unit_inputs`), which discharges `UnitShape`'s
       input field (`unitShape_of`).
     - Each input of VU `g` copies its message bit: the block rows at its position read exactly `copySrc g w`
-      (`input_rows`). As a model `CopyRow` (`input_copy`), that is a table class's `copy`.
+      (`input_rows`). As a model `CopyRow` (`input_copy`, and `setupH_inputCopy` for an accepted statement), that is a
+      table class's `copy`, when the message bit's position is in the block.
   - Still to prove:
     - `NetRows` for a flat typed class, whose unit net #307 builds from `derive`'s rows (`Typed.netOfD_ok`);
-    - `UnitShape`'s other three fields from `deriveChecked`, and the rows' circuits' place from `checkTyped`;
-    - a template whose parts read a table.
+    - a template whose parts read a table;
+    - the message bit's position in the block, for `setupH_inputCopy`.
 
 ### 1.6 Proved from the libraries, not assumed
 
