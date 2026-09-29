@@ -166,7 +166,9 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
   - A computed row is `z_i = (⊕_{c∈a_i} z_c)·(⊕_{c∈b_i} z_c)`, reading earlier columns and the constant. It is one gate
     of the circuit (`Audit.Op.row`).
   - A program's circuit (`Prog.circuit`) is its units' rows, with each unit's input columns and constant wired to
-    earlier gates. Every unit is an instance of its template's rows (`Prog.isRowsUnit`).
+    earlier gates. Several input columns may be wired to one gate (a unit reading one source on several inputs), and
+    the constant to a gate no input column is wired to. Every unit is an instance of its template's rows
+    (`Prog.isRowsUnit`).
   - **A pinned file read as `Rows`.**
     - Its inputs are its self rows (`A = B = [i]`).
     - Its padding columns (`A = B = 0` in the input region) are forced zero and read by no row, so they are not columns
@@ -197,13 +199,17 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
     - the rows at its constant read the pin, as every slot's constant is wired to it (spec §16.1).
 
     The decoded transcript then carries `true` on the constant (`UnitPlace.decode_one`).
+  - A unit's input columns on one gate must carry one value in every satisfying witness (`UnitPlace.aliased`), as
+    they do when they copy one source's position, or forced-zero rows. The transcript reads each gate off one of its
+    columns.
   - `UnitPlace.correct` gives the audit's lowering hypothesis with one decoder per drawn unit. Two drawn units that
     share a wire hold it in different columns. The link, not the lowering, makes them agree.
 - **The placement, from the executable's accept step** (`placement_of_setupH`, `ExecSetup.lean`). When `Stmt.setupH`
   accepts, VU `g`'s stacked unit slots are placed at `ur.slot (g·upv + u)`, the shared constant at the pin, in the model
   statement of the matrices the verifier folds (flock-verifier's `placedA`/`placedB`, PR #156; `Layout.model`).
   `unitPlace_of_setupH` is the `UnitPlace` that `loweringSoundB_of_place` takes, given the unit's instance in the audit
-  circuit (`IsRowsUnit`, the circuit side).
+  circuit (`IsRowsUnit`, the circuit side) and `Layout.Aliased`: its inputs on one gate carry one value, from the flat
+  statement's copies (open).
   - `Layout.placement` (`ExecPlacement.lean`) proves `Placement` from the layout facts `Layout` names. At a unit copy's
     computed rows only its slot has entries (pairwise-apart spans, `rangesEntry_of_covers`) and Δ has none. At its
     constant Δ's `(k, k)` cancels the row's own entry and `(k, pin)` reads the pin. The pin's row reads itself.
