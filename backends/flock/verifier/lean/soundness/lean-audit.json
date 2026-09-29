@@ -264,6 +264,25 @@
    "assumptions": [],
    "type_hash": "0000000048602bdf"
   },
+  "FlockSoundness.Audit.Law.stratified_miss_eq_greedy": {
+   "signature": [
+    "FlockSoundness.Audit.Law.stratified_miss_eq_greedy {n m : Nat} (σ : Fin n → Fin m) (k : Fin m → Nat)",
+    "  (hk : ∀ (s : Fin m), instLENat.le (k s) (FlockSoundness.Audit.Law.stratum σ s).card) (a : Fin m → Nat)",
+    "  (ha : ∀ (s : Fin m), instLENat.le (a s) (FlockSoundness.Audit.Law.stratum σ s).card) {τ : ENNReal}",
+    "  (hτ0 : ENNReal.instPartialOrder.lt 0 τ) (hτ1 : ENNReal.instLE.le τ 1)",
+    "  (htake :",
+    "    ∀ (s : Fin m),",
+    "      instLTNat.lt 0 (a s) → ENNReal.instLE.le τ (FlockSoundness.Audit.Law.stratumRatio σ k s (instHSub.hSub (a s) 1)))",
+    "  (hleave :",
+    "    ∀ (s : Fin m),",
+    "      instLTNat.lt (a s) (FlockSoundness.Audit.Law.stratum σ s).card →",
+    "        ENNReal.instLE.le (FlockSoundness.Audit.Law.stratumRatio σ k s (a s)) τ) :",
+    "  Eq ((FlockSoundness.Audit.Law.stratified σ k hk).miss (Finset.univ.sum fun s => a s))",
+    "    (Finset.univ.prod fun s => FlockSoundness.Audit.Law.stratumEscape σ k s (a s))"
+   ],
+   "assumptions": [],
+   "type_hash": "0000000016689ba9"
+  },
   "FlockSoundness.Audit.Law.sum_workK_le": {
    "signature": [
     "FlockSoundness.Audit.Law.sum_workK_le {n m : Nat} (σ : Fin n → Fin m) (w : Fin m → Nat) (K : Nat)",
@@ -1790,6 +1809,7 @@
     "FlockSoundness.Audit.InfluenceWitness.A.influence",
     "FlockSoundness.Audit.InfluenceWitness.Gen.harm_witness",
     "FlockSoundness.Audit.Law.escape_widen_le",
+    "FlockSoundness.Audit.Law.stratified_miss_eq_greedy",
     "FlockSoundness.Audit.Law.work_escape_le",
     "FlockSoundness.Audit.Partition.Refines.twoStage_influence",
     "FlockSoundness.Audit.Partition.audit_exfiltration",
@@ -1846,6 +1866,7 @@
    },
    "pins": [
     "FlockSoundness.Audit.Law.one_le_workK",
+    "FlockSoundness.Audit.Law.stratified_miss_eq_greedy",
     "FlockSoundness.Audit.Law.sum_workK_le",
     "FlockSoundness.Audit.Law.workK_ge",
     "FlockSoundness.Audit.Law.work_escape_le",
@@ -1855,6 +1876,14 @@
     "FlockSoundness.Audit.extraction_audit_work",
     "FlockSoundness.Audit.extraction_audit_work_whole_stratum"
    ]
+  },
+  "FlockSoundness.Audit.StratifiedMiss": {
+   "digest": "18d0f5b1804a73b0fc71ac580aca5ca5",
+   "definitions": {
+    "FlockSoundness.Audit.Law.stratumEscape": "4af529b99ca327b1",
+    "FlockSoundness.Audit.Law.stratumRatio": "db99e8430185e632"
+   },
+   "pins": ["FlockSoundness.Audit.Law.stratified_miss_eq_greedy"]
   },
   "FlockSoundness.Audit.TwoStage": {
    "digest": "6e426a1a29789fe403267a833094578f",
@@ -2068,6 +2097,7 @@
     "FlockSoundness.Audit.InfluenceWitness.A.influence",
     "FlockSoundness.Audit.InfluenceWitness.Gen.harm_witness",
     "FlockSoundness.Audit.Law.escape_widen_le",
+    "FlockSoundness.Audit.Law.stratified_miss_eq_greedy",
     "FlockSoundness.Audit.Law.work_escape_le",
     "FlockSoundness.Audit.Partition.Refines.twoStage_influence",
     "FlockSoundness.Audit.Partition.audit_exfiltration",
