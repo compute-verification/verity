@@ -8,7 +8,7 @@ from fractions import Fraction
 
 from verity.ir.partition import Level
 from verity.proofs.profile import Bernoulli, IntegrityProfile, Stratified, Stratum, Subset
-from verity_one_stage.consumers import compute_bound, exfiltration_bound, location_bits
+from verity_one_stage.consumers import compute_bound, exfiltration_bound
 
 #: A4 P6's layer 0 (one-stage-e2e): six templates, 6,771,765 units, in canonical order.
 A4_SIZES = {"rms_triton": 287, "gemm2048": 6_171_648, "rope": 11_480, "rms_fused": 287, "silu_mul": 287,
@@ -34,33 +34,16 @@ def mib(bits: float) -> float:
     return bits / 8 / 2 ** 20
 
 
-def test_exfiltration_is_the_output_bit_weighted_bound_plus_the_location_term():
+def test_exfiltration_is_the_output_bit_weighted_bound():
     """A4's laws: the output bits in wrong units reach 9.40 MiB under the uniform subset:1024, 8.81 MiB with one unit per
-    template and 1.50 MiB drawing in proportion to output bits, each exactly core's `harm_bound` over the law.  Which units
-    are wrong adds 0.08, 0.09 and 0.41 MiB (`location_bits`), so the bounds are 9.48, 8.89 and 1.91 MiB."""
+    template and 1.50 MiB drawing in proportion to output bits, each exactly core's `harm_bound` over the law."""
     segments = [(A4_BITS[name], size) for name, size in A4_SIZES.items()]
     uniform = Stratified.uniform(sum(A4_SIZES.values()), 1024)
-    p = one_level(Subset(1024))
-    got = exfiltration_bound(p, {"unit": segments})
-    assert got == uniform.harm_bound({"unit": segments}, DELTA) + location_bits(p) and 9.48 < mib(got) < 9.49
-    for ks, lo, hi in ((FLOOR, 8.88, 8.90), (BY_BITS, 1.90, 1.92)):
-        p = one_level(a4_law(ks))
-        got = exfiltration_bound(p, A4_BITS)
-        assert got == a4_law(ks).harm_bound(A4_BITS, DELTA) + location_bits(p) and lo < mib(got) < hi
-
-
-def test_the_location_term_bounds_the_number_of_wrong_sets():
-    """log2 of the sets of at most K = bound() of n units, sum_{j <= K} C(n, j), is at most `location_bits`, and within
-    log2(n) + 1 bits of it; no wrong unit means no choice, and at least half the units wrong means every subset."""
-    from math import comb, log2
-
-    for n, k in ((512, 4), (512, 16), (4096, 38)):
-        p = IntegrityProfile(("unit",), (n,), {"unit": Subset(k)}, 0.01)
-        K = p.bound()
-        exact = log2(sum(comb(n, j) for j in range(K + 1)))
-        assert exact <= location_bits(p) <= exact + log2(n) + 1
-    assert location_bits(IntegrityProfile(("unit",), (8,), {"unit": Subset(8)}, 0.01)) == 0.0
-    assert location_bits(IntegrityProfile(("unit",), (8,), {"unit": Subset(1)}, 0.01)) == 8.0
+    got = exfiltration_bound(one_level(Subset(1024)), {"unit": segments})
+    assert got == uniform.harm_bound({"unit": segments}, DELTA) and 9.39 < mib(got) < 9.41
+    for ks, lo, hi in ((FLOOR, 8.80, 8.82), (BY_BITS, 1.49, 1.51)):
+        got = exfiltration_bound(one_level(a4_law(ks)), A4_BITS)
+        assert got == a4_law(ks).harm_bound(A4_BITS, DELTA) and lo < mib(got) < hi
 
 
 def test_compute_is_the_work_weighted_bound():
@@ -75,8 +58,6 @@ def test_compute_is_the_work_weighted_bound():
 
 
 def test_an_application_reads_nothing_the_profile_does_not_bound():
-    """Weighting every unit 1 reads the profile's own count (from above, within one unit), for every law; exfiltration
-    adds the location term to it."""
+    """Weighting every unit 1 reads the profile's own count (from above, within one unit), for every law."""
     for p in (one_level(Subset(1024)), one_level(a4_law(FLOOR)), one_level(a4_law(BY_BITS))):
-        assert p.bound() <= compute_bound(p, 1) < p.bound() + 1 + 1e-6 * p.bound()
-        assert exfiltration_bound(p, 1) == compute_bound(p, 1) + location_bits(p)
+        assert p.bound() <= compute_bound(p, 1) == exfiltration_bound(p, 1) < p.bound() + 1 + 1e-6 * p.bound()
