@@ -3,7 +3,8 @@
 root_A is `audit.commit_rows` over A's rows (the protocol's own commitment); the forming, the checked words and the useful
 output are `schemes.fp8_is.FP8IS` over `D3s(sums=...)`, run tile by tile through its `encode`, `checked` and `useful` on
 16 × 16 tiles (a test instance: the scheme's production tiles are 64 × 64, and a cell's words do not depend on the tiling).
-Only the dequantization after Z is the circuit's own: y = bf16(s·t·Z) + bias, by the core primitives the circuit calls.
+Only the dequantization after Z is the circuit's own: vLLM's epilogue order (`fp8.NcpFp8Dequant`), by the core primitives
+the circuit calls.
 """
 from __future__ import annotations
 
@@ -33,7 +34,7 @@ class Call:
     s: tuple[int, ...]
     b: tuple[tuple[int, ...], ...]
     t: tuple[int, ...]
-    bias: tuple[int, ...]
+    bias: tuple[int, ...] | None            # n BF16 encodings, or None for a linear with no bias
     salt: bytes
     index: int
     weight: int
@@ -64,7 +65,8 @@ class Call:
         public gates, evaluated natively: `fp8.prefix`), and the ids, which are the shape's."""
         m, n, width = self.shape.m, self.shape.n, self.shape.width
         hs, amps = self.weight_outputs()
-        out = [[x for r in self.a for x in r], list(self.s), hs, amps, list(self.t), list(self.bias),
+        out = [[x for r in self.a for x in r], list(self.s), hs, amps, list(self.t),
+               *([list(self.bias)] if self.bias is not None else []),
                prefix(self.shape, self.sums, self.lengths, self.salt, self.weight), [self.index >> 32, self.index & M32],
                list(range(m)), list(range(m)), list(range(n))]
         if width > m:
@@ -93,9 +95,12 @@ def root_a(call: Call) -> bytes:
     return commit_rows(activation_binding(call.salt, call.index), call.index, [bytes(r) for r in call.a]).commitment.root
 
 
-def dequant(z: int, s: int, t: int, bias: int) -> int:
-    mul, cast, add = REGISTRY["F32Mul_v2"].evaluate, REGISTRY["F32ToBf16Rn_v1"].evaluate, REGISTRY["Bf16Add_v1"].evaluate
-    return add(cast(mul(mul(s, t), z)), bias)
+def dequant(z: int, s: int, t: int, bias: int | None) -> int:
+    """vLLM's epilogue order (`fp8.NcpFp8Dequant`): m = RN(s·Z), then bf16(RN(t·m + f32(bias))) or bf16(RN(t·m))."""
+    mul, fma = REGISTRY["F32Mul_v2"].evaluate, REGISTRY["F32Fma_v2"].evaluate
+    widen, cast = REGISTRY["Bf16ToF32_v1"].evaluate, REGISTRY["F2fpBf16_v1"].evaluate
+    m = mul(s, z)
+    return cast(mul(t, m) if bias is None else fma(t, m, widen(bias)))
 
 
 def evaluate(call: Call) -> Result:
@@ -123,7 +128,8 @@ def evaluate(call: Call) -> Result:
                 z[i][j] = running[-1]
                 assert S8.f32_float(z[i][j]) == useful[bi][bj] or useful[bi][bj] != useful[bi][bj]
         words.append(tw)
-    out = [[dequant(z[i][j], call.s[i], call.t[j], call.bias[j]) for j in range(sh.n)] for i in range(sh.m)]
+    out = [[dequant(z[i][j], call.s[i], call.t[j], None if call.bias is None else call.bias[j]) for j in range(sh.n)]
+           for i in range(sh.m)]
     return Result(root, x, y, words, z, out)
 
 

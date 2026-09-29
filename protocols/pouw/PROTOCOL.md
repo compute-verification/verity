@@ -451,13 +451,18 @@ NcpFp8FormY{K,SUMS,IL,WL,LL} 16-column weight strip       its h and amplitudes, 
                                                           frontier
 NcpFp8FormX{K,SUMS,IL,WL,LL} 16-row strip of A            16 rows, row ids, E₁'s frontier              the X̃ strip (16 × 3k codes)
 NcpFp8Tile{K}                16 × 16 block                its X̃ strip, its Ỹ strip                     the words, and Z
-NcpFp8Dequant                output entry                 Z, s_i, t_j, bias_j                          y = bf16(s_i·t_j·Z) + bias_j
+NcpFp8Dequant{BIAS}          output entry                 Z, s_i, t_j (and bias_j)                     y, in vLLM's epilogue order
 ~~~
 
 - **root_A** is the protocol's commitment to A's rows: `verity.commitments.merkle`'s SHA-256 frame-v3 tree, one leaf per
   row (the row's k codes), its domain bound to `activation_binding(salt, index)` with owner = index, padded to a power of
   two. Strips are its aligned 16-leaf subtrees.
 - **E₁ and F₁** are `D3Family.stream`'s SHAKE256 streams over (salt, index, root_A, weight id, line), 2k bytes each.
+- **The served output** is vLLM's `cutlass_scaled_mm` epilogue, bit for bit, as `H-1T`'s is (`NcpFp8Dequant{BIAS}`, as
+  the vLLM integration's exact-tested `ScaledMmFp8Coordinate` pins it): m = RN(s_i·Z), the row scale first under the
+  batch-invariant dispatch's swapped scales, then y = cvt.rn.bf16(RN(t_j·m + f32(bias_j))) in one FFMA, or
+  cvt.rn.bf16(RN(t_j·m)) for a linear without a bias (its own Definition, `NcpFp8Linear{…,BIAS=False}`: the two differ
+  on a −0). `traced_as(…, bias=…)` picks it.
 - **The tile** runs `cell_words`: T = 3k/32 fresh E4M3 k32 atoms from +0 (`HopperE4m3QgmmaDot32`) and the running FP32
   sums (`F32Add_v1`). Per cell its words are I_1 … I_T and R_2 … R_(T−1), and Z = R_T, the useful output, is field 1.
 - **The arithmetic** is #295's `verity.ml.tc.fp16` and `fp32`, one primitive per operation (`circuit.fp8_words`), and

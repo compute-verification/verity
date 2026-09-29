@@ -193,7 +193,9 @@ def _pouw_roots() -> list[Any]:
     fp8_templates = [t for sums in fp8.SUMS for _role, t in fp8.call_templates(fp8.Shape(48, 96, 32), sums)]
     fp8_templates += [t for sums in fp8.SUMS for _role, t in fp8.weight_templates(96, sums)]
     small = fp8.Shape(16, 96, 16)
-    return out + list({t.id: t for t in fp8_templates}.values()) + [fp8.linear(small), fp8.weight(small), fp8.window(small, 2)]
+    fp8_templates += [fp8.dequant_template(False)]
+    return (out + list({t.id: t for t in fp8_templates}.values())
+            + [fp8.linear(small), fp8.linear(small, bias=False), fp8.weight(small), fp8.window(small, 2)])
 
 
 def _core_roots() -> list[Any]:

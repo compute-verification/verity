@@ -143,16 +143,16 @@ class Traced:
         from . import plan
 
         if self.scheme in FP8_SUMS:
-            return plan.fp8_layout(self.shape, self.kind, self.lengths)
+            return plan.fp8_layout(self.shape, self.kind, self.lengths, self.definition.S().BIAS)
         return plan.layout(self.shape, self.kind)
 
 
-def traced_as(scheme: str, m: int, k: int, n: int, *, index: int = 0, weight: int = 0) -> Traced | None:
+def traced_as(scheme: str, m: int, k: int, n: int, *, index: int = 0, weight: int = 0, bias: bool = True) -> Traced | None:
     """The circuit sampled proofs traces for one PoUW linear of shape m × k → n under ``scheme``, or None when the scheme has
     no circuit here. Raises `protocol.DomainError` for a shape outside the circuit (`ncp-v2`: 16 | m, 16 | n, 64 | k;
     NCP-FP8: 16 | m, 16 | n, 32 | k, k admissible, m, n <= 2^24). The scheme pins its parameter, never the caller. NCP-FP8's
     Definition depends on the byte lengths of the matmul's ``index`` and ``weight`` id (`fp8.Lengths`), the verifier's
-    anchors."""
+    anchors, and on whether the linear has a ``bias``, which picks vLLM's epilogue (`fp8.NcpFp8Dequant`)."""
     if scheme not in SCHEMES:
         return None
     from . import partition
@@ -162,7 +162,7 @@ def traced_as(scheme: str, m: int, k: int, n: int, *, index: int = 0, weight: in
 
         shape, lengths = fp8.Shape(m, k, n), fp8.Lengths.of(index, weight)
         sums = FP8_SUMS[scheme]
-        c = partition.fp8_circuit(shape, sums, lengths)
+        c = partition.fp8_circuit(shape, sums, lengths, bias=bias)
         return Traced(scheme, shape, c.fn, partition.query_of(c), m * n, fp8.weight(shape, sums),
                       partition.fp8_weight_query(shape, sums), lengths)
     from . import ncp2

@@ -49,7 +49,7 @@ def call(m: int, k: int, n: int, *, sums: str = "f16", index: int = 3, weight: i
 
 def run(c: R.Call) -> tuple[list[list[int]], list[list[int]]]:
     """The Program's outputs: y (m × n BF16) and each tile's words."""
-    out = evaluate(fp8.linear(c.shape, c.sums, c.lengths), *c.args())
+    out = evaluate(fp8.linear(c.shape, c.sums, c.lengths, c.bias is not None), *c.args())
     m, n, per = c.shape.m, c.shape.n, fp8.D * fp8.D * fp8.tile_words(c.shape.k)
     tiles = (m // fp8.D) * (n // fp8.D)
     assert len(out) == m * n + per * tiles
@@ -628,3 +628,56 @@ def test_a_window_s_anchored_inputs_are_the_verifier_s():
     for bad in ((3, 3), (3, 300)):
         with pytest.raises(DomainError):
             fp8_window_inputs([Fp8Anchors(c1.shape, c1.salt, i, c1.weight, c1.sums) for i in bad])
+
+
+# ---- the served output: vLLM's epilogue order --------------------------------------------------------------------------
+
+def scaled_epilogue(z: int, s: int, t: int, bias: int | None) -> int:
+    """vLLM's `cutlass_scaled_mm` epilogue as the vLLM integration pins it (`verity_vllm.program.registry.fp8`
+    `ScaledMmFp8Coordinate`, 0 mismatches against `_C.cutlass_scaled_mm` on the production capture): the batch-invariant
+    dispatch swaps the scales, so Compute0 = RN(s_i·acc) with the row (token) scale, and Compute1 = FFMA(t_j, ·, f32(b_j))
+    (`ScaledEpilogueBias`) or RN(t_j·) (`ScaledEpilogue`), then `cvt.rn.bf16.f32`. Written here on core's bit-level
+    evaluators, since `protocols/pouw` reads nothing of the integration."""
+    from verity.ml.fp32 import bf16_to_f32_bits, f32_fma_bits, f32_mul_bits
+    from verity.ml.tc.cast import f32_to_bf16_hw_word
+
+    m = f32_mul_bits(s, z)
+    return f32_to_bf16_hw_word(f32_mul_bits(t, m) if bias is None else f32_fma_bits(t, m, bf16_to_f32_bits(bias)))
+
+
+@pytest.mark.parametrize("shape,sums,bias", [((16, 96, 16), "f16", True), ((16, 96, 16), "f16", False),
+                                             ((16, 96, 16), "f32", True), ((48, 96, 32), "f16", True),
+                                             ((32, 128, 16), "f32", False)])
+def test_the_served_output_is_vllm_s_scaled_epilogue(shape, sums, bias):
+    """y is what vLLM serves: each output is `scaled_epilogue` of #295's R_T, the row scale, the column scale and the bias
+    (none for a linear without one), bit for bit, and the reference's y is too."""
+    c = call(*shape, sums=sums)
+    if not bias:
+        c = R.Call(c.shape, c.a, c.s, c.b, c.t, None, c.salt, c.index, c.weight, c.sums)
+    ref = R.evaluate(c)
+    y, _words = run(c)
+    want = [[scaled_epilogue(ref.z[i][j], c.s[i], c.t[j], c.bias[j] if bias else None) for j in range(shape[2])]
+            for i in range(shape[0])]
+    assert y == want == ref.out
+
+
+def test_the_dequantization_unit_is_the_epilogue_on_hard_words():
+    """`NcpFp8Dequant{BIAS}` alone, against `scaled_epilogue` on words across the exponent range, subnormals and ±0, and the
+    case that separates the two variants: Z = −0 without a bias serves −0, and an FFMA with a +0 bias would serve +0. The
+    branch's earlier order, bf16(RN(RN(s·t)·Z)) then a bf16 add, differs from the served one on many of these."""
+    from verity.ir.defs import REGISTRY
+
+    rng = random.Random(29)
+    zs = [_f32(rng.uniform(-1, 1) * 2.0 ** rng.randint(-140, 100)) for _ in range(400)] + [0, 0x80000000, 1, 0x807FFFFF]
+    old_differs = 0
+    for z in zs:
+        s, t, b = _f32(rng.uniform(1e-4, 4) * 2.0 ** rng.randint(-20, 20)), _f32(rng.uniform(1e-4, 4)), rng.getrandbits(15)
+        assert evaluate(fp8.dequant_template(True), z, s, t, b)[0] == scaled_epilogue(z, s, t, b)
+        assert evaluate(fp8.dequant_template(False), z, s, t)[0] == scaled_epilogue(z, s, t, None)
+        old = REGISTRY["Bf16Add_v1"].evaluate(REGISTRY["F32ToBf16Rn_v1"].evaluate(
+            REGISTRY["F32Mul_v2"].evaluate(REGISTRY["F32Mul_v2"].evaluate(s, t), z)), b)
+        old_differs += old != scaled_epilogue(z, s, t, b)
+    assert old_differs > 0
+    one = _f32(1.0)
+    assert evaluate(fp8.dequant_template(False), 0x80000000, one, one)[0] == 0x8000
+    assert evaluate(fp8.dequant_template(True), 0x80000000, one, one, 0)[0] == 0x0000

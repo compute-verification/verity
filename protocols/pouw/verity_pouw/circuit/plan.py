@@ -227,7 +227,7 @@ def template_strata(us: Sequence[Unit], per_tile: int) -> tuple[StratumSpec, ...
                  for t, g in groups.items())
 
 
-def fp8_layout(shape, sums: str = "f16", lengths=None) -> Layout:
+def fp8_layout(shape, sums: str = "f16", lengths=None, bias: bool = True) -> Layout:
     """NCP-FP8's layout (`circuit.fp8`): each tile's closure is `ncp-v2`'s (its X and Y strips, its strip's digest, the
     nodes on that strip's path to root_A, the key) with the call's domain unit, and the **pad cone**, every pad strip and
     every node with no row beneath it.  root_A's tree is padded to a power of two, and a pad has no tile beneath it that a
@@ -240,7 +240,7 @@ def fp8_layout(shape, sums: str = "f16", lengths=None) -> Layout:
     from .partition import circuit_units, fp8_circuit
 
     lengths = fp8.Lengths(1, 1, 1) if lengths is None else lengths
-    us = circuit_units(fp8_circuit(shape, sums, lengths))
+    us = circuit_units(fp8_circuit(shape, sums, lengths, bias=bias))
     by_role: dict[str, list[Unit]] = {}
     for u in us:
         by_role.setdefault(u.role, []).append(u)

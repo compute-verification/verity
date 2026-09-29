@@ -2,9 +2,9 @@
 
 A weight's h and amplitudes read only its codes, so they are formed once per run and weight: `NcpFp8Weight{K,N,SUMS}`'s root
 body holds its `NcpFp8Amp` units.  One linear call ``A·Bᵀ`` (A: m × k activation rows as the model's E4M3 codes X_q) is
-`NcpFp8Linear{M,K,N,SUMS,IL,OL,WL}`, which reads them as committed inputs.  Each root body holds only instances of the unit
-templates below, so each partition is `Q_template_instances` over them (`circuit.partition`), and every value is computed in
-exactly one of them.  `NcpFp8Window{…,C}` is C calls on one weight in one root, the weight's units once.
+`NcpFp8Linear{M,K,N,SUMS,IL,OL,WL,BIAS}`, which reads them as committed inputs.  Each root body holds only instances of
+the unit templates below, so each partition is `Q_template_instances` over them (`circuit.partition`), and every value is
+computed in exactly one of them.  `NcpFp8Window{…,C}` is C calls on one weight in one root, the weight's units once.
 
     template                    one instance per            reads                                      returns
     NcpFp8Amp{K,SUMS}           16-column weight strip      its 16 weight rows                         h and the amplitudes
@@ -19,7 +19,8 @@ exactly one of them.  `NcpFp8Window{…,C}` is C calls on one weight in one root
                                                             frontier
     NcpFp8FormX{K,SUMS,..,LL}   16-row strip of A           16 rows, row ids, E₁'s frontier            the X̃ strip (16 × 3k codes)
     NcpFp8Tile{K}               16 × 16 block               its X̃ strip, its Ỹ strip                   the checked words, and Z
-    NcpFp8Dequant               output entry                Z, the row scale, the column scale, bias   y (BF16)
+    NcpFp8Dequant{BIAS}         output entry                Z, the row scale, the column scale, bias   y (BF16), in vLLM's
+                                                                                                       epilogue order
 
 **Semantics** are #295's (`schemes.fp8_is`), bit for bit (`fp8_reference`):
 - root_A is the protocol's commitment to A's rows (`audit.commit_rows`: `verity.commitments.merkle`'s SHA-256 frame-v3 tree,
@@ -735,17 +736,30 @@ NcpFp8TileDef = CompositeDefinition(
         "the useful output.", conformance="protocol-defined")
 
 
-def _dequant_body(B, S, z, s, t, bias):
-    st = B.call(_prim("F32Mul_v2"), s, t)
-    v = B.call(_prim("F32Mul_v2"), st, z)
-    return B.call(_prim("Bf16Add_v1"), B.call(_prim("F32ToBf16Rn_v1"), v), bias)
+def _dequant_body(B, S, z, s, t, *bias):
+    m = B.call(_prim("F32Mul_v2"), s, z)
+    if S.BIAS:
+        v = B.call(_prim("F32Fma_v2"), t, m, B.call(_prim("Bf16ToF32_v1"), bias[0]))
+    else:
+        v = B.call(_prim("F32Mul_v2"), t, m)
+    return B.call(_prim("F2fpBf16_v1"), v)
 
 
 NcpFp8DequantDef = CompositeDefinition(
-    "NcpFp8Dequant", 1, (), lambda S: ((("z", F32), ("s", F32), ("t", F32), ("bias", BF16)), BF16), _dequant_body,
-    doc="y = bf16(s_i·t_j·Z) + bias_j: a width-rule unit after the Z separator.", conformance="protocol-defined")
+    "NcpFp8Dequant", 1, ("BIAS",),
+    lambda S: ((("z", F32), ("s", F32), ("t", F32)) + ((("bias", BF16),) if S.BIAS else ()), BF16), _dequant_body,
+    doc="The served output, in the order of vLLM's `cutlass_scaled_mm` epilogue under the batch-invariant dispatch (its "
+        "scales swapped, so the row scale is ScaleB): m = RN(s_i·Z), then y = bf16(RN(t_j·m + bias_j)) in one FFMA "
+        "(`ScaledEpilogueBias`, BIAS) or bf16(RN(t_j·m)) (`ScaledEpilogue`), with `cvt.rn.bf16.f32`. A width-rule unit "
+        "after the Z separator.", conformance="protocol-defined")
 
-NcpFp8Dequant = bind(NcpFp8DequantDef)
+
+def dequant_template(bias: bool = True) -> SpecializedDefinition:
+    """`NcpFp8Dequant{BIAS}`: with a bias the epilogue is an FFMA, without it a multiply, and the two differ on a −0."""
+    return bind(NcpFp8DequantDef, BIAS=bias)
+
+
+NcpFp8Dequant = dequant_template(True)
 
 
 # ---- the linear call -----------------------------------------------------------------------------------------------------
@@ -831,12 +845,14 @@ def _prefix_widths(shape: Shape, sums: str, lengths: Lengths) -> tuple[int, int]
     return widths[0], sum(widths[1:])
 
 
-def _call_sig(m: int, k: int, n: int, sums: str, lg: Lengths) -> list[tuple[str, Any]]:
+def _call_sig(m: int, k: int, n: int, sums: str, lg: Lengths, bias: bool = True) -> list[tuple[str, Any]]:
     shape = Shape(m, k, n)
     pads, ups = shape.width - m, len(upper_nodes(shape))
     params = [("a", Array(m, Array(k, U8))), ("s", Array(m, F32)), ("hs", hs_type(k, n, sums)), ("amps", amps_type(k, n)),
-              ("t", Array(n, F32)), ("bias", Array(n, BF16)), ("prefix", Array(sum(_prefix_widths(shape, sums, lg)), U32)),
-              ("index", PAIR), ("rowids", Array(m, U32)), ("lines", Array(m, U32)), ("colids", Array(n, U32))]
+              ("t", Array(n, F32))]
+    params += [("bias", Array(n, BF16))] if bias else []
+    params += [("prefix", Array(sum(_prefix_widths(shape, sums, lg)), U32)), ("index", PAIR), ("rowids", Array(m, U32)),
+               ("lines", Array(m, U32)), ("colids", Array(n, U32))]
     params += [("padids", Array(pads, U32))] if pads else []
     params += [("nodeids", Array(ups, Array(2, U32)))] if ups else []
     return params
@@ -847,7 +863,7 @@ def _call_out(m: int, k: int, n: int) -> Tuple:
 
 
 def _linear_sig(S):
-    return tuple(_call_sig(S.M, S.K, S.N, S.SUMS, Lengths(S.IL, S.OL, S.WL))), _call_out(S.M, S.K, S.N)
+    return tuple(_call_sig(S.M, S.K, S.N, S.SUMS, Lengths(S.IL, S.OL, S.WL), S.BIAS)), _call_out(S.M, S.K, S.N)
 
 
 def _call_units(B, S, a, s, hs, amps, t, bias, pre, index, rid, lines, cid, padids, nodeids):
@@ -907,15 +923,19 @@ def _call_units(B, S, a, s, hs, amps, t, bias, pre, index, rid, lines, cid, padi
             zz = Coll(Array(D * D, F32), z.refs)
             s_rep = Coll(Array(D * D, F32), concat([s[D * rs + r].refs for r in range(D) for _ in range(D)]))
             t_rep = Coll(Array(D * D, F32), concat([t[D * cs + c].refs for _ in range(D) for c in range(D)]))
-            b_rep = Coll(Array(D * D, BF16), concat([bias[D * cs + c].refs for _ in range(D) for c in range(D)]))
-            out[rs, cs] = B.batch(NcpFp8Dequant, zz, s_rep, t_rep, b_rep, axes=(0, 0, 0, 0))
+            if S.BIAS:
+                b_rep = Coll(Array(D * D, BF16), concat([bias[D * cs + c].refs for _ in range(D) for c in range(D)]))
+                out[rs, cs] = B.batch(dequant_template(True), zz, s_rep, t_rep, b_rep, axes=(0, 0, 0, 0))
+            else:
+                out[rs, cs] = B.batch(dequant_template(False), zz, s_rep, t_rep, axes=(0, 0, 0))
     y = Coll(Array(m, Array(n, BF16)),
              concat([out[i // D, j // D][D * (i % D) + j % D].refs for i in range(m) for j in range(n)]))
     words = array_of([tiles[rs][cs][0] for rs in range(ms) for cs in range(ns)])
     return y, words
 
 
-def _linear_body(B, S, a, s, hs, amps, t, bias, pre, index, rid, lines, cid, *rest):
+def _linear_body(B, S, a, s, hs, amps, t, *rest):
+    bias, (pre, index, rid, lines, cid, *rest) = (rest[0], rest[1:]) if S.BIAS else (None, rest)
     shape = Shape(S.M, S.K, S.N)
     padids = rest[0] if shape.width > S.M else None
     nodeids = rest[-1] if upper_nodes(shape) else None
@@ -923,7 +943,7 @@ def _linear_body(B, S, a, s, hs, amps, t, bias, pre, index, rid, lines, cid, *re
 
 
 NcpFp8LinearDef = CompositeDefinition(
-    "NcpFp8Linear", 1, ("M", "K", "N", "SUMS", "IL", "OL", "WL"), _linear_sig, _linear_body,
+    "NcpFp8Linear", 1, ("M", "K", "N", "SUMS", "IL", "OL", "WL", "BIAS"), _linear_sig, _linear_body,
     doc="One NCP-FP8 (D-3s) linear call under sampled proofs: y = dequant(R_T) with #295's checked words, as instances of "
         "the unit templates only; its weight's h and amplitudes are committed inputs (`NcpFp8Weight`).",
     conformance="protocol-defined")
@@ -933,14 +953,15 @@ WINDOW_PER_CALL = ("a", "s", "prefix", "index", "rowids", "lines", "colids", "pa
 
 
 def _window_sig(S):
-    call = dict(_call_sig(S.M, S.K, S.N, S.SUMS, Lengths(S.IL, S.OL, S.WL)))
-    params = [("b", Array(S.N, Array(S.K, U8))), ("t", call["t"]), ("bias", call["bias"])]
+    call = dict(_call_sig(S.M, S.K, S.N, S.SUMS, Lengths(S.IL, S.OL, S.WL), S.BIAS))
+    params = [("b", Array(S.N, Array(S.K, U8))), ("t", call["t"])] + ([("bias", call["bias"])] if S.BIAS else [])
     params += [(p, Array(S.C, call[p])) for p in WINDOW_PER_CALL if p in call]
     out = _call_out(S.M, S.K, S.N)
     return tuple(params), Tuple(Array(S.C, out.fields[0]), Array(S.C, out.fields[1]))
 
 
-def _window_body(B, S, b, t, bias, a, s, pre, index, rid, lines, cid, *rest):
+def _window_body(B, S, b, t, *rest):
+    bias, (a, s, pre, index, rid, lines, cid, *rest) = (rest[0], rest[1:]) if S.BIAS else (None, rest)
     shape = Shape(S.M, S.K, S.N)
     pads, ups = shape.width > S.M, bool(upper_nodes(shape))
     padids = rest[0] if pads else None
@@ -952,7 +973,7 @@ def _window_body(B, S, b, t, bias, a, s, pre, index, rid, lines, cid, *rest):
 
 
 NcpFp8WindowDef = CompositeDefinition(
-    "NcpFp8Window", 1, ("M", "K", "N", "SUMS", "IL", "OL", "WL", "C"), _window_sig, _window_body,
+    "NcpFp8Window", 1, ("M", "K", "N", "SUMS", "IL", "OL", "WL", "C", "BIAS"), _window_sig, _window_body,
     doc="C calls on one weight in one root: the weight's h and amplitudes once (`NcpFp8Amp`), then each call's units "
         "reading them, each call with its own anchored inputs.", conformance="protocol-defined")
 
@@ -994,7 +1015,8 @@ def weight_templates(k: int, sums: str = "f16") -> list[tuple[str, SpecializedDe
     return [("amp", amp_template(k, sums))]
 
 
-def call_templates(shape: Shape, sums: str = "f16", lengths: Lengths = Lengths(1, 1, 1)) -> list[tuple[str, SpecializedDefinition]]:
+def call_templates(shape: Shape, sums: str = "f16", lengths: Lengths = Lengths(1, 1, 1),
+                   bias: bool = True) -> list[tuple[str, SpecializedDefinition]]:
     """Every unit template one call instantiates, with its role, in the order its root body first uses them."""
     m, k, n = shape.m, shape.k, shape.n
     out = [("domain", domain_template(m, k, lengths))]
@@ -1004,7 +1026,7 @@ def call_templates(shape: Shape, sums: str = "f16", lengths: Lengths = Lengths(1
     out += [("key", key_template(k, sums, lengths, m, n))]
     out += [("form_y", form_template(False, k, sums, lengths, ll)) for ll in sorted({_ulen(D * c) for c in range(n // D)})]
     out += [("form_x", form_template(True, k, sums, lengths, ll)) for ll in sorted({_ulen(D * s) for s in range(m // D)})]
-    out += [("tile", tile_template(k)), ("dequant", NcpFp8Dequant)]
+    out += [("tile", tile_template(k)), ("dequant", dequant_template(bias))]
     seen, uniq = set(), []
     for role, t in out:
         if t.id not in seen:
@@ -1013,11 +1035,14 @@ def call_templates(shape: Shape, sums: str = "f16", lengths: Lengths = Lengths(1
     return uniq
 
 
-def linear(shape: Shape, sums: str = "f16", lengths: Lengths = Lengths(1, 1, 1)) -> SpecializedDefinition:
-    """`NcpFp8Linear{M,K,N,SUMS,IL,OL,WL}` for one call (``sums`` "f16" is #295's target cell `d3s-v0-f16`)."""
+def linear(shape: Shape, sums: str = "f16", lengths: Lengths = Lengths(1, 1, 1),
+           bias: bool = True) -> SpecializedDefinition:
+    """`NcpFp8Linear{M,K,N,SUMS,IL,OL,WL,BIAS}` for one call (``sums`` "f16" is #295's target cell `d3s-v0-f16`), of a
+    linear with a bias or without (vLLM's two epilogues)."""
     shape.check()
     tag(sums)
-    return bind(NcpFp8LinearDef, M=shape.m, K=shape.k, N=shape.n, SUMS=sums, IL=lengths.il, OL=lengths.ol, WL=lengths.wl)
+    return bind(NcpFp8LinearDef, M=shape.m, K=shape.k, N=shape.n, SUMS=sums, IL=lengths.il, OL=lengths.ol, WL=lengths.wl,
+                BIAS=bias)
 
 
 def weight(shape: Shape, sums: str = "f16") -> SpecializedDefinition:
@@ -1027,17 +1052,19 @@ def weight(shape: Shape, sums: str = "f16") -> SpecializedDefinition:
     return bind(NcpFp8WeightDef, K=shape.k, N=shape.n, SUMS=sums)
 
 
-def window(shape: Shape, calls: int, sums: str = "f16", lengths: Lengths = Lengths(1, 1, 1)) -> SpecializedDefinition:
-    """`NcpFp8Window{M,K,N,SUMS,IL,OL,WL,C}`: ``calls`` calls of this shape on one weight, in one root, their indices of
-    one byte length."""
+def window(shape: Shape, calls: int, sums: str = "f16", lengths: Lengths = Lengths(1, 1, 1),
+           bias: bool = True) -> SpecializedDefinition:
+    """`NcpFp8Window{M,K,N,SUMS,IL,OL,WL,C,BIAS}`: ``calls`` calls of this shape on one weight, in one root, their indices
+    of one byte length."""
     shape.check()
     tag(sums)
     return bind(NcpFp8WindowDef, M=shape.m, K=shape.k, N=shape.n, SUMS=sums, IL=lengths.il, OL=lengths.ol, WL=lengths.wl,
-                C=calls)
+                C=calls, BIAS=bias)
 
 
 __all__ = ["BF16", "D", "F32", "Family", "Hoisted", "Lengths", "NcpFp8Dequant", "SUMS", "Shape", "WINDOW_PER_CALL",
-           "amp_template", "amps_type", "call_templates", "digest_template", "domain_layout", "domain_template",
+           "amp_template", "amps_type", "call_templates", "dequant_template", "digest_template", "domain_layout",
+           "domain_template",
            "form_template", "hs_type", "hw_type", "key_layout", "key_template", "leaf_digest", "leaf_fn", "linear", "node_fn",
            "node_template", "pad_fn", "pad_template", "perm", "prefix", "prefix_parts", "row_fn", "strip_lengths",
            "subtile_digest", "tag", "tile_template", "tile_words", "upper_nodes", "weight", "weight_templates", "window"]

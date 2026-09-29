@@ -62,9 +62,10 @@ def ncp_circuit(shape: Shape, kind: str = "shift24", fn: Any = None) -> Circuit:
     return Circuit(ncp2.linear(shape, kind) if fn is None else fn, ncp2.templates(shape.k, kind), shape.m, shape.n, POUW_ROLES)
 
 
-def fp8_circuit(shape: fp8.Shape, sums: str = "f16", lengths: fp8.Lengths = fp8.Lengths(1, 1, 1), fn: Any = None) -> Circuit:
-    return Circuit(fp8.linear(shape, sums, lengths) if fn is None else fn, {"tile": fp8.tile_template(shape.k)}, shape.m,
-                   shape.n, FP8_POUW_ROLES, tuple(fp8.call_templates(shape, sums, lengths)))
+def fp8_circuit(shape: fp8.Shape, sums: str = "f16", lengths: fp8.Lengths = fp8.Lengths(1, 1, 1), fn: Any = None,
+                bias: bool = True) -> Circuit:
+    return Circuit(fp8.linear(shape, sums, lengths, bias) if fn is None else fn, {"tile": fp8.tile_template(shape.k)}, shape.m,
+                   shape.n, FP8_POUW_ROLES, tuple(fp8.call_templates(shape, sums, lengths, bias)))
 
 
 def fp8_weight_circuit(shape: fp8.Shape, sums: str = "f16") -> Circuit:
@@ -76,10 +77,12 @@ def fp8_weight_query(shape: fp8.Shape, sums: str = "f16") -> dict[str, Any]:
     return query_of(fp8_weight_circuit(shape, sums))
 
 
-def fp8_window_circuit(shape: fp8.Shape, calls: int, sums: str = "f16", lengths: fp8.Lengths = fp8.Lengths(1, 1, 1)) -> Circuit:
+def fp8_window_circuit(shape: fp8.Shape, calls: int, sums: str = "f16", lengths: fp8.Lengths = fp8.Lengths(1, 1, 1),
+                       bias: bool = True) -> Circuit:
     """``calls`` NCP-FP8 calls on one weight in one root (`fp8.window`)."""
-    return Circuit(fp8.window(shape, calls, sums, lengths), {"tile": fp8.tile_template(shape.k)}, shape.m, shape.n,
-                   FP8_POUW_ROLES, tuple(fp8.weight_templates(shape.k, sums)) + tuple(fp8.call_templates(shape, sums, lengths)),
+    return Circuit(fp8.window(shape, calls, sums, lengths, bias), {"tile": fp8.tile_template(shape.k)}, shape.m, shape.n,
+                   FP8_POUW_ROLES,
+                   tuple(fp8.weight_templates(shape.k, sums)) + tuple(fp8.call_templates(shape, sums, lengths, bias)),
                    calls)
 
 
