@@ -177,13 +177,17 @@ def test_lane_shorthand_folds_into_one_spelling(env, capsys):
 
 def test_abandoned_is_written_only_with_the_note_that_says_why(env, capsys):
     """`abandoned` marks evidence of a line of work that was given up; the label is only read with its note, so `--ref` must name one
-    as note:<lane>/<file name without .md> (the name survives a move into a month folder)."""
+    as note:<lane>/<file name without .md> or the notes README's note:<campaign>/<lane>/<name> (both survive a move into a month folder)."""
     st, note = LocalStore(), "note:flock-backend/20260929T0500Z-report-flock-backend"
-    why = "label key 'abandoned' needs --ref naming the note that says why (note:<lane>/<file name without .md>)"
+    why = ("label key 'abandoned' needs --ref naming the note that says why (note:<lane>/<file name without .md>, "
+           "or note:<campaign>/<lane>/<name>)")
     assert vocab.check_ref("abandoned", None) == why and vocab.check_ref("abandoned", note) is None
-    assert vocab.check_ref("abandoned", "note:kb/LANE-CONTRACT") is None
+    for ok in ("note:kb/LANE-CONTRACT", "note:r20-proof/red-team-vu/20260922T1042Z-report-redteam-vu"):
+        assert vocab.check_ref("abandoned", ok) is None, ok
     assert vocab.check_ref("abandoned", RUN_REAL) == f"{why}, not {RUN_REAL!r}"
-    assert vocab.check_ref("abandoned", "note:lanes/flock-backend/2026-09/x.md") is not None     # a path, not the note's name
+    for path in ("note:lanes/flock-backend/2026-09/x.md", "note:flock-backend/x.md", "note:flock-backend/2026-09/x",
+                 "note:flock-backend/28/x", "note:20260929T0500Z-report-flock-backend"):   # paths, and a name without its lane
+        assert vocab.check_ref("abandoned", path) is not None, path
     assert vocab.check_ref("superseded_by", None) is None and vocab.check_ref("note", "anything") is None
     for ref in ([], ["--ref", RUN_REAL]):
         assert main(["label", RUN_REAL, "abandoned", "W=31 field, not the protocol's", "--by", "flock-backend", *ref]) == 2

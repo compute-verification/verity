@@ -137,11 +137,13 @@ REF_KEYS = ("path", "result_artifact", "constructed_from_attempt")
 #: the artifact's meta at `put`); a label is what a table selects on or a judgement about the result, so these are refused.
 MEASUREMENT_KEYS = ("l", "n", "subbatches", "per_proof_vus", "R_proved", "threads", "window", "rtt_ms_path", "native_peak", "accumulate",
                     "replicate", "encoder")
-#: A note in the notes repo, as a label's ref names it: `note:<lane>/<file name without .md>` (`note:kb/<name>` for kb/), the same
-#: whichever month folder the file has moved to.
-NOTE_REF_RE = re.compile(r"^note:[A-Za-z0-9][\w.-]*/[\w.-]+$")
+#: A note in the notes repo, as a label's ref names it: `note:<lane>/<file name without .md>` (`note:kb/<name>` for kb/) or the notes
+#: README's `note:<campaign>/<lane>/<name>`, either the same whichever month folder the file has moved to.  Not a bare name (a handoff
+#: sent to several lanes has the same name in each), and not a path (`.md`, a `YYYY-MM` or `DD` folder).
+NOTE_REF_RE = re.compile(r"^note:(?:(?![\d-]+/)[A-Za-z0-9][\w.-]*/){1,2}(?![\w.-]*\.md$)[\w.-]+$")
 #: Keys whose label is only read with its ref: the form that ref must take, and what it names.
-REF_FORMS: dict[str, tuple[re.Pattern[str], str]] = {ABANDONED: (NOTE_REF_RE, "the note that says why (note:<lane>/<file name without .md>)")}
+REF_FORMS: dict[str, tuple[re.Pattern[str], str]] = {
+    ABANDONED: (NOTE_REF_RE, "the note that says why (note:<lane>/<file name without .md>, or note:<campaign>/<lane>/<name>)")}
 #: Label keys that name evidence / findings written by code today (trust dossiers, the ledger's red-team assertions).
 FINDING = "finding"
 LEVEL = "level"
