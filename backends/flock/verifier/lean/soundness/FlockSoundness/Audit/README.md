@@ -46,7 +46,10 @@ point (1,024 heads, 16 drawn): 590 or more wrong heads escape with probability a
 `subset_exec_escape_le` (`ExecDraw.lean`, beside the executable's other checks, since it imports `Flock.Draw`), **the
 running sampler**: over a uniform byte stream, the verifier's executable `Flock.Draw.subset k n` returns a draw missing
 $B$ with probability at most `subset_escape`'s $\binom{n-|B|}{k}/\binom{n}{k}$, through its rejection sampler, its
-`HashMap` Fisher–Yates and its `Array.qsort`.
+`HashMap` Fisher–Yates and its `Array.qsort`. `stratified_exec_escape_le` (`ExecStratified.lean`): the executable
+`Flock.Draw.stratified`, on strata that describe $\sigma$'s (`ExecStrata`), misses $B$ with probability at most
+`Law.stratified`'s escape, the product over strata; `flock_e2e_drawn_exec` and `flock_e2e_count_exec` are the e2e
+theorems at the executable's law (`execStratified`), the count curve bounded by `Law.stratified`'s `miss`.
 
 **Theorems, the stratified law** (`Audit/Stratified.lean`, the default draw law; `docs/sampling-strategies.md` §4):
 `Law.stratified σ k`, an independent uniform $k_s$-subset inside each stratum of $\sigma : \mathrm{Fin}\,n \to \mathrm{Fin}\,m$;

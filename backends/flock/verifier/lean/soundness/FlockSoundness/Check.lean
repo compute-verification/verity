@@ -204,6 +204,10 @@ hypotheses of the theorems that use them, never `axiom` declarations, so they ca
 #print axioms FlockSoundness.Audit.Law.subset_miss
 -- the verifier's executable `subset` sampler escapes no more often than the uniform `k`-subset
 #print axioms FlockSoundness.Audit.Law.subset_exec_escape_le
+-- the executable stratified draw, and the e2e theorems at its law
+#print axioms FlockSoundness.Audit.Law.stratified_exec_escape_le
+#print axioms FlockSoundness.Audit.Partition.flock_e2e_drawn_exec
+#print axioms FlockSoundness.Audit.Partition.flock_e2e_count_exec
 #print axioms FlockSoundness.Audit.Law.avg_escape_subsets
 #print axioms FlockSoundness.Audit.Law.choose_support
 #print axioms FlockSoundness.Audit.Law.subset_minimax
