@@ -226,17 +226,22 @@ second field of `NcpTile`'s return (`partition.SEPARATOR_PORTS`). The registrant
   window) to y passes through a pinned Z. What crosses is m·n values of 32 bits, 8,192 bits per tile, and no credited word is
   delivered.
 
-**The draw** (`plan`). Tiles are drawn by the law, each proved with its closure: its X unit, strip digest, the node units
-on that strip's path and the key, each once, and its Y unit in the weight's Program (`Plan.proved_y`), once per plan. The
-dequantization units are drawn at the law's floor. The law is a seam:
-- `CountLaw` is `main`'s stratified rule today, k_s = max(1, round(K·n_s/N)).
-- `WorkLaw` is Verity root's work law (#362, `Flock/Draw.lean`): k_s = min(n_s, max(1, ⌈K·W_s/W⌉)), with
-  K = 27,713 at ε = 0.1% and δ = 2⁻⁴⁰ (`plan.record_k`; 27,712 misses).
-  - K is a **window's** budget (X-SPC-83). A call draws its share K_c = ⌈K·W_c/W_window⌉, capped at its units
-    (`plan.window_laws`): #362's law with strata by (call, template), so the window keeps its (1 − ε)^K, and it draws at
-    most K plus one floor unit per stratum.
-  - It is of record once root chooses the strata: this plan's two (tiles and dequantization, with the closure) or
-    #362's one per template (#372), X-SPC-84.
+**The draw** (`plan`). The strata are the verifier's own, as `verify` derives them (root's ruling on X-SPC-84): one per
+template of the call's partition, in the order of its first unit (`Flock/Draw.lean` `strataOf`). The law draws each
+stratum, and each drawn tile is proved with its closure: its X unit, strip digest, the node units on that strip's path and
+the key, each once, and its Y unit in the weight's Program (`Plan.proved_y`), once per plan. Every other template is drawn
+at its floor, so a wholly wrong one is caught directly (`audit_work_whole_stratum`). The law is a seam:
+- `WorkLaw` is Verity root's work law (#362 with #374's floors, `Flock/Draw.lean`): k_s = min(n_s, max(f_s,
+  ⌈K·w_s·n_s/W⌉)), with K = 27,713 at ε = 0.1% and δ = 2⁻⁴⁰ (`plan.record_k`; 27,712 misses). Only the tile template does
+  PoUW work, so W is its stratum's, and k_tile = min(n_tile, max(f_tile, K)).
+  - `plan.work_table` is the verifier's `--work-table`: every template of the call, `{"work": w, "floor": f}`, the tile's
+    W_ref per tile and 0 for `digest`, `node`, `key`, `form_x` and `dequant`, floors 1 unless POUS sets them.
+  - `plan.law_object` is the law `verify` derives from it, each stratum `{template, units, work, floor, k}`.
+  - K is a **window's** budget (X-SPC-83): a call draws its share K_c = ⌈K·W_c/W_window⌉, capped at its units
+    (`plan.window_laws`). That is the law `verify` enforces when each call is its own statement with its own K_c
+    (`--work K_c`); within one Program (`ncp2.window`) the calls share their templates' strata and one K. The per-call
+    split's window-level bound is X-SPC-83's question, and no pin states it.
+- `CountLaw` is `main`'s stratified rule, k_s = max(1, round(K·n_s/N)).
 
 **The layout is the verifier's.** The Layout theorems (`Layout.accountable_compute` and the rest) hold only for the
 window's own layout, so the verifier derives each tile's own unit and its closure from the shape alone, through the
@@ -254,7 +259,8 @@ The profile is `Stratified` over the tile strata, and its `harm_bound`, at W_ref
 - For `ncp-v2`:
   - the lead domain's shapes (k ≥ 1,088) as a recorded run rather than a test;
   - C-Flock pieces for the PoUW primitives;
-  - root's choice of the work law's strata (X-SPC-84);
+  - the floors POUS sets for the zero-work templates (X-SPC-55; 1 until then), and the per-call split's window-level
+    bound (X-SPC-83);
   - the served-output designation and the pinned ports in `Q_nested_instances` v0's spec, evaluator and Lean port;
   - the vLLM adapter's `traced_as`;
   - the reuse of a weight's Y proofs across a run's windows (X-SPC-51), which needs its commitments linked across windows;
