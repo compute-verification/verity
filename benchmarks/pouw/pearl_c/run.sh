@@ -16,9 +16,9 @@ if ! sha256sum -c MANIFEST.sha256 > "$OUT/inputs.check" 2>&1; then echo "REFUSED
 nvidia-smi --query-gpu=timestamp,clocks.sm,clocks.mem,power.draw,temperature.gpu,clocks_throttle_reasons.active,utilization.gpu \
   --format=csv,nounits -lms 100 > "$OUT/smi_trace.csv" &
 SMI=$!
-timeout "${RUN_TIMEOUT:-300}" python3 run.py check/check.json > "$OUT/pearl_c.jsonl" 2> "$OUT/summary.txt"; RC=$?
+timeout "${RUN_TIMEOUT:-150}" python3 run.py check/check.json > "$OUT/pearl_c.jsonl" 2> "$OUT/summary.txt"; RC=$?
 if python3 -c "import torch" 2> /dev/null; then
-  timeout "${VENDOR_TIMEOUT:-180}" python3 vendor.py > "$OUT/vendor.jsonl" 2>> "$OUT/summary.txt"
+  timeout "${VENDOR_TIMEOUT:-90}" python3 vendor.py > "$OUT/vendor.jsonl" 2>> "$OUT/summary.txt"
 else
   echo "vendor: no torch on the image, cuBLASLt not timed" >> "$OUT/summary.txt"
 fi
