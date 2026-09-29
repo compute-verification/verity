@@ -48,7 +48,7 @@ for c in $(ls "$W/live"); do
 done
 
 GLIBC_NEEDS=$(for b in "$W"/out/upstream-*; do objdump -T "$b"; done | grep -o 'GLIBC_[0-9.]*' | sed 's/GLIBC_//' | sort -V | tail -1)
-python3 - "$W/out" "$BUNDLE" "$(git -C "$W/flock" rev-parse HEAD 2>/dev/null || echo unknown)" "$(rustc -V)" "$(cargo -V)" \
+python3 - "$W/out" "$BUNDLE" "$(git -c safe.directory="*" -C "$W/flock" rev-parse HEAD 2>/dev/null || echo unknown)" "$(rustc -V)" "$(cargo -V)" \
   "$(rustc -vV | awk '/^host:/ {print $2}')" "$(ldd --version | head -1)" "$GLIBC_NEEDS" "$RUSTFLAGS" <<'EOF'
 import hashlib, json, sys
 from pathlib import Path
