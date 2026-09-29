@@ -319,12 +319,13 @@ def _depth(fn: Any, limits: dict[str, int], depth: dict[str, int], fns: dict[str
 _PENDING: list[tuple[Any, int, int, int, dict[str, int]]] = []
 
 
-def _rule_of_pending(i: int) -> dict[str, Any] | None:
+def _rule_of_pending(i: int) -> dict[str, Any] | str:
+    """The unit rule of pending Definition `i`, or what it raised (`repr`): left to `check_calls`, which reports or raises it."""
     fn, X, W, extras, limits = _PENDING[i]
     try:
         return unit_rule(fn, X, W, extras, memo=_RULES[tuple(sorted(limits.items()))], max_gates=limits)
-    except Exception:  # noqa: BLE001  -- left to check_calls, which reports or raises it as it always has
-        return None
+    except Exception as e:  # noqa: BLE001
+        return repr(e)
 
 
 def prefetch(specs: Iterable[str], X: int = 16, W: int = 32, extras: int = 0, *, max_gates: Limits = None, jobs: int = 1,
@@ -358,7 +359,7 @@ def prefetch(specs: Iterable[str], X: int = 16, W: int = 32, extras: int = 0, *,
         try:
             with ProcessPoolExecutor(min(jobs, len(todo)), mp_context=multiprocessing.get_context("fork")) as ex:
                 for fn, rule in zip(todo, ex.map(_rule_of_pending, range(len(todo)))):
-                    if rule is not None:
+                    if isinstance(rule, dict):
                         memo[(fn.id, X, W, extras)] = rule
                         done += 1
         finally:
