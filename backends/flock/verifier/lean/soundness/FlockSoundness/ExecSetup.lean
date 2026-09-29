@@ -63,6 +63,7 @@ theorem setupH_spec {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : 
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
+  (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) h0 at h)
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) h1 at h)
