@@ -55,7 +55,7 @@ class Circuit:
 
     @property
     def tiles(self) -> int:
-        return (self.m // D) * (self.n // D)
+        return self.calls * (self.m // D) * (self.n // D)
 
 
 def ncp_circuit(shape: Shape, kind: str = "shift24", fn: Any = None) -> Circuit:
@@ -255,7 +255,7 @@ def circuit_separator(c: Circuit, uc: UnitCut | None = None) -> Separator:
     preds: list[list[int]] = [[] for _ in range(g.n)]
     for p, q in zip(g.src, g.dst):
         preds[q].append(p)
-    y_gates = list(g.outputs[:c.m * c.n])
+    y_gates = list(g.outputs[:c.calls * c.m * c.n])
     words_delivered = sum(1 for q in y_gates if us[owner[q]].role != "dequant")
     seen, stack, stopped, reached = set(y_gates), list(y_gates), set(), 0
     while stack:

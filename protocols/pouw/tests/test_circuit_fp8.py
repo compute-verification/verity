@@ -282,6 +282,8 @@ def test_calls_on_one_weight_compose_without_recompute():
     assert roles.count("amp") == 1 and roles.count("key") == 2 and roles.count("form_y") == 2
     w = P.circuit_width_rule(c, uc=uc)                                     # every call's y served by default (X-SPC-102)
     assert w.ok and len(w.checked) == 2 * 256 and {uc.units[u].role for u in w.checked} == {"dequant"}
+    sep = P.circuit_separator(c, uc)                                       # and read by the separator (X-SPC-109)
+    assert sep.ok and sep.z_gates == 2 * 256 and sep.per_tile_bits == 32 * 256
 
 
 @pytest.mark.slow
@@ -628,6 +630,10 @@ def test_a_window_s_anchored_inputs_are_the_verifier_s():
     for bad in ((3, 3), (3, 300)):
         with pytest.raises(DomainError):
             fp8_window_inputs([Fp8Anchors(c1.shape, c1.salt, i, c1.weight, c1.sums) for i in bad])
+    first = Fp8Anchors(c1.shape, c1.salt, 3, c1.weight, c1.sums)
+    for other in (Fp8Anchors(c1.shape, bytes(32), 4, c1.weight, c1.sums), Fp8Anchors(c1.shape, c1.salt, 4, c1.weight + 1, c1.sums)):
+        with pytest.raises(DomainError):                                   # another salt, or another weight id (X-SPC-108)
+            fp8_window_inputs([first, other])
 
 
 # ---- the served output: vLLM's epilogue order --------------------------------------------------------------------------

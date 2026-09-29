@@ -536,8 +536,9 @@ window's, and a call alone is capped at its units (X-SPC-83). Each call's subset
 Program as `ncp-v2`'s Y is (X-SPC-101): the plan opens them at each drawn tile's column strip beside the weight Program's
 outputs there, and `Traced.check_link` refuses a difference. A window (`NcpFp8Window`) serves every call's y, C·m·n
 outputs (`partition.Circuit.calls`), and `anchors.fp8_window_inputs` builds its per-call anchored inputs from each call's
-`Fp8Anchors`, refusing a repeated index (X-SPC-102); the window's layout and draw are not here yet. The layout is
-the verifier's, as `ncp-v2`'s: derived from the shape and the declaration's lengths, and any other refused
+`Fp8Anchors`, refusing a repeated index or calls of another salt or weight id (X-SPC-102, 108); its separator reads
+every call's y too (X-SPC-109). A window form of `traced_as`, with the window's layout and draw, is not here yet. The
+layout is the verifier's, as `ncp-v2`'s: derived from the shape and the declaration's lengths, and any other refused
 (`Traced.check_layout`).
 
 ## Not here yet
@@ -563,3 +564,5 @@ the verifier's, as `ncp-v2`'s: derived from the shape and the declaration's leng
   - the leaf's link in the Program: a unit that hashes a drawn tile's words to its sub-digest and combines it with the
     opening's 15 siblings (committed inputs) into the transcript's leaf, and its place under the separator and the
     width rule. Today the tile returns its words unhashed, and `fp8.subtile_digest` computes the sub-digest from them.
+  - a window form of `traced_as`: the verifier's `NcpFp8Window` Program, layout and draw over its C calls. Its width
+    rule, separator and anchored inputs (`fp8_window_inputs`) already cover every call.
