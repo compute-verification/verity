@@ -89,6 +89,8 @@ def build (name : String) (table : ByteArray) (n lo bits : Nat) : V Net := do
   let useful := bd.a.size
   let unitLog := max 7 (log2ceil useful)
   if loM.size != nlo || nh != 2 ^ (n - lo) then throw s!"lookup {name}: decoder shape"
+  -- the product rows' B side, read from the table, is the low decoder's minterms, which precede them
+  Net.checkOrder s!"lookup {name}" 128 konst (fix bd.a) (fix bd.b)
   let a ← Sparse.ofRows (fix bd.a) (2 ^ unitLog)
   let b ← Sparse.ofRows (fix bd.b) (2 ^ unitLog)
   return { name, useful, constPos := konst, inGroups := #[⟨0, 1, #[n]⟩], outGroups := #[⟨out0 / 128, 1, #[bits]⟩],

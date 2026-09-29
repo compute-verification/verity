@@ -77,14 +77,21 @@ a `sys.path` entry another test file added: every suite runs alone.
 
 ## Write tests that mean something
 
-- **Deterministic:** seeded randomness, no wall-clock or ordering dependence, no network unless an opt-in variable asks.
+- **Deterministic:** seeded randomness, no ordering dependence, no network unless an opt-in variable asks, and no wall-clock
+  time: `tests/test_no_wall_clock.py` rejects sleeps, clock readings, timeouts and sleeping workloads in every suite. Wait on
+  the event instead (a child's exit, a line of its output, a FIFO the test holds open: `tools/research/tests/waits.py`), and
+  inject the clock or timer that the code under test measures time with (`monkeypatch.setattr(mod, "clock", ...)`).
 - **Isolated:** write only under `tmp_path`; change the environment, `sys.path` or a module only through `monkeypatch`. The
   runner fails a run in which the tests changed a file of the repository, and names the files.
 - **Exact:** for bit-exact code, compare words, digests and pinned vectors, not approximations. A negative checks that the
   code rejects by name, not merely that it raises.
 - **Small fixtures** sit beside the tests (`tests/fixtures/`). Shared ones go under the root `fixtures/`, registered in
-  `fixtures/artifacts.json`. Large evidence lives in the evidence store, not in git: `tests/test_repository.py` caps a
-  tracked file at 5 MiB.
+  `fixtures/artifacts.json`. `tests/test_repository.py` caps a tracked file at 256 KiB (source code aside). A larger
+  fixture is registered there and gitignored instead: `research data put --kind fixture/v1 --file|--tree PATH --preserve`,
+  add the id and path to the registry and the path to `.gitignore`, then `research data export`. `suites.py` fetches it
+  before the suites that read it (`research data fetch-fixtures` by hand, e.g. before `cargo test`), checks every byte
+  against its id, and keys the suite on the id. A verifier's fixtures are the prover's bytes, never regenerated in its test.
+  When a test can recompute an expected output, pin its digest rather than the file.
 
 ## Dummy credentials
 

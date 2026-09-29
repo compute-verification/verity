@@ -38,11 +38,12 @@ from pathlib import Path
 from typing import Any, Callable, Iterator
 
 from ..telemetry.job import write_json_atomic
+from .evict import EVICTED_FILE
 
 MARKER = ".custody"
 SCHEMA = "research/run-custody/v0.1"
 KIND = "run-record/v1"
-EXCLUDED = frozenset({".fetched", ".fetched.tmp", MARKER, MARKER + ".tmp", "preserved.json"})   # markers about the dir, not of it
+EXCLUDED = frozenset({".fetched", ".fetched.tmp", MARKER, MARKER + ".tmp", "preserved.json", EVICTED_FILE})   # markers about the dir, not of it
 DIR_NAME = "custody"                          # <root>/requests/<run-id>/custody/ on the machine
 CRED_FILE = "cred.json"
 STORE_TOML = "store.toml"

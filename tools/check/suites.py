@@ -9,11 +9,17 @@
 
 A suite is a directory whose `pyproject.toml` configures pytest (`[tool.pytest.ini_options]`). Its inputs are its own directory,
 the directories of the workspace packages it depends on (its `[project]` dependencies, transitively), the paths it lists under
-`[tool.verity.tests] inputs`, and the environment: the installed distributions, Python, the platform, whether `lake`, `cargo`
-and `nvidia-smi` are on the PATH, and the `VERITY_*` and `FLOCK_*` variables tests switch on. The cache key hashes all of them,
+`[tool.verity.tests] inputs`, the build outputs it lists under `artifacts` (each file's digest: git ignores them), and the
+environment: the installed distributions, Python, the platform, whether `lake`, `cargo` and `nvidia-smi` are on the PATH, and
+the `VERITY_*` and `FLOCK_*` variables tests switch on. The cache key hashes all of them,
 read from git's view of the working tree, so uncommitted edits count; a tree without .git (what `research run --source` ships)
 is keyed from the sha256 of every file in it. A pass is kept under its key in `~/.cache/verity/tests`
 (`VERITY_TEST_CACHE` overrides it) and reused while the key is unchanged.
+
+Fixtures too large for git are entries of `fixtures/artifacts.json` whose paths git does not track. Before the suites run, the
+entries under their inputs are fetched (`research data fetch-fixtures`: every byte checked against its id), and each suite's key
+adds the ids of those under its inputs, since git's tree ids leave ignored files out. A suite whose fixtures cannot be fetched
+fails without running.
 
 Every run loads `guard/verity_suite_guard.py`, which fails the suite if its tests open a repository file outside its inputs,
 so a cached pass never hides a change to something the tests read. Programs a test starts as a subprocess are not traced:
@@ -55,6 +61,7 @@ XDIST = importlib.util.find_spec("xdist") is not None
 TOOLS = ("lake", "cargo", "nvidia-smi")
 ENV_PREFIXES = ("VERITY_", "FLOCK_")
 QUICK = ["-m", "not slow"]
+REGISTRY = "fixtures/artifacts.json"
 
 
 def _norm(name: str) -> str:
@@ -134,6 +141,7 @@ class Suite:
     requires: tuple[str, ...]    # names of the distributions it depends on
     inputs: tuple[str, ...]      # paths it declares under [tool.verity.tests] inputs
     parallel: bool = False       # [tool.verity.tests] parallel: its tests may run in several processes at once
+    artifacts: tuple[str, ...] = ()   # [tool.verity.tests] artifacts: build outputs its tests run or skip on
 
 
 def _pyproject(path: str) -> dict:
@@ -176,8 +184,23 @@ def discover() -> list[Suite]:
         project = data.get("project", {})
         name = "repository" if path == "." else _norm(project["name"]) if project else path
         tests = data["tool"].get("verity", {}).get("tests", {})
-        suites.append(Suite(name, path, _requires(project, data), tuple(tests.get("inputs", [])), tests.get("parallel", False) is True))
+        suites.append(Suite(name, path, _requires(project, data), tuple(tests.get("inputs", [])), tests.get("parallel", False) is True,
+                            tuple(tests.get("artifacts", []))))
     return suites
+
+
+def artifact_ids(suite: Suite) -> dict[str, str]:
+    """Each declared build output as the key sees it: a file's sha256, "directory", or "absent" (git ignores build outputs, so the
+    tree's object ids never see them)."""
+    out = {}
+    for a in suite.artifacts:
+        p = ROOT / a
+        if p.is_file():
+            with open(p, "rb") as f:
+                out[a] = hashlib.file_digest(f, "sha256").hexdigest()
+        else:
+            out[a] = "directory" if p.is_dir() else "absent"
+    return out
 
 
 def closure(suite: Suite, pkgs: dict[str, str]) -> list[str]:
@@ -241,8 +264,46 @@ def inputs_of(suite: Suite, pkgs: dict[str, str]) -> list[str]:
     return sorted(paths)
 
 
+def _under(path: str, prefixes: list[str]) -> bool:
+    return any(p == "." or path == p or path.startswith(p.rstrip("/") + "/") for p in prefixes)
+
+
+def fetched_fixtures(tree: str | None, paths: set[str]) -> dict[str, str]:
+    """{repo path: art id} of the registry's entries under `paths` that git's view of the tree does not hold (in a tree without
+    git, every entry under them: the fetch leaves one already exact alone)."""
+    p = ROOT / REGISTRY
+    if not p.is_file():
+        return {}
+    reg = {v: k for k, v in json.loads(p.read_text()).items() if k.startswith("art:") and isinstance(v, str) and _under(v, sorted(paths))}
+    if tree is None or not reg:
+        return reg
+    held = object_ids(tree, sorted(reg))
+    return {v: k for v, k in reg.items() if held[v] == "absent"}
+
+
+def fetch_fixtures(fixtures: dict[str, str], logs: Path) -> set[str]:
+    """Fetch the entries (`research data fetch-fixtures`); returns the paths that are still missing or different afterwards."""
+    if not fixtures:
+        return set()
+    log = logs / "fetch-fixtures.log"
+    p = subprocess.run([sys.executable, "-m", "research", "data", "fetch-fixtures", "--repo", str(ROOT), "--json", *sorted(fixtures)],
+                       cwd=ROOT, capture_output=True, text=True)
+    log.write_text(p.stdout + p.stderr)
+    try:
+        rep = json.loads(p.stdout)
+    except ValueError:
+        print(f"fetch-fixtures failed (rc {p.returncode}); log: {log}")
+        return set(fixtures)
+    bad = {e["path"] for e in rep["entries"] if e["status"] in ("missing", "stale")}
+    blobs = rep["fetch"]["blobs"]
+    print(f"fixtures: {len(fixtures)} registry entries checked, {blobs['fetched']} blobs ({blobs['bytes'] / 1e6:.1f} MB) downloaded"
+          + (f", {len(bad)} missing (log: {log})" if bad else ""))
+    return bad
+
+
 def key(suite: Suite, ids: dict[str, str], env: dict, args: list[str]) -> str:
-    blob = json.dumps({"suite": suite.path, "inputs": ids, "environment": env, "pytest": args}, sort_keys=True)
+    blob = json.dumps({"suite": suite.path, "inputs": ids, "artifacts": artifact_ids(suite), "environment": env, "pytest": args},
+                      sort_keys=True)
     return hashlib.sha256(blob.encode()).hexdigest()
 
 
@@ -360,12 +421,20 @@ def main(argv: list[str] | None = None) -> int:
     chosen = [s for s in select(suites, a.suites) if s not in skipped]
     args = (QUICK if a.quick else []) + extra
     tree, env = worktree(), environment()
+    inputs = {s: inputs_of(s, pkgs) for s in chosen}
+    fixtures = fetched_fixtures(tree, {p for ps in inputs.values() for p in ps})
+    logs = a.logs or CACHE / "logs" / f"{time.strftime('%Y%m%dT%H%M%S')}-{os.getpid()}"
+    logs.mkdir(parents=True, exist_ok=True)
+    # the repository's own suite keys on the whole tree but reads tracked files only, so it alone never makes a fetch
+    needed = {p: art for p, art in fixtures.items() if any(_under(p, [x for x in ps if x != "."]) for ps in inputs.values())}
+    unfetched = set() if a.list else fetch_fixtures(needed, logs)
     files = None if GIT else digests()
     plan = []
     meta = metadata()
     for s in chosen:
-        paths = inputs_of(s, pkgs)
+        paths = inputs[s]
         ids = object_ids(tree, sorted(set(paths) | set(meta) | set(RUNNER)), files)
+        ids.update({f"fixture:{p}": art for p, art in fixtures.items() if _under(p, paths)})
         keys = [key(s, ids, env, args)] + ([key(s, ids, env, extra)] if a.quick else [])   # a full pass also covers --quick
         plan.append((s, paths, keys, next((c for c in map(cached, keys) if c), None)))
 
@@ -375,12 +444,15 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{s.name:28} {s.path:28} {state}\n    inputs: {', '.join(paths)}")
         return 0
 
-    logs = a.logs or CACHE / "logs" / f"{time.strftime('%Y%m%dT%H%M%S')}-{os.getpid()}"
-    logs.mkdir(parents=True, exist_ok=True)
     head = _git("rev-parse", "HEAD").strip() if GIT else a.commit or "unknown"
     dirty = bool(_git("status", "--porcelain").strip()) if GIT else False
     results: list[Result] = [Result(s, "cached", since=hit, key=hit["key"]) for s, _, _, hit in plan if hit and not a.fresh]
-    todo = [(s, paths, keys) for s, paths, keys, hit in plan if a.fresh or not hit]
+    blocked = [s for s, paths, _, hit in plan if (a.fresh or not hit) and any(_under(p, [x for x in paths if x != "."]) for p in unfetched)]
+    for s in blocked:
+        print(f"failed  {s.name:28} its fixtures could not be fetched: "
+              f"{', '.join(sorted(p for p in unfetched if _under(p, inputs[s])))[:300]} (log: {logs / 'fetch-fixtures.log'})")
+        results.append(Result(s, "failed", log=logs / "fetch-fixtures.log"))
+    todo = [(s, paths, keys) for s, paths, keys, hit in plan if (a.fresh or not hit) and s not in blocked]
     known = _durations()
     todo.sort(key=lambda t: (not t[0].parallel, -known.get(t[0].path, float("inf"))))
     for r in results:

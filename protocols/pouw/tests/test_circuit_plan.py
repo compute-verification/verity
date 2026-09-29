@@ -20,8 +20,9 @@ def test_a_tiles_closure_is_its_strips_digest_path_and_key():
     for tile, closure in lay.closure.items():
         rs, cs = us[tile].where
         roles = [us[u].role for u in closure]
-        assert roles[:4] == ["tile", "form_x", "form_y", "digest"] and roles[-1] == "key"
-        assert us[closure[1]].where == (rs,) and us[closure[2]].where == (cs,) and us[closure[3]].where == (rs,)
+        assert roles[:3] == ["tile", "form_x", "digest"] and roles[-1] == "key"
+        assert us[closure[1]].where == (rs,) and us[closure[2]].where == (rs,)
+        assert lay.y_strip[tile] == cs                     # its Y unit is the weight Program's, column strip cs
         # the unbalanced tree: strips 0 and 1 sit under a node below the root, strip 2 under the root alone
         assert len([r for r in roles if r == "node"]) == (2 if rs < 2 else 1)
 
@@ -60,6 +61,7 @@ def test_a_plan_proves_each_drawn_tile_with_its_closure_once():
     assert plan == PL.draw(_key(), lay, PL.CountLaw(8))                  # the verifier's key fixes it
     tiles = [u for u in plan.drawn if lay.units[u].role == "tile"]
     want = set(plan.drawn).union(*(lay.closure[t] for t in tiles))
+    assert plan.proved_y == tuple(sorted({lay.y_strip[t] for t in tiles}))
     assert set(plan.proved) == want and len(plan.proved) == len(want)
     assert all(lay.units[u].role in ("tile", "dequant") for u in plan.drawn)
 
@@ -67,11 +69,10 @@ def test_a_plan_proves_each_drawn_tile_with_its_closure_once():
 def test_openings_are_one_leaf_per_row():
     """A and the weight are committed a leaf per row (X-SPC-57): a proved strip opens exactly its 16 rows."""
     lay = PL.layout(ncp2.Shape(32, 64, 32))
-    by_role = {u.role: u for u in lay.units if u.role in ("form_x", "form_y")}
+    by_role = {u.role: u for u in lay.units if u.role == "form_x"}
     assert PL.openings(lay, [by_role["form_x"].index]) == tuple(("a", r) for r in range(16 * by_role["form_x"].where[0],
                                                                                          16 * by_role["form_x"].where[0] + 16))
-    assert PL.openings(lay, [by_role["form_y"].index]) == tuple(("b", r) for r in range(16 * by_role["form_y"].where[0],
-                                                                                         16 * by_role["form_y"].where[0] + 16))
+    assert PL.openings(lay, [], [1]) == tuple(("b", r) for r in range(16, 32))      # the weight Program's Y unit 1
 
 
 def test_the_profile_is_stratified_over_the_tile_strata():
@@ -91,9 +92,23 @@ def test_traced_as_is_the_compositions_entry_point():
     from verity_pouw.circuit import traced_as
     from verity_pouw.protocol import DomainError
 
-    t = traced_as("ncp-v2", 32, 64, 32)
+    t = traced_as("ncp-v2-shift24", 32, 64, 32)
     assert t.definition is ncp2.linear(ncp2.Shape(32, 64, 32)) and t.query == P.query(ncp2.Shape(32, 64, 32))
     assert t.served == 32 * 32 and t.layout().closure == PL.layout(ncp2.Shape(32, 64, 32)).closure
     assert traced_as("ncp-v1", 32, 64, 32) is None and traced_as("pearl-fp8-v4", 32, 64, 32) is None
     with pytest.raises(DomainError):
         traced_as("ncp-v2", 30, 64, 32)
+    assert traced_as("ncp-v2", 32, 64, 32).definition is ncp2.linear(ncp2.Shape(32, 64, 32), "word")   # the scheme pins P
+    assert t.weight is ncp2.weight(ncp2.Shape(32, 64, 32)) and t.kind == "shift24"
+
+
+def test_the_default_work_law_draws_a_calls_share_of_the_windows_budget():
+    """K = 27,713 is a window's budget (X-SPC-83): alone, a call is capped at its units instead of raising; in a window each
+    call draws ⌈K·W_c/W_window⌉, so C equal calls draw about K between them, not C·K."""
+    lay = PL.layout(ncp2.Shape(32, 64, 32))
+    tile, rest = lay.strata
+    assert PL.WorkLaw().sizes(lay.strata) == {tile.name: 4, rest.name: 1}      # K capped at the call's 1,028 units
+    laws = PL.window_laws([lay] * 10_000)
+    assert laws[0].budget(lay.strata) == -(-PL.RECORD_K // 10_000) == 3
+    assert laws[0].sizes(lay.strata) == {tile.name: 3, rest.name: 1}
+    assert sum(law.sizes(lay.strata)[tile.name] for law in laws) <= PL.RECORD_K + 10_000 * len(lay.strata)

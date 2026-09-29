@@ -4,7 +4,9 @@ A `Circuit` is one call's Definition with its unit templates by role; `ncp_circu
 (`circuit.h1t`), and the checks below read either.  The functions named for `ncp-v2` take its (shape, kind) as before.
 
 * `query(shape, kind)` / `partition(program, ...)`: core's `verity/partition/v1` object naming the templates (`ncp2.templates`;
-  `NcpNode` only when the call has two strips or more, since a listed template needs an instance).
+  `NcpNode` only when the call has two strips or more, since a listed template needs an instance). The weight's own
+  Program (`NcpWeight`, its Y units) has `weight_query`; `window_units` and `window_cut` number and cut C calls on one
+  weight in one root (`NcpWindow`).
 * `units(shape, kind)`: every unit with its role, its template's descriptor id, and where it sits (strip, column strip, tile,
   tree node), numbered as `partition_object.evaluate` numbers them (node order, then member).
 * `unit_cut(shape, kind)`: the whole call as one flat `cut.CallGraph` with the owner of every computing gate, checked by
@@ -78,8 +80,18 @@ def query_of(c: Circuit) -> dict[str, Any]:
 def listed(shape: Shape, kind: str = "shift24") -> list[Any]:
     """The templates the call instantiates, in the order its root body first uses them."""
     t = ncp2.templates(shape.k, kind)
-    order = ["digest"] + (["node"] if shape.m // D > 1 else []) + ["key", "form_y", "form_x", "tile", "dequant"]
+    order = ["digest"] + (["node"] if shape.m // D > 1 else []) + ["key", "form_x", "tile", "dequant"]
     return [t[r] for r in order]
+
+
+def weight_query(shape: Shape, kind: str = "shift24") -> dict[str, Any]:
+    """The weight Program's query: its Y units (`NcpFormY`), one per 16-column strip."""
+    return PO.template_instances_query([ncp2.templates(shape.k, kind)["form_y"]])
+
+
+@lru_cache(maxsize=8)
+def weight_program(shape: Shape, kind: str = "shift24") -> Program:
+    return Program(ncp2.weight(shape, kind))
 
 
 def query(shape: Shape, kind: str = "shift24") -> dict[str, Any]:
@@ -131,9 +143,9 @@ def circuit_units(c: Circuit) -> tuple[Unit, ...]:
             if role in ("digest", "form_x", "form_y", "pad"):
                 where: tuple[int, ...] = (strips[role] + m,)
             elif role == "tile":
-                where = (tile_row, m)
+                where = (tile_row % ms, m)
             elif role == "dequant":
-                where = (deq_node // ns, deq_node % ns, m)
+                where = ((deq_node // ns) % ms, deq_node % ns, m)
             else:
                 where = ()
             out.append(Unit(len(out), role, descriptor_id(nd.fn), k, m, where))
@@ -143,8 +155,18 @@ def circuit_units(c: Circuit) -> tuple[Unit, ...]:
             deq_node += 1
         elif role in ("digest", "form_x", "form_y", "pad"):
             strips[role] += count
-    assert tile_row == ms
+    assert tile_row % max(ms, 1) == 0
     return tuple(out)
+
+
+def window_units(shape: Shape, calls: int, kind: str = "shift24") -> tuple[Unit, ...]:
+    """`NcpWindow`'s units: the weight's Y units, then each call's, in the partition's numbering."""
+    return units_of(ncp2.window(shape, calls, kind), shape, kind)
+
+
+def window_cut(shape: Shape, calls: int, kind: str = "shift24") -> "UnitCut":
+    """C calls on one weight in one root, cut as one Program: the invariant over a window's composition."""
+    return unit_cut_of(ncp2.window(shape, calls, kind), shape, kind)
 
 
 @dataclass
@@ -270,24 +292,34 @@ class WidthRule:
     separator_bits: int                   # the pinned ports' total width
 
 
-def width_rule(shape: Shape, kind: str = "shift24", fn: Any = None, served: int | None = None) -> WidthRule:
-    """The width rule by reachability, with the separator pinned (X-SPC-60, X-SPC-66): remove the pinned ports' values, find
-    every unit from which a served output (the first ``served`` root outputs, y's m·n entries by default) is still reachable,
-    and hold each such unit to `cut.WIDTH_RULE`; every other unit is behind the separator and exempt. The ports are the
-    protocol's (`SEPARATOR_PORTS`), so a wide unit cannot name its own output a separator: a pinned tile whose word leaf
-    reaches a served output is itself reachable, and fails."""
+def width_rule(shape: Shape, kind: str = "shift24") -> WidthRule:
+    """The width rule by reachability, with the separator pinned (X-SPC-60, X-SPC-66), on the protocol's own Program
+    (`ncp2.linear`, which the verifier builds; X-SPC-73): remove the pinned ports' values, find every unit from which a
+    served output (y's m·n entries, the protocol's designation) is still reachable, and hold each such unit to
+    `cut.WIDTH_RULE`; every other unit is behind the separator and exempt. The ports are the protocol's
+    (`SEPARATOR_PORTS`), so a wide unit cannot name its own output a separator: a pinned tile whose word leaf reaches a
+    served output is itself reachable, and fails."""
+    return width_rule_of(ncp2.linear(shape, kind), shape, kind, shape.m * shape.n)
+
+
+def width_rule_of(fn: Any, shape: Shape, kind: str, served: int) -> WidthRule:
+    """`width_rule` on a given Definition and served count: the check a test runs on a variant. It is a property of the
+    Definition checked, so it certifies nothing about any other; only `width_rule`'s Program is the protocol's."""
     return circuit_width_rule(ncp_circuit(shape, kind, fn), served)
 
 
 def circuit_width_rule(c: Circuit, served: int | None = None, uc: UnitCut | None = None) -> WidthRule:
-    """`width_rule` for any circuit."""
+    """`width_rule` for any circuit: its served outputs are its first ``served`` root outputs (y's m·n by default)."""
+    served = c.m * c.n if served is None else served
+    if not 1 <= served:
+        raise ValueError("the served outputs are at least one: a width rule over none checks nothing")
     uc = circuit_cut(c) if uc is None else uc
     g, owner = uc.graph, uc.owner
     ports = _port_gates(uc, c)
     preds: list[list[int]] = [[] for _ in range(g.n)]
     for p, q in zip(g.src, g.dst):
         preds[q].append(p)
-    served_gates = list(g.outputs[:c.m * c.n if served is None else served])
+    served_gates = list(g.outputs[:served])
     seen, stack = set(served_gates), list(served_gates)
     while stack:
         q = stack.pop()
@@ -315,4 +347,5 @@ def boundary_bits(shape: Shape, kind: str = "shift24") -> dict[str, Counter]:
 __all__ = ["H1T_POUW_ROLES", "POUW_ROLES", "SEPARATOR_PORTS", "Circuit", "Separator", "Unit", "UnitCut", "WidthRule",
            "boundary_bits", "circuit_cut", "circuit_separator", "circuit_units", "circuit_width_rule", "h1t_circuit",
            "listed", "listed_of", "ncp_circuit", "partition", "program", "query", "query_of", "separator", "unit_cut",
-           "unit_cut_of", "units", "units_of", "width_rule"]
+           "unit_cut_of", "units", "units_of", "weight_program", "weight_query", "width_rule", "width_rule_of", "window_cut",
+           "window_units"]

@@ -145,15 +145,20 @@ the audit's integrity profile carries the work bound (Project design note `docs/
 Lean statements are the store's `lean/submissions/pouw-accountable-compute`). This package has NCP-INT at small shapes
 (16 | m, 16 | n, 64 | k); the certificate's domain is still `ncp-v1`'s.
 
-**The units.** `NcpLinear{M,K,N,PERM}` is one linear call. Its root body holds only instances of these templates, so the
-partition is `Q_template_instances` over them (`circuit.partition.query`); every value is computed in exactly one unit.
+**The units.** A weight's Y strips and c₀ read only B, the salt, the weight id and the column ids, so they are formed once
+per run and weight: `NcpWeight{K,N,PERM}`'s root body is its `NcpFormY` units (`partition.weight_query`). One linear call
+is `NcpLinear{M,K,N,PERM}`, which reads its weight's Y strips and c₀ as committed inputs. Each root body holds only
+template instances, so each partition is `Q_template_instances` over them (`circuit.partition.query`); every value is
+computed in exactly one unit. `NcpWindow{M,K,N,PERM,C}` is C calls on one weight in one root, the Y units once
+(`partition.window_cut`): the composition passes the invariant too (`test_calls_on_one_weight_compose_without_recompute`).
 
 ~~~text
 template            per                          reads                                         returns
+NcpFormY{K,PERM}    16-column weight strip       16 weight rows, salt, weight id, column ids   the Y strip (s8), c₀
+  (NcpWeight: once per run and weight)
 NcpDigest{K}        16-row strip of A            its 16 A rows                                 D_s
 NcpNode             node of the call's tree      its two children                              the parent (the root is D_A)
-NcpKey              call                         salt, forward, position, weight id, D_A       K
-NcpFormY{K,PERM}    16-column weight strip       16 weight rows, salt, weight id, column ids   the Y strip (s8), c₀
+NcpKey              call                         D_A, salt, forward, position, weight id       K
 NcpFormX{K,PERM}    16-row strip of A            16 A rows, K, row ids                         the X strip (X + β, u8)
 NcpTile{K}          16 × 16 block                its X strip, its Y strip, c₀                  the credited words, and Z
 NcpDequant          output entry                 Z, s_i, t_j, bias_j                           y = bf16(fp32(s_i)·fp32(t_j)·Z) + bias_j
@@ -165,7 +170,7 @@ little-endian for SHAKE256. Tags are 8 ASCII bytes. `noise(b) = (b mod 64) − 3
 ~~~text
 r_i = SHA-512("ncp2-row" ‖ row i's int7 bytes)            D_s = SHA-512("ncp2-stp" ‖ r_16s ‖ … ‖ r_16s+15)
 D_A = RFC 6962 tree over D_1 … D_(m/16), node = SHA-512("ncp2-nod" ‖ left ‖ right); one leaf's root is the leaf
-K   = SHAKE256("ncp2-key" ‖ salt ‖ forward ‖ position ‖ weight id ‖ D_A)[:32],   position = layer << 32 | site
+K   = SHAKE256(D_A ‖ "ncp2-key" ‖ salt ‖ forward ‖ position ‖ weight id)[:32],   position = layer << 32 | site
 E₁ row i    = noise(SHAKE256(ι(i) ×5 ‖ "ncp2-E1\0" ‖ K)[:k])
 F₁ column j = noise(SHAKE256(ι(j) ×5 ‖ "ncp2-F1\0" ‖ salt ‖ weight id)[:k]),        ι(i) = i << 32 | i
 ~~~
@@ -181,12 +186,34 @@ weight are committed a leaf per row, so a proved unit opens exactly the rows it 
 - **K is per call, and each row's XOF begins with the row's own index in all five of Keccak's columns.** A row's XOF over
   (salt, forward, D_A, …, i) would compute round 1's values of the call-wide fields alone in every X unit: the same
   function of the same values in two units. The recompute check rejects that layout
-  (`test_the_index_in_every_column_is_what_keeps_the_xof_recompute_free`). F₁ carries the column index the same way.
+  (`test_the_index_in_every_column_is_what_keeps_the_xof_recompute_free`). F₁ carries the column index the same way,
+  and K's message begins with D_A's eight lanes, so that no two calls' key units compute a common value (X-SPC-71).
 - **c₀ is the Y unit's.** Every tile of a column would otherwise compute −β·Σ Y[:, j] again.
 - **The index binding is anchored inputs.** `Q_template_instances` admits no constant node at the root, so the forward
-  index, the position, the weight id and the global row and column indices are Program inputs, anchored like the salt.
+  index, the position, the weight id and the global row and column indices are Program inputs. Each has an anchor the
+  verifier owns (`circuit.anchors`, the red team's X-SPC-72):
+
+  ~~~text
+  salt        the run's salt
+  forward     the verifier's own enumeration of the window's forwards
+  position    (layer, site) from the registered layout
+  weight id   the registered id of the matrix whose rows B opens under the weights root
+  row ids     the call's global row indices, distinct
+  column ids  the weight's global column indices, shards included, distinct
+  ~~~
+
+  The verifier builds these inputs itself (`Traced.call_args`, `Traced.weight_args`) or refuses a prover's that differ
+  (`Anchors.check_call`), and a window's `Ledger` refuses a repeated call index (forward, position), A11's
+  `UniqueCallIndices`.
 - **Every primitive returns at most 32 bits.** SHA-512 words are carried as (hi, lo) halves and Keccak lanes as
   (lo, hi).
+
+**The verifier builds the Program** (X-SPC-73). `traced_as(scheme, m, k, n)` gives the call's and the weight's
+Definitions from the scheme and the shape alone; the scheme pins P (`ncp-v2`: the word-granular P, as `ncp-v1`;
+`ncp-v2-shift24`: the shift by 24). The verifier never takes a prover's descriptor: `Traced.check_descriptor` refuses one
+whose digest isn't its own Program's. So the width rule is a property of that Definition, checked on it
+(`partition.width_rule(shape, kind)` takes no Definition and no served count; a test's variant goes through
+`width_rule_of`, which refuses an empty served set).
 
 **The separator** (decision 4: option (a), Z stays in the tile). The protocol pins the separator port: the tile's Z, the
 second field of `NcpTile`'s return (`partition.SEPARATOR_PORTS`). The registrant can't choose it.
@@ -195,16 +222,21 @@ second field of `NcpTile`'s return (`partition.SEPARATOR_PORTS`). The registrant
   unit is behind the separator.
 - A tile whose word leaf reached y would itself be reachable, and would fail, along with every PoUW unit upstream of it
   (`test_a_word_leaf_wired_to_the_served_output_fails_the_width_rule`).
-- `partition.separator` checks the topology. Every path from a PoUW unit (digest, node, key, form-X, form-Y, tile) to y
-  passes through a pinned Z. What crosses is m·n values of 32 bits, 8,192 bits per tile, and no credited word is
+- `partition.separator` checks the topology. Every path from a PoUW unit (digest, node, key, form-X, tile; and form-Y in a
+  window) to y passes through a pinned Z. What crosses is m·n values of 32 bits, 8,192 bits per tile, and no credited word is
   delivered.
 
-**The draw** (`plan`). Tiles are drawn by the law, each proved with its closure: its X unit, Y unit, strip digest, the
-node units on that strip's path, and the key, each once. The dequantization units are drawn at the law's floor. The law
-is a seam:
+**The draw** (`plan`). Tiles are drawn by the law, each proved with its closure: its X unit, strip digest, the node units
+on that strip's path and the key, each once, and its Y unit in the weight's Program (`Plan.proved_y`), once per plan. The
+dequantization units are drawn at the law's floor. The law is a seam:
 - `CountLaw` is `main`'s stratified rule today, k_s = max(1, round(K·n_s/N)).
 - `WorkLaw` is Verity root's work law (draft #362, `Flock/Draw.lean`): k_s = min(n_s, max(1, ⌈K·W_s/W⌉)), with
-  K = 27,713 at ε = 0.1% and δ = 2⁻⁴⁰ (`plan.record_k`; 27,712 misses). It is of record when #362 merges.
+  K = 27,713 at ε = 0.1% and δ = 2⁻⁴⁰ (`plan.record_k`; 27,712 misses).
+  - K is a **window's** budget (X-SPC-83). A call draws its share K_c = ⌈K·W_c/W_window⌉, capped at its units
+    (`plan.window_laws`): #362's law with strata by (call, template), so the window keeps its (1 − ε)^K, and it draws at
+    most K plus one floor unit per stratum.
+  - It is of record when #362 merges, in the strata root chooses: this plan's two (tiles and dequantization, with the
+    closure) or #362's one per template (#372), X-SPC-84.
 
 The profile is `Stratified` over the tile strata, and its `harm_bound`, at W_ref per tile, bounds the unsound work.
 
@@ -219,4 +251,5 @@ The profile is `Stratified` over the tile strata, and its `harm_bound`, at W_ref
   - the work law's merge (#362);
   - the served-output designation and the pinned ports in `Q_nested_instances` v0's spec, evaluator and Lean port;
   - the vLLM adapter's `traced_as`;
+  - the reuse of a weight's Y proofs across a run's windows (X-SPC-51), which needs its commitments linked across windows;
   - NCP-FP8 and H-1T.

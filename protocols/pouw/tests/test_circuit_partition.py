@@ -24,7 +24,14 @@ def test_the_template_query_applies_and_numbers_units_as_core_does():
     us = P.units(SHAPE)
     assert part.population == len(us)
     assert [t for _k, t, _a, n in part.ranges for _ in range(n)] == [u.template for u in us]
-    assert Counter(u.role for u in us) == {"digest": 2, "node": 1, "key": 1, "form_y": 2, "form_x": 2, "tile": 4, "dequant": 1024}
+    assert Counter(u.role for u in us) == {"digest": 2, "node": 1, "key": 1, "form_x": 2, "tile": 4, "dequant": 1024}
+    assert PO.verify(PO.build(prog, q), prog).ok
+
+
+def test_the_weight_program_is_its_y_units():
+    """A weight's Y strips and c₀ are formed once per run and weight, in their own Program (X-SPC-70)."""
+    prog, q = P.weight_program(SHAPE), P.weight_query(SHAPE)
+    assert PO.evaluate(prog, q).population == SHAPE.n // 16
     assert PO.verify(PO.build(prog, q), prog).ok
 
 
@@ -59,12 +66,12 @@ def test_the_width_rule_with_the_pinned_port():
     assert wr.ok and not wr.too_wide
     us = P.units(SHAPE)
     assert {us[u].role for u in wr.checked} == {"dequant"}
-    assert wr.exempt == 12 and wr.separator_bits == 32 * SHAPE.m * SHAPE.n
+    assert wr.exempt == 10 and wr.separator_bits == 32 * SHAPE.m * SHAPE.n
     bits = P.boundary_bits(SHAPE)
     assert bits["dequant"] == {16: 1024} and bits["tile"] == {(11 * 256 + 256) * 32: 4}
 
 
-def _served_word_body(B, S, a, s, b, t, bias, salt, fwd, pos, wid, rid, cid):
+def _served_word_body(B, S, a, s, ys, c0s, t, bias, salt, fwd, pos, wid, rid):
     """`ncp2.linear`'s body with one change: dequantization reads each tile's last credited word instead of its Z, the
     wiring a pinned port must reject (a word leaf is not a port)."""
     m, k, n = S.M, S.K, S.N
@@ -74,11 +81,8 @@ def _served_word_body(B, S, a, s, b, t, bias, salt, fwd, pos, wid, rid, cid):
     dig = B.batch(tm["digest"], strips, axes=(0,))
     root = ncp2.rfc6962(0, ms, lambda i: dig[i], lambda left, right: B.call(ncp2.NcpNode, left, right))
     key = B.call(ncp2.NcpKey, salt, fwd, pos, wid, root)
-    ys = B.batch(tm["form_y"], b.reshape(Array(ns, Array(16, Array(k, ncp2.W.I7)))), salt, wid,
-                 cid.reshape(Array(ns, Array(16, ncp2.U32))), axes=(0, None, None, 0))
     xs = B.batch(tm["form_x"], strips, key, rid.reshape(Array(ms, Array(16, ncp2.U32))), axes=(0, None, 0))
-    tiles = [B.batch(tm["tile"], xs[rs], array_of([ys[c][0] for c in range(ns)]), array_of([ys[c][1] for c in range(ns)]),
-                     axes=(None, 0, 0)) for rs in range(ms)]
+    tiles = [B.batch(tm["tile"], xs[rs], ys, c0s, axes=(None, 0, 0)) for rs in range(ms)]
     per = (3 * k // 16 - 1) * 256
     out = {}
     for rs in range(ms):
@@ -98,10 +102,37 @@ def test_a_word_leaf_wired_to_the_served_output_fails_the_width_rule():
     does every PoUW unit upstream of them, so all of them are width-checked, and fail."""
     fn = bind(CompositeDefinition("NcpLinearServedWord", 1, ("M", "K", "N", "PERM"), ncp2._linear_sig, _served_word_body,
                                   register=False), M=SHAPE.m, K=SHAPE.k, N=SHAPE.n, PERM="shift24")
-    wr = P.width_rule(SHAPE, fn=fn)
+    wr = P.width_rule_of(fn, SHAPE, "shift24", SHAPE.m * SHAPE.n)
     us = P.units_of(fn, SHAPE)
     assert not wr.ok
-    assert {us[u].role for u, _ob, _og in wr.too_wide} == set(P.POUW_ROLES)
+    assert {us[u].role for u, _ob, _og in wr.too_wide} == set(P.POUW_ROLES) - {"form_y"}
+    # the verifier never takes this Program: it builds its own and compares digests (X-SPC-73)
+    from verity.ir.codec import encode_program
+    from verity.ir.program import Program
+    from verity_pouw.circuit import traced_as
+    from verity_pouw.protocol import DomainError
+
+    t = traced_as("ncp-v2-shift24", SHAPE.m, SHAPE.k, SHAPE.n)
+    t.check_descriptor(encode_program(Program(t.definition)))
+    with pytest.raises(DomainError):
+        t.check_descriptor(encode_program(Program(fn)))
+
+
+def test_the_width_rule_is_over_the_protocols_program_and_its_served_outputs():
+    """`width_rule` takes no Definition and no served count: those are the protocol's. A variant's check refuses an empty
+    served set, which would pass vacuously (X-SPC-73)."""
+    with pytest.raises(ValueError):
+        P.width_rule_of(ncp2.linear(SHAPE), SHAPE, "shift24", 0)
+
+
+@pytest.mark.slow
+def test_calls_on_one_weight_compose_without_recompute():
+    """Two calls on one weight in one root: the weight's Y units once, each call's own units reading them. With Y per call
+    the second call recomputed the first's whole Y unit, and with the key's per-call lanes last two of its XORs (X-SPC-70,
+    X-SPC-71); now no value is computed in two units."""
+    uc = P.window_cut(ncp2.Shape(16, 64, 16), 2)
+    assert uc.verdict.ok, uc.verdict.codes
+    assert Counter(u.role for u in uc.units) == {"form_y": 1, "digest": 2, "key": 2, "form_x": 2, "tile": 2, "dequant": 512}
 
 
 def _naive_form_x_body(B, S, rows, key, rid):
