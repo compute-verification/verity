@@ -107,12 +107,13 @@ def buildStmt (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins) (t
   else do Stmt.setup tags (Blake3Row.leaf (← Comp.load Blake3Row.spec compB)) circuitB pubB coins tables
 
 /-- `buildStmt` for a session of `count` tables (`Stmt.setupTables`): the session and each table's statement. `work` is the
-verifier's own `K` and work table, which a work draw's law is held to, and `closure` its closure map. -/
+verifier's own `K` and work table, which a work draw's law is held to, `stratified` its own `K` for a stratified draw,
+and `closure` its closure map. -/
 def buildSession (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins) (tables : List (String × ByteArray))
     (count : Nat) (draw : Option Lean.Json := none) (partition : Option Lean.Json := none) (program : Option ByteArray := none)
-    (work : Option (Nat × Array (String × Nat)) := none) (closure : Option (Std.HashMap Nat (Array Nat)) := none) :
-    V (SessionSpec × Array Stmt) :=
-  if tags.hm96Rows then Stmt.setupTables tags circuitB pubB coins count tables draw partition program work closure
+    (work : Option (Nat × Array (String × Nat × Nat)) := none) (stratified : Option Nat := none)
+    (closure : Option (Std.HashMap Nat (Array Nat)) := none) : V (SessionSpec × Array Stmt) :=
+  if tags.hm96Rows then Stmt.setupTables tags circuitB pubB coins count tables draw partition program work stratified closure
   else if count > 1 then throw s!"{tags.name}: one table per session"
   else do
     let st ← buildStmt tags circuitB pubB compB coins tables draw partition program
@@ -142,8 +143,8 @@ def partitionInput (args : List String) : IO (Except String (Option Lean.Json)) 
       | .error e => return .error s!"partition: not JSON: {e}"
 
 /-- `--work-table F`: the verifier's own work table (`Draw.workTableOfJson`: template descriptor id ↦ the PoUW work of one
-of its units), a path, or with `--archive` its SHA-512. -/
-def workTableInput (args : List String) : IO (Except String (Option (Array (String × Nat)))) := do
+of its units, and its floor), a path, or with `--archive` its SHA-512. -/
+def workTableInput (args : List String) : IO (Except String (Option (Array (String × Nat × Nat)))) := do
   let some f := argOf args "--work-table" | return .ok none
   let bytes ← match argOf args "--archive" with
     | none => (try pure (Except.ok (← IO.FS.readBinFile f)) catch e => pure (Except.error s!"work table: {e}"))
@@ -220,11 +221,12 @@ def coinTreeCmd (path : String) : IO UInt32 := do
 /-- `verify --statement ID --circuit F --comp F --public F [--coins seed|os] [--session-tables J] --session DIR...`: `ID`
 names the statement's tags (`verity/flock-circuit` by default, or `verity/flock-netlist/v1`); `--comp` is the row leaf's
 pinned compression circuit; `J` (default 1) is the tables of every session (§16.12). A session with a work draw needs the
-verifier's own `--work K`, `--work-table`, `--program` and `--partition`. Each DIR holds `session.json` and
-`<table>.rep<r>.bin` for each table and rep. A closure draw needs the verifier's own `--closure F`. The statement is set up once; one verdict line per session, in order. Exit 0
-iff every session is accepted. -/
+verifier's own `--work K`, `--work-table`, `--program` and `--partition`, one with a stratified draw its own
+`--stratified K`, `--program` and `--partition`, and a closure draw its own `--closure F`. Each DIR holds `session.json`
+and `<table>.rep<r>.bin` for each table and rep. The statement is set up once; one verdict line per session, in order.
+Exit 0 iff every session is accepted. -/
 def verifyCmd (args : List String) : IO UInt32 := do
-  let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--partition F] [--program F] [--work K --work-table F] [--closure F] [--coins seed|os] [--session-tables J] --session DIR..."
+  let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--coins seed|os] [--session-tables J] --session DIR..."
   let (some _, some _) := (argOf args "--circuit", argOf args "--public") | IO.eprintln usage; return 2
   let some tags := Tags.find? ((argOf args "--statement").getD Tags.circuit.name)
     | IO.eprintln s!"unknown statement; known: {Tags.all.map (·.name)}"; return 2
@@ -256,8 +258,13 @@ def verifyCmd (args : List String) : IO UInt32 := do
   let work := match ownK, table with
     | some k, some t => some (k, t)
     | _, _ => none
+  let stratified ← match argOf args "--stratified" with
+    | none => pure none
+    | some k => match k.toNat? with
+      | some k => pure (some k)
+      | none => IO.eprintln "verify: --stratified K: K is a natural number"; return 2
   let setupOf := fun (draw : Option Lean.Json) =>
-    match buildSession tags circuitB pubB compB coins tables count draw partition program work closure with
+    match buildSession tags circuitB pubB compB coins tables count draw partition program work stratified closure with
     | .ok (spec, sts) => Except.ok (spec, sts.map Setup.ofCircuit, (sts[0]?.map (·.partition)).getD Lean.Json.null)
     | .error e => Except.error s!"setup: {e}"
   IO.eprintln s!"inputs: {(← IO.monoMsNow) - t0} ms"
@@ -491,7 +498,7 @@ def stratifiedInput (args : List String) : IO (Except String (Option (Draw.Law �
   return (HmRow.stratifiedLaw obj program k).map some
 
 /-- `--program P --partition Q --work K --work-table F`: the work law the verifier derives from its own program, partition
-object and work table (`HmRow.workLaw`), and the population; none without `--work`. -/
+object and work table of works and floors (`HmRow.workLaw`), and the population; none without `--work`. -/
 def workInput (args : List String) : IO (Except String (Option (Draw.Law × Nat))) := do
   let some k := argOf args "--work" | return .ok none
   let some k := k.toNat? | return .error "--work K: K is a natural number"
@@ -519,9 +526,9 @@ def ownLaw (args : List String) : IO (Except String (Option (Draw.Law × Nat))) 
 /-- `draw (--population N (--k K | --p NUM/DEN) | --program P --partition Q (--stratified K | --work K --work-table F))
 [--closure F] [--stream HEX | --stream-file F]`: the unit draw (§7.3), from the operating system's randomness (a stratified or work draw:
 one stream per stratum), or from the given bytes (a test; a stratified or work draw's streams are its consecutive segments).
-The strata are the verifier's own, derived from its program and partition object, and a work law's work is its own work
-table's; with `--closure F`, a work draw is widened by the verifier's closure map. Prints `DRAW {…}`, the object the
-verifier sends in the clear. -/
+The strata are the verifier's own, derived from its program and partition object, and a work law's works and floors are its
+own work table's; with `--closure F`, a work draw is widened by the verifier's closure map. Prints `DRAW {…}`, the object
+the verifier sends in the clear. -/
 def drawCmd (args : List String) : IO UInt32 := do
   let (law, pop) ← match ← ownLaw args with
     | .error e => IO.eprintln s!"draw: {e}"; return 2

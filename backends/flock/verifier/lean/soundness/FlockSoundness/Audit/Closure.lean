@@ -15,8 +15,8 @@ program.
 * `harm σ w cl u`, the work of the units whose closure holds `u`. `harm_le_unsoundWork`: **a wrong unit's whole harm is in
   the unsound work**, whether or not a draw reaches it. `unsoundWork_le_harm`: the unsound work is at most the wrong
   units' harm (coverage), and `unsoundWork_singleton`: exactly, for one wrong unit.
-* `audit_work_closure`, `extraction_audit_work_closure`: under the work law's closure draw, the audit accepts while the
-  unsound units do at least `T` of the work with probability at most `((W − T)/W)^K + ε_ks + δ_link`.
+* `audit_work_closure`, `extraction_audit_work_closure`: under the work law's closure draw, at any floors `f_s ≥ 1`, the
+  audit accepts while the unsound units do at least `T` of the work with probability at most `((W − T)/W)^K + ε_ks + δ_link`.
   `audit_work_closure_harm`: likewise while some wrong unit's harm is at least `T`. `audit_work_closure_of_record`: at
   `K = 27,713`, unsound work of at least 0.1% with at most `2^-40 + ε_ks + δ_link`.
 -/
@@ -104,71 +104,71 @@ theorem unsoundWork_singleton (σ : Fin n → Fin m) (w : Fin m → ℕ) (cl : F
 
 /-- Under the work law's closure draw, a set making at least `T` of the work unsound escapes with at most
 `((W − T)/W)^K`. -/
-theorem closure_escape_le_work (σ : Fin n → Fin m) (w : Fin m → ℕ) (K : ℕ) (cl : Fin n → Finset (Fin n))
-    (hW : 0 < totalWork σ w) {B : Finset (Fin n)} {T : ℕ} (hT : T ≤ unsoundWork σ w cl B) :
-    ((work σ w K).closure cl).escape B ≤ (((totalWork σ w - T : ℕ) : ℝ≥0∞) / (totalWork σ w : ℝ≥0∞)) ^ K := by
+theorem closure_escape_le_work (σ : Fin n → Fin m) (w : Fin m → ℕ) (f : Fin m → ℕ) (K : ℕ) (cl : Fin n → Finset (Fin n))
+    (hf : ∀ s, 1 ≤ f s) (hW : 0 < totalWork σ w) {B : Finset (Fin n)} {T : ℕ} (hT : T ≤ unsoundWork σ w cl B) :
+    ((work σ w f K).closure cl).escape B ≤ (((totalWork σ w - T : ℕ) : ℝ≥0∞) / (totalWork σ w : ℝ≥0∞)) ^ K := by
   rw [closure_escape]
-  exact ((work σ w K).escape_anti subset_union_right).trans (work_escape_le_of_le σ w K hW hT)
+  exact ((work σ w f K).escape_anti subset_union_right).trans (work_escape_le_of_le σ w f K hf hW hT)
 
 end Law
 
 section Audits
 
-variable {n m : ℕ} {σ : Fin n → Fin m} {w : Fin m → ℕ} {K : ℕ} {cl : Fin n → Finset (Fin n)}
+variable {n m : ℕ} {σ : Fin n → Fin m} {w : Fin m → ℕ} {f : Fin m → ℕ} {K : ℕ} {cl : Fin n → Finset (Fin n)}
   {Reg : Type} {session : Finset (Fin n) → Reg → Game Bool}
 
 /-- **The work audit with closure draws** (oracle layer): the audit accepts while the units its wrong units make unsound
 do at least `T` of the work with probability at most `((W − T)/W)^K + ε_ks + δ_link`. -/
-theorem audit_work_closure (A : Analysis ((Law.work σ w K).closure cl) Reg session) {εks δlink : ℝ≥0∞}
-    (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink) (hW : 0 < Law.totalWork σ w) (T : ℕ)
-    (σ' : Strategy (audit ((Law.work σ w K).closure cl) Reg session)) :
+theorem audit_work_closure (A : Analysis ((Law.work σ w f K).closure cl) Reg session) {εks δlink : ℝ≥0∞}
+    (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink) (hf : ∀ s, 1 ≤ f s) (hW : 0 < Law.totalWork σ w) (T : ℕ)
+    (σ' : Strategy (audit ((Law.work σ w f K).closure cl) Reg session)) :
     prob (fun o => o.1 = true ∧ T ≤ Law.unsoundWork σ w cl (A.wrong (A.committedOf σ')))
-        (audit ((Law.work σ w K).closure cl) Reg session) σ' ≤
+        (audit ((Law.work σ w f K).closure cl) Reg session) σ' ≤
       (((Law.totalWork σ w - T : ℕ) : ℝ≥0∞) / (Law.totalWork σ w : ℝ≥0∞)) ^ K + εks + δlink := by
   refine (audit_profile A hks hlink (fun B => T ≤ Law.unsoundWork σ w cl B) σ').trans ?_
   gcongr
-  exact iSup₂_le fun B hB => Law.closure_escape_le_work σ w K cl hW hB
+  exact iSup₂_le fun B hB => Law.closure_escape_le_work σ w f K cl hf hW hB
 
 /-- **The work audit with closure draws** (compiled layer, randomized extractor): at most
 `((W − T)/W)^K + ε_ks(σ) + δ_link(σ)`. -/
-theorem extraction_audit_work_closure (A : ExtractionAnalysis ((Law.work σ w K).closure cl) Reg session)
-    {εks δlink : (R : Reg) → Cont ((Law.work σ w K).closure cl) Reg session R → ℝ≥0∞}
-    (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink) (hW : 0 < Law.totalWork σ w) (T : ℕ)
-    (σ' : Strategy (audit ((Law.work σ w K).closure cl) Reg session)) :
+theorem extraction_audit_work_closure (A : ExtractionAnalysis ((Law.work σ w f K).closure cl) Reg session)
+    {εks δlink : (R : Reg) → Cont ((Law.work σ w f K).closure cl) Reg session R → ℝ≥0∞}
+    (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink) (hf : ∀ s, 1 ≤ f s) (hW : 0 < Law.totalWork σ w) (T : ℕ)
+    (σ' : Strategy (audit ((Law.work σ w f K).closure cl) Reg session)) :
     prob (fun o => o.1 = true ∧ T ≤ Law.unsoundWork σ w cl (A.wrong (A.committedOf σ')))
-        (audit ((Law.work σ w K).closure cl) Reg session) σ' ≤
+        (audit ((Law.work σ w f K).closure cl) Reg session) σ' ≤
       (((Law.totalWork σ w - T : ℕ) : ℝ≥0∞) / (Law.totalWork σ w : ℝ≥0∞)) ^ K +
         εks (reg σ') (cont σ') + δlink (reg σ') (cont σ') := by
   refine (extraction_audit_le A hks hlink (fun X _ => T ≤ Law.unsoundWork σ w cl (A.wrong X)) σ').trans ?_
   gcongr
   by_cases hB : T ≤ Law.unsoundWork σ w cl (A.wrong (A.committedOf σ'))
-  · exact (prCoin_mono fun ω h => h.2).trans (Law.closure_escape_le_work σ w K cl hW hB)
+  · exact (prCoin_mono fun ω h => h.2).trans (Law.closure_escape_le_work σ w f K cl hf hW hB)
   · exact (prCoin_mono (q := fun _ => False) fun ω h => hB h.1).trans (prCoin_false.le.trans zero_le)
 
 /-- **Each wrong unit is charged its harm** (oracle layer): the audit accepts while some wrong unit, drawn or not, has
 harm at least `T` with probability at most `((W − T)/W)^K + ε_ks + δ_link`. -/
-theorem audit_work_closure_harm (A : Analysis ((Law.work σ w K).closure cl) Reg session) {εks δlink : ℝ≥0∞}
-    (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink) (hW : 0 < Law.totalWork σ w) (T : ℕ)
-    (σ' : Strategy (audit ((Law.work σ w K).closure cl) Reg session)) :
+theorem audit_work_closure_harm (A : Analysis ((Law.work σ w f K).closure cl) Reg session) {εks δlink : ℝ≥0∞}
+    (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink) (hf : ∀ s, 1 ≤ f s) (hW : 0 < Law.totalWork σ w) (T : ℕ)
+    (σ' : Strategy (audit ((Law.work σ w f K).closure cl) Reg session)) :
     prob (fun o => o.1 = true ∧ ∃ u ∈ A.wrong (A.committedOf σ'), T ≤ Law.harm σ w cl u)
-        (audit ((Law.work σ w K).closure cl) Reg session) σ' ≤
+        (audit ((Law.work σ w f K).closure cl) Reg session) σ' ≤
       (((Law.totalWork σ w - T : ℕ) : ℝ≥0∞) / (Law.totalWork σ w : ℝ≥0∞)) ^ K + εks + δlink := by
-  refine le_trans (prob_mono (fun o ho => ⟨ho.1, ?_⟩) _ _) (audit_work_closure A hks hlink hW T σ')
+  refine le_trans (prob_mono (fun o ho => ⟨ho.1, ?_⟩) _ _) (audit_work_closure A hks hlink hf hW T σ')
   obtain ⟨u, hu, hT⟩ := ho.2
   exact hT.trans (Law.harm_le_unsoundWork σ w cl hu)
 
 /-- **The closure audit at the sizing of record**: with `K = 27,713`, the audit accepts while the units its wrong units
 make unsound do at least 0.1% of the work with probability at most `2^-40 + ε_ks + δ_link`. -/
-theorem audit_work_closure_of_record (A : Analysis ((Law.work σ w 27713).closure cl) Reg session) {εks δlink : ℝ≥0∞}
-    (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink) (hW : 0 < Law.totalWork σ w)
-    (σ' : Strategy (audit ((Law.work σ w 27713).closure cl) Reg session)) :
+theorem audit_work_closure_of_record (A : Analysis ((Law.work σ w f 27713).closure cl) Reg session) {εks δlink : ℝ≥0∞}
+    (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink) (hf : ∀ s, 1 ≤ f s) (hW : 0 < Law.totalWork σ w)
+    (σ' : Strategy (audit ((Law.work σ w f 27713).closure cl) Reg session)) :
     prob (fun o => o.1 = true ∧ Law.totalWork σ w ≤ 1000 * Law.unsoundWork σ w cl (A.wrong (A.committedOf σ')))
-        (audit ((Law.work σ w 27713).closure cl) Reg session) σ' ≤ ((2 : ℝ≥0∞) ^ 40)⁻¹ + εks + δlink := by
+        (audit ((Law.work σ w f 27713).closure cl) Reg session) σ' ≤ ((2 : ℝ≥0∞) ^ 40)⁻¹ + εks + δlink := by
   refine (audit_profile A hks hlink (fun B => Law.totalWork σ w ≤ 1000 * Law.unsoundWork σ w cl B) σ').trans ?_
   gcongr
   refine iSup₂_le fun B hB => ?_
   rw [Law.closure_escape]
-  exact ((Law.work σ w 27713).escape_anti subset_union_right).trans (Law.work_escape_of_record σ w hW hB)
+  exact ((Law.work σ w f 27713).escape_anti subset_union_right).trans (Law.work_escape_of_record σ w f hf hW hB)
 
 end Audits
 
