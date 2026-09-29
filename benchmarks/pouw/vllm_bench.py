@@ -17,7 +17,8 @@ vLLM, and restores nothing because each mode runs in a fresh engine.  Modes:
 - ``ncp2``: every call committed by `ncp-v2`'s serving kernel (`pouw_device.FusedCommitter`, `ncp2_fused.cu`): the key, the
   noise from SHAKE256, X and Y, the tiles hashed as they are made, the exact dequantization, which is the served y, and the
   units root; Y's leaves cached per weight. ``ncp2-nohash`` is the same with every hash and XOF left out (a stand-in noise):
-  the difference is hashing. ``ncp2-lowbyte`` swaps the tiles' word leaves for the low-byte variant (timed, not committed).
+  the difference is hashing. ``ncp2-lowbyte`` swaps the tiles' word leaves for the low-byte variant (timed, not committed; its
+  γ is unproved, so its numbers are never results).
   Each ncp2 mode first checks its device path against `pouw_native` on one call, and each timing phase records the tile
   kernel's summed time (the GEMM, in ``ncp2-nohash``).
 
@@ -60,6 +61,8 @@ def int7(x, dim):
 
 
 NCP2_MODES = ("ncp2", "ncp2-nohash", "ncp2-lowbyte")
+#: what every low-byte number carries: the variant's γ has no proof, so it is timed and never reported as a result
+LOWBYTE_STATUS = "gamma unproved: not a result"
 
 
 def ncp2_committer(mode: str):
@@ -324,7 +327,8 @@ def split(bf16: dict, full: dict, nohash: dict, lowbyte: dict | None) -> dict:
                "gemm_x_bf16": gemm / t_b, "hashing_x_bf16": (t_f - t_n) / t_b, "else_x_bf16": (t_n - gemm) / t_b}
         if lowbyte and f"{key}_s" in lowbyte:
             t_l = lowbyte[f"{key}_s"]
-            row.update(lowbyte_s=t_l, lowbyte_slowdown=t_l / t_b, lowbyte_hashing_s=t_l - t_n, lowbyte_hashing_x_bf16=(t_l - t_n) / t_b)
+            row.update(lowbyte_s=t_l, lowbyte_slowdown=t_l / t_b, lowbyte_hashing_s=t_l - t_n, lowbyte_hashing_x_bf16=(t_l - t_n) / t_b,
+                       lowbyte_status=LOWBYTE_STATUS)
         out[key] = row
     return out
 

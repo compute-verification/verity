@@ -321,4 +321,5 @@ def test_the_vllm_split_adds_up_to_the_slowdown():
     assert abs(p["gemm_s"] + p["hashing_s"] + p["else_s"] - p["ncp2_s"]) < 1e-12 and p["slowdown"] == 100.0
     assert abs(p["gemm_x_bf16"] + p["hashing_x_bf16"] + p["else_x_bf16"] - p["slowdown"]) < 1e-9
     assert (p["gemm_s"], p["hashing_s"]) == (0.3, 1.5) and p["lowbyte_slowdown"] == 50.0
+    assert p["lowbyte_status"] == "gamma unproved: not a result"
     assert out["decode_b32"]["slowdown"] == 30.0 and abs(out["decode_b32"]["hashing_x_bf16"] - 26.0) < 1e-12

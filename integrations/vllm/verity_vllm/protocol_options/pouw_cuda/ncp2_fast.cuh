@@ -348,7 +348,7 @@ HD void tile_fused(const uint8_t* xs, const uint8_t* ys, int k3, int steps, Run 
   if (HASH) wl_final(wl, leaf);
 }
 
-// The low-byte leaf variant (cheap-binding's NCP-INT row 4; timed, not committed): TurboSHAKE128 with domain byte 0x0B over
+// The low-byte leaf variant (cheap-binding's NCP-INT row 4; its γ is unproved: timed only, not committed, never a result): TurboSHAKE128 with domain byte 0x0B over
 // the low byte of every checkpoint in the word leaf's order, 8 rows (128 bytes, 16 lanes) per permutation, each block's other
 // 5 lanes of the rate zero.
 constexpr uint8_t LOWBYTE_DS = 0x0B;

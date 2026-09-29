@@ -30,7 +30,8 @@ SOURCES = ("ncp2.cuh", "ncp2_fast.cuh", "ncp2_host.cpp")
 CFLAGS = ("-O2", "-std=c++17", "-ffp-contract=off", "-fno-fast-math", "-fno-exceptions", "-fno-rtti", "-fPIC", "-shared")
 CUDA_SOURCES = ("ncp2.cuh", "ncp2_kernels.cu")
 FUSED_SOURCES = ("ncp2.cuh", "ncp2_fast.cuh", "ncp2_fused.cu")
-#: `ncp2_fused`'s flags: hash (1), time the tile kernel (2), cache Y's leaves per weight (4), the tiles' low-byte leaf variant (8)
+#: `ncp2_fused`'s flags: hash (1), time the tile kernel (2), cache Y's leaves per weight (4), the tiles' low-byte leaf variant (8;
+#: its γ is unproved, so it is timed only and never a result)
 HASH, TIME_TILES, CACHE_Y, LOWBYTE = 1, 2, 4, 8
 #: the low-byte variant's TurboSHAKE128 domain byte, and its layout: 128 low bytes (8 rows of 16) per 168-byte block
 LOWBYTE_DS, LOWBYTE_BLOCK, TS128_RATE = 0x0B, 128, 168
@@ -140,7 +141,7 @@ def _lib(on: str) -> ctypes.CDLL:
 
 
 def lowbyte_leaf(words: np.ndarray) -> bytes:
-    """The low-byte variant's leaf over a tile's checkpoints (a tile unit's outputs, in order): TurboSHAKE128 with domain byte
+    """The low-byte variant's leaf (its γ is unproved: timed only, never a result) over a tile's checkpoints (a tile unit's outputs, in order): TurboSHAKE128 with domain byte
     `LOWBYTE_DS` over each word's low byte, `LOWBYTE_BLOCK` bytes then zeros to the rate per block, the last block unpadded."""
     low = (np.asarray(words, np.uint32) & 0xFF).astype(np.uint8).tobytes()
     blocks = [low[i:i + LOWBYTE_BLOCK] for i in range(0, len(low), LOWBYTE_BLOCK)]

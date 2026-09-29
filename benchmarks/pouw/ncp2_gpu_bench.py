@@ -168,7 +168,8 @@ def gate_fused() -> list[dict]:
 
 #: the fused kernel's timed shapes: decode at 16 and 32 rows, and prefill
 FUSED_ROWS = (16, 32, 256, 2048)
-#: its modes: no hashing at all (the control), the committed word leaves, the low-byte variant
+#: its modes: no hashing at all (the control), the committed word leaves, the low-byte variant (its γ is unproved: timed only,
+#: never a result)
 FUSED_MODES = {"nohash": PD.TIME_TILES, "word": PD.HASH | PD.TIME_TILES | PD.CACHE_Y,
                "lowbyte": PD.HASH | PD.TIME_TILES | PD.CACHE_Y | PD.LOWBYTE}
 

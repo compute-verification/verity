@@ -8,7 +8,7 @@
 //   - the dequantization and its word leaves, and the units tree, a thread per node.
 // Flag 1 hashes; without it every hash and XOF is left out and the noise is a counter-based stand-in (the no-hash control).
 // Flag 2 times the tile kernel with CUDA events, read by `ncp2_fused_tile_ms` without a synchronization per call. Flag 8
-// swaps the tiles' word leaves for the low-byte variant (`tile_fused_lowbyte`), for timing.
+// swaps the tiles' word leaves for the low-byte variant (`tile_fused_lowbyte`), for timing only: its γ is unproved.
 #include <cuda_runtime.h>
 
 #include <vector>
@@ -105,7 +105,7 @@ struct SmemRun {
   __device__ __forceinline__ uint32_t& operator()(int j) const { return base[j * 32]; }
 };
 
-// LEAF 0: no leaf (the no-hash control); 1: the word leaf (committed); 2: the low-byte variant (timed only).
+// LEAF 0: no leaf (the no-hash control); 1: the word leaf (committed); 2: the low-byte variant (timed only; γ unproved).
 template <int LEAF>
 __global__ void __launch_bounds__(32) kf_tiles(int ns, size_t tiles, int steps, int k3, int n, const uint8_t* x,
                                                const uint8_t* y, const uint32_t* c0, uint8_t* tile_leaves, uint32_t* z) {
