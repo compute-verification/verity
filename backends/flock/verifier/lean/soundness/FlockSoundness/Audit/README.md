@@ -109,6 +109,15 @@ $\eta$ of it, with $\eta$ added to the bound, as a keyed draw needs, and
 the same for the per-call split with y's floors, the law #364 runs. The product law assumes each call's draw is under a
 distinct context.
 
+**Theorems, receipt-indexed laws** (`Audit/Indexed.lean`): the live window draw depends on the registration,
+$D(\mathrm{source}, \mathrm{digest}(R))$, so its game is the one-stage audit with the law indexed by it, `auditIndexed`
+for `L : Reg → Law n`. `audit_indexed_le`, `audit_indexed_profile` and `extraction_audit_indexed_le`: the one-stage bounds
+over the registered law $L(R)$, with one $\varepsilon_{ks}$ and $\delta_{link}$ across registrations at the oracle layer.
+`audit_indexed_window_of_le_slack`, `audit_indexed_window_split_of_record_of_le_slack` and
+`extraction_audit_indexed_window_of_le_slack`: the window audits for $(L\,R).\mathrm{escape}(B) \le
+\mathrm{stratified}.\mathrm{escape}(B) + \eta$ for every $R$ and $B$, one $\eta$ for every receipt. The fixed-law audit
+is the constant case (`auditIndexed_const`).
+
 **Theorems, two-stage** (`Audit/TwoStage.lean`):
 
 - `twoStage_profile`, variant (b), nested sampling: the profile over the coarse partition with the effective escape
