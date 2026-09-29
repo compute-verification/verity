@@ -17,6 +17,5 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# The tests read the verifier's pin, replayable sets and agreement scripts (the agreement step's inputs), and, in a shipped
-# tree (a pod's), READY.json, where `tracked_files` finds the commit's tree (not in git's view, so no part of the key).
-inputs = ["backends/flock/verifier", "READY.json"]
+# The tests read the verifier's pin, replayable sets and agreement scripts (the agreement step's inputs).
+inputs = ["READY.json", "backends/flock/verifier"]
