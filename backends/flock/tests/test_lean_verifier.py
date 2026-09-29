@@ -317,17 +317,17 @@ def _work_program(tmp_path):
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_work_draw_from_the_verifiers_own_program(tmp_path):
-    """`draw --program --partition --work K --work-table F`: the stratified law's strata, `k_s = min(n_s, max(1,
-    ⌈K w_s n_s / W⌉))` (a stratum that does no work draws its floor of one), each stratum's `subset` on its own segment of
-    the stream, and U2 on work draws, held to the verifier's own law."""
+    """`draw --program --partition --work K --work-table F`: the stratified law's strata, `k_s = min(n_s, max(f_s,
+    ⌈K w_s n_s / W⌉))` with each stratum's floor `f_s` from the table (one by default, so a stratum that does no work draws
+    one), each stratum's `subset` on its own segment of the stream, and U2 on work draws, held to the verifier's own law."""
     import random
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
     ref = _stratified_agree()
     table = _work_program(tmp_path)
     flags = table("w.json", {"T0_v0": 3, "T1_v0": 1, "T2_v0": 0})
-    law = {"law": "work", "k": 2, "strata": [{"template": "T0_v0", "units": [[0, 2], [5, 6]], "work": 3, "k": 2},
-                                             {"template": "T1_v0", "units": [[2, 5]], "work": 1, "k": 1},
-                                             {"template": "T2_v0", "units": [[6, 10]], "work": 0, "k": 1}]}
+    law = {"law": "work", "k": 2, "strata": [{"template": "T0_v0", "units": [[0, 2], [5, 6]], "work": 3, "floor": 1, "k": 2},
+                                             {"template": "T1_v0", "units": [[2, 5]], "work": 1, "floor": 1, "k": 1},
+                                             {"template": "T2_v0", "units": [[6, 10]], "work": 0, "floor": 1, "k": 1}]}
     need = sum(2 * s["k"] * ref.width(sum(hi - lo for lo, hi in s["units"])) + 64 for s in law["strata"])
     rng = random.Random(20260929)
     for _ in range(20):
@@ -363,19 +363,27 @@ def test_work_draw_from_the_verifiers_own_program(tmp_path):
     strat = _lean_draw_obj([*flags[:4], "--stratified", "2"])
     assert [g["ok"] for g in check([other, strat])] == [True, True]
     assert [g["ok"] for g in check([other, strat], *flags, "--work", "2")] == [False, False]
-    # with a count budget C, T2 (no work, 4 of 10 units) draws what stratified:C draws from it; T0 and T1 are sized by work
-    for c, want in {"1": [2, 1, 1], "4": [2, 1, 2], "10": [2, 1, 4]}.items():
-        dc = _lean_draw_obj([*flags, "--work", "2", "--count", c])
-        assert dc["count"] == int(c) and [s["k"] for s in dc["strata"]] == want, c
-        assert dc["strata"][2]["k"] == _lean_draw_obj([*flags[:4], "--stratified", c])["strata"][2]["k"], c
-    dc = _lean_draw_obj([*flags, "--work", "2", "--count", "4"])
-    # without its count, or with another, the draw's T2 is not the rule's; count 5 gives the same k_s, and only the
-    # verifier's own law refuses it
-    cbad = [{k: v for k, v in dc.items() if k != "count"}, {**dc, "count": 0}, {**dc, "count": 11}, {**dc, "count": 5}]
-    assert [g["ok"] for g in check([dc, *cbad], *flags, "--work", "2", "--count", "4")] == [True] + [False] * 4
-    assert [g["ok"] for g in check([dc, cbad[3]])] == [True, True]
-    assert [g["ok"] for g in check([dc, d], *flags, "--work", "2")] == [False, True]
-    assert _lean_draw_obj([*flags, "--work", "2", "--count", "11"]) is None
+    # floors per stratum from the table: T2 (no work, 4 of 10 units) at floor 2 draws what stratified:4 draws from it,
+    # at floor 9 all four; a floor on a working stratum lifts it too
+    cases = [({"T0_v0": 3, "T1_v0": 1, "T2_v0": {"work": 0, "floor": 2}}, [1, 1, 2], [2, 1, 2]),
+             ({"T0_v0": 3, "T1_v0": 1, "T2_v0": {"work": 0, "floor": 9}}, [1, 1, 9], [2, 1, 4]),
+             ({"T0_v0": 3, "T1_v0": {"work": 1, "floor": 3}, "T2_v0": 0}, [1, 3, 1], [2, 3, 1])]
+    for i, (work, floors, want) in enumerate(cases):
+        df = _lean_draw_obj([*table(f"wf{i}.json", work), "--work", "2"])
+        assert [s["floor"] for s in df["strata"]] == floors and [s["k"] for s in df["strata"]] == want, work
+    assert _lean_draw_obj([*flags[:4], "--stratified", "4"])["strata"][2]["k"] == 2
+    ff = table("wf.json", cases[0][0])
+    df = _lean_draw_obj([*ff, "--work", "2"])
+    f0, f1, f2 = df["strata"]
+    # U2 refuses a floor of 0, a missing floor and a count key; floor 1 with k 1 is the rule's, and only the verifier's own
+    # table refuses it
+    fbad = [{**df, "strata": [f0, f1, {**f2, "floor": 0}]}, {**df, "strata": [f0, f1, {k: v for k, v in f2.items() if k != "floor"}]},
+            {**df, "count": 4}, {**df, "strata": [f0, f1, {**f2, "floor": 1, "k": 1}], "units": [u for u in df["units"] if u < 6] + [6]}]
+    assert [g["ok"] for g in check([df, *fbad], *ff, "--work", "2")] == [True] + [False] * 4
+    assert [g["ok"] for g in check([df, fbad[3]])] == [True, True]
+    assert [g["ok"] for g in check([df, d], *flags, "--work", "2")] == [False, True]
+    assert _lean_draw_obj([*table("wf0z.json", {"T0_v0": 3, "T1_v0": 1, "T2_v0": {"work": 0, "floor": 0}}), "--work", "2"]) is None
+    assert _lean_draw_obj([*table("wfx.json", {"T0_v0": {"work": 3, "floor": 1, "x": 1}, "T1_v0": 1, "T2_v0": 0}), "--work", "2"]) is None
     for k in ("0", "11"):
         assert _lean_draw_obj([*flags, "--work", k]) is None
     assert _lean_draw_obj([*table("w3.json", {"T0_v0": 3, "T1_v0": 1}), "--work", "2"]) is None
