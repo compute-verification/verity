@@ -7,7 +7,7 @@ The call is bound to its `NcpLinear_v1` Program and committed. The model's modul
 packs them.
 
 The verifier then runs the real sampled replay, with the PoUW rows answered by their calls (`pouw_circuit.linked`), and
-the circuit replay of every call (`pouw_circuit.replay`: closure draws under `CountLaw`, each proved unit re-evaluated).
+the circuit replay of every call (`pouw_circuit.replay`: closure draws under #362's work law, each proved unit re-evaluated).
 
 - The honest run is accepted.
 - A wrong X strip, a wrong tile word and an A strip that is not the quantized input are each rejected, each committed by
@@ -296,7 +296,7 @@ def test_the_honest_run_is_accepted(world):
     rep, pw, issues = _verdict(world)
     assert rep["result"] is True and rep["grade"] == "complete", rep["why"]
     assert PC.ROW_FAMILY in rep["population"]["by_family"] and rep["sample"]["mismatch_n"] == 0
-    assert pw["result"] is True and pw["law"] == "count" and pw["proved_units"] > 0, pw["why"]
+    assert pw["result"] is True and pw["law"].startswith("work") and pw["proved_units"] > 0, pw["why"]
     assert issues == []
     roles = {r["call"]: r for r in pw["calls"]}
     assert all(c["proved"] >= c["drawn"] > 0 for c in roles.values())
@@ -332,7 +332,8 @@ def test_a_wrong_tile_word_is_rejected(world):
     lay = c.traced.layout()
     from verity.randomness import derive
     source = b"\x07" * 32
-    drawn = CPL.draw(derive(source, CPL.DRAW_DOMAIN, {"call": bad.index}), lay, CPL.CountLaw(8)).drawn
+    drawn = CPL.draw(derive(source, CPL.DRAW_DOMAIN, {"call": bad.index}), lay,
+                     CPL.WorkLaw(min(CPL.RECORD_K, sum(len(st.units) for st in lay.strata)))).drawn
     tile = next(u for u in drawn if lay.units[u].role == "tile")
     g = c.partition.outputs(tile)[7]
     rec = dataclasses.replace(bad, committed={**bad.committed, g: bad.committed[g] ^ 1})

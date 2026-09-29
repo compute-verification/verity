@@ -9,7 +9,7 @@ calls root) and every call's record. `replay` checks, per call:
    of earlier passes, then its own); and the columns 0 … n − 1;
 3. the committed `Input` gates are the call's inputs, and the served y is the root's first m·n committed outputs;
 4. its plan, `verity_pouw.circuit.plan.draw` under the call's own key (``derive(source, DRAW_DOMAIN, {"call": i})``) and
-   the law (`CountLaw` until #362 lands): every proved unit (each drawn tile with its closure, and the floor draws)
+   #362's work law (`WorkLaw`, K = min(`RECORD_K`, the call's units); a caller may pass another): every proved unit (each drawn tile with its closure, and the floor draws)
    evaluates, from its committed inputs, to its committed outputs.
 
 `linked` installs the delegate for the model Program's `NcpLinearRow_v1` rows (`delegate`) for the length of a sampled
@@ -70,7 +70,7 @@ def unit_holds(compiled: PC.Compiled, committed: Mapping[int, int], u: int) -> b
     return all(committed.get(g) == t[g] for g in tp.outputs(u))
 
 
-def prove_call(rec: PC.CallRecord, source: bytes, law: CPL.TileLaw) -> dict[str, Any]:
+def prove_call(rec: PC.CallRecord, source: bytes, law: CPL.TileLaw | None = None) -> dict[str, Any]:
     """One call: its inputs and served y against its committed cut, then its plan's proved units."""
     sh = rec.shape
     c = PC.program(rec.scheme, sh.m, sh.k, sh.n)
@@ -84,6 +84,7 @@ def prove_call(rec: PC.CallRecord, source: bytes, law: CPL.TileLaw) -> dict[str,
     if served != [v for row in rec.y for v in row]:
         bad.append("the served y is not the committed root output")
     lay = c.traced.layout()
+    law = law or CPL.WorkLaw(min(CPL.RECORD_K, sum(len(st.units) for st in lay.strata)))    # #362's work law; K <= N at small calls
     p = CPL.draw(derive(source, CPL.DRAW_DOMAIN, {"call": rec.index}), lay, law)
     wrong = [u for u in p.proved if not unit_holds(c, rec.committed, u)]
     bad += [f"unit {u} ({lay.units[u].role} {lay.units[u].where}) does not hold" for u in wrong]
@@ -93,7 +94,6 @@ def prove_call(rec: PC.CallRecord, source: bytes, law: CPL.TileLaw) -> dict[str,
 
 def replay(records: Sequence[PC.CallRecord], commitment: Mapping[str, Any], source: bytes, law: CPL.TileLaw | None = None) -> dict[str, Any]:
     """Every call of the run: the root, the anchors and each call's plan. ``result`` is True only when all hold."""
-    law = law or CPL.CountLaw(8)
     salt, wroot = bytes.fromhex(commitment["salt"]), bytes.fromhex(commitment["weights_root"])
     why = []
     if not records:
@@ -103,7 +103,8 @@ def replay(records: Sequence[PC.CallRecord], commitment: Mapping[str, Any], sour
     why += anchors(records, salt)
     calls = [prove_call(r, source, law) for r in records]
     why += [f"call {c['call']}: {w}" for c in calls for w in c["why"]]
-    return {"schema": "verity-vllm/pouw-ncp-v2-replay/v1", "result": not why, "why": why[:12], "why_n": len(why), "law": law.name,
+    return {"schema": "verity-vllm/pouw-ncp-v2-replay/v1", "result": not why, "why": why[:12], "why_n": len(why),
+            "law": law.name if law else "work (#362, K = min(RECORD_K, the call's units))",
             "calls": calls, "proved_units": sum(c["proved"] for c in calls),
             "not_of_record": "the quantizer and the int7 linear of the model rows are evaluated natively (no registered Definition yet)"}
 
