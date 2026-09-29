@@ -9,9 +9,9 @@ beneath it (Lean `harm_le_unsoundWork`, `closureLaw_escape`).
 **The law is a seam** (`TileLaw`), so the plan switches laws without changing:
 * `CountLaw` is the law on `main` today, one_stage's and #167's stratified law: one stratum per template, a uniform k_s-subset
   inside each, k_s = max(1, round(K·n_s/N)) (rounding half up), K the law's budget over the strata it draws.
-* `WorkLaw` is the work-sized law Verity root is drafting in `Flock/Draw.lean`: tile strata sized ⌈t·W_s/W⌉ (capped at n_s,
-  where the stratum is proved whole), the rest at its floor. It is not of record until that Lean lands; switch
-  `law=WorkLaw(...)` when it does.
+* `WorkLaw` is Verity root's work law (draft #362, `Flock/Draw.lean` `workK`): k_s = min(n_s, max(1, ⌈K·W_s/W⌉)), with
+  K = `RECORD_K` = 27,713 at ε = 0.1% and δ = 2⁻⁴⁰ (`record_k`). It is not of record until #362 merges; switch
+  `law=WorkLaw()` when it does.
 
 **Openings** are row-granular (the red team's X-SPC-57): A and the weight are committed one leaf per row, so a proved
 unit opens exactly the rows it reads.
@@ -68,20 +68,44 @@ class CountLaw:
         return {s.name: min(len(s.units), max(1, _round_half_up(self.k * len(s.units), total))) for s in strata}
 
 
+def record_k(epsilon: Fraction, delta: Fraction) -> int:
+    """The smallest K with (1 − ε)^K ≤ δ, decided in exact integers: wrong units doing a fraction ε of the work escape the
+    work law's draw with at most (1 − ε)^K (#362's `work_escape_le`). At ε = 0.1% and δ = 2⁻⁴⁰ it is 27,713; 27,712 misses
+    (#362's `record_sizing`, `record_sizing_one_fewer`)."""
+    eps, dlt = Fraction(epsilon), Fraction(delta)
+    if not (0 < eps < 1 and 0 < dlt < 1):
+        raise ValueError("0 < ε < 1 and 0 < δ < 1")
+    q = 1 - eps
+
+    def meets(k: int) -> bool:                              # q^k <= δ, cross-multiplied
+        return q.numerator ** k * dlt.denominator <= dlt.numerator * q.denominator ** k
+
+    k = max(1, ceil(log(float(dlt)) / log(float(q))) - 2)
+    while not meets(k):
+        k += 1
+    while k > 1 and meets(k - 1):
+        k -= 1
+    return k
+
+
+#: the tile draws of record: ε = 0.1%, δ = 2⁻⁴⁰
+RECORD_K = 27_713
+
+
 @dataclass(frozen=True)
 class WorkLaw:
-    """The work-sized law (pending `Flock/Draw.lean`): tile strata ⌈t·W_s/W⌉ with t = ln(1/δ)/ε, capped at n_s; the rest at
-    ``floor`` draws each."""
+    """The work law (Verity root's, draft #362, `Flock/Draw.lean` `workK`): each stratum draws
+    k_s = min(n_s, max(1, ⌈K·W_s/W⌉)), W_s its work, W the strata's total, 1 ≤ K ≤ N. The floor of one binds exactly for the
+    strata that do no work (the dequantization units). ``k`` is the budget K (`record_k`)."""
 
-    epsilon: Fraction
-    delta: Fraction
-    floor: int = 1
+    k: int = RECORD_K
     name: str = "work"
 
     def sizes(self, strata: Sequence[StratumSpec]) -> dict[str, int]:
-        t = log(1 / float(self.delta)) / float(self.epsilon)
         work = sum(s.work for s in strata)
-        return {s.name: min(len(s.units), ceil(t * s.work / work) if s.work else self.floor) for s in strata}
+        if work < 1 or not 1 <= self.k <= sum(len(s.units) for s in strata):
+            raise ValueError("the work law needs some work and 1 <= K <= N")
+        return {s.name: min(len(s.units), max(1, -(-self.k * s.work // work))) for s in strata}
 
 
 @dataclass(frozen=True)
@@ -181,5 +205,5 @@ def unsound_work_bound(lay: Layout, sizes: Mapping[str, int], delta: float) -> f
     return profile(lay, sizes).harm_bound({s.name: float(lay.tile_work()) for s in lay.strata if s.role == "tile"}, delta)
 
 
-__all__ = ["DRAW_DOMAIN", "CountLaw", "Layout", "Plan", "StratumSpec", "TileLaw", "WorkLaw", "draw", "layout", "openings",
-           "profile", "unsound_work_bound"]
+__all__ = ["DRAW_DOMAIN", "RECORD_K", "CountLaw", "Layout", "Plan", "StratumSpec", "TileLaw", "WorkLaw", "draw", "layout", "openings",
+           "profile", "record_k", "unsound_work_bound"]

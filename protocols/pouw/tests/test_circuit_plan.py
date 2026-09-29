@@ -35,9 +35,23 @@ def test_the_count_law_is_mains_stratified_rule():
 
 def test_the_work_law_sizes_tiles_by_work_and_the_rest_at_its_floor():
     lay = PL.layout(ncp2.Shape(32, 64, 32))
-    sizes = PL.WorkLaw(Fraction(1, 2), Fraction(1, 4), floor=2).sizes(lay.strata)
     tile, rest = lay.strata
-    assert sizes == {tile.name: 3, rest.name: 2}          # ⌈ln 4 / 0.5⌉ over one tile stratum
+    assert PL.WorkLaw(3).sizes(lay.strata) == {tile.name: 3, rest.name: 1}   # ⌈3·W/W⌉, and the floor of one
+    assert PL.WorkLaw(9).sizes(lay.strata) == {tile.name: 4, rest.name: 1}   # capped at the stratum's 4 tiles
+
+
+def test_the_work_law_is_roots_rule():
+    """#362's example: T0 has 3 units of work 3, T1 3 units of work 1, T2 4 units of work 0; `work:2` draws 2, 1 and 1."""
+    strata = [PL.StratumSpec("T0", "tile", (0, 1, 2), 9), PL.StratumSpec("T1", "tile", (3, 4, 5), 3),
+              PL.StratumSpec("T2", "dequant", (6, 7, 8, 9), 0)]
+    assert PL.WorkLaw(2).sizes(strata) == {"T0": 2, "T1": 1, "T2": 1}
+
+
+def test_the_record_budget_is_27713():
+    """(1 − 0.001)^K ≤ 2⁻⁴⁰ first at K = 27,713 (#362's `record_sizing`); 27,712 misses (`record_sizing_one_fewer`)."""
+    assert PL.record_k(Fraction(1, 1000), Fraction(1, 2 ** 40)) == PL.RECORD_K == 27_713
+    assert 999 ** 27_712 * 2 ** 40 > 1000 ** 27_712
+    assert PL.record_k(Fraction(1, 1000), Fraction(1, 100)) == 4_603
 
 
 def test_a_plan_proves_each_drawn_tile_with_its_closure_once():

@@ -7,7 +7,7 @@
 * `reference`: the native reference `linear` must evaluate to.
 * `partition`: the `Q_template_instances` partition, the whole-call cut (no value computed in two units), the Z separator and
   the width rule with the separator port pinned by the protocol.
-* `plan`: closure draws behind a draw-law seam (`CountLaw` today, `WorkLaw` when `Flock/Draw.lean` lands).
+* `plan`: closure draws behind a draw-law seam (`CountLaw` today, `WorkLaw`, root's #362 law, when it merges).
 
 `traced_as(scheme, shape)` is what a composition (the vLLM integration's protocol options) calls: for a scheme whose circuit is
 here, the Definition sampled proofs traces for one PoUW linear, its partition query, its served outputs and its draw layout;

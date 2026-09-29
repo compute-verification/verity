@@ -203,7 +203,8 @@ second field of `NcpTile`'s return (`partition.SEPARATOR_PORTS`). The registrant
 node units on that strip's path, and the key, each once. The dequantization units are drawn at the law's floor. The law
 is a seam:
 - `CountLaw` is `main`'s stratified rule today, k_s = max(1, round(K·n_s/N)).
-- `WorkLaw` sizes tiles ⌈t·W_s/W⌉, and waits on `Flock/Draw.lean`.
+- `WorkLaw` is Verity root's work law (draft #362, `Flock/Draw.lean`): k_s = min(n_s, max(1, ⌈K·W_s/W⌉)), with
+  K = 27,713 at ε = 0.1% and δ = 2⁻⁴⁰ (`plan.record_k`; 27,712 misses). It is of record when #362 merges.
 
 The profile is `Stratified` over the tile strata, and its `harm_bound`, at W_ref per tile, bounds the unsound work.
 
@@ -215,7 +216,7 @@ The profile is `Stratified` over the tile strata, and its `harm_bound`, at W_ref
 - For `ncp-v2`:
   - the lead domain's shapes (k ≥ 1,088) as a recorded run rather than a test;
   - C-Flock pieces for the PoUW primitives;
-  - the work-sized law in `Flock/Draw.lean`;
+  - the work law's merge (#362);
   - the served-output designation and the pinned ports in `Q_nested_instances` v0's spec, evaluator and Lean port;
   - the vLLM adapter's `traced_as`;
   - NCP-FP8 and H-1T.
