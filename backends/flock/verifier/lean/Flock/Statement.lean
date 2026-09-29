@@ -105,6 +105,24 @@ def outRegion (c : Circuit) (pub : Public) : V Region := do
 
 end Circuit
 
+/-- **The statement range the soundness bound covers** (the soundness package's `Stmt.InRange`): at most `2^26` witness
+bits per block, 1024 public regions, and 64 coordinates per link point. `setup` and `setupH` refuse a statement outside
+it, so the verifier accepts only statements the proved bound covers. -/
+def checkInRange (kLog nRegions mPts : Nat) : V Unit :=
+  if kLog ≤ 26 && nRegions ≤ 1024 && mPts ≤ 64 then pure ()
+  else throw s!"statement range: k_log {kLog}, {nRegions} regions, m_pts {mPts}; the soundness bound covers k_log ≤ 26, at most 1024 regions and m_pts ≤ 64"
+
+/-- `checkInRange` accepts exactly the soundness package's `Stmt.InRange`. -/
+theorem checkInRange_ok (kLog nRegions mPts : Nat) :
+    checkInRange kLog nRegions mPts = .ok () ↔ kLog ≤ 26 ∧ nRegions ≤ 1024 ∧ mPts ≤ 64 := by
+  unfold checkInRange
+  by_cases h : kLog ≤ 26 ∧ nRegions ≤ 1024 ∧ mPts ≤ 64
+  · simp [h, pure, Except.pure]
+  · simp only [h, iff_false]
+    have : (decide (kLog ≤ 26) && decide (nRegions ≤ 1024) && decide (mPts ≤ 64)) = false := by
+      simp only [Bool.and_eq_false_iff, decide_eq_false_iff_not]; omega
+    simp [this, throw, throwThe, MonadExceptOf.throw]
+
 /-- The coin source named in `Hello` (§7). -/
 inductive Coins where
   | os
@@ -159,6 +177,7 @@ def Stmt.setup (tags : Tags) (leaf : RowLeaf) (circuitFile publicFile : ByteArra
   let pin ← c.pin leaf
   let (da, db) ← c.delta leaf pin
   let regions := (← leaf.regions c pub).push (← c.outRegion pub)
+  checkInRange c.kLog regions.size (PT_LOCAL + nbl)
   let mut h := tags.statement.toUTF8 ++ leaf.comp.digest ++ c.sha ++ leaf.key c ++ (← canon tags.identity).toUTF8
   for x in [n, blocksReal, nbl, m, c.kLog, pin, regions.size, c.g] do h := pushLe64 h x
   for d in [da, db] do
