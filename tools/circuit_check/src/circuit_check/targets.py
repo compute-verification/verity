@@ -179,14 +179,15 @@ def templates() -> list[tuple[str, Any, list[dict]]]:
 
 def _pouw_roots() -> list[Any]:
     """PoUW's `ncp-v2` unit templates at k = 64 and the smallest whole call (`verity_pouw.circuit.ncp2`); the package's own
-    tests check the call's template partition and its Z separator. Beside them, the model Program's row at a PoUW site
-    (`verity_vllm.program.registry.pouw_rows`)."""
+    tests check the call's template partition and its Z separator. Beside them, the model Program's rows at a PoUW site, without
+    and with the bias (`verity_vllm.program.registry.pouw_rows`)."""
     from verity.ir.defs import bind
     from verity_pouw.circuit import ncp2
     from verity_vllm.program.registry import pouw_rows
 
     return list(ncp2.templates(64, "shift24").values()) + [ncp2.linear(ncp2.Shape(16, 64, 16)),
-                                                          bind(pouw_rows.NcpLinearRow, K=64, N=16)]
+                                                          bind(pouw_rows.NcpLinearRow, K=64, N=16),
+                                                          bind(pouw_rows.NcpLinearRowBias, K=64, N=16)]
 
 
 def _core_roots() -> list[Any]:

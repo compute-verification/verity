@@ -36,8 +36,12 @@ from verity.ir import partition_object as PO
 from verity_vllm.query.manifest.format import spec_family
 from verity.ir.evaluate import evaluate_region
 
-#: The model Program's family for one row of a PoUW site: its served output, checked by the replay against the call.
+#: The model Program's families for one row of a PoUW site: its served output, checked by the replay against the call; the
+#: second is a biased linear's row whose bias add was the pre-bias output's only reader (`program.registry.pouw_rows`)
 ROW_FAMILY = "NcpLinearRow_v1"
+ROW_BIAS_FAMILY = "NcpLinearRowBias_v1"
+#: the model families the Build lowers at a PoUW site, and what each becomes
+LOWERED = {"Gemm_v1": ROW_FAMILY, "GemmBias_v1": ROW_BIAS_FAMILY}
 #: `schemes.ncp`'s production permutation, the one the executor runs
 KIND = "shift24"
 LEAF_TAG = b"verity/pouw/ncp-v2/call/v2\0"
@@ -281,19 +285,20 @@ def summary(rec: CallRecord) -> dict[str, Any]:
 def lower(inst: dict[str, Any], sites: Mapping[str, str]) -> dict[str, Any]:
     """The Build's lowering of a model Program (an instance sequence) under ``pouw:<scheme>``: every row of a PoUW site
     (``sites``: op path prefix of a linear module -> scheme, e.g. ``model.layers.0.mlp.down_proj`` -> ``ncp-v2``), a
-    ``Gemm_v1{K,N}`` row, becomes ``NcpLinearRow_v1{K,N}`` over the same arguments (`program.registry.pouw_rows`). The rest is
-    unchanged; the scheme is the calls'."""
+    ``Gemm_v1{K,N}`` or ``GemmBias_v1{K,N}`` row, becomes ``NcpLinearRow_v1{K,N}`` or ``NcpLinearRowBias_v1{K,N}`` over the
+    same arguments (`LOWERED`, `program.registry.pouw_rows`). The rest is unchanged; the scheme is the calls'."""
     rows = []
     for r in inst["rows"]:
         spec, name = r.get("spec", ""), r.get("name", "")
         site = next((p for p in sites if name.startswith(p + "/")), None)
-        if site is not None and spec_family(spec) == "Gemm_v1":
+        if site is not None and spec_family(spec) in LOWERED:
             statics = spec[spec.index("{") + 1:-1]
-            r = dict(r, spec=f"{ROW_FAMILY}{{{statics}}}")
+            r = dict(r, spec=f"{LOWERED[spec_family(spec)]}{{{statics}}}")
         rows.append(r)
     return dict(inst, rows=rows)
 
 
-__all__ = ["CALLS_BINDING", "CALLS_FILE", "Call", "CallRecord", "Compiled", "KIND", "Quantized", "ROW_FAMILY", "Rows",
+__all__ = ["CALLS_BINDING", "CALLS_FILE", "Call", "CallRecord", "Compiled", "KIND", "LOWERED", "Quantized", "ROW_BIAS_FAMILY",
+           "ROW_FAMILY", "Rows",
            "WeightDigest", "call_leaf", "calls_root", "commit_call_ir", "evaluate_ir", "inputs_digest", "int7_bytes", "lower",
            "program", "summary", "unit_leaf", "units_root", "weight_digest"]

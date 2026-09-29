@@ -19,11 +19,12 @@ K is `RECORD_K` (27,713) capped at the run's units by default. At Qwen2.5-0.5B's
 its closure, about 26 CPU-hours of IR evaluation per forward at 16 rows. A caller may pass a smaller law (the option's
 ``draws`` setting), and the report names it.
 
-`linked` installs the delegate for the model Program's `NcpLinearRow_v1` rows (`delegate`) for the length of a sampled
-replay. It evaluates a sampled row as the int7 linear on the row's committed input and registered weight: quantize both,
-take the exact dot product, and apply the circuit's own dequantization. `replay_vu` then compares that with the committed
-module output. It also names every row where the call disagrees with those operands: A's row and scale, the weight's
-rows and scales, or the served y row.
+`linked` installs the delegate for the model Program's `NcpLinearRow_v1` and `NcpLinearRowBias_v1` rows (`delegate`) for
+the length of a sampled replay. It evaluates a sampled row as the int7 linear on the row's committed input and registered
+weight: quantize both, take the exact dot product, and apply the circuit's own dequantization, adding the row's registered
+bias for the biased family and −0 otherwise. `replay_vu` then compares that with the committed module output. It also names
+every row where the call disagrees with those operands: A's row and scale, the weight's rows and scales, the bias, or the
+served y row.
 
 **Not of record yet.** The quantizer and the int7 linear are evaluated natively here, with no registered Definition.
 """
@@ -192,8 +193,9 @@ def dequant(z: np.ndarray, s: np.ndarray, t: np.ndarray, bias: Sequence[int]) ->
     return [int(v) for v in y]
 
 
-def delegate(records: Sequence[PC.CallRecord], sites: Mapping[str, int], issues: list[str]):
-    """The `NcpLinearRow_v1` delegate over the run's calls; a disagreement with a call is appended to ``issues``."""
+def delegate(records: Sequence[PC.CallRecord], sites: Mapping[str, int], issues: list[str], biased: bool = False):
+    """The `NcpLinearRow_v1` delegate over the run's calls (``biased``: `NcpLinearRowBias_v1`'s, whose third operand is the
+    bias); a disagreement with a call is appended to ``issues``."""
     by = {(r.call.forward, r.call.weight): r for r in records}
     weights: dict[int, tuple[np.ndarray, np.ndarray]] = {}
 
@@ -217,7 +219,10 @@ def delegate(records: Sequence[PC.CallRecord], sites: Mapping[str, int], issues:
             raise Declined(f"no committed output of {place.op_path} at step {place.step}")
         row = int(entries[0].get("element_offset") or 0) // n + place.row
         a, s, b, t, z = int7_linear(np.concatenate(inputs[0]), wslices[1], n)
-        y = dequant(z, s, t, (NEG_ZERO_BF16,) * n)
+        if biased and wslices[2] is None:
+            raise Declined("the row's bias is not a registered slice")
+        bias = [int(v) for v in np.asarray(wslices[2]).reshape(-1)] if biased else [NEG_ZERO_BF16] * n
+        y = dequant(z, s, t, bias)
         c = rec.call
         where = f"{place.request_id} step {place.step} {place.op_path} row {place.row} (call {rec.index} row {row})"
         if row >= rec.shape.m:
@@ -233,6 +238,8 @@ def delegate(records: Sequence[PC.CallRecord], sites: Mapping[str, int], issues:
             cb, ct = weights[rec.index]
             if not (np.array_equal(cb, b) and np.array_equal(np.asarray(ct, np.uint32), t.view(np.uint32))):
                 issues.append(f"{where}: the call's weight rows or scales are not the quantized registered weight")
+            if biased and [int(v) for v in c.bias] != bias:
+                issues.append(f"{where}: the call's bias is not the registered bias")
             if [int(v) for v in rec.y[row]] != dequant(z, s, t, c.bias):                    # the call's y carries its bias
                 issues.append(f"{where}: the call's served y row is not the int7 linear of the committed operands")
         return {place.member: np.asarray(y, dtype=np.uint16)}
@@ -241,10 +248,11 @@ def delegate(records: Sequence[PC.CallRecord], sites: Mapping[str, int], issues:
 
 @contextmanager
 def linked(records: Sequence[PC.CallRecord], sites: Mapping[str, int]) -> Iterator[list[str]]:
-    """For the length of a sampled replay: the model's `NcpLinearRow_v1` rows answered by the run's calls. Yields the
-    list of disagreements, which the caller folds into its verdict."""
+    """For the length of a sampled replay: the model's `NcpLinearRow_v1` and `NcpLinearRowBias_v1` rows answered by the run's
+    calls. Yields the list of disagreements, which the caller folds into its verdict."""
     issues: list[str] = []
-    with delegated(PC.ROW_FAMILY, delegate(records, sites, issues)):
+    with delegated(PC.ROW_FAMILY, delegate(records, sites, issues)), \
+            delegated(PC.ROW_BIAS_FAMILY, delegate(records, sites, issues, biased=True)):
         yield issues
 
 

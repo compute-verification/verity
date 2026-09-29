@@ -52,8 +52,10 @@ def _bf16(rng, n, scale=1.0):
     return (np.asarray(rng.standard_normal(n) * scale, dtype=np.float32).view(np.uint32) >> 16).astype(np.uint16)
 
 
-def _program(bias: bool = False):
-    """Stage-major rows per step (every token's norm before the step's PoUW rows), so a step's PoUW rows are one batch."""
+def _program(bias: bool | str = False):
+    """Stage-major rows per step (every token's norm before the step's PoUW rows), so a step's PoUW rows are one batch.
+    ``bias=True`` is a biased linear whose add is its own `BiasAdd_v1` row; ``bias="fused"`` one whose add the Build bound
+    into the GEMM (`GemmBias_v1{K,N}(x, W, b)`, the pre-bias output's only reader)."""
     fields = [("model.model.embed_tokens.weight", V * H, f"Array<{V},Array<{H},Value<16>>>"),
               ("model.model.layers.0.input_layernorm.weight", H, f"Array<{H},Value<16>>"),
               ("model.model.layers.0.mlp.up_proj.weight", NU * H, f"Array<{NU},Array<{H},Value<16>>>"),
@@ -79,9 +81,14 @@ def _program(bias: bool = False):
                   [[["p", 0, k, k + 1]] if s == 0 else [["n", sel, 0, 1]], W("model.model.embed_tokens.weight")]) for k in toks]
         lns = [add(f"RMSNormTriton_v1{{N={H},EPS={EPS}}}", f"model.model.layers.0.input_layernorm/triton_launch_{s}[{k}]",
                    [[["n", e, 0, H]], W("model.model.layers.0.input_layernorm.weight")]) for k, e in zip(toks, es)]
-        ups = [add(f"Gemm_v1{{K={H},N={NU}}}", f"model.{SITE}/triton_launch_{s}a[{k}]",
-                   [[["n", ln, 0, H]], W("model.model.layers.0.mlp.up_proj.weight")]) for k, ln in zip(toks, lns)]
-        if bias:                                        # the biased linear: its add is its own row, the module returns post-bias
+        if bias == "fused":
+            ups = [add(f"GemmBias_v1{{K={H},N={NU}}}", f"model.{SITE}/add_{s}[{k}]",
+                       [[["n", ln, 0, H]], W("model.model.layers.0.mlp.up_proj.weight"), W("model.model.layers.0.mlp.up_proj.bias")])
+                   for k, ln in zip(toks, lns)]
+        else:
+            ups = [add(f"Gemm_v1{{K={H},N={NU}}}", f"model.{SITE}/triton_launch_{s}a[{k}]",
+                       [[["n", ln, 0, H]], W("model.model.layers.0.mlp.up_proj.weight")]) for k, ln in zip(toks, lns)]
+        if bias is True:                                        # the biased linear: its add is its own row, the module returns post-bias
             ups = [add(f"BiasAdd_v1{{N={NU}}}", f"model.{SITE}/bias_add_{s}[{k}]", [[["n", u, 0, NU]], W("model.model.layers.0.mlp.up_proj.bias")])
                    for k, u in zip(toks, ups)]
         lg = add(f"Gemm_v1{{K={NU},N={V}}}", f"model.logits_processor/triton_launch_{s}c[0]", [[["n", ups[-1], 0, NU]], W("model.lm_head.weight")])
@@ -164,12 +171,12 @@ class Run:
         for r in pi.rows:
             d = pi.describe(r)
             fam = d["family"]
-            if fam == PC.ROW_FAMILY:
+            if fam in (PC.ROW_FAMILY, PC.ROW_BIAS_FAMILY):
                 if d["step"] in done:
                     continue
                 done.add(d["step"])
                 batch = [(rid, rr) for rid in ("r0", "r1") for rr in pi.rows
-                         if pi.describe(rr)["family"] == PC.ROW_FAMILY and pi.describe(rr)["step"] == d["step"]]
+                         if pi.describe(rr)["family"] == fam and pi.describe(rr)["step"] == d["step"]]
                 x = np.stack([(np.concatenate(self._inputs(rid, rr)[0][0]).astype(np.uint32) << 16).view(np.float32) for rid, rr in batch])
                 y = self.model.layers[0].quant_method.apply(self.model.layers[0], x, self.bias)
                 ybits = (np.asarray(y, dtype=np.float32).view(np.uint32) >> 16).astype(np.uint16)
@@ -245,6 +252,19 @@ def biased_world(tmp_path_factory):
                    tmp_path_factory.mktemp("pouw-biased"), mp)
 
 
+@pytest.fixture(scope="module")
+def fused_world(tmp_path_factory):
+    rng = np.random.default_rng(13)
+    inst, woff = _program(bias="fused")
+    inst = PC.lower(inst, {f"model.{SITE}": "ncp-v2"})
+    weights = _bf16(rng, max(hi for _lo, hi in woff.values()), 0.5)
+    lo, hi = woff["model.model.layers.0.input_layernorm.weight"]
+    weights[lo:hi] = 0x3F80
+    with pytest.MonkeyPatch.context() as mp:
+        return Run(inst, woff, weights, {"r0": [(i + 3) % V for i in range(LP)], "r1": [(7 * i) % V for i in range(LP)]},
+                   tmp_path_factory.mktemp("pouw-fused"), mp)
+
+
 def _verdict(world, records=None, commitment=None, source=b"\x07" * 32, law=None):
     records = world.records if records is None else records
     commitment = world.commitment if commitment is None else commitment
@@ -296,7 +316,7 @@ def test_each_step_is_one_ncp_v2_call_bound_committed_and_served_as_y(world):
         assert [[int(v) for v in r] for r in rec.y] == ref.y                             # the circuit's y is the reference's
 
 
-@pytest.mark.parametrize("which", ["world", "biased_world"])
+@pytest.mark.parametrize("which", ["world", "biased_world", "fused_world"])
 def test_the_native_commitment_is_the_ir_evaluators_leaf_for_leaf(which, request):
     """Both paths on the small model: each call re-committed from its Program's IR evaluation has the native commit's unit
     leaves, inputs digest, units root and served y, so the run's calls root is the same."""
@@ -413,3 +433,36 @@ def test_pouw_serve_accepts_the_honest_calls_and_rejects_its_tampered_tile(world
     pf = pouw_serve.per_forward(world.records, [1.0, 2.5])
     assert [(f["forward"], f["calls"], f["rows"], f["seconds"]) for f in pf] == [(0, 1, 32, 1.0), (1, 1, 16, 2.5)]
     assert cli.parse("pouw-serve", ["--workload", "w.json"]).draws == 16
+
+
+def test_the_build_lowers_a_fused_bias_linear_to_the_fused_row():
+    inst, _ = _program(bias="fused")
+    specs = [r["spec"] for r in PC.lower(inst, {f"model.{SITE}": "ncp-v2"})["rows"]]
+    assert sum(s == f"{PC.ROW_BIAS_FAMILY}{{K={H},N={NU}}}" for s in specs) == LP + T and not any(s.startswith("GemmBias_v1") for s in specs)
+
+
+def test_a_fused_bias_linear_is_accepted_and_its_rows_answered_by_the_call(fused_world):
+    """The row is the module's output: the sampled rows are evaluated by the delegate (the call's y, its bias added by the
+    circuit's dequantization), never composed as interior rows."""
+    w = fused_world
+    assert all(any(b != 0x8000 for b in r.call.bias) for r in w.records)
+    rep, pw, issues = _verdict(w)
+    assert rep["result"] is True and rep["grade"] == "complete", rep["why"]
+    site = [k for k in rep["strata"] if k.startswith(PC.ROW_BIAS_FAMILY)]
+    assert site and all(rep["strata"][k]["evaluated"] > 0 for k in site), rep["strata"]
+    assert pw["result"] is True and issues == []
+
+
+def test_a_fused_bias_linears_wrong_a_strip_and_wrong_bias_are_named(fused_world):
+    w = fused_world
+    bad = w.records[0]
+    a_rec = PN.commit_call(bad.index, bad.scheme, dataclasses.replace(bad.call, a=_shifted_first_strip(bad.call.a)))
+    records = [a_rec, w.records[1]]
+    _rep, pw, issues = _verdict(w, records, _recommitted(w, records))
+    assert pw["result"] is True and any("A row" in i for i in issues), issues
+    bias = bad.call.bias.copy()
+    bias[3] ^= 0x0100
+    b_rec = PN.commit_call(bad.index, bad.scheme, dataclasses.replace(bad.call, bias=bias))
+    records = [b_rec, w.records[1]]
+    rep, pw, issues = _verdict(w, records, _recommitted(w, records))
+    assert pw["result"] is True and any("bias is not the registered bias" in i for i in issues), issues

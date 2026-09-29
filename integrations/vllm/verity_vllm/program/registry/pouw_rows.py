@@ -1,4 +1,5 @@
-"""PoUW's `ncp-v2` in the model Program: `NcpLinearRow_v1{K,N}`, one row of a PoUW linear's served output.
+"""PoUW's `ncp-v2` in the model Program: `NcpLinearRow_v1{K,N}` and `NcpLinearRowBias_v1{K,N}`, one row of a PoUW linear's
+served output without and with its bias.
 
 A PoUW linear's call is its own `NcpLinear_v1` Program call (`verity_pouw.circuit`), and its served y depends on x and W
 alone: the noise cancels in Z = A·Bᵀ, which is exact. So one row of the model Program at a PoUW site is this Definition.
@@ -6,7 +7,10 @@ It quantizes the row and each weight row with the adapter's quantizer (`protocol
 ``verity.pouw.symmetric-int7-rowmax-rne-f32/v1``):
     scale = RN_f32(rowmax |v| · RN_f32(1/63)), 1 for a zero row;  q = clamp(RNE(RN_f32(v / scale)), −63, 63).
 It then takes the exact int32 dot product in ascending k from 0, and applies the circuit's dequantization (`NcpDequant`)
-with the bias −0, the bf16 add's identity: y_j = bf16(fp32(s)·fp32(t_j)·Z_j). A biased linear's `BiasAdd_v1` follows it.
+with the bias −0, the bf16 add's identity: y_j = bf16(fp32(s)·fp32(t_j)·Z_j). A biased linear whose pre-bias output is read
+elsewhere keeps its `BiasAdd_v1` after it. When the bias add is the output's only reader, the Build binds the pair to
+`NcpLinearRowBias_v1`, whose `NcpDequant` adds b_j: y_j = bf16(fp32(s)·fp32(t_j)·Z_j) + b_j, the call's own served y. The
+pre-bias word is then interior to the row, as it is to the call.
 
 The quantizer's max is `NcpAbsMax` rather than `F32Max_v1`, whose operands are flushed to zero as the fast-math FA2 build
 does: a row of subnormals has a nonzero max here, as it does in numpy.
@@ -82,10 +86,7 @@ def _quant(B, K, row):
     return [B.call(NcpRneClampI7, B.call(F.F32Div, v, scale)) for v in xf], scale
 
 
-@composite("NcpLinearRow", 1, ["K", "N"], lambda S: ((("x", Array(S.K, BF16)), ("w", Array(S.N, Array(S.K, BF16)))), Array(S.N, BF16)),
-           conformance="protocol-defined")
-def NcpLinearRow(B, S, x, w):
-    """One row of a PoUW linear's served y: `x[K]` and `W[N,K]` quantized per row, the exact dot product, `NcpDequant` adding −0."""
+def _row(B, S, x, w, bias):
     if S.K % 16:
         raise TypeError(f"NcpLinearRow: K = {S.K} is not a multiple of 16")
     a, s = _quant(B, S.K, x)
@@ -95,8 +96,23 @@ def NcpLinearRow(B, S, x, w):
         z = B.call(ZERO32)
         for c in range(S.K // 16):
             z = B.call(NcpDot16I7, z, array_of(a[16 * c:16 * c + 16]), array_of(b[16 * c:16 * c + 16]))
-        ys.append(B.call(NcpDequant, z, s, t, B.call(NEG_ZERO16)))
+        ys.append(B.call(NcpDequant, z, s, t, bias(j)))
     return array_of(ys)
 
 
-__all__ = ["NcpAbsMax", "NcpDot16I7", "NcpLinearRow", "NcpRneClampI7"]
+@composite("NcpLinearRow", 1, ["K", "N"], lambda S: ((("x", Array(S.K, BF16)), ("w", Array(S.N, Array(S.K, BF16)))), Array(S.N, BF16)),
+           conformance="protocol-defined")
+def NcpLinearRow(B, S, x, w):
+    """One row of a PoUW linear's served y: `x[K]` and `W[N,K]` quantized per row, the exact dot product, `NcpDequant` adding −0."""
+    return _row(B, S, x, w, lambda j: B.call(NEG_ZERO16))
+
+
+@composite("NcpLinearRowBias", 1, ["K", "N"],
+           lambda S: ((("x", Array(S.K, BF16)), ("w", Array(S.N, Array(S.K, BF16))), ("b", Array(S.N, BF16))), Array(S.N, BF16)),
+           conformance="protocol-defined")
+def NcpLinearRowBias(B, S, x, w, b):
+    """One row of a biased PoUW linear's served y: `NcpLinearRow_v1`'s quantize and exact dot product, `NcpDequant` adding b_j."""
+    return _row(B, S, x, w, lambda j: b[j])
+
+
+__all__ = ["NcpAbsMax", "NcpDot16I7", "NcpLinearRow", "NcpLinearRowBias", "NcpRneClampI7"]
