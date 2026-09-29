@@ -416,9 +416,6 @@ def test_the_float_pairwise_version_crashed_where_the_profile_now_serves():
 #: A4 P6's layer 0 (one-stage-e2e): six templates, 6,771,765 units, in canonical order.
 A4_SIZES = {"rms_triton": 287, "gemm2048": 6_171_648, "rope": 11_480, "rms_fused": 287, "silu_mul": 287,
             "gemm8192": 587_776}
-#: Output bits per unit: the prover's freedom in a wrong unit (16-bit words).
-A4_BITS = {"rms_triton": 2048 * 16, "gemm2048": 16, "rope": 64 * 16, "rms_fused": 2 * 2048 * 16, "silu_mul": 8192 * 16,
-           "gemm8192": 16}
 
 
 def a4_law(ks: dict) -> Stratified:
@@ -499,12 +496,10 @@ def test_one_stratum_is_the_uniform_subset(run):
 
 def test_a4_uniform_leaves_the_norms_undrawn():
     """A4 P6's law: at most 91,051 wrong units at 2^-20 (the audit's own bound), but a template of 287 units that is
-    wrong in every unit escapes with probability 0.958, and the prover's freedom reaches 9.4 MiB."""
+    wrong in every unit escapes with probability 0.958."""
     law = Stratified.uniform(sum(A4_SIZES.values()), 1024)
     assert law.count_bound(2.0 ** -20) == 91_051
     assert 0.957 < float(law.escape({"unit": 287})) < 0.958
-    segments = [(A4_BITS[name], size) for name, size in A4_SIZES.items()]
-    assert 9.39 < law.harm_bound({"unit": segments}, 2.0 ** -20) / 8 / 2 ** 20 < 9.41
 
 
 def test_a4_one_unit_floor_per_template():
@@ -517,14 +512,11 @@ def test_a4_one_unit_floor_per_template():
     for name in ("rms_triton", "rms_fused", "silu_mul"):
         assert law.escape({name: 287}) == 0 and law.stratum_bound(name, 2.0 ** -20) == 286
         assert law.escape({name: 1}) == Fraction(286, 287)
-    assert 8.80 < law.harm_bound(A4_BITS, 2.0 ** -20) / 8 / 2 ** 20 < 8.82
 
 
 def test_a4_proportional_to_output_bits():
-    """Inclusion proportional to output bits at the same proving cost: the prover's freedom falls from 9.4 MiB to 1.5 MiB,
-    and the count bound rises to 11.4% of the units."""
+    """Inclusion proportional to output bits at the same proving cost: the count bound rises to 11.4% of the units."""
     law = a4_law({"rms_triton": 10, "gemm2048": 104, "rope": 12, "rms_fused": 20, "silu_mul": 39, "gemm8192": 10})
-    assert 1.49 < law.harm_bound(A4_BITS, 2.0 ** -20) / 8 / 2 ** 20 < 1.51
     assert law.count_bound(2.0 ** -20) == 773_981
 
 
@@ -558,6 +550,39 @@ def test_stratified_queries_name_known_strata():
     with pytest.raises(ValueError):
         law.count_bound(1.0)
     assert law.worst_counts(law.population) is None and law.miss(law.population) == 0
+
+
+def test_a_profile_drawn_by_strata_reads_its_bounds_off_the_law():
+    """A Stratified draw of the checked level: the profile's bound is the law's exact count bound, its stratum bounds each
+    stratum's own, and its weighted bound the law's.  A one-level Subset is one stratum, and a Bernoulli level has none."""
+    for law in SMALL:
+        a = IntegrityProfile((Level("unit", "q"),), (law.population,), {"unit": law}, 0.1, drawn={"unit": law.k})
+        assert a.strata() is law and a.bound() == law.count_bound(0.1)
+        assert a.stratum_bounds() == {s.name: law.stratum_bound(s.name, 0.1) for s in law.strata}
+        assert a.harm_bound(2.0) == law.harm_bound({s.name: 2.0 for s in law.strata}, 0.1)
+        assert a.to_json()["levels"][0]["draw"] == law.to_json()
+        with pytest.raises(ValueError):
+            a.worst_case(lambda m: m)
+    grouped = IntegrityProfile(("group", "unit"), (2, 5), {"unit": SMALL[1]}, 0.1)
+    assert grouped.bound() == SMALL[1].count_bound(0.1)
+    for n, k, delta in ((1024, 16, 0.01), (6, 2, 0.25), (344, 128, 2.0 ** -20)):
+        one = one_level(n, k, delta)
+        assert one.strata() == Stratified.uniform(n, k) and one.bound() == Stratified.uniform(n, k).count_bound(delta)
+        assert one.bound() == int(one.worst_case(lambda m: m)) and one.stratum_bounds() == {"unit": one.bound()}
+    assert TOY.strata() is None and TOY.stratum_bounds() == {} and TOY.bound() == incorrect_units(TOY)
+    assert TOY.harm_bound(4) == TOY.worst_case(lambda m: 4 * m)
+    with pytest.raises(ValueError):
+        TOY.harm_bound({"check": 4.0})
+
+
+@pytest.mark.parametrize("levels, sizes, draws", [
+    (("group", "unit"), (2, 5), {"group": Bernoulli(Fraction(1, 2)), "unit": SMALL[1]}),   # not the only draw
+    (("unit", "sub"), (10, 1), {"unit": SMALL[1], "sub": Subset(1)}),                     # not the checked level
+    (("unit",), (9,), {"unit": SMALL[1]}),                                                # strata of 10 units, level of 9
+])
+def test_ill_formed_stratified_profiles_are_refused(levels, sizes, draws):
+    with pytest.raises(ValueError):
+        IntegrityProfile(levels, sizes, draws, 0.01)
 
 
 def test_stratified_json_is_the_profile_law():

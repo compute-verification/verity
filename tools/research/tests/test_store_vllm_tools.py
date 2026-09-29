@@ -58,7 +58,7 @@ def test_row_configuration_is_the_key_and_retain_is_not():
     params, key = t.resolve_params(_argv("build", "--retain", "host", "--build-jobs", "4"), REPO)
     assert key["row"] == ROW and key["model"] == "meta-llama/Llama-3.2-1B" and key["revision"] == "4e20da8c" and key["role"] == "LLAMA32_1B"
     assert (key["model_tag"], key["dtype"], key["hw"], key["tp"], key["batch"], key["input"], key["output"]) == ("llama32-1b", "bf16", "l40s", 1, 1, 4096, 512)
-    assert (key["arrivals"], key["sampling"], key["exec"], key["query"]) == ("mixed", "greedy", "bi-eager", "Q_module_body_v1")
+    assert (key["arrivals"], key["sampling"], key["exec"], key["query"]) == ("mixed", "greedy", "bi-eager", "Q_word_v1{X=16,W=32,R=no-recompute}")
     assert "retain" not in key and "build_jobs" not in key, "footprint / schedule knobs are not key params"
     assert params["retain"] == "host" and params["build_jobs"] == "4", "...but they are recorded"
     assert params["argv"][:3] == CMD

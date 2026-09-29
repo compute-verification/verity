@@ -125,7 +125,7 @@ def test_attention_commits_scores_p_row_values_and_inverse_sum(attn):
     r = W.unit_rule(attn)
     assert not r["violations"]
     heads = {(i["scope"].split("{")[0], i["head"]): i["words"] for i in r["committed_interior"]}
-    assert heads[("DotBf16_v1", "AmpereBF16TcDot16_v1")] == 4 * 21                  # S: one score per (head, key)
+    assert heads[("DotBf16_v1", "AmpereBF16TcDot16_v2")] == 4 * 21                  # S: one score per (head, key)
     assert heads[("AttnBlock_v3", "F2fpBf16_v1")] == 4 * 21                          # P (bf16): what the PV products read
     assert heads[("AttentionHead_v3", "Fa2InvSum_v1")] == 4                          # FIN inv_sum, one per head
     assert heads[("AttnBlock_v3", "MufuEx2Ftz_v1")] == 4 * 21                        # exp2(s * scale - max), f32: the stream's P plane

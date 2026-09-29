@@ -30,6 +30,7 @@ import gzip
 import json
 import os
 import re
+import sys
 import time
 from dataclasses import dataclass
 
@@ -41,14 +42,14 @@ from verity_vllm.program.sampling_event import is_sampling_event as _is_sampling
 PAD_SPECS = ("Const", "I32Eq_v1", "BitNot_v1", "BitAnd_v1", "SelectI32_v1", "SelectBf16_v1")
 _T_RE = re.compile(r"\{T=\d+,")
 # [R16 stoch/global, COORD M-0169 (4)] the derived top-p split count S: the fold emits it as `Const32[S]` "splits", the 6th operand
-# (index 5) of `GumbelTopPTokenSelect_v1{V}` (patterns.TokenSelectGumbelTopP._stage3); the request Program takes it as the request-owned
-# INPUT `splits` (int32 [T+1], after the seed) and event s reads `splits[s:s+1]` (vllm_meta.StochasticRequest).  compare BINDS the two:
-# the fold's constant at the request's event s IS the value of the Program's input entry s -- canonicalised ("SPLITS", s, s+1) on both
-# sides; the constant's VALUE is kept (`Prog.splits_values`, by select node) for GM-01's per-engine-step relation check
-# (`global_match.sampler_geometry_check`: S_t == SplitsFor_v1(|live(t)|, num_SMs)).  Nothing about S is a static of the Definition.
+# (index 5) of the top-p select, the one sampling event with a 6th operand (patterns.TokenSelectGumbelTopP._stage3); the request Program
+# takes it as the request-owned INPUT `splits` (int32 [T+1], after the seed) and event s reads `splits[s:s+1]` (vllm_meta.StochasticRequest).
+# compare BINDS the two: the fold's constant at the request's event s IS the value of the Program's input entry s -- canonicalised
+# ("SPLITS", s, s+1) on both sides; the constant's VALUE is kept (`Prog.splits_values`, by select node) for GM-01's per-engine-step
+# relation check (`global_match.sampler_geometry_check`: S_t == SplitsFor_v1(|live(t)|, num_SMs)).  Nothing about S is a static of the
+# Definition.
 _CONST_RE = re.compile(r"^Const(\d+)\[0x([0-9a-fA-F]+)\]_v1$")
 SPLITS_OPERAND = 5
-_TOPP_SELECT = "GumbelTopPTokenSelect_v1"
 
 
 def const_value(spec: str) -> tuple[int, int] | None:
@@ -58,24 +59,13 @@ def const_value(spec: str) -> tuple[int, int] | None:
 
 
 def _registry():
-    from verity.ir.defs import REGISTRY
-    from verity_vllm.program.registry import b1, moe, pad_prims, serve3  # noqa: F401  (moe: [R13 MOE-01] the fused-MoE Definitions + ref_prims they use)
-    from verity_vllm.program.registry import dense  # noqa: F401  [R15 dense] the unfused norm chain / GeGLU / softcap Definitions (Gemma-2 programs)
-    from verity_vllm.program.registry import sampling  # noqa: F401  [R15 stoch] GumbelTopPTokenSelect_v1 / TopPMask_v1 / GumbelSelectF32_v1 (+ codec lazy prims)
-    try:  # [R13 hopper] target-keyed programs (Hopper: HopperBF16WgmmaDot16_v1, Fa3InvSum_v1) decode through the same registry
-        from verity_vllm.program.registry import hopper  # noqa: F401
-    except Exception as e:  # noqa: BLE001  (veritor.core needs Python >= 3.12; a Hopper program then fails to decode, with this reason)
-        print(f"[compare] hopper registry unavailable ({e!r}): Hopper-target programs will not decode", file=sys.stderr)
-    try:  # [R15 fp8] block-scaled FP8 programs (Fp8GroupQuant_v1, ScaledMmFp8Block_v1 and their f32 / e4m3 primitives)
-        from verity_vllm.program.registry import fp8  # noqa: F401
-    except Exception as e:  # noqa: BLE001  (the FP8 module needs the hopper registry: same Python >= 3.12 condition)
-        print(f"[compare] fp8 registry unavailable ({e!r}): FP8 programs will not decode", file=sys.stderr)
-    try:  # [R17-42 route A (3)] the PADDED MoE construction (MoeFfnFixedL_v1 per token; `target.moe_construction = padded`) decodes through
-        # the same registry as MOE-01 -- a padded component's descriptor names Definitions no other module registers
-        from verity_vllm.program.registry import moe_pad  # noqa: F401
-    except Exception as e:  # noqa: BLE001
-        print(f"[compare] moe_pad registry unavailable ({e!r}): padded-construction programs will not decode", file=sys.stderr)
-    return REGISTRY
+    """The registry every module loaded (`verity_vllm.program.registry.load`); a module that fails to import is named on stderr (its
+    Programs, e.g. Hopper's under Python < 3.12, then fail to decode with that reason)."""
+    from verity_vllm.program.registry.catalog import load
+    reg, errors = load()
+    for e in errors:
+        print(f"[compare] registry module unavailable ({e}): Programs naming its Definitions will not decode", file=sys.stderr)
+    return reg
 
 
 class Prog:
@@ -202,7 +192,7 @@ class Prog:
             cands: set[int] = set()
             for r in self.inst:
                 sp = r["spec"].split(":", 1)[-1]
-                if not sp.startswith(_TOPP_SELECT) or len(r["args"]) <= SPLITS_OPERAND:
+                if not _is_sampling_event(sp) or len(r["args"]) <= SPLITS_OPERAND:
                     continue
                 a = r["args"][SPLITS_OPERAND]
                 if len(a) == 1 and a[0][0] == "n" and a[0][3] == 1 and a[0][1][0] not in self.inputs:
@@ -225,7 +215,7 @@ class Prog:
                                 i += 1
         for i, r in enumerate(self.inst):
             sp = r["spec"].split(":", 1)[-1]
-            if not sp.startswith(_TOPP_SELECT) or len(r["args"]) <= SPLITS_OPERAND:
+            if not _is_sampling_event(sp) or len(r["args"]) <= SPLITS_OPERAND:
                 continue
             a = r["args"][SPLITS_OPERAND]
             if len(a) != 1 or a[0][0] != "n":

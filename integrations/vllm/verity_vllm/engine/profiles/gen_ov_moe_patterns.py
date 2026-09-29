@@ -46,6 +46,7 @@ from verity_vllm.observe.fold.patterns import (SiluAndMul, bound_args, find_desc
 from verity_vllm.observe.fold.resolver import Compute, Gather, Group, PerRow, Resolution, Shared, StepContext, Transparent, Unsupported
 from verity_vllm.observe.fold.tree import TreeNode
 from verity_vllm.engine.profiles.gen_llama_patterns import GemmLaunchTuned
+from verity_vllm.program.frontend.target_profile import TargetProfile
 
 #: The op name prefix of the MoE custom op(s) (`vllm.moe_forward.default`, `vllm.moe_forward_shared.default`).
 MOE_OP_PREFIX = "moe_forward"
@@ -430,11 +431,11 @@ MOE_CONSTRUCTION_PATTERNS = {"indexed-read": MoEFusedExperts, "padded": MoEFused
 def ov_moe_patterns(config: dict[str, Any], *, gemm_constexprs: dict[str, Any] | None = None, gemm_num_sms: int | None = None,
                     moe_construction: str | None = None) -> list:
     """The MoE architecture's patterns, placed BEFORE the base list (the tuned-GEMM specialization must see `o_proj` first; the MoE
-    scope pattern matches the custom op no base pattern knows).  `moe_construction` (None = `indexed-read`, MOE-01) selects the
-    scope pattern: the workload's DECLARED construction, never inferred (R17-42 route A (4)).  [P6] the tuned GEMM is the
+    scope pattern matches the custom op no base pattern knows).  `moe_construction` (None = `TargetProfile.DEFAULT_MOE_CONSTRUCTION`)
+    selects the scope pattern: the workload's DECLARED construction, never inferred (R17-42 route A (4)).  [P6] the tuned GEMM is the
     target-agnostic `gen_llama_patterns.GemmLaunchTuned` (the record target's table; `gemm_constexprs` is accepted and unused: the
     delegate `GemmLaunch` pins the target's tiling)."""
-    key = moe_construction or "indexed-read"
+    key = moe_construction or TargetProfile.DEFAULT_MOE_CONSTRUCTION
     if key not in MOE_CONSTRUCTION_PATTERNS:
         raise ValueError(f"moe_construction {moe_construction!r} is not one of {sorted(MOE_CONSTRUCTION_PATTERNS)}")
     tuned = GemmLaunchTuned() if gemm_num_sms is None else GemmLaunchTuned(num_sms=gemm_num_sms)
