@@ -3,6 +3,8 @@
 * a cancelled row takes its running stage (and the stage's forked workers) with it: GNU ``timeout`` moves the stage into
   its own process group, which never sees the runner's killpg, so the driver forwards TERM/INT/HUP to timeout's pid,
   waits for the stage to be gone, records the cancel and exits 128+signal;
+* after a PASS Build the row stops (exit 21, no Match) when a call-boundary identity of its manifest has no source the
+  Commit attaches, the first one named in stages.txt, and goes on to Match when each has one;
 * a Commit over a Match record whose account files are gone refuses to start (PRECHECK_FAIL_MATCH_RECORD_INCOMPLETE,
   exit 14); the Match summary accepts an explicit ``--match-phase cpu`` resume over the preserved capture;
 * the Match of record (``fast`` inside ``shared``) is the default and the caller can choose the audit checker;
@@ -26,6 +28,7 @@ from pathlib import Path
 
 import pytest
 
+from tests.acquire.call_boundary_programs import LP, PF, T, build_dir, dense_program
 from verity_vllm.check.weights_of_record import SCHEMA, SCHEMA_V1
 from verity_vllm.config import UsageError
 from verity_vllm.pipeline import cli
@@ -251,6 +254,87 @@ def test_a_moved_capture_refuses_the_commit_by_name(tmp_path, missing):
     end, row_end = _timeline(r)
     assert {"stage": "stage.commit", "ev": "end", "rc": 3, "fail_class": "PRECHECK_FAIL_MATCH_RECORD_INCOMPLETE", "missing": lacks}.items() <= end.items()
     assert {"stage": "row", "ev": "end", "ok": False, "stopped_at": "commit"}.items() <= row_end.items()
+
+
+# ---------------------------------------------------------------------------------------------------------------- Build: call boundaries
+
+def _built(r: SingleRow, monkeypatch, **kw) -> dict:
+    """A PASS Build of the call-boundary source's dense stand-in (`dense_program(**kw)`: its Build dir and manifest.json in the row dir),
+    the Build's children stubbed; the call-boundary gate after it runs for real.  Returns the manifest."""
+    b, _at = dense_program(**kw)
+    _d, man = build_dir(Path(r.d), b.doc(LP), [PF[len("model."):]])
+    (Path(r.d) / "manifest.json").write_text(json.dumps(man))
+    r.LP, r.T, r.ck = LP, T, "/ck"
+    run_tl = r.run_tl
+
+    def child(stage, to, lf, cmd, *extra):
+        if stage != "build.global_program":
+            return run_tl(stage, to, lf, cmd, *extra)
+        os.makedirs(f"{r.d}/build_workload")
+        Path(f"{r.d}/build_workload/workload_program.json").write_text(json.dumps({"workload_digest": "w" * 64}))
+        return 0
+
+    for name, fn in (("prepare", lambda: None), ("gpu_exclusive", lambda why: None), ("derive_all", lambda to: (0, 0)),
+                     ("guarded", lambda what, fn, *a: "PASS"), ("target_family", lambda *a, out: (0, "TARGET-FAMILY-OK")),
+                     ("required_manifest", lambda stage: 0), ("run_tl", child), ("timeline_report", lambda: None)):
+        monkeypatch.setattr(r, name, fn)
+    monkeypatch.setattr(R, "build_line", lambda d: ("d" * 16, "m" * 16))
+    return man
+
+
+@pytest.mark.skipif(not _GNU_TIMEOUT, reason="GNU timeout (coreutils) required -- the pods have it, macOS does not")
+def test_a_call_boundary_without_a_source_stops_the_row_after_its_build_by_name(tmp_path, monkeypatch):
+    r = _row(tmp_path, "--stages", "build,match")
+    _built(r, monkeypatch, embed=PF)
+    matched: list[int] = []
+    monkeypatch.setattr(r, "match", lambda: matched.append(1))
+    assert r.run() == 21 and not matched
+    build, gate = (ln.split(" ", 3) for ln in (Path(r.d) / "stages.txt").read_text().splitlines())
+    assert build[:2] == ["build", "PASS"] and gate[:2] == ["build-call-boundaries", "FAIL"]
+    rec = json.loads((Path(r.d) / "call_boundaries.json").read_text())
+    assert rec["pass"] is False and rec["uncovered"] > 0
+    assert gate[3].startswith(f"rc=1 identities={rec['identities']} claimed=0 covered={rec['covered']} uncovered={rec['uncovered']} ")
+    assert gate[3].endswith(f"first: {rec['named']['uncovered'][0]}") and "reads Program input 'prompt'" in gate[3]
+    assert "call boundaries without a source the Commit attaches -> stop" in (Path(r.d) / "row.log").read_text()
+    assert {"stage": "row", "ev": "end", "ok": False, "stopped_at": "call_boundaries"}.items() <= _timeline(r)[-1].items()
+
+
+@pytest.mark.skipif(not _GNU_TIMEOUT, reason="GNU timeout (coreutils) required -- the pods have it, macOS does not")
+def test_a_row_whose_every_call_boundary_has_a_source_goes_on_to_match(tmp_path, monkeypatch):
+    r = _row(tmp_path, "--stages", "build,match")
+    man = _built(r, monkeypatch)
+    n = sum(1 for x in man["identities"] if x["family"] == "call_boundaries")
+    matched: list[int] = []
+    monkeypatch.setattr(r, "match", lambda: matched.append(1))
+    assert r.run() == 0 and matched and n > 0
+    build, gate = (ln.split(" ", 3) for ln in (Path(r.d) / "stages.txt").read_text().splitlines())
+    assert build[:2] == ["build", "PASS"] and gate[:2] == ["build-call-boundaries", "PASS"]
+    assert gate[3].startswith(f"identities={n} claimed=0 covered={n} uncovered=0 unattached=0 sources=call_boundary wall=")
+
+
+@pytest.mark.skipif(not _GNU_TIMEOUT, reason="GNU timeout (coreutils) required -- the pods have it, macOS does not")
+def test_a_tp_row_stops_after_its_build_on_any_call_boundary(tmp_path, monkeypatch):
+    t = _tp_row(tmp_path, TP_DENSE)
+    os.makedirs(t.d, exist_ok=True)
+    t.child_env, t.shapes = {**os.environ, "PYTHONPATH": os.pathsep.join([str(TREE), os.environ.get("PYTHONPATH", "")])}, []
+    b, _at = dense_program()
+    _d, man = build_dir(tmp_path, b.doc(LP), [PF[len("model."):]])
+
+    def manifest_global(stage, to):
+        (Path(t.d) / "manifest.json").write_text(json.dumps({**man, "ranks": 2}))
+        return 0
+
+    for name, fn in (("jobs", lambda n: 1), ("derive_all", lambda todo, jobs: None), ("compose_all", lambda ranks: None),
+                     ("guarded_summary", lambda: "PASS"), ("manifest_global", manifest_global)):
+        monkeypatch.setattr(t, name, fn)
+    monkeypatch.setattr(R, "tp_build_digests", lambda d: ("d" * 16, []))
+    monkeypatch.setattr(R, "tp_rank_workload_digest", lambda bdir, r: "w" * 16)
+    with pytest.raises(Stop) as e:
+        t.build()
+    assert e.value.rc == 21
+    build, gate = (ln.split(" ", 3) for ln in (Path(t.d) / "stages.txt").read_text().splitlines())
+    assert build[:2] == ["build", "PASS"] and gate[:2] == ["build-call-boundaries", "FAIL"]
+    assert gate[3].endswith(": a manifest of 2 ranks (the source serves one rank)") and " sources=none " in gate[3]
 
 
 # ---------------------------------------------------------------------------------------------------------------- taps
