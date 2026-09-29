@@ -40,8 +40,17 @@ BETA = 128
 ROLES = ("digest", "node", "key", "form_y", "form_x", "tile", "dequant")
 #: weight rows read, formed and multiplied at a time (a multiple of 16), one block per task of the commit's thread pool
 BLOCK = 256
-#: the pool's threads: numpy's products and sums and hashlib over a tile's words release the GIL
-THREADS = min(16, len(os.sched_getaffinity(0)))
+#: the fewest rows a block is cut to so that every thread of the pool has one (`block_for`)
+MIN_BLOCK = 64
+#: the pool's threads, one per CPU this process may run on: numpy's products and sums and hashlib over a tile's words release the GIL
+THREADS = len(os.sched_getaffinity(0))
+
+
+def block_for(n: int) -> int:
+    """Rows per task for a weight of ``n`` rows: `BLOCK`, or fewer, down to `MIN_BLOCK`, when `BLOCK` would leave threads of
+    the pool without a block. The commit does not depend on it."""
+    per = -(-n // THREADS)
+    return max(MIN_BLOCK, min(BLOCK, -(-per // D) * D))
 
 
 @cache
@@ -315,10 +324,12 @@ class Native:
 
     # ---- the whole call
 
-    def commit(self, index: int, scheme: str, block: int = BLOCK) -> PC.CallRecord:
-        """Every unit's leaf, hashed as it is computed, and the served y; the weight's rows are read ``block`` at a time."""
+    def commit(self, index: int, scheme: str, block: int | None = None) -> PC.CallRecord:
+        """Every unit's leaf, hashed as it is computed, and the served y; the weight's rows are read ``block`` at a time
+        (default `block_for`)."""
         c, sh = self.call, self.shape
         m, k, n = sh.m, sh.k, sh.n
+        block = block or block_for(n)
         leaves: list[bytes] = [b""] * self.population
 
         def put(u: int, v: np.ndarray) -> None:
@@ -366,12 +377,12 @@ class Native:
         return PC.CallRecord(index, scheme, c, PC.inputs_digest(c, wd.parts()), blob, PC.units_root(blob), served, self.outputs)
 
 
-def served(call: PC.Call, block: int = BLOCK) -> np.ndarray:
+def served(call: PC.Call, block: int | None = None) -> np.ndarray:
     """The call's served y alone, without its units: Z = A·Bᵀ exactly (the noise cancels in the circuit's Z; float64 is exact,
     every sum an integer below 2⁵³) and `dequant`, as `Native.commit` serves it. The weight's rows are read ``block`` at a
     time."""
     (m, _k), n = call.a.shape, call.b.n
-    a, y = np.asarray(call.a, np.float64), np.empty((m, n), np.uint16)
+    a, y, block = np.asarray(call.a, np.float64), np.empty((m, n), np.uint16), block or BLOCK
     for lo in range(0, n, block):
         hi = min(n, lo + block)
         b, t = call.b.rows(lo, hi)
@@ -385,4 +396,4 @@ def commit_call(index: int, scheme: str, call: PC.Call, tamper: Mapping[tuple[in
     return Native(call, tamper=tamper).commit(index, scheme)
 
 
-__all__ = ["BLOCK", "Native", "commit_call", "dequant", "served"]
+__all__ = ["BLOCK", "MIN_BLOCK", "Native", "THREADS", "block_for", "commit_call", "dequant", "served"]

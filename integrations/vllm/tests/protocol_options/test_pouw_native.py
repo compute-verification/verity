@@ -74,6 +74,23 @@ def test_the_weight_is_read_once_in_blocks_and_the_block_does_not_change_the_com
     assert (a.leaves, a.inputs, a.root) == (b.leaves, b.inputs, b.root) and np.array_equal(a.y, b.y)
 
 
+@pytest.mark.parametrize("threads", [1, 3, 256])
+def test_the_pools_threads_and_their_blocks_do_not_change_the_commit(threads, monkeypatch):
+    """A pool of one thread per CPU cuts the weight into `block_for` blocks, at least `MIN_BLOCK` rows, so that every thread has
+    one: 256 threads read a 400-row weight 64 rows at a time, one thread in `BLOCK`s; either commit is the other's, bit for bit."""
+    ref = PN.Native(_call(np.random.default_rng(5), 16, 64, 400)).commit(0, "ncp-v2", block=PN.BLOCK)
+    monkeypatch.setattr(PN, "THREADS", threads)
+    PN._pool.cache_clear()
+    try:
+        call = _call(np.random.default_rng(5), 16, 64, 400)
+        got = PN.Native(call).commit(0, "ncp-v2")
+    finally:
+        PN._pool.cache_clear()
+    assert PN.block_for(400) == {1: 256, 3: 144, 256: 64}[threads]
+    assert [hi - lo for lo, hi in call.b.reads][0] == PN.block_for(400)
+    assert (got.leaves, got.inputs, got.root) == (ref.leaves, ref.inputs, ref.root) and np.array_equal(got.y, ref.y)
+
+
 def test_a_tampered_value_changes_exactly_its_units_leaf_and_its_opening():
     call = _call(np.random.default_rng(4), 32, 64, 16)
     honest = PN.commit_call(0, "ncp-v2", call)
