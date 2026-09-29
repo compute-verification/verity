@@ -18,8 +18,10 @@ G=${GPU:-1}
 SM=${SM:-$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1 | tr -d .)}; SM=${SM:-89}
 if [ -z "${BINARY:-}" ]; then   # BINARY / PYBIN: a prebuilt flock-circuit and a Python with numpy (a local dry run)
   # the proving build never has seed injection; the selftest's harness gets its own build with it. Both are kept per pod, keyed
-  # by the build scripts and patches, so later runs of the same commit's builds skip the compile
-  KEY=$(cat backends/flock/pod/20-gpu-link.sh backends/flock/pod/60-circuit.sh backends/flock/*.patch backends/flock/cuda_*_patch.py | sha256sum | cut -c1-16)
+  # by the build scripts, patches and the prover's sources, so later runs of the same builds skip the compile and another
+  # tree's run on the pod builds its own
+  KEY=$(cat backends/flock/pod/20-gpu-link.sh backends/flock/pod/60-circuit.sh backends/flock/*.patch backends/flock/cuda_*_patch.py \
+    $(find backends/flock/cuda backends/flock/live -type f | LC_ALL=C sort) | sha256sum | cut -c1-16)
   BIN=$W/bin-$KEY-g$G-sm$SM; F=/workspace/flock-gpu-link/flock
   # the prover runs on CUDA 13.3: a driver older than that (R570) needs its compat library, cached binary or not
   C13=${CUDA_TK:-/usr/local/cuda-13.3}; export PATH=$C13/bin:$PATH NVCC=$C13/bin/nvcc LD_LIBRARY_PATH=$C13/compat:$C13/lib64:${LD_LIBRARY_PATH:-}
