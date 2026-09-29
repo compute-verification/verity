@@ -396,7 +396,8 @@ copies an attempt manifest plus its outputs' manifests and blobs from a machine'
   to its sha256 and size, or the next source is tried. The registry is one caller; a snapshot's members can be another.
 - `fetch-fixtures` makes fetched entries present and exact (a tree's directory holds its files and nothing else), never writes a
   tracked file, and is offline once fetched. `suites.py` runs it first and keys each suite on the ids under its inputs.
-- `export` copies every entry and `previous` id to the export bucket (`remote.load_export`; never the store's own), blobs first.
+- `export` copies every entry and `previous` id to the export bucket (`remote.load_export`; never the store's own), blobs first:
+  through the site's broker (`BrokerRemote`, `RESEARCH_EXPORT_URL` + a writer token) when set, else with a bucket key.
   A superseded id the store lacks comes from git history; one neither holds is a warning. `--verify-url` is the end-to-end test.
 
 ## 8. Labels

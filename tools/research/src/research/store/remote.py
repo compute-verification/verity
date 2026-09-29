@@ -191,6 +191,84 @@ class HttpRemote:
         raise NotImplementedError(f"{self.base} does not list: fetch by id")
 
 
+class BrokerRemote:
+    """The public export written through the site's broker (the site holds the bucket's only key; a writer holds a revocable token).
+    `put(key, path)` for `objects/sha256/<hex>` or `manifests/<hex>.json`, whose bytes hash to `<hex>`:
+
+        POST <url>/uploads {sha256, bytes, kind}   Bearer token   -> {"status": "exists"} | {"status": "upload", "url", "headers"?}
+        PUT  <presigned url> (the bytes, `If-None-Match: *`)      -> staged at incoming/<hex>, straight to the bucket
+        POST <url>/uploads/<hex>/commit                           -> {"status": "created" | "exists"}; 409 when the staged bytes
+                                                                     do not hash to <hex> (the broker deletes them)
+
+    and returns `push`'s results: `skipped` (the broker had it), `created`, `exists` (another writer committed it first), or
+    RemoteConflict on a 409.  `get` and `head` read `<url>/<key>` like `HttpRemote`; there is no `list`."""
+
+    TIMEOUT_S = 120.0
+
+    def __init__(self, url: str, token: str):
+        self.base, self.token = url.rstrip("/"), token
+        self.reader = HttpRemote(self.base)
+
+    def describe(self) -> str:
+        return f"broker:{self.base}"
+
+    def _call(self, url: str, body: dict | None = None) -> tuple[int, dict]:
+        import json  # noqa: PLC0415
+
+        req = urllib.request.Request(url, method="POST", data=json.dumps(body or {}).encode(),
+                                     headers={"Authorization": f"Bearer {self.token}", "Content-Type": "application/json",
+                                              "User-Agent": "research-store-export"})
+        try:
+            with urllib.request.urlopen(req, timeout=self.TIMEOUT_S) as r:
+                return r.status, json.loads(r.read() or b"{}")
+        except urllib.error.HTTPError as e:
+            try:
+                doc = json.loads(e.read() or b"{}")
+            except ValueError:
+                doc = {}
+            return e.code, doc
+
+    def put(self, key: str, path: Path) -> dict:
+        path = Path(path)
+        if key.startswith("objects/sha256/"):
+            kind, hex_ = "object", key[len("objects/sha256/"):]
+        elif key.startswith("manifests/") and key.endswith(".json"):
+            kind, hex_ = "manifest", key[len("manifests/"):-len(".json")]
+        else:
+            raise ValueError(f"the broker takes objects/sha256/<hex> and manifests/<hex>.json, not {key!r}")
+        data = path.read_bytes()
+        if hashlib.sha256(data).hexdigest() != hex_:
+            raise ValueError(f"{path} does not hash to {key}")
+        res = {"action": "created", "bytes": len(data), "etag": None, "md5": hashlib.md5(data, usedforsecurity=False).hexdigest()}
+        code, doc = self._call(f"{self.base}/uploads", {"sha256": hex_, "bytes": len(data), "kind": kind})
+        if code == 200 and doc.get("status") == "exists":
+            return {**res, "action": "skipped"}
+        if code != 200 or doc.get("status") != "upload" or not doc.get("url"):
+            raise RuntimeError(f"broker {self.base}/uploads answered {code} {doc.get('error') or doc.get('status') or ''} for {key}")
+        headers = {"If-None-Match": "*", "Content-Length": str(len(data)), **(doc.get("headers") or {})}
+        req = urllib.request.Request(doc["url"], method="PUT", data=data, headers=headers)
+        try:
+            urllib.request.urlopen(req, timeout=self.TIMEOUT_S).close()
+        except urllib.error.HTTPError as e:
+            if e.code != 412:                                     # 412: already staged by a concurrent writer; commit decides
+                raise RuntimeError(f"upload of {key} answered {e.code}") from None
+        code, doc = self._call(f"{self.base}/uploads/{hex_}/commit")
+        if code == 409:
+            raise RemoteConflict(f"{key}: the broker refused the upload: the staged bytes do not hash to it ({doc.get('error', 'mismatch')})")
+        if code != 200 or doc.get("status") not in ("created", "exists"):
+            raise RuntimeError(f"broker commit of {key} answered {code} {doc.get('error') or doc.get('status') or ''}")
+        return {**res, "action": doc["status"]}
+
+    def get(self, key: str, path: Path) -> None:
+        self.reader.get(key, path)
+
+    def head(self, key: str) -> dict | None:
+        return self.reader.head(key)
+
+    def list(self, prefix: str) -> list[str]:
+        raise NotImplementedError(f"{self.base} does not list: fetch by id")
+
+
 def config_path(explicit: Path | str | None = None) -> Path:
     if explicit:
         return Path(explicit).expanduser()
@@ -243,10 +321,12 @@ def load_remote(path: Path | str | None = None) -> Remote | None:
 
 
 def load_export(path: Path | str | None = None, environ: dict | None = None) -> Remote | None:
-    """Where `research data export` writes the public export: the `[export]` table of `store.toml` (the `[remote]` schema), else
-    `$RESEARCH_EXPORT_DIR` (a directory), else `$RESEARCH_EXPORT_BUCKET` on `$RESEARCH_EXPORT_ENDPOINT` (default `R2_ENDPOINT`) with
-    the key pair in `RESEARCH_EXPORT_ACCESS_KEY_ID` / `RESEARCH_EXPORT_SECRET_ACCESS_KEY` (default the store's `AWS_*` pair).  None
-    when none is set.  Never the store's own bucket: the export is a second bucket, the only one a public reader can reach."""
+    """Where `research data export` writes the public export: the `[export]` table of `store.toml` (the `[remote]` schema, or
+    `type = "broker"` with `url` and `token_env`), else the site's broker at `$RESEARCH_EXPORT_URL` with the writer token in
+    `$RESEARCH_EXPORT_TOKEN`, else `$RESEARCH_EXPORT_DIR` (a directory), else `$RESEARCH_EXPORT_BUCKET` on `$RESEARCH_EXPORT_ENDPOINT`
+    (default `R2_ENDPOINT`) with the key pair in `RESEARCH_EXPORT_ACCESS_KEY_ID` / `RESEARCH_EXPORT_SECRET_ACCESS_KEY` (default the
+    store's `AWS_*` pair).  None when none is set.  Never the store's own bucket: the export is a second bucket, the only one a
+    public reader can reach."""
     env = os.environ if environ is None else environ
     p = config_path(path)
     r, where, own = None, "", None
@@ -257,6 +337,10 @@ def load_export(path: Path | str | None = None, environ: dict | None = None) -> 
             raise ConfigError(f"{p}: {e}") from e
         r, where = cfg.get("export"), p
         own = (cfg.get("remote") or {}).get("bucket")
+    if r is None and env.get("RESEARCH_EXPORT_URL"):
+        if not env.get("RESEARCH_EXPORT_TOKEN"):
+            raise ConfigError("export: RESEARCH_EXPORT_URL is set but RESEARCH_EXPORT_TOKEN (the broker's writer token) is not")
+        return BrokerRemote(env["RESEARCH_EXPORT_URL"], env["RESEARCH_EXPORT_TOKEN"])
     if r is None and env.get("RESEARCH_EXPORT_DIR"):
         return FsRemote(env["RESEARCH_EXPORT_DIR"])
     if r is None and env.get("RESEARCH_EXPORT_BUCKET"):
@@ -278,6 +362,11 @@ def load_export(path: Path | str | None = None, environ: dict | None = None) -> 
 
 def _remote_from(r: dict, p: Path | str) -> Remote:
     t = r.get("type")
+    if t == "broker":
+        token = os.environ.get(r.get("token_env") or "RESEARCH_EXPORT_TOKEN")
+        if not r.get("url") or not token:
+            raise ConfigError(f"{p}: [export] type broker needs url and the writer token in {r.get('token_env') or 'RESEARCH_EXPORT_TOKEN'}")
+        return BrokerRemote(r["url"], token)
     if t == "fs":
         if not r.get("path"):
             raise ConfigError(f"{p}: [remote] type fs needs path")
@@ -306,4 +395,4 @@ def _remote_from(r: dict, p: Path | str) -> Remote:
             if r.get(k) is not None:
                 extra[k] = r[k]
         return S3Remote(endpoint=r["endpoint"], bucket=r["bucket"], access_key=ak, secret_key=sk, region=r.get("region", "auto"), session_token=token, **extra)
-    raise ConfigError(f"{p}: unknown [remote] type {t!r} (fs | s3)")
+    raise ConfigError(f"{p}: unknown [remote] type {t!r} (fs | s3 | broker)")
