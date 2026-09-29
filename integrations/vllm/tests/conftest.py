@@ -77,9 +77,6 @@ KNOWN_FAILURES = {
         "exact GELU against torch CPU: max ulp 128, normalised error inf",
     "tests/program/test_ref_prims.py::test_gelu_ref_vs_torch[none-f32]":
         "exact GELU against torch CPU: max ulp 875,646,710, normalised error nan",
-    "tests/program/test_lifted_tiny.py::test_specified_list_is_closed":
-        "passes alone; fails once another test in the process has resolved Lifted[GatherBf16x64_v1]_v2{ORD=3}, which"
-        " registers it as specified",
 }
 
 
