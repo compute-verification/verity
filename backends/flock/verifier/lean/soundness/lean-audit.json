@@ -287,6 +287,15 @@
    "assumptions": [],
    "type_hash": "000000004f59aac1"
   },
+  "FlockSoundness.Audit.Law.workOf_le_unsoundWork": {
+   "signature": [
+    "FlockSoundness.Audit.Law.workOf_le_unsoundWork {n m : Nat} (σ : Fin n → Fin m) (w : Fin m → Nat)",
+    "  (cl : Fin n → Finset (Fin n)) (B : Finset (Fin n)) :",
+    "  instLENat.le (FlockSoundness.Audit.Law.workOf σ w B) (FlockSoundness.Audit.Law.unsoundWork σ w cl B)"
+   ],
+   "assumptions": [],
+   "type_hash": "000000009be23d12"
+  },
   "FlockSoundness.Audit.Law.workRule_eq_draw": {
    "signature": ["FlockSoundness.Audit.Law.workRule_eq_draw : Eq Flock.Draw.workK FlockSoundness.Audit.Law.workRule"],
    "assumptions": [],
@@ -1650,12 +1659,12 @@
    ]
   },
   "FlockSoundness.Audit.Closure": {
-   "digest": "a08afca7d9d040b093a2f3cd14492063",
+   "digest": "98c661639676f1380dff3d33f2686b12",
    "definitions": {
     "FlockSoundness.Audit.Law.closure": "e7461dd903b24df2",
-    "FlockSoundness.Audit.Law.harm": "1cf5c9d4ed5be944",
+    "FlockSoundness.Audit.Law.harm": "fc15e3c8180fa15a",
     "FlockSoundness.Audit.Law.unsoundTiles": "7080a6ab498b58cb",
-    "FlockSoundness.Audit.Law.unsoundWork": "6cf3d6f5b8fea881"
+    "FlockSoundness.Audit.Law.unsoundWork": "8a9ff6e033880ccc"
    },
    "pins": [
     "FlockSoundness.Audit.Law.closure_escape",
@@ -1664,6 +1673,7 @@
     "FlockSoundness.Audit.Law.mem_closure_draw",
     "FlockSoundness.Audit.Law.unsoundWork_le_harm",
     "FlockSoundness.Audit.Law.unsoundWork_singleton",
+    "FlockSoundness.Audit.Law.workOf_le_unsoundWork",
     "FlockSoundness.Audit.audit_work_closure",
     "FlockSoundness.Audit.audit_work_closure_harm",
     "FlockSoundness.Audit.audit_work_closure_of_record",
@@ -1882,6 +1892,7 @@
     "FlockSoundness.Audit.Law.unsoundWork_singleton",
     "FlockSoundness.Audit.Law.workK_ge",
     "FlockSoundness.Audit.Law.workK_rest",
+    "FlockSoundness.Audit.Law.workOf_le_unsoundWork",
     "FlockSoundness.Audit.Law.workRule_eq_draw",
     "FlockSoundness.Audit.Law.work_escape_floor_le",
     "FlockSoundness.Audit.Law.work_escape_le",

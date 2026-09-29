@@ -12,13 +12,16 @@ program.
 * `closure_escape`: **the closure draw's escape is the base law's escape of `B` with the units it makes unsound**,
   `(L.closure cl).escape B = L.escape (B ∪ unsoundTiles cl B)`, where `unsoundTiles cl B` are the units whose closure
   meets `B`. So a wrong unit that is never drawn on its own is charged to every unit above it.
-* `harm σ w cl u`, the work of the units whose closure holds `u`. `harm_le_unsoundWork`: **a wrong unit's whole harm is in
-  the unsound work**, whether or not a draw reaches it. `unsoundWork_le_harm`: the unsound work is at most the wrong
-  units' harm (coverage), and `unsoundWork_singleton`: exactly, for one wrong unit.
+* `unsoundWork σ w cl B`, the work of `B ∪ unsoundTiles cl B`: the wrong units and the units they make unsound, the set
+  `closure_escape` measures. A closure map need not list a unit in its own closure (a tile's is its strips and path
+  nodes), so the wrong units' own work is counted explicitly: `workOf_le_unsoundWork`.
+* `harm σ w cl u`, the work of `u` and of the units whose closure holds it. `harm_le_unsoundWork`: **a wrong unit's whole
+  harm is in the unsound work**, whether or not a draw reaches it. `unsoundWork_le_harm`: the unsound work is at most the
+  wrong units' harm (coverage), and `unsoundWork_singleton`: exactly, for one wrong unit.
 * `audit_work_closure`, `extraction_audit_work_closure`: under the work law's closure draw, at any floors `f_s ≥ 1`, the
-  audit accepts while the unsound units do at least `T` of the work with probability at most `((W − T)/W)^K + ε_ks + δ_link`.
-  `audit_work_closure_harm`: likewise while some wrong unit's harm is at least `T`. `audit_work_closure_of_record`: at
-  `K = 27,713`, unsound work of at least 0.1% with at most `2^-40 + ε_ks + δ_link`.
+  audit accepts while the unsound units do at least `T` of the work with probability at most
+  `((W − T)/W)^K + ε_ks + δ_link`. `audit_work_closure_harm`: likewise while some wrong unit's harm is at least `T`.
+  `audit_work_closure_of_record`: at `K = 27,713`, unsound work of at least 0.1% with at most `2^-40 + ε_ks + δ_link`.
 -/
 
 namespace FlockSoundness.Audit
@@ -61,38 +64,51 @@ theorem closure_escape (L : Law n) (cl : Fin n → Finset (Fin n)) (B : Finset (
     by_contra hc
     exact disjoint_left.1 h2 ht (mem_filter.2 ⟨mem_univ t, hc⟩)
 
-/-- The work of the units made unsound by `B`. -/
+/-- The work of the wrong units `B` and of the units they make unsound. -/
 abbrev unsoundWork (σ : Fin n → Fin m) (w : Fin m → ℕ) (cl : Fin n → Finset (Fin n)) (B : Finset (Fin n)) : ℕ :=
-  workOf σ w (unsoundTiles cl B)
+  workOf σ w (B ∪ unsoundTiles cl B)
 
-/-- **The harm of a unit**: the work of every unit whose closure holds it, what it spoils when wrong. -/
+/-- **The wrong units' own work is in the unsound work**, whatever the closure map. -/
+theorem workOf_le_unsoundWork (σ : Fin n → Fin m) (w : Fin m → ℕ) (cl : Fin n → Finset (Fin n)) (B : Finset (Fin n)) :
+    workOf σ w B ≤ unsoundWork σ w cl B :=
+  sum_le_sum_of_subset subset_union_left
+
+/-- **The harm of a unit**: its own work and the work of every unit whose closure holds it, what it spoils when wrong. -/
 def harm (σ : Fin n → Fin m) (w : Fin m → ℕ) (cl : Fin n → Finset (Fin n)) (u : Fin n) : ℕ :=
-  workOf σ w (univ.filter fun t => u ∈ cl t)
+  workOf σ w (insert u (univ.filter fun t => u ∈ cl t))
 
-/-- **A wrong unit's whole harm is in the unsound work**, whether or not a draw reaches it: every unit whose closure
-holds a wrong unit is unsound. -/
+/-- **A wrong unit's whole harm is in the unsound work**, whether or not a draw reaches it: it is wrong itself, and every
+unit whose closure holds it is unsound. -/
 theorem harm_le_unsoundWork (σ : Fin n → Fin m) (w : Fin m → ℕ) (cl : Fin n → Finset (Fin n)) {B : Finset (Fin n)}
     {u : Fin n} (hu : u ∈ B) : harm σ w cl u ≤ unsoundWork σ w cl B := by
   unfold harm unsoundWork unsoundTiles workOf
   refine sum_le_sum_of_subset fun t ht => ?_
-  rw [mem_filter] at ht ⊢
-  exact ⟨ht.1, not_disjoint_iff.2 ⟨u, ht.2, hu⟩⟩
+  rcases mem_insert.1 ht with rfl | ht
+  · exact mem_union_left _ hu
+  · exact mem_union_right _ (mem_filter.2 ⟨mem_univ t, not_disjoint_iff.2 ⟨u, (mem_filter.1 ht).2, hu⟩⟩)
 
-/-- **Coverage**: the unsound work is at most the wrong units' harm. Each unsound unit is charged to a wrong unit of its
-closure; overlaps only overcount. -/
+/-- **Coverage**: the unsound work is at most the wrong units' harm. Each wrong unit is charged to itself and each unsound
+unit to a wrong unit of its closure; overlaps only overcount. -/
 theorem unsoundWork_le_harm (σ : Fin n → Fin m) (w : Fin m → ℕ) (cl : Fin n → Finset (Fin n)) (B : Finset (Fin n)) :
     unsoundWork σ w cl B ≤ ∑ u ∈ B, harm σ w cl u := by
   classical
-  unfold unsoundWork unsoundTiles harm workOf
-  simp only [sum_filter]
+  have e : ∀ S : Finset (Fin n), workOf σ w S = ∑ t, if t ∈ S then w (σ t) else 0 := fun S => by
+    rw [sum_ite_mem, univ_inter, workOf]
+  unfold unsoundWork harm
+  simp only [e]
   rw [sum_comm]
   refine sum_le_sum fun t _ => ?_
   split_ifs with h
+  · obtain ⟨u, hu, htu⟩ : ∃ u ∈ B, t ∈ insert u (univ.filter fun t => u ∈ cl t) := by
+      rcases mem_union.1 h with htB | htU
+      · exact ⟨t, htB, mem_insert_self _ _⟩
+      · obtain ⟨u, hu, huB⟩ := not_disjoint_iff.1 (mem_filter.1 htU).2
+        exact ⟨u, huB, mem_insert_of_mem (mem_filter.2 ⟨mem_univ t, hu⟩)⟩
+    calc w (σ t) = (if t ∈ insert u (univ.filter fun t => u ∈ cl t) then w (σ t) else 0) := by simp only [htu, ite_true]
+      _ ≤ ∑ u ∈ B, if t ∈ insert u (univ.filter fun t => u ∈ cl t) then w (σ t) else 0 :=
+          single_le_sum (f := fun u => if t ∈ insert u (univ.filter fun t => u ∈ cl t) then w (σ t) else 0)
+            (fun _ _ => Nat.zero_le _) hu
   · exact Nat.zero_le _
-  · obtain ⟨u, hu, huB⟩ := not_disjoint_iff.1 h
-    calc w (σ t) = (if u ∈ cl t then w (σ t) else 0) := by simp only [hu, ite_true]
-      _ ≤ ∑ u ∈ B, if u ∈ cl t then w (σ t) else 0 :=
-          single_le_sum (f := fun u => if u ∈ cl t then w (σ t) else 0) (fun _ _ => Nat.zero_le _) huB
 
 /-- **The charging is exact for one wrong unit.** -/
 theorem unsoundWork_singleton (σ : Fin n → Fin m) (w : Fin m → ℕ) (cl : Fin n → Finset (Fin n)) (u : Fin n) :
@@ -102,13 +118,12 @@ theorem unsoundWork_singleton (σ : Fin n → Fin m) (w : Fin m → ℕ) (cl : F
   ext t
   simp [disjoint_singleton_right]
 
-/-- Under the work law's closure draw, a set making at least `T` of the work unsound escapes with at most
-`((W − T)/W)^K`. -/
+/-- Under the work law's closure draw, a set whose unsound work is at least `T` escapes with at most `((W − T)/W)^K`. -/
 theorem closure_escape_le_work (σ : Fin n → Fin m) (w : Fin m → ℕ) (f : Fin m → ℕ) (K : ℕ) (cl : Fin n → Finset (Fin n))
     (hf : ∀ s, 1 ≤ f s) (hW : 0 < totalWork σ w) {B : Finset (Fin n)} {T : ℕ} (hT : T ≤ unsoundWork σ w cl B) :
     ((work σ w f K).closure cl).escape B ≤ (((totalWork σ w - T : ℕ) : ℝ≥0∞) / (totalWork σ w : ℝ≥0∞)) ^ K := by
   rw [closure_escape]
-  exact ((work σ w f K).escape_anti subset_union_right).trans (work_escape_le_of_le σ w f K hf hW hT)
+  exact work_escape_le_of_le σ w f K hf hW hT
 
 end Law
 
@@ -117,8 +132,8 @@ section Audits
 variable {n m : ℕ} {σ : Fin n → Fin m} {w : Fin m → ℕ} {f : Fin m → ℕ} {K : ℕ} {cl : Fin n → Finset (Fin n)}
   {Reg : Type} {session : Finset (Fin n) → Reg → Game Bool}
 
-/-- **The work audit with closure draws** (oracle layer): the audit accepts while the units its wrong units make unsound
-do at least `T` of the work with probability at most `((W − T)/W)^K + ε_ks + δ_link`. -/
+/-- **The work audit with closure draws** (oracle layer): the audit accepts while its wrong units and the units they make
+unsound do at least `T` of the work with probability at most `((W − T)/W)^K + ε_ks + δ_link`. -/
 theorem audit_work_closure (A : Analysis ((Law.work σ w f K).closure cl) Reg session) {εks δlink : ℝ≥0∞}
     (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink) (hf : ∀ s, 1 ≤ f s) (hW : 0 < Law.totalWork σ w) (T : ℕ)
     (σ' : Strategy (audit ((Law.work σ w f K).closure cl) Reg session)) :
@@ -157,8 +172,8 @@ theorem audit_work_closure_harm (A : Analysis ((Law.work σ w f K).closure cl) R
   obtain ⟨u, hu, hT⟩ := ho.2
   exact hT.trans (Law.harm_le_unsoundWork σ w cl hu)
 
-/-- **The closure audit at the sizing of record**: with `K = 27,713`, the audit accepts while the units its wrong units
-make unsound do at least 0.1% of the work with probability at most `2^-40 + ε_ks + δ_link`. -/
+/-- **The closure audit at the sizing of record**: with `K = 27,713`, the audit accepts while its wrong units and the units
+they make unsound do at least 0.1% of the work with probability at most `2^-40 + ε_ks + δ_link`. -/
 theorem audit_work_closure_of_record (A : Analysis ((Law.work σ w f 27713).closure cl) Reg session) {εks δlink : ℝ≥0∞}
     (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink) (hf : ∀ s, 1 ≤ f s) (hW : 0 < Law.totalWork σ w)
     (σ' : Strategy (audit ((Law.work σ w f 27713).closure cl) Reg session)) :
@@ -168,7 +183,7 @@ theorem audit_work_closure_of_record (A : Analysis ((Law.work σ w f 27713).clos
   gcongr
   refine iSup₂_le fun B hB => ?_
   rw [Law.closure_escape]
-  exact ((Law.work σ w f 27713).escape_anti subset_union_right).trans (Law.work_escape_of_record σ w f hf hW hB)
+  exact Law.work_escape_of_record σ w f hf hW hB
 
 end Audits
 

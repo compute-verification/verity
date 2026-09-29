@@ -385,11 +385,12 @@ differ. The stratified law is unchanged.
   - `verify` refuses a closure draw unless it holds its own closure map, and then the closure must be its own derivation
     from the drawn units. With the map, a plain work draw is refused too, since it lacks its closure.
   - What it guarantees (`soundness/FlockSoundness/Audit/Closure.lean`): a set's escape under the closure draw is the work
-    law's escape of the set with the units it makes unsound, those whose closure meets it (`closure_escape`). So a wrong
-    unit that is never drawn on its own, such as a node, is charged the work of every unit above it (`harm_le_unsoundWork`).
-    At any floors, the audit accepts while the unsound units do at least a fraction `ε` of the work with probability at most
-    `(1 − ε)^K + ε_ks + δ_link` (`audit_work_closure`). At K = 27,713 and ε = 0.1% that is `2^-40`
-    (`audit_work_closure_of_record`).
+    law's escape of the set with the units it makes unsound, those whose closure meets it (`closure_escape`). The unsound
+    work is the work of both: the closure map need not list a tile in its own closure, so the wrong units' own work is
+    counted explicitly. A wrong unit's harm is its own work and that of every unit above it, so one that is never drawn on
+    its own, such as a node, is charged all of it (`harm_le_unsoundWork`). At any floors, the audit accepts while the
+    unsound work is at least a fraction `ε` of the work with probability at most `(1 − ε)^K + ε_ks + δ_link`
+    (`audit_work_closure`). At K = 27,713 and ε = 0.1% that is `2^-40` (`audit_work_closure_of_record`).
   - `Law.widen`'s `escape_widen_le` is weaker. It carries only the base law's escape bounds, and only to a widening on the
     same coins, and those bound the wrong units' own work, not the unsound work.
 
