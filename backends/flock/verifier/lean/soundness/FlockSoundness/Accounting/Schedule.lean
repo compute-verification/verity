@@ -8,8 +8,9 @@ The verifier of record pins Flock's `fast100` Ligerito profile and runs it twice
 This file is the schedule table of §15 as data, for every `m` the profile supports (22 to 35).
 Level `ℓ` of a schedule is a Reed–Solomon code of rate `2^-logInvRate` on messages of
 `2^logCols` columns (codeword length `2^(logCols + logInvRate)`), interleaved over `2^lanes`
-rows; the verifier makes `queries` consistency queries on it. The proximity slack is
-`η = 1/50` at every level (Johnson regime).
+rows; the verifier makes `queries` consistency queries on it. The analysis slack is
+`η = 1/200` at every level (Johnson regime); the §15 value `0.02` is a diagnostic the verifier never
+reads.
 -/
 
 namespace FlockSoundness.Accounting

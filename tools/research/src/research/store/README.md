@@ -419,12 +419,13 @@ a table read the same key. One constant per key (`vocab.PROOF_CLASS`, never the 
 value form: `enum` (a closed set), `bool` (`true` | `false`), `int`, `number`, `text`, `list`. `research data vocab [--json]`
 prints the table; the groups are:
 
-- **result** — the producing lane about its own result (`ledger_to_store`, or `label` by hand): `candidate` (enum: A, B-AIR,
-  B-Ligero, C, SP1, shared), `proof_class` (enum: the contract's classes + COMPONENT), `soundness`, `K`, `B`, `hardware`,
+- **result** — the producing lane about its own result (`ledger_to_store`, or `label` by hand): `candidate` (enum: the backend
+  families A-GKR, B-Ligero, C-Flock, D-SP1, and the frozen ledger's B-AIR, C (the VOLE candidate), SP1 (D-SP1) and shared),
+  `proof_class` (enum: the contract's classes + COMPONENT), `soundness`, `K`, `B`, `hardware`,
   `authentication` (enum: included | included-hash | excluded), `campaign`, `relation`, `mode` (enum: interactive | fiat-shamir), `zk` (bool),
   `overhead`, `seconds_per_vu`, `track` (enum), `scope` (enum: unit | vu | component), `label`, `note`, `assumptions` (list),
   `omitted` (list), `domain` (`total` | `finite-only`: the operand domain the statement covers), `breakthrough` (bool); grouping and configuration a table selects on: `lane`, `row`, `sweep`, `arm`, `stage`,
-  `source`, `superseded_by`, `hash`, `sharing`, `fold` (int), `pipeline` (int).
+  `source`, `superseded_by`, `interaction_attempt_of` (the cell an interaction attempt belongs to), `hash`, `sharing`, `fold` (int), `pipeline` (int).
 - **verification** — an independent verifier, never the producer: `verified` (enum: accepted | rejected | not-transferable |
   no-dumps), `verifier`, `verifier_seconds`, `same_device` (bool), `below_bar` (bool: verified, but the whole-proof bound misses the tables' 2^-128 bar,
   so it is shown in the below-bar drill-down and never as a Table 2 cell), `outcome`; `independently_verified` (bool) is the back-fill's

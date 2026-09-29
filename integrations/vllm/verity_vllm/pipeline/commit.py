@@ -62,7 +62,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.config import option
+from verity_vllm.acquire.sources import taps as TAPS
+from verity_vllm.config import group, option
 from verity_vllm.engine import engine_profile as prof  # noqa: F401
 
 prof.apply_env()
@@ -554,7 +555,7 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
     workload requests/steps/ranks), the identity-coverage verdict, and openings drawn from the EXPECTED population (incl. the last step
     and every family) verified against the original roots.  Requests: `r<i>` in workload order; B>1 needs the per-step request->row map
     from the global Program (gprog/manifest) -- without it the map binds everything to r0 and the coverage of r1.. FAILS (fail-closed)."""
-    from verity_vllm.commit import binding as B
+    from verity_vllm.commit import binding as B, partition as PT
     from verity_vllm.check import executed_prefix as EP
 
     # [R15 manbind / COORD 5] the map's key `program_digest` is the Program of record = the required manifest's (the Build's digest; at B>=2
@@ -581,7 +582,7 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
     derived_splits = stochastic and ("sampler_splits" in _man_fams or sampling.get("splits") == "derived")
     structure = B.structure_of(com, stochastic=stochastic, derived_splits=derived_splits)
     collector = {"variant": com.name, "retention": getattr(com, "retain", None), "window_mb": args.window_mb, "window_slots": getattr(args, "window_slots", None),
-                 "arena_mb": args.arena_mb, "layout": args.layout, "gpu_tree": bool(args.gpu_tree)}
+                 "arena_mb": args.arena_mb, "layout": args.layout, "gpu_tree": bool(args.gpu_tree), **PT.partition_entry(_hdr if getattr(args, "required_manifest", None) else None)}
     # [R18 tap, F-r17-23] the FA2 tap's bounded-residency record (cap, the one allocation, peaks, split counts) beside the collector variant
     for _s in getattr(com, "sources", []) or []:
         if hasattr(_s, "tap_cap_bytes"):
@@ -594,16 +595,7 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
     step_rows = getattr(com, "step_rows", None) or {}
 
     def _logical(rid: str) -> str:
-        """Engine row id -> workload `r<i>`.  vLLM v1 suffixes the external request id with `-<8 hex>` internally; match exact, then
-        with the suffix stripped, then by prefix.  Unmapped ids stay raw (-> coverage FAILS for that request, fail-closed)."""
-        rid = str(rid)
-        if rid in order:
-            return order[rid]
-        base = rid.rsplit("-", 1)[0]
-        if base in order:
-            return order[base]
-        hits = [v for k, v in order.items() if rid.startswith(k)]
-        return hits[0] if len(hits) == 1 else rid
+        return B.logical_request(rid, order)
 
     request_rows = {int(s): [(_logical(rid), lo, hi) for rid, lo, hi in rows] for s, rows in step_rows.items()} if n_req > 1 else None
     padded = bool(getattr(com, "_padding", None))                                   # [B9.1] finalize materialised padding steps (--padded-finalize)
@@ -743,7 +735,7 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
         ok = [com.verify(rc, o) for o in ops]
     rec = {"rules_version": B.RULES_VERSION, "map_schema": bmap["schema"], "map_digest": bmap["digest"], "map_entries_n": bmap["entries_n"], "layout": bmap["layout"],
            "program_digest": pd, "program_digest_source": ("required-manifest" if man_hdr is not None else "committer"), "root_program_digest": root_pd,
-           "collector": collector, "population": {"source": ("required-manifest (lane manifest: Q_module(P) -- module-boundary population over the Program, families selected by the canonical VU query; R17-9 (ii))" if man_hdr else
+           "collector": collector, "population": {"source": (f"required-manifest (lane manifest: {((man_hdr or {}).get('query') or {}).get('query_id') or 'Q(P)'} over the Program, families selected by the canonical VU query; R17-9 (ii))" if man_hdr else
                                                              "structure(model modules x MEMBER_RULES) x workload(requests, steps=max_new, ranks)"), "manifest": man_hdr,
                                                   "digest": pop_digest, "n": pop_n, "requests": n_req, "steps": horizon, "ranks": 1, "step_rows_recorded": len(step_rows), "step_rows_why": getattr(com, "step_rows_why", None), "step_rows_src": getattr(com, "step_rows_src", None),
                                                   "modules": len(structure["modules"]), "attention_layers": len(structure["attention_layers"]), "hidden": structure["hidden"]},
@@ -991,15 +983,15 @@ def hot_unsafe_reasons(args: Options) -> list[str]:
 
 def oracle_producers_of_record(args: Options, required_manifest: dict[str, Any] | None, reqs: list[dict[str, Any]],
                                sampling: dict[str, Any]) -> tuple[dict[tuple[str, str], dict[str, Any]] | None, dict[str, Any]]:
-    """The oracle's producer facts from the Programs of record (`oracle_compare.producers_of_programs`) for a `v2-query` manifest, which
-    carries none: (facts | None, record).  The Programs are the replay's (same lookup, same of-record digest check); None + the named
-    reason when the manifest is not v2, no Program dir is given or a Program is not of record."""
+    """The oracle's producer facts from the Programs of record (`oracle_compare.producers_of_programs`, under the manifest's query) for a
+    manifest the query path built (`query.query_id` in `required.QUERIES`), which carries none: (facts | None, record).  The Programs are
+    the replay's (same lookup, same of-record digest check); None + the named reason for any other manifest, no Program dir or one not of record."""
     from verity_vllm.check import oracle_compare as OC
-    from verity_vllm.check.replay import driver as SR
     from verity_vllm.query.manifest import format as MF
+    from verity_vllm.query.required import QUERIES
     q = required_manifest.get("query") if isinstance(required_manifest, dict) else None
-    if not (isinstance(q, dict) and q.get("engine") == SR.V2_QUERY):
-        return None, {"used": False, "why": "manifest is not v2-query: its rows carry the producer annotations"}
+    if not (isinstance(q, dict) and q.get("query_id") in QUERIES):
+        return None, {"used": False, "why": "manifest is not the query path's: its rows carry the producer annotations"}
     t0 = time.monotonic()
     labels = {str(r.get("request_id")): f"r{int(r.get('index', i))}" for i, r in enumerate(reqs)}
     if getattr(args, "programs_root", None):
@@ -1019,7 +1011,7 @@ def oracle_producers_of_record(args: Options, required_manifest: dict[str, Any] 
     bad = sorted(k for k, d in digs.items() if d not in of_record)
     if bad:
         return None, {"used": False, "why": f"Program(s) {bad[:4]} not of record (of-record {sorted(x[:16] for x in of_record)})"}
-    facts = OC.producers_of_programs(loaded, aliases=(required_manifest or {}).get("op_path_aliases"))
+    facts = OC.producers_of_programs(loaded, aliases=(required_manifest or {}).get("op_path_aliases"), query=q["query_id"])
     del loaded
     return facts, {"used": True, "members": len(facts), "with_operand": sum(1 for f in facts.values() if f.get("operand")),
                    "with_consumers": sum(1 for f in facts.values() if f.get("consumers")),
@@ -1054,9 +1046,7 @@ class Options:
     hidden_so: str | None = option("--hidden-so", default=None, help="CMT-2 M1 tap FA2 extension (.so): bind the FA2 hidden stream (rows R5-R8) into the same run root")
     hidden_ns: str | None = option("--hidden-ns", default=None, help="torch.ops namespace of the tapped .so (default verity_fa2_matAll; verity_fa2_matReq for the src-59 build)")
     tap_cap_mb: int | None = option("--tap-cap-mb", type=int, default=None, help="[R18 tap, F-r17-23] cap (MiB) on the FA2 M1 tap's device buffer: a multi-sequence launch whose padded tap buffer exceeds it is " "split into sequence groups tapped one after another into ONE bounded buffer (names/bytes/roots unchanged); default 2048 " "(VERITY_FA2_TAP_CAP_MB); 0 = the unbounded per-geometry buffers (B64 llama 1024: 24.53 GiB, the r17_0738 OOM)")
-    norm_tap_so: str | None = option("--norm-tap-so", default=None, help="opt-in, never the record: the norm-scale tap op (ops/pod_norm_tap.sh) -- commit `<norm module>/norm_scale` for every norm_scales identity of the required manifest (manifest build --norm-scales; acquire.sources.norm_scale_source)")
-    router_tap_so: str | None = option("--router-tap-so", default=None, help="opt-in, never the record: the router-softmax tap op (ops/pod_router_tap.sh) -- commit `moe/L<k>/router_softmax` for every router_softmax identity of the required manifest (manifest build --router-softmax; acquire.sources.router_softmax_source)")
-    vocab_range: bool = option("--vocab-range", default=False, action="store_true", help="opt-in, never the record: commit `<embedding module>/vocab_range` for every vocab_range identity of the required manifest (manifest build --vocab-range; acquire.sources.vocab_range_source)")
+    tap_sources: TAPS.TapSources = group(TAPS.TapSources)
     value_check: bool = option("--value-check", default=False, action="store_true", help="one extra instrumented run with reference taps + re-execution (value_check.json)")
     arms: str | None = option("--arms", default=None, help="R10: comma-separated committer kinds run as separate treatment arms in one process, interleaved with the control (order rotates per round)")
     profile_hooks: bool = option("--profile-hooks", default=False, action="store_true", help="native_collect: time the hook bodies (perf_counter per call) -- profiling run, not a headline timing")
@@ -1087,6 +1077,7 @@ class Options:
     replay_max: int = option("--replay-max", type=int, default=2000, help="sampled replay: cap on the stratified sample per pair (never below one VU per stratum; recorded)")
     replay_workers: int | None = option("--replay-workers", type=int, default=None, help="sampled replay: evaluator threads (default min(16, cpus/2); recorded)")
     vu_export_dir: str | None = option("--vu-export-dir", env="VERITY_VU_EXPORT_DIR", default=None, help="opt-in, not on the record: after pair 0's replay PASSes, export a stratified sample of its VUs as benchmark instance sets into this directory (verity_vllm.pipeline.vu_export; limits.json / provenance.json there are read)")
+    serving_rows: str | None = option("--serving-rows", default=None, metavar="REQUEST_JSON", help="opt-in, not on the record: after pair 0's roots are final and before its seed, commit every RoPE head in M0's serving row format (verity_vllm.pipeline.serving_rows; the row stage writes the request: dir, partition, run, committer)")
     replay_target: list[str] | None = option("--replay-target", action="append", default=None, metavar="OP_PATH[@STEP]", help="sampled replay: add EVERY VU of a module (at a request-local step) to the sample, outside the cap -- the targeted negatives of record " "(a single-identity fault at a mid-phase step); repeatable; recorded under sample.targeted")
     program_digest: str | None = option("--program-digest", default=None, help="[R15 COORD 5] the Build's Program digest of record (B=1: build_request's program_digest; B>=2: gprog's workload digest): the " "required manifest's program_digest must equal it or the Commit fails closed as wrong-Program; also the binding map's key digest")
     required_manifest: str | None = option("--required-manifest", default=None, help="[R14 MAN-01] the Program/query-derived required-value manifest (verity_vllm.pipeline.cli build ...): every " "identity it lists (step, invocation, op_path, output_member, element range, request, rank) must be covered by a committed " "tensor of every instrumented run (coverage_check); replaces the REL-02 counts+classes source, which stays as the labelled fallback")
@@ -1175,9 +1166,9 @@ def main(args: Options, argv: list[str] | None = None) -> None:
         from verity_vllm.commit.binding import require_build_program_digest
         require_build_program_digest(args.required_manifest, args.program_digest)          # [COORD M-0205 (C1)] named refusal, before any engine
         from verity_vllm.query.manifest.format import coverage_check as manifest_coverage_check
-        required_manifest = json.load(open(args.required_manifest))
-        print(f"[delta] required-value manifest {args.required_manifest}: {required_manifest['populations']['identities']} identities "
-              f"{required_manifest['populations']['by_family']} digest {required_manifest['manifest_digest'][:16]} (Program {str(required_manifest['program_digest'])[:16]})", flush=True)
+        from verity_vllm.commit.partition import require_partition
+        required_manifest = require_partition(json.load(open(args.required_manifest)), args.programs_root, args.program_dir)
+        print(f"[delta] required-value manifest {args.required_manifest}: {required_manifest['populations']['identities']} identities {required_manifest['populations']['by_family']} digest {required_manifest['manifest_digest'][:16]} (Program {str(required_manifest['program_digest'])[:16]})", flush=True)
         if args.compiled_taps == "kernels":
             compiled_kernels.set_role_maps(required_manifest)          # BEFORE the engine compiles: capture-time copies + eager acquisitions bind the manifest's roles
             print(f"[delta] compiled kernel taps: argument roles from the manifest's role_maps {compiled_kernels.hooks_info.get('role_maps')} "
@@ -1394,9 +1385,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 print(f"[delta] fa2 tap bound (F-r17-23): cap {_hsrc.tap_cap_bytes >> 20} MiB "
                       f"({'ONE bounded device buffer; launches above it are split into sequence groups' if _hsrc.tap_cap_bytes else 'OFF: unbounded per-geometry buffers'}); "
                       f"telemetry {_hsrc.telemetry_path}", flush=True)
-        from verity_vllm.acquire.sources import norm_scale_source as _NSS, taps as _TAPS
-        required_classes = _NSS.attach(com, args, required_manifest, required_classes)     # --norm-tap-so only: the norm scales (opt-in, never the record)
-        required_classes = _TAPS.attach(com, required_manifest, required_classes, router_tap_so=args.router_tap_so, vocab_range=args.vocab_range, explicit_classes=required_classes_cli)
+        required_classes = TAPS.attach(com, required_manifest, required_classes, args.tap_sources, explicit_classes=required_classes_cli, programs=(args.program_dir, args.programs_root))
         # [R17-42 route A, moe: found on the first padded Commit (cp-moe 04:37Z, rc 139)] the MoE block source stages six planes per MoE layer
         # per step by NAME (moe/L<k>/<plane>); the gather collector lays the arena out from the required-value MANIFEST, so a plane the manifest
         # does not name has no slot and the stage is a wild write (SIGSEGV in Collector::push_desc).  Under the PADDED construction the
@@ -2315,7 +2304,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                         print(f"[delta] replay cache: pair {pair} key differs from pair {_v0['pair']}'s in {_d0}: own replay (root {rc.run_root.hex()[:16]} vs {_v0['run_root'][:16]})", flush=True)
                     TL.start("validate.sampled_replay", pair=pair, cached=_cached is not None)
                     try:
-                        from verity_vllm.check import executed_prefix as EPX, oracle_compare as OC; from verity_vllm.check.replay import replay_codes as RC, driver as SR; from verity_vllm.pipeline import vu_store as VUX
+                        from verity_vllm.check import executed_prefix as EPX, oracle_compare as OC; from verity_vllm.check.replay import replay_codes as RC, driver as SR; from verity_vllm.pipeline import vu_store as VUX, serving_rows as SRW
                         from verity_vllm.query.manifest import format as MF
                         if _cached is not None:
                             raise _ReplayReused()
@@ -2356,8 +2345,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                             print(f"[delta] replay/linkage arrivals follow the engine schedule of record: {_arr} (declared {_sched_r.get('declared_arrive_steps')})", flush=True)
                         _k0 = next(iter(_progs))
                         _pi0 = SR.ProgramIndex(_progs[_k0], program_dir=_loaded[_k0].get("dir"))
-                        _wp = SR.model_weights_provider(eng.model, _pi0.prefix)
-                        _rd = OC.OpenedReader(com, rc)
+                        _wp, _rd = SRW.readers(args.serving_rows, com, rc, SR.model_weights_provider(eng.model, _pi0.prefix), _progs, _bm, _arr, _loaded, required_manifest, args.label)
                         # [O5] the weight slices the relations consume must be the COMMITTED weights: re-register the live parameters now and
                         # compare the root with the run's weights root (registered before the workload; a param swap after it is a named FAIL)
                         _wc: dict[str, Any]

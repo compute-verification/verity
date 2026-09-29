@@ -500,35 +500,35 @@ theorem prCoin_linkBad_le (A : Arith F K) (hA : A.Correct) (S : Statement)
       _ ≤ _ := zero_le
 
 open Classical in
-/-- **The link points** (§16.2), for a list of at most `L` codewords near the committed table: if
-the committed values do not satisfy the statement, the link points leave some rep start
-undoomed with probability at most `L·|regions|·(m_pts/|F|)²`. -/
-theorem link_sound_of_card (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Schedule)
-    (ptLocal mPts : ℕ) (C : Oracle F) (hC : ¬ Committed A S sch C)
+/-- **The link points** (§16.2), for a list `W` of at most `L` messages none of which packs a
+satisfying witness: the link points leave some rep start undoomed over `W` with probability at
+most `L·|regions|·(m_pts/|F|)²`. -/
+theorem link_sound_of_list (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Schedule)
+    (ptLocal mPts : ℕ) (W : Set (Message F sch.k0 sch.level₀.logCols))
+    (hC : ¬ ∃ M ∈ W, S.Satisfies (wit A S sch M))
     (hlay : S.LinkLayout ptLocal mPts) (L : ℕ)
-    (hL : (Finset.univ.filter fun M => M ∈ closeMsgs A sch C).card ≤ L) :
+    (hL : (Finset.univ.filter fun M => M ∈ W).card ≤ L) :
     prCoin (fun pts : Fin 2 → Fin mPts → F =>
-        ¬ RepDoomed A S sch C (extraClaims S ptLocal mPts pts)) ≤
+        ¬ RepDoomedW A S sch W (extraClaims S ptLocal mPts pts)) ≤
       L * (S.regions.length * ((mPts : ℝ≥0∞) / Fintype.card F) ^ 2) := by
   classical
-  set s := Finset.univ.filter fun M => M ∈ closeMsgs A sch C
+  set s := Finset.univ.filter fun M => M ∈ W
   calc prCoin (fun pts : Fin 2 → Fin mPts → F =>
-          ¬ RepDoomed A S sch C (extraClaims S ptLocal mPts pts))
+          ¬ RepDoomedW A S sch W (extraClaims S ptLocal mPts pts))
       ≤ prCoin (fun pts => ∃ M ∈ s, ∃ R ∈ S.regions.toFinset,
           LinkBad S R ptLocal mPts (wit A S sch M) pts) := by
         refine prCoin_mono fun pts h => ?_
-        simp only [RepDoomed, not_forall, not_not] at h
-        obtain ⟨M, hclose, hr1cs, hpin, hext⟩ := h
-        have hsat : ¬ S.Satisfies (wit A S sch M) := fun hs => hC ⟨M, hclose, hs⟩
+        simp only [RepDoomedW, not_forall, not_not] at h
+        obtain ⟨M, hMW, hr1cs, hpin, hext⟩ := h
+        have hsat : ¬ S.Satisfies (wit A S sch M) := fun hs => hC ⟨M, hMW, hs⟩
         have hreg : ¬ ∀ R ∈ S.regions, ∀ (o : Fin (2 ^ S.nbl)) (i : ℕ)
             (_hi : i < 2 ^ R.free.length), ∀ h : R.inBlock i < 2 ^ S.kLog,
               S.block (wit A S sch M) o ⟨R.inBlock i, h⟩ = R.bits o i :=
           fun hr => hsat ⟨hr1cs, hpin, hr⟩
         push Not at hreg
         obtain ⟨R, hR, o, i, hi, hib, hne⟩ := hreg
-        refine ⟨M, by simp only [s, Finset.mem_filter, Finset.mem_univ, true_and, closeMsgs,
-          Set.mem_setOf_eq]; exact hclose, R, List.mem_toFinset.2 hR,
-          ⟨o, i, hi, hib, hne⟩, hext _ ?_, hext _ ?_⟩
+        refine ⟨M, by simp only [s, Finset.mem_filter, Finset.mem_univ, true_and]; exact hMW,
+          R, List.mem_toFinset.2 hR, ⟨o, i, hi, hib, hne⟩, hext _ ?_, hext _ ?_⟩
         · exact List.mem_flatMap.2 ⟨R, hR, by simp⟩
         · exact List.mem_flatMap.2 ⟨R, hR, by simp⟩
     _ ≤ ∑ M ∈ s, prCoin (fun pts => ∃ R ∈ S.regions.toFinset,
@@ -544,5 +544,18 @@ theorem link_sound_of_card (A : Arith F K) (hA : A.Correct) (S : Statement) (sch
         simp only [Finset.sum_const, nsmul_eq_mul]
         gcongr
         all_goals first | exact_mod_cast hL | exact_mod_cast List.toFinset_card_le _
+
+open Classical in
+/-- **The link points** for the codewords near the committed table: `link_sound_of_list` at
+`closeMsgs`. -/
+theorem link_sound_of_card (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Schedule)
+    (ptLocal mPts : ℕ) (C : Oracle F) (hC : ¬ Committed A S sch C)
+    (hlay : S.LinkLayout ptLocal mPts) (L : ℕ)
+    (hL : (Finset.univ.filter fun M => M ∈ closeMsgs A sch C).card ≤ L) :
+    prCoin (fun pts : Fin 2 → Fin mPts → F =>
+        ¬ RepDoomed A S sch C (extraClaims S ptLocal mPts pts)) ≤
+      L * (S.regions.length * ((mPts : ℝ≥0∞) / Fintype.card F) ^ 2) := by
+  simp only [repDoomed_iff]
+  exact link_sound_of_list A hA S sch ptLocal mPts _ (fun ⟨M, hM, hs⟩ => hC ⟨M, hM, hs⟩) hlay L hL
 
 end FlockSoundness

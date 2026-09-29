@@ -1,7 +1,7 @@
 """Subcircuit bodies the interface fixes canonically, so both tracks derive one digest.
 
 A subcircuit that originates at the interface (the serving exporter projects a
-captured verification unit to it) is identified by
+captured proof unit to it) is identified by
 :func:`~veritor.interface.typed_obligation.subcircuit_digest` of its body.
 Two exporters that build "the same" GEMM coordinate must therefore build the
 *same body* -- the same incoming order, the same gate order, the same argument
@@ -67,10 +67,10 @@ def make_subcircuit(
 #: ``W[j, :]`` and producing the one word ``out[j]``; its body is ``tc_dot16_0``,
 #: ``tc_dot16`` chained over the 16-slices, ``f32_to_bf16``, every gate one
 #: ``Value<w>``.  Those calls and gates are the canonical circuit; a coordinate
-#: obligation is a subcircuit of it.  That production's batch-invariant kernel
+#: obligation is a subcircuit of it.  That the batch-invariant serving kernel
 #: implements this ``Gemm`` is the serving side's conformance evidence (roles, IR
 #: §10: specification = this body over L1's family; reference evaluators =
-#: veritor.core.tc / the guest's common crate / Lean TCB; production implementation
+#: veritor.core.tc / the guest's common crate / Lean TCB; serving implementation
 #: = matmul_persistent; proof checker = the guest).
 GEMM_WITHIN = "Gemm"
 
@@ -115,7 +115,7 @@ def gemm_accumulator_fp8(k: int, *, step_k: int = 32) -> Subcircuit:
     Incoming values ``0 .. k`` are the A operands (8-bit E4M3 words), ``k .. 2k`` the B operands, ascending ``k``.
     Gate ``0`` is ``tc_dot{step_k}_0(a[0:step_k], b[0:step_k])``; gate ``s`` is ``tc_dot{step_k}(acc_{s-1}, ...)``;
     the last accumulator word is the one outgoing value -- there is **no** epilogue cast: the scale-and-
-    ``cvt.rn.satfinite.e4m3x2`` store of a production FP8 GEMM is a separate relation.  The ops are those of
+    ``cvt.rn.satfinite.e4m3x2`` store of a serving FP8 GEMM is a separate relation.  The ops are those of
     ``veritor.tensor-core.<pipeline>@2`` (:func:`verity.proofs.families.make_tensor_core_gate_set`) for a
     ``step_k``-wide pipeline; the body is the same for Hopper (one group of 32) and Ada (two of 16): the grouping is
     the gate's semantics, not the program's.  Draft: no guest checks this family yet.
@@ -144,7 +144,7 @@ def gemm_accumulator_nvfp4(k: int, *, step_k: int = 64, block: int = 16) -> Subc
     ``2k + k/block .. 2(k + k/block)`` scales).  Gate ``s`` is ``tc_dot{step_k}[_0](acc, a codes[s], a scales[s], b codes[s],
     b scales[s])`` -- one operand of a step is its ``step_k`` codes followed by its ``step_k / block`` scale bytes, the
     argument order ``BlockScaledAlignAdd.step`` takes (:func:`verity.proofs.families.tensor_core_gates`).  No
-    epilogue cast (the production NVFP4 store -- scale, then quantise -- is a separate relation).  Draft: no guest
+    epilogue cast (the serving NVFP4 store -- scale, then quantise -- is a separate relation).  Draft: no guest
     checks this family yet.
     """
 
@@ -185,8 +185,8 @@ def input_equation(expected: int, width: int = 16) -> Subcircuit:
 
 
 def elementwise(gate: str, arity: int, width: int = 16, *, prim: str = "", kind: str = "") -> Subcircuit:
-    """``<gate>`` over ``arity`` incoming ``Value<width>`` words: the body of one elementwise verification unit (a
-    batch member or primitive VU of a registered primitive the approved guest evaluates as one gate -- ``silu_mul_bf16``
+    """``<gate>`` over ``arity`` incoming ``Value<width>`` words: the body of one elementwise proof unit (a
+    batch member or primitive proof unit of a registered primitive the approved guest evaluates as one gate -- ``silu_mul_bf16``
     over the gate/up words, ``bf16_add_f2fp`` over the two residual words, ``rope_out``/``rope_out_add`` over
     ``(x, y, cos, sin)``).  Incoming values are the primitive's operands in its signature order; gate 0 is the one
     outgoing value.  ``prim``/``kind`` annotate (``Definition``; not in the digest).

@@ -265,7 +265,7 @@ def result(a, input_set, low, p: dict, sweep: dict, pin: str) -> dict:
         extra = {"key_counts": {str(t): Ts.count(t) for t in sorted(set(Ts))},
                  "key_class": {"T": [a.klass.lo, a.klass.hi], "pin": pin, "manifest": "flock-ir-class/v1"}}
     fp = contract.fingerprint(
-        profile=None, domain="finite", K=None, B=n, proof_class="NON_ZK_PROOF", authentication="included-hash", zk_mode="none",
+        profile=None, domain=low.domain, K=None, B=n, proof_class="NON_ZK_PROOF", authentication="included-hash", zk_mode="none",
         security={"target": -128, "achieved_log2": PER_PROOF_LOG2 + math.log2(len(p["subbatches"])), "per_proof_log2": PER_PROOF_LOG2,
                   "proofs": len(p["subbatches"]), "union": "union bound over the batch's sequential sub-batch proofs",
                   "profile": "flock-128-r2", "reps": 2, "per_rep_log2": -97.8, "coins": "live verifier (flock-live R1-R8)"},

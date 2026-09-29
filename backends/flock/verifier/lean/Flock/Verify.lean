@@ -25,7 +25,7 @@ structure Setup where
   deriving Inhabited
 
 def Setup.ofCircuit (st : Stmt) : Setup :=
-  { spec := st.spec, m := st.m, kLog := st.c.kLog, digest := st.digest, fold := st.circuitFold,
+  { spec := st.spec, m := st.m, kLog := st.c.kLog, digest := st.digest.extract 0 32, fold := st.circuitFold,
     extra := st.extraClaims, merkle := st.merkle,
     publics := fun p => if p.size == 0 then pure () else throw "S8: the circuit statement commits no public words" }
 
@@ -36,7 +36,9 @@ def verifyRep (st : Setup) (sch : Schedule) (sess : Session) (r : Nat) (bytes : 
   let name := s!"{st.spec.table}/rep{r}"
   let some stream := sess.streams.find? (·.name == name) | throw s!"S11: no stream {name}"
   let extras ← st.extra sess.points
-  let p ← decodeProof { m := st.m, kLog := st.kLog, claims := 2 + extras.size, sched := sch, hashLen := st.merkle.digestLen } bytes
+  let saltLen : Option Nat := if st.merkle.saltBytes = 0 then none else some st.merkle.saltBytes
+  let shape : Shape := { m := st.m, kLog := st.kLog, claims := 2 + extras.size, sched := sch, hashLen := st.merkle.digestLen, saltLen }
+  let p ← decodeProof shape bytes
   if p.params != pcsParams st.merkle sch then throw "R7/F2: the proof's PCS parameters are not the pinned fast100 parameters"
   let prog : TM Unit := do
     let zc ← bindAndZerocheck st.m st.digest (p.cap.foldl (· ++ ·) ByteArray.empty) p.zerocheck
@@ -57,10 +59,10 @@ def verify (st : Setup) (record : String) (proofs : Array ByteArray) : V Unit :=
   if proofs.size != 2 then throw "two proofs expected"
   let want := [s!"{st.spec.table}/rep0", s!"{st.spec.table}/rep1"]
   if sess.proofSha.size != 2 || !want.all (fun w => sess.proofSha.any (·.1 == w)) then
-    throw "S17: proof_sha256 does not list exactly the two rep streams"
+    throw s!"S17: proof_{st.spec.dk} does not list exactly the two rep streams"
   for r in [0:2] do
     let sha := (sess.proofSha.find? (·.1 == want[r]!)).map (·.2)
-    if sha != some (hexOf (Sha256.hash proofs[r]!)) then throw s!"S17: {want[r]!}: the proof is not the one the server received"
+    if sha != some (hexOf (st.spec.dg proofs[r]!)) then throw s!"S17: {want[r]!}: the proof is not the one the server received"
   let c0 ← verifyRep st sch sess 0 proofs[0]!
   let c1 ← verifyRep st sch sess 1 proofs[1]!
   if c0 != c1 then throw "S18/R1: the reps' caps differ"

@@ -105,7 +105,7 @@ theorem foldLoL_W0 [CharP K 2] (A : Arith F K) (n : ℕ) (b : ℕ → F) (z₀ :
 /-- **The level-0 folds.** From a level-0 claim false for every message of the list against
 `W0`, after the folds by `initial` the claim is false for every fold, against `resAt` with the
 level-0 OOD claim, and no round was an MCA event, except with probability `foldError`. -/
-theorem phaseB0 (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) (hA : A.Correct) (n : ℕ)
+theorem phaseB0 (A : Arith F K) (hA : A.Correct) (n : ℕ)
     (b : ℕ → F) (l : Level) (hl : l.Ok) (hf : l.Fits) (k0 : ℕ) (hk0 : l.lanes = k0)
     (hn : n = k0 + l.logCols) (C : Oracle F) (z₀ : List F) (hz : z₀.length = n) (β₀ : F) (s₀ : K)
     (q₀ : Quad K) (hq₀ : q₀.eval 0 + q₀.eval 1 = s₀) (dim : ℕ)
@@ -142,7 +142,7 @@ theorem phaseB0 (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) (hA : A.Correc
       rfl
   have hmcaε : ∀ U : Fin 2 → Fin (2 ^ l.logLen) → K,
       prCoin (fun γ : K => IsMCA (AffineLineGenerator K) (codeK A hA l hf) γ U l.radius) ≤
-        ENNReal.ofReal (l.mcaA / qK) := prCoin_level_mca_le hMCA A hA l hl hf
+        ENNReal.ofReal (l.mcaA / qK) := prCoin_level_mca_le A hA l hl hf
   have hsumε := value_foldRounds_sum_le A hA S u v k0 l.logCols s₀ q₀ hq₀
     (fun M hM => by rw [← hn]; exact hdoom M hM)
   calc value _ (foldRounds A k0 s₀ q₀)
@@ -194,7 +194,7 @@ theorem ofReal_lastLevel (A : Arith F K) (hA : A.Correct) (l : Level) (hl : l.Ok
 
 /-- **The last level.** From `PreFold` on the last level, its folds, its queries against the
 clear residual and the final check accept with probability at most `lastLevelError`. -/
-theorem finalStage (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) (hA : A.Correct) (n : ℕ)
+theorem finalStage (A : Arith F K) (hA : A.Correct) (n : ℕ)
     (b : ℕ → F) (initial : List K) (ext : ℕ) (l : Level) (hl : l.Ok) (hf : l.Fits)
     (hlanes : 1 ≤ l.lanes) (hQ : l.queries ≤ 2 ^ 64) (hext : l.logCols = ext) (e : ℕ)
     (st : LigState F K) (hpre : PreFold A n b initial l st.prev e st) :
@@ -273,7 +273,7 @@ theorem finalStage (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) (hA : A.Cor
       Finset.sum_congr rfl fun y _ => mul_comm _ _
     rw [hc] at hacc
     linear_combination -hacc
-  · exact add_le_add (phaseB hMCA A hA n b initial l hl hf st.prev e st hpre hlanes) le_rfl |>.trans
+  · exact add_le_add (phaseB A hA n b initial l hl hf st.prev e st hpre hlanes) le_rfl |>.trans
       (ofReal_lastLevel A hA l hl)
 
 /-! ## Every level -/
@@ -330,7 +330,7 @@ theorem phaseA' (A : Arith F K) (hA : A.Correct) (n : ℕ) (b : ℕ → F) (init
 
 /-- **Every level.** From `PreFold` on the first of chained levels, the recursive rounds accept
 with probability at most `ligeritoError`. -/
-theorem value_recursiveRounds_le (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K)
+theorem value_recursiveRounds_le (A : Arith F K)
     (hA : A.Correct) (n : ℕ) (b : ℕ → F) (initial : List K) (ext : ℕ) :
     ∀ (levs : List Level) (st : LigState F K) (e : ℕ), levelsChained levs ext = true →
       PreFold A n b initial (levs.headD default) st.prev e st →
@@ -340,7 +340,7 @@ theorem value_recursiveRounds_le (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F 
   | [l], st, e, h, hpre => by
       simp only [levelsChained, Bool.and_eq_true, decide_eq_true_eq] at h
       obtain ⟨hl, hf, hlanes, hQ⟩ := levelGood_spec h.1
-      exact finalStage hMCA A hA n b initial ext l hl hf hlanes hQ h.2 e st hpre
+      exact finalStage A hA n b initial ext l hl hf hlanes hQ h.2 e st hpre
   | l :: l' :: rest, st, e, h, hpre => by
       have h' := h
       simp only [levelsChained, Bool.and_eq_true, decide_eq_true_eq] at h'
@@ -355,7 +355,7 @@ theorem value_recursiveRounds_le (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F 
         fun out hpost => ?_).trans ?_
       · obtain ⟨ch, s, q⟩ := out
         exact phaseA' A hA n b initial l l' hf hf' hQ l.lanes ch _ hpost hdim _ rfl _ _
-          fun C' st' hpre' => value_recursiveRounds_le hMCA A hA n b initial ext (l' :: rest)
+          fun C' st' hpre' => value_recursiveRounds_le A hA n b initial ext (l' :: rest)
             { st' with prev := C', prevLevel := l' } l.logCols hrest
             ⟨hpre'.sum, hpre'.ok, hpre'.dim, hpre'.doom⟩
       · have hok := levelsChained_ok hrest
@@ -368,7 +368,7 @@ theorem value_recursiveRounds_le (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F 
             (ENNReal.ofReal (midA l l') + ENNReal.ofReal (ligeritoError (l' :: rest)))
             ≤ ENNReal.ofReal (l.foldError (max l.listBound l'.listBound)) +
               (ENNReal.ofReal (midA l l') + ENNReal.ofReal (ligeritoError (l' :: rest))) :=
-              add_le_add ((phaseB hMCA A hA n b initial l hl hf st.prev e st hpre hlanes).trans
+              add_le_add ((phaseB A hA n b initial l hl hf st.prev e st hpre hlanes).trans
                 (ENNReal.ofReal_le_ofReal (foldError_mono l (le_max_left _ _)))) le_rfl
           _ = ENNReal.ofReal (ligeritoError (l :: l' :: rest)) := by
               rw [ligeritoError, midLevelError_eq, ENNReal.ofReal_add (add_nonneg hfe hm) hr,
@@ -395,7 +395,7 @@ theorem ligerito_eq (A : Arith F K) (m k0 : ℕ) (l₀ l₁ : Level) (rest : Lis
 /-- **Ligerito is sound.** For a schedule of the `fast100` shape, if the claim `Σ_y f(y)·b(y) = T`
 is false for every message near the committed level-0 table, Ligerito accepts with probability
 at most `L₀/|F| + ligeritoError`. -/
-theorem ligerito_sound (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) (hA : A.Correct)
+theorem ligerito_sound (A : Arith F K) (hA : A.Correct)
     (sch : Schedule)
     (hshape : 2 ≤ sch.levels.length ∧ (sch.levels.headD default).lanes = sch.k0 ∧
       sch.m - 7 = sch.k0 + (sch.levels.headD default).logCols ∧
@@ -456,10 +456,10 @@ theorem ligerito_sound (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) (hA : A
         exact phaseA' A hA (m - 7) b initial l₀ l₁ hf₀ hf₁ hQ₀ k0 initial
           ⟨s, q, m - 7 - k0 + 1, [], [⟨List.ofFn z₀, β₀, none⟩], [], C, l₀⟩ hpost hdim₀
           (m - 7 - k0 + 1) (by omega) _ _ fun C' st' hpre' =>
-            value_recursiveRounds_le hMCA A hA (m - 7) b initial ext (l₁ :: rest)
+            value_recursiveRounds_le A hA (m - 7) b initial ext (l₁ :: rest)
               { st' with prev := C', prevLevel := l₁ } l₀.logCols hrest
               ⟨hpre'.sum, hpre'.ok, hpre'.dim, hpre'.doom⟩
-      · refine add_le_add (phaseB0 hMCA A hA (m - 7) b l₀ hl₀ hf₀ k0 hk0 hn C (List.ofFn z₀)
+      · refine add_le_add (phaseB0 A hA (m - 7) b l₀ hl₀ hf₀ k0 hk0 hn C (List.ofFn z₀)
           (by simp) β₀ (s₀ β₀) _ hq₀ (m - 7 - k0 + 1) fun M hM h => hβ₀ ⟨M, hM, h⟩) le_rfl
   · have hok := levelsChained_ok hchain
     have hq : (0 : ℝ) < qF := by unfold qF; positivity

@@ -41,6 +41,8 @@ structure Range where
   pos0 : Nat
   count : Nat
   role : Role
+  /-- aligned to its slot only, spanning its count (PR #83's `sha512x3` range); else aligned to its power-of-two span -/
+  packed : Bool := false
   deriving Inhabited, Repr
 
 def Range.start (r : Range) : Nat := r.pos0 * 2 ^ r.slotLog
@@ -73,6 +75,19 @@ structure Circuit where
   leafScheme : String
   perVu : Array Nat
   wires : Array Wire
+  /-- the `sha512x3` and `hm96` circuits of an `hm96-sha512/row/v1` statement (`Flock.HmRow`) -/
+  shaNet : Nat := 0
+  hmNet : Nat := 0
+  /-- the class of every instance (PR #83 from `e51e2b86`): SHA-512 of the file without META's bindings; empty before -/
+  classSha : ByteArray := ByteArray.empty
+  /-- META, for its bindings (`program_sha512`, `partition`) -/
+  metaJ : Json := Json.null
+  /-- the circuit whose output group holds the returned outputs: the unit, or (a tail that returns them) its last stage -/
+  outNet : Nat := 0
+  /-- `outNet`'s output ports that are the output words (a stage), in output-leaf order (META `out_net_ports`) -/
+  outNetPorts : Array Nat := #[]
+  /-- the unit inputs that are row words (`(unit, input port, leaf)`): the low 16 bits are the word's message bits -/
+  leafCuts : Array (Nat × Nat × Nat) := #[]
   deriving Inhabited
 
 namespace Circuit
@@ -210,14 +225,15 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
     | .ok _ => throw "META: lookups is not an object"
     | .error _ => pure #[]
   for (name, spec) in lks do
-    let some (_, sha, size) := MUFU_TABLES.find? (·.1 == name) | throw "META: a lookup of a table the statement does not pin"
-    if (← J.str spec "sha256" ctx) != sha || (← J.str spec "table" ctx) != name || (← J.nat spec "out_bits" ctx) != 31 then
+    let some pinned := MUFU_TABLES.find? (·.name == name) | throw "META: a lookup of a table the statement does not pin"
+    let size := pinned.words
+    if (← J.str spec "sha256" ctx) != pinned.sha256 || (← J.str spec "table" ctx) != name || (← J.nat spec "out_bits" ctx) != 31 then
       throw s!"META: lookup {name} is not the pinned table"
     let n ← J.nat spec "in_bits" ctx
     let lo ← J.nat spec "lo_bits" ctx
     if 2 ^ n != size || !(2 ≤ lo && lo < n) then throw s!"META: lookup {name}'s index is not its table's"
     let some (_, words) := tables.find? (·.1 == name) | throw s!"the circuit has a lookup of {name}: its table is not given"
-    if words.size != 4 * size || hexOf (Sha256.hash words) != sha then throw s!"MUFU table {name}: not the pinned table"
+    if words.size != 4 * size || hexOf (Sha512.hash words) != pinned.sha512 then throw s!"MUFU table {name}: not the pinned table"
     nets := nets.push (s!"lookup:{name}", ← Lookup.build s!"lookup:{name}" words n lo 31)
   let ports ← (← J.arr mj "ports" ctx).mapM fun p => do
     let a ← J.asArr p s!"{ctx}: a port"
@@ -240,7 +256,7 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
       | .ok (Json.str "parents"), .ok p => pure (Role.parents (← J.asNat p "range port"))
       | .error _, .error _ => pure Role.none
       | _, _ => throw "a range of an unknown role"
-    pure (⟨kind, ← J.nat r "slot_log" ctx, ← J.nat r "pos0" ctx, ← J.nat r "count" ctx, role⟩ : Range)
+    pure ({ kind, slotLog := ← J.nat r "slot_log" ctx, pos0 := ← J.nat r "pos0" ctx, count := ← J.nat r "count" ctx, role } : Range)
   let leavesIn ← intLists mj "leaves_in"
   let leavesOut ← (← intLists mj "leaves_out").mapM fun u => u.mapM fun x =>
     if x < 0 then (throw "META: a negative output leaf" : V Nat) else pure x.toNat

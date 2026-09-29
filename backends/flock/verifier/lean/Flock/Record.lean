@@ -3,6 +3,7 @@ PROTOCOL.md §5: the session record (`flock-live-session/v1`) and the session ch
 -/
 import Lean.Data.Json
 import Flock.Transcript
+import Flock.Draw
 
 namespace Flock
 
@@ -27,7 +28,17 @@ structure SessionSpec where
   points : Nat := 2
   /-- the statement's coin server retains every round's bytes: each round must carry them (§6.2) -/
   retainRounds : Bool := false
+  /-- the statement's unit draw (the public header's `unit_draw`, §7.3) and its instance count -/
+  unitDraw : Option Json := none
+  instances : Nat := 0
+  /-- the record's digests are SHA-512 under `_sha512` keys (PR #83's `SessionConfig::sha512_digests`), else SHA-256 -/
+  sha512Digests : Bool := false
   deriving Inhabited
+
+/-- The record's digest key suffix and hash (`dk`, `dg`). -/
+def SessionSpec.dk (spec : SessionSpec) : String := if spec.sha512Digests then "sha512" else "sha256"
+def SessionSpec.dg (spec : SessionSpec) (b : ByteArray) : ByteArray :=
+  if spec.sha512Digests then Sha512.hash b else Sha256.hash b
 
 structure Session where
   rootF : ByteArray
@@ -91,22 +102,29 @@ def decode (spec : SessionSpec) (text : String) : V Session := do
   check ((← str l "mode") == "exchange") "S3/E1: link.mode is not exchange"
   -- S4
   check ((← str l "sigma") == hexOf spec.sigma) "S4: the record's Σ is not the statement's"
+  -- U1–U3 (§7.3): a null draw is no draw
+  let recDraw := match j.getObjVal? "unit_draw" with
+    | .ok Json.null => none
+    | .ok d => some d
+    | .error _ => none
+  Draw.check recDraw spec.unitDraw spec.instances
+  let dk := spec.dk
   let t := spec.table
   -- S5
   let rootB ← unhex (← str (← fld l "root_b") t)
   check (rootB.size > 0) "S5: empty root_B"
-  check ((← str (← fld l "root_b_sha256") t) == hexOf (Sha256.hash rootB)) "S5: root_b differs from root_b_sha256"
+  check ((← str (← fld l s!"root_b_{dk}") t) == hexOf (spec.dg rootB)) s!"S5: root_b differs from root_b_{dk}"
   -- S6 (D1: root_F = Σ)
   let rootF ← unhex (← str l "root_f")
   check (rootF.size > 0) "S6: empty root_F"
-  check ((← str l "root_f_sha256") == hexOf (Sha256.hash rootF)) "S6: root_f differs from root_f_sha256"
+  check ((← str l s!"root_f_{dk}") == hexOf (spec.dg rootF)) s!"S6: root_f differs from root_f_{dk}"
   check (rootF == spec.sigma) "S6/D1: root_F is not Σ"
   -- S7 (an absent key is empty bytes)
   let pubs ← fld l "publics"
-  let pubShas ← fld l "publics_sha256"
+  let pubShas ← fld l s!"publics_{dk}"
   let publics ← if isNull pubs t then pure ByteArray.empty else unhex (← str pubs t)
   if !(publics.size == 0 && isNull pubShas t) then
-    check ((← str pubShas t) == hexOf (Sha256.hash publics)) "S7: publics differ from publics_sha256"
+    check ((← str pubShas t) == hexOf (spec.dg publics)) s!"S7: publics differ from publics_{dk}"
   -- S9
   let pts ← (← arr l "points").mapM fun p => match p.getArr? with
     | .ok a => f128s a
@@ -121,17 +139,17 @@ def decode (spec : SessionSpec) (text : String) : V Session := do
     let rounds ← (← arr s "rounds").mapIdxM fun k r => do
       check ((← nat r "k") == k) s!"S12: {name}: rounds out of order"
       let n ← nat r "n"
-      let sha ← unhex (← str r "msg_sha256")
+      let sha ← unhex (← str r s!"msg_{dk}")
       let coins ← f128s (← arr r "coins")
-      check (1 ≤ n && n ≤ 65536 && coins.size == n && sha.size == 32) s!"S12: {name} round {k} is malformed"
+      check (1 ≤ n && n ≤ 65536 && coins.size == n && sha.size == (spec.dg ByteArray.empty).size) s!"S12: {name} round {k} is malformed"
       -- the framed bytes, when the server retained them: bound to the digest, then compared exactly at replay (§6.2)
       check (!spec.retainRounds || !isNull r "msg") s!"S12: {name} round {k}: the statement retains round bytes and the record has none"
       let bytes ← if isNull r "msg" then pure none else do
         let b ← unhex (← str r "msg")
-        check (Sha256.hash b == sha && b.size == (← nat r "msg_len")) s!"S12: {name} round {k}: the retained bytes are not the recorded digest's"
+        check (spec.dg b == sha && b.size == (← nat r "msg_len")) s!"S12: {name} round {k}: the retained bytes are not the recorded digest's"
         pure (some b)
       pure (⟨n, sha, coins, bytes⟩ : Round)
-    let rootSha := match (← fld s "root_sha256").getStr? with
+    let rootSha := match (← fld s s!"root_{dk}").getStr? with
       | .ok x => some x
       | .error _ => none
     pure (⟨name, ← str s "parent", ← str s "label", ← nat s "at", rootSha, rounds⟩ : StreamRec)
@@ -140,14 +158,14 @@ def decode (spec : SessionSpec) (text : String) : V Session := do
   for s in streams do
     let r := if s.name == s!"{t}/rep0" then 0 else 1
     check (s.parent == "" && s.at_ == 0 && s.label == spec.domain r && s.rounds.size > 0) s!"S11: {s.name} is not a root stream of this statement"
-    check (s.rootSha == some (hexOf (Sha256.hash rootB))) s!"S13/R1: {s.name} bound a root other than the committed root_B"
+    check (s.rootSha == some (hexOf (spec.dg rootB))) s!"S13/R1: {s.name} bound a root other than the committed root_B"
   -- S14
   let mut lb := rootF ++ rootB
   for p in pts do
     for c in p do lb := F128.pushBytes lb c
   for c in y do lb := F128.pushBytes lb c
-  check ((← str j "link_sha256") == hexOf (Sha256.hash lb)) "S14: link_sha256 is not the exchange it covers"
-  let proofSha ← (← arr j "proof_sha256").mapM fun p => do pure ((← str p "stream"), (← str p "sha256"))
+  check ((← str j s!"link_{dk}") == hexOf (spec.dg lb)) s!"S14: link_{dk} is not the exchange it covers"
+  let proofSha ← (← arr j s!"proof_{dk}").mapM fun p => do pure ((← str p "stream"), (← str p dk))
   return { rootF, rootB, publics, points := pts, y, streams, proofSha }
 
 end Record

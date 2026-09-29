@@ -4062,7 +4062,7 @@
      "tool": "redigest.py art:82c73709/honest OUT; redigest.py --retain art:82c73709/honest OUT --upstream-checks link_sigma,retained_bytes",
      "cases": "as in the first set; the proofs' 64-byte digests are read off PcsParams.merkle_hash; retained-not-digest is rejected by both (no divergence at 631567f7)"
     },
-    "lean_statement": "verity/flock-circuit",
+    "lean_statement": "verity/flock-circuit@631567f7",
     "forgeries": "art:2fb50856",
     "forgeries_note": "14 selftest forgeries that run a session, expectations in each case.json; cross_session_replay_both_reps is now caught at R2 by the retained bytes (both verifiers)",
     "fuzz": {
@@ -4107,7 +4107,7 @@
     "mutants": {
      "tool": "as in the previous set, on art:24aba3a2/honest"
     },
-    "lean_statement": "verity/flock-circuit",
+    "lean_statement": "verity/flock-circuit@631567f7",
     "forgeries": "art:d13d622c",
     "forgeries_note": "15 selftest forgeries; relabelled_circuit and tail_swapped_circuit_refused need two RMSNorm statements in memory and were OOM-killed on a 15 GB VM (not an abort): M0 recorded them (next set)",
     "agreement": "r20260927-012244-342d (result art:a59f3cb2): 63/63"
@@ -4129,7 +4129,7 @@
      "link_sigma",
      "retained_bytes"
     ],
-    "lean_statement": "verity/flock-circuit",
+    "lean_statement": "verity/flock-circuit@631567f7",
     "selftest": [
      "art:1100e385/rope-head/records-cpu",
      "art:1100e385/rope-head/records-gpu"
@@ -4155,18 +4155,169 @@
      "link_sigma",
      "retained_bytes"
     ],
-    "lean_statement": "verity/flock-circuit",
+    "lean_statement": "verity/flock-circuit@631567f7",
     "selftest": [
      "art:1100e385/rmst128/records-cpu",
      "art:1100e385/rmst128/records-gpu"
     ],
     "selftest_note": "expectations and upstream's live verdicts in each case.json; aborted cases (refused at Hello) replay with empty proof files; output_claim_false and digest_claim_false ran against a false public file the records do not carry, so both verifiers reject them at S2/R7 (their Hello carries that file's \u03a3)",
     "agreement": "r20260927-012244-342d (result art:a59f3cb2): 38/38"
+   },
+   {
+    "tags": "verity/flock-circuit (hm96-sha512 rows, SHA-512 identity and binding digests)",
+    "pr83": "eb90718f",
+    "generator": "flock-circuit selftest --record-dir (PR #83 eb90718f with circuit-vectors-eb90718f.patch, which also records the two draw cases), converted by selftest_records.py; extra/: the patch's honest vector, two draw negatives and a salt mutant",
+    "statement": {
+     "circuit": "art:c49cb61e/rope-head/stage/circuit.txt",
+     "public": "art:c49cb61e/rope-head/stage/pub-4.bin",
+     "circuit_sha512": "c84261e71e7b76c1c169cd4a04a87edf4109947c8fb11d35c39807c37b1c9279530c489d6f5642d3cdc232e8e3871b62ec224ac07b7caa5fe5cbfc7f71519141",
+     "detail": "RoPE d64, 4 instances (population), CPU selftest build (seed_injection: true)"
+    },
+    "lean_statement": "verity/flock-circuit@eb90718f+seed-injection",
+    "selftest": [
+     "art:c49cb61e/rope-head/records-cpu"
+    ],
+    "forgeries": "art:c49cb61e/rope-head/extra",
+    "selftest_note": "19 selftest cases and the draw cases unit_draw_session (a drawn statement, accepted) and unit_draw_ignored_refused (refused at Hello); extra/: honest_vector, draw_altered and draw_dropped (the record's draw changed or removed: S2), salt_altered (an opened salt flipped, proof_sha512 rebuilt: the Merkle opening)",
+    "agreement": "r20260927-060508-66c0 (result art:294b6cf1): 25/25; r20260927-064449-6059 (sets 8 and 9): 50/50"
+   },
+   {
+    "tags": "verity/flock-circuit (hm96-sha512 rows, SHA-512 identity and binding digests)",
+    "pr83": "eb90718f",
+    "generator": "flock-circuit selftest --record-dir on a CPU pod (r20260927-061936-560b: PR #83 eb90718f with circuit-vectors-eb90718f.patch, --features sha512,seed-injection), converted by selftest_records.py",
+    "statement": {
+     "circuit": "art:187679d7/rmst128/stage/circuit.txt",
+     "public": "art:187679d7/rmst128/stage/pub-2.bin",
+     "tables": "art:925d6833",
+     "circuit_sha512": "33edd22b8db746e6390e6ee6de646a7847f407d545a49b51edba7d14f5b7c1661bab120168e01d902cdc870187b0a1982685cd193beb24f26e7b3173689d1e67",
+     "detail": "Triton RMSNorm n128, 2 instances (population): lookup slots, tail stages; CPU selftest build (seed_injection: true)"
+    },
+    "lean_statement": "verity/flock-circuit@eb90718f+seed-injection",
+    "selftest": [
+     "art:187679d7/rmst128/records-cpu"
+    ],
+    "selftest_note": "every selftest case that runs a session (23) and the draw cases unit_draw_session (accepted) and unit_draw_ignored_refused; each drawn session replays upstream in its own process (upstream leaks a statement's matrices; two RMSNorm statements exceed 15 GB)",
+    "agreement": "r20260927-064449-6059 (sets 8 and 9): 50/50"
+   },
+   {
+    "tags": "verity/flock-circuit (the e2e bindings: verity/partition/v1, program_sha512, per-instance classes)",
+    "pr83": "e51e2b86",
+    "generator": "flock-circuit selftest --record-dir (PR #83 e51e2b86 with circuit-vectors-eb90718f.patch, --features sha512,seed-injection), converted by selftest_records.py; staged with --partition (the object's tagged digest) --program --unit-indices [3, 17, 40, 1001]",
+    "statement": {
+     "circuit": "art:62afd0ae/rope-head/stage/circuit.txt",
+     "public": "art:62afd0ae/rope-head/stage/pub-4.bin",
+     "partition": "art:62afd0ae/rope-head/partition.json",
+     "circuit_sha512": "7674743d65a93e09c19910d3832b119642622783a532b14f231ca617e7f6de667db9aa4fa0936280a4188f785abc23fbe186ba9d56a3d6c4d996ae7a052ffaa2",
+     "detail": "RoPE d64, 4 instances at global unit indices [3, 17, 40, 1001]; partition verity/partition/v1 29f27eb0 (Q_word v1 {X: 16, W: 32} over program 57fab977); class 3927f513"
+    },
+    "lean_statement": "verity/flock-circuit+seed-injection",
+    "selftest": [
+     "art:62afd0ae/rope-head/records-cpu"
+    ],
+    "selftest_note": "19 selftest cases and the draw cases (a drawn session over the caller's indices, and one that ignores the draw)",
+    "agreement": "r20260927-070106-614e: 21/21"
+   },
+   {
+    "tags": "verity/flock-circuit (the e2e bindings, an open query name)",
+    "pr83": "e51e2b86",
+    "generator": "flock-circuit selftest --record-dir --only honest / unit_draw_session (PR #83 e51e2b86 with circuit-vectors-eb90718f.patch, --features sha512,seed-injection); staged with --partition (the tagged digest of a Q_template_instance v1 object) --program --unit-indices [3, 17, 40, 1001]",
+    "statement": {
+     "circuit": "art:3f2298b6/rope-head/stage/circuit.txt",
+     "public": "art:3f2298b6/rope-head/stage/pub-4.bin",
+     "partition": "art:3f2298b6/rope-head/partition.json",
+     "circuit_sha512": "d9f93aee013f00493ae22761f71539f4596c61788e540c44ea5e12850882d19174f3114d2a2eba0f294fa5497894702b0af69a8cd668bd33d8134574d6381212",
+     "detail": "RoPE d64, 4 instances at [3, 17, 40, 1001]; partition verity/partition/v1 c920dfc8, query Q_template_instance v1 (not evaluated by the verifier: its verdicts say units as stated)"
+    },
+    "lean_statement": "verity/flock-circuit+seed-injection",
+    "selftest": [
+     "art:3f2298b6/rope-head/records-cpu"
+    ],
+    "selftest_note": "honest and unit_draw_session, both accepted; rope-head/partition-noformat.json (no format) is refused at setup",
+    "agreement": "2/2 (local, 2026-09-27T07:25Z)"
+   },
+   {
+    "tags": "verity/flock-circuit (the e2e bindings, Q_template_instance v0, units derived)",
+    "pr83": "e51e2b86",
+    "generator": "flock-circuit selftest --record-dir --only honest / unit_draw_session (PR #83 e51e2b86 with circuit-vectors-eb90718f.patch); staged with --partition (Q_template_instance v0 over RoPEHead_v1{D=64}) --program (a 2000-unit population program, core's codec at PR #131) --unit-indices [3, 17, 40, 1001]",
+    "statement": {
+     "circuit": "art:e1fb80d2/rope-head/stage/circuit.txt",
+     "public": "art:e1fb80d2/rope-head/stage/pub-4.bin",
+     "partition": "art:e1fb80d2/rope-head/partition.json",
+     "program": "art:e1fb80d2/rope-head/program.json",
+     "circuit_sha512": "ca5cbd543607882c9fd17506056e7e309369ff4f7feb10e5e0f535384fffbfd67655a6dd4dc86f01b8f85e485013f4d58c530fbf8013ac5ca02e56659a3856cf",
+     "detail": "RoPE d64, 4 instances at [3, 17, 40, 1001] of a 2000-unit population; the verdicts' partition finding says units derived"
+    },
+    "lean_statement": "verity/flock-circuit+seed-injection",
+    "selftest": [
+     "art:e1fb80d2/rope-head/records-cpu"
+    ],
+    "selftest_note": "honest and unit_draw_session, both accepted with units derived",
+    "agreement": "2/2 (local, 2026-09-27T07:45Z)"
+   },
+   {
+    "tags": "verity/flock-circuit (GEMM: packed unit range, out_net, leaf_cuts)",
+    "pr83": "25519ba1",
+    "generator": "flock-circuit selftest --record-dir on a CPU pod (r20260927-073025-b0ff: PR #83 25519ba1 with circuit-vectors-25519ba1.patch, --features sha512,seed-injection), converted by selftest_records.py; extra/: draw altered, draw dropped, salt altered",
+    "statement": {
+     "circuit": "art:3104c2f9/gemm-k1024/stage/circuit.txt",
+     "public": "art:3104c2f9/gemm-k1024/stage/pub-4.bin",
+     "circuit_sha512": "d504d7390ef20157c669262e85274d9742b4b070fb0f091ad54e07a4f95571358efd6f110123af0c94b2fccaa37317b65232148c8b3e8343a7025db7c29f1f8c",
+     "detail": "gemm-coordinate/k1024/sm80-mma-bf16 (synthetic, seed 20260927), 4 instances: 64 tensor-core k-step units per VU (packed), x as 1024 leaf cuts, the tail's stage1 returning the output (out_net); k_log 23, m 26"
+    },
+    "lean_statement": "verity/flock-circuit+seed-injection",
+    "selftest": [
+     "art:3104c2f9/gemm-k1024/records-cpu"
+    ],
+    "forgeries": "art:3104c2f9/gemm-k1024/extra",
+    "selftest_note": "every selftest case that runs a session and the draw cases (unit_draw_session, unit_draw_from_file, unit_draw_ignored_refused); m = 26: replay on a machine with more than 15 GB",
+    "agreement": "r20260927-074433-43a6 (on the pod): 27/27"
+   },
+   {
+    "tags": "verity/flock-circuit (shared-row public files: header shared_rows, tables and u32 refs)",
+    "pr83": "967b8d06",
+    "generator": "stage.py in the artifact (PR #83 967b8d06's verity_flock.circuit.write with share_rows); flock-circuit selftest --record-dir (967b8d06 with circuit-vectors-967b8d06.patch, --features sha512,seed-injection, CPU), converted by selftest_records.py",
+    "statement": {
+     "circuit": "art:0eea3abf/rope-shared/stage/circuit.txt",
+     "public": "art:0eea3abf/rope-shared/stage/pub-6.bin",
+     "partition": "art:0eea3abf/partition.json",
+     "program": "art:0eea3abf/program.json",
+     "circuit_sha512": "ca5cbd543607882c9fd17506056e7e309369ff4f7feb10e5e0f535384fffbfd67655a6dd4dc86f01b8f85e485013f4d58c530fbf8013ac5ca02e56659a3856cf",
+     "detail": "RoPE d64, six instances repeating three rows (shared_rows x: 3, cs: 3; refs 0,1,0,2,1,0) at [3, 17, 40, 1001, 1500, 1999] of set 12's Q_template_instance population, units derived"
+    },
+    "lean_statement": "verity/flock-circuit@967b8d06+seed-injection",
+    "selftest": [
+     "art:0eea3abf/rope-shared/records-cpu"
+    ],
+    "selftest_note": "every selftest case that runs a session (row_ref_claim_false: instance 0's x ref names another row; its false statement, like digest_claim_false's and output_claim_false's, is its own pub.bin, so both verifiers reject at the proof's openings), and the draw cases",
+    "agreement": "23/23 (local, 2026-09-27T10:05Z)"
+   },
+   {
+    "tags": "verity/flock-circuit (68ae79f2's identity text, a per-instance file)",
+    "pr83": "967b8d06",
+    "generator": "the same instances as set 14 as a per-instance file (stage.py per); selftest records as set 14's",
+    "statement": {
+     "circuit": "art:0eea3abf/rope-shared/stage/circuit.txt",
+     "public": "art:0eea3abf/rope-per/stage/pub-6.bin",
+     "partition": "art:0eea3abf/partition.json",
+     "program": "art:0eea3abf/program.json",
+     "circuit_sha512": "ca5cbd543607882c9fd17506056e7e309369ff4f7feb10e5e0f535384fffbfd67655a6dd4dc86f01b8f85e485013f4d58c530fbf8013ac5ca02e56659a3856cf",
+     "detail": "set 14's instances without shared_rows: the file reads as before, under the 967b8d06 statement name"
+    },
+    "lean_statement": "verity/flock-circuit@967b8d06+seed-injection",
+    "selftest": [
+     "art:0eea3abf/rope-per/records-cpu"
+    ],
+    "selftest_note": "every selftest case that runs a session, and the draw cases (no row_ref_claim_false: no table)",
+    "agreement": "22/22 (local, 2026-09-27T10:05Z)"
    }
   ],
   "recorded_runs": [
    "r20260926-232948-22a9: sets 0-3, 217/217 (result art:ab9fa582)",
-   "r20260927-012244-342d: sets 0-7, 412/412, seed 20260927 (result art:a59f3cb2, run record art:d5ca1e5c)"
+   "r20260927-012244-342d: sets 0-7, 412/412, seed 20260927 (result art:a59f3cb2, run record art:d5ca1e5c)",
+   "r20260927-060508-66c0: set 8 (eb90718f), 25/25 (result art:294b6cf1)",
+   "r20260927-064449-6059: sets 8 and 9 (eb90718f), 50/50",
+   "r20260927-070106-614e: set 10 (e51e2b86), 21/21",
+   "r20260927-074433-43a6: GEMM at PR #83 25519ba1 (set 13), 27/27, on a CPU pod"
   ]
  }
 }

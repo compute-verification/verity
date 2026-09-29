@@ -1,8 +1,8 @@
 //! The plan validator, the planned operand assembly and the `veritor.int8-q7`
-//! interpreter of `zk/sp1/common`, restructured into the subset of Rust that
+//! interpreter of `backends/sp1/common`, restructured into the subset of Rust that
 //! Aeneas translates (lane L3, Target D assessment).
 //!
-//! Every function here mirrors one in `zk/sp1/common/src/{check,gateset}.rs`
+//! Every function here mirrors one in `backends/sp1/common/src/{kernel/openings,kernel/relations,gateset}.rs`
 //! (named in its doc comment).  The changes from the production code, all
 //! recorded in `docs/verified-backend/guest-cost-and-first-optimisation.md`:
 //!

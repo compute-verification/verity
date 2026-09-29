@@ -1,7 +1,7 @@
 # Flock interactive soundness: design and derivations
 
-This file holds the reasoning behind `ASSUMPTIONS.md`, which lists the theorems and assumptions themselves. Each section
-derives or plans an entry there. The long forms, with sources, are lane notes, cited as `note:<id>`.
+This file holds the reasoning behind `README.md`, which lists the theorems, and `ASSUMPTIONS.md`, which states what they
+assume. Each section derives or plans an entry there. The long forms, with sources, are lane notes, cited as `note:<id>`.
 
 ## 1. The hash: why SHA-512
 
@@ -52,8 +52,8 @@ on the hash's output width `n`.
 2. Make the round digests assumption-free by having the coin server keep each round's bytes (it already receives
    them).
 
-The compiled bound is then 2^-195.5 plus `t·2^{17.3−256}` plus negligible terms, from plain collision resistance, for
-every prover, up to `t ≈ 2^110`. ASSUMPTIONS.md §1.2 states it, and §2 below derives it.
+The compiled bound is then 2^-205 plus `t·2^{17.3−256}` plus negligible terms, from plain collision resistance, for
+every prover, up to `t ≈ 2^110`. README.md §1.2 states it, and §2 below derives it.
 
 **Outside the verifier,** the statement's data commitments (frame-v3 roots, row digests, Halevi–Micali leaves hashed
 in the circuit) fall into two cases (the lifetime-soundness desk study, §1 and §3):
@@ -73,7 +73,7 @@ in the circuit) fall into two cases (the lifetime-soundness desk study, §1 and 
 
 ## 2. The compiled theorem: its terms, its number, its proof
 
-The protocol is ASSUMPTIONS.md §1.1's table (the `fast100` profile twice on one root, live `os` coins, a statement of
+The protocol is README.md §1.1's table (the `fast100` profile twice on one root, live `os` coins, a statement of
 §16) in the adopted variant: SHA-512 Merkle caps, and the coin server keeping each round's bytes.
 
 **The committed values of an arbitrary prover.** Let `P*` be any classical prover. Without loss of generality it is
@@ -98,7 +98,7 @@ anyone.
 **The number.** `B_ℓ` makes at most `2t` SHA-512 evaluations when `P*` makes `t`, plus two verifications. Under the
 generic bound for SHA-512, `Adv ≤ (2t)²/2^513`, which gives
 
-> ε ≤ 2^-195.5 + `t·√2·S_m / 2^256` + `t²/2^511`,
+> ε ≤ 2^-205 + `t·√2·S_m / 2^256` + `t²/2^511`,
 
 with `log2(√2·S_m)` = 10.7 at m = 22, 16.3 at m = 33 and 17.3 at m = 35 (§1.2). That is at most 2^-128 for `t` up to
 2^110.7 at m = 35 and 2^117 at m = 22. The hash term overtakes the statistical one from `t ≈ 2^43` (m = 35) to
@@ -123,40 +123,137 @@ with `log2(√2·S_m)` = 10.7 at m = 22, 16.3 at m = 33 and 17.3 at m = 35 (§1.
 Every step depends only on Lean's standard axioms (`Check.lean`).
 
 **Remark: the random-oracle version.** Modeling SHA-512 as a random oracle gives straight-line extraction of the
-committed tables (VCVio's Merkle extraction) and a tight bound, `2^-195.5 + O(t²/2^512) + t·(cap entries)/2^512`,
+committed tables (VCVio's Merkle extraction) and a tight bound, `2^-205 + O(t²/2^512) + t·(cap entries)/2^512`,
 without the square root. It is a cross-check only. The number above does not rest on it.
 
 ## 3. Knowledge soundness: the extractor, its analysis, its cost
 
 Soundness says the committed witness satisfies the statement. A claim about *which* data a proof used needs that witness
 computed, because hiding leaves open to essentially any row. So "these proofs used the registered weights" (§10) needs
-it, and so does the recursion track, whose outer proof must be a proof of knowledge. The long form, with the effort
-table, is `note:20260926T2330Z-finding-knowledge-soundness`.
+it, and so does the recursion track, whose outer proof must be a proof of knowledge. The analysis and its review are
+`note:20260927T0535Z-draft-knowledge-soundness-analysis` and `note:20260927T0600Z-review-knowledge-soundness`. The
+adopted form is the review's "fill and decode"; it is proved (`Knowledge.lean`).
 
-- **The extractor.** It reruns any classical prover `P*` from the start, about `(N₀/Q₀)·ln(1/(ζβ))/ε` times, where ε
-  is the probability that `P*` is accepted. That sees all but a fraction ζ of level 0's columns, except with
-  probability β. Level 0 is committed in the first message, so every run opens the same cap.
-  - Two runs that open one position differently give a SHA-512 collision.
-  - Otherwise the extractor list-decodes the observed columns, treating the rest as erasures, and outputs a witness that
-    satisfies the statement.
+- **The extractor.** Level 0 is committed in the first message, so every rerun after it opens under the same cap. The
+  extractor:
+  - reruns `P*` after its level-0 cap `K` times;
+  - fills each level-0 position with the first verifying opening it saw, and a fixed row elsewhere;
+  - decodes the full table at the level-0 radius `δ`, over at most `L₀` candidates (`closeMsgs`). The table theorem
+    decodes non-constructively; Guruswami–Sudan is needed only by reductions that run the extractor.
+- **Why it works.** For any level-0 table `T`, the compiled bound gives
+  `Pr[accepted ∧ T uncommitted] ≤ ε_c⁻ + Pr[a run opens a level-0 position off T]`
+  (`table_sound_compiled_of_table`), with one `ε_c⁻` for every `T`. A fresh run opens a position off the extractor's
+  table in one of two ways, with these costs over the extractor's `K` runs:
+  - it conflicts with the extractor run that supplied the row: `K·Adv₀`, a union over the `K` fresh–extractor pairs,
+    each a two-run collision finder;
+  - it opens a position no extractor run opened: `Σ_p q_p(1 − q_p)^K ≤ N₀/(eK)`.
+
+  One Markov step gives `Pr[extraction fails] ≤ (K·Adv₀ + N₀/(eK))/(ε − ε_c⁻)` (`table_knowledge_sound`).
+- **The numbers** (m = 33).
+  - With `K = 2^21.6/(ε − ε_c⁻)`, failure is at most `1/4 + (t·2^-244.7/(ε − ε_c⁻))²`. The hash term is squared, so
+    `κ = ε_c⁻ + t·2^-243.7`.
+  - The product form the audit consumes needs no condition on `ε`:
+    `Pr[accepted ∧ extraction fails] ≤ ε_c⁻ + K·Adv₀ + N₀/(eK)` (`table_knowledge_sound_joint_tight`). Rerun list by rerun
+    list, `ε·1[fails] ≤ ε_c⁻ + mass`, so no Markov step enters. At `K = √(N₀/(e·Adv₀))` this is
+    `ε_c⁻ + t·2^-244.7`, which is `2^-164.7` at `t = 2^80` above `ε_c⁻`.
+  - For comparison, the draft's form (fresh runs against `T*`, with a rewinding square root) gives a hash term of
+    `t·2^-233.4/(ε − ε_c)` and `κ = ε_c + t·2^-231.4`.
+- **Not knowing ε.** For the audit, the extractor is an analysis device, and `K` may depend on `ε` and `Adv₀`. An
+  efficient extractor, as recursion needs, doubles `K` until a satisfying witness is found, which is a decidable stop.
+  An exponential tail comes from disjoint blocks: the unseen set is the intersection of the blocks' unseen sets, so `r`
+  blocks of `2N₀/(e(ε − ε_c⁻))` runs fail with probability at most `2^-r`.
+- **Canonical values.** The extractor should output the values behind the `hm96` commit strings, not "one satisfying
+  witness". Two satisfying candidates that differ behind a commit string are an `hm96` collision. This, and
+  `registered_weights`, need the SHA-512 leaf layout in the model.
 - **Binding to registered data.** Given the registrant's opening `(W, R)`, the extracted rows equal `W` wherever the
   statement links the root, or tree binding and then Halevi–Micali binding give a SHA-512 collision.
-- **The extraction is mostly straight-line,** since the extractor sees conflicts itself. The rewinding lemma bounds the
-  positions where it saw only off-plurality values.
-  - A first estimate of that term is `t·2^-227/ε`, so 2^-128 needs `t/ε ≤ 2^99`. This is to be sharpened.
-  - Generic interactive-BCS bounds give only about 2^-100 to 2^-111 with SHA-512.
-- **Effort:** about 1,250–2,000 lines of Lean, roughly half the development so far, plus 200–350 if recursion needs
-  witness-extended emulation. Decoding is the largest piece and is provable: CompPoly's Guruswami–Sudan decoder is
-  verified with no `sorry`, and ArkLib's Johnson bound covers the punctured interleaved code. Write and review the
-  analysis on paper first. It follows `table_sound_compiled`; `registered_weights` waits for the SHA-512 leaf layout,
-  and recursion for M1/M2.
-- **Sampled audits need it** (the lifetime-soundness desk study, §2 and §3). The audit bound defines a wrong unit
-  through the committed transcript: the plurality table lifted to the serving commitments, then the value the extractor
-  recovers most often behind each commit string. So each audit pays the table's knowledge error, plus a link term
-  `δ_link` (a rewinding whose collision finder runs the extractor). Bound `δ_link` together with
-  `table_knowledge_sound`. The first estimate above gives about `√(t·2^-227)` per audit, which is 2^-73.5 at `t = 2^80`.
-- **Risks:** the concrete knowledge error; a thin decoding margin at level 0 (`η = 1/50` leaves under 1% after
-  erasures, so coverage must be about 99%); bridging CompPoly, ArkLib and `Model`. It is classical only (§9).
+- **Sampled audits need the link term `δ_link` as well** (the lifetime-soundness desk study, §2 and §3).
+  - Its collision finder runs the extractor, so the extractor's run count enters the collision-resistance bound.
+  - The analysis is below and in `note:20260927T0705Z-draft-link-term`; the Lean plan is
+    `note:20260927T1510Z-draft-expected-time-link-plan`.
+- **Risks:** `ValueBinding` until the `hm96` layout; bridging CompPoly, ArkLib and `Model` for the efficient decoder.
+  It is classical only (§9).
+
+**The link term: expected-time collision resistance, of record** (Daniel, Sep 27). The audit's value layer rests on
+`ASSUMPTIONS.md` A2. One audit's knowledge-plus-link term, of record and, for comparison, under the other two
+assumptions. $Q_s$ is the expected number of commit strings the drawn units read, at most the $N_s$ leaves under the
+serving roots, $N_0 = 2^{21}$ the level-0 codeword length (m = 33), and $t$ the prover's SHA-512 evaluations. The
+audits are the lifetime doc's A–D.
+
+| Assumption | Knowledge + link | A | B | C | D |
+|---|---|---|---|---|---|
+| **Expected-time collision resistance** (A2, of record) | $t\cdot Q_s\,(8N_0/e)/2^{256}$ | $t\cdot2^{-218.4}$ | $t\cdot2^{-209.4}$ | $t\cdot2^{-209.4}$ | $t\cdot2^{-206.4}$ |
+| Strict-time collision resistance (comparison) | $2\sqrt{t\cdot 4N_0\sqrt{N_s/e}/(e\,2^{256.5})}$ | $2\sqrt{t\cdot2^{-226.3}}$ | $2\sqrt{t\cdot2^{-221.5}}$ | $2\sqrt{t\cdot2^{-218.5}}$ | $2\sqrt{t\cdot2^{-215.7}}$ |
+| Random oracle (comparison; tree, link and knowledge together) | $t^2/2^{511}$ | $t^2/2^{511}$ | $t^2/2^{511}$ | $t^2/2^{511}$ | $t^2/2^{511}$ |
+
+The first two rows are the terms beyond $\varepsilon_c^-$ and $\delta_{\rm tree}$, which the record doubles (below). The
+strict-time row is the earlier analysis, with $N_s$; it keeps $\sqrt{q^2/2^{513}}=q/2^{256.5}$, which holds for a
+budget $q$ fixed in advance.
+
+The same terms in $\log_2$ for audit B, next to the rest of its hash bound ($\delta_{\rm Flock}+\delta_{\rm tree}=t\cdot2^{-229.3}$):
+
+| Audit B | $t=2^{64}$ | $2^{80}$ | $2^{100}$ | $2^{110}$ |
+|---|---|---|---|---|
+| Expected-time (of record) | −145.4 | −129.4 | −109.4 | −99.4 |
+| Strict-time | −77.8 | −69.8 | −59.8 | −54.8 |
+| Random oracle | −383 | −351 | −311 | −291 |
+| $\delta_{\rm Flock}+\delta_{\rm tree}$ | −165.3 | −149.3 | −129.3 | −119.3 |
+
+At $t=2^{80}$ the audits read −138.4, −129.4, −129.4 and −126.4 of record, and −72.2, −69.8, −68.3 and −66.8 under
+strict time.
+
+- **Expected-time collision resistance, of record.**
+  - **The assumption** (A2, in the expected-time sense of Chiesa–Dall'Agnol–Guan–Spooner–Yogev, ePrint 2024/1434): an
+    algorithm whose *expected* number of SHA-512 evaluations is $T$ finds a collision with probability at most
+    $T/2^{256}$. It read $T/2^{256.5}$ until the correction of Sep 27 (the proximity-gap scoping lane).
+  - **Why $2^{256}$.** For a random oracle with $N=2^{512}$ outputs the sharp bound is $E[Q]/E[\tau_N]$, with $\tau_N$
+    the number of distinct inputs hashed until the first collision and $E[\tau_N]=\sqrt{\pi N/2}+2/3+o(1)\approx2^{256.33}$.
+    Hashing until the first collision attains it, with probability 1 at cost $E[\tau_N]$, so $2^{256}$ holds for a random
+    oracle with 0.33 bits to spare. The proof: with $a_i$ the probability of an $i$-th fresh query before any collision
+    and $w_i=(i-1)/N$, success is at most $\sum_ia_iw_i$, where $a_{i+1}\le a_i(1-w_i)$ and $\sum_ia_i\le E[Q]$.
+    Chebyshev's sum inequality puts the maximum at $a_i\propto\prod_{j<i}(1-w_j)$, where it is $E[Q]/E[\tau_N]$.
+  - **Why not $2^{256.5}$.** $\min(1,q^2/2^{513})\le q/2^{256.5}$ bounds a budget $q$ fixed in advance, not a finder
+    that stops adaptively: the first-collision attack beats $T/2^{256.5}$ by a factor 1.13.
+  - **Why linear in $T$.** A finder can gamble: running that attack with probability $p$ succeeds with probability $p$
+    at expected cost $pE[\tau_N]$. The quadratic form $T^2/2^{513}$ would be false for this reason.
+  - **The extractor** runs the session once. Only if that run accepts does it rerun, until $k=cN_0/e$ reruns have
+    accepted: $(1+k)\,t$ evaluations in expectation, whatever $\varepsilon$, and no estimate of it. It fills level 0
+    from the accepted reruns, and the compiled bound's deviation term needs only accepted runs. So with
+    $q_p=\Pr[\text{a run accepts and opens }p]$ the missing term is $\sum_p q_p(1-q_p/\varepsilon)^k\le\varepsilon/c$.
+    The conflict term is $(k/\varepsilon)\mathrm{Adv}_0$, and bounding the failure by $\min(\varepsilon,\cdot)$ turns
+    it into $\sqrt{k\,\mathrm{Adv}_0}\approx t\cdot2^{-244}$.
+  - **The value layer** is the plurality of what extractions recover behind each commit string (lifetime doc §2), a
+    function of the state at registration. Behind one string, disagreeing with the plurality is at most as likely as
+    two independent recoveries disagreeing: $r-p_{\max}\le r-\sum_v p_v^2/r$.
+  - **The link finder** for one commit string draws a unit set that reads it and runs an extraction. Two drawn units
+    that open the string differently are already a collision. If one value was read, it runs extractions on such
+    draws until one reads the string, $1/r$ of them in expectation, and collides if the value differs. That is
+    $2(1+k)\,t$ evaluations in expectation (Wald). Weighting each string by the probability that a draw reads it gives
+    $\delta_{\rm link}\le2Q_s(1+k)\,t/2^{256}$, with $Q_s\le N_s$ (below).
+  - **The bound is relative.** $u^*$ is wrong, so acceptance itself is the bad event:
+    $\Pr[\text{accept}\wedge\text{hit}]\,(1-1/c)\le\delta_{\rm tree}+\varepsilon_c^-+\sqrt{k\,\mathrm{Adv}_0}+\delta_{\rm link}$.
+    The square root goes.
+  - **The constant.** $c=2$ minimizes $c^2/(c-1)$, giving the record's $t\cdot Q_s(8N_0/e)/2^{256}$ up to lower-order
+    terms. It doubles the other terms, to $2\delta_{\rm tree}+2\varepsilon_c^-$, one bit on terms 19 bits below.
+  - **A one-bit refinement, for later:** $4N_0/e$, from a value layer drawn from a sequence of auxiliary extractions
+    (the first recovery behind each string), with the committed transcript then chosen by averaging over that
+    sequence. The record keeps $8N_0/e$, the form the Lean proof takes.
+  - **Proved** (`flock_batched_linkSoundE`), under A2 for each commit string's explicit finder and a named binding of
+    wires to commit strings (`ValueBinding`, from the `hm96` layout):
+    $\delta_{\rm link}\le Q_s\big(2(1+k)t'/2^{256}+1/(eM)+k/(eR_w)\big)/(1-\rho)$. Waits give up after $R_w$ runs
+    and the finder after $M$ further trials; $\rho$ bounds each table's $N_0/(ek)$.
+  - **$Q_s\le N_s$** is the expected number of commit strings the drawn units read, since the finder draws only unit
+    sets that read its target. The record counts $Q_s$ (Daniel, Sep 27); with $N_s$ it would be $t\cdot2^{-205.1}$ for
+    audit B.
+- **Strict time** (comparison). Balancing the knowledge term's $N_0/(eK)$ against the link finder's cost, which grows
+  linearly with the extractor's $K$ reruns, leaves a square root. The review's first estimate was $2^{-65.3}$ at
+  $t=2^{80}$, audit B. Improving substantially on the strict-time loss would improve the analysis of Schnorr's
+  protocol (CDGSY24).
+- **The random-oracle column** (comparison, lifetime doc §7). The extractor reads the commit strings, the `hm96`
+  openings and the tables off the prover's queries, so `δ_tree`, `δ_link` and the knowledge term collapse into one
+  global $t^2/2^{511}$. `ASSUMPTIONS.md` keeps the random oracle as a cross-check only.
+- **Either way,** the table theorems (`table_sound_compiled`, `table_knowledge_sound_joint`) and `δ_tree` stand as
+  proved under strict-time collision resistance. A2 enters only the value layer.
 
 ## 4. Where the spec follows upstream rather than the paper (spec §19), and the bound
 
@@ -181,18 +278,19 @@ table, is `note:20260926T2330Z-finding-knowledge-soundness`.
 
 ## 5. Accounting findings
 
-- **2^-195.5 holds for m ≤ 33 only.** At m = 34 and 35, `fast100` has a seventh Ligerito level. Its query term
-  (2^-102.6) moves the table bound to 2^-195.43. PROTOCOL.md §15 quotes 2^-195.5 per table, from the m = 33 ledger.
-  Both are far below 2^-128.
-- **Terms flock-128's ledger does not charge,** none moving the total by 0.001 bit: the list factor `L₀` before
-  Ligerito's binding (paper Appendix A), the `r = 1` set (A5), the pin (A8), the link points (A14), MCA and fold terms
-  per folding round rather than per level, and consistency batching at each level's own list size.
-- **List sizes.** ArkLib proves the Johnson list bound as `1/(2ηρ)` (50 at rate 1/2). Flock uses the sharper
-  `1/(2η√ρ)` (35). The bound uses ArkLib's, and the difference is below 0.001 bit.
+- **2^-205 holds for every m, 22 ≤ m ≤ 35,** at the analysis slack `η = 1/200`, the seventh Ligerito level at
+  m = 34, 35 included. At `η = 1/50` it was 2^-195.5 for m ≤ 33 and 2^-195.43 at m = 34, 35. PROTOCOL.md §15 quotes
+  2^-195.5 per table, from the m = 33 ledger at `η = 0.02`. All are far below 2^-128.
+- **Terms flock-128's ledger does not charge,** none moving the total by 0.001 bit at `η = 1/50`: the list factor
+  `L₀` before Ligerito's binding (paper Appendix A), the `r = 1` set (A5), the pin (A8), the link points (A14), MCA and
+  fold terms per folding round rather than per level, and consistency batching at each level's own list size.
+- **List sizes.** ArkLib proves the Johnson list bound as `1/(2ηρ)` (200 at rate 1/2). Flock uses the sharper
+  `1/(2η√ρ)` (141). The bound uses ArkLib's. Even the exact pairwise-Johnson lists (29 at level 0, m = 33) would add
+  only 0.17 bit (the proximity-gap scoping lane).
 
 ## 6. Zero knowledge: the masked protocol and the reference prover
 
-The targets and expected assumptions are ASSUMPTIONS.md §6.
+The targets and expected assumptions are README.md §3.
 
 **The masked protocol** is lane `flock-netlist`'s M1/M2 (PR #83). It consists of VEIL-style masking of the sumchecks,
 Reed–Solomon padding in Ligerito over GF(2^128), and Halevi–Micali leaf commitments. The model in `Model/*` is written
@@ -231,18 +329,18 @@ We follow the staging and vocabulary, and differ where the setting does.
 
 | a16z stage | What it asks | Here | Follows, or deliberately differs |
 |---|---|---|---|
-| **1a** PIOP soundness | A machine-checked soundness proof of the polynomial IOP | `table_sound` at the oracle layer: the PIOP with Ligerito as an interactive oracle commitment, information-theoretic, per table, against any prover. | Follows, modulo A1 (our level 4a); proving A1 is level 4b, not plannable at the Johnson bound (a unique-decoding profile would be, since ArkLib proves those gaps). |
-| **1b** commitment binding, under a cryptographic assumption or an idealized model | Binding of the polynomial commitment | The Merkle layer: plain SHA-512 collision resistance, for every prover, by rewinding to the plurality table (§2). Ligerito's commitment binds to a list of at most L₀ codewords, not to one polynomial (ASSUMPTIONS.md §2). The random-oracle version is only a cross-check. | Follows. The model is named per result, as a16z asks. |
+| **1a** PIOP soundness | A machine-checked soundness proof of the polynomial IOP | `table_sound` at the oracle layer: the PIOP with Ligerito as an interactive oracle commitment, information-theoretic, per table, against any prover. | Follows, with no named assumption: A1, mutual correlated agreement up to the Johnson bound, is proved from DKT26, which ArkLib proves (#907; README.md §1.6). |
+| **1b** commitment binding, under a cryptographic assumption or an idealized model | Binding of the polynomial commitment | The Merkle layer: plain SHA-512 collision resistance, for every prover, by rewinding to the plurality table (§2). Ligerito's commitment binds to a list of at most L₀ codewords, not to one polynomial (README.md §2). The random-oracle version is only a cross-check. | Follows. The model is named per result, as a16z asks. |
 | **1c** the compiled argument | With Fiat–Shamir, security in the random-oracle model | **Deliberately different: no Fiat–Shamir.** The oracle protocol plus Merkle commitments (1b) plus session binding, which needs no assumption since the coin server keeps each round's bytes. | Differs. No random oracle for coins, avoiding the article's main caveat; a Fiat–Shamir variant is future work (§8). |
 | **1d** constraint system against semantics | The constraint system is equivalent to the VM's semantics | No VM: 1d is the lowering theorem, that the block R1CS (spec §16) is satisfied exactly by correct evaluations of the named circuit (level 3, another lane). | Differs in content, not intent: "the circuit is the meaning". Circuit against hardware is checked by capture replay, outside formal scope. |
 | **1e** glue, and ZK if intended | One theorem, including zero knowledge | One theorem from the verifier's acceptance to "the committed values satisfy the named circuit", for the compiled protocol. Zero knowledge is proved separately (§6). | Follows. **Recursion caveat:** triggered only by the recursion track. Its outer proof must be knowledge-sound (§3), and every component inside it verified. |
-| **2** verifier implementation | The implemented verifier (Rust, Solidity, …) matches the Stage-1 protocol | `Flock.Verify` (lane `flock-verifier`) refines `Model`: if it accepts, the model accepts. | Differs: a Lean-to-Lean refinement; the compiler and runtime are trusted, mitigated by agreement tests (ASSUMPTIONS.md §5). |
+| **2** verifier implementation | The implemented verifier (Rust, Solidity, …) matches the Stage-1 protocol | `Flock.Verify` (lane `flock-verifier`) refines `Model`: if it accepts, the model accepts. | Differs: a Lean-to-Lean refinement; the compiler and runtime are trusted, mitigated by agreement tests (`assumptions/trusted-components.md`). |
 | **3** prover implementation | The prover implementation is proved complete, and zero-knowledge if intended | A Lean reference prover with completeness and zero-knowledge theorems, tied to production by byte-for-byte differential tests (§6). | **Deliberately different: the production prover is not proved.** Untested equivalence is trusted; its failures cost liveness, not soundness. |
 
 **Levels.** Our formal-verification levels (the Lean verifier study) map onto the stages as follows:
 
-- level 4a is Stage 1a–1c (interactive) modulo A1;
-- level 4b completes Stage 1 by proving A1;
+- level 4a is Stage 1a–1c (interactive);
+- level 4b, which completes Stage 1 by proving A1, is done (Sep 27, from DKT26 in ArkLib);
 - level 3 is Stage 2, plus the lowering theorem of 1d;
 - levels 1–2 are the implementation that Stage 2 is about.
 
@@ -250,15 +348,15 @@ We follow the staging and vocabulary, and differ where the setting does.
 target 2^-128, and state the number the way the stages suggest:
 
 1. **The statistical part, per table:** `−log2` of the proven error against any prover at the oracle layer. That is
-   195.5 bits for m ≤ 33 and 195.4 bits for m = 34, 35.
-   - Only proven results are used: A1 is a published theorem, not a conjectured proximity gap.
+   205 bits for every m, 22 ≤ m ≤ 35.
+   - Only machine-checked results are used: A1 is proved in Lean, not a conjectured proximity gap.
    - No bits are credited to grinding (proof of work).
    - A session with several tables adds their errors.
 2. **The cryptographic part, with its model named:** collision resistance of SHA-512, as
    `Σ_ℓ √(N_ℓ·Q_ℓ·Adv_ℓ) + Adv_×` for explicit collision finders. That is at most `t·2^{17.3−256}` under the generic
    bound (§2), for classical provers.
 3. **Each assumption, at the stage that uses it:**
-   - 1a: A1;
+   - 1a: none, since A1 is proved;
    - 1b: SHA-512 collision resistance;
    - 1c (interactive): uniform coins, and nothing for the rounds, whose bytes the server keeps;
    - Stage 2: the compiler's correctness, mitigated by tests.
@@ -300,121 +398,64 @@ verifier (§6), not to non-interactive proofs.
 
 ## 9. Quantum provers and verifiers
 
-The full analysis, with sources, is `note:20260926T2240Z-finding-post-quantum`.
+The full analysis, with sources and the Lean landscape, is `note:20260926T2240Z-finding-post-quantum`.
 
 **The theorem is classical, and only its compiled layer is affected.**
 
 - **The oracle layer holds against quantum provers as it stands.** `table_sound` is statistical, and every message and
-  coin is classical. A quantum prover is therefore one more randomized strategy, which `table_sound` already bounds.
-- **The compiled layer does not carry over.** §2 rewinds `P*` from a snapshot taken at the commitment.
-  - A quantum state cannot be copied, and measuring the first run's openings disturbs it. So there is no second
-    independent run, and no plurality table.
-  - Collision resistance is also the wrong property. Some hashes that resist quantum collision-finding give commitments
-    that do not bind quantum adversaries (Ambainis–Rosmanis–Unruh 2014). The replacement is **collapsing** (Unruh
-    2016).
-  - Classical proof frameworks, ours and VCVio included, are unsound for quantum adversaries by design.
+  coin is classical, so a quantum prover is one more randomized strategy.
+- **The compiled layer does not carry over.** §2 rewinds `P*`, but a quantum state can't be copied, or measured without
+  disturbing it. Collision resistance is also the wrong property: the replacement is **collapsing** (Unruh 2016).
+  Classical frameworks, ours and VCVio included, are unsound for quantum adversaries by design.
 
-**What is known, and what applies to live coins.**
+**What applies to live coins.** Chiesa–Dall'Agnol–Di–Guan–Spooner (TCC 2025, ePrint 2025/947, Theorem 6.1) prove
+interactive BCS post-quantum sound: `ε_ARG ≤ ε_IOP + Σ_i L_i·(q_i + 5)·ε_collapse + ϵ`, for a public-coin semi-adaptive
+IOP with a collapse-position-binding vector commitment and openings at the end.
 
-- **Kilian's protocol.** Chiesa–Ma–Spooner–Zhandry (FOCS 2021) prove Kilian's argument (one PCP commitment) post-quantum
-  sound in the standard model, with a collapsing hash.
-- **Our setting.** Chiesa–Dall'Agnol–Di–Guan–Spooner (TCC 2025, ePrint 2025/947) extend this to interactive BCS: any
-  public-coin semi-adaptive IOP, a collapse-position-binding vector commitment, and openings at the end. Their Theorem
-  6.1 gives `ε_ARG ≤ ε_IOP + Σ_i L_i·(q_i + 5)·ε_collapse + ϵ`.
-- **Flock fits:**
-  - the coins are public;
-  - Merkle caps are a vector commitment, and hash trees over a collapsing hash are collapsing;
-  - Ligerito's queries depend only on coins, so the IOP is non-adaptive, hence semi-adaptive;
-  - `ε_IOP` is the oracle-layer bound;
-  - the kept round bytes fix every message before its coins.
+- Flock fits: its coins are public and its commitments are Merkle caps. Its queries depend only on coins, `ε_IOP` is
+  the oracle-layer bound, and the kept round bytes fix every message before its coins.
+- So **if SHA-512 is collapsing, Flock is post-quantum sound with error `tableError + negl(λ)`.** This is a paper-level
+  corollary, not yet written out.
+- SHA-512 is collapsing if its compression function is (Unruh 2016; Fehr 2018). Table 1 would need a new property,
+  `collapsing/sha-512`.
 
-  So **if SHA-512 is collapsing, Flock's interactive protocol is post-quantum sound with error `tableError + negl(λ)`.**
-  This is a paper-level corollary, not yet written out.
-- **Fiat–Shamir (§8).** The reference is the quantum random-oracle model: `O(t²·ε_rbr + t³/2^λ)` (Chiesa–Manohar–Spooner,
-  TCC 2019).
+**No concrete bound follows at our parameters, for any prover size.**
 
-**Is SHA-512 collapsing?** It is conjectured. Random oracles are collapsing (Unruh 2016), and Merkle–Damgård preserves
-collapsing (Unruh, Asiacrypt 2016; Fehr, TCC 2018). So SHA-512 is collapsing if its compression function is. No attack
-is known beyond generic collision search. Table 1 would need a new property for it (`collapsing/sha-512`).
-
-**The loss makes the corollary asymptotic only.** The reduction's collapse adversary costs `poly(k·L_max/ϵ)` prover runs,
-and its advantage is multiplied by `Σ_i L_i·(q_i + 5)`. At m = 33, `L_max = 2^21`, that sum is about `2^30`, and a table
-has 150–200 rounds.
-
-- A 2^-128 target needs `ϵ ≤ 2^-128`, hence at least 2^157 prover runs.
-- Even at 2^157 queries, the generic quantum collision probability `q³/2^512 = 2^-41`, times `2^30`, is `2^-11`.
-
-**So no concrete post-quantum bound follows at our parameters, for any prover size.** A number would need one of:
-
-- the quantum random-oracle model, with straight-line extraction by Zhandry's compressed oracle, and a target of
-  `ε_stat + O(t³/2^512)`, which no one has proved for the interactive case;
-- a tighter standard-model rewinding, which is open.
-
-**Grover and BHT margins for SHA-512.**
-
-| Attack | Quantum cost |
-|---|---|
-| Preimage or second preimage (Grover) | 2^256 queries, sequential; `P` machines gain only `√P` |
-| Collision (Brassard–Høyer–Tapp) | 2^170.7 queries, and as much quantum-accessible memory |
-| Collision with small quantum memory (Chailloux–Naya-Plasencia–Schrottenloher) | 2^204.8 time |
-| Collision, generic limit (Zhandry) | success at most `O(q³/2^512)` |
-
-- **The hash has ample margin**, the reduction's loss is what blocks a number. SHA-256 collisions cost 2^85.3 by BHT;
-  NIST's post-quantum category 4 is SHA-384 collision search, and SHA-512 sits above it.
-- **`seed` coins** (PR #83) sit at exactly 2^128: Grover on the 256-bit seed, and on SHA-256 as a PRF.
+- The reduction's collapse adversary costs `poly(k·L_max/ϵ)` prover runs, and its advantage is multiplied by
+  `Σ_i L_i·(q_i + 5) ≈ 2^30` at m = 33.
+- A 2^-128 target needs `ϵ ≤ 2^-128`, hence at least 2^157 runs. At that many queries even the generic `q³/2^512` is
+  2^-41, which is 2^-11 after the loss.
+- A number needs straight-line extraction in the quantum random-oracle model (Zhandry's compressed oracle), or tighter
+  rewinding. Both are open for the interactive case.
+- The hash itself has ample margin: collisions cost 2^170.7 queries by Brassard–Høyer–Tapp. `seed` coins (PR #83) sit
+  at 2^128, from Grover on the 256-bit seed.
 
 **Zero knowledge against quantum verifiers.**
 
-- **The special honest-verifier ZK lemma (§11) is unaffected.** For fixed coins the view is classical and
-  statistically close to the simulation, and statistical distance bounds quantum distinguishers too. Halevi–Micali
-  hiding, masks and padding are statistical.
-- **Malicious-verifier ZK with the single-rewind simulator** (§11) needs quantum rewinding of a verifier whose state may
-  be quantum. The reserve route of a registered verifier key (§11.2) is straight-line and avoids it.
-  - The closest result: Lombardi–Ma–Spooner (FOCS 2022) prove Goldreich–Kahan, where the verifier commits to its
-    challenges first, post-quantum ZK. It needs the verifier's commitment to be collapse-binding and statistically
-    hiding.
-  - Constant-round black-box post-quantum ZK is impossible (Chia–Chung–Liu–Yamakawa, FOCS 2021). Ours has 150–200
-    rounds, so that does not apply, but adapting LMS22 to coins revealed round by round is research.
-  - **Design consequence:** the coin-seed commitment would need a 128-bit quantum margin, so SHA-384 or SHA-512, not
-    SHA-256.
+- Special honest-verifier ZK (§11) is statistical, so it is unaffected.
+- Malicious-verifier ZK with the single-rewind simulator needs quantum rewinding. The registered-verifier-key route
+  (§11.2) is straight-line.
+- A coin-seed commitment that must hold against quantum verifiers needs SHA-384 or SHA-512, not SHA-256.
 
-**What a post-quantum statement would take:**
-
-1. **The asymptotic corollary, on paper (small).** Show that Flock is interactive BCS over a public-coin, non-adaptive
-   IOP, and apply CDDGS25 under "SHA-512 is collapsing". It needs a quantum-cryptography reviewer, and it gives
-   `tableError + negl(λ)`, not a number.
-2. **A concrete number (research).** Either interactive BCS in the quantum random-oracle model with concrete terms, or
-   tighter quantum rewinding.
-3. **Lean.**
-   - **What exists:** Lean 4 quantum-information libraries (Lean-QIT, 2026; QICLean) with states, channels,
-     measurements, entropy and some QKD. They are outside Mathlib and not on our pins.
-   - **What no proof assistant has:** quantum adversaries with superposition queries in a game model like ours,
-     collapsing, CMSZ21's rewinding engine (Jordan's lemma, Marriott–Watrous), CDDGS25's multi-round argument, or
-     Zhandry's compressed oracle. The nearest tools, qrhl-tool (Isabelle) and EasyPQC (EasyCrypt), handle quantum
-     random-oracle proofs such as Fujisaki–Okamoto and Full Domain Hash, but no rewinding.
-   - **A full Lean statement** is a research formalization program, larger than this whole classical development, and
-     not plannable now.
-   - **A cheap intermediate:** CDDGS25's theorem as a named `Prop`, like A1, with the application proved (Flock is
-     public-coin and non-adaptive, with `ε_IOP = tableError`). It is honest, but adds little while the conclusion is
-     asymptotic.
-
-**Recommendation.** Keep the theorem classical, and claim no post-quantum number in Table 1. A fair statement is: the
-statistical layer holds against quantum provers; the compiled protocol is post-quantum sound asymptotically if SHA-512
-is collapsing (CDDGS25); no concrete post-quantum bound is known at these parameters.
+**Recommendation.** Keep the theorem classical, and claim no post-quantum number in Table 1. The statistical layer
+holds against quantum provers. The compiled protocol is post-quantum sound asymptotically if SHA-512 is collapsing
+(CDDGS25), and no concrete bound is known at these parameters. A Lean statement would be a research program, because no
+proof assistant has quantum rewinding. The cheap intermediate is CDDGS25 as a named `Prop`, with Flock's application
+proved.
 
 ## 10. One root, many proofs
 
 The weights are committed once, as Halevi–Micali leaves under a Merkle root registered as the model's anchor, and every
 later proof opens that root. Numbers and sources: `note:20260926T2310Z-finding-root-reuse`.
 
-- **Soundness over N tables**, by union bound: `N·2^-195.5 + N·t·2^{17.3−256}`, plus the root's straight-line binding
+- **Soundness over N tables**, by union bound: `N·2^-205 + N·t·2^{17.3−256}`, plus the root's straight-line binding
   once, `t²/2^513`.
-  - The statistical part allows N up to 2^67.5.
+  - The statistical part allows N up to 2^77.
   - The rewinding term needs `N·t ≤ 2^110.7`, about 2^30 tables at `t = 2^80`.
   - So the per-table hash term runs out, not the root. The random-oracle version's hash term is global.
   - **Decision:** state security per table, or as a lifetime budget on `N·t`.
   - For sampled audits the count is audits, not tables, and the composition needs knowledge soundness
-    (ASSUMPTIONS.md §7).
+    (README.md §4).
 - **Binding for the root's life.** Proofs publish the leaves' commit strings and paths, so binding is straight-line
   against the adversary's cumulative work. It must hold as long as anyone relies on the root, disputes about old proofs
   included.
@@ -464,17 +505,17 @@ are in `note:20260927T0015Z-finding-malicious-verifier-zk-options`.
 ### 11.1 The model: batched, serialized sessions
 
 A session carries every table from a time window, and many GPUs or datacenters prove them in parallel. Sessions are
-serialized, and each is arbitrarily large. `ASSUMPTIONS.md` §2 states the rules. Why they give zero knowledge and keep
+serialized, and each is arbitrarily large. `README.md` §2 states the rules. Why they give zero knowledge and keep
 soundness:
 
-1. **Zero knowledge needs only the single-rewind simulator.**
-   - A session has one coin commitment, however many tables and machines it spans. What forces repeated rewinding is
-     several commitments interleaved in time.
+1. **Zero knowledge needs only one rewind point** (the "single-rewind" simulator of §9).
+   - A session has one coin commitment, however many tables and machines it spans. What forces rewinding to several
+     points is several commitments interleaved in time.
    - The Goldreich–Kahan simulator makes one extraction phase: an honest prover on a dummy witness. That is
      indistinguishable from a real run until the final openings, because every earlier message is masked and those
-     openings come after the last coin. It then rewinds once, to just after step 0, and simulates every table from the
-     extracted coins by SHVZK. The tables' masks are independent, so their simulations compose. The simulator runs in
-     expected polynomial time, handling aborts as Goldreich–Kahan do.
+     openings come after the last coin. It then rewinds only to just after step 0, and simulates every table from the
+     extracted coins by SHVZK. The tables' masks are independent, so their simulations compose. Its rewinds, aborts and
+     completion estimate are as `README.md` §3 states them, in expected polynomial time.
    - Serialized sessions compose sequentially (auxiliary-input zero knowledge, Goldreich–Oren 1994).
 2. **Coins committed under one root, per (table, repetition, round).** The commitment is a SHA-512 Merkle root over
    Halevi–Micali commitments to each coin, so each table's stream is a subtree. That keeps soundness to statistical
@@ -483,7 +524,7 @@ soundness:
 3. **Shared commitment, per-table streams: soundness unchanged.** Each table's bound holds for every prover strategy,
    and the other tables are just part of that strategy. Its coins are uniform and released only after its own round's
    bytes are recorded. So the union bound gives `Σ tableError` over the session's tables, and there is no barrier
-   across machines. Squaring 2^-97.8 into 2^-195.5 needs independent coins per repetition.
+   across machines. Squaring the per-rep error into the table's needs independent coins per repetition.
 4. **Latency.** A session lasts one machine's proving work plus about 220 round trips, paced by the slowest stream.
    - With tables spread across GPUs and a coin server co-located per datacenter, that is about 1–2 s.
    - Sessions run back to back, so a table waits at most one window plus one session: twice the session length.
@@ -509,3 +550,42 @@ If real concurrency is ever needed:
   - **Lean.** About 3,000–5,000 lines on top of the Goldreich–Kahan simulator. Pass–Tseng–Venkitasubramaniam's
     simplified analysis is the one to formalize.
   - Exactly one verifier does not simplify it.
+
+## 12. The audit layer: the integrity profile
+
+`docs/audit-protocols.md` §4 is the plan and `FlockSoundness/Audit/README.md` the list of theorems. The full rationale is in
+`note:audit-lean/20260927T0736Z-finding-audit-layer-design`. The points a reviewer needs:
+
+- **Strategies, not `value`.** `value` can exceed every strategy's `prob` when a branch has no strategy. So the audit
+  theorems take per-strategy hypotheses and give per-strategy conclusions (`Game/Prob.lean`), as `table_sound_exec`
+  does.
+- **Knowledge soundness and the link term.** Halevi–Micali leaves open to essentially any value, so a unit is wrong
+  relative to a committed transcript defined by extraction. A drawn wrong unit is charged to one of two named events:
+  extraction fails, or it disagrees with the transcript (`cover`, from `correct_congr`). The oracle layer is the special
+  case where the registration is the transcript (`Partition.oracle`).
+- **Transcripts are total** (`Fin C.N → Bool`), and the committed set is derived. `Circuit.run` is the one evaluator,
+  and every composition lemma is a strong induction over gate indices.
+- **Two-stage.** Second-stage coins are drawn for every coarse unit, and only the drawn units' coordinates are used.
+  Tightness and the dilution counterexample hold for any first-stage law. Minimax uses the supporting line of
+  `s ↦ C(n − s, K)` in `ℕ`, where real convexity fails.
+- **The Flock instantiation, oracle layer** (`Audit/Flock.lean`). `table_sound` splits into its `value` form
+  (`table_value_sound`), which projects a batched session onto one table through `value_interleave_le`. The lowering
+  is a named hypothesis.
+- **The compiled layer** (`Audit/Extraction.lean`, `Audit/FlockCompiled.lean`, `Audit/FlockBatched.lean`). The
+  table's extractor is randomized and its bound depends on the prover, so the audit carries, per drawn unit, the joint
+  probabilities `ks = Pr[accept ∧ extraction fails]` and `link = Pr[accept ∧ extraction disagrees]` over the fresh run
+  and the reruns, with `cover: Pr[accept] ≤ ks + link` at a wrong drawn unit, and bounds that are functions of the
+  prover's state (the form agreed with flock-soundness). A deterministic extractor is the special case
+  (`Analysis.toExtraction`), so `extraction_audit_le` subsumes `audit_le`.
+  - Several tables (`FlockBatched.lean`): the protocol's batched session (`sessionB`); each drawn unit is read from
+    one table of the plan, `ks` is `Pr[accept]` times that table's extraction failure (the product is the joint
+    probability, by independence), and ε_ks is the largest table's `joint_le_B'` bound averaged over the draw.
+  - One table on its own (`FlockCompiled.lean`): `ks` is `table_knowledge_sound_joint_tight`'s left side.
+  - The decoder is per drawn unit, since two drawn units that share a wire hold it in their own columns. The circuit
+    `C` stays abstract; for a program it is the rows the verifier parses (`Prog.circuit`), and
+    `loweringSoundB_of_place` discharges the lowering from each unit's `UnitPlace`, given L1 and the placement.
+  - The link event is the weakest one (every satisfying candidate disagrees). For the expected-time extractor's
+    analysis (`analysisBE`), `flock_batched_linkSoundE` discharges `δ_link` under A2 and `ValueBinding` (§3).
+  - Composed (`FlockLinked.lean`): `flock_batched_count_linked` and `flock_batched_drawn_linked` carry no `δ_link`
+    hypothesis. They rest on A2, `ValueBinding` and the lowering; the `_placed` forms take `UnitPlace`
+    (row placement and L1) for the lowering.

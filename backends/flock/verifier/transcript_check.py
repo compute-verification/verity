@@ -70,32 +70,47 @@ class T:
     def vec(s, n): return s.squeeze(2, n)
 
 
-HASH_KIND_WIDTH = {0: 32, 2: 64}  # PcsParams.merkle_hash: Sha256 = 0, Sha512 = 2 (Blake3 = 1 is not a Merkle kind here)
+HASH_KIND_WIDTH = {0: 32, 2: 64, 3: 64}  # PcsParams.merkle_hash: Sha256 = 0, Sha512 = 2, Hm96Sha512 = 3 (Blake3 = 1 is not a Merkle kind here)
+SALT_BYTES = {3: 192}  # an hm96-sha512 tree's openings carry each opened row's salt (`opened_salts`)
 
 
-def digest_width(b):
-    """The Merkle digest width, read off the commitment: the one whose `PcsParams.merkle_hash` names it."""
+def merkle_kind(b):
+    """`PcsParams.merkle_hash` and the Merkle digest width, read off the commitment."""
     for h in (32, 64):
         try:
             r = R(b, h)
             r.vec(r.h32); r.u64(); r.u64(); r.u64(); r.u32(); t = r.u8(); r.u64() if t else None
-            if HASH_KIND_WIDTH.get(r.u32()) == h:
-                return h
+            k = r.u32()
+            if HASH_KIND_WIDTH.get(k) == h:
+                return k, h
         except ValueError:
             pass
     raise ValueError("no Merkle digest width fits the commitment")
 
 
+def digest_width(b):
+    """The Merkle digest width, read off the commitment: the one whose `PcsParams.merkle_hash` names it."""
+    return merkle_kind(b)[1]
+
+
+def salt_bytes(b):
+    """Bytes of each opened row's salt (0: unsalted leaves, no `opened_salts` field)."""
+    return SALT_BYTES.get(merkle_kind(b)[0], 0)
+
+
 def decode(b):
     r = R(b, digest_width(b))
+    sb = salt_bytes(b)
     cap = r.vec(r.h32); m = r.u64(); r.u64(); k0 = r.u64(); r.u32(); t = r.u8(); r.u64() if t else None; r.u32()
     pair = lambda: (r.f128(), r.f128())
     zc = dict(ab=r.vec(r.f128), c=r.vec(r.f128), rounds=r.vec(pair), fa=r.f128(), fb=r.f128(), fc=r.f128(), nonces=r.vec(r.u64))
     lc = dict(rounds=r.vec(pair), zp=r.vec(r.f128), me=r.vec(pair), nonces=r.vec(r.u64))
     rs = r.vec(lambda: (r.vec(r.f128), r.u64())); bn = r.vec(r.u64)
-    rec = lambda: (r.vec(lambda: r.vec(r.f128)), r.vec(r.h32))
+    rec = lambda: (r.vec(lambda: r.vec(r.f128)), r.vec(r.h32), r.vec(lambda: r.take(sb)) if sb else None)
     lig = dict(icap=r.vec(r.h32), iproof=rec(), rcaps=r.vec(lambda: r.vec(r.h32)), rproofs=r.vec(rec))
     lig["yr"] = r.vec(r.f128); r.vec(lambda: r.vec(r.f128)); r.vec(r.h32)
+    if sb:
+        r.vec(lambda: r.take(sb))
     lig["sc"] = r.vec(pair)
     lig["sc256"] = r.vec(lambda: ((r.f128(), r.f128()), (r.f128(), r.f128())))
     for k in ("qn", "ood", "fold", "cbn", "consn"):

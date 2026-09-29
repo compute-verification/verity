@@ -5,7 +5,7 @@
    "name": "smollm2-135m-m1",
    "log": "data/logs/m1.jsonl.gz",
    "profile": "vllm_d9105ea80_sm89_eager",
-   "digest": "d2b299f56e40d311504a81d18873131a06e13d04483cb9bf6451ab53703fe6e8",
+   "digest": "d72cd7ad71fbf73854c8fc9af5d8fa51fa71ec4a65bcad396fbcc5834fb0e8e1",
    "attribution_sha": "099bfe628971c29d913d1e2eda16b2cab93322da0bbc73f7077c32ec47868f0a",
    "n_instances": 14226,
    "n_steps": 16,
@@ -19,14 +19,14 @@
     "rope.rotary_embedding",
     "sample.gumbel_two_stage"
    ],
-   "recorded_utc": "2026-09-17T02:01:04Z",
-   "decision": "D73"
+   "recorded_utc": "2026-09-28T09:05:28Z",
+   "decision": "rebaseline-2026-09-28 (Daniel: re-baseline epoch; AmpereBF16TcDot16_v1 -> core v2 re-key, G0c)"
   },
   {
    "name": "qwen2.5-1.5b-m6",
    "log": "data/logs/m6/log.jsonl.gz",
    "profile": "vllm_d9105ea80_sm89_eager_qwen15",
-   "digest": "14a3ac665ffd9d2f1f9c4b37e2f3521de7d3cc2fe87366348218dfa9bdd459f5",
+   "digest": "074e6caba4f1e1884fa336c1bf8798f845b3f6e06224462d7aa313f5488dd89c",
    "attribution_sha": "c926d65ca202e1777350acb9b95b1a919fa071d259df990237223d8dcaa882e8",
    "n_instances": 14602,
    "n_steps": 16,
@@ -41,8 +41,8 @@
     "rope.rotary_embedding",
     "sample.gumbel_two_stage"
    ],
-   "recorded_utc": "2026-09-17T02:01:16Z",
-   "decision": "D73"
+   "recorded_utc": "2026-09-28T09:05:32Z",
+   "decision": "rebaseline-2026-09-28 (Daniel: re-baseline epoch; AmpereBF16TcDot16_v1 -> core v2 re-key, G0c)"
   }
  ]
 }

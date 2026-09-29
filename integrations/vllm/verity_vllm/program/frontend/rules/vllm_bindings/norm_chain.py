@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import torch
 
-from verity.ir.refs import Coll
+from verity.ir.refs import Coll, runs
 from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo, ViewRule
 from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, rows_of, shape
-from verity_vllm.program.frontend.rules.vllm_bindings.observations import _OBSERVED
+from verity_vllm.program.frontend.rules.vllm_bindings.observations import _OBSERVED, active_target_profile
 from verity_vllm.program.frontend.rules.vllm_bindings.operands import BF16, aten
 from verity_vllm.program.frontend.rules.vllm_bindings.pins import MEAN_PINS
 
@@ -280,7 +280,8 @@ class RsqrtRule(OpRule):
 class AddScalarRule(OpRule):
     """`aten.add.Tensor(x f32 [.., N], C)` with a static Python scalar -> `add_scalar_bf16{N,C}` (x a widened bf16 view: GemmaRMSNorm's
     `weight.float() + 1.0`) | `add_scalar_f32{N,C}` (`variance + eps`) per row; ATen's CUDA `add_kernel` in opmath f32 with the scalar
-    narrowed once (one FADD, RN). The constant is part of the kind. `alpha` must be 1."""
+    narrowed once (one FADD, RN). The constant is part of the kind. `alpha` must be 1.  When x is a weight and the declared target's
+    `weight_only_calls` is `once`, a forward whose add reads the same weight leaves as an earlier forward's reads that forward's value."""
     modes = frozenset({"profile"})
     info = RuleInfo("AddScalar[aten]", 1, "op-binding", applies_to="aten.add.Tensor(x float32 [.., N], C: static scalar), alpha == 1",
                     preconditions=("x is an f32 value collection of rank >= 1 (widened -> AddScalarBf16, genuine -> AddScalarF32)",
@@ -308,8 +309,18 @@ class AddScalarRule(OpRule):
         N = rows[0].type.n
         w = widened_bf16(ctx, x)
         fn = ctx.kind("add_scalar_bf16" if w else "add_scalar_f32", node, N=N, C=c)
+        once = ctx.weight_of(x) is not None and active_target_profile().effective_weight_only_calls() == "once"
+        key = (fn.id, tuple(tuple(r) for r in runs(ctx.coll(x).refs))) if once else None
+        issued = ctx.state.setdefault("weight_only_calls", {}) if once else {}
+        if key in issued:
+            ctx.define(node, issued[key][0])
+            ctx.record(self, node, {"N": N, "C": c, "rows": len(rows), "operand_widened_bf16": bool(w), "weight_only_calls": "once"},
+                       emitted=f"{fn.id} x0 (reads {issued[key][1]})")
+            return
         outs = [ctx.call(fn, r, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]") for i, r in enumerate(rows)]
         ctx.define(node, from_rows(outs, lead))
+        if once:
+            issued[key] = (ctx.val(node), node.name)
         if w and ctx.weight_of(x) is not None:
             ctx.bind_weight_role(x, self, "norm.weight_plus_one", N=N, C=c)
         ctx.record(self, node, {"N": N, "C": c, "rows": len(rows), "operand_widened_bf16": bool(w)}, emitted=f"{fn.id} x{len(rows)}")

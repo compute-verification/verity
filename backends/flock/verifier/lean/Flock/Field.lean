@@ -62,17 +62,11 @@ def invGo (a : F128) : Nat → F128 → F128
 def inv (a : F128) : F128 := square (invGo a 127 one)
 
 /-- The 16-byte encoding `le64(lo) ‖ le64(hi)`. -/
-def toBytes (a : F128) : ByteArray := Id.run do
-  let mut b := ByteArray.emptyWithCapacity 16
-  for i in [0:8] do b := b.push (a.lo >>> (8 * i).toUInt64).toUInt8
-  for i in [0:8] do b := b.push (a.hi >>> (8 * i).toUInt64).toUInt8
-  return b
+def toBytes (a : F128) : ByteArray :=
+  ⟨Array.ofFn (n := 16) fun i =>
+    if i.val < 8 then (a.lo >>> (8 * i.val).toUInt64).toUInt8 else (a.hi >>> (8 * (i.val - 8)).toUInt64).toUInt8⟩
 
-def pushBytes (out : ByteArray) (a : F128) : ByteArray := Id.run do
-  let mut b := out
-  for i in [0:8] do b := b.push (a.lo >>> (8 * i).toUInt64).toUInt8
-  for i in [0:8] do b := b.push (a.hi >>> (8 * i).toUInt64).toUInt8
-  return b
+def pushBytes (out : ByteArray) (a : F128) : ByteArray := out ++ a.toBytes
 
 @[inline] def bit (a : F128) (i : Nat) : Bool :=
   if i < 64 then (a.lo >>> i.toUInt64) &&& 1 == 1 else (a.hi >>> (i - 64).toUInt64) &&& 1 == 1

@@ -1,7 +1,7 @@
 """The CI agreement job (PROTOCOL.md §17.1): every replayable set of `vectors.json` through both verifiers.
 
-    python ci.py --lean BIN --upstream PR83_COMMIT=BIN [--upstream ...] --work DIR [--inputs DIR] [--jobs J] [--seed S]
-        [--fuzz N] [--sets I,J] [--out DIR]
+    python ci.py --lean BIN --upstream PR83_COMMIT=BIN [--upstream ...] --work DIR [--inputs DIR] [--jobs J] [--session-jobs K]
+        [--seed S] [--fuzz N] [--sets I,J] [--out DIR]
 
 For each set (in `vectors.json` `replayable.sets`) whose PR #83 commit has an upstream binary, the job:
 - fetches its inputs from the evidence store (`research data fetch`);
@@ -11,16 +11,24 @@ For each set (in `vectors.json` `replayable.sets`) whose PR #83 commit has an up
 - runs `agree.py` on all of them.
 
 `--inputs DIR` holds the stored inputs already fetched (`DIR/<art id prefix>/…`, as `research data fetch --to` lays them
-out), for a machine without store access. `--jobs` runs sets in parallel. Writes DIR/result.json (one entry per set) and
+out), for a machine without store access. `--jobs` runs sets in parallel, and `--session-jobs` a set's sessions across that
+many verifier processes at once over all sets (by default the cores, and the available memory at 8 GB a process): each set's
+sessions are dealt into chunks of four or more (`agree.py --jobs`), and a set finishing early frees its slots for the
+others. The verdicts and every output are the same whatever the parallelism. Writes DIR/result.json (one entry per set) and
 exits 1 if any set has a disagreement or a missed expectation. With `--out` (a recorded run's directory), each set's
 agreement outputs are copied there and `result.json` is written in the `research/result/v0.1` envelope. Run it as a
 recorded job (`ci-pod.sh` on a CPU pod). Use a fixed seed per change and a rolling seed nightly.
 """
-import argparse, hashlib, json, os, shutil, subprocess, sys
+import argparse, hashlib, json, os, shutil, subprocess, sys, threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+import agree  # noqa: E402
+
+#: the verifier processes all sets may run at once (main sets it: `--session-jobs`)
+SLOTS = threading.Semaphore(1)
 
 
 def fetch(art, store):
@@ -45,7 +53,10 @@ def run_set(i, s, a, ups, store):
         return {"set": i, "pr83": s["pr83"], "skipped": "no upstream binary for this PR #83 commit"}, False
     w = a.work / f"set{i}"
     st = s["statement"]
-    circuit, public, comp = fetch(st["circuit"], store), fetch(st["public"], store), fetch(st["comp"], store)
+    circuit, public = fetch(st["circuit"], store), fetch(st["public"], store)
+    comp = fetch(st["comp"], store) if "comp" in st else None
+    partition = fetch(st["partition"], store) if "partition" in st else None
+    program = fetch(st["program"], store) if "program" in st else None
     tables = fetch(st["tables"], store) if "tables" in st else None
     checks = ",".join(s.get("upstream_checks", [])) or "none"
     sessions, expects = [], []
@@ -72,14 +83,32 @@ def run_set(i, s, a, ups, store):
         py(HERE / "selftest_records.py", fetch(rd, store), d)
         sessions += sorted(str(p) for p in d.iterdir() if p.is_dir())
     cmd = [sys.executable, HERE / "agree.py", "--lean", a.lean, "--upstream", up, "--statement", s["lean_statement"],
-           "--circuit", circuit, "--comp", comp, "--public", public, *(x for e in expects for x in ("--expect", e)),
-           "--out", w / "agree", "--sessions", *sessions]
+           "--circuit", circuit, *(("--comp", comp) if comp else ()), *(("--partition", partition) if partition else ()), *(("--program", program) if program else ()),
+           "--public", public, *(x for e in expects for x in ("--expect", e)),
+           "--out", w / "agree", "--jobs", a.session_jobs, "--sessions", *sessions]
     if tables:
         cmd += ["--tables", tables]
-    p = subprocess.run(list(map(str, cmd)), capture_output=True, text=True)
+    # in-process: every set's verifier processes draw on one budget (SLOTS), so a long set takes the slots short ones free
+    rc = agree.main([str(x) for x in cmd[2:]], slots=SLOTS, quiet=True)
     r = json.loads((w / "agree" / "result.json").read_text())
     r.update({"set": i, "pr83": s["pr83"], "lean_statement": s["lean_statement"], "detail": st.get("detail", "")})
-    return r, p.returncode != 0
+    return r, rc != 0
+
+
+#: the memory one verifier process may take (a statement of m <= 26: upstream's replay builds it, and leaks it)
+GB_PER_PROCESS = 8
+
+
+def auto_session_jobs():
+    """Verifier processes at once, over all sets: the cores, and the available memory at `GB_PER_PROCESS` each."""
+    mem = GB_PER_PROCESS
+    try:
+        for line in open("/proc/meminfo"):
+            if line.startswith("MemAvailable:"):
+                mem = int(line.split()[1]) // (1 << 20)
+    except OSError:
+        pass
+    return max(1, min(os.cpu_count() or 1, mem // GB_PER_PROCESS))
 
 
 def sha256(p):
@@ -92,7 +121,9 @@ def main():
     ap.add_argument("--upstream", action="append", default=[], metavar="COMMIT=BIN")
     ap.add_argument("--work", required=True, type=Path)
     ap.add_argument("--inputs", type=Path, default=None)
-    ap.add_argument("--jobs", type=int, default=1)
+    ap.add_argument("--jobs", type=int, default=1, help="sets at once")
+    ap.add_argument("--session-jobs", type=int, default=0,
+                    help="verifier processes at once over all sets; 0: the cores, and the available memory at 8 GB a process")
     ap.add_argument("--seed", type=int, default=20260926)
     ap.add_argument("--fuzz", type=int, default=20)
     ap.add_argument("--sets", default=None, help="comma-separated set indices (default: every set with an upstream binary)")
@@ -102,6 +133,10 @@ def main():
     store = a.inputs or (a.work / "store")
     sets = json.loads((HERE / "vectors.json").read_text())["replayable"]["sets"]
     pick = [int(i) for i in a.sets.split(",")] if a.sets else list(range(len(sets)))
+    global SLOTS
+    if a.session_jobs <= 0:
+        a.session_jobs = auto_session_jobs()
+    SLOTS = threading.Semaphore(a.session_jobs)
     with ThreadPoolExecutor(max_workers=a.jobs) as ex:
         done = list(ex.map(lambda i: run_set(i, sets[i], a, ups, store), pick))
     results = [r for r, _ in done]

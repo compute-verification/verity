@@ -81,6 +81,60 @@ def sha512 : Hm96 :=
     saltTag := tag "verity/hm96-sha512/salt/v1", leafTag := tag "verity/hm96-sha512/leaf/v1",
     keyLabel := tag "verity/hm96-sha512/key/v1" }
 
+/- `hm96-sha512/v1` under its default key, as the proof's Merkle leaves and the serving rows use it: the mask from per-byte
+tables (the XOR of `M`'s columns `8p + s` over the set bits `s` of salt byte `p`), built once. -/
+namespace Default512
+
+def key : ByteArray := sha512.keyFromLabel
+
+private def keyBit (t : Nat) : UInt64 := ((key.get! (t / 8)).toUInt64 >>> (t % 8).toUInt64) &&& 1
+
+/-- Column `j` of `M` (bits `i < 512` of `key_{i+j}`) as eight little-endian limbs, for `j < 1536`. -/
+def cols : Array UInt64 := Id.run do
+  let mut out := Array.replicate (8 * 1536) (0 : UInt64)
+  for j in [0:1536] do
+    for i in [0:512] do
+      let c := 8 * j + i / 64
+      out := out.set! c (out[c]! ||| (keyBit (i + j) <<< (i % 64).toUInt64))
+  return out
+
+/-- Entry `256 p + v`: the XOR of `cols[8p + s]` over the set bits `s` of `v`, eight limbs each. -/
+def tables : Array UInt64 := Id.run do
+  let mut t := Array.replicate (8 * 256 * 192) (0 : UInt64)
+  for p in [0:192] do
+    for v in [1:256] do
+      let prev := 8 * (256 * p + (v &&& (v - 1)))
+      let col := 8 * (8 * p + Nat.log2 (v &&& (256 - v)))
+      let at_ := 8 * (256 * p + v)
+      for k in [0:8] do t := t.set! (at_ + k) (t[prev + k]! ^^^ cols[col + k]!)
+  return t
+
+/-- `M·y` as 64 bytes. -/
+def mask (salt : ByteArray) : ByteArray := Id.run do
+  let mut acc := Array.replicate 8 (0 : UInt64)
+  for p in [0:192] do
+    let at_ := 8 * (256 * p + (salt.get! p).toNat)
+    for k in [0:8] do acc := acc.set! k (acc[k]! ^^^ tables[at_ + k]!)
+  let mut out := ByteArray.emptyWithCapacity 64
+  for k in [0:8] do
+    for j in [0:8] do out := out.push ((acc[k]! >>> (8 * j).toUInt64) &&& 0xff).toUInt8
+  return out
+
+def saltPrefix : ByteArray := pad sha512.saltTag 128
+def leafPrefix : ByteArray := sha512.leafPrefix key
+
+/-- `b ‖ c` for the inner digest `x` and the salt. -/
+def commitString (x salt : ByteArray) : ByteArray :=
+  let m := mask salt
+  let b := ByteArray.mk ((Array.range 64).map fun i => x.get! i ^^^ m.get! i)
+  b ++ Sha512.hash (saltPrefix ++ salt)
+
+def treeLeaf (bc : ByteArray) : ByteArray := Sha512.hash (leafPrefix ++ bc)
+
+def leaf (x salt : ByteArray) : ByteArray := treeLeaf (commitString x salt)
+
+end Default512
+
 end Hm96
 
 end Flock

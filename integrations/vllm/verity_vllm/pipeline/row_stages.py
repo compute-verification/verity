@@ -188,28 +188,16 @@ class SingleRow(Row):
         self.tl("admission", "end", ("rc", 0), ("advisory", "true"))
 
     # ------------------------------------------------------------------------------------------------ manifest
-    def norm_tap(self) -> bool:
-        """The row runs the norm-scale tap (NORM_TAP=1): opt-in, never the record."""
-        return self.ck_.norm_tap == "1"
-
-    def router_tap(self) -> bool:
-        """The row runs the router-softmax tap (ROUTER_TAP=1): opt-in, never the record."""
-        return self.ck_.router_tap == "1"
-
-    def vocab_tap(self) -> bool:
-        """The row runs the vocabulary-range source (VOCAB_TAP=1): opt-in, never the record."""
-        return self.ck_.vocab_tap == "1"
-
     def guarded_max(self) -> bool:
-        """The row runs the guarded-max tap build (GUARDED_MAX_TAP=1): opt-in, never the record."""
+        """The row runs the guarded-max tap build: by default, as every row's attention is FA2/FA3 (GUARDED_MAX_TAP=0 for A/B only)."""
         return self.ck_.guarded_max_tap == "1"
 
     def required_manifest(self, stage: str) -> int:
-        """Build the required-value manifest of record (Q_module_body_v1 over the Build's request Programs; under NORM_TAP=1,
-        GUARDED_MAX_TAP=1, ROUTER_TAP=1 or VOCAB_TAP=1 the tap's policy too) -> 0 | 3 | 1."""
+        """Build the required-value manifest of record (the query of record over the Build's request Programs, under the tap and
+        guarded-max policies the row runs: all by default, NORM_TAP=0 etc. for A/B only) -> 0 | 3 | 1."""
         wd = ""
-        policy = R.tap_policy_flags(self.ck_) + (["--guarded-max"] if self.guarded_max() else [])
-        self.tl(f"{stage}.required_manifest", "start", ("engine", "v2-query"))
+        policy = R.tap_policy_flags(self.ck_)
+        self.tl(f"{stage}.required_manifest", "start", ("query", R.QUERY_OF_RECORD))
         if self.B > 1 and glob.glob(f"{self.d}/build_request_LP*_T*"):
             wd = R.workload_digest(self.d)
             cmd = self.cli("manifest", "build-global", "--fixture", self.wl, "--programs-root", self.d,
@@ -222,7 +210,7 @@ class SingleRow(Row):
             rc = subprocess.run(cmd, stdout=f, stderr=subprocess.STDOUT, cwd=self.tree, env=self.child_env).returncode
         if rc == 0:
             self.tl(f"{stage}.required_manifest", "end", ("rc", 0))
-            self.log(f"required-value manifest of record (Q_module_body_v1, B={self.B}{', workload digest ' + wd[:16] if wd else ''}): {_tail(log)}")
+            self.log(f"required-value manifest of record ({R.QUERY_OF_RECORD}, B={self.B}{', workload digest ' + wd[:16] if wd else ''}): {_tail(log)}")
             return 0
         if os.path.exists(f"{self.d}/manifest.json"):
             os.remove(f"{self.d}/manifest.json")
@@ -483,9 +471,11 @@ class SingleRow(Row):
     def match_cmd(self) -> list[str]:
         d, cm = self.d, self.cm
         snapmax = ["--snapshot-max-bytes", cm.snapshot_max_bytes] if cm.snapshot_max_bytes else []
+        # the Programs the Match compares against (B=1 the request Program, B>=2 its components): the fold binds their sampler construction
+        progs = [p for p in ([f"{d}/build_request"] if self.B <= 1 else sorted(glob.glob(f"{d}/build_request_LP*_T*"))) if os.path.isfile(f"{p}/result.json")]
         return self.cli("match", "--case", self.role, "--workload", self.wl, "--out", f"{d}/match", "--checkpoint-dir", self.ck,
                         "--phase", cm.match_phase, "--python-gpu", self.py, "--python-cpu", self.py312, "--max-num-seqs", str(self.B),
-                        "--snapshot-steps", self.snap_steps or self.snap_def, *snapmax, "--skip", SKIP,
+                        "--snapshot-steps", self.snap_steps or self.snap_def, *snapmax, *(x for p in progs for x in ("--program-dir", p)), "--skip", SKIP,
                         "--engine-arg", f"gpu_memory_utilization={self.gpu_util}", "--cards-dir", f"{d}/match/cards", py=self.py312)
 
     def stochastic(self) -> bool:
@@ -519,7 +509,8 @@ class SingleRow(Row):
         self.tl("row", "end", ("ok", "false"), ("stopped_at", "commit"))
         raise Stop(rc)
 
-    def commit_cmd(self) -> list[str]:
+    def commit_cmd(self, taps: list[str]) -> list[str]:
+        """The Commit's command line; `taps`: the row's taps that apply to it (`row_records.applicable_taps`), whose sources it attaches."""
         ck = self.ck_
         cmd = self.cli("commit", "--case", self.role, "--workload", self.wl, "--committer", "native_collect_v2b", "--fast-copy", "--gpu-tree",
                        "--hidden-so", self.hidden_so, "--openings", "64", "--pairs", str(ck.pairs), "--warmup", "2", "--max-num-seqs", str(self.B),
@@ -541,13 +532,9 @@ class SingleRow(Row):
             cmd += ["--required-classes", ck.required_classes]
         if ck.vu_export != "0":
             cmd += ["--vu-export-dir", self.vu_export_dir()]
-        if self.norm_tap():
-            cmd += ["--norm-tap-so", self.env.norm_tap_so]
-        if self.router_tap():
-            cmd += ["--router-tap-so", self.env.router_tap_so]
-        if self.vocab_tap():
-            cmd.append("--vocab-range")
-        return cmd
+        if ck.serving_rows:
+            cmd += ["--serving-rows", self.serving_rows_request(ck.serving_rows)]
+        return cmd + R.tap_source_args(taps, self.env)
 
     def vu_export_dir(self) -> str:
         """Where the Commit exports the row's sampled VUs (`pipeline.vu_export`): inside the research run dir when there is one, so the
@@ -561,32 +548,40 @@ class SingleRow(Row):
                                   "dirty": False if self.env.environ.get("RESEARCH_SOURCE_SHA") else None}}, f)
         return d
 
+    def serving_rows_request(self, partition: str) -> str:
+        """The Commit's serving-rows request (`pipeline.serving_rows`): its directory inside the research run dir when there is one,
+        so the run's custody preserves it, the verifier's partition file, and the run id and source the roots' domains bind."""
+        rd = self.env.research_run_dir
+        d = os.path.join(rd, "serving-rows", self.row) if rd else f"{self.d}/serving-rows"
+        os.makedirs(d, exist_ok=True)
+        req = os.path.join(d, "request.json")
+        with open(req, "w") as f:
+            json.dump({"dir": d, "partition": partition, "run": self.env.environ.get("RESEARCH_RUN_ID") or self.row,
+                       "committer": {"source": self.env.environ.get("RESEARCH_SOURCE_SHA")}}, f)
+        return req
+
+    def program_digest(self) -> str:
+        """The Program digest the Commit is keyed by: the one named, else the Build's of record ("" when unreadable)."""
+        try:
+            return self.ck_.program_digest or R.program_digest_of_record(self.d, self.B)
+        except (OSError, ValueError, KeyError, TypeError, AttributeError):
+            return ""
+
     def manifest_of_record(self) -> str:
-        """The required-value manifest the Commit runs over: the one named, else the Build's when the query path built it
-        (a pre-query manifest is moved aside, never used), else rebuilt here from the Build's request Programs."""
+        """The required-value manifest the Commit runs over: the one named, else the Build's when it is of record (`R.manifest_not_of_record`:
+        the query of record with a partition, the Build's Program digest, the row's tap policies, a passing word check); any other is moved
+        aside, never used, and the manifest rebuilt here from the Build's request Programs."""
         d = self.d
         man = self.ck_.required_manifest or ""
         if not man and os.path.isfile(f"{d}/manifest.json"):
-            eng = R.manifest_engine(f"{d}/manifest.json")
-            missing = R.manifest_missing_policies(f"{d}/manifest.json", self.ck_) if eng == "v2-query" else []
-            if missing:
-                prev = f"{d}/manifest.no-{'-'.join(missing).replace('_', '-')}-{_stamp()}.json"
-                os.replace(f"{d}/manifest.json", prev)
-                self.log(f"manifest.json beside the Build was built without the {', '.join(missing)} policy and this Commit runs its tap: moved aside "
-                         f"({os.path.basename(prev)}), rebuilding the manifest under the policy")
-            elif eng == "v2-query" and self.guarded_max() != R.manifest_guarded_max(f"{d}/manifest.json"):
-                prev = f"{d}/manifest.guarded-max-{int(not self.guarded_max())}-{_stamp()}.json"
-                os.replace(f"{d}/manifest.json", prev)
-                self.log(f"manifest.json beside the Build has {'no ' if self.guarded_max() else 'the '}guarded-max policy and this Commit runs "
-                         f"GUARDED_MAX_TAP={int(self.guarded_max())}: moved aside ({os.path.basename(prev)}), rebuilding the manifest")
-            elif eng == "v2-query":
+            slug, why = R.manifest_not_of_record(R.load_json(f"{d}/manifest.json"), self.program_digest(), self.ck_)
+            if not why:
                 man = f"{d}/manifest.json"
                 self.log(f"required-value manifest of record: {man} (built at the Build stage: {_tail(f'{d}/manifest.log', 200)})")
             else:
-                prev = f"{d}/manifest.pre-v2-{_stamp()}.json"
+                prev = f"{d}/manifest.{slug}-{_stamp()}.json"
                 os.replace(f"{d}/manifest.json", prev)
-                self.log(f"manifest.json beside the Build is not the query path's (query.engine={eng or 'none'}): moved aside "
-                         f"({os.path.basename(prev)}), rebuilding the manifest of record")
+                self.log(f"manifest.json beside the Build {why}: moved aside ({os.path.basename(prev)}), rebuilding the manifest of record")
         if not man and (os.path.isfile(f"{d}/build_request/instances.json.gz") or glob.glob(f"{d}/build_request_LP*_T*")):
             mrc = self.required_manifest("commit")
             if mrc == 3:
@@ -662,8 +657,6 @@ class SingleRow(Row):
         else:
             cmd += ["--program", f"{d}/build_request", "--workload", self.wl]
         cmd += R.tap_policy_flags(self.ck_)
-        if self.guarded_max():
-            cmd.append("--guarded-max")
         self.tl("validate.manifest_verify", "start")
         with open(f"{d}/manifest_verify.log", "w") as f:
             rc = subprocess.run(cmd, stdout=f, stderr=subprocess.STDOUT, cwd=self.tree, env=self.child_env).returncode
@@ -682,12 +675,7 @@ class SingleRow(Row):
         self.tl("stage.commit", "start")
         if not os.path.isfile(self.hidden_so):
             self.commit_stop(12, f"hidden .so missing: {self.hidden_so}")
-        if self.norm_tap() and not os.path.isfile(self.env.norm_tap_so):
-            self.commit_stop(12, f"NORM_TAP=1 and the norm tap .so is missing: {self.env.norm_tap_so} (ops/pod_norm_tap.sh)")
-        if self.router_tap() and not os.path.isfile(self.env.router_tap_so):
-            self.commit_stop(12, f"ROUTER_TAP=1 and the router tap .so is missing: {self.env.router_tap_so} (ops/pod_router_tap.sh)")
         self.tl("commit.prepare", "start")
-        cmd = self.commit_cmd()
         pd_req = f"{d}/build_request"
         if self.B <= 1:
             served = R.served_shape(d)
@@ -695,14 +683,15 @@ class SingleRow(Row):
                 self.log(f"B=1 EOS-stopped request ({served}, match_shape.json): Program of record at Commit = the CAP-shape build_request; the positions "
                          "past the executed prefix are classified not-executed by rule, not cut from the population (the Match-side served-shape comparison stands)")
         man = self.manifest_of_record()
+        taps = R.applicable_taps(man, ck) if man else []
+        why = R.missing_tap_build(taps, self.env)
+        if why:
+            self.commit_stop(12, why)
+        self.log(f"taps: {', '.join(taps) or 'none'} (on, and the manifest names their families); guarded max {'on' if self.guarded_max() else 'off'}")
+        cmd = self.commit_cmd(taps)
         if man:
             cmd += ["--required-manifest", man]
-        pdig = ck.program_digest
-        if not pdig:
-            try:
-                pdig = R.program_digest_of_record(d, self.B)
-            except (OSError, ValueError, KeyError, TypeError, AttributeError):
-                pdig = ""
+        pdig = self.program_digest()
         if pdig:
             cmd += ["--program-digest", pdig]
         cmd += (ck.commit_args or "").split()
