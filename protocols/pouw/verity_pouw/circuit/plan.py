@@ -88,13 +88,17 @@ class CountLaw:
 
 
 def check_work_strata(strata: Sequence[StratumSpec]) -> None:
-    """Refuse a call whose work is in more than one stratum: the window pin's `covers_window` takes each call's work in one
-    stratum as its hypothesis `hone`, since the cap K_c ≤ N_c can under-draw one of two work strata (root's counterexample:
-    4 units at work 2 and 2 at work 5 with K = 8 cap K_c at 6, and the first draws 3 where covering needs 3.6). X-SPC-84
-    gives work to the tile template only; this makes that a check, not a convention."""
+    """Refuse a call whose work is in more than one stratum, or whose tiles are of more than one template. The window pin's
+    `covers_window` takes each call's work in one stratum as its hypothesis `hone`: where the cap K_c ≤ N_c binds, a
+    second work stratum is under-drawn (the red team's window: ten wrong units escape with 0.156 against a claimed
+    2.4·10⁻⁴). A stratum does work when 0 < w_s·n_s, its `work`. X-SPC-84 gives work to the tile template only; this
+    makes that a check, not a convention."""
     worked = [s.name for s in strata if s.work > 0]
     if len(worked) > 1:
         raise ValueError(f"a call's work is in one stratum (the window pin's hone), not in {len(worked)}: {worked}")
+    tiles = [s.name for s in strata if s.role == "tile"]
+    if len(tiles) > 1:
+        raise ValueError(f"a call's tiles share one template, not {len(tiles)}: {tiles}")
 
 
 def record_k(epsilon: Fraction, delta: Fraction) -> int:
@@ -169,9 +173,9 @@ def window_laws(layouts: Sequence["Layout"], k: int = RECORD_K, floors: tuple[tu
     window draws at most K_y + C of its y cells. K_y = K = 27,713 keeps δ = 2⁻⁴⁰ over the window: a tile-bad and a y-bad
     wrong set are one family of the audit, so its sampling term is the larger of (1 − ε)^K and (1 − ε)^K_y, not their sum.
     The other zero-work templates keep their floors (1 unless ``floors`` names them, X-SPC-84). Per call these are pinned
-    (`audit_work_floor`); over the window, the per-call split's bound (X-SPC-83, 106) and B's (X-SPC-105) wait on root's
-    window-composition pin (`FlockSoundness/Audit/Window.lean`), which assumes each call draws under its own key context
-    (`draw`'s ``call``)."""
+    (`audit_work_floor`); over the window, the per-call split (X-SPC-83, 106) and B (X-SPC-105) are root's window pin
+    `audit_window_split_of_record` (`FlockSoundness/Audit/Window.lean`, pending its proof), which takes each call's work
+    in one stratum (`check_work_strata`) and each call's draw under its own key context (`Traced.draw`'s `Ledger`)."""
     for lay in layouts:
         check_work_strata(lay.strata)
     total = sum(lay.work() for lay in layouts)
