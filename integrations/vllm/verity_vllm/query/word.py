@@ -299,6 +299,73 @@ def tap_kernel(scope: str | None, head: str | None = None) -> str:
 _RULES: dict = {}
 
 
+def _depth(fn: Any, limits: dict[str, int], depth: dict[str, int], fns: dict[str, Any]) -> int:
+    """`unit_rule`'s recursion under `fn`, by Definition id into `depth`: 0 for a body cut as a whole, one more than its deepest
+    member for a separable body, -1 when there is nothing to cut (a primitive, a body over its gate limit)."""
+    got = depth.get(fn.id)
+    if got is not None:
+        return got
+    if isinstance(fn, PrimitiveDefinition):
+        d = -1
+    elif (sep := separable(fn)) is not None:
+        d = 1 + max((_depth(c, limits, depth, fns) for c, _m in sep), default=-1)
+    else:
+        d = 0 if fn.gates <= gate_limit(fn, limits) else -1
+    depth[fn.id], fns[fn.id] = d, fn
+    return d
+
+
+#: the prefetch's work, set before its workers fork (a Definition need not pickle)
+_PENDING: list[tuple[Any, int, int, int, dict[str, int]]] = []
+
+
+def _rule_of_pending(i: int) -> dict[str, Any] | None:
+    fn, X, W, extras, limits = _PENDING[i]
+    try:
+        return unit_rule(fn, X, W, extras, memo=_RULES[tuple(sorted(limits.items()))], max_gates=limits)
+    except Exception:  # noqa: BLE001  -- left to check_calls, which reports or raises it as it always has
+        return None
+
+
+def prefetch(specs: Iterable[str], X: int = 16, W: int = 32, extras: int = 0, *, max_gates: Limits = None, jobs: int = 1,
+             specialize: Callable[[str, dict], Any] = specialization) -> int:
+    """Memo, `jobs` forked processes at a time, the unit rules `check_calls` would compute one after another for Calls of the
+    Definition ids `specs` (`spec_histogram` keys; a `batch:` / `scan:` prefix is dropped): every Definition under them that the
+    process has not ruled on yet, the bodies cut as a whole first, then each separable body once its members are memoed.  A rule
+    is a function of its Definition, so a check reads what it would have computed; a spec that does not resolve, or a rule that
+    raises, is left to `check_calls`.  Nothing is done for `jobs` <= 1 or without `fork`.  Returns how many rules were memoed."""
+    import multiprocessing
+    from concurrent.futures import ProcessPoolExecutor
+    from verity_vllm.query.program_view import spec_base, spec_statics
+    if jobs <= 1 or "fork" not in multiprocessing.get_all_start_methods():
+        return 0
+    limits = gate_limits(max_gates)
+    memo = _RULES.setdefault(tuple(sorted(limits.items())), {})
+    depth: dict[str, int] = {}
+    fns: dict[str, Any] = {}
+    for s in dict.fromkeys(specs):
+        try:
+            fn = specialize(spec_base(s), spec_statics(s))
+        except (KeyError, TypeError, ValueError, AttributeError):
+            continue
+        _depth(fn, limits, depth, fns)
+    done = 0
+    for d in range(max(depth.values(), default=-1) + 1):
+        todo = sorted((fns[i] for i, k in depth.items() if k == d and (i, X, W, extras) not in memo), key=lambda fn: -fn.gates)
+        if not todo:
+            continue
+        _PENDING[:] = [(fn, X, W, extras, limits) for fn in todo]
+        try:
+            with ProcessPoolExecutor(min(jobs, len(todo)), mp_context=multiprocessing.get_context("fork")) as ex:
+                for fn, rule in zip(todo, ex.map(_rule_of_pending, range(len(todo)))):
+                    if rule is not None:
+                        memo[(fn.id, X, W, extras)] = rule
+                        done += 1
+        finally:
+            _PENDING.clear()
+    return done
+
+
 def check_calls(groups: Iterable[dict[str, Any]], X: int = 16, W: int = 32, extras: int = 0, *, strict: bool = True,
                 specialize: Callable[[str, dict], Any] = specialization,
                 acquired: Mapping[str, int | Callable[[dict], int]] | None = None, max_gates: Limits = None) -> dict[str, Any]:
@@ -393,4 +460,5 @@ def check_query(P: Any, Q: Any, X: int = 16, W: int = 32, extras: int = 0, *, st
 
 
 __all__ = ["QUERY_ID", "WIRING", "RULE", "MAX_GATES", "MAX_GATES_ENV", "committed_today", "tap_kernel", "QueryRuleViolation", "query_id", "parse",
-           "gate_limits", "gate_limit", "specialization", "Graph", "partition", "units", "unit_rule", "check_calls", "call_groups", "check_query"]
+           "gate_limits", "gate_limit", "specialization", "Graph", "partition", "units", "unit_rule", "prefetch", "check_calls", "call_groups",
+           "check_query"]
