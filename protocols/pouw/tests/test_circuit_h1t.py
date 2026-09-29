@@ -263,21 +263,25 @@ def test_the_width_rule_refuses_an_empty_served_set():
 
 def test_equal_calls_under_one_key_draw_different_tiles():
     """X-SPC-96 on H-1T: each stratum's subset is keyed by the call's (forward, position) with its template, so equal calls
-    under one key draw different tiles; `Traced.draw` draws over the verifier's own layout (X-SPC-97)."""
+    under one key draw different tiles; `Traced.draw` draws over the verifier's own layout (X-SPC-97), and admits each
+    call to the window's `Ledger` first, so a repeated (forward, position) is refused before it draws (M1)."""
     from verity.randomness import derive
     from verity_pouw.circuit import plan as PL
     from verity_pouw.circuit import traced_h1t
-    from verity_pouw.circuit.anchors import H1tAnchors
+    from verity_pouw.circuit.anchors import H1tAnchors, Ledger
 
     c = call(64, 96, 64)
     t, law, key = traced_h1t(64, 96, 64), PL.WorkLaw(4), derive(b"verifier-secret", PL.DRAW_DOMAIN, {"receipt": b"r"})
-    lay = t.layout()
+    lay, window = t.layout(), Ledger()
 
-    def tiles(forward):
+    def tiles(forward, ledger):
         an = H1tAnchors(c.salt, forward, c.layer, c.site, c.weight, tuple(c.rowids), tuple(range(64)))
-        return [u for u in t.draw(key, law, an).drawn if lay.units[u].role == "tile"]
+        return [u for u in t.draw(key, law, an, ledger).drawn if lay.units[u].role == "tile"]
 
-    assert tiles(3) == tiles(3) and all(tiles(f) != tiles(3) for f in (4, 5, 6))
+    first = tiles(3, window)
+    assert first == tiles(3, Ledger()) and all(tiles(f, window) != first for f in (4, 5, 6))
+    with pytest.raises(DomainError, match="repeated"):
+        tiles(3, window)
 
 
 # ---- the served output: vLLM's epilogue order --------------------------------------------------------------------------
@@ -345,7 +349,7 @@ def test_a_key_drawn_at_its_floor_opens_its_strip_s_rows():
     from verity.randomness import derive
     from verity_pouw.circuit import plan as PL
     from verity_pouw.circuit import traced_h1t
-    from verity_pouw.circuit.anchors import H1tAnchors
+    from verity_pouw.circuit.anchors import H1tAnchors, Ledger
 
     c = call(48, 64, 32)
     t = traced_h1t(48, 64, 32)
@@ -353,7 +357,7 @@ def test_a_key_drawn_at_its_floor_opens_its_strip_s_rows():
     an = H1tAnchors(c.salt, c.forward, c.layer, c.site, c.weight, tuple(c.rowids), tuple(range(32)))
     lonely = 0
     for i in range(60):
-        plan = t.draw(derive(b"verifier-secret", PL.DRAW_DOMAIN, {"receipt": b"r%d" % i}), PL.WorkLaw(2), an)
+        plan = t.draw(derive(b"verifier-secret", PL.DRAW_DOMAIN, {"receipt": b"r%d" % i}), PL.WorkLaw(2), an, Ledger())
         units = [lay.units[u] for u in plan.proved]
         tile_strips = {u.where[0] for u in units if u.role == "tile"}
         for u in units:
