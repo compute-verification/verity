@@ -249,7 +249,8 @@ The profile is `Stratified` over the tile strata, and its `harm_bound`, at W_ref
 ## H-1T as a circuit under sampled proofs, layout A (`verity_pouw/circuit/h1t.py`)
 
 Track H's tagged one-sided FP8 construction (docs `pouw/hardness-shaped-matrices.md` §3.1) as a Program under layout A,
-the shape `TTH1T` is being restated to. There is no H-1T scheme in `schemes` yet: the reference is Track H's pinned map,
+the scope of the restated `TTH1T`'s grant (a named assumption for layout A at 16 × 16 tiles, k <= 32,768, the units,
+tiling and Program fixed before the salt). There is no H-1T scheme in `schemes` yet: the reference is Track H's pinned map,
 `h1_tagged.h1t_ref`, whose forming and chain `tests/vectors/h1t_ref.json` pins bit for bit (Track H's own code, run on raw
 salt words in the honest kernel's bit layout). Shapes: 16 | m, 16 | n, 8 | k, 29 < k <= 32,768, n <= 88,412.
 
@@ -276,9 +277,20 @@ H1tDequant      output entry          Z, s_i, t_j, bias_j                       
   r_16s … r_16s+15), K_s = SHAKE256(ι(strip) ×5 ‖ "H1T-KEY\0" ‖ salt ‖ forward ‖ position ‖ weight id ‖ D_s)[:32], row
   i's words = SHAKE256(ι(row) ×5 ‖ "h1t-slt\0" ‖ K_s)[:72T]. Track H's reference fixes the map, the words' bits and the
   chain, not this derivation. The strip id and the row ids are separate anchored inputs.
+- **The anchors are the verifier's** (`anchors.H1tAnchors`): `ncp-v2`'s fields (the salt, the forward index, the
+  position, the weight id, the call's global rows and the weight's global columns), with each strip's id its rows' // 16
+  (rows come in aligned strips) and each column's tag tuple `h1t.tag_tuple(j)`. `Traced.call_args` builds them and
+  `H1tAnchors.check_call` refuses a prover's that differ.
+- **The verifier builds the Program and the layout** (`circuit.traced_h1t(m, k, n)`, since H-1T has no registered scheme
+  for `traced_as` yet), from the shape alone and only within the granted scope: layout A at 16 × 16 tiles, 16 | m,
+  16 | n, 8 | k, 29 < k <= 32,768.
 - **The partition** (`partition.h1t_circuit`): the whole-call `validate_unit_cut` passes, every path from a key, forming
-  or tile unit to y crosses a pinned Z (8,192 bits per tile), and only the dequantization units are width-checked. A
-  drawn tile's closure would be its x strip's forming unit and its strip's key unit (the draw layout isn't here yet).
+  or tile unit to y crosses a pinned Z (8,192 bits per tile), and only the dequantization units are width-checked.
+  `H1tWindow{M,K,N,C}`, C calls on one weight in one root, each with its own anchored indices, passes the invariant too.
+- **The draw** (`plan.h1t_layout`): a tile's closure is the tile, its X strip's forming unit and that strip's key. A
+  tile's W_ref is its cells' 2T k32 atoms (`h1t.tile_work`, 64·T MACs a cell; the forming's share isn't counted). A
+  proved tile opens its X strip's rows and its 16 weight rows. The layout is the verifier's: `Traced.check_layout`
+  refuses any other, and `draw` refuses a tile mapped to its X strip.
 
 ## Not here yet
 
@@ -293,5 +305,5 @@ H1tDequant      output entry          Z, s_i, t_j, bias_j                       
   - the vLLM adapter's `traced_as`;
   - the reuse of a weight's Y proofs across a run's windows (X-SPC-51), which needs its commitments linked across windows;
   - NCP-FP8.
-- For H-1T's circuit: an H-1T scheme in `schemes` (its stream derivation pinned), the legal-input check
-  (|x| <= 416) on committed rows, its draw layout, and `traced_as`.
+- For H-1T's circuit: an H-1T scheme in `schemes` (its stream derivation pinned), with `traced_as` routing to
+  `traced_h1t`; the legal-input check (|x| <= 416) on committed rows; and W_ref with the forming's share.
