@@ -37,7 +37,9 @@ to the telemetry harness (timeout, sampler, cancel evidence, classifier, tee'd l
 with --on; `--cwd source` (or `source/SUB`, a relative SUB) runs it in the source root (the invoking directory; with --on, the shipped
 tree other runs of the commit share), an absolute --cwd as given; job.json run.cwd / run.cwd_basis record it.  It exits with the workload's status; with
 --require-result, a zero exit and a missing or invalid result.json exits 65 instead.  Harness flags pass through unchanged
-(--tree-sha, --workload-digest, --input name=path, --declared-output, --policy, --no-sampler, ...).
+(--tree-sha, --workload-digest, --input name=path, --declared-output, --policy, --no-sampler, ...).  `run` and `fetch --all` refuse
+(exit 3) while the runs root's filesystem has less than $RESEARCH_DISK_FLOOR_GB free (default 1.5; 0 turns it off), and name the
+eviction that frees it (runs.disk_floor_refusal).
 `--on <machine>` ships the tool (and, with --source, a clean git HEAD), stages the request, and has the machine claim the run id
 and start the same runner detached; see remote.py.  A machine must be listed in ~/.research/machines.toml for the project.
 `--tool` loads a store Tool declaration (research/store/tools_registry.py or dotted.module:NAME): before launch the runner records
@@ -171,6 +173,9 @@ def cmd_run(argv: list[str]) -> int:
     if ns.project:
         harness_opts = ["--project", ns.project, *harness_opts]
     root = R.runs_root(ns.runs_dir)
+    if not ns.claimed and (why := R.disk_floor_refusal(root)):
+        print(f"research run: refused: {why}", file=sys.stderr)
+        return 3
     run_id = ns.id or R.new_run_id()
     run_dir = root / run_id
     if ns.on:
@@ -571,6 +576,9 @@ def cmd_fetch(argv: list[str]) -> int:
     ap.add_argument("--all", action="store_true", help="every file, verified by sha256; writes preserved.json last")
     ns = ap.parse_args(argv)
     root = R.runs_root(ns.runs_dir)
+    if ns.all and (why := R.disk_floor_refusal(root)):          # the records alone are small: observing a run stays possible
+        print(f"research fetch --all: refused: {why}", file=sys.stderr)
+        return 3
     try:
         run_dir = R.resolve(root, ns.ref)
         rec = remote.fetch(run_dir, everything=ns.all)

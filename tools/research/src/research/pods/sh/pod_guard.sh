@@ -282,7 +282,7 @@ def alive(pid):
     except (ProcessLookupError, ValueError, TypeError, OverflowError):
         return False
 
-MARKERS = (".fetched", ".fetched.tmp", ".custody", ".custody.tmp", "preserved.json")
+MARKERS = (".fetched", ".fetched.tmp", ".custody", ".custody.tmp", "preserved.json", "run-files.evicted.json")   # about the dir, not of it
 
 def _fetched(d):
     m = load(os.path.join(d, ".fetched"))
@@ -294,7 +294,7 @@ def _fetched(d):
         return "unreadable .fetched"
     for base, dirs, files in os.walk(d):
         for f in files:
-            if f in (".fetched", ".fetched.tmp"):
+            if os.path.relpath(os.path.join(base, f), d) in MARKERS:
                 continue
             try:
                 if os.lstat(os.path.join(base, f)).st_mtime >= t0:

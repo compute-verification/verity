@@ -31,11 +31,19 @@ The guard's own host is `--self-pod ID`, else RUNPOD_POD_ID (from /proc/1/enviro
 /root/dm/POD_ID, else none (a laptop).
 
 Files: $RESEARCH_GUARD_DIR (default ~/.research/pods)/guard-<prefix>[.dry-run].{json,log,pid}.  One guard per prefix: a start refuses
-(exit 3) while the recorded pid is alive.  `--detach` re-runs the same command in a new session, stdin closed, output to the log
-(setsid nohup; under `caffeinate -is` on macOS), and prints the pid.  A failed list (network blip) is logged and retried: it never ends
-the guard.  `stop` signals exactly the recorded pid (no pkill).  A trip is sticky across restarts; after a lapsed deadline `reset`
-clears it in the state file, keeping the spend tally, and logs who cleared it.  It refuses (exit 3) while the recorded guard is alive,
-since a live guard rewrites the file from memory each poll: stop, reset, then start again with the new limits.
+(exit 3) while the recorded pid is alive.  `--detach` starts a supervisor in a new session, stdin closed, output to the log (setsid
+nohup; under `caffeinate -is` on macOS), and prints its pid; the supervisor runs the guard and starts it again one poll after any exit
+but a stop (0), bad arguments (2) or another live guard (3).  A failed list (network blip) is logged and retried: it never ends the
+guard.  `stop` signals exactly the recorded pid (no pkill).  A trip is sticky across restarts; after a lapsed deadline `reset` clears it
+in the state file, keeping the spend tally, and logs who cleared it.  It refuses (exit 3) while the recorded guard is alive, since a
+live guard rewrites the file from memory each poll: stop, reset, then start again with the new limits.
+
+Fail closed.  A fault on the guard's own machine never stops enforcement and never loosens a limit (the 2026-09-28 18:10 PT incident:
+the control pod's disk filled, every guard died on its state write, and nothing enforced any cap for 15 minutes).
+  * Each poll decides and terminates from memory first, then records.  Every log, state and pid write is best effort: a failure is
+    kept in memory (`faults`), printed to stderr when it starts and when it clears, and written into the state once a write succeeds.
+  * A read that fails keeps the last value read: an unreadable `--cap-file` keeps the cap in force, an unreadable balance keeps the
+    last balance.  A state file that does not parse is set aside (`.corrupt-<epoch>`) and a new tally starts, recorded in the state.
 """
 from __future__ import annotations
 
@@ -56,6 +64,7 @@ from typing import Any, Callable
 DEAD = ("EXITED", "TERMINATED")
 TERMINATING_S = 600
 KEEP_TERMINATED = 500
+STOP_CODES = (0, 2, 3)          # the guard's exits the supervisor does not answer with a restart: stopped, bad arguments, another guard
 
 
 class RunPodAPI:
@@ -148,32 +157,115 @@ def new_state(cfg: Config, now: float) -> dict[str, Any]:
 
 
 def load_state(path: Path, cfg: Config, now: float, log: Callable[[str], None]) -> dict[str, Any]:
-    if not path.exists():
+    """The tally in `path`, else a new one.  A file that cannot be read or parsed does not stop the guard: it is set aside and a new
+    tally starts from the baseline, with `tally_restarted` saying why (the spend before it is not counted)."""
+    try:
+        raw = path.read_text()
+    except FileNotFoundError:
         return new_state(cfg, now)
-    state = json.loads(path.read_text())
-    if cfg.baseline:
-        log(f"--baseline {cfg.baseline:g} ignored: the tally in {path.name} continues (spent ${state['spent']:.2f})")
+    except OSError as err:
+        why = f"unreadable ({type(err).__name__}: {err})"
+    else:
+        try:
+            state = json.loads(raw)
+            if isinstance(state, dict) and isinstance(state.get("spent"), (int, float)) and isinstance(state.get("pods"), dict):
+                if cfg.baseline:
+                    log(f"--baseline {cfg.baseline:g} ignored: the tally in {path.name} continues (spent ${state['spent']:.2f})")
+                return state
+            why = "not a guard state"
+        except ValueError as err:
+            why = f"does not parse ({err})"
+    aside = path.with_name(f"{path.name}.corrupt-{int(now)}")
+    try:
+        path.replace(aside)
+    except OSError:
+        aside = path
+    log(f"STATE {path.name} {why}: kept as {aside.name}; a new tally starts at the baseline ${cfg.baseline:.2f}")
+    state = new_state(cfg, now)
+    state["tally_restarted"] = {"at": iso(now), "why": why, "kept": str(aside)}
     return state
 
 
 def save_state(path: Path, state: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(".tmp")
-    tmp.write_text(json.dumps(state, indent=1, sort_keys=True))
-    tmp.replace(path)
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    try:
+        with open(tmp, "w") as f:
+            f.write(json.dumps(state, indent=1, sort_keys=True))
+            f.flush()
+            os.fsync(f.fileno())
+        tmp.replace(path)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def _append(path: Path, text: str) -> None:
+    with path.open("a") as f:
+        f.write(text)
+
+
+class Recorder:
+    """The guard's writes: its log, state and pid files, all best effort.  A failure is kept in `faults` (per file kind: since, count,
+    last error), printed to stderr when it starts and when it clears, and never raised, so it can neither end the loop nor delay a
+    termination.  `clock` stamps the log lines."""
+
+    def __init__(self, files: dict[str, Path], clock: Callable[[], float]):
+        self.files, self.clock = files, clock
+        self.faults: dict[str, dict[str, Any]] = {}
+
+    def _say(self, msg: str) -> None:
+        try:
+            print(f"research pods guard: {msg}", file=sys.stderr, flush=True)
+        except Exception:  # noqa: BLE001 -- stderr may be the log on the same full disk
+            pass
+
+    def attempt(self, what: str, fn: Callable[[], None]) -> bool:
+        try:
+            fn()
+        except Exception as err:  # noqa: BLE001 -- no local fault may stop enforcement
+            e = f"{type(err).__name__}: {err}"
+            f = self.faults.get(what)
+            if f is None:
+                self.faults[what] = {"since": iso(self.clock()), "count": 1, "error": e}
+                self._say(f"{what} write failed ({e}); enforcing from memory")
+            else:
+                f["count"] += 1
+                f["error"] = e
+            return False
+        if what in self.faults:
+            f = self.faults.pop(what)
+            self._say(f"{what} writes work again after {f['count']} failure(s) since {f['since']} ({f['error']})")
+        return True
+
+    def log(self, msg: str) -> None:
+        line = f"{iso(self.clock())} {msg}\n"
+        self.attempt("log", lambda: _append(self.files["log"], line))
+
+    def save(self, state: dict[str, Any]) -> None:
+        state["faults"] = {k: dict(v) for k, v in self.faults.items()}
+        self.attempt("state", lambda: save_state(self.files["state"], state))
 
 
 def cap_now(cfg: Config, state: dict[str, Any], log: Callable[[str], None]) -> float | None:
+    """The cap in force: the number in `--cap-file` when it is readable, else the last cap in force (a failed read never loosens nor
+    tightens it), else `--cap-usd`."""
     if cfg.cap_file:
         try:
-            value = float(Path(cfg.cap_file).read_text().split()[0])
-        except (OSError, ValueError, IndexError):
-            value = None
+            value: float | None = float(Path(cfg.cap_file).read_text().split()[0])
+            err = None
+        except (OSError, ValueError, IndexError) as e:
+            value, err = None, f"{type(e).__name__}: {e}"
         if value is not None:
             if value != state.get("cap"):
                 log(f"cap {state.get('cap')} -> {value:g} (from {cfg.cap_file})")
             state["cap"] = value
+            state.pop("cap_file_error", None)
             return value
+        if state.get("cap") is not None:
+            if state.get("cap_file_error") is None:
+                log(f"cap file {cfg.cap_file} unreadable ({err}): keeping the cap in force, ${state['cap']:g}")
+            state["cap_file_error"] = err
+            return state["cap"]
     state["cap"] = cfg.cap_usd
     return cfg.cap_usd
 
@@ -195,16 +287,14 @@ def poll(api: Any, cfg: Config, state: dict[str, Any], now: float, log: Callable
     state["spent"] += rate * hours
     state["last_poll"], state["rate_now"] = now, rate
     cap = cap_now(cfg, state, log)
-    if pods:
-        log(f"{len(pods)} pod(s) ${rate:.2f}/h spent=${state['spent']:.2f}" + (f" of ${cap:g}" if cap is not None else "")
-            + " " + " ".join(f"{p['id']}:{p.get('name')}@{p.get('costPerHr')}" for p in pods))
 
     balance = None
     if cfg.balance_floor is not None and not state.get("tripped"):
         try:
             balance = state["balance"] = api.balance()
-        except Exception as err:  # noqa: BLE001 -- an unreadable balance is not a trip
-            log(f"balance read failed: {type(err).__name__}: {err}")
+        except Exception as err:  # noqa: BLE001 -- an unreadable balance keeps the last reading: a failed read never loosens the floor
+            balance = state.get("balance")
+            log(f"balance read failed: {type(err).__name__}: {err}" + (f"; judging the last reading, ${balance:.2f}" if balance is not None else ""))
     if not state.get("tripped"):
         why = None
         if cfg.deadline is not None and now >= cfg.deadline:
@@ -222,6 +312,9 @@ def poll(api: Any, cfg: Config, state: dict[str, Any], now: float, log: Callable
         _act(cfg, state, pods, now, me, log, done, api)
     finally:
         state["rate_kept"] = sum(float(p.get("costPerHr") or 0.0) for p in pods if p["id"] not in state["terminating"])
+    if pods:
+        log(f"{len(pods)} pod(s) ${rate:.2f}/h spent=${state['spent']:.2f}" + (f" of ${cap:g}" if cap is not None else "")
+            + " " + " ".join(f"{p['id']}:{p.get('name')}@{p.get('costPerHr')}" for p in pods))
     return done
 
 
@@ -290,15 +383,14 @@ def recorded_pid(pid_path: Path) -> int | None:
 
 def run(cfg: Config, api: Any = None, *, poll_s: float = 60.0, log_path: str | None = None, clock: Callable[[], float] = time.time,
         sleep: Callable[[float], None] = time.sleep, iterations: int | None = None) -> int:
-    """The guard loop (`iterations` bounds it for tests).  Exit 3 when another guard for this prefix is alive."""
+    """The guard loop (`iterations` bounds it for tests).  Exit 3 when another guard for this prefix is alive.  No local fault ends
+    it (module docstring, "Fail closed"): the directories, pid, log and state go through a `Recorder`."""
     api = api or RunPodAPI()
     p = paths(cfg.prefix, cfg.dry_run, log_path)
+    rec = Recorder(p, clock)
     for f in p.values():   # the pid and state files live in the guard dir even when --log points elsewhere
-        f.parent.mkdir(parents=True, exist_ok=True)
-
-    def log(msg: str) -> None:
-        with p["log"].open("a") as f:
-            f.write(f"{iso(clock())} {msg}\n")
+        rec.attempt("directory", lambda f=f: f.parent.mkdir(parents=True, exist_ok=True))
+    log = rec.log
 
     other = recorded_pid(p["pid"])
     if other and other != os.getpid() and _alive(other):
@@ -306,28 +398,54 @@ def run(cfg: Config, api: Any = None, *, poll_s: float = 60.0, log_path: str | N
         print(f"research pods guard: guard pid {other} for prefix {cfg.prefix!r} is alive ({p['pid']}); `research pods guard stop --prefix "
               f"{cfg.prefix}` first", file=sys.stderr)
         return 3
-    p["pid"].write_text(f"{os.getpid()}\n")
+    rec.attempt("pid", lambda: p["pid"].write_text(f"{os.getpid()}\n"))
     state = load_state(p["state"], cfg, clock(), log)
     state["config"] = {**asdict(cfg), "deadline": iso(cfg.deadline), "poll_s": poll_s}
     state["pid"] = os.getpid()
     log(f"guard pid {os.getpid()} start prefix={cfg.prefix!r} self={cfg.self_pod} spent_so_far=${state['spent']:.2f} "
         + " ".join(f"{k}={state['config'][k]}" for k in cfg.limits()) + (" cap_file=" + cfg.cap_file if cfg.cap_file else "")
         + (" DRY-RUN" if cfg.dry_run else ""))
-    save_state(p["state"], state)
+    rec.save(state)
     n = 0
     while iterations is None or n < iterations:
         try:
             poll(api, cfg, state, clock(), log)
         except Exception as err:  # noqa: BLE001 -- a safety loop must outlive a network blip (budget_cap.py, 2026-09-09)
             log(f"poll failed: {type(err).__name__}: {err}")
-        save_state(p["state"], state)
+        rec.save(state)
         n += 1
         if iterations is None or n < iterations:
             sleep(poll_s)
     return 0
 
 
+def supervise(cmd: list[str], poll_s: float, *, call: Callable[[list[str]], int] = subprocess.call,
+              sleep: Callable[[float], None] = time.sleep, clock: Callable[[], float] = time.time) -> int:
+    """Run the guard `cmd` until it stops on purpose (STOP_CODES), starting it again `poll_s` after any other exit: a crash, a kill,
+    an uncaught error.  A crash costs one poll, not the evening.  Returns the guard's last exit code."""
+    def say(msg: str) -> None:
+        try:
+            print(f"{iso(clock())} supervisor pid {os.getpid()}: {msg}", flush=True)
+        except Exception:  # noqa: BLE001 -- its output is the log, on a disk that may be full
+            pass
+
+    restarts = 0
+    while True:
+        try:
+            rc = call(cmd)
+        except OSError as err:           # the interpreter could not even be started (a transient fork failure)
+            rc = -1
+            say(f"could not start the guard: {type(err).__name__}: {err}")
+        if rc in STOP_CODES:
+            say(f"guard exited {rc}; not restarting")
+            return rc
+        restarts += 1
+        say(f"guard exited {rc}: restart {restarts} in {poll_s:g} s")
+        sleep(poll_s)
+
+
 def detach(argv: list[str], prefix: str, dry_run: bool, log_path: str | None) -> int:
+    """Start the supervisor (`--supervise`, which runs the guard and restarts it) in a new session, output to the log."""
     p = paths(prefix, dry_run, log_path)
     other = recorded_pid(p["pid"])
     if other and _alive(other):
@@ -335,7 +453,7 @@ def detach(argv: list[str], prefix: str, dry_run: bool, log_path: str | None) ->
         return 3
     for f in p.values():
         f.parent.mkdir(parents=True, exist_ok=True)
-    cmd = [sys.executable, "-m", "research", "pods", "guard", *[a for a in argv if a != "--detach"]]
+    cmd = [sys.executable, "-m", "research", "pods", "guard", "--supervise", *[a for a in argv if a != "--detach"]]
     if sys.platform == "darwin":
         cmd = ["caffeinate", "-is", *cmd]
     with p["log"].open("ab") as out:
@@ -344,7 +462,7 @@ def detach(argv: list[str], prefix: str, dry_run: bool, log_path: str | None) ->
     if proc.poll() is not None:
         print(f"research pods guard: the detached guard exited {proc.returncode}; see {p['log']}", file=sys.stderr)
         return 1
-    print(f"research pods guard: pid {proc.pid} prefix={prefix!r} log={p['log']} (`research pods guard status --prefix {prefix}`)")
+    print(f"research pods guard: supervisor pid {proc.pid} prefix={prefix!r} log={p['log']} (`research pods guard status --prefix {prefix}`)")
     return 0
 
 
@@ -358,6 +476,7 @@ def status(prefix: str, dry_run: bool = False, as_json: bool = False) -> int:
     out = {"prefix": prefix, "pid": pid, "alive": bool(pid and _alive(pid)), "started": iso(state.get("started")),
            "last_poll": iso(state.get("last_poll")), "spent": round(state.get("spent", 0.0), 2), "cap": state.get("cap"),
            "rate_now": state.get("rate_now"), "rate_kept": state.get("rate_kept"), "tripped": state.get("tripped"), "config": state.get("config"),
+           "faults": state.get("faults") or {}, "cap_file_error": state.get("cap_file_error"), "tally_restarted": state.get("tally_restarted"),
            "pods": {k: v for k, v in state.get("pods", {}).items() if state.get("last_poll") and v.get("last_seen") == state["last_poll"]},
            "terminated": state.get("terminated", [])[-20:], "state_file": str(p["state"]), "log": str(p["log"])}
     if as_json:
@@ -372,6 +491,13 @@ def status(prefix: str, dry_run: bool = False, as_json: bool = False) -> int:
           + (f", deadline {cfg['deadline']}" if cfg.get("deadline") else "") + (f", pod-max {cfg['pod_max_hours']:g} h" if cfg.get("pod_max_hours") else ""))
     if out["tripped"]:
         print(f"  TRIPPED {out['tripped']['at']}: {out['tripped']['why']}")
+    for what, f in (state.get("faults") or {}).items():
+        print(f"  FAULT: {what} writes failing since {f.get('since')} ({f.get('count')}x, last {f.get('error')}); enforcing from memory")
+    if state.get("cap_file_error"):
+        print(f"  cap file unreadable ({state['cap_file_error']}): the cap in force is kept")
+    if state.get("tally_restarted"):
+        t = state["tally_restarted"]
+        print(f"  tally restarted {t.get('at')}: the state file {t.get('why')} (kept as {t.get('kept')})")
     for pid_, e in sorted(out["pods"].items(), key=lambda kv: kv[1].get("created") or 0):
         print(f"  {pid_} {e.get('name')} ${e.get('rate', 0):g}/h spent ${e.get('spent', 0):.2f} created {iso(e.get('created'))}")
     for t in out["terminated"][-10:]:
@@ -431,7 +557,8 @@ def _parser() -> argparse.ArgumentParser:
     ap.add_argument("--dry-run", action="store_true", help="log WOULD-TERMINATE; call nothing; separate state/log/pid files")
     ap.add_argument("--log", help="log file (default $RESEARCH_GUARD_DIR/guard-<prefix>.log)")
     ap.add_argument("--self-pod", help="the guard's own pod id (default: RUNPOD_POD_ID, /proc/1/environ, /root/dm/POD_ID)")
-    ap.add_argument("--detach", action="store_true", help="run in a new session with output to the log, print the pid, return")
+    ap.add_argument("--detach", action="store_true", help="start the supervisor in a new session with output to the log, print its pid, return")
+    ap.add_argument("--supervise", action="store_true", help=argparse.SUPPRESS)    # what --detach starts: run the guard, restart it after a crash
     return ap
 
 
@@ -469,12 +596,23 @@ def main(argv: list[str]) -> int:
         print("research pods guard: no limit given (--deadline / --cap-usd / --rate-max / --balance-floor / --pod-max-hours); it would guard nothing",
               file=sys.stderr)
         return 2
+    if cfg.cap_file and cfg.cap_usd is None and not ns.supervise:
+        probe: dict[str, Any] = {}
+        try:
+            probe = json.loads(paths(cfg.prefix, cfg.dry_run)["state"].read_text())
+        except (OSError, ValueError):
+            pass
+        if cap_now(cfg, probe if isinstance(probe, dict) else {}, lambda m: None) is None:
+            print(f"research pods guard: --cap-file {cfg.cap_file} is unreadable, no --cap-usd, and no cap in force from an earlier run: "
+                  "there is no cap to enforce", file=sys.stderr)
+            return 2
     if ns.detach:
         return detach(argv, ns.prefix, ns.dry_run, ns.log)
+    if ns.supervise:
+        return supervise([sys.executable, "-m", "research", "pods", "guard", *[a for a in argv if a != "--supervise"]], ns.poll)
 
     def on_term(signum, frame):  # noqa: ARG001
-        with paths(cfg.prefix, cfg.dry_run, ns.log)["log"].open("a") as f:
-            f.write(f"{iso(time.time())} guard pid {os.getpid()} stopped (signal {signum})\n")
+        Recorder(paths(cfg.prefix, cfg.dry_run, ns.log), time.time).log(f"guard pid {os.getpid()} stopped (signal {signum})")
         raise SystemExit(0)
 
     signal.signal(signal.SIGTERM, on_term)
