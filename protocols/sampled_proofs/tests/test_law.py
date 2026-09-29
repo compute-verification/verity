@@ -1,4 +1,5 @@
-"""The two-stage law: exact stages, beacon-keyed draws addressed by replay-unit index, and the integrity profile it implies."""
+"""The two-stage law: exact stages, draws from the verifier's own randomness (and LEGACY's derived keys) addressed by
+replay-unit index, and the integrity profile it implies."""
 
 from __future__ import annotations
 
@@ -9,7 +10,7 @@ import pytest
 
 from verity.ir.partition import Level
 from verity.proofs.profile import Bernoulli, IntegrityProfile
-from verity_sampled_proofs.law import (CHECK, REPLAY, ReplayUnit, Stage, TwoStageLaw, check_probability, ru_key,
+from verity_sampled_proofs.law import (CHECK, REPLAY, OwnRandomness, ReplayUnit, Stage, TwoStageLaw, check_probability, ru_key,
                                        select_replay_units, select_verification_units, vu_key)
 
 BIND = {"program": b"\x01" * 32, "boundary_root": b"\x02" * 32}
@@ -158,3 +159,57 @@ def test_a_mixed_class_is_profiled_at_its_largest_replay_unit():
         TOY.profile("u", [ReplayUnit(0, "other", 4)], delta=0.01)
     with pytest.raises(ValueError):
         TOY.profile("u", delta=0.01)
+
+
+def _stream(b: bytes):
+    at = [0]
+
+    def read(n: int) -> bytes:
+        out = b[at[0]:at[0] + n]
+        at[0] += n
+        return out
+    return read
+
+
+def _ref_uniform(n, stream, pos):
+    """The Lean verifier's reference on a raw stream (backends/flock/tests/test_lean_verifier.py)."""
+    w = (n.bit_length() + 64 + 7) // 8
+    limit = (1 << 8 * w) - (1 << 8 * w) % n
+    while pos + w <= len(stream):
+        x = int.from_bytes(stream[pos:pos + w], "big")
+        pos += w
+        if x < limit:
+            return x % n, pos
+    return None
+
+
+def test_own_randomness_is_the_lean_verifiers_samplers_on_raw_bytes():
+    import random
+    rng = random.Random(7)
+    for case in range(200):
+        n, k = rng.randint(1, 5000), None
+        k = rng.randint(0, min(n, 20))
+        stream = bytearray(rng.randbytes(2000))
+        if case % 4 == 0:
+            stream[:16] = b"\xff" * 16
+        swapped, pos = {}, 0
+        for i in range(k):
+            j, pos = _ref_uniform(n - i, bytes(stream), pos)
+            j += i
+            swapped[i], swapped[j] = swapped.get(j, j), swapped.get(i, i)
+        want = tuple(sorted(swapped.get(i, i) for i in range(k)))
+        assert OwnRandomness(_stream(bytes(stream))).subset(k, n) == want
+        p = Fraction(rng.randint(1, 9), 10)
+        got = OwnRandomness(_stream(bytes(stream))).bernoulli(p)
+        assert got == (_ref_uniform(p.denominator, bytes(stream), 0)[0] < p.numerator)
+    assert OwnRandomness(_stream(b"")).bernoulli(Fraction(1)) is True
+    with pytest.raises(ValueError):
+        OwnRandomness(_stream(b"\x00" * 3)).uniform(10)
+
+
+def test_the_stages_draw_from_the_verifiers_own_randomness():
+    units = _units(8000)
+    picked = select_replay_units(OwnRandomness(), LAW, units)
+    assert abs(len(picked) - 2000) < 5 * (8000 * 3 / 16) ** 0.5
+    vus = select_verification_units(OwnRandomness(), LAW, [ReplayUnit(0, "decode", 6), ReplayUnit(1, "prefill", 5)])
+    assert len(vus[0]) == 2 and len(set(vus[0])) == 2 and vus[1] == (0, 1, 2, 3, 4)

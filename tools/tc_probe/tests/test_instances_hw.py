@@ -290,7 +290,7 @@ def _gpu_compute_capability() -> str | None:
     if shutil.which("nvcc") is None and not Path("/usr/local/cuda/bin/nvcc").exists():
         return None
     try:
-        smi = subprocess.run(["nvidia-smi", "--query-gpu=compute_cap", "--format=csv,noheader"], capture_output=True, text=True, timeout=20, check=False)
+        smi = subprocess.run(["nvidia-smi", "--query-gpu=compute_cap", "--format=csv,noheader"], capture_output=True, text=True, check=False)
     except OSError:
         return None
     if smi.returncode != 0 or not smi.stdout.strip():

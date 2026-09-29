@@ -3,23 +3,24 @@ relative `result.json` can no longer race (research-secondary found two concurre
 from __future__ import annotations
 
 import json
+import os
 import sys
-import time
 from pathlib import Path
-
-import pytest
 
 from research import remote
 from research import runs as R
 from research.cli import main
 from research.store import attempt as A
+from waits import wait_runner
 
 PY = sys.executable
 SRC = str(Path(remote.__file__).resolve().parents[1])
 SHA = "c" * 40
 
-# writes a relative result.json naming its run, gives the other run time to do the same, then reads it back
-RACER = ("import json, os, time; me = os.environ['RESEARCH_RUN_ID']; json.dump({'who': me}, open('result.json', 'w')); time.sleep(1.5); "
+# writes a relative result.json naming its run; given a FIFO it meets the other run there (ra opens it to write, rb to read, and
+# neither open returns before both runs have written), then reads it back
+RACER = ("import json, os, sys; me = os.environ['RESEARCH_RUN_ID']; json.dump({'who': me}, open('result.json', 'w')); "
+         "sys.argv[1:] and open(sys.argv[1], 'w' if me == 'ra' else 'r').close(); "
          "import treemod; print(json.load(open('result.json'))['who'], treemod.X, os.getcwd())")
 
 
@@ -32,10 +33,11 @@ def _tree(root: Path) -> Path:
     return src
 
 
-def _request(root: Path, src: Path, run_id: str, *, harness=()) -> Path:
+def _request(root: Path, src: Path, run_id: str, *, harness=(), meet: Path | None = None) -> Path:
     (root / "requests" / run_id).mkdir(parents=True)
     req = {"schema": remote.REQUEST_SCHEMA, "run_id": run_id, "runs_root": str(root / "runs"), "tool": SRC, "python": PY, "cwd": str(src),
-           "env": {"PYTHONPATH": str(src)}, "harness_args": ["--stage", "t", "--no-sampler", *harness], "command": [PY, "-c", RACER],
+           "env": {"PYTHONPATH": str(src)}, "harness_args": ["--stage", "t", "--no-sampler", *harness],
+           "command": [PY, "-c", RACER, *([str(meet)] if meet else [])],
            "exclusive": False, "cost": {"provider": "runpod", "pod_id": "p1", "rate_usd_per_hour": 0.06, "rate_observed_utc": "t0", "currency": "USD", "reason": None},
            "remote": {"machine": "m", "pod_id": "p1", "root": str(root), "source_sha": SHA, "source_dir": str(src)}}
     p = root / "requests" / run_id / "request.json"
@@ -43,21 +45,18 @@ def _request(root: Path, src: Path, run_id: str, *, harness=()) -> Path:
     return p
 
 
-def _wait(run_dir: Path, timeout: float = 30) -> dict:
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        s = R.summarize(run_dir)
-        if s["state"] in R.TERMINAL:
-            return s
-        time.sleep(0.1)
-    pytest.fail(f"run did not finish: {R.summarize(run_dir)}")
+def _wait(run_dir: Path) -> dict:
+    wait_runner(run_dir)
+    return R.summarize(run_dir)
 
 
 def test_two_concurrent_runs_of_one_commit_do_not_share_a_cwd(tmp_path):
     root = tmp_path / "root"
     src = _tree(root)
     before = sorted(p.relative_to(src).as_posix() for p in src.rglob("*"))
-    outs = [remote.launch_request(_request(root, src, rid)) for rid in ("ra", "rb")]
+    meet = tmp_path / "meet"
+    os.mkfifo(meet)
+    outs = [remote.launch_request(_request(root, src, rid, meet=meet)) for rid in ("ra", "rb")]
     assert all(o["started"] for o in outs)
     for rid in ("ra", "rb"):
         run_dir = root / "runs" / rid

@@ -1,11 +1,15 @@
-"""The overhead ledger: one append-only JSONL file per lane under ``backends/numerical/reports/ledger/``, one line per
-recorded state of that lane's overhead (``overhead.vs_native_peak``: prover seconds per K=1536 VU over the native
-9.85 ps), with the labels every campaign number must carry (``backends/AGENTS.md``).  ``bench.plots`` draws them.
+"""The overhead ledger: one JSONL file per lane, one line per recorded state of that lane's overhead
+(``overhead.vs_native_peak``: prover seconds per K=1536 VU over the native 9.85 ps), with the labels every campaign number
+must carry (``backends/AGENTS.md``).  ``bench.plots`` draws them.
 
-    python -m verity_numerical.bench.ledger add --lane A-gpu --label "first GPU layer" --scope unit \\
+The campaign's ledger is frozen history: it lives in the evidence store (``bench.frozen``, at its former path
+``backends/numerical/reports/ledger/``), every claim in it is a label there (``bench.ledger_to_store``), and a new claim is a
+label on the attempt it describes, never a new line.  ``frozen_dir()`` is the store copy, fetched on first use.
+
+    python -m verity_numerical.bench.ledger check [--dir DIR]        # validate every ledger file (default: the frozen ledger)
+    python -m verity_numerical.bench.ledger add --dir DIR --lane A-gpu --label "first GPU layer" --scope unit \\
         --seconds-per-unit 3.2e-6 --proof-class NON_ZK_PROOF_DIAGNOSTIC --hardware "RTX 4090" --B 4096 \\
         --security 2^-128 --assumptions hash --omitted "chain linkage" --note "..." [--breakthrough] [--run-id ...]
-    python -m verity_numerical.bench.ledger check          # validate every ledger file
 
 A lane appends only to its own file (``<lane>.jsonl``), so lanes never conflict on merge.  Scope ``unit`` numbers are
 per-transition-unit times scaled by the 96 units of a K=1536 VU (an extrapolation: chain linkage and epilogue are not
@@ -24,12 +28,12 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from verity_numerical.bench import contract
+from verity_numerical.bench import contract, frozen
 
-__all__ = ["DIR", "SCHEMA", "SCOPES", "TRACKS", "UNITS_PER_VU", "add", "entry", "load", "load_all", "main", "validate"]
+__all__ = ["REL", "SCHEMA", "SCOPES", "TRACKS", "UNITS_PER_VU", "add", "entry", "frozen_dir", "load", "load_all", "main", "validate"]
 
 SCHEMA = "ledger/v1"
-DIR = Path(__file__).resolve().parents[3] / "reports" / "ledger"
+REL = "backends/numerical/reports/ledger"
 SCOPES = ("unit", "vu", "component")
 TRACKS = ("A", "B", "C", "shared", "scout", "baseline")
 UNITS_PER_VU = 96  # K=1536 / 16 products per transition unit
@@ -97,7 +101,12 @@ def validate(e: Any) -> list[str]:
     return p
 
 
-def add(e: dict[str, Any], directory: Path = DIR) -> Path:
+def frozen_dir() -> Path:
+    """The campaign's frozen ledger, from the evidence store."""
+    return frozen.path(REL)
+
+
+def add(e: dict[str, Any], directory: Path) -> Path:
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / f"{e['lane']}.jsonl"
     with path.open("a") as f:
@@ -121,7 +130,8 @@ def load(path: Path) -> list[dict[str, Any]]:
     return out
 
 
-def load_all(directory: Path = DIR) -> dict[str, list[dict[str, Any]]]:
+def load_all(directory: Path | None = None) -> dict[str, list[dict[str, Any]]]:
+    directory = frozen_dir() if directory is None else Path(directory)
     if not directory.exists():
         return {}
     return {p.stem: load(p) for p in sorted(directory.glob("*.jsonl"))}
@@ -150,9 +160,9 @@ def main(argv: list[str] | None = None) -> int:
     a.add_argument("--note", default="")
     a.add_argument("--run-id")
     a.add_argument("--breakthrough", action="store_true")
-    a.add_argument("--dir", type=Path, default=DIR)
+    a.add_argument("--dir", type=Path, required=True, help="a ledger directory of your own; the campaign's is frozen")
     c = sub.add_parser("check")
-    c.add_argument("--dir", type=Path, default=DIR)
+    c.add_argument("--dir", type=Path, default=None, help="default: the frozen ledger, from the evidence store")
     ns = ap.parse_args(argv)
     if ns.cmd == "check":
         lanes = load_all(ns.dir)

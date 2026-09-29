@@ -153,6 +153,30 @@ def test_the_source_scan_refuses_kernel_bypasses_but_not_prose(tmp_path):
     assert [h.split(" names ")[0] for h in hits] == ["unchecked: P/A.lean:2", "unchecked: lakefile.toml:3"]
 
 
+def test_the_dependency_scan_reads_what_the_build_takes_from_fetched_packages(tmp_path):
+    dep, other = tmp_path / ".lake" / "packages" / "dep", tmp_path / ".lake" / "packages" / "other"
+    lib = dep / ".lake" / "build" / "lib" / "lean"
+    for path, text in ((dep / "D.lean", "/-- Prose may name debug.skipKernelTC. -/\ndef d := 1\n"),
+                       (dep / "D" / "E.lean", "def e := 1\nset_option debug.skipKernelTC true in\ntheorem t : True := trivial\n"),
+                       (dep / "D" / "F.lean", "set_option debug.byAsSorry true\n"),
+                       (dep / "lakefile.toml", "name = \"dep\"\n[leanOptions]\ndebug.byAsSorry = true\n"),
+                       (other / "lakefile.toml", "# nothing of it is imported\n[leanOptions]\ndebug.byAsSorry = true\n")):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+    oleans = [str(lib / "D.olean"), str(lib / "D" / "E.olean"), str(tmp_path / ".lake" / "build" / "lib" / "lean" / "P.olean"),
+              str(tmp_path / "toolchain" / "lib" / "lean" / "Init.olean")]
+    fails, read = A.dependency_scans(tmp_path, oleans, {})
+    assert read == 3 and [f.split(" (")[0] for f in fails] == ["unchecked: .lake/packages/dep/D/E.lean:2",
+                                                               "unchecked: .lake/packages/dep/lakefile.toml:3"]
+    listed = {"D.E": "why", "dep/lakefile.toml": "why", "D.F": "not imported"}
+    assert A.dependency_scans(tmp_path, oleans, {"dependency_unchecked": listed})[0] == [
+        "unchecked: `dependency_unchecked` lists D.F, which the package does not import or which names no such option; "
+        "remove the entry"]
+    (dep / "D.lean").unlink()
+    assert A.dependency_scans(tmp_path, oleans[:1], {"dependency_unchecked": {"dep/lakefile.toml": "why"}})[0] == [
+        "unchecked: the package imports D from dep, whose source .lake/packages/dep/D.lean is missing, so nothing scanned it"]
+
+
 def test_code_run_while_compiling_is_refused_unless_listed(tmp_path):
     (tmp_path / "P").mkdir()
     (tmp_path / "P" / "A.lean").write_text("import Lean\n@[simp] theorem t : True := trivial\nopen Lean in\nrun_cmd pure ()\n"
@@ -161,10 +185,36 @@ def test_code_run_while_compiling_is_refused_unless_listed(tmp_path):
     hits = A.scans(tmp_path, A.lean_modules(tmp_path), {})
     assert [h.split(" runs code")[0] for h in hits] == ["compile-time: P/A.lean:4", "compile-time: P/A.lean:6",
                                                         "compile-time: P/B.lean:1"]
-    assert A.scans(tmp_path, A.lean_modules(tmp_path), {"compile_time": {"P.A": "why", "P.B": "why", "P.C": "why"}}) == [
-        "compile-time: `compile_time` lists P.C, which matches no file; remove the entry"]
+    assert A.scans(tmp_path, A.lean_modules(tmp_path), {"compile_time": {"P.A": "why", "P.B": "why"}}) == []
+    assert len(A.scans(tmp_path, A.lean_modules(tmp_path), {"compile_time": {"P": "a prefix lists no module"}})) == 3
     (tmp_path / "lakefile.lean").write_text("import Lake\n")
     assert A.scans(tmp_path, {}, {})[0].startswith("compile-time: lakefile.lean runs code")
+
+
+def test_a_compile_time_listing_is_tied_to_its_file_and_kept_out_of_what_pins_read(tmp_path):
+    (tmp_path / "P").mkdir()
+    (tmp_path / "P" / "Tac.lean").write_text('elab "t" : tactic => pure ()\n')
+    (tmp_path / "P" / "Defs.lean").write_text('macro "m" : term => `(1)\ndef f := 1\n')
+    files = A.lean_modules(tmp_path)
+    pins = {"pins": {"P.t": {"module": "P.Thms", "reads": [{"name": "P.f", "module": "P.Defs"}]}}}
+    listed = {"P.Tac": {"why": "why", "digest": A.sha256(tmp_path / "P" / "Tac.lean")}}
+    fails, now, notes = A.listings(tmp_path, files, {"compile_time": {"P.Tac": "why"}}, pins)
+    assert [f.split(":")[1] for f in fails] == [" the listing of P.Tac records no digest of P/Tac.lean"]
+    assert now == listed and notes[0].startswith("compile_time P.Tac (P/Tac.lean): listed; a reviewer reads")
+    assert A.listings(tmp_path, files, {"compile_time": {"P.Tac": "why"}}, pins, update=True)[0] == []
+    assert A.listings(tmp_path, files, {"compile_time": listed}, pins) == ([], listed, [])
+    (tmp_path / "P" / "Tac.lean").write_text('elab "t" : tactic => do IO.println "now it does IO"\n')
+    fails, _, notes = A.listings(tmp_path, files, {"compile_time": listed}, pins)
+    assert fails[0].startswith("compile-time: the listing of P.Tac was reviewed against another version of P/Tac.lean")
+    assert notes[0].startswith("compile_time P.Tac (P/Tac.lean): the file changed since its listing was reviewed")
+    read = {"P.Defs": {"why": "why", "digest": A.sha256(tmp_path / "P" / "Defs.lean")}}
+    assert A.listings(tmp_path, files, {"compile_time": read}, pins)[0][0].startswith(
+        "compile-time: P.Defs is listed under `compile_time`, and pinned statements are declared or read there (P.t)")
+    declared = {"pins": {"P.t": {"module": "P.Tac", "reads": []}}}
+    tac = {"P.Tac": {"why": "why", "digest": A.sha256(tmp_path / "P" / "Tac.lean")}}
+    assert "(P.t)" in A.listings(tmp_path, files, {"compile_time": tac}, declared)[0][0]
+    assert A.listings(tmp_path, files, {"compile_time": {"P": "a prefix"}}, pins)[0] == [
+        "compile-time: `compile_time` lists P, which is not a module of the package; list modules one by one"]
 
 
 def test_a_package_without_a_policy_gets_a_template(tmp_path):

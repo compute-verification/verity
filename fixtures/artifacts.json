@@ -90,7 +90,7 @@
   "art:62b840bf3c83a964692b49c1db1ef273d862bbac427cfa742c5296fe67a223fd": "integrations/vllm/tests/regression/expected/olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed__greedy__bi-eager.json",
   "art:67d428555f44c24594efb8c3744c85e667025f74bb5de7145357739171219945": "integrations/vllm/tests/regression/expected/qwen25-15b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager.json",
   "art:a7c7b36effa6ae2097f192856ac68f998d82901b042b54725ef6ac259b427e6a": "integrations/vllm/tests/regression/expected/qwen3-4b-fp8__fp8__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json",
-  "art:d68968cee842d0199f1e12aa7efb6a8ee90e1d0ea1123e4946afdd4f7ceb7f5b": "integrations/vllm/tests/regression/expected/qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json",
+  "art:44aca97047b4caa2a39334546d40877f48ef64dd70f67f4bd3b941b11abf9f75": "integrations/vllm/tests/regression/expected/qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json",
   "art:7ef52142d7982f8a2d7153f4410a5452a435acb508bc061582343d0d49773ff9": "packages/verity/tests/ml/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z/lm_head_decode_0/out_row.u16",
   "art:717e0de012feeca965453526a69e9a7a4755ae8a7c7a2c9ae6b2e5408544cbcf": "packages/verity/tests/ml/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z/lm_head_decode_1/out_row.u16",
   "art:8a1a5738bf0e518d716ba8278bf65cf495e23f7fa6e1f8bcc5e39f92e5f914d2": "packages/verity/tests/ml/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z/lm_head_decode_2/out_row.u16",
@@ -114,6 +114,9 @@
     ],
     "art:26b81171153e286b3f5306e767290795def2cdbabfce2acf4608b3ef9ce15f7c": [
       "art:d775cc59e5e058b21c9eac5d748fab785ecd6be184782427bead14eb3cc80811"
+    ],
+    "art:44aca97047b4caa2a39334546d40877f48ef64dd70f67f4bd3b941b11abf9f75": [
+      "art:d68968cee842d0199f1e12aa7efb6a8ee90e1d0ea1123e4946afdd4f7ceb7f5b"
     ]
   }
 }
