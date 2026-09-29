@@ -17,10 +17,15 @@ One line per fact on stdout, one per failure on stderr. It checks:
 - that the CPU has `avx512f` when the run carries the pinned upstream build (so lean-agreement runs) and its RUSTFLAGS need it;
 - that the tree's and the cache's filesystems have the space a check takes: 45 GB, or 1.25 times the most the recent checks
   recorded on this machine took (their `resources.jsonl`) when that is more, plus 1.25 times each dependency tree to restore.
+  A filesystem short of it gets room made first, and fails only if that isn't enough: a dead audit's scratch, dead ships,
+  unfinished restores and unpinned dependency trees go, then the store's copies its remote holds, then idle source trees, then,
+  while no other run is live, uv's, cargo's, torch's and pip's caches; never this tree, its dependencies, or what a live run or
+  process holds.
 The run's `--send` files are in RESEARCH_PREFLIGHT_INPUTS.
 """
 from __future__ import annotations
 
+import fcntl
 import importlib.util
 import json
 import os
@@ -28,8 +33,10 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 import urllib.request
 from pathlib import Path
+from typing import Callable
 
 ROOT = Path(__file__).resolve().parents[2]
 GB = 1 << 30
@@ -261,17 +268,180 @@ def recorded_peak(runs: Path | None, recent: int = RECENT) -> tuple[float, str] 
     return max(peaks) if peaks else None
 
 
-def disk(tree: Path, cache: Path, restore: list[dict], usage=shutil.disk_usage, runs: Path | None = None) -> tuple[list[str], list[str]]:
+#: a source tree shipped this recently may be a launch on its way, and an unused scratch this recent a live audit still
+#: setting up (copying its inputs, restoring its dependencies); an hour-old one is a dead run's
+IDLE_S, SCRATCH_S = 30 * 60, 2 * 3600
+
+
+def _json(p: Path) -> dict:
+    try:
+        d = json.loads(Path(p).read_text())
+        return d if isinstance(d, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _alive(pid) -> bool:
+    try:
+        os.kill(int(pid), 0)
+        return True
+    except (TypeError, ValueError, ProcessLookupError):
+        return False
+    except PermissionError:
+        return True
+
+
+def live_runs(runs: Path | None) -> list[Path]:
+    """The run directories under ``runs`` whose run is live: not terminal, and its workload or its runner still a process."""
+    out = []
+    for d in sorted(runs.iterdir()) if runs is not None and runs.is_dir() else ():
+        st, la = _json(d / "status.json"), _json(d / "launch.json")
+        if st.get("state") not in ("done", "failed", "cancelled") and (_alive(st.get("pid")) or _alive(la.get("runner_pid"))):
+            out.append(d)
+    return out
+
+
+def _busy(runs: Path | None) -> list[Path]:
+    """What eviction never takes, nor anything holding it: every process's working directory, and every live run's tree."""
+    out = []
+    for p in Path("/proc").iterdir():
+        if p.name.isdigit():
+            try:
+                out.append(Path(os.readlink(p / "cwd")))
+            except OSError:
+                pass
+    for d in live_runs(runs):
+        la = _json(d / "launch.json")
+        req = _json(Path(la["request"])) if la.get("request") else {}
+        out += [Path(x) for x in (la.get("cwd"), (req.get("remote") or {}).get("source_dir")) if x]
+    return [p.resolve() for p in out]
+
+
+def _remove(p: Path) -> None:
+    if p.is_dir() and not p.is_symlink():
+        shutil.rmtree(p, ignore_errors=True)
+    else:
+        p.unlink(missing_ok=True)
+
+
+def _remove_unlocked(p: Path) -> None:
+    """``p``, a kept dependency tree, unless an audit holds its lock (`lean_audit.WarmDeps` moves it in and out under it)."""
+    with open(p.with_name(f"{p.name}.lock"), "a") as f:
+        try:
+            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            return
+        _remove(p)
+
+
+def _age(p: Path, now: float) -> float:
+    try:
+        return now - p.stat().st_mtime
+    except OSError:
+        return 0.0
+
+
+#: removes a candidate, given the free bytes to reach and how to read them (only the store's eviction stops partway)
+Remove = Callable[[int, Callable[[], int]], None]
+
+
+def _store_copies(store: Path) -> Remove:
+    def remove(target: int, free: Callable[[], int]) -> None:
+        from research.store.evict import evict_runs, evict_store
+        from research.store.local import LocalStore
+
+        st = LocalStore(store)
+        evict_store(st, target_free_bytes=target, free_fn=free)
+        evict_runs(st, store.parent / "runs", target_free_bytes=target, free_fn=free)
+    return remove
+
+
+def evictable(tree: Path, cache: Path, runs: Path | None, needed: set[str], now: float) -> list[tuple[str, Path, Remove]]:
+    """(what, path, remove) for everything that may go to make room, in the order it goes: what nothing will use again (a dead
+    audit's scratch, a dead ship's partial or quarantined tree, an unfinished dependency restore, the dependency trees of manifests
+    this commit doesn't pin); the local copies the store's remote holds (`research`'s own eviction); idle source trees, oldest
+    first; and, only in a tree `research run --on` shipped and while no other run is live here, the caches every run shares,
+    least recently used first.  Never this tree, the dependencies it needs, or anything a live run or process holds (`_busy`)."""
+    src = tree.parent if tree.parent.name == "src" and (tree / "READY.json").exists() else None      # a tree `research run --on` shipped
+    busy, alone = _busy(runs), src is not None and runs is not None and not live_runs(runs)
+    deps = cache / "lean-deps"
+    out: list[tuple[str, Path, Remove]] = []
+
+    def add(what: str, p: Path, remove: Callable[[Path], None] = _remove) -> None:
+        r = p.resolve()
+        if p.exists() and r != tree.resolve() and not any(b == r or r in b.parents for b in busy):
+            out.append((what, p, lambda _target, _free: remove(p)))
+
+    def ls(d: Path | None, pattern: str = "*") -> list[Path]:
+        return sorted(d.glob(pattern), key=lambda p: -_age(p, now)) if d is not None and d.is_dir() else []
+
+    for p in ls(cache, "lean-audit-scratch-*"):
+        if alone or _age(p, now) > SCRATCH_S:
+            add("a dead Lean audit's scratch", p)
+    for p in ls(src, "*.partial-*"):
+        if _age(p, now) > IDLE_S:
+            add("a dead ship's partial tree", p)
+    for p in ls(src / ".quarantine" if src else None):
+        add("a quarantined tree", p)
+    for p in ls(deps, ".*.part") + ls(deps, ".*.tmp"):
+        if alone or _age(p, now) > SCRATCH_S:
+            add("an unfinished dependency restore", p)
+    for p in ls(deps):
+        if p.is_dir() and p.name not in needed:
+            add("Lean dependencies this commit doesn't pin", p, _remove_unlocked)
+    store = runs.parent / "store" if runs is not None else None
+    if store is not None and (store / "catalog.sqlite").exists():
+        out.append(("the store's copies of what its remote holds", store, _store_copies(store)))
+    for p in ls(src):
+        if p.is_dir() and (p / "READY.json").exists() and _age(p / "READY.json", now) > IDLE_S:
+            add("an idle source tree", p)
+    if alone:
+        home, xdg = Path.home(), Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache")
+        flock = Path(os.environ.get("FLOCK_CHECKOUT") or home / ".cache" / "verity" / "flock-b684b12")
+        for what, p in sorted((("uv's cache", Path(os.environ.get("UV_CACHE_DIR") or xdg / "uv")), ("the Flock checkout's build", flock / "target"),
+                               ("torch's extension builds", Path(os.environ.get("TORCH_EXTENSIONS_DIR") or xdg / "torch_extensions")),
+                               ("pip's cache", xdg / "pip")), key=lambda c: -_age(c[1], now)):
+            add(what, p)
+    return out
+
+
+def make_room(at: Path, need_gb: float, candidates: list[tuple[str, Path, Remove]], usage=shutil.disk_usage) -> list[str]:
+    """Remove ``candidates`` on ``at``'s filesystem, in order, until it has ``need_gb`` free: what went, and what each freed."""
+    gone, dev = [], at.stat().st_dev
+
+    def free() -> int:
+        return int(usage(at).free)
+
+    for what, p, remove in candidates:
+        before = free()
+        if before >= need_gb * GB:
+            break
+        if not p.exists() or p.stat().st_dev != dev:
+            continue
+        try:
+            remove(int(need_gb * GB), free)
+        except Exception as e:  # noqa: BLE001 -- one candidate that can't go leaves the others to try
+            gone.append(f"{what} {p.name} could not go ({type(e).__name__})")
+            continue
+        if free() > before:
+            gone.append(f"{what} {p.name} ({(free() - before) / GB:.1f} GB)")
+    return gone
+
+
+def disk(tree: Path, cache: Path, restore: list[dict], usage=shutil.disk_usage, runs: Path | None = None, needed: set[str] = frozenset(),
+         now: float | None = None) -> tuple[list[str], list[str]]:
     """Free space on the tree's and the cache's filesystems (one sum when they are one) against what a check takes there: the
     warm floor (`TREE_GB`, `CACHE_GB`), or `MARGIN` times the peak recent checks here recorded on the tree's (`recorded_peak`)
-    when that is more, plus `MARGIN` times each dependency tree to restore, on the cache's."""
+    when that is more, plus `MARGIN` times each dependency tree to restore, on the cache's.  A filesystem short of it first gets
+    room made on it (`evictable`, `make_room`: ``needed`` are the dependency trees this commit pins), and fails only if that
+    wasn't enough."""
     peak = recorded_peak(runs)
     derived = MARGIN * peak[0] if peak else 0.0
     at_tree, at_cache = _existing(tree), _existing(cache)
     extra = MARGIN * sum(DEPS_TREE_GB + r["bytes"] / GB for r in restore)
     one = at_tree.stat().st_dev == at_cache.stat().st_dev
     need = [(at_tree, TREE_GB + CACHE_GB if one else TREE_GB, extra if one else 0.0)] + ([] if one else [(at_cache, CACHE_GB, extra)])
-    facts, fails = [], []
+    facts, fails, candidates = [], [], None
     for at, floor, more in need:
         why = []
         if at == at_tree and derived > floor:
@@ -281,11 +451,20 @@ def disk(tree: Path, cache: Path, restore: list[dict], usage=shutil.disk_usage, 
             why.append(f"{len(restore)} Lean dependency tree(s) to restore")
         gb = floor + more
         free = usage(at).free / GB
+        if free < gb:
+            if candidates is None:
+                candidates = evictable(tree, cache, runs, set(needed), time.time() if now is None else now)
+            if gone := make_room(at, gb, candidates, usage):
+                after = usage(at).free / GB
+                facts.append(f"disk: made room on {at}'s filesystem, {free:.0f} -> {after:.0f} GB free: " + "; ".join(gone[:8])
+                             + (f"; and {len(gone) - 8} more" if len(gone) > 8 else ""))
+                free = after
         line = f"disk: {free:.0f} GB free on {at}'s filesystem, where a check needs {gb:.0f} GB" + (f" ({'; '.join(why)})" if why else "")
         if free >= gb:
             facts.append(line)
         else:
-            fails.append(f"{line}: free some (idle trees under <root>/src) or use a larger pod")
+            warm = f"; a pod with its Lean dependencies warm needs {more:.0f} GB less" if more else ""
+            fails.append(f"{line}, after removing what this machine can spare: use a larger pod{warm}")
     return facts, fails
 
 
@@ -306,7 +485,7 @@ def checkout(root: Path, sha: str | None) -> tuple[list[str], list[str]]:
 
 
 def run(root: Path, inputs: Path | None, custody: Path | None, cache: Path, cpuinfo: Path = Path("/proc/cpuinfo"),
-        usage=shutil.disk_usage, sha: str | None = None, runs: Path | None = None) -> tuple[list[str], list[str]]:
+        usage=shutil.disk_usage, sha: str | None = None, runs: Path | None = None, now: float | None = None) -> tuple[list[str], list[str]]:
     lean = (root / "backends" / "flock" / "verifier" / "lean" / "lakefile.toml").exists()
     packages = LA.packages(CHECK.tracked_files(root) or []) if lean else []
     sent = inputs / CHECK.LEAN_DEPS_URLS if inputs is not None else None
@@ -318,7 +497,9 @@ def run(root: Path, inputs: Path | None, custody: Path | None, cache: Path, cpui
         fails.append(f"prepare the pod: `{POD_SETUP}`")
     f, x, restore = lean_deps(root, packages, cache, urls)
     facts, fails = facts + f, fails + x
-    for f, x in (store(restore or probe(root, packages), urls, custody), cpu(root, inputs, cpuinfo), disk(root, cache, restore, usage, runs)):
+    needed = {k for p in packages if (k := LA.deps_key(root / p))}
+    for f, x in (store(restore or probe(root, packages), urls, custody), cpu(root, inputs, cpuinfo),
+                 disk(root, cache, restore, usage, runs, needed, now)):
         facts, fails = facts + f, fails + x
     return facts, fails
 

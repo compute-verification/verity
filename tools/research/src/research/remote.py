@@ -119,7 +119,7 @@ GUARD_ENVIRON = "/proc/1/environ"             # RunPod injects RUNPOD_POD_ID and
 GUARD_SCRIPT = Path(__file__).resolve().parent / "pods" / "sh" / "pod_guard.sh"
 POD_TARGET_RETRIES = 6           # extra GET /pods/{id} reads when a RUNNING pod answers without an ssh mapping
 POD_TARGET_RETRY_S = 2.0
-PREFLIGHT_TIMEOUT_S = 180
+PREFLIGHT_TIMEOUT_S = 900        # a preflight may make room first: removing a dead run's 19 GB Lean scratch takes minutes
 PREFLIGHT_TAIL = 40              # lines of the preflight's stdout and stderr kept in its report
 
 

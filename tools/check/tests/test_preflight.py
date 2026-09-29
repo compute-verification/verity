@@ -8,6 +8,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import types
 from pathlib import Path
 
@@ -30,8 +31,8 @@ def _sha(b: bytes) -> str:
     return hashlib.sha256(b).hexdigest()
 
 
-def _tree(tmp_path: Path, *, rustflags: str = "-C target-cpu=x86-64-v3", pinned: bool = True) -> Path:
-    t = tmp_path / "tree"
+def _tree(tmp_path: Path, *, rustflags: str = "-C target-cpu=x86-64-v3", pinned: bool = True, at: Path | None = None) -> Path:
+    t = at or tmp_path / "tree"
     (t / "tools" / "check").mkdir(parents=True)
     (t / "tools" / "check" / "pod_setup.sh").write_text("set -e\nUV_VERSION=${UV_VERSION:-0.12.20}\n")
     for pkg, deps in (("backends/flock/verifier/lean", []), ("pkg/a", [{"type": "git", "name": "mathlib", "rev": "r1"}])):
@@ -56,6 +57,16 @@ def _head(tree: Path) -> str:
 
 def _key(tree: Path) -> str:
     return PF.LA.deps_key(tree / "pkg" / "a")
+
+
+@pytest.fixture(autouse=True)
+def _own_home(tmp_path, monkeypatch):
+    """The preflight may remove the caches under HOME: each test's are its own, never this machine's."""
+    home = tmp_path / "home"
+    home.mkdir()
+    for k, v in {"HOME": home, "XDG_CACHE_HOME": home / ".cache", "UV_CACHE_DIR": home / ".cache" / "uv",
+                 "TORCH_EXTENSIONS_DIR": home / ".cache" / "torch_extensions", "FLOCK_CHECKOUT": home / "flock"}.items():
+        monkeypatch.setenv(k, str(v))
 
 
 @pytest.fixture
@@ -104,12 +115,12 @@ def _usage(free_gb: float):
     return lambda p: types.SimpleNamespace(free=int(free_gb * PF.GB))
 
 
-def _run(tmp_path, tree, *, inputs=None, custody=None, warm=True, cpu=NO_AVX, free_gb=100.0, sha=None, runs=None):
+def _run(tmp_path, tree, *, inputs=None, custody=None, warm=True, cpu=NO_AVX, free_gb=100.0, sha=None, runs=None, usage=None, now=None):
     cache = tmp_path / "cache"
     if warm:
         (cache / "lean-deps" / _key(tree)).mkdir(parents=True, exist_ok=True)
     (tmp_path / "cpuinfo").write_text(cpu)
-    return PF.run(tree, inputs, custody, cache, tmp_path / "cpuinfo", _usage(free_gb), sha=sha, runs=runs)
+    return PF.run(tree, inputs, custody, cache, tmp_path / "cpuinfo", usage or _usage(free_gb), sha=sha, runs=runs, now=now)
 
 
 def test_a_prepared_pod_passes(tmp_path, path):
@@ -238,6 +249,84 @@ def test_the_floor_rises_to_what_the_recent_checks_here_took(tmp_path, path):
         _recorded(runs, f"r20260929-12000{i}-dddd", "check", [80, 70])
     _, fails = _run(tmp_path, tree, **ok, free_gb=46, runs=runs)
     assert fails == [], "12.5 GB is under the 45 GB floor, which a recorded check only ever raises"
+
+
+NOW = 2_000_000_000.0                       # the clock the eviction tests hand the preflight
+OLD, JUST = NOW - 3 * 3600, NOW - 60
+
+
+def _du(*dirs: Path) -> int:
+    return sum(p.stat().st_size for d in dirs if d.exists() for p in d.rglob("*") if p.is_file() and not p.is_symlink())
+
+
+def _junk(d: Path, size: int, mtime: float = OLD, marker: str | None = None) -> Path:
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "blob").write_bytes(b"x" * size)
+    for p in ([d / marker] if marker else []):
+        p.write_text("{}\n")
+        os.utime(p, (mtime, mtime))
+    os.utime(d, (mtime, mtime))
+    return d
+
+
+@pytest.fixture
+def pod(tmp_path, monkeypatch):
+    """A machine as `research run --on` leaves one, measured in bytes (1 GB is 1 byte): this commit's shipped tree with its warm
+    dependencies (50), a dead audit's scratch (300), an unpinned dependency tree (150), an idle tree (200), a tree shipped a
+    minute ago (200) and uv's cache (400); its disk has 50 free."""
+    monkeypatch.setattr(PF, "GB", 1)
+    monkeypatch.setattr(PF, "TREE_GB", 0)
+    root, cache, home = tmp_path / "root", tmp_path / "cache", tmp_path / "home"
+    tree = _tree(tmp_path, at=root / "src" / ("a" * 40))
+    (tree / ".git" / "info" / "exclude").write_text("/READY.json\n")
+    (tree / "READY.json").write_text("{}\n")
+    (root / "runs").mkdir()
+    k = _key(tree)
+    j = {"scratch": _junk(cache / "lean-audit-scratch-dead", 300), "unpinned": _junk(cache / "lean-deps" / ("f" * 64), 150),
+         "needed": _junk(cache / "lean-deps" / k, 50), "idle": _junk(root / "src" / ("b" * 40), 200, marker="READY.json"),
+         "shipped": _junk(root / "src" / ("c" * 40), 200, JUST, marker="READY.json"), "uv": _junk(home / ".cache" / "uv", 400)}
+    others = lambda: [d for d in (root / "src").iterdir() if d != tree]     # noqa: E731
+    cap = _du(cache, home, *others()) + 50
+
+    def disk(floor: int):
+        monkeypatch.setattr(PF, "CACHE_GB", floor)
+        usage = lambda p: types.SimpleNamespace(free=cap - _du(cache, home, *others()))     # noqa: E731
+        return PF.disk(tree, cache, [], usage, root / "runs", {k}, NOW)
+    return types.SimpleNamespace(tree=tree, root=root, junk=j, disk=disk)
+
+
+def _left(pod) -> set[str]:
+    return {name for name, d in pod.junk.items() if d.exists()}
+
+
+def test_room_is_made_in_order_and_only_down_to_the_floor(pod):
+    facts, fails = pod.disk(100)
+    assert fails == [] and _left(pod) == {"unpinned", "needed", "idle", "shipped", "uv"}, "a dead audit's scratch was enough"
+    assert any(f.startswith(f"disk: made room on {pod.tree}'s filesystem, 50 -> 350 GB free: a dead Lean audit's scratch") for f in facts)
+    facts, fails = pod.disk(700)
+    assert fails == [] and _left(pod) == {"needed", "shipped", "uv"}, "then the unpinned dependencies, then the idle tree"
+
+
+def test_a_pod_is_refused_only_once_nothing_it_can_spare_is_left(pod):
+    _, fails = pod.disk(1250)
+    assert _left(pod) == {"needed", "shipped"}, "uv's cache goes too, and this commit's dependencies and a fresh ship stay"
+    assert len(fails) == 1 and fails[0].endswith(f"'s filesystem, where a check needs 1250 GB, after removing what this machine can "
+                                                 f"spare: use a larger pod"), fails
+
+
+def test_nothing_a_live_run_or_process_holds_goes(pod):
+    run = pod.root / "runs" / "r20260929-230000-live"
+    run.mkdir()
+    (run / "status.json").write_text(json.dumps({"state": "running", "pid": os.getpid()}))
+    (run / "launch.json").write_text(json.dumps({"runner_pid": os.getpid(), "cwd": str(pod.junk["idle"])}))
+    sitting = subprocess.Popen([sys.executable, "-c", "import sys; sys.stdin.read()"], cwd=pod.junk["scratch"], stdin=subprocess.PIPE)
+    try:
+        _, fails = pod.disk(1250)
+    finally:
+        sitting.stdin.close()
+        sitting.wait()
+    assert _left(pod) == {"scratch", "needed", "idle", "shipped", "uv"}, "shared caches wait while another run is live"
+    assert len(fails) == 1
 
 
 def test_the_check_tool_declares_this_preflight():
