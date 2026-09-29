@@ -15,8 +15,10 @@ vLLM, and restores nothing because each mode runs in a fresh engine.  Modes:
 - ``pearl``: Pearl's noisy quantization to e4m3 (rank-32 noise lines of norm 256, δ = 1), the windowed e4m3 GEMM of the
   ``ada`` device, and the peel back to BF16.
 
-Noise in the timed modes comes from torch's generator, not SHAKE256 or BLAKE3: the protocol's derivations and the
-transcript hashing are costed separately (NCP: 3k/16 words per output at the research store's measured SHAKE256 rate).
+Noise in the timed modes comes from torch's generator, not SHAKE256 or BLAKE3, and the transcript is not hashed in the
+timed path.  The binding (NCP: every checked word, 3k/16 per output; Pearl: A's planes and the ticket extracts) is added
+as serial time at each device rate in `gamma.HASHES`, an estimate: ``timing_total``, the headline, is the tok/s with the
+binding at the scheme's pinned hash (`gamma.PINNED`), and ``timing`` is the measured tok/s without it, which carries no γ.
 All modes run eagerly (the wrapper is not graph-capturable yet), at the same memory utilization.
 """
 
@@ -32,6 +34,7 @@ from pathlib import Path
 
 os.environ.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
 sys.path.insert(0, str(Path(__file__).parent))
+from gamma import HASHES, PINNED, pearl_hash_bytes  # noqa: E402
 
 PROMPTS = [
     "Explain why the sky is blue in two sentences.", "Write a haiku about matrix multiplication.",
@@ -43,8 +46,8 @@ PROMPTS = [
     "Explain proof of work in simple terms.", "Name the planets of the solar system in order.",
     "How does a refrigerator keep food cold?", "What is a prime number? Give five examples.",
 ]
-SHAKE_GBPS = 650.0
 R = 32
+SCHEME = {"ncp": "ncp-v1", "pearl": "pearl-fp8-v4"}
 
 
 def int7(x, dim):
@@ -151,6 +154,7 @@ def install(model, mode: str) -> dict:
                     Aq = torch.cat([Aq, torch.zeros(mp - m, k, dtype=torch.uint8, device=Aq.device)])
                 cfg = 0 if mp >= 128 and n % 128 == 0 else 1
                 Ct = ext.fp8_gemm(Aq.contiguous(), st["Bq"], cfg)[:m]
+                stats["transcript_bytes"] += pearl_hash_bytes(m, k, n)
                 P = torch.cat([(a * (x2 @ st["FB"]).float()), b * EA.float()], dim=1).to(torch.bfloat16)
                 y = ((Ct - (P @ st["Q"]).float()) / (a * st["a_w"])).to(x.dtype)
             if bias is not None:
@@ -202,27 +206,37 @@ def run_mode(args, mode: str) -> dict:
     outs = llm.generate(msgs, greedy, use_tqdm=False)
     result = {"mode": mode, "tokens": [list(o.outputs[0].token_ids) for o in outs],
               "texts": [o.outputs[0].text for o in outs[:4]]}
-    timing = {}
+    timing, total, total_by_hash = {}, {}, {}
+
+    def timed_generate(llm, key: str, prompts, sp, tokens: int) -> None:
+        torch.cuda.synchronize()
+        b0 = stats.get("transcript_bytes", 0)
+        t0 = time.perf_counter()
+        llm.generate(prompts, sp, use_tqdm=False)
+        dt = time.perf_counter() - t0
+        timing[key] = tokens / dt
+        if mode in SCHEME:
+            nbytes = stats["transcript_bytes"] - b0
+            total_by_hash[key] = {h: tokens / (dt + nbytes / (v.gbps * 1e9)) for h, v in HASHES.items()}
+            total[key] = total_by_hash[key][PINNED[SCHEME[mode]]]
+
     for bs in args.decode_batches:
         sp = SamplingParams(temperature=0.0, max_tokens=64, ignore_eos=True)
         prompts = [{"prompt_token_ids": [int(t) for t in torch.randint(100, 20000, (64,))]} for _ in range(bs)]
         llm.generate(prompts[:1], SamplingParams(max_tokens=4), use_tqdm=False)
-        torch.cuda.synchronize()
-        t0 = time.perf_counter()
-        llm.generate(prompts, sp, use_tqdm=False)
-        dt = time.perf_counter() - t0
-        timing[f"decode_b{bs}_tok_s"] = bs * 64 / dt
+        timed_generate(llm, f"decode_b{bs}_tok_s", prompts, sp, bs * 64)
     for plen in args.prefill_tokens:
         prompts = [{"prompt_token_ids": [int(t) for t in torch.randint(100, 20000, (plen,))]} for _ in range(2)]
         sp = SamplingParams(temperature=0.0, max_tokens=1)
         llm.generate(prompts[:1], sp, use_tqdm=False)
-        torch.cuda.synchronize()
-        t0 = time.perf_counter()
-        llm.generate(prompts, sp, use_tqdm=False)
-        timing[f"prefill_{plen}_tok_s"] = 2 * plen / (time.perf_counter() - t0)
+        timed_generate(llm, f"prefill_{plen}_tok_s", prompts, sp, 2 * plen)
     result["timing"] = timing
+    if mode in SCHEME:
+        result["pinned_hash"] = PINNED[SCHEME[mode]]
+        result["timing_total"] = total
+        result["timing_total_by_hash"] = total_by_hash
     if stats:
-        stats["shake_est_s"] = stats["transcript_bytes"] / (SHAKE_GBPS * 1e9)
+        stats["hash_est_s"] = {h: stats["transcript_bytes"] / (v.gbps * 1e9) for h, v in HASHES.items()}
         result["stats"] = stats
     del llm
     torch.cuda.empty_cache()
@@ -254,7 +268,7 @@ def main() -> None:
             continue
         results[mode] = json.loads(part.read_text())
         print(json.dumps({k: v for k, v in results[mode].items() if k != "tokens"}), flush=True)
-        args.out.write_text(json.dumps({"schema": "verity-pouw/vllm-bench/v1", "results": results}, indent=1))
+        args.out.write_text(json.dumps({"schema": "verity-pouw/vllm-bench/v2", "results": results}, indent=1))
     results = {m: r for m, r in results.items() if "tokens" in r}
     ref = results.get("bf16")
 
@@ -265,11 +279,12 @@ def main() -> None:
     summary = {m: {"token_agreement_vs_bf16": agree(r["tokens"], ref["tokens"]) if ref else None} for m, r in results.items()}
     if "ncp" in results and "w7a7" in results:
         summary["ncp"]["tokens_equal_w7a7"] = results["ncp"]["tokens"] == results["w7a7"]["tokens"]
-    args.out.write_text(json.dumps({"schema": "verity-pouw/vllm-bench/v1", "summary": summary, "results": results}, indent=1))
+    args.out.write_text(json.dumps({"schema": "verity-pouw/vllm-bench/v2", "summary": summary, "results": results}, indent=1))
     print(json.dumps(summary), flush=True)
     import run_result
     ok = summary.get("ncp", {}).get("tokens_equal_w7a7", True) is not False and len(results) == len(args.modes.split(","))
-    ms = [(f"{m}.{k}", v, "tok/s") for m, r in results.items() for k, v in r["timing"].items()]
+    ms = [(f"{m}.{k}.total", v, "tok/s") for m, r in results.items() for k, v in r.get("timing_total", {}).items()]
+    ms += [(f"{m}.{k}", v, "tok/s") for m, r in results.items() for k, v in r["timing"].items()]
     run_result.write(args.out, ok, "vllm_bench: every mode ran, and NCP's greedy tokens equal W7A7's", json.dumps(summary), ms)
 
 

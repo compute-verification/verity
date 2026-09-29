@@ -12,11 +12,15 @@ Gates, before any timing (the run refuses to time a kernel that fails its gate):
 Timings, per workload shape (m, k, n), median of CUDA-event timed repetitions:
 - plain: the int8 GEMM (cuBLASLt ``torch._int_mm`` where it applies, and this kernel without reads), the e4m3 GEMM
   (cuBLASLt ``torch._scaled_mm``) and BF16 (``torch.mm``);
-- NCP: the (m, 3k, n) GEMM with every accumulator read once per 16-deep step, forming the three noised operands, and
-  SHAKE256 over the transcript (3k/16 words per output) at the research store's measured 650 GB/s (``gpu-constants.md``;
-  an estimate, not run here);
+- NCP: the (m, 3k, n) GEMM with every accumulator read once per 16-deep step (folded, a stand-in for feeding the hash)
+  and forming the three noised operands;
 - Pearl: the windowed e4m3 GEMM, noisy quantization of A (the rank-32 noise product and the elementwise BF16 steps), and
   the peel (A·F_B and the 2r correction columns, BF16).
+
+Hashing: the binding (NCP: every checked word, 3k/16 per output; Pearl: A's planes and the ticket extracts) is added as
+serial time at each device rate in `gamma.HASHES`, estimated here, not run.  ``*_total_over_*``, the headline, is the
+arithmetic plus the binding at the scheme's pinned hash (`gamma.PINNED`); ``*_arith_over_*`` and ``*_kernel_over_*`` are
+components without a binding, which carry no γ.
 """
 
 from __future__ import annotations
@@ -32,10 +36,18 @@ from pathlib import Path
 import torch
 
 sys.path.insert(0, str(Path(__file__).parent))
+from gamma import HASHES, PINNED, ncp_hash_words, pearl_hash_bytes  # noqa: E402
 from kernels import load  # noqa: E402
 
-SHAKE_GBPS = 650.0
 R = 32
+
+
+def hash_ms(nbytes: int) -> dict[str, float]:
+    return {h: nbytes / (v.gbps * 1e9) * 1e3 for h, v in HASHES.items()}
+
+
+def over(arith_ms: float, hashes: dict[str, float], base_ms: float) -> dict[str, float]:
+    return {h: (arith_ms + ms) / base_ms for h, ms in hashes.items()}
 
 
 _FLUSH: list = []
@@ -153,12 +165,17 @@ def bench_shape(ext, m: int, k: int, n: int, gates: dict) -> dict:
         out["ncp_gemm_reads_ms"] = timed(lambda: ext.ncp_gemm(X, Y, 1, cfg))
         out["ncp_gemm_bare3k_ms"] = timed(lambda: ext.ncp_gemm(X, Y, 0, cfg))
         out["ncp_form_ms"] = timed(form)
-        words = m * n * (3 * k // 16)
-        out["ncp_transcript_bytes"] = 4 * words
-        out["ncp_shake_est_ms"] = 4 * words / (SHAKE_GBPS * 1e9) * 1e3
-        base = out.get("int8_cublaslt_ms", out["int8_kernel_bare_ms"])
-        out["ncp_kernel_over_int8"] = out["ncp_gemm_reads_ms"] / base
-        out["ncp_total_over_int8"] = (out["ncp_gemm_reads_ms"] + out["ncp_form_ms"] + out["ncp_shake_est_ms"]) / base
+        out["ncp_transcript_bytes"] = 4 * ncp_hash_words(m, k, n)
+        out["ncp_hash_est_ms"] = hash_ms(out["ncp_transcript_bytes"])
+        arith = out["ncp_gemm_reads_ms"] + out["ncp_form_ms"]
+        bases = (("int8", out.get("int8_cublaslt_ms", out["int8_kernel_bare_ms"])), ("fp8", out.get("fp8_cublaslt_ms")))
+        for plain, base in bases:
+            if base is None:
+                continue
+            out[f"ncp_kernel_over_{plain}"] = out["ncp_gemm_reads_ms"] / base
+            out[f"ncp_arith_over_{plain}"] = arith / base
+            out[f"ncp_total_over_{plain}_by_hash"] = over(arith, out["ncp_hash_est_ms"], base)
+            out[f"ncp_total_over_{plain}"] = out[f"ncp_total_over_{plain}_by_hash"][PINNED["ncp-v1"]]
     if gates["pearl"]["ok"]:
         Aq = torch.randint(0, 0x7E, (pad, k), dtype=torch.uint8, device=dev)
         Bq = torch.randint(0, 0x7E, (n, k), dtype=torch.uint8, device=dev)
@@ -179,9 +196,14 @@ def bench_shape(ext, m: int, k: int, n: int, gates: dict) -> dict:
         out["pearl_gemm_ms"] = timed(lambda: ext.fp8_gemm(Aq, Bq, 0 if pad >= 128 and n % 128 == 0 else 1))
         out["pearl_quantize_ms"] = timed(quantize)
         out["pearl_peel_ms"] = timed(peel)
+        out["pearl_hash_bytes"] = pearl_hash_bytes(m, k, n)
+        out["pearl_hash_est_ms"] = hash_ms(out["pearl_hash_bytes"])
+        arith = out["pearl_gemm_ms"] + out["pearl_quantize_ms"] + out["pearl_peel_ms"]
         base = out.get("fp8_cublaslt_ms", out["bf16_ms"])
         out["pearl_kernel_over_fp8"] = out["pearl_gemm_ms"] / base
-        out["pearl_total_over_fp8"] = (out["pearl_gemm_ms"] + out["pearl_quantize_ms"] + out["pearl_peel_ms"]) / base
+        out["pearl_arith_over_fp8"] = arith / base
+        out["pearl_total_over_fp8_by_hash"] = over(arith, out["pearl_hash_est_ms"], base)
+        out["pearl_total_over_fp8"] = out["pearl_total_over_fp8_by_hash"][PINNED["pearl-fp8-v4"]]
     return out
 
 
@@ -202,12 +224,16 @@ def main() -> None:
         rows.append(r)
         print(json.dumps(r), flush=True)
     env = {"device": torch.cuda.get_device_name(), "torch": torch.__version__, "cuda": torch.version.cuda}
-    args.out.write_text(json.dumps({"schema": "verity-pouw/gemm-bench/v1", "env": env, "gates": gates, "rows": rows}, indent=1))
+    hashes = {h: {"gbps": v.gbps, "status": v.status, "source": v.source} for h, v in HASHES.items()}
+    args.out.write_text(json.dumps({"schema": "verity-pouw/gemm-bench/v2", "env": env, "hashes": hashes, "pinned": PINNED,
+                                    "gates": gates, "rows": rows}, indent=1))
     import run_result
     ms = [(f"{key}@{'x'.join(map(str, r['shape']))}", r[key], "ratio") for r in rows if tuple(r["shape"]) in ((1, 2048, 2048), (2048, 2048, 2048), (4096, 4096, 4096))
-          for key in ("ncp_kernel_over_int8", "ncp_total_over_int8", "pearl_kernel_over_fp8", "pearl_total_over_fp8") if key in r]
+          for key in ("ncp_total_over_fp8", "ncp_total_over_int8", "pearl_total_over_fp8",
+                      "ncp_kernel_over_int8", "pearl_kernel_over_fp8") if key in r]
     run_result.write(args.out, gates["ncp"]["ok"] and gates["pearl"]["ok"], "gemm_bench gates",
-                     f"ncp {gates['ncp']}; pearl {gates['pearl']}", ms)
+                     f"ncp {gates['ncp']}; pearl {gates['pearl']}; totals include the binding at each scheme's pinned hash "
+                     f"(estimated from gamma.HASHES, not run)", ms)
 
 
 if __name__ == "__main__":
