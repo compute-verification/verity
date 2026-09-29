@@ -184,7 +184,7 @@ def _pouw_roots() -> list[Any]:
     and its Z separator."""
     from verity_pouw.circuit import fp8, ncp2
 
-    fp8_templates = [t for sums in fp8.SUMS for t in fp8.templates(96, sums, 1, 1, 1, 32).values()]
+    fp8_templates = [t for sums in fp8.SUMS for _role, t in fp8.call_templates(fp8.Shape(48, 96, 32), sums)]
     return (list(ncp2.templates(64, "shift24").values()) + [ncp2.linear(ncp2.Shape(16, 64, 16))]
             + list({t.id: t for t in fp8_templates}.values()) + [fp8.linear(fp8.Shape(16, 96, 16))])
 

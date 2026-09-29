@@ -4,17 +4,17 @@ One linear call ``A·Bᵀ`` (A: m × k activation rows as the model's E4M3 codes
 `NcpFp8Linear{M,K,N,SUMS,IL,OL,WL}`.  Its root body holds only instances of the unit templates below, so the partition is
 `Q_template_instances` over them (`circuit.partition`), and every value is computed in exactly one of them.
 
-    template             one instance per            reads                                           computes and returns
-    NcpFp8Domain            call                        salt, index                                     root_A's commitment domain,
-                                                                                                     and the hoisted frontiers
-    NcpFp8Digest{K}         16-row strip of A           its 16 rows, row ids, the domain's frontiers    its 16 leaves' subtree root
-    NcpFp8Pad               16 pad leaves               pad ranks, the domain's frontiers               their subtree root
-    NcpFp8Node              tree node above the strips  its two children, its (level, index)            the parent; the top is root_A
-    NcpFp8Key{K,SUMS,..}    call                        salt, index, weight id, root_A                  E₁'s and F₁'s frontiers
-    NcpFp8FormY{K,SUMS,..}  16-column weight strip      16 weight rows, column ids, F₁'s frontier       the Ỹ strip (16 × 3k codes)
-    NcpFp8FormX{K,SUMS,..}  16-row strip of A           16 rows, row ids, E₁'s frontier                 the X̃ strip (16 × 3k codes)
-    NcpFp8Tile{K}           16 × 16 block               its X̃ strip, its Ỹ strip                        the checked words, and Z
-    NcpFp8Dequant           output entry                Z, the row scale, the column scale, the bias    y (BF16)
+    template                    one instance per            reads                                      returns
+    NcpFp8Domain{M,K,IL,OL}     call                        salt, index                                root_A's domain id, the tree's
+                                                                                                       frontiers
+    NcpFp8Digest{K,RL,L0..L3}   16-row strip of A           its 16 rows, row ids, frontiers            its 16 leaves' subtree root
+    NcpFp8Pad{RL,L0..L3}        16 pad leaves               pad ranks, frontiers                       their subtree root
+    NcpFp8Node{L}               tree node above the strips  its two children, its (level, index)       the parent; the top is root_A
+    NcpFp8Key{K,SUMS,IL,WL,M,N} call                        salt, index, weight id, root_A             E₁'s and F₁'s frontiers
+    NcpFp8FormY{K,SUMS,..,LL}   16-column weight strip      16 weight rows, column ids, F₁'s frontier  the Ỹ strip (16 × 3k codes)
+    NcpFp8FormX{K,SUMS,..,LL}   16-row strip of A           16 rows, row ids, E₁'s frontier            the X̃ strip (16 × 3k codes)
+    NcpFp8Tile{K}               16 × 16 block               its X̃ strip, its Ỹ strip                   the checked words, and Z
+    NcpFp8Dequant               output entry                Z, the row scale, the column scale, bias   y (BF16)
 
 **Semantics** are #295's (`schemes.fp8_is`), bit for bit (`fp8_reference`):
 - root_A is the protocol's commitment to A's rows (`audit.commit_rows`: `verity.commitments.merkle`'s SHA-256 frame-v3 tree,
@@ -29,9 +29,11 @@ One linear call ``A·Bᵀ`` (A: m × k activation rows as the model's E4M3 codes
 its call-wide gates computed once in `NcpFp8Domain` (the tree's) and `NcpFp8Key` (the streams'), each returning its frontier, and
 its row gates in the row's unit.  **Index binding**: the index, the weight id, the row, column and pad ranks and the upper
 nodes' (level, index) are Program inputs, anchored like the salt.  Their encodings are minimal big-endian
-(`verity.randomness.frame`, `verity.commitments.merkle._uint`), so the byte lengths of the index (IL), of index + 2, the
-domain's owner (OL), and of the weight id (WL) are template parameters; rows, columns and tree indices below 256 take one
-byte, which bounds m and n at 256 here.
+(`verity.randomness.frame`, `verity.commitments.merkle._uint`), so byte lengths are template parameters: the index's (IL),
+index + 2's, the domain's owner (OL), and the weight id's (WL) per call; a strip's ranks and its nodes' indices
+(`strip_lengths`), an upper node's index, and a row's or column's line per binding.  Strips and forming strips are batched
+in runs of one byte-length signature, and the per-call units return one frontier per variant (`domain_layout`,
+`key_layout`).
 """
 from __future__ import annotations
 
@@ -63,7 +65,7 @@ ROW_SCHEMA = b"verity/pouw/row/v1"                         # `audit.ROW_SCHEMA`
 ACTIVATION_TAG = b"verity/pouw/activation-rows/v1"         # `audit.activation_binding`'s tag
 LAW = "d3s"
 SUMS = ("f32", "f16")
-MAX_LINES = 256                                            # rows, columns and tree indices take one byte below this
+MAX_LINES = 1 << 24                                        # row, column and rank ids are u32 Program inputs
 
 
 def _prim(name: str):
@@ -201,12 +203,17 @@ def _dom_message(g, salt, index, m: int, ol: int, il: int):
                                         H.const_bytes(m.to_bytes(max(1, (m.bit_length() + 7) // 8), "big"))))
 
 
-def _leaf(k: int):
+def _ulen(v: int) -> int:
+    """The byte length of `verity.randomness.frame`'s and `merkle._uint`'s minimal big-endian encoding of ``v``."""
+    return max(1, (v.bit_length() + 7) // 8)
+
+
+def _leaf(k: int, rl: int):
     def build(g):
         dom = _inputs(g, "dom", 8, True)
         rid = g.input("rid", False)
         row = _inputs(g, "row", k, False)
-        rank = H.u32_bytes(rid, 1)
+        rank = H.u32_bytes(rid, rl)
         out = H.sha256(g, H.merkle_message(b"leaf", H.be_words(dom), rank, rank, H.const_bytes(ROW_SCHEMA),
                                            [H.Byte8(x) for x in row]))
         return ({("dom", j): dom[j] for j in range(8)}, [("rid", U32, [rid]), ("row", Array(k, U8), row)], out, DIGEST)
@@ -214,44 +221,46 @@ def _leaf(k: int):
     return build
 
 
-LEAF = Family("NcpFp8Leaf", ("K",), _leaf, "One committed row's Merkle leaf (`CommitmentDomain.leaf`, the row's codes as its "
-                                           "value), the domain's gates hoisted.")
+LEAF = Family("NcpFp8Leaf", ("K", "RL"), _leaf, "One committed row's Merkle leaf (`CommitmentDomain.leaf`, the row's codes as "
+                                                 "its value, its rank RL bytes), the domain's gates hoisted.")
 
 
-def leaf_fn(k: int) -> Hoisted:
-    return LEAF.at(k)
+def leaf_fn(k: int, rl: int = 1) -> Hoisted:
+    return LEAF.at(k, rl)
 
 
-def _pad():
+def _pad(rl: int):
     def build(g):
         dom = _inputs(g, "dom", 8, True)
         rank = g.input("rank", False)
-        out = H.sha256(g, H.merkle_message(b"pad", H.be_words(dom), H.u32_bytes(rank, 1)))
+        out = H.sha256(g, H.merkle_message(b"pad", H.be_words(dom), H.u32_bytes(rank, rl)))
         return {("dom", j): dom[j] for j in range(8)}, [("rank", U32, [rank])], out, DIGEST
 
     return build
 
 
-PAD = Family("NcpFp8PadLeaf", (), _pad, "One pad leaf of the power-of-two tree (`tree_levels`), the domain's gates hoisted.")
+PAD = Family("NcpFp8PadLeaf", ("RL",), _pad, "One pad leaf of the power-of-two tree (`tree_levels`, its rank RL bytes), the "
+                                               "domain's gates hoisted.")
 
 
-def pad_fn() -> Hoisted:
-    return PAD.at()
+def pad_fn(rl: int = 1) -> Hoisted:
+    return PAD.at(rl)
 
 
-def _node(depth: int | None):
+def _node(depth: int | None, length: int):
     """A tree node: in a strip (``depth`` 0 … 3, its index the first rank beneath it shifted by depth + 1) or above the
-    strips (``depth`` None: level and index are inputs)."""
+    strips (``depth`` None: level and index are inputs); its index ``length`` bytes."""
 
     def build(g):
         dom = _inputs(g, "dom", 8, True)
         left, right = _inputs(g, "left", 8, False), _inputs(g, "right", 8, False)
         if depth is None:
             lvl, idx = g.input("level", False), g.input("index", False)
-            lb, ib, local = H.u32_bytes(lvl, 1), H.u32_bytes(idx, 1), [("level", U32, [lvl]), ("index", U32, [idx])]
+            lb, ib, local = H.u32_bytes(lvl, 1), H.u32_bytes(idx, length), [("level", U32, [lvl]), ("index", U32, [idx])]
         else:
             src = g.input("first", False)
-            lb, ib, local = [depth], [H.Byte(src, depth + 1)], [("first", U32, [src])]
+            ib = [H.Byte(src, depth + 1 + 8 * (length - 1 - t)) for t in range(length)]
+            lb, local = [depth], [("first", U32, [src])]
         out = H.sha256(g, H.merkle_message(b"node", H.be_words(dom), lb, ib, H.be_words(left), H.be_words(right)))
         return ({("dom", j): dom[j] for j in range(8)}, [*local, ("left", DIGEST, left), ("right", DIGEST, right)], out,
                 DIGEST)
@@ -259,39 +268,59 @@ def _node(depth: int | None):
     return build
 
 
-STRIP_NODE = Family("NcpFp8StripNode", ("DEPTH",), _node,
+STRIP_NODE = Family("NcpFp8StripNode", ("DEPTH", "L"), _node,
                     "One Merkle node inside a 16-leaf strip (`CommitmentDomain.node` at depth DEPTH, its index the first rank "
-                    "beneath it >> (DEPTH + 1)), the domain's gates hoisted.")
-UPPER_NODE = Family("NcpFp8UpperNode", (), lambda: _node(None),
-                    "One Merkle node above the strips (`CommitmentDomain.node`, its level and index inputs), the domain's gates "
-                    "hoisted.")
+                    "beneath it >> (DEPTH + 1), L bytes), the domain's gates hoisted.")
+UPPER_NODE = Family("NcpFp8UpperNode", ("L",), lambda length: _node(None, length),
+                    "One Merkle node above the strips (`CommitmentDomain.node`, its level and its L-byte index inputs), the "
+                    "domain's gates hoisted.")
 
 
-def node_fn(depth: int | None) -> Hoisted:
-    return UPPER_NODE.at() if depth is None else STRIP_NODE.at(depth)
+def node_fn(depth: int | None, length: int = 1) -> Hoisted:
+    return UPPER_NODE.at(length) if depth is None else STRIP_NODE.at(depth, length)
 
 
-def _subtree(B, leaves: list[Coll], firsts: list[Coll], fronts: list[Coll]) -> Coll:
+def strip_lengths(first: int) -> tuple[int, int, int, int, int]:
+    """A 16-rank strip's byte lengths from its first rank: its ranks', then its depth-0 … 3 nodes' indices (uniform in the
+    strip, since 256 is a multiple of 16)."""
+    return (_ulen(first), *(_ulen(first >> (d + 1)) for d in range(4)))
+
+
+def _subtree(B, leaves: list[Coll], firsts: list[Coll], fronts: list[Coll], lengths: Sequence[int]) -> Coll:
     """The 16 leaves' subtree root: depths 0 … 3 of `tree_levels`, each node's index its first rank >> (depth + 1)."""
     level, first = leaves, firsts
     for d in range(4):
-        fn = node_fn(d).definition
+        fn = node_fn(d, lengths[d]).definition
         level = [B.call(fn, fronts[d], first[2 * j], level[2 * j], level[2 * j + 1]) for j in range(len(level) // 2)]
         first = first[::2]
     return level[0]
 
 
-def _domain_parts(m: int) -> tuple[bool, bool]:
-    """(the tree has nodes above the strips, the tree has pad strips)."""
+def domain_layout(m: int) -> list[tuple]:
+    """The frontiers `NcpFp8Domain` returns after the domain id, in order: ("leaf", RL), ("strip", DEPTH, L), ("upper", L),
+    ("pad", RL), one per byte-length variant the tree of m rows has."""
     width = 1 << merkle_depth(m)
-    return width > D, width > m
+    real = [strip_lengths(D * s) for s in range(m // D)]
+    pads = [strip_lengths(D * s) for s in range(m // D, width // D)]
+    ups = sorted({_ulen(j) for _lv, j in _upper(width)})
+    return ([("leaf", rl) for rl in sorted({x[0] for x in real})]
+            + [("strip", d, ln) for d, ln in sorted({(d, x[1 + d]) for x in real + pads for d in range(4)})]
+            + [("upper", ln) for ln in ups] + [("pad", rl) for rl in sorted({x[0] for x in pads})])
+
+
+def _variant(key: tuple, k: int) -> Hoisted:
+    kind = key[0]
+    if kind == "leaf":
+        return leaf_fn(k, key[1])
+    if kind == "strip":
+        return node_fn(key[1], key[2])
+    if kind == "upper":
+        return node_fn(None, key[1])
+    return pad_fn(key[1])
 
 
 def _domain_sig(S):
-    upper, pads = _domain_parts(S.M)
-    ret = [DIGEST, Array(leaf_fn(S.K).width, U32), *(Array(node_fn(d).width, U32) for d in range(4))]
-    ret += [Array(node_fn(None).width, U32)] if upper else []
-    ret += [Array(pad_fn().width, U32)] if pads else []
+    ret = [DIGEST, *(Array(_variant(key, S.K).width, U32) for key in domain_layout(S.M))]
     return (("salt", Array(32, U8)), ("index", PAIR)), Tuple(*ret)
 
 
@@ -304,62 +333,62 @@ def _domain_body(B, S, salt, index):
     e.emit([n for n in g.nodes if n.kind != "in"])
     dom_c = [e.val(x, 32) for x in dom]
     denv = {("dom", j): dom_c[j] for j in range(8)}
-    upper, pads = _domain_parts(S.M)
-    fronts = [leaf_fn(S.K).frontier(B, denv), *(node_fn(d).frontier(B, denv) for d in range(4))]
-    fronts += [node_fn(None).frontier(B, denv)] if upper else []
-    fronts += [pad_fn().frontier(B, denv)] if pads else []
-    return tuple_of(array_of(dom_c), *fronts)
+    return tuple_of(array_of(dom_c), *(_variant(key, S.K).frontier(B, denv) for key in domain_layout(S.M)))
 
 
 NcpFp8DomainDef = CompositeDefinition(
     "NcpFp8Domain", 1, ("M", "K", "IL", "OL"), _domain_sig, _domain_body,
     doc="root_A's commitment domain (`audit.activation_binding`, `CommitmentDomain.domain_id` with owner = index), and the "
-        "tree's hoisted frontiers: leaves, strip nodes by depth, upper nodes and pads.", conformance="protocol-defined")
+        "tree's hoisted frontiers, one per byte-length variant (`domain_layout`).", conformance="protocol-defined")
 
 
 def _digest_sig(S):
-    return ((("leaf", Array(leaf_fn(S.K).width, U32)), *((f"node{d}", Array(node_fn(d).width, U32)) for d in range(4)),
+    return ((("leaf", Array(leaf_fn(S.K, S.RL).width, U32)),
+             *((f"node{d}", Array(node_fn(d, ln).width, U32)) for d, ln in enumerate((S.L0, S.L1, S.L2, S.L3))),
              ("rows", Array(D, Array(S.K, U8))), ("rowids", Array(D, U32))), DIGEST)
 
 
 def _digest_body(B, S, leaf, n0, n1, n2, n3, rows, rid):
-    lf = leaf_fn(S.K).definition
+    lf = leaf_fn(S.K, S.RL).definition
     leaves = [B.call(lf, leaf, rid[r], rows[r]) for r in range(D)]
-    return _subtree(B, leaves, [rid[r] for r in range(D)], [n0, n1, n2, n3])
+    return _subtree(B, leaves, [rid[r] for r in range(D)], [n0, n1, n2, n3], (S.L0, S.L1, S.L2, S.L3))
 
 
 NcpFp8DigestDef = CompositeDefinition(
-    "NcpFp8Digest", 1, ("K",), _digest_sig, _digest_body,
-    doc="A 16-row strip's leaves and their subtree root (depths 0 … 3 of root_A's tree).", conformance="protocol-defined")
+    "NcpFp8Digest", 1, ("K", "RL", "L0", "L1", "L2", "L3"), _digest_sig, _digest_body,
+    doc="A 16-row strip's leaves and their subtree root (depths 0 … 3 of root_A's tree; RL, L0 … L3 the byte lengths of its "
+        "ranks and its nodes' indices).", conformance="protocol-defined")
 
 
 def _pad_sig(S):
-    return ((("pad", Array(pad_fn().width, U32)), *((f"node{d}", Array(node_fn(d).width, U32)) for d in range(4)),
+    return ((("pad", Array(pad_fn(S.RL).width, U32)),
+             *((f"node{d}", Array(node_fn(d, ln).width, U32)) for d, ln in enumerate((S.L0, S.L1, S.L2, S.L3))),
              ("ranks", Array(D, U32))), DIGEST)
 
 
 def _pad_body(B, S, pad, n0, n1, n2, n3, ranks):
-    pf = pad_fn().definition
+    pf = pad_fn(S.RL).definition
     leaves = [B.call(pf, pad, ranks[r]) for r in range(D)]
-    return _subtree(B, leaves, [ranks[r] for r in range(D)], [n0, n1, n2, n3])
+    return _subtree(B, leaves, [ranks[r] for r in range(D)], [n0, n1, n2, n3], (S.L0, S.L1, S.L2, S.L3))
 
 
 NcpFp8PadDef = CompositeDefinition(
-    "NcpFp8Pad", 1, (), _pad_sig, _pad_body, doc="16 pad leaves of root_A's tree and their subtree root.",
-    conformance="protocol-defined")
+    "NcpFp8Pad", 1, ("RL", "L0", "L1", "L2", "L3"), _pad_sig, _pad_body,
+    doc="16 pad leaves of root_A's tree and their subtree root.", conformance="protocol-defined")
 
 
 def _node_sig(S):
-    return ((("upper", Array(node_fn(None).width, U32)), ("id", Array(2, U32)), ("left", DIGEST), ("right", DIGEST)), DIGEST)
+    return ((("upper", Array(node_fn(None, S.L).width, U32)), ("id", Array(2, U32)), ("left", DIGEST), ("right", DIGEST)),
+            DIGEST)
 
 
 def _node_body(B, S, upper, nid, left, right):
-    return B.call(node_fn(None).definition, upper, nid[0], nid[1], left, right)
+    return B.call(node_fn(None, S.L).definition, upper, nid[0], nid[1], left, right)
 
 
 NcpFp8NodeDef = CompositeDefinition(
-    "NcpFp8Node", 1, (), _node_sig, _node_body, doc="One node of root_A's tree above the strips; the top is root_A.",
-    conformance="protocol-defined")
+    "NcpFp8Node", 1, ("L",), _node_sig, _node_body,
+    doc="One node of root_A's tree above the strips (its index L bytes); the top is root_A.", conformance="protocol-defined")
 
 
 # ---- the streams and the forming ------------------------------------------------------------------------------------------
@@ -417,31 +446,32 @@ def _side(g: H.Graph, codes: Sequence[H.Val], stream: Sequence[H.Val], left: boo
     return [g.op(cast, g.op(f32add, f32(x), f32(n))) for base, nz in blocks for x, n in zip(base, nz)]
 
 
-def _stream(g: H.Graph, name: str, sums: str, k: int, salt, index, root, weight, line, il: int, wl: int) -> list[H.Val]:
+def _stream(g: H.Graph, name: str, sums: str, k: int, salt, index, root, weight, line, il: int, wl: int,
+            ll: int = 1) -> list[H.Val]:
     """`D3Family.stream`: SHAKE256("verity/pouw/fp8-is/<tag>/<name>" ‖ 0 ‖ frame(salt, index, root_A, weight, line)), 2k
     bytes, as half-lanes."""
     msg = (H.const_bytes(f"verity/pouw/fp8-is/{tag(sums)}/{name}".encode() + b"\0")
            + H.frame(b"b", [H.Byte8(x) for x in salt]) + H.frame(b"i", H.uint_bytes(index, il))
-           + H.frame(b"b", H.be_words(root)) + H.frame(b"i", H.uint_bytes(weight, wl)) + H.frame(b"i", H.u32_bytes(line, 1)))
+           + H.frame(b"b", H.be_words(root)) + H.frame(b"i", H.uint_bytes(weight, wl)) + H.frame(b"i", H.u32_bytes(line, ll)))
     return H.shake256(g, msg, 2 * k)
 
 
 def _row(left: bool):
-    def make(k: int, sums: str, il: int, wl: int):
-        return _row_build(k, sums, il, wl, left)
+    def make(k: int, sums: str, il: int, wl: int, ll: int):
+        return _row_build(k, sums, il, wl, ll, left)
 
     return make
 
 
-def _row_build(k: int, sums: str, il: int, wl: int, left: bool):
-    """One X̃ row (``left``: E₁'s stream) or Ỹ column (F₁'s) from its codes and its line id."""
+def _row_build(k: int, sums: str, il: int, wl: int, ll: int, left: bool):
+    """One X̃ row (``left``: E₁'s stream) or Ỹ column (F₁'s) from its codes and its ``ll``-byte line id."""
 
     def build(g):
         salt, index, root, weight = (_inputs(g, "salt", 32, True), _inputs(g, "index", 2, True), _inputs(g, "root", 8, True),
                                      _inputs(g, "weight", 2, True))
         line = g.input("line", False)
         codes = _inputs(g, "codes", k, False)
-        stream = _stream(g, "E1" if left else "F1", sums, k, salt, index, root, weight, line, il, wl)
+        stream = _stream(g, "E1" if left else "F1", sums, k, salt, index, root, weight, line, il, wl, ll)
         out = _side(g, codes, stream, left, sums)
         shared = {n.name: n for n in salt + index + root + weight}
         return shared, [("line", U32, [line]), ("codes", Array(k, U8), codes)], out, Array(3 * k, U8)
@@ -449,36 +479,46 @@ def _row_build(k: int, sums: str, il: int, wl: int, left: bool):
     return build
 
 
-X_ROW = Family("NcpFp8XRow", ("K", "SUMS", "IL", "WL"), _row(True),
-               "One X̃ row: its E₁ stream and D-3s forming (`D3Family.side`), the stream's call-wide gates hoisted.")
-Y_ROW = Family("NcpFp8YRow", ("K", "SUMS", "IL", "WL"), _row(False),
-               "One Ỹ column: its F₁ stream and D-3s forming (`D3Family.side`), the stream's call-wide gates hoisted.")
+X_ROW = Family("NcpFp8XRow", ("K", "SUMS", "IL", "WL", "LL"), _row(True),
+               "One X̃ row: its E₁ stream (its line LL bytes) and D-3s forming (`D3Family.side`), the stream's call-wide gates "
+               "hoisted.")
+Y_ROW = Family("NcpFp8YRow", ("K", "SUMS", "IL", "WL", "LL"), _row(False),
+               "One Ỹ column: its F₁ stream (its line LL bytes) and D-3s forming (`D3Family.side`), the stream's call-wide "
+               "gates hoisted.")
 
 
-def row_fn(k: int, sums: str, il: int, wl: int, left: bool) -> Hoisted:
-    return (X_ROW if left else Y_ROW).at(k, sums, il, wl)
+def row_fn(k: int, sums: str, il: int, wl: int, left: bool, ll: int = 1) -> Hoisted:
+    return (X_ROW if left else Y_ROW).at(k, sums, il, wl, ll)
+
+
+def key_layout(m: int, n: int) -> list[tuple[str, int]]:
+    """The frontiers `NcpFp8Key` returns, in order: ("x", LL) per byte length of A's row lines, then ("y", LL) per byte
+    length of the weight's column lines."""
+    return ([("x", ll) for ll in sorted({_ulen(D * s) for s in range(m // D)})]
+            + [("y", ll) for ll in sorted({_ulen(D * c) for c in range(n // D)})])
 
 
 def _key_sig(S):
+    fns = [row_fn(S.K, S.SUMS, S.IL, S.WL, side == "x", ll) for side, ll in key_layout(S.M, S.N)]
     return ((("salt", Array(32, U8)), ("index", PAIR), ("weight", PAIR), ("root", DIGEST)),
-            Tuple(Array(row_fn(S.K, S.SUMS, S.IL, S.WL, True).width, U32), Array(row_fn(S.K, S.SUMS, S.IL, S.WL, False).width, U32)))
+            Tuple(*(Array(fn.width, U32) for fn in fns)))
 
 
 def _key_body(B, S, salt, index, weight, root):
     env = {("salt", j): salt[j] for j in range(32)} | {("index", j): index[j] for j in range(2)}
     env |= {("weight", j): weight[j] for j in range(2)} | {("root", j): root[j] for j in range(8)}
-    return tuple_of(row_fn(S.K, S.SUMS, S.IL, S.WL, True).frontier(B, env), row_fn(S.K, S.SUMS, S.IL, S.WL, False).frontier(B, env))
+    return tuple_of(*(row_fn(S.K, S.SUMS, S.IL, S.WL, side == "x", ll).frontier(B, env) for side, ll in key_layout(S.M, S.N)))
 
 
 NcpFp8KeyDef = CompositeDefinition(
-    "NcpFp8Key", 1, ("K", "SUMS", "IL", "WL"), _key_sig, _key_body,
-    doc="E₁'s and F₁'s call-wide gates, once per call: every stream's shared prefix over (salt, index, root_A, weight id).",
-    conformance="protocol-defined")
+    "NcpFp8Key", 1, ("K", "SUMS", "IL", "WL", "M", "N"), _key_sig, _key_body,
+    doc="E₁'s and F₁'s call-wide gates, once per call: every stream's shared prefix over (salt, index, root_A, weight id), "
+        "one frontier per line length (`key_layout`).", conformance="protocol-defined")
 
 
 def _form_sig(left: bool):
     def sig(S):
-        fn = row_fn(S.K, S.SUMS, S.IL, S.WL, left)
+        fn = row_fn(S.K, S.SUMS, S.IL, S.WL, left, S.LL)
         return ((("frontier", Array(fn.width, U32)), ("rows", Array(D, Array(S.K, U8))), ("ids", Array(D, U32))),
                 Array(D, Array(3 * S.K, U8)))
 
@@ -487,17 +527,17 @@ def _form_sig(left: bool):
 
 def _form_body(left: bool):
     def body(B, S, frontier, rows, ids):
-        fn = row_fn(S.K, S.SUMS, S.IL, S.WL, left).definition
+        fn = row_fn(S.K, S.SUMS, S.IL, S.WL, left, S.LL).definition
         return array_of([B.call(fn, frontier, ids[r], rows[r]) for r in range(D)])
 
     return body
 
 
 NcpFp8FormXDef = CompositeDefinition(
-    "NcpFp8FormX", 1, ("K", "SUMS", "IL", "WL"), _form_sig(True), _form_body(True),
+    "NcpFp8FormX", 1, ("K", "SUMS", "IL", "WL", "LL"), _form_sig(True), _form_body(True),
     doc="An activation strip's X̃ rows: [Q(h + e) | Q(h + e₂) | Q(−h − s)] (D-3s, `D3Family.side`).", conformance="protocol-defined")
 NcpFp8FormYDef = CompositeDefinition(
-    "NcpFp8FormY", 1, ("K", "SUMS", "IL", "WL"), _form_sig(False), _form_body(False),
+    "NcpFp8FormY", 1, ("K", "SUMS", "IL", "WL", "LL"), _form_sig(False), _form_body(False),
     doc="A weight strip's Ỹ columns: [Q(h + f) ; Q(h + f₂) ; Q(h + s)] (D-3s, `D3Family.side`).", conformance="protocol-defined")
 
 
@@ -543,16 +583,10 @@ NcpFp8DequantDef = CompositeDefinition(
     "NcpFp8Dequant", 1, (), lambda S: ((("z", F32), ("s", F32), ("t", F32), ("bias", BF16)), BF16), _dequant_body,
     doc="y = bf16(s_i·t_j·Z) + bias_j: a width-rule unit after the Z separator.", conformance="protocol-defined")
 
-NcpFp8Pad = bind(NcpFp8PadDef)
-NcpFp8Node = bind(NcpFp8NodeDef)
 NcpFp8Dequant = bind(NcpFp8DequantDef)
 
 
 # ---- the linear call -----------------------------------------------------------------------------------------------------
-
-def _uint_len(v: int) -> int:
-    return max(1, (v.bit_length() + 7) // 8)
-
 
 @dataclass(frozen=True)
 class Shape:
@@ -564,7 +598,7 @@ class Shape:
         if self.m % D or self.n % D or self.k % SLICE or min(self.m, self.k, self.n) <= 0:
             raise DomainError(f"the NCP-FP8 circuit needs 16 | m, 16 | n, 32 | k: {self}")
         if self.m > MAX_LINES or self.n > MAX_LINES:
-            raise DomainError(f"the NCP-FP8 circuit takes one-byte rows and columns: m, n <= {MAX_LINES}, not {self}")
+            raise DomainError(f"the NCP-FP8 circuit takes m, n <= {MAX_LINES}, not {self}")
         perm(self.k)
 
     @property
@@ -583,16 +617,31 @@ class Lengths:
 
     @staticmethod
     def of(index: int, weight: int) -> "Lengths":
-        return Lengths(_uint_len(index), _uint_len(index + 2), _uint_len(weight))
+        return Lengths(_ulen(index), _ulen(index + 2), _ulen(weight))
 
 
-def upper_nodes(shape: Shape) -> list[tuple[int, int]]:
-    """The tree's nodes above the strips, (level, index), in the order the root body computes them (level ascending)."""
-    out, count, level = [], shape.width // D, 4
+def _upper(width: int) -> list[tuple[int, int]]:
+    out, count, level = [], width // D, 4
     while count > 1:
         count //= 2
         out += [(level, j) for j in range(count)]
         level += 1
+    return out
+
+
+def upper_nodes(shape: Shape) -> list[tuple[int, int]]:
+    """The tree's nodes above the strips, (level, index), in the order the root body computes them (level ascending)."""
+    return _upper(shape.width)
+
+
+def _runs(keys: Sequence) -> list[tuple[int, int, Any]]:
+    """Consecutive equal keys as (lo, hi, key)."""
+    out: list[tuple[int, int, Any]] = []
+    for j, key in enumerate(keys):
+        if out and out[-1][2] == key:
+            out[-1] = (out[-1][0], j + 1, key)
+        else:
+            out.append((j, j + 1, key))
     return out
 
 
@@ -614,32 +663,49 @@ def _linear_body(B, S, a, s, b, t, bias, salt, index, weight, rid, cid, *rest):
     ms, ns, pads = m // D, n // D, shape.width - m
     padids = rest[0] if pads else None
     nodeids = rest[-1] if upper_nodes(shape) else None
-    tm = templates(k, S.SUMS, S.IL, S.OL, S.WL, m)
-    dom = B.call(tm["domain"], salt, index)
-    fleaf, fnodes = dom[1], [dom[2 + d] for d in range(4)]
-    at = 6
-    fupper = dom[at] if upper_nodes(shape) else None
-    at += 1 if upper_nodes(shape) else 0
-    fpad = dom[at] if pads else None
+    lg = Lengths(S.IL, S.OL, S.WL)
+    dom = B.call(domain_template(m, k, lg), salt, index)
+    front = {key: dom[1 + j] for j, key in enumerate(domain_layout(m))}
+
+    def strip_fronts(sig, kind):
+        return [front[(kind, sig[0])], *(front[("strip", d, sig[1 + d])] for d in range(4))]
+
     strips_a = a.reshape(Array(ms, Array(D, Array(k, U8))))
-    dig = B.batch(tm["digest"], fleaf, *fnodes, strips_a, rid.reshape(Array(ms, Array(D, U32))),
-                  axes=(None, None, None, None, None, 0, 0))
-    level = [dig[j] for j in range(ms)]
+    rows_id = rid.reshape(Array(ms, Array(D, U32)))
+    level = []
+    for lo, hi, sig in _runs([strip_lengths(D * s_) for s_ in range(ms)]):
+        dig = B.batch(digest_template(k, sig), *strip_fronts(sig, "leaf"), strips_a[lo:hi], rows_id[lo:hi],
+                      axes=(None, None, None, None, None, 0, 0))
+        level += [dig[j] for j in range(hi - lo)]
     if pads:
-        pd = B.batch(tm["pad"], fpad, *fnodes, padids.reshape(Array(pads // D, Array(D, U32))),
-                     axes=(None, None, None, None, None, 0))
-        level += [pd[j] for j in range(pads // D)]
-    at = 0
+        pad_ids = padids.reshape(Array(pads // D, Array(D, U32)))
+        for lo, hi, sig in _runs([strip_lengths(m + D * s_) for s_ in range(pads // D)]):
+            pd = B.batch(pad_template(sig), *strip_fronts(sig, "pad"), pad_ids[lo:hi], axes=(None, None, None, None, None, 0))
+            level += [pd[j] for j in range(hi - lo)]
+    ups, at = upper_nodes(shape), 0
     while len(level) > 1:
-        level = [B.call(tm["node"], fupper, nodeids[at + j], level[2 * j], level[2 * j + 1]) for j in range(len(level) // 2)]
-        at += len(level)
+        nxt = []
+        for j in range(len(level) // 2):
+            ln = _ulen(ups[at + j][1])
+            nxt.append(B.call(node_template(ln), front[("upper", ln)], nodeids[at + j], level[2 * j], level[2 * j + 1]))
+        at += len(nxt)
+        level = nxt
     root = level[0]
-    key = B.call(tm["key"], salt, index, weight, root)
-    ys = B.batch(tm["form_y"], key[1], b.reshape(Array(ns, Array(D, Array(k, U8)))), cid.reshape(Array(ns, Array(D, U32))),
-                 axes=(None, 0, 0))
-    xs = B.batch(tm["form_x"], key[0], strips_a, rid.reshape(Array(ms, Array(D, U32))), axes=(None, 0, 0))
-    y_strips = array_of([ys[c] for c in range(ns)])
-    tiles = [B.batch(tm["tile"], xs[rs], y_strips, axes=(None, 0)) for rs in range(ms)]
+    kl = key_layout(m, n)
+    key = B.call(key_template(k, S.SUMS, lg, m, n), salt, index, weight, root)
+    kfront = {kk: key[j] for j, kk in enumerate(kl)}
+    wrows, cols_id = b.reshape(Array(ns, Array(D, Array(k, U8)))), cid.reshape(Array(ns, Array(D, U32)))
+    y_strips = []
+    for lo, hi, ll in _runs([_ulen(D * c) for c in range(ns)]):
+        ys = B.batch(form_template(False, k, S.SUMS, lg, ll), kfront[("y", ll)], wrows[lo:hi], cols_id[lo:hi], axes=(None, 0, 0))
+        y_strips += [ys[j] for j in range(hi - lo)]
+    x_strips = []
+    for lo, hi, ll in _runs([_ulen(D * s_) for s_ in range(ms)]):
+        xs = B.batch(form_template(True, k, S.SUMS, lg, ll), kfront[("x", ll)], strips_a[lo:hi], rows_id[lo:hi], axes=(None, 0, 0))
+        x_strips += [xs[j] for j in range(hi - lo)]
+    y_all = array_of(y_strips)
+    tile_t = tile_template(k)
+    tiles = [B.batch(tile_t, x_strips[rs], y_all, axes=(None, 0)) for rs in range(ms)]
     out = {}
     for rs in range(ms):
         for cs in range(ns):
@@ -661,13 +727,51 @@ NcpFp8LinearDef = CompositeDefinition(
         "the unit templates only.", conformance="protocol-defined")
 
 
-@lru_cache(maxsize=None)
-def templates(k: int, sums: str, il: int, ol: int, wl: int, m: int) -> dict[str, SpecializedDefinition]:
-    """The unit templates of a call with m rows at depth ``k``, by role."""
-    return {"domain": bind(NcpFp8DomainDef, M=m, K=k, IL=il, OL=ol), "digest": bind(NcpFp8DigestDef, K=k), "pad": NcpFp8Pad,
-            "node": NcpFp8Node, "key": bind(NcpFp8KeyDef, K=k, SUMS=sums, IL=il, WL=wl),
-            "form_y": bind(NcpFp8FormYDef, K=k, SUMS=sums, IL=il, WL=wl), "form_x": bind(NcpFp8FormXDef, K=k, SUMS=sums, IL=il, WL=wl),
-            "tile": bind(NcpFp8TileDef, K=k), "dequant": NcpFp8Dequant}
+def domain_template(m: int, k: int, lg: Lengths) -> SpecializedDefinition:
+    return bind(NcpFp8DomainDef, M=m, K=k, IL=lg.il, OL=lg.ol)
+
+
+def digest_template(k: int, sig: Sequence[int]) -> SpecializedDefinition:
+    return bind(NcpFp8DigestDef, K=k, RL=sig[0], L0=sig[1], L1=sig[2], L2=sig[3], L3=sig[4])
+
+
+def pad_template(sig: Sequence[int]) -> SpecializedDefinition:
+    return bind(NcpFp8PadDef, RL=sig[0], L0=sig[1], L1=sig[2], L2=sig[3], L3=sig[4])
+
+
+def node_template(length: int) -> SpecializedDefinition:
+    return bind(NcpFp8NodeDef, L=length)
+
+
+def key_template(k: int, sums: str, lg: Lengths, m: int, n: int) -> SpecializedDefinition:
+    return bind(NcpFp8KeyDef, K=k, SUMS=sums, IL=lg.il, WL=lg.wl, M=m, N=n)
+
+
+def form_template(left: bool, k: int, sums: str, lg: Lengths, ll: int) -> SpecializedDefinition:
+    return bind(NcpFp8FormXDef if left else NcpFp8FormYDef, K=k, SUMS=sums, IL=lg.il, WL=lg.wl, LL=ll)
+
+
+def tile_template(k: int) -> SpecializedDefinition:
+    return bind(NcpFp8TileDef, K=k)
+
+
+def call_templates(shape: Shape, sums: str = "f16", lengths: Lengths = Lengths(1, 1, 1)) -> list[tuple[str, SpecializedDefinition]]:
+    """Every unit template one call instantiates, with its role, in the order its root body first uses them."""
+    m, k, n = shape.m, shape.k, shape.n
+    out = [("domain", domain_template(m, k, lengths))]
+    out += [("digest", digest_template(k, sig)) for _lo, _hi, sig in _runs([strip_lengths(D * s) for s in range(m // D)])]
+    out += [("pad", pad_template(sig)) for _lo, _hi, sig in _runs([strip_lengths(m + D * s) for s in range((shape.width - m) // D)])]
+    out += [("node", node_template(ln)) for ln in sorted({_ulen(j) for _lv, j in upper_nodes(shape)})]
+    out += [("key", key_template(k, sums, lengths, m, n))]
+    out += [("form_y", form_template(False, k, sums, lengths, ll)) for ll in sorted({_ulen(D * c) for c in range(n // D)})]
+    out += [("form_x", form_template(True, k, sums, lengths, ll)) for ll in sorted({_ulen(D * s) for s in range(m // D)})]
+    out += [("tile", tile_template(k)), ("dequant", NcpFp8Dequant)]
+    seen, uniq = set(), []
+    for role, t in out:
+        if t.id not in seen:
+            seen.add(t.id)
+            uniq.append((role, t))
+    return uniq
 
 
 def linear(shape: Shape, sums: str = "f16", lengths: Lengths = Lengths(1, 1, 1)) -> SpecializedDefinition:
@@ -677,5 +781,7 @@ def linear(shape: Shape, sums: str = "f16", lengths: Lengths = Lengths(1, 1, 1))
     return bind(NcpFp8LinearDef, M=shape.m, K=shape.k, N=shape.n, SUMS=sums, IL=lengths.il, OL=lengths.ol, WL=lengths.wl)
 
 
-__all__ = ["BF16", "D", "F32", "NcpFp8Dequant", "NcpFp8Node", "NcpFp8Pad", "Hoisted", "Lengths", "SUMS", "Shape", "leaf_fn", "linear",
-           "node_fn", "pad_fn", "perm", "row_fn", "tag", "templates", "tile_words", "upper_nodes"]
+__all__ = ["BF16", "D", "F32", "Family", "Hoisted", "Lengths", "NcpFp8Dequant", "SUMS", "Shape", "call_templates",
+           "digest_template", "domain_layout", "domain_template", "form_template", "key_layout", "key_template", "leaf_fn",
+           "linear", "node_fn", "node_template", "pad_fn", "pad_template", "perm", "row_fn", "strip_lengths", "tag",
+           "tile_template", "tile_words", "upper_nodes"]

@@ -362,21 +362,21 @@ The profile is `Stratified` over the tile strata, and its `harm_bound`, at W_ref
 The same layout (a) as `ncp-v2`, over `fp8-is-*`'s D-3s forming on X_q (above): #295's scheme is the reference, and the
 Program evaluates to it bit for bit (`circuit.fp8_reference`: root_A by `audit.commit_rows`, the forming, words and useful
 output by `FP8IS(D3s(sums))`'s own `encode`, `checked` and `useful` on 16 × 16 tiles). `SUMS` is "f16" (the target cell) or
-"f32". Test shapes: 16 | m, 16 | n, 32 | k with k admissible (π passes the d = 32 rule from k = 96), m, n <= 256.
+"f32". Its shapes: 16 | m, 16 | n, 32 | k with k admissible (π passes the d = 32 rule from k = 96).
 
 **The units.** `NcpFp8Linear{M,K,N,SUMS,IL,OL,WL}` is one linear call; its root body holds only these templates' instances.
 
 ~~~text
-template                  per                          reads                                        returns
-NcpFp8Domain{M,K,IL,OL}   call                         salt, index                                  root_A's domain id, the tree's frontiers
-NcpFp8Digest{K}           16-row strip of A            its 16 rows (E4M3), row ids, frontiers       its 16 leaves' subtree root
-NcpFp8Pad                 16 pad leaves                pad ranks, frontiers                         their subtree root
-NcpFp8Node                tree node above the strips   its children, its (level, index)             the parent; the top is root_A
-NcpFp8Key{K,SUMS,IL,WL}   call                         salt, index, weight id, root_A               E₁'s and F₁'s frontiers
-NcpFp8FormY{K,SUMS,IL,WL} 16-column weight strip       16 weight rows, column ids, F₁'s frontier    the Ỹ strip (16 × 3k codes)
-NcpFp8FormX{K,SUMS,IL,WL} 16-row strip of A            16 rows, row ids, E₁'s frontier              the X̃ strip (16 × 3k codes)
-NcpFp8Tile{K}             16 × 16 block                its X̃ strip, its Ỹ strip                     the words, and Z
-NcpFp8Dequant             output entry                 Z, s_i, t_j, bias_j                          y = bf16(s_i·t_j·Z) + bias_j
+template                     per                          reads                                        returns
+NcpFp8Domain{M,K,IL,OL}      call                         salt, index                                  root_A's domain id, the tree's frontiers
+NcpFp8Digest{K,RL,L0..L3}    16-row strip of A            its 16 rows (E4M3), row ids, frontiers       its 16 leaves' subtree root
+NcpFp8Pad{RL,L0..L3}         16 pad leaves                pad ranks, frontiers                         their subtree root
+NcpFp8Node{L}                tree node above the strips   its children, its (level, index)             the parent; the top is root_A
+NcpFp8Key{K,SUMS,IL,WL,M,N}  call                         salt, index, weight id, root_A               E₁'s and F₁'s frontiers
+NcpFp8FormY{K,SUMS,IL,WL,LL} 16-column weight strip       16 weight rows, column ids, F₁'s frontier    the Ỹ strip (16 × 3k codes)
+NcpFp8FormX{K,SUMS,IL,WL,LL} 16-row strip of A            16 rows, row ids, E₁'s frontier              the X̃ strip (16 × 3k codes)
+NcpFp8Tile{K}                16 × 16 block                its X̃ strip, its Ỹ strip                     the words, and Z
+NcpFp8Dequant                output entry                 Z, s_i, t_j, bias_j                          y = bf16(s_i·t_j·Z) + bias_j
 ~~~
 
 - **root_A** is the protocol's commitment to A's rows: `verity.commitments.merkle`'s SHA-256 frame-v3 tree, one leaf per
@@ -394,17 +394,20 @@ functions of the same values in many units, which `validate_unit_cut` rejects. S
 DAG over inputs marked call-wide or the row's own, and split:
 - its call-wide gates run once, in `NcpFp8Domain` (the tree's) or `NcpFp8Key` (the streams'), which return the frontier,
   the call-wide values a row's gate reads;
-- its row gates are a Definition of their own (`NcpFp8Leaf{K}`, `NcpFp8StripNode{DEPTH}`, `NcpFp8UpperNode`,
-  `NcpFp8PadLeaf`, `NcpFp8XRow` and `NcpFp8YRow{K,SUMS,IL,WL}`) that reads the frontier as committed values.
+- its row gates are a Definition of their own (`NcpFp8Leaf{K,RL}`, `NcpFp8StripNode{DEPTH,L}`, `NcpFp8UpperNode{L}`,
+  `NcpFp8PadLeaf{RL}`, `NcpFp8XRow` and `NcpFp8YRow{K,SUMS,IL,WL,LL}`) that reads the frontier as committed values.
 
 A hash block whose inputs are all call-wide or all the row's own is one call of its Definition (`PouwKeccakF1600`,
 `PouwSha256Compress`); a mixed block is expanded into primitives. Without the split, two rows recompute the streams'
 prefix (`test_without_hoisting_two_rows_recompute_the_streams_prefix`).
 
 **Index binding.** The index, the weight id, the row, column and pad ranks and the upper nodes' (level, index) are Program
-inputs, anchored like the salt. Their encodings are minimal big-endian (`frame`, `merkle._uint`), so the byte lengths of
-the index (IL), of index + 2, the domain's owner (OL), and of the weight id (WL) are template parameters
-(`fp8.Lengths.of(index, weight)`). Rows, columns and tree indices take one byte, which bounds m and n at 256.
+inputs, anchored like the salt. Their encodings are minimal big-endian (`frame`, `merkle._uint`), so byte lengths are
+template parameters:
+- per call, the index's (IL), index + 2's (OL, the domain's owner) and the weight id's (WL), `fp8.Lengths.of(index, weight)`;
+- per binding, a strip's ranks and its nodes' indices (`fp8.strip_lengths`), an upper node's index, and a row's or
+  column's line. Past 255 they take two bytes, so strips are batched in runs of one byte-length signature, and the domain
+  and key units return one frontier per variant (`fp8.domain_layout`, `fp8.key_layout`).
 
 **The separator and the width rule** are `ncp-v2`'s, read through `partition.Circuit`: the pinned port is the tile's Z
 (field 1), every path from a PoUW unit (the domain, digests, pads, nodes, the key, the forming, the tiles) to y crosses a
@@ -430,6 +433,5 @@ it: a pad has no tile beneath it that a wrong one could be charged to. A tile's 
   - the vLLM adapter's `traced_as`;
   - H-1T.
 - For NCP-FP8's circuit:
-  - rows or columns past 255 (two-byte ranks and indices: more template bindings);
-  - production shapes (64 × 64 tiles, k in the thousands) as a recorded run;
+  - production shapes (k in the thousands, m and n up to the model's) as a recorded run;
   - C-Flock pieces for its primitives.

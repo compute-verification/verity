@@ -43,10 +43,11 @@ class Circuit:
     """One call's Definition and its unit templates by role."""
 
     fn: Any
-    templates: Any                      # role -> unit template
+    templates: Any                      # role -> unit template (the tile's is the separator port's)
     m: int
     n: int
     pouw_roles: tuple[str, ...]
+    variants: tuple[tuple[str, Any], ...] = ()   # (role, template) for every template, when a role has several
 
     @property
     def tiles(self) -> int:
@@ -58,8 +59,8 @@ def ncp_circuit(shape: Shape, kind: str = "shift24", fn: Any = None) -> Circuit:
 
 
 def fp8_circuit(shape: fp8.Shape, sums: str = "f16", lengths: fp8.Lengths = fp8.Lengths(1, 1, 1), fn: Any = None) -> Circuit:
-    tm = fp8.templates(shape.k, sums, lengths.il, lengths.ol, lengths.wl, shape.m)
-    return Circuit(fp8.linear(shape, sums, lengths) if fn is None else fn, tm, shape.m, shape.n, FP8_POUW_ROLES)
+    return Circuit(fp8.linear(shape, sums, lengths) if fn is None else fn, {"tile": fp8.tile_template(shape.k)}, shape.m,
+                   shape.n, FP8_POUW_ROLES, tuple(fp8.call_templates(shape, sums, lengths)))
 
 
 def listed_of(fn: Any) -> list[Any]:
@@ -119,16 +120,17 @@ def units_of(fn: Any, shape: Shape, kind: str = "shift24") -> tuple[Unit, ...]:
 
 def circuit_units(c: Circuit) -> tuple[Unit, ...]:
     """Every unit of a circuit, in the partition's numbering."""
-    roles = {id(v): r for r, v in c.templates.items()}
+    roles = {id(v): r for r, v in (*c.templates.items(), *c.variants)}
     ms, ns = c.m // D, c.n // D
     out: list[Unit] = []
     tile_row = deq_node = 0
+    strips: Counter = Counter()                            # a strip role's units so far, across its batch nodes
     for k, nd in enumerate(c.fn.body.nodes):
         role = roles[id(nd.fn)]
         count = nd.n if nd.form == "batch" else 1
         for m in range(count):
             if role in ("digest", "form_x", "form_y", "pad"):
-                where: tuple[int, ...] = (m,)
+                where: tuple[int, ...] = (strips[role] + m,)
             elif role == "tile":
                 where = (tile_row, m)
             elif role == "dequant":
@@ -140,6 +142,8 @@ def circuit_units(c: Circuit) -> tuple[Unit, ...]:
             tile_row += 1
         elif role == "dequant":
             deq_node += 1
+        elif role in ("digest", "form_x", "form_y", "pad"):
+            strips[role] += count
     assert tile_row == ms
     return tuple(out)
 

@@ -164,7 +164,39 @@ def test_the_domain_is_295s():
     with pytest.raises(DomainError):
         fp8.linear(fp8.Shape(24, 96, 16))
     with pytest.raises(DomainError):
-        fp8.linear(fp8.Shape(272, 96, 16))                  # rows past 255 take two bytes: not here yet
+        fp8.linear(fp8.Shape(16, 100, 16))
+
+
+def test_two_byte_ranks_and_lines_are_template_variants():
+    """Past 255, a rank, a line and a node index take two bytes (`merkle._uint`, `frame`), so the strips, the pads, the
+    nodes and the forming split into bindings by byte length, and the per-call units return one frontier per variant."""
+    assert fp8.strip_lengths(0) == (1, 1, 1, 1, 1) and fp8.strip_lengths(256) == (2, 1, 1, 1, 1)
+    assert fp8.strip_lengths(2048) == (2, 2, 2, 2, 1)                   # its depth-3 index is 128
+    layout = fp8.domain_layout(272)                                      # 17 strips, padded to 512 leaves
+    assert ("leaf", 1) in layout and ("leaf", 2) in layout and ("pad", 2) in layout and ("pad", 1) not in layout
+    assert fp8.key_layout(272, 16) == [("x", 1), ("x", 2), ("y", 1)]
+    roles = [r for r, _ in fp8.call_templates(fp8.Shape(272, 96, 16))]
+    assert roles.count("digest") == 2 and roles.count("form_x") == 2 and roles.count("pad") == 1
+
+
+def test_the_descriptor_decodes_to_the_same_program():
+    """Every template and per-row family is a registered Definition with statics, so a descriptor decodes by id alone."""
+    from verity.ir.codec import decode_program, encode_program, program_digest
+    from verity.ir.defs import REGISTRY
+    from verity.ir.program import Program
+
+    prog = Program(fp8.linear(fp8.Shape(16, 96, 16), "f16", fp8.Lengths(2, 2, 1)))
+    assert program_digest(decode_program(encode_program(prog), REGISTRY)) == program_digest(prog)
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("shape,sums,index", [((272, 96, 16), "f16", 3), ((16, 96, 272), "f32", 70_000)])
+def test_the_program_evaluates_to_295s_scheme_past_255(shape, sums, index):
+    """272 rows: two-byte ranks and E₁ lines, fifteen pad strips with two-byte ranks; 272 columns: two-byte F₁ lines."""
+    c = call(*shape, sums=sums, index=index)
+    ref = R.evaluate(c)
+    y, words = run(c)
+    assert words == ref.words and y == ref.out
 
 
 # ---- the partition --------------------------------------------------------------------------------------------------------
