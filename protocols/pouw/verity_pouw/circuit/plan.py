@@ -190,7 +190,8 @@ def fp8_layout(shape, sums: str = "f16", lengths=None) -> Layout:
     """NCP-FP8's layout (`circuit.fp8`): each tile's closure is `ncp-v2`'s (its X and Y strips, its strip's digest, the
     nodes on that strip's path to root_A, the key) with the call's domain unit, and the **pad cone**, every pad strip and
     every node with no row beneath it.  root_A's tree is padded to a power of two, and a pad has no tile beneath it that a
-    wrong one could be charged to, so the pad cone is proved whenever a tile is.  A tile's W_ref is its cells' share of
+    wrong one could be charged to, so the pad cone is proved whenever a tile is.  Its Y strip reads the weight Program's
+    h and amplitudes (`NcpFp8Amp`), proved once per plan (`Plan.proved_y`).  A tile's W_ref is its cells' share of
     `FP8IS.wref`, rounded up."""
     from ..protocol import Shape as PShape
     from . import fp8, fp8_reference
@@ -210,18 +211,19 @@ def fp8_layout(shape, sums: str = "f16", lengths=None) -> Layout:
     digest = {u.where[0]: u.index for u in by_role["digest"]}
     form_x = {u.where[0]: u.index for u in by_role["form_x"]}
     form_y = {u.where[0]: u.index for u in by_role["form_y"]}
-    closure = {}
+    closure, y_strip = {}, {}
     for t in by_role["tile"]:
         rs, cs = t.where
         path = [nodes[(lv, j)] for lv, j in ups if j == rs >> (lv - 3)]
         closure[t.index] = (t.index, form_x[rs], form_y[cs], digest[rs], *path, *one)
+        y_strip[t.index] = cs
     wref = fp8_reference.scheme(sums).wref(PShape(shape.m, shape.k, shape.n))
     per_tile = -(-wref * D * D // (shape.m * shape.n))
     strata = []
     for role in ("tile", "dequant"):
         group = by_role[role]
         strata.append(StratumSpec(group[0].template, role, tuple(u.index for u in group), per_tile * len(group) if role == "tile" else 0))
-    return Layout(shape, us, tuple(strata), closure, per_tile=per_tile)
+    return Layout(shape, us, tuple(strata), closure, y_strip, per_tile)
 
 
 @dataclass(frozen=True)
@@ -250,14 +252,12 @@ def draw(key: Key, lay: Layout, law: TileLaw) -> Plan:
 
 def openings(lay: Layout, proved, proved_y=()) -> tuple[tuple[str, int], ...]:
     """The input rows the proved units read, one leaf per row: a digest or X unit its strip's 16 A rows, a Y unit (the
-    weight Program's, by column strip, or NCP-FP8's in the call) its 16 weight rows."""
+    weight Program's, by column strip: `ncp-v2`'s Y unit, NCP-FP8's h and amplitudes) its 16 weight rows."""
     rows: set[tuple[str, int]] = set()
     for i in proved:
         u = lay.units[i]
         if u.role in ("digest", "form_x"):
             rows.update(("a", D * u.where[0] + r) for r in range(D))
-        elif u.role == "form_y":
-            rows.update(("b", D * u.where[0] + r) for r in range(D))
     for cs in proved_y:
         rows.update(("b", D * cs + r) for r in range(D))
     return tuple(sorted(rows))

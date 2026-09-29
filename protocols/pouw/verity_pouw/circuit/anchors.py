@@ -18,9 +18,9 @@ NCP-FP8's (`Fp8Anchors`, X-SPC-89) are its declaration, (salt, index, weight id)
 alone, which the verifier builds the same way:
 
     field        value                                                                     input
-    salt         the run's salt                                                            `salt`
+    salt, weight the run's salt and the registered id of the matrix B is: the Program's    `prefix`
+      id         gates over these alone, evaluated natively (`fp8.prefix`, X-SPC-90)
     index        the matmul's index, the call index                                        `index`
-    weight id    the registered id of the matrix B is                                      `weight`
     row ranks    0 … m−1, root_A's leaves (`audit.commit_rows`)                            `rowids`
     row lines    the row ranks: E₁'s row i is row i's                                      `lines`
     column lines 0 … n−1, F₁'s column j is B's column j under the weight id (#295)         `colids`
@@ -103,6 +103,7 @@ class Fp8Anchors:
     salt: bytes
     index: int
     weight: int
+    sums: str = "f16"                     # the scheme's D-3s sums: the streams' tag, which the prefix reads
 
     @property
     def call_index(self) -> int:
@@ -126,16 +127,20 @@ class Fp8Anchors:
 
     def call_inputs(self) -> dict[str, list[int]]:
         """`NcpFp8Linear`'s anchored inputs, by parameter."""
-        from .fp8 import upper_nodes
+        from .fp8 import prefix, upper_nodes
 
         m, n, width = self.shape.m, self.shape.n, self.shape.width
-        out = {"salt": list(self.salt), "index": _lane(self.index)[::-1], "weight": _lane(self.weight)[::-1],
+        out = {"prefix": prefix(self.shape, self.sums, self.lengths, self.salt, self.weight), "index": _lane(self.index)[::-1],
                "rowids": list(range(m)), "lines": list(range(m)), "colids": list(range(n))}
         if width > m:
             out["padids"] = list(range(m, width))
         if upper_nodes(self.shape):
             out["nodeids"] = [v for node in upper_nodes(self.shape) for v in node]
         return out
+
+    def weight_inputs(self) -> dict[str, list[int]]:
+        """`NcpFp8Weight`'s anchored inputs: none, since h and the amplitudes read B alone."""
+        return {}
 
     def check_call(self, fn, args: Sequence[Sequence[int]]) -> None:
         """Refuse a call's flat input leaves whose anchored inputs are not these anchors'."""

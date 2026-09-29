@@ -138,6 +138,31 @@ def test_the_program_evaluates_to_295s_scheme_on_a_padded_tree_and_long_ids():
     assert words == ref.words and y == ref.out
 
 
+@pytest.mark.parametrize("sums", fp8.SUMS)
+def test_the_weight_program_is_295s_h_and_amplitudes(sums):
+    """`NcpFp8Weight`, once per run and weight: each column's h (FP32 words under f32 sums) and its amplitudes, as #295's
+    `D3Family.parse` and `amplitudes` give them; every call's Ỹ strip reads these (X-SPC-90)."""
+    c = call(16, 96, 32, sums=sums)
+    hs, amps = c.weight_outputs()
+    assert list(evaluate(fp8.weight(c.shape, sums), *c.weight_args())) == hs + amps
+
+
+def test_the_salt_and_weight_gates_are_the_verifier_s():
+    """The domain's and the streams' gates over the salt and the weight id alone would be computed again by every call of
+    a run, or of a weight (the red team's 901 and 138, X-SPC-90): they are evaluated natively, and the call reads them as
+    its anchored prefix, with no salt or weight id input of its own."""
+    g, _iv, dom, pub = fp8._dom_graph(16, 1, 1)
+    assert len(H.cone(g, dom)) - len(pub.rest) == 901
+    for left in (True, False):
+        hf, key = fp8.row_fn(96, "f16", 1, 1, left), fp8._key_public(96, "f16", 1, 1, left, 1)
+        assert len(hf.split.hoisted) - len(key.rest) == 69
+    names = [p for p, _t in fp8.linear(fp8.Shape(16, 96, 16)).signature()[0]]
+    assert "prefix" in names and "salt" not in names and "weight" not in names
+    c = call(16, 96, 16)
+    other = fp8.prefix(c.shape, c.sums, c.lengths, bytes(32), c.weight)
+    assert other != fp8.prefix(c.shape, c.sums, c.lengths, c.salt, c.weight)
+
+
 def test_the_owners_length_is_its_own():
     """The domain's owner is index + 2 (`CommitmentDomain`), which can take a byte more than the index."""
     c = call(32, 128, 16, index=254, weight=255)
@@ -244,6 +269,36 @@ def test_the_cut_holds_past_255():
     assert P.circuit_separator(c, uc).ok and P.circuit_width_rule(c, uc=uc).ok
 
 
+def test_calls_on_one_weight_compose_without_recompute():
+    """Two calls on one weight in one root (`NcpFp8Window`): the weight's h and amplitudes once, each call's units reading
+    them. At #380's first head this recomputed 13,423 gates (X-SPC-90); with the amplitude unit and the verifier's prefix,
+    no value is computed in two units."""
+    uc = P.circuit_cut(P.fp8_window_circuit(fp8.Shape(16, 96, 16), 2))
+    assert uc.verdict.ok, uc.verdict.codes
+    roles = [u.role for u in uc.units]
+    assert roles.count("amp") == 1 and roles.count("key") == 2 and roles.count("form_y") == 2
+
+
+@pytest.mark.slow
+def test_a_window_evaluates_to_its_calls():
+    """The window's outputs are each call's own, evaluated alone."""
+    c1, c2 = call(16, 96, 16, index=3, seed=7), call(16, 96, 16, index=4, seed=7)
+    a2 = call(16, 96, 16, seed=8).a
+    c2 = R.Call(c2.shape, a2, c2.s, c1.b, c1.t, c1.bias, c1.salt, 4, c1.weight, c1.sums)
+    per = [dict(zip([p for p, _t in fp8.linear(c.shape).signature()[0]], c.args())) for c in (c1, c2)]
+    fn = fp8.window(c1.shape, 2)
+    args = [c1.weight_args()[0], list(c1.t), list(c1.bias)]
+    args += [[v for d in per for v in d[p]] for p, _t in fn.signature()[0][3:]]
+    out = evaluate(fn, *args)
+    alone = [evaluate(fp8.linear(c.shape, c.sums, c.lengths), *c.args()) for c in (c1, c2)]
+    m, n = 16, 16
+    ys, words = out[:2 * m * n], out[2 * m * n:]
+    per_words = len(words) // 2
+    for j, got in enumerate(alone):
+        assert list(ys[j * m * n:(j + 1) * m * n]) == list(got[:m * n])
+        assert list(words[j * per_words:(j + 1) * per_words]) == list(got[m * n:])
+
+
 def test_delivered_words_fail_the_width_rule():
     """Were the tiles' words served beside y, the tiles would reach a served output other than through Z, and fail."""
     c, uc = _check(fp8.Shape(16, 96, 16))
@@ -348,6 +403,7 @@ def test_traced_as_gives_the_fp8_circuit():
     assert {"fp8-is-h100-d3s-v0-f16", "fp8-is-h100-d3s-v0"} <= set(SCHEMES)
     t = traced_as("fp8-is-h100-d3s-v0-f16", 32, 96, 32, index=5, weight=300)
     assert t.definition is fp8.linear(fp8.Shape(32, 96, 32), "f16", fp8.Lengths(1, 1, 2)) and t.served == 32 * 32
+    assert t.weight is fp8.weight(fp8.Shape(32, 96, 32), "f16") and t.weight_query == P.fp8_weight_query(fp8.Shape(32, 96, 32))
     assert t.query == P.query_of(P.fp8_circuit(fp8.Shape(32, 96, 32), "f16", fp8.Lengths(1, 1, 2)))
     assert len(t.layout().closure) == 4
     assert traced_as("fp8-is-h100-d3s-v0", 32, 96, 32).definition.S().SUMS == "f32"
@@ -369,22 +425,23 @@ def test_the_verifier_builds_every_id_from_the_shape(shape):
     from verity_pouw.circuit.anchors import Fp8Anchors
 
     c = call(*shape, index=300, weight=70_000)
-    an = Fp8Anchors(c.shape, c.salt, c.index, c.weight)
-    assert _traced(c).call_args(an, *c.args()[:5]) == c.args()
+    an = Fp8Anchors(c.shape, c.salt, c.index, c.weight, c.sums)
+    assert _traced(c).call_args(an, *c.args()[:6]) == c.args()
     assert an.call_inputs()["rowids"] == an.call_inputs()["lines"]
 
 
 def test_a_prover_s_ids_must_be_the_verifier_s():
     """Each free id the red team moved (X-SPC-89) is refused: repeated lines, lines that are not the ranks, other pad ranks
-    or node indices, and another index or weight id."""
+    or node indices, another index, and a prefix of another salt or weight id."""
     from verity_pouw.circuit.anchors import Fp8Anchors
 
     c = call(48, 96, 16)
-    fn, an = _traced(c).definition, Fp8Anchors(c.shape, c.salt, c.index, c.weight)
+    fn, an = _traced(c).definition, Fp8Anchors(c.shape, c.salt, c.index, c.weight, c.sums)
     an.check_call(fn, c.args())
     names = [p for p, _t in fn.signature()[0]]
     moved = {"lines": [0] * 16 + list(range(16, 48)), "rowids": list(range(47, -1, -1)), "colids": list(range(1, 17)),
-             "padids": [v + 1000 for v in range(48, 64)], "nodeids": [4, 0, 4, 2, 5, 0], "index": [0, 4], "weight": [0, 12]}
+             "padids": [v + 1000 for v in range(48, 64)], "nodeids": [4, 0, 4, 2, 5, 0], "index": [0, 4],
+             "prefix": fp8.prefix(c.shape, c.sums, c.lengths, c.salt, 12)}
     for name, value in moved.items():
         args = list(c.args())
         assert args[names.index(name)] != value
@@ -399,9 +456,11 @@ def test_the_anchors_fix_the_definition_s_byte_lengths_and_a_window_s_indices():
     c = call(16, 96, 16)
     t = _traced(c)
     with pytest.raises(DomainError):
-        t.call_args(Fp8Anchors(c.shape, c.salt, 300, c.weight), *c.args()[:5])       # a two-byte index, a one-byte Definition
+        t.call_args(Fp8Anchors(c.shape, c.salt, 300, c.weight), *c.args()[:6])       # a two-byte index, a one-byte Definition
     with pytest.raises(DomainError):
-        t.call_args(Fp8Anchors(fp8.Shape(32, 96, 16), c.salt, c.index, c.weight), *c.args()[:5])
+        t.call_args(Fp8Anchors(fp8.Shape(32, 96, 16), c.salt, c.index, c.weight), *c.args()[:6])
+    with pytest.raises(DomainError):
+        t.call_args(Fp8Anchors(c.shape, c.salt, c.index, c.weight, "f32"), *c.args()[:6])    # another scheme's streams
     ledger = Ledger()
     ledger.admit(Fp8Anchors(c.shape, c.salt, c.index, c.weight), c.shape)
     ledger.admit(Fp8Anchors(c.shape, c.salt, c.index + 1, c.weight), c.shape)

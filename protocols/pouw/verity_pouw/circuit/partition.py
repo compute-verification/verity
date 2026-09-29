@@ -36,8 +36,9 @@ from .ncp2 import D, Shape
 
 #: the units whose values are PoUW's alone: behind the Z separator
 POUW_ROLES = ("digest", "node", "key", "form_y", "form_x", "tile")
-#: NCP-FP8's: root_A's tree (its domain, strips, pads and nodes), the streams' key, the forming and the tiles
-FP8_POUW_ROLES = ("domain", "digest", "pad", "node", "key", "form_y", "form_x", "tile")
+#: NCP-FP8's: root_A's tree (its domain, strips, pads and nodes), the streams' key, the forming (with the weight's h and
+#: amplitudes) and the tiles
+FP8_POUW_ROLES = ("domain", "digest", "pad", "node", "key", "amp", "form_y", "form_x", "tile")
 
 
 @dataclass(frozen=True)
@@ -63,6 +64,21 @@ def ncp_circuit(shape: Shape, kind: str = "shift24", fn: Any = None) -> Circuit:
 def fp8_circuit(shape: fp8.Shape, sums: str = "f16", lengths: fp8.Lengths = fp8.Lengths(1, 1, 1), fn: Any = None) -> Circuit:
     return Circuit(fp8.linear(shape, sums, lengths) if fn is None else fn, {"tile": fp8.tile_template(shape.k)}, shape.m,
                    shape.n, FP8_POUW_ROLES, tuple(fp8.call_templates(shape, sums, lengths)))
+
+
+def fp8_weight_circuit(shape: fp8.Shape, sums: str = "f16") -> Circuit:
+    """NCP-FP8's weight Program (`fp8.weight`): its h and amplitude units, one per 16-column strip."""
+    return Circuit(fp8.weight(shape, sums), {}, shape.m, shape.n, FP8_POUW_ROLES, tuple(fp8.weight_templates(shape.k, sums)))
+
+
+def fp8_weight_query(shape: fp8.Shape, sums: str = "f16") -> dict[str, Any]:
+    return query_of(fp8_weight_circuit(shape, sums))
+
+
+def fp8_window_circuit(shape: fp8.Shape, calls: int, sums: str = "f16", lengths: fp8.Lengths = fp8.Lengths(1, 1, 1)) -> Circuit:
+    """``calls`` NCP-FP8 calls on one weight in one root (`fp8.window`)."""
+    return Circuit(fp8.window(shape, calls, sums, lengths), {"tile": fp8.tile_template(shape.k)}, shape.m, shape.n,
+                   FP8_POUW_ROLES, tuple(fp8.weight_templates(shape.k, sums)) + tuple(fp8.call_templates(shape, sums, lengths)))
 
 
 def listed_of(fn: Any) -> list[Any]:
@@ -141,7 +157,7 @@ def circuit_units(c: Circuit) -> tuple[Unit, ...]:
         role = roles[id(nd.fn)]
         count = nd.n if nd.form == "batch" else 1
         for m in range(count):
-            if role in ("digest", "form_x", "form_y", "pad"):
+            if role in ("digest", "form_x", "form_y", "pad", "amp"):
                 where: tuple[int, ...] = (strips[role] + m,)
             elif role == "tile":
                 where = (tile_row % ms, m)
@@ -154,7 +170,7 @@ def circuit_units(c: Circuit) -> tuple[Unit, ...]:
             tile_row += 1
         elif role == "dequant":
             deq_node += 1
-        elif role in ("digest", "form_x", "form_y", "pad"):
+        elif role in ("digest", "form_x", "form_y", "pad", "amp"):
             strips[role] += count
     assert tile_row % max(ms, 1) == 0
     return tuple(out)
@@ -346,7 +362,8 @@ def boundary_bits(shape: Shape, kind: str = "shift24") -> dict[str, Counter]:
 
 
 __all__ = ["FP8_POUW_ROLES", "POUW_ROLES", "SEPARATOR_PORTS", "Circuit", "Separator", "Unit", "UnitCut", "WidthRule",
-           "boundary_bits", "circuit_cut", "circuit_separator", "circuit_units", "circuit_width_rule", "fp8_circuit",
+           "boundary_bits", "circuit_cut", "circuit_separator", "circuit_units", "circuit_width_rule", "fp8_circuit", "fp8_weight_circuit",
+           "fp8_weight_query", "fp8_window_circuit",
            "listed", "listed_of", "ncp_circuit", "partition", "program", "query", "query_of", "separator", "unit_cut",
            "unit_cut_of", "units", "units_of", "weight_program", "weight_query", "width_rule", "width_rule_of", "window_cut",
            "window_units"]

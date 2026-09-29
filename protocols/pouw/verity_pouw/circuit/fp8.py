@@ -1,17 +1,22 @@
 """NCP-FP8 (D-3s, #295's `fp8-is-h100-d3s-v0[-f16]`) as a Program, cut into its proof units under layout (a).
 
-One linear call ``A·Bᵀ`` (A: m × k activation rows as the model's E4M3 codes X_q, B: the weight's n rows of E4M3 codes) is
-`NcpFp8Linear{M,K,N,SUMS,IL,OL,WL}`.  Its root body holds only instances of the unit templates below, so the partition is
-`Q_template_instances` over them (`circuit.partition`), and every value is computed in exactly one of them.
+A weight's h and amplitudes read only its codes, so they are formed once per run and weight: `NcpFp8Weight{K,N,SUMS}`'s root
+body holds its `NcpFp8Amp` units.  One linear call ``A·Bᵀ`` (A: m × k activation rows as the model's E4M3 codes X_q) is
+`NcpFp8Linear{M,K,N,SUMS,IL,OL,WL}`, which reads them as committed inputs.  Each root body holds only instances of the unit
+templates below, so each partition is `Q_template_instances` over them (`circuit.partition`), and every value is computed in
+exactly one of them.  `NcpFp8Window{…,C}` is C calls on one weight in one root, the weight's units once.
 
     template                    one instance per            reads                                      returns
-    NcpFp8Domain{M,K,IL,OL}     call                        salt, index                                root_A's domain id, the tree's
+    NcpFp8Amp{K,SUMS}           16-column weight strip      its 16 weight rows                         h and the amplitudes
+      (NcpFp8Weight: once per run and weight)
+    NcpFp8Domain{M,K,IL,OL}     call                        its prefix, index                          root_A's domain id, the tree's
                                                                                                        frontiers
     NcpFp8Digest{K,RL,L0..L3}   16-row strip of A           its 16 rows, row ids, frontiers            its 16 leaves' subtree root
     NcpFp8Pad{RL,L0..L3}        16 pad leaves               pad ranks, frontiers                       their subtree root
     NcpFp8Node{L}               tree node above the strips  its two children, its (level, index)       the parent; the top is root_A
-    NcpFp8Key{K,SUMS,IL,WL,M,N} call                        salt, index, weight id, root_A             E₁'s and F₁'s frontiers
-    NcpFp8FormY{K,SUMS,..,LL}   16-column weight strip      16 weight rows, column ids, F₁'s frontier  the Ỹ strip (16 × 3k codes)
+    NcpFp8Key{K,SUMS,IL,WL,M,N} call                        its prefix, index, root_A                  E₁'s and F₁'s frontiers
+    NcpFp8FormY{K,SUMS,..,LL}   16-column weight strip      its h and amplitudes, column ids, F₁'s     the Ỹ strip (16 × 3k codes)
+                                                            frontier
     NcpFp8FormX{K,SUMS,..,LL}   16-row strip of A           16 rows, row ids, E₁'s frontier            the X̃ strip (16 × 3k codes)
     NcpFp8Tile{K}               16 × 16 block               its X̃ strip, its Ỹ strip                   the checked words, and Z
     NcpFp8Dequant               output entry                Z, the row scale, the column scale, bias   y (BF16)
@@ -21,14 +26,17 @@ One linear call ``A·Bᵀ`` (A: m × k activation rows as the model's E4M3 codes
   one leaf per row, its domain bound to the salt and the index, padded to a power of two);
 - E₁'s row i and F₁'s column j are `D3Family.stream`'s SHAKE256 streams over (salt, index, root_A, weight id, line);
 - X̃'s rows and Ỹ's columns are `D3Family.side`'s D-3s forming (the rms statistic, partner-max amplitudes, the three NCP
-  blocks and their E4M3 casts, in f32 sums or f16 sums);
+  blocks and their E4M3 casts, in f32 sums or f16 sums); a Ỹ column's part over its codes alone (h, and the amplitudes)
+  is its weight's `NcpFp8Amp`, the part over F₁ its call's `NcpFp8FormY`;
 - a cell's checked words are `cell_words`': T = 3k/32 fresh E4M3 k32 atoms I_τ from +0 (`HopperE4m3QgmmaDot32`) and the
   running FP32 sums R_2 … R_T; the tile returns I_1 … I_T and R_2 … R_(T−1) as its words, and R_T, the useful output, as Z.
 
 **Hoisting** (`hoist`): the streams' and the tree's messages share call-wide prefixes, so each per-row function is split,
 its call-wide gates computed once in `NcpFp8Domain` (the tree's) and `NcpFp8Key` (the streams'), each returning its frontier, and
-its row gates in the row's unit.  **Index binding**: the index, the weight id, the row ranks, the rows' stream lines, the
-column lines, the pad ranks and the upper nodes' (level, index) are Program inputs, anchored like the salt.  A row's rank
+its row gates in the row's unit.  Their gates over the salt and the weight id alone would repeat in every call of a run, or
+of a weight, so they are the verifier's: evaluated natively (`prefix`) and read as the call's anchored **prefix**.
+**Index binding**: the index, the row ranks, the rows' stream lines, the column lines, the pad ranks and the upper nodes'
+(level, index) are Program inputs, which the verifier builds (`anchors.Fp8Anchors`).  A row's rank
 (the tree's) and its line (E₁'s) are equal but separate inputs, so that no two units place the same input's bytes alike.  Their encodings are minimal big-endian
 (`verity.randomness.frame`, `verity.commitments.merkle._uint`), so byte lengths are template parameters: the index's (IL),
 index + 2's, the domain's owner (OL), and the weight id's (WL) per call; a strip's ranks and its nodes' indices
@@ -320,18 +328,30 @@ def _variant(key: tuple, k: int) -> Hoisted:
     return pad_fn(key[1])
 
 
-def _domain_sig(S):
-    ret = [DIGEST, *(Array(_variant(key, S.K).width, U32) for key in domain_layout(S.M))]
-    return (("salt", Array(32, U8)), ("index", PAIR)), Tuple(*ret)
+def _is_public(name) -> bool:
+    """The inputs every call of a run (the salt), or of a weight (its id), shares: gates over these alone are the verifier's."""
+    return name[0] in ("salt", "weight")
 
 
-def _domain_body(B, S, salt, index):
+@lru_cache(maxsize=64)
+def _dom_graph(m: int, ol: int, il: int) -> tuple[H.Graph, list[H.Node], list[H.Val], H.Public]:
+    """The domain id's DAG over (salt, index), and its public part: `activation_binding`'s gates over the salt alone."""
     g = H.Graph()
     sv, iv = _inputs(g, "salt", 32, True), _inputs(g, "index", 2, True)
-    dom = _dom_message(g, sv, iv, S.M, S.OL, S.IL)
-    env = {n.i: c for n, c in zip(sv + iv, [salt[j] for j in range(32)] + [index[0], index[1]])}
+    dom = _dom_message(g, sv, iv, m, ol, il)
+    return g, iv, dom, H.public_part(g, H.cone(g, dom), _is_public, dom)
+
+
+def _domain_sig(S):
+    ret = [DIGEST, *(Array(_variant(key, S.K).width, U32) for key in domain_layout(S.M))]
+    return (("prefix", Array(len(_dom_graph(S.M, S.OL, S.IL)[3].frontier), U32)), ("index", PAIR)), Tuple(*ret)
+
+
+def _domain_body(B, S, pre, index):
+    _g, iv, dom, pub = _dom_graph(S.M, S.OL, S.IL)
+    env = {n.i: pre[j] for j, n in enumerate(pub.frontier)} | {n.i: index[j] for j, n in enumerate(iv)}
     e = H.Emitter(B, env)
-    e.emit([n for n in g.nodes if n.kind != "in"])
+    e.emit(pub.rest)
     dom_c = [e.val(x, 32) for x in dom]
     denv = {("dom", j): dom_c[j] for j in range(8)}
     return tuple_of(array_of(dom_c), *(_variant(key, S.K).frontier(B, denv) for key in domain_layout(S.M)))
@@ -340,7 +360,8 @@ def _domain_body(B, S, salt, index):
 NcpFp8DomainDef = CompositeDefinition(
     "NcpFp8Domain", 1, ("M", "K", "IL", "OL"), _domain_sig, _domain_body,
     doc="root_A's commitment domain (`audit.activation_binding`, `CommitmentDomain.domain_id` with owner = index), and the "
-        "tree's hoisted frontiers, one per byte-length variant (`domain_layout`).", conformance="protocol-defined")
+        "tree's hoisted frontiers, one per byte-length variant (`domain_layout`); the binding's gates over the salt alone "
+        "are the verifier's, read as the anchored prefix.", conformance="protocol-defined")
 
 
 def _digest_sig(S):
@@ -399,6 +420,12 @@ F16_TWO_INV4, F16_MINUS_3_8, F16_2_POW_M8, F16_2_POW_M6 = S8.F16_TWO_INV4, S8.F1
 
 def _side(g: H.Graph, codes: Sequence[H.Val], stream: Sequence[H.Val], left: bool, sums: str) -> list[H.Val]:
     """`D3Family.side` for law d3s on X_q (or a weight column's codes): one stacked row of X̃ or column of Ỹ, 3k codes."""
+    h, amp = _amplitude(g, codes, left)
+    return _blocks(g, h, amp, stream, left, sums)
+
+
+def _amplitude(g: H.Graph, codes: Sequence[H.Val], left: bool) -> tuple[list[H.Val], list[H.Val]]:
+    """`D3Family.side`'s part over the codes alone: h (f16) and the amplitudes max(|h_l|, |h_partner(l)|, floor)."""
     k = len(codes)
     pi, inv = perm(k)
     f32add, f32mul, f32div = _prim("F32Add_v1"), _prim("F32Mul_v1"), _prim("F32Div_v1")
@@ -422,7 +449,16 @@ def _side(g: H.Graph, codes: Sequence[H.Val], stream: Sequence[H.Val], left: boo
     floor = g.op(FW.PouwF16Max, g.op(FW.PouwF32ToF16Rn, rms), F16_2_POW_M6)
     mag = [g.op(FW.PouwF16Abs, w) for w in h]
     partner = inv if left else pi
-    amp = [g.op(FW.PouwF16Max, g.op(FW.PouwF16Max, mag[l], mag[partner[l]]), floor) for l in range(k)]
+    return h, [g.op(FW.PouwF16Max, g.op(FW.PouwF16Max, mag[l], mag[partner[l]]), floor) for l in range(k)]
+
+
+def _blocks(g: H.Graph, h: Sequence[H.Val], amp: Sequence[H.Val], stream: Sequence[H.Val], left: bool, sums: str,
+            wide_h: bool = False) -> list[H.Val]:
+    """`D3Family.side`'s part over the stream: the noise, the three blocks and their E4M3 casts.  ``wide_h``: ``h`` is
+    already FP32 words (a Ỹ column's under f32 sums, from its weight's `NcpFp8Amp`)."""
+    k = len(amp)
+    pi, inv = perm(k)
+    f32add = _prim("F32Add_v1")
     e = [g.op(FW.PouwF16Mul, amp[l], g.op(FW.PouwF16Fma, F16_TWO_INV4, g.op(FW.PouwF16Field, stream[l // 2], l % 2),
                                           F16_MINUS_3_8)) for l in range(k)]
     if left:
@@ -443,8 +479,8 @@ def _side(g: H.Graph, codes: Sequence[H.Val], stream: Sequence[H.Val], left: boo
             wide[key] = g.op(FW.PouwF16ToF32, v)
         return wide[key]
 
-    cast = _prim("F32ToE4m3Sat_v1")
-    return [g.op(cast, g.op(f32add, f32(x), f32(n))) for base, nz in blocks for x, n in zip(base, nz)]
+    cast, base32 = _prim("F32ToE4m3Sat_v1"), (lambda v: v) if wide_h else f32
+    return [g.op(cast, g.op(f32add, base32(x), f32(n))) for base, nz in blocks for x, n in zip(base, nz)]
 
 
 def _stream(g: H.Graph, name: str, sums: str, k: int, salt, index, root, weight, line, il: int, wl: int,
@@ -464,18 +500,29 @@ def _row(left: bool):
     return make
 
 
+def hw_type(sums: str) -> Value:
+    """A weight value as a Ỹ column reads it from its `NcpFp8Amp`: h's f16 word, or its FP32 word under f32 sums."""
+    return U16 if sums == "f16" else U32
+
+
 def _row_build(k: int, sums: str, il: int, wl: int, ll: int, left: bool):
-    """One X̃ row (``left``: E₁'s stream) or Ỹ column (F₁'s) from its codes and its ``ll``-byte line id."""
+    """One X̃ row (``left``: E₁'s stream, from its codes) or Ỹ column (F₁'s, from its weight's h and amplitudes), and its
+    ``ll``-byte line id."""
 
     def build(g):
         salt, index, root, weight = (_inputs(g, "salt", 32, True), _inputs(g, "index", 2, True), _inputs(g, "root", 8, True),
                                      _inputs(g, "weight", 2, True))
         line = g.input("line", False)
-        codes = _inputs(g, "codes", k, False)
-        stream = _stream(g, "E1" if left else "F1", sums, k, salt, index, root, weight, line, il, wl, ll)
-        out = _side(g, codes, stream, left, sums)
+        stream = lambda: _stream(g, "E1" if left else "F1", sums, k, salt, index, root, weight, line, il, wl, ll)  # noqa: E731
         shared = {n.name: n for n in salt + index + root + weight}
-        return shared, [("line", U32, [line]), ("codes", Array(k, U8), codes)], out, Array(3 * k, U8)
+        if left:
+            codes = _inputs(g, "codes", k, False)
+            out = _side(g, codes, stream(), True, sums)
+            return shared, [("line", U32, [line]), ("codes", Array(k, U8), codes)], out, Array(3 * k, U8)
+        h, amp = _inputs(g, "h", k, False), _inputs(g, "amp", k, False)
+        out = _blocks(g, h, amp, stream(), False, sums, wide_h=sums == "f32")
+        return (shared, [("line", U32, [line]), ("h", Array(k, hw_type(sums)), h), ("amp", Array(k, U16), amp)], out,
+                Array(3 * k, U8))
 
     return build
 
@@ -484,8 +531,8 @@ X_ROW = Family("NcpFp8XRow", ("K", "SUMS", "IL", "WL", "LL"), _row(True),
                "One X̃ row: its E₁ stream (its line LL bytes) and D-3s forming (`D3Family.side`), the stream's call-wide gates "
                "hoisted.")
 Y_ROW = Family("NcpFp8YRow", ("K", "SUMS", "IL", "WL", "LL"), _row(False),
-               "One Ỹ column: its F₁ stream (its line LL bytes) and D-3s forming (`D3Family.side`), the stream's call-wide "
-               "gates hoisted.")
+               "One Ỹ column from its weight's h and amplitudes (`NcpFp8Amp`): its F₁ stream (its line LL bytes) and the D-3s "
+               "blocks, the stream's call-wide gates hoisted.")
 
 
 def row_fn(k: int, sums: str, il: int, wl: int, left: bool, ll: int = 1) -> Hoisted:
@@ -499,47 +546,125 @@ def key_layout(m: int, n: int) -> list[tuple[str, int]]:
             + [("y", ll) for ll in sorted({_ulen(D * c) for c in range(n // D)})])
 
 
+@lru_cache(maxsize=64)
+def _key_public(k: int, sums: str, il: int, wl: int, left: bool, ll: int) -> H.Public:
+    """A stream's call-wide gates, cut at their public part: the gates over the salt and the weight id alone."""
+    hf = row_fn(k, sums, il, wl, left, ll)
+    return H.public_part(hf.split.graph, hf.split.hoisted, _is_public, hf.split.frontier)
+
+
+def _key_parts(S) -> list[tuple[Hoisted, H.Public]]:
+    return [(row_fn(S.K, S.SUMS, S.IL, S.WL, side == "x", ll), _key_public(S.K, S.SUMS, S.IL, S.WL, side == "x", ll))
+            for side, ll in key_layout(S.M, S.N)]
+
+
 def _key_sig(S):
-    fns = [row_fn(S.K, S.SUMS, S.IL, S.WL, side == "x", ll) for side, ll in key_layout(S.M, S.N)]
-    return ((("salt", Array(32, U8)), ("index", PAIR), ("weight", PAIR), ("root", DIGEST)),
-            Tuple(*(Array(fn.width, U32) for fn in fns)))
+    parts = _key_parts(S)
+    return ((("prefix", Array(sum(len(p.frontier) for _hf, p in parts), U32)), ("index", PAIR), ("root", DIGEST)),
+            Tuple(*(Array(hf.width, U32) for hf, _p in parts)))
 
 
-def _key_body(B, S, salt, index, weight, root):
-    env = {("salt", j): salt[j] for j in range(32)} | {("index", j): index[j] for j in range(2)}
-    env |= {("weight", j): weight[j] for j in range(2)} | {("root", j): root[j] for j in range(8)}
-    return tuple_of(*(row_fn(S.K, S.SUMS, S.IL, S.WL, side == "x", ll).frontier(B, env) for side, ll in key_layout(S.M, S.N)))
+def _key_body(B, S, pre, index, root):
+    named = {("index", j): index[j] for j in range(2)} | {("root", j): root[j] for j in range(8)}
+    outs, at = [], 0
+    for hf, pub in _key_parts(S):
+        env = {n.i: pre[at + j] for j, n in enumerate(pub.frontier)}
+        env |= {n.i: named[name] for name, n in hf.shared.items() if name in named}
+        at += len(pub.frontier)
+        e = H.Emitter(B, env)
+        e.emit(pub.rest)
+        outs.append(array_of([e.val(n, 32) for n in hf.split.frontier]))
+    return tuple_of(*outs)
 
 
 NcpFp8KeyDef = CompositeDefinition(
     "NcpFp8Key", 1, ("K", "SUMS", "IL", "WL", "M", "N"), _key_sig, _key_body,
     doc="E₁'s and F₁'s call-wide gates, once per call: every stream's shared prefix over (salt, index, root_A, weight id), "
-        "one frontier per line length (`key_layout`).", conformance="protocol-defined")
+        "one frontier per line length (`key_layout`); its gates over the salt and the weight id alone are the verifier's, "
+        "read as the anchored prefix.", conformance="protocol-defined")
 
 
-def _form_sig(left: bool):
-    def sig(S):
-        fn = row_fn(S.K, S.SUMS, S.IL, S.WL, left, S.LL)
-        return ((("frontier", Array(fn.width, U32)), ("rows", Array(D, Array(S.K, U8))), ("ids", Array(D, U32))),
-                Array(D, Array(3 * S.K, U8)))
-
-    return sig
+def _form_x_body(B, S, frontier, rows, ids):
+    fn = row_fn(S.K, S.SUMS, S.IL, S.WL, True, S.LL).definition
+    return array_of([B.call(fn, frontier, ids[r], rows[r]) for r in range(D)])
 
 
-def _form_body(left: bool):
-    def body(B, S, frontier, rows, ids):
-        fn = row_fn(S.K, S.SUMS, S.IL, S.WL, left, S.LL).definition
-        return array_of([B.call(fn, frontier, ids[r], rows[r]) for r in range(D)])
-
-    return body
+def _form_y_body(B, S, frontier, hs, amps, ids):
+    fn = row_fn(S.K, S.SUMS, S.IL, S.WL, False, S.LL).definition
+    return array_of([B.call(fn, frontier, ids[r], hs[r], amps[r]) for r in range(D)])
 
 
 NcpFp8FormXDef = CompositeDefinition(
-    "NcpFp8FormX", 1, ("K", "SUMS", "IL", "WL", "LL"), _form_sig(True), _form_body(True),
+    "NcpFp8FormX", 1, ("K", "SUMS", "IL", "WL", "LL"),
+    lambda S: ((("frontier", Array(row_fn(S.K, S.SUMS, S.IL, S.WL, True, S.LL).width, U32)),
+                ("rows", Array(D, Array(S.K, U8))), ("ids", Array(D, U32))), Array(D, Array(3 * S.K, U8))), _form_x_body,
     doc="An activation strip's X̃ rows: [Q(h + e) | Q(h + e₂) | Q(−h − s)] (D-3s, `D3Family.side`).", conformance="protocol-defined")
 NcpFp8FormYDef = CompositeDefinition(
-    "NcpFp8FormY", 1, ("K", "SUMS", "IL", "WL", "LL"), _form_sig(False), _form_body(False),
-    doc="A weight strip's Ỹ columns: [Q(h + f) ; Q(h + f₂) ; Q(h + s)] (D-3s, `D3Family.side`).", conformance="protocol-defined")
+    "NcpFp8FormY", 1, ("K", "SUMS", "IL", "WL", "LL"),
+    lambda S: ((("frontier", Array(row_fn(S.K, S.SUMS, S.IL, S.WL, False, S.LL).width, U32)),
+                ("hs", Array(D, Array(S.K, hw_type(S.SUMS)))), ("amps", Array(D, Array(S.K, U16))), ("ids", Array(D, U32))),
+               Array(D, Array(3 * S.K, U8))), _form_y_body,
+    doc="A weight strip's Ỹ columns: [Q(h + f) ; Q(h + f₂) ; Q(h + s)] (D-3s, `D3Family.side`), from the strip's h and "
+        "amplitudes (`NcpFp8Amp`, the weight's).", conformance="protocol-defined")
+
+
+# ---- the weight side: h and the amplitudes, once per run and weight strip ---------------------------------------------------
+
+@lru_cache(maxsize=16)
+def _amp_graph(k: int, sums: str) -> tuple[H.Graph, list[H.Node], list[H.Val], list[H.Val]]:
+    g = H.Graph()
+    codes = _inputs(g, "codes", k, False)
+    h, amp = _amplitude(g, codes, False)
+    return g, codes, (h if sums == "f16" else [g.op(FW.PouwF16ToF32, w) for w in h]), amp
+
+
+def _amp_row_body(B, S, codes):
+    g, ins, hw, amp = _amp_graph(S.K, S.SUMS)
+    e = H.Emitter(B, {n.i: codes[j] for j, n in enumerate(ins)})
+    e.emit(H.cone(g, [*hw, *amp]))
+    return tuple_of(array_of([e.val(v, hw_type(S.SUMS).w) for v in hw]), array_of([e.val(v, 16) for v in amp]))
+
+
+NcpFp8AmpRowDef = CompositeDefinition(
+    "NcpFp8AmpRow", 1, ("K", "SUMS"),
+    lambda S: ((("codes", Array(S.K, U8)),), Tuple(Array(S.K, hw_type(S.SUMS)), Array(S.K, U16))), _amp_row_body,
+    doc="One weight column's part of `D3Family.side` over its codes alone: h (f16, or FP32 under f32 sums) and the "
+        "amplitudes max(|h_l|, |h_π(l)|, floor(rms)).", conformance="protocol-defined")
+
+
+def _amp_body(B, S, rows):
+    fn = bind(NcpFp8AmpRowDef, K=S.K, SUMS=S.SUMS)
+    cols = [B.call(fn, rows[r]) for r in range(D)]
+    return tuple_of(array_of([c[0] for c in cols]), array_of([c[1] for c in cols]))
+
+
+NcpFp8AmpDef = CompositeDefinition(
+    "NcpFp8Amp", 1, ("K", "SUMS"),
+    lambda S: ((("rows", Array(D, Array(S.K, U8))),), Tuple(Array(D, Array(S.K, hw_type(S.SUMS))), Array(D, Array(S.K, U16)))),
+    _amp_body, doc="A 16-column weight strip's h and amplitudes, once per run and weight, read by every call's Ỹ strip.",
+    conformance="protocol-defined")
+
+
+def hs_type(k: int, n: int, sums: str) -> Array:
+    return Array(n // D, Array(D, Array(k, hw_type(sums))))
+
+
+def amps_type(k: int, n: int) -> Array:
+    return Array(n // D, Array(D, Array(k, U16)))
+
+
+def _weight_units(B, S, b):
+    ns = S.N // D
+    amp = B.batch(amp_template(S.K, S.SUMS), b.reshape(Array(ns, Array(D, Array(S.K, U8)))), axes=(0,))
+    return array_of([amp[c][0] for c in range(ns)]), array_of([amp[c][1] for c in range(ns)])
+
+
+NcpFp8WeightDef = CompositeDefinition(
+    "NcpFp8Weight", 1, ("K", "N", "SUMS"),
+    lambda S: ((("b", Array(S.N, Array(S.K, U8))),), Tuple(hs_type(S.K, S.N, S.SUMS), amps_type(S.K, S.N))),
+    lambda B, S, b: tuple_of(*_weight_units(B, S, b)),
+    doc="One run's weight side: each strip's h and amplitudes (`NcpFp8Amp`), formed once per run and weight and read by "
+        "every call on it.", conformance="protocol-defined")
 
 
 # ---- the tile and the dequantization ----------------------------------------------------------------------------------------
@@ -646,26 +771,57 @@ def _runs(keys: Sequence) -> list[tuple[int, int, Any]]:
     return out
 
 
-def _linear_sig(S):
-    m, k, n = S.M, S.K, S.N
+def prefix_parts(shape: Shape, sums: str, lengths: Lengths) -> list[tuple[H.Graph, list[H.Node]]]:
+    """The public values the call's domain and key units read, in the anchored prefix's order: the domain's, then each
+    stream variant's (`key_layout`)."""
+    m, k, n = shape.m, shape.k, shape.n
+    g, _iv, _dom, pub = _dom_graph(m, lengths.ol, lengths.il)
+    parts = [(g, pub.frontier)]
+    for side, ll in key_layout(m, n):
+        p = _key_public(k, sums, lengths.il, lengths.wl, side == "x", ll)
+        parts.append((p.graph, p.frontier))
+    return parts
+
+
+def prefix(shape: Shape, sums: str, lengths: Lengths, salt: bytes, weight: int) -> list[int]:
+    """The anchored prefix, as the verifier evaluates it natively from the run's salt and the weight id."""
+    env = {("salt", j): salt[j] for j in range(32)} | {("weight", 0): weight >> 32, ("weight", 1): weight & W.M32}
+    return [v for g, front in prefix_parts(shape, sums, lengths) for v in H.evaluate_cone(g, front, env)]
+
+
+def _prefix_widths(shape: Shape, sums: str, lengths: Lengths) -> tuple[int, int]:
+    """(the domain's, the key's) prefix widths."""
+    widths = [len(front) for _g, front in prefix_parts(shape, sums, lengths)]
+    return widths[0], sum(widths[1:])
+
+
+def _call_sig(m: int, k: int, n: int, sums: str, lg: Lengths) -> list[tuple[str, Any]]:
     shape = Shape(m, k, n)
     pads, ups = shape.width - m, len(upper_nodes(shape))
-    params = [("a", Array(m, Array(k, U8))), ("s", Array(m, F32)), ("b", Array(n, Array(k, U8))), ("t", Array(n, F32)),
-              ("bias", Array(n, BF16)), ("salt", Array(32, U8)), ("index", PAIR), ("weight", PAIR),
-              ("rowids", Array(m, U32)), ("lines", Array(m, U32)), ("colids", Array(n, U32))]
+    params = [("a", Array(m, Array(k, U8))), ("s", Array(m, F32)), ("hs", hs_type(k, n, sums)), ("amps", amps_type(k, n)),
+              ("t", Array(n, F32)), ("bias", Array(n, BF16)), ("prefix", Array(sum(_prefix_widths(shape, sums, lg)), U32)),
+              ("index", PAIR), ("rowids", Array(m, U32)), ("lines", Array(m, U32)), ("colids", Array(n, U32))]
     params += [("padids", Array(pads, U32))] if pads else []
     params += [("nodeids", Array(ups, Array(2, U32)))] if ups else []
-    return tuple(params), Tuple(Array(m, Array(n, BF16)), Array((m // D) * (n // D), Array(D * D * tile_words(k), U32)))
+    return params
 
 
-def _linear_body(B, S, a, s, b, t, bias, salt, index, weight, rid, lines, cid, *rest):
+def _call_out(m: int, k: int, n: int) -> Tuple:
+    return Tuple(Array(m, Array(n, BF16)), Array((m // D) * (n // D), Array(D * D * tile_words(k), U32)))
+
+
+def _linear_sig(S):
+    return tuple(_call_sig(S.M, S.K, S.N, S.SUMS, Lengths(S.IL, S.OL, S.WL))), _call_out(S.M, S.K, S.N)
+
+
+def _call_units(B, S, a, s, hs, amps, t, bias, pre, index, rid, lines, cid, padids, nodeids):
+    """One call's units, reading its weight's committed h and amplitudes: (y, the credited words)."""
     m, k, n = S.M, S.K, S.N
     shape = Shape(m, k, n)
     ms, ns, pads = m // D, n // D, shape.width - m
-    padids = rest[0] if pads else None
-    nodeids = rest[-1] if upper_nodes(shape) else None
     lg = Lengths(S.IL, S.OL, S.WL)
-    dom = B.call(domain_template(m, k, lg), salt, index)
+    pd, _pk = _prefix_widths(shape, S.SUMS, lg)
+    dom = B.call(domain_template(m, k, lg), pre[0:pd], index)
     front = {key: dom[1 + j] for j, key in enumerate(domain_layout(m))}
 
     def strip_fronts(sig, kind):
@@ -681,8 +837,8 @@ def _linear_body(B, S, a, s, b, t, bias, salt, index, weight, rid, lines, cid, *
     if pads:
         pad_ids = padids.reshape(Array(pads // D, Array(D, U32)))
         for lo, hi, sig in _runs([strip_lengths(m + D * s_) for s_ in range(pads // D)]):
-            pd = B.batch(pad_template(sig), *strip_fronts(sig, "pad"), pad_ids[lo:hi], axes=(None, None, None, None, None, 0))
-            level += [pd[j] for j in range(hi - lo)]
+            pd_ = B.batch(pad_template(sig), *strip_fronts(sig, "pad"), pad_ids[lo:hi], axes=(None, None, None, None, None, 0))
+            level += [pd_[j] for j in range(hi - lo)]
     ups, at = upper_nodes(shape), 0
     while len(level) > 1:
         nxt = []
@@ -692,13 +848,13 @@ def _linear_body(B, S, a, s, b, t, bias, salt, index, weight, rid, lines, cid, *
         at += len(nxt)
         level = nxt
     root = level[0]
-    kl = key_layout(m, n)
-    key = B.call(key_template(k, S.SUMS, lg, m, n), salt, index, weight, root)
-    kfront = {kk: key[j] for j, kk in enumerate(kl)}
-    wrows, cols_id = b.reshape(Array(ns, Array(D, Array(k, U8)))), cid.reshape(Array(ns, Array(D, U32)))
+    key = B.call(key_template(k, S.SUMS, lg, m, n), pre[pd:], index, root)
+    kfront = {kk: key[j] for j, kk in enumerate(key_layout(m, n))}
+    cols_id = cid.reshape(Array(ns, Array(D, U32)))
     y_strips = []
     for lo, hi, ll in _runs([_ulen(D * c) for c in range(ns)]):
-        ys = B.batch(form_template(False, k, S.SUMS, lg, ll), kfront[("y", ll)], wrows[lo:hi], cols_id[lo:hi], axes=(None, 0, 0))
+        ys = B.batch(form_template(False, k, S.SUMS, lg, ll), kfront[("y", ll)], hs[lo:hi], amps[lo:hi], cols_id[lo:hi],
+                     axes=(None, 0, 0, 0))
         y_strips += [ys[j] for j in range(hi - lo)]
     x_strips = []
     lines_id = lines.reshape(Array(ms, Array(D, U32)))
@@ -720,13 +876,49 @@ def _linear_body(B, S, a, s, b, t, bias, salt, index, weight, rid, lines, cid, *
     y = Coll(Array(m, Array(n, BF16)),
              concat([out[i // D, j // D][D * (i % D) + j % D].refs for i in range(m) for j in range(n)]))
     words = array_of([tiles[rs][cs][0] for rs in range(ms) for cs in range(ns)])
-    return tuple_of(y, words)
+    return y, words
+
+
+def _linear_body(B, S, a, s, hs, amps, t, bias, pre, index, rid, lines, cid, *rest):
+    shape = Shape(S.M, S.K, S.N)
+    padids = rest[0] if shape.width > S.M else None
+    nodeids = rest[-1] if upper_nodes(shape) else None
+    return tuple_of(*_call_units(B, S, a, s, hs, amps, t, bias, pre, index, rid, lines, cid, padids, nodeids))
 
 
 NcpFp8LinearDef = CompositeDefinition(
     "NcpFp8Linear", 1, ("M", "K", "N", "SUMS", "IL", "OL", "WL"), _linear_sig, _linear_body,
     doc="One NCP-FP8 (D-3s) linear call under sampled proofs: y = dequant(R_T) with #295's checked words, as instances of "
-        "the unit templates only.", conformance="protocol-defined")
+        "the unit templates only; its weight's h and amplitudes are committed inputs (`NcpFp8Weight`).",
+    conformance="protocol-defined")
+
+#: a window's per-call inputs, each with a leading axis of C
+WINDOW_PER_CALL = ("a", "s", "prefix", "index", "rowids", "lines", "colids", "padids", "nodeids")
+
+
+def _window_sig(S):
+    call = dict(_call_sig(S.M, S.K, S.N, S.SUMS, Lengths(S.IL, S.OL, S.WL)))
+    params = [("b", Array(S.N, Array(S.K, U8))), ("t", call["t"]), ("bias", call["bias"])]
+    params += [(p, Array(S.C, call[p])) for p in WINDOW_PER_CALL if p in call]
+    out = _call_out(S.M, S.K, S.N)
+    return tuple(params), Tuple(Array(S.C, out.fields[0]), Array(S.C, out.fields[1]))
+
+
+def _window_body(B, S, b, t, bias, a, s, pre, index, rid, lines, cid, *rest):
+    shape = Shape(S.M, S.K, S.N)
+    pads, ups = shape.width > S.M, bool(upper_nodes(shape))
+    padids = rest[0] if pads else None
+    nodeids = rest[-1] if ups else None
+    hs, amps = _weight_units(B, S, b)
+    calls = [_call_units(B, S, a[c], s[c], hs, amps, t, bias, pre[c], index[c], rid[c], lines[c], cid[c],
+                         padids[c] if pads else None, nodeids[c] if ups else None) for c in range(S.C)]
+    return tuple_of(array_of([y for y, _ in calls]), array_of([w for _, w in calls]))
+
+
+NcpFp8WindowDef = CompositeDefinition(
+    "NcpFp8Window", 1, ("M", "K", "N", "SUMS", "IL", "OL", "WL", "C"), _window_sig, _window_body,
+    doc="C calls on one weight in one root: the weight's h and amplitudes once (`NcpFp8Amp`), then each call's units "
+        "reading them, each call with its own anchored inputs.", conformance="protocol-defined")
 
 
 def domain_template(m: int, k: int, lg: Lengths) -> SpecializedDefinition:
@@ -757,6 +949,15 @@ def tile_template(k: int) -> SpecializedDefinition:
     return bind(NcpFp8TileDef, K=k)
 
 
+def amp_template(k: int, sums: str) -> SpecializedDefinition:
+    return bind(NcpFp8AmpDef, K=k, SUMS=sums)
+
+
+def weight_templates(k: int, sums: str = "f16") -> list[tuple[str, SpecializedDefinition]]:
+    """The weight Program's unit template, with its role."""
+    return [("amp", amp_template(k, sums))]
+
+
 def call_templates(shape: Shape, sums: str = "f16", lengths: Lengths = Lengths(1, 1, 1)) -> list[tuple[str, SpecializedDefinition]]:
     """Every unit template one call instantiates, with its role, in the order its root body first uses them."""
     m, k, n = shape.m, shape.k, shape.n
@@ -783,7 +984,24 @@ def linear(shape: Shape, sums: str = "f16", lengths: Lengths = Lengths(1, 1, 1))
     return bind(NcpFp8LinearDef, M=shape.m, K=shape.k, N=shape.n, SUMS=sums, IL=lengths.il, OL=lengths.ol, WL=lengths.wl)
 
 
-__all__ = ["BF16", "D", "F32", "Family", "Hoisted", "Lengths", "NcpFp8Dequant", "SUMS", "Shape", "call_templates",
-           "digest_template", "domain_layout", "domain_template", "form_template", "key_layout", "key_template", "leaf_fn",
-           "linear", "node_fn", "node_template", "pad_fn", "pad_template", "perm", "row_fn", "strip_lengths", "tag",
-           "tile_template", "tile_words", "upper_nodes"]
+def weight(shape: Shape, sums: str = "f16") -> SpecializedDefinition:
+    """`NcpFp8Weight{K,N,SUMS}`: the weight side of every call of this shape's (k, n)."""
+    shape.check()
+    tag(sums)
+    return bind(NcpFp8WeightDef, K=shape.k, N=shape.n, SUMS=sums)
+
+
+def window(shape: Shape, calls: int, sums: str = "f16", lengths: Lengths = Lengths(1, 1, 1)) -> SpecializedDefinition:
+    """`NcpFp8Window{M,K,N,SUMS,IL,OL,WL,C}`: ``calls`` calls of this shape on one weight, in one root, their indices of
+    one byte length."""
+    shape.check()
+    tag(sums)
+    return bind(NcpFp8WindowDef, M=shape.m, K=shape.k, N=shape.n, SUMS=sums, IL=lengths.il, OL=lengths.ol, WL=lengths.wl,
+                C=calls)
+
+
+__all__ = ["BF16", "D", "F32", "Family", "Hoisted", "Lengths", "NcpFp8Dequant", "SUMS", "Shape", "WINDOW_PER_CALL",
+           "amp_template", "amps_type", "call_templates", "digest_template", "domain_layout", "domain_template",
+           "form_template", "hs_type", "hw_type", "key_layout", "key_template", "leaf_fn", "linear", "node_fn",
+           "node_template", "pad_fn", "pad_template", "perm", "prefix", "prefix_parts", "row_fn", "strip_lengths", "tag",
+           "tile_template", "tile_words", "upper_nodes", "weight", "weight_templates", "window"]

@@ -396,16 +396,23 @@ Program evaluates to it bit for bit (`circuit.fp8_reference`: root_A by `audit.c
 output by `FP8IS(D3s(sums))`'s own `encode`, `checked` and `useful` on 16 × 16 tiles). `SUMS` is "f16" (the target cell) or
 "f32". Its shapes: 16 | m, 16 | n, 32 | k with k admissible (π passes the d = 32 rule from k = 96).
 
-**The units.** `NcpFp8Linear{M,K,N,SUMS,IL,OL,WL}` is one linear call; its root body holds only these templates' instances.
+**The units.** A weight's h and amplitudes read only its codes, so they are formed once per run and weight:
+`NcpFp8Weight{K,N,SUMS}`'s root body is its `NcpFp8Amp` units (`partition.fp8_weight_query`). `NcpFp8Linear{M,K,N,SUMS,IL,OL,WL}`
+is one linear call, which reads them as committed inputs; its root body holds only these templates' instances.
+`NcpFp8Window{…,C}` is C calls on one weight in one root, the weight's units once, and it passes the invariant
+(`test_calls_on_one_weight_compose_without_recompute`).
 
 ~~~text
 template                     per                          reads                                        returns
-NcpFp8Domain{M,K,IL,OL}      call                         salt, index                                  root_A's domain id, the tree's frontiers
+NcpFp8Amp{K,SUMS}            16-column weight strip       its 16 weight rows (E4M3)                    h (f16; FP32 under f32 sums), the amplitudes
+  (NcpFp8Weight: once per run and weight)
+NcpFp8Domain{M,K,IL,OL}      call                         its prefix, index                            root_A's domain id, the tree's frontiers
 NcpFp8Digest{K,RL,L0..L3}    16-row strip of A            its 16 rows (E4M3), row ids, frontiers       its 16 leaves' subtree root
 NcpFp8Pad{RL,L0..L3}         16 pad leaves                pad ranks, frontiers                         their subtree root
 NcpFp8Node{L}                tree node above the strips   its children, its (level, index)             the parent; the top is root_A
-NcpFp8Key{K,SUMS,IL,WL,M,N}  call                         salt, index, weight id, root_A               E₁'s and F₁'s frontiers
-NcpFp8FormY{K,SUMS,IL,WL,LL} 16-column weight strip       16 weight rows, column ids, F₁'s frontier    the Ỹ strip (16 × 3k codes)
+NcpFp8Key{K,SUMS,IL,WL,M,N}  call                         its prefix, index, root_A                    E₁'s and F₁'s frontiers
+NcpFp8FormY{K,SUMS,IL,WL,LL} 16-column weight strip       its h and amplitudes, column ids, F₁'s       the Ỹ strip (16 × 3k codes)
+                                                          frontier
 NcpFp8FormX{K,SUMS,IL,WL,LL} 16-row strip of A            16 rows, row ids, E₁'s frontier              the X̃ strip (16 × 3k codes)
 NcpFp8Tile{K}                16 × 16 block                its X̃ strip, its Ỹ strip                     the words, and Z
 NcpFp8Dequant                output entry                 Z, s_i, t_j, bias_j                          y = bf16(s_i·t_j·Z) + bias_j
@@ -433,9 +440,18 @@ A hash block whose inputs are all call-wide or all the row's own is one call of 
 `PouwSha256Compress`); a mixed block is expanded into primitives. Without the split, two rows recompute the streams'
 prefix (`test_without_hoisting_two_rows_recompute_the_streams_prefix`).
 
-**Index binding.** The index, the weight id, the row ranks, the rows' stream lines, the column lines, the pad ranks and
-the upper nodes' (level, index) are Program inputs. The verifier builds every one (`anchors.Fp8Anchors`, X-SPC-89): the
-index and the weight id are the call's declaration, and the rest are functions of the shape (ranks and lines 0 … m−1,
+**The prefix** (X-SPC-90). The domain's and the key's gates over the salt and the weight id alone would compute the same
+values in every call of a run, or of a weight: `activation_binding`'s first block and rounds (901 gates) and the streams'
+first-block lanes that hold only the tag, the salt and the weight id (69 per stream). They are functions of the verifier's
+anchors, so the verifier evaluates them natively (`fp8.prefix`, `hoist.public_part`) and the call reads the values its
+remaining gates need as one anchored input, `prefix`; the call has no salt or weight id input of its own. A Ỹ column's part
+over its codes alone (the decode, the rms, the floor and the amplitudes: 35–39% of its forming's ANDs, by the red team's count) is its weight's `NcpFp8Amp`;
+F₁ is keyed per call on root_A, so the rest of the column stays in the call.
+
+**Index binding.** The prefix, the index, the row ranks, the rows' stream lines, the column lines, the pad ranks and the
+upper nodes' (level, index) are Program inputs. The verifier builds every one (`anchors.Fp8Anchors`, X-SPC-89): the prefix
+is its own evaluation from the salt and the weight id, the index is the call's declaration, and the rest are functions of
+the shape (ranks and lines 0 … m−1,
 column lines 0 … n−1, pad ranks m … width−1, `fp8.upper_nodes`), so y is fixed by the committed A, B, the salt and the
 declaration alone. `Traced.call_args` builds them, `Fp8Anchors.check_call` refuses a prover's that differ, and a window's
 `Ledger` refuses a repeated index. A row's rank (the tree's) and its line (E₁'s) are equal but separate inputs, equal by
@@ -453,7 +469,9 @@ Z, 8,192 bits per tile, and only the dequantization units (16 bits each) are wid
 
 **The draw** (`plan.fp8_layout`). A tile's closure is `ncp-v2`'s (its X and Y strips, its strip's digest, the nodes on
 the strip's path, the key) plus the domain unit and the **pad cone**, every pad strip and every node with no row beneath
-it: a pad has no tile beneath it that a wrong one could be charged to. A tile's W_ref is its cells' share of `FP8IS.wref`.
+it: a pad has no tile beneath it that a wrong one could be charged to. Its Y strip's `NcpFp8Amp`, in the weight's
+Program, is proved once per plan (`Plan.proved_y`), and opens the strip's weight rows. A tile's W_ref is its cells' share of
+`FP8IS.wref`. `WorkLaw()` draws every layout: K is a window's, and a call alone is capped at its units (X-SPC-83).
 
 ## Not here yet
 

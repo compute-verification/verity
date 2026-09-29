@@ -16,7 +16,9 @@ from ..protocol import Context, Matmul
 from ..protocol import Shape as PShape
 from ..protocol import grid_tiles
 from ..schemes import fp8_is as S8
-from .fp8 import D, Lengths, Shape, upper_nodes
+from verity.ml.tc import fp16
+
+from .fp8 import D, Lengths, Shape, perm, prefix, upper_nodes
 
 M32 = (1 << 32) - 1
 
@@ -41,14 +43,32 @@ class Call:
     def lengths(self) -> Lengths:
         return Lengths.of(self.index, self.weight)
 
+    def weight_args(self) -> list:
+        """The flat input leaves of `fp8.weight`: B's codes."""
+        return [[x for r in self.b for x in r]]
+
+    def weight_outputs(self) -> tuple[list[int], list[int]]:
+        """What `fp8.weight` must return, by #295's own forming: each column's h (`D3Family.parse`; its FP32 words under f32
+        sums) and its amplitudes (`D3Family.amplitudes` with the column's partner π)."""
+        forming, (pi, _inv) = scheme(self.sums).forming, perm(self.shape.k)
+        hs: list[int] = []
+        amps: list[int] = []
+        for row in self.b:
+            h = forming.parse(bytes(row), self.shape.k, False)
+            hs += h if self.sums == "f16" else [fp16.to_f32(w) for w in h]
+            amps += forming.amplitudes(h, pi)
+        return hs, amps
+
     def args(self) -> list:
-        """The flat input leaves of `fp8.linear`, in parameter order."""
-        m, n = self.shape.m, self.shape.n
-        out = [[x for r in self.a for x in r], list(self.s), [x for r in self.b for x in r], list(self.t), list(self.bias),
-               list(self.salt), [self.index >> 32, self.index & M32], [self.weight >> 32, self.weight & M32],
+        """The flat input leaves of `fp8.linear`, in parameter order: the weight side's outputs, the prefix (the circuit's own
+        public gates, evaluated natively: `fp8.prefix`), and the ids, which are the shape's."""
+        m, n, width = self.shape.m, self.shape.n, self.shape.width
+        hs, amps = self.weight_outputs()
+        out = [[x for r in self.a for x in r], list(self.s), hs, amps, list(self.t), list(self.bias),
+               prefix(self.shape, self.sums, self.lengths, self.salt, self.weight), [self.index >> 32, self.index & M32],
                list(range(m)), list(range(m)), list(range(n))]
-        if self.shape.width > m:
-            out.append(list(range(m, self.shape.width)))
+        if width > m:
+            out.append(list(range(m, width)))
         if upper_nodes(self.shape):
             out.append([v for p in upper_nodes(self.shape) for v in p])
         return out

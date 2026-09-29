@@ -11,6 +11,10 @@ or the row's own (local), and split:
 * the **local** part (every gate with a local operand) is a Definition of its own that reads the frontier as one committed
   array, so each of its gates depends on the row and no two rows compute the same value.
 
+The call-wide units are cut once more (`public_part`): their gates over the salt and the weight id alone would compute the
+same values in every call of a run, or of a weight, which a window's cut rejects.  Those are functions of the verifier's
+anchors, so the verifier evaluates them natively (`evaluate_cone`) and the unit reads the values it needs as an anchored input.
+
 Constants fold as the DAG is built.  A hash block whose inputs are all shared, or all local, is one call of the hash's
 Definition (`hashes.KeccakF1600`, `Sha256Compress`); a block that mixes them is expanded into primitives, so that only its
 shared gates are hoisted.  The message builders pack bytes exactly as `verity.randomness.frame` and
@@ -161,6 +165,77 @@ def split(g: Graph, outputs: Sequence[Val]) -> Split:
         stack.extend(_deps(n))
     s.hoisted = [n for n in g.nodes if n.i in need]
     return s
+
+
+@dataclass
+class Public:
+    """A call-wide unit's gates cut at its **public** part: every gate whose operands are constants, public inputs or public
+    gates is a function of the verifier's anchors alone, so the verifier evaluates it natively (`evaluate_cone`) and the
+    unit reads the public values its other gates need (``frontier``) as one anchored input."""
+
+    graph: Graph
+    frontier: list[Node]                       # public gates a remaining gate reads, in graph order
+    rest: list[Node]                           # the gates the unit still computes, in order
+
+
+def public_part(g: Graph, nodes: Sequence[Node], public: Callable[[Any], bool], outputs: Sequence[Val] = ()) -> Public:
+    """Cut ``nodes`` (a unit's gates of ``g``, in order) at the gates over inputs named ``public`` alone.  A public input read
+    by a remaining gate, or a public value among the unit's ``outputs``, would need the unit to return an anchor as its own
+    value, and is refused."""
+    pub: set[int] = set()
+    for n in g.nodes:
+        if n.kind == "in":
+            if public(n.name):
+                pub.add(n.i)
+        elif (ds := _deps(n)) and all(d.i in pub for d in ds):
+            pub.add(n.i)
+    rest = [n for n in nodes if n.i not in pub]
+    front: dict[int, Node] = {}
+    for n in rest:
+        for d in _deps(n):
+            if d.i in pub:
+                if d.kind == "in":
+                    raise AssertionError(f"a remaining gate reads the public input {d.name} directly")
+                front.setdefault(d.i, d)
+    if any(not isinstance(o, int) and o.i in pub for o in outputs):
+        raise AssertionError("a unit's output is public")
+    return Public(g, sorted(front.values(), key=lambda n: n.i), rest)
+
+
+def _live(outputs: Sequence[Val]) -> set[int]:
+    live: set[int] = set()
+    stack = [o for o in outputs if not isinstance(o, int)]
+    while stack:
+        n = stack.pop()
+        if n.i not in live:
+            live.add(n.i)
+            stack.extend(_deps(n))
+    return live
+
+
+def cone(g: Graph, outputs: Sequence[Val]) -> list[Node]:
+    """The gates ``outputs`` need, in graph order."""
+    live = _live(outputs)
+    return [n for n in g.nodes if n.i in live and n.kind != "in"]
+
+
+def evaluate_cone(g: Graph, outputs: Sequence[Val], env: dict) -> list[int]:
+    """`evaluate` over only the gates ``outputs`` need, so ``env`` names only the inputs they read."""
+    live = _live(outputs)
+    val: dict[int, Any] = {}
+    get = lambda a: a if isinstance(a, int) else val[a.i]  # noqa: E731
+    for n in g.nodes:
+        if n.i not in live:
+            continue
+        if n.kind == "in":
+            val[n.i] = env[n.name]
+        elif n.kind == "op":
+            val[n.i] = n.fn.evaluate(*(get(a) for a in n.args))
+        elif n.kind == "call":
+            val[n.i] = n.py(*[[get(a) for a in grp] for grp in n.args])
+        else:
+            val[n.i] = val[n.src.i][n.k]
+    return [get(o) for o in outputs]
 
 
 def _leaf_widths(t) -> list[int]:
@@ -464,6 +539,6 @@ def shake256(g: Graph, msg: Sequence[Item], n: int) -> list[Val]:
         st = keccak(g, st)
 
 
-__all__ = ["Byte", "Byte8", "Emitter", "Graph", "MERKLE_FRAME", "Node", "SHA256_IV", "Sha256Compress", "Split", "be_words",
-           "const_bytes", "evaluate", "frame", "keccak", "merkle_message", "sha256", "sha256_compress", "shake256", "split",
-           "u32_bytes", "uint_bytes"]
+__all__ = ["Byte", "Byte8", "Emitter", "Graph", "MERKLE_FRAME", "Node", "Public", "SHA256_IV", "Sha256Compress", "Split",
+           "be_words", "cone", "const_bytes", "evaluate", "evaluate_cone", "frame", "keccak", "merkle_message", "public_part", "sha256",
+           "sha256_compress", "shake256", "split", "u32_bytes", "uint_bytes"]

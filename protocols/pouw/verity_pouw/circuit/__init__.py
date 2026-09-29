@@ -38,7 +38,8 @@ class Traced:
     definition: Any             # `NcpLinear_v1{M,K,N,PERM}` or `NcpFp8Linear_v1{M,K,N,SUMS,IL,OL,WL}`
     query: dict                 # `verity/partition/v1`'s query: `Q_template_instances` over the unit templates
     served: int                 # the first `served` root outputs are delivered (y); the credited words are committed only
-    weight: Any = None          # `NcpWeight_v1{K,N,PERM}`: the weight's Y strips and c₀, once per run and weight
+    weight: Any = None          # `NcpWeight_v1{K,N,PERM}` (the weight's Y strips and c₀) or `NcpFp8Weight_v1{K,N,SUMS}`
+                                # (its h and amplitudes): once per run and weight
     weight_query: dict | None = None
     lengths: Any = None         # NCP-FP8: `fp8.Lengths`, the call's integer encodings' byte lengths
 
@@ -71,23 +72,25 @@ class Traced:
 
     def call_args(self, anchors, *data: Sequence[int]) -> list:
         """The call's flat inputs: its committed ``data`` in parameter order (`ncp-v2`: a, s, ys, c0s, t, bias; NCP-FP8: a,
-        s, b, t, bias), then its anchored ones, built from the verifier's ``anchors`` (`anchors.Anchors`,
+        s, hs, amps, t, bias), then its anchored ones, built from the verifier's ``anchors`` (`anchors.Anchors`,
         `anchors.Fp8Anchors`)."""
+        return self._args(self.definition, anchors, anchors.call_inputs, data)
+
+    def weight_args(self, anchors, *data: Sequence[int]) -> list:
+        """The weight Program's flat inputs: B, then its anchored ones (`ncp-v2`: salt, weight id, column ids)."""
+        return self._args(self.weight, anchors, anchors.weight_inputs, data)
+
+    def _args(self, fn, anchors, inputs, data) -> list:
         from ..protocol import DomainError
 
         anchors.check(self.shape)
-        if self.lengths is not None and anchors.lengths != self.lengths:
-            raise DomainError(f"{self.scheme}: the anchors' index and weight id take {anchors.lengths}, not {self.lengths}")
-        an = anchors.call_inputs()
-        names = [p for p, _t in self.definition.signature()[0]]
+        if self.lengths is not None and (anchors.lengths, anchors.sums) != (self.lengths, self.kind):
+            raise DomainError(f"{self.scheme}: the anchors take {anchors.lengths}, {anchors.sums} sums, not {self.lengths}")
+        an = inputs()
+        names = [p for p, _t in fn.signature()[0]]
         if sorted(names[len(data):]) != sorted(an):
-            raise DomainError(f"{self.definition.id} takes {len(names) - len(an)} committed inputs, not {len(data)}")
+            raise DomainError(f"{fn.id} takes {len(names) - len(an)} committed inputs, not {len(data)}")
         return [list(d) for d in data] + [an[p] for p in names[len(data):]]
-
-    def weight_args(self, anchors, b: Sequence[int]) -> list:
-        anchors.check(self.shape)
-        an = anchors.weight_inputs()
-        return [list(b), an["salt"], an["weight"], an["colids"]]
 
     def layout(self):
         """The closure-draw layout (`plan.layout`, `plan.fp8_layout`)."""
@@ -112,8 +115,10 @@ def traced_as(scheme: str, m: int, k: int, n: int, *, index: int = 0, weight: in
         from . import fp8
 
         shape, lengths = fp8.Shape(m, k, n), fp8.Lengths.of(index, weight)
-        c = partition.fp8_circuit(shape, FP8_SUMS[scheme], lengths)
-        return Traced(scheme, shape, c.fn, partition.query_of(c), m * n, lengths=lengths)
+        sums = FP8_SUMS[scheme]
+        c = partition.fp8_circuit(shape, sums, lengths)
+        return Traced(scheme, shape, c.fn, partition.query_of(c), m * n, fp8.weight(shape, sums),
+                      partition.fp8_weight_query(shape, sums), lengths)
     from . import ncp2
 
     kind, shape = NCP_KINDS[scheme], ncp2.Shape(m, k, n)
