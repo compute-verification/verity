@@ -249,7 +249,9 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
     - each callee's input rows are self rows (`callee_rows`), and the own rows read only own and part columns
       (`own_reads`);
     - the unit's constant row is `[const]·[const]` (`unit_const_row`), and its order lists only own and part columns
-      (`order_cols`).
+      (`order_cols`);
+    - the unit's reads cover a part's rows exactly as its callee's reads, shifted (`part_reads`), and a covered callee row
+      is a product row `a · []`, its read's low minterms callee rows (`callee_prod`). Both are about part rows only.
   - Still to prove: `NetRows` for a flat typed class, whose unit net #307 builds from `derive`'s rows (`Typed.netOfD_ok`),
     and a template's block rows from `setupH` (1e, #277).
 
