@@ -79,6 +79,7 @@ research tele SUBCOMMAND ...             # the harness's own surface
 research data SUBCOMMAND ...             # the evidence store (below)
 research merge REF [--into main] [--tool check] [-m MSG] [--dry-run]   # the merge gate (merge.py)
 research merge --train A B C [--on MACHINE --project P] [--command CMD]  # several refs, one checked candidate
+research merge --sweep [--into main] [--remote origin] [--dry-run]       # close the PRs that landed, retarget their children
 ~~~
 
 `research merge` is how `main` receives a merge: in the target's checkout it runs `git merge --no-ff REF` only when the store
@@ -92,6 +93,14 @@ so the chain's commits are the train's prefixes), records the tool on the last (
 polled there), and fast-forwards the target to it when it passes: the exact tree checked is the one that lands. When it fails,
 the prefixes are bisected (each checked the same way) to the first ref whose merge breaks it, and the target fast-forwards to
 the longest prefix that passed.
+
+After a merge or a train lands, `research merge` sweeps the pull requests (`gh`), and `research merge --sweep` does only that.
+It fetches the remote's copy of the target, closes every open pull request whose head is on it with a one-line comment naming
+the commit it landed in, and retargets onto the target every open pull request whose base branch's tip is on it. That covers
+the stacked pull requests GitHub never closes because their base isn't the target. The remote's branch is the truth, not the
+checkout, and `research merge` doesn't push: after `git push`, run `research merge --sweep` to close what the merge landed. It
+is idempotent, and `--dry-run` prints what it would close and retarget. Without the remote the sweep is skipped, and a
+failure (no `gh`, no network) is reported without changing the merge's exit code.
 
 A tool's declaration may name result steps a merge needs by path (`Tool.merge_requires`, `{step: [path prefixes]}`, read from
 the target's checkout): when the merge's diff touches a prefix, only an attempt whose `result.json` `steps` show that step
