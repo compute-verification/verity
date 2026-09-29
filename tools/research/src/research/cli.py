@@ -3,7 +3,8 @@
   research run [--project P] [--stage S] [--timeout T] [--expect K=V ...] [--require-result] [--runs-dir D] [harness flags] -- CMD...
   research run [--tool NAME|module:NAME] [--scratch NAME ...] [--campaign C] [...] -- CMD...   # evidence store: derivation before, attempt after
   research run --on MACHINE --project P [--source GITDIR] [--send FILE ...] [--env K=V ...] [--exclusive] [--mem-gb N [--mem-wait S]]
-               [--custody-ttl 6h | --no-custody-r2] [...] -- CMD...   # run custody on the store's remote is the default with --on
+               [--custody-ttl 6h | --no-custody-r2] [--preflight TOOL] [...] -- CMD...   # run custody on the store's remote is the default
+                                                 # with --on; a --tool's declared preflight (or --preflight TOOL's) runs on the machine first
   research fetch <run-id> [--all]                # copy the machine's records (or every file, verified) into the local run dir
   research status [--runs-dir D] [--refresh] [--balance] [--all] [--json]
   research inspect <run-id|prefix|path> [--runs-dir D] [--json]
@@ -132,6 +133,9 @@ def cmd_run(argv: list[str]) -> int:
                     help="with --on: admit only if the machine's memory cgroup has N GB free after live reservations (/workspace/ramlock), "
                          "and reserve them for the run; else MemoryNotAvailable (research.mem)")
     ap.add_argument("--mem-wait", type=float, default=0.0, metavar="S", help="with --mem-gb: wait up to S seconds for the memory instead of refusing")
+    ap.add_argument("--preflight", default=None, metavar="TOOL",
+                    help="with --on --source: run TOOL's declared preflight (Tool.preflight) on the machine before this run, as a --tool TOOL "
+                         "run does, and refuse the run when it fails")
     ap.add_argument("--id", default=None, help="use this run id instead of allocating one")
     ap.add_argument("--claimed", action="store_true", help=argparse.SUPPRESS)          # machine side: the dir was created by launch-request
     ap.add_argument("--cost-json", default=None, help=argparse.SUPPRESS)
@@ -162,6 +166,10 @@ def cmd_run(argv: list[str]) -> int:
     mem_reservation = os.environ.pop("RESEARCH_MEM_RESERVATION", None) if ns.claimed else None    # research.mem: this runner's, not the workload's
     if ns.mem_gb is not None and not ns.on:
         print("research run: --mem-gb admits a run on a shared machine (--on MACHINE); a local run has no reservation to take", file=sys.stderr)
+        return 2
+    if ns.preflight and not (ns.on and ns.source):
+        print("research run: --preflight runs a tool's preflight on the machine, from the tree --source ships (--on MACHINE --source GITDIR)",
+              file=sys.stderr)
         return 2
     if (ns.custody_r2 or ns.custody_ttl) and not ns.on:
         print("research run: --custody-r2 / --custody-ttl are for --on MACHINE (a local run's records are already on this disk: "
@@ -561,7 +569,7 @@ def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts
         rec = remote.launch(run_id=run_id, local_dir=run_dir, machine_name=ns.on, project=ns.project, command=command, harness_args=harness_args,
                             source=Path(ns.source).expanduser() if ns.source else None, sends=[Path(s).expanduser() for s in ns.send],
                             cwd=None, env=env, exclusive=ns.exclusive, mem_gb=ns.mem_gb, mem_wait_s=ns.mem_wait,
-                            custody_ttl=(ns.custody_ttl or "6h") if custody else None)
+                            custody_ttl=(ns.custody_ttl or "6h") if custody else None, preflight_tool=ns.preflight)
     except remote.Refused as e:
         print(f"research run --on {ns.on}: refused: {e}", file=sys.stderr)
         return 3

@@ -61,7 +61,7 @@ uv run pytest                            # all tests
 
 research run [--project P] [--stage S] [--timeout T] [--expect K=V] [--require-result] [--env K=V] [--cwd DIR] [harness flags] -- CMD...
 research run [--tool NAME|module:NAME] [--scratch NAME]... [--campaign C] [...] -- CMD...      # evidence store, below
-research run --on MACHINE --project P [--source GITDIR] [--send FILE] [--env K=V] [--exclusive] [--mem-gb N [--mem-wait S]] [...] -- CMD...
+research run --on MACHINE --project P [--source GITDIR] [--send FILE] [--env K=V] [--exclusive] [--mem-gb N [--mem-wait S]] [--preflight TOOL] [...] -- CMD...
 research run --on MACHINE [--custody-ttl 6h] ...    # the default: the machine puts the attempt + every run file on the store's remote (store README §10.1)
 research run --on MACHINE --no-custody-r2 ...       # opt out: the records stay on the machine until `research fetch --all`
 research data custody RUN [--publish] | --triage                 # a run's custody on the remote, from any machine; the runs root by custody state
@@ -235,6 +235,26 @@ run is refused with `MemoryNotAvailable`, and `refused.json` gives every number.
 `--mem-wait S` polls for up to S seconds instead. job.json records the
 admission (`run.remote.mem`) and the attempt records
 `execution.mem_gb_reserved`. `research mem` prints the reading on the machine.
+
+A tool can declare a preflight (`Tool.preflight`: a Python script in the tree
+and its args), which says whether a machine is prepared for it. When a
+`--tool` run's shipped tree declares one, `launch-request` runs it there,
+in the tree, with the runner's environment, before anything else is
+admitted. `RESEARCH_PREFLIGHT_INPUTS` names the run's `--send` files and,
+with custody, `RESEARCH_PREFLIGHT_CUSTODY` the staged key's directory. It
+runs under the interpreter `research` itself runs on, since it may be
+checking what else is installed. On exit 0 the run starts, and job.json
+records the report (`run.remote.preflight`). Any other exit refuses the run
+(`PreflightFailed`, exit 3, `refused.json`), with the script's stderr as the
+reason. Nothing starts and no attempt is recorded, so a refusal is an error,
+never a verdict, and `research merge --train` stops rather than bisecting. A
+declaration that exists but cannot be read also refuses. `--preflight TOOL`
+runs TOOL's preflight before a run of something else, such as a Lean record
+regeneration on a check pod, and refuses if the tree declares none. `check`
+declares `tools/check/preflight.py`: the tools `pod_setup.sh` installs, the
+Lean dependencies (warm, or restorable from the store, never GitHub), one
+store read, `avx512f` when the run carries an upstream build that needs it,
+and free disk.
 
 Limitations, stated: until `fetch --all` completes, the only copy of the
 evidence is on the machine. Provisioning is a separate, explicit act; `--on` never creates a pod.
