@@ -357,6 +357,63 @@ is a seam:
 
 The profile is `Stratified` over the tile strata, and its `harm_bound`, at W_ref per tile, bounds the unsound work.
 
+## NCP-FP8 (`fp8-is-h100-d3s-v0-f16`, `-d3s-v0`) as a circuit under sampled proofs (`verity_pouw/circuit/fp8.py`)
+
+The same layout (a) as `ncp-v2`, over `fp8-is-*`'s D-3s forming on X_q (above): #295's scheme is the reference, and the
+Program evaluates to it bit for bit (`circuit.fp8_reference`: root_A by `audit.commit_rows`, the forming, words and useful
+output by `FP8IS(D3s(sums))`'s own `encode`, `checked` and `useful` on 16 × 16 tiles). `SUMS` is "f16" (the target cell) or
+"f32". Test shapes: 16 | m, 16 | n, 32 | k with k admissible (π passes the d = 32 rule from k = 96), m, n <= 256.
+
+**The units.** `NcpFp8Linear{M,K,N,SUMS,IL,OL,WL}` is one linear call; its root body holds only these templates' instances.
+
+~~~text
+template                  per                          reads                                        returns
+NcpFp8Domain{M,K,IL,OL}   call                         salt, index                                  root_A's domain id, the tree's frontiers
+NcpFp8Digest{K}           16-row strip of A            its 16 rows (E4M3), row ids, frontiers       its 16 leaves' subtree root
+NcpFp8Pad                 16 pad leaves                pad ranks, frontiers                         their subtree root
+NcpFp8Node                tree node above the strips   its children, its (level, index)             the parent; the top is root_A
+NcpFp8Key{K,SUMS,IL,WL}   call                         salt, index, weight id, root_A               E₁'s and F₁'s frontiers
+NcpFp8FormY{K,SUMS,IL,WL} 16-column weight strip       16 weight rows, column ids, F₁'s frontier    the Ỹ strip (16 × 3k codes)
+NcpFp8FormX{K,SUMS,IL,WL} 16-row strip of A            16 rows, row ids, E₁'s frontier              the X̃ strip (16 × 3k codes)
+NcpFp8Tile{K}             16 × 16 block                its X̃ strip, its Ỹ strip                     the words, and Z
+NcpFp8Dequant             output entry                 Z, s_i, t_j, bias_j                          y = bf16(s_i·t_j·Z) + bias_j
+~~~
+
+- **root_A** is the protocol's commitment to A's rows: `verity.commitments.merkle`'s SHA-256 frame-v3 tree, one leaf per
+  row (the row's k codes), its domain bound to `activation_binding(salt, index)` with owner = index, padded to a power of
+  two. Strips are its aligned 16-leaf subtrees.
+- **E₁ and F₁** are `D3Family.stream`'s SHAKE256 streams over (salt, index, root_A, weight id, line), 2k bytes each.
+- **The tile** runs `cell_words`: T = 3k/32 fresh E4M3 k32 atoms from +0 (`HopperE4m3QgmmaDot32`) and the running FP32
+  sums (`F32Add_v1`). Per cell its words are I_1 … I_T and R_2 … R_(T−1), and Z = R_T, the useful output, is field 1.
+- **The arithmetic** is #295's `verity.ml.tc.fp16` and `fp32`, one primitive per operation (`circuit.fp8_words`), and
+  core's FP32 add, mul and div, which equal #295's on every non-NaN word.
+
+**Hoisting** (`circuit.hoist`). Every stream's message and every leaf's and node's hash share call-wide prefixes (the salt,
+the index, root_A and the weight id; the commitment domain). Computed in each row's unit, those gates would be the same
+functions of the same values in many units, which `validate_unit_cut` rejects. So each per-row function is built once as a
+DAG over inputs marked call-wide or the row's own, and split:
+- its call-wide gates run once, in `NcpFp8Domain` (the tree's) or `NcpFp8Key` (the streams'), which return the frontier,
+  the call-wide values a row's gate reads;
+- its row gates are a Definition of their own (`NcpFp8Leaf{K}`, `NcpFp8StripNode{DEPTH}`, `NcpFp8UpperNode`,
+  `NcpFp8PadLeaf`, `NcpFp8XRow` and `NcpFp8YRow{K,SUMS,IL,WL}`) that reads the frontier as committed values.
+
+A hash block whose inputs are all call-wide or all the row's own is one call of its Definition (`PouwKeccakF1600`,
+`PouwSha256Compress`); a mixed block is expanded into primitives. Without the split, two rows recompute the streams'
+prefix (`test_without_hoisting_two_rows_recompute_the_streams_prefix`).
+
+**Index binding.** The index, the weight id, the row, column and pad ranks and the upper nodes' (level, index) are Program
+inputs, anchored like the salt. Their encodings are minimal big-endian (`frame`, `merkle._uint`), so the byte lengths of
+the index (IL), of index + 2, the domain's owner (OL), and of the weight id (WL) are template parameters
+(`fp8.Lengths.of(index, weight)`). Rows, columns and tree indices take one byte, which bounds m and n at 256.
+
+**The separator and the width rule** are `ncp-v2`'s, read through `partition.Circuit`: the pinned port is the tile's Z
+(field 1), every path from a PoUW unit (the domain, digests, pads, nodes, the key, the forming, the tiles) to y crosses a
+Z, 8,192 bits per tile, and only the dequantization units (16 bits each) are width-checked.
+
+**The draw** (`plan.fp8_layout`). A tile's closure is `ncp-v2`'s (its X and Y strips, its strip's digest, the nodes on
+the strip's path, the key) plus the domain unit and the **pad cone**, every pad strip and every node with no row beneath
+it: a pad has no tile beneath it that a wrong one could be charged to. A tile's W_ref is its cells' share of `FP8IS.wref`.
+
 ## Not here yet
 
 - The fast implementations: the RTX 4090 kernels and the vLLM adapter (`integrations/vllm/verity_vllm/protocol_options/pouw.py`)
@@ -371,4 +428,8 @@ The profile is `Stratified` over the tile strata, and its `harm_bound`, at W_ref
   - the work law's merge (#362);
   - the served-output designation and the pinned ports in `Q_nested_instances` v0's spec, evaluator and Lean port;
   - the vLLM adapter's `traced_as`;
-  - NCP-FP8 and H-1T.
+  - H-1T.
+- For NCP-FP8's circuit:
+  - rows or columns past 255 (two-byte ranks and indices: more template bindings);
+  - production shapes (64 × 64 tiles, k in the thousands) as a recorded run;
+  - C-Flock pieces for its primitives.
