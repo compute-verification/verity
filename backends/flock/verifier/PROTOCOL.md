@@ -360,6 +360,26 @@ Offline, the draw's uniformity is not checkable; soundness rests on the verifier
 session without a draw on either side is unchanged. The live side (PR #83) sends the draw after registration, stages the
 public header with it and records it; until then no recorded session carries one.
 
+### 7.4 The keyed coin tree (`coin-tree/hm96-sha512/v2`, `docs/coin-tree-v2.md`)
+
+The verifier's coins are committed at `Hello` in a coin tree whose every hash is prefixed by the prover's fresh 32-byte
+nonce. The server answers with the root and a fresh hm96 key for the session's tree. The key is drawn after the nonce,
+never reused, and never revealed before that answer. `Flock.CoinTree` checks the record; the openings need no check, since
+the commitment protects the prover (§7 of the spec).
+- **`Hello`.** `coins` is `{"block", "nonce", "rounds_log", "scheme", "streams"}`. The verifier's own `Hello` (`helloOf`
+  with `Coins.tree`) leaves the nonce empty.
+- **R7** (`CoinTree.checkHello`). The received `coins.nonce` must be 64 lowercase hex digits. It is put into the
+  verifier's `Hello`, which is serialized canonically and must equal the received string byte for byte.
+- **The record's `coin_tree`** (`CoinTree.checkRecord`).
+  - It has exactly `key`, `nonce`, `root` and `spec`.
+  - The nonce is `Hello`'s. The key is 256 bytes with bit 2047 zero (bit 7 of byte 255), and the root 64 bytes, both
+    lowercase hex.
+  - The spec is `{"block", "rounds_log", "scheme", "streams"}`, the verifier's.
+- **Freshness** (`CoinTree.checkFresh`). `verify` refuses a session whose key an earlier session of the same run used.
+- **Scope.** Only `--zk` sessions carry a coin tree, and no statement this verifier implements is one yet. The checks run
+  once a statement's `Hello` names the scheme (`Stmt.spec`'s `coinTree`). `flock-verify coin-tree-check` runs them alone,
+  on §9's values (`test_lean_coin_tree.py`).
+
 ## 8. The proof container
 
 ### 8.1 Encoding
