@@ -396,8 +396,11 @@ def select(found: dict[str, Any], max_gates: int = MAX_GATES) -> dict[str, Any]:
 
 
 def suite() -> dict[str, Any]:
-    """Every Definition the suite checks, by id."""
-    return select(reachable(catalog()))
+    """Every Definition the suite checks, by id: `select`'s, and PoUW's roots whatever their size (each P's whole call and
+    window share a family and a gate count, so `select` alone keeps one of them)."""
+    out = select(reachable(catalog()))
+    out.update({fn.id: fn for fn in _pouw_roots()})
+    return dict(sorted(out.items()))
 
 
 __all__ = ["MAX_GATES", "REGISTERED", "ROOT_ERRORS", "TEMPLATE_PARAMS", "TINY", "call_families", "catalog", "definition", "family", "instance_statics", "kind_of",
