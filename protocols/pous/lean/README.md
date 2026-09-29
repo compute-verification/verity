@@ -12,11 +12,17 @@ Pous/Model/{M1,HashChain,Pebbling,Labelling,Invertible,ColumnGame,Dense,SampledA
                                     Pietrzak's one-way labels, P3's invertible labels, the two-directional column
                                     game, the dense scheme S1 (one segment, segmented, and tagged as the code
                                     keys it), the state after a history
-Pous/Accounting/{Params,LemmaA}.lean  trusted: ρ, δ, expansion, `Meets`; Lemma A's bound and A7′'s rows
+Pous/Model/{P3Chain,BandChain,PubEncoder}.lean
+                                    trusted: the overwrite chain on an ideal permutation, P3 with it as `H`, the
+                                    band and the dense chain scheme over it, the public-encoder setup check
+Pous/Accounting/{Params,LemmaA,PubMeets}.lean  trusted: ρ, δ, expansion, `Meets`; Lemma A's bound and A7′'s rows;
+                                    `PubMeets`, the requirement with a public encoder
 Pous/Assumptions.lean               trusted: named hypotheses (Lemma A, Conjecture B1′)
-Pous/Pinned.lean                    trusted: the 33 statements grade.sh grades against
+Pous/Pinned.lean                    trusted: the 46 statements grade.sh grades against
 Pous/Sanity.lean, Pous/Accounting/Numbers.lean   proved: the definitions are not vacuous; certified numbers
 PousProofs/                         proved: Theorem 1, Track A, pebbling, B5, sampled audits, the dense scheme, P3
+PousProofs/Chain/Flat.lean          proved, generated: P3 with a concrete `H`, the band, the dense chain scheme and
+                                    the public encoder over the overwrite chain (the graded lanes, flattened)
 PousProofs/Pinned.lean              PousProofs.X : Pous.Pinned.X for each proved pinned statement
 lean-audit.json                     the policy and pin records for tools/lean/audit.py
 CheckAxioms.lean                    one #print axioms line per headline theorem
@@ -36,7 +42,7 @@ bash check.sh                       # the audit, the open targets, and the grade
 ~~~
 
 **Trusted without proof:** the statements in `Pous/Game`, `Pous/Model`, `Pous/Accounting/Params.lean`,
-`Pous/Accounting/LemmaA.lean`, `Pous/Assumptions.lean` and `Pous/Pinned.lean`; Lean's kernel; the Mathlib pin; the
+`Pous/Accounting/LemmaA.lean`, `Pous/Accounting/PubMeets.lean`, `Pous/Assumptions.lean` and `Pous/Pinned.lean`; Lean's kernel; the Mathlib pin; the
 grader and its sandbox. Everything else is checked by machine. Docstring paths such as `lean/submissions/…` and
 `docs/…` name the POUS Project store, where the provers' drafts and reviews live.
 
