@@ -78,6 +78,7 @@ __all__ = [
     "pipeline_for",
     "tc_dot",
     "tc_dot_chain",
+    "tc_mixed_chain",
 ]
 
 
@@ -233,6 +234,23 @@ def tc_dot_chain(model: Model, acc_bits: int, a: Sequence[int], b: Sequence[int]
         raise InvalidArtifact(f"chain length must be a multiple of {n}")
     for start in range(0, len(a), n):
         acc_bits = model.step(acc_bits, a[start : start + n], b[start : start + n])
+    return acc_bits
+
+
+def tc_mixed_chain(
+    acc_bits: int,
+    steps: Sequence[tuple[Model, Sequence[int], Sequence[int]]],
+) -> int:
+    """Fold an ordered sequence of possibly different tensor-core instruction models.
+
+    This is the reference boundary for a mixed-dtype chain such as an E4M3
+    product followed by a BF16 step on the same nonzero FP32 accumulator.
+    Each step consumes the raw word emitted by the previous step; no host
+    rounding, cast, or widening is inserted between instructions.
+    """
+
+    for model, a_words, b_words in steps:
+        acc_bits = model.step(acc_bits, a_words, b_words)
     return acc_bits
 
 

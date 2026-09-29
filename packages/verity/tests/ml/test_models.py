@@ -24,6 +24,7 @@ from verity.ml.tc.models import (
     BLACKWELL_SM120_MXF4,
     BLACKWELL_SM120_MXF4_UNDERFLOW_SIGNED,
     BLACKWELL_SM120_NVF4,
+    HOPPER_BF16_WGMMA_K16,
     HOPPER_E4M3_K32,
     HOPPER_E5M2_K32,
     MODELS,
@@ -34,6 +35,7 @@ from verity.ml.tc.models import (
     Pipeline,
     tc_dot,
     tc_dot_chain,
+    tc_mixed_chain,
 )
 from verity.ml.tc.term import Term, e2m1_product, e5m2_product
 
@@ -66,7 +68,7 @@ def test_pipeline_is_group_sum_and_nothing_moved() -> None:
     for name in ("AMPERE_BF16_M16N8K16", "HOPPER_BF16_M16N8K16", "HOPPER_E4M3_K32", "ADA_BF16_M16N8K16",
                  "ADA_E4M3_M16N8K32", "HAWKEYE_AMPERE_GROUPSUM_E4M3_V0"):
         assert getattr(silicon, name) is getattr(models, name) is PIPELINES[getattr(models, name).name]
-    assert silicon.tc_dot is tc_dot and silicon.tc_dot_chain is tc_dot_chain
+    assert silicon.tc_dot is tc_dot and silicon.tc_dot_chain is tc_dot_chain and silicon.tc_mixed_chain is tc_mixed_chain
     assert set(PIPELINES) <= set(MODELS)
 
 
@@ -99,6 +101,23 @@ def test_fp8_accumulator_is_truncated_to_the_adder_before_the_add() -> None:
     assert ADA_E4M3_M16N8K32.step(acc, zeros, zeros) == 0x3F800000
     # BF16 Ampere (25-bit adder) keeps the whole accumulator through an all-zero group
     assert AMPERE_BF16_M16N8K16.step(acc, [0] * 16, [0] * 16) == acc
+
+
+def test_mixed_chain_carries_fp8_output_into_bf16_cleanup() -> None:
+    """Pearl-C's BF16 clean-up consumes the raw nonzero FP32 word from its E4M3 product."""
+
+    fp8_one, bf16_one = 0x38, 0x3F80
+    steps = [
+        (HOPPER_E4M3_K32, [fp8_one] * 32, [fp8_one] * 32),
+        (HOPPER_BF16_WGMMA_K16, [bf16_one] * 16, [bf16_one] * 16),
+    ]
+    product = HOPPER_E4M3_K32.step(0, steps[0][1], steps[0][2])
+    assert product == 0x42000000  # 32
+    assert tc_mixed_chain(0, steps) == 0x42400000  # 32 + 16 = 48
+    assert HOPPER_BF16_WGMMA_K16.step(0, steps[1][1], steps[1][2]) == 0x41800000
+
+    with pytest.raises(InvalidArtifact):
+        tc_mixed_chain(0, [(HOPPER_BF16_WGMMA_K16, [bf16_one] * 15, [bf16_one] * 16)])
 
 
 def test_e5m2_models_share_the_e4m3_pipeline() -> None:

@@ -36,6 +36,7 @@ from .models import (  # noqa: F401
     pipeline_for,
     tc_dot,
     tc_dot_chain,
+    tc_mixed_chain,
 )
 from .term import (  # noqa: F401
     FP32_MAX_EXPONENT,
@@ -69,4 +70,5 @@ __all__ = [
     "pipeline_for",
     "tc_dot",
     "tc_dot_chain",
+    "tc_mixed_chain",
 ]

@@ -33,6 +33,7 @@ from .silicon import (  # noqa: F401
     pipeline_for,
     tc_dot,
     tc_dot_chain,
+    tc_mixed_chain,
 )
 from .total import (  # noqa: F401
     HOPPER_BF16_WGMMA_K16,
