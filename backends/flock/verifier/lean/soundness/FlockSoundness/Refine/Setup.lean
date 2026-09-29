@@ -190,17 +190,62 @@ theorem parse_checkLayout {tags : Tags} {bytes : ByteArray} {tables : List (Stri
     subst h
     assumption
 
-set_option maxHeartbeats 2000000 in
-theorem hm_parse_check {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
-    (h : HmRow.parse tags bytes tables = .ok c) : ∃ ls, HmRow.check c tags ls = .ok () := by
+set_option maxHeartbeats 4000000 in
+/-- An untyped `HmRow.parse` ends with `HmRow.check`. -/
+theorem hm_parse_check_none {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
+    {pre : Array (String × Net)} {c : Circuit} (h : HmRow.parse tags bytes tables none pre = .ok c) :
+    ∃ ls, HmRow.check c tags ls = .ok () := by
   unfold HmRow.parse at h
-  dsimp only at h
-  simp only [throw_bind', pure_bind] at h
+  dsimp only [Option.isSome_none] at h
+  simp only [throw_bind', pure_bind, Bool.false_eq_true, ite_false, Option.mapM_none] at h
   repeat' walk_step
   all_goals
     simp only [pure, Except.pure, Except.ok.injEq] at h
     subst h
     exact ⟨_, by assumption⟩
+
+set_option maxHeartbeats 4000000 in
+/-- A template's `HmRow.parse` ends with `HmRow.check`. -/
+theorem hm_parse_check_some {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
+    {t : Typed.Template} {c : Circuit} (h : HmRow.parse tags bytes tables (some t) #[] = .ok c) :
+    ∃ ls, HmRow.check c tags ls = .ok () := by
+  unfold HmRow.parse at h
+  dsimp only [Option.isSome_some] at h
+  simp only [throw_bind', pure_bind, ite_true] at h
+  repeat' walk_step
+  all_goals
+    simp only [pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    exact ⟨_, by assumption⟩
+
+/-- `HmRow.parse` with its defaults, as `setupH` calls it, ends with `HmRow.check`. -/
+theorem hm_parse_check {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
+    (h : HmRow.parse tags bytes tables = .ok c) : ∃ ls, HmRow.check c tags ls = .ok () :=
+  hm_parse_check_none h
+
+/-- `HmRow.check` doesn't read a circuit's class. -/
+theorem check_cls (c : Circuit) (tags : Tags) (ls : Lean.Json) (x : Option _) :
+    HmRow.check { c with cls := x } tags ls = HmRow.check c tags ls := rfl
+
+/-- A typed statement's parse ends with `HmRow.check` of the circuit it returns: its class is not a field `check` reads. -/
+theorem hm_parseTyped_check {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
+    (h : HmRow.parseTyped tags bytes tables = .ok c) : ∃ ls, HmRow.check c tags ls = .ok () := by
+  unfold HmRow.parseTyped at h
+  obtain ⟨⟨k, r⟩, -, h⟩ := ebind_ok h
+  dsimp only at h
+  cases r with
+  | inr t =>
+      obtain ⟨c', hc', h⟩ := ebind_ok h
+      simp only [pure, Except.pure, Except.ok.injEq] at h
+      subst h
+      obtain ⟨ls, hls⟩ := hm_parse_check_some hc'
+      exact ⟨ls, (check_cls c' tags ls _).trans hls⟩
+  | inl u =>
+      obtain ⟨c', hc', h⟩ := ebind_ok h
+      simp only [pure, Except.pure, Except.ok.injEq] at h
+      subst h
+      obtain ⟨ls, hls⟩ := hm_parse_check_none hc'
+      exact ⟨ls, (check_cls c' tags ls _).trans hls⟩
 
 /-! ### The regions a setup builds -/
 
@@ -209,7 +254,6 @@ theorem blake3_regions_wf {c : Circuit} {pub : Public} {regs : Array Region} (h 
     ∀ x ∈ regs.toList, RegionWF c.kLog x := by
   unfold Blake3Row.regions at h
   dsimp only at h
-  try simp only [throw_bind', pure_bind] at h
   obtain ⟨out, hloop, h⟩ := ebind_ok h
   simp only [pure, Except.pure, Except.ok.injEq] at h
   subst h
@@ -265,7 +309,7 @@ theorem setup_wf {tags : Tags} {comp : Comp} {circuitFile publicFile : ByteArray
     StmtWF st ∧ RegionsWF st := by
   unfold Stmt.setup at h
   dsimp only at h
-  simp only [throw_bind', pure_bind] at h
+  simp only [throw_bind'] at h
   repeat' walk_step
   all_goals
     simp only [pure, Except.pure, Except.ok.injEq] at h
@@ -287,7 +331,8 @@ theorem setupH_wf {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Co
   all_goals
     simp only [pure, Except.pure, Except.ok.injEq] at h
     subst h
-    obtain ⟨_, hc⟩ := hm_parse_check (by assumption)
+    obtain ⟨_, hc⟩ : ∃ ls, HmRow.check _ tags ls = .ok () := by
+      first | exact hm_parse_check (by assumption) | exact hm_parseTyped_check (by assumption)
     exact ⟨wf_of_facts (hm_check_slots hc) (hm_pin_ok (by assumption)) rfl, rfl, rfl,
       hm_regions_wf (by assumption)⟩
 

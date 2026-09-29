@@ -100,11 +100,12 @@ def compose_global(fixture: Mapping[str, Any], parts: Mapping[str, dict[str, Any
 
 
 def _with_partitions(q: dict[str, Any], key: str, queries: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
-    """A composed header names every part's partition (`key`: `by_component` / `by_rank`), never one part's for all."""
-    q.pop("partition", None)
-    parts = {k: h["partition"] for k, h in queries.items() if h.get("partition")}
-    if parts:
-        q["partition"] = {key: dict(sorted(parts.items()))}
+    """A composed header names every part's partition and word check (`key`: `by_component` / `by_rank`), never one part's for all."""
+    for field in ("partition", "word_check"):
+        q.pop(field, None)
+        parts = {k: h[field] for k, h in queries.items() if h.get(field)}
+        if parts:
+            q[field] = {key: dict(sorted(parts.items()))}
     return q
 
 

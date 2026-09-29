@@ -112,6 +112,36 @@ def test_appended_hook_leaves_the_list() -> None:
     assert lst == [print, *other]
 
 
+def test_a_service_stops_before_the_patches_it_serves_and_keeps_its_counters() -> None:
+    log: list[str] = []
+    r = Runner()
+    before = hooks.live()
+    with hooks.Hooks(tag="pous:band-chain/d12/v1") as h:
+        h.wrap(r, "sample", lambda o: (lambda x: ("decoded", o(x))))
+        s = h.service("responder", lambda: log.append("start") or 7, lambda handle: log.append(f"stop {handle}") or {"answered": 3})
+        assert log == ["start"] and s.handle == 7 and s.tag == h.tag
+        assert hooks.live(h.tag) == (h.entries[0], s) and hooks.live("pouw:ncp-v1") == ()
+        assert r.sample(1) == ("decoded", ("sample", 1))
+    assert log == ["start", "stop 7"] and s.result == {"answered": 3} and "sample" not in vars(r) and hooks.live() == before
+    s.uninstall()
+    assert log == ["start", "stop 7"]
+
+
+def test_an_entry_that_fails_to_uninstall_does_not_keep_the_others() -> None:
+    r = Runner()
+    before = hooks.live()
+    h = hooks.Hooks()
+    h.wrap(r, "sample", lambda o: o)
+
+    def stop(handle):
+        raise RuntimeError("stuck")
+
+    h.service("responder", lambda: None, stop)
+    with pytest.raises(RuntimeError, match="stuck"):
+        h.uninstall()
+    assert "sample" not in vars(r) and h.entries == () and hooks.live() == before
+
+
 def test_triton_launch_restores_jitfunction_run() -> None:
     jit = pytest.importorskip("triton.runtime.jit")
     from verity_vllm.observe import triton_adapter

@@ -7,7 +7,6 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-import time
 from pathlib import Path
 
 import pytest
@@ -60,13 +59,12 @@ def _no_git_machine(tmp_path: Path) -> list[str]:
 
 def test_first_and_delta_ships_go_as_git_objects_and_verify_per_file(repo, tmp_path, capsys):
     root = tmp_path / "root"
-    t0 = time.time() - 1
     sha, dest, doc = remote.ship_source(LOCAL, str(root), repo)
     assert doc["verified"] == "git-push+tree+file-sha256" and doc["transport"] == "git" and doc["tree"] == _git(repo, "rev-parse", "HEAD^{tree}")
     man = remote.archive_manifest_git(repo)
     assert doc["archive_sha256"] == man["archive_sha256"] and doc["files"] == 4 and doc["pod_archive_sha256"]
     assert _tree(Path(dest)) == man["files"], "the tree on the machine is the commit, file by file"
-    assert min(p.stat().st_mtime for p in Path(dest).rglob("*") if p.is_file()) >= t0, "extraction mtimes, not the 2020 commit time"
+    assert min(p.stat().st_mtime for p in Path(dest).rglob("*") if p.is_file()) >= 1_609_459_200, "extraction mtimes, not the 2020 commit time"   # 2021-01-01
     bare = root / remote.POD_GIT_REPO
     assert _git(bare, "rev-parse", f"refs/research/src/{sha}") == sha
     assert [p.name for p in (root / "src").iterdir()] == [sha] and "archive stream" not in capsys.readouterr().err

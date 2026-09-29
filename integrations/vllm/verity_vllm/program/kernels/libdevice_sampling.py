@@ -29,6 +29,7 @@ from dataclasses import dataclass
 
 from verity_vllm.config import option
 from verity_vllm.program.kernels import sampling_rng as R
+from verity_vllm.program.registry.sampling import LOG_INVALID_NAN
 
 F32 = np.float32
 FLT_MIN = np.float32(1.1754943508222875e-38)          # 2**-126, IR constant 0x3810000000000000
@@ -103,9 +104,17 @@ def add_rz_f32(a, b) -> np.ndarray:
     return ftz(t)
 
 
+_INVALID = np.array([LOG_INVALID_NAN], dtype=np.uint32).view(F32)[0]
+
+
+def _neg_not_nan(a: np.ndarray) -> np.ndarray:
+    w = np.asarray(a, dtype=F32).view(np.uint32)
+    return (w >= np.uint32(0x80000000)) & ((w & np.uint32(0x7FFFFFFF)) <= np.uint32(0x7F800000))
+
+
 def nv_logf(a) -> np.ndarray:
     """libdevice `__nv_logf` (accurate, FTZ), element-wise on float32."""
-    a = np.asarray(a, dtype=F32)
+    a = ftz(np.asarray(a, dtype=F32))
     small = a < FLT_MIN
     a2 = np.where(small, (a * TWO_P23).astype(F32), a).astype(F32)
     i0 = np.where(small, F32(-23.0), F32(0.0)).astype(F32)
@@ -124,7 +133,7 @@ def nv_logf(a) -> np.ndarray:
     r = fma_f32(i2, LN2, r)
     bad = a2.view(np.uint32) >= np.uint32(0x7F800000)                  # inf, nan, negative
     if np.any(bad):
-        r = np.where(bad, fma_f32(a2, INF, INF), r).astype(F32)
+        r = np.where(bad, np.where(_neg_not_nan(a2), _INVALID, fma_f32(a2, INF, INF)), r).astype(F32)
     r = np.where(a2 == 0, F32(-np.inf), r).astype(F32)
     return r
 
@@ -152,7 +161,7 @@ def nv_log1pf(a) -> np.ndarray:
     bad = ab >= np.uint32(0x7F800000)
     if np.any(bad):
         big = a.view(np.int32) > np.int32(-1082130432)
-        r = np.where(bad & big, fma_f32(a, INF, INF), r).astype(F32)
+        r = np.where(bad & big, np.where(_neg_not_nan(a), _INVALID, fma_f32(a, INF, INF)), r).astype(F32)
         r = np.where(bad & (a == 0), F32(-0.0), r).astype(F32)
     return r
 
