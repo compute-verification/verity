@@ -131,8 +131,9 @@ class WarmDeps:
         self.held[pkg] = self.store / k
 
     def give_back(self, passed: set[Path]) -> None:
-        """Keep the dependencies of the packages whose audit passed (their imported `.olean` files matched the record), and
-        drop the others': a run's compile-time code may write in them, so only a passing audit vouches for what comes back."""
+        """Keep the dependencies of the packages in ``passed`` (an audit that passed, whose imported `.olean` files matched
+        the record, or one that failed before compiling anything, on fetching a dependency) and drop the others': a run's
+        compile-time code may write in them, so only such a run vouches for what comes back."""
         for pkg, home in self.held.items():
             src = pkg / ".lake" / "packages"
             if not src.is_dir() or pkg not in passed:
@@ -163,7 +164,7 @@ def scratch_tree(dest: Path, files: list[str]) -> None:
 #: a dependency fetch that failed for a reason outside the audit (GitHub throttles anonymous clones from a busy address)
 TRANSIENT = ("could not read Username for 'https://github.com'", "Could not resolve host", "expected flush after ref listing",
              "Failed to connect to", "The requested URL returned error: 429", "The requested URL returned error: 5")
-RETRIES = (90, 240)
+RETRIES = (90, 240, 480)
 
 
 def transient(rep: dict) -> bool:
@@ -208,7 +209,10 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
                 os.replace(tmp, cache / f"{keys[p]}.json")
         if r.returncode not in (0, 1) and not failed:
             failed = [f"audit.py exit {r.returncode}"]
-        passed = {work / p for p in audited if p in reports and controls_ok and not reports[p].get("failures")}
+        # a pass vouches for its dependencies; so does a failure only in fetching them (Lake clones every dependency, each at
+        # the revision the manifest pins, before it compiles anything): keeping those, a retry fetches only what is missing
+        passed = {work / p for p in audited if p in reports and ((controls_ok and not reports[p].get("failures"))
+                                                                 or transient(reports[p]))}
     finally:
         warm.give_back(passed)
         shutil.rmtree(work, ignore_errors=True)

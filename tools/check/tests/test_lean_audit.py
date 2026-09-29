@@ -126,3 +126,18 @@ def test_a_failed_dependency_fetch_is_no_verdict_and_is_retried():
     assert LA.transient({"failures": [clone]})
     assert not LA.transient({"failures": [clone, "axioms: sorryAx in Foo.bar"]})          # a real failure is never retried away
     assert not LA.transient({"failures": ["build: exit 1\nerror: unknown identifier 'x'"]}) and not LA.transient({"failures": []})
+
+
+def test_a_fetch_failure_keeps_what_was_fetched(tmp_path, monkeypatch):
+    """A package that failed only on fetching a dependency compiled nothing: its partial fetch comes back, for the retry."""
+    root = _tree(tmp_path, monkeypatch)
+    (root / "pkg/b/lean-audit.json").write_text("{}")
+    k = LA.deps_key(root / "pkg/a")
+    fake = FAKE_AUDIT.replace('reps.append({"package": str(pkg), "failures": [f"reads {m}" for m in missing]})',
+                              'reps.append({"package": str(pkg), "failures": ["build: exit 1\\nfatal: could not read Username for '
+                              '\'https://github.com\': No such device"] if pkg.name == "a" else []})\n    missing = [pkg] if pkg.name == "a" else missing')
+    assert fake != FAKE_AUDIT
+    (root / "tools/lean/audit.py").write_text(fake)
+    monkeypatch.setattr(LA, "RETRIES", ())
+    rc, ran, _doc = _run(tmp_path, 1)
+    assert rc == 1 and (tmp_path / "cache" / "lean-deps" / k / "dep" / "built").exists()
