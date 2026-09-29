@@ -13,7 +13,8 @@ It also checks the unit's logical order (`order`, the list `Rows.compose` reads)
 the inputs first; each row after them reads only earlier columns; every row outside it is a zero row. And it checks the
 unit's parts as its template statement reads them (`partsChecked`): each part's rows are its callee's, shifted, past the
 unit's own rows and apart from the other parts'; Δ is exactly the unit's constant and the parts' constants and bound
-inputs; the own rows read only own and part columns.
+inputs; the own rows read only own and part columns; the unit's constant row is `[const]·[const]`; and its order lists
+only own and part columns.
 
 An inline read is checked as `table/v2` lays it out: its decoders' rows (`chkDecode`), its product rows, each a high minterm
 times the table-direct side its record gives (`readSide`, the side `Lookup.foldB` folds), and its output rows; a value bit
@@ -398,14 +399,18 @@ def deltaEntryOk (done : Array D) (u : D) (e : Nat × Option (List Nat)) : Bool 
 
 /-- **The unit's parts, as its template statement reads them** (`Typed.templateOf`): each part is placed (`partOk`), and
 the parts follow one another by base; Δ has one entry per row, each the unit's constant, a part's constant or a part's
-bound input; each of the unit's own rows reads only its own and its parts' rows. -/
+bound input; each of the unit's own rows reads only its own and its parts' rows. The unit's constant row is
+`[const]·[const]`, so that its root net's constant reads nothing but itself, and its order lists only own and part
+columns. -/
 def partsChecked (done : Array D) (unit : Nat) : Bool :=
   let u := done.getD unit default
   u.parts.all (fun p => partOk done unit u p.1 p.2) &&
     (u.parts.toList.zip u.parts.toList.tail).all (fun pq => decide (pq.1.2 + (done.getD pq.1.1 default).size ≤ pq.2.2)) &&
     distinctFrom (u.delta.toList.map (·.1)) {} && u.delta.all (deltaEntryOk done u) &&
-    (List.range u.size).all fun c =>
-      ((u.rows.getD c ([], [])).1 ++ (u.rows.getD c ([], [])).2).all fun x => decide (x < u.size) || inPart done u x
+    ((List.range u.size).all fun c =>
+      ((u.rows.getD c ([], [])).1 ++ (u.rows.getD c ([], [])).2).all fun x => decide (x < u.size) || inPart done u x) &&
+    u.rows.getD u.const ([], []) == ([u.const], [u.const]) &&
+    (order done u).all fun c => decide (c < u.size) || inPart done u c
 
 /-- **The rows the verifier uses**: `deriveAll`'s, once every layout's pass the check, the unit's are in logical order, and
 its parts are as its template reads them. -/
