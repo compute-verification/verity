@@ -357,8 +357,15 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
         CK(cudaMemcpy(d_b, C->host_b, len * sizeof(F128), cudaMemcpyHostToDevice));
     } else {
         auto t0 = std::chrono::steady_clock::now();
+        static const bool prof = getenv("FC_WITNESS_PROFILE") != nullptr;
+        using clk = std::chrono::steady_clock;
+        auto tick = [&]() { if (prof) cudaStreamSynchronize(0); return clk::now(); };
+        auto secs = [](clk::time_point a, clk::time_point b) { return std::chrono::duration<double>(b - a).count(); };
+        double p_tape = 0, p_rows = 0; long long p_batches = 0, p_nh = 0, p_hin_bytes = 0, p_tape_bytes = 0;
+        clk::time_point p_mem, p_hin, p_comp;
         CK(cudaMemsetAsync(df, 0, len * sizeof(F128))); CK(cudaMemsetAsync(d_a, 0, len * sizeof(F128)));
         CK(cudaMemsetAsync(d_b, 0, len * sizeof(F128)));
+        p_mem = tick();
         {
             static std::once_flag h_once;
             static cudaError_t h_err = cudaSuccess;
@@ -381,6 +388,7 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
             uint64_t* d_hin; uint32_t* d_hs = nullptr;
             CK(cudaMalloc(&d_hin, (size_t)n_h * N->h_in_words * 16));
             CK(cudaMemcpy(d_hin, N->h_inputs, (size_t)n_h * N->h_in_words * 16, cudaMemcpyHostToDevice));
+            p_hin = tick(); p_nh = n_h; p_hin_bytes = n_h * N->h_in_words * 16;
             if (N->h_plan) {
 #ifdef FLOCK_HB
                 static const uint32_t* plan_of = nullptr;
@@ -398,10 +406,14 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
                 const int nrb = (N->h_useful + 31) / 32;
                 for (long long s0 = 0; s0 < n_h; s0 += batch) {
                     const long long nb = std::min(batch, n_h - s0);
+                    auto q0 = tick();
                     fc_sha_tape<<<(unsigned)((nb + 127) / 128), 128>>>(d_hin + 2LL * s0 * N->h_in_words, N->h_in_words, nb, d_tape);
+                    auto q1 = tick();
+                    p_tape += secs(q0, q1); p_batches++; p_tape_bytes += nb * per;
                     fc_sha_rows<<<dim3((unsigned)nrb, (unsigned)((nb + 7) / 8)), 256>>>(d_tape, nb, s0, d_plan, N->h_useful, (int)hper,
                         N->r_pos0[hr], hl, k_log, (uint32_t*)df, (uint32_t*)d_a, (uint32_t*)d_b);
                     CK(cudaGetLastError());
+                    p_rows += secs(q1, tick());
                 }
                 CK(cudaStreamSynchronize(0));
                 cudaFree(d_tape);
@@ -425,6 +437,7 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
             CK(cudaStreamSynchronize(0));
             if (d_hs) cudaFree(d_hs);
             cudaFree(d_hin);
+            p_comp = tick();
             const uint64_t* p = N->host0_zab;
             for (long long i = 0; i < N->n_host0; i++) {
                 const size_t w = (size_t)N->host0_words[i];
@@ -434,6 +447,29 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
                 p += 6 * w;
             }
             CK(cudaStreamSynchronize(0));
+            const auto p_h0 = clk::now();
+            if (prof) {
+                // the host slots' upload against one contiguous copy of the same bytes, pageable and pinned (256 MB slices)
+                const size_t bytes = (size_t)(p - N->host0_zab) * 8, sl = std::min(bytes, (size_t)256 << 20);
+                double pg = 0, pn = 0;
+                void *d_s = nullptr, *h_s = nullptr;
+                if (sl && cudaMalloc(&d_s, sl) == cudaSuccess && cudaMallocHost(&h_s, sl) == cudaSuccess) {
+                    memcpy(h_s, N->host0_zab, sl);
+                    auto b0 = clk::now();
+                    for (int r = 0; r < 4; r++) cudaMemcpy(d_s, N->host0_zab, sl, cudaMemcpyHostToDevice);
+                    auto b1 = clk::now();
+                    for (int r = 0; r < 4; r++) cudaMemcpy(d_s, h_s, sl, cudaMemcpyHostToDevice);
+                    auto b2 = clk::now();
+                    pg = 4.0 * sl / secs(b0, b1) / 1e9; pn = 4.0 * sl / secs(b1, b2) / 1e9;
+                }
+                if (d_s) cudaFree(d_s);
+                if (h_s) cudaFreeHost(h_s);
+                fprintf(stderr, "FCWPROF\t{\"memset_s\":%.6f,\"len_words\":%lld,\"hin_s\":%.6f,\"hin_bytes\":%lld,\"n_h\":%lld,\"tape_s\":%.6f,"
+                        "\"rows_s\":%.6f,\"batches\":%lld,\"tape_bytes\":%lld,\"comp_s\":%.6f,\"host0_s\":%.6f,\"n_host0\":%lld,"
+                        "\"host0_bytes\":%zu,\"h2d_pageable_gbs\":%.3f,\"h2d_pinned_gbs\":%.3f,\"window_s\":%.6f}\n",
+                        secs(t0, p_mem), len, secs(p_mem, p_hin), p_hin_bytes, p_nh, p_tape, p_rows, p_batches, p_tape_bytes,
+                        secs(p_hin, p_comp), secs(p_comp, p_h0), N->n_host0, bytes, pg, pn, secs(t0, p_h0));
+            }
         }
         auto t1 = std::chrono::steady_clock::now();
         if (!N->u_host) {
