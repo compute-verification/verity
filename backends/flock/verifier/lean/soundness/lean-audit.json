@@ -145,6 +145,78 @@
   }
  },
  "pins": {
+  "FlockSoundness.Audit.Law.escape_widen_le": {
+   "signature": [
+    "FlockSoundness.Audit.Law.escape_widen_le {n : Nat} (L : FlockSoundness.Audit.Law n)",
+    "  {f : Finset (Fin n) → Finset (Fin n)} (hf : ∀ (S : Finset (Fin n)), Finset.instPartialOrder.le S (f S))",
+    "  (B : Finset (Fin n)) : ENNReal.instLE.le ((L.widen f).escape B) (L.escape B)"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000c86b7230"
+  },
+  "FlockSoundness.Audit.Law.one_le_workK": {
+   "signature": [
+    "FlockSoundness.Audit.Law.one_le_workK {n m : Nat} {σ : Fin n → Fin m} {w : Fin m → Nat} {K : Nat} {s : Fin m}",
+    "  (h : (FlockSoundness.Audit.Law.stratum σ s).Nonempty) : instLENat.le 1 (FlockSoundness.Audit.Law.workK σ w K s)"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000c175ca60"
+  },
+  "FlockSoundness.Audit.Law.record_sizing": {
+   "signature": [
+    "FlockSoundness.Audit.Law.record_sizing :",
+    "  ENNReal.instLE.le (instHPow.hPow (999 / 1000) 27713) (ENNReal.instInv.inv (instHPow.hPow 2 40))"
+   ],
+   "assumptions": [],
+   "type_hash": "0000000036495a89"
+  },
+  "FlockSoundness.Audit.Law.record_sizing_one_fewer": {
+   "signature": [
+    "FlockSoundness.Audit.Law.record_sizing_one_fewer :",
+    "  Not (ENNReal.instLE.le (instHPow.hPow (999 / 1000) 27712) (ENNReal.instInv.inv (instHPow.hPow 2 40)))"
+   ],
+   "assumptions": [],
+   "type_hash": "0000000048602bdf"
+  },
+  "FlockSoundness.Audit.Law.sum_workK_le": {
+   "signature": [
+    "FlockSoundness.Audit.Law.sum_workK_le {n m : Nat} (σ : Fin n → Fin m) (w : Fin m → Nat) (K : Nat)",
+    "  (hW : instLTNat.lt 0 (FlockSoundness.Audit.Law.totalWork σ w)) :",
+    "  instLENat.le (Finset.univ.sum fun s => FlockSoundness.Audit.Law.workK σ w K s) (instHAdd.hAdd K m)"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000bcfa7f31"
+  },
+  "FlockSoundness.Audit.Law.workK_ge": {
+   "signature": [
+    "FlockSoundness.Audit.Law.workK_ge {n m : Nat} {σ : Fin n → Fin m} {w : Fin m → Nat} {K : Nat} (s : Fin m)",
+    "  (hW : instLTNat.lt 0 (FlockSoundness.Audit.Law.totalWork σ w)) :",
+    "  Or (Eq (FlockSoundness.Audit.Law.workK σ w K s) (FlockSoundness.Audit.Law.stratum σ s).card)",
+    "    (instLENat.le (instHMul.hMul (instHMul.hMul K (w s)) (FlockSoundness.Audit.Law.stratum σ s).card)",
+    "      (instHMul.hMul (FlockSoundness.Audit.Law.totalWork σ w) (FlockSoundness.Audit.Law.workK σ w K s)))"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000aaab7bf1"
+  },
+  "FlockSoundness.Audit.Law.workRule_eq_draw": {
+   "signature": ["FlockSoundness.Audit.Law.workRule_eq_draw : Eq Flock.Draw.workK FlockSoundness.Audit.Law.workRule"],
+   "assumptions": [],
+   "type_hash": "00000000b5c4f5f7"
+  },
+  "FlockSoundness.Audit.Law.work_escape_le": {
+   "signature": [
+    "FlockSoundness.Audit.Law.work_escape_le {n m : Nat} (σ : Fin n → Fin m) (w : Fin m → Nat) (K : Nat)",
+    "  (hW : instLTNat.lt 0 (FlockSoundness.Audit.Law.totalWork σ w)) (B : Finset (Fin n)) :",
+    "  ENNReal.instLE.le ((FlockSoundness.Audit.Law.work σ w K).escape B)",
+    "    (instHPow.hPow",
+    "      (instHDiv.hDiv",
+    "        (instHSub.hSub (FlockSoundness.Audit.Law.totalWork σ w) (FlockSoundness.Audit.Law.workOf σ w B)).cast",
+    "        (FlockSoundness.Audit.Law.totalWork σ w).cast)",
+    "      K)"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000b4f04e2b"
+  },
   "FlockSoundness.Audit.Partition.flock_e2e_count": {
    "signature": [
     "FlockSoundness.Audit.Partition.flock_e2e_count {C : FlockSoundness.Audit.Circuit} {n : Nat}",
@@ -243,6 +315,117 @@
    ],
    "assumptions": [],
    "type_hash": "0000000076fada01"
+  },
+  "FlockSoundness.Audit.audit_work": {
+   "signature": [
+    "FlockSoundness.Audit.audit_work {n m : Nat} {σ : Fin n → Fin m} {w : Fin m → Nat} {K : Nat} {Reg : Type}",
+    "  {session : Finset (Fin n) → Reg → FlockSoundness.Game Bool}",
+    "  (A : FlockSoundness.Audit.Analysis (FlockSoundness.Audit.Law.work σ w K) Reg session) {εks δlink : ENNReal}",
+    "  (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink)",
+    "  (hW : instLTNat.lt 0 (FlockSoundness.Audit.Law.totalWork σ w)) (T : Nat)",
+    "  (σ' : (FlockSoundness.Audit.audit (FlockSoundness.Audit.Law.work σ w K) Reg session).Strategy) :",
+    "  ENNReal.instLE.le",
+    "    (FlockSoundness.Game.prob",
+    "      (fun o =>",
+    "        And (Eq o.fst Bool.true) (instLENat.le T (FlockSoundness.Audit.Law.workOf σ w (A.wrong (A.committedOf σ')))))",
+    "      (FlockSoundness.Audit.audit (FlockSoundness.Audit.Law.work σ w K) Reg session) σ')",
+    "    (instHAdd.hAdd",
+    "      (instHAdd.hAdd",
+    "        (instHPow.hPow",
+    "          (instHDiv.hDiv (instHSub.hSub (FlockSoundness.Audit.Law.totalWork σ w) T).cast",
+    "            (FlockSoundness.Audit.Law.totalWork σ w).cast)",
+    "          K)",
+    "        εks)",
+    "      δlink)"
+   ],
+   "assumptions": [],
+   "type_hash": "000000007c502960"
+  },
+  "FlockSoundness.Audit.audit_work_of_record": {
+   "signature": [
+    "FlockSoundness.Audit.audit_work_of_record {n m : Nat} {σ : Fin n → Fin m} {w : Fin m → Nat} {Reg : Type}",
+    "  {session : Finset (Fin n) → Reg → FlockSoundness.Game Bool}",
+    "  (A : FlockSoundness.Audit.Analysis (FlockSoundness.Audit.Law.work σ w 27713) Reg session) {εks δlink : ENNReal}",
+    "  (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink)",
+    "  (hW : instLTNat.lt 0 (FlockSoundness.Audit.Law.totalWork σ w))",
+    "  (σ' : (FlockSoundness.Audit.audit (FlockSoundness.Audit.Law.work σ w 27713) Reg session).Strategy) :",
+    "  ENNReal.instLE.le",
+    "    (FlockSoundness.Game.prob",
+    "      (fun o =>",
+    "        And (Eq o.fst Bool.true)",
+    "          (instLENat.le (FlockSoundness.Audit.Law.totalWork σ w)",
+    "            (instHMul.hMul 1000 (FlockSoundness.Audit.Law.workOf σ w (A.wrong (A.committedOf σ'))))))",
+    "      (FlockSoundness.Audit.audit (FlockSoundness.Audit.Law.work σ w 27713) Reg session) σ')",
+    "    (instHAdd.hAdd (instHAdd.hAdd (ENNReal.instInv.inv (instHPow.hPow 2 40)) εks) δlink)"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000ea3af01b"
+  },
+  "FlockSoundness.Audit.audit_work_whole_stratum": {
+   "signature": [
+    "FlockSoundness.Audit.audit_work_whole_stratum {n m : Nat} {σ : Fin n → Fin m} {w : Fin m → Nat} {K : Nat} {Reg : Type}",
+    "  {session : Finset (Fin n) → Reg → FlockSoundness.Game Bool}",
+    "  (A : FlockSoundness.Audit.Analysis (FlockSoundness.Audit.Law.work σ w K) Reg session) {εks δlink : ENNReal}",
+    "  (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink) (s : Fin m)",
+    "  (hs : (FlockSoundness.Audit.Law.stratum σ s).Nonempty)",
+    "  (σ' : (FlockSoundness.Audit.audit (FlockSoundness.Audit.Law.work σ w K) Reg session).Strategy) :",
+    "  ENNReal.instLE.le",
+    "    (FlockSoundness.Game.prob",
+    "      (fun o =>",
+    "        And (Eq o.fst Bool.true)",
+    "          (Finset.instPartialOrder.le (FlockSoundness.Audit.Law.stratum σ s) (A.wrong (A.committedOf σ'))))",
+    "      (FlockSoundness.Audit.audit (FlockSoundness.Audit.Law.work σ w K) Reg session) σ')",
+    "    (instHAdd.hAdd εks δlink)"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000a450f8f4"
+  },
+  "FlockSoundness.Audit.extraction_audit_work": {
+   "signature": [
+    "FlockSoundness.Audit.extraction_audit_work {n m : Nat} {σ : Fin n → Fin m} {w : Fin m → Nat} {K : Nat} {Reg : Type}",
+    "  {session : Finset (Fin n) → Reg → FlockSoundness.Game Bool}",
+    "  (A : FlockSoundness.Audit.ExtractionAnalysis (FlockSoundness.Audit.Law.work σ w K) Reg session)",
+    "  {εks δlink : (R : Reg) → FlockSoundness.Audit.Cont (FlockSoundness.Audit.Law.work σ w K) Reg session R → ENNReal}",
+    "  (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink)",
+    "  (hW : instLTNat.lt 0 (FlockSoundness.Audit.Law.totalWork σ w)) (T : Nat)",
+    "  (σ' : (FlockSoundness.Audit.audit (FlockSoundness.Audit.Law.work σ w K) Reg session).Strategy) :",
+    "  ENNReal.instLE.le",
+    "    (FlockSoundness.Game.prob",
+    "      (fun o =>",
+    "        And (Eq o.fst Bool.true) (instLENat.le T (FlockSoundness.Audit.Law.workOf σ w (A.wrong (A.committedOf σ')))))",
+    "      (FlockSoundness.Audit.audit (FlockSoundness.Audit.Law.work σ w K) Reg session) σ')",
+    "    (instHAdd.hAdd",
+    "      (instHAdd.hAdd",
+    "        (instHPow.hPow",
+    "          (instHDiv.hDiv (instHSub.hSub (FlockSoundness.Audit.Law.totalWork σ w) T).cast",
+    "            (FlockSoundness.Audit.Law.totalWork σ w).cast)",
+    "          K)",
+    "        (εks (FlockSoundness.Audit.reg σ') (FlockSoundness.Audit.cont σ')))",
+    "      (δlink (FlockSoundness.Audit.reg σ') (FlockSoundness.Audit.cont σ')))"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000260d801c"
+  },
+  "FlockSoundness.Audit.extraction_audit_work_whole_stratum": {
+   "signature": [
+    "FlockSoundness.Audit.extraction_audit_work_whole_stratum {n m : Nat} {σ : Fin n → Fin m} {w : Fin m → Nat} {K : Nat}",
+    "  {Reg : Type} {session : Finset (Fin n) → Reg → FlockSoundness.Game Bool}",
+    "  (A : FlockSoundness.Audit.ExtractionAnalysis (FlockSoundness.Audit.Law.work σ w K) Reg session)",
+    "  {εks δlink : (R : Reg) → FlockSoundness.Audit.Cont (FlockSoundness.Audit.Law.work σ w K) Reg session R → ENNReal}",
+    "  (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink) (s : Fin m)",
+    "  (hs : (FlockSoundness.Audit.Law.stratum σ s).Nonempty)",
+    "  (σ' : (FlockSoundness.Audit.audit (FlockSoundness.Audit.Law.work σ w K) Reg session).Strategy) :",
+    "  ENNReal.instLE.le",
+    "    (FlockSoundness.Game.prob",
+    "      (fun o =>",
+    "        And (Eq o.fst Bool.true)",
+    "          (Finset.instPartialOrder.le (FlockSoundness.Audit.Law.stratum σ s) (A.wrong (A.committedOf σ'))))",
+    "      (FlockSoundness.Audit.audit (FlockSoundness.Audit.Law.work σ w K) Reg session) σ')",
+    "    (instHAdd.hAdd (εks (FlockSoundness.Audit.reg σ') (FlockSoundness.Audit.cont σ'))",
+    "      (δlink (FlockSoundness.Audit.reg σ') (FlockSoundness.Audit.cont σ')))"
+   ],
+   "assumptions": [],
+   "type_hash": "000000005e19676d"
   },
   "FlockSoundness.Merkle.opening_binding": {
    "signature": [
@@ -393,6 +576,16 @@
    ],
    "assumptions": [],
    "type_hash": "00000000c74db5c9"
+  },
+  "FlockSoundness.UProg.rowsL1": {
+   "signature": [
+    "FlockSoundness.UProg.rowsL1 {k one : Nat} (hk : instLTNat.lt one k) {outs : List Nat}",
+    "  (p : FlockSoundness.UProg k one outs) :",
+    "  (FlockSoundness.UProg.P hk p).RowsL1 (FlockSoundness.UProg.PB hk p)",
+    "    (fun vals => Function.comp vals (FlockSoundness.UProg.mapG hk p)) (Finset.instSingleton.singleton ⟨one, ⋯⟩)"
+   ],
+   "assumptions": [],
+   "type_hash": "000000005e4ddc68"
   },
   "FlockSoundness.execArith_correct": {
    "signature": ["FlockSoundness.execArith_correct : FlockSoundness.execArith.Correct"],
@@ -620,7 +813,8 @@
     "FlockSoundness.Types.Dag.layout_sound",
     "FlockSoundness.Types.Dag.unit_sound",
     "FlockSoundness.Types.compose_complete",
-    "FlockSoundness.Types.compose_sound"
+    "FlockSoundness.Types.compose_sound",
+    "FlockSoundness.UProg.rowsL1"
    ]
   },
   "Flock.Derive": {
@@ -665,7 +859,8 @@
     "FlockSoundness.Types.Dag.layout_sound",
     "FlockSoundness.Types.Dag.unit_sound",
     "FlockSoundness.Types.compose_complete",
-    "FlockSoundness.Types.compose_sound"
+    "FlockSoundness.Types.compose_sound",
+    "FlockSoundness.UProg.rowsL1"
    ]
   },
   "Flock.DeriveAll": {
@@ -739,7 +934,8 @@
    "pins": [
     "FlockSoundness.Rows.compose_eval_unit",
     "FlockSoundness.Types.Dag.layout_sound",
-    "FlockSoundness.Types.Dag.unit_sound"
+    "FlockSoundness.Types.Dag.unit_sound",
+    "FlockSoundness.UProg.rowsL1"
    ]
   },
   "Flock.DeriveCheck": {
@@ -777,7 +973,8 @@
    "pins": [
     "FlockSoundness.Rows.compose_eval_unit",
     "FlockSoundness.Types.Dag.layout_sound",
-    "FlockSoundness.Types.Dag.unit_sound"
+    "FlockSoundness.Types.Dag.unit_sound",
+    "FlockSoundness.UProg.rowsL1"
    ]
   },
   "Flock.Layout": {
@@ -829,7 +1026,8 @@
    "pins": [
     "FlockSoundness.Rows.compose_eval_unit",
     "FlockSoundness.Types.Dag.layout_sound",
-    "FlockSoundness.Types.Dag.unit_sound"
+    "FlockSoundness.Types.Dag.unit_sound",
+    "FlockSoundness.UProg.rowsL1"
    ]
   },
   "Flock.Library": {
@@ -843,7 +1041,8 @@
    "pins": [
     "FlockSoundness.Rows.compose_eval_unit",
     "FlockSoundness.Types.Dag.layout_sound",
-    "FlockSoundness.Types.Dag.unit_sound"
+    "FlockSoundness.Types.Dag.unit_sound",
+    "FlockSoundness.UProg.rowsL1"
    ]
   },
   "FlockLevel3.ArithFacts": {
@@ -1131,8 +1330,25 @@
     "FlockSoundness.Types.Dag.layout_sound",
     "FlockSoundness.Types.Dag.unit_sound",
     "FlockSoundness.Types.compose_complete",
-    "FlockSoundness.Types.compose_sound"
+    "FlockSoundness.Types.compose_sound",
+    "FlockSoundness.UProg.rowsL1"
    ]
+  },
+  "FlockSoundness.Audit.Extraction": {
+   "digest": "21004edc4f6855354dfdcc848d1be100",
+   "definitions": {
+    "FlockSoundness.Audit.ExtractionAnalysis": "98384b61f8e11682",
+    "FlockSoundness.Audit.ExtractionAnalysis.KnowledgeSound": "9144debef6582227",
+    "FlockSoundness.Audit.ExtractionAnalysis.LinkSound": "feefd9597790f22e",
+    "FlockSoundness.Audit.ExtractionAnalysis.Tr": "8ff00ab42230ecfc",
+    "FlockSoundness.Audit.ExtractionAnalysis.committed": "cc2c19723b703a9b",
+    "FlockSoundness.Audit.ExtractionAnalysis.committedOf": "693448135740fe61",
+    "FlockSoundness.Audit.ExtractionAnalysis.ks": "4dafb92e50a5fe30",
+    "FlockSoundness.Audit.ExtractionAnalysis.link": "8c669aa93d65f0c7",
+    "FlockSoundness.Audit.ExtractionAnalysis.wrong": "cfd1c935998b59ed",
+    "FlockSoundness.Audit.atTgt": "b523fba2f6448293"
+   },
+   "pins": ["FlockSoundness.Audit.extraction_audit_work", "FlockSoundness.Audit.extraction_audit_work_whole_stratum"]
   },
   "FlockSoundness.Audit.FlockBatched": {
    "digest": "dea09807e364910a078eb29acdb12fb3",
@@ -1207,17 +1423,86 @@
     "FlockSoundness.Audit.Law.miss": "d7e09d10fca7bd60",
     "FlockSoundness.Audit.Law.Ω": "829fd6ddac35b1ca"
    },
-   "pins": ["FlockSoundness.Audit.Partition.flock_e2e_count", "FlockSoundness.Audit.Partition.flock_e2e_drawn"]
+   "pins": [
+    "FlockSoundness.Audit.Law.escape_widen_le",
+    "FlockSoundness.Audit.Law.work_escape_le",
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
+    "FlockSoundness.Audit.audit_work",
+    "FlockSoundness.Audit.audit_work_of_record",
+    "FlockSoundness.Audit.audit_work_whole_stratum",
+    "FlockSoundness.Audit.extraction_audit_work",
+    "FlockSoundness.Audit.extraction_audit_work_whole_stratum"
+   ]
   },
   "FlockSoundness.Audit.OneStage": {
-   "digest": "a20a8b34af0234a867313fb5c573090b",
+   "digest": "0d700dca3416dca476311ad8a76da0ec",
    "definitions": {
+    "FlockSoundness.Audit.Analysis": "9dd2f1fd0cb53544",
+    "FlockSoundness.Audit.Analysis.KnowledgeSound": "6b851cf008d0fb32",
+    "FlockSoundness.Audit.Analysis.LinkSound": "edbda78ea67eb297",
+    "FlockSoundness.Audit.Analysis.Tr": "c126aefbd2a56b1c",
+    "FlockSoundness.Audit.Analysis.committed": "1d36f7b212c75c5d",
+    "FlockSoundness.Audit.Analysis.committedOf": "67ea44d5b5012822",
+    "FlockSoundness.Audit.Analysis.ksFail": "d0cfe7d9628b3742",
+    "FlockSoundness.Audit.Analysis.linkFail": "4c3925a1022be9f2",
+    "FlockSoundness.Audit.Analysis.wrong": "1a302c97f965b737",
     "FlockSoundness.Audit.Cont": "78d0a1f1523d45de",
     "FlockSoundness.Audit.audit": "74586d8a66f3427c",
     "FlockSoundness.Audit.cont": "ea2c637aa000131e",
     "FlockSoundness.Audit.reg": "965ee5ab445cdecb"
    },
-   "pins": ["FlockSoundness.Audit.Partition.flock_e2e_count", "FlockSoundness.Audit.Partition.flock_e2e_drawn"]
+   "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
+    "FlockSoundness.Audit.audit_work",
+    "FlockSoundness.Audit.audit_work_of_record",
+    "FlockSoundness.Audit.audit_work_whole_stratum",
+    "FlockSoundness.Audit.extraction_audit_work",
+    "FlockSoundness.Audit.extraction_audit_work_whole_stratum"
+   ]
+  },
+  "FlockSoundness.Audit.Stratified": {
+   "digest": "b06d8587d8bccf23848eb285192db14d",
+   "definitions": {
+    "FlockSoundness.Audit.Law.stratified": "c1eb3217fa71d51e",
+    "FlockSoundness.Audit.Law.stratum": "a9f3b1df8b4096e1"
+   },
+   "pins": [
+    "FlockSoundness.Audit.Law.one_le_workK",
+    "FlockSoundness.Audit.Law.sum_workK_le",
+    "FlockSoundness.Audit.Law.workK_ge",
+    "FlockSoundness.Audit.Law.work_escape_le",
+    "FlockSoundness.Audit.audit_work",
+    "FlockSoundness.Audit.audit_work_of_record",
+    "FlockSoundness.Audit.audit_work_whole_stratum",
+    "FlockSoundness.Audit.extraction_audit_work",
+    "FlockSoundness.Audit.extraction_audit_work_whole_stratum"
+   ]
+  },
+  "FlockSoundness.Audit.Work": {
+   "digest": "1597fae5023dc467f4a9246a8c0f821c",
+   "definitions": {
+    "FlockSoundness.Audit.Law.totalWork": "a4cfb0860168199d",
+    "FlockSoundness.Audit.Law.widen": "4da34219fccd5624",
+    "FlockSoundness.Audit.Law.work": "3d45461daadbaa1b",
+    "FlockSoundness.Audit.Law.workK": "93abafad088904c8",
+    "FlockSoundness.Audit.Law.workOf": "a9b2650dd91cfb3e",
+    "FlockSoundness.Audit.Law.workRule": "fbd546fd41323624"
+   },
+   "pins": [
+    "FlockSoundness.Audit.Law.escape_widen_le",
+    "FlockSoundness.Audit.Law.one_le_workK",
+    "FlockSoundness.Audit.Law.sum_workK_le",
+    "FlockSoundness.Audit.Law.workK_ge",
+    "FlockSoundness.Audit.Law.workRule_eq_draw",
+    "FlockSoundness.Audit.Law.work_escape_le",
+    "FlockSoundness.Audit.audit_work",
+    "FlockSoundness.Audit.audit_work_of_record",
+    "FlockSoundness.Audit.audit_work_whole_stratum",
+    "FlockSoundness.Audit.extraction_audit_work",
+    "FlockSoundness.Audit.extraction_audit_work_whole_stratum"
+   ]
   },
   "FlockSoundness.CompiledLock": {
    "digest": "703ed11cb8289e0e443a40539e2782a6",
@@ -1296,6 +1581,7 @@
    "pins": [
     "FlockSoundness.Rows.compose_eval",
     "FlockSoundness.Rows.compose_eval_unit",
+    "FlockSoundness.UProg.rowsL1",
     "FlockSoundness.placement_of_realizes"
    ]
   },
@@ -1304,7 +1590,7 @@
    "definitions": {
     "FlockSoundness.Compose.ofBlock": "4cfa2fa118656993"
    },
-   "pins": ["FlockSoundness.Rows.compose_eval_unit"]
+   "pins": ["FlockSoundness.Rows.compose_eval_unit", "FlockSoundness.UProg.rowsL1"]
   },
   "FlockSoundness.Defs": {
    "digest": "1cc2134a37060fbf2b00703ce87a654e",
@@ -1337,7 +1623,11 @@
     "FlockSoundness.Audit.Partition.DerivedPlaces.place": "58c6f4c0c85674a8",
     "FlockSoundness.Audit.Partition.RowsL1": "4a5011fce2192af3"
    },
-   "pins": ["FlockSoundness.Audit.Partition.flock_e2e_count", "FlockSoundness.Audit.Partition.flock_e2e_drawn"]
+   "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
+    "FlockSoundness.UProg.rowsL1"
+   ]
   },
   "FlockSoundness.Extract": {
    "digest": "2e90c25ca1a2d40529a6ce773df8e68e",
@@ -1373,8 +1663,15 @@
     "FlockSoundness.Game.send": "ca27d021bc348230"
    },
    "pins": [
+    "FlockSoundness.Audit.Law.escape_widen_le",
+    "FlockSoundness.Audit.Law.work_escape_le",
     "FlockSoundness.Audit.Partition.flock_e2e_count",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
+    "FlockSoundness.Audit.audit_work",
+    "FlockSoundness.Audit.audit_work_of_record",
+    "FlockSoundness.Audit.audit_work_whole_stratum",
+    "FlockSoundness.Audit.extraction_audit_work",
+    "FlockSoundness.Audit.extraction_audit_work_whole_stratum",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_compiled",
     "FlockSoundness.table_sound_exec",
@@ -1465,7 +1762,15 @@
    "definitions": {
     "FlockSoundness.Game.Strategy.ofMap": "42270a46a7c16ac6"
    },
-   "pins": ["FlockSoundness.Audit.Partition.flock_e2e_count", "FlockSoundness.Audit.Partition.flock_e2e_drawn"]
+   "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
+    "FlockSoundness.Audit.audit_work",
+    "FlockSoundness.Audit.audit_work_of_record",
+    "FlockSoundness.Audit.audit_work_whole_stratum",
+    "FlockSoundness.Audit.extraction_audit_work",
+    "FlockSoundness.Audit.extraction_audit_work_whole_stratum"
+   ]
   },
   "FlockSoundness.Game.Seq": {
    "digest": "9da3f9905f3092408e83d86356e58105",
@@ -1555,12 +1860,20 @@
    ]
   },
   "FlockSoundness.Lowering": {
-   "digest": "496b54d3803bf220e47ed9b10e6347ed",
+   "digest": "831800b4b115336881ccd9bc766dd608",
    "definitions": {
-    "FlockSoundness.Audit.Partition.IsRowsUnit": "e8fd3a86de155234",
+    "FlockSoundness.Audit.Op.lift": "d4ec2a7f3ab8e14b",
+    "FlockSoundness.Audit.Partition.IsRowsUnit": "9f2bc7c9e6ffd9c6",
     "FlockSoundness.Audit.Partition.IsRowsUnit.decode": "a6f173a9a2cb273f",
     "FlockSoundness.Audit.Partition.IsRowsUnit.wire": "0091ebc2dc688ed3",
     "FlockSoundness.Placement": "48dda1a1429920d8",
+    "FlockSoundness.Prog": "ce542e149d791691",
+    "FlockSoundness.Prog.brecOn.go": "0ac839f7bfb49627",
+    "FlockSoundness.Prog.colWire": "8b5543f16179c4f5",
+    "FlockSoundness.Prog.inputs": "c1447c5714c578b5",
+    "FlockSoundness.Prog.op": "061c7c5663330469",
+    "FlockSoundness.Prog.snoc": "4983f6e0e23819ef",
+    "FlockSoundness.Prog.unit": "a9d3738ddda41162",
     "FlockSoundness.Rows": "451bf782963ef6af",
     "FlockSoundness.Rows.Sat": "c13cbb9f1f53f506",
     "FlockSoundness.Rows.a": "83e5a1723bb68a69",
@@ -1570,7 +1883,7 @@
     "FlockSoundness.Rows.nIn": "c068cb69891d4646",
     "FlockSoundness.Rows.one": "2f294e1490520e33",
     "FlockSoundness.Rows.w": "fbe53e17a6cfd83e",
-    "FlockSoundness.UnitPlace": "0766bc23158d944c",
+    "FlockSoundness.UnitPlace": "20e7fcd723ba145c",
     "FlockSoundness.UnitPlace.R": "317ae06ff4f882ba",
     "FlockSoundness.UnitPlace.col": "b3493b273430b5f5",
     "FlockSoundness.UnitPlace.decode": "dae56579106b91a2",
@@ -1583,6 +1896,7 @@
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Rows.compose_eval",
     "FlockSoundness.Rows.compose_eval_unit",
+    "FlockSoundness.UProg.rowsL1",
     "FlockSoundness.placement_of_realizes"
    ]
   },
@@ -2084,6 +2398,84 @@
     "FlockSoundness.Types.compose_complete",
     "FlockSoundness.Types.compose_sound"
    ]
+  },
+  "FlockSoundness.Types.Flatten": {
+   "digest": "f8f16615106d552ff2457507977dc1c8",
+   "definitions": {
+    "FlockSoundness.Types.Flatten.Gate": "ab1f44142b4edb53",
+    "FlockSoundness.Types.Flatten.Gate.and": "a48a057fa3bc4da4",
+    "FlockSoundness.Types.Flatten.Gate.input": "8734ba3b4954e5da",
+    "FlockSoundness.Types.Flatten.Gate.not": "2d36ce9a0d244237",
+    "FlockSoundness.Types.Flatten.Gate.xor": "4565641d0a1ce118",
+    "FlockSoundness.Types.Flatten.bitsGates": "c6dce0019eb0d954",
+    "FlockSoundness.Types.Flatten.decodeGates": "7d20935e568f36ff",
+    "FlockSoundness.Types.Flatten.flatItems": "511a2773c6f77bb1",
+    "FlockSoundness.Types.Flatten.flatten": "71926e0c4922bdbb",
+    "FlockSoundness.Types.Flatten.formGate": "a21e489132f9974b",
+    "FlockSoundness.Types.Flatten.formsGates": "729f94b190437de2",
+    "FlockSoundness.Types.Flatten.minterms": "2b0516a1efe61eff",
+    "FlockSoundness.Types.Flatten.prodGates": "0f9c6a09ce205c88",
+    "FlockSoundness.Types.Flatten.readGates": "bed0a51ae0100455",
+    "FlockSoundness.Types.Flatten.sel": "45e47f614ed7748a",
+    "FlockSoundness.Types.Flatten.xorChain": "4a79adb045e12afb",
+    "FlockSoundness.Types.Flatten.xorGates": "d628210b5ff81d7d"
+   },
+   "pins": ["FlockSoundness.UProg.rowsL1"]
+  },
+  "FlockSoundness.Types.Program": {
+   "digest": "4076ac5491c0bcbb6aa7ad8e3716bbd2",
+   "definitions": {
+    "FlockSoundness.Src": "0f56bf598e4dacbd",
+    "FlockSoundness.Src.Valid": "efeed902f7ccaab1",
+    "FlockSoundness.Src.input": "02e8d1d96dca0e5e",
+    "FlockSoundness.Src.out": "cee2ca54b9133f50",
+    "FlockSoundness.UProg": "e256cb344240e366",
+    "FlockSoundness.UProg.C": "89fdab351e6d0dc5",
+    "FlockSoundness.UProg.CB": "f6540082f3980432",
+    "FlockSoundness.UProg.P": "0f3dc04f6bced069",
+    "FlockSoundness.UProg.PB": "258f23e77d8fb858",
+    "FlockSoundness.UProg.boolN": "80ca0f006c61b300",
+    "FlockSoundness.UProg.brecOn.go": "bc6cc81df8e74d28",
+    "FlockSoundness.UProg.copyGate": "392882b8a4dab8fe",
+    "FlockSoundness.UProg.inputs": "92fccfe2653cdcf0",
+    "FlockSoundness.UProg.insOf": "f3af6b5b8279ef27",
+    "FlockSoundness.UProg.mapG": "d2a8187c61069db7",
+    "FlockSoundness.UProg.n": "343b2b38798e183e",
+    "FlockSoundness.UProg.oneOf": "7e33302be9a070ca",
+    "FlockSoundness.UProg.opB": "f32b31972faf674f",
+    "FlockSoundness.UProg.outGate": "9df2772935ca9f2c",
+    "FlockSoundness.UProg.outsB": "4952365ed75a92cf",
+    "FlockSoundness.UProg.outsC": "abdfc63a672ef19a",
+    "FlockSoundness.UProg.rowsN": "5393296a58905f42",
+    "FlockSoundness.UProg.snoc": "2069fd9cf180c336",
+    "FlockSoundness.UProg.srcB": "7560184c61ed9e1e",
+    "FlockSoundness.UProg.srcGate": "c4454b9c64491827",
+    "FlockSoundness.UProg.toRows": "189dcacc7ce4540d",
+    "FlockSoundness.UProg.unitB": "106f9b4bd7947a04",
+    "FlockSoundness.UProg.wireB": "dc5c5b760f75e35d",
+    "FlockSoundness.UProg.wireF": "3b3568adbaa29ac9",
+    "FlockSoundness.UnitSpec": "5eef2480c840f260",
+    "FlockSoundness.UnitSpec.F": "f148de303c269033",
+    "FlockSoundness.UnitSpec.R": "39796f16ee186054",
+    "FlockSoundness.UnitSpec.done": "cc41abf071170ff5",
+    "FlockSoundness.UnitSpec.fsize": "44911c3c2ef0f696",
+    "FlockSoundness.UnitSpec.gs": "ea583d47a4f27bc5",
+    "FlockSoundness.UnitSpec.idx": "5d0bee216dc6227a",
+    "FlockSoundness.UnitSpec.loOf": "cd38327583d7ceb3",
+    "FlockSoundness.UnitSpec.out": "0a5ec45707722116",
+    "FlockSoundness.UnitSpec.t": "b8bde2a01d31ba22",
+    "FlockSoundness.UnitSpec.types": "ecb44d422e69f065",
+    "FlockSoundness.UnitSpec.words": "c02df0ee1cb68fd3"
+   },
+   "pins": ["FlockSoundness.UProg.rowsL1"]
+  },
+  "FlockSoundness.Types.Units": {
+   "digest": "8a287025438e018e2845a537621aa226",
+   "definitions": {
+    "FlockSoundness.Types.Flatten.Gate.lift": "a63cce92ce06c479",
+    "FlockSoundness.Types.Flatten.unitGates": "1ddc92e2a7cd8a42"
+   },
+   "pins": ["FlockSoundness.UProg.rowsL1"]
   }
  },
  "dependencies": {

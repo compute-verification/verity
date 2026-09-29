@@ -9,6 +9,64 @@ from __future__ import annotations
 import pytest
 
 KNOWN_FAILURES = {
+    "tests/acquire/test_compiled_source.py::test_renumber_assigns_invocations_per_call_site":
+        "CPU torch: `Tried to instantiate dummy base class _cuda_isCurrentStreamCapturing` (owner vllm-epoch-prep)",
+    "tests/check/test_fold_sampler_construction.py::test_101s_records_fold_canonical_equal_under_the_programs_construction":
+        "the store fetch of *match_compare.json returns nothing off the check pod (owner vllm-epoch-prep)",
+    "tests/engine/test_profiles_generic.py::test_generic_profile_equals_its_fixture[derived_B0]":
+        "#321 added TokenSelectGumbelTopP.construction; the canonical profile fixtures predate it (re-pin with `verity-vllm canonical-profiles --write`; owner vllm-epoch-prep)",
+    "tests/engine/test_profiles_generic.py::test_generic_profile_equals_its_fixture[derived_B1]":
+        "#321 added TokenSelectGumbelTopP.construction; the canonical profile fixtures predate it (re-pin with `verity-vllm canonical-profiles --write`; owner vllm-epoch-prep)",
+    "tests/engine/test_profiles_generic.py::test_generic_profile_equals_its_fixture[derived_B1_tp2]":
+        "#321 added TokenSelectGumbelTopP.construction; the canonical profile fixtures predate it (re-pin with `verity-vllm canonical-profiles --write`; owner vllm-epoch-prep)",
+    "tests/engine/test_profiles_generic.py::test_generic_profile_equals_its_fixture[derived_B7]":
+        "#321 added TokenSelectGumbelTopP.construction; the canonical profile fixtures predate it (re-pin with `verity-vllm canonical-profiles --write`; owner vllm-epoch-prep)",
+    "tests/engine/test_profiles_generic.py::test_generic_profile_equals_its_fixture[derived_GEMMA2_2B]":
+        "#321 added TokenSelectGumbelTopP.construction; the canonical profile fixtures predate it (re-pin with `verity-vllm canonical-profiles --write`; owner vllm-epoch-prep)",
+    "tests/engine/test_profiles_generic.py::test_generic_profile_equals_its_fixture[derived_LLAMA32_1B]":
+        "#321 added TokenSelectGumbelTopP.construction; the canonical profile fixtures predate it (re-pin with `verity-vllm canonical-profiles --write`; owner vllm-epoch-prep)",
+    "tests/engine/test_profiles_generic.py::test_generic_profile_equals_its_fixture[derived_LLAMA32_1B_tp2]":
+        "#321 added TokenSelectGumbelTopP.construction; the canonical profile fixtures predate it (re-pin with `verity-vllm canonical-profiles --write`; owner vllm-epoch-prep)",
+    "tests/engine/test_profiles_generic.py::test_generic_profile_equals_its_fixture[derived_MISTRAL7B]":
+        "#321 added TokenSelectGumbelTopP.construction; the canonical profile fixtures predate it (re-pin with `verity-vllm canonical-profiles --write`; owner vllm-epoch-prep)",
+    "tests/engine/test_profiles_generic.py::test_generic_profile_equals_its_fixture[derived_OLMOE]":
+        "#321 added TokenSelectGumbelTopP.construction; the canonical profile fixtures predate it (re-pin with `verity-vllm canonical-profiles --write`; owner vllm-epoch-prep)",
+    "tests/engine/test_profiles_generic.py::test_generic_profile_equals_its_fixture[derived_PHI3_MINI]":
+        "#321 added TokenSelectGumbelTopP.construction; the canonical profile fixtures predate it (re-pin with `verity-vllm canonical-profiles --write`; owner vllm-epoch-prep)",
+    "tests/engine/test_profiles_generic.py::test_generic_profile_equals_its_fixture[derived_PYTHIA160M]":
+        "#321 added TokenSelectGumbelTopP.construction; the canonical profile fixtures predate it (re-pin with `verity-vllm canonical-profiles --write`; owner vllm-epoch-prep)",
+    "tests/engine/test_profiles_generic.py::test_generic_profile_equals_its_fixture[derived_QWEN05]":
+        "#321 added TokenSelectGumbelTopP.construction; the canonical profile fixtures predate it (re-pin with `verity-vllm canonical-profiles --write`; owner vllm-epoch-prep)",
+    "tests/engine/test_profiles_generic.py::test_generic_profile_equals_its_fixture[derived_QWEN3_30B_A3B]":
+        "#321 added TokenSelectGumbelTopP.construction; the canonical profile fixtures predate it (re-pin with `verity-vllm canonical-profiles --write`; owner vllm-epoch-prep)",
+    "tests/engine/test_profiles_generic.py::test_generic_profile_equals_its_fixture[derived_QWEN3_30B_A3B_tp2]":
+        "#321 added TokenSelectGumbelTopP.construction; the canonical profile fixtures predate it (re-pin with `verity-vllm canonical-profiles --write`; owner vllm-epoch-prep)",
+    "tests/engine/test_profiles_generic.py::test_generic_profile_equals_its_fixture[derived_QWEN3_4B]":
+        "#321 added TokenSelectGumbelTopP.construction; the canonical profile fixtures predate it (re-pin with `verity-vllm canonical-profiles --write`; owner vllm-epoch-prep)",
+    "tests/engine/test_profiles_generic.py::test_generic_profile_equals_its_fixture[derived_QWEN3_4B_FP8]":
+        "#321 added TokenSelectGumbelTopP.construction; the canonical profile fixtures predate it (re-pin with `verity-vllm canonical-profiles --write`; owner vllm-epoch-prep)",
+    "tests/engine/test_profiles_generic.py::test_generic_profile_equals_its_fixture[derived_SMOL360]":
+        "#321 added TokenSelectGumbelTopP.construction; the canonical profile fixtures predate it (re-pin with `verity-vllm canonical-profiles --write`; owner vllm-epoch-prep)",
+    "tests/engine/test_profiles_generic.py::test_generic_profile_equals_its_fixture[derived_TINYLLAMA]":
+        "#321 added TokenSelectGumbelTopP.construction; the canonical profile fixtures predate it (re-pin with `verity-vllm canonical-profiles --write`; owner vllm-epoch-prep)",
+    "tests/pipeline/test_source_identity.py::test_negative_requested_sha_mismatch_fails_by_name":
+        "needs a .git; a shipped check tree has none (owner vllm-epoch-run)",
+    "tests/pipeline/test_source_identity.py::test_precheck_passes_with_matching_veritor_repo_and_sha[integration]":
+        "needs a .git; a shipped check tree has none (owner vllm-epoch-run)",
+    "tests/pipeline/test_source_identity.py::test_precheck_passes_with_matching_veritor_repo_and_sha[repo]":
+        "needs a .git; a shipped check tree has none (owner vllm-epoch-run)",
+    "tests/pipeline/test_source_identity.py::test_repo_root_resolution_prefers_export_json_then_git_then_markers":
+        "needs a .git; a shipped check tree has none (owner vllm-epoch-run)",
+    "tests/program/test_registry_one_process.py::test_core_and_every_integration_registry_load_in_one_process[core-first]":
+        "core verity.ml.fp32 registers F32Add_v2 ... F32SubFtz_v2 and the one-process load reports the 9 ids as a conflict (owner flock-ir-lowering)",
+    "tests/program/test_registry_one_process.py::test_core_and_every_integration_registry_load_in_one_process[integration-first]":
+        "core verity.ml.fp32 registers F32Add_v2 ... F32SubFtz_v2 and the one-process load reports the 9 ids as a conflict (owner flock-ir-lowering)",
+    "tests/program/test_twins.py::test_check_writes_the_evidence_schema":
+        "the evidence schema's `openmp` key depends on whether the C++ twins were built in this tree (environmental; owner vllm-epoch-prep)",
+    "tests/pipeline/test_row.py::test_the_commit_flags_the_row_arms_exist":
+        "fails on the torch-less CPU check pod only (passes with CPU torch); needs importorskip where torch is required (owner vllm-epoch-prep)",
+    "tests/check/test_compiled_autotune.py::test_unknown_kernel_is_not_shown_and_does_not_raise":
+        "fails on the torch-less CPU check pod only (passes with CPU torch); needs importorskip where torch is required (owner vllm-epoch-prep)",
     "tests/observe/test_patterns_synthetic.py::test_gumbel_two_stage_sampler_is_one_token_select":
         "the observer refuses the sampler's bf16 [1, V] logits view as not a row-contiguous float32 [R, V] view",
     "tests/pipeline/test_research_tools.py::test_closure_covers_every_core_file":
