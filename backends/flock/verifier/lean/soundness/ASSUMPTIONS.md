@@ -15,7 +15,8 @@ verifier derives (`dp`, `hL1`).
 There are three, each a `Prop` taken as a hypothesis:
 - A2 (`Assumptions.SHA512ExpectedTimeCR`), which the link theorem (`flock_batched_linkSoundE`) takes as `hCR`;
 - A3 (`Assumptions.UniformRandomBytes`), which the live draw's theorems take as `ht`;
-- A4 (`Assumptions.KeyedStreamsUniform`), which the PoUW window's keyed draw takes as `hA4`.
+- A4 (`Assumptions.KeyedStreamsUniform`), which the PoUW window's keyed draw takes as `hA4`;
+- A5 (`Assumptions.UniformSecret`), which the same draw takes as `hsec`.
 `README.md` §1.5 names one more, L1, about the lowering, stated below. The development declares no `axiom`. So a
 mis-stated assumption can make a theorem vacuous, but it can never make Lean prove something false.
 
@@ -52,10 +53,10 @@ unit draw.
 - **Upstream:** watch entry `A3-uniform-bytes`.
 
 **A4. `verity.randomness`'s keyed streams at distinct indices pass a test as independent uniform streams do, up to `η`**
-(`prf/sha-256`), for the PoUW window's keyed draw. Under review by root's statement reviewer (`lanes/verity-root/`
-`20260929T1655Z-handoff-from-pous-keyed-stream-assumption.md`).
+(`prf/sha-256`), for the PoUW window's keyed draw. The red team would grant it as a named hypothesis
+(`lanes/pous/20260929T1724Z-redteam-a4-keyed-streams.md`).
 
-- **Statement.** A verifier secret of `S` uniform bytes gives the key `Randomness.derive`. For a test `E` of the key's
+- **Statement.** A secret of `S` uniform bytes (A5) gives the key `Randomness.derive`. For a test `E` of the key's
   streams at indices whose framings (`Randomness.frames`) are pairwise distinct, each read to `L i` bytes
   (`Randomness.stream`), the streams pass `E` with at most the probability that independent uniform streams do, plus
   `η`. `Randomness.lean` is the Lean spec of `verity.randomness` v1: it reproduces
@@ -64,10 +65,33 @@ unit draw.
 - **Per test, as A2 is per finder.** For every test the statement would be refutable, since `2^(8S)` sources give at
   most that many stream tuples. `keyedWindow_escape_le` takes A4 for one test per set `B` (`windowTest`: the window draw
   misses `B`), and `η` enters its bound.
-- **What it assumes of SHA-256.** It is a pseudorandom function keyed by a secret prefix, on the prefix-free inputs
-  `verity.randomness` hashes: `frames` is length-framed and the counter is 8 bytes. It also assumes the verifier's
-  secret is uniform.
+- **What it assumes of SHA-256.** Its compression function `f` is a pseudorandom function in two ways.
+  - Keyed by its chaining value, it makes the cascade a PRF on prefix-free inputs (Bellare, Canetti and Krawczyk 1996).
+    The inputs are prefix-free: `frames` is length-framed and the counter is 8 bytes, so length extension doesn't apply.
+  - Keyed by the secret bytes in its first message block, it is a dual PRF, as the HMAC analyses use. The secret follows
+    a fixed public tag: 28 bytes for `stream`, and 37 for `derive` with the source's frame header.
+  - The secret's uniformity is not A4's but A5's.
+- **η, stated.** η stays symbolic in Lean, and every record-level statement keeps `+ η` visible, never absorbed.
+  - **The claimed value:** for `S = 32`, η ≤ 2⁻¹²⁸ for the chain's tests. The derivation is generic key search over
+    `min(256, 8S)` bits, plus a hybrid over the `q` compression calls the test's streams take. With `q ≤ 2⁴⁰` and a
+    test of `T ≤ 2⁸⁰` hash evaluations, the bound stays under 2⁻¹²⁸.
+  - **One η for the whole family:** every set `B` (the closures of the bad sets, which `closure_escape` evaluates), every
+    stream budget `L`, and every receipt context. The audit takes a sup over `B`, not a union, and `E_B` costs the same
+    for every `B`, every `L` and every context.
+  - **Vacuity:** A4 is plausible only for `S ≥ 32`, and η can never be below about 2⁻⁸ˢ, since keyed probabilities are
+    multiples of that. It holds trivially at η ≥ 1, and is claimed only for the chain's efficient tests `E_B`.
 - **Upstream:** watch entry `A4-prf-sha256`.
+
+**A5. The PoUW window's secret is `S` uniform bytes, fresh for the window** (`uniform/python-secrets`).
+
+- **Statement.** A source is a finite probability space and, on each outcome, the secret. `UniformSecret sec` says every
+  event about the secret has the probability it has for `S` uniform bytes. `keyedWindow` draws over the real secret
+  source, and its theorems take A5 as `hsec`.
+- **What A5 assumes of the verifier.** Its window secret is `secrets.token_bytes(32)` from the operating system's CSPRNG,
+  drawn once the window's receipt is complete and used for that window alone (#423's `Ledger.open`, root's C2). A
+  secret reused across windows is outside it, since later windows would be committed after earlier draws were seen.
+- **Split out of A4** at the red team's request: it is a property of what produces the secret, not of SHA-256.
+- **Upstream:** watch entry `A5-uniform-secret`.
 
 - **L1. Each template's rows compute its gates** (named hypothesis). That is, the rows' outputs are the gates' outputs, in
   the program's Boolean circuit, on every input. The audit certifies drawn units against their rows. That says something

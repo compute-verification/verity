@@ -10,9 +10,9 @@ uses one takes it as a hypothesis: the development declares no `axiom`, so `#pri
 lists only Lean's three standard axioms, and a mis-stated assumption can make a theorem
 vacuous but can never make Lean prove something false.
 
-There are three. Assumption 2 is a hypothesis about one explicit finder, for the audit's link term. Assumption 3 is a
+There are four. Assumption 2 is a hypothesis about one explicit finder, for the audit's link term. Assumption 3 is a
 hypothesis about the byte source the verifier draws its units from. Assumption 4 is a hypothesis about one test of
-`verity.randomness`'s keyed streams, for the PoUW window draw.
+`verity.randomness`'s keyed streams, for the PoUW window draw, and Assumption 5 one about the window's secret.
 Assumption 1, BCHKS25's mutual correlated agreement up to the Johnson bound, is proved
 (`mcaError_le_bchks25`, from DKT26). Merkle binding is proved too (VCVio's binding theorem,
 `Merkle`), and SHA-256's collision resistance enters the compiled theorem as an explicit
@@ -82,14 +82,26 @@ It is a predicate on one test, as A2 is on one finder. A statement for every tes
 sources give at most that many stream tuples. The theorems take it for the test they need, whether the draw computed
 from the streams misses a given set, and `η` enters their bound.
 
-What A4 assumes of SHA-256 is that it is a pseudorandom function keyed by a secret prefix, on the inputs
-`verity.randomness` hashes. Those inputs are prefix-free: `frames` is length-framed and the counter is 8 bytes, so length
-extension doesn't apply. It also assumes the verifier's secret is uniform. -/
+What A4 assumes of SHA-256 is that its compression function `f` is a pseudorandom function in two ways. Keyed by its
+chaining value, it makes the cascade a PRF on prefix-free inputs (Bellare, Canetti and Krawczyk 1996). Keyed by the secret
+bytes in its first message block, after a fixed public tag (28 bytes for `stream`, 37 for `derive` with the source's frame
+header), it is a dual PRF, as the HMAC analyses use. The inputs are prefix-free: `frames` is length-framed and the counter
+is 8 bytes, so length extension doesn't apply. The secret's uniformity is not A4's: it is A5 (`UniformSecret`). -/
 def KeyedStreamsUniform (S : ℕ) (domain : String) (context : List (String × Randomness.Part)) {m : ℕ}
     (idx : Fin m → List Randomness.Part) (L : Fin m → ℕ) (E : (Fin m → ByteArray) → Prop) (η : ℝ≥0∞) : Prop :=
   (∀ i j, Randomness.frames (idx i) = Randomness.frames (idx j) → i = j) →
     prCoin (fun src : Fin S → Fin 256 => E fun i =>
         Randomness.stream (Randomness.derive ⟨Array.ofFn fun b => UInt8.ofFin (src b)⟩ domain context) (idx i) (L i)) ≤
       prCoin (fun f : (i : Fin m) → Fin (L i) → Fin 256 => E fun i => ⟨Array.ofFn fun b => UInt8.ofFin (f i b)⟩) + η
+
+/-- **Assumption 5 (`uniform/python-secrets`): the PoUW window's secret is `S` uniform bytes**, drawn fresh for the
+window. A source is a finite probability space `Ω` (`prCoin` weighs its outcomes evenly) and, on outcome `ω`, the secret
+`sec ω`. The source is uniform when every event about the secret has the probability it has for `S` uniform bytes.
+
+What A5 assumes of the verifier is that its window secret is such a source: `secrets.token_bytes(32)` from the operating
+system's CSPRNG, drawn once the window's receipt is complete and used for that window alone (#423's `Ledger.open`). A
+secret reused across windows is outside it, since later windows would be committed after earlier draws were seen. -/
+def UniformSecret {Ω : Type} [Fintype Ω] {S : ℕ} (sec : Ω → Fin S → Fin 256) : Prop :=
+  ∀ E : (Fin S → Fin 256) → Prop, prCoin (fun ω => E (sec ω)) = prCoin E
 
 end FlockSoundness.Assumptions
