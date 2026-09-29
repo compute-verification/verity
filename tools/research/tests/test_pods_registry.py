@@ -131,7 +131,12 @@ def test_g1_create_register_then_run_on_needs_no_hand_edit(reg, monkeypatch, cap
     monkeypatch.setattr(runpod, "get", pods(POD))
     monkeypatch.setattr(part, "check_pod", lambda pod_id: {"pod_id": pod_id, "sku": "x", "count": 1, "vram_mb": 1, "reference_vram_mb": 1,
                                                            "cpu": "c", "load": 0, "hostname": "h", "verdict": "reference", "reference": True})
-    assert part.main(["create", "--name", "vy-lane-a", "--register", "--project", "verity", "--guard", "true"]) == 0
+    from research.pods import budgets, lease
+
+    monkeypatch.setattr(budgets, "check_create", lambda name, hours: (None, "vy-lane-"))
+    monkeypatch.setattr(lease, "arm", lambda ssh, seconds, **kw: {"expires_utc": "t", "lease_pid": 1, "lease_alive": True, "guard_pid": 2,
+                                                                  "guard_alive": True})
+    assert part.main(["create", "--name", "vy-lane-a", "--max-hours", "2", "--register", "--project", "verity", "--guard", "true"]) == 0
     assert "REGISTERED vy-lane-a -> pod abc123def45678" in capsys.readouterr().out
     m = remote.resolve_machine("vy-lane-a", "verity")
     assert m["pod_id"] == POD["id"] and remote.guard_idle_min(m) == 90.0

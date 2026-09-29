@@ -14,14 +14,15 @@
                                                  # attempt of the tool for that exact commit in the store (research/merge.py)
   research merge --train A B C [--on MACHINE --project P]                # several refs as one candidate, one check, a fast-forward
   research pods check-part <machine|pod-id>      # reference-part gate: name, VRAM vs [families.<fam>] vram_mb, host CPU, load, verdict (exit 3 = variant)
-  research pods create <runpod flags> [--require-reference-part] [--register --project P] [--allow-duplicate]   # at most one live pod per --name (exit 4 exists, 5 no stock, 2 failed), then the same verdict once sshd answers
+  research pods create <runpod flags> --max-hours H [--first-idle-min 20] [--require-reference-part] [--register --project P] [--allow-duplicate]
+                                                 # only under a budget line the guard has read (exit 6); at most one live pod per --name (exit 4
+                                                 # exists, 5 no stock, 2 failed); the lease armed at boot and over ssh (pods/lease.py)
+  research pods extend TARGET --hours H | lease TARGET   # push the pod's lease to at least now + H / show it
   research pods register NAME --pod-id ID --project P | unregister NAME | registry [import]   # the pod registry: one file per machine (pods/registry.py)
   research pods unpreserved <machine|pod-id>     # Attempts recorded on that machine that are NOT `preserved` (same predicate as `data preserved`); exit 1 if any
   research pods drain <machine|pod-id> [--force --reason TEXT]      # the report, then terminate ONLY when nothing is unpreserved (override logged)
-  research pods guard --prefix P [--deadline ISO --cap-usd N --rate-max USD/h --balance-floor USD --pod-max-hours H] [--dry-run] [--detach]
-                                                 # budget guard over pods named P*: trips terminate all (own host last); rate sheds newest first
-  research pods guard status|stop --prefix P     # its state file / SIGTERM to exactly its recorded pid
-  research pods guard reset --prefix P [--by WHO]  # clear a sticky trip (guard stopped), keeping the spend tally; logged
+  research pods guard [--budgets NOTES|FILE] [--dry-run] [--detach]   # the one budgets guard: every line of budgets.toml, re-read each poll
+  research pods guard status|stop                # its state file / SIGTERM to exactly its recorded pid
   research env --source TREE [--rev REV] [--json]  # `export PYTHONPATH=...` from TREE's [tool.uv.workspace] members (research.pythonpath)
   research pods ssh TARGET [--print] [-- CMD...]  # TARGET = machines.toml name | pod id | pod name; the port is looked up, never hard-coded
   research pods sync TARGET [SRC] [--dest DIR]    # rsync the worktree's git-visible files (default /workspace/src), prune what it shipped before

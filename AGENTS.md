@@ -175,6 +175,11 @@ Make ordinary reversible engineering decisions independently. Surface changes
 to agreed semantics, acceptance criteria, material spending, or destructive
 behavior.
 
+A guard never fails open, and an agent VM can be suspended at any moment, so
+nothing that bounds spend or preserves results may depend on one: pods bound
+themselves (`research pods create --max-hours`, under a line of the notes repo's
+`budgets.toml`), and runs preserve their results from the pod.
+
 Architectural rationale and human-facing reports belong in Notion;
 experimental evidence belongs in artifact storage. Temporary working notes
 need not become permanent documentation. Remove obsolete rules and machinery
