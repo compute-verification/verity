@@ -8,7 +8,8 @@
         head(key)          {"bytes": n, "etag": md5 hex | None} or None
         list(prefix)       every key under `prefix`
 
-`FsRemote(root)` is a directory (also the test double).  `S3Remote` lives in `remote_s3.py`.  `load_remote()` reads
+`FsRemote(root)` is a directory (also the test double).  `S3Remote` lives in `remote_s3.py`.  `HttpRemote(base_url)` is the read-only
+public export (`fetchset.py`): `get` and `head` over anonymous HTTPS at `<base_url>/<key>`, no `put`, no `list`.  `load_remote()` reads
 `~/.research/store.toml` (or `$RESEARCH_STORE_CONFIG`); no file, or no `[remote]` table, means no remote: the local store is the
 only replica and nothing is ever called PRESERVED.  The config names the ENV VARS that hold credentials; it never holds secrets.
 When the default `~/.research/store.toml` is absent and `$RESEARCH_STORE_CONFIG` is unset, the environment stands in (a cloud VM
@@ -25,7 +26,10 @@ import hashlib
 import os
 import shutil
 import threading
+import time
 import tomllib
+import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import Callable, Protocol, runtime_checkable
 
@@ -127,6 +131,64 @@ class FsRemote:
         return sorted(out)
 
 
+class HttpRemote:
+    """The public export read over anonymous HTTP(S): `<base_url>/<key>` for `manifests/<hex>.json` and `objects/sha256/<hex>`.
+    Redirects are followed (a front end may answer with a presigned URL). 404 and 403 read as absent, since a read-only front end
+    that refuses unknown keys may answer either; 5xx and network errors are retried. Nothing here is trusted: every caller checks
+    the bytes against the sha256 it asked for."""
+
+    RETRIES = 3
+    TIMEOUT_S = 60.0
+
+    def __init__(self, base_url: str):
+        self.base = base_url.rstrip("/")
+
+    def describe(self) -> str:
+        return self.base
+
+    def _open(self, method: str, key: str):
+        if key.startswith("/") or ".." in key.split("/"):
+            raise ValueError(f"bad remote key {key!r}")
+        req = urllib.request.Request(f"{self.base}/{key}", method=method, headers={"User-Agent": "research-store-fetch"})
+        for attempt in range(self.RETRIES + 1):
+            try:
+                return urllib.request.urlopen(req, timeout=self.TIMEOUT_S)
+            except urllib.error.HTTPError as e:
+                if e.code in (403, 404):
+                    raise KeyError(key) from None
+                if e.code < 500 or attempt == self.RETRIES:
+                    raise
+            except (urllib.error.URLError, TimeoutError, ConnectionError):
+                if attempt == self.RETRIES:
+                    raise
+            time.sleep(0.5 * 2**attempt)
+
+    def get(self, key: str, path: Path) -> None:
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.parent / f".tmp-{path.name}-{os.getpid()}-{threading.get_ident()}"
+        try:
+            with self._open("GET", key) as r, open(tmp, "wb") as f:
+                shutil.copyfileobj(r, f, 1 << 20)
+            os.replace(tmp, path)
+        finally:
+            tmp.unlink(missing_ok=True)
+
+    def head(self, key: str) -> dict | None:
+        try:
+            with self._open("HEAD", key) as r:
+                n = r.headers.get("Content-Length")
+                return {"bytes": int(n) if n is not None else None, "etag": None}
+        except KeyError:
+            return None
+
+    def put(self, key: str, path: Path) -> dict:
+        raise NotImplementedError(f"{self.base} is read-only: `research data export` writes the export bucket")
+
+    def list(self, prefix: str) -> list[str]:
+        raise NotImplementedError(f"{self.base} does not list: fetch by id")
+
+
 def config_path(explicit: Path | str | None = None) -> Path:
     if explicit:
         return Path(explicit).expanduser()
@@ -167,6 +229,40 @@ def load_remote(path: Path | str | None = None) -> Remote | None:
         raise ConfigError(f"{p}: {e}") from e
     r = cfg.get("remote")
     return _remote_from(r, p) if r else None
+
+
+def load_export(path: Path | str | None = None, environ: dict | None = None) -> Remote | None:
+    """Where `research data export` writes the public export: the `[export]` table of `store.toml` (the `[remote]` schema), else
+    `$RESEARCH_EXPORT_DIR` (a directory), else `$RESEARCH_EXPORT_BUCKET` on `$RESEARCH_EXPORT_ENDPOINT` (default `R2_ENDPOINT`) with
+    the key pair in `RESEARCH_EXPORT_ACCESS_KEY_ID` / `RESEARCH_EXPORT_SECRET_ACCESS_KEY` (default the store's `AWS_*` pair).  None
+    when none is set.  Never the store's own bucket: the export is a second bucket, the only one a public reader can reach."""
+    env = os.environ if environ is None else environ
+    p = config_path(path)
+    r, where, own = None, "", None
+    if p.is_file():
+        try:
+            cfg = tomllib.loads(p.read_text(encoding="utf-8"))
+        except tomllib.TOMLDecodeError as e:
+            raise ConfigError(f"{p}: {e}") from e
+        r, where = cfg.get("export"), p
+        own = (cfg.get("remote") or {}).get("bucket")
+    if r is None and env.get("RESEARCH_EXPORT_DIR"):
+        return FsRemote(env["RESEARCH_EXPORT_DIR"])
+    if r is None and env.get("RESEARCH_EXPORT_BUCKET"):
+        endpoint = env.get("RESEARCH_EXPORT_ENDPOINT") or env.get("R2_ENDPOINT")
+        if not endpoint:
+            raise ConfigError("export: RESEARCH_EXPORT_BUCKET is set but neither RESEARCH_EXPORT_ENDPOINT nor R2_ENDPOINT is")
+        pair = ("RESEARCH_EXPORT_ACCESS_KEY_ID", "RESEARCH_EXPORT_SECRET_ACCESS_KEY", "RESEARCH_EXPORT_SESSION_TOKEN") \
+            if env.get("RESEARCH_EXPORT_ACCESS_KEY_ID") else ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN")
+        r, where = {"type": "s3", "bucket": env["RESEARCH_EXPORT_BUCKET"], "endpoint": endpoint, "region": "auto",
+                    "access_key_id_env": pair[0], "secret_access_key_env": pair[1], "session_token_env": pair[2]}, \
+            "environment (RESEARCH_EXPORT_BUCKET)"
+        own = own or env.get("R2_BUCKET")
+    if r is None:
+        return None
+    if r.get("type") == "s3" and r.get("bucket") and r["bucket"] == own:
+        raise ConfigError(f"{where}: the export bucket is the store's own bucket; the export must be a separate, public-read bucket")
+    return _remote_from(r, where)
 
 
 def _remote_from(r: dict, p: Path | str) -> Remote:

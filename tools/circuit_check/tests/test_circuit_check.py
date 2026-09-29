@@ -282,25 +282,53 @@ def test_the_cli_writes_a_report_and_fails_by_name(tmp_path, capsys):
     assert cli.main([fp8, "-q", "--strict"]) == 1
 
 
-def test_the_cache_reuses_a_report_only_while_every_read_is_unchanged(tmp_path):
-    """Two runs of one request: the second is a hit.  An entry whose recorded digest of one file it read no longer matches (as
+def test_the_cache_reuses_a_targets_result_only_while_every_read_is_unchanged(tmp_path):
+    """Two runs of one target: the second reuses it.  An entry whose recorded digest of one file it read no longer matches (as
     after an edit) is not reused, and the run records a new entry."""
     import subprocess
     import sys
 
-    def run():
-        r = subprocess.run([sys.executable, "-m", "circuit_check", "F32Mul_v1", "-q", "--cache", str(tmp_path)], capture_output=True, text=True)
+    def run(*targets):
+        r = subprocess.run([sys.executable, "-m", "circuit_check", *targets, "-q", "--cache", str(tmp_path)], capture_output=True, text=True)
         assert r.returncode == 0, r.stderr
         return r.stdout
 
-    assert "cache hit" not in run() and "cache hit" in run()
-    (entry,) = list(tmp_path.glob("*/*.json"))
+    assert "0 of 1 targets reused" in run("F32Mul_v1") and "1 of 1 targets reused" in run("F32Mul_v1")
+    assert "1 of 2 targets reused" in run("F32Mul_v1", "rope-head")           # per target: the new one runs, the old one is reused
+    (entry,) = [p for p in tmp_path.glob("*/*/*.json") if json.loads(p.read_text())["key"]["request"]["target"][1] == "F32Mul_v1"]
     e = json.loads(entry.read_text())
     assert "packages/verity/src/verity/ir/defs.py" in e["reads"]["files"] and e["reads"]["dirs"]
-    assert e["key"]["version"] == entry.parent.name
+    assert e["key"]["version"] == entry.parent.parent.name and e["key"]["request"]["target"] == ["definition", "F32Mul_v1"]
     e["reads"]["files"]["packages/verity/src/verity/ir/defs.py"] = "0" * 64
     entry.write_text(json.dumps(e))
-    assert "cache hit" not in run() and len(list(tmp_path.glob("*/*.json"))) == 2
+    assert "0 of 1 targets reused" in run("F32Mul_v1") and len(list(entry.parent.glob("*.json"))) == 2
+
+
+def test_a_result_after_a_read_the_tracer_cannot_see_is_not_stored(tmp_path):
+    """A check that starts a program (its reads are untraced) is not stored, nor is any later one in that process; a library
+    built in the tree and loaded by the dynamic loader is an input by its bytes."""
+    import subprocess
+    import sys
+
+    script = f"""
+import json, ctypes.util
+from pathlib import Path
+from circuit_check import cache as CC, checks as CK, cli
+CC.trace(cli.REPO)
+ok = lambda: {{"failures": [], "warnings": []}}
+def spawns():
+    import subprocess
+    subprocess.run(["true"])
+    return ok()
+cli._tasks = lambda *a: [("definition", "A", ok), ("definition", "B", spawns), ("definition", "C", ok)]
+rep = cli.run([], CK.Options(), log=None, cache=Path({str(tmp_path)!r}))
+print(json.dumps(rep["cache"]))
+"""
+    r = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, cwd=REPO)
+    assert r.returncode == 0, r.stderr
+    stats = json.loads(r.stdout.strip().splitlines()[-1])
+    assert stats["stored"] == 1 and [u["target"] for u in stats["untraced"]] == ["B", "C"]
+    assert "subprocess.Popen" in stats["untraced"][0]["because"][0]
 
 
 def test_parallel_jobs_give_the_serial_report(tmp_path):
@@ -322,13 +350,17 @@ def test_the_cache_reads_the_tree_as_git_has_it(tmp_path):
     (tmp_path / "a.txt").write_text("a")
     got = {"files": ["a.txt", "build/lib.so"], "dirs": ["."], "probes": ["build/lib.so", "b.txt"]}
     CC._VISIBLE.clear()
+    CC._MEMO.clear()
     before = CC._digests(tmp_path, got)
     (tmp_path / "build").mkdir()
     (tmp_path / "build" / "lib.so").write_bytes(b"built")
     CC._VISIBLE.clear()
+    CC._MEMO.clear()
     assert CC._digests(tmp_path, got) == before
     (tmp_path / "b.txt").write_text("b")
     CC._VISIBLE.clear()
+    CC._MEMO.clear()
     after = CC._digests(tmp_path, got)
     assert after["dirs"] != before["dirs"] and after["probes"]["b.txt"] == "file"
     CC._VISIBLE.clear()
+    CC._MEMO.clear()
