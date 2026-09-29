@@ -10,8 +10,9 @@ order they were admitted; `main` fast-forwards to the newest commit on `next` th
 
 Admission.  A PR is admitted while it is open against `main`, isn't a draft, has an owner, carries no hold label, and has every grant
 its change needs.  The owner is the lane its body names on a `Lane {name}` line, else the Cursor agent id its body carries.  The
-rules file (`ci/queue.toml` on `main`, or `--rules`) says which grants a change needs: a role for changed files under listed paths,
-or for a change to listed sections of any `lean-audit.json` (`pins`, `reads`).  A grant is a store label `grant = {role}` on the
+rules file (`ci/queue.toml` on `main`, `tools/check/queue.toml` until the repository move, or `--rules`) says which grants a change
+needs: a role for changed files under listed paths (`merge_requires`' syntax, `!` patterns included), or for a change to listed
+sections of any `lean-audit.json` (`pins`, `reads`).  A grant is a store label `grant = {role}` on the
 target `pr:{number}@{head sha}`, so a new push needs new grants.
 
 `next`.  Its first-parent chain above `main` is the queue, and each merge commit's trailers name its PR, head and owner: git holds
@@ -54,6 +55,8 @@ from .store import ids, vocab
 
 BRANCH, SHADOW_BRANCH = "next", "queue-shadow"
 RULES = "ci/queue.toml"
+#: where the rules are until the repository move puts `tools/check/` at `ci/`
+RULES_BEFORE_MOVE = "tools/check/queue.toml"
 IDENTITY = {"GIT_AUTHOR_NAME": "research queue", "GIT_AUTHOR_EMAIL": "queue@research.invalid",
             "GIT_COMMITTER_NAME": "research queue", "GIT_COMMITTER_EMAIL": "queue@research.invalid"}
 LANE_RE = re.compile(r"^[ \t>*_]*Lane[:\s]+`?([A-Za-z0-9][A-Za-z0-9._-]*)`?", re.M)
@@ -135,7 +138,7 @@ class GitHub:
 @dataclass(frozen=True)
 class Rule:
     role: str
-    paths: tuple[str, ...] = ()        # a changed file equal to one, or under one ending in `/`, needs the role
+    paths: tuple[str, ...] = ()        # `merge_requires`' syntax: a changed file under a prefix and matching no `!` pattern needs the role
     lean_audit: tuple[str, ...] = ()   # a change to one of these top-level sections of any `lean-audit.json` needs the role
 
 
@@ -163,18 +166,16 @@ class Rules:
 
     def needs(self, repo: Path, base: str, head: str) -> set[str]:
         """The roles whose grants the change `base`...`head` (from their merge base) needs."""
+        from .merge import rule_touches
+
         mb = _out(repo, "merge-base", base, head)
         changed = [p for p in _out(repo, "diff", "--name-only", mb, head).splitlines() if p]
-        roles = {r.role for r in self.grants if any(_under(p, q) for p in changed for q in r.paths)}
+        roles = {r.role for r in self.grants if r.paths and rule_touches(list(r.paths), changed)}
         audits = [p for p in changed if p == "lean-audit.json" or p.endswith("/lean-audit.json")]
         for r in (r for r in self.grants if r.lean_audit and r.role not in roles):
             if any(_section(repo, mb, p, s) != _section(repo, head, p, s) for p in audits for s in r.lean_audit):
                 roles.add(r.role)
         return roles
-
-
-def _under(path: str, rule: str) -> bool:
-    return path.startswith(rule) if rule.endswith("/") else path == rule
 
 
 def _section(repo: Path, rev: str, path: str, section: str):
@@ -276,10 +277,13 @@ class Queue:
 
     def rules(self) -> Rules:
         if self._rules is None:
-            r = _git(self.workdir, "show", f"origin/main:{RULES}", check=False)
-            if r.returncode:
+            for path in (RULES, RULES_BEFORE_MOVE):
+                r = _git(self.workdir, "show", f"origin/main:{path}", check=False)
+                if r.returncode == 0:
+                    self._rules = Rules.parse(r.stdout, path)
+                    break
+            else:
                 raise QueueError(f"`main` has no {RULES}: pass --rules FILE")
-            self._rules = Rules.parse(r.stdout)
         return self._rules
 
     def chain(self) -> list[Member]:
