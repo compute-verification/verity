@@ -79,12 +79,19 @@ class _Torch:
         return _T(a.a @ b.a)
 
 
+def _check_tile(m, n, cfg):
+    bm, bn = B.ROUTE_U_TILES[cfg]
+    if m % bm or n % bn:
+        raise RuntimeError(f"shape ({m}, ?, {n}) is not a multiple of the tile {bm} x {bn} x 64")
+
+
 class _RouteU:
     """#218's `ncp_route_u` contract in numpy: C = the last checkpoint, and every 16-deep checkpoint [M, N, K/16] from
     c0 = −128·colsum(Y)."""
 
     @staticmethod
-    def ncp_route_u(xu, ys, _cfg):
+    def ncp_route_u(xu, ys, cfg):
+        _check_tile(xu.a.shape[0], ys.a.shape[0], cfg)
         x, y = xu.a.astype(np.int64), ys.a.view(np.int8).astype(np.int64)
         steps = x.shape[1] // 16
         per = np.einsum("mtd,ntd->mnt", x.reshape(x.shape[0], steps, 16), y.reshape(y.shape[0], steps, 16))
@@ -93,10 +100,17 @@ class _RouteU:
         return _T(ck[:, :, -1].copy()), _T(ck)
 
 
-def test_the_route_u_gate_reads_the_kernels_checkpoint_layout(monkeypatch):
+def test_the_route_u_gate_reads_the_kernels_checkpoint_layout_under_every_config_it_times(monkeypatch):
     small = [("qwen05 small", c) for n, c in B.PD.gate_calls() if n == "five-strips"]
     monkeypatch.setattr(B.PD, "gate_calls", lambda qwen=False: small)
-    assert B.gate_route_u(_RouteU, _Torch) == [{"call": "qwen05 small", "checkpoints_equal": True}]
+    monkeypatch.setattr(B, "CFG0_GATE", (128, 64, 256))
+    got = B.gate_route_u(_RouteU, _Torch)
+    assert [(r["call"], r["cfg"]) for r in got] == [("qwen05 small", 2), ("qwen05 k=64 n=256 m=128", 0),
+                                                    ("qwen05 k=64 n=256 m=128", 1), ("qwen05 k=64 n=256 m=128", 2)]
+    assert all(r["checkpoints_equal"] for r in got)
+    timed = {B._cfgs(m, n)[0] for m in B.ROWS for _k, n in B.PD.QWEN05}
+    gated = {c for m in (16, 128) for _k, n in B.PD.QWEN05 for c in B._cfgs(m, n)}
+    assert timed <= gated
 
 
 def test_the_committer_and_hash_gates_run_through_the_host_build(monkeypatch):
@@ -130,8 +144,8 @@ class _Dev:
 
 class _Timed:
     @staticmethod
-    def ncp_route_u(xu, ys, _cfg):
-        return None
+    def ncp_route_u(xu, ys, cfg):
+        _check_tile(xu.a.shape[0], ys.a.shape[0], cfg)
 
 
 def test_the_timings_and_projection_cover_every_linear_and_hash(monkeypatch):
@@ -144,3 +158,55 @@ def test_the_timings_and_projection_cover_every_linear_and_hash(monkeypatch):
     assert set(t["from_memory_bytes_per_s"]) == set(B.HASH) and abs(t["from_memory_bytes_per_s"]["sha256"] / 5e11 - 1) < 0.01
     p = B.projection(t)
     assert set(p) == set(B.ROWS) and all(p[m][h]["unfused_x_bf16"] > p[m][h]["fused_x_bf16"] > 0 for m in B.ROWS for h in B.HASH)
+
+
+def test_a_linear_that_fails_is_recorded_and_the_rest_still_run(monkeypatch):
+    monkeypatch.setattr(B.PD, "device", lambda: _Dev)
+    monkeypatch.setattr(_Torch, "mm", staticmethod(lambda a, b: None))
+    monkeypatch.setitem(sys.modules, "gemm_bench", type(sys)("gemm_bench"))
+    sys.modules["gemm_bench"].timed = lambda fn, reps: (fn(), 0.5)[1]
+    class Failing:
+        @staticmethod
+        def ncp_route_u(xu, ys, cfg):
+            if (xu.a.shape[0], ys.a.shape[0]) == (16, 9728):
+                raise RuntimeError("shape (16, 2688, 9728) is not a multiple of the tile")
+
+    saved = []
+    t = B.timings(Failing, _Torch, 2, save=lambda part: saved.append(len(part.get("linears", []))))
+    bad = [r for r in t["linears"] if "error" in r]
+    assert bad and all(r["n"] == 9728 and r["m"] == 16 for r in bad) and len(t["linears"]) == len(B.ROWS) * len(B.PD.QWEN05)
+    assert saved[0] == 0 and saved[-1] == len(t["linears"])
+    assert 16 not in B.projection(t) and 256 in B.projection(t)
+
+
+def test_main_on_the_pod_path_writes_every_piece(monkeypatch, tmp_path, capsys):
+    """`main` end to end with torch, #218's extension and the device library faked, the committer and hashes on the host
+    build: what the pod runs, but for the GPU."""
+    calls = [c for c in B.PD.gate_calls() if c[0] == "five-strips"]
+    monkeypatch.setattr(B.PD, "gate_calls", lambda qwen=False: calls + [("qwen05 small", calls[0][1])])
+    monkeypatch.setattr(B, "CFG0_GATE", (128, 64, 256))
+    monkeypatch.setattr(B.PD, "commit_call_timed", lambda i, s, c: (B.PD.commit_call(i, s, c), 0.0))
+    host = B.PD.hash_many
+    monkeypatch.setattr(B.PD, "hash_many", lambda kind, msgs, out=None, ds=0x1F, on="host": host(kind, msgs, out, ds))
+    monkeypatch.setattr(B.PD, "device", lambda: _Dev)
+    torch = type(sys)("torch")
+    for name in ("bfloat16", "uint8", "from_numpy", "randn", "randint"):
+        setattr(torch, name, getattr(_Torch, name))
+    torch.mm = lambda a, b: None
+    torch.cuda = type("cuda", (), {"empty_cache": staticmethod(lambda: None), "get_device_name": staticmethod(lambda: "fake")})
+    monkeypatch.setitem(sys.modules, "torch", torch)
+    kernels = type(sys)("kernels")
+    kernels.load = lambda: type("ext", (), {"ncp_route_u": staticmethod(lambda xu, ys, cfg: _RouteU.ncp_route_u(xu, ys, cfg)
+                                                                          if xu.a.shape[1] <= 3 * 64 else _Timed.ncp_route_u(xu, ys, cfg))})
+    monkeypatch.setitem(sys.modules, "kernels", kernels)
+    monkeypatch.setitem(sys.modules, "gemm_bench", type(sys)("gemm_bench"))
+    sys.modules["gemm_bench"].timed = lambda fn, reps: (fn(), 0.5)[1]
+    out = tmp_path / "r.json"
+    monkeypatch.setattr(sys, "argv", ["ncp2_gpu_bench.py", "--reps", "2", "--out", str(out)])
+    B.main()
+    import json
+
+    res = json.loads(out.read_text())
+    assert set(res) == {"accounting", "host_gate", "device", "gates", "timings", "projection"}
+    assert set(res["gates"]) == {"hashes", "committer", "route_u"} and len(res["timings"]["linears"]) == 12
+    assert "GATES " in capsys.readouterr().out

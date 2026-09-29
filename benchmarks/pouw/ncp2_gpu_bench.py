@@ -142,27 +142,40 @@ def gate_committer() -> list[dict]:
     return out
 
 
-def _cfg(m: int) -> int:
-    return 2 if m < 64 else 0
+#: `ncp_route_u`'s tile (BM, BN) by config, largest first (`kernels/pouw_gemm.cu` launch<MT, NT, WM, WN, ...>: BM = WM·MT·16,
+#: BN = WN·NT·8; K a multiple of 64)
+ROUTE_U_TILES = {0: (128, 256), 1: (16, 256), 2: (16, 16)}
+#: the gate call for config 0: gate_up at 128 rows
+CFG0_GATE = (128, *PD.QWEN05[2])
+
+
+def _cfgs(m: int, n: int) -> list[int]:
+    """The configs whose tile divides (m, n), largest first."""
+    return [c for c, (bm, bn) in ROUTE_U_TILES.items() if m % bm == 0 and n % bn == 0]
 
 
 def gate_route_u(ext, torch) -> list[dict]:
+    """Every config the timings run, on `ncp-v2`'s own X and Y: Qwen2.5-0.5B's four linears at 16 rows, and gate_up at 128
+    rows (the only shape config 0's 128 × 256 tile divides)."""
+    rng = np.random.default_rng(5)
+    calls = [(n, c) for n, c in PD.gate_calls(qwen=True) if n.startswith("qwen05")]
+    m, k, n = CFG0_GATE
+    calls.append((f"qwen05 k={k} n={n} m={m}", PD._call(rng, m, k, n, layer=11, site=2, weight=46)))
     out = []
-    for name, call in PD.gate_calls(qwen=True):
-        if not name.startswith("qwen05"):
-            continue
+    for name, call in calls:
         nat, sh = PN.Native(call), call.shape
         x = np.concatenate([nat.x_strip(rs) for rs in range(sh.m // D)])
         b, _t = nat.weight(0, sh.n)
         y, c0 = nat.y_block(b, 0)
         want = np.concatenate([nat.tiles(nat._x64(nat.x_strip(rs)), y, c0) for rs in range(sh.m // D)], axis=1)   # [t, m, n]
-        cz, ck = ext.ncp_route_u(torch.from_numpy(x).cuda(), torch.from_numpy(y).cuda(), _cfg(sh.m))
-        got = ck.cpu().numpy().view(np.uint32).transpose(2, 0, 1)
-        ok = np.array_equal(got, want) and np.array_equal(cz.cpu().numpy().view(np.uint32), want[-1])
-        out.append({"call": name, "checkpoints_equal": bool(ok)})
-        if not ok:
-            t, r, c = (int(v) for v in np.argwhere(got != want)[0])
-            raise SystemExit(f"route U: {name}: checkpoint {t} of ({r}, {c}) is {got[t, r, c]:#x}, not {want[t, r, c]:#x}")
+        for cfg in _cfgs(sh.m, sh.n):
+            cz, ck = ext.ncp_route_u(torch.from_numpy(x).cuda(), torch.from_numpy(y).cuda(), cfg)
+            got = ck.cpu().numpy().view(np.uint32).transpose(2, 0, 1)
+            ok = np.array_equal(got, want) and np.array_equal(cz.cpu().numpy().view(np.uint32), want[-1])
+            out.append({"call": name, "cfg": cfg, "checkpoints_equal": bool(ok)})
+            if not ok:
+                t, r, c = (int(v) for v in np.argwhere(got != want)[0])
+                raise SystemExit(f"route U: {name} cfg {cfg}: checkpoint {t} of ({r}, {c}) is {got[t, r, c]:#x}, not {want[t, r, c]:#x}")
     return out
 
 
@@ -186,10 +199,9 @@ def _leaf_ms(dev, code: int, count: int, words: int, most: int, reps: int) -> fl
     return ms.value * count / units * (UNIT_TAG + 4 * words) / (UNIT_TAG + 4 * timed_words)
 
 
-def timings(ext, torch, reps: int) -> dict:
-    from gemm_bench import timed
-
-    dev, out = PD.device(), {"linears": [], "ceiling_bytes_per_s": {}, "from_memory_bytes_per_s": {}}
+def rates(reps: int) -> dict:
+    """Each hash's in-register ceiling and saturated from-memory rate, in bytes absorbed per second."""
+    dev, out = PD.device(), {"ceiling_bytes_per_s": {}, "from_memory_bytes_per_s": {}}
     for kind, code in CEILING.items():
         rate = ctypes.c_double(0)
         if rc := dev.ncp2_ceiling(code, 128 * 24, 256, 256, ctypes.byref(rate)):
@@ -198,27 +210,50 @@ def timings(ext, torch, reps: int) -> dict:
     for h, (_block, _pad, code) in HASH.items():
         ms = _leaf_ms(dev, code, RATE_UNITS, RATE_WORDS, RATE_UNITS, reps)
         out["from_memory_bytes_per_s"][h] = RATE_UNITS * absorbed(h, UNIT_TAG + 4 * RATE_WORDS) / (ms * 1e-3)
+    return out
+
+
+def linear(ext, torch, timed, dev, m: int, k: int, n: int, reps: int) -> dict:
+    """One linear at m rows: BF16, the route-U GEMM at its largest config, its leaves under each hash, and F₁."""
+    row: dict = {"m": m, "k": k, "n": n}
+    a = torch.randn(m, k, device="cuda", dtype=torch.bfloat16)
+    w = torch.randn(n, k, device="cuda", dtype=torch.bfloat16)
+    row["bf16_ms"] = timed(partial(torch.mm, a, w.T), reps)
+    del a, w
+    row["route_u_cfg"] = cfg = _cfgs(m, n)[0]
+    xu = torch.randint(0, 256, (m, 3 * k), device="cuda", dtype=torch.uint8)
+    ys = torch.randint(0, 256, (n, 3 * k), device="cuda", dtype=torch.uint8)
+    row["route_u_ms"] = timed(partial(ext.ncp_route_u, xu, ys, cfg), reps)
+    del xu, ys
+    torch.cuda.empty_cache()
+    acc = call_accounting(m, k, n)
+    for h, (_block, _pad, code) in HASH.items():
+        for part, most in TIMED_UNITS.items():
+            count, length = acc["messages"][part]
+            row[f"{h} {part} ms"] = _leaf_ms(dev, code, count, (length - UNIT_TAG) // 4, most, reps)
+    ms = ctypes.c_float(0)
+    if rc := dev.ncp2_f1_time(n, k, reps, ctypes.byref(ms)):
+        raise SystemExit(f"F1: CUDA error {rc}")
+    row["f1_ms"] = ms.value
+    return row
+
+
+def timings(ext, torch, reps: int, save=lambda part: None) -> dict:
+    """`rates`, then every linear at every m; a linear that fails is recorded with its error and the rest still run.
+    ``save`` is called after each piece."""
+    from gemm_bench import timed
+
+    out = rates(reps)
+    save(out)
+    out["linears"] = []
     for m in ROWS:
         for k, n in PD.QWEN05:
-            row = {"m": m, "k": k, "n": n}
-            a = torch.randn(m, k, device="cuda", dtype=torch.bfloat16)
-            w = torch.randn(n, k, device="cuda", dtype=torch.bfloat16)
-            row["bf16_ms"] = timed(partial(torch.mm, a, w.T), reps)
-            xu = torch.randint(0, 256, (m, 3 * k), device="cuda", dtype=torch.uint8)
-            ys = torch.randint(0, 256, (n, 3 * k), device="cuda", dtype=torch.uint8)
-            row["route_u_ms"] = timed(partial(ext.ncp_route_u, xu, ys, _cfg(m)), reps)
-            del a, w, xu, ys
-            torch.cuda.empty_cache()
-            acc = call_accounting(m, k, n)
-            for h, (_block, _pad, code) in HASH.items():
-                for part, most in TIMED_UNITS.items():
-                    count, length = acc["messages"][part]
-                    row[f"{h} {part} ms"] = _leaf_ms(dev, code, count, (length - UNIT_TAG) // 4, most, reps)
-            ms = ctypes.c_float(0)
-            if rc := dev.ncp2_f1_time(n, k, reps, ctypes.byref(ms)):
-                raise SystemExit(f"F1: CUDA error {rc}")
-            row["f1_ms"] = ms.value
-            out["linears"].append(row)
+            try:
+                out["linears"].append(linear(ext, torch, timed, PD.device(), m, k, n, reps))
+            except (RuntimeError, SystemExit) as e:
+                out["linears"].append({"m": m, "k": k, "n": n, "error": str(e)[:300]})
+                torch.cuda.empty_cache()
+            save(out)
     return out
 
 
@@ -230,6 +265,8 @@ def projection(t: dict) -> dict:
     out = {}
     for m in ROWS:
         rows = [r for r in t["linears"] if r["m"] == m]
+        if len(rows) != len(PD.QWEN05) or any("error" in r for r in rows):
+            continue
         bf16 = LAYERS * sum(r["bf16_ms"] for r in rows)
         gemm = LAYERS * sum(r["route_u_ms"] for r in rows)
         f1 = LAYERS * sum(r["f1_ms"] for r in rows)
@@ -248,34 +285,46 @@ def projection(t: dict) -> dict:
     return out
 
 
+def _report(res: dict) -> None:
+    for a in res["accounting"]:
+        gb = {h: round(a["absorbed"][h]["total"] / 1e9, 2) for h in HASH}
+        print(f"m={a['m']:>5}: {a['units']:,} units; absorbed GB {gb}; tile words {a['tile_bytes_per_mac']:.3f} B per MAC; "
+              f"XOF {a['xof_bytes'] / 1e9:.3f} GB")
+    for m, p in res.get("projection", {}).items():
+        print(f"m={m:>5}: " + "; ".join(f"{h} unfused {p[h]['unfused_x_bf16']:.1f}x fused {p[h]['fused_x_bf16']:.1f}x" for h in HASH))
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--dry-run", action="store_true", help="CPU only: the accounting and the host gate")
     ap.add_argument("--reps", type=int, default=20)
     ap.add_argument("--out", type=Path)
     args = ap.parse_args()
-    res: dict = {"accounting": [forward_accounting(m) for m in ROWS], "host_gate": host_gate()}
+    res: dict = {"accounting": [forward_accounting(m) for m in ROWS]}
+
+    def save(key: str | None = None, value=None) -> None:
+        """Write what is measured so far, and print the piece just measured, so a later failure loses nothing before it."""
+        if key is not None:
+            res[key] = value
+            print(f"{key.upper()} " + json.dumps(value, default=str)[:4000], flush=True)
+        if args.out:
+            args.out.write_text(json.dumps(res, indent=1, default=str))
+
+    save("host_gate", host_gate())
     if not args.dry_run:
         import torch
         from kernels import load
 
+        save("device", torch.cuda.get_device_name())
         ext = load()
-        res["gates"] = {"hashes": gate_hashes(), "committer": gate_committer(), "route_u": gate_route_u(ext, torch)}
-        res["timings"] = timings(ext, torch, args.reps)
-        res["projection"] = projection(res["timings"])
-        res["device"] = torch.cuda.get_device_name()
-    text = json.dumps(res, indent=1, default=str)
-    if args.out:
-        args.out.write_text(text)
-    for a in res["accounting"]:
-        gb = {h: round(a["absorbed"][h]["total"] / 1e9, 2) for h in HASH}
-        print(f"m={a['m']:>5}: {a['units']:,} units; absorbed GB {gb}; tile words {a['tile_bytes_per_mac']:.3f} B per MAC; "
-              f"XOF {a['xof_bytes'] / 1e9:.3f} GB")
-    for kind in ("ceiling_bytes_per_s", "from_memory_bytes_per_s"):
-        if kind in res.get("timings", {}):
-            print(kind, {h: f"{v / 1e9:.0f} GB/s" for h, v in res["timings"][kind].items()})
-    for m, p in res.get("projection", {}).items():
-        print(f"m={m:>5}: " + "; ".join(f"{h} unfused {p[h]['unfused_x_bf16']:.1f}x fused {p[h]['fused_x_bf16']:.1f}x" for h in HASH))
+        save("gates", {"hashes": gate_hashes()})
+        res["gates"]["committer"] = gate_committer()
+        save("gates", res["gates"])
+        res["gates"]["route_u"] = gate_route_u(ext, torch)
+        save("gates", res["gates"])
+        save("timings", timings(ext, torch, args.reps, save=lambda part: save("timings", part)))
+        save("projection", projection(res["timings"]))
+    _report(res)
 
 
 if __name__ == "__main__":
