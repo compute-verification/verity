@@ -82,13 +82,11 @@ class Target:
 
 @runtime_checkable
 class Installed(Protocol):
-    """An installed option.  ``outside_program`` says why the Program of record does not describe what the option
-    changes (None: it does), and makes a Commit's verdict not of record.  `commitment` and `info` stay readable after
-    `close`: the Commit writes its record once every option is off."""
+    """An installed option.  `commitment` and `info` stay readable after `close`: the Commit writes its record once every
+    option is off."""
 
     name: str
     hooks: Hooks
-    outside_program: str | None
 
     def commitment(self) -> dict[str, Any]:
         """What the option commits to, as JSON: the composition record's entry (`Composition.record`)."""
@@ -115,7 +113,6 @@ class Option:
     hooks: Hooks
     commits: dict[str, Any] = field(default_factory=dict)
     details: dict[str, Any] = field(default_factory=dict)
-    outside_program: str | None = None
     decoded: Callable[[], Mapping[str, Any]] | None = None
     release: Callable[[], Any] | None = None
     closed: bool = False

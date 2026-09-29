@@ -227,8 +227,10 @@ the others once its committers registered the weights of record (the replay read
 released: `protocol_options.weights_view`).  Adapters install innermost first (PoUW replaces the linear GEMMs, POUS decodes the
 weights they read, sampled proofs commits what the model computed) and uninstall in reverse, every patch and service through
 `engine/hooks.py` tagged with its option.  The protocol logic is `verity_pouw`, `verity_pous` and `verity_sampled_proofs`';
-the adapters (`pouw.py`, `pous.py`, `sampled_proofs.py`) are thin.  A Commit with an option its Program does not describe
-writes its verdict with `protocols.of_record = false`.  PoUW's settings are `beacon` (hex, at least 32 bytes),
+the adapters (`pouw.py`, `pous.py`, `sampled_proofs.py`) are thin.  A Commit admits only options its Program describes (POUS's
+bit-identical decode; an executor with its Definition, `traced_as`), so its verdict is of record as usual and carries the set
+(`verdict.protocols`) and the composition record's digest.
+PoUW is refused beside sampled proofs until its modeled circuit lands (its `traced_as` is None).  PoUW's settings are `beacon` (hex, at least 32 bytes),
 `retain_steps`, `transcript_dir` and `weight_operands`. `weight_operands` is `per-forward` by default, formed from the
 weight each call is handed; POUS requires this. The alternative, `resident`, is an opt-in: it is prepared at install and
 kept, a weight-derived copy of 3 B per weight (about 205 GB at 70B), so POUS refuses it. A `per-forward` call holds the

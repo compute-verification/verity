@@ -133,8 +133,8 @@ class TargetProfile:
                            sampled proofs alone (`config.DEFAULT_ROW_PROTOCOLS`), the Commit as it has always run.  Declared, it is the
                            whole set in its one spelling, sampled proofs included (a profile is the target of sampled proofs' Program);
                            the default spelled out is refused (declare None).  The Commit installs the other protocols beside its
-                           committer (`protocol_options.at_commit`), and its verdict is not of record while the Program does not describe
-                           what they change.  Omitted from `to_json()` when None.
+                           committer (`protocol_options.at_commit`) and refuses any it cannot trace (an executor needs the Definition
+                           of what it computes).  Omitted from `to_json()` when None.
 
     Derived (not fields; one rule each, `verity_vllm.program.registry.targets` consumes them): `tensor_core_family` (the registered k16
     tensor-core step of the capability: `ampere` for sm_8x, `hopper` for sm_90) and `tuned_gemm_arch_family` (vLLM's tuned

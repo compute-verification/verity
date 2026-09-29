@@ -117,7 +117,7 @@ def test_weights_are_committed_before_the_salt_and_the_int7_linear_is_served_exa
     assert c["weights_root"] == weights_root(roots).hex()
     assert c["salt"] == Epoch.start(declared, roots, bytes.fromhex(BEACON)).salt.hex()
     assert comp.record()["protocols"][0]["weights"] == comp.weight_commitments["pouw:ncp-v1"]
-    assert opt.outside_program and len(hooks.live("pouw:ncp-v1")) == 2
+    assert len(hooks.live("pouw:ncp-v1")) == 2
 
     x, bias = rng.standard_normal((5, K), np.float32), rng.standard_normal(N, np.float32)
     layer = model.layers[0]

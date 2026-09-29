@@ -56,8 +56,6 @@ EXECUTED = ("ncp-v1", "ncp-v1-shift24")
 QUANTIZER = "verity.pouw.symmetric-int7-rowmax-rne-f32/v1"
 KEYS = ("beacon", "retain_steps", "transcript_dir", "weight_operands")
 WEIGHT_OPERANDS = ("resident", "per-forward")
-OUTSIDE_PROGRAM = ("PoUW replaces each linear layer's GEMM by its scheme's noised 3k-deep int8 GEMM; the useful output is "
-                   "the int7 linear (quantize, exact int32 GEMM, dequantize), which no Definition of the Program describes yet")
 PLACEHOLDER = (
     "without a `beacon` setting the salt comes from 32 zero bytes, so it is predictable",
     "with weight_operands = per-forward, a forward's weight is not re-checked against the root committed at install",
@@ -380,5 +378,4 @@ def install(scheme: str, target: Target) -> Option:
     h = target.hooks(entry)
     for w, layer in enumerate(layers):
         h.wrap(layer.quant_method, "apply", lambda orig, w=w: _executor(run, w))
-    return Option(name=entry, hooks=h, commits=run.commits, details=run.details, outside_program=OUTSIDE_PROGRAM,
-                  release=run.finish)
+    return Option(name=entry, hooks=h, commits=run.commits, details=run.details, release=run.finish)

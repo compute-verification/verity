@@ -33,8 +33,10 @@ whatever an adapter refuses for its context (sampled proofs outside the Commit s
 
 **The record.**  `Composition.record` is ``verity-vllm/protocol-composition/v0``: the stage, the profile digest and, per
 protocol, its entry and what it commits to, with the SHA-256 of its canonical JSON.  It is a placeholder: each protocol's
-verifier checks its own claims, and nothing checks the links between them yet.  An option the Program does not describe
-(``Installed.outside_program``) makes the Commit's verdict not of record (`Composition.verdict`).
+verifier checks its own claims, and nothing checks the links between them yet.  A Commit's verdict carries the set and the
+record's digest (`Composition.verdict`); it is of record like any other, because every option a Commit admits is one the
+Program describes: POUS's decode is bit-identical and leaves the circuit untouched, and an executor is refused until it
+names its Definition (``traced_as``).
 """
 from __future__ import annotations
 
@@ -186,10 +188,6 @@ class Composition:
                 out[k] = v
         return out
 
-    def outside_program(self) -> dict[str, str]:
-        """Each option the Program of record does not describe, with the reason."""
-        return {i.name: i.outside_program for i in self.installed if i.outside_program}
-
     def record(self, profile_digest: str | None = None) -> dict[str, Any]:
         body = {"schema": RECORD_SCHEMA, "stage": self.context.stage, "profile_digest": profile_digest,
                 "protocols": [{"entry": i.name, "commitment": i.commitment(),
@@ -199,10 +197,8 @@ class Composition:
         return {**body, "digest": hashlib.sha256(canon).hexdigest()}
 
     def verdict(self, profile_digest: str | None = None) -> dict[str, Any]:
-        """The block a Commit's verdict carries: the set, whether a verdict under it can be of record, and the record's digest."""
-        out = self.outside_program()
-        return {"protocols": list(self.entries), "of_record": not out, "outside_program": out,
-                "record": self.record(profile_digest)["digest"]}
+        """The block a Commit's verdict carries: the set and the record's digest."""
+        return {"protocols": list(self.entries), "record": self.record(profile_digest)["digest"]}
 
     def info(self) -> dict[str, Any]:
         return {i.name: i.info() for i in self.installed}
