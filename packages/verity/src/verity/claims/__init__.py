@@ -57,6 +57,8 @@ PROPERTIES: dict[str, Property] = {p.id: p for p in (
     Property("ecr", "Expected-time collision resistance", "ECR"),
     Property("xof", "Extendable-output-function security", "XOF"),
     Property("sis", "Ring-SIS binding", "SIS"),
+    # A3 in backends/flock/verifier/lean/soundness/ASSUMPTIONS.md, for the unit draw's bytes
+    Property("uniform", "Independent uniform output", "Uniform"),
 )}
 
 INSTANCES: dict[str, Instance] = {i.id: i for i in (
@@ -69,6 +71,7 @@ INSTANCES: dict[str, Instance] = {i.id: i for i in (
     Instance("poseidon2-koalabear", "Poseidon2-KoalaBear", algebraic=True),
     Instance("ajtai-n64", "Ajtai n = 64", algebraic=True),
     Instance("ajtai-n128", "Ajtai n = 128", algebraic=True),
+    Instance("io-getrandombytes", "IO.getRandomBytes"),
 )}
 
 ENTRIES: dict[str, Entry] = {e.id: e for e in (

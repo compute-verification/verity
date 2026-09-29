@@ -12,8 +12,9 @@ verifier derives (`dp`, `hL1`).
 
 ## Named assumptions (taken without proof)
 
-There is one, A2, a `Prop` (`Assumptions.SHA512ExpectedTimeCR`) that the link theorem (`flock_batched_linkSoundE`)
-takes as a hypothesis (`hCR`).
+There are two, each a `Prop` taken as a hypothesis: A2 (`Assumptions.SHA512ExpectedTimeCR`), which the link theorem
+(`flock_batched_linkSoundE`) takes as `hCR`, and A3 (`Assumptions.UniformRandomBytes`), which the live draw's theorems
+take as `ht`.
 `README.md` §1.5 names one more, L1, about the lowering, stated below. The development declares no `axiom`. So a
 mis-stated assumption can make a theorem vacuous, but it can never make Lean prove something false.
 
@@ -27,6 +28,24 @@ audit's value layer (Daniel, Sep 27; constant corrected the same day).
   stated for all finders: the link theorem takes it for the finder it builds from the prover.
 - **Why it is plausible, and where it is used:** `assumptions/a2-sha512-expected-time-cr.md`.
 - **Upstream:** watch entries `collision-resistance`, `keyed-cr` and `rom-cr` (see Upstream status).
+
+**A3. The verifier's operating-system randomness is independent uniform bytes** (`uniform/io-getrandombytes`), for the
+unit draw.
+
+- **Statement.** A byte source is a finite probability space and, on each outcome, the first `L i` bytes of each stream
+  `i`. `UniformRandomBytes L t` says every event about those bytes has the probability it has for independent uniform
+  bytes. What A3 assumes of the operating system is that the running verifier's calls to `IO.getRandomBytes` are such a
+  source, each call's bytes independent of every earlier call's.
+- **Why it is not stated about `IO.getRandomBytes`.** To Lean's logic an `IO` action is a function of the world and
+  `IO.getRandomBytes` an opaque constant, so a `Prop` saying its bytes are random would be refutable, and every theorem
+  taking it vacuous. What ties the statement to the verifier is `drawOS_def`: the live draw `Flock.Draw.drawOS` is
+  `Flock.Draw.drawWith` with every stream's bytes from `IO.getRandomBytes`, and the theorems are about `drawWith`.
+- **Where it is used.** `drawOS_subset_escape_le`, `drawOS_stratified_escape_le`, `drawOS_work_escape_le`,
+  `execOS_escape_le` and `execOS_subset_escape_le` (`FlockSoundness/ExecDrawOS.lean`). They hold for every number of
+  bytes `L` the model reads. The live verifier reads as many as its reruns need, and its escape is the limit as `L`
+  grows, which the theorems don't state. `subset_exec_escape_le` and `stratified_exec_escape_le` take uniform streams
+  as their probability space, the same assumption.
+- **Upstream:** watch entry `A3-uniform-bytes`.
 
 - **L1. Each template's rows compute its gates** (named hypothesis). That is, the rows' outputs are the gates' outputs, in
   the program's Boolean circuit, on every input. The audit certifies drawn units against their rows. That says something
@@ -88,7 +107,8 @@ before the session's first coin, not bounds state by state.
   coin. Their own collision resistance matters to what the statement refers to (registered data, linked proofs), not to
   this theorem.
 - **`os` coins** (the default). Each round's coins are uniform and unknown to the prover before it sent the round. They
-  come from the verifier's `/dev/urandom` (spec §7.1). The randomness is trusted, not proved.
+  come from the verifier's `/dev/urandom` (spec §7.1). The randomness is trusted, not proved. For the unit draw it is
+  A3.
 - **`seed` coins** (PR #83, `coin-commit/sha256/v1`) add two assumptions: the seed commitment hides the seed, and
   SHA-256 in counter mode is a PRF. They are needed only if the seed mode becomes the verifier of record's source.
 - **The random-oracle model is not used.** Its version of the compiled bound is only a cross-check (DESIGN.md §2).
