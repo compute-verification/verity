@@ -14,7 +14,10 @@ Transport: the CLI (`python -m research.cli data ...`) in a subprocess -- the st
 `<repo>/tools/research/src` on PYTHONPATH is enough; the CLI's printed contract (`put` / `snapshot` print the art id, `fetch` prints the
 path, `select --ids` prints ids, `show --json` dumps the manifest document) is what is parsed here.  Credentials for a remote put come
 from the environment (`set -a; source ~/.config/verity/r2.env; set +a` on the control machine; a pod uses a minted temporary credential,
-README §7.1) -- nothing here reads or copies a secret.
+README §7.1).  Inside a `research run --custody-r2` job on a machine with no store config of its own (a pod: no `~/.research/store.toml`,
+`$RESEARCH_STORE_CONFIG` unset), the CLI subprocess's environment gets the run's custody key -- `<root>/requests/<run id>/custody/`
+store.toml + cred.json, whose actions include GetObject -- so the frozen reference trees are fetched from the remote there too; the key
+goes into that environment only, never onto disk or into a log.
 
 `reachable()` answers "can this machine use the store at all" (package importable + a local store root): the tests skip on False.
 """
@@ -49,11 +52,26 @@ def _research_src() -> Path | None:
     return None
 
 
+def _custody_dir() -> Path | None:
+    """The custody dir of the `research run` job this process runs in (`<root>/requests/<run id>/custody/`, beside `<root>/runs/<run id>/`)
+    when it holds a key and no store config is set here; else None."""
+    run_dir, run_id = os.environ.get("RESEARCH_RUN_DIR"), os.environ.get("RESEARCH_RUN_ID")
+    if not run_dir or not run_id or os.environ.get("RESEARCH_STORE_CONFIG") or (Path.home() / ".research" / "store.toml").is_file():
+        return None
+    d = Path(run_dir).resolve().parent.parent / "requests" / run_id / "custody"
+    return d if (d / "store.toml").is_file() and (d / "cred.json").is_file() else None
+
+
 def _env() -> dict[str, str]:
     env = dict(os.environ)
     src = _research_src()
     if src is not None:
         env["PYTHONPATH"] = str(src) + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
+    custody = _custody_dir()
+    if custody is not None:
+        cred = json.loads((custody / "cred.json").read_text())
+        env["RESEARCH_STORE_CONFIG"] = str(custody / "store.toml")
+        env.update({k: cred[k] for k in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN") if cred.get(k)})
     return env
 
 

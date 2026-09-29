@@ -106,8 +106,13 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     part = dict(partition) if partition is not None else P.partition(program, query)
     if part["program"] != P.program_sha512(program):
         c.fail("R2-program", {"partition": part["program"], "verifier": P.program_sha512(program)})
-    for field, mine in (("program", part["program"]), ("query", query_digest(part["query"])), ("partition", P.digest(part))):
-        if rec[field] != mine:
+    try:
+        part_digest = P.digest(part)
+    except ValueError as e:
+        c.fail("R2-partition", {"registered": rec["partition"], "verifier": str(e)})
+        part_digest = None
+    for field, mine in (("program", part["program"]), ("query", query_digest(part["query"])), ("partition", part_digest)):
+        if mine is not None and rec[field] != mine:
             c.fail(f"R2-{field}", {"registered": rec[field], "verifier": mine})
     try:
         population = P.units(program, query)

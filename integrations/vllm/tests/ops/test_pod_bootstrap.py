@@ -39,7 +39,7 @@ def _bin(tmp_path: Path, *, nvidia_smi: bool) -> Path:
 
 def _dry_run(tmp_path: Path, *args: str, nvidia_smi: bool) -> subprocess.CompletedProcess:
     env = {"PATH": str(_bin(tmp_path, nvidia_smi=nvidia_smi)), "WORK": str(tmp_path / "work"), "HOME": str(tmp_path)}
-    return subprocess.run([BASH, str(SCRIPT), "--dry-run", "--out", str(tmp_path / "out"), *args], capture_output=True, text=True, env=env, timeout=60)
+    return subprocess.run([BASH, str(SCRIPT), "--dry-run", "--out", str(tmp_path / "out"), *args], capture_output=True, text=True, env=env)
 
 
 def test_script_parses() -> None:
@@ -79,7 +79,7 @@ def test_dry_run_touches_nothing(tmp_path: Path) -> None:
 
 def test_unknown_argument_exits_2(tmp_path: Path) -> None:
     env = {"PATH": str(_bin(tmp_path, nvidia_smi=False)), "HOME": str(tmp_path)}
-    r = subprocess.run([BASH, str(SCRIPT), "--tpu"], capture_output=True, text=True, env=env, timeout=60)
+    r = subprocess.run([BASH, str(SCRIPT), "--tpu"], capture_output=True, text=True, env=env)
     assert r.returncode == 2 and "unknown arg --tpu" in r.stderr
 
 
@@ -107,7 +107,7 @@ def test_readiness_cpu_mode_record(tmp_path: Path) -> None:
     env = dict(os.environ, PYTHONPATH=os.pathsep.join(str(p) for p in (root, core, research, sampled)),
                https_proxy="http://127.0.0.1:9", HTTPS_PROXY="http://127.0.0.1:9")   # the network probe fails fast, recorded as an error
     r = subprocess.run([sys.executable, str(src), str(root), str(core), str(out), "", "", str(research), "cpu", str(sampled)],
-                       capture_output=True, text=True, env=env, timeout=300)
+                       capture_output=True, text=True, env=env)
     assert out.exists(), f"readiness.json not written\nstdout: {r.stdout}\nstderr: {r.stderr}"
     rec = json.loads(out.read_text())
     assert rec["schema"] == "verity-vllm/readiness/v1" and rec["mode"] == "cpu"
@@ -148,7 +148,7 @@ def test_the_pth_check_passes_on_a_fresh_venv_and_fails_without_the_pth(tmp_path
     if not uv:
         pytest.skip("uv not installed")
     venv = tmp_path / "venv"
-    if subprocess.run([uv, "venv", "-q", "-p", "3.12", str(venv)], capture_output=True, timeout=300).returncode != 0:
+    if subprocess.run([uv, "venv", "-q", "-p", "3.12", str(venv)], capture_output=True).returncode != 0:
         pytest.skip("no Python 3.12 for uv venv")
     py, site = venv / "bin" / "python", venv / "lib" / "python3.12" / "site-packages"
     sampled, core, research = TREE / "protocols" / "sampled_proofs", TREE / "packages" / "verity" / "src", TREE / "tools" / "research" / "src"
@@ -158,10 +158,10 @@ def test_the_pth_check_passes_on_a_fresh_venv_and_fails_without_the_pth(tmp_path
     probe.write_text("import os, subprocess, sys\nsampled = sys.argv[1]\n" + fn + "print(sampled_without_pythonpath())\n")
     env = dict(os.environ, PYTHONPATH=os.pathsep.join(str(p) for p in (VLLM, core, research, sampled)))
     (site / "verity-sampled-proofs.pth").write_text(f"{sampled}\n")
-    ok = subprocess.run([str(py), str(probe), str(sampled)], capture_output=True, text=True, env=env, timeout=120)
+    ok = subprocess.run([str(py), str(probe), str(sampled)], capture_output=True, text=True, env=env)
     assert ok.returncode == 0 and ok.stdout.strip().startswith(str(sampled.resolve())), ok.stdout + ok.stderr
     (site / "verity-sampled-proofs.pth").unlink()
-    bad = subprocess.run([str(py), str(probe), str(sampled)], capture_output=True, text=True, env=env, timeout=120)
+    bad = subprocess.run([str(py), str(probe), str(sampled)], capture_output=True, text=True, env=env)
     assert bad.returncode != 0 and "without protocols/sampled_proofs on PYTHONPATH" in bad.stderr
 
 

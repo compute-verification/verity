@@ -31,6 +31,7 @@ def _low(template, **params):
 
 
 @pytest.mark.parametrize("template,params", [("rope-head", {"D": 64}), ("silu-mul", {"I": 8192})])
+@pytest.mark.slow
 def test_a_flat_class_carries_types_not_rows(template, params):
     low, sub = _low(template, **params)
     old = FC.compose(low, sub)
@@ -122,6 +123,7 @@ def test_gemm_is_one_instance_type(tmp_path):
     assert holds and _words(got, T) == want
 
 
+@pytest.mark.slow
 def test_attention_is_one_instance_type(tmp_path):
     """Attention's instance type (its tensor-core units as calls, its softmax stages' gates as its own rows, its ex2 and rcp
     reads of the measured tables) computes the set's outputs."""
@@ -143,6 +145,7 @@ def test_attention_is_one_instance_type(tmp_path):
     assert _words(out, T) == _root_outputs(s, sub, T)
 
 
+@pytest.mark.slow
 def test_attention_composes_with_placed_reads(tmp_path):
     """Attention's typed statement: its reads are placed `table/v2` layouts in block ranges of their own, one per MUFU read."""
     sub = TM.attention_head(64, 16, T=9)

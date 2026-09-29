@@ -5,7 +5,7 @@
 
 A thin wrapper (lane h100-bestvsbest): it runs `backends.direct.ligero.run bench-vu` in-process with `--out`, `--dump-dir` and
 `--run-id` pointed at the run directory, then runs `ligero-verify verify` (backends/ligero-verify, shares no code with the prover)
-on every recorded rep's sub-batch proof -- with `--coins` = the runner's step-0 coins in interactive mode (DISCREPANCIES D7: a
+on every recorded rep's sub-batch proof -- with `--coins` = the runner's step-0 coins in interactive mode (D7, backends/ligero-verify/discrepancies/d7.md: a
 file proof is sound only against the verifier's own coins) -- and writes one result.json whose measurement names are the same as
 `backends/gkr/bench_result.py`'s (prove_wall, verify_wall, verify_python_wall, proof_bytes, depth, soundness_bits, e2e_0ms) so the
 two candidates are `research data select`-able side by side.  Nothing in the prover is touched.

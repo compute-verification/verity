@@ -4,6 +4,12 @@ For the expert reviewer and for Table 1. This file states every named assumption
 soundness theorems take, each in full; the detail behind them is in `assumptions/`. What is proved is in `README.md`
 and, for the audit layer, `FlockSoundness/Audit/README.md`. `DESIGN.md` holds the derivations.
 
+**The end-to-end theorem** is a skeleton: `flock_e2e_count` and `flock_e2e_drawn`, in `FlockSoundness/E2E.lean`. They
+state the chain from the audit's acceptance to the integrity profile on the committed circuit. Each unfinished piece is a
+named hypothesis, and `assumptions/e2e-checklist.md` lists them with their owners. Two of those carry what the statement
+doesn't say yet: that the acceptance is the executable verifier's (`hExec`), and that the units' rows are the ones the
+verifier derives (`dp`, `hL1`).
+
 ## Named assumptions (taken without proof)
 
 There is one, A2, a `Prop` (`Assumptions.SHA512ExpectedTimeCR`) that the link theorem (`flock_batched_linkSoundE`)
@@ -25,7 +31,8 @@ audit's value layer (Daniel, Sep 27; constant corrected the same day).
 - **L1. Each template's rows compute its gates** (named hypothesis). That is, the rows' outputs are the gates' outputs, in
   the program's Boolean circuit, on every input. The audit certifies drawn units against their rows. That says something
   about the program's Boolean circuit only through L1.
-  - **The evidence for it, and the path to discharge it:** `assumptions/l1-template-rows.md`.
+  - **Proved for RoPE** (`rope-head/neox-bf16/pair`): `Rope.rope_sound`, for the pinned file's rows.
+  - **The evidence for it, the proof for RoPE, and the path for the rest:** `assumptions/l1-template-rows.md`.
 
 A1, Reed–Solomon mutual correlated agreement up to the Johnson bound, is proved: `mcaError_le_bchks25`, from DKT26 in
 ArkLib (`README.md` §1.6; watch entries `A1-johnson-mca` and `udr-mca`).
@@ -39,6 +46,11 @@ ArkLib (`README.md` §1.6; watch entries `A1-johnson-mca` and `udr-mca`).
   - Placed (`Placement`) means two things:
     - the block matrices' rows at the unit's computed columns read exactly its rows' columns;
     - the rows at its constant read the pin, as every slot's constant is wired to it (spec §16.1).
+  - A unit's input columns on one gate also carry one value in every satisfying witness (`UnitPlace.aliased`): they
+    copy one source's position, or forced-zero rows.
+  - **Proved from the executable's accept step** for `hm96-sha512/row/v1` statements (`placement_of_setupH`,
+    `unitPlace_of_setupH`; `README.md` §1.5). Open: which instance a drawn unit is (its block and VU), and `aliased`
+    from the flat statement's copies, which `unitPlace_of_setupH` takes as a hypothesis (`Layout.Aliased`).
 
 **The audit layer's named hypotheses** (`Prop`s taken as hypotheses; no `axiom`; the theorems are in
 `FlockSoundness/Audit/README.md`):
@@ -59,7 +71,7 @@ before the session's first coin, not bounds state by state.
 | Named at the compiled layer | Meaning | Discharged by |
 |---|---|---|
 | `ExtractionAnalysis.LinkSound` (`analysisB`, `analysisC`, `analysisBE`) | `δ_link`: extraction succeeds, but every close satisfying candidate decodes, on the unit's committed wires, to values other than the committed transcript's | for `analysisBE`: `flock_batched_linkSoundE`, under A2 for each commit string's finder and `ValueBinding` (named; the `hm96` layout discharges it); composed in `flock_batched_count_linked`, `_drawn_linked` (`_placed`: from `UnitPlace`) |
-| `Partition.LoweringSoundB`, `Partition.LoweringSoundC` | a message packing a witness that satisfies the statement of a drawn unit's table decodes, for that unit, to values on which it is correct | `loweringSoundB_of_place`, `loweringSoundC_of_place` from each drawn unit's `UnitPlace` (`lowering_sound`, `README.md` §1.5), given the statement builder's `Placement` (level 3) and L1 |
+| `Partition.LoweringSoundB`, `Partition.LoweringSoundC` | a message packing a witness that satisfies the statement of a drawn unit's table decodes, for that unit, to values on which it is correct | `loweringSoundB_of_place`, `loweringSoundC_of_place` from each drawn unit's `UnitPlace` (`lowering_sound`, `README.md` §1.5), given the statement builder's `Placement` and `aliased` (level 3) and L1. `unitPlace_of_setupH` gives it from `Stmt.setupH`, given the unit's instance in the audit circuit and `aliased` |
 
 ## Cryptographic assumptions and coins
 
@@ -91,10 +103,10 @@ before the session's first coin, not bounds state by state.
 `lean-audit.json` records each pinned theorem's statement (`pins`) and the definitions it reads (`reads`). The audit
 fails when either changes until the record is rewritten, and a rewritten record needs a named statement reviewer. The
 pins include the table theorems (`README.md` §1.1 and §1.2, with their `_exec` forms), `execArith_correct` and
-`Merkle.opening_binding`; none takes a named assumption. The theorem that takes A2, `flock_batched_linkSoundE`, is not
-pinned, nor are `flock_inputs_sound`, `flock_session_sound`, `lowering_sound` and `mcaError_le_bchks25`. A theorem that
-is not in `pins` is still audited (standard axioms, kernel replay), but a change to its statement would not fail the
-audit.
+`Merkle.opening_binding`; none takes a named assumption. The end-to-end skeleton's `flock_e2e_count` and `flock_e2e_drawn`
+are pinned too; they take A2 as `hCR` and pass it to the link theorem, `flock_batched_linkSoundE`, which is not pinned,
+nor are `flock_inputs_sound`, `flock_session_sound`, `lowering_sound` and `mcaError_le_bchks25`. A theorem that is not in
+`pins` is still audited (standard axioms, kernel replay), but a change to its statement would not fail the audit.
 
 ## Upstream status
 

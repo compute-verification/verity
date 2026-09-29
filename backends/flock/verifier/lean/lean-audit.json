@@ -1,7 +1,8 @@
 {
  "roots": ["Flock", "FlockProofs", "Main"],
  "exempt": {
-  "CheckAxioms": "the #print axioms list backends/flock/tests/test_lean_verifier.py reads; superseded by this audit"
+  "CheckAxioms": "the #print axioms list backends/flock/tests/test_lean_verifier.py reads; superseded by this audit",
+  "FlockRows": "the flock-rows executable's entry point, one line; its command is Flock.Rows.cmd, audited under Flock"
  },
  "meaning": ["FlockProofs", "Flock.CircuitType", "Flock.Library", "Flock.Layout"],
  "escapes": {
@@ -67,6 +68,15 @@
    ],
    "assumptions": [],
    "type_hash": "000000003ffc6eca"
+  },
+  "Flock.checkInRange_ok": {
+   "signature": [
+    "Flock.checkInRange_ok (kLog nRegions mPts : Nat) :",
+    "  Iff (Eq (Flock.checkInRange kLog nRegions mPts) (Except.ok Unit.unit))",
+    "    (And (instLENat.le kLog 26) (And (instLENat.le nRegions 1024) (instLENat.le mPts 64)))"
+   ],
+   "assumptions": [],
+   "type_hash": "0000000036db5def"
   },
   "Flock.climb_binding": {
    "signature": [
