@@ -14,7 +14,8 @@ strip's path to D_A and the call's key unit, each proved once, and its Y strip's
 * `WorkLaw` is Verity root's work law (#362 with #374's floors, `Flock/Draw.lean` `workK`):
   k_s = min(n_s, max(f_s, ⌈K·W_s/W⌉)), with K = `RECORD_K` = 27,713 at ε = 0.1% and δ = 2⁻⁴⁰ (`record_k`) and f_s the
   verifier's floor. `work_table` is the verifier's `--work-table` and `law_object` the law `verify` derives from it. K is
-  a **window's** budget: a call draws its share K_c = ⌈K·W_c/W_window⌉, capped at its units (`window_laws`).
+  a **window's** budget: a call draws its share K_c = ⌈K·W_c/W_window⌉, capped at its units, and its y cells at the
+  floor ⌈K_y·n_c/N⌉ of the window's N, K_y = K (`window_laws`, root's option B on X-SPC-105).
 
 **Openings** are row-granular (the red team's X-SPC-57): A and the weight are committed one leaf per row, so a proved
 unit opens exactly the rows it reads.
@@ -144,13 +145,30 @@ class WorkLaw:
         return {s.name: min(len(s.units), max(self.floor(s.name), -(-k * s.work // work))) for s in strata}
 
 
-def window_laws(layouts: Sequence["Layout"], k: int = RECORD_K, floors: tuple[tuple[str, int], ...] = ()) -> list[WorkLaw]:
+def window_laws(layouts: Sequence["Layout"], k: int = RECORD_K, floors: tuple[tuple[str, int], ...] = (),
+                k_y: int | None = None) -> list[WorkLaw]:
     """Each call's work law in a window of calls: its share K_c = ⌈K·W_c/W_window⌉ of the window's budget K (X-SPC-83), capped
     at its units, over its own strata. That is the law `verify` enforces when each call is its own statement, given its own
-    K_c (`--work K_c`). Within one Program (`ncp2.window`) the calls share their templates' strata and one K, which is what
-    `verify` derives there instead. The per-call split's window-level bound is X-SPC-83's question: no pin states it."""
+    K_c (`--work K_c`) and work table. Within one Program (`ncp2.window`) the calls share their templates' strata and one K,
+    which is what `verify` derives there instead.
+
+    **y's floors** (root's option B on X-SPC-105): each call's dequantization stratum s has floor f_s = ⌈K_y·n_s/N⌉, n_s its
+    units and N the window's dequantization units, so k_s = min(n_s, f_s) meets k_s·N ≥ K_y·n_s or proves the stratum, and a
+    window draws at most K_y + C of its y cells. K_y = K = 27,713 keeps δ = 2⁻⁴⁰ over the window: a tile-bad and a y-bad
+    wrong set are one family of the audit, so its sampling term is the larger of (1 − ε)^K and (1 − ε)^K_y, not their sum.
+    The other zero-work templates keep their floors (1 unless ``floors`` names them, X-SPC-84). Per call these are pinned
+    (`audit_work_floor`); over the window, the per-call split's bound (X-SPC-83, 106) and B's (X-SPC-105) wait on root's
+    window-composition pin (`FlockSoundness/Audit/Window.lean`), which assumes each call draws under its own key context
+    (`draw`'s ``call``)."""
     total = sum(lay.work() for lay in layouts)
-    return [WorkLaw(k, window_work=total, floors=floors) for _ in layouts]
+    k_y = k if k_y is None else k_y
+    ys = [[s for s in lay.strata if s.role == "dequant"] for lay in layouts]
+    n = sum(len(s.units) for ss in ys for s in ss)
+    out = []
+    for ss in ys:
+        f = dict(floors) | {s.name: -(-k_y * len(s.units) // n) for s in ss}
+        out.append(WorkLaw(k, window_work=total, floors=tuple(f.items())))
+    return out
 
 
 @dataclass(frozen=True)
