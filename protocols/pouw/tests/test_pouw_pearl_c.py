@@ -1,4 +1,4 @@
-"""``pearl-c-h100-v0``: the chain against Pearl's own Rust (H100) and against `pearl_kw`'s replay, the clean-up's
+"""``pearl-c-h100-v0`` and ``-v1``: the chain against Pearl's own Rust (H100) and against `pearl_kw`'s replay, the clean-up's
 pinning and algebra, the seeds' keying, the leaf and tickets rebuilt from their bytes, the pinned vectors, and the
 lifecycle on a test instance."""
 
@@ -199,6 +199,114 @@ def test_lifecycle_on_a_test_instance():
 
     s, k = C.PearlC(k_min=32, tile=(16, 16)), 128
     rows_a, rows_b = CV.rows("life", "A", 32, k), CV.rows("life", "B", 16, k)
+    work = Workload((Matmul(3, Shape(32, k, 16), 9),))
+    prover = Prover(s, {9: rows_b})
+    epoch = Epoch.start(work, prover.weight_roots, b"beacon")
+    tr = prover.prove(epoch, {3: rows_a})
+    assert Verifier(s, epoch).audit(prover, tr, Sampled(2), b"verifier").accepted
+
+
+# ---- forming v1 (§5) ------------------------------------------------------------------------------------------------
+
+def f32w(x: float) -> int:
+    return P.f32_bits(x)
+
+
+def test_v1_stats_pinned_on_a_known_row():
+    """All ones at k = 1,024: 128 positions, S = 128, ρ = 1, α = RN(448/5), β_row = RN(RN(ρ·α)·f32(√32/256²))."""
+    s, rho, alpha, beta = C.s5_stats([f32w(1.0)] * 1024)
+    assert (s, rho) == (f32w(1.0), f32w(1.0))
+    assert alpha == f32w(P.f32(448.0 / 5.0))
+    assert beta == f32w(P.f32(P.f32(P.f32_of_bits(alpha)) * P.f32_of_bits(C.S5_LINE)))
+    assert C.S5_LINE == f32w(P.f32(32 ** 0.5 / 65536))
+    zero = C.s5_stats([0] * 1024)
+    assert zero[:2] == (0, 0) and zero[2] == f32w(448.0 * 2.0 ** 32) and zero[3] == 0
+
+
+def test_v1_rho_reads_every_eighth_position_only():
+    rng = random.Random("pearl-c-rho")
+    x = [f32w(rng.uniform(-4, 4)) for _ in range(512)]
+    y = list(x)
+    for p in range(512):
+        if p % C.S5_STRIDE:
+            y[p] = f32w(rng.uniform(-1, 1))
+    assert C.s5_stats(x)[1] == C.s5_stats(y)[1]
+    exact = sum((P.f32_of_bits(x[p]) ** 2 for p in range(0, 512, 8))) / 64
+    assert abs(P.f32_of_bits(C.s5_stats(x)[1]) / exact ** 0.5 - 1) < 1e-6
+
+
+def v1_instance(case: str, shape=(16, 128, 16), index=3, weight=9):
+    s = C.PearlC(k_min=32, tile=(16, 16), forming="v1")
+    ctx = Context(hashlib.sha256(b"salt").digest(), Matmul(index, Shape(*shape), weight), hashlib.sha256(b"root_a").digest(),
+                  hashlib.sha256(b"root_b").digest())
+    a, b = CV.rows_f32(case, "A", shape[0], shape[1]), CV.rows_f32(case, "B", shape[2], shape[1])
+    tile = Tile(tuple(range(shape[0])), tuple(range(shape[2])))
+    noise = s.noise(ctx)
+    ops = s.encode(ctx, noise, a, b, tile)
+    return s, ctx, noise, ops, s.checked(ctx, ops), a, b
+
+
+def test_v1_atom_is_alpha_x_plus_the_noise():
+    """Each code is the cast of one atom with α·x as its accumulator: within the atom's 14-bit window of α·x + E′·F,
+    and the noise E′·F has an RMS near σ·α."""
+    s, ctx, noise, ops, checked, a, b = v1_instance("atom")
+    k = ctx.matmul.shape.k
+    fa = C._basis(noise.seed_b, 0, k)
+    ratios = []
+    for i in range(4):
+        x = C.parse_f32_row(a[i], k)
+        alpha, rho, ep = P.f32_of_bits(ops.a.alpha[i]), P.f32_of_bits(ops.a.rho[i]), ops.a.ep[i]
+        assert ep == C.eprime(ops.a.beta[i], ops.e_a[i])
+        noise_t = [sum(P.fp8_to_f32(e) * P.fp8_to_f32(f) for e, f in zip(ep, fa[t])) for t in range(k)]
+        for t in range(k):
+            ax = P.f32_of_bits(P.f32_bits(P.f32(alpha * P.f32_of_bits(x[t]))))
+            d = P.f32_of_bits(C.HOPPER_E4M3_K32.step(P.f32_bits(ax), ep, fa[t]))
+            assert ops.a.codes[i][t] == P.f32_to_fp8(d)
+            assert abs(d - (ax + noise_t[t])) <= 2.0 ** -12 * max(abs(ax), max(abs(n) for n in noise_t)) + 2.0 ** -20
+        ratios.append((sum(n * n for n in noise_t) / k) ** 0.5 / (rho * alpha))
+    assert all(0.5 < r < 2.0 for r in ratios), ratios
+
+
+def test_v1_useful_output_removes_the_noise():
+    s, ctx, noise, ops, checked, a, b = v1_instance("useful")
+    k = ctx.matmul.shape.k
+    fa = [[P.f32_of_bits(w) for w in C.parse_f32_row(r, k)] for r in a]
+    fb = [[P.f32_of_bits(w) for w in C.parse_f32_row(r, k)] for r in b]
+    exact = [[sum(x * y for x, y in zip(ra, rb)) for rb in fb] for ra in fa]
+
+    def rel_rms(got):
+        num = sum((g - e) ** 2 for gr, er in zip(got, exact) for g, e in zip(gr, er))
+        return (num / sum(e * e for er in exact for e in er)) ** 0.5
+
+    useful = s.useful(ctx, noise, ops, checked)
+    noisy = [[P.f32_of_bits(w) / (P.f32_of_bits(ops.a.alpha[i]) * P.f32_of_bits(ops.b.alpha[j])) for j, w in enumerate(row)]
+             for i, row in enumerate(checked.c)]
+    assert rel_rms(useful) < 0.08 and rel_rms(noisy) > 3 * rel_rms(useful)
+
+
+def test_v1_peel_uses_e_prime_exactly():
+    s, ctx, noise, ops, checked, a, b = v1_instance("factors")
+    for i in range(2):
+        assert ops.pa[i][:C.R] == [P.f32_to_bf16(P.fp8_to_f32(c)) for c in ops.a.ep[i]]
+        assert ops.pb[i][C.R:] == [P.f32_to_bf16(P.fp8_to_f32(c)) ^ 0x8000 for c in ops.b.ep[i]]
+
+
+def test_v1_registry_and_cost():
+    s = get("pearl-c-h100-v1")
+    assert s.name == "pearl-c-h100-v1" and dict(s.certificate.parameters)["forming"] == "v1"
+    assert dict(get("pearl-c-h100-v0").certificate.parameters)["forming"] == "v0"
+    sh = Shape(128, 2048, 256)
+    v0, v1 = get("pearl-c-h100-v0").wref(sh), s.wref(sh)
+    assert v0 - v1 == (C.FORMING_V0_UNITS - C.FORMING_V1_UNITS) * (128 + 256) * 2048
+    with pytest.raises(ValueError):
+        C.PearlC(forming="v2")
+
+
+def test_v1_lifecycle_on_a_test_instance():
+    from verity_pouw.audit import Epoch, Prover, Sampled, Verifier, Workload
+
+    s, k = C.PearlC(k_min=32, tile=(16, 16), forming="v1"), 128
+    rows_a, rows_b = CV.rows_f32("life", "A", 32, k), CV.rows_f32("life", "B", 16, k)
     work = Workload((Matmul(3, Shape(32, k, 16), 9),))
     prover = Prover(s, {9: rows_b})
     epoch = Epoch.start(work, prover.weight_roots, b"beacon")

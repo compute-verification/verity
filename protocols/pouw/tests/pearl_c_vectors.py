@@ -3,7 +3,9 @@
 
 Inputs are derived, not stored: row i of operand ``name`` in case ``c`` is an FP10 row whose k codes are the signed bytes
 of SHAKE256("verity/pouw/pearl-c-vectors/v1", c, name, "codes", i) clamped to ±127 and whose k/8 BF16 scales are
-2^(−4 − (b mod 5)) for the bytes of SHAKE256(…, "scales", i).  The context's salt and roots are SHA-256 of their labels."""
+2^(−4 − (b mod 5)) for the bytes of SHAKE256(…, "scales", i).  A v1 row (FP32 words) is that row opened, each nonzero word's
+low 16 mantissa bits replaced by the 16-bit words of SHAKE256(…, "fraction", i).  The context's salt and roots are SHA-256
+of their labels."""
 
 from __future__ import annotations
 
@@ -17,9 +19,11 @@ from verity_pouw.schemes import pearl_c as C
 from verity_pouw.schemes import pearl_kw as P
 
 OUT = Path(__file__).with_name("vectors") / "pearl_c.json"
-#: (case, shape, tile rows, tile cols, unit index, weight id, test instance)
-CASES = (("test-16", (16, 128, 16), (0, 16), (0, 16), 3, 9, True),
-         ("prod-64", (64, 1024, 64), (0, 64), (0, 64), 7, 2, False))
+#: (case, shape, tile rows, tile cols, unit index, weight id, test instance, forming)
+CASES = (("test-16", (16, 128, 16), (0, 16), (0, 16), 3, 9, True, "v0"),
+         ("prod-64", (64, 1024, 64), (0, 64), (0, 64), 7, 2, False, "v0"),
+         ("test-16-v1", (16, 128, 16), (0, 16), (0, 16), 3, 9, True, "v1"),
+         ("prod-64-v1", (64, 1024, 64), (0, 64), (0, 64), 7, 2, False, "v1"))
 
 
 def shake(case: str, name: str, part: str, i: int, n: int) -> bytes:
@@ -35,13 +39,22 @@ def rows(case: str, name: str, count: int, k: int) -> list[bytes]:
     return out
 
 
+def rows_f32(case: str, name: str, count: int, k: int) -> list[bytes]:
+    out = []
+    for i, row in enumerate(rows(case, name, count, k)):
+        opened = P.open_row(*P.parse_row(row, k))
+        frac = struct.unpack(f"<{k}H", shake(case, name, "fraction", i, 2 * k))
+        out.append(C.f32_row([(x << 16) | f if x & 0x7FFF else x << 16 for x, f in zip(opened, frac)]))
+    return out
+
+
 def ctx_of(case: str, shape: tuple[int, int, int], index: int, weight: int) -> Context:
     h = lambda s: hashlib.sha256(f"{s}/{case}".encode()).digest()
     return Context(h("salt"), Matmul(index, Shape(*shape), weight), h("root_a"), h("root_b"))
 
 
-def scheme(test: bool) -> C.PearlC:
-    return C.PearlC(k_min=32, tile=(16, 16)) if test else C.PearlC()
+def scheme(test: bool, forming: str = "v0") -> C.PearlC:
+    return C.PearlC(k_min=32, tile=(16, 16), forming=forming) if test else C.PearlC(forming=forming)
 
 
 def sha(data: bytes) -> str:
@@ -56,11 +69,12 @@ def halves(grid: list[list[int]]) -> bytes:
     return b"".join(struct.pack(f"<{len(r)}H", *r) for r in grid)
 
 
-def case_vector(case, shape, r, c, index, weight, test) -> dict:
-    s, ctx = scheme(test), ctx_of(case, shape, index, weight)
+def case_vector(case, shape, r, c, index, weight, test, forming) -> dict:
+    s, ctx = scheme(test, forming), ctx_of(case, shape, index, weight)
     s.check(ctx.matmul)
     tile = Tile(tuple(range(*r)), tuple(range(*c)))
-    a, b = rows(case, "A", len(tile.rows), shape[1]), rows(case, "B", len(tile.cols), shape[1])
+    make = rows if forming == "v0" else rows_f32
+    a, b = make(case, "A", len(tile.rows), shape[1]), make(case, "B", len(tile.cols), shape[1])
     noise = s.noise(ctx)
     ops = s.encode(ctx, noise, a, b, tile)
     checked = s.checked(ctx, ops)

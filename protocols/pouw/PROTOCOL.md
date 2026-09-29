@@ -138,7 +138,7 @@ docstring states every parameter.
   signed permutation (`tests/vectors/ncp_lean.json`, from `tests/ncp_lean.py` on the integrated package, with the Lean
   sources' SHA-256). The scheme's own pinned vectors are `tests/vectors/ncp.json`.
 
-## `pearl-c-h100-v0`: Pearl-C, Pearl's product with its noisy clean-up checked (`schemes/pearl_c.py`)
+## `pearl-c-h100-v0` and `pearl-c-h100-v1`: Pearl-C, Pearl's product with its noisy clean-up checked (`schemes/pearl_c.py`)
 
 The cheap-binding lane's H100 candidate (research store `docs/pouw/cheap-binding.md` §1). It takes Pearl's H100 product
 and output tickets, and adds #311's noisy clean-up pinned bit for bit, so that the useful output U is a checked value.
@@ -148,9 +148,12 @@ states every step.
 ~~~text
 seeds     seed_B = H_"pearl-c/v0/seed-B"(salt ‖ root_B);  seed_A = H_"pearl-c/v0/seed-A"(salt ‖ root_A ‖ root_B ‖ index u64)
 forming   v0, #311's as ported (`pearl_kw`): FP10 rows, exact norms, α, β, N = E·Fᵀ, X̃ = fp8(clamp(fma(α, X, β·N)))
+          v1, §5's: FP32 rows x; s = max|x|, ρ = RMS over every 8th position, α = 448/max(s + 4ρ, 2^−32), σ = ρ,
+          β_row = (σ·α)·√r/256², E′ = e4m3(β_row·E), X̃ = e4m3(HOPPER_E4M3_K32.step(C = α·x, E′_row, F line))
 chain     C̃ = the H100 replay of A′·B̃ᵀ: a +0 accumulator per 128 products chains four HOPPER_E4M3_K32 atoms,
           promoted by one FP32 nearest-even add (−0 → +0)
-peel      P_A = [bf16(β_A·E_A) ‖ bf16(A′·F_B)],  P_B = [bf16((β_B·E_B)·G − B̃·F_A) ‖ −bf16(β_B·E_B)],  G = F_Bᵀ·F_A;
+peel      P_A = [bf16(β_A·E_A) ‖ bf16(A′·F_B)],  P_B = [bf16((β_B·E_B)·G − B̃·F_A) ‖ −bf16(β_B·E_B)],  G = F_Bᵀ·F_A
+          (v1: bf16(E′) in place of bf16(β·E));
           U = C̃ + P_A·P_Bᵀ as four HOPPER_BF16_WGMMA_K16 steps into C̃'s word
 leaf      TurboSHAKE128 (D = 0x21) per tile row and 32-column chunk over its C̃ then U words, then TurboSHAKE128
           (D = 0x22) over those digests
@@ -166,11 +169,14 @@ useful    U/(α_A·α_B), glue
   - The chain equals Pearl's own Rust H100 replay at `284b147b`: the pinned matmuls, and both 16 × 16 H100 tiles
     after `pearl_kw`'s forming (`tests/vectors/pearl_kw.json`).
   - It equals `pearl_kw.replay` on random codes, partial windows included.
-  - The scheme's own vectors are `tests/vectors/pearl_c.json`: a 16 × 16 × 128 test instance and one 64 × 1,024 × 64
-    tile.
-- **Forming v0 is the port, not the design.** The design's forming reads the previous layer's BF16 output and leaves 2–32
-  A-only units per element. v0 keeps #311's FP10 decode and exact norms, whose A-only work the red team counts as
-  skippable (X-PC-2). The rework replaces it when it is specced.
+  - The scheme's own vectors are `tests/vectors/pearl_c.json`: for each forming, a 16 × 16 × 128 test instance and one
+    64 × 1,024 × 64 tile.
+- **Two formings.**
+  - v0 is the port, not the design: it keeps #311's FP10 decode and exact norms, whose A-only work the red team counts
+    as skippable (X-PC-2).
+  - v1 is the rework (`cheap-binding.md` §5), with its roundings pinned in the module docstring: the order of ρ's
+    partial sums, α and β_row's FP32 steps, and the 2^−32 floor that keeps an all-zero row finite. Only ρ depends on A
+    alone; the scaling α·x and the cast are glue.
 - **The TurboSHAKE128 reference** is `verity.commitments.turboshake`, checked against RFC 9861 and `hashlib`'s
   Keccak-f[1600].
 
