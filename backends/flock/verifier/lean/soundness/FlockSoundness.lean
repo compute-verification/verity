@@ -95,6 +95,7 @@ import FlockSoundness.Audit.FlockBatched
 import FlockSoundness.Audit.Stratified
 import FlockSoundness.Audit.Work
 import FlockSoundness.Audit.FlockWork
+import FlockSoundness.Audit.Closure
 import FlockSoundness.Audit.FlockBatchedAcc
 import FlockSoundness.Audit.FlockLink
 import FlockSoundness.Audit.FlockLinked
