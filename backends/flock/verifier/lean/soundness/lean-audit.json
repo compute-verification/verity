@@ -864,7 +864,7 @@
    ]
   },
   "Flock.DeriveAll": {
-   "digest": "0cc432ba738d70475708774a38509f1b",
+   "digest": "38bc6ae07fe74f03d0bb6e472b144b91",
    "definitions": {
     "Flock.DeriveAll.Build": "d002b4dad286ea98",
     "Flock.DeriveAll.Build.items": "7ae45696c3561161",
@@ -885,8 +885,10 @@
     "Flock.DeriveAll.D.inCols": "bced23c0e2bb1316",
     "Flock.DeriveAll.D.items": "6891311a20572388",
     "Flock.DeriveAll.D.outCols": "de0348a6ffdee110",
+    "Flock.DeriveAll.D.parts": "06772cc68ade7021",
     "Flock.DeriveAll.D.reads": "db0f9a1e12cf606e",
     "Flock.DeriveAll.D.rows": "cd0fdaa26acd576e",
+    "Flock.DeriveAll.D.size": "3454e7839e425cc5",
     "Flock.DeriveAll.Ent": "9caacc5860f2e379",
     "Flock.DeriveAll.Inst": "ffa6a203af5a68cd",
     "Flock.DeriveAll.Inst.base": "4ec66829443b36f1",
@@ -939,7 +941,7 @@
    ]
   },
   "Flock.DeriveCheck": {
-   "digest": "178f624d4096fa9b1a86685fc78b0891",
+   "digest": "7788f0b85a9dbe13285b756c436fb659",
    "definitions": {
     "Flock.DeriveAll.Chk": "151ea8aaea236e59",
     "Flock.DeriveAll.Chk.bindAt": "86eb8746f8ac415b",
@@ -954,19 +956,25 @@
     "Flock.DeriveAll.checkLayout": "958daaa574aa442d",
     "Flock.DeriveAll.chkDecode": "d148225f81443f39",
     "Flock.DeriveAll.colSet": "50da0a8eb7d303c6",
-    "Flock.DeriveAll.deriveChecked": "9becb22bbb3c5c15",
+    "Flock.DeriveAll.deltaEntryOk": "15803810db1d7f33",
+    "Flock.DeriveAll.deriveChecked": "78538499f98b733a",
+    "Flock.DeriveAll.distinctFrom": "bec074d59ed13538",
     "Flock.DeriveAll.fullRow": "7de91b23c8fa735e",
     "Flock.DeriveAll.genOk": "71f98dc26325138d",
     "Flock.DeriveAll.genOuts": "516379ddb6627629",
+    "Flock.DeriveAll.inPart": "ae478925a588a77e",
     "Flock.DeriveAll.orderChecked": "fea41fd751371b71",
     "Flock.DeriveAll.orderOk": "4af817ede5db2de6",
     "Flock.DeriveAll.outRows": "d7fde6a8eac7f371",
     "Flock.DeriveAll.outsideOk": "ae67f57728791e9c",
+    "Flock.DeriveAll.partOk": "3e28519bfe89d26f",
+    "Flock.DeriveAll.partsChecked": "d9ff6ba374904e91",
     "Flock.DeriveAll.placedOk": "b6bbca77af62543a",
     "Flock.DeriveAll.prodRows": "24708b8a8c98bae9",
     "Flock.DeriveAll.readOk": "e3eac2c6f5463220",
     "Flock.DeriveAll.readSide": "8d8a6160f11e447c",
     "Flock.DeriveAll.readsOf": "4d13811fface13c1",
+    "Flock.DeriveAll.rowWithin": "c885c4d9bebfa085",
     "Flock.DeriveAll.shiftRow": "54585bbd4270157a",
     "Flock.DeriveAll.walk": "f76b037af32a4239"
    },
