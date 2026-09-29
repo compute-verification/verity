@@ -72,7 +72,8 @@ def test_the_lean_steps_once_the_verifier_is_on_the_tree(tmp_path, monkeypatch):
     assert (build, unit, audit, agree) == ("lean-build", "lean-unit-cut", "lean-audit", "lean-agreement")
     assert lake[-1].endswith("lake build")
     assert cut[1].endswith("verifier/unit_cut_agree.py") and cut[cut.index("--lean") + 1].endswith(".lake/build/bin/flock-verify")
-    assert lean_audit[1].endswith("tools/lean/audit.py") and {"--all", "--build"} <= set(lean_audit)
+    assert lean_audit[1].endswith("tools/check/lean_audit.py") and {"--cache", "--deps"} <= set(lean_audit) and "--fresh" not in lean_audit
+    assert "--fresh" in CHECK.lean_steps(out, cache=False)[2][1]
     assert argv[2:4] == ["--lean-agreement", str(out)] and {Path(x).name for x in argv[4:]} == {"a.tar.gz", "b.tar.gz"}
     (sent / "b.tar.gz").unlink()
     assert CHECK.lean_steps(out)[3][1] == "only upstream of the pinned upstream build and inputs was sent"
@@ -101,6 +102,17 @@ def test_the_rule_the_gate_reads(monkeypatch):
     pin = __import__("json").loads((ROOT / "backends" / "flock" / "verifier" / "upstream.json").read_text())
     assert set(pin["upstream"]["binaries"]) == {s["pr83"] for s in __import__("json").loads(
         (ROOT / "backends" / "flock" / "verifier" / "vectors.json").read_text())["replayable"]["sets"]}
+
+
+def test_the_recorded_check_takes_cpu_only_torch():
+    spec2 = importlib.util.spec_from_file_location("check_tool", ROOT / "tools" / "check" / "tool.py")
+    tool = importlib.util.module_from_spec(spec2)
+    spec2.loader.exec_module(tool)
+    assert tool.CHECK.command[:5] == ["uv", "run", "--locked", "--extra", "torch-cpu"]
+    import tomllib
+    cpu = [p for p in tomllib.loads((ROOT / "uv.lock").read_text())["package"] if p["name"] == "torch" and "+cpu" in p["version"]]
+    assert cpu and all("download.pytorch.org/whl/cpu" in p["source"]["registry"] for p in cpu)
+    assert not [d["name"] for p in cpu for d in p.get("dependencies", []) if d["name"].startswith(("nvidia-", "cuda-", "triton"))]
 
 
 def test_a_recorded_run_writes_a_valid_result(tmp_path, monkeypatch):
@@ -137,6 +149,20 @@ def test_the_groups_split_the_cores_and_run_at_once(tmp_path, monkeypatch):
     assert shipped[shipped.index("--commit") + 1] == "abc123"
     cold = CHECK.groups(tmp_path, 16, cache=False)
     assert lean[0] == "lean" and "--cache" not in cold[1][0][1] and "--fresh" in cold[0][0][1]
+    assert not any(s in pt[1] for s in CHECK.AFTER_LEAN), "without the Lean steps the suites that use Lean run with the rest"
+
+
+def test_the_suites_that_use_lean_run_after_the_lean_steps_have_built_everything(tmp_path, monkeypatch):
+    """Not beside `lake build`: whether their tests run or skip, and what `lake` finds built, must not depend on how far the
+    concurrent Lean group has got (verity-flock passed or failed on build order, r20260929-015410-5a20)."""
+    out, _ = _pinned(tmp_path, monkeypatch)
+    (_, pytest, _), = CHECK.groups(out, 8)[0]
+    lean = CHECK.groups(out, 8)[2]
+    assert [n for n, _, _ in lean] == ["lean-build", "lean-unit-cut", "lean-audit", "lean-suites", "lean-agreement"]
+    assert all(pytest[pytest.index(s) - 1] == "--skip" for s in CHECK.AFTER_LEAN)
+    argv = lean[3][1]
+    assert argv[:2] == ["bash", "-c"] and argv[2].startswith(CHECK.ELAN), "with elan's lake on the PATH, as lean-build has it"
+    assert all(f" {s} " in argv[2] for s in CHECK.AFTER_LEAN) and "suites-lean.json" in argv[2] and "--jobs 4" in argv[2]
 
 
 def test_a_checkouts_files_are_gits_and_the_key_environment_drops_the_tree_path(tmp_path):

@@ -68,6 +68,22 @@
   "replace": {"Control/Thms.lean": ["theorem helper", "/-- Prose may name debug.skipKernelTC and `run_cmd`:\n#eval and initialize here are words, not commands. -/\ntheorem helper"]},
   "passes": true
  },
+ "dependency_option": {
+  "write": {".lake/packages/dep/lakefile.toml": "name = \"dep\"\n\n[[lean_lib]]\nname = \"Dep\"\n",
+            ".lake/packages/dep/Dep.lean": "set_option debug.skipKernelTC true in\ntheorem Dep.unchecked : True := trivial\n"},
+  "replace": {"lakefile.toml": ["[[lean_lib]]", "[[require]]\nname = \"dep\"\npath = \".lake/packages/dep\"\n\n[[lean_lib]]"],
+              "lake-manifest.json": ["\"packages\": []", "\"packages\": [{\"type\": \"path\", \"scope\": \"\", \"name\": \"dep\", \"manifestFile\": \"lake-manifest.json\", \"inherited\": false, \"dir\": \".lake/packages/dep\", \"configFile\": \"lakefile.toml\"}]"],
+              "Control.lean": ["import Control.Thms", "import Control.Thms\nimport Dep"]},
+  "fails": "unchecked: .lake/packages/dep/Dep.lean:1 (Dep, which the package's build takes from dep) names debug.skipKernelTC"
+ },
+ "dependency_docstring": {
+  "write": {".lake/packages/dep/lakefile.toml": "name = \"dep\"\n# debug.skipKernelTC in a comment\n\n[[lean_lib]]\nname = \"Dep\"\n",
+            ".lake/packages/dep/Dep.lean": "/-- Prose may name debug.skipKernelTC. -/\ntheorem Dep.fine : True := trivial\n-- set_option debug.skipKernelTC true in\n"},
+  "replace": {"lakefile.toml": ["[[lean_lib]]", "[[require]]\nname = \"dep\"\npath = \".lake/packages/dep\"\n\n[[lean_lib]]"],
+              "lake-manifest.json": ["\"packages\": []", "\"packages\": [{\"type\": \"path\", \"scope\": \"\", \"name\": \"dep\", \"manifestFile\": \"lake-manifest.json\", \"inherited\": false, \"dir\": \".lake/packages/dep\", \"configFile\": \"lakefile.toml\"}]"],
+              "Control.lean": ["import Control.Thms", "import Control.Thms\nimport Dep"]},
+  "passes": true
+ },
  "missing_policy": {
   "delete": ["lean-audit.json"],
   "fails": "policy: "

@@ -3,6 +3,8 @@
 * a cancelled row takes its running stage (and the stage's forked workers) with it: GNU ``timeout`` moves the stage into
   its own process group, which never sees the runner's killpg, so the driver forwards TERM/INT/HUP to timeout's pid,
   waits for the stage to be gone, records the cancel and exits 128+signal;
+* after a PASS Build the row stops (exit 21, no Match) when a call-boundary identity of its manifest has no source the
+  Commit attaches, the first one named in stages.txt, and goes on to Match when each has one;
 * a Commit over a Match record whose account files are gone refuses to start (PRECHECK_FAIL_MATCH_RECORD_INCOMPLETE,
   exit 14); the Match summary accepts an explicit ``--match-phase cpu`` resume over the preserved capture;
 * the Match of record (``fast`` inside ``shared``) is the default and the caller can choose the audit checker;
@@ -17,15 +19,16 @@ from __future__ import annotations
 import gzip
 import json
 import os
+import select
 import shutil
 import signal
 import subprocess
 import sys
-import time
 from pathlib import Path
 
 import pytest
 
+from tests.acquire.call_boundary_programs import LP, PF, T, build_dir, dense_program
 from verity_vllm.check.weights_of_record import SCHEMA, SCHEMA_V1
 from verity_vllm.config import UsageError
 from verity_vllm.pipeline import cli
@@ -114,29 +117,37 @@ def test_a_foreign_veritor_repo_is_refused_by_name(tmp_path, capsys):
 
 # ---------------------------------------------------------------------------------------------------------------- cancel
 
-# the stage: a python parent that forks a grandchild; both write their pids and sleep.  A row's fold / commit look like this.
+# the stage: a python parent that forks a grandchild; both write their pids (and the stage its `timeout`'s), close their end of the
+# test's FIFO and block on a pipe nobody writes to, until a signal ends them.  A row's fold / commit look like this.
 STAGE = r'''
-import os, sys, time
+import os, sys
 d = sys.argv[1]
-open(os.path.join(d, "stage.pid"), "w").write(str(os.getpid()))
-pid = os.fork()
-if pid == 0:
+for name, pid in (("stage", os.getpid()), ("timeout", os.getppid())):
+    open(os.path.join(d, name + ".pid"), "w").write(str(pid))
+ready = open(READY, "wb")
+block, _ = os.pipe()
+if os.fork() == 0:
     open(os.path.join(d, "grandchild.pid"), "w").write(str(os.getpid()))
-    time.sleep(600)
-    sys.exit(0)
-time.sleep(600)
+ready.close()
+os.read(block, 1)
 '''
 
+# the row; one byte on fd `registered` once the stage's `timeout` pid is where the signal forwarding finds it
 HARNESS = r'''
 import os, sys
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline.row_driver import Row, Stop
-tmp, to, stage = sys.argv[1:4]
+tmp, to, stage, registered = sys.argv[1:5]
 o = cli.parse("row", ["run", "r", "R", "o/r", "x", "--sweep-dir", tmp, "--py", sys.executable], os.environ)
 row = Row(row="r", role="R", repo="o/r", rev="x", stages="build", env=o.env, proc="row_pod")
 os.makedirs(row.d, exist_ok=True)
 row.child_env = dict(os.environ)
 row.install_signal_forwarding()
+class Announced(set):
+    def add(self, pid):
+        super().add(pid)
+        os.write(int(registered), b".")
+row._running = Announced()
 try:
     rc = row.run_to(int(to), row.d + "/stage.log", [sys.executable, stage, row.d])
 except Stop as s:
@@ -157,38 +168,45 @@ def _alive(pid: int) -> bool:
         return True
 
 
-def _wait_for(pred, seconds: float) -> bool:
-    t_end = time.monotonic() + seconds
-    while time.monotonic() < t_end:
-        if pred():
-            return True
-        time.sleep(0.05)
-    return pred()
+def _wait_exited(fds: list[int]) -> None:
+    for fd in fds:                                                       # a pidfd turns readable once its process has exited
+        select.select([fd], [], [])
+        os.close(fd)
 
 
-def _start(tmp: Path, timeout_s: int, stage_exit: str | None = None) -> tuple[subprocess.Popen, Path]:
-    stage = tmp / "stage.py"
-    stage.write_text(STAGE if stage_exit is None else f"import sys; sys.exit({stage_exit})")
+def _start(tmp: Path, stage_exit: str | None = None) -> tuple[subprocess.Popen, Path]:
+    """The row, running `stage.py` under `timeout 0` (no timer: the expiry test raises it); returns once the row forwards signals to the
+    stage and, for the blocking stage, once the stage and its grandchild have written their pids."""
+    stage, ready = tmp / "stage.py", tmp / "ready"
+    os.mkfifo(ready)
+    stage.write_text(f"READY = {str(ready)!r}\n" + STAGE if stage_exit is None else f"import sys; sys.exit({stage_exit})")
     d = tmp / "r"
     env = {**os.environ, "PYTHONPATH": os.pathsep.join([str(TREE), os.environ.get("PYTHONPATH", "")])}
     env.pop("VERITY_TIMELINE", None)
+    registered_r, registered_w = os.pipe()
     # the research runner starts the row as a session leader and later killpg()s that group -- same here
-    p = subprocess.Popen([sys.executable, "-c", HARNESS, str(tmp), str(timeout_s), str(stage)], start_new_session=True, env=env,
-                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    assert _wait_for(lambda: (d / "grandchild.pid").exists() or (d / "row.log").exists() and "run_to rc" in (d / "row.log").read_text(), 20)
+    p = subprocess.Popen([sys.executable, "-c", HARNESS, str(tmp), "0", str(stage), str(registered_w)], start_new_session=True, env=env,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, pass_fds=(registered_w,))
+    os.close(registered_w)
+    assert os.read(registered_r, 1) == b".", "the row exited before it ran the stage"
+    os.close(registered_r)
+    if stage_exit is None:
+        with open(ready, "rb") as f:
+            assert f.read() == b""                                       # EOF: the stage and its grandchild both closed their ends
     return p, d
 
 
 @pytest.mark.skipif(not _GNU_TIMEOUT, reason="GNU timeout (coreutils) required -- the pods have it, macOS does not")
 @pytest.mark.parametrize("sig,rc", [(signal.SIGTERM, 143), (signal.SIGINT, 130)])
 def test_killpg_on_the_row_takes_the_stage_and_its_grandchild(tmp_path, sig, rc):
-    p, d = _start(tmp_path, 600)
+    p, d = _start(tmp_path)
     stage, grand = int((d / "stage.pid").read_text()), int((d / "grandchild.pid").read_text())
     assert _alive(stage) and _alive(grand)
     assert os.getpgid(stage) != p.pid, "GNU timeout puts the stage in its own process group -- the premise of the forwarding"
+    fds = [os.pidfd_open(stage), os.pidfd_open(grand)]
     os.killpg(p.pid, sig)
-    assert p.wait(timeout=15) == rc
-    assert _wait_for(lambda: not _alive(stage) and not _alive(grand), 10), "stage or its forked worker survived the cancel"
+    assert p.wait() == rc
+    _wait_exited(fds)                                                    # the stage or its forked worker surviving the cancel hangs here
     name = signal.Signals(sig).name
     assert f"CANCELLED by {name}" in (d / "stage.log").read_text()
     row_log = (d / "row.log").read_text()
@@ -200,18 +218,20 @@ def test_killpg_on_the_row_takes_the_stage_and_its_grandchild(tmp_path, sig, rc)
 
 @pytest.mark.skipif(not _GNU_TIMEOUT, reason="GNU timeout (coreutils) required -- the pods have it, macOS does not")
 def test_the_expiry_path_still_kills_the_forked_worker(tmp_path):
-    p, d = _start(tmp_path, 1)
-    stage, grand = int((d / "stage.pid").read_text()), int((d / "grandchild.pid").read_text())
-    assert p.wait(timeout=15) == 124
-    assert _wait_for(lambda: not _alive(stage) and not _alive(grand), 10), "timeout expiry left the forked worker alive"
+    p, d = _start(tmp_path)
+    stage, grand, to = (int((d / f"{n}.pid").read_text()) for n in ("stage", "grandchild", "timeout"))
+    fds = [os.pidfd_open(stage), os.pidfd_open(grand)]
+    os.kill(to, signal.SIGALRM)                                          # what GNU timeout's own timer raises on expiry
+    assert p.wait() == 124
+    _wait_exited(fds)                                                    # timeout expiry leaving the forked worker alive hangs here
     log = (d / "stage.log").read_text()
-    assert "TIMEOUT after 1s" in log and "CANCELLED" not in log
+    assert "TIMEOUT after 0s" in log and "CANCELLED" not in log
 
 
 @pytest.mark.skipif(not _GNU_TIMEOUT, reason="GNU timeout (coreutils) required -- the pods have it, macOS does not")
 def test_a_normal_exit_returns_the_stage_rc_unchanged(tmp_path):
-    p, d = _start(tmp_path, 600, stage_exit="7")
-    assert p.wait(timeout=15) == 7
+    p, d = _start(tmp_path, stage_exit="7")
+    assert p.wait() == 7
     assert "run_to rc=7" in (d / "row.log").read_text() and "cancelled" not in (d / "row.log").read_text()
     assert not (d / "timeline.jsonl").exists()
     assert (d / "stage.log").read_text().startswith(f"$ {sys.executable} ")
@@ -251,6 +271,87 @@ def test_a_moved_capture_refuses_the_commit_by_name(tmp_path, missing):
     end, row_end = _timeline(r)
     assert {"stage": "stage.commit", "ev": "end", "rc": 3, "fail_class": "PRECHECK_FAIL_MATCH_RECORD_INCOMPLETE", "missing": lacks}.items() <= end.items()
     assert {"stage": "row", "ev": "end", "ok": False, "stopped_at": "commit"}.items() <= row_end.items()
+
+
+# ---------------------------------------------------------------------------------------------------------------- Build: call boundaries
+
+def _built(r: SingleRow, monkeypatch, **kw) -> dict:
+    """A PASS Build of the call-boundary source's dense stand-in (`dense_program(**kw)`: its Build dir and manifest.json in the row dir),
+    the Build's children stubbed; the call-boundary gate after it runs for real.  Returns the manifest."""
+    b, _at = dense_program(**kw)
+    _d, man = build_dir(Path(r.d), b.doc(LP), [PF[len("model."):]])
+    (Path(r.d) / "manifest.json").write_text(json.dumps(man))
+    r.LP, r.T, r.ck = LP, T, "/ck"
+    run_tl = r.run_tl
+
+    def child(stage, to, lf, cmd, *extra):
+        if stage != "build.global_program":
+            return run_tl(stage, to, lf, cmd, *extra)
+        os.makedirs(f"{r.d}/build_workload")
+        Path(f"{r.d}/build_workload/workload_program.json").write_text(json.dumps({"workload_digest": "w" * 64}))
+        return 0
+
+    for name, fn in (("prepare", lambda: None), ("gpu_exclusive", lambda why: None), ("derive_all", lambda to: (0, 0)),
+                     ("guarded", lambda what, fn, *a: "PASS"), ("target_family", lambda *a, out: (0, "TARGET-FAMILY-OK")),
+                     ("required_manifest", lambda stage: 0), ("run_tl", child), ("timeline_report", lambda: None)):
+        monkeypatch.setattr(r, name, fn)
+    monkeypatch.setattr(R, "build_line", lambda d: ("d" * 16, "m" * 16))
+    return man
+
+
+@pytest.mark.skipif(not _GNU_TIMEOUT, reason="GNU timeout (coreutils) required -- the pods have it, macOS does not")
+def test_a_call_boundary_without_a_source_stops_the_row_after_its_build_by_name(tmp_path, monkeypatch):
+    r = _row(tmp_path, "--stages", "build,match")
+    _built(r, monkeypatch, embed=PF)
+    matched: list[int] = []
+    monkeypatch.setattr(r, "match", lambda: matched.append(1))
+    assert r.run() == 21 and not matched
+    build, gate = (ln.split(" ", 3) for ln in (Path(r.d) / "stages.txt").read_text().splitlines())
+    assert build[:2] == ["build", "PASS"] and gate[:2] == ["build-call-boundaries", "FAIL"]
+    rec = json.loads((Path(r.d) / "call_boundaries.json").read_text())
+    assert rec["pass"] is False and rec["uncovered"] > 0
+    assert gate[3].startswith(f"rc=1 identities={rec['identities']} claimed=0 covered={rec['covered']} uncovered={rec['uncovered']} ")
+    assert gate[3].endswith(f"first: {rec['named']['uncovered'][0]}") and "reads Program input 'prompt'" in gate[3]
+    assert "call boundaries without a source the Commit attaches -> stop" in (Path(r.d) / "row.log").read_text()
+    assert {"stage": "row", "ev": "end", "ok": False, "stopped_at": "call_boundaries"}.items() <= _timeline(r)[-1].items()
+
+
+@pytest.mark.skipif(not _GNU_TIMEOUT, reason="GNU timeout (coreutils) required -- the pods have it, macOS does not")
+def test_a_row_whose_every_call_boundary_has_a_source_goes_on_to_match(tmp_path, monkeypatch):
+    r = _row(tmp_path, "--stages", "build,match")
+    man = _built(r, monkeypatch)
+    n = sum(1 for x in man["identities"] if x["family"] == "call_boundaries")
+    matched: list[int] = []
+    monkeypatch.setattr(r, "match", lambda: matched.append(1))
+    assert r.run() == 0 and matched and n > 0
+    build, gate = (ln.split(" ", 3) for ln in (Path(r.d) / "stages.txt").read_text().splitlines())
+    assert build[:2] == ["build", "PASS"] and gate[:2] == ["build-call-boundaries", "PASS"]
+    assert gate[3].startswith(f"identities={n} claimed=0 covered={n} uncovered=0 unattached=0 sources=call_boundary wall=")
+
+
+@pytest.mark.skipif(not _GNU_TIMEOUT, reason="GNU timeout (coreutils) required -- the pods have it, macOS does not")
+def test_a_tp_row_stops_after_its_build_on_any_call_boundary(tmp_path, monkeypatch):
+    t = _tp_row(tmp_path, TP_DENSE)
+    os.makedirs(t.d, exist_ok=True)
+    t.child_env, t.shapes = {**os.environ, "PYTHONPATH": os.pathsep.join([str(TREE), os.environ.get("PYTHONPATH", "")])}, []
+    b, _at = dense_program()
+    _d, man = build_dir(tmp_path, b.doc(LP), [PF[len("model."):]])
+
+    def manifest_global(stage, to):
+        (Path(t.d) / "manifest.json").write_text(json.dumps({**man, "ranks": 2}))
+        return 0
+
+    for name, fn in (("jobs", lambda n: 1), ("derive_all", lambda todo, jobs: None), ("compose_all", lambda ranks: None),
+                     ("guarded_summary", lambda: "PASS"), ("manifest_global", manifest_global)):
+        monkeypatch.setattr(t, name, fn)
+    monkeypatch.setattr(R, "tp_build_digests", lambda d: ("d" * 16, []))
+    monkeypatch.setattr(R, "tp_rank_workload_digest", lambda bdir, r: "w" * 16)
+    with pytest.raises(Stop) as e:
+        t.build()
+    assert e.value.rc == 21
+    build, gate = (ln.split(" ", 3) for ln in (Path(t.d) / "stages.txt").read_text().splitlines())
+    assert build[:2] == ["build", "PASS"] and gate[:2] == ["build-call-boundaries", "FAIL"]
+    assert gate[3].endswith(": a manifest of 2 ranks (the source serves one rank)") and " sources=none " in gate[3]
 
 
 # ---------------------------------------------------------------------------------------------------------------- taps
@@ -387,6 +488,9 @@ def test_a_tp_row_runs_the_guarded_build_and_every_tap_its_manifest_names(tmp_pa
 
 # ---------------------------------------------------------------------------------------------------------------- Match summary
 
+STAGE_START = 1_600_000_000
+
+
 def _summary_row(tmp_path: Path, *, old: bool, stage_record: bool) -> Path:
     d = tmp_path / "row"
     (d / "match" / "capture").mkdir(parents=True)
@@ -397,9 +501,8 @@ def _summary_row(tmp_path: Path, *, old: bool, stage_record: bool) -> Path:
     (d / "match" / "capture" / "log.jsonl.gz").write_bytes(b"x")
     (d / "match" / "program.json").write_text("{}")
     (d / "match" / "instances.jsonl").write_text("")
-    if old:
-        t = time.time() - 3600
-        os.utime(d / "match" / "capture" / "log.jsonl.gz", (t, t))
+    t = STAGE_START - 3600 if old else STAGE_START
+    os.utime(d / "match" / "capture" / "log.jsonl.gz", (t, t))
     if stage_record:
         (d / "match" / "stages.json").write_text(json.dumps({"stages": [{"stage": "capture", "returncode": 0, "status": "ok"},
                                                                         {"stage": "control", "returncode": 0, "status": "ok"},
@@ -410,7 +513,7 @@ def _summary_row(tmp_path: Path, *, old: bool, stage_record: bool) -> Path:
 
 
 def _summary(d: Path, resumed: bool) -> dict:
-    R.match_summary(str(d), 0, 0, 0, int(time.time()) - 60, -1, resumed)
+    R.match_summary(str(d), 0, 0, 0, STAGE_START, -1, resumed)
     return json.load(open(d / "match_summary.json"))
 
 

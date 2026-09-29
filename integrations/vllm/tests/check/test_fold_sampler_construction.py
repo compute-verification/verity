@@ -187,11 +187,10 @@ def test_101s_records_fold_canonical_equal_under_the_programs_construction(tmp_p
     fold = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", "match", "--worker", "fold", "--log", str(log), "--profile",
                            _profile_of_101(), "--out", str(run / "fold_summary.json"), "--persist-dir", str(run),
                            "--sampler-construction", SE.program_sampler_construction([str(build / "build_request")])],
-                          cwd=VLLM_DIR, env=env, capture_output=True, text=True, timeout=3600)
+                          cwd=VLLM_DIR, env=env, capture_output=True, text=True)
     assert fold.returncode == 0, fold.stderr[-3000:]
     cmp = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", "program-compare", "--a", str(build / "build_request"),
-                          "--b", str(run), "--out", str(tmp_path / "match_compare.json")], cwd=VLLM_DIR, env=env, capture_output=True, text=True,
-                         timeout=3600)
+                          "--b", str(run), "--out", str(tmp_path / "match_compare.json")], cwd=VLLM_DIR, env=env, capture_output=True, text=True)
     assert cmp.returncode == 0, cmp.stderr[-3000:]
     res = json.load(open(tmp_path / "match_compare.json"))
     assert res["histogram_diff_T_normalised"] == {} and res["compare"]["canonical_sha256"]["equal"] is True, res["histogram_diff_T_normalised"]

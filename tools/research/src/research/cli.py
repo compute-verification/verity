@@ -13,15 +13,18 @@
   research merge REF [--into main] [--tool check] [-m MSG] [--dry-run]   # the merge gate: `git merge --no-ff REF` only with a passing
                                                  # attempt of the tool for that exact commit in the store (research/merge.py)
   research merge --train A B C [--on MACHINE --project P]                # several refs as one candidate, one check, a fast-forward
+  research queue status|sync|land|eject [--shadow] [--dry-run]          # the merge queue: ready PRs on `next`, `main` fast-forwarded to
+                                                 # the newest commit on it with a passing check (research/queue.py)
   research pods check-part <machine|pod-id>      # reference-part gate: name, VRAM vs [families.<fam>] vram_mb, host CPU, load, verdict (exit 3 = variant)
-  research pods create <runpod flags> [--require-reference-part] [--register --project P] [--allow-duplicate]   # at most one live pod per --name (exit 4 exists, 5 no stock, 2 failed), then the same verdict once sshd answers
+  research pods create <runpod flags> --max-hours H [--first-idle-min 20] [--require-reference-part] [--register --project P] [--allow-duplicate]
+                                                 # only under a budget line the guard has read (exit 6); at most one live pod per --name (exit 4
+                                                 # exists, 5 no stock, 2 failed); the lease armed at boot and over ssh (pods/lease.py)
+  research pods extend TARGET --hours H | lease TARGET   # push the pod's lease to at least now + H / show it
   research pods register NAME --pod-id ID --project P | unregister NAME | registry [import]   # the pod registry: one file per machine (pods/registry.py)
   research pods unpreserved <machine|pod-id>     # Attempts recorded on that machine that are NOT `preserved` (same predicate as `data preserved`); exit 1 if any
   research pods drain <machine|pod-id> [--force --reason TEXT]      # the report, then terminate ONLY when nothing is unpreserved (override logged)
-  research pods guard --prefix P [--deadline ISO --cap-usd N --rate-max USD/h --balance-floor USD --pod-max-hours H] [--dry-run] [--detach]
-                                                 # budget guard over pods named P*: trips terminate all (own host last); rate sheds newest first
-  research pods guard status|stop --prefix P     # its state file / SIGTERM to exactly its recorded pid
-  research pods guard reset --prefix P [--by WHO]  # clear a sticky trip (guard stopped), keeping the spend tally; logged
+  research pods guard [--budgets NOTES|FILE] [--dry-run] [--detach]   # the one budgets guard: every line of budgets.toml, re-read each poll
+  research pods guard status|stop                # its state file / SIGTERM to exactly its recorded pid
   research env --source TREE [--rev REV] [--json]  # `export PYTHONPATH=...` from TREE's [tool.uv.workspace] members (research.pythonpath)
   research pods ssh TARGET [--print] [-- CMD...]  # TARGET = machines.toml name | pod id | pod name; the port is looked up, never hard-coded
   research pods sync TARGET [SRC] [--dest DIR]    # rsync the worktree's git-visible files (default /workspace/src), prune what it shipped before
@@ -37,7 +40,9 @@ to the telemetry harness (timeout, sampler, cancel evidence, classifier, tee'd l
 with --on; `--cwd source` (or `source/SUB`, a relative SUB) runs it in the source root (the invoking directory; with --on, the shipped
 tree other runs of the commit share), an absolute --cwd as given; job.json run.cwd / run.cwd_basis record it.  It exits with the workload's status; with
 --require-result, a zero exit and a missing or invalid result.json exits 65 instead.  Harness flags pass through unchanged
-(--tree-sha, --workload-digest, --input name=path, --declared-output, --policy, --no-sampler, ...).
+(--tree-sha, --workload-digest, --input name=path, --declared-output, --policy, --no-sampler, ...).  `run` and `fetch --all` refuse
+(exit 3) while the runs root's filesystem has less than $RESEARCH_DISK_FLOOR_GB free (default 1.5; 0 turns it off), and name the
+eviction that frees it (runs.disk_floor_refusal).
 `--on <machine>` ships the tool (and, with --source, a clean git HEAD), stages the request, and has the machine claim the run id
 and start the same runner detached; see remote.py.  A machine must be listed in ~/.research/machines.toml for the project.
 `--tool` loads a store Tool declaration (research/store/tools_registry.py or dotted.module:NAME): before launch the runner records
@@ -171,6 +176,9 @@ def cmd_run(argv: list[str]) -> int:
     if ns.project:
         harness_opts = ["--project", ns.project, *harness_opts]
     root = R.runs_root(ns.runs_dir)
+    if not ns.claimed and (why := R.disk_floor_refusal(root)):
+        print(f"research run: refused: {why}", file=sys.stderr)
+        return 3
     run_id = ns.id or R.new_run_id()
     run_dir = root / run_id
     if ns.on:
@@ -571,6 +579,9 @@ def cmd_fetch(argv: list[str]) -> int:
     ap.add_argument("--all", action="store_true", help="every file, verified by sha256; writes preserved.json last")
     ns = ap.parse_args(argv)
     root = R.runs_root(ns.runs_dir)
+    if ns.all and (why := R.disk_floor_refusal(root)):          # the records alone are small: observing a run stays possible
+        print(f"research fetch --all: refused: {why}", file=sys.stderr)
+        return 3
     try:
         run_dir = R.resolve(root, ns.ref)
         rec = remote.fetch(run_dir, everything=ns.all)
@@ -829,6 +840,10 @@ def main(argv: list[str] | None = None) -> int:
         from .merge import main as merge_main
 
         return merge_main(rest)
+    if cmd == "queue":
+        from .queue import main as queue_main
+
+        return queue_main(rest)
     print(f"research: unknown command {cmd!r}\n\n{__doc__.strip()}", file=sys.stderr)
     return 2
 
