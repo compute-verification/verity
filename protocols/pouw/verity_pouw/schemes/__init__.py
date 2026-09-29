@@ -21,11 +21,17 @@ def _pearl(**config: Any) -> PoUWScheme:
     return PearlKW(**config)
 
 
+def _pearl_c(**config: Any) -> PoUWScheme:
+    from .pearl_c import PearlC
+    return PearlC(**config)
+
+
 #: name -> factory of the configured scheme (keyword arguments configure it, as a commitment scheme's ports do)
 SCHEMES: dict[str, Callable[..., PoUWScheme]] = {
     "ncp-v1": _ncp("word"),
     "ncp-v1-shift24": _ncp("shift24"),
     "pearl-fp8-v4": _pearl,
+    "pearl-c-h100-v0": _pearl_c,
 }
 
 
