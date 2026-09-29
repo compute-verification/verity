@@ -67,8 +67,10 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
  PR #192; until then `--m0-pythonpath` names a checkout of it) and the Lean
  verifier. `protocols/pous` (`verity_pous`) is proof of useful space: the reference
  codecs, setup and timed audit, its `PROTOCOL.md`, and its Lean package (`lean/`:
- pinned statements, proofs and a submission grader). Applications (vLLM) compose
- protocols.
+ pinned statements, proofs and a submission grader). `protocols/pouw` (`verity_pouw`)
+ is proof of useful work: the `PoUWScheme` interface (`protocol`), its lifecycle
+ (`audit`) and the named schemes (`schemes.get`: NCP, Pearl's FP8 scheme), each with
+ pinned vectors; see its `PROTOCOL.md`. Applications (vLLM) compose protocols.
 - `census/`: data only, meant to move to its own repository: `hardware.json`, `datatypes.json`, `networks.json`,
  `subcircuits.json`, `input_sets.json`, `workloads.json` (stable ids, sources), a JSON Schema for each under `schemas/`,
  and a README with the id scheme and sourcing rules. Nothing imports it; the renderer and benchmarks
@@ -102,10 +104,17 @@ Dependency direction (README "Development"): `ir <- evaluation <- ml`,
 without a frontend or runtime integration.
 
 ~~~text
-uv sync                                   # workspace root; installs research and verity editable
-uv run pytest                             # the root pyproject's testpaths; integrations/vllm keeps its own pytest config
+uv sync --all-packages --all-extras       # the whole workspace, editable, with torch for the vLLM integration's CPU tests
+uv run tools/check/suites.py              # every test suite whose inputs changed since it last passed; --quick skips slow tests
 uv run python tools/check/check.py        # the check a merge requires; --record publishes it as an Attempt
 ~~~
+
+## Tests
+
+Every package's tests live in its own `tests/` and run as one suite, in its own process (a `parallel` suite in pytest-xdist
+workers), cached by input; the repository's own suite (`tests/`) holds only invariants of the whole tree. How to run them,
+what a suite may read (`[tool.verity.tests] inputs`), and the rules for slow tests, fixtures and dummy credentials:
+`.agents/skills/testing/SKILL.md`.
 
 ## Circuits
 
@@ -115,11 +124,16 @@ small binding in `circuit_check.targets`, which the suite enforces.
 
 ## Checking and merging
 
-There is no GitHub Actions CI. `check` (`tools/check/check.py`) is the one check: pytest, `circuit-check --all`, the Lean
-verifier's build and its partition check against `verity.ir`, the Lean audit, and the verifier's cross-check against
-upstream's Rust verifier when the run is sent its input bundle (skipped by name otherwise). `--record` runs it through `research run` as an
-Attempt of the checked-out clean commit. Merge into `main` only through `research merge <branch>`, which refuses without a
-passing `check` of that exact commit in the evidence store, or when `main` has moved past it.
+There is no GitHub Actions CI. `check` (`tools/check/check.py`) is the one check: every test suite (`tools/check/suites.py`),
+`circuit-check --all`, the Lean verifier's build and its partition check against `verity.ir`, the Lean audit, and the
+verifier's cross-check against upstream's Rust verifier, at once on a multi-core CPU pod, with caches that hit only on
+identical inputs. `--record` runs it through `research run` as an Attempt of the checked-out clean commit. Merge into `main`
+only through `research merge <branch>`, which refuses without a passing `check` of that exact commit in the evidence store, or
+when `main` has moved past it; `research merge --train A B C --on POD --project verity` lands several at once on one `check`
+of the merged tree. A change under `backends/flock/` also needs `check`'s agreement with upstream's verifier
+(`lean-agreement`, on the build pinned in `backends/flock/verifier/upstream.json`; not for a `README.md` or `PROTOCOL.md`
+alone, and skipped by name elsewhere): record it with
+`uv run python tools/check/check.py --record --on POD`, which sends that build when the commit touches `backends/flock/`.
 
 ## Lean
 

@@ -562,10 +562,10 @@ def producers_of(manifest: dict[str, Any] | None) -> dict[tuple[str, str], dict[
     return out
 
 
-def producers_of_programs(programs: dict[str, dict[str, Any]], aliases: dict[str, Any] | None = None) -> dict[tuple[str, str], dict[str, Any]]:
-    """(op_path, output_member) -> {"spec", "operand", "consumers"} read from the Programs of record by dataflow, under the query a
-    `v2-query` manifest was built with (`required.population`, the Correspondence `query.cli` reads) -- such a manifest carries no
-    producer annotations.  Per required `instance_outputs` Value of every producing Call: `spec` = the Call's family; `operand` = the
+def producers_of_programs(programs: dict[str, dict[str, Any]], aliases: dict[str, Any] | None = None, query: str | None = None) -> dict[tuple[str, str], dict[str, Any]]:
+    """(op_path, output_member) -> {"spec", "operand", "consumers"} read from the Programs of record by dataflow, under `query`, the one
+    the query path built the manifest with (`required.population`, the Correspondence `query.cli` reads; None: the query of record) --
+    such a manifest carries no producer annotations.  Per required `instance_outputs` Value of every producing Call: `spec` = the Call's family; `operand` = the
     family of the Call whose output its FIRST operand reads (the order-free selector among same-family instances of one module: a fused
     norm's two narrowings read AddWidenedBf16 -> `1` and MulVecF32 -> `0`); `consumers` = the modules of the Calls that read the Value
     outside its own module, Program order (the dataflow resolution when the fold observed the producer under another path).  A fact the
@@ -586,19 +586,19 @@ def producers_of_programs(programs: dict[str, dict[str, Any]], aliases: dict[str
         corr = Correspondence.of(P, prog.get("dir"), implementation_paths=Correspondence.implementation_paths_of(res))
         tpinfo = res.get("tp") if isinstance(res.get("tp"), dict) else {}
         world = int(tpinfo.get("world") or 1)
-        program_producer_facts(P, corr, tp=({"world": world, "rank": int(tpinfo.get("rank") or 0)} if world > 1 else None), aliases=aliases, into=out)
+        program_producer_facts(P, corr, tp=({"world": world, "rank": int(tpinfo.get("rank") or 0)} if world > 1 else None), aliases=aliases, into=out, query=query)
         del P, corr
     return out
 
 
 def program_producer_facts(P: Any, corr: Any, *, tp: dict[str, Any] | None = None, aliases: dict[str, Any] | None = None,
-                           into: dict[tuple[str, str], dict[str, Any]] | None = None) -> dict[tuple[str, str], dict[str, Any]]:
+                           into: dict[tuple[str, str], dict[str, Any]] | None = None, query: str | None = None) -> dict[tuple[str, str], dict[str, Any]]:
     """`producers_of_programs` for one ProgramView + Correspondence, accumulated into `into` (the member's facts over every Program)."""
-    from verity_vllm.query.required import population
+    from verity_vllm.query.required import QUERY_OF_RECORD, population
 
     canon = {str(k): str(v[0]) for k, v in (aliases or {}).items() if isinstance(v, (list, tuple)) and v}
     out = {} if into is None else into
-    pop = population(P, corr, tp=tp)
+    pop = population(P, corr, tp=tp, query=query or QUERY_OF_RECORD)
     members = {cid: [cm.member for cm in pop.members_of(cid) if cm.family == "instance_outputs"] for cid in pop.producers()}
     members = {cid: ms for cid, ms in members.items() if ms}
     readers: dict[int, list[int]] = defaultdict(list)

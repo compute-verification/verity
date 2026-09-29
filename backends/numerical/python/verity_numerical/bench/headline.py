@@ -296,7 +296,9 @@ def headline(V: Any, workloads: Sequence[Mapping[str, Any]] | None = None) -> li
         gpu = V.prover_gpu.get(c.artifact)
         return next((h for h in census.HARDWARE.values() if T.same_sku(gpu, h.device)), None)
 
-    cells = [(c, views.backend_of(cfg_of[c.configuration]) if c.configuration in cfg_of else None, sub_of(c)) for c in V.admissible]
+    # a typed circuit cell (verity/flock-circuit/types) is compared with a flat one per instance only, never in one headline
+    cells = [(c, views.backend_of(cfg_of[c.configuration]) if c.configuration in cfg_of else None, sub_of(c)) for c in V.admissible
+             if c.configuration != views.FLOCK_CIRCUIT_TYPED_CONFIG.id]
     out = []
     for w in workloads:
         served = census.HARDWARE[w["serving"]["hardware"]]

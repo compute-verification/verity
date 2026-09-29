@@ -129,6 +129,7 @@ def test_diff_tables_compares_label_by_class() -> None:
 
 
 @pytest.mark.skipif(not ledger.DIR.is_dir(), reason="campaign ledger not present")
+@pytest.mark.slow
 def test_campaign_ledger_round_trips_through_a_fresh_store(store: LocalStore) -> None:
     """No attempts at all: every row is a ledger-row artifact, the red-team verdicts land on those, and the like-for-like table
     rebuilt from the store matches decision_tables' ledger-built table row for row under the red-team policy -- and differs from it

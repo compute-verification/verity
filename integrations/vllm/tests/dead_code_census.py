@@ -18,6 +18,7 @@ literals that name an integration module (`importlib.import_module("verity_vllm.
 prefixes (`f"verity_vllm.program.registry.{m}"` + every short literal of the same file that completes to a module), path literals
 (`verity_vllm/commit/committer/hidden_gpu_src/hidden_gpu.py`) and unique `<name>.py` literals joined at runtime.  Anything reachable from a
 root is LIVE.  `verity_vllm/engine/profiles/**` is resolved by name at runtime: the whole package is reachable when any consumer is.
+`registry.catalog.load()` imports every module of `verity_vllm.program.registry` but `quarantine` (`pkgutil`): they are reachable from it.
 
 CLASSES (per module of the census packages):
     LIVE       static_reachable or dynamically_imported
@@ -208,6 +209,11 @@ class Graph:
             if pkg == "verity_vllm.engine.profiles":                     # resolved by name from the workload's case at runtime
                 for m in self.file_of:
                     if m.startswith(pkg + "."):
+                        self.add(src_mod, m)
+                continue
+            if pkg == "verity_vllm.program.registry":                    # registry.catalog.load(): every module of it but quarantine
+                for m in self.file_of:
+                    if m.rsplit(".", 1)[0] == pkg and m != pkg + ".quarantine":
                         self.add(src_mod, m)
                 continue
             for s in strings:

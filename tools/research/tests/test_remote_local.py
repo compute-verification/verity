@@ -72,7 +72,12 @@ def test_exclusive_refuses_a_live_holder_and_reclaims_a_dead_one(tmp_path):
     s2 = R.summarize(runs_root / "second")
     assert s2["state"] == "refused"                                # never invented as "failed" by the runner: it never ran
     s = _wait_terminal(runs_root / "hold")
-    assert s["state"] == "done" and not (runs_root / ".exclusive.lock").exists(), "the runner releases its own lock"
+    lock = runs_root / ".exclusive.lock"
+    for _ in range(50):                                            # the runner records its terminal state, then releases the lock
+        if not lock.exists():
+            break
+        time.sleep(0.1)
+    assert s["state"] == "done" and not lock.exists(), "the runner releases its own lock"
     req3, _ = _request(tmp_path, "third", [PY, "-c", "print('yes')"], exclusive=True)
     assert remote.launch_request(req3)["started"]
     _wait_terminal(runs_root / "third")
@@ -144,6 +149,7 @@ def test_machines_resolution(tmp_path, monkeypatch):
         remote.resolve_machine("a", None)
 
 
+@pytest.mark.slow
 def test_exclusive_refuses_when_any_run_is_live_and_vice_versa(tmp_path):
     plain, runs_root = _request(tmp_path, "plain", [PY, "-c", "import time; time.sleep(3)"])
     assert remote.launch_request(plain)["started"]
