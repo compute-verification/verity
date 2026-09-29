@@ -13,7 +13,6 @@ derived from a reference evaluation)."""
 from __future__ import annotations
 
 import math
-import time
 from collections import Counter
 
 import pytest
@@ -118,7 +117,6 @@ def brute_force_all(r, budget: int, depth: int) -> list[vq.VU]:
 @pytest.mark.parametrize("budget,depth", CONFIGS)
 def test_enumeration_equals_brute_force_exactly_once(consistent_toy, budget, depth):
     r, _, _, _ = consistent_toy
-    t0 = time.time()
     mine = list(vq.enumerate_vus(r, max_arg_leaves=budget, depth=depth))
     ref = brute_force_all(r, budget, depth)
     assert mine == ref, (len(mine), len(ref), sorted(set(mine) ^ set(ref))[:5])
@@ -131,7 +129,6 @@ def test_enumeration_equals_brute_force_exactly_once(consistent_toy, budget, dep
     assert all(v in ix for v in mine)
     with pytest.raises(IndexError):
         ix.by_index(n)
-    assert time.time() - t0 < 30
 
 
 def test_population_sizes_against_hand_count(consistent_toy):
@@ -188,7 +185,6 @@ def test_per_instance_counts_match_independent_walk(consistent_toy):
 def test_child_units_are_bit_exact_and_tile_the_parent_returns(consistent_toy, snapshots):
     r, weights, t, _ = consistent_toy
     rep = replay.Replayer(r, snapshots, weights, chain=False, snapshots=True)
-    t0 = time.time()
     ix = vq.index(r, max_arg_leaves=100)
     n_child = 0
     for k in range(len(r.body.nodes)):
@@ -219,7 +215,6 @@ def test_child_units_are_bit_exact_and_tile_the_parent_returns(consistent_toy, s
         assert covered == Counter(p_rets), (k, r.instances[k]["spec"])
         assert set(covered.values()) == {1}
     assert n_child == 368
-    assert time.time() - t0 < 30
 
 
 def test_two_level_units_are_bit_exact_and_disjoint(consistent_toy, snapshots):
@@ -275,7 +270,6 @@ def test_production_sample_is_uniform_over_vus_and_deterministic(consistent_toy)
     assert N == 391
     seeds, per_seed = 40, 2000
     counts: Counter = Counter()
-    t0 = time.time()
     for s in range(seeds):
         a = vq.production_sample(r, seed=s, n=per_seed, max_arg_leaves=budget)
         assert a == vq.production_sample(r, seed=s, n=per_seed, max_arg_leaves=budget)      # deterministic per seed
@@ -298,7 +292,6 @@ def test_production_sample_is_uniform_over_vus_and_deterministic(consistent_toy)
     assert C["QKV"] * 0.6 < ratio < C["QKV"] * 1.5, ratio
     share = sum(1 for v in counts.elements() if v.is_instance) / total
     assert abs(share - sum(ix.fits) / N) < 0.02
-    assert time.time() - t0 < 30
 
 
 # ---------------------------------------------------------------------------------------------------------

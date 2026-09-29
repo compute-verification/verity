@@ -9,16 +9,17 @@
 
 Three independent groups run at once, the cores split between them (`--cores N`, default the CPUs this process may use):
 
-    pytest          every test suite (`tools/check/suites.py`), half the cores' worth at once: each package's tests in their own
-                    process, a pass reused while its inputs are unchanged; each suite's log and the outcomes (`suites.json`)
-                    beside the run's result
+    pytest          every test suite (`tools/check/suites.py`) but those that use Lean, half the cores' worth at once: each
+                    package's tests in their own process, a pass reused while its inputs are unchanged; each suite's log and the
+                    outcomes (`suites.json`) beside the run's result
     circuit-check   `circuit-check --all --jobs` the other half: every registered Definition and template (`tools/circuit_check`),
                     its report beside the run's result
     lean            `lake build` of the Lean verifier (`backends/flock/verifier/lean`), then its partition check against
                     `verity.ir.partition` (`unit_cut_agree.py`), then the audit of every Lake package with a `lean-audit.json`
                     (`tools/lean/audit.py --all --build`: axioms, sorry, declared axioms, escapes, files, kernel bypasses, code
                     run while compiling, dependency .olean digests, pinned statements, a kernel replay; its reports under
-                    `lean-audit/`), then its agreement with upstream's Rust verifier (`ci.py`) on the upstream build stored once
+                    `lean-audit/`), then the suites that use Lean (`AFTER_LEAN`, outcomes in `suites-lean.json`) on what those
+                    steps built, then its agreement with upstream's Rust verifier (`ci.py`) on the upstream build stored once
                     and pinned by hash (`backends/flock/verifier/upstream.json`), when the run has it; skipped by name without
                     it.  `research merge` requires it for a change under backends/flock/ (`tool.py`)
 
@@ -46,6 +47,7 @@ import json
 import os
 import platform
 import re
+import shlex
 import signal
 import subprocess
 import sys
@@ -326,6 +328,13 @@ def record(argv: list[str]) -> int:
     return subprocess.run(cmd, cwd=ROOT, env=env).returncode
 
 
+#: The suites whose tests run `lake` or what the Lean steps build under `.lake/`: a step of the Lean group once `lean-audit` has
+#: built every Lake package, with elan's `lake` on the PATH, so what they run or skip never depends on how far a concurrent
+#: `lake build` has got, and no test's `lake build` shares a build directory with one (tests/test_no_wall_clock.py holds every
+#: other suite to not skipping on them).
+AFTER_LEAN = ("verity-flock", "verity-lean-audit")
+
+
 def groups(out: Path, n: int, cache: bool = True) -> list[list[tuple[str, list[str] | str, Path]]]:
     """The independent groups, each a sequence of (name, argv or the reason it is skipped / cannot run, cwd)."""
     py = sys.executable
@@ -333,11 +342,18 @@ def groups(out: Path, n: int, cache: bool = True) -> list[list[tuple[str, list[s
     b = max(1, n - a)
     # vLLM's suite is not in the gate yet: 12 of its 4,400 CPU tests fail with torch 2.14 and it takes 20 minutes on one core
     commit = ["--commit", os.environ["RESEARCH_SOURCE_SHA"]] if os.environ.get("RESEARCH_SOURCE_SHA") else []   # a shipped tree has no .git
-    pytest = [py, str(ROOT / "tools" / "check" / "suites.py"), "--json", str(out / "suites.json"), "--logs", str(out / "suites"),
-              "--skip", "verity-vllm", *commit, "--jobs", str(a), *([] if cache else ["--fresh"])]
+    suites = [py, str(ROOT / "tools" / "check" / "suites.py")]
+    tail = [*commit, "--jobs", str(a), *([] if cache else ["--fresh"])]
+    lean = lean_steps(out, cache)
+    after_lean: list[str] = []
+    if len(lean) > 1:
+        after_lean = [x for s in AFTER_LEAN for x in ("--skip", s)]
+        lean_suites = [*suites, *AFTER_LEAN, "--json", str(out / "suites-lean.json"), "--logs", str(out / "suites"), *tail]
+        lean.insert(3, ("lean-suites", ["bash", "-c", ELAN + shlex.join(lean_suites)], ROOT))
+    pytest = [*suites, "--json", str(out / "suites.json"), "--logs", str(out / "suites"), "--skip", "verity-vllm", *after_lean, *tail]
     cc = [py, "-m", "circuit_check", "--all", "-q", "--jobs", str(b), "--out", str(out / "circuit-check.json"),
           *(["--cache", str(cache_dir() / "circuit-check")] if cache else [])]
-    return [[("pytest", pytest, ROOT)], [("circuit-check", cc, ROOT)], lean_steps(out, cache)]
+    return [[("pytest", pytest, ROOT)], [("circuit-check", cc, ROOT)], lean]
 
 
 def steps(out: Path, n: int = 1) -> list[tuple[str, list[str] | str, Path]]:
@@ -481,7 +497,7 @@ def write_result(run_dir: Path, ok: bool, done: list[dict]) -> None:
            "validation": {"status": "passed" if ok else "failed", "checker": "tools/check/check.py",
                           "detail": "; ".join(f"{s['step']} {s['status']}" for s in done)},
            "measurements": [{"name": f"{s['step']}_wall", "value": s["seconds"], "unit": "s"} for s in done],
-           "steps": done, "artifacts": [p for p in ("suites.json", "suites/", "circuit-check.json", "lean-audit/",
+           "steps": done, "artifacts": [p for p in ("suites.json", "suites-lean.json", "suites/", "circuit-check.json", "lean-audit/",
                                                     *(s.get("log") for s in done), *agreement_verdicts(run_dir))
                                         if p and (run_dir / p).exists()]}
     tmp = run_dir / "result.json.tmp"

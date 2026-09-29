@@ -80,6 +80,7 @@ research data SUBCOMMAND ...             # the evidence store (below)
 research merge REF [--into main] [--tool check] [-m MSG] [--dry-run]   # the merge gate (merge.py)
 research merge --train A B C [--on MACHINE --project P] [--command CMD]  # several refs, one checked candidate
 research merge --sweep [--into main] [--remote origin] [--dry-run]       # close the PRs that landed, retarget their children
+research queue status|sync|land|eject [--shadow] [--dry-run]       # the merge queue on `next` (queue.py)
 ~~~
 
 `research merge` is how `main` receives a merge: in the target's checkout it runs `git merge --no-ff REF` only when the store
@@ -107,6 +108,13 @@ the target's checkout): when the merge's diff touches a prefix, only an attempt 
 `passed` admits it; `!` patterns leave paths out (`!README.md`: every file of that name under the prefixes). `check` requires
 `lean-agreement` for `backends/flock/`, less its README.md and PROTOCOL.md files; `--train --send FILE` ships what such a step
 needs.
+
+`research queue` is the merge queue: `next` is `main` plus every admitted PR, one `--no-ff` merge commit each, and `land`
+fast-forwards `main` to the newest commit on `next` that the same gate accepts. A PR is admitted when it's open, not a draft,
+names its owner (a `Lane {name}` line, else its Cursor agent id), has no hold label, and has the grants the rules file
+(`ci/queue.toml`) requires of its change: `grant` labels on `pr:{n}@{head}` in the store. The branch holds the queue's state (each
+merge commit's `PR:`, `Head:` and `Owner:` trailers); a sync keeps the prefix that still matches and merges the rest again, and a
+conflicting or ejected PR's owner gets one handoff per head. `--shadow` builds `queue-shadow`, never moves `main` and tells no one.
 
 The workload receives `RESEARCH_RUN_ID` and `RESEARCH_RUN_DIR` and may write
 `$RESEARCH_RUN_DIR/result.json` (see `result.py` for the envelope). A local
@@ -229,14 +237,15 @@ Nothing that bounds spend may depend on an agent VM, which can be suspended at a
 
 - **A lease on every pod** (`pods/lease.py`, `pods/sh/lease.sh`). `research pods create --max-hours H` puts the expiry in the pod's
   environment, then, once sshd answers, arms the lease loop over ssh with the lease file and starts the idle guard (`pod_guard.sh
-  daemon`: `--first-idle-min`, default 20, before the pod's first run); `--boot-lease` also runs the loop from a RunPod image's start
+  daemon`: `--first-idle-min`, default 20, before the pod's first run; `--idle-min 0` arms none, for a pool pod kept up idle);
+  `--boot-lease` also runs the loop from a RunPod image's start
   command, before sshd (opt-in until a live run shows sshd comes up with it). At the
   expiry the idle guard ends a pod whose runs all have custody; the lease loop ends it after a 15-minute grace whatever is unfetched,
   with the pod's own key (GraphQL `podTerminate`). A pod that cannot be armed is terminated by `create`. `research run --on` extends
   the lease to cover the run's `--timeout` plus 15 minutes; `research pods extend TARGET --hours H` extends it by hand (never
   shortens it), `research pods lease TARGET` shows it.
-- **One budget file** (`pods/budgets.py`): `budgets.toml` at the notes repo's root; each line is a prefix with `cap_usd`, `expires`,
-  `max_pod_hours` and `by`. `research pods create` reads the guard's state from its host (one ssh call) and refuses (exit 6) unless
+- **One budget file** (`pods/budgets.py`): `budgets.toml` at the notes repo's root; each line is a prefix with `cap_usd` (total),
+  `cap_usd_per_day` (any rolling 24 hours; its trip clears as the window moves) or both, `expires`, `max_pod_hours` and `by`. `research pods create` reads the guard's state from its host (one ssh call) and refuses (exit 6) unless
   the guard polled in the last 3 minutes and its budgets have a live, untripped line covering the name with `max_pod_hours` at least
   `--max-hours`.
 - **One guard** (`research pods guard`, `pods/guard.py`; its docstring is the contract) on the control pod re-reads `budgets.toml`

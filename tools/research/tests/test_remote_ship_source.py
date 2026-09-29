@@ -11,7 +11,6 @@ import os
 import subprocess
 import sys
 import tarfile
-import time
 from pathlib import Path
 
 import pytest
@@ -19,6 +18,7 @@ import pytest
 from research import remote
 from research import runs as R
 from research.store import attempt as A
+from waits import wait_runner
 
 PY = sys.executable
 SRC = str(Path(remote.__file__).resolve().parents[1])
@@ -87,7 +87,7 @@ def test_an_older_commit_shipped_after_a_newer_build_is_not_mistaken_for_built(r
     output = tmp_path / "shared-target" / "binary"                  # the last build, just finished, from the first commit
     output.parent.mkdir()
     output.write_text("built from commit one\n")
-    built_at = time.time() - 5
+    built_at = 1_700_000_000                                      # 2023, after the older commit's date
     os.utime(output, (built_at, built_at))
     (repo / "pkg" / "b.py").write_text("B = 3\n")                 # a commit whose date is before that build (a baseline re-run)
     subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qam", "older"], cwd=repo, check=True,
@@ -185,36 +185,41 @@ def test_manifest_streamed_from_git_equals_the_in_memory_one(repo):
 
 
 def test_launcher_killed_mid_ship_leaves_nothing_executable(repo, tmp_path):
-    """SIGKILL the launcher while the archive is in flight (a throttled feed): no <root>/src/<sha>/ appears, the machine-side gate
-    refuses the identity, and the orphaned transport removes its partial once it sees the short stream."""
+    """SIGKILL the launcher while the archive is in flight (its feed stalls mid-stream): no <root>/src/<sha>/ appears, the
+    machine-side gate refuses the identity, and the orphaned transport removes its partial once it sees the short stream.  The
+    transport runs through a wrapper that holds a FIFO open for writing, so EOF on the FIFO is the transport's exit."""
     import os
     import signal
 
     root = tmp_path / "root"
     sha = _git(repo, "rev-parse", "HEAD")
+    held = tmp_path / "transport"
+    os.mkfifo(held)
+    transport = os.open(held, os.O_RDONLY | os.O_NONBLOCK)         # a reader first, so the wrapper's open for writing does not block
     child = f"""
-import pathlib, sys, time
+import pathlib, signal, sys
 sys.path.insert(0, {SRC!r})
 from research import remote
 real_feed = remote._archive_feed
-class Slow:
+class Stall:
+    # more than a pipe holds: the write returns once the machine side's cat is reading, so its partial exists; then no more
     def __init__(self, w): self.w = w
     def write(self, b):
-        for i in range(0, len(b), 1024):
-            self.w.write(b[i:i + 1024]); self.w.flush(); print("SENT", flush=True); time.sleep(0.05)
+        self.w.write(b + bytes(1 << 20)); self.w.flush(); print("SENT", flush=True); signal.pause()
     def flush(self): self.w.flush()
-remote._archive_feed = lambda git_dir, sent: (lambda w, inner=real_feed(git_dir, sent): inner(Slow(w)))
-remote.ship_source(["sh", "-c"], {str(root)!r}, pathlib.Path({str(repo)!r}))
+remote._archive_feed = lambda git_dir, sent: (lambda w, inner=real_feed(git_dir, sent): inner(Stall(w)))
+remote.ship_source(["sh", "-c", 'exec 9>"$0"; eval "$1"', {str(held)!r}], {str(root)!r}, pathlib.Path({str(repo)!r}))
 """
     p = subprocess.Popen([PY, "-c", child], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    assert p.stdout.readline().strip() == b"SENT", p.stderr.read()
-    p.stdout.readline()
-    assert list((root / "src").glob("*.partial-*")), "the ship is in flight"
-    os.kill(p.pid, signal.SIGKILL)
-    p.wait()
-    deadline = time.time() + 10
-    while time.time() < deadline and list((root / "src").glob("*.partial-*")):
-        time.sleep(0.1)
+    try:
+        assert p.stdout.readline().strip() == b"SENT", p.stderr.read()
+        assert list((root / "src").glob("*.partial-*")), "the ship is in flight"
+        os.kill(p.pid, signal.SIGKILL)
+        p.wait()
+        os.set_blocking(transport, True)
+        assert os.read(transport, 1) == b"", "the orphaned transport exited"
+    finally:
+        os.close(transport)
     assert not (root / "src" / sha).exists(), "nothing executable by name"
     assert not list((root / "src").glob("*.partial-*")), "the orphaned transport removed the partial when the stream ended short"
     req, _ = _request(tmp_path, "rk", [PY, "-c", "print('ran')"], remote_sec={"source_sha": sha, "source_dir": str(root / "src" / sha)})
@@ -229,9 +234,8 @@ def test_a_dead_ships_stale_partial_is_removed_by_the_next_ship(repo, tmp_path):
     stale = root / "src" / "f00d.partial-deadbeef"
     (stale / "pkg").mkdir(parents=True)
     (stale / "pkg" / "half.py").write_text("x")
-    old = time.time() - 3600
     for p in (stale / "pkg" / "half.py", stale / "pkg", stale):
-        os.utime(p, (old, old))
+        os.utime(p, (1_600_000_000, 1_600_000_000))                 # untouched since 2020
     fresh = root / "src" / "cafe.partial-0000beef"                  # another launcher's ship in progress: kept
     fresh.mkdir()
     (fresh / ".archive.tar").write_bytes(b"in flight")
@@ -299,14 +303,9 @@ def _request(tmp_path, run_id, command, *, remote_sec):
     return p, root
 
 
-def _wait_terminal(run_dir, timeout=20):
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        s = R.summarize(run_dir)
-        if s["state"] in R.TERMINAL:
-            return s
-        time.sleep(0.1)
-    pytest.fail(f"run did not finish: {R.summarize(run_dir)}")
+def _wait_terminal(run_dir):
+    wait_runner(run_dir)
+    return R.summarize(run_dir)
 
 
 def test_machine_refuses_to_execute_without_ready_or_with_foreign_identity(tmp_path):
