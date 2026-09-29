@@ -2,7 +2,7 @@
 fused-MoE construction is a declared-and-bound Program static of the workload -- read from the manifest's target, coupled to every component
 (its derive-time `target.declared` AND its `spec_histogram` Definitions), never attested.  Fail closed, by name:
 
-  - undeclared -> indexed-read (MOE-01), the pre-R17 rows unchanged (no key in the target, no digest change);
+  - undeclared -> indexed-read-ordered (MOE-01, the router in selection order); a declared `indexed-read` composes the kernel-order rows;
   - `padded` with components that bind `MoeFfnFixedL_v1` -> the block, `moe_block_present`, the padded population label;
   - a component derived under the OTHER construction (target.declared) -> refused, both directions;
   - a component whose Definitions are the other family's (spec_histogram) -> refused, both directions (the digest would be another row's);
@@ -21,6 +21,7 @@ from verity_vllm.pipeline import global_program as GP
 MOE01 = {"Gemm_v1{K=2048,N=64}": 16, "MoeExpertGemm_v1{E=64,K=2048,N=2048}": 128, "MoeExpertGemmW_v1{E=64,K=1024,N=2048}": 128,
          "MoeRouterTopK_v1{E=64,TOPK=8}": 16, "MoeSum_v1{TOPK=8,H=2048}": 16, "RmsNorm_v1{H=2048}": 33}
 PADDED = {"Gemm_v1{K=2048,N=64}": 16, "MoeFfnFixedL_v1{E=64,TOPK=8,VPT=8,H=2048,I=1024}": 16, "RmsNorm_v1{H=2048}": 33}
+ORDERED = {**{k: v for k, v in MOE01.items() if not k.startswith("MoeRouterTopK_v1")}, "MoeRouterTopKOrdered_v1{E=64,TOPK=8}": 16}
 DENSE = {"Gemm_v1{K=2048,N=8192}": 16, "RmsNorm_v1{H=2048}": 33}
 
 
@@ -40,13 +41,19 @@ def manifest(**target):
     return {"target": target} if target else {}
 
 
-def test_undeclared_is_indexed_read_and_moe01_components_compose_as_before(tmp_path):
-    shapes = {(256, 31): component(tmp_path, "c0", MOE01, {"compute_capability": [8, 9], "num_sms": 142})}
+def test_undeclared_is_indexed_read_ordered_and_declared_indexed_read_composes_as_before(tmp_path):
+    shapes = {(256, 31): component(tmp_path, "c0", ORDERED, {"compute_capability": [8, 9], "num_sms": 142})}
     out = GP.workload_moe_construction(manifest(), shapes)
-    assert out["refusal"] is None and out["value"] == "indexed-read" and out["declared_explicitly"] is False and out["attested"] is False
+    assert out["refusal"] is None and out["value"] == "indexed-read-ordered" and out["declared_explicitly"] is False and out["attested"] is False
     assert out["moe_block_present"] is True and out["components"]["256,31"]["binds_declared_construction"] is True
-    assert out["components"]["256,31"]["moe_construction"] == "indexed-read" and out["components"]["256,31"]["declared_explicitly"] is False
-    assert "MOE-01" in out["population_label"] or "indexed-read" in out["population_label"]
+    assert out["components"]["256,31"]["moe_construction"] == "indexed-read-ordered" and out["components"]["256,31"]["declared_explicitly"] is False
+    assert "MOE-01" in out["population_label"] and "indexed-read-ordered" in out["population_label"]
+    # the kernel-order router is the other construction's under the default (refused by name) and composes when declared
+    out = GP.workload_moe_construction(manifest(), {(256, 31): component(tmp_path, "k0", MOE01, None)})
+    assert out["refusal"] and "MoeRouterTopK_v1" in out["refusal"] and "the indexed-read construction" in out["refusal"]
+    decl = {"compute_capability": [8, 9], "num_sms": 142, "moe_construction": "indexed-read"}
+    out = GP.workload_moe_construction(manifest(moe_construction="indexed-read"), {(256, 31): component(tmp_path, "k1", MOE01, decl)})
+    assert out["refusal"] is None and out["value"] == "indexed-read" and out["declared_explicitly"] is True and out["moe_block_present"] is True
     # a dense workload under the default is fine: no MoE block, nothing declared, nothing idle
     dense = {(256, 31): component(tmp_path, "d0", DENSE, None)}
     out = GP.workload_moe_construction(manifest(), dense)
@@ -76,16 +83,14 @@ def test_a_component_derived_under_the_other_construction_is_refused_by_name(tmp
 
 @pytest.mark.parametrize("workload, hist, other", [("padded", MOE01, "MoeExpertGemm_v1"), ("indexed-read", PADDED, "MoeFfnFixedL_v1")])
 def test_a_component_whose_definitions_are_the_other_familys_is_refused_by_name(tmp_path, workload, hist, other):
-    decl = {"compute_capability": [8, 9], "num_sms": 142}
-    if workload == "padded":
-        decl["moe_construction"] = "padded"
+    decl = {"compute_capability": [8, 9], "num_sms": 142, "moe_construction": workload}
     shapes = {(256, 31): component(tmp_path, "c0", hist, decl)}
-    out = GP.workload_moe_construction(manifest(**({"moe_construction": "padded"} if workload == "padded" else {})), shapes)
+    out = GP.workload_moe_construction(manifest(moe_construction=workload), shapes)
     assert out["refusal"] and other in out["refusal"] and "refused by name" in out["refusal"]
     assert other in out["components"]["256,31"]["binds_other_construction"]
     # and with no target.declared at all (pre-v3 component) the Definitions alone still refuse it
     shapes = {(256, 31): component(tmp_path, "c1", hist, None)}
-    out = GP.workload_moe_construction(manifest(**({"moe_construction": "padded"} if workload == "padded" else {})), shapes)
+    out = GP.workload_moe_construction(manifest(moe_construction=workload), shapes)
     assert out["refusal"] and other in out["refusal"]
 
 

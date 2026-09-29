@@ -293,6 +293,13 @@ def _kept(split: tuple[list[dict], list[dict]], indices: dict, all_vus: list[dic
     return split
 
 
+def manifest_query(manifest: dict[str, Any] | None) -> str | None:
+    """The query the manifest was built under, when it is one the population knows (`required.QUERIES`); else None (the query of record)."""
+    from verity_vllm.query.required import QUERIES
+    q = ((manifest or {}).get("query") or {}).get("query_id")
+    return q if q in QUERIES else None
+
+
 def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], committed: Callable[[int, str, int, int], bytes | None],
                    weights: Callable[[str, int, int], np.ndarray | None], *, arrivals: dict[str, int] | None = None, per_stratum: int = 2,
                    seed: int, seed_source: str = "caller", max_evaluate: int = 2000, attention_paths: list[str] | None = None, tp: dict[str, Any] | None = None,
@@ -324,7 +331,7 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
     for rid, inst in programs.items():
         pi = indices.get(id(inst))
         if pi is None:
-            pi = ProgramIndex(inst, attention_paths=attention_paths, tp=tp, program_dir=(program_dirs or {}).get(rid))
+            pi = ProgramIndex(inst, attention_paths=attention_paths, tp=tp, program_dir=(program_dirs or {}).get(rid), query=manifest_query(manifest))
             indices[id(inst)] = pi
         addr_rec["correspondence"][str(rid)] = pi.correspondence
         # [tp M-0523 (1)] a per-rank map (tp2_worker: every entry carries identity.rank == r) labels its strata with THAT rank; a
