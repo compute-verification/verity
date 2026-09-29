@@ -234,6 +234,10 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
     unit's block rows (`blockRow`), and `BlockFacts.placement` gives a table class's placement at a slot for the unit's
     composed rows (`ofBlock`) from them. `Layout.realizes` proves `Realizes` at any unit slot of a flat statement
     `Stmt.setupH` accepted, for composed rows that are the parsed unit net's (`Compose.NetRows`).
+  - **A typed template's Δ** (`ExecTyped.lean`, #277): `delta_typed` gives Δ_A and Δ_B as the flat entries
+    (`delta_split`'s forms), then per VU the input bits' copies of their message bits, the parts' bound rows and the root
+    rows' cross entries (`Typed.tail`). `CopyRow` and `ZeroRow` state a block row that reads exactly one column, or none;
+    a satisfying witness carries the column's value there (`CopyRow.block_eq`), or 0 (`ZeroRow.block_eq`).
   - Still to prove: `NetRows` for a flat typed class, whose unit net #307 builds from `derive`'s rows (`Typed.netOfD_ok`),
     and a template's block rows from `setupH` (1e, #277).
 
