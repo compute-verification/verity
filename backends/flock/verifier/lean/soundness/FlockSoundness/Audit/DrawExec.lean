@@ -146,7 +146,12 @@ theorem subset_eq (k n : ℕ) (src : ByteArray) :
     subset k n src = (loopSw n src (List.range' 0 k) ∅ 0).map
       (fun sw => ((Array.range k).map fun i => sw.getD i i).qsort (· < ·)) := by
   unfold subset
-  simp only [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size, Nat.sub_zero, Nat.add_sub_cancel, Nat.div_one]
+  dsimp only
+  rw [Std.Legacy.Range.forIn_eq_forIn_range']
+  have hsize : ([:k] : Std.Legacy.Range).size = k := by
+    show (k - 0 + 1 - 1) / 1 = k
+    omega
+  rw [hsize]
   refine forIn_char n src _ _ _ ?_ ?_ ?_ ?_ (List.range' 0 k) ∅ 0
   · intro i s h; simp only [h]
   · intro i s r p h; simp only [h]; rfl
@@ -293,8 +298,9 @@ theorem avg_beL (F : ℕ → ℝ≥0∞) : ∀ w : ℕ,
     have hs : ∀ (x : Fin 256) (g : Fin w → Fin 256),
         bsOf ((Fin.snocEquiv fun _ => Fin 256) (x, g)) = bsOf g ++ [UInt8.ofFin x] := by
       intro x g
-      simp only [bsOf, Fin.snocEquiv, Equiv.coe_fn_mk, List.ofFn_succ', Fin.snoc_castSucc, Fin.snoc_last,
-        List.concat_eq_append]
+      have hsn : (Fin.snocEquiv fun _ => Fin 256) (x, g) = Fin.snoc g x := rfl
+      rw [hsn]
+      simp only [bsOf, List.ofFn_succ', Fin.snoc_castSucc, Fin.snoc_last, List.concat_eq_append]
     simp only [hs, beL_snoc, UInt8.toNat_ofFin]
     rw [avg_comm]
     have h256 : ∀ y, avg (fun x : Fin 256 => F (y * 256 + ↑x)) = (∑ x ∈ range 256, F (y * 256 + x)) / (256 : ℝ≥0∞) := by
@@ -422,7 +428,8 @@ theorem size_streamOf {L : ℕ} (f : Fin L → Fin 256) : (Law.streamOf f).size 
 
 theorem get!_streamOf {L : ℕ} (f : Fin L → Fin 256) (j : ℕ) (hj : j < L) :
     (Law.streamOf f).get! j = UInt8.ofFin (f ⟨j, hj⟩) := by
-  simp [Law.streamOf, ByteArray.get!, hj]
+  show (Array.ofFn fun i => UInt8.ofFin (f i))[j]! = _
+  simp [hj]
 
 theorem take_drop_bsOf {L : ℕ} (f : Fin L → Fin 256) (pos w : ℕ) (h : pos + w ≤ L) :
     ((bsOf f).drop pos).take w = (List.range w).map fun i => (Law.streamOf f).get! (pos + i) := by
