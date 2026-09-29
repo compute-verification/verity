@@ -32,6 +32,7 @@ DOMAIN = "instances whose operand and result words are all finite (the reference
 #: a Gemm row reading at least this many weight words takes the float64 chain (the logits `lm_head`); smaller rows keep the int64 twin
 FAST_GEMM_WORDS = 1 << 24
 MAX_THREADS = 8
+_REDO_CHUNK = 4096                                  # coordinates per int64 recompute (memory-bounded, as `rows.GEMM_CHUNK`)
 _FLOOR = -132
 _TRUNC24 = np.int64(~((1 << 29) - 1))
 
@@ -153,11 +154,21 @@ class _Prepared:
 
     def __init__(self, w: np.ndarray) -> None:
         self.src = w
-        wT = np.ascontiguousarray(w.T)
-        self.f = (wT.astype(np.uint32) << 16).view(np.float32)
-        raw = ((wT >> 7) & 0xFF).astype(np.uint8)
-        self.bad = (raw == 0xFF).any(axis=0)
-        self.e = np.maximum(raw, 1)
+        N, K = w.shape
+        self.f = np.empty((K, N), dtype=np.float32)
+        self.e = np.empty((K, N), dtype=np.uint8)
+        f = self.f.view(np.uint32)
+
+        def block(k0: int) -> None:                 # 16 columns at a time: no full-size transposed temporaries
+            wT = w[:, k0:k0 + 16].T
+            f[k0:k0 + 16] = wT
+            f[k0:k0 + 16] <<= 16
+            self.e[k0:k0 + 16] = ((wT >> 7) & 0xFF).astype(np.uint8)
+
+        with ThreadPoolExecutor(threads()) as ex:
+            list(ex.map(block, range(0, K, 16)))
+        self.bad = (self.e == 0xFF).any(axis=0)
+        np.maximum(self.e, 1, out=self.e)
 
     def key(self) -> tuple:
         return _key(self.src)
@@ -224,8 +235,9 @@ def dot_ampere(x: np.ndarray, w: np.ndarray, n_threads: int | None = None) -> tu
         list(ex.map(job, range(0, N, step)))
     nonfin = np.zeros(N, dtype=bool)
     idx = np.flatnonzero(redo)
-    if idx.size:
-        out[idx], nonfin[idx] = D.dot_bf16(x[None, :], w[idx])
+    for i in range(0, idx.size, _REDO_CHUNK):
+        at = idx[i:i + _REDO_CHUNK]
+        out[at], nonfin[at] = D.dot_bf16(x[None, :], w[at])
     return out, nonfin
 
 
