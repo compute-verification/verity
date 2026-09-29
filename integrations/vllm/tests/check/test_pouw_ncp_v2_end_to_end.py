@@ -528,3 +528,36 @@ def test_the_transcript_holds_every_calls_inputs_and_regenerates_each_call(which
     calls = PC.load_calls(w.tdir / PC.CALLS_DATA_FILE, lambda weight: pouw._LayerRows(w.w_up))
     assert [i for i, _s, _c in calls] == [r.index for r in w.records] and {s for _i, s, _c in calls} == {"ncp-v2"}
     assert [PC.call_leaf(PN.commit_call(i, s, c)).hex() for i, s, c in calls] == [PC.call_leaf(r).hex() for r in w.records]
+
+
+@pytest.fixture(scope="module")
+def device_world(tmp_path_factory):
+    """`world` with the setting ``device: cuda``, the serving kernel's CPU twin (`ncp2_fast.cuh`) standing in for the GPU."""
+    from verity_vllm.protocol_options import pouw_device as PD
+
+    if PD.compiler() is None:
+        pytest.skip("needs a C++ compiler")
+    rng = np.random.default_rng(5)
+    inst, woff = _program()
+    inst = PC.lower(inst, {f"model.{SITE}": "ncp-v2"})
+    weights = _bf16(rng, max(hi for _lo, hi in woff.values()), 0.5)
+    lo, hi = woff["model.model.layers.0.input_layernorm.weight"]
+    weights[lo:hi] = 0x3F80
+    fast = PD.commit_call
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(PD, "commit_call", lambda i, s, c, on="host", flags=PD.HASH: fast(i, s, c, on="fast") if on == "fused" else fast(i, s, c, on, flags))
+        return Run(inst, woff, weights, {"r0": [(i + 1) % V for i in range(LP)], "r1": [(3 * i) % V for i in range(LP)]},
+                   tmp_path_factory.mktemp("pouw-device"), mp, settings={"device": "cuda"})
+
+
+def test_the_device_setting_commits_through_the_serving_kernel_what_the_host_commits(world, device_world):
+    assert device_world.run.details["committer"].startswith("pouw_device fused")
+    assert device_world.commitment == world.commitment
+    rep, pw, issues = _verdict(device_world)
+    assert rep["result"] is True and pw["result"] is True and issues == [], (rep["why"], pw["why"])
+
+
+def test_the_device_setting_is_cuda_or_absent():
+    assert pouw.Settings.of({"device": "cuda"}).device == "cuda" and pouw.Settings.of({}).device is None
+    with pytest.raises(ValueError, match="'device' is one of cuda"):
+        pouw.Settings.of({"device": "tpu"})

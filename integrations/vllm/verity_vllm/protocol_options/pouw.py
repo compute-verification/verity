@@ -47,6 +47,7 @@ from verity_pouw.schemes import ncp
 
 from verity.commitments import MerkleTree
 from verity_vllm.protocol_options import pouw_circuit as PC
+from verity_vllm.protocol_options import pouw_device as PD
 from verity_vllm.protocol_options import pouw_native as PN
 from verity_vllm.protocol_options.interface import Context, Option, Target
 
@@ -59,9 +60,12 @@ EXECUTES = ("LinearBase.quant_method.apply",)
 EXECUTED = ("ncp-v1", "ncp-v1-shift24", "ncp-v2")
 #: The pinned int7 quantizer of the FP8 lane's reference (docs/pouw-fp8/reference.md), applied without a basis rotation.
 QUANTIZER = "verity.pouw.symmetric-int7-rowmax-rne-f32/v1"
-KEYS = ("beacon", "retain_steps", "transcript_dir", "draws", "tamper")
+KEYS = ("beacon", "retain_steps", "transcript_dir", "draws", "tamper", "device")
 #: ``ncp-v2``'s negative controls (`Settings.tamper`): a prover that commits and opens one value wrong
 TAMPERS = ("tile", "bias")
+#: where the Commit computes `ncp-v2`'s values: the host (`pouw_native`, the default) or ``cuda``, the serving kernel
+#: (`pouw_device.commit_call(on="fused")`, held to `pouw_native` leaf for leaf by its gate)
+DEVICES = ("cuda",)
 PLACEHOLDER = (
     "without a `beacon` setting the salt comes from 32 zero bytes, so it is predictable",
     "a forward's weight is not re-checked against the root committed at install",
@@ -92,6 +96,7 @@ class Settings:
     #: tile with its low bit flipped (`check.replay.pouw_circuit.tamper_drawn_tile`); ``bias`` commits and serves the first
     #: biased call with bias word 0's low bit flipped
     tamper: str | None = None
+    device: str | None = None
 
     @classmethod
     def of(cls, raw: Mapping[str, Any]) -> Settings:
@@ -119,7 +124,10 @@ class Settings:
         tamper = raw.get("tamper")
         if tamper is not None and tamper not in TAMPERS:
             raise ValueError(f"pouw setting 'tamper' is one of {', '.join(TAMPERS)}")
-        return cls(beacon, retain, tdir, draws, tamper)
+        device = raw.get("device")
+        if device is not None and device not in DEVICES:
+            raise ValueError(f"pouw setting 'device' is one of {', '.join(DEVICES)}")
+        return cls(beacon, retain, tdir, draws, tamper, device)
 
 
 def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
@@ -358,6 +366,7 @@ class _CircuitRun:
                        "committed a leaf per unit; y served, credited words committed",
             "beacon": "given" if settings.beacon else "placeholder: 32 zero bytes",
             "calls": 0, "padded_rows": 0, "commit_seconds": 0.0, "uncovered": "every GEMM outside LinearBase (lm_head, attention)",
+            "committer": "pouw_device fused (ncp2_fused.cu, cuda)" if settings.device == "cuda" else "pouw_native (host)",
             "placeholder": list(PLACEHOLDER)}
 
     def gemm(self, w: int, x: Any, weight: Any, bias: Any) -> Any:
@@ -387,7 +396,10 @@ class _CircuitRun:
         call = PC.Call(a, _f32_bits(s), _LayerRows(weight), bias_bits, self.salt, forward=self.forward, layer=w, site=0, weight=w,
                        rowids=np.arange(self.row_base, self.row_base + mp, dtype=np.uint32), colids=np.arange(n, dtype=np.uint32))
         if self.commit:
-            rec = PN.commit_call(len(self.records), self.scheme, call)
+            if self.settings.device == "cuda":
+                rec = PD.commit_call(len(self.records), self.scheme, call, on="fused")
+            else:
+                rec = PN.commit_call(len(self.records), self.scheme, call)
             self.records.append(rec)
             served = rec.y
         else:
