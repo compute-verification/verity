@@ -34,10 +34,15 @@ KINDS: dict[str, str] = {
                         "meta {targets, files, taken_utc, host}",
     "telemetry/v1": "events.jsonl or resources.jsonl of an attempt",
     "check/v1": "a repository check run's result.json (each step's status and seconds); what `research merge` reads is its attempt",
+    "flock-upstream-build/v1": "upstream Flock's verifier builds for the agreement job (backends/flock/verifier/upstream-build.sh): "
+                               "a tar.gz of upstream-<PR #83 commit> binaries and BUILD.json; meta {flock, rustc, host, bundle_sha256, "
+                               "binaries}, pinned by backends/flock/verifier/upstream.json",
+    "flock-agreement-inputs/v1": "the stored inputs the agreement job's replayable sets name (a ci-bundle's store/, tar.gz); meta "
+                                 "{arts}, pinned by backends/flock/verifier/upstream.json",
     "redteam-findings/v1": "meta {findings: [...]}; refs.target",
     "ledger-row/v1": "one frozen overhead-ledger row (backends/numerical/reports/ledger/<lane>.jsonl) whose run is not an attempt here; "
                      "meta = the row as written (schema ledger/v1); payload null; the lane's claims are labels on it",
-    "trust-dossier/v1": "the computed trust level of one numerical target (verity.proofs.trust): meta = the TrustReport "
+    "trust-dossier/v1": "the computed trust level of one numerical target (tools/tc_probe/trust.py): meta = the TrustReport "
                         "(schema verity/trust-dossier/v1: level, criteria with evidence ids, D-entries, references, missing items, invalidation "
                         "triggers, relitigation procedure); refs.cited = every artifact it rests on, refs.previous = earlier dossiers; payload null; "
                         "labels target, instruction, level, anchor",

@@ -18,6 +18,7 @@ PKG_ROOT = HERE.parent / "src"          # tools/research/src (research is instal
 
 from research.telemetry import CLASSIFIER_VERSION, events, job, policy  # noqa: E402
 from research.telemetry.classify import classify  # noqa: E402
+from waits import Gate  # noqa: E402
 
 # The r17 campaign's RULES.md seed lives in veritor and keeps moving; compare against it only when asked to.
 SEED = Path(os.environ["RESEARCH_SEED_RULES"]) if os.environ.get("RESEARCH_SEED_RULES") else None
@@ -527,15 +528,27 @@ def test_tele_run_launched_through_the_script_starts_a_sampler_that_finds_the_pa
     shutil.copytree(PKG_ROOT / "research", root / "research", ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
     main_py = root / "research" / "telemetry" / "__main__.py"
     mark = tmp_path / "sidecar_module_file.txt"
-    main_py.write_text(f"import pathlib\npathlib.Path({str(mark)!r}).write_text(__file__)\n" + main_py.read_text())
+    gate = Gate(tmp_path / "sampled")            # the workload runs until the sidecar's first round is written, so the sidecar is up
+    main_py.write_text(f"import os, pathlib\npathlib.Path({str(mark)!r}).write_text(__file__)\n"
+                       "from research.telemetry import sample as _sample\n"
+                       "_round = _sample.Sampler.round\n"
+                       f"def _release_after_first(self, final=False, gate={str(gate.path)!r}):\n"
+                       "    alive = _round(self, final)\n"
+                       "    if self.samples == 1:\n"
+                       "        fd = os.open(gate, os.O_WRONLY); os.write(fd, b'x'); os.close(fd)\n"
+                       "    return alive\n"
+                       "_sample.Sampler.round = _release_after_first\n" + main_py.read_text())
     launcher = tmp_path / "tele"
     launcher.write_text("import sys\n"
                         f"sys.path.insert(0, {str(root)!r})\n"
                         "from research.telemetry.cli import main\n"
                         "sys.exit(main())\n")
     env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
-    r = subprocess.run([sys.executable, str(launcher), "run", "--attempt-dir", str(tmp_path / "a"), "--stage", "t", "--cadence", "0.2", "--linger", "0.5",
-                        "--", "sleep", "1.5"], capture_output=True, text=True, env=env, cwd=str(tmp_path))
+    try:
+        r = subprocess.run([sys.executable, str(launcher), "run", "--attempt-dir", str(tmp_path / "a"), "--stage", "t", "--cadence", "0.2", "--linger", "0.5",
+                            "--", sys.executable, "-c", Gate.WAIT, str(gate.path)], capture_output=True, text=True, env=env, cwd=str(tmp_path))
+    finally:
+        gate.close()
     assert r.returncode == 0, r.stderr
     log = (tmp_path / "a" / "sampler.log").read_text() if (tmp_path / "a" / "sampler.log").exists() else ""
     assert "No module named" not in log, log
@@ -545,26 +558,42 @@ def test_tele_run_launched_through_the_script_starts_a_sampler_that_finds_the_pa
     assert Path(mark.read_text()).resolve() == main_py.resolve()
 
 
-@pytest.mark.slow
-def test_tele_run_reads_a_timeout_change_from_the_control_file_and_records_it(tmp_path):
+#: The operator's `tele set-timeout` from inside the workload, mid-run; then it waits for the gate argv[1] (never released: killed).
+SETS_TIMEOUT = ("import sys; from research.telemetry.run import set_timeout; set_timeout(sys.argv[2], float(sys.argv[3]), 'manual', sys.argv[4]); "
+                "open(sys.argv[1], 'rb').read(1)")
+
+
+def test_tele_run_reads_a_timeout_change_from_the_control_file_and_records_it(tmp_path, monkeypatch):
     """[r19-int-8, F-r19-int-8] Seven R19 rows were launched with --timeout sized on Build alone; tele run held the value in memory and
     would have SIGTERMed healthy Match/Commit stages.  `tele set-timeout` writes control/timeout_s; the run loop re-reads it (mtime/size
-    change), emits a `timeout_changed` mark carrying old/new/actor/reason and updates status.json.  Here: a 1 s launch timeout is raised
-    to 60 s at t~0.4 s, the 2.5 s workload finishes with rc 0 and no timeout marker; then the reverse -- a 60 s launch timeout lowered to
-    0.5 s ends the workload with the ordinary timeout cancel-intent naming the NEW value."""
-    import threading
+    change), emits a `timeout_changed` mark carrying old/new/actor/reason and updates status.json.  The stage clock stands at 0 until
+    status.json carries the new value, then reads 30 s: past a 1 s launch timeout raised to 60 s (the workload is released and finishes
+    with rc 0, no timeout marker), and past a 60 s launch timeout lowered to 0.5 s (the ordinary timeout cancel-intent names the NEW
+    value)."""
     from research.telemetry import run as trun
+    monkeypatch.setenv("PYTHONPATH", str(PKG_ROOT))
 
-    def go(d, timeout, cmd):
-        return subprocess.run([sys.executable, "-m", "research.telemetry", "run", "--attempt-dir", str(d), "--stage", "t", "--timeout", str(timeout),
-                               "--no-sampler", "--no-classify", "--grace", "1", "--", *cmd], capture_output=True, text=True,
-                              env={**os.environ, "PYTHONPATH": str(PKG_ROOT)}, cwd=str(tmp_path))
+    def go(d, launch, new, reason, gate, *, finish):
+        read = []
 
-    d = tmp_path / "raise"
+        def clock():
+            st = json.loads((d / "status.json").read_text()) if (d / "status.json").exists() else {}
+            if st.get("timeout_s") != new:
+                return 0.0
+            if finish and not read:
+                gate.release()
+            read.append(True)
+            return 30.0
+        monkeypatch.setattr(trun, "clock", clock)
+        return trun.main(["--attempt-dir", str(d), "--stage", "t", "--timeout", str(launch), "--no-sampler", "--no-classify", "--grace", "1",
+                          "--", sys.executable, "-c", SETS_TIMEOUT, str(gate.path), str(d), str(new), reason])
+
+    d, gate = tmp_path / "raise", Gate(tmp_path / "raise.gate")
     d.mkdir()
-    threading.Timer(0.4, trun.set_timeout, args=(d, 60.0, "manual", "sized on Build alone")).start()
-    r = go(d, 1.0, ["sleep", "2.5"])
-    assert r.returncode == 0, r.stderr
+    try:
+        assert go(d, 1.0, 60.0, "sized on Build alone", gate, finish=True) == 0
+    finally:
+        gate.close()
     recs = [json.loads(l) for l in (d / "events.jsonl").read_text().splitlines() if l.strip()]
     marks = [x for x in recs if x.get("kind") == "mark" and x.get("name") == "timeout_changed"]
     assert len(marks) == 1 and marks[0]["old_timeout_s"] == 1.0 and marks[0]["new_timeout_s"] == 60.0
@@ -573,28 +602,34 @@ def test_tele_run_reads_a_timeout_change_from_the_control_file_and_records_it(tm
     st = json.loads((d / "status.json").read_text())
     assert st["state"] == "done" and st["timeout_s"] == 60.0 and st.get("timed_out") is False
 
-    d2 = tmp_path / "lower"
+    d2, gate = tmp_path / "lower", Gate(tmp_path / "lower.gate")
     d2.mkdir()
-    threading.Timer(0.4, trun.set_timeout, args=(d2, 0.5, "manual", "abort")).start()
-    r = go(d2, 60.0, ["sleep", "20"])
-    assert r.returncode != 0
+    try:
+        assert go(d2, 60.0, 0.5, "abort", gate, finish=False) != 0
+    finally:
+        gate.close()
     recs = [json.loads(l) for l in (d2 / "events.jsonl").read_text().splitlines() if l.strip()]
     ci = [x for x in recs if x.get("kind") == "cancel_intent"]
     assert ci and ci[0]["actor"] == "timeout" and "timeout_s=0.5" in ci[0]["reason"]
     st = json.loads((d2 / "status.json").read_text())
     assert st["state"] == "cancelled" and st["timed_out"] is True
 
-    # a bare number and an unparseable file: the first is accepted, the second is ignored (never the reason a workload stops)
-    d3 = tmp_path / "bare"
-    d3.mkdir()
-    (d3 / "control").mkdir()
-    (d3 / "control" / "timeout_s").write_text("not json")
-    threading.Timer(0.4, lambda: (d3 / "control" / "timeout_s").write_text("30")).start()
-    r = go(d3, 1.0, ["sleep", "2.0"])
-    assert r.returncode == 0, r.stderr
-    assert "ignoring unparseable" in r.stderr
-    recs = [json.loads(l) for l in (d3 / "events.jsonl").read_text().splitlines() if l.strip()]
-    assert [x["new_timeout_s"] for x in recs if x.get("kind") == "mark" and x.get("name") == "timeout_changed"] == [30.0]
+
+def test_the_timeout_control_file_accepts_a_bare_number_and_ignores_what_it_cannot_parse(tmp_path, capsys):
+    """An unparseable control file is reported once and otherwise ignored (never the reason a workload stops); a bare number is a
+    timeout_s.  The run loop acts on whatever this returns (test above)."""
+    from research.telemetry import run as trun
+
+    ctl = trun._TimeoutControl(tmp_path)
+    assert ctl.poll() is None
+    (tmp_path / "control").mkdir()
+    (tmp_path / "control" / "timeout_s").write_text("not json")
+    assert ctl.poll() is None
+    os.utime(tmp_path / "control" / "timeout_s", (1_600_000_000, 1_600_000_000))   # changed again, still unparseable: not said twice
+    assert ctl.poll() is None and capsys.readouterr().err.count("ignoring unparseable") == 1
+    (tmp_path / "control" / "timeout_s").write_text("30")
+    assert ctl.poll() == {"timeout_s": 30.0}
+    assert ctl.poll() is None, "unchanged: nothing new"
 
 
 def test_set_timeout_cli_writes_the_control_file():

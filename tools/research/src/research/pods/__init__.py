@@ -1,7 +1,8 @@
-"""Pod fleet: RunPod lifecycle, budget cap, memory guard, and the pod-side shell guards under sh/.
+"""Pod fleet: RunPod lifecycle, the lease every pod carries (lease.py, sh/lease.sh), the one budgets guard (guard.py, budgets.py),
+the memory guard, and the pod-side idle guard under sh/.
 
-Promoted verbatim from veritor zk/campaign @ df7fbea3d (deadline.sh, rearm.sh from the r17 deadman pod, 2026-09-21).
-budget_cap.py and mem_guard.py import runpod.py as a sibling via sys.path so the same files run standalone on a pod.
+Promoted from veritor zk/campaign @ df7fbea3d (2026-09-21).  mem_guard.py imports runpod.py as a sibling via sys.path so the same
+file runs standalone on a pod.
 """
 
 # Name suffixes of this project's pods.  runpod.py `create` (standalone, spells its own) still appends the first; parsers accept all.

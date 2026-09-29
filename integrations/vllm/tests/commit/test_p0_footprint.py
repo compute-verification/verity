@@ -18,7 +18,6 @@ import os
 import subprocess
 import sys
 import threading
-import time
 from pathlib import Path
 
 import pytest
@@ -48,7 +47,8 @@ def _arena(sizes: list[int]) -> nh._DeviceArena:
     return a
 
 
-def test_take_best_fit_and_no_growth_while_busy():
+def test_take_best_fit_and_no_growth_while_busy(monkeypatch):
+    monkeypatch.setattr(nh._DeviceArena, "WAIT_TIMEOUT_S", float("inf"))   # the wait below ends by the release, never by the clock
     a = _arena([64, 64, 1024])
     d1, d2 = a.take(10), a.take(10)
     assert d1.numel() == 64 and d2.numel() == 64                     # decode-sized steps never consume the prefill block
@@ -56,16 +56,24 @@ def test_take_best_fit_and_no_growth_while_busy():
     assert p.numel() == 1024
     assert a.allocs == 3                                             # nothing grew
     got: list = []
+    waiting = threading.Event()
+
+    class _Cv(threading.Condition):
+        def wait(self, *args, **kwargs):
+            waiting.set()
+            return super().wait(*args, **kwargs)
+
+    a._cv = _Cv(a._lock)
 
     def taker():
         got.append(a.take(10))                                       # every block busy -> must WAIT for a release, not allocate
 
     t = threading.Thread(target=taker)
     t.start()
-    time.sleep(0.2)
+    waiting.wait()                                                   # the taker is in the arena's wait; only release() below ends it
     assert not got and t.is_alive() and a.allocs == 3
     a.release(d1)
-    t.join(timeout=5)
+    t.join()
     assert got and got[0] is d1 and a.waits == 1 and a.wait_s > 0
 
 
@@ -159,7 +167,7 @@ def test_e2e_windowed_roots(tmp_path: Path):
         cmd = list(base)
         if name == "win-bounded-none":
             cmd[cmd.index("--retain") + 1] = "none"
-        p = subprocess.run(cmd + extra + ["--out", str(tmp_path / name)], capture_output=True, text=True, timeout=3600)
+        p = subprocess.run(cmd + extra + ["--out", str(tmp_path / name)], capture_output=True, text=True)
         vp = tmp_path / name / "verdict.json"
         assert vp.exists(), f"{name}: exit {p.returncode}, no verdict\n{p.stdout[-2000:]}\n{p.stderr[-2000:]}"
         v = json.loads(vp.read_text())

@@ -72,7 +72,7 @@ def _compose(workload: Path, derived: Path, out: Path, eos: int) -> dict:
     """GP-01 as the Build runs it: `verity-vllm global-program` in its own interpreter."""
     p = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", "global-program", "--workload", str(workload),
                         "--derived", str(derived), "--out", str(out), "--eos-token-ids", str(eos)],
-                       cwd=VLLM_DIR, capture_output=True, text=True, timeout=1800)
+                       cwd=VLLM_DIR, capture_output=True, text=True)
     assert p.returncode == 0, p.stderr[-3000:]
     return json.loads(p.stdout.strip().splitlines()[-1])
 
@@ -84,7 +84,7 @@ def _decode_cold(descriptor: Path) -> int:
             "from verity.ir.codec import decode_program\n"
             "from verity_vllm.check.match.program_compare import _registry\n"
             "print(decode_program(json.load(gzip.open(sys.argv[1])), _registry()).gates)\n")
-    p = subprocess.run([sys.executable, "-c", code, str(descriptor)], cwd=VLLM_DIR, capture_output=True, text=True, timeout=1800)
+    p = subprocess.run([sys.executable, "-c", code, str(descriptor)], cwd=VLLM_DIR, capture_output=True, text=True)
     assert p.returncode == 0, p.stderr[-3000:]
     return int(p.stdout.strip().splitlines()[-1])
 
@@ -112,7 +112,7 @@ def _build_101(tmp_path) -> Path:
 
 
 def _run(code: str, *args: str) -> subprocess.CompletedProcess:
-    return subprocess.run([sys.executable, "-c", code, *args], cwd=VLLM_DIR, capture_output=True, text=True, timeout=1800)
+    return subprocess.run([sys.executable, "-c", code, *args], cwd=VLLM_DIR, capture_output=True, text=True)
 
 
 @pytest.mark.slow
@@ -133,7 +133,7 @@ def test_101s_manifest_step_resolves_every_call_as_its_build_does(tmp_path):
     env = {k: v for k, v in os.environ.items() if k not in ("VERITY_QWORD_MAX_GATES", "VERITY_WORD_CHECK")}
     p = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", "manifest", "build", "--program", str(build / "build_request"),
                         "--workload", f"workloads/{ROW_101}.json", *MANIFEST_POLICY, "--out", str(tmp_path / "manifest.json")],
-                       cwd=VLLM_DIR, capture_output=True, text=True, timeout=1800, env=env)
+                       cwd=VLLM_DIR, capture_output=True, text=True, env=env)
     assert "not a registered Definition" not in p.stderr and "not in the registry" not in p.stderr, p.stderr[-3000:]
     assert p.returncode != 0 and "1 violation(s): GumbelTopPTokenSelect_v2{V=128256,S=32}: too-large, 32 Call(s)" in p.stderr, p.stderr[-3000:]
 

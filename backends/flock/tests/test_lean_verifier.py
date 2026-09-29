@@ -44,11 +44,11 @@ def test_audit_layer_is_abstract():
     """The audit theorems import only the interaction model, Mathlib and each other, so any backend can instantiate them
     (`soundness/DESIGN.md` §12). The Flock instantiations are the only files that import Flock's theorems:
     `Flock.lean` (oracle layer), `FlockCompiled.lean` (one table), `FlockBatched.lean` (several tables),
-    `FlockBatchedAcc.lean` (the expected-time extractor), `FlockLink.lean` (the link theorem) and `FlockLinked.lean` (the
-    two composed). No proof is admitted."""
+    `FlockBatchedAcc.lean` (the expected-time extractor), `FlockLink.lean` (the link theorem), `FlockLinked.lean` (the
+    two composed) and `FlockWork.lean` (the executable's work rule). No proof is admitted."""
     files = sorted(AUDIT.glob("*.lean"))
     flock = {"Flock.lean", "FlockCompiled.lean", "FlockBatched.lean", "FlockBatchedAcc.lean", "FlockLink.lean",
-             "FlockLinked.lean"}
+             "FlockLinked.lean", "FlockWork.lean"}
     assert files and flock <= {p.name for p in files}
     bad = [f"{p.name}: {line}" for p in files if p.name not in flock for line in p.read_text().splitlines()
            if line.startswith("import ") and not AUDIT_IMPORTS.match(line)]
@@ -292,6 +292,129 @@ def test_stratified_draw_from_the_verifiers_own_program(tmp_path):
     assert _lean_draw_obj(["--program", str(tmp_path / "p.desc"), "--partition", str(tmp_path / "w.json"), "--stratified", "4"]) is None
 
 
+def _work_program(tmp_path):
+    """Three templates' units under `Q_template_instances` (T0 at [0, 2) and [5, 6), T1 at [2, 5), T2 at [6, 10)), and a
+    writer of work tables that returns the verifier's flags for it."""
+    import hashlib
+    desc = {"schema": "verity-ir/descriptor/v1", "callees": ["Input8_v1", "T0_v0", "T1_v0", "T2_v0"], "root": "Root_v0",
+            "definitions": {"Root_v0": {"form": "composite", "body": {"nodes": [
+                {"form": "primitive", "fn": 0}, {"form": "batch", "fn": 1, "n": 2}, {"form": "batch", "fn": 2, "n": 3},
+                {"form": "batch", "fn": 1, "n": 1}, {"form": "batch", "fn": 3, "n": 4}]}},
+                "Input8_v1": {"form": "primitive"}, "T0_v0": {"form": "primitive"}, "T1_v0": {"form": "primitive"},
+                "T2_v0": {"form": "primitive"}}}
+    text = json.dumps(desc, sort_keys=True, separators=(",", ":"))
+    (tmp_path / "p.desc").write_text(text)
+    obj = {"format": "verity/partition/v1", "program": hashlib.sha512(text.encode()).hexdigest(),
+           "query": {"name": "Q_template_instances", "version": 0, "params": {"templates": ["T1_v0", "T0_v0", "T2_v0"]}}}
+    (tmp_path / "q.json").write_text(json.dumps(obj))
+
+    def table(name, work):
+        (tmp_path / name).write_text(json.dumps(work))
+        return ["--program", str(tmp_path / "p.desc"), "--partition", str(tmp_path / "q.json"), "--work-table", str(tmp_path / name)]
+
+    return table
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_work_draw_from_the_verifiers_own_program(tmp_path):
+    """`draw --program --partition --work K --work-table F`: the stratified law's strata, `k_s = min(n_s, max(1,
+    ⌈K w_s n_s / W⌉))` (a stratum that does no work draws its floor of one), each stratum's `subset` on its own segment of
+    the stream, and U2 on work draws, held to the verifier's own law."""
+    import random
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    ref = _stratified_agree()
+    table = _work_program(tmp_path)
+    flags = table("w.json", {"T0_v0": 3, "T1_v0": 1, "T2_v0": 0})
+    law = {"law": "work", "k": 2, "strata": [{"template": "T0_v0", "units": [[0, 2], [5, 6]], "work": 3, "k": 2},
+                                             {"template": "T1_v0", "units": [[2, 5]], "work": 1, "k": 1},
+                                             {"template": "T2_v0", "units": [[6, 10]], "work": 0, "k": 1}]}
+    need = sum(2 * s["k"] * ref.width(sum(hi - lo for lo, hi in s["units"])) + 64 for s in law["strata"])
+    rng = random.Random(20260929)
+    for _ in range(20):
+        src = rng.randbytes(need)
+        (tmp_path / "s.bin").write_bytes(src)
+        d = _lean_draw_obj([*flags, "--work", "2", "--stream-file", str(tmp_path / "s.bin")])
+        assert {k: d[k] for k in ("law", "k", "strata")} == law and d["population"] == 10
+        assert d["units"] == ref.reference_draw(law, src)
+    # W = 3·3 + 1·3 = 12: sized by work, floored at one, capped at n_s
+    for k, want in {"1": [1, 1, 1], "4": [3, 1, 1], "10": [3, 3, 1]}.items():
+        assert [s["k"] for s in _lean_draw_obj([*flags, "--work", k])["strata"]] == want, k
+    d = _lean_draw_obj([*flags, "--work", "2"])
+    assert len(d["units"]) == 4 and sum(u in (0, 1, 5) for u in d["units"]) == 2 and sum(u >= 6 for u in d["units"]) == 1
+    s0, s1, s2 = d["strata"]
+    bad = [{**d, "k": 3}, {**d, "law": "stratified"}, {**d, "units": d["units"][:-1]},
+           {**d, "strata": [s0, s1, {**s2, "k": 0}]}, {**d, "strata": [s0, s1, {k: v for k, v in s2.items() if k != "work"}]},
+           {**d, "strata": [{**s0, "work": "3"}, s1, s2]}, {**d, "strata": [s0, s1, {**s2, "k": True}]},
+           {**d, "strata": [s0, s1, {**s2, "work": 0, "n": 4}]}, {**d, "strata": [s0, s1]},
+           # U2 alone accepts a work of 4 (the same k_s); the verifier's own table refuses it
+           {**d, "strata": [{**s0, "work": 4}, s1, s2]}]
+
+    def check(cases, *extra):
+        (tmp_path / "cases.json").write_text(json.dumps([{"record": x, "statement": x, "instances": len(x["units"])} for x in cases]))
+        p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "draw-test", str(tmp_path / "cases.json"), *extra],
+                           capture_output=True, text=True)
+        return [json.loads(line[10:]) for line in p.stdout.splitlines()]
+
+    got = check([d, *bad], *flags, "--work", "2")
+    assert [g["ok"] for g in got] == [True] + [False] * len(bad), got
+    assert [g["ok"] for g in check([d, bad[-1]])] == [True, True]
+    # another table's law, or the stratified law, is not this verifier's
+    other = _lean_draw_obj([*table("w2.json", {"T0_v0": 1, "T1_v0": 1, "T2_v0": 0}), "--work", "2"])
+    strat = _lean_draw_obj([*flags[:4], "--stratified", "2"])
+    assert [g["ok"] for g in check([other, strat])] == [True, True]
+    assert [g["ok"] for g in check([other, strat], *flags, "--work", "2")] == [False, False]
+    for k in ("0", "11"):
+        assert _lean_draw_obj([*flags, "--work", k]) is None
+    assert _lean_draw_obj([*table("w3.json", {"T0_v0": 3, "T1_v0": 1}), "--work", "2"]) is None
+    assert _lean_draw_obj([*table("w4.json", {"T0_v0": 0, "T1_v0": 0, "T2_v0": 0}), "--work", "2"]) is None
+    assert _lean_draw_obj([*flags, "--work", "2", "--stratified", "2"]) is None
+    assert _lean_draw_obj([*flags[:4], "--work", "2"]) is None
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_verify_takes_a_work_draw_only_from_its_own_table(tmp_path):
+    """`verify` refuses a session whose record carries a work draw unless it holds its own K, work table, program and
+    partition, since the draw's K and stated work set every k_s; with all four, the law must be its own derivation, so a
+    draw made at another K (k = 1, say, which U2 alone accepts) is refused."""
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    table = _work_program(tmp_path)
+    flags = table("w.json", {"T0_v0": 3, "T1_v0": 1, "T2_v0": 0})
+    other = table("w2.json", {"T0_v0": 1, "T1_v0": 1, "T2_v0": 0})
+    (tmp_path / "circuit.txt").write_text("not a circuit\n")
+    (tmp_path / "pub.bin").write_bytes(b"{}\n")
+
+    def session(name, draw):
+        s = tmp_path / name
+        s.mkdir()
+        (s / "session.json").write_text(json.dumps({"kind": "flock-live-session/v1", "unit_draw": draw}))
+        for r in (0, 1):
+            (s / f"circuit.rep{r}.bin").write_bytes(b"\0" * 16)
+        return s
+
+    at2 = session("k2", _lean_draw_obj([*flags, "--work", "2"]))
+    at1 = session("k1", _lean_draw_obj([*flags, "--work", "1"]))
+
+    def why(s, *extra):
+        p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "verify", "--circuit", str(tmp_path / "circuit.txt"),
+                            "--public", str(tmp_path / "pub.bin"), *extra, "--session", str(s)],
+                           capture_output=True, text=True)
+        (v,) = [json.loads(line[8:]) for line in p.stdout.splitlines() if line.startswith("VERDICT ")]
+        assert not v["accepted"] and p.returncode == 1
+        return v["why"]
+
+    need = "setup: U2: a work draw needs the verifier's own K, work table, program and partition"
+    assert why(at2).startswith(need)
+    assert why(at2, *flags[:4], "--work", "2").startswith(need)
+    assert why(at2, *flags[4:], "--work", "2").startswith(need)
+    assert why(at2, *flags).startswith(need)
+    assert why(at2, *other, "--work", "2").startswith("setup: U2: the draw's work law is not the verifier's own")
+    assert why(at2, *flags, "--work", "3").startswith("setup: U2: the draw's K is 2, not the verifier's 3")
+    assert why(at1, *flags, "--work", "2").startswith("setup: U2: the draw's K is 1, not the verifier's 2")
+    # at its own K and table the law is its own derivation, and setup goes on to the circuit, which this file is not
+    assert not why(at2, *flags, "--work", "2").startswith("setup: U2:")
+    assert not why(at1, *flags, "--work", "1").startswith("setup: U2:")
+
+
 def _one_stage_draw():
     try:
         from verity_one_stage import draw
@@ -380,3 +503,37 @@ def test_merkle_extractor_computes_a_collision(tmp_path):
     assert p.returncode == 0, p.stdout + p.stderr
     assert p.stdout.split("\n")[:4] == ["(true, true, true)", '"node 01 05 | 02 04"',
         '"leaf 01000000000000000000000000000000  | 01010000000000000000000000000000 "', "(true, true)"], p.stdout
+
+
+def _net(rows, ins="1 0 1 1 2", outs="1 1 1 1 1"):
+    """A `flock-ir-unit/v2` expanded circuit: one input group of 2 bits (rows 2..127 input padding), one output group."""
+    return "\n".join([f"flock-ir-unit/v2 tiny {len(rows)} {len(rows) - 1} {ins} {outs}"] + rows) + "\n"
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_net_parser_refuses_rows_out_of_order(tmp_path):
+    """`Net.parse` holds every computed row to the order the soundness package's `Rows.topo` names (#144's
+    `test_pinned_rows_read_earlier_columns`): it reads only earlier columns that are not input padding, or the constant. Port
+    groups must fit their words, and input groups the input rows."""
+    base = ["1 0 1 0", "1 1 1 1"] + ["0 0"] * 126 + ["1 0 1 1", "2 128 1 1 130", "1 130 1 130"]
+
+    def edit(r, row):
+        return base[:r] + [row] + base[r + 1:]
+
+    cases = {
+        "ok": (_net(base), None),
+        "later": (_net(edit(128, "1 129 1 1")), "row 128 reads column 129, not an earlier one"),
+        "itself": (_net(edit(128, "1 128 1 1")), "row 128 reads column 128, not an earlier one"),
+        "padding": (_net(edit(128, "1 5 1 1")), "row 128 reads column 5, an input padding column"),
+        "padding-b": (_net(edit(129, "2 128 1 1 7")), "row 129 reads column 7, an input padding column"),
+        "overrun": (_net(base, ins="1 0 1 1 200"), "a port group's ports overrun its words"),
+        "reach": (_net(base, ins="1 0 2 1 2"), "the input rows reach the constant"),
+    }
+    for name, (text, _) in cases.items():
+        (tmp_path / f"{name}.net").write_text(text)
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    out = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "net-check", *(str(tmp_path / f"{n}.net") for n in cases)],
+                         capture_output=True, text=True).stdout
+    got = {Path(j["file"]).stem: j for j in (json.loads(l.split(" ", 1)[1]) for l in out.splitlines() if l.startswith("NETCHECK "))}
+    for name, (_, why) in cases.items():
+        assert got[name]["ok"] == (why is None) and (why is None or why in got[name]["error"]), (name, got[name])

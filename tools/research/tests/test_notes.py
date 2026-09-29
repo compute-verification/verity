@@ -573,7 +573,9 @@ def test_relaunch_saves_the_work_supersedes_binds_the_successor_and_prints_its_l
     import tarfile
     assert tarfile.open(ev / "uncommitted-2100Z-untracked.tgz").getnames() == ["notes.txt"]
     assert (ev / "uncommitted-2100Z.merge").read_text().strip() == _git(repo, "rev-parse", "other").strip()
-    row = notes.lane_status(notes.report_for(root, "wave-4090"), NOW, 30)
+    report = notes.report_for(root, "wave-4090")
+    os.utime(report, (NOW.timestamp(), NOW.timestamp()))   # written at NOW: a checkpoint's HH:MM is dated from its file's time
+    row = notes.lane_status(report, NOW, 30)
     assert row["state"] == "superseded" and row["text"] == "by wave-4090-2 (relaunch): stall 4"
     assert notes.binding(root, "wave-4090-2") == {"branch": "lane/wave-4090", "worktree": str(repo), "pod": "vy-wave-4090",
                                                   "succeeds": "wave-4090", "brief": "campaigns/w/BRIEF.md", "final": "06:30Z", "budget": "$5"}
@@ -1165,13 +1167,14 @@ def test_a_failing_steward_rule_is_a_line_not_a_dead_watcher():
     assert line.endswith(" STEWARD-ERROR render: ZeroDivisionError: division by zero")
 
 
-def test_cli_watch_pass_runs_the_steward_rules_on_a_temp_root(tmp_path, capsys):
+def test_cli_watch_pass_runs_the_steward_rules_on_a_temp_root(tmp_path, capsys, monkeypatch):
+    monkeypatch.setattr(notes, "_utcnow", lambda: NOW)
     root, log, src = tmp_path / "notes", tmp_path / "guardian.log", tmp_path / "src"
     _report(root, "late", "CHECKPOINT 1111111 (12:00Z) [open] x\n", 60 * 48)
     wt = tmp_path / "wt" / "late"
     wt.mkdir(parents=True)
     notes.bind(root, "late", final="12:00Z", worktree=str(wt))
-    _set_mtime(root / "lanes" / "late" / "binding.json", dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=48))
+    _set_mtime(root / "lanes" / "late" / "binding.json", NOW - dt.timedelta(hours=48))
     bench = src / "backends" / "numerical" / "python" / "verity_numerical" / "bench"
     bench.mkdir(parents=True)
     for f in (bench.parent / "__init__.py", bench / "__init__.py"):
@@ -1191,6 +1194,6 @@ def test_cli_watch_pass_runs_the_steward_rules_on_a_temp_root(tmp_path, capsys):
     assert f" RENDERED {rendered[0]}" in out and " RENDER-FAILED render@00:00Z (drilldown): " in out and "No module named" in out
     assert ' RUN-FAILED here: args put the run on a machine: ["--on", MACHINE, ..., "--", CMD...]' in out
     state = notes.load_state(root)
-    assert state["overdue"]["late"]["alerted"] and state["render"] == {"render@00:00Z": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d")}
+    assert state["overdue"]["late"]["alerted"] and state["render"] == {"render@00:00Z": "2026-09-23"}
     assert notes.main(["watch", "--root", str(root), "--all", "--passes", "1", "--guardian-log", "none"]) == 1
     assert "OVERDUE" not in capsys.readouterr().out                             # said once, across watcher restarts too
