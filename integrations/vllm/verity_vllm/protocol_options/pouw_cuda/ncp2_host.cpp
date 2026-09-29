@@ -35,7 +35,7 @@ extern "C" int ncp2_commit(int m, int k, int n, const int8_t* a, const uint32_t*
                            const uint16_t* bias, const uint8_t* salt, uint64_t forward, uint64_t position, uint64_t weight,
                            const uint32_t* rowids, const uint32_t* colids, const uint32_t* pi, const uint32_t* inv,
                            uint8_t* leaves, uint16_t* y_out) {
-  if (m <= 0 || n <= 0 || k <= 0 || m % D || n % D || (3 * k) % D) return 1;
+  if (m <= 0 || n <= 0 || k <= 0 || m % D || n % D || (3 * k) % D || m / D > (1 << 19)) return 1;
   const int ms = m / D, ns = n / D, steps = 3 * k / D, k3 = 3 * k;
   const size_t digest = 0, node = ms, key = 2 * ms - 1, form_y = 2 * ms, form_x = 2 * ms + ns, tile = 3 * ms + ns,
                deq = 3 * ms + ns + (size_t)ms * ns;

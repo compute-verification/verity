@@ -10,11 +10,9 @@
 #ifdef __CUDACC__
 #define HD __host__ __device__ __forceinline__
 #define HDM __host__ __device__ __forceinline__
-#define HDR __host__ __device__
 #else
 #define HD static inline
 #define HDM inline
-#define HDR static
 #endif
 
 namespace ncp2 {
@@ -527,17 +525,40 @@ HD void tree_node(const uint8_t* left, const uint8_t* right, uint8_t out[64]) {
   sha512_final(h, out);
 }
 
-// The RFC 6962 tree over strips lo … hi − 1 (`ncp2.rfc6962`): nodes appended to ``nodes`` (64 bytes each) in emission order,
-// ``*count`` of them; returns the subtree's digest, a strip's own or a node's.
-HDR const uint8_t* rfc6962(const uint8_t* strips, int lo, int hi, uint8_t* nodes, int* count) {
-  if (hi - lo == 1) return strips + 64 * (size_t)lo;
-  int split = 1;
-  while (split * 2 < hi - lo) split *= 2;
-  const uint8_t* left = rfc6962(strips, lo, lo + split, nodes, count);
-  const uint8_t* right = rfc6962(strips, lo + split, hi, nodes, count);
-  uint8_t* out = nodes + 64 * (size_t)(*count)++;
-  tree_node(left, right, out);
-  return out;
+// The RFC 6962 tree over strips lo … hi − 1 (`ncp2.rfc6962`): nodes appended to ``nodes`` (64 bytes each) in emission order
+// (after both subtrees), ``*count`` of them; returns the root, a strip's own digest or a node's. Iterative, so the device
+// stack stays static: a frame per level, for at most 2^19 strips (`ncp2_commit` refuses more).
+HD const uint8_t* rfc6962(const uint8_t* strips, int lo, int hi, uint8_t* nodes, int* count) {
+  struct Frame { int lo, hi, split; const uint8_t* left; };
+  Frame st[21];
+  int top = 0;
+  const uint8_t* done = nullptr;
+  st[0] = {lo, hi, 0, nullptr};
+  while (true) {
+    Frame& f = st[top];
+    if (done == nullptr) {
+      if (f.hi - f.lo == 1) {
+        done = strips + 64 * (size_t)f.lo;
+      } else {
+        int split = 1;
+        while (split * 2 < f.hi - f.lo) split *= 2;
+        f.split = split;
+        st[++top] = {f.lo, f.lo + split, 0, nullptr};
+        continue;
+      }
+    } else if (f.left == nullptr) {
+      f.left = done;
+      done = nullptr;
+      st[++top] = {f.lo + f.split, f.hi, 0, nullptr};
+      continue;
+    } else {
+      uint8_t* out = nodes + 64 * (size_t)(*count)++;
+      tree_node(f.left, done, out);
+      done = out;
+    }
+    if (top == 0) return done;
+    --top;
+  }
 }
 
 // K = SHAKE256("ncp2-key" ‖ salt ‖ forward ‖ position ‖ weight id ‖ D_A as lanes)[:32].

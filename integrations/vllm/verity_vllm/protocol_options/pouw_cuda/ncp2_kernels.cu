@@ -153,7 +153,7 @@ extern "C" int ncp2_commit(int m, int k, int n, const int8_t* a, const uint32_t*
                            const uint16_t* bias, const uint8_t* salt, uint64_t forward, uint64_t position, uint64_t weight,
                            const uint32_t* rowids, const uint32_t* colids, const uint32_t* pi, const uint32_t* inv,
                            uint8_t* leaves, uint16_t* y_out, uint8_t* root, float* ms_out) {
-  if (m <= 0 || n <= 0 || k <= 0 || m % D || n % D || (3 * k) % D) return 1;
+  if (m <= 0 || n <= 0 || k <= 0 || m % D || n % D || (3 * k) % D || m / D > (1 << 19)) return 1;
   const int ms = m / D, ns = n / D, steps = 3 * k / D, k3 = 3 * k;
   const size_t tiles = (size_t)ms * ns, population = 3 * (size_t)ms + ns + tiles + tiles * D * D;
   const size_t tile_base = 3 * (size_t)ms + ns, deq_base = tile_base + tiles;
@@ -187,6 +187,7 @@ extern "C" int ncp2_commit(int m, int k, int n, const int8_t* a, const uint32_t*
   const size_t per_tile = (size_t)steps * D * D, chunk = (256u << 20) / (per_tile * 4) ? (256u << 20) / (per_tile * 4) : 1;
   CK(dck.alloc((chunk < tiles ? chunk : tiles) * per_tile));
 
+  CK(cudaDeviceSetLimit(cudaLimitStackSize, 2048));
   cudaEvent_t t0, t1;
   CK(cudaEventCreate(&t0));
   CK(cudaEventCreate(&t1));
