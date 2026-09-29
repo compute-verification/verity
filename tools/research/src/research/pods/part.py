@@ -16,7 +16,7 @@ from __future__ import annotations
 import json
 import tomllib
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from .. import remote
 from ..env import sku_family
@@ -95,7 +95,7 @@ def render(rep: dict[str, Any]) -> str:
 
 #: RunPod's replies that mean "no machine of that spec right now": the only create failure a caller may answer with another spec.
 NO_STOCK = ("no instances currently available", "no longer any instances available")
-EXIT_EXISTS, EXIT_NO_STOCK, EXIT_FAILED = 4, 5, 2
+EXIT_EXISTS, EXIT_NO_STOCK, EXIT_FAILED, EXIT_UNBUDGETED = 4, 5, 2, 6
 
 
 def _named(name: str) -> list[dict]:
@@ -135,10 +135,54 @@ def create_once(ns: Any) -> tuple[dict | None, int]:
         return None, EXIT_FAILED
 
 
+def create_leased(ns: Any, *, gate: Callable[[str, float], tuple[str | None, str | None]] | None = None,
+                  wait_ssh: Callable[[str], tuple[str, int]] | None = None, arm: Callable[..., dict] | None = None,
+                  terminate: Callable[[str], None] | None = None, clock: Callable[[], float] | None = None) -> tuple[dict | None, int]:
+    """`research pods create`'s lifecycle: the budget gate, the create call with the lease in the pod's boot (research.pods.lease),
+    then, once sshd answers, the lease and the idle guard armed over ssh.  A pod that cannot be armed is terminated: no pod leaves
+    here unbounded.  Returns (pod with its `lease` report, 0) or (None, exit code)."""
+    import sys
+    import time
+
+    from . import budgets, lease, runpod
+
+    name = f"{ns.name}-veritor-campaign"
+    why, line = (gate or budgets.check_create)(name, ns.max_hours)
+    if why:
+        print(f"research pods create: REFUSED {ns.name}: {why}", file=sys.stderr)
+        return None, EXIT_UNBUDGETED
+    print(f"research pods create: {ns.name} is under the budget line {line!r}", file=sys.stderr)
+    ns.lease_expires = int((clock or time.time)() + ns.max_hours * 3600)
+    pod, rc = create_once(ns)
+    if pod is None:
+        return None, rc
+    kill = terminate or runpod.terminate
+    try:
+        host, port = (wait_ssh or runpod.wait_ssh)(pod["id"])
+        from .. import remote
+
+        pod["lease"] = (arm or lease.arm)(remote.ssh_argv(host, port), int(ns.max_hours * 3600), first_idle_min=ns.first_idle_min,
+                                          idle_min=ns.idle_min)
+    except Exception as e:  # noqa: BLE001  (no sshd, a failed ssh, a failed arm: the pod must not outlive this call unbounded)
+        print(f"research pods create: pod {pod['id']} could not be armed ({type(e).__name__}: {e}); terminating it", file=sys.stderr)
+        try:
+            kill(pod["id"])
+        except Exception as e2:  # noqa: BLE001
+            print(f"research pods create: TERMINATE FAILED for {pod['id']} ({e2}): its boot lease and the budgets guard still bound it; "
+                  f"`research pods terminate {pod['id']}`", file=sys.stderr)
+        return None, EXIT_FAILED
+    rep = pod["lease"]
+    print(f"research pods create: pod {pod['id']} leased until {rep.get('expires_utc')} (lease loop pid {rep.get('lease_pid')}, idle guard "
+          f"pid {rep.get('guard_pid')}{'' if rep.get('guard_alive') else ' NOT RUNNING'}: terminates after {ns.first_idle_min:g} idle min "
+          f"before a first run, {ns.idle_min:g} after); `research pods extend {ns.name} --hours H` extends it", file=sys.stderr)
+    return pod, 0
+
+
 def main(argv: list[str]) -> int:
-    """`research pods check-part <machine|pod-id> [--json]` | `research pods create <runpod create flags> [--require-reference-part]`
-    | `research pods ssh|sync ...` (connect.py) | `research pods health <pod>` (health.py) | any other verb goes to
-    `python -m research.pods.runpod` unchanged.  Exit 3 = not the reference part (check-part, create) or DEGRADED (health)."""
+    """`research pods check-part <machine|pod-id> [--json]` | `research pods create <runpod create flags> --max-hours H [...]`
+    | `research pods extend|lease TARGET` | `research pods ssh|sync ...` (connect.py) | `research pods health <pod>` (health.py) | any other
+    verb goes to `python -m research.pods.runpod` unchanged.  Exit 3 = not the reference part (check-part, create) or DEGRADED (health);
+    create's exit 6 = no budget line lets it (research.pods.budgets.gate)."""
     import argparse
     import sys
 
@@ -168,9 +212,43 @@ def main(argv: list[str]) -> int:
         from .registry import main as registry_main           # one file per machine (registry.py)
 
         return registry_main(argv)
+    if argv[:1] in (["extend"], ["lease"]):
+        from . import lease
+        from .connect import ssh_base
+
+        ap = argparse.ArgumentParser(prog=f"research pods {argv[0]}", description="the pod's lease (research.pods.lease)")
+        ap.add_argument("target", metavar="TARGET", help="machine name, pod id or pod name")
+        if argv[0] == "extend":
+            ap.add_argument("--hours", type=float, required=True, help="the lease ends no sooner than now + H (it is never shortened)")
+            ap.add_argument("--by", default=None, help="who extends it, recorded in the lease line (default $RESEARCH_LANE, else user@host)")
+        ns = ap.parse_args(argv[1:])
+        import os
+        import socket
+
+        by = (getattr(ns, "by", None) or os.environ.get("RESEARCH_LANE") or f"{os.environ.get('USER', '?')}@{socket.gethostname()}").replace(" ", "_")
+        cmd = lease.extend_argv(int(ns.hours * 3600), by) if argv[0] == "extend" else ["sh", f"{lease.LEASE_DIR}/lease.sh", "show"]
+        try:
+            r = remote.ssh_run(ssh_base(ns.target), cmd, timeout=90)
+        except (remote.Refused, OSError) as e:
+            print(f"research pods {argv[0]}: {e}", file=sys.stderr)
+            return 1
+        out = r.stdout.decode(errors="replace").strip()
+        if r.returncode != 0:
+            print(f"research pods {argv[0]}: {ns.target}: {(out + r.stderr.decode(errors='replace')).strip()[-300:] or f'rc {r.returncode}'} "
+                  f"(a pod created before leases has none)", file=sys.stderr)
+            return 1
+        print(f"{ns.target}: lease {out}")
+        return 0
     if argv[:1] == ["create"]:
         ap = argparse.ArgumentParser(prog="research pods create")
         runpod.create_args(ap)
+        ap.add_argument("--max-hours", type=float, required=True,
+                        help="the pod's lease: it terminates itself this long after creation unless extended (research pods extend, "
+                             "research run --on); at most the budget line's max_pod_hours")
+        ap.add_argument("--boot-lease", action="store_true",
+                        help="also run the lease loop from the pod's start command, before sshd (RunPod images only; research.pods.lease)")
+        ap.add_argument("--first-idle-min", type=float, default=20.0, help="the idle guard's limit before the pod's first run (default 20)")
+        ap.add_argument("--idle-min", type=float, default=90.0, help="the idle guard's limit after it (default 90)")
         ap.add_argument("--require-reference-part", action="store_true", help="exit 3 (pod left running) unless the board is the reference part")
         ap.add_argument("--register", action="store_true", help="register the pod under --name once sshd answers (research pods register)")
         ap.add_argument("--project", default=None, help="--register: the project the machine is bound to")
@@ -179,10 +257,11 @@ def main(argv: list[str]) -> int:
         ns = ap.parse_args(argv[1:])
         if ns.register and not ns.project:
             ap.error("--register needs --project")
-        pod, rc = create_once(ns)
+        if ns.max_hours <= 0:
+            ap.error("--max-hours must be positive")
+        pod, rc = create_leased(ns)
         if pod is None:
             return rc
-        runpod.wait_ssh(pod["id"])
         if ns.register:
             from .registry import main as registry_main
 

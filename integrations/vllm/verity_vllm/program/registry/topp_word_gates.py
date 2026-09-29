@@ -80,6 +80,11 @@ def _logf(a: int) -> int:
     return nv_logf(a)
 
 
+def _logf_gpu(a: int) -> int:
+    from verity_vllm.program.registry.sampling import nv_logf_gpu
+    return nv_logf_gpu(a)
+
+
 BitXor = PrimitiveDefinition("BitXor", 1, (("a", BIT), ("b", BIT)), BIT, _xor, doc="a XOR b on bits.", conformance="exact-model-tested")
 U32Xor = PrimitiveDefinition("U32Xor", 1, (("a", I32), ("b", I32)), I32, _uxor, doc="a XOR b on 32-bit words.",
                              conformance="exact-model-tested")
@@ -88,6 +93,8 @@ SelectBit = PrimitiveDefinition("SelectBit", 1, (("c", BIT), ("a", BIT), ("b", B
 I32ToF32 = PrimitiveDefinition("I32ToF32", 1, (("a", I32),), F32, _i2f, doc=_i2f.__doc__, conformance="exact-model-tested")
 NvLogf = PrimitiveDefinition("NvLogf", 1, (("a", F32),), F32, _logf, doc="libdevice `__nv_logf` on an fp32 word (FTZ): "
                              "`sampling.nv_logf`, `tl.log` in the top-p pipeline.", conformance="exact-model-tested")
+NvLogfV2 = PrimitiveDefinition("NvLogf", 2, (("a", F32),), F32, _logf_gpu, doc="`NvLogf_v1` with every NaN result the GPU's "
+                               "0x7FFFFFFF (`sampling.nv_logf_gpu`), for the re-baseline.", conformance="exact-model-tested")
 TopPNumkeep = PrimitiveDefinition("TopPNumkeep", 1, (("numdup", I32), ("q", F32)), I32, _numkeep, doc=_numkeep.__doc__,
                                   conformance="exact-model-tested")
 
@@ -187,4 +194,4 @@ def numeric(name: str):
 
 
 __all__ = ["CW", "M32", "QNAN", "LOG2E", "M126", "HALF", "EPS9", "f32_word", "BitXor", "U32Xor", "SelectBit", "I32ToF32", "NvLogf",
-           "TopPNumkeep", "SIG", "WIDTH", "GATES", "numeric"]
+           "NvLogfV2", "TopPNumkeep", "SIG", "WIDTH", "GATES", "numeric"]
