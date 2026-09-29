@@ -92,24 +92,25 @@ def world(tmp_path: Path) -> World:
     return World(tmp_path)
 
 
-def test_ready_prs_merge_onto_next_in_number_order_and_drafts_holds_and_ownerless_prs_wait(world):
+def test_ready_prs_and_drafts_merge_onto_next_in_number_order_and_holds_and_ownerless_prs_wait(world):
     world.gh.put(3, world.change({"c.txt": "c3\n"}))
     world.gh.put(1, world.change({"a.txt": "a1\n"}))
     world.gh.put(2, world.change({"b.txt": "b2\n"}), draft=True)
     world.gh.put(4, world.change({"d.txt": "d\n"}), labels=("hold",))
     world.gh.put(5, world.change({"e.txt": "e\n"}), body="no owner here")
     world.gh.put(6, world.change({"f.txt": "f\n"}), body=f"[Open in Web](https://cursor.com/agents/{AGENT})")
+    world.gh.put(7, world.change({"g.txt": "g\n"}), draft=True, labels=("hold",))
     q = world.queue()
     members, entries = q.sync()
-    assert [m.pr for m in members] == [1, 3, 6] == world.on_next(q)
-    assert members[2].owner == AGENT and members[0].owner == "lane-1"
-    assert entries[2].state == "draft" and entries[4].why == "held (`hold` label)" and entries[5].why.startswith("no owner")
+    assert [m.pr for m in members] == [1, 2, 3, 6] == world.on_next(q)
+    assert members[3].owner == AGENT and members[0].owner == "lane-1"
+    assert entries[4].why == entries[7].why == "held (`hold` label)" and entries[5].why.startswith("no owner")
     tip = _git(world.origin, "rev-parse", "refs/heads/next")
-    assert _git(world.origin, "rev-parse", f"{tip}^1^1^1") == _git(world.origin, "rev-parse", "main")    # one merge commit each
+    assert _git(world.origin, "rev-parse", f"{tip}^1^1^1^1") == _git(world.origin, "rev-parse", "main")    # one merge commit each
     msg = _git(world.origin, "log", "-1", "--format=%B", tip)
     assert msg.startswith("Queue: #6 change 6") and f"Head: {world.gh.prs[6].head}" in msg
     status = q.status()
-    assert [n for n, e in sorted(status.items()) if e.state == "queued"] == [1, 3, 6] and status[3].position == 2
+    assert [n for n, e in sorted(status.items()) if e.state == "queued"] == [1, 2, 3, 6] and status[3].position == 3
 
 
 def test_a_new_push_moves_its_pr_to_the_tip_and_keeps_the_commits_before_it(world):

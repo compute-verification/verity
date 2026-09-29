@@ -2,18 +2,19 @@
 order they were admitted; `main` fast-forwards to the newest commit on `next` that `research merge`'s gate accepts: a passing
 `check` attempt of that exact commit.
 
-    research queue status [--all] [--json]         each open PR: its place in `next`, what it waits for, or why it was refused
+    research queue status [--json]                 each open PR: its place in `next`, what it waits for, or why it was refused
     research queue sync [--dry-run]                admit and drop PRs, merge them onto `next`, push it
     research queue land [--dry-run]                fast-forward `main` to the newest commit on `next` that passed `check`, push it
     research queue eject PR --reason TEXT          keep the PR's current head out of `next`; a new push re-admits it
     common flags: [--shadow] [--workdir DIR] [--rules FILE] [--repo OWNER/NAME] [--remote URL]
 
-Admission.  A PR is admitted while it is open against `main`, isn't a draft, has an owner, carries no hold label, and has every grant
-its change needs.  The owner is the lane its body names on a `Lane {name}` line, else the Cursor agent id its body carries.  The
-rules file (`ci/queue.toml` on `main`, `tools/check/queue.toml` until the repository move, or `--rules`) says which grants a change
-needs: a role for changed files under listed paths (`merge_requires`' syntax, `!` patterns included), or for a change to listed
-sections of any `lean-audit.json` (`pins`, `reads`).  A grant is a store label `grant = {role}` on the
-target `pr:{number}@{head sha}`, so a new push needs new grants.
+Admission.  A PR is admitted while it is open against `main`, has an owner, carries no hold label, and has every grant its change
+needs.  A draft is admitted like any other PR, since agents open PRs as drafts: the hold label is what keeps a PR out.  The owner is
+the lane its body names on a `Lane {name}` line, else the Cursor agent id its body carries.  The rules file (`ci/queue.toml` on
+`main`, `tools/check/queue.toml` until the repository move, or `--rules`) says which grants a change needs: a role for changed files
+under listed paths (`merge_requires`' syntax, `!` patterns included), or for a change to listed sections of any `lean-audit.json`
+(`pins`, `reads`).  A grant is a store label `grant = {role}` on the target `pr:{number}@{head sha}`, so a new push needs new
+grants.
 
 `next`.  Its first-parent chain above `main` is the queue, and each merge commit's trailers name its PR, head and owner: git holds
 the queue's state.  A sync keeps the longest prefix of that chain which still matches the admitted PRs (same PR, same head, same
@@ -225,7 +226,7 @@ class Member:
 class Entry:
     """One open PR's standing in a sync."""
     pr: PR
-    state: str = "ready"                  # ready | queued | waiting | refused | draft
+    state: str = "ready"                  # ready | queued | waiting | refused
     why: str = ""
     after: tuple[int, ...] = ()           # open PRs whose heads its head contains
     position: int | None = None           # 1-based, on `next`
@@ -312,9 +313,7 @@ class Queue:
         for p in prs:
             e = out[p.number] = Entry(p)
             ejected = state["ejected"].get(str(p.number))
-            if p.draft:
-                e.state, e.why = "draft", "a draft"
-            elif rules.hold_label in p.labels:
+            if rules.hold_label in p.labels:
                 e.state, e.why = "waiting", f"held (`{rules.hold_label}` label)"
             elif p.owner is None:
                 e.state, e.why = "waiting", "no owner: add a `Lane {name}` line to the PR body"
@@ -322,9 +321,8 @@ class Queue:
                 e.state, e.why = "refused", f"ejected at {p.head[:8]}: {ejected['why']} (a new push re-admits it)"
             elif missing := rules.needs(self.workdir, "origin/main", p.head) - self.grants(p.number, p.head):
                 e.state, e.why = "waiting", f"waiting for the {', '.join(sorted(missing))} grant at {p.head[:8]}"
-            if e.state != "draft":
-                below = _out(self.workdir, "rev-list", f"origin/main..{p.head}").split()
-                e.after = tuple(sorted(heads[h] for h in below if h in heads and heads[h] != p.number))
+            below = _out(self.workdir, "rev-list", f"origin/main..{p.head}").split()
+            e.after = tuple(sorted(heads[h] for h in below if h in heads and heads[h] != p.number))
         changed = True
         while changed:                                      # a PR waits while a PR whose commits it contains isn't admitted
             changed = False
@@ -529,10 +527,9 @@ def _lock(workdir: Path):
     return f
 
 
-def _render(entries: dict[int, Entry], all_prs: bool) -> str:
-    rank = {"queued": 0, "ready": 1, "waiting": 2, "refused": 3, "draft": 4}
-    rows = sorted((e for e in entries.values() if all_prs or e.state != "draft"),
-                  key=lambda e: (rank[e.state], e.position or 0, e.pr.number))
+def _render(entries: dict[int, Entry]) -> str:
+    rank = {"queued": 0, "ready": 1, "waiting": 2, "refused": 3}
+    rows = sorted(entries.values(), key=lambda e: (rank[e.state], e.position or 0, e.pr.number))
     lines = []
     for e in rows:
         where = f"{e.position:>3}" if e.position else "  -"
@@ -553,7 +550,6 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--repo", default=None, help="OWNER/NAME on GitHub (default: from the remote's URL)")
     ap.add_argument("--rules", type=Path, default=None, help=f"the admission rules (default: {RULES} on `main`)")
     ap.add_argument("--store", default=None, help="evidence store root (default $RESEARCH_STORE or ~/.research/store)")
-    ap.add_argument("--all", action="store_true", help="status: drafts too")
     ap.add_argument("--json", action="store_true", help="status: as JSON")
     a = ap.parse_args(argv)
     from .store.local import LocalStore
@@ -570,12 +566,11 @@ def main(argv: list[str]) -> int:
         if a.command == "status":
             entries = q.status()
             if a.json:
-                print(json.dumps([{"pr": e.pr.number, "head": e.pr.head, "owner": e.pr.owner, "state": e.state, "why": e.why,
-                                   "position": e.position, "commit": e.commit, "after": list(e.after)}
-                                  for e in sorted(entries.values(), key=lambda e: e.pr.number) if a.all or e.state != "draft"],
-                                 indent=1))
+                print(json.dumps([{"pr": e.pr.number, "head": e.pr.head, "owner": e.pr.owner, "draft": e.pr.draft, "state": e.state,
+                                   "why": e.why, "position": e.position, "commit": e.commit, "after": list(e.after)}
+                                  for e in sorted(entries.values(), key=lambda e: e.pr.number)], indent=1))
             else:
-                print(_render(entries, a.all))
+                print(_render(entries))
             return 0
         if a.command == "sync":
             q.sync(dry_run=a.dry_run)

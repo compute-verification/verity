@@ -118,7 +118,7 @@ the target's checkout): when the merge's diff touches a prefix, only an attempt 
 needs.
 
 `research queue` is the merge queue: `next` is `main` plus every admitted PR, one `--no-ff` merge commit each, and `land`
-fast-forwards `main` to the newest commit on `next` that the same gate accepts. A PR is admitted when it's open, not a draft,
+fast-forwards `main` to the newest commit on `next` that the same gate accepts. A PR is admitted when it's open (a draft too),
 names its owner (a `Lane {name}` line, else its Cursor agent id), has no hold label, and has the grants the rules file
 (`ci/queue.toml`) requires of its change: `grant` labels on `pr:{n}@{head}` in the store. The branch holds the queue's state (each
 merge commit's `PR:`, `Head:` and `Owner:` trailers); a sync keeps the prefix that still matches and merges the rest again, and a
