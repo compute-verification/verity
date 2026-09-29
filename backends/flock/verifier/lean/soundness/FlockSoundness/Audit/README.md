@@ -70,6 +70,21 @@ wrong with probability at most the per-unit terms.
 **Composition** (`Audit/Circuit.lean`): `compose` (every unit correct and the inputs anchored give the circuit's
 evaluation on every committed wire) and `compose_cone` (the same for a consumer's wires, from its cone alone).
 
+**Influence through a separator** (`Audit/Influence.lean`). $D$ is the set of delivered wires (the served tokens); the
+circuit's other outputs, such as commitments and leaves, are not delivered. $K$ **separates** the units $B$ from $D$
+(`Separates K B D`, a downstream cut) when every gate path from a unit of $B$ to a wire of $D$ meets $K$.
+
+- `outputs_eq_of_separates`, **the influence cap**: two transcripts with the anchors' inputs, whose wrong units lie in
+  $B$, and that agree on a committed separator $K$ of $B$, deliver the same values on $D$;
+- `card_delivered_le`: so they deliver at most $2^{|K|}$ values on $D$;
+- `separates_exits`: the committed wires of the units of $B$ separate $B$ (a replay unit's exports); `Separates.mono`,
+  `Separates.union`;
+- `card_influenceSet_le`: the influence set at $\delta$, what is delivered with the wrong units of some set escaping with
+  probability at least $\delta$, fixed before the prover, has at most $\sum_{B : e(B) \ge \delta} 2^{|K_B|}$ members;
+- `audit_influence`: $\Pr[\text{accept} \wedge \mathrm{out}_D(X) \notin \mathrm{influenceSet}] \le \delta +
+  \varepsilon_{ks} + \delta_{link} + \delta_{in}$, so the prover's influence over what is delivered is
+  $\log_2 |\mathrm{influenceSet}|$ bits; `Refines.twoStage_influence` is the same over replay units, with $e_{\text{eff}}$.
+
 **Tightness and insecurity** (`Audit/Examples.lean`, on `K` chains of `nv` NOT gates, one coarse unit per chain and one
 fine unit per gate, with a uniform `k₂`-subset of each drawn chain's gates in the second stage and an ideal session):
 

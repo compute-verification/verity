@@ -374,3 +374,12 @@ hypotheses of the theorems that use them, never `axiom` declarations, so they ca
 #print axioms FlockSoundness.Layout.placedB_const
 #print axioms FlockSoundness.Layout.placed_pin
 #print axioms FlockSoundness.Layout.realizes
+-- influence through a separator: a downstream cut determines what is delivered, and the audit's influence set
+#print axioms FlockSoundness.Audit.Partition.Separates.mono
+#print axioms FlockSoundness.Audit.Partition.Separates.union
+#print axioms FlockSoundness.Audit.Partition.separates_exits
+#print axioms FlockSoundness.Audit.Partition.outputs_eq_of_separates
+#print axioms FlockSoundness.Audit.Partition.card_delivered_le
+#print axioms FlockSoundness.Audit.Partition.card_influenceSet_le
+#print axioms FlockSoundness.Audit.Partition.audit_influence
+#print axioms FlockSoundness.Audit.Partition.Refines.twoStage_influence

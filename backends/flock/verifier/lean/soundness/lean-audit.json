@@ -145,6 +145,12 @@
   }
  },
  "pins": {
+  "FlockSoundness.Audit.Partition.Refines.twoStage_influence": {},
+  "FlockSoundness.Audit.Partition.Separates.mono": {},
+  "FlockSoundness.Audit.Partition.Separates.union": {},
+  "FlockSoundness.Audit.Partition.audit_influence": {},
+  "FlockSoundness.Audit.Partition.card_delivered_le": {},
+  "FlockSoundness.Audit.Partition.card_influenceSet_le": {},
   "FlockSoundness.Audit.Partition.flock_e2e_count": {
    "signature": [
     "FlockSoundness.Audit.Partition.flock_e2e_count {C : FlockSoundness.Audit.Circuit} {n : Nat}",
@@ -244,6 +250,8 @@
    "assumptions": [],
    "type_hash": "0000000076fada01"
   },
+  "FlockSoundness.Audit.Partition.outputs_eq_of_separates": {},
+  "FlockSoundness.Audit.Partition.separates_exits": {},
   "FlockSoundness.Merkle.opening_binding": {
    "signature": [
     "FlockSoundness.Merkle.opening_binding {Col D : Type} (H : List UInt8 → D) (E : FlockSoundness.Merkle.Enc Col D)",

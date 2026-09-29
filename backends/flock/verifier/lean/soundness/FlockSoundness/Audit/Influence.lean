@@ -1,0 +1,277 @@
+import FlockSoundness.Audit.TwoStage
+
+/-!
+# Influence through a separator
+
+An accepted audit bounds which units are wrong; this file bounds what the wrong units can make the audited computation
+deliver. `D` is the set of delivered wires: what the consumer receives (the served tokens). It can be smaller than the
+circuit's outputs, since commitments and leaves are outputs that the verifier sees and nobody is delivered.
+
+* `Circuit.FeedsAvoiding K g t`: `g` feeds `t` along a path none of whose gates is in `K`.
+* `Partition.Separates K B D` (a downstream cut): `K` meets every path from a gate of a unit of `B` to a wire of `D`.
+* `outputs_eq_of_separates`, **the influence cap**: two transcripts with the anchors' inputs, whose wrong units lie in
+  `B`, and that agree on a committed separator of `B`, deliver the same values on `D`. So they deliver at most `2^|K|`
+  values on `D` (`card_delivered_le`): in a Boolean circuit a gate is one bit, and `|K|` is the separator's width.
+* `separates_exits`: the committed wires of the units of `B` separate `B`. For a replay unit, those are its exports.
+  `Separates.mono` and `Separates.union` build separators for larger sets from smaller ones.
+* `influenceSet D e a δ`: what the transcripts with the anchors' inputs deliver on `D` when their wrong units form a set
+  whose escape `e B` is at least `δ`. It is fixed by the circuit, the partition, the anchors, the law and `δ`, never by
+  the prover, and `card_influenceSet_le` bounds its size by `∑_{B : δ ≤ e B} 2^|K B|`.
+* `audit_influence` (one-stage) and `Refines.twoStage_influence` (two-stage, over replay units, with `effEscape`): the
+  audit accepts while the delivered values lie outside the influence set with probability at most
+  `δ + ε_ks + δ_link + δ_in`. The influence in bits is `log₂ |influenceSet|`.
+-/
+
+namespace FlockSoundness.Audit
+
+open Game Finset
+open scoped ENNReal
+
+namespace Circuit
+
+variable (C : Circuit)
+
+/-- `g` feeds `t` along a path none of whose gates is in `K`, both ends included. -/
+inductive FeedsAvoiding (K : Finset (Fin C.N)) : Fin C.N → Fin C.N → Prop
+  | refl {t : Fin C.N} : t ∉ K → FeedsAvoiding K t t
+  | step {g h t : Fin C.N} : g ∉ K → g ∈ (C.op h).args → FeedsAvoiding K h t → FeedsAvoiding K g t
+
+end Circuit
+
+theorem Circuit.FeedsAvoiding.not_mem {C : Circuit} {K : Finset (Fin C.N)} {g t : Fin C.N}
+    (h : C.FeedsAvoiding K g t) : g ∉ K := by
+  cases h with
+  | refl hK => exact hK
+  | step hg _ _ => exact hg
+
+namespace Partition
+
+variable {C : Circuit} {n : ℕ} (P : Partition C n)
+
+/-- **A separator of the units `B` from the delivered wires `D`** (a downstream cut): every path from a gate of a unit
+of `B` to a wire of `D` meets `K`. -/
+def Separates (K : Finset (Fin C.N)) (B : Finset (Fin n)) (D : Finset (Fin C.N)) : Prop :=
+  ∀ g t u, P.unit g = some u → u ∈ B → t ∈ D → ¬ C.FeedsAvoiding K g t
+
+variable {P}
+
+theorem Separates.mono {K K' : Finset (Fin C.N)} {B B' : Finset (Fin n)} {D : Finset (Fin C.N)}
+    (h : P.Separates K B D) (hK : K ⊆ K') (hB : B' ⊆ B) : P.Separates K' B' D := by
+  intro g t u hu huB ht hgt
+  refine h g t u hu (hB huB) ht ?_
+  clear hu huB ht
+  induction hgt with
+  | refl hn => exact .refl fun hk => hn (hK hk)
+  | step hg hx _ ih => exact .step (fun hk => hg (hK hk)) hx ih
+
+theorem Separates.union {K₁ K₂ : Finset (Fin C.N)} {B₁ B₂ : Finset (Fin n)} {D : Finset (Fin C.N)}
+    (h₁ : P.Separates K₁ B₁ D) (h₂ : P.Separates K₂ B₂ D) : P.Separates (K₁ ∪ K₂) (B₁ ∪ B₂) D := by
+  intro g t u hu huB ht hgt
+  rcases mem_union.1 huB with hB | hB
+  · exact (h₁.mono subset_union_left subset_rfl) g t u hu hB ht hgt
+  · exact (h₂.mono subset_union_right subset_rfl) g t u hu hB ht hgt
+
+variable (P)
+
+open Classical in
+/-- The committed wires of the units of `B`: what they export. -/
+noncomputable def exits (B : Finset (Fin n)) : Finset (Fin C.N) :=
+  P.committed.filter fun g => ∃ u ∈ B, P.unit g = some u
+
+/-- **The exits separate**: every path from a unit of `B` to a delivered wire leaves `B` through a committed wire, or
+ends at a delivered wire of `B`, which is committed. -/
+theorem separates_exits (B : Finset (Fin n)) {D : Finset (Fin C.N)} (hD : D ⊆ P.committed) :
+    P.Separates (P.exits B) B D := by
+  classical
+  intro g t u hu huB ht hgt
+  induction hgt generalizing u with
+  | @refl t hn =>
+      exact hn (mem_filter.2 ⟨hD ht, u, huB, hu⟩)
+  | @step g h t hg hx _ ih =>
+      by_cases hh : P.unit h = some u
+      · exact ih u hh huB ht
+      · exact hg (mem_filter.2 ⟨P.mem_committed_of_read hx (by rw [hu]; exact hh), u, huB, hu⟩)
+
+/-- The induction behind `outputs_eq_of_separates`: on a gate with a path to a delivered wire avoiding `K`, the two
+transcripts' local evaluations agree, and so do their committed values. -/
+theorem separator_induction {K : Finset (Fin C.N)} {B : Finset (Fin n)} {D : Finset (Fin C.N)}
+    (hK : K ⊆ P.committed) (hsep : P.Separates K B D) {X Y a : Fin C.N → Bool}
+    (hX : C.InputsAgree X a) (hY : C.InputsAgree Y a) (hwX : P.wrong X ⊆ B) (hwY : P.wrong Y ⊆ B)
+    (hXY : ∀ g ∈ K, X g = Y g) :
+    ∀ m (g : Fin C.N), g.val = m → (∃ t ∈ D, C.FeedsAvoiding K g t) →
+      (∀ u, P.unit g = some u → P.localEval X u g = P.localEval Y u g) ∧
+      (g ∈ P.committed → X g = Y g) := by
+  intro m
+  induction m using Nat.strong_induction_on with
+  | _ m ih =>
+  intro g hgm ⟨t, ht, hgt⟩
+  have hcor : ∀ u, P.unit g = some u → P.Correct X u ∧ P.Correct Y u := by
+    intro u hu
+    have huB : u ∉ B := fun huB => hsep g t u hu huB ht hgt
+    exact ⟨not_not.1 fun hc => huB (hwX (P.mem_wrong.2 hc)),
+      not_not.1 fun hc => huB (hwY (P.mem_wrong.2 hc))⟩
+  have hB : ∀ u, P.unit g = some u → P.localEval X u g = P.localEval Y u g := by
+    intro u hu
+    rw [P.localEval_of_mem X hu, P.localEval_of_mem Y hu]
+    refine Op.apply_congr _ fun x hx => ?_
+    have hxg : x.val < m := hgm ▸ C.topo g x hx
+    by_cases hxK : x ∈ K
+    · by_cases hxu : P.unit x = some u
+      · rw [← (hcor u hu).1 x (hK hxK) hxu, ← (hcor u hu).2 x (hK hxK) hxu]
+        exact hXY x hxK
+      · rw [P.localEval_of_not_mem X hxu, P.localEval_of_not_mem Y hxu]
+        exact hXY x hxK
+    · obtain ⟨ihB, ihA⟩ := ih x.val hxg x rfl ⟨t, ht, .step hxK hx hgt⟩
+      by_cases hxu : P.unit x = some u
+      · exact ihB u hxu
+      · rw [P.localEval_of_not_mem X hxu, P.localEval_of_not_mem Y hxu]
+        exact ihA (P.mem_committed_of_read hx (by rw [hu]; exact Ne.symm hxu))
+  refine ⟨hB, fun hg => ?_⟩
+  cases hi : (C.op g).isInput
+  · obtain ⟨u, hu⟩ := Option.ne_none_iff_exists'.1 fun h => by
+      simp [(P.input_iff g).1 h] at hi
+    rw [(hcor u hu).1 g hg hu, (hcor u hu).2 g hg hu]
+    exact hB u hu
+  · rw [hX g hi, hY g hi]
+
+/-- **The influence cap**: two transcripts with the anchors' inputs, whose wrong units lie in `B`, and that agree on a
+committed separator `K` of `B` from the committed delivered wires `D`, deliver the same values on `D`. -/
+theorem outputs_eq_of_separates {K : Finset (Fin C.N)} {B : Finset (Fin n)} {D : Finset (Fin C.N)}
+    (hK : K ⊆ P.committed) (hD : D ⊆ P.committed) (hsep : P.Separates K B D) {X Y a : Fin C.N → Bool}
+    (hX : C.InputsAgree X a) (hY : C.InputsAgree Y a) (hwX : P.wrong X ⊆ B) (hwY : P.wrong Y ⊆ B)
+    (hXY : ∀ g ∈ K, X g = Y g) : ∀ t ∈ D, X t = Y t := by
+  intro t ht
+  by_cases htK : t ∈ K
+  · exact hXY t htK
+  · exact (P.separator_induction hK hsep hX hY hwX hwY hXY t.val t rfl ⟨t, ht, .refl htK⟩).2 (hD ht)
+
+/-- What a transcript delivers on the wires `D`. -/
+def out (D : Finset (Fin C.N)) (X : Fin C.N → Bool) : D → Bool := fun t => X t
+
+open Classical in
+/-- What the transcripts with the anchors' inputs whose wrong units lie in `B` deliver on `D`. -/
+noncomputable def delivered (D : Finset (Fin C.N)) (a : Fin C.N → Bool) (B : Finset (Fin n)) : Finset (D → Bool) :=
+  univ.filter fun y => ∃ X, C.InputsAgree X a ∧ P.wrong X ⊆ B ∧ out D X = y
+
+/-- **At most `2^|K|` delivered values** behind a committed separator `K` of `B`. -/
+theorem card_delivered_le {K : Finset (Fin C.N)} {B : Finset (Fin n)} {D : Finset (Fin C.N)}
+    (hK : K ⊆ P.committed) (hD : D ⊆ P.committed) (hsep : P.Separates K B D) (a : Fin C.N → Bool) :
+    (P.delivered D a B).card ≤ 2 ^ K.card := by
+  classical
+  have hspec : ∀ y ∈ P.delivered D a B, ∃ X, C.InputsAgree X a ∧ P.wrong X ⊆ B ∧ out D X = y :=
+    fun y hy => (mem_filter.1 hy).2
+  let f : (D → Bool) → (K → Bool) := fun y =>
+    if h : ∃ X, C.InputsAgree X a ∧ P.wrong X ⊆ B ∧ out D X = y then fun g => Classical.choose h g
+    else fun _ => false
+  calc (P.delivered D a B).card ≤ (univ : Finset (K → Bool)).card := by
+        refine card_le_card_of_injOn f (fun _ _ => mem_coe.2 (mem_univ _)) ?_
+        intro y hy y' hy' hf
+        have h := hspec y hy
+        have h' := hspec y' hy'
+        simp only [f, h, h', ↓reduceDIte] at hf
+        obtain ⟨hX, hwX, hyX⟩ := Classical.choose_spec h
+        obtain ⟨hY, hwY, hyY⟩ := Classical.choose_spec h'
+        rw [← hyX, ← hyY]
+        funext t
+        exact P.outputs_eq_of_separates hK hD hsep hX hY hwX hwY (fun g hg => congrFun hf ⟨g, hg⟩) t t.2
+    _ = 2 ^ K.card := by rw [card_univ, Fintype.card_fun, Fintype.card_bool, Fintype.card_coe]
+
+open Classical in
+/-- **The influence set at `δ`**: what is delivered on `D` with the wrong units of some set whose escape `e B` is at
+least `δ`. -/
+noncomputable def influenceSet (D : Finset (Fin C.N)) (e : Finset (Fin n) → ℝ≥0∞) (a : Fin C.N → Bool)
+    (δ : ℝ≥0∞) : Finset (D → Bool) :=
+  (univ.filter fun B => δ ≤ e B).biUnion fun B => P.delivered D a B
+
+/-- **The influence bound**: with a committed separator `K B` of every set `B`,
+`|influenceSet| ≤ ∑_{B : δ ≤ e B} 2^|K B|`. -/
+theorem card_influenceSet_le {D : Finset (Fin C.N)} (hD : D ⊆ P.committed) (e : Finset (Fin n) → ℝ≥0∞)
+    (a : Fin C.N → Bool) (δ : ℝ≥0∞) (K : Finset (Fin n) → Finset (Fin C.N)) (hK : ∀ B, K B ⊆ P.committed)
+    (hsep : ∀ B, P.Separates (K B) B D) :
+    (P.influenceSet D e a δ).card ≤ ∑ B ∈ univ.filter (fun B => δ ≤ e B), 2 ^ (K B).card :=
+  card_biUnion_le.trans (sum_le_sum fun B _ => P.card_delivered_le (hK B) hD (hsep B) a)
+
+theorem out_mem_influenceSet {D : Finset (Fin C.N)} {e : Finset (Fin n) → ℝ≥0∞} {a X : Fin C.N → Bool}
+    {δ : ℝ≥0∞} (hia : C.InputsAgree X a) (he : δ ≤ e (P.wrong X)) : out D X ∈ P.influenceSet D e a δ := by
+  classical
+  simp only [influenceSet, mem_biUnion, mem_filter, mem_univ, true_and]
+  exact ⟨P.wrong X, he, mem_filter.2 ⟨mem_univ _, X, hia, subset_rfl, rfl⟩⟩
+
+section OneStage
+
+variable {L : Law n} {Reg : Type} {session : Finset (Fin n) → Reg → Game Bool}
+  {X : (R : Reg) → Cont L Reg session R → (Fin C.N → Bool)}
+  {ext : (S : Finset (Fin n)) → (R : Reg) → Strategy (session S R) → Fin n → Option (Fin C.N → Bool)}
+  {a : Fin C.N → Bool} {εks δlink δin : ℝ≥0∞} {D : Finset (Fin C.N)}
+
+/-- **The influence of an accepted audit** (one-stage): the audit accepts while the committed transcript delivers on
+`D` a value outside the influence set at `δ` with probability at most `δ + ε_ks + δ_link + δ_in`. -/
+theorem audit_influence (hks : (P.analysis X ext).KnowledgeSound εks)
+    (hlink : (P.analysis X ext).LinkSound δlink) (hin : AnchorsSound X a δin) (δ : ℝ≥0∞)
+    (σ : Strategy (audit L Reg session)) :
+    prob (fun o => o.1 = true ∧ out D (X (reg σ) (cont σ)) ∉ P.influenceSet D L.escape a δ)
+        (audit L Reg session) σ ≤ δ + εks + δlink + δin := by
+  refine (prob_split_inputs X a σ (fun _ => out D (X (reg σ) (cont σ)) ∉ P.influenceSet D L.escape a δ)).trans ?_
+  rw [add_comm]
+  refine add_le_add ?_ (hin σ)
+  have key : ∀ o : Bool × Finset (Fin n), (o.1 = true ∧ (C.InputsAgree (X (reg σ) (cont σ)) a ∧
+      out D (X (reg σ) (cont σ)) ∉ P.influenceSet D L.escape a δ)) →
+      o.1 = true ∧ L.escape (P.wrong (X (reg σ) (cont σ))) < δ := by
+    rintro o ⟨hacc, hia, hout⟩
+    exact ⟨hacc, lt_of_not_ge fun hge => hout (P.out_mem_influenceSet hia hge)⟩
+  refine (prob_mono key _ _).trans ?_
+  refine (audit_profile (P.analysis X ext) hks hlink (fun B => L.escape B < δ) σ).trans ?_
+  gcongr
+  exact iSup₂_le fun B hB => hB.le
+
+end OneStage
+
+section TwoStage
+
+variable {nf nc : ℕ} {Pf : Partition C nf} {Pc : Partition C nc} {a : Fin C.N → Bool} {εks δlink δin : ℝ≥0∞}
+  {D : Finset (Fin C.N)}
+
+/-- **The influence of an accepted two-stage audit**, variant (b), over replay units: the committed coarse transcript
+delivers on `D` a value outside the coarse partition's influence set, with the effective escape, with probability at
+most `δ + ε_ks + δ_link + δ_in`. A replay unit's separator can be its exits (`separates_exits`). -/
+theorem Refines.twoStage_influence (r : Refines Pf Pc) {L₁ : Law nc} {L₂ : Fin nc → Law nf} {Reg : Type}
+    {Int : Finset (Fin nc) → Type}
+    {session : Finset (Fin nf) → Reg → (S₁ : Finset (Fin nc)) → Int S₁ → Game Bool}
+    (X : (R : Reg) → Cont₁ L₁ L₂ Reg Int session R → (Fin C.N → Bool))
+    (Yint : (R : Reg) → (ω₁ : L₁.Ω) → (I : Int (L₁.draw ω₁)) → Cont₂ L₁ L₂ Reg Int session R ω₁ I →
+      (Fin C.N → Bool))
+    (ext : (S : Finset (Fin nf)) → (R : Reg) → (S₁ : Finset (Fin nc)) → (I : Int S₁) →
+      Strategy (session S R S₁ I) → Fin nf → Option (Fin C.N → Bool))
+    (hks : (r.analysis₂ X Yint ext).KnowledgeSound εks) (hlink : (r.analysis₂ X Yint ext).LinkSound δlink)
+    (σ : Strategy (twoStage L₁ L₂ Reg Int session))
+    (hin : prob (fun o => o.1 = true ∧ ¬ C.InputsAgree (X (reg₂ σ) (cont₁ σ)) a)
+      (twoStage L₁ L₂ Reg Int session) σ ≤ δin) (δ : ℝ≥0∞) :
+    prob (fun o => o.1 = true ∧ out D (X (reg₂ σ) (cont₁ σ)) ∉ Pc.influenceSet D (effEscape L₁ L₂ r.parent) a δ)
+        (twoStage L₁ L₂ Reg Int session) σ ≤ δ + εks + δlink + δin := by
+  let W := Pc.wrong (X (reg₂ σ) (cont₁ σ))
+  let good : Bool × Finset (Fin nc) × Finset (Fin nf) → Prop := fun o =>
+    o.1 = true ∧ effEscape L₁ L₂ r.parent W < δ
+  let bad : Bool × Finset (Fin nc) × Finset (Fin nf) → Prop := fun o =>
+    o.1 = true ∧ ¬ C.InputsAgree (X (reg₂ σ) (cont₁ σ)) a
+  have hsplit : ∀ o : Bool × Finset (Fin nc) × Finset (Fin nf),
+      (o.1 = true ∧ out D (X (reg₂ σ) (cont₁ σ)) ∉ Pc.influenceSet D (effEscape L₁ L₂ r.parent) a δ) →
+      good o ∨ bad o := by
+    intro o h
+    by_cases hia : C.InputsAgree (X (reg₂ σ) (cont₁ σ)) a
+    · exact Or.inl ⟨h.1, lt_of_not_ge fun hge => h.2 (Pc.out_mem_influenceSet hia hge)⟩
+    · exact Or.inr ⟨h.1, hia⟩
+  have hgood : prob good (twoStage L₁ L₂ Reg Int session) σ ≤ δ + εks + δlink := by
+    refine (twoStage_profile (r.analysis₂ X Yint ext) hks hlink
+      (fun B => effEscape L₁ L₂ r.parent B < δ) σ).trans ?_
+    gcongr
+    exact iSup₂_le fun B hB => hB.le
+  calc _ ≤ prob (fun o => good o ∨ bad o) (twoStage L₁ L₂ Reg Int session) σ := prob_mono hsplit _ _
+    _ ≤ prob good (twoStage L₁ L₂ Reg Int session) σ + prob bad (twoStage L₁ L₂ Reg Int session) σ :=
+        prob_or_le good bad _ _
+    _ ≤ δ + εks + δlink + δin := add_le_add hgood hin
+
+end TwoStage
+
+end Partition
+
+end FlockSoundness.Audit
