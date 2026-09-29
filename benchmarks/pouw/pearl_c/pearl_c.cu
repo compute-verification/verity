@@ -470,19 +470,122 @@ extern "C" __global__ void __launch_bounds__(128) form(const Args a) {
         reinterpret_cast<const uint4*>(sO + c * 2048)[tid];
 }
 
+// ---------------------------------------------------------------- forming v1 (cheap-binding §5)
+constexpr uint32_t S5_LINE = 0x38B504F3;   // f32(sqrt(32) / 256^2)
+constexpr float S5_FLOOR = 0x1p-32f;
+
+// one warp per FP32 row: s = max|x|, rho (32 partial FMA chains over every 8th position, then the xor butterfly), alpha,
+// beta_row.  p0 rows (rows x k words), p1 alpha, p2 beta, p3 1/alpha (glue), p4 (s, rho) per row; i0 rows, i1 k
+extern "C" __global__ void __launch_bounds__(256) stats_s5(const Args a) {
+  const int row = (blockIdx.x * 256 + threadIdx.x) / 32, lane = threadIdx.x % 32, rows = a.i[0], k = a.i[1];
+  if (row >= rows) return;
+  const float* x = reinterpret_cast<const float*>(a.p[0]) + (size_t)row * k;
+  float s = 0.0f, part = 0.0f;
+  for (int j = lane * 4; j < k; j += 128) {
+    const float4 v = *reinterpret_cast<const float4*>(x + j);
+    s = fmaxf(s, fmaxf(fmaxf(fabsf(v.x), fabsf(v.y)), fmaxf(fabsf(v.z), fabsf(v.w))));
+  }
+  for (int p = 8 * lane; p < k; p += 256) part = __fmaf_rn(x[p], x[p], part);
+#pragma unroll
+  for (int o = 16; o; o >>= 1) { s = fmaxf(s, __shfl_xor_sync(~0u, s, o)); part = __fadd_rn(part, __shfl_xor_sync(~0u, part, o)); }
+  if (lane) return;
+  const float rho = __fsqrt_rn(__fdiv_rn(part, (float)((k + 7) / 8)));
+  const float alpha = __fdiv_rn(448.0f, fmaxf(__fadd_rn(s, __fmul_rn(4.0f, rho)), S5_FLOOR));
+  reinterpret_cast<float*>(a.p[1])[row] = alpha;
+  reinterpret_cast<float*>(a.p[2])[row] = __fmul_rn(__fmul_rn(rho, alpha), __uint_as_float(S5_LINE));
+  reinterpret_cast<float*>(a.p[3])[row] = __frcp_rn(alpha);
+  reinterpret_cast<float2*>(a.p[4])[row] = make_float2(s, rho);
+}
+
+// E' = e4m3(beta_row E) per row.  p0 E codes (rows x 32), p1 beta (f32), p2 out E' codes (rows x 32), p3 out E' tiled (H = 128,
+// depth 32); i0 rows
+extern "C" __global__ void eprime(const Args a) {
+  const int row = blockIdx.x * blockDim.x + threadIdx.x;
+  if (row >= a.i[0]) return;
+  const uint8_t* E = reinterpret_cast<const uint8_t*>(a.p[0]) + (size_t)row * 32;
+  const float beta = reinterpret_cast<const float*>(a.p[1])[row];
+  uint32_t w[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+#pragma unroll
+  for (int j = 0; j < 32; j++) w[j / 4] |= (uint32_t)e4m3(__fmul_rn(beta, e4m3f(E[j]))) << (8 * (j % 4));
+  uint4* out = reinterpret_cast<uint4*>(a.p[2] + (size_t)row * 32);
+  out[0] = make_uint4(w[0], w[1], w[2], w[3]);
+  out[1] = make_uint4(w[4], w[5], w[6], w[7]);
+  uint8_t* t = reinterpret_cast<uint8_t*>(a.p[3]);
+  *reinterpret_cast<uint4*>(t + tiled(row, 0, 128, 32)) = make_uint4(w[0], w[1], w[2], w[3]);
+  *reinterpret_cast<uint4*>(t + tiled(row, 16, 128, 32)) = make_uint4(w[4], w[5], w[6], w[7]);
+}
+
+// X~ = e4m3(D), D = the atom with alpha x as its accumulator (scale-d = 1) over E' and the F lines, per 64 rows x 128 of depth.
+// p0 rows (FP32), p1 alpha, p3 E' tiled, p4 F tiled (H = 128, depth 32; lines are rows), p5 out codes tiled (H = 128, depth k);
+// i0 rows, i1 k.  grid (k / 128, rows / 64), 128 threads
+extern "C" __global__ void __launch_bounds__(128) form_s5(const Args a) {
+  __shared__ __align__(128) uint8_t sE[2048], sF[4096], sO[4 * 2048];
+  const int tid = threadIdx.x, t0 = blockIdx.x * 128, r0 = blockIdx.y * 64, k = a.i[1];
+  const uint4* E = reinterpret_cast<const uint4*>(a.p[3] + (size_t)(r0 / 128) * 4096 + (r0 % 128) / 64 * 2048);
+  const uint4* F = reinterpret_cast<const uint4*>(a.p[4] + (size_t)(t0 / 128) * 4096);
+  reinterpret_cast<uint4*>(sE)[tid] = E[tid];
+  reinterpret_cast<uint4*>(sF)[tid] = F[tid];
+  reinterpret_cast<uint4*>(sF)[tid + 128] = F[tid + 128];
+  const float* x = reinterpret_cast<const float*>(a.p[0]);
+  const float* alpha = reinterpret_cast<const float*>(a.p[1]);
+  const int rA = 16 * (tid / 32) + (tid % 32) / 4, cA = 2 * (tid % 4);
+  const float al0 = alpha[r0 + rA], al1 = alpha[r0 + rA + 8];
+  float d[64];
+#pragma unroll
+  for (int j = 0; j < 16; j++) {
+    const float2 v0 = *reinterpret_cast<const float2*>(x + (size_t)(r0 + rA) * k + t0 + 8 * j + cA);
+    const float2 v1 = *reinterpret_cast<const float2*>(x + (size_t)(r0 + rA + 8) * k + t0 + 8 * j + cA);
+    d[4 * j] = __fmul_rn(al0, v0.x); d[4 * j + 1] = __fmul_rn(al0, v0.y);
+    d[4 * j + 2] = __fmul_rn(al1, v1.x); d[4 * j + 3] = __fmul_rn(al1, v1.y);
+  }
+  asm volatile("fence.proxy.async.shared::cta;" ::: "memory");
+  __syncthreads();
+  WG_FENCE;
+  qmma<128, 1>(d, desc(sa(sE)), desc(sa(sF)));
+  WG_COMMIT;
+  WG_WAIT(0);
+#pragma unroll
+  for (int i = 0; i < 64; i++) {
+    const int r = rA + 8 * ((i / 2) % 2), t = 8 * (i / 4) + cA + i % 2;
+    sO[(t / 32) * 2048 + (r >> 3) * 256 + ((t & 31) >> 4) * 128 + (r & 7) * 16 + (t & 15)] = e4m3(d[i]);
+  }
+  __syncthreads();
+  uint8_t* out = reinterpret_cast<uint8_t*>(a.p[5]);
+#pragma unroll
+  for (int c = 0; c < 4; c++)
+    reinterpret_cast<uint4*>(out + ((size_t)(r0 / 128) * (k / 32) + t0 / 32 + c) * 4096 + (r0 % 128) / 64 * 2048)[tid] =
+        reinterpret_cast<const uint4*>(sO + c * 2048)[tid];
+}
+
 // ---------------------------------------------------------------- the plain baseline's quantize and inputs
-// one CTA per BF16 row: s = 448 / amax, codes = fp8(x s) tiled (H = 128), glue scale amax / 448.  p0 X (rows x k bf16),
-// p1 out codes, p2 out glue (f32); i0 rows, i1 k
+// one CTA per row (BF16 when i2 = 0, FP32 when i2 = 1): s = 448 / amax, codes = fp8(x s) tiled (H = 128), glue scale amax / 448.
+// p0 X (rows x k), p1 out codes, p2 out glue (f32); i0 rows, i1 k, i2 input type
+DEV void load16(const uint8_t* row, int g, bool f32in, float* v) {
+  if (f32in) {
+    const float4* p = reinterpret_cast<const float4*>(row) + 4 * g;
+#pragma unroll
+    for (int i = 0; i < 4; i++) { const float4 w = p[i]; v[4 * i] = w.x; v[4 * i + 1] = w.y; v[4 * i + 2] = w.z; v[4 * i + 3] = w.w; }
+  } else {
+    const uint4* p = reinterpret_cast<const uint4*>(row) + 2 * g;
+#pragma unroll
+    for (int i = 0; i < 2; i++) {
+      const uint4 w = p[i];
+      const uint32_t u[4] = {w.x, w.y, w.z, w.w};
+#pragma unroll
+      for (int j = 0; j < 4; j++) { v[8 * i + 2 * j] = bf2f(u[j]); v[8 * i + 2 * j + 1] = bf2f(u[j] >> 16); }
+    }
+  }
+}
 extern "C" __global__ void __launch_bounds__(256) plainq(const Args a) {
   __shared__ float red[8];
   const int row = blockIdx.x, k = a.i[1], tid = threadIdx.x;
-  const uint4* X = reinterpret_cast<const uint4*>(a.p[0] + (size_t)row * k * 2);
-  float amax = 0.0f;
-  for (int j = tid; j < k / 8; j += 256) {
-    const uint4 w = X[j];
-    const uint32_t v[4] = {w.x, w.y, w.z, w.w};
+  const bool f32in = a.i[2] != 0;
+  const uint8_t* X = reinterpret_cast<const uint8_t*>(a.p[0]) + (size_t)row * k * (f32in ? 4 : 2);
+  float amax = 0.0f, v[16];
+  for (int g = tid; g < k / 16; g += 256) {
+    load16(X, g, f32in, v);
 #pragma unroll
-    for (int i = 0; i < 4; i++) amax = fmaxf(amax, fmaxf(fabsf(bf2f(v[i])), fabsf(bf2f(v[i] >> 16))));
+    for (int i = 0; i < 16; i++) amax = fmaxf(amax, fabsf(v[i]));
   }
 #pragma unroll
   for (int o = 16; o; o >>= 1) amax = fmaxf(amax, __shfl_xor_sync(~0u, amax, o));
@@ -495,13 +598,23 @@ extern "C" __global__ void __launch_bounds__(256) plainq(const Args a) {
   if (tid == 0) reinterpret_cast<float*>(a.p[2])[row] = amax > 0.0f ? __fdiv_rn(amax, 448.0f) : 1.0f;
   uint8_t* out = reinterpret_cast<uint8_t*>(a.p[1]);
   for (int g = tid; g < k / 16; g += 256) {
-    const uint4 w0 = X[2 * g], w1 = X[2 * g + 1];
-    const uint32_t v[8] = {w0.x, w0.y, w0.z, w0.w, w1.x, w1.y, w1.z, w1.w};
+    load16(X, g, f32in, v);
     uint32_t o[4] = {0, 0, 0, 0};
 #pragma unroll
-    for (int i = 0; i < 16; i++) o[i / 4] |= (uint32_t)e4m3(__fmul_rn(bf2f(v[i / 2] >> (16 * (i % 2))), s)) << (8 * (i % 4));
+    for (int i = 0; i < 16; i++) o[i / 4] |= (uint32_t)e4m3(__fmul_rn(v[i], s)) << (8 * (i % 4));
     *reinterpret_cast<uint4*>(out + tiled(row, 16 * g, 128, k)) = make_uint4(o[0], o[1], o[2], o[3]);
   }
+}
+
+// timing inputs for v1: FP32 rows, x = (mix32 byte, -128 -> -127) 2^(-4 - h mod 5) with 16 random low mantissa bits when nonzero.
+// p0 out; i0 rows, i1 k, i2 seed
+extern "C" __global__ void gen_f32(const Args a) {
+  const size_t w = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
+  if (w >= (size_t)a.i[0] * a.i[1]) return;
+  const uint32_t h = mix32((uint32_t)a.i[2] ^ mix32((uint32_t)w * 2u + 1u)), b = h & 0xFF;
+  const int code = (int)(int8_t)(b == 0x80 ? 0x81 : b);
+  const float x = __fmul_rn((float)code, __uint_as_float((123u - (h >> 8) % 5) << 23));
+  reinterpret_cast<uint32_t*>(a.p[0])[w] = code ? __float_as_uint(x) | (h >> 16) : 0;
 }
 
 // X = RNE_bf16(code scale) per element: p0 FP10 rows, p1 out (rows x k bf16); i0 rows, i1 k.  One thread per 8-code block
@@ -545,33 +658,35 @@ extern "C" __global__ void gen_fp10(const Args a) {
 }
 
 // ---------------------------------------------------------------- the clean-up's factors
-// P_A rows (tiled, H = 128, 128 bytes): [bf16(beta_A bf16(E_A)) || RNE_bf16(A'F_B)].  p0 E_A codes (rows x 32), p1 beta (u16),
-// p2 AF words (rows x 32), p3 out; i0 rows
+// the peel's scaled noise: bf16(beta bf16(E)) for v0 (i1 = 0; beta BF16), bf16(E') for v1 (i1 = 1; p0 holds E', beta unused)
+DEV uint16_t scaled(const Args& a, int row, int p) {
+  const uint8_t e = reinterpret_cast<const uint8_t*>(a.p[0])[row * 32 + p];
+  return a.i[1] ? e4m3bf(e) : bmul(reinterpret_cast<const uint16_t*>(a.p[1])[row], e4m3bf(e));
+}
+
+// P_A rows (tiled, H = 128, 128 bytes): [scaled noise || RNE_bf16(A'F_B)].  p0 E_A (or E'_A) codes (rows x 32), p1 beta (u16),
+// p2 AF words (rows x 32), p3 out; i0 rows, i1 forming
 extern "C" __global__ void pa(const Args a) {
   const int t = blockIdx.x * blockDim.x + threadIdx.x;
   if (t >= a.i[0] * 64) return;
   const int row = t / 64, e = t % 64;
-  uint16_t v;
-  if (e < 32) v = bmul(reinterpret_cast<const uint16_t*>(a.p[1])[row], e4m3bf(reinterpret_cast<const uint8_t*>(a.p[0])[row * 32 + e]));
-  else v = f2bf(reinterpret_cast<const float*>(a.p[2])[row * 32 + e - 32]);
+  const uint16_t v = e < 32 ? scaled(a, row, e) : f2bf(reinterpret_cast<const float*>(a.p[2])[row * 32 + e - 32]);
   *reinterpret_cast<uint16_t*>(a.p[3] + tiled(row, 2 * e, 128, 128)) = v;
 }
 
-// P_B rows: [RNE_bf16(FP32 add(fma chain from +0 over p of be_p G_pq, -BF_jq)) || -be], be_p = bf16(beta_B bf16(E_B,p)).
-// p0 E_B codes, p1 beta, p2 BF words (rows x 32), p3 G words (32 x 32, row p), p4 out; i0 rows
+// P_B rows: [RNE_bf16(FP32 add(fma chain from +0 over p of be_p G_pq, -BF_jq)) || -be], be the scaled noise.
+// p0 E_B (or E'_B) codes, p1 beta, p2 BF words (rows x 32), p3 G words (32 x 32, row p), p4 out; i0 rows, i1 forming
 extern "C" __global__ void pb(const Args a) {
   const int t = blockIdx.x * blockDim.x + threadIdx.x;
   if (t >= a.i[0] * 32) return;
   const int row = t / 32, q = t % 32;
-  const uint8_t* E = reinterpret_cast<const uint8_t*>(a.p[0]) + row * 32;
-  const uint16_t beta = reinterpret_cast<const uint16_t*>(a.p[1])[row];
   const float* G = reinterpret_cast<const float*>(a.p[3]);
   float acc = 0.0f;
-  for (int p = 0; p < 32; p++) acc = __fmaf_rn(bf2f(bmul(beta, e4m3bf(E[p]))), G[p * 32 + q], acc);
+  for (int p = 0; p < 32; p++) acc = __fmaf_rn(bf2f(scaled(a, row, p)), G[p * 32 + q], acc);
   const uint16_t mid = f2bf(__fadd_rn(acc, -reinterpret_cast<const float*>(a.p[2])[row * 32 + q]));
   uint8_t* out = reinterpret_cast<uint8_t*>(a.p[4]);
   *reinterpret_cast<uint16_t*>(out + tiled(row, 2 * q, 128, 128)) = mid;
-  *reinterpret_cast<uint16_t*>(out + tiled(row, 2 * (32 + q), 128, 128)) = bmul(beta, e4m3bf(E[q])) ^ 0x8000;
+  *reinterpret_cast<uint16_t*>(out + tiled(row, 2 * (32 + q), 128, 128)) = scaled(a, row, q) ^ 0x8000;
 }
 
 // ---------------------------------------------------------------- hashing: TurboSHAKE128 (Keccak-p[1600, 12], rate 168)
@@ -666,17 +781,19 @@ extern "C" __global__ void __launch_bounds__(64) hash_leaf(const Args a) {
   store32(reinterpret_cast<uint8_t*>(a.p[1]) + (size_t)t * 32, h);
 }
 
-// A's commitment, modeled: TurboSHAKE128 of each 1,280-byte segment of an FP10 row, D = 0x23.  p0 rows, p1 out (rows x segs x 32 B);
-// i0 rows, i1 k
-extern "C" __global__ void __launch_bounds__(128) hash_rows(const Args a) {
-  const int k = a.i[1], rs = k + k / 4, segs = rs / 1280;
+// A's commitment, modeled: TurboSHAKE128 of each 8 NL-byte segment of a row (FP10 rows in 1,280-byte segments, FP32 rows in
+// 1,024-byte ones), D = 0x23.  p0 rows, p1 out (rows x segs x 32 B); i0 rows, i1 row bytes
+template <int NL> DEV void hash_rows_body(const Args& a) {
+  const int rs = a.i[1], segs = rs / (8 * NL);
   const size_t t = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
   if (t >= (size_t)a.i[0] * segs) return;
-  const uint64_t* src = reinterpret_cast<const uint64_t*>(a.p[0] + (t / segs) * rs + (t % segs) * 1280);
+  const uint64_t* src = reinterpret_cast<const uint64_t*>(a.p[0] + (t / segs) * rs + (t % segs) * 8 * NL);
   uint64_t h[4];
-  turboshake<160, 0x23>([&](int i) { return src[i]; }, h);
+  turboshake<NL, 0x23>([&](int i) { return src[i]; }, h);
   store32(reinterpret_cast<uint8_t*>(a.p[1]) + t * 32, h);
 }
+extern "C" __global__ void __launch_bounds__(128) hash_rows_fp10(const Args a) { hash_rows_body<160>(a); }
+extern "C" __global__ void __launch_bounds__(128) hash_rows_f32(const Args a) { hash_rows_body<128>(a); }
 
 // Pearl's tickets: per 16 x 16 subtile of C~, the 16-lane fold (lane (rb, cb) folds its 4 x 4 block row-major,
 // lane <- rotl32(lane 0x9E3779B1 + bits, 13)) hashed as one keyed BLAKE3 block.  p0 C~, p1 out (subtiles row-major x 32 B),
