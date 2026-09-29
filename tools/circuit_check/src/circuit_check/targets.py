@@ -30,9 +30,10 @@ REGISTERED: list[str] = []
 
 
 def _authored(d: Any) -> bool:
-    """A Definition the core or the vLLM registry defines (not one a test module registered in the same session)."""
+    """A Definition the core, the vLLM registry or PoUW's circuit defines (not one a test module registered in the same
+    session)."""
     fn = getattr(d, "evaluate", None) or getattr(d, "body", None)
-    return getattr(fn, "__module__", "").partition(".")[0] in ("verity", "verity_vllm")
+    return getattr(fn, "__module__", "").partition(".")[0] in ("verity", "verity_vllm", "verity_pouw")
 
 
 def load_registries() -> None:
@@ -50,6 +51,7 @@ def load_registries() -> None:
         if m.name != "quarantine":
             importlib.import_module(f"{R.__name__}.{m.name}")
     from verity_vllm.program.kernels import rows, twins  # noqa: F401  (their kernels register with core)
+    import verity_pouw.circuit.ncp2  # noqa: F401  (PoUW's ncp-v2 unit templates and primitives)
     REGISTERED[:] = sorted(i for i, d in REGISTRY.defs.items() if _authored(d))
     _LOADED = True
 
@@ -173,6 +175,14 @@ def templates() -> list[tuple[str, Any, list[dict]]]:
             sub = t.bind(**params)
             out.append((sub.id, sub, instance_statics(sub, params)))
     return out
+
+
+def _pouw_roots() -> list[Any]:
+    """PoUW's `ncp-v2` unit templates at k = 64 and the smallest whole call (`verity_pouw.circuit.ncp2`); the package's own
+    tests check the call's template partition and its Z separator."""
+    from verity_pouw.circuit import ncp2
+
+    return list(ncp2.templates(64, "shift24").values()) + [ncp2.linear(ncp2.Shape(16, 64, 16))]
 
 
 def _core_roots() -> list[Any]:
@@ -319,7 +329,7 @@ def catalog() -> list[Any]:
         elif isinstance(d, CompositeDefinition) and not d.statics:
             roots.append(bind(d))
     ROOT_ERRORS.clear()
-    roots += _core_roots() + _kernel_roots() + _vocabulary_roots()
+    roots += _core_roots() + _kernel_roots() + _vocabulary_roots() + _pouw_roots()
     for label, make in _model_roots():
         try:
             fn = make()
