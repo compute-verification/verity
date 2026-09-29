@@ -44,6 +44,8 @@ structure Tags where
   bindings : Bool := false
   /-- PR #83 from `967b8d06`: a public file may be a shared-row file (header `shared_rows`, `Flock.HmRow.sharedRows`) -/
   sharedRows : Bool := false
+  /-- item 1e (#225): the unit is circuit types and a layout, not rows, and the verifier derives its rows (`Flock.Typed`) -/
+  typed : Bool := false
   deriving Inhabited
 
 namespace Tags
@@ -140,9 +142,9 @@ def leafSchemeHm96 : Json :=
 /-- The identity of PR #83's statement from `eb90718f`; `seedInjection` is true only in the selftest harness's build. From
 `68ae79f2` (`sha512Text`) its text names the round digest, the statement digest and Σ as SHA-512, as they are since
 `eb90718f`. -/
-def identityHm96 (seedInjection : Bool) (sha512Text : Bool := false) : Json :=
+def identityHm96 (seedInjection : Bool) (sha512Text : Bool := false) (statement : String := "verity/flock-circuit") : Json :=
   let h := if sha512Text then "sha512" else "sha256"
-  Json.mkObj [("statement", s "verity/flock-circuit"), ("backend", s "C-interactive"),
+  Json.mkObj [("statement", s statement), ("backend", s "C-interactive"),
     ("proof_class", s "NON_ZK_PROOF"), ("profile", s "fast100"), ("reps", n 2), ("commitments", s "one root, both reps (R1)"),
     ("flavor", s "rs"), ("leaf_scheme", leafSchemeHm96), ("seed_injection", Json.bool seedInjection),
     ("hashes", Json.mkObj [("merkle", s "hm96-sha512 (every Ligerito level)"),
@@ -181,9 +183,23 @@ def circuit967b8d06 : Tags :=
 def circuit967b8d06Selftest : Tags :=
   { circuit967b8d06 with name := "verity/flock-circuit@967b8d06+seed-injection", identity := identityHm96 true true }
 
+/-- `verity/flock-circuit/types` (item 1e, #225, #273): `verity/flock-circuit`'s statement (with `967b8d06`'s identity text)
+with its unit as circuit types and a layout; the verifier derives the unit's rows (`Flock.Typed`). The identity and the
+statement digest's leading tag name the typed statement, as the prover's do, and it has its own Σ tag and domain (a new
+id gets new tags). -/
+def circuitTypes : Tags :=
+  { circuit967b8d06 with
+    name := "verity/flock-circuit/types", statement := "verity/flock-circuit/types", fileFormat := "flock-circuit/types",
+    sigmaTag := "verity/flock-circuit/types/sigma", domainPrefix := "flock-circuit-types/fast100x2/rep",
+    identity := identityHm96 false true "verity/flock-circuit/types", typed := true }
+
+def circuitTypesSelftest : Tags :=
+  { circuitTypes with
+    name := "verity/flock-circuit/types+seed-injection", identity := identityHm96 true true "verity/flock-circuit/types" }
+
 /-- The versions this verifier knows, by name. -/
 def all : List Tags := [netlistV1, circuit19c7269a, circuitFd02e847, circuit631567f7, circuitEb90718f, circuitEb90718fSelftest,
-  circuit, circuitSelftest, circuit967b8d06, circuit967b8d06Selftest]
+  circuit, circuitSelftest, circuit967b8d06, circuit967b8d06Selftest, circuitTypes, circuitTypesSelftest]
 
 def find? (name : String) : Option Tags := all.find? (·.name == name)
 

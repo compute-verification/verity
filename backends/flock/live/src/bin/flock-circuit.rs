@@ -38,7 +38,6 @@ use serde_json::{Value, json};
 use sha2::{Digest, Sha512};
 
 const TABLE: &str = "circuit";
-const SIGMA_TAG: &[u8] = b"verity/flock-circuit/sigma";
 
 fn arg(k: &str, d: &str) -> String {
     let a: Vec<String> = std::env::args().collect();
@@ -53,8 +52,8 @@ fn f128_bytes(v: &[F128]) -> Vec<u8> {
     v.iter().flat_map(|x| x.lo.to_le_bytes().into_iter().chain(x.hi.to_le_bytes())).collect()
 }
 
-fn domain(rep: usize) -> Vec<u8> {
-    format!("flock-circuit/fast100x2/rep{rep}").into_bytes()
+fn domain(c: &Composite, rep: usize) -> Vec<u8> {
+    format!("{}{rep}", c.tags().domain).into_bytes()
 }
 
 /// The Merkle hash of every Ligerito level: hm96-sha512/v1 leaves under SHA-512 nodes in a production build (feature `sha512`,
@@ -149,7 +148,7 @@ fn zk_identity(c: &Composite) -> Value {
 /// The backend identity the statement digest pins (so a NON_ZK and a ZK cell never share one).
 fn identity(c: &Composite) -> Value {
     let hooks = if zk_mode() { zk_identity(c) } else { NoMask::new(ProverSeed::from_os()).identity() };
-    json!({"statement": STATEMENT, "backend": "C-interactive", "proof_class": "NON_ZK_PROOF", "profile": "fast100", "reps": 2,
+    json!({"statement": c.statement(), "backend": "C-interactive", "proof_class": "NON_ZK_PROOF", "profile": "fast100", "reps": 2,
            "commitments": "one root, both reps (R1)", "flavor": "rs", "leaf_scheme": c.leaf_scheme,
            // a selftest build injects seeds (the determinism check); a proving build never has the feature
            "seed_injection": cfg!(feature = "seed-injection"),
@@ -162,10 +161,10 @@ fn identity(c: &Composite) -> Value {
            "hooks": hooks})
 }
 
-/// Σ = SHA-512(SIGMA_TAG ‖ the circuit's SHA-512 ‖ the statement digest ‖ the public digest).
+/// Σ = SHA-512(the statement's Σ tag ‖ the circuit's SHA-512 ‖ the statement digest ‖ the public digest).
 fn sigma(st: &Stmt, inst: &Instances) -> [u8; 64] {
     let mut h = Sha512::new();
-    h.update(SIGMA_TAG);
+    h.update(st.c.tags().sigma.as_bytes());
     h.update(st.c.sha512);
     h.update(st.digest);
     h.update(inst.public_sha512);
@@ -179,7 +178,7 @@ struct CircuitVerifier {
 
 impl StatementVerifier for CircuitVerifier {
     fn domain(&self, _t: &str, rep: usize) -> Vec<u8> {
-        domain(rep)
+        domain(&self.st.c, rep)
     }
 
     fn verify(&self, _t: &str, rep: usize, proof: &[u8], ch: &mut ReplayChallenger, link: &LinkCtx<'_>) -> Result<Vec<u8>, String> {
@@ -421,6 +420,8 @@ struct Wit {
     flip_z: Option<usize>,
     /// after the inputs converge: flip this bit of a unit's cut input (net, instance, column) — a tampered private cut word
     cut_flip: Option<(usize, usize, usize)>,
+    /// a typed template's: a part's bound input row (root instance, unit coordinate) flipped as it's evaluated
+    typed_flip: Option<(usize, usize)>,
     /// evaluate these circuits instead of the pinned ones (a swapped tail)
     nets: Arc<BTreeMap<usize, &'static flock_live::ir_block::IrUnitNet>>,
     /// write these public regions into the witness (a dummy witness whose region claims are the public ones)
@@ -462,7 +463,7 @@ fn witness(st: &Stmt, w: &Wit, device: bool) -> (WitData, f64) {
     };
     #[cfg(feature = "gpu")]
     // a tail that returns the outputs interleaves with the units round by round: the device's two passes cannot follow it
-    if device && w.flip_z.is_none() && w.cut_flip.is_none() && w.nets.is_empty() && w.regions.is_none() && st.c.out_net == st.c.unit_net {
+    if device && w.flip_z.is_none() && w.cut_flip.is_none() && w.nets.is_empty() && w.regions.is_none() && st.c.out_net == st.c.unit_net && st.c.typed.is_none() {
         use rayon::prelude::*;
         let ur = st.c.unit_range();
         let ri: Vec<_> = (0..st.blocks()).into_par_iter().map(|b| (w.rowin)(b)).collect();
@@ -479,7 +480,7 @@ fn witness(st: &Stmt, w: &Wit, device: bool) -> (WitData, f64) {
     #[cfg(feature = "gpu")]
     // a tail that returns the outputs (a chain of units, the tail's stages): the host converges every slot's inputs and computes
     // the stages and lookups; the device the compressions, and the units from their converged inputs
-    if device && w.flip_z.is_none() && w.cut_flip.is_none() && w.nets.is_empty() && w.regions.is_none() {
+    if device && w.flip_z.is_none() && w.cut_flip.is_none() && w.nets.is_empty() && w.regions.is_none() && st.c.typed.is_none() {
         use rayon::prelude::*;
         let c = &st.c;
         let ri: Vec<_> = (0..st.blocks()).into_par_iter().map(|b| (w.rowin)(b)).collect();
@@ -500,7 +501,7 @@ fn witness(st: &Stmt, w: &Wit, device: bool) -> (WitData, f64) {
         let word = &mut ins[n][x][col / 128];
         if col % 128 < 64 { word.lo ^= 1 << (col % 128) } else { word.hi ^= 1 << (col % 128 - 64) }
     }
-    let (mut z, a, b, zl) = st.witness(&ins, &*w.mask, &w.nets);
+    let (mut z, a, b, zl) = st.witness_with(&ins, &*w.mask, &w.nets, w.typed_flip);
     if let Some(bit) = w.flip_z {
         z[bit / 128] = z[bit / 128] + if bit % 128 < 64 { F128::new(1 << (bit % 128), 0) } else { F128::new(0, 1 << (bit % 128 - 64)) };
     }
@@ -707,7 +708,7 @@ fn prove_cpu_zk(st: &Arc<Stmt>, wt: &WitData, lig: LigeritoProfile, rep: usize, 
     let mut hk = |cm: &Commitment| -> Vec<Vec<F128>> { hook(merkle_digest_bytes(&cm.cap)).into_iter().map(|p| p[6..].to_vec()).collect() };
     let (proof, commitment) = if std::env::var("FC_ZK_FRAMED").is_ok() {
         let mut rounds = |content: &[u8], n: usize| replay_round(&mut mch, content, n).unwrap_or_else(|e| panic!("LIVE-ERROR replay: {e}"));
-        let mut fr = Framer { pending: frame_domain(&domain(rep)), rounds: &mut rounds };
+        let mut fr = Framer { pending: frame_domain(&domain(&st.c, rep)), rounds: &mut rounds };
         prove_fast_ligerito_from_witness_extra_zk(&st.r1cs, &params(st.m, lig), z, a, b, zl, &st.circuit, &mut hk, Some(&zk.level0), &mut fr)
     } else {
         prove_fast_ligerito_from_witness_extra_zk(&st.r1cs, &params(st.m, lig), z, a, b, zl, &st.circuit, &mut hk, Some(&zk.level0), &mut mch)
@@ -1225,7 +1226,7 @@ fn zkaudit(st: &Arc<Stmt>, inst: &Arc<Instances>) {
     let ligerito = json!({"m": st.m, "t_pad0": zk_t_pad(st.m), "initial_k": lc.initial_k, "initial_log_msg_cols": lc.initial_log_msg_cols, "recursive_ks": lc.recursive_ks,
         "recursive_log_msg_cols": lc.recursive_log_msg_cols, "log_inv_rates": lc.log_inv_rates, "queries": lc.queries, "ood_samples": lc.ood_samples,
         "grinding_bits": lc.grinding_bits});
-    let out = json!({"statement": STATEMENT, "unit": st.c.name, "instances": st.n, "ligerito": ligerito,
+    let out = json!({"statement": st.c.statement(), "unit": st.c.name, "instances": st.n, "ligerito": ligerito,
         "classes": total.iter().map(|(k, (n, b))| (k.to_string(), json!({"items": n, "bytes": b}))).collect::<serde_json::Map<_, _>>(),
         "masked_values": n_masked, "masked_all_differ_from_control": all_differ, "region_claims": n_region, "region_s_hat_v_is_public": region_public,
         "unattributed_bytes": unattributed, "clear": clear, "checks_pass": all_differ && region_public && unattributed == 0,
@@ -1414,7 +1415,7 @@ fn rewind(st: &Stmt, inst: &Instances, v: impl Transport + 'static, hello: &str,
     let mut sims = Vec::new();
     for rep in 0..2 {
         let (c, pr, inner) = simulate_full(st, inst, &coins[rep].concat(), points, &dummy[rep], rng, rep, 2 * index + rep as u64)?;
-        let mut rec = flock_live::RecordingChallenger::new(&domain(rep), coins[rep].clone());
+        let mut rec = flock_live::RecordingChallenger::new(&domain(&st.c, rep), coins[rep].clone());
         verify_zk_with(st, inst, &c, &pr, &inner, points, rep, &mut rec).map_err(|e| format!("rep {rep}'s simulation is rejected on the extracted coins: {e}"))?;
         if let Some(e) = rec.mismatch.or_else(|| (rec.rounds.len() != coins[rep].len()).then(|| format!("{} rounds, extracted {}", rec.rounds.len(), coins[rep].len()))) {
             return Err(format!("rep {rep}'s simulation does not follow the extracted schedule: {e}"));
@@ -1433,7 +1434,7 @@ fn rewind(st: &Stmt, inst: &Instances, v: impl Transport + 'static, hello: &str,
     expect!(Req::Register, Resp::Draw(_));
     expect!(Req::Hello(hello.to_string()), Resp::Coins(_));
     for rep in 0..2 {
-        expect!(Req::Open { stream: rep_stream(TABLE, rep), parent: String::new(), label: domain(rep), at: 0 }, Resp::Ok);
+        expect!(Req::Open { stream: rep_stream(TABLE, rep), parent: String::new(), label: domain(&st.c, rep), at: 0 }, Resp::Ok);
         if rep == 0 {
             match call(&t, Req::Commit { root_f: sigma(st, inst).to_vec(), roots: vec![(TABLE.into(), sims[0].1.clone())], publics: vec![] })? {
                 Resp::Coins(c) if c.chunks(st.m_pts).eq(points.iter().map(|p| p.as_slice())) => {}
@@ -1746,7 +1747,7 @@ fn prove_gpu(st: &Stmt, wt: &WitData, lig: LigeritoProfile, rep: usize, hook: Ho
              salts: &Mutex<flock_live::zk_hooks::LeafSalts>) -> (Vec<u8>, Value) {
     use flock_live::gpu_circuit::{Live, prove_circuit};
     let (proof, commitment, ph, wph) =
-        with_gpu_src(st, wt, |src| prove_circuit(st, src, &params(st.m, lig), &domain(rep), hook, Live::Stream(ch), Some(salts)));
+        with_gpu_src(st, wt, |src| prove_circuit(st, src, &params(st.m, lig), &domain(&st.c, rep), hook, Live::Stream(ch), Some(salts)));
     let bk = gpu_buckets(wt, ph, wph);
     eprintln!("GPUPHASE\t{bk}");
     (bincode::serialize(&(commitment, proof)).unwrap(), bk)
@@ -1762,7 +1763,7 @@ fn gpu_zk_device(st: &Stmt, wt: &WitData, lig: LigeritoProfile, rep: usize, hook
                  -> (R1csProofLigerito, Commitment, Value) {
     use flock_live::gpu_circuit::{Live, prove_circuit};
     let (proof, commitment, ph, wph) =
-        with_gpu_src(st, wt, |src| prove_circuit(st, src, &params(st.m, lig), &domain(rep), hook, Live::Zk { level0, rounds }, Some(salts)));
+        with_gpu_src(st, wt, |src| prove_circuit(st, src, &params(st.m, lig), &domain(&st.c, rep), hook, Live::Zk { level0, rounds }, Some(salts)));
     let bk = gpu_buckets(wt, ph, wph);
     eprintln!("GPUPHASE\t{bk}");
     (proof, commitment, bk)
@@ -1864,10 +1865,17 @@ fn wit(st: &Arc<Stmt>, inst: &Arc<Instances>, plan: &Plan, zero: bool, seed: Pro
     });
     let ur = st.c.unit_range();
     let unit = st.c.unit();
-    let cut_flip = (plan.cut_flip && unit.in_groups.len() > 1).then(|| (st.c.unit_net, 0, unit.in_groups[1].col * 128 + 3));
+    let cut_flip = (plan.cut_flip && unit.in_groups.len() > 1 && st.c.typed.is_none()).then(|| (st.c.unit_net, 0, unit.in_groups[1].col * 128 + 3));
+    // a typed template's cut words are its parts' bound inputs: the first one of instance 0
+    let typed_flip = st.c.typed.as_ref().filter(|_| plan.cut_flip).and_then(|t| t.inst.bind.iter().flatten().next()).map(|b| (0, b.0));
     let nets = if plan.tail_swapped { forged_stages(st) } else { BTreeMap::new() };
-    Wit { rowin, inputs, mask, flip_z: plan.unit_flip.then_some(ur.slot(ur.count.min(6) - 1) + st.c.unit().in_words * 128 + 40), cut_flip,
-          nets: Arc::new(nets), regions: (zero && plan.zero_witness).then(|| inst.clone()), mask_host: random }
+    // a unit's internal row; a typed template's first AND row, the root's (else a part's)
+    let flip_z = match &st.c.typed {
+        Some(t) => t.inst.first_and().map(|u| t.col(&st.c, ur.count.min(6) - 1, u)),
+        None => Some(ur.slot(ur.count.min(6) - 1) + st.c.unit().in_words * 128 + 40),
+    };
+    Wit { rowin, inputs, mask, flip_z: flip_z.filter(|_| plan.unit_flip), cut_flip, typed_flip, nets: Arc::new(nets),
+          regions: (zero && plan.zero_witness).then(|| inst.clone()), mask_host: random }
 }
 
 /// The tail stages of the forged circuit (`--forged`: the same template with every positive tail constant x 4, staged by
@@ -1980,7 +1988,7 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
             let t_zk_commit = if pre_id.is_some() { if rep == 0 { t_level0 } else { 0.0 } }
                               else { tz0.elapsed().as_secs_f64() + if rep == 0 { t_level0 } else { 0.0 } };
             // rep 1's stream on the device path opens at its first round, after rep 0's last one (the order on the wire)
-            let mut lch = if rep0_finish.is_some() { None } else { Some(LiveChallenger::new(t.clone(), TABLE, rep, &domain(rep))?) };
+            let mut lch = if rep0_finish.is_some() { None } else { Some(LiveChallenger::new(t.clone(), TABLE, rep, &domain(&st.c, rep))?) };
             let tt = t.clone();
             let mut hook = |root: &[u8]| -> Vec<Vec<F128>> {
                 // red-team-hm96 C1: both reps' level-0 trees take salt stream 0, so they must be one tree; stop before rep 1
@@ -2065,7 +2073,7 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
                                         if let Some(e) = stop {
                                             panic!("{e}");
                                         }
-                                        let l = LiveChallenger::new(t.clone(), TABLE, rep, &domain(rep)).unwrap_or_else(|e| panic!("LIVE-REFUSED open: {e}"));
+                                        let l = LiveChallenger::new(t.clone(), TABLE, rep, &domain(&st.c, rep)).unwrap_or_else(|e| panic!("LIVE-REFUSED open: {e}"));
                                         opened = Some(zk_masking(st, l, &z));
                                     }
                                     let m = &mut opened.as_mut().expect("rep 1's stream").0;
@@ -2139,11 +2147,12 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
     let step0 = if v["accepted"] == true && !is_zk(st) { check_coin_seed(&commit, &hello, &v, &log.lock().unwrap_or_else(PoisonError::into_inner)) } else { Ok(()) };
     let v = if let Err(e) = &step0 { json!({"accepted": false, "why": e, "verdict": v}) } else { v };
     let c = &st.c;
-    let ands = (c.unit().useful as u64, st.n as u64 * c.upv as u64);
+    let (rows_per_vu, ands_per_vu) = c.sizes_per_vu();
     (
-        json!({"accepted": v["accepted"], "why": v["why"], "verdict": v, "statement": STATEMENT, "scheme": SCHEME,
+        json!({"accepted": v["accepted"], "why": v["why"], "verdict": v, "statement": c.statement(), "scheme": SCHEME,
                "prover": if plan.gpu {"flock-cuda-circuit"} else {"flock-cpu"}, "gpu": plan.gpu, "unit": c.name, "set": inst.header["set"],
-               "subcircuit": inst.header["subcircuit"], "instances": st.n, "vus_per_block": c.g, "units": ands.1, "k_log": c.k_log, "nbl": st.nbl,
+               "subcircuit": inst.header["subcircuit"], "instances": st.n, "vus_per_block": c.g, "units": st.n * c.upv, "rows_per_vu": rows_per_vu,
+               "ands_per_vu": ands_per_vu, "k_log": c.k_log, "nbl": st.nbl,
                "dense_m": st.m, "e2e_s": e2e_s, "witness_s": witness_s, "prove_s": prove_s, "prove_total_s": prove_s.iter().sum::<f64>(),
                "buckets": buckets, "wait_s": wait_s, "wait_e2e_s": wait_e2e_s, "calls": calls, "wire_sent": ws, "wire_recv": wr,
                "proof_bytes": proofs.iter().map(|p| p.len()).collect::<Vec<_>>(), "sigma": hex(&sig), "roots": inst.header["frame_v3"]["roots"],
@@ -2183,6 +2192,7 @@ const CASES: &[(&str, bool, bool)] = &[
     ("leaf_salts_from_prover_seed_refused", false, false),
     ("device_salts_match_host", true, false),
     ("leaf_key_witness_refused", false, false),
+    ("typed_statement_altered_refused", false, false),
     ("private_cut_word_tampered", false, true),
     ("tail_swapped", false, true),
     ("tail_swapped_circuit_refused", false, false),
@@ -2214,7 +2224,8 @@ const NOT_ZK: &[&str] = &["coin_seed_opening_forged", "coin_seed_record_replays"
 
 fn skipped(st: &Stmt, name: &str) -> bool {
     let multi_block = st.c.ports.iter().any(|p| p.comps > 1);
-    let cut = st.c.wires.iter().any(|w| w.dst.0 != st.c.sha_net && w.dst.0 != st.c.hm_net);
+    let cut = st.c.wires.iter().any(|w| w.dst.0 != st.c.sha_net && w.dst.0 != st.c.hm_net)
+        || st.c.typed.as_ref().is_some_and(|t| t.inst.bind.iter().any(|b| !b.is_empty()));
     // a tail with no positive constant to forge (GEMM's: the zero accumulator and the cast) forges to itself: nothing to swap
     let forged_same = std::fs::read_to_string(arg("--forged", "circuit-forged.txt"))
         .map(|f| f == std::fs::read_to_string(arg("--circuit", "")).unwrap_or_default()).unwrap_or(true);
@@ -2560,6 +2571,32 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         return json!({"case": name, "expect": "refused at parse (not the pinned leaf-commitment scheme)", "pass": why.iter().all(Option::is_some),
                       "why": why});
     }
+    if name == "typed_statement_altered_refused" {
+        // the unit's type altered under its digest; the unit's layout altered under its sha512; the unit's rows in the statement
+        if st.c.statement() != flock_live::typed::STATEMENT {
+            return json!({"case": name, "pass": true, "skipped": "a check of a typed statement"});
+        }
+        let text = std::fs::read_to_string(arg("--circuit", "")).unwrap();
+        let lines: Vec<String> = text.split('\n').map(str::to_string).collect();
+        let meta: Value = serde_json::from_str(&lines[1][5..]).unwrap();
+        let with_meta = |m: &Value| { let mut l = lines.clone(); l[1] = format!("META {}", serde_json::to_string(m).unwrap()); l.join("\n") };
+        let mut type_altered = meta.clone();
+        let ut = meta["unit_type"].as_str().unwrap_or("");
+        let and = meta["types"][ut]["items"].as_array().and_then(|a| a.iter().position(|it| it[0] == 0)).unwrap_or(0);
+        let c = &mut type_altered["types"][ut]["items"][and][1][1];
+        *c = json!(1 - c.as_u64().unwrap_or(0));
+        let mut layout_altered = meta.clone();
+        let split = if meta["layouts"][0]["in_split"] == json!([]) { json!([1]) } else { json!([]) };
+        layout_altered["layouts"][0]["in_split"] = split;
+        let rows = if flock_live::typed::is_flat(&meta) { flock_live::typed::unit_rows(&meta, &st.c.name) } else {
+            flock_live::typed::instance(&meta).map(|i| i.root_text(&st.c.name))
+        }.unwrap();
+        let with_rows = format!("{text}CIRCUIT unit {}\n{rows}", rows.lines().count());
+        let why: Vec<Option<String>> = [with_meta(&type_altered), with_meta(&layout_altered), with_rows].iter()
+            .map(|t| Composite::parse(t, Some(&arg("--tables", "tables"))).err()).collect();
+        return json!({"case": name, "expect": "refused at parse (a type or a layout not its digest; the unit's rows in the statement)",
+                      "pass": why.iter().all(Option::is_some), "why": why});
+    }
     let mut plan = plan_of(name, gpu);
     if name == "cross_session_replay_both_reps" {
         let s0 = Arc::new(Mutex::new(server(st, inst)));
@@ -2596,7 +2633,7 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
     let (v, proofs) = session(&pst, &pinst, shared(InProc(s.clone())), &plan, ProverSeed::from_os());
     let acc = v["accepted"].as_bool().unwrap_or(false);
     let rec = s.lock().unwrap_or_else(PoisonError::into_inner).record_json();
-    record_case(name, want.1, &v, &rec, &proofs);
+    record_case(st.c.statement(), name, want.1, &v, &rec, &proofs);
     let reps: Vec<Value> = rec["verdict"]["reps"].as_array().cloned().unwrap_or_default().iter().map(|r| json!([r["stream"], r["ok"], r["why"]])).collect();
     let both = reps.len() == 2 && reps.iter().all(|r| r[1] == false);
     let stopped = v["prover_stopped"].as_str().is_some_and(|x| x.contains("level-0 root"));
@@ -2622,13 +2659,13 @@ fn flip_salt(p: &[u8]) -> Vec<u8> {
 
 /// `--record-dir DIR`: the case's session as the verifier recorded it (`DIR/<case>.json`: the expectation, the prover's result,
 /// the server record) and the proofs the prover produced (`DIR/<case>.rep<r>.proof`), for replaying verifiers' vectors.
-fn record_case(name: &str, expect_accept: bool, v: &Value, rec: &Value, proofs: &[Vec<u8>]) {
+fn record_case(statement: &str, name: &str, expect_accept: bool, v: &Value, rec: &Value, proofs: &[Vec<u8>]) {
     let dir = arg("--record-dir", "");
     if dir.is_empty() {
         return;
     }
     let _ = std::fs::create_dir_all(&dir);
-    let doc = json!({"case": name, "statement": STATEMENT, "expect": if expect_accept {"accept"} else {"reject"}, "accepted": v["accepted"],
+    let doc = json!({"case": name, "statement": statement, "expect": if expect_accept {"accept"} else {"reject"}, "accepted": v["accepted"],
                      "why": v["why"], "prover_stopped": v["prover_stopped"], "record": rec});
     let _ = std::fs::write(format!("{dir}/{name}.json"), serde_json::to_vec_pretty(&doc).unwrap_or_default());
     for (r, p) in proofs.iter().enumerate() {
@@ -2640,11 +2677,12 @@ fn record_case(name: &str, expect_accept: bool, v: &Value, rec: &Value, proofs: 
 /// native tail: the 36-op RMSNorm row tail's shape, one F32Add over two cut words), and META with a `tail` program.
 fn with_tail(text: &str) -> (String, String) {
     let lines: Vec<&str> = text.split('\n').collect();
-    let at = lines.iter().position(|l| l.starts_with("CIRCUIT unit ")).unwrap();
-    let n: usize = lines[at].split_whitespace().nth(2).unwrap().parse().unwrap();
+    // the unit's section, or a typed statement's first (it has none): a CUT line is refused in any
+    let at = lines.iter().position(|l| l.starts_with("CIRCUIT unit ")).or_else(|| lines.iter().position(|l| l.starts_with("CIRCUIT "))).unwrap();
+    let (sec, n) = { let h: Vec<&str> = lines[at].split_whitespace().collect(); (h[1].to_string(), h[2].parse::<usize>().unwrap()) };
     let cut = r#"CUT {"in":[],"out":[],"tail":[[2,"F32Add_v1",0,1]],"words":2}"#;
     let mut a: Vec<String> = lines.iter().map(|s| s.to_string()).collect();
-    a[at] = format!("CIRCUIT unit {}", n + 1);
+    a[at] = format!("CIRCUIT {sec} {}", n + 1);
     a.insert(at + 1 + n, cut.to_string());
     let mut meta: Value = serde_json::from_str(&lines[1][5..]).unwrap();
     meta["tail"] = json!([[2, "F32Add_v1", 0, 1]]);
@@ -2725,8 +2763,11 @@ fn gpu_cpu_case(_: &Arc<Stmt>, _: &Arc<Instances>) -> Value {
 fn relabel(text: &str) -> String {
     let mut lines: Vec<String> = text.split('\n').map(|s| s.to_string()).collect();
     let mut meta: Value = serde_json::from_str(&lines[1][5..]).unwrap();
-    let l = meta["leaves_in"][0].as_array_mut().unwrap();
-    l.swap(0, 1);
+    // a unit's first two leaves swapped; a typed template (no leaf maps) its instance's first two outputs
+    match meta.get_mut("leaves_in").and_then(|l| l.get_mut(0)).and_then(Value::as_array_mut) {
+        Some(l) => l.swap(0, 1),
+        None => flock_live::typed::relabel(&mut meta).unwrap(),
+    }
     lines[1] = format!("META {}", serde_json::to_string(&meta).unwrap());
     lines.join("\n")
 }
@@ -2767,8 +2808,9 @@ fn selftest(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) {
         all &= v["pass"] == true;
         println!("NEG\t{v}");
     }
-    println!("SELFTEST\t{}", json!({"statement": STATEMENT, "unit": st.c.name, "subcircuit": inst.header["subcircuit"], "instances": st.n,
-        "vus_per_block": st.c.g, "k_log": st.c.k_log, "m": st.m, "gpu": gpu, "circuit_sha512": hex(&st.c.sha512), "all_pass": all}));
+    println!("SELFTEST\t{}", json!({"statement": st.c.statement(), "unit": st.c.name, "subcircuit": inst.header["subcircuit"], "instances": st.n,
+        "vus_per_block": st.c.g, "k_log": st.c.k_log, "m": st.m, "gpu": gpu, "circuit_sha512": hex(&st.c.sha512),
+        "unit_rows_sha256": hex(&st.c.unit().sha256), "rows_per_vu": st.c.sizes_per_vu().0, "ands_per_vu": st.c.sizes_per_vu().1, "all_pass": all}));
 }
 
 fn serve_loop(make: impl Fn() -> Server) {
@@ -2837,6 +2879,15 @@ fn main() {
     }
     let tb = Instant::now();
     let c = load_composite(&arg("--circuit", "circuit.txt"));
+    if cmd == "rows" {
+        // a typed statement's rows as this prover derives them, laid out as staging's rows/ (to diff the two mirrors)
+        let out = arg("--out", "rows");
+        std::fs::create_dir_all(&out).expect("--out");
+        for (f, text) in flock_live::typed::staged_rows(&c.meta, &c.name).unwrap_or_else(|e| refuse(e)) {
+            std::fs::write(format!("{out}/{f}"), text).expect("rows");
+        }
+        return;
+    }
     let pin = arg("--pin", "");
     if cmd == "serve" && pin.is_empty() {
         refuse("serve needs --pin (the pinned circuit's SHA-512)".into());
@@ -2853,6 +2904,10 @@ fn main() {
     }
     let id = identity(&c);
     let st = Arc::new(Stmt::new(c, inst.n, id).unwrap_or_else(|e| refuse(e)));
+    // the device prover holds at most 12 slot types (`gpu_circuit::FC_MAX_TYPES`)
+    if flag("--gpu") && st.circuit.types.len() > 12 {
+        refuse(format!("{} slot types: the GPU prover holds at most 12", st.circuit.types.len()));
+    }
     if zk_mode() {
         zk_queries0(st.m).unwrap_or_else(|e| refuse(e));
     }

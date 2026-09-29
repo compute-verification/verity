@@ -68,6 +68,14 @@ import FlockSoundness.Game.Seq
 import FlockSoundness.ExtractWait
 import FlockSoundness.LinkFinder
 import FlockSoundness.Lowering
+import FlockSoundness.ExecRows
+import FlockSoundness.ExecDelta
+import FlockSoundness.ExecPlacement
+import FlockSoundness.ExecParse
+import FlockSoundness.ExecCircuit
+import FlockSoundness.ExecCheck
+import FlockSoundness.ExecLookup
+import FlockSoundness.ExecSetup
 import FlockSoundness.Types.Flat
 import FlockSoundness.Rope.Lowering
 import FlockSoundness.Types.Dag
@@ -88,3 +96,4 @@ import FlockSoundness.Audit.FlockBatchedAcc
 import FlockSoundness.Audit.FlockLink
 import FlockSoundness.Audit.FlockLinked
 import FlockSoundness.E2E
+import FlockSoundness.ComposePlace
