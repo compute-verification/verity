@@ -85,10 +85,10 @@ circuit's other outputs, such as commitments and leaves, are not delivered. $K$ 
   \varepsilon_{ks} + \delta_{link} + \delta_{in}$, so the prover's influence over what is delivered is
   $\log_2 |\mathrm{influenceSet}|$ bits; `Refines.twoStage_influence` is the same over replay units, with $e_{\text{eff}}$
   and the two-stage input hypothesis `AnchorsSound₂` (`Audit/TwoStage.lean`).
-- **Not vacuous** (`Audit/InfluenceExamples.lean`): on a four-gate circuit, `lemma47` applies the influence cap to two
-  different transcripts that both have a wrong unit, with a separator narrower than the unit's exits
-  (`three_mem_exits`), and `count` bounds what they deliver by 2; `influence_met` meets `audit_influence`'s hypotheses
-  at 0 on an audit that accepts with probability 1 (`accepts`).
+- **Not vacuous** (`Audit/InfluenceWitness.lean`, the statement reviewer's witness): on a four-gate circuit,
+  `W.lemma47` applies the influence cap to two different transcripts that both have a wrong unit, with a separator
+  narrower than the unit's exits (`W.three_mem_exits`), and `W.count` bounds what they deliver by 2; `A.influence`
+  meets `audit_influence`'s hypotheses at 0 on an audit that accepts with probability 1 (`A.accepts`).
 
 **Tightness and insecurity** (`Audit/Examples.lean`, on `K` chains of `nv` NOT gates, one coarse unit per chain and one
 fine unit per gate, with a uniform `k₂`-subset of each drawn chain's gates in the second stage and an ideal session):
