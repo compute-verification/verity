@@ -95,6 +95,17 @@ def test_the_rule_the_gate_reads(monkeypatch):
         (ROOT / "backends" / "flock" / "verifier" / "vectors.json").read_text())["replayable"]["sets"]}
 
 
+def test_the_recorded_check_takes_cpu_only_torch():
+    spec2 = importlib.util.spec_from_file_location("check_tool", ROOT / "tools" / "check" / "tool.py")
+    tool = importlib.util.module_from_spec(spec2)
+    spec2.loader.exec_module(tool)
+    assert tool.CHECK.command[:5] == ["uv", "run", "--locked", "--extra", "torch-cpu"]
+    import tomllib
+    cpu = [p for p in tomllib.loads((ROOT / "uv.lock").read_text())["package"] if p["name"] == "torch" and "+cpu" in p["version"]]
+    assert cpu and all("download.pytorch.org/whl/cpu" in p["source"]["registry"] for p in cpu)
+    assert not [d["name"] for p in cpu for d in p.get("dependencies", []) if d["name"].startswith(("nvidia-", "cuda-", "triton"))]
+
+
 def test_a_recorded_run_writes_a_valid_result(tmp_path, monkeypatch):
     from research import result as RES
 
