@@ -11,8 +11,6 @@ import pytest
 KNOWN_FAILURES = {
     "tests/acquire/test_compiled_source.py::test_renumber_assigns_invocations_per_call_site":
         "CPU torch: `Tried to instantiate dummy base class _cuda_isCurrentStreamCapturing` (owner vllm-epoch-prep)",
-    "tests/check/test_fold_sampler_construction.py::test_101s_records_fold_canonical_equal_under_the_programs_construction":
-        "the store fetch of *match_compare.json returns nothing off the check pod (owner vllm-epoch-prep)",
     "tests/pipeline/test_source_identity.py::test_negative_requested_sha_mismatch_fails_by_name":
         "needs a .git; a shipped check tree has none (owner vllm-epoch-run)",
     "tests/pipeline/test_source_identity.py::test_precheck_passes_with_matching_veritor_repo_and_sha[integration]":
