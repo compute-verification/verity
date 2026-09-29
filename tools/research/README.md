@@ -236,6 +236,24 @@ run is refused with `MemoryNotAvailable`, and `refused.json` gives every number.
 admission (`run.remote.mem`) and the attempt records
 `execution.mem_gb_reserved`. `research mem` prints the reading on the machine.
 
+A tool can declare a preflight (`Tool.preflight`: a Python script in the tree
+and its args), which says whether a machine is prepared for it. When a
+`--tool` run's shipped tree declares one, `launch-request` runs it there,
+in the tree, with the runner's environment, before anything else is
+admitted. `RESEARCH_PREFLIGHT_INPUTS` names the run's `--send` files and,
+with custody, `RESEARCH_PREFLIGHT_CUSTODY` the staged key's directory. It
+runs under the interpreter `research` itself runs on, since it may be
+checking what else is installed. On exit 0 the run starts, and job.json
+records the report (`run.remote.preflight`). Any other exit refuses the run
+(`PreflightFailed`, exit 3, `refused.json`), with the script's stderr as the
+reason. Nothing starts and no attempt is recorded, so a refusal is an error,
+never a verdict, and `research merge --train` stops rather than bisecting. A
+declaration that exists but cannot be read also refuses. `check` declares
+`tools/check/preflight.py`: the tools `pod_setup.sh` installs, the Lean
+dependencies (warm, or restorable from the store, never GitHub), one store
+read, `avx512f` when the run carries an upstream build that needs it, and
+free disk.
+
 Limitations, stated: until `fetch --all` completes, the only copy of the
 evidence is on the machine. Provisioning is a separate, explicit act; `--on` never creates a pod.
 
