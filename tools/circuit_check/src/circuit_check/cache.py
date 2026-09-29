@@ -106,7 +106,8 @@ def _hook(event: str, args: tuple) -> None:
         if (rel := _rel(args[0] if args and args[0] is not None else ".")) is not None:
             _READS["dirs"].add(rel)
     elif event in UNTRACEABLE and not _INTERNAL:
-        _UNTRACED.append(f"{event} {str(args[0] if args else '')[:120]}")
+        argv = args[1] if len(args) > 1 and isinstance(args[1], (list, tuple)) else args[:1]
+        _UNTRACED.append(f"{event} {' '.join(map(str, argv))[:240]}")
     elif event == "ctypes.dlopen" and args and args[0] and (rel := _rel(args[0])) is not None:
         _READS["libs"].add(rel)                        # a library built in the tree: an input by its bytes (`_digests`)
 

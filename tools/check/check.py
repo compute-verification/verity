@@ -393,8 +393,15 @@ def _step(name: str, argv: list[str] | str, cwd: Path, out: Path, cache: bool) -
     return rec
 
 
+#: vLLM's C++ twin models, compiled on first use: built once before the groups start, so that no step compiles them while
+#: another loads them (a check that compiles mid-run is untraceable, and circuit-check stores none of its results)
+PREBUILD = ("try:\n    from verity_vllm.program.kernels import twins\nexcept ImportError:\n    twins = None\n"
+            "if twins:\n    twins.preload()\n")
+
+
 def run(out: Path, n: int | None = None, cache: bool = True) -> tuple[bool, list[dict]]:
     n = n or cores()
+    subprocess.run([sys.executable, "-c", PREBUILD], cwd=ROOT, env=env(), capture_output=True)
 
     def group(g: list) -> list[dict]:
         done = []
