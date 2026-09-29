@@ -50,6 +50,11 @@ $B$ with probability at most `subset_escape`'s $\binom{n-|B|}{k}/\binom{n}{k}$, 
 `Flock.Draw.stratified`, on strata that describe $\sigma$'s (`ExecStrata`), misses $B$ with probability at most
 `Law.stratified`'s escape, the product over strata; `flock_e2e_drawn_exec` and `flock_e2e_count_exec` are the e2e
 theorems at the executable's law (`execStratified`), the count curve bounded by `Law.stratified`'s `miss`.
+`drawOS_subset_escape_le`, `drawOS_stratified_escape_le` and `drawOS_work_escape_le` (`ExecDrawOS.lean`), **the live
+draw**: `Flock.Draw.drawOS`, which is `drawWith` on `IO.getRandomBytes` (`drawOS_def`), extending a stream that runs out
+and rerunning, misses $B$ with probability at most the same escapes, on a byte source that A3 makes uniform
+(`Assumptions.UniformRandomBytes`); `execOS_escape_le` and `execOS_subset_escape_le` state it for the live draw as a law
+(`execOS`).
 
 **Theorems, the stratified law** (`Audit/Stratified.lean`, the default draw law; `docs/sampling-strategies.md` §4):
 `Law.stratified σ k`, an independent uniform $k_s$-subset inside each stratum of $\sigma : \mathrm{Fin}\,n \to \mathrm{Fin}\,m$;
