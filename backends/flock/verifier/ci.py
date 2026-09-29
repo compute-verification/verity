@@ -2,6 +2,7 @@
 
     python ci.py --lean BIN --upstream PR83_COMMIT=BIN [--upstream ...] --work DIR [--inputs DIR] [--jobs J] [--session-jobs K]
         [--seed S] [--fuzz N] [--sets I,J] [--out DIR]
+    python ci.py --live --lean BIN --work DIR [--sets I,J] ...    `vectors.json`'s `live.sets`, against the live verdicts
 
 For each set (in `vectors.json` `replayable.sets`) whose PR #83 commit has an upstream binary, the job:
 - fetches its inputs from the evidence store (`research data fetch`);
@@ -9,6 +10,9 @@ For each set (in `vectors.json` `replayable.sets`) whose PR #83 commit has an up
   (`fuzz.py --seed S`) from its honest session;
 - adds the set's stored forgeries, if it has any;
 - runs `agree.py` on all of them.
+
+`--live` runs `live.sets` instead: sets with no upstream binary, whose upstream verdicts are the live server's in each
+case's `case.json` (`agree.py --upstream live`).
 
 `--inputs DIR` holds the stored inputs already fetched (`DIR/<art id prefix>/…`, as `research data fetch --to` lays them
 out), for a machine without store access. `--jobs` runs sets in parallel, and `--session-jobs` a set's sessions across that
@@ -48,7 +52,7 @@ def py(*args):
 
 
 def run_set(i, s, a, ups, store):
-    up = agree.LIVE if s.get("upstream") == agree.LIVE else ups.get(s["pr83"])
+    up = agree.LIVE if a.live else ups.get(s["pr83"])
     if up is None:
         return {"set": i, "pr83": s["pr83"], "skipped": "no upstream binary for this PR #83 commit"}, False
     w = a.work / f"set{i}"
@@ -126,12 +130,13 @@ def main():
                     help="verifier processes at once over all sets; 0: the cores, and the available memory at 8 GB a process")
     ap.add_argument("--seed", type=int, default=20260926)
     ap.add_argument("--fuzz", type=int, default=20)
+    ap.add_argument("--live", action="store_true", help="vectors.json's live.sets (the live server's verdicts), not replayable.sets")
     ap.add_argument("--sets", default=None, help="comma-separated set indices (default: every set with an upstream binary)")
     ap.add_argument("--out", type=Path, default=None, help="a recorded run's directory: outputs and result.json go there")
     a = ap.parse_args()
     ups = dict(u.split("=", 1) for u in a.upstream)
     store = a.inputs or (a.work / "store")
-    sets = json.loads((HERE / "vectors.json").read_text())["replayable"]["sets"]
+    sets = json.loads((HERE / "vectors.json").read_text())["live" if a.live else "replayable"]["sets"]
     pick = [int(i) for i in a.sets.split(",")] if a.sets else list(range(len(sets)))
     global SLOTS
     if a.session_jobs <= 0:
