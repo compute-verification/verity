@@ -236,9 +236,11 @@ at its floor, so a wholly wrong one is caught directly (`audit_work_whole_stratu
   PoUW work, so W is its stratum's, and k_tile = min(n_tile, max(f_tile, K)).
   - `plan.work_table` is the verifier's `--work-table`: every template of the call, `{"work": w, "floor": f}`, the tile's
     W_ref per tile and 0 for `digest`, `node`, `key`, `form_x` and `dequant`; `dequant`'s floor is y's (below), and the
-    others' 1 unless POUS sets them. A call's work is in one stratum, the tile template's: `work_table`, `WorkLaw` and
-    `window_laws` refuse any other (`plan.check_work_strata`), since the window pin's `covers_window` takes it as its
-    hypothesis `hone` (with the cap K_c ≤ N_c, a second work stratum can be under-drawn).
+    others' 1 unless POUS sets them. A call's work is in one stratum (0 < w_s·n_s in one only) and its tiles are of one
+    template: `work_table`, `WorkLaw.budget` and `window_laws` refuse any other (`plan.check_work_strata`), since the
+    window pin takes it as its hypothesis `hone`. Where the cap K_c ≤ N_c binds, a second work stratum is under-drawn:
+    in the red team's window ten wrong units escape with 0.156 against a claimed 2.4·10⁻⁴
+    (`test_the_red_team_s_capped_window_is_refused`).
   - `plan.law_object` is the law `verify` derives from it, each stratum `{template, units, work, floor, k}`.
   - K is a **window's** budget (X-SPC-83): a call draws its share K_c = ⌈K·W_c/W_window⌉, capped at its units
     (`plan.window_laws`). That is the law `verify` enforces when each call is its own statement with its own K_c
@@ -250,10 +252,27 @@ at its floor, so a wholly wrong one is caught directly (`audit_work_whole_stratu
     are one family of the one window audit, so its sampling term is the larger of (1 − ε)^K and (1 − ε)^K_y, not their
     sum. Per call the floor is pinned (`audit_work_floor`); `flock-verify draw --work` derives the same law from these
     tables.
-  - **The window's bound is pending.** Both the per-call split of the tiles' K (X-SPC-83, 106) and B's window claim, an
-    escape of at most (1 − ∑_c b_c/N)^K_y for b_c wrong y cells in each call (weighted AM–GM), wait on root's
-    window-composition pin, `FlockSoundness/Audit/Window.lean`, which root's work-law lane drafts. It takes the per-call
-    draws as independent, which the draw below gives.
+  - **X-SPC-105 and X-SPC-106 are closed by the window pin**, `audit_window_split_of_record` in
+    `FlockSoundness/Audit/Window.lean` (pending its proof PR and grant): the per-call law with y's floors at
+    K = K_y = 27,713 accepts a window with at least 0.1% of its work unsound or 0.1% of its y cells wrong with probability
+    at most 2⁻⁴⁰ + ε_ks + δ_link. Its hypotheses are `hone` (above) and y's floors (`hfy`); outside it, the window's
+    use of it rests on four things:
+    - *The verifier derives every number itself.* `window_laws` (`plan.py:164`) takes only the verifier's own layouts
+      (`Traced.layout`, `__init__.py:125`; any other is refused by `Traced.check_layout`, `__init__.py:117`). It
+      computes W from them (`plan.py:181`) and N (`plan.py:184`), and the floors ⌈K_y·n_s/N⌉ (`plan.py:187`);
+      `WorkLaw.budget` computes W_c and N_c from the call's own strata and K_c = min(N_c, max(1, ⌈K·W_c/W⌉))
+      (`plan.py:153–157`). No prover-stated number enters (X-SPC-80, 81).
+    - *Call indices are distinct and the verifier's.* `Traced.draw` admits the call to the window's `Ledger`
+      (`__init__.py:94`), which refuses a repeated (forward, position) before anything is drawn (`anchors.py:100–104`),
+      and each stratum's context is ("call", forward, position, "stratum", template) (`plan.py:283`). The index is the
+      verifier's anchors' (`Anchors`, `anchors.py:34`, which `Anchors.check_call` holds the call's inputs to,
+      `anchors.py:75`). This is the pin's M1.
+    - *Every call's commitment precedes the window key.* `plan.draw` and `Traced.draw` take the key as given
+      (`__init__.py:83`); it must be the verifier's randomness derived under `DRAW_DOMAIN` after the receipt that binds
+      every call's commitment, so W, N and each K_c are fixed before any call's draw. Nothing in this package checks the
+      order: the window form of `traced_as` must.
+    - *ε_ks and δ_link are the window's.* The pin's are one window `Analysis`'s (M2). The per-call values are not cited
+      as the window's; no statement composes them yet.
 - `CountLaw` is `main`'s stratified rule, k_s = max(1, round(K·n_s/N)).
 
 **The draw is per call** (X-SPC-96). Each stratum's subset is drawn from the verifier's key under the call's index,
@@ -287,8 +306,9 @@ The profile is `Stratified` over the tile strata, and its `harm_bound`, at W_ref
   - the lead domain's shapes (k ≥ 1,088) as a recorded run rather than a test;
   - C-Flock pieces for the PoUW primitives;
   - the floors POUS sets for the zero-work templates other than `dequant` (X-SPC-55; 1 until then);
-  - root's window-composition pin (`FlockSoundness/Audit/Window.lean`), for the per-call split's window-level bound
-    (X-SPC-83, 106) and B's window claim for y (X-SPC-105, closed by option B per call);
+  - the proof and grant of the window pin, `audit_window_split_of_record` (`FlockSoundness/Audit/Window.lean`);
+  - the check that the window key comes after every call's commitment, with the window form of `traced_as`;
+  - a statement composing the calls' ε_ks and δ_link into the window's (M2);
   - the served-output designation and the pinned ports in `Q_nested_instances` v0's spec, evaluator and Lean port;
   - the vLLM adapter's `traced_as`;
   - the reuse of a weight's Y proofs across a run's windows (X-SPC-51), which needs its commitments linked across windows;

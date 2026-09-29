@@ -230,6 +230,37 @@ def test_a_work_table_with_a_calls_work_in_two_strata_is_refused():
     assert -(-6 * a.work // (a.work + b.work)) == 3 and 3 * 18 < 8 * a.work       # 3 drawn, 8·2·4/18 ≈ 3.6 needed
     with pytest.raises(ValueError, match="one stratum"):
         PL.WorkLaw(8).sizes((a, b))
+    tile = _by_role(lay)["tile"]                                                 # a call's tiles split over two templates
+    split = dataclasses.replace(lay, strata=tuple(x for s in lay.strata for x in (
+        (dataclasses.replace(s, units=s.units[:1]), dataclasses.replace(s, name=s.name + "'", units=s.units[1:], work=0))
+        if s is tile else (s,))))
+    with pytest.raises(ValueError, match="one template"):
+        PL.work_table(split)
+
+
+def test_the_red_team_s_capped_window_is_refused():
+    """The red team's window (20260929T1622Z): call 0 has 1,000 units at work 2 and 10 at work 1,000, call 1 100,000 at
+    work 0 and 1 at work 1, and K = 5,000. Call 0's share 5,000 is capped at its 1,010 units, so its work-2 stratum would
+    draw 169 of 1,000 (834 uncapped), and ten wrong units there escape with 0.156 where the window bound claims
+    (1 − 20/12,001)^5,000 ≈ 2.4·10⁻⁴. `window_laws` refuses the window: call 0 does work in two strata."""
+    from math import comb
+
+    import pytest
+
+    shape = ncp2.Shape(16, 64, 16)
+    call0 = PL.Layout(shape, (), (PL.StratumSpec("w2", "form_x", tuple(range(1000)), 2 * 1000),
+                                  PL.StratumSpec("t0", "tile", tuple(range(1000, 1010)), 1000 * 10)), {})
+    call1 = PL.Layout(shape, (), (PL.StratumSpec("y1", "dequant", tuple(range(100_000)), 0),
+                                  PL.StratumSpec("t1", "tile", (100_000,), 1)), {})
+    total, k = call0.work() + call1.work(), 5000
+    share = -(-k * call0.work() // total)
+    assert (total, share) == (12_001, 5000) and share > 1010                     # the cap binds
+    assert (-(-1010 * 2000 // call0.work()), -(-k * 2000 // call0.work())) == (169, 834)
+    escape = comb(990, 169) / comb(1000, 169)
+    assert 0.15 < escape < 0.16 and (1 - 20 / total) ** k < 2.5e-4
+    with pytest.raises(ValueError, match="one stratum"):
+        PL.window_laws([call0, call1], k=k)
+    PL.window_laws([call1], k=k)                                                 # one work stratum a call: admitted
 
 
 def test_a_tiles_closure_contains_the_tile_itself():
