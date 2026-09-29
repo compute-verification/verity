@@ -5,12 +5,18 @@ a line of its output), inject the clock or the timer into the code that measures
 to block on instead of a sleep.
 
 What may stay is listed in ``ALLOWED``, one line of reason each: a whole file (``path``) or one top-level function, class
-or assigned name in it (``path::name``). An entry that no longer matches anything fails too."""
+or assigned name in it (``path::name``). An entry that no longer matches anything fails too.
+
+The same holds for build order: a test may run or skip on what `check` builds concurrently (the Lean toolchain and the Lake
+build outputs) only in a suite that `check` runs after those steps (`test_only_the_suites_check_runs_after_its_lean_steps_...`)."""
 
 from __future__ import annotations
 
 import ast
+import importlib.util
+import os
 import re
+import tomllib
 
 from test_repository import ROOT, _testpaths, _tracked
 
@@ -89,10 +95,89 @@ def offenses(source: str) -> list[tuple[str, int, str]]:
     return sorted(out, key=lambda o: o[1])
 
 
+def lean_gates(source: str) -> list[int]:
+    """The lines of skip conditions (`skipif(...)`, `if ...: pytest.skip(...)`) that probe what `check`'s Lean group builds or
+    installs while the other suites run: elan's `lake` (a "lake" string, as in `shutil.which("lake")`) or a Lake build output (a
+    path through `.lake`), in the condition itself or in a function or module-level name it uses."""
+    tree = ast.parse(source)
+    defs: dict[str, ast.AST] = {n.name: n for n in tree.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+    defs |= {n.targets[0].id: n.value for n in tree.body if isinstance(n, ast.Assign) and isinstance(n.targets[0], ast.Name)}
+
+    def probes(node: ast.AST, seen: frozenset[str] = frozenset()) -> bool:
+        for n in ast.walk(node):
+            if isinstance(n, ast.Constant) and isinstance(n.value, str) and (n.value == "lake" or ".lake" in n.value):
+                return True
+            if isinstance(n, ast.Name) and n.id in defs and n.id not in seen and probes(defs[n.id], seen | {n.id}):
+                return True
+        return False
+
+    lines = []
+    for n in ast.walk(tree):
+        cond = None
+        if isinstance(n, ast.Call) and _dotted(n.func).endswith("skipif"):
+            cond = n.args[0] if n.args else next((k.value for k in n.keywords if k.arg == "condition"), None)
+        elif isinstance(n, ast.If) and any(isinstance(s, ast.Expr) and isinstance(s.value, ast.Call)
+                                           and _dotted(s.value.func) == "pytest.skip" for s in n.body):
+            cond = n.test
+        if cond is not None and probes(cond):
+            lines.append(n.lineno)
+    return sorted(lines)
+
+
 def _test_sources() -> list[str]:
     tracked = _tracked()
     testpaths = _testpaths(tracked)
     return [p for p in tracked if p.endswith(".py") and any(t == "." or p.startswith(t + "/") for t in testpaths)]
+
+
+def test_only_the_suites_check_runs_after_its_lean_steps_skip_on_lean() -> None:
+    """`check` builds the Lean verifier and every Lake package, and installs elan when `lake` is missing, while the pytest step
+    runs: a test elsewhere that runs or skips on `lake` or a `.lake/` build output passes or fails with the build order (as
+    verity-flock did, r20260929-015410-5a20). Such tests belong to a suite `check` runs after its Lean steps (`AFTER_LEAN`), and
+    that suite declares the build outputs it uses under `[tool.verity.tests] artifacts`, which key its cached pass."""
+    spec = importlib.util.spec_from_file_location("repo_check", ROOT / "tools" / "check" / "check.py")
+    check = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(check)
+    names = {}
+    for p in _tracked():
+        if os.path.basename(p) == "pyproject.toml":
+            data = tomllib.loads((ROOT / p).read_text())
+            if "pytest" in data.get("tool", {}) and "project" in data:
+                names[re.sub(r"[-_.]+", "-", data["project"]["name"]).lower()] = (os.path.dirname(p), data)
+    after = [names[s][0] + "/" for s in check.AFTER_LEAN]
+    offenders = [f"{path}:{line}" for path in _test_sources() if not path.startswith(tuple(after))
+                 for line in lean_gates((ROOT / path).read_text(encoding="utf-8"))]
+    assert not offenders, "tests that skip on what check's Lean steps build, outside the suites it runs after them:\n" + "\n".join(offenders)
+    flock = names["verity-flock"][1]["tool"]["verity"]["tests"]
+    assert "backends/flock/verifier/lean/.lake/build/bin/flock-verify" in flock.get("artifacts", []), "verity-flock runs the verifier"
+
+
+def test_the_lean_gate_scan_sees_each_form() -> None:
+    src = '''
+import shutil, pytest
+from pathlib import Path
+BIN = Path("lean") / ".lake" / "build" / "bin" / "v"
+
+def _built():
+    return BIN.exists()
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="x")
+def test_a():
+    pass
+
+@pytest.mark.skipif(not _built(), reason="x")
+def test_b():
+    pass
+
+def test_c():
+    if not (Path("p") / ".lake").is_dir():
+        pytest.skip("x")
+
+@pytest.mark.skipif(shutil.which("cargo") is None, reason="x")
+def test_d():
+    pass
+'''
+    assert lean_gates(src) == [9, 13, 18]
 
 
 def test_tests_do_not_depend_on_wall_clock_time() -> None:
