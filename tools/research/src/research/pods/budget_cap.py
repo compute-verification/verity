@@ -17,6 +17,11 @@ Ownership (2026-09-12, after the stale ``2026-09-11-ext`` daemon terminated the 
 terminate ONLY pods whose name starts with one of its ``--own-prefix`` values (default: the tag) or whose id is listed in
 ``~/.runpod/owned-<tag>.txt``; every other pod is logged FOREIGN and left alone.  One daemon per machine: ``start``/``run``
 refuse if another ``budget_cap.py run`` is alive unless ``--allow-multiple``.
+
+Fail closed (2026-09-28, after a full disk ended every guard on the control pod): each poll terminates first and records after, every
+state and log write is best effort (a failure goes to stderr and never ends the loop), an unreadable ``--cap-file`` keeps the cap in
+force (across a restart too), a state file that does not parse is set aside and a new tally starts, and ``start`` runs the daemon under
+a respawn loop, so a crash costs one poll.  ``stop`` ends the loop and the daemon together (their process group).
 """
 
 from __future__ import annotations
@@ -55,22 +60,57 @@ def _log_path(tag: str) -> Path:
     return HOME / f"budget-{tag}.log"
 
 
+def _say(msg: str) -> None:
+    try:
+        print(f"budget_cap: {msg}", file=sys.stderr, flush=True)
+    except Exception:  # noqa: BLE001 -- stderr is the log, on the same disk
+        pass
+
+
 def _load(tag: str) -> dict:
     p = _state_path(tag)
-    if p.exists():
-        return json.loads(p.read_text())
-    return {"tag": tag, "spent": 0.0, "last_poll": None, "pods": {}, "tripped": None, "started": _stamp()}
+    fresh = {"tag": tag, "spent": 0.0, "last_poll": None, "pods": {}, "tripped": None, "started": _stamp()}
+    try:
+        state = json.loads(p.read_text())
+        if isinstance(state, dict) and isinstance(state.get("pods"), dict):
+            return state
+        why = "not a budget state"
+    except FileNotFoundError:
+        return fresh
+    except (OSError, ValueError) as err:
+        why = f"{type(err).__name__}: {err}"
+    try:
+        p.replace(p.with_name(f"{p.name}.corrupt-{int(_now())}"))
+    except OSError:
+        pass
+    _say(f"state {p} unusable ({why}): set aside, a new tally starts")
+    fresh["tally_restarted"] = {"at": _stamp(), "why": why}
+    return fresh
 
 
 def _save(tag: str, state: dict) -> None:
-    tmp = _state_path(tag).with_suffix(".tmp")
-    tmp.write_text(json.dumps(state, indent=1, sort_keys=True))
-    tmp.replace(_state_path(tag))
+    """Best effort: a failed write (a full disk) is reported and the daemon goes on enforcing from memory."""
+    tmp = _state_path(tag).with_name(f".{_state_path(tag).name}.{os.getpid()}.tmp")
+    try:
+        with open(tmp, "w") as f:
+            f.write(json.dumps(state, indent=1, sort_keys=True))
+            f.flush()
+            os.fsync(f.fileno())
+        tmp.replace(_state_path(tag))
+    except Exception as err:  # noqa: BLE001
+        _say(f"state write failed ({type(err).__name__}: {err}); enforcing from memory")
+        try:
+            tmp.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 def _log(tag: str, msg: str) -> None:
-    with _log_path(tag).open("a") as f:
-        f.write(f"{_stamp()} {msg}\n")
+    try:
+        with _log_path(tag).open("a") as f:
+            f.write(f"{_stamp()} {msg}\n")
+    except Exception as err:  # noqa: BLE001 -- an unwritable log never stops enforcement
+        _say(f"log write failed ({type(err).__name__}: {err}): {msg}")
 
 
 def _live_pods() -> list[dict]:
@@ -131,13 +171,14 @@ def _terminate_all(tag: str, pods: list[dict], why: str) -> None:
         try:
             runpod._request("DELETE", f"/pods/{pid}")
             _log(tag, f"TERMINATED {pid} {pod.get('name')} ${pod.get('costPerHr')}/h — {why}")
-        except SystemExit as err:  # runpod._request raises SystemExit on HTTP errors
+        except (SystemExit, Exception) as err:  # noqa: BLE001 — runpod.PodError on HTTP errors; one failed DELETE must not stop the rest
             _log(tag, f"terminate {pid} failed: {err}")
 
 
 def _cap_now(tag: str, cap: float, cap_file: str | None, state: dict) -> float:
     """The cap in force: ``--cap``, or the number in ``--cap-file`` when that file is readable (phase gates: the integrator raises the
-    cap by writing the file; the daemon never lowers its own state). [2026-09-13, D55]"""
+    cap by writing the file; the daemon never lowers its own state). [2026-09-13, D55]  ``cap`` is the cap in force so far, which an
+    unreadable file keeps (``run`` seeds it from the state's last cap on a restart)."""
     if not cap_file:
         return cap
     try:
@@ -187,6 +228,8 @@ def _overaged(tag: str, pods: list[dict], state: dict, pod_max_hours: float | No
 def run(tag: str, cap: float, rate_max: float, prefixes: list[str] | None = None, allow_multiple: bool = False,
         cap_file: str | None = None, pod_max_hours: float | None = None) -> None:
     state = _load(tag)
+    if cap_file and state.get("cap") is not None:
+        cap = float(state["cap"])            # the cap in force before the restart: an unreadable --cap-file must not fall back to --cap
     state.setdefault("cap", cap)
     state.setdefault("rate_max", rate_max)
     prefixes = list(prefixes) if prefixes else [tag]
@@ -198,51 +241,56 @@ def run(tag: str, cap: float, rate_max: float, prefixes: list[str] | None = None
     _log(tag, f"daemon pid {os.getpid()} start cap=${cap} rate_max=${rate_max}/h spent_so_far=${state['spent']:.2f} owns name-prefixes={prefixes} + ids in {_owned_ids_path(tag).name}"
               + (f" cap-file={cap_file}" if cap_file else "") + (f" pod-max-hours={pod_max_hours}" if pod_max_hours else ""))
     while True:
-        cap = _cap_now(tag, cap, cap_file, state)
         try:
-            pods, foreign = _owned(tag, _live_pods(), prefixes)
+            cap = _poll(tag, cap, rate_max, prefixes, cap_file, pod_max_hours, state)
         except (SystemExit, Exception) as err:  # noqa: BLE001 — a safety daemon must never die on a network blip
             # 2026-09-09: an unhandled urllib URLError (DNS hiccup) killed the daemon at 16:54 PT and a
             # pod ran ~2.75 h uncounted.  Log, keep the accumulated state, and retry.
-            _log(tag, f"list failed: {type(err).__name__}: {err}")
-            time.sleep(POLL)
-            continue
-        if foreign:
-            _log(tag, "FOREIGN (not counted, never terminated): " + " ".join(f"{p['id']}:{p.get('name')}@{p.get('costPerHr')}" for p in foreign))
-        now = _now()
-        last = state.get("last_poll")
-        hours = (now - last) / 3600.0 if last else 0.0
-        rate = 0.0
-        for pod in pods:
-            r = float(pod.get("costPerHr") or 0.0)
-            rate += r
-            entry = state["pods"].setdefault(pod["id"], {"name": pod.get("name"), "rate": r, "spent": 0.0, "first_seen": _stamp()})
-            entry["rate"] = r
-            entry["spent"] += r * hours
-            entry["last_seen"] = _stamp()
-        state["spent"] += rate * hours
-        state["last_poll"] = now
-        state["rate_now"] = rate
-        _save(tag, state)
-        if pods:
-            _log(tag, f"{len(pods)} pod(s) ${rate:.2f}/h  spent=${state['spent']:.2f} of ${cap}  " + " ".join(f"{p['id']}@{p.get('costPerHr')}" for p in pods))
-        tripped = state.get("tripped")
-        if not tripped and state["spent"] >= cap:
-            tripped = f"CAP ${cap} reached (spent ${state['spent']:.2f})"
-        if not tripped and rate > rate_max:
-            tripped = f"RATE ${rate:.2f}/h exceeds ${rate_max}/h"
-        if tripped:
-            if not state.get("tripped"):
-                _log(tag, f"TRIPPED: {tripped}")
-                state["tripped"] = f"{_stamp()} {tripped}"
-                _save(tag, state)
-            if pods:
-                _terminate_all(tag, pods, tripped)
-        else:
-            old = _overaged(tag, pods, state, pod_max_hours)
-            if old:
-                _terminate_all(tag, old, f"POD AGE > {pod_max_hours} h (per-pod ceiling)")
+            _log(tag, f"poll failed: {type(err).__name__}: {err}")
         time.sleep(POLL)
+
+
+def _poll(tag: str, cap: float, rate_max: float, prefixes: list[str], cap_file: str | None, pod_max_hours: float | None, state: dict) -> float:
+    """One poll: tally, decide, terminate; only then save and log (both best effort).  Returns the cap in force."""
+    cap = _cap_now(tag, cap, cap_file, state)
+    pods, foreign = _owned(tag, _live_pods(), prefixes)
+    now = _now()
+    last = state.get("last_poll")
+    hours = (now - last) / 3600.0 if last else 0.0
+    rate = 0.0
+    for pod in pods:
+        r = float(pod.get("costPerHr") or 0.0)
+        rate += r
+        entry = state["pods"].setdefault(pod["id"], {"name": pod.get("name"), "rate": r, "spent": 0.0, "first_seen": _stamp()})
+        entry["rate"] = r
+        entry["spent"] += r * hours
+        entry["last_seen"] = _stamp()
+    state["spent"] += rate * hours
+    state["last_poll"] = now
+    state["rate_now"] = rate
+    tripped = state.get("tripped")
+    fresh_trip = None
+    if not tripped and state["spent"] >= cap:
+        tripped = fresh_trip = f"CAP ${cap} reached (spent ${state['spent']:.2f})"
+    if not tripped and rate > rate_max:
+        tripped = fresh_trip = f"RATE ${rate:.2f}/h exceeds ${rate_max}/h"
+    if fresh_trip:
+        state["tripped"] = f"{_stamp()} {fresh_trip}"
+    if tripped:
+        if pods:
+            _terminate_all(tag, pods, tripped)
+    else:
+        old = _overaged(tag, pods, state, pod_max_hours)
+        if old:
+            _terminate_all(tag, old, f"POD AGE > {pod_max_hours} h (per-pod ceiling)")
+    _save(tag, state)
+    if fresh_trip:
+        _log(tag, f"TRIPPED: {fresh_trip}")
+    if foreign:
+        _log(tag, "FOREIGN (not counted, never terminated): " + " ".join(f"{p['id']}:{p.get('name')}@{p.get('costPerHr')}" for p in foreign))
+    if pods:
+        _log(tag, f"{len(pods)} pod(s) ${rate:.2f}/h  spent=${state['spent']:.2f} of ${cap}  " + " ".join(f"{p['id']}@{p.get('costPerHr')}" for p in pods))
+    return cap
 
 
 def start(args: argparse.Namespace) -> None:
@@ -262,10 +310,16 @@ def start(args: argparse.Namespace) -> None:
         command += ["--pod-max-hours", str(args.pod_max_hours)]
     if os.uname().sysname == "Darwin":
         command = ["caffeinate", "-is", *command]
+    command = ["sh", "-c", RESPAWN, "budget_cap-respawn", str(POLL), *command]
     with _log_path(args.tag).open("ab") as handle:
         proc = subprocess.Popen(command, stdout=handle, stderr=handle, stdin=subprocess.DEVNULL, start_new_session=True)
     (HOME / f"budget-{args.tag}.pid").write_text(str(proc.pid))
-    print(f"budget_cap daemon pid {proc.pid} cap=${args.cap} rate_max=${args.rate_max}/h log={_log_path(args.tag)}")
+    print(f"budget_cap daemon pid {proc.pid} (respawn loop) cap=${args.cap} rate_max=${args.rate_max}/h log={_log_path(args.tag)}")
+
+
+#: `start`'s supervisor: the daemon again one poll after any exit but 3 (another daemon runs); `stop` signals its process group.
+RESPAWN = ('poll=$1; shift; while :; do "$@"; rc=$?; [ "$rc" -eq 3 ] && exit 3; '
+           'echo "$(date -u +%FT%TZ) budget_cap exited $rc; restarting in ${poll}s"; sleep "$poll"; done')
 
 
 def status(args: argparse.Namespace) -> None:

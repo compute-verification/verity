@@ -164,7 +164,7 @@ def test_pod_max_hours_terminates_old_scoped_pods_but_never_the_guards_host():
     api, lines = FakeRunPod([pod("a", "vyv-a", 1.0, 5 * 60), pod("me", "vyv-control", 1.0, 10 * 60), pod("b", "vyv-b", 1.0, 30)]), []
     cfg = G.Config(prefix="vyv-", pod_max_hours=4, self_pod="me")
     step(api, cfg, G.new_state(cfg, T0), T0, lines)
-    assert api.deleted == ["a"] and "POD AGE 5.00 h > 4 h" in lines[-1]
+    assert api.deleted == ["a"] and any("POD AGE 5.00 h > 4 h" in ln for ln in lines)
 
 
 def test_the_balance_floor_trips_and_an_unreadable_balance_does_not():
