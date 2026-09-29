@@ -107,11 +107,11 @@ def buildStmt (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins) (t
   else do Stmt.setup tags (Blake3Row.leaf (← Comp.load Blake3Row.spec compB)) circuitB pubB coins tables
 
 /-- `buildStmt` for a session of `count` tables (`Stmt.setupTables`): the session and each table's statement. `work` is the
-verifier's own `K` and work table, which a work draw's law is held to. -/
+verifier's own `K` and work table, which a work draw's law is held to, and `stratified` its own `K` for a stratified draw. -/
 def buildSession (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins) (tables : List (String × ByteArray))
     (count : Nat) (draw : Option Lean.Json := none) (partition : Option Lean.Json := none) (program : Option ByteArray := none)
-    (work : Option (Nat × Array (String × Nat)) := none) : V (SessionSpec × Array Stmt) :=
-  if tags.hm96Rows then Stmt.setupTables tags circuitB pubB coins count tables draw partition program work
+    (work : Option (Nat × Array (String × Nat)) := none) (stratified : Option Nat := none) : V (SessionSpec × Array Stmt) :=
+  if tags.hm96Rows then Stmt.setupTables tags circuitB pubB coins count tables draw partition program work stratified
   else if count > 1 then throw s!"{tags.name}: one table per session"
   else do
     let st ← buildStmt tags circuitB pubB compB coins tables draw partition program
@@ -204,11 +204,11 @@ def coinTreeCmd (path : String) : IO UInt32 := do
 /-- `verify --statement ID --circuit F --comp F --public F [--coins seed|os] [--session-tables J] --session DIR...`: `ID`
 names the statement's tags (`verity/flock-circuit` by default, or `verity/flock-netlist/v1`); `--comp` is the row leaf's
 pinned compression circuit; `J` (default 1) is the tables of every session (§16.12). A session with a work draw needs the
-verifier's own `--work K`, `--work-table`, `--program` and `--partition`. Each DIR holds `session.json` and
-`<table>.rep<r>.bin` for each table and rep. The statement is set up once; one verdict line per session, in order. Exit 0
-iff every session is accepted. -/
+verifier's own `--work K`, `--work-table`, `--program` and `--partition`, and one with a stratified draw its own
+`--stratified K`. Each DIR holds `session.json` and `<table>.rep<r>.bin` for each table and rep. The statement is set up
+once; one verdict line per session, in order. Exit 0 iff every session is accepted. -/
 def verifyCmd (args : List String) : IO UInt32 := do
-  let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--partition F] [--program F] [--work K --work-table F] [--coins seed|os] [--session-tables J] --session DIR..."
+  let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--coins seed|os] [--session-tables J] --session DIR..."
   let (some _, some _) := (argOf args "--circuit", argOf args "--public") | IO.eprintln usage; return 2
   let some tags := Tags.find? ((argOf args "--statement").getD Tags.circuit.name)
     | IO.eprintln s!"unknown statement; known: {Tags.all.map (·.name)}"; return 2
@@ -237,8 +237,13 @@ def verifyCmd (args : List String) : IO UInt32 := do
   let work := match ownK, table with
     | some k, some t => some (k, t)
     | _, _ => none
+  let stratified ← match argOf args "--stratified" with
+    | none => pure none
+    | some k => match k.toNat? with
+      | some k => pure (some k)
+      | none => IO.eprintln "verify: --stratified K: K is a natural number"; return 2
   let setupOf := fun (draw : Option Lean.Json) =>
-    match buildSession tags circuitB pubB compB coins tables count draw partition program work with
+    match buildSession tags circuitB pubB compB coins tables count draw partition program work stratified with
     | .ok (spec, sts) => Except.ok (spec, sts.map Setup.ofCircuit, (sts[0]?.map (·.partition)).getD Lean.Json.null)
     | .error e => Except.error s!"setup: {e}"
   IO.eprintln s!"inputs: {(← IO.monoMsNow) - t0} ms"
