@@ -4,13 +4,13 @@ from __future__ import annotations
 import json
 import os
 import sys
-import time
 from pathlib import Path
 
 import pytest
 
 from research import remote
 from research import runs as R
+from waits import Gate, wait_runner
 
 PY = sys.executable
 SRC = str(Path(remote.__file__).resolve().parents[1])   # .../src, so `-m research` resolves in the child
@@ -28,28 +28,28 @@ def _request(tmp_path, run_id, command, *, exclusive=False, env=None, harness=()
     return p, root / "runs"
 
 
-def _wait_terminal(run_dir, timeout=20):
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        s = R.summarize(run_dir)
-        if s["state"] in R.TERMINAL:
-            return s
-        time.sleep(0.1)
-    pytest.fail(f"run did not finish: {R.summarize(run_dir)}")
+def _wait_terminal(run_dir):
+    wait_runner(run_dir)
+    return R.summarize(run_dir)
 
 
 def test_claim_starts_detached_runner_and_redelivery_is_idempotent(tmp_path):
-    req, runs_root = _request(tmp_path, "r1", [PY, "-c", "import os, time; time.sleep(1.5); print(os.environ['RESEARCH_RUN_ID'])"])
-    out = remote.launch_request(req)
-    assert out["claimed"] and out["started"] and out["runner_pid"]
-    again = remote.launch_request(req)                          # the ssh session "dropped" and the launcher re-delivered
-    assert again["claimed"] is False and again["existing"] and again["runner_pid"] == out["runner_pid"]
-    s = _wait_terminal(runs_root / "r1")
+    gate = Gate(tmp_path / "gate")
+    req, runs_root = _request(tmp_path, "r1", [PY, "-c", f"{Gate.WAIT}; import os; print(os.environ['RESEARCH_RUN_ID'])", str(gate.path)])
+    try:
+        out = remote.launch_request(req)
+        assert out["claimed"] and out["started"] and out["runner_pid"]
+        again = remote.launch_request(req)                      # the ssh session "dropped" and the launcher re-delivered, mid-run
+        assert again["claimed"] is False and again["existing"] and again["runner_pid"] == out["runner_pid"]
+        gate.release()
+        s = _wait_terminal(runs_root / "r1")
+    finally:
+        gate.close()
     assert s["state"] == "done" and s["rc"] == 0
     assert (runs_root / "r1" / "stdout.log").read_text().strip() == "r1"
     job = json.loads((runs_root / "r1" / "job.json").read_text())
     assert job["run"]["remote"]["pod_id"] == "p1" and job["cost"]["rate_usd_per_hour"] == 0.06 and job["cost"]["shared"] is False
-    assert s["cost"]["usd"] is not None and s["cost"]["usd"] < 0.001
+    assert s["cost"]["usd"] == round(0.06 * s["cost"]["wall_s"] / 3600, 4), "the request's rate times the run's wall time"
     launch = json.loads((runs_root / "r1" / "launch.json").read_text())
     assert launch["argv"][launch["argv"].index("--") + 1] == PY, "argv travels as a list; no shell string"
 
@@ -62,16 +62,20 @@ def test_env_and_spaces_reach_the_workload(tmp_path):
 
 
 def test_exclusive_refuses_a_live_holder_and_reclaims_a_dead_one(tmp_path):
-    req1, runs_root = _request(tmp_path, "hold", [PY, "-c", "import time; time.sleep(4)"], exclusive=True)
-    assert remote.launch_request(req1)["started"]
-    time.sleep(0.5)
-    req2, _ = _request(tmp_path, "second", [PY, "-c", "print('no')"], exclusive=True)
-    out = remote.launch_request(req2)
-    assert out["claimed"] and out["started"] is False and "exclusively held by run hold" in out["refused"]
-    assert (runs_root / "second" / "refused.json").exists() and not (runs_root / "second" / "job.json").exists()
-    s2 = R.summarize(runs_root / "second")
-    assert s2["state"] == "refused"                                # never invented as "failed" by the runner: it never ran
-    s = _wait_terminal(runs_root / "hold")
+    gate = Gate(tmp_path / "gate")
+    req1, runs_root = _request(tmp_path, "hold", [PY, "-c", Gate.WAIT, str(gate.path)], exclusive=True)
+    try:
+        assert remote.launch_request(req1)["started"]
+        req2, _ = _request(tmp_path, "second", [PY, "-c", "print('no')"], exclusive=True)
+        out = remote.launch_request(req2)
+        assert out["claimed"] and out["started"] is False and "exclusively held by run hold" in out["refused"]
+        assert (runs_root / "second" / "refused.json").exists() and not (runs_root / "second" / "job.json").exists()
+        s2 = R.summarize(runs_root / "second")
+        assert s2["state"] == "refused"                            # never invented as "failed" by the runner: it never ran
+        gate.release()
+        s = _wait_terminal(runs_root / "hold")
+    finally:
+        gate.close()
     assert s["state"] == "done" and not (runs_root / ".exclusive.lock").exists(), "the runner releases its own lock"
     req3, _ = _request(tmp_path, "third", [PY, "-c", "print('yes')"], exclusive=True)
     assert remote.launch_request(req3)["started"]
@@ -144,23 +148,27 @@ def test_machines_resolution(tmp_path, monkeypatch):
         remote.resolve_machine("a", None)
 
 
-@pytest.mark.slow
 def test_exclusive_refuses_when_any_run_is_live_and_vice_versa(tmp_path):
-    plain, runs_root = _request(tmp_path, "plain", [PY, "-c", "import time; time.sleep(3)"])
-    assert remote.launch_request(plain)["started"]
-    time.sleep(0.5)
-    excl, _ = _request(tmp_path, "excl", [PY, "-c", "print(1)"], exclusive=True)
-    out = remote.launch_request(excl)
-    assert out["started"] is False and "other run(s) are live" in out["refused"] and "plain" in out["refused"]
-    assert not (runs_root / ".exclusive.lock").exists(), "a refused exclusive launch leaves no lock behind"
-    _wait_terminal(runs_root / "plain")
-    holder, _ = _request(tmp_path, "holder", [PY, "-c", "import time; time.sleep(3)"], exclusive=True)
-    assert remote.launch_request(holder)["started"]
-    time.sleep(0.5)
-    late, _ = _request(tmp_path, "late", [PY, "-c", "print(1)"])
-    out = remote.launch_request(late)
-    assert out["started"] is False and "exclusively held by run holder" in out["refused"], "a plain launch respects a live exclusive holder"
-    _wait_terminal(runs_root / "holder")
+    first, second = Gate(tmp_path / "first"), Gate(tmp_path / "second")
+    plain, runs_root = _request(tmp_path, "plain", [PY, "-c", Gate.WAIT, str(first.path)])
+    try:
+        assert remote.launch_request(plain)["started"]
+        excl, _ = _request(tmp_path, "excl", [PY, "-c", "print(1)"], exclusive=True)
+        out = remote.launch_request(excl)
+        assert out["started"] is False and "other run(s) are live" in out["refused"] and "plain" in out["refused"]
+        assert not (runs_root / ".exclusive.lock").exists(), "a refused exclusive launch leaves no lock behind"
+        first.release()
+        _wait_terminal(runs_root / "plain")
+        holder, _ = _request(tmp_path, "holder", [PY, "-c", Gate.WAIT, str(second.path)], exclusive=True)
+        assert remote.launch_request(holder)["started"]
+        late, _ = _request(tmp_path, "late", [PY, "-c", "print(1)"])
+        out = remote.launch_request(late)
+        assert out["started"] is False and "exclusively held by run holder" in out["refused"], "a plain launch respects a live exclusive holder"
+        second.release()
+        _wait_terminal(runs_root / "holder")
+    finally:
+        first.close()
+        second.close()
 
 
 def test_snapshot_identity_reaches_the_record(tmp_path):
