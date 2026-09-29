@@ -8,11 +8,12 @@ carry, and check it against the bounds."""
 import itertools
 import math
 import random
+from fractions import Fraction
 
 from verity_network_timing import capacity
 from verity_network_timing.audit import Audit
 from verity_network_timing.grid import GridParams, Warden, fill, occupancy
-from verity_network_timing.schedule import ClockSync, LogicalFrame, SyncSet, expected_grids
+from verity_network_timing.schedule import ClockSync, LogicalFrame, SyncSet, eligible, expected_grids
 
 P = GridParams(buckets=3, allocation=2, frame_bytes=1)
 FRAMES = [LogicalFrame(b"a", 0, 0), LogicalFrame(b"b", 0, 1), LogicalFrame(b"c", 1, 0), LogicalFrame(b"d", 3, 0),
@@ -76,6 +77,15 @@ def test_accepted_count_le_sync_advice():
     assert math.log2(len(seen)) <= capacity.accepted_bound_bits(0, sync_set.bits, windows)
     # and never more than the envelope (the block cap with one block)
     assert len(seen) <= capacity.left_packed_patterns(P.buckets, P.allocation) ** windows
+
+
+def test_fractional_rate_count_le_sync_advice():
+    """The same bound when ρ is below one frame per bucket: `eligible` spaces a session's frames ⌊λ/ρ⌋ apart."""
+    assert [eligible(LogicalFrame(b"", 5, i), ClockSync(1, Fraction(1, 3))) for i in range(4)] == [6, 9, 12, 15]
+    assert [eligible(LogicalFrame(b"", 0, i), ClockSync(0, Fraction(2, 3))) for i in range(4)] == [0, 1, 3, 4]
+    sync_set = SyncSet((0, 1), (Fraction(1, 2), 1))
+    seen = accepted_observations(sync_set, 2)
+    assert 1 <= len(seen) <= sync_set.size ** 2
 
 
 def test_fixed_clock_zero_capacity():

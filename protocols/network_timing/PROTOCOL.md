@@ -37,8 +37,10 @@ The Program fixes each real frame's content, its **anchor** and its **logical in
 bucket of the request it answers. λ is its position within its session, from the canonical gate order.
 
 A window declares one clock-sync value `ClockSync(δ, ρ)`, from the protocol's set `SyncSet`: for example 16 offsets ×
-8 rates, which is 7 bits. A frame then moves through three steps:
-- it is **eligible** at `anchor + δ + λ // ρ`, using the sync of its anchor's window;
+8 rates, which is 7 bits. δ is a whole number of buckets. ρ is a positive fraction of frames per bucket, below 1 for a
+session slower than one frame per bucket (a POUS band forward takes about 13 buckets). A frame then moves through three
+steps:
+- it is **eligible** at `anchor + δ + ⌊λ/ρ⌋`, using the sync of its anchor's window;
 - the shaper **hands** it to the warden in canonical order, at `h(k) = max(eligible(k), h(k−1))`;
 - the warden's own rule then **releases** it.
 
@@ -81,16 +83,19 @@ docstring) and sizes:
 
 - **Σ_sync:**
   - δ from 0 up to the p99.99 first-frame latency, in 16 steps;
-  - ρ from the p0.01 production rate (at least 1) up to the p50 rate, in 8 values.
+  - ρ geometrically from the p0.01 production rate up to the p50 rate, in 8 values, each rounded down to a fraction
+    with denominator at most 64 (rounding down keeps a value lenient).
 - **The honest miss rate:** per window, the prover declares the met value with the least latency. A window that no value
   meets is a miss, which is a violation. The target is 1e-4.
-- **The egress allocation r:** start at twice the p99.9 of per-bucket demand, then raise r until the FIFO replay has no
-  overflow and a p99 queueing delay of at most one bucket.
+- **The egress allocation r:** the least r at or above twice the p99.9 of per-bucket demand whose FIFO replay has no
+  overflow and a p99 queueing delay of at most one bucket. Both improve monotonically in r, so the search doubles and
+  then bisects.
 - **The ingress grid:** the smallest r_in that carries honest ingress, at τ_in. τ_in is decision D, 100 ms by default,
-  and a parameter.
+  and a parameter. With arrival times (`arrival_ms`), τ_in may be finer than the trace bucket, and the report adds the
+  delivery delay: a frame waits for the next ingress bucket boundary, then for its FIFO slot.
 
-The report has the per-link bandwidth, the utilization and padding share, the clock-sync set and its bits, the added
-first-frame latency, the capacity per day, and the K charge by span.
+The report has the per-link bandwidth, the utilization and padding share, the clock-sync set and its bits, the (δ, ρ)
+range the honest prover declared, the added first-frame latency, the capacity per day, and the K charge by span.
 
 ## Tests
 

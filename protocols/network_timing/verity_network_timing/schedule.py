@@ -4,8 +4,9 @@ The Program gives every real frame an **anchor** and a **logical index**:
 - the anchor is the recorded bucket, on the global bucket clock, of the request it answers;
 - the logical index λ is its position within its session, in the Program's canonical gate order.
 
-A window declares one clock-sync value, `ClockSync(delta, rho)`, from the protocol's set `SyncSet`. A frame is eligible
-at `anchor + delta + λ // rho`, using the sync of the window that holds its anchor. The sender's shaper hands frames to
+A window declares one clock-sync value, `ClockSync(delta, rho)`, from the protocol's set `SyncSet`. The rate ρ is a
+positive fraction of frames per bucket, and may be below 1 for sessions slower than one frame per bucket. A frame is
+eligible at `anchor + delta + ⌊λ / rho⌋`, using the sync of the window that holds its anchor. The sender's shaper hands frames to
 the warden in canonical order, each at `h(k) = max(eligible(k), h(k−1))`. The warden's own rule (FIFO at the allocation
 r, left-packed) then fixes every grid. So the Program's grids are a function of its frames, the recorded anchors and the
 sync advice, and the timing channel of accepted runs is at most `log2 #Σ_sync` bits per window.
@@ -16,6 +17,7 @@ from __future__ import annotations
 import math
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
+from fractions import Fraction
 
 from verity_network_timing.grid import Grid, GridParams, Record, Warden, fill, released
 
@@ -23,14 +25,15 @@ from verity_network_timing.grid import Grid, GridParams, Record, Warden, fill, r
 @dataclass(frozen=True, slots=True, order=True)
 class ClockSync:
     """One window's clock-sync advice: the offset δ (buckets after the anchor), and the rate ρ (frames per bucket
-    within a session)."""
+    within a session, a positive fraction)."""
 
     delta: int
-    rho: int
+    rho: Fraction
 
     def __post_init__(self) -> None:
-        if self.delta < 0 or self.rho < 1:
-            raise ValueError("clock sync needs delta ≥ 0 and rho ≥ 1")
+        object.__setattr__(self, "rho", Fraction(self.rho))
+        if self.delta < 0 or self.rho <= 0:
+            raise ValueError("clock sync needs delta ≥ 0 and rho > 0")
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,13 +41,14 @@ class SyncSet:
     """Σ_sync: the values a window may declare. The protocol fixes it, from calibration."""
 
     deltas: tuple[int, ...]
-    rhos: tuple[int, ...]
+    rhos: tuple[Fraction, ...]
 
     def __post_init__(self) -> None:
         if not self.deltas or not self.rhos:
             raise ValueError("a sync set is non-empty")
-        if min(self.deltas) < 0 or min(self.rhos) < 1:
-            raise ValueError("clock sync needs delta ≥ 0 and rho ≥ 1")
+        object.__setattr__(self, "rhos", tuple(Fraction(r) for r in self.rhos))
+        if min(self.deltas) < 0 or min(self.rhos) <= 0:
+            raise ValueError("clock sync needs delta ≥ 0 and rho > 0")
 
     def __iter__(self) -> Iterator[ClockSync]:
         return (ClockSync(d, r) for d in self.deltas for r in self.rhos)
@@ -73,7 +77,7 @@ class LogicalFrame:
 
 def eligible(frame: LogicalFrame, sync: ClockSync) -> int:
     """The frame's logical release bucket: `anchor + δ + ⌊λ / ρ⌋`."""
-    return frame.anchor + sync.delta + frame.index // sync.rho
+    return frame.anchor + sync.delta + (frame.index * sync.rho.denominator) // sync.rho.numerator
 
 
 def handing_buckets(frames: Sequence[LogicalFrame], syncs: Sequence[ClockSync], window_buckets: int) -> list[int]:

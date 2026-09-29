@@ -15,11 +15,12 @@ The trace is JSON, with one entry per configuration:
        {"name": "peak-decode",
         "egress": [{"link": "responses",
                     "frames": [{"session": "s1", "index": 0, "anchor": 12, "ready": 14}, ...]}],
-        "ingress": [{"link": "requests", "arrivals": [0, 2, 1, ...]}]}]}
+        "ingress": [{"link": "requests", "arrival_ms": [3.2, 41.0, 41.5, ...]}]}]}
 
 - **Egress frames** are listed in the Program's canonical order, with anchors non-decreasing. `anchor` is the recorded
-  bucket of the request a frame answers, and `ready` is the bucket in which the frame became ready to send.
-- **Ingress `arrivals`** counts frames per trace bucket.
+  bucket of the request a frame answers, and `ready` is the first bucket that starts after the frame is ready to send.
+- **Ingress `arrival_ms`** is each frame's arrival time at the warden, in ms. A trace may give `arrivals` instead, the
+  count of frames per trace bucket; then the ingress bucket must be a multiple of the trace bucket.
 
 Percentiles use the nearest-rank method.
 """
@@ -32,11 +33,13 @@ import math
 import sys
 from collections import defaultdict, deque
 from collections.abc import Sequence
+from fractions import Fraction
 
 from verity_network_timing import capacity
 from verity_network_timing.schedule import ClockSync, LogicalFrame, SyncSet, eligible
 
 SPANS_S = (60, 600, 3600, 86400)
+MAX_RHO_DENOMINATOR = 64
 
 
 def percentile(xs: Sequence[float], p: float) -> float:
@@ -52,7 +55,7 @@ def first_frame_latencies(frames: Sequence[dict]) -> list[int]:
     return [f["ready"] - f["anchor"] for f in frames if f["index"] == 0]
 
 
-def session_rates(frames: Sequence[dict]) -> list[float]:
+def session_rates(frames: Sequence[dict]) -> list[Fraction]:
     """Each session's production rate, in frames per bucket, from its first to its last frame."""
     by_session: dict[str, list[dict]] = defaultdict(list)
     for f in frames:
@@ -61,27 +64,38 @@ def session_rates(frames: Sequence[dict]) -> list[float]:
     for fs in by_session.values():
         if len(fs) > 1:
             fs = sorted(fs, key=lambda f: f["index"])
-            rates.append((len(fs) - 1) / max(1, fs[-1]["ready"] - fs[0]["ready"]))
+            rates.append(Fraction(len(fs) - 1, max(1, fs[-1]["ready"] - fs[0]["ready"])))
     return rates
 
 
-def choose_sync_set(latencies: Sequence[int], low_rates: Sequence[float], typical_rates: Sequence[float],
+def fraction_at_most(x: Fraction | float, max_denominator: int = MAX_RHO_DENOMINATOR) -> Fraction:
+    """The largest p/q ≤ x with 1 ≤ q ≤ `max_denominator`, and at least 1/max_denominator. Rounding down keeps a rate
+    lenient: a session at rate x still meets it."""
+    x = Fraction(x)
+    best = Fraction(1, max_denominator)
+    for q in range(1, max_denominator + 1):
+        best = max(best, Fraction(math.floor(x * q), q))
+    return best
+
+
+def choose_sync_set(latencies: Sequence[int], low_rates: Sequence[Fraction], typical_rates: Sequence[Fraction],
                     n_delta: int = 16, n_rho: int = 8) -> SyncSet:
     """The spec's §2:
     - **δ** runs from 0 up to the p99.99 first-frame latency, in `n_delta` steps;
-    - **ρ** runs from the p0.01 production rate (at least 1) up to the p50 rate, in `n_rho` values.
+    - **ρ** runs geometrically from the p0.01 production rate up to the p50 rate, in `n_rho` values, each rounded down to
+      a fraction with denominator at most 64. ρ is below 1 for sessions slower than one frame per bucket.
 
     `low_rates` should come from the heaviest configuration, and `typical_rates` from the lightest."""
     hi = math.ceil(percentile(latencies, 99.99)) if latencies else 0
     step = max(1, math.ceil(hi / max(1, n_delta - 1)))
     deltas = tuple(i * step for i in range(n_delta))
-    lo_r = max(1, math.floor(percentile(low_rates, 0.01))) if low_rates else 1
-    hi_r = max(lo_r, math.ceil(percentile(typical_rates, 50))) if typical_rates else lo_r
+    lo_r = fraction_at_most(percentile(low_rates, 0.01)) if low_rates else Fraction(1)
+    hi_r = max(lo_r, Fraction(percentile(typical_rates, 50))) if typical_rates else lo_r
     if n_rho == 1 or hi_r == lo_r:
-        rhos: tuple[int, ...] = (lo_r,)
-    else:
-        rhos = tuple(sorted({round(lo_r + i * (hi_r - lo_r) / (n_rho - 1)) for i in range(n_rho)}))
-    return SyncSet(deltas, rhos)
+        return SyncSet(deltas, (lo_r,))
+    ratio = float(hi_r / lo_r)
+    rhos = {lo_r} | {fraction_at_most(lo_r * Fraction(ratio ** (i / (n_rho - 1)))) for i in range(1, n_rho)}
+    return SyncSet(deltas, tuple(sorted(rhos)))
 
 
 def _hand(frames: Sequence[LogicalFrame], ready: Sequence[int], sync: ClockSync, last: int) -> tuple[bool, list[int]]:
@@ -143,6 +157,25 @@ def replay_fifo(hands: Sequence[int], allocation: int, queue_capacity: int) -> t
     return ok, delays
 
 
+def least_allocation(hands: Sequence[int], queue_capacity: int, max_delay: int, start: int = 1) -> int:
+    """The least r ≥ `start` whose FIFO replay has no overflow and a p99 queueing delay of at most `max_delay` buckets.
+    Both only improve as r grows, so doubling and then bisection finds it."""
+
+    def fits(r: int) -> bool:
+        ok, delays = replay_fifo(hands, r, queue_capacity)
+        return ok and percentile(delays, 99) <= max_delay
+
+    if not hands:
+        return start
+    lo, hi = start - 1, start
+    while not fits(hi):
+        lo, hi = hi, 2 * hi
+    while hi - lo > 1:
+        mid = (lo + hi) // 2
+        lo, hi = (lo, mid) if fits(mid) else (mid, hi)
+    return hi
+
+
 def size_allocation(hands: Sequence[int], queue_capacity: int, headroom: float = 2.0,
                     max_delay: int = 1) -> dict:
     """The spec's §3. Start at r = ⌈headroom · p99.9⌉ of per-bucket demand, then raise r until there is no overflow and
@@ -153,13 +186,9 @@ def size_allocation(hands: Sequence[int], queue_capacity: int, headroom: float =
     demand = [0] * horizon
     for h in hands:
         demand[h] += 1
-    r = max(1, math.ceil(headroom * percentile(demand, 99.9)))
-    while True:
-        ok, delays = replay_fifo(hands, r, queue_capacity)
-        p99 = percentile(delays, 99)
-        if ok and p99 <= max_delay:
-            break
-        r += 1
+    r = least_allocation(hands, queue_capacity, max_delay, max(1, math.ceil(headroom * percentile(demand, 99.9))))
+    ok, delays = replay_fifo(hands, r, queue_capacity)
+    p99 = percentile(delays, 99)
     return {
         "allocation": r,
         "demand": {f"p{p}": percentile(demand, p) for p in (50, 99, 99.9)} | {"max": max(demand)},
@@ -178,14 +207,26 @@ def size_ingress(arrivals: Sequence[int], trace_bucket_ms: int, ingress_bucket_m
     k = ingress_bucket_ms // trace_bucket_ms
     counts = [sum(arrivals[i : i + k]) for i in range(0, len(arrivals), k)]
     hands = [t for t, c in enumerate(counts) for _ in range(c)]
-    r = 1
-    while hands:
-        ok, delays = replay_fifo(hands, r, queue_capacity)
-        if ok and percentile(delays, 99) <= max_delay:
-            break
-        r += 1
+    r = least_allocation(hands, queue_capacity, max_delay)
     rate = capacity.ingress_rate(r, ingress_bucket_ms)
     return {"allocation": r, "bucket_ms": ingress_bucket_ms, "rate_bps": rate}
+
+
+def size_ingress_ms(arrival_ms: Sequence[float], ingress_bucket_ms: int = 100, queue_capacity: int = 1 << 16,
+                    max_delay: int = 1) -> dict:
+    """`size_ingress` from arrival times in ms, for any τ_in. A frame arriving at t is enqueued at the next bucket
+    boundary, bucket ⌈t/τ_in⌉, and released after its FIFO delay. The report adds the delivery delay, release time
+    minus arrival time, which the ingress grid adds to every request."""
+    arrived = sorted(arrival_ms)
+    hands = [math.ceil(t / ingress_bucket_ms) for t in arrived]
+    r = least_allocation(hands, queue_capacity, max_delay)
+    _, delays = replay_fifo(hands, r, queue_capacity)
+    delivery = [(h + d) * ingress_bucket_ms - t for h, d, t in zip(hands, delays, arrived, strict=True)]
+    return {
+        "allocation": r, "bucket_ms": ingress_bucket_ms, "rate_bps": capacity.ingress_rate(r, ingress_bucket_ms),
+        "delivery_delay_ms": ({p: percentile(delivery, q) for p, q in (("p50", 50), ("p99", 99))}
+                              | {"max": max(delivery)}) if delivery else {},
+    }
 
 
 def calibrate(trace: dict, *, ingress_bucket_ms: int = 100, n_delta: int = 16, n_rho: int = 8,
@@ -200,6 +241,7 @@ def calibrate(trace: dict, *, ingress_bucket_ms: int = 100, n_delta: int = 16, n
 
     per_link_frames: dict[str, list[list[dict]]] = defaultdict(list)
     per_link_arrivals: dict[str, list[list[int]]] = defaultdict(list)
+    per_link_arrival_ms: dict[str, list[list[float]]] = defaultdict(list)
     latencies, low_rates, typical_rates = [], [], []
     for cfg in configs:
         cfg_rates = []
@@ -208,13 +250,16 @@ def calibrate(trace: dict, *, ingress_bucket_ms: int = 100, n_delta: int = 16, n
             latencies += first_frame_latencies(link["frames"])
             cfg_rates += session_rates(link["frames"])
         for link in cfg.get("ingress", []):
-            per_link_arrivals[link["link"]].append(link["arrivals"])
+            if "arrival_ms" in link:
+                per_link_arrival_ms[link["link"]].append(link["arrival_ms"])
+            else:
+                per_link_arrivals[link["link"]].append(link["arrivals"])
         if cfg_rates:
             low_rates.append(percentile(cfg_rates, 0.01))
             typical_rates.append(percentile(cfg_rates, 50))
     sync_set = choose_sync_set(latencies, low_rates, typical_rates, n_delta, n_rho)
 
-    egress, windows_total, misses_total, chosen_deltas = [], 0, 0, []
+    egress, windows_total, misses_total, chosen = [], 0, 0, []
     for name, runs in per_link_frames.items():
         hands_all, link_windows, link_misses = [], 0, 0
         offset = 0
@@ -223,7 +268,7 @@ def calibrate(trace: dict, *, ingress_bucket_ms: int = 100, n_delta: int = 16, n
             syncs, hands, misses = choose_syncs(lf, [f["ready"] for f in frames], sync_set, T)
             link_windows += len(syncs)
             link_misses += misses
-            chosen_deltas += [s.delta for s in syncs]
+            chosen += [syncs[w] for w in sorted({f.anchor // T for f in lf})]
             hands_all += [h + offset for h in hands]
             offset = (max(hands_all) + 1) if hands_all else offset
         alloc = size_allocation(hands_all, q, headroom)
@@ -244,6 +289,12 @@ def calibrate(trace: dict, *, ingress_bucket_ms: int = 100, n_delta: int = 16, n
     for name, runs in per_link_arrivals.items():
         joined = [c for run in runs for c in run]
         ingress.append({"link": name, "direction": "ingress"} | size_ingress(joined, bucket_ms, ingress_bucket_ms, q))
+    for name, runs in per_link_arrival_ms.items():
+        joined_ms, offset = [], 0.0
+        for run in runs:
+            joined_ms += [t + offset for t in run]
+            offset = (math.ceil(max(joined_ms, default=offset) / ingress_bucket_ms) + 2) * ingress_bucket_ms
+        ingress.append({"link": name, "direction": "ingress"} | size_ingress_ms(joined_ms, ingress_bucket_ms, q))
 
     miss_rate = misses_total / windows_total if windows_total else 0.0
     windows_per_day = 86400 * 1000 / (T * bucket_ms)
@@ -253,11 +304,15 @@ def calibrate(trace: dict, *, ingress_bucket_ms: int = 100, n_delta: int = 16, n
         "grid": {"bucket_ms": bucket_ms, "window_buckets": T, "frame_bytes": frame_bytes, "queue_capacity": q},
         "egress": egress,
         "clock_sync": {
-            "deltas": list(sync_set.deltas), "rhos": list(sync_set.rhos), "size": sync_set.size,
+            "deltas": list(sync_set.deltas), "rhos": [str(r) for r in sync_set.rhos], "size": sync_set.size,
             "bits_per_window": sync_set.bits,
             "honest_miss_rate": miss_rate, "target": epsilon, "meets_target": miss_rate <= epsilon,
-            "first_frame_latency_ms": ({"p50": percentile(chosen_deltas, 50) * bucket_ms,
-                                        "p99": percentile(chosen_deltas, 99) * bucket_ms} if chosen_deltas else {}),
+            "declared": ({"delta": [min(s.delta for s in chosen), max(s.delta for s in chosen)],
+                          "rho": [str(min(s.rho for s in chosen)), str(max(s.rho for s in chosen))]}
+                         if chosen else {}),
+            "first_frame_latency_ms": ({"p50": percentile([s.delta for s in chosen], 50) * bucket_ms,
+                                        "p99": percentile([s.delta for s in chosen], 99) * bucket_ms}
+                                       if chosen else {}),
         },
         "capacity": {
             "egress_bits_per_day_one_clock": sync_set.bits * windows_per_day,
