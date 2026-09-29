@@ -8,6 +8,9 @@
                                                             inputs when the commit changes backends/flock/ against --base REF
                                                             (default origin/main), and presigned URLs for the pinned Lean
                                                             dependency bundles
+    uv run python tools/check/check.py --nightly --on M     the backstop of every cache: the same, cold and to the end, with every
+                                                            step's inputs; its result names each cached pass it contradicts
+                                                            (`cache_contradictions`); the steward launches it daily (`record`)
     uv run python tools/check/check.py --lean-deps-files    the `--send` for those URLs, for `research merge --train`
     ... [--verdicts-in PACK]                                import the passes another machine stored (`verdicts.py`) before
                                                             the steps; with --record --on, the pack travels with the run
@@ -321,9 +324,13 @@ def lean_agreement(out: Path, upstream: Path, inputs: Path) -> int:
 
 
 def record(argv: list[str]) -> int:
-    """`--record [--on MACHINE] [--base REF]`: `research run --tool check` on this clean commit, with the pinned upstream build and
-    inputs (fetched from the store) when the commit changes a path `tools/check/tool.py` names against REF (default origin/main)."""
-    on = base = None
+    """`--record [--on MACHINE] [--base REF] [--id RUN]`: `research run --tool check` on this clean commit, with the pinned upstream
+    build and inputs (fetched from the store) when the commit changes a path `tools/check/tool.py` names against REF (default
+    origin/main).  `--nightly` is the backstop of every cache: the same, cold (`--no-cache`) and to the end (`--keep-going`), with the
+    agreement's inputs whatever the diff, so every step runs; a cached pass it contradicts is named in its result
+    (`cache_contradictions`).  The steward launches it daily (a `[[run]]` entry with this file as its `launcher`)."""
+    on = base = run_id = None
+    nightly = False
     rest = []
     it = iter(argv)
     for x in it:
@@ -331,8 +338,14 @@ def record(argv: list[str]) -> int:
             on = next(it)
         elif x == "--base":
             base = next(it)
+        elif x == "--id":
+            run_id = next(it)
+        elif x == "--nightly":
+            nightly = True
         else:
             rest.append(x)
+    if nightly:
+        rest += [f for f in ("--no-cache", "--keep-going") if f not in rest]
     spec = importlib.util.spec_from_file_location("check_tool", ROOT / "tools" / "check" / "tool.py")
     tool = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(tool)
@@ -340,8 +353,9 @@ def record(argv: list[str]) -> int:
     changed = subprocess.run(["git", "diff", "--name-only", base, "HEAD"], cwd=ROOT, capture_output=True, text=True, check=True).stdout.split()
     from research.merge import rule_touches
 
-    need = [s for s, rule in tool.CHECK.merge_requires.items() if rule_touches(rule, changed)]
-    cmd = [sys.executable, "-m", "research", "run", "--tool", "check", "--project", "verity", "--cwd", "source"]
+    need = [s for s, rule in tool.CHECK.merge_requires.items() if rule_touches(rule, changed) or nightly]
+    cmd = [sys.executable, "-m", "research", "run", *(["--id", run_id] if run_id else []), "--tool", "check", "--project", "verity",
+           "--cwd", "source"]
     env = dict(os.environ)
     if "lean-agreement" in need:
         from research.store.local import LocalStore
@@ -644,7 +658,16 @@ def agreement_verdicts(run_dir: Path) -> list[str]:
     return [str(p.relative_to(run_dir)) for p in files if p.is_file()]
 
 
-def write_result(run_dir: Path, ok: bool, done: list[dict], verdicts: dict | None = None) -> None:
+def contradictions(out: Path) -> list[dict]:
+    """The suites whose fresh run (`--no-cache`) failed what a cached pass, a suite's or a test's, answers for (`suites.py`)."""
+    found = []
+    for f in ("suites.json", "suites-lean.json"):
+        if (out / f).is_file():
+            found += [{"suite": d["suite"], "contradicts": d["contradicts"]} for d in json.loads((out / f).read_text()) if d.get("contradicts")]
+    return found
+
+
+def write_result(run_dir: Path, ok: bool, done: list[dict], verdicts: dict | None = None, contradicted: list[dict] = ()) -> None:
     doc = {"schema": "research/result/v0.1", "kind": "check/v1", "run_id": os.environ["RESEARCH_RUN_ID"],
            "workload_fingerprint": {"steps": [s["step"] for s in done]},
            "validation": {"status": "passed" if ok else "failed", "checker": "tools/check/check.py",
@@ -656,6 +679,8 @@ def write_result(run_dir: Path, ok: bool, done: list[dict], verdicts: dict | Non
                                         if p and (run_dir / p).exists()]}
     if verdicts:
         doc["verdicts"] = verdicts
+    if contradicted:
+        doc["cache_contradictions"] = list(contradicted)
     tmp = run_dir / "result.json.tmp"
     tmp.write_text(json.dumps(doc, indent=1) + "\n")
     os.replace(tmp, run_dir / "result.json")
@@ -674,7 +699,7 @@ def main(argv: list[str]) -> int:
         return 0
     if argv[:1] == ["--lean-agreement"] and len(argv) == 4:
         return lean_agreement(*map(Path, argv[1:]))
-    if "--record" in argv:
+    if "--record" in argv or "--nightly" in argv:
         if os.environ.get("RESEARCH_RUN_ID"):
             print("check: --record inside a recorded run", file=sys.stderr)
             return 2
@@ -698,10 +723,14 @@ def main(argv: list[str]) -> int:
     before = VERDICTS.snapshot() if run_dir is not None and cache else None
     t0 = time.monotonic()
     ok, done = run(out, n, cache, keep_going)
+    bad = contradictions(out)
+    for c in bad:
+        print(f"check: CACHE CONTRADICTED in {c['suite']}: {', '.join(c['contradicts'][:5])} failed fresh, and a cached pass answers for it",
+              flush=True)
     if run_dir is not None:
         if before is not None:
             verdicts["out"] = {"file": "verdicts.tar.gz", "entries": VERDICTS.export(run_dir / "verdicts.tar.gz", before)}
-        write_result(run_dir, ok, done, verdicts)
+        write_result(run_dir, ok, done, verdicts, bad)
     print(f"check: {'passed' if ok else 'FAILED'} in {time.monotonic() - t0:.1f} s ({', '.join(s['step'] + ' ' + s['status'] for s in done)});"
           f" outputs in {out}")
     return 0 if ok else 1

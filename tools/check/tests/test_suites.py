@@ -251,3 +251,128 @@ def test_a_shipped_tree_with_no_store_fails_only_on_a_fixture_it_cannot_fetch(tm
     p = _run_shipped(root, tmp_path)
     assert p.returncode == 1
     assert "its fixtures could not be fetched: pkg/tests/fixtures/big.proof" in p.stdout, p.stdout
+
+
+def test_what_a_module_can_reach_by_name(tmp_path, monkeypatch):
+    """Imports and `test_...` words in strings are what a module mentions; a computed import leaves nothing out, unless it is computed
+    from the module's own package's name; a top-level call or an assignment to an attribute or item acts on the process."""
+    S = _suites(monkeypatch, tmp_path)
+    s = S.scan("import a.b\nfrom .c import d\nX = 'tests/test_e.py::t'\nfrom importlib import import_module\n"
+               "def f(n):\n    return import_module(f'{__name__}.{n}')\n")
+    assert {"a", "b", "c", "d", "test_e"} <= s.names and s.package and not s.computed and not s.effects
+    assert S.scan("import importlib\ndef f(n):\n    return importlib.import_module(n)\n").computed
+    assert S.scan("import glob\nFILES = glob.glob('tests/test_*.py')\n").computed          # a pattern names test modules too
+    assert not S.scan("import pytest\nnp = pytest.importorskip('numpy')\n").computed          # a literal name is a mention
+    for effect in ("import sys\nsys.path.insert(0, '.')\n", "import os\nos.environ['A'] = '1'\n", "import m\nm.X = 1\n",
+                   "try:\n    import x\nexcept ImportError:\n    print('no x')\n"):
+        assert S.scan(effect).effects, effect
+    assert not S.scan("'''doc'''\nfrom a import b\nA, B = 1, b()\nclass C:\n    pass\n").effects
+    assert S.scan("def (:\n") is None
+
+
+def _per_test_workspace(root: Path) -> None:
+    """A shipped tree with this runner and one parallel suite: `test_heavy` (on a helper), `test_sibling` (failing until fixed),
+    `test_uses` (importing `test_shared`), and `test_shared`."""
+    import shutil
+
+    (root / "tools" / "check").mkdir(parents=True)
+    shutil.copy(HERE / "suites.py", root / "tools" / "check" / "suites.py")
+    shutil.copytree(HERE / "guard", root / "tools" / "check" / "guard", ignore=shutil.ignore_patterns("__pycache__"))
+    (root / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = ["pkg"]\n')
+    (root / "pkg" / "tests").mkdir(parents=True)
+    (root / "pkg" / "pyproject.toml").write_text('[project]\nname = "pkg"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n\n'
+                                                 '[tool.verity.tests]\nparallel = true\n')
+    for name, text in {"helpers.py": "VALUE = 1\n",
+                       "test_heavy.py": "from helpers import VALUE\n\ndef test_heavy():\n    assert VALUE == 1\n\ndef test_heavy_too():\n    pass\n",
+                       "test_sibling.py": "def test_sibling():\n    assert False\n",
+                       "test_uses.py": "from test_shared import X\n\ndef test_uses():\n    assert X == 1\n",
+                       "test_shared.py": "X = 1\n\ndef test_shared():\n    pass\n"}.items():
+        (root / "pkg" / "tests" / name).write_text(text)
+
+
+def _run_suite(root: Path, tmp_path: Path, *args: str, extra: dict | None = None) -> subprocess.CompletedProcess:
+    env = {k: v for k, v in os.environ.items() if not k.startswith(("R2_", "AWS_", "RESEARCH_", "VERITY_"))}
+    env.update(RESEARCH_STORE=str(tmp_path / "pod-store"), RESEARCH_STORE_CONFIG=str(tmp_path / "absent.toml"), RESEARCH_FIXTURES_URL="",
+               VERITY_TEST_CACHE=str(tmp_path / "cache"), PYTHONDONTWRITEBYTECODE="1", **(extra or {}))
+    return subprocess.run([sys.executable, str(root / "tools" / "check" / "suites.py"), "--jobs", "1", "--logs", str(tmp_path / "logs"), *args],
+                          cwd=root, env=env, capture_output=True, text=True)
+
+
+def _reused(tmp_path: Path) -> list[str]:
+    import json
+
+    p = tmp_path / "logs" / "pkg.reuse.json"
+    return sorted(json.loads(p.read_text())) if p.exists() else []
+
+
+def test_a_failed_suite_keeps_its_passes_and_a_sibling_fix_reuses_them(tmp_path):
+    root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
+    _per_test_workspace(root)
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 1 and "4 per-test passes kept" in p.stdout, p.stdout
+
+    (tests / "test_sibling.py").write_text("def test_sibling():\n    assert True\n")       # the fix: another module
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 0 and "1 passed, 4 reused" in p.stdout, p.stdout
+    assert _reused(tmp_path) == ["tests/test_heavy.py::test_heavy", "tests/test_heavy.py::test_heavy_too",
+                                 "tests/test_shared.py::test_shared", "tests/test_uses.py::test_uses"]
+
+    (tests / "test_shared.py").write_text("X = 1\n\n\ndef test_shared():\n    pass\n")       # reaches test_uses, which imports it
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 0 and "2 passed, 3 reused" in p.stdout, p.stdout
+    assert _reused(tmp_path) == ["tests/test_heavy.py::test_heavy", "tests/test_heavy.py::test_heavy_too", "tests/test_sibling.py::test_sibling"]
+
+    (tests / "helpers.py").write_text("VALUE = 1  # not a test module: in every key\n")
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 0 and "5 passed in" in p.stdout and _reused(tmp_path) == [], p.stdout
+
+    (tests / "test_effect.py").write_text("import os\nos.environ['PKG_FLAG'] = '1'\n\ndef test_effect():\n    pass\n")
+    (tests / "test_dyn.py").write_text("import importlib\n\ndef test_dyn():\n    assert importlib.import_module('test_' + 'shared').X == 1\n")
+    p = _run_suite(root, tmp_path)                        # new modules: the one acting on import joins every key
+    assert p.returncode == 0 and "7 passed" in p.stdout, p.stdout
+    (tests / "test_sibling.py").write_text("def test_sibling():\n    assert 1\n")
+    p = _run_suite(root, tmp_path)                        # test_dyn imports by a computed name: no test module is left out of its key
+    assert p.returncode == 0 and "2 passed, 5 reused" in p.stdout and "tests/test_dyn.py::test_dyn" not in _reused(tmp_path), p.stdout
+    (tests / "test_effect.py").write_text("import os\nos.environ['PKG_FLAG'] = '2'\n\ndef test_effect():\n    pass\n")
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 0 and "7 passed" in p.stdout and _reused(tmp_path) == [], p.stdout
+
+
+def test_a_fresh_run_that_fails_what_a_kept_pass_answers_for_says_so(tmp_path):
+    """The nightly cold check's signal: a key that misses an input shows as a fresh failure a cached pass contradicts."""
+    import json
+
+    root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
+    _per_test_workspace(root)
+    (tests / "test_sibling.py").write_text("import os\n\ndef test_sibling():\n    assert not os.environ.get('PKG_BREAK')\n")
+    assert _run_suite(root, tmp_path).returncode == 0
+    p = _run_suite(root, tmp_path, "--fresh")                                   # nothing reused, yet it all passes again
+    assert p.returncode == 0 and _reused(tmp_path) == [] and "CONTRADICTS" not in p.stdout
+    out = tmp_path / "suites.json"                   # PKG_BREAK: an input no key covers (a variable outside VERITY_ and FLOCK_)
+    p = _run_suite(root, tmp_path, "--fresh", "--json", str(out), extra={"PKG_BREAK": "1"})
+    assert p.returncode == 1 and "CONTRADICTS a cached pass: (the suite), tests/test_sibling.py::test_sibling" in p.stdout, p.stdout
+    assert json.loads(out.read_text())[0]["contradicts"] == ["(the suite)", "tests/test_sibling.py::test_sibling"]
+
+
+def test_an_interrupted_run_keeps_what_finished(tmp_path):
+    """A stop (check.py's SIGINT to the step's processes) mid-suite: the tests that passed before it are kept."""
+    import signal
+
+    root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
+    _per_test_workspace(root)
+    gate = tmp_path / "gate"
+    os.mkfifo(gate)
+    for f in ("test_sibling.py", "test_uses.py", "test_shared.py"):
+        (tests / f).unlink()
+    (tests / "test_z_block.py").write_text(f"import signal\n\ndef test_block():\n    with open({str(gate)!r}, 'w') as f:\n"
+                                           "        f.write('x')\n    signal.pause()\n")
+    env = {k: v for k, v in os.environ.items() if not k.startswith(("R2_", "AWS_", "RESEARCH_", "VERITY_"))}
+    env.update(VERITY_TEST_CACHE=str(tmp_path / "cache"), PYTHONDONTWRITEBYTECODE="1")
+    p = subprocess.Popen([sys.executable, str(root / "tools" / "check" / "suites.py"), "--jobs", "1", "--logs", str(tmp_path / "logs")],
+                         cwd=root, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, start_new_session=True)
+    with open(gate) as f:                                  # test_heavy's two tests have passed; test_block is running
+        f.read()
+    os.killpg(p.pid, signal.SIGINT)
+    out = p.communicate()[0]
+    assert p.returncode != 0 and "2 per-test passes kept" in out, out
+    assert len(list((tmp_path / "cache" / "per-test" / "pkg").glob("pkg~tests~test_heavy.py--*.json"))) == 1

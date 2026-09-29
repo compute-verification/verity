@@ -1436,19 +1436,22 @@ def run_lines(root: Path, now: dt.datetime, state: dict, config: Path | None = N
     `python -m research run --id <run id> <args>` runs in `source` with the tree's workspace on PYTHONPATH, as a render's commands
     do.  It returns once the machine has started the workload detached, so the pass waits for the launch only (at most 10 min),
     never for the run: `LAUNCHED <name> <run id> on <machine>`, else `RUN-FAILED <name> <run id>: <stderr tail>`, and the next
-    launch is the next period's.  The run's Attempt records the rest (`research inspect <run id>`).  An invalid entry is one
+    launch is the next period's.  The run's Attempt records the rest (`research inspect <run id>`).  An entry with a `launcher` (a list
+    of strings) runs `<launcher> --id <run id> <args>` instead, for a tool that prepares what its run needs and then launches it, as
+    `tools/check/check.py --nightly` does; its args still name the machine (`--on MACHINE`).  An invalid entry is one
     `RUN-FAILED <name>: <why>` line."""
     entries, lines = steward_entries(config or root / STEWARD_TOML, "run", now, state, "RUN-FAILED")
     if not entries:
         return lines
     done, invalid, seen = state.setdefault("run", {}), state.setdefault("run_invalid", {}), set()
     for e in entries:
-        name, args, weekday = str(e.get("name", "")), e.get("args"), e.get("weekday")
+        name, args, weekday, launcher = str(e.get("name", "")), e.get("args"), e.get("weekday"), e.get("launcher")
         m = HHMMZ_RE.fullmatch(str(e.get("at", "")))
-        ok = name and m and e.get("source") and isinstance(args, list) and all(isinstance(a, str) for a in args)
-        opts = args[:args.index("--")] if ok and "--" in args else []
+        ok = (name and m and e.get("source") and isinstance(args, list) and all(isinstance(a, str) for a in args)
+              and (launcher is None or (isinstance(launcher, list) and launcher and all(isinstance(a, str) for a in launcher))))
+        opts = (args[:args.index("--")] if "--" in args else args if launcher else []) if ok else []
         machine = remote.flag_value(opts, "--on")
-        bad = ('an entry needs name, at = "HH:MMZ", source and args (a list of strings)' if not ok else
+        bad = ('an entry needs name, at = "HH:MMZ", source and args (a list of strings; a launcher too, when it has one)' if not ok else
                f"weekday = {weekday!r}: one of {', '.join(WEEKDAYS)}" if weekday is not None and weekday not in WEEKDAYS else
                'args put the run on a machine: ["--on", MACHINE, ..., "--", CMD...]' if not machine else
                "args set --id: the steward names the run" if remote.flag_value(opts, "--id") is not None else
@@ -1465,7 +1468,7 @@ def run_lines(root: Path, now: dt.datetime, state: dict, config: Path | None = N
         done[name] = {"period": period, "run": run_id}
         invalid.pop(name, None)
         src = Path(str(e["source"])).expanduser()
-        cmd = [sys.executable, "-m", "research", "run", "--id", run_id, *args]
+        cmd = [*launcher, "--id", run_id, *args] if launcher else [sys.executable, "-m", "research", "run", "--id", run_id, *args]
         rc, stdout, stderr = run(cmd, {**os.environ, "PYTHONPATH": tree_pythonpath(src)}, src, timeout_s)
         done[name]["rc"] = rc
         lines.append(f"{now:%H:%MZ} LAUNCHED {name} {run_id} on {machine}" if rc == 0 else

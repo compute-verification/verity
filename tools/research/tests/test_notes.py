@@ -1107,6 +1107,26 @@ def test_scheduled_runs_launch_once_per_utc_day_or_iso_week_at_or_after_their_ti
     assert lines[0] == "21:00Z RUN-FAILED lean-fresh r0: timeout after 600s"
 
 
+def test_a_run_entry_with_a_launcher_runs_it_with_the_run_id_and_its_args(tmp_path):
+    """The nightly cold check: `check.py --nightly` prepares the run's inputs, then launches it on the machine its args name."""
+    nightly = ["uv", "run", "--locked", "python", "tools/check/check.py", "--nightly"]
+    (tmp_path / "steward.toml").write_text(_run_toml(
+        f'name = "nightly-check"\nat = "13:30Z"\nsource = "/src"\nlauncher = {json.dumps(nightly)}\nargs = ["--on", "vy-coord-t1"]',
+        'name = "no-machine"\nat = "13:30Z"\nsource = "/src"\nlauncher = ["x"]\nargs = []',
+        'name = "bad-launcher"\nat = "13:30Z"\nsource = "/src"\nlauncher = "x"\nargs = ["--on", "m"]'))
+    calls = []
+
+    def run(cmd, env, cwd, timeout):
+        calls.append((cmd, cwd))
+        return 0, "", ""
+
+    assert notes.run_lines(tmp_path, NOW, {}, run=run, new_id=lambda: "r7") == [
+        "21:00Z LAUNCHED nightly-check r7 on vy-coord-t1",
+        '21:00Z RUN-FAILED no-machine: args put the run on a machine: ["--on", MACHINE, ..., "--", CMD...]',
+        '21:00Z RUN-FAILED bad-launcher: an entry needs name, at = "HH:MMZ", source and args (a list of strings; a launcher too, when it has one)']
+    assert calls == [([*nightly, "--id", "r7", "--on", "vy-coord-t1"], Path("/src"))]
+
+
 def test_an_invalid_run_entry_is_one_line_until_it_changes(tmp_path):
     ok = 'at = "20:00Z"\nsource = "/src"\nargs = ["--on", "vy-x", "--", "true"]'
     (tmp_path / "steward.toml").write_text(_run_toml(
@@ -1121,8 +1141,8 @@ def test_an_invalid_run_entry_is_one_line_until_it_changes(tmp_path):
         return 0, "", ""
 
     assert notes.run_lines(tmp_path, NOW, state, run=run, new_id=lambda: "r9") == [
-        '21:00Z RUN-FAILED no-args: an entry needs name, at = "HH:MMZ", source and args (a list of strings)',
-        '21:00Z RUN-FAILED nine: an entry needs name, at = "HH:MMZ", source and args (a list of strings)',
+        '21:00Z RUN-FAILED no-args: an entry needs name, at = "HH:MMZ", source and args (a list of strings; a launcher too, when it has one)',
+        '21:00Z RUN-FAILED nine: an entry needs name, at = "HH:MMZ", source and args (a list of strings; a launcher too, when it has one)',
         "21:00Z RUN-FAILED monday: weekday = 'monday': one of mon, tue, wed, thu, fri, sat, sun",
         '21:00Z RUN-FAILED local: args put the run on a machine: ["--on", MACHINE, ..., "--", CMD...]',
         "21:00Z RUN-FAILED named: args set --id: the steward names the run",

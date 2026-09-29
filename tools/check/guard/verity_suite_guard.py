@@ -15,6 +15,11 @@ top-level imports that failed with no installed distribution providing the name 
 Under pytest-xdist every worker loads it too, since xdist gives each worker the controller's command line and `sys.path`.
 A worker sends its record to the controller when its session ends (`workeroutput`), and the controller counts outcomes from
 the reports workers send it. A worker that sends no record fails the suite (`unguarded`).
+
+For `suites.py`'s per-test verdicts it also records each test that passed (every phase, and not an xfail) with its call's
+seconds, each test that failed, and which of the suite's `test_*.py` files were opened while a test module was collected or
+its tests ran (under `"*"` when neither: a session fixture, a conftest). It deselects the tests `VERITY_SUITE_REUSE` names,
+whose passes `suites.py` reuses.
 """
 from __future__ import annotations
 
@@ -44,6 +49,11 @@ _record: dict[str, set] = {"distributions": set(), "missing": set()}      # from
 _unguarded: list[str] = []
 _counts = {"passed": 0, "failed": 0, "error": 0, "skipped": 0}
 _slow: list[tuple[str, float]] = []
+_suite = os.path.join(os.path.realpath(os.getcwd()), "")         # suites.py runs pytest from the suite's directory
+_current = "*"                                                   # the test module being collected or run
+_reads: dict[str, set[str]] = {}                                 # test module (or "*") -> other test modules it opened
+_outcomes: dict[str, float | None] = {}                          # node id -> call seconds, None once a phase did not pass
+_failed: set[str] = set()
 
 
 def _audit(event: str, args: tuple) -> None:
@@ -62,6 +72,11 @@ def _audit(event: str, args: tuple) -> None:
         _watched.add(os.path.relpath(path, _root))
     if path.startswith(_inside) and not path.startswith(_allowed) and path not in _allowed_files:
         _outside.add(os.path.relpath(path, _root))
+    name = os.path.basename(path)
+    if path.startswith(_suite) and name.startswith("test_") and name.endswith(".py"):
+        rel = os.path.relpath(path, _root)
+        if rel != _current:
+            _reads.setdefault(_current, set()).add(rel)
 
 
 def _used() -> dict[str, list[str]]:
@@ -80,7 +95,52 @@ if _ACTIVE:
     sys.addaudithook(_audit)
 
 
+def _module_of(path) -> str:
+    return os.path.relpath(os.path.realpath(str(path)), _root)
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_make_collect_report(collector):
+    """Opens while a module is collected (its import) are that module's."""
+    global _current
+    before = _current
+    if isinstance(collector, pytest.Module):
+        _current = _module_of(collector.path)
+    try:
+        yield
+    finally:
+        _current = before
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_protocol(item, nextitem):
+    global _current
+    before, _current = _current, _module_of(item.path)
+    try:
+        yield
+    finally:
+        _current = before
+
+
+def pytest_collection_modifyitems(session, config, items) -> None:
+    reuse = os.environ.get("VERITY_SUITE_REUSE")
+    if not reuse:
+        return
+    with open(reuse) as f:
+        ids = set(json.load(f))
+    gone = [i for i in items if i.nodeid in ids]
+    if gone:
+        config.hook.pytest_deselected(items=gone)
+        items[:] = [i for i in items if i.nodeid not in ids]
+
+
 def pytest_runtest_logreport(report) -> None:
+    if report.outcome != "passed" or getattr(report, "wasxfail", None) is not None:
+        _outcomes[report.nodeid] = None
+        if report.outcome == "failed":
+            _failed.add(report.nodeid)
+    elif report.when == "call" and _outcomes.get(report.nodeid, 0.0) is not None:
+        _outcomes[report.nodeid] = report.duration
     if report.when == "call":
         _counts[report.outcome] += 1
         if report.duration > SLOW_S and "slow" not in report.keywords:
@@ -102,6 +162,8 @@ def pytest_testnodedown(node, error) -> None:
         _watched.update(record["watched"])
         for k in _record:
             _record[k].update(record[k])
+        for m, files in record.get("reads", {}).items():
+            _reads.setdefault(m, set()).update(files)
 
 
 def pytest_sessionfinish(session, exitstatus) -> None:
@@ -109,11 +171,14 @@ def pytest_sessionfinish(session, exitstatus) -> None:
         return
     config = session.config
     used = _used()
+    reads = {m: sorted(files) for m, files in sorted(_reads.items())}
     if hasattr(config, "workerinput"):
-        config.workeroutput[_KEY] = {"outside": sorted(_outside), "watched": sorted(_watched), **used}
+        config.workeroutput[_KEY] = {"outside": sorted(_outside), "watched": sorted(_watched), "reads": reads, **used}
         return
     used = {k: sorted(set(v) | _record[k]) for k, v in used.items()}
+    passed = {n: round(s, 3) for n, s in sorted(_outcomes.items()) if s is not None}
     payload = json.dumps({"counts": _counts, "outside": sorted(_outside), "unguarded": _unguarded, "unmarked_slow": _slow,
-                          "watched": sorted(_watched), **used}, indent=1)
+                          "watched": sorted(_watched), "passed": passed, "failed": sorted(_failed), "reads": reads, **used},
+                         indent=1)
     with open(os.environ["VERITY_SUITE_REPORT"], "w") as f:
         f.write(payload)

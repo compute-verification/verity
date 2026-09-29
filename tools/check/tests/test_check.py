@@ -402,3 +402,42 @@ def test_the_preflight_is_the_lockfile_and_the_repository_lints(monkeypatch):
     monkeypatch.delenv("UV", raising=False)
     monkeypatch.setattr(CHECK.shutil, "which", lambda _name: None)
     assert CHECK.preflight()[0][1].startswith("failed: no `uv` here")
+
+
+def test_the_nightly_check_runs_every_step_cold_and_to_the_end(tmp_path, monkeypatch):
+    """With no diff against main, the agreement's inputs still go (every step runs), under the steward's run id."""
+    import types
+
+    import research.store.local as local
+
+    _out, sent = _pinned(tmp_path, monkeypatch)
+    calls = []
+
+    def fake_run(cmd, **kw):
+        calls.append(cmd)
+        return types.SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(CHECK.subprocess, "run", fake_run)
+    monkeypatch.setattr(local, "LocalStore", lambda: types.SimpleNamespace(fetch=lambda art: sent / ("a.tar.gz" if art == "art:u" else "b.tar.gz")))
+    monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: None)
+    assert CHECK.main(["--nightly", "--on", "vy-ci", "--id", "r20260929-230000-abcd"]) == 0
+    (diff, launch) = calls
+    assert diff[:3] == ["git", "diff", "--name-only"]
+    assert launch[1:6] == ["-m", "research", "run", "--id", "r20260929-230000-abcd"] and launch[launch.index("--on") + 1] == "vy-ci"
+    assert {Path(launch[i + 1]).name for i, x in enumerate(launch) if x == "--send"} == {"a.tar.gz", "b.tar.gz"}
+    assert launch[-2:] == ["--no-cache", "--keep-going"] and launch[launch.index("--") + 1:][-3:-2] == ["tools/check/check.py"]
+
+
+def test_a_contradicted_cached_pass_is_named_in_the_result(tmp_path, monkeypatch):
+    import json
+
+    from research import result as RES
+
+    (tmp_path / "suites.json").write_text(json.dumps([{"suite": "pkg", "contradicts": ["tests/test_a.py::test_a"]}, {"suite": "b"}]))
+    bad = CHECK.contradictions(tmp_path)
+    assert bad == [{"suite": "pkg", "contradicts": ["tests/test_a.py::test_a"]}]
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r20260929-010000-abcd")
+    CHECK.write_result(tmp_path, False, [{"step": "pytest", "status": "failed", "rc": 1, "seconds": 1.0}], None, bad)
+    r = RES.check(tmp_path, "r20260929-010000-abcd")
+    assert r.valid, r.errors
+    assert r.doc["cache_contradictions"] == bad
