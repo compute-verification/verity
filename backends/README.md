@@ -27,7 +27,7 @@ while the suite's inputs are unchanged. It has no `cargo` step, so no Rust test 
 its partition check against `verity.ir.partition` on random cuts, and audit every Lake package; the Lean verifier's
 agreement with upstream's Rust verifier runs only when the run is sent its input bundle.
 
-Python counts are pytest's collected items on a CPU machine after `uv sync --all-packages --all-extras` (torch for the CPU,
+Python counts are pytest's collected items on a CPU machine after `uv sync --all-packages --extra torch-cpu` (CPU-only torch,
 no GPU). Rust counts are `#[test]` functions.
 
 | family | status | Python tests `check` collects | Python tests outside `check` | Rust tests (`check` runs none) |

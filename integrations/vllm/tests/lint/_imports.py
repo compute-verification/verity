@@ -31,6 +31,7 @@ LAYER = {
     "verity_vllm.check": "check|properties",
     "verity_vllm.properties": "check|properties",
     "verity_vllm.acquire": "acquire",
+    "verity_vllm.protocol_options": "acquire",                 # installs beside the taps; imports engine.hooks, commit, config
     "verity_vllm.observe": "observe|commit",
     "verity_vllm.commit": "observe|commit",
     "verity_vllm.engine": "engine",

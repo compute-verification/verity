@@ -682,7 +682,7 @@ def test_s3remote_against_a_fake_bucket(tmp_path):
     finally:
         srv.shutdown()
         srv.server_close()
-        th.join(5)
+        th.join()
 
 
 class FakeS3:
@@ -854,7 +854,7 @@ class FakeS3:
     def close(self) -> None:
         self.srv.shutdown()
         self.srv.server_close()
-        self.thread.join(5)
+        self.thread.join()
 
 
 @pytest.fixture
