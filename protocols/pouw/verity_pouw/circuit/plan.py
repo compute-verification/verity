@@ -282,14 +282,13 @@ def closure_map(lay: Layout) -> dict[str, list[int]]:
     return {str(t): list(c) for t, c in lay.closure.items()}
 
 
-def widen(lay: Layout, unit_draw: Mapping, floors: tuple[tuple[str, int], ...] = ()) -> Plan:
-    """The plan for a work draw the verifier of record issued (`flock-verify draw`'s `DRAW {...}`): its law must be this call's
-    own derivation under the verifier's floors, never taken as stated (#362's U2), and its units exactly k_s in each
-    stratum; then every drawn tile's closure (`Law.widen`), with the Y units it reads in the weight's Program. A closure
-    draw's stated closure (`--closure`, `closure_map`) must be exactly that one."""
-    if unit_draw.get("law") != "work" or not isinstance(unit_draw.get("k"), int):
-        raise ValueError("not a work draw")
-    law = WorkLaw(unit_draw["k"], floors=floors)
+def widen(lay: Layout, unit_draw: Mapping, law: WorkLaw) -> Plan:
+    """The plan for a work draw the verifier of record issued (`flock-verify draw`'s `DRAW {...}`), held whole to the
+    verifier's own law: ``law`` is its `WorkLaw` for this call (K_c from `window_laws`, and its floors), and the draw's
+    law must be exactly `law_object(lay, law)`, its K included, never taken as stated (#362's U2, X-SPC-80, X-SPC-114).
+    Its units must be exactly k_s in each stratum; then every drawn tile's closure (`Law.widen`), with the Y units it
+    reads in the weight's Program. A closure draw's stated closure (`--closure`, `closure_map`) must be exactly that
+    one. The verifier calls it through `Traced.widen`, over its own layout (X-SPC-115)."""
     own = law_object(lay, law)
     if {k: unit_draw.get(k) for k in own} != own or unit_draw.get("population") != len(lay.units):
         raise ValueError("the draw's law is not this call's own (its program, partition and work table)")

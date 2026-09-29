@@ -110,16 +110,23 @@ def test_the_work_table_and_law_object_are_362s():
 
 
 def test_widen_takes_a_verifiers_work_draw_only_under_this_calls_own_law():
-    """A work draw's stated work sets every k_s, so `widen` holds it to the call's own law (#362's red team C1), then adds
-    every drawn tile's closure."""
+    """`widen` holds a work draw whole to the verifier's own law, its K and floors included (#362's red team C1, X-SPC-114),
+    then adds every drawn tile's closure; a closure draw's closure must be the verifier's. The verifier goes through
+    `Traced.widen`, over its own layout (X-SPC-115)."""
+    import inspect
+
     import pytest
 
+    import circuit_fixtures as F
+    from verity_pouw.circuit import Traced, traced_as
+
     lay = PL.layout(ncp2.Shape(32, 64, 32))
-    plan = PL.draw(_key(), lay, PL.WorkLaw(2))
-    d = {**PL.law_object(lay, PL.WorkLaw(2)), "population": len(lay.units), "units": list(plan.drawn)}
-    assert PL.widen(lay, d) == plan
+    law = PL.WorkLaw(2)
+    plan = PL.draw(_key(), lay, law)
+    d = {**PL.law_object(lay, law), "population": len(lay.units), "units": list(plan.drawn)}
+    assert PL.widen(lay, d, law) == plan
     closure = sorted(set(plan.proved) - set(plan.drawn))
-    assert PL.widen(lay, {**d, "closure": closure}) == plan                 # a closure draw (`--closure`), the verifier's own
+    assert PL.widen(lay, {**d, "closure": closure}, law) == plan             # a closure draw (`--closure`), the verifier's own
     s0, *rest = d["strata"]
     bad = [{**d, "k": 3}, {**d, "law": "stratified"}, {**d, "population": 1035}, {**d, "units": list(plan.drawn)[:-1]},
            {**d, "units": sorted({*plan.drawn, *(u for u in range(len(lay.units)) if u not in plan.drawn)})[:len(plan.drawn)]},
@@ -127,9 +134,24 @@ def test_widen_takes_a_verifiers_work_draw_only_under_this_calls_own_law():
            {**d, "strata": [{**s0, "floor": 2}, *rest]}, {**d, "closure": closure[:-1]}]
     for b in bad:
         with pytest.raises(ValueError):
-            PL.widen(lay, b)
-
-
+            PL.widen(lay, b, law)
+    at_one = PL.draw(_key(), lay, PL.WorkLaw(1))                             # self-consistent at K = 1, not the verifier's K
+    d1 = {**PL.law_object(lay, PL.WorkLaw(1)), "population": len(lay.units), "units": list(at_one.drawn)}
+    assert PL.widen(lay, d1, PL.WorkLaw(1)) == at_one
+    with pytest.raises(ValueError):
+        PL.widen(lay, d1, law)
+    deq = next(s.name for s in lay.strata if s.role == "dequant")
+    floored = PL.WorkLaw(2, floors=((deq, 5),))
+    f5 = PL.draw(_key(), lay, floored)
+    d5 = {**PL.law_object(lay, floored), "population": len(lay.units), "units": list(f5.drawn)}
+    assert PL.widen(lay, d5, floored) == f5
+    with pytest.raises(ValueError):
+        PL.widen(lay, d5, law)                                                # a floor the verifier's table doesn't have
+    call = F.call(32, 64, 32)
+    t = traced_as("ncp-v2-shift24", 32, 64, 32)
+    assert list(inspect.signature(Traced.widen).parameters) == ["self", "unit_draw", "law"]
+    assert t.widen(d, law) == PL.widen(t.layout(), d, law)
+    assert call.shape == t.shape
 
 def test_openings_are_one_leaf_per_row():
     """A and the weight are committed a leaf per row (X-SPC-57): a proved strip opens exactly its 16 rows."""

@@ -89,6 +89,13 @@ class Traced:
         index = anchors.call_index
         return plan.draw(key, self.layout(), law, index if isinstance(index, tuple) else (index,))
 
+    def widen(self, unit_draw, law):
+        """The verifier's plan for a work draw its verifier of record issued (`plan.widen`), over its own layout, never a
+        given one, and under its own law (K_c and floors), never the draw's (X-SPC-114, 115)."""
+        from . import plan
+
+        return plan.widen(self.layout(), unit_draw, law)
+
     def check_link(self, plan, call_args: Sequence[Sequence[int]], weight_outputs: Sequence[int]) -> None:
         """Refuse a call whose weight-side inputs differ from the weight Program's outputs at a column strip the plan opens
         (its ("y", strip) leaves, the drawn tiles' column strips): the call's committed inputs opened against the weight
