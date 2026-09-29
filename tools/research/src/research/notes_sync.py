@@ -52,7 +52,8 @@ NEVER_COMMIT = ("steward-state.json", ".steward-state.json.tmp")
 
 
 def _run(root: Path, *args: str, timeout: float = 120, input: str | None = None) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True, timeout=timeout, input=input)
+    """git in `root`; output that is not UTF-8 (a diff of a binary or Latin-1 file) is decoded with replacement characters."""
+    return subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True, errors="replace", timeout=timeout, input=input)
 
 
 def _out(root: Path, *args: str) -> str | None:
