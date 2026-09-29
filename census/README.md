@@ -74,7 +74,7 @@ the run. This is the mix that weights backend overheads into a per-workload head
 `verity_numerical.bench.headline`). Every family maps to a census
 subcircuit template bound from its IR Definition, with the number of the template's subcircuits one proof unit holds (`subcircuits_per_vu`):
 - `Gemm_v1` and `Gemm_v2` are N `gemm-coordinate`, on Ampere-class mma or Hopper wgmma;
-- `Attention_v3` and `Attention_v2` are NH `attention-head` (FA2 or FA3);
+- `Attention_v3`, `Attention_v2` and `Attention_v4` are NH `attention-head` (FA2, or FA3; `Attention_v4` is FA3 under its per-iteration `Check_inf` construction, whose `MASKED_FROM` names the first masked key block);
 - `RoPE_v1` is NHEADS `rope-head`;
 - the MoE expert GEMMs and the FP8 block-scaled GEMM are N coordinates;
 - the other families are one row each.
