@@ -10,10 +10,10 @@ import math
 import random
 from fractions import Fraction
 
-from verity_network_timing import capacity
-from verity_network_timing.audit import Audit
-from verity_network_timing.grid import GridParams, Warden, fill, occupancy
-from verity_network_timing.schedule import ClockSync, LogicalFrame, SyncSet, eligible, expected_grids
+from verity_network_warden import capacity
+from verity_network_warden.audit import Audit
+from verity_network_warden.grid import GridParams, Warden, fill, occupancy
+from verity_network_warden.schedule import ClockSync, LogicalFrame, SyncSet, eligible, expected_grids
 
 P = GridParams(buckets=3, allocation=2, frame_bytes=1)
 FRAMES = [LogicalFrame(b"a", 0, 0), LogicalFrame(b"b", 0, 1), LogicalFrame(b"c", 1, 0), LogicalFrame(b"d", 3, 0),

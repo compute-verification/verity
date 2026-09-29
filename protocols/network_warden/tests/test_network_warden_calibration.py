@@ -7,7 +7,7 @@ import random
 from contextlib import redirect_stdout
 from fractions import Fraction
 
-from verity_network_timing import calibration, capacity
+from verity_network_warden import calibration, capacity
 
 
 def synthetic_trace(seed=0, sessions=40, window_buckets=20, frames_per_session=6, gap=1, latency=(1, 4)):

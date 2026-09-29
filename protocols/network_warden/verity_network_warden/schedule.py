@@ -19,7 +19,7 @@ from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from fractions import Fraction
 
-from verity_network_timing.grid import Grid, GridParams, Record, Warden, fill, released
+from verity_network_warden.grid import Grid, GridParams, Record, Warden, fill, released
 
 
 @dataclass(frozen=True, slots=True, order=True)

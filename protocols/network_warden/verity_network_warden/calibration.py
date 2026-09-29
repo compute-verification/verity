@@ -35,8 +35,8 @@ from collections import defaultdict, deque
 from collections.abc import Sequence
 from fractions import Fraction
 
-from verity_network_timing import capacity
-from verity_network_timing.schedule import ClockSync, LogicalFrame, SyncSet, eligible
+from verity_network_warden import capacity
+from verity_network_warden.schedule import ClockSync, LogicalFrame, SyncSet, eligible
 
 SPANS_S = (60, 600, 3600, 86400)
 MAX_RHO_DENOMINATOR = 64
@@ -331,7 +331,7 @@ def calibrate(trace: dict, *, ingress_bucket_ms: int = 100, n_delta: int = 16, n
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(prog="network-timing-calibrate", description=__doc__.splitlines()[0])
+    ap = argparse.ArgumentParser(prog="network-warden-calibrate", description=__doc__.splitlines()[0])
     ap.add_argument("trace", help="honest timing trace (JSON)")
     ap.add_argument("--ingress-bucket-ms", type=int, default=100, help="the ingress bucket τ_in (decision D)")
     ap.add_argument("--deltas", type=int, default=16, help="offsets in Σ_sync")

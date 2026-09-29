@@ -7,8 +7,8 @@ import random
 
 import pytest
 
-from verity_network_timing import capacity
-from verity_network_timing.grid import (
+from verity_network_warden import capacity
+from verity_network_warden.grid import (
     COMPLETE, GridParams, Reason, Status, Warden, fill, left_packed, occupancy, released, row_left_packed,
 )
 

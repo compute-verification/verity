@@ -16,8 +16,8 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
-from verity_network_timing.grid import GridParams, Record
-from verity_network_timing.schedule import ClockSync, LogicalFrame, SyncSet, expected_grids
+from verity_network_warden.grid import GridParams, Record
+from verity_network_warden.schedule import ClockSync, LogicalFrame, SyncSet, expected_grids
 
 
 @dataclass(frozen=True, slots=True)

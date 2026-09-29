@@ -1,8 +1,8 @@
 """The verifier's exact check with record-and-reject, and an honest shaper that meets the logical schedule."""
 
-from verity_network_timing.audit import Audit
-from verity_network_timing.grid import GridParams, Reason, Warden
-from verity_network_timing.schedule import ClockSync, LogicalFrame, SyncSet, expected_grids, run_shaper
+from verity_network_warden.audit import Audit
+from verity_network_warden.grid import GridParams, Reason, Warden
+from verity_network_warden.schedule import ClockSync, LogicalFrame, SyncSet, expected_grids, run_shaper
 
 P = GridParams(buckets=4, allocation=2, frame_bytes=1)
 SYNC_SET = SyncSet((0, 1, 2), (1, 2))
