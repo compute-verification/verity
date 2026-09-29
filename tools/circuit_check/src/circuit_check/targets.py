@@ -52,6 +52,7 @@ def load_registries() -> None:
             importlib.import_module(f"{R.__name__}.{m.name}")
     from verity_vllm.program.kernels import rows, twins  # noqa: F401  (their kernels register with core)
     import verity_pouw.circuit.ncp2  # noqa: F401  (PoUW's ncp-v2 unit templates and primitives)
+    import verity_pouw.circuit.h1t  # noqa: F401  (PoUW's H-1T unit templates and primitives)
     REGISTERED[:] = sorted(i for i, d in REGISTRY.defs.items() if _authored(d))
     _LOADED = True
 
@@ -179,11 +180,15 @@ def templates() -> list[tuple[str, Any, list[dict]]]:
 
 def _pouw_roots() -> list[Any]:
     """PoUW's `ncp-v2` unit templates at k = 64, and the smallest whole call, its weight side and a window of two calls on
-    it (`verity_pouw.circuit.ncp2`); the package's own tests check their template partitions and the Z separator."""
+    it (`verity_pouw.circuit.ncp2`), and H-1T's templates at k = 96 with its smallest whole call (`verity_pouw.circuit.h1t`);
+    the package's own tests check their template partitions and the Z separator."""
     from verity_pouw.circuit import ncp2
 
+    from verity_pouw.circuit import h1t
+
     shape = ncp2.Shape(16, 64, 16)
-    return list(ncp2.templates(64, "shift24").values()) + [ncp2.linear(shape), ncp2.weight(shape), ncp2.window(shape, 2)]
+    return (list(ncp2.templates(64, "shift24").values()) + [ncp2.linear(shape), ncp2.weight(shape), ncp2.window(shape, 2)]
+            + list(h1t.templates(96).values()) + [h1t.linear(h1t.Shape(16, 96, 16))])
 
 
 def _core_roots() -> list[Any]:
