@@ -79,6 +79,7 @@ import FlockSoundness.ExecSetup
 import FlockSoundness.Types.Flat
 import FlockSoundness.Rope.Lowering
 import FlockSoundness.Types.Dag
+import FlockSoundness.Types.Parts
 import FlockSoundness.Types.Flatten
 import FlockSoundness.Compose
 import FlockSoundness.ComposeDag
