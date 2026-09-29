@@ -3,11 +3,14 @@
 The research coordinator names a train (`POST /api/trains`: PR numbers in order).  The service, with the `verity-merge-queue`
 App's token, merges each PR's head onto a new `train/{id}` branch through GitHub's Merges API and adds one `merge-check` job for
 the tip.  The reconcile cron (`reconcile(now)`, beside the expire-leases cron) lands a train whose check passed:
+  rebuild   when `main` is no longer an ancestor of the tip, the train is rebuilt on the new `main` from the same heads and
+            checked again (at most REBUILDS), before any gate: the gate's diff is main..tip, which GitHub's three-dot compare
+            gives only while `main` is an ancestor.
   gate      `research merge`'s gate, ported: the Attempt `attempts/{run id}.json` of the job's run in the evidence store is a
             `check` of exactly the tip, clean, done with rc 0, and every step `main`'s `merge_requires` asks for the change
             (main..tip, `rule_touches`) passed in its result.  The worker's report of "passed" is never the verdict.
-  land      `main` is moved to the tip with `force: false`, so GitHub itself refuses anything but a fast-forward.  When `main`
-            moved meanwhile, the train is rebuilt on the new `main` from the same heads and checked again (at most REBUILDS).
+  land      `main` is moved to the tip with `force: false`, so GitHub itself refuses anything but a fast-forward; a refusal (a
+            push in between) rebuilds the train too.
   sweep     then every open PR whose head is on `main` and whose base isn't `main` is closed with a comment naming the landing
             (GitHub marks those based on `main` merged itself), and every open PR based on a branch whose tip is on `main` is
             retargeted onto `main` (`research merge --sweep`'s rule).  This needs the App's Pull requests (write).
@@ -125,7 +128,7 @@ class Train:
     prs: list[dict]                 # [{"number", "head"}], in order
     base: str
     tip: str
-    job: int
+    job: int | None                 # None for a train that was refused before it was checked
     land: bool
     requirements: dict
     by: str
@@ -188,7 +191,7 @@ class TrainService(JobService):
         tip, conflict = self._build(tid, base, heads)
         if conflict is not None:
             self._event(now, "train.refused", f"train:{tid}", t.name, {"conflict": conflict})
-            self.trains[tid] = Train(tid, heads, base, base, 0, land, req, t.name, "refused", f"#{conflict} doesn't merge onto the train")
+            self.trains[tid] = Train(tid, heads, base, base, None, land, req, t.name, "refused", f"#{conflict} doesn't merge onto the train")
             raise Refused(409, f"#{conflict} doesn't merge onto the train so far")
         job = self._check(tid, tip, base, req, t, now)
         self.trains[tid] = tr = Train(tid, heads, base, tip, job, land, req, t.name)
@@ -237,6 +240,8 @@ class TrainService(JobService):
                 self._end(tr, "failed", f"the check of {tr.tip} failed (run {tr.run_id})", now)
             elif j.state != "done":
                 self._end(tr, "stuck", f"the check of {tr.tip} is {j.state}: no verdict", now)
+            elif not self.github.is_ancestor(self.github.refs["main"], tr.tip):
+                self._rebuild(tr, now)                  # main moved: the gate's diff would be against a main the tip lacks
             elif why := self.gate(tr):
                 self._end(tr, "stuck", why, now)
             elif not tr.land:
