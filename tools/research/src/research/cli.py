@@ -13,6 +13,8 @@
   research merge REF [--into main] [--tool check] [-m MSG] [--dry-run]   # the merge gate: `git merge --no-ff REF` only with a passing
                                                  # attempt of the tool for that exact commit in the store (research/merge.py)
   research merge --train A B C [--on MACHINE --project P]                # several refs as one candidate, one check, a fast-forward
+  research queue status|sync|land|eject [--shadow] [--dry-run]          # the merge queue: ready PRs on `next`, `main` fast-forwarded to
+                                                 # the newest commit on it with a passing check (research/queue.py)
   research pods check-part <machine|pod-id>      # reference-part gate: name, VRAM vs [families.<fam>] vram_mb, host CPU, load, verdict (exit 3 = variant)
   research pods create <runpod flags> [--require-reference-part] [--register --project P] [--allow-duplicate]   # at most one live pod per --name (exit 4 exists, 5 no stock, 2 failed), then the same verdict once sshd answers
   research pods register NAME --pod-id ID --project P | unregister NAME | registry [import]   # the pod registry: one file per machine (pods/registry.py)
@@ -829,6 +831,10 @@ def main(argv: list[str] | None = None) -> int:
         from .merge import main as merge_main
 
         return merge_main(rest)
+    if cmd == "queue":
+        from .queue import main as queue_main
+
+        return queue_main(rest)
     print(f"research: unknown command {cmd!r}\n\n{__doc__.strip()}", file=sys.stderr)
     return 2
 
