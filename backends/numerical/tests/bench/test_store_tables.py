@@ -129,6 +129,7 @@ def test_diff_tables_compares_label_by_class() -> None:
 
 
 @pytest.mark.skipif(not ledger.DIR.is_dir(), reason="campaign ledger not present")
+@pytest.mark.slow
 def test_campaign_ledger_round_trips_through_a_fresh_store(store: LocalStore) -> None:
     """No attempts at all: every row is a ledger-row artifact, the red-team verdicts land on those, and the like-for-like table
     rebuilt from the store matches decision_tables' ledger-built table row for row under the red-team policy -- and differs from it
@@ -143,6 +144,19 @@ def test_campaign_ledger_round_trips_through_a_fresh_store(store: LocalStore) ->
     ok2, _, diffs2 = ST.diff_tables(ST.render_like_for_like(store.index, None), theirs)
     overridden = sum(1 for r in DT.LIKE_FOR_LIKE if r.label_override)
     assert ok2 == n - overridden and len(diffs2) == overridden and all("[label]" in d for d in diffs2)
+
+
+@pytest.mark.skipif(not ledger.DIR.is_dir(), reason="campaign ledger not present")
+def test_every_label_the_ledger_import_writes_is_on_the_vocabulary() -> None:
+    """The frozen ledger and its red-team verdicts are the labels the repo records.  Every one passes `vocab.check` (no unknown key,
+    old spelling, string-typed bool / int or off-enum value), so a change to the vocabulary that would invalidate one fails here."""
+    from research.store import vocab
+
+    labels = [(k, v) for _, _, row in L2S._rows(ledger.DIR) for k, v in L2S.row_labels(row).items()]
+    labels += [kv for verdict in L2S.REDTEAM for kv in verdict["labels"]]
+    off = sorted({f"{k}={v!r}: {why}" for k, v in labels if (why := vocab.check(k, v))})
+    assert len(labels) > 1000 and not off, off
+    assert {v for k, v in labels if k == vocab.CANDIDATE} == {"A-GKR", "B-AIR", "B-Ligero", "C", "SP1", "shared"}
 
 
 def test_dry_run_writes_nothing(store: LocalStore, tmp_path: Path) -> None:

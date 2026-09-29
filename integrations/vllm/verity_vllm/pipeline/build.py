@@ -20,6 +20,7 @@ import time
 import traceback
 from dataclasses import dataclass
 
+from verity.ir.partition_object import program_sha512
 from verity_vllm.config import option
 from verity_vllm.engine import env as engine_env, hooks
 from verity_vllm.program.frontend.inputs_trace import InputsTrace
@@ -115,7 +116,7 @@ SAMPLERS_BOUND = {"greedy": "ArgmaxTokenSelect_v1 (aten.argmax over the bf16 log
                   # INPUT of the Program; temperature / top_p / pos are constants; S = SplitsFor_v1(|live(t)|, num_SMs) is a DERIVED input
                   # (`splits`, request-owned, one entry per sampling event; `sampler_geometry`), or the constant SplitsFor_v1(1, num_SMs)
                   # of a single-request workload -- the 6th operand, never a static.
-                  "stochastic": "GumbelTopPTokenSelect[vllm]_v2 (vllm_iface.gumbel_topp_token_select -> GumbelTopPTokenSelect_v1{V}; seed + derived S Program inputs, or seed input + constant S of a single-request workload)"}
+                  "stochastic": "GumbelTopPTokenSelect[vllm]_v3 (vllm_iface.gumbel_topp_token_select -> GumbelTopPTokenSelect_v1{V} with seed + derived S Program inputs, or GumbelTopPTokenSelect_v2{V,S} with the seed input and the constant S of a single-request workload: its keep word as word gates)"}
 
 
 def declared_live_counts(reqs: list[dict]) -> list[int]:
@@ -517,7 +518,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             with gzip.open(os.path.join(out, "descriptor.json.gz"), "wb") as f:
                 f.write(raw)
             corr_doc = (desc.get("annotations") or {}).get(CORR_NS) or {}
-            res["program"] = {"function": program.fn.id, "digest": digest, "gates": program.gates, "input_gates": program.input_gates,
+            res["program"] = {"function": program.fn.id, "digest": digest, "sha512": program_sha512(desc), "gates": program.gates, "input_gates": program.input_gates,
                               "n_root_nodes": len(program.fn.body.nodes), "descriptor_bytes": descriptor_size(desc),
                               "descriptor_sha256": hashlib.sha256(raw).hexdigest(), "dead_gates": rep.dead.total if rep.dead else None,
                               "correspondence_digest": corr_digest,

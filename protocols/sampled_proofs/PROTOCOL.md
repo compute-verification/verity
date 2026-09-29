@@ -16,9 +16,8 @@ Spot-checks a committed transcript of a Verity Program, and says what an accepte
 6. An accepted audit emits a `verity.proofs.profile.IntegrityProfile` per RU class (`TwoStageLaw.profile`). It
    holds the exhaustively checked facts: the evaluated Programs, the prescribed families, linkage, and the families
    covered on every audit (`VerificationPlan.covered`). Its law is one level, `replay` (the `n_r` RUs), drawn
-   `Bernoulli(p * k / n_v)`, with the count drawn and `delta`; it counts wrong RUs (see "The law"). Resource
-   accounting, policies and PoUW each read what they need off it, passing their own utility to `worst_case` (work in VUs
-   charges `n_v` per wrong RU). The application counts `delta` once.
+   `Bernoulli(p * k / n_v)`, with the count drawn and `delta`; it counts wrong RUs (see "The law"), and weights
+   nothing.
 
 ## Randomness
 
@@ -41,6 +40,13 @@ at most `1 - p * k / n_v`, independently across RUs, and the profile is over the
 `n_v` (`TwoStageLaw.profile` takes the class's RUs and uses their maximum). The rate also rests on the VU draw being made by
 the verifier from its own randomness after the interiors are committed (pitfall 4). `tests/test_law.py` checks the sampler against the per-RU formula and
 reproduces the attack the old two-level profile missed (§2.9's `TOY`: 64 skipped VUs pass with probability 0.01).
+
+## Consumers
+
+Applications derive their guarantees from the profile, each weighting a wrong RU by what it costs the application, and
+each counts `delta` once. Compute security charges a wrong RU its class's `n_v` VUs, the most work it can hold:
+`verity_one_stage.consumers.compute_bound(profile, n_v)`, the profile's weighted bound `harm_bound(n_v)`. Policies and
+PoUW pass their own utility to `worst_case`.
 
 ## Boundaries
 
