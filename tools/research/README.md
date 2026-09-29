@@ -78,6 +78,7 @@ research pods sync TARGET [SRC] [--dest DIR] [--exclude G]...     # the worktree
 research tele SUBCOMMAND ...             # the harness's own surface
 research data SUBCOMMAND ...             # the evidence store (below)
 research merge REF [--into main] [--tool check] [-m MSG] [--dry-run]   # the merge gate (merge.py)
+research merge --train A B C [--on MACHINE --project P] [--command CMD]  # several refs, one checked candidate
 ~~~
 
 `research merge` is how `main` receives a merge: in the target's checkout it runs `git merge --no-ff REF` only when the store
@@ -85,6 +86,18 @@ research merge REF [--into main] [--tool check] [-m MSG] [--dry-run]   # the mer
 and a clean source at REF's exact commit, and when the target's tip is an ancestor of REF, so the merged tree is the checked one.
 The merge commit carries a `Check: <attempt id>` trailer. The tool is the repository's (`tools/check`); `research` only reads
 its attempts.
+
+`research merge --train A B C` merges the refs in order onto the target's tip in a scratch worktree (one `--no-ff` merge each,
+so the chain's commits are the train's prefixes), records the tool on the last (`research run --tool`, `--on` a machine and
+polled there), and fast-forwards the target to it when it passes: the exact tree checked is the one that lands. When it fails,
+the prefixes are bisected (each checked the same way) to the first ref whose merge breaks it, and the target fast-forwards to
+the longest prefix that passed.
+
+A tool's declaration may name result steps a merge needs by path (`Tool.merge_requires`, `{step: [path prefixes]}`, read from
+the target's checkout): when the merge's diff touches a prefix, only an attempt whose `result.json` `steps` show that step
+`passed` admits it; `!` patterns leave paths out (`!README.md`: every file of that name under the prefixes). `check` requires
+`lean-agreement` for `backends/flock/`, less its README.md and PROTOCOL.md files; `--train --send FILE` ships what such a step
+needs.
 
 The workload receives `RESEARCH_RUN_ID` and `RESEARCH_RUN_DIR` and may write
 `$RESEARCH_RUN_DIR/result.json` (see `result.py` for the envelope). A local
@@ -285,10 +298,21 @@ called PRESERVED without a remote; nothing in the store is ever overwritten.
 - `research data lookup --tool T [--param k=v]... [--condition k=v]...
   [--source-tree SHA | --any-source] [-- ARGV...]` answers "have we done this?"
 
+### Notes stamped ahead of the clock
+
+`research notes sync` (`notes_sync.py`; `checkpoint`, `bind` and `relaunch` run it with `RESEARCH_NOTES_SYNC=1`) leaves out any
+lane note it would add or change whose filename stamp (a new path) or front matter `created:` (a new value) is more than 5 minutes
+ahead of the clock, syncs the rest, and exits 5. Each note left out gets one line, from the steward's watch pass too, every
+pass until the note is renamed or the clock passes its stamp:
+
+~~~text
+SYNC-REFUSED lanes/x/20260928T0700Z-report-x.md: stamp 20260928T0700Z is 18 min ahead; use 20260928T0642Z (date -u +%Y%m%dT%H%MZ)
+~~~
+
 ### The steward off the laptop
 
 `research notes watch` is the steward: liveness, reaping, deadlines,
-budgets and the daily render (`notes.py`). Three flags let it run on any
+budgets, the daily render and scheduled runs (`notes.py`). Three flags let it run on any
 always-on host (`steward.py`):
 
 - `--liveness git` (or `RESEARCH_LIVENESS=git`): a notes file's time is
@@ -303,6 +327,27 @@ always-on host (`steward.py`):
   read-only and takes over when the lease frees.
 - `research notes service systemd|launchd` prints the service definition
   (restart on exit and after a reboot; `watch --lease --standby`).
+
+Its schedule is `<notes root>/steward.toml`, re-read every pass: `[[render]]` entries (the tables render, `render_lines`) and
+`[[run]]` entries, each a recorded run launched on a machine once a UTC day at or after `at`, or once an ISO week with
+`weekday` (`run_lines`):
+
+~~~toml
+[[run]]
+name = "lean-upstream"                       # its lines' name, and the key of its state
+at = "10:30Z"
+weekday = "mon"                              # weekly; daily without it
+source = "/workspace/steward/verity"         # the tree it is launched from: its cwd, and its workspace on PYTHONPATH
+args = ["--on", "vy-lean-small", "--project", "verity", "--source", ".", "--cwd", "source", "--tool", "lean_upstream", "--",
+        "python", "tools/lean/upstream.py", "backends/flock/verifier/lean/soundness", "--fetch", "--rev", "origin/main"]
+~~~
+
+`args` are `research run`'s and must put the run on a machine (`--on`). The steward runs `research run --id <run id> <args>`,
+which returns once the machine has started the workload detached, so a pass waits for the launch (at most 10 minutes), never
+for the run. It prints `LAUNCHED <name> <run id> on <machine>`, or `RUN-FAILED <name> <run id>: <why>`, and the next launch is
+the next period's; an invalid entry is one `RUN-FAILED <name>: <why>` line. The run's Attempt records what ran and how it
+ended (`research inspect <run id>`). The Lean runs it schedules are declared in `tools/lean/tool.py`: `lean_audit`
+(`audit.py --all --build --fresh`, nightly on `main`) and `lean_upstream` (the entry above, weekly).
 
 ## Not yet built, in order
 

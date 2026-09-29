@@ -25,16 +25,17 @@ from verity.ir.defs import bind
 from verity_vllm.program.registry import moe_pad as MP
 
 PADDED = OV.with_moe_construction(OV.PROFILE, "padded")
+KERNEL_ORDER = OV.with_moe_construction(OV.PROFILE, "indexed-read")
 FIXED_ID = f"MoeFfnFixedL_v1{{E={E},TOPK={TOPK},VPT=8,H={H},I={I}}}"
 
 
-def _resolve_padded(M: int, **kw):
+def _resolve_padded(M: int, profile=PADDED, **kw):
     start_kw = {k: kw.pop(k) for k in ("padded",) if k in kw}
     evs = moe_scope_events(M, **kw)
     start = _start(M, **start_kw)
     se = step_events([start, *evs])
     c = _ctx(start)
-    ctx = StepContext(c.header, c.start, c.sample, c.links, c.roots, c.config, PADDED)     # the same facts, the PADDED profile
+    ctx = StepContext(c.header, c.start, c.sample, c.links, c.roots, c.config, profile)    # the same facts, the PADDED profile
     return resolve_step(se, ctx), se
 
 
@@ -91,14 +92,13 @@ def test_padded_scope_declines_exactly_as_the_pairwise_reading(kw, needle):
     res, _ = _resolve_padded(3, **kw)
     assert len(res) == 1 and isinstance(res[0], Unsupported), res
     assert needle in res[0].reason, res[0].reason
-    from tests.engine.test_gen_ov_moe import _resolve
-    pair, _ = _resolve(3, **kw)
-    assert pair[0].reason == res[0].reason                                                                  # the same refusal, verbatim
+    pair, _ = _resolve_padded(3, profile=KERNEL_ORDER, **kw)
+    assert pair[0].reason == res[0].reason                                              # the same refusal as the kernel-order router's, verbatim
 
 
 def test_the_construction_is_declared_and_selected_by_name_never_inferred(tmp_path):
-    # the profile hook: undeclared / indexed-read = the profile as is; padded swaps the scope pattern and nothing else
-    assert OV.with_moe_construction(OV.PROFILE, None) is OV.PROFILE and OV.with_moe_construction(OV.PROFILE, "indexed-read") is OV.PROFILE
+    # the profile hook: undeclared / the default = the profile as is; padded swaps the scope pattern and nothing else
+    assert OV.with_moe_construction(OV.PROFILE, None) is OV.PROFILE and OV.with_moe_construction(OV.PROFILE, "indexed-read-ordered") is OV.PROFILE
     assert isinstance(OV.PROFILE.patterns[1], MoEFusedExperts) and not isinstance(OV.PROFILE.patterns[1], MoEFusedExpertsPadded)
     assert isinstance(PADDED.patterns[1], MoEFusedExpertsPadded) and PADDED.patterns[1].name == "moe.fused_experts.padded"
     assert [type(p).__name__ for p in PADDED.patterns[2:]] == [type(p).__name__ for p in OV.PROFILE.patterns[2:]]

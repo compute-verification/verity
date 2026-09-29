@@ -264,7 +264,7 @@ def _canonical_sets(P, sc) -> list[Part]:
         sets += _zip_sets(sc, muls + cvts)
         covered |= set(muls + cvts)
     elif sid.startswith("AttnBlock_v"):
-        pv = FX.find_nodes(sc, form="batch", callee="BF16TcDot16_v1") or FX.find_nodes(sc, form="batch", callee="WgmmaDot16_v1")
+        pv = FX.find_nodes(sc, form="batch", callee="BF16TcDot16_v2") or FX.find_nodes(sc, form="batch", callee="WgmmaDot16_v1")
         assert pv, "the PV k-step batches"
         sets += _zip_sets(sc, pv)
         dots = FX.find_nodes(sc, form="call", callee="DotBf16_v")
@@ -300,6 +300,7 @@ def _canonical_sets(P, sc) -> list[Part]:
 
 
 @pytest.mark.parametrize("name", FX.VLLM_FAMILY_FIXTURES)
+@pytest.mark.slow
 def test_canonical_shapes_by_oracle(name):
     P = FX.fixture(name)
     sets = _canonical_sets(P, FX.root_scope(P))
@@ -340,7 +341,7 @@ def test_canonical_attention_pv_chain_is_32_bits(name):
     n_ksteps = set()
     for jb in blocks:
         sb = FX.child_scope(sc, jb)
-        pv = FX.find_nodes(sb, form="batch", callee="BF16TcDot16_v1")
+        pv = FX.find_nodes(sb, form="batch", callee="BF16TcDot16_v2")
         n_ksteps.add(len(pv))
         for s in _zip_sets(sb, pv):
             assert FX.oracle_w_out(P, s) == 32

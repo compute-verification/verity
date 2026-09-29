@@ -45,6 +45,7 @@ CORRESPOND = [  # the zero-row / initial-state broadcasts: TA1 writes `Concat`/`
 
 
 @pytest.mark.parametrize("label,front,ta1,statics", EQUAL, ids=[e[0] for e in EQUAL])
+@pytest.mark.slow
 def test_authored_digest_equals_ta1(label, front, ta1, statics):
     rep = export_report(front, static=statics, dead_gates="ignore")
     P_t = Program(bind(ta1, **statics))
