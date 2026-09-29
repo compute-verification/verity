@@ -577,30 +577,34 @@ def _draw_key():
 
 def test_equal_calls_under_one_key_draw_different_tiles():
     """X-SPC-96 on FP8: each stratum's subset is keyed by the call's index, the matmul index, with its template, so two
-    equal calls under one key draw different tiles, and `Traced.draw` draws over the verifier's own layout."""
+    equal calls under one key draw different tiles, and `Traced.draw` draws over the verifier's own layout. It admits each
+    call to the window's `Ledger` first, so a repeated matmul index is refused before it draws (M1)."""
     from verity_pouw.circuit import plan as PL
-    from verity_pouw.circuit.anchors import Fp8Anchors
+    from verity_pouw.circuit.anchors import Fp8Anchors, Ledger
 
     c = call(64, 96, 64, index=3)
-    t, law = _traced(c), PL.WorkLaw(4)
+    t, law, window = _traced(c), PL.WorkLaw(4), Ledger()
     lay = t.layout()
 
-    def tiles(index):
-        plan = t.draw(_draw_key(), law, Fp8Anchors(c.shape, c.salt, index, c.weight, c.sums))
+    def tiles(index, ledger):
+        plan = t.draw(_draw_key(), law, Fp8Anchors(c.shape, c.salt, index, c.weight, c.sums), ledger)
         return [u for u in plan.drawn if lay.units[u].role == "tile"]
 
-    assert tiles(3) == tiles(3) and all(tiles(i) != tiles(3) for i in (4, 5, 6))
+    first = tiles(3, window)
+    assert first == tiles(3, Ledger()) and all(tiles(i, window) != first for i in (4, 5, 6))
+    with pytest.raises(DomainError, match="repeated"):
+        tiles(3, window)
 
 
 def test_the_call_s_h_and_amplitudes_are_linked_to_the_weight_program():
     """X-SPC-101: the plan opens the call's h and amplitudes at each drawn tile's column strip beside the weight Program's
     outputs there (`Traced.check_link`). Another weight's h and amplitudes, or one amplitude changed, are refused."""
     from verity_pouw.circuit import plan as PL
-    from verity_pouw.circuit.anchors import Fp8Anchors
+    from verity_pouw.circuit.anchors import Fp8Anchors, Ledger
 
     c = call(16, 96, 32)
     t = _traced(c)
-    plan = t.draw(_draw_key(), PL.WorkLaw(1), Fp8Anchors(c.shape, c.salt, c.index, c.weight, c.sums))
+    plan = t.draw(_draw_key(), PL.WorkLaw(1), Fp8Anchors(c.shape, c.salt, c.index, c.weight, c.sums), Ledger())
     assert {cs for role, cs in plan.openings if role == "y"} == set(plan.proved_y) != set()
     weight_out = list(evaluate(fp8.weight(c.shape, c.sums), *c.weight_args()))
     args = c.args()
