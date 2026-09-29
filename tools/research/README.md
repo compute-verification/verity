@@ -224,6 +224,11 @@ read keeps the last value, and `--detach` runs it under a supervisor that
 restarts it after a crash (`budget_cap.py start` the same). Provisioning is a separate,
 explicit act; `--on` never creates a pod.
 
+The disk floor: `research run` and `research fetch --all` refuse (exit 3) while the runs root's filesystem has less than
+`$RESEARCH_DISK_FLOOR_GB` free (default 1.5; `0` turns it off), naming the eviction that frees it. `research data custody RUN
+--publish` removes the run's files of 1 MiB and more once custody holds (`--keep-local` keeps them); `run-files.evicted.json`
+names the fetch that restores them.
+
 ### research data
 
 `src/research/store/` is the evidence store; its `README.md` is the contract
