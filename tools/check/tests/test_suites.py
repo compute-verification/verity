@@ -351,7 +351,51 @@ def test_a_fresh_run_that_fails_what_a_kept_pass_answers_for_says_so(tmp_path):
     out = tmp_path / "suites.json"                   # PKG_BREAK: an input no key covers (a variable outside VERITY_ and FLOCK_)
     p = _run_suite(root, tmp_path, "--fresh", "--json", str(out), extra={"PKG_BREAK": "1"})
     assert p.returncode == 1 and "CONTRADICTS a cached pass: (the suite), tests/test_sibling.py::test_sibling" in p.stdout, p.stdout
-    assert json.loads(out.read_text())[0]["contradicts"] == ["(the suite)", "tests/test_sibling.py::test_sibling"]
+    doc = json.loads(out.read_text())[0]
+    assert doc["contradicts"] == ["(the suite)", "tests/test_sibling.py::test_sibling"]
+    assert doc["nondeterministic"] == ["tests/test_sibling.py::test_sibling"] and "NONDETERMINISTIC: tests/test_sibling.py" in p.stdout
+    (tests / "test_shared.py").write_text("X = 1\n\n\ndef test_shared():\n    pass\n")      # the suite's key moves; the flaky test re-runs
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 0 and "tests/test_sibling.py::test_sibling" not in _reused(tmp_path), p.stdout
+
+
+def test_a_suite_that_is_not_parallel_records_outcomes_but_reuses_none(tmp_path):
+    root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
+    _per_test_workspace(root)
+    pyproject = root / "pkg" / "pyproject.toml"
+    pyproject.write_text(pyproject.read_text().replace("parallel = true", "parallel = false"))
+    (tests / "test_sibling.py").write_text("import os\n\ndef test_sibling():\n    assert not os.environ.get('PKG_BREAK')\n")
+    assert _run_suite(root, tmp_path).returncode == 0
+    (tests / "test_shared.py").write_text("X = 1\n\n\ndef test_shared():\n    pass\n")
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 0 and _reused(tmp_path) == [] and "5 passed in" in p.stdout, p.stdout
+    p = _run_suite(root, tmp_path, "--fresh", extra={"PKG_BREAK": "1"})
+    assert p.returncode == 1 and "NONDETERMINISTIC: tests/test_sibling.py::test_sibling" in p.stdout, p.stdout
+
+
+def test_explain_names_what_a_miss_changed(tmp_path):
+    """Against the nearest kept pass: the input that moved and its files (git's trees), and per test module what it reaches."""
+    root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
+    _per_test_workspace(root)
+    (tests / "test_sibling.py").write_text("def test_sibling():\n    assert True\n")
+    g = ["git", "-C", str(root), "-c", "user.name=t", "-c", "user.email=t@t"]
+    subprocess.run([*g, "init", "-q"], check=True)
+    subprocess.run([*g, "add", "-A"], check=True)
+    subprocess.run([*g, "commit", "-qm", "tree"], check=True)
+    assert _run_suite(root, tmp_path).returncode == 0
+    p = _run_suite(root, tmp_path, "--explain", "pkg")
+    assert p.returncode == 0 and "pkg: cached: a pass under this key" in p.stdout, p.stdout
+    (tests / "helpers.py").write_text("VALUE = 1  # moved\n")
+    p = _run_suite(root, tmp_path, "--explain", "pkg")
+    assert "pkg: missed; the nearest pass kept here" in p.stdout and "input pkg changed" in p.stdout, p.stdout
+    assert "pkg/tests/helpers.py" in p.stdout.split("input pkg changed")[1].split("\n")[0], p.stdout
+    assert "per-test: 0 tests of 0 of 4 test modules would be reused" in p.stdout
+    assert "pkg/tests/test_heavy.py: it reaches pkg/tests/helpers.py, which changed" in p.stdout, p.stdout
+    (tests / "helpers.py").write_text("VALUE = 1\n")
+    (tests / "test_shared.py").write_text("X = 1\n\n\ndef test_shared():\n    pass\n")
+    p = _run_suite(root, tmp_path, "--explain", "pkg")
+    assert "per-test: 3 tests of 2 of 4 test modules would be reused" in p.stdout, p.stdout
+    assert "pkg/tests/test_uses.py: it reaches pkg/tests/test_shared.py, which changed" in p.stdout, p.stdout
 
 
 def test_an_interrupted_run_keeps_what_finished(tmp_path):

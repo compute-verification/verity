@@ -40,6 +40,9 @@ the suite's key less the sibling test modules it can't reach (by import, or by n
 module re-runs that module and whatever reaches it, and counts the rest as `reused`. So a test depends on another test module
 only by importing or naming it, never through what that module does at import (a top-level call puts it in every key). `--fresh`
 reuses nothing; the nightly `audit-main` job runs `check.py --no-cache` on `main` and names any cached pass it contradicts.
+`uv run tools/check/suites.py --explain SUITE` says why a suite would run (the input, dependency or variable that moved since the
+nearest pass), and `lean_audit.py --explain PKG` the same for a Lean package. A test that passed and failed under one key is
+reported `nondeterministic`.
 
 ## Where a test goes
 

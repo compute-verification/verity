@@ -40,6 +40,12 @@ keeps only passes that took at least that long; `--no-per-test` turns it off; `-
 that a cached pass (the suite's or a test's) answers for: the nightly cold check's signal that a key misses an input
 (`check.py --no-cache`, the nightly `audit-main` job). A stop mid-run (SIGINT) still keeps the passes of runs that finished.
 
+Every suite, parallel or not, records each test's outcome under its module's key (a suite that isn't parallel keys every module on
+all its files, and reuses nothing): a test that both passed and failed under one key is `nondeterministic`, since its inputs were
+identical, and is never reused. Each pass keeps its key's components beside it (`components`: every input's object id, the build
+outputs, the resolved dependencies, the environment, the pytest arguments), and `--explain SUITE` diffs a miss against the nearest
+pass kept here, naming a changed directory's files from git's trees, and says per test module what it reaches that moved.
+
 `--jobs` is how many test processes run at once. A suite that declares `[tool.verity.tests] parallel = true` spreads its tests
 over all of them with pytest-xdist, whose workers load the guard too. Parallel suites run first, one at a time, then the
 others side by side, longest first. Without pytest-xdist installed, a parallel suite runs in one process.
@@ -368,10 +374,19 @@ def fetch_fixtures(fixtures: dict[str, str], logs: Path) -> set[str]:
     return bad
 
 
+def _digest(doc) -> str:
+    return hashlib.sha256(json.dumps(doc, sort_keys=True).encode()).hexdigest()
+
+
+def components(suite: Suite, ids: dict[str, str], env: dict, args: list[str], deps: dict[str, list] | None = None) -> dict:
+    """What a suite's key hashes: each input's object id, the build outputs, the resolved dependencies, the environment and the
+    pytest arguments. A pass keeps them beside it, so `--explain` can say what a miss changed."""
+    return {"suite": suite.path, "inputs": ids, "artifacts": artifact_ids(suite), "resolved": deps or {}, "environment": env,
+            "pytest": args}
+
+
 def key(suite: Suite, ids: dict[str, str], env: dict, args: list[str], deps: dict[str, list] | None = None) -> str:
-    blob = json.dumps({"suite": suite.path, "inputs": ids, "artifacts": artifact_ids(suite), "resolved": deps or {},
-                       "environment": env, "pytest": args}, sort_keys=True)
-    return hashlib.sha256(blob.encode()).hexdigest()
+    return _digest(components(suite, ids, env, args, deps))
 
 
 def cached(k: str) -> dict | None:
@@ -555,16 +570,24 @@ class PerTest:
         self.suite, self.tree, self.files = suite, tree, files
         self.dir = CACHE / PER_TEST / (suite.path.replace("/", "_") if suite.path != "." else "repository")
         self.own = own_ids(tree, suite.path, files)
+        self.narrow = suite.parallel             # a suite that doesn't declare order independence keys each module on everything
         texts = {}
-        for f in self.own:
+        for f in self.own if self.narrow else ():
             if f.endswith(".py"):
                 try:
                     texts[f] = (ROOT / f).read_text(encoding="utf-8")
                 except (OSError, UnicodeDecodeError):
                     texts[f] = ""          # scans as nothing reachable, and is kept in every key when it is a test module
         self.mods = Modules(suite, texts)
-        self.keeps = {m: self.mods.reach(m) for m in self.mods.modules()}
+        if self.narrow:
+            self.keeps = {m: self.mods.reach(m) for m in self.mods.modules()}
+        else:
+            self.keeps = {m: None for m in sorted(f for f in self.own if f.endswith(".py") and self.mods.narrowable(f))}
         self.keys = {m: [module_key(suite, m, keep, self.mods, ids, self.own, env, a, deps) for a in arg_sets] for m, keep in self.keeps.items()}
+        self.components = {"suite_tree": ids.get(suite.path), "outside": {p: i for p, i in ids.items() if p != suite.path},
+                           "artifacts": artifact_ids(suite), "environment": _digest(env), "resolved": _digest(deps or {}),
+                           "pytest": arg_sets[0]}
+        self.nondeterministic: list[str] = []
 
     def _entry(self, module: str, k: str) -> Path:
         return self.dir / f"{module.replace('/', '~')}--{k}.json"
@@ -581,22 +604,27 @@ class PerTest:
                 if p.exists():
                     e = json.loads(p.read_text())
                     if self._holds(e, lock, provided):
-                        out.update(dict.fromkeys(e["passed"], p.name))
+                        out.update(dict.fromkeys((n for n in e["passed"] if n not in e.get("failed", {})), p.name))
         return out
 
     def keep(self, r: "Result", head: str, used_now: dict, min_s: float) -> int:
-        """Keep the passes of a run the guard vouches for (a report, no read outside the inputs, every worker's record), each under
-        its module's key, beside those kept before under the same key and reads; the number kept."""
-        if not r.reported or r.outside or r.unguarded or not r.passed:
+        """Record the outcomes of a run the guard vouches for (a report, no read outside the inputs, every worker's record), each
+        under its module's key, beside those recorded before under the same key and reads: every failure, and every pass of at
+        least ``min_s`` seconds. A test with both under one key is `nondeterministic`: its inputs were identical. The number of
+        passes kept."""
+        if not r.reported or r.outside or r.unguarded or not (r.passed or r.failed_tests):
             return 0
         base = "" if self.suite.path == "." else self.suite.path + "/"
-        by_module: dict[str, dict[str, float]] = {}
-        for node, s in r.passed.items():
+        when = time.strftime("%Y-%m-%d %H:%M")
+        by_module: dict[str, tuple[dict, dict]] = {}
+        for node, s in (r.passed or {}).items():
             if s >= min_s:
-                by_module.setdefault(base + node.split("::", 1)[0], {})[node] = s
+                by_module.setdefault(base + node.split("::", 1)[0], ({}, {}))[0][node] = s
+        for node in r.failed_tests or []:
+            by_module.setdefault(base + node.split("::", 1)[0], ({}, {}))[1][node] = when
         self.dir.mkdir(parents=True, exist_ok=True)
         n = 0
-        for m, passed in sorted(by_module.items()):
+        for m, (passed, failed) in sorted(by_module.items()):
             if m not in self.keys:
                 continue
             keep = self.keeps[m]
@@ -604,14 +632,17 @@ class PerTest:
                      if keep is not None and f not in keep and self.mods.narrowable(f)}
             p = self._entry(m, self.keys[m][0])
             old = json.loads(p.read_text()) if p.exists() else {}
+            n += len(passed)
             if old.get("reads", {}) == reads or not old:
-                passed = {**old.get("passed", {}), **passed}
-            doc = {"suite": self.suite.path, "module": m, "key": self.keys[m][0], "commit": head, "when": time.strftime("%Y-%m-%d %H:%M"),
-                   "passed": dict(sorted(passed.items())), "reads": reads, "narrowed": keep is not None, **used_now}
+                passed, failed = {**old.get("passed", {}), **passed}, {**old.get("failed", {}), **failed}
+            self.nondeterministic += sorted(set(passed) & set(failed))
+            doc = {"suite": self.suite.path, "module": m, "key": self.keys[m][0], "commit": head, "when": when,
+                   "passed": dict(sorted(passed.items())), "failed": dict(sorted(failed.items())), "reads": reads,
+                   "narrowed": keep is not None, "components": {**self.components, "keep": sorted(keep) if keep is not None else None},
+                   **used_now}
             tmp = p.with_name(f".{p.name}.tmp")
             tmp.write_text(json.dumps(doc, indent=1) + "\n")
             os.replace(tmp, p)
-            n += len(passed)
             prefix = f"{m.replace('/', '~')}--"
             older = sorted((q for q in self.dir.iterdir() if q.name.startswith(prefix) and q.suffix == ".json"),
                            key=lambda q: q.stat().st_mtime, reverse=True)[KEEP_PER_MODULE:]
@@ -619,11 +650,127 @@ class PerTest:
                 q.unlink(missing_ok=True)
         return n
 
+    def explain(self, lock: dict[str, dict], provided: set[str]) -> list[str]:
+        """Which modules' kept passes a run would reuse now, and for each other module what moved since its newest entry."""
+        reusable = self.reusable(lock, provided)
+        mods = {n.split("::", 1)[0] for n in reusable}
+        base = "" if self.suite.path == "." else self.suite.path + "/"
+        out = [f"per-test: {len(reusable)} tests of {len(mods)} of {len(self.keys)} test modules would be reused"
+               + ("" if self.narrow else " (none: the suite doesn't declare parallel = true, so outcomes are recorded, not reused)")]
+        for m in sorted(self.keys):
+            if m[len(base):] in mods or not self.narrow:
+                continue
+            prefix = f"{m.replace('/', '~')}--"
+            entries = sorted((q for q in self.dir.glob(f"{prefix}*.json")), key=lambda q: q.stat().st_mtime, reverse=True) if self.dir.is_dir() else []
+            if not entries:
+                out.append(f"  {m}: nothing kept")
+                continue
+            e = json.loads(entries[0].read_text())
+            out.append(f"  {m}: " + "; ".join(self._moved(m, e, lock, provided)))
+        return out
+
+    def _moved(self, m: str, e: dict, lock: dict[str, dict], provided: set[str]) -> list[str]:
+        was, now = e.get("components") or {}, {**self.components, "keep": sorted(self.keeps[m]) if self.keeps[m] is not None else None}
+        if not was:
+            return ["its entry predates recorded components"]
+        why = [f"input {p} changed" for p in sorted(set(was.get("outside", {})) | set(now["outside"]))
+               if was.get("outside", {}).get(p) != now["outside"].get(p)]
+        why += [f"{k} changed" for k in ("artifacts", "environment", "resolved", "pytest") if was.get(k) != now[k]]
+        if (was.get("keep") is None) != (now["keep"] is None):
+            why.append("narrowing " + ("is now off: it reaches a computed import" if now["keep"] is None else "is now on"))
+        if was.get("suite_tree") != now["suite_tree"]:
+            kept = set(now["keep"] or ())
+            files = _changed_files(was.get("suite_tree"), now["suite_tree"])
+            if files is not None and self.suite.path != ".":
+                files = [f"{self.suite.path}/{f}" for f in files]      # the subtree's own paths, as the root's
+            if files is None:
+                why.append(f"a file under {self.suite.path} changed (its old tree isn't here to list which)")
+            else:
+                hit = [f for f in files if now["keep"] is None or f in kept or not self.mods.narrowable(f)]
+                why += [f"it reaches {f}, which changed" for f in hit[:5]] + ([f"and {len(hit) - 5} more"] if len(hit) > 5 else [])
+        if not self._holds(e, lock, provided) and not why:
+            why.append("what its tests read beside the key moved (a test module they opened, or a metadata file or distribution)")
+        return why or ["nothing its key reads moved; its entry holds no pass it could reuse (only failures, or a nondeterministic test)"]
+
     def contradicted(self, r: "Result", lock: dict[str, dict], provided: set[str]) -> list[str]:
         """The tests a fresh run failed that a kept pass, still valid by its key and reads, says passed: a key that misses an input,
         or a test whose outcome isn't a function of its inputs."""
         kept = self.reusable(lock, provided)
         return sorted(n for n in (r.failed_tests or []) if n in kept)
+
+
+def _changed_files(old: str | None, new: str | None) -> list[str] | None:
+    """The files that differ between two of git's tree objects (root-relative paths are not needed: the caller's are the tree's
+    own), None when either isn't a tree in this repository (a shipped tree's ids are digests, not git's)."""
+    if not (GIT and old and new) or old == new:
+        return [] if old == new else None
+    r = subprocess.run(["git", "diff-tree", "-r", "--name-only", old, new], cwd=ROOT, capture_output=True, text=True)
+    return r.stdout.split() if r.returncode == 0 else None
+
+
+def explain_changes(was: dict, now: dict) -> list[str]:
+    """What differs between two suites' key components (`components`), one line each, a changed directory with its files."""
+    out = []
+    wi, ni = was.get("inputs", {}), now["inputs"]
+    for p in sorted(set(wi) | set(ni)):
+        if p not in wi:
+            out.append(f"input {p}: new ({ni[p][:12]})")
+        elif p not in ni:
+            out.append(f"input {p}: no longer an input")
+        elif wi[p] != ni[p]:
+            files = _changed_files(wi[p], ni[p])
+            where = "" if files is None else f": {', '.join(f'{p.rstrip(chr(47))}/{f}' if p != '.' else f for f in files[:8])}" + \
+                (f" and {len(files) - 8} more" if len(files) > 8 else "")
+            out.append(f"input {p} changed ({wi[p][:12]} -> {ni[p][:12]}){where}")
+    for k in sorted(set(was.get("artifacts", {})) | set(now["artifacts"])):
+        if was.get("artifacts", {}).get(k) != now["artifacts"].get(k):
+            out.append(f"build output {k}: {was.get('artifacts', {}).get(k, 'absent')} -> {now['artifacts'].get(k, 'absent')}")
+    wr, nr = was.get("resolved", {}), now["resolved"]
+    for d in sorted(set(wr) | set(nr)):
+        if wr.get(d) != nr.get(d):
+            a, b = wr.get(d) or [None, None], nr.get(d) or [None, None]
+            out.append(f"dependency {d}: " + (f"{a[1]} -> {b[1]}" if a[1] != b[1] else "its uv.lock entry changed"))
+    we, ne = was.get("environment", {}), now["environment"]
+    for k in ("python", "system", "machine"):
+        if we.get(k) != ne.get(k):
+            out.append(f"{k}: {we.get(k)} -> {ne.get(k)}")
+    for t in sorted(set(we.get("tools", {})) | set(ne.get("tools", {}))):
+        if we.get("tools", {}).get(t) != ne.get("tools", {}).get(t):
+            out.append(f"tool {t}: {'on the PATH' if we.get('tools', {}).get(t) else 'absent'} -> {'on the PATH' if ne.get('tools', {}).get(t) else 'absent'}")
+    wv, nv = we.get("variables", {}), ne.get("variables", {})
+    for v in sorted(set(wv) | set(nv)):
+        if wv.get(v) != nv.get(v):
+            out.append(f"variable {v}: {wv.get(v, '(unset)')!r} -> {nv.get(v, '(unset)')!r}")
+    if was.get("pytest") != now["pytest"]:
+        out.append(f"pytest arguments: {was.get('pytest')} -> {now['pytest']}")
+    return out
+
+
+def explain(s: Suite, now: dict, keys: list[str], hit: dict | None, per: "PerTest | None", tree: str | None,
+            files: dict[str, str] | None, lock: dict[str, dict], provided: set[str]) -> list[str]:
+    """Why ``s`` would run: its key against the nearest pass kept here (fewest differing components), and its per-test reuse."""
+    if hit:
+        return [f"{s.name}: cached: a pass under this key, from {hit['commit'][:10]} {hit['when']}"]
+    out = []
+    held = next((c for c in map(cached, keys) if c), None)
+    if held:
+        out.append(f"{s.name}: a pass under this key exists but no longer holds: what its tests read beside the key moved (a metadata "
+                   f"file they opened, or a distribution they imported outside their resolved dependencies)")
+    passes = []
+    for f in CACHE.glob("*.json") if CACHE.is_dir() else ():
+        try:
+            d = json.loads(f.read_text())
+        except (OSError, ValueError):
+            continue
+        if isinstance(d, dict) and d.get("suite") == s.path and "components" in d:
+            passes.append(d)
+    if not passes and not held:
+        out.append(f"{s.name}: missed; no pass of it kept here records its key's components (passes kept before `--explain` don't)")
+    elif passes:
+        best = min(passes, key=lambda d: (len(explain_changes(d["components"], now)), d.get("when", "")))
+        out.append(f"{s.name}: missed; the nearest pass kept here ({best['commit'][:10]} {best['when']}) differs in:")
+        out += [f"  {line}" for line in explain_changes(best["components"], now)] or ["  nothing its key reads (a different pytest selection?)"]
+    return out + (per.explain(lock, provided) if per else [])
 
 
 def _durations() -> dict[str, float]:
@@ -653,6 +800,7 @@ class Result:
     reads: dict | None = None        # test module (or "*") -> the suite's other test modules it opened
     reused: int = 0                  # tests left out because a kept pass answers for them (`PerTest`)
     contradicts: list | None = None  # in a fresh run: what failed that a cached pass answers for
+    nondeterministic: list | None = None     # tests that both passed and failed under one key
 
 
 #: pytest with the guard loaded by name (`-p`), which xdist repeats in each worker, from `guard/`: appended to sys.path, and
@@ -749,12 +897,14 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--per-test-min-s", type=float, default=None, metavar="S",
                     help=f"keep per-test passes only of tests whose call took at least S seconds (default ${MIN_S_ENV}, else 0)")
     ap.add_argument("--no-per-test", action="store_true", help="neither reuse nor keep per-test passes")
+    ap.add_argument("--explain", metavar="SUITE", help="say why SUITE would run: its key against the nearest pass kept here, and its "
+                    "per-test reuse; runs nothing")
     a = ap.parse_args(argv)
     sys.stdout.reconfigure(line_buffering=True)
 
     pkgs, suites = members(), discover()
     skipped = select(suites, a.skip) if a.skip else []
-    chosen = [s for s in select(suites, a.suites) if s not in skipped]
+    chosen = [s for s in select(suites, [a.explain] if a.explain else a.suites) if s not in skipped]
     args = (QUICK if a.quick else []) + extra
     tree, env = worktree(), environment()
     inputs = {s: inputs_of(s, pkgs) for s in chosen}
@@ -763,7 +913,7 @@ def main(argv: list[str] | None = None) -> int:
     logs.mkdir(parents=True, exist_ok=True)
     # the repository's own suite keys on the whole tree but reads tracked files only, so it alone never makes a fetch
     needed = {p: art for p, art in fixtures.items() if any(_under(p, [x for x in ps if x != "."]) for ps in inputs.values())}
-    unfetched = set() if a.list else fetch_fixtures(needed, logs)
+    unfetched = set() if a.list or a.explain else fetch_fixtures(needed, logs)
     files = None if GIT else digests()
     plan, ids_of = [], {}
     meta, lock, provided = metadata(), locked(), set(importlib.metadata.packages_distributions())
@@ -776,6 +926,14 @@ def main(argv: list[str] | None = None) -> int:
         hit = next((c for c in map(cached, keys) if c and holds(c, tree, files, lock, provided)), None)
         plan.append((s, paths, keys, hit, deps))
         ids_of[s] = ids
+
+    if a.explain:
+        [(s, _paths, keys, hit, deps)] = plan
+        ids = ids_of[s]
+        now = components(s, ids, env, args, deps)
+        per = None if a.no_per_test else PerTest(s, ids, env, [args] + ([extra] if a.quick else []), deps, tree, files)
+        print("\n".join(explain(s, now, keys, hit, per, tree, files, lock, provided)))
+        return 0
 
     if a.list:
         for s, paths, keys, hit, _deps in plan:
@@ -805,8 +963,8 @@ def main(argv: list[str] | None = None) -> int:
     slots = Slots(jobs)
     min_s = a.per_test_min_s if a.per_test_min_s is not None else float(os.environ.get(MIN_S_ENV) or 0)
     per = {s: PerTest(s, ids_of[s], env, [args] + ([extra] if a.quick else []), deps, tree, files)
-           for s, _paths, _keys, deps in todo if s.parallel and not a.no_per_test}
-    reuse = {s: [] if a.fresh else sorted(pt.reusable(lock, provided)) for s, pt in per.items()}
+           for s, _paths, _keys, deps in todo if not a.no_per_test}
+    reuse = {s: [] if a.fresh or not s.parallel else sorted(pt.reusable(lock, provided)) for s, pt in per.items()}
     hit_of = {s: hit for s, _paths, _keys, hit, _deps in plan}
     stopping = threading.Event()
 
@@ -827,8 +985,12 @@ def main(argv: list[str] | None = None) -> int:
         if a.fresh and r.status == "failed":
             r.contradicts = (["(the suite)"] if hit_of.get(s) else []) + (per[s].contradicted(r, lock, provided) if s in per else [])
         kept = per[s].keep(r, head, u, min_s) if s in per else 0
+        r.nondeterministic = sorted(set(per[s].nondeterministic)) if s in per else []
         print(f"{r.status:7} {s.name:28} {_count(r)} in {r.seconds:.0f} s" + (f" on {r.workers} workers" if r.workers > 1 else "")
-              + (f"; {kept} per-test passes kept" if kept else ""))
+              + (f"; {kept} per-test passes kept" if kept and per[s].narrow else f"; {kept} outcomes recorded" if kept else ""))
+        if r.nondeterministic:
+            print(f"        NONDETERMINISTIC: {', '.join(r.nondeterministic[:5])}{' ...' if len(r.nondeterministic) > 5 else ''} both passed "
+                  "and failed under one key: their inputs were identical")
         if r.contradicts:
             print(f"        CONTRADICTS a cached pass: {', '.join(r.contradicts[:5])}{' ...' if len(r.contradicts) > 5 else ''}"
                   " -- a key misses an input, or a test's outcome isn't a function of its inputs")
@@ -836,7 +998,8 @@ def main(argv: list[str] | None = None) -> int:
             CACHE.mkdir(parents=True, exist_ok=True)
             (CACHE / f"{k}.json").write_text(json.dumps({"suite": s.path, "key": k, "commit": head, "dirty": dirty,
                                                           "when": time.strftime("%Y-%m-%d %H:%M"), "counts": r.counts, "reused": r.reused,
-                                                          "seconds": round(r.seconds, 1), **u}, indent=1) + "\n")
+                                                          "seconds": round(r.seconds, 1), **u,
+                                                          "components": components(s, ids_of[s], env, args, deps)}, indent=1) + "\n")
         elif r.outside:
             print(f"        its tests read {len(r.outside)} files outside its inputs, for example {', '.join(r.outside[:3])}:"
                   f" depend on the package, or list the path under [tool.verity.tests] inputs in {s.path}/pyproject.toml")
@@ -885,7 +1048,7 @@ def main(argv: list[str] | None = None) -> int:
         a.json.write_text(json.dumps([{"suite": r.suite.path, "name": r.suite.name, "status": r.status, "key": r.key,
                                        "seconds": round(r.seconds, 1), "workers": r.workers, "counts": r.counts,
                                        "outside": r.outside, "unguarded": r.unguarded, "since": r.since, "reused": r.reused,
-                                       "contradicts": r.contradicts} for r in results]
+                                       "contradicts": r.contradicts, "nondeterministic": r.nondeterministic} for r in results]
                                      + [{"suite": s.path, "name": s.name, "status": "skipped"} for s in skipped], indent=1) + "\n")
     return 1 if failed or written else 0
 
