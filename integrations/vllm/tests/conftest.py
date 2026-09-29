@@ -19,10 +19,6 @@ KNOWN_FAILURES = {
         "needs a .git; a shipped check tree has none (owner vllm-epoch-run)",
     "tests/pipeline/test_source_identity.py::test_repo_root_resolution_prefers_export_json_then_git_then_markers":
         "needs a .git; a shipped check tree has none (owner vllm-epoch-run)",
-    "tests/program/test_registry_one_process.py::test_core_and_every_integration_registry_load_in_one_process[core-first]":
-        "core verity.ml.fp32 registers F32Add_v2 ... F32SubFtz_v2 and the one-process load reports the 9 ids as a conflict (owner flock-ir-lowering)",
-    "tests/program/test_registry_one_process.py::test_core_and_every_integration_registry_load_in_one_process[integration-first]":
-        "core verity.ml.fp32 registers F32Add_v2 ... F32SubFtz_v2 and the one-process load reports the 9 ids as a conflict (owner flock-ir-lowering)",
     "tests/program/test_twins.py::test_check_writes_the_evidence_schema":
         "the evidence schema's `openmp` key depends on whether the C++ twins were built in this tree (environmental; owner vllm-epoch-prep)",
     "tests/pipeline/test_row.py::test_the_commit_flags_the_row_arms_exist":
