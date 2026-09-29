@@ -27,6 +27,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import threading
 import time
 from collections import defaultdict
 from dataclasses import dataclass
@@ -85,6 +86,15 @@ def per_forward(records: Sequence[Any], seconds: Sequence[float]) -> list[dict[s
     return [{"forward": k, **v, "seconds": round(v["seconds"], 3)} for k, v in sorted(by.items())]
 
 
+def progress(run: Any, stop: threading.Event, every: float = 30.0) -> None:
+    """One line every ``every`` seconds while the engine serves: the calls and forwards committed and the executor's time."""
+    t0 = time.monotonic()
+    while not stop.wait(every):
+        recs = list(run.records)
+        print(f"[pouw-serve] {time.monotonic() - t0:.0f}s: {len(recs)} calls, {recs[-1].call.forward + 1 if recs else 0} forwards, "
+              f"executor {sum(run.seconds):.1f}s", flush=True)
+
+
 def main(a: Options) -> int:
     from vllm import SamplingParams
 
@@ -100,10 +110,13 @@ def main(a: Options) -> int:
     built = time.monotonic() - t0
     prompts = [{"prompt_token_ids": r["prompt_token_ids"]} for r in wl["requests"]]
     params = [SamplingParams(temperature=0.0, max_tokens=int(r["max_tokens"])) for r in wl["requests"]]
+    run, _sites = pouw.circuit_run(ENTRY)
+    stop = threading.Event()
+    threading.Thread(target=progress, args=(run, stop), daemon=True).start()
     t1 = time.monotonic()
     outs = llm.generate(prompts, params, use_tqdm=False)
     served = time.monotonic() - t1
-    run, _sites = pouw.circuit_run(ENTRY)
+    stop.set()
     llm.close()
     records, commitment = list(run.records), dict(run.commits)
     pf = per_forward(records, run.seconds)
@@ -113,6 +126,7 @@ def main(a: Options) -> int:
     t2 = time.monotonic()
     v = verdicts(records, commitment, source, a.draws)
     replayed = time.monotonic() - t2
+    print(f"replayed twice in {replayed:.1f}s: honest {v['honest']['seconds']}s, tampered {v['tampered']['seconds']}s", flush=True)
     decode = [f["seconds"] for f in pf[1:]]
     doc = {"schema": "verity-vllm/pouw-serve/v1", "workload": a.workload, "model": wl["model"], "revision": rev, "draws": a.draws,
            "engine_build_s": round(built, 3), "serve_s": round(served, 3), "replay_s": round(replayed, 3),

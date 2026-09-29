@@ -14,14 +14,16 @@ call's inputs and the byte layouts `ncp2`'s docstring states:
              partial sum is an integer below 2⁵³)
     dequant  Bf16Add(F32ToBf16Rn(F32Mul(F32Mul(s, t), I32ToF32Rn(Z))), bias), over arrays (`dequant`)
 
-`commit` computes a whole call one block of weight rows at a time, reading those rows from the layer, and keeps only each
-unit's leaf (`pouw_circuit.unit_leaf`) and the served y. `outputs(u)` regenerates one unit for the replay's openings, and
+`commit` computes a whole call one block of weight rows at a time, the blocks on a thread pool, reading those rows from the
+layer, and keeps only each unit's leaf (`pouw_circuit.unit_leaf`) and the served y. `outputs(u)` regenerates one unit for the replay's openings, and
 `args(u, opened)` gives the unit's template arguments from the call's inputs and its producers' opened outputs.
 """
 from __future__ import annotations
 
 import hashlib
-from functools import cached_property
+import os
+from concurrent.futures import ThreadPoolExecutor
+from functools import cache, cached_property
 from typing import Callable, Mapping
 
 import numpy as np
@@ -36,8 +38,15 @@ from verity_vllm.protocol_options import pouw_circuit as PC
 M32 = 0xFFFFFFFF
 BETA = 128
 ROLES = ("digest", "node", "key", "form_y", "form_x", "tile", "dequant")
-#: weight rows read, formed and multiplied at a time (a multiple of 16)
+#: weight rows read, formed and multiplied at a time (a multiple of 16), one block per task of the commit's thread pool
 BLOCK = 256
+#: the pool's threads: numpy's products and sums and hashlib over a tile's words release the GIL
+THREADS = min(16, len(os.sched_getaffinity(0)))
+
+
+@cache
+def _pool() -> ThreadPoolExecutor:
+    return ThreadPoolExecutor(max_workers=THREADS, thread_name_prefix="pouw-native")
 
 
 def _u64(v: int) -> bytes:
@@ -324,12 +333,12 @@ class Native:
         for rs, x in enumerate(xs):
             put(self.index("form_x", rs), x.reshape(-1))
         x64 = [self._x64(x) for x in xs]
-        wd, z, y_out = PC.WeightDigest(n, k), np.empty((m, n), np.uint32), np.empty((m, n), np.uint16)
+        z, y_out = np.empty((m, n), np.uint32), np.empty((m, n), np.uint16)
         block = max(D, block // D * D)
-        for lo in range(0, n, block):
+
+        def columns(lo: int) -> tuple[np.ndarray, np.ndarray]:
             hi = min(n, lo + block)
             b, t = self.weight(lo, hi)
-            wd.update(b, t)
             y, c0 = self.y_block(b, lo)
             for j in range(0, hi - lo, D):
                 put(self.index("form_y", (lo + j) // D), np.concatenate([y[j:j + D].reshape(-1), c0[j:j + D]]))
@@ -339,6 +348,11 @@ class Native:
                     put(self.index("tile", rs, (lo + j) // D), np.ascontiguousarray(words[:, :, j:j + D]))
                 z[D * rs:D * rs + D, lo:hi] = words[-1]
             y_out[:, lo:hi] = dequant(z[:, lo:hi], c.s[:, None], t[None, :], c.bias[None, lo:hi])
+            return b, t
+
+        wd = PC.WeightDigest(n, k)
+        for b, t in _pool().map(columns, range(0, n, block)):              # in block order: B is digested row by row
+            wd.update(b, t)
         base = self.base["dequant"]
         deq = y_out.reshape(self.ms, D, self.ns, D).transpose(0, 2, 1, 3).reshape(-1).astype(np.uint32)
         for u, hit in self.tamper.items():
