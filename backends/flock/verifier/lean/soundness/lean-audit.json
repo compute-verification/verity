@@ -145,6 +145,92 @@
   }
  },
  "pins": {
+  "FlockSoundness.Audit.InfluenceWitness.A.accepts": {
+   "signature": [
+    "FlockSoundness.Audit.InfluenceWitness.A.accepts",
+    "  (σ :",
+    "    (FlockSoundness.Audit.audit FlockSoundness.Audit.InfluenceWitness.A.L Unit",
+    "        FlockSoundness.Audit.InfluenceWitness.A.session).Strategy) :",
+    "  Eq",
+    "    (FlockSoundness.Game.prob (fun o => Eq o.fst Bool.true)",
+    "      (FlockSoundness.Audit.audit FlockSoundness.Audit.InfluenceWitness.A.L Unit",
+    "        FlockSoundness.Audit.InfluenceWitness.A.session)",
+    "      σ)",
+    "    1"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000a3ba58f8"
+  },
+  "FlockSoundness.Audit.InfluenceWitness.A.influence": {
+   "signature": [
+    "FlockSoundness.Audit.InfluenceWitness.A.influence (δ : ENNReal)",
+    "  (σ :",
+    "    (FlockSoundness.Audit.audit FlockSoundness.Audit.InfluenceWitness.A.L Unit",
+    "        FlockSoundness.Audit.InfluenceWitness.A.session).Strategy) :",
+    "  ENNReal.instLE.le",
+    "    (FlockSoundness.Game.prob",
+    "      (fun o =>",
+    "        And (Eq o.fst Bool.true)",
+    "          (Not",
+    "            (SetLike.instMembership.mem",
+    "              (FlockSoundness.Audit.InfluenceWitness.W.P.influenceSet FlockSoundness.Audit.InfluenceWitness.W.D",
+    "                FlockSoundness.Audit.InfluenceWitness.A.L.escape FlockSoundness.Audit.InfluenceWitness.W.a δ)",
+    "              (FlockSoundness.Audit.Partition.out FlockSoundness.Audit.InfluenceWitness.W.D",
+    "                (FlockSoundness.Audit.InfluenceWitness.A.Xc (FlockSoundness.Audit.reg σ)",
+    "                  (FlockSoundness.Audit.cont σ))))))",
+    "      (FlockSoundness.Audit.audit FlockSoundness.Audit.InfluenceWitness.A.L Unit",
+    "        FlockSoundness.Audit.InfluenceWitness.A.session)",
+    "      σ)",
+    "    (instHAdd.hAdd (instHAdd.hAdd (instHAdd.hAdd δ 0) 0) 0)"
+   ],
+   "assumptions": [],
+   "type_hash": "000000003bed0d60"
+  },
+  "FlockSoundness.Audit.InfluenceWitness.Gen.harm_witness": {
+   "signature": [
+    "FlockSoundness.Audit.InfluenceWitness.Gen.harm_witness {C : FlockSoundness.Audit.Circuit} {n : Nat}",
+    "  (P : FlockSoundness.Audit.Partition C n) {D : Finset (Fin C.N)} (hD : Finset.instPartialOrder.le D P.committed)",
+    "  (L : FlockSoundness.Audit.Law n) (a : Fin C.N → Bool) (δ : ENNReal) :",
+    "  instLENat.le (P.influenceSet D L.escape a δ).card",
+    "    (instHMul.hMul (instHPow.hPow 2 (Finset.univ.sum fun u => (P.exits (Finset.instSingleton.singleton u)).card))",
+    "      (Finset.filter (fun B => ENNReal.instLE.le δ (L.escape B)) Finset.univ).card)"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000aebf639e"
+  },
+  "FlockSoundness.Audit.InfluenceWitness.W.count": {
+   "signature": [
+    "FlockSoundness.Audit.InfluenceWitness.W.count :",
+    "  instLENat.le",
+    "    (FlockSoundness.Audit.InfluenceWitness.W.P.delivered FlockSoundness.Audit.InfluenceWitness.W.D",
+    "        FlockSoundness.Audit.InfluenceWitness.W.a FlockSoundness.Audit.InfluenceWitness.W.B).card",
+    "    2"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000224745f3"
+  },
+  "FlockSoundness.Audit.InfluenceWitness.W.lemma47": {
+   "signature": [
+    "FlockSoundness.Audit.InfluenceWitness.W.lemma47 :",
+    "  And (Eq (FlockSoundness.Audit.InfluenceWitness.W.X 2) (FlockSoundness.Audit.InfluenceWitness.W.Y 2))",
+    "    (And (Ne FlockSoundness.Audit.InfluenceWitness.W.X FlockSoundness.Audit.InfluenceWitness.W.Y)",
+    "      (Ne (FlockSoundness.Audit.InfluenceWitness.W.P.wrong FlockSoundness.Audit.InfluenceWitness.W.X)",
+    "        Finset.instEmptyCollection.emptyCollection))"
+   ],
+   "assumptions": [],
+   "type_hash": "000000005976430d"
+  },
+  "FlockSoundness.Audit.InfluenceWitness.W.three_mem_exits": {
+   "signature": [
+    "FlockSoundness.Audit.InfluenceWitness.W.three_mem_exits :",
+    "  And",
+    "    (SetLike.instMembership.mem",
+    "      (FlockSoundness.Audit.InfluenceWitness.W.P.exits FlockSoundness.Audit.InfluenceWitness.W.B) 3)",
+    "    (Not (SetLike.instMembership.mem FlockSoundness.Audit.InfluenceWitness.W.K 3))"
+   ],
+   "assumptions": [],
+   "type_hash": "000000006616009d"
+  },
   "FlockSoundness.Audit.Law.escape_widen_le": {
    "signature": [
     "FlockSoundness.Audit.Law.escape_widen_le {n : Nat} (L : FlockSoundness.Audit.Law n)",
@@ -216,6 +302,166 @@
    ],
    "assumptions": [],
    "type_hash": "00000000b4f04e2b"
+  },
+  "FlockSoundness.Audit.Partition.Refines.twoStage_influence": {
+   "signature": [
+    "FlockSoundness.Audit.Partition.Refines.twoStage_influence {C : FlockSoundness.Audit.Circuit} {nf nc : Nat}",
+    "  {Pf : FlockSoundness.Audit.Partition C nf} {Pc : FlockSoundness.Audit.Partition C nc} {a : Fin C.N → Bool}",
+    "  {εks δlink δin : ENNReal} {D : Finset (Fin C.N)} (r : Pf.Refines Pc) {L₁ : FlockSoundness.Audit.Law nc}",
+    "  {L₂ : Fin nc → FlockSoundness.Audit.Law nf} {Reg : Type} {Int : Finset (Fin nc) → Type}",
+    "  {session : Finset (Fin nf) → Reg → (S₁ : Finset (Fin nc)) → Int S₁ → FlockSoundness.Game Bool}",
+    "  (X : (R : Reg) → FlockSoundness.Audit.Cont₁ L₁ L₂ Reg Int session R → Fin C.N → Bool)",
+    "  (Yint :",
+    "    (R : Reg) →",
+    "      (ω₁ : L₁.Ω) → (I : Int (L₁.draw ω₁)) → FlockSoundness.Audit.Cont₂ L₁ L₂ Reg Int session R ω₁ I → Fin C.N → Bool)",
+    "  (ext :",
+    "    (S : Finset (Fin nf)) →",
+    "      (R : Reg) →",
+    "        (S₁ : Finset (Fin nc)) → (I : Int S₁) → (session S R S₁ I).Strategy → Fin nf → Option (Fin C.N → Bool))",
+    "  (hks : (r.analysis₂ X Yint ext).KnowledgeSound εks) (hlink : (r.analysis₂ X Yint ext).LinkSound δlink)",
+    "  (hin : FlockSoundness.Audit.Partition.AnchorsSound₂ X a δin) (δ : ENNReal)",
+    "  (σ : (FlockSoundness.Audit.twoStage L₁ L₂ Reg Int session).Strategy) :",
+    "  ENNReal.instLE.le",
+    "    (FlockSoundness.Game.prob",
+    "      (fun o =>",
+    "        And (Eq o.fst Bool.true)",
+    "          (Not",
+    "            (SetLike.instMembership.mem (Pc.influenceSet D (FlockSoundness.Audit.effEscape L₁ L₂ r.parent) a δ)",
+    "              (FlockSoundness.Audit.Partition.out D (X (FlockSoundness.Audit.reg₂ σ) (FlockSoundness.Audit.cont₁ σ))))))",
+    "      (FlockSoundness.Audit.twoStage L₁ L₂ Reg Int session) σ)",
+    "    (instHAdd.hAdd (instHAdd.hAdd (instHAdd.hAdd δ εks) δlink) δin)"
+   ],
+   "assumptions": [],
+   "type_hash": "000000004a51b9ce"
+  },
+  "FlockSoundness.Audit.Partition.Separates.mono": {
+   "signature": [
+    "FlockSoundness.Audit.Partition.Separates.mono {C : FlockSoundness.Audit.Circuit} {n : Nat}",
+    "  {P : FlockSoundness.Audit.Partition C n} {K K' : Finset (Fin C.N)} {B B' : Finset (Fin n)} {D : Finset (Fin C.N)}",
+    "  (h : P.Separates K B D) (hK : Finset.instPartialOrder.le K K') (hB : Finset.instPartialOrder.le B' B) :",
+    "  P.Separates K' B' D"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000b6e5f5d7"
+  },
+  "FlockSoundness.Audit.Partition.Separates.union": {
+   "signature": [
+    "FlockSoundness.Audit.Partition.Separates.union {C : FlockSoundness.Audit.Circuit} {n : Nat}",
+    "  {P : FlockSoundness.Audit.Partition C n} {K₁ K₂ : Finset (Fin C.N)} {B₁ B₂ : Finset (Fin n)} {D : Finset (Fin C.N)}",
+    "  (h₁ : P.Separates K₁ B₁ D) (h₂ : P.Separates K₂ B₂ D) :",
+    "  P.Separates (Finset.instUnion.union K₁ K₂) (Finset.instUnion.union B₁ B₂) D"
+   ],
+   "assumptions": [],
+   "type_hash": "000000004509b599"
+  },
+  "FlockSoundness.Audit.Partition.audit_exfiltration": {
+   "signature": [
+    "FlockSoundness.Audit.Partition.audit_exfiltration {C : FlockSoundness.Audit.Circuit} {n : Nat}",
+    "  (P : FlockSoundness.Audit.Partition C n) {L : FlockSoundness.Audit.Law n} {Reg : Type}",
+    "  {session : Finset (Fin n) → Reg → FlockSoundness.Game Bool}",
+    "  {X : (R : Reg) → FlockSoundness.Audit.Cont L Reg session R → Fin C.N → Bool}",
+    "  {ext : (S : Finset (Fin n)) → (R : Reg) → (session S R).Strategy → Fin n → Option (Fin C.N → Bool)}",
+    "  {a : Fin C.N → Bool} {εks δlink δin : ENNReal} {D : Finset (Fin C.N)} {M : Type} [Fintype M] [Nonempty M]",
+    "  [DecidableEq M] (hks : (P.analysis X ext).KnowledgeSound εks) (hlink : (P.analysis X ext).LinkSound δlink)",
+    "  (hin : FlockSoundness.Audit.Partition.AnchorsSound X a δin) (hD : Finset.instPartialOrder.le D P.committed)",
+    "  (hb : Fin n → Nat) (K : Finset (Fin n) → Finset (Fin C.N))",
+    "  (hK : ∀ (B : Finset (Fin n)), Finset.instPartialOrder.le (K B) P.committed)",
+    "  (hsep : ∀ (B : Finset (Fin n)), P.Separates (K B) B D)",
+    "  (hw : ∀ (B : Finset (Fin n)), instLENat.le (K B).card (B.sum fun u => hb u)) {δ : ENNReal} {H k : Nat}",
+    "  (hH : FlockSoundness.Audit.IsHarmBound L (fun u => (hb u).cast) δ H.cast)",
+    "  (hk : ENNReal.instPartialOrder.lt (L.miss (instHAdd.hAdd k 1)) δ)",
+    "  (σ : M → (FlockSoundness.Audit.audit L Reg session).Strategy)",
+    "  (g : ((Subtype fun x => SetLike.instMembership.mem D x) → Bool) → M) :",
+    "  ENNReal.instLE.le",
+    "    (FlockSoundness.Game.avg fun m =>",
+    "      FlockSoundness.Game.prob",
+    "        (fun o =>",
+    "          And (Eq o.fst Bool.true)",
+    "            (Eq",
+    "              (g",
+    "                (FlockSoundness.Audit.Partition.out D",
+    "                  (X (FlockSoundness.Audit.reg (σ m)) (FlockSoundness.Audit.cont (σ m)))))",
+    "              m))",
+    "        (FlockSoundness.Audit.audit L Reg session) (σ m))",
+    "    (instHAdd.hAdd",
+    "      (instHDiv.hDiv",
+    "        (instHMul.hMul (instHPow.hPow 2 H) ((Finset.range (instHAdd.hAdd k 1)).sum fun j => n.choose j)).cast",
+    "        (Fintype.card M).cast)",
+    "      (instHAdd.hAdd (instHAdd.hAdd (instHAdd.hAdd δ εks) δlink) δin))"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000303ddf3e"
+  },
+  "FlockSoundness.Audit.Partition.audit_influence": {
+   "signature": [
+    "FlockSoundness.Audit.Partition.audit_influence {C : FlockSoundness.Audit.Circuit} {n : Nat}",
+    "  (P : FlockSoundness.Audit.Partition C n) {L : FlockSoundness.Audit.Law n} {Reg : Type}",
+    "  {session : Finset (Fin n) → Reg → FlockSoundness.Game Bool}",
+    "  {X : (R : Reg) → FlockSoundness.Audit.Cont L Reg session R → Fin C.N → Bool}",
+    "  {ext : (S : Finset (Fin n)) → (R : Reg) → (session S R).Strategy → Fin n → Option (Fin C.N → Bool)}",
+    "  {a : Fin C.N → Bool} {εks δlink δin : ENNReal} {D : Finset (Fin C.N)} (hks : (P.analysis X ext).KnowledgeSound εks)",
+    "  (hlink : (P.analysis X ext).LinkSound δlink) (hin : FlockSoundness.Audit.Partition.AnchorsSound X a δin) (δ : ENNReal)",
+    "  (σ : (FlockSoundness.Audit.audit L Reg session).Strategy) :",
+    "  ENNReal.instLE.le",
+    "    (FlockSoundness.Game.prob",
+    "      (fun o =>",
+    "        And (Eq o.fst Bool.true)",
+    "          (Not",
+    "            (SetLike.instMembership.mem (P.influenceSet D L.escape a δ)",
+    "              (FlockSoundness.Audit.Partition.out D (X (FlockSoundness.Audit.reg σ) (FlockSoundness.Audit.cont σ))))))",
+    "      (FlockSoundness.Audit.audit L Reg session) σ)",
+    "    (instHAdd.hAdd (instHAdd.hAdd (instHAdd.hAdd δ εks) δlink) δin)"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000faa71805"
+  },
+  "FlockSoundness.Audit.Partition.card_admissible_le": {
+   "signature": [
+    "FlockSoundness.Audit.Partition.card_admissible_le {n : Nat} {L : FlockSoundness.Audit.Law n} {δ : ENNReal} {K : Nat}",
+    "  (hK : ENNReal.instPartialOrder.lt (L.miss (instHAdd.hAdd K 1)) δ) :",
+    "  instLENat.le (Finset.filter (fun B => ENNReal.instLE.le δ (L.escape B)) Finset.univ).card",
+    "    ((Finset.range (instHAdd.hAdd K 1)).sum fun j => n.choose j)"
+   ],
+   "assumptions": [],
+   "type_hash": "000000007fb9a953"
+  },
+  "FlockSoundness.Audit.Partition.card_delivered_le": {
+   "signature": [
+    "FlockSoundness.Audit.Partition.card_delivered_le {C : FlockSoundness.Audit.Circuit} {n : Nat}",
+    "  (P : FlockSoundness.Audit.Partition C n) {K : Finset (Fin C.N)} {B : Finset (Fin n)} {D : Finset (Fin C.N)}",
+    "  (hK : Finset.instPartialOrder.le K P.committed) (hD : Finset.instPartialOrder.le D P.committed)",
+    "  (hsep : P.Separates K B D) (a : Fin C.N → Bool) : instLENat.le (P.delivered D a B).card (instHPow.hPow 2 K.card)"
+   ],
+   "assumptions": [],
+   "type_hash": "0000000006b2b97e"
+  },
+  "FlockSoundness.Audit.Partition.card_influenceSet_le": {
+   "signature": [
+    "FlockSoundness.Audit.Partition.card_influenceSet_le {C : FlockSoundness.Audit.Circuit} {n : Nat}",
+    "  (P : FlockSoundness.Audit.Partition C n) {D : Finset (Fin C.N)} (hD : Finset.instPartialOrder.le D P.committed)",
+    "  (e : Finset (Fin n) → ENNReal) (a : Fin C.N → Bool) (δ : ENNReal) (K : Finset (Fin n) → Finset (Fin C.N))",
+    "  (hK : ∀ (B : Finset (Fin n)), Finset.instPartialOrder.le (K B) P.committed)",
+    "  (hsep : ∀ (B : Finset (Fin n)), P.Separates (K B) B D) :",
+    "  instLENat.le (P.influenceSet D e a δ).card",
+    "    ((Finset.filter (fun B => ENNReal.instLE.le δ (e B)) Finset.univ).sum fun B => instHPow.hPow 2 (K B).card)"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000896ea5d4"
+  },
+  "FlockSoundness.Audit.Partition.card_influenceSet_le_harm": {
+   "signature": [
+    "FlockSoundness.Audit.Partition.card_influenceSet_le_harm {C : FlockSoundness.Audit.Circuit} {n : Nat}",
+    "  (P : FlockSoundness.Audit.Partition C n) {L : FlockSoundness.Audit.Law n} {a : Fin C.N → Bool} {D : Finset (Fin C.N)}",
+    "  (hD : Finset.instPartialOrder.le D P.committed) (hb : Fin n → Nat) (K : Finset (Fin n) → Finset (Fin C.N))",
+    "  (hK : ∀ (B : Finset (Fin n)), Finset.instPartialOrder.le (K B) P.committed)",
+    "  (hsep : ∀ (B : Finset (Fin n)), P.Separates (K B) B D)",
+    "  (hw : ∀ (B : Finset (Fin n)), instLENat.le (K B).card (B.sum fun u => hb u)) {δ : ENNReal} {H : Nat}",
+    "  (hH : FlockSoundness.Audit.IsHarmBound L (fun u => (hb u).cast) δ H.cast) :",
+    "  instLENat.le (P.influenceSet D L.escape a δ).card",
+    "    (instHMul.hMul (instHPow.hPow 2 H) (Finset.filter (fun B => ENNReal.instLE.le δ (L.escape B)) Finset.univ).card)"
+   ],
+   "assumptions": [],
+   "type_hash": "000000006aea6d6b"
   },
   "FlockSoundness.Audit.Partition.flock_e2e_count": {
    "signature": [
@@ -316,6 +562,28 @@
    "assumptions": [],
    "type_hash": "0000000076fada01"
   },
+  "FlockSoundness.Audit.Partition.outputs_eq_of_separates": {
+   "signature": [
+    "FlockSoundness.Audit.Partition.outputs_eq_of_separates {C : FlockSoundness.Audit.Circuit} {n : Nat}",
+    "  (P : FlockSoundness.Audit.Partition C n) {K : Finset (Fin C.N)} {B : Finset (Fin n)} {D : Finset (Fin C.N)}",
+    "  (hK : Finset.instPartialOrder.le K P.committed) (hD : Finset.instPartialOrder.le D P.committed)",
+    "  (hsep : P.Separates K B D) {X Y a : Fin C.N → Bool} (hX : C.InputsAgree X a) (hY : C.InputsAgree Y a)",
+    "  (hwX : Finset.instPartialOrder.le (P.wrong X) B) (hwY : Finset.instPartialOrder.le (P.wrong Y) B)",
+    "  (hXY : ∀ (g : Fin C.N), SetLike.instMembership.mem K g → Eq (X g) (Y g)) (t : Fin C.N) :",
+    "  SetLike.instMembership.mem D t → Eq (X t) (Y t)"
+   ],
+   "assumptions": [],
+   "type_hash": "0000000047980c32"
+  },
+  "FlockSoundness.Audit.Partition.separates_exits": {
+   "signature": [
+    "FlockSoundness.Audit.Partition.separates_exits {C : FlockSoundness.Audit.Circuit} {n : Nat}",
+    "  (P : FlockSoundness.Audit.Partition C n) (B : Finset (Fin n)) {D : Finset (Fin C.N)}",
+    "  (hD : Finset.instPartialOrder.le D P.committed) : P.Separates (P.exits B) B D"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000dd94d473"
+  },
   "FlockSoundness.Audit.audit_work": {
    "signature": [
     "FlockSoundness.Audit.audit_work {n m : Nat} {σ : Fin n → Fin m} {w : Fin m → Nat} {K : Nat} {Reg : Type}",
@@ -379,6 +647,16 @@
    ],
    "assumptions": [],
    "type_hash": "00000000a450f8f4"
+  },
+  "FlockSoundness.Audit.card_guess_le": {
+   "signature": [
+    "FlockSoundness.Audit.card_guess_le {M O : Type} [Fintype M] [DecidableEq M] [DecidableEq O] (Y : Finset O) (y : M → O)",
+    "  (g : O → M) :",
+    "  instLENat.le (Finset.filter (fun m => And (SetLike.instMembership.mem Y (y m)) (Eq (g (y m)) m)) Finset.univ).card",
+    "    Y.card"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000ef550d88"
   },
   "FlockSoundness.Audit.extraction_audit_work": {
    "signature": [
@@ -1296,9 +1574,10 @@
    "pins": ["FlockSoundness.Audit.Partition.flock_e2e_count", "FlockSoundness.Audit.Partition.flock_e2e_drawn"]
   },
   "FlockSoundness.Audit.Circuit": {
-   "digest": "f8e33f60eb43c2bd69ae731ff0418dae",
+   "digest": "de2dc0631ebe47398400913b0e790953",
    "definitions": {
     "FlockSoundness.Audit.Circuit": "ac0209898d7f0b93",
+    "FlockSoundness.Audit.Circuit.InputsAgree": "86f4a9c65a843f5e",
     "FlockSoundness.Audit.Circuit.N": "ab448554c28c1c7d",
     "FlockSoundness.Audit.Circuit.op": "d2e7ed001812d20b",
     "FlockSoundness.Audit.Circuit.outputs": "0b39b9dec279981a",
@@ -1314,6 +1593,8 @@
     "FlockSoundness.Audit.Op.xor": "904817d34211a037",
     "FlockSoundness.Audit.Partition": "9a719009f4f01fdf",
     "FlockSoundness.Audit.Partition.Correct": "926a70ca08af9ee0",
+    "FlockSoundness.Audit.Partition.Refines": "d8f44f49fe6501aa",
+    "FlockSoundness.Audit.Partition.Refines.parent": "60ef81ff95432338",
     "FlockSoundness.Audit.Partition.committed": "5e30fcbca748a6e6",
     "FlockSoundness.Audit.Partition.io": "710c798260b02960",
     "FlockSoundness.Audit.Partition.localEval": "26e6bb4e9e72636e",
@@ -1322,8 +1603,23 @@
     "FlockSoundness.Audit.xorSum": "05493c94f08c5153"
    },
    "pins": [
+    "FlockSoundness.Audit.InfluenceWitness.A.influence",
+    "FlockSoundness.Audit.InfluenceWitness.Gen.harm_witness",
+    "FlockSoundness.Audit.InfluenceWitness.W.count",
+    "FlockSoundness.Audit.InfluenceWitness.W.lemma47",
+    "FlockSoundness.Audit.InfluenceWitness.W.three_mem_exits",
+    "FlockSoundness.Audit.Partition.Refines.twoStage_influence",
+    "FlockSoundness.Audit.Partition.Separates.mono",
+    "FlockSoundness.Audit.Partition.Separates.union",
+    "FlockSoundness.Audit.Partition.audit_exfiltration",
+    "FlockSoundness.Audit.Partition.audit_influence",
+    "FlockSoundness.Audit.Partition.card_delivered_le",
+    "FlockSoundness.Audit.Partition.card_influenceSet_le",
+    "FlockSoundness.Audit.Partition.card_influenceSet_le_harm",
     "FlockSoundness.Audit.Partition.flock_e2e_count",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
+    "FlockSoundness.Audit.Partition.outputs_eq_of_separates",
+    "FlockSoundness.Audit.Partition.separates_exits",
     "FlockSoundness.Rope.rope_sound",
     "FlockSoundness.Rows.compose_eval",
     "FlockSoundness.Rows.compose_eval_unit",
@@ -1413,19 +1709,93 @@
    },
    "pins": ["FlockSoundness.Audit.Partition.flock_e2e_count", "FlockSoundness.Audit.Partition.flock_e2e_drawn"]
   },
+  "FlockSoundness.Audit.Harm": {
+   "digest": "342da0e09b023d14898e3a92f9cd3e22",
+   "definitions": {
+    "FlockSoundness.Audit.IsHarmBound": "342da0e09b023d14"
+   },
+   "pins": [
+    "FlockSoundness.Audit.Partition.audit_exfiltration",
+    "FlockSoundness.Audit.Partition.card_influenceSet_le_harm"
+   ]
+  },
+  "FlockSoundness.Audit.Influence": {
+   "digest": "07072fcd892eda625719fd77c631703a",
+   "definitions": {
+    "FlockSoundness.Audit.Circuit.FeedsAvoiding": "8d645d0e3089d427",
+    "FlockSoundness.Audit.Circuit.FeedsAvoiding.refl": "cd3634229e289699",
+    "FlockSoundness.Audit.Circuit.FeedsAvoiding.step": "bd11abdeded76034",
+    "FlockSoundness.Audit.Partition.Separates": "3acd8cbf1b707cb4",
+    "FlockSoundness.Audit.Partition.delivered": "ab688d1e40393d92",
+    "FlockSoundness.Audit.Partition.exits": "675c24821649d0e3",
+    "FlockSoundness.Audit.Partition.influenceSet": "8da331a98ad7d309",
+    "FlockSoundness.Audit.Partition.out": "52c68d05c48db523"
+   },
+   "pins": [
+    "FlockSoundness.Audit.InfluenceWitness.A.influence",
+    "FlockSoundness.Audit.InfluenceWitness.Gen.harm_witness",
+    "FlockSoundness.Audit.InfluenceWitness.W.count",
+    "FlockSoundness.Audit.InfluenceWitness.W.three_mem_exits",
+    "FlockSoundness.Audit.Partition.Refines.twoStage_influence",
+    "FlockSoundness.Audit.Partition.Separates.mono",
+    "FlockSoundness.Audit.Partition.Separates.union",
+    "FlockSoundness.Audit.Partition.audit_exfiltration",
+    "FlockSoundness.Audit.Partition.audit_influence",
+    "FlockSoundness.Audit.Partition.card_delivered_le",
+    "FlockSoundness.Audit.Partition.card_influenceSet_le",
+    "FlockSoundness.Audit.Partition.card_influenceSet_le_harm",
+    "FlockSoundness.Audit.Partition.outputs_eq_of_separates",
+    "FlockSoundness.Audit.Partition.separates_exits"
+   ]
+  },
+  "FlockSoundness.Audit.InfluenceWitness": {
+   "digest": "52af07ca43acf6090ba69e7d792b5c73",
+   "definitions": {
+    "FlockSoundness.Audit.InfluenceWitness.A.H": "063e0133b5a660af",
+    "FlockSoundness.Audit.InfluenceWitness.A.L": "9aaa44e9017bfdbb",
+    "FlockSoundness.Audit.InfluenceWitness.A.Xc": "7c1de7b29127af40",
+    "FlockSoundness.Audit.InfluenceWitness.A.session": "a64cd9e6cf440ec0",
+    "FlockSoundness.Audit.InfluenceWitness.W.B": "0c3feb2d16868671",
+    "FlockSoundness.Audit.InfluenceWitness.W.C": "614cd1c7439f9d35",
+    "FlockSoundness.Audit.InfluenceWitness.W.D": "38bab60556ba689d",
+    "FlockSoundness.Audit.InfluenceWitness.W.K": "29b020aceba8f494",
+    "FlockSoundness.Audit.InfluenceWitness.W.P": "4908a97211d7d6e1",
+    "FlockSoundness.Audit.InfluenceWitness.W.X": "3d163d87dc175840",
+    "FlockSoundness.Audit.InfluenceWitness.W.Y": "8d264f72b362928a",
+    "FlockSoundness.Audit.InfluenceWitness.W.a": "1da3b1ae0416b485",
+    "FlockSoundness.Audit.InfluenceWitness.W.ops": "ed031173df3ba931",
+    "FlockSoundness.Audit.InfluenceWitness.W.unitOf": "66b8da0e14826324"
+   },
+   "pins": [
+    "FlockSoundness.Audit.InfluenceWitness.A.accepts",
+    "FlockSoundness.Audit.InfluenceWitness.A.influence",
+    "FlockSoundness.Audit.InfluenceWitness.W.count",
+    "FlockSoundness.Audit.InfluenceWitness.W.lemma47",
+    "FlockSoundness.Audit.InfluenceWitness.W.three_mem_exits"
+   ]
+  },
   "FlockSoundness.Audit.Law": {
-   "digest": "3fb92dc3a95ed41b5f28cadecc91125c",
+   "digest": "4e723a6b73b906e945867efd24a8791a",
    "definitions": {
     "FlockSoundness.Audit.Law": "ab6311f067d1e558",
     "FlockSoundness.Audit.Law.draw": "e9f1dc8a2d17dfbd",
     "FlockSoundness.Audit.Law.escape": "54759f255ec28484",
     "FlockSoundness.Audit.Law.fintype": "e69a6854a7f2747b",
+    "FlockSoundness.Audit.Law.incl": "eed2fd973f7e564f",
     "FlockSoundness.Audit.Law.miss": "d7e09d10fca7bd60",
     "FlockSoundness.Audit.Law.Ω": "829fd6ddac35b1ca"
    },
    "pins": [
+    "FlockSoundness.Audit.InfluenceWitness.A.accepts",
+    "FlockSoundness.Audit.InfluenceWitness.A.influence",
+    "FlockSoundness.Audit.InfluenceWitness.Gen.harm_witness",
     "FlockSoundness.Audit.Law.escape_widen_le",
     "FlockSoundness.Audit.Law.work_escape_le",
+    "FlockSoundness.Audit.Partition.Refines.twoStage_influence",
+    "FlockSoundness.Audit.Partition.audit_exfiltration",
+    "FlockSoundness.Audit.Partition.audit_influence",
+    "FlockSoundness.Audit.Partition.card_admissible_le",
+    "FlockSoundness.Audit.Partition.card_influenceSet_le_harm",
     "FlockSoundness.Audit.Partition.flock_e2e_count",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Audit.audit_work",
@@ -1436,7 +1806,7 @@
    ]
   },
   "FlockSoundness.Audit.OneStage": {
-   "digest": "0d700dca3416dca476311ad8a76da0ec",
+   "digest": "8054067c8b46806c86d98e8bc84ac645",
    "definitions": {
     "FlockSoundness.Audit.Analysis": "9dd2f1fd0cb53544",
     "FlockSoundness.Audit.Analysis.KnowledgeSound": "6b851cf008d0fb32",
@@ -1448,11 +1818,17 @@
     "FlockSoundness.Audit.Analysis.linkFail": "4c3925a1022be9f2",
     "FlockSoundness.Audit.Analysis.wrong": "1a302c97f965b737",
     "FlockSoundness.Audit.Cont": "78d0a1f1523d45de",
+    "FlockSoundness.Audit.Partition.AnchorsSound": "2a67ece305a74ccd",
+    "FlockSoundness.Audit.Partition.analysis": "a9f5835bedfd860b",
     "FlockSoundness.Audit.audit": "74586d8a66f3427c",
     "FlockSoundness.Audit.cont": "ea2c637aa000131e",
     "FlockSoundness.Audit.reg": "965ee5ab445cdecb"
    },
    "pins": [
+    "FlockSoundness.Audit.InfluenceWitness.A.accepts",
+    "FlockSoundness.Audit.InfluenceWitness.A.influence",
+    "FlockSoundness.Audit.Partition.audit_exfiltration",
+    "FlockSoundness.Audit.Partition.audit_influence",
     "FlockSoundness.Audit.Partition.flock_e2e_count",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Audit.audit_work",
@@ -1479,6 +1855,31 @@
     "FlockSoundness.Audit.extraction_audit_work",
     "FlockSoundness.Audit.extraction_audit_work_whole_stratum"
    ]
+  },
+  "FlockSoundness.Audit.TwoStage": {
+   "digest": "6e426a1a29789fe403267a833094578f",
+   "definitions": {
+    "FlockSoundness.Audit.Analysis₂": "b2bdf9c7ec1a23a9",
+    "FlockSoundness.Audit.Analysis₂.KnowledgeSound": "7939a9b91bf97c56",
+    "FlockSoundness.Audit.Analysis₂.LinkSound": "987ba26c4104b9ed",
+    "FlockSoundness.Audit.Analysis₂.TrC": "799435ea32bd8622",
+    "FlockSoundness.Audit.Analysis₂.TrF": "db741b79a8d09fd4",
+    "FlockSoundness.Audit.Analysis₂.committedC": "f311e2a7fa4e9add",
+    "FlockSoundness.Audit.Analysis₂.committedF": "8fe0872666d1ad10",
+    "FlockSoundness.Audit.Analysis₂.ksFail": "e30985cbfe9dab80",
+    "FlockSoundness.Audit.Analysis₂.linkFail": "1da9b72fb613a160",
+    "FlockSoundness.Audit.Cont₁": "6a0a75df9cda8224",
+    "FlockSoundness.Audit.Cont₂": "80d76085bfefb987",
+    "FlockSoundness.Audit.Partition.AnchorsSound₂": "3765b17960a1ec85",
+    "FlockSoundness.Audit.Partition.Refines.analysis₂": "1b25b24fccdb2a3f",
+    "FlockSoundness.Audit.Partition.extend": "ac011af386d0492b",
+    "FlockSoundness.Audit.cont₁": "8a20c5928777739f",
+    "FlockSoundness.Audit.effEscape": "1fa1078bc5e04a44",
+    "FlockSoundness.Audit.fineDraw": "cb6ef25bac61a52a",
+    "FlockSoundness.Audit.reg₂": "c404081af1fb90ab",
+    "FlockSoundness.Audit.twoStage": "afc841561e7cba19"
+   },
+   "pins": ["FlockSoundness.Audit.Partition.Refines.twoStage_influence"]
   },
   "FlockSoundness.Audit.Work": {
    "digest": "1597fae5023dc467f4a9246a8c0f821c",
@@ -1663,8 +2064,16 @@
     "FlockSoundness.Game.send": "ca27d021bc348230"
    },
    "pins": [
+    "FlockSoundness.Audit.InfluenceWitness.A.accepts",
+    "FlockSoundness.Audit.InfluenceWitness.A.influence",
+    "FlockSoundness.Audit.InfluenceWitness.Gen.harm_witness",
     "FlockSoundness.Audit.Law.escape_widen_le",
     "FlockSoundness.Audit.Law.work_escape_le",
+    "FlockSoundness.Audit.Partition.Refines.twoStage_influence",
+    "FlockSoundness.Audit.Partition.audit_exfiltration",
+    "FlockSoundness.Audit.Partition.audit_influence",
+    "FlockSoundness.Audit.Partition.card_admissible_le",
+    "FlockSoundness.Audit.Partition.card_influenceSet_le_harm",
     "FlockSoundness.Audit.Partition.flock_e2e_count",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Audit.audit_work",
@@ -1763,6 +2172,10 @@
     "FlockSoundness.Game.Strategy.ofMap": "42270a46a7c16ac6"
    },
    "pins": [
+    "FlockSoundness.Audit.InfluenceWitness.A.influence",
+    "FlockSoundness.Audit.Partition.Refines.twoStage_influence",
+    "FlockSoundness.Audit.Partition.audit_exfiltration",
+    "FlockSoundness.Audit.Partition.audit_influence",
     "FlockSoundness.Audit.Partition.flock_e2e_count",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Audit.audit_work",
