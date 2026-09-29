@@ -148,6 +148,7 @@
   "FlockSoundness.Audit.Partition.Refines.twoStage_influence": {},
   "FlockSoundness.Audit.Partition.Separates.mono": {},
   "FlockSoundness.Audit.Partition.Separates.union": {},
+  "FlockSoundness.Audit.Partition.audit_exfiltration": {},
   "FlockSoundness.Audit.Partition.audit_influence": {},
   "FlockSoundness.Audit.Partition.card_admissible_le": {},
   "FlockSoundness.Audit.Partition.card_delivered_le": {},
@@ -254,6 +255,7 @@
   },
   "FlockSoundness.Audit.Partition.outputs_eq_of_separates": {},
   "FlockSoundness.Audit.Partition.separates_exits": {},
+  "FlockSoundness.Audit.card_guess_le": {},
   "FlockSoundness.Merkle.opening_binding": {
    "signature": [
     "FlockSoundness.Merkle.opening_binding {Col D : Type} (H : List UInt8 → D) (E : FlockSoundness.Merkle.Enc Col D)",

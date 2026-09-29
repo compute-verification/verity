@@ -88,6 +88,12 @@ circuit's other outputs, such as commitments and leaves, are not delivered. $K$ 
   \binom{n}{j}$ bits, for a harm bound $H$ (`IsHarmBound`, `Audit/Harm.lean`: the specification of core's `harm_bound`) with
   each unit's harm the width it adds to a separator, such as its exits (`card_exits_le`), and $\mathrm{miss}(K+1) <
   \delta$. $H$ counts the value bits and the second term the choice of which units are wrong.
+- `audit_exfiltration`, **exfiltration with the location term**: a prover that picks its strategy from a uniform message
+  $m \in M$, and a receiver that sees only what is delivered on $D$, recover $m$ from an accepted audit with probability
+  at most $2^H \sum_{j \le K} \binom{n}{j} / |M| + \delta + \varepsilon_{ks} + \delta_{link} + \delta_{in}$; with
+  $|M| = 2^\ell$, the first term is $2^{H + \log_2 \sum_{j \le K} \binom{n}{j} - \ell}$. `card_guess_le` is its counting
+  step and `audit_exfiltration_influenceSet` its form over $|\mathrm{influenceSet}|$. Core's reading is
+  `verity_one_stage.consumers.exfiltration_bound`: `harm_bound` over output bits plus `location_bits`.
 
 **Tightness and insecurity** (`Audit/Examples.lean`, on `K` chains of `nv` NOT gates, one coarse unit per chain and one
 fine unit per gate, with a uniform `k₂`-subset of each drawn chain's gates in the second stage and an ideal session):

@@ -24,6 +24,9 @@ circuit's outputs, since commitments and leaves are outputs that the verifier se
 * `card_influenceSet_le_harm` and `card_admissible_le`: the influence is at most `H + log₂ ∑_{j ≤ K} C(n, j)` bits. `H` is
   a harm bound (`IsHarmBound`) with each unit's harm the width it adds to a separator, for example its exits
   (`card_exits_le`): the value bits. The second term is the choice of which units are wrong, when `miss (K + 1) < δ`.
+* `audit_exfiltration`: a prover that picks its strategy from a uniform message `m`, and a receiver that sees only what
+  is delivered, recover `m` from an accepted audit with probability at most `2^H · ∑_{j ≤ K} C(n, j) / |M|` plus the
+  audit's error: the value bits and the location term together. `card_guess_le` is its counting step.
 -/
 
 namespace FlockSoundness.Audit
@@ -47,6 +50,15 @@ theorem Circuit.FeedsAvoiding.not_mem {C : Circuit} {K : Finset (Fin C.N)} {g t 
   cases h with
   | refl hK => exact hK
   | step hg _ _ => exact hg
+
+/-- **Guessing through a small set of outputs**: a receiver `g` that sees only the delivered output `y m` recovers the
+message `m`, with `y m ∈ Y`, for at most `|Y|` messages. -/
+theorem card_guess_le {M O : Type} [Fintype M] [DecidableEq M] [DecidableEq O] (Y : Finset O) (y : M → O) (g : O → M) :
+    (univ.filter fun m => y m ∈ Y ∧ g (y m) = m).card ≤ Y.card :=
+  card_le_card_of_injOn y (fun _ hm => (mem_filter.1 hm).2.1) fun m hm m' hm' h =>
+    calc m = g (y m) := (mem_filter.1 hm).2.2.symm
+      _ = g (y m') := by rw [h]
+      _ = m' := (mem_filter.1 hm').2.2
 
 namespace Partition
 
@@ -273,6 +285,64 @@ theorem audit_influence (hks : (P.analysis X ext).KnowledgeSound εks)
   refine (audit_profile (P.analysis X ext) hks hlink (fun B => L.escape B < δ) σ).trans ?_
   gcongr
   exact iSup₂_le fun B hB => hB.le
+
+/-- The influence-set form of `audit_exfiltration`: a prover that picks its strategy `σ m` from a uniform message `m`,
+and a receiver `g` that sees only what is delivered on `D`, succeed together (the audit accepts and `g` returns `m`) with
+probability at most `|influenceSet|/|M| + δ + ε_ks + δ_link + δ_in`. -/
+theorem audit_exfiltration_influenceSet {M : Type} [Fintype M] [Nonempty M] [DecidableEq M]
+    (hks : (P.analysis X ext).KnowledgeSound εks) (hlink : (P.analysis X ext).LinkSound δlink)
+    (hin : AnchorsSound X a δin) (δ : ℝ≥0∞) (σ : M → Strategy (audit L Reg session)) (g : (D → Bool) → M) :
+    avg (fun m => prob (fun o => o.1 = true ∧ g (out D (X (reg (σ m)) (cont (σ m)))) = m)
+        (audit L Reg session) (σ m)) ≤
+      ((P.influenceSet D L.escape a δ).card : ℝ≥0∞) / (Fintype.card M : ℝ≥0∞) + (δ + εks + δlink + δin) := by
+  classical
+  let Y := P.influenceSet D L.escape a δ
+  let y : M → (D → Bool) := fun m => out D (X (reg (σ m)) (cont (σ m)))
+  have step : ∀ m, prob (fun o => o.1 = true ∧ g (y m) = m) (audit L Reg session) (σ m) ≤
+      (if y m ∈ Y ∧ g (y m) = m then 1 else 0) +
+        prob (fun o => o.1 = true ∧ y m ∉ Y) (audit L Reg session) (σ m) := by
+    intro m
+    refine (prob_mono (q := fun o => (o.1 = true ∧ (y m ∈ Y ∧ g (y m) = m)) ∨ (o.1 = true ∧ y m ∉ Y))
+      (fun o h => ?_) _ _).trans ((prob_or_le _ _ _ _).trans (add_le_add ?_ le_rfl))
+    · by_cases hy : y m ∈ Y
+      · exact Or.inl ⟨h.1, hy, h.2⟩
+      · exact Or.inr ⟨h.1, hy⟩
+    · rw [prob_and_const]
+      split_ifs
+      · exact prob_le_one _ _ _
+      · exact le_rfl
+  calc avg (fun m => prob (fun o => o.1 = true ∧ g (y m) = m) (audit L Reg session) (σ m))
+      ≤ avg (fun m => (if y m ∈ Y ∧ g (y m) = m then (1 : ℝ≥0∞) else 0) +
+          prob (fun o => o.1 = true ∧ y m ∉ Y) (audit L Reg session) (σ m)) := avg_mono step
+    _ = prCoin (fun m => y m ∈ Y ∧ g (y m) = m) +
+          avg (fun m => prob (fun o => o.1 = true ∧ y m ∉ Y) (audit L Reg session) (σ m)) := by
+        rw [avg_add, avg_ite_eq_prCoin]
+    _ ≤ (Y.card : ℝ≥0∞) / (Fintype.card M : ℝ≥0∞) + (δ + εks + δlink + δin) := by
+        refine add_le_add ?_ ((avg_mono fun m => P.audit_influence hks hlink hin δ (σ m)).trans
+          (avg_const _).le)
+        rw [prCoin_eq_card]
+        gcongr
+        exact_mod_cast card_guess_le Y y g
+
+/-- **Exfiltration, with the location term**: a prover that picks its strategy `σ m` from a uniform message `m`, and a
+receiver `g` that sees only what is delivered on `D`, succeed together with probability at most
+`2^H · ∑_{j ≤ k} C(n, j) / |M| + δ + ε_ks + δ_link + δ_in`. Here `H` is a harm bound at `δ` of each unit's width `hb` on
+a separator (the value bits) and `miss (k + 1) < δ` (which units are wrong). With `|M| = 2^ℓ`, the first term is
+`2^(H + log₂ ∑_{j ≤ k} C(n, j) − ℓ)`. -/
+theorem audit_exfiltration {M : Type} [Fintype M] [Nonempty M] [DecidableEq M]
+    (hks : (P.analysis X ext).KnowledgeSound εks) (hlink : (P.analysis X ext).LinkSound δlink)
+    (hin : AnchorsSound X a δin) (hD : D ⊆ P.committed) (hb : Fin n → ℕ) (K : Finset (Fin n) → Finset (Fin C.N))
+    (hK : ∀ B, K B ⊆ P.committed) (hsep : ∀ B, P.Separates (K B) B D) (hw : ∀ B, (K B).card ≤ ∑ u ∈ B, hb u)
+    {δ : ℝ≥0∞} {H k : ℕ} (hH : IsHarmBound L (fun u => (hb u : ℝ)) δ H) (hk : L.miss (k + 1) < δ)
+    (σ : M → Strategy (audit L Reg session)) (g : (D → Bool) → M) :
+    avg (fun m => prob (fun o => o.1 = true ∧ g (out D (X (reg (σ m)) (cont (σ m)))) = m)
+        (audit L Reg session) (σ m)) ≤
+      ((2 ^ H * ∑ j ∈ range (k + 1), n.choose j : ℕ) : ℝ≥0∞) / (Fintype.card M : ℝ≥0∞) +
+        (δ + εks + δlink + δin) := by
+  refine (P.audit_exfiltration_influenceSet hks hlink hin δ σ g).trans ?_
+  have hcard := (P.card_influenceSet_le_harm (a := a) hD hb K hK hsep hw hH).trans
+    (Nat.mul_le_mul_left _ (card_admissible_le hk))
+  gcongr
 
 end OneStage
 

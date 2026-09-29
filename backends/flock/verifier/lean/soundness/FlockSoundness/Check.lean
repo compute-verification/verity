@@ -388,3 +388,7 @@ hypotheses of the theorems that use them, never `axiom` declarations, so they ca
 #print axioms FlockSoundness.Audit.Partition.card_exits_le
 #print axioms FlockSoundness.Audit.Partition.card_influenceSet_le_harm
 #print axioms FlockSoundness.Audit.Partition.card_admissible_le
+-- exfiltration: the value bits and the location term, from the influence set
+#print axioms FlockSoundness.Audit.card_guess_le
+#print axioms FlockSoundness.Audit.Partition.audit_exfiltration_influenceSet
+#print axioms FlockSoundness.Audit.Partition.audit_exfiltration
