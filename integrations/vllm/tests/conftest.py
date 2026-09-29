@@ -75,9 +75,6 @@ KNOWN_FAILURES = {
         "the untied lm_head adds no input gates (7,158,595 either way)",
     "tests/observe/test_patterns_synthetic.py::test_gumbel_two_stage_sampler_is_one_token_select":
         "the observer refuses the sampler's bf16 [1, V] logits view as not a row-contiguous float32 [R, V] view",
-    "tests/pipeline/test_research_tools.py::test_closure_covers_every_core_file":
-        "research_tools.CLOSURE lacks verity.claims, verity.evaluation and verity.randomness, so the vLLM Tools' identity"
-        " misses them; adding them changes that identity, so stored attempts stop being reused",
     "tests/program/test_analytic.py::test_check_cos_sin_against_the_captured_b0_table":
         "torch CPU cos/sin against the captured b0 table: max ulp 29,154, the bound 2",
     "tests/engine/test_gen_dense2.py::test_inv_freq_models_cuda_reciprocal_multiply_and_is_identity_for_power_of_two_D":
