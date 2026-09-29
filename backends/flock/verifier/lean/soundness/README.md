@@ -256,8 +256,18 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
       `delta_entry`, `delta_const`);
     - each callee's input rows are self rows (`callee_rows`), and the own rows read only own and part columns
       (`own_reads`).
-  - Still to prove: `NetRows` for a flat typed class, whose unit net #307 builds from `derive`'s rows (`Typed.netOfD_ok`),
-    and a template's block rows from `setupH` (1e, #277).
+  - **A template's block rows, placed** (`ExecTemplatePlace.lean`, T3). Given two facts structures,
+    `TemplateLayout.blockFacts` proves `BlockFacts` at every VU `g`, at `Typed.col c tb g`, and
+    `TemplateLayout.placement` gives a table class's `placed g`.
+    - `TemplateLayout` is the accepted statement's layout: its ranges, the root's and the parts' nets and slots, and Δ.
+    - `UnitShape` is the unit's shape: its constant row, its order within its own and its parts' columns, no Δ at an
+      input, and no table read.
+    - Supporting lemmas: unit columns sit at distinct positions across VUs (`col_inj`), and the typed tail at a unit
+      column's position is its bound-input and cross entries (`tail_count`).
+  - Still to prove:
+    - `NetRows` for a flat typed class, whose unit net #307 builds from `derive`'s rows (`Typed.netOfD_ok`);
+    - `TemplateLayout` from `setupH`, and `UnitShape` from `deriveChecked`;
+    - a template whose parts read a table.
 
 ### 1.6 Proved from the libraries, not assumed
 
