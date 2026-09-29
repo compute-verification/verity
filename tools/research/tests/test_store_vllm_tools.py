@@ -262,6 +262,15 @@ def test_outputs_json_errors_are_publish_errors_not_crashes(env):
     assert A.publish(d, store=st)["published"] is False
 
 
+@pytest.fixture
+def no_dirty_digest(monkeypatch):
+    """This checkout's source identity without its dirty digest, which reads every untracked file of the working tree: the
+    derivations these tests compare don't depend on it, and a suite may not read files outside its inputs."""
+    from research import env as E
+    monkeypatch.setattr(E, "_dirty_digest", lambda root: None)
+
+
+@pytest.mark.usefixtures("no_dirty_digest")
 def test_run_input_by_artifact_id_enters_the_derivation(tmp_path, monkeypatch):
     """`research run --tool vllm.match --input build=art:...`: a store id names the input directly; it lands in `inputs`
     (hence the derivation), not as a hashed path."""
@@ -287,6 +296,7 @@ def test_run_input_by_artifact_id_enters_the_derivation(tmp_path, monkeypatch):
     assert ref["artifact"] == art and ref["sha256"] is None and "store id" in ref["sha256_reason"]
 
 
+@pytest.mark.usefixtures("no_dirty_digest")
 def test_lookup_computes_the_derivation_the_runner_records(tmp_path, monkeypatch, capsys):
     """`research data lookup --tool vllm.build -- ARGV` fills the Tool's own key conditions (`tool.vllm.build.torch|vllm`, its probe) the
     way `research run --tool` records them, so the derivation it looks up is the one an attempt was published under."""
