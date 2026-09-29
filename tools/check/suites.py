@@ -279,7 +279,7 @@ def fetch_fixtures(fixtures: dict[str, str], logs: Path) -> set[str]:
         return set(fixtures)
     bad = {e["path"] for e in rep["entries"] if e["status"] in ("missing", "stale")}
     blobs = rep["fetch"]["blobs"]
-    print(f"fixtures: {len(fixtures)} fetched entries, {blobs['fetched']} blobs ({blobs['bytes'] / 1e6:.1f} MB) downloaded"
+    print(f"fixtures: {len(fixtures)} registry entries checked, {blobs['fetched']} blobs ({blobs['bytes'] / 1e6:.1f} MB) downloaded"
           + (f", {len(bad)} missing (log: {log})" if bad else ""))
     return bad
 
