@@ -181,18 +181,6 @@ def _tree(origin: Path) -> list[str]:
     return _git(origin, "ls-tree", "-r", "--name-only", "main").split()
 
 
-def test_a_commit_whose_diff_is_not_utf8_still_syncs(machines):
-    """The key scan reads `git log -p` of the outgoing commits: removing a Latin-1 or binary file must not crash it."""
-    origin, a, _ = machines
-    (a / "kb" / "latin1.txt").write_bytes(b"caf\xe9 \x93quoted\x94\n")
-    _git(a, "add", "-A")
-    _git(a, "commit", "-qm", "before")
-    _git(a, "push", "-q", "origin", "HEAD:main")
-    (a / "kb" / "latin1.txt").unlink()
-    rep = NS.sync(a, secrets=[], now=NOW)
-    assert (rep["rc"], rep["pushed"]) == (0, True) and "kb/latin1.txt" not in _tree(origin)
-
-
 def test_a_lane_note_stamped_over_5_min_ahead_is_left_out_and_the_rest_sync(machines):
     origin, a, _ = machines
     six, five, created = ("lanes/x/20260928T0648Z-report-x.md", "lanes/y/20260928T0647Z-report-y.md",
@@ -261,3 +249,15 @@ def test_created_is_read_from_the_front_matter_with_or_without_seconds():
         assert NS.created_at(f"---\nlane: x\ncreated: {value}\n---\nbody\n")[1] == when, value
     assert NS.created_at("created: 2026-09-28T07:00Z\n") is None                  # not in front matter
     assert NS.created_at("---\ncreated: 2026-09-28\n---\n") is None               # no time of day
+
+
+def test_a_commit_whose_diff_is_not_utf8_still_syncs(machines):
+    """The key scan reads `git log -p` of the outgoing commits: removing a Latin-1 or binary file must not crash it."""
+    origin, a, _ = machines
+    (a / "kb" / "latin1.txt").write_bytes(b"caf\xe9 \x93quoted\x94\n")
+    _git(a, "add", "-A")
+    _git(a, "commit", "-qm", "before")
+    _git(a, "push", "-q", "origin", "HEAD:main")
+    (a / "kb" / "latin1.txt").unlink()
+    rep = NS.sync(a, secrets=[], now=NOW)
+    assert (rep["rc"], rep["pushed"]) == (0, True) and "kb/latin1.txt" not in _tree(origin)
