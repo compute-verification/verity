@@ -355,15 +355,17 @@ def _anchors(call, **kw):
     return Anchors(call.salt, f["forward"], f["layer"], f["site"], call.weight, tuple(call.rowids), tuple(call.colids))
 
 
-def _window(t, anchors, source=bytes(range(32))):
-    """A window over ``anchors`` (each of ``t``'s shape, with a commitment of its own): its `Receipt`, and the `Ledger`
-    opened from it, with the fresh source replaced by ``source`` so the draws are reproducible."""
+def _window(t, anchors, source=bytes(range(32)), commitments=None):
+    """A window over ``anchors`` (each of ``t``'s shape, with a commitment of its own unless ``commitments`` gives them):
+    its `Receipt`, and the `Ledger` opened from it, with the fresh source replaced by ``source`` so the draws are
+    reproducible."""
     import hashlib
     from unittest import mock
 
     from verity_pouw.circuit import anchors as A
 
-    receipt = A.Receipt(tuple((an, t.shape, hashlib.sha512(repr(an).encode()).digest()) for an in anchors))
+    cs = commitments or [hashlib.sha512(repr(an).encode()).digest() for an in anchors]
+    receipt = A.Receipt(tuple((an, t.shape, c) for an, c in zip(anchors, cs)))
     with mock.patch.object(A, "_fresh_source", lambda: source):
         return receipt, A.Ledger.open(receipt)
 
@@ -380,14 +382,15 @@ def test_equal_calls_under_one_key_draw_different_tiles():
     ans = [_anchors(call)] + [_anchors(call, **kw) for kw in ({"forward": 4}, {"site": 3}, {"layer": 6})]
     _receipt, window = _window(t, ans)
     tiles = lambda plan: [u for u in plan.drawn if t.layout().units[u].role == "tile"]  # noqa: E731
-    drawn = [tiles(t.draw(window.key, law, an, window)) for an in ans]
+    drawn = [tiles(t.draw(law, an, window)) for an in ans]
     assert drawn[0] == tiles(PL.draw(window.key, t.layout(), law, ans[0].call_index))
     assert all(d != drawn[0] for d in drawn[1:])
     assert [s.name for s in t.layout().strata] == list(dict.fromkeys(u.template for u in t.layout().units))
 
 
 def test_the_verifier_draws_over_its_own_layout():
-    """`Traced.draw(key, law, anchors, ledger)` takes no layout: it is `plan.draw` over `Traced.layout()` (X-SPC-97)."""
+    """`Traced.draw(law, anchors, ledger)` takes no layout and no key: it is `plan.draw` over `Traced.layout()` (X-SPC-97)
+    under the ledger's key."""
     import inspect
 
     import circuit_fixtures as F
@@ -395,10 +398,10 @@ def test_the_verifier_draws_over_its_own_layout():
 
     call = F.call(32, 64, 32)
     t = traced_as("ncp-v2-shift24", 32, 64, 32)
-    assert list(inspect.signature(Traced.draw).parameters) == ["self", "key", "law", "anchors", "ledger"]
+    assert list(inspect.signature(Traced.draw).parameters) == ["self", "law", "anchors", "ledger"]
     an = _anchors(call)
     _receipt, window = _window(t, [an])
-    assert t.draw(window.key, PL.WorkLaw(2), an, window) == PL.draw(window.key, t.layout(), PL.WorkLaw(2), an.call_index)
+    assert t.draw(PL.WorkLaw(2), an, window) == PL.draw(window.key, t.layout(), PL.WorkLaw(2), an.call_index)
 
 
 def test_a_repeated_call_index_is_refused_before_any_draw(monkeypatch):
@@ -426,28 +429,27 @@ def test_a_repeated_call_index_is_refused_before_any_draw(monkeypatch):
     _receipt, window = _window(t, [first, _anchors(call, forward=call.forward + 1)])
     drawn, real = [], plan_module.draw
     monkeypatch.setattr(plan_module, "draw", lambda key, lay, law, index: drawn.append(index) or real(key, lay, law, index))
-    t.draw(window.key, law, first, window)
+    t.draw(law, first, window)
     for again in (first, twin):
         with pytest.raises(DomainError, match="repeated|not on the window's receipt"):
-            t.draw(window.key, law, again, window)
+            t.draw(law, again, window)
     assert drawn == [first.call_index] and window.seen == {first.call_index}
-    t.draw(window.key, law, _anchors(call, forward=call.forward + 1), window)
+    t.draw(law, _anchors(call, forward=call.forward + 1), window)
     assert len(drawn) == 2
     for no_ledger in (None, set()):
         with pytest.raises(TypeError):
-            t.draw(window.key, law, first, no_ledger)
+            t.draw(law, first, no_ledger)
     assert len(drawn) == 2
 
 
 def test_the_window_key_is_derived_from_the_complete_receipt(monkeypatch):
     """Root's C1: the window's key comes after every call's commitment. A `Receipt` lists every call of the window with its
     shape and commitment, and is immutable; `Ledger.open` derives the key from it alone, under `DRAW_DOMAIN` with
-    {"receipt": digest}, and `Traced.draw` refuses a ledger not opened from a receipt, any other key, and a call the
-    receipt doesn't list (another index, the same index with other anchors, or another shape), before `plan.draw` runs.
-    The digest moves with any one commitment or shape, not with the order the calls are listed in."""
+    {"receipt": digest}, and `Traced.draw` refuses a ledger not opened from a receipt and a call the receipt doesn't list
+    (another index, the same index with other anchors, or another shape), before `plan.draw` runs. The digest binds each
+    call's full anchors (salt, weight id, rows and columns), shape and commitment, and not the order they are listed in."""
     import dataclasses
     import hashlib
-    from unittest import mock
 
     import pytest
 
@@ -467,25 +469,24 @@ def test_the_window_key_is_derived_from_the_complete_receipt(monkeypatch):
     monkeypatch.setattr(plan_module, "draw", lambda key, lay, law, index: drawn.append(index) or real(key, lay, law, index))
     other_shape = ncp2.Shape(32, 128, 32)
     twin = dataclasses.replace(a, weight=a.weight + 1)
-    refusals = [
-        (lambda: t.draw(window.key, law, a, A.Ledger()), "opened from its complete receipt"),
-        (lambda: t.draw(_key(), law, a, window), "not the window's"),
-        (lambda: t.draw(derive(source, PL.DRAW_DOMAIN, {"receipt": receipt.digest()[:-1]}), law, a, window), "not the window's"),
-        (lambda: t.draw(window.key, law, unlisted, window), "not on the window's receipt"),
-        (lambda: t.draw(window.key, law, twin, window), "not on the window's receipt"),
-        (lambda: window.admit(a, other_shape), "not on the window's receipt"),
-    ]
+    refusals = [(lambda: t.draw(law, a, A.Ledger()), "opened from its complete receipt"),
+                (lambda: t.draw(law, unlisted, window), "not on the window's receipt"),
+                (lambda: t.draw(law, twin, window), "not on the window's receipt"),
+                (lambda: window.admit(a, other_shape), "not on the window's receipt")]
     for refused, match in refusals:
         with pytest.raises(DomainError, match=match):
             refused()
     assert drawn == []
-    t.draw(window.key, law, a, window)
-    t.draw(window.key, law, b, window)
+    t.draw(law, a, window)
+    t.draw(law, b, window)
     assert drawn == [a.call_index, b.call_index]
     ca, cb = (c for _an, _s, c in receipt.calls)
     assert A.Receipt(((b, t.shape, cb), (a, t.shape, ca))).digest() == receipt.digest()
-    for changed in (((a, t.shape, ca), (b, t.shape, hashlib.sha512(b"b'").digest())), ((a, t.shape, ca), (b, other_shape, cb))):
-        assert A.Receipt(changed).digest() != receipt.digest()
+    changed = [((a, t.shape, ca), (b, t.shape, hashlib.sha512(b"b'").digest())), ((a, t.shape, ca), (b, other_shape, cb))]
+    for field, value in (("salt", bytes(32)), ("weight", b.weight + 1), ("rows", tuple(reversed(b.rows))),
+                         ("cols", tuple(reversed(b.cols)))):
+        changed.append(((a, t.shape, ca), (dataclasses.replace(b, **{field: value}), t.shape, cb)))
+    assert len({A.Receipt(c).digest() for c in changed} | {receipt.digest()}) == len(changed) + 1
     for bad in ((), ((a, t.shape, b"short"),)):
         with pytest.raises(DomainError):
             A.Receipt(bad)
@@ -493,8 +494,140 @@ def test_the_window_key_is_derived_from_the_complete_receipt(monkeypatch):
         receipt.calls = ()
     with pytest.raises(TypeError):
         A.Ledger.open([(a, t.shape, ca)])
-    with mock.patch.object(A, "_fresh_source", lambda: source):
-        assert A.Ledger.open(receipt).key == window.key
+
+
+def test_a_caller_built_ledger_has_no_key():
+    """The red team's first probe: a ledger built with a key from a caller-chosen source. `Ledger` takes no receipt, key
+    or source, and sets none afterwards, so only `Ledger.open` makes one that draws."""
+    import pytest
+
+    import circuit_fixtures as F
+    from verity_pouw.circuit import traced_as
+    from verity_pouw.circuit.anchors import Ledger
+    from verity_pouw.protocol import DomainError
+
+    call = F.call(32, 64, 32)
+    t, an = traced_as("ncp-v2-shift24", 32, 64, 32), _anchors(call)
+    receipt, _window_ = _window(t, [an])
+    chosen = derive(b"caller-chosen", PL.DRAW_DOMAIN, {"receipt": receipt.digest()})
+    for built in (lambda: Ledger(receipt=receipt, key=chosen), lambda: Ledger(receipt, chosen)):
+        with pytest.raises(TypeError):
+            built()
+    bare = Ledger()
+    for name, value in (("key", chosen), ("_key", chosen), ("receipt", receipt), ("_receipt", receipt), ("_source", b"x")):
+        with pytest.raises(AttributeError):
+            setattr(bare, name, value)
+    with pytest.raises(DomainError, match="opened from its complete receipt"):
+        t.draw(PL.WorkLaw(2), an, bare)
+
+
+def test_an_opened_ledger_s_key_cannot_be_reassigned():
+    """The red team's second probe: an opened ledger whose key is reassigned. The key is set once, in `Ledger.open`, and
+    `Traced.draw` reads it from the ledger, so a caller's key never reaches a draw."""
+    import pytest
+
+    import circuit_fixtures as F
+    from verity_pouw.circuit import traced_as
+
+    call = F.call(32, 64, 32)
+    t, an = traced_as("ncp-v2-shift24", 32, 64, 32), _anchors(call)
+    receipt, window = _window(t, [an])
+    derived, chosen = window.key, derive(b"caller-chosen", PL.DRAW_DOMAIN, {"receipt": receipt.digest()})
+    for name in ("key", "_key"):
+        with pytest.raises(AttributeError):
+            setattr(window, name, chosen)
+    assert window.key == derived and t.draw(PL.WorkLaw(2), an, window) == PL.draw(derived, t.layout(), PL.WorkLaw(2),
+                                                                                  an.call_index)
+
+
+def test_an_opened_ledger_s_receipt_cannot_be_swapped():
+    """The red team's third probe: an opened ledger whose receipt is swapped for a larger one after the key exists, so a
+    call committed after the key would be drawn under it. The receipt is set once, in `Ledger.open`, and the later call
+    is refused."""
+    import hashlib
+
+    import pytest
+
+    import circuit_fixtures as F
+    from verity_pouw.circuit import traced_as
+    from verity_pouw.circuit.anchors import Receipt
+    from verity_pouw.protocol import DomainError
+
+    call = F.call(32, 64, 32)
+    t, a, late = traced_as("ncp-v2-shift24", 32, 64, 32), _anchors(call, forward=1), _anchors(call, forward=2)
+    receipt, window = _window(t, [a])
+    larger = Receipt(receipt.calls + ((late, t.shape, hashlib.sha512(b"late").digest()),))
+    for name in ("receipt", "_receipt"):
+        with pytest.raises(AttributeError):
+            setattr(window, name, larger)
+    assert window.receipt is receipt
+    with pytest.raises(DomainError, match="not on the window's receipt"):
+        t.draw(PL.WorkLaw(2), late, window)
+
+
+def test_openings_are_checked_against_the_receipt_s_commitment():
+    """The red team's tier-3 item: the call's A-row openings are checked against its commitment as the opened ledger's
+    receipt lists it, by call index (`Ledger.commitment`), never one supplied with the openings. The prover's own rows
+    under the receipt's commitment pass; rows committed under any other commitment, a missing row, a row opened twice,
+    or a call the receipt doesn't list are refused."""
+    import pytest
+
+    import circuit_fixtures as F
+    from verity_pouw import audit
+    from verity_pouw.circuit import traced_as
+    from verity_pouw.circuit.anchors import Ledger
+    from verity_pouw.protocol import DomainError
+
+    call = F.call(32, 64, 32)
+    t, an = traced_as("ncp-v2-shift24", 32, 64, 32), _anchors(call)
+    rows = [bytes(v & 0xFF for v in r) for r in call.a]
+    binding = audit.activation_binding(call.salt, 7)
+    domain = audit.rows_domain(binding, 7, len(rows))
+    tree = audit.commit_rows(binding, 7, rows)
+    other = audit.commit_rows(binding, 7, [bytes(len(r)) for r in rows])
+    _receipt, window = _window(t, [an], commitments=[tree.commitment.root])
+    assert window.commitment(an) == tree.commitment.root
+    plan = t.draw(PL.WorkLaw(2), an, window)
+    opened = sorted(r for kind, r in plan.openings if kind == "a")
+    t.check_openings(plan, an, window, domain, [tree.open(r) for r in opened])
+    for bad in ([other.open(r) for r in opened], [tree.open(r) for r in opened[1:]],
+                [tree.open(r) for r in opened] + [tree.open(opened[0])]):
+        with pytest.raises(DomainError):
+            t.check_openings(plan, an, window, domain, bad)
+    for no_receipt in (Ledger(),):
+        with pytest.raises(DomainError, match="window's receipt"):
+            no_receipt.commitment(an)
+    with pytest.raises(DomainError, match="not on the window's receipt"):
+        window.commitment(_anchors(call, forward=call.forward + 9))
+
+
+def test_the_record_keeps_the_source_once_the_draw_is_sent():
+    """The red team's answer to question 2: the audit record keeps the window's source and receipt digest once its draw
+    is sent, so a third party re-derives the key (`replay_key`) and so the draw. Before it is sent the record is refused,
+    and after it the window draws nothing more. What the record can't show is that the source was fresh."""
+    import pytest
+
+    import circuit_fixtures as F
+    from verity_pouw.circuit import traced_as
+    from verity_pouw.circuit.anchors import replay_key
+    from verity_pouw.protocol import DomainError
+
+    call = F.call(32, 64, 32)
+    t, a, b = traced_as("ncp-v2-shift24", 32, 64, 32), _anchors(call, forward=1), _anchors(call, forward=2)
+    source = bytes(range(32))
+    receipt, window = _window(t, [a, b], source)
+    plan = t.draw(PL.WorkLaw(2), a, window)
+    with pytest.raises(DomainError, match="once its draw is sent"):
+        window.record()
+    window.sent()
+    with pytest.raises(DomainError, match="sent"):
+        t.draw(PL.WorkLaw(2), b, window)
+    record = window.record()
+    assert record == {"domain": PL.DRAW_DOMAIN, "receipt": receipt.digest().hex(), "source": source.hex()}
+    assert replay_key(record) == window.key
+    assert PL.draw(replay_key(record), t.layout(), PL.WorkLaw(2), a.call_index) == plan
+    with pytest.raises(DomainError):
+        replay_key({**record, "domain": "verity/pouw/other/v1"})
 
 
 def test_each_window_s_source_is_fresh():
@@ -530,7 +663,7 @@ def test_the_call_s_y_is_linked_to_the_weight_program():
     call = F.call(32, 64, 32)
     t = traced_as("ncp-v2-shift24", 32, 64, 32)
     _receipt, window = _window(t, [_anchors(call)])
-    plan = t.draw(window.key, PL.WorkLaw(2), _anchors(call), window)
+    plan = t.draw(PL.WorkLaw(2), _anchors(call), window)
     assert {cs for role, cs in plan.openings if role == "y"} == set(plan.proved_y) != set()
     weight_out = list(evaluate(ncp2.weight(call.shape), *call.weight_args()))
     args = call.args()
