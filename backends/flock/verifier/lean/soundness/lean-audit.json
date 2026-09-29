@@ -282,7 +282,44 @@
    "assumptions": [],
    "type_hash": "000000004509b599"
   },
-  "FlockSoundness.Audit.Partition.audit_exfiltration": {},
+  "FlockSoundness.Audit.Partition.audit_exfiltration": {
+   "signature": [
+    "FlockSoundness.Audit.Partition.audit_exfiltration {C : FlockSoundness.Audit.Circuit} {n : Nat}",
+    "  (P : FlockSoundness.Audit.Partition C n) {L : FlockSoundness.Audit.Law n} {Reg : Type}",
+    "  {session : Finset (Fin n) → Reg → FlockSoundness.Game Bool}",
+    "  {X : (R : Reg) → FlockSoundness.Audit.Cont L Reg session R → Fin C.N → Bool}",
+    "  {ext : (S : Finset (Fin n)) → (R : Reg) → (session S R).Strategy → Fin n → Option (Fin C.N → Bool)}",
+    "  {a : Fin C.N → Bool} {εks δlink δin : ENNReal} {D : Finset (Fin C.N)} {M : Type} [Fintype M] [Nonempty M]",
+    "  [DecidableEq M] (hks : (P.analysis X ext).KnowledgeSound εks) (hlink : (P.analysis X ext).LinkSound δlink)",
+    "  (hin : FlockSoundness.Audit.Partition.AnchorsSound X a δin) (hD : Finset.instPartialOrder.le D P.committed)",
+    "  (hb : Fin n → Nat) (K : Finset (Fin n) → Finset (Fin C.N))",
+    "  (hK : ∀ (B : Finset (Fin n)), Finset.instPartialOrder.le (K B) P.committed)",
+    "  (hsep : ∀ (B : Finset (Fin n)), P.Separates (K B) B D)",
+    "  (hw : ∀ (B : Finset (Fin n)), instLENat.le (K B).card (B.sum fun u => hb u)) {δ : ENNReal} {H k : Nat}",
+    "  (hH : FlockSoundness.Audit.IsHarmBound L (fun u => (hb u).cast) δ H.cast)",
+    "  (hk : ENNReal.instPartialOrder.lt (L.miss (instHAdd.hAdd k 1)) δ)",
+    "  (σ : M → (FlockSoundness.Audit.audit L Reg session).Strategy)",
+    "  (g : ((Subtype fun x => SetLike.instMembership.mem D x) → Bool) → M) :",
+    "  ENNReal.instLE.le",
+    "    (FlockSoundness.Game.avg fun m =>",
+    "      FlockSoundness.Game.prob",
+    "        (fun o =>",
+    "          And (Eq o.fst Bool.true)",
+    "            (Eq",
+    "              (g",
+    "                (FlockSoundness.Audit.Partition.out D",
+    "                  (X (FlockSoundness.Audit.reg (σ m)) (FlockSoundness.Audit.cont (σ m)))))",
+    "              m))",
+    "        (FlockSoundness.Audit.audit L Reg session) (σ m))",
+    "    (instHAdd.hAdd",
+    "      (instHDiv.hDiv",
+    "        (instHMul.hMul (instHPow.hPow 2 H) ((Finset.range (instHAdd.hAdd k 1)).sum fun j => n.choose j)).cast",
+    "        (Fintype.card M).cast)",
+    "      (instHAdd.hAdd (instHAdd.hAdd (instHAdd.hAdd δ εks) δlink) δin))"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000303ddf3e"
+  },
   "FlockSoundness.Audit.Partition.audit_influence": {
    "signature": [
     "FlockSoundness.Audit.Partition.audit_influence {C : FlockSoundness.Audit.Circuit} {n : Nat}",
@@ -475,7 +512,16 @@
    "assumptions": [],
    "type_hash": "00000000dd94d473"
   },
-  "FlockSoundness.Audit.card_guess_le": {},
+  "FlockSoundness.Audit.card_guess_le": {
+   "signature": [
+    "FlockSoundness.Audit.card_guess_le {M O : Type} [Fintype M] [DecidableEq M] [DecidableEq O] (Y : Finset O) (y : M → O)",
+    "  (g : O → M) :",
+    "  instLENat.le (Finset.filter (fun m => And (SetLike.instMembership.mem Y (y m)) (Eq (g (y m)) m)) Finset.univ).card",
+    "    Y.card"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000ef550d88"
+  },
   "FlockSoundness.Merkle.opening_binding": {
    "signature": [
     "FlockSoundness.Merkle.opening_binding {Col D : Type} (H : List UInt8 → D) (E : FlockSoundness.Merkle.Enc Col D)",
@@ -1382,6 +1428,7 @@
     "FlockSoundness.Audit.Partition.Refines.twoStage_influence",
     "FlockSoundness.Audit.Partition.Separates.mono",
     "FlockSoundness.Audit.Partition.Separates.union",
+    "FlockSoundness.Audit.Partition.audit_exfiltration",
     "FlockSoundness.Audit.Partition.audit_influence",
     "FlockSoundness.Audit.Partition.card_delivered_le",
     "FlockSoundness.Audit.Partition.card_influenceSet_le",
@@ -1468,7 +1515,10 @@
    "definitions": {
     "FlockSoundness.Audit.IsHarmBound": "342da0e09b023d14"
    },
-   "pins": ["FlockSoundness.Audit.Partition.card_influenceSet_le_harm"]
+   "pins": [
+    "FlockSoundness.Audit.Partition.audit_exfiltration",
+    "FlockSoundness.Audit.Partition.card_influenceSet_le_harm"
+   ]
   },
   "FlockSoundness.Audit.Influence": {
    "digest": "07072fcd892eda625719fd77c631703a",
@@ -1490,6 +1540,7 @@
     "FlockSoundness.Audit.Partition.Refines.twoStage_influence",
     "FlockSoundness.Audit.Partition.Separates.mono",
     "FlockSoundness.Audit.Partition.Separates.union",
+    "FlockSoundness.Audit.Partition.audit_exfiltration",
     "FlockSoundness.Audit.Partition.audit_influence",
     "FlockSoundness.Audit.Partition.card_delivered_le",
     "FlockSoundness.Audit.Partition.card_influenceSet_le",
@@ -1540,6 +1591,7 @@
     "FlockSoundness.Audit.InfluenceWitness.A.influence",
     "FlockSoundness.Audit.InfluenceWitness.Gen.harm_witness",
     "FlockSoundness.Audit.Partition.Refines.twoStage_influence",
+    "FlockSoundness.Audit.Partition.audit_exfiltration",
     "FlockSoundness.Audit.Partition.audit_influence",
     "FlockSoundness.Audit.Partition.card_admissible_le",
     "FlockSoundness.Audit.Partition.card_influenceSet_le_harm",
@@ -1567,6 +1619,7 @@
    "pins": [
     "FlockSoundness.Audit.InfluenceWitness.A.accepts",
     "FlockSoundness.Audit.InfluenceWitness.A.influence",
+    "FlockSoundness.Audit.Partition.audit_exfiltration",
     "FlockSoundness.Audit.Partition.audit_influence",
     "FlockSoundness.Audit.Partition.flock_e2e_count",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn"
@@ -1760,6 +1813,7 @@
     "FlockSoundness.Audit.InfluenceWitness.A.influence",
     "FlockSoundness.Audit.InfluenceWitness.Gen.harm_witness",
     "FlockSoundness.Audit.Partition.Refines.twoStage_influence",
+    "FlockSoundness.Audit.Partition.audit_exfiltration",
     "FlockSoundness.Audit.Partition.audit_influence",
     "FlockSoundness.Audit.Partition.card_admissible_le",
     "FlockSoundness.Audit.Partition.card_influenceSet_le_harm",
@@ -1858,6 +1912,7 @@
    "pins": [
     "FlockSoundness.Audit.InfluenceWitness.A.influence",
     "FlockSoundness.Audit.Partition.Refines.twoStage_influence",
+    "FlockSoundness.Audit.Partition.audit_exfiltration",
     "FlockSoundness.Audit.Partition.audit_influence",
     "FlockSoundness.Audit.Partition.flock_e2e_count",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn"
