@@ -189,6 +189,14 @@ recommendation, and record his ruling as a line here or in a skill so nobody
 asks twice. The rulings so far, and friction notes for what you can't fix now:
 `.agents/skills/friction/SKILL.md`.
 
+Two objectives are open, and Daniel wants help with them while we develop the
+codebase and the research harness: the right amount of cross-agent chatter and
+note-taking, enough to drive self-improvement and process wins and to catch
+inefficiencies but no more; and the right balance of autonomy, teamwork and
+asking Daniel. Neither is settled, and agents are expected to use their judgment
+and help tune both. Each ruling and each friction note is how a balance gets
+codified (`.agents/skills/friction/SKILL.md`).
+
 A guard never fails open, and an agent VM can be suspended at any moment, so
 nothing that bounds spend or preserves results may depend on one: pods bound
 themselves (`research pods create --max-hours`, under a line of the notes repo's
