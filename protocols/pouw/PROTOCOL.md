@@ -487,6 +487,23 @@ template parameters, and the anchors fix the call's:
 (field 1), every path from a PoUW unit (the domain, digests, pads, nodes, the key, the forming, the tiles) to y crosses a
 Z, 8,192 bits per tile, and only the dequantization units (16 bits each) are width-checked.
 
+**The leaf** (X-SPC-92). #295's transcript leaf is two-level, its production default: a 64 × 64 tile's leaf is
+SHAKE256 over its 16 subtiles' digests, and a subtile is the circuit's 16 × 16 tile. From a tile's credited words (its
+first field: cell-major, per cell I_1 … I_T and R_2 … R_(T−1)) and each cell's R_T = RN_f32(R_(T−1) + I_T), the tile's own
+`F32Add_v1`, `fp8.subtile_digest` and `fp8.leaf_digest` give #295's bytes:
+
+~~~text
+sub(a, b) = SHAKE256("verity/pouw/fp8-is-h100-<tag>/subtile" ‖ 0x00 ‖ the layer's words ‖ the core words)[:32]
+            the layer's words: its rows' then its columns' (none for D-3s); the core words: little-endian, step-major,
+            row-major over the subtile's cells within a step, I_τ before R_τ, R_1 = I_1 unchecked, R_T = Z included
+leaf      = SHAKE256("verity/pouw/fp8-is-h100-<tag>/leaf" ‖ 0x00 ‖ sub(0, 0) ‖ sub(0, 1) ‖ … ‖ sub(3, 3))[:32]
+            subtile (a, b) is rows 16a … 16a + 15 and columns 16b … 16b + 15 of the 64 × 64 tile, row-major
+~~~
+
+`test_the_subtile_digests_are_295s_leaf_vector` holds this to #295's pinned `leaf-64-d3s-f16` (all 16 sub-digests and the
+leaf), and `test_the_circuit_s_tiles_give_295s_production_leaf` holds a 64 × 128 × 64 call's circuit tiles to #295's
+production leaf on the same call.
+
 **The draw** (`plan.fp8_layout`). A tile's closure is `ncp-v2`'s (its X and Y strips, its strip's digest, the nodes on
 the strip's path, the key) plus the domain unit and the **pad cone**, every pad strip and every node with no row beneath
 it: a pad has no tile beneath it that a wrong one could be charged to. Its Y strip's `NcpFp8Amp`, in the weight's
@@ -514,8 +531,6 @@ the verifier's, as `ncp-v2`'s: derived from the shape and the declaration's leng
 - For NCP-FP8's circuit:
   - production shapes (k in the thousands, m and n up to the model's) as a recorded run;
   - C-Flock pieces for its primitives;
-  - #295's word leaf at the circuit's tile (X-SPC-92). The reference runs #295's scheme on 16 × 16 tiles, its test
-    instance; its production leaf is one SHAKE256 over a 64 × 64 tile's words. Decided with #295's owner: a two-level
-    leaf, SHAKE256 over each 16 × 16 subtile's words and SHAKE256 over the 16 sub-digests as the 64 × 64 leaf. Until
-    #295 makes it the default, a verifier can't combine #295's transcript with these proofs, and the circuit's tile
-    returns its words unhashed: the sub-digest, and the opening's 15 siblings as committed inputs, come with it.
+  - the leaf's link in the Program: a unit that hashes a drawn tile's words to its sub-digest and combines it with the
+    opening's 15 siblings (committed inputs) into the transcript's leaf, and its place under the separator and the
+    width rule. Today the tile returns its words unhashed, and `fp8.subtile_digest` computes the sub-digest from them.

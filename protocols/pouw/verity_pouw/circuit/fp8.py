@@ -46,6 +46,7 @@ in runs of one byte-length signature, and the per-call units return one frontier
 """
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any, Callable, Sequence
@@ -691,6 +692,41 @@ def tile_words(k: int) -> int:
     return 2 * (3 * k // SLICE) - 2
 
 
+def _leaf_tag(sums: str, part: str) -> bytes:
+    return f"verity/pouw/{S8.PREFIX}-{tag(sums)}/{part}".encode() + b"\0"
+
+
+def subtile_digest(sums: str, k: int, words: Sequence[int]) -> bytes:
+    """#295's sub-digest of one 16 × 16 subtile (`FP8IS.subdigest`), from the circuit's tile's credited words (its first
+    field: cell-major, per cell I_1 … I_T and R_2 … R_(T−1)), with each cell's R_T = RN_f32(R_(T−1) + I_T) by the tile's
+    own `F32Add_v1`:
+
+        sub = SHAKE256("verity/pouw/fp8-is-h100-<tag>/subtile" ‖ 0x00 ‖ the layer's words ‖ the core words)[:32]
+
+    The core words are little-endian, step-major, row-major over the cells within a step, I_τ before R_τ, and R_1 = I_1
+    unchecked. D-3s's layer has no checked words of its own (`D3Family.form`), so none come before them."""
+    steps, per = 3 * k // SLICE, tile_words(k)
+    if len(words) != D * D * per:
+        raise ValueError(f"a tile at k = {k} credits {D * D * per} words, not {len(words)}")
+    add = _prim("F32Add_v1").evaluate
+    cells = [list(words[c * per:(c + 1) * per]) for c in range(D * D)]
+    out = bytearray()
+    for t in range(steps):
+        for w in cells:
+            out += w[t].to_bytes(4, "little")
+            if t == steps - 1:
+                out += add(w[-1] if steps > 2 else w[0], w[t]).to_bytes(4, "little")
+            elif t:
+                out += w[steps + t - 1].to_bytes(4, "little")
+    return hashlib.shake_256(_leaf_tag(sums, "subtile") + bytes(out)).digest(32)
+
+
+def leaf_digest(sums: str, subdigests: Sequence[bytes]) -> bytes:
+    """#295's Merkle leaf of a 64 × 64 tile (`FP8IS.digest`): SHAKE256("verity/pouw/fp8-is-h100-<tag>/leaf" ‖ 0x00 ‖ its
+    16 subtiles' digests, row-major)[:32]. A proof of one circuit tile opens it with the other 15."""
+    return hashlib.shake_256(_leaf_tag(sums, "leaf") + b"".join(subdigests)).digest(32)
+
+
 NcpFp8TileDef = CompositeDefinition(
     "NcpFp8Tile", 1, ("K",),
     lambda S: ((("xs", Array(D, Array(3 * S.K, U8))), ("ys", Array(D, Array(3 * S.K, U8)))),
@@ -1002,6 +1038,6 @@ def window(shape: Shape, calls: int, sums: str = "f16", lengths: Lengths = Lengt
 
 __all__ = ["BF16", "D", "F32", "Family", "Hoisted", "Lengths", "NcpFp8Dequant", "SUMS", "Shape", "WINDOW_PER_CALL",
            "amp_template", "amps_type", "call_templates", "digest_template", "domain_layout", "domain_template",
-           "form_template", "hs_type", "hw_type", "key_layout", "key_template", "leaf_fn", "linear", "node_fn",
-           "node_template", "pad_fn", "pad_template", "perm", "prefix", "prefix_parts", "row_fn", "strip_lengths", "tag",
-           "tile_template", "tile_words", "upper_nodes", "weight", "weight_templates", "window"]
+           "form_template", "hs_type", "hw_type", "key_layout", "key_template", "leaf_digest", "leaf_fn", "linear", "node_fn",
+           "node_template", "pad_fn", "pad_template", "perm", "prefix", "prefix_parts", "row_fn", "strip_lengths",
+           "subtile_digest", "tag", "tile_template", "tile_words", "upper_nodes", "weight", "weight_templates", "window"]

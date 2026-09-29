@@ -4,8 +4,10 @@ unit is behind the pinned Z separator."""
 from __future__ import annotations
 
 import hashlib
+import json
 import random
 import struct
+from pathlib import Path
 
 import pytest
 
@@ -496,3 +498,52 @@ def test_the_anchors_fix_the_definition_s_byte_lengths_and_a_window_s_indices():
     ledger.admit(Fp8Anchors(c.shape, c.salt, c.index + 1, c.weight), c.shape)
     with pytest.raises(DomainError):
         ledger.admit(Fp8Anchors(c.shape, c.salt, c.index, 12), c.shape)
+
+
+# ---- #295's two-level leaf ----------------------------------------------------------------------------------------------
+
+def _tile_layout_words(cells) -> list[int]:
+    """#295's checked cells of one 16 × 16 subtile as the circuit's tile credits them: cell-major, I_1 … I_T, R_2 … R_(T−1)."""
+    return [w for atoms, running in cells for w in atoms + running[1:-1]]
+
+
+def test_the_subtile_digests_are_295s_leaf_vector():
+    """#295's `leaf-64-d3s-f16` pins a 64 × 64 tile's 16 sub-digests and its leaf. Each subtile's cells, laid out as the
+    circuit's tile credits them, give those bytes through `fp8.subtile_digest` (R_T from the tile's own add) and
+    `fp8.leaf_digest`: the circuit's words are the leaf's."""
+    import fp8_is_vectors as V
+    from verity_pouw.protocol import Tile
+
+    case = next(c for c in V.CASES if c[0] == "leaf-64-d3s-f16")
+    pinned = next(c for c in json.loads((Path(__file__).parent / "vectors" / "fp8_is.json").read_text())["cases"]
+                  if c["case"] == "leaf-64-d3s-f16")
+    name, forming, shape, r, c, index, weight = case
+    s, ctx = V.scheme(forming, shape), V.ctx_of(name, shape, index, weight)
+    cap_a, cap_b = V.caps(s.forming)
+    tile = Tile(tuple(range(*r)), tuple(range(*c)))
+    ops = s.encode(ctx, s.noise(ctx), V.rows(name, "A", 64, shape[1], cap_a), V.rows(name, "B", 64, shape[1], cap_b), tile)
+    checked = s.checked(ctx, ops)
+    assert checked.trace == b""                                             # D-3s's layer checks no words of its own
+    subs = [fp8.subtile_digest("f16", shape[1], _tile_layout_words(
+        [checked.cells[i][j] for i in range(16 * a, 16 * a + 16) for j in range(16 * b, 16 * b + 16)]))
+        for a in range(4) for b in range(4)]
+    assert [d.hex() for d in subs] == pinned["subdigests"]
+    assert fp8.leaf_digest("f16", subs).hex() == pinned["digest"]
+
+
+@pytest.mark.slow
+def test_the_circuit_s_tiles_give_295s_production_leaf():
+    """End to end: a 64 × 128 × 64 call through the circuit, its 16 tiles' credited words hashed as `fp8.subtile_digest`
+    has them, equal #295's production leaf (`FP8IS` on its 64 × 64 tile) on the same call, sub-digest by sub-digest."""
+    from verity_pouw.protocol import Context, Matmul, Tile
+    from verity_pouw.schemes import fp8_is as S8
+
+    c = call(64, 128, 64, index=7, weight=3)
+    _y, words = run(c)
+    subs = [fp8.subtile_digest("f16", 128, w) for w in words]              # tiles (rs, cs) row-major: subtile (a, b)
+    sc = S8.FP8IS(S8.D3s(sums="f16"), mnk_min=16, tile=(64, 64))
+    ctx = Context(c.salt, Matmul(c.index, PShape(64, 128, 64), c.weight), R.root_a(c), bytes(32))
+    ops = sc.encode(ctx, sc.noise(ctx), [bytes(r) for r in c.a], [bytes(r) for r in c.b], Tile(tuple(range(64)), tuple(range(64))))
+    checked = sc.checked(ctx, ops)
+    assert subs == sc.subdigests(checked)
+    assert fp8.leaf_digest("f16", subs) == sc.digest(ctx, None, checked)
