@@ -324,12 +324,12 @@ H1tDequant{BIAS} output entry         Z, s_i, t_j (and bias_j)                  
   too; its separator and width rule read every call's y (`Circuit.calls`), and `anchors.h1t_window_inputs` builds its
   anchored inputs, one salt, weight id and columns, with a `Ledger` (X-SPC-111).
 - **The draw** (`plan.h1t_layout`): the strata are one per template, as `verify` derives them (root's ruling on
-  X-SPC-84), the tile's with its W_ref and the others at their floors. A tile's closure is the tile, its X strip's
-  forming unit and that strip's key. A
-  tile's W_ref is its cells' 2T k32 atoms (`h1t.tile_work`, 64·T MACs a cell; the forming's share isn't counted). A
-  proved tile opens its 16 weight rows, and a proved key or X unit its strip's rows (the key reads them itself, so a
-  key drawn at its floor for a strip no drawn tile covers opens them too, X-SPC-110). The layout is the verifier's: `Traced.check_layout`
-  refuses any other, and `draw` refuses a tile mapped to its X strip. Each call's subsets are keyed by its (forward,
+  X-SPC-84), the tile's with its W_ref and the others at their floors: 1, but in a window each call's `H1tDequant`
+  has option B's floor ⌈K_y·n_c/N⌉ (`window_laws`, as for `ncp-v2`). A tile's closure is the tile, its X strip's
+  forming unit and that strip's key. A tile's W_ref is its cells' 2T k32 atoms (`h1t.tile_work`, 64·T MACs a cell; the
+  forming's share isn't counted). A proved tile opens its 16 weight rows, and a proved key or X unit its strip's rows
+  (the key reads them itself, so a key drawn at its floor for a strip no drawn tile covers opens them too, X-SPC-110).
+  The layout is the verifier's: `Traced.check_layout` refuses any other, and `draw` refuses a tile mapped to its X strip. Each call's subsets are keyed by its (forward,
   position) with the template (X-SPC-96), and the verifier draws through `Traced.draw`. H-1T has no weight Program: its
   tiles read B′'s rows directly, so there is no Y link to open.
 

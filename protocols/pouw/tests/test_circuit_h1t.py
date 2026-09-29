@@ -385,3 +385,16 @@ def test_a_window_s_defaults_cover_every_call_and_its_inputs_are_the_verifier_s(
                 [an[0], H1tAnchors(c1.salt, 4, 5, 2, 12, tuple(c1.rowids), tuple(range(16)))]):
         with pytest.raises(DomainError):
             h1t_window_inputs(bad, shape)
+
+
+def test_y_is_drawn_at_option_b_s_floors():
+    """Root's option B (X-SPC-105) on H-1T: in a window, each call's `H1tDequant` has floor ⌈K_y·n_c/N⌉ in its work table,
+    and every other zero-work template 1."""
+    from verity_pouw.circuit import plan as PL
+    from verity_pouw.circuit import traced_h1t
+
+    lay = traced_h1t(32, 96, 32).layout()
+    (law, *_) = PL.window_laws([lay] * 100)
+    table, deq = PL.work_table(lay, law), next(s for s in lay.strata if s.role == "dequant")
+    assert table[deq.name] == {"work": 0, "floor": -(-PL.RECORD_K // 100)} and law.sizes(lay.strata)[deq.name] == 278
+    assert all(table[s.name]["floor"] == 1 for s in lay.strata if s.role != "dequant")
