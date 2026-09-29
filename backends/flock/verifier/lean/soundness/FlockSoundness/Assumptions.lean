@@ -55,13 +55,16 @@ bytes**, for the unit draw.
 
 The verifier draws the units it audits from `IO.getRandomBytes`: `Flock.Draw.drawOS` is `Flock.Draw.drawWith` with every
 stream's bytes from it. To Lean's logic an `IO` action is a function of the world, and `IO.getRandomBytes` an opaque
-constant, so a `Prop` saying its bytes are random would be refutable, and every theorem taking it vacuous. A3 is stated
-instead of a byte source: a finite probability space `Ω` (`prCoin` weighs its outcomes evenly) and, on outcome `ω`, the
+constant, so a `Prop` saying its bytes are random would be refutable, and every theorem taking it vacuous. At run time,
+Lean v4.34.0's runtime implements it as `lean_io_get_random_bytes` (`src/runtime/io.cpp`), which reads `/dev/urandom`
+on Unix and calls `BCryptGenRandom` on Windows. A3 is stated instead of a byte source: a finite probability space `Ω` (`prCoin` weighs its outcomes evenly) and, on outcome `ω`, the
 bytes `t ω i` that stream `i` returns, its first `L i`. The source is uniform when every event about those bytes has the
 probability it has for independent uniform bytes.
 
 What A3 assumes of the operating system is that the running verifier's calls to `IO.getRandomBytes` are such a source,
-every call's bytes independent of every earlier call's, for every `L`. -/
+every call's bytes independent of every earlier call's, for every `L`. The step from `IO` to the model rests on
+`drawWith` being generic in its monad, together with A3: the theorems read `drawWith` on a model byte source, and
+`drawOS` runs the same `drawWith` on `IO.getRandomBytes` (`drawOS_def`). -/
 def UniformRandomBytes {Ω : Type} [Fintype Ω] {m : ℕ} (L : Fin m → ℕ) (t : Ω → (i : Fin m) → Fin (L i) → Fin 256) :
     Prop :=
   ∀ E : ((i : Fin m) → Fin (L i) → Fin 256) → Prop, prCoin (fun ω => E (t ω)) = prCoin E
