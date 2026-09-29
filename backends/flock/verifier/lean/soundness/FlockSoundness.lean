@@ -104,7 +104,6 @@ import FlockSoundness.ExecDrawOS
 import FlockSoundness.Randomness
 import FlockSoundness.PlanDraw
 import FlockSoundness.KeyedDraw
-import FlockSoundness.Audit.WindowCompiled
 import FlockSoundness.Audit.RegDraw
 import FlockSoundness.Audit.StratifiedMiss
 import FlockSoundness.Audit.Work
