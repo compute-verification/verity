@@ -66,6 +66,16 @@ $\Pr[\text{accept} \wedge W_{\mathrm{wrong}(X)} \ge T]$ by $((W - T)/W)^K$ plus 
 closure draws: proving more units than are drawn, on the same coins, never raises an escape. `FlockWork.lean`'s
 `workRule_eq_draw`: the executable's `Flock.Draw.workK` is `Law.workRule`.
 
+**Theorems, closure draws** (`Audit/Closure.lean`; `../../PROTOCOL.md` §7.3): `Law.closure L cl` is `L` widened on its coins
+by the verifier's closure map, each drawn unit proved with its closure. `closure_escape`: its escape is the base law's
+escape of $B \cup \mathrm{unsound}(B)$, the units whose closure meets $B$, so a wrong unit that is never drawn on its own
+is charged to the units above it. `harm_le_unsoundWork`: a wrong unit's harm (the work of the units whose closure holds
+it) is in the unsound work, drawn or not; `unsoundWork_le_harm` (coverage) and `unsoundWork_singleton`. `audit_work_closure`
+and `extraction_audit_work_closure`: under the work law's closure draw,
+$\Pr[\text{accept} \wedge \mathrm{work}(\mathrm{unsound}(\mathrm{wrong}(X))) \ge T] \le ((W - T)/W)^K$ plus the per-unit
+terms; `audit_work_closure_harm`: likewise for a wrong unit's harm; `audit_work_closure_of_record`: $2^{-40}$ at
+$K = 27{,}713$ for unsound work of at least 0.1%.
+
 **Theorems, two-stage** (`Audit/TwoStage.lean`):
 
 - `twoStage_profile`, variant (b), nested sampling: the profile over the coarse partition with the effective escape

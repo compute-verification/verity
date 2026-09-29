@@ -323,7 +323,7 @@ The draw is the object
 {"law": "subset",     "population": N, "k": K,                       "units": [u_0 < u_1 < …]}
 {"law": "bernoulli",  "population": N, "p": "num/den",               "units": [u_0 < u_1 < …]}
 {"law": "stratified", "population": N, "k": K, "strata": [stratum…], "units": [u_0 < u_1 < …]}
-{"law": "work",       "population": N, "k": K, "strata": [work stratum…], "units": [u_0 < u_1 < …]}
+{"law": "work",       "population": N, "k": K, "strata": [work stratum…], "units": [u_0 < u_1 < …], ["closure": [c_0 < c_1 < …]]}
 ~~~
 
 **The stratified law** is the default (Daniel, Sep 27; the encoding is `note:20260927T1550Z-handoff-from-stratified-law`,
@@ -360,9 +360,22 @@ differ. The stratified law is unchanged.
   `K = 27,713` meets it (`record_sizing`) and `K = 27,712` does not (`record_sizing_one_fewer`). Rounding up keeps
   every unit's inclusion probability at least `K w_s / W`, which the bound needs. Every non-empty stratum draws at
   least one unit, so a wholly wrong stratum is caught (`audit_work_whole_stratum`).
-- **Closure draws** are not part of this law: proving a drawn tile together with the two strips it reads waits for
-  the red team's verdict on the PoUW design's closure theorem. `Law.widen` and `escape_widen_le` carry the work law's
-  bounds to any rule that adds units after the draw.
+- **Closure draws.** A closure draw proves each drawn unit together with its closure: for a tile, the two strips it
+  reads and the node units on its X strip's path. The closure comes from the verifier's own closure map (`--closure F`: a
+  JSON object from a unit's index to the units its credit depends on).
+  - The draw keeps its sampled `units`, so U2's per-stratum counts are unchanged, and adds `"closure"`: the units in the
+    drawn units' closures that are not themselves drawn, ascending (`Draw.closureOf`).
+  - The statement proves both (`UnitDraw.proved`), and U3 counts both.
+  - `verify` refuses a closure draw unless it holds its own closure map, and then the closure must be its own derivation
+    from the drawn units. With the map, a plain work draw is refused too, since it lacks its closure.
+  - What it guarantees (`soundness/FlockSoundness/Audit/Closure.lean`): a set's escape under the closure draw is the work
+    law's escape of the set with the units it makes unsound, those whose closure meets it (`closure_escape`). So a wrong
+    unit that is never drawn on its own, such as a node, is charged the work of every unit above it (`harm_le_unsoundWork`).
+    The audit accepts while the unsound units do at least a fraction `ε` of the work with probability at most
+    `(1 − ε)^K + ε_ks + δ_link` (`audit_work_closure`). At K = 27,713 and ε = 0.1% that is `2^-40`
+    (`audit_work_closure_of_record`).
+  - `Law.widen`'s `escape_widen_le` is weaker. It carries only the base law's escape bounds, and only to a widening on the
+    same coins, and those bound the wrong units' own work, not the unsound work.
 
 The statement carries it as the public header's `unit_draw` (so under `pub.sha` and Σ), instance `i` being unit `u_i`,
 and the record keeps it as `unit_draw`. The offline checks:
@@ -370,8 +383,8 @@ and the record keeps it as `unit_draw`. The offline checks:
 | check | rule |
 |---|---|
 | U1 | the record keeps a draw iff the statement carries one, and they are canonically equal |
-| U2 | the draw is well formed: exactly the law's keys; units ascending, distinct and in `[0, N)`; `subset` has `K ≤ N` units; `bernoulli` has `0 ≤ num ≤ den`, `den > 0`, no unit at `p = 0` and every unit at `p = 1`; `stratified` has `1 ≤ K ≤ N`, each stratum exactly `{template, units, k}` with a distinct template, its ranges ascending, disjoint, not adjacent and non-empty, its `k` the rule's, the strata's ranges tiling `[0, N)` exactly, and exactly `k_s` units in each; `work` has the same checks, with each stratum exactly `{template, units, work, k}`, `W ≥ 1` and each `k` the work rule's. When the verifier holds the program and a template-query partition object, a stratified draw's law must be its own derivation from them, at the draw's `K`. A work draw's law must always be its own derivation from them, its work table and its own `K`, and `verify` refuses a work draw without all four or at another `K` |
-| U3 | the statement's `instances` is the number of drawn units |
+| U2 | the draw is well formed: exactly the law's keys; units ascending, distinct and in `[0, N)`; `subset` has `K ≤ N` units; `bernoulli` has `0 ≤ num ≤ den`, `den > 0`, no unit at `p = 0` and every unit at `p = 1`; `stratified` has `1 ≤ K ≤ N`, each stratum exactly `{template, units, k}` with a distinct template, its ranges ascending, disjoint, not adjacent and non-empty, its `k` the rule's, the strata's ranges tiling `[0, N)` exactly, and exactly `k_s` units in each; `work` has the same checks, with each stratum exactly `{template, units, work, k}`, `W ≥ 1`, each `k` the work rule's, and a closure (when there is one) of non-empty, ascending, distinct units of the population, none of them drawn. When the verifier holds the program and a template-query partition object, a stratified draw's law must be its own derivation from them, at the draw's `K`. A work draw's law must always be its own derivation from them, its work table and its own `K`, and `verify` refuses a work draw without all four or at another `K` |
+| U3 | the statement's `instances` is the number of drawn units and their closure. A work draw's closure must be the verifier's own derivation from its closure map, and `verify` refuses a closure draw without the map |
 
 `stratified_agree.py` checks the Lean verifier against core's (#164's `verity_one_stage.draw`, #161's `Stratified`):
 - the derived law and population, against `draw.derive` and `partition.units`;
