@@ -91,14 +91,44 @@ def test_the_bound_is_at_least_audit_exfiltration_evaluated_in_lean():
         assert exfiltration_bound(p, b) >= H + log2(admissible)
 
 
+def test_stratified_miss_is_the_lean_certified_greedy_fill():
+    """The stratified vectors (`gridS_counts`): Lean fills each law greedily in exact integers, and the kernel checks that
+    tau separates each fill, in (0, 1], every factor taken at least tau and every factor left at most tau,
+    cross-multiplied.  So the fill of K + 1 units attains miss (K + 1) < delta and the fill of K attains miss K >= delta
+    (`stratified_miss_eq_greedy`), for every law with those strata.  Core's `miss` is those fills' exact escapes, at the
+    grid's exact ties and near-ties too, its count bound is K, and its exfiltration reading bounds the numerator as for
+    the uniform law."""
+    data = json.loads(LEAN_VECTORS.read_text())
+    assert len(data["stratified"]) == 16
+    for v in data["stratified"]:
+        law = Stratified(tuple(Stratum(f"s{i}", n, k) for i, (n, k) in enumerate(v["strata"])))
+        names = [s.name for s in law.strata]
+        K, H, b, admissible, delta = v["K"], v["H"], v["bits"], v["admissible"], 2.0 ** v["delta_log2"]
+        after, at = dict(zip(names, v["fill_next"])), dict(zip(names, v["fill"]))
+        assert sum(after.values()) == K + 1 and sum(at.values()) == K
+        assert law.miss(K + 1) == law.escape(after) < Fraction(delta) <= law.escape(at) == law.miss(K)
+        n = law.population
+        p = IntegrityProfile((Level("unit"),), (n,), {"unit": law}, delta)
+        assert law.count_bound(delta) == p.bound() == K and H == b * K
+        assert H <= p.harm_bound(b) < H + b
+        loc = location_bits(p)
+        if 2 * K >= n:
+            assert loc == n and admissible <= 2 ** n
+        else:
+            assert log2(admissible) <= loc <= log2(admissible) + log2(n + 1)
+        assert exfiltration_bound(p, b) >= H + log2(admissible)
+
 def test_the_lean_vectors_were_generated_from_this_tree():
     """The vectors record the sha256 of the exporter and of the soundness package's files they read (`lean/generate.sh`):
-    `audit_exfiltration` (`Audit/Influence.lean`), the uniform law and `subset_miss` (`Audit/Law.lean`), and the toolchain
-    and Mathlib pins.  A change to any of them fails here until the vectors are regenerated."""
+    `audit_exfiltration` (`Audit/Influence.lean`), the uniform law and `subset_miss` (`Audit/Law.lean`), the stratified
+    law and `stratified_miss_eq_greedy` (`Audit/Stratified.lean`, `Audit/StratifiedMiss.lean`), and the toolchain and
+    Mathlib pins.  A change to any of them fails here until the vectors are regenerated."""
     recorded = json.loads(LEAN_VECTORS.read_text())["inputs"]
     soundness = "backends/flock/verifier/lean/soundness/"
     assert set(recorded) == {"protocols/one_stage/tests/lean/ExfiltrationVectors.lean",
                              *(soundness + f for f in ("FlockSoundness/Audit/Influence.lean", "FlockSoundness/Audit/Law.lean",
+                                                       "FlockSoundness/Audit/Stratified.lean",
+                                                       "FlockSoundness/Audit/StratifiedMiss.lean",
                                                        "lake-manifest.json", "lean-toolchain"))}
     stale = [p for p, h in recorded.items() if hashlib.sha256((ROOT / p).read_bytes()).hexdigest() != h]
     assert not stale, f"changed since the vectors were generated, rerun protocols/one_stage/tests/lean/generate.sh: {stale}"
