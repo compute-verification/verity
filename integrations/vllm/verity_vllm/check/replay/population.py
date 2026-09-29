@@ -153,7 +153,7 @@ def _interior_feeders_without_evaluator(pi: ProgramIndex, r: dict, *, depth: int
             if pd is None or pd["members"]:
                 continue                                                         # unmodelled / a member-straddling slice: a replay-time fault, not a name
             pf = pd["family"]
-            if pf not in EVALUATORS:
+            if pf not in EVALUATORS and pf not in DELEGATES:
                 out.add(f"{pf} ({NOT_YET.get(pf, 'no registered evaluator')})")
             elif depth + 1 >= INTERIOR_DEPTH:
                 out.add(f"{pf} (interior chain deeper than {INTERIOR_DEPTH})")

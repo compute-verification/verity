@@ -342,7 +342,7 @@ class _CircuitRun:
             s = np.concatenate([s, np.ones(mp - m, np.float32)])
         if w == 0:
             self.rows_seen += mp
-        bias_bits = np.zeros(n, np.uint16) if bias is None else _bf16_bits(_host(bias).reshape(-1))
+        bias_bits = np.full(n, 0x8000, np.uint16) if bias is None else _bf16_bits(_host(bias).reshape(-1))   # −0: the bf16 add's identity
         call = CR.Call(tuple(tuple(int(v) for v in r) for r in a), tuple(int(v) for v in _f32_bits(s)),
                        tuple(tuple(int(v) for v in r) for r in b), tuple(int(v) for v in _f32_bits(t)),
                        tuple(int(v) for v in bias_bits), self.salt, forward=self.forward, layer=w, site=0, weight=w,

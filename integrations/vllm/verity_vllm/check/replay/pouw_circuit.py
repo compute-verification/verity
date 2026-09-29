@@ -39,6 +39,8 @@ from verity_vllm.protocol_options import pouw
 from verity_vllm.protocol_options import pouw_circuit as PC
 
 M32 = 0xFFFFFFFF
+#: the row's bias when the linear has none: −0, the identity of the bf16 add (`program.registry.pouw_rows`)
+NEG_ZERO_BF16 = 0x8000
 
 
 def anchors(records: Sequence[PC.CallRecord], salt: bytes) -> list[str]:
@@ -138,18 +140,28 @@ def delegate(records: Sequence[PC.CallRecord], sites: Mapping[str, int], issues:
         if weights[1] is None or len(inputs[0]) == 0:
             raise Declined("the row's weight is not a registered slice")
         entries = place.store.entries(place.request_id, place.step, place.op_path, place.member)[0]
+        if not entries:                                  # an interior row (a biased linear's, under its BiasAdd): the module's member
+            canon, _inv = place.store.resolve(place.op_path)
+            for m in sorted({k[3] for k in place.store.idx if k[:3] == (place.request_id, int(place.step), canon)}):
+                entries = place.store.entries(place.request_id, place.step, place.op_path, m)[0]
+                if entries:
+                    break
         if not entries:
             raise Declined(f"no committed output of {place.op_path} at step {place.step}")
         row = int(entries[0].get("element_offset") or 0) // n + place.row
         a, s, b, t, z = int7_linear(np.concatenate(inputs[0]), weights[1], n)
-        y = dequant(z, s, t, (0,) * n)
+        y = dequant(z, s, t, (NEG_ZERO_BF16,) * n)
         c = rec.call
         where = f"{place.request_id} step {place.step} {place.op_path} row {place.row} (call {rec.index} row {row})"
         if row >= len(rec.y):
             issues.append(f"{where}: the call has no such row")
         else:
-            if tuple(int(v) for v in a) != c.a[row] or int(s.view(np.uint32)[0]) != c.s[row]:
-                issues.append(f"{where}: the call's A row or scale is not the quantized committed input")
+            arow = tuple(int(v) for v in a)
+            if arow != c.a[row]:
+                j = next(j for j, (p, q) in enumerate(zip(arow, c.a[row])) if p != q) if len(arow) == len(c.a[row]) else -1
+                issues.append(f"{where}: the call's A row is not the quantized committed input (entry {j})")
+            if int(s.view(np.uint32)[0]) != c.s[row]:
+                issues.append(f"{where}: the call's row scale is not the committed input's")
             if tuple(tuple(int(v) for v in r) for r in b) != c.b or tuple(int(v) for v in t.view(np.uint32)) != c.t:
                 issues.append(f"{where}: the call's weight rows or scales are not the quantized registered weight")
             if list(rec.y[row]) != dequant(z, s, t, c.bias):                      # the call's y carries its bias

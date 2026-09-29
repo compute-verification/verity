@@ -49,12 +49,14 @@ def _bf16(rng, n, scale=1.0):
     return (np.asarray(rng.standard_normal(n) * scale, dtype=np.float32).view(np.uint32) >> 16).astype(np.uint16)
 
 
-def _program():
+def _program(bias: bool = False):
     """Stage-major rows per step (every token's norm before the step's PoUW rows), so a step's PoUW rows are one batch."""
     fields = [("model.model.embed_tokens.weight", V * H, f"Array<{V},Array<{H},Value<16>>>"),
               ("model.model.layers.0.input_layernorm.weight", H, f"Array<{H},Value<16>>"),
               ("model.model.layers.0.mlp.up_proj.weight", NU * H, f"Array<{NU},Array<{H},Value<16>>>"),
               ("model.lm_head.weight", V * NU, f"Array<{V},Array<{NU},Value<16>>>")]
+    if bias:
+        fields.insert(3, ("model.model.layers.0.mlp.up_proj.bias", NU, f"Array<{NU},Value<16>>"))
     off, woff = 0, {}
     for n, c, _t in fields:
         woff[n] = (off, off + c)
@@ -76,6 +78,9 @@ def _program():
                    [[["n", e, 0, H]], W("model.model.layers.0.input_layernorm.weight")]) for k, e in zip(toks, es)]
         ups = [add(f"Gemm_v1{{K={H},N={NU}}}", f"model.{SITE}/triton_launch_{s}a[{k}]",
                    [[["n", ln, 0, H]], W("model.model.layers.0.mlp.up_proj.weight")]) for k, ln in zip(toks, lns)]
+        if bias:                                        # the biased linear: its add is its own row, the module returns post-bias
+            ups = [add(f"BiasAdd_v1{{N={NU}}}", f"model.{SITE}/bias_add_{s}[{k}]", [[["n", u, 0, NU]], W("model.model.layers.0.mlp.up_proj.bias")])
+                   for k, u in zip(toks, ups)]
         lg = add(f"Gemm_v1{{K={NU},N={V}}}", f"model.logits_processor/triton_launch_{s}c[0]", [[["n", ups[-1], 0, NU]], W("model.lm_head.weight")])
         sel = add(f"TokenSelect_v1{{V={V}}}", f"argmax_{s}[0]", [[["n", lg, 0, V]]])
     inst = {"schema": "cb-a/instance-sequence/v1", "digest": "t" * 64, "params": [["prompt", f"Array<{LP},Value<32>>"], ["weights", wtype]],
@@ -111,6 +116,8 @@ class Run:
         self.values, self.blocks, self.dtypes = {}, {}, {}
         lo, hi = woff["model.model.layers.0.mlp.up_proj.weight"]
         w_up = (weights[lo:hi].astype(np.uint32) << 16).view(np.float32).reshape(NU, H)
+        blo, bhi = woff.get("model.model.layers.0.mlp.up_proj.bias", (0, 0))
+        self.bias = (weights[blo:bhi].astype(np.uint32) << 16).view(np.float32) if bhi > blo else None
         monkeypatch.setattr(pouw, "linear_types", lambda: (Linear,))
         self.model = Model(w_up)
         ctx = PO.Context(stage="serve", enabled=("pouw:ncp-v2",), settings={"pouw": {"beacon": BEACON, "transcript_dir": str(tmp_path)}})
@@ -160,11 +167,18 @@ class Run:
                 batch = [(rid, rr) for rid in ("r0", "r1") for rr in pi.rows
                          if pi.describe(rr)["family"] == PC.ROW_FAMILY and pi.describe(rr)["step"] == d["step"]]
                 x = np.stack([(np.concatenate(self._inputs(rid, rr)[0][0]).astype(np.uint32) << 16).view(np.float32) for rid, rr in batch])
-                y = self.model.layers[0].quant_method.apply(self.model.layers[0], x)
+                y = self.model.layers[0].quant_method.apply(self.model.layers[0], x, self.bias)
                 ybits = (np.asarray(y, dtype=np.float32).view(np.uint32) >> 16).astype(np.uint16)
                 for (rid, rr), row in zip(batch, ybits):
-                    self.values[(rid, rr["i"])] = row
-                    self._commit(rid, pi.describe(rr), fam, row)
+                    self.values[(rid, rr["i"])] = row                          # the module's output (post-bias when biased)
+                    if pi.describe(rr)["members"]:
+                        self._commit(rid, pi.describe(rr), fam, row)
+                continue
+            if fam == "BiasAdd_v1" and pi.describe(pi.by_i[r["args"][0][0][1]])["family"] == PC.ROW_FAMILY:
+                for rid in ("r0", "r1"):                                         # the executor returned the post-bias output already
+                    row = self.values[(rid, r["args"][0][0][1])]
+                    self.values[(rid, r["i"])] = row
+                    self._commit(rid, d, fam, row)
                 continue
             for rid in ("r0", "r1"):
                 inputs, wsl = self._inputs(rid, r)
@@ -214,6 +228,19 @@ def world(tmp_path_factory):
                    tmp_path_factory.mktemp("pouw"), mp)
 
 
+@pytest.fixture(scope="module")
+def biased_world(tmp_path_factory):
+    rng = np.random.default_rng(9)
+    inst, woff = _program(bias=True)
+    inst = PC.lower(inst, {f"model.{SITE}": "ncp-v2"})
+    weights = _bf16(rng, max(hi for _lo, hi in woff.values()), 0.5)
+    lo, hi = woff["model.model.layers.0.input_layernorm.weight"]
+    weights[lo:hi] = 0x3F80
+    with pytest.MonkeyPatch.context() as mp:
+        return Run(inst, woff, weights, {"r0": [(i + 2) % V for i in range(LP)], "r1": [(5 * i) % V for i in range(LP)]},
+                   tmp_path_factory.mktemp("pouw-biased"), mp)
+
+
 def _verdict(world, records=None, commitment=None, source=b"\x07" * 32, law=None):
     records = world.records if records is None else records
     commitment = world.commitment if commitment is None else commitment
@@ -251,7 +278,7 @@ def test_the_rows_native_evaluation_is_the_registered_definition():
         x = _bf16(rng, H, scale)
         w = _bf16(rng, NU * H, 0.5)
         a, s, b, t, z = RC.int7_linear(x, w, NU)
-        assert list(evaluate(d, [int(v) for v in x], [int(v) for v in w])) == RC.dequant(z, s, t, (0,) * NU), scale
+        assert list(evaluate(d, [int(v) for v in x], [int(v) for v in w])) == RC.dequant(z, s, t, (RC.NEG_ZERO_BF16,) * NU), scale
 
 
 def test_each_step_is_one_ncp_v2_call_bound_committed_and_served_as_y(world):
@@ -334,3 +361,28 @@ def test_every_other_scheme_stays_refused_beside_sampled_proofs(scheme):
     assert any("no Definition" in r for r in PO.refusals(ctx))
     ok = PO.Context(stage="commit", enabled=("pouw:ncp-v2", "sampled-proofs:vllm-v1"), settings={"pouw": {"beacon": BEACON}})
     assert PO.refusals(ok) == ()
+
+
+def test_a_biased_linear_is_linked_through_its_bias_add(biased_world):
+    """Qwen's qkv shape: the PoUW row is interior under its BiasAdd_v1, and the module returns post-bias. The sampled BiasAdd
+    rows compose the row from its call, and the call's y (bias included) is linked to them."""
+    w = biased_world
+    assert all(any(b != 0x8000 for b in r.call.bias) for r in w.records)                 # the calls carry the bias
+    rep, pw, issues = _verdict(w)
+    assert rep["result"] is True and rep["grade"] == "complete", rep["why"]
+    site = [k for k in rep["strata"] if k.startswith("BiasAdd_v1") and SITE in k]
+    assert site and all(rep["strata"][k]["evaluated"] > 0 for k in site)
+    named = [u for u in rep["unreplayable"] if u["family"].startswith(PC.ROW_FAMILY)]
+    assert named and all("(interior" in u["family"] or "(structure" in u["family"] for u in named), named   # composed, never a gap
+    assert pw["result"] is True and issues == []
+
+
+@pytest.mark.slow
+def test_a_biased_linears_wrong_a_strip_is_named(biased_world):
+    w = biased_world
+    bad = w.records[0]
+    a = tuple(tuple(((v + 1 + 63) % 127) - 63 for v in row) if i < 16 else row for i, row in enumerate(bad.call.a))
+    rec = PC.commit_call(bad.index, bad.scheme, dataclasses.replace(bad.call, a=a))
+    records = [rec, w.records[1]]
+    rep, pw, issues = _verdict(w, records, _recommitted(w, records))
+    assert pw["result"] is True and any("A row" in i for i in issues), issues

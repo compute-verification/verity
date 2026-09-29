@@ -6,7 +6,7 @@ It quantizes the row and each weight row with the adapter's quantizer (`protocol
 ``verity.pouw.symmetric-int7-rowmax-rne-f32/v1``):
     scale = RN_f32(rowmax |v| · RN_f32(1/63)), 1 for a zero row;  q = clamp(RNE(RN_f32(v / scale)), −63, 63).
 It then takes the exact int32 dot product in ascending k from 0, and applies the circuit's dequantization (`NcpDequant`)
-with no bias: y_j = bf16(fp32(s)·fp32(t_j)·Z_j).
+with the bias −0, the bf16 add's identity: y_j = bf16(fp32(s)·fp32(t_j)·Z_j). A biased linear's `BiasAdd_v1` follows it.
 
 The quantizer's max is `NcpAbsMax` rather than `F32Max_v1`, whose operands are flushed to zero as the fast-math FA2 build
 does: a row of subnormals has a nonzero max here, as it does in numpy.
@@ -36,7 +36,9 @@ def _inv63_bits() -> int:
 
 ONE32 = P.const(32, 0x3F800000)
 ZERO32 = P.const(32, 0)
-ZERO16 = P.const(16, 0)
+#: −0: the identity of the bf16 add (x + (−0) = x for every x, both zeros included), so this row followed by the linear's
+#: `BiasAdd_v1` is the circuit's one add, and an unbiased call adds −0 too
+NEG_ZERO16 = P.const(16, 0x8000)
 INV63_32 = P.const(32, _inv63_bits())
 
 
@@ -83,7 +85,7 @@ def _quant(B, K, row):
 @composite("NcpLinearRow", 1, ["K", "N"], lambda S: ((("x", Array(S.K, BF16)), ("w", Array(S.N, Array(S.K, BF16)))), Array(S.N, BF16)),
            conformance="protocol-defined")
 def NcpLinearRow(B, S, x, w):
-    """One row of a PoUW linear's served y: `x[K]` and `W[N,K]` quantized per row, the exact dot product, `NcpDequant` with no bias."""
+    """One row of a PoUW linear's served y: `x[K]` and `W[N,K]` quantized per row, the exact dot product, `NcpDequant` adding −0."""
     if S.K % 16:
         raise TypeError(f"NcpLinearRow: K = {S.K} is not a multiple of 16")
     a, s = _quant(B, S.K, x)
@@ -93,7 +95,7 @@ def NcpLinearRow(B, S, x, w):
         z = B.call(ZERO32)
         for c in range(S.K // 16):
             z = B.call(NcpDot16I7, z, array_of(a[16 * c:16 * c + 16]), array_of(b[16 * c:16 * c + 16]))
-        ys.append(B.call(NcpDequant, z, s, t, B.call(ZERO16)))
+        ys.append(B.call(NcpDequant, z, s, t, B.call(NEG_ZERO16)))
     return array_of(ys)
 
 
