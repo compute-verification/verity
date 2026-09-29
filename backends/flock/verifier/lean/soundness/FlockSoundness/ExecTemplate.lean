@@ -26,7 +26,7 @@ structure ParseFactsT (tags : Tags) (t : Typed.Template) (c : Circuit) : Prop wh
   hmNet : c.hmNet < c.nets.size
   kinds : ∀ r ∈ c.ranges.toList, ∀ i, r.kind = .net i → i < c.nets.size
   check : ∃ ls, HmRow.check c tags ls = .ok ()
-  typed : ∃ tb, c.typed = some tb ∧ HmRow.blockOf t (fun d => c.nets.findIdx? (·.1 == d)) = .ok tb
+  typed : c.typed = some (HmRow.blockOf t)
   upv : c.upv = 1
   leavesIn : c.leavesIn = #[#[]]
   wires : c.wires = HmRow.rowWires c.ports c.shaNet c.hmNet
@@ -306,20 +306,16 @@ theorem parse_facts_tmpl {tags : Tags} {bytes : ByteArray} {tables : List (Strin
     · (have hh := except_bind_ok h; clear h; obtain ⟨kind, hk, h⟩ := hh)
       cases hk
   -- the template's own facts
-  have htyped : ∃ tb, tyd = some tb ∧ HmRow.blockOf t (fun d => nets2.findIdx? (·.1 == d)) = .ok tb := by
-    revert htyd
-    cases hb : HmRow.blockOf t (fun d => nets2.findIdx? (·.1 == d)) with
-    | error e => intro h; simp [Functor.map, Except.map] at h
-    | ok tb => intro h; exact ⟨tb, by simpa [hb, Functor.map, Except.map] using h.symm, rfl⟩
+  have htyped : tyd = some (HmRow.blockOf t) := by
+    simpa [Functor.map, Except.map, pure, Except.pure] using htyd.symm
   have hkeys := forIn_list_forall (P := fun k => J.has jv k = false) (fun k _ s t hs => by
     split at hs
     · obtain ⟨_, hx, -⟩ := except_bind_ok hs; cases hx
     · rename_i hk; cases hs; exact ⟨⟨_, rfl⟩, by simpa using hk⟩) hderived
-  obtain ⟨tb, htb, hblk⟩ := htyped
   exact { pre := by obtain ⟨more, hm, hmore⟩ := hnets; exact ⟨more, hm, hmore⟩
           ports := hports, unitNet := findIdx?_lt hunit, shaNet := hnetOf _ _ hsha,
           hmNet := hnetOf _ _ hhm, kinds := hkinds, check := ⟨ls, by cases w; exact hcheck⟩
-          typed := ⟨tb, htb, hblk⟩
+          typed := htyped
           upv := (Except.ok.inj hupv).symm
           leavesIn := (Except.ok.inj hleavesIn).symm
           wires := rfl
