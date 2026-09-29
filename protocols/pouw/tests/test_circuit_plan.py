@@ -112,3 +112,16 @@ def test_the_default_work_law_draws_a_calls_share_of_the_windows_budget():
     assert laws[0].budget(lay.strata) == -(-PL.RECORD_K // 10_000) == 3
     assert laws[0].sizes(lay.strata) == {tile.name: 3, rest.name: 1}
     assert sum(law.sizes(lay.strata)[tile.name] for law in laws) <= PL.RECORD_K + 10_000 * len(lay.strata)
+
+
+def test_a_tiles_closure_contains_the_tile_itself():
+    """A drawn tile is proved itself, not only what it reads: `t ∈ cl t`, as Lean's `Layout.cl` inserts the tile's own unit.
+    Without it a wrong tile over right strips would count as zero harm (the Flock red team's C1 on #390)."""
+    for shape in (ncp2.Shape(32, 64, 32), ncp2.Shape(48, 64, 32)):
+        lay = PL.layout(shape)
+        tiles = {u.index for u in lay.units if u.role == "tile"}
+        assert set(lay.closure) == tiles
+        assert all(lay.closure[t][0] == t for t in tiles)
+        plan = PL.draw(_key(), lay, PL.WorkLaw(len(tiles)))                 # every tile drawn
+        assert tiles <= set(plan.drawn) <= set(plan.proved)
+        assert all(set(lay.closure[t]) <= set(plan.proved) for t in tiles)
