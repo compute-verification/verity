@@ -156,7 +156,8 @@ Research terms (Tool, Derivation, Attempt, Artifact, Snapshot, Replica, Label) b
 
 **v2 is the integration** (since the flip on `lane/vllm-v2-default`, Draft 3.1 §12.3): the required-value manifest of record is
 `Q_word_v1{X=16,W=32}` over the Program + runtime correspondence: every Call boundary committed, the header naming the
-Program's `verity/partition/v1` object, which the Commit checks and its binding map records (`verity_vllm.query`: `verity-vllm manifest build | build-global`,
+Program's `verity/partition/v1` object, which the Commit checks and its binding map records, and the strict word check the Build passed
+(`query.word_check`), without which the Commit refuses the manifest (`verity_vllm.query`: `verity-vllm manifest build | build-global`,
 built at the end of a PASS Build by `verity-vllm row`); value acquisition follows the acquisition plan derived from it
 (`verity_vllm.acquire`; TP rank committers still select by `native_host`'s class tables); the verdict of record is `<row>/verdict.json`
 (`vllm-verdict/v1`, `verity_vllm.check.verdict`).  `commit_summary.json` and the `finalize.py` board are no longer written (P5).  The

@@ -367,6 +367,7 @@ def main(args: Options) -> int:
     from verity_vllm.pipeline.tp.capture import parse_engine_args
     from verity_vllm.engine.rank_worker import EXTENSION
     from verity_vllm.commit.challenge import challenge_positions
+    from verity_vllm.commit.partition import require_partition
 
     if args.world is not None:
         args.tp = int(args.world)
@@ -458,9 +459,8 @@ def main(args: Options) -> int:
     versions["build_program_digest_kind"] = {str(k): v for k, v in pd_kind.items()}
     versions["build_program_digest"] = {str(k): v for k, v in pds.items()}
     (out / "versions.json").write_text(json.dumps(versions, indent=1, default=str) + "\n")
-    man_doc = None
-    if args.required_manifest:
-        man_doc = json.loads(Path(args.required_manifest).read_text())
+    man_doc = require_partition(json.loads(Path(args.required_manifest).read_text()), None, None) if args.required_manifest else None
+    if man_doc is not None:
         pdr = man_doc.get("program_digest_per_rank") or {}
         for r in range(world):
             if pds.get(r) is None:

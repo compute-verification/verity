@@ -24,3 +24,4 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # Test-only: tests import B-Ligero (through verity_numerical) and circuit-check's targets, and read the census.
 inputs = ["backends/direct", "census", "tools/circuit_check"]
+parallel = true
