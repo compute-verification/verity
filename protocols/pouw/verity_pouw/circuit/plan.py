@@ -1,8 +1,8 @@
 """Closure draws: the verification plan for `ncp-v2`'s partition (design note §12.2 (2′), §12.3).
 
 The verifier draws tiles by a law over the tile strata, and proves each drawn tile together with its **closure**: its
-X strip's unit, its Y strip's unit, its strip's digest unit, the tree-node units on that strip's path to D_A, and the call's
-key unit, each proved once. The rest (the dequantization units) is drawn under the law's floor. Every other unit is never
+X strip's unit, its strip's digest unit, the tree-node units on that strip's path to D_A and the call's key unit, each
+proved once, and its Y strip's unit in the weight's own Program (`NcpWeight`), proved once per plan. The rest (the dequantization units) is drawn under the law's floor. Every other unit is never
 drawn on its own: a node beneath no drawn tile is never proved, and a wrong one is counted through the unsound tiles
 beneath it (Lean `harm_le_unsoundWork`, `closureLaw_escape`).
 
@@ -10,8 +10,9 @@ beneath it (Lean `harm_le_unsoundWork`, `closureLaw_escape`).
 * `CountLaw` is the law on `main` today, one_stage's and #167's stratified law: one stratum per template, a uniform k_s-subset
   inside each, k_s = max(1, round(K·n_s/N)) (rounding half up), K the law's budget over the strata it draws.
 * `WorkLaw` is Verity root's work law (draft #362, `Flock/Draw.lean` `workK`): k_s = min(n_s, max(1, ⌈K·W_s/W⌉)), with
-  K = `RECORD_K` = 27,713 at ε = 0.1% and δ = 2⁻⁴⁰ (`record_k`). It is not of record until #362 merges; switch
-  `law=WorkLaw()` when it does.
+  K = `RECORD_K` = 27,713 at ε = 0.1% and δ = 2⁻⁴⁰ (`record_k`). K is a **window's** budget: a call draws its share,
+  K_c = ⌈K·W_c/W_window⌉, capped at its units (`window_laws`), which is #362's law with strata by (call, template), so
+  the window keeps its (1 − ε)^K. It is not of record until #362 merges (and root chooses the strata, X-SPC-84).
 
 **Openings** are row-granular (the red team's X-SPC-57): A and the weight are committed one leaf per row, so a proved
 unit opens exactly the rows it reads.
@@ -23,7 +24,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from fractions import Fraction
-from math import ceil, log
+from decimal import ROUND_CEILING, Decimal, localcontext
 from typing import Mapping, Protocol, Sequence
 
 from verity.proofs.profile import Stratified, Stratum
@@ -80,7 +81,10 @@ def record_k(epsilon: Fraction, delta: Fraction) -> int:
     def meets(k: int) -> bool:                              # q^k <= δ, cross-multiplied
         return q.numerator ** k * dlt.denominator <= dlt.numerator * q.denominator ** k
 
-    k = max(1, ceil(log(float(dlt)) / log(float(q))) - 2)
+    with localcontext() as cx:                              # the start, ⌈ln δ / ln(1 − ε)⌉, in 60-digit decimals
+        cx.prec = 60
+        ln = lambda f: (Decimal(f.numerator).ln() - Decimal(f.denominator).ln())  # noqa: E731
+        k = max(1, int((ln(dlt) / ln(q)).to_integral_value(rounding=ROUND_CEILING)) - 2)
     while not meets(k):
         k += 1
     while k > 1 and meets(k - 1):
@@ -100,12 +104,26 @@ class WorkLaw:
 
     k: int = RECORD_K
     name: str = "work"
+    window_work: int | None = None          # the window's work W_window, when the call draws its share of K
+
+    def budget(self, strata: Sequence[StratumSpec]) -> int:
+        """This call's K: its share ⌈K·W_c/W_window⌉ of the window's (all of K when it is the window), capped at its N."""
+        work, n = sum(s.work for s in strata), sum(len(s.units) for s in strata)
+        if work < 1 or self.k < 1:
+            raise ValueError("the work law needs some work and K >= 1")
+        share = self.k if self.window_work is None else -(-self.k * work // self.window_work)
+        return min(n, max(1, share))
 
     def sizes(self, strata: Sequence[StratumSpec]) -> dict[str, int]:
-        work = sum(s.work for s in strata)
-        if work < 1 or not 1 <= self.k <= sum(len(s.units) for s in strata):
-            raise ValueError("the work law needs some work and 1 <= K <= N")
-        return {s.name: min(len(s.units), max(1, -(-self.k * s.work // work))) for s in strata}
+        work, k = sum(s.work for s in strata), self.budget(strata)
+        return {s.name: min(len(s.units), max(1, -(-k * s.work // work))) for s in strata}
+
+
+def window_laws(layouts: Sequence["Layout"], k: int = RECORD_K) -> list[WorkLaw]:
+    """Each call's work law in a window of calls: its share of the window's budget K (X-SPC-83). The window draws at most
+    K + (its strata) units, and each call's floor draws its dequantization at least once."""
+    total = sum(lay.work() for lay in layouts)
+    return [WorkLaw(k, window_work=total) for _ in layouts]
 
 
 @dataclass(frozen=True)
@@ -115,12 +133,17 @@ class Layout:
     shape: Shape
     units: tuple[Unit, ...]
     strata: tuple[StratumSpec, ...]
-    closure: Mapping[int, tuple[int, ...]]              # tile unit -> the units proved with it (itself first)
+    closure: Mapping[int, tuple[int, ...]]              # tile unit -> the call's units proved with it (itself first)
+    y_strip: Mapping[int, int] = None                   # tile unit -> the weight Program's Y unit it reads (column strip)
 
     def tile_work(self) -> int:
         """One tile's W_ref: its cells' share of the call's (`schemes.ncp.NCP.wref`)."""
         s = self.shape
         return (3 * s.m * s.k * s.n + FORM_UNITS * s.m * s.k) * D * D // (s.m * s.n)
+
+    def work(self) -> int:
+        """The call's work W_c: its strata's."""
+        return sum(st.work for st in self.strata)
 
 
 def layout(shape: Shape, kind: str = "shift24") -> Layout:
@@ -144,19 +167,19 @@ def layout(shape: Shape, kind: str = "shift24") -> Layout:
     key = by_role["key"][0].index
     digest = {u.where[0]: u.index for u in by_role["digest"]}
     form_x = {u.where[0]: u.index for u in by_role["form_x"]}
-    form_y = {u.where[0]: u.index for u in by_role["form_y"]}
-    closure = {}
+    closure, y_strip = {}, {}
     for t in by_role["tile"]:
         rs, cs = t.where
         path = [nodes[j].index for j, (lo, hi) in enumerate(spans) if lo <= rs < hi]
-        closure[t.index] = (t.index, form_x[rs], form_y[cs], digest[rs], *path, key)
+        closure[t.index] = (t.index, form_x[rs], digest[rs], *path, key)
+        y_strip[t.index] = cs
     tile = Layout(shape, us, (), {})
     strata = []
     for role in ("tile", "dequant"):
         group = by_role[role]
         work = tile.tile_work() * len(group) if role == "tile" else 0
         strata.append(StratumSpec(group[0].template, role, tuple(u.index for u in group), work))
-    return Layout(shape, us, tuple(strata), closure)
+    return Layout(shape, us, tuple(strata), closure, y_strip)
 
 
 @dataclass(frozen=True)
@@ -166,6 +189,7 @@ class Plan:
     drawn: tuple[int, ...]                   # the units the law drew (tiles and floor units)
     proved: tuple[int, ...]                  # the drawn units and every drawn tile's closure, ascending, each once
     openings: tuple[tuple[str, int], ...]    # the row leaves the proved units open: ("a", row) or ("b", weight row)
+    proved_y: tuple[int, ...] = ()           # the weight Program's Y units the drawn tiles read (column strips), each once
 
 
 def draw(key: Key, lay: Layout, law: TileLaw) -> Plan:
@@ -176,21 +200,22 @@ def draw(key: Key, lay: Layout, law: TileLaw) -> Plan:
     for s in lay.strata:
         drawn += [s.units[i] for i in key.subset(sizes[s.name], len(s.units), ("stratum", s.name))]
     proved = set(drawn)
+    ys = {lay.y_strip[u] for u in drawn if lay.y_strip and u in lay.y_strip}
     for u in drawn:
         proved.update(lay.closure.get(u, ()))
-    return Plan(law.name, sizes, tuple(sorted(drawn)), tuple(sorted(proved)), openings(lay, proved))
+    return Plan(law.name, sizes, tuple(sorted(drawn)), tuple(sorted(proved)), openings(lay, proved, ys), tuple(sorted(ys)))
 
 
-def openings(lay: Layout, proved) -> tuple[tuple[str, int], ...]:
-    """The input rows the proved units read, one leaf per row: a digest or X unit its strip's 16 A rows, a Y unit its 16
-    weight rows."""
+def openings(lay: Layout, proved, proved_y=()) -> tuple[tuple[str, int], ...]:
+    """The input rows the proved units read, one leaf per row: a digest or X unit its strip's 16 A rows, a Y unit (the
+    weight Program's, by column strip) its 16 weight rows."""
     rows: set[tuple[str, int]] = set()
     for i in proved:
         u = lay.units[i]
         if u.role in ("digest", "form_x"):
             rows.update(("a", D * u.where[0] + r) for r in range(D))
-        elif u.role == "form_y":
-            rows.update(("b", D * u.where[0] + r) for r in range(D))
+    for cs in proved_y:
+        rows.update(("b", D * cs + r) for r in range(D))
     return tuple(sorted(rows))
 
 
@@ -206,4 +231,4 @@ def unsound_work_bound(lay: Layout, sizes: Mapping[str, int], delta: float) -> f
 
 
 __all__ = ["DRAW_DOMAIN", "RECORD_K", "CountLaw", "Layout", "Plan", "StratumSpec", "TileLaw", "WorkLaw", "draw", "layout", "openings",
-           "profile", "record_k", "unsound_work_bound"]
+           "profile", "record_k", "unsound_work_bound", "window_laws"]
