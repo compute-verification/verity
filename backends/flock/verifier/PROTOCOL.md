@@ -1278,7 +1278,9 @@ digest's leading tag is the statement id, `verity/flock-circuit/types`, as the p
     (`flock-verify typed-expand`, `test_lean_typed_statement.py`).
 - **A template** (GEMM) is parsed with its block (`HmRow.parse`'s `tmpl`, #273's split).
   - **Circuits:** `root`, the unit's own region with its entries at part columns left out, one slot per VU. Then each
-    placed layout's rows, named by its digest, one slot of its range per part.
+    placed layout's rows, named by its digest, one slot of its range per part. A part's circuit is its own layout's, by
+    position among the placed layouts (`HmRow.blockOf`), never by digest: two layouts with one digest stay apart. A part
+    naming a layout the file lacks is refused.
   - **Derived, never stated:** `units_per_vu` (1), the leaf maps (none), the output circuit (the root) and the wires (the
     rows' chains). META stating any of them, or `lookups`, `leaf_cuts` or `unit_log`, is refused.
   - **Checks** (#273's `check_typed`): the root's ports are the rows' words and the output words, 16 bits each, in one
