@@ -34,7 +34,8 @@ pod's disk filled, every guard died on its state write, and nothing enforced any
     (the state carries their text, so a restart keeps them too); an unreadable balance keeps the last reading.  A state file that does
     not parse is set aside (`.corrupt-<epoch>`) and new tallies start, recorded in the state.
   * `--detach` starts a supervisor that runs the guard and starts it again one poll after any exit but a stop (0), bad arguments (2)
-    or another live guard (3).
+    or another live guard (3).  A guard with no RunPod key refuses to loop (EXIT_NO_KEY, 4); supervised, it is tried again each poll,
+    so a key file that comes back brings it back.
   * `research pods create` refuses while the guard has not completed a poll in budgets.STALE_S (research.pods.budgets.gate): nothing
     new starts unguarded.
 
@@ -62,6 +63,7 @@ DEAD = ("EXITED", "TERMINATED")
 TERMINATING_S = 600
 KEEP_TERMINATED = 500
 STOP_CODES = (0, 2, 3)          # the guard's exits the supervisor does not answer with a restart: stopped, bad arguments, another guard
+EXIT_NO_KEY = 4                 # no RunPod API key here: the guard refuses to loop (it could terminate nothing); the supervisor retries
 SCHEMA = "research/budgets-guard/v1"
 WINDOW_S = 86400                # cap_usd_per_day's rolling window
 BUCKET_S = 300                  # its spend is kept in buckets this long; a bucket that straddles the window's edge counts whole
@@ -416,10 +418,23 @@ def recorded_pid(pid_path: Path) -> int | None:
         return None
 
 
+def api_problem() -> str | None:
+    """Why the real RunPod API cannot be called here (no ~/.runpod/config.toml and no RUNPOD_API_KEY), or None."""
+    from . import runpod
+
+    try:
+        runpod._config()
+    except runpod.PodError as e:
+        return str(e)
+    return None
+
+
 def run(cfg: Config, api: Any = None, *, poll_s: float = 60.0, log_path: str | None = None, clock: Callable[[], float] = time.time,
         sleep: Callable[[float], None] = time.sleep, iterations: int | None = None) -> int:
-    """The guard loop (`iterations` bounds it for tests).  Exit 3 when another guard is alive here.  No local fault ends it (module
-    docstring, "Fail closed"): the directories, pid, log and state go through a `Recorder`."""
+    """The guard loop (`iterations` bounds it for tests).  Exit 3 when another guard is alive here; EXIT_NO_KEY, before any poll, when
+    it would call the real API and no RunPod key is configured.  No local fault ends it (module docstring, "Fail closed"): the
+    directories, pid, log and state go through a `Recorder`."""
+    no_key = api_problem() if api is None else None
     api = api or RunPodAPI()
     p = paths(cfg.dry_run, log_path)
     rec = Recorder(p, clock)
@@ -431,6 +446,10 @@ def run(cfg: Config, api: Any = None, *, poll_s: float = 60.0, log_path: str | N
         log(f"REFUSED to start: guard pid {other} is alive ({p['pid']})")
         print(f"research pods guard: guard pid {other} is alive ({p['pid']}); `research pods guard stop` first", file=sys.stderr)
         return 3
+    if no_key:
+        log(f"REFUSED to start: {no_key}")
+        print(f"research pods guard: {no_key}: a guard without a RunPod key can terminate nothing, so it does not start", file=sys.stderr)
+        return EXIT_NO_KEY
     rec.attempt("pid", lambda: p["pid"].write_text(f"{os.getpid()}\n"))
     state = load_state(p["state"], clock(), log)
     state.update(pid=os.getpid(), config={"source": str(cfg.source), "dry_run": cfg.dry_run, "self_pod": cfg.self_pod, "poll_s": poll_s})
@@ -600,6 +619,9 @@ def main(argv: list[str]) -> int:
                 return 2
             print(f"research pods guard: budgets.toml at {cfg.source} cannot be read ({type(e).__name__}: {e}); the budgets in the state "
                   "stay in force until it can", file=sys.stderr)
+        if why := api_problem():
+            print(f"research pods guard: {why}: a guard without a RunPod key can terminate nothing, so it does not start", file=sys.stderr)
+            return EXIT_NO_KEY
     if ns.detach:
         return detach(argv, ns.dry_run, ns.log)
 
