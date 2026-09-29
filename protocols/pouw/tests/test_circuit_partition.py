@@ -42,32 +42,35 @@ def test_a_one_strip_call_has_no_node_units():
 
 
 @pytest.mark.slow
-def test_the_unit_cut_computes_every_value_in_exactly_one_unit():
-    """`validate_unit_cut` over the whole call: every gate certified once, reads across units through committed values,
-    and no value computed in two units (`gate-recomputed`)."""
-    uc = P.unit_cut(SHAPE)
+@pytest.mark.parametrize("kind", ["shift24", "word"])
+def test_the_unit_cut_computes_every_value_in_exactly_one_unit(kind):
+    """`validate_unit_cut` over the whole call, for both P's (X-SPC-98): every gate certified once, reads across units
+    through committed values, and no value computed in two units (`gate-recomputed`)."""
+    uc = P.unit_cut(SHAPE, kind)
     assert uc.verdict.ok, uc.verdict.codes
     assert uc.verdict.detail["certified"] == uc.verdict.detail["computed_gates"]
 
 
 @pytest.mark.slow
-def test_the_z_separator_width():
+@pytest.mark.parametrize("kind", ["shift24", "word"])
+def test_the_z_separator_width(kind):
     """Every path from a PoUW unit to y crosses a tile's Z: m·n values of 32 bits, 8,192 bits per tile."""
-    sep = P.separator(SHAPE)
+    sep = P.separator(SHAPE, kind)
     assert sep.ok and sep.reached_pouw == 0 and sep.words_delivered == 0
     assert sep.z_gates == SHAPE.m * SHAPE.n
     assert sep.width_bits == 32 * SHAPE.m * SHAPE.n and sep.per_tile_bits == 8192
 
 
 @pytest.mark.slow
-def test_the_width_rule_with_the_pinned_port():
+@pytest.mark.parametrize("kind", ["shift24", "word"])
+def test_the_width_rule_with_the_pinned_port(kind):
     """With the tiles' Z pinned as the separator, only the dequantization units reach y, and each fits the width rule."""
-    wr = P.width_rule(SHAPE)
+    wr = P.width_rule(SHAPE, kind)
     assert wr.ok and not wr.too_wide
-    us = P.units(SHAPE)
+    us = P.units(SHAPE, kind)
     assert {us[u].role for u in wr.checked} == {"dequant"}
     assert wr.exempt == 10 and wr.separator_bits == 32 * SHAPE.m * SHAPE.n
-    bits = P.boundary_bits(SHAPE)
+    bits = P.boundary_bits(SHAPE, kind)
     assert bits["dequant"] == {16: 1024} and bits["tile"] == {(11 * 256 + 256) * 32: 4}
 
 
@@ -126,11 +129,12 @@ def test_the_width_rule_is_over_the_protocols_program_and_its_served_outputs():
 
 
 @pytest.mark.slow
-def test_calls_on_one_weight_compose_without_recompute():
+@pytest.mark.parametrize("kind", ["shift24", "word"])
+def test_calls_on_one_weight_compose_without_recompute(kind):
     """Two calls on one weight in one root: the weight's Y units once, each call's own units reading them. With Y per call
     the second call recomputed the first's whole Y unit, and with the key's per-call lanes last two of its XORs (X-SPC-70,
     X-SPC-71); now no value is computed in two units."""
-    uc = P.window_cut(ncp2.Shape(16, 64, 16), 2)
+    uc = P.window_cut(ncp2.Shape(16, 64, 16), 2, kind)
     assert uc.verdict.ok, uc.verdict.codes
     assert Counter(u.role for u in uc.units) == {"form_y": 1, "digest": 2, "key": 2, "form_x": 2, "tile": 2, "dequant": 512}
 

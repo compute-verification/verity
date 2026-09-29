@@ -147,6 +147,20 @@ class Fp8Anchors:
         _check(fn, args, self.call_inputs())
 
 
+def fp8_window_inputs(anchors: Sequence[Fp8Anchors]) -> dict[str, list[int]]:
+    """`NcpFp8Window`'s per-call anchored inputs (X-SPC-102), each call's own (`Fp8Anchors.call_inputs`) in call order,
+    after a `Ledger` refuses a repeated index; every call is of one shape, one sums and one set of byte lengths."""
+    if not anchors:
+        raise DomainError("a window has at least one call")
+    first, ledger = anchors[0], Ledger()
+    for an in anchors:
+        if (an.shape, an.sums, an.lengths) != (first.shape, first.sums, first.lengths):
+            raise DomainError("a window's calls share one shape, sums and byte lengths")
+        ledger.admit(an, an.shape)
+    per = [an.call_inputs() for an in anchors]
+    return {p: [v for d in per for v in d[p]] for p in per[0]}
+
+
 def _check(fn, args, want: dict[str, list[int]]) -> None:
     params, _ = fn.signature()
     names = [name for name, _t in params]
@@ -170,4 +184,4 @@ class Ledger:
         self.seen.add(anchors.call_index)
 
 
-__all__ = ["Anchors", "Fp8Anchors", "Ledger"]
+__all__ = ["Anchors", "Fp8Anchors", "Ledger", "fp8_window_inputs"]

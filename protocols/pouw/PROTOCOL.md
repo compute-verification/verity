@@ -406,6 +406,17 @@ at its floor, so a wholly wrong one is caught directly (`audit_work_whole_stratu
     split's window-level bound is X-SPC-83's question, and no pin states it.
 - `CountLaw` is `main`'s stratified rule, k_s = max(1, round(K·n_s/N)).
 
+**The draw is per call** (X-SPC-96). Each stratum's subset is drawn from the verifier's key under the call's index,
+(forward, position), with the template: the strata are the call's own, one per template, and the calls of a window drawn
+under one key draw independently, so K split across them keeps the window's (1 − ε)^K. The verifier draws through
+`Traced.draw(key, law, anchors)`, which takes no layout: it draws over `Traced.layout()` (X-SPC-97).
+
+**The call's Y is linked to the weight Program** (X-SPC-95). The call reads its weight's Y strips and c₀ as committed
+inputs, so at each drawn tile's column strip (the strips `Plan.proved_y` proves in the weight Program) the plan opens
+the call's Y and c₀ there beside the weight Program's output there, a ("y", strip) leaf, and `Traced.check_link` refuses
+any strip where they differ (`test_the_call_s_y_is_linked_to_the_weight_program`: another weight's Y, or one c₀ changed).
+A wrong Y input on a strip no drawn tile reads spoils only undrawn tiles, which the law charges like any unsound tile.
+
 **The layout is the verifier's.** The Layout theorems (`Layout.accountable_compute` and the rest) hold only for the
 window's own layout, so the verifier derives each tile's own unit and its closure from the shape alone, through the
 Program it builds (`Traced.layout`), and refuses any other (`Traced.check_layout`). `draw` refuses a layout whose tile is
@@ -515,7 +526,12 @@ it: a pad has no tile beneath it that a wrong one could be charged to. Its Y str
 Program, is proved once per plan (`Plan.proved_y`), and opens the strip's weight rows. A tile's W_ref is its cells' share of
 `FP8IS.wref`. The strata are one per template, as for `ncp-v2` (every byte-length variant its own), the work table
 gives the tile template its W_ref and every other template 0, floors 1. `WorkLaw()` draws every layout: K is a
-window's, and a call alone is capped at its units (X-SPC-83). The layout is
+window's, and a call alone is capped at its units (X-SPC-83). Each call's subsets are keyed by its matmul index with the template, as
+`ncp-v2`'s (X-SPC-96), and the verifier draws through `Traced.draw`. The call's h and amplitudes are linked to the weight
+Program as `ncp-v2`'s Y is (X-SPC-101): the plan opens them at each drawn tile's column strip beside the weight Program's
+outputs there, and `Traced.check_link` refuses a difference. A window (`NcpFp8Window`) serves every call's y, C·m·n
+outputs (`partition.Circuit.calls`), and `anchors.fp8_window_inputs` builds its per-call anchored inputs from each call's
+`Fp8Anchors`, refusing a repeated index (X-SPC-102); the window's layout and draw are not here yet. The layout is
 the verifier's, as `ncp-v2`'s: derived from the shape and the declaration's lengths, and any other refused
 (`Traced.check_layout`).
 

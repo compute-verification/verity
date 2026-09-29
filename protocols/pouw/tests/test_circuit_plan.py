@@ -115,7 +115,8 @@ def test_openings_are_one_leaf_per_row():
     by_role = {u.role: u for u in lay.units if u.role == "form_x"}
     assert PL.openings(lay, [by_role["form_x"].index]) == tuple(("a", r) for r in range(16 * by_role["form_x"].where[0],
                                                                                          16 * by_role["form_x"].where[0] + 16))
-    assert PL.openings(lay, [], [1]) == tuple(("b", r) for r in range(16, 32))      # the weight Program's Y unit 1
+    assert PL.openings(lay, [], [1]) == (*(("b", r) for r in range(16, 32)), ("y", 1))   # the weight Program's Y unit 1,
+    # and the call's Y input at its strip beside that unit's output (X-SPC-95)
 
 
 def test_the_profile_is_stratified_over_the_tile_strata():
@@ -196,3 +197,71 @@ def test_a_prover_s_layout_mapping_a_tile_to_its_x_strip_is_refused():
             t.check_layout(bad)
         with pytest.raises(DomainError):
             PL.draw(_key(), bad, PL.WorkLaw())
+
+
+def _anchors(call, **kw):
+    from verity_pouw.circuit.anchors import Anchors
+
+    f = {"forward": call.forward, "layer": call.layer, "site": call.site, **kw}
+    return Anchors(call.salt, f["forward"], f["layer"], f["site"], call.weight, tuple(call.rowids), tuple(call.colids))
+
+
+def test_equal_calls_under_one_key_draw_different_tiles():
+    """Each stratum's subset is keyed by the call's index, (forward, position), with its template (X-SPC-96): two equal
+    calls of a window, under the one key, draw different tiles, and one call draws the same tiles every time. The strata
+    stay one per template of the call's partition (X-SPC-84); only the randomness is per call."""
+    import circuit_fixtures as F
+    from verity_pouw.circuit import traced_as
+
+    call = F.call(64, 64, 64)
+    t, law = traced_as("ncp-v2-shift24", 64, 64, 64), PL.WorkLaw(4)
+    tiles = lambda plan: [u for u in plan.drawn if t.layout().units[u].role == "tile"]  # noqa: E731
+    first = t.draw(_key(), law, _anchors(call))
+    assert tiles(first) == tiles(t.draw(_key(), law, _anchors(call)))
+    others = [tiles(t.draw(_key(), law, _anchors(call, **kw))) for kw in ({"forward": 4}, {"site": 3}, {"layer": 6})]
+    assert all(o != tiles(first) for o in others)
+    assert [s.name for s in t.layout().strata] == list(dict.fromkeys(u.template for u in t.layout().units))
+
+
+def test_the_verifier_draws_over_its_own_layout():
+    """`Traced.draw(key, law, anchors)` takes no layout: it is `plan.draw` over `Traced.layout()` (X-SPC-97)."""
+    import inspect
+
+    import circuit_fixtures as F
+    from verity_pouw.circuit import Traced, traced_as
+
+    call = F.call(32, 64, 32)
+    t = traced_as("ncp-v2-shift24", 32, 64, 32)
+    assert list(inspect.signature(Traced.draw).parameters) == ["self", "key", "law", "anchors"]
+    an = _anchors(call)
+    assert t.draw(_key(), PL.WorkLaw(2), an) == PL.draw(_key(), t.layout(), PL.WorkLaw(2), an.call_index)
+
+
+def test_the_call_s_y_is_linked_to_the_weight_program():
+    """The call reads its weight's Y strips and c₀ as inputs, so the plan opens them at each drawn tile's column strip
+    beside the weight Program's outputs there, and the verifier compares the two (`Traced.check_link`, X-SPC-95). Another
+    weight's Y, or one c₀ changed, is refused."""
+    import pytest
+
+    import circuit_fixtures as F
+    from verity.evaluation import evaluate
+    from verity_pouw.circuit import ncp2, traced_as
+    from verity_pouw.protocol import DomainError
+
+    call = F.call(32, 64, 32)
+    t = traced_as("ncp-v2-shift24", 32, 64, 32)
+    plan = t.draw(_key(), PL.WorkLaw(2), _anchors(call))
+    assert {cs for role, cs in plan.openings if role == "y"} == set(plan.proved_y) != set()
+    weight_out = list(evaluate(ncp2.weight(call.shape), *call.weight_args()))
+    args = call.args()
+    t.check_link(plan, args, weight_out)
+    other = F.call(32, 64, 32, seed=8)                                        # another weight B′, with its own Y and c₀
+    swapped = list(args)
+    swapped[2:4] = other.args()[2:4]
+    with pytest.raises(DomainError):
+        t.check_link(plan, swapped, weight_out)
+    cs = plan.proved_y[0]
+    bumped = list(args)
+    bumped[3] = [v + 1 if 16 * cs <= i < 16 * cs + 16 else v for i, v in enumerate(args[3])]
+    with pytest.raises(DomainError):
+        t.check_link(plan, bumped, weight_out)

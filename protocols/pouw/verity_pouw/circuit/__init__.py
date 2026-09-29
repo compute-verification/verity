@@ -31,6 +31,11 @@ FP8_SUMS = {"fp8-is-h100-d3s-v0-f16": "f16", "fp8-is-h100-d3s-v0": "f32"}
 SCHEMES = {**NCP_KINDS, **FP8_SUMS}
 
 
+#: a call's inputs that are its weight Program's outputs, in that Program's output order (`ncp-v2`: its Y strips and c₀;
+#: NCP-FP8: its h and amplitudes)
+LINKED = ("ys", "c0s", "hs", "amps")
+
+
 @dataclass(frozen=True)
 class Traced:
     scheme: str
@@ -80,17 +85,50 @@ class Traced:
         """The weight Program's flat inputs: B, then its anchored ones (`ncp-v2`: salt, weight id, column ids)."""
         return self._args(self.weight, anchors, anchors.weight_inputs, data)
 
-    def _args(self, fn, anchors, inputs, data) -> list:
+    def _check_anchors(self, anchors) -> None:
         from ..protocol import DomainError
 
         anchors.check(self.shape)
         if self.lengths is not None and (anchors.lengths, anchors.sums) != (self.lengths, self.kind):
             raise DomainError(f"{self.scheme}: the anchors take {anchors.lengths}, {anchors.sums} sums, not {self.lengths}")
+
+    def _args(self, fn, anchors, inputs, data) -> list:
+        from ..protocol import DomainError
+
+        self._check_anchors(anchors)
         an = inputs()
         names = [p for p, _t in fn.signature()[0]]
         if sorted(names[len(data):]) != sorted(an):
             raise DomainError(f"{fn.id} takes {len(names) - len(an)} committed inputs, not {len(data)}")
         return [list(d) for d in data] + [an[p] for p in names[len(data):]]
+
+    def draw(self, key, law, anchors):
+        """The verifier's plan for this call: `plan.draw` over its own layout (`layout`), never a given one (X-SPC-97), each
+        stratum's subset keyed by the call's index (``anchors.call_index``) with its template (X-SPC-96)."""
+        from . import plan
+
+        self._check_anchors(anchors)
+        index = anchors.call_index
+        return plan.draw(key, self.layout(), law, index if isinstance(index, tuple) else (index,))
+
+    def check_link(self, plan, call_args: Sequence[Sequence[int]], weight_outputs: Sequence[int]) -> None:
+        """Refuse a call whose weight-side inputs differ from the weight Program's outputs at a column strip the plan opens
+        (its ("y", strip) leaves, the drawn tiles' column strips): the call's committed inputs opened against the weight
+        Program's output commitment (X-SPC-95, X-SPC-101). The inputs are the call's parameters the weight Program returns,
+        in its output order (`ncp-v2`: ys, c0s; NCP-FP8: hs, amps)."""
+        from ..protocol import DomainError
+
+        params = self.definition.signature()[0]
+        names = [p for p, _t in params]
+        linked = [(names.index(p), t) for p, t in params if p in LINKED]
+        strips = [cs for role, cs in plan.openings if role == "y"]
+        at = 0
+        for i, t in linked:
+            per = t.elem.leaves
+            for cs in strips:
+                if list(call_args[i][cs * per:(cs + 1) * per]) != list(weight_outputs[at + cs * per:at + (cs + 1) * per]):
+                    raise DomainError(f"{self.scheme}: the call's {names[i]} at column strip {cs} is not the weight Program's")
+            at += t.n * per
 
     def check_layout(self, offered) -> None:
         """Refuse a layout that isn't the verifier's own, derived from the shape (`layout`): the tiles, each tile's own unit
@@ -134,4 +172,4 @@ def traced_as(scheme: str, m: int, k: int, n: int, *, index: int = 0, weight: in
                   partition.weight_query(shape, kind))
 
 
-__all__ = ["FP8_SUMS", "NCP_KINDS", "SCHEMES", "Traced", "traced_as"]
+__all__ = ["FP8_SUMS", "LINKED", "NCP_KINDS", "SCHEMES", "Traced", "traced_as"]

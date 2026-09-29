@@ -51,6 +51,7 @@ class Circuit:
     n: int
     pouw_roles: tuple[str, ...]
     variants: tuple[tuple[str, Any], ...] = ()   # (role, template) for every template, when a role has several
+    calls: int = 1                               # a window's calls, whose y all come first (X-SPC-102)
 
     @property
     def tiles(self) -> int:
@@ -78,7 +79,8 @@ def fp8_weight_query(shape: fp8.Shape, sums: str = "f16") -> dict[str, Any]:
 def fp8_window_circuit(shape: fp8.Shape, calls: int, sums: str = "f16", lengths: fp8.Lengths = fp8.Lengths(1, 1, 1)) -> Circuit:
     """``calls`` NCP-FP8 calls on one weight in one root (`fp8.window`)."""
     return Circuit(fp8.window(shape, calls, sums, lengths), {"tile": fp8.tile_template(shape.k)}, shape.m, shape.n,
-                   FP8_POUW_ROLES, tuple(fp8.weight_templates(shape.k, sums)) + tuple(fp8.call_templates(shape, sums, lengths)))
+                   FP8_POUW_ROLES, tuple(fp8.weight_templates(shape.k, sums)) + tuple(fp8.call_templates(shape, sums, lengths)),
+                   calls)
 
 
 def listed_of(fn: Any) -> list[Any]:
@@ -326,8 +328,9 @@ def width_rule_of(fn: Any, shape: Shape, kind: str, served: int) -> WidthRule:
 
 
 def circuit_width_rule(c: Circuit, served: int | None = None, uc: UnitCut | None = None) -> WidthRule:
-    """`width_rule` for any circuit: its served outputs are its first ``served`` root outputs (y's m·n by default)."""
-    served = c.m * c.n if served is None else served
+    """`width_rule` for any circuit: its served outputs are its first ``served`` root outputs (every call's y by default:
+    C·m·n for a window of C calls)."""
+    served = c.calls * c.m * c.n if served is None else served
     if not 1 <= served:
         raise ValueError("the served outputs are at least one: a width rule over none checks nothing")
     uc = circuit_cut(c) if uc is None else uc

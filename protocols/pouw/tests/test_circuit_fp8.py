@@ -275,10 +275,13 @@ def test_calls_on_one_weight_compose_without_recompute():
     """Two calls on one weight in one root (`NcpFp8Window`): the weight's h and amplitudes once, each call's units reading
     them. At #380's first head this recomputed 13,423 gates (X-SPC-90); with the amplitude unit and the verifier's prefix,
     no value is computed in two units."""
-    uc = P.circuit_cut(P.fp8_window_circuit(fp8.Shape(16, 96, 16), 2))
+    c = P.fp8_window_circuit(fp8.Shape(16, 96, 16), 2)
+    uc = P.circuit_cut(c)
     assert uc.verdict.ok, uc.verdict.codes
     roles = [u.role for u in uc.units]
     assert roles.count("amp") == 1 and roles.count("key") == 2 and roles.count("form_y") == 2
+    w = P.circuit_width_rule(c, uc=uc)                                     # every call's y served by default (X-SPC-102)
+    assert w.ok and len(w.checked) == 2 * 256 and {uc.units[u].role for u in w.checked} == {"dequant"}
 
 
 @pytest.mark.slow
@@ -437,7 +440,8 @@ def test_the_record_work_law_draws_every_fp8_layout(shape):
     plan = PL.draw(derive(b"verifier-secret", PL.DRAW_DOMAIN, {"receipt": b"r"}), lay, PL.WorkLaw())
     tiles = {u.index for u in lay.units if u.role == "tile"}
     assert tiles <= set(plan.drawn) and all(set(lay.closure[t]) <= set(plan.proved) for t in tiles)
-    assert set(plan.openings) == {("a", i) for i in range(shape[0])} | {("b", j) for j in range(shape[2])}
+    assert set(plan.openings) == ({("a", i) for i in range(shape[0])} | {("b", j) for j in range(shape[2])}
+                                  | {("y", cs) for cs in range(shape[2] // 16)})
 
 
 def test_traced_as_gives_the_fp8_circuit():
@@ -558,3 +562,69 @@ def test_the_circuit_s_tiles_give_295s_production_leaf():
     checked = sc.checked(ctx, ops)
     assert subs == sc.subdigests(checked)
     assert fp8.leaf_digest("f16", subs) == sc.digest(ctx, None, checked)
+
+
+# ---- the verifier's draw and the weight link -----------------------------------------------------------------------------
+
+def _draw_key():
+    from verity.randomness import derive
+    from verity_pouw.circuit import plan as PL
+
+    return derive(b"verifier-secret", PL.DRAW_DOMAIN, {"receipt": b"r"})
+
+
+def test_equal_calls_under_one_key_draw_different_tiles():
+    """X-SPC-96 on FP8: each stratum's subset is keyed by the call's index, the matmul index, with its template, so two
+    equal calls under one key draw different tiles, and `Traced.draw` draws over the verifier's own layout."""
+    from verity_pouw.circuit import plan as PL
+    from verity_pouw.circuit.anchors import Fp8Anchors
+
+    c = call(64, 96, 64, index=3)
+    t, law = _traced(c), PL.WorkLaw(4)
+    lay = t.layout()
+
+    def tiles(index):
+        plan = t.draw(_draw_key(), law, Fp8Anchors(c.shape, c.salt, index, c.weight, c.sums))
+        return [u for u in plan.drawn if lay.units[u].role == "tile"]
+
+    assert tiles(3) == tiles(3) and all(tiles(i) != tiles(3) for i in (4, 5, 6))
+
+
+def test_the_call_s_h_and_amplitudes_are_linked_to_the_weight_program():
+    """X-SPC-101: the plan opens the call's h and amplitudes at each drawn tile's column strip beside the weight Program's
+    outputs there (`Traced.check_link`). Another weight's h and amplitudes, or one amplitude changed, are refused."""
+    from verity_pouw.circuit import plan as PL
+    from verity_pouw.circuit.anchors import Fp8Anchors
+
+    c = call(16, 96, 32)
+    t = _traced(c)
+    plan = t.draw(_draw_key(), PL.WorkLaw(1), Fp8Anchors(c.shape, c.salt, c.index, c.weight, c.sums))
+    assert {cs for role, cs in plan.openings if role == "y"} == set(plan.proved_y) != set()
+    weight_out = list(evaluate(fp8.weight(c.shape, c.sums), *c.weight_args()))
+    args = c.args()
+    t.check_link(plan, args, weight_out)
+    other = call(16, 96, 32, seed=8)
+    swapped = list(args)
+    swapped[2:4] = other.args()[2:4]
+    with pytest.raises(DomainError):
+        t.check_link(plan, swapped, weight_out)
+    cs = plan.proved_y[0]
+    bumped = list(args)
+    bumped[3] = [v ^ 1 if cs * 16 * 96 <= i < (cs + 1) * 16 * 96 and i % 97 == 0 else v for i, v in enumerate(args[3])]
+    with pytest.raises(DomainError):
+        t.check_link(plan, bumped, weight_out)
+
+
+def test_a_window_s_anchored_inputs_are_the_verifier_s():
+    """X-SPC-102: `anchors.fp8_window_inputs` builds a window's per-call anchored inputs from each call's `Fp8Anchors`,
+    in call order, and refuses a repeated index or calls of different byte lengths."""
+    from verity_pouw.circuit.anchors import Fp8Anchors, fp8_window_inputs
+
+    c1, c2 = call(16, 96, 16, index=3), call(16, 96, 16, index=4)
+    got = fp8_window_inputs([Fp8Anchors(c.shape, c.salt, c.index, c.weight, c.sums) for c in (c1, c2)])
+    names = [p for p, _t in fp8.linear(c1.shape).signature()[0]]
+    for p, values in got.items():
+        assert values == c1.args()[names.index(p)] + c2.args()[names.index(p)]
+    for bad in ((3, 3), (3, 300)):
+        with pytest.raises(DomainError):
+            fp8_window_inputs([Fp8Anchors(c1.shape, c1.salt, i, c1.weight, c1.sums) for i in bad])
