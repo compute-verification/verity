@@ -2,13 +2,20 @@
 
 Today's derivations hash the run root, the prover's own commitment (Fiat-Shamir), and their outputs are recorded in
 verdicts.  They stay byte-identical while `LEGACY` is true; decision 42 retires them at the re-baseline epoch.  The
-non-legacy forms draw through `verity.randomness.derive` from a `source` that is a beacon round published after the
-run root was registered, or an auditor key, with the run root and the draw's other bindings as context:
+non-legacy forms are the verifier's (deployment decision A24; no beacon, as sampled proofs has none since #132): every coin
+is `verity.randomness.derive` keyed by the verifier's secret, never by a root, with the receipt of the registration it
+follows and the draw's other bindings as context:
 
+* the run's salt (`run_salt`): `verity/vllm-commit/run-salt/v1` over the weights root and the run id, issued after the
+  weights root's receipt; the prover commits it as an Input, anchored in the registration record;
 * opening positions (`challenge_positions`): `verity/vllm-commit/opening-positions/v1`;
 * opening identities from the expected population (`identity_picker`): `verity/vllm-commit/opening-identities/v1`;
-* the replay sample: sampled proofs' verification-unit draw (`replay_key`), each stratum a replay unit selected with
+* the replay sample (`replay_key`): `verity/vllm-commit/replay-sample/v1`, each stratum a replay unit selected with
   p = 1 and `per_stratum` of its units checked (`stratum_picks`).
+
+`RunWindows` is the verifier's side of a run's registrations: each window's call indices registered once, a window whose
+indices include one an earlier window registered refused (X-SPC-18), and an aborted window a rejected run.  Its receipts
+are what the draws follow.
 
 The legacy seeds of the other drivers (replay's tiers, the compiled-kernel check, recompute's reference rows,
 difftest, the relation checkers) are here too (`root_seed` .. `case_seed`), with the only generator constructors
@@ -27,32 +34,45 @@ from typing import Any, TypeVar
 import numpy as np
 
 from verity.randomness import Key, derive
-from verity_sampled_proofs.law import ReplayUnit, Stage, TwoStageLaw, select_verification_units, vu_key
+from verity_sampled_proofs.law import ReplayUnit, Stage, TwoStageLaw, select_verification_units
 
 #: Every derivation's default until the re-baseline epoch (decision 42).
 LEGACY = True
 
 POSITIONS_DOMAIN = "verity/vllm-commit/opening-positions/v1"
 IDENTITIES_DOMAIN = "verity/vllm-commit/opening-identities/v1"
+REPLAY_DOMAIN = "verity/vllm-commit/replay-sample/v1"
+SALT_DOMAIN = "verity/vllm-commit/run-salt/v1"
+RECEIPT_TAG = b"verity/vllm-commit/window-receipt/v1"
 _LEGACY_POSITIONS_TAG = b"verity/cmt-integ/challenge/v0"
 
 T = TypeVar("T")
 
 
-def _source(legacy: bool, source: bytes | None) -> None:
-    if legacy and source is not None:
-        raise ValueError("a legacy challenge derives from the run root alone; pass legacy=False with a source")
+def _source(legacy: bool, source: bytes | None, receipt: bytes | None = b"") -> None:
+    if legacy and (source is not None or receipt):
+        raise ValueError("a legacy challenge derives from the run root alone; pass legacy=False with a source and a receipt")
     if not legacy and not source:
-        raise ValueError("a non-legacy challenge needs a source: a beacon round after the root, or an auditor key")
+        raise ValueError("a non-legacy challenge needs a source: the verifier's secret")
+    if not legacy and not receipt:
+        raise ValueError("a non-legacy challenge is drawn after a receipt: pass the registration receipt it follows")
+
+
+def run_salt(secret: bytes, weights_root: bytes, run_id: str) -> bytes:
+    """The run's 32-byte salt, the verifier's: derived from its secret over the weights root and the run id, after the weights
+    root's receipt.  Never from a prover's value alone."""
+    _source(False, secret, b"-")
+    return derive(secret, SALT_DOMAIN, {"weights_root": bytes(weights_root), "run_id": str(run_id)}).stream("salt", 32)
 
 
 def challenge_positions(run_root: bytes, leaves_per_step: list[int], k: int, salt: bytes = b"", *, legacy: bool = LEGACY,
-                        source: bytes | None = None) -> list[tuple[int, int]]:
+                        source: bytes | None = None, receipt: bytes | None = None) -> list[tuple[int, int]]:
     """`k` committed leaves as (step, leaf within the step), uniform over all leaves with replacement.  Deterministic, so
-    the harness and a verifier derive the same list from (root, layout sizes, k, salt) and, off legacy, the source.
+    the harness and a verifier derive the same list from (root, layout sizes, k, salt) and, off legacy, the verifier's secret
+    and the receipt the draw follows.
 
     Legacy: 8-byte words of sha256(tag || root || salt || counter), each reduced mod the leaf total."""
-    _source(legacy, source)
+    _source(legacy, source, receipt)
     if len(run_root) != 32:
         raise ValueError("run root must be 32 bytes")
     total = sum(leaves_per_step)
@@ -65,7 +85,8 @@ def challenge_positions(run_root: bytes, leaves_per_step: list[int], k: int, sal
         return s, g - (cum[s - 1] if s else 0)
 
     if not legacy:
-        key = derive(source, POSITIONS_DOMAIN, {"run_root": run_root, "salt": salt, "layout": ",".join(map(str, leaves_per_step))})
+        key = derive(source, POSITIONS_DOMAIN, {"run_root": run_root, "receipt": bytes(receipt), "salt": salt,
+                                                "layout": ",".join(map(str, leaves_per_step))})
         return [at(key.uniform(total, i)) for i in range(k)]
     out: list[tuple[int, int]] = []
     ctr = 0
@@ -80,13 +101,15 @@ def challenge_positions(run_root: bytes, leaves_per_step: list[int], k: int, sal
 
 
 def identity_picker(run_root: bytes, map_digest: str, salt: bytes = b"", *, legacy: bool = LEGACY,
-                    source: bytes | None = None) -> Callable[[int, int], int]:
-    """`pick(i, n)`: the i-th draw in [0, n) of an opening-identity challenge bound to (root, binding-map digest, salt).
+                    source: bytes | None = None, receipt: bytes | None = None) -> Callable[[int, int], int]:
+    """`pick(i, n)`: the i-th draw in [0, n) of an opening-identity challenge bound to (root, binding-map digest, salt), and off
+    legacy to the receipt it follows.
 
     Legacy: sha256(sha256(root || map digest || salt) || i as 4 bytes)[:8] mod n."""
-    _source(legacy, source)
+    _source(legacy, source, receipt)
     if not legacy:
-        key = derive(source, IDENTITIES_DOMAIN, {"run_root": run_root, "map_digest": bytes.fromhex(map_digest), "salt": salt})
+        key = derive(source, IDENTITIES_DOMAIN, {"run_root": run_root, "receipt": bytes(receipt),
+                                                 "map_digest": bytes.fromhex(map_digest), "salt": salt})
         return lambda i, n: key.uniform(n, i)
     seed = hashlib.sha256(run_root + bytes.fromhex(map_digest) + salt).digest()
     return lambda i, n: int.from_bytes(hashlib.sha256(seed + i.to_bytes(4, "big")).digest()[:8], "big") % n
@@ -98,10 +121,43 @@ def legacy_replay_seed(challenge: str, run_root: bytes) -> int:
     return int.from_bytes(hashlib.sha256(challenge.encode("utf-8") + b"|" + bytes(run_root)).digest()[:8], "big")
 
 
-def replay_key(source: bytes, run_root: bytes) -> Key:
-    """The replay sample's key off legacy: sampled proofs' verification-unit draw after the run root."""
-    _source(False, source)
-    return vu_key(source, {"run_root": bytes(run_root)})
+def replay_key(source: bytes, run_root: bytes, receipt: bytes) -> Key:
+    """The replay sample's key off legacy: the verifier's secret, over the run root and the receipt of its registration."""
+    _source(False, source, receipt)
+    return derive(source, REPLAY_DOMAIN, {"run_root": bytes(run_root), "receipt": bytes(receipt)})
+
+
+class RunWindows:
+    """The verifier's record of one run's registrations (X-SPC-18).  `register` takes a window's call indices (hashable
+    positions: forward, layer, site) and its root, and returns the window's receipt.  It refuses a window already registered
+    (a window is never re-registered), duplicate indices within it, any index an earlier window of the run registered, and
+    everything after an abort (`abort`: the run is rejected)."""
+
+    def __init__(self, run_id: str) -> None:
+        self.run_id = str(run_id)
+        self.windows: dict[int, bytes] = {}
+        self.owner: dict[Any, int] = {}
+        self.aborted: int | None = None
+
+    def register(self, window: int, indices: Sequence[Any], root: bytes) -> bytes:
+        if self.aborted is not None:
+            raise ValueError(f"run {self.run_id} was rejected: window {self.aborted} aborted")
+        if window in self.windows:
+            raise ValueError(f"window {window} of run {self.run_id} is already registered; a window is never re-registered")
+        if len(set(indices)) != len(indices):
+            raise ValueError(f"window {window} lists a call index twice")
+        again = sorted((str(i), self.owner[i]) for i in indices if i in self.owner)
+        if again:
+            raise ValueError(f"window {window} re-registers call indices of earlier windows of run {self.run_id}: {again[:5]}")
+        digest = hashlib.sha256(b"".join(hashlib.sha256(repr(i).encode()).digest() for i in sorted(indices, key=repr))).digest()
+        receipt = hashlib.sha256(RECEIPT_TAG + self.run_id.encode() + int(window).to_bytes(8, "big") + bytes(root) + digest).digest()
+        self.windows[window] = receipt
+        self.owner.update({i: window for i in indices})
+        return receipt
+
+    def abort(self, window: int) -> None:
+        """An aborted window rejects the run: nothing registers after it."""
+        self.aborted = int(window)
 
 
 def stratum_picks(pools: Sequence[Sequence[T]], per_stratum: int, seed: int | None, key: Key | None = None) -> list[list[T]]:
