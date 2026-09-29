@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ctypes
 import hashlib
+import os
 
 import numpy as np
 import pytest
@@ -11,7 +12,10 @@ from verity_vllm.protocol_options import pouw_circuit as PC
 from verity_vllm.protocol_options import pouw_device as PD
 from verity_vllm.protocol_options import pouw_native as PN
 
-pytestmark = pytest.mark.skipif(PD.compiler() is None, reason="needs a C++ compiler")
+#: Under `check` (`tools/check/suites.py` sets VERITY_SUITE_ROOT) the CPU build always runs: without a compiler these tests
+#: fail there instead of skipping. nvcc and a GPU stay optional (their tests skip by name).
+IN_CHECK = bool(os.environ.get("VERITY_SUITE_ROOT"))
+pytestmark = pytest.mark.skipif(PD.compiler() is None and not IN_CHECK, reason="needs a C++ compiler")
 
 
 def ptn(n: int) -> bytes:

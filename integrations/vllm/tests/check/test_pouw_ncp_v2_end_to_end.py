@@ -20,6 +20,7 @@ the prover and evaluated from its template by the IR reference).
 from __future__ import annotations
 
 import dataclasses
+import os
 
 import numpy as np
 import pytest
@@ -535,8 +536,8 @@ def device_world(tmp_path_factory):
     """`world` with the setting ``device: cuda``, the serving kernel's CPU twin (`ncp2_fast.cuh`) standing in for the GPU."""
     from verity_vllm.protocol_options import pouw_device as PD
 
-    if PD.compiler() is None:
-        pytest.skip("needs a C++ compiler")
+    if PD.compiler() is None and not os.environ.get("VERITY_SUITE_ROOT"):
+        pytest.skip("needs a C++ compiler (required under check)")
     rng = np.random.default_rng(5)
     inst, woff = _program()
     inst = PC.lower(inst, {f"model.{SITE}": "ncp-v2"})
