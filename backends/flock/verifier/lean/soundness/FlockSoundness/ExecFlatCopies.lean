@@ -6,11 +6,14 @@ import FlockSoundness.Types.ProgramPlaces
 
 A flat statement's Δ (`HmRow.delta`, no typed template) is its slot constants' pairs, the rows' constant bits, then each
 unit copy's leaf bits, cut bits and wired bits (`delta_flat`). `HmRow.check` wires each of a unit's input ports exactly
-once (`CheckFacts.wired`, leaves by `leaves_in`), and #434's `Net.ofRows` check keeps its ports' bits apart. So at each of
-a unit copy's input port bits, Δ has one copy pair, over the net's self row there:
+once (`CheckFacts.wired`, leaves by `leaves_in`), and #434's `Typed.flatNet` makes the unit's inputs its net's input port
+bits in order, so the ports' bits are distinct columns. At each of a unit copy's input port bits, Δ then has one copy
+pair, over the net's self row there:
 - `Layout.delta_port`: the count of Δ's pairs at a port bit is its own and its source's (`flatSrc`);
-- `Layout.inputRow`: the block rows there copy the source, or are zero when the source lies outside the block;
-- `Layout.zeroRow`: each unit slot's row past its useful rows is a forced-zero row.
+- `Layout.placed_port`: the block rows there read the source, so they copy it, or are zero when it lies outside the
+  block;
+- `Layout.placed_zero`: each unit slot's row past its useful rows is a forced-zero row;
+- `setupH_flatTableClass`: the flat class's `TableClass`, from the statement `Stmt.setupH` accepted.
 -/
 
 open Flock FlockLevel3
@@ -803,18 +806,18 @@ theorem setupH_flatFacts (ht : tags.typed = true)
       exact absurd hhn (by unfold HmRow.HM_NET; decide)
 
 /-- **A flat class's input copies, at each unit slot**: input `w`'s block rows read the column Δ copies into it
-(`flatSrcAt`), given that the unit's inputs are its net's input port bits in order (`hin`). -/
+(`flatSrcAt`). The unit's inputs are its net's input port bits in order (`Typed.flatNet`, #434). -/
 theorem setupH_flatInput (ht : tags.typed = true)
     (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) {k : Typed.Class} {net : Net}
-    (hr : Typed.read tags cf tables = .ok (k, .inl net))
-    (hin : (k.done.getD k.unit default).inCols.toList = portBits net.inGroups) {s₀ w : ℕ}
+    (hr : Typed.read tags cf tables = .ok (k, .inl net)) {s₀ w : ℕ}
     (hs₀ : s₀ < st.c.unitRange.count) (hw : w < (k.done.getD k.unit default).inCols.size) (r j : Fin (2 ^ st.c.kLog))
     (hr' : r.val = st.c.unitRange.slot s₀ + (k.done.getD k.unit default).inCols[w]) :
     placedA st r j = (if j.val = flatSrcAt st.c s₀ (k.done.getD k.unit default).inCols[w] then 1 else 0) ∧
       placedB st r j = if j.val = flatSrcAt st.c s₀ (k.done.getD k.unit default).inCols[w] then 1 else 0 := by
   obtain ⟨-, hunit, L⟩ := setupH_flatLayout ht h hr
   obtain ⟨P, C, hΔ, hsha, hhm⟩ := setupH_flatFacts ht h hr
-  obtain ⟨-, name, hnet, -⟩ := read_flat' hr
+  obtain ⟨-, name, hnet, -, hin⟩ := read_flat' hr
+  replace hin : (k.done.getD k.unit default).inCols.toList = portBits net.inGroups := hin
   have hlog : net.unitLog ≤ 32 := hunit ▸ L.unitLog_le hs₀
   obtain ⟨hnd0, -, htake, -, -⟩ := order_sound k.hd 0
   have hndin : (k.done.getD k.unit default).inCols.toList.Nodup := by
@@ -920,8 +923,7 @@ theorem flatZero_block (g : Fin st.c.unitRange.count) {z : Model.Witness ((setup
 
 /-- **A flat class's input copies**: at unit slot `g`, each input of the unit's composed rows carries what its copy
 position carries, in every block of a satisfying witness. -/
-theorem setupH_flatCopy (hin : (k.done.getD k.unit default).inCols.toList = portBits net.inGroups)
-    (g : Fin st.c.unitRange.count)
+theorem setupH_flatCopy (g : Fin st.c.unitRange.count)
     (c : Fin (Rows.compose (ofBlock (Typed.wordsIn k.held) k.done (k.done.getD k.unit default)) (ofBlock_ordered k.hd)).w)
     (hc : c.val < (Rows.compose (ofBlock (Typed.wordsIn k.held) k.done (k.done.getD k.unit default))
       (ofBlock_ordered k.hd)).nIn)
@@ -945,7 +947,7 @@ theorem setupH_flatCopy (hin : (k.done.getD k.unit default).inCols.toList = port
     rw [dite_eq_left (show c.val < (order k.done (k.done.getD k.unit default)).length by omega)]
     show st.c.unitRange.slot g + (order k.done (k.done.getD k.unit default)).getD c.val 0 = _
     rw [order_getD_inCols htake hw, Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hw, Option.getD_some]
-  have hrow := fun j => setupH_flatInput ht h hr hin g.isLt hw _ j hcol
+  have hrow := fun j => setupH_flatInput ht h hr g.isLt hw _ j hcol
   have hgd : (k.done.getD k.unit default).inCols.getD c.val 0 = (k.done.getD k.unit default).inCols[c.val] := by
     rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hw, Option.getD_some]
   unfold flatCopyPos
@@ -968,10 +970,8 @@ theorem setupH_flatCopy (hin : (k.done.getD k.unit default).inCols.toList = port
 
 /-- **A flat class's table class** (the soundness lane's `TableClass`), from the statement `Stmt.setupH` accepted: its
 unit slots, the unit's composed rows placed at each (`setupH_flatPlacement`), each input's copy position
-(`setupH_flatCopy`) and the slots' forced-zero rows (`setupH_flatZero`). It takes one fact about the class, `hin`: the
-unit's inputs are its net's input port bits, in order. -/
-def setupH_flatTableClass (hin : (k.done.getD k.unit default).inCols.toList = portBits net.inGroups) :
-    TableClass ((setupH_flatLayout ht h hr).2.2.model regs) where
+(`setupH_flatCopy`) and the slots' forced-zero rows (`setupH_flatZero`). -/
+def setupH_flatTableClass : TableClass ((setupH_flatLayout ht h hr).2.2.model regs) where
   types := Typed.typeIn k.types
   ls := k.ls
   info := Typed.infoIn k.held
@@ -984,7 +984,7 @@ def setupH_flatTableClass (hin : (k.done.getD k.unit default).inCols.toList = po
     (setupH_flatRealizes ht h hr regs g.isLt).lt
   placed g := setupH_flatPlacement ht h hr regs g.isLt
   copyPos := flatCopyPos ht h hr regs
-  copy g c hc _ hz o := setupH_flatCopy ht h hr regs hin g c hc hz o
+  copy g c hc _ hz o := setupH_flatCopy ht h hr regs g c hc hz o
   zeros := Finset.univ.image (flatZeroPos ht h hr regs)
   zero q hq _ hz o := by
     obtain ⟨g, -, rfl⟩ := Finset.mem_image.1 hq

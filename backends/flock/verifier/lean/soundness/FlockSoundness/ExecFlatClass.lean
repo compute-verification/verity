@@ -31,12 +31,13 @@ at or past the net's `inWords` words. -/
 def PastInputs (done : Array D) (u : D) (net : Net) : Prop :=
   ∀ c ∈ (order done u).drop u.inCols.size, net.inWords * Flock.WORD ≤ c
 
-/-- A flat class read: its unit is flat, its net is built from the class's own unit rows, and its order's computed
-columns are past the net's input rows (`Typed.flatNet`, #434). -/
+/-- A flat class read: its unit is flat, its net is built from the class's own unit rows, its order's computed columns
+are past the net's input rows, and its input columns are the net's input port bits in order (`Typed.flatNet`, #434). -/
 theorem read_flat' {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {k : Typed.Class} {net : Net}
     (h : Typed.read tags bytes tables = .ok (k, .inl net)) :
     Typed.isFlat (k.done.getD k.unit default) = true ∧ ∃ name, Typed.netOfD (k.done.getD k.unit default) name = .ok net ∧
-      PastInputs k.done (k.done.getD k.unit default) net := by
+      PastInputs k.done (k.done.getD k.unit default) net ∧
+      (k.done.getD k.unit default).inCols.toList = (portCols net.inGroups).toList.flatMap fun p => List.range' p.1 p.2 := by
   refine ⟨?_, Typed.read_flat h⟩
   unfold Typed.read at h
   simp only [bind, Except.bind, pure, Except.pure] at h
@@ -188,7 +189,7 @@ theorem setupH_flatRealizes (ht : tags.typed = true)
       (ofBlock (Typed.wordsIn k.held) k.done (k.done.getD k.unit default)) (fun c => st.c.unitRange.slot s₀ + c) := by
   have L := (setupH_flatLayout ht h hr).2.2
   have hunit := (setupH_flatLayout ht h hr).2.1
-  obtain ⟨hflat, name, hnet, hpast⟩ := read_flat' hr
+  obtain ⟨hflat, name, hnet, hpast, -⟩ := read_flat' hr
   have hlog : net.unitLog ≤ 32 := hunit ▸ (setupH_flatLayout ht h hr).2.2.unitLog_le hs
   refine (setupH_flatLayout ht h hr).2.2.realizes regs hs ?_
   rw [hunit]
