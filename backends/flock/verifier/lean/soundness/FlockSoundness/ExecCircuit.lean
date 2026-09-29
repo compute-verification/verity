@@ -3,9 +3,9 @@ import FlockSoundness.ExecParse
 /-!
 # What `HmRow.parse` accepted
 
-`parse_facts`: a circuit file `HmRow.parse` accepted has only text nets (`Net.parse`) and lookup slots (`Lookup.build`),
-ports of whole SHA-512 blocks, the unit, `sha512x3` and `hm96` nets and every range's net among its nets, and passed
-`HmRow.check`. The walk lifts each level's join points into local definitions (`extract_lets`), so a branch point is one
+`parse_facts`: a circuit file `HmRow.parse` accepted has only nets `Net.ofRows` built (its text nets, and a typed flat
+class's unit net given first as `pre`, `parse_facts_pre`) and lookup slots (`Lookup.build`), ports of whole SHA-512
+blocks, the unit, `sha512x3` and `hm96` nets and every range's net among its nets, and passed `HmRow.check`. The walk lifts each level's join points into local definitions (`extract_lets`), so a branch point is one
 goal: the branches meet at the join point.
 -/
 
@@ -85,8 +85,7 @@ theorem findIdx?_lt {α : Type} {xs : Array α} {p : α → Bool} {i : ℕ} (h :
 
 /-- **What `HmRow.parse` accepted.** -/
 structure ParseFacts (tags : Tags) (c : Circuit) : Prop where
-  nets : ∀ x ∈ c.nets.toList,
-    (∃ lines, Net.parse lines = .ok x.2) ∨ ∃ nm tb n lo bits, Lookup.build nm tb n lo bits = .ok x.2
+  nets : ∀ x ∈ c.nets.toList, Built x.2 ∨ ∃ nm tb n lo bits, Lookup.build nm tb n lo bits = .ok x.2
   ports : ∀ p ∈ c.ports.toList, 0 < p.chunks
   unitNet : c.unitNet < c.nets.size
   shaNet : c.shaNet < c.nets.size
@@ -97,8 +96,11 @@ structure ParseFacts (tags : Tags) (c : Circuit) : Prop where
   typed : c.typed = none
 
 set_option maxHeartbeats 4000000 in
-theorem parse_facts {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
-    (h : HmRow.parse tags bytes tables = .ok c) : ParseFacts tags c := by
+/-- **What `HmRow.parse` accepted, with nets `pre` first** (a typed flat class's unit net, #307): its nets are `pre`'s,
+then the file's own, and its unit is the first named `unit`. -/
+theorem parse_facts_pre {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {pre : Array (String × Net)}
+    {c : Circuit} (hpre : ∀ x ∈ pre.toList, Built x.2) (h : HmRow.parse tags bytes tables (pre := pre) = .ok c) :
+    ParseFacts tags c ∧ (∃ more, c.nets.toList = pre.toList ++ more) ∧ c.nets.findIdx? (·.1 == "unit") = some c.unitNet := by
   unfold HmRow.parse at h
   simp (config := { zeta := false }) only [Option.isSome_none, Bool.false_eq_true, ↓reduceIte, Option.mapM_none] at h
   ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) sha jp0 at h)
@@ -235,9 +237,10 @@ theorem parse_facts {tags : Tags} {bytes : ByteArray} {tables : List (String × 
     · rename_i i' hi'; cases hi; exact findIdx?_lt hi'
     · cases hi
   -- the text nets (the `while` loop over the `NET` blocks)
-  have htext : ∀ x ∈ nets1.toList, ∃ lines, Net.parse lines = .ok x.2 := by
-    refine loop_inv (fun b : Array (String × Net) × ℕ => ∀ x ∈ b.1.toList, ∃ lines, Net.parse lines = .ok x.2)
-      (fun b => lines.size - b.2) ?_ _ (nets0, at0) s1 le_rfl (by simp [nets0]) hwhile
+  have htext : ∃ more, nets1.toList = nets0.toList ++ more ∧ ∀ x ∈ more, ∃ lines, Net.parse lines = .ok x.2 := by
+    refine loop_inv (fun b : Array (String × Net) × ℕ =>
+        ∃ more, b.1.toList = nets0.toList ++ more ∧ ∀ x ∈ more, ∃ lines, Net.parse lines = .ok x.2)
+      (fun b => lines.size - b.2) ?_ _ (nets0, at0) s1 le_rfl ⟨[], by simp, by simp⟩ hwhile
     intro b hb s h
     ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) nets at_ at h)
     split at h
@@ -260,10 +263,11 @@ theorem parse_facts {tags : Tags} {bytes : ByteArray} {tables : List (String × 
           have hs := Except.ok.inj h
           subst hs
           refine Or.inr ⟨_, rfl, ?_, ?_⟩
-          · intro x hx
-            simp only [nets', Array.toList_push, List.mem_append, List.mem_singleton] at hx
+          · obtain ⟨more, hm, hmore⟩ := hb
+            refine ⟨more ++ [_], by simp [nets', nets, hm]; rfl, fun x hx => ?_⟩
+            simp only [List.mem_append, List.mem_singleton] at hx
             rcases hx with hx | rfl
-            · exact hb x hx
+            · exact hmore x hx
             · exact ⟨_, hv⟩
           · simp only [at', at_]; omega
         · (have hh := except_bind_ok h; clear h; obtain ⟨net, hnet, h⟩ := hh)
@@ -274,12 +278,13 @@ theorem parse_facts {tags : Tags} {bytes : ByteArray} {tables : List (String × 
       subst hs
       exact Or.inl ⟨_, rfl, hb⟩
   -- the lookup slots
-  have hnets : ∀ x ∈ nets2.toList,
+  have hnets : ∃ more, nets2.toList = nets0.toList ++ more ∧ ∀ x ∈ more,
       (∃ lines, Net.parse lines = .ok x.2) ∨ ∃ nm tb n lo bits, Lookup.build nm tb n lo bits = .ok x.2 := by
     rw [← Array.forIn_toList] at hlook
-    refine forIn_except_inv (fun nets : Array (String × Net) => ∀ x ∈ nets.toList,
+    obtain ⟨more0, hm0, hmore0⟩ := htext
+    refine forIn_except_inv (fun nets : Array (String × Net) => ∃ more, nets.toList = nets0.toList ++ more ∧ ∀ x ∈ more,
       (∃ lines, Net.parse lines = .ok x.2) ∨ ∃ nm tb n lo bits, Lookup.build nm tb n lo bits = .ok x.2)
-      _ ?_ nets1 s2 (fun x hx => Or.inl (htext x hx)) hlook
+      _ ?_ nets1 s2 ⟨more0, hm0, fun x hx => Or.inl (hmore0 x hx)⟩ hlook
     intro a _ b hb s h
     obtain ⟨lname, spec⟩ := a
     ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) nets at h)
@@ -305,10 +310,11 @@ theorem parse_facts {tags : Tags} {bytes : ByteArray} {tables : List (String × 
         have hs := Except.ok.inj h
         subst hs
         refine ⟨_, Or.inl rfl, ?_⟩
-        intro x hx
-        simp only [nets', Array.toList_push, List.mem_append, List.mem_singleton] at hx
+        obtain ⟨more, hm, hmore⟩ := hb
+        refine ⟨more ++ [_], by simp [nets', nets, hm]; rfl, fun x hx => ?_⟩
+        simp only [List.mem_append, List.mem_singleton] at hx
         rcases hx with hx | rfl
-        · exact hb x hx
+        · exact hmore x hx
         · exact Or.inr ⟨_, _, _, _, _, hbuild⟩
       · (have hh := except_bind_ok h; clear h; obtain ⟨w, hw, h⟩ := hh)
         cases hw
@@ -358,7 +364,21 @@ theorem parse_facts {tags : Tags} {bytes : ByteArray} {tables : List (String × 
       exact hnetOf _ _ hi'
     · (have hh := except_bind_ok h; clear h; obtain ⟨kind, hk, h⟩ := hh)
       cases hk
-  exact { nets := hnets, ports := hports, unitNet := findIdx?_lt hunit, shaNet := hnetOf _ _ hsha,
-          hmNet := hnetOf _ _ hhm, kinds := hkinds, check := ⟨ls, by cases w; exact hcheck⟩ , typed := rfl }
+  obtain ⟨more, hm, hmore⟩ := hnets
+  have hbuilt : ∀ x ∈ nets2.toList, Built x.2 ∨ ∃ nm tb n lo bits, Lookup.build nm tb n lo bits = .ok x.2 := by
+    intro x hx
+    rw [hm, List.mem_append] at hx
+    rcases hx with hx | hx
+    · exact Or.inl (hpre x hx)
+    · rcases hmore x hx with ⟨_, hp⟩ | hb
+      · exact Or.inl (parse_built hp)
+      · exact Or.inr hb
+  refine ⟨?_, ⟨more, hm⟩, hunit⟩
+  exact { nets := hbuilt, ports := hports, unitNet := findIdx?_lt hunit, shaNet := hnetOf _ _ hsha,
+          hmNet := hnetOf _ _ hhm, kinds := hkinds, check := ⟨ls, by cases w; exact hcheck⟩, typed := rfl }
+
+theorem parse_facts {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
+    (h : HmRow.parse tags bytes tables = .ok c) : ParseFacts tags c :=
+  (parse_facts_pre (fun _ hx => by simp at hx) h).1
 
 end FlockSoundness
