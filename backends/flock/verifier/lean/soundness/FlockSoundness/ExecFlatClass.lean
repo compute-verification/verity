@@ -10,7 +10,7 @@ a flat class (#307): `parseTyped` parses the file with the unit's net first (`Hm
 - `setupH_flatLayout`: the statement `Stmt.setupH` accepted has the layout an untyped one has (`Layout`), its unit net
   the class's.
 - `netRows_flat`: the unit's composed rows (`ofBlock`) are its net's rows (`NetRows`), given `PastInputs`: the order's
-  columns after the unit's inputs are at or past the net's input rows.
+  columns after the unit's inputs are at or past the net's input rows, which `Typed.read` checks (`Typed.flatNet`, #434).
 - `setupH_flatRealizes`, `setupH_flatPlacement`: so at each unit slot, the accepted statement realizes the unit's composed
   rows (`Layout.realizes`) and places them (`Realizes.placement`), the table class's `placed` there.
 -/
@@ -26,10 +26,18 @@ open Compose Flock.DeriveAll Types.Dag
 theorem netOfD_built {d : D} {name : String} {n : Net} (h : Typed.netOfD d name = .ok n) : Built n :=
   ⟨name, d.size, d.const, _, _, Typed.rowsA d, Typed.rowsB d, h⟩
 
-/-- A flat class read: its unit is flat, and its net is built from the class's own unit rows. -/
+/-- **The unit's order lists its computed columns past its net's input rows**: every column after the unit's inputs is
+at or past the net's `inWords` words. -/
+def PastInputs (done : Array D) (u : D) (net : Net) : Prop :=
+  ∀ c ∈ (order done u).drop u.inCols.size, net.inWords * Flock.WORD ≤ c
+
+/-- A flat class read: its unit is flat, its net is built from the class's own unit rows, its order's computed columns
+are past the net's input rows, and its input columns are the net's input port bits in order (`Typed.flatNet`, #434). -/
 theorem read_flat' {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {k : Typed.Class} {net : Net}
     (h : Typed.read tags bytes tables = .ok (k, .inl net)) :
-    Typed.isFlat (k.done.getD k.unit default) = true ∧ ∃ name, Typed.netOfD (k.done.getD k.unit default) name = .ok net := by
+    Typed.isFlat (k.done.getD k.unit default) = true ∧ ∃ name, Typed.netOfD (k.done.getD k.unit default) name = .ok net ∧
+      PastInputs k.done (k.done.getD k.unit default) net ∧
+      (k.done.getD k.unit default).inCols.toList = (portCols net.inGroups).toList.flatMap fun p => List.range' p.1 p.2 := by
   refine ⟨?_, Typed.read_flat h⟩
   unfold Typed.read at h
   simp only [bind, Except.bind, pure, Except.pure] at h
@@ -45,11 +53,6 @@ theorem read_flat' {tags : Tags} {bytes : ByteArray} {tables : List (String × B
       obtain ⟨rfl, -⟩ := h
       exact hflat
   · split at h <;> simp at h
-
-/-- **The unit's order lists its computed columns past its net's input rows**: every column after the unit's inputs is
-at or past the net's `inWords` words. -/
-def PastInputs (done : Array D) (u : D) (net : Net) : Prop :=
-  ∀ c ∈ (order done u).drop u.inCols.size, net.inWords * Flock.WORD ≤ c
 
 /-! ## The unit's composed rows are its net's -/
 
@@ -154,7 +157,7 @@ theorem setupH_flatLayout (ht : tags.typed = true)
   rcases hcase with ⟨t, c', hrt, -, -⟩ | ⟨net', c', hrn, hpc, hc⟩
   · cases hrt
   · cases hrn
-    obtain ⟨name, hnet⟩ := Typed.read_flat hr
+    obtain ⟨name, hnet, -⟩ := Typed.read_flat hr
     obtain ⟨P, ⟨more, hmore⟩, hunit⟩ := parse_facts_pre (fun x hx => by
       simp at hx
       subst hx
@@ -177,34 +180,31 @@ theorem setupH_flatLayout (ht : tags.typed = true)
     rw [hu0, getD_of_getElem? h0]
 
 /-- **A flat class's composed rows, realized at each unit slot of the accepted statement**: at unit slot `s₀`, with
-positions `slot s₀ + c`, the model of the statement `Stmt.setupH` accepted realizes the unit's composed rows (`ofBlock`),
-given `PastInputs`. -/
+positions `slot s₀ + c`, the model of the statement `Stmt.setupH` accepted realizes the unit's composed rows (`ofBlock`). -/
 theorem setupH_flatRealizes (ht : tags.typed = true)
     (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) {k : Typed.Class} {net : Net}
     (hr : Typed.read tags cf tables = .ok (k, .inl net))
-    (hpast : PastInputs k.done (k.done.getD k.unit default) net)
     (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {s₀ : ℕ} (hs : s₀ < st.c.unitRange.count) :
     Realizes ((setupH_flatLayout ht h hr).2.2.model regs)
       (ofBlock (Typed.wordsIn k.held) k.done (k.done.getD k.unit default)) (fun c => st.c.unitRange.slot s₀ + c) := by
   have L := (setupH_flatLayout ht h hr).2.2
   have hunit := (setupH_flatLayout ht h hr).2.1
-  obtain ⟨hflat, name, hnet⟩ := read_flat' hr
+  obtain ⟨hflat, name, hnet, hpast, -⟩ := read_flat' hr
   have hlog : net.unitLog ≤ 32 := hunit ▸ (setupH_flatLayout ht h hr).2.2.unitLog_le hs
   refine (setupH_flatLayout ht h hr).2.2.realizes regs hs ?_
   rw [hunit]
   exact netRows_flat k.hd hflat hnet hlog hpast
 
 /-- **A flat class's placement at each unit slot of the accepted statement**: the unit's composed rows, as #256 and #287
-state them, placed at `composePlace` in the model of the statement `Stmt.setupH` accepted, given `PastInputs`. -/
+state them, placed at `composePlace` in the model of the statement `Stmt.setupH` accepted. -/
 theorem setupH_flatPlacement (ht : tags.typed = true)
     (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) {k : Typed.Class} {net : Net}
     (hr : Typed.read tags cf tables = .ok (k, .inl net))
-    (hpast : PastInputs k.done (k.done.getD k.unit default) net)
     (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {s₀ : ℕ} (hs : s₀ < st.c.unitRange.count) :
     Placement ((setupH_flatLayout ht h hr).2.2.model regs)
       (Rows.compose (ofBlock (Typed.wordsIn k.held) k.done (k.done.getD k.unit default)) (ofBlock_ordered k.hd))
       (composePlace _ _ (ofBlock_ordered k.hd) (fun c => st.c.unitRange.slot s₀ + c)
-        (setupH_flatRealizes ht h hr hpast regs hs).lt) :=
-  (setupH_flatRealizes ht h hr hpast regs hs).placement (ofBlock_ordered k.hd)
+        (setupH_flatRealizes ht h hr regs hs).lt) :=
+  (setupH_flatRealizes ht h hr regs hs).placement (ofBlock_ordered k.hd)
 
 end FlockSoundness
