@@ -258,7 +258,8 @@ def record(argv: list[str]) -> int:
         pin = json.loads(UPSTREAM_PIN.read_text())
         store = LocalStore()
         files = {k: Path(store.fetch(pin[k]["art"])) for k in ("upstream", "inputs")}
-        print(f"check: changes under {', '.join(tool.CHECK.merge_requires['lean-agreement'])} against {base}: sending the pinned "
+        print(f"check: changes under {', '.join(r for r in tool.CHECK.merge_requires['lean-agreement'] if not r.startswith('!'))} "
+              f"against {base}: sending the pinned "
               f"upstream build and inputs")
         cmd += [x for k in ("upstream", "inputs") for x in ("--input", f"flock_{k}={pin[k]['art']}")]
         if on:

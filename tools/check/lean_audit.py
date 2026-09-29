@@ -160,15 +160,69 @@ def scratch_tree(dest: Path, files: list[str]) -> None:
             shutil.copy2(s, d)
 
 
+#: a dependency fetch that failed for a reason outside the audit (GitHub throttles anonymous clones from a busy address)
+TRANSIENT = ("could not read Username for 'https://github.com'", "Could not resolve host", "expected flush after ref listing",
+             "Failed to connect to", "The requested URL returned error: 429", "The requested URL returned error: 5")
+RETRIES = (90, 240)
+
+
+def transient(rep: dict) -> bool:
+    """A package that failed only in setup or build, and only on fetching a dependency: no verdict, so it is audited again."""
+    fs = rep.get("failures", [])
+    return bool(fs) and all(f.startswith(("setup:", "build:")) and any(t in f for t in TRANSIENT) for f in fs)
+
+
+def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: Path, cache: Path, deps: Path, fresh: bool,
+           log) -> tuple[list[str], list[str]]:
+    """Audit ``missed`` (and the packages they require by path) on a scratch tree of their inputs, and store each pass.
+    Returns (the failed, the audited)."""
+    deps.mkdir(parents=True, exist_ok=True)
+    work = Path(tempfile.mkdtemp(prefix="lean-audit-scratch-", dir=deps.parent))    # beside the dependencies: moves, not copies
+    warm = WarmDeps(deps)
+    passed: set[Path] = set()
+    audited: list[str] = []
+    failed: list[str] = []
+    try:
+        union = sorted({f for p in missed for f in inputs(p, files)})
+        scratch_tree(work, union)
+        audited = packages(union)
+        for p in audited:
+            warm.take(work / p, log)
+        env = {**os.environ, "LEAN_NUM_THREADS": str(CHECK.cores())}
+        t0 = time.monotonic()
+        (out / "audit.json").unlink(missing_ok=True)
+        r = subprocess.run([sys.executable, str(work / "tools" / "lean" / "audit.py"), "--all", "--build", "--root", str(work),
+                            "--out", str(out)], cwd=work, env=env)
+        log(f"lean-audit: {', '.join(audited)} audited in {time.monotonic() - t0:.0f} s (exit {r.returncode})")
+        doc = json.loads((out / "audit.json").read_text()) if (out / "audit.json").exists() else {"failed": ["audit.py"]}
+        failed = [os.path.relpath(f, work) if f.startswith(str(work)) else f for f in doc.get("failed", [])]
+        controls_ok = not [f for f in failed if f.startswith("controls")]
+        for rep in doc.get("packages", []):
+            p = os.path.relpath(rep["package"], work)
+            rep["package"] = p
+            reports[p] = rep
+            if controls_ok and not rep["failures"] and r.returncode in (0, 1) and p in keys and not fresh:
+                cache.mkdir(parents=True, exist_ok=True)
+                tmp = cache / f".{keys[p]}.tmp"
+                tmp.write_text(json.dumps({"schema": SCHEMA, "package": p, "key": keys[p], "report": rep}))
+                os.replace(tmp, cache / f"{keys[p]}.json")
+        if r.returncode not in (0, 1) and not failed:
+            failed = [f"audit.py exit {r.returncode}"]
+        passed = {work / p for p in audited if p in reports and controls_ok and not reports[p].get("failures")}
+    finally:
+        warm.give_back(passed)
+        shutil.rmtree(work, ignore_errors=True)
+    return failed, audited
+
+
 def run(out: Path, cache: Path, deps: Path, fresh: bool = False, log=print) -> int:
     files = CHECK.tracked_files(ROOT)
     if files is None:
         log("lean-audit: the tree's files cannot be listed; nothing is cached")
         fresh = True
         files = [str(p.relative_to(ROOT)) for p in ROOT.rglob("*") if p.is_file() and ".lake" not in p.parts]
-    flags = ["--all", "--build"]
     pkgs = packages(files)
-    keys = {p: key(p, files, flags) for p in pkgs}
+    keys = {p: key(p, files, ["--all", "--build"]) for p in pkgs}
     out.mkdir(parents=True, exist_ok=True)
     reports, cached = {}, {}
     for p, k in keys.items():
@@ -177,42 +231,18 @@ def run(out: Path, cache: Path, deps: Path, fresh: bool = False, log=print) -> i
             reports[p] = json.loads(entry.read_text())["report"]
             cached[p] = k
             log(f"lean-audit: {p}: PASS reused ({k[:12]}): every file its audit reads is unchanged")
-    missed = [p for p in pkgs if p not in cached]
-    failed: list[str] = []
-    if missed:
-        deps.mkdir(parents=True, exist_ok=True)
-        work = Path(tempfile.mkdtemp(prefix="lean-audit-scratch-", dir=deps.parent))    # beside the dependencies: moves, not copies
-        warm = WarmDeps(deps)
-        passed: set[Path] = set()
-        try:
-            union = sorted({f for p in missed for f in inputs(p, files)})
-            scratch_tree(work, union)
-            audited = [p for p in packages(union)]
-            for p in audited:
-                warm.take(work / p, log)
-            env = {**os.environ, "LEAN_NUM_THREADS": str(CHECK.cores())}
-            t0 = time.monotonic()
-            r = subprocess.run([sys.executable, str(work / "tools" / "lean" / "audit.py"), *flags, "--root", str(work),
-                                "--out", str(out)], cwd=work, env=env)
-            log(f"lean-audit: {', '.join(audited)} audited in {time.monotonic() - t0:.0f} s (exit {r.returncode})")
-            doc = json.loads((out / "audit.json").read_text()) if (out / "audit.json").exists() else {"failed": ["audit.py"]}
-            failed = [os.path.relpath(f, work) if f.startswith(str(work)) else f for f in doc.get("failed", [])]
-            controls_ok = not [f for f in failed if f.startswith("controls")]
-            for rep in doc.get("packages", []):
-                p = os.path.relpath(rep["package"], work)
-                rep["package"] = p
-                reports[p] = rep
-                if controls_ok and not rep["failures"] and r.returncode in (0, 1) and p in keys and not fresh:
-                    cache.mkdir(parents=True, exist_ok=True)
-                    tmp = cache / f".{keys[p]}.tmp"
-                    tmp.write_text(json.dumps({"schema": SCHEMA, "package": p, "key": keys[p], "report": rep}))
-                    os.replace(tmp, cache / f"{keys[p]}.json")
-            if r.returncode not in (0, 1) and not failed:
-                failed = [f"audit.py exit {r.returncode}"]
-            passed = {work / p for p, rep in reports.items() if controls_ok and not rep.get("failures")}
-        finally:
-            warm.give_back(passed)
-            shutil.rmtree(work, ignore_errors=True)
+    todo, failed = [p for p in pkgs if p not in cached], []
+    for attempt in range(len(RETRIES) + 1):
+        if not todo:
+            break
+        now, audited = _audit(todo, files, keys, reports, out, cache, deps, fresh, log)
+        failed = [f for f in failed if f not in audited] + now
+        retry = [p for p in audited if p in now and transient(reports.get(p, {}))]
+        if not retry or attempt == len(RETRIES):
+            break
+        log(f"lean-audit: {', '.join(retry)}: a dependency fetch failed, so no verdict; auditing again in {RETRIES[attempt]} s")
+        time.sleep(RETRIES[attempt])
+        todo = retry
     failed += [p for p in pkgs if p not in reports and p not in failed]
     (out / "audit.json").write_text(json.dumps({"passed": not failed, "failed": failed, "cached": cached,
                                                 "packages": [reports[p] for p in pkgs if p in reports]}, indent=1) + "\n")

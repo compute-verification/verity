@@ -118,3 +118,11 @@ def test_the_real_packages_and_their_inputs():
     got = LA.inputs("backends/flock/verifier/lean/soundness", files)
     assert "backends/flock/verifier/lean/level3/lean-audit.json" in got and "backends/flock/verifier/lean/Main.lean" in got
     assert "tools/lean/audit.py" in got and not [f for f in got if f.startswith("backends/flock/verifier/lean/soundness/.lake")]
+
+
+def test_a_failed_dependency_fetch_is_no_verdict_and_is_retried():
+    clone = ("build: exit 1\ninfo: plausible: cloning https://github.com/leanprover-community/plausible\nfatal: could not read "
+             "Username for 'https://github.com': No such device or address")
+    assert LA.transient({"failures": [clone]})
+    assert not LA.transient({"failures": [clone, "axioms: sorryAx in Foo.bar"]})          # a real failure is never retried away
+    assert not LA.transient({"failures": ["build: exit 1\nerror: unknown identifier 'x'"]}) and not LA.transient({"failures": []})
