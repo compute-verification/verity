@@ -22,6 +22,7 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass
 from functools import lru_cache
+from pathlib import Path
 from typing import Any, Callable, Mapping, Protocol, Sequence
 
 import numpy as np
@@ -275,6 +276,33 @@ def commit_call_ir(index: int, scheme: str, call: Call) -> CallRecord:
 CALLS_FILE = "pouw-ncp-v2-calls.json"
 
 
+#: The file beside it holding every call's inputs but the weight's rows (`save_calls`), which a verifier reads from the weights of
+#: record: enough to regenerate and open each call off the serving host (`load_calls`).
+CALLS_DATA_FILE = "pouw-ncp-v2-calls.npz"
+
+
+def save_calls(path: str | Path, records: Sequence[CallRecord]) -> None:
+    """Every call's A, s, bias, row and column ids, salt and anchored fields, by index."""
+    arrays: dict[str, np.ndarray] = {}
+    for r in records:
+        c, p = r.call, f"c{r.index}_"
+        arrays.update({p + "a": c.a, p + "s": c.s, p + "bias": c.bias, p + "rowids": c.rowids, p + "colids": c.colids,
+                       p + "salt": np.frombuffer(c.salt, np.uint8), p + "fields": np.array([c.forward, c.layer, c.site, c.weight], np.int64)})
+    np.savez_compressed(path, index=np.array([r.index for r in records], np.int64), schemes=np.array([r.scheme for r in records]), **arrays)
+
+
+def load_calls(path: str | Path, rows: Callable[[int], Rows]) -> list[tuple[int, str, Call]]:
+    """(index, scheme, call) for each call `save_calls` wrote, its weight's rows from ``rows(weight)``."""
+    z = np.load(path)
+    out = []
+    for i, scheme in zip(z["index"].tolist(), z["schemes"].tolist()):
+        p = f"c{i}_"
+        forward, layer, site, weight = (int(v) for v in z[p + "fields"])
+        out.append((i, str(scheme), Call(z[p + "a"], z[p + "s"], rows(weight), z[p + "bias"], z[p + "salt"].tobytes(), forward=forward, layer=layer,
+                                         site=site, weight=weight, rowids=z[p + "rowids"], colids=z[p + "colids"])))
+    return out
+
+
 def summary(rec: CallRecord) -> dict[str, Any]:
     c, sh = rec.call, rec.shape
     return {"index": rec.index, "scheme": rec.scheme, "shape": [sh.m, sh.k, sh.n], "forward": c.forward, "layer": c.layer,
@@ -298,7 +326,7 @@ def lower(inst: dict[str, Any], sites: Mapping[str, str]) -> dict[str, Any]:
     return dict(inst, rows=rows)
 
 
-__all__ = ["CALLS_BINDING", "CALLS_FILE", "Call", "CallRecord", "Compiled", "KIND", "LOWERED", "Quantized", "ROW_BIAS_FAMILY",
+__all__ = ["CALLS_BINDING", "CALLS_DATA_FILE", "CALLS_FILE", "Call", "CallRecord", "Compiled", "KIND", "LOWERED", "Quantized", "ROW_BIAS_FAMILY",
            "ROW_FAMILY", "Rows",
-           "WeightDigest", "call_leaf", "calls_root", "commit_call_ir", "evaluate_ir", "inputs_digest", "int7_bytes", "lower",
-           "program", "summary", "unit_leaf", "units_root", "weight_digest"]
+           "WeightDigest", "call_leaf", "calls_root", "commit_call_ir", "evaluate_ir", "inputs_digest", "int7_bytes", "load_calls", "lower",
+           "program", "save_calls", "summary", "unit_leaf", "units_root", "weight_digest"]

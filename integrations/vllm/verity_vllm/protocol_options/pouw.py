@@ -408,6 +408,7 @@ class _CircuitRun:
             d.mkdir(parents=True, exist_ok=True)
             (d / PC.CALLS_FILE).write_text(json.dumps({"entry": self.entry, "commitment": self.commits,
                                                         "calls": [PC.summary(r) for r in self.records]}) + "\n")
+            PC.save_calls(d / PC.CALLS_DATA_FILE, self.records)
 
 
 #: The live `ncp-v2` runs by entry, with their sites (the collector's path of each linear -> its ordinal), for the Commit's

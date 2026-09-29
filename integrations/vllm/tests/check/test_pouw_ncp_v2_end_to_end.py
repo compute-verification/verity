@@ -130,7 +130,7 @@ class Run:
         blo, bhi = woff.get("model.model.layers.0.mlp.up_proj.bias", (0, 0))
         self.bias = torch.from_numpy((weights[blo:bhi].astype(np.uint32) << 16).view(np.float32)) if bhi > blo else None
         monkeypatch.setattr(pouw, "linear_types", lambda: (Linear,))
-        self.model = Model(w_up)
+        self.model, self.w_up, self.tdir = Model(w_up), w_up, tmp_path
         ctx = PO.Context(stage="serve", enabled=("pouw:ncp-v2",),
                          settings={"pouw": {"beacon": BEACON, "transcript_dir": str(tmp_path), **(settings or {})}})
         with PO.install(self.model, ctx) as comp:
@@ -517,3 +517,14 @@ def test_the_tamper_setting_is_one_of_the_controls():
     assert pouw.Settings.of({"tamper": "tile"}).tamper == "tile" and pouw.Settings.of({}).tamper is None
     with pytest.raises(ValueError, match="tamper"):
         pouw.Settings.of({"tamper": "weights"})
+
+
+@pytest.mark.parametrize("which", ["world", "fused_world"])
+def test_the_transcript_holds_every_calls_inputs_and_regenerates_each_call(which, request):
+    """`transcript_dir`'s call data (`save_calls`) with the weight's rows from the weights of record re-commits every call to its
+    live leaf: the data a verifier needs to open the calls off the serving host."""
+    from verity_vllm.protocol_options import pouw_native as PN
+    w = request.getfixturevalue(which)
+    calls = PC.load_calls(w.tdir / PC.CALLS_DATA_FILE, lambda weight: pouw._LayerRows(w.w_up))
+    assert [i for i, _s, _c in calls] == [r.index for r in w.records] and {s for _i, s, _c in calls} == {"ncp-v2"}
+    assert [PC.call_leaf(PN.commit_call(i, s, c)).hex() for i, s, c in calls] == [PC.call_leaf(r).hex() for r in w.records]
