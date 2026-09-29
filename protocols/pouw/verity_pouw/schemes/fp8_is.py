@@ -54,6 +54,8 @@ SLICE = 32
 ATOM_UNITS, FADD_UNITS = 32, 32
 #: MH100 nominal W1 price of one E4M3 code written by ``cvt.rn.satfinite.e4m3x2.f32`` (32 per x2 instruction; unmeasured)
 CVT_UNITS = 16
+#: The edge of the leaf's subtiles: the transcript leaf of a 64 × 64 tile is SHAKE256 over its 16 subtiles' digests
+SUBTILE = 16
 #: H100 W1 prices by instruction class, per instruction of two lanes unless noted: Round 7 as measured
 #: (``gpu-constants.md`` §12), Round 8 loop-free, and Round 9 (§14, run ``r20260928-181753-0070``), the default.
 #: ``hadd2_f32`` is one f16 -> f32 widen (per result); ``block_f32`` one f32 block value h + e (per result), which Rounds 7
@@ -156,12 +158,18 @@ class Stack:
 
 @dataclass(frozen=True, slots=True)
 class Checked:
-    """A tile's checked values: the forming layer's words (serialized) and the core's ``cells[i][j] = ([I_τ], [R_τ])``
-    (R_1 is ``None`` when unseeded), with the seeds they started from."""
+    """A tile's checked values: the forming layer's words (serialized) per row and per column, and the core's
+    ``cells[i][j] = ([I_τ], [R_τ])`` (R_1 is ``None`` when unseeded), with the seeds they started from."""
 
-    trace: bytes
+    trace_x: list[bytes]
+    trace_y: list[bytes]
     cells: list[list[tuple[list[int], list[int | None]]]]
     seeds: list[list[int]] | None = None
+
+    @property
+    def trace(self) -> bytes:
+        """The forming words of the tile's rows, then its columns."""
+        return b"".join(self.trace_x + self.trace_y)
 
 
 # ---- the forming layer ----------------------------------------------------------------------------------------------
@@ -973,15 +981,33 @@ class FP8IS:
         """The forming words of the tile's rows then columns, and each cell's core words (`cell_words`)."""
         seed = (lambda i, j: ops.seeds[i][j]) if ops.seeds is not None else (lambda i, j: None)
         cells = [[cell_words(x, y, seed(i, j)) for j, y in enumerate(ops.y)] for i, x in enumerate(ops.x)]
-        return Checked(b"".join(ops.trace_x + ops.trace_y), cells, ops.seeds)
+        return Checked(list(ops.trace_x), list(ops.trace_y), cells, ops.seeds)
 
-    def digest(self, ctx: Context, noise, checked: Checked) -> bytes:
-        cells = [cell for row in checked.cells for cell in row]
+    def subdigest(self, checked: Checked, rows: range, cols: range) -> bytes:
+        """One subtile's digest: SHAKE256("verity/pouw/fp8-is-h100-<tag>/subtile" ‖ 0x00 ‖ the forming words of its rows,
+        then its columns ‖ its core words)[:32], the core words little-endian, step-major, row-major over its cells
+        within a step, I_τ before R_τ (when R_τ is checked)."""
+        cells = [checked.cells[i][j] for i in rows for j in cols]
         steps = len(cells[0][0]) if cells else 0
         words = b"".join(struct.pack("<I", atoms[t]) + (b"" if running[t] is None else struct.pack("<I", running[t]))
                          for t in range(steps) for atoms, running in cells)
-        return hashlib.shake_256(f"verity/pouw/{PREFIX}-{self.forming.tag}/tile".encode() + b"\0" + checked.trace
+        trace = b"".join([checked.trace_x[i] for i in rows] + [checked.trace_y[j] for j in cols])
+        return hashlib.shake_256(f"verity/pouw/{PREFIX}-{self.forming.tag}/subtile".encode() + b"\0" + trace
                                  + words).digest(32)
+
+    def subdigests(self, checked: Checked) -> list[bytes]:
+        """The tile's `SUBTILE` × `SUBTILE` subtiles' digests, row-major: subtile (a, b) holds rows 16a … 16a + 15 and
+        columns 16b … 16b + 15 of the tile, and comes before (a, b + 1).  A tile under 16 on a side is one subtile."""
+        m, n = len(checked.cells), len(checked.cells[0])
+        return [self.subdigest(checked, range(a, min(a + SUBTILE, m)), range(b, min(b + SUBTILE, n)))
+                for a in range(0, m, SUBTILE) for b in range(0, n, SUBTILE)]
+
+    def digest(self, ctx: Context, noise, checked: Checked) -> bytes:
+        """The tile's Merkle leaf, two-level: SHAKE256("verity/pouw/fp8-is-h100-<tag>/leaf" ‖ 0x00 ‖ its sub-digests in
+        `subdigests`' order)[:32], 16 of them on a 64 × 64 tile.  A proof of one 16 × 16 subtile opens the leaf with the
+        other 15 sub-digests (the circuit's tile, #380)."""
+        return hashlib.shake_256(f"verity/pouw/{PREFIX}-{self.forming.tag}/leaf".encode() + b"\0"
+                                 + b"".join(self.subdigests(checked))).digest(32)
 
     def useful(self, ctx: Context, noise, ops: Stack, checked: Checked) -> list[list[float]]:
         """R_T per cell as its FP32 value, less the seed (one add.rn.f32, glue) for a seeded layer."""
