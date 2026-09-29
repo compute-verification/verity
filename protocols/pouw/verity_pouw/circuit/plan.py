@@ -230,18 +230,22 @@ class Plan:
     sizes: Mapping[str, int]
     drawn: tuple[int, ...]                   # the units the law drew (tiles and floor units)
     proved: tuple[int, ...]                  # the drawn units and every drawn tile's closure, ascending, each once
-    openings: tuple[tuple[str, int], ...]    # the row leaves the proved units open: ("a", row) or ("b", weight row)
+    openings: tuple[tuple[str, int], ...]    # the leaves the plan opens: ("a", row), ("b", weight row), ("y", column strip)
     proved_y: tuple[int, ...] = ()           # the weight Program's Y units the drawn tiles read (column strips), each once
 
 
-def draw(key: Key, lay: Layout, law: TileLaw) -> Plan:
+def draw(key: Key, lay: Layout, law: TileLaw, call: Sequence[int] = ()) -> Plan:
     """The plan for one draw: a uniform k_s-subset of each stratum from ``key`` (the verifier's own randomness, derived under
-    `DRAW_DOMAIN` after the receipt), then every drawn tile's closure."""
+    `DRAW_DOMAIN` after the receipt), then every drawn tile's closure.  ``call`` is the call's index (`anchors`'
+    `call_index`), which keys each stratum's subset with its template: the strata are the call's own (one per template,
+    X-SPC-84), and the calls of a window drawn under one key draw independently (X-SPC-96).  The verifier draws through
+    `Traced.draw`, over its own layout."""
     lay.check()
     sizes = law.sizes(lay.strata)
     drawn: list[int] = []
     for s in lay.strata:
-        drawn += [s.units[i] for i in key.subset(sizes[s.name], len(s.units), ("stratum", s.name))]
+        context = ("call", *call, "stratum", s.name) if call else ("stratum", s.name)
+        drawn += [s.units[i] for i in key.subset(sizes[s.name], len(s.units), context)]
     proved = set(drawn)
     ys = {lay.y_strip[u] for u in drawn if lay.y_strip and u in lay.y_strip}
     for u in drawn:
@@ -265,8 +269,9 @@ def law_object(lay: Layout, law: WorkLaw) -> dict:
 
 
 def openings(lay: Layout, proved, proved_y=()) -> tuple[tuple[str, int], ...]:
-    """The input rows the proved units read, one leaf per row: a digest or X unit its strip's 16 A rows, a Y unit (the
-    weight Program's, by column strip) its 16 weight rows."""
+    """The leaves a plan opens: a digest or X unit's strip's 16 A rows, one leaf per row; a Y unit's (the weight Program's,
+    by column strip) 16 weight rows; and at each such column strip, ("y", strip), the call's Y and c₀ input there and the
+    weight Program's output there, which the verifier compares (`Traced.check_link`, X-SPC-95)."""
     rows: set[tuple[str, int]] = set()
     for i in proved:
         u = lay.units[i]
@@ -274,6 +279,7 @@ def openings(lay: Layout, proved, proved_y=()) -> tuple[tuple[str, int], ...]:
             rows.update(("a", D * u.where[0] + r) for r in range(D))
     for cs in proved_y:
         rows.update(("b", D * cs + r) for r in range(D))
+        rows.add(("y", cs))
     return tuple(sorted(rows))
 
 
