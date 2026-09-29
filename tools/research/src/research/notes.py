@@ -13,6 +13,8 @@
   research notes status|watch --liveness git [--fetch] ...   # steward.py: notes commit times and origin's lane/* tips, not mtimes
   research notes watch --lease [store|PATH] [--standby] ...   # steward.py: only the steward lease's holder acts
   research notes service systemd|launchd [...] [-- WATCH ARGS] # steward.py: the steward's service definition
+  research notes index [--root DIR] [--catalog PATH] [--search TEXT | --evidence ID]   # notes_index.py: notes, full text, citations
+  research notes mcp [--root DIR] [--catalog PATH]            # notes_mcp.py: that index joined to the evidence catalog, as MCP on stdio
 
 A lane's report is `<root>/lanes/<lane>/<stamp>-report-<lane>.md` (the newest one if several).  `checkpoint` writes
 `CHECKPOINT <sha> (<HH:MM>Z) [<state>] <text>` directly under the front matter (newest first, where lanes already put them),
@@ -1864,6 +1866,10 @@ def main(argv: list[str]) -> int:
         from .steward import service_main  # noqa: PLC0415
 
         return service_main(argv[1:])
+    if argv and argv[0] in ("index", "mcp"):
+        from . import notes_index, notes_mcp  # noqa: PLC0415
+
+        return (notes_index if argv[0] == "index" else notes_mcp).main(argv[1:], default_root())
     rc = _main(argv)
     if rc in (0, 3) and argv and argv[0] in ("checkpoint", "bind", "relaunch"):
         root = Path(argv[argv.index("--root") + 1]).expanduser() if "--root" in argv[:-1] else default_root()

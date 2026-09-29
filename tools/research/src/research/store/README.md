@@ -177,6 +177,8 @@ current flag), `index_attempt(doc)`, `index_label(label, path)`, `set_presence(a
 `select_artifacts(kind=None, where=None, label=None, attempt=None, tool=None, derivation=None)`, `labels(target, key=None)`,
 `replicas(art_id)`, `sql(query, params=())` and `sql_with_columns(...)` on a read-only (`?mode=ro`) connection. Attempt queries
 return the attempt documents; artifact queries return `{id, kind, bytes, payload_type, manifest, local, remote, repo_path}`.
+`compact(src, dst)` (`research data catalog --compact OUT`) copies the catalog for readers that query it but never fetch
+(`research notes mcp --catalog`): the same tables and indexes, `manifest_json` NULL, no `replicas` / `replica_checks`.
 
 ## 6. Tools, derivations, conditions, closures, scratch
 
