@@ -219,6 +219,8 @@ def dot_ampere(x: np.ndarray, w: np.ndarray, n_threads: int | None = None) -> tu
     """`DotBf16_v1{K}` of the row `x` (K,) against every row of `w` (N, K), bf16 words: (f32 words, non-finite coordinates), equal to
     `derived_rows.dot_bf16` word for word."""
     x = np.asarray(x, dtype=np.uint16)
+    if x.shape[0] % 16 or w.shape[1] != x.shape[0]:
+        raise ValueError(f"a k16 chain needs K a multiple of 16 and W [N, K] (x {x.shape}, W {w.shape})")
     p = prepared(w)
     N = w.shape[0]
     out = np.empty(N, dtype=np.uint32)

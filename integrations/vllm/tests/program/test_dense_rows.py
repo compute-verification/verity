@@ -203,6 +203,12 @@ def test_float64_chain_on_cancelling_steps_and_exact_zeros():
     assert np.array_equal(out, ref) and (ref == 0).all()
 
 
+def test_float64_chain_refuses_a_partial_k16_step():
+    x = _x(np.random.default_rng(5709))
+    with pytest.raises(ValueError, match="multiple of 16"):
+        DR.dot_ampere(x[:40], np.zeros((3, 40), dtype=np.uint16))
+
+
 def test_prepared_weights_are_keyed_by_their_buffer():
     rng = np.random.default_rng(5707)
     x = _x(rng)
