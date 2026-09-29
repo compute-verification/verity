@@ -272,6 +272,7 @@ The profile is `Stratified` over the tile strata, and its `harm_bound`, at W_ref
   - C-Flock pieces for the PoUW primitives;
   - the floors POUS sets for the zero-work templates (X-SPC-55; 1 until then), and the per-call split's window-level
     bound (X-SPC-83);
+  - X-SPC-105 is open: the dequantization units are in no tile's closure, and every floor stays at 1 until root rules;
   - the served-output designation and the pinned ports in `Q_nested_instances` v0's spec, evaluator and Lean port;
   - the vLLM adapter's `traced_as`;
   - the reuse of a weight's Y proofs across a run's windows (X-SPC-51), which needs its commitments linked across windows;
