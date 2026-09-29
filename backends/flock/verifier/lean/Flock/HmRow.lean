@@ -752,11 +752,12 @@ def stratifiedLaw (obj : Json) (program : ByteArray) (k : Nat) : V (Draw.Law × 
   | .ok law => return (law, population)
   | .error e => throw s!"stratified: {e}"
 
-/-- `work:K` expanded over the verifier's own program, partition object and work table (`Draw.deriveWork`), and the
-population. -/
-def workLaw (obj : Json) (program : ByteArray) (k : Nat) (table : Array (String × Nat)) : V (Draw.Law × Nat) := do
+/-- `work:K` (with `count`, `work:K:C`) expanded over the verifier's own program, partition object and work table
+(`Draw.deriveWork`), and the population. -/
+def workLaw (obj : Json) (program : ByteArray) (k : Nat) (count : Option Nat) (table : Array (String × Nat)) :
+    V (Draw.Law × Nat) := do
   let (strata, population) ← templateStrata "work" obj program
-  match Draw.deriveWork k strata table with
+  match Draw.deriveWork k count strata table with
   | .ok law => return (law, population)
   | .error e => throw s!"work: {e}"
 
@@ -934,11 +935,11 @@ def Stmt.setupTables (tags : Tags) (circuitFile publicFile : ByteArray) (coins :
     (program : Option ByteArray := none) (work : Option (Array (String × Nat)) := none) : V (SessionSpec × Array Stmt) := do
   -- a work draw's stated work sets every k_s, so its law must be the verifier's own derivation, never taken as stated
   if let some d := draw then
-    if let .ok (Draw.Law.work k strata) := (Draw.UnitDraw.ofJson d).map (·.law) then
+    if let .ok (Draw.Law.work k count strata) := (Draw.UnitDraw.ofJson d).map (·.law) then
       let (some obj, some prog, some table) := (partition, program, work)
         | throw "U2: a work draw needs the verifier's own work table, program and partition (--work-table, --program, --partition)"
-      let (law, _) ← HmRow.workLaw obj prog k table
-      if law != Draw.Law.work k strata then
+      let (law, _) ← HmRow.workLaw obj prog k count table
+      if law != Draw.Law.work k count strata then
         throw "U2: the draw's work law is not the verifier's own (its program, query and work table)"
   if count ≤ 1 then
     let st ← Stmt.setupH tags circuitFile publicFile coins tables draw partition program

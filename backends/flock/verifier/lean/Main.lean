@@ -462,11 +462,17 @@ def stratifiedInput (args : List String) : IO (Except String (Option (Draw.Law �
     | .error e => return .error e
   return (HmRow.stratifiedLaw obj program k).map some
 
-/-- `--program P --partition Q --work K --work-table F`: the work law the verifier derives from its own program, partition
-object and work table (`HmRow.workLaw`), and the population; none without `--work`. -/
+/-- `--program P --partition Q --work K [--count C] --work-table F`: the work law the verifier derives from its own program,
+partition object and work table (`HmRow.workLaw`), with the count budget `C` when given, and the population; none without
+`--work`. -/
 def workInput (args : List String) : IO (Except String (Option (Draw.Law × Nat))) := do
   let some k := argOf args "--work" | return .ok none
   let some k := k.toNat? | return .error "--work K: K is a natural number"
+  let count ← match argOf args "--count" with
+    | none => pure none
+    | some c => match c.toNat? with
+      | some c => pure (some c)
+      | none => return .error "--count C: C is a natural number"
   let program ← match ← programInput args with
     | .ok (some p) => pure p
     | .ok none => return .error "--work needs --program (the verifier derives the strata itself)"
@@ -479,7 +485,7 @@ def workInput (args : List String) : IO (Except String (Option (Draw.Law × Nat)
     | .ok (some t) => pure t
     | .ok none => return .error "--work needs --work-table (the verifier's own work per template)"
     | .error e => return .error e
-  return (HmRow.workLaw obj program k table).map some
+  return (HmRow.workLaw obj program k count table).map some
 
 /-- The verifier's own law from `--stratified K` or `--work K` (at most one), and the population; none without either. -/
 def ownLaw (args : List String) : IO (Except String (Option (Draw.Law × Nat))) :=
@@ -488,7 +494,7 @@ def ownLaw (args : List String) : IO (Except String (Option (Draw.Law × Nat))) 
   | none, some _ => workInput args
   | _, none => stratifiedInput args
 
-/-- `draw (--population N (--k K | --p NUM/DEN) | --program P --partition Q (--stratified K | --work K --work-table F))
+/-- `draw (--population N (--k K | --p NUM/DEN) | --program P --partition Q (--stratified K | --work K [--count C] --work-table F))
 [--stream HEX | --stream-file F]`: the unit draw (§7.3), from the operating system's randomness (a stratified or work draw:
 one stream per stratum), or from the given bytes (a test; a stratified or work draw's streams are its consecutive segments).
 The strata are the verifier's own, derived from its program and partition object, and a work law's work is its own work
@@ -499,7 +505,7 @@ def drawCmd (args : List String) : IO UInt32 := do
     | .ok (some lp) => pure lp
     | .ok none =>
       let some pop := (argOf args "--population").bind String.toNat?
-        | IO.eprintln "draw: --population N, or --program P --partition Q (--stratified K | --work K --work-table F)"; return 2
+        | IO.eprintln "draw: --population N, or --program P --partition Q (--stratified K | --work K [--count C] --work-table F)"; return 2
       match argOf args "--k", argOf args "--p" with
       | some k, none => match k.toNat? with
         | some k => if k ≤ pop then pure (Draw.Law.subset k, pop) else IO.eprintln "draw: k > population"; return 2
@@ -525,7 +531,7 @@ def drawCmd (args : List String) : IO UInt32 := do
   IO.println s!"DRAW {d.toJson.compress}"
   return 0
 
-/-- `draw-test FILE [--program P --partition Q (--stratified K | --work K --work-table F)]`: U1–U3 (§7.3) on each case
+/-- `draw-test FILE [--program P --partition Q (--stratified K | --work K [--count C] --work-table F)]`: U1–U3 (§7.3) on each case
 `{"record", "statement", "instances"}` (a draw or null each), one `DRAWCHECK {"ok", "why"}` line per case. With a law's
 flags, the statement's draw is also held to the verifier's own law and population (`draw.check_draw`'s `law` and
 `population`). -/
