@@ -383,6 +383,12 @@ hypotheses of the theorems that use them, never `axiom` declarations, so they ca
 #print axioms FlockSoundness.Audit.Partition.card_influenceSet_le
 #print axioms FlockSoundness.Audit.Partition.audit_influence
 #print axioms FlockSoundness.Audit.Partition.Refines.twoStage_influence
+-- the influence theorems are not vacuous: a four-gate witness and an audit that meets audit_influence's hypotheses
+#print axioms FlockSoundness.Audit.InfluenceExamples.lemma47
+#print axioms FlockSoundness.Audit.InfluenceExamples.three_mem_exits
+#print axioms FlockSoundness.Audit.InfluenceExamples.count
+#print axioms FlockSoundness.Audit.InfluenceExamples.influence_met
+#print axioms FlockSoundness.Audit.InfluenceExamples.accepts
 -- harm bounds and influence: the value bits (a harm bound) plus the choice of which units are wrong
 #print axioms FlockSoundness.Audit.escape_lt_of_harm_gt
 #print axioms FlockSoundness.Audit.Partition.card_exits_le

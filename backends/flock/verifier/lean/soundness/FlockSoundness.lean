@@ -98,6 +98,7 @@ import FlockSoundness.Audit.FlockLink
 import FlockSoundness.Audit.FlockLinked
 import FlockSoundness.Audit.Harm
 import FlockSoundness.Audit.Influence
+import FlockSoundness.Audit.InfluenceExamples
 import FlockSoundness.E2E
 import FlockSoundness.Types.Units
 import FlockSoundness.Types.Program
