@@ -546,7 +546,7 @@ def device_world(tmp_path_factory):
     weights[lo:hi] = 0x3F80
     fast = PD.commit_call
     with pytest.MonkeyPatch.context() as mp:
-        mp.setattr(PD, "commit_call", lambda i, s, c, on="host", flags=PD.HASH: fast(i, s, c, on="fast") if on == "fused" else fast(i, s, c, on, flags))
+        mp.setattr(PD, "commit_call", lambda i, s, c, on="host", flags=PD.HASH: fast(i, s, c, on="twin") if on == "fused" else fast(i, s, c, on, flags))
         return Run(inst, woff, weights, {"r0": [(i + 1) % V for i in range(LP)], "r1": [(3 * i) % V for i in range(LP)]},
                    tmp_path_factory.mktemp("pouw-device"), mp, settings={"device": "cuda"})
 

@@ -30,6 +30,7 @@ import argparse
 import ctypes
 import hashlib
 import json
+import os
 import sys
 import time
 from functools import partial
@@ -43,6 +44,8 @@ from verity_vllm.protocol_options import pouw_device as PD
 from verity_vllm.protocol_options import pouw_native as PN
 
 LAYERS = 24
+#: Qwen2.5-0.5B's four linears, (k, n): qkv (with bias), o, gate_up, down
+QWEN05 = ((896, 1152), (896, 896), (896, 9728), (4864, 896))
 ROWS = (16, 256, 2048)
 D = 16
 UNIT_TAG, NODE_TAG = 27, 33
@@ -90,7 +93,7 @@ def call_accounting(m: int, k: int, n: int) -> dict:
 def forward_accounting(m: int) -> dict:
     """A 24-layer Qwen2.5-0.5B forward of ``m`` rows: bytes each hash absorbs, by part, and the XOF."""
     out: dict = {"m": m, "macs": 0, "units": 0, "absorbed": {h: {} for h in HASH}, "xof_bytes": 0}
-    for k, n in PD.QWEN05:
+    for k, n in QWEN05:
         acc = call_accounting(m, k, n)
         out["macs"] += LAYERS * acc["macs"]
         out["units"] += LAYERS * acc["units"]
@@ -107,7 +110,7 @@ def forward_accounting(m: int) -> dict:
 def host_gate() -> list[dict]:
     """The host build against `pouw_native` on every gate call: the gate the pod repeats for the device."""
     out = []
-    for name, call in PD.gate_calls(qwen=True):
+    for name, call in PD.gate_calls(QWEN05):
         t0 = time.perf_counter()
         diff = PD.first_difference(PN.commit_call(0, "ncp-v2", call), PD.commit_call(0, "ncp-v2", call))
         out.append({"call": name, "difference": diff, "s": round(time.perf_counter() - t0, 3)})
@@ -132,7 +135,7 @@ def gate_hashes() -> dict:
 
 def gate_committer() -> list[dict]:
     out = []
-    for name, call in PD.gate_calls(qwen=True):
+    for name, call in PD.gate_calls(QWEN05):
         got, ms = PD.commit_call_timed(0, "ncp-v2", call)
         diff = PD.first_difference(PN.commit_call(0, "ncp-v2", call), got)
         sh = call.shape
@@ -146,14 +149,14 @@ def gate_committer() -> list[dict]:
 #: BN = WN·NT·8; K a multiple of 64)
 ROUTE_U_TILES = {0: (128, 256), 1: (16, 256), 2: (16, 16)}
 #: the gate call for config 0: gate_up at 128 rows
-CFG0_GATE = (128, *PD.QWEN05[2])
+CFG0_GATE = (128, *QWEN05[2])
 
 
 def gate_fused() -> list[dict]:
     """The serving kernel (`ncp2_fused.cu`) against `pouw_native` on every gate call: the committed word leaves leaf for leaf,
     and the low-byte variant's tile leaves against `pouw_device.lowbyte_leaf` of the tile words, the rest as committed."""
     out = []
-    for name, call in PD.gate_calls(qwen=True):
+    for name, call in PD.gate_calls(QWEN05):
         ref = PN.commit_call(0, "ncp-v2", call)
         got, ms = PD.commit_call_timed(0, "ncp-v2", call, on="fused")
         low, ms_low = PD.commit_call_timed(0, "ncp-v2", call, on="fused", flags=PD.HASH | PD.LOWBYTE)
@@ -179,7 +182,7 @@ def fused_timings(torch, reps: int, save=lambda part: None) -> dict:
     later calls see them), with the tile words' achieved rate."""
     out: dict = {"calls": []}
     for m in FUSED_ROWS:
-        for k, n in PD.QWEN05:
+        for k, n in QWEN05:
             row: dict = {"m": m, "k": k, "n": n}
             g = torch.Generator(device="cuda").manual_seed(m * 7 + n)
             a = torch.randint(-64, 64, (m, k), dtype=torch.int8, device="cuda", generator=g)
@@ -228,10 +231,9 @@ def _cfgs(m: int, n: int) -> list[int]:
 def gate_route_u(ext, torch) -> list[dict]:
     """Every config the timings run, on `ncp-v2`'s own X and Y: Qwen2.5-0.5B's four linears at 16 rows, and gate_up at 128
     rows (the only shape config 0's 128 × 256 tile divides)."""
-    rng = np.random.default_rng(5)
-    calls = [(n, c) for n, c in PD.gate_calls(qwen=True) if n.startswith("qwen05")]
+    calls = [(n, c) for n, c in PD.gate_calls(QWEN05) if n.startswith("linear")]
     m, k, n = CFG0_GATE
-    calls.append((f"qwen05 k={k} n={n} m={m}", PD._call(rng, m, k, n, layer=11, site=2, weight=46)))
+    calls.append((f"linear k={k} n={n} m={m}", PD.gate_call(f"linear k={k} n={n} m={m}", m, k, n, layer=11, site=2, weight=46)))
     out = []
     for name, call in calls:
         nat, sh = PN.Native(call), call.shape
@@ -318,7 +320,7 @@ def timings(ext, torch, reps: int, save=lambda part: None) -> dict:
     save(out)
     out["linears"] = []
     for m in ROWS:
-        for k, n in PD.QWEN05:
+        for k, n in QWEN05:
             try:
                 out["linears"].append(linear(ext, torch, timed, PD.device(), m, k, n, reps))
             except (RuntimeError, SystemExit) as e:
@@ -336,7 +338,7 @@ def projection(t: dict) -> dict:
     out = {}
     for m in ROWS:
         rows = [r for r in t["linears"] if r["m"] == m]
-        if len(rows) != len(PD.QWEN05) or any("error" in r for r in rows):
+        if len(rows) != len(QWEN05) or any("error" in r for r in rows):
             continue
         bf16 = LAYERS * sum(r["bf16_ms"] for r in rows)
         gemm = LAYERS * sum(r["route_u_ms"] for r in rows)
@@ -372,6 +374,7 @@ def main() -> None:
     ap.add_argument("--out", type=Path)
     ap.add_argument("--fused-only", action="store_true", help="the fused kernel's gates and timings only")
     args = ap.parse_args()
+    PD.configure(build_dir=os.environ.get("VERITY_POUW_CUDA_BUILD"), arch=os.environ.get("VERITY_POUW_CUDA_ARCH"))
     res: dict = {"accounting": [forward_accounting(m) for m in ROWS]}
 
     def save(key: str | None = None, value=None) -> None:

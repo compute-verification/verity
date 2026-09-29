@@ -132,13 +132,13 @@ def test_the_device_build_commits_what_pouw_native_commits(device, name, call):
 def test_the_serving_kernels_functions_on_the_cpu_commit_what_pouw_native_commits(name, call):
     """`ncp2_fast.cuh`: the word-stream leaves, the tile hashed as it is computed, the aligned SHA-512 key, the block-wise
     noise and the register units tree, run on the CPU."""
-    assert PD.first_difference(PN.commit_call(0, "ncp-v2", call), PD.commit_call(0, "ncp-v2", call, on="fast")) is None
+    assert PD.first_difference(PN.commit_call(0, "ncp-v2", call), PD.commit_call(0, "ncp-v2", call, on="twin")) is None
 
 
 @pytest.mark.parametrize("count", [1, 2, 3, 5, 16, 17, 1000])
 def test_the_fast_units_tree_is_pouw_circuits(count):
     leaves = np.random.default_rng(count).bytes(32 * count)
-    assert PD.units_root_fast(leaves) == PC.units_root(leaves)
+    assert PD.units_root_twin(leaves) == PC.units_root(leaves)
 
 
 def test_the_low_byte_variant_hashes_each_checkpoints_low_byte(five_strips):

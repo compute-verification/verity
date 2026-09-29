@@ -23,7 +23,7 @@ def test_padding_and_the_tree():
 def test_a_tiles_words_are_three_quarters_of_a_byte_per_useful_mac():
     for m in B.ROWS:
         acc = B.forward_accounting(m)
-        words = sum(B.LAYERS * (m // 16) * (n // 16) * 3 * k // 16 * 256 * 4 for k, n in B.PD.QWEN05)
+        words = sum(B.LAYERS * (m // 16) * (n // 16) * 3 * k // 16 * 256 * 4 for k, n in B.QWEN05)
         assert words / acc["macs"] == 0.75
         assert 0.75 < acc["tile_bytes_per_mac"] < 0.76
 
@@ -101,21 +101,21 @@ class _RouteU:
 
 
 def test_the_route_u_gate_reads_the_kernels_checkpoint_layout_under_every_config_it_times(monkeypatch):
-    small = [("qwen05 small", c) for n, c in B.PD.gate_calls() if n == "five-strips"]
-    monkeypatch.setattr(B.PD, "gate_calls", lambda qwen=False: small)
+    small = [("linear small", c) for n, c in B.PD.gate_calls() if n == "five-strips"]
+    monkeypatch.setattr(B.PD, "gate_calls", lambda shapes=(): small)
     monkeypatch.setattr(B, "CFG0_GATE", (128, 64, 256))
     got = B.gate_route_u(_RouteU, _Torch)
-    assert [(r["call"], r["cfg"]) for r in got] == [("qwen05 small", 2), ("qwen05 k=64 n=256 m=128", 0),
-                                                    ("qwen05 k=64 n=256 m=128", 1), ("qwen05 k=64 n=256 m=128", 2)]
+    assert [(r["call"], r["cfg"]) for r in got] == [("linear small", 2), ("linear k=64 n=256 m=128", 0),
+                                                    ("linear k=64 n=256 m=128", 1), ("linear k=64 n=256 m=128", 2)]
     assert all(r["checkpoints_equal"] for r in got)
-    timed = {B._cfgs(m, n)[0] for m in B.ROWS for _k, n in B.PD.QWEN05}
-    gated = {c for m in (16, 128) for _k, n in B.PD.QWEN05 for c in B._cfgs(m, n)}
+    timed = {B._cfgs(m, n)[0] for m in B.ROWS for _k, n in B.QWEN05}
+    gated = {c for m in (16, 128) for _k, n in B.QWEN05 for c in B._cfgs(m, n)}
     assert timed <= gated
 
 
 def test_the_committer_and_hash_gates_run_through_the_host_build(monkeypatch):
     calls = B.PD.gate_calls()
-    monkeypatch.setattr(B.PD, "gate_calls", lambda qwen=False: calls)
+    monkeypatch.setattr(B.PD, "gate_calls", lambda shapes=(): calls)
     monkeypatch.setattr(B.PD, "commit_call_timed", lambda i, s, c: (B.PD.commit_call(i, s, c), 0.0))
     host = B.PD.hash_many
     monkeypatch.setattr(B.PD, "hash_many", lambda kind, msgs, out=None, ds=0x1F, on="host": host(kind, msgs, out, ds))
@@ -154,7 +154,7 @@ def test_the_timings_and_projection_cover_every_linear_and_hash(monkeypatch):
     monkeypatch.setitem(sys.modules, "gemm_bench", type(sys)("gemm_bench"))
     sys.modules["gemm_bench"].timed = lambda fn, reps: (fn(), 0.5)[1]
     t = B.timings(_Timed, _Torch, 2)
-    assert len(t["linears"]) == len(B.ROWS) * len(B.PD.QWEN05)
+    assert len(t["linears"]) == len(B.ROWS) * len(B.QWEN05)
     assert set(t["from_memory_bytes_per_s"]) == set(B.HASH) and abs(t["from_memory_bytes_per_s"]["sha256"] / 5e11 - 1) < 0.01
     p = B.projection(t)
     assert set(p) == set(B.ROWS) and all(p[m][h]["unfused_x_bf16"] > p[m][h]["fused_x_bf16"] > 0 for m in B.ROWS for h in B.HASH)
@@ -174,7 +174,7 @@ def test_a_linear_that_fails_is_recorded_and_the_rest_still_run(monkeypatch):
     saved = []
     t = B.timings(Failing, _Torch, 2, save=lambda part: saved.append(len(part.get("linears", []))))
     bad = [r for r in t["linears"] if "error" in r]
-    assert bad and all(r["n"] == 9728 and r["m"] == 16 for r in bad) and len(t["linears"]) == len(B.ROWS) * len(B.PD.QWEN05)
+    assert bad and all(r["n"] == 9728 and r["m"] == 16 for r in bad) and len(t["linears"]) == len(B.ROWS) * len(B.QWEN05)
     assert saved[0] == 0 and saved[-1] == len(t["linears"])
     assert 16 not in B.projection(t) and 256 in B.projection(t)
 
@@ -183,7 +183,7 @@ def test_main_on_the_pod_path_writes_every_piece(monkeypatch, tmp_path, capsys):
     """`main` end to end with torch, #218's extension and the device library faked, the committer and hashes on the host
     build: what the pod runs, but for the GPU."""
     calls = [c for c in B.PD.gate_calls() if c[0] == "five-strips"]
-    monkeypatch.setattr(B.PD, "gate_calls", lambda qwen=False: calls + [("qwen05 small", calls[0][1])])
+    monkeypatch.setattr(B.PD, "gate_calls", lambda shapes=(): calls + [("linear small", calls[0][1])])
     monkeypatch.setattr(B, "CFG0_GATE", (128, 64, 256))
     monkeypatch.setattr(B.PD, "commit_call_timed", lambda i, s, c: (B.PD.commit_call(i, s, c), 0.0))
     host = B.PD.hash_many
@@ -215,11 +215,11 @@ def test_main_on_the_pod_path_writes_every_piece(monkeypatch, tmp_path, capsys):
 def test_the_fused_gate_runs_through_the_cpu_twin(monkeypatch):
     """`gate_fused` with the device swapped for `ncp2_fast.cuh` on the CPU (the low-byte tiles from `lowbyte_leaf`)."""
     calls = [c for c in B.PD.gate_calls() if c[0] in ("five-strips", "dequant-edges")]
-    monkeypatch.setattr(B.PD, "gate_calls", lambda qwen=False: calls)
+    monkeypatch.setattr(B.PD, "gate_calls", lambda shapes=(): calls)
     PC = B.PD.PC
 
     def timed(i, s, call, on="device", flags=B.PD.HASH):
-        rec = B.PD.commit_call(i, s, call, on="fast")
+        rec = B.PD.commit_call(i, s, call, on="twin")
         if flags & B.PD.LOWBYTE:
             nat = B.PN.Native(call)
             lo, hi = nat.base["tile"], nat.base["dequant"]
@@ -302,7 +302,7 @@ def test_the_fused_timings_cover_every_shape_and_mode(monkeypatch):
 
     monkeypatch.setattr(B.PD, "FusedCommitter", Committer)
     out = B.fused_timings(_FT, 3)
-    assert len(out["calls"]) == len(B.FUSED_ROWS) * len(B.PD.QWEN05)
+    assert len(out["calls"]) == len(B.FUSED_ROWS) * len(B.QWEN05)
     assert all(r["y_equal"] and r["word_tile_ms"] == 2.0 and r["nohash_ms"] == 10.0 / 3 for r in out["calls"])
     assert set(out["forward_m2048"]) == {"nohash", "word", "lowbyte", "nohash_tile", "word_tile", "lowbyte_tile"}
 

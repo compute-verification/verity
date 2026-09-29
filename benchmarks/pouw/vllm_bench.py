@@ -67,6 +67,7 @@ LOWBYTE_STATUS = "gamma unproved: not a result"
 
 def ncp2_committer(mode: str):
     from verity_vllm.protocol_options import pouw_device as PD
+    PD.configure(build_dir=os.environ.get("VERITY_POUW_CUDA_BUILD"), arch=os.environ.get("VERITY_POUW_CUDA_ARCH"))
     flags = {"ncp2": PD.HASH | PD.CACHE_Y, "ncp2-nohash": 0, "ncp2-lowbyte": PD.HASH | PD.CACHE_Y | PD.LOWBYTE}[mode]
     return PD.FusedCommitter(bytes(range(32)), flags | PD.TIME_TILES)
 
@@ -79,7 +80,7 @@ def ncp2_self_check(committer) -> dict:
     from verity_vllm.protocol_options import pouw_device as PD
     from verity_vllm.protocol_options import pouw_native as PN
 
-    call = PD._call(np.random.default_rng(1), 16, 896, 1152)
+    call = PD.gate_call("vllm self-check", 16, 896, 1152)
     ref = PN.commit_call(0, "ncp-v2", call)
     b, t = call.b.rows(0, call.b.n)
     cuda = lambda v, dt: torch.from_numpy(np.ascontiguousarray(v).view(dt)).cuda()

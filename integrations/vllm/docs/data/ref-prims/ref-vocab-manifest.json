@@ -1,6 +1,6 @@
 {
  "decimal_precision": 100,
- "digest": "82fd6a281c1b999ad2929c0c05a701614a5e322bfe2a92141dd77ec2af8f8e52",
+ "digest": "791320f527c1dd79fcbc3360f965911a09a0b753cd9bb7de57bbc67540cc6842",
  "families": {
   "GatherBf16x{V}": "292a5b258ce1fa42b6513f45967ba6739fc31d49a3d5a661daee7c967e24f271",
   "GatherF32x{V}": "c8f5a53caaa21e3bf82b99ad0dffa5ce4b647bcd20ea9eb9b62242748bc605a9"
@@ -292,8 +292,8 @@
    ]
   }
  },
- "module": "verity_vllm.registry.ref_prims",
- "module_sha256": "046288e134402e7b423cc02d3190719608f607fe86d0022748b5e05210b964e7",
+ "module": "verity_vllm.program.registry.ref_prims",
+ "module_sha256": "023647535de1dfd1c3ab5fc9f18bf5cafaeac2c3fcac45107b9589cb0e67bfa7",
  "schema": "verity-ir/ref-vocab/v0",
  "shared": {
   "ArgmaxStep_v1": {
@@ -305,11 +305,11 @@
    "kind": "primitive"
   },
   "Bf16GtStrict_v1": {
-   "evaluator_sha256": "ed987f5daacef102221c5b4b08ee19472ad6a745067cc0b8984fe415bf345817",
+   "evaluator_sha256": "728c119f4a204d46be9cdc8c6b0a5bfc5ea640bea1834481d407cdb2917927bb",
    "kind": "primitive"
   },
   "Bf16ToF32_v1": {
-   "evaluator_sha256": "e530a5748d60f1c13d9d907efcbfb6d250c690a004a9d685073407204bf68a47",
+   "evaluator_sha256": "97a44fccf2c4fff017139340f01fa7b91d4d0aeac45a6439b8f9535e8b4e4b11",
    "kind": "primitive"
   },
   "F32Add_v1": {
@@ -329,7 +329,7 @@
    "kind": "primitive"
   },
   "F32ToBf16Rn_v1": {
-   "evaluator_sha256": "7268d3038ef8c2f5891baf3b7d2c75bfd3494b6bd7729a27343a3d5cf21ab43b",
+   "evaluator_sha256": "e94bb5cf93e07a7bfeb03ea3ba9bb2598761fed15af3d748531da0306f6c84b6",
    "kind": "primitive"
   },
   "I32Add_v1": {

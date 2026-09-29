@@ -16,6 +16,7 @@ import os
 import shutil
 import subprocess
 from collections.abc import Sequence
+from dataclasses import dataclass, field
 from functools import cache
 from pathlib import Path
 
@@ -44,25 +45,51 @@ _i8 = np.ctypeslib.ndpointer(np.int8, flags="C_CONTIGUOUS")
 _COMMIT = [ctypes.c_int] * 3 + [_i8, _u32, _i8, _u32, _u16, _u8] + [ctypes.c_uint64] * 3 + [_u32] * 4 + [_u8, _u16]
 
 
+@dataclass
+class Toolchain:
+    """What the builds use: a C++ compiler and nvcc (None: the first on the path), the CUDA arch (89, the RTX 4090) and the
+    directory the libraries are built into. A command line sets it once with `configure`."""
+
+    cxx: str | None = None
+    nvcc: str | None = None
+    arch: str = "89"
+    build_dir: Path = field(default_factory=lambda: Path.home() / ".cache" / "verity" / "pouw_cuda")
+
+
+TOOLCHAIN = Toolchain()
+
+
+def configure(**changes) -> Toolchain:
+    """Set `TOOLCHAIN`'s fields (``cxx``, ``nvcc``, ``arch``, ``build_dir``; None leaves one as it is) and forget every loaded
+    library, so the next load builds with them."""
+    for key, value in changes.items():
+        if not hasattr(TOOLCHAIN, key):
+            raise TypeError(f"no toolchain field {key!r}")
+        if value is not None:
+            setattr(TOOLCHAIN, key, Path(value) if key == "build_dir" else value)
+    for loader in (host, device, fused):
+        getattr(loader, "cache_clear", lambda: None)()
+    return TOOLCHAIN
+
+
 def compiler() -> str | None:
-    """``$CXX``, or the first of g++, c++ and clang++ on the path."""
-    return os.environ.get("CXX") or next((c for c in ("g++", "c++", "clang++") if shutil.which(c)), None)
+    """`TOOLCHAIN`'s C++ compiler, or the first of g++, c++ and clang++ on the path."""
+    return TOOLCHAIN.cxx or next((c for c in ("g++", "c++", "clang++") if shutil.which(c)), None)
 
 
 def nvcc() -> str | None:
-    """``$NVCC``, nvcc on the path, or CUDA's default install."""
-    return os.environ.get("NVCC") or shutil.which("nvcc") or next((p for p in ("/usr/local/cuda/bin/nvcc",) if os.path.exists(p)), None)
+    """`TOOLCHAIN`'s nvcc, or nvcc on the path."""
+    return TOOLCHAIN.nvcc or shutil.which("nvcc")
 
 
 def _need(tool: str | None, what: str) -> str:
     if tool is None:
-        raise RuntimeError(f"no {what}")
+        raise RuntimeError(f"no {what} (on the path, or `configure`)")
     return tool
 
 
 def cuda_flags() -> tuple[str, ...]:
-    arch = os.environ.get("VERITY_POUW_CUDA_ARCH", "89")
-    return (*NVCC_FLAGS, f"-gencode=arch=compute_{arch},code=sm_{arch}")
+    return (*NVCC_FLAGS, f"-gencode=arch=compute_{TOOLCHAIN.arch},code=sm_{TOOLCHAIN.arch}")
 
 
 def source_digest(sources: Sequence[str] = SOURCES, flags: Sequence[str] = (), tool: str | None = None) -> str:
@@ -70,17 +97,16 @@ def source_digest(sources: Sequence[str] = SOURCES, flags: Sequence[str] = (), t
     h = hashlib.sha256()
     for name in sources:
         h.update(name.encode() + b"\0" + (HERE / name).read_bytes() + b"\0")
-    version = subprocess.run([tool or _need(compiler(), "C++ compiler: set CXX"), "--version"], capture_output=True, text=True,
+    version = subprocess.run([tool or _need(compiler(), "C++ compiler"), "--version"], capture_output=True, text=True,
                              check=True).stdout.strip().splitlines()
     h.update(" ".join(flags or CFLAGS).encode() + b"\0" + "|".join(version).encode())
     return h.hexdigest()
 
 
 def _build(tool: str, sources: Sequence[str], flags: Sequence[str], name: str) -> ctypes.CDLL:
-    """``sources[-1]`` built in ``$VERITY_POUW_CUDA_BUILD`` (default ``~/.cache/verity/pouw_cuda``) under the first 12 hex
-    digits of `source_digest`, so a changed source never loads another's library."""
-    root = Path(os.environ.get("VERITY_POUW_CUDA_BUILD", Path.home() / ".cache" / "verity" / "pouw_cuda"))
-    lib = root / source_digest(sources, flags, tool)[:12] / name
+    """``sources[-1]`` built in `TOOLCHAIN`'s ``build_dir`` under the first 12 hex digits of `source_digest`, so a changed
+    source never loads another's library."""
+    lib = TOOLCHAIN.build_dir / source_digest(sources, flags, tool)[:12] / name
     if not lib.exists():
         lib.parent.mkdir(parents=True, exist_ok=True)
         tmp = lib.with_suffix(f".{os.getpid()}.tmp")
@@ -97,7 +123,7 @@ def _bind_hash_commit(dll: ctypes.CDLL) -> None:
 @cache
 def host() -> ctypes.CDLL:
     """`ncp2_host.cpp` built for this CPU with the system C++ compiler."""
-    dll = _build(_need(compiler(), "C++ compiler: set CXX"), SOURCES, CFLAGS, "libncp2_host.so")
+    dll = _build(_need(compiler(), "C++ compiler"), SOURCES, CFLAGS, "libncp2_host.so")
     _bind_hash_commit(dll)
     dll.ncp2_commit.argtypes = dll.ncp2_commit_fast.argtypes = _COMMIT
     dll.ncp2_units_root_fast.argtypes = [_u8, ctypes.c_uint64, _u8]
@@ -109,7 +135,7 @@ def host() -> ctypes.CDLL:
 @cache
 def device() -> ctypes.CDLL:
     """`ncp2_kernels.cu` built with nvcc for ``$VERITY_POUW_CUDA_ARCH`` (default 89, the RTX 4090)."""
-    dll = _build(_need(nvcc(), "nvcc: set NVCC"), CUDA_SOURCES, cuda_flags(), "libncp2_cuda.so")
+    dll = _build(_need(nvcc(), "nvcc"), CUDA_SOURCES, cuda_flags(), "libncp2_cuda.so")
     _bind_hash_commit(dll)
     fp, dp = ctypes.POINTER(ctypes.c_float), ctypes.POINTER(ctypes.c_double)
     dll.ncp2_commit.argtypes = _COMMIT + [_u8, fp]
@@ -124,7 +150,7 @@ def device() -> ctypes.CDLL:
 @cache
 def fused() -> ctypes.CDLL:
     """`ncp2_fused.cu`, the serving kernel, built with nvcc like `device`."""
-    dll = _build(_need(nvcc(), "nvcc: set NVCC"), FUSED_SOURCES, cuda_flags(), "libncp2_fused.so")
+    dll = _build(_need(nvcc(), "nvcc"), FUSED_SOURCES, cuda_flags(), "libncp2_fused.so")
     vp, fp = ctypes.c_void_p, ctypes.POINTER(ctypes.c_float)
     dll.ncp2_fused.argtypes = ([ctypes.c_int] * 3 + [vp] * 5 + [_u8] + [ctypes.c_uint64] * 3 + [vp] * 4
                                + [ctypes.c_int, ctypes.c_uint64, vp, vp, vp])
@@ -137,7 +163,7 @@ def fused() -> ctypes.CDLL:
 
 
 def _lib(on: str) -> ctypes.CDLL:
-    return {"host": host, "fast": host, "device": device, "fused": fused}[on]()
+    return {"host": host, "twin": host, "device": device, "fused": fused}[on]()
 
 
 def lowbyte_leaf(words: np.ndarray) -> bytes:
@@ -157,7 +183,7 @@ def tile_lowbyte_host(xs: np.ndarray, ys: np.ndarray, c0: np.ndarray, steps: int
     return out.tobytes()
 
 
-def units_root_fast(leaves: bytes) -> bytes:
+def units_root_twin(leaves: bytes) -> bytes:
     """`pouw_circuit.units_root` by the host build's fast node (`ncp2_fast.cuh` `units_node_fast`)."""
     root = np.zeros(32, np.uint8)
     host().ncp2_units_root_fast(np.frombuffer(leaves, np.uint8).copy(), len(leaves) // 32, root)
@@ -191,19 +217,18 @@ def _commit(on: str, index: int, scheme: str, call: PC.Call, flags: int = HASH) 
     if on == "fused":
         rc = lib.ncp2_fused_host(*args, root, ctypes.byref(ms), flags)
     else:
-        commit = lib.ncp2_commit_fast if on == "fast" else lib.ncp2_commit
+        commit = lib.ncp2_commit_fast if on == "twin" else lib.ncp2_commit
         rc = commit(*args, *((root, ctypes.byref(ms)) if on == "device" else ()))
     if rc:
         raise ValueError(f"{sh}: outside 16-row and 16-column strips" if rc == 1 else f"CUDA error {rc}")
     blob = leaves.tobytes()
-    root_b = root.tobytes() if on in ("device", "fused") else units_root_fast(blob) if on == "fast" else PC.units_root(blob)
+    root_b = root.tobytes() if on in ("device", "fused") else units_root_twin(blob) if on == "twin" else PC.units_root(blob)
     rec = PC.CallRecord(index, scheme, call, PC.inputs_digest(call, PC.weight_digest(call.b)), blob, root_b, y, nat.outputs)
     return rec, (ms.value if on in ("device", "fused") else None)
 
 
 def commit_call(index: int, scheme: str, call: PC.Call, on: str = "host", flags: int = HASH) -> PC.CallRecord:
-    """One call committed by the ``on`` build: "host" (`ncp2.cuh`), "fast" (`ncp2_fast.cuh`, the serving kernel's way, on the
-    CPU) or "device" (`ncp2_kernels.cu`); the fast and device records carry their own units root. A record opens units
+    """One call committed by the ``on`` build: "host" (`ncp2.cuh`), "twin" (`ncp2_fast.cuh`, the serving kernel's CPU twin) or "device" (`ncp2_kernels.cu`); the twin and device records carry their own units root. A record opens units
     through `pouw_native`. ``flags`` are the fused build's (`ncp2_fused`)."""
     return _commit(on, index, scheme, call, flags)[0]
 
@@ -305,57 +330,86 @@ F32_EDGES = (0x00000000, 0x80000000, 0x00000001, 0x807FFFFF, 0x3F800000, 0xBF800
 BF16_EDGES = (0x0000, 0x8000, 0x0001, 0x807F, 0x3F80, 0xBF80, 0x7F7F, 0xFF7F, 0x7F80, 0xFF80, 0x7FC0, 0xFFC1, 0x7F81, 0x4B00)
 
 
-def _call(rng: np.random.Generator, m: int, k: int, n: int, *, a=None, b=None, s=None, t=None, bias=None, forward: int = 3,
-          layer: int = 2, site: int = 0, weight: int = 2) -> PC.Call:
-    a = rng.integers(-64, 64, (m, k)).astype(np.int8) if a is None else a
-    b = rng.integers(-64, 64, (n, k)).astype(np.int8) if b is None else b
-    scale = lambda size: (np.abs(rng.standard_normal(size)).astype(np.float32) * 0.01 + 1e-3).view(np.uint32)
-    s = scale(m) if s is None else np.asarray(s, np.uint32)
-    t = scale(n) if t is None else np.asarray(t, np.uint32)
-    bias = (rng.standard_normal(n).astype(np.float32).view(np.uint32) >> 16).astype(np.uint16) if bias is None else bias
-    return PC.Call(a, s, PC.Quantized(b, t), np.asarray(bias, np.uint16), rng.bytes(32), forward=forward, layer=layer, site=site,
-                   weight=weight, rowids=np.arange(1000, 1000 + m, dtype=np.uint32),
-                   colids=rng.permutation(4 * n)[:n].astype(np.uint32))
+def _stream(tag: str, n: int) -> np.ndarray:
+    """``n`` fixed bytes for the gate call named ``tag``: SHAKE256 over a label and the tag."""
+    return np.frombuffer(hashlib.shake_256(b"verity/pouw-device/gate-call\0" + tag.encode()).digest(max(1, n)), np.uint8)[:n]
 
 
-#: Qwen2.5-0.5B's four linears, (k, n): qkv (with bias), o, gate_up, down.
-QWEN05 = ((896, 1152), (896, 896), (896, 9728), (4864, 896))
+def _values(tag: str, m: int, k: int, n: int) -> dict[str, np.ndarray]:
+    """A call's inputs from `_stream`: int7 A and B uniform on [−64, 63], positive row and column scales, a BF16 bias about
+    0 and n distinct column ids."""
+    sizes = {"a": m * k, "b": n * k, "s": 2 * m, "t": 2 * n, "bias": 2 * n, "salt": 32, "cols": 4 * 4 * n}
+    raw, at, out = _stream(tag, sum(sizes.values())), 0, {}
+    for key, size in sizes.items():
+        out[key], at = raw[at:at + size], at + size
+    scale = lambda u: (np.float32(1e-3) + u.view("<u2").astype(np.float32) * np.float32(0.01 / 65535)).view(np.uint32)
+    bias = ((out["bias"].view("<u2").astype(np.float32) / np.float32(16384) - np.float32(2)).view(np.uint32) >> 16).astype(np.uint16)
+    return {"a": ((out["a"] & 0x7F).astype(np.int16) - 64).astype(np.int8).reshape(m, k),
+            "b": ((out["b"] & 0x7F).astype(np.int16) - 64).astype(np.int8).reshape(n, k),
+            "s": scale(out["s"]), "t": scale(out["t"]), "bias": bias, "salt": out["salt"].tobytes(),
+            "colids": np.argsort(out["cols"].view("<u4"), kind="stable")[:n].astype(np.uint32)}
 
 
-def gate_calls(seed: int = 0, qwen: bool = False) -> list[tuple[str, PC.Call]]:
-    """The calls a device committer must commit exactly: a tree of five strips, a column count off every block size, the
-    dequantization's special encodings on every row and column scale and bias, Z past 2²⁴ (I32ToF32Rn rounds), and with
-    ``qwen`` each of Qwen2.5-0.5B's linears at 16 rows."""
-    rng = np.random.default_rng(seed)
+def gate_call(tag: str, m: int, k: int, n: int, *, a=None, b=None, s=None, t=None, bias=None, forward: int = 3, layer: int = 2,
+              site: int = 0, weight: int = 2) -> PC.Call:
+    """One call of the gate: its inputs fixed by ``tag`` (`_values`), any of them given instead."""
+    v = _values(tag, m, k, n)
+    pick = lambda given, key, dt: v[key] if given is None else np.asarray(given, dt)
+    return PC.Call(pick(a, "a", np.int8), pick(s, "s", np.uint32), PC.Quantized(pick(b, "b", np.int8), pick(t, "t", np.uint32)),
+                   pick(bias, "bias", np.uint16), v["salt"], forward=forward, layer=layer, site=site, weight=weight,
+                   rowids=np.arange(1000, 1000 + m, dtype=np.uint32), colids=v["colids"])
+
+
+def gate_calls(shapes: Sequence[tuple[int, int]] = ()) -> list[tuple[str, PC.Call]]:
+    """The calls a device committer must commit exactly:
+    - a tree of five strips;
+    - a column count off every block size;
+    - the dequantization's special encodings on every row and column scale and bias;
+    - Z past 2²⁴, where I32ToF32Rn rounds;
+    - one call at 16 rows for each (k, n) of ``shapes`` (a model's linears, which the caller names)."""
     edges = np.array(F32_EDGES, np.uint32)
-    out = [("five-strips", _call(rng, 80, 64, 48)),
-           ("odd-columns", _call(rng, 16, 64, 272, forward=7, layer=23, site=3, weight=95)),
-           ("dequant-edges", _call(rng, 16 * 2, 64, 16 * 18, s=np.resize(edges, 32), t=np.repeat(edges, 16),
-                                   bias=np.resize(np.array(BF16_EDGES, np.uint16), 16 * 18)))]
+    out = [("five-strips", gate_call("five-strips", 80, 64, 48)),
+           ("odd-columns", gate_call("odd-columns", 16, 64, 272, forward=7, layer=23, site=3, weight=95)),
+           ("dequant-edges", gate_call("dequant-edges", 16 * 2, 64, 16 * 18, s=np.resize(edges, 32), t=np.repeat(edges, 16),
+                                       bias=np.resize(np.array(BF16_EDGES, np.uint16), 16 * 18)))]
     k = 4864
-    a = np.where(rng.random((16, k)) < 0.99, -64, rng.integers(-64, 64, (16, k))).astype(np.int8)
-    b = np.where(rng.random((16, k)) < 0.99, -64, rng.integers(-64, 64, (16, k))).astype(np.int8)
-    out.append(("z-past-2^24", _call(rng, 16, k, 16, a=a, b=b)))
-    if qwen:
-        out += [(f"qwen05 k={k} n={n}", _call(rng, 16, k, n, layer=11, site=i, weight=4 * 11 + i)) for i, (k, n) in enumerate(QWEN05)]
+    extreme = _stream("z-past-2^24", 2 * 16 * k).reshape(2, 16, k)
+    a = np.where(extreme[0] < 253, -64, (extreme[0] & 0x7F).astype(np.int16) - 64).astype(np.int8)
+    b = np.where(extreme[1] < 253, -64, (extreme[1] & 0x7F).astype(np.int16) - 64).astype(np.int8)
+    out.append(("z-past-2^24", gate_call("z-past-2^24", 16, k, 16, a=a, b=b)))
+    out += [(f"linear k={k} n={n}", gate_call(f"linear k={k} n={n}", 16, k, n, layer=11, site=i, weight=4 * 11 + i))
+            for i, (k, n) in enumerate(shapes)]
     return out
 
 
 __all__ = [
     "BF16_EDGES",
+    "CACHE_Y",
+    "CFLAGS",
     "CUDA_SOURCES",
     "F32_EDGES",
+    "FUSED_SOURCES",
+    "HASH",
     "HASHES",
-    "QWEN05",
+    "LOWBYTE",
+    "LOWBYTE_BLOCK",
+    "LOWBYTE_DS",
+    "NVCC_FLAGS",
     "SOURCES",
+    "TIME_TILES",
+    "TOOLCHAIN",
+    "TS128_RATE",
     "FusedCommitter",
+    "Toolchain",
     "commit_call",
     "commit_call_timed",
     "compiler",
+    "configure",
     "cuda_flags",
     "device",
     "first_difference",
     "fused",
+    "gate_call",
     "gate_calls",
     "hash_many",
     "host",
@@ -364,5 +418,5 @@ __all__ = [
     "nvcc",
     "source_digest",
     "tile_lowbyte_host",
-    "units_root_fast",
+    "units_root_twin",
 ]
