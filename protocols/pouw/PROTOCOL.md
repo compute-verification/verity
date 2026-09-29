@@ -240,6 +240,40 @@ dequantization units are drawn at the law's floor. The law is a seam:
 
 The profile is `Stratified` over the tile strata, and its `harm_bound`, at W_ref per tile, bounds the unsound work.
 
+## H-1T as a circuit under sampled proofs, layout A (`verity_pouw/circuit/h1t.py`)
+
+Track H's tagged one-sided FP8 construction (docs `pouw/hardness-shaped-matrices.md` §3.1) as a Program under layout A,
+the shape `TTH1T` is being restated to. There is no H-1T scheme in `schemes` yet: the reference is Track H's pinned map,
+`h1_tagged.h1t_ref`, whose forming and chain `tests/vectors/h1t_ref.json` pins bit for bit (Track H's own code, run on raw
+salt words in the honest kernel's bit layout). Shapes: 16 | m, 16 | n, 8 | k, 29 < k <= 32,768, n <= 88,412.
+
+~~~text
+template        per                   reads                                                     returns
+H1tKey{K}       16-row strip of A     its rows, its strip id, salt, forward, position, weight id  K_s
+H1tFormX{K}     16-row strip of A     its rows, their row ids, K_s                                [x1 | x2] per row (2 × 32T codes)
+H1tTile{K}      16 × 16 block         its x strip, 16 weight rows (B′'s real codes), their tags   the credited words, and Z
+H1tDequant      output entry          Z, s_i, t_j, bias_j                                         y = bf16(s_i·t_j·Z) + bias_j
+~~~
+
+- **The map** (`h1t_words`, one primitive per lane): T = ceil(k/29) slices of 29 real lanes (0 past k) and 3 tag lanes.
+  Per slice, F = max(2^(e(M) − 6), 2^−2); on a real lane mu = max(p/8, F), x1 = enc(x + s·mu), x2 = enc(−s·mu); on tag
+  lane i, v_i = s_i·32F·(1 + m_i/8), x1 = v_i, x2 = −v_i. The salt bits are the kernel's (`h1_kernel.h1t_form_xq`):
+  per slice raw words r0 … r17, a real lane's bit 15 or 31 of r_(l div 2) set when x2 < 0; tag lane 29 from r17's bits
+  31 and 25 … 23, lanes 30 and 31 from r16's 15 and 9 … 7, and 31 and 25 … 23.
+- **B′** is the weight's registered E4M3 rows, laid out per slice with the column's fixed tag tuple (A0[j mod 23],
+  A1[(j div 23) mod 62], A1[(j div 1426) mod 62]), an anchored input. There is no weight-side forming.
+- **The chain** per cell: I_1 … I_T over x1, then I_(T+1) … I_2T over x2, each a fresh E4M3 k32 atom from +0
+  (`HopperE4m3QgmmaDot32`); R_1 = I_1 and R_τ = RN_f32(R_(τ−1) + I_τ). The credited words are I_1 … I_2T and
+  R_2 … R_(2T−2), 4T − 3 per cell; Z = R_2T is the useful output and the pinned separator port, as in `ncp-v2`.
+- **The salt stream is the circuit's**, tile-local as the FP8 red team's X-SPW-5 has it (D_s in root_A's place, and the
+  global row index, X-SPW-2), in `ncp-v2`'s formats: r_i = SHA-512("h1t-row\0" ‖ row i), D_s = SHA-512("h1t-stp\0" ‖
+  r_16s … r_16s+15), K_s = SHAKE256(ι(strip) ×5 ‖ "H1T-KEY\0" ‖ salt ‖ forward ‖ position ‖ weight id ‖ D_s)[:32], row
+  i's words = SHAKE256(ι(row) ×5 ‖ "h1t-slt\0" ‖ K_s)[:72T]. Track H's reference fixes the map, the words' bits and the
+  chain, not this derivation. The strip id and the row ids are separate anchored inputs.
+- **The partition** (`partition.h1t_circuit`): the whole-call `validate_unit_cut` passes, every path from a key, forming
+  or tile unit to y crosses a pinned Z (8,192 bits per tile), and only the dequantization units are width-checked. A
+  drawn tile's closure would be its x strip's forming unit and its strip's key unit (the draw layout isn't here yet).
+
 ## Not here yet
 
 - The fast implementations: the RTX 4090 kernels and the vLLM adapter (`integrations/vllm/verity_vllm/protocol_options/pouw.py`)
@@ -252,4 +286,6 @@ The profile is `Stratified` over the tile strata, and its `harm_bound`, at W_ref
   - the served-output designation and the pinned ports in `Q_nested_instances` v0's spec, evaluator and Lean port;
   - the vLLM adapter's `traced_as`;
   - the reuse of a weight's Y proofs across a run's windows (X-SPC-51), which needs its commitments linked across windows;
-  - NCP-FP8 and H-1T.
+  - NCP-FP8.
+- For H-1T's circuit: an H-1T scheme in `schemes` (its stream derivation pinned), the legal-input check
+  (|x| <= 416) on committed rows, its draw layout, and `traced_as`.
