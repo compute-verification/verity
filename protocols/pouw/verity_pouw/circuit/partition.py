@@ -1,4 +1,7 @@
-"""`ncp-v2`'s partition: `Q_template_instances` over the unit templates, its invariant, and the Z separator.
+"""The circuits' partition: `Q_template_instances` over the unit templates, its invariant, and the Z separator.
+
+A `Circuit` is one call's Definition with its unit templates by role; `ncp_circuit` is `ncp-v2`'s, `h1t_circuit` H-1T's
+(`circuit.h1t`), and the checks below read either.  The functions named for `ncp-v2` take its (shape, kind) as before.
 
 * `query(shape, kind)` / `partition(program, ...)`: core's `verity/partition/v1` object naming the templates (`ncp2.templates`;
   `NcpNode` only when the call has two strips or more, since a listed template needs an instance).
@@ -26,11 +29,50 @@ from verity.ir.cut import CallGraph, boundary_widths, check_cut, fits
 from verity.ir.partition import CutVerdict
 from verity.ir.program import Program
 
-from . import ncp2
+from . import h1t, ncp2
 from .ncp2 import D, Shape
 
 #: the units whose values are PoUW's alone: behind the Z separator
 POUW_ROLES = ("digest", "node", "key", "form_y", "form_x", "tile")
+#: H-1T's: the strips' salt keys, the forming and the tiles
+H1T_POUW_ROLES = ("key", "form_x", "tile")
+
+
+@dataclass(frozen=True)
+class Circuit:
+    """One call's Definition and its unit templates by role."""
+
+    fn: Any
+    templates: Any                      # role -> unit template (the tile's is the separator port's)
+    m: int
+    n: int
+    pouw_roles: tuple[str, ...]
+    variants: tuple[tuple[str, Any], ...] = ()   # (role, template) for every template, when a role has several
+
+    @property
+    def tiles(self) -> int:
+        return (self.m // D) * (self.n // D)
+
+
+def ncp_circuit(shape: Shape, kind: str = "shift24", fn: Any = None) -> Circuit:
+    return Circuit(ncp2.linear(shape, kind) if fn is None else fn, ncp2.templates(shape.k, kind), shape.m, shape.n, POUW_ROLES)
+
+
+def h1t_circuit(shape: h1t.Shape, fn: Any = None) -> Circuit:
+    return Circuit(h1t.linear(shape) if fn is None else fn, h1t.templates(shape.k), shape.m, shape.n, H1T_POUW_ROLES)
+
+
+def listed_of(fn: Any) -> list[Any]:
+    """A call's templates in the order its root body first uses them."""
+    out: list[Any] = []
+    for nd in fn.body.nodes:
+        if all(nd.fn is not t for t in out):
+            out.append(nd.fn)
+    return out
+
+
+def query_of(c: Circuit) -> dict[str, Any]:
+    return PO.template_instances_query(listed_of(c.fn))
 
 
 def listed(shape: Shape, kind: str = "shift24") -> list[Any]:
@@ -72,18 +114,22 @@ def units(shape: Shape, kind: str = "shift24") -> tuple[Unit, ...]:
 
 def units_of(fn: Any, shape: Shape, kind: str = "shift24") -> tuple[Unit, ...]:
     """Every unit of a call Definition built from the unit templates (`ncp2.linear`, or a variant a test builds)."""
-    roles = {id(v): r for r, v in ncp2.templates(shape.k, kind).items()}
-    ms, ns = shape.m // D, shape.n // D
+    return circuit_units(ncp_circuit(shape, kind, fn))
+
+
+def circuit_units(c: Circuit) -> tuple[Unit, ...]:
+    """Every unit of a circuit, in the partition's numbering."""
+    roles = {id(v): r for r, v in (*c.templates.items(), *c.variants)}
+    ms, ns = c.m // D, c.n // D
     out: list[Unit] = []
     tile_row = deq_node = 0
-    for k, nd in enumerate(fn.body.nodes):
+    strips: Counter = Counter()                            # a strip role's units so far, across its batch nodes
+    for k, nd in enumerate(c.fn.body.nodes):
         role = roles[id(nd.fn)]
         count = nd.n if nd.form == "batch" else 1
         for m in range(count):
-            if role in ("digest", "form_x"):
-                where: tuple[int, ...] = (m,)
-            elif role == "form_y":
-                where = (m,)
+            if role in ("digest", "form_x", "form_y", "pad"):
+                where: tuple[int, ...] = (strips[role] + m,)
             elif role == "tile":
                 where = (tile_row, m)
             elif role == "dequant":
@@ -95,6 +141,8 @@ def units_of(fn: Any, shape: Shape, kind: str = "shift24") -> tuple[Unit, ...]:
             tile_row += 1
         elif role == "dequant":
             deq_node += 1
+        elif role in ("digest", "form_x", "form_y", "pad"):
+            strips[role] += count
     assert tile_row == ms
     return tuple(out)
 
@@ -114,8 +162,14 @@ def unit_cut(shape: Shape, kind: str = "shift24") -> UnitCut:
 
 
 def unit_cut_of(fn: Any, shape: Shape, kind: str = "shift24") -> UnitCut:
+    return circuit_cut(ncp_circuit(shape, kind, fn))
+
+
+def circuit_cut(c: Circuit) -> UnitCut:
+    """A circuit's whole-call cut, checked by `cut.check_cut` with no width rule."""
+    fn = c.fn
     body = fn.body
-    us = units_of(fn, shape, kind)
+    us = circuit_units(c)
     first: list[int] = []                                 # the first unit of each root node
     at = 0
     for nd in body.nodes:
@@ -146,14 +200,18 @@ def separator(shape: Shape, kind: str = "shift24") -> Separator:
     """Trace backward from the delivered outputs (y) without crossing a pinned separator port (the tiles' Z): no gate of a
     PoUW unit (digest, node, key, form-X, form-Y, tile) may be reached, and the ports the trace stops at are every tile's Z
     (Draft 2, Definition 4.6 and Lemma 4.7)."""
-    fn = ncp2.linear(shape, kind)
-    uc = unit_cut(shape, kind)
+    return circuit_separator(ncp_circuit(shape, kind), unit_cut(shape, kind))
+
+
+def circuit_separator(c: Circuit, uc: UnitCut | None = None) -> Separator:
+    """`separator` for any circuit: no gate of one of its PoUW roles is reached from y without crossing a pinned port."""
+    uc = circuit_cut(c) if uc is None else uc
     g, owner, us = uc.graph, uc.owner, uc.units
-    ports = _port_gates(uc, fn, shape, kind)
+    ports = _port_gates(uc, c)
     preds: list[list[int]] = [[] for _ in range(g.n)]
     for p, q in zip(g.src, g.dst):
         preds[q].append(p)
-    y_gates = list(g.outputs[:shape.m * shape.n])
+    y_gates = list(g.outputs[:c.m * c.n])
     words_delivered = sum(1 for q in y_gates if us[owner[q]].role != "dequant")
     seen, stack, stopped, reached = set(y_gates), list(y_gates), set(), 0
     while stack:
@@ -164,13 +222,12 @@ def separator(shape: Shape, kind: str = "shift24") -> Separator:
             seen.add(p)
             if p in ports:
                 stopped.add(p)
-            elif us[owner[p]].role in POUW_ROLES:
+            elif us[owner[p]].role in c.pouw_roles:
                 reached += 1
             else:
                 stack.append(p)
     width = sum(int(g.width[p]) for p in stopped)
-    tiles = (shape.m // D) * (shape.n // D)
-    return Separator(reached == 0 and stopped == ports and words_delivered == 0, len(stopped), width, width // tiles, reached,
+    return Separator(reached == 0 and stopped == ports and words_delivered == 0, len(stopped), width, width // c.tiles, reached,
                      words_delivered)
 
 
@@ -179,11 +236,11 @@ def separator(shape: Shape, kind: str = "shift24") -> Separator:
 SEPARATOR_PORTS: dict[str, int] = {"tile": 1}
 
 
-def _port_gates(uc: UnitCut, fn: Any, shape: Shape, kind: str) -> set[int]:
+def _port_gates(uc: UnitCut, c: Circuit) -> set[int]:
     """The computing gates (CallGraph order) of every pinned separator port of every unit."""
-    body, g = fn.body, uc.graph
-    index = {j: c for c, j in enumerate(g.keep)}
-    tmpl = ncp2.templates(shape.k, kind)
+    body, g = c.fn.body, uc.graph
+    index = {j: q for q, j in enumerate(g.keep)}
+    tmpl = c.templates
     local: dict[str, list[int]] = {}
     for role, field_ in SEPARATOR_PORTS.items():
         t = tmpl[role]
@@ -219,14 +276,18 @@ def width_rule(shape: Shape, kind: str = "shift24", fn: Any = None, served: int 
     and hold each such unit to `cut.WIDTH_RULE`; every other unit is behind the separator and exempt. The ports are the
     protocol's (`SEPARATOR_PORTS`), so a wide unit cannot name its own output a separator: a pinned tile whose word leaf
     reaches a served output is itself reachable, and fails."""
-    fn = ncp2.linear(shape, kind) if fn is None else fn
-    uc = unit_cut_of(fn, shape, kind)
+    return circuit_width_rule(ncp_circuit(shape, kind, fn), served)
+
+
+def circuit_width_rule(c: Circuit, served: int | None = None, uc: UnitCut | None = None) -> WidthRule:
+    """`width_rule` for any circuit."""
+    uc = circuit_cut(c) if uc is None else uc
     g, owner = uc.graph, uc.owner
-    ports = _port_gates(uc, fn, shape, kind)
+    ports = _port_gates(uc, c)
     preds: list[list[int]] = [[] for _ in range(g.n)]
     for p, q in zip(g.src, g.dst):
         preds[q].append(p)
-    served_gates = list(g.outputs[:shape.m * shape.n if served is None else served])
+    served_gates = list(g.outputs[:c.m * c.n if served is None else served])
     seen, stack = set(served_gates), list(served_gates)
     while stack:
         q = stack.pop()
@@ -251,5 +312,7 @@ def boundary_bits(shape: Shape, kind: str = "shift24") -> dict[str, Counter]:
     return out
 
 
-__all__ = ["POUW_ROLES", "SEPARATOR_PORTS", "Separator", "Unit", "UnitCut", "WidthRule", "boundary_bits", "listed",
-           "partition", "program", "query", "separator", "unit_cut", "unit_cut_of", "units", "units_of", "width_rule"]
+__all__ = ["H1T_POUW_ROLES", "POUW_ROLES", "SEPARATOR_PORTS", "Circuit", "Separator", "Unit", "UnitCut", "WidthRule",
+           "boundary_bits", "circuit_cut", "circuit_separator", "circuit_units", "circuit_width_rule", "h1t_circuit",
+           "listed", "listed_of", "ncp_circuit", "partition", "program", "query", "query_of", "separator", "unit_cut",
+           "unit_cut_of", "units", "units_of", "width_rule"]
