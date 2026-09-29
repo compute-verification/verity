@@ -66,3 +66,39 @@ POUW_PEARL_CAL = Tool(name="pouw_pearl_cal", version="1", command=["python", "be
                       closure=["benchmarks/pouw/pearl_calibration.py", "benchmarks/pouw/pearl_b200_setup.sh",
                                "benchmarks/pouw/run_result.py"],
                       key_params=["model"], produces=["bench-result/v1", "run-files/v1"], parse=parse_vllm)
+
+
+def parse_pearlc_census(argv: list[str]) -> dict:
+    ap = _parser()
+    ap.add_argument("--ks", default="8192,16384,65536")
+    ap.add_argument("--deltas", default="1")
+    ap.add_argument("--tile", default="64x16")
+    ap.add_argument("--families", default=None)
+    ap.add_argument("--run", type=int, default=1)
+    ns, _ = ap.parse_known_args(argv)
+    return {"ks": ns.ks, "deltas": ns.deltas, "tile": ns.tile, "families": ns.families, "run": ns.run}
+
+
+def parse_pearlc_quality(argv: list[str]) -> dict:
+    ap = _parser()
+    ap.add_argument("--model", default="Qwen/Qwen2.5-0.5B")
+    ap.add_argument("--variant", default=None)
+    ap.add_argument("--delta", type=float, default=1.0)
+    ap.add_argument("--seqlen", type=int, default=2048)
+    ap.add_argument("--max-windows", type=int, default=0)
+    ap.add_argument("--seed", type=int, default=20260929)
+    ns, _ = ap.parse_known_args(argv)
+    return {"model": ns.model, "variant": ns.variant, "delta": ns.delta, "seqlen": ns.seqlen, "max_windows": ns.max_windows,
+            "seed": ns.seed}
+
+
+# Pearl-C (docs/pouw/cheap-binding.md in the research store): TT_OUT's falsification census, and the quality of U.
+POUW_PEARLC_CENSUS = Tool(name="pouw_pearlc_census", version="1", command=["python", "benchmarks/pouw/pearlc_census.py"],
+                          closure=["benchmarks/pouw/pearlc_census.py", "benchmarks/pouw/run_result.py",
+                                   "packages/verity/src/verity/ml/tc/**"],
+                          key_params=["ks", "deltas", "tile", "families", "run"], produces=["bench-result/v1", "run-files/v1"],
+                          parse=parse_pearlc_census)
+POUW_PEARLC_QUALITY = Tool(name="pouw_pearlc_quality", version="1", command=["python", "benchmarks/pouw/pearlc_quality.py"],
+                           closure=["benchmarks/pouw/pearlc_quality.py", "benchmarks/pouw/run_result.py"],
+                           key_params=["model", "variant", "delta", "seqlen", "max_windows", "seed"],
+                           produces=["bench-result/v1", "run-files/v1"], parse=parse_pearlc_quality)
