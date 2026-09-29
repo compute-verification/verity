@@ -2547,7 +2547,7 @@
    ]
   },
   "Flock.DeriveCheck": {
-   "digest": "e04eebd18857acd7d87495c2d4017304",
+   "digest": "0dc232e393ac1e8d1d2decbacb106570",
    "definitions": {
     "Flock.DeriveAll.Chk": "151ea8aaea236e59",
     "Flock.DeriveAll.Chk.bindAt": "86eb8746f8ac415b",
@@ -2574,7 +2574,8 @@
     "Flock.DeriveAll.outRows": "d7fde6a8eac7f371",
     "Flock.DeriveAll.outsideOk": "ae67f57728791e9c",
     "Flock.DeriveAll.partOk": "3e28519bfe89d26f",
-    "Flock.DeriveAll.partsChecked": "5c6c8517da615e9a",
+    "Flock.DeriveAll.partReadsOk": "7341a9f80bd56183",
+    "Flock.DeriveAll.partsChecked": "2b17b7e79bad8c51",
     "Flock.DeriveAll.placedOk": "b6bbca77af62543a",
     "Flock.DeriveAll.prodRows": "24708b8a8c98bae9",
     "Flock.DeriveAll.readOk": "e3eac2c6f5463220",

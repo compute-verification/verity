@@ -257,7 +257,9 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
     - each callee's input rows are self rows (`callee_rows`), and the own rows read only own and part columns
       (`own_reads`);
     - the unit's constant row is `[const]·[const]` (`unit_const_row`), and its order lists only own and part columns
-      (`order_cols`).
+      (`order_cols`);
+    - the unit's reads cover a part's rows exactly as its callee's reads, shifted (`part_reads`), and a covered callee row
+      is a product row `a · []`, its read's low minterms callee rows (`callee_prod`). Both are about part rows only.
   - **A template's block rows, placed** (`ExecTemplatePlace.lean`, T3). Given two facts structures,
     `TemplateLayout.blockFacts` proves `BlockFacts` at every VU `g`, at `Typed.col c tb g`, and
     `TemplateLayout.placement` gives a table class's `placed g`.
