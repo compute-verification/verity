@@ -1,0 +1,281 @@
+"""Kernels for host evaluation (`acquire.sources.call_boundary_plan`) of the dense chain of `registry.dense` -- GemmaRMSNorm's unfused
+ATen chain and the logits soft cap -- and the Ampere k16 GEMM chain of a large Gemm row (the logits `lm_head`).
+
+The chain's kernels are numpy over one instance, registered with core `verity.evaluation` as kernel "dense" through
+`kernel_registry.register` (self-checked against the reference by tests/program/test_kernel_self_check.py).  Each is bit-equal to its
+Definition on the instances it claims: the chain's f32 arithmetic is `F32Add_v1` / `F32Mul_v1`, which are numpy float32 RN without
+FTZ; `MeanTriton`'s reduction follows its body's register, warp-butterfly and warp order; `Bf16Tanh` is the table of its body over
+the 65,536 bf16 words.  An instance with a non-finite operand or result word is declined, and the reference computes it.
+
+`gemm_ampere_row` is `DotBf16_v1`'s ascending chain of `tc_dot16` steps (two groups of eight products plus the running accumulator,
+25-bit adder, exponent floor -132) in float64: a bf16 x bf16 product is exact there; a group's terms align as
+`floor(|t| / U)` with `U = 2^(max nominal exponent - 24)`; their sum is an exact integer below 2^31; the step's word is that sum times
+`U` truncated to 24 significant bits.  A coordinate whose chain meets a non-finite operand, an f32-subnormal or an overflowing step
+result is recomputed by `derived_rows.dot_bf16`, so every word equals the int64 twin's.  The W side (values and exponents, transposed)
+is prepared once per weight buffer (keyed by its address, shape and strides: a Commit's weight words do not change in place), and
+coordinates are split over up to `MAX_THREADS` threads; the words do not depend on the split.
+"""
+from __future__ import annotations
+
+import functools
+import os
+from concurrent.futures import ThreadPoolExecutor
+from typing import Any
+
+import numpy as np
+
+from verity_vllm.program.kernels import derived_rows as D
+from verity_vllm.program.kernels.kernel_registry import Declined, register
+
+KERNEL = "dense"
+DOMAIN = "instances whose operand and result words are all finite (the reference computes the others)"
+#: a Gemm row reading at least this many weight words takes the float64 chain (the logits `lm_head`); smaller rows keep the int64 twin
+FAST_GEMM_WORDS = 1 << 24
+MAX_THREADS = 8
+_FLOOR = -132
+_TRUNC24 = np.int64(~((1 << 29) - 1))
+
+
+def _f32(u: np.ndarray) -> np.ndarray:
+    return np.ascontiguousarray(u, dtype=np.uint32).view(np.float32)
+
+
+def _widen(x: np.ndarray) -> np.ndarray:
+    return D.bf16_to_f32_words(np.asarray(x, dtype=np.uint16))
+
+
+def _finite32(u: np.ndarray) -> bool:
+    return not bool(((np.asarray(u, dtype=np.uint32) & 0x7F800000) == 0x7F800000).any())
+
+
+def _finite16(w: np.ndarray) -> bool:
+    return not bool(((np.asarray(w, dtype=np.uint16) & 0x7F80) == 0x7F80).any())
+
+
+def _claim(fn):
+    """`fn(*args, **statics)` on finite words only: a non-finite operand or result word declines the instance."""
+    @functools.wraps(fn)
+    def kernel(*args: np.ndarray, **statics: Any) -> np.ndarray:
+        for a in args:
+            if not (_finite16(a) if a.dtype == np.uint16 else _finite32(a)):
+                raise Declined("a non-finite operand word")
+        out = fn(*args, **statics)
+        if not (_finite16(out) if out.dtype == np.uint16 else _finite32(out)):
+            raise Declined("a non-finite result word")
+        return out
+    return kernel
+
+
+# ---- the norm chain -----------------------------------------------------------------------------------------------------
+
+def square_bf16(x, **_s):
+    xf = _widen(x)
+    return D.mul_rn(xf, xf)
+
+
+def square_f32(x, **_s):
+    return D.mul_rn(x, x)
+
+
+def add_widened_bf16(x, r, **_s):
+    return D.add_rn(_widen(x), _widen(r))
+
+
+def scale_row_bf16(x, s, **_s):
+    return D.mul_rn(_widen(x), np.asarray(s, dtype=np.uint32).reshape(1)[0])
+
+
+def scale_row_f32(x, s, **_s):
+    return D.mul_rn(np.asarray(x, dtype=np.uint32), np.asarray(s, dtype=np.uint32).reshape(1)[0])
+
+
+def mul_vec_f32(x, w, **_s):
+    return D.mul_rn(np.asarray(x, dtype=np.uint32), np.asarray(w, dtype=np.uint32))
+
+
+@functools.lru_cache(maxsize=None)
+def _mean_layout(N: int) -> np.ndarray:
+    """[blocks, 128 threads, registers] element index per register of `MeanTriton`'s body (N for a masked lane)."""
+    from verity_vllm.program.registry import dense
+    spt = dense.size_per_thread(N)
+    blocks = [[[i if i < N else N for i in dense.thread_elements(c0, t, spt)] for t in range(dense.THREADS)]
+              for c0 in range(0, N, dense.BLOCK_SIZE)]
+    return np.asarray(blocks, dtype=np.int64)
+
+
+def mean_triton(x, *, N, **_s):
+    """`MeanTriton_v1{N}`: each thread's registers added in order, the warps' xor-butterfly 16, 8, 4, 2, 1, the CTA's
+    `(w0 + w2) + (w1 + w3)`, the blocks' sums added in order from +0, then `div.full.f32` by N."""
+    N = int(N)
+    xs = np.concatenate([np.asarray(x, dtype=np.uint32).reshape(N), np.zeros(1, dtype=np.uint32)])   # the masked lanes' +0.0
+    acc = np.zeros(1, dtype=np.uint32)
+    for idx in _mean_layout(N):
+        regs = xs[idx]                                                       # [128, registers]
+        lane = regs[:, 0]
+        for j in range(1, regs.shape[1]):
+            lane = D.add_rn(lane, regs[:, j])
+        cur = lane.reshape(4, 32)
+        for m in (16, 8, 4, 2, 1):
+            cur = D.add_rn(cur, cur[:, np.arange(32) ^ m])
+        w = cur[:, 0]
+        acc = D.add_rn(acc, D.add_rn(D.add_rn(w[0:1], w[2:3]), D.add_rn(w[1:2], w[3:4])))
+    nf = np.float32(float(N)).reshape(1).view(np.uint32)
+    return D.mul_rn(D.div_full_scale_a(acc, nf), D.div_full_rcp(nf))
+
+
+# ---- the logits soft cap ---------------------------------------------------------------------------------------------------
+
+def bf16_div_scalar(x, *, C, **_s):
+    from verity_vllm.program.registry.dense import reciprocal_bits
+    return D.f2fp_bf16(D.mul_rn(_widen(x), np.uint32(reciprocal_bits(float(C)))))
+
+
+def bf16_mul_scalar(x, *, C, **_s):
+    return D.f2fp_bf16(D.mul_rn(_widen(x), np.float32(float(C)).view(np.uint32)))
+
+
+@functools.lru_cache(maxsize=1)
+def _tanh_table() -> np.ndarray:
+    from verity_vllm.program.registry.dense import tanh_f32_bits
+    words = np.arange(1 << 16, dtype=np.uint32) << 16
+    return D.f2fp_bf16(np.asarray([tanh_f32_bits(int(w)) for w in words], dtype=np.uint32))
+
+
+def bf16_tanh(x, **_s):
+    return _tanh_table()[np.asarray(x, dtype=np.uint16)]
+
+
+# ---- the Ampere k16 GEMM chain in float64 ------------------------------------------------------------------------------
+
+class _Prepared:
+    """One weight buffer's W side: f32 values and nominal exponent fields (`max(field, 1)`), both [K, N], and its non-finite
+    coordinates.  Held with a reference to the buffer, so the address it is keyed by cannot be reused while it is cached."""
+
+    def __init__(self, w: np.ndarray) -> None:
+        self.src = w
+        wT = np.ascontiguousarray(w.T)
+        self.f = (wT.astype(np.uint32) << 16).view(np.float32)
+        raw = ((wT >> 7) & 0xFF).astype(np.uint8)
+        self.bad = (raw == 0xFF).any(axis=0)
+        self.e = np.maximum(raw, 1)
+
+    def key(self) -> tuple:
+        return _key(self.src)
+
+
+def _key(w: np.ndarray) -> tuple:
+    return (w.__array_interface__["data"][0], w.shape, w.strides, w.dtype.str)
+
+
+_PREPARED: list[_Prepared] = []
+
+
+def prepared(w: np.ndarray) -> _Prepared:
+    """The W side of `w` (N, K), prepared once per weight buffer (the most recent one is kept)."""
+    if _PREPARED and _PREPARED[0].key() == _key(w):
+        return _PREPARED[0]
+    _PREPARED[:] = [_Prepared(w)]
+    return _PREPARED[0]
+
+
+def _chain(x: np.ndarray, p: _Prepared, lo: int, hi: int) -> tuple[np.ndarray, np.ndarray]:
+    """The k16 chain of coordinates lo..hi: (f32 words, coordinates the float64 path does not claim)."""
+    K = x.shape[0]
+    xf = _f32(_widen(x)).astype(np.float64)
+    xe = np.maximum((x >> 7) & 0xFF, 1).astype(np.int16) - 254
+    a = np.zeros(hi - lo)
+    bad = np.zeros(hi - lo, dtype=bool)
+    with np.errstate(invalid="ignore", over="ignore"):    # a non-finite or overflowing coordinate is handed back (`bad`)
+        for g in range(0, K, 8):                    # a k16 step is two groups of eight, each joined by the running accumulator
+            v = p.f[g:g + 8, lo:hi] * xf[g:g + 8, None]
+            pe = np.where(v != 0, p.e[g:g + 8, lo:hi] + xe[g:g + 8, None], np.int16(-30000)).max(axis=0)
+            ab = np.abs(a)
+            a_exp = np.maximum(((ab.view(np.int64) >> 52) & 0x7FF) - 1023, -126)
+            me = np.maximum(np.maximum(pe, _FLOOR), np.where(a != 0, a_exp, -(1 << 20)))
+            inv = np.ldexp(1.0, (24 - me).astype(np.int32))
+            tot = np.copysign(np.floor(np.abs(v) * inv), v).sum(axis=0) + np.copysign(np.floor(ab * inv), a)
+            y = np.abs(tot) * np.ldexp(1.0, (me - 24).astype(np.int32))
+            bad |= (y >= 2.0 ** 128) | ((y != 0) & (y < 2.0 ** -126))
+            a = np.where(tot == 0, 0.0, np.copysign((y.view(np.int64) & _TRUNC24).view(np.float64), tot))
+        return a.astype(np.float32).view(np.uint32), bad
+
+
+def threads() -> int:
+    return max(1, min(len(os.sched_getaffinity(0)), MAX_THREADS))
+
+
+def dot_ampere(x: np.ndarray, w: np.ndarray, n_threads: int | None = None) -> tuple[np.ndarray, np.ndarray]:
+    """`DotBf16_v1{K}` of the row `x` (K,) against every row of `w` (N, K), bf16 words: (f32 words, non-finite coordinates), equal to
+    `derived_rows.dot_bf16` word for word."""
+    x = np.asarray(x, dtype=np.uint16)
+    p = prepared(w)
+    N = w.shape[0]
+    out = np.empty(N, dtype=np.uint32)
+    redo = p.bad | bool((((x >> 7) & 0xFF) == 0xFF).any())
+    n = n_threads or threads()
+    step = -(-N // n)
+
+    def job(lo: int) -> None:
+        hi = min(lo + step, N)
+        out[lo:hi], b = _chain(x, p, lo, hi)
+        redo[lo:hi] |= b
+
+    with ThreadPoolExecutor(n) as ex:
+        list(ex.map(job, range(0, N, step)))
+    nonfin = np.zeros(N, dtype=bool)
+    idx = np.flatnonzero(redo)
+    if idx.size:
+        out[idx], nonfin[idx] = D.dot_bf16(x[None, :], w[idx])
+    return out, nonfin
+
+
+def gemm_ampere_row(x: np.ndarray, w: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """`Gemm_v1{K,N}` of one token row by the float64 chain: (bf16 words [N], non-finite coordinates)."""
+    acc, nonfin = dot_ampere(x, w)
+    return D.f2fp_bf16(acc).astype(np.uint16), nonfin
+
+
+# ---- registration --------------------------------------------------------------------------------------------------------
+
+def _targets():
+    from verity.ir.defs import bind
+    from verity_vllm.program.registry import dense
+    return {
+        "SquareBf16_v1": [bind(dense.SquareBf16, N=16)], "SquareF32_v1": [bind(dense.SquareF32, N=16)],
+        "MeanTriton_v1": [bind(dense.MeanTriton, N=2304), bind(dense.MeanTriton, N=20)],
+        "AddWidenedBf16_v1": [bind(dense.AddWidenedBf16, N=16)], "ScaleRowBf16_v1": [bind(dense.ScaleRowBf16, N=16)],
+        "ScaleRowF32_v1": [bind(dense.ScaleRowF32, N=16)], "MulVecF32_v1": [bind(dense.MulVecF32, N=16)],
+        "Bf16DivScalar_v1": [bind(dense.Bf16DivScalar, N=16, C=30.0)], "Bf16MulScalar_v1": [bind(dense.Bf16MulScalar, N=16, C=30.0)],
+        "Bf16Tanh_v1": [bind(dense.Bf16Tanh, N=16)],
+    }
+
+
+KERNELS = {"SquareBf16_v1": square_bf16, "SquareF32_v1": square_f32, "MeanTriton_v1": mean_triton, "AddWidenedBf16_v1": add_widened_bf16,
+           "ScaleRowBf16_v1": scale_row_bf16, "ScaleRowF32_v1": scale_row_f32, "MulVecF32_v1": mul_vec_f32,
+           "Bf16DivScalar_v1": bf16_div_scalar, "Bf16MulScalar_v1": bf16_mul_scalar, "Bf16Tanh_v1": bf16_tanh}
+
+
+_EDGE = np.array([0x00000000, 0x80000000, 0x00010000, 0x80010000, 0x007F0000, 0x3F800000, 0xBF800000], dtype=np.uint32)
+
+
+def _sample(rng: np.random.Generator, n: int, params, **_statics) -> list[np.ndarray]:
+    """Self-check words: normals at a random scale per instance (2^-30 .. 2^30), one in sixteen a signed zero, a subnormal or +-1."""
+    from verity.evaluation.batch import type_shape
+    out = []
+    for pt in params:
+        shape = (n, *type_shape(pt))
+        v = rng.standard_normal(shape) * 2.0 ** rng.integers(-30, 30, (n,) + (1,) * (len(shape) - 1))
+        u = np.where(rng.random(shape) < 1 / 16, rng.choice(_EDGE, shape), v.astype(np.float32).view(np.uint32))
+        out.append(u if set(pt.leaf_widths()) == {32} else (u >> 16).astype(np.uint16))
+    return out
+
+
+def _register() -> None:
+    for family, fn in KERNELS.items():
+        register(family, _claim(fn), kernel=KERNEL, domain=DOMAIN, sample=_sample,
+                 check_targets=lambda rng, f=family: _targets()[f])
+
+
+_register()
+
+__all__ = ["KERNEL", "KERNELS", "FAST_GEMM_WORDS", "MAX_THREADS", "dot_ampere", "gemm_ampere_row", "prepared", "threads"]
