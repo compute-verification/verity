@@ -29,6 +29,8 @@ REGISTRY: dict[str, str] = {
     "flock_agreement": "backends.flock.verifier.tool:FLOCK_AGREEMENT",
     "flock_class_sweep": "backends.flock.tool:FLOCK_CLASS_SWEEP",
     "check": "tools.check.tool:CHECK",
+    "lean_audit": "tools.lean.tool:LEAN_AUDIT",
+    "lean_upstream": "tools.lean.tool:LEAN_UPSTREAM",
     # vLLM integration sweep stages (integration-owned declarations).
     "vllm.build": "integrations.vllm.verity_vllm.pipeline.research_tools:VLLM_BUILD",
     "vllm.match": "integrations.vllm.verity_vllm.pipeline.research_tools:VLLM_MATCH",

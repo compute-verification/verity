@@ -504,9 +504,9 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
     indices = list(range(lo, hi)) if indices is None else [int(u) for u in indices]
     if len(indices) != n or any(a >= b for a, b in zip(indices, indices[1:])) or min(indices, default=0) < 0:
         raise ValueError("unit indices: one global index per instance, ascending")
-    units = {"vus_per_block": G, "units_per_vu": meta["units_per_vu"], "indices": indices,
+    units = {"vus_per_block": G, "units_per_vu": meta.get("units_per_vu", 1), "indices": indices,
              "blocks": [indices[b:b + G] for b in range(0, n, G)], "classes": [class_digest(text)] * n}
-    head = {"format": INST_FORMAT, "statement": STATEMENT, "scheme": SCHEME, "set": input_set.name, "subcircuit": sub.id,
+    head = {"format": INST_FORMAT, "statement": meta.get("statement", STATEMENT), "scheme": SCHEME, "set": input_set.name, "subcircuit": sub.id,
             "content_digest": input_set.content_digest, "range": [lo, hi], "instances": n, "circuit_sha512": digest(text),
             "units": units, "frame_v3": fv, "rows": True}
     if refs is not None:

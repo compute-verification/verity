@@ -9,6 +9,13 @@ namespace Flock
 
 open Lean (Json)
 
+/-- Sessions of several tables (upstream's `session_tables`, `--session-tables J`): the session Σ's tag, and the rep domains'
+prefix before `{table}/rep{r}`. -/
+structure TablesTags where
+  sigmaTag : String
+  domainPrefix : String
+  deriving Inhabited
+
 structure Tags where
   /-- how the verifier's configuration names this version: the statement id, `@<PR #83 commit>` for a superseded format -/
   name : String
@@ -44,11 +51,32 @@ structure Tags where
   bindings : Bool := false
   /-- PR #83 from `967b8d06`: a public file may be a shared-row file (header `shared_rows`, `Flock.HmRow.sharedRows`) -/
   sharedRows : Bool := false
+  /-- #306: a session may prove its units in several tables; `none`: one table per session -/
+  manyTables : Option TablesTags := none
   deriving Inhabited
 
 namespace Tags
 
 def domain (t : Tags) (r : Nat) : String := t.domainPrefix ++ toString r
+
+/-- The most tables in one session; their names sort in table order (`circuit-00` to `circuit-63`). -/
+def MAX_TABLES : Nat := 64
+
+/-- A session's table names: `table` alone, or `table-00`, `table-01`, … -/
+def tableNames (t : Tags) (count : Nat) : Array String :=
+  if count ≤ 1 then #[t.table]
+  else (Array.range count).map fun j => s!"{t.table}-{if j < 10 then "0" else ""}{j}"
+
+/-- A rep stream's domain in a session of `count` tables: `domain r` for one, the table's name in it for several. -/
+def tableDomain (t : Tags) (count : Nat) (table : String) (r : Nat) : String :=
+  match t.manyTables with
+  | some tt => if count ≤ 1 then t.domain r else s!"{tt.domainPrefix}{table}/rep{r}"
+  | none => t.domain r
+
+/-- Table `j`'s identity in a session of `count > 1` tables: the statement's, naming the session's rules. -/
+def tableIdentity (t : Tags) (count j : Nat) : Json :=
+  t.identity.setObjVal! "session" (Json.mkObj [("tables", Lean.toJson count), ("table", Lean.toJson j),
+    ("units", Json.str "the draw's units (without a draw, the population's) in equal consecutive parts; table j proves part j as a subset draw of the population")])
 
 private def s (x : String) : Json := Json.str x
 private def n (x : Nat) : Json := Lean.toJson x
@@ -174,9 +202,12 @@ def circuitSelftest : Tags :=
   { circuit with name := "verity/flock-circuit+seed-injection", identity := identityHm96 true }
 
 /-- `verity/flock-circuit` as of PR #83 `967b8d06`: `e51e2b86`'s statement with the identity text of `68ae79f2` (the round
-digest, the statement digest and Σ named SHA-512), and shared-row public files (`967b8d06`). -/
+digest, the statement digest and Σ named SHA-512), and shared-row public files (`967b8d06`). From #306 a session may prove
+its units in several tables. -/
 def circuit967b8d06 : Tags :=
-  { circuit with name := "verity/flock-circuit@967b8d06", identity := identityHm96 false true, sharedRows := true }
+  { circuit with
+    name := "verity/flock-circuit@967b8d06", identity := identityHm96 false true, sharedRows := true,
+    manyTables := some { sigmaTag := "verity/flock-circuit/sigma-tables", domainPrefix := "flock-circuit/fast100x2/" } }
 
 def circuit967b8d06Selftest : Tags :=
   { circuit967b8d06 with name := "verity/flock-circuit@967b8d06+seed-injection", identity := identityHm96 true true }

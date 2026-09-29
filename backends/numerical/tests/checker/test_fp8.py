@@ -182,6 +182,7 @@ def test_e5m2_hypotheses_go_through_the_same_params() -> None:
             assert reference.dot(p, acc, a, b) == want and step_output(p, acc, a, b) == want
 
 
+@pytest.mark.slow
 def test_toy_lossy_reference_and_checker_agree_exhaustively_on_a_slice() -> None:
     # The reduced lossy widths (sig 3 / exp 3 e4m3-rule operands, 7-bit / 4-exp accumulator, 5-bit adder):
     # every accumulator word x a fixed set of operand vectors, reference against gadget relation.

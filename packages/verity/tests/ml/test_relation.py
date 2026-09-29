@@ -145,6 +145,7 @@ def _flatten(w: dict) -> list[tuple[list, str]]:
 
 
 @pytest.mark.parametrize("name", ["ampere", "hopper"])
+@pytest.mark.slow
 def test_every_column_is_constrained(name: str) -> None:
     """Perturbing any single witness column (or any field of any group's output state) breaks some predicate.  This is
     the local-soundness check the census rests on; it is not a proof of the argument system."""

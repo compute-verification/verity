@@ -150,6 +150,7 @@ def _replay_scan(masked, g, noisy, V):
 
 
 @pytest.mark.parametrize("V", [1056, 1280])
+@pytest.mark.slow
 def test_row_words_match_the_ir_evaluator(tmp_path, V):
     s = _set(tmp_path, V)
     logits, sc, outs = S.instances(s, 0, s.n)
@@ -172,6 +173,7 @@ def test_row_words_match_the_ir_evaluator(tmp_path, V):
         assert [tuple(int(x) for x in lane[v, 3:6]) for v in range(V)] == carries
 
 
+@pytest.mark.slow
 def test_staged_rows_through_the_units(tmp_path):
     V = 1280
     s = _set(tmp_path, V, 4)
@@ -201,6 +203,7 @@ def test_supports_and_relation():
 
 # --- negatives ---------------------------------------------------------------------------------------------------------------
 
+@pytest.mark.slow
 def test_a_flipped_witness_bit_leaves_its_lane_unsatisfied(tmp_path):
     V = 1056
     s = _set(tmp_path, V, 2)
@@ -213,6 +216,7 @@ def test_a_flipped_witness_bit_leaves_its_lane_unsatisfied(tmp_path):
 
 
 @pytest.mark.parametrize("word", ["kbit", "g"])
+@pytest.mark.slow
 def test_a_forged_native_word_is_refused(tmp_path, word):
     V = 1056
     s = _set(tmp_path, V, 2)
@@ -228,6 +232,7 @@ def test_a_forged_native_word_is_refused(tmp_path, word):
         S.serve_args(path)
 
 
+@pytest.mark.slow
 def test_a_forged_unit_word_breaks_the_lane_relation(tmp_path):
     V = 1056
     s = _set(tmp_path, V, 2)
