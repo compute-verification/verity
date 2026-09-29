@@ -34,9 +34,13 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
     in `tests/evaluation/test_evaluation.py`, which self-checks it.
   - `verity.ml`: exact hardware semantics of the tensor-core accumulator step
     (`verity.ml.tc`, stdlib only) and their IR registrations (`prims`,
-    `gemm`), with numpy kernels beside them (`kernels`; numpy is a core
-    dependency, kept out of `verity.ir` and `verity.ml.tc` by
-    `tests/test_boundaries.py`). `verity.ml.tc.relation` restates the step as witness columns +
+    `gemm`), the other IR primitives (`scalar`: integer, bit, select and
+    comparison operations; `fp32`: FP32 add, mul, FMA and divide, their
+    flush-to-zero forms, and BF16 element-wise arithmetic), the library of
+    hardware and protocol objects core owns (`library`), and numpy kernels
+    beside them (`kernels`; numpy is a core dependency, kept out of `verity.ir`
+    and `verity.ml.tc` by `tests/test_boundaries.py`). `verity.ml.tc.relation`
+    restates the step as witness columns +
     mul/linear/lookup predicates and counts them (`census()`). Tests replay
     the A100 / RTX 4090 / H100 captures under `tests/ml/fixtures/` (see its
     README for provenance).
@@ -63,8 +67,8 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
  `PROTOCOL.md`. `protocols/one_stage` (`verity_one_stage`) is the one-stage
  audit: registration, the verifier's draw over a partition's proof units, and the
  audit record with its profile; `benchmarks/one_stage` runs it end to end with
- C-Flock's circuit prover (M0, `verity_flock.circuit`, which lands on `main` with
- PR #192; until then `--m0-pythonpath` names a checkout of it) and the Lean
+ C-Flock's circuit prover (M0, `verity_flock.circuit`, run from the pinned tree
+ that `--m0-pythonpath` names, not from the checkout) and the Lean
  verifier. `protocols/pous` (`verity_pous`) is proof of useful space: the reference
  codecs, setup and timed audit, its `PROTOCOL.md`, and its Lean package (`lean/`:
  pinned statements, proofs and a submission grader). `protocols/pouw` (`verity_pouw`)
