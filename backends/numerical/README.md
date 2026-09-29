@@ -1,12 +1,18 @@
 # backends/numerical
 
+Frozen: kept, still in the tables, not developed. The exception is the bench spine `verity_numerical.bench` (the result
+contract, workloads, lowerings, the tables and their views), which C-Flock, `circuit-check` and the table renderers read.
+What the merge gate runs here: `../README.md`.
+
 Campaign-side numerical work for `verity.proofs.target.FIRST` (rules: `backends/AGENTS.md`). `verity_numerical.reference`
-is lane WP1 (independent numerical references); `verity_numerical.checker` is lane WP2.
+is lane WP1 (independent numerical references); `verity_numerical.checker` is lane WP2. `security` is the soundness
+calculator for A-GKR and B-Ligero (`accounting`, `census`), `gkr_export` A-GKR's circuit exporter, `explore` cost-model
+explorations and `redteam` the red team's forgeries against the checkers.
 
 ## WP1: independence audit of the existing columns
 
 The target names three executable columns of the finite-domain step: Python `verity.ml.tc.silicon`, Rust
-`backends/sp1/common/src/tc.rs`, Lean `veritor/lean/VeritorSpec/TC.lean` (reused unchanged by `TCB.lean`, which only adds the
+`backends/sp1/common/src/tc.rs`, Lean `veritor/lean/VeritorSpec/TC.lean` in the `veritor` repository (reused unchanged by `TCB.lean`, which only adds the
 casts). Reading them against Hawkeye's pinned simulator (`fixtures/hawkeye/PIN.json`, `src/Ampere_simulator.cpp::group_sum`,
 `utils/utils.cpp::multiply_bfloat16_to_gfloat`, `src/gfloat.cpp::Gfloat::operator float`):
 

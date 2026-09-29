@@ -146,7 +146,7 @@ CAPTION: dict[str, Any] = {
     "execution": "dense",
     "accumulation": "fp32",
     "flop_per_fma": 2,
-    "instances": "the frozen instance set of the row's target (FROZEN_INSTANCES)",
+    "instances": "the frozen input set of the row's target (FROZEN_INSTANCES)",
     "native_denominator": "datasheet dense tensor-core peak of the exact target device (Target.native_peak)",
     "authentication": "excluded (bare columns) | included-hash (columns ' + in-proof hash': Poseidon2-BabyBear row hashing inside the proof, "
                       "digests checked against the operand Merkle roots; x, W private)",
@@ -517,7 +517,7 @@ def _measurements(result: Mapping[str, Any]) -> dict[str, Any]:
 
 #: One letter per reject reason, assigned where :func:`reject_codes` writes the reason (drill-down D2, campaign morning-tables
 #: BRIEF §1).  A contract reason is ``P`` when any of its problems is phase accounting (:data:`PHASE_SUM_PROBLEM`).
-REASON_LETTERS: dict[str, str] = {"U": "not independently verified", "I": "different instance set", "P": "phase-sum",
+REASON_LETTERS: dict[str, str] = {"U": "not independently verified", "I": "different input set", "P": "phase-sum",
                                   "S": "shared hashing", "Z": "class/ZK not the column's", "K": "prover not on the row's SKU",
                                   "B": "batch != 4096", "X": "other"}
 #: ``contract.validate_measurements`` 's wording of a phase-accounting failure: the buckets and joints exceed ``t.total`` beyond
@@ -593,9 +593,9 @@ def reject_codes(result: Mapping[str, Any], labels: Iterable[Any], attempt: Mapp
     want = frozen_instances(target)
     inst = fp.get("instances")
     if want is None:
-        p.append(("I", f"target {target.name!r} has no frozen instance set yet"))
+        p.append(("I", f"target {target.name!r} has no frozen input set yet"))
     elif not isinstance(inst, Mapping):
-        p.append(("I", "instances is null: not measured on the frozen instance set"))
+        p.append(("I", "instances is null: not measured on the frozen input set"))
     else:
         diff = instances_diff(inst, want)
         if diff:
@@ -1164,7 +1164,7 @@ def _phase_cells(ph: Mapping[str, Any]) -> list[str]:
 
 def caption_text() -> str:
     return (f"K = {K}; B = {B}; soundness 2^{SOUNDNESS_LOG2} (target and achieved, union-bounded over sub-batches); dense execution; "
-            f"FP32 accumulation; FMA = 2 FLOP; the frozen instance set of the row's target; native denominator = datasheet dense peak of the "
+            f"FP32 accumulation; FMA = 2 FLOP; the frozen input set of the row's target; native denominator = datasheet dense peak of the "
             f"exact target device (`Target.native_peak`); authentication = {AUTHENTICATION} in the candidate columns, included-hash in the "
             f"' + in-proof hash' columns (Poseidon2-BabyBear hashing of the operand rows inside the proof, digests bound to the Merkle roots; "
             f"x, W private). Cell = best valid implementation of the "

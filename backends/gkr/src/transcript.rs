@@ -120,7 +120,7 @@ pub enum Event {
 /// (`Fp::rejection_sample` on each digest, coordinate by coordinate, `DEGREE` coordinates per challenge).
 /// `slots` counts every challenge drawn (`rounds.protocol` in the one-coin-per-message reading).
 ///
-/// Latency emulation (lane latency, 2026-09-22): in production the protocol is interactive (the verifier's coins
+/// Latency emulation (lane latency, 2026-09-22): in a live proof the protocol is interactive (the verifier's coins
 /// arrive over the network, `backends/ZK_CONSTRUCTION.md` 3.3), so every verifier message on the critical path is
 /// one network round trip.  The prover marks those points with [`Transcript::round_trip`]: it counts them
 /// (`trips` = `rounds.sequential_depth`, measured rather than derived) and, when `rtt` is set (`--rtt-ms`),

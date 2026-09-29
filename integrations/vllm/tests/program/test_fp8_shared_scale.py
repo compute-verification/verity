@@ -1,11 +1,14 @@
 """`ScaledMmFp8BlockSharedScale_v1` (registry.fp8): each weight block's scale products `FMUL(sx[kb], sw[kb])` computed once and read by
 its G coordinates.  The same function and signature as `ScaledMmFp8Block_v1` -- the same circuit once the G - 1 copies of each product are
 merged, bit-equal under the reference evaluator on e4m3 / f32 edge words (NaN, +-inf, +-0, subnormals, saturation, products that
-overflow or underflow) -- and under `Q_word_v1{16,32,no-recompute}` no violation: the partition commits the N/G * K/G products."""
+overflow or underflow) -- and under `Q_word_v1{16,32,no-recompute}` no violation: the partition commits the N/G * K/G products.  It is the
+default binding (`TargetProfile.fp8_scale_construction`, None = shared-per-block) of the vocabulary and the frontend rule; `per-coordinate`
+binds `ScaledMmFp8Block_v1`.  The Match pattern's binding: tests/program/test_fp8_profile.py."""
 from __future__ import annotations
 
 import random
 import re
+import types
 
 import pytest
 
@@ -13,6 +16,7 @@ from verity.evaluation import evaluate
 from verity.ir.cut import call_scope
 from verity.ir.defs import bind
 from verity.ir.layout import resolve
+from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile
 from verity_vllm.program.registry import fp8
 from verity_vllm.query import word as W
 
@@ -73,6 +77,7 @@ def _bf16_class(b: int) -> str:
     return "nan" if e == 0xFF and m else "inf" if e == 0xFF else "zero" if not b & 0x7FFF else "subnormal" if e == 0 else "normal"
 
 
+@pytest.mark.slow
 def test_bit_equal_on_edge_vectors():
     K, N, G = 256, 256, 128
     old, new = _pair(K, N)
@@ -107,3 +112,77 @@ def test_new_ids_carry_no_version_in_their_names():
         name = d.id.rsplit("_v", 1)[0]
         assert d.id == f"{name}_v1" and not re.search(r"[Vv]\d", name) and name.startswith("ScaledMmFp8Block")
     assert fp8.SHARED_SCALE == {"ScaledMmFp8Block_v1": fp8.ScaledMmFp8BlockSharedScale}
+
+
+def test_the_knob_defaults_to_shared_per_block_and_is_omitted_when_unset():
+    assert DEFAULT_TARGET.fp8_scale_construction is None and DEFAULT_TARGET.effective_fp8_scale_construction() == "shared-per-block"
+    assert "fp8_scale_construction" not in DEFAULT_TARGET.to_json()
+    per = DEFAULT_TARGET.with_overrides(fp8_scale_construction="per-coordinate")
+    assert per.to_json()["fp8_scale_construction"] == "per-coordinate" and per.digest() != DEFAULT_TARGET.digest()
+    assert TargetProfile.from_json(per.to_json()) == per and per.effective_fp8_scale_construction() == "per-coordinate"
+    for bad in ("shared", "per_coordinate", True):
+        with pytest.raises(ValueError, match="fp8_scale_construction"):
+            TargetProfile(fp8_scale_construction=bad)
+
+
+def test_the_vocabulary_binds_the_construction_it_is_given():
+    from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3 as V
+
+    new, old = V.kind("scaled_mm_fp8_block", K=256, N=384, G=128, SCALE="shared-per-block"), V.kind("scaled_mm_fp8_block", K=256, N=384, G=128, SCALE="per-coordinate")
+    assert new == bind(fp8.ScaledMmFp8BlockSharedScale, K=256, N=384, G=128) and old == bind(fp8.ScaledMmFp8Block, K=256, N=384, G=128)
+    assert V.kind("scaled_mm_fp8_block", K=256, N=384, G=128) is None             # the rule always states the construction
+
+
+class _Ctx:
+    """The derive context `CutlassScaledMmFp8BlockRule.emit` reads: asks the b1-eager-v3 vocabulary, records the Calls and the facts."""
+
+    def __init__(self):
+        from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3
+
+        self.vocab, self.calls, self.records = PROFILE_B1_EAGER_V3, [], []
+
+    def kind(self, role, node, **statics):
+        return self.vocab.kind(role, **statics)
+
+    def call(self, fn, *args, **kw):
+        self.calls.append(fn)
+        return fn
+
+    def coll(self, v):
+        return v
+
+    def hint_name(self, node):
+        return "model.layers.0.self_attn.qkv_proj"
+
+    def bind_weight_role(self, *a, **kw):
+        pass
+
+    def rebind(self, *a, **kw):
+        pass
+
+    def record(self, rule, node, facts, emitted):
+        self.records.append((facts, emitted))
+
+
+@pytest.mark.parametrize("scale", [None, "shared-per-block", "per-coordinate"])
+def test_the_frontend_rule_binds_the_active_targets_construction(monkeypatch, scale):
+    from verity_vllm.program.frontend.rules.vllm_bindings import clear_observations, observe_target_profile
+    from verity_vllm.program.frontend.rules.vllm_bindings import fp8 as R
+
+    K, N = 256, 384
+    monkeypatch.setattr(R, "shape", lambda ctx, v: (K, N))
+    monkeypatch.setattr(R, "_untransposed", lambda ctx, v, a, b, name: name)
+    monkeypatch.setattr(R, "rows_of", lambda coll: ([coll, coll], ()))
+    monkeypatch.setattr(R, "from_rows", lambda outs, lead: outs)
+    clear_observations()
+    try:
+        observe_target_profile(DEFAULT_TARGET.with_overrides(compute_capability=(9, 0), fp8_scale_construction=scale))
+        ctx = _Ctx()
+        R.CutlassScaledMmFp8BlockRule().emit(types.SimpleNamespace(args=("out", "a", "b", "a_s", "b_s")), ctx)
+    finally:
+        clear_observations()
+    defn = fp8.ScaledMmFp8Block if scale == "per-coordinate" else fp8.ScaledMmFp8BlockSharedScale
+    fn = bind(defn, K=K, N=N, G=128)
+    assert ctx.calls == [fn] * 2
+    (facts, emitted), = ctx.records
+    assert facts["scale"] == (scale or "shared-per-block") and emitted == f"{fn.id} x2"

@@ -448,6 +448,7 @@ def _fake_ssh(monkeypatch, tmp_path, log: list):
     return cli_prov
 
 
+@pytest.mark.slow
 def test_pull_streams_ten_thousand_small_files_in_a_few_tars_with_identical_layout(tmp_path, monkeypatch, capsys):
     from research.store import cli_prov as CP
 

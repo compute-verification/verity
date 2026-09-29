@@ -47,7 +47,29 @@
  "kernel": {
   "write": {"Control/Bad.lean": "import Lean\nopen Lean Elab Command in\n#eval show CommandElabM Unit from liftCoreM do\n  let opt := Name.mkStr (Name.mkStr .anonymous \"debug\") (\"skipKernel\" ++ \"TC\")\n  withOptions (fun o => o.setBool opt true) <| addDecl\n    (.thmDecl { name := `Control.bogus, levelParams := [], type := mkConst ``False, value := mkConst ``True.intro })\n"},
   "replace": {"Control.lean": ["import Control.Thms", "import Control.Thms\nimport Control.Bad"]},
+  "policy": {"compile_time": {"Control.Bad": "the kernel control: its #eval adds the declaration"}},
   "replay_only": true,
   "fails": "replay: the kernel rejected a declaration under Control"
+ },
+ "initializer": {
+  "write": {"Control/Bad.lean": "initialize\n  try IO.FS.writeFile \"FORGED\" \"{\\\"offenders\\\": []}\" catch _ => pure ()\n\ntheorem Control.bad : 1 = 2 := by sorry\n"},
+  "replace": {"Control.lean": ["import Control.Thms", "import Control.Thms\nimport Control.Bad"]},
+  "policy": {"compile_time": {"Control.Bad": "the initializer control: allowed, so that only the facts can catch it"}},
+  "not_written": ["FORGED"],
+  "fails": "sorry: sorryAx is used by Control.bad"
+ },
+ "compile_time_io": {
+  "write": {"Control/Bad.lean": "import Lean\nopen Lean Elab Command in\nrun_cmd do\n  try\n    let s ← IO.FS.readFile \"lean-audit.json\"\n    IO.FS.writeFile \"lean-audit.json\" s\n    IO.FS.writeFile \"TREE_WRITTEN\" \"a checker input was rewritten and restored\"\n  catch _ => pure ()\n\ntheorem Control.fine : True := trivial\n"},
+  "replace": {"Control.lean": ["import Control.Thms", "import Control.Thms\nimport Control.Bad"]},
+  "not_written": ["TREE_WRITTEN"],
+  "fails": "compile-time: Control/Bad.lean:3 runs code while it compiles (run_cmd)"
+ },
+ "docstring": {
+  "replace": {"Control/Thms.lean": ["theorem helper", "/-- Prose may name debug.skipKernelTC and `run_cmd`:\n#eval and initialize here are words, not commands. -/\ntheorem helper"]},
+  "passes": true
+ },
+ "missing_policy": {
+  "delete": ["lean-audit.json"],
+  "fails": "policy: "
  }
 }

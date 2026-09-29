@@ -200,6 +200,27 @@ def test_inputs_are_validated() -> None:
     assert E.evaluate_batch(P.Bf16ToF32, np.zeros(0, np.uint16)).shape == (0,)
 
 
+def test_a_broadcast_operand_is_read_in_place() -> None:
+    """One weight for every instance (a read-only broadcast view): words no wider than the declared widths are not widened or copied."""
+    import tracemalloc
+
+    from verity.evaluation.batch import _as_batch
+
+    big = np.broadcast_to(np.arange(1 << 16, dtype=np.uint16), (64, 1 << 16))
+    tracemalloc.start()
+    a = _as_batch(big, Array(1 << 16, Value(16)), "w", None)
+    peak = tracemalloc.get_traced_memory()[1]
+    tracemalloc.stop()
+    assert np.shares_memory(a, big) and peak < 1 << 20                       # a widened copy would be 32 MiB
+    rng = np.random.default_rng(4)
+    spec = bind(G.Gemm, K=32, N=3, DOT=P.HopperBF16WgmmaDot16)
+    x, w = _bf16_rows(rng, 7, 32), _bf16_rows(rng, 3, 32)
+    shared = np.broadcast_to(w, (7, 3, 32))
+    assert np.array_equal(E.evaluate_batch(spec, x, shared), E.evaluate_batch(spec, x, np.ascontiguousarray(shared)))
+    with pytest.raises(ValueError, match="wider"):
+        _as_batch(np.broadcast_to(np.array([1 << 16], np.uint32), (4, 1)), Array(1, Value(16)), "w", None)
+
+
 # ---- hardware captures through the kernels -----------------------------------------------------------------------------
 
 def _u16(s: str) -> list[int]:

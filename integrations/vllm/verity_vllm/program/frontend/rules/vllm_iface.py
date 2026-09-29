@@ -61,11 +61,13 @@ _define_once("unified_cache_pad(Tensor live, Tensor zero, int slot) -> ()", "uni
 # input); `temperature` / `top_p` the request's declared policy (STRUCTURAL: constants of the Program); `pos` the position of the
 # logits row (`input_batch.positions[logits_indices]`: the last input token of the step); `splits` int32 [1] the pipeline's split count
 # for this event -- [R16 stoch, coord M-0169] a DERIVED input of the workload (S_t = SplitsFor_v1(|live(t)|, num_SMs)) the request wrapper
-# reads from its request-owned `splits` Input, not a static.  Not a vLLM op: a stand-in with an explicit schema like `unified_cache_pad`;
-# the frontend rule `GumbelTopPTokenSelect[vllm]` binds it to `GumbelTopPTokenSelect_v1{V}` (verity_vllm.program.registry.sampling; S its 6th operand).
-_define_once("gumbel_topp_token_select(Tensor logits, Tensor seed, float temperature, float top_p, int pos, Tensor splits) -> Tensor",
+# reads from its request-owned `splits` Input, not a static.  [single-request workloads] A single-request workload passes `splits=None`
+# and `S` = SplitsFor_v1(1, num_SMs), the constant split count of its every event.  Not a vLLM op: a stand-in with an explicit schema like
+# `unified_cache_pad`; the frontend rule `GumbelTopPTokenSelect[vllm]` binds it to `GumbelTopPTokenSelect_v1{V}` (verity_vllm.program.registry.sampling;
+# S its 6th operand).
+_define_once("gumbel_topp_token_select(Tensor logits, Tensor seed, float temperature, float top_p, int pos, Tensor? splits, int? S=None) -> Tensor",
              "gumbel_topp_token_select",
-             lambda logits, seed, temperature, top_p, pos, splits: logits.new_empty(tuple(logits.shape[:-1]), dtype=torch.int32))
+             lambda logits, seed, temperature, top_p, pos, splits, S=None: logits.new_empty(tuple(logits.shape[:-1]), dtype=torch.int32))
 
 iface = torch.ops.vllm_iface
 

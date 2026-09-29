@@ -487,7 +487,7 @@ def test_run_records_store_section_scratch_and_campaign(tmp_path, monkeypatch, c
     err = capsys.readouterr().err
     assert "research: attempt published" in err or "research: attempt not published" in err
     if not _store_core_available():
-        assert (run_dir / "store_publish_error.json").exists(), "without store-core the failure is recorded, and the run's own exit status stands"
+        assert (run_dir / "store_publish_error.json").exists(), "without research.store.local the failure is recorded, and the run's own exit status stands"
 
 
 def test_run_with_tool_declaration_resolves_before_launch(tmp_path, monkeypatch):
@@ -587,7 +587,7 @@ def test_machine_side_runner_loads_tool_from_shipped_source(tmp_path):
     assert store["store_root"] == str(root / "store")
 
 
-@pytest.mark.skipif(not _store_core_available(), reason="research.store.local (lane store-core) is not merged: the local store cannot be opened")
+@pytest.mark.skipif(not _store_core_available(), reason="research.store.local does not import: the local store cannot be opened")
 def test_run_publishes_attempt_to_local_store(tmp_path, monkeypatch):
     from research.store.local import LocalStore
 

@@ -1,6 +1,6 @@
 # A-GKR — data-parallel GKR + logUp-GKR lookups + interactive Longfellow-style ZK layer
 
-Status: **specification / proposed research**. Nothing here is implemented or measured. The interactive
+Status: **specification**. A-GKR is frozen; `README.md` says which parts are built and measured. The interactive
 adaptation of the Longfellow ZK layer (section 5), the merging of logUp-GKR claims into the checker GKR
 (section 4.3), the depth reductions of section 5.4 marked **[proposal]** and the verifier-coin commitment of
 section 5.5 are *proposals*; none is a drop-in component with a published proof for this composition.
@@ -1220,7 +1220,7 @@ eq_hi(p >> 14) eq_lo(p mod 2^14) per cell and 32 byte-table lookups of rho power
 a are int8 tensor-core products of the bit planes of the eq table (2^m x 32 bytes) with 0/1 vectors and with the 7-bit
 limbs of the rho powers.
 
-### 17.3 Soundness **[derivation; not yet in `soundness.py`]**
+### 17.3 Soundness **[derivation; superseded by 17.5, whose terms `soundness.py` books]**
 
 Suppose some committed bit differs from z at its position (the bits are boolean by the unit's assertions, and Lambda_F
 is a bijection, so b viewed in position order is a boolean vector b').  Then b'^ - z^ is a nonzero multilinear
