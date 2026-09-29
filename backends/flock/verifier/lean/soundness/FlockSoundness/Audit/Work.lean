@@ -7,18 +7,20 @@ import Mathlib.Analysis.MeanInequalities
 The draw law's second version (Daniel, Sep 28): the stratified law's strata, with each stratum's draw sized by the PoUW
 work its units do instead of by their number. Stratum `s` has `n_s` units, each doing work `w_s` (zero for units that do no
 PoUW work: dequantization, the quantizer, attention), and the population does `W = Σ_s w_s n_s`. Stratum `s` draws
-`k_s = min(n_s, max(f_s, ⌈K w_s n_s / W⌉))` (`Law.workRule`, the executable's `Flock.Draw.workK`) above its floor `f_s ≥ 1`.
-The floor is one, or with a count budget `C` the count law's size for a stratum that does no work (`floorRule`, the
-executable's `Flock.Draw.workFloor`).
+`k_s = min(n_s, max(f_s, ⌈K w_s n_s / W⌉))` (`Law.workRule`, the executable's `Flock.Draw.workK`) above its floor `f_s ≥ 1`,
+which the verifier's work table sets per stratum beside `w_s` (one when it names none).
 
 The work law is `Law.stratified` at those sizes (`Law.work`), so every theorem of the stratified law and of the one-stage
 audit holds of it as stated: `stratified_escape`, `stratified_escape_floor`, `audit_whole_stratum`,
 `extraction_audit_whole_stratum`, `audit_profile`, `audit_count`, `audit_drawn` and the Flock instantiations. What is new,
 for every floor `f ≥ 1`:
 
-* `one_le_workK`: **the integrity floor**. Every non-empty stratum draws at least one unit, so a wholly wrong stratum is
-  caught whatever its work (`audit_work_whole_stratum`, `extraction_audit_work_whole_stratum`); `min_le_workK`: at least
-  `min(n_s, f_s)`.
+* `floor_le_workK`: **the floor**. A stratum draws at least `min(n_s, f_s)` units, so every non-empty stratum draws at least
+  one and a wholly wrong stratum is caught whatever its work (`audit_work_whole_stratum`,
+  `extraction_audit_work_whole_stratum`).
+* `work_escape_floor_le`: **the per-stratum floor escape**. A set with `b_s` units in a non-empty stratum `s` escapes with
+  probability at most `((n_s − b_s)/n_s)^(f_s)`, so a floor `f_s ≈ ln(1/δ)/ε_s` catches a fraction `ε_s` of the stratum
+  wrong up to `δ` (`audit_work_floor`, `extraction_audit_work_floor`).
 * `workK_ge`: **draws sized by work**. A stratum draws at least `K w_s n_s / W` units, or all of them.
 * `sum_workK_le`: at most `K + Σ_s f_s` units are drawn (`K` plus one per stratum at `f = 1`).
 * `work_escape_le`: **the work bound**. A set of units doing `W_B` of the work escapes with probability at most
@@ -28,13 +30,13 @@ for every floor `f ≥ 1`:
 * `record_sizing`, `audit_work_of_record`: at the sizing of record (`δ = 2^-40`, `ε = 0.1%`), `K = 27,713` suffices;
   `record_sizing_one_fewer`: `K = 27,712` does not, under this bound.
 
-With a count budget `C` (`countFloor σ w (some C)`):
+For the strata that do no work:
 
-* `workK_rest`: a stratum that does no work draws exactly the count law's size, `countK σ C s`, which is `main`'s
-  stratified law's `stratumK C n_s N` for a non-empty stratum and `C ≤ N` (`countK_eq`).
-* `work_escape_le_count`: **the rest keeps the count law's guarantee**. A set escapes the work law at most as often as its
-  units in strata that do no work escape the stratified law at the count law's sizes; `audit_work_rest` and
-  `extraction_audit_work_rest` carry any such integrity profile to the audit.
+* `workK_rest`: such a stratum draws exactly `min(n_s, f_s)`.
+* `work_escape_le_count`: **floors at the count law's sizes keep its guarantee**. When every stratum that does no work has
+  `f_s` at least `countK σ C s` (`main`'s stratified law's `stratumK C n_s N` for a non-empty stratum and `C ≤ N`,
+  `countK_eq`), a set escapes the work law at most as often as its units in those strata escape the stratified law at `C`;
+  `audit_work_rest` and `extraction_audit_work_rest` carry any such integrity profile to the audit.
 
 Closure draws (a drawn unit proved with the units it reads) are not part of this law. `Law.widen` proves more units than a
 law draws on the same coins, and `escape_widen_le` carries every escape bound to it.
@@ -84,15 +86,15 @@ theorem totalWork_eq (σ : Fin n → Fin m) (w : Fin m → ℕ) :
 
 /-! ## The rule -/
 
-/-- A stratum draws at least `min(n_s, f_s)`. -/
-theorem min_le_workK (σ : Fin n → Fin m) (w : Fin m → ℕ) (f : Fin m → ℕ) (K : ℕ) (s : Fin m) :
+/-- **The floor**: a stratum draws at least `min(n_s, f_s)` units, whatever its work. -/
+theorem floor_le_workK (σ : Fin n → Fin m) (w : Fin m → ℕ) (f : Fin m → ℕ) (K : ℕ) (s : Fin m) :
     min (stratum σ s).card (f s) ≤ workK σ w f K s :=
   min_le_min le_rfl (le_max_left _ _)
 
-/-- **The integrity floor**: with `f_s ≥ 1`, every non-empty stratum draws at least one unit, whatever its work. -/
+/-- With `f_s ≥ 1`, every non-empty stratum draws at least one unit, whatever its work. -/
 theorem one_le_workK {σ : Fin n → Fin m} {w : Fin m → ℕ} {f : Fin m → ℕ} {K : ℕ} {s : Fin m} (hf : 1 ≤ f s)
     (h : (stratum σ s).Nonempty) : 1 ≤ workK σ w f K s :=
-  (le_min (Finset.card_pos.2 h) hf).trans (min_le_workK σ w f K s)
+  (le_min (Finset.card_pos.2 h) hf).trans (floor_le_workK σ w f K s)
 
 theorem le_mul_ceil_div (x W : ℕ) (hW : 0 < W) : x ≤ W * ((x + W - 1) / W) := by
   have h1 := Nat.div_add_mod (x + W - 1) W
@@ -272,29 +274,70 @@ theorem work_escape_le_of_le (σ : Fin n → Fin m) (w : Fin m → ℕ) (f : Fin
   refine (work_escape_le σ w f K hf hW B).trans ?_
   gcongr
 
-/-! ## The count floor -/
+/-! ## Floors -/
+
+/-- The hypergeometric escape of `m` of `n` units under a uniform `k`-subset, `C(n − m, k)/C(n, k)`, in `ℝ≥0∞`, is at most
+`((n − m)/n)^k`. -/
+theorem choose_div_le_pow' {n m k : ℕ} (hk : k ≤ n) (hn : 0 < n) :
+    ((n - m).choose k : ℝ≥0∞) / (n.choose k : ℝ≥0∞) ≤ (((n - m : ℕ) : ℝ≥0∞) / (n : ℝ≥0∞)) ^ k := by
+  have hC : ((n.choose k : ℕ) : ℝ≥0) ≠ 0 := by exact_mod_cast (Nat.choose_pos hk).ne'
+  have hN : ((n : ℕ) : ℝ≥0) ≠ 0 := by exact_mod_cast hn.ne'
+  have h := ENNReal.coe_le_coe.2 (choose_div_le_pow (m := m) hk hn)
+  rw [ENNReal.coe_div hC, ENNReal.coe_pow, ENNReal.coe_div hN] at h
+  simpa using h
+
+/-- A hypergeometric factor is at most one. -/
+theorem choose_div_le_one (n m k : ℕ) : ((n - m).choose k : ℝ≥0∞) / (n.choose k : ℝ≥0∞) ≤ 1 := by
+  refine ENNReal.div_le_of_le_mul ?_
+  rw [one_mul]
+  exact_mod_cast Nat.choose_le_choose _ (Nat.sub_le _ _)
+
+/-- **The per-stratum floor escape**: a set with `b_s` units in a non-empty stratum `s` escapes with probability at most
+`((n_s − b_s)/n_s)^(f_s)`. -/
+theorem work_escape_floor_le (σ : Fin n → Fin m) (w : Fin m → ℕ) (f : Fin m → ℕ) (K : ℕ) (s : Fin m)
+    (hs : (stratum σ s).Nonempty) (B : Finset (Fin n)) :
+    (work σ w f K).escape B ≤
+      ((((stratum σ s).card - (B.filter (σ · = s)).card : ℕ) : ℝ≥0∞) / ((stratum σ s).card : ℝ≥0∞)) ^ (f s) := by
+  classical
+  rw [stratified_escape, ← Finset.mul_prod_erase univ _ (mem_univ s)]
+  refine (mul_le_of_le_one_right' (Finset.prod_le_one fun t _ => choose_div_le_one _ _ _)).trans ?_
+  have hpos : 0 < (stratum σ s).card := Finset.card_pos.2 hs
+  have hk := workK_le σ w f K s
+  have hM : (B.filter (σ · = s)).card ≤ (stratum σ s).card := card_le_card (filter_subset_filter _ (subset_univ B))
+  have hx1 : (((stratum σ s).card - (B.filter (σ · = s)).card : ℕ) : ℝ≥0∞) / ((stratum σ s).card : ℝ≥0∞) ≤ 1 :=
+    ENNReal.div_le_of_le_mul (by rw [one_mul]; exact_mod_cast Nat.sub_le _ _)
+  by_cases hfk : f s ≤ workK σ w f K s
+  · exact (choose_div_le_pow' hk hpos).trans (pow_le_pow_of_le_one zero_le hx1 hfk)
+  · have hkN : workK σ w f K s = (stratum σ s).card := by
+      have := floor_le_workK σ w f K s
+      omega
+    rcases Nat.eq_zero_or_pos (B.filter (σ · = s)).card with h0 | hb
+    · rw [h0, Nat.sub_zero, ENNReal.div_self (by exact_mod_cast (Nat.choose_pos hk).ne') (ENNReal.natCast_ne_top _),
+        ENNReal.div_self (by exact_mod_cast hpos.ne') (ENNReal.natCast_ne_top _), one_pow]
+    · rw [hkN, Nat.choose_eq_zero_of_lt (by omega), Nat.cast_zero, ENNReal.zero_div]
+      exact zero_le
+
+/-- The per-stratum floor escape, monotone in the count: a set with at least `b` units in stratum `s` escapes with at most
+`((n_s − b)/n_s)^(f_s)`. -/
+theorem work_escape_floor_le_of_le (σ : Fin n → Fin m) (w : Fin m → ℕ) (f : Fin m → ℕ) (K : ℕ) (s : Fin m)
+    (hs : (stratum σ s).Nonempty) {B : Finset (Fin n)} {b : ℕ} (hb : b ≤ (B.filter (σ · = s)).card) :
+    (work σ w f K).escape B ≤ ((((stratum σ s).card - b : ℕ) : ℝ≥0∞) / ((stratum σ s).card : ℝ≥0∞)) ^ (f s) := by
+  refine (work_escape_floor_le σ w f K s hs B).trans ?_
+  gcongr
+
+/-- **A stratum that does no work draws `min(n_s, f_s)`.** -/
+theorem workK_rest {σ : Fin n → Fin m} {w : Fin m → ℕ} {f : Fin m → ℕ} (K : ℕ) {s : Fin m} (hw : w s = 0) :
+    workK σ w f K s = min (stratum σ s).card (f s) := by
+  have h0 : (K * w s * (stratum σ s).card + totalWork σ w - 1) / totalWork σ w = 0 := by
+    rw [hw, mul_zero, zero_mul, zero_add]
+    rcases Nat.eq_zero_or_pos (totalWork σ w) with h | h
+    · rw [h]
+    · exact Nat.div_eq_of_lt (by omega)
+  unfold workK workRule
+  rw [h0, max_eq_left (Nat.zero_le _)]
 
 /-- The count law's rule, the executable's `Flock.Draw.stratumK`: `C · size / population` rounded half up, at least one. -/
 def countRule (C size population : ℕ) : ℕ := max 1 ((2 * C * size + population) / (2 * population))
-
-/-- A stratum's floor, the executable's `Flock.Draw.workFloor`: one, or with a count budget `C` the count law's size for a
-stratum that does no work. -/
-def floorRule (count : Option ℕ) (work size population : ℕ) : ℕ :=
-  match count with
-  | some c => if work = 0 then countRule c size population else 1
-  | none => 1
-
-theorem one_le_floorRule (count : Option ℕ) (work size population : ℕ) : 1 ≤ floorRule count work size population := by
-  unfold floorRule countRule
-  split
-  · split
-    · exact le_max_left _ _
-    · exact le_rfl
-  · exact le_rfl
-
-/-- The work law's floors over `σ`'s strata, with count budget `count`. -/
-def countFloor (σ : Fin n → Fin m) (w : Fin m → ℕ) (count : Option ℕ) (s : Fin m) : ℕ :=
-  floorRule count (w s) (stratum σ s).card n
 
 /-- The count law's sizes over `σ`'s strata at count budget `C`: `main`'s stratified law, `stratumK C n_s N`. -/
 def countK (σ : Fin n → Fin m) (C : ℕ) (s : Fin m) : ℕ := min (stratum σ s).card (countRule C (stratum σ s).card n)
@@ -310,23 +353,53 @@ theorem countK_eq {σ : Fin n → Fin m} {C : ℕ} {s : Fin m} (hC : C ≤ n) (h
   refine min_eq_right (max_le hn1 (Nat.lt_succ_iff.1 ((Nat.div_lt_iff_lt_mul (by omega)).2 ?_)))
   nlinarith
 
-/-- **A stratum that does no work draws what the count law draws.** -/
-theorem workK_rest {σ : Fin n → Fin m} {w : Fin m → ℕ} (K C : ℕ) {s : Fin m} (hw : w s = 0) :
-    workK σ w (countFloor σ w (some C)) K s = countK σ C s := by
-  have h0 : (K * w s * (stratum σ s).card + totalWork σ w - 1) / totalWork σ w = 0 := by
-    rw [hw, mul_zero, zero_mul, zero_add]
-    rcases Nat.eq_zero_or_pos (totalWork σ w) with h | h
-    · rw [h]
-    · exact Nat.div_eq_of_lt (by omega)
-  have hf : countFloor σ w (some C) s = countRule C (stratum σ s).card n := by simp [countFloor, floorRule, hw]
-  unfold workK workRule countK
-  rw [h0, hf, max_eq_left (Nat.zero_le _)]
+theorem choose_mul_choose_succ_le (a n j : ℕ) (ha : a ≤ n) :
+    a.choose (j + 1) * n.choose j ≤ a.choose j * n.choose (j + 1) := by
+  refine Nat.le_of_mul_le_mul_right ?_ (Nat.succ_pos j)
+  have h1 := Nat.choose_succ_right_eq a j
+  have h2 := Nat.choose_succ_right_eq n j
+  have hj : a - j ≤ n - j := by omega
+  generalize a - j = x at h1 hj
+  generalize n - j = y at h2 hj
+  calc a.choose (j + 1) * n.choose j * (j + 1) = a.choose (j + 1) * (j + 1) * n.choose j := by ring
+    _ = a.choose j * x * n.choose j := by rw [h1]
+    _ ≤ a.choose j * y * n.choose j := by gcongr
+    _ = a.choose j * (n.choose j * y) := by ring
+    _ = a.choose j * (n.choose (j + 1) * (j + 1)) := by rw [h2]
+    _ = a.choose j * n.choose (j + 1) * (j + 1) := by ring
 
-/-- **The rest keeps the count law's guarantee.** With a count budget `C`, a set escapes the work law at most as often as
-its units in strata that do no work escape the stratified law at the count law's sizes. -/
-theorem work_escape_le_count (σ : Fin n → Fin m) (w : Fin m → ℕ) (K C : ℕ) (B : Finset (Fin n)) :
-    (work σ w (countFloor σ w (some C)) K).escape B ≤
-      (stratified σ (countK σ C) (countK_le σ C)).escape (B.filter fun u => w (σ u) = 0) := by
+theorem choose_mul_le_of_le {a n k : ℕ} (ha : a ≤ n) : ∀ {k'}, k ≤ k' → k' ≤ n →
+    a.choose k' * n.choose k ≤ a.choose k * n.choose k'
+  | k', hkk, hk' => by
+    induction k', hkk using Nat.le_induction with
+    | base => exact le_rfl
+    | succ j hkj ih =>
+      have hjn : j ≤ n := by omega
+      have ih := ih hjn
+      have hpos : 0 < n.choose j := Nat.choose_pos hjn
+      refine Nat.le_of_mul_le_mul_right ?_ hpos
+      calc a.choose (j + 1) * n.choose k * n.choose j = (a.choose (j + 1) * n.choose j) * n.choose k := by ring
+        _ ≤ (a.choose j * n.choose (j + 1)) * n.choose k := Nat.mul_le_mul_right _ (choose_mul_choose_succ_le a n j ha)
+        _ = (a.choose j * n.choose k) * n.choose (j + 1) := by ring
+        _ ≤ (a.choose k * n.choose j) * n.choose (j + 1) := Nat.mul_le_mul_right _ ih
+        _ = a.choose k * n.choose (j + 1) * n.choose j := by ring
+
+/-- **The hypergeometric escape falls as the draw grows**: `C(a, k')/C(n, k') ≤ C(a, k)/C(n, k)` for `a ≤ n` and
+`k ≤ k' ≤ n`. -/
+theorem choose_div_anti {a n k k' : ℕ} (ha : a ≤ n) (hkk : k ≤ k') (hk' : k' ≤ n) :
+    (a.choose k' : ℝ≥0∞) / (n.choose k' : ℝ≥0∞) ≤ (a.choose k : ℝ≥0∞) / (n.choose k : ℝ≥0∞) := by
+  have hk0 : (n.choose k : ℝ≥0∞) ≠ 0 := by exact_mod_cast (Nat.choose_pos (hkk.trans hk')).ne'
+  have hk'0 : (n.choose k' : ℝ≥0∞) ≠ 0 := by exact_mod_cast (Nat.choose_pos hk').ne'
+  rw [ENNReal.div_le_iff hk'0 (ENNReal.natCast_ne_top _), ← ENNReal.mul_div_right_comm,
+    ENNReal.le_div_iff_mul_le (Or.inl hk0) (Or.inl (ENNReal.natCast_ne_top _))]
+  exact_mod_cast choose_mul_le_of_le ha hkk hk'
+
+/-- **Floors at the count law's sizes keep its guarantee.** When every stratum that does no work has a floor of at least
+the count law's size at `C`, a set escapes the work law at most as often as its units in those strata escape the
+stratified law at `C`. -/
+theorem work_escape_le_count (σ : Fin n → Fin m) (w : Fin m → ℕ) (f : Fin m → ℕ) (K C : ℕ)
+    (hf : ∀ s, w s = 0 → countK σ C s ≤ f s) (B : Finset (Fin n)) :
+    (work σ w f K).escape B ≤ (stratified σ (countK σ C) (countK_le σ C)).escape (B.filter fun u => w (σ u) = 0) := by
   classical
   rw [stratified_escape, stratified_escape]
   refine Finset.prod_le_prod fun s _ => ?_
@@ -340,16 +413,17 @@ theorem work_escape_le_count (σ : Fin n → Fin m) (w : Fin m → ℕ) (K C : �
         exact ⟨hu, hs⟩
       · rintro ⟨hu, hs⟩
         exact ⟨⟨hu, by rw [hs]; exact hw⟩, hs⟩
-    rw [hm, workK_rest K C hw]
+    rw [hm]
+    refine choose_div_anti (Nat.sub_le _ _) ?_ (workK_le σ w f K s)
+    rw [workK_rest K hw]
+    exact le_min (countK_le σ C s) (hf s hw)
   · have hm : ((B.filter fun u => w (σ u) = 0).filter (σ · = s)).card = 0 := by
       rw [Finset.card_eq_zero, Finset.filter_eq_empty_iff]
       intro u hu hs
       exact hw (hs ▸ (Finset.mem_filter.1 hu).2)
     rw [hm, Nat.sub_zero, ENNReal.div_self (by exact_mod_cast (Nat.choose_pos (countK_le σ C s)).ne')
       (ENNReal.natCast_ne_top _)]
-    refine ENNReal.div_le_of_le_mul ?_
-    rw [one_mul]
-    exact_mod_cast Nat.choose_le_choose _ (Nat.sub_le _ _)
+    exact choose_div_le_one _ _ _
 
 /-! ## Closure draws: the seam -/
 
@@ -457,36 +531,66 @@ theorem extraction_audit_work_whole_stratum (A : ExtractionAnalysis (Law.work σ
         (audit (Law.work σ w f K) Reg session) σ' ≤ εks (reg σ') (cont σ') + δlink (reg σ') (cont σ') :=
   extraction_audit_whole_stratum A hks hlink s (Law.one_le_workK hf hs) σ'
 
-/-- **The rest keeps its count-law profile, audited** (oracle layer): with a count budget `C`, for any family `𝓑`, the
-audit accepts while the wrong units in strata that do no work form a set in `𝓑` with probability at most the stratified
-law's `sup_{B ∈ 𝓑} escape B` at the count law's sizes, plus `ε_ks + δ_link`. -/
-theorem audit_work_rest {C : ℕ} (A : Analysis (Law.work σ w (Law.countFloor σ w (some C)) K) Reg session)
-    {εks δlink : ℝ≥0∞} (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink) (𝓑 : Finset (Fin n) → Prop)
-    (σ' : Strategy (audit (Law.work σ w (Law.countFloor σ w (some C)) K) Reg session)) :
+/-- **The per-stratum floor, audited** (oracle layer): the audit accepts while at least `b` units of a non-empty stratum
+`s` are wrong with probability at most `((n_s − b)/n_s)^(f_s) + ε_ks + δ_link`. -/
+theorem audit_work_floor (A : Analysis (Law.work σ w f K) Reg session) {εks δlink : ℝ≥0∞}
+    (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink) (s : Fin m) (hs : (Law.stratum σ s).Nonempty) (b : ℕ)
+    (σ' : Strategy (audit (Law.work σ w f K) Reg session)) :
+    prob (fun o => o.1 = true ∧ b ≤ ((A.wrong (A.committedOf σ')).filter (σ · = s)).card)
+        (audit (Law.work σ w f K) Reg session) σ' ≤
+      ((((Law.stratum σ s).card - b : ℕ) : ℝ≥0∞) / ((Law.stratum σ s).card : ℝ≥0∞)) ^ (f s) + εks + δlink := by
+  refine (audit_profile A hks hlink (fun B => b ≤ (B.filter (σ · = s)).card) σ').trans ?_
+  gcongr
+  exact iSup₂_le fun B hB => Law.work_escape_floor_le_of_le σ w f K s hs hB
+
+/-- **The per-stratum floor, audited** (compiled layer, randomized extractor): at most
+`((n_s − b)/n_s)^(f_s) + ε_ks(σ) + δ_link(σ)`. -/
+theorem extraction_audit_work_floor (A : ExtractionAnalysis (Law.work σ w f K) Reg session)
+    {εks δlink : (R : Reg) → Cont (Law.work σ w f K) Reg session R → ℝ≥0∞}
+    (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink) (s : Fin m) (hs : (Law.stratum σ s).Nonempty) (b : ℕ)
+    (σ' : Strategy (audit (Law.work σ w f K) Reg session)) :
+    prob (fun o => o.1 = true ∧ b ≤ ((A.wrong (A.committedOf σ')).filter (σ · = s)).card)
+        (audit (Law.work σ w f K) Reg session) σ' ≤
+      ((((Law.stratum σ s).card - b : ℕ) : ℝ≥0∞) / ((Law.stratum σ s).card : ℝ≥0∞)) ^ (f s) +
+        εks (reg σ') (cont σ') + δlink (reg σ') (cont σ') := by
+  refine (extraction_audit_le A hks hlink (fun X _ => b ≤ ((A.wrong X).filter (σ · = s)).card) σ').trans ?_
+  gcongr
+  by_cases hB : b ≤ ((A.wrong (A.committedOf σ')).filter (σ · = s)).card
+  · exact (prCoin_mono fun ω h => h.2).trans (Law.work_escape_floor_le_of_le σ w f K s hs hB)
+  · exact (prCoin_mono (q := fun _ => False) fun ω h => hB h.1).trans (prCoin_false.le.trans zero_le)
+
+/-- **Floors at the count law's sizes keep its profile, audited** (oracle layer): when every stratum that does no work has
+a floor of at least the count law's size at `C`, for any family `𝓑`, the audit accepts while the wrong units in those
+strata form a set in `𝓑` with probability at most the stratified law's `sup_{B ∈ 𝓑} escape B` at `C`, plus
+`ε_ks + δ_link`. -/
+theorem audit_work_rest {C : ℕ} (hf : ∀ s, w s = 0 → Law.countK σ C s ≤ f s)
+    (A : Analysis (Law.work σ w f K) Reg session) {εks δlink : ℝ≥0∞} (hks : A.KnowledgeSound εks)
+    (hlink : A.LinkSound δlink) (𝓑 : Finset (Fin n) → Prop) (σ' : Strategy (audit (Law.work σ w f K) Reg session)) :
     prob (fun o => o.1 = true ∧ 𝓑 ((A.wrong (A.committedOf σ')).filter fun u => w (σ u) = 0))
-        (audit (Law.work σ w (Law.countFloor σ w (some C)) K) Reg session) σ' ≤
+        (audit (Law.work σ w f K) Reg session) σ' ≤
       (⨆ (B : Finset (Fin n)) (_ : 𝓑 B), (Law.stratified σ (Law.countK σ C) (Law.countK_le σ C)).escape B) +
         εks + δlink := by
   refine (audit_profile A hks hlink (fun B => 𝓑 (B.filter fun u => w (σ u) = 0)) σ').trans
     (add_le_add (add_le_add ?_ le_rfl) le_rfl)
-  exact iSup₂_le fun B hB => (Law.work_escape_le_count σ w K C B).trans
+  exact iSup₂_le fun B hB => (Law.work_escape_le_count σ w f K C hf B).trans
     (le_iSup₂_of_le (f := fun (B : Finset (Fin n)) (_ : 𝓑 B) =>
       (Law.stratified σ (Law.countK σ C) (Law.countK_le σ C)).escape B) _ hB le_rfl)
 
-/-- **The rest keeps its count-law profile, audited** (compiled layer, randomized extractor): the same with
+/-- **Floors at the count law's sizes keep its profile, audited** (compiled layer, randomized extractor): the same with
 `ε_ks(σ) + δ_link(σ)`. -/
-theorem extraction_audit_work_rest {C : ℕ} (A : ExtractionAnalysis (Law.work σ w (Law.countFloor σ w (some C)) K) Reg session)
-    {εks δlink : (R : Reg) → Cont (Law.work σ w (Law.countFloor σ w (some C)) K) Reg session R → ℝ≥0∞}
+theorem extraction_audit_work_rest {C : ℕ} (hf : ∀ s, w s = 0 → Law.countK σ C s ≤ f s)
+    (A : ExtractionAnalysis (Law.work σ w f K) Reg session)
+    {εks δlink : (R : Reg) → Cont (Law.work σ w f K) Reg session R → ℝ≥0∞}
     (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink) (𝓑 : Finset (Fin n) → Prop)
-    (σ' : Strategy (audit (Law.work σ w (Law.countFloor σ w (some C)) K) Reg session)) :
+    (σ' : Strategy (audit (Law.work σ w f K) Reg session)) :
     prob (fun o => o.1 = true ∧ 𝓑 ((A.wrong (A.committedOf σ')).filter fun u => w (σ u) = 0))
-        (audit (Law.work σ w (Law.countFloor σ w (some C)) K) Reg session) σ' ≤
+        (audit (Law.work σ w f K) Reg session) σ' ≤
       (⨆ (B : Finset (Fin n)) (_ : 𝓑 B), (Law.stratified σ (Law.countK σ C) (Law.countK_le σ C)).escape B) +
         εks (reg σ') (cont σ') + δlink (reg σ') (cont σ') := by
   refine (extraction_audit_le A hks hlink (fun X _ => 𝓑 ((A.wrong X).filter fun u => w (σ u) = 0)) σ').trans ?_
   gcongr
   by_cases hB : 𝓑 ((A.wrong (A.committedOf σ')).filter fun u => w (σ u) = 0)
-  · exact (prCoin_mono fun ω h => h.2).trans ((Law.work_escape_le_count σ w K C _).trans
+  · exact (prCoin_mono fun ω h => h.2).trans ((Law.work_escape_le_count σ w f K C hf _).trans
       (le_iSup₂_of_le (f := fun (B : Finset (Fin n)) (_ : 𝓑 B) =>
         (Law.stratified σ (Law.countK σ C) (Law.countK_le σ C)).escape B) _ hB le_rfl))
   · exact (prCoin_mono (q := fun _ => False) fun ω h => hB h.1).trans (prCoin_false.le.trans zero_le)
