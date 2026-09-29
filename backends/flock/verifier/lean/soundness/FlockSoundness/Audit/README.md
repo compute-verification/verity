@@ -92,6 +92,20 @@ $\Pr[\text{accept} \wedge \mathrm{work}(B \cup \mathrm{unsound}(B)) \ge T] \le (
 $B = \mathrm{wrong}(X)$; `audit_work_closure_harm`: likewise for a wrong unit's harm; `audit_work_closure_of_record`:
 $2^{-40}$ at $K = 27{,}713$ for unsound work of at least 0.1%.
 
+**Theorems, windows of calls** (`Audit/Window.lean`; X-SPC-105, X-SPC-106): a window is one stratified law over its
+(call, template) strata, the calls drawn independently. `Covers σ k w K`: every stratum draws at least its share
+$K w_s n_s / W$, or all its units. `stratified_escape_le_of_covers`: then $\mathrm{escape}(B) \le ((W - W_B)/W)^K$, for any
+such law. `covers_work`: the work law covers its own work. `covers_window`: the per-call split, call $c$ at its share
+$K_c = \min(N_c, \max(1, \lceil K W_c / W \rceil))$, covers the window's work when each call's work is in one stratum
+(`hone`); with two strata doing work in a call, a binding cap breaks the bound itself (the module docstring's example).
+`covers_of_floor`: y's floors $f_s$ with $K_y v_s n_s \le f_s N$ cover the y weights $v$ at $K_y$. `audit_window` and
+`extraction_audit_window`: $\Pr[\text{accept} \wedge (\mathrm{unsoundWork}_w \ge T \vee \mathrm{unsoundWork}_v \ge T_y)]$ is
+at most the larger of the two bounds plus the per-unit terms, not their sum, since both bound the one committed wrong set.
+`audit_window_of_le`: the same for any law whose escapes are at most the product law's, such as an executable draw.
+`audit_window_of_record`: $2^{-40}$ at $K = K_y = 27{,}713$ for a 0.1% share of either; `audit_window_split_of_record`:
+the same for the per-call split with y's floors, the law #364 runs. The product law assumes each call's draw is under a
+distinct context.
+
 **Theorems, two-stage** (`Audit/TwoStage.lean`):
 
 - `twoStage_profile`, variant (b), nested sampling: the profile over the coarse partition with the effective escape
