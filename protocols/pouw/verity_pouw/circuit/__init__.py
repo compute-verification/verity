@@ -82,15 +82,17 @@ class Traced:
 
     def draw(self, key, law, anchors, ledger):
         """The verifier's plan for this call: `plan.draw` over its own layout (`layout`), never a given one (X-SPC-97), each
-        stratum's subset keyed by the call's index (``anchors.call_index``) with its template (X-SPC-96). The call is first
-        admitted to ``ledger``, the window's `anchors.Ledger` (one per window key), so a call index the window already
-        holds is refused before anything is drawn. Each call of a window then draws under a context of its own: the
-        product law root's window pin takes as M1."""
+        stratum's subset keyed by the call's index (``anchors.call_index``) with its template (X-SPC-96). ``ledger`` is the
+        window's `anchors.Ledger`, opened from its complete `Receipt` (`Ledger.open`), and ``key`` must be the key it
+        derived: the draw is refused otherwise, and so is a call the receipt doesn't list or the window already holds,
+        before anything is drawn. So every call's commitment precedes the key (C1), and each call of a window draws under
+        a context of its own: the product law root's window pin takes as M1."""
         from . import plan
         from .anchors import Ledger
 
         if not isinstance(ledger, Ledger):
-            raise TypeError("a call is drawn only once its window's Ledger admits it")
+            raise TypeError("a call is drawn only under its window's Ledger")
+        ledger.check_draw(key)
         ledger.admit(anchors, self.shape)
         index = anchors.call_index
         return plan.draw(key, self.layout(), law, index if isinstance(index, tuple) else (index,))

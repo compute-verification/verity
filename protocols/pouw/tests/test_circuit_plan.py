@@ -355,23 +355,34 @@ def _anchors(call, **kw):
     return Anchors(call.salt, f["forward"], f["layer"], f["site"], call.weight, tuple(call.rowids), tuple(call.colids))
 
 
+def _window(t, anchors, source=bytes(range(32))):
+    """A window over ``anchors`` (each of ``t``'s shape, with a commitment of its own): its `Receipt`, and the `Ledger`
+    opened from it, with the fresh source replaced by ``source`` so the draws are reproducible."""
+    import hashlib
+    from unittest import mock
+
+    from verity_pouw.circuit import anchors as A
+
+    receipt = A.Receipt(tuple((an, t.shape, hashlib.sha512(repr(an).encode()).digest()) for an in anchors))
+    with mock.patch.object(A, "_fresh_source", lambda: source):
+        return receipt, A.Ledger.open(receipt)
+
+
 def test_equal_calls_under_one_key_draw_different_tiles():
-    """Each stratum's subset is keyed by the call's index, (forward, position), with its template (X-SPC-96): two equal
-    calls of a window, under the one key, draw different tiles, and one call draws the same tiles every time. The strata
-    stay one per template of the call's partition (X-SPC-84); only the randomness is per call."""
+    """Each stratum's subset is keyed by the call's index, (forward, position), with its template (X-SPC-96): equal calls of
+    a window, under its one key, draw different tiles, and one call draws the same tiles under that key every time. The
+    strata stay one per template of the call's partition (X-SPC-84); only the randomness is per call."""
     import circuit_fixtures as F
     from verity_pouw.circuit import traced_as
 
     call = F.call(64, 64, 64)
-    from verity_pouw.circuit.anchors import Ledger
-
-    t, law, window = traced_as("ncp-v2-shift24", 64, 64, 64), PL.WorkLaw(4), Ledger()
+    t, law = traced_as("ncp-v2-shift24", 64, 64, 64), PL.WorkLaw(4)
+    ans = [_anchors(call)] + [_anchors(call, **kw) for kw in ({"forward": 4}, {"site": 3}, {"layer": 6})]
+    _receipt, window = _window(t, ans)
     tiles = lambda plan: [u for u in plan.drawn if t.layout().units[u].role == "tile"]  # noqa: E731
-    first = t.draw(_key(), law, _anchors(call), window)
-    assert tiles(first) == tiles(t.draw(_key(), law, _anchors(call), Ledger()))   # the same call, in its own window
-    others = [tiles(t.draw(_key(), law, _anchors(call, **kw), window))
-              for kw in ({"forward": 4}, {"site": 3}, {"layer": 6})]
-    assert all(o != tiles(first) for o in others)
+    drawn = [tiles(t.draw(window.key, law, an, window)) for an in ans]
+    assert drawn[0] == tiles(PL.draw(window.key, t.layout(), law, ans[0].call_index))
+    assert all(d != drawn[0] for d in drawn[1:])
     assert [s.name for s in t.layout().strata] == list(dict.fromkeys(u.template for u in t.layout().units))
 
 
@@ -381,46 +392,128 @@ def test_the_verifier_draws_over_its_own_layout():
 
     import circuit_fixtures as F
     from verity_pouw.circuit import Traced, traced_as
-    from verity_pouw.circuit.anchors import Ledger
 
     call = F.call(32, 64, 32)
     t = traced_as("ncp-v2-shift24", 32, 64, 32)
     assert list(inspect.signature(Traced.draw).parameters) == ["self", "key", "law", "anchors", "ledger"]
     an = _anchors(call)
-    assert t.draw(_key(), PL.WorkLaw(2), an, Ledger()) == PL.draw(_key(), t.layout(), PL.WorkLaw(2), an.call_index)
+    _receipt, window = _window(t, [an])
+    assert t.draw(window.key, PL.WorkLaw(2), an, window) == PL.draw(window.key, t.layout(), PL.WorkLaw(2), an.call_index)
 
 
 def test_a_repeated_call_index_is_refused_before_any_draw(monkeypatch):
     """The window pin takes a window's per-call draws as independent (M1), and each call's subsets are keyed by its index
-    under the one window key. So `Traced.draw` admits the call to the window's `Ledger` before it draws: a second call with
-    the same (forward, position), even of another weight id, is refused before `plan.draw` runs, and the ledger keeps only
-    the calls it admitted. A draw without a ledger is refused."""
+    under the one window key. A receipt lists each call index once, and `Traced.draw` admits the call to the window's
+    `Ledger` before it draws: a call index already drawn, even with another weight id, is refused before `plan.draw`
+    runs. A draw without a ledger is refused."""
+    import hashlib
+
     import pytest
 
     import circuit_fixtures as F
     from verity_pouw.circuit import plan as plan_module
     from verity_pouw.circuit import traced_as
-    from verity_pouw.circuit.anchors import Anchors, Ledger
+    from verity_pouw.circuit.anchors import Anchors, Receipt
     from verity_pouw.protocol import DomainError
 
     call = F.call(32, 64, 32)
-    t, law, window = traced_as("ncp-v2-shift24", 32, 64, 32), PL.WorkLaw(2), Ledger()
-    drawn, real = [], plan_module.draw
-    monkeypatch.setattr(plan_module, "draw", lambda key, lay, law, index: drawn.append(index) or real(key, lay, law, index))
+    t, law = traced_as("ncp-v2-shift24", 32, 64, 32), PL.WorkLaw(2)
     first = _anchors(call)
-    t.draw(_key(), law, first, window)
     twin = Anchors(call.salt, call.forward, call.layer, call.site, call.weight + 1, tuple(call.rowids), tuple(call.colids))
     assert twin.call_index == first.call_index
+    with pytest.raises(DomainError, match="repeated"):
+        Receipt(((first, t.shape, hashlib.sha512(b"1").digest()), (twin, t.shape, hashlib.sha512(b"2").digest())))
+    _receipt, window = _window(t, [first, _anchors(call, forward=call.forward + 1)])
+    drawn, real = [], plan_module.draw
+    monkeypatch.setattr(plan_module, "draw", lambda key, lay, law, index: drawn.append(index) or real(key, lay, law, index))
+    t.draw(window.key, law, first, window)
     for again in (first, twin):
-        with pytest.raises(DomainError, match="repeated"):
-            t.draw(_key(), law, again, window)
+        with pytest.raises(DomainError, match="repeated|not on the window's receipt"):
+            t.draw(window.key, law, again, window)
     assert drawn == [first.call_index] and window.seen == {first.call_index}
-    t.draw(_key(), law, _anchors(call, forward=call.forward + 1), window)
+    t.draw(window.key, law, _anchors(call, forward=call.forward + 1), window)
     assert len(drawn) == 2
     for no_ledger in (None, set()):
         with pytest.raises(TypeError):
-            t.draw(_key(), law, _anchors(call, forward=call.forward + 2), no_ledger)
+            t.draw(window.key, law, first, no_ledger)
     assert len(drawn) == 2
+
+
+def test_the_window_key_is_derived_from_the_complete_receipt(monkeypatch):
+    """Root's C1: the window's key comes after every call's commitment. A `Receipt` lists every call of the window with its
+    shape and commitment, and is immutable; `Ledger.open` derives the key from it alone, under `DRAW_DOMAIN` with
+    {"receipt": digest}, and `Traced.draw` refuses a ledger not opened from a receipt, any other key, and a call the
+    receipt doesn't list (another index, the same index with other anchors, or another shape), before `plan.draw` runs.
+    The digest moves with any one commitment or shape, not with the order the calls are listed in."""
+    import dataclasses
+    import hashlib
+    from unittest import mock
+
+    import pytest
+
+    import circuit_fixtures as F
+    from verity_pouw.circuit import anchors as A
+    from verity_pouw.circuit import plan as plan_module
+    from verity_pouw.circuit import traced_as
+    from verity_pouw.protocol import DomainError
+
+    call = F.call(32, 64, 32)
+    t, law = traced_as("ncp-v2-shift24", 32, 64, 32), PL.WorkLaw(2)
+    a, b, unlisted = (_anchors(call, forward=f) for f in (1, 2, 3))
+    source = bytes(range(32))
+    receipt, window = _window(t, [a, b], source)
+    assert window.key == derive(source, PL.DRAW_DOMAIN, {"receipt": receipt.digest()})
+    drawn, real = [], plan_module.draw
+    monkeypatch.setattr(plan_module, "draw", lambda key, lay, law, index: drawn.append(index) or real(key, lay, law, index))
+    other_shape = ncp2.Shape(32, 128, 32)
+    twin = dataclasses.replace(a, weight=a.weight + 1)
+    refusals = [
+        (lambda: t.draw(window.key, law, a, A.Ledger()), "opened from its complete receipt"),
+        (lambda: t.draw(_key(), law, a, window), "not the window's"),
+        (lambda: t.draw(derive(source, PL.DRAW_DOMAIN, {"receipt": receipt.digest()[:-1]}), law, a, window), "not the window's"),
+        (lambda: t.draw(window.key, law, unlisted, window), "not on the window's receipt"),
+        (lambda: t.draw(window.key, law, twin, window), "not on the window's receipt"),
+        (lambda: window.admit(a, other_shape), "not on the window's receipt"),
+    ]
+    for refused, match in refusals:
+        with pytest.raises(DomainError, match=match):
+            refused()
+    assert drawn == []
+    t.draw(window.key, law, a, window)
+    t.draw(window.key, law, b, window)
+    assert drawn == [a.call_index, b.call_index]
+    ca, cb = (c for _an, _s, c in receipt.calls)
+    assert A.Receipt(((b, t.shape, cb), (a, t.shape, ca))).digest() == receipt.digest()
+    for changed in (((a, t.shape, ca), (b, t.shape, hashlib.sha512(b"b'").digest())), ((a, t.shape, ca), (b, other_shape, cb))):
+        assert A.Receipt(changed).digest() != receipt.digest()
+    for bad in ((), ((a, t.shape, b"short"),)):
+        with pytest.raises(DomainError):
+            A.Receipt(bad)
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        receipt.calls = ()
+    with pytest.raises(TypeError):
+        A.Ledger.open([(a, t.shape, ca)])
+    with mock.patch.object(A, "_fresh_source", lambda: source):
+        assert A.Ledger.open(receipt).key == window.key
+
+
+def test_each_window_s_source_is_fresh():
+    """Root's C2: A4 models one fresh uniform source per derivation. `Ledger.open` takes no source: it draws 32 fresh bytes
+    from the operating system's CSPRNG (`secrets`) for each window, once the receipt is complete, so two windows, even
+    over one receipt, get independent keys, and no window's key is a function of another's."""
+    import inspect
+
+    import circuit_fixtures as F
+    from verity_pouw.circuit import anchors as A
+    from verity_pouw.circuit import traced_as
+
+    call = F.call(32, 64, 32)
+    t = traced_as("ncp-v2-shift24", 32, 64, 32)
+    receipt, _window_ = _window(t, [_anchors(call)])
+    assert list(inspect.signature(A.Ledger.open).parameters) == ["receipt"]
+    assert len(A._fresh_source()) == A.SOURCE_BYTES == 32
+    keys = {A.Ledger.open(receipt).key for _ in range(8)}
+    assert len(keys) == 8
 
 
 def test_the_call_s_y_is_linked_to_the_weight_program():
@@ -436,9 +529,8 @@ def test_the_call_s_y_is_linked_to_the_weight_program():
 
     call = F.call(32, 64, 32)
     t = traced_as("ncp-v2-shift24", 32, 64, 32)
-    from verity_pouw.circuit.anchors import Ledger
-
-    plan = t.draw(_key(), PL.WorkLaw(2), _anchors(call), Ledger())
+    _receipt, window = _window(t, [_anchors(call)])
+    plan = t.draw(window.key, PL.WorkLaw(2), _anchors(call), window)
     assert {cs for role, cs in plan.openings if role == "y"} == set(plan.proved_y) != set()
     weight_out = list(evaluate(ncp2.weight(call.shape), *call.weight_args()))
     args = call.args()
