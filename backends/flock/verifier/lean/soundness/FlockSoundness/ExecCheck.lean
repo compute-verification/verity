@@ -269,6 +269,7 @@ structure CheckFactsT (c : Circuit) (tb : TypedBlock) : Prop where
   hm_in : (portCols (c.nets.getD c.hmNet default).2.inGroups).map (·.2) = #[512, 1024, 8 * HmRow.SALT_BYTES]
   perVu_sha : c.perVu.getD c.shaNet 0 = (HmRow.rowSlots c.ports).1
   perVu_hm : c.perVu.getD c.hmNet 0 = nextPow2 c.ports.size
+  rows_after : tb.rangeLogs.size < c.shaNet ∧ tb.rangeLogs.size < c.hmNet
 
 theorem check_facts_typed {c : Circuit} {tags : Tags} {ls : Lean.Json} {tb : TypedBlock} (ht : c.typed = some tb)
     (h : HmRow.check c tags ls = .ok ()) : CheckFactsT c tb := by
@@ -360,6 +361,9 @@ theorem check_facts_typed {c : Circuit} {tags : Tags} {ls : Lean.Json} {tb : Typ
       simp only [bne_iff_ne, ne_eq, not_not] at hc
       exact ⟨⟨_, rfl⟩, hc⟩) hone
   unfold HmRow.checkTyped at h
+  ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp0 at h)
+  obtain ⟨hrows, h⟩ := ite_throw_ok' h
+  simp (config := { zeta := false }) only [jp0] at h
   ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) root nOut jp1 at h)
   obtain ⟨hpv1, h⟩ := ite_throw_ok' h
   simp (config := { zeta := false }) only [jp1] at h
@@ -398,6 +402,9 @@ theorem check_facts_typed {c : Circuit} {tags : Tags} {ls : Lean.Json} {tb : Typ
     sha_in := ⟨by rw [hports.1.1.1.1]; rfl, fun i hi => hports.1.1.1.2 i (by rw [hports.1.1.1.1]; exact hi)⟩
     hm_in := hports.1.2
     perVu_sha := hpv'.1
-    perVu_hm := hpv'.2 }
+    perVu_hm := hpv'.2
+    rows_after := by
+      simp only [Bool.or_eq_true, decide_eq_true_eq, not_or, not_le] at hrows
+      exact hrows }
 
 end FlockSoundness

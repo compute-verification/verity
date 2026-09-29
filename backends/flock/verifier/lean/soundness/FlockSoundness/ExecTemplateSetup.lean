@@ -401,13 +401,15 @@ template `t` that `templateOf` built from the class's derivation. -/
 theorem templateLayout_of {tags : Tags} {c : Circuit} (P : ParseFactsT tags t c) (C : CheckFactsT c (HmRow.blockOf t))
     (htm : Typed.templateOf name done ls unit ty held = .ok t)
     (hder : ∀ p ∈ (done.getD unit default).parts, (ls.getD p.1 default).own = .derive)
-    (hrows : t.layouts.size < c.shaNet ∧ t.layouts.size < c.hmNet) {st : Stmt} (hst : st.c = c)
+    {st : Stmt} (hst : st.c = c)
     (hpin : HmRow.pin c = .ok st.pin) (hda : st.da = (HmRow.delta c st.pin).1) (hdb : st.db = (HmRow.delta c st.pin).2)
     (hm : st.m = c.kLog + st.nbl) (hk : c.kLog ≤ 26) :
     TemplateLayout st (HmRow.blockOf t) done (done.getD unit default) := by
   subst hst
   obtain ⟨digests, -, hroot, hown, hinc, -, -, hbind, hcross, hparts, hmem, hsize, -⟩ := Typed.templateOf_spec htm
-  obtain ⟨hbown, -, -, hbin, hbbind, hbcross, hbsize, hbpart, -, -⟩ := HmRow.blockOf_spec t
+  obtain ⟨hbown, -, -, hbin, hbbind, hbcross, hbsize, hbpart, hbrl, -⟩ := HmRow.blockOf_spec t
+  have hrows : t.layouts.size < st.c.shaNet ∧ t.layouts.size < st.c.hmNet := by
+    have := C.rows_after; rw [hbrl] at this; exact this
   obtain ⟨more, hpre, -⟩ := P.pre
   have hnsz : st.c.nets.size = 1 + t.layouts.size + more.length := by
     rw [← Array.length_toList, hpre]; simp; omega
@@ -500,15 +502,12 @@ variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (Strin
   {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
 
 /-- **The accepted template statement's layout, from `Stmt.setupH`** (`tags.typed`, a template read). Its circuit carries
-the class `k` (`Circuit.cls`), and `TemplateLayout` holds for the class's unit. Two hypotheses remain:
-- `hder`, T3's scope: every part places a derived layout, with no table read;
-- `hrows`: the rows' circuits come after the root and the placed layouts' circuits, which `parse` finds by name
-  (asked of flock-verifier as a `checkTyped` check). -/
+the class `k` (`Circuit.cls`), and `TemplateLayout` holds for the class's unit. One hypothesis remains, T3's scope
+(`hder`): every part places a derived layout, with no table read. -/
 theorem setupH_templateLayout (ht : tags.typed = true)
     (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) {k : Typed.Class} {t : Typed.Template}
     (hr : Typed.read tags cf tables = .ok (k, .inr t))
-    (hder : ∀ p ∈ (k.done.getD k.unit default).parts, (k.ls.getD p.1 default).own = .derive)
-    (hrows : t.layouts.size < st.c.shaNet ∧ t.layouts.size < st.c.hmNet) :
+    (hder : ∀ p ∈ (k.done.getD k.unit default).parts, (k.ls.getD p.1 default).own = .derive) :
     st.c.cls = some k ∧ st.c.typed = some (HmRow.blockOf t) ∧
       TemplateLayout st (HmRow.blockOf t) k.done (k.done.getD k.unit default) := by
   obtain ⟨hp, hpin, hda, hdb, hm, hk⟩ := setupH_spec_typed ht h
@@ -529,23 +528,29 @@ theorem setupH_templateLayout (ht : tags.typed = true)
     have C' : CheckFactsT st.c (HmRow.blockOf t) := by
       rw [hc]
       exact ⟨C.bound_slotLog, C.disj, C.unit_lookup, C.count, C.one_range, C.root_perVu, C.rangeLogs, C.root_zero,
-        C.sha_in, C.hm_in, C.perVu_sha, C.perVu_hm⟩
-    exact templateLayout_of P' C' htm hder hrows rfl hpin hda hdb hm hk
+        C.sha_in, C.hm_in, C.perVu_sha, C.perVu_hm, C.rows_after⟩
+    exact templateLayout_of P' C' htm hder rfl hpin hda hdb hm hk
   · cases hrn
 
+/-- **The unit's shape, from `deriveChecked`**, for a unit that reads no table: its constant row and order (#404's
+`unit_const_row`, `order_cols`) and its inputs (`unit_inputs`). -/
+theorem unitShape_of_class (k : Typed.Class) (hreads : (k.done.getD k.unit default).reads = #[]) :
+    UnitShape k.done (k.done.getD k.unit default) :=
+  unitShape_of k.hd (unit_const_row k.hd) (order_cols k.hd) hreads
+
 /-- **1e's facts at every VU of an accepted template statement** (T3): for the class `k` its circuit carries, the block
-rows at `Typed.col c tb g c` are the unit's block row there, in the model of the accepted statement. -/
+rows at `Typed.col c tb g c` are the unit's block row there, in the model of the accepted statement. T3's scope: the
+parts place derived layouts (`hder`) and the unit reads no table (`hreads`). -/
 theorem setupH_blockFacts (ht : tags.typed = true)
     (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) {k : Typed.Class} {t : Typed.Template}
     (hr : Typed.read tags cf tables = .ok (k, .inr t))
     (hder : ∀ p ∈ (k.done.getD k.unit default).parts, (k.ls.getD p.1 default).own = .derive)
-    (hrows : t.layouts.size < st.c.shaNet ∧ t.layouts.size < st.c.hmNet)
-    (U : UnitShape k.done (k.done.getD k.unit default))
+    (hreads : (k.done.getD k.unit default).reads = #[])
     (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {g : ℕ} (hg : g < st.c.g) {one : ℕ}
     (hone : (k.done.getD k.unit default).rows.size ≤ one) :
-    BlockFacts ((setupH_templateLayout ht h hr hder hrows).2.2.model regs) (Typed.wordsIn k.held) k.done
+    BlockFacts ((setupH_templateLayout ht h hr hder).2.2.model regs) (Typed.wordsIn k.held) k.done
       (k.done.getD k.unit default) one (Typed.col st.c (HmRow.blockOf t) g) :=
-  (setupH_templateLayout ht h hr hder hrows).2.2.blockFacts k.hd (unit_lt k.hd) U regs hg hone
+  (setupH_templateLayout ht h hr hder).2.2.blockFacts k.hd (unit_lt k.hd) (unitShape_of_class k hreads) regs hg hone
 
 theorem count_flatMap_rows_pair {α : Type} (l : List α) (R S : α → ℕ) (y j : ℕ) :
     (l.flatMap fun e => [(R e, R e), (R e, S e)]).count (y, j) =
@@ -793,5 +798,23 @@ theorem input_copy (hd : deriveChecked types ls info words unit = .ok done) (T :
     exact ite_fin_val j hs
 
 end TemplateLayout
+
+/-- **The inputs of an accepted template statement copy their message bits** (a table class's `copy`): input `w` of VU
+`g` is a copy row of `Typed.copySrc st.c g w` in the model of the accepted statement, when that position is in the
+block. -/
+theorem setupH_inputCopy {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
+    {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt} (ht : tags.typed = true)
+    (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) {k : Typed.Class} {t : Typed.Template}
+    (hr : Typed.read tags cf tables = .ok (k, .inr t))
+    (hder : ∀ p ∈ (k.done.getD k.unit default).parts, (k.ls.getD p.1 default).own = .derive)
+    (hreads : (k.done.getD k.unit default).reads = #[])
+    (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {g w : ℕ} (hg : g < st.c.g)
+    (hw : w < (k.done.getD k.unit default).inCols.size) (hs : Typed.copySrc st.c g w < 2 ^ st.c.kLog) :
+    CopyRow ((setupH_templateLayout ht h hr hder).2.2.model regs)
+      ⟨Typed.col st.c (HmRow.blockOf t) g (k.done.getD k.unit default).inCols[w],
+        (setupH_templateLayout ht h hr hder).2.2.col_lt k.hd hg
+          (TemplateLayout.inCols_row k.hd (unit_lt k.hd) (unitShape_of_class k hreads) (Array.getElem_mem hw)).1⟩
+      ⟨Typed.copySrc st.c g w, hs⟩ :=
+  (setupH_templateLayout ht h hr hder).2.2.input_copy k.hd (unitShape_of_class k hreads) regs hg hw hs
 
 end FlockSoundness
