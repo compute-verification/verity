@@ -489,6 +489,85 @@ def test_verify_takes_a_stratified_draw_only_at_its_own_k(tmp_path):
     assert not why(at1, *flags, "--stratified", "1").startswith("setup: U2:")
 
 
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_closure_draw_proves_the_verifiers_closure(tmp_path):
+    """`draw --work K --work-table F --closure C`: the work draw, unchanged, widened by the verifier's closure map (each
+    drawn unit's closure, less the drawn units). U2 on the closure, U3 counting the drawn units and their closure, and
+    `verify` holding the closure to the verifier's own map."""
+    import random
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    ref = _stratified_agree()
+    table = _work_program(tmp_path)
+    flags = table("w.json", {"T0_v0": 3, "T1_v0": 1, "T2_v0": 0})
+    cmap = {0: [6], 1: [6, 7], 5: [8], 2: [9], 3: [9], 4: [7]}
+    (tmp_path / "cl.json").write_text(json.dumps({str(u): cs for u, cs in cmap.items()}))
+    (tmp_path / "cl2.json").write_text(json.dumps({}))
+    cl = ["--closure", str(tmp_path / "cl.json")]
+
+    def closure_of(units):
+        return sorted({c for u in units for c in cmap.get(u, [])} - set(units))
+
+    rng = random.Random(20260929)
+    for _ in range(10):
+        plain = _lean_draw_obj([*flags, "--work", "2"])
+        law = {k: plain[k] for k in ("law", "k", "strata")}
+        need = sum(2 * s["k"] * ref.width(sum(hi - lo for lo, hi in s["units"])) + 64 for s in law["strata"])
+        src = rng.randbytes(need)
+        (tmp_path / "s.bin").write_bytes(src)
+        d = _lean_draw_obj([*flags, "--work", "2", *cl, "--stream-file", str(tmp_path / "s.bin")])
+        assert d["units"] == ref.reference_draw(law, src)
+        assert d.get("closure", []) == closure_of(d["units"])
+    d = _lean_draw_obj([*flags, "--work", "2", *cl])
+    while not d.get("closure"):
+        d = _lean_draw_obj([*flags, "--work", "2", *cl])
+    n = len(d["units"]) + len(d["closure"])
+
+    def check(cases, *extra):
+        (tmp_path / "cases.json").write_text(json.dumps([{"record": x, "statement": x, "instances": i} for x, i in cases]))
+        p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "draw-test", str(tmp_path / "cases.json"), *extra],
+                           capture_output=True, text=True)
+        return [json.loads(line[10:]) for line in p.stdout.splitlines()]
+
+    # U3 counts the drawn units and their closure
+    got = check([(d, n), (d, len(d["units"]))])
+    assert [g["ok"] for g in got] == [True, False] and got[1]["why"].startswith("U3:"), got
+    c = d["closure"]
+    bad = [{**d, "closure": []}, {**d, "closure": c[::-1] if len(c) > 1 else c + [c[0]]},
+           {**d, "closure": sorted(c + [d["units"][0]])}, {**d, "closure": c + [10]}, {**d, "closure": ["7"]}]
+    assert [g["ok"] for g in check([(x, len(x["units"]) + len(x["closure"])) for x in bad])] == [False] * len(bad)
+    strat = _lean_draw_obj([*flags[:4], "--stratified", "2"])
+    assert not check([({**strat, "closure": [9]}, len(strat["units"]) + 1)])[0]["ok"]
+    # the verifier's own map: its closure is accepted, a smaller one refused, and a plain draw lacks its closure
+    smaller = {**d, "closure": c[:-1]} if len(c) > 1 else {k: v for k, v in d.items() if k != "closure"}
+    assert [g["ok"] for g in check([(d, n), (smaller, n - 1)], *flags, "--work", "2", *cl)] == [True, False]
+    (tmp_path / "circuit.txt").write_text("not a circuit\n")
+    (tmp_path / "pub.bin").write_bytes(b"{}\n")
+
+    def session(name, draw):
+        s = tmp_path / name
+        s.mkdir()
+        (s / "session.json").write_text(json.dumps({"kind": "flock-live-session/v1", "unit_draw": draw}))
+        for r in (0, 1):
+            (s / f"circuit.rep{r}.bin").write_bytes(b"\0" * 16)
+        return s
+
+    def why(s, *extra):
+        p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "verify", "--circuit", str(tmp_path / "circuit.txt"),
+                            "--public", str(tmp_path / "pub.bin"), *flags, "--work", "2", *extra, "--session", str(s)],
+                           capture_output=True, text=True)
+        (v,) = [json.loads(line[8:]) for line in p.stdout.splitlines() if line.startswith("VERDICT ")]
+        assert not v["accepted"] and p.returncode == 1
+        return v["why"]
+
+    widened = session("widened", d)
+    assert why(widened).startswith("setup: U3: a closure draw needs the verifier's own closure map (--closure)")
+    assert why(widened, "--closure", str(tmp_path / "cl2.json")).startswith("setup: U3: the draw's closure is not the verifier's own")
+    assert not why(widened, *cl).startswith(("setup: U2:", "setup: U3:"))
+    plain = session("plain", {k: v for k, v in d.items() if k != "closure"})
+    assert why(plain, *cl).startswith("setup: U3: the draw's closure is not the verifier's own")
+    assert not why(plain).startswith(("setup: U2:", "setup: U3:"))
+
+
 def _one_stage_draw():
     try:
         from verity_one_stage import draw
