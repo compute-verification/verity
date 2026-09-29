@@ -51,7 +51,7 @@ def accepted_bound_bits(content_bits: float, sync_bits: float, windows: int, jit
 
 def ingress_rate(allocation: int, bucket_ms: int = 100) -> float:
     """An ingress link's covert rate in bit/s, `log2(r_in + 1)/τ_in`. No clock pins ingress timing, because the outside
-    sender chooses when requests arrive. The 100 ms default is decision D's."""
+    sender chooses when requests arrive. τ_in is 100 ms (decision D, decided); other values are for comparison."""
     return math.log2(allocation + 1) / (bucket_ms / 1000)
 
 

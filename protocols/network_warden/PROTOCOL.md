@@ -95,8 +95,9 @@ docstring) and sizes:
 - **The egress allocation r:** the least r at or above twice the p99.9 of per-bucket demand whose FIFO replay has no
   overflow and a p99 queueing delay of at most one bucket. Both improve monotonically in r, so the search doubles and
   then bisects.
-- **The ingress grid:** the smallest r_in that carries honest ingress, at τ_in. τ_in is decision D, 100 ms by default,
-  and a parameter. With arrival times (`arrival_ms`), τ_in may be finer than the trace bucket, and the report adds the
+- **The ingress grid:** the smallest r_in that carries honest ingress, at τ_in. τ_in is **100 ms** (decision D,
+  decided 29 Sep, with the timing-channel doc's §3.6 calibration as evidence). The grid stays configurable, so
+  `--ingress-bucket-ms` still compares alternatives. With arrival times (`arrival_ms`), τ_in may be finer than the trace bucket, and the report adds the
   delivery delay: a frame waits for the next ingress bucket boundary, then for its FIFO slot. The p99 FIFO delay is at
   most one ingress bucket by default; `--ingress-max-delay-ms` sets the budget in ms instead, so different τ_in are
   compared at the same latency.

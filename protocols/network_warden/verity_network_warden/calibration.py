@@ -6,7 +6,8 @@ From honest runs on the target hardware it picks, per boundary link:
 - the ingress grid.
 
 It reports the honest miss rate, the costs and the capacity. The protocol fixes τ_b, the frame size and the security
-target; the ingress bucket (decision D, 100 ms by default) is a parameter.
+target. The ingress bucket τ_in is 100 ms (decision D, decided); the grid stays configurable, so other buckets can be
+compared.
 
 The trace is JSON, with one entry per configuration:
 
@@ -233,7 +234,7 @@ def size_allocation(hands: Sequence[int], queue_capacity: int, headroom: float =
 def size_ingress(arrivals: Sequence[int], trace_bucket_ms: int, ingress_bucket_ms: int = 100,
                  queue_capacity: int = 1 << 16, max_delay: int = 1) -> dict:
     """The smallest ingress allocation r_in that carries honest ingress without overflow, with a p99 delay of at most
-    `max_delay` ingress buckets. The ingress bucket τ_in is decision D, 100 ms by default."""
+    `max_delay` ingress buckets. The ingress bucket τ_in is 100 ms (decision D)."""
     if ingress_bucket_ms % trace_bucket_ms:
         raise ValueError("the ingress bucket must be a multiple of the trace bucket")
     k = ingress_bucket_ms // trace_bucket_ms
@@ -372,7 +373,7 @@ def calibrate(trace: dict, *, ingress_bucket_ms: int = 100, n_delta: int = 16, n
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="network-warden-calibrate", description=__doc__.splitlines()[0])
     ap.add_argument("trace", help="honest timing trace (JSON)")
-    ap.add_argument("--ingress-bucket-ms", type=int, default=100, help="the ingress bucket τ_in (decision D)")
+    ap.add_argument("--ingress-bucket-ms", type=int, default=100, help="the ingress bucket τ_in: 100 ms (decision D); other values compare alternatives")
     ap.add_argument("--deltas", type=int, default=16, help="offsets in Σ_sync")
     ap.add_argument("--rhos", type=int, default=8, help="rates in Σ_sync")
     ap.add_argument("--headroom", type=float, default=2.0)
