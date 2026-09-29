@@ -159,3 +159,101 @@ def test_delivered_words_fail_the_width_rule():
     c, uc = _check(h1t.Shape(16, 96, 16))
     w = P.circuit_width_rule(c, served=len(uc.graph.outputs), uc=uc)
     assert not w.ok and {uc.units[u].role for u, _, _ in w.too_wide} == set(P.H1T_POUW_ROLES)
+
+
+# ---- the verifier's inputs, layout and window -------------------------------------------------------------------------
+
+def _anchors(c: R.Call):
+    from verity_pouw.circuit.anchors import H1tAnchors
+
+    return H1tAnchors(c.salt, c.forward, c.layer, c.site, c.weight, tuple(c.rowids), tuple(range(c.shape.n)))
+
+
+def test_the_verifier_builds_every_anchored_input():
+    """From its anchors, the verifier's inputs are exactly the reference call's: the strip ids are its rows' // 16, and the
+    tag tuples its columns'."""
+    from verity_pouw.circuit import traced_h1t
+
+    c = call(32, 96, 32)
+    t = traced_h1t(32, 96, 32)
+    assert t.definition is h1t.linear(c.shape) and t.served == 32 * 32
+    assert t.call_args(_anchors(c), *c.args()[:5]) == c.args()
+
+
+def test_a_prover_s_anchored_inputs_are_refused():
+    """Repeated strip or row ids (X-SPW-2's duplicate), another column's tags, another call index or weight id: each is
+    refused, as are anchors whose rows are not aligned strips or whose columns the tags don't tell apart."""
+    from verity_pouw.circuit.anchors import H1tAnchors
+
+    c = call(32, 96, 16)
+    an, fn = _anchors(c), h1t.linear(c.shape)
+    an.check_call(fn, c.args())
+    names = [p for p, _t in fn.signature()[0]]
+    moved = {"stripids": [9, 9], "rowids": list(range(16)) * 2, "tags": [x for j in range(1, 17) for x in h1t.tag_tuple(j)],
+             "forward": [4, 0], "weight": [12, 0]}
+    for name, value in moved.items():
+        args = list(c.args())
+        assert args[names.index(name)] != value
+        args[names.index(name)] = value
+        with pytest.raises(DomainError):
+            an.check_call(fn, args)
+    with pytest.raises(DomainError):
+        H1tAnchors(c.salt, 3, 5, 2, 11, tuple(range(8, 40)), tuple(range(16))).check(c.shape)
+    with pytest.raises(DomainError):
+        H1tAnchors(c.salt, 3, 5, 2, 11, tuple(c.rowids), (h1t.TAG_COLUMNS, *range(15))).check(c.shape)
+
+
+def test_the_verifier_refuses_shapes_outside_the_granted_scope():
+    """`TTH1T` is granted for layout A at 16 × 16 tiles with k <= 32,768; the verifier builds no Program outside it."""
+    from verity_pouw.circuit import traced_h1t
+
+    for shape in ((24, 96, 16), (16, 96, 24), (16, 32_776, 16), (16, 29, 16)):
+        with pytest.raises(DomainError):
+            traced_h1t(*shape)
+
+
+def test_calls_on_one_weight_compose_without_recompute():
+    """Two calls on one weight in one root (`H1tWindow`), each with its own anchored indices: no value is computed in two
+    units, since every key gate reads its strip id and every tile gate its call's X strip."""
+    uc = P.circuit_cut(P.h1t_window_circuit(h1t.Shape(16, 96, 16), 2))
+    assert uc.verdict.ok, uc.verdict.codes
+    assert Counter(u.role for u in uc.units) == {"key": 2, "form_x": 2, "tile": 2, "dequant": 512}
+
+
+def test_the_layout_is_the_verifier_s():
+    """Each tile's closure is the tile, its X strip's forming unit and that strip's key (t ∈ cl t). `WorkLaw()` draws it,
+    opening the rows its units read, B′'s included. A prover's layout mapping a tile to its X strip (C1) is refused, by
+    the verifier's comparison and by `draw`."""
+    from dataclasses import replace
+
+    from verity.randomness import derive
+    from verity_pouw.circuit import plan as PL
+    from verity_pouw.circuit import traced_h1t
+
+    t = traced_h1t(32, 96, 32)
+    lay = t.layout()
+    us = lay.units
+    for tile, cl in lay.closure.items():
+        assert [us[u].role for u in cl] == ["tile", "form_x", "key"] and us[cl[1]].where[0] == us[tile].where[0]
+    key = derive(b"verifier-secret", PL.DRAW_DOMAIN, {"receipt": b"r"})
+    plan = PL.draw(key, lay, PL.WorkLaw())
+    assert set(lay.closure) <= set(plan.drawn) <= set(plan.proved)
+    assert set(plan.openings) == {("a", i) for i in range(32)} | {("b", j) for j in range(32)}
+    t.check_layout(lay)
+    tile = min(lay.closure)
+    xs = lay.closure[tile][1]
+    headed_by_x = replace(lay, closure={**lay.closure, tile: (xs, *(u for u in lay.closure[tile] if u not in (tile, xs)))})
+    strata = tuple(replace(s, units=tuple(xs if u == tile else u for u in s.units)) if s.role == "tile" else s
+                   for s in lay.strata)
+    x_as_tile = replace(lay, strata=strata, closure={(xs if u == tile else u): c for u, c in lay.closure.items()})
+    for bad in (headed_by_x, x_as_tile):
+        with pytest.raises(DomainError):
+            t.check_layout(bad)
+        with pytest.raises(DomainError):
+            PL.draw(key, bad, PL.WorkLaw())
+
+
+def test_the_width_rule_refuses_an_empty_served_set():
+    c, uc = _check(h1t.Shape(16, 96, 16))
+    with pytest.raises(ValueError):
+        P.circuit_width_rule(c, served=0, uc=uc)
