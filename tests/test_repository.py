@@ -160,16 +160,22 @@ def test_markdown_size_caps() -> None:
 UNSUITED_TEST_DIRS = ("backends/direct/", "backends/gkr/", "backends/shared/")
 
 
-def test_every_test_file_is_in_a_suite() -> None:
-    """`tools/check/suites.py` runs suites, so a test file outside every suite's testpaths would never run. A suite is a
-    directory whose pyproject.toml configures pytest; give a new package one, or put the test in the package it tests."""
-    tracked = _tracked()
+def _testpaths(tracked: list[str]) -> list[str]:
+    """Every suite's testpaths, relative to the root: a suite is a directory whose pyproject.toml configures pytest."""
     testpaths = []
     for p in tracked:
         if os.path.basename(p) == "pyproject.toml":
             ini = tomllib.loads((ROOT / p).read_text()).get("tool", {}).get("pytest", {}).get("ini_options")
             if ini is not None:
                 testpaths += [os.path.normpath(os.path.join(os.path.dirname(p), t)) for t in ini.get("testpaths", ["."])]
+    return testpaths
+
+
+def test_every_test_file_is_in_a_suite() -> None:
+    """`tools/check/suites.py` runs suites, so a test file outside every suite's testpaths would never run. A suite is a
+    directory whose pyproject.toml configures pytest; give a new package one, or put the test in the package it tests."""
+    tracked = _tracked()
+    testpaths = _testpaths(tracked)
     tests = [p for p in tracked if p.endswith(".py") and (os.path.basename(p).startswith("test_") or p.endswith("_test.py"))]
     offenders = [p for p in tests if not any(t == "." or p.startswith(t + "/") for t in testpaths) and not p.startswith(UNSUITED_TEST_DIRS)]
     assert not offenders, "test files that no suite runs:\n" + "\n".join(offenders)

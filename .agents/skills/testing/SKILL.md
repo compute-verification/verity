@@ -77,7 +77,10 @@ a `sys.path` entry another test file added: every suite runs alone.
 
 ## Write tests that mean something
 
-- **Deterministic:** seeded randomness, no wall-clock or ordering dependence, no network unless an opt-in variable asks.
+- **Deterministic:** seeded randomness, no ordering dependence, no network unless an opt-in variable asks, and no wall-clock
+  time: `tests/test_no_wall_clock.py` rejects sleeps, clock readings, timeouts and sleeping workloads in every suite. Wait on
+  the event instead (a child's exit, a line of its output, a FIFO the test holds open: `tools/research/tests/waits.py`), and
+  inject the clock or timer that the code under test measures time with (`monkeypatch.setattr(mod, "clock", ...)`).
 - **Isolated:** write only under `tmp_path`; change the environment, `sys.path` or a module only through `monkeypatch`. The
   runner fails a run in which the tests changed a file of the repository, and names the files.
 - **Exact:** for bit-exact code, compare words, digests and pinned vectors, not approximations. A negative checks that the
