@@ -235,6 +235,8 @@ def test_the_layout_is_the_verifier_s():
     us = lay.units
     for tile, cl in lay.closure.items():
         assert [us[u].role for u in cl] == ["tile", "form_x", "key"] and us[cl[1]].where[0] == us[tile].where[0]
+    assert [s.name for s in lay.strata] == list(dict.fromkeys(u.template for u in us))       # one per template (X-SPC-84)
+    assert PL.work_table(lay) == {s.name: {"work": lay.tile_work() if s.role == "tile" else 0, "floor": 1} for s in lay.strata}
     key = derive(b"verifier-secret", PL.DRAW_DOMAIN, {"receipt": b"r"})
     plan = PL.draw(key, lay, PL.WorkLaw())
     assert set(lay.closure) <= set(plan.drawn) <= set(plan.proved)

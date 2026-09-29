@@ -171,12 +171,43 @@ def stratified (strata : Array Stratum) (streams : Array ByteArray) : Option (Ar
     out := out ++ local_.map s.unit
   return out.qsort (· < ·)
 
-/-- A draw: its law, the population `[0, population)`, and the drawn units, ascending. -/
+/-- A draw: its law, the population `[0, population)`, the drawn units, ascending, and for a closure draw the units
+proved with them, their closure beyond the drawn units, ascending. -/
 structure UnitDraw where
   law : Law
   population : Nat
   units : Array Nat
+  closure : Array Nat := #[]
   deriving Inhabited
+
+/-- The units a draw proves: the drawn units and their closure, ascending. -/
+def UnitDraw.proved (d : UnitDraw) : Array Nat :=
+  if d.closure.isEmpty then d.units else (d.units ++ d.closure).qsort (· < ·)
+
+/-- A closure map: a JSON object from a unit's index to the units its credit depends on (for a tile, the strips it reads
+and its path's nodes), the verifier's own, from its program. -/
+def closureMapOfJson (j : Json) : Except String (Std.HashMap Nat (Array Nat)) := do
+  let .ok kvs := j.getObj? | throw "a closure map is an object from unit index to the units its credit depends on"
+  kvs.toArray.foldlM (init := {}) fun m (key, v) => do
+    let some u := key.toNat? | throw s!"closure map: '{key}' is not a unit index"
+    let .arr cs := v | throw s!"closure map: unit {u}: not a list of units"
+    let cs ← cs.mapM fun c => match c.getNat? with
+      | .ok x => pure x
+      | .error _ => throw s!"closure map: unit {u}: not a list of units"
+    return m.insert u cs
+
+/-- A draw's closure under the closure map `cm`: every unit in a drawn unit's closure that is not itself drawn,
+ascending. -/
+def closureOf (cm : Std.HashMap Nat (Array Nat)) (units : Array Nat) : Array Nat := Id.run do
+  let drawn : Std.HashMap Nat Unit := units.foldl (fun m u => m.insert u ()) {}
+  let mut seen : Std.HashMap Nat Unit := {}
+  let mut out := #[]
+  for u in units do
+    for c in cm.getD u #[] do
+      if !drawn.contains c && !seen.contains c then
+        seen := seen.insert c ()
+        out := out.push c
+  return out.qsort (· < ·)
 
 def Stratum.toJson (s : Stratum) : Json :=
   Json.mkObj [("template", Json.str s.template),
@@ -202,8 +233,9 @@ def UnitDraw.toJson (d : UnitDraw) : Json :=
       ("p", Json.str s!"{a}/{b}"), ("units", u)]
   | .stratified k strata => Json.mkObj [("law", "stratified"), ("population", Lean.toJson d.population),
       ("k", Lean.toJson k), ("strata", Json.arr (strata.map (·.toJson))), ("units", u)]
-  | .work k strata => Json.mkObj [("law", "work"), ("population", Lean.toJson d.population),
-      ("k", Lean.toJson k), ("strata", Json.arr (strata.map (·.toJson))), ("units", u)]
+  | .work k strata => Json.mkObj ([("law", Json.str "work"), ("population", Lean.toJson d.population),
+      ("k", Lean.toJson k), ("strata", Json.arr (strata.map (·.toJson))), ("units", u)] ++
+      if d.closure.isEmpty then [] else [("closure", Json.arr (d.closure.map fun x => Lean.toJson x))])
 
 /-- A stratum object: exactly `{template, units, k}`, its units non-empty `[lo, hi)` ranges, ascending, disjoint and not
 adjacent (`draw.strata_problem`). -/
@@ -279,7 +311,8 @@ private def ratio (s : String) : V (Nat × Nat) :=
     | _, _ => throw "U2: unit_draw.p is not num/den"
   | _ => throw "U2: unit_draw.p is not num/den"
 
-/-- U2: a well-formed draw. Its keys are exactly the law's; `subset` draws exactly `k ≤ population` units; `bernoulli`
+/-- U2: a well-formed draw. Its keys are exactly the law's, and a work draw's closure (when it has one) is non-empty,
+ascending, distinct units of the population, none of them drawn; `subset` draws exactly `k ≤ population` units; `bernoulli`
 has `0 ≤ p ≤ 1`, no unit when `p = 0` and every unit when `p = 1`; `stratified`'s strata are well formed and tile the
 population (`strataProblem`), and exactly `k_s` of its units fall in each, and likewise `work`'s (`workProblem`); units
 are ascending, distinct and in the population. -/
@@ -302,13 +335,22 @@ def UnitDraw.ofJson (j : Json) : V UnitDraw := do
       let .ok (.arr ss) := j.getObjVal? "strata" | throw "U2: unit_draw.strata is not a list"
       pure (Law.stratified (← J.nat j "k" ctx) (← ss.mapM stratumOfJson))
     | "work" =>
-      if kvs.toArray.size != 5 || !(j.getObjVal? "k").isOk || !(j.getObjVal? "strata").isOk then
-        throw "U2: unit_draw's keys are not law, population, k, strata, units"
+      if kvs.toArray.size != (if (j.getObjVal? "closure").isOk then 6 else 5) || !(j.getObjVal? "k").isOk
+          || !(j.getObjVal? "strata").isOk then
+        throw "U2: unit_draw's keys are not law, population, k, strata, units and a closure draw's closure"
       let .ok (.arr ss) := j.getObjVal? "strata" | throw "U2: unit_draw.strata is not a list"
       pure (Law.work (← J.nat j "k" ctx) (← ss.mapM workStratumOfJson))
     | l => throw s!"U2: unit_draw.law {l} is neither subset, bernoulli, stratified nor work"
   if !(List.range units.size).all (fun i => units[i]! < population && (i == 0 || units[i - 1]! < units[i]!)) then
     throw "U2: the drawn units are not ascending, distinct units of the population"
+  let closure ← match j.getObjVal? "closure" with
+    | .error _ => pure #[]
+    | .ok c => do
+      let cs ← (← J.asArr c "U2: unit_draw.closure").mapM (J.asNat · "U2: a unit of the closure")
+      if cs.isEmpty || !(List.range cs.size).all (fun i => cs[i]! < population && (i == 0 || cs[i - 1]! < cs[i]!)) then
+        throw "U2: the closure is not non-empty, ascending, distinct units of the population"
+      if cs.any units.contains then throw "U2: the closure holds a drawn unit"
+      pure cs
   match law with
   | .subset k => if k > population || units.size != k then throw "U2: a subset draw of the wrong size"
   | .stratified k strata =>
@@ -325,7 +367,7 @@ def UnitDraw.ofJson (j : Json) : V UnitDraw := do
     if b == 0 || a > b then throw "U2: unit_draw.p is not a probability"
     if a == 0 && units.size != 0 then throw "U2: a p = 0 draw with units"
     if a == b && units.size != population then throw "U2: a p = 1 draw without every unit"
-  return { law, population, units }
+  return { law, population, units, closure }
 
 /-- U1–U3: the record's `unit_draw` against the statement's (the public header's, under Σ) and its `instances`. -/
 def check (record statement : Option Json) (instances : Nat) : V Unit := do
@@ -336,7 +378,7 @@ def check (record statement : Option Json) (instances : Nat) : V Unit := do
   | some r, some s =>
     if (← canon r) != (← canon s) then throw "U1: the record's unit draw is not the statement's"
     let d ← UnitDraw.ofJson s
-    if d.units.size != instances then throw "U3: the statement's instances are not the drawn units"
+    if d.proved.size != instances then throw "U3: the statement's instances are not the drawn units and their closure"
 
 /-- A sampler run on the verifier's operating-system randomness: a stream of `need` bytes, extended by `need` more and the
 same sampler rerun on it whenever it runs out, so the draw stays exact. -/

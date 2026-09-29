@@ -107,11 +107,13 @@ def buildStmt (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins) (t
   else do Stmt.setup tags (Blake3Row.leaf (← Comp.load Blake3Row.spec compB)) circuitB pubB coins tables
 
 /-- `buildStmt` for a session of `count` tables (`Stmt.setupTables`): the session and each table's statement. `work` is the
-verifier's own `K` and work table, which a work draw's law is held to, and `stratified` its own `K` for a stratified draw. -/
+verifier's own `K` and work table, which a work draw's law is held to, `stratified` its own `K` for a stratified draw,
+and `closure` its closure map. -/
 def buildSession (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins) (tables : List (String × ByteArray))
     (count : Nat) (draw : Option Lean.Json := none) (partition : Option Lean.Json := none) (program : Option ByteArray := none)
-    (work : Option (Nat × Array (String × Nat × Nat)) := none) (stratified : Option Nat := none) : V (SessionSpec × Array Stmt) :=
-  if tags.hm96Rows then Stmt.setupTables tags circuitB pubB coins count tables draw partition program work stratified
+    (work : Option (Nat × Array (String × Nat × Nat)) := none) (stratified : Option Nat := none)
+    (closure : Option (Std.HashMap Nat (Array Nat)) := none) : V (SessionSpec × Array Stmt) :=
+  if tags.hm96Rows then Stmt.setupTables tags circuitB pubB coins count tables draw partition program work stratified closure
   else if count > 1 then throw s!"{tags.name}: one table per session"
   else do
     let st ← buildStmt tags circuitB pubB compB coins tables draw partition program
@@ -154,6 +156,21 @@ def workTableInput (args : List String) : IO (Except String (Option (Array (Stri
     | some t => match Lean.Json.parse t with
       | .ok j => return (Draw.workTableOfJson j).map some
       | .error e => return .error s!"work table: not JSON: {e}"
+
+/-- `--closure F`: the verifier's own closure map (`Draw.closureMapOfJson`: a unit's index ↦ the units its credit depends
+on), a path, or with `--archive` its SHA-512. -/
+def closureInput (args : List String) : IO (Except String (Option (Std.HashMap Nat (Array Nat)))) := do
+  let some f := argOf args "--closure" | return .ok none
+  let bytes ← match argOf args "--archive" with
+    | none => (try pure (Except.ok (← IO.FS.readBinFile f)) catch e => pure (Except.error s!"closure map: {e}"))
+    | some dir => archiveGet dir f
+  match bytes with
+  | .error e => return .error e
+  | .ok b => match String.fromUTF8? b with
+    | none => return .error "closure map: not UTF-8"
+    | some t => match Lean.Json.parse t with
+      | .ok j => return (Draw.closureMapOfJson j).map some
+      | .error e => return .error s!"closure map: not JSON: {e}"
 
 /-- A record's `unit_draw`, when it is a draw (not absent, not null). -/
 def recordDraw (record : String) : Option Lean.Json :=
@@ -204,11 +221,12 @@ def coinTreeCmd (path : String) : IO UInt32 := do
 /-- `verify --statement ID --circuit F --comp F --public F [--coins seed|os] [--session-tables J] --session DIR...`: `ID`
 names the statement's tags (`verity/flock-circuit` by default, or `verity/flock-netlist/v1`); `--comp` is the row leaf's
 pinned compression circuit; `J` (default 1) is the tables of every session (§16.12). A session with a work draw needs the
-verifier's own `--work K`, `--work-table`, `--program` and `--partition`, and one with a stratified draw its own
-`--stratified K`, `--program` and `--partition`. Each DIR holds `session.json` and `<table>.rep<r>.bin` for each table and rep. The statement is set up
-once; one verdict line per session, in order. Exit 0 iff every session is accepted. -/
+verifier's own `--work K`, `--work-table`, `--program` and `--partition`, one with a stratified draw its own
+`--stratified K`, `--program` and `--partition`, and a closure draw its own `--closure F`. Each DIR holds `session.json`
+and `<table>.rep<r>.bin` for each table and rep. The statement is set up once; one verdict line per session, in order.
+Exit 0 iff every session is accepted. -/
 def verifyCmd (args : List String) : IO UInt32 := do
-  let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--coins seed|os] [--session-tables J] --session DIR..."
+  let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--coins seed|os] [--session-tables J] --session DIR..."
   let (some _, some _) := (argOf args "--circuit", argOf args "--public") | IO.eprintln usage; return 2
   let some tags := Tags.find? ((argOf args "--statement").getD Tags.circuit.name)
     | IO.eprintln s!"unknown statement; known: {Tags.all.map (·.name)}"; return 2
@@ -234,6 +252,9 @@ def verifyCmd (args : List String) : IO UInt32 := do
     | some k => match k.toNat? with
       | some k => pure (some k)
       | none => IO.eprintln "verify: --work K: K is a natural number"; return 2
+  let closure ← match ← closureInput args with
+    | .ok c => pure c
+    | .error e => IO.eprintln e; return 2
   let work := match ownK, table with
     | some k, some t => some (k, t)
     | _, _ => none
@@ -243,7 +264,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
       | some k => pure (some k)
       | none => IO.eprintln "verify: --stratified K: K is a natural number"; return 2
   let setupOf := fun (draw : Option Lean.Json) =>
-    match buildSession tags circuitB pubB compB coins tables count draw partition program work stratified with
+    match buildSession tags circuitB pubB compB coins tables count draw partition program work stratified closure with
     | .ok (spec, sts) => Except.ok (spec, sts.map Setup.ofCircuit, (sts[0]?.map (·.partition)).getD Lean.Json.null)
     | .error e => Except.error s!"setup: {e}"
   IO.eprintln s!"inputs: {(← IO.monoMsNow) - t0} ms"
@@ -503,10 +524,11 @@ def ownLaw (args : List String) : IO (Except String (Option (Draw.Law × Nat))) 
   | _, none => stratifiedInput args
 
 /-- `draw (--population N (--k K | --p NUM/DEN) | --program P --partition Q (--stratified K | --work K --work-table F))
-[--stream HEX | --stream-file F]`: the unit draw (§7.3), from the operating system's randomness (a stratified or work draw:
+[--closure F] [--stream HEX | --stream-file F]`: the unit draw (§7.3), from the operating system's randomness (a stratified or work draw:
 one stream per stratum), or from the given bytes (a test; a stratified or work draw's streams are its consecutive segments).
 The strata are the verifier's own, derived from its program and partition object, and a work law's works and floors are its
-own work table's. Prints `DRAW {…}`, the object the verifier sends in the clear. -/
+own work table's; with `--closure F`, a work draw is widened by the verifier's closure map. Prints `DRAW {…}`, the object
+the verifier sends in the clear. -/
 def drawCmd (args : List String) : IO UInt32 := do
   let (law, pop) ← match ← ownLaw args with
     | .error e => IO.eprintln s!"draw: {e}"; return 2
@@ -536,10 +558,15 @@ def drawCmd (args : List String) : IO UInt32 := do
       match Draw.drawOn law pop src with
       | some d => pure d
       | none => IO.eprintln "draw: the stream ran out"; return 1
+  let d ← match ← closureInput args, d.law with
+    | .error e, _ => IO.eprintln s!"draw: {e}"; return 2
+    | .ok none, _ => pure d
+    | .ok (some cm), .work .. => pure { d with closure := Draw.closureOf cm d.units }
+    | .ok (some _), _ => IO.eprintln "draw: --closure widens a work draw only"; return 2
   IO.println s!"DRAW {d.toJson.compress}"
   return 0
 
-/-- `draw-test FILE [--program P --partition Q (--stratified K | --work K --work-table F)]`: U1–U3 (§7.3) on each case
+/-- `draw-test FILE [--program P --partition Q (--stratified K | --work K --work-table F)] [--closure F]`: U1–U3 (§7.3) on each case
 `{"record", "statement", "instances"}` (a draw or null each), one `DRAWCHECK {"ok", "why"}` line per case. With a law's
 flags, the statement's draw is also held to the verifier's own law and population (`draw.check_draw`'s `law` and
 `population`). -/
@@ -547,6 +574,9 @@ def drawTest (path : String) (args : List String) : IO UInt32 := do
   let .ok (.arr cases) := Lean.Json.parse (← IO.FS.readFile path) | IO.eprintln "draw-test: not a JSON list"; return 2
   let own ← match ← ownLaw args with
     | .ok o => pure o
+    | .error e => IO.eprintln s!"draw-test: {e}"; return 2
+  let closure ← match ← closureInput args with
+    | .ok c => pure c
     | .error e => IO.eprintln s!"draw-test: {e}"; return 2
   for c in cases do
     let side := fun (k : String) => match c.getObjVal? k with
@@ -560,6 +590,9 @@ def drawTest (path : String) (args : List String) : IO UInt32 := do
         let d ← Draw.UnitDraw.ofJson s
         if d.population != pop then throw s!"U2: the draw's population {d.population} is not the verifier's {pop}"
         if d.law != law then throw "U2: the draw's law is not the verifier's own (its program and query)"
+      if let (some cm, some s) := (closure, side "statement") then
+        let d ← Draw.UnitDraw.ofJson s
+        if d.closure != Draw.closureOf cm d.units then throw "U3: the draw's closure is not the verifier's own (its closure map)"
     let (ok, why) := match r with
       | .ok () => (true, "")
       | .error e => (false, e)
