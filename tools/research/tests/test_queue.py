@@ -254,3 +254,15 @@ def test_rules_refuse_what_they_cannot_place():
                 '[[grant]]\nrole = "review"\npaths = ["x/"]\nwhen = "always"\n'):
         with pytest.raises(QueueError):
             Rules.parse(bad)
+
+
+def test_until_the_move_the_rules_are_read_from_tools_check(world):
+    moved = world.change({"tools/check/queue.toml": RULES.replace('paths = ["integrations/vllm/"]', 'paths = ["integrations/vllm/", "!README.md"]')})
+    _git(world.dev, "rm", "-q", "ci/queue.toml")
+    _git(world.dev, "commit", "-q", "-m", "rules where they are before the move")
+    _git(world.dev, "push", "-q", "origin", "HEAD:refs/heads/main")
+    assert moved
+    world.gh.put(1, world.change({"integrations/vllm/x.py": "x = 1\n", "integrations/vllm/README.md": "r\n"}))
+    world.gh.put(2, world.change({"integrations/vllm/README.md": "docs only\n"}))
+    _, entries = world.queue().sync()
+    assert entries[1].why.startswith("waiting for the vllm-coordinator grant") and entries[2].state == "queued"
