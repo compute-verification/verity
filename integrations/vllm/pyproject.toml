@@ -7,6 +7,7 @@ dependencies = [
     "research",
     "verity",
     "verity-sampled-proofs",
+    "verity-pous",
     "verity-pouw",
     "numpy>=1.26",
 ]
@@ -31,6 +32,7 @@ packages = [
 research = { workspace = true }
 verity = { workspace = true }
 verity-sampled-proofs = { workspace = true }
+verity-pous = { workspace = true }
 verity-pouw = { workspace = true }
 
 [tool.pytest.ini_options]

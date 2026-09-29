@@ -59,7 +59,7 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
 - `protocols/`: one distribution per protocol, and each imports only the
  stdlib, `verity` and itself (`protocols/tests/test_protocol_boundaries.py`).
  The first is `protocols/sampled_proofs` (`verity_sampled_proofs`): the
- two-stage law, its beacon-keyed draws, and verification plans. See its
+ two-stage law, its draws from the verifier's own randomness, and verification plans. See its
  `PROTOCOL.md`. `protocols/one_stage` (`verity_one_stage`) is the one-stage
  audit: registration, the verifier's draw over a partition's proof units, and the
  audit record with its profile; `benchmarks/one_stage` runs it end to end with
@@ -70,7 +70,8 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
  pinned statements, proofs and a submission grader). `protocols/pouw` (`verity_pouw`)
  is proof of useful work: the `PoUWScheme` interface (`protocol`), its lifecycle
  (`audit`) and the named schemes (`schemes.get`: NCP, Pearl's FP8 scheme), each with
- pinned vectors; see its `PROTOCOL.md`. Applications (vLLM) compose protocols.
+ pinned vectors, and `circuit`, `ncp-v2` as a Program that sampled proofs verifies; see
+ its `PROTOCOL.md`. Applications (vLLM) compose protocols.
 - `census/`: data only, meant to move to its own repository: `hardware.json`, `datatypes.json`, `networks.json`,
  `subcircuits.json`, `input_sets.json`, `workloads.json` (stable ids, sources), a JSON Schema for each under `schemas/`,
  and a README with the id scheme and sourcing rules. Nothing imports it; the renderer and benchmarks
@@ -134,6 +135,8 @@ of the merged tree. A change under `backends/flock/` also needs `check`'s agreem
 (`lean-agreement`, on the build pinned in `backends/flock/verifier/upstream.json`; not for a `README.md` or `PROTOCOL.md`
 alone, and skipped by name elsewhere): record it with
 `uv run python tools/check/check.py --record --on POD`, which sends that build when the commit touches `backends/flock/`.
+`check` reuses a pass (a test suite, a circuit-check target, a Lean package's audit) only while every input it read is
+unchanged, and keeps each pod's Lean dependencies warm under their manifest and toolchain.
 
 ## Lean
 
@@ -174,6 +177,11 @@ reason to add approval steps.
 Make ordinary reversible engineering decisions independently. Surface changes
 to agreed semantics, acceptance criteria, material spending, or destructive
 behavior.
+
+A guard never fails open, and an agent VM can be suspended at any moment, so
+nothing that bounds spend or preserves results may depend on one: pods bound
+themselves (`research pods create --max-hours`, under a line of the notes repo's
+`budgets.toml`), and runs preserve their results from the pod.
 
 Architectural rationale and human-facing reports belong in Notion;
 experimental evidence belongs in artifact storage. Temporary working notes
