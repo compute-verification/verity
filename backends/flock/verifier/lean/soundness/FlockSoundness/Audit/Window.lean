@@ -13,7 +13,9 @@ Two modelling lines sit outside the statements:
   compose from the calls' is not stated here.
 
 `audit_window_of_le` takes any law whose escapes are at most the product law's, such as an executable draw proved against
-it, so the ideal law here need not be the one run.
+it, so the ideal law here need not be the one run. `audit_window_of_le_slack` allows those escapes an additive `η`, which
+a keyed draw's pseudorandomness assumption supplies, and adds `η` to the bound; at `η = 0` it is `audit_window_of_le`.
+`audit_window_split_of_record_of_le_slack` is its record form for the per-call split with y's floors.
 
 Two weightings of the same draw: `w`, the work (each tile's W_ref on the tile strata, 0 elsewhere), and `v`, the y cells
 (1 on the dequantization strata, 0 elsewhere).
@@ -255,6 +257,19 @@ theorem closure_escape_le_window {L : Law n} (σ : Fin n → Fin m) (k : Fin m �
   · refine le_max_of_le_right ((stratified_escape_le_of_covers σ k hk v Ky hN hcy _).trans ?_)
     gcongr
 
+/-- `closure_escape_le_window` for a law whose escapes exceed the stratified law's by at most `η`. -/
+theorem closure_escape_le_window_slack {L : Law n} (σ : Fin n → Fin m) (k : Fin m → ℕ)
+    (hk : ∀ s, k s ≤ (stratum σ s).card) {η : ℝ≥0∞} (hL : ∀ B, L.escape B ≤ (stratified σ k hk).escape B + η)
+    (cl : Fin n → Finset (Fin n)) {w v : Fin m → ℕ} {K Ky : ℕ} (hW : 0 < totalWork σ w) (hc : Covers σ k w K)
+    (hN : 0 < totalWork σ v) (hcy : Covers σ k v Ky) {T Ty : ℕ} {B : Finset (Fin n)}
+    (hB : T ≤ unsoundWork σ w cl B ∨ Ty ≤ unsoundWork σ v cl B) :
+    (L.closure cl).escape B ≤
+      max ((((totalWork σ w - T : ℕ) : ℝ≥0∞) / (totalWork σ w : ℝ≥0∞)) ^ K)
+        ((((totalWork σ v - Ty : ℕ) : ℝ≥0∞) / (totalWork σ v : ℝ≥0∞)) ^ Ky) + η := by
+  have h := closure_escape_le_window σ k hk (fun _ => le_rfl) cl hW hc hN hcy hB
+  rw [closure_escape] at h ⊢
+  exact (hL _).trans (add_le_add h le_rfl)
+
 /-- A 0.1% share at `K = 27,713` escapes with at most `2^-40`. -/
 theorem pow_record_le {W U : ℕ} (hW : 0 < W) (hU : W ≤ 1000 * U) :
     (((W - U : ℕ) : ℝ≥0∞) / (W : ℝ≥0∞)) ^ 27713 ≤ ((2 : ℝ≥0∞) ^ 40)⁻¹ := by
@@ -359,6 +374,64 @@ theorem audit_window_split_of_record {C : ℕ} {call : Fin m → Fin C} {w v f :
   audit_window_of_record A hks hlink hW (Law.covers_window σ call w f 27713 hW hone) hN
     (Law.covers_of_floor σ _ f v 27713 (Law.windowK_le σ call w f 27713)
       (fun _ => min_le_min le_rfl (le_max_left _ _)) hfy) σ'
+
+/-- **The window audit for a law within `η` of the product law** (oracle layer): `audit_window_of_le` for a law `L` whose
+escapes are at most the stratified law's plus `η`, drawn with closures, such as a keyed draw under a pseudorandomness
+assumption. The bound gains `η`; at `η = 0` it is `audit_window_of_le`. -/
+theorem audit_window_of_le_slack {L : Law n} {η : ℝ≥0∞} (hL : ∀ B, L.escape B ≤ (Law.stratified σ k hk).escape B + η)
+    (A : Analysis (L.closure cl) Reg session) {εks δlink : ℝ≥0∞} (hks : A.KnowledgeSound εks)
+    (hlink : A.LinkSound δlink) {w v : Fin m → ℕ} {K Ky : ℕ} (hW : 0 < Law.totalWork σ w) (hc : Law.Covers σ k w K)
+    (hN : 0 < Law.totalWork σ v) (hcy : Law.Covers σ k v Ky) (T Ty : ℕ)
+    (σ' : Strategy (audit (L.closure cl) Reg session)) :
+    prob (fun o => o.1 = true ∧ (T ≤ Law.unsoundWork σ w cl (A.wrong (A.committedOf σ')) ∨
+        Ty ≤ Law.unsoundWork σ v cl (A.wrong (A.committedOf σ'))))
+        (audit (L.closure cl) Reg session) σ' ≤
+      max ((((Law.totalWork σ w - T : ℕ) : ℝ≥0∞) / (Law.totalWork σ w : ℝ≥0∞)) ^ K)
+          ((((Law.totalWork σ v - Ty : ℕ) : ℝ≥0∞) / (Law.totalWork σ v : ℝ≥0∞)) ^ Ky) + η + εks + δlink := by
+  refine (audit_profile A hks hlink (fun B => T ≤ Law.unsoundWork σ w cl B ∨ Ty ≤ Law.unsoundWork σ v cl B) σ').trans ?_
+  gcongr
+  exact iSup₂_le fun B hB => Law.closure_escape_le_window_slack σ k hk hL cl hW hc hN hcy hB
+
+/-- At `η = 0`, `audit_window_of_le_slack` is `audit_window_of_le`. -/
+example {L : Law n} (hL : ∀ B, L.escape B ≤ (Law.stratified σ k hk).escape B)
+    (A : Analysis (L.closure cl) Reg session) {εks δlink : ℝ≥0∞} (hks : A.KnowledgeSound εks)
+    (hlink : A.LinkSound δlink) {w v : Fin m → ℕ} {K Ky : ℕ} (hW : 0 < Law.totalWork σ w) (hc : Law.Covers σ k w K)
+    (hN : 0 < Law.totalWork σ v) (hcy : Law.Covers σ k v Ky) (T Ty : ℕ)
+    (σ' : Strategy (audit (L.closure cl) Reg session)) :
+    prob (fun o => o.1 = true ∧ (T ≤ Law.unsoundWork σ w cl (A.wrong (A.committedOf σ')) ∨
+        Ty ≤ Law.unsoundWork σ v cl (A.wrong (A.committedOf σ'))))
+        (audit (L.closure cl) Reg session) σ' ≤
+      max ((((Law.totalWork σ w - T : ℕ) : ℝ≥0∞) / (Law.totalWork σ w : ℝ≥0∞)) ^ K)
+          ((((Law.totalWork σ v - Ty : ℕ) : ℝ≥0∞) / (Law.totalWork σ v : ℝ≥0∞)) ^ Ky) + εks + δlink := by
+  simpa only [add_zero] using
+    audit_window_of_le_slack (η := 0) (fun B => by rw [add_zero]; exact hL B) A hks hlink hW hc hN hcy T Ty σ'
+
+/-- **The per-call split with y's floors, for a law within `η` of it, at the sizing of record**: at most
+`2^-40 + η + ε_ks + δ_link`. -/
+theorem audit_window_split_of_record_of_le_slack {C : ℕ} {call : Fin m → Fin C} {w v f : Fin m → ℕ} {L : Law n}
+    {η : ℝ≥0∞}
+    (hL : ∀ B, L.escape B ≤
+      (Law.stratified σ (Law.windowK σ call w f 27713) (Law.windowK_le σ call w f 27713)).escape B + η)
+    (A : Analysis (L.closure cl) Reg session) {εks δlink : ℝ≥0∞} (hks : A.KnowledgeSound εks)
+    (hlink : A.LinkSound δlink) (hW : 0 < Law.totalWork σ w)
+    (hone : ∀ s, 0 < w s → Law.callWork σ call w (call s) = w s * (Law.stratum σ s).card)
+    (hN : 0 < Law.totalWork σ v) (hfy : ∀ s, 27713 * v s * (Law.stratum σ s).card ≤ f s * Law.totalWork σ v)
+    (σ' : Strategy (audit (L.closure cl) Reg session)) :
+    prob (fun o => o.1 = true ∧ (Law.totalWork σ w ≤ 1000 * Law.unsoundWork σ w cl (A.wrong (A.committedOf σ')) ∨
+        Law.totalWork σ v ≤ 1000 * Law.unsoundWork σ v cl (A.wrong (A.committedOf σ'))))
+        (audit (L.closure cl) Reg session) σ' ≤ ((2 : ℝ≥0∞) ^ 40)⁻¹ + η + εks + δlink := by
+  have hc := Law.covers_window σ call w f 27713 hW hone
+  have hcy := Law.covers_of_floor σ _ f v 27713 (Law.windowK_le σ call w f 27713)
+    (fun _ => min_le_min le_rfl (le_max_left _ _)) hfy
+  refine (audit_profile A hks hlink (fun B => Law.totalWork σ w ≤ 1000 * Law.unsoundWork σ w cl B ∨
+    Law.totalWork σ v ≤ 1000 * Law.unsoundWork σ v cl B) σ').trans ?_
+  gcongr
+  refine iSup₂_le fun B hB => ?_
+  rw [Law.closure_escape]
+  refine (hL _).trans (add_le_add ?_ le_rfl)
+  rcases hB with hB | hB
+  · exact (Law.stratified_escape_le_of_covers σ _ _ w 27713 hW hc _).trans (Law.pow_record_le hW hB)
+  · exact (Law.stratified_escape_le_of_covers σ _ _ v 27713 hN hcy _).trans (Law.pow_record_le hN hB)
 
 end Audits
 
