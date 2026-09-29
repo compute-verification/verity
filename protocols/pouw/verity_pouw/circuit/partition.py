@@ -64,6 +64,11 @@ def h1t_circuit(shape: h1t.Shape, fn: Any = None) -> Circuit:
     return Circuit(h1t.linear(shape) if fn is None else fn, h1t.templates(shape.k), shape.m, shape.n, H1T_POUW_ROLES)
 
 
+def h1t_window_circuit(shape: h1t.Shape, calls: int) -> Circuit:
+    """``calls`` H-1T calls on one weight in one root (`h1t.window`)."""
+    return h1t_circuit(shape, h1t.window(shape, calls))
+
+
 def listed_of(fn: Any) -> list[Any]:
     """A call's templates in the order its root body first uses them."""
     out: list[Any] = []
@@ -345,7 +350,7 @@ def boundary_bits(shape: Shape, kind: str = "shift24") -> dict[str, Counter]:
 
 
 __all__ = ["H1T_POUW_ROLES", "POUW_ROLES", "SEPARATOR_PORTS", "Circuit", "Separator", "Unit", "UnitCut", "WidthRule",
-           "boundary_bits", "circuit_cut", "circuit_separator", "circuit_units", "circuit_width_rule", "h1t_circuit",
+           "boundary_bits", "circuit_cut", "circuit_separator", "circuit_units", "circuit_width_rule", "h1t_circuit", "h1t_window_circuit",
            "listed", "listed_of", "ncp_circuit", "partition", "program", "query", "query_of", "separator", "unit_cut",
            "unit_cut_of", "units", "units_of", "weight_program", "weight_query", "width_rule", "width_rule_of", "window_cut",
            "window_units"]

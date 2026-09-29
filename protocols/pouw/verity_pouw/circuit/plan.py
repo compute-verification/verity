@@ -141,9 +141,12 @@ class Layout:
     strata: tuple[StratumSpec, ...]
     closure: Mapping[int, tuple[int, ...]]              # tile unit -> the call's units proved with it (itself first)
     y_strip: Mapping[int, int] = None                   # tile unit -> the weight Program's Y unit it reads (column strip)
+    per_tile: int | None = None                         # a tile's W_ref, when not `ncp-v2`'s
 
     def tile_work(self) -> int:
-        """One tile's W_ref: its cells' share of the call's (`schemes.ncp.NCP.wref`)."""
+        """One tile's W_ref: its cells' share of the call's (`schemes.ncp.NCP.wref`), or the circuit's own (H-1T)."""
+        if self.per_tile is not None:
+            return self.per_tile
         s = self.shape
         return (3 * s.m * s.k * s.n + FORM_UNITS * s.m * s.k) * D * D // (s.m * s.n)
 
@@ -199,6 +202,25 @@ def layout(shape: Shape, kind: str = "shift24") -> Layout:
     return Layout(shape, us, tuple(strata), closure, y_strip)
 
 
+def h1t_layout(shape) -> Layout:
+    """H-1T's layout (`circuit.h1t`): each tile's closure is its X strip's forming unit and that strip's key, which reads
+    the strip's rows; the tile reads B′'s rows and tags as committed inputs.  A tile's W_ref is `h1t.tile_work`."""
+    from . import h1t
+    from .partition import circuit_units, h1t_circuit
+
+    us = circuit_units(h1t_circuit(shape))
+    by_role: dict[str, list[Unit]] = {}
+    for u in us:
+        by_role.setdefault(u.role, []).append(u)
+    key = {u.member: u.index for u in by_role["key"]}
+    form_x = {u.where[0]: u.index for u in by_role["form_x"]}
+    closure = {t.index: (t.index, form_x[t.where[0]], key[t.where[0]]) for t in by_role["tile"]}
+    per_tile = h1t.tile_work(shape.k)
+    strata = tuple(StratumSpec(by_role[r][0].template, r, tuple(u.index for u in by_role[r]),
+                               per_tile * len(by_role[r]) if r == "tile" else 0) for r in ("tile", "dequant"))
+    return Layout(shape, us, strata, closure, per_tile=per_tile)
+
+
 @dataclass(frozen=True)
 class Plan:
     law: str
@@ -226,12 +248,14 @@ def draw(key: Key, lay: Layout, law: TileLaw) -> Plan:
 
 def openings(lay: Layout, proved, proved_y=()) -> tuple[tuple[str, int], ...]:
     """The input rows the proved units read, one leaf per row: a digest or X unit its strip's 16 A rows, a Y unit (the
-    weight Program's, by column strip) its 16 weight rows."""
+    weight Program's, by column strip) its 16 weight rows, and a tile with no Y unit (H-1T's) its 16 weight rows itself."""
     rows: set[tuple[str, int]] = set()
     for i in proved:
         u = lay.units[i]
         if u.role in ("digest", "form_x"):
             rows.update(("a", D * u.where[0] + r) for r in range(D))
+        elif u.role == "tile" and not (lay.y_strip and i in lay.y_strip):
+            rows.update(("b", D * u.where[1] + r) for r in range(D))
     for cs in proved_y:
         rows.update(("b", D * cs + r) for r in range(D))
     return tuple(sorted(rows))
@@ -248,5 +272,5 @@ def unsound_work_bound(lay: Layout, sizes: Mapping[str, int], delta: float) -> f
     return profile(lay, sizes).harm_bound({s.name: float(lay.tile_work()) for s in lay.strata if s.role == "tile"}, delta)
 
 
-__all__ = ["DRAW_DOMAIN", "RECORD_K", "CountLaw", "Layout", "Plan", "StratumSpec", "TileLaw", "WorkLaw", "draw", "layout", "openings",
+__all__ = ["DRAW_DOMAIN", "RECORD_K", "CountLaw", "Layout", "Plan", "StratumSpec", "TileLaw", "WorkLaw", "draw", "h1t_layout", "layout", "openings",
            "profile", "record_k", "unsound_work_bound", "window_laws"]

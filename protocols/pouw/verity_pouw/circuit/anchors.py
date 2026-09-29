@@ -13,6 +13,12 @@
 The verifier builds these inputs itself (`Anchors.call_inputs`, `Anchors.weight_inputs`), or compares a prover's
 (`Anchors.check_call`, `Anchors.check_weight`); it never takes them as stated.  A window's `Ledger` refuses a repeated
 call index, (forward, position): the Lean statement's A11, `UniqueCallIndices`.
+
+H-1T's (`H1tAnchors`) are `ncp-v2`'s fields, with its strip ids and tag tuples derived from them by the verifier:
+
+    field        value                                                                     input
+    strip ids    each strip's global index, its rows' // 16 (rows come in aligned strips)  `stripids`
+    tag tuples   `h1t.tag_tuple(j)` of each of the weight's global columns j               `tags`
 """
 from __future__ import annotations
 
@@ -80,6 +86,53 @@ class Anchors:
         _check(fn, args, self.weight_inputs())
 
 
+@dataclass(frozen=True)
+class H1tAnchors:
+    """One H-1T call's anchors: `ncp-v2`'s fields, from which the verifier also builds the strip ids and the tag tuples."""
+
+    salt: bytes
+    forward: int
+    layer: int
+    site: int
+    weight: int
+    rows: tuple[int, ...]
+    cols: tuple[int, ...]
+
+    @property
+    def position(self) -> int:
+        return (self.layer << 32) | self.site
+
+    @property
+    def call_index(self) -> tuple[int, int]:
+        return self.forward, self.position
+
+    def check(self, shape) -> None:
+        """Refuse anchors that cannot be a call's: `Anchors.check`'s conditions, rows in aligned strips of 16, and columns
+        inside the tag tuples' injective range."""
+        from .h1t import TAG_COLUMNS
+
+        Anchors(self.salt, self.forward, self.layer, self.site, self.weight, self.rows, self.cols).check(shape)
+        for s in range(shape.m // 16):
+            first = self.rows[16 * s]
+            if first % 16 or self.rows[16 * s:16 * s + 16] != tuple(range(first, first + 16)):
+                raise DomainError("H-1T's rows come in aligned strips of 16: a strip's id is its rows' // 16")
+        if max(self.cols) >= TAG_COLUMNS:
+            raise DomainError(f"the tag tuples are injective for global columns below {TAG_COLUMNS}")
+
+    def call_inputs(self) -> dict[str, list[int]]:
+        """`H1tLinear`'s anchored inputs, by parameter."""
+        from .h1t import tag_tuple
+
+        return {"salt": [int.from_bytes(self.salt[4 * i:4 * i + 4], "little") for i in range(8)],
+                "forward": _lane(self.forward), "position": _lane(self.position), "weight": _lane(self.weight),
+                "stripids": [self.rows[16 * s] // 16 for s in range(len(self.rows) // 16)], "rowids": list(self.rows),
+                "tags": [c for j in self.cols for c in tag_tuple(j)]}
+
+    def check_call(self, fn, args: Sequence[Sequence[int]]) -> None:
+        """Refuse a call's flat input leaves whose anchored inputs are not these anchors'."""
+        _check(fn, args, self.call_inputs())
+
+
 def _check(fn, args, want: dict[str, list[int]]) -> None:
     params, _ = fn.signature()
     names = [name for name, _t in params]
@@ -96,11 +149,11 @@ class Ledger:
 
     seen: set = field(default_factory=set)
 
-    def admit(self, anchors: Anchors, shape: Shape) -> None:
+    def admit(self, anchors: Anchors | H1tAnchors, shape) -> None:
         anchors.check(shape)
         if anchors.call_index in self.seen:
             raise DomainError(f"call index (forward, position) = {anchors.call_index} is repeated in the window")
         self.seen.add(anchors.call_index)
 
 
-__all__ = ["Anchors", "Ledger"]
+__all__ = ["Anchors", "H1tAnchors", "Ledger"]

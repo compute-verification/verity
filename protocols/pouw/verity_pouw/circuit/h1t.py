@@ -65,6 +65,10 @@ def slices(k: int) -> int:
     return -(-k // REAL)
 
 
+#: the columns the tag tuples tell apart: 23 · 62 · 62
+TAG_COLUMNS = 23 * 62 * 62
+
+
 def tag_tuple(j: int) -> tuple[int, int, int]:
     """Column j's tag codes (`h1_tagged.tag_tuples`): injective for j < 23 · 62 · 62 = 88,412."""
     return A0[j % 23], A1[(j // 23) % 62], A1[(j // (23 * 62)) % 62]
@@ -188,7 +192,7 @@ class Shape:
             raise DomainError(f"the H-1T circuit needs 16 | m, 16 | n, 8 | k: {self}")
         if not REAL < self.k <= MAX_K:
             raise DomainError(f"the H-1T circuit needs 29 < k <= {MAX_K} (at least two slices): {self}")
-        if self.n > 23 * 62 * 62:
+        if self.n > TAG_COLUMNS:
             raise DomainError(f"the tag tuples are injective for n <= 88,412 columns: {self}")
 
 
@@ -201,6 +205,11 @@ def _linear_sig(S):
 
 
 def _linear_body(B, S, a, s, b, t, bias, salt, fwd, pos, wid, sid, rid, tags):
+    return tuple_of(*_call_units(B, S, a, s, b, t, bias, salt, fwd, pos, wid, sid, rid, tags))
+
+
+def _call_units(B, S, a, s, b, t, bias, salt, fwd, pos, wid, sid, rid, tags):
+    """One call's units: (y, the credited words)."""
     m, k, n = S.M, S.K, S.N
     ms, ns = m // D, n // D
     tm = templates(k)
@@ -222,13 +231,38 @@ def _linear_body(B, S, a, s, b, t, bias, salt, fwd, pos, wid, sid, rid, tags):
     y = Coll(Array(m, Array(n, BF16)),
              concat([out[i // D, j // D][D * (i % D) + j % D].refs for i in range(m) for j in range(n)]))
     words = array_of([tiles[rs][cs][0] for rs in range(ms) for cs in range(ns)])
-    return tuple_of(y, words)
+    return y, words
 
 
 H1tLinearDef = CompositeDefinition(
     "H1tLinear", 1, ("M", "K", "N"), _linear_sig, _linear_body,
     doc="One H-1T linear call under sampled proofs (layout A): y = dequant(R_2T) with the credited chain words, as "
         "instances of the unit templates only.", conformance="protocol-defined")
+
+
+def _window_sig(S):
+    m, k, n, c = S.M, S.K, S.N, S.C
+    return ((("b", Array(n, Array(k, U8))), ("t", Array(n, F32)), ("bias", Array(n, BF16)), ("salt", Array(8, U32)),
+             ("weight", LANE), ("tags", Array(n, Array(3, U8))), ("a", Array(c, Array(m, Array(k, U8)))),
+             ("s", Array(c, Array(m, F32))), ("forward", Array(c, LANE)), ("position", Array(c, LANE)),
+             ("stripids", Array(c, Array(m // D, U32))), ("rowids", Array(c, Array(m, U32)))),
+            Tuple(Array(c, Array(m, Array(n, BF16))), Array(c, Array((m // D) * (n // D), Array(D * D * words_per_cell(k), U32)))))
+
+
+def _window_body(B, S, b, t, bias, salt, wid, tags, a, s, fwd, pos, sid, rid):
+    calls = [_call_units(B, S, a[c], s[c], b, t, bias, salt, fwd[c], pos[c], wid, sid[c], rid[c], tags) for c in range(S.C)]
+    return tuple_of(array_of([y for y, _ in calls]), array_of([w for _, w in calls]))
+
+
+H1tWindowDef = CompositeDefinition(
+    "H1tWindow", 1, ("M", "K", "N", "C"), _window_sig, _window_body,
+    doc="C H-1T calls on one weight in one root, each with its own anchored indices: the composition a window proves.",
+    conformance="protocol-defined")
+
+
+def tile_work(k: int) -> int:
+    """A tile's W_ref: its 256 cells' 2T k32 atoms, 64·T MACs a cell (the forming's share is not counted)."""
+    return D * D * 2 * slices(k) * SLICE
 
 
 @lru_cache(maxsize=None)
@@ -244,5 +278,12 @@ def linear(shape: Shape) -> SpecializedDefinition:
     return bind(H1tLinearDef, M=shape.m, K=shape.k, N=shape.n)
 
 
+def window(shape: Shape, calls: int) -> SpecializedDefinition:
+    """`H1tWindow{M,K,N,C}`: ``calls`` calls of this shape on one weight, in one root."""
+    shape.check()
+    return bind(H1tWindowDef, M=shape.m, K=shape.k, N=shape.n, C=calls)
+
+
 __all__ = ["A0", "A1", "BF16", "D", "F32", "H1tDequant", "LANE", "MAX_K", "REAL", "SLICE", "Shape", "TAG_KEY", "TAG_ROW",
-           "TAG_SALT", "TAG_STRIP", "WORDS_PER_SLICE", "linear", "slices", "tag_tuple", "templates", "words_per_cell"]
+           "TAG_COLUMNS", "TAG_SALT", "TAG_STRIP", "WORDS_PER_SLICE", "linear", "slices", "tag_tuple", "templates", "tile_work",
+           "window", "words_per_cell"]

@@ -24,21 +24,23 @@ from typing import Any, Sequence
 
 #: the schemes that have a circuit here, each with the permutation P it pins (as `ncp-v1` and `ncp-v1-shift24` do)
 SCHEMES = {"ncp-v2": "word", "ncp-v2-shift24": "shift24"}
+#: H-1T's circuit (`h1t`, layout A) has no registered scheme yet, so `traced_h1t` names it
+H1T = "h1t"
 
 
 @dataclass(frozen=True)
 class Traced:
     scheme: str
-    shape: Any                  # `ncp2.Shape`
-    definition: Any             # `NcpLinear_v1{M,K,N,PERM}`
+    shape: Any                  # `ncp2.Shape` or `h1t.Shape`
+    definition: Any             # `NcpLinear_v1{M,K,N,PERM}` or `H1tLinear_v1{M,K,N}`
     query: dict                 # `verity/partition/v1`'s query: `Q_template_instances` over the unit templates
     served: int                 # the first `served` root outputs are delivered (y); the credited words are committed only
-    weight: Any                 # `NcpWeight_v1{K,N,PERM}`: the weight's Y strips and c₀, once per run and weight
-    weight_query: dict
+    weight: Any = None          # `NcpWeight_v1{K,N,PERM}`: the weight's Y strips and c₀, once per run and weight (H-1T: none)
+    weight_query: dict | None = None
 
     @property
-    def kind(self) -> str:
-        return SCHEMES[self.scheme]
+    def kind(self) -> str | None:
+        return SCHEMES.get(self.scheme)
 
     def digest(self) -> str:
         """The call Program's digest, as the verifier builds it."""
@@ -63,18 +65,25 @@ class Traced:
         if program_digest(decode_program(descriptor, REGISTRY)) != self.digest():
             raise DomainError(f"{self.scheme}: the descriptor is not the verifier's Program for {self.shape}")
 
-    def call_args(self, anchors, a: Sequence[int], s: Sequence[int], ys: Sequence[int], c0s: Sequence[int],
-                  t: Sequence[int], bias: Sequence[int]) -> list:
-        """The call's flat inputs, its anchored ones built from the verifier's ``anchors`` (`anchors.Anchors`)."""
-        anchors.check(self.shape)
-        an = anchors.call_inputs()
-        return [list(a), list(s), list(ys), list(c0s), list(t), list(bias), an["salt"], an["forward"], an["position"],
-                an["weight"], an["rowids"]]
+    def call_args(self, anchors, *data: Sequence[int]) -> list:
+        """The call's flat inputs: its committed ``data`` in parameter order (`ncp-v2`: a, s, ys, c0s, t, bias; H-1T: a, s,
+        b, t, bias), then its anchored ones, built from the verifier's ``anchors`` (`anchors.Anchors`,
+        `anchors.H1tAnchors`)."""
+        return self._args(self.definition, anchors, anchors.call_inputs, data)
 
-    def weight_args(self, anchors, b: Sequence[int]) -> list:
+    def weight_args(self, anchors, *data: Sequence[int]) -> list:
+        """The weight Program's flat inputs: B, then its anchored ones (salt, weight id, column ids)."""
+        return self._args(self.weight, anchors, anchors.weight_inputs, data)
+
+    def _args(self, fn, anchors, inputs, data) -> list:
+        from ..protocol import DomainError
+
         anchors.check(self.shape)
-        an = anchors.weight_inputs()
-        return [list(b), an["salt"], an["weight"], an["colids"]]
+        an = inputs()
+        names = [p for p, _t in fn.signature()[0]]
+        if sorted(names[len(data):]) != sorted(an):
+            raise DomainError(f"{fn.id} takes {len(names) - len(an)} committed inputs, not {len(data)}")
+        return [list(d) for d in data] + [an[p] for p in names[len(data):]]
 
     def check_layout(self, offered) -> None:
         """Refuse a layout that isn't the verifier's own, derived from the shape (`layout`): the tiles, each tile's own unit
@@ -85,9 +94,11 @@ class Traced:
             raise DomainError(f"{self.scheme}: the layout is not the verifier's for {self.shape}")
 
     def layout(self):
-        """The closure-draw layout (`plan.layout`), from the shape alone."""
+        """The closure-draw layout (`plan.layout`, `plan.h1t_layout`), from the shape alone."""
         from . import plan
 
+        if self.scheme == H1T:
+            return plan.h1t_layout(self.shape)
         return plan.layout(self.shape, self.kind)
 
 
@@ -104,4 +115,15 @@ def traced_as(scheme: str, m: int, k: int, n: int) -> Traced | None:
                   partition.weight_query(shape, kind))
 
 
-__all__ = ["SCHEMES", "Traced", "traced_as"]
+def traced_h1t(m: int, k: int, n: int) -> Traced:
+    """H-1T's circuit for one linear of shape m × k → n, as the verifier builds it: the Definition, its partition query,
+    the served outputs and the draw layout, from the shape alone. Raises `protocol.DomainError` outside the granted scope
+    (layout A at 16 × 16 tiles: 16 | m, 16 | n, 8 | k, 29 < k <= 32,768). `traced_as` returns it once H-1T is a registered
+    scheme."""
+    from . import h1t, partition
+
+    shape = h1t.Shape(m, k, n)
+    return Traced(H1T, shape, h1t.linear(shape), partition.query_of(partition.h1t_circuit(shape)), m * n)
+
+
+__all__ = ["H1T", "SCHEMES", "Traced", "traced_as", "traced_h1t"]
