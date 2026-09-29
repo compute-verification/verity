@@ -104,17 +104,22 @@ DTYPE = "dtype"
 
 VERIFIED_ACCEPTED, VERIFIED_REJECTED, VERIFIED_NOT_TRANSFERABLE, VERIFIED_NO_DUMPS = "accepted", "rejected", "not-transferable", "no-dumps"
 VERIFIED_VALUES = (VERIFIED_ACCEPTED, VERIFIED_REJECTED, VERIFIED_NOT_TRANSFERABLE, VERIFIED_NO_DUMPS)
-#: `verity_numerical.bench.contract.PROOF_CLASSES` + the ledger's `COMPONENT` (a bucket measured alone is no proof class).  The store
-#: imports neither package (the `research` rule), so the spelling is pinned here; the ledger's tests cross-check it.
+#: Mirrors `PROOF_CLASSES` in `backends/numerical/python/verity_numerical/bench/contract.py` + the `COMPONENT` that
+#: `bench/ledger.py` adds (a bucket measured alone is no proof class).  The store imports neither package (the `research` rule), so
+#: the spelling is copied here; `backends/numerical/tests/bench/test_tables.py` checks the copy against both.
 PROOF_CLASSES = ("NO_PROOF", "ARITHMETIC_DIAGNOSTIC", "NON_ZK_PROOF_DIAGNOSTIC", "NON_ZK_PROOF", "COMPLETE_HVZK_BACKEND", "COMPLETE_ZK_BACKEND",
                  "COMPONENT")
 AUTHENTICATION_VALUES = ("included", "included-hash", "included-hash-shared", "excluded")
 MODES = ("interactive", "fiat-shamir")
 SCOPES = ("unit", "vu", "component")
 TRACKS = ("A", "B", "C", "shared", "scout", "baseline")
-#: One spelling per candidate, the one Table 1 of `bench.tables` uses for its rows (`A-GKR`, `B-Ligero`, `SP1`); `ledger_to_store.candidate`
-#: derives them from the lane name.  `A` was the ledger import's spelling until 2026-09-23 (`VALUE_ALIASES`): read as `A-GKR`, no longer written.
-CANDIDATES = ("A-GKR", "B-AIR", "B-Ligero", "C", "SP1", "shared")
+#: Mirrors the Glossary's backend families (`README.md`, "Backend family"), which `bench/views.py` spells as `FAMILY_NAMES`; the
+#: backends' tests check the copy.  A `candidate` label written today names one of these.
+BACKEND_FAMILIES = ("A-GKR", "B-Ligero", "C-Flock", "D-SP1")
+#: The backend families, then the values `ledger_to_store.candidate` derives from a frozen ledger lane, which recorded labels carry
+#: and so stay valid: `B-AIR`, `C` (the VOLE candidate in `backends/vole`, not C-Flock), `SP1` (D-SP1 as the frozen ledger and
+#: tables spell it) and `shared`.  `A` was the ledger import's spelling until 2026-09-23 (`VALUE_ALIASES`): read as `A-GKR`, no longer written.
+CANDIDATES = (*BACKEND_FAMILIES, "B-AIR", "C", "SP1", "shared")
 
 # ---- old spellings (2026-09-23 hygiene): accepted on read, never written anew ----------------------------------------------------------------
 
@@ -135,6 +140,9 @@ MEASUREMENT_KEYS = ("l", "n", "subbatches", "per_proof_vus", "R_proved", "thread
 FINDING = "finding"
 LEVEL = "level"
 ANCHOR = "anchor"
+#: A reviewer's grant on a pull request at one head (`pr:<n>@<sha>`), which the merge queue's admission rules require.
+GRANT = "grant"
+GRANT_ROLES = ("red-team", "statement-reviewer", "vllm-coordinator", "review")
 
 
 def canonical_key(name: str) -> str:
@@ -194,7 +202,7 @@ def _k(name: str, group: str, form: str, doc: str, values: tuple[str, ...] = (),
 
 VOCAB: dict[str, Key] = {k.name: k for k in (
     # result
-    _k(CANDIDATE, GROUP_RESULT, ENUM, "the candidate proof system the result belongs to", CANDIDATES),
+    _k(CANDIDATE, GROUP_RESULT, ENUM, "the backend family the result belongs to (or the older candidate a ledger row names)", CANDIDATES),
     _k(PROOF_CLASS, GROUP_RESULT, ENUM, "the class claimed for the result (a red-team verdict is another proof_class label, by red-team-*)", PROOF_CLASSES),
     _k(SOUNDNESS, GROUP_RESULT, TEXT, "the soundness target or achieved bound as stated, e.g. 2^-128 (qualifiers allowed)"),
     _k(K, GROUP_RESULT, INT, "the relation's K (1536 for the frozen target)"),
@@ -241,6 +249,8 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(SAME_DEVICE, GROUP_VERIFICATION, BOOL, "whether the verifier ran on the prover's machine"),
     _k(BELOW_BAR, GROUP_VERIFICATION, BOOL, "the verified proof's whole-proof bound is below the tables' 2^-128 bar: shown in the below-bar drill-down, never a Table 2 cell"),
     _k(OUTCOME, GROUP_VERIFICATION, TEXT, "an Attempt's failure class as judged (CGROUP_OOM, UNKNOWN_EXIT, ...), restating or correcting the classifier's"),
+    _k(GRANT, GROUP_VERIFICATION, ENUM, "a reviewer's grant on pr:<n>@<head>: the role that reviewed that exact head (the merge queue admits on it)",
+       GRANT_ROLES),
     # evidence
     _k(INSTRUCTION, GROUP_EVIDENCE, TEXT, "the tensor-core instruction probed, as the registry names it (sm89.mma.m16n8k32.e4m3)"),
     _k(MODEL, GROUP_EVIDENCE, TEXT, "the silicon model the capture was compared with"),
@@ -258,7 +268,7 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(COMPONENT, GROUP_EVIDENCE, TEXT, "the component a measurement isolates (encoder, hash, lookup, ...)"),
     _k(JOBS, GROUP_EVIDENCE, INT, "the number of jobs a battery or sweep ran"),
     _k(DTYPE, GROUP_EVIDENCE, TEXT, "the operand format a measurement is for (bf16, e4m3, e2m1)"),
-    _k(LEVEL, GROUP_EVIDENCE, TEXT, "a trust dossier's computed trust level for its target (verity.proofs.trust)"),
+    _k(LEVEL, GROUP_EVIDENCE, TEXT, "a trust dossier's computed trust level for its target (tools/tc_probe/trust.py)"),
     _k(ANCHOR, GROUP_EVIDENCE, TEXT, "the anchor family a trust dossier rests on"),
 )}
 

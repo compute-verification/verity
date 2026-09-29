@@ -115,6 +115,7 @@ def test_anchors_cite_paper_table_hardware():
     assert vole.ANCHORS["quicksilver_bool_1t"].rate_per_s == 7.6e6
 
 
+@pytest.mark.slow
 def test_table_and_report_shape():
     rows = vole.table(1536, batches=(1, 64), targets=(-128,))
     assert [r["B"] for r in rows] == [1, 64] and all(r["mac_extension"] == 3 for r in rows)

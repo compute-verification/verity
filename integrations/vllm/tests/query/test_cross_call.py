@@ -8,6 +8,7 @@ import copy
 import numpy as np
 import pytest
 
+from verity.ir.cut import separable
 from verity.ir.defs import CompositeDefinition, bind
 from verity.ir.refs import tuple_of
 from verity.ir.types import Array, Tuple
@@ -145,7 +146,7 @@ def test_members_of_a_separable_definition_are_compared():
         return tuple_of(B.call(P.F32Add, x[0], x[1]), B.call(P.F32Add, x[0], x[1]))
 
     f = bind(CompositeDefinition("TwiceSeparable", 1, (), lambda S: ((("x", Array(2, F32)),), Tuple(F32, F32)), twice, register=False))
-    assert W._separable(f) is not None
+    assert separable(f) is not None
     (v,) = W.unit_rule(f)["violations"]
     assert v["class"] == "cut" and v["detail"]["gate-recomputed"]["n"] == 1
     for fam, st in (("Gemm_v1", {"K": 64, "N": 8}), ("Attention_v3", {"T": 21, "NH": 4, "KVH": 2, "D": 64, "BN": 128}), ("RoPE_v1", {"NHEADS": 3, "D": 16})):

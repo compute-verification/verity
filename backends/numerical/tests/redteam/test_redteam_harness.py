@@ -1,6 +1,8 @@
 """The harness itself: passes a sound checker, catches a weakened one, and its report is well-formed JSON."""
 from __future__ import annotations
 
+import pytest
+
 import json
 import random
 
@@ -58,6 +60,7 @@ def test_relation_columns_cover_every_integer_column() -> None:
         assert c.lo <= v < c.hi, (c.name, v, c.lo, c.hi)
 
 
+@pytest.mark.slow
 def test_harness_detects_weakened_checker() -> None:
     """Drop the predicate that binds ``out.M`` of the last group: a single-column mutation is accepted with another
     output, and the harness reports SAT with the concrete input, column and both outputs."""
@@ -70,6 +73,7 @@ def test_harness_detects_weakened_checker() -> None:
     assert H.run_mutations(sound, GOLDEN[:2], rng=random.Random(0)).status in ("PASS", "NOTE")
 
 
+@pytest.mark.slow
 def test_mutations_and_coordinated_search_do_not_break_the_integer_relation() -> None:
     t = RT.relation_target(AMP)
     sample = GOLDEN[:3] + C.structured_cases(AMP)[:8]

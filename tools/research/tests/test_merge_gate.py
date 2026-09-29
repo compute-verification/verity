@@ -83,3 +83,79 @@ def test_merge_refuses_a_commit_the_target_has_moved_past(tmp_path, monkeypatch,
     assert merge_main(["feat"]) == 1 and "main has moved past" in capsys.readouterr().err
     _git(main, "checkout", "-q", "-b", "other")
     assert merge_main(["feat", "--dry-run"]) == 1 and "not main" in capsys.readouterr().err
+
+
+def _branch(main: Path, name: str, path: str) -> None:
+    _git(main, "checkout", "-q", "-b", name, "main")
+    (main / path).write_text(name + "\n")
+    _git(main, "add", path)
+    _git(main, "commit", "-q", "-m", name)
+    _git(main, "checkout", "-q", "main")
+
+
+def test_a_train_lands_what_it_checked_and_bisects_to_the_breaking_ref(tmp_path, monkeypatch, capsys):
+    """A B C, where B adds the file the check refuses: the candidate fails, the prefixes are checked (A passes, A+B fails), B is
+    named and main fast-forwards to the checked A prefix; then A C (without B) lands whole on one check."""
+    monkeypatch.setenv("RESEARCH_RUNS", str(tmp_path / "runs"))
+    main, _feat, _tip = _repos(tmp_path)
+    for name, path in (("A", "a.txt"), ("B", "BAD"), ("C", "c.txt")):
+        _branch(main, name, path)
+    monkeypatch.chdir(main)
+    before = _git(main, "rev-parse", "HEAD")
+    cmd = ["--tool", "mytools.decl_check:T", "--command", "sh -c 'test ! -e BAD'"]
+    assert merge_main(["--train", "A", "B", "C", *cmd]) == 1
+    out = capsys.readouterr().out
+    assert "train A B C: B breaks it; main fast-forwarded to" in out and out.count("recorded as") == 3
+    assert _git(main, "rev-parse", "HEAD^1") == before and (main / "a.txt").exists() and not (main / "BAD").exists()
+    assert "Train:" in _git(main, "log", "-1", "--format=%B")
+    assert merge_main(["--train", "C", *cmd]) == 0
+    out = capsys.readouterr().out
+    assert out.count("recorded as") == 1 and "`check` passed; main fast-forwarded" in out and (main / "c.txt").exists()
+    assert not _git(main, "worktree", "list").count("research-train")
+
+
+_RESULT = ("import json, os; d = os.environ['RESEARCH_RUN_DIR']; json.dump({'schema': 'research/result/v0.1', 'kind': 'check/v1', "
+           "'run_id': os.environ['RESEARCH_RUN_ID'], 'workload_fingerprint': {}, 'validation': {'status': 'passed', 'checker': 't'}, "
+           "'measurements': [], 'steps': [{'step': 'agree', 'status': '%s'}]}, open(d + '/result.json', 'w'))")
+
+
+def test_a_path_rule_requires_its_step_for_a_change_under_the_path(tmp_path, monkeypatch, capsys):
+    """The target's declaration says `agree` must pass for a change under flock/: an attempt that skipped it admits a change
+    elsewhere but not one under flock/; one where it passed admits both."""
+    import sys
+
+    main, feat, _tip = _repos(tmp_path)
+    (main / "tools" / "check").mkdir(parents=True)
+    (main / "tools" / "check" / "tool.py").write_text("from research.store.tool import Tool\n"
+                                                      "CHECK = Tool(name='check', version='1', merge_requires={'agree': ['flock/']})\n")
+    _git(main, "add", "-A")
+    _git(main, "commit", "-q", "-m", "rule")
+    _git(feat, "merge", "-q", "main")
+    def run(status: str) -> int:
+        monkeypatch.chdir(feat)
+        return research_main(["run", "--runs-dir", str(tmp_path / "runs"), "--project", "t", "--no-sampler", "--tool", "check",
+                              "--cwd", "source", "--", sys.executable, "-c", _RESULT % status])
+    assert run("skipped") == 0
+    monkeypatch.chdir(main)
+    assert merge_main(["feat", "--dry-run"]) == 0                                  # a.txt only: the rule does not apply
+    (feat / "flock").mkdir()
+    (feat / "flock" / "x.txt").write_text("x\n")
+    _git(feat, "add", "-A")
+    _git(feat, "commit", "-q", "-m", "flock change")
+    assert run("skipped") == 0
+    monkeypatch.chdir(main)
+    assert merge_main(["feat", "--dry-run"]) == 1
+    assert "changes flock/, where `check` must have run agree" in capsys.readouterr().err
+    assert run("passed") == 0
+    monkeypatch.chdir(main)
+    assert merge_main(["feat", "--dry-run"]) == 0
+
+
+def test_a_path_rule_leaves_out_what_its_patterns_name():
+    from research.merge import rule_touches
+
+    rule = ["flock/", "!README.md", "!docs/*.md"]
+    assert rule_touches(rule, ["flock/README.md", "flock/sub/README.md", "docs/x.md"]) == []
+    assert rule_touches(rule, ["flock/README.md", "flock/a.rs"]) == ["flock/"]
+    assert rule_touches(rule, ["flockish/a.rs", "other/README.md"]) == []
+    assert rule_touches(["flock/"], ["flock/README.md"]) == ["flock/"]            # no pattern, no exception
