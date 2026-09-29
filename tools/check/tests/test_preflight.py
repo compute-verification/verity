@@ -5,12 +5,16 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import os
+import shutil
+import subprocess
 import types
 from pathlib import Path
 
 import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
+GIT = shutil.which("git")
 spec = importlib.util.spec_from_file_location("check_preflight", ROOT / "tools" / "check" / "preflight.py")
 PF = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(PF)
@@ -40,7 +44,14 @@ def _tree(tmp_path: Path, *, rustflags: str = "-C target-cpu=x86-64-v3", pinned:
     (t / "backends" / "flock" / "verifier" / "upstream.json").write_text(json.dumps({"upstream": {"sha256": _sha(UPSTREAM), "rustflags": rustflags}}))
     deps = {PF.LA.deps_key(t / "pkg" / "a"): {"package": "pkg/a", "sha256": _sha(BUNDLE), "bytes": len(BUNDLE), "run": "r1"}} if pinned else {}
     (t / "tools" / "check" / "lean-deps.json").write_text(json.dumps({"schema": "lean-deps-pin/v1", "deps": deps}))
+    for args in (["init", "-q"], ["add", "."], ["commit", "-q", "-m", "tree"]):         # not this machine's git config (a signing helper)
+        subprocess.run([GIT, "-c", "user.email=t@t", "-c", "user.name=t", *args], cwd=t, check=True, capture_output=True,
+                       env={**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"})
     return t
+
+
+def _head(tree: Path) -> str:
+    return subprocess.run([GIT, "rev-parse", "HEAD"], cwd=tree, check=True, capture_output=True, text=True).stdout.strip()
 
 
 def _key(tree: Path) -> str:
@@ -49,13 +60,14 @@ def _key(tree: Path) -> str:
 
 @pytest.fixture
 def path(tmp_path, monkeypatch):
-    """A PATH holding what `pod_setup.sh` installs; `path(uv=None)` leaves a tool out."""
+    """A PATH holding git and what `pod_setup.sh` installs; `path(uv=None)` leaves a tool out."""
     b = tmp_path / "bin"
     b.mkdir()
 
     def make(uv: str | None = "0.12.20", toolchain: str | None = TOOLCHAIN, cargo: bool = True, lake: bool = True) -> None:
         for p in b.iterdir():
             p.unlink()
+        (b / "git").symlink_to(GIT)
         for name, out in (("uv", uv and f"uv {uv} (abc 2026-09-01)"), ("elan", toolchain and f"{toolchain} (default)"),
                           ("cargo", cargo and "cargo 1.90.0"), ("lake", lake and "Lake version 5.0.0")):
             if out:
@@ -92,18 +104,19 @@ def _usage(free_gb: float):
     return lambda p: types.SimpleNamespace(free=int(free_gb * PF.GB))
 
 
-def _run(tmp_path, tree, *, inputs=None, custody=None, warm=True, cpu=NO_AVX, free_gb=100.0):
+def _run(tmp_path, tree, *, inputs=None, custody=None, warm=True, cpu=NO_AVX, free_gb=100.0, sha=None):
     cache = tmp_path / "cache"
     if warm:
-        (cache / "lean-deps" / _key(tree)).mkdir(parents=True)
+        (cache / "lean-deps" / _key(tree)).mkdir(parents=True, exist_ok=True)
     (tmp_path / "cpuinfo").write_text(cpu)
-    return PF.run(tree, inputs, custody, cache, tmp_path / "cpuinfo", _usage(free_gb))
+    return PF.run(tree, inputs, custody, cache, tmp_path / "cpuinfo", _usage(free_gb), sha=sha)
 
 
 def test_a_prepared_pod_passes(tmp_path, path):
     tree = _tree(tmp_path)
-    facts, fails = _run(tmp_path, tree, inputs=_inputs(tmp_path), custody=_custody(tmp_path, BUNDLE))
+    facts, fails = _run(tmp_path, tree, inputs=_inputs(tmp_path), custody=_custody(tmp_path, BUNDLE), sha=_head(tree))
     assert fails == []
+    assert f"tree: a clean checkout of {_head(tree)[:12]}" in facts
     assert "uv 0.12.20" in facts and "cargo 1.90.0" in facts and f"elan has {TOOLCHAIN}" in facts
     assert f"pkg/a: Lean dependencies warm here ({_key(tree)[:12]})" in facts
     assert f"store: pkg/a's Lean bundle {_key(tree)[:12]} read with the run's custody key" in facts
@@ -122,6 +135,20 @@ def test_a_pod_setup_sh_did_not_prepare_is_refused_with_the_remedy(tmp_path, pat
     path(**tools)
     _, fails = _run(tmp_path, _tree(tmp_path), inputs=_inputs(tmp_path), custody=_custody(tmp_path, BUNDLE))
     assert fails == [why, f"prepare the pod: `{PF.POD_SETUP}`"]
+
+
+def test_a_tree_that_is_not_a_clean_checkout_of_the_commit_is_refused(tmp_path, path):
+    """`suites.py` keys from git's view of the tree, and a changed tree records its attempt dirty, which no merge accepts."""
+    tree = _tree(tmp_path)
+    ok = dict(inputs=_inputs(tmp_path), custody=_custody(tmp_path, BUNDLE))
+    _, fails = _run(tmp_path, tree, **ok, sha="0" * 40)
+    assert fails == [f"tree: {tree} is a checkout of {_head(tree)[:12]}, not of the commit the run names (000000000000)"]
+    (tree / "stray.txt").write_text("left by an earlier run\n")
+    _, fails = _run(tmp_path, tree, **ok, sha=_head(tree))
+    assert len(fails) == 1 and fails[0].startswith(f"tree: git sees 1 change(s) in {tree} (?? stray.txt)")
+    shutil.rmtree(tree / ".git")
+    _, fails = _run(tmp_path, tree, **ok)
+    assert fails[0].startswith(f"tree: {tree} is not a git checkout (the archive stream, or a launcher that predates checkouts")
 
 
 def test_the_uv_pin_is_read_from_pod_setup_sh():

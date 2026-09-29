@@ -5,6 +5,8 @@ unprepared pod is an error, never a verdict on the commit.
     python3 tools/check/preflight.py        by the interpreter `research` runs on, since nothing else may be installed yet
 
 One line per fact on stdout, one per failure on stderr. It checks:
+- that the tree is a git checkout of the commit (RESEARCH_SOURCE_SHA) with nothing git sees changed: `suites.py` keys from git's
+  view of it, and the runner would record a changed tree as dirty, which no merge accepts;
 - that `pod_setup.sh` ran: uv at the version it pins, elan with the toolchain the Lake packages pin, and cargo, on the PATH a
   run sees;
 - that each Lean package's dependencies are warm on this machine, or restorable from the store: `lean-deps.json` pins a bundle
@@ -235,26 +237,32 @@ def disk(tree: Path, cache: Path, restore: list[dict], usage=shutil.disk_usage) 
     return facts, fails
 
 
-def files(root: Path) -> list[str]:
-    """The tree's files as the audit lists them, or (no git here) its `lean-audit.json` files."""
-    got = CHECK.tracked_files(root)
-    if got is not None:
-        return got
-    out = []
-    for base, dirs, names in os.walk(root):
-        dirs[:] = [d for d in dirs if d not in (".lake", ".venv", ".git")]
-        out += [os.path.relpath(os.path.join(base, n), root) for n in names if n == "lean-audit.json"]
-    return sorted(out)
+def checkout(root: Path, sha: str | None) -> tuple[list[str], list[str]]:
+    """That ``root`` is a git checkout of ``sha`` (when given) with nothing git sees changed."""
+    head = _out(["git", "-C", str(root), "rev-parse", "HEAD"]) if (root / ".git").exists() else None
+    if head is None:
+        return [], [f"tree: {root} is not a git checkout (the archive stream, or a launcher that predates checkouts, shipped it): "
+                    f"remove it, and the next launch ships one where the machine has git"]
+    head = head.strip()
+    if sha and head != sha:
+        return [], [f"tree: {root} is a checkout of {head[:12]}, not of the commit the run names ({sha[:12]})"]
+    changed = (_out(["git", "-C", str(root), "status", "--porcelain"]) or "").splitlines()
+    if changed:
+        return [], [f"tree: git sees {len(changed)} change(s) in {root} ({'; '.join(c.strip() for c in changed[:3])}): remove the tree, "
+                    f"and the next launch ships it afresh"]
+    return [f"tree: a clean checkout of {head[:12]}"], []
 
 
 def run(root: Path, inputs: Path | None, custody: Path | None, cache: Path, cpuinfo: Path = Path("/proc/cpuinfo"),
-        usage=shutil.disk_usage) -> tuple[list[str], list[str]]:
+        usage=shutil.disk_usage, sha: str | None = None) -> tuple[list[str], list[str]]:
     lean = (root / "backends" / "flock" / "verifier" / "lean" / "lakefile.toml").exists()
-    packages = LA.packages(files(root)) if lean else []
+    packages = LA.packages(CHECK.tracked_files(root) or []) if lean else []
     sent = inputs / CHECK.LEAN_DEPS_URLS if inputs is not None else None
     urls = json.loads(sent.read_text()) if sent is not None and sent.is_file() else {}
-    facts, fails = setup(root, packages)
-    if fails:
+    facts, fails = checkout(root, sha)
+    f, x = setup(root, packages)
+    facts, fails = facts + f, fails + x
+    if x:
         fails.append(f"prepare the pod: `{POD_SETUP}`")
     f, x, restore = lean_deps(root, packages, cache, urls)
     facts, fails = facts + f, fails + x
@@ -268,7 +276,8 @@ def _env_path(name: str) -> Path | None:
 
 
 def main() -> int:
-    facts, fails = run(ROOT, _env_path("RESEARCH_PREFLIGHT_INPUTS"), _env_path("RESEARCH_PREFLIGHT_CUSTODY"), CHECK.cache_dir())
+    facts, fails = run(ROOT, _env_path("RESEARCH_PREFLIGHT_INPUTS"), _env_path("RESEARCH_PREFLIGHT_CUSTODY"), CHECK.cache_dir(),
+                       sha=os.environ.get("RESEARCH_SOURCE_SHA"))
     for line in facts:
         print(line, flush=True)
     for line in fails:
