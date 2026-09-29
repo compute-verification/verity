@@ -118,9 +118,13 @@ def nv_logf(a: np.ndarray) -> np.ndarray:
     r = mul_ftz(r, f)
     r = fma_ftz(r, f, f)
     r = fma_ftz(i2, _u32(SP.LN2_BITS), r)
-    r = np.where(a2 >= 0x7F800000, fma_ftz(a2, _u32(0x7F800000), _u32(0x7F800000)), r)
+    r = np.where(a2 >= 0x7F800000, np.where(_neg_not_nan(a2), _u32(SP.LOG_INVALID_NAN), fma_ftz(a2, _u32(0x7F800000), _u32(0x7F800000))), r)
     r = np.where((a2 & 0x7FFFFFFF) == 0, _u32(0xFF800000), r)
     return _u32(r)
+
+
+def _neg_not_nan(a: np.ndarray) -> np.ndarray:
+    return (a >= 0x80000000) & ((a & 0x7FFFFFFF) <= 0x7F800000)
 
 
 def nv_log1pf(a: np.ndarray) -> np.ndarray:
@@ -153,7 +157,8 @@ def _log1pf_from_sum(a: np.ndarray, s: np.ndarray) -> np.ndarray:
     r = fma_ftz(ef, _u32(SP.LN2_BITS), r)
     big = a >= 0x7F800000
     ai = _i32_of_u32(a)
-    r = np.where(big & (ai > -1082130432), fma_ftz(a, _u32(0x7F800000), _u32(0x7F800000)), r)
+    r = np.where(big & (ai > -1082130432),
+                 np.where(_neg_not_nan(a), _u32(SP.LOG_INVALID_NAN), fma_ftz(a, _u32(0x7F800000), _u32(0x7F800000))), r)
     r = np.where(big & ((a & 0x7FFFFFFF) == 0), _u32(0x80000000), r)
     return _u32(r)
 
