@@ -15,6 +15,9 @@ torch = pytest.importorskip("torch")
 from verity_vllm.acquire.sources import compiled_source as cs  # noqa: E402
 
 cuda = pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+#: A CUDA build of torch (PyPI's) asks the driver whether a graph is being captured when the record op runs, even on CPU.
+cuda_build_needs_a_gpu = pytest.mark.skipif(torch.version.cuda is not None and not torch.cuda.is_available(),
+                                            reason="a CUDA build of torch without a GPU: the record op asks CUDA whether it is capturing")
 
 
 class _Lin(torch.nn.Module):
@@ -79,6 +82,7 @@ def _wrap(src: cs.CompiledGraphSource, m: torch.nn.Module):
 
 
 @pytest.mark.slow
+@cuda_build_needs_a_gpu
 def test_renumber_assigns_invocations_per_call_site():
     cs._register_op()
     src = cs.CompiledGraphSource(rows=4)
