@@ -15,7 +15,16 @@ def test_the_steps_are_the_suites_then_circuit_check_then_the_lean_hook(tmp_path
     names = [(n, argv if isinstance(argv, str) else argv[1:4]) for n, argv, _cwd in CHECK.steps(tmp_path)]
     assert names[0] == ("pytest", [str(ROOT / "tools/check/suites.py"), "--json", str(tmp_path / "suites.json")])
     assert names[1] == ("circuit-check", ["-m", "circuit_check", "--all"])
-    assert names[2] == ("lean", "skipped: backends/flock/verifier/lean is not on this tree")
+    assert names[2] == ("flock-circuit-build", [str(ROOT / "backends" / "flock" / "check_build.sh")])
+    assert names[3] == ("lean", "skipped: backends/flock/verifier/lean is not on this tree")
+
+
+def test_the_build_step_checks_every_cpu_feature_set_a_pod_builds():
+    """A proving build never has `seed-injection` (1053c0c9 compiled only with it); the class sweep's proving build has no
+    `glue`."""
+    script = (ROOT / "backends" / "flock" / "check_build.sh").read_text()
+    assert "for features in sha512 sha512,glue sha512,glue,seed-injection; do" in script
+    assert "cargo check -q -p flock-live --bin flock-circuit" in script
 
 
 _BIN = b"#!/bin/sh\nexit 0\n"
@@ -131,7 +140,8 @@ def test_the_steps_see_the_trees_packages_only(monkeypatch):
 
 def test_the_groups_split_the_cores_and_run_at_once(tmp_path, monkeypatch):
     monkeypatch.setattr(CHECK, "FLOCK_VERIFIER", tmp_path / "verifier")
-    (pt,), (cc,), (lean,) = CHECK.groups(tmp_path, 16)
+    (pt,), (cc, build), (lean,) = CHECK.groups(tmp_path, 16)
+    assert build[0] == "flock-circuit-build" and build[1][-1].endswith("backends/flock/check_build.sh")
     assert pt[1][1].endswith("tools/check/suites.py") and pt[1][pt[1].index("--jobs") + 1] == "8" and "--fresh" not in pt[1]
     assert cc[1][cc[1].index("--jobs") + 1] == "8" and "--cache" in cc[1]
     monkeypatch.setenv("RESEARCH_SOURCE_SHA", "abc123")                          # a shipped tree: suites.py gets the commit
