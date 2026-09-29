@@ -52,6 +52,7 @@ def load_registries() -> None:
             importlib.import_module(f"{R.__name__}.{m.name}")
     from verity_vllm.program.kernels import rows, twins  # noqa: F401  (their kernels register with core)
     import verity_pouw.circuit.ncp2  # noqa: F401  (PoUW's ncp-v2 unit templates and primitives)
+    import verity_pouw.circuit.fp8  # noqa: F401  (PoUW's NCP-FP8 unit templates and primitives)
     REGISTERED[:] = sorted(i for i, d in REGISTRY.defs.items() if _authored(d))
     _LOADED = True
 
@@ -178,11 +179,14 @@ def templates() -> list[tuple[str, Any, list[dict]]]:
 
 
 def _pouw_roots() -> list[Any]:
-    """PoUW's `ncp-v2` unit templates at k = 64 and the smallest whole call (`verity_pouw.circuit.ncp2`); the package's own
-    tests check the call's template partition and its Z separator."""
-    from verity_pouw.circuit import ncp2
+    """PoUW's `ncp-v2` unit templates at k = 64 and NCP-FP8's at k = 96 (both sums), with each scheme's smallest whole call
+    (`verity_pouw.circuit.ncp2`, `verity_pouw.circuit.fp8`); the package's own tests check each call's template partition
+    and its Z separator."""
+    from verity_pouw.circuit import fp8, ncp2
 
-    return list(ncp2.templates(64, "shift24").values()) + [ncp2.linear(ncp2.Shape(16, 64, 16))]
+    fp8_templates = [t for sums in fp8.SUMS for t in fp8.templates(96, sums, 1, 1, 1, 32).values()]
+    return (list(ncp2.templates(64, "shift24").values()) + [ncp2.linear(ncp2.Shape(16, 64, 16))]
+            + list({t.id: t for t in fp8_templates}.values()) + [fp8.linear(fp8.Shape(16, 96, 16))])
 
 
 def _core_roots() -> list[Any]:
