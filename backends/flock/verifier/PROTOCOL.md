@@ -1129,8 +1129,30 @@ gate)`. The failure codes, in order, are those of `verity.ir.partition.validate_
 
 With no failure, each gate is certified by exactly one unit and the committed set is the boundary set. A read outside the
 circuit is malformed. `unit_cut_agree.py` checks the codes against the reference on random cuts (5000 agree, every code
-exercised). Still ahead, once the verifier holds the IR program (§16.8): the width rule, the claimed units' membership in
-the partition, and the leaf positions derived from it.
+exercised).
+
+**One Call's cut against its graph** (`Partition.checkCut`, `flock-verify cut-check`; reference `verity.ir.cut.check_cut`,
+PR #111). The invariant runs on the Call's computing gates, with its parameters as the input unit and, unless served values
+are given, the committed set the cut implies: a value is committed exactly when another unit reads it or the Call returns
+it. Then the width rule `Q_word_v1{X, W, EXTRAS}`, today `(16, 32, 0)`: each unit's boundary (its gates another unit reads
+or the Call returns) is at most `X + EXTRAS` bits, or one value of at most `W + EXTRAS` bits; else `unit-too-wide`, with
+`(unit, bits, values)`.
+
+**`Q_word` v1 over the verifier's own copy of the program** (`Flock.Qword`, `Flock.Program`, `Flock.Extract`;
+`flock-verify evaluate`, `qword-program`; reference `verity.ir.cut` and `verity.ir.partition_object`, #111, #120):
+- the program is decoded from its `verity-ir/descriptor/v1` bytes by #120's rules, and each Call's graph is built as core's
+  `CallGraph` builds it;
+- a program that is not topological, or whose root batches or scans, is inapplicable to every query;
+- the cut is core's: a flat cut packs the returned gates into runs of at most `X` bits and promotes committed units until no
+  edge crosses units that head nothing, and a separable body is its members' cuts;
+- `Extract.checkCalls` checks each Definition's cut once, on its Call's whole graph with the derived committed set, for the
+  partition invariant and the width rule `(X, W, 0)`, as `partition_object.verify` does.
+
+The algorithm step by step and the agreement evidence (`cut_check_agree.py`, `qword_agree.py`, `qword_program_agree.py`:
+every pinned vector, all of #101's Definitions, the LM-head `Gemm` in 100 s at 9 GB) are in
+`note:20260929T1052Z-report-flock-verifier-qword-cut-check`.
+
+Still ahead: the leaf positions.
 
 ### 16.8 Objects by content
 
@@ -1277,9 +1299,13 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   against #131's `template_instance_vectors.json` (16 of 16: the population, the ranges, every unit's node, member and gates,
   the refusals word for word, the malformed parameters).
 - **The partition finding.** Every verdict of such a statement carries `partition = {rule, query, digest, units, note}`.
-  `units` is `derived` when the verifier derived the statement's units itself: the template queries, given `--program`.
-  For `Q_word` v1 (`Flock.Qword`) the program's Call graphs are not extracted yet, and any other query is not evaluated;
-  then `units` is `as stated`, with the reason in `note`, and an audit reports it as a gap, not a complete check.
+  `units` is `derived` when the verifier derived the statement's units itself, given `--program`: for the template
+  queries (above), and for `Q_word` v1 (§16.7) when the program is the object's, the query applies, every claimed unit is
+  one whole activation of the circuit's template (the innermost Definition on its `locate` path, whose cut is one unit),
+  and every Call's cut holds the invariant and the width rule. A failing cut refuses the partition, naming the Call and
+  its codes. Set 10's object, over RoPE's own program (a root batch), is refused with `--program`, as core's `evaluate`
+  refuses it. For any other query, or without `--program`, `units` is `as stated`, with the reason in `note`, which an
+  audit reports as a gap.
 - **Proof.** The Merkle trees are `hm96-sha512/v1` (`PcsParams.merkle_hash = 3`, 64-byte digests): every level's openings
   carry `opened_salts` (192 bytes per opened row, after the siblings), and an opened row's leaf is
   `SHA-512(leaf_prefix ‖ (x ⊕ M(key)·y) ‖ SHA-512(salt_prefix ‖ y))` for `x = SHA-512(row)`.

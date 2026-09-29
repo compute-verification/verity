@@ -564,6 +564,87 @@ def test_template_queries_agree_with_the_vectors(tmp_path):
     assert p.returncode == 0, p.stdout + p.stderr
 
 
+def _has_check_cut():
+    try:
+        from verity.ir.cut import check_cut  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+@pytest.mark.skipif(shutil.which("lake") is None or not _has_check_cut(), reason="no Lean toolchain or no verity.ir.cut (PR #111)")
+def test_check_cut_agrees_with_the_reference(tmp_path):
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    p = subprocess.run(["python3", str(LEAN.parent / "cut_check_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
+                        "--out", str(tmp_path), "--n", "300"], capture_output=True, text=True)
+    assert p.returncode == 0, p.stdout + p.stderr
+
+
+def _qword_vector_file():
+    try:
+        import verity
+        from verity.ir.codec import decode_program  # noqa: F401
+    except ImportError:
+        return None
+    v = Path(verity.__file__).resolve().parents[2] / "tests" / "ir" / "qword_vectors.json"
+    return v if v.exists() else None
+
+
+@pytest.mark.skipif(shutil.which("lake") is None or _qword_vector_file() is None,
+                    reason="no Lean toolchain or no qword_vectors.json in core (PR #111)")
+def test_qword_cuts_agree_with_core_verify(tmp_path):
+    """Every Call's cut on its whole graph (`qword-program --cuts`: the partition invariant and the width rule), against core's
+    `partition_object.verify`: its pinned cut refusals, and each of its programs at several (X, W)."""
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    p = subprocess.run(["python3", str(LEAN.parent / "qword_program_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
+                        "--out", str(tmp_path), "--qword-vectors", str(_qword_vector_file())], capture_output=True, text=True)
+    assert p.returncode == 0, p.stdout + p.stderr
+    r = json.loads(p.stdout.strip().splitlines()[-1])["qword_vectors"]
+    assert r["cut_refusals"] == 3 and r["cuts"] == 50, r
+
+
+def _qword_vectors():
+    try:
+        import verity.ir.partition_object  # noqa: F401
+        from verity.ir.cut import cut_word  # noqa: F401
+    except ImportError:
+        return None
+    import verity
+    v = Path(verity.__file__).resolve().parents[2] / "tests" / "ir" / "partition_vectors.json"
+    return v if v.exists() else None
+
+
+@pytest.mark.skipif(shutil.which("lake") is None or _qword_vectors() is None, reason="no Lean toolchain or no Q_word evaluator (PR #111)")
+def test_qword_evaluator_agrees_with_the_reference(tmp_path):
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    p = subprocess.run(["python3", str(LEAN.parent / "qword_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
+                        "--out", str(tmp_path), "--n", "300", "--vectors", str(_qword_vectors())], capture_output=True, text=True)
+    assert p.returncode == 0, p.stdout + p.stderr
+
+
+def _format_vectors():
+    try:
+        import verity
+    except ImportError:
+        return None
+    ir = Path(verity.__file__).resolve().parents[2] / "tests" / "ir"
+    need = [ir / "format_vectors.json", ir / "partition_vectors.json", ir / "test_format_spec.py"]
+    return ir if all(p.exists() for p in need) else None
+
+
+@pytest.mark.skipif(shutil.which("lake") is None or _format_vectors() is None,
+                    reason="no Lean toolchain or no program format vectors (PR #120)")
+def test_qword_over_programs_agrees_with_the_reference(tmp_path):
+    ir = _format_vectors()
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    p = subprocess.run(["python3", str(LEAN.parent / "qword_program_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
+                        "--out", str(tmp_path), "--vectors", str(ir / "partition_vectors.json"),
+                        "--format", str(ir / "format_vectors.json")]
+                       + (["--qword-vectors", str(ir / "qword_vectors.json")] if (ir / "qword_vectors.json").exists() else []),
+                       capture_output=True, text=True)
+    assert p.returncode == 0, p.stdout + p.stderr
+
+
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_merkle_collision_is_not_met_by_a_split_string(tmp_path):
     """`MerkleScheme.Collision` is a collision of the hash, not of how its input is split: one byte string split two ways
