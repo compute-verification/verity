@@ -416,10 +416,13 @@ at its floor, so a wholly wrong one is caught directly (`audit_work_whole_stratu
     sum. Per call the floor is pinned (`audit_work_floor`); `flock-verify draw --work` derives the same law from these
     tables.
   - **X-SPC-105 and X-SPC-106 are closed by the window pin**, `audit_window_split_of_record` in
-    `FlockSoundness/Audit/Window.lean` (pending its proof PR and grant): the per-call law with y's floors at
+    `FlockSoundness/Audit/Window.lean` ([#418](https://github.com/danielreuter/verity/pull/418), proved at `f06327bd`,
+    pending its grant): the per-call law with y's floors at
     K = K_y = 27,713 accepts a window with at least 0.1% of its work unsound or 0.1% of its y cells wrong with probability
-    at most 2⁻⁴⁰ + ε_ks + δ_link. Its hypotheses are `hone` (above) and y's floors (`hfy`); outside it, the window's
-    use of it rests on four things:
+    at most 2⁻⁴⁰ + ε_ks + δ_link. Its `callK` and `windowK` are `WorkLaw.budget` and `WorkLaw.sizes`, recomputed from
+    their formulas in `test_the_window_law_is_the_window_pin_s`; its hypotheses are `hone` (above) and y's floors
+    (`hfy`). One Program (`ncp2.window`) is its case C = 1: K_c = min(N, K), the K `verify` takes (`1 <= k <= n`),
+    and y's floor K_y. Outside it, the window's use of it rests on four things:
     - *The verifier derives every number itself.* `window_laws` (`plan.py:164`) takes only the verifier's own layouts
       (`Traced.layout`, `__init__.py:148`; any other is refused by `Traced.check_layout`, `__init__.py:140`). It
       computes W from them (`plan.py:181`) and N (`plan.py:184`), and the floors ⌈K_y·n_s/N⌉ (`plan.py:187`);
@@ -589,7 +592,8 @@ layout is the verifier's, as `ncp-v2`'s: derived from the shape and the declarat
   - the lead domain's shapes (k ≥ 1,088) as a recorded run rather than a test;
   - C-Flock pieces for the PoUW primitives;
   - the floors POUS sets for the zero-work templates other than `dequant` (X-SPC-55; 1 until then);
-  - the proof and grant of the window pin, `audit_window_split_of_record` (`FlockSoundness/Audit/Window.lean`);
+  - the grant and merge of the window pin, `audit_window_split_of_record`
+    ([#418](https://github.com/danielreuter/verity/pull/418));
   - the check that the window key comes after every call's commitment, with the window form of `traced_as`;
   - a statement composing the calls' ε_ks and δ_link into the window's (M2);
   - the served-output designation and the pinned ports in `Q_nested_instances` v0's spec, evaluator and Lean port;

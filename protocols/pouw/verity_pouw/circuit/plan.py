@@ -174,7 +174,7 @@ def window_laws(layouts: Sequence["Layout"], k: int = RECORD_K, floors: tuple[tu
     wrong set are one family of the audit, so its sampling term is the larger of (1 − ε)^K and (1 − ε)^K_y, not their sum.
     The other zero-work templates keep their floors (1 unless ``floors`` names them, X-SPC-84). Per call these are pinned
     (`audit_work_floor`); over the window, the per-call split (X-SPC-83, 106) and B (X-SPC-105) are root's window pin
-    `audit_window_split_of_record` (`FlockSoundness/Audit/Window.lean`, pending its proof), which takes each call's work
+    `audit_window_split_of_record` (`FlockSoundness/Audit/Window.lean`, #418), which takes each call's work
     in one stratum (`check_work_strata`) and each call's draw under its own key context (`Traced.draw`'s `Ledger`)."""
     for lay in layouts:
         check_work_strata(lay.strata)

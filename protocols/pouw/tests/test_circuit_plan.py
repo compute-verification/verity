@@ -263,6 +263,51 @@ def test_the_red_team_s_capped_window_is_refused():
     PL.window_laws([call1], k=k)                                                 # one work stratum a call: admitted
 
 
+def test_the_window_law_is_the_window_pin_s():
+    """#418's `Audit/Window.lean` definitions, recomputed on ℕ from their formulas on random small windows, against
+    `window_laws`: `callK` = min(N_c, max(1, ⌈K·W_c/W⌉)) is `WorkLaw.budget`, `windowK` = workRule(K_c, w_s, n_s, W_c, f_s)
+    is `WorkLaw.sizes`, and the pin's hypotheses hold: `hone` (each call's work in one stratum), `hfy` (y's floors, v = 1 on
+    the dequantization strata) and so `Covers` of w at K and of v at K_y, which `audit_window_split_of_record` reads."""
+    import random
+
+    def ceil(a, b):                                           # Lean's (a + b - 1) / b on ℕ
+        return (a + b - 1) // b
+
+    def work_rule(k, work, size, total, floor):               # `Work.lean`'s workRule
+        return min(size, max(floor, ceil(k * work * size, total)))
+
+    rng, shape = random.Random(418), ncp2.Shape(16, 64, 16)
+    for _ in range(300):
+        calls, k = rng.randint(1, 6), rng.choice([1, 2, 3, 7, 30, 200])
+        layouts = []
+        for c in range(calls):
+            spec = [("tile", "tile", rng.randint(1, 8), rng.randint(1, 50))]
+            spec += [(f"z{i}", rng.choice(["digest", "key", "form_x"]), rng.randint(1, 5), 0) for i in range(rng.randint(0, 2))]
+            spec += [("y", "dequant", rng.randint(1, 20), 0)]
+            rng.shuffle(spec)
+            at, strata = 0, []
+            for name, role, size, w in spec:
+                strata.append(PL.StratumSpec(name, role, tuple(range(at, at + size)), w * size))
+                at += size
+            layouts.append(PL.Layout(shape, (), tuple(strata), {}))
+        floors = tuple((z, rng.randint(1, 4)) for z in ("z0", "z1") if rng.random() < 0.5)
+        laws = PL.window_laws(layouts, k=k, floors=floors)
+        big_w = sum(s.work for lay in layouts for s in lay.strata)
+        big_n = sum(len(s.units) for lay in layouts for s in lay.strata if s.role == "dequant")
+        for lay, law in zip(layouts, laws):
+            w_c, n_c = sum(s.work for s in lay.strata), sum(len(s.units) for s in lay.strata)
+            k_c = min(n_c, max(1, ceil(k * w_c, big_w)))                                   # callK
+            assert law.budget(lay.strata) == k_c
+            sizes, table = law.sizes(lay.strata), PL.work_table(lay, law)
+            for s in lay.strata:
+                n_s, w_s, f_s, v_s = len(s.units), table[s.name]["work"], table[s.name]["floor"], int(s.role == "dequant")
+                assert sizes[s.name] == work_rule(k_c, w_s, n_s, w_c, f_s)                  # windowK
+                assert w_s == 0 or w_c == w_s * n_s                                         # hone
+                assert k * v_s * n_s <= f_s * big_n                                         # hfy at K_y = K
+                assert k * w_s * n_s <= sizes[s.name] * big_w or sizes[s.name] == n_s       # Covers w K
+                assert k * v_s * n_s <= sizes[s.name] * big_n or sizes[s.name] == n_s       # Covers v K_y
+
+
 def test_a_tiles_closure_contains_the_tile_itself():
     """A drawn tile is proved itself, not only what it reads: `t ∈ cl t`, as Lean's `Layout.cl` inserts the tile's own unit.
     Without it a wrong tile over right strips would count as zero harm (the Flock red team's C1 on #390)."""
