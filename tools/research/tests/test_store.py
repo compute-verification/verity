@@ -578,6 +578,19 @@ def test_sigv4_aws_documented_vectors():
     assert remote_s3.canonical_query({"list-type": "2", "prefix": "objects/sha256/"}) == "list-type=2&prefix=objects%2Fsha256%2F"
 
 
+def test_presigned_url_aws_documented_vector():
+    """'Authenticating Requests: Using Query Parameters' (S3 API reference): GET /test.txt for 86400 s."""
+    url = remote_s3.presign("GET", "https", HOST, "/test.txt", AK, SK, REGION, DATE, 86400)
+    assert url == ("https://examplebucket.s3.amazonaws.com/test.txt?X-Amz-Algorithm=AWS4-HMAC-SHA256"
+                   "&X-Amz-Credential=AKIAIOSFODNN7EXAMPLE%2F20130524%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20130524T000000Z"
+                   "&X-Amz-Expires=86400&X-Amz-SignedHeaders=host"
+                   "&X-Amz-Signature=aeeed9bbccd4d02ee5c0109b86d86835f995330da4c265957d157751f604d404")
+    r = remote_s3.S3Remote("https://acct.r2.cloudflarestorage.com", "bkt", AK, SK, session_token="tok")
+    got = r.presign("objects/sha256/ab", 600)
+    assert got.startswith("https://acct.r2.cloudflarestorage.com/bkt/objects/sha256/ab?") and "X-Amz-Security-Token=tok" in got
+    assert SK not in got and "X-Amz-Expires=600" in got
+
+
 def test_s3remote_against_a_fake_bucket(tmp_path):
     """The urllib plumbing (path-style URLs, signed payload hash, HEAD 404, list-type=2 paging) against an in-process HTTP server."""
     import http.server
