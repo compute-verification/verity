@@ -100,7 +100,8 @@ docstring) and sizes:
   compared at the same latency.
 
 The report has the per-link bandwidth, the utilization and padding share, the clock-sync set and its bits, the (δ, ρ)
-range the honest prover declared, the added first-frame latency, the capacity per day, and the K charge by span.
+range the honest prover declared, the added first-frame latency, the shaping delay (hand time minus ready time, over
+every frame), the capacity per day, and the K charge by span.
 
 ## Tests
 

@@ -8,7 +8,7 @@ from contextlib import redirect_stdout
 from fractions import Fraction
 
 from verity_network_warden import calibration, capacity
-from verity_network_warden.schedule import LogicalFrame, SyncSet
+from verity_network_warden.schedule import ClockSync, LogicalFrame, SyncSet
 
 
 def synthetic_trace(seed=0, sessions=40, window_buckets=20, frames_per_session=6, gap=1, latency=(1, 4)):
@@ -45,6 +45,7 @@ def test_calibrate_honest_trace():
     assert egress["allocation"] >= 1 and not egress["replay"]["overflow"]
     assert egress["replay"]["p99_delay_buckets"] <= 1
     assert 0 <= egress["padding_share"] <= 1
+    assert 0 <= egress["shaping_delay_ms"]["p50"] <= egress["shaping_delay_ms"]["p99"] <= egress["shaping_delay_ms"]["max"]
     (ingress,) = report["ingress"]
     assert ingress["bucket_ms"] == 100  # decision D's default
     assert ingress["rate_bps"] == capacity.ingress_rate(ingress["allocation"], 100)
@@ -86,6 +87,17 @@ def test_a_mid_session_stall_is_an_honest_miss():
             f["ready"] += 30
     sync = calibration.calibrate(trace)["clock_sync"]
     assert sync["honest_miss_rate"] > 0 and not sync["meets_target"]
+
+
+def test_prover_does_not_trade_pace_for_one_bucket_of_offset():
+    """The first frame is ready 2 buckets after the anchor and the rest pace at 4 per bucket from bucket 3. ρ = 1 is met
+    at δ = 2, and ρ = 4 only at δ = 3. The prover takes (3, 4): its frames wait at most a bucket, where (2, 1) would hold
+    the 40th frame 29 buckets."""
+    frames = [LogicalFrame(b"", 10, i) for i in range(40)]
+    ready = [12] + [13 + i // 4 for i in range(1, 40)]
+    syncs, hands, misses = calibration.choose_syncs(frames, ready, SyncSet(tuple(range(6)), (1, 4)), 600)
+    assert misses == 0 and syncs == [ClockSync(3, 4)]
+    assert max(h - r for h, r in zip(hands, ready)) <= 1
 
 
 def test_fraction_at_most_rounds_down():
