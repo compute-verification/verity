@@ -77,3 +77,17 @@ appear here. `tools/lean/audit.py` checks every declaration; this list is the he
 -- the 14 GB theorem for the implementation's tagged keying, and the oracle-game transfer it rests on
 #print axioms PousDenseReCert.segTag_meets_14
 #print axioms PousDenseReCert.segTag_auditSecure
+-- the overwrite chain: P3 with a concrete `H`, the band, the dense chain scheme and the public encoder, no hypothesis
+#print axioms PousProofs.P3ConcreteMeets64
+#print axioms PousProofs.P3ConcreteMeets14GB
+#print axioms PousProofs.P3ConcreteMeets64D12
+#print axioms PousProofs.BandChainMeets64
+#print axioms PousProofs.BandChainMeets64D5
+#print axioms PousProofs.BandChainMeets64D12
+#print axioms PousProofs.BandMultiMeets14
+#print axioms PousProofs.BandMultiMeets14K106
+#print axioms PousProofs.ChainDenseMeets64
+#print axioms PousProofs.BandPubMeets64
+#print axioms PousProofs.BandPubMeets14
+#print axioms PousProofs.BandPubMeets14Global
+#print axioms PousProofs.ChainDenseMeets111

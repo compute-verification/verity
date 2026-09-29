@@ -8,6 +8,7 @@ import PousProofs.Pebbling.B3Chain
 import PousProofs.Dense.DenseMeets
 import PousProofs.P3.InvertibleCore
 import PousProofs.P3.Refutation
+import PousProofs.Chain.Flat
 
 /-!
 # The proved pinned statements
@@ -86,5 +87,27 @@ theorem SampledAuditSim : Pous.Pinned.SampledAuditSim := @PousAudit.sampled_audi
 theorem StackedAuditSeq : Pous.Pinned.StackedAuditSeq := @PousAudit.stacked_audit_seq
 theorem StackedAuditOnePercent : Pous.Pinned.StackedAuditOnePercent := @PousAudit.stacked_audit_one_percent
 theorem DenseMeets : Pous.Pinned.DenseMeets := PousDense.dense_meets
+
+/-! ## The overwrite chain (`PousProofs/Chain/Flat.lean`)
+
+P3 with a concrete `H`, the band, the dense chain scheme and the public encoder, each over the trusted copies
+(`Pous/Model/P3Chain.lean`, `BandChain.lean`, `PubEncoder.lean`, `Pous/Accounting/PubMeets.lean`). -/
+
+theorem P3ConcreteMeets64 : Pous.Pinned.P3ConcreteMeets64 :=
+  PousP3ConcreteMulti.p3_meets_concrete_64_D10_unconditional
+theorem P3ConcreteMeets14GB : Pous.Pinned.P3ConcreteMeets14GB :=
+  PousP3ConcreteMulti.p3_meets_concrete_multi_64_D10_unconditional
+theorem P3ConcreteMeets64D12 : Pous.Pinned.P3ConcreteMeets64D12 :=
+  PousP3ConcreteMulti.p3_meets_concrete_64_D12_band16_unconditional
+theorem BandChainMeets64 : Pous.Pinned.BandChainMeets64 := Pous.BandChain.band_meets_64_final
+theorem BandChainMeets64D5 : Pous.Pinned.BandChainMeets64D5 := Pous.BandChain.band_meets_64_d5_final
+theorem BandChainMeets64D12 : Pous.Pinned.BandChainMeets64D12 := Pous.BandChain.band_meets_64_d12_final
+theorem BandMultiMeets14 : Pous.Pinned.BandMultiMeets14 := Pous.BandMulti.band_meets_14_final
+theorem BandMultiMeets14K106 : Pous.Pinned.BandMultiMeets14K106 := Pous.BandMulti.band_meets_14_k106_final
+theorem ChainDenseMeets64 : Pous.Pinned.ChainDenseMeets64 := PousSpongeChain.chain_meets_64_final
+theorem BandPubMeets64 : Pous.Pinned.BandPubMeets64 := PousPub.band_pub_meets_64_final
+theorem BandPubMeets14 : Pous.Pinned.BandPubMeets14 := PousPub.band_pub_meets_14_final
+theorem BandPubMeets14Global : Pous.Pinned.BandPubMeets14Global := PousPub.band_pub_meets_14_global_final
+theorem ChainDenseMeets111 : Pous.Pinned.ChainDenseMeets111 := PousSpongeChain.chainDenseMeets111_final
 
 end PousProofs
