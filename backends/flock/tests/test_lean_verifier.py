@@ -44,11 +44,11 @@ def test_audit_layer_is_abstract():
     """The audit theorems import only the interaction model, Mathlib and each other, so any backend can instantiate them
     (`soundness/DESIGN.md` §12). The Flock instantiations are the only files that import Flock's theorems:
     `Flock.lean` (oracle layer), `FlockCompiled.lean` (one table), `FlockBatched.lean` (several tables),
-    `FlockBatchedAcc.lean` (the expected-time extractor), `FlockLink.lean` (the link theorem) and `FlockLinked.lean` (the
-    two composed). No proof is admitted."""
+    `FlockBatchedAcc.lean` (the expected-time extractor), `FlockLink.lean` (the link theorem), `FlockLinked.lean` (the
+    two composed) and `FlockWork.lean` (the executable's work rule). No proof is admitted."""
     files = sorted(AUDIT.glob("*.lean"))
     flock = {"Flock.lean", "FlockCompiled.lean", "FlockBatched.lean", "FlockBatchedAcc.lean", "FlockLink.lean",
-             "FlockLinked.lean"}
+             "FlockLinked.lean", "FlockWork.lean"}
     assert files and flock <= {p.name for p in files}
     bad = [f"{p.name}: {line}" for p in files if p.name not in flock for line in p.read_text().splitlines()
            if line.startswith("import ") and not AUDIT_IMPORTS.match(line)]
@@ -290,6 +290,78 @@ def test_stratified_draw_from_the_verifiers_own_program(tmp_path):
         assert _lean_draw_obj([*flags, "--stratified", k]) is None
     (tmp_path / "w.json").write_text(json.dumps({**obj, "query": {"name": "Q_word", "version": 1, "params": {"X": 16, "W": 32}}}))
     assert _lean_draw_obj(["--program", str(tmp_path / "p.desc"), "--partition", str(tmp_path / "w.json"), "--stratified", "4"]) is None
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_work_draw_from_the_verifiers_own_program(tmp_path):
+    """`draw --program --partition --work K --work-table F`: the stratified law's strata, `k_s = min(n_s, max(1,
+    ⌈K w_s n_s / W⌉))` (a stratum that does no work draws its floor of one), each stratum's `subset` on its own segment of
+    the stream, and U2 on work draws, held to the verifier's own law."""
+    import hashlib
+    import random
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    ref = _stratified_agree()
+    desc = {"schema": "verity-ir/descriptor/v1", "callees": ["Input8_v1", "T0_v0", "T1_v0", "T2_v0"], "root": "Root_v0",
+            "definitions": {"Root_v0": {"form": "composite", "body": {"nodes": [
+                {"form": "primitive", "fn": 0}, {"form": "batch", "fn": 1, "n": 2}, {"form": "batch", "fn": 2, "n": 3},
+                {"form": "batch", "fn": 1, "n": 1}, {"form": "batch", "fn": 3, "n": 4}]}},
+                "Input8_v1": {"form": "primitive"}, "T0_v0": {"form": "primitive"}, "T1_v0": {"form": "primitive"},
+                "T2_v0": {"form": "primitive"}}}
+    text = json.dumps(desc, sort_keys=True, separators=(",", ":"))
+    (tmp_path / "p.desc").write_text(text)
+    obj = {"format": "verity/partition/v1", "program": hashlib.sha512(text.encode()).hexdigest(),
+           "query": {"name": "Q_template_instances", "version": 0, "params": {"templates": ["T1_v0", "T0_v0", "T2_v0"]}}}
+    (tmp_path / "q.json").write_text(json.dumps(obj))
+
+    def table(name, work):
+        (tmp_path / name).write_text(json.dumps(work))
+        return ["--program", str(tmp_path / "p.desc"), "--partition", str(tmp_path / "q.json"), "--work-table", str(tmp_path / name)]
+
+    flags = table("w.json", {"T0_v0": 3, "T1_v0": 1, "T2_v0": 0})
+    law = {"law": "work", "k": 2, "strata": [{"template": "T0_v0", "units": [[0, 2], [5, 6]], "work": 3, "k": 2},
+                                             {"template": "T1_v0", "units": [[2, 5]], "work": 1, "k": 1},
+                                             {"template": "T2_v0", "units": [[6, 10]], "work": 0, "k": 1}]}
+    need = sum(2 * s["k"] * ref.width(sum(hi - lo for lo, hi in s["units"])) + 64 for s in law["strata"])
+    rng = random.Random(20260929)
+    for _ in range(20):
+        src = rng.randbytes(need)
+        (tmp_path / "s.bin").write_bytes(src)
+        d = _lean_draw_obj([*flags, "--work", "2", "--stream-file", str(tmp_path / "s.bin")])
+        assert {k: d[k] for k in ("law", "k", "strata")} == law and d["population"] == 10
+        assert d["units"] == ref.reference_draw(law, src)
+    # W = 3·3 + 1·3 = 12: sized by work, floored at one, capped at n_s
+    for k, want in {"1": [1, 1, 1], "4": [3, 1, 1], "10": [3, 3, 1]}.items():
+        assert [s["k"] for s in _lean_draw_obj([*flags, "--work", k])["strata"]] == want, k
+    d = _lean_draw_obj([*flags, "--work", "2"])
+    assert len(d["units"]) == 4 and sum(u in (0, 1, 5) for u in d["units"]) == 2 and sum(u >= 6 for u in d["units"]) == 1
+    s0, s1, s2 = d["strata"]
+    bad = [{**d, "k": 3}, {**d, "law": "stratified"}, {**d, "units": d["units"][:-1]},
+           {**d, "strata": [s0, s1, {**s2, "k": 0}]}, {**d, "strata": [s0, s1, {k: v for k, v in s2.items() if k != "work"}]},
+           {**d, "strata": [{**s0, "work": "3"}, s1, s2]}, {**d, "strata": [s0, s1, {**s2, "k": True}]},
+           {**d, "strata": [s0, s1, {**s2, "work": 0, "n": 4}]}, {**d, "strata": [s0, s1]},
+           # U2 alone accepts a work of 4 (the same k_s); the verifier's own table refuses it
+           {**d, "strata": [{**s0, "work": 4}, s1, s2]}]
+
+    def check(cases, *extra):
+        (tmp_path / "cases.json").write_text(json.dumps([{"record": x, "statement": x, "instances": len(x["units"])} for x in cases]))
+        p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "draw-test", str(tmp_path / "cases.json"), *extra],
+                           capture_output=True, text=True)
+        return [json.loads(line[10:]) for line in p.stdout.splitlines()]
+
+    got = check([d, *bad], *flags, "--work", "2")
+    assert [g["ok"] for g in got] == [True] + [False] * len(bad), got
+    assert [g["ok"] for g in check([d, bad[-1]])] == [True, True]
+    # another table's law, or the stratified law, is not this verifier's
+    other = _lean_draw_obj([*table("w2.json", {"T0_v0": 1, "T1_v0": 1, "T2_v0": 0}), "--work", "2"])
+    strat = _lean_draw_obj([*flags[:4], "--stratified", "2"])
+    assert [g["ok"] for g in check([other, strat])] == [True, True]
+    assert [g["ok"] for g in check([other, strat], *flags, "--work", "2")] == [False, False]
+    for k in ("0", "11"):
+        assert _lean_draw_obj([*flags, "--work", k]) is None
+    assert _lean_draw_obj([*table("w3.json", {"T0_v0": 3, "T1_v0": 1}), "--work", "2"]) is None
+    assert _lean_draw_obj([*table("w4.json", {"T0_v0": 0, "T1_v0": 0, "T2_v0": 0}), "--work", "2"]) is None
+    assert _lean_draw_obj([*flags, "--work", "2", "--stratified", "2"]) is None
+    assert _lean_draw_obj([*flags[:4], "--work", "2"]) is None
 
 
 def _one_stage_draw():
