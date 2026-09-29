@@ -4,7 +4,10 @@ fixtures."""
 
 from __future__ import annotations
 
+import json
 from fractions import Fraction
+from math import log2
+from pathlib import Path
 
 from verity.ir.partition import Level
 from verity.proofs.profile import Bernoulli, IntegrityProfile, Stratified, Stratum, Subset
@@ -52,7 +55,7 @@ def test_exfiltration_is_the_output_bit_weighted_bound_plus_the_location_term():
 def test_the_location_term_bounds_the_number_of_wrong_sets():
     """log2 of the sets of at most K = bound() of n units, sum_{j <= K} C(n, j), is at most `location_bits`, and within
     log2(n) + 1 bits of it; no wrong unit means no choice, and at least half the units wrong means every subset."""
-    from math import comb, log2
+    from math import comb
 
     for n, k in ((512, 4), (512, 16), (4096, 38)):
         p = IntegrityProfile(("unit",), (n,), {"unit": Subset(k)}, 0.01)
@@ -61,6 +64,28 @@ def test_the_location_term_bounds_the_number_of_wrong_sets():
         assert exact <= location_bits(p) <= exact + log2(n) + 1
     assert location_bits(IntegrityProfile(("unit",), (8,), {"unit": Subset(8)}, 0.01)) == 0.0
     assert location_bits(IntegrityProfile(("unit",), (8,), {"unit": Subset(1)}, 0.01)) == 8.0
+
+
+def test_the_bound_is_at_least_audit_exfiltration_evaluated_in_lean():
+    """`fixtures/exfiltration_lean.json`: Lean evaluates `audit_exfiltration`'s bound (`lean/ExfiltrationVectors.lean`)
+    on the uniform k-subset of n units at delta = 2^-e with b output bits per unit: K, the least count meeting its
+    `miss (K + 1) < delta` (through `Law.subset_miss`), the harm bound H = b K, and admissible = sum_{j <= K} C(n, j),
+    so the bound's numerator is 2^H admissible.  Core's count bound is K; `harm_bound` is at least H and below H + b;
+    `location_bits` is at least log2 admissible and within log2(n + 1) of it, and n once K >= n / 2; so
+    `exfiltration_bound` is at least log2 of the numerator."""
+    data = json.loads((Path(__file__).parent / "fixtures" / "exfiltration_lean.json").read_text())
+    assert data["statement"] == "FlockSoundness.Audit.Partition.audit_exfiltration" and len(data["vectors"]) == 24
+    for v in data["vectors"]:
+        n, K, H, b, admissible = v["n"], v["K"], v["H"], v["bits"], v["admissible"]
+        p = IntegrityProfile(("unit",), (n,), {"unit": Subset(v["k"])}, 2.0 ** v["delta_log2"])
+        assert p.bound() == K and H == b * K
+        assert H <= p.harm_bound(b) < H + b
+        loc = location_bits(p)
+        if 2 * K >= n:
+            assert loc == n and admissible <= 2 ** n
+        else:
+            assert log2(admissible) <= loc <= log2(admissible) + log2(n + 1)
+        assert exfiltration_bound(p, b) >= H + log2(admissible)
 
 
 def test_compute_is_the_work_weighted_bound():
