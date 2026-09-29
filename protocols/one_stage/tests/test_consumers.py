@@ -4,6 +4,7 @@ fixtures."""
 
 from __future__ import annotations
 
+import hashlib
 import json
 from fractions import Fraction
 from math import log2
@@ -22,6 +23,8 @@ A4_BITS = {"rms_triton": 2048 * 16, "gemm2048": 16, "rope": 64 * 16, "rms_fused"
 DELTA = 2.0 ** -20
 FLOOR = {"rms_triton": 1, "gemm2048": 905, "rope": 2, "rms_fused": 1, "silu_mul": 1, "gemm8192": 86}
 BY_BITS = {"rms_triton": 10, "gemm2048": 104, "rope": 12, "rms_fused": 20, "silu_mul": 39, "gemm8192": 10}
+ROOT = Path(__file__).resolve().parents[3]
+LEAN_VECTORS = Path(__file__).parent / "fixtures" / "exfiltration_lean.json"
 
 
 def a4_law(ks: dict) -> Stratified:
@@ -69,11 +72,11 @@ def test_the_location_term_bounds_the_number_of_wrong_sets():
 def test_the_bound_is_at_least_audit_exfiltration_evaluated_in_lean():
     """`fixtures/exfiltration_lean.json`: Lean evaluates `audit_exfiltration`'s bound (`lean/ExfiltrationVectors.lean`)
     on the uniform k-subset of n units at delta = 2^-e with b output bits per unit: K, the least count meeting its
-    `miss (K + 1) < delta` (through `Law.subset_miss`), the harm bound H = b K, and admissible = sum_{j <= K} C(n, j),
-    so the bound's numerator is 2^H admissible.  Core's count bound is K; `harm_bound` is at least H and below H + b;
-    `location_bits` is at least log2 admissible and within log2(n + 1) of it, and n once K >= n / 2; so
-    `exfiltration_bound` is at least log2 of the numerator."""
-    data = json.loads((Path(__file__).parent / "fixtures" / "exfiltration_lean.json").read_text())
+    `miss (K + 1) < delta` (the kernel checks miss (K + 1) < delta <= miss K, `grid_counts`), the harm bound H = b K,
+    and admissible = sum_{j <= K} C(n, j), so the bound's numerator is 2^H admissible.  Core's count bound is K;
+    `harm_bound` is at least H and below H + b; `location_bits` is at least log2 admissible and within log2(n + 1) of
+    it, and n once K >= n / 2; so `exfiltration_bound` is at least log2 of the numerator."""
+    data = json.loads(LEAN_VECTORS.read_text())
     assert data["statement"] == "FlockSoundness.Audit.Partition.audit_exfiltration" and len(data["vectors"]) == 24
     for v in data["vectors"]:
         n, K, H, b, admissible = v["n"], v["K"], v["H"], v["bits"], v["admissible"]
@@ -86,6 +89,19 @@ def test_the_bound_is_at_least_audit_exfiltration_evaluated_in_lean():
         else:
             assert log2(admissible) <= loc <= log2(admissible) + log2(n + 1)
         assert exfiltration_bound(p, b) >= H + log2(admissible)
+
+
+def test_the_lean_vectors_were_generated_from_this_tree():
+    """The vectors record the sha256 of the exporter and of the soundness package's files they read (`lean/generate.sh`):
+    `audit_exfiltration` (`Audit/Influence.lean`), the uniform law and `subset_miss` (`Audit/Law.lean`), and the toolchain
+    and Mathlib pins.  A change to any of them fails here until the vectors are regenerated."""
+    recorded = json.loads(LEAN_VECTORS.read_text())["inputs"]
+    soundness = "backends/flock/verifier/lean/soundness/"
+    assert set(recorded) == {"protocols/one_stage/tests/lean/ExfiltrationVectors.lean",
+                             *(soundness + f for f in ("FlockSoundness/Audit/Influence.lean", "FlockSoundness/Audit/Law.lean",
+                                                       "lake-manifest.json", "lean-toolchain"))}
+    stale = [p for p, h in recorded.items() if hashlib.sha256((ROOT / p).read_bytes()).hexdigest() != h]
+    assert not stale, f"changed since the vectors were generated, rerun protocols/one_stage/tests/lean/generate.sh: {stale}"
 
 
 def test_compute_is_the_work_weighted_bound():
