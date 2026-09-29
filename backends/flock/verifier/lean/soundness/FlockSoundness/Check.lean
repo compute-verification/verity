@@ -216,6 +216,12 @@ hypotheses of the theorems that use them, never `axiom` declarations, so they ca
 #print axioms FlockSoundness.Audit.Law.drawOS_work_escape_le
 #print axioms FlockSoundness.Audit.Law.execOS_escape_le
 #print axioms FlockSoundness.Audit.Law.execOS_subset_escape_le
+#print axioms FlockSoundness.Audit.Law.execOS_work_escape_le
+-- the PoUW circuit's keyed draws: Key.subset (one stream per swap), the window as one stratified law, and tier 3 under A4
+#print axioms FlockSoundness.Audit.Law.subsetOn_escape_le
+#print axioms FlockSoundness.Audit.Law.drawOn_escape_le
+#print axioms FlockSoundness.Audit.Law.keyedWindow_escape_le
+#print axioms FlockSoundness.Audit.Law.keyedWindow_escape_le_of_names
 #print axioms FlockSoundness.Audit.Law.avg_escape_subsets
 #print axioms FlockSoundness.Audit.Law.choose_support
 #print axioms FlockSoundness.Audit.Law.subset_minimax

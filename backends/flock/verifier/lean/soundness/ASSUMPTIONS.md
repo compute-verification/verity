@@ -12,9 +12,10 @@ verifier derives (`dp`, `hL1`).
 
 ## Named assumptions (taken without proof)
 
-There are two, each a `Prop` taken as a hypothesis: A2 (`Assumptions.SHA512ExpectedTimeCR`), which the link theorem
-(`flock_batched_linkSoundE`) takes as `hCR`, and A3 (`Assumptions.UniformRandomBytes`), which the live draw's theorems
-take as `ht`.
+There are three, each a `Prop` taken as a hypothesis:
+- A2 (`Assumptions.SHA512ExpectedTimeCR`), which the link theorem (`flock_batched_linkSoundE`) takes as `hCR`;
+- A3 (`Assumptions.UniformRandomBytes`), which the live draw's theorems take as `ht`;
+- A4 (`Assumptions.KeyedStreamsUniform`), which the PoUW window's keyed draw takes as `hA4`.
 `README.md` §1.5 names one more, L1, about the lowering, stated below. The development declares no `axiom`. So a
 mis-stated assumption can make a theorem vacuous, but it can never make Lean prove something false.
 
@@ -38,14 +39,35 @@ unit draw.
   source, each call's bytes independent of every earlier call's.
 - **Why it is not stated about `IO.getRandomBytes`.** To Lean's logic an `IO` action is a function of the world and
   `IO.getRandomBytes` an opaque constant, so a `Prop` saying its bytes are random would be refutable, and every theorem
-  taking it vacuous. What ties the statement to the verifier is `drawOS_def`: the live draw `Flock.Draw.drawOS` is
-  `Flock.Draw.drawWith` with every stream's bytes from `IO.getRandomBytes`, and the theorems are about `drawWith`.
+  taking it vacuous. At run time, Lean v4.34.0's runtime implements it as `lean_io_get_random_bytes`
+  (`src/runtime/io.cpp`), which reads `/dev/urandom` on Unix and calls `BCryptGenRandom` on Windows. Re-read it at every
+  toolchain bump. What ties the statement to the verifier is `drawOS_def`: the live draw `Flock.Draw.drawOS` is
+  `Flock.Draw.drawWith` with every stream's bytes from `IO.getRandomBytes`, and the theorems are about `drawWith`. The
+  step from `IO` to the model rests on `drawWith` being generic in its monad, together with A3.
 - **Where it is used.** `drawOS_subset_escape_le`, `drawOS_stratified_escape_le`, `drawOS_work_escape_le`,
   `execOS_escape_le` and `execOS_subset_escape_le` (`FlockSoundness/ExecDrawOS.lean`). They hold for every number of
   bytes `L` the model reads. The live verifier reads as many as its reruns need, and its escape is the limit as `L`
   grows, which the theorems don't state. `subset_exec_escape_le` and `stratified_exec_escape_le` take uniform streams
   as their probability space, the same assumption.
 - **Upstream:** watch entry `A3-uniform-bytes`.
+
+**A4. `verity.randomness`'s keyed streams at distinct indices pass a test as independent uniform streams do, up to `η`**
+(`prf/sha-256`), for the PoUW window's keyed draw. Under review by root's statement reviewer (`lanes/verity-root/`
+`20260929T1655Z-handoff-from-pous-keyed-stream-assumption.md`).
+
+- **Statement.** A verifier secret of `S` uniform bytes gives the key `Randomness.derive`. For a test `E` of the key's
+  streams at indices whose framings (`Randomness.frames`) are pairwise distinct, each read to `L i` bytes
+  (`Randomness.stream`), the streams pass `E` with at most the probability that independent uniform streams do, plus
+  `η`. `Randomness.lean` is the Lean spec of `verity.randomness` v1: it reproduces
+  `packages/verity/tests/randomness/vectors.json`, and Python matches its vectors
+  (`backends/flock/tests/test_randomness_spec.py`).
+- **Per test, as A2 is per finder.** For every test the statement would be refutable, since `2^(8S)` sources give at
+  most that many stream tuples. `keyedWindow_escape_le` takes A4 for one test per set `B` (`windowTest`: the window draw
+  misses `B`), and `η` enters its bound.
+- **What it assumes of SHA-256.** It is a pseudorandom function keyed by a secret prefix, on the prefix-free inputs
+  `verity.randomness` hashes: `frames` is length-framed and the counter is 8 bytes. It also assumes the verifier's
+  secret is uniform.
+- **Upstream:** watch entry `A4-prf-sha256`.
 
 - **L1. Each template's rows compute its gates** (named hypothesis). That is, the rows' outputs are the gates' outputs, in
   the program's Boolean circuit, on every input. The audit certifies drawn units against their rows. That says something

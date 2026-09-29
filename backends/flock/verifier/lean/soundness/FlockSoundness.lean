@@ -97,6 +97,9 @@ import FlockSoundness.Audit.Stratified
 import FlockSoundness.ExecDraw
 import FlockSoundness.ExecStratified
 import FlockSoundness.ExecDrawOS
+import FlockSoundness.Randomness
+import FlockSoundness.PlanDraw
+import FlockSoundness.KeyedDraw
 import FlockSoundness.Audit.Work
 import FlockSoundness.Audit.FlockWork
 import FlockSoundness.Audit.Closure

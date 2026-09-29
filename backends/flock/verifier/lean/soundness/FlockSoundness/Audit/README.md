@@ -55,6 +55,11 @@ draw**: `Flock.Draw.drawOS`, which is `drawWith` on `IO.getRandomBytes` (`drawOS
 and rerunning, misses $B$ with probability at most the same escapes, on a byte source that A3 makes uniform
 (`Assumptions.UniformRandomBytes`); `execOS_escape_le` and `execOS_subset_escape_le` state it for the live draw as a law
 (`execOS`).
+`subsetOn_escape_le`, `drawOn_escape_le` and `keyedWindow_escape_le` (`KeyedDraw.lean`), **the PoUW circuit's keyed
+draws**. `Key.subset`, which draws each swap from its own `verity.randomness` stream, escapes no more often than the
+uniform $k$-subset. The window's per-call draws under one key form one `Law.stratified` over its (call, template)
+strata. So the live window draw (`keyedWindow`) escapes $B$ with at most `Law.stratified`'s escape plus the $\eta$ of A4
+(`Assumptions.KeyedStreamsUniform`).
 
 **Theorems, the stratified law** (`Audit/Stratified.lean`, the default draw law; `docs/sampling-strategies.md` §4):
 `Law.stratified σ k`, an independent uniform $k_s$-subset inside each stratum of $\sigma : \mathrm{Fin}\,n \to \mathrm{Fin}\,m$;

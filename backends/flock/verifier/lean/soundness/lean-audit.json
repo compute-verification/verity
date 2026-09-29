@@ -25,7 +25,8 @@
   "imports": [
    "ArkLib",
    "CompPoly.Fields.Binary.AdditiveNTT.NovelPolynomialBasis",
-   "VCVio.CryptoFoundations.HardnessAssumptions.CollisionResistance"
+   "VCVio.CryptoFoundations.HardnessAssumptions.CollisionResistance",
+   "VCVio.CryptoFoundations.PRF"
   ],
   "watch": {
    "A1-johnson-mca": {
@@ -146,6 +147,11 @@
    "A3-uniform-bytes": {
     "about": "A3 (UniformRandomBytes, uniform/io-getrandombytes): the operating system's bytes, which the live draw reads through IO.getRandomBytes, are independent and uniform",
     "mentions": ["IO.getRandomBytes"],
+    "ack": []
+   },
+   "A4-prf-sha256": {
+    "about": "A4 (KeyedStreamsUniform, prf/sha-256): verity.randomness's keyed streams at distinct indices pass a test as independent uniform streams do, up to eta, SHA-256 keyed by a secret prefix being a PRF",
+    "mentions": ["PRFScheme.prfAdvantage"],
     "ack": []
    }
   }
@@ -370,6 +376,11 @@
    "assumptions": [],
    "type_hash": "00000000573237be"
   },
+  "FlockSoundness.Audit.Law.drawOn_escape_le": {},
+  "FlockSoundness.Audit.Law.execOS_work_escape_le": {},
+  "FlockSoundness.Audit.Law.keyedWindow_escape_le": {},
+  "FlockSoundness.Audit.Law.keyedWindow_escape_le_of_names": {},
+  "FlockSoundness.Audit.Law.subsetOn_escape_le": {},
   "FlockSoundness.Audit.Law.execStratified_escape_le": {
    "signature": [
     "FlockSoundness.Audit.Law.execStratified_escape_le {n m : Nat} (σ : Fin n → Fin m) (k : Fin m → Nat)",
