@@ -229,7 +229,8 @@ Nothing that bounds spend may depend on an agent VM, which can be suspended at a
 
 - **A lease on every pod** (`pods/lease.py`, `pods/sh/lease.sh`). `research pods create --max-hours H` puts the expiry in the pod's
   environment, then, once sshd answers, arms the lease loop over ssh with the lease file and starts the idle guard (`pod_guard.sh
-  daemon`: `--first-idle-min`, default 20, before the pod's first run); `--boot-lease` also runs the loop from a RunPod image's start
+  daemon`: `--first-idle-min`, default 20, before the pod's first run; `--idle-min 0` arms none, for a pool pod kept up idle);
+  `--boot-lease` also runs the loop from a RunPod image's start
   command, before sshd (opt-in until a live run shows sshd comes up with it). At the
   expiry the idle guard ends a pod whose runs all have custody; the lease loop ends it after a 15-minute grace whatever is unfetched,
   with the pod's own key (GraphQL `podTerminate`). A pod that cannot be armed is terminated by `create`. `research run --on` extends
