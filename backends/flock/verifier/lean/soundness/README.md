@@ -264,9 +264,17 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
       input, and no table read.
     - Supporting lemmas: unit columns sit at distinct positions across VUs (`col_inj`), and the typed tail at a unit
       column's position is its bound-input and cross entries (`tail_count`).
+  - **From the accept step** (`ExecTemplateSetup.lean`). `setupH_templateLayout` derives `TemplateLayout` from what
+    `Stmt.setupH` accepted for a template (`Typed.read`'s class and block). It uses the template's parse and check,
+    `templateOf_spec`, and #398's `blockOf_spec`, `slotOf_lt` and `slotOf_lt_of_lt`. `setupH_blockFacts` is then
+    `BlockFacts` at every VU of the accepted statement.
+    - It keeps two hypotheses: every part places a derived layout (no table read), and the rows' circuits come after the
+      root and the placed layouts' circuits.
+    - Supporting lemmas: the class's unit is one of its layouts (`unit_lt`), and Δ's other flat rows are input bits of
+      the rows' circuits' slots (`deltaIn_rows`).
   - Still to prove:
     - `NetRows` for a flat typed class, whose unit net #307 builds from `derive`'s rows (`Typed.netOfD_ok`);
-    - `TemplateLayout` from `setupH`, and `UnitShape` from `deriveChecked`;
+    - `UnitShape` from `deriveChecked`, and the rows' circuits' place from `checkTyped`;
     - a template whose parts read a table.
 
 ### 1.6 Proved from the libraries, not assumed
