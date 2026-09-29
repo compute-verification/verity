@@ -210,7 +210,7 @@ def world(tmp_path_factory):
     lo, hi = woff["model.model.layers.0.input_layernorm.weight"]
     weights[lo:hi] = 0x3F80
     with pytest.MonkeyPatch.context() as mp:
-        return Run(inst, woff, weights, {"r0": list(range(1, LP + 1)), "r1": [(3 * i) % V for i in range(LP)]},
+        return Run(inst, woff, weights, {"r0": [(i + 1) % V for i in range(LP)], "r1": [(3 * i) % V for i in range(LP)]},
                    tmp_path_factory.mktemp("pouw"), mp)
 
 
@@ -233,10 +233,25 @@ def test_the_build_lowers_only_the_pouw_site():
     inst, _ = _program()
     low = PC.lower(inst, {f"model.{SITE}": "ncp-v2"})
     specs = [r["spec"] for r in low["rows"]]
-    assert sum(s == f"{PC.ROW_FAMILY}{{K={H},N={NU},SCHEME=ncp-v2}}" for s in specs) == LP + T
+    assert sum(s == f"{PC.ROW_FAMILY}{{K={H},N={NU}}}" for s in specs) == LP + T
     assert all(s.startswith(PC.ROW_FAMILY) for r, s in zip(low["rows"], specs) if SITE in r["name"])
     assert not any(s.startswith(PC.ROW_FAMILY) for r, s in zip(low["rows"], specs) if SITE not in r["name"])
     assert PC.program("ncp-v2", 16, H, NU) is PC.program("ncp-v2", 16, H, NU)          # one Program per distinct shape
+
+
+def test_the_rows_native_evaluation_is_the_registered_definition():
+    """`NcpLinearRow_v1` (`program.registry.pouw_rows`) evaluated by the IR reference is what the replay computes natively, on rows at
+    three scales, a row of subnormals and a zero row."""
+    from verity.evaluation import evaluate
+    from verity.ir.defs import bind
+    from verity_vllm.program.registry import pouw_rows
+    rng = np.random.default_rng(1)
+    d = bind(pouw_rows.NcpLinearRow, K=H, N=NU)
+    for scale in (1e-3, 1.0, 50.0, 1e-39, 0.0):
+        x = _bf16(rng, H, scale)
+        w = _bf16(rng, NU * H, 0.5)
+        a, s, b, t, z = RC.int7_linear(x, w, NU)
+        assert list(evaluate(d, [int(v) for v in x], [int(v) for v in w])) == RC.dequant(z, s, t, (0,) * NU), scale
 
 
 def test_each_step_is_one_ncp_v2_call_bound_committed_and_served_as_y(world):
@@ -260,11 +275,12 @@ def test_the_honest_run_is_accepted(world):
     assert all(c["proved"] >= c["drawn"] > 0 for c in roles.values())
 
 
-def test_without_the_delegate_the_pouw_rows_fail_closed(world):
+def test_without_the_delegate_the_pouw_rows_are_named_unreplayable_never_evaluated(world):
     bmap, committed = world.bmap_and_reader()
     rep = SR.sampled_replay({rid: world.inst for rid in world.prompts}, bmap, committed, world.weights_reader(), per_stratum=2, seed=3, workers=0)
-    assert rep["result"] is not True
-    assert any(PC.ROW_FAMILY in f for f in rep["population"]["not_evaluable_by_family"])
+    named = [u for u in rep["unreplayable"] if u["family"].startswith(PC.ROW_FAMILY)]
+    assert named and named[0]["n"] == 2 * (LP + T) and named[0]["why"] == "no registered evaluator"
+    assert not any(k.startswith(PC.ROW_FAMILY) for k in rep["strata"])                   # never evaluated, never a stratum
 
 
 def _form_x_out(rec):
@@ -298,6 +314,7 @@ def test_a_wrong_tile_word_is_rejected(world):
     assert pw["result"] is False and any("tile" in w for w in pw["why"]), pw["why"]
 
 
+@pytest.mark.slow
 def test_an_a_strip_that_is_not_the_quantized_input_is_rejected(world):
     """A prover that runs the call on a different first strip of A, consistently: its proofs hold, and the model rows it
     serves are that call's y. The sampled rows at the PoUW site are not the int7 linear of their committed inputs, and the

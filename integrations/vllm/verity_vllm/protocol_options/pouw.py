@@ -365,6 +365,23 @@ class _CircuitRun:
                                                         "calls": [PC.record_json(r) for r in self.records]}) + "\n")
 
 
+#: The live `ncp-v2` runs by entry, with their sites (the collector's path of each linear -> its ordinal), for the Commit's
+#: replay (`check.replay.pouw_circuit.around`) before the composition closes.
+_CIRCUIT_RUNS: dict[str, tuple[_CircuitRun, dict[str, int]]] = {}
+
+
+def circuit_run(entry: str) -> tuple[_CircuitRun, dict[str, int]] | None:
+    return _CIRCUIT_RUNS.get(entry)
+
+
+def _sites(model: Any, layers: list[Any]) -> dict[str, int]:
+    named = getattr(model, "named_modules", None)
+    if named is None:
+        return {}
+    ids = {id(m): w for w, m in enumerate(layers)}
+    return {name: ids[id(m)] for name, m in named() if id(m) in ids}
+
+
 def _executor(run: _Run | _CircuitRun, w: int):
     def apply(layer: Any, x: Any, bias: Any = None) -> Any:
         return run.gemm(w, x, layer.weight, bias)
@@ -419,6 +436,8 @@ def install(scheme: str, target: Target) -> Option:
     declared = Workload(tuple(Matmul(w, Shape(16, k, n), w) for w, (n, k) in shapes.items()))
     salt = Epoch.start(declared, roots, settings.beacon or bytes(32)).salt
     run = _CircuitRun(scheme, entry, settings, roots, salt) if s is None else _Run(s, entry, settings, roots, salt)
+    if isinstance(run, _CircuitRun):
+        _CIRCUIT_RUNS[entry] = (run, _sites(target.model, layers))
     h = target.hooks(entry)
     for w, layer in enumerate(layers):
         h.wrap(layer.quant_method, "apply", lambda orig, w=w: _executor(run, w))

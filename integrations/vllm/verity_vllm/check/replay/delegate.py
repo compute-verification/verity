@@ -17,12 +17,14 @@ import numpy as np
 
 @dataclass(frozen=True)
 class Place:
-    """Where the row is: its request, its engine step, its module and its row within the request's block, and the store."""
+    """Where the row is: its request, its engine step, its module, its row within the request's block, its committed member
+    and the store."""
 
     request_id: str
     step: int
     op_path: str
     row: int
+    member: str
     store: Any
 
 

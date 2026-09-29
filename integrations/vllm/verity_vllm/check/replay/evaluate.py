@@ -171,7 +171,8 @@ def _evaluate_row(pi: ProgramIndex, store: CommittedStore, weights: Callable[[st
         wrefs.append(wref if wsl is not None else None)
     fn = DELEGATES.get(fam)
     if fn is not None:                                                   # a protocol's replay answers for the row (`delegate`)
-        return fn(st, inputs, wslices, Place(rid, arrive + d["step"], d["op_path"], d["row"], store))
+        member = d["members"][0][0] if d["members"] else "out"
+        return fn(st, inputs, wslices, Place(rid, arrive + d["step"], d["op_path"], d["row"], member, store))
     return evaluate(fam, st, inputs, wslices, refs=wrefs)
 
 

@@ -22,6 +22,7 @@ rows and scales, or the served y row.
 """
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from typing import Any
@@ -109,14 +110,18 @@ def _bf16_f32(words: np.ndarray) -> np.ndarray:
     return (np.asarray(words, dtype=np.uint32) << 16).view(np.float32)
 
 
-def int7_linear(x: np.ndarray, w: np.ndarray, n: int) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, list[int]]:
-    """The row's served output from its bf16 operands: `pouw.quantize` on x and on W, the exact dot product, and the
-    circuit's dequantization (`reference.dequant`, no bias). Returns A's row, s, B, t and the y row's BF16 encodings."""
+def int7_linear(x: np.ndarray, w: np.ndarray, n: int) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """`NcpLinearRow_v1` natively (`program.registry.pouw_rows`, which its tests pin to this): `pouw.quantize` on x and on W, and
+    the exact dot product. Returns A's row, s, B, t and Z (int32 encodings)."""
     a, s = pouw.quantize(_bf16_f32(x).reshape(1, -1))
     b, t = pouw.quantize(_bf16_f32(w).reshape(n, -1))
-    z = (b.astype(np.int64) @ a[0].astype(np.int64)) & M32
+    return a[0], s, b, t, (b.astype(np.int64) @ a[0].astype(np.int64)) & M32
+
+
+def dequant(z: np.ndarray, s: np.ndarray, t: np.ndarray, bias: Sequence[int]) -> list[int]:
+    """The circuit's dequantization of a row (`reference.dequant`): y_j = bf16(fp32(s)·fp32(t_j)·Z_j) + bias_j."""
     sb, tb = int(s.view(np.uint32)[0]), t.view(np.uint32)
-    return a[0], s, b, t, [CR.dequant(int(z[j]), sb, int(tb[j]), 0) for j in range(n)]
+    return [CR.dequant(int(z[j]), sb, int(tb[j]), int(bias[j])) for j in range(len(z))]
 
 
 def delegate(records: Sequence[PC.CallRecord], sites: Mapping[str, int], issues: list[str]):
@@ -132,11 +137,12 @@ def delegate(records: Sequence[PC.CallRecord], sites: Mapping[str, int], issues:
             raise Declined(f"no ncp-v2 call at forward {place.step} for {place.op_path}")
         if weights[1] is None or len(inputs[0]) == 0:
             raise Declined("the row's weight is not a registered slice")
-        entries = place.store.entries(place.request_id, place.step, place.op_path, "0")[0]
+        entries = place.store.entries(place.request_id, place.step, place.op_path, place.member)[0]
         if not entries:
             raise Declined(f"no committed output of {place.op_path} at step {place.step}")
         row = int(entries[0].get("element_offset") or 0) // n + place.row
-        a, s, b, t, y = int7_linear(np.concatenate(inputs[0]), weights[1], n)
+        a, s, b, t, z = int7_linear(np.concatenate(inputs[0]), weights[1], n)
+        y = dequant(z, s, t, (0,) * n)
         c = rec.call
         where = f"{place.request_id} step {place.step} {place.op_path} row {place.row} (call {rec.index} row {row})"
         if row >= len(rec.y):
@@ -146,9 +152,9 @@ def delegate(records: Sequence[PC.CallRecord], sites: Mapping[str, int], issues:
                 issues.append(f"{where}: the call's A row or scale is not the quantized committed input")
             if tuple(tuple(int(v) for v in r) for r in b) != c.b or tuple(int(v) for v in t.view(np.uint32)) != c.t:
                 issues.append(f"{where}: the call's weight rows or scales are not the quantized registered weight")
-            if list(rec.y[row]) != y:
+            if list(rec.y[row]) != dequant(z, s, t, c.bias):                      # the call's y carries its bias
                 issues.append(f"{where}: the call's served y row is not the int7 linear of the committed operands")
-        return {"0": np.asarray(y, dtype=np.uint16)}
+        return {place.member: np.asarray(y, dtype=np.uint16)}
     return fn
 
 
@@ -161,4 +167,40 @@ def linked(records: Sequence[PC.CallRecord], sites: Mapping[str, int]) -> Iterat
         yield issues
 
 
-__all__ = ["anchors", "delegate", "int7_linear", "linked", "prove_call", "replay", "unit_holds"]
+@contextmanager
+def around(comp: Any, source: bytes) -> Iterator[dict[str, Any] | None]:
+    """The Commit's sampled replay under a composition with ``pouw:ncp-v2``: the rows answered by the live run's calls for
+    the length of the block. On exit the yielded dict is filled with the circuit replay, whose ``result`` is False when a
+    call's plan, its anchors or its linkage to the model rows fails. Yields None without such an entry."""
+    entry = next((e for e in (getattr(comp, "entries", None) or ()) if e.split(":", 1)[0] == pouw.NAME
+                  and e.split(":", 1)[1] in PC.C.SCHEMES), None)
+    live = pouw.circuit_run(entry) if entry else None
+    if live is None:
+        yield None
+        return
+    run, sites = live
+    out: dict[str, Any] = {"entry": entry}
+    with linked(run.records, sites) as issues:
+        yield out
+    commitment = dict(run.commits, calls_root=PC.calls_root(run.salt, bytes.fromhex(run.commits["weights_root"]), run.records).hex()
+                      if run.records else None)
+    out.update(replay(run.records, commitment, source), linkage=issues[:12], linkage_n=len(issues))
+    if issues:
+        out["result"] = False
+        out["why"] = issues[:12] + out["why"]
+
+
+def replayed(comp: Any, seed_parts: Sequence[Any], run: Any) -> dict[str, Any]:
+    """The Commit's sampled replay (``run()``) under `around`, keyed from the replay's own seed; a failing circuit replay
+    makes the replay's result False, named."""
+    source = hashlib.sha256(("verity-vllm/pouw-ncp-v2/draw-source/v1|" + "|".join(map(str, seed_parts))).encode()).digest()
+    with around(comp, source) as pw:
+        sr = run()
+    if pw is not None:
+        sr["pouw_ncp_v2"] = pw
+        if pw.get("result") is False:
+            sr["result"], sr["grade"], sr["why"] = False, "mismatch", f"{pw['entry']}: {(pw.get('why') or ['?'])[0]}"
+    return sr
+
+
+__all__ = ["around", "anchors", "delegate", "replayed", "dequant", "int7_linear", "linked", "prove_call", "replay", "unit_holds"]
