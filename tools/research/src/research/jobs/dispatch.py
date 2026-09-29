@@ -16,6 +16,9 @@ runs where `research run --on` with custody works today, the research coordinato
                 claimed for it (`check.py --record` sets no --timeout, so its launch doesn't extend the lease).  Its rules of its
                 own are about whether a pod is free, not whether it's prepared: no job for a pod whose setup hasn't reported done
                 (a chain that launched a check while `pod_setup.sh` still ran cost train TVC an hour), nor for one with a live run.
+                Every free pod asks in each pass, the one with the most Lean dependency trees warm (`lean_warm`, its check cache's
+                `lean-deps/`) first: a cold pod must restore three of them, 86 GB of disk where a warm one needs 45, and the
+                rest take turns asking first.
     preflight   whether a pod is prepared is decided in one place, `tools/check/preflight.py` (#440), which `research run --on`
                 runs on the machine before claiming the run: a `--tool check` run gets it, and a `lean-regen` asks for it with
                 `--preflight check`.  A refusal is an error, retried on another pod, and the pod is benched for BENCH_S.
@@ -113,7 +116,7 @@ def lease_needed(timeout_s: int) -> int:
 def describe(caps: dict) -> str:
     lease = f"lease {caps['lease_s'] / 3600:.1f} h" if caps.get("lease_s") is not None else "NO lease (a job with min_lease_s won't come)"
     return (f"{lease}, {caps.get('disk_gb')} GB free, {caps.get('mem_gb')} GB, {caps.get('cpus')} cpus"
-            + (", avx512" if caps.get("avx512") else ", no avx512"))
+            + (", avx512" if caps.get("avx512") else ", no avx512") + f", {caps.get('lean_warm') or 0} Lean dependency trees warm")
 
 
 def unavailable(caps: dict) -> str | None:
@@ -182,7 +185,8 @@ class Dispatcher:
         if self.host_problem:
             self.next_claim = self.clock() + CLAIM_S
             return
-        free = free[self.turn % len(free):] + free[:self.turn % len(free)]   # each pod gets the first ask in turn
+        free = free[self.turn % len(free):] + free[:self.turn % len(free)]   # each pod gets the first ask in turn,
+        free.sort(key=lambda s: -((s.caps or {}).get("lean_warm") or 0))     # ... but a pod whose Lean trees are warm asks first
         self.turn += 1
         for s in free:
             if self.clock() < s.bench_until:
@@ -197,8 +201,8 @@ class Dispatcher:
             except Unreachable as e:
                 self.log(f"claim: the Job queue is unreachable ({e})")
                 break
-            if status == 204:
-                break
+            if status == 204:                    # nothing for this pod's capabilities; the next pod may have what a job needs
+                continue
             if status != 200:
                 raise DispatchError(f"claim refused: {status} {body.get('error')}")
             self._start(s, body)
@@ -396,9 +400,10 @@ try:
     expires = int(open(lease_file).read().split()[0])
 except (OSError, ValueError, IndexError):
     expires = int(os.environ["RESEARCH_LEASE_EXPIRES"]) if os.environ.get("RESEARCH_LEASE_EXPIRES", "").isdigit() else None
+deps = (os.environ.get("CHECK_CACHE") or os.path.expanduser("~/.cache/verity-check")) + "/lean-deps/*/"
 caps = {"avx512": " avx512f" in flags, "mem_gb": mem // 2**30, "cpus": os.cpu_count(),
         "disk_gb": shutil.disk_usage(probe).free // 2**30, "busy": busy,
-        "tools": [t for t in ("uv", "lake", "cargo", "nvidia-smi") if shutil.which(t)]}
+        "tools": [t for t in ("uv", "lake", "cargo", "nvidia-smi") if shutil.which(t)], "lean_warm": len(glob.glob(deps))}
 if expires is not None:
     caps["lease_s"] = max(0, expires - int(time.time()))
 try:

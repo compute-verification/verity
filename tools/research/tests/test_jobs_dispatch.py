@@ -166,14 +166,28 @@ def test_a_pod_that_cant_be_measured_asks_for_nothing_and_the_dispatcher_goes_on
 
 
 def test_a_job_goes_only_to_a_pod_that_meets_its_requirements():
-    """An idle pass stops at the first empty claim, and the pods take turns asking first, so each pod's capabilities are offered."""
+    """Every free pod asks in each pass, so each pod's capabilities are offered, also when the pod that asks first has what the
+    job lacks: t1's warm Lean trees put it first, and it can't take an AVX-512 job."""
     w = World(pods=("t1", "t2"))
-    w.runner.caps["t1"] = {**GOOD, "avx512": False}
+    w.runner.caps["t1"] = {**GOOD, "avx512": False, "lean_warm": 3}
     j = w.add(requirements={"avx512": True})
     w.at(0)
-    assert w.runner.started == []
-    w.at(D.CLAIM_S)
     assert w.runner.started == [(j, 1, "t2")]
+
+
+def test_a_pod_whose_lean_trees_are_warm_takes_a_job_first():
+    """TVD2 was refused on t9, whose three Lean dependency trees were cold (86 GB), and ran on t1, whose trees were warm (45 GB)."""
+    w = World(pods=("t9", "t1"))
+    w.runner.caps["t9"] = {**GOOD, "lean_warm": 0}
+    w.runner.caps["t1"] = {**GOOD, "lean_warm": 3}
+    w.at(0)                                          # measured once, with nothing queued
+    a = w.add(C1)
+    w.at(D.CLAIM_S)
+    assert w.runner.started == [(a, 1, "t1")]
+    b = w.add(C2)
+    w.at(2 * D.CLAIM_S)
+    assert w.runner.started[-1] == (b, 1, "t9"), "a cold pod still takes what no warm pod is free for"
+    assert any("t1: free: " in line and "3 Lean dependency trees warm" in line for line in w.lines)
 
 
 def test_every_free_pod_takes_a_job_in_one_pass():
@@ -470,8 +484,6 @@ def test_a_job_is_claimed_only_for_a_pod_whose_lease_covers_it(capsys):
     assert jobs_main(["add", "merge-check", "--commit", C1, "--base", BASE, "--timeout-s", "3600"], client=w.coord) == 0
     assert w.job(1).requirements["min_lease_s"] == 3600 + 900
     w.at(0)
-    assert w.runner.started == []
-    w.at(D.CLAIM_S)
     assert w.runner.started == [(1, 1, "t2")]
     assert any("t1: free: lease 1.2 h, 70 GB free, 240 GB, 64 cpus, avx512" in line for line in w.lines)
 
@@ -510,10 +522,13 @@ def test_the_probe_reads_the_lease_the_tools_and_live_runs(tmp_path):
         return json.loads(subprocess.run([sys.executable, "-c", D.PROBE, str(r), str(lease), D.SETUP_MARKER], capture_output=True,
                                          text=True, check=True, env=e).stdout)
 
+    for k in ("a" * 64, "b" * 64):                                    # two Lean dependency trees warm in the check cache
+        (tmp_path / ".cache" / "verity-check" / "lean-deps" / k).mkdir(parents=True)
+    (tmp_path / ".cache" / "verity-check" / "lean-deps" / f"{'a' * 64}.lock").write_text("")
     caps = probe(root)
-    assert caps["busy"] == 1 and caps["lease_s"] > 2 * 10 ** 9
+    assert caps["busy"] == 1 and caps["lease_s"] > 2 * 10 ** 9 and caps["lean_warm"] == 2
     assert (caps["setup_done"], caps["setup_at"]) == (True, "2026-09-29T22:00:00Z")
-    assert set(caps) == {"avx512", "mem_gb", "cpus", "disk_gb", "busy", "tools", "lease_s", "setup_done", "setup_at"}
+    assert set(caps) == {"avx512", "mem_gb", "cpus", "disk_gb", "busy", "tools", "lease_s", "setup_done", "setup_at", "lean_warm"}
     lease.unlink()
     (tmp_path / ".research" / "pod-setup.json").unlink()
     caps = probe(root / "missing")
