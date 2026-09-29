@@ -64,7 +64,9 @@ size, independently across strata. `docs/sampling-strategies.md` has the analysi
 Applications read the profile, and it is neither of them (`consumers`). Each weights wrong units by what one costs it,
 through the profile's generic weighted bound (`IntegrityProfile.harm_bound`), at the profile's delta:
 
-- **Exfiltration security** (`exfiltration_bound`): wrong units weighted by their output bits, which the prover chose.
+- **Exfiltration security** (`exfiltration_bound`): wrong units weighted by their output bits, which the prover chose,
+  plus which units are wrong (`location_bits`, log₂ of the sets of at most `bound()` units). The soundness package's
+  Lean states the bound as `audit_exfiltration`.
 - **Compute security** (`compute_bound`): wrong units weighted by their work, which the prover could have skipped.
 
 ## Partition

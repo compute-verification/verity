@@ -8,9 +8,10 @@ negatives.
 - `compose_circuit.py`, `stage_subset.py`, `stage_tampered.py`: helpers that run inside M0's tree (its `verity_flock`).
 - `pod.sh`: the entry point on a CPU pod.
 
-The runs need more than `main`: C-Flock's circuit prover (M0, `verity_flock.circuit`) is on draft PR #83. `pod.sh` takes
-`git archive`s of M0's tree and the Lean verifier's tree at pinned commits, and a captured input set, as inputs sent with
-the run; it builds `flock-circuit` and `flock-verify` once per pod, then runs the driver:
+C-Flock's circuit prover (M0, `verity_flock.circuit`) is on `main`, but a run does not take it from its checkout:
+`pod.sh` takes `git archive`s of M0's tree and the Lean verifier's tree at pinned commits, and a captured input set, as
+inputs sent with the run; it builds `flock-circuit` and `flock-verify` once per pod, then runs the driver, whose
+`--m0-pythonpath` names that M0 tree:
 
 ~~~sh
 research run --on POD --source . --cwd source --send m0.tar --send lean.tar --send set.tar -- bash benchmarks/one_stage/pod.sh
