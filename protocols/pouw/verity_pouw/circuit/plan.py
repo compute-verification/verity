@@ -87,6 +87,16 @@ class CountLaw:
         return {s.name: min(len(s.units), max(1, _round_half_up(self.k * len(s.units), total))) for s in strata}
 
 
+def check_work_strata(strata: Sequence[StratumSpec]) -> None:
+    """Refuse a call whose work is in more than one stratum: the window pin's `covers_window` takes each call's work in one
+    stratum as its hypothesis `hone`, since the cap K_c ≤ N_c can under-draw one of two work strata (root's counterexample:
+    4 units at work 2 and 2 at work 5 with K = 8 cap K_c at 6, and the first draws 3 where covering needs 3.6). X-SPC-84
+    gives work to the tile template only; this makes that a check, not a convention."""
+    worked = [s.name for s in strata if s.work > 0]
+    if len(worked) > 1:
+        raise ValueError(f"a call's work is in one stratum (the window pin's hone), not in {len(worked)}: {worked}")
+
+
 def record_k(epsilon: Fraction, delta: Fraction) -> int:
     """The smallest K with (1 − ε)^K ≤ δ, decided in exact integers: wrong units doing a fraction ε of the work escape the
     work law's draw with at most (1 − ε)^K (#362's `work_escape_le`). At ε = 0.1% and δ = 2⁻⁴⁰ it is 27,713; 27,712 misses
@@ -133,7 +143,9 @@ class WorkLaw:
         return f
 
     def budget(self, strata: Sequence[StratumSpec]) -> int:
-        """This call's K: its share ⌈K·W_c/W_window⌉ of the window's (all of K when it is the window), capped at its N."""
+        """This call's K: its share ⌈K·W_c/W_window⌉ of the window's (all of K when it is the window), capped at its N. The
+        call's work must be in one stratum (`check_work_strata`)."""
+        check_work_strata(strata)
         work, n = sum(s.work for s in strata), sum(len(s.units) for s in strata)
         if work < 1 or self.k < 1:
             raise ValueError("the work law needs some work and K >= 1")
@@ -160,6 +172,8 @@ def window_laws(layouts: Sequence["Layout"], k: int = RECORD_K, floors: tuple[tu
     (`audit_work_floor`); over the window, the per-call split's bound (X-SPC-83, 106) and B's (X-SPC-105) wait on root's
     window-composition pin (`FlockSoundness/Audit/Window.lean`), which assumes each call draws under its own key context
     (`draw`'s ``call``)."""
+    for lay in layouts:
+        check_work_strata(lay.strata)
     total = sum(lay.work() for lay in layouts)
     k_y = k if k_y is None else k_y
     ys = [[s for s in lay.strata if s.role == "dequant"] for lay in layouts]
@@ -273,7 +287,9 @@ def draw(key: Key, lay: Layout, law: TileLaw, call: Sequence[int] = ()) -> Plan:
 
 def work_table(lay: Layout, law: WorkLaw = WorkLaw()) -> dict[str, dict[str, int]]:
     """The verifier's work table (#362's `--work-table`, `Draw.workTableOfJson`): every template of the call, with its W_ref
-    per unit (0 for units that do no PoUW work) and its floor f_s (`law.floors`)."""
+    per unit (0 for units that do no PoUW work) and its floor f_s (`law.floors`). It refuses a call whose work is in more
+    than one stratum (`check_work_strata`, the window pin's `hone`)."""
+    check_work_strata(lay.strata)
     return {s.name: {"work": s.work // len(s.units), "floor": law.floor(s.name)} for s in lay.strata}
 
 
@@ -312,5 +328,6 @@ def unsound_work_bound(lay: Layout, sizes: Mapping[str, int], delta: float) -> f
     return profile(lay, sizes).harm_bound({s.name: float(lay.tile_work()) for s in lay.strata if s.role == "tile"}, delta)
 
 
-__all__ = ["DRAW_DOMAIN", "RECORD_K", "CountLaw", "Layout", "Plan", "StratumSpec", "TileLaw", "WorkLaw", "draw", "law_object",
+__all__ = ["DRAW_DOMAIN", "RECORD_K", "CountLaw", "Layout", "Plan", "StratumSpec", "TileLaw", "WorkLaw", "check_work_strata",
+           "draw", "law_object",
            "layout", "openings", "profile", "record_k", "template_strata", "unsound_work_bound", "window_laws", "work_table"]
