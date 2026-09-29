@@ -190,7 +190,9 @@ def _pouw_roots() -> list[Any]:
     for kind in ("shift24", "word"):
         out += [t for t in ncp2.templates(64, kind).values() if t not in out]
         out += [ncp2.linear(shape, kind), ncp2.weight(shape, kind), ncp2.window(shape, 2, kind)]
-    return out + list(h1t.templates(96).values()) + [h1t.linear(h1t.Shape(16, 96, 16)), h1t.window(h1t.Shape(16, 96, 16), 2)]
+    small = h1t.Shape(16, 96, 16)
+    return (out + list(h1t.templates(96).values()) + [h1t.dequant_template(False)]
+            + [h1t.linear(small), h1t.linear(small, bias=False), h1t.window(small, 2)])
 
 
 def _core_roots() -> list[Any]:

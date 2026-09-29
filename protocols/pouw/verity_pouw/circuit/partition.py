@@ -60,13 +60,14 @@ def ncp_circuit(shape: Shape, kind: str = "shift24", fn: Any = None) -> Circuit:
     return Circuit(ncp2.linear(shape, kind) if fn is None else fn, ncp2.templates(shape.k, kind), shape.m, shape.n, POUW_ROLES)
 
 
-def h1t_circuit(shape: h1t.Shape, fn: Any = None) -> Circuit:
-    return Circuit(h1t.linear(shape) if fn is None else fn, h1t.templates(shape.k), shape.m, shape.n, H1T_POUW_ROLES)
+def h1t_circuit(shape: h1t.Shape, fn: Any = None, bias: bool = True) -> Circuit:
+    return Circuit(h1t.linear(shape, bias) if fn is None else fn, h1t.templates(shape.k, bias), shape.m, shape.n,
+                   H1T_POUW_ROLES)
 
 
-def h1t_window_circuit(shape: h1t.Shape, calls: int) -> Circuit:
+def h1t_window_circuit(shape: h1t.Shape, calls: int, bias: bool = True) -> Circuit:
     """``calls`` H-1T calls on one weight in one root (`h1t.window`)."""
-    return h1t_circuit(shape, h1t.window(shape, calls))
+    return h1t_circuit(shape, h1t.window(shape, calls, bias), bias)
 
 
 def listed_of(fn: Any) -> list[Any]:

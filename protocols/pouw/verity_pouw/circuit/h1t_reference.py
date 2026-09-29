@@ -31,7 +31,7 @@ class Call:
     s: tuple[int, ...]                      # m FP32 encodings
     b: tuple[tuple[int, ...], ...]          # n weight rows of k codes (B′'s real rows)
     t: tuple[int, ...]                      # n FP32 encodings
-    bias: tuple[int, ...]                   # n BF16 encodings
+    bias: tuple[int, ...] | None            # n BF16 encodings, or None for a linear with no bias
     salt: bytes                             # 32 bytes
     forward: int
     layer: int
@@ -57,7 +57,8 @@ class Call:
         salt = [int.from_bytes(self.salt[4 * i:4 * i + 4], "little") for i in range(8)]
         lane = lambda v: [v & M32, (v >> 32) & M32]  # noqa: E731
         return [[x for row in self.a for x in row], list(self.s), [x for row in self.b for x in row], list(self.t),
-                list(self.bias), salt, lane(self.forward), lane(self.position), lane(self.weight), list(self.stripids),
+                *([list(self.bias)] if self.bias is not None else []), salt, lane(self.forward), lane(self.position),
+                lane(self.weight), list(self.stripids),
                 list(self.rowids), [c for tg in self.tags for c in tg]]
 
 
@@ -135,9 +136,12 @@ def cell_words(x1: Sequence[int], x2: Sequence[int], bs: Sequence[Sequence[int]]
     return atoms + run[1:2 * T - 2], run[-1]
 
 
-def dequant(z: int, s: int, t: int, bias: int) -> int:
-    mul, cast, add = REGISTRY["F32Mul_v2"].evaluate, REGISTRY["F32ToBf16Rn_v1"].evaluate, REGISTRY["Bf16Add_v1"].evaluate
-    return add(cast(mul(mul(s, t), z)), bias)
+def dequant(z: int, s: int, t: int, bias: int | None) -> int:
+    """vLLM's epilogue order (`h1t.H1tDequant`): m = RN(s·Z), then bf16(RN(t·m + f32(bias))) or bf16(RN(t·m))."""
+    mul, fma = REGISTRY["F32Mul_v2"].evaluate, REGISTRY["F32Fma_v2"].evaluate
+    widen, cast = REGISTRY["Bf16ToF32_v1"].evaluate, REGISTRY["F2fpBf16_v1"].evaluate
+    m = mul(s, z)
+    return cast(mul(t, m) if bias is None else fma(t, m, widen(bias)))
 
 
 @dataclass(frozen=True)
@@ -170,7 +174,8 @@ def evaluate(call: Call) -> Result:
                     w, z[i][j] = cell_words(x1[i], x2[i], bp[j])
                     tw += w
             words.append(tw)
-    out = [[dequant(z[i][j], call.s[i], call.t[j], call.bias[j]) for j in range(sh.n)] for i in range(sh.m)]
+    out = [[dequant(z[i][j], call.s[i], call.t[j], None if call.bias is None else call.bias[j]) for j in range(sh.n)]
+           for i in range(sh.m)]
     return Result(keys, x1, x2, words, z, out)
 
 

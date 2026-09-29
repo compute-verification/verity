@@ -130,7 +130,7 @@ class Traced:
         from . import plan
 
         if self.scheme == H1T:
-            return plan.h1t_layout(self.shape)
+            return plan.h1t_layout(self.shape, self.definition.S().BIAS)
         return plan.layout(self.shape, self.kind)
 
 
@@ -147,15 +147,15 @@ def traced_as(scheme: str, m: int, k: int, n: int) -> Traced | None:
                   partition.weight_query(shape, kind))
 
 
-def traced_h1t(m: int, k: int, n: int) -> Traced:
+def traced_h1t(m: int, k: int, n: int, bias: bool = True) -> Traced:
     """H-1T's circuit for one linear of shape m × k → n, as the verifier builds it: the Definition, its partition query,
     the served outputs and the draw layout, from the shape alone. Raises `protocol.DomainError` outside the granted scope
-    (layout A at 16 × 16 tiles: 16 | m, 16 | n, 8 | k, 29 < k <= 32,768). `traced_as` returns it once H-1T is a registered
-    scheme."""
+    (layout A at 16 × 16 tiles: 16 | m, 16 | n, 8 | k, 29 < k <= 32,768). ``bias`` says whether the linear has one, which
+    picks vLLM's epilogue (`h1t.H1tDequant`). `traced_as` returns it once H-1T is a registered scheme."""
     from . import h1t, partition
 
     shape = h1t.Shape(m, k, n)
-    return Traced(H1T, shape, h1t.linear(shape), partition.query_of(partition.h1t_circuit(shape)), m * n)
+    return Traced(H1T, shape, h1t.linear(shape, bias), partition.query_of(partition.h1t_circuit(shape, bias=bias)), m * n)
 
 
 __all__ = ["H1T", "LINKED", "SCHEMES", "Traced", "traced_as", "traced_h1t"]

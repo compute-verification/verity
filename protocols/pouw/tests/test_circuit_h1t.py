@@ -42,7 +42,7 @@ def call(m: int, k: int, n: int, seed: int = 7, *, a=None, rowids=None, stripids
 
 
 def run(c: R.Call) -> tuple[list[list[int]], list[list[int]]]:
-    out = evaluate(h1t.linear(c.shape), *c.args())
+    out = evaluate(h1t.linear(c.shape, c.bias is not None), *c.args())
     m, n, per = c.shape.m, c.shape.n, h1t.D * h1t.D * h1t.words_per_cell(c.shape.k)
     tiles = (m // h1t.D) * (n // h1t.D)
     assert len(out) == m * n + per * tiles
@@ -278,3 +278,61 @@ def test_equal_calls_under_one_key_draw_different_tiles():
         return [u for u in t.draw(key, law, an).drawn if lay.units[u].role == "tile"]
 
     assert tiles(3) == tiles(3) and all(tiles(f) != tiles(3) for f in (4, 5, 6))
+
+
+# ---- the served output: vLLM's epilogue order --------------------------------------------------------------------------
+
+def scaled_epilogue(z: int, s: int, t: int, bias: int | None) -> int:
+    """vLLM's `cutlass_scaled_mm` epilogue as the vLLM integration pins it (`verity_vllm.program.registry.fp8`
+    `ScaledMmFp8Coordinate`, 0 mismatches against `_C.cutlass_scaled_mm` on the production capture): the batch-invariant
+    dispatch swaps the scales, so Compute0 = RN(s_i·acc) with the row (token) scale, and Compute1 = FFMA(t_j, ·, f32(b_j))
+    (`ScaledEpilogueBias`) or RN(t_j·) (`ScaledEpilogue`), then `cvt.rn.bf16.f32`. Written here on core's bit-level
+    evaluators, since `protocols/pouw` reads nothing of the integration."""
+    from verity.ml.fp32 import bf16_to_f32_bits, f32_fma_bits, f32_mul_bits
+    from verity.ml.tc.cast import f32_to_bf16_hw_word
+
+    m = f32_mul_bits(s, z)
+    return f32_to_bf16_hw_word(f32_mul_bits(t, m) if bias is None else f32_fma_bits(t, m, bf16_to_f32_bits(bias)))
+
+
+@pytest.mark.parametrize("shape,bias", [((16, 96, 16), True), ((16, 96, 16), False), ((32, 96, 32), True),
+                                        ((16, 232, 16), True), ((16, 232, 16), False)])
+def test_the_served_output_is_vllm_s_scaled_epilogue(shape, bias):
+    """y is what vLLM serves: each output is `scaled_epilogue` of the chain's Z, the row scale, the column scale and the
+    bias (none for a linear without one), bit for bit."""
+    c = call(*shape)
+    if not bias:
+        c = R.Call(**{**c.__dict__, "bias": None})
+    ref = R.evaluate(c)
+    y, _words = run(c)
+    want = [[scaled_epilogue(ref.z[i][j], c.s[i], c.t[j], c.bias[j] if bias else None) for j in range(shape[2])]
+            for i in range(shape[0])]
+    assert y == want == ref.out
+
+
+def test_the_dequantization_unit_is_the_epilogue_on_hard_words():
+    """`H1tDequant{BIAS}` alone, against `scaled_epilogue` on words across the exponent range, subnormals and ties, and
+    the case that separates the two variants: Z = −0 without a bias serves −0, and an FFMA with a +0 bias would serve +0.
+    The branch's earlier order, bf16(RN(RN(s·t)·Z)) then a bf16 add, differs from the served one on many of these."""
+    import struct
+
+    rng = random.Random(29)
+
+    def f32(x):
+        return struct.unpack("<I", struct.pack("<f", x))[0]
+
+    zs = [f32(rng.uniform(-1, 1) * 2.0 ** rng.randint(-140, 100)) for _ in range(400)] + [0, 0x80000000, 1, 0x807FFFFF]
+    old_differs = 0
+    for z in zs:
+        s, t, b = f32(rng.uniform(1e-4, 4) * 2.0 ** rng.randint(-20, 20)), f32(rng.uniform(1e-4, 4)), rng.getrandbits(15)
+        assert evaluate(h1t.dequant_template(True), z, s, t, b)[0] == scaled_epilogue(z, s, t, b)
+        assert evaluate(h1t.dequant_template(False), z, s, t)[0] == scaled_epilogue(z, s, t, None)
+        from verity.ir.defs import REGISTRY
+
+        old = REGISTRY["Bf16Add_v1"].evaluate(REGISTRY["F32ToBf16Rn_v1"].evaluate(
+            REGISTRY["F32Mul_v2"].evaluate(REGISTRY["F32Mul_v2"].evaluate(s, t), z)), b)
+        old_differs += old != scaled_epilogue(z, s, t, b)
+    assert old_differs > 0
+    one = f32(1.0)
+    assert evaluate(h1t.dequant_template(False), 0x80000000, one, one)[0] == 0x8000
+    assert evaluate(h1t.dequant_template(True), 0x80000000, one, one, 0)[0] == 0x0000

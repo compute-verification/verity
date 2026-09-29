@@ -227,14 +227,14 @@ def template_strata(us: Sequence[Unit], per_tile: int) -> tuple[StratumSpec, ...
                  for t, g in groups.items())
 
 
-def h1t_layout(shape) -> Layout:
+def h1t_layout(shape, bias: bool = True) -> Layout:
     """H-1T's layout (`circuit.h1t`): each tile's closure is its X strip's forming unit and that strip's key, which reads
     the strip's rows; the tile reads B′'s rows and tags as committed inputs.  The strata are one per template (the key, the
     forming, the tile and the dequantization), as for `ncp-v2`.  A tile's W_ref is `h1t.tile_work`."""
     from . import h1t
     from .partition import circuit_units, h1t_circuit
 
-    us = circuit_units(h1t_circuit(shape))
+    us = circuit_units(h1t_circuit(shape, bias=bias))
     by_role: dict[str, list[Unit]] = {}
     for u in us:
         by_role.setdefault(u.role, []).append(u)

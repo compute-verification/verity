@@ -275,7 +275,7 @@ template        per                   reads                                     
 H1tKey{K}       16-row strip of A     its rows, its strip id, salt, forward, position, weight id  K_s
 H1tFormX{K}     16-row strip of A     its rows, their row ids, K_s                                [x1 | x2] per row (2 × 32T codes)
 H1tTile{K}      16 × 16 block         its x strip, 16 weight rows (B′'s real codes), their tags   the credited words, and Z
-H1tDequant      output entry          Z, s_i, t_j, bias_j                                         y = bf16(s_i·t_j·Z) + bias_j
+H1tDequant{BIAS} output entry         Z, s_i, t_j (and bias_j)                                    y, in vLLM's epilogue order
 ~~~
 
 - **The map** (`h1t_words`, one primitive per lane): T = ceil(k/29) slices of 29 real lanes (0 past k) and 3 tag lanes.
@@ -285,6 +285,11 @@ H1tDequant      output entry          Z, s_i, t_j, bias_j                       
   31 and 25 … 23, lanes 30 and 31 from r16's 15 and 9 … 7, and 31 and 25 … 23.
 - **B′** is the weight's registered E4M3 rows, laid out per slice with the column's fixed tag tuple (A0[j mod 23],
   A1[(j div 23) mod 62], A1[(j div 1426) mod 62]), an anchored input. There is no weight-side forming.
+- **The served output** is vLLM's `cutlass_scaled_mm` epilogue, bit for bit (`H1tDequant{BIAS}`, as the vLLM
+  integration's exact-tested `ScaledMmFp8Coordinate` pins it). The batch-invariant dispatch swaps the scales, so the row
+  scale goes first: m = RN(s_i·Z). With a bias, y = cvt.rn.bf16(RN(t_j·m + f32(bias_j))), one FFMA
+  (`ScaledEpilogueBias`); without one, y = cvt.rn.bf16(RN(t_j·m)) (`ScaledEpilogue`). The two differ on a −0, so a linear
+  without a bias has its own Definition (`H1tLinear{…,BIAS=False}`), and the verifier picks it (`traced_h1t(…, bias)`).
 - **The chain** per cell: I_1 … I_T over x1, then I_(T+1) … I_2T over x2, each a fresh E4M3 k32 atom from +0
   (`HopperE4m3QgmmaDot32`); R_1 = I_1 and R_τ = RN_f32(R_(τ−1) + I_τ). The credited words are I_1 … I_2T and
   R_2 … R_(2T−2), 4T − 3 per cell; Z = R_2T is the useful output and the pinned separator port, as in `ncp-v2`.
