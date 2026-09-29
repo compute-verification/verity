@@ -1452,7 +1452,8 @@ def run_lines(root: Path, now: dt.datetime, state: dict, config: Path | None = N
 def sync_lines(root: Path, srep: dict, now: dt.datetime) -> list[str]:
     """The watcher's line for its own `notes sync`: the report when it committed, and a failure as `SYNC-FAILED ahead A behind B:
     <report>` every pass it lasts, so a clone that stops syncing (83 commits behind on 2026-09-26) is never silent.  A lane note left
-    out for a stamp ahead of the clock is one `SYNC-REFUSED <path>: ...` line every pass it lasts; the other notes synced."""
+    out for a stamp ahead of the clock or broken front matter is one `SYNC-REFUSED <path>: ...` line every pass it lasts; the other
+    notes synced.  A `SYNC-WARN <path>: ...` line comes once, with the commit that took the note."""
     from . import notes_sync  # noqa: PLC0415
 
     refused = [f"{now:%H:%MZ} {x}" for x in notes_sync.refused_lines(srep)]
