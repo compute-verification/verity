@@ -76,6 +76,10 @@ import FlockSoundness.ExecCircuit
 import FlockSoundness.ExecCheck
 import FlockSoundness.ExecLookup
 import FlockSoundness.ExecSetup
+import FlockSoundness.ExecTyped
+import FlockSoundness.ExecTemplate
+import FlockSoundness.ExecTemplatePlace
+import FlockSoundness.ExecTemplateSetup
 import FlockSoundness.Types.Flat
 import FlockSoundness.Rope.Lowering
 import FlockSoundness.Types.Dag
