@@ -9,7 +9,6 @@ import shutil
 import subprocess
 import sys
 import textwrap
-import time
 from pathlib import Path
 
 import pytest
@@ -22,6 +21,7 @@ from research.store import cli_prov
 from research.store import derivation as D
 from research.store import tools_registry
 from research.store.tool import Tool, content_identity, parse_argv, tree_listing
+from waits import wait_runner
 
 FIXTURES = Path(__file__).parent / "fixtures"
 RUN_FIXTURE = FIXTURES / "run_v0.2"
@@ -568,9 +568,7 @@ def test_machine_side_runner_loads_tool_from_shipped_source(tmp_path):
            "exclusive": False, "cost": {}, "remote": {"machine": "m", "pod_id": "p1"}}
     (root / "requests/r1/request.json").write_text(json.dumps(req))
     assert remote.launch_request(root / "requests/r1/request.json")["started"]
-    deadline = time.time() + 30
-    while time.time() < deadline and R.summarize(root / "runs/r1")["state"] not in R.TERMINAL:
-        time.sleep(0.1)
+    wait_runner(root / "runs/r1")
     s = R.summarize(root / "runs/r1")
     assert s["state"] == "done" and s["rc"] == 0, (root / "runs/r1/launcher.log").read_text()
     store = json.loads((root / "runs/r1/job.json").read_text())["store"]

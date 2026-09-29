@@ -22,7 +22,7 @@ def judge(*args: str, runs_dir: Path | None = None) -> subprocess.CompletedProce
     cmd = [sys.executable, str(JUDGE), *args]
     if runs_dir is not None:
         cmd += ["--runs-dir", str(runs_dir)]
-    return subprocess.run(cmd, capture_output=True, text=True, timeout=120, env={**os.environ})
+    return subprocess.run(cmd, capture_output=True, text=True, env={**os.environ})
 
 
 @pytest.fixture

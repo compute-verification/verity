@@ -6,15 +6,14 @@ import json
 import os
 import subprocess
 import sys
-import time
 from pathlib import Path
 
 import pytest
 
 from research import pythonpath as P
 from research import remote
-from research import runs as R
 from research.cli import main
+from waits import wait_runner
 
 REPO = Path(__file__).resolve().parents[3]
 SRC = str(Path(remote.__file__).resolve().parents[1])
@@ -94,9 +93,7 @@ def test_launch_request_sets_the_trees_pythonpath_appends_the_users_and_records_
     (root / "requests" / "r" / "request.json").write_text(json.dumps(req))
     assert remote.launch_request(root / "requests" / "r" / "request.json")["started"]
     run_dir = root / "runs" / "r"
-    deadline = time.time() + 30
-    while R.summarize(run_dir)["state"] not in R.TERMINAL and time.time() < deadline:
-        time.sleep(0.1)
+    wait_runner(run_dir)
     out = (run_dir / "stdout.log").read_text().splitlines()
     assert out[0] == "tree 1", (run_dir / "stderr.log").read_text()
     assert out[1].split(":") == [SRC, str(src / "pkgs/one/src"), str(mine)], "tool, then the tree's roots, then the user's --env PYTHONPATH"

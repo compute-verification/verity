@@ -9,8 +9,9 @@
 
 A suite is a directory whose `pyproject.toml` configures pytest (`[tool.pytest.ini_options]`). Its inputs are its own directory,
 the directories of the workspace packages it depends on (its `[project]` dependencies, transitively), the paths it lists under
-`[tool.verity.tests] inputs`, and the environment: the installed distributions, Python, the platform, whether `lake`, `cargo`
-and `nvidia-smi` are on the PATH, and the `VERITY_*` and `FLOCK_*` variables tests switch on. The cache key hashes all of them,
+`[tool.verity.tests] inputs`, the build outputs it lists under `artifacts` (each file's digest: git ignores them), and the
+environment: the installed distributions, Python, the platform, whether `lake`, `cargo` and `nvidia-smi` are on the PATH, and
+the `VERITY_*` and `FLOCK_*` variables tests switch on. The cache key hashes all of them,
 read from git's view of the working tree, so uncommitted edits count; a tree without .git (what `research run --source` ships)
 is keyed from the sha256 of every file in it. A pass is kept under its key in `~/.cache/verity/tests`
 (`VERITY_TEST_CACHE` overrides it) and reused while the key is unchanged.
@@ -140,6 +141,7 @@ class Suite:
     requires: tuple[str, ...]    # names of the distributions it depends on
     inputs: tuple[str, ...]      # paths it declares under [tool.verity.tests] inputs
     parallel: bool = False       # [tool.verity.tests] parallel: its tests may run in several processes at once
+    artifacts: tuple[str, ...] = ()   # [tool.verity.tests] artifacts: build outputs its tests run or skip on
 
 
 def _pyproject(path: str) -> dict:
@@ -182,8 +184,23 @@ def discover() -> list[Suite]:
         project = data.get("project", {})
         name = "repository" if path == "." else _norm(project["name"]) if project else path
         tests = data["tool"].get("verity", {}).get("tests", {})
-        suites.append(Suite(name, path, _requires(project, data), tuple(tests.get("inputs", [])), tests.get("parallel", False) is True))
+        suites.append(Suite(name, path, _requires(project, data), tuple(tests.get("inputs", [])), tests.get("parallel", False) is True,
+                            tuple(tests.get("artifacts", []))))
     return suites
+
+
+def artifact_ids(suite: Suite) -> dict[str, str]:
+    """Each declared build output as the key sees it: a file's sha256, "directory", or "absent" (git ignores build outputs, so the
+    tree's object ids never see them)."""
+    out = {}
+    for a in suite.artifacts:
+        p = ROOT / a
+        if p.is_file():
+            with open(p, "rb") as f:
+                out[a] = hashlib.file_digest(f, "sha256").hexdigest()
+        else:
+            out[a] = "directory" if p.is_dir() else "absent"
+    return out
 
 
 def closure(suite: Suite, pkgs: dict[str, str]) -> list[str]:
@@ -285,7 +302,8 @@ def fetch_fixtures(fixtures: dict[str, str], logs: Path) -> set[str]:
 
 
 def key(suite: Suite, ids: dict[str, str], env: dict, args: list[str]) -> str:
-    blob = json.dumps({"suite": suite.path, "inputs": ids, "environment": env, "pytest": args}, sort_keys=True)
+    blob = json.dumps({"suite": suite.path, "inputs": ids, "artifacts": artifact_ids(suite), "environment": env, "pytest": args},
+                      sort_keys=True)
     return hashlib.sha256(blob.encode()).hexdigest()
 
 
