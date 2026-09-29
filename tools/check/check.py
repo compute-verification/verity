@@ -277,7 +277,9 @@ def record(argv: list[str]) -> int:
     tool = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(tool)
     base = base or "origin/main"
-    changed = subprocess.run(["git", "diff", "--name-only", base, "HEAD"], cwd=ROOT, capture_output=True, text=True, check=True).stdout.split()
+    # what this commit changes since it left REF (a merge base), not what REF has changed since
+    changed = subprocess.run(["git", "diff", "--name-only", f"{base}...HEAD"], cwd=ROOT, capture_output=True, text=True,
+                             check=True).stdout.split()
     from research.merge import rule_touches
 
     need = [s for s, rule in tool.CHECK.merge_requires.items() if rule_touches(rule, changed)]
