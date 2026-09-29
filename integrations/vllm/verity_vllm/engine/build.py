@@ -140,11 +140,18 @@ def parse_engine_args(items: list[str] | None) -> dict[str, Any]:
 prepare_compiled_process_cache = engine_env.prepare_compiled_process_cache
 
 
+#: The keyword arguments only sampled proofs' replay needs (deployment decision A8), left to vLLM when sampled proofs does not run
+REPLAY_ONLY_KWARGS = ("enable_prefix_caching", "gpu_memory_utilization", "max_model_len")
+
+
 def engine_kwargs_for(checkpoints: str | Path = "manifests/checkpoints.json", *, max_num_seqs: int = 8, case: str = CASE,
-                      engine_args: dict[str, Any] | None = None, target: Any = None, execution: str | None = None) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+                      engine_args: dict[str, Any] | None = None, target: Any = None, execution: str | None = None,
+                      sampled_proofs: bool = True) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     """[R16 sys] The exact `LLM(**kw)` keyword set `build_engine` would build from these inputs (+ the env flags it applies and the
     checkpoint record), WITHOUT building: a hot worker compares it with its live engine's `kwargs` to decide reuse vs restart.  Applies the
-    same environment knobs as `build_engine` (idempotent).  Refusals (unknown execution, contradicting enforce_eager) are the same."""
+    same environment knobs as `build_engine` (idempotent).  Refusals (unknown execution, contradicting enforce_eager) are the same.
+    Without ``sampled_proofs`` (deployment decisions A3, A8) the engine is vLLM's own: no whole-engine batch invariance, and
+    prefix caching, memory and context length left to vLLM (`REPLAY_ONLY_KWARGS`); explicit ``engine_args`` still apply."""
     from verity_vllm.engine import engine_profile as prof
 
     if target is not None:
@@ -152,7 +159,7 @@ def engine_kwargs_for(checkpoints: str | Path = "manifests/checkpoints.json", *,
         # `fp8_block_gemm`) are applied before vLLM reads them -- the same object the builder applied; the header records them
         # (`target_env`) and `target_mismatches` reads the selected FP8 kernel back
         target_env = engine_env.apply_target(target.env())
-    env_flags = prof.apply_env()
+    env_flags = prof.apply_env(sampled_proofs)
     if target is not None:
         env_flags = {**env_flags, **target_env}
     cp = prof.checkpoint_for(case, checkpoints)
@@ -162,6 +169,9 @@ def engine_kwargs_for(checkpoints: str | Path = "manifests/checkpoints.json", *,
     kw = prof.engine_kwargs(cp, replay=False, enforce_eager=want_eager)
     kw["enforce_eager"] = want_eager
     kw["enable_prefix_caching"] = False
+    if not sampled_proofs:
+        for k in REPLAY_ONLY_KWARGS:
+            kw.pop(k, None)
     kw["max_num_seqs"] = int(max_num_seqs)
     if target is not None:
         kw.update(target.engine_args())
@@ -177,7 +187,7 @@ def engine_kwargs_for(checkpoints: str | Path = "manifests/checkpoints.json", *,
 
 def build_engine(checkpoints: str | Path = "manifests/checkpoints.json", *, max_num_seqs: int = 8,
                  verify_weights: bool = False, case: str = CASE, engine_args: dict[str, Any] | None = None, target: Any = None,
-                 execution: str | None = None) -> Engine:
+                 execution: str | None = None, sampled_proofs: bool = True) -> Engine:
     from verity_vllm.engine import engine_profile as prof
 
     # [R15 EXEC-02 / COORD M-0063 (2)] `enforce_eager` comes from the row's declared execution (`execution_of_workload`), not from a literal:
@@ -187,7 +197,8 @@ def build_engine(checkpoints: str | Path = "manifests/checkpoints.json", *, max_
     # [R13 hopper] `kernel_config.enable_flashinfer_autotune=False` by construction (the autotune dummy run must not depend on the shell's PATH);
     # [GEN batch SHARED-CODE] explicit CLI engine args override last and are recorded in versions.json/run.json.  All of it in
     # `engine_kwargs_for` (R16 sys: the hot worker computes the same keyword set to decide reuse vs restart).
-    kw, env_flags, cp = engine_kwargs_for(checkpoints, max_num_seqs=max_num_seqs, case=case, engine_args=engine_args, target=target, execution=execution)
+    kw, env_flags, cp = engine_kwargs_for(checkpoints, max_num_seqs=max_num_seqs, case=case, engine_args=engine_args, target=target,
+                                          execution=execution, sampled_proofs=sampled_proofs)
     from vllm import LLM  # noqa: E402  (after apply_env)
 
     if verify_weights:

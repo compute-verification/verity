@@ -13,7 +13,9 @@ import tempfile
 from collections.abc import Mapping
 from typing import Any
 
-#: The engine's execution profile (CONTRACT.md §2 / §2.1), shared by production and replay.
+#: The engine's execution profile (CONTRACT.md §2 / §2.1), shared by production and replay when sampled proofs runs.
+#: Without sampled proofs (`apply_engine(..., sampled_proofs=False)`) the whole-engine batch invariance is left out
+#: (deployment decision A3): nothing replays the engine's values.
 ENGINE = {
     "VLLM_BATCH_INVARIANT": "1",
     "VLLM_USE_V2_MODEL_RUNNER": "1",
@@ -45,9 +47,14 @@ def pin(pins: Mapping[str, str]) -> dict[str, str]:
     return {k: os.environ[k] for k in pins}
 
 
-def apply_engine(hf_home: str | None) -> dict[str, str]:
-    """``ENGINE``, the checkpoint store's ``HF_HOME`` and ``HF_HUB_OFFLINE=1``; returns the ``ENGINE`` values in force."""
-    got = pin(ENGINE)
+#: The switches only sampled proofs needs: its replay recomputes the served values bit for bit.
+REPLAY_ONLY = ("VLLM_BATCH_INVARIANT",)
+
+
+def apply_engine(hf_home: str | None, sampled_proofs: bool = True) -> dict[str, str]:
+    """``ENGINE`` (without `REPLAY_ONLY` when sampled proofs does not run), the checkpoint store's ``HF_HOME`` and
+    ``HF_HUB_OFFLINE=1``; returns the ``ENGINE`` values in force."""
+    got = pin(ENGINE if sampled_proofs else {k: v for k, v in ENGINE.items() if k not in REPLAY_ONLY})
     if hf_home:
         os.environ.setdefault("HF_HOME", hf_home)
     os.environ.setdefault("HF_HUB_OFFLINE", "1")

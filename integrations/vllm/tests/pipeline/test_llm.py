@@ -109,13 +109,45 @@ def built(monkeypatch):
 def test_the_engine_is_built_from_the_pin_with_only_the_options_set(built):
     llm = L.LLM(*LLAMA[:1], revision=LLAMA[1])
     assert built == {"checkpoints": config.CHECKPOINTS, "max_num_seqs": 8, "case": "LLAMA32_1B", "engine_args": {},
-                     "execution": "bi-eager"}
+                     "execution": "compiled", "sampled_proofs": False}
     assert llm.engine_record["pin"]["case"] == "LLAMA32_1B"
     assert llm.engine_record["env_flags"] == {"F": "1"}
     L.LLM(LLAMA[0], revision=LLAMA[1], tensor_parallel_size=2, max_num_seqs=4, gpu_memory_utilization=0.6, seed=3,
-          enforce_eager=False)
+          enforce_eager=True)
     assert built["engine_args"] == {"gpu_memory_utilization": 0.6, "seed": 3, "tensor_parallel_size": 2}
-    assert (built["max_num_seqs"], built["execution"]) == (4, "bi-compiled")
+    assert (built["max_num_seqs"], built["execution"], built["sampled_proofs"]) == (4, "eager", False)
+
+
+def test_without_sampled_proofs_the_engine_is_vllms_own(monkeypatch):
+    """Deployment decisions A3 and A8: the whole-engine batch invariance and the replay restrictions apply only when sampled
+    proofs runs.  `LLM` never runs it; a row's stages always do, and keep the replay profile."""
+    from verity_vllm.engine import build as EB
+    from verity_vllm.engine import engine_profile as prof
+    from verity_vllm.engine import env as E
+    monkeypatch.setattr(prof, "checkpoint_for", lambda case, path: {"local_path": "/snap", "repo": "r"})
+    monkeypatch.delenv("VLLM_BATCH_INVARIANT", raising=False)
+    kw, flags, _ = EB.engine_kwargs_for(case="X", execution="compiled", sampled_proofs=False)
+    assert "VLLM_BATCH_INVARIANT" not in flags and "VLLM_BATCH_INVARIANT" not in __import__("os").environ
+    assert not set(EB.REPLAY_ONLY_KWARGS) & set(kw) and kw["enforce_eager"] is False
+    assert {k: flags[k] for k in E.ENGINE if k not in E.REPLAY_ONLY} == {k: v for k, v in E.ENGINE.items() if k not in E.REPLAY_ONLY}
+    kw, flags, _ = EB.engine_kwargs_for(case="X", execution="eager")
+    assert flags["VLLM_BATCH_INVARIANT"] == "1" and kw["enable_prefix_caching"] is False
+    assert (kw["gpu_memory_utilization"], kw["max_model_len"]) == (prof.GPU_MEMORY_UTILIZATION, prof.MAX_MODEL_LEN)
+
+
+def test_eager_is_the_default_exactly_when_protocol_options_are_installed(built, monkeypatch):
+    from verity_vllm import protocol_options as PO
+    fake = SimpleNamespace(NAME="pous", schemes=lambda: ("band-chain/d12/v1",), refusals=lambda scheme, ctx: (),
+                           install=lambda scheme, target: PO.Option(name=f"pous:{scheme}", hooks=target.hooks(f"pous:{scheme}")))
+    monkeypatch.setitem(sys.modules, "verity_vllm.protocol_options.fake_pous", fake)
+    monkeypatch.setitem(PO.ADAPTERS, "pous", "fake_pous")
+    from verity_vllm.engine import vllm_adapter as va
+    real = va.build_engine
+    monkeypatch.setattr(va, "build_engine", lambda *a, **kw: SimpleNamespace(**vars(real(*a, **kw)), model=SimpleNamespace()))
+    L.LLM(LLAMA[0], revision=LLAMA[1], protocols="pous:band-chain/d12/v1").close()
+    assert (built["execution"], built["sampled_proofs"]) == ("eager", False)
+    L.LLM(LLAMA[0], revision=LLAMA[1])
+    assert built["execution"] == "compiled"
 
 
 def test_generate_returns_the_outputs_and_records_the_call(built):

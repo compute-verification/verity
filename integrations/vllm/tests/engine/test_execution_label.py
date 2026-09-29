@@ -80,7 +80,7 @@ def _no_llm(monkeypatch):
     fake.LLM = LLM
     monkeypatch.setitem(sys.modules, "vllm", fake)
     from verity_vllm.engine import engine_profile as prof
-    monkeypatch.setattr(prof, "apply_env", lambda: {})
+    monkeypatch.setattr(prof, "apply_env", lambda sampled_proofs=True: {})
     monkeypatch.setattr(prof, "checkpoint_for", lambda case, ck: {"local_path": "/nonexistent", "repo": "x", "revision": "y"})
 
 

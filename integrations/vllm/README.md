@@ -197,16 +197,18 @@ outputs = llm.generate(["The capital of France is"], SamplingParams(temperature=
 
 `model` and `revision` (the full commit sha) must be pinned in `manifests/checkpoints.json` with the snapshot on the host.
 The engine is built by `engine.vllm_adapter.build_engine` from that pin's engine profile, as every `verity-vllm` stage
-builds it: dtype, tokenizer and attention come from the profile, and prefix caching is off.  Supported keyword options:
+builds it: dtype, tokenizer and attention come from the profile.  Sampled proofs never runs here, so the replay profile does not
+apply (deployment decisions A3, A8): no whole-engine batch invariance, and prefix caching, memory and context length are vLLM's.
+Supported keyword options:
 
 | option | default | sets |
 | --- | --- | --- |
 | `tensor_parallel_size` | 1 | GPUs the model is sharded over |
 | `max_num_seqs` | 8 | requests the scheduler runs together |
 | `max_num_batched_tokens` | vLLM's | tokens per scheduler step |
-| `max_model_len` | the pin's | context length |
-| `gpu_memory_utilization` | the profile's | fraction of device memory the engine may take |
-| `enforce_eager` | True | eager execution; False compiles with torch.compile and CUDA graphs |
+| `max_model_len` | vLLM's | context length |
+| `gpu_memory_utilization` | vLLM's | fraction of device memory the engine may take |
+| `enforce_eager` | eager with protocol options, else compiled | eager execution; False compiles with torch.compile and CUDA graphs |
 | `seed` | 0 | the engine seed |
 | `protocols` | none | protocol options installed on the engine: `"pouw:<scheme>,pous:<scheme>"` or `{name: scheme}` |
 | `protocols_config` | none | each enabled protocol's settings, `{name: {...}}`; never hashed |

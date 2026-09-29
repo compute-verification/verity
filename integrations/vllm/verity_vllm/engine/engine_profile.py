@@ -71,10 +71,10 @@ def max_model_len_for(cp: dict[str, Any]) -> int:
     return MAX_MODEL_LEN
 
 
-def apply_env() -> dict[str, str]:
+def apply_env(sampled_proofs: bool = True) -> dict[str, str]:
     from verity_vllm.config import checkpoints_hf_home
 
-    return env.apply_engine(checkpoints_hf_home())
+    return env.apply_engine(checkpoints_hf_home(), sampled_proofs)
 
 
 def load_checkpoints(path: str | Path) -> dict[str, dict[str, Any]]:

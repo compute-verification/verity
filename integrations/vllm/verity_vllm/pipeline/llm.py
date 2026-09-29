@@ -27,10 +27,10 @@ SUPPORTED: dict[str, Supported] = {
     "tensor_parallel_size": Supported(int, 1, "GPUs the model is sharded over"),
     "max_num_seqs": Supported(int, 8, "requests the scheduler runs together"),
     "max_num_batched_tokens": Supported(int, None, "tokens per scheduler step (default: vLLM's for the model length)"),
-    "max_model_len": Supported(int, None, "context length (default: the pin's)"),
-    "gpu_memory_utilization": Supported((float, int), None, "fraction of device memory the engine may take (default: the "
-                                                            "engine profile's)"),
-    "enforce_eager": Supported(bool, True, "True runs eagerly; False compiles with torch.compile and CUDA graphs"),
+    "max_model_len": Supported(int, None, "context length (default: vLLM's for the model)"),
+    "gpu_memory_utilization": Supported((float, int), None, "fraction of device memory the engine may take (default: vLLM's)"),
+    "enforce_eager": Supported(bool, None, "True runs eagerly; False compiles with torch.compile and CUDA graphs (default: "
+                                           "eager with protocol options, whose wrappers run eager; else compiled)"),
     "seed": Supported(int, 0, "the engine seed"),
     "protocols": Supported((str, dict, list, tuple), None, "protocol options installed on the engine: 'pouw:<scheme>,pous:<scheme>' "
                                                              "or {name: scheme} (verity_vllm.protocol_options); default none"),
@@ -61,6 +61,11 @@ def resolve_options(options: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def eager(opts: dict[str, Any]) -> bool:
+    """``enforce_eager`` as set, else eager exactly when protocol options are installed (their wrappers run eager)."""
+    return opts["enforce_eager"] if opts["enforce_eager"] is not None else bool(config.parse_protocols(opts["protocols"]))
+
+
 def protocol_context(opts: dict[str, Any]) -> Any:
     """The protocol options' serving context for resolved options, None when none is enabled; ``ValueError`` names every
     refusal, before any engine exists."""
@@ -70,7 +75,7 @@ def protocol_context(opts: dict[str, Any]) -> Any:
             raise ValueError("verity_vllm.LLM: protocols_config without protocols")
         return None
     from verity_vllm import protocol_options as PO
-    ctx = PO.Context(stage="serve", enabled=enabled, world=opts["tensor_parallel_size"], enforce_eager=opts["enforce_eager"],
+    ctx = PO.Context(stage="serve", enabled=enabled, world=opts["tensor_parallel_size"], enforce_eager=eager(opts),
                      settings=PO.load_settings(opts["protocols_config"]))
     bad = PO.refusals(ctx)
     if bad:
@@ -113,10 +118,15 @@ class LLM:
     * ``tensor_parallel_size`` (int, default 1): GPUs the model is sharded over.
     * ``max_num_seqs`` (int, default 8): requests the scheduler runs together.
     * ``max_num_batched_tokens`` (int): tokens per scheduler step; default vLLM's for the model length.
-    * ``max_model_len`` (int): context length; default the pin's.
-    * ``gpu_memory_utilization`` (float): fraction of device memory the engine may take; default the engine profile's.
-    * ``enforce_eager`` (bool, default True): True runs eagerly; False compiles with torch.compile and CUDA graphs, in a
-      fresh Inductor cache for this process.
+    * ``max_model_len`` (int): context length; default vLLM's for the model.
+    * ``gpu_memory_utilization`` (float): fraction of device memory the engine may take; default vLLM's.
+    * ``enforce_eager`` (bool): True runs eagerly; False compiles with torch.compile and CUDA graphs, in a fresh Inductor
+      cache for this process.  Default: eager when protocol options are installed (their wrappers run eager), else
+      compiled.
+
+    Sampled proofs never runs here, so the engine is vLLM's own (deployment decisions A3, A8): no whole-engine batch
+    invariance, and prefix caching, memory and context length are vLLM's defaults.  The row stages, which run sampled
+    proofs, keep the replay profile.
     * ``seed`` (int, default 0): the engine seed.
     * ``protocols`` (str or mapping): protocol options installed on the engine once it is built
       (:mod:`verity_vllm.protocol_options`), ``"pouw:<scheme>,pous:<scheme>"`` or ``{"pous": "<scheme>"}``; default none.
@@ -143,7 +153,7 @@ class LLM:
         if self.pin.world > 1:
             engine_args["tensor_parallel_size"] = self.pin.world
         self._engine = va.build_engine(config.CHECKPOINTS, max_num_seqs=opts["max_num_seqs"], case=self.pin.case,
-                                       engine_args=engine_args, execution=va.execution_label_of(opts["enforce_eager"]))
+                                       engine_args=engine_args, execution="eager" if eager(opts) else "compiled", sampled_proofs=False)
         self.records: list[GenerateRecord] = []
         self.protocols = None
         if ctx is not None:
