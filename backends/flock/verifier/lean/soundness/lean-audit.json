@@ -149,8 +149,10 @@
   "FlockSoundness.Audit.Partition.Separates.mono": {},
   "FlockSoundness.Audit.Partition.Separates.union": {},
   "FlockSoundness.Audit.Partition.audit_influence": {},
+  "FlockSoundness.Audit.Partition.card_admissible_le": {},
   "FlockSoundness.Audit.Partition.card_delivered_le": {},
   "FlockSoundness.Audit.Partition.card_influenceSet_le": {},
+  "FlockSoundness.Audit.Partition.card_influenceSet_le_harm": {},
   "FlockSoundness.Audit.Partition.flock_e2e_count": {
    "signature": [
     "FlockSoundness.Audit.Partition.flock_e2e_count {C : FlockSoundness.Audit.Circuit} {n : Nat}",

@@ -1,4 +1,5 @@
 import FlockSoundness.Audit.TwoStage
+import FlockSoundness.Audit.Harm
 
 /-!
 # Influence through a separator
@@ -20,6 +21,9 @@ circuit's outputs, since commitments and leaves are outputs that the verifier se
 * `audit_influence` (one-stage) and `Refines.twoStage_influence` (two-stage, over replay units, with `effEscape`): the
   audit accepts while the delivered values lie outside the influence set with probability at most
   `δ + ε_ks + δ_link + δ_in`. The influence in bits is `log₂ |influenceSet|`.
+* `card_influenceSet_le_harm` and `card_admissible_le`: the influence is at most `H + log₂ ∑_{j ≤ K} C(n, j)` bits. `H` is
+  a harm bound (`IsHarmBound`) with each unit's harm the width it adds to a separator, for example its exits
+  (`card_exits_le`): the value bits. The second term is the choice of which units are wrong, when `miss (K + 1) < δ`.
 -/
 
 namespace FlockSoundness.Audit
@@ -196,6 +200,52 @@ theorem out_mem_influenceSet {D : Finset (Fin C.N)} {e : Finset (Fin n) → ℝ�
   classical
   simp only [influenceSet, mem_biUnion, mem_filter, mem_univ, true_and]
   exact ⟨P.wrong X, he, mem_filter.2 ⟨mem_univ _, X, hia, subset_rfl, rfl⟩⟩
+
+theorem exits_subset_biUnion (B : Finset (Fin n)) : P.exits B ⊆ B.biUnion fun u => P.exits {u} := by
+  intro g hg
+  obtain ⟨hc, u, hu, hgu⟩ := mem_filter.1 hg
+  exact mem_biUnion.2 ⟨u, hu, mem_filter.2 ⟨hc, u, mem_singleton_self u, hgu⟩⟩
+
+/-- A set's exits are at most the sum of its units' exits: each unit's exported width is a harm the exits separator
+is covered by. -/
+theorem card_exits_le (B : Finset (Fin n)) : (P.exits B).card ≤ ∑ u ∈ B, (P.exits {u}).card :=
+  (card_le_card (P.exits_subset_biUnion B)).trans card_biUnion_le
+
+section Harm
+
+variable {L : Law n} {a : Fin C.N → Bool} {D : Finset (Fin C.N)}
+
+/-- **Influence from a harm bound**: when every set's separator is no wider than the harm `hb` of its units and `H` is a
+harm bound at `δ`, `|influenceSet| ≤ 2^H · #{B : δ ≤ escape B}`. -/
+theorem card_influenceSet_le_harm (hD : D ⊆ P.committed) (hb : Fin n → ℕ) (K : Finset (Fin n) → Finset (Fin C.N))
+    (hK : ∀ B, K B ⊆ P.committed) (hsep : ∀ B, P.Separates (K B) B D) (hw : ∀ B, (K B).card ≤ ∑ u ∈ B, hb u)
+    {δ : ℝ≥0∞} {H : ℕ} (hH : IsHarmBound L (fun u => (hb u : ℝ)) δ H) :
+    (P.influenceSet D L.escape a δ).card ≤ 2 ^ H * (univ.filter fun B => δ ≤ L.escape B).card := by
+  refine (P.card_influenceSet_le hD L.escape a δ K hK hsep).trans ?_
+  calc ∑ B ∈ univ.filter (fun B => δ ≤ L.escape B), 2 ^ (K B).card
+      ≤ ∑ B ∈ univ.filter (fun B => δ ≤ L.escape B), 2 ^ H := by
+        refine sum_le_sum fun B hB => pow_le_pow_right₀ (by norm_num) ((hw B).trans ?_)
+        have h1 := hH B (mem_filter.1 hB).2
+        have h2 : ((∑ u ∈ B, hb u : ℕ) : ℝ) ≤ (H : ℝ) := by push_cast; exact h1
+        exact_mod_cast h2
+    _ = 2 ^ H * (univ.filter fun B => δ ≤ L.escape B).card := by rw [sum_const, smul_eq_mul, mul_comm]
+
+/-- **The location term**: when `miss (K + 1) < δ`, the sets escaping with probability at least `δ` hold at most `K`
+units, so there are at most `∑_{j ≤ K} C(n, j)` of them. -/
+theorem card_admissible_le {δ : ℝ≥0∞} {K : ℕ} (hK : L.miss (K + 1) < δ) :
+    (univ.filter fun B : Finset (Fin n) => δ ≤ L.escape B).card ≤ ∑ j ∈ range (K + 1), n.choose j := by
+  classical
+  have hsub : (univ.filter fun B : Finset (Fin n) => δ ≤ L.escape B) ⊆
+      (range (K + 1)).biUnion fun j => (univ : Finset (Fin n)).powersetCard j := by
+    intro B hB
+    have hle : B.card ≤ K := by
+      by_contra hc
+      exact absurd ((mem_filter.1 hB).2.trans (L.escape_le_miss (by omega))) (not_le.2 hK)
+    exact mem_biUnion.2 ⟨B.card, mem_range.2 (by omega), mem_powersetCard.2 ⟨subset_univ _, rfl⟩⟩
+  refine (card_le_card hsub).trans (card_biUnion_le.trans (le_of_eq (sum_congr rfl fun j _ => ?_)))
+  rw [card_powersetCard, card_univ, Fintype.card_fin]
+
+end Harm
 
 section OneStage
 
