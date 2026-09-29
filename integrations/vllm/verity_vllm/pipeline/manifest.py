@@ -27,6 +27,7 @@ import json
 import os
 import sys
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
@@ -183,9 +184,9 @@ def _headroom() -> int | None:
         return None
 
 
-#: a component build's peak memory, from its Call count (`spec_histogram`): the OLMoE TP2 row's builds peak at about 6.1 KB per Call
-#: over a 0.3 GB interpreter (3.0 GB at 456K Calls, 4.3 GB at 659K), with headroom
-PEAK_PER_CALL = 8 << 10
+#: a component build's peak memory, from its Call count (`spec_histogram`): the TP2 MoE rows' builds peak at 2.6 KB per Call (OLMoE
+#: LP1024, 2.0 GB at 659K Calls) to 3.0 KB (Qwen3-30B LP1024 T127, 9.0 GB at 2.99M), over a 0.3 GB interpreter; with headroom
+PEAK_PER_CALL = 4 << 10
 PEAK_BASE = 512 << 20
 #: the share of the headroom the component builds may take together
 HEADROOM_SHARE = 0.8
@@ -231,15 +232,42 @@ def build_components(tasks: list[tuple[str, dict[str, Any]]], *, jobs: int = 1, 
     (`_peak`) fit `HEADROOM_SHARE` of the headroom; a Build without a histogram runs alone.  A build is a function of its Build dir, so
     the manifests are those one process builds, and the first build or `after` to fail in `tasks` order raises, as one after another."""
     import multiprocessing
-    from multiprocessing.connection import wait
     after = after or (lambda _i, _m: None)
-    head = _headroom() if jobs > 1 and len(tasks) > 1 and "fork" in multiprocessing.get_all_start_methods() else None
-    if head is None:
-        out = []
-        for i, (d, kw) in enumerate(tasks):
-            out.append(build(d, **kw))
-            after(i, out[-1])
-        return out
+    if jobs <= 1 or len(tasks) < 2 or "fork" not in multiprocessing.get_all_start_methods():
+        return _build_in_turn(tasks, after)
+    with _pool_lock():
+        head = _headroom()
+        if head is None:
+            return _build_in_turn(tasks, after)
+        return _build_forked(tasks, jobs, after, head, log)
+
+
+def _build_in_turn(tasks: list[tuple[str, dict[str, Any]]], after: Callable[[int, dict[str, Any]], None]) -> list[dict[str, Any]]:
+    out = []
+    for i, (d, kw) in enumerate(tasks):
+        out.append(build(d, **kw))
+        after(i, out[-1])
+    return out
+
+
+@contextmanager
+def _pool_lock():
+    """One process pool of component builds per machine at a time (two budgeting one headroom would take it twice: the vLLM suite's
+    xdist workers run both stored TP2 rows at once)."""
+    import fcntl
+    import tempfile
+    with open(os.path.join(tempfile.gettempdir(), "verity-manifest-build-components.lock"), "a") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
+
+
+def _build_forked(tasks: list[tuple[str, dict[str, Any]]], jobs: int, after: Callable[[int, dict[str, Any]], None], head: int,
+                  log) -> list[dict[str, Any]]:
+    import multiprocessing
+    from multiprocessing.connection import wait
     ctx = multiprocessing.get_context("fork")
     budget = int(head * HEADROOM_SHARE)
     need = [e if (e := _peak(d)) is not None else budget + 1 for d, _kw in tasks]
