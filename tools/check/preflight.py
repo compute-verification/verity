@@ -15,7 +15,8 @@ One line per fact on stdout, one per failure on stderr. It checks:
 - that the store answers: every bundle still to restore, or else one pinned object, is read with the run's custody key
   (RESEARCH_PREFLIGHT_CUSTODY), else through its sent URL;
 - that the CPU has `avx512f` when the run carries the pinned upstream build (so lean-agreement runs) and its RUSTFLAGS need it;
-- that the tree's and the cache's filesystems have the space a check takes, plus each dependency tree still to restore.
+- that the tree's and the cache's filesystems have the space a check takes: 45 GB, or 1.25 times the most the recent checks
+  recorded on this machine took (their `resources.jsonl`) when that is more, plus 1.25 times each dependency tree to restore.
 The run's `--send` files are in RESEARCH_PREFLIGHT_INPUTS.
 """
 from __future__ import annotations
@@ -32,12 +33,16 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 GB = 1 << 30
-#: what a check with warm Lean dependencies takes on the tree's filesystem (the workspace's .venv, the verifier's build) and on
-#: the cache's (the audit's scratch builds, uv's cache, the Flock checkout's target/): together the 25 GB the merge trains'
-#: launcher required free on check pods
-TREE_GB, CACHE_GB = 10, 15
+#: the warm floor where no check recorded here says more, on the tree's filesystem (the workspace's .venv, the verifier's build)
+#: and the cache's (the audit's scratch builds, uv's cache, the Flock checkout's target/): together 45 GB, the merge trains'
+#: launcher's floor, since a full check peaks at about 40 GB (TB2's and TO3's ran out of space with 31 and 36 GB free)
+TREE_GB, CACHE_GB = 15, 30
 #: one Lean dependency tree unpacked from its bundle (8.0 to 10 GB for the three packages), besides the bundle itself
 DEPS_TREE_GB = 10
+#: over the highest peak the recent checks here recorded, and over each dependency tree to restore
+MARGIN = 1.25
+#: how many of this machine's most recent recorded checks the floor reads
+RECENT = 5
 PROBE_TIMEOUT_S = 30
 #: a pinned build needs AVX-512 when it was built for the build host's CPU or for x86-64-v4, or names an AVX-512 feature
 AVX512 = re.compile(r"target-cpu=(native|x86-64-v4)\b|avx512")
@@ -219,17 +224,64 @@ def _existing(p: Path) -> Path:
     return p
 
 
-def disk(tree: Path, cache: Path, restore: list[dict], usage=shutil.disk_usage) -> tuple[list[str], list[str]]:
-    """Free space on the tree's and the cache's filesystems (one sum when they are one) against what a check takes there."""
-    need: dict[int, list] = {}
-    for path, gb in ((tree, TREE_GB), (cache, CACHE_GB + sum(DEPS_TREE_GB + r["bytes"] / GB for r in restore))):
-        at = _existing(path)
-        need.setdefault(at.stat().st_dev, [at, 0.0])[1] += gb
+def _storage_free(resources: Path) -> list[int]:
+    """The free bytes each storage sample of a run's `resources.jsonl` read on its run directory's filesystem, in order."""
+    out = []
+    with open(resources, encoding="utf-8", errors="replace") as f:
+        for line in f:
+            if '"kind":"storage"' not in line:
+                continue
+            try:
+                free = json.loads(line)["mounts"][0]["free_bytes"]
+            except (ValueError, KeyError, IndexError, TypeError):
+                continue
+            if isinstance(free, int):
+                out.append(free)
+    return out
+
+
+def recorded_peak(runs: Path | None, recent: int = RECENT) -> tuple[float, str] | None:
+    """(GB, run id): the most disk one of the ``recent`` newest `check` runs under ``runs`` took on its filesystem, free space at
+    its first storage sample less the lowest it saw (what ran beside it counts too); None when none is recorded here."""
+    if runs is None or not runs.is_dir():
+        return None
+    peaks = []
+    for d in sorted((d for d in runs.iterdir() if d.is_dir()), key=lambda d: d.name, reverse=True):     # run ids sort by time
+        try:
+            job = json.loads((d / "job.json").read_text())
+        except (OSError, ValueError):
+            continue
+        if ((job.get("store") or {}).get("tool") or {}).get("name") != "check" or not (d / "resources.jsonl").is_file():
+            continue
+        free = _storage_free(d / "resources.jsonl")
+        if len(free) >= 2:
+            peaks.append(((free[0] - min(free)) / GB, d.name))
+        if len(peaks) == recent:
+            break
+    return max(peaks) if peaks else None
+
+
+def disk(tree: Path, cache: Path, restore: list[dict], usage=shutil.disk_usage, runs: Path | None = None) -> tuple[list[str], list[str]]:
+    """Free space on the tree's and the cache's filesystems (one sum when they are one) against what a check takes there: the
+    warm floor (`TREE_GB`, `CACHE_GB`), or `MARGIN` times the peak recent checks here recorded on the tree's (`recorded_peak`)
+    when that is more, plus `MARGIN` times each dependency tree to restore, on the cache's."""
+    peak = recorded_peak(runs)
+    derived = MARGIN * peak[0] if peak else 0.0
+    at_tree, at_cache = _existing(tree), _existing(cache)
+    extra = MARGIN * sum(DEPS_TREE_GB + r["bytes"] / GB for r in restore)
+    one = at_tree.stat().st_dev == at_cache.stat().st_dev
+    need = [(at_tree, TREE_GB + CACHE_GB if one else TREE_GB, extra if one else 0.0)] + ([] if one else [(at_cache, CACHE_GB, extra)])
     facts, fails = [], []
-    restoring = f" with {len(restore)} Lean dependency tree(s) to restore" if restore else ""
-    for at, gb in need.values():
+    for at, floor, more in need:
+        why = []
+        if at == at_tree and derived > floor:
+            floor = derived
+            why.append(f"{MARGIN:g} x the {peak[0]:.0f} GB check {peak[1]} took here")
+        if more:
+            why.append(f"{len(restore)} Lean dependency tree(s) to restore")
+        gb = floor + more
         free = usage(at).free / GB
-        line = f"disk: {free:.0f} GB free on {at}'s filesystem, where a check needs {gb:.0f} GB{restoring}"
+        line = f"disk: {free:.0f} GB free on {at}'s filesystem, where a check needs {gb:.0f} GB" + (f" ({'; '.join(why)})" if why else "")
         if free >= gb:
             facts.append(line)
         else:
@@ -254,7 +306,7 @@ def checkout(root: Path, sha: str | None) -> tuple[list[str], list[str]]:
 
 
 def run(root: Path, inputs: Path | None, custody: Path | None, cache: Path, cpuinfo: Path = Path("/proc/cpuinfo"),
-        usage=shutil.disk_usage, sha: str | None = None) -> tuple[list[str], list[str]]:
+        usage=shutil.disk_usage, sha: str | None = None, runs: Path | None = None) -> tuple[list[str], list[str]]:
     lean = (root / "backends" / "flock" / "verifier" / "lean" / "lakefile.toml").exists()
     packages = LA.packages(CHECK.tracked_files(root) or []) if lean else []
     sent = inputs / CHECK.LEAN_DEPS_URLS if inputs is not None else None
@@ -266,7 +318,7 @@ def run(root: Path, inputs: Path | None, custody: Path | None, cache: Path, cpui
         fails.append(f"prepare the pod: `{POD_SETUP}`")
     f, x, restore = lean_deps(root, packages, cache, urls)
     facts, fails = facts + f, fails + x
-    for f, x in (store(restore or probe(root, packages), urls, custody), cpu(root, inputs, cpuinfo), disk(root, cache, restore, usage)):
+    for f, x in (store(restore or probe(root, packages), urls, custody), cpu(root, inputs, cpuinfo), disk(root, cache, restore, usage, runs)):
         facts, fails = facts + f, fails + x
     return facts, fails
 
@@ -276,8 +328,9 @@ def _env_path(name: str) -> Path | None:
 
 
 def main() -> int:
+    runs = ROOT.parent.parent / "runs" if ROOT.parent.name == "src" else None       # a shipped tree: <root>/src/<sha>, <root>/runs
     facts, fails = run(ROOT, _env_path("RESEARCH_PREFLIGHT_INPUTS"), _env_path("RESEARCH_PREFLIGHT_CUSTODY"), CHECK.cache_dir(),
-                       sha=os.environ.get("RESEARCH_SOURCE_SHA"))
+                       sha=os.environ.get("RESEARCH_SOURCE_SHA"), runs=runs)
     for line in facts:
         print(line, flush=True)
     for line in fails:
