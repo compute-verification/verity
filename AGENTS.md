@@ -105,9 +105,9 @@ Dependency direction (README "Development"): `ir <- evaluation <- ml`,
 without a frontend or runtime integration.
 
 ~~~text
-uv sync --all-packages --all-extras       # the whole workspace, editable, with torch for the vLLM integration's CPU tests
+uv sync --all-packages --extra torch-cpu  # the whole workspace, editable, with CPU-only torch (GPU work: a member's `torch` extra)
 uv run tools/check/suites.py              # every test suite whose inputs changed since it last passed; --quick skips slow tests
-uv run python tools/check/check.py        # the check a merge requires; --record publishes it as an Attempt
+uv run --extra torch-cpu python tools/check/check.py  # the check a merge requires; --record publishes it as an Attempt
 ~~~
 
 ## Tests
@@ -116,6 +116,8 @@ Every package's tests live in its own `tests/` and run as one suite, in its own 
 workers), cached by input; the repository's own suite (`tests/`) holds only invariants of the whole tree. How to run them,
 what a suite may read (`[tool.verity.tests] inputs`), and the rules for slow tests, fixtures and dummy credentials:
 `.agents/skills/testing/SKILL.md`.
+No test depends on wall-clock time (no sleeps, clock readings or timeouts; wait on the event itself or inject the clock):
+`tests/test_no_wall_clock.py` enforces it, and its `ALLOWED` list, one reason per entry, holds the exceptions.
 
 ## Circuits
 
@@ -197,7 +199,7 @@ rather than accumulating them.
 - Evidence goes through `research run --tool … --campaign …`: every completed or failed run is auto-published as an Attempt in the evidence store (`~/.research/store`, `research data …`; contract in `tools/research/src/research/store/README.md`).
 - Findings and claims about a run are labels, never edits to a shared table: `research data label <run id|art:…> <key> <value> --by <lane> --ref <run id>` (a red-team verdict is another label by the red-team; tables pick a policy, `store_tables.py --proof-class-by 'red-team-*'`).
 - The ledger `backends/numerical/reports/ledger/*.jsonl` is frozen history (imported once by `ledger_to_store.py`); new rows are labels on the attempt they describe.
-- Repo-replicated inputs are registered in `fixtures/artifacts.json` (`{art id: path}`, `research data put --kind fixture/v1 --file …`); `tools/research/tests/test_repo_replicas.py` checks every entry hashes to its id.
+- Fixtures are registered in `fixtures/artifacts.json` (`{art id: path}`, `research data put --kind fixture/v1 --file …`); `tools/research/tests/test_repo_replicas.py` checks every entry hashes to its id. A tracked file is at most 256 KiB (`tests/test_repository.py`); a larger fixture's path is gitignored and `research data fetch-fixtures` fetches it (the store README §7.3).
 - `tests/test_repository.py` rejects report-genre files (`*HANDOFF*`, `*REPORT*`, `*URGENT*`, `*DRAFT*`, `*TRIAGE*`, `*STATUS*`, anything under `reports/` or `results/`), and `.gitignore` keeps them out of `git add`.
 
 ## Lanes (worker agents)
@@ -214,3 +216,7 @@ origin lacks.
 
 When creating or modifying a skill in `.agents/skills/`, use
 `.agents/skills/authoring-skills/SKILL.md`.
+
+Before adding, changing or retiring a process (a rule here or in the lane contract, a gate in `check` or `research merge`,
+a required review, a file every PR must update), assess its effect on research velocity with
+`.agents/skills/process-design/SKILL.md`.

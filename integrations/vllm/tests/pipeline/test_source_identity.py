@@ -353,7 +353,7 @@ def test_runners_refuse_a_foreign_veritor_repo_before_doing_anything(tmp_path, a
     other = tmp_path / "other"
     other.mkdir()
     r = subprocess.run(argv, cwd=INTEGRATION, env=_env(VERITOR_REPO=str(other), PATH=os.environ.get("PATH", ""), PYTHONPATH=PP),
-                       capture_output=True, text=True, timeout=60)
+                       capture_output=True, text=True)
     assert r.returncode == 3, (r.stdout, r.stderr)
     assert "PRECHECK_FAIL_SOURCE_IDENTITY" in r.stderr and str(other) in r.stderr
     assert not list(tmp_path.glob("**/stages.txt"))
