@@ -17,6 +17,7 @@ FIXTURES = ROOT / BAT.FIXTURE_DIR
 slow = pytest.mark.skipif(not os.environ.get("VERITY_SLOW"), reason="z3 sweeps run on the pod (VERITY_SLOW=1)")
 
 
+@pytest.mark.slow
 def test_rules_analysis_sound_with_all_rules():
     """Every predicate of every embedded gadget is read faithfully mod p under the full rule set."""
     rep = BB.rules_report(REAL)

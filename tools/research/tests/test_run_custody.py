@@ -153,6 +153,7 @@ def test_a_stray_sigterm_to_the_runner_does_not_cost_the_run_its_record_or_custo
     assert "runner got SIGTERM" in log and "runner got SIGHUP" in log
 
 
+@pytest.mark.slow
 def test_a_failed_publish_leaves_a_negative_marker_forgets_the_key_and_the_guard_refuses(tmp_path, capsys):
     runs = tmp_path / "root" / "runs"
     d = _fixture_run(runs)
