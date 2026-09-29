@@ -157,7 +157,7 @@ link term per audit.
 | L1: each template's rows compute its gates (`ASSUMPTIONS.md`) | (meaning) | named; proved for RoPE | RoPE: `Rope.rope_sound`, a verified lowering; the rest: the IR comparison tests |
 
 The proved results depend only on Lean's three standard axioms (`propext`, `Classical.choice`, `Quot.sound`). Run
-`lake env lean FlockSoundness/Check.lean` to check.
+`python tools/lean/audit.py backends/flock/verifier/lean/soundness` to check every declaration (`lean-audit.json`).
 
 ### 1.5 The compiled lowering (`lowering_sound`, `Prog.isRowsUnit`; `Lowering.lean`)
 
@@ -240,6 +240,14 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
     unit's block rows (`blockRow`), and `BlockFacts.placement` gives a table class's placement at a slot for the unit's
     composed rows (`ofBlock`) from them. `Layout.realizes` proves `Realizes` at any unit slot of a flat statement
     `Stmt.setupH` accepted, for composed rows that are the parsed unit net's (`Compose.NetRows`).
+  - **A typed template's Δ** (`ExecTyped.lean`, #277): `delta_typed` gives Δ_A and Δ_B as the flat entries
+    (`delta_split`'s forms), then per VU the input bits' copies of their message bits, the parts' bound rows and the root
+    rows' cross entries (`Typed.tail`). `CopyRow` and `ZeroRow` state a block row that reads exactly one column, or none;
+    a satisfying witness carries the column's value there (`CopyRow.block_eq`), or 0 (`ZeroRow.block_eq`).
+  - **A typed template's statement** (`ExecTemplate.lean`): what `setupH` accepted for `tags.typed`
+    (`setupH_spec_typed`), `parseTyped`'s template and flat-class paths (`parseTyped_spec`), the template's parse
+    (`parse_facts_tmpl`: its nets the root and placed layouts' circuits first, its block `blockOf t`, the rows' own wires,
+    no leaf map or cut) and check (`check_facts_typed`).
   - **A template unit's parts** (`Types/Parts.lean`). `deriveChecked` also checks the unit's parts as its template
     statement reads them (`partsChecked`), and these are the row facts a template's block rows rest on:
     - each part's region is past the unit's own rows, and the parts are apart (`part_region`, `parts_apart`);
@@ -247,9 +255,36 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
     - Δ is exactly the unit's and the parts' constants and the parts' bound inputs, one entry per row (`delta_nodup`,
       `delta_entry`, `delta_const`);
     - each callee's input rows are self rows (`callee_rows`), and the own rows read only own and part columns
-      (`own_reads`).
-  - Still to prove: `NetRows` for a flat typed class, whose unit net #307 builds from `derive`'s rows (`Typed.netOfD_ok`),
-    and a template's block rows from `setupH` (1e, #277).
+      (`own_reads`);
+    - the unit's constant row is `[const]·[const]` (`unit_const_row`), and its order lists only own and part columns
+      (`order_cols`).
+  - **A template's block rows, placed** (`ExecTemplatePlace.lean`, T3). Given two facts structures,
+    `TemplateLayout.blockFacts` proves `BlockFacts` at every VU `g`, at `Typed.col c tb g`, and
+    `TemplateLayout.placement` gives a table class's `placed g`.
+    - `TemplateLayout` is the accepted statement's layout: its ranges, the root's and the parts' nets and slots, and Δ.
+    - `UnitShape` is the unit's shape: its constant row, its order within its own and its parts' columns, no Δ at an
+      input, and no table read.
+    - Supporting lemmas: unit columns sit at distinct positions across VUs (`col_inj`), and the typed tail at a unit
+      column's position is its bound-input and cross entries (`tail_count`).
+  - **From the accept step** (`ExecTemplateSetup.lean`). `setupH_templateLayout` derives `TemplateLayout` from what
+    `Stmt.setupH` accepted for a template (`Typed.read`'s class and block). It uses the template's parse and check,
+    `templateOf_spec`, and #398's `blockOf_spec`, `slotOf_lt` and `slotOf_lt_of_lt`. `setupH_blockFacts` is then
+    `BlockFacts` at every VU of the accepted statement.
+    - The rows' circuits come after the root and the placed layouts' circuits, by `checkTyped` (#405,
+      `CheckFactsT.rows_after`). The unit's shape comes from `deriveChecked` (`unitShape_of_class`, with #404's
+      `unit_const_row` and `order_cols`).
+    - What remains is T3's scope: every part places a derived layout, and the unit reads no table.
+    - Supporting lemmas: the class's unit is one of its layouts (`unit_lt`), and Δ's other flat rows are input bits of
+      the rows' circuits' slots (`deltaIn_rows`).
+    - The unit's own check makes its inputs self rows with no Δ entry (`unit_inputs`), which discharges `UnitShape`'s
+      input field (`unitShape_of`).
+    - Each input of VU `g` copies its message bit: the block rows at its position read exactly `copySrc g w`
+      (`input_rows`). As a model `CopyRow` (`input_copy`, and `setupH_inputCopy` for an accepted statement), that is a
+      table class's `copy`, when the message bit's position is in the block.
+  - Still to prove:
+    - `NetRows` for a flat typed class, whose unit net #307 builds from `derive`'s rows (`Typed.netOfD_ok`);
+    - a template whose parts read a table;
+    - the message bit's position in the block, for `setupH_inputCopy`.
 
 ### 1.6 Proved from the libraries, not assumed
 

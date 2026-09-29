@@ -628,6 +628,151 @@ def templateQueryCmd (paths : List String) : IO UInt32 := do
     IO.println s!"TEMPLATEQUERY {line.compress}"
   return 0
 
+/-- `cut-check FILE...`: `check_cut` (the invariant on one Call's cut against its graph, and the width rule) on each case, one
+`CUTCHECK` line per file. -/
+def cutCheckCmd (paths : List String) : IO UInt32 := do
+  let mut all := true
+  for path in paths do
+    let res := match Lean.Json.parse (← IO.FS.readFile path) with
+      | .error e => Except.error s!"not JSON: {e}"
+      | .ok j => Partition.checkCutOfJson j
+    let line := match res with
+      | .error e => Lean.Json.mkObj [("file", Lean.Json.str path), ("ok", Lean.Json.bool false), ("error", Lean.Json.str e)]
+      | .ok (g, owner, committed, limits) =>
+        let (cs, wide) := Partition.checkCut g owner committed limits
+        Lean.Json.mkObj [("file", Lean.Json.str path), ("ok", Lean.Json.bool cs.isEmpty),
+          ("codes", Lean.Json.arr (cs.toArray.map Lean.Json.str)),
+          ("wide", Lean.Json.arr (wide.map fun (x : Nat × Nat × Nat) => Lean.Json.arr #[Lean.toJson x.1, Lean.toJson x.2.1, Lean.toJson x.2.2]))]
+    all := all && (line.getObjValAs? Bool "ok").toOption.getD false
+    IO.println s!"CUTCHECK {line.compress}"
+  return (if all then 0 else 1)
+
+/-- `evaluate FILE...`: `Q_word` v1 on each case `{"X", "calls": [{"call", "def", "graph"?}]}` (`Flock.Qword`): per Call its
+owners, units, committed set (from its graph) and, for a flat cut, its kinds and heads; the population and every unit's
+`locate`. One `EVALUATE` line per file. -/
+def evaluateCmd (paths : List String) : IO UInt32 := do
+  let mut all := true
+  for path in paths do
+    let text ← try IO.FS.readFile path catch _ => pure ""
+    let res : V Lean.Json := do
+      let j ← match Lean.Json.parse text with
+        | .ok j => pure j
+        | .error e => throw s!"not JSON: {e}"
+      let X ← match j.getObjValAs? Nat "X" with | .ok x => pure x | .error _ => throw "evaluate: X"
+      let cs ← match j.getObjVal? "calls" with
+        | .ok (.arr a) => pure a
+        | _ => throw "evaluate: calls"
+      let mut calls := #[]
+      let mut outs := #[]
+      for c in cs do
+        let k := (c.getObjValAs? Nat "call").toOption.getD 0
+        let d ← Qword.defOfJson ((c.getObjVal? "def").toOption.getD Lean.Json.null)
+        let dc := Qword.evaluate X d
+        calls := calls.push (k, dc)
+        let own := dc.owner
+        let mut o := [("call", Lean.toJson k), ("owner", Lean.toJson own), ("units", Lean.toJson dc.units)]
+        if let .ok gj := c.getObjVal? "graph" then
+          let (g, _, _, _) ← Partition.checkCutOfJson (Lean.Json.mkObj [("graph", gj), ("owner", Lean.Json.arr #[])])
+          o := o ++ [("committed", Lean.toJson (if own.size == g.n then Partition.derivedCommitted g own else #[]))]
+        if let .flat g := d then
+          let (_, kinds, heads) := Qword.cutWord g X
+          o := o ++ [("kinds", Lean.toJson kinds), ("head", Lean.toJson heads)]
+        outs := outs.push (Lean.Json.mkObj o)
+      let P : Qword.Units := ⟨calls⟩
+      let loc := (Array.range P.population).map fun i => match P.locate i with
+        | some (p, k, u, path) => Lean.Json.arr #[Lean.toJson i, Lean.toJson #[p, k, u],
+            Lean.Json.arr (path.toArray.map fun (a, b, c) => Lean.toJson #[a, b, c])]
+        | none => Lean.Json.null
+      return Lean.Json.mkObj [("calls", Lean.Json.arr outs), ("population", Lean.toJson P.population), ("locate", Lean.Json.arr loc)]
+    let line := match res with
+      | .ok r => (r.setObjVal! "file" (Lean.Json.str path)).setObjVal! "ok" (Lean.Json.bool true)
+      | .error e => Lean.Json.mkObj [("file", Lean.Json.str path), ("ok", Lean.Json.bool false), ("error", Lean.Json.str e)]
+    all := all && (line.getObjValAs? Bool "ok").toOption.getD false
+    IO.println s!"EVALUATE {line.compress}"
+  return (if all then 0 else 1)
+
+/-- A Call's graph as core's `CallGraph` exports it (`test_format_spec._graph` and `partition_vectors.json`'s fields). -/
+def graphJson (gr : Extract.Graph) : Lean.Json :=
+  let g := gr.g
+  let pairs := fun (xs : Array (Nat × Nat)) => Lean.Json.arr (xs.map fun (a, b) => Lean.toJson #[a, b])
+  Lean.Json.mkObj [("total", Lean.toJson g.total), ("structure", Lean.toJson g.free), ("n", Lean.toJson g.n),
+    ("keep", Lean.toJson gr.keep), ("width", Lean.toJson g.width), ("prim", Lean.toJson gr.prim),
+    ("external", Lean.toJson (gr.external.map fun b => if b then 1 else 0)), ("input_ids", Lean.toJson gr.inputIds),
+    ("src", Lean.toJson (g.reads.map (·.1))), ("dst", Lean.toJson (g.reads.map (·.2))), ("input_reads", pairs g.inputReads),
+    ("outputs", Lean.toJson g.outputs), ("returned_inputs", Lean.toJson g.returnedInputs), ("recomputed", pairs g.recomputed)]
+
+private def sha512Of (j : Lean.Json) : V String := do return hexOf (Sha512.hash (← canon j).toUTF8)
+
+/-- `qword-program DESCRIPTOR [X [W]] [--digests] [--cuts]`: `Q_word` v1 on the program (`Flock.Program`, `Flock.Extract`, `Flock.Qword`):
+the program's SHA-512, the population and per Call its units. In full: per Call its owners, derived committed set and graph,
+and every unit's `locate`. With `--digests`: per Definition a Call names, its units and the SHA-512 of its owners, and of
+its graph for a flat cut. One `QWORDPROGRAM` line. -/
+def qwordProgramCmd (args : List String) : IO UInt32 := do
+  let path := args.headD ""
+  let nums := ((args.drop 1).takeWhile (·.all Char.isDigit)).filterMap String.toNat?
+  let X := nums.headD 16
+  let W := (nums.drop 1).headD 32
+  let digests := args.contains "--digests"
+  let cuts := args.contains "--cuts"
+  let bytes ← try IO.FS.readBinFile path catch _ => pure ByteArray.empty
+  let res : V Lean.Json := do
+    let P ← Program.decode bytes
+    if let some v := P.orderViolation then
+      return Lean.Json.mkObj [("inapplicable", v), ("error", Lean.Json.str (match Extract.evaluate P X with
+        | .error e => e
+        | .ok _ => ""))]
+    let calls ← Extract.evaluate P X
+    let units : Qword.Units := ⟨calls.map fun (k, _, c) => (k, c)⟩
+    -- `--template T --units i,j,…`: the claimed units' membership, as a Flock statement's finding checks it
+    if let some t := argOf args "--template" then
+      let idx := ((argOf args "--units").getD "").splitOn "," |>.filterMap String.toNat? |>.toArray
+      return match Extract.claimedUnits P calls t idx with
+        | .ok note => Lean.Json.mkObj [("members", Lean.Json.bool true), ("note", Lean.Json.str note)]
+        | .error e => Lean.Json.mkObj [("members", Lean.Json.bool false), ("note", Lean.Json.str e)]
+    let base := [("program_sha512", Lean.Json.str (hexOf P.sha512)), ("population", Lean.toJson units.population),
+      ("calls", Lean.Json.arr (calls.map fun (k, d, c) => Lean.Json.arr #[Lean.toJson k, Lean.Json.str (P.defs[d]!).key,
+        Lean.toJson c.units]))]
+    -- `--cuts`: every Definition's cut checked on its Call's whole graph (`partition_object.verify`'s `cut`)
+    let cutJson : List (String × Lean.Json) ← if !cuts then pure [] else do
+      let checked ← Extract.checkCalls P calls X W
+      pure [("cuts", Lean.Json.mkObj (checked.toList.map fun (d, r) => ((P.defs[d]!).key, r.toJson))),
+        ("cut", Lean.Json.arr ((Extract.cutFailures calls checked).map fun (k, r) =>
+          Lean.Json.arr #[Lean.toJson k, Lean.toJson r.codes.toArray]))]
+    let base := base ++ cutJson
+    if digests then
+      let mut defs : Array (String × Lean.Json) := #[]
+      for (_, d, c) in calls do
+        let key := (P.defs[d]!).key
+        if defs.any (·.1 == key) then continue
+        let mut o := [("units", Lean.toJson c.units), ("owner_sha512", Lean.Json.str (← sha512Of (Lean.toJson c.owner)))]
+        if let .flat .. := c then
+          if !(P.defs[d]!).prim then o := o ++ [("graph_sha512", Lean.Json.str (← sha512Of (graphJson (← Extract.graph P d))))]
+        defs := defs.push (key, Lean.Json.mkObj o)
+      return Lean.Json.mkObj (base ++ [("definitions", Lean.Json.mkObj defs.toList)])
+    let mut detail := #[]
+    for (k, d, c) in calls do
+      let own := c.owner
+      let mut o := [("call", Lean.toJson k), ("definition", Lean.Json.str (P.defs[d]!).key), ("units", Lean.toJson c.units),
+        ("owner", Lean.toJson own)]
+      if let .flat _ kinds := c then o := o ++ [("kinds", Lean.toJson kinds)]
+      let gr ← Extract.graph P d
+      o := o ++ [("graph", graphJson gr),
+        ("committed", Lean.toJson (if own.size == gr.g.n then Partition.derivedCommitted gr.g own else #[]))]
+      detail := detail.push (Lean.Json.mkObj o)
+    let loc := (Array.range units.population).map fun i => match units.locate i with
+      | some (p, k, u, path) => Lean.Json.arr #[Lean.toJson i, Lean.toJson #[p, k, u],
+          Lean.Json.arr (path.toArray.map fun (a, b, c) => Lean.toJson #[a, b, c])]
+      | none => Lean.Json.null
+    let owners := Lean.Json.arr (calls.map fun (k, _, c) => Lean.Json.arr #[Lean.toJson k, Lean.toJson c.owner])
+    let od := hexOf (Sha512.hash ("verity/partition/v1/owners".toUTF8.push 0 ++ (← canon owners).toUTF8))
+    return Lean.Json.mkObj (base ++ [("owners_digest", Lean.Json.str od), ("detail", Lean.Json.arr detail),
+      ("locate", Lean.Json.arr loc)])
+  let line := match res with
+    | .ok r => r.setObjVal! "ok" (Lean.Json.bool !(r.getObjVal? "inapplicable").isOk)
+    | .error e => Lean.Json.mkObj [("ok", Lean.Json.bool false), ("error", Lean.Json.str e)]
+  IO.println s!"QWORDPROGRAM {line.compress}"
+  return (if (line.getObjValAs? Bool "ok").toOption.getD false then 0 else 1)
+
 def main (args : List String) : IO UInt32 := do
   match args with
   | ["merkle-test", path] => merkleTest path
@@ -635,6 +780,9 @@ def main (args : List String) : IO UInt32 := do
   | ["hm96-test", path] => hm96Test path
   | ["hm96-test", path, "sha512"] => hm96Test path Hm96.sha512
   | "unit-cut" :: paths => unitCutCmd paths
+  | "cut-check" :: paths => cutCheckCmd paths
+  | "evaluate" :: paths => evaluateCmd paths
+  | "qword-program" :: rest => qwordProgramCmd rest
   | "archive-put" :: dir :: paths => archivePutCmd dir paths
   | "template-query" :: paths => templateQueryCmd paths
   | "net-check" :: paths => netCheckCmd paths

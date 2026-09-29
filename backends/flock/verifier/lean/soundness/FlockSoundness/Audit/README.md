@@ -67,7 +67,11 @@ strata. So the live window draw (`keyedWindow`) escapes $B$ with at most `Law.st
 which is what `verity.proofs.profile.Stratified` computes; `stratified_escape_floor`, **a floor catches its whole
 stratum**: with $k_s \ge 1$, a set containing $U_s$ never escapes; `audit_whole_stratum` and
 `extraction_audit_whole_stratum`, the one-stage profile instantiated, so an audit accepts while a whole floored stratum is
-wrong with probability at most the per-unit terms.
+wrong with probability at most the per-unit terms. `stratified_miss_eq_greedy` (`Audit/StratifiedMiss.lean`), **the
+stratified count curve**: a count vector that some $\tau \in (0, 1]$ separates, every escape factor
+$r_s(c) = (n_s - c - k_s)/(n_s - c)$ it takes at least $\tau$ and every one it leaves at most $\tau$, attains
+$\mathrm{miss}(\sum_s a_s) = \prod_s \binom{n_s - a_s}{k_s}/\binom{n_s}{k_s}$. A greedy fill has such a $\tau$, so this is
+`Stratified.miss` and discharges `audit_exfiltration`'s `hk` for a stratified law.
 
 **Theorems, the work law** (`Audit/Work.lean`, the draw law's second version; `../../PROTOCOL.md` §7.3): `Law.work σ w f K`
 is `Law.stratified` with stratum $s$ drawing $k_s = \min(n_s, \max(f_s, \lceil K w_s n_s / W \rceil))$, where $w_s$ is the
@@ -104,6 +108,22 @@ under the work law's closure draw, at any floors $f_s \ge 1$,
 $\Pr[\text{accept} \wedge \mathrm{work}(B \cup \mathrm{unsound}(B)) \ge T] \le ((W - T)/W)^K$ plus the per-unit terms, for
 $B = \mathrm{wrong}(X)$; `audit_work_closure_harm`: likewise for a wrong unit's harm; `audit_work_closure_of_record`:
 $2^{-40}$ at $K = 27{,}713$ for unsound work of at least 0.1%.
+
+**Theorems, windows of calls** (`Audit/Window.lean`; X-SPC-105, X-SPC-106): a window is one stratified law over its
+(call, template) strata, the calls drawn independently. `Covers σ k w K`: every stratum draws at least its share
+$K w_s n_s / W$, or all its units. `stratified_escape_le_of_covers`: then $\mathrm{escape}(B) \le ((W - W_B)/W)^K$, for any
+such law. `covers_work`: the work law covers its own work. `covers_window`: the per-call split, call $c$ at its share
+$K_c = \min(N_c, \max(1, \lceil K W_c / W \rceil))$, covers the window's work when each call's work is in one stratum
+(`hone`); with two strata doing work in a call, a binding cap breaks the bound itself (the module docstring's example).
+`covers_of_floor`: y's floors $f_s$ with $K_y v_s n_s \le f_s N$ cover the y weights $v$ at $K_y$. `audit_window` and
+`extraction_audit_window`: $\Pr[\text{accept} \wedge (\mathrm{unsoundWork}_w \ge T \vee \mathrm{unsoundWork}_v \ge T_y)]$ is
+at most the larger of the two bounds plus the per-unit terms, not their sum, since both bound the one committed wrong set.
+`audit_window_of_le`: the same for any law whose escapes are at most the product law's, such as an executable draw;
+`audit_window_of_le_slack`: for a law within $\eta$ of it, with $\eta$ added to the bound, as a keyed draw needs, and
+`audit_window_split_of_record_of_le_slack`, its record form, $2^{-40} + \eta$ plus the per-unit terms.
+`audit_window_of_record`: $2^{-40}$ at $K = K_y = 27{,}713$ for a 0.1% share of either; `audit_window_split_of_record`:
+the same for the per-call split with y's floors, the law #364 runs. The product law assumes each call's draw is under a
+distinct context.
 
 **Theorems, two-stage** (`Audit/TwoStage.lean`):
 
@@ -154,6 +174,9 @@ circuit's other outputs, such as commitments and leaves, are not delivered. $K$ 
   meets `audit_influence`'s hypotheses at 0 on an audit that accepts with probability 1 (`A.accepts`); `Gen.harm_witness`
   meets `card_influenceSet_le_harm`'s on any partition and law, with the exits as separators and each unit's exported
   width as its harm.
+  `Two.influence` meets `Refines.twoStage_influence`'s, with `AnchorsSound₂`, on a two-stage audit that accepts with
+  probability 1 (`Two.accepts`), and `Ex.exfil` meets `audit_exfiltration`'s eight hypotheses together, for a one-bit
+  message.
 
 **Tightness and insecurity** (`Audit/Examples.lean`, on `K` chains of `nv` NOT gates, one coarse unit per chain and one
 fine unit per gate, with a uniform `k₂`-subset of each drawn chain's gates in the second stage and an ideal session):
