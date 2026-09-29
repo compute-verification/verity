@@ -78,6 +78,7 @@ def test_r1_the_lifted_workload_root_is_one_partitioned_namespace_and_every_guar
 # ---------------------------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_a1_a5_b_is_word_for_word_invariant_to_whether_a_stops_and_the_program_object_is_the_same(component):
     """pad's T-M2 compares B lifted vs B unlifted.  The reviewer's angle: run the SAME lifted workload twice — A with the fixture prompt
     (stops at a_A = 4) and A with B's never-stopping prompt — and require every word of B's call range AND of the shared weights range to
