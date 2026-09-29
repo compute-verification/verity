@@ -38,7 +38,7 @@ suite key missed deselects every test whose module's key and recorded reads are 
 to one test module re-runs that module and what can reach it, not the suite. `--per-test-min-s` (or `$VERITY_TEST_CACHE_MIN_S`)
 keeps only passes that took at least that long; `--no-per-test` turns it off; `--fresh` reuses nothing, and names what failed
 that a cached pass (the suite's or a test's) answers for: the nightly cold check's signal that a key misses an input
-(`check.py --nightly`). A stop mid-run (SIGINT) still keeps the passes of runs that finished.
+(`check.py --no-cache`, the nightly `audit-main` job). A stop mid-run (SIGINT) still keeps the passes of runs that finished.
 
 `--jobs` is how many test processes run at once. A suite that declares `[tool.verity.tests] parallel = true` spreads its tests
 over all of them with pytest-xdist, whose workers load the guard too. Parallel suites run first, one at a time, then the

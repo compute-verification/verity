@@ -39,7 +39,7 @@ In a `parallel = true` suite each passing test is also cached on its own, even w
 the suite's key less the sibling test modules it can't reach (by import, or by name in a string). A run after a fix to one test
 module re-runs that module and whatever reaches it, and counts the rest as `reused`. So a test depends on another test module
 only by importing or naming it, never through what that module does at import (a top-level call puts it in every key). `--fresh`
-reuses nothing; the nightly `check.py --nightly` runs everything cold and names any cached pass it contradicts.
+reuses nothing; the nightly `audit-main` job runs `check.py --no-cache` on `main` and names any cached pass it contradicts.
 
 ## Where a test goes
 
