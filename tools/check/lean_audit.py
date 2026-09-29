@@ -1,6 +1,7 @@
 """`lean_audit`: check's Lean audit step. `tools/lean/audit.py --all --build`, with passes reused and dependencies kept warm.
 
-    python tools/check/lean_audit.py --out DIR [--cache DIR] [--deps DIR] [--fresh]
+    python tools/check/lean_audit.py --out DIR [--cache DIR] [--deps DIR] [--fresh] [--urls FILE] [--export DIR]
+    python tools/check/lean_audit.py --pin RUN        pin the bundles run RUN exported (`lean-deps.json`)
 
 A package's verdict is reused while everything its audit reads is unchanged. Its key hashes:
 - the tracked files of the package, less the Lake packages nested in it (`audit.lean_modules` skips them);
@@ -20,6 +21,13 @@ they're dropped, so a run's compile-time code cannot leave the next run a cache 
 earlier passing run. The audit's `dependencies` check still compares their `.olean` files with the
 package's record, and the kernel replay still covers the package's own modules. Lean gets this machine's CPUs
 (`LEAN_NUM_THREADS`): inside a pod, its default counts the host's.
+
+A machine without a package's dependencies restores them from the evidence store instead of cloning them from GitHub, which
+throttles anonymous clones from shared addresses. `lean-deps.json` pins one bundle per `lake-manifest.json` + `lean-toolchain`
+by sha256; the launcher sends a presigned URL for each (`--urls`, `check.py --record`), and a bundle is used only when its
+bytes are the pinned ones. A bundle leaves out the builds Mathlib's cache supplies: `lake exe cache get` takes those from
+Mathlib's CDN, which is not GitHub. After a bump, a passing cold audit run with `--export` writes the new bundles into its run
+directory, custody puts them on R2, and `--pin RUN` pins them.
 """
 from __future__ import annotations
 
@@ -32,8 +40,11 @@ import os
 import shutil
 import subprocess
 import sys
+import tarfile
 import tempfile
 import time
+import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -102,12 +113,82 @@ def deps_key(pkg: Path) -> str | None:
     return hashlib.sha256(m.read_bytes() + b"\0" + (pkg / "lean-toolchain").read_bytes()).hexdigest()
 
 
+PIN = "tools/check/lean-deps.json"
+#: the presigned URLs sent with a recorded run, {deps_key: URL}; `check.py` moves the file out of the run directory
+URLS = "lean-deps-urls.json"
+URL_TTL_S = 6 * 3600
+
+
+def pins() -> dict[str, dict]:
+    """{deps_key: {package, sha256, bytes, run}}: the stored bundle of each manifest + toolchain."""
+    p = ROOT / PIN
+    return json.loads(p.read_text())["deps"] if p.is_file() else {}
+
+
+def cache_covered(packages_dir: Path) -> set[str]:
+    """The fetched packages whose builds `lake exe cache get` takes from Mathlib's CDN: Mathlib and what its manifest pins."""
+    m = packages_dir / "mathlib" / "lake-manifest.json"
+    return {"mathlib", *(d["name"] for d in json.loads(m.read_text()).get("packages", []))} if m.is_file() else set()
+
+
+def bundle(src: Path, dst: Path) -> dict:
+    """A package's `.lake/packages` as a gzipped tar, less the builds Mathlib's cache supplies. Every member must pass
+    `tarfile`'s data filter, which `restore` extracts with."""
+    skip = tuple(f"{n}/.lake/build" for n in sorted(cache_covered(src)))
+
+    def keep(ti: tarfile.TarInfo) -> tarfile.TarInfo | None:
+        if ti.name in skip or ti.name.startswith(tuple(s + "/" for s in skip)):
+            return None
+        tarfile.data_filter(ti, str(src))
+        return ti
+
+    tmp = dst.with_name(f".{dst.name}.tmp")
+    with tarfile.open(tmp, "w:gz", compresslevel=1) as t:
+        for name in sorted(os.listdir(src)):
+            t.add(src / name, arcname=name, filter=keep)
+    os.replace(tmp, dst)
+    return {"sha256": CHECK._sha256(dst), "bytes": dst.stat().st_size}
+
+
+def restore(store: Path, k: str, url: str, pin: dict, name: str, log=print) -> bool:
+    """Download the bundle pinned under ``k`` and unpack it as ``store/k``. False, and the package builds cold, when it can't
+    be fetched or isn't the pinned bundle. The URL is never logged: it grants a read until it expires."""
+    part, tmp = store / f".{k}.part", store / f".{k}.tmp"
+    t0 = time.monotonic()
+    try:
+        h, n = hashlib.sha256(), 0
+        with urllib.request.urlopen(url, timeout=120) as r, open(part, "wb") as f:
+            for chunk in iter(lambda: r.read(1 << 20), b""):
+                h.update(chunk)
+                n += len(chunk)
+                f.write(chunk)
+        if (h.hexdigest(), n) != (pin["sha256"], pin["bytes"]):
+            log(f"lean-audit: {name}: the store's dependencies ({k[:12]}) are not the pinned bundle; building cold")
+            return False
+        t1 = time.monotonic()
+        shutil.rmtree(tmp, ignore_errors=True)
+        with tarfile.open(part) as t:
+            t.extractall(tmp, filter="data")
+        os.replace(tmp, store / k)
+    except (OSError, ValueError, tarfile.TarError) as e:            # urllib's errors are OSErrors
+        log(f"lean-audit: {name}: the store's dependencies ({k[:12]}) could not be restored "
+            f"({getattr(e, 'code', None) or type(e).__name__}); building cold")
+        return False
+    finally:
+        part.unlink(missing_ok=True)
+        shutil.rmtree(tmp, ignore_errors=True)
+    log(f"lean-audit: {name}: dependencies from the store ({k[:12]}): {n >> 20} MiB fetched in {t1 - t0:.0f} s, "
+        f"unpacked in {time.monotonic() - t1:.0f} s")
+    return True
+
+
 class WarmDeps:
     """Each package's `.lake/packages` kept under its `deps_key`, moved in before a build and back after. A run holds the
-    ones it moved in; another run at the same time finds them absent and builds cold."""
+    ones it moved in; another run at the same time finds them absent and builds cold. Missing ones come from the store
+    when ``urls`` has the pinned bundle's."""
 
-    def __init__(self, store: Path):
-        self.store = store
+    def __init__(self, store: Path, urls: dict[str, str] | None = None):
+        self.store, self.urls = store, urls or {}
         self.held: dict[Path, Path] = {}
 
     def _lock(self, k: str):
@@ -122,6 +203,8 @@ class WarmDeps:
         dst = pkg / ".lake" / "packages"
         with self._lock(k):
             src = self.store / k
+            if not src.is_dir() and not dst.exists() and k in self.urls and (pin := pins().get(k)):
+                restore(self.store, k, self.urls[k], pin, pkg.name, log)
             if src.is_dir() and not dst.exists():
                 dst.parent.mkdir(parents=True, exist_ok=True)
                 _move(src, dst)
@@ -142,6 +225,21 @@ class WarmDeps:
                 if home.exists():
                     shutil.rmtree(home, ignore_errors=True)
                 _move(src, home)
+
+    def export(self, pkgs: dict[str, str], dest: Path, log=print) -> dict:
+        """Bundle the kept dependencies of ``pkgs`` ({package: deps_key}, packages that passed) into ``dest``, with the
+        listing `--pin` reads (`lean-deps.json`)."""
+        dest.mkdir(parents=True, exist_ok=True)
+        done: dict[str, dict] = {}
+        for p, k in sorted(pkgs.items()):
+            if k in done or not (self.store / k).is_dir():
+                continue
+            t0 = time.monotonic()
+            with self._lock(k):
+                done[k] = {"package": p, **bundle(self.store / k, dest / f"{k}.tar.gz")}
+            log(f"lean-audit: {p}: dependencies bundled ({k[:12]}, {done[k]['bytes'] >> 20} MiB in {time.monotonic() - t0:.0f} s)")
+        (dest / "lean-deps.json").write_text(json.dumps({"schema": "lean-deps/v1", "deps": done}, indent=1) + "\n")
+        return done
 
 
 def _move(src: Path, dst: Path) -> None:
@@ -174,12 +272,12 @@ def transient(rep: dict) -> bool:
 
 
 def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: Path, cache: Path, deps: Path, fresh: bool,
-           log) -> tuple[list[str], list[str]]:
+           log, urls: dict[str, str] | None = None) -> tuple[list[str], list[str]]:
     """Audit ``missed`` (and the packages they require by path) on a scratch tree of their inputs, and store each pass.
     Returns (the failed, the audited)."""
     deps.mkdir(parents=True, exist_ok=True)
     work = Path(tempfile.mkdtemp(prefix="lean-audit-scratch-", dir=deps.parent))    # beside the dependencies: moves, not copies
-    warm = WarmDeps(deps)
+    warm = WarmDeps(deps, urls)
     passed: set[Path] = set()
     audited: list[str] = []
     failed: list[str] = []
@@ -187,8 +285,8 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
         union = sorted({f for p in missed for f in inputs(p, files)})
         scratch_tree(work, union)
         audited = packages(union)
-        for p in audited:
-            warm.take(work / p, log)
+        with ThreadPoolExecutor(max_workers=max(1, len(audited))) as ex:
+            list(ex.map(lambda p: warm.take(work / p, log), audited))
         env = {**os.environ, "LEAN_NUM_THREADS": str(CHECK.cores())}
         t0 = time.monotonic()
         (out / "audit.json").unlink(missing_ok=True)
@@ -219,7 +317,8 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
     return failed, audited
 
 
-def run(out: Path, cache: Path, deps: Path, fresh: bool = False, log=print) -> int:
+def run(out: Path, cache: Path, deps: Path, fresh: bool = False, log=print, urls: dict[str, str] | None = None,
+        export: Path | None = None) -> int:
     files = CHECK.tracked_files(ROOT)
     if files is None:
         log("lean-audit: the tree's files cannot be listed; nothing is cached")
@@ -239,7 +338,7 @@ def run(out: Path, cache: Path, deps: Path, fresh: bool = False, log=print) -> i
     for attempt in range(len(RETRIES) + 1):
         if not todo:
             break
-        now, audited = _audit(todo, files, keys, reports, out, cache, deps, fresh, log)
+        now, audited = _audit(todo, files, keys, reports, out, cache, deps, fresh, log, urls)
         failed = [f for f in failed if f not in audited] + now
         retry = [p for p in audited if p in now and transient(reports.get(p, {}))]
         if not retry or attempt == len(RETRIES):
@@ -251,17 +350,88 @@ def run(out: Path, cache: Path, deps: Path, fresh: bool = False, log=print) -> i
     (out / "audit.json").write_text(json.dumps({"passed": not failed, "failed": failed, "cached": cached,
                                                 "packages": [reports[p] for p in pkgs if p in reports]}, indent=1) + "\n")
     log(f"lean-audit: {'PASS' if not failed else 'FAIL (' + ', '.join(failed) + ')'}: {len(cached)} of {len(pkgs)} packages reused")
+    if export is not None:
+        ok = {p: k for p in pkgs if p in reports and not reports[p].get("failures") and (k := deps_key(ROOT / p))}
+        WarmDeps(deps).export(ok, export, log)
     return 0 if not failed else 1
 
 
+def presigned(ttl_s: int = URL_TTL_S) -> dict[str, str]:
+    """{deps_key: URL} for this tree's pinned bundles, each a GET of the bundle's blob signed by the launcher's store remote.
+    Empty when this machine's store has no remote that signs."""
+    from research.store.local import object_key
+    from research.store.remote import ConfigError, load_remote
+
+    want = {deps_key(ROOT / p) for p in packages(CHECK.tracked_files(ROOT) or [])}
+    pinned = {k: v for k, v in pins().items() if k in want}
+    try:
+        r = load_remote() if pinned else None
+    except ConfigError:
+        r = None
+    if not hasattr(r, "presign"):
+        return {}
+    return {k: r.presign(object_key(v["sha256"]), ttl_s) for k, v in sorted(pinned.items())}
+
+
+def url_file(dest: Path, ttl_s: int = URL_TTL_S) -> Path | None:
+    """`presigned` written as ``dest/lean-deps-urls.json`` (mode 600), the name `check.py` looks for among a run's inputs."""
+    if not (urls := presigned(ttl_s)):
+        return None
+    p = dest / URLS
+    fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        json.dump(urls, f)
+    return p
+
+
+def pin(run_id: str) -> int:
+    """Pin the bundles run ``run_id`` exported: each must be a file of its run record, which custody put on the remote."""
+    from research.store.local import LocalStore, object_key
+
+    st = LocalStore()
+    doc = st.get_attempt(run_id)
+    rr = ((doc or {}).get("outputs") or {}).get("run_record")
+    if not rr:
+        print(f"lean_audit: {run_id} has no run record (launch it with --custody-r2)", file=sys.stderr)
+        return 1
+    files = {f.path: f for f in st.get_manifest(rr).payload.files or []}
+    listing = next((p for p in files if p.endswith("/lean-deps.json") or p == "lean-deps.json"), None)
+    if listing is None:
+        print(f"lean_audit: {run_id} exported no bundle (`--export`)", file=sys.stderr)
+        return 1
+    with tempfile.TemporaryDirectory() as d:
+        got = json.loads((st.fetch(rr, Path(d), paths=[listing]) / listing).read_text())["deps"]
+    base = listing[: -len("lean-deps.json")]
+    current = {deps_key(ROOT / p) for p in packages(CHECK.tracked_files(ROOT) or [])}
+    deps = {k: v for k, v in pins().items() if k in current}                  # a bumped manifest's bundle is no one's any more
+    for k, v in sorted(got.items()):
+        f = files.get(f"{base}{k}.tar.gz")
+        head = st.remote.head(object_key(v["sha256"])) if st.remote else None
+        if k not in current:
+            print(f"lean_audit: {v['package']}: the bundle {k[:12]} is for another manifest or toolchain; not pinned", file=sys.stderr)
+            return 1
+        if f is None or (f.sha256, f.bytes) != (v["sha256"], v["bytes"]) or not head or head["bytes"] != v["bytes"]:
+            print(f"lean_audit: {v['package']}: the bundle {k[:12]} is not on the remote as listed; not pinned", file=sys.stderr)
+            return 1
+        deps[k] = {"package": v["package"], "sha256": v["sha256"], "bytes": v["bytes"], "run": run_id}
+        print(f"lean_audit: {v['package']}: pinned {k[:12]} ({v['bytes'] >> 20} MiB, {run_id})")
+    (ROOT / PIN).write_text(json.dumps({"schema": "lean-deps-pin/v1", "deps": deps}, indent=1, sort_keys=True) + "\n")
+    return 0
+
+
 def main(argv: list[str]) -> int:
+    if argv[:1] == ["--pin"] and len(argv) == 2:
+        return pin(argv[1])
     ap = argparse.ArgumentParser(prog="lean_audit.py", description=__doc__.split("\n\n")[0])
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--cache", type=Path, default=CHECK.cache_dir() / "lean-audit")
     ap.add_argument("--deps", type=Path, default=CHECK.cache_dir() / "lean-deps")
     ap.add_argument("--fresh", action="store_true", help="audit every package and store nothing")
+    ap.add_argument("--urls", type=Path, help=f"{URLS}: presigned URLs for the pinned bundles ({PIN})")
+    ap.add_argument("--export", type=Path, help="bundle the dependencies of every package that passed into this directory")
     a = ap.parse_args(argv)
-    return run(a.out, a.cache, a.deps, a.fresh, log=lambda s: print(s, flush=True))
+    urls = json.loads(a.urls.read_text()) if a.urls and a.urls.is_file() else None
+    return run(a.out, a.cache, a.deps, a.fresh, log=lambda s: print(s, flush=True), urls=urls, export=a.export)
 
 
 if __name__ == "__main__":

@@ -81,6 +81,24 @@ def test_the_lean_steps_once_the_verifier_is_on_the_tree(tmp_path, monkeypatch):
     assert CHECK.lean_steps(out)[3][1].startswith("skipped: the pinned upstream build was not sent")
 
 
+def test_the_lean_dependency_urls_leave_the_run_directory_before_any_step(tmp_path, monkeypatch):
+    """The presigned URLs sent with a run reach the audit step from outside the run directory, which the run's record keeps."""
+    monkeypatch.delenv(CHECK.LEAN_DEPS_URLS_ENV, raising=False)
+    assert CHECK.take_lean_deps_urls(tmp_path) is None
+    (tmp_path / "inputs").mkdir()
+    (tmp_path / "inputs" / CHECK.LEAN_DEPS_URLS).write_text('{"k": "https://r2/o?sig"}')
+    got = CHECK.take_lean_deps_urls(tmp_path)
+    try:
+        assert not (tmp_path / "inputs" / CHECK.LEAN_DEPS_URLS).exists() and not got.is_relative_to(tmp_path)
+        assert got.read_text() == '{"k": "https://r2/o?sig"}' and got.stat().st_mode & 0o777 == 0o600
+        audit = CHECK.lean_steps(tmp_path, urls=got)[2][1]
+        assert audit[audit.index("--urls") + 1] == str(got) and "--urls" not in CHECK.lean_steps(tmp_path)[2][1]
+    finally:
+        got.unlink()
+    monkeypatch.setenv(CHECK.LEAN_DEPS_URLS_ENV, "/somewhere/urls.json")                  # a local recorded run's launcher
+    assert CHECK.take_lean_deps_urls(tmp_path) == Path("/somewhere/urls.json")
+
+
 def test_the_agreement_runs_ci_on_the_pinned_binaries_only(tmp_path, monkeypatch):
     import json
 

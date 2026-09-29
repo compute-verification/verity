@@ -58,7 +58,7 @@ in both runs); it is reached only at `jobs` = 256 on a first push (320.6; re-pus
 that plan a pack format for many-small-file trees is warranted; it is not implemented, and one object per blob stays the storage
 unit until it is.  Raising `store.toml [remote] jobs` (with `max_pool_connections` >= jobs) is the interim lever.
 
-The signing functions are pure and tested against the AWS documented vectors (`sign_headers`, `canonical_request`,
+The signing functions are pure and tested against the AWS documented vectors (`sign_headers`, `presign`, `canonical_request`,
 `string_to_sign`, `signature`).  One instance may be used from several threads (`LocalStore.push` does): the pool is locked, a
 connection is never shared by two requests at once, and the only other shared mutable is the conditional-PUT flag.
 """
@@ -159,6 +159,20 @@ def sign_headers(method: str, host: str, path: str, query: dict[str, str] | list
     signed = ";".join(sorted(k.lower() for k in h))
     h["Authorization"] = f"{ALGORITHM} Credential={access_key}/{scope},SignedHeaders={signed},Signature={sig}"
     return h
+
+
+def presign(method: str, scheme: str, host: str, path: str, access_key: str, secret_key: str, region: str, amz_date: str,
+            expires_s: int, session_token: str | None = None, service: str = "s3") -> str:
+    """A query-signed URL (SigV4 `X-Amz-*` parameters, only `host` signed, `UNSIGNED-PAYLOAD`): whoever holds it may send this one
+    request for `expires_s` seconds (at most 7 days) from `amz_date`, and nothing else."""
+    scope = f"{amz_date[:8]}/{region}/{service}/aws4_request"
+    query = {"X-Amz-Algorithm": ALGORITHM, "X-Amz-Credential": f"{access_key}/{scope}", "X-Amz-Date": amz_date,
+             "X-Amz-Expires": str(int(expires_s)), "X-Amz-SignedHeaders": "host"}
+    if session_token:
+        query["X-Amz-Security-Token"] = session_token
+    creq = canonical_request(method, path, query, {"host": host}, "UNSIGNED-PAYLOAD")
+    sig = signature(secret_key, amz_date[:8], region, string_to_sign(amz_date, scope, creq), service)
+    return f"{scheme}://{host}{uri_encode(path, keep_slash=True)}?{canonical_query(query)}&X-Amz-Signature={sig}"
 
 
 def sha256_file(path: Path) -> tuple[str, int]:
@@ -667,6 +681,12 @@ class S3Remote:
                 self.conditional_put_error = "`If-None-Match: *` ignored (a second PUT of a fresh key answered 2xx, not 412); HEAD-then-plain-PUT for the rest of this session"
                 self.conditional_put = False
                 res["fallback"] = self.conditional_put_error
+
+    def presign(self, key: str, expires_s: int, method: str = "GET") -> str:
+        """A URL for one `method` request on `key`, valid `expires_s` seconds (`presign`): read access to one object for a machine
+        that holds no key."""
+        return presign(method, self.scheme, self.host, self._path(key), self.access_key, self.secret_key, self.region, self._now(),
+                       expires_s, self.session_token)
 
     def delete(self, key: str) -> bool:
         """Remove `key` (True) or find it absent already (False).  Not part of the `Remote` protocol -- the store never deletes a
