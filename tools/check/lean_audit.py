@@ -6,7 +6,8 @@
 A package's verdict is reused while everything its audit reads is unchanged. Its key hashes:
 - the tracked files of the package, less the Lake packages nested in it (`audit.lean_modules` skips them);
 - the same for each package it requires by path (`audit.path_deps`);
-- `tools/lean/` (the auditor and its controls), this file and `check.py`, which it imports;
+- `tools/lean/` (the auditor and its controls), this file and `common.py`, the helpers it imports: not `check.py`, which only
+  launches it, so an edit to `check.py` alone keeps every package's verdict;
 - the package's `lean-toolchain` and `lake-manifest.json`, which pin the toolchain and the fetched dependencies.
 
 When one package misses, the audit runs on a scratch tree holding only the missed packages' inputs, from that tree's own copy of
@@ -59,7 +60,8 @@ def _module(path: Path, name: str):
     return m
 
 
-CHECK = _module(ROOT / "tools" / "check" / "check.py", "check_for_lean_audit")
+#: every file this step loads is in `inputs`: this module, `common.py` and `tools/lean/` (`test_lean_audit.py` holds it)
+COMMON = _module(ROOT / "tools" / "check" / "common.py", "check_common_for_lean_audit")
 
 
 def _sha(p: Path) -> str:
@@ -94,7 +96,7 @@ def inputs(pkg: str, files: list[str]) -> list[str]:
     """Every tracked file an audit of ``pkg`` can read."""
     own = [f for p in (pkg, *path_deps(pkg)) for f in own_files(p, files)]
     tool = [f for f in files if f.startswith(LEAN_TOOL)]
-    return sorted({*own, *tool, "tools/check/lean_audit.py", "tools/check/check.py"})
+    return sorted({*own, *tool, "tools/check/lean_audit.py", "tools/check/common.py"})
 
 
 def key(pkg: str, files: list[str], flags: list[str]) -> str:
@@ -147,7 +149,7 @@ def bundle(src: Path, dst: Path) -> dict:
         for name in sorted(os.listdir(src)):
             t.add(src / name, arcname=name, filter=keep)
     os.replace(tmp, dst)
-    return {"sha256": CHECK._sha256(dst), "bytes": dst.stat().st_size}
+    return {"sha256": COMMON.sha256(dst), "bytes": dst.stat().st_size}
 
 
 def restore(store: Path, k: str, url: str, pin: dict, name: str, log=print) -> bool:
@@ -287,7 +289,7 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
         audited = packages(union)
         with ThreadPoolExecutor(max_workers=max(1, len(audited))) as ex:
             list(ex.map(lambda p: warm.take(work / p, log), audited))
-        env = {**os.environ, "LEAN_NUM_THREADS": str(CHECK.cores())}
+        env = {**os.environ, "LEAN_NUM_THREADS": str(COMMON.cores())}
         t0 = time.monotonic()
         (out / "audit.json").unlink(missing_ok=True)
         r = subprocess.run([sys.executable, str(work / "tools" / "lean" / "audit.py"), "--all", "--build", "--root", str(work),
@@ -319,7 +321,7 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
 
 def run(out: Path, cache: Path, deps: Path, fresh: bool = False, log=print, urls: dict[str, str] | None = None,
         export: Path | None = None) -> int:
-    files = CHECK.tracked_files(ROOT)
+    files = COMMON.tracked_files(ROOT)
     if files is None:
         log("lean-audit: the tree's files cannot be listed; nothing is cached")
         fresh = True
@@ -362,7 +364,7 @@ def presigned(ttl_s: int = URL_TTL_S) -> dict[str, str]:
     from research.store.local import object_key
     from research.store.remote import ConfigError, load_remote
 
-    want = {deps_key(ROOT / p) for p in packages(CHECK.tracked_files(ROOT) or [])}
+    want = {deps_key(ROOT / p) for p in packages(COMMON.tracked_files(ROOT) or [])}
     pinned = {k: v for k, v in pins().items() if k in want}
     try:
         r = load_remote() if pinned else None
@@ -402,7 +404,7 @@ def pin(run_id: str) -> int:
     with tempfile.TemporaryDirectory() as d:
         got = json.loads((st.fetch(rr, Path(d), paths=[listing]) / listing).read_text())["deps"]
     base = listing[: -len("lean-deps.json")]
-    current = {deps_key(ROOT / p) for p in packages(CHECK.tracked_files(ROOT) or [])}
+    current = {deps_key(ROOT / p) for p in packages(COMMON.tracked_files(ROOT) or [])}
     deps = {k: v for k, v in pins().items() if k in current}                  # a bumped manifest's bundle is no one's any more
     for k, v in sorted(got.items()):
         f = files.get(f"{base}{k}.tar.gz")
@@ -424,8 +426,8 @@ def main(argv: list[str]) -> int:
         return pin(argv[1])
     ap = argparse.ArgumentParser(prog="lean_audit.py", description=__doc__.split("\n\n")[0])
     ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--cache", type=Path, default=CHECK.cache_dir() / "lean-audit")
-    ap.add_argument("--deps", type=Path, default=CHECK.cache_dir() / "lean-deps")
+    ap.add_argument("--cache", type=Path, default=COMMON.cache_dir() / "lean-audit")
+    ap.add_argument("--deps", type=Path, default=COMMON.cache_dir() / "lean-deps")
     ap.add_argument("--fresh", action="store_true", help="audit every package and store nothing")
     ap.add_argument("--urls", type=Path, help=f"{URLS}: presigned URLs for the pinned bundles ({PIN})")
     ap.add_argument("--export", type=Path, help="bundle the dependencies of every package that passed into this directory")

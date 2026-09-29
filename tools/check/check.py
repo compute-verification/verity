@@ -96,10 +96,6 @@ def custody_dir() -> Path | None:
     return d if (d / "store.toml").is_file() and (d / "cred.json").is_file() else None
 
 
-def cache_dir() -> Path:
-    return Path(os.environ.get("CHECK_CACHE") or Path.home() / ".cache" / "verity-check")
-
-
 def _load(name: str):
     spec = importlib.util.spec_from_file_location(f"check_{name}", Path(__file__).resolve().parent / f"{name}.py")
     m = importlib.util.module_from_spec(spec)
@@ -109,23 +105,12 @@ def _load(name: str):
 
 #: the verdict packs (`verdicts.py`)
 VERDICTS = _load("verdicts")
-
-
-def cores() -> int:
-    """The CPUs this process may use, bounded by the cgroup quota (a pod's `nproc` can exceed it)."""
-    n = len(os.sched_getaffinity(0))
-    try:
-        q, p = Path("/sys/fs/cgroup/cpu.max").read_text().split()
-        if q != "max":
-            n = min(n, max(1, int(q) // int(p)))
-    except (OSError, ValueError):
-        try:                                           # cgroup v1
-            q = int(Path("/sys/fs/cgroup/cpu/cpu.cfs_quota_us").read_text())
-            if q > 0:
-                n = min(n, max(1, q // int(Path("/sys/fs/cgroup/cpu/cpu.cfs_period_us").read_text())))
-        except (OSError, ValueError):
-            pass
-    return n
+#: the helpers `lean_audit.py` shares (`common.py`), kept out of this file so that its audit key doesn't cover this file
+COMMON = _load("common")
+cache_dir = COMMON.cache_dir
+cores = COMMON.cores
+_sha256 = COMMON.sha256
+tracked_files = COMMON.tracked_files
 
 
 #: the toolchain `lean-toolchain` pins, through elan when `lake` is missing (as `ci-pod.sh` does)
@@ -138,14 +123,6 @@ ELAN = ('command -v lake >/dev/null || command -v "$HOME/.elan/bin/lake" >/dev/n
 UPSTREAM_PIN = FLOCK_VERIFIER / "upstream.json"
 #: where check looks for them besides the run's `inputs/` (`--send`): a local recorded run's launcher sets it
 AGREEMENT_DIR_ENV = "FLOCK_AGREEMENT_INPUTS"
-
-
-def _sha256(p: Path) -> str:
-    h = hashlib.sha256()
-    with open(p, "rb") as f:
-        for chunk in iter(lambda: f.read(1 << 20), b""):
-            h.update(chunk)
-    return h.hexdigest()
 
 
 def agreement_files(out: Path) -> dict[str, Path]:
@@ -471,21 +448,6 @@ def env() -> dict[str, str]:
     for k in ("GIT_AUTHOR_EMAIL", "GIT_COMMITTER_EMAIL"):
         out.setdefault(k, "check@localhost")
     return out
-
-
-def tracked_files(root: Path = ROOT) -> list[str] | None:
-    """The tree's files as git has them: tracked and untracked-unignored in a checkout; in a shipped tree (no `.git`), the
-    commit's tree as the machine's bare repository holds it (`READY.json` names it), never what steps have built in it since.
-    None when neither is available."""
-    if (root / ".git").exists():
-        argv = ["git", "-C", str(root), "ls-files", "-z", "-co", "--exclude-standard"]
-    else:
-        ready, bare = root / "READY.json", root.parent.parent / "git" / "verity.git"
-        if not (ready.exists() and bare.exists()):
-            return None
-        argv = ["git", "--git-dir", str(bare), "ls-tree", "-r", "-z", "--name-only", json.loads(ready.read_text())["tree"]]
-    r = subprocess.run(argv, capture_output=True)
-    return sorted(p.decode() for p in r.stdout.split(b"\0") if p) if r.returncode == 0 else None
 
 
 def _env_key(e: dict[str, str]) -> dict[str, str]:
