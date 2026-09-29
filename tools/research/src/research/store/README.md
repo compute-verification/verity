@@ -308,7 +308,7 @@ Inputs come from flags > `store.toml [remote]` (endpoint, bucket, the env var *n
 - **local** (no API call): sign a JWT (HS256) with the parent *secret access key* — Cloudflare's documented client-side signing,
   ported claim for claim from their reference implementation: `{bucket, scope | actions, paths?: {prefixPaths, objectPaths}, sub:
   account id, iss: parent key id, aud: endpoint host, iat, exp}`; the temporary key id is the parent's, the temporary secret is the
-  sha256 hex of the JWT, the session token is `base64("jwt/" + JWT)`. Checked live against `verity-dev` (2026-09-22): a 10-minute
+  sha256 hex of the JWT, the session token is `base64("jwt/" + JWT)`. Checked live against the store's bucket (2026-09-22): a 10-minute
   `object-read-only` credential HEADs a manifest (200) and is refused a PUT (403); `--prefix` + `--actions` are enforced (PUT inside
   the prefix 200, HEAD outside it 403, a GET not in `actions` 403). One deviation from the reference TypeScript: R2 answers 400 to a
   JWT that carries both `scope` and `actions`, so `--actions` *replaces* `--permission` in the claims. Only this path can scope by

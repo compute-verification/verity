@@ -827,11 +827,11 @@ def test_art_custody_is_the_preserved_check_and_caps_what_it_would_read_back(tmp
 
 def test_r2_env_fills_only_unset_variables(tmp_path):
     p = tmp_path / "r2.env"
-    p.write_text("# R2\nAWS_ACCESS_KEY_ID=abc\nexport R2_BUCKET='verity-dev'\nR2_ENDPOINT=\"https://x\"\nAWS_SECRET_ACCESS_KEY=theirs\n"
+    p.write_text("# R2\nAWS_ACCESS_KEY_ID=abc\nexport R2_BUCKET='store-bucket'\nR2_ENDPOINT=\"https://x\"\nAWS_SECRET_ACCESS_KEY=theirs\n"
                  "R2_ACCOUNT_ID=acct\n\nnot a pair\n")
     env = {"AWS_SECRET_ACCESS_KEY": "mine", "R2_ACCOUNT_ID": ""}
     assert notes.load_env_file(p, env) == ["AWS_ACCESS_KEY_ID", "R2_BUCKET", "R2_ENDPOINT", "R2_ACCOUNT_ID"]
-    assert env == {"AWS_SECRET_ACCESS_KEY": "mine", "R2_ACCOUNT_ID": "acct", "AWS_ACCESS_KEY_ID": "abc", "R2_BUCKET": "verity-dev",
+    assert env == {"AWS_SECRET_ACCESS_KEY": "mine", "R2_ACCOUNT_ID": "acct", "AWS_ACCESS_KEY_ID": "abc", "R2_BUCKET": "store-bucket",
                    "R2_ENDPOINT": "https://x"}
     assert notes.load_env_file(tmp_path / "absent.env", env) == []
 

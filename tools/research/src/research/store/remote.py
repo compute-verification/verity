@@ -12,9 +12,11 @@
 `~/.research/store.toml` (or `$RESEARCH_STORE_CONFIG`); no file, or no `[remote]` table, means no remote: the local store is the
 only replica and nothing is ever called PRESERVED.  The config names the ENV VARS that hold credentials; it never holds secrets.
 When the default `~/.research/store.toml` is absent and `$RESEARCH_STORE_CONFIG` is unset, the environment stands in (a cloud VM
-with only the Cursor secrets): `R2_ENDPOINT` + `R2_BUCKET` (which must be the bucket `tools/research/store.pod.toml` names) + `AWS_ACCESS_KEY_ID` /
-`AWS_SECRET_ACCESS_KEY` [+ `AWS_SESSION_TOKEN`].  A file that exists always wins; an explicit `$RESEARCH_STORE_CONFIG` naming a
-missing file still means no remote.
+with only the Cursor secrets): `R2_ENDPOINT` + `R2_BUCKET` (whose sha256 must be the `bucket_sha256` `tools/research/store.pod.toml`
+pins) + `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` [+ `AWS_SESSION_TOKEN`].  A file that exists always wins; an explicit
+`$RESEARCH_STORE_CONFIG` naming a missing file still means no remote.
+For `type = "s3"`, `bucket` and `endpoint` may instead be named by env var (`bucket_env`, `endpoint_env`), so a tracked config such
+as `store.pod.toml` holds neither, and `bucket_sha256` pins which bucket is acceptable without naming it.
 For `type = "s3"` the optional `session_token_env` (default `AWS_SESSION_TOKEN`) names the env var of a temporary credential's
 session token; when that variable is set the token is sent (and signed) with every request, when unset the key pair is a
 long-lived one and nothing changes.
@@ -30,7 +32,7 @@ from pathlib import Path
 from typing import Callable, Protocol, runtime_checkable
 
 
-POD_CONFIG = Path(__file__).resolve().parents[3] / "store.pod.toml"   # names the store's bucket; the environment fallback must match it
+POD_CONFIG = Path(__file__).resolve().parents[3] / "store.pod.toml"   # pins the store's bucket by sha256; the environment fallback must match it
 
 
 class RemoteConflict(Exception):
@@ -133,6 +135,19 @@ def config_path(explicit: Path | str | None = None) -> Path:
     return Path(os.environ.get("RESEARCH_STORE_CONFIG", Path.home() / ".research" / "store.toml")).expanduser()
 
 
+def bucket_digest(bucket: str) -> str:
+    return hashlib.sha256(bucket.encode("utf-8")).hexdigest()
+
+
+def expected_bucket_digest() -> str:
+    """The sha256 of the store's bucket name, as `store.pod.toml` pins it (the tracked tree never names the bucket)."""
+    try:
+        h = tomllib.loads(POD_CONFIG.read_text(encoding="utf-8"))["remote"]["bucket_sha256"]
+    except (OSError, KeyError, tomllib.TOMLDecodeError) as e:
+        raise ConfigError(f"cannot read the store's bucket digest from {POD_CONFIG} ({type(e).__name__})") from None
+    return h
+
+
 def env_remote_config(environ: dict | None = None) -> dict | None:
     """The `[remote]` table the Cursor secrets stand for, or None when `R2_ENDPOINT` and `R2_BUCKET` are both unset.  ConfigError
     when only one is set or the bucket is not the store's."""
@@ -142,12 +157,8 @@ def env_remote_config(environ: dict | None = None) -> dict | None:
         return None
     if not endpoint or not bucket:
         raise ConfigError(f"environment remote: {'R2_BUCKET' if endpoint else 'R2_ENDPOINT'} is not set")
-    try:
-        expected = tomllib.loads(POD_CONFIG.read_text(encoding="utf-8"))["remote"]["bucket"]
-    except (OSError, KeyError, tomllib.TOMLDecodeError) as e:
-        raise ConfigError(f"environment remote: cannot read the store's bucket from {POD_CONFIG} ({type(e).__name__})") from None
-    if bucket != expected:
-        raise ConfigError(f"environment remote: R2_BUCKET is not the research store's bucket ({POD_CONFIG.name})")
+    if bucket_digest(bucket) != expected_bucket_digest():
+        raise ConfigError(f"environment remote: R2_BUCKET is not the research store's bucket (its sha256 is not the one {POD_CONFIG.name} pins)")
     return {"type": "s3", "bucket": bucket, "endpoint": endpoint, "region": "auto",
             "access_key_id_env": "AWS_ACCESS_KEY_ID", "secret_access_key_env": "AWS_SECRET_ACCESS_KEY"}
 
@@ -178,9 +189,17 @@ def _remote_from(r: dict, p: Path | str) -> Remote:
     if t == "s3":
         from .remote_s3 import S3Remote
 
+        r = dict(r)
+        for k in ("bucket", "endpoint"):
+            if not r.get(k) and r.get(f"{k}_env"):
+                r[k] = os.environ.get(r[f"{k}_env"])
+                if not r[k]:
+                    raise ConfigError(f"{p}: [remote] {k}_env names {r[f'{k}_env']}, which is not set")
         for k in ("bucket", "endpoint", "access_key_id_env", "secret_access_key_env"):
             if not r.get(k):
-                raise ConfigError(f"{p}: [remote] type s3 needs {k}")
+                raise ConfigError(f"{p}: [remote] type s3 needs {k} (or {k}_env)" if k in ("bucket", "endpoint") else f"{p}: [remote] type s3 needs {k}")
+        if r.get("bucket_sha256") and bucket_digest(r["bucket"]) != r["bucket_sha256"]:
+            raise ConfigError(f"{p}: the bucket is not the one [remote] bucket_sha256 pins")
         ak, sk = os.environ.get(r["access_key_id_env"]), os.environ.get(r["secret_access_key_env"])
         if not ak or not sk:
             raise ConfigError(f"{p}: credentials env vars {r['access_key_id_env']} / {r['secret_access_key_env']} are not set")
