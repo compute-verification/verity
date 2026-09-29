@@ -287,6 +287,76 @@ wref      ⌈m·n·(32·T + p_FADD·n_R) + f_A·m·k + f_B·n·k⌉: an atom wor
   The core is checked against the total FP8 step and numpy's float32 running sum, and D-2's exact algebra (before any
   rounding) against A·Bᵀ.
 
+## `ncp-v2`: NCP-INT as a circuit under sampled proofs (`verity_pouw/circuit`)
+
+Sampled proofs is PoUW's verifier here: the call is a `verity.ir` Program, drawn units are proved, never recomputed, and
+the audit's integrity profile carries the work bound (Project design note `docs/pouw/sampled-proofs-circuit.md`, §12; its
+Lean statements are the store's `lean/submissions/pouw-accountable-compute`). This package has NCP-INT at small shapes
+(16 | m, 16 | n, 64 | k); the certificate's domain is still `ncp-v1`'s.
+
+**The units.** `NcpLinear{M,K,N,PERM}` is one linear call. Its root body holds only instances of these templates, so the
+partition is `Q_template_instances` over them (`circuit.partition.query`); every value is computed in exactly one unit.
+
+~~~text
+template            per                          reads                                         returns
+NcpDigest{K}        16-row strip of A            its 16 A rows                                 D_s
+NcpNode             node of the call's tree      its two children                              the parent (the root is D_A)
+NcpKey              call                         salt, forward, position, weight id, D_A       K
+NcpFormY{K,PERM}    16-column weight strip       16 weight rows, salt, weight id, column ids   the Y strip (s8), c₀
+NcpFormX{K,PERM}    16-row strip of A            16 A rows, K, row ids                         the X strip (X + β, u8)
+NcpTile{K}          16 × 16 block                its X strip, its Y strip, c₀                  the credited words, and Z
+NcpDequant          output entry                 Z, s_i, t_j, bias_j                           y = bf16(fp32(s_i)·fp32(t_j)·Z) + bias_j
+~~~
+
+**The formats.** Every hashed field is a 64-bit word: big-endian for SHA-512 (a digest word is its big-endian value) and
+little-endian for SHAKE256. Tags are 8 ASCII bytes. `noise(b) = (b mod 64) − 31`.
+
+~~~text
+r_i = SHA-512("ncp2-row" ‖ row i's int7 bytes)            D_s = SHA-512("ncp2-stp" ‖ r_16s ‖ … ‖ r_16s+15)
+D_A = RFC 6962 tree over D_1 … D_(m/16), node = SHA-512("ncp2-nod" ‖ left ‖ right); one leaf's root is the leaf
+K   = SHAKE256("ncp2-key" ‖ salt ‖ forward ‖ position ‖ weight id ‖ D_A)[:32],   position = layer << 32 | site
+E₁ row i    = noise(SHAKE256(ι(i) ×5 ‖ "ncp2-E1\0" ‖ K)[:k])
+F₁ column j = noise(SHAKE256(ι(j) ×5 ‖ "ncp2-F1\0" ‖ salt ‖ weight id)[:k]),        ι(i) = i << 32 | i
+~~~
+
+X, Y, c₀ and the checked values are `ncp-v1`'s (`schemes.ncp.assemble`, `checked_route_u`) on this noise: the tile returns
+checkpoints 1 … 3k/16 − 1, step-major and row-major within a step, and Z, the last (A·Bᵀ exactly, mod 2^32). A and the
+weight are committed a leaf per row, so a proved unit opens exactly the rows it reads.
+
+**Why the formats look this way.** Each is forced by the partition, and each is checked by a test.
+- **D_s is its own unit.** An IR node is one call, placed after its arguments, so one unit can't both write D_s and read
+  D_A, which depends on it. The design note's X unit is two here: the digest unit and the forming unit. Both read the
+  strip's rows, which are committed inputs, and they compute different functions.
+- **K is per call, and each row's XOF begins with the row's own index in all five of Keccak's columns.** A row's XOF over
+  (salt, forward, D_A, …, i) would compute round 1's values of the call-wide fields alone in every X unit: the same
+  function of the same values in two units. The recompute check rejects that layout
+  (`test_the_index_in_every_column_is_what_keeps_the_xof_recompute_free`). F₁ carries the column index the same way.
+- **c₀ is the Y unit's.** Every tile of a column would otherwise compute −β·Σ Y[:, j] again.
+- **The index binding is anchored inputs.** `Q_template_instances` admits no constant node at the root, so the forward
+  index, the position, the weight id and the global row and column indices are Program inputs, anchored like the salt.
+- **Every primitive returns at most 32 bits.** SHA-512 words are carried as (hi, lo) halves and Keccak lanes as
+  (lo, hi).
+
+**The separator** (decision 4: option (a), Z stays in the tile). The protocol pins the separator port: the tile's Z, the
+second field of `NcpTile`'s return (`partition.SEPARATOR_PORTS`). The registrant can't choose it.
+- `partition.width_rule` removes the pinned ports' values, then width-checks every unit from which a served output (y)
+  is still reachable, under `cut.WIDTH_RULE`. Only the dequantization units are, and each returns 16 bits. Every other
+  unit is behind the separator.
+- A tile whose word leaf reached y would itself be reachable, and would fail, along with every PoUW unit upstream of it
+  (`test_a_word_leaf_wired_to_the_served_output_fails_the_width_rule`).
+- `partition.separator` checks the topology. Every path from a PoUW unit (digest, node, key, form-X, form-Y, tile) to y
+  passes through a pinned Z. What crosses is m·n values of 32 bits, 8,192 bits per tile, and no credited word is
+  delivered.
+
+**The draw** (`plan`). Tiles are drawn by the law, each proved with its closure: its X unit, Y unit, strip digest, the
+node units on that strip's path, and the key, each once. The dequantization units are drawn at the law's floor. The law
+is a seam:
+- `CountLaw` is `main`'s stratified rule today, k_s = max(1, round(K·n_s/N)).
+- `WorkLaw` is Verity root's work law (draft #362, `Flock/Draw.lean`): k_s = min(n_s, max(1, ⌈K·W_s/W⌉)), with
+  K = 27,713 at ε = 0.1% and δ = 2⁻⁴⁰ (`plan.record_k`; 27,712 misses). It is of record when #362 merges.
+
+The profile is `Stratified` over the tile strata, and its `harm_bound`, at W_ref per tile, bounds the unsound work.
+
 ## Not here yet
 
 - The fast implementations: the RTX 4090 kernels and the vLLM adapter (`integrations/vllm/verity_vllm/protocol_options/pouw.py`)
@@ -295,3 +365,10 @@ wref      ⌈m·n·(32·T + p_FADD·n_R) + f_A·m·k + f_B·n·k⌉: an atom wor
 - The honest D-3 kernel on an H100 (its forming loop and the checked step together): not run at any frontier size.
   Round 10 timed the classes and the checked step's harness shapes, not this kernel. The γ figures come from class
   prices.
+- For `ncp-v2`:
+  - the lead domain's shapes (k ≥ 1,088) as a recorded run rather than a test;
+  - C-Flock pieces for the PoUW primitives;
+  - the work law's merge (#362);
+  - the served-output designation and the pinned ports in `Q_nested_instances` v0's spec, evaluator and Lean port;
+  - the vLLM adapter's `traced_as`;
+  - NCP-FP8 and H-1T.

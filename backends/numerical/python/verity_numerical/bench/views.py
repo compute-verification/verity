@@ -81,7 +81,7 @@ ALGEBRAIC_FLAG = "algebraic hash, not for highest-stakes use"
 REASON_LETTERS: dict[str, str] = {
     "R": "weaker statement than the full relation", "Z": "not the family's declared class",
     "S": "commitments on a scheme verity.commitments does not define", "L": "fails the view's security filter",
-    "U": "not independently verified", "F": "proof files not preserved", "I": "another instance set", "K": "prover not on the line's GPU",
+    "U": "not independently verified", "F": "proof files not preserved", "I": "another input set", "K": "prover not on the line's GPU",
     "P": "phase-sum", "M": "protocol not met", "D": "capped by a red-team verdict", "X": "other", "B": "legacy: batch != 4096 or K != 1536"}
 _ORDER = {k: i for i, k in enumerate(REASON_LETTERS)}
 
@@ -110,6 +110,8 @@ SCHEMES: tuple[Scheme, ...] = (
     Scheme("frame-v3/blake3-row", "frame-v3 · keyed-BLAKE3 rows",
            "verity.commitments.merkle trees; the keyed-BLAKE3 row-leaf schema is promoted from backends/direct/ligero/leaf/blake3.py (core-schemes)", True),
     Scheme("vllm-v1", "vllm-v1 · SHA-256", "verity.commitments.vllm_v1 (position / fa2h / id leaves, step and stream root bindings)", True),
+    Scheme("frame-v3-sha512/hm96-sha512", "frame-v3 · SHA-512, hm96-sha512 leaves",
+           "verity.commitments.frame_v3 (the SHA-512 variant) over verity.commitments.hm96 hm96-sha512/v1 leaves", True),
     Scheme("frame-v3/poseidon2-row", "frame-v3 · Poseidon2 rows", "verity.commitments.rowleaf (leaf/v2h)", False),
     Scheme("frame-v3/poseidon2-tile", "frame-v3 · Poseidon2 64x64 tiles", None, False),
     Scheme("frame-v3/ajtai-row", "frame-v3 · Ajtai rows", None, False),
@@ -400,9 +402,46 @@ FLOCK_VLLM_CONFIG = dataclasses.replace(
     soundness="2^-205 per proof for flock-128-r2 (live verifier coins, no grinding credit), union 2^-203 over 4 proofs (the cells "
               "record the earlier, still valid 2^-195.44); "
               "red-team-flock: GRANTED WITH CONDITIONS at ff1c1e3f (VL1 closed at af6aae19)")
-CONFIGURATIONS = (*(dataclasses.replace(c, interaction=_INTERACTION[c.id]) for c in CONFIGURATIONS), FLOCK_CONFIG, FLOCK_VLLM_CONFIG)
+#: M0's generic circuit (statement ``verity/flock-circuit``): one pinned GF(2) circuit per template, the SHA-512 commitments
+#: proved inside it.  The unit wording, the absent privacy claim and the time and AND qualifiers follow red-team-flock-3's
+#: statement review (a plain row would call the attention unit a head, or read the hm96 leaves as hiding).
+FLOCK_CIRCUIT_CONFIG = dataclasses.replace(
+    FLOCK_CONFIG, id="C-Flock, generic circuit, SHA-512 in-circuit commitments", scheme="frame-v3-sha512/hm96-sha512",
+    ports="per instance: one query row (attention: one query over T keys) or one output coordinate (GEMM); x, W committed; "
+          "y public, equal to the IR reference on every proved instance",
+    commitment="frame-v3-sha512 trees over hm96-sha512 leaves, proved in the circuit (the benchmark's salts are "
+               "public); commitment timed separately as serving's hm96-sha512 leaf and tree commitment of the committed values",
+    hashes=(Hash("SHA-512", _STMT, _CR + " (frame-v3-sha512 trees, in circuit)"), Hash("SHA-512", _STMT, _CR + " (hm96-sha512 leaves, in circuit)"),
+            *FLOCK_CONFIG.hashes[2:3],
+            Hash("SHA-512", _COINS, "commit-before-coin binding of the live transcript")),
+    zk="No: NON_ZK_PROOF; no privacy claim (M0's mask slots are zero and the benchmark's hm96 salts are public)",
+    soundness="2^-205 per table for flock-128-r2 (fast100 x2, live verifier coins); knowledge soundness under SHA-512 CR and "
+              "Ligerito's named axioms",
+    assumptions=FLOCK_CONFIG.assumptions + "; template instances as stated (M0's provisional unit cover), all proved, no unit draw",
+    pin="verity/flock-circuit pinned circuit file (PR #83); the Lean verifier of record for this format (PR #142)",
+    interaction="live verifier: coins for every squeeze of both reps; prover end-to-end time (witness, proof, live rounds, upload), "
+                "verification separate")
+CIRCUIT_FLAT, CIRCUIT_TYPED = "verity/flock-circuit", "verity/flock-circuit/types"
+#: red-team-flock-3's C2 for the typed statement (Q4): #277 and #268 on main, and the typed path calling #268's checks.  Until it
+#: holds, no typed cell or row says the circuit computes its type.
+TYPED_C2 = False
+#: Why a typed cell is not a Table 2 cell (nor in the workload headline): until C2 holds and Table 2 gives the typed statement
+#: lines of its own, a typed cell would compete with a flat one for the same line.
+TYPED_NOT_IN_TABLE2 = (f"{CIRCUIT_TYPED}: not a Table 2 cell until C2 holds (#277 and #268 on main, the typed path calling #268's "
+                       "checks) and Table 2 shows typed and flat statements on separate lines")
+#: M0's typed statement (``verity/flock-circuit/types``, PR #281): the same circuit route with typed ports.  Its own row and
+#: backend, so a typed cell is never merged with a flat one (red-team-flock-3's Q4).
+FLOCK_CIRCUIT_TYPED_CONFIG = dataclasses.replace(
+    FLOCK_CIRCUIT_CONFIG, id="C-Flock, typed circuit (verity/flock-circuit/types), SHA-512 in-circuit commitments",
+    zk=FLOCK_CIRCUIT_CONFIG.zk + "; the sessions accepted by the Rust live verifier (flock-circuit serve), no Lean replay"
+       + ("; the circuit computes its type (#268's checks)" if TYPED_C2 else ""),
+    pin=f"{CIRCUIT_TYPED} pinned circuit file (circuit_format flock-circuit/types, PR #281); compared with the flat statement per "
+        "instance only")
+CONFIGURATIONS = (*(dataclasses.replace(c, interaction=_INTERACTION[c.id]) for c in CONFIGURATIONS), FLOCK_CONFIG, FLOCK_VLLM_CONFIG,
+                  FLOCK_CIRCUIT_CONFIG, FLOCK_CIRCUIT_TYPED_CONFIG)
 _CONFIG = {c.id: c for c in CONFIGURATIONS}
-assert set(_CONFIG) == set(D._BY_ID) | {FLOCK_CONFIG.id, FLOCK_VLLM_CONFIG.id}, "every drilldown.VARIANTS entry is a declared configuration"
+assert set(_CONFIG) == set(D._BY_ID) | {FLOCK_CONFIG.id, FLOCK_VLLM_CONFIG.id, FLOCK_CIRCUIT_CONFIG.id, FLOCK_CIRCUIT_TYPED_CONFIG.id}, \
+    "every drilldown.VARIANTS entry is a declared configuration"
 
 TABLE1_COLUMNS = ("Configuration", "Flag", "Statement", "x, W, y", "Commitment scheme", "Hashes (role; property; class)", "ZK and verifier model",
                   "Soundness (whole-proof bound at its cells; dominant term)", "Proximity bounds", "Interaction model", "Transferability",
@@ -421,7 +460,28 @@ def configuration_of(meta: Mapping[str, Any], configurations: Mapping[str, Confi
     name = _get(fp, "software", "backend", "name")
     if not FLOCK.recognises(name):
         return None
+    if fp.get("statement") == CIRCUIT_FLAT:
+        return cfgs.get(FLOCK_CIRCUIT_CONFIG.id)
+    if fp.get("statement") == CIRCUIT_TYPED:
+        return cfgs.get(FLOCK_CIRCUIT_TYPED_CONFIG.id)
     return cfgs.get(FLOCK_VLLM_CONFIG.id if str(name).lower().startswith("flock-vllm-v1") else FLOCK_CONFIG.id)
+
+
+def circuit_facts(meta: Mapping[str, Any]) -> dict[str, Any] | None:
+    """A circuit-statement result's AND count, its convention and the verifier that accepted it (red-team-flock-3's Q4); ``None``
+    for any other result.  A flat result recorded before #281 has no ``ands_counted``: its count is the tensor-core units' only."""
+    fp = meta.get("workload_fingerprint") if isinstance(meta.get("workload_fingerprint"), Mapping) else {}
+    if fp.get("statement") not in (CIRCUIT_FLAT, CIRCUIT_TYPED):
+        return None
+    counted = fp.get("ands_counted")
+    verifier = fp.get("verifier") if isinstance(fp.get("verifier"), Mapping) else {}
+    draw = fp.get("unit_draw")
+    return {"statement": fp["statement"], "ands_per_instance": fp.get("ands_per_instance"), "rows_per_instance": fp.get("rows_per_instance"),
+            "ands_label": "ANDs per instance: tensor-core units + tail" if counted else "ANDs per instance: units only (recorded before #281)",
+            "not_counted": "in-circuit SHA-512 and hm96: proved but not counted",
+            "accepted_by": verifier.get("accepted_by") or "the Rust live verifier (flock-circuit serve)",
+            "computes_its_type": TYPED_C2 if fp["statement"] == CIRCUIT_TYPED else None,
+            **({"unit_draw": f"{draw} (units_per_vu 1: a unit draw counts instances)"} if draw else {})}
 
 
 # --- native throughput N ----------------------------------------------------------------------------------------------------------
@@ -829,8 +889,8 @@ RELATION_SEMANTICS = {"bf16-ampere": "sm80.mma.m16n8k16.bf16", "bf16-hopper": "s
 INPUT_SET_KINDS = ("input-set/v1", "vllm-vu-set/v1")
 
 
-#: Hardware lines no target anchors: a target's instruction on another device (docs ontology, "A result": hardware is its own
-#: axis).  #101 was served on an L40S, whose BF16 GEMM is the Ampere-class mma the first target states.  Every result on such
+#: Hardware lines no target anchors: a target's instruction on another device (``README.md``'s Glossary, "Cell": prover
+#: hardware is its own axis).  #101 was served on an L40S, whose BF16 GEMM is the Ampere-class mma the first target states.  Every result on such
 #: a line is a statement of its own (:func:`result_subcircuit`), so the line has rows only where it has results.
 L40S_BF16 = dataclasses.replace(FIRST, name="l40s-48gb/bf16/sm80.mma.m16n8k16.bf16", anchor_device="NVIDIA L40S 48GB", status="draft", dossier=None)
 #: Every Table 2 line by name: the targets, then the hardware-only lines.
@@ -856,7 +916,7 @@ def _sem_slug(semantics: str) -> str:
 
 def result_subcircuit(meta: Mapping[str, Any], target: Target) -> str | None:
     """The census subcircuit of a result's statement when it is not its target's own -- a statement of its own, so a Table 2
-    row of its own (docs ontology, "A result": K and the semantics are part of the subcircuit) -- else ``None``.
+    row of its own (``README.md``'s Glossary, "Subcircuit": K and the semantics are part of it) -- else ``None``.
 
     K is the fingerprint's.  The semantics are the ``bench.cell`` stamp's subcircuit, else the result's ``relation``
     (:data:`RELATION_SEMANTICS`), else the target's instruction.  Semantics the census records as one (``stood_for_by``) are
@@ -1124,9 +1184,9 @@ def _instances(ctx: Ctx, rules: Rules, equivs: Sequence[T.InstanceEquiv], self_:
     fp = ctx.meta["workload_fingerprint"]
     want, inst = T.frozen_instances(ctx.target), fp.get("instances")
     if want is None:
-        return [("I", f"target {ctx.target.name!r} has no frozen instance set yet")]
+        return [("I", f"target {ctx.target.name!r} has no frozen input set yet")]
     if not isinstance(inst, Mapping):
-        return [("I", "instances is null: not measured on the frozen instance set")]
+        return [("I", "instances is null: not measured on the frozen input set")]
     diff = T.instances_diff(inst, want)
     if not diff:
         return []
@@ -1287,6 +1347,7 @@ class Views:
     key_class_of: dict[str, dict[str, Any]] = field(default_factory=dict)  #: each admissible class cell's key counts (:func:`key_class_of`)
     omitted_of: dict[str, Any] = field(default_factory=dict)  #: each admissible result's latest ``omitted`` label (what it leaves out)
     domain_of: dict[str, str] = field(default_factory=dict)  #: each admissible result's operand domain (``domain`` label, else its fingerprint)
+    circuit_of: dict[str, dict[str, Any]] = field(default_factory=dict)  #: each admissible circuit-statement result's :func:`circuit_facts`
     prover_gpu: dict[str, str | None] = field(default_factory=dict)  #: each admissible result's ``hardware.gpu.name``, by artifact
     interaction_raw: dict[str, dict[str, Any]] = field(default_factory=dict)  #: each admissible result's raw round and loopback records
     #: the attempts labelled ``interaction_attempt_of`` a cell, by that cell's artifact (IX1): ``{artifact, attempt, deviation}``
@@ -1450,6 +1511,13 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
     pools: dict[Key, list[tuple[Ctx, dict[str, Any]]]] = {}
     unfiltered: dict[Key, list[tuple[Ctx, dict[str, Any]]]] = {}
     for c in entries:
+        if c.config is not None and c.config.id == FLOCK_CIRCUIT_TYPED_CONFIG.id:
+            # never the best of a typed and a flat cell (different statement ids are never merged): out of Table 2 until C2 holds
+            # and Table 2 gives the typed statement lines of its own, whatever TYPED_C2 says
+            rid, _ = T._attempt_of(store, c.art)
+            V.rejected.append({"artifact": c.art, "family": c.family.id, "configuration": c.config.id, "line": c.target.name,
+                               "subcircuit": c.subcircuit, "attempt": rid, "codes": [("X", TYPED_NOT_IN_TABLE2)]})
+            continue
         codes = reject_codes(store, c, rules, equivs)
         P = throughput(c.meta, rules, c.config is not None and not c.config.transferability.startswith("transferable"))
         key = (c.target.name, c.subcircuit, scheme_of(c), _column(c, rules), vkey(c))
@@ -1489,6 +1557,8 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
         dom = _latest(c.labels, "domain") or (fp_dom if fp_dom in contract.DOMAINS else None)
         if dom:
             V.domain_of[c.art] = str(dom)
+        if (facts := circuit_facts(c.meta)) is not None:
+            V.circuit_of[c.art] = facts
         if c.key_class:
             V.key_class_of[c.art] = c.key_class
             N = n_of(c)                 # its own key counts' work-weighted N (the row's is its first cell's)
@@ -2135,7 +2205,7 @@ def column_header(col: str) -> str:
     return FAMILY_NAMES[fid] + col[len(fid):] if fid else col
 
 
-#: Composed backends with their own id (docs ontology, "Presentation rules"): route (a) renders in the A-GKR column, and its
+#: Composed backends with their own id (``README.md``'s Glossary, "Backend"): route (a) renders in the A-GKR column, and its
 #: profile adds C-Flock's assumptions and the sigma link's.
 COMPOSED = {ROUTE_A: "A-route-a"}
 
@@ -2505,8 +2575,10 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
         return (sets_by_ref.get((c.instances.get("dataset"), c.instances.get("tier"))) or SimpleNamespace(id=None)).id
 
     def result_key(c: ViewCell) -> str:
-        """backend x statement x input set x prover hardware."""
-        return (f"{backend_by_cfg.get(c.configuration or '') or slug(c.column)}@{statement_id(c.line, c.scheme, c.subcircuit)}"
+        """backend x statement x input set x prover hardware; the typed circuit statement is its own statement, so a typed
+        result never stands in for a flat one (red-team-flock-3's Q4)."""
+        typed = "+types" if c.configuration == FLOCK_CIRCUIT_TYPED_CONFIG.id else ""
+        return (f"{backend_by_cfg.get(c.configuration or '') or slug(c.column)}@{statement_id(c.line, c.scheme, c.subcircuit)}{typed}"
                 f"@{input_set_id(c)}@{prover_of(c)}")
 
     def input_set_of(c: ViewCell) -> dict[str, Any] | None:
@@ -2570,6 +2642,7 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
                       "algebraic_hashes": list(c.algebraic), "verified": bool(c.legacy.verified_by), "verified_by": c.legacy.verified_by,
                       "under_reverification": c.legacy.finding},
             "marks": _mark_names(c), "zk_class": zk_class(cfg) if cfg else None, "domain": V.domain_of.get(c.artifact),
+            **({"circuit": V.circuit_of[c.artifact]} if c.artifact in V.circuit_of else {}),
             "throughput": {"inputs": P["instances"], **{k: P[k] for k in ("instances_per_second", "end_to_end_s", "commit_s", "proving_s", "interaction_s")}},
             "batching": dict(c.batching), "instances": dict(c.instances),
             "interaction": interaction_fields(ix, P, V.interaction_raw.get(c.artifact, {})),

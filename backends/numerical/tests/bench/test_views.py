@@ -268,13 +268,14 @@ def test_a_diagnostic_verdict_on_one_run_does_not_cap_the_other_runs_of_its_stat
 
 
 POSEIDON2_ROW = "frame-v3/poseidon2-row"
+SHA512_HM96 = "frame-v3-sha512/hm96-sha512"
 
 
 def test_table2_has_one_line_per_subcircuit_hardware_and_admissible_scheme(store: LocalStore) -> None:
     views = V.build(store)
-    order = ["frame-v3/sha256", BLAKE3_ROW, "vllm-v1", POSEIDON2_ROW]
-    assert {ln["scheme"] for ln in views.lines} == set(order) and len(views.lines) == 4 * len(TARGETS)
-    assert [ln["scheme"] for ln in views.lines[:4]] == order                    # one subcircuit's schemes sit together
+    order = ["frame-v3/sha256", BLAKE3_ROW, "vllm-v1", SHA512_HM96, POSEIDON2_ROW]
+    assert {ln["scheme"] for ln in views.lines} == set(order) and len(views.lines) == 5 * len(TARGETS)
+    assert [ln["scheme"] for ln in views.lines[:5]] == order                    # one subcircuit's schemes sit together
     assert V._SCHEME["vllm-v1"].admissible and V._SCHEME["vllm-v1"].standard and not V._SCHEME["frame-v3/ajtai-row"].admissible
     assert V._SCHEME[POSEIDON2_ROW].admissible and not V._SCHEME[POSEIDON2_ROW].standard      # core-defined, algebraic
     assert {ln["scheme"] for ln in V.build(store, V.LEGACY).lines} == {None}
@@ -401,17 +402,19 @@ def test_archived_and_unsupported_configurations(store: LocalStore) -> None:
 
 
 def test_table1_carries_the_security_properties(store: LocalStore) -> None:
-    assert {c.id for c in V.CONFIGURATIONS} == {v.id for v in V.D.VARIANTS} | {V.FLOCK_CONFIG.id, V.FLOCK_VLLM_CONFIG.id}
+    assert {c.id for c in V.CONFIGURATIONS} == {v.id for v in V.D.VARIANTS} | {V.FLOCK_CONFIG.id, V.FLOCK_VLLM_CONFIG.id, V.FLOCK_CIRCUIT_CONFIG.id,
+                                                                         V.FLOCK_CIRCUIT_TYPED_CONFIG.id}
     full = {c.id for c in V.CONFIGURATIONS if c.full_relation}
     assert full == {"B-Ligero + Poseidon2 per row", "B-Ligero + Poseidon2 shared 64x64 tile", "B-Ligero + BLAKE3 in circuit",
                     "B-Ligero + SHA-256 in circuit", "B-Ligero + vllm-v1 SHA-256 in circuit", "B-Ligero + Ajtai n=64",
                     "B-Ligero + Ajtai n=128", "SP1 stock, committed (frame-v3 SHA-256 rows)",
                     "SP1 stock, committed (vllm-v1 SHA-256 position leaves)", "Flock (flock-128-r2, live coins)", V.ROUTE_A,
-                    V.FLOCK_VLLM_CONFIG.id}
+                    V.FLOCK_VLLM_CONFIG.id, V.FLOCK_CIRCUIT_CONFIG.id, V.FLOCK_CIRCUIT_TYPED_CONFIG.id}
     assert [c.id for c in V.CONFIGURATIONS if c.full_relation and not c.scheme_problem()] == [
         "B-Ligero + Poseidon2 per row", "B-Ligero + BLAKE3 in circuit", "B-Ligero + SHA-256 in circuit",
         "B-Ligero + vllm-v1 SHA-256 in circuit", V.ROUTE_A, "SP1 stock, committed (frame-v3 SHA-256 rows)",
-        "SP1 stock, committed (vllm-v1 SHA-256 position leaves)", "Flock (flock-128-r2, live coins)", V.FLOCK_VLLM_CONFIG.id]
+        "SP1 stock, committed (vllm-v1 SHA-256 position leaves)", "Flock (flock-128-r2, live coins)", V.FLOCK_VLLM_CONFIG.id,
+        V.FLOCK_CIRCUIT_CONFIG.id, V.FLOCK_CIRCUIT_TYPED_CONFIG.id]
     assert all(c.interaction for c in V.CONFIGURATIONS)
     assert all(x.basis.startswith(("proven", V.MACHINE_CHECKED, "conjectured")) for c in V.CONFIGURATIONS for x in c.proximity)
     assert all(c.proximity and c.hashes and c.dominant_term for c in V.CONFIGURATIONS)
@@ -436,7 +439,7 @@ def test_cli_json_round_trips_and_parity_exit_codes(store: LocalStore, capsys: p
     js = json.loads(capsys.readouterr().out)
     assert js["schema"] == "verity/tables-views/v1" and js["table2"]["columns"] == ["A-GKR", "B-Ligero", "SP1", "Flock"]
     assert len(js["table3"]) == 1 and js["table3"][0]["scheme"] == BLAKE3_ROW
-    assert [x["id"] for x in js["schemes"] if x["admissible"]] == ["frame-v3/sha256", BLAKE3_ROW, "vllm-v1", POSEIDON2_ROW]
+    assert [x["id"] for x in js["schemes"] if x["admissible"]] == ["frame-v3/sha256", BLAKE3_ROW, "vllm-v1", SHA512_HM96, POSEIDON2_ROW]
     assert V.main(["--root", str(store.root), "--rules", "legacy", "--format", "json"]) == 0
     assert json.loads(capsys.readouterr().out)["table2"]["columns"] == ["A-GKR", "B-Ligero", "SP1", "Flock"]
     assert V.main(["--root", str(store.root), "--parity"]) == 0
@@ -1064,15 +1067,16 @@ def test_entities_schemes_carry_the_hash_assumptions_their_configurations_declar
     ent = V.render_entities(V.build(store), rendered_at="2026-09-25T23:00:00Z", commit="abc")
     sch = {s["id"]: s for s in ent["schemes"]}
     assert [x["legacy_id"] for x in sch.values()] == [s.id for s in V.SCHEMES]
-    assert list(sch) == ["frame-v3/sha-256", "frame-v3/blake3-keyed", "vllm-v1/sha-256", "frame-v3/poseidon2-babybear",
+    assert list(sch) == ["frame-v3/sha-256", "frame-v3/blake3-keyed", "vllm-v1/sha-256", SHA512_HM96, "frame-v3/poseidon2-babybear",
                          "frame-v3/poseidon2-babybear-tile64", "frame-v3/ajtai"]
     assert sch["frame-v3/blake3-keyed"]["assumptions"] == ["cr/sha-256", "cr/blake3"]           # frame-v3's trees are SHA-256
     assert sch["frame-v3/sha-256"]["assumptions"] == ["cr/sha-256"] and sch["vllm-v1/sha-256"]["assumptions"] == ["cr/sha-256"]
     assert sch["frame-v3/poseidon2-babybear"]["assumptions"] == ["cr/sha-256", "cr/poseidon2-babybear"]
-    assert all(x["tree_hash"] == "sha-256" for x in sch.values())
+    assert all(x["tree_hash"] == "sha-256" for k, x in sch.items() if k != SHA512_HM96)
+    assert (sch[SHA512_HM96]["tree_hash"], sch[SHA512_HM96]["leaf_hashes"], sch[SHA512_HM96]["assumptions"]) == ("sha-512", ["sha-512"], ["cr/sha-512"])
     assert {k: (x["leaf_hashes"], x["algebraic"]) for k, x in sch.items() if k != "frame-v3/ajtai"} == {
         "frame-v3/sha-256": (["sha-256"], False), "frame-v3/blake3-keyed": (["blake3"], False), "vllm-v1/sha-256": (["sha-256"], False),
-        "frame-v3/poseidon2-babybear": (["poseidon2-babybear"], True), "frame-v3/poseidon2-babybear-tile64": (["poseidon2-babybear"], True)}
+        SHA512_HM96: (["sha-512"], False), "frame-v3/poseidon2-babybear": (["poseidon2-babybear"], True), "frame-v3/poseidon2-babybear-tile64": (["poseidon2-babybear"], True)}
     b3 = sch["frame-v3/blake3-keyed"]
     assert b3["name"] == "frame-v3 · keyed-BLAKE3 rows" and b3["description"].startswith("frame-v3 SHA-256 trees over") and ";" not in b3["description"]
     assert "statement commitment (frame-v3 trees)" in b3["assumption_details"][0]["roles"]
@@ -1563,3 +1567,74 @@ def test_table1_flags_the_frozen_backend_families_not_actively_developed(store: 
     assert fam[V._fam("A-GKR")] == fam[V._fam("B-Ligero")] == fam[V._fam("SP1")] == V.NOT_ACTIVE and fam[V._fam("Flock")] == "active"
     for b in site["backends"]:
         assert b["development"] == (V.NOT_ACTIVE if b["backend_family"] in {V._fam(x) for x in V.FROZEN} else "active")
+
+
+def test_m0_generic_circuit_cells_take_their_own_c_flock_row() -> None:
+    cfg = V.FLOCK_CIRCUIT_CONFIG
+    assert cfg.family == V.FLOCK_CONFIG.family and cfg.scheme_problem() is None and cfg.full_relation
+    fp = {"statement": "verity/flock-circuit", "software": {"backend": {"name": "flock-circuit"}}}
+    assert V.configuration_of({"workload_fingerprint": fp}) is cfg
+    assert V.configuration_of({"workload_fingerprint": {**fp, "statement": "verity/flock-ir-frame/v3"}}) is V.FLOCK_CONFIG
+    assert "one query row" in cfg.ports and "one output coordinate" in cfg.ports
+    words = " ".join((cfg.ports, cfg.commitment, cfg.zk)).lower()
+    assert "private" not in words and "hiding" not in words
+
+
+def test_a_typed_circuit_cell_takes_its_own_row_and_backend() -> None:
+    """red-team-flock-3's Q4 (#281): the typed id has its own row naming the id and its pin, and names its verifier; it is the
+    same C-Flock interactive backend proving another statement."""
+    typed, flat = V.FLOCK_CIRCUIT_TYPED_CONFIG, V.FLOCK_CIRCUIT_CONFIG
+    fp = {"statement": V.CIRCUIT_TYPED, "software": {"backend": {"name": "flock-circuit", "circuit_format": "flock-circuit/types"}}}
+    assert V.configuration_of({"workload_fingerprint": fp}) is typed
+    assert V.configuration_of({"workload_fingerprint": {**fp, "statement": V.CIRCUIT_FLAT}}) is flat
+    assert typed.family == flat.family and typed.full_relation and typed.scheme_problem() is None
+    assert V.CIRCUIT_TYPED in typed.id and V.CIRCUIT_TYPED in typed.pin and "per instance" in typed.pin
+    assert V.backend_of(typed) == V.backend_of(flat) == "C-interactive"      # one backend, two statements
+    assert "Rust live verifier" in typed.zk and "no Lean replay" in typed.zk
+
+
+def test_no_typed_cell_says_it_computes_its_type_before_c2() -> None:
+    """C2 (#277 and #268 on main, the typed path calling #268's checks) is not met: nothing rendered claims it."""
+    assert V.TYPED_C2 is False
+    rendered = V.render_markdown(V.Views(rules=V.SPEC)) + repr(V.FLOCK_CIRCUIT_TYPED_CONFIG)
+    assert "computes its type" not in rendered
+    fp = {"statement": V.CIRCUIT_TYPED, "ands_per_instance": 33117, "ands_counted": "tensor-core units + tail",
+          "verifier": {"accepted_by": "flock-circuit serve: the Rust live verifier (flock-live R1-R8); no Lean replay in this run"}}
+    assert V.circuit_facts({"workload_fingerprint": fp})["computes_its_type"] is False
+
+
+def test_circuit_ands_are_labelled_by_their_convention() -> None:
+    """ANDs per instance are the tensor-core units + tail on both statements since #281 (GEMM k64: 33,117); a flat result recorded
+    before it counted the units only (33,040) and says so; the rows' SHA-512 and hm96 are proved but not counted."""
+    new = {"statement": V.CIRCUIT_TYPED, "ands_per_instance": 33117, "rows_per_instance": 52, "ands_counted": "tensor-core units + tail: ...",
+           "verifier": {"accepted_by": "flock-circuit serve: the Rust live verifier (flock-live R1-R8); no Lean replay in this run"}}
+    f = V.circuit_facts({"workload_fingerprint": new})
+    assert (f["ands_per_instance"], f["ands_label"]) == (33117, "ANDs per instance: tensor-core units + tail")
+    assert f["accepted_by"].startswith("flock-circuit serve: the Rust live verifier") and "proved but not counted" in f["not_counted"]
+    assert "unit_draw" not in f
+    old = V.circuit_facts({"workload_fingerprint": {"statement": V.CIRCUIT_FLAT, "ands_per_instance": 33040}})
+    assert old["ands_label"] == "ANDs per instance: units only (recorded before #281)" and old["computes_its_type"] is None
+    drawn = V.circuit_facts({"workload_fingerprint": {**new, "unit_draw": "subset:8"}})
+    assert drawn["unit_draw"] == "subset:8 (units_per_vu 1: a unit draw counts instances)"
+    assert V.circuit_facts({"workload_fingerprint": {"statement": "verity/flock-ir-frame/v3"}}) is None
+
+
+def test_a_typed_circuit_cell_is_never_a_table2_cell(store: LocalStore, monkeypatch) -> None:
+    """Different statement ids are never merged: a typed cell on a flat cell's line is no Table 2 cell (nor admissible, so no
+    headline or result), listed as rejected with the reason, until Table 2 gives the typed statement lines of its own; flipping
+    C2 alone does not admit it."""
+    flat = committed(store, t_total=0.4, commit=0.6, interaction=FLOCK_LIVE, backend="flock union, flock-128-r2 (backends/flock)",
+                     proof_class="NON_ZK_PROOF", security={"target": -128, "achieved_log2": -195.5})
+    doc = hashed("blake3", t_total=0.1)
+    fp = doc["workload_fingerprint"]
+    fp["software"]["backend"]["name"], fp["statement"], fp["proof_class"] = "flock-circuit", V.CIRCUIT_TYPED, "NON_ZK_PROOF"
+    doc["measurements"].append({"name": V.COMMIT, "value": 0.1, "unit": "s"})
+    typed = put(store, doc)
+    assert V.configuration_of(doc) is V.FLOCK_CIRCUIT_TYPED_CONFIG
+    for c2 in (False, True):
+        monkeypatch.setattr(V, "TYPED_C2", c2)
+        views = V.build(store)
+        assert line(views)["cells"]["Flock"].artifact == flat
+        assert all(c.artifact != typed for ln in views.lines for c in ln["cells"].values() if c is not None)
+        assert typed not in {c.artifact for c in views.admissible}
+        assert [r["codes"] for r in views.rejected if r["artifact"] == typed] == [[("X", V.TYPED_NOT_IN_TABLE2)]]

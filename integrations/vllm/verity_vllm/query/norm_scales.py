@@ -61,9 +61,10 @@ def _population_class() -> type:
 
         def __init__(self, P: Any, corr: Any, **kw: Any) -> None:
             super().__init__(P, corr, **kw)
-            base = self.required.values
+            base = self.required.values - self.interior
             extra = frozenset(ValueRef(c.id, p.name) for c in scale_calls(P, self.literals) for p in c.port_table) - base
             self.norm_scale_values = extra
+            self.interior = self.interior - extra
             self.policy = Policy(prescribed_inputs=self.policy.prescribed_inputs, protocol_required=self.policy.protocol_required | extra)
             self.required = RequiredValues(self.B.values, self.policy.prescribed_inputs, self.policy.protocol_required)
             self._ports_of = None
@@ -78,9 +79,9 @@ def _population_class() -> type:
     return NormScalePopulation
 
 
-def population(P: Any, corr: Any, *, return_slots: bool = True, tp: Mapping[str, Any] | None = None) -> Any:
-    """`required.population` under the norm-scale policy."""
-    return _population_class()(P, corr, return_slots=return_slots, tp=tp)
+def population(P: Any, corr: Any, *, return_slots: bool = True, tp: Mapping[str, Any] | None = None, **kw: Any) -> Any:
+    """`required.population` under the norm-scale policy (`kw`: `query`)."""
+    return _population_class()(P, corr, return_slots=return_slots, tp=tp, **kw)
 
 
 def kernel_rows(pop: Any, add: Callable[..., None], impl: Callable[[str], str], aliases: Mapping[str, tuple[str, int]]) -> dict[str, Any]:

@@ -293,7 +293,8 @@ def run(cfg: Config, api: Any = None, *, poll_s: float = 60.0, log_path: str | N
     """The guard loop (`iterations` bounds it for tests).  Exit 3 when another guard for this prefix is alive."""
     api = api or RunPodAPI()
     p = paths(cfg.prefix, cfg.dry_run, log_path)
-    p["log"].parent.mkdir(parents=True, exist_ok=True)
+    for f in p.values():   # the pid and state files live in the guard dir even when --log points elsewhere
+        f.parent.mkdir(parents=True, exist_ok=True)
 
     def log(msg: str) -> None:
         with p["log"].open("a") as f:
@@ -332,7 +333,8 @@ def detach(argv: list[str], prefix: str, dry_run: bool, log_path: str | None) ->
     if other and _alive(other):
         print(f"research pods guard: guard pid {other} for prefix {prefix!r} is alive; `research pods guard stop --prefix {prefix}` first", file=sys.stderr)
         return 3
-    p["log"].parent.mkdir(parents=True, exist_ok=True)
+    for f in p.values():
+        f.parent.mkdir(parents=True, exist_ok=True)
     cmd = [sys.executable, "-m", "research", "pods", "guard", *[a for a in argv if a != "--detach"]]
     if sys.platform == "darwin":
         cmd = ["caffeinate", "-is", *cmd]

@@ -118,7 +118,7 @@ PADDED = "padded"
 
 
 def active_moe_construction() -> str:
-    """The construction the ACTIVE TargetProfile declares (`indexed-read` when undeclared); read at `applies` time, never cached."""
+    """The construction the ACTIVE TargetProfile declares (`TargetProfile.DEFAULT_MOE_CONSTRUCTION` when undeclared); read at `applies` time, never cached."""
     from verity_vllm.program.frontend.rules.vllm_bindings import active_target_profile  # noqa: PLC0415  (vllm_bindings imports this module lazily; keep the cycle lazy both ways)
     return active_target_profile().effective_moe_construction()
 

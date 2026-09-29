@@ -257,32 +257,35 @@ class StochasticServe(nn.Module):
     per sampling event, S_t = SplitsFor_v1(|live(t)|, num_SMs)) are forward INPUTS; temperature / top_p are constructor constants;
     `pos` is the logits row's position (LP-1+k for the k-th sample).  `literal_seed` (negative): the seed created inside forward —
     hidden state, refused.  `literal_splits` (negative): S as a tensor literal / a Python int inside forward — refused likewise (S is
-    the workload's derived value, never the wrapper's).  `temperature=0` (negative): the rule refuses (greedy is TokenSelect_v1)."""
+    the workload's derived value, never the wrapper's).  `temperature=0` (negative): the rule refuses (greedy is TokenSelect_v1).
+    `constant_S`: the single-request workload's split count, passed to every select as `S` (no `splits` input)."""
 
     def __init__(self, C: dict, steps: int, temperature: float = 0.8, top_p: float = 0.95, literal_seed: bool = False,
-                 literal_splits: int | None = None) -> None:
+                 literal_splits: int | None = None, constant_S: int | None = None) -> None:
         super().__init__()
         self.lm = CausalLM(C)
         self.steps = steps
         self.temperature, self.top_p = float(temperature), float(top_p)
         self.literal_seed = literal_seed
         self.literal_splits = literal_splits
+        self.constant_S = constant_S
 
-    def _select(self, logits, seed, pos: int, S):
-        return iface.gumbel_topp_token_select(logits[-1:], seed, self.temperature, self.top_p, pos, S)
+    def _select(self, logits, seed, pos: int, entry):
+        return iface.gumbel_topp_token_select(logits[-1:], seed, self.temperature, self.top_p, pos, entry, S=self.constant_S)
 
-    def forward(self, prompt, seed, splits):
+    def forward(self, prompt, seed, splits=None):
         if self.literal_seed:
             seed = torch.tensor([1234], dtype=torch.int64)
         if self.literal_splits is not None:
             splits = torch.full((self.steps + 1,), int(self.literal_splits), dtype=torch.int32)
+        entry = (lambda s: None) if self.constant_S is not None else (lambda s: splits[s:s + 1])   # noqa: E731
         LP = prompt.shape[0]
         logits = self.lm(prompt, torch.arange(0, LP))
-        tok = self._select(logits, seed, LP - 1, splits[0:1])
+        tok = self._select(logits, seed, LP - 1, entry(0))
         toks = [tok]
         for s in range(self.steps):
             logits = self.lm(tok, torch.arange(LP + s, LP + s + 1))
-            tok = self._select(logits, seed, LP + s, splits[s + 1:s + 2])
+            tok = self._select(logits, seed, LP + s, entry(s + 1))
             toks.append(tok)
         return torch.cat(toks)
 

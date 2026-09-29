@@ -1319,6 +1319,22 @@ def test_gp01_binds_a_per_request_sampler_schedule_component_only_to_its_declare
     assert "derived against another workload" in G.sampler_schedule_binding(reqs[:1], {(8, 3): other})["refusal"]
 
 
+def test_a_single_request_constant_s_component_binds_only_in_a_single_request_workload(tmp_path):
+    """[single-request workloads] A component built for a single-request workload takes S = SplitsFor_v1(1, num_SMs) as a constant: it
+    binds in a workload of one request, and a workload of several requests (whose S_t follows the live set) refuses it by name."""
+    from verity_vllm.pipeline import global_program as G
+    d = tmp_path / "c_one"
+    d.mkdir()
+    (d / "result.json").write_text(json.dumps({"ok": True, "sampling": {"kind": "stochastic", "splits": 32,
+                                                                         "geometry": {"sampler_batch": 1, "num_sms": 142, "splits": 32}}}))
+    one = [{"request_id": "r0", "index": 0, "prompt_len": 8, "cap": 4, "arrive_step": 0}]
+    assert G.sampler_schedule_binding(one, {(8, 3): str(d)})["refusal"] is None
+    three = one + [{"request_id": "r1", "index": 1, "prompt_len": 8, "cap": 4, "arrive_step": 2},
+                   {"request_id": "r2", "index": 2, "prompt_len": 5, "cap": 2, "arrive_step": 1}]
+    bad = G.sampler_schedule_binding(three, {(8, 3): str(d)})
+    assert bad["refusal"] and "S = 32 is the single-request constant" in bad["refusal"] and "3 requests" in bad["refusal"]
+
+
 def test_g1_ties_the_manifest_of_record_to_the_run_header_sha_and_sampling_fields(memory, tmp_path):
     """rev-pm M-0570 (2): GM-01 was blind to the manifest's sampling fields -- seeds swapped or a seed deleted in the manifest (GP-01
     recomposed: digest unchanged, seeds are Inputs) passed G1 by ids/prompts/caps/arrivals. G1 now requires RunHeader.workload.sha256 ==
@@ -2259,6 +2275,7 @@ def test_fast_dag_hash_progression_memo_does_not_carry_a_forward_ref_marker_to_a
 
 
 @pytest.mark.parametrize("impl,workers", [("record", "1"), ("fast", "1"), ("fast", "3")])
+@pytest.mark.slow
 def test_cli_decomp_out_is_the_standalone_batch_decomp_document(memory, tmp_path, monkeypatch, impl, workers):
     """[COORD R17-28, mprof P1] row_pod runs cb_a.batch_decomp in its own process (match.compare) and GM-01 runs the same decompose()
     again inside check() (the x09 block) -- 365 s twice at B8 1024/128.  `--decomp-out` writes the document GM-01's own X-09 run

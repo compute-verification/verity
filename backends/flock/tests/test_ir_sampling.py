@@ -17,6 +17,8 @@ from verity_flock import ir_sampling as S
 P = pytest.importorskip("verity_vllm.program.registry.prims")
 from verity.evaluation import evaluate  # noqa: E402
 from verity.ir.defs import bind  # noqa: E402
+from verity.ml import fp32 as F  # noqa: E402
+from verity.ml.scalar import SelectF32  # noqa: E402
 from verity_numerical.bench import lowerings  # noqa: E402
 from verity_numerical.bench import templates as TM  # noqa: E402
 from verity_numerical.bench.generate import generate  # noqa: E402
@@ -63,8 +65,8 @@ def run_piece(piece, widths, vectors):
 
 
 PIECES = [
-    ("F32Mul_v1", (32, 32), P.F32Mul.evaluate),
-    ("F32AddFtz_v1", (32, 32), P.F32AddFtz.evaluate),
+    ("F32Mul_v1", (32, 32), F.F32Mul.evaluate),
+    ("F32AddFtz_v1", (32, 32), F.F32AddFtz.evaluate),
     ("DivFullScaleA_v1", (32, 32), P.DivFullScaleA.evaluate),
     ("F32GtStrict_v1", (32, 32), RP.F32GtStrict.evaluate),
 ]
@@ -137,7 +139,7 @@ def _set(tmp_path, V, n=3):
 
 def _replay_scan(masked, g, noisy, V):
     """``GumbelSelectF32``'s scan replayed from its Definition with the IR primitives: every lane's carry out."""
-    y0 = P.SelectF32.evaluate(noisy, P.F32AddFtz.evaluate(masked[0], g[0]), masked[0])
+    y0 = SelectF32.evaluate(noisy, F.F32AddFtz.evaluate(masked[0], g[0]), masked[0])
     carry = (y0, 0, 1)
     out = [carry]
     for v in range(1, V):
@@ -148,6 +150,7 @@ def _replay_scan(masked, g, noisy, V):
 
 
 @pytest.mark.parametrize("V", [1056, 1280])
+@pytest.mark.slow
 def test_row_words_match_the_ir_evaluator(tmp_path, V):
     s = _set(tmp_path, V)
     logits, sc, outs = S.instances(s, 0, s.n)
@@ -170,6 +173,7 @@ def test_row_words_match_the_ir_evaluator(tmp_path, V):
         assert [tuple(int(x) for x in lane[v, 3:6]) for v in range(V)] == carries
 
 
+@pytest.mark.slow
 def test_staged_rows_through_the_units(tmp_path):
     V = 1280
     s = _set(tmp_path, V, 4)
@@ -199,6 +203,7 @@ def test_supports_and_relation():
 
 # --- negatives ---------------------------------------------------------------------------------------------------------------
 
+@pytest.mark.slow
 def test_a_flipped_witness_bit_leaves_its_lane_unsatisfied(tmp_path):
     V = 1056
     s = _set(tmp_path, V, 2)
@@ -211,6 +216,7 @@ def test_a_flipped_witness_bit_leaves_its_lane_unsatisfied(tmp_path):
 
 
 @pytest.mark.parametrize("word", ["kbit", "g"])
+@pytest.mark.slow
 def test_a_forged_native_word_is_refused(tmp_path, word):
     V = 1056
     s = _set(tmp_path, V, 2)
@@ -226,6 +232,7 @@ def test_a_forged_native_word_is_refused(tmp_path, word):
         S.serve_args(path)
 
 
+@pytest.mark.slow
 def test_a_forged_unit_word_breaks_the_lane_relation(tmp_path):
     V = 1056
     s = _set(tmp_path, V, 2)

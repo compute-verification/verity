@@ -43,8 +43,8 @@ never change a `require`, a revision or `lean-toolchain` in a feature PR.
 ## Assumptions and pins
 
 - **An assumption is a named `Prop`** in the package's assumptions module (`FlockSoundness.Assumptions`), taken as a
-  hypothesis by each theorem that needs it (`(hMCA : Assumptions.BCHKS25Thm46)`), and listed in the ledger
-  (`ASSUMPTIONS.md` §3). Never an `axiom`, never a `sorry` on `main`, never `native_decide`, never an option that skips
+  hypothesis by each theorem that needs it (`(hCR : Assumptions.SHA512ExpectedTimeCR …)`), and stated in the ledger
+  (`ASSUMPTIONS.md`). Never an `axiom`, never a `sorry` on `main`, never `native_decide`, never an option that skips
   the kernel. A statement you can't prove yet is a hypothesis, or a theorem in a lane branch, not on `main`.
 - **Freeze the statement, then prove it.** In your lane branch, state the theorem on a `sorry` stub, check it against the
   paper or the spec, pin it and run `--update`, and have the statement reviewed before the proof. The record holds the
