@@ -28,6 +28,10 @@ SCHEMES = {"ncp-v2": "word", "ncp-v2-shift24": "shift24"}
 H1T = "h1t"
 
 
+#: a call's inputs that are its weight Program's outputs, in that Program's output order
+LINKED = ("ys", "c0s")
+
+
 @dataclass(frozen=True)
 class Traced:
     scheme: str
@@ -85,6 +89,34 @@ class Traced:
             raise DomainError(f"{fn.id} takes {len(names) - len(an)} committed inputs, not {len(data)}")
         return [list(d) for d in data] + [an[p] for p in names[len(data):]]
 
+    def draw(self, key, law, anchors):
+        """The verifier's plan for this call: `plan.draw` over its own layout (`layout`), never a given one (X-SPC-97), each
+        stratum's subset keyed by the call's index (``anchors.call_index``) with its template (X-SPC-96)."""
+        from . import plan
+
+        anchors.check(self.shape)
+        index = anchors.call_index
+        return plan.draw(key, self.layout(), law, index if isinstance(index, tuple) else (index,))
+
+    def check_link(self, plan, call_args: Sequence[Sequence[int]], weight_outputs: Sequence[int]) -> None:
+        """Refuse a call whose weight-side inputs differ from the weight Program's outputs at a column strip the plan opens
+        (its ("y", strip) leaves, the drawn tiles' column strips): the call's committed inputs opened against the weight
+        Program's output commitment (X-SPC-95). The inputs are the call's parameters the weight Program returns, in its
+        output order (`ncp-v2`: ys, c0s)."""
+        from ..protocol import DomainError
+
+        params = self.definition.signature()[0]
+        names = [p for p, _t in params]
+        linked = [(names.index(p), t) for p, t in params if p in LINKED]
+        strips = [cs for role, cs in plan.openings if role == "y"]
+        at = 0
+        for i, t in linked:
+            per = t.elem.leaves
+            for cs in strips:
+                if list(call_args[i][cs * per:(cs + 1) * per]) != list(weight_outputs[at + cs * per:at + (cs + 1) * per]):
+                    raise DomainError(f"{self.scheme}: the call's {names[i]} at column strip {cs} is not the weight Program's")
+            at += t.n * per
+
     def check_layout(self, offered) -> None:
         """Refuse a layout that isn't the verifier's own, derived from the shape (`layout`): the tiles, each tile's own unit
         and its closure are the partition's, never a prover's, since the Layout theorems hold only for the window's own."""
@@ -126,4 +158,4 @@ def traced_h1t(m: int, k: int, n: int) -> Traced:
     return Traced(H1T, shape, h1t.linear(shape), partition.query_of(partition.h1t_circuit(shape)), m * n)
 
 
-__all__ = ["H1T", "SCHEMES", "Traced", "traced_as", "traced_h1t"]
+__all__ = ["H1T", "LINKED", "SCHEMES", "Traced", "traced_as", "traced_h1t"]

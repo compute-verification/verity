@@ -67,11 +67,15 @@ def test_the_key_binds_every_anchored_field():
         assert R.key(other, R.root(other.a)) != base, field
 
 
-def test_the_program_evaluates_to_the_reference():
+@pytest.mark.parametrize("kind", ["shift24", "word"])
+def test_the_program_evaluates_to_the_reference(kind):
+    """Both P's: `ncp-v2`'s word P and `ncp-v2-shift24`'s shift by 24 (X-SPC-98)."""
     shape = ncp2.Shape(32, 64, 32)
     call = F.call(32, 64, 32)
-    ref = R.evaluate(call)
-    y, words = _outputs(shape, call)
+    ref = R.evaluate(call, kind)
+    out = evaluate(ncp2.linear(shape, kind), *call.args(kind))
+    mn, per = shape.m * shape.n, (shape.steps - 1) * 256
+    y, words = list(out[:mn]), [list(out[mn + i * per:mn + (i + 1) * per]) for i in range(4)]
     assert y == [v for row in ref.y for v in row]
     assert words == ref.words
 

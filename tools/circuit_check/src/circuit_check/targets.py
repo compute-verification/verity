@@ -180,15 +180,17 @@ def templates() -> list[tuple[str, Any, list[dict]]]:
 
 def _pouw_roots() -> list[Any]:
     """PoUW's `ncp-v2` unit templates at k = 64, and the smallest whole call, its weight side and a window of two calls on
-    it (`verity_pouw.circuit.ncp2`), and H-1T's templates at k = 96 with its smallest whole call and a window of two calls (`verity_pouw.circuit.h1t`);
-    the package's own tests check their template partitions and the Z separator."""
-    from verity_pouw.circuit import ncp2
-
-    from verity_pouw.circuit import h1t
+    it (`verity_pouw.circuit.ncp2`) for both P's (`ncp-v2`'s word P and `ncp-v2-shift24`), and H-1T's templates at k = 96
+    with its smallest whole call and a window of two calls (`verity_pouw.circuit.h1t`); the package's own tests check their
+    template partitions and the Z separator."""
+    from verity_pouw.circuit import h1t, ncp2
 
     shape = ncp2.Shape(16, 64, 16)
-    return (list(ncp2.templates(64, "shift24").values()) + [ncp2.linear(shape), ncp2.weight(shape), ncp2.window(shape, 2)]
-            + list(h1t.templates(96).values()) + [h1t.linear(h1t.Shape(16, 96, 16)), h1t.window(h1t.Shape(16, 96, 16), 2)])
+    out = []
+    for kind in ("shift24", "word"):
+        out += [t for t in ncp2.templates(64, kind).values() if t not in out]
+        out += [ncp2.linear(shape, kind), ncp2.weight(shape, kind), ncp2.window(shape, 2, kind)]
+    return out + list(h1t.templates(96).values()) + [h1t.linear(h1t.Shape(16, 96, 16)), h1t.window(h1t.Shape(16, 96, 16), 2)]
 
 
 def _core_roots() -> list[Any]:

@@ -243,6 +243,17 @@ at its floor, so a wholly wrong one is caught directly (`audit_work_whole_stratu
     split's window-level bound is X-SPC-83's question, and no pin states it.
 - `CountLaw` is `main`'s stratified rule, k_s = max(1, round(K·n_s/N)).
 
+**The draw is per call** (X-SPC-96). Each stratum's subset is drawn from the verifier's key under the call's index,
+(forward, position), with the template: the strata are the call's own, one per template, and the calls of a window drawn
+under one key draw independently, so K split across them keeps the window's (1 − ε)^K. The verifier draws through
+`Traced.draw(key, law, anchors)`, which takes no layout: it draws over `Traced.layout()` (X-SPC-97).
+
+**The call's Y is linked to the weight Program** (X-SPC-95). The call reads its weight's Y strips and c₀ as committed
+inputs, so at each drawn tile's column strip (the strips `Plan.proved_y` proves in the weight Program) the plan opens
+the call's Y and c₀ there beside the weight Program's output there, a ("y", strip) leaf, and `Traced.check_link` refuses
+any strip where they differ (`test_the_call_s_y_is_linked_to_the_weight_program`: another weight's Y, or one c₀ changed).
+A wrong Y input on a strip no drawn tile reads spoils only undrawn tiles, which the law charges like any unsound tile.
+
 **The layout is the verifier's.** The Layout theorems (`Layout.accountable_compute` and the rest) hold only for the
 window's own layout, so the verifier derives each tile's own unit and its closure from the shape alone, through the
 Program it builds (`Traced.layout`), and refuses any other (`Traced.check_layout`). `draw` refuses a layout whose tile is
@@ -297,7 +308,9 @@ H1tDequant      output entry          Z, s_i, t_j, bias_j                       
   forming unit and that strip's key. A
   tile's W_ref is its cells' 2T k32 atoms (`h1t.tile_work`, 64·T MACs a cell; the forming's share isn't counted). A
   proved tile opens its X strip's rows and its 16 weight rows. The layout is the verifier's: `Traced.check_layout`
-  refuses any other, and `draw` refuses a tile mapped to its X strip.
+  refuses any other, and `draw` refuses a tile mapped to its X strip. Each call's subsets are keyed by its (forward,
+  position) with the template (X-SPC-96), and the verifier draws through `Traced.draw`. H-1T has no weight Program: its
+  tiles read B′'s rows directly, so there is no Y link to open.
 
 ## Not here yet
 

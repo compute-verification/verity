@@ -259,3 +259,22 @@ def test_the_width_rule_refuses_an_empty_served_set():
     c, uc = _check(h1t.Shape(16, 96, 16))
     with pytest.raises(ValueError):
         P.circuit_width_rule(c, served=0, uc=uc)
+
+
+def test_equal_calls_under_one_key_draw_different_tiles():
+    """X-SPC-96 on H-1T: each stratum's subset is keyed by the call's (forward, position) with its template, so equal calls
+    under one key draw different tiles; `Traced.draw` draws over the verifier's own layout (X-SPC-97)."""
+    from verity.randomness import derive
+    from verity_pouw.circuit import plan as PL
+    from verity_pouw.circuit import traced_h1t
+    from verity_pouw.circuit.anchors import H1tAnchors
+
+    c = call(64, 96, 64)
+    t, law, key = traced_h1t(64, 96, 64), PL.WorkLaw(4), derive(b"verifier-secret", PL.DRAW_DOMAIN, {"receipt": b"r"})
+    lay = t.layout()
+
+    def tiles(forward):
+        an = H1tAnchors(c.salt, forward, c.layer, c.site, c.weight, tuple(c.rowids), tuple(range(64)))
+        return [u for u in t.draw(key, law, an).drawn if lay.units[u].role == "tile"]
+
+    assert tiles(3) == tiles(3) and all(tiles(f) != tiles(3) for f in (4, 5, 6))
