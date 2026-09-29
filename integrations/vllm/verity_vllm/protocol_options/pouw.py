@@ -7,12 +7,9 @@ type (vLLM's ``LinearBase``, `linear_types`) and commits every layer's int7 weig
 ``apply`` through the composition's tagged `Hooks`.  Each call of a replaced ``apply(layer, x, bias)`` is one unit of the
 run's workload:
 
-1. quantize x's rows to int7 per row (`quantize`), and take the weight operands (`weight_operands`: the int7 weight per
-   output channel with the epoch's noise, Y = [B + F₁ ; B + F₂ ; B + F₃], and c₀).  The setting ``weight_operands`` says
-   where they come from: ``"per-forward"`` (the default) prepares them from the weight of the layer each call is handed,
-   so no weight-derived copy outlives the call and under POUS the GEMM reads POUS's decoded weight; ``"resident"`` (an
-   opt-in) prepares them once at install and keeps them, 3 B per weight, so `keeps_weight_copy` is True and the
-   selector refuses POUS beside it;
+1. quantize x's rows to int7 per row (`quantize`), and prepare the weight operands (`weight_operands`: the int7 weight per
+   output channel with the epoch's noise, Y = [B + F₁ ; B + F₂ ; B + F₃], and c₀) from the weight of the layer the call
+   is handed, so no weight-derived copy outlives the call and under POUS the GEMM reads POUS's decoded weight;
 2. commit the unit's activation rows, derive its noise and compute every 16 x 16 tile's route-U checked values and
    digest (`ncp_tiles`, gated bit for bit against the scheme's reference in the tests); the digests join the transcript;
 3. return the useful output, the final checkpoint A·Bᵀ, dequantized by the row and column scales, plus the bias.
@@ -54,11 +51,10 @@ EXECUTES = ("LinearBase.quant_method.apply",)
 EXECUTED = ("ncp-v1", "ncp-v1-shift24")
 #: The pinned int7 quantizer of the FP8 lane's reference (docs/pouw-fp8/reference.md), applied without a basis rotation.
 QUANTIZER = "verity.pouw.symmetric-int7-rowmax-rne-f32/v1"
-KEYS = ("beacon", "retain_steps", "transcript_dir", "weight_operands")
-WEIGHT_OPERANDS = ("resident", "per-forward")
+KEYS = ("beacon", "retain_steps", "transcript_dir")
 PLACEHOLDER = (
     "without a `beacon` setting the salt comes from 32 zero bytes, so it is predictable",
-    "with weight_operands = per-forward, a forward's weight is not re-checked against the root committed at install",
+    "a forward's weight is not re-checked against the root committed at install",
     "not auditable yet: one epoch per install (no rotation), activation rows kept only in memory for the last "
     "`retain_steps` units (0 by default) and never persisted, no opener, and the transcript's leaves grow without bound "
     "for the life of the install",
@@ -79,7 +75,6 @@ class Settings:
     beacon: bytes | None = None
     retain_steps: int = 0
     transcript_dir: str | None = None
-    weight_operands: str = "per-forward"
 
     @classmethod
     def of(cls, raw: Mapping[str, Any]) -> Settings:
@@ -101,19 +96,7 @@ class Settings:
         tdir = raw.get("transcript_dir")
         if tdir is not None and not isinstance(tdir, str):
             raise ValueError("pouw setting 'transcript_dir' is a path string")
-        operands = raw.get("weight_operands", "per-forward")
-        if operands not in WEIGHT_OPERANDS:
-            raise ValueError(f"pouw setting 'weight_operands' is one of {', '.join(WEIGHT_OPERANDS)}")
-        return cls(beacon, retain, tdir, operands)
-
-
-def keeps_weight_copy(scheme: str, ctx: Context) -> bool:
-    """True when the weight operands stay resident across forwards (``weight_operands = "resident"``, an opt-in); a
-    malformed setting counts as a copy."""
-    try:
-        return Settings.of(ctx.settings_of(NAME)).weight_operands == "resident"
-    except ValueError:
-        return True
+        return cls(beacon, retain, tdir)
 
 
 def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
@@ -244,7 +227,6 @@ class _Run:
         self.roots_a: list[bytes] = []
         self.leaves: list[bytes] = []
         self.retained: deque = deque(maxlen=settings.retain_steps)
-        self.resident: dict[int, Operands] | None = None
         cert = scheme.certificate
         self.commits: dict[str, Any] = {
             "scheme": scheme.name, "salt": salt.hex(), "weights_root": weights_root(weight_roots).hex(),
@@ -254,7 +236,6 @@ class _Run:
             "certificate": {"conjecture": cert.conjecture, "gamma": None if cert.gamma is None else str(cert.gamma),
                             "parameters": dict(cert.parameters)},
             "beacon": "given" if settings.beacon else "placeholder: 32 zero bytes",
-            "weight_operands": settings.weight_operands,
             "units": 0, "tiles": 0, "padded_rows": 0, "uncovered": "every GEMM outside LinearBase (lm_head, attention)",
             "placeholder": list(PLACEHOLDER)}
 
@@ -262,14 +243,8 @@ class _Run:
         """The scheme's permutation at depth k (its noise before the salt-derived rows)."""
         return self.scheme.noise(UnitContext(self.salt, Matmul(0, Shape(16, k, n), w), b"", self.weight_roots[w]))
 
-    def operands(self, w: int, weight: Any) -> Operands:
-        """The resident operands, or ``weight``'s, prepared now (``weight_operands = "per-forward"``)."""
-        if self.resident is not None:
-            return self.resident[w]
-        return weight_operands(self.scheme, self.salt, w, weight, self.noise_of(w, *weight.shape))
-
     def gemm(self, w: int, x: Any, weight: Any, bias: Any) -> Any:
-        ops = self.operands(w, weight)
+        ops = weight_operands(self.scheme, self.salt, w, weight, self.noise_of(w, *weight.shape))
         n, k = ops.y.shape[0], ops.y.shape[1] // 3
         xs = _host(x)
         lead = xs.shape[:-1]
@@ -372,9 +347,6 @@ def install(scheme: str, target: Target) -> Option:
     declared = Workload(tuple(Matmul(w, Shape(16, k, n), w) for w, (n, k) in shapes.items()))
     salt = Epoch.start(declared, roots, settings.beacon or bytes(32)).salt
     run = _Run(s, entry, settings, roots, salt)
-    if settings.weight_operands == "resident":
-        run.resident = {w: weight_operands(s, salt, w, layer.weight, run.noise_of(w, *shapes[w]))
-                        for w, layer in enumerate(layers)}
     h = target.hooks(entry)
     for w, layer in enumerate(layers):
         h.wrap(layer.quant_method, "apply", lambda orig, w=w: _executor(run, w))

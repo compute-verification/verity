@@ -80,7 +80,8 @@ def test_schemes_are_the_protocol_packages_and_only_ncp_is_executed():
                                       ({"settings": {"pouw": {"beacon": "zz"}}}, "hex string"),
                                       ({"settings": {"pouw": {"beacon": "ab"}}}, "at least 32 bytes"),
                                       ({"settings": {"pouw": {"retain_steps": -1}}}, "non-negative"),
-                                      ({"settings": {"pouw": {"salt": "x"}}}, "unknown pouw settings")])
+                                      ({"settings": {"pouw": {"salt": "x"}}}, "unknown pouw settings"),
+                                      ({"settings": {"pouw": {"weight_operands": "resident"}}}, "unknown pouw settings")])
 def test_a_run_the_adapter_cannot_serve_is_refused(kw, match):
     assert any(match in r for r in pouw.refusals("ncp-v1", _serve("pouw:ncp-v1", **kw)))
 
@@ -165,17 +166,6 @@ def test_weight_operands_formed_in_blocks_equal_one_block(monkeypatch):
     assert np.array_equal(whole.y, pouw.stack_y(s, ctx.salt, 2, b, noise)[0])
 
 
-def test_resident_operands_are_prepared_at_install_and_ignore_the_handed_weight():
-    rng = _rng(4)
-    w = rng.standard_normal((N, K), np.float32)
-    model = Model(w)
-    with PO.install(model, _serve("pouw:ncp-v1", settings={"pouw": {"beacon": BEACON, "weight_operands": "resident"}})) as comp:
-        assert comp.get("pouw").info()["weight_operands"] == "resident"
-        x = rng.standard_normal((16, K), np.float32)
-        other = types.SimpleNamespace(weight=rng.standard_normal((N, K), np.float32))
-        assert np.array_equal(model.layers[0].quant_method.apply(other, x), _int7_linear(x, w))
-
-
 # --- composition -------------------------------------------------------------------------------------------------------------
 
 def _fake_pous(monkeypatch):
@@ -195,18 +185,10 @@ def _fake_pous(monkeypatch):
     monkeypatch.setitem(PO.ADAPTERS, "pous", "fake_pous")
 
 
-def test_keeps_weight_copy_follows_weight_operands():
-    assert pouw.Settings.of({}).weight_operands == "per-forward"
-    assert not pouw.keeps_weight_copy("ncp-v1", _serve("pouw:ncp-v1"))
-    assert pouw.keeps_weight_copy("ncp-v1", _serve("pouw:ncp-v1", settings={"pouw": {"weight_operands": "resident"}}))
-    assert "one of resident, per-forward" in pouw.refusals("ncp-v1", _serve("pouw:ncp-v1", settings={"pouw": {"weight_operands": "x"}}))[0]
-
-
-def test_the_selector_refuses_pous_beside_resident_operands(monkeypatch):
+def test_pouw_keeps_no_weight_copy_so_the_selector_admits_pous_beside_it(monkeypatch):
     _fake_pous(monkeypatch)
-    enabled = ("pouw:ncp-v1", "pous:band-chain/d12/v1")
-    assert any("keeps a weight-derived copy" in r for r in PO.refusals(_serve(*enabled, settings={"pouw": {"weight_operands": "resident"}})))
-    assert PO.refusals(_serve(*enabled)) == ()
+    assert not hasattr(pouw, "keeps_weight_copy")
+    assert PO.refusals(_serve("pouw:ncp-v1", "pous:band-chain/d12/v1")) == ()
 
 
 def test_under_pous_the_gemm_reads_the_weight_it_is_handed(monkeypatch):
@@ -214,7 +196,7 @@ def test_under_pous_the_gemm_reads_the_weight_it_is_handed(monkeypatch):
     rng = _rng(3)
     w = rng.standard_normal((N, K), np.float32)
     model = Model(w)
-    settings = {"pouw": {"beacon": BEACON, "weight_operands": "per-forward"}}
+    settings = {"pouw": {"beacon": BEACON}}
     with PO.install(model, _serve("pouw:ncp-v1", "pous:band-chain/d12/v1", settings=settings)) as comp:
         assert comp.entries == ("pouw:ncp-v1", "pous:band-chain/d12/v1")
         layer = model.layers[0]
