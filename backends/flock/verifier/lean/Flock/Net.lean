@@ -104,6 +104,14 @@ private def groups (h : Array String) (at0 : Nat) : V (Array Group × Nat) := do
     at_ := at_ + 3 + np
   return (out, at_)
 
+/-- A net's input groups ascend and are disjoint, and each input port bit's row is a self row, `[c]·[c]`: only the padding
+past a group's ports may be empty. So each port bit is its own column, which one copy pair of Δ fills. -/
+def inputsOk (inGroups : Array Group) (ra rb : Array (Array Nat)) : Bool :=
+  (List.range (inGroups.size - 1)).all (fun i => (inGroups.getD i default).col + (inGroups.getD i default).words ≤
+      (inGroups.getD (i + 1) default).col) &&
+    inGroups.all fun g => (List.range (g.bits.foldl (· + ·) 0)).all fun j =>
+      ra.getD (g.col * WORD + j) #[] == #[g.col * WORD + j] && rb.getD (g.col * WORD + j) #[] == #[g.col * WORD + j]
+
 /-- An expanded circuit from its parts, as `parse` reads them from text or `Flock.Typed` has them from `derive`: its
 useful rows' count, its constant, its port groups, and each useful row's A and B columns. -/
 def ofRows (name : String) (useful constPos : Nat) (inGroups outGroups : Array Group) (ra rb : Array (Array Nat)) :
@@ -125,6 +133,7 @@ def ofRows (name : String) (useful constPos : Nat) (inGroups outGroups : Array G
   if ra.getD constPos #[] != #[constPos] || rb.getD constPos #[] != #[constPos] then
     throw "flock-ir-unit/v2: the constant row is not A = B = [const]"
   checkOrder "flock-ir-unit/v2" (inWords * WORD) constPos ra rb
+  if !inputsOk inGroups ra rb then throw "flock-ir-unit/v2: the input groups overlap, or an input port bit has no self row"
   let a ← Sparse.ofRows ra (2 ^ unitLog)
   let b ← Sparse.ofRows rb (2 ^ unitLog)
   return { name, useful, constPos, inGroups, outGroups, inWords, a, b, unitLog }
@@ -146,13 +155,34 @@ theorem ofRows_ok {name : String} {useful constPos : Nat} {ig og : Array Group} 
   repeat' (first | split at h | (injection h with h; subst h))
   all_goals first
     | exact absurd h (by simp)
-    | (rename_i _ _ _ _ hreach _ hfind hconst _ _ hord _ _ ha _ _ hb
+    | (rename_i _ _ _ _ hreach _ hfind hconst _ _ hord _ _ _ ha _ _ hb
        simp only [Bool.or_eq_true, bne_iff_ne, ne_eq, not_or, Decidable.not_not] at hconst
        refine ⟨rfl, ha, hb, rfl, rfl, rfl, rfl, Nat.not_lt.mp hreach, hconst.1, hconst.2, hord, fun i hi => ?_, rfl, rfl⟩
        have := List.find?_eq_none.mp hfind i (List.mem_range.mpr hi)
        revert this
        generalize ((ra.getD i #[] == #[i] && rb.getD i #[] == #[i]) || ((ra.getD i #[]).isEmpty && (rb.getD i #[]).isEmpty)) = b
        cases b <;> simp)
+
+/-- A net `ofRows` builds passed `inputsOk`: its input groups ascend and are disjoint, and every input port bit's row is a
+self row. -/
+theorem ofRows_inputs {name : String} {useful constPos : Nat} {ig og : Array Group} {ra rb : Array (Array Nat)} {n : Net}
+    (h : ofRows name useful constPos ig og ra rb = .ok n) :
+    (∀ i (hi : i + 1 < ig.size), ig[i].col + ig[i].words ≤ ig[i + 1].col) ∧
+      ∀ g ∈ ig.toList, ∀ j < g.bits.foldl (· + ·) 0,
+        ra.getD (g.col * WORD + j) #[] = #[g.col * WORD + j] ∧ rb.getD (g.col * WORD + j) #[] = #[g.col * WORD + j] := by
+  have hin : inputsOk ig ra rb = true := by
+    unfold ofRows at h
+    simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
+    repeat' (first | split at h | (injection h with h; subst h))
+    all_goals first
+      | exact absurd h (by simp)
+      | (rename_i _ _ _ _ _ _ _ _ _ _ _ h1 h2 h3 _ _ _ _
+         first | simpa using h1 | simpa using h2 | simpa using h3)
+  unfold inputsOk at hin
+  simp only [Bool.and_eq_true, List.all_eq_true, List.mem_range, decide_eq_true_eq, Array.all_eq_true', beq_iff_eq] at hin
+  refine ⟨fun i hi => ?_, fun g hg j hj => hin.2 g (Array.mem_toList_iff.1 hg) j hj⟩
+  have := hin.1 i (by omega)
+  simpa [Array.getD, hi, Nat.lt_of_succ_lt hi] using this
 
 /-- Parse one expanded circuit (the lines of a `NET` block). -/
 def parse (lines : Array String) : V Net := do
