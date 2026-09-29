@@ -60,3 +60,23 @@ def test_a_shipped_tree_reports_writes_as_git_would(tmp_path, monkeypatch):
     (tmp_path / "pkg" / "new.json").write_text("{}\n")
     (tmp_path / "pkg" / "target" / "kept.bin").unlink()
     assert S.changed(before) == ["pkg/a.py", "pkg/new.json", "pkg/target/kept.bin"]
+
+
+def test_fetched_fixtures_are_the_registry_entries_git_does_not_hold(tmp_path, monkeypatch):
+    import json
+    import subprocess
+
+    (tmp_path / "fixtures").mkdir()
+    (tmp_path / "pkg" / "fx").mkdir(parents=True)
+    (tmp_path / "pkg" / "fx" / "small.json").write_text("{}\n")
+    reg = {"art:" + "a" * 64: "pkg/fx/small.json", "art:" + "b" * 64: "pkg/fx/big.proof", "art:" + "c" * 64: "other/big.bin",
+           "previous": {"art:" + "a" * 64: ["art:" + "d" * 64]}}
+    (tmp_path / "fixtures" / "artifacts.json").write_text(json.dumps(reg))
+    S = _suites(monkeypatch, tmp_path)
+    assert S.fetched_fixtures(None, {"pkg"}) == {"pkg/fx/small.json": "art:" + "a" * 64, "pkg/fx/big.proof": "art:" + "b" * 64}
+
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    subprocess.run(["git", "-C", str(tmp_path), "add", "-A"], check=True)
+    tree = subprocess.run(["git", "-C", str(tmp_path), "write-tree"], capture_output=True, text=True, check=True).stdout.strip()
+    assert S.fetched_fixtures(tree, {"pkg"}) == {"pkg/fx/big.proof": "art:" + "b" * 64}     # the tracked entry is keyed by git
+    assert S.fetched_fixtures(tree, {"."}) == {"pkg/fx/big.proof": "art:" + "b" * 64, "other/big.bin": "art:" + "c" * 64}
