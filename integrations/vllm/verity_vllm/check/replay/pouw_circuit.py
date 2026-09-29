@@ -132,6 +132,16 @@ def draw(records: Sequence[PC.CallRecord], source: bytes, law: CPL.TileLaw | Non
     return RunPlan(law.name, getattr(law, "k", 0), sizes, tuple(sorted(drawn)), tuple(sorted(proved)))
 
 
+def tamper_drawn_tile(records: Sequence[PC.CallRecord], source: bytes, law: CPL.TileLaw | None = None,
+                      leaf: int = 7) -> tuple[list[PC.CallRecord], dict[str, int]]:
+    """A negative control: the calls as a prover commits and opens them with word ``leaf`` of the first tile the replay draws
+    (`draw` under ``source`` and ``law``) flipped in its low bit. Returns the calls and where the tamper is."""
+    i, u = next((i, u) for i, u in draw(records, source, law).drawn if PN.Native(records[i].call).locate(u)[0] == "tile")
+    rec = records[i]
+    bad = PN.commit_call(rec.index, rec.scheme, rec.call, tamper={(u, leaf): int(rec.opening(u)[leaf]) ^ 1})
+    return [*records[:i], bad, *records[i + 1:]], {"what": "tile", "call": rec.index, "unit": u, "leaf": leaf}
+
+
 def unit_holds(rec: PC.CallRecord, nat: PN.Native, u: int, opened) -> str | None:
     """None when unit ``u``'s opening and its producers' hash to their committed leaves and its template evaluates from
     the opened inputs to the opened outputs; else what fails."""
@@ -261,7 +271,9 @@ def around(comp: Any, source: bytes) -> Iterator[dict[str, Any] | None]:
     """The Commit's sampled replay under a composition with ``pouw:ncp-v2``: the rows answered by the live run's calls for
     the length of the block. On exit the yielded dict is filled with the circuit replay, whose ``result`` is False when a
     call's plan, its anchors or its linkage to the model rows fails. The law is the work law at the run's ``draws``
-    setting when it has one. Yields None without such an entry."""
+    setting when it has one. The run's ``tamper`` setting makes it a negative control: ``tile`` replays the calls as
+    `tamper_drawn_tile` commits them, ``bias`` the executor's wrong-bias call (`pouw.Settings.tamper`). Yields None
+    without such an entry."""
     entry = next((e for e in (getattr(comp, "entries", None) or ()) if e.split(":", 1)[0] == pouw.NAME
                   and e.split(":", 1)[1] in PC.C.SCHEMES), None)
     live = pouw.circuit_run(entry) if entry else None
@@ -269,13 +281,16 @@ def around(comp: Any, source: bytes) -> Iterator[dict[str, Any] | None]:
         yield None
         return
     run, sites = live
-    out: dict[str, Any] = {"entry": entry}
-    with linked(run.records, sites) as issues:
-        yield out
-    commitment = dict(run.commits, calls_root=PC.calls_root(run.salt, bytes.fromhex(run.commits["weights_root"]), run.records).hex()
-                      if run.records else None)
     law = CPL.WorkLaw(run.settings.draws) if run.settings.draws else None
-    out.update(replay(run.records, commitment, source, law), linkage=issues[:12], linkage_n=len(issues))
+    records, tampered = list(run.records), run.tampered
+    if run.settings.tamper == "tile" and records:
+        records, tampered = tamper_drawn_tile(records, source, law)
+    out: dict[str, Any] = {"entry": entry, "tampered": tampered}
+    with linked(records, sites) as issues:
+        yield out
+    commitment = dict(run.commits, calls_root=PC.calls_root(run.salt, bytes.fromhex(run.commits["weights_root"]), records).hex()
+                      if records else None)
+    out.update(replay(records, commitment, source, law), linkage=issues[:12], linkage_n=len(issues))
     if issues:
         out["result"] = False
         out["why"] = issues[:12] + out["why"]
@@ -295,4 +310,4 @@ def replayed(comp: Any, seed_parts: Sequence[Any], run: Any) -> dict[str, Any]:
 
 
 __all__ = ["RunPlan", "anchors", "around", "check_call", "delegate", "dequant", "draw", "int7_linear", "linked", "replay",
-           "replayed", "unit_holds"]
+           "replayed", "tamper_drawn_tile", "unit_holds"]

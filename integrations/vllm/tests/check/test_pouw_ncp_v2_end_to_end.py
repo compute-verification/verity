@@ -121,7 +121,7 @@ class Run:
     """The prover: the model rows by the registry evaluators, each step's PoUW batch by the adapter's `ncp-v2` executor,
     module outputs packed per (step, member) with the requests side by side (r0 then r1)."""
 
-    def __init__(self, inst, woff, weights, prompts, tmp_path, monkeypatch):
+    def __init__(self, inst, woff, weights, prompts, tmp_path, monkeypatch, settings=None):
         self.inst, self.woff, self.weights, self.prompts = inst, woff, weights, prompts
         self.pi = IX.ProgramIndex(inst)
         self.values, self.blocks, self.dtypes = {}, {}, {}
@@ -131,12 +131,14 @@ class Run:
         self.bias = torch.from_numpy((weights[blo:bhi].astype(np.uint32) << 16).view(np.float32)) if bhi > blo else None
         monkeypatch.setattr(pouw, "linear_types", lambda: (Linear,))
         self.model = Model(w_up)
-        ctx = PO.Context(stage="serve", enabled=("pouw:ncp-v2",), settings={"pouw": {"beacon": BEACON, "transcript_dir": str(tmp_path)}})
+        ctx = PO.Context(stage="serve", enabled=("pouw:ncp-v2",),
+                         settings={"pouw": {"beacon": BEACON, "transcript_dir": str(tmp_path), **(settings or {})}})
         with PO.install(self.model, ctx) as comp:
             self._run()
             opt = comp.get("pouw")
         self.commitment = opt.commitment()
-        self.records = list(pouw.circuit_run("pouw:ncp-v2")[0].records)
+        self.run = pouw.circuit_run("pouw:ncp-v2")[0]
+        self.records = list(self.run.records)
         import json
         doc = json.loads((tmp_path / PC.CALLS_FILE).read_text())
         assert doc["commitment"] == self.commitment
@@ -469,3 +471,49 @@ def test_a_fused_bias_linears_wrong_a_strip_and_wrong_bias_are_named(fused_world
     rep, pw, issues = _verdict(w, records, _recommitted(w, records))
     assert pw["result"] is True and any("bias is not the registered bias" in i for i in issues), issues
 
+
+def _replayed(world, monkeypatch, **settings):
+    """The row Commit's replay entry (`replayed`, `around`) over this world's live run, with pouw ``settings``."""
+    from types import SimpleNamespace
+    run = SimpleNamespace(records=world.records, commits=world.commitment, salt=bytes.fromhex(world.commitment["salt"]),
+                          settings=pouw.Settings.of(settings), tampered=None)
+    monkeypatch.setattr(pouw, "circuit_run", lambda entry: (run, {SITE: 0}))
+    return RC.replayed(SimpleNamespace(entries=("pouw:ncp-v2",)), ("seed", 7), lambda: {"result": True, "grade": "complete", "why": None})
+
+
+def test_the_row_commits_tile_tamper_is_a_drawn_tile_word_committed_and_opened_wrong_and_rejected(world, monkeypatch):
+    honest = _replayed(world, monkeypatch, draws=2)
+    assert honest["result"] is True and honest["pouw_ncp_v2"]["result"] is True and honest["pouw_ncp_v2"]["tampered"] is None
+    sr = _replayed(world, monkeypatch, draws=2, tamper="tile")
+    t = sr["pouw_ncp_v2"]["tampered"]
+    assert sr["result"] is False and sr["grade"] == "mismatch" and t["what"] == "tile" and t["leaf"] == 7
+    assert f"unit {t['unit']} (tile" in sr["why"] and "does not hold" in sr["why"], sr["why"]
+
+
+@pytest.fixture(scope="module")
+def bias_tampered_world(tmp_path_factory):
+    rng = np.random.default_rng(13)
+    inst, woff = _program(bias="fused")
+    inst = PC.lower(inst, {f"model.{SITE}": "ncp-v2"})
+    weights = _bf16(rng, max(hi for _lo, hi in woff.values()), 0.5)
+    lo, hi = woff["model.model.layers.0.input_layernorm.weight"]
+    weights[lo:hi] = 0x3F80
+    with pytest.MonkeyPatch.context() as mp:
+        return Run(inst, woff, weights, {"r0": [(i + 3) % V for i in range(LP)], "r1": [(7 * i) % V for i in range(LP)]},
+                   tmp_path_factory.mktemp("pouw-bias-tampered"), mp, settings={"tamper": "bias"})
+
+
+def test_the_row_commits_bias_tamper_commits_and_serves_a_wrong_bias_and_the_delegate_names_it(bias_tampered_world, fused_world):
+    w = bias_tampered_world
+    assert w.run.tampered == {"what": "bias", "call": 0, "word": 0} and w.run.details["tampered"] == w.run.tampered
+    assert int(w.records[0].call.bias[0]) == int(fused_world.records[0].call.bias[0]) ^ 1
+    assert np.array_equal(w.records[1].call.bias, fused_world.records[1].call.bias)
+    rep, pw, issues = _verdict(w)
+    assert pw["result"] is True                                                          # a wrong input the circuit alone can't see
+    assert any("bias is not the registered bias" in i for i in issues), issues
+
+
+def test_the_tamper_setting_is_one_of_the_controls():
+    assert pouw.Settings.of({"tamper": "tile"}).tamper == "tile" and pouw.Settings.of({}).tamper is None
+    with pytest.raises(ValueError, match="tamper"):
+        pouw.Settings.of({"tamper": "weights"})

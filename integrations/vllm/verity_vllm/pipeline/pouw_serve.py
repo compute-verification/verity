@@ -9,7 +9,7 @@ committed natively as it is served (`protocol_options.pouw_native`). Once the en
 
 - **honest**: the calls as committed;
 - **tampered**: the same calls, except that one drawn tile's credited word is flipped by its prover, committed and
-  opened that way (`tampered`), with the calls root recomputed over it.
+  opened that way (`check.replay.pouw_circuit.tamper_drawn_tile`), with the calls root recomputed over it.
 
 Both replays use one draw source, fixed by the beacon before any call exists.
 
@@ -49,17 +49,6 @@ class Options:
     run_id: str = option("--run-id", env="RESEARCH_RUN_ID", default="", help="the research run's id: result.json is written when set")
 
 
-def tampered(records: Sequence[Any], source: bytes, law: Any) -> tuple[list[Any], dict[str, int]]:
-    """The calls with word 7 of the first drawn tile flipped by its prover (committed and opened so), and where."""
-    from verity_vllm.check.replay import pouw_circuit as RC
-    from verity_vllm.protocol_options import pouw_native as PN
-
-    i, u = next((i, u) for i, u in RC.draw(records, source, law).drawn if PN.Native(records[i].call).locate(u)[0] == "tile")
-    rec = records[i]
-    bad = PN.commit_call(rec.index, rec.scheme, rec.call, tamper={(u, 7): int(rec.opening(u)[7]) ^ 1})
-    return [*records[:i], bad, *records[i + 1:]], {"call": rec.index, "unit": u, "leaf": 7}
-
-
 def verdicts(records: Sequence[Any], commitment: dict[str, Any], source: bytes, draws: int) -> dict[str, Any]:
     """Both replays and the verdict."""
     from verity_pouw.circuit import plan as CPL
@@ -68,7 +57,7 @@ def verdicts(records: Sequence[Any], commitment: dict[str, Any], source: bytes, 
 
     law = CPL.WorkLaw(draws)
     honest = RC.replay(records, commitment, source, law)
-    bad, where = tampered(records, source, law)
+    bad, where = RC.tamper_drawn_tile(records, source, law)
     salt, wroot = bytes.fromhex(commitment["salt"]), bytes.fromhex(commitment["weights_root"])
     t = RC.replay(bad, dict(commitment, calls_root=PC.calls_root(salt, wroot, bad).hex()), source, law)
     return {"honest": honest, "tampered": dict(t, tampered=where),
@@ -153,4 +142,4 @@ def main(a: Options) -> int:
     return 0 if ok else 1
 
 
-__all__ = ["Options", "main", "per_forward", "tampered", "verdicts"]
+__all__ = ["Options", "main", "per_forward", "verdicts"]

@@ -188,10 +188,12 @@ def test_the_match_capture_installs_its_workloads_target_executors(linears):
 
 
 def test_a_workloads_protocols_config_reaches_the_capture_and_the_commit(tmp_path):
-    """`load_workload` carries the workload's `protocols_config`: the capture and the Commit install from it."""
+    """`load_workload` carries the workload's `protocols_config` (the capture and the Commit install from it), and the Commit's
+    `--protocols-config` names another file for one run (a negative control's settings)."""
     import json
 
     from verity_vllm.engine import vllm_adapter as va
+    from verity_vllm.pipeline import cli
     doc = json.loads(open("workloads/workload_qwen05_32x16_1req.json").read())
     doc["protocols_config"] = {"pouw": {"beacon": BEACON, "draws": 8}}
     (tmp_path / "wl.json").write_text(json.dumps(doc))
@@ -199,3 +201,4 @@ def test_a_workloads_protocols_config_reaches_the_capture_and_the_commit(tmp_pat
     del doc["protocols_config"]
     (tmp_path / "wl.json").write_text(json.dumps(doc))
     assert va.load_workload(tmp_path / "wl.json")["protocols_config"] is None
+    assert cli.parse("commit", ["--workload", "w.json", "--out", "o", "--protocols-config", "tamper.json"]).protocols_config == "tamper.json"

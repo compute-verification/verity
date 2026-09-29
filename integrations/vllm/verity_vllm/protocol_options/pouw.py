@@ -59,7 +59,9 @@ EXECUTES = ("LinearBase.quant_method.apply",)
 EXECUTED = ("ncp-v1", "ncp-v1-shift24", "ncp-v2")
 #: The pinned int7 quantizer of the FP8 lane's reference (docs/pouw-fp8/reference.md), applied without a basis rotation.
 QUANTIZER = "verity.pouw.symmetric-int7-rowmax-rne-f32/v1"
-KEYS = ("beacon", "retain_steps", "transcript_dir", "draws")
+KEYS = ("beacon", "retain_steps", "transcript_dir", "draws", "tamper")
+#: ``ncp-v2``'s negative controls (`Settings.tamper`): a prover that commits and opens one value wrong
+TAMPERS = ("tile", "bias")
 PLACEHOLDER = (
     "without a `beacon` setting the salt comes from 32 zero bytes, so it is predictable",
     "a forward's weight is not re-checked against the root committed at install",
@@ -86,6 +88,10 @@ class Settings:
     #: ``ncp-v2``'s replay: the work law's K over the run (`check.replay.pouw_circuit.draw`); None is `RECORD_K`, capped at
     #: the run's units
     draws: int | None = None
+    #: ``ncp-v2``'s negative control, None for an honest run: ``tile`` commits and opens word 7 of the replay's first drawn
+    #: tile with its low bit flipped (`check.replay.pouw_circuit.tamper_drawn_tile`); ``bias`` commits and serves the first
+    #: biased call with bias word 0's low bit flipped
+    tamper: str | None = None
 
     @classmethod
     def of(cls, raw: Mapping[str, Any]) -> Settings:
@@ -110,7 +116,10 @@ class Settings:
         draws = raw.get("draws")
         if draws is not None and (not isinstance(draws, int) or isinstance(draws, bool) or draws < 1):
             raise ValueError("pouw setting 'draws' is a positive integer")
-        return cls(beacon, retain, tdir, draws)
+        tamper = raw.get("tamper")
+        if tamper is not None and tamper not in TAMPERS:
+            raise ValueError(f"pouw setting 'tamper' is one of {', '.join(TAMPERS)}")
+        return cls(beacon, retain, tdir, draws, tamper)
 
 
 def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
@@ -336,6 +345,7 @@ class _CircuitRun:
                  commit: bool = True) -> None:
         self.scheme, self.entry, self.settings, self.commit = scheme, entry, settings, commit
         self.weight_roots, self.salt = weight_roots, salt
+        self.tampered: dict[str, Any] | None = None
         self.records: list[PC.CallRecord] = []
         self.seconds: list[float] = []                  # each call's executor wall time: quantize, commit, dequantize
         self.forward, self.row_base, self.rows_seen = -1, 0, 0
@@ -370,6 +380,10 @@ class _CircuitRun:
         if w == 0:
             self.rows_seen += mp
         bias_bits = np.full(n, 0x8000, np.uint16) if bias is None else _bf16_bits(_host(bias).reshape(-1))   # −0: the bf16 add's identity
+        if self.settings.tamper == "bias" and bias is not None and self.tampered is None and self.commit:
+            bias_bits = bias_bits.copy()
+            bias_bits[0] ^= 1
+            self.tampered = self.details["tampered"] = {"what": "bias", "call": len(self.records), "word": 0}
         call = PC.Call(a, _f32_bits(s), _LayerRows(weight), bias_bits, self.salt, forward=self.forward, layer=w, site=0, weight=w,
                        rowids=np.arange(self.row_base, self.row_base + mp, dtype=np.uint32), colids=np.arange(n, dtype=np.uint32))
         if self.commit:
