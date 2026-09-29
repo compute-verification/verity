@@ -24,8 +24,8 @@ from .model import ArtifactManifest
 from .remote import HttpRemote, Remote
 
 #: The store's public half, read-only, at the store's own keys: `<PUBLIC_URL>/manifests/<hex>.json` and `<PUBLIC_URL>/objects/sha256/<hex>`
-#: (the site's `/store` base, which redirects to the `verity-public` bucket). Empty until it has passed `export --verify-url`.
-PUBLIC_URL = ""
+#: (the site's `/store` base, which redirects to the `verity-public` bucket).
+PUBLIC_URL = "https://website-docs-sage.vercel.app/store"
 PUBLIC_URL_ENV = "RESEARCH_PUBLIC_URL"
 JOBS = 32
 
