@@ -1,4 +1,4 @@
-"""Sessions of several tables (PROTOCOL.md §16.11, #306's `--session-tables J`, N4): the Lean verifier builds each table's
+"""Sessions of several tables (PROTOCOL.md §16.12, #306's `--session-tables J`, N4): the Lean verifier builds each table's
 statement from its part of the session's draw (without one, of the population's units), never from anything in the record,
 and runs §5.3 over every table. The sessions are #306's live ones on RoPE, all accepted by its server."""
 from __future__ import annotations

@@ -160,7 +160,7 @@ def archivePutCmd (dir : String) (paths : List String) : IO UInt32 := do
 
 /-- `verify --statement ID --circuit F --comp F --public F [--coins seed|os] [--session-tables J] --session DIR...`: `ID`
 names the statement's tags (`verity/flock-circuit` by default, or `verity/flock-netlist/v1`); `--comp` is the row leaf's
-pinned compression circuit; `J` (default 1) is the tables of every session (§16.11). Each DIR holds `session.json` and
+pinned compression circuit; `J` (default 1) is the tables of every session (§16.12). Each DIR holds `session.json` and
 `<table>.rep<r>.bin` for each table and rep. The statement is set up once; one verdict line per session, in order. Exit 0
 iff every session is accepted. -/
 def verifyCmd (args : List String) : IO UInt32 := do
