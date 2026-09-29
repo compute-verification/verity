@@ -33,8 +33,7 @@
   "imports": [
    "ArkLib",
    "CompPoly.Fields.Binary.AdditiveNTT.NovelPolynomialBasis",
-   "VCVio.CryptoFoundations.HardnessAssumptions.CollisionResistance",
-   "VCVio.CryptoFoundations.PRF"
+   "VCVio.CryptoFoundations.HardnessAssumptions.CollisionResistance"
   ],
   "watch": {
    "A1-johnson-mca": {
@@ -183,20 +182,6 @@
    },
    "A3-uniform-bytes": {
     "about": "A3 (UniformRandomBytes, uniform/io-getrandombytes): the operating system's bytes, which the live draw reads through IO.getRandomBytes, are independent and uniform",
-    "mentions": [
-     "IO.getRandomBytes"
-    ],
-    "ack": []
-   },
-   "A4-prf-sha256": {
-    "about": "A4 (KeyedStreamsUniform, prf/sha-256): verity.randomness's keyed streams at distinct indices pass a test as independent uniform streams do, up to eta, SHA-256 keyed by a secret prefix being a PRF",
-    "mentions": [
-     "PRFScheme.prfAdvantage"
-    ],
-    "ack": []
-   },
-   "A5-uniform-secret": {
-    "about": "A5 (UniformSecret, uniform/python-secrets): the PoUW window's secret, secrets.token_bytes(32), is uniform and fresh for the window",
     "mentions": [
      "IO.getRandomBytes"
     ],
@@ -511,8 +496,6 @@
    ],
    "assumptions": [],
    "type_hash": "0000000032bdb5fd"
-<<<<<<< HEAD
-=======
   },
   "FlockSoundness.Audit.Law.drawOn_escape_le": {
    "signature": [
@@ -529,7 +512,6 @@
    ],
    "assumptions": [],
    "type_hash": "00000000a550a327"
->>>>>>> refs/remotes/pr/425
   },
   "FlockSoundness.Audit.Law.escape_widen_le": {
    "signature": [
@@ -1026,8 +1008,6 @@
    "assumptions": [],
    "type_hash": "0000000016689ba9"
   },
-<<<<<<< HEAD
-=======
   "FlockSoundness.Audit.Law.subsetOn_escape_le": {
    "signature": [
     "FlockSoundness.Audit.Law.subsetOn_escape_le (n k L : Nat) (hk : instLENat.le k n) (B : Finset (Fin n)) :",
@@ -1041,7 +1021,6 @@
    "assumptions": [],
    "type_hash": "000000006a781adf"
   },
->>>>>>> refs/remotes/pr/425
   "FlockSoundness.Audit.Law.subset_exec_escape_le": {
    "signature": [
     "FlockSoundness.Audit.Law.subset_exec_escape_le (n k L : Nat) (hk : instLENat.le k n) (B : Finset (Fin n)) :",
@@ -2216,16 +2195,6 @@
    "assumptions": [],
    "type_hash": "000000005aed7f70"
   },
-<<<<<<< HEAD
-  "FlockSoundness.Game.Sim.prob_le": {
-   "signature": [
-    "FlockSoundness.Game.Sim.prob_le {α β : Type} {pL : β → Prop} {pg : α → Prop} {L : FlockSoundness.Game β}",
-    "  {g : FlockSoundness.Game α} (d : FlockSoundness.Game.Sim pL pg L g) (s : L.Strategy) :",
-    "  ENNReal.instLE.le (FlockSoundness.Game.prob pL L s) (FlockSoundness.Game.prob pg g (d.strategy s))"
-   ],
-   "assumptions": [],
-   "type_hash": "00000000d6a859e2"
-=======
   "FlockSoundness.Audit.prob_auditReg": {
    "signature": [
     "FlockSoundness.Audit.prob_auditReg {n : Nat} {Reg : Type} (L : Reg → FlockSoundness.Audit.Law n)",
@@ -2237,7 +2206,15 @@
    ],
    "assumptions": [],
    "type_hash": "00000000922cdfe9"
->>>>>>> refs/remotes/pr/425
+  },
+  "FlockSoundness.Game.Sim.prob_le": {
+   "signature": [
+    "FlockSoundness.Game.Sim.prob_le {α β : Type} {pL : β → Prop} {pg : α → Prop} {L : FlockSoundness.Game β}",
+    "  {g : FlockSoundness.Game α} (d : FlockSoundness.Game.Sim pL pg L g) (s : L.Strategy) :",
+    "  ENNReal.instLE.le (FlockSoundness.Game.prob pL L s) (FlockSoundness.Game.prob pg g (d.strategy s))"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000d6a859e2"
   },
   "FlockSoundness.Merkle.opening_binding": {
    "signature": [
@@ -4421,12 +4398,10 @@
    ]
   },
   "FlockSoundness.Assumptions": {
-   "digest": "6fd1a93ab7c2f2216c7c52dfabfacf6e",
+   "digest": "a185b305df832180622b9af3514116ba",
    "definitions": {
-    "FlockSoundness.Assumptions.KeyedStreamsUniform": "916e7b1cf565effa",
     "FlockSoundness.Assumptions.SHA512ExpectedTimeCR": "ccb6f722fa4330ad",
-    "FlockSoundness.Assumptions.UniformRandomBytes": "da3a666b67a731b0",
-    "FlockSoundness.Assumptions.UniformSecret": "d47e21c4ce39465a"
+    "FlockSoundness.Assumptions.UniformRandomBytes": "da3a666b67a731b0"
    },
    "pins": [
     "FlockSoundness.Audit.Law.drawOS_stratified_escape_le",
@@ -4434,13 +4409,6 @@
     "FlockSoundness.Audit.Law.drawOS_work_escape_le",
     "FlockSoundness.Audit.Law.execOS_escape_le",
     "FlockSoundness.Audit.Law.execOS_subset_escape_le",
-    "FlockSoundness.Audit.Law.execOS_work_escape_le",
-    "FlockSoundness.Audit.Law.keyedWindowReg_audit_of_record",
-    "FlockSoundness.Audit.Law.keyedWindowReg_extraction_audit_of_record",
-    "FlockSoundness.Audit.Law.keyedWindow_audit_of_record",
-    "FlockSoundness.Audit.Law.keyedWindow_escape_le",
-    "FlockSoundness.Audit.Law.keyedWindow_escape_le_of_names",
-    "FlockSoundness.Audit.Law.keyedWindow_extraction_audit_of_record",
     "FlockSoundness.Audit.Partition.flock_e2e_count",
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
@@ -4520,10 +4488,6 @@
     "FlockSoundness.Audit.Law.closure_escape",
     "FlockSoundness.Audit.Law.closure_escape_le_work",
     "FlockSoundness.Audit.Law.harm_le_unsoundWork",
-    "FlockSoundness.Audit.Law.keyedWindowReg_audit_of_record",
-    "FlockSoundness.Audit.Law.keyedWindowReg_extraction_audit_of_record",
-    "FlockSoundness.Audit.Law.keyedWindow_audit_of_record",
-    "FlockSoundness.Audit.Law.keyedWindow_extraction_audit_of_record",
     "FlockSoundness.Audit.Law.mem_closure_draw",
     "FlockSoundness.Audit.Law.unsoundWork_le_harm",
     "FlockSoundness.Audit.Law.unsoundWork_singleton",
@@ -4558,8 +4522,6 @@
     "FlockSoundness.Audit.atTgt": "b523fba2f6448293"
    },
    "pins": [
-    "FlockSoundness.Audit.Law.keyedWindowReg_extraction_audit_of_record",
-    "FlockSoundness.Audit.Law.keyedWindow_extraction_audit_of_record",
     "FlockSoundness.Audit.extraction_audit_window",
     "FlockSoundness.Audit.extraction_audit_window_of_le_slack",
     "FlockSoundness.Audit.extraction_audit_window_split_of_record_of_le_slack",
@@ -4754,26 +4716,14 @@
     "FlockSoundness.Audit.Law.drawOS_stratified_escape_le",
     "FlockSoundness.Audit.Law.drawOS_subset_escape_le",
     "FlockSoundness.Audit.Law.drawOS_work_escape_le",
-    "FlockSoundness.Audit.Law.drawOn_escape_le",
     "FlockSoundness.Audit.Law.escape_widen_le",
     "FlockSoundness.Audit.Law.execOS_escape_le",
     "FlockSoundness.Audit.Law.execOS_subset_escape_le",
-    "FlockSoundness.Audit.Law.execOS_work_escape_le",
     "FlockSoundness.Audit.Law.execStratified_escape_le",
-    "FlockSoundness.Audit.Law.keyedWindowReg_audit_of_record",
-    "FlockSoundness.Audit.Law.keyedWindowReg_extraction_audit_of_record",
-    "FlockSoundness.Audit.Law.keyedWindow_audit_of_record",
-    "FlockSoundness.Audit.Law.keyedWindow_escape_le",
-    "FlockSoundness.Audit.Law.keyedWindow_escape_le_of_names",
-    "FlockSoundness.Audit.Law.keyedWindow_extraction_audit_of_record",
     "FlockSoundness.Audit.Law.mem_closure_draw",
     "FlockSoundness.Audit.Law.stratified_escape_le_of_covers",
     "FlockSoundness.Audit.Law.stratified_exec_escape_le",
     "FlockSoundness.Audit.Law.stratified_miss_eq_greedy",
-<<<<<<< HEAD
-=======
-    "FlockSoundness.Audit.Law.subsetOn_escape_le",
->>>>>>> refs/remotes/pr/425
     "FlockSoundness.Audit.Law.subset_exec_escape_le",
     "FlockSoundness.Audit.Law.work_escape_floor_le",
     "FlockSoundness.Audit.Law.work_escape_le",
@@ -4808,8 +4758,7 @@
     "FlockSoundness.Audit.extraction_audit_work_closure",
     "FlockSoundness.Audit.extraction_audit_work_floor",
     "FlockSoundness.Audit.extraction_audit_work_rest",
-    "FlockSoundness.Audit.extraction_audit_work_whole_stratum",
-    "FlockSoundness.Audit.prob_auditReg"
+    "FlockSoundness.Audit.extraction_audit_work_whole_stratum"
    ]
   },
   "FlockSoundness.Audit.OneStage": {
@@ -4835,10 +4784,6 @@
     "FlockSoundness.Audit.InfluenceWitness.A.accepts",
     "FlockSoundness.Audit.InfluenceWitness.A.influence",
     "FlockSoundness.Audit.InfluenceWitness.Ex.exfil",
-    "FlockSoundness.Audit.Law.keyedWindowReg_audit_of_record",
-    "FlockSoundness.Audit.Law.keyedWindowReg_extraction_audit_of_record",
-    "FlockSoundness.Audit.Law.keyedWindow_audit_of_record",
-    "FlockSoundness.Audit.Law.keyedWindow_extraction_audit_of_record",
     "FlockSoundness.Audit.Partition.audit_exfiltration",
     "FlockSoundness.Audit.Partition.audit_influence",
     "FlockSoundness.Audit.Partition.flock_e2e_count",
@@ -4866,8 +4811,7 @@
     "FlockSoundness.Audit.extraction_audit_work_closure",
     "FlockSoundness.Audit.extraction_audit_work_floor",
     "FlockSoundness.Audit.extraction_audit_work_rest",
-    "FlockSoundness.Audit.extraction_audit_work_whole_stratum",
-    "FlockSoundness.Audit.prob_auditReg"
+    "FlockSoundness.Audit.extraction_audit_work_whole_stratum"
    ]
   },
   "FlockSoundness.Audit.Stratified": {
@@ -4884,23 +4828,9 @@
     "FlockSoundness.Audit.Law.covers_work",
     "FlockSoundness.Audit.Law.drawOS_stratified_escape_le",
     "FlockSoundness.Audit.Law.drawOS_work_escape_le",
-<<<<<<< HEAD
     "FlockSoundness.Audit.Law.execOS_escape_le",
     "FlockSoundness.Audit.Law.execStratified_escape_le",
     "FlockSoundness.Audit.Law.floor_le_workK",
-=======
-    "FlockSoundness.Audit.Law.drawOn_escape_le",
-    "FlockSoundness.Audit.Law.execOS_escape_le",
-    "FlockSoundness.Audit.Law.execOS_work_escape_le",
-    "FlockSoundness.Audit.Law.execStratified_escape_le",
-    "FlockSoundness.Audit.Law.floor_le_workK",
-    "FlockSoundness.Audit.Law.keyedWindowReg_audit_of_record",
-    "FlockSoundness.Audit.Law.keyedWindowReg_extraction_audit_of_record",
-    "FlockSoundness.Audit.Law.keyedWindow_audit_of_record",
-    "FlockSoundness.Audit.Law.keyedWindow_escape_le",
-    "FlockSoundness.Audit.Law.keyedWindow_escape_le_of_names",
-    "FlockSoundness.Audit.Law.keyedWindow_extraction_audit_of_record",
->>>>>>> refs/remotes/pr/425
     "FlockSoundness.Audit.Law.stratified_escape_le_of_covers",
     "FlockSoundness.Audit.Law.stratified_exec_escape_le",
     "FlockSoundness.Audit.Law.stratified_miss_eq_greedy",
@@ -4987,10 +4917,6 @@
     "FlockSoundness.Audit.Law.covers_of_floor",
     "FlockSoundness.Audit.Law.covers_window",
     "FlockSoundness.Audit.Law.covers_work",
-    "FlockSoundness.Audit.Law.keyedWindowReg_audit_of_record",
-    "FlockSoundness.Audit.Law.keyedWindowReg_extraction_audit_of_record",
-    "FlockSoundness.Audit.Law.keyedWindow_audit_of_record",
-    "FlockSoundness.Audit.Law.keyedWindow_extraction_audit_of_record",
     "FlockSoundness.Audit.Law.stratified_escape_le_of_covers",
     "FlockSoundness.Audit.audit_window",
     "FlockSoundness.Audit.audit_window_of_le",
@@ -5026,10 +4952,6 @@
     "FlockSoundness.Audit.Law.escape_widen_le",
     "FlockSoundness.Audit.Law.floor_le_workK",
     "FlockSoundness.Audit.Law.harm_le_unsoundWork",
-    "FlockSoundness.Audit.Law.keyedWindowReg_audit_of_record",
-    "FlockSoundness.Audit.Law.keyedWindowReg_extraction_audit_of_record",
-    "FlockSoundness.Audit.Law.keyedWindow_audit_of_record",
-    "FlockSoundness.Audit.Law.keyedWindow_extraction_audit_of_record",
     "FlockSoundness.Audit.Law.mem_closure_draw",
     "FlockSoundness.Audit.Law.stratified_escape_le_of_covers",
     "FlockSoundness.Audit.Law.sum_workK_le",
@@ -5202,6 +5124,58 @@
     "FlockSoundness.UProg.rowsL1"
    ]
   },
+  "FlockSoundness.ExecDraw": {
+   "digest": "223517e5d74b87649e5e27915e46ebfe",
+   "definitions": {
+    "FlockSoundness.Audit.Law.streamOf": "223517e5d74b8764"
+   },
+   "pins": [
+    "FlockSoundness.Audit.Law.drawOS_stratified_escape_le",
+    "FlockSoundness.Audit.Law.drawOS_subset_escape_le",
+    "FlockSoundness.Audit.Law.drawOS_work_escape_le",
+    "FlockSoundness.Audit.Law.execOS_escape_le",
+    "FlockSoundness.Audit.Law.execOS_subset_escape_le",
+    "FlockSoundness.Audit.Law.execStratified_escape_le",
+    "FlockSoundness.Audit.Law.stratified_exec_escape_le",
+    "FlockSoundness.Audit.Law.subset_exec_escape_le",
+    "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec"
+   ]
+  },
+  "FlockSoundness.ExecDrawOS": {
+   "digest": "a33d3c796eff94455ebbfd7c3f309920",
+   "definitions": {
+    "FlockSoundness.Audit.Law.drawOS_def": "c6e097e17d1ded7c",
+    "FlockSoundness.Audit.Law.execOS": "3d35566e7f46b636",
+    "FlockSoundness.Audit.Law.runOS": "9e261a55ef9d579d",
+    "FlockSoundness.Audit.Law.tapeGet": "5202d1c866c2a35c",
+    "FlockSoundness.Audit.Law.tapesOf": "f1c09b31f54c052d"
+   },
+   "pins": [
+    "FlockSoundness.Audit.Law.drawOS_def",
+    "FlockSoundness.Audit.Law.drawOS_stratified_escape_le",
+    "FlockSoundness.Audit.Law.drawOS_subset_escape_le",
+    "FlockSoundness.Audit.Law.drawOS_work_escape_le",
+    "FlockSoundness.Audit.Law.execOS_escape_le",
+    "FlockSoundness.Audit.Law.execOS_subset_escape_le"
+   ]
+  },
+  "FlockSoundness.ExecStratified": {
+   "digest": "27b5044398289bc1cbdff5b7259d3017",
+   "definitions": {
+    "FlockSoundness.Audit.Law.ExecStrata": "da727f9d95c06424",
+    "FlockSoundness.Audit.Law.execStratified": "a839dbc85a1975cc"
+   },
+   "pins": [
+    "FlockSoundness.Audit.Law.drawOS_stratified_escape_le",
+    "FlockSoundness.Audit.Law.drawOS_work_escape_le",
+    "FlockSoundness.Audit.Law.execOS_escape_le",
+    "FlockSoundness.Audit.Law.execStratified_escape_le",
+    "FlockSoundness.Audit.Law.stratified_exec_escape_le",
+    "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec"
+   ]
+  },
   "FlockSoundness.Extract": {
    "digest": "2e90c25ca1a2d40529a6ce773df8e68e",
    "definitions": {
@@ -5257,28 +5231,13 @@
     "FlockSoundness.Audit.Law.drawOS_stratified_escape_le",
     "FlockSoundness.Audit.Law.drawOS_subset_escape_le",
     "FlockSoundness.Audit.Law.drawOS_work_escape_le",
-    "FlockSoundness.Audit.Law.drawOn_escape_le",
     "FlockSoundness.Audit.Law.escape_widen_le",
     "FlockSoundness.Audit.Law.execOS_escape_le",
     "FlockSoundness.Audit.Law.execOS_subset_escape_le",
-    "FlockSoundness.Audit.Law.execOS_work_escape_le",
     "FlockSoundness.Audit.Law.execStratified_escape_le",
-<<<<<<< HEAD
     "FlockSoundness.Audit.Law.stratified_escape_le_of_covers",
     "FlockSoundness.Audit.Law.stratified_exec_escape_le",
     "FlockSoundness.Audit.Law.stratified_miss_eq_greedy",
-=======
-    "FlockSoundness.Audit.Law.keyedWindowReg_audit_of_record",
-    "FlockSoundness.Audit.Law.keyedWindowReg_extraction_audit_of_record",
-    "FlockSoundness.Audit.Law.keyedWindow_audit_of_record",
-    "FlockSoundness.Audit.Law.keyedWindow_escape_le",
-    "FlockSoundness.Audit.Law.keyedWindow_escape_le_of_names",
-    "FlockSoundness.Audit.Law.keyedWindow_extraction_audit_of_record",
-    "FlockSoundness.Audit.Law.stratified_escape_le_of_covers",
-    "FlockSoundness.Audit.Law.stratified_exec_escape_le",
-    "FlockSoundness.Audit.Law.stratified_miss_eq_greedy",
-    "FlockSoundness.Audit.Law.subsetOn_escape_le",
->>>>>>> refs/remotes/pr/425
     "FlockSoundness.Audit.Law.subset_exec_escape_le",
     "FlockSoundness.Audit.Law.work_escape_floor_le",
     "FlockSoundness.Audit.Law.work_escape_le",
@@ -5314,11 +5273,7 @@
     "FlockSoundness.Audit.extraction_audit_work_floor",
     "FlockSoundness.Audit.extraction_audit_work_rest",
     "FlockSoundness.Audit.extraction_audit_work_whole_stratum",
-<<<<<<< HEAD
     "FlockSoundness.Game.Sim.prob_le",
-=======
-    "FlockSoundness.Audit.prob_auditReg",
->>>>>>> refs/remotes/pr/425
     "FlockSoundness.Refine.ligerito_accepts",
     "FlockSoundness.Refine.ligerito_accepts_opening",
     "FlockSoundness.Refine.ligerito_refines",
@@ -5443,10 +5398,6 @@
     "FlockSoundness.Audit.InfluenceWitness.A.influence",
     "FlockSoundness.Audit.InfluenceWitness.Ex.exfil",
     "FlockSoundness.Audit.InfluenceWitness.Two.influence",
-    "FlockSoundness.Audit.Law.keyedWindowReg_audit_of_record",
-    "FlockSoundness.Audit.Law.keyedWindowReg_extraction_audit_of_record",
-    "FlockSoundness.Audit.Law.keyedWindow_audit_of_record",
-    "FlockSoundness.Audit.Law.keyedWindow_extraction_audit_of_record",
     "FlockSoundness.Audit.Partition.Refines.twoStage_influence",
     "FlockSoundness.Audit.Partition.audit_exfiltration",
     "FlockSoundness.Audit.Partition.audit_influence",
@@ -6072,7 +6023,10 @@
     "FlockSoundness.Refine.Retains": "7228349562c74651",
     "FlockSoundness.Refine.encs": "d71c6a2cddeb3a06"
    },
-   "pins": ["FlockSoundness.Refine.encs_inj", "FlockSoundness.Refine.zerocheck_frames"]
+   "pins": [
+    "FlockSoundness.Refine.encs_inj",
+    "FlockSoundness.Refine.zerocheck_frames"
+   ]
   },
   "FlockSoundness.Refine.Ligerito": {
    "digest": "12e6da387e8206ed41f600012a1eac1e",
@@ -6162,7 +6116,9 @@
    "definitions": {
     "FlockSoundness.Refine.tableOut": "ead90cfc91929021"
    },
-   "pins": ["FlockSoundness.Refine.live_le_tableC"]
+   "pins": [
+    "FlockSoundness.Refine.live_le_tableC"
+   ]
   },
   "FlockSoundness.Refine.LiveSim": {
    "digest": "a5451c418cc617707b8f0275f2f6f183",
@@ -6261,15 +6217,11 @@
    },
    "pins": [
     "FlockSoundness.Refine.ofCircuit_extra",
-<<<<<<< HEAD
     "FlockSoundness.Refine.setupH_wf",
     "FlockSoundness.Refine.setup_wf",
     "FlockSoundness.Refine.stmtOf_linkLayout",
     "FlockSoundness.Refine.verify_refines_ofCircuit",
     "FlockSoundness.Refine.verify_refines_ofCircuit_hm96"
-=======
-    "FlockSoundness.Refine.verify_refines_ofCircuit"
->>>>>>> refs/remotes/pr/425
    ]
   },
   "FlockSoundness.Refine.Rep": {
@@ -6777,217 +6729,6 @@
    },
    "pins": [
     "FlockSoundness.UProg.rowsL1"
-   ]
-  },
-  "Flock.Draw": {
-   "digest": "6aefe76322ba3bd2ca82f83165954598",
-   "definitions": {
-    "Flock.Draw.Law": "fb4e9b9127f8172f",
-    "Flock.Draw.Law.bernoulli": "50a44b3135b57483",
-    "Flock.Draw.Law.stratified": "d3665204bc456d72",
-    "Flock.Draw.Law.subset": "8aa0c11b24515cf7",
-    "Flock.Draw.Law.toJson": "0271b7d5ec5a3045",
-    "Flock.Draw.Law.work": "caf28e00c9e5fa4a",
-    "Flock.Draw.Stratum": "98414b252e95edf7",
-    "Flock.Draw.Stratum.k": "3530c56cddbc9434",
-    "Flock.Draw.Stratum.need": "d348ae27c8afde4e",
-    "Flock.Draw.Stratum.size": "22a2b9abbcbc6ff1",
-    "Flock.Draw.Stratum.unit": "f96c71d04f89b06a",
-    "Flock.Draw.Stratum.units": "2dfbfe66e0d3e794",
-    "Flock.Draw.UnitDraw": "6da8dba0eb86d235",
-    "Flock.Draw.UnitDraw.units": "72d3a3be55d44f05",
-    "Flock.Draw.WorkStratum": "bc8795cbca794244",
-    "Flock.Draw.WorkStratum.toStratum": "376924a2ad30311f",
-    "Flock.Draw.beNat": "7ee7e983cabb432c",
-    "Flock.Draw.bernoulli": "dc33ae33b27d50a6",
-    "Flock.Draw.drawOS": "51d01a7e251ab0ca",
-    "Flock.Draw.drawWith": "02b84b173298dfc4",
-    "Flock.Draw.instInhabitedStratum": "97d22b03b0706a2c",
-    "Flock.Draw.instInhabitedStratum.default": "bc49cb2226042d7d",
-    "Flock.Draw.onWith": "2b847cc2f5bded12",
-    "Flock.Draw.stratified": "60590b0149387390",
-    "Flock.Draw.stratifiedWith": "53a4ab3c735b4178",
-    "Flock.Draw.stratumK": "65910952ca01dd3e",
-    "Flock.Draw.subset": "a961c5d84f7249e4",
-    "Flock.Draw.uniform": "b76e86e173ce1ee0",
-    "Flock.Draw.width": "da18247367fc9279",
-    "Flock.Draw.workK": "283e782e7003d67f",
-    "Flock.Draw.workTableOfJson": "1aba80c0c7c68395"
-   },
-   "pins": [
-    "FlockSoundness.Audit.Law.countRule_eq_draw",
-    "FlockSoundness.Audit.Law.drawOS_def",
-    "FlockSoundness.Audit.Law.drawOS_stratified_escape_le",
-    "FlockSoundness.Audit.Law.drawOS_subset_escape_le",
-    "FlockSoundness.Audit.Law.drawOS_work_escape_le",
-    "FlockSoundness.Audit.Law.drawOn_escape_le",
-    "FlockSoundness.Audit.Law.execOS_escape_le",
-    "FlockSoundness.Audit.Law.execOS_subset_escape_le",
-    "FlockSoundness.Audit.Law.execOS_work_escape_le",
-    "FlockSoundness.Audit.Law.execStratified_escape_le",
-    "FlockSoundness.Audit.Law.keyedWindowReg_audit_of_record",
-    "FlockSoundness.Audit.Law.keyedWindowReg_extraction_audit_of_record",
-    "FlockSoundness.Audit.Law.keyedWindow_audit_of_record",
-    "FlockSoundness.Audit.Law.keyedWindow_escape_le",
-    "FlockSoundness.Audit.Law.keyedWindow_escape_le_of_names",
-    "FlockSoundness.Audit.Law.keyedWindow_extraction_audit_of_record",
-    "FlockSoundness.Audit.Law.stratified_exec_escape_le",
-    "FlockSoundness.Audit.Law.subsetOn_escape_le",
-    "FlockSoundness.Audit.Law.subset_exec_escape_le",
-    "FlockSoundness.Audit.Law.workRule_eq_draw",
-    "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
-    "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec"
-   ]
-  },
-  "FlockSoundness.Audit.RegDraw": {
-   "digest": "acc92e6e9ff01ba3686896fc7fbf24d2",
-   "definitions": {
-    "FlockSoundness.Audit.atReg": "052eb9dbff6d76e2",
-    "FlockSoundness.Audit.auditReg": "6ae66b2e3a1672da"
-   },
-   "pins": [
-    "FlockSoundness.Audit.Law.keyedWindowReg_audit_of_record",
-    "FlockSoundness.Audit.Law.keyedWindowReg_extraction_audit_of_record",
-    "FlockSoundness.Audit.prob_auditReg"
-   ]
-  },
-  "FlockSoundness.ExecDraw": {
-   "digest": "223517e5d74b87649e5e27915e46ebfe",
-   "definitions": {
-    "FlockSoundness.Audit.Law.streamOf": "223517e5d74b8764"
-   },
-   "pins": [
-    "FlockSoundness.Audit.Law.drawOS_stratified_escape_le",
-    "FlockSoundness.Audit.Law.drawOS_subset_escape_le",
-    "FlockSoundness.Audit.Law.drawOS_work_escape_le",
-    "FlockSoundness.Audit.Law.drawOn_escape_le",
-    "FlockSoundness.Audit.Law.execOS_escape_le",
-    "FlockSoundness.Audit.Law.execOS_subset_escape_le",
-    "FlockSoundness.Audit.Law.execOS_work_escape_le",
-    "FlockSoundness.Audit.Law.execStratified_escape_le",
-    "FlockSoundness.Audit.Law.stratified_exec_escape_le",
-    "FlockSoundness.Audit.Law.subsetOn_escape_le",
-    "FlockSoundness.Audit.Law.subset_exec_escape_le",
-    "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
-    "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec"
-   ]
-  },
-  "FlockSoundness.ExecDrawOS": {
-   "digest": "a33d3c796eff94455ebbfd7c3f309920",
-   "definitions": {
-    "FlockSoundness.Audit.Law.drawOS_def": "c6e097e17d1ded7c",
-    "FlockSoundness.Audit.Law.execOS": "3d35566e7f46b636",
-    "FlockSoundness.Audit.Law.runOS": "9e261a55ef9d579d",
-    "FlockSoundness.Audit.Law.tapeGet": "5202d1c866c2a35c",
-    "FlockSoundness.Audit.Law.tapesOf": "f1c09b31f54c052d"
-   },
-   "pins": [
-    "FlockSoundness.Audit.Law.drawOS_def",
-    "FlockSoundness.Audit.Law.drawOS_stratified_escape_le",
-    "FlockSoundness.Audit.Law.drawOS_subset_escape_le",
-    "FlockSoundness.Audit.Law.drawOS_work_escape_le",
-    "FlockSoundness.Audit.Law.execOS_escape_le",
-    "FlockSoundness.Audit.Law.execOS_subset_escape_le",
-    "FlockSoundness.Audit.Law.execOS_work_escape_le"
-   ]
-  },
-  "FlockSoundness.ExecStratified": {
-   "digest": "27b5044398289bc1cbdff5b7259d3017",
-   "definitions": {
-    "FlockSoundness.Audit.Law.ExecStrata": "da727f9d95c06424",
-    "FlockSoundness.Audit.Law.execStratified": "a839dbc85a1975cc"
-   },
-   "pins": [
-    "FlockSoundness.Audit.Law.drawOS_stratified_escape_le",
-    "FlockSoundness.Audit.Law.drawOS_work_escape_le",
-    "FlockSoundness.Audit.Law.execOS_escape_le",
-    "FlockSoundness.Audit.Law.execOS_work_escape_le",
-    "FlockSoundness.Audit.Law.execStratified_escape_le",
-    "FlockSoundness.Audit.Law.stratified_exec_escape_le",
-    "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
-    "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec"
-   ]
-  },
-  "FlockSoundness.KeyedDraw": {
-   "digest": "67eed1b8dce3aedd70b4709af7934061",
-   "definitions": {
-    "FlockSoundness.Audit.KeyedDraw.drawOn": "dc67197f6e574b2e",
-    "FlockSoundness.Audit.KeyedDraw.flat": "86019fe258e3c50f",
-    "FlockSoundness.Audit.KeyedDraw.streamsOf": "f4a0d94ef81831ee",
-    "FlockSoundness.Audit.Law.PlanStrata": "28b59b758733ed3e",
-    "FlockSoundness.Audit.Law.keyedWindow": "9ef801f5ee29bf85",
-    "FlockSoundness.Audit.Law.noStratum": "957f7a04b91e1da2",
-    "FlockSoundness.Audit.Law.windowIdx": "ee27cf8ed2b5e057",
-    "FlockSoundness.Audit.Law.windowOf": "1ec453c434fd8789",
-    "FlockSoundness.Audit.Law.windowStreams": "a469d8835d936ee1",
-    "FlockSoundness.Audit.Law.windowTest": "51446aff85147685"
-   },
-   "pins": [
-    "FlockSoundness.Audit.Law.drawOn_escape_le",
-    "FlockSoundness.Audit.Law.keyedWindowReg_audit_of_record",
-    "FlockSoundness.Audit.Law.keyedWindowReg_extraction_audit_of_record",
-    "FlockSoundness.Audit.Law.keyedWindow_audit_of_record",
-    "FlockSoundness.Audit.Law.keyedWindow_escape_le",
-    "FlockSoundness.Audit.Law.keyedWindow_escape_le_of_names",
-    "FlockSoundness.Audit.Law.keyedWindow_extraction_audit_of_record",
-    "FlockSoundness.Audit.Law.subsetOn_escape_le"
-   ]
-  },
-  "FlockSoundness.PlanDraw": {
-   "digest": "8fbfa47e82aa8096d906f5852db5fc39",
-   "definitions": {
-    "FlockSoundness.PlanDraw.Call": "04e56fedbfeb67a0",
-    "FlockSoundness.PlanDraw.Call.index": "0acfa1b70af3e668",
-    "FlockSoundness.PlanDraw.Call.strata": "b54eb47d0744738a",
-    "FlockSoundness.PlanDraw.Stratum": "75ac5f7568081e1c",
-    "FlockSoundness.PlanDraw.Stratum.k": "3bd4da2d2207878b",
-    "FlockSoundness.PlanDraw.Stratum.name": "43300e5292cacd4e",
-    "FlockSoundness.PlanDraw.Stratum.units": "6d2fd9ec8116261d",
-    "FlockSoundness.PlanDraw.context": "bd9faa6e7c036245",
-    "FlockSoundness.PlanDraw.drawAll": "ae3c26e8193d60e4",
-    "FlockSoundness.PlanDraw.drawn": "ce1e19514dfc512e",
-    "FlockSoundness.PlanDraw.window": "6bc06f45dad82057"
-   },
-   "pins": [
-    "FlockSoundness.Audit.Law.drawOn_escape_le",
-    "FlockSoundness.Audit.Law.keyedWindowReg_audit_of_record",
-    "FlockSoundness.Audit.Law.keyedWindowReg_extraction_audit_of_record",
-    "FlockSoundness.Audit.Law.keyedWindow_audit_of_record",
-    "FlockSoundness.Audit.Law.keyedWindow_escape_le",
-    "FlockSoundness.Audit.Law.keyedWindow_escape_le_of_names",
-    "FlockSoundness.Audit.Law.keyedWindow_extraction_audit_of_record"
-   ]
-  },
-  "FlockSoundness.Randomness": {
-   "digest": "25e48dec0271efc95d6f603e7d3bcbf0",
-   "definitions": {
-    "FlockSoundness.Randomness.DERIVE": "4e1fb19597e84b5b",
-    "FlockSoundness.Randomness.Part": "a585c09f466ba39f",
-    "FlockSoundness.Randomness.Part.bytes": "5b5f77b7e088ecc3",
-    "FlockSoundness.Randomness.Part.int": "1e9438e2f9fea667",
-    "FlockSoundness.Randomness.Part.str": "e787165410165722",
-    "FlockSoundness.Randomness.STREAM": "c527ff87405f3810",
-    "FlockSoundness.Randomness.be8": "e9331771302df2a8",
-    "FlockSoundness.Randomness.block": "a22aeb334b323baa",
-    "FlockSoundness.Randomness.derive": "6ce874deda55b1f8",
-    "FlockSoundness.Randomness.frame": "53e2eb04f952a7de",
-    "FlockSoundness.Randomness.frames": "a56c965fa3bad5ad",
-    "FlockSoundness.Randomness.natBytes": "325ee69dbe1335fe",
-    "FlockSoundness.Randomness.stream": "dd7c17cffbd6905c",
-    "FlockSoundness.Randomness.subset": "92af711aacc7e0f0",
-    "FlockSoundness.Randomness.subsetOn": "a7fdb1139a26a17d",
-    "FlockSoundness.Randomness.swapIndex": "3d4137be19c57a6f",
-    "FlockSoundness.Randomness.uniformOn": "afee3abf6b775bed"
-   },
-   "pins": [
-    "FlockSoundness.Audit.Law.drawOn_escape_le",
-    "FlockSoundness.Audit.Law.keyedWindowReg_audit_of_record",
-    "FlockSoundness.Audit.Law.keyedWindowReg_extraction_audit_of_record",
-    "FlockSoundness.Audit.Law.keyedWindow_audit_of_record",
-    "FlockSoundness.Audit.Law.keyedWindow_escape_le",
-    "FlockSoundness.Audit.Law.keyedWindow_escape_le_of_names",
-    "FlockSoundness.Audit.Law.keyedWindow_extraction_audit_of_record",
-    "FlockSoundness.Audit.Law.subsetOn_escape_le"
    ]
   }
  },
