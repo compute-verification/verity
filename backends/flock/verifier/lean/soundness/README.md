@@ -297,14 +297,13 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
     which `Typed.read` checks (`Typed.flatNet`, #434).
   - **A typed flat class's copies and zero rows** (`ExecFlatCopies.lean`). Δ is the slot constants' pairs, the rows'
     constant bits, then each unit copy's leaf, cut and wire pairs (`delta_flat`). `HmRow.check` wires each of the unit's
-    input ports once (`CheckFacts.wired`, `wire_leaf`, `cut_leaf`), and the ports' bits are distinct columns. So at each
-    port bit the block rows read the one column Δ copies there (`Layout.placed_port`), and each unit slot's row past its
-    useful rows is zero (`Layout.placed_zero`). `setupH_flatTableClass` is then the flat class's `TableClass`: its
-    placement, its copies (`setupH_flatCopy`) and its forced-zero rows.
+    input ports once (`CheckFacts.wired`, `wire_leaf`, `cut_leaf`), and `Typed.read` checks that the unit's inputs are
+    its net's input port bits in order (`Typed.flatNet`, #434), so those bits are distinct columns. So at each input the
+    block rows read the one column Δ copies there (`Layout.placed_port`), and each unit slot's row past its useful rows
+    is zero (`Layout.placed_zero`). `setupH_flatTableClass` is then the flat class's `TableClass`: its placement, its
+    copies (`setupH_flatCopy`) and its forced-zero rows.
     - An input whose source lies outside the block has zero rows, and its copy position is its slot's forced-zero row.
   - Still to prove:
-    - that the unit's inputs are its net's input port bits, in order (`setupH_flatTableClass`'s `hin`), which
-      flock-verifier is adding to #434's `Typed.flatNet`;
     - the message bit's position in the block, for `setupH_inputCopy`.
 
 ### 1.6 Proved from the libraries, not assumed
