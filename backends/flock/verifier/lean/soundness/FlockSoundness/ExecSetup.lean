@@ -92,19 +92,21 @@ theorem pin_spec {c : Circuit} {p : ℕ} (h : HmRow.pin c = .ok p) :
     ∃ r ∈ c.ranges.toList, ∃ i, r.kind = .net i ∧ 0 < r.count ∧
       p = r.start + (c.nets.getD i default).2.constPos := by
   unfold HmRow.pin at h
+  dsimp only at h
   split at h
   · rename_i r hr
     split at h
     · rename_i i hi
       by_cases hc : (r.count == 0) = true
-      · rw [ite_eq_left hc] at h; cases h
+      · rw [ite_eq_left hc] at h; obtain ⟨_, h0, _⟩ := except_bind_ok h; cases h0
       · rw [ite_eq_right hc] at h
+        obtain ⟨-, h⟩ := ite_throw_ok' h
         cases h
         refine ⟨r, Array.mem_def.1 (Array.mem_of_find?_eq_some hr), i, hi, ?_, rfl⟩
         simp only [beq_iff_eq] at hc
         omega
-    · cases h
-  · cases h
+    · obtain ⟨_, h0, _⟩ := except_bind_ok h; cases h0
+  · obtain ⟨_, h0, _⟩ := except_bind_ok h; cases h0
 
 /-- A net with exactly one range: `rangeOf` finds it. -/
 theorem rangeOf_spec {c : Circuit} {n : ℕ} (h : (c.ranges.filter (·.kind == Kind.net n)).size = 1) :

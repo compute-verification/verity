@@ -55,12 +55,13 @@ PROTOCOL_SIZE_CAP = 128 * 1024
 BLOB_LIMIT = 256 * 1024  # a tracked file holds at most this, except source code (CODE_SUFFIXES) and ALLOWLIST
 #: Suffixes of source, exempt from BLOB_LIMIT (a generated module or a pinned Lean file can be larger); markdown has its own caps.
 CODE_SUFFIXES = SOURCE_SUFFIXES | {".lean", ".cuh", ".cpp", ".md"}
-#: Data over BLOB_LIMIT that is not a test fixture: runtime tables a module loads, the generated census, three vLLM workload specs,
-#: two vLLM logs and the Flock soundness proofs' Lean audit policy (its pins' SHA-256 records, `tools/lean/audit.py`). Each is
-#: capped at its size rounded up to 64 KiB, so none can grow past that and nothing joins them silently. A test fixture over
-#: BLOB_LIMIT is registered in fixtures/artifacts.json instead and fetched (`research data fetch-fixtures`).
+#: Data over BLOB_LIMIT that is not a test fixture: runtime tables a module loads, the generated census, the soundness audit
+#: record, three vLLM workload specs and two vLLM logs. Each is capped at its size rounded up to 64 KiB, so none can grow past
+#: that and nothing joins them silently; the soundness audit record grows about 2.5 KiB per pin, so its cap leaves room for about
+#: 100 more pins instead. A test fixture over BLOB_LIMIT is registered in fixtures/artifacts.json instead and fetched
+#: (`research data fetch-fixtures`).
 ALLOWLIST = {
-    "backends/flock/verifier/lean/soundness/lean-audit.json": 320 * 1024,
+    "backends/flock/verifier/lean/soundness/lean-audit.json": 512 * 1024,
     "census/workloads.json": 384 * 1024,
     "integrations/vllm/data/logs/m1.jsonl.gz": 576 * 1024,
     "integrations/vllm/data/logs/m6/log.jsonl.gz": 576 * 1024,
