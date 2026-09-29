@@ -104,7 +104,7 @@ def _pouw(log):
         for m in target.model.modules():
             h.wrap(m.quant_method, "apply", lambda orig: (lambda layer, x, bias=None: ("pouw", layer.weight, x)))
         log.append("pouw")
-        return PO.Option(name=f"pouw:{scheme}", hooks=h, commits={"weight_roots": "w"}, outside_program="GEMMs the Program does not describe")
+        return PO.Option(name=f"pouw:{scheme}", hooks=h, commits={"weight_roots": "w"})
     return install
 
 
@@ -147,20 +147,17 @@ def test_the_composition_installs_innermost_first_and_unwinds_to_the_model_as_it
     assert layer.quant_method.apply(layer, "x") == ("gemm", 2, "x")
 
 
-def test_the_record_says_what_each_option_committed_to_and_whether_a_verdict_is_of_record(monkeypatch):
-    log: list[str] = []
-    _fake_adapter(monkeypatch, "pouw", _pouw(log), schemes=("ncp-v1",))
-    ctx = PO.Context(stage="commit", enabled=ALL[:1] + ALL[2:])
+def test_the_record_says_what_each_option_committed_to(monkeypatch):
+    _fake_adapter(monkeypatch, "pous", _pous([]), schemes=("band-chain/d12/v1",))
+    ctx = PO.Context(stage="commit", enabled=ALL[1:])
     with PO.install(Model(), ctx) as comp:
         comp.bind("sampled-proofs", run_roots=["ab" * 32])
     rec = comp.record("d" * 64)
     assert rec["schema"] == PO.RECORD_SCHEMA and rec["stage"] == "commit" and rec["profile_digest"] == "d" * 64
-    assert rec["protocols"] == [{"entry": "pouw:ncp-v1", "commitment": {"weight_roots": "w"}},
+    assert rec["protocols"] == [{"entry": "pous:band-chain/d12/v1", "commitment": {"storage_root": "c"}},
                                 {"entry": "sampled-proofs:vllm-v1", "commitment": {"run_roots": ["ab" * 32]}}]
     assert rec["digest"] == comp.record("d" * 64)["digest"] != comp.record("e" * 64)["digest"]
-    v = comp.verdict("d" * 64)
-    assert v == {"protocols": ["pouw:ncp-v1", "sampled-proofs:vllm-v1"], "of_record": False,
-                 "outside_program": {"pouw:ncp-v1": "GEMMs the Program does not describe"}, "record": rec["digest"]}
+    assert comp.verdict("d" * 64) == {"protocols": list(ALL[1:]), "record": rec["digest"]}
     assert comp.info()["sampled-proofs:vllm-v1"]["commitment_scheme"] == "vllm-v1"
 
 
@@ -201,8 +198,8 @@ def test_sampled_proofs_alone_at_the_commit_adds_no_hooks():
     assert PO.refusals(ctx) == () and PO.adapter("sampled-proofs").schemes() == ("vllm-v1",)
     before = hooks.live()
     with PO.install(Model(), ctx) as comp:
-        assert comp.entries == ALL[2:] and hooks.live() == before and comp.outside_program() == {}
-    assert comp.verdict()["of_record"] is True
+        assert comp.entries == ALL[2:] and hooks.live() == before
+    assert comp.verdict() == {"protocols": list(ALL[2:]), "record": comp.record()["digest"]}
 
 
 def test_the_commit_context_is_none_for_the_default_and_checked_for_a_declared_set(monkeypatch):
@@ -230,19 +227,21 @@ def test_the_commit_guard_exits_3_naming_every_reason(monkeypatch, capsys, kw, m
     assert e.value.code == 3 and "REFUSE (fail-closed)" in out and match in out
 
 
-def test_a_composed_commit_records_its_options_and_writes_a_verdict_not_of_record(monkeypatch, tmp_path):
+def test_a_commit_with_pous_records_its_options_and_its_verdict_stands(monkeypatch, tmp_path):
     log: list[str] = []
-    _fake_adapter(monkeypatch, "pouw", _pouw(log), schemes=("ncp-v1",))
-    p, model, versions = TargetProfile(protocols=ALL[:1] + ALL[2:]), Model(), {}
+    _fake_adapter(monkeypatch, "pous", _pous(log), schemes=("band-chain/d12/v1",))
+    p, model, versions = TargetProfile(protocols=ALL[1:]), Model(), {}
     assert PO.commit_guard(p) is p
     comp = PO.at_commit(p, model, versions)
-    assert versions["protocols"]["entries"] == list(ALL[:1] + ALL[2:]) and "apply" in vars(model.layers[0].quant_method)
+    assert versions["protocols"]["entries"] == list(ALL[1:]) and "apply" in vars(model.layers[0].quant_method)
     verdict = {"commit_pass": True, "run_roots": ["ab" * 32]}
     PO.into_verdict(comp, verdict, tmp_path, p, program_digest="cd" * 32, manifest={"manifest_digest": "ef" * 32})
-    assert comp.closed and "apply" not in vars(model.layers[0].quant_method)
-    assert verdict["commit_pass"] is True and verdict["protocols"]["of_record"] is False
+    assert comp.closed and "apply" not in vars(model.layers[0].quant_method) and log[-1] == "pous released"
     rec = json.loads((tmp_path / "protocols.json").read_text())
-    assert rec["digest"] == verdict["protocols"]["record"] and rec["profile_digest"] == p.digest()
+    assert verdict == {"commit_pass": True, "run_roots": ["ab" * 32], "protocols": {"protocols": list(ALL[1:]), "record": rec["digest"]}}
+    assert rec["profile_digest"] == p.digest()
+    assert rec["protocols"][1] == {"entry": "sampled-proofs:vllm-v1",
+                                   "commitment": {"run_roots": ["ab" * 32], "program_digest": "cd" * 32, "manifest_digest": "ef" * 32}}
     assert rec["protocols"][1] == {"entry": "sampled-proofs:vllm-v1",
                                    "commitment": {"run_roots": ["ab" * 32], "program_digest": "cd" * 32, "manifest_digest": "ef" * 32}}
 
