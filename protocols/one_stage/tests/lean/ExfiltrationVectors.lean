@@ -40,15 +40,64 @@ theorem audit_exfiltration_numerator {C : Circuit} {n : ℕ} (P : Partition C n)
       (numerator n H k : ℝ≥0∞) / (Fintype.card M : ℝ≥0∞) + (δ + εks + δlink + δin) :=
   P.audit_exfiltration hks hlink hin hD hb K hK hsep hw hH hk σ g
 
-/-- The least `K` with `C(n - (K + 1), k) · 2^e < C(n, k)`, which is `(Law.subset n k).miss (K + 1) < 2^-e`. -/
-def countBound (n k e : ℕ) : ℕ :=
-  ((List.range (n + 1)).find? fun K => (n - (K + 1)).choose k * 2 ^ e < n.choose k).getD n
+/-- `C(m, k)` as `m.descFactorial k / k!`, which the kernel evaluates in `k` steps (`Nat.choose` unfolds Pascal's rule). -/
+def chooseD (m k : ℕ) : ℕ := m.descFactorial k / k.factorial
+
+theorem chooseD_eq (m k : ℕ) : chooseD m k = m.choose k := (Nat.choose_eq_descFactorial_div_factorial m k).symm
+
+/-- From `K`, with `c = C(n - (K + 1), k)` and `f` steps left: the first count whose successor meets
+`c · 2^e < top = C(n, k)`. The next `c` is `c · (m - k) / m` for `m = n - (K + 1)`. -/
+def search (n k e top : ℕ) : ℕ → ℕ → ℕ → ℕ
+  | 0, K, _ => K
+  | f + 1, K, c =>
+    if c * 2 ^ e < top then K else search n k e top f (K + 1) (c * (n - (K + 1) - k) / (n - (K + 1)))
+
+/-- The vector's count, the least `K` whose successor meets `hk`: `grid_meets` checks it, not this search. -/
+def countBound (n k e : ℕ) : ℕ := search n k e (chooseD n k) n 0 (chooseD (n - 1) k)
+
+/-- What the kernel checks of a vector: `k ≤ n`, `K + 1 ≤ n` and `C(n - (K + 1), k) · 2^e < C(n, k) ≤ C(n - K, k) · 2^e`. -/
+def meets (n k e K : ℕ) : Bool :=
+  k ≤ n && K + 1 ≤ n && chooseD (n - (K + 1)) k * 2 ^ e < chooseD n k && chooseD n k ≤ chooseD (n - K) k * 2 ^ e
+
+/-- `meets` is `miss (K + 1) < 2^-e ≤ miss K` for the uniform `k`-subset: `K` meets `audit_exfiltration`'s `hk`, and it is
+the least that does, since `miss` is antitone. -/
+theorem miss_of_meets {n k e K : ℕ} (h : meets n k e K = true) :
+    ∃ hk : k ≤ n, (Law.subset n k hk).miss (K + 1) < ((2 ^ e : ℕ) : ℝ≥0∞)⁻¹ ∧
+      ((2 ^ e : ℕ) : ℝ≥0∞)⁻¹ ≤ (Law.subset n k hk).miss K := by
+  simp only [meets, Bool.and_eq_true, decide_eq_true_eq, chooseD_eq] at h
+  obtain ⟨⟨⟨hk, hK⟩, hlt⟩, hle⟩ := h
+  have hB : (n.choose k : ℝ≥0∞) ≠ 0 := by exact_mod_cast (Nat.choose_pos hk).ne'
+  have hc : ((2 ^ e : ℕ) : ℝ≥0∞) ≠ 0 := by exact_mod_cast (pow_pos two_pos e).ne'
+  have ht : ∀ x : ℕ, (x : ℝ≥0∞) ≠ ⊤ := fun x => ENNReal.natCast_ne_top x
+  refine ⟨hk, ?_, ?_⟩
+  · rw [Law.subset_miss hk hK, ENNReal.div_lt_iff (Or.inl hB) (Or.inl (ht _)), ← ENNReal.div_eq_inv_mul,
+      ENNReal.lt_div_iff_mul_lt (Or.inl hc) (Or.inl (ht _))]
+    exact_mod_cast hlt
+  · rw [Law.subset_miss hk (by omega), ENNReal.le_div_iff_mul_le (Or.inl hB) (Or.inl (ht _)), ← ENNReal.div_eq_inv_mul,
+      ENNReal.div_le_iff_le_mul (Or.inl hc) (Or.inl (ht _))]
+    exact_mod_cast hle
 
 /-- `(n, k, e, b)`: `n` units, `k` drawn, `δ = 2^-e`, `b` output bits per unit. -/
 def grid : List (ℕ × ℕ × ℕ × ℕ) :=
   [(16, 1, 4), (16, 4, 4), (16, 8, 10), (64, 4, 4), (64, 8, 10), (64, 16, 20), (512, 4, 10), (512, 16, 10),
     (512, 64, 20), (4096, 38, 10), (4096, 128, 20), (65536, 1024, 20)].flatMap fun (n, k, e) =>
       [(n, k, e, 1), (n, k, e, 16)]
+
+/-- Every vector's count meets `meets`, evaluated by the kernel. -/
+theorem grid_meets : grid.all (fun (n, k, e, _) => meets n k e (countBound n k e)) = true := by decide +kernel
+
+/-- **Each vector's `K` meets `hk`, and no smaller count does**: `miss (K + 1) < 2^-e ≤ miss K`. -/
+theorem grid_counts : ∀ c ∈ grid, ∃ hk : c.2.1 ≤ c.1,
+    (Law.subset c.1 c.2.1 hk).miss (countBound c.1 c.2.1 c.2.2.1 + 1) < ((2 ^ c.2.2.1 : ℕ) : ℝ≥0∞)⁻¹ ∧
+      ((2 ^ c.2.2.1 : ℕ) : ℝ≥0∞)⁻¹ ≤ (Law.subset c.1 c.2.1 hk).miss (countBound c.1 c.2.1 c.2.2.1) :=
+  fun c hc => miss_of_meets (List.all_eq_true.1 grid_meets c hc)
+
+open Lean in
+run_meta do
+  for d in [``grid_counts, ``audit_exfiltration_numerator] do
+    for a in ← collectAxioms d do
+      unless a ∈ [``propext, ``Classical.choice, ``Quot.sound] do
+        throwError "{d} uses {a}, beyond propext, Classical.choice and Quot.sound"
 
 def row : ℕ × ℕ × ℕ × ℕ → String
   | (n, k, e, b) =>
