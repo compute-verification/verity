@@ -16,7 +16,7 @@ from research.jobs import model
 from research.jobs.cli import main as jobs_main
 from research.jobs.client import ModelClient
 
-GOOD = {"avx512": True, "mem_gb": 240, "cpus": 64, "disk_gb": 70, "busy": 0, "tools": ["uv", "lake", "cargo"]}
+GOOD = {"avx512": True, "mem_gb": 240, "cpus": 64, "disk_gb": 70, "busy": 0, "tools": ["uv", "lake", "cargo"], "lease_s": 6 * 3600}
 C1, C2, BASE = "1" * 40, "2" * 40, "b" * 40
 RUN = "r20260929-000005-aaaa"
 
@@ -35,6 +35,10 @@ class FakeRunner:
         self.launches: dict[str, tuple | None] = {}
         self.runs: dict[str, D.Observation] = {}
         self.started, self.stopped, self.killed, self.probes = [], [], [], []
+        self.local: str | None = None
+
+    def local_problem(self):
+        return self.local
 
     def probe(self, pod):
         self.probes.append(pod)
@@ -311,7 +315,8 @@ def test_a_payload_the_dispatcher_cant_run_is_an_error(payload, why):
 
 def _git(cwd: Path, *args: str) -> str:
     env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
-    return subprocess.run(["git", "-C", str(cwd), *args], check=True, capture_output=True, text=True, env=env).stdout.strip()
+    return subprocess.run(["git", "-c", "commit.gpgsign=false", "-c", "core.fsmonitor=false", "-C", str(cwd), *args], check=True,
+                          capture_output=True, text=True, env=env).stdout.strip()
 
 
 def test_the_launch_child_checks_the_commit_in_its_own_worktree_without_the_token(tmp_path):
@@ -366,8 +371,9 @@ def test_research_jobs_adds_lists_shows_cancels_and_reads_events(capsys):
     args = ["add", "merge-check", "--commit", C1, "--base", BASE, "--agreement"]
     assert jobs_main(args, client=w.coord) == 0
     assert jobs_main(args, client=w.coord) == 0
-    assert capsys.readouterr().out.splitlines() == ["job 1 added (queued)", "job 1 already there (queued)"]
-    assert (w.job(1).dedupe_key, w.job(1).requirements, w.job(1).payload["base"]) == (f"merge-check:{C1}", {"avx512": True}, BASE)
+    assert capsys.readouterr().out.splitlines() == ["job 1 added (queued)", "job 1 already there (queued)", f"    added for commit {C1}"]
+    assert (w.job(1).dedupe_key, w.job(1).payload["base"], w.job(1).payload["timeout_s"]) == (f"merge-check:{C1}", BASE, D.DEFAULT_TIMEOUT_S)
+    assert w.job(1).requirements == {"avx512": True, "min_lease_s": D.DEFAULT_TIMEOUT_S + 900}
     assert jobs_main(["list"], client=w.coord) == 0
     assert "merge-check  queued" in capsys.readouterr().out
     assert jobs_main(["cancel", "1"], client=w.coord) == 0
@@ -395,3 +401,147 @@ def test_research_worker_is_wired(capsys):
     with pytest.raises(SystemExit) as e:
         main(["jobs", "--help"])
     assert e.value.code == 0 and "research jobs" in capsys.readouterr().out
+
+
+def test_no_claim_while_the_host_is_under_the_disk_floor():
+    w = World()
+    j = w.add()
+    w.runner.local = "0.90 GB free on the filesystem of /home/rc/.research/runs, under the 1.5 GB floor"
+    w.at(0)
+    w.at(D.CLAIM_S)
+    assert w.runner.started == [] and w.runner.probes == []
+    assert [line.split(" ", 1)[1] for line in w.lines] == ["claiming stopped: " + w.runner.local]
+    w.runner.local = None
+    w.at(2 * D.CLAIM_S)
+    assert w.runner.started == [(j, 1, "t1")]
+    assert "claiming again: the host has room" in w.lines[1]
+
+
+def test_a_running_job_is_tended_under_the_disk_floor():
+    w = World()
+    j = w.add()
+    w.at(0)
+    w.runner.launches["L1-1"] = (0, RUN, "")
+    w.runner.local = "under the floor"
+    w.runner.runs[RUN] = D.Observation("passed", "check passed")
+    w.at(5)
+    w.at(65)
+    assert w.job(j).state == "done"
+
+
+def test_the_disk_floor_is_research_runs_own(tmp_path):
+    r = D.ResearchRunner(workdir=tmp_path / "jobs", environ={"RESEARCH_RUNS": str(tmp_path / "runs"), "RESEARCH_DISK_FLOOR_GB": "1e9"})
+    assert "under the 1e+09 GB floor" in r.local_problem()
+    r.environ["RESEARCH_DISK_FLOOR_GB"] = "0"
+    assert r.local_problem() is None
+
+
+def test_a_job_is_claimed_only_for_a_pod_whose_lease_covers_it(capsys):
+    w = World(pods=("t1", "t2"))
+    w.runner.caps["t1"] = {**GOOD, "lease_s": D.lease_needed(3600) - 1}
+    assert jobs_main(["add", "merge-check", "--commit", C1, "--base", BASE, "--timeout-s", "3600"], client=w.coord) == 0
+    assert w.job(1).requirements["min_lease_s"] == 3600 + 900
+    w.at(0)
+    assert w.runner.started == []
+    w.at(D.CLAIM_S)
+    assert w.runner.started == [(1, 1, "t2")]
+    assert any("t1: ready: lease 1.2 h, 70 GB free, 240 GB, 64 cpus, avx512" in line for line in w.lines)
+
+
+def test_a_job_without_min_lease_s_on_a_short_lease_is_named():
+    w = World()
+    w.runner.caps["t1"] = {**GOOD, "lease_s": 600}
+    j = w.add()
+    w.at(0)
+    assert w.runner.started == [(j, 1, "t1")]
+    assert any(f"job {j} was added without min_lease_s" in line and "research pods extend t1" in line for line in w.lines)
+
+
+def test_a_pod_without_a_lease_says_so():
+    w = World()
+    w.runner.caps["t1"] = {k: v for k, v in GOOD.items() if k != "lease_s"}
+    assert jobs_main(["add", "merge-check", "--commit", C1, "--base", BASE], client=w.coord) == 0
+    w.at(0)
+    assert w.runner.started == []
+    assert any("NO lease (a job with min_lease_s won't come)" in line for line in w.lines)
+
+
+def test_the_probe_reads_the_lease_the_tools_and_live_runs(tmp_path):
+    root = tmp_path / "research"
+    for name, status in (("r1", {"state": "done", "pid": os.getpid()}), ("r2", {"state": "running", "pid": os.getpid()}),
+                         ("r3", {"state": "running", "pid": 2 ** 22 + 1})):
+        (root / "runs" / name).mkdir(parents=True)
+        (root / "runs" / name / "status.json").write_text(json.dumps(status))
+    lease = tmp_path / "lease"
+    lease.write_text("4102444800 2100-01-01T00:00:00Z pods-create\n")
+    env = {"PATH": os.environ["PATH"], "HOME": str(tmp_path)}
+    caps = json.loads(subprocess.run([sys.executable, "-c", D.PROBE, str(root), str(lease)], capture_output=True, text=True,
+                                     check=True, env=env).stdout)
+    assert caps["busy"] == 1 and caps["lease_s"] > 2 * 10 ** 9
+    assert set(caps) == {"avx512", "mem_gb", "cpus", "disk_gb", "busy", "tools", "lease_s"}
+    lease.unlink()
+    caps = json.loads(subprocess.run([sys.executable, "-c", D.PROBE, str(root / "missing"), str(lease)], capture_output=True,
+                                     text=True, check=True, env=env).stdout)
+    assert "lease_s" not in caps and caps["busy"] == 0
+    caps = json.loads(subprocess.run([sys.executable, "-c", D.PROBE, str(root), str(lease)], capture_output=True, text=True,
+                                     check=True, env={**env, "RESEARCH_LEASE_EXPIRES": "4102444800"}).stdout)
+    assert caps["lease_s"] > 2 * 10 ** 9
+
+
+def _lean_repo(tmp_path: Path) -> Path:
+    repo = tmp_path / "repo"
+    files = {
+        "a/lean-audit.json": "{}", "a/lakefile.toml": "", "a/A.lean": "a",
+        "a/lake-manifest.json": json.dumps({"packages": [{"type": "path", "dir": "../b"}, {"type": "git", "name": "mathlib"}]}),
+        "a/nested/lakefile.toml": "", "a/nested/N.lean": "n",
+        "b/lakefile.toml": "", "b/B.lean": "b", "c/lean-audit.json": "{}", "c/C.lean": "c",
+        "tools/lean/audit.py": "audit", "tools/check/check.py": "check", "README.md": "readme",
+    }
+    for f, text in files.items():
+        (repo / f).parent.mkdir(parents=True, exist_ok=True)
+        (repo / f).write_text(text)
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-qm", "one")
+    return repo
+
+
+def test_a_lean_regen_is_keyed_on_the_files_the_audit_reads(tmp_path):
+    from research.jobs.cli import lean_inputs, lean_key
+
+    repo = _lean_repo(tmp_path)
+    one = _git(repo, "rev-parse", "HEAD")
+    assert sorted(lean_inputs(one, ["a"], repo)) == ["a/A.lean", "a/lake-manifest.json", "a/lakefile.toml", "a/lean-audit.json",
+                                                    "b/B.lean", "b/lakefile.toml", "tools/lean/audit.py"]
+    keys = {}
+    for name, path, text in (("readme", "README.md", "x"), ("nested", "a/nested/N.lean", "x"), ("check", "tools/check/check.py", "x"),
+                             ("dep", "b/B.lean", "x"), ("tool", "tools/lean/audit.py", "x"), ("other", "c/C.lean", "x")):
+        (repo / path).write_text(text)
+        _git(repo, "commit", "-qam", name)
+        keys[name] = lean_key(_git(repo, "rev-parse", "HEAD"), ["a"], repo)
+    base = lean_key(one, ["a"], repo)
+    assert keys["readme"] == keys["nested"] == keys["check"] == base
+    assert len({base, keys["dep"], keys["tool"]}) == 3 and keys["other"] == keys["tool"]
+    assert lean_key(one, ["a/"], repo) == base != lean_key(one, ["a", "c"], repo)
+    with pytest.raises(SystemExit, match="b has no lean-audit.json"):
+        lean_key(one, ["b"], repo)
+
+
+def test_trains_with_the_same_lean_inputs_share_one_regeneration(tmp_path, monkeypatch, capsys):
+    repo = _lean_repo(tmp_path)
+    one = _git(repo, "rev-parse", "HEAD")
+    (repo / "README.md").write_text("another train")
+    _git(repo, "commit", "-qam", "two")
+    two = _git(repo, "rev-parse", "HEAD")
+    monkeypatch.chdir(repo)
+    w = World()
+    assert jobs_main(["add", "lean-regen", "--commit", one, "--package", "a"], client=w.coord) == 0
+    w.at(0)
+    w.runner.launches["L1-1"] = (0, RUN, "")
+    w.at(5)
+    w.runner.runs[RUN] = D.Observation("passed", "done rc=0")
+    w.at(65)
+    capsys.readouterr()
+    assert jobs_main(["add", "lean-regen", "--commit", two, "--package", "a"], client=w.coord) == 0
+    assert capsys.readouterr().out.splitlines() == ["job 1 already there (done)", f"    added for commit {one}; run {RUN}"]
+    assert w.job(1).dedupe_key == f"lean-regen:{w.job(1).payload['inputs']}" and len(w.svc.jobs) == 1

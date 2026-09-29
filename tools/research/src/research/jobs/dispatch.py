@@ -6,10 +6,14 @@ each with today's `research run --on` onto one of the pods it was given, one job
 It is one worker, `dispatch:{name}`, whose `jobs:work` token the Console mints (`$JOBS_TOKEN` or ~/.research/jobs/token); it
 runs where `research run --on` with custody works today, the research coordinator's VM.  Each pod it holds is a slot:
 
+    host        no claim while this host's runs root or workdir has less free space than `research run`'s floor
+                ($RESEARCH_DISK_FLOOR_GB): the launch writes a worktree and records there.  Running jobs are still tended.
     preflight   before a free pod asks for work, and again every PREFLIGHT_S: over ssh, pod_setup.sh's tools (uv, lake, cargo),
-                AVX-512, memory, cores, free disk (MIN_DISK_GB), and no live `research` run on it.  A pod that fails is refused
-                with the reason until it passes.  What it measured is sent as the claim's capabilities, so a job that needs
-                AVX-512 only goes to a pod that has it.
+                AVX-512, memory, cores, free disk (MIN_DISK_GB), the seconds left on the pod's lease, and no live `research` run
+                on it.  A pod that fails is refused with the reason until it passes.  What it measured is sent as the claim's
+                capabilities, so a job that needs AVX-512 only goes to a pod that has it, and a job whose `min_lease_s` (its
+                timeout_s plus the lease margin, set by `research jobs add`) the pod's lease can't cover isn't claimed for it:
+                `check.py --record` sets no --timeout, so its launch doesn't extend the lease.
     launch      in a child process (`python -m research.jobs.dispatch launch SPEC`), so renewals never wait on it: fetch the
                 commit into the dispatcher's own clone with forced refspecs, a worktree of it, then
                   merge-check  `check.py --record --on POD --base BASE [--verdicts-in PACK]` (the pack fetched from the store)
@@ -41,6 +45,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
+from ..pods.lease import LEASE_FILE, RUN_MARGIN_S
 from .client import TOKEN_ENV, Unreachable
 
 KINDS = ("merge-check", "lean-regen")
@@ -51,7 +56,7 @@ RENEW_S = 60
 POLL_S = 60
 PREFLIGHT_S = 600
 LAUNCH_TIMEOUT_S = 1800
-DEFAULT_TIMEOUT_S = 4 * 3600
+DEFAULT_TIMEOUT_S = 2 * 3600       # a cold check took 41 min, a Lean regeneration 30-40
 MIN_DISK_GB = 25
 SETUP_TOOLS = ("uv", "lake", "cargo")      # what tools/check/pod_setup.sh puts on a pod
 WORKDIR = Path.home() / ".research" / "jobs"
@@ -87,6 +92,17 @@ class Slot:
     problem: str | None = None
 
 
+def lease_needed(timeout_s: int) -> int:
+    """The lease a job needs left on its pod: its timeout plus what the runner needs after it (publish, custody push)."""
+    return int(timeout_s) + RUN_MARGIN_S
+
+
+def describe(caps: dict) -> str:
+    lease = f"lease {caps['lease_s'] / 3600:.1f} h" if caps.get("lease_s") is not None else "NO lease (a job with min_lease_s won't come)"
+    return (f"{lease}, {caps.get('disk_gb')} GB free, {caps.get('mem_gb')} GB, {caps.get('cpus')} cpus"
+            + (", avx512" if caps.get("avx512") else ", no avx512"))
+
+
 def preflight_problem(caps: dict) -> str | None:
     missing = [t for t in SETUP_TOOLS if t not in caps.get("tools", [])]
     if missing:
@@ -112,6 +128,7 @@ class Dispatcher:
     slots: list[Slot] = field(default_factory=list)
     next_claim: float = 0.0
     turn: int = 0
+    host_problem: str | None = None
 
     def __post_init__(self):
         saved = self._load()
@@ -149,6 +166,12 @@ class Dispatcher:
         free = [s for s in self.slots if not s.job]
         if not free:
             return
+        was, self.host_problem = self.host_problem, self.runner.local_problem()
+        if self.host_problem != was:
+            self.log(f"claiming stopped: {self.host_problem}" if self.host_problem else "claiming again: the host has room")
+        if self.host_problem:
+            self.next_claim = self.clock() + CLAIM_S
+            return
         free = free[self.turn % len(free):] + free[:self.turn % len(free)]   # each pod gets the first ask in turn
         self.turn += 1
         for s in free:
@@ -179,8 +202,8 @@ class Dispatcher:
             s.caps, s.problem = None, f"preflight failed: {type(e).__name__}: {e}"
         if s.problem and s.problem != was:
             self.log(f"{s.pod}: refused: {s.problem}")
-        elif was and not s.problem:
-            self.log(f"{s.pod}: passes preflight again")
+        elif not s.problem:
+            self.log(f"{s.pod}: {'passes preflight again' if was else 'ready'}: {describe(s.caps)}")
 
     def _start(self, s: Slot, claim: dict) -> None:
         now = self.clock()
@@ -188,6 +211,10 @@ class Dispatcher:
         s.claimed = s.renewed = s.observed = now
         s.run_id, s.outcome, s.phase = None, None, "launching"
         self.log(f"{s.pod}: job {s.job['id']} ({s.job['kind']}) attempt {s.attempt}: launching")
+        need = lease_needed(s.job["payload"].get("timeout_s") or DEFAULT_TIMEOUT_S)
+        if (s.caps or {}).get("lease_s") is not None and s.caps["lease_s"] < need and "min_lease_s" not in s.job["requirements"]:
+            self.log(f"{s.pod}: job {s.job['id']} was added without min_lease_s, and the pod's lease ({s.caps['lease_s']} s) is "
+                     f"under the {need} s it needs; `research pods extend {s.pod}` before it ends the run")
         try:
             s.launch = self.runner.start(s.job, s.attempt, s.pod)
         except Exception as e:  # noqa: BLE001
@@ -317,8 +344,8 @@ class Dispatcher:
 # ---- the real runner: ssh probes, `research run --on`, `research fetch` ------------------------------------------------------------------
 
 PROBE = r"""
-import glob, json, os, shutil, sys
-root = sys.argv[1]
+import glob, json, os, shutil, sys, time
+root, lease_file = sys.argv[1], sys.argv[2]
 os.environ["PATH"] = os.path.expanduser("~/.elan/bin") + ":" + os.path.expanduser("~/.cargo/bin") + ":/usr/local/bin:" + os.environ.get("PATH", "")
 def alive(pid):
     try:
@@ -347,9 +374,16 @@ probe = root
 while not os.path.exists(probe):
     probe = os.path.dirname(probe)
 flags = open("/proc/cpuinfo").read()
-print(json.dumps({"avx512": " avx512f" in flags, "mem_gb": mem // 2**30, "cpus": os.cpu_count(),
-                  "disk_gb": shutil.disk_usage(probe).free // 2**30, "busy": busy,
-                  "tools": [t for t in ("uv", "lake", "cargo", "nvidia-smi") if shutil.which(t)]}))
+try:
+    expires = int(open(lease_file).read().split()[0])
+except (OSError, ValueError, IndexError):
+    expires = int(os.environ["RESEARCH_LEASE_EXPIRES"]) if os.environ.get("RESEARCH_LEASE_EXPIRES", "").isdigit() else None
+caps = {"avx512": " avx512f" in flags, "mem_gb": mem // 2**30, "cpus": os.cpu_count(),
+        "disk_gb": shutil.disk_usage(probe).free // 2**30, "busy": busy,
+        "tools": [t for t in ("uv", "lake", "cargo", "nvidia-smi") if shutil.which(t)]}
+if expires is not None:
+    caps["lease_s"] = max(0, expires - int(time.time()))
+print(json.dumps(caps))
 """
 
 
@@ -367,6 +401,15 @@ class ResearchRunner:
         env.pop(TOKEN_ENV, None)
         return env
 
+    def local_problem(self) -> str | None:
+        from .. import runs as R
+
+        env = os.environ if self.environ is None else self.environ
+        for d in (R.runs_root(env.get("RESEARCH_RUNS")), self.workdir):
+            if why := R.disk_floor_refusal(Path(d), env):
+                return why
+        return None
+
     def _ssh(self, pod: str) -> tuple[list[str], dict]:
         from .. import remote
 
@@ -378,7 +421,7 @@ class ResearchRunner:
         from .. import remote
 
         ssh, m = self._ssh(pod)
-        r = remote.ssh_run(ssh, [m.get("python", "python3"), "-c", PROBE, m["root"]], timeout=120)
+        r = remote.ssh_run(ssh, [m.get("python", "python3"), "-c", PROBE, m["root"], LEASE_FILE], timeout=120)
         if r.returncode != 0:
             raise RuntimeError(f"probe exited {r.returncode}: {r.stderr.decode(errors='replace')[-300:]}")
         return json.loads(r.stdout.decode().strip().splitlines()[-1])

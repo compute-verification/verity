@@ -11,24 +11,35 @@ reference).  The Job queue holds batch, unattended work on pods; an interactive 
     research worker --dispatch --pods A,B,... [--name rc] [--kinds merge-check,lean-regen] [--once] [--workdir DIR] [--repo OWNER/NAME]
 
 `add` resolves --commit in the current checkout, and --base (for `merge_requires`) defaults to `main`'s tip on GitHub, read
-with `git ls-remote` rather than a local ref that may be stale.  The dedupe key defaults to `{kind}:{commit}`, so adding the same
-check twice returns the first job; a deliberate re-run names a new key.  --agreement asks for a pod with AVX-512 (the pinned
-upstream Flock build needs it).  The token is `$JOBS_TOKEN` or ~/.research/jobs/token; the site is `$JOBS_URL`.  Exit 1 when the
+with `git ls-remote` rather than a local ref that may be stale.  --timeout-s defaults to the dispatcher's DEFAULT_TIMEOUT_S, and
+the job asks for a pod whose lease has that long left plus the lease margin (`min_lease_s`), so no check starts on a pod that
+ends before it can finish.  --agreement asks for a pod with AVX-512 (the pinned upstream Flock build needs it).
+
+The dedupe key makes adding idempotent, and a deliberate re-run names a new one (--dedupe-key).  A merge check's is
+`merge-check:{commit}`.  A Lean regeneration's is `lean-regen:{digest of its inputs}`: the blobs, at that commit, of every tracked
+file the audit reads (each package and the packages it requires by path, less the Lake packages nested in them, and
+`tools/lean/`; `tools/check/lean_audit.py`'s inputs without check's own files).  So trains whose Lean inputs are the same share
+one regeneration, and the second add answers with the first job and its run.  The token is `$JOBS_TOKEN` or ~/.research/jobs/token; the site is `$JOBS_URL`.  Exit 1 when the
 Job queue refuses, 4 when it can't be reached.
 """
 from __future__ import annotations
 
 import argparse
 import fcntl
+import hashlib
 import json
+import posixpath
 import subprocess
 import sys
 from pathlib import Path
 
 from .client import HTTPClient, Unreachable
-from .dispatch import KINDS as DISPATCH_KINDS, SHA, WORKDIR, Dispatcher, DispatchError, ResearchRunner
+from .dispatch import DEFAULT_TIMEOUT_S, SHA, WORKDIR, Dispatcher, DispatchError, ResearchRunner, lease_needed
+from .dispatch import KINDS as DISPATCH_KINDS
 
 REPO = "danielreuter/verity"
+LEAN_TOOL = "tools/lean/"
+LEAN_KEY_SCHEMA = "lean-regen-inputs/v1"
 
 
 def resolve_commit(ref: str) -> str:
@@ -47,23 +58,64 @@ def main_tip(repo: str) -> str:
     return r.stdout.split()[0]
 
 
+def _git(*args: str, cwd: Path | None = None) -> str:
+    r = subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True)
+    if r.returncode:
+        raise SystemExit(f"research jobs: git {' '.join(args[:3])}: {r.stderr.strip()}")
+    return r.stdout
+
+
+def lean_inputs(commit: str, packages: list[str], cwd: Path | None = None) -> dict[str, str]:
+    """{path: blob sha} of every tracked file `audit.py --build --update PACKAGE...` reads at `commit` (module docstring)."""
+    files = {}
+    for entry in _git("ls-tree", "-r", "-z", "--full-tree", commit, cwd=cwd).split("\0"):
+        if entry:
+            meta, path = entry.split("\t", 1)
+            files[path] = meta.split()[2]
+    pkgs: set[str] = set()
+    for pkg in packages:
+        pkg = pkg.strip("/")
+        if f"{pkg}/lean-audit.json" not in files:
+            raise SystemExit(f"research jobs: {pkg} has no lean-audit.json at {commit[:12]}")
+        pkgs.add(pkg)
+        if f"{pkg}/lake-manifest.json" in files:
+            manifest = json.loads(_git("show", f"{commit}:{pkg}/lake-manifest.json", cwd=cwd))
+            pkgs |= {posixpath.normpath(posixpath.join(pkg, d["dir"])) for d in manifest.get("packages", []) if d.get("type") == "path"}
+
+    def own(pkg: str) -> list[str]:
+        nested = {f.rsplit("/", 1)[0] + "/" for f in files if f.startswith(pkg + "/") and f.rsplit("/", 1)[-1] in ("lakefile.toml", "lakefile.lean")
+                  and f.rsplit("/", 1)[0] != pkg}
+        return [f for f in files if f.startswith(pkg + "/") and not any(f.startswith(n) for n in nested)]
+
+    return {f: files[f] for f in sorted({*(f for p in pkgs for f in own(p)), *(f for f in files if f.startswith(LEAN_TOOL))})}
+
+
+def lean_key(commit: str, packages: list[str], cwd: Path | None = None) -> str:
+    h = hashlib.sha256(json.dumps([LEAN_KEY_SCHEMA, sorted(p.strip("/") for p in packages)]).encode())
+    for path, blob in lean_inputs(commit, packages, cwd).items():
+        h.update(f"{path}\0{blob}\0".encode())
+    return h.hexdigest()
+
+
 def add_body(ns: argparse.Namespace) -> dict:
     commit = resolve_commit(ns.commit)
-    payload: dict = {"repo": ns.repo, "commit": commit}
-    requirements: dict = {}
+    timeout = ns.timeout_s or DEFAULT_TIMEOUT_S
+    payload: dict = {"repo": ns.repo, "commit": commit, "timeout_s": timeout}
+    requirements: dict = {"min_lease_s": lease_needed(timeout)}
     if ns.kind == "merge-check":
         payload["base"] = resolve_commit(ns.base) if ns.base else main_tip(ns.repo)
         payload["verdict_pack"] = ns.verdict_pack
         if ns.agreement:
             requirements["avx512"] = True
+        key = f"merge-check:{commit}"
     else:
         if not ns.package:
             raise SystemExit("research jobs add lean-regen: name at least one --package")
         payload["packages"] = ns.package
-    if ns.timeout_s:
-        payload["timeout_s"] = ns.timeout_s
+        payload["inputs"] = lean_key(commit, ns.package)
+        key = f"lean-regen:{payload['inputs']}"
     body = {"kind": ns.kind, "payload": payload, "requirements": requirements, "priority": ns.priority,
-            "dedupe_key": ns.dedupe_key or f"{ns.kind}:{commit}"}
+            "dedupe_key": ns.dedupe_key or key}
     if ns.max_attempts:
         body["max_attempts"] = ns.max_attempts
     return body
@@ -123,6 +175,11 @@ def main(argv: list[str], client=None) -> int:
             status, body = c.call("POST", "/api/jobs", add_body(ns))
             if status in (200, 201):
                 print(f"job {body['id']} {'added' if body['created'] else 'already there'} ({body['state']})")
+                if not body["created"]:
+                    st, j = c.call("GET", f"/api/jobs/{body['id']}")
+                    if st == 200:
+                        run = (j.get("result") or {}).get("run_id")
+                        print(f"    added for commit {j['payload'].get('commit')}" + (f"; run {run}" if run else ""))
                 return 0
         elif ns.cmd == "list":
             status, body = c.call("GET", "/api/jobs" + _query(state=ns.state, kind=ns.kind, limit=ns.limit))

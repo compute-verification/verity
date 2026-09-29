@@ -56,6 +56,16 @@
       ]
     },
     {
+      "name": "a job that needs a lease of min_lease_s goes only to a pod whose lease has that long left",
+      "steps": [
+        {"at": 0, "req": ["POST", "/api/jobs"], "token": "tok-coordinator", "body": {"kind": "merge-check", "payload": {"timeout_s": 7200}, "requirements": {"min_lease_s": 8100}}, "expect": {"status": 201, "body": {"id": 1}}},
+        {"at": 1, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc", "slot": "vy-coord-t1", "capabilities": {"lease_s": 3600}}, "expect": {"status": 204}},
+        {"at": 2, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc", "slot": "vy-coord-t2", "capabilities": {}}, "expect": {"status": 204}},
+        {"at": 3, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc", "slot": "vy-coord-t3", "capabilities": {"lease_s": 8100}}, "expect": {"status": 200, "body": {"job": {"id": 1}}}},
+        {"at": 4, "req": ["POST", "/api/jobs"], "token": "tok-coordinator", "body": {"kind": "merge-check", "payload": {}, "requirements": {"min_lease_s": "2h"}}, "expect": {"status": 400}}
+      ]
+    },
+    {
       "name": "a worker claims only its own kinds, and only as itself",
       "steps": [
         {"at": 0, "req": ["POST", "/api/jobs"], "token": "tok-coordinator", "body": {"kind": "lean-regen", "payload": {"commit": "c1"}}, "expect": {"status": 201, "body": {"id": 1}}},

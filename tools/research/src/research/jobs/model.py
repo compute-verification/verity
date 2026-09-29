@@ -24,7 +24,8 @@ STATES = ("queued", "running", "done", "failed", "dead", "cancelled")
 OUTCOMES = ("passed", "failed", "error")
 #: requirement -> the capability it reads: a bool needs the capability true, a `min_` number needs it at least that, a list
 #: needs every name in the capability's list
-REQUIREMENTS = {"avx512": "avx512", "min_mem_gb": "mem_gb", "min_cpus": "cpus", "min_disk_gb": "disk_gb", "tools": "tools"}
+REQUIREMENTS = {"avx512": "avx512", "min_mem_gb": "mem_gb", "min_cpus": "cpus", "min_disk_gb": "disk_gb", "min_lease_s": "lease_s",
+                "tools": "tools"}
 DEFAULT_LEASE_S, MIN_LEASE_S, MAX_LEASE_S = 900, 60, 3600
 DEFAULT_MAX_ATTEMPTS = 3
 
