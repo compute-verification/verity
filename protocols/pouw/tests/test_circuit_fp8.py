@@ -687,3 +687,16 @@ def test_the_dequantization_unit_is_the_epilogue_on_hard_words():
     one = _f32(1.0)
     assert evaluate(fp8.dequant_template(False), 0x80000000, one, one)[0] == 0x8000
     assert evaluate(fp8.dequant_template(True), 0x80000000, one, one, 0)[0] == 0x0000
+
+
+def test_y_is_drawn_at_option_b_s_floors():
+    """Root's option B (X-SPC-105) on NCP-FP8: in a window, each call's `NcpFp8Dequant` has floor ⌈K_y·n_c/N⌉ in its work
+    table, and every other zero-work template 1."""
+    from verity_pouw.circuit import plan as PL
+    from verity_pouw.circuit import traced_as
+
+    lay = traced_as("fp8-is-h100-d3s-v0-f16", 32, 96, 32).layout()
+    (law, *_) = PL.window_laws([lay] * 100)
+    table, deq = PL.work_table(lay, law), next(s for s in lay.strata if s.role == "dequant")
+    assert table[deq.name] == {"work": 0, "floor": -(-PL.RECORD_K // 100)} and law.sizes(lay.strata)[deq.name] == 278
+    assert all(table[s.name]["floor"] == 1 for s in lay.strata if s.role != "dequant")

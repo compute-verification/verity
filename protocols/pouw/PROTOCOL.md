@@ -543,7 +543,8 @@ the strip's path, the key) plus the domain unit and the **pad cone**, every pad 
 it: a pad has no tile beneath it that a wrong one could be charged to. Its Y strip's `NcpFp8Amp`, in the weight's
 Program, is proved once per plan (`Plan.proved_y`), and opens the strip's weight rows. A tile's W_ref is its cells' share of
 `FP8IS.wref`. The strata are one per template, as for `ncp-v2` (every byte-length variant its own), the work table
-gives the tile template its W_ref and every other template 0, floors 1. `WorkLaw()` draws every layout: K is a
+gives the tile template its W_ref and every other template 0, floors 1 but y's: in a window each call's
+`NcpFp8Dequant` has option B's floor ⌈K_y·n_c/N⌉ (`window_laws`, as for `ncp-v2`). `WorkLaw()` draws every layout: K is a
 window's, and a call alone is capped at its units (X-SPC-83). Each call's subsets are keyed by its matmul index with the template, as
 `ncp-v2`'s (X-SPC-96), and the verifier draws through `Traced.draw`. The call's h and amplitudes are linked to the weight
 Program as `ncp-v2`'s Y is (X-SPC-101): the plan opens them at each drawn tile's column strip beside the weight Program's
