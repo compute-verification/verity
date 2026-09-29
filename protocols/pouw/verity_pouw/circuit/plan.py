@@ -116,9 +116,12 @@ class Layout:
     units: tuple[Unit, ...]
     strata: tuple[StratumSpec, ...]
     closure: Mapping[int, tuple[int, ...]]              # tile unit -> the units proved with it (itself first)
+    per_tile: int | None = None                         # a tile's W_ref, when not `ncp-v2`'s
 
     def tile_work(self) -> int:
-        """One tile's W_ref: its cells' share of the call's (`schemes.ncp.NCP.wref`)."""
+        """One tile's W_ref: its cells' share of the call's (`schemes.ncp.NCP.wref`, or the scheme's own for NCP-FP8)."""
+        if self.per_tile is not None:
+            return self.per_tile
         s = self.shape
         return (3 * s.m * s.k * s.n + FORM_UNITS * s.m * s.k) * D * D // (s.m * s.n)
 
@@ -157,6 +160,44 @@ def layout(shape: Shape, kind: str = "shift24") -> Layout:
         work = tile.tile_work() * len(group) if role == "tile" else 0
         strata.append(StratumSpec(group[0].template, role, tuple(u.index for u in group), work))
     return Layout(shape, us, tuple(strata), closure)
+
+
+def fp8_layout(shape, sums: str = "f16", lengths=None) -> Layout:
+    """NCP-FP8's layout (`circuit.fp8`): each tile's closure is `ncp-v2`'s (its X and Y strips, its strip's digest, the
+    nodes on that strip's path to root_A, the key) with the call's domain unit, and the **pad cone**, every pad strip and
+    every node with no row beneath it.  root_A's tree is padded to a power of two, and a pad has no tile beneath it that a
+    wrong one could be charged to, so the pad cone is proved whenever a tile is.  A tile's W_ref is its cells' share of
+    `FP8IS.wref`, rounded up."""
+    from ..protocol import Shape as PShape
+    from . import fp8, fp8_reference
+    from .partition import circuit_units, fp8_circuit
+
+    lengths = fp8.Lengths(1, 1, 1) if lengths is None else lengths
+    us = circuit_units(fp8_circuit(shape, sums, lengths))
+    by_role: dict[str, list[Unit]] = {}
+    for u in us:
+        by_role.setdefault(u.role, []).append(u)
+    ups = fp8.upper_nodes(shape)
+    nodes = {p: u.index for p, u in zip(ups, by_role.get("node", []))}
+    real = shape.m // D
+    pad_cone = [u.index for u in by_role.get("pad", [])]
+    pad_cone += [nodes[(lv, j)] for lv, j in ups if j << (lv - 3) >= real]
+    one = [by_role["key"][0].index, by_role["domain"][0].index, *pad_cone]
+    digest = {u.where[0]: u.index for u in by_role["digest"]}
+    form_x = {u.where[0]: u.index for u in by_role["form_x"]}
+    form_y = {u.where[0]: u.index for u in by_role["form_y"]}
+    closure = {}
+    for t in by_role["tile"]:
+        rs, cs = t.where
+        path = [nodes[(lv, j)] for lv, j in ups if j == rs >> (lv - 3)]
+        closure[t.index] = (t.index, form_x[rs], form_y[cs], digest[rs], *path, *one)
+    wref = fp8_reference.scheme(sums).wref(PShape(shape.m, shape.k, shape.n))
+    per_tile = -(-wref * D * D // (shape.m * shape.n))
+    strata = []
+    for role in ("tile", "dequant"):
+        group = by_role[role]
+        strata.append(StratumSpec(group[0].template, role, tuple(u.index for u in group), per_tile * len(group) if role == "tile" else 0))
+    return Layout(shape, us, tuple(strata), closure, per_tile)
 
 
 @dataclass(frozen=True)
@@ -205,5 +246,5 @@ def unsound_work_bound(lay: Layout, sizes: Mapping[str, int], delta: float) -> f
     return profile(lay, sizes).harm_bound({s.name: float(lay.tile_work()) for s in lay.strata if s.role == "tile"}, delta)
 
 
-__all__ = ["DRAW_DOMAIN", "RECORD_K", "CountLaw", "Layout", "Plan", "StratumSpec", "TileLaw", "WorkLaw", "draw", "layout", "openings",
-           "profile", "record_k", "unsound_work_bound"]
+__all__ = ["DRAW_DOMAIN", "RECORD_K", "CountLaw", "Layout", "Plan", "StratumSpec", "TileLaw", "WorkLaw", "draw", "fp8_layout",
+           "layout", "openings", "profile", "record_k", "unsound_work_bound"]
