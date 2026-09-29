@@ -363,6 +363,19 @@ def test_work_draw_from_the_verifiers_own_program(tmp_path):
     strat = _lean_draw_obj([*flags[:4], "--stratified", "2"])
     assert [g["ok"] for g in check([other, strat])] == [True, True]
     assert [g["ok"] for g in check([other, strat], *flags, "--work", "2")] == [False, False]
+    # with a count budget C, T2 (no work, 4 of 10 units) draws what stratified:C draws from it; T0 and T1 are sized by work
+    for c, want in {"1": [2, 1, 1], "4": [2, 1, 2], "10": [2, 1, 4]}.items():
+        dc = _lean_draw_obj([*flags, "--work", "2", "--count", c])
+        assert dc["count"] == int(c) and [s["k"] for s in dc["strata"]] == want, c
+        assert dc["strata"][2]["k"] == _lean_draw_obj([*flags[:4], "--stratified", c])["strata"][2]["k"], c
+    dc = _lean_draw_obj([*flags, "--work", "2", "--count", "4"])
+    # without its count, or with another, the draw's T2 is not the rule's; count 5 gives the same k_s, and only the
+    # verifier's own law refuses it
+    cbad = [{k: v for k, v in dc.items() if k != "count"}, {**dc, "count": 0}, {**dc, "count": 11}, {**dc, "count": 5}]
+    assert [g["ok"] for g in check([dc, *cbad], *flags, "--work", "2", "--count", "4")] == [True] + [False] * 4
+    assert [g["ok"] for g in check([dc, cbad[3]])] == [True, True]
+    assert [g["ok"] for g in check([dc, d], *flags, "--work", "2")] == [False, True]
+    assert _lean_draw_obj([*flags, "--work", "2", "--count", "11"]) is None
     for k in ("0", "11"):
         assert _lean_draw_obj([*flags, "--work", k]) is None
     assert _lean_draw_obj([*table("w3.json", {"T0_v0": 3, "T1_v0": 1}), "--work", "2"]) is None
