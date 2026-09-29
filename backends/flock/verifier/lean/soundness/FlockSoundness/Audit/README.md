@@ -43,9 +43,10 @@ $\binom{n-|B|}{k}/\binom{n}{k}$; `subset_miss`, its count curve $\binom{n-K}{k}/
 k/n)^{|B|}$, so inclusion probabilities alone give a consumer a valid bound; `subset_minimax`, **uniform is
 optimal**: no law that proves $k$ units on average has a smaller count curve, at any $K$; `demo_count_590`, the demo's
 point (1,024 heads, 16 drawn): 590 or more wrong heads escape with probability at most $2^{-20}$, by exact arithmetic.
-`subset_exec_escape_le` (`Audit/DrawExec.lean`), **the running sampler**: over a uniform byte stream, the verifier's
-executable `Flock.Draw.subset k n` returns a draw missing $B$ with probability at most `subset_escape`'s
-$\binom{n-|B|}{k}/\binom{n}{k}$, through its rejection sampler, its `HashMap` Fisher–Yates and its `Array.qsort`.
+`subset_exec_escape_le` (`ExecDraw.lean`, beside the executable's other checks, since it imports `Flock.Draw`), **the
+running sampler**: over a uniform byte stream, the verifier's executable `Flock.Draw.subset k n` returns a draw missing
+$B$ with probability at most `subset_escape`'s $\binom{n-|B|}{k}/\binom{n}{k}$, through its rejection sampler, its
+`HashMap` Fisher–Yates and its `Array.qsort`.
 
 **Theorems, the stratified law** (`Audit/Stratified.lean`, the default draw law; `docs/sampling-strategies.md` §4):
 `Law.stratified σ k`, an independent uniform $k_s$-subset inside each stratum of $\sigma : \mathrm{Fin}\,n \to \mathrm{Fin}\,m$;
