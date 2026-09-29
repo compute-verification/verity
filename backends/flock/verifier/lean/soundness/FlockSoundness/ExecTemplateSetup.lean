@@ -74,6 +74,40 @@ theorem unit_lt {types : String → Option CircuitType} {ls : Array Flock.Layout
   rw [hu] at this
   exact absurd this (by decide)
 
+/-- **The unit's inputs are self rows with no Δ entry**: its own check (`checkLayout`, the unit's `Chk.rowIs`). -/
+theorem unit_inputs {types : String → Option CircuitType} {ls : Array Flock.Layout} {info : String → Option TableInfo}
+    {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D}
+    (hd : deriveChecked types ls info words unit = .ok done) :
+    ∀ x ∈ (done.getD unit default).inCols, (done.getD unit default).rows[x]? = some ([x], [x]) ∧
+      (done.getD unit default).delta.find? (·.1 == x) = none := by
+  have h := (deriveChecked_spec hd).1 unit (unit_lt hd)
+  cases hown : (ls.getD unit default).own with
+  | derive =>
+    cases ht : (ls.getD unit default).type.bind types with
+    | none => simp only [checkLayout, hown, ht, Bool.false_eq_true] at h
+    | some t =>
+      obtain ⟨-, -, hin, -, -, hins, -⟩ := checkLayout_spec h ht
+      intro x hx
+      obtain ⟨w, hw, rfl⟩ := Array.mem_iff_getElem.mp hx
+      have := hins w (by omega)
+      have hgd : (done.getD unit default).inCols.getD w 0 = (done.getD unit default).inCols[w] :=
+        getD_of_getElem? (Array.getElem?_eq_getElem hw)
+      rw [hgd] at this
+      simp only [Chk.rowIs, beq_self_eq_true, Bool.not_true, Bool.false_or, Bool.and_eq_true, beq_iff_eq,
+        Option.isNone_iff_eq_none] at this
+      exact ⟨this.1.1, this.2⟩
+  | gen sha n vb lo => exact absurd rfl (genLayout_spec h hown).1
+
+/-- **`UnitShape` with its input field discharged**: the unit's inputs carry no Δ entry by its own check. -/
+theorem unitShape_of {types : String → Option CircuitType} {ls : Array Flock.Layout} {info : String → Option TableInfo}
+    {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D}
+    (hd : deriveChecked types ls info words unit = .ok done)
+    (hcr : (done.getD unit default).rows.getD (done.getD unit default).const ([], []) =
+      ([(done.getD unit default).const], [(done.getD unit default).const]))
+    (ho : ∀ c ∈ order done (done.getD unit default), InUnit done (done.getD unit default) c)
+    (hr : (done.getD unit default).reads = #[]) : UnitShape done (done.getD unit default) :=
+  ⟨hcr, ho, fun x hx => (unit_inputs hd x hx).2, hr⟩
+
 /-! ## The rows' wires are into the rows' circuits -/
 
 theorem rowSlots_all (ports : Array Port) :
@@ -512,5 +546,252 @@ theorem setupH_blockFacts (ht : tags.typed = true)
     BlockFacts ((setupH_templateLayout ht h hr hder hrows).2.2.model regs) (Typed.wordsIn k.held) k.done
       (k.done.getD k.unit default) one (Typed.col st.c (HmRow.blockOf t) g) :=
   (setupH_templateLayout ht h hr hder hrows).2.2.blockFacts k.hd (unit_lt k.hd) U regs hg hone
+
+theorem count_flatMap_rows_pair {α : Type} (l : List α) (R S : α → ℕ) (y j : ℕ) :
+    (l.flatMap fun e => [(R e, R e), (R e, S e)]).count (y, j) =
+      ((l.filter fun e => R e = y).flatMap fun e => [R e, S e]).count j :=
+  count_flatMap_rows l R (fun e => [R e, S e]) y j
+
+
+theorem filter_range_eq (w : ℕ) : ∀ n, w < n → (List.range n).filter (fun i => decide (i = w)) = [w]
+  | 0, h => absurd h (Nat.not_lt_zero _)
+  | n + 1, h => by
+    rw [List.range_succ, List.filter_append]
+    by_cases hw : w < n
+    · rw [filter_range_eq w n hw]
+      simp [show n ≠ w by omega]
+    · have hwn : w = n := by omega
+      subst hwn
+      rw [List.filter_eq_nil_iff.2 (fun i hi => by simp at hi; simp; omega)]
+      simp
+
+
+/-! ## The unit's inputs copy their message bits -/
+
+namespace TemplateLayout
+
+variable {types : String → Option CircuitType} {ls : Array Flock.Layout} {info : String → Option TableInfo}
+  {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D} {st : Stmt} {tb : TypedBlock}
+
+set_option hygiene false in
+local notation "𝒖" => done.getD unit default
+
+/-- **The typed tail at an input column's position**: that input's copy entries, `(i, i)` and `(i, copySrc g w)`. -/
+theorem tail_count_input (hd : deriveChecked types ls info words unit = .ok done)
+    (T : TemplateLayout st tb done 𝒖) (U : UnitShape done 𝒖) {g w : ℕ} (hg : g < st.c.g) (hw : w < 𝒖.inCols.size)
+    (side : Bool) (j : ℕ) :
+    (Typed.tail st.c tb side).count (Typed.col st.c tb g 𝒖.inCols[w], j) =
+      [Typed.col st.c tb g 𝒖.inCols[w], Typed.copySrc st.c g w].count j := by
+  have hul := unit_lt hd
+  have hx : 𝒖.inCols[w] ∈ 𝒖.inCols := Array.getElem_mem hw
+  obtain ⟨hxU, -⟩ := inCols_row hd hul U hx
+  obtain ⟨hrow, hnone⟩ := unit_inputs hd _ hx
+  have hnd : 𝒖.inCols.toList.Nodup := by
+    have := (order_sound hd 0).1
+    unfold order at this
+    exact this.of_append_left
+  unfold Typed.tail
+  rw [count_flatMap_range _ _ hg (fun g' hg' hne => List.count_eq_zero.2 fun hm => by
+    obtain ⟨x, hx', -, he⟩ := T.tailVU_rows hd hul U hm
+    exact hne (T.col_inj hd hg' hg hx' hxU he.symm).1)]
+  unfold Typed.tailVU
+  rw [List.count_append, List.count_append]
+  have hA := count_flatMap_rows (List.range tb.inCols.size) (fun w' => Typed.col st.c tb g tb.inCols[w']!)
+    (fun w' => [Typed.col st.c tb g tb.inCols[w']!, Typed.copySrc st.c g w']) (Typed.col st.c tb g 𝒖.inCols[w]) j
+  have hfil : ((List.range tb.inCols.size).filter fun w' =>
+      Typed.col st.c tb g tb.inCols[w']! = Typed.col st.c tb g 𝒖.inCols[w]) = [w] := by
+    have hsz : tb.inCols.size = 𝒖.inCols.size := by rw [T.inCols]
+    rw [List.filter_congr (q := fun w' => decide (w' = w)) (fun w' hw' => by
+      rw [List.mem_range] at hw'
+      have hw'' : w' < 𝒖.inCols.size := by omega
+      have hget : tb.inCols[w']! = 𝒖.inCols[w'] := by
+        rw [getElem!_pos tb.inCols w' hw']; simp only [T.inCols]
+      rw [hget]
+      obtain ⟨hU', -⟩ := inCols_row hd hul U (Array.getElem_mem hw'')
+      refine decide_eq_decide.2 ⟨fun h => ?_, fun h => by subst h; rfl⟩
+      have := (T.col_inj hd hg hg hU' hxU h).2
+      have h2 : 𝒖.inCols.toList[w']'(by simpa using hw'') = 𝒖.inCols.toList[w]'(by simpa using hw) := by
+        simpa using this
+      exact (List.Nodup.getElem_inj_iff hnd).1 h2)]
+    rw [hsz]
+    exact filter_range_eq w _ hw
+  rw [count_flatMap_rows_pair]
+  beta_reduce
+  rw [hfil]
+  have hB := count_flatMap_rows2 tb.bind.toList (fun rs => Typed.col st.c tb g rs.1) (fun rs => rs.2.toList)
+    (Typed.col st.c tb g) (Typed.col st.c tb g 𝒖.inCols[w]) j
+  have hC := count_flatMap_rows3 tb.cross.toList (fun e => Typed.col st.c tb g e.1)
+    (fun e => (if side then e.2.1 else e.2.2).toList) (Typed.col st.c tb g) (Typed.col st.c tb g 𝒖.inCols[w]) j
+  rw [hB, hC]
+  rw [List.filter_congr (q := fun rs => decide (rs.1 = 𝒖.inCols[w])) (fun rs hrs => by
+      obtain ⟨-, -, -, h1, -⟩ := T.bind_row hd hul hrs
+      exact decide_eq_decide.2 ⟨fun h => (T.col_inj hd hg hg h1 hxU h).2, fun h => by rw [h]⟩),
+    List.filter_congr (l := tb.cross.toList) (q := fun e => decide (e.1 = 𝒖.inCols[w])) (fun e he => by
+      obtain ⟨h1, -⟩ := T.cross_row hd U he
+      exact decide_eq_decide.2 ⟨fun h => (T.col_inj hd hg hg (Or.inl h1) hxU h).2, fun h => by rw [h]⟩)]
+  rw [T.cross, crossOf_at, T.bind, bind_at _ _ (delta_nodup hd)]
+  have hb0 : bindCols (Typed.col st.c tb g) 𝒖 𝒖.inCols[w] = [] := by unfold bindCols; rw [hnone]
+  have hc0 : crossCols (Typed.col st.c tb g) 𝒖 side 𝒖.inCols[w] = [] := by
+    unfold crossCols
+    split
+    · rename_i hlt
+      rw [getD_of_getElem? hrow]
+      have hfil' : [𝒖.inCols[w]].filter (· ≥ 𝒖.size) = [] := by
+        rw [List.filter_eq_nil_iff]
+        intro x hx
+        simp only [List.mem_singleton] at hx
+        subst hx
+        simp only [ge_iff_le, decide_eq_true_eq, not_le]
+        exact hlt
+      cases side <;> simp only [Bool.false_eq_true, ↓reduceIte, hfil', List.map_nil]
+    · rfl
+  have hget : tb.inCols[w]! = 𝒖.inCols[w] := by
+    rw [getElem!_pos tb.inCols w (by rw [T.inCols]; exact hw)]; simp only [T.inCols]
+  rw [hb0, hc0, List.flatMap_singleton, hget]
+  simp
+
+/-- The block rows at a net slot's column, counted: the slot net's row there, placed; Δ's first-loop pairs there; and the
+typed tail there. -/
+theorem entry_raw (T : TemplateLayout st tb done 𝒖) {n sl off y : ℕ} {d : D} (hn : n < st.c.nets.size)
+    (hns : n ≠ st.c.shaNet) (hnh : n ≠ st.c.hmNet) (hat : AtSlot st.c n sl off y)
+    (hnet : ∃ nm, Typed.netOfD d nm = .ok (st.c.nets.getD n default).2) (j : ℕ) :
+    rangesEntry st (slotEntryA st) y j + deltaEntry st.da y j =
+        (((((Typed.rowsA d).getD off #[]).toList.map ((st.c.rangeOf n).slot sl + ·)).count j +
+          (constPairs st.c st.pin).count (y, j) + (Typed.tail st.c tb true).count (y, j) : ℕ) : ZMod 2) ∧
+      rangesEntry st (slotEntryB st) y j + deltaEntry st.db y j =
+        (((((Typed.rowsB d).getD off #[]).toList.map ((st.c.rangeOf n).slot sl + ·)).count j +
+          (constPairs st.c st.pin).count (y, j) + (Typed.tail st.c tb false).count (y, j) : ℕ) : ZMod 2) := by
+  obtain ⟨nm, hnet⟩ := hnet
+  obtain ⟨hm, hk, -, hsl⟩ := T.range hn
+  have h32 : (st.c.nets.getD n default).2.unitLog ≤ 32 := by
+    rw [← hsl]; exact le_trans (hat.slotLog_le T.bound hm) T.kLog
+  have hs := fun j' => netOfD_sparse hnet h32 off j'
+  obtain ⟨hla, hlb⟩ := rowsA_lt hnet off
+  obtain ⟨hda, hdb⟩ := T.delta_count (T.deltaIn_ne hn hns hnh hat) j
+  have hre := fun e => rangesEntry_at T.disj hm hk hat e j
+  refine ⟨?_, ?_⟩
+  · rw [hre, hda]
+    show (if _ then sparseEntry (st.c.nets.getD n default).2.a off _ else 0) + _ = _
+    rw [(hs _).1, count_slot _ (by rw [hsl]; exact hla) j]
+    push_cast; ring
+  · rw [hre, hdb]
+    show (if _ then sparseEntry (st.c.nets.getD n default).2.b off _ +
+      lookupEntry (st.c.nets.getD n default).2.lookup off _ else 0) + _ = _
+    rw [netOfD_lookup hnet, (hs _).2]
+    simp only [lookupEntry, add_zero]
+    rw [count_slot _ (by rw [hsl]; exact hlb) j]
+    push_cast; ring
+
+theorem copy_sum (y s j : ℕ) :
+    ((([y].count j + 0 + [y, s].count j : ℕ)) : ZMod 2) = (if j = s then 1 else 0) := by
+  have h : [y].count j + 0 + [y, s].count j = [s].count j + 2 * [y].count j := by
+    simp only [List.count_cons, List.count_nil]; ring
+  rw [h]
+  push_cast
+  rw [show (2 : ZMod 2) = 0 from rfl, zero_mul, add_zero]
+  by_cases hj : j = s
+  · subst hj; simp
+  · simp [hj, Ne.symm hj]
+
+/-- **An input of VU `g` copies its message bit**: the block rows at its position read exactly `copySrc g w`, in `A` and
+in `B` (#277's input copies, over the unit's self input rows). -/
+theorem input_rows (hd : deriveChecked types ls info words unit = .ok done) (T : TemplateLayout st tb done 𝒖)
+    (U : UnitShape done 𝒖) {g w : ℕ} (hg : g < st.c.g) (hw : w < 𝒖.inCols.size) (j : ℕ) :
+    rangesEntry st (slotEntryA st) (Typed.col st.c tb g 𝒖.inCols[w]) j +
+        deltaEntry st.da (Typed.col st.c tb g 𝒖.inCols[w]) j = (if j = Typed.copySrc st.c g w then 1 else 0) ∧
+      rangesEntry st (slotEntryB st) (Typed.col st.c tb g 𝒖.inCols[w]) j +
+        deltaEntry st.db (Typed.col st.c tb g 𝒖.inCols[w]) j = (if j = Typed.copySrc st.c g w then 1 else 0) := by
+  have hul := unit_lt hd
+  have hx : 𝒖.inCols[w] ∈ 𝒖.inCols := Array.getElem_mem hw
+  obtain ⟨hxU, hnc⟩ := inCols_row hd hul U hx
+  obtain ⟨hrow, hnone⟩ := unit_inputs hd _ hx
+  have htA := T.tail_count_input hd U hg hw true j
+  have htB := T.tail_count_input hd U hg hw false j
+  rcases T.at_inUnit hd hg hxU with ⟨hco, hat⟩ | ⟨i, hi, hu, hge, hlo, hhi, hat⟩
+  · obtain ⟨nm, hr⟩ := T.root
+    obtain ⟨-, -, -, -, hcst, -⟩ := Typed.netOfD_ok hr
+    obtain ⟨hEA, hEB⟩ := T.entry_raw T.unitNet (Ne.symm T.shaNet.2) (Ne.symm T.hmNet.2) hat ⟨nm, hr⟩ j
+    have hK := constPairs_count (pin := st.pin) T.disj T.slotLog T.fit (T.range T.unitNet).1 (T.range T.unitNet).2.1
+      hat j
+    have hK0 : (constPairs st.c st.pin).count (Typed.col st.c tb g 𝒖.inCols[w], j) = 0 := by
+      rw [hK, ite_eq_right (fun h => hnc.1 (h.1.trans hcst))]
+    have hgd : 𝒖.rows.getD 𝒖.inCols[w] ([], []) = ([𝒖.inCols[w]], [𝒖.inCols[w]]) := getD_of_getElem? hrow
+    have hl : ∀ side : Bool, ((if side then (𝒖.rows.getD 𝒖.inCols[w] ([], [])).1
+        else (𝒖.rows.getD 𝒖.inCols[w] ([], [])).2).filter (· < 𝒖.size)).map
+          ((st.c.rangeOf st.c.unitNet).slot g + ·) = [Typed.col st.c tb g 𝒖.inCols[w]] := by
+      intro side
+      have hfx : [𝒖.inCols[w]].filter (· < 𝒖.size) = [𝒖.inCols[w]] := by
+        rw [List.filter_singleton, decide_eq_true hco]; rfl
+      rw [hgd, hat.2.2]
+      cases side <;> simp only [Bool.false_eq_true, ↓reduceIte, hfx, List.map_cons, List.map_nil]
+    refine ⟨hEA.trans ?_, hEB.trans ?_⟩
+    · rw [rowsA_getD (d := Typed.rootOf 𝒖) hco, rootOf_rows, List.toList_toArray]
+      rw [show ((𝒖.rows.getD 𝒖.inCols[w] ([], [])).1.filter (· < 𝒖.size)) =
+        ((if true then (𝒖.rows.getD 𝒖.inCols[w] ([], [])).1 else (𝒖.rows.getD 𝒖.inCols[w] ([], [])).2).filter
+          (· < 𝒖.size)) from rfl, hl true, hK0, htA]
+      exact copy_sum _ _ _
+    · rw [rowsB_getD (d := Typed.rootOf 𝒖) hco, rootOf_rows, List.toList_toArray]
+      rw [show ((𝒖.rows.getD 𝒖.inCols[w] ([], [])).2.filter (· < 𝒖.size)) =
+        ((if false then (𝒖.rows.getD 𝒖.inCols[w] ([], [])).1 else (𝒖.rows.getD 𝒖.inCols[w] ([], [])).2).filter
+          (· < 𝒖.size)) from rfl, hl false, hK0, htB]
+      exact copy_sum _ _ _
+  · obtain ⟨-, hn, -, hns, hnh, -, nm, hnet⟩ := T.part i hi hu
+    obtain ⟨-, -, -, -, hcst, -⟩ := Typed.netOfD_ok hnet
+    have hpm : 𝒖.parts[i] ∈ 𝒖.parts := Array.getElem_mem hu
+    obtain ⟨hEA, hEB⟩ := T.entry_raw hn hns hnh hat ⟨nm, hnet⟩ j
+    have hK := constPairs_count (pin := st.pin) T.disj T.slotLog T.fit (T.range hn).1 (T.range hn).2.1 hat j
+    have hy := hat.2.2
+    generalize hb : 𝒖.parts[i].2 = b at hlo hhi hat hy hEA hEB hK
+    generalize hcal : done.getD 𝒖.parts[i].1 default = d at hhi hcst hnet hEA hEB
+    generalize hc' : 𝒖.inCols[w] - b = c' at hat hy hEA hEB hK
+    have hcd : c' < d.size := by omega
+    have hceq : b + c' = 𝒖.inCols[w] := by omega
+    obtain ⟨-, hK1, hO⟩ := part_rows hd hpm (c := c') (by rw [hcal]; exact hcd)
+    rw [hcal, hb, hceq] at hK1 hO
+    have hcc : c' ≠ d.const := fun h => by rw [hK1 h] at hnone; cases hnone
+    have hK0 : (constPairs st.c st.pin).count (Typed.col st.c tb g 𝒖.inCols[w], j) = 0 := by
+      rw [hK, ite_eq_right (fun h => hcc (h.1.trans hcst))]
+    rcases hO hcc with ⟨s, hfs, -⟩ | ⟨-, hrow'⟩
+    · rw [hfs] at hnone; cases hnone
+    · rw [hrow] at hrow'
+      have hsh := Option.some.inj hrow'
+      generalize hr' : d.rows.getD c' ([], []) = row' at hsh
+      obtain ⟨ra, rb⟩ := row'
+      simp only [shiftRow, Prod.mk.injEq] at hsh
+      obtain ⟨ha, hb'⟩ := hsh
+      obtain ⟨a0, rfl, ha0⟩ := List.map_eq_singleton_iff.1 ha.symm
+      obtain ⟨b0, rfl, hb0⟩ := List.map_eq_singleton_iff.1 hb'.symm
+      have ha0' : a0 = c' := by omega
+      have hb0' : b0 = c' := by omega
+      refine ⟨hEA.trans ?_, hEB.trans ?_⟩
+      · rw [rowsA_getD hcd, hr', hK0, htA]
+        rw [show ([a0].toArray.toList.map ((st.c.rangeOf tb.parts[i].1).slot
+          (g * st.c.perVu.getD tb.parts[i].1 0 + tb.parts[i].2.1) + ·)) = [Typed.col st.c tb g 𝒖.inCols[w]] by
+            rw [hy, ha0']; rfl]
+        exact copy_sum _ _ _
+      · rw [rowsB_getD hcd, hr', hK0, htB]
+        rw [show ([b0].toArray.toList.map ((st.c.rangeOf tb.parts[i].1).slot
+          (g * st.c.perVu.getD tb.parts[i].1 0 + tb.parts[i].2.1) + ·)) = [Typed.col st.c tb g 𝒖.inCols[w]] by
+            rw [hy, hb0']; rfl]
+        exact copy_sum _ _ _
+
+/-- **An input of VU `g` is a copy row of its message bit**, in the model of the accepted statement (when the message
+bit's position is in the block). A satisfying witness then carries the message bit there (`CopyRow.block_eq`): a table
+class's `copy`. -/
+theorem input_copy (hd : deriveChecked types ls info words unit = .ok done) (T : TemplateLayout st tb done 𝒖)
+    (U : UnitShape done 𝒖) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {g w : ℕ} (hg : g < st.c.g)
+    (hw : w < 𝒖.inCols.size) (hs : Typed.copySrc st.c g w < 2 ^ st.c.kLog) :
+    CopyRow (T.model regs)
+      ⟨Typed.col st.c tb g 𝒖.inCols[w], T.col_lt hd hg (inCols_row hd (unit_lt hd) U (Array.getElem_mem hw)).1⟩
+      ⟨Typed.copySrc st.c g w, hs⟩ := by
+  refine ⟨fun j => ?_, fun j => ?_⟩
+  · show rangesEntry st (slotEntryA st) _ j.val + deltaEntry st.da _ j.val = _
+    rw [(T.input_rows hd U hg hw j.val).1]
+    exact ite_fin_val j hs
+  · show rangesEntry st (slotEntryB st) _ j.val + deltaEntry st.db _ j.val = _
+    rw [(T.input_rows hd U hg hw j.val).2]
+    exact ite_fin_val j hs
+
+end TemplateLayout
 
 end FlockSoundness

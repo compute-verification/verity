@@ -272,9 +272,13 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
       root and the placed layouts' circuits.
     - Supporting lemmas: the class's unit is one of its layouts (`unit_lt`), and Δ's other flat rows are input bits of
       the rows' circuits' slots (`deltaIn_rows`).
+    - The unit's own check makes its inputs self rows with no Δ entry (`unit_inputs`), which discharges `UnitShape`'s
+      input field (`unitShape_of`).
+    - Each input of VU `g` copies its message bit: the block rows at its position read exactly `copySrc g w`
+      (`input_rows`). As a model `CopyRow` (`input_copy`), that is a table class's `copy`.
   - Still to prove:
     - `NetRows` for a flat typed class, whose unit net #307 builds from `derive`'s rows (`Typed.netOfD_ok`);
-    - `UnitShape` from `deriveChecked`, and the rows' circuits' place from `checkTyped`;
+    - `UnitShape`'s other three fields from `deriveChecked`, and the rows' circuits' place from `checkTyped`;
     - a template whose parts read a table.
 
 ### 1.6 Proved from the libraries, not assumed
