@@ -5,7 +5,6 @@ from __future__ import annotations
 import datetime as dt
 import subprocess
 import threading
-import time
 from pathlib import Path
 
 import pytest
@@ -375,16 +374,17 @@ def test_missing_citations_asks_the_remote_and_a_label_accounts_for_a_run(tmp_pa
 
     assert NS.missing_citations(cited, Down()) == (set(), "the store's remote did not answer for 6 cited ids (OSError)")
 
+    release = threading.Event()
+
     class Hangs:
         def list(self, prefix):
-            time.sleep(1)
+            release.wait()
             return []
 
         head = list
 
-    t0 = time.monotonic()
-    assert NS.missing_citations(cited, Hangs(), wait_s=0.1) == (set(), "6 cited ids not answered within 0.1 s")
-    assert time.monotonic() - t0 < 0.9
+    assert NS.missing_citations(cited, Hangs(), wait_s=0) == (set(), "6 cited ids not answered within 0 s")   # returns while they hang
+    release.set()
 
 
 def test_citation_warnings_name_each_note_and_how_to_publish(tmp_path, monkeypatch):
