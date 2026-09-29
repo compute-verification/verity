@@ -71,7 +71,7 @@ def _payload() -> bytes:
 def arm_script(seconds: int, *, first_idle_min: float, idle_min: float, root: str = ROOT, lease_dir: str = LEASE_DIR,
                extra_env: dict[str, str] | None = None) -> str:
     """The shell `arm` runs on the pod (stdin: a tar of lease.sh and pod_guard.sh).  It prints `LEASE <line>`, `LEASE_PID <pid>
-    <alive|dead>` and `GUARD_PID <pid> <alive|dead>`."""
+    <alive|dead>` and `GUARD_PID <pid> <alive|dead>` (`none` with `idle_min` 0: no idle guard, for a pool pod kept up idle)."""
     d, r = shlex.quote(lease_dir), shlex.quote(root)
     genv = {**guard_env(), "GUARD_TERMINAL": "done failed cancelled", "GUARD_FIRST_IDLE_MIN": f"{first_idle_min:g}",
             "GUARD_LEASE_FILE": f"{lease_dir}/lease", **(extra_env or {})}
@@ -91,11 +91,15 @@ else
   lease_pid=$!
   echo "$lease_pid" > {d}/lease.pid
 fi
-cd {r}/guard && setsid nohup env {env} bash {d}/pod_guard.sh daemon {r} {idle_min:g} >> {r}/guard/daemon.log 2>&1 < /dev/null &
-guard_pid=$!
+if [ {1 if idle_min > 0 else 0} = 1 ]; then
+  cd {r}/guard && setsid nohup env {env} bash {d}/pod_guard.sh daemon {r} {idle_min:g} >> {r}/guard/daemon.log 2>&1 < /dev/null &
+  guard_pid=$!
+else
+  guard_pid=none
+fi
 echo "LEASE $(cat {d}/lease)"
 echo "LEASE_PID $lease_pid $(kill -0 "$lease_pid" 2>/dev/null && echo alive || echo dead)"
-echo "GUARD_PID $guard_pid $(kill -0 "$guard_pid" 2>/dev/null && echo alive || echo dead)"
+echo "GUARD_PID $guard_pid $([ "$guard_pid" != none ] && kill -0 "$guard_pid" 2>/dev/null && echo alive || echo dead)"
 """
 
 
