@@ -205,7 +205,7 @@ def coinTreeCmd (path : String) : IO UInt32 := do
 names the statement's tags (`verity/flock-circuit` by default, or `verity/flock-netlist/v1`); `--comp` is the row leaf's
 pinned compression circuit; `J` (default 1) is the tables of every session (§16.12). A session with a work draw needs the
 verifier's own `--work K`, `--work-table`, `--program` and `--partition`, and one with a stratified draw its own
-`--stratified K`. Each DIR holds `session.json` and `<table>.rep<r>.bin` for each table and rep. The statement is set up
+`--stratified K`, `--program` and `--partition`. Each DIR holds `session.json` and `<table>.rep<r>.bin` for each table and rep. The statement is set up
 once; one verdict line per session, in order. Exit 0 iff every session is accepted. -/
 def verifyCmd (args : List String) : IO UInt32 := do
   let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--coins seed|os] [--session-tables J] --session DIR..."

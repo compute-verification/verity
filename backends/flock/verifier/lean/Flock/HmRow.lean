@@ -929,16 +929,20 @@ several, the session's units (the draw's, without one the population's) split in
 table `j` is `setupH`'s statement of part `j` as a subset draw of the population, under `Tags.tableIdentity`: every check
 `setupH` makes, it makes on each table. Every part comes from `draw`, the session's, never from a table's header. The
 session's Σ covers every table's; its `unitDraw` is `draw`. `work` is the verifier's own `K` and work table, which a work
-draw's law is held to, and `stratified` its own `K` for a stratified draw. -/
+draw's law is held to, and `stratified` its own `K`, at which a stratified draw's law is its own derivation. -/
 def Stmt.setupTables (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins) (count : Nat)
     (tables : List (String × ByteArray) := []) (draw : Option Json := none) (partition : Option Json := none)
     (program : Option ByteArray := none) (work : Option (Nat × Array (String × Nat)) := none)
     (stratified : Option Nat := none) : V (SessionSpec × Array Stmt) := do
-  -- a stratified draw's K sets every k_s, so it must be the verifier's own
+  -- a stratified draw's K and strata set every k_s, so its law must be the verifier's own derivation, never taken as stated
   if let some d := draw then
-    if let .ok (Draw.Law.stratified k _) := (Draw.UnitDraw.ofJson d).map (·.law) then
-      let some K := stratified | throw "U2: a stratified draw needs the verifier's own K (--stratified K)"
+    if let .ok (Draw.Law.stratified k strata) := (Draw.UnitDraw.ofJson d).map (·.law) then
+      let (some obj, some prog, some K) := (partition, program, stratified)
+        | throw "U2: a stratified draw needs the verifier's own K, program and partition (--stratified, --program, --partition)"
       if k != K then throw s!"U2: the draw's K is {k}, not the verifier's {K}"
+      let (law, _) ← HmRow.stratifiedLaw obj prog K
+      if law != Draw.Law.stratified k strata then
+        throw "U2: the draw's strata are not the verifier's own (its K, program and query)"
   -- a work draw's K and stated work set every k_s, so its law must be the verifier's own derivation, never taken as stated
   if let some d := draw then
     if let .ok (Draw.Law.work k strata) := (Draw.UnitDraw.ofJson d).map (·.law) then
