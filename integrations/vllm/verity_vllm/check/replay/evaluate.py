@@ -15,6 +15,7 @@ from verity_vllm.program.kernels.rows import EVALUATORS, ROWS
 from verity_vllm.check.replay.index import IDS_MEMBER, SAMPLER_OP, SEED_PARAM, ProgramIndex, const_word
 from verity_vllm.check.replay.opening import _ITEMSIZE, CommittedStore
 from verity_vllm.check.replay.compare import _interior_slice, _tp_member_alias, lifted_compare, padded_slot_enable
+from verity_vllm.check.replay.delegate import DELEGATES, Place
 
 
 #: [R16 fp8] a `weights` field's leaf width (its `Value<b>`) -> the word dtype the registered slice is read as (bf16 -> u16, e4m3 -> u8, f32 -> u32)
@@ -168,6 +169,9 @@ def _evaluate_row(pi: ProgramIndex, store: CommittedStore, weights: Callable[[st
         inputs.append(words)
         wslices.append(wsl)
         wrefs.append(wref if wsl is not None else None)
+    fn = DELEGATES.get(fam)
+    if fn is not None:                                                   # a protocol's replay answers for the row (`delegate`)
+        return fn(st, inputs, wslices, Place(rid, arrive + d["step"], d["op_path"], d["row"], store))
     return evaluate(fam, st, inputs, wslices, refs=wrefs)
 
 

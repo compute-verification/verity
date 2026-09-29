@@ -361,10 +361,8 @@ class _CircuitRun:
         if self.settings.transcript_dir:
             d = Path(self.settings.transcript_dir)
             d.mkdir(parents=True, exist_ok=True)
-            calls = [{"index": r.index, "shape": [r.shape.m, r.shape.k, r.shape.n], "forward": r.call.forward,
-                      "position": r.call.position, "weight": r.call.weight, "leaf": PC.leaf(r).hex()} for r in self.records]
-            (d / "pouw-ncp-v2-calls.json").write_text(json.dumps({"entry": self.entry, "commitment": self.commits, "calls": calls},
-                                                                 indent=1) + "\n")
+            (d / PC.CALLS_FILE).write_text(json.dumps({"entry": self.entry, "commitment": self.commits,
+                                                        "calls": [PC.record_json(r) for r in self.records]}) + "\n")
 
 
 def _executor(run: _Run | _CircuitRun, w: int):

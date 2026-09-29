@@ -109,6 +109,28 @@ def calls_root(salt: bytes, weights_root: bytes, records: Sequence[CallRecord]) 
     return commit_rows(tagged(CALLS_BINDING, salt, weights_root), -3, [leaf(r) for r in records]).commitment.root
 
 
+#: The file under the option's ``transcript_dir`` holding the commitment and every call's record (the prover's openings).
+CALLS_FILE = "pouw-ncp-v2-calls.json"
+
+
+def record_json(rec: CallRecord) -> dict[str, Any]:
+    c = rec.call
+    return {"index": rec.index, "scheme": rec.scheme, "leaf": leaf(rec).hex(),
+            "call": {"a": [list(r) for r in c.a], "s": list(c.s), "b": [list(r) for r in c.b], "t": list(c.t), "bias": list(c.bias),
+                     "salt": c.salt.hex(), "forward": c.forward, "layer": c.layer, "site": c.site, "weight": c.weight,
+                     "rowids": list(c.rowids), "colids": list(c.colids)},
+            "committed": [sorted(rec.committed), [rec.committed[g] for g in sorted(rec.committed)]], "y": [list(r) for r in rec.y]}
+
+
+def record_of(obj: Mapping[str, Any]) -> CallRecord:
+    c = obj["call"]
+    call = R.Call(tuple(tuple(r) for r in c["a"]), tuple(c["s"]), tuple(tuple(r) for r in c["b"]), tuple(c["t"]), tuple(c["bias"]),
+                  bytes.fromhex(c["salt"]), forward=c["forward"], layer=c["layer"], site=c["site"], weight=c["weight"],
+                  rowids=tuple(c["rowids"]), colids=tuple(c["colids"]))
+    gates, vals = obj["committed"]
+    return CallRecord(int(obj["index"]), obj["scheme"], call, dict(zip(gates, vals)), tuple(tuple(r) for r in obj["y"]))
+
+
 def lower(inst: dict[str, Any], sites: Mapping[str, str]) -> dict[str, Any]:
     """The Build's lowering of a model Program (an instance sequence) under ``pouw:<scheme>``: every row of a PoUW site
     (``sites``: op path prefix of a linear module -> scheme, e.g. ``model.layers.0.mlp.down_proj`` -> ``ncp-v2``), a
@@ -124,4 +146,5 @@ def lower(inst: dict[str, Any], sites: Mapping[str, str]) -> dict[str, Any]:
     return dict(inst, rows=rows)
 
 
-__all__ = ["CALLS_BINDING", "CallRecord", "Compiled", "ROW_FAMILY", "calls_root", "commit_call", "leaf", "lower", "program"]
+__all__ = ["CALLS_BINDING", "CALLS_FILE", "CallRecord", "Compiled", "ROW_FAMILY", "calls_root", "commit_call", "leaf", "lower", "program",
+           "record_json", "record_of"]
