@@ -81,6 +81,7 @@ import FlockSoundness.ExecTemplate
 import FlockSoundness.Types.Flat
 import FlockSoundness.Rope.Lowering
 import FlockSoundness.Types.Dag
+import FlockSoundness.Types.Parts
 import FlockSoundness.Types.Flatten
 import FlockSoundness.Compose
 import FlockSoundness.ComposeDag
@@ -95,6 +96,8 @@ import FlockSoundness.Audit.Extraction
 import FlockSoundness.Audit.FlockCompiled
 import FlockSoundness.Audit.FlockBatched
 import FlockSoundness.Audit.Stratified
+import FlockSoundness.Audit.Work
+import FlockSoundness.Audit.FlockWork
 import FlockSoundness.Audit.FlockBatchedAcc
 import FlockSoundness.Audit.FlockLink
 import FlockSoundness.Audit.FlockLinked
