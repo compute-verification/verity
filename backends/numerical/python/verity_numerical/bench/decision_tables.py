@@ -1,5 +1,6 @@
 """Regenerate every table of ``backends/numerical/reports/DECISION_DRAFT.md`` (and its appendix) from the overhead
-ledger (``backends/numerical/reports/ledger/*.jsonl``) and the per-lane reports.
+ledger (the frozen one in the evidence store, ``ledger.frozen_dir()``, unless ``--ledger-dir`` names another) and the
+per-lane reports.
 
     python -m verity_numerical.bench.decision_tables            # print every table
     python -m verity_numerical.bench.decision_tables --write    # refresh the tables in place between the markers
@@ -36,7 +37,7 @@ from verity_numerical.bench import latency, ledger
 
 __all__ = ["REPORTS", "TABLES", "main", "render", "render_all", "update_markdown"]
 
-REPORTS = ledger.DIR.parent
+REPORTS = Path(__file__).resolve().parents[3] / "reports"   # untracked (.gitignore): the drafts are working copies
 DRAFT = REPORTS / "DECISION_DRAFT.md"
 APPENDIX = REPORTS / "DECISION_DRAFT_appendix.md"
 LINK_GBPS = 10.0
@@ -47,7 +48,7 @@ NATIVE_PS = 9.85  # ps per K=1536 VU, contract.NATIVE_REFERENCE
 # --- ledger lookup ----------------------------------------------------------------------------------------------------
 
 
-def _entries(directory: Path) -> list[dict[str, Any]]:
+def _entries(directory: Path | None = None) -> list[dict[str, Any]]:
     return [e for rows in ledger.load_all(directory).values() for e in rows]
 
 
@@ -530,7 +531,7 @@ def _merge_order(lanes: Iterable[str]) -> list[str]:
 
     try:
         log = subprocess.run(["git", "log", "--first-parent", "--reverse", "--format=%s", "main"], check=True, capture_output=True,
-                             text=True, cwd=REPORTS).stdout
+                             text=True, cwd=Path(__file__).resolve().parent).stdout
     except (subprocess.CalledProcessError, FileNotFoundError):
         return []
     order: list[str] = []
@@ -577,11 +578,11 @@ TABLES = {
 }
 
 
-def render(name: str, directory: Path = ledger.DIR) -> str:
+def render(name: str, directory: Path | None = None) -> str:
     return TABLES[name](_entries(directory))
 
 
-def render_all(directory: Path = ledger.DIR) -> dict[str, str]:
+def render_all(directory: Path | None = None) -> dict[str, str]:
     entries = _entries(directory)
     return {name: fn(entries) for name, fn in TABLES.items()}
 
@@ -603,7 +604,7 @@ def update_markdown(text: str, tables: dict[str, str]) -> tuple[str, list[str]]:
 
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--ledger-dir", type=Path, default=ledger.DIR)
+    ap.add_argument("--ledger-dir", type=Path, default=None, help="default: the frozen ledger, from the evidence store")
     ap.add_argument("--write", action="store_true", help="refresh the tables inside the draft and the appendix")
     ap.add_argument("--check", action="store_true", help="exit 1 if the drafts' tables differ from the ledger")
     ap.add_argument("--table", choices=sorted(TABLES), help="print one table")

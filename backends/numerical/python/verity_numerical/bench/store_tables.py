@@ -30,7 +30,7 @@ import sys
 from collections.abc import Sequence
 from typing import Any
 
-from verity_numerical.bench import decision_tables as DT, ledger, tables
+from verity_numerical.bench import decision_tables as DT, tables
 from verity_numerical.bench.ledger_to_store import LEDGER_ROW_KIND
 from verity_numerical.bench.tables import RANK, _Label as Assertion
 
@@ -196,7 +196,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--store", default=None, metavar="ROOT", help="store root (default $RESEARCH_STORE or ~/.research/store)")
     ap.add_argument("--proof-class-by", default=None, metavar="PATTERN", help="policy: cap each row's class by the latest matching asserter, e.g. 'red-team-*'")
     ap.add_argument("--diff-ledger", action="store_true", help="compare with decision_tables' ledger-built like-for-like table")
-    ap.add_argument("--ledger-dir", default=ledger.DIR, help="ledger directory for --diff-ledger")
+    ap.add_argument("--ledger-dir", default=None, help="ledger directory for --diff-ledger (default: the frozen ledger, from the evidence store)")
     ns = ap.parse_args(argv)
     from research.store.local import LocalStore
 

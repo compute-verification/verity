@@ -54,7 +54,7 @@ GPU_PEAKS = {
 PROFILE = "first-campaign-target/2026-09-21"
 K_TARGET, B_TARGET, UNITS = 1536, 4096, 4096
 LAYER_WIDTHS = (137, 679, 673, 669, 647, 533)
-PREVIOUS_RUN = HERE.parent.parent.parent / "numerical" / "reports" / "tc_sumcheck_4090.json"
+PREVIOUS_RUN = "backends/numerical/reports/tc_sumcheck_4090.json"   # the campaign's frozen evidence (verity_numerical.bench.frozen)
 
 
 def pow2_pad(w: int) -> int:
@@ -307,10 +307,14 @@ def measure_launch(kern, repeats: int, device) -> dict:
 
 
 def previous_composition() -> dict | None:
-    """The torch limb-composition numbers of lane tc-sumcheck on the same GPU (its recorded run), for the comparison."""
-    if not PREVIOUS_RUN.exists():
+    """The torch limb-composition numbers of lane tc-sumcheck on the same GPU (its recorded run), for the comparison; None where
+    the evidence store cannot serve it (a pod has no store credentials)."""
+    try:
+        from verity_numerical.bench import frozen
+
+        doc = json.loads(frozen.path(PREVIOUS_RUN).read_text())
+    except Exception:  # noqa: BLE001
         return None
-    doc = json.loads(PREVIOUS_RUN.read_text())
     m = doc["measured"]
     rounds = {(r["t"], r["deg"]): r for r in m["rounds"]}
     per_round = {f"t{t}.deg{d}": {"graphed_seconds": r["seconds"].get("total_graphed"), "kernel_gpu_busy_seconds": (r.get("gpu_kernel_seconds") or {}).get("gpu_busy")}

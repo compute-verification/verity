@@ -1,13 +1,14 @@
 """anchor-a100 lane: the measured A100 column for every GPU kernel of the campaign, and A vs B re-priced on it.
 
     uv run --frozen --package verity-numerical python backends/shared/anchor_a100/report.py \
-        --results backends/shared/anchor_a100/results --out backends/numerical/reports/anchor_a100
+        [--results DIR] [--out backends/numerical/reports/anchor_a100]
 
-Inputs (fetched research runs, copied under ``--results/<kernel>/``): ``microbench/microbench.json``,
+Inputs (fetched research runs, under ``--results/<kernel>/``): ``microbench/microbench.json``,
 ``hash_gpu/bench.json``, ``encode/bench.json``, ``fused/bench.json``, ``fused_logup/fused_logup.json``,
 ``packed/bench.json``, ``tensor/bench.json``.  Missing inputs leave their section out (the report is regenerated after
-every kernel lands).  The recorded 4090 / H100 numbers are read from the lanes' own reports in
-``backends/numerical/reports`` and ``backends/*/results_*.json``.
+every kernel lands).  The recorded 4090 / H100 numbers are the lanes' own reports (``backends/numerical/reports/*.json``,
+``backends/*/results_*.json``).  All of them are the campaign's frozen evidence, read from the evidence store
+(``verity_numerical.bench.frozen``) at their former repository paths; ``--results`` defaults to the lane's recorded runs there.
 
 Floors on the A100 use the *measured* copy bandwidth (``microbench.json``) beside the datasheet 2,039 GB/s; tensor floors
 use the datasheet INT8 peak 312 T MAC/s (the cuBLAS ``_int_mm`` ceiling measured here is reported next to it).
@@ -25,7 +26,7 @@ import sys
 import time
 from pathlib import Path
 
-from verity_numerical.bench import contract
+from verity_numerical.bench import contract, frozen
 from verity_numerical.explore import tensor as tx
 from verity_numerical.security import accounting as acc
 
@@ -36,7 +37,7 @@ from encode import (
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
-REPORTS = REPO / "backends" / "numerical" / "reports"
+REPORTS = "backends/numerical/reports"
 A100 = "NVIDIA A100 SXM4 80GB"
 DATASHEET_BW = 2.039e12
 DATASHEET_INT8_MACS = 312.0e12
@@ -563,10 +564,10 @@ def reprice(meas: dict) -> tuple[str, dict]:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--results", type=Path, default=HERE / "results")
-    ap.add_argument("--out", type=Path, default=REPORTS / "anchor_a100")
+    ap.add_argument("--results", type=Path, default=None, help="default: the recorded runs, from the evidence store")
+    ap.add_argument("--out", type=Path, default=REPO / REPORTS / "anchor_a100")
     a = ap.parse_args(argv)
-    R = a.results
+    R = a.results or frozen.path("backends/shared/anchor_a100/results")
     runs = load(R / "runs.json") or {}
     mb = load(R / "microbench" / "microbench.json")
     bw_meas = mb["measured_peaks"]["hbm_copy_bytes_per_s"] if mb else DATASHEET_BW
@@ -595,7 +596,7 @@ def main(argv=None) -> int:
                f"(the 4090 got 0.253 of its peak), while BF16 reaches {s['bf16_flops_per_s_cublas_best']/1e12:.0f} TFLOPS ({s['bf16_flops_per_s_cublas_best']/312e12:.2f} of the peak "
                "that defines the native reference).  The native reference is therefore ~6% conservative on this card, not more."), ""]
     hash_a = load(R / "hash_gpu" / "bench.json")
-    hash_ref = load(REPO / "backends/shared/hash_gpu/results_r20260922-054241-b966.json")
+    hash_ref = load(frozen.path("backends/shared/hash_gpu/results_r20260922-054241-b966.json"))
     if hash_a and hash_ref:
         txt, d = sec_hash(hash_a, hash_ref, bw_meas)
         doc["kernels"] += d
@@ -617,7 +618,7 @@ def main(argv=None) -> int:
                f"**{best_b['hash']} at {best_b['a100_gb_per_s']:.0f} GB/s** ({best_b['a100_ms']:.1f} ms per B batch, {best_b['a100_ms']*1e3/4096:.1f} us/VU); the hash_gpu.md / encode_gpu.json "
                f"A100 rows (SHA-256 x2.02 = 901 GB/s) overstate the A100's hash rate by {901/best_b['a100_gb_per_s']:.1f}x."), ""]
     enc_a = load(R / "encode" / "bench.json")
-    enc_ref = load(REPO / "backends/direct/encode/results_r20260922-062016-6bdf.json")
+    enc_ref = load(frozen.path("backends/direct/encode/results_r20260922-062016-6bdf.json"))
     if enc_a and enc_ref:
         txt, d = sec_encode(enc_a, enc_ref, bw_meas)
         doc["kernels"] += d
@@ -633,7 +634,7 @@ def main(argv=None) -> int:
                + (f"The fused Triton INT8 matrix DFT takes {tr['a100_ms']:.0f} ms ({tr['ratio_ref_over_a100_time']:.2f}x the 4090, {tr['a100_fraction_of_int8_peak']:.3f} of the A100 INT8 peak): "
                   f"the SIMT NTT beats it by {tr['a100_ms']/bb['a100_ms']:.1f}x on the anchor too." if tr else ""), ""]
     fused_a = load(R / "fused" / "bench.json")
-    fused_ref = load(REPORTS / "fused_sumcheck_4090.json")
+    fused_ref = load(frozen.path(f"{REPORTS}/fused_sumcheck_4090.json"))
     if fused_a and fused_ref:
         txt, d = sec_fused(fused_a, fused_ref, bw_meas)
         doc["kernels"] += d
@@ -648,7 +649,7 @@ def main(argv=None) -> int:
                        f"{k21['a100_gb_per_s']:.0f} GB/s = {k21['fraction_of_floor']:.2f} of the measured-bandwidth floor).  The 130-round layer model: {Ls['graphed_seconds']*1e3:.2f} ms graphed "
                        f"({fused_ref['measured']['layers']['simt']['graphed_seconds']/Ls['graphed_seconds']:.2f}x the 4090's 6.20 ms)."), ""]
     logup_a = load(R / "fused_logup" / "fused_logup.json")
-    logup_ref = load(REPORTS / "fused_logup_4090.json")
+    logup_ref = load(frozen.path(f"{REPORTS}/fused_logup_4090.json"))
     if logup_a and logup_ref:
         txt, d = sec_logup(logup_a, logup_ref, bw_meas)
         doc["kernels"] += d
@@ -658,7 +659,7 @@ def main(argv=None) -> int:
             meas["logup_round_2p21_us"] = best["a100_us"]
             meas["logup_over_checker_round"] = best["a100_us"] / meas["fused_checker_round_2p21_us"]
     packed_a = load(R / "packed" / "bench.json")
-    packed_ref = load(REPORTS / "packed_sumcheck_h100.json")
+    packed_ref = load(frozen.path(f"{REPORTS}/packed_sumcheck_h100.json"))
     if packed_a and packed_ref:
         txt, d = sec_packed(packed_a, packed_ref)
         doc["kernels"] += d
@@ -675,11 +676,11 @@ def main(argv=None) -> int:
                f"(H100: k=3, 257 ms, 62.7 us/VU)." + (f"  At 2^26 k=3: {r26['a100_s']*1e3:.2f} ms vs 9.08 on the H100 ({r26['ratio_ref_over_a100_time']:.2f}x; bandwidth ratio 0.61, "
                                                      f"INT8-peak ratio 0.32)." if r26 else ""), ""]
     p2_a26 = load(R / "wave2_gkr" / "packed26" / "bench.json")
-    p2_h26 = load(REPO / "backends/gkr/packed/results/r20260922-064917-c293/bench.json")
+    p2_h26 = load(frozen.path("backends/gkr/packed/results/r20260922-064917-c293/bench.json"))
     p2_a28 = load(R / "wave2_gkr" / "packed28" / "bench.json")
-    p2_h28 = load(REPO / "backends/gkr/packed/results/r20260922-065412-73be/bench.json")
+    p2_h28 = load(frozen.path("backends/gkr/packed/results/r20260922-065412-73be/bench.json"))
     lg_a = load(R / "wave2_gkr" / "logup" / "logup_bench.json")
-    lg_h = load(REPO / "backends/gkr/packed/results/r20260922-073439-1f15/logup_bench.json")
+    lg_h = load(frozen.path("backends/gkr/packed/results/r20260922-073439-1f15/logup_bench.json"))
     if p2_a26 and p2_h26 and p2_a28 and p2_h28 and lg_a and lg_h:
         txt, d = sec_packed2(p2_a26, p2_h26, p2_a28, p2_h28, lg_a, lg_h)
         doc["kernels"] += d
@@ -700,17 +701,17 @@ def main(argv=None) -> int:
                 f"on the A100 vs 427 on the H100 ({l3['ratio_ref_over_a100_time']:.2f}x: a 1.7x departure from the bandwidth ratio) -- it is host-launch-bound (~1 ms x 351 rounds; the 20 smallest levels are "
                 f"{l3['a100_tail_levels_ms']:.0f} of the {l3['a100_s']*1e3:.0f} ms on both cards), so the GPU does not matter yet; the device work is ~0.1-0.2 s.  Fixing the launch loop (CUDA graphs per level) is worth ~2x on either card."), ""]
     tensor_a = load(R / "tensor" / "bench.json")
-    tensor_ref = load(REPORTS / "tc_sumcheck_4090.json")
+    tensor_ref = load(frozen.path(f"{REPORTS}/tc_sumcheck_4090.json"))
     if tensor_a and tensor_ref:
         txt, d = sec_tensor(tensor_a, tensor_ref)
         doc["kernels"] += d
         md += ["## 5. `backends/gkr/tensor` -- the original INT8-limb round (4090 run `r20260922-051730-15d4`)", "", txt, ""]
     commit_a = load(R / "wave2_b" / "commit.json")
-    commit_4 = load(REPO / "backends/direct/encode/results_commit_r20260922-064722-07c7.json")
+    commit_4 = load(frozen.path("backends/direct/encode/results_commit_r20260922-064722-07c7.json"))
     buckets_a = load(R / "wave2_b" / "buckets.json")
-    buckets_4 = load(REPO / "backends/direct/encode/results_buckets_r20260922-065537-279b.json")
+    buckets_4 = load(frozen.path("backends/direct/encode/results_buckets_r20260922-065537-279b.json"))
     lint_a = load(R / "wave2_b" / "lintest.json")
-    lint_4 = load(REPO / "backends/direct/encode/results_lintest_r20260922-073017-0924.json")
+    lint_4 = load(frozen.path("backends/direct/encode/results_lintest_r20260922-073017-0924.json"))
     if commit_a and commit_4 and buckets_a and buckets_4 and lint_a and lint_4:
         txt, d = sec_bwave(commit_a, commit_4, buckets_a, buckets_4, lint_a, lint_4, bw_meas)
         doc["kernels"] += d
@@ -728,8 +729,8 @@ def main(argv=None) -> int:
                 f"(0.4-0.7x) except the batch inversion ({inv['ratio_ref_over_a100_time']:.2f}x: HBM-bound) and the structured linear test at M=1 (1.21x lazy); M=3 lazy = "
                 + (f"{l3['a100_ms']:.1f} ms ({l3['ratio_ref_over_a100_time']:.2f}x)." if l3 else "")), ""]
     lig_a = {n: load(R / "ligero" / f"{n}.json") for n in ("ligero_unit_b4096", "ligero_vu_42", "ligero_vu_85")}
-    lig_ref = {"ligero_unit_b4096": load(REPO / "backends/direct/ligero/results/result_unit_b4096.json"), "ligero_vu_42": load(REPO / "backends/direct/ligero/results/result_vu_42.json"),
-               "ligero_vu_85": load(REPO / "backends/direct/ligero/results/result_vu_85.json")}
+    lig_ref = {"ligero_unit_b4096": load(frozen.path("backends/direct/ligero/results/result_unit_b4096.json")), "ligero_vu_42": load(frozen.path("backends/direct/ligero/results/result_vu_42.json")),
+               "ligero_vu_85": load(frozen.path("backends/direct/ligero/results/result_vu_85.json"))}
     if all(lig_a.values()) and all(lig_ref.values()):
         txt, d = sec_ligero(lig_a, lig_ref, bw_meas)
         doc["kernels"] += d
