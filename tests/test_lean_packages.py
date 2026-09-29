@@ -2,6 +2,7 @@
 `lean-audit` step reads), and all of them build with one toolchain and one Mathlib, so a bump is one change to all of them."""
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -40,3 +41,17 @@ def test_one_mathlib():
                 if dep["name"] == "mathlib":
                     revs[str(p.relative_to(ROOT))] = dep["rev"]
     assert revs and len(set(revs.values())) == 1, revs
+
+
+def test_every_record_merges_with_the_driver():
+    """`.gitattributes` sends every `lean-audit.json` to `tools/lean/merge.py`, and each record's `reads` digests are the ones
+    the driver recomputes from their definitions."""
+    spec = importlib.util.spec_from_file_location("lean_merge", ROOT / "tools" / "lean" / "merge.py")
+    merge = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(merge)
+    assert f"lean-audit.json merge={merge.NAME}" in (ROOT / ".gitattributes").read_text().splitlines()
+    stale = [f"{p.relative_to(ROOT)}: {m}" for p in lake_packages()
+             for m, g in json.loads((p / "lean-audit.json").read_text()).get("reads", {}).items()
+             if g["digest"] != merge.A.module_digest(merge.A.definitions(g))]
+    assert not stale, (f"reads digests that are not the SHA-256 of their definitions (`python tools/lean/merge.py --normalize "
+                       f"FILE` recomputes them): {stale}")
