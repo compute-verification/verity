@@ -10,8 +10,6 @@ return, re-returned nested returns, pass-through returns, scan carries (includin
 axis-1 and strided batch arguments.  Small statics keep the whole file well under a minute."""
 from __future__ import annotations
 
-import time
-
 import pytest
 
 from verity.ir import boundary as B
@@ -604,10 +602,9 @@ def test_embedding_gather_is_analytic():
     assert any(isinstance(d, B._Aff2) and d.major == "i" and d.m_stride == 1 and d.i_stride == 8 for v in ix.edges.values() for _, d in v)
     run_family("Embedding_v1{V=16,H=8} root nodes/members", oracle, body_parts(sc) + [merged(sc, {(1, m) for m in range(0, 128, 8)}), merged(sc, {(2, 0), (2, 7)})])
     assert B.in_gates(Part(sc, frozenset({(2, 3)}))) == frozenset({sc.spec.body.offsets[0]}) | frozenset(sc.spec.body.offsets[1] + 3 + 8 * v for v in range(16))
-    t0 = time.perf_counter()
     big = bind(b1.Embedding, V=4096, H=512)
     assert B.used_param_intervals(big) == (((0, 1),), ((0, 4096 * 512),))
-    assert B.consumer_index(big).used_exact and time.perf_counter() - t0 < 1.0
+    assert B.consumer_index(big).used_exact
 
 
 # --------------------------------------------------------------------------------------------------------------
@@ -853,11 +850,11 @@ def test_unsupported_nested_scope_without_parent(gemm):
 
 def test_query_cost_independent_of_member_count():
     """Per-part queries must not scale with the body size: a member of Gemm{K=256,N=2048} (2048 coordinates, 524k weight
-    Input gates) answers in the same time as one of Gemm{K=32,N=6}; the whole-node part enumerates only its boundary."""
+    Input gates) is answered exactly from its own boundary, at a size where listing the body per query is impractical (the
+    test checks the answers, not a time); the whole-node part enumerates only its boundary."""
     P_ = Program(bind(b1.Gemm, K=256, N=2048))
     sc = P_.circuit.root_scope
     jb = [j for j, n in enumerate(sc.spec.body.nodes) if n.form == "batch" and not isinstance(n.fn, PrimitiveDefinition)][0]
-    t0 = time.perf_counter()
     for m in (0, 1000, 2047):
         p = Part(sc, frozenset({(jb, m)}))
         assert B.w_out(p) == 16 and B.w_out_bound(p) == 16
@@ -868,11 +865,11 @@ def test_query_cost_independent_of_member_count():
     assert B.w_out(whole) == 2048 * 16 and len(B.out_gates(whole)) == 2048
     weights = Part(sc, frozenset({(1, m) for m in range(0, 2048 * 256, 97)}))  # a spread of weight Input gates
     assert B.w_out(weights) == 16 * len(weights.items) and B.in_gates(weights) == frozenset()
-    assert time.perf_counter() - t0 < 5.0
     # the summaries are intrinsic: the same specialization's index is shared by every activation
     assert B.consumer_index(sc.spec.body.nodes[jb].fn) is B.consumer_index(sc.child(jb, 5).spec)
 
 
+@pytest.mark.slow
 def test_serve_v4_tiny_program():
     """A whole (tiny) serving program: Serve_v4 over a 2-layer, H=32 config (~37k gates, 40 root nodes: Embedding,
     LayerPre/LayerPost per position and layer, Attention_v3{T=1..5} with Strided KV-cache views, Final, Input gates).

@@ -1,5 +1,5 @@
 From 3510b39a71afd587c8076fd3ddd18a1ccbd23818 Mon Sep 17 00:00:00 2001
-From: Daniel Reuter <dreuter14@gmail.com>
+From: Daniel Reuter <62895916+danielreuter@users.noreply.github.com>
 Date: Sat, 22 Aug 2026 20:25:49 -0700
 Subject: [PATCH 3/3] Add TC_DOT AIR chip, RiscvAir registration, artifacts,
  and soundness tests

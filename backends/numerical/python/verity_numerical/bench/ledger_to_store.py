@@ -2,6 +2,9 @@
 
     python -m verity_numerical.bench.ledger_to_store --store ROOT [--ledger-dir DIR] [--dry-run] [--json]
 
+The campaign's import is done (a dry run against the store adds nothing); the ledger itself is now in the store too
+(``ledger.frozen_dir()``, the default ``--ledger-dir``).
+
 The ledger is frozen history: one line per claim a lane made, written when it was made.  The store keeps every claim as an
 assertion with provenance (``research.store`` README §8) and never picks a winner; ``store_tables`` does.  For every row:
 
@@ -91,7 +94,8 @@ def ts_z(ts: str) -> str:
 
 
 def ledger_ref(path: Path, line: int) -> str:
-    """``backends/numerical/reports/ledger/<lane>.jsonl:<line>`` -- repo-relative when the file is under the repo."""
+    """``backends/numerical/reports/ledger/<lane>.jsonl:<line>`` -- relative to the tree holding that path (the repository, or
+    the frozen evidence fetched from the store), absolute otherwise."""
     p = Path(path).resolve()
     for anc in p.parents:
         if (anc / "backends" / "numerical" / "reports" / "ledger").is_dir() and p.is_relative_to(anc):
@@ -173,10 +177,10 @@ def _artifact_id(store: Any, row: dict[str, Any], *, dry_run: bool) -> str:
     return store.put_artifact(LEDGER_ROW_KIND, row)
 
 
-def import_ledger(store: Any, directory: Path = ledger.DIR, *, dry_run: bool = False, log: Callable[[str], None] | None = None) -> dict[str, Any]:
+def import_ledger(store: Any, directory: Path | None = None, *, dry_run: bool = False, log: Callable[[str], None] | None = None) -> dict[str, Any]:
     """Apply every row and every red-team assertion; return counts and the per-row targets."""
     say = log or (lambda s: None)
-    rows = _rows(directory)
+    rows = _rows(ledger.frozen_dir() if directory is None else directory)
     stats: dict[str, Any] = {"rows": len(rows), "on_attempts": 0, "on_artifacts": 0, "artifacts_new": 0, "labels_added": 0, "labels_skipped": 0,
                              "redteam_added": 0, "redteam_skipped": 0, "targets": {}, "dry_run": dry_run}
     targets: dict[str, _Target] = {}
@@ -243,7 +247,7 @@ def import_ledger(store: Any, directory: Path = ledger.DIR, *, dry_run: bool = F
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--store", default=None, metavar="ROOT", help="store root (default $RESEARCH_STORE or ~/.research/store)")
-    ap.add_argument("--ledger-dir", type=Path, default=ledger.DIR)
+    ap.add_argument("--ledger-dir", type=Path, default=None, help="default: the frozen ledger, from the evidence store")
     ap.add_argument("--dry-run", action="store_true", help="resolve targets and count what would be added; write nothing")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("-q", "--quiet", action="store_true", help="counts only")
