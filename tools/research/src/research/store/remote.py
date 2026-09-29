@@ -31,6 +31,7 @@ import threading
 import time
 import tomllib
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 from typing import Callable, Protocol, runtime_checkable
@@ -135,26 +136,42 @@ class FsRemote:
 
 class HttpRemote:
     """The public export read over anonymous HTTP(S): `<base_url>/<key>` for `manifests/<hex>.json` and `objects/sha256/<hex>`.
-    Redirects are followed (a front end may answer with a presigned URL). 404 and 403 read as absent, since a read-only front end
-    that refuses unknown keys may answer either; 5xx and network errors are retried. Nothing here is trusted: every caller checks
-    the bytes against the sha256 it asked for."""
+    Redirects are followed (the site answers `307` to the bucket, or to a presigned URL). 404 and 403 read as absent, since a
+    read-only front end that refuses unknown keys may answer either; 5xx and network errors are retried. `bypass` (a Vercel
+    preview's protection-bypass secret, `$RESEARCH_SITE_BYPASS`) is sent to the site only: its redirects are then followed by
+    hand, without the header. Nothing here is trusted: every caller checks the bytes against the sha256 it asked for."""
 
     RETRIES = 3
     TIMEOUT_S = 60.0
+    USER_AGENT = "research-store-fetch"
 
-    def __init__(self, base_url: str):
+    def __init__(self, base_url: str, bypass: str | None = None):
         self.base = base_url.rstrip("/")
+        self.bypass = bypass if bypass is not None else os.environ.get(BYPASS_ENV) or None
 
     def describe(self) -> str:
         return self.base
 
+    def _once(self, method: str, url: str):
+        if not self.bypass:
+            return urllib.request.urlopen(urllib.request.Request(url, method=method, headers={"User-Agent": self.USER_AGENT}),
+                                          timeout=self.TIMEOUT_S)
+        req = urllib.request.Request(url, method=method, headers={"User-Agent": self.USER_AGENT, BYPASS_HEADER: self.bypass})
+        try:
+            return _NO_REDIRECTS.open(req, timeout=self.TIMEOUT_S)
+        except urllib.error.HTTPError as e:
+            if e.code not in (301, 302, 303, 307, 308) or not e.headers.get("Location"):
+                raise
+            target = urllib.parse.urljoin(url, e.headers["Location"])     # the bucket: never send it the bypass secret
+            return urllib.request.urlopen(urllib.request.Request(target, method=method, headers={"User-Agent": self.USER_AGENT}),
+                                          timeout=self.TIMEOUT_S)
+
     def _open(self, method: str, key: str):
         if key.startswith("/") or ".." in key.split("/"):
             raise ValueError(f"bad remote key {key!r}")
-        req = urllib.request.Request(f"{self.base}/{key}", method=method, headers={"User-Agent": "research-store-fetch"})
         for attempt in range(self.RETRIES + 1):
             try:
-                return urllib.request.urlopen(req, timeout=self.TIMEOUT_S)
+                return self._once(method, f"{self.base}/{key}")
             except urllib.error.HTTPError as e:
                 if e.code in (403, 404):
                     raise KeyError(key) from None
@@ -192,32 +209,37 @@ class HttpRemote:
 
 
 class BrokerRemote:
-    """The public export written through the site's broker (the site holds the bucket's only key; a writer holds a revocable token).
-    `put(key, path)` for `objects/sha256/<hex>` or `manifests/<hex>.json`, whose bytes hash to `<hex>`:
+    """The store's public half written through the site's broker (contract v2, `internal/site-broker-contract.md`): the site holds
+    the bucket's only key, and a writer holds a revocable token. `put(key, path)`, for `objects/sha256/<hex>` or
+    `manifests/<hex>.json` whose bytes hash to `<hex>`:
 
-        POST <url>/uploads {sha256, bytes, kind}   Bearer token   -> {"status": "exists"} | {"status": "upload", "url", "headers"?}
-        PUT  <presigned url> (the bytes, `If-None-Match: *`)      -> staged at incoming/<hex>, straight to the bucket
-        POST <url>/uploads/<hex>/commit                           -> {"status": "created" | "exists"}; 409 when the staged bytes
-                                                                     do not hash to <hex> (the broker deletes them)
+        POST <url>/uploads {key, bytes}          -> 200 exists | 201 {upload_id, upload: {method, url, headers}, commit_url}
+        PUT  upload.url with exactly its headers -> 200 (anything else: start again)
+        POST commit_url {}                       -> 201 created | 200 exists | 409 mismatch (the staged copy is deleted)
 
-    and returns `push`'s results: `skipped` (the broker had it), `created`, `exists` (another writer committed it first), or
-    RemoteConflict on a 409.  `get` and `head` read `<url>/<key>` like `HttpRemote`; there is no `list`."""
+    It returns `push`'s results: `skipped` (the site had it), `created`, `exists` (another writer committed it first), or
+    RemoteConflict on `409 mismatch`. A `503`, a network error, a failed `PUT` or `404 not_staged` start again from the first
+    call, `RETRIES` times. The presigned URL is a secret while it lives, so no message ever names it. `get` and `head` read
+    `<url>/<key>` like `HttpRemote`; there is no `list`."""
 
     TIMEOUT_S = 120.0
+    RETRIES = 3
 
-    def __init__(self, url: str, token: str):
+    def __init__(self, url: str, token: str, bypass: str | None = None):
         self.base, self.token = url.rstrip("/"), token
-        self.reader = HttpRemote(self.base)
+        self.reader = HttpRemote(self.base, bypass)
+        self.bypass = self.reader.bypass
 
     def describe(self) -> str:
         return f"broker:{self.base}"
 
-    def _call(self, url: str, body: dict | None = None) -> tuple[int, dict]:
+    def _call(self, url: str, body: dict) -> tuple[int, dict]:
         import json  # noqa: PLC0415
 
-        req = urllib.request.Request(url, method="POST", data=json.dumps(body or {}).encode(),
-                                     headers={"Authorization": f"Bearer {self.token}", "Content-Type": "application/json",
-                                              "User-Agent": "research-store-export"})
+        headers = {"Authorization": f"Bearer {self.token}", "Content-Type": "application/json", "User-Agent": "research-store-export"}
+        if self.bypass:
+            headers[BYPASS_HEADER] = self.bypass
+        req = urllib.request.Request(url, method="POST", data=json.dumps(body).encode(), headers=headers)
         try:
             with urllib.request.urlopen(req, timeout=self.TIMEOUT_S) as r:
                 return r.status, json.loads(r.read() or b"{}")
@@ -226,38 +248,65 @@ class BrokerRemote:
                 doc = json.loads(e.read() or b"{}")
             except ValueError:
                 doc = {}
-            return e.code, doc
+            return e.code, doc if isinstance(doc, dict) else {}
+        except (urllib.error.URLError, TimeoutError, ConnectionError):
+            return 0, {}                                          # a network error: start again
+
+    @staticmethod
+    def _err(doc: dict) -> str:
+        e = doc.get("error")
+        if isinstance(e, dict):
+            return f"{e.get('code', '?')}: {e.get('message', '')}".strip()
+        return str(e or doc.get("status") or "")
+
+    def _upload(self, up: dict, data: bytes) -> bool:
+        """The PUT to the presigned URL (never with the bypass secret, never named in a message): True on 200."""
+        req = urllib.request.Request(up["url"], method=up.get("method", "PUT"), data=data, headers=dict(up.get("headers") or {}))
+        try:
+            with urllib.request.urlopen(req, timeout=self.TIMEOUT_S) as r:
+                return r.status == 200
+        except (urllib.error.URLError, TimeoutError, ConnectionError):
+            return False
 
     def put(self, key: str, path: Path) -> dict:
         path = Path(path)
         if key.startswith("objects/sha256/"):
-            kind, hex_ = "object", key[len("objects/sha256/"):]
+            hex_ = key[len("objects/sha256/"):]
         elif key.startswith("manifests/") and key.endswith(".json"):
-            kind, hex_ = "manifest", key[len("manifests/"):-len(".json")]
+            hex_ = key[len("manifests/"):-len(".json")]
         else:
             raise ValueError(f"the broker takes objects/sha256/<hex> and manifests/<hex>.json, not {key!r}")
         data = path.read_bytes()
         if hashlib.sha256(data).hexdigest() != hex_:
             raise ValueError(f"{path} does not hash to {key}")
         res = {"action": "created", "bytes": len(data), "etag": None, "md5": hashlib.md5(data, usedforsecurity=False).hexdigest()}
-        code, doc = self._call(f"{self.base}/uploads", {"sha256": hex_, "bytes": len(data), "kind": kind})
-        if code == 200 and doc.get("status") == "exists":
-            return {**res, "action": "skipped"}
-        if code != 200 or doc.get("status") != "upload" or not doc.get("url"):
-            raise RuntimeError(f"broker {self.base}/uploads answered {code} {doc.get('error') or doc.get('status') or ''} for {key}")
-        headers = {"If-None-Match": "*", "Content-Length": str(len(data)), **(doc.get("headers") or {})}
-        req = urllib.request.Request(doc["url"], method="PUT", data=data, headers=headers)
-        try:
-            urllib.request.urlopen(req, timeout=self.TIMEOUT_S).close()
-        except urllib.error.HTTPError as e:
-            if e.code != 412:                                     # 412: already staged by a concurrent writer; commit decides
-                raise RuntimeError(f"upload of {key} answered {e.code}") from None
-        code, doc = self._call(f"{self.base}/uploads/{hex_}/commit")
-        if code == 409:
-            raise RemoteConflict(f"{key}: the broker refused the upload: the staged bytes do not hash to it ({doc.get('error', 'mismatch')})")
-        if code != 200 or doc.get("status") not in ("created", "exists"):
-            raise RuntimeError(f"broker commit of {key} answered {code} {doc.get('error') or doc.get('status') or ''}")
-        return {**res, "action": doc["status"]}
+        why = ""
+        for attempt in range(self.RETRIES + 1):
+            if attempt:
+                time.sleep(0.5 * 2**attempt)
+            code, doc = self._call(f"{self.base}/uploads", {"key": key, "bytes": len(data)})
+            if code == 200 and doc.get("status") == "exists":
+                return {**res, "action": "skipped"}
+            if code in (0, 503):
+                why = f"uploads answered {code or 'no response'} {self._err(doc)}"
+                continue
+            if code != 201 or doc.get("status") != "upload" or not isinstance(doc.get("upload"), dict):
+                raise RuntimeError(f"broker {self.base}/uploads answered {code} {self._err(doc)} for {key}")
+            if not self._upload(doc["upload"], data):
+                why = "the upload to the presigned URL failed"
+                continue
+            commit = doc.get("commit_url") or f"{self.base}/uploads/{doc.get('upload_id')}/commit"
+            code, cdoc = self._call(commit, {})
+            if code in (200, 201) and cdoc.get("status") in ("created", "exists"):
+                return {**res, "action": cdoc["status"]}
+            err = cdoc.get("error") if isinstance(cdoc.get("error"), dict) else {}
+            if code == 409 and err.get("code") == "mismatch":
+                raise RemoteConflict(f"{key}: the broker refused the upload: its bytes hash to {cdoc.get('actual_sha256', '?')}")
+            if code in (0, 503) or (code == 404 and err.get("code") == "not_staged"):
+                why = f"commit answered {code or 'no response'} {self._err(cdoc)}"
+                continue
+            raise RuntimeError(f"broker commit of {key} answered {code} {self._err(cdoc)}")
+        raise RuntimeError(f"broker: {key} not written after {self.RETRIES + 1} tries ({why})")
 
     def get(self, key: str, path: Path) -> None:
         self.reader.get(key, path)
@@ -267,6 +316,15 @@ class BrokerRemote:
 
     def list(self, prefix: str) -> list[str]:
         raise NotImplementedError(f"{self.base} does not list: fetch by id")
+
+
+class _Refuse(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *a, **k):                              # noqa: ANN002, ANN003
+        return None
+
+
+_NO_REDIRECTS = urllib.request.build_opener(_Refuse)
+BYPASS_ENV, BYPASS_HEADER = "RESEARCH_SITE_BYPASS", "x-vercel-protection-bypass"
 
 
 def config_path(explicit: Path | str | None = None) -> Path:
