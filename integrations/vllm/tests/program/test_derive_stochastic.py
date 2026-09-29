@@ -168,6 +168,7 @@ def _derive_constant(C, LP, STEPS, S, **kw):
 
 
 @pytest.mark.parametrize("S", [32, 16])
+@pytest.mark.slow
 def test_a_single_request_takes_S_as_a_constant(S):
     """[single-request workloads] A single-request workload's S = SplitsFor_v1(1, num_SMs) is a constant of its Program: no `splits`
     parameter, every select `GumbelTopPTokenSelect_v2{V,S}` (its keep word as word gates at S), and its 6th operand a `Const32[S]`

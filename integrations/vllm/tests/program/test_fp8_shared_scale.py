@@ -77,6 +77,7 @@ def _bf16_class(b: int) -> str:
     return "nan" if e == 0xFF and m else "inf" if e == 0xFF else "zero" if not b & 0x7FFF else "subnormal" if e == 0 else "normal"
 
 
+@pytest.mark.slow
 def test_bit_equal_on_edge_vectors():
     K, N, G = 256, 256, 128
     old, new = _pair(K, N)
