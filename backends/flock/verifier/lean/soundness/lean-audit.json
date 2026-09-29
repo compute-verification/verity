@@ -9,7 +9,8 @@
   "Flock.DeriveAll",
   "Flock.DeriveCheck",
   "Flock.Layout",
-  "Flock.Library"
+  "Flock.Library",
+  "Flock.Draw"
  ],
  "compile_time": {
   "FlockSoundness.Refine.Walk": {
@@ -2693,6 +2694,34 @@
     "FlockSoundness.Types.Dag.layout_sound",
     "FlockSoundness.Types.Dag.unit_sound",
     "FlockSoundness.UProg.rowsL1"
+   ]
+  },
+  "Flock.Draw": {
+   "digest": "5ae7f5688bdbe28e07a075ab227134ba",
+   "definitions": {
+    "Flock.Draw.Stratum": "98414b252e95edf7",
+    "Flock.Draw.Stratum.k": "3530c56cddbc9434",
+    "Flock.Draw.Stratum.size": "22a2b9abbcbc6ff1",
+    "Flock.Draw.Stratum.unit": "f96c71d04f89b06a",
+    "Flock.Draw.Stratum.units": "2dfbfe66e0d3e794",
+    "Flock.Draw.beNat": "7ee7e983cabb432c",
+    "Flock.Draw.instInhabitedStratum": "97d22b03b0706a2c",
+    "Flock.Draw.instInhabitedStratum.default": "bc49cb2226042d7d",
+    "Flock.Draw.stratified": "60590b0149387390",
+    "Flock.Draw.stratumK": "65910952ca01dd3e",
+    "Flock.Draw.subset": "a961c5d84f7249e4",
+    "Flock.Draw.uniform": "b76e86e173ce1ee0",
+    "Flock.Draw.width": "da18247367fc9279",
+    "Flock.Draw.workK": "283e782e7003d67f"
+   },
+   "pins": [
+    "FlockSoundness.Audit.Law.countRule_eq_draw",
+    "FlockSoundness.Audit.Law.execStratified_escape_le",
+    "FlockSoundness.Audit.Law.stratified_exec_escape_le",
+    "FlockSoundness.Audit.Law.subset_exec_escape_le",
+    "FlockSoundness.Audit.Law.workRule_eq_draw",
+    "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec"
    ]
   },
   "Flock.Layout": {
