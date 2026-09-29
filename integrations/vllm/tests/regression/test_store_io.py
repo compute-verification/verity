@@ -62,3 +62,26 @@ def test_no_key_no_change(pod: Path, missing: str) -> None:
 def test_outside_a_run_no_change(pod: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("RESEARCH_RUN_ID")
     assert "RESEARCH_STORE_CONFIG" not in store_io._env()
+
+
+def test_inside_checks_steps_the_custody_dir_comes_by_name(pod: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """`check.py` drops RESEARCH_* from its steps and names the custody dir in CHECK_STORE_CUSTODY instead."""
+    monkeypatch.delenv("RESEARCH_RUN_ID")
+    monkeypatch.delenv("RESEARCH_RUN_DIR")
+    monkeypatch.setenv("CHECK_STORE_CUSTODY", str(pod))
+    env = store_io._env()
+    assert env["RESEARCH_STORE_CONFIG"] == str(pod / "store.toml") and env["AWS_SESSION_TOKEN"] == "token"
+
+
+def test_no_remote_is_unreachable_outside_the_gate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A laptop or dev pod with a local store and no remote: the store-backed tests skip."""
+    (tmp_path / "home").mkdir()
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "store"))
+    for k in ("RESEARCH_STORE_CONFIG", "RESEARCH_RUN_ID", "RESEARCH_RUN_DIR", "CHECK_STORE_CUSTODY", "R2_ENDPOINT", "R2_BUCKET",
+              "VERITY_STORE_REQUIRED"):
+        monkeypatch.delenv(k, raising=False)
+    assert store_io.reachable(need_remote=False)
+    assert not store_io.reachable()
+    monkeypatch.setenv("VERITY_STORE_REQUIRED", "1")
+    assert store_io.reachable(), "a recorded check never skips the store-backed tests"
