@@ -1,8 +1,10 @@
 """Talking to the Job queue: `HTTPClient` for the site, `ModelClient` for the reference model (tests, and trying a change).
 
-Both answer `call(method, path, body) -> (status, body)` and raise `Unreachable` when no answer came.  The token is read from
-`$JOBS_TOKEN`, else from `~/.research/jobs/token` (one line, mode 600); it is sent as `Authorization: Bearer`, never printed, and
-never put in an argv.  The site is `$JOBS_URL`, default the production control app.
+Both answer `call(method, path, body) -> (status, body)` and raise `Unreachable` when no answer came.  `research jobs` reads its
+token from `$JOBS_TOKEN` (the coordinator's, which adds jobs), else `~/.research/jobs/token`.  `research worker` reads only
+`$JOBS_WORKER_TOKEN`, else `~/.research/jobs/token` (the worker's `jobs:work` token, one line, mode 600), never `$JOBS_TOKEN`, so
+the two can live on one VM as the site spec places them.  A token is sent as `Authorization: Bearer`, never printed, and never put
+in an argv.  The site is `$JOBS_URL`, default the production control app.
 """
 from __future__ import annotations
 
@@ -17,7 +19,7 @@ from typing import Callable
 from . import model
 
 DEFAULT_URL = "https://website-docs-sage.vercel.app"
-URL_ENV, TOKEN_ENV = "JOBS_URL", "JOBS_TOKEN"
+URL_ENV, TOKEN_ENV, WORKER_TOKEN_ENV = "JOBS_URL", "JOBS_TOKEN", "JOBS_WORKER_TOKEN"
 TOKEN_FILE = Path.home() / ".research" / "jobs" / "token"
 TIMEOUT_S = 30
 
@@ -26,13 +28,14 @@ class Unreachable(Exception):
     """No answer from the Job queue (network, DNS, a 5xx); the caller tries again later."""
 
 
-def load_token(environ: dict[str, str] | None = None, path: Path | None = None) -> str:
+def load_token(environ: dict[str, str] | None = None, path: Path | None = None, var: str = TOKEN_ENV) -> str:
+    """The token in `$var`, else in the token file."""
     env = os.environ if environ is None else environ
-    if env.get(TOKEN_ENV):
-        return env[TOKEN_ENV].strip()
+    if env.get(var):
+        return env[var].strip()
     p = path or TOKEN_FILE
     if not p.exists():
-        raise SystemExit(f"research jobs: no token: set ${TOKEN_ENV} or write it to {p} (mode 600)")
+        raise SystemExit(f"research jobs: no token: set ${var} or write it to {p} (mode 600)")
     if p.stat().st_mode & (stat.S_IRWXG | stat.S_IRWXO):
         raise SystemExit(f"research jobs: {p} is readable by others; chmod 600 it")
     return p.read_text().strip()

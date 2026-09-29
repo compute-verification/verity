@@ -8,6 +8,7 @@ import stat
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -617,3 +618,51 @@ def test_audit_main_is_a_cold_check_of_mains_tip_with_every_path_changed(tmp_pat
     w.runner.runs[RUN] = D.Observation("failed", "check failed: failed rc=1")
     w.at(65)
     assert w.job(1).state == "failed"
+
+
+def test_the_worker_claims_with_its_own_token_even_beside_the_coordinators(tmp_path, monkeypatch):
+    """The site spec puts the coordinator's token in $JOBS_TOKEN and dispatch-rc's in ~/.research/jobs/token on one VM."""
+    from research import remote
+    from research.jobs import cli as J
+    from research.jobs.client import WORKER_TOKEN_ENV, load_token
+
+    token = tmp_path / "token"
+    token.write_text("dispatch-rc-secret\n")
+    token.chmod(0o600)
+    assert load_token({"JOBS_TOKEN": "coordinator-secret"}, token, var=WORKER_TOKEN_ENV) == "dispatch-rc-secret"
+    assert load_token({"JOBS_TOKEN": "coordinator-secret"}, token) == "coordinator-secret"
+    seen = {}
+    monkeypatch.setenv("JOBS_TOKEN", "coordinator-secret")
+    monkeypatch.delenv(WORKER_TOKEN_ENV, raising=False)
+    monkeypatch.setattr("research.jobs.client.TOKEN_FILE", token)
+    monkeypatch.setattr(remote, "resolve_machine", lambda name, project: {"name": name})
+    monkeypatch.setattr(J, "HTTPClient", lambda token=None: seen.setdefault("client", SimpleNamespace(url="u", token=token)))
+    monkeypatch.setattr(D.Dispatcher, "run", lambda self, once=False: None)
+    assert J.worker_main(["--dispatch", "--pods", "t1", "--workdir", str(tmp_path / "jobs")]) == 0
+    assert seen["client"].token == "dispatch-rc-secret"
+    assert "JOBS_WORKER_TOKEN" not in D.ResearchRunner(environ={"JOBS_WORKER_TOKEN": "x", "JOBS_TOKEN": "y"}).env()
+
+
+class Recording:
+    def __init__(self, inner):
+        self.inner, self.calls = inner, []
+
+    def call(self, method, path, body=None):
+        self.calls.append((method, path, body))
+        return self.inner.call(method, path, body)
+
+
+def test_a_complete_and_a_renewal_send_no_nulls():
+    """The site takes run_id and summary only as strings: a launch that failed completes without a run_id."""
+    w = World()
+    rec = Recording(w.worker)
+    w.d.client = rec
+    j = w.add()
+    w.at(0)
+    w.at(D.RENEW_S)
+    w.runner.launches["L1-1"] = (3, None, "research run --on t1: refused: pod is EXITED")
+    w.at(D.RENEW_S + 5)
+    renew = next(b for m, p, b in rec.calls if p.endswith("/renew"))
+    complete = next(b for m, p, b in rec.calls if p.endswith("/complete"))
+    assert renew["progress"] == {"pod": "t1", "step": "launching"} and "run_id" not in complete
+    assert isinstance(complete["summary"], str) and w.svc.attempts[0].outcome == "error" and w.job(j).attempts == 2

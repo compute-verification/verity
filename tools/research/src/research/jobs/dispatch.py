@@ -51,7 +51,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from ..pods.lease import LEASE_FILE, RUN_MARGIN_S
-from .client import TOKEN_ENV, Unreachable
+from .client import TOKEN_ENV, WORKER_TOKEN_ENV, Unreachable
 
 KINDS = ("merge-check", "lean-regen", "audit-main")
 CHECK_KINDS = ("merge-check", "audit-main")
@@ -245,8 +245,8 @@ class Dispatcher:
         if self.clock() - s.renewed < RENEW_S:
             return
         try:
-            status, body = self.client.call("POST", f"/api/jobs/{s.job['id']}/renew",
-                                            {"lease_token": s.lease, "progress": {"pod": s.pod, "run_id": s.run_id, "step": s.phase}})
+            progress = {k: v for k, v in (("pod", s.pod), ("run_id", s.run_id), ("step", s.phase)) if v}
+            status, body = self.client.call("POST", f"/api/jobs/{s.job['id']}/renew", {"lease_token": s.lease, "progress": progress})
         except Unreachable as e:
             self.log(f"{s.pod}: job {s.job['id']}: renew unreachable ({e}); the lease has {s.job.get('lease_s', 900)} s")
             return
@@ -301,8 +301,10 @@ class Dispatcher:
     def _report(self, s: Slot) -> None:
         outcome, summary = s.outcome
         try:
-            status, body = self.client.call("POST", f"/api/jobs/{s.job['id']}/complete",
-                                            {"lease_token": s.lease, "outcome": outcome, "run_id": s.run_id, "summary": summary[:2000]})
+            body = {"lease_token": s.lease, "outcome": outcome, "summary": str(summary)[:2000]}
+            if s.run_id:                                   # the site takes run_id only as a string
+                body["run_id"] = s.run_id
+            status, body = self.client.call("POST", f"/api/jobs/{s.job['id']}/complete", body)
         except Unreachable as e:
             self.log(f"{s.pod}: job {s.job['id']}: complete unreachable ({e}); trying again")
             return
@@ -409,6 +411,7 @@ class ResearchRunner:
     def env(self) -> dict:
         env = dict(os.environ if self.environ is None else self.environ)
         env.pop(TOKEN_ENV, None)
+        env.pop(WORKER_TOKEN_ENV, None)
         return env
 
     def local_problem(self) -> str | None:

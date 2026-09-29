@@ -11,7 +11,8 @@ reference).  The Job queue holds batch, unattended work on pods; an interactive 
     research jobs events [--after ID] [--kind K] [--subject S] [--limit N] [--json]
     research worker --dispatch --pods A,B,... [--name rc] [--kinds merge-check,lean-regen] [--once] [--workdir DIR] [--repo OWNER/NAME]
 
-`add` resolves --commit in the current checkout, and --base (for `merge_requires`) defaults to `main`'s tip on GitHub, read
+The token is `$JOBS_TOKEN` (the coordinator's) for `research jobs`, and `$JOBS_WORKER_TOKEN` or ~/.research/jobs/token (never
+`$JOBS_TOKEN`) for `research worker`.  `add` resolves --commit in the current checkout, and --base (for `merge_requires`) defaults to `main`'s tip on GitHub, read
 with `git ls-remote` rather than a local ref that may be stale.  --timeout-s defaults to the dispatcher's DEFAULT_TIMEOUT_S, and
 the job asks for a pod whose lease has that long left plus the lease margin (`min_lease_s`), so no check starts on a pod that
 ends before it can finish.  A check asks for AVX-512 only when the tree says so, as #440's preflight decides it: the change
@@ -22,7 +23,7 @@ The dedupe key makes adding idempotent, and a deliberate re-run names a new one 
 `merge-check:{commit}`.  A Lean regeneration's is `lean-regen:{digest of its inputs}`: the blobs, at that commit, of every tracked
 file the audit reads (each package and the packages it requires by path, less the Lake packages nested in them, and
 `tools/lean/`; `tools/check/lean_audit.py`'s inputs without check's own files).  So trains whose Lean inputs are the same share
-one regeneration, and the second add answers with the first job and its run.  The token is `$JOBS_TOKEN` or ~/.research/jobs/token; the site is `$JOBS_URL`.  Exit 1 when the
+one regeneration, and the second add answers with the first job and its run.  The site is `$JOBS_URL`.  Exit 1 when the
 Job queue refuses, 4 when it can't be reached.
 """
 from __future__ import annotations
@@ -38,7 +39,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from .client import HTTPClient, Unreachable
+from .client import WORKER_TOKEN_ENV, HTTPClient, Unreachable, load_token
 from .dispatch import AUDIT_TIMEOUT_S, DEFAULT_TIMEOUT_S, EMPTY_TREE, SHA, WORKDIR, Dispatcher, DispatchError, ResearchRunner, lease_needed
 from .dispatch import KINDS as DISPATCH_KINDS
 
@@ -309,7 +310,7 @@ def worker_main(argv: list[str]) -> int:
     except BlockingIOError:
         print(f"research worker: dispatch:{ns.name} already runs from {workdir}", file=sys.stderr)
         return 2
-    client = HTTPClient()
+    client = HTTPClient(token=load_token(var=WORKER_TOKEN_ENV))
     d = Dispatcher(client, ResearchRunner(repo=ns.repo, workdir=workdir), pods, name=ns.name, kinds=kinds,
                    state_path=workdir / f"dispatch-{ns.name}.json", out=lambda m: print(m, flush=True))
     d.log(f"{d.worker} on {client.url}: {', '.join(pods)}; {', '.join(kinds)}")
