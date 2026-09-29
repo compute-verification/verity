@@ -1,4 +1,5 @@
-"""Identifier syntax (README §1): `art:<sha256 hex>`, `drv:<sha256 hex>`, attempt id == run id (`r20260922-105905-2021`).
+"""Identifier syntax (README §1): `art:<sha256 hex>`, `drv:<sha256 hex>`, attempt id == run id (`r20260922-105905-2021`), and a
+pull request at one head, `pr:<number>@<40-hex commit>`, which only labels target (the merge queue's grants).
 
 The store checks syntax, never existence: a ref may name an artifact that lives only remotely.
 """
@@ -15,6 +16,7 @@ SHORT_ART_MIN_HEX = 8
 SHORT_ART_RE = re.compile(rf"^art:[0-9a-f]{{{SHORT_ART_MIN_HEX},63}}$")
 DRV_RE = re.compile(rf"^drv:{HEX64}$")
 RUN_RE = re.compile(r"^r\d{8}-\d{6}-[0-9a-f]{4}$")
+PR_RE = re.compile(r"^pr:[1-9]\d*@[0-9a-f]{40}$")
 SHA_RE = re.compile(rf"^{HEX64}$")
 
 
@@ -46,6 +48,10 @@ def is_run_id(s: Any) -> bool:
     return isinstance(s, str) and bool(RUN_RE.match(s))
 
 
+def is_pr(s: Any) -> bool:
+    return isinstance(s, str) and bool(PR_RE.match(s))
+
+
 def is_sha256(s: Any) -> bool:
     return isinstance(s, str) and bool(SHA_RE.match(s))
 
@@ -61,11 +67,13 @@ def target_dirname(target: str) -> str:
 
 
 def kind_of_id(s: str) -> str:
-    """'art' | 'drv' | 'run' | 'unknown'."""
+    """'art' | 'drv' | 'run' | 'pr' | 'unknown'."""
     if is_art(s):
         return "art"
     if is_drv(s):
         return "drv"
     if is_run_id(s):
         return "run"
+    if is_pr(s):
+        return "pr"
     return "unknown"

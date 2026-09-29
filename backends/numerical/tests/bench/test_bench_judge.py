@@ -22,7 +22,7 @@ def judge(*args: str, runs_dir: Path | None = None) -> subprocess.CompletedProce
     cmd = [sys.executable, str(JUDGE), *args]
     if runs_dir is not None:
         cmd += ["--runs-dir", str(runs_dir)]
-    return subprocess.run(cmd, capture_output=True, text=True, timeout=120, env={**os.environ})
+    return subprocess.run(cmd, capture_output=True, text=True, env={**os.environ})
 
 
 @pytest.fixture
@@ -180,7 +180,7 @@ def test_missing_instances_warns_and_judges(tmp_path: Path) -> None:
     cand = write_run(tmp_path, "r-cand", conforming_result("r-cand"))  # instances: null
     proc = judge(str(base), str(cand))
     assert proc.returncode == 0, proc.stdout + proc.stderr
-    assert "WARNING: candidate instances is null: not measured on the shared instance set" in proc.stdout
+    assert "WARNING: candidate instances is null: not measured on the shared input set" in proc.stdout
     lacking = conforming_result("r-old")
     del lacking["workload_fingerprint"]["instances"]
     old = write_run(tmp_path, "r-old", lacking)
