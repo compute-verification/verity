@@ -26,9 +26,14 @@ from verity_vllm.protocol_options import pouw_circuit as PC
 from verity_vllm.protocol_options import pouw_native as PN
 
 HERE = Path(__file__).with_name("pouw_cuda")
-SOURCES = ("ncp2.cuh", "ncp2_host.cpp")
+SOURCES = ("ncp2.cuh", "ncp2_fast.cuh", "ncp2_host.cpp")
 CFLAGS = ("-O2", "-std=c++17", "-ffp-contract=off", "-fno-fast-math", "-fno-exceptions", "-fno-rtti", "-fPIC", "-shared")
 CUDA_SOURCES = ("ncp2.cuh", "ncp2_kernels.cu")
+FUSED_SOURCES = ("ncp2.cuh", "ncp2_fast.cuh", "ncp2_fused.cu")
+#: `ncp2_fused`'s flags: hash (1), time the tile kernel (2), cache Y's leaves per weight (4), the tiles' low-byte leaf variant (8)
+HASH, TIME_TILES, CACHE_Y, LOWBYTE = 1, 2, 4, 8
+#: the low-byte variant's TurboSHAKE128 domain byte, and its layout: 128 low bytes (8 rows of 16) per 168-byte block
+LOWBYTE_DS, LOWBYTE_BLOCK, TS128_RATE = 0x0B, 128, 168
 #: no --use_fast_math: the dequantization's steps are IEEE binary32, with subnormals, and nothing is contracted
 NVCC_FLAGS = ("-O3", "-std=c++17", "-fmad=false", "-Xcompiler", "-fPIC", "-shared")
 HASHES = {"sha256": (0, 32), "sha512": (1, 64), "shake256": (2, None), "turboshake128": (3, None)}
@@ -80,17 +85,23 @@ def _build(tool: str, sources: Sequence[str], flags: Sequence[str], name: str) -
         tmp = lib.with_suffix(f".{os.getpid()}.tmp")
         subprocess.run([tool, *flags, "-o", str(tmp), str(HERE / sources[-1])], check=True)
         tmp.replace(lib)
-    dll = ctypes.CDLL(str(lib))
+    return ctypes.CDLL(str(lib))
+
+
+def _bind_hash_commit(dll: ctypes.CDLL) -> None:
     dll.ncp2_hash.argtypes = [ctypes.c_int, ctypes.c_int, _u8, _u64, ctypes.c_uint64, ctypes.c_uint64, _u8]
     dll.ncp2_hash.restype = dll.ncp2_commit.restype = ctypes.c_int
-    return dll
 
 
 @cache
 def host() -> ctypes.CDLL:
     """`ncp2_host.cpp` built for this CPU with the system C++ compiler."""
     dll = _build(_need(compiler(), "C++ compiler: set CXX"), SOURCES, CFLAGS, "libncp2_host.so")
-    dll.ncp2_commit.argtypes = _COMMIT
+    _bind_hash_commit(dll)
+    dll.ncp2_commit.argtypes = dll.ncp2_commit_fast.argtypes = _COMMIT
+    dll.ncp2_units_root_fast.argtypes = [_u8, ctypes.c_uint64, _u8]
+    dll.ncp2_tile_lowbyte.argtypes = [_u8, _u8, _u32, ctypes.c_int, ctypes.c_int, _u8]
+    dll.ncp2_commit_fast.restype = dll.ncp2_units_root_fast.restype = dll.ncp2_tile_lowbyte.restype = ctypes.c_int
     return dll
 
 
@@ -98,6 +109,7 @@ def host() -> ctypes.CDLL:
 def device() -> ctypes.CDLL:
     """`ncp2_kernels.cu` built with nvcc for ``$VERITY_POUW_CUDA_ARCH`` (default 89, the RTX 4090)."""
     dll = _build(_need(nvcc(), "nvcc: set NVCC"), CUDA_SOURCES, cuda_flags(), "libncp2_cuda.so")
+    _bind_hash_commit(dll)
     fp, dp = ctypes.POINTER(ctypes.c_float), ctypes.POINTER(ctypes.c_double)
     dll.ncp2_commit.argtypes = _COMMIT + [_u8, fp]
     dll.ncp2_ceiling.argtypes = [ctypes.c_int] * 4 + [dp]
@@ -108,8 +120,47 @@ def device() -> ctypes.CDLL:
     return dll
 
 
+@cache
+def fused() -> ctypes.CDLL:
+    """`ncp2_fused.cu`, the serving kernel, built with nvcc like `device`."""
+    dll = _build(_need(nvcc(), "nvcc: set NVCC"), FUSED_SOURCES, cuda_flags(), "libncp2_fused.so")
+    vp, fp = ctypes.c_void_p, ctypes.POINTER(ctypes.c_float)
+    dll.ncp2_fused.argtypes = ([ctypes.c_int] * 3 + [vp] * 5 + [_u8] + [ctypes.c_uint64] * 3 + [vp] * 4
+                               + [ctypes.c_int, ctypes.c_uint64, vp, vp, vp])
+    dll.ncp2_fused_host.argtypes = _COMMIT + [_u8, fp, ctypes.c_int]
+    dll.ncp2_fused_tile_ms.argtypes = [ctypes.POINTER(ctypes.c_double), ctypes.POINTER(ctypes.c_uint64)]
+    dll.ncp2_fused_reset_cache.argtypes = []
+    for f in (dll.ncp2_fused, dll.ncp2_fused_host, dll.ncp2_fused_tile_ms, dll.ncp2_fused_reset_cache):
+        f.restype = ctypes.c_int
+    return dll
+
+
 def _lib(on: str) -> ctypes.CDLL:
-    return {"host": host, "device": device}[on]()
+    return {"host": host, "fast": host, "device": device, "fused": fused}[on]()
+
+
+def lowbyte_leaf(words: np.ndarray) -> bytes:
+    """The low-byte variant's leaf over a tile's checkpoints (a tile unit's outputs, in order): TurboSHAKE128 with domain byte
+    `LOWBYTE_DS` over each word's low byte, `LOWBYTE_BLOCK` bytes then zeros to the rate per block, the last block unpadded."""
+    low = (np.asarray(words, np.uint32) & 0xFF).astype(np.uint8).tobytes()
+    blocks = [low[i:i + LOWBYTE_BLOCK] for i in range(0, len(low), LOWBYTE_BLOCK)]
+    msg = b"".join(bl + bytes(TS128_RATE - LOWBYTE_BLOCK) for bl in blocks[:-1]) + blocks[-1]
+    return hash_many("turboshake128", [msg], 32, LOWBYTE_DS)[0]
+
+
+def tile_lowbyte_host(xs: np.ndarray, ys: np.ndarray, c0: np.ndarray, steps: int) -> bytes:
+    """`tile_fused_lowbyte` on the CPU: X and Y strips (16 × 3k bytes each) and the strip's c₀."""
+    out = np.zeros(32, np.uint8)
+    host().ncp2_tile_lowbyte(np.ascontiguousarray(xs, np.uint8).reshape(-1), np.ascontiguousarray(ys, np.uint8).reshape(-1),
+                             np.ascontiguousarray(c0, np.uint32), xs.shape[1], steps, out)
+    return out.tobytes()
+
+
+def units_root_fast(leaves: bytes) -> bytes:
+    """`pouw_circuit.units_root` by the host build's fast node (`ncp2_fast.cuh` `units_node_fast`)."""
+    root = np.zeros(32, np.uint8)
+    host().ncp2_units_root_fast(np.frombuffer(leaves, np.uint8).copy(), len(leaves) // 32, root)
+    return root.tobytes()
 
 
 def hash_many(kind: str, msgs: Sequence[bytes], out: int | None = None, ds: int = 0x1F, on: str = "host") -> list[bytes]:
@@ -125,7 +176,7 @@ def hash_many(kind: str, msgs: Sequence[bytes], out: int | None = None, ds: int 
     return [res[i * width:(i + 1) * width].tobytes() for i in range(len(msgs))]
 
 
-def _commit(on: str, index: int, scheme: str, call: PC.Call) -> tuple[PC.CallRecord, float | None]:
+def _commit(on: str, index: int, scheme: str, call: PC.Call, flags: int = HASH) -> tuple[PC.CallRecord, float | None]:
     sh, nat = call.shape, PN.Native(call)
     b, t = call.b.rows(0, call.b.n)
     leaves = np.zeros(nat.population * 32, np.uint8)
@@ -135,28 +186,85 @@ def _commit(on: str, index: int, scheme: str, call: PC.Call) -> tuple[PC.CallRec
             np.frombuffer(call.salt, np.uint8).copy(), call.forward, call.position, call.weight, c(call.rowids, np.uint32),
             c(call.colids, np.uint32), c(nat.pi, np.uint32), c(nat.inv, np.uint32), leaves, y]
     root, ms = np.zeros(32, np.uint8), ctypes.c_float(0)
-    rc = _lib(on).ncp2_commit(*args, *((root, ctypes.byref(ms)) if on == "device" else ()))
+    lib = _lib(on)
+    if on == "fused":
+        rc = lib.ncp2_fused_host(*args, root, ctypes.byref(ms), flags)
+    else:
+        commit = lib.ncp2_commit_fast if on == "fast" else lib.ncp2_commit
+        rc = commit(*args, *((root, ctypes.byref(ms)) if on == "device" else ()))
     if rc:
         raise ValueError(f"{sh}: outside 16-row and 16-column strips" if rc == 1 else f"CUDA error {rc}")
     blob = leaves.tobytes()
-    rec = PC.CallRecord(index, scheme, call, PC.inputs_digest(call, PC.weight_digest(call.b)), blob,
-                        root.tobytes() if on == "device" else PC.units_root(blob), y, nat.outputs)
-    return rec, (ms.value if on == "device" else None)
+    root_b = root.tobytes() if on in ("device", "fused") else units_root_fast(blob) if on == "fast" else PC.units_root(blob)
+    rec = PC.CallRecord(index, scheme, call, PC.inputs_digest(call, PC.weight_digest(call.b)), blob, root_b, y, nat.outputs)
+    return rec, (ms.value if on in ("device", "fused") else None)
 
 
-def commit_call(index: int, scheme: str, call: PC.Call, on: str = "host") -> PC.CallRecord:
-    """One call committed by the ``on`` build of `ncp2.cuh`; the device's record carries the device's units root. Its record
-    opens units through `pouw_native`."""
-    return _commit(on, index, scheme, call)[0]
+def commit_call(index: int, scheme: str, call: PC.Call, on: str = "host", flags: int = HASH) -> PC.CallRecord:
+    """One call committed by the ``on`` build: "host" (`ncp2.cuh`), "fast" (`ncp2_fast.cuh`, the serving kernel's way, on the
+    CPU) or "device" (`ncp2_kernels.cu`); the fast and device records carry their own units root. A record opens units
+    through `pouw_native`. ``flags`` are the fused build's (`ncp2_fused`)."""
+    return _commit(on, index, scheme, call, flags)[0]
 
 
-def commit_call_timed(index: int, scheme: str, call: PC.Call) -> tuple[PC.CallRecord, float]:
-    """`commit_call` on the device, and its device time in ms from the first kernel to the root, the inputs resident."""
-    rec, ms = _commit("device", index, scheme, call)
+def commit_call_timed(index: int, scheme: str, call: PC.Call, on: str = "device", flags: int = HASH) -> tuple[PC.CallRecord, float]:
+    """`commit_call` on a device build ("device" or "fused"), and its device time in ms, the inputs resident."""
+    rec, ms = _commit(on, index, scheme, call, flags)
     return rec, float(ms)
 
 
+class FusedCommitter:
+    """Linear calls committed on the device by `ncp2_fused` from torch tensors on the current stream: A (m × k int8, m a
+    multiple of 16), the row scales' FP32 encodings (int32), the weight's int7 rows and scale encodings, the bias's BF16
+    encodings (int16), the row and column ids (int32); the served y comes back as BF16 encodings (int16, m × n).
+    ``flags`` are `HASH`, `TIME_TILES` and `CACHE_Y`."""
+
+    def __init__(self, salt: bytes, flags: int) -> None:
+        self.lib, self.salt, self.flags = fused(), np.frombuffer(salt, np.uint8).copy(), flags
+        self._perms: dict[int, tuple] = {}
+
+    def perm(self, k: int):
+        import torch
+        if k not in self._perms:
+            pi = np.asarray(ncp2.perm(PC.KIND, k), np.int64)
+            self._perms[k] = tuple(torch.tensor(v.astype(np.int32), device="cuda") for v in (pi, np.argsort(pi)))
+        return self._perms[k]
+
+    def __call__(self, a, s, b, t, bias, forward: int, position: int, weight: int, rowids, colids, root: np.ndarray | None = None):
+        import torch
+        (m, k), n = a.shape, b.shape[0]
+        y = torch.empty((m, n), dtype=torch.int16, device=a.device)
+        pi, inv = self.perm(k)
+        rc = self.lib.ncp2_fused(m, k, n, a.data_ptr(), s.data_ptr(), b.data_ptr(), t.data_ptr(), bias.data_ptr(), self.salt, forward,
+                                 position, weight, rowids.data_ptr(), colids.data_ptr(), pi.data_ptr(), inv.data_ptr(), self.flags,
+                                 torch.cuda.current_stream().cuda_stream, y.data_ptr(),
+                                 None if root is None else root.ctypes.data, None)
+        if rc:
+            raise RuntimeError(f"ncp2_fused {m}x{k}x{n}: " + ("outside the strips" if rc == 1 else f"CUDA error {rc}"))
+        return y
+
+    def tile_ms(self) -> tuple[float, int]:
+        """The tile kernel's summed time over the calls since the last read (`TIME_TILES`), and their count."""
+        total, calls = ctypes.c_double(0), ctypes.c_uint64(0)
+        self.lib.ncp2_fused_tile_ms(ctypes.byref(total), ctypes.byref(calls))
+        return total.value, calls.value
+
+
 # ---- the gate ------------------------------------------------------------------------------------------------------------
+
+def lowbyte_difference(ref: PC.CallRecord, got: PC.CallRecord) -> str | None:
+    """`first_difference` for a record committed with `LOWBYTE`: its tile leaves against `lowbyte_leaf` of ``ref``'s tile
+    words, every other leaf and the served y against ``ref``."""
+    nat = PN.Native(ref.call)
+    lo, hi = nat.base["tile"], nat.base["dequant"]
+    for u in range(lo, hi):
+        if got.leaf(u) != lowbyte_leaf(ref.opening(u)):
+            role, where = nat.locate(u)
+            return f"unit {u} ({role} {where}) has the wrong low-byte leaf"
+    patched = got.leaves[:32 * lo] + ref.leaves[32 * lo:32 * hi] + got.leaves[32 * hi:]
+    rec = PC.CallRecord(got.index, got.scheme, got.call, got.inputs, patched, PC.units_root(patched), got.y, got.opening)
+    return first_difference(ref, rec)
+
 
 def first_difference(ref: PC.CallRecord, got: PC.CallRecord) -> str | None:
     """None when ``got`` commits what ``ref`` does: its inputs' digest, every unit's leaf, the root and the served y. Otherwise
@@ -232,5 +340,28 @@ def gate_calls(seed: int = 0, qwen: bool = False) -> list[tuple[str, PC.Call]]:
     return out
 
 
-__all__ = ["BF16_EDGES", "CUDA_SOURCES", "F32_EDGES", "HASHES", "QWEN05", "SOURCES", "commit_call", "commit_call_timed", "compiler", "cuda_flags",
-           "device", "first_difference", "gate_calls", "hash_many", "host", "nvcc", "source_digest"]
+__all__ = [
+    "BF16_EDGES",
+    "CUDA_SOURCES",
+    "F32_EDGES",
+    "HASHES",
+    "QWEN05",
+    "SOURCES",
+    "FusedCommitter",
+    "commit_call",
+    "commit_call_timed",
+    "compiler",
+    "cuda_flags",
+    "device",
+    "first_difference",
+    "fused",
+    "gate_calls",
+    "hash_many",
+    "host",
+    "lowbyte_difference",
+    "lowbyte_leaf",
+    "nvcc",
+    "source_digest",
+    "tile_lowbyte_host",
+    "units_root_fast",
+]

@@ -122,3 +122,64 @@ def test_the_device_build_commits_what_pouw_native_commits(device, name, call):
     msgs = [bytes(range(n % 256)) * (1 + n // 256) for n in (0, 27, 64, 136, 168, 300)]
     for kind in PD.HASHES:
         assert PD.hash_many(kind, msgs, 48, on="device") == PD.hash_many(kind, msgs, 48)
+
+
+@pytest.mark.parametrize("name, call", PD.gate_calls(), ids=[n for n, _c in PD.gate_calls()])
+def test_the_serving_kernels_functions_on_the_cpu_commit_what_pouw_native_commits(name, call):
+    """`ncp2_fast.cuh`: the word-stream leaves, the tile hashed as it is computed, the aligned SHA-512 key, the block-wise
+    noise and the register units tree, run on the CPU."""
+    assert PD.first_difference(PN.commit_call(0, "ncp-v2", call), PD.commit_call(0, "ncp-v2", call, on="fast")) is None
+
+
+@pytest.mark.parametrize("count", [1, 2, 3, 5, 16, 17, 1000])
+def test_the_fast_units_tree_is_pouw_circuits(count):
+    leaves = np.random.default_rng(count).bytes(32 * count)
+    assert PD.units_root_fast(leaves) == PC.units_root(leaves)
+
+
+def test_the_low_byte_variant_hashes_each_checkpoints_low_byte(five_strips):
+    """The timed-only variant (cheap binding's row 4): the kernel's function on the CPU equals the reference built from
+    `pouw_native`'s own tile words."""
+    call, nat, _ref = five_strips
+    b, _t = nat.weight(0, call.shape.n)
+    y, c0 = nat.y_block(b, 0)
+    for rs, cs in ((0, 0), (2, 1), (4, 2)):
+        words = nat.outputs(nat.index("tile", rs, cs))
+        got = PD.tile_lowbyte_host(nat.x_strip(rs), y[16 * cs:16 * cs + 16], c0[16 * cs:16 * cs + 16], nat.steps)
+        assert got == PD.lowbyte_leaf(words)
+        assert got == PD.lowbyte_leaf(words ^ 0x100)                     # only the low byte is bound
+        assert got != PD.lowbyte_leaf(words ^ np.eye(1, len(words), 5, dtype=np.uint32).ravel())
+
+
+@pytest.fixture(scope="module")
+def fused():
+    if PD.nvcc() is None:
+        pytest.skip("needs nvcc")
+    return PD.fused()
+
+
+def test_the_fused_build_loads_and_without_a_gpu_reports_cuda_errors(fused, device):
+    if _has_gpu(device):
+        pytest.skip("a CUDA device is present")
+    with pytest.raises(ValueError, match="CUDA error"):
+        PD.commit_call(0, "ncp-v2", dict(PD.gate_calls())["five-strips"], on="fused")
+
+
+@pytest.mark.parametrize("name, call", PD.gate_calls(), ids=[n for n, _c in PD.gate_calls()])
+def test_the_fused_kernel_commits_what_pouw_native_commits(fused, device, name, call):
+    if not _has_gpu(device):
+        pytest.skip("needs a CUDA device")
+    ref = PN.commit_call(0, "ncp-v2", call)
+    assert PD.first_difference(ref, PD.commit_call(0, "ncp-v2", call, on="fused")) is None
+    assert PD.lowbyte_difference(ref, PD.commit_call(0, "ncp-v2", call, on="fused", flags=PD.HASH | PD.LOWBYTE)) is None
+
+
+def test_the_low_byte_check_names_a_wrong_leaf(five_strips):
+    _call, nat, ref = five_strips
+    u = nat.index("tile", 1, 1)
+    good = ref.leaves[:32 * nat.base["tile"]] + b"".join(PD.lowbyte_leaf(ref.opening(v)) for v in range(nat.base["tile"], nat.base["dequant"])) \
+        + ref.leaves[32 * nat.base["dequant"]:]
+    rec = lambda leaves: PC.CallRecord(0, "ncp-v2", ref.call, ref.inputs, leaves, PC.units_root(leaves), ref.y, ref.opening)
+    assert PD.lowbyte_difference(ref, rec(good)) is None
+    bad = good[:32 * u] + bytes(32) + good[32 * u + 32:]
+    assert PD.lowbyte_difference(ref, rec(bad)).startswith(f"unit {u} (tile (1, 1)) has the wrong low-byte leaf")
