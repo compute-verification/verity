@@ -287,27 +287,64 @@ def test_equal_calls_under_one_key_draw_different_tiles():
     from verity_pouw.circuit import traced_as
 
     call = F.call(64, 64, 64)
-    t, law = traced_as("ncp-v2-shift24", 64, 64, 64), PL.WorkLaw(4)
+    from verity_pouw.circuit.anchors import Ledger
+
+    t, law, window = traced_as("ncp-v2-shift24", 64, 64, 64), PL.WorkLaw(4), Ledger()
     tiles = lambda plan: [u for u in plan.drawn if t.layout().units[u].role == "tile"]  # noqa: E731
-    first = t.draw(_key(), law, _anchors(call))
-    assert tiles(first) == tiles(t.draw(_key(), law, _anchors(call)))
-    others = [tiles(t.draw(_key(), law, _anchors(call, **kw))) for kw in ({"forward": 4}, {"site": 3}, {"layer": 6})]
+    first = t.draw(_key(), law, _anchors(call), window)
+    assert tiles(first) == tiles(t.draw(_key(), law, _anchors(call), Ledger()))   # the same call, in its own window
+    others = [tiles(t.draw(_key(), law, _anchors(call, **kw), window))
+              for kw in ({"forward": 4}, {"site": 3}, {"layer": 6})]
     assert all(o != tiles(first) for o in others)
     assert [s.name for s in t.layout().strata] == list(dict.fromkeys(u.template for u in t.layout().units))
 
 
 def test_the_verifier_draws_over_its_own_layout():
-    """`Traced.draw(key, law, anchors)` takes no layout: it is `plan.draw` over `Traced.layout()` (X-SPC-97)."""
+    """`Traced.draw(key, law, anchors, ledger)` takes no layout: it is `plan.draw` over `Traced.layout()` (X-SPC-97)."""
     import inspect
 
     import circuit_fixtures as F
     from verity_pouw.circuit import Traced, traced_as
+    from verity_pouw.circuit.anchors import Ledger
 
     call = F.call(32, 64, 32)
     t = traced_as("ncp-v2-shift24", 32, 64, 32)
-    assert list(inspect.signature(Traced.draw).parameters) == ["self", "key", "law", "anchors"]
+    assert list(inspect.signature(Traced.draw).parameters) == ["self", "key", "law", "anchors", "ledger"]
     an = _anchors(call)
-    assert t.draw(_key(), PL.WorkLaw(2), an) == PL.draw(_key(), t.layout(), PL.WorkLaw(2), an.call_index)
+    assert t.draw(_key(), PL.WorkLaw(2), an, Ledger()) == PL.draw(_key(), t.layout(), PL.WorkLaw(2), an.call_index)
+
+
+def test_a_repeated_call_index_is_refused_before_any_draw(monkeypatch):
+    """The window pin takes a window's per-call draws as independent (M1), and each call's subsets are keyed by its index
+    under the one window key. So `Traced.draw` admits the call to the window's `Ledger` before it draws: a second call with
+    the same (forward, position), even of another weight id, is refused before `plan.draw` runs, and the ledger keeps only
+    the calls it admitted. A draw without a ledger is refused."""
+    import pytest
+
+    import circuit_fixtures as F
+    from verity_pouw.circuit import plan as plan_module
+    from verity_pouw.circuit import traced_as
+    from verity_pouw.circuit.anchors import Anchors, Ledger
+    from verity_pouw.protocol import DomainError
+
+    call = F.call(32, 64, 32)
+    t, law, window = traced_as("ncp-v2-shift24", 32, 64, 32), PL.WorkLaw(2), Ledger()
+    drawn, real = [], plan_module.draw
+    monkeypatch.setattr(plan_module, "draw", lambda key, lay, law, index: drawn.append(index) or real(key, lay, law, index))
+    first = _anchors(call)
+    t.draw(_key(), law, first, window)
+    twin = Anchors(call.salt, call.forward, call.layer, call.site, call.weight + 1, tuple(call.rowids), tuple(call.colids))
+    assert twin.call_index == first.call_index
+    for again in (first, twin):
+        with pytest.raises(DomainError, match="repeated"):
+            t.draw(_key(), law, again, window)
+    assert drawn == [first.call_index] and window.seen == {first.call_index}
+    t.draw(_key(), law, _anchors(call, forward=call.forward + 1), window)
+    assert len(drawn) == 2
+    for no_ledger in (None, set()):
+        with pytest.raises(TypeError):
+            t.draw(_key(), law, _anchors(call, forward=call.forward + 2), no_ledger)
+    assert len(drawn) == 2
 
 
 def test_the_call_s_y_is_linked_to_the_weight_program():
@@ -323,7 +360,9 @@ def test_the_call_s_y_is_linked_to_the_weight_program():
 
     call = F.call(32, 64, 32)
     t = traced_as("ncp-v2-shift24", 32, 64, 32)
-    plan = t.draw(_key(), PL.WorkLaw(2), _anchors(call))
+    from verity_pouw.circuit.anchors import Ledger
+
+    plan = t.draw(_key(), PL.WorkLaw(2), _anchors(call), Ledger())
     assert {cs for role, cs in plan.openings if role == "y"} == set(plan.proved_y) != set()
     weight_out = list(evaluate(ncp2.weight(call.shape), *call.weight_args()))
     args = call.args()
