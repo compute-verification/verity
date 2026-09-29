@@ -244,7 +244,10 @@ class JobService:
             for j in self.jobs.values():
                 if j.dedupe_key == key:
                     return 200, {"id": j.id, "created": False, "state": j.state}
-        not_before = self.seconds(body["not_before"]) if body.get("not_before") else now
+        try:
+            not_before = self.seconds(body["not_before"]) if body.get("not_before") is not None else now
+        except (TypeError, AttributeError, ValueError):
+            raise Refused(400, "not_before must be an ISO 8601 time") from None
         j = Job(len(self.jobs) + 1, kind, payload, prio, req, key, t.name, now, not_before, max_attempts, lease_s)
         self.jobs[j.id] = j
         self._event(now, "job.added", f"job:{j.id}", t.name, {"kind": kind, "dedupe_key": key})
