@@ -85,8 +85,10 @@ docstring) and sizes:
   - δ from 0 up to the p99.99 first-frame latency, in 16 steps;
   - ρ geometrically from the p0.01 production rate up to the p50 rate, in 8 values, each rounded down to a fraction
     with denominator at most 1024 (rounding down keeps a value lenient).
-- **The honest prover's choice:** per window, the met value with the least latency. Frames are in the Program's
-  canonical order, which is step-major for a batching engine, so a long session interleaves with later windows' frames.
+- **The honest prover's choice:** per window, the met value with the least total hand time over the window's frames
+  (their total shaping delay). Taking the least δ first would pick a slow ρ to save one bucket, and hold every later
+  frame for seconds. Frames are in the Program's canonical order, which is step-major for a batching engine, so a long
+  session interleaves with later windows' frames.
   While a window is chosen, later windows take their most eager value; that only lowers hand times, so a window found
   met stays met.
 - **The honest miss rate:** a window that no value meets is a miss, which is a violation. The target is 1e-4.
