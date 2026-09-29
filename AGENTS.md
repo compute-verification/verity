@@ -104,9 +104,9 @@ Dependency direction (README "Development"): `ir <- evaluation <- ml`,
 without a frontend or runtime integration.
 
 ~~~text
-uv sync --all-packages --all-extras       # the whole workspace, editable, with torch for the vLLM integration's CPU tests
+uv sync --all-packages --extra torch-cpu  # the whole workspace, editable, with CPU-only torch (GPU work: a member's `torch` extra)
 uv run tools/check/suites.py              # every test suite whose inputs changed since it last passed; --quick skips slow tests
-uv run python tools/check/check.py        # the check a merge requires; --record publishes it as an Attempt
+uv run --extra torch-cpu python tools/check/check.py  # the check a merge requires; --record publishes it as an Attempt
 ~~~
 
 ## Tests
