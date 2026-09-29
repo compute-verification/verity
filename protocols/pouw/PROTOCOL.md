@@ -259,9 +259,10 @@ at its floor, so a wholly wrong one is caught directly (`audit_work_whole_stratu
 **The draw is per call** (X-SPC-96). Each stratum's subset is drawn from the verifier's key under the call's index,
 (forward, position), with the template: the strata are the call's own, one per template, and the calls of a window drawn
 under one key draw independently, so K split across them keeps the window's (1 − ε)^K. The verifier draws through
-`Traced.draw(key, law, anchors)`, which takes no layout: it draws over `Traced.layout()` (X-SPC-97), and keys each
-stratum's subset with ("call", forward, position, "stratum", template), a context of the call's own, since a window's
-`Ledger` refuses a repeated call index.
+`Traced.draw(key, law, anchors, ledger)`, which takes no layout: it draws over `Traced.layout()` (X-SPC-97). It first
+admits the call to the window's `anchors.Ledger` (one per window key), which refuses a call index the window already
+holds before anything is drawn, and then keys each stratum's subset with ("call", forward, position, "stratum",
+template). So each call of a window draws under a context of its own, the product law the window pin takes as M1.
 
 **The call's Y is linked to the weight Program** (X-SPC-95). The call reads its weight's Y strips and c₀ as committed
 inputs, so at each drawn tile's column strip (the strips `Plan.proved_y` proves in the weight Program) the plan opens

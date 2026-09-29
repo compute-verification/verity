@@ -89,12 +89,18 @@ class Traced:
             raise DomainError(f"{fn.id} takes {len(names) - len(an)} committed inputs, not {len(data)}")
         return [list(d) for d in data] + [an[p] for p in names[len(data):]]
 
-    def draw(self, key, law, anchors):
+    def draw(self, key, law, anchors, ledger):
         """The verifier's plan for this call: `plan.draw` over its own layout (`layout`), never a given one (X-SPC-97), each
-        stratum's subset keyed by the call's index (``anchors.call_index``) with its template (X-SPC-96)."""
+        stratum's subset keyed by the call's index (``anchors.call_index``) with its template (X-SPC-96). The call is first
+        admitted to ``ledger``, the window's `anchors.Ledger` (one per window key), so a call index the window already
+        holds is refused before anything is drawn. Each call of a window then draws under a context of its own: the
+        product law root's window pin takes as M1."""
         from . import plan
+        from .anchors import Ledger
 
-        anchors.check(self.shape)
+        if not isinstance(ledger, Ledger):
+            raise TypeError("a call is drawn only once its window's Ledger admits it")
+        ledger.admit(anchors, self.shape)
         index = anchors.call_index
         return plan.draw(key, self.layout(), law, index if isinstance(index, tuple) else (index,))
 

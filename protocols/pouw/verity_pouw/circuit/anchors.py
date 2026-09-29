@@ -162,7 +162,8 @@ def _check(fn, args, want: dict[str, list[int]]) -> None:
 
 @dataclass
 class Ledger:
-    """A window's calls, as the verifier admits them: a repeated call index is refused."""
+    """A window's calls, as the verifier admits them: a repeated call index is refused. `Traced.draw` admits each call
+    here before it draws, so a window's calls draw under distinct contexts of its one key."""
 
     seen: set = field(default_factory=set)
 
