@@ -703,18 +703,34 @@ theorem placement (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {g :
       ite_slot_eq (v := slotEntryB st (.net ip) (st.c.nets.getD ip default).2.constPos) (Nat.two_pow_pos _) hoffW hcr.2.2]
     rfl
 
+/-- **The unit's inputs on one gate carry one value** at VU `g`'s stacked unit slots in block `o`, in every witness
+satisfying the accepted statement: the inputs that `inst` wires to one gate copy one source's position, or forced-zero
+rows (`UnitPlace.aliased`). -/
+def Aliased (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {C : Audit.Circuit} {n : ℕ}
+    {P : Audit.Partition C n} {u : Fin n} (inst : P.IsRowsUnit u ((unitRows st L.unit_parsed).stack st.c.upv))
+    (o : Fin (2 ^ (L.model regs).nbl)) {g : ℕ} (hg : g < st.c.g) : Prop :=
+  ∀ c c', inst.wire c = inst.wire c' → c.val < ((unitRows st L.unit_parsed).stack st.c.upv).nIn →
+    c'.val < ((unitRows st L.unit_parsed).stack st.c.upv).nIn → ∀ z : Model.Witness (L.model regs).m,
+      (L.model regs).Satisfies z →
+      (L.model regs).block z o (stackPlace (L.model regs) (unitRows st L.unit_parsed) st.c.upv
+        (fun u => st.c.unitRange.slot (g * st.c.upv + u)) (L.hb hg) c) =
+      (L.model regs).block z o (stackPlace (L.model regs) (unitRows st L.unit_parsed) st.c.upv
+        (fun u => st.c.unitRange.slot (g * st.c.upv + u)) (L.hb hg) c')
+
 /-- **A drawn unit's place in the accepted statement** (#145's `UnitPlace`, which `loweringSoundB_of_place` and #171's
 `_placed` forms take): VU `g`'s stacked unit slots in block `o`, given the unit's instance in the audit circuit
-(`inst`, the circuit side). -/
+(`inst`, the circuit side), whose inputs on one gate carry one value there (`hal`). -/
 noncomputable def unitPlace (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {C : Audit.Circuit} {n : ℕ}
     {P : Audit.Partition C n} {u : Fin n} (inst : P.IsRowsUnit u ((unitRows st L.unit_parsed).stack st.c.upv))
-    (o : Fin (2 ^ (L.model regs).nbl)) {g : ℕ} (hg : g < st.c.g) : UnitPlace P (L.model regs) u where
+    (o : Fin (2 ^ (L.model regs).nbl)) {g : ℕ} (hg : g < st.c.g) (hal : L.Aliased regs inst o hg) :
+    UnitPlace P (L.model regs) u where
   R := (unitRows st L.unit_parsed).stack st.c.upv
   inst := inst
   o := o
   col := stackPlace (L.model regs) (unitRows st L.unit_parsed) st.c.upv
     (fun u => st.c.unitRange.slot (g * st.c.upv + u)) (L.hb hg)
   placed := L.placement regs hg
+  aliased := hal
 
 end Layout
 

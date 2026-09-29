@@ -79,6 +79,7 @@ import FlockSoundness.ExecSetup
 import FlockSoundness.Types.Flat
 import FlockSoundness.Rope.Lowering
 import FlockSoundness.Types.Dag
+import FlockSoundness.Types.Flatten
 import FlockSoundness.Compose
 import FlockSoundness.ComposeDag
 import FlockSoundness.Game.Prob
@@ -96,4 +97,8 @@ import FlockSoundness.Audit.FlockBatchedAcc
 import FlockSoundness.Audit.FlockLink
 import FlockSoundness.Audit.FlockLinked
 import FlockSoundness.E2E
+import FlockSoundness.Types.Units
+import FlockSoundness.Types.Program
+import FlockSoundness.Types.ProgramPlaces
+import FlockSoundness.Types.ProgramE2E
 import FlockSoundness.ComposePlace
