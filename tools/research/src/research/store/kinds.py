@@ -26,6 +26,9 @@ KINDS: dict[str, str] = {
     "evidence/v1": "a lane's evidence behind a note, which never goes in the notes (scripts, logs, JSON, plots): payload file or tree; "
                    "meta {lane, what, run?}; the note cites the art: id",
     "fixture/v1": "a repo-replicated input (golden records, instances); payload file/tree",
+    "notes-evidence-index/v1": "where the bytes of files removed from the notes tree live: payload index.jsonl, one {path, sha256, "
+                               "bytes, art, member, kind} per file (`research data fetch <art> --path <member>` restores it); meta "
+                               "{notes_commit, files, bytes, note}",
     "frozen-evidence/v1": "files the frozen r20 campaign's code still reads (the overhead ledger, recorded run results), no longer tracked: "
                           "payload tree at their former repository paths; meta {name, from_commit, note}; pinned by "
                           "verity_numerical.bench.frozen.EVIDENCE",
