@@ -383,6 +383,36 @@ def test_a_tiles_closure_adds_the_domain_and_the_pad_cone():
     assert lay.tile_work() == -(-R.scheme().wref(PShape(80, 96, 16)) * fp8.D * fp8.D // (80 * 16))   # its cells' share
 
 
+def test_a_prover_s_layout_mapping_a_tile_to_its_x_strip_is_refused():
+    """As for `ncp-v2`, the verifier derives the layout from the shape and the declaration alone, never from a prover: a
+    layout mapping a tile to its X strip (C1) is refused, by the verifier's comparison and by `draw`; so is the layout
+    of another declaration's byte lengths."""
+    from dataclasses import replace
+
+    from verity.randomness import derive
+    from verity_pouw.circuit import plan as PL
+    from verity_pouw.circuit import traced_as
+
+    t = traced_as("fp8-is-h100-d3s-v0-f16", 48, 96, 16, index=3, weight=11)
+    lay = t.layout()
+    t.check_layout(lay)
+    tile = next(u.index for u in lay.units if u.role == "tile")
+    xs = lay.closure[tile][1]
+    assert lay.units[xs].role == "form_x"
+    headed_by_x = replace(lay, closure={**lay.closure, tile: (xs, *(u for u in lay.closure[tile] if u not in (tile, xs)))})
+    strata = tuple(replace(s, units=tuple(xs if u == tile else u for u in s.units)) if s.role == "tile" else s
+                   for s in lay.strata)
+    x_as_tile = replace(lay, strata=strata, closure={(xs if u == tile else u): c for u, c in lay.closure.items()})
+    key = derive(b"verifier-secret", PL.DRAW_DOMAIN, {"receipt": b"r"})
+    for bad in (headed_by_x, x_as_tile):
+        with pytest.raises(DomainError):
+            t.check_layout(bad)
+        with pytest.raises(DomainError):
+            PL.draw(key, bad, PL.WorkLaw())
+    with pytest.raises(DomainError):
+        traced_as("fp8-is-h100-d3s-v0-f16", 48, 96, 16, index=300, weight=11).check_layout(lay)
+
+
 @pytest.mark.parametrize("shape", [(16, 96, 16), (48, 96, 32), (80, 96, 16)])
 def test_the_record_work_law_draws_every_fp8_layout(shape):
     """`WorkLaw()`, K = 27,713, the window's budget: alone, a call is capped at its units rather than raising (X-SPC-83 on

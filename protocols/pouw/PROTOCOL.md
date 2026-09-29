@@ -477,7 +477,9 @@ Z, 8,192 bits per tile, and only the dequantization units (16 bits each) are wid
 the strip's path, the key) plus the domain unit and the **pad cone**, every pad strip and every node with no row beneath
 it: a pad has no tile beneath it that a wrong one could be charged to. Its Y strip's `NcpFp8Amp`, in the weight's
 Program, is proved once per plan (`Plan.proved_y`), and opens the strip's weight rows. A tile's W_ref is its cells' share of
-`FP8IS.wref`. `WorkLaw()` draws every layout: K is a window's, and a call alone is capped at its units (X-SPC-83).
+`FP8IS.wref`. `WorkLaw()` draws every layout: K is a window's, and a call alone is capped at its units (X-SPC-83). The layout is
+the verifier's, as `ncp-v2`'s: derived from the shape and the declaration's lengths, and any other refused
+(`Traced.check_layout`).
 
 ## Not here yet
 
