@@ -359,7 +359,7 @@ supplies bytes only; the manifest must still be resolvable locally or remotely. 
 cached into `objects/`. A repo fixture is registered bare (`fixture/v1`, `meta {}`, `refs {}`), so its id is its bytes (plus the
 bare file name); when the bytes change on purpose, `research data refresh-fixtures [--preserve]` re-registers it and moves the old
 id into the map's `previous` block (`{"previous": {"art:<new>": ["art:<old>", ...]}}`), which readers skip: `replica_map()` takes
-`art:` keys only. `research data pull --from MACHINE RUN`
+`art:` keys only. A registry entry git does not track is fetched instead (§7.3). `research data pull --from MACHINE RUN`
 copies an attempt manifest plus its outputs' manifests and blobs from a machine's local store over ssh (uses
 `research.remote` helpers) — the same-host tier of the planner until R2 is configured.
 
@@ -385,6 +385,17 @@ copies an attempt manifest plus its outputs' manifests and blobs from a machine'
   and compares it with this one on content: ids and manifest bytes, attempt documents, label content hashes, every verified replica
   row confirmed by HEAD (manifest + blobs, sizes), and with `--render` the `bench.tables` markdown. Every difference gets a cause
   (`pending here`, `not pulled`, `uploaded during the run`); anything else fails (exit 1). Read-only for the store under test.
+
+### 7.3 Fetched fixtures and the public export
+
+- A registry entry is *tracked* (git holds it; a tracked file is at most 256 KiB) or *fetched* (its path is gitignored).
+- `fetchset.py` fetches any set of ids, `--jobs` at a time: local objects, else the private remote when reachable, else the public
+  export (`HttpRemote`: `GET <url>/manifests/<hex>.json`, `<url>/objects/sha256/<hex>`). A manifest must hash to its id and a blob
+  to its sha256 and size, or the next source is tried. The registry is one caller; a snapshot's members can be another.
+- `fetch-fixtures` makes fetched entries present and exact (a tree's directory holds its files and nothing else), never writes a
+  tracked file, and is offline once fetched. `suites.py` runs it first and keys each suite on the ids under its inputs.
+- `export` copies every entry and `previous` id to the export bucket (`remote.load_export`; never the store's own), blobs first.
+  A superseded id the store lacks comes from git history; one neither holds is a warning. `--verify-url` is the end-to-end test.
 
 ## 8. Labels
 
@@ -473,6 +484,11 @@ research data refresh-fixtures [--preserve] [--dry-run] [--repo DIR] [--json]
                                               re-register every fixtures/artifacts.json entry whose bytes changed (§7): put as a bare
                                               fixture/v1 under the new id (--preserve pushes it), rewrite the entry, keep the old id under
                                               the map's `previous` block; prints old -> new; idempotent; exit 1 on a missing path or conflict
+research data fetch-fixtures [PATH ...] [--repo DIR] [--check] [--stubs] [--public-url URL] [--no-private] [--jobs N] [--json]
+                                              make the fetched registry entries under PATH present and exact (§7.3); exit 1 if any is missing
+research data export [--repo DIR] [--dry-run] [--no-previous] [--blobs FILE] [--jobs N] [--json]
+                                              copy every registry entry and its `previous` ids to the export bucket (§7.3)
+research data export --verify-url URL [...]   fetch all of it back through URL into a scratch store, every byte checked
 research data doctor [--clean] [--runs-dir D] [--json]
                                               run dirs holding a store_publish_error.json (§10): stale (the run is an attempt in this store)
                                               vs REAL (it is not); read-only unless --clean, which deletes the stale files and nothing else
@@ -571,5 +587,5 @@ trust-dossier/v1         the computed trust level of one numerical target (`pyth
 ## 13. Deferred (each arrives with a named failure)
 
 `diff` (F9), `independent` (U3, descriptive not authoritative: shared closure files / lockfiles / inputs), `impact` (F4),
-`export` (F5/U5), `gc` (F11), pod teardown gating on PRESERVED (F7), closure-scoped reuse, replica planner beyond the
+`gc` (F11), pod teardown gating on PRESERVED (F7), closure-scoped reuse, replica planner beyond the
 three-tier order above.
