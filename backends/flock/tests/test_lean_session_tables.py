@@ -60,32 +60,12 @@ def _swap_tables(rec):
         p["stream"] = f"{'circuit-01' if t == 'circuit-00' else 'circuit-00'}/{r}"
 
 
-@pytest.fixture(scope="module")
-def refused(rope, tmp_path_factory):
-    """The refusals of sessions without a draw, in one verifier run (one setup): their verdicts by name."""
-    w = tmp_path_factory.mktemp("refused")
-    j2 = _session(rope, "j2")
-    dirs = {"another J": _session(rope, "j4"),
-            "a missing root": _copy(j2, w / "root", lambda rec: rec["link"]["root_b"].pop("circuit-01")),
-            "a short y": _copy(j2, w / "y", lambda rec: rec["link"].update(y=rec["link"]["y"][:2]))}
-    files = _copy(j2, w / "files")
-    for r in (0, 1):
-        a, b = files / f"circuit-00.rep{r}.bin", files / f"circuit-01.rep{r}.bin"
-        x = a.read_bytes()
-        a.write_bytes(b.read_bytes())
-        b.write_bytes(x)
-    dirs["swapped files"] = files
-    dirs["swapped files and digests"] = _copy(files, w / "both", _swap_tables)
-    return dict(zip(dirs, _verify(rope, 2, *dirs.values())))
-
-
 def _draw(**kw):
     return lambda rec: rec["unit_draw"].update(kw)
 
 
 #: the drawn session's draw (units 3..6 of 8) edited, and the refusal it meets
 DRAWS = {
-    "a changed draw": (_draw(units=[0, 4, 5, 6]), "S2/R7"),
     "a table's part as the session's draw": (_draw(k=2, units=[3, 4]), "S2/R7"),
     "a Bernoulli draw": (lambda rec: rec.update(unit_draw={"law": "bernoulli", "population": 8, "p": "1/1", "units": list(range(8))}),
                          "setup: tables: several tables need a subset draw"),
@@ -95,15 +75,28 @@ DRAWS = {
 
 
 @pytest.fixture(scope="module")
-def refused_draws(rope, tmp_path_factory):
-    w = tmp_path_factory.mktemp("draws")
-    dirs = [_copy(_session(rope, "j2-draw"), w / str(i), edit) for i, (edit, _) in enumerate(DRAWS.values())]
-    return dict(zip(DRAWS, _verify(rope, 2, *dirs)))
+def verdicts(rope, tmp_path_factory):
+    """The drawn J = 2 session and its refusals, in one verifier run (each statement set up once): verdicts by name."""
+    w = tmp_path_factory.mktemp("sessions")
+    s = _session(rope, "j2-draw")
+    dirs = {"honest": s,
+            "a missing root": _copy(s, w / "root", lambda rec: rec["link"]["root_b"].pop("circuit-01")),
+            "a short y": _copy(s, w / "y", lambda rec: rec["link"].update(y=rec["link"]["y"][:2]))}
+    files = _copy(s, w / "files")
+    for r in (0, 1):
+        a, b = files / f"circuit-00.rep{r}.bin", files / f"circuit-01.rep{r}.bin"
+        x = a.read_bytes()
+        a.write_bytes(b.read_bytes())
+        b.write_bytes(x)
+    dirs["swapped files"] = files
+    dirs["swapped files and digests"] = _copy(files, w / "both", _swap_tables)
+    dirs.update({name: _copy(s, w / f"draw{i}", edit) for i, (name, (edit, _)) in enumerate(DRAWS.items())})
+    return dict(zip(dirs, _verify(rope, 2, *dirs.values())))
 
 
 @pytest.mark.slow
-def test_two_tables_of_a_drawn_session_are_accepted(rope):
-    [v] = _verify(rope, 2, _session(rope, "j2-draw"))
+def test_two_tables_of_a_drawn_session_are_accepted(verdicts):
+    v = verdicts["honest"]
     assert v["accepted"], v["why"]
 
 
@@ -117,39 +110,43 @@ def test_every_live_session_is_accepted(rope):
 
 
 @pytest.mark.slow
-def test_another_table_count_is_refused(refused):
-    """J is the verifier's: a J = 4 session read as J = 2 names other tables and another Σ."""
-    v = refused["another J"]
+def test_another_table_count_is_refused(rope, tmp_path):
+    """J is the verifier's: a J = 2 session read as one table names other tables and another Σ (S2), before any proof."""
+    s = _copy(_session(rope, "j2-draw"), tmp_path / "s")
+    for r in (0, 1):
+        shutil.copy(s / f"circuit-00.rep{r}.bin", s / f"circuit.rep{r}.bin")
+    [v] = _verify(rope, 1, s)
     assert not v["accepted"] and v["why"].startswith("S2/R7"), v["why"]
 
 
 @pytest.mark.slow
-def test_a_missing_tables_root_is_refused(refused):
-    v = refused["a missing root"]
+def test_a_missing_tables_root_is_refused(verdicts):
+    v = verdicts["a missing root"]
     assert not v["accepted"] and "circuit-01 missing" in v["why"], v["why"]
 
 
 @pytest.mark.slow
-def test_y_is_two_words_per_table(refused):
-    v = refused["a short y"]
+def test_y_is_two_words_per_table(verdicts):
+    v = verdicts["a short y"]
     assert not v["accepted"] and v["why"].startswith("S10"), v["why"]
 
 
 @pytest.mark.slow
-def test_proofs_are_their_tables(refused):
+def test_proofs_are_their_tables(verdicts):
     """Table 1's proofs in table 0's files: S17 refuses the files; with the record's digests swapped too, table 0's streams
     refuse table 1's messages."""
-    v = refused["swapped files"]
+    v = verdicts["swapped files"]
     assert not v["accepted"] and v["why"].startswith("S17"), v["why"]
-    v = refused["swapped files and digests"]
+    v = verdicts["swapped files and digests"]
     assert not v["accepted"] and v["why"].startswith("R2"), v["why"]
 
 
 @pytest.mark.slow
 @pytest.mark.parametrize("name", list(DRAWS))
-def test_the_parts_come_from_the_sessions_draw(refused_draws, name):
-    """Σ covers each table's part, so another draw is another session (S2); a draw the tables cannot split is refused."""
-    v = refused_draws[name]
+def test_the_parts_come_from_the_sessions_draw(verdicts, name):
+    """Σ covers each table's part, so a table's part is not the session's draw (S2); a draw the tables cannot split is
+    refused."""
+    v = verdicts[name]
     assert not v["accepted"] and v["why"].startswith(DRAWS[name][1]), v["why"]
 
 

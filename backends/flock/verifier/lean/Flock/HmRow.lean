@@ -720,13 +720,15 @@ def regions (c : Circuit) (pub : Public) : V (Array Region) := do
 
 end HmRow
 
-/-- An `hm96-sha512/row/v1` statement from the parsed circuit and the population's public file: the statement of `tags` (its
-identity is the digest's), over the population or, for a drawn session, the drawn units. -/
-def Stmt.ofPopulationH (tags : Tags) (c : Circuit) (pop : Public) (coins : Coins) (draw : Option Json := none)
-    (partition : Option Json := none) (program : Option ByteArray := none) : V Stmt := do
+/-- `setup` for an `hm96-sha512/row/v1` statement: the circuit, the population's public file and, for a drawn session, the
+drawn units' statement over it. -/
+def Stmt.setupH (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins) (tables : List (String × ByteArray) := [])
+    (draw : Option Json := none) (partition : Option Json := none) (program : Option ByteArray := none) : V Stmt := do
+  let c ← HmRow.parse tags circuitFile tables
   let finding0 ← if tags.bindings then (some <$> HmRow.checkPartition c partition)
     else if partition.isSome then throw s!"{tags.name}: the statement binds no partition" else pure none
   let some merkle := MerkleScheme.find? c.leafScheme | throw s!"leaf-commitment scheme {c.leafScheme}: not one this verifier implements"
+  let pop ← HmRow.loadPublic tags c publicFile
   let pub ← match draw with
     | some d => HmRow.drawn c pop d
     | none => pure pop
@@ -765,17 +767,11 @@ def Stmt.ofPopulationH (tags : Tags) (c : Circuit) (pop : Public) (coins : Coins
   return { tags, leaf := default, c, pub, n, blocksReal, nbl, m, mPts := PT_LOCAL + nbl, pin, regions, da, db, digest, sigma,
            hello, merkle, partition := (finding.map (·.toJson)).getD Json.null }
 
-/-- `setup` for an `hm96-sha512/row/v1` statement: the circuit, the population's public file and, for a drawn session, the
-drawn units' statement over it. -/
-def Stmt.setupH (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins) (tables : List (String × ByteArray) := [])
-    (draw : Option Json := none) (partition : Option Json := none) (program : Option ByteArray := none) : V Stmt := do
-  let c ← HmRow.parse tags circuitFile tables
-  Stmt.ofPopulationH tags c (← HmRow.loadPublic tags c publicFile) coins draw partition program
-
 /-- A session's statement in `count` tables (§16.11, upstream's `session_tables`): one table is `setupH`'s statement. For
 several, the session's units (the draw's, without one the population's) split into `count` equal consecutive parts, and
-table `j` is the statement of part `j` as a subset draw of the population, under `Tags.tableIdentity`. Every part comes from
-`draw`, the session's, never from a table's header. The session's Σ covers every table's; its `unitDraw` is `draw`. -/
+table `j` is `setupH`'s statement of part `j` as a subset draw of the population, under `Tags.tableIdentity`: every check
+`setupH` makes, it makes on each table. Every part comes from `draw`, the session's, never from a table's header. The
+session's Σ covers every table's; its `unitDraw` is `draw`. -/
 def Stmt.setupTables (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins) (count : Nat)
     (tables : List (String × ByteArray) := []) (draw : Option Json := none) (partition : Option Json := none)
     (program : Option ByteArray := none) : V (SessionSpec × Array Stmt) := do
@@ -792,19 +788,18 @@ def Stmt.setupTables (tags : Tags) (circuitFile publicFile : ByteArray) (coins :
     match u.law with
     | .subset _ => splits u.units.size
     | _ => throw "tables: several tables need a subset draw (a Bernoulli draw's unit count is random, so the tables could not split it evenly)"
-  let c ← HmRow.parse tags circuitFile tables
-  let pop ← HmRow.loadPublic tags c publicFile
-  let units ← match u? with
-    | none => pure (Array.range pop.n)
-    | some u => do
-      if u.population != pop.n then throw "U: the draw's population is not this registered population"
-      pure u.units
+  -- without a draw, the population's units (`setupH` checks a draw's population against the file)
+  let (population, units) ← match u? with
+    | some u => pure (u.population, u.units)
+    | none => do
+      let n := (← HmRow.loadPublic tags (← HmRow.parse tags circuitFile tables) publicFile).n
+      pure (n, Array.range n)
   splits units.size
   let k := units.size / count
   let sts ← (Array.range count).mapM fun j =>
-    let part := Json.mkObj [("law", Json.str "subset"), ("population", Lean.toJson pop.n), ("k", Lean.toJson k),
+    let part := Json.mkObj [("law", Json.str "subset"), ("population", Lean.toJson population), ("k", Lean.toJson k),
       ("units", Json.arr ((units.extract (j * k) (j * k + k)).map Lean.toJson))]
-    Stmt.ofPopulationH { tags with identity := tags.tableIdentity count j } c pop coins (some part) partition program
+    Stmt.setupH { tags with identity := tags.tableIdentity count j } circuitFile publicFile coins tables (some part) partition program
   let mPts := sts[0]!.mPts
   if sts.any (·.mPts != mPts) then throw "tables: the tables' link points have different lengths"
   let sigma := Sha512.hash (sts.foldl (fun h st => h ++ st.sigma) (pushLe64 tt.sigmaTag.toUTF8 count))
