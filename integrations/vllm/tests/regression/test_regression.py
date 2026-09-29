@@ -13,7 +13,8 @@ THE REFERENCE.  v1 = `lane/vllm-integration` at release tag `r19-int-21` (commit
 
     GREEN   #11 llama32-1b B1 i4096/o512 (l40s)   #23 llama32-1b B64 (l40s)   #39 qwen25-15b B1 i4096/o512 (l40s)   #60 mistral-7b B8 (l40s)
             #67 olmoe-1b-7b B32 (l40s)            #68 olmoe-1b-7b B32 mixed-arrivals (l40s)   #73 qwen3-4b B8 (h100)   #74 qwen3-4b-fp8 B8 (h100)
-    BY NAME #4 smollm2-135m (R17 row; only the CPU record audit exists)   #57 gemma2-2b B8 -- the NEGATIVE: Commit REFUSED at manifest build
+            #4 smollm2-135m B16 (l40s; FAIL in v1, reclassified GREEN in the follow-up epoch: Daniel, 2026-09-29T20:12Z)
+    BY NAME #57 gemma2-2b B8 -- the NEGATIVE: Commit REFUSED at manifest build
             (unmodelled Bf16MulScalarTensor_v1 unnamed crossing) and that refusal must reproduce -- or the F-r19-int-20 decision below
             #70 olmoe TP2 B8 (no fold Match, Commit rc=1)   #75 qwen3-30b-a3b TP2 B2 (rank Programs only, no manifest)
 
