@@ -67,6 +67,11 @@ $PY -c 'import sys; assert sys.version_info[:2] == (3, 12), sys.version' || fail
 # scripts that set their own PYTHONPATH (gates, rows) still import verity_sampled_proofs: a .pth in the venv's site-packages
 SITE=$VENV/lib/python3.12/site-packages; [ -d "$SITE" ] || fail PTH "no $SITE (the venv is Python 3.12)"
 echo "$SAMPLED" > "$SITE/verity-sampled-proofs.pth" || fail PTH "cannot write $SITE/verity-sampled-proofs.pth"
+# and every other protocol, whose package a row's protocol options import (`protocol_options.CIRCUITS`: verity_pouw.circuit)
+for P in "$ROOT"/../../protocols/*/pyproject.toml; do
+  P=$(cd "${P%/pyproject.toml}" && pwd -P)
+  [ "$P" = "$SAMPLED" ] || echo "$P" > "$SITE/verity-$(basename "$P" | tr _ -).pth" || fail PTH "cannot write a .pth for $P"
+done
 
 # ---- 2. vLLM d9105ea80 (cu129 wheel, sha pinned) + torch cu129 + the Python deps ---------------------------------------------------
 W="vllm-0.28.1rc1.dev472+gd9105ea80.cu129-cp38-abi3-manylinux_2_28_x86_64.whl"
@@ -193,6 +198,10 @@ def sampled_without_pythonpath():
         raise RuntimeError(f"without protocols/sampled_proofs on PYTHONPATH: rc {r.returncode}, {(r.stdout + r.stderr).strip()[-200:]}")
     return r.stdout.strip()
 check("sampled_proofs_via_pth", sampled_without_pythonpath)   # the venv's verity-sampled-proofs.pth, for scripts whose PYTHONPATH omits it
+def protocols_from_tree():
+    top = os.path.realpath(os.path.join(root, "..", "..", "protocols"))
+    return {d: under(f"verity_{d}", os.path.join(top, d)) for d in sorted(os.listdir(top)) if os.path.isfile(os.path.join(top, d, "pyproject.toml"))}
+check("protocols_from_tree", protocols_from_tree)   # every protocol package, through its .pth: a row's stages set their own PYTHONPATH
 check("numpy_import", lambda: __import__("numpy").__version__)
 check("no_old_tree_on_path", lambda: [p for p in sys.path if "/workspace/cp/veritor" in p or p.endswith("/vllm-poc")] == [] or (_ for _ in ()).throw(RuntimeError(str(sys.path))))
 if gpu:
