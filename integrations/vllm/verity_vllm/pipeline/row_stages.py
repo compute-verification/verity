@@ -6,7 +6,9 @@
 * **Build**: the step Program, the request wrapper Program (``--lp``/``--t``, default the envelope; a stochastic row:
   its first request) and every other declared request shape, each under its launch context at B >= 2; then GP-01's
   workload Program (the row's Program digest) and the required-value manifest of record (``manifest build`` /
-  ``build-global``; exit 13 when it does not build, 3 when the core registry is not importable).
+  ``build-global``; exit 13 when it does not build, 3 when the core registry is not importable).  After a PASS Build the
+  row stops (exit 21) unless every call-boundary identity of the manifest has a source the Commit attaches
+  (``Row.call_boundaries``: the CPU gate ``gate call-boundaries``).
 * **Match**: the observed run and the fold (``match``), the per-request comparison (B=1 against the served shape; B>1
   the X-09 decomposition, deriving any shape it names as missing and rerunning once), the global Match (GM-01) and, on
   a stochastic row, the sampler value check; ``row_records.match_summary`` decides.
@@ -16,7 +18,8 @@
   record (``verdict from-record``), whose outcome is the stage's decision.
 
 Exit: 0 every requested stage PASS; 10 Build FAIL; 11 Match FAIL; 12 Commit FAIL; 13 manifest not built; 14 Match
-record incomplete at Commit; 3 precheck FAIL; 2 no workload; 128+signal when cancelled.
+record incomplete at Commit; 21 a call-boundary identity without a source the Commit attaches; 3 precheck FAIL; 2 no
+workload; 128+signal when cancelled.
 """
 from __future__ import annotations
 
@@ -52,9 +55,10 @@ def _stamp() -> str:
 
 class SingleRow(Row):
     def __init__(self, *, row: str, role: str, repo: str, rev: str, stages: str, env: RunEnv, gpu_util: str,
-                 build: BuildConfig, match: MatchConfig, commit: CommitConfig):
+                 build: BuildConfig, match: MatchConfig, commit: CommitConfig, protocols: tuple[str, ...] | None = None):
         super().__init__(row=row, role=role, repo=repo, rev=rev, stages=stages, env=env, proc="row_pod")
         self.gpu_util, self.cb, self.cm, self.ck_ = gpu_util, build, match, commit
+        self.protocols = protocols            # the row's protocol set beside sampled proofs (protocol_options.at_row), None by default
         self.trap = False
 
     def run(self) -> int:
@@ -153,7 +157,7 @@ class SingleRow(Row):
         self.LP = self.cb.lp if self.cb.lp is not None else s["LP"]
         self.T = self.cb.t if self.cb.t is not None else s["T"]
         self.MML = self.I + self.O
-        self.tgt = R.declared_target(self.path(self.wl))
+        self.tgt = R.declared_target(self.path(self.wl), self.protocols)
         self.tgt_args = ["--target", self.tgt] if self.tgt else []
         # the attention implementation the row executes (declared, else the pinned vLLM's default for this device) selects the tap
         _, fa = self.output(self.cli("row", "fa-version", self.wl), stderr=subprocess.DEVNULL)
@@ -356,6 +360,7 @@ class SingleRow(Row):
             self.log("BUILD FAIL -> stop")
             self.tl("row", "end", ("ok", "false"), ("stopped_at", "build"))
             raise Stop(10 if mrc == 0 else 13)
+        self.call_boundaries(to)
 
     # ------------------------------------------------------------------------------------------------ Match
     def derive_missing(self, derived: list[str], label: str) -> None:
@@ -515,6 +520,8 @@ class SingleRow(Row):
         cmd = self.cli("commit", "--case", self.role, "--workload", self.wl, "--committer", "native_collect_v2b", "--fast-copy", "--gpu-tree",
                        "--hidden-so", self.hidden_so, "--openings", "64", "--pairs", str(ck.pairs), "--warmup", "2", "--max-num-seqs", str(self.B),
                        "--engine-arg", f"gpu_memory_utilization={self.gpu_util}", "--label", self.row, "--out", f"{self.d}/commit")
+        if self.protocols:
+            cmd += self.tgt_args                      # the declared target with the row's protocols; unset, the Commit reads the workload's
         # the windowed collector (ring of window_slots x window_mb MiB, raw copies retained on host, openings verified after release)
         # is the default; window_mb=0 is per-step blocks, retain=device the device-resident footprint
         if int(ck.window_mb) > 0:

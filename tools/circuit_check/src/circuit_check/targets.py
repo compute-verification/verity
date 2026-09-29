@@ -179,13 +179,14 @@ def templates() -> list[tuple[str, Any, list[dict]]]:
 
 
 def _pouw_roots() -> list[Any]:
-    """PoUW's `ncp-v2` unit templates at k = 64 and NCP-FP8's at k = 96 (both sums), with each scheme's smallest whole call
-    (`verity_pouw.circuit.ncp2`, `verity_pouw.circuit.fp8`); the package's own tests check each call's template partition
-    and its Z separator."""
+    """PoUW's `ncp-v2` unit templates at k = 64, with the smallest whole call, its weight side and a window of two calls on
+    it (`verity_pouw.circuit.ncp2`), and NCP-FP8's at k = 96 (both sums) with its smallest whole call
+    (`verity_pouw.circuit.fp8`); the package's own tests check their template partitions and the Z separator."""
     from verity_pouw.circuit import fp8, ncp2
 
+    shape = ncp2.Shape(16, 64, 16)
     fp8_templates = [t for sums in fp8.SUMS for _role, t in fp8.call_templates(fp8.Shape(48, 96, 32), sums)]
-    return (list(ncp2.templates(64, "shift24").values()) + [ncp2.linear(ncp2.Shape(16, 64, 16))]
+    return (list(ncp2.templates(64, "shift24").values()) + [ncp2.linear(shape), ncp2.weight(shape), ncp2.window(shape, 2)]
             + list({t.id: t for t in fp8_templates}.values()) + [fp8.linear(fp8.Shape(16, 96, 16))])
 
 
