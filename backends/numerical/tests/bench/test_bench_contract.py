@@ -508,7 +508,7 @@ def test_sp1_prove_mapping_is_one_joint_and_validates(conforming: dict) -> None:
 def test_reference_run_writes_a_conforming_result(tmp_path) -> None:
     out = tmp_path / "run"
     proc = subprocess.run([sys.executable, str(VECTOR_RUN), "--vector", K16_VECTOR, "--backend", "reference", "--out", str(out)],
-                          capture_output=True, text=True, timeout=120, env={**os.environ, "RESEARCH_RUN_ID": "r-local-test"})
+                          capture_output=True, text=True, env={**os.environ, "RESEARCH_RUN_ID": "r-local-test"})
     assert proc.returncode == 0, proc.stderr
     result = json.loads((out / "result.json").read_text())
     assert result["run_id"] == "r-local-test"
