@@ -80,7 +80,15 @@ research data SUBCOMMAND ...             # the evidence store (below)
 research merge REF [--into main] [--tool check] [-m MSG] [--dry-run]   # the merge gate (merge.py)
 research merge --train A B C [--on MACHINE --project P] [--command CMD]  # several refs, one checked candidate
 research merge --sweep [--into main] [--remote origin] [--dry-run]       # close the PRs that landed, retarget their children
+research git old2new|remap|check|build ...                              # after a history rewrite (commitmap.py, below)
 ~~~
+
+After a history rewrite, a `commit-map/v1` artifact records each old commit's image and whether its tree was kept; it applies once
+its approver labels it `commit_map=accepted`. The gate then reads an attempt of an old commit for its image when the tree is the
+same (as the attempt recorded it), and refuses a REF that holds a commit the rewrite replaced. `research git remap` moves a
+clone's local branches onto the rewritten history (local commits re-created over the images, trees unchanged), `research git
+old2new SHA` names an image, `research git check REF` is the old-history guard, and `research git build PRE POST` writes the
+map's payload from the two mirrors.
 
 `research merge` is how `main` receives a merge: in the target's checkout it runs `git merge --no-ff REF` only when the store
 (refreshed from the remote first, when one is usable) holds an attempt of the tool, default `check`, with `state` done, rc 0,
