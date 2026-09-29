@@ -29,18 +29,43 @@ def test_a_tiles_closure_is_its_strips_digest_path_and_key():
         assert len([r for r in roles if r == "node"]) == (2 if rs < 2 else 1)
 
 
+def _by_role(lay):
+    return {s.role: s for s in lay.strata}
+
+
+def test_the_strata_are_the_verifiers_own():
+    """One stratum per template, its units as merged ranges, in the order of their first unit (`Flock/Draw.lean` `strataOf`
+    over core's evaluation of the partition query), covering the population exactly."""
+    from verity.ir import partition_object as PO
+    from verity_pouw.circuit import partition as P
+
+    shape = ncp2.Shape(32, 64, 32)
+    lay = PL.layout(shape)
+    want: dict[str, list[list[int]]] = {}
+    for _k, tid, lo, n in PO.evaluate(P.program(shape), P.query(shape)).ranges:
+        rs = want.setdefault(tid, [])
+        if rs and rs[-1][1] == lo:
+            rs[-1][1] = lo + n
+        else:
+            rs.append([lo, lo + n])
+    assert [(s.name, s.ranges()) for s in lay.strata] == list(want.items())
+    assert sorted(u for s in lay.strata for u in s.units) == list(range(len(lay.units)))
+    assert {s.role for s in lay.strata} == {"digest", "node", "key", "form_x", "tile", "dequant"}   # Y is the weight's
+
+
 def test_the_count_law_is_mains_stratified_rule():
     lay = PL.layout(ncp2.Shape(32, 64, 32))
     sizes = PL.CountLaw(8).sizes(lay.strata)
-    tile, rest = lay.strata
-    assert sizes == {tile.name: 1, rest.name: 8}          # max(1, round(8·4/1028)), round(8·1024/1028)
+    n = len(lay.units)                                     # 2 digests, 1 node, the key, 2 X strips, 4 tiles, 1,024 outputs
+    assert n == 1034
+    assert sizes == {s.name: 8 if s.role == "dequant" else 1 for s in lay.strata}   # round(8·1024/1036); the rest at one
 
 
 def test_the_work_law_sizes_tiles_by_work_and_the_rest_at_its_floor():
     lay = PL.layout(ncp2.Shape(32, 64, 32))
-    tile, rest = lay.strata
-    assert PL.WorkLaw(3).sizes(lay.strata) == {tile.name: 3, rest.name: 1}   # ⌈3·W/W⌉, and the floor of one
-    assert PL.WorkLaw(9).sizes(lay.strata) == {tile.name: 4, rest.name: 1}   # capped at the stratum's 4 tiles
+    tile = _by_role(lay)["tile"]
+    assert PL.WorkLaw(3).sizes(lay.strata) == {s.name: 3 if s is tile else 1 for s in lay.strata}   # ⌈3·W/W⌉, floor of one
+    assert PL.WorkLaw(9).sizes(lay.strata) == {s.name: 4 if s is tile else 1 for s in lay.strata}   # capped at 4 tiles
 
 
 def test_the_work_law_is_roots_rule():
@@ -59,13 +84,29 @@ def test_the_record_budget_is_27713():
 
 def test_a_plan_proves_each_drawn_tile_with_its_closure_once():
     lay = PL.layout(ncp2.Shape(32, 64, 32))
-    plan = PL.draw(_key(), lay, PL.CountLaw(8))
-    assert plan == PL.draw(_key(), lay, PL.CountLaw(8))                  # the verifier's key fixes it
+    plan = PL.draw(_key(), lay, PL.WorkLaw(2))
+    assert plan == PL.draw(_key(), lay, PL.WorkLaw(2))                    # the verifier's key fixes it
     tiles = [u for u in plan.drawn if lay.units[u].role == "tile"]
     want = set(plan.drawn).union(*(lay.closure[t] for t in tiles))
     assert plan.proved_y == tuple(sorted({lay.y_strip[t] for t in tiles}))
     assert set(plan.proved) == want and len(plan.proved) == len(want)
-    assert all(lay.units[u].role in ("tile", "dequant") for u in plan.drawn)
+    assert len(tiles) == 2 and len(plan.drawn) == 2 + len(lay.strata) - 1   # each other stratum at its floor of one
+
+
+def test_the_work_table_and_law_object_are_362s():
+    """`work_table` is the verifier's `--work-table` (W_ref per tile, 0 elsewhere, and each template's floor f_s);
+    `law_object` is the law `flock-verify draw --work K` derives from it (`Draw.deriveWork`, `Law.toJson`). A floor from the
+    verifier's table raises a zero-work stratum's draws to it (X-SPC-81)."""
+    lay = PL.layout(ncp2.Shape(32, 64, 32))
+    tile, deq = _by_role(lay)["tile"], _by_role(lay)["dequant"]
+    table = PL.work_table(lay)
+    assert table == {s.name: {"work": lay.tile_work() if s is tile else 0, "floor": 1} for s in lay.strata}
+    law = PL.law_object(lay, PL.WorkLaw(3))
+    assert law == {"law": "work", "k": 3, "strata": [{"template": s.name, "units": s.ranges(), "work": table[s.name]["work"],
+                                                      "floor": 1, "k": 3 if s is tile else 1} for s in lay.strata]}
+    floored = PL.WorkLaw(3, floors=((deq.name, 5),))
+    assert PL.work_table(lay, floored)[deq.name] == {"work": 0, "floor": 5}
+    assert {s["template"]: (s["floor"], s["k"]) for s in PL.law_object(lay, floored)["strata"]}[deq.name] == (5, 5)
 
 
 def test_openings_are_one_leaf_per_row():
@@ -79,7 +120,7 @@ def test_openings_are_one_leaf_per_row():
 
 def test_the_profile_is_stratified_over_the_tile_strata():
     lay = PL.layout(ncp2.Shape(32, 64, 32))
-    tile = lay.strata[0]
+    tile = _by_role(lay)["tile"]
     assert PL.profile(lay, {tile.name: 1}) == Stratified((Stratum(tile.name, 4, 1),))
     # one draw of four tiles at δ = 1/4: three unsound tiles escape with probability exactly 1/4
     bound = PL.unsound_work_bound(lay, {tile.name: 1}, 0.25)
@@ -108,11 +149,12 @@ def test_the_default_work_law_draws_a_calls_share_of_the_windows_budget():
     """K = 27,713 is a window's budget (X-SPC-83): alone, a call is capped at its units instead of raising; in a window each
     call draws ⌈K·W_c/W_window⌉, so C equal calls draw about K between them, not C·K."""
     lay = PL.layout(ncp2.Shape(32, 64, 32))
-    tile, rest = lay.strata
-    assert PL.WorkLaw().sizes(lay.strata) == {tile.name: 4, rest.name: 1}      # K capped at the call's 1,028 units
+    tile = _by_role(lay)["tile"]
+    assert PL.WorkLaw().sizes(lay.strata) == {s.name: 4 if s is tile else 1 for s in lay.strata}   # K capped at its units
     laws = PL.window_laws([lay] * 10_000)
     assert laws[0].budget(lay.strata) == -(-PL.RECORD_K // 10_000) == 3
-    assert laws[0].sizes(lay.strata) == {tile.name: 3, rest.name: 1}
+    assert laws[0].sizes(lay.strata) == {s.name: 3 if s is tile else 1 for s in lay.strata}
+    assert PL.law_object(lay, laws[0])["k"] == 3                     # #362's law at the call's share
     assert sum(law.sizes(lay.strata)[tile.name] for law in laws) <= PL.RECORD_K + 10_000 * len(lay.strata)
 
 

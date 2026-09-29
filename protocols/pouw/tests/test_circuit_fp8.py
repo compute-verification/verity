@@ -415,6 +415,17 @@ def test_a_prover_s_layout_mapping_a_tile_to_its_x_strip_is_refused():
         traced_as("fp8-is-h100-d3s-v0-f16", 48, 96, 16, index=300, weight=11).check_layout(lay)
 
 
+def test_the_strata_are_one_per_template():
+    """As `verify` derives them (root's ruling on X-SPC-84): one stratum per template of the call's partition, byte-length
+    variants apart, covering the population; the work table gives the tile its W_ref and every other template 0, floors 1."""
+    from verity_pouw.circuit import plan as PL
+
+    lay = PL.fp8_layout(fp8.Shape(80, 96, 16))
+    assert [s.name for s in lay.strata] == list(dict.fromkeys(u.template for u in lay.units))
+    assert sorted(u for s in lay.strata for u in s.units) == list(range(len(lay.units)))
+    assert PL.work_table(lay) == {s.name: {"work": lay.tile_work() if s.role == "tile" else 0, "floor": 1} for s in lay.strata}
+
+
 @pytest.mark.parametrize("shape", [(16, 96, 16), (48, 96, 32), (80, 96, 16)])
 def test_the_record_work_law_draws_every_fp8_layout(shape):
     """`WorkLaw()`, K = 27,713, the window's budget: alone, a call is capped at its units rather than raising (X-SPC-83 on

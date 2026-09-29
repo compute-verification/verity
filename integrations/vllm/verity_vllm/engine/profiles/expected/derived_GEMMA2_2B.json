@@ -198,6 +198,7 @@
   {
    "__type__": "TokenSelectGumbelTopP",
    "block_size": 1024,
+   "construction": null,
    "name": "sample.gumbel_topp_select",
    "vocab": 256000
   },

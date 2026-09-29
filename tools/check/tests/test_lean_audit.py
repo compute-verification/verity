@@ -2,9 +2,15 @@
 guard, and dependencies kept warm across runs."""
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
+import sys
+import tarfile
+import types
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
 spec = importlib.util.spec_from_file_location("check_lean_audit", ROOT / "tools" / "check" / "lean_audit.py")
@@ -141,3 +147,98 @@ def test_a_fetch_failure_keeps_what_was_fetched(tmp_path, monkeypatch):
     monkeypatch.setattr(LA, "RETRIES", ())
     rc, ran, _doc = _run(tmp_path, 1)
     assert rc == 1 and (tmp_path / "cache" / "lean-deps" / k / "dep" / "built").exists()
+
+
+def _packages_dir(d: Path) -> Path:
+    """A `.lake/packages` with Mathlib (its build from Mathlib's cache), a package its manifest pins, and one built here."""
+    for f, text in {"mathlib/lake-manifest.json": json.dumps({"packages": [{"name": "batteries"}]}),
+                    "mathlib/Mathlib.lean": "", "mathlib/.lake/build/lib/lean/Mathlib.olean": "cdn",
+                    "mathlib/.git/HEAD": "abc\n", "batteries/.lake/build/lib/lean/Batteries.olean": "cdn",
+                    "Arklib/ArkLib.lean": "", "Arklib/.lake/build/lib/lean/ArkLib.olean": "built here"}.items():
+        (d / f).parent.mkdir(parents=True, exist_ok=True)
+        (d / f).write_text(text)
+    return d
+
+
+def test_a_bundle_leaves_out_what_mathlibs_cache_supplies_and_restores_only_when_pinned(tmp_path):
+    src = _packages_dir(tmp_path / "deps" / "k1")
+    assert LA.cache_covered(src) == {"mathlib", "batteries"}
+    pin = LA.bundle(src, tmp_path / "k1.tar.gz")
+    with tarfile.open(tmp_path / "k1.tar.gz") as t:
+        names = set(t.getnames())
+    assert "Arklib/.lake/build/lib/lean/ArkLib.olean" in names and "mathlib/.git/HEAD" in names
+    assert not [n for n in names if n.startswith(("mathlib/.lake/build", "batteries/.lake/build"))]
+    assert pin == {"sha256": hashlib.sha256((tmp_path / "k1.tar.gz").read_bytes()).hexdigest(),
+                   "bytes": (tmp_path / "k1.tar.gz").stat().st_size}
+    store, url, logs = tmp_path / "store", (tmp_path / "k1.tar.gz").as_uri(), []
+    store.mkdir()
+    assert not LA.restore(store, "k1", url, {**pin, "sha256": "0" * 64}, "pkg", logs.append)       # not the pinned bytes
+    assert not (store / "k1").exists() and "not the pinned bundle" in logs[-1]
+    assert not LA.restore(store, "k1", (tmp_path / "gone.tar.gz").as_uri(), pin, "pkg", logs.append)
+    assert "could not be restored" in logs[-1] and "gone" not in logs[-1]                           # the URL is never logged
+    assert LA.restore(store, "k1", url, pin, "pkg", logs.append)
+    assert (store / "k1" / "Arklib/.lake/build/lib/lean/ArkLib.olean").read_text() == "built here"
+    assert sorted(p.name for p in store.iterdir()) == ["k1"]                                        # no part file left
+
+
+def test_a_cold_machine_takes_the_pinned_bundle_from_the_store(tmp_path, monkeypatch):
+    root = _tree(tmp_path, monkeypatch)
+    (root / "pkg/b/lean-audit.json").write_text("{}")
+    k = LA.deps_key(root / "pkg/a")
+    (tmp_path / "made" / "dep").mkdir(parents=True)
+    (tmp_path / "made" / "dep" / "built").write_text("x")
+    pin = LA.bundle(tmp_path / "made", tmp_path / f"{k}.tar.gz")
+    (root / LA.PIN).write_text(json.dumps({"schema": "lean-deps-pin/v1", "deps": {k: {"package": "pkg/a", **pin, "run": "r1"}}}))
+    out = tmp_path / "out"
+    assert LA.run(out, tmp_path / "c" / "lean-audit", tmp_path / "c" / "lean-deps", log=lambda s: None,
+                  urls={k: (tmp_path / f"{k}.tar.gz").as_uri()}, export=tmp_path / "export") == 0
+    assert sorted((out / "ran.txt").read_text().split("\n")[:-1]) == ["pkg/a warm", "pkg/b cold"]
+    listing = json.loads((tmp_path / "export" / "lean-deps.json").read_text())["deps"]
+    assert list(listing) == [k] and listing[k]["package"] == "pkg/a" and (tmp_path / "export" / f"{k}.tar.gz").is_file()
+
+
+def test_pinning_takes_only_bundles_on_the_remote_for_this_trees_manifests(tmp_path, monkeypatch, capsys):
+    root = _tree(tmp_path, monkeypatch)
+    k = LA.deps_key(root / "pkg/a")
+    (tmp_path / "rec" / "lean-deps").mkdir(parents=True)
+    entry = {"package": "pkg/a", "sha256": "ab" * 32, "bytes": 5}
+    (tmp_path / "rec" / "lean-deps" / "lean-deps.json").write_text(json.dumps({"deps": {k: entry}}))
+    heads = {f"objects/sha256/{'ab' * 32}": {"bytes": 5}}
+    tree = [types.SimpleNamespace(path=f"lean-deps/{k}.tar.gz", sha256="ab" * 32, bytes=5),
+            types.SimpleNamespace(path="lean-deps/lean-deps.json", sha256="cd" * 32, bytes=9)]
+
+    class Store:
+        remote = types.SimpleNamespace(head=heads.get)
+
+        def get_attempt(self, run):
+            return {"outputs": {"run_record": "art:rec"}}
+
+        def get_manifest(self, art):
+            return types.SimpleNamespace(payload=types.SimpleNamespace(files=tree))
+
+        def fetch(self, art, to, paths):
+            return tmp_path / "rec"
+
+    local = types.ModuleType("research.store.local")
+    local.LocalStore, local.object_key = Store, lambda h: f"objects/sha256/{h}"
+    monkeypatch.setitem(sys.modules, "research.store.local", local)
+    stale = {"0" * 64: {"package": "pkg/a", "sha256": "ef" * 32, "bytes": 1, "run": "r0"}}
+    (root / LA.PIN).write_text(json.dumps({"schema": "lean-deps-pin/v1", "deps": stale}))
+    assert LA.pin("r20260929-000000-abcd") == 0
+    assert LA.pins() == {k: {**entry, "run": "r20260929-000000-abcd"}}                  # the stale manifest's pin is gone
+    heads.clear()
+    assert LA.pin("r20260929-000000-abcd") == 1 and "not on the remote" in capsys.readouterr().err
+
+
+def test_the_launcher_signs_only_this_trees_pinned_bundles(tmp_path, monkeypatch):
+    root = _tree(tmp_path, monkeypatch)
+    k = LA.deps_key(root / "pkg/a")
+    (root / LA.PIN).write_text(json.dumps({"schema": "lean-deps-pin/v1", "deps": {
+        k: {"package": "pkg/a", "sha256": "ab" * 32, "bytes": 5, "run": "r1"},
+        "0" * 64: {"package": "pkg/a", "sha256": "cd" * 32, "bytes": 5, "run": "r0"}}}))
+    signed = []
+    remote = types.SimpleNamespace(presign=lambda key, ttl: signed.append((key, ttl)) or f"https://r2/{key}?sig")
+    monkeypatch.setattr(pytest.importorskip("research.store.remote"), "load_remote", lambda: remote)
+    p = LA.url_file(tmp_path, ttl_s=60)
+    assert json.loads(p.read_text()) == {k: f"https://r2/objects/sha256/{'ab' * 32}?sig"} and signed == [(f"objects/sha256/{'ab' * 32}", 60)]
+    assert p.name == LA.URLS and p.stat().st_mode & 0o777 == 0o600

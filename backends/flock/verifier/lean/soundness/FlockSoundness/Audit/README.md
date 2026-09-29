@@ -52,19 +52,41 @@ stratum**: with $k_s \ge 1$, a set containing $U_s$ never escapes; `audit_whole_
 `extraction_audit_whole_stratum`, the one-stage profile instantiated, so an audit accepts while a whole floored stratum is
 wrong with probability at most the per-unit terms.
 
-**Theorems, the work law** (`Audit/Work.lean`, the draw law's second version; `../../PROTOCOL.md` §7.3): `Law.work σ w K`
-is `Law.stratified` with stratum $s$ drawing $k_s = \min(n_s, \max(1, \lceil K w_s n_s / W \rceil))$, where $w_s$ is the
-PoUW work of each of its units and $W = \sum_s w_s n_s$, so every stratified and one-stage theorem holds of it as stated.
-`one_le_workK`, **the integrity floor**: every non-empty stratum draws at least one unit, whatever its work, and
-`audit_work_whole_stratum` and `extraction_audit_work_whole_stratum` catch a wholly wrong one. `workK_ge`: a stratum
-draws at least $K w_s n_s / W$ units, or all of them. `sum_workK_le`: at most $K + m$ units are drawn. `work_escape_le`,
+**Theorems, the work law** (`Audit/Work.lean`, the draw law's second version; `../../PROTOCOL.md` §7.3): `Law.work σ w f K`
+is `Law.stratified` with stratum $s$ drawing $k_s = \min(n_s, \max(f_s, \lceil K w_s n_s / W \rceil))$, where $w_s$ is the
+PoUW work of each of its units, $W = \sum_s w_s n_s$ and $f_s \ge 1$ its floor, set per stratum in the verifier's work
+table; every stratified and one-stage theorem holds of it as stated, and the theorems below hold for every such $f$.
+`floor_le_workK`, **the floor**: a stratum draws at least $\min(n_s, f_s)$ units, so every non-empty stratum draws at least
+one and `audit_work_whole_stratum` and `extraction_audit_work_whole_stratum` catch a wholly wrong one.
+`work_escape_floor_le`, **the per-stratum floor escape**: a set with $b_s$ units in a non-empty stratum escapes with at most
+$((n_s - b_s)/n_s)^{f_s}$, audited at both layers (`audit_work_floor`, `extraction_audit_work_floor`). `workK_ge`: a
+stratum draws at least $K w_s n_s / W$ units, or all of them. `sum_workK_le`: at most $K + \sum_s f_s$ units are drawn.
+`workK_rest`: a stratum that does no work draws $\min(n_s, f_s)$. `work_escape_le_count`: when those strata have floors of
+at least the stratified law's sizes at $C$ (`countK`, which `countK_eq` shows is `stratumK C n_s N`), a set escapes the
+work law at most as often as its units in them escape the stratified law at $C$ (`choose_div_anti`: the hypergeometric
+escape falls as the draw grows), and `audit_work_rest` and `extraction_audit_work_rest` carry any such integrity profile to
+the audit. `work_escape_le`,
 **the work bound**: a set $B$ of units doing $W_B$ of the work escapes with probability at most $((W - W_B)/W)^K$, from
 the per-stratum hypergeometric and weighted AM-GM over the work shares. `audit_work` and `extraction_audit_work` bound
 $\Pr[\text{accept} \wedge W_{\mathrm{wrong}(X)} \ge T]$ by $((W - T)/W)^K$ plus the per-unit terms. `record_sizing` and
 `audit_work_of_record`: at $K = 27{,}713$, wrong units doing at least 0.1% of the work escape with at most $2^{-40}$;
 `record_sizing_one_fewer`: $K = 27{,}712$ does not reach it under this bound. `Law.widen` and `escape_widen_le`, the seam for
 closure draws: proving more units than are drawn, on the same coins, never raises an escape. `FlockWork.lean`'s
-`workRule_eq_draw`: the executable's `Flock.Draw.workK` is `Law.workRule`.
+`workRule_eq_draw` and `countRule_eq_draw`: the executable's `Flock.Draw.workK` and `stratumK` are `Law.workRule` and
+`countRule`.
+
+**Theorems, closure draws** (`Audit/Closure.lean`; `../../PROTOCOL.md` §7.3): `Law.closure L cl` is `L` widened on its coins
+by the verifier's closure map, each drawn unit proved with its closure. `closure_escape`: its escape is the base law's
+escape of $B \cup \mathrm{unsound}(B)$, $\mathrm{unsound}(B)$ being the units whose closure meets $B$, so a wrong unit that is
+never drawn on its own is charged to the units above it. `unsoundWork` is the work of $B \cup \mathrm{unsound}(B)$: a closure
+map need not list a unit in its own closure, so the wrong units' own work is counted explicitly (`workOf_le_unsoundWork`).
+`harm_le_unsoundWork`: a
+wrong unit's harm (its own work and that of the units whose closure holds it) is in the unsound work, drawn or not;
+`unsoundWork_le_harm` (coverage) and `unsoundWork_singleton`. `audit_work_closure` and `extraction_audit_work_closure`:
+under the work law's closure draw, at any floors $f_s \ge 1$,
+$\Pr[\text{accept} \wedge \mathrm{work}(B \cup \mathrm{unsound}(B)) \ge T] \le ((W - T)/W)^K$ plus the per-unit terms, for
+$B = \mathrm{wrong}(X)$; `audit_work_closure_harm`: likewise for a wrong unit's harm; `audit_work_closure_of_record`:
+$2^{-40}$ at $K = 27{,}713$ for unsound work of at least 0.1%.
 
 **Theorems, two-stage** (`Audit/TwoStage.lean`):
 
