@@ -7,17 +7,21 @@ from pathlib import Path
 
 import pytest
 
-from research.jobs import model
+from research.jobs import model, trains
 
 VECTORS = json.loads(Path(model.__file__).with_name("vectors.json").read_text())
+TRAINS = json.loads(Path(model.__file__).with_name("train_vectors.json").read_text())
 
 
-def service() -> model.JobService:
-    s = model.JobService(epoch=VECTORS["epoch"])
-    for t in VECTORS["setup"]["tokens"]:
+def service(vectors: dict = VECTORS) -> model.JobService:
+    s = model.JobService(epoch=vectors["epoch"]) if "github" not in vectors["setup"] else trains.TrainService(epoch=vectors["epoch"])
+    for t in vectors["setup"]["tokens"]:
         s.mint(t["secret"], t["name"], t["scopes"])
-    for w in VECTORS["setup"]["workers"]:
+    for w in vectors["setup"]["workers"]:
         s.register(w["id"], w["kind"], w["token"], w["kinds"])
+    if gh := vectors["setup"].get("github"):
+        s.github = trains.FakeGitHub(commits=json.loads(json.dumps(gh["commits"])), refs=dict(gh["refs"]),
+                                     prs={p["number"]: {**p, "labels": list(p["labels"])} for p in gh["prs"]})
     return s
 
 
@@ -44,9 +48,9 @@ def mismatches(want, got, where: str = "body") -> list[str]:
     return [] if want == got and type(want) is type(got) else [f"{where}: want {want!r}, got {got!r}"]
 
 
-def run_case(case: dict, s: model.JobService | None = None) -> list[tuple[str, dict]]:
+def run_case(case: dict, s: model.JobService | None = None, vectors: dict = VECTORS) -> list[tuple[str, dict]]:
     """Run one case's steps; returns each request's (path, response body) for the coverage checks."""
-    s = s or service()
+    s = s or service(vectors)
     saved: dict = {}
     seen = []
     for i, step in enumerate(case["steps"]):
@@ -57,6 +61,24 @@ def run_case(case: dict, s: model.JobService | None = None) -> list[tuple[str, d
             s.retire(step["retire"])
         elif step.get("tick"):
             assert s.tick(step["at"]) == step["expect"]["moved"], where
+        elif step.get("reconcile"):
+            assert s.reconcile(step["at"]) == step["expect"]["moved"], where
+        elif "store" in step:
+            s.store.attempts.update(json.loads(json.dumps(step["store"].get("attempts", {}))))
+            s.store.manifests.update(json.loads(json.dumps(step["store"].get("manifests", {}))))
+        elif "github_push" in step:
+            g = step["github_push"]
+            s.github.push(g["ref"], g["sha"], g["parents"], g["files"])
+        elif "github_label" in step:
+            s.github.prs[step["github_label"]["pr"]]["labels"].append(step["github_label"]["add"])
+        elif "expect_github" in step:
+            want = step["expect_github"]
+            for ref, sha in want.get("refs", {}).items():
+                assert s.github.refs.get(ref) == sha, f"{where}: {ref} is {s.github.refs.get(ref)}, want {sha}"
+            for n, pr in want.get("prs", {}).items():
+                assert not (bad := mismatches(pr, s.github.prs[int(n)], f"pr {n}")), f"{where}: {bad}"
+            if "comments" in want:
+                assert s.github.comments == want["comments"], f"{where}: {s.github.comments}"
         else:
             method, path = step["req"]
             status, body = s.request(method, path, step.get("token"), substitute(step.get("body"), saved), step["at"])
@@ -73,13 +95,34 @@ def test_case(case):
     run_case(case)
 
 
-def test_the_cases_have_unique_names_and_one_form_per_step():
-    names = [c["name"] for c in VECTORS["cases"]]
+@pytest.mark.parametrize("case", TRAINS["cases"], ids=[c["name"] for c in TRAINS["cases"]])
+def test_train_case(case):
+    run_case(case, vectors=TRAINS)
+
+
+FORMS = {"req", "tick", "revoke", "retire", "reconcile", "store", "github_push", "github_label", "expect_github"}
+
+
+@pytest.mark.parametrize("vectors", [VECTORS, TRAINS], ids=["jobs", "trains"])
+def test_the_cases_have_unique_names_and_one_form_per_step(vectors):
+    names = [c["name"] for c in vectors["cases"]]
     assert len(names) == len(set(names))
-    for c in VECTORS["cases"]:
+    for c in vectors["cases"]:
         for step in c["steps"]:
-            assert len({"req", "tick", "revoke", "retire"} & set(step)) == 1, step
+            assert len(FORMS & set(step)) == 1, step
             assert isinstance(step["at"], int), step
+
+
+def test_the_train_cases_reach_every_train_state_and_route():
+    states, routes = set(), set()
+    for c in TRAINS["cases"]:
+        s = service(TRAINS)
+        for req, body in run_case(c, s, TRAINS):
+            method, path = req.split(" ", 1)
+            routes.add(f"{method} " + "/".join("{id}" if p.isdigit() else p for p in path.split("?")[0].split("/")))
+        states |= {t.state for t in s.trains.values()}
+    assert set(trains.TRAIN_STATES) <= states
+    assert {"POST /api/trains", "GET /api/trains", "GET /api/trains/{id}", "POST /api/trains/{id}/cancel"} <= routes
 
 
 def test_the_cases_reach_every_state_and_every_route():
