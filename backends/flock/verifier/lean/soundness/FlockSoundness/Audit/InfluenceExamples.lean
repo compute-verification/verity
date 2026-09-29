@@ -14,6 +14,8 @@ witnesses meet them.
 * An audit whose law draws nothing and whose session always accepts, with the honest transcript committed: `main`'s
   hypotheses hold at 0, so `audit_influence` applies (`influence_met`), and the audit accepts with probability 1
   (`accepts`).
+* `harm_witness`: `card_influenceSet_le_harm`'s hypotheses hold on any partition and law, with the exits as separators,
+  each unit's exported width as its harm, and the total exported width as the harm bound.
 -/
 
 namespace FlockSoundness.Audit.InfluenceExamples
@@ -193,5 +195,20 @@ theorem accepts (σ : Strategy (audit nothing Unit session)) :
   rw [prob_map]
   show prob _ (Game.ret true) _ = 1
   simp [prob]
+
+/-! ## The harm form's hypotheses, on any partition and law -/
+
+/-- **`card_influenceSet_le_harm`'s hypotheses are met on any partition and law**: the exits as separators
+(`separates_exits`), each unit's exported width as its harm (`card_exits_le`), and the total exported width as the harm
+bound. -/
+theorem harm_witness {C₀ : Circuit} {n : ℕ} (P₀ : Partition C₀ n) (L : Law n) {D₀ : Finset (Fin C₀.N)}
+    (hD₀ : D₀ ⊆ P₀.committed) (a₀ : Fin C₀.N → Bool) (δ : ℝ≥0∞) :
+    (P₀.influenceSet D₀ L.escape a₀ δ).card ≤
+      2 ^ (∑ u, (P₀.exits {u}).card) * (univ.filter fun B => δ ≤ L.escape B).card :=
+  P₀.card_influenceSet_le_harm hD₀ (fun u => (P₀.exits {u}).card) P₀.exits (fun _ => filter_subset _ _)
+    (fun B => P₀.separates_exits B hD₀) P₀.card_exits_le
+    (fun B _ => by
+      show ∑ u ∈ B, ((P₀.exits {u}).card : ℝ) ≤ ((∑ u, (P₀.exits {u}).card : ℕ) : ℝ)
+      exact_mod_cast sum_le_sum_of_subset (f := fun u => (P₀.exits {u}).card) (subset_univ B))
 
 end FlockSoundness.Audit.InfluenceExamples

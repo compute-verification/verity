@@ -92,7 +92,8 @@ circuit's other outputs, such as commitments and leaves, are not delivered. $K$ 
 - **Not vacuous** (`Audit/InfluenceExamples.lean`): on a four-gate circuit, `lemma47` applies the influence cap to two
   different transcripts that both have a wrong unit, with a separator narrower than the unit's exits
   (`three_mem_exits`), and `count` bounds what they deliver by 2; `influence_met` meets `audit_influence`'s hypotheses
-  at 0 on an audit that accepts with probability 1 (`accepts`).
+  at 0 on an audit that accepts with probability 1 (`accepts`); `harm_witness` meets `card_influenceSet_le_harm`'s on any
+  partition and law, with the exits as separators and each unit's exported width as its harm.
 
 **Tightness and insecurity** (`Audit/Examples.lean`, on `K` chains of `nv` NOT gates, one coarse unit per chain and one
 fine unit per gate, with a uniform `k₂`-subset of each drawn chain's gates in the second stage and an ideal session):

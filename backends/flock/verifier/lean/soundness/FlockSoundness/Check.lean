@@ -394,3 +394,4 @@ hypotheses of the theorems that use them, never `axiom` declarations, so they ca
 #print axioms FlockSoundness.Audit.Partition.card_exits_le
 #print axioms FlockSoundness.Audit.Partition.card_influenceSet_le_harm
 #print axioms FlockSoundness.Audit.Partition.card_admissible_le
+#print axioms FlockSoundness.Audit.InfluenceExamples.harm_witness
