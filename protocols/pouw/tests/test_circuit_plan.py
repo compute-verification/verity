@@ -67,3 +67,19 @@ def test_the_profile_is_stratified_over_the_tile_strata():
     # one draw of four tiles at δ = 1/4: three unsound tiles escape with probability exactly 1/4
     bound = PL.unsound_work_bound(lay, {tile.name: 1}, 0.25)
     assert 3 * lay.tile_work() <= bound < 3.01 * lay.tile_work()
+
+
+def test_traced_as_is_the_compositions_entry_point():
+    """What #311's PoUW adapter calls: the circuit for `ncp-v2`, nothing for a scheme without one."""
+    import pytest
+
+    from verity_pouw.circuit import partition as P
+    from verity_pouw.circuit import traced_as
+    from verity_pouw.protocol import DomainError
+
+    t = traced_as("ncp-v2", 32, 64, 32)
+    assert t.definition is ncp2.linear(ncp2.Shape(32, 64, 32)) and t.query == P.query(ncp2.Shape(32, 64, 32))
+    assert t.served == 32 * 32 and t.layout().closure == PL.layout(ncp2.Shape(32, 64, 32)).closure
+    assert traced_as("ncp-v1", 32, 64, 32) is None and traced_as("pearl-fp8-v4", 32, 64, 32) is None
+    with pytest.raises(DomainError):
+        traced_as("ncp-v2", 30, 64, 32)
