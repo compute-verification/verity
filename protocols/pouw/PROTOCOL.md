@@ -387,6 +387,12 @@ dequantization units are drawn at the law's floor. The law is a seam:
   - It is of record once root chooses the strata: this plan's two (tiles and dequantization, with the closure) or
     #362's one per template (#372), X-SPC-84.
 
+**The layout is the verifier's.** The Layout theorems (`Layout.accountable_compute` and the rest) hold only for the
+window's own layout, so the verifier derives each tile's own unit and its closure from the shape alone, through the
+Program it builds (`Traced.layout`), and refuses any other (`Traced.check_layout`). `draw` refuses a layout whose tile is
+not a tile unit or is not its closure's first unit: a tile mapped to its X strip is C1 again
+(`test_a_prover_s_layout_mapping_a_tile_to_its_x_strip_is_refused`).
+
 The profile is `Stratified` over the tile strata, and its `harm_bound`, at W_ref per tile, bounds the unsound work.
 
 ## NCP-FP8 (`fp8-is-h100-d3s-v0-f16`, `-d3s-v0`) as a circuit under sampled proofs (`verity_pouw/circuit/fp8.py`)

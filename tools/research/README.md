@@ -336,6 +336,23 @@ called PRESERVED without a remote; nothing in the store is ever overwritten.
 - `research data lookup --tool T [--param k=v]... [--condition k=v]...
   [--source-tree SHA | --any-source] [-- ARGV...]` answers "have we done this?"
 
+### Notes and evidence over MCP
+
+`research notes mcp` (`notes_mcp.py`) serves a notes clone and the evidence catalog to an agent's MCP client over stdio; it hosts
+nothing and reads no credential. Its tools: `search_notes` (full text ranked, or the newest notes, by lane, kind and time; each
+hit says how many of its cited ids the catalog holds), `read_note` (by path or id, in any form notes cite each other by, a path from
+before a move into a month folder included), `evidence` (for a run id, an `art:` prefix or `note:<id>`: what
+the catalog holds, and the notes citing it) and `sql` (read-only, over the notes index and the catalog attached as `ev`). The
+index (`notes_index.py`) catches up with the clone before every call, re-reading only the notes that changed; `research notes
+index` builds it, or answers `--search` / `--evidence` in a shell. The catalog is the local store's `catalog.sqlite`, or
+`--catalog` names a copy made by `research data catalog --compact`: the same tables without the whole manifests, for a machine
+that queries evidence without keeping a store. The notes root defaults to `$RESEARCH_NOTES` or `~/.research/notes`. In Cursor,
+`.cursor/mcp.json`:
+
+~~~json
+{"mcpServers": {"research-notes": {"command": "uv", "args": ["--directory", "/workspace", "run", "research", "notes", "mcp"]}}}
+~~~
+
 ### Notes stamped ahead of the clock
 
 `research notes sync` (`notes_sync.py`; `checkpoint`, `bind` and `relaunch` run it with `RESEARCH_NOTES_SYNC=1`) leaves out any
@@ -345,6 +362,14 @@ pass until the note is renamed or the clock passes its stamp:
 
 ~~~text
 SYNC-REFUSED lanes/x/20260928T0700Z-report-x.md: stamp 20260928T0700Z is 18 min ahead; use 20260928T0642Z (date -u +%Y%m%dT%H%MZ)
+~~~
+
+Once pushed, it looks up the `art:` ids and run ids the pushed lines cite on the store's remote, which is what every reader
+resolves, and warns, never refuses, for each note citing one the remote lacks. A run counts once its attempt, or a label on it
+(`custody waived`), is there. `RESEARCH_NOTES_CITE_CHECK=0` turns it off.
+
+~~~text
+SYNC-WARN lanes/x/20260929T0600Z-report-x.md: cites r20260928-042319-9aac, which the evidence store does not have (a run is in the store once its attempt is on the remote: `research data custody <run> --publish` where its run dir is, else `research data label <run> custody waived --by <you>`)
 ~~~
 
 ### The steward off the laptop
@@ -386,6 +411,15 @@ for the run. It prints `LAUNCHED <name> <run id> on <machine>`, or `RUN-FAILED <
 the next period's; an invalid entry is one `RUN-FAILED <name>: <why>` line. The run's Attempt records what ran and how it
 ended (`research inspect <run id>`). The Lean runs it schedules are declared in `tools/lean/tool.py`: `lean_audit`
 (`audit.py --all --build --fresh`, nightly on `main`) and `lean_upstream` (the entry above, weekly).
+
+### A lane's older notes
+
+`research notes archive LANE` (`notes_archive.py`) moves the lane's notes stamped more than `--older-days` (3) days ago into
+`lanes/<lane>/<YYYY-MM>/` (`--by day`: `<YYYY-MM>/<DD>/`) in one commit, which `research notes sync` pushes; without `--apply` it
+prints the plan. It keeps reports, unstamped names, anything untracked or changed since the last commit, and mail the lane's
+`inbox` has not shown (all mail, in a clone without the lane's `.inbox-seen`, which git ignores: run it where the lane reads its
+inbox); it overwrites nothing, and a failure puts every file back. `inbox`, `status` and `mail` read only a lane's own folder, so
+that folder stays its working set; `git log --follow` finds a moved note's history.
 
 ## Not yet built, in order
 

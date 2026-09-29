@@ -92,8 +92,16 @@ class Traced:
             raise DomainError(f"{fn.id} takes {len(names) - len(an)} committed inputs, not {len(data)}")
         return [list(d) for d in data] + [an[p] for p in names[len(data):]]
 
+    def check_layout(self, offered) -> None:
+        """Refuse a layout that isn't the verifier's own, derived from the shape (`layout`): the tiles, each tile's own unit
+        and its closure are the partition's, never a prover's, since the Layout theorems hold only for the window's own."""
+        from ..protocol import DomainError
+
+        if offered != self.layout():
+            raise DomainError(f"{self.scheme}: the layout is not the verifier's for {self.shape}")
+
     def layout(self):
-        """The closure-draw layout (`plan.layout`, `plan.fp8_layout`)."""
+        """The closure-draw layout (`plan.layout`, `plan.fp8_layout`), from the shape (and NCP-FP8's lengths) alone."""
         from . import plan
 
         if self.scheme in FP8_SUMS:

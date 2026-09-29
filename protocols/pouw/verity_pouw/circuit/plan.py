@@ -18,6 +18,10 @@ beneath it (Lean `harm_le_unsoundWork`, `closureLaw_escape`).
 **Openings** are row-granular (the red team's X-SPC-57): A and the weight are committed one leaf per row, so a proved
 unit opens exactly the rows it reads.
 
+**The layout is the verifier's.** `layout` derives each tile's own unit and its closure from the shape alone (through the
+Program the verifier builds), never from a prover: `Traced.check_layout` refuses any other, and `draw` refuses one whose
+tile is not its own closure's first unit.
+
 **The profile** is core's `Stratified` over the tile strata, whose `harm_bound` with each tile's W_ref as its harm bounds
 the unsound work at δ (Lean `audit_closure`, `accountable_compute`).
 """
@@ -31,6 +35,7 @@ from typing import Mapping, Protocol, Sequence
 from verity.proofs.profile import Stratified, Stratum
 from verity.randomness import Key
 
+from ..protocol import DomainError
 from ..schemes.ncp import FORM_UNITS
 from .ncp2 import D, Shape, rfc6962
 from .partition import Unit, units
@@ -149,6 +154,17 @@ class Layout:
         """The call's work W_c: its strata's."""
         return sum(st.work for st in self.strata)
 
+    def check(self) -> None:
+        """Refuse a layout whose tiles are not the partition's tile units, or whose closure of a tile doesn't hold the tile's
+        own unit first: the Layout theorems (`Layout.accountable_compute`) read τ = the tile's own unit, and a tile mapped to
+        its X strip is C1 again.  `draw` runs it; a verifier compares the whole layout with its own (`Traced.check_layout`)."""
+        tiles = [u for st in self.strata if st.role == "tile" for u in st.units]
+        if set(tiles) != set(self.closure):
+            raise DomainError("the layout's closures are not its tile stratum's")
+        for t in tiles:
+            if self.units[t].role != "tile" or self.closure[t][:1] != (t,):
+                raise DomainError(f"unit {t}: a tile is a tile unit, and its closure holds it first")
+
 
 def layout(shape: Shape, kind: str = "shift24") -> Layout:
     us = units(shape, kind)
@@ -239,6 +255,7 @@ class Plan:
 def draw(key: Key, lay: Layout, law: TileLaw) -> Plan:
     """The plan for one draw: a uniform k_s-subset of each stratum from ``key`` (the verifier's own randomness, derived under
     `DRAW_DOMAIN` after the receipt), then every drawn tile's closure."""
+    lay.check()
     sizes = law.sizes(lay.strata)
     drawn: list[int] = []
     for s in lay.strata:
