@@ -120,7 +120,7 @@ with `log2(√2·S_m)` = 10.7 at m = 22, 16.3 at m = 33 and 17.3 at m = 35 (§1.
    `Pr[conflict_ℓ] ≤ Adv_ℓ`.
 5. **Rounds.** The kept bytes fix every message before its coins: the `Game` model itself (`send` before `coin`).
 
-Every step depends only on Lean's standard axioms (`Check.lean`).
+Every step depends only on Lean's standard axioms (the Lean audit, `lean-audit.json`).
 
 **Remark: the random-oracle version.** Modeling SHA-512 as a random oracle gives straight-line extraction of the
 committed tables (VCVio's Merkle extraction) and a tight bound, `2^-205 + O(t²/2^512) + t·(cap entries)/2^512`,
@@ -583,7 +583,8 @@ If real concurrency is ever needed:
   - One table on its own (`FlockCompiled.lean`): `ks` is `table_knowledge_sound_joint_tight`'s left side.
   - The decoder is per drawn unit, since two drawn units that share a wire hold it in their own columns. The circuit
     `C` stays abstract; for a program it is the rows the verifier parses (`Prog.circuit`), and
-    `loweringSoundB_of_place` discharges the lowering from each unit's `UnitPlace`, given L1 and the placement.
+    `loweringSoundB_of_place` discharges the lowering from each unit's `UnitPlace`, given L1. `unitPlace_of_setupH` gives
+    the `UnitPlace` from the executable's accept step (`Stmt.setupH`), given the unit's instance in `C`.
   - The link event is the weakest one (every satisfying candidate disagrees). For the expected-time extractor's
     analysis (`analysisBE`), `flock_batched_linkSoundE` discharges `δ_link` under A2 and `ValueBinding` (§3).
   - Composed (`FlockLinked.lean`): `flock_batched_count_linked` and `flock_batched_drawn_linked` carry no `δ_link`

@@ -9,7 +9,6 @@ import shutil
 import stat
 import subprocess
 import sys
-import time
 from pathlib import Path
 
 import pytest
@@ -24,6 +23,7 @@ from research.store.local import LocalStore, object_key
 from research.store.model import Label
 
 from test_pod_guard_daemon import QUIET, _env, idle_since
+from waits import Gate, wait_runner
 
 PY = sys.executable
 SRC = str(Path(remote.__file__).resolve().parents[1])
@@ -54,15 +54,11 @@ def _request(tmp_path: Path, run_id: str, command: list[str], vault: Path) -> tu
     return p, root / "runs"
 
 
-def _wait_marker(run_dir: Path, timeout: float = 60) -> dict:
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        try:
-            return json.loads((run_dir / CU.MARKER).read_text())
-        except (OSError, ValueError):
-            time.sleep(0.1)
-    pytest.fail(f"no {CU.MARKER} in {run_dir}: {sorted(p.name for p in run_dir.iterdir())}; launcher.log: "
-                f"{(run_dir / 'launcher.log').read_text()[-2000:] if (run_dir / 'launcher.log').exists() else '-'}")
+def _wait_marker(run_dir: Path) -> dict:
+    wait_runner(run_dir)
+    assert (run_dir / CU.MARKER).exists(), (f"no {CU.MARKER} in {run_dir}: {sorted(p.name for p in run_dir.iterdir())}; launcher.log: "
+                                            f"{(run_dir / 'launcher.log').read_text()[-2000:] if (run_dir / 'launcher.log').exists() else '-'}")
+    return json.loads((run_dir / CU.MARKER).read_text())
 
 
 def _other_machine(tmp_path: Path, vault: Path, monkeypatch) -> LocalStore:
@@ -136,16 +132,21 @@ def test_a_stray_sigterm_to_the_runner_does_not_cost_the_run_its_record_or_custo
     import signal
 
     vault = tmp_path / "vault"
-    req, runs = _request(tmp_path, RID, [PY, "-c", "import time; time.sleep(2); print('finished')"], vault)
-    assert remote.launch_request(req)["started"]
-    d = runs / RID
-    deadline = time.time() + 30
-    while time.time() < deadline and (json.loads((d / "status.json").read_text()) if (d / "status.json").exists() else {}).get("state") != "running":
-        time.sleep(0.05)
-    runner = json.loads((d / "launch.json").read_text())["runner_pid"]
-    os.kill(runner, signal.SIGTERM)
-    os.kill(runner, signal.SIGHUP)
-    marker = _wait_marker(d)
+    arrived, gate = tmp_path / "arrived", Gate(tmp_path / "gate")
+    os.mkfifo(arrived)
+    workload = f"import sys; open(sys.argv[2], 'w').close(); {Gate.WAIT}; print('finished')"   # arrives, then waits for the gate
+    req, runs = _request(tmp_path, RID, [PY, "-c", workload, str(gate.path), str(arrived)], vault)
+    try:
+        assert remote.launch_request(req)["started"]
+        d = runs / RID
+        open(arrived, "rb").close()                              # returns once the workload runs: the runner is past its setup
+        runner = json.loads((d / "launch.json").read_text())["runner_pid"]
+        os.kill(runner, signal.SIGTERM)
+        os.kill(runner, signal.SIGHUP)
+        gate.release()
+        marker = _wait_marker(d)
+    finally:
+        gate.close()
     status = json.loads((d / "status.json").read_text())
     assert status["state"] == "done" and status["rc"] == 0 and (d / "stdout.log").read_text() == "finished\n"
     assert marker["preserved"] is True and CU.marker_problem(d) is None
@@ -153,8 +154,10 @@ def test_a_stray_sigterm_to_the_runner_does_not_cost_the_run_its_record_or_custo
     assert "runner got SIGTERM" in log and "runner got SIGHUP" in log
 
 
-@pytest.mark.slow
-def test_a_failed_publish_leaves_a_negative_marker_forgets_the_key_and_the_guard_refuses(tmp_path, capsys):
+def test_a_failed_publish_leaves_a_negative_marker_forgets_the_key_and_the_guard_refuses(tmp_path, capsys, monkeypatch):
+    from research.store import remote_s3
+
+    monkeypatch.setattr(remote_s3, "RETRY_BACKOFF_S", 0.0)
     runs = tmp_path / "root" / "runs"
     d = _fixture_run(runs)
     cdir = _custody_dir(tmp_path, FIXTURE_RID, tmp_path / "vault",
@@ -185,7 +188,7 @@ def test_on_the_machine_a_failed_push_leaves_launcher_log_as_recorded_and_names_
     code = ("from pathlib import Path; from research.store import custody as CU, remote_s3 as R; R.RETRY_BACKOFF_S = 0; "
             f"CU.runner_publish(Path({str(d)!r}), Path({str(cdir)!r}), sleep=lambda s: None, tries=1)")
     with open(d / "launcher.log", "ab") as log:
-        subprocess.run([PY, "-c", code], stdout=log, stderr=log, env={**os.environ, "PYTHONPATH": SRC}, check=True, timeout=120)
+        subprocess.run([PY, "-c", code], stdout=log, stderr=log, env={**os.environ, "PYTHONPATH": SRC}, check=True)
     assert (d / "launcher.log").read_bytes() == before
     marker = json.loads((d / CU.MARKER).read_text())
     assert marker["preserved"] is False and marker["error"].startswith("the custody key expired at 2020-01-01T00:00:00Z: the run outlived")
@@ -309,21 +312,24 @@ def test_a_refused_claim_deletes_the_staged_key(tmp_path):
 POD = "abcdefghijkl12"
 
 
+NOW = 1_800_000_000.0
+
+
 def _state(verdict="idle", unfetched=(), age_s=30.0):
-    return lambda pod_id, root: ({"verdict": verdict, "unfetched": list(unfetched), "runs": 2, "updated_epoch": time.time() - age_s}, "")
+    return lambda pod_id, root: ({"verdict": verdict, "unfetched": list(unfetched), "runs": 2, "updated_epoch": NOW - age_s}, "")
 
 
 def test_pod_custody_needs_a_fresh_guard_verdict_over_every_run_dir(tmp_path):
     st = LocalStore(tmp_path / "s")
-    ok, why, _ = DR.pod_custody(st, POD, refresh=False, probe=False, state=_state())
+    ok, why, _ = DR.pod_custody(st, POD, refresh=False, probe=False, now=NOW, state=_state())
     assert ok and "2 run dir(s) with custody" in why
-    ok, why, _ = DR.pod_custody(st, POD, refresh=False, probe=False, state=_state(unfetched=[{"run": RID, "why": "no .custody"}]))
+    ok, why, _ = DR.pod_custody(st, POD, refresh=False, probe=False, now=NOW, state=_state(unfetched=[{"run": RID, "why": "no .custody"}]))
     assert not ok and RID in why
-    ok, why, _ = DR.pod_custody(st, POD, refresh=False, probe=False, state=_state(age_s=3600))
+    ok, why, _ = DR.pod_custody(st, POD, refresh=False, probe=False, now=NOW, state=_state(age_s=3600))
     assert not ok and "guard dead?" in why
-    ok, why, _ = DR.pod_custody(st, POD, refresh=False, probe=False, state=lambda p, r: (None, "no guard state on the pod"))
+    ok, why, _ = DR.pod_custody(st, POD, refresh=False, probe=False, now=NOW, state=lambda p, r: (None, "no guard state on the pod"))
     assert not ok and "unknown" in why
-    ok, why, _ = DR.pod_custody(st, POD, refresh=True, probe=False, state=_state())
+    ok, why, _ = DR.pod_custody(st, POD, refresh=True, probe=False, now=NOW, state=_state())
     assert not ok and "refresh" in why, "no remote: the catalog cannot be brought up to date, so custody is not claimed"
 
 
