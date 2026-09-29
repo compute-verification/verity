@@ -1,0 +1,19 @@
+name = "pouw"
+defaultTargets = ["Pouw", "PouwProofs"]
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+
+[[require]]
+name = "mathlib"
+git = "https://github.com/leanprover-community/mathlib4"
+rev = "5ed2965256430c3649e86755f9576b54eca72435"
+
+# The trusted layer: the game, Pearl-C's accounting and the named assumptions. It imports no proofs.
+[[lean_lib]]
+name = "Pouw"
+
+# Proofs about the trusted layer, checked by `tools/lean/audit.py` (`lean-audit.json`).
+[[lean_lib]]
+name = "PouwProofs"
