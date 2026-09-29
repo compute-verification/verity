@@ -4,7 +4,6 @@ hashes every file the audit step runs, covers this module and not `check.py`, wh
 from __future__ import annotations
 
 import hashlib
-import json
 import os
 import subprocess
 from pathlib import Path
@@ -42,15 +41,9 @@ def sha256(p: Path) -> str:
 
 
 def tracked_files(root: Path = ROOT) -> list[str] | None:
-    """The tree's files as git has them: tracked and untracked-unignored in a checkout; in a shipped tree (no `.git`), the
-    commit's tree as the machine's bare repository holds it (`READY.json` names it), never what steps have built in it since.
-    None when neither is available."""
-    if (root / ".git").exists():
-        argv = ["git", "-C", str(root), "ls-files", "-z", "-co", "--exclude-standard"]
-    else:
-        ready, bare = root / "READY.json", root.parent.parent / "git" / "verity.git"
-        if not (ready.exists() and bare.exists()):
-            return None
-        argv = ["git", "--git-dir", str(bare), "ls-tree", "-r", "-z", "--name-only", json.loads(ready.read_text())["tree"]]
-    r = subprocess.run(argv, capture_output=True)
+    """The tree's files as git has them, tracked and untracked-unignored (a tree `research run --on` ships is a checkout); None
+    outside a checkout."""
+    if not (root / ".git").exists():
+        return None
+    r = subprocess.run(["git", "-C", str(root), "ls-files", "-z", "-co", "--exclude-standard"], capture_output=True)
     return sorted(p.decode() for p in r.stdout.split(b"\0") if p) if r.returncode == 0 else None

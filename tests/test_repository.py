@@ -193,21 +193,6 @@ REGISTRY = "fixtures/artifacts.json"
 
 
 def _tracked() -> list[str]:
-    if not (ROOT / ".git").exists():                # a shipped `git archive` (research run --source): the commit's tree as the
-        ready = ROOT / "READY.json"                 # machine's bare repository holds it, never what steps have built in it since
-        bare = ROOT.parent.parent / "git" / "verity.git"
-        if ready.exists() and bare.exists():
-            tree = json.loads(ready.read_text())["tree"]
-            out = subprocess.run(["git", "--git-dir", str(bare), "ls-tree", "-r", "-z", "--name-only", tree], check=True,
-                                 capture_output=True).stdout
-            return sorted(p.decode() for p in out.split(b"\0") if p)
-        out = []
-        for d, dirs, files in os.walk(ROOT):
-            dirs[:] = [x for x in dirs if x not in (".venv", "__pycache__", ".lake")]
-            out += [os.path.relpath(os.path.join(d, f), ROOT) for f in files]
-        registered = [v.rstrip("/") for k, v in json.loads((ROOT / "fixtures" / "artifacts.json").read_text()).items()
-                      if k.startswith("art:") and isinstance(v, str)] if (ROOT / "fixtures" / "artifacts.json").is_file() else []
-        return sorted(p for p in out if p != "READY.json" and not any(p == r or p.startswith(r + "/") for r in registered))
     out = subprocess.run(["git", "ls-files", "-z"], cwd=ROOT, check=True, capture_output=True).stdout
     return [p.decode() for p in out.split(b"\0") if p]
 
