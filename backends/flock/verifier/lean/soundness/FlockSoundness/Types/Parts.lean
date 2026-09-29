@@ -14,8 +14,9 @@ checks the part structure that reading needs (`partsChecked`), and these lemmas 
 3. **Δ** (`delta_nodup`, `delta_entry`, `delta_const`, `callee_rows`): one entry per row, each the unit's constant, a
    part's constant or a part's bound input. Each callee's input rows are self rows, and its constant row is
    `[const]·[const]`.
-4. **The own rows** (`own_reads`): each reads only own and part columns. So the entries `crossOf` takes, those at or past
-   `u.size`, are part columns.
+4. **The own rows** (`own_reads`, `unit_const_row`, `order_cols`): each reads only own and part columns. So the entries
+   `crossOf` takes, those at or past `u.size`, are part columns. The constant row is `[const]·[const]`, and the order
+   lists only own and part columns.
 -/
 
 namespace FlockSoundness.Types.Dag
@@ -48,14 +49,18 @@ theorem partsChecked_spec {done : Array D} {unit : Nat} (h : partsChecked done u
         pq.1.2 + (done.getD pq.1.1 default).size ≤ pq.2.2) ∧
       ((done.getD unit default).delta.toList.map (·.1)).Nodup ∧
       (∀ e ∈ (done.getD unit default).delta, deltaEntryOk done (done.getD unit default) e = true) ∧
-      ∀ c < (done.getD unit default).size,
+      (∀ c < (done.getD unit default).size,
         ∀ x ∈ ((done.getD unit default).rows.getD c ([], [])).1 ++ ((done.getD unit default).rows.getD c ([], [])).2,
-          x < (done.getD unit default).size ∨ inPart done (done.getD unit default) x = true := by
+          x < (done.getD unit default).size ∨ inPart done (done.getD unit default) x = true) ∧
+      (done.getD unit default).rows.getD (done.getD unit default).const ([], []) =
+        ([(done.getD unit default).const], [(done.getD unit default).const]) ∧
+      ∀ c ∈ order done (done.getD unit default),
+        c < (done.getD unit default).size ∨ inPart done (done.getD unit default) c = true := by
   unfold partsChecked at h
   simp only [Bool.and_eq_true, Array.all_eq_true_iff_forall_mem, List.all_eq_true, decide_eq_true_eq,
-    List.mem_range, Bool.or_eq_true] at h
-  obtain ⟨⟨⟨⟨hp, hz⟩, hd⟩, he⟩, ho⟩ := h
-  exact ⟨hp, hz, (distinctFrom_spec _ _ hd).2, he, ho⟩
+    List.mem_range, Bool.or_eq_true, beq_iff_eq] at h
+  obtain ⟨⟨⟨⟨⟨⟨hp, hz⟩, hd⟩, he⟩, ho⟩, hc⟩, hord⟩ := h
+  exact ⟨hp, hz, (distinctFrom_spec _ _ hd).2, he, ho, hc, hord⟩
 
 variable {types : String → Option CircuitType} {ls : Array Layout} {info : String → Option TableInfo}
   {words : String → Option (Array Nat)} {unit : Nat} {done : Array D}
@@ -220,7 +225,25 @@ theorem own_reads (hd : deriveChecked types ls info words unit = .ok done) {c : 
       x < (done.getD unit default).size ∨
         ∃ p ∈ (done.getD unit default).parts, p.2 ≤ x ∧ x < p.2 + (done.getD p.1 default).size := by
   intro x hx
-  rcases (partsChecked_spec (deriveChecked_parts hd)).2.2.2.2 c hc x hx with h | h
+  rcases (partsChecked_spec (deriveChecked_parts hd)).2.2.2.2.1 c hc x hx with h | h
+  · exact Or.inl h
+  · unfold inPart at h
+    simp only [Array.any_eq_true', Bool.and_eq_true, decide_eq_true_eq] at h
+    exact Or.inr h
+
+/-- **The unit's constant row is `[const]·[const]`**, as a derived row: its root net's constant reads only itself, so
+`crossOf` has no entry at it. -/
+theorem unit_const_row (hd : deriveChecked types ls info words unit = .ok done) :
+    (done.getD unit default).rows.getD (done.getD unit default).const ([], []) =
+      ([(done.getD unit default).const], [(done.getD unit default).const]) :=
+  (partsChecked_spec (deriveChecked_parts hd)).2.2.2.2.2.1
+
+/-- **The unit's order lists only own and part columns.** -/
+theorem order_cols (hd : deriveChecked types ls info words unit = .ok done) :
+    ∀ c ∈ order done (done.getD unit default), c < (done.getD unit default).size ∨
+      ∃ p ∈ (done.getD unit default).parts, p.2 ≤ c ∧ c < p.2 + (done.getD p.1 default).size := by
+  intro c hc
+  rcases (partsChecked_spec (deriveChecked_parts hd)).2.2.2.2.2.2 c hc with h | h
   · exact Or.inl h
   · unfold inPart at h
     simp only [Array.any_eq_true', Bool.and_eq_true, decide_eq_true_eq] at h

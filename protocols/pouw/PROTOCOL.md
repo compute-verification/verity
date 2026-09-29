@@ -399,7 +399,9 @@ at its floor, so a wholly wrong one is caught directly (`audit_work_whole_stratu
   PoUW work, so W is its stratum's, and k_tile = min(n_tile, max(f_tile, K)).
   - `plan.work_table` is the verifier's `--work-table`: every template of the call, `{"work": w, "floor": f}`, the tile's
     W_ref per tile and 0 for `digest`, `node`, `key`, `form_x` and `dequant`; `dequant`'s floor is y's (below), and the
-    others' 1 unless POUS sets them.
+    others' 1 unless POUS sets them. A call's work is in one stratum, the tile template's: `work_table`, `WorkLaw` and
+    `window_laws` refuse any other (`plan.check_work_strata`), since the window pin's `covers_window` takes it as its
+    hypothesis `hone` (with the cap K_c ≤ N_c, a second work stratum can be under-drawn).
   - `plan.law_object` is the law `verify` derives from it, each stratum `{template, units, work, floor, k}`.
   - K is a **window's** budget (X-SPC-83): a call draws its share K_c = ⌈K·W_c/W_window⌉, capped at its units
     (`plan.window_laws`). That is the law `verify` enforces when each call is its own statement with its own K_c

@@ -3,6 +3,8 @@ exists always wins, so the laptop's choice and behaviour are unchanged."""
 from __future__ import annotations
 
 import base64
+import hashlib
+import re
 import subprocess
 import tomllib
 from pathlib import Path
@@ -11,9 +13,10 @@ import pytest
 
 from research.pods import runpod
 from research.store import remote_s3
+from research.store import remote
 from research.store.remote import POD_CONFIG, ConfigError, load_remote
 
-BUCKET = tomllib.loads(POD_CONFIG.read_text())["remote"]["bucket"]
+BUCKET = "store-bucket"                                            # a dummy: the tracked tree never names the store's bucket
 
 
 @pytest.fixture
@@ -80,6 +83,10 @@ def r2(tmp_path, monkeypatch):
     monkeypatch.setenv("AWS_ACCESS_KEY_ID", "ak")
     monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "sk")
     monkeypatch.delenv("AWS_SESSION_TOKEN", raising=False)
+    pod = tmp_path / "store.pod.toml"
+    pod.write_text(POD_CONFIG.read_text().replace(tomllib.loads(POD_CONFIG.read_text())["remote"]["bucket_sha256"],
+                                                  hashlib.sha256(BUCKET.encode()).hexdigest()))
+    monkeypatch.setattr(remote, "POD_CONFIG", pod)                 # pins the dummy's digest, as the tracked file pins the store's
     return tmp_path / "home" / ".research" / "store.toml"
 
 
@@ -111,5 +118,23 @@ def test_store_toml_wins_and_an_explicit_config_path_is_never_replaced_by_env(r2
     assert load_remote(tmp_path / "absent.toml") is None
 
 
-def test_the_expected_bucket_is_read_from_the_tracked_pod_config():
-    assert POD_CONFIG == Path(__file__).resolve().parents[1] / "store.pod.toml" and BUCKET
+def test_the_tracked_pod_config_pins_the_bucket_by_digest_and_names_neither_bucket_nor_endpoint():
+    assert POD_CONFIG == Path(__file__).resolve().parents[1] / "store.pod.toml"
+    r = tomllib.loads(POD_CONFIG.read_text())["remote"]
+    assert re.fullmatch(r"[0-9a-f]{64}", r["bucket_sha256"])
+    assert "bucket" not in r and "endpoint" not in r and (r["bucket_env"], r["endpoint_env"]) == ("R2_BUCKET", "R2_ENDPOINT")
+    assert "r2.cloudflarestorage.com" not in POD_CONFIG.read_text()
+
+
+def test_the_pod_config_takes_bucket_and_endpoint_from_the_environment_and_checks_the_digest(r2, monkeypatch):
+    pod = remote.POD_CONFIG
+    monkeypatch.delenv("R2_BUCKET", raising=False)
+    monkeypatch.setenv("R2_ENDPOINT", "https://acct.r2.cloudflarestorage.com")
+    with pytest.raises(ConfigError, match="bucket_env names R2_BUCKET, which is not set"):
+        load_remote(pod)
+    monkeypatch.setenv("R2_BUCKET", "some-other-bucket")
+    with pytest.raises(ConfigError, match="not the one .remote. bucket_sha256 pins"):
+        load_remote(pod)
+    monkeypatch.setenv("R2_BUCKET", BUCKET)
+    r = load_remote(pod)
+    assert isinstance(r, remote_s3.S3Remote) and r.bucket == BUCKET and r.host == "acct.r2.cloudflarestorage.com"

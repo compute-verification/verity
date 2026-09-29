@@ -81,6 +81,7 @@ VERIFIED_BY = "verified_by"                           # a ledger row's free-text
 SAME_DEVICE = "same_device"
 BELOW_BAR = "below_bar"                               # verified, but its whole-proof bound misses the tables' 2^-128 bar
 OUTCOME = "outcome"
+COMMIT_MAP = "commit_map"                             # on a commit-map/v1 artifact: whether the history rewrite it records applies
 
 # ---- evidence labels: probe captures and input sets --------------------------------------------------------------------------------
 
@@ -105,6 +106,7 @@ DTYPE = "dtype"
 
 VERIFIED_ACCEPTED, VERIFIED_REJECTED, VERIFIED_NOT_TRANSFERABLE, VERIFIED_NO_DUMPS = "accepted", "rejected", "not-transferable", "no-dumps"
 VERIFIED_VALUES = (VERIFIED_ACCEPTED, VERIFIED_REJECTED, VERIFIED_NOT_TRANSFERABLE, VERIFIED_NO_DUMPS)
+COMMIT_MAP_VALUES = ("accepted", "retracted")
 #: Mirrors `PROOF_CLASSES` in `backends/numerical/python/verity_numerical/bench/contract.py` + the `COMPONENT` that
 #: `bench/ledger.py` adds (a bucket measured alone is no proof class).  The store imports neither package (the `research` rule), so
 #: the spelling is copied here; `backends/numerical/tests/bench/test_tables.py` checks the copy against both.
@@ -248,6 +250,8 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(FOLD, GROUP_RESULT, INT, "columns folded per VU (the relation's -xN)"),
     _k(PIPELINE, GROUP_RESULT, INT, "prover pipeline depth (sub-batches in flight; 1 = sequential)"),
     # verification
+    _k(COMMIT_MAP, GROUP_VERIFICATION, ENUM, "on a commit-map/v1 artifact, by its approver (research.commitmap.ACCEPTORS): whether the rewrite it "
+       "records applies, so that records keyed by an old commit are read for its image; the latest label wins", COMMIT_MAP_VALUES),
     _k(VERIFIED, GROUP_VERIFICATION, ENUM, "an independent verifier's verdict on the result's proof(s)", VERIFIED_VALUES),
     _k(VERIFIER, GROUP_VERIFICATION, TEXT, "which verifier produced the verdict (binary or module + revision)"),
     _k(VERIFIER_SECONDS, GROUP_VERIFICATION, NUMBER, "the verifier's wall seconds for the verdict"),

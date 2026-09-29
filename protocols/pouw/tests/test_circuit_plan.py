@@ -69,10 +69,17 @@ def test_the_work_law_sizes_tiles_by_work_and_the_rest_at_its_floor():
 
 
 def test_the_work_law_is_roots_rule():
-    """#362's example: T0 has 3 units of work 3, T1 3 units of work 1, T2 4 units of work 0; `work:2` draws 2, 1 and 1."""
-    strata = [PL.StratumSpec("T0", "tile", (0, 1, 2), 9), PL.StratumSpec("T1", "tile", (3, 4, 5), 3),
-              PL.StratumSpec("T2", "dequant", (6, 7, 8, 9), 0)]
-    assert PL.WorkLaw(2).sizes(strata) == {"T0": 2, "T1": 1, "T2": 1}
+    """#362's rule, k_s = min(n_s, max(f_s, ⌈K·W_s/W⌉)): T0 has 3 units of work 3 and T2 4 units of work 0, and `work:2`
+    draws 2 and 1; a floor of 3 on T2 draws 3. #362's own example also gives work to a second template (T1, 3 units of
+    work 1), which a call's table may not (`hone`, `check_work_strata`), so the verifier refuses it."""
+    import pytest
+
+    t0, t1, t2 = (PL.StratumSpec("T0", "tile", (0, 1, 2), 9), PL.StratumSpec("T1", "tile", (3, 4, 5), 3),
+                  PL.StratumSpec("T2", "dequant", (6, 7, 8, 9), 0))
+    assert PL.WorkLaw(2).sizes([t0, t2]) == {"T0": 2, "T2": 1}
+    assert PL.WorkLaw(2, floors=(("T2", 3),)).sizes([t0, t2]) == {"T0": 2, "T2": 3}
+    with pytest.raises(ValueError, match="one stratum"):
+        PL.WorkLaw(2).sizes([t0, t1, t2])
 
 
 def test_the_record_budget_is_27713():
@@ -198,6 +205,31 @@ def test_y_is_drawn_at_root_s_option_b_floors_over_the_window():
     lay = PL.layout(ncp2.Shape(32, 64, 32))
     (alone,) = PL.window_laws([lay])
     assert alone.sizes(lay.strata)[_by_role(lay)["dequant"].name] == 32 * 32
+
+
+def test_a_work_table_with_a_calls_work_in_two_strata_is_refused():
+    """The window pin's `covers_window` holds only when each call's work is in one stratum (`hone`): with the cap K_c ≤ N_c,
+    root's counterexample (4 units at work 2 and 2 at work 5, K = 8) draws 3 of the first where covering needs 3.6. The
+    verifier's own layouts give work to the tile template only (X-SPC-84), and `work_table`, `WorkLaw` and `window_laws`
+    refuse any layout that doesn't."""
+    import dataclasses
+
+    import pytest
+
+    lay = PL.layout(ncp2.Shape(32, 64, 32))
+    assert [s.role for s in lay.strata if s.work] == ["tile"]
+    PL.work_table(lay, PL.window_laws([lay] * 3)[0])
+    deq = _by_role(lay)["dequant"]
+    two = dataclasses.replace(lay, strata=tuple(dataclasses.replace(s, work=len(s.units)) if s is deq else s
+                                                 for s in lay.strata))
+    for refused in (lambda: PL.work_table(two), lambda: PL.WorkLaw().sizes(two.strata), lambda: PL.window_laws([lay, two]),
+                    lambda: PL.law_object(two, PL.WorkLaw()), lambda: PL.draw(_key(), two, PL.WorkLaw())):
+        with pytest.raises(ValueError, match="one stratum"):
+            refused()
+    a, b = PL.StratumSpec("a", "tile", (0, 1, 2, 3), 2 * 4), PL.StratumSpec("b", "tile", (4, 5), 5 * 2)
+    assert -(-6 * a.work // (a.work + b.work)) == 3 and 3 * 18 < 8 * a.work       # 3 drawn, 8·2·4/18 ≈ 3.6 needed
+    with pytest.raises(ValueError, match="one stratum"):
+        PL.WorkLaw(8).sizes((a, b))
 
 
 def test_a_tiles_closure_contains_the_tile_itself():

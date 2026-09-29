@@ -188,7 +188,9 @@ def key(request: dict) -> dict:
 
     _INTERNAL.append(True)                             # the tracer's own work (`platform` runs `uname`): no input of a check
     try:
-        plat = platform.platform()
+        # the system, the CPU and the C library, not `platform.platform()`: that names the host's kernel release, which differs
+        # between pods and would keep one pod's reports from ever counting on another (`tools/check/verdicts.py`)
+        plat = "-".join([platform.system(), platform.machine(), *platform.libc_ver()])
     finally:
         _INTERNAL.pop()
     dists = sorted(f"{d.metadata['Name']}=={d.version}" for d in metadata.distributions())
