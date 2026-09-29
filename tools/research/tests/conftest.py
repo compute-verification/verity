@@ -19,6 +19,7 @@ def _isolated_store(monkeypatch, tmp_path_factory):
     for k in ("RUNPOD_API_KEY", "RUNPOD_SSH_KEY_B64", "R2_ENDPOINT", "R2_BUCKET", "R2_ACCOUNT_ID"):
         monkeypatch.delenv(k, raising=False)
     # ... nor the public fixture export or an export bucket (fetchset.py, remote.load_export)
-    for k in ("RESEARCH_FIXTURES_URL", "RESEARCH_EXPORT_DIR", "RESEARCH_EXPORT_BUCKET", "RESEARCH_EXPORT_URL", "RESEARCH_EXPORT_TOKEN",
-              "RESEARCH_SITE_BYPASS"):
+    for k in ("RESEARCH_FIXTURES_URL", "RESEARCH_EXPORT_DIR", "RESEARCH_EXPORT_BUCKET"):
+        monkeypatch.delenv(k, raising=False)
+    for k in ("RESEARCH_EXPORT_URL", "RESEARCH_EXPORT_TOKEN", "RESEARCH_SITE_BYPASS"):   # the site's broker and a preview's bypass
         monkeypatch.delenv(k, raising=False)
