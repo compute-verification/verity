@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import bisect
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from functools import lru_cache
 from typing import Any
 
@@ -50,10 +50,11 @@ class Circuit:
     n: int
     pouw_roles: tuple[str, ...]
     variants: tuple[tuple[str, Any], ...] = ()   # (role, template) for every template, when a role has several
+    calls: int = 1                               # a window's calls, whose y all come first
 
     @property
     def tiles(self) -> int:
-        return (self.m // D) * (self.n // D)
+        return self.calls * (self.m // D) * (self.n // D)
 
 
 def ncp_circuit(shape: Shape, kind: str = "shift24", fn: Any = None) -> Circuit:
@@ -67,7 +68,7 @@ def h1t_circuit(shape: h1t.Shape, fn: Any = None, bias: bool = True) -> Circuit:
 
 def h1t_window_circuit(shape: h1t.Shape, calls: int, bias: bool = True) -> Circuit:
     """``calls`` H-1T calls on one weight in one root (`h1t.window`)."""
-    return h1t_circuit(shape, h1t.window(shape, calls, bias), bias)
+    return replace(h1t_circuit(shape, h1t.window(shape, calls, bias), bias), calls=calls)
 
 
 def listed_of(fn: Any) -> list[Any]:
@@ -239,7 +240,7 @@ def circuit_separator(c: Circuit, uc: UnitCut | None = None) -> Separator:
     preds: list[list[int]] = [[] for _ in range(g.n)]
     for p, q in zip(g.src, g.dst):
         preds[q].append(p)
-    y_gates = list(g.outputs[:c.m * c.n])
+    y_gates = list(g.outputs[:c.calls * c.m * c.n])
     words_delivered = sum(1 for q in y_gates if us[owner[q]].role != "dequant")
     seen, stack, stopped, reached = set(y_gates), list(y_gates), set(), 0
     while stack:
@@ -315,8 +316,9 @@ def width_rule_of(fn: Any, shape: Shape, kind: str, served: int) -> WidthRule:
 
 
 def circuit_width_rule(c: Circuit, served: int | None = None, uc: UnitCut | None = None) -> WidthRule:
-    """`width_rule` for any circuit: its served outputs are its first ``served`` root outputs (y's m·n by default)."""
-    served = c.m * c.n if served is None else served
+    """`width_rule` for any circuit: its served outputs are its first ``served`` root outputs (every call's y by default:
+    C·m·n for a window of C calls)."""
+    served = c.calls * c.m * c.n if served is None else served
     if not 1 <= served:
         raise ValueError("the served outputs are at least one: a width rule over none checks nothing")
     uc = circuit_cut(c) if uc is None else uc

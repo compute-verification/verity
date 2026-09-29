@@ -163,6 +163,7 @@ class Layout:
     closure: Mapping[int, tuple[int, ...]]              # tile unit -> the call's units proved with it (itself first)
     y_strip: Mapping[int, int] = None                   # tile unit -> the weight Program's Y unit it reads (column strip)
     per_tile: int | None = None                         # a tile's W_ref, when not `ncp-v2`'s
+    a_readers: tuple[str, ...] = ("digest", "form_x")   # the roles whose units read their strip's A rows
 
     def tile_work(self) -> int:
         """One tile's W_ref: its cells' share of the call's (`schemes.ncp.NCP.wref`), or the circuit's own (H-1T)."""
@@ -229,7 +230,8 @@ def template_strata(us: Sequence[Unit], per_tile: int) -> tuple[StratumSpec, ...
 
 def h1t_layout(shape, bias: bool = True) -> Layout:
     """H-1T's layout (`circuit.h1t`): each tile's closure is its X strip's forming unit and that strip's key, which reads
-    the strip's rows; the tile reads B′'s rows and tags as committed inputs.  The strata are one per template (the key, the
+    the strip's rows itself (so a proved key opens them, as a proved X unit does, X-SPC-110); the tile reads B′'s rows and
+    tags as committed inputs.  The strata are one per template (the key, the
     forming, the tile and the dequantization), as for `ncp-v2`.  A tile's W_ref is `h1t.tile_work`."""
     from . import h1t
     from .partition import circuit_units, h1t_circuit
@@ -242,7 +244,7 @@ def h1t_layout(shape, bias: bool = True) -> Layout:
     form_x = {u.where[0]: u.index for u in by_role["form_x"]}
     closure = {t.index: (t.index, form_x[t.where[0]], key[t.where[0]]) for t in by_role["tile"]}
     per_tile = h1t.tile_work(shape.k)
-    return Layout(shape, us, template_strata(us, per_tile), closure, per_tile=per_tile)
+    return Layout(shape, us, template_strata(us, per_tile), closure, per_tile=per_tile, a_readers=("form_x", "key"))
 
 
 @dataclass(frozen=True)
@@ -297,8 +299,9 @@ def openings(lay: Layout, proved, proved_y=()) -> tuple[tuple[str, int], ...]:
     rows: set[tuple[str, int]] = set()
     for i in proved:
         u = lay.units[i]
-        if u.role in ("digest", "form_x"):
-            rows.update(("a", D * u.where[0] + r) for r in range(D))
+        if u.role in lay.a_readers:
+            strip = u.where[0] if u.where else u.member
+            rows.update(("a", D * strip + r) for r in range(D))
         elif u.role == "tile" and not (lay.y_strip and i in lay.y_strip):
             rows.update(("b", D * u.where[1] + r) for r in range(D))
     for cs in proved_y:

@@ -133,6 +133,23 @@ class H1tAnchors:
         _check(fn, args, self.call_inputs())
 
 
+def h1t_window_inputs(anchors: Sequence[H1tAnchors], shape) -> dict[str, list[int]]:
+    """`H1tWindow`'s anchored inputs (X-SPC-111): the window's one salt, weight id and tags, and each call's forward index,
+    position, strip ids and row ids in call order, after a `Ledger` refuses a repeated call index. Every call is of one
+    shape, salt, weight id and columns (X-SPC-108's rule)."""
+    if not anchors:
+        raise DomainError("a window has at least one call")
+    first, ledger = anchors[0], Ledger()
+    for an in anchors:
+        if (an.salt, an.weight, an.cols) != (first.salt, first.weight, first.cols):
+            raise DomainError("a window's calls share one salt, weight id and columns")
+        ledger.admit(an, shape)
+    per = [an.call_inputs() for an in anchors]
+    out = {p: per[0][p] for p in ("salt", "weight", "tags")}
+    out |= {p: [v for d in per for v in d[p]] for p in ("forward", "position", "stripids", "rowids")}
+    return out
+
+
 def _check(fn, args, want: dict[str, list[int]]) -> None:
     params, _ = fn.signature()
     names = [name for name, _t in params]
@@ -156,4 +173,4 @@ class Ledger:
         self.seen.add(anchors.call_index)
 
 
-__all__ = ["Anchors", "H1tAnchors", "Ledger"]
+__all__ = ["Anchors", "H1tAnchors", "Ledger", "h1t_window_inputs"]

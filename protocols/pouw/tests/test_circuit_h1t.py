@@ -336,3 +336,52 @@ def test_the_dequantization_unit_is_the_epilogue_on_hard_words():
     one = f32(1.0)
     assert evaluate(h1t.dequant_template(False), 0x80000000, one, one)[0] == 0x8000
     assert evaluate(h1t.dequant_template(True), 0x80000000, one, one, 0)[0] == 0x0000
+
+
+def test_a_key_drawn_at_its_floor_opens_its_strip_s_rows():
+    """H-1T's key reads its strip's A rows itself, so a key drawn at its own floor for a strip no drawn tile covers is
+    proved over rows the plan must open (X-SPC-110): every proved key's and X unit's strip rows are opened, and some of the
+    plans here draw such a key."""
+    from verity.randomness import derive
+    from verity_pouw.circuit import plan as PL
+    from verity_pouw.circuit import traced_h1t
+    from verity_pouw.circuit.anchors import H1tAnchors
+
+    c = call(48, 64, 32)
+    t = traced_h1t(48, 64, 32)
+    lay = t.layout()
+    an = H1tAnchors(c.salt, c.forward, c.layer, c.site, c.weight, tuple(c.rowids), tuple(range(32)))
+    lonely = 0
+    for i in range(60):
+        plan = t.draw(derive(b"verifier-secret", PL.DRAW_DOMAIN, {"receipt": b"r%d" % i}), PL.WorkLaw(2), an)
+        units = [lay.units[u] for u in plan.proved]
+        tile_strips = {u.where[0] for u in units if u.role == "tile"}
+        for u in units:
+            if u.role in ("key", "form_x"):
+                strip = u.where[0] if u.where else u.member
+                assert {("a", 16 * strip + r) for r in range(16)} <= set(plan.openings)
+                lonely += u.role == "key" and strip not in tile_strips
+    assert lonely > 0
+
+
+def test_a_window_s_defaults_cover_every_call_and_its_inputs_are_the_verifier_s():
+    """X-SPC-111: a window's separator and width rule read every call's y by default (`Circuit.calls`), and
+    `anchors.h1t_window_inputs` builds its anchored inputs from each call's `H1tAnchors`, refusing a repeated call index or
+    calls of another salt, weight id or columns."""
+    from verity_pouw.circuit.anchors import H1tAnchors, h1t_window_inputs
+
+    shape = h1t.Shape(16, 96, 16)
+    c = P.h1t_window_circuit(shape, 2)
+    uc = P.circuit_cut(c)
+    sep, w = P.circuit_separator(c, uc), P.circuit_width_rule(c, uc=uc)
+    assert sep.ok and sep.per_tile_bits == 32 * 256 and w.ok and len(w.checked) == 2 * 256
+    c1, c2 = call(16, 96, 16), call(16, 96, 16)
+    an = [H1tAnchors(c1.salt, f, c1.layer, c1.site, c1.weight, tuple(c1.rowids), tuple(range(16))) for f in (3, 4)]
+    got = h1t_window_inputs(an, shape)
+    names = [p for p, _t in h1t.linear(shape).signature()[0]]
+    assert got["salt"] == c1.args()[names.index("salt")] and got["tags"] == c1.args()[names.index("tags")]
+    assert got["forward"] == [3, 0, 4, 0] and got["rowids"] == list(c1.rowids) * 2
+    for bad in ([an[0], an[0]], [an[0], H1tAnchors(bytes(32), 4, 5, 2, 11, tuple(c1.rowids), tuple(range(16)))],
+                [an[0], H1tAnchors(c1.salt, 4, 5, 2, 12, tuple(c1.rowids), tuple(range(16)))]):
+        with pytest.raises(DomainError):
+            h1t_window_inputs(bad, shape)

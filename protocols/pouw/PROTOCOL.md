@@ -307,12 +307,15 @@ H1tDequant{BIAS} output entry         Z, s_i, t_j (and bias_j)                  
   16 | n, 8 | k, 29 < k <= 32,768.
 - **The partition** (`partition.h1t_circuit`): the whole-call `validate_unit_cut` passes, every path from a key, forming
   or tile unit to y crosses a pinned Z (8,192 bits per tile), and only the dequantization units are width-checked.
-  `H1tWindow{M,K,N,C}`, C calls on one weight in one root, each with its own anchored indices, passes the invariant too.
+  `H1tWindow{M,K,N,C,BIAS}`, C calls on one weight in one root, each with its own anchored indices, passes the invariant
+  too; its separator and width rule read every call's y (`Circuit.calls`), and `anchors.h1t_window_inputs` builds its
+  anchored inputs, one salt, weight id and columns, with a `Ledger` (X-SPC-111).
 - **The draw** (`plan.h1t_layout`): the strata are one per template, as `verify` derives them (root's ruling on
   X-SPC-84), the tile's with its W_ref and the others at their floors. A tile's closure is the tile, its X strip's
   forming unit and that strip's key. A
   tile's W_ref is its cells' 2T k32 atoms (`h1t.tile_work`, 64·T MACs a cell; the forming's share isn't counted). A
-  proved tile opens its X strip's rows and its 16 weight rows. The layout is the verifier's: `Traced.check_layout`
+  proved tile opens its 16 weight rows, and a proved key or X unit its strip's rows (the key reads them itself, so a
+  key drawn at its floor for a strip no drawn tile covers opens them too, X-SPC-110). The layout is the verifier's: `Traced.check_layout`
   refuses any other, and `draw` refuses a tile mapped to its X strip. Each call's subsets are keyed by its (forward,
   position) with the template (X-SPC-96), and the verifier draws through `Traced.draw`. H-1T has no weight Program: its
   tiles read B′'s rows directly, so there is no Y link to open.
@@ -332,4 +335,6 @@ H1tDequant{BIAS} output entry         Z, s_i, t_j (and bias_j)                  
   - the reuse of a weight's Y proofs across a run's windows (X-SPC-51), which needs its commitments linked across windows;
   - NCP-FP8.
 - For H-1T's circuit: an H-1T scheme in `schemes` (its stream derivation pinned), with `traced_as` routing to
-  `traced_h1t`; the legal-input check (|x| <= 416) on committed rows; and W_ref with the forming's share.
+  `traced_h1t`; the legal-input check (|x| <= 416) on committed rows; W_ref with the forming's share; and a window form
+  of `traced_h1t`: the verifier's `H1tWindow` Program, layout and draw over its C calls (its width rule, separator and
+  anchored inputs, `h1t_window_inputs`, already cover every call).
