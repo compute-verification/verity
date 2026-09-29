@@ -334,6 +334,7 @@ class _CircuitRun:
         self.scheme, self.entry, self.settings = scheme, entry, settings
         self.weight_roots, self.salt = weight_roots, salt
         self.records: list[PC.CallRecord] = []
+        self.seconds: list[float] = []                  # each call's executor wall time: quantize, commit, dequantize
         self.forward, self.row_base, self.rows_seen = -1, 0, 0
         self.commits: dict[str, Any] = {
             "scheme": scheme, "salt": salt.hex(), "weights_root": weights_root(weight_roots).hex(), "quantizer": QUANTIZER,
@@ -370,10 +371,11 @@ class _CircuitRun:
                        rowids=np.arange(self.row_base, self.row_base + mp, dtype=np.uint32), colids=np.arange(n, dtype=np.uint32))
         rec = PN.commit_call(len(self.records), self.scheme, call)
         self.records.append(rec)
+        y = _like(((np.asarray(rec.y[:m], dtype=np.uint32) << 16).view(np.float32)).reshape(*lead, n), x)
+        self.seconds.append(time.monotonic() - t0)
         self.details.update(calls=len(self.records), padded_rows=self.details["padded_rows"] + mp - m,
-                            commit_seconds=round(self.details["commit_seconds"] + time.monotonic() - t0, 3))
-        y = (np.asarray(rec.y[:m], dtype=np.uint32) << 16).view(np.float32)
-        return _like(y.reshape(*lead, n), x)
+                            commit_seconds=round(sum(self.seconds), 3))
+        return y
 
     def finish(self) -> None:
         """Commit the calls: the root over every call's leaf (`pouw_circuit.calls_root`)."""

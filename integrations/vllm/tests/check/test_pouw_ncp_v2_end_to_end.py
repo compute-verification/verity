@@ -400,3 +400,16 @@ def test_a_biased_linears_wrong_a_strip_is_named(biased_world):
     records = [rec, w.records[1]]
     rep, pw, issues = _verdict(w, records, _recommitted(w, records))
     assert pw["result"] is True and any("A row" in i for i in issues), issues
+
+
+def test_pouw_serve_accepts_the_honest_calls_and_rejects_its_tampered_tile(world):
+    """`verity-vllm pouw-serve`'s verdicts over this run's calls: the honest ones accepted, one drawn tile's flipped word
+    rejected by name, at the pod run's K."""
+    from verity_vllm.pipeline import cli, pouw_serve
+    v = pouw_serve.verdicts(world.records, world.commitment, b"\x09" * 32, 2)
+    assert v["verdict"] == {"honest": "accepted", "tampered": "rejected"}, v["tampered"]["why"]
+    t = v["tampered"]["tampered"]
+    assert any(f"call {t['call']}: unit {t['unit']} (tile" in w and "does not hold" in w for w in v["tampered"]["why"])
+    pf = pouw_serve.per_forward(world.records, [1.0, 2.5])
+    assert [(f["forward"], f["calls"], f["rows"], f["seconds"]) for f in pf] == [(0, 1, 32, 1.0), (1, 1, 16, 2.5)]
+    assert cli.parse("pouw-serve", ["--workload", "w.json"]).draws == 16
