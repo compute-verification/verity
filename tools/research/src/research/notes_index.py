@@ -242,14 +242,28 @@ class NotesIndex:
                 out.append("    " + " ".join(snip.split()))
         return "\n".join(out)
 
+    def resolve(self, ref: str) -> list[str]:
+        """The notes a citation names, newest first: a path under the root or a front matter `id:`; else the file name it ends in
+        (`note:<name>`, `note:<lane>/<name>`, `note:<campaign>/<lane>/<name>`, a path from before a move into a month folder),
+        narrowed to the lane or top folder the citation names when that leaves any."""
+        ref = ref.strip().removeprefix("note:").strip("/")
+        exact = self.db.execute("SELECT path FROM notes WHERE path = ? OR id = ? ORDER BY time DESC, path", (ref, ref)).fetchall()
+        if exact or not ref:
+            return [p for (p,) in exact]
+        parts = ref.split("/")
+        name = parts[-1].removesuffix(".md") + ".md"
+        found = self.db.execute("SELECT path, lane FROM notes WHERE path = ? OR substr(path, -?) = ? ORDER BY time DESC, path",
+                                (name, len(name) + 1, "/" + name)).fetchall()
+        narrowed = [p for p, lane in found if (lane or p.split("/")[0]) in parts[:-1]]
+        return narrowed or [p for p, _ in found]
+
     def read(self, ref: str) -> str:
-        ref = ref.strip().removeprefix("note:")
-        rows = self.db.execute("SELECT path FROM notes WHERE path = ? OR id = ? ORDER BY time DESC", (ref, ref)).fetchall()
+        rows = self.resolve(ref)
         if not rows:
             raise LookupError(f"no note {ref!r}: give its path under the notes root, or its id (the file name without .md)")
         if len(rows) > 1:
-            return f"{len(rows)} notes have the id {ref!r}; read one by path:\n" + "\n".join(p for (p,) in rows)
-        path = rows[0][0]
+            return f"{len(rows)} notes match {ref!r}; read one by path:\n" + "\n".join(rows)
+        path = rows[0]
         text = (self.root / path).read_text(errors="replace")
         if len(text) > READ_MAX:
             text = text[:READ_MAX] + f"\n[... {len(text) - READ_MAX} more characters]"
@@ -290,13 +304,14 @@ class NotesIndex:
         out: list[str] = []
         full = None
         if ident.startswith("note:"):
-            ref = ident[5:]
-            notes = self.db.execute("SELECT path FROM notes WHERE id = ?", (ref,)).fetchall()
-            out.append(f"{ident}: " + (", ".join(p for (p,) in notes) if notes else "no such note in the index"))
+            notes = self.resolve(ident)
+            out.append(f"{ident}: " + (", ".join(notes) if notes else "no such note in the index"))
             if self.catalog:
-                labels = self.db.execute("SELECT target, key, value, by, ts FROM ev.labels WHERE ref = ? ORDER BY ts", (ident,)).fetchall()
-                out.append(f"labels whose ref is {ident} ({len(labels)}):")
-                out += [f"  {t}  {k} = {_clip(v)}  ({by}, {ts})" for t, k, v, by, ts in labels]
+                name = ident.rstrip("/").rsplit("/", 1)[-1].removeprefix("note:").removesuffix(".md")
+                labels = self.db.execute("SELECT target, key, value, by, ts, ref FROM ev.labels WHERE ref = ? OR ref = ? OR (ref LIKE 'note:%' "
+                                         "AND substr(ref, -?) = ?) ORDER BY ts", (ident, f"note:{name}", len(name) + 1, "/" + name)).fetchall()
+                out.append(f"labels whose ref names {name} ({len(labels)}):")
+                out += [f"  {t}  {k} = {_clip(v)}  ({by}, {ts}{'' if ref == ident else ', ref ' + ref})" for t, k, v, by, ts, ref in labels]
         elif RUN_RE.match(ident):
             if self.catalog:
                 r = self.db.execute("SELECT tool, state, rc, validation, start_utc, wall_s, host, project, campaign, source_commit "

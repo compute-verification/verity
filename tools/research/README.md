@@ -331,7 +331,8 @@ called PRESERVED without a remote; nothing in the store is ever overwritten.
 
 `research notes mcp` (`notes_mcp.py`) serves a notes clone and the evidence catalog to an agent's MCP client over stdio; it hosts
 nothing and reads no credential. Its tools: `search_notes` (full text ranked, or the newest notes, by lane, kind and time; each
-hit says how many of its cited ids the catalog holds), `read_note`, `evidence` (for a run id, an `art:` prefix or `note:<id>`: what
+hit says how many of its cited ids the catalog holds), `read_note` (by path or id, in any form notes cite each other by, a path from
+before a move into a month folder included), `evidence` (for a run id, an `art:` prefix or `note:<id>`: what
 the catalog holds, and the notes citing it) and `sql` (read-only, over the notes index and the catalog attached as `ev`). The
 index (`notes_index.py`) catches up with the clone before every call, re-reading only the notes that changed; `research notes
 index` builds it, or answers `--search` / `--evidence` in a shell. The catalog is the local store's `catalog.sqlite`, or

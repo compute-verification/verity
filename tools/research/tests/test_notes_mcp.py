@@ -22,7 +22,7 @@ from test_store import _attempt
 
 RUN, WAIVED, LOST = "r20260928-060054-e5c1", "r20260928-042319-9aac", "r20260928-000000-0000"
 HANDOFF, ANSWER = "lanes/x/20260928T0600Z-handoff-from-y.md", "lanes/x/2026-09/20260920T0100Z-answer-z.md"
-NOTE = "note:20260928T0600Z-handoff-from-y"
+NOTE = "note:x/20260928T0600Z-handoff-from-y"
 TS = "2026-09-28T06:10:00Z"
 
 
@@ -130,7 +130,7 @@ def test_evidence_joins_notes_to_the_catalog_and_says_when_there_is_none(tmp_pat
     assert a[0].startswith(f"{art}: bench-result/v1, ") and a[1:4] == [f"  made by {RUN}", "labels (1):",
                                                                        f"  abandoned = the path fails on sm_90  (x, {TS}, ref {NOTE})"]
     assert a[-2:] == ["notes citing it (1):", f"  2026-09-28T06:00Z  {HANDOFF}  Probe results for sm_90"]
-    assert idx.evidence(NOTE).splitlines() == [f"{NOTE}: {HANDOFF}", f"labels whose ref is {NOTE} (1):",
+    assert idx.evidence(NOTE).splitlines() == [f"{NOTE}: {HANDOFF}", "labels whose ref names 20260928T0600Z-handoff-from-y (1):",
                                                f"  {art}  abandoned = the path fails on sm_90  (x, {TS})"]
     assert idx.evidence("art:00000000").splitlines()[:2] == ["art:00000000: not in the catalog", "notes citing it (0):"]
     with pytest.raises(ValueError, match="an id is"):
@@ -144,7 +144,7 @@ def test_evidence_joins_notes_to_the_catalog_and_says_when_there_is_none(tmp_pat
         idx.read("missing")
     (root / "kb/other.md").write_text("---\nid: kb-doc\ncreated: 2026-09-01T00:00Z\n---\nthe same id\n")
     idx.refresh()
-    assert idx.read("kb-doc").splitlines() == ["2 notes have the id 'kb-doc'; read one by path:", "kb/doc.md", "kb/other.md"]
+    assert idx.read("kb-doc").splitlines() == ["2 notes match 'kb-doc'; read one by path:", "kb/doc.md", "kb/other.md"]
 
     monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "no-store"))
     bare = NI.NotesIndex(root, tmp_path / "bare.sqlite")
@@ -160,6 +160,31 @@ def test_evidence_joins_notes_to_the_catalog_and_says_when_there_is_none(tmp_pat
 def test_the_default_catalog_is_the_local_stores(tmp_path):
     root, _, _ = _world(tmp_path)
     assert NI.NotesIndex(root, tmp_path / "index.sqlite").catalog == LocalStore().index.path
+
+
+def test_a_citation_finds_its_note_in_every_form_notes_cite_by_and_after_a_move(tmp_path):
+    """Notes cite each other as note:<name>, note:<lane>/<name>, note:<campaign>/<lane>/<name> (the notes README's form) or by a
+    path, which `research notes archive` may since have moved into a month folder.  A handoff sent to several lanes has the same
+    name in each: the lane in the citation picks one, and a lane holding neither lists both."""
+    root, _, art = _world(tmp_path)
+    twin = "lanes/y/20260920T0100Z-answer-z.md"
+    (root / twin).parent.mkdir(parents=True, exist_ok=True)
+    (root / twin).write_text("---\nkind: answer\n---\nThe same answer, sent to y too.\n")
+    LocalStore().add_label(WAIVED, "abandoned", "gave up on the waiver", by="y", ref="note:r20-proof/x/20260928T0600Z-handoff-from-y",
+                           ts="2026-09-28T06:20:00Z")
+    idx = _index(tmp_path, LocalStore().index.path)
+    for ref in ("note:x/20260920T0100Z-answer-z", "note:r20-proof/x/20260920T0100Z-answer-z", "lanes/x/20260920T0100Z-answer-z.md",
+                "x/2026-09/20260920T0100Z-answer-z.md", ANSWER):
+        assert idx.resolve(ref) == [ANSWER], ref
+    assert idx.resolve("note:y/20260920T0100Z-answer-z") == [twin]
+    assert idx.resolve("note:20260920T0100Z-answer-z") == idx.resolve("note:z/20260920T0100Z-answer-z") == [ANSWER, twin]
+    assert idx.read("note:20260920T0100Z-answer-z").splitlines() == [
+        "2 notes match 'note:20260920T0100Z-answer-z'; read one by path:", ANSWER, twin]
+    assert idx.resolve("note:kb/doc") == idx.resolve("kb-doc") == ["kb/doc.md"] and idx.resolve("note:x/missing") == []
+    assert idx.evidence(NOTE).splitlines() == [
+        f"{NOTE}: {HANDOFF}", "labels whose ref names 20260928T0600Z-handoff-from-y (2):",
+        f"  {art}  abandoned = the path fails on sm_90  (x, {TS})",
+        f"  {WAIVED}  abandoned = gave up on the waiver  (y, 2026-09-28T06:20:00Z, ref note:r20-proof/x/20260928T0600Z-handoff-from-y)"]
 
 
 def test_sql_reads_both_databases_and_writes_neither(tmp_path, monkeypatch):

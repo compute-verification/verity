@@ -33,12 +33,14 @@ TOOLS: list[dict[str, Any]] = [
          "limit": {"type": "integer", "minimum": 1, "maximum": MAX_ROWS, "default": 20}}}},
     {"name": "read_note",
      "description": "One note's full text, by its path under the notes root or its id (the file name without .md, or `note:<id>`), "
-                    "followed by each id it cites and what the evidence catalog holds for it.",
+                    "followed by each id it cites and what the evidence catalog holds for it. Any form notes cite by works: "
+                    "`note:<lane>/<name>`, `note:<campaign>/<lane>/<name>`, or a path from before the note moved into a month folder.",
      "inputSchema": {"type": "object", "properties": {"ref": {"type": "string"}}, "required": ["ref"]}},
     {"name": "evidence",
      "description": "What the evidence catalog holds for an id, and the notes that cite it. A run id (rYYYYMMDD-HHMMSS-xxxx): its "
                     "attempt (tool, state, rc, when, where), outputs and labels. `art:<hex>` (8+ digits): kind, bytes, the attempt that "
-                    "made it, labels. `note:<id>`: the labels whose ref is that note, e.g. `abandoned` on the evidence behind it.",
+                    "made it, labels. `note:<id>`: the note, and the labels whose ref names it (in any of the forms read_note takes), "
+                    "e.g. `abandoned` on the evidence behind it.",
      "inputSchema": {"type": "object", "properties": {"id": {"type": "string"}}, "required": ["id"]}},
     {"name": "sql",
      "description": f"Read-only SQLite over the notes index and the evidence catalog; at most {MAX_ROWS} rows, tab-separated. Tables: "
