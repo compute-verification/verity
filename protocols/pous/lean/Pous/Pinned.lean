@@ -614,11 +614,13 @@ def BandMultiMeets14K106 : Prop :=
 every `d ≥ 5`, the `N`-segment band `chainBandSeg N (2^9) d` (`N·512` blocks of 64 KiB, `N·32` MiB) meets the
 requirement at `D = 5`, `Q = 2^20`, `k = 111`, `ε = 2^-128`, both with the implementation's per-segment tags
 (`segDom salt`, segment `s` keyed by `salt ‖ u64(s)`, any 192-bit salt) and with one global salt and global indices
-(`dom salt`). One advice string covers the whole store. `2^64` is where `u64(s)` stops being injective; the domains
-must be injective across segments (the lane's `SharedDomainBreaks`). At `N = 448` this is `BandMultiMeets14`, and at
-`N = 1` it is the one-segment band under `segDom`. Proof: the POUS store's
-`lean/submissions/band-multi/BandMultiFamilyFinal.lean`, `PousBandMulti.band_meets_family_final`; here
-`PousProofs.BandMultiMeetsFamily`. -/
+(`dom salt`). One advice string covers the whole store. `2^64` is where `u64(s)` stops being injective, and the domains
+must be injective across segments: with a shared domain every `N ≥ 2` breaks (the lane's `shared_domain_breaks_fam`).
+At `N = 448` this is `BandMultiMeets14`, and at `N = 1` its global layout is `BandChainMeets64`. Added on 29 Sep 2026.
+Statement reviewer: a red-team read (`bc-9e381a9e`, for the band lane), GO (the POUS store's
+`internal/p3-instantiation/band-family-pin-redteam-verdict.md`). Proof: the POUS store's
+`lean/submissions/band-multi/BandMultiFamilyFinal.lean`, `PousBandMulti.band_meets_family_final` (graded:
+`band-multi/family-pin/GRADE.txt`); here `PousProofs.BandMultiMeetsFamily`. -/
 def BandMultiMeetsFamily : Prop :=
   ∀ (N : ℕ) [NeZero N], N ≤ 2 ^ 64 → ∀ d : ℕ, 5 ≤ d →
     (∀ salt : Bits 192,

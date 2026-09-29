@@ -236,6 +236,99 @@ theorem band_meets_family_14 (hepf : ChainExPostFactoG) (d : ℕ) (hd : 5 ≤ d)
     ChainBandMeets14 d ∧ ChainBandMeets14Global d :=
   band_meets_family hepf 448 (by norm_num) d hd
 
+/-! ## Injective domains are necessary at every `N ≥ 2`; `N = 1` is the one-segment band
+
+`shared_breaks_S` and `shared_domain_breaks_fam` are the red team's generalization of `shared_domain_breaks` from
+`N = 448` (`internal/p3-instantiation/band-family-pin-redteam-verdict.md` §2). -/
+
+/-- With the shared domain, storing segment 0's labels answers every challenge with no query, so the audit of `N`
+segments accepts with probability 1 at every state bound of at least one segment's `2^28` bits. -/
+theorem shared_breaks_S (N : ℕ) [NeZero (N * 2 ^ 9)] (d : ℕ) (salt : Bits 256) (D Q k S : ℕ) (δ ε : ℝ≥0∞)
+    (hN : 0 < N) (hLS : 2 ^ 9 * 524288 ≤ S) (hlt : δ + ε < 1) :
+    ¬ AuditSecure (chainBandSeg N (2 ^ 9) d 524288 512 (sharedDom salt (2 ^ 9))) .sequential S D Q k δ ε := by
+  intro hsec
+  let enc0 : (Fin (2 ^ 9) → Bits 524288) → Bits S := fun y t =>
+    if h : t.val < 2 ^ 9 * 524288 then codeEquiv (2 ^ 9) 524288 y ⟨t.val, h⟩ else false
+  let dec0 : Bits S → Fin (2 ^ 9) → Bits 524288 := fun σ =>
+    (codeEquiv (2 ^ 9) 524288).symm (fun t => σ ⟨t.val, lt_of_lt_of_le t.isLt hLS⟩)
+  have hdec : ∀ y, dec0 (enc0 y) = y := by
+    intro y
+    have : (fun t : Fin (2 ^ 9 * 524288) => enc0 y ⟨t.val, lt_of_lt_of_le t.isLt hLS⟩) =
+        codeEquiv (2 ^ 9) 524288 y := by
+      funext t
+      simp only [enc0, t.isLt, ↓reduceDIte]
+    show (codeEquiv (2 ^ 9) 524288).symm _ = y
+    rw [this, Equiv.symm_apply_apply]
+  let s0 : Fin N := ⟨0, hN⟩
+  let sch := chainBandSeg N (2 ^ 9) d 524288 512 (sharedDom salt (2 ^ 9))
+  let A₁ : Preprocessor sch S := fun _ _ C _ => enc0 fun i => C (gIdx s0 i)
+  let A₂ : SeqResponder sch S D Q :=
+    { step := fun _ _ _ σ i => Prog.ret (dec0 σ (locOf (N := N) (B := 2 ^ 9) i), σ)
+      bounded := fun _ _ _ _ _ _ => ⟨Nat.zero_le _, Nat.zero_le _⟩ }
+  have hacc : ∀ x, seqAccepts sch k (fun _ => false) A₁ A₂ x := by
+    intro x
+    let f : Bits (524288 + (524288 + 512)) → Bits (524288 + (524288 + 512)) := fun y =>
+      (idealPerm (524288 + (524288 + 512))).answer x.1 (.inl y)
+    let C := labelG (bandSegDAG N (2 ^ 9) d) f (sharedDom salt (2 ^ 9))
+      (Dense.blocks (N * 2 ^ 9) 524288 (fun _ => false))
+    show seqAnswers ((idealPerm (524288 + (524288 + 512))).answer x.1)
+        (fun _ σ i => Prog.ret (dec0 σ (locOf (N := N) (B := 2 ^ 9) i), σ)) 0 (List.ofFn x.2.2)
+        (enc0 fun i => C (gIdx s0 i)) = List.ofFn fun j => C (x.2.2 j)
+    refine (seqAnswers_ret_ofFn _ _ _ x.2.2).trans ?_
+    congr 1
+    funext j
+    show dec0 (enc0 fun i => C (gIdx s0 i)) (locOf (x.2.2 j)) = C (x.2.2 j)
+    rw [hdec]
+    show C (gIdx s0 (locOf (x.2.2 j))) = C (x.2.2 j)
+    exact (sharedDom_label (N := N) (B := 2 ^ 9) (d := d) f salt (gIdx s0 (locOf (x.2.2 j)))).trans
+      ((congrArg _ (locOf_gIdx s0 _)).trans (sharedDom_label (N := N) (B := 2 ^ 9) (d := d) f salt _).symm)
+  have h2 := hsec (fun _ => false) A₁ A₂
+  rw [pr_eq_one hacc] at h2
+  exact absurd h2 (not_le.2 hlt)
+
+/-- **A shared domain breaks the store at every segment count `N ≥ 2`**, for every in-degree, round budget, `k` and
+`ε` (`SharedDomainBreaks` at `N = 448`). At `N = 1` the shared domain is `dom`, which is injective. -/
+theorem shared_domain_breaks_fam (N : ℕ) [NeZero N] (hN : 2 ≤ N) (d : ℕ) (salt : Bits 256) (D Q k : ℕ)
+    (ε : ℝ≥0∞) :
+    ¬ Pous.Meets (chainBandSeg N (2 ^ 9) d 524288 512 (sharedDom salt (2 ^ 9))) .sequential D Q k ε := by
+  intro hM
+  obtain ⟨hε, -, -, -, hsec⟩ := hM
+  refine shared_breaks_S N d salt D Q k _ _ _ (by omega) ?_ (delta_add_lt_one hε) hsec
+  show 2 ^ 9 * 524288 ≤ ⌊Params.ρ * (((N * 2 ^ 9) * 524288 : ℕ) : ℚ)⌋₊
+  apply Nat.le_floor
+  unfold Params.ρ
+  push_cast
+  have : (2 : ℚ) ≤ N := by exact_mod_cast hN
+  nlinarith
+
+theorem topoDAG_eq_of_par {n : ℕ} {G H : TopoDAG n} (h : G.par = H.par) : G = H := by
+  cases G; cases H; cases h; rfl
+
+theorem bandSegDAG_one (d : ℕ) : (bandSegDAG 1 (2 ^ 9) d : TopoDAG (2 ^ 9)) = bandDAG (2 ^ 9) d := by
+  apply topoDAG_eq_of_par
+  unfold bandSegDAG bandDAG
+  funext v
+  apply Finset.ext
+  intro u
+  simp only [Finset.mem_filter, Finset.mem_univ, true_and]
+  have hu : u.val < 2 ^ 9 := u.isLt
+  have hv : v.val < 2 ^ 9 := v.isLt
+  constructor
+  · rintro ⟨-, h⟩; exact h
+  · intro h; exact ⟨by rw [Nat.div_eq_of_lt hu, Nat.div_eq_of_lt hv], h⟩
+
+/-- One segment of the multi-segment layout is the one-segment band. -/
+theorem chainBandSeg_one (d ℓ c : ℕ) (dom : ℕ → Bits c) :
+    chainBandSeg 1 (2 ^ 9) d ℓ c dom = chainBand (2 ^ 9) d ℓ c dom := by
+  show chainScheme (B := 2 ^ 9) (bandSegDAG 1 (2 ^ 9) d) ℓ c dom = chainScheme (bandDAG (2 ^ 9) d) ℓ c dom
+  rw [bandSegDAG_one]
+
+/-- At `N = 1` the family's global layout is the one-segment band statement `ChainBandMeets64`. -/
+theorem band_meets_family_one (hepf : ChainExPostFactoG) (d : ℕ) (hd : 5 ≤ d) : ChainBandMeets64 d := by
+  intro salt
+  have h := (band_meets_family hepf 1 (by norm_num) d hd).2 salt
+  rwa [chainBandSeg_one] at h
+
 end Pous.BandMulti
 
 end
