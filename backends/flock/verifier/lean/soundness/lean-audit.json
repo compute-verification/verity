@@ -1,6 +1,10 @@
 {
- "roots": ["FlockSoundness"],
- "assumptions": ["FlockSoundness.Assumptions"],
+ "roots": [
+  "FlockSoundness"
+ ],
+ "assumptions": [
+  "FlockSoundness.Assumptions"
+ ],
  "meaning": [
   "FlockSoundness",
   "FlockLevel3",
@@ -15,7 +19,9 @@
   "scan": {
    "Arklib": {
     "baseline": "scripts/axiom_baseline.json",
-    "sources": ["ArkLib"]
+    "sources": [
+     "ArkLib"
+    ]
    }
   },
   "imports": [
@@ -26,7 +32,11 @@
   "watch": {
    "A1-johnson-mca": {
     "about": "Assumptions.BCHKS25Thm46 (A1): the Johnson-range MCA bound the Ligerito folds assume",
-    "mentions": ["CoreDefinitions.mcaError", "CoreDefinitions.AffineLineGenerator", "ReedSolomon.code"],
+    "mentions": [
+     "CoreDefinitions.mcaError",
+     "CoreDefinitions.AffineLineGenerator",
+     "ReedSolomon.code"
+    ],
     "ack": [
      "ProximityGap.rs_mcaError_le_of_le_relUDR",
      "ReedSolomon.FirstOrder.automaticFirstOrder_finiteLength_mcaError_le",
@@ -46,12 +56,20 @@
    },
    "udr-mca": {
     "about": "the unique-decoding fallback for the MCA bound",
-    "mentions": ["CoreDefinitions.mcaError", "Code.relativeUniqueDecodingRadius"],
-    "ack": ["ProximityGap.rs_mcaError_le_of_le_relUDR"]
+    "mentions": [
+     "CoreDefinitions.mcaError",
+     "Code.relativeUniqueDecodingRadius"
+    ],
+    "ack": [
+     "ProximityGap.rs_mcaError_le_of_le_relUDR"
+    ]
    },
    "list-size": {
     "about": "ListSize.closeMsgs_card_le: the Johnson list bound, 25·2^r at rate 2^-r",
-    "mentions": ["ReedSolomon.closePolynomialSet", "Set.ncard"],
+    "mentions": [
+     "ReedSolomon.closePolynomialSet",
+     "Set.ncard"
+    ],
     "ack": [
      "ReedSolomon.FirstOrder.automaticFirstOrder_finiteLength_finiteSlack_bounds",
      "ReedSolomon.FirstOrder.automaticFirstOrder_finiteLength_rate_bounds",
@@ -98,7 +116,10 @@
    },
    "list-size-code": {
     "about": "ListSize.closeMsgs_card_le, stated as list decodability",
-    "mentions": ["Code.IsListDecodable", "ReedSolomon.code"],
+    "mentions": [
+     "Code.IsListDecodable",
+     "ReedSolomon.code"
+    ],
     "ack": [
      "OutOfDomSmpl.out_of_dom_smpl_1",
      "OutOfDomSmpl.out_of_dom_smpl_2",
@@ -109,7 +130,9 @@
    },
    "tensor-fold": {
     "about": "the fold union in LigeritoLevels (2^k - 1 pairs per level, paper Lemma 9)",
-    "mentions": ["TensorMCA.tensorFoldBad"],
+    "mentions": [
+     "TensorMCA.tensorFoldBad"
+    ],
     "ack": [
      "ReedSolomon.interleavedRS_tensorFoldBad_card_le_heightThree",
      "TensorMCA.hasFullTensorDecomposition_of_not_mem_bad",
@@ -121,23 +144,35 @@
    },
    "novel-basis": {
     "about": "Arith.Correct.xhat_poly, proved per instance for L ≤ 40 (level3)",
-    "mentions": ["AdditiveNTT.novelPolynomialBasis"],
-    "ack": ["AdditiveNTT.novelPolynomialBasis_is_basisVectors"]
+    "mentions": [
+     "AdditiveNTT.novelPolynomialBasis"
+    ],
+    "ack": [
+     "AdditiveNTT.novelPolynomialBasis_is_basisVectors"
+    ]
    },
    "collision-resistance": {
     "about": "A2 (SHA512ExpectedTimeCR) and the explicit collision finders",
-    "mentions": ["CollisionResistance.crAdvantage"],
+    "mentions": [
+     "CollisionResistance.crAdvantage"
+    ],
     "ack": []
    },
    "keyed-cr": {
     "about": "A2, keyed form",
-    "mentions": ["CollisionResistance.keyedCRAdvantage"],
+    "mentions": [
+     "CollisionResistance.keyedCRAdvantage"
+    ],
     "ack": []
    },
    "rom-cr": {
     "about": "A2's random-oracle shadow (an expected-query birthday bound)",
-    "mentions": ["CollisionResistance.romCRAdvantage"],
-    "ack": ["CollisionResistance.romCRAdvantage_le_birthday"]
+    "mentions": [
+     "CollisionResistance.romCRAdvantage"
+    ],
+    "ack": [
+     "CollisionResistance.romCRAdvantage_le_birthday"
+    ]
    }
   }
  },
@@ -263,7 +298,9 @@
    "type_hash": "000000005f881815"
   },
   "FlockSoundness.Audit.Law.countRule_eq_draw": {
-   "signature": ["FlockSoundness.Audit.Law.countRule_eq_draw : Eq Flock.Draw.stratumK FlockSoundness.Audit.Law.countRule"],
+   "signature": [
+    "FlockSoundness.Audit.Law.countRule_eq_draw : Eq Flock.Draw.stratumK FlockSoundness.Audit.Law.countRule"
+   ],
    "assumptions": [],
    "type_hash": "00000000379c4336"
   },
@@ -320,6 +357,25 @@
    ],
    "assumptions": [],
    "type_hash": "0000000048602bdf"
+  },
+  "FlockSoundness.Audit.Law.stratified_miss_eq_greedy": {
+   "signature": [
+    "FlockSoundness.Audit.Law.stratified_miss_eq_greedy {n m : Nat} (σ : Fin n → Fin m) (k : Fin m → Nat)",
+    "  (hk : ∀ (s : Fin m), instLENat.le (k s) (FlockSoundness.Audit.Law.stratum σ s).card) (a : Fin m → Nat)",
+    "  (ha : ∀ (s : Fin m), instLENat.le (a s) (FlockSoundness.Audit.Law.stratum σ s).card) {τ : ENNReal}",
+    "  (hτ0 : ENNReal.instPartialOrder.lt 0 τ) (hτ1 : ENNReal.instLE.le τ 1)",
+    "  (htake :",
+    "    ∀ (s : Fin m),",
+    "      instLTNat.lt 0 (a s) → ENNReal.instLE.le τ (FlockSoundness.Audit.Law.stratumRatio σ k s (instHSub.hSub (a s) 1)))",
+    "  (hleave :",
+    "    ∀ (s : Fin m),",
+    "      instLTNat.lt (a s) (FlockSoundness.Audit.Law.stratum σ s).card →",
+    "        ENNReal.instLE.le (FlockSoundness.Audit.Law.stratumRatio σ k s (a s)) τ) :",
+    "  Eq ((FlockSoundness.Audit.Law.stratified σ k hk).miss (Finset.univ.sum fun s => a s))",
+    "    (Finset.univ.prod fun s => FlockSoundness.Audit.Law.stratumEscape σ k s (a s))"
+   ],
+   "assumptions": [],
+   "type_hash": "0000000016689ba9"
   },
   "FlockSoundness.Audit.Law.sum_workK_le": {
    "signature": [
@@ -380,7 +436,9 @@
    "type_hash": "000000009be23d12"
   },
   "FlockSoundness.Audit.Law.workRule_eq_draw": {
-   "signature": ["FlockSoundness.Audit.Law.workRule_eq_draw : Eq Flock.Draw.workK FlockSoundness.Audit.Law.workRule"],
+   "signature": [
+    "FlockSoundness.Audit.Law.workRule_eq_draw : Eq Flock.Draw.workK FlockSoundness.Audit.Law.workRule"
+   ],
    "assumptions": [],
    "type_hash": "00000000228a4b74"
   },
@@ -1873,7 +1931,9 @@
    "type_hash": "000000005e4ddc68"
   },
   "FlockSoundness.execArith_correct": {
-   "signature": ["FlockSoundness.execArith_correct : FlockSoundness.execArith.Correct"],
+   "signature": [
+    "FlockSoundness.execArith_correct : FlockSoundness.execArith.Correct"
+   ],
    "assumptions": [],
    "type_hash": "00000000f4d0def7"
   },
@@ -2735,7 +2795,10 @@
    "definitions": {
     "FlockSoundness.Assumptions.SHA512ExpectedTimeCR": "ccb6f722fa4330ad"
    },
-   "pins": ["FlockSoundness.Audit.Partition.flock_e2e_count", "FlockSoundness.Audit.Partition.flock_e2e_drawn"]
+   "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn"
+   ]
   },
   "FlockSoundness.Audit.Circuit": {
    "digest": "de2dc0631ebe47398400913b0e790953",
@@ -2846,14 +2909,20 @@
     "FlockSoundness.Audit.Partition.batchedSession": "c9f9c060ac307ed0",
     "FlockSoundness.Audit.Partition.tabOf": "443b5aa6c1c50bd3"
    },
-   "pins": ["FlockSoundness.Audit.Partition.flock_e2e_count", "FlockSoundness.Audit.Partition.flock_e2e_drawn"]
+   "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn"
+   ]
   },
   "FlockSoundness.Audit.FlockBatchedAcc": {
    "digest": "490b0378546e13b9531fb420e4e4ebeb",
    "definitions": {
     "FlockSoundness.Audit.Partition.ksAvgBE": "490b0378546e13b9"
    },
-   "pins": ["FlockSoundness.Audit.Partition.flock_e2e_count", "FlockSoundness.Audit.Partition.flock_e2e_drawn"]
+   "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn"
+   ]
   },
   "FlockSoundness.Audit.FlockLink": {
    "digest": "11af9ca0821ce01081424179f7dd4743",
@@ -2891,7 +2960,10 @@
     "FlockSoundness.Audit.Partition.trialStrat": "5e0afba475f400c6",
     "FlockSoundness.Audit.Partition.Ωc": "dbd8ff314e4aac75"
    },
-   "pins": ["FlockSoundness.Audit.Partition.flock_e2e_count", "FlockSoundness.Audit.Partition.flock_e2e_drawn"]
+   "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn"
+   ]
   },
   "FlockSoundness.Audit.FlockLinked": {
    "digest": "eea53dee89f0210e563922dd66354f52",
@@ -2899,7 +2971,10 @@
     "FlockSoundness.Audit.Partition.linkBoundE": "7152c4c16a0c01e4",
     "FlockSoundness.Audit.Partition.placeDecoder": "48b816a77733250c"
    },
-   "pins": ["FlockSoundness.Audit.Partition.flock_e2e_count", "FlockSoundness.Audit.Partition.flock_e2e_drawn"]
+   "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn"
+   ]
   },
   "FlockSoundness.Audit.Harm": {
    "digest": "342da0e09b023d14898e3a92f9cd3e22",
@@ -3105,7 +3180,9 @@
     "FlockSoundness.Audit.reg₂": "c404081af1fb90ab",
     "FlockSoundness.Audit.twoStage": "afc841561e7cba19"
    },
-   "pins": ["FlockSoundness.Audit.Partition.Refines.twoStage_influence"]
+   "pins": [
+    "FlockSoundness.Audit.Partition.Refines.twoStage_influence"
+   ]
   },
   "FlockSoundness.Audit.Work": {
    "digest": "416c4342bf801742afa92ca825b21a68",
@@ -3239,7 +3316,10 @@
    "definitions": {
     "FlockSoundness.Compose.ofBlock": "4cfa2fa118656993"
    },
-   "pins": ["FlockSoundness.Rows.compose_eval_unit", "FlockSoundness.UProg.rowsL1"]
+   "pins": [
+    "FlockSoundness.Rows.compose_eval_unit",
+    "FlockSoundness.UProg.rowsL1"
+   ]
   },
   "FlockSoundness.Defs": {
    "digest": "1cc2134a37060fbf2b00703ce87a654e",
@@ -3283,7 +3363,10 @@
    "definitions": {
     "FlockSoundness.Extract.firstTable": "2e90c25ca1a2d405"
    },
-   "pins": ["FlockSoundness.Audit.Partition.flock_e2e_count", "FlockSoundness.Audit.Partition.flock_e2e_drawn"]
+   "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn"
+   ]
   },
   "FlockSoundness.ExtractWait": {
    "digest": "ab9062903c31c4b97e462bc07050ecc8",
@@ -3291,7 +3374,10 @@
     "FlockSoundness.Extract.firsts": "38d7f19d9d2a8126",
     "FlockSoundness.Extract.waitCost": "0b2ddf280a5d6cb3"
    },
-   "pins": ["FlockSoundness.Audit.Partition.flock_e2e_count", "FlockSoundness.Audit.Partition.flock_e2e_drawn"]
+   "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn"
+   ]
   },
   "FlockSoundness.Game.Basic": {
    "digest": "d39bbe0b0175850214e89b610c58bbe4",
@@ -3372,7 +3458,10 @@
     "FlockSoundness.Game.Lock.sameThen": "b576e93f4d8a2698",
     "FlockSoundness.Game.batch": "04cc7e06ce627a1a"
    },
-   "pins": ["FlockSoundness.Audit.Partition.flock_e2e_count", "FlockSoundness.Audit.Partition.flock_e2e_drawn"]
+   "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn"
+   ]
   },
   "FlockSoundness.Game.Expect": {
    "digest": "1d9ca2b4c76019fbe50326b120a9da3d",
@@ -3473,7 +3562,10 @@
     "FlockSoundness.Game.runsG": "e72dd36e2030d14a",
     "FlockSoundness.Game.runsStrat": "9bc113835d0df7f5"
    },
-   "pins": ["FlockSoundness.Audit.Partition.flock_e2e_count", "FlockSoundness.Audit.Partition.flock_e2e_drawn"]
+   "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn"
+   ]
   },
   "FlockSoundness.GateRows": {
    "digest": "c105c0c80ea0329ac48e53aac43ef21b",
@@ -3498,7 +3590,9 @@
     "FlockSoundness.GateRows.run": "927948e95290f765",
     "FlockSoundness.GateRows.runsList": "13a1a437aad8d735"
    },
-   "pins": ["FlockSoundness.Rope.rope_sound"]
+   "pins": [
+    "FlockSoundness.Rope.rope_sound"
+   ]
   },
   "FlockSoundness.Instance": {
    "digest": "614e3e3f08e4cd9422ad82c3c4444147",
@@ -3532,7 +3626,9 @@
     "FlockSoundness.levelGood": "5ed9eda84a723620",
     "FlockSoundness.levelsChained": "02ecc12eea16c736"
    },
-   "pins": ["FlockSoundness.table_sound_compiled"]
+   "pins": [
+    "FlockSoundness.table_sound_compiled"
+   ]
   },
   "FlockSoundness.LinkFinder": {
    "digest": "db3e7fbd5c745fb38049d6b9e79582dd",
@@ -3544,7 +3640,10 @@
     "FlockSoundness.LinkFinder.nextRead": "f03052b33dd7f473",
     "FlockSoundness.LinkFinder.pRd": "dd59e91de4619eac"
    },
-   "pins": ["FlockSoundness.Audit.Partition.flock_e2e_count", "FlockSoundness.Audit.Partition.flock_e2e_drawn"]
+   "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn"
+   ]
   },
   "FlockSoundness.LinkSound": {
    "digest": "6c32c076a0c9c1cc6f968128ffc221ac",
@@ -3948,7 +4047,9 @@
     "FlockSoundness.Refine.levelsOf": "0991da2ddafa3f45",
     "FlockSoundness.Refine.origE": "b7cccc3fe758b0ce"
    },
-   "pins": ["FlockSoundness.Refine.final_refines"]
+   "pins": [
+    "FlockSoundness.Refine.final_refines"
+   ]
   },
   "FlockSoundness.Refine.Ligerito": {
    "digest": "12e6da387e8206ed41f600012a1eac1e",
@@ -4033,7 +4134,10 @@
     "FlockSoundness.Refine.regionOf": "c2c6137c5dc0126b",
     "FlockSoundness.Refine.regionsOf": "cac820d20e8bde9c"
    },
-   "pins": ["FlockSoundness.Refine.ofCircuit_extra", "FlockSoundness.Refine.verify_refines_ofCircuit"]
+   "pins": [
+    "FlockSoundness.Refine.ofCircuit_extra",
+    "FlockSoundness.Refine.verify_refines_ofCircuit"
+   ]
   },
   "FlockSoundness.Refine.Rep": {
    "digest": "2c6ccf1102c5f506e8dd201e1edab997",
@@ -4182,7 +4286,9 @@
     "FlockSoundness.Rope.pinnedRuns": "a733b84daa315397",
     "FlockSoundness.Rope.unpackRuns": "0d63f82b79bf0d34"
    },
-   "pins": ["FlockSoundness.Rope.rope_sound"]
+   "pins": [
+    "FlockSoundness.Rope.rope_sound"
+   ]
   },
   "FlockSoundness.Rope.Gates": {
    "digest": "456a404bb2949dbb43f705d30d3b91af",
@@ -4243,14 +4349,18 @@
     "FlockSoundness.Rope.nIn": "1c335152cc1b7125",
     "FlockSoundness.Rope.outCodes": "8096a8e034588f5d"
    },
-   "pins": ["FlockSoundness.Rope.rope_sound"]
+   "pins": [
+    "FlockSoundness.Rope.rope_sound"
+   ]
   },
   "FlockSoundness.Rope.Lowering": {
    "digest": "f90b5834ad7a996e466e5a117a377947",
    "definitions": {
     "FlockSoundness.Rope.SatList": "f90b5834ad7a996e"
    },
-   "pins": ["FlockSoundness.Rope.rope_sound"]
+   "pins": [
+    "FlockSoundness.Rope.rope_sound"
+   ]
   },
   "FlockSoundness.Rope.Pinned": {
    "digest": "ac24c81017e6c20b8994783eebd382ff",
@@ -4310,7 +4420,9 @@
     "FlockSoundness.Rope.pinOut": "a5dfb7b38215c4ef",
     "FlockSoundness.Rope.pinnedCodes": "05868213389d218a"
    },
-   "pins": ["FlockSoundness.Rope.rope_sound"]
+   "pins": [
+    "FlockSoundness.Rope.rope_sound"
+   ]
   },
   "FlockSoundness.Session": {
    "digest": "8344410d7ebde5b556090193ed67f9b5",
@@ -4356,7 +4468,10 @@
     "FlockSoundness.sessionB": "d829da73421b5324",
     "FlockSoundness.stratB": "75fa3c3ba8472b03"
    },
-   "pins": ["FlockSoundness.Audit.Partition.flock_e2e_count", "FlockSoundness.Audit.Partition.flock_e2e_drawn"]
+   "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn"
+   ]
   },
   "FlockSoundness.SessionBatchAcc": {
    "digest": "90a3be4b69cf70f5ed360f98a2d7252b",
@@ -4364,7 +4479,10 @@
     "FlockSoundness.ksBoundAccB": "0d373391d5252a3a",
     "FlockSoundness.rateB": "1467e969687a7192"
    },
-   "pins": ["FlockSoundness.Audit.Partition.flock_e2e_count", "FlockSoundness.Audit.Partition.flock_e2e_drawn"]
+   "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn"
+   ]
   },
   "FlockSoundness.Types.Dag": {
    "digest": "0fff8415afc66039f079e4209c110060",
@@ -4421,7 +4539,9 @@
     "FlockSoundness.Types.Flatten.xorChain": "4a79adb045e12afb",
     "FlockSoundness.Types.Flatten.xorGates": "d628210b5ff81d7d"
    },
-   "pins": ["FlockSoundness.UProg.rowsL1"]
+   "pins": [
+    "FlockSoundness.UProg.rowsL1"
+   ]
   },
   "FlockSoundness.Types.Program": {
    "digest": "4076ac5491c0bcbb6aa7ad8e3716bbd2",
@@ -4468,7 +4588,9 @@
     "FlockSoundness.UnitSpec.types": "ecb44d422e69f065",
     "FlockSoundness.UnitSpec.words": "c02df0ee1cb68fd3"
    },
-   "pins": ["FlockSoundness.UProg.rowsL1"]
+   "pins": [
+    "FlockSoundness.UProg.rowsL1"
+   ]
   },
   "FlockSoundness.Types.Units": {
    "digest": "8a287025438e018e2845a537621aa226",
@@ -4476,7 +4598,19 @@
     "FlockSoundness.Types.Flatten.Gate.lift": "a63cce92ce06c479",
     "FlockSoundness.Types.Flatten.unitGates": "1ddc92e2a7cd8a42"
    },
-   "pins": ["FlockSoundness.UProg.rowsL1"]
+   "pins": [
+    "FlockSoundness.UProg.rowsL1"
+   ]
+  },
+  "FlockSoundness.Audit.StratifiedMiss": {
+   "digest": "18d0f5b1804a73b0fc71ac580aca5ca5",
+   "definitions": {
+    "FlockSoundness.Audit.Law.stratumEscape": "4af529b99ca327b1",
+    "FlockSoundness.Audit.Law.stratumRatio": "db99e8430185e632"
+   },
+   "pins": [
+    "FlockSoundness.Audit.Law.stratified_miss_eq_greedy"
+   ]
   }
  },
  "dependencies": {
