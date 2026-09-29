@@ -353,7 +353,8 @@ variable {nf nc : ℕ} {Pf : Partition C nf} {Pc : Partition C nc} {a : Fin C.N 
 
 /-- **The influence of an accepted two-stage audit**, variant (b), over replay units: the committed coarse transcript
 delivers on `D` a value outside the coarse partition's influence set, with the effective escape, with probability at
-most `δ + ε_ks + δ_link + δ_in`. A replay unit's separator can be its exits (`separates_exits`). -/
+most `δ + ε_ks + δ_link + δ_in`, given the two-stage input hypothesis `AnchorsSound₂`. A replay unit's separator can be
+its exits (`separates_exits`). -/
 theorem Refines.twoStage_influence (r : Refines Pf Pc) {L₁ : Law nc} {L₂ : Fin nc → Law nf} {Reg : Type}
     {Int : Finset (Fin nc) → Type}
     {session : Finset (Fin nf) → Reg → (S₁ : Finset (Fin nc)) → Int S₁ → Game Bool}
@@ -363,9 +364,7 @@ theorem Refines.twoStage_influence (r : Refines Pf Pc) {L₁ : Law nc} {L₂ : F
     (ext : (S : Finset (Fin nf)) → (R : Reg) → (S₁ : Finset (Fin nc)) → (I : Int S₁) →
       Strategy (session S R S₁ I) → Fin nf → Option (Fin C.N → Bool))
     (hks : (r.analysis₂ X Yint ext).KnowledgeSound εks) (hlink : (r.analysis₂ X Yint ext).LinkSound δlink)
-    (σ : Strategy (twoStage L₁ L₂ Reg Int session))
-    (hin : prob (fun o => o.1 = true ∧ ¬ C.InputsAgree (X (reg₂ σ) (cont₁ σ)) a)
-      (twoStage L₁ L₂ Reg Int session) σ ≤ δin) (δ : ℝ≥0∞) :
+    (hin : AnchorsSound₂ X a δin) (δ : ℝ≥0∞) (σ : Strategy (twoStage L₁ L₂ Reg Int session)) :
     prob (fun o => o.1 = true ∧ out D (X (reg₂ σ) (cont₁ σ)) ∉ Pc.influenceSet D (effEscape L₁ L₂ r.parent) a δ)
         (twoStage L₁ L₂ Reg Int session) σ ≤ δ + εks + δlink + δin := by
   let W := Pc.wrong (X (reg₂ σ) (cont₁ σ))
@@ -388,7 +387,7 @@ theorem Refines.twoStage_influence (r : Refines Pf Pc) {L₁ : Law nc} {L₂ : F
   calc _ ≤ prob (fun o => good o ∨ bad o) (twoStage L₁ L₂ Reg Int session) σ := prob_mono hsplit _ _
     _ ≤ prob good (twoStage L₁ L₂ Reg Int session) σ + prob bad (twoStage L₁ L₂ Reg Int session) σ :=
         prob_or_le good bad _ _
-    _ ≤ δ + εks + δlink + δin := add_le_add hgood hin
+    _ ≤ δ + εks + δlink + δin := add_le_add hgood (hin σ)
 
 end TwoStage
 

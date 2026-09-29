@@ -83,7 +83,8 @@ circuit's other outputs, such as commitments and leaves, are not delivered. $K$ 
   probability at least $\delta$, fixed before the prover, has at most $\sum_{B : e(B) \ge \delta} 2^{|K_B|}$ members;
 - `audit_influence`: $\Pr[\text{accept} \wedge \mathrm{out}_D(X) \notin \mathrm{influenceSet}] \le \delta +
   \varepsilon_{ks} + \delta_{link} + \delta_{in}$, so the prover's influence over what is delivered is
-  $\log_2 |\mathrm{influenceSet}|$ bits; `Refines.twoStage_influence` is the same over replay units, with $e_{\text{eff}}$.
+  $\log_2 |\mathrm{influenceSet}|$ bits; `Refines.twoStage_influence` is the same over replay units, with $e_{\text{eff}}$
+  and the two-stage input hypothesis `AnchorsSound₂` (`Audit/TwoStage.lean`).
 - `card_influenceSet_le_harm` and `card_admissible_le`: that influence is at most $H + \log_2 \sum_{j \le K}
   \binom{n}{j}$ bits, for a harm bound $H$ (`IsHarmBound`, `Audit/Harm.lean`: the specification of core's `harm_bound`) with
   each unit's harm the width it adds to a separator, such as its exits (`card_exits_le`), and $\mathrm{miss}(K+1) <
@@ -94,6 +95,11 @@ circuit's other outputs, such as commitments and leaves, are not delivered. $K$ 
   $|M| = 2^\ell$, the first term is $2^{H + \log_2 \sum_{j \le K} \binom{n}{j} - \ell}$. `card_guess_le` is its counting
   step and `audit_exfiltration_influenceSet` its form over $|\mathrm{influenceSet}|$. Core's reading is
   `verity_one_stage.consumers.exfiltration_bound`: `harm_bound` over output bits plus `location_bits`.
+- **Not vacuous** (`Audit/InfluenceExamples.lean`): on a four-gate circuit, `lemma47` applies the influence cap to two
+  different transcripts that both have a wrong unit, with a separator narrower than the unit's exits
+  (`three_mem_exits`), and `count` bounds what they deliver by 2; `influence_met` meets `audit_influence`'s hypotheses
+  at 0 on an audit that accepts with probability 1 (`accepts`); `harm_witness` meets `card_influenceSet_le_harm`'s on any
+  partition and law, with the exits as separators and each unit's exported width as its harm.
 
 **Tightness and insecurity** (`Audit/Examples.lean`, on `K` chains of `nv` NOT gates, one coarse unit per chain and one
 fine unit per gate, with a uniform `k₂`-subset of each drawn chain's gates in the second stage and an ideal session):
