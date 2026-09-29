@@ -1,10 +1,6 @@
 {
- "roots": [
-  "FlockSoundness"
- ],
- "assumptions": [
-  "FlockSoundness.Assumptions"
- ],
+ "roots": ["FlockSoundness"],
+ "assumptions": ["FlockSoundness.Assumptions"],
  "meaning": [
   "FlockSoundness",
   "FlockLevel3",
@@ -20,9 +16,7 @@
   "scan": {
    "Arklib": {
     "baseline": "scripts/axiom_baseline.json",
-    "sources": [
-     "ArkLib"
-    ]
+    "sources": ["ArkLib"]
    }
   },
   "imports": [
@@ -34,11 +28,7 @@
   "watch": {
    "A1-johnson-mca": {
     "about": "Assumptions.BCHKS25Thm46 (A1): the Johnson-range MCA bound the Ligerito folds assume",
-    "mentions": [
-     "CoreDefinitions.mcaError",
-     "CoreDefinitions.AffineLineGenerator",
-     "ReedSolomon.code"
-    ],
+    "mentions": ["CoreDefinitions.mcaError", "CoreDefinitions.AffineLineGenerator", "ReedSolomon.code"],
     "ack": [
      "ProximityGap.rs_mcaError_le_of_le_relUDR",
      "ReedSolomon.FirstOrder.automaticFirstOrder_finiteLength_mcaError_le",
@@ -58,20 +48,12 @@
    },
    "udr-mca": {
     "about": "the unique-decoding fallback for the MCA bound",
-    "mentions": [
-     "CoreDefinitions.mcaError",
-     "Code.relativeUniqueDecodingRadius"
-    ],
-    "ack": [
-     "ProximityGap.rs_mcaError_le_of_le_relUDR"
-    ]
+    "mentions": ["CoreDefinitions.mcaError", "Code.relativeUniqueDecodingRadius"],
+    "ack": ["ProximityGap.rs_mcaError_le_of_le_relUDR"]
    },
    "list-size": {
     "about": "ListSize.closeMsgs_card_le: the Johnson list bound, 25·2^r at rate 2^-r",
-    "mentions": [
-     "ReedSolomon.closePolynomialSet",
-     "Set.ncard"
-    ],
+    "mentions": ["ReedSolomon.closePolynomialSet", "Set.ncard"],
     "ack": [
      "ReedSolomon.FirstOrder.automaticFirstOrder_finiteLength_finiteSlack_bounds",
      "ReedSolomon.FirstOrder.automaticFirstOrder_finiteLength_rate_bounds",
@@ -118,10 +100,7 @@
    },
    "list-size-code": {
     "about": "ListSize.closeMsgs_card_le, stated as list decodability",
-    "mentions": [
-     "Code.IsListDecodable",
-     "ReedSolomon.code"
-    ],
+    "mentions": ["Code.IsListDecodable", "ReedSolomon.code"],
     "ack": [
      "OutOfDomSmpl.out_of_dom_smpl_1",
      "OutOfDomSmpl.out_of_dom_smpl_2",
@@ -132,9 +111,7 @@
    },
    "tensor-fold": {
     "about": "the fold union in LigeritoLevels (2^k - 1 pairs per level, paper Lemma 9)",
-    "mentions": [
-     "TensorMCA.tensorFoldBad"
-    ],
+    "mentions": ["TensorMCA.tensorFoldBad"],
     "ack": [
      "ReedSolomon.interleavedRS_tensorFoldBad_card_le_heightThree",
      "TensorMCA.hasFullTensorDecomposition_of_not_mem_bad",
@@ -146,55 +123,37 @@
    },
    "novel-basis": {
     "about": "Arith.Correct.xhat_poly, proved per instance for L ≤ 40 (level3)",
-    "mentions": [
-     "AdditiveNTT.novelPolynomialBasis"
-    ],
-    "ack": [
-     "AdditiveNTT.novelPolynomialBasis_is_basisVectors"
-    ]
+    "mentions": ["AdditiveNTT.novelPolynomialBasis"],
+    "ack": ["AdditiveNTT.novelPolynomialBasis_is_basisVectors"]
    },
    "collision-resistance": {
     "about": "A2 (SHA512ExpectedTimeCR) and the explicit collision finders",
-    "mentions": [
-     "CollisionResistance.crAdvantage"
-    ],
+    "mentions": ["CollisionResistance.crAdvantage"],
     "ack": []
    },
    "keyed-cr": {
     "about": "A2, keyed form",
-    "mentions": [
-     "CollisionResistance.keyedCRAdvantage"
-    ],
+    "mentions": ["CollisionResistance.keyedCRAdvantage"],
     "ack": []
    },
    "rom-cr": {
     "about": "A2's random-oracle shadow (an expected-query birthday bound)",
-    "mentions": [
-     "CollisionResistance.romCRAdvantage"
-    ],
-    "ack": [
-     "CollisionResistance.romCRAdvantage_le_birthday"
-    ]
+    "mentions": ["CollisionResistance.romCRAdvantage"],
+    "ack": ["CollisionResistance.romCRAdvantage_le_birthday"]
    },
    "A3-uniform-bytes": {
     "about": "A3 (UniformRandomBytes, uniform/io-getrandombytes): the operating system's bytes, which the live draw reads through IO.getRandomBytes, are independent and uniform",
-    "mentions": [
-     "IO.getRandomBytes"
-    ],
+    "mentions": ["IO.getRandomBytes"],
     "ack": []
    },
    "A4-prf-sha256": {
     "about": "A4 (KeyedStreamsUniform, prf/sha-256): verity.randomness's keyed streams at distinct indices pass a test as independent uniform streams do, up to eta, SHA-256 keyed by a secret prefix being a PRF",
-    "mentions": [
-     "PRFScheme.prfAdvantage"
-    ],
+    "mentions": ["PRFScheme.prfAdvantage"],
     "ack": []
    },
    "A5-uniform-secret": {
     "about": "A5 (UniformSecret, uniform/python-secrets): the PoUW window's secret, secrets.token_bytes(32), is uniform and fresh for the window",
-    "mentions": [
-     "IO.getRandomBytes"
-    ],
+    "mentions": ["IO.getRandomBytes"],
     "ack": []
    }
   }
@@ -403,9 +362,7 @@
    "type_hash": "000000005f881815"
   },
   "FlockSoundness.Audit.Law.countRule_eq_draw": {
-   "signature": [
-    "FlockSoundness.Audit.Law.countRule_eq_draw : Eq Flock.Draw.stratumK FlockSoundness.Audit.Law.countRule"
-   ],
+   "signature": ["FlockSoundness.Audit.Law.countRule_eq_draw : Eq Flock.Draw.stratumK FlockSoundness.Audit.Law.countRule"],
    "assumptions": [],
    "type_hash": "00000000379c4336"
   },
@@ -599,15 +556,225 @@
    "assumptions": [],
    "type_hash": "000000006fe61753"
   },
-  "FlockSoundness.Audit.Law.keyedWindowReg_audit_of_record": {},
-  "FlockSoundness.Audit.Law.keyedWindowReg_extraction_audit_of_record": {},
-  "FlockSoundness.Audit.Law.keyedWindow_audit_of_record": {},
+  "FlockSoundness.Audit.Law.keyedWindowReg_audit_of_record": {
+   "signature": [
+    "FlockSoundness.Audit.Law.keyedWindowReg_audit_of_record {n M : Nat} {cl : Fin n → Finset (Fin n)} {Reg : Type}",
+    "  {session : Finset (Fin n) → Reg → FlockSoundness.Game Bool} {C : Nat} (σ : Fin n → Fin M) (call : Fin M → Fin C)",
+    "  (w v f : Fin M → Nat) (calls : List FlockSoundness.PlanDraw.Call)",
+    "  (hWS :",
+    "    FlockSoundness.Audit.Law.PlanStrata σ (FlockSoundness.Audit.Law.windowK σ call w f 27713)",
+    "      (FlockSoundness.Audit.KeyedDraw.flat calls))",
+    "  {Ω : Type} [Fintype Ω] [Nonempty Ω] {S : Nat} (sec : Ω → Fin S → Fin 256)",
+    "  (hsec : FlockSoundness.Assumptions.UniformSecret sec) (L : Nat) (domain : String)",
+    "  (ctx : Reg → List (Prod String FlockSoundness.Randomness.Part)) (η : ENNReal)",
+    "  (hnames :",
+    "    ∀ (c : FlockSoundness.PlanDraw.Call), List.instMembership.mem calls c → (List.map (fun x => x.name) c.strata).Nodup)",
+    "  (hsmall :",
+    "    ∀ (j : Fin (Finset.univ.sum fun p => FlockSoundness.Audit.Law.windowK σ call w f 27713 p)),",
+    "      instLTNat.lt",
+    "        (FlockSoundness.Randomness.frames",
+    "            (FlockSoundness.Audit.Law.windowIdx (FlockSoundness.Audit.KeyedDraw.flat calls)",
+    "              (FlockSoundness.Audit.Law.windowK σ call w f 27713) j)).size",
+    "        (instHPow.hPow 2 64))",
+    "  (hA4 :",
+    "    ∀ (R : Reg) (B : Finset (Fin n)),",
+    "      FlockSoundness.Assumptions.KeyedStreamsUniform S domain (ctx R)",
+    "        (FlockSoundness.Audit.Law.windowIdx (FlockSoundness.Audit.KeyedDraw.flat calls)",
+    "          (FlockSoundness.Audit.Law.windowK σ call w f 27713))",
+    "        (fun x => L)",
+    "        (FlockSoundness.Audit.Law.windowTest (FlockSoundness.Audit.KeyedDraw.flat calls)",
+    "          (FlockSoundness.Audit.Law.windowK σ call w f 27713) B)",
+    "        η)",
+    "  (A :",
+    "    (R : Reg) →",
+    "      FlockSoundness.Audit.Analysis ((FlockSoundness.Audit.Law.keyedWindow sec domain (ctx R) calls L).closure cl) Reg",
+    "        session)",
+    "  {εks δlink : ENNReal} (hks : ∀ (R : Reg), (A R).KnowledgeSound εks) (hlink : ∀ (R : Reg), (A R).LinkSound δlink)",
+    "  (hW : instLTNat.lt 0 (FlockSoundness.Audit.Law.totalWork σ w))",
+    "  (hone :",
+    "    ∀ (s : Fin M),",
+    "      instLTNat.lt 0 (w s) →",
+    "        Eq (FlockSoundness.Audit.Law.callWork σ call w (call s))",
+    "          (instHMul.hMul (w s) (FlockSoundness.Audit.Law.stratum σ s).card))",
+    "  (hN : instLTNat.lt 0 (FlockSoundness.Audit.Law.totalWork σ v))",
+    "  (hfy :",
+    "    ∀ (s : Fin M),",
+    "      instLENat.le (instHMul.hMul (instHMul.hMul 27713 (v s)) (FlockSoundness.Audit.Law.stratum σ s).card)",
+    "        (instHMul.hMul (f s) (FlockSoundness.Audit.Law.totalWork σ v)))",
+    "  (σ' :",
+    "    (FlockSoundness.Audit.auditReg",
+    "        (fun R => (FlockSoundness.Audit.Law.keyedWindow sec domain (ctx R) calls L).closure cl) session).Strategy) :",
+    "  ENNReal.instLE.le",
+    "    (FlockSoundness.Game.prob",
+    "      (fun o =>",
+    "        And (Eq o.fst Bool.true)",
+    "          (Or",
+    "            (instLENat.le (FlockSoundness.Audit.Law.totalWork σ w)",
+    "              (instHMul.hMul 1000",
+    "                (FlockSoundness.Audit.Law.unsoundWork σ w cl",
+    "                  ((A (Sigma.fst σ')).wrong ((A (Sigma.fst σ')).committedOf (FlockSoundness.Audit.atReg σ'))))))",
+    "            (instLENat.le (FlockSoundness.Audit.Law.totalWork σ v)",
+    "              (instHMul.hMul 1000",
+    "                (FlockSoundness.Audit.Law.unsoundWork σ v cl",
+    "                  ((A (Sigma.fst σ')).wrong ((A (Sigma.fst σ')).committedOf (FlockSoundness.Audit.atReg σ'))))))))",
+    "      (FlockSoundness.Audit.auditReg",
+    "        (fun R => (FlockSoundness.Audit.Law.keyedWindow sec domain (ctx R) calls L).closure cl) session)",
+    "      σ')",
+    "    (instHAdd.hAdd (instHAdd.hAdd (instHAdd.hAdd (ENNReal.instInv.inv (instHPow.hPow 2 40)) η) εks) δlink)"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000f9e5b54d"
+  },
+  "FlockSoundness.Audit.Law.keyedWindowReg_extraction_audit_of_record": {
+   "signature": [
+    "FlockSoundness.Audit.Law.keyedWindowReg_extraction_audit_of_record {n M : Nat} {cl : Fin n → Finset (Fin n)}",
+    "  {Reg : Type} {session : Finset (Fin n) → Reg → FlockSoundness.Game Bool} {C : Nat} (σ : Fin n → Fin M)",
+    "  (call : Fin M → Fin C) (w v f : Fin M → Nat) (calls : List FlockSoundness.PlanDraw.Call)",
+    "  (hWS :",
+    "    FlockSoundness.Audit.Law.PlanStrata σ (FlockSoundness.Audit.Law.windowK σ call w f 27713)",
+    "      (FlockSoundness.Audit.KeyedDraw.flat calls))",
+    "  {Ω : Type} [Fintype Ω] [Nonempty Ω] {S : Nat} (sec : Ω → Fin S → Fin 256)",
+    "  (hsec : FlockSoundness.Assumptions.UniformSecret sec) (L : Nat) (domain : String)",
+    "  (ctx : Reg → List (Prod String FlockSoundness.Randomness.Part)) (η : ENNReal)",
+    "  (hnames :",
+    "    ∀ (c : FlockSoundness.PlanDraw.Call), List.instMembership.mem calls c → (List.map (fun x => x.name) c.strata).Nodup)",
+    "  (hsmall :",
+    "    ∀ (j : Fin (Finset.univ.sum fun p => FlockSoundness.Audit.Law.windowK σ call w f 27713 p)),",
+    "      instLTNat.lt",
+    "        (FlockSoundness.Randomness.frames",
+    "            (FlockSoundness.Audit.Law.windowIdx (FlockSoundness.Audit.KeyedDraw.flat calls)",
+    "              (FlockSoundness.Audit.Law.windowK σ call w f 27713) j)).size",
+    "        (instHPow.hPow 2 64))",
+    "  (hA4 :",
+    "    ∀ (R : Reg) (B : Finset (Fin n)),",
+    "      FlockSoundness.Assumptions.KeyedStreamsUniform S domain (ctx R)",
+    "        (FlockSoundness.Audit.Law.windowIdx (FlockSoundness.Audit.KeyedDraw.flat calls)",
+    "          (FlockSoundness.Audit.Law.windowK σ call w f 27713))",
+    "        (fun x => L)",
+    "        (FlockSoundness.Audit.Law.windowTest (FlockSoundness.Audit.KeyedDraw.flat calls)",
+    "          (FlockSoundness.Audit.Law.windowK σ call w f 27713) B)",
+    "        η)",
+    "  (A :",
+    "    (R : Reg) →",
+    "      FlockSoundness.Audit.ExtractionAnalysis",
+    "        ((FlockSoundness.Audit.Law.keyedWindow sec domain (ctx R) calls L).closure cl) Reg session)",
+    "  {εks δlink :",
+    "    (R R' : Reg) →",
+    "      FlockSoundness.Audit.Cont ((FlockSoundness.Audit.Law.keyedWindow sec domain (ctx R) calls L).closure cl) Reg",
+    "          session R' →",
+    "        ENNReal}",
+    "  (hks : ∀ (R : Reg), (A R).KnowledgeSound (εks R)) (hlink : ∀ (R : Reg), (A R).LinkSound (δlink R))",
+    "  (hW : instLTNat.lt 0 (FlockSoundness.Audit.Law.totalWork σ w))",
+    "  (hone :",
+    "    ∀ (s : Fin M),",
+    "      instLTNat.lt 0 (w s) →",
+    "        Eq (FlockSoundness.Audit.Law.callWork σ call w (call s))",
+    "          (instHMul.hMul (w s) (FlockSoundness.Audit.Law.stratum σ s).card))",
+    "  (hN : instLTNat.lt 0 (FlockSoundness.Audit.Law.totalWork σ v))",
+    "  (hfy :",
+    "    ∀ (s : Fin M),",
+    "      instLENat.le (instHMul.hMul (instHMul.hMul 27713 (v s)) (FlockSoundness.Audit.Law.stratum σ s).card)",
+    "        (instHMul.hMul (f s) (FlockSoundness.Audit.Law.totalWork σ v)))",
+    "  (σ' :",
+    "    (FlockSoundness.Audit.auditReg",
+    "        (fun R => (FlockSoundness.Audit.Law.keyedWindow sec domain (ctx R) calls L).closure cl) session).Strategy) :",
+    "  ENNReal.instLE.le",
+    "    (FlockSoundness.Game.prob",
+    "      (fun o =>",
+    "        And (Eq o.fst Bool.true)",
+    "          (Or",
+    "            (instLENat.le (FlockSoundness.Audit.Law.totalWork σ w)",
+    "              (instHMul.hMul 1000",
+    "                (FlockSoundness.Audit.Law.unsoundWork σ w cl",
+    "                  ((A (Sigma.fst σ')).wrong ((A (Sigma.fst σ')).committedOf (FlockSoundness.Audit.atReg σ'))))))",
+    "            (instLENat.le (FlockSoundness.Audit.Law.totalWork σ v)",
+    "              (instHMul.hMul 1000",
+    "                (FlockSoundness.Audit.Law.unsoundWork σ v cl",
+    "                  ((A (Sigma.fst σ')).wrong ((A (Sigma.fst σ')).committedOf (FlockSoundness.Audit.atReg σ'))))))))",
+    "      (FlockSoundness.Audit.auditReg",
+    "        (fun R => (FlockSoundness.Audit.Law.keyedWindow sec domain (ctx R) calls L).closure cl) session)",
+    "      σ')",
+    "    (instHAdd.hAdd",
+    "      (instHAdd.hAdd (instHAdd.hAdd (ENNReal.instInv.inv (instHPow.hPow 2 40)) η)",
+    "        (εks (Sigma.fst σ') (FlockSoundness.Audit.reg (FlockSoundness.Audit.atReg σ'))",
+    "          (FlockSoundness.Audit.cont (FlockSoundness.Audit.atReg σ'))))",
+    "      (δlink (Sigma.fst σ') (FlockSoundness.Audit.reg (FlockSoundness.Audit.atReg σ'))",
+    "        (FlockSoundness.Audit.cont (FlockSoundness.Audit.atReg σ'))))"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000125e78a8"
+  },
+  "FlockSoundness.Audit.Law.keyedWindow_audit_of_record": {
+   "signature": [
+    "FlockSoundness.Audit.Law.keyedWindow_audit_of_record {n M : Nat} {cl : Fin n → Finset (Fin n)} {Reg : Type}",
+    "  {session : Finset (Fin n) → Reg → FlockSoundness.Game Bool} {C : Nat} (σ : Fin n → Fin M) (call : Fin M → Fin C)",
+    "  (w v f : Fin M → Nat) (calls : List FlockSoundness.PlanDraw.Call)",
+    "  (hWS :",
+    "    FlockSoundness.Audit.Law.PlanStrata σ (FlockSoundness.Audit.Law.windowK σ call w f 27713)",
+    "      (FlockSoundness.Audit.KeyedDraw.flat calls))",
+    "  {Ω : Type} [Fintype Ω] [Nonempty Ω] {S : Nat} (sec : Ω → Fin S → Fin 256)",
+    "  (hsec : FlockSoundness.Assumptions.UniformSecret sec) (L : Nat) (domain : String)",
+    "  (context : List (Prod String FlockSoundness.Randomness.Part)) (η : ENNReal)",
+    "  (hnames :",
+    "    ∀ (c : FlockSoundness.PlanDraw.Call), List.instMembership.mem calls c → (List.map (fun x => x.name) c.strata).Nodup)",
+    "  (hsmall :",
+    "    ∀ (j : Fin (Finset.univ.sum fun p => FlockSoundness.Audit.Law.windowK σ call w f 27713 p)),",
+    "      instLTNat.lt",
+    "        (FlockSoundness.Randomness.frames",
+    "            (FlockSoundness.Audit.Law.windowIdx (FlockSoundness.Audit.KeyedDraw.flat calls)",
+    "              (FlockSoundness.Audit.Law.windowK σ call w f 27713) j)).size",
+    "        (instHPow.hPow 2 64))",
+    "  (hA4 :",
+    "    ∀ (B : Finset (Fin n)),",
+    "      FlockSoundness.Assumptions.KeyedStreamsUniform S domain context",
+    "        (FlockSoundness.Audit.Law.windowIdx (FlockSoundness.Audit.KeyedDraw.flat calls)",
+    "          (FlockSoundness.Audit.Law.windowK σ call w f 27713))",
+    "        (fun x => L)",
+    "        (FlockSoundness.Audit.Law.windowTest (FlockSoundness.Audit.KeyedDraw.flat calls)",
+    "          (FlockSoundness.Audit.Law.windowK σ call w f 27713) B)",
+    "        η)",
+    "  (A :",
+    "    FlockSoundness.Audit.Analysis ((FlockSoundness.Audit.Law.keyedWindow sec domain context calls L).closure cl) Reg",
+    "      session)",
+    "  {εks δlink : ENNReal} (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink)",
+    "  (hW : instLTNat.lt 0 (FlockSoundness.Audit.Law.totalWork σ w))",
+    "  (hone :",
+    "    ∀ (s : Fin M),",
+    "      instLTNat.lt 0 (w s) →",
+    "        Eq (FlockSoundness.Audit.Law.callWork σ call w (call s))",
+    "          (instHMul.hMul (w s) (FlockSoundness.Audit.Law.stratum σ s).card))",
+    "  (hN : instLTNat.lt 0 (FlockSoundness.Audit.Law.totalWork σ v))",
+    "  (hfy :",
+    "    ∀ (s : Fin M),",
+    "      instLENat.le (instHMul.hMul (instHMul.hMul 27713 (v s)) (FlockSoundness.Audit.Law.stratum σ s).card)",
+    "        (instHMul.hMul (f s) (FlockSoundness.Audit.Law.totalWork σ v)))",
+    "  (σ' :",
+    "    (FlockSoundness.Audit.audit ((FlockSoundness.Audit.Law.keyedWindow sec domain context calls L).closure cl) Reg",
+    "        session).Strategy) :",
+    "  ENNReal.instLE.le",
+    "    (FlockSoundness.Game.prob",
+    "      (fun o =>",
+    "        And (Eq o.fst Bool.true)",
+    "          (Or",
+    "            (instLENat.le (FlockSoundness.Audit.Law.totalWork σ w)",
+    "              (instHMul.hMul 1000 (FlockSoundness.Audit.Law.unsoundWork σ w cl (A.wrong (A.committedOf σ')))))",
+    "            (instLENat.le (FlockSoundness.Audit.Law.totalWork σ v)",
+    "              (instHMul.hMul 1000 (FlockSoundness.Audit.Law.unsoundWork σ v cl (A.wrong (A.committedOf σ')))))))",
+    "      (FlockSoundness.Audit.audit ((FlockSoundness.Audit.Law.keyedWindow sec domain context calls L).closure cl) Reg",
+    "        session)",
+    "      σ')",
+    "    (instHAdd.hAdd (instHAdd.hAdd (instHAdd.hAdd (ENNReal.instInv.inv (instHPow.hPow 2 40)) η) εks) δlink)"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000527b1966"
+  },
   "FlockSoundness.Audit.Law.keyedWindow_escape_le": {
    "signature": [
     "FlockSoundness.Audit.Law.keyedWindow_escape_le {n M : Nat} (σ : Fin n → Fin M) (k : Fin M → Nat)",
     "  (hk : ∀ (s : Fin M), instLENat.le (k s) (FlockSoundness.Audit.Law.stratum σ s).card)",
     "  (calls : List FlockSoundness.PlanDraw.Call)",
-    "  (hWS : FlockSoundness.Audit.Law.PlanStrata σ k (FlockSoundness.Audit.KeyedDraw.flat calls)) (S L : Nat)",
+    "  (hWS : FlockSoundness.Audit.Law.PlanStrata σ k (FlockSoundness.Audit.KeyedDraw.flat calls)) {Ω : Type} [Fintype Ω]",
+    "  [Nonempty Ω] {S : Nat} (sec : Ω → Fin S → Fin 256) (hsec : FlockSoundness.Assumptions.UniformSecret sec) (L : Nat)",
     "  (domain : String) (context : List (Prod String FlockSoundness.Randomness.Part)) (η : ENNReal)",
     "  (hinj :",
     "    ∀ (j j' : Fin (Finset.univ.sum fun p => k p)),",
@@ -623,18 +790,19 @@
     "        (FlockSoundness.Audit.Law.windowIdx (FlockSoundness.Audit.KeyedDraw.flat calls) k) (fun x => L)",
     "        (FlockSoundness.Audit.Law.windowTest (FlockSoundness.Audit.KeyedDraw.flat calls) k B) η)",
     "  (B : Finset (Fin n)) :",
-    "  ENNReal.instLE.le ((FlockSoundness.Audit.Law.keyedWindow S domain context calls L).escape B)",
+    "  ENNReal.instLE.le ((FlockSoundness.Audit.Law.keyedWindow sec domain context calls L).escape B)",
     "    (instHAdd.hAdd ((FlockSoundness.Audit.Law.stratified σ k hk).escape B) η)"
    ],
    "assumptions": [],
-   "type_hash": "000000005bda82c7"
+   "type_hash": "00000000f2d69ca7"
   },
   "FlockSoundness.Audit.Law.keyedWindow_escape_le_of_names": {
    "signature": [
     "FlockSoundness.Audit.Law.keyedWindow_escape_le_of_names {n M : Nat} (σ : Fin n → Fin M) (k : Fin M → Nat)",
     "  (hk : ∀ (s : Fin M), instLENat.le (k s) (FlockSoundness.Audit.Law.stratum σ s).card)",
     "  (calls : List FlockSoundness.PlanDraw.Call)",
-    "  (hWS : FlockSoundness.Audit.Law.PlanStrata σ k (FlockSoundness.Audit.KeyedDraw.flat calls)) (S L : Nat)",
+    "  (hWS : FlockSoundness.Audit.Law.PlanStrata σ k (FlockSoundness.Audit.KeyedDraw.flat calls)) {Ω : Type} [Fintype Ω]",
+    "  [Nonempty Ω] {S : Nat} (sec : Ω → Fin S → Fin 256) (hsec : FlockSoundness.Assumptions.UniformSecret sec) (L : Nat)",
     "  (domain : String) (context : List (Prod String FlockSoundness.Randomness.Part)) (η : ENNReal)",
     "  (hnames :",
     "    ∀ (c : FlockSoundness.PlanDraw.Call), List.instMembership.mem calls c → (List.map (fun x => x.name) c.strata).Nodup)",
@@ -650,13 +818,84 @@
     "        (FlockSoundness.Audit.Law.windowIdx (FlockSoundness.Audit.KeyedDraw.flat calls) k) (fun x => L)",
     "        (FlockSoundness.Audit.Law.windowTest (FlockSoundness.Audit.KeyedDraw.flat calls) k B) η)",
     "  (B : Finset (Fin n)) :",
-    "  ENNReal.instLE.le ((FlockSoundness.Audit.Law.keyedWindow S domain context calls L).escape B)",
+    "  ENNReal.instLE.le ((FlockSoundness.Audit.Law.keyedWindow sec domain context calls L).escape B)",
     "    (instHAdd.hAdd ((FlockSoundness.Audit.Law.stratified σ k hk).escape B) η)"
    ],
    "assumptions": [],
-   "type_hash": "0000000009367b49"
+   "type_hash": "0000000051184ed2"
   },
-  "FlockSoundness.Audit.Law.keyedWindow_extraction_audit_of_record": {},
+  "FlockSoundness.Audit.Law.keyedWindow_extraction_audit_of_record": {
+   "signature": [
+    "FlockSoundness.Audit.Law.keyedWindow_extraction_audit_of_record {n M : Nat} {cl : Fin n → Finset (Fin n)} {Reg : Type}",
+    "  {session : Finset (Fin n) → Reg → FlockSoundness.Game Bool} {C : Nat} (σ : Fin n → Fin M) (call : Fin M → Fin C)",
+    "  (w v f : Fin M → Nat) (calls : List FlockSoundness.PlanDraw.Call)",
+    "  (hWS :",
+    "    FlockSoundness.Audit.Law.PlanStrata σ (FlockSoundness.Audit.Law.windowK σ call w f 27713)",
+    "      (FlockSoundness.Audit.KeyedDraw.flat calls))",
+    "  {Ω : Type} [Fintype Ω] [Nonempty Ω] {S : Nat} (sec : Ω → Fin S → Fin 256)",
+    "  (hsec : FlockSoundness.Assumptions.UniformSecret sec) (L : Nat) (domain : String)",
+    "  (context : List (Prod String FlockSoundness.Randomness.Part)) (η : ENNReal)",
+    "  (hnames :",
+    "    ∀ (c : FlockSoundness.PlanDraw.Call), List.instMembership.mem calls c → (List.map (fun x => x.name) c.strata).Nodup)",
+    "  (hsmall :",
+    "    ∀ (j : Fin (Finset.univ.sum fun p => FlockSoundness.Audit.Law.windowK σ call w f 27713 p)),",
+    "      instLTNat.lt",
+    "        (FlockSoundness.Randomness.frames",
+    "            (FlockSoundness.Audit.Law.windowIdx (FlockSoundness.Audit.KeyedDraw.flat calls)",
+    "              (FlockSoundness.Audit.Law.windowK σ call w f 27713) j)).size",
+    "        (instHPow.hPow 2 64))",
+    "  (hA4 :",
+    "    ∀ (B : Finset (Fin n)),",
+    "      FlockSoundness.Assumptions.KeyedStreamsUniform S domain context",
+    "        (FlockSoundness.Audit.Law.windowIdx (FlockSoundness.Audit.KeyedDraw.flat calls)",
+    "          (FlockSoundness.Audit.Law.windowK σ call w f 27713))",
+    "        (fun x => L)",
+    "        (FlockSoundness.Audit.Law.windowTest (FlockSoundness.Audit.KeyedDraw.flat calls)",
+    "          (FlockSoundness.Audit.Law.windowK σ call w f 27713) B)",
+    "        η)",
+    "  (A :",
+    "    FlockSoundness.Audit.ExtractionAnalysis",
+    "      ((FlockSoundness.Audit.Law.keyedWindow sec domain context calls L).closure cl) Reg session)",
+    "  {εks δlink :",
+    "    (R : Reg) →",
+    "      FlockSoundness.Audit.Cont ((FlockSoundness.Audit.Law.keyedWindow sec domain context calls L).closure cl) Reg",
+    "          session R →",
+    "        ENNReal}",
+    "  (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink)",
+    "  (hW : instLTNat.lt 0 (FlockSoundness.Audit.Law.totalWork σ w))",
+    "  (hone :",
+    "    ∀ (s : Fin M),",
+    "      instLTNat.lt 0 (w s) →",
+    "        Eq (FlockSoundness.Audit.Law.callWork σ call w (call s))",
+    "          (instHMul.hMul (w s) (FlockSoundness.Audit.Law.stratum σ s).card))",
+    "  (hN : instLTNat.lt 0 (FlockSoundness.Audit.Law.totalWork σ v))",
+    "  (hfy :",
+    "    ∀ (s : Fin M),",
+    "      instLENat.le (instHMul.hMul (instHMul.hMul 27713 (v s)) (FlockSoundness.Audit.Law.stratum σ s).card)",
+    "        (instHMul.hMul (f s) (FlockSoundness.Audit.Law.totalWork σ v)))",
+    "  (σ' :",
+    "    (FlockSoundness.Audit.audit ((FlockSoundness.Audit.Law.keyedWindow sec domain context calls L).closure cl) Reg",
+    "        session).Strategy) :",
+    "  ENNReal.instLE.le",
+    "    (FlockSoundness.Game.prob",
+    "      (fun o =>",
+    "        And (Eq o.fst Bool.true)",
+    "          (Or",
+    "            (instLENat.le (FlockSoundness.Audit.Law.totalWork σ w)",
+    "              (instHMul.hMul 1000 (FlockSoundness.Audit.Law.unsoundWork σ w cl (A.wrong (A.committedOf σ')))))",
+    "            (instLENat.le (FlockSoundness.Audit.Law.totalWork σ v)",
+    "              (instHMul.hMul 1000 (FlockSoundness.Audit.Law.unsoundWork σ v cl (A.wrong (A.committedOf σ')))))))",
+    "      (FlockSoundness.Audit.audit ((FlockSoundness.Audit.Law.keyedWindow sec domain context calls L).closure cl) Reg",
+    "        session)",
+    "      σ')",
+    "    (instHAdd.hAdd",
+    "      (instHAdd.hAdd (instHAdd.hAdd (ENNReal.instInv.inv (instHPow.hPow 2 40)) η)",
+    "        (εks (FlockSoundness.Audit.reg σ') (FlockSoundness.Audit.cont σ')))",
+    "      (δlink (FlockSoundness.Audit.reg σ') (FlockSoundness.Audit.cont σ')))"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000d9167c8f"
+  },
   "FlockSoundness.Audit.Law.mem_closure_draw": {
    "signature": [
     "FlockSoundness.Audit.Law.mem_closure_draw {n : Nat} (L : FlockSoundness.Audit.Law n) (cl : Fin n → Finset (Fin n))",
@@ -821,9 +1060,7 @@
    "type_hash": "000000009be23d12"
   },
   "FlockSoundness.Audit.Law.workRule_eq_draw": {
-   "signature": [
-    "FlockSoundness.Audit.Law.workRule_eq_draw : Eq Flock.Draw.workK FlockSoundness.Audit.Law.workRule"
-   ],
+   "signature": ["FlockSoundness.Audit.Law.workRule_eq_draw : Eq Flock.Draw.workK FlockSoundness.Audit.Law.workRule"],
    "assumptions": [],
    "type_hash": "00000000228a4b74"
   },
@@ -1714,8 +1951,90 @@
    "assumptions": [],
    "type_hash": "00000000012a7d89"
   },
-  "FlockSoundness.Audit.extraction_audit_window_of_le_slack": {},
-  "FlockSoundness.Audit.extraction_audit_window_split_of_record_of_le_slack": {},
+  "FlockSoundness.Audit.extraction_audit_window_of_le_slack": {
+   "signature": [
+    "FlockSoundness.Audit.extraction_audit_window_of_le_slack {n m : Nat} {σ : Fin n → Fin m} {k : Fin m → Nat}",
+    "  {hk : ∀ (s : Fin m), instLENat.le (k s) (FlockSoundness.Audit.Law.stratum σ s).card} {cl : Fin n → Finset (Fin n)}",
+    "  {Reg : Type} {session : Finset (Fin n) → Reg → FlockSoundness.Game Bool} {L : FlockSoundness.Audit.Law n}",
+    "  {η : ENNReal}",
+    "  (hL :",
+    "    ∀ (B : Finset (Fin n)),",
+    "      ENNReal.instLE.le (L.escape B) (instHAdd.hAdd ((FlockSoundness.Audit.Law.stratified σ k hk).escape B) η))",
+    "  (A : FlockSoundness.Audit.ExtractionAnalysis (L.closure cl) Reg session)",
+    "  {εks δlink : (R : Reg) → FlockSoundness.Audit.Cont (L.closure cl) Reg session R → ENNReal}",
+    "  (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink) {w v : Fin m → Nat} {K Ky : Nat}",
+    "  (hW : instLTNat.lt 0 (FlockSoundness.Audit.Law.totalWork σ w)) (hc : FlockSoundness.Audit.Law.Covers σ k w K)",
+    "  (hN : instLTNat.lt 0 (FlockSoundness.Audit.Law.totalWork σ v)) (hcy : FlockSoundness.Audit.Law.Covers σ k v Ky)",
+    "  (T Ty : Nat) (σ' : (FlockSoundness.Audit.audit (L.closure cl) Reg session).Strategy) :",
+    "  ENNReal.instLE.le",
+    "    (FlockSoundness.Game.prob",
+    "      (fun o =>",
+    "        And (Eq o.fst Bool.true)",
+    "          (Or (instLENat.le T (FlockSoundness.Audit.Law.unsoundWork σ w cl (A.wrong (A.committedOf σ'))))",
+    "            (instLENat.le Ty (FlockSoundness.Audit.Law.unsoundWork σ v cl (A.wrong (A.committedOf σ'))))))",
+    "      (FlockSoundness.Audit.audit (L.closure cl) Reg session) σ')",
+    "    (instHAdd.hAdd",
+    "      (instHAdd.hAdd",
+    "        (instHAdd.hAdd",
+    "          (ENNReal.instMax.max",
+    "            (instHPow.hPow",
+    "              (instHDiv.hDiv (instHSub.hSub (FlockSoundness.Audit.Law.totalWork σ w) T).cast",
+    "                (FlockSoundness.Audit.Law.totalWork σ w).cast)",
+    "              K)",
+    "            (instHPow.hPow",
+    "              (instHDiv.hDiv (instHSub.hSub (FlockSoundness.Audit.Law.totalWork σ v) Ty).cast",
+    "                (FlockSoundness.Audit.Law.totalWork σ v).cast)",
+    "              Ky))",
+    "          η)",
+    "        (εks (FlockSoundness.Audit.reg σ') (FlockSoundness.Audit.cont σ')))",
+    "      (δlink (FlockSoundness.Audit.reg σ') (FlockSoundness.Audit.cont σ')))"
+   ],
+   "assumptions": [],
+   "type_hash": "000000004f84d0eb"
+  },
+  "FlockSoundness.Audit.extraction_audit_window_split_of_record_of_le_slack": {
+   "signature": [
+    "FlockSoundness.Audit.extraction_audit_window_split_of_record_of_le_slack {n m : Nat} {σ : Fin n → Fin m}",
+    "  {cl : Fin n → Finset (Fin n)} {Reg : Type} {session : Finset (Fin n) → Reg → FlockSoundness.Game Bool} {C : Nat}",
+    "  {call : Fin m → Fin C} {w v f : Fin m → Nat} {L : FlockSoundness.Audit.Law n} {η : ENNReal}",
+    "  (hL :",
+    "    ∀ (B : Finset (Fin n)),",
+    "      ENNReal.instLE.le (L.escape B)",
+    "        (instHAdd.hAdd",
+    "          ((FlockSoundness.Audit.Law.stratified σ (FlockSoundness.Audit.Law.windowK σ call w f 27713) ⋯).escape B) η))",
+    "  (A : FlockSoundness.Audit.ExtractionAnalysis (L.closure cl) Reg session)",
+    "  {εks δlink : (R : Reg) → FlockSoundness.Audit.Cont (L.closure cl) Reg session R → ENNReal}",
+    "  (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink)",
+    "  (hW : instLTNat.lt 0 (FlockSoundness.Audit.Law.totalWork σ w))",
+    "  (hone :",
+    "    ∀ (s : Fin m),",
+    "      instLTNat.lt 0 (w s) →",
+    "        Eq (FlockSoundness.Audit.Law.callWork σ call w (call s))",
+    "          (instHMul.hMul (w s) (FlockSoundness.Audit.Law.stratum σ s).card))",
+    "  (hN : instLTNat.lt 0 (FlockSoundness.Audit.Law.totalWork σ v))",
+    "  (hfy :",
+    "    ∀ (s : Fin m),",
+    "      instLENat.le (instHMul.hMul (instHMul.hMul 27713 (v s)) (FlockSoundness.Audit.Law.stratum σ s).card)",
+    "        (instHMul.hMul (f s) (FlockSoundness.Audit.Law.totalWork σ v)))",
+    "  (σ' : (FlockSoundness.Audit.audit (L.closure cl) Reg session).Strategy) :",
+    "  ENNReal.instLE.le",
+    "    (FlockSoundness.Game.prob",
+    "      (fun o =>",
+    "        And (Eq o.fst Bool.true)",
+    "          (Or",
+    "            (instLENat.le (FlockSoundness.Audit.Law.totalWork σ w)",
+    "              (instHMul.hMul 1000 (FlockSoundness.Audit.Law.unsoundWork σ w cl (A.wrong (A.committedOf σ')))))",
+    "            (instLENat.le (FlockSoundness.Audit.Law.totalWork σ v)",
+    "              (instHMul.hMul 1000 (FlockSoundness.Audit.Law.unsoundWork σ v cl (A.wrong (A.committedOf σ')))))))",
+    "      (FlockSoundness.Audit.audit (L.closure cl) Reg session) σ')",
+    "    (instHAdd.hAdd",
+    "      (instHAdd.hAdd (instHAdd.hAdd (ENNReal.instInv.inv (instHPow.hPow 2 40)) η)",
+    "        (εks (FlockSoundness.Audit.reg σ') (FlockSoundness.Audit.cont σ')))",
+    "      (δlink (FlockSoundness.Audit.reg σ') (FlockSoundness.Audit.cont σ')))"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000e545183d"
+  },
   "FlockSoundness.Audit.extraction_audit_work": {
    "signature": [
     "FlockSoundness.Audit.extraction_audit_work {n m : Nat} {σ : Fin n → Fin m} {w f : Fin m → Nat} {K : Nat} {Reg : Type}",
@@ -1841,7 +2160,18 @@
    "assumptions": [],
    "type_hash": "000000005aed7f70"
   },
-  "FlockSoundness.Audit.prob_auditReg": {},
+  "FlockSoundness.Audit.prob_auditReg": {
+   "signature": [
+    "FlockSoundness.Audit.prob_auditReg {n : Nat} {Reg : Type} (L : Reg → FlockSoundness.Audit.Law n)",
+    "  (session : Finset (Fin n) → Reg → FlockSoundness.Game Bool) (p : Prod Bool (Finset (Fin n)) → Prop)",
+    "  (σ : (FlockSoundness.Audit.auditReg L session).Strategy) :",
+    "  Eq (FlockSoundness.Game.prob p (FlockSoundness.Audit.auditReg L session) σ)",
+    "    (FlockSoundness.Game.prob p (FlockSoundness.Audit.audit (L (Sigma.fst σ)) Reg session)",
+    "      (FlockSoundness.Audit.atReg σ))"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000922cdfe9"
+  },
   "FlockSoundness.Merkle.opening_binding": {
    "signature": [
     "FlockSoundness.Merkle.opening_binding {Col D : Type} (H : List UInt8 → D) (E : FlockSoundness.Merkle.Enc Col D)",
@@ -2689,9 +3019,7 @@
    "type_hash": "000000005e4ddc68"
   },
   "FlockSoundness.execArith_correct": {
-   "signature": [
-    "FlockSoundness.execArith_correct : FlockSoundness.execArith.Correct"
-   ],
+   "signature": ["FlockSoundness.execArith_correct : FlockSoundness.execArith.Correct"],
    "assumptions": [],
    "type_hash": "00000000f4d0def7"
   },
@@ -3134,8 +3462,12 @@
     "FlockSoundness.Audit.Law.execOS_subset_escape_le",
     "FlockSoundness.Audit.Law.execOS_work_escape_le",
     "FlockSoundness.Audit.Law.execStratified_escape_le",
+    "FlockSoundness.Audit.Law.keyedWindowReg_audit_of_record",
+    "FlockSoundness.Audit.Law.keyedWindowReg_extraction_audit_of_record",
+    "FlockSoundness.Audit.Law.keyedWindow_audit_of_record",
     "FlockSoundness.Audit.Law.keyedWindow_escape_le",
     "FlockSoundness.Audit.Law.keyedWindow_escape_le_of_names",
+    "FlockSoundness.Audit.Law.keyedWindow_extraction_audit_of_record",
     "FlockSoundness.Audit.Law.stratified_exec_escape_le",
     "FlockSoundness.Audit.Law.subsetOn_escape_le",
     "FlockSoundness.Audit.Law.subset_exec_escape_le",
@@ -3627,11 +3959,12 @@
    ]
   },
   "FlockSoundness.Assumptions": {
-   "digest": "66229ba912ab154cdbe9e79a3ec7d7b5",
+   "digest": "6fd1a93ab7c2f2216c7c52dfabfacf6e",
    "definitions": {
     "FlockSoundness.Assumptions.KeyedStreamsUniform": "916e7b1cf565effa",
     "FlockSoundness.Assumptions.SHA512ExpectedTimeCR": "ccb6f722fa4330ad",
-    "FlockSoundness.Assumptions.UniformRandomBytes": "da3a666b67a731b0"
+    "FlockSoundness.Assumptions.UniformRandomBytes": "da3a666b67a731b0",
+    "FlockSoundness.Assumptions.UniformSecret": "d47e21c4ce39465a"
    },
    "pins": [
     "FlockSoundness.Audit.Law.drawOS_stratified_escape_le",
@@ -3640,8 +3973,12 @@
     "FlockSoundness.Audit.Law.execOS_escape_le",
     "FlockSoundness.Audit.Law.execOS_subset_escape_le",
     "FlockSoundness.Audit.Law.execOS_work_escape_le",
+    "FlockSoundness.Audit.Law.keyedWindowReg_audit_of_record",
+    "FlockSoundness.Audit.Law.keyedWindowReg_extraction_audit_of_record",
+    "FlockSoundness.Audit.Law.keyedWindow_audit_of_record",
     "FlockSoundness.Audit.Law.keyedWindow_escape_le",
     "FlockSoundness.Audit.Law.keyedWindow_escape_le_of_names",
+    "FlockSoundness.Audit.Law.keyedWindow_extraction_audit_of_record",
     "FlockSoundness.Audit.Partition.flock_e2e_count",
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
@@ -3721,6 +4058,10 @@
     "FlockSoundness.Audit.Law.closure_escape",
     "FlockSoundness.Audit.Law.closure_escape_le_work",
     "FlockSoundness.Audit.Law.harm_le_unsoundWork",
+    "FlockSoundness.Audit.Law.keyedWindowReg_audit_of_record",
+    "FlockSoundness.Audit.Law.keyedWindowReg_extraction_audit_of_record",
+    "FlockSoundness.Audit.Law.keyedWindow_audit_of_record",
+    "FlockSoundness.Audit.Law.keyedWindow_extraction_audit_of_record",
     "FlockSoundness.Audit.Law.mem_closure_draw",
     "FlockSoundness.Audit.Law.unsoundWork_le_harm",
     "FlockSoundness.Audit.Law.unsoundWork_singleton",
@@ -3735,6 +4076,8 @@
     "FlockSoundness.Audit.audit_work_closure_harm",
     "FlockSoundness.Audit.audit_work_closure_of_record",
     "FlockSoundness.Audit.extraction_audit_window",
+    "FlockSoundness.Audit.extraction_audit_window_of_le_slack",
+    "FlockSoundness.Audit.extraction_audit_window_split_of_record_of_le_slack",
     "FlockSoundness.Audit.extraction_audit_work_closure"
    ]
   },
@@ -3753,7 +4096,11 @@
     "FlockSoundness.Audit.atTgt": "b523fba2f6448293"
    },
    "pins": [
+    "FlockSoundness.Audit.Law.keyedWindowReg_extraction_audit_of_record",
+    "FlockSoundness.Audit.Law.keyedWindow_extraction_audit_of_record",
     "FlockSoundness.Audit.extraction_audit_window",
+    "FlockSoundness.Audit.extraction_audit_window_of_le_slack",
+    "FlockSoundness.Audit.extraction_audit_window_split_of_record_of_le_slack",
     "FlockSoundness.Audit.extraction_audit_work",
     "FlockSoundness.Audit.extraction_audit_work_closure",
     "FlockSoundness.Audit.extraction_audit_work_floor",
@@ -3951,8 +4298,12 @@
     "FlockSoundness.Audit.Law.execOS_subset_escape_le",
     "FlockSoundness.Audit.Law.execOS_work_escape_le",
     "FlockSoundness.Audit.Law.execStratified_escape_le",
+    "FlockSoundness.Audit.Law.keyedWindowReg_audit_of_record",
+    "FlockSoundness.Audit.Law.keyedWindowReg_extraction_audit_of_record",
+    "FlockSoundness.Audit.Law.keyedWindow_audit_of_record",
     "FlockSoundness.Audit.Law.keyedWindow_escape_le",
     "FlockSoundness.Audit.Law.keyedWindow_escape_le_of_names",
+    "FlockSoundness.Audit.Law.keyedWindow_extraction_audit_of_record",
     "FlockSoundness.Audit.Law.mem_closure_draw",
     "FlockSoundness.Audit.Law.stratified_escape_le_of_covers",
     "FlockSoundness.Audit.Law.stratified_exec_escape_le",
@@ -3986,11 +4337,14 @@
     "FlockSoundness.Audit.audit_work_rest",
     "FlockSoundness.Audit.audit_work_whole_stratum",
     "FlockSoundness.Audit.extraction_audit_window",
+    "FlockSoundness.Audit.extraction_audit_window_of_le_slack",
+    "FlockSoundness.Audit.extraction_audit_window_split_of_record_of_le_slack",
     "FlockSoundness.Audit.extraction_audit_work",
     "FlockSoundness.Audit.extraction_audit_work_closure",
     "FlockSoundness.Audit.extraction_audit_work_floor",
     "FlockSoundness.Audit.extraction_audit_work_rest",
-    "FlockSoundness.Audit.extraction_audit_work_whole_stratum"
+    "FlockSoundness.Audit.extraction_audit_work_whole_stratum",
+    "FlockSoundness.Audit.prob_auditReg"
    ]
   },
   "FlockSoundness.Audit.OneStage": {
@@ -4016,6 +4370,10 @@
     "FlockSoundness.Audit.InfluenceWitness.A.accepts",
     "FlockSoundness.Audit.InfluenceWitness.A.influence",
     "FlockSoundness.Audit.InfluenceWitness.Ex.exfil",
+    "FlockSoundness.Audit.Law.keyedWindowReg_audit_of_record",
+    "FlockSoundness.Audit.Law.keyedWindowReg_extraction_audit_of_record",
+    "FlockSoundness.Audit.Law.keyedWindow_audit_of_record",
+    "FlockSoundness.Audit.Law.keyedWindow_extraction_audit_of_record",
     "FlockSoundness.Audit.Partition.audit_exfiltration",
     "FlockSoundness.Audit.Partition.audit_influence",
     "FlockSoundness.Audit.Partition.flock_e2e_count",
@@ -4037,11 +4395,26 @@
     "FlockSoundness.Audit.audit_work_rest",
     "FlockSoundness.Audit.audit_work_whole_stratum",
     "FlockSoundness.Audit.extraction_audit_window",
+    "FlockSoundness.Audit.extraction_audit_window_of_le_slack",
+    "FlockSoundness.Audit.extraction_audit_window_split_of_record_of_le_slack",
     "FlockSoundness.Audit.extraction_audit_work",
     "FlockSoundness.Audit.extraction_audit_work_closure",
     "FlockSoundness.Audit.extraction_audit_work_floor",
     "FlockSoundness.Audit.extraction_audit_work_rest",
-    "FlockSoundness.Audit.extraction_audit_work_whole_stratum"
+    "FlockSoundness.Audit.extraction_audit_work_whole_stratum",
+    "FlockSoundness.Audit.prob_auditReg"
+   ]
+  },
+  "FlockSoundness.Audit.RegDraw": {
+   "digest": "acc92e6e9ff01ba3686896fc7fbf24d2",
+   "definitions": {
+    "FlockSoundness.Audit.atReg": "052eb9dbff6d76e2",
+    "FlockSoundness.Audit.auditReg": "6ae66b2e3a1672da"
+   },
+   "pins": [
+    "FlockSoundness.Audit.Law.keyedWindowReg_audit_of_record",
+    "FlockSoundness.Audit.Law.keyedWindowReg_extraction_audit_of_record",
+    "FlockSoundness.Audit.prob_auditReg"
    ]
   },
   "FlockSoundness.Audit.Stratified": {
@@ -4063,8 +4436,12 @@
     "FlockSoundness.Audit.Law.execOS_work_escape_le",
     "FlockSoundness.Audit.Law.execStratified_escape_le",
     "FlockSoundness.Audit.Law.floor_le_workK",
+    "FlockSoundness.Audit.Law.keyedWindowReg_audit_of_record",
+    "FlockSoundness.Audit.Law.keyedWindowReg_extraction_audit_of_record",
+    "FlockSoundness.Audit.Law.keyedWindow_audit_of_record",
     "FlockSoundness.Audit.Law.keyedWindow_escape_le",
     "FlockSoundness.Audit.Law.keyedWindow_escape_le_of_names",
+    "FlockSoundness.Audit.Law.keyedWindow_extraction_audit_of_record",
     "FlockSoundness.Audit.Law.stratified_escape_le_of_covers",
     "FlockSoundness.Audit.Law.stratified_exec_escape_le",
     "FlockSoundness.Audit.Law.stratified_miss_eq_greedy",
@@ -4090,6 +4467,8 @@
     "FlockSoundness.Audit.audit_work_rest",
     "FlockSoundness.Audit.audit_work_whole_stratum",
     "FlockSoundness.Audit.extraction_audit_window",
+    "FlockSoundness.Audit.extraction_audit_window_of_le_slack",
+    "FlockSoundness.Audit.extraction_audit_window_split_of_record_of_le_slack",
     "FlockSoundness.Audit.extraction_audit_work",
     "FlockSoundness.Audit.extraction_audit_work_closure",
     "FlockSoundness.Audit.extraction_audit_work_floor",
@@ -4103,9 +4482,7 @@
     "FlockSoundness.Audit.Law.stratumEscape": "4af529b99ca327b1",
     "FlockSoundness.Audit.Law.stratumRatio": "db99e8430185e632"
    },
-   "pins": [
-    "FlockSoundness.Audit.Law.stratified_miss_eq_greedy"
-   ]
+   "pins": ["FlockSoundness.Audit.Law.stratified_miss_eq_greedy"]
   },
   "FlockSoundness.Audit.TwoStage": {
    "digest": "6e426a1a29789fe403267a833094578f",
@@ -4149,6 +4526,10 @@
     "FlockSoundness.Audit.Law.covers_of_floor",
     "FlockSoundness.Audit.Law.covers_window",
     "FlockSoundness.Audit.Law.covers_work",
+    "FlockSoundness.Audit.Law.keyedWindowReg_audit_of_record",
+    "FlockSoundness.Audit.Law.keyedWindowReg_extraction_audit_of_record",
+    "FlockSoundness.Audit.Law.keyedWindow_audit_of_record",
+    "FlockSoundness.Audit.Law.keyedWindow_extraction_audit_of_record",
     "FlockSoundness.Audit.Law.stratified_escape_le_of_covers",
     "FlockSoundness.Audit.audit_window",
     "FlockSoundness.Audit.audit_window_of_le",
@@ -4156,7 +4537,9 @@
     "FlockSoundness.Audit.audit_window_of_record",
     "FlockSoundness.Audit.audit_window_split_of_record",
     "FlockSoundness.Audit.audit_window_split_of_record_of_le_slack",
-    "FlockSoundness.Audit.extraction_audit_window"
+    "FlockSoundness.Audit.extraction_audit_window",
+    "FlockSoundness.Audit.extraction_audit_window_of_le_slack",
+    "FlockSoundness.Audit.extraction_audit_window_split_of_record_of_le_slack"
    ]
   },
   "FlockSoundness.Audit.Work": {
@@ -4182,6 +4565,10 @@
     "FlockSoundness.Audit.Law.escape_widen_le",
     "FlockSoundness.Audit.Law.floor_le_workK",
     "FlockSoundness.Audit.Law.harm_le_unsoundWork",
+    "FlockSoundness.Audit.Law.keyedWindowReg_audit_of_record",
+    "FlockSoundness.Audit.Law.keyedWindowReg_extraction_audit_of_record",
+    "FlockSoundness.Audit.Law.keyedWindow_audit_of_record",
+    "FlockSoundness.Audit.Law.keyedWindow_extraction_audit_of_record",
     "FlockSoundness.Audit.Law.mem_closure_draw",
     "FlockSoundness.Audit.Law.stratified_escape_le_of_covers",
     "FlockSoundness.Audit.Law.sum_workK_le",
@@ -4209,6 +4596,8 @@
     "FlockSoundness.Audit.audit_work_rest",
     "FlockSoundness.Audit.audit_work_whole_stratum",
     "FlockSoundness.Audit.extraction_audit_window",
+    "FlockSoundness.Audit.extraction_audit_window_of_le_slack",
+    "FlockSoundness.Audit.extraction_audit_window_split_of_record_of_le_slack",
     "FlockSoundness.Audit.extraction_audit_work",
     "FlockSoundness.Audit.extraction_audit_work_closure",
     "FlockSoundness.Audit.extraction_audit_work_floor",
@@ -4306,10 +4695,7 @@
    "definitions": {
     "FlockSoundness.Compose.ofBlock": "4cfa2fa118656993"
    },
-   "pins": [
-    "FlockSoundness.Rows.compose_eval_unit",
-    "FlockSoundness.UProg.rowsL1"
-   ]
+   "pins": ["FlockSoundness.Rows.compose_eval_unit", "FlockSoundness.UProg.rowsL1"]
   },
   "FlockSoundness.Defs": {
    "digest": "1cc2134a37060fbf2b00703ce87a654e",
@@ -4470,8 +4856,12 @@
     "FlockSoundness.Audit.Law.execOS_subset_escape_le",
     "FlockSoundness.Audit.Law.execOS_work_escape_le",
     "FlockSoundness.Audit.Law.execStratified_escape_le",
+    "FlockSoundness.Audit.Law.keyedWindowReg_audit_of_record",
+    "FlockSoundness.Audit.Law.keyedWindowReg_extraction_audit_of_record",
+    "FlockSoundness.Audit.Law.keyedWindow_audit_of_record",
     "FlockSoundness.Audit.Law.keyedWindow_escape_le",
     "FlockSoundness.Audit.Law.keyedWindow_escape_le_of_names",
+    "FlockSoundness.Audit.Law.keyedWindow_extraction_audit_of_record",
     "FlockSoundness.Audit.Law.stratified_escape_le_of_covers",
     "FlockSoundness.Audit.Law.stratified_exec_escape_le",
     "FlockSoundness.Audit.Law.stratified_miss_eq_greedy",
@@ -4504,11 +4894,14 @@
     "FlockSoundness.Audit.audit_work_rest",
     "FlockSoundness.Audit.audit_work_whole_stratum",
     "FlockSoundness.Audit.extraction_audit_window",
+    "FlockSoundness.Audit.extraction_audit_window_of_le_slack",
+    "FlockSoundness.Audit.extraction_audit_window_split_of_record_of_le_slack",
     "FlockSoundness.Audit.extraction_audit_work",
     "FlockSoundness.Audit.extraction_audit_work_closure",
     "FlockSoundness.Audit.extraction_audit_work_floor",
     "FlockSoundness.Audit.extraction_audit_work_rest",
     "FlockSoundness.Audit.extraction_audit_work_whole_stratum",
+    "FlockSoundness.Audit.prob_auditReg",
     "FlockSoundness.Refine.ligerito_accepts",
     "FlockSoundness.Refine.ligerito_accepts_opening",
     "FlockSoundness.Refine.ligerito_refines",
@@ -4625,6 +5018,10 @@
     "FlockSoundness.Audit.InfluenceWitness.A.influence",
     "FlockSoundness.Audit.InfluenceWitness.Ex.exfil",
     "FlockSoundness.Audit.InfluenceWitness.Two.influence",
+    "FlockSoundness.Audit.Law.keyedWindowReg_audit_of_record",
+    "FlockSoundness.Audit.Law.keyedWindowReg_extraction_audit_of_record",
+    "FlockSoundness.Audit.Law.keyedWindow_audit_of_record",
+    "FlockSoundness.Audit.Law.keyedWindow_extraction_audit_of_record",
     "FlockSoundness.Audit.Partition.Refines.twoStage_influence",
     "FlockSoundness.Audit.Partition.audit_exfiltration",
     "FlockSoundness.Audit.Partition.audit_influence",
@@ -4647,6 +5044,8 @@
     "FlockSoundness.Audit.audit_work_rest",
     "FlockSoundness.Audit.audit_work_whole_stratum",
     "FlockSoundness.Audit.extraction_audit_window",
+    "FlockSoundness.Audit.extraction_audit_window_of_le_slack",
+    "FlockSoundness.Audit.extraction_audit_window_split_of_record_of_le_slack",
     "FlockSoundness.Audit.extraction_audit_work",
     "FlockSoundness.Audit.extraction_audit_work_closure",
     "FlockSoundness.Audit.extraction_audit_work_floor",
@@ -4693,9 +5092,7 @@
     "FlockSoundness.GateRows.run": "927948e95290f765",
     "FlockSoundness.GateRows.runsList": "13a1a437aad8d735"
    },
-   "pins": [
-    "FlockSoundness.Rope.rope_sound"
-   ]
+   "pins": ["FlockSoundness.Rope.rope_sound"]
   },
   "FlockSoundness.Instance": {
    "digest": "614e3e3f08e4cd9422ad82c3c4444147",
@@ -4726,13 +5123,13 @@
    ]
   },
   "FlockSoundness.KeyedDraw": {
-   "digest": "c31e74f248b8e17f42c02701a2f4522a",
+   "digest": "67eed1b8dce3aedd70b4709af7934061",
    "definitions": {
     "FlockSoundness.Audit.KeyedDraw.drawOn": "dc67197f6e574b2e",
     "FlockSoundness.Audit.KeyedDraw.flat": "86019fe258e3c50f",
     "FlockSoundness.Audit.KeyedDraw.streamsOf": "f4a0d94ef81831ee",
     "FlockSoundness.Audit.Law.PlanStrata": "28b59b758733ed3e",
-    "FlockSoundness.Audit.Law.keyedWindow": "b6fbe659df7c50bc",
+    "FlockSoundness.Audit.Law.keyedWindow": "9ef801f5ee29bf85",
     "FlockSoundness.Audit.Law.noStratum": "957f7a04b91e1da2",
     "FlockSoundness.Audit.Law.windowIdx": "ee27cf8ed2b5e057",
     "FlockSoundness.Audit.Law.windowOf": "1ec453c434fd8789",
@@ -4741,8 +5138,12 @@
    },
    "pins": [
     "FlockSoundness.Audit.Law.drawOn_escape_le",
+    "FlockSoundness.Audit.Law.keyedWindowReg_audit_of_record",
+    "FlockSoundness.Audit.Law.keyedWindowReg_extraction_audit_of_record",
+    "FlockSoundness.Audit.Law.keyedWindow_audit_of_record",
     "FlockSoundness.Audit.Law.keyedWindow_escape_le",
     "FlockSoundness.Audit.Law.keyedWindow_escape_le_of_names",
+    "FlockSoundness.Audit.Law.keyedWindow_extraction_audit_of_record",
     "FlockSoundness.Audit.Law.subsetOn_escape_le"
    ]
   },
@@ -4752,9 +5153,7 @@
     "FlockSoundness.levelGood": "5ed9eda84a723620",
     "FlockSoundness.levelsChained": "02ecc12eea16c736"
    },
-   "pins": [
-    "FlockSoundness.table_sound_compiled"
-   ]
+   "pins": ["FlockSoundness.table_sound_compiled"]
   },
   "FlockSoundness.LinkFinder": {
    "digest": "db3e7fbd5c745fb38049d6b9e79582dd",
@@ -5188,8 +5587,12 @@
    },
    "pins": [
     "FlockSoundness.Audit.Law.drawOn_escape_le",
+    "FlockSoundness.Audit.Law.keyedWindowReg_audit_of_record",
+    "FlockSoundness.Audit.Law.keyedWindowReg_extraction_audit_of_record",
+    "FlockSoundness.Audit.Law.keyedWindow_audit_of_record",
     "FlockSoundness.Audit.Law.keyedWindow_escape_le",
-    "FlockSoundness.Audit.Law.keyedWindow_escape_le_of_names"
+    "FlockSoundness.Audit.Law.keyedWindow_escape_le_of_names",
+    "FlockSoundness.Audit.Law.keyedWindow_extraction_audit_of_record"
    ]
   },
   "FlockSoundness.Randomness": {
@@ -5215,8 +5618,12 @@
    },
    "pins": [
     "FlockSoundness.Audit.Law.drawOn_escape_le",
+    "FlockSoundness.Audit.Law.keyedWindowReg_audit_of_record",
+    "FlockSoundness.Audit.Law.keyedWindowReg_extraction_audit_of_record",
+    "FlockSoundness.Audit.Law.keyedWindow_audit_of_record",
     "FlockSoundness.Audit.Law.keyedWindow_escape_le",
     "FlockSoundness.Audit.Law.keyedWindow_escape_le_of_names",
+    "FlockSoundness.Audit.Law.keyedWindow_extraction_audit_of_record",
     "FlockSoundness.Audit.Law.subsetOn_escape_le"
    ]
   },
@@ -5242,9 +5649,7 @@
     "FlockSoundness.Refine.levelsOf": "0991da2ddafa3f45",
     "FlockSoundness.Refine.origE": "b7cccc3fe758b0ce"
    },
-   "pins": [
-    "FlockSoundness.Refine.final_refines"
-   ]
+   "pins": ["FlockSoundness.Refine.final_refines"]
   },
   "FlockSoundness.Refine.Ligerito": {
    "digest": "12e6da387e8206ed41f600012a1eac1e",
@@ -5329,10 +5734,7 @@
     "FlockSoundness.Refine.regionOf": "c2c6137c5dc0126b",
     "FlockSoundness.Refine.regionsOf": "cac820d20e8bde9c"
    },
-   "pins": [
-    "FlockSoundness.Refine.ofCircuit_extra",
-    "FlockSoundness.Refine.verify_refines_ofCircuit"
-   ]
+   "pins": ["FlockSoundness.Refine.ofCircuit_extra", "FlockSoundness.Refine.verify_refines_ofCircuit"]
   },
   "FlockSoundness.Refine.Rep": {
    "digest": "2c6ccf1102c5f506e8dd201e1edab997",
@@ -5483,9 +5885,7 @@
     "FlockSoundness.Rope.pinnedRuns": "a733b84daa315397",
     "FlockSoundness.Rope.unpackRuns": "0d63f82b79bf0d34"
    },
-   "pins": [
-    "FlockSoundness.Rope.rope_sound"
-   ]
+   "pins": ["FlockSoundness.Rope.rope_sound"]
   },
   "FlockSoundness.Rope.Gates": {
    "digest": "456a404bb2949dbb43f705d30d3b91af",
@@ -5546,18 +5946,14 @@
     "FlockSoundness.Rope.nIn": "1c335152cc1b7125",
     "FlockSoundness.Rope.outCodes": "8096a8e034588f5d"
    },
-   "pins": [
-    "FlockSoundness.Rope.rope_sound"
-   ]
+   "pins": ["FlockSoundness.Rope.rope_sound"]
   },
   "FlockSoundness.Rope.Lowering": {
    "digest": "f90b5834ad7a996e466e5a117a377947",
    "definitions": {
     "FlockSoundness.Rope.SatList": "f90b5834ad7a996e"
    },
-   "pins": [
-    "FlockSoundness.Rope.rope_sound"
-   ]
+   "pins": ["FlockSoundness.Rope.rope_sound"]
   },
   "FlockSoundness.Rope.Pinned": {
    "digest": "ac24c81017e6c20b8994783eebd382ff",
@@ -5617,9 +6013,7 @@
     "FlockSoundness.Rope.pinOut": "a5dfb7b38215c4ef",
     "FlockSoundness.Rope.pinnedCodes": "05868213389d218a"
    },
-   "pins": [
-    "FlockSoundness.Rope.rope_sound"
-   ]
+   "pins": ["FlockSoundness.Rope.rope_sound"]
   },
   "FlockSoundness.Session": {
    "digest": "8344410d7ebde5b556090193ed67f9b5",
@@ -5742,9 +6136,7 @@
     "FlockSoundness.Types.Flatten.xorChain": "4a79adb045e12afb",
     "FlockSoundness.Types.Flatten.xorGates": "d628210b5ff81d7d"
    },
-   "pins": [
-    "FlockSoundness.UProg.rowsL1"
-   ]
+   "pins": ["FlockSoundness.UProg.rowsL1"]
   },
   "FlockSoundness.Types.Program": {
    "digest": "4076ac5491c0bcbb6aa7ad8e3716bbd2",
@@ -5791,9 +6183,7 @@
     "FlockSoundness.UnitSpec.types": "ecb44d422e69f065",
     "FlockSoundness.UnitSpec.words": "c02df0ee1cb68fd3"
    },
-   "pins": [
-    "FlockSoundness.UProg.rowsL1"
-   ]
+   "pins": ["FlockSoundness.UProg.rowsL1"]
   },
   "FlockSoundness.Types.Units": {
    "digest": "8a287025438e018e2845a537621aa226",
@@ -5801,9 +6191,7 @@
     "FlockSoundness.Types.Flatten.Gate.lift": "a63cce92ce06c479",
     "FlockSoundness.Types.Flatten.unitGates": "1ddc92e2a7cd8a42"
    },
-   "pins": [
-    "FlockSoundness.UProg.rowsL1"
-   ]
+   "pins": ["FlockSoundness.UProg.rowsL1"]
   }
  },
  "dependencies": {
