@@ -154,9 +154,50 @@ def test_the_default_work_law_draws_a_calls_share_of_the_windows_budget():
     assert PL.WorkLaw().sizes(lay.strata) == {s.name: 4 if s is tile else 1 for s in lay.strata}   # K capped at its units
     laws = PL.window_laws([lay] * 10_000)
     assert laws[0].budget(lay.strata) == -(-PL.RECORD_K // 10_000) == 3
-    assert laws[0].sizes(lay.strata) == {s.name: 3 if s is tile else 1 for s in lay.strata}
+    deq = _by_role(lay)["dequant"]                                   # y's floor ⌈K_y·1,024/(10,000·1,024)⌉ (option B)
+    assert laws[0].sizes(lay.strata) == {s.name: 3 if s in (tile, deq) else 1 for s in lay.strata}
     assert PL.law_object(lay, laws[0])["k"] == 3                     # #362's law at the call's share
     assert sum(law.sizes(lay.strata)[tile.name] for law in laws) <= PL.RECORD_K + 10_000 * len(lay.strata)
+
+
+
+def test_y_is_drawn_at_root_s_option_b_floors_over_the_window():
+    """Root's option B on X-SPC-105: each call's dequantization stratum has floor f_c = ⌈K_y·n_c/N⌉ in its own work table, N
+    the window's y cells and K_y = K = 27,713, so k_c = min(n_c, f_c) meets k_c·N ≥ K_y·n_c or proves the stratum, and the
+    window draws at most K_y + C y cells. The other zero-work templates keep floor 1, and the tiles' K_c don't move. A call
+    alone proves all its y cells up to K_y. Over the window the escape of b_c wrong cells in each call is at most
+    (1 − ∑b_c/N)^K_y (weighted AM–GM, root's §1), the bound the window pin states."""
+    import random
+
+    shapes = [ncp2.Shape(32, 64, 32)] * 3 + [ncp2.Shape(64, 64, 64)] * 2 + [ncp2.Shape(48, 64, 32)]
+    lays = [PL.layout(s) for s in shapes] * 400
+    laws = PL.window_laws(lays)
+    n_y = [len(_by_role(lay)["dequant"].units) for lay in lays]
+    big_n = sum(n_y)
+    ks = []
+    tiled = PL.WorkLaw(PL.RECORD_K, window_work=sum(lay.work() for lay in lays))     # the tiles' K_c, without y's floors
+    for lay, law, n_c in zip(lays, laws, n_y):
+        deq, table = _by_role(lay)["dequant"], PL.work_table(lay, law)
+        f_c = -(-PL.RECORD_K * n_c // big_n)
+        assert table[deq.name] == {"work": 0, "floor": f_c}
+        assert all(table[s.name]["floor"] == 1 for s in lay.strata if s.role not in ("dequant",))
+        k_c = law.sizes(lay.strata)[deq.name]
+        assert k_c == min(n_c, f_c) and (k_c * big_n >= PL.RECORD_K * n_c or k_c == n_c)
+        tile = _by_role(lay)["tile"].name
+        assert law.sizes(lay.strata)[tile] == tiled.sizes(lay.strata)[tile]
+        assert PL.law_object(lay, law)["strata"][[s.name for s in lay.strata].index(deq.name)]["floor"] == f_c
+        ks.append(k_c)
+    assert PL.RECORD_K <= sum(ks) <= PL.RECORD_K + len(lays)
+    rng = random.Random(105)
+    for _ in range(20):
+        bad = [rng.randrange(0, n_c // 50 + 1) for n_c in n_y]
+        per_call = 1.0
+        for b, n_c, k_c in zip(bad, n_y, ks):
+            per_call *= ((n_c - b) / n_c) ** k_c
+        assert per_call <= (1 - sum(bad) / big_n) ** PL.RECORD_K * (1 + 1e-9)
+    lay = PL.layout(ncp2.Shape(32, 64, 32))
+    (alone,) = PL.window_laws([lay])
+    assert alone.sizes(lay.strata)[_by_role(lay)["dequant"].name] == 32 * 32
 
 
 def test_a_tiles_closure_contains_the_tile_itself():

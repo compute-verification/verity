@@ -235,18 +235,31 @@ at its floor, so a wholly wrong one is caught directly (`audit_work_whole_stratu
   ⌈K·w_s·n_s/W⌉)), with K = 27,713 at ε = 0.1% and δ = 2⁻⁴⁰ (`plan.record_k`; 27,712 misses). Only the tile template does
   PoUW work, so W is its stratum's, and k_tile = min(n_tile, max(f_tile, K)).
   - `plan.work_table` is the verifier's `--work-table`: every template of the call, `{"work": w, "floor": f}`, the tile's
-    W_ref per tile and 0 for `digest`, `node`, `key`, `form_x` and `dequant`, floors 1 unless POUS sets them.
+    W_ref per tile and 0 for `digest`, `node`, `key`, `form_x` and `dequant`; `dequant`'s floor is y's (below), and the
+    others' 1 unless POUS sets them.
   - `plan.law_object` is the law `verify` derives from it, each stratum `{template, units, work, floor, k}`.
   - K is a **window's** budget (X-SPC-83): a call draws its share K_c = ⌈K·W_c/W_window⌉, capped at its units
     (`plan.window_laws`). That is the law `verify` enforces when each call is its own statement with its own K_c
-    (`--work K_c`); within one Program (`ncp2.window`) the calls share their templates' strata and one K. The per-call
-    split's window-level bound is X-SPC-83's question, and no pin states it.
+    (`--work K_c`); within one Program (`ncp2.window`) the calls share their templates' strata and one K.
+  - **y's floors** (root's option B, which closes X-SPC-105). No tile's closure holds a dequantization unit, so y is
+    drawn at its floor: each call's table gives `dequant` `{"work": 0, "floor": f_c}`, f_c = ⌈K_y·n_c/N⌉, n_c its y
+    cells and N the window's, with K_y = K = 27,713 (`plan.window_laws`). So k_c = min(n_c, f_c) meets k_c·N ≥ K_y·n_c
+    or proves the call's y, and a window draws at most K_y + C y cells. δ stays 2⁻⁴⁰: a tile-bad and a y-bad wrong set
+    are one family of the one window audit, so its sampling term is the larger of (1 − ε)^K and (1 − ε)^K_y, not their
+    sum. Per call the floor is pinned (`audit_work_floor`); `flock-verify draw --work` derives the same law from these
+    tables.
+  - **The window's bound is pending.** Both the per-call split of the tiles' K (X-SPC-83, 106) and B's window claim, an
+    escape of at most (1 − ∑_c b_c/N)^K_y for b_c wrong y cells in each call (weighted AM–GM), wait on root's
+    window-composition pin, `FlockSoundness/Audit/Window.lean`, which root's work-law lane drafts. It takes the per-call
+    draws as independent, which the draw below gives.
 - `CountLaw` is `main`'s stratified rule, k_s = max(1, round(K·n_s/N)).
 
 **The draw is per call** (X-SPC-96). Each stratum's subset is drawn from the verifier's key under the call's index,
 (forward, position), with the template: the strata are the call's own, one per template, and the calls of a window drawn
 under one key draw independently, so K split across them keeps the window's (1 − ε)^K. The verifier draws through
-`Traced.draw(key, law, anchors)`, which takes no layout: it draws over `Traced.layout()` (X-SPC-97).
+`Traced.draw(key, law, anchors)`, which takes no layout: it draws over `Traced.layout()` (X-SPC-97), and keys each
+stratum's subset with ("call", forward, position, "stratum", template), a context of the call's own, since a window's
+`Ledger` refuses a repeated call index.
 
 **The call's Y is linked to the weight Program** (X-SPC-95). The call reads its weight's Y strips and c₀ as committed
 inputs, so at each drawn tile's column strip (the strips `Plan.proved_y` proves in the weight Program) the plan opens
@@ -328,8 +341,9 @@ H1tDequant{BIAS} output entry         Z, s_i, t_j (and bias_j)                  
 - For `ncp-v2`:
   - the lead domain's shapes (k ≥ 1,088) as a recorded run rather than a test;
   - C-Flock pieces for the PoUW primitives;
-  - the floors POUS sets for the zero-work templates (X-SPC-55; 1 until then), and the per-call split's window-level
-    bound (X-SPC-83);
+  - the floors POUS sets for the zero-work templates other than `dequant` (X-SPC-55; 1 until then);
+  - root's window-composition pin (`FlockSoundness/Audit/Window.lean`), for the per-call split's window-level bound
+    (X-SPC-83, 106) and B's window claim for y (X-SPC-105, closed by option B per call);
   - the served-output designation and the pinned ports in `Q_nested_instances` v0's spec, evaluator and Lean port;
   - the vLLM adapter's `traced_as`;
   - the reuse of a weight's Y proofs across a run's windows (X-SPC-51), which needs its commitments linked across windows;
