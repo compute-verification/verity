@@ -19,11 +19,14 @@ the reports workers send it. A worker that sends no record fails the suite (`ung
 For `suites.py`'s per-test verdicts it also records each test that passed (every phase, and not an xfail) with its call's
 seconds, each test that failed, and which of the suite's `test_*.py` files were opened while a test module was collected or
 its tests ran (under `"*"` when neither: a session fixture, a conftest). It deselects the tests `VERITY_SUITE_REUSE` names,
-whose passes `suites.py` reuses.
+whose passes `suites.py` reuses. It sets `VERITY_SUITE_MODULE` while a test module is collected or run, so the Pythons a test starts
+trace their own reads (`child/`), and in a child this process forks it writes each such read at once to `VERITY_SUITE_READS`
+(`child/verity_suite_reads.py`): a fork's memory never comes back, and one that ends through `os._exit` flushes nothing.
 """
 from __future__ import annotations
 
 import importlib.metadata
+import importlib.util
 import json
 import os
 import sys
@@ -54,9 +57,25 @@ _current = "*"                                                   # the test modu
 _reads: dict[str, set[str]] = {}                                 # test module (or "*") -> other test modules it opened
 _outcomes: dict[str, float | None] = {}                          # node id -> call seconds, None once a phase did not pass
 _failed: set[str] = set()
+_pid = os.getpid()
+
+
+def _child_reads():
+    spec = importlib.util.spec_from_file_location("verity_suite_reads", os.path.join(os.path.dirname(os.path.abspath(__file__)), "child",
+                                                                                     "verity_suite_reads.py"))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.Reads()
+
+
+_forked = _child_reads() if _ACTIVE and os.environ.get("VERITY_SUITE_READS") else None
 
 
 def _audit(event: str, args: tuple) -> None:
+    if os.getpid() != _pid:                          # a fork of this process: what it reads must reach the file now
+        if _forked is not None:
+            _forked.seen(event, args, _current)
+        return
     if event == "import":
         if args and isinstance(args[0], str):
             _tried.add(args[0].partition(".")[0])
@@ -99,27 +118,46 @@ def _module_of(path) -> str:
     return os.path.relpath(os.path.realpath(str(path)), _root)
 
 
+def _enter(module: str) -> str:
+    """Make ``module`` the one whose tests are running, here and in every child started meanwhile; the one before it."""
+    global _current
+    before, _current = _current, module
+    if _ACTIVE:
+        os.environ["VERITY_SUITE_MODULE"] = module
+    return before
+
+
+def _leave(before: str) -> None:
+    global _current
+    _current = before
+    if not _ACTIVE:
+        return
+    if before == "*":
+        os.environ.pop("VERITY_SUITE_MODULE", None)
+    else:
+        os.environ["VERITY_SUITE_MODULE"] = before
+
+
 @pytest.hookimpl(hookwrapper=True)
 def pytest_make_collect_report(collector):
     """Opens while a module is collected (its import) are that module's."""
-    global _current
-    before = _current
-    if isinstance(collector, pytest.Module):
-        _current = _module_of(collector.path)
+    if not isinstance(collector, pytest.Module):
+        yield
+        return
+    before = _enter(_module_of(collector.path))
     try:
         yield
     finally:
-        _current = before
+        _leave(before)
 
 
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_protocol(item, nextitem):
-    global _current
-    before, _current = _current, _module_of(item.path)
+    before = _enter(_module_of(item.path))
     try:
         yield
     finally:
-        _current = before
+        _leave(before)
 
 
 def pytest_collection_modifyitems(session, config, items) -> None:
