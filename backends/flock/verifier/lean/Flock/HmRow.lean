@@ -770,4 +770,44 @@ def Stmt.setupH (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coin
   return { tags, leaf := default, c, pub, n, blocksReal, nbl, m, mPts := PT_LOCAL + nbl, pin, regions, da, db, digest, sigma,
            hello, merkle, partition := (finding.map (·.toJson)).getD Json.null }
 
+/-- A session's statement in `count` tables (§16.12, upstream's `session_tables`): one table is `setupH`'s statement. For
+several, the session's units (the draw's, without one the population's) split into `count` equal consecutive parts, and
+table `j` is `setupH`'s statement of part `j` as a subset draw of the population, under `Tags.tableIdentity`: every check
+`setupH` makes, it makes on each table. Every part comes from `draw`, the session's, never from a table's header. The
+session's Σ covers every table's; its `unitDraw` is `draw`. -/
+def Stmt.setupTables (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins) (count : Nat)
+    (tables : List (String × ByteArray) := []) (draw : Option Json := none) (partition : Option Json := none)
+    (program : Option ByteArray := none) : V (SessionSpec × Array Stmt) := do
+  if count ≤ 1 then
+    let st ← Stmt.setupH tags circuitFile publicFile coins tables draw partition program
+    return (st.spec, #[st])
+  let some tt := tags.manyTables | throw s!"{tags.name}: one table per session"
+  if count > Tags.MAX_TABLES then throw s!"tables: at most {Tags.MAX_TABLES} per session, not {count}"
+  let splits := fun (n : Nat) => if n == 0 || n % count != 0 then throw s!"tables: {n} units do not split into {count} equal tables"
+    else (pure () : V Unit)
+  -- the draw's law and count are refused before the circuit is read
+  let u? ← draw.mapM Draw.UnitDraw.ofJson
+  if let some u := u? then
+    match u.law with
+    | .subset _ => splits u.units.size
+    | _ => throw "tables: several tables need a subset draw (a Bernoulli draw's unit count is random, so the tables could not split it evenly)"
+  -- without a draw, the population's units (`setupH` checks a draw's population against the file)
+  let (population, units) ← match u? with
+    | some u => pure (u.population, u.units)
+    | none => do
+      let n := (← HmRow.loadPublic tags (← HmRow.parse tags circuitFile tables) publicFile).n
+      pure (n, Array.range n)
+  splits units.size
+  let k := units.size / count
+  let sts ← (Array.range count).mapM fun j =>
+    let part := Json.mkObj [("law", Json.str "subset"), ("population", Lean.toJson population), ("k", Lean.toJson k),
+      ("units", Json.arr ((units.extract (j * k) (j * k + k)).map Lean.toJson))]
+    Stmt.setupH { tags with identity := tags.tableIdentity count j } circuitFile publicFile coins tables (some part) partition program
+  let mPts := sts[0]!.mPts
+  if sts.any (·.mPts != mPts) then throw "tables: the tables' link points have different lengths"
+  let sigma := Sha512.hash (sts.foldl (fun h st => h ++ st.sigma) (pushLe64 tt.sigmaTag.toUTF8 count))
+  let names := tags.tableNames count
+  return ({ tables := names, domain := tags.tableDomain count, sigma, hello := ← helloOf tags sigma mPts coins names, mPts,
+            retainRounds := tags.retainRounds, unitDraw := draw, instances := units.size, sha512Digests := tags.hm96Rows }, sts)
+
 end Flock

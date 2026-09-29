@@ -6,7 +6,10 @@ selected is `CutlassFp8BlockScaledMMKernel` (`VLLM_USE_DEEP_GEMM=0`; the DeepGEM
         -> Compute(Fp8GroupQuant_v1{K,G}, rows=M, (PerRow(x),), (PerRow(x_q), PerRow(x_s)))
     _C.cutlass_scaled_mm(out![M,N] bf16, x_q[M,K] e4m3, W.T [K,N] (view of the e4m3 [N,K] parameter), x_s[M,K/G] f32,
                          Ws.T [K/G,N/G] (view of the f32 [N/G,K/G] `weight_scale_inv` parameter), bias=None)
-        -> Compute(ScaledMmFp8Block_v1{K,N,G}, rows=M, (PerRow(x_q), PerRow(x_s), Shared(W), Shared(Ws)), (PerRow(out),))
+        -> Compute(ScaledMmFp8BlockSharedScale_v1{K,N,G}, rows=M, (PerRow(x_q), PerRow(x_s), Shared(W), Shared(Ws)), (PerRow(out),))
+
+The GEMM's Definition is the record target's `fp8_scale_construction`: `ScaledMmFp8BlockSharedScale_v1` by default (each weight
+block's scale products once), `ScaledMmFp8Block_v1` under `per-coordinate`; one function, one signature.
 
 Both registered Definitions (`verity_vllm.program.registry.fp8`) are pinned bit for bit on the H100 against these kernels (the module's
 `_QUANT_CONF` / `_BLOCK_CONF` conformance notes; out/gen/sweep/evidence/fp8/).  The GEMM Definition is the sm90 blockwise CUTLASS
@@ -155,6 +158,8 @@ class CutlassScaledMmFp8Block:
         if not any(r.role == "weight" for r in wroots) or not any(r.role == "weight" for r in sroots):
             return unsupported(node, "b / b_scales are not checkpoint parameters (weight Roots)", b=repr(w), b_scales=repr(ws))
         wname, sname = wroots[0].name, sroots[0].name
-        return Compute(bind(fp8.ScaledMmFp8Block, K=K, N=N, G=G), M, (PerRow(xq), PerRow(xs), Shared(w), Shared(ws)), (PerRow(out),),
+        shared = tp.effective_fp8_scale_construction() == "shared-per-block"
+        defn = fp8.SHARED_SCALE[fp8.ScaledMmFp8Block.id] if shared else fp8.ScaledMmFp8Block
+        return Compute(bind(defn, K=K, N=N, G=G), M, (PerRow(xq), PerRow(xs), Shared(w), Shared(ws)), (PerRow(out),),
                        (node.id,), hint=hint_of(node, wname), kernels=("cutlass_3x_gemm_fp8_blockwise", "sm90_fp8_blockwise"),
                        attribution=attribution_for(ctx, M, node.phase), pattern=self.name, roots=(None, None, wname, sname))

@@ -784,6 +784,7 @@ class Commitments:
 
     def of(self, fn) -> str:
         from verity.ir.codec import _spec_id
+        from verity.ir.cut import separable
         from verity.ir.defs import PrimitiveDefinition
         from verity_vllm.query import word as WQ
 
@@ -792,7 +793,7 @@ class Commitments:
             return fid
         if isinstance(fn, PrimitiveDefinition):
             rec = self._primitive(fn, fid, WQ)
-        elif (sep := WQ._separable(fn)) is not None:
+        elif (sep := separable(fn)) is not None:
             rec = self._combine(fid, fn.gates, [(self.records[self.of(c)], m) for c, m in sep])
         elif fn.gates > (limit := WQ.gate_limit(fn)):
             rec = _empty(fid, fn.gates)

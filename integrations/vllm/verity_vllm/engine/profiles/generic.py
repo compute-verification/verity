@@ -50,6 +50,7 @@ from verity_vllm.engine.profiles.gen_llama_patterns import ADA_TUNED_GEMM, with_
 from verity_vllm.engine.profiles.gen_ln_patterns import with_ln_patterns
 from verity_vllm.engine.profiles.gen_ov_moe_patterns import (FUSED_MOE_NUM_STAGES, FUSED_MOE_NUM_WARPS, FUSED_MOE_NUMERIC_PINS, FUSED_MOE_PINS, MOE_CONSTRUCTION_PATTERNS,
                                   ROUTER_VPT_BY_E, MoEFusedExperts)
+from verity_vllm.program.frontend.target_profile import TargetProfile
 
 MODULE_PREFIX = "derived_"
 OV_SAMPLING_SUFFIX = "_ovs"
@@ -351,7 +352,7 @@ def _dense_patterns(cfg: dict[str, Any], C: dict[str, Any], patterns: list) -> l
 
 
 def _moe_patterns(C: dict[str, Any], patterns: list, *, world: int, moe_construction: str | None, fused_pins, fused_num_warps, fused_num_stages) -> list:
-    key = moe_construction or "indexed-read"
+    key = moe_construction or TargetProfile.DEFAULT_MOE_CONSTRUCTION
     if key not in MOE_CONSTRUCTION_PATTERNS:
         raise ValueError(f"moe_construction {moe_construction!r} is not one of {sorted(MOE_CONSTRUCTION_PATTERNS)}")
     coll = TpCollective(world=world) if world > 1 else None
@@ -370,7 +371,8 @@ def build_profile(role: str, world: int = 1, *, moe_construction: str | None = N
                   hf_config: dict[str, Any] | None = None, repo: str | None = None, revision: str | None = None) -> Profile:
     """The κ profile of a checkpoint role (one rank of a `world`-way engine when `world > 1`) from its HF config.json and the family facts.
 
-    `moe_construction` (MoE roles): None / `indexed-read` = the MOE-01 pairwise fold; `padded` = one fixed-slot Compute per token (refused at
+    `moe_construction` (MoE roles): None = `TargetProfile.DEFAULT_MOE_CONSTRUCTION`; `indexed-read` = the MOE-01 pairwise fold;
+    `indexed-read-ordered` = MOE-01 with the router in selection order; `padded` = one fixed-slot Compute per token (refused at
     fold time under a renormalising router).  `fused_moe_pins` / `..._num_warps` / `..._num_stages`: the fused_moe_kernel tiling to pin instead
     of `gen_ov_moe_patterns.FUSED_MOE_PINS` (a κ fact of the capture; never loosened, only re-pinned from a rank log).  `hf_config`: the
     document to derive from (default: `load_hf_config(role)`; tests pass a synthetic one).  `ov_sampling`: the experimental sampled-row
@@ -437,13 +439,15 @@ def build_profile(role: str, world: int = 1, *, moe_construction: str | None = N
                         "kernels": ["_C.per_token_group_fp8_quant (per_token_group_quant_8bit_kernel)",
                                     "_C.cutlass_scaled_mm blockwise (cutlass_3x_gemm_fp8_blockwise<bf16>, sm90)"],
                         "env": ["VLLM_USE_DEEP_GEMM=0 (the DeepGEMM JIT path is not modelled)", "VLLM_USE_FLASHINFER_SAMPLER=0"],
-                        "families": ["Fp8GroupQuant_v1{K,G}", "ScaledMmFp8Block_v1{K,N,G}"], "quantization_config": C.get("quantization_config")}
+                        "families": ["Fp8GroupQuant_v1{K,G}", "ScaledMmFp8BlockSharedScale_v1{K,N,G} (fp8_scale_construction per-coordinate: "
+                                     "ScaledMmFp8Block_v1{K,N,G})"], "quantization_config": C.get("quantization_config")}
     if arch == "moe":
         moe = next(p for p in patterns if isinstance(p, MoEFusedExperts))
         E, T, I, H = C["NUM_EXPERTS"], C["TOPK"], C["I"], C["H"]
         notes["moe"] = {"status": "constructive: Computes over registry.moe definitions per step per rank",
                         "scope_pattern": f"gen_ov_moe_patterns.{type(moe).__name__} (vllm.moe_forward*), renormalize={bool(C.get('RENORMALIZE', False))}",
-                        "definitions": [f"{'MoeRouterTopKNorm_v1' if C.get('RENORMALIZE') else 'MoeRouterTopK_v1'}{{E={E},TOPK={T},VPT={C['ROUTER_VPT']}}}",
+                        "definitions": [f"MoeRouterTopK{'Ordered' if moe.router == 'ordered' else ''}{'Norm' if C.get('RENORMALIZE') else ''}_v1"
+                                        f"{{E={E},TOPK={T},VPT={C['ROUTER_VPT']}}}",
                                         f"MoeExpertGemm_v1{{E={E},K={H},N={2 * I}}}", f"SiluMul_v1{{I={I}}} (base)", f"MoeExpertGemmW_v1{{E={E},K={I},N={H}}}",
                                         f"MoeSum_v1{{TOPK={T},H={H}}}"] + ([f"AllReduce2_v1{{N={H}}} (the block's TP all-reduce, in or after the scope)"] if world > 1 else []),
                         "pins": {"fused_moe_kernel": {**FUSED_MOE_NUMERIC_PINS, **moe.fused_pins, "num_warps": moe.fused_num_warps, "num_stages": moe.fused_num_stages,
@@ -451,7 +455,7 @@ def build_profile(role: str, world: int = 1, *, moe_construction: str | None = N
                                                                 else "injected (build_profile(fused_moe_pins=...))"},
                                  "router_vpt_by_E": {E: C["ROUTER_VPT"]},
                                  "alignment": "moe_align_block_size is Transparent(noop): a pair->expert-block schedule with no numerical effect"},
-                        "construction": moe_construction or "indexed-read",
+                        "construction": moe_construction or TargetProfile.DEFAULT_MOE_CONSTRUCTION,
                         "sharding": {"router": "replicated (full E logits on every rank)", "experts": f"intermediate axis / {world}: w13 [E, 2*{I}, H], w2 [E, H, {I}]",
                                      "reduce": "moe_sum rank-local, then AllReduce2_v1{N=H} of the routed sum"} if world > 1 else "none (TP1)",
                         "record_fields_present": sorted(f for f in ("q_norm", "k_norm", "gate_w", "w13", "w2")
@@ -477,7 +481,7 @@ def build_profile(role: str, world: int = 1, *, moe_construction: str | None = N
 
 def with_moe_construction(profile: Profile, moe_construction: str | None) -> Profile:
     """The fold's hook (run_config `fold_summary_result`): this profile under the workload's DECLARED MoE construction."""
-    if moe_construction in (None, "indexed-read"):
+    if moe_construction in (None, TargetProfile.DEFAULT_MOE_CONSTRUCTION):
         return profile
     return build_profile(profile.notes["case"], int(profile.config.get("WORLD", 1)), moe_construction=moe_construction)
 

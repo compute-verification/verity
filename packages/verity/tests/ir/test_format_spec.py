@@ -278,6 +278,9 @@ ALIAS = [
     ("the longest recorded prefix wins", (7, 0), Concat([_A(1), _A(2), _A(3), _A(9)])),
     ("a body's ret aliases too", None, Concat([_A(1), _A(2), _A(20)])),
     ("a sequence that is not a concatenation is never an alias", (8, 0), _A(1, 0, 2)),
+    ("a node's first argument, new parts: recorded as (9, 0)", (9, 0), Concat([_A(40), _A(41)])),
+    ("its second argument repeats them and is written out: an alias names an earlier node", (9, 1), Concat([_A(40), _A(41)])),
+    ("a later node aliases the first argument", (10, 0), Concat([_A(40), _A(41)])),
 ]
 
 
