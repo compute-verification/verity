@@ -60,9 +60,8 @@ draws**. `Key.subset`, which draws each swap from its own `verity.randomness` st
 uniform $k$-subset. The window's per-call draws under one key form one `Law.stratified` over its (call, template)
 strata. So the live window draw (`keyedWindow`) escapes $B$ with at most `Law.stratified`'s escape plus the $\eta$ of A4
 (`Assumptions.KeyedStreamsUniform`), on a uniform window secret (A5). `keyedWindow_audit_of_record` and
-`keyedWindow_extraction_audit_of_record` put it through the window pins (#421's slack form
-`audit_window_split_of_record_of_le_slack`, and its proof at the compiled layer through `extraction_audit_le`, as
-`extraction_audit_window_of_le_slack` in `Audit/Window.lean` does): the 0.1% event has probability at most
+`keyedWindow_extraction_audit_of_record` put it through the window pins (`audit_window_split_of_record_of_le_slack`, and
+at the compiled layer `extraction_audit_window_split_of_record_of_le_slack`): the 0.1% event has probability at most
 $2^{-40} + \eta + \varepsilon_{ks} + \delta_{link}$. The key's context is the receipt digest, so the real game's draw
 depends on the registration: `auditReg` (`Audit/RegDraw.lean`), and `prob_auditReg` moves each of its strategies to the
 fixed-law game at its registration, which `keyedWindowReg_extraction_audit_of_record` reads.
@@ -127,7 +126,8 @@ at most the larger of the two bounds plus the per-unit terms, not their sum, sin
 `audit_window_of_le`: the same for any law whose escapes are at most the product law's, such as an executable draw;
 `audit_window_of_le_slack` and, at the compiled layer, `extraction_audit_window_of_le_slack`: for a law within
 $\eta$ of it, with $\eta$ added to the bound, as a keyed draw needs, and
-`audit_window_split_of_record_of_le_slack`, its record form, $2^{-40} + \eta$ plus the per-unit terms.
+`audit_window_split_of_record_of_le_slack`, its record form, $2^{-40} + \eta$ plus the per-unit terms, with
+`extraction_audit_window_split_of_record_of_le_slack` at the compiled layer.
 `audit_window_of_record`: $2^{-40}$ at $K = K_y = 27{,}713$ for a 0.1% share of either; `audit_window_split_of_record`:
 the same for the per-call split with y's floors, the law #364 runs. The product law assumes each call's draw is under a
 distinct context.

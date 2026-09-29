@@ -1023,8 +1023,7 @@ theorem keyedWindow_audit_of_record {C : ℕ} (σ : Fin n → Fin M) (call : Fin
       hnames hsmall hA4 B) A hks hlink hW hone hN hfy σ'
 
 /-- **The claim of record: the PoUW window audit on the live keyed draw at the compiled layer** (randomized extractor):
-`keyedWindow_audit_of_record`'s bound with `ε_ks(σ)` and `δ_link(σ)`: `audit_window_split_of_record_of_le_slack`'s proof,
-through `extraction_audit_le` in place of `audit_profile`. -/
+`keyedWindow_audit_of_record`'s bound with `ε_ks(σ)` and `δ_link(σ)`, through `extraction_audit_window_split_of_record_of_le_slack`. -/
 theorem keyedWindow_extraction_audit_of_record {C : ℕ} (σ : Fin n → Fin M) (call : Fin M → Fin C) (w v f : Fin M → ℕ)
     (calls : List PlanDraw.Call) (hWS : PlanStrata σ (windowK σ call w f 27713) (KeyedDraw.flat calls))
     {Ω : Type} [Fintype Ω] [Nonempty Ω] {S : ℕ} (sec : Ω → Fin S → Fin 256) (hsec : Assumptions.UniformSecret sec)
@@ -1043,25 +1042,10 @@ theorem keyedWindow_extraction_audit_of_record {C : ℕ} (σ : Fin n → Fin M) 
     prob (fun o => o.1 = true ∧ (totalWork σ w ≤ 1000 * unsoundWork σ w cl (A.wrong (A.committedOf σ')) ∨
         totalWork σ v ≤ 1000 * unsoundWork σ v cl (A.wrong (A.committedOf σ'))))
         (audit ((keyedWindow (n := n) sec domain context calls L).closure cl) Reg session) σ' ≤
-      ((2 : ℝ≥0∞) ^ 40)⁻¹ + η + εks (reg σ') (cont σ') + δlink (reg σ') (cont σ') := by
-  have hL := keyedWindow_escape_le_of_names σ _ (windowK_le σ call w f 27713) calls hWS sec hsec L domain context η
-    hnames hsmall hA4
-  have hc := covers_window σ call w f 27713 hW hone
-  have hcy := covers_of_floor σ _ f v 27713 (windowK_le σ call w f 27713)
-    (fun _ => min_le_min le_rfl (le_max_left _ _)) hfy
-  refine (extraction_audit_le A hks hlink (fun x _ => totalWork σ w ≤ 1000 * unsoundWork σ w cl (A.wrong x) ∨
-    totalWork σ v ≤ 1000 * unsoundWork σ v cl (A.wrong x)) σ').trans ?_
-  gcongr
-  by_cases hB : totalWork σ w ≤ 1000 * unsoundWork σ w cl (A.wrong (A.committedOf σ')) ∨
-      totalWork σ v ≤ 1000 * unsoundWork σ v cl (A.wrong (A.committedOf σ'))
-  · refine (prCoin_mono fun ω h => h.2).trans ?_
-    change ((keyedWindow (n := n) sec domain context calls L).closure cl).escape _ ≤ _
-    rw [closure_escape]
-    refine (hL _).trans (add_le_add ?_ le_rfl)
-    rcases hB with hB | hB
-    · exact (stratified_escape_le_of_covers σ _ _ w 27713 hW hc _).trans (pow_record_le hW hB)
-    · exact (stratified_escape_le_of_covers σ _ _ v 27713 hN hcy _).trans (pow_record_le hN hB)
-  · exact (prCoin_mono (q := fun _ => False) fun ω h => hB h.1).trans (prCoin_false.le.trans zero_le)
+      ((2 : ℝ≥0∞) ^ 40)⁻¹ + η + εks (reg σ') (cont σ') + δlink (reg σ') (cont σ') :=
+  extraction_audit_window_split_of_record_of_le_slack
+    (fun B => keyedWindow_escape_le_of_names σ _ (windowK_le σ call w f 27713) calls hWS sec hsec L domain context η
+      hnames hsmall hA4 B) A hks hlink hW hone hN hfy σ'
 
 /-- **The claim of record on the real, receipt-keyed game** (#423's C1): the key's context `ctx R` is the digest of the
 registration's receipt, so the draw is `auditReg`'s. Strategy by strategy (`prob_auditReg`), it is
