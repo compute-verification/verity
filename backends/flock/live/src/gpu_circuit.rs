@@ -101,6 +101,9 @@ struct CircuitParams {
     /// `Reuse`: 0 none, 1 keep for `reuse_tag`, 2 take `reuse_tag`'s
     rep_reuse: i32,
     reuse_tag: u64,
+    /// the compression slots' native witness: per sha512x3 row its (a, b) sources, and the tape's words per slot; null: level by level
+    h_plan: *const u32,
+    h_tape_words: i32,
 }
 
 #[cfg(feature = "sha512")]
@@ -203,6 +206,22 @@ pub fn kept(tag: u64) -> bool {
 /// GEMM coordinate has 305 levels per tensor-core step), while the host's `eval64` walks its rows once per 64 units. A unit at
 /// least this deep is evaluated on the host; `FC_HOST_UNITS=0|1` overrides.
 pub const HOST_UNIT_LEVELS: usize = 2048;
+
+/// The compression slots' native witness plan (`sha512_native`): the sha512x3 circuit's rows' `(a, b)` sources as `u32` pairs, and
+/// the tape's words per slot. Derived and checked against `eval64` once per process (the slot circuit is pinned); `None` if the
+/// circuit's plan cannot be derived.
+#[cfg(feature = "sha512")]
+fn native_plan(st: &Stmt) -> Option<&'static (Vec<u32>, i32)> {
+    static PLAN: OnceLock<Option<(Vec<u32>, i32)>> = OnceLock::new();
+    PLAN.get_or_init(|| match crate::sha512_native::NativeSha::derive(&st.c.nets[st.c.sha_net].1) {
+        Ok(p) => Some((p.rows.iter().flat_map(|&(a, b)| [a, b]).collect(), p.roles.len() as i32)),
+        Err(e) => {
+            eprintln!("the native compression witness is off: {e}");
+            None
+        }
+    })
+    .as_ref()
+}
 
 /// Whether the statement's units are evaluated on the host (`HOST_UNIT_LEVELS`).
 pub fn deep_unit(st: &Stmt) -> bool {
@@ -436,6 +455,7 @@ pub fn prove_circuit(
     live: Live<'_>,
     salts: Option<&std::sync::Mutex<crate::zk_hooks::LeafSalts>>,
     reuse: Reuse,
+    native_sha: bool,
 ) -> (R1csProofLigerito, Commitment, [f64; 8], [f64; 3], [f64; 3]) {
     let t_setup = Instant::now();
     let s = statics_for(comp(), &st.circuit.da, &st.circuit.db);
@@ -579,7 +599,15 @@ pub fn prove_circuit(
         u_host,
         rep_reuse: match reuse { Reuse::None => 0, Reuse::Keep(_) => 1, Reuse::Take(_) => 2 },
         reuse_tag: match reuse { Reuse::None => 0, Reuse::Keep(t) | Reuse::Take(t) => t },
+        h_plan: null(),
+        h_tape_words: 0,
     };
+    #[cfg(feature = "sha512")]
+    if let Some((plan, words)) = native_sha.then(|| native_plan(st)).flatten() {
+        (p.h_plan, p.h_tape_words) = (plan.as_ptr(), *words);
+    }
+    #[cfg(not(feature = "sha512"))]
+    let _ = native_sha;
     #[cfg(feature = "sha512")]
     let zk_words: Option<(Vec<F128>, Vec<F128>)> = level0.map(|z| {
         let (w, l) = (1usize << cfg.initial_k, 1usize << (m - 7 - cfg.initial_k));
