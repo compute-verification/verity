@@ -13,6 +13,11 @@ has the same sha256 and every recorded directory the same listing, so a hit mean
 derived from what it has.  Not seen: files a C extension reads with its own I/O (none here), and anything outside the
 repository, which the interpreter, platform and distribution list stand for.
 
+Only a verdict is stored, of the tree its check read: not a check that raised (an ImportError says the environment was broken,
+not what the target is), nor one whose reads, digested again by the process that ran it right after, differ from the digests
+the entry would record (the tree changed during the run: a concurrent run rewrote it), nor one after a module was imported from
+outside the tree (another tree's copy, which no recorded read covers).
+
 Entries are files ``<dir>/<version>/<sha256 of the entry>.json``; there is no expiry and no path or time shortcut.
 """
 from __future__ import annotations
@@ -138,13 +143,32 @@ def untraced() -> list[str]:
     return list(_UNTRACED)
 
 
+_OUTSIDE: set[str] = set()
+
+
+def _interpreter_dirs() -> tuple[str, ...]:
+    import sysconfig
+
+    dirs = {sys.prefix, sys.base_prefix, sys.exec_prefix, sys.base_exec_prefix,
+            *(sysconfig.get_paths().get(k) for k in ("stdlib", "platstdlib", "purelib", "platlib"))}
+    return tuple({os.path.join(f(d), "") for d in dirs if d for f in (os.path.abspath, os.path.realpath)})
+
+
 def reads() -> dict[str, list[str]]:
-    """The files and directories read so far, the imported modules' sources included."""
+    """The files and directories read so far, the imported modules' sources included.  A module imported from outside the tree
+    and the interpreter's own directories (another tree's copy of a package, say) is a read no key can hold: the process's
+    results after it are not stored (`untraced`)."""
     files = set(_READS["files"])
-    for m in list(sys.modules.values()):
+    inside = (os.path.join(str(_ROOT[0]), ""), *_interpreter_dirs()) if _ROOT else ()
+    for name, m in list(sys.modules.items()):
         f = getattr(m, "__file__", None)
-        if f and (rel := _rel(f)) is not None:
+        if not f:
+            continue
+        if (rel := _rel(f)) is not None:
             files.add(rel)
+        elif inside and name not in _OUTSIDE and not any(p.startswith(inside) for p in (os.path.abspath(f), os.path.realpath(f))):
+            _OUTSIDE.add(name)
+            _UNTRACED.append(f"imported {name} from {f}, outside the tree")
     return {"files": sorted(files), "dirs": sorted(_READS["dirs"]), "probes": sorted(_READS["probes"] - files - _READS["dirs"]),
             "libs": sorted(_READS["libs"])}
 
@@ -177,14 +201,17 @@ def _kind(p: Path) -> str | None:
     return "dir" if p.is_dir() else "file" if p.exists() else None
 
 
-def _digests(root: Path, got: dict[str, list[str]]) -> dict[str, dict[str, str | None]]:
+def _digests(root: Path, got: dict[str, list[str]], fresh: bool = False) -> dict[str, dict[str, str | None]]:
     """Each recorded read as it is now.  With git's view of the tree (`visible`), a file or directory git does not have (bytecode,
-    a build inside the tree) counts as absent: derived from what git has, it is not an input of its own."""
+    a build inside the tree) counts as absent: derived from what git has, it is not an input of its own.  Each read is digested
+    once per process (a run changes none of its inputs) unless ``fresh``."""
     v = visible(root)
     seen = (lambda r: True) if v is None else (lambda r: r in v[0] or r in v[1])
 
     def memo(kind: str, r: str, fn):
-        k = (str(root), kind, r)                    # a run changes none of its inputs: each is read once per process
+        if fresh:
+            return fn()
+        k = (str(root), kind, r)
         if k not in _MEMO:
             _MEMO[k] = fn()
         return _MEMO[k]
@@ -223,8 +250,19 @@ def lookup(cache: Path, k: dict, root: Path) -> tuple[dict, str] | None:
     return None
 
 
-def store(cache: Path, k: dict, root: Path, got: dict[str, list[str]], report: dict) -> str:
-    e = {"key": k, "reads": _digests(root, got), "report": report}
+def seen(root: Path, got: dict[str, list[str]]) -> dict[str, dict[str, str | None]]:
+    """The reads as the process that just ran a check sees them: digested now, not remembered from earlier in the run."""
+    return _digests(root, got, fresh=True)
+
+
+def store(cache: Path, k: dict, root: Path, got: dict[str, list[str]], report: dict,
+          worker: dict[str, dict[str, str | None]] | None = None) -> str | None:
+    """Record ``report`` under ``k`` with its reads' digests; None, and nothing stored, when ``worker`` (`seen` in the process that
+    ran the check) differs from them: the tree changed while the run went on, and the report may be of a tree no digest names."""
+    now = _digests(root, got)
+    if worker is not None and worker != now:
+        return None
+    e = {"key": k, "reads": now, "report": report}
     body = json.dumps(e, sort_keys=True, separators=(",", ":"), default=str)
     eid = hashlib.sha256(body.encode()).hexdigest()
     d = _dir(cache, k)
@@ -235,4 +273,4 @@ def store(cache: Path, k: dict, root: Path, got: dict[str, list[str]], report: d
     return eid
 
 
-__all__ = ["SCHEMA", "UNTRACEABLE", "key", "lookup", "reads", "store", "trace", "tracing", "untraced", "version"]
+__all__ = ["SCHEMA", "UNTRACEABLE", "key", "lookup", "reads", "seen", "store", "trace", "tracing", "untraced", "version"]
