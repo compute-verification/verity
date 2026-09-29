@@ -223,6 +223,13 @@ def create(args: argparse.Namespace) -> None:
         body["vcpuCount"] = args.vcpu
         for key in ("gpuTypeIds", "gpuCount", "minVCPUPerGPU", "minRAMPerGPU"):
             body.pop(key, None)
+    if getattr(args, "lease_expires", None):
+        # `research pods create --max-hours`: the lease holds from boot (research.pods.lease.boot_fields)
+        from .lease import boot_fields
+
+        extra = boot_fields(args.image, args.lease_expires, boot=bool(getattr(args, "boot_lease", False)))
+        body["env"].update(extra.pop("env"))
+        body.update(extra)
     pod = _request("POST", "/pods", body)
     print(json.dumps(pod, indent=2))
     return pod

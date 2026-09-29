@@ -578,6 +578,19 @@ def test_sigv4_aws_documented_vectors():
     assert remote_s3.canonical_query({"list-type": "2", "prefix": "objects/sha256/"}) == "list-type=2&prefix=objects%2Fsha256%2F"
 
 
+def test_presigned_url_aws_documented_vector():
+    """'Authenticating Requests: Using Query Parameters' (S3 API reference): GET /test.txt for 86400 s."""
+    url = remote_s3.presign("GET", "https", HOST, "/test.txt", AK, SK, REGION, DATE, 86400)
+    assert url == ("https://examplebucket.s3.amazonaws.com/test.txt?X-Amz-Algorithm=AWS4-HMAC-SHA256"
+                   "&X-Amz-Credential=AKIAIOSFODNN7EXAMPLE%2F20130524%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20130524T000000Z"
+                   "&X-Amz-Expires=86400&X-Amz-SignedHeaders=host"
+                   "&X-Amz-Signature=aeeed9bbccd4d02ee5c0109b86d86835f995330da4c265957d157751f604d404")
+    r = remote_s3.S3Remote("https://acct.r2.cloudflarestorage.com", "bkt", AK, SK, session_token="tok")
+    got = r.presign("objects/sha256/ab", 600)
+    assert got.startswith("https://acct.r2.cloudflarestorage.com/bkt/objects/sha256/ab?") and "X-Amz-Security-Token=tok" in got
+    assert SK not in got and "X-Amz-Expires=600" in got
+
+
 def test_s3remote_against_a_fake_bucket(tmp_path):
     """The urllib plumbing (path-style URLs, signed payload hash, HEAD 404, list-type=2 paging) against an in-process HTTP server."""
     import http.server
@@ -669,7 +682,7 @@ def test_s3remote_against_a_fake_bucket(tmp_path):
     finally:
         srv.shutdown()
         srv.server_close()
-        th.join(5)
+        th.join()
 
 
 class FakeS3:
@@ -841,7 +854,7 @@ class FakeS3:
     def close(self) -> None:
         self.srv.shutdown()
         self.srv.server_close()
-        self.thread.join(5)
+        self.thread.join()
 
 
 @pytest.fixture
@@ -872,6 +885,7 @@ def _many_files(root: Path, n: int, seed: int = 0) -> Path:
     return root
 
 
+@pytest.mark.slow
 def test_push_is_concurrent_conditional_and_verified_by_etag(fake_s3, tmp_path):
     """300 blobs with 16 workers: every object lands, every PUT is a conditional create, the manifest's PUT comes after the last blob's,
     and the report is deterministic.  A second push HEADs everything, uploads nothing and is still PRESERVED (`etag-md5`).  A key that
@@ -927,6 +941,7 @@ def test_push_is_concurrent_conditional_and_verified_by_etag(fake_s3, tmp_path):
     assert st.push(snap)["verified"] == "sha256-readback", "no blobs: the manifest read-back is the whole check"
 
 
+@pytest.mark.slow
 def test_push_falls_back_to_plain_put_when_the_service_rejects_the_condition(fake_s3, tmp_path):
     s = fake_s3(reject_conditional=501)
     st = LocalStore()
@@ -1054,6 +1069,7 @@ def test_throttled_put_is_retried_not_failed(fake_s3, tmp_path, monkeypatch):
     assert remote_s3.retry_delay("Wed, 21 Oct 2026 07:28:00 GMT", 2) == 0.0 and remote_s3.retry_delay(None, 1) == 0.0
 
 
+@pytest.mark.slow
 def test_cli_push_reports_rate_and_takes_jobs_and_verify(fake_s3, tmp_path, capsys):
     s = fake_s3()
     st = LocalStore()

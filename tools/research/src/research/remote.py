@@ -64,6 +64,9 @@
                     (outputs.run_record), verifies it on the remote, deletes the key and writes <run>/.custody (store.custody).  It terminates with the
                     pod's OWN key (RUNPOD_API_KEY in /proc/1/environ); without one it is not installed and the launch says so.  The account
                     key is never sent.  <root>/guard/state.json: verdict, last activity, idle minutes, refusal reasons.
+    lease           a pod `research pods create` made carries a lease (research.pods.lease, pods/sh/lease.sh): it ends itself at the
+                    lease's expiry.  The request's `lease_extend_s` (the run's --timeout + lease.RUN_MARGIN_S) makes launch-request
+                    push the expiry to at least now + that, so the lease cannot end the run; the answer's `lease` says what it did.
 """
 from __future__ import annotations
 
@@ -434,8 +437,10 @@ GIT_ARCHIVE_CAPS = ("-c", "core.deltaBaseCacheLimit=8m", "-c", "core.packedGitWi
 
 
 def _git_archive(git_dir: Path) -> subprocess.Popen:
-    return subprocess.Popen(["git", *GIT_ARCHIVE_CAPS, "archive", "--format=tar", "HEAD"], cwd=git_dir, stdout=subprocess.PIPE,
-                            stderr=tempfile.TemporaryFile())
+    err = tempfile.TemporaryFile()
+    proc = subprocess.Popen(["git", *GIT_ARCHIVE_CAPS, "archive", "--format=tar", "HEAD"], cwd=git_dir, stdout=subprocess.PIPE, stderr=err)
+    proc.archive_stderr = err          # Popen.stderr is None when stderr is a file, so the file is kept here
+    return proc
 
 
 def _git_archive_done(proc: subprocess.Popen) -> str | None:
@@ -443,8 +448,8 @@ def _git_archive_done(proc: subprocess.Popen) -> str | None:
     proc.stdout.close()
     if proc.wait() == 0:
         return None
-    proc.stderr.seek(0)
-    return f"rc {proc.returncode}: {proc.stderr.read().decode(errors='replace')[-300:].strip()}"
+    proc.archive_stderr.seek(0)
+    return f"rc {proc.returncode}: {proc.archive_stderr.read().decode(errors='replace')[-300:].strip()}"
 
 
 def archive_manifest_git(git_dir: Path) -> dict[str, Any]:
@@ -965,7 +970,14 @@ def launch_request(request_path: Path) -> dict[str, Any]:
         req = json.loads(request_path.read_text())
         g = req.get("guard")
     except (OSError, ValueError):
-        g = None
+        req, g = {}, None
+    if req.get("lease_extend_s") and out.get("started"):
+        from .pods import lease
+
+        try:
+            out["lease"] = lease.machine_extend(float(req["lease_extend_s"]), f"run-{req.get('run_id')}")
+        except Exception as e:  # noqa: BLE001  (the run is started; the answer says the lease could not be touched)
+            out["lease"] = {"leased": None, "error": f"{type(e).__name__}: {e}"}
     if g:
         try:
             out["guard"] = ensure_guard(Path(req["runs_root"]).parent, float(g.get("idle_min") or GUARD_IDLE_MIN_DEFAULT),
@@ -1082,6 +1094,32 @@ def flag_value(args: list[str], flag: str) -> str | None:
     return val
 
 
+def lease_extend_s(harness_args: list[str]) -> float | None:
+    """How far the machine's lease must reach for this run: its --timeout plus the runner's publish and custody push
+    (research.pods.lease.RUN_MARGIN_S); None without a --timeout."""
+    from .pods.lease import RUN_MARGIN_S
+
+    try:
+        t = float(flag_value(harness_args, "--timeout") or "")
+    except ValueError:
+        return None
+    return t + RUN_MARGIN_S if t > 0 else None
+
+
+def lease_line(lz: dict[str, Any] | None, asked: float | None, machine: str) -> str:
+    """The launcher's one line on the machine's lease after a launch."""
+    if asked is None:
+        return (f"{machine}'s lease was not extended: the run has no --timeout, so a pod lease (if any) may end it; "
+                f"`research pods extend {machine} --hours H` extends it by hand")
+    if lz is None:
+        return f"{machine} answered without a lease report (its research package predates leases): the lease, if any, was not extended"
+    if lz.get("leased") is False:
+        return f"{machine} has no lease ({lz.get('reason')}): nothing ends it but its guards"
+    if lz.get("extended"):
+        return f"{machine}'s lease now ends no sooner than {lz.get('expires_utc')} (the run's --timeout plus its publish margin)"
+    return f"{machine}'s lease could NOT be extended ({lz.get('error')}): it may end the run; `research pods extend {machine} --hours H`"
+
+
 def workload_cwd(harness_args: list[str], tool_pkg: Path | None) -> str:
     """What the machine will use as the workload's cwd, for remote.json: the `--cwd` asked for, else the run dir -- unless the package
     that runs on the machine (the shipped tree's, `tool_pkg`) predates WORKLOAD_CWD_DEFAULT and so still runs in the shared tree."""
@@ -1154,6 +1192,7 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
                    "cwd": remote_cwd, "env": env, "harness_args": harness_args, "command": command, "exclusive": exclusive,
                    "mem_gb": mem_gb, "mem_wait_s": mem_wait_s, "ramlock_dir": m.get("ramlock"),
                    "guard": {"idle_min": guard_min} if guard_min else None,
+                   "lease_extend_s": lease_extend_s(harness_args),
                    **({"custody": custody_pub} if custody_pub else {}),
                    "cost": {"provider": "runpod", "pod_id": m["pod_id"], "machine": machine_name, "currency": "USD",
                             "rate_usd_per_hour": tgt["cost_per_hr"], "rate_observed_utc": tgt["rate_observed_utc"], "reason": None},
@@ -1193,6 +1232,9 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
                       f"state {g.get('state')}", file=sys.stderr)
             else:
                 print(f"research: NO guard on {machine_name}: {g.get('reason')}", file=sys.stderr)
+        if not out.get("refused"):
+            rec["lease"] = lz = out.get("lease")
+            print(f"research: {lease_line(lz, request['lease_extend_s'], machine_name)}", file=sys.stderr)
         write_json_atomic(local_dir / "remote.json", rec)
         return rec
     except Refused as e:

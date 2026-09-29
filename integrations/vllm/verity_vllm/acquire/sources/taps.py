@@ -5,7 +5,8 @@ the manifest names them: the blockwise FP8 GEMM's scale products (`scale_product
 for the single-rank Commit (`pipeline.commit`: `attach`) and for the rank workers of a TP Commit: `pipeline.tp.commit` hands
 `for_ranks(...)` to `engine.rank_worker.tp2_commit_make` through the RPC, each rank calls it with its own committer and its rows of the
 merged manifest, and `require_on_every_rank` fails the Commit closed unless every rank attached every tap that is on.  The single-rank
-`attach` also attaches the call-boundary source (`call_boundary_source`) whenever the manifest names `call_boundaries` identities."""
+`attach` also attaches the call-boundary source (`call_boundary_source`) whenever the manifest names `call_boundaries` identities;
+`attached` names what it attaches for a row's manifest, constructing nothing (the CPU gate's `call-boundaries`, `acquire.gate`)."""
 from __future__ import annotations
 
 import json
@@ -21,10 +22,10 @@ from verity_vllm.query import router_softmax as RS
 from verity_vllm.query import scale_products as SP
 from verity_vllm.query import vocab_range as VR
 
-#: (the TapSources field, the rank result's key, the source module, the manifest family)
-SOURCES = (("norm_tap_so", "norm_scale_source", norm_scale_source, NS.FAMILY),
-           ("router_tap_so", "router_softmax_source", router_softmax_source, RS.FAMILY),
-           ("vocab_range", "vocab_range_source", vocab_range_source, VR.FAMILY))
+#: (the TapSources field, the rank result's key, the source module, the manifest family, the source's class)
+SOURCES = (("norm_tap_so", "norm_scale_source", norm_scale_source, NS.FAMILY, norm_scale_source.NormScaleSource),
+           ("router_tap_so", "router_softmax_source", router_softmax_source, RS.FAMILY, router_softmax_source.RouterSoftmaxSource),
+           ("vocab_range", "vocab_range_source", vocab_range_source, VR.FAMILY, vocab_range_source.VocabRangeSource))
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -48,7 +49,7 @@ def attach(com: Any, manifest: Mapping[str, Any] | None, required_classes: tuple
     """Attach each tap that is on to `com` (each refuses a manifest that does not name its family, exit 3), the call-boundary source when
     the manifest names call boundaries (its Programs found under `programs`) and the scale-products source when the manifest names its
     family; returns the required classes with their families added unless the caller gave them explicitly."""
-    for f, _key, mod, _fam in SOURCES:
+    for f, _key, mod, _fam, _cls in SOURCES:
         required_classes, _src = mod.attach(com, getattr(taps, f), manifest, required_classes, explicit_classes=explicit_classes, model=model)
     required_classes, _src = call_boundary_source.attach(com, bool(call_boundary_source.manifest_sites(manifest)), manifest, required_classes,
                                                          explicit_classes=explicit_classes, model=model, programs=programs)
@@ -57,12 +58,24 @@ def attach(com: Any, manifest: Mapping[str, Any] | None, required_classes: tuple
     return required_classes
 
 
+def attached(manifest: Mapping[str, Any] | None) -> list[str]:
+    """The `short_name`s of the sources a row's Commit attaches through `attach` for its manifest of record, constructing none: each tap
+    whose family the manifest names (the row passes a tap's option exactly then, `pipeline.row_records.applicable_taps`, and rebuilds a
+    manifest of other tap policies) and, on one rank, the call-boundary source when the manifest names call boundaries no other source
+    claims and the scale-products source when it names scale products (a TP Commit attaches neither)."""
+    fams = {r.get("family") for r in (manifest or {}).get("identities") or []}
+    one = int((manifest or {}).get("ranks") or 1) == 1
+    return [*(cls.short_name for _f, _key, _mod, fam, cls in SOURCES if fam in fams),
+            *([call_boundary_source.CallBoundarySource.short_name] if one and call_boundary_source.manifest_sites(manifest) else []),
+            *([scale_products_source.ScaleProductsSource.short_name] if one and SP.manifest_sites(manifest) else [])]
+
+
 def attach_rank(com: Any, model: Any, manifest_path: str | None, rank: int, **given: Any) -> dict[str, Any]:
     """A TP rank's side: attach each tap that is on with the rank's rows of the merged manifest; per source its stats, or its refusal."""
     man = json.loads(Path(manifest_path).read_text()) if manifest_path else {}
     mine = dict(man, identities=[r for r in man.get("identities") or [] if int(r.get("rank", 0)) == int(rank)])
     out: dict[str, Any] = {}
-    for f, key, mod, _fam in SOURCES:
+    for f, key, mod, _fam, _cls in SOURCES:
         if not given.get(f):
             continue
         try:
@@ -82,7 +95,7 @@ def require_on_every_rank(made: list[dict[str, Any]], required_classes: tuple[st
                           explicit_classes: bool) -> tuple[str, ...]:
     """The TP driver's side, once every rank made its committer: every tap that is on attached on every rank (else SystemExit, fail
     closed), its family added to the required classes unless they were given, and each rank's state recorded in `versions`."""
-    for f, key, _mod, fam in SOURCES:
+    for f, key, _mod, fam, _cls in SOURCES:
         if not getattr(taps, f):
             continue
         states = {int(m["rank"]): (m.get("tap_sources") or {}).get(key) for m in made}
@@ -97,4 +110,4 @@ def require_on_every_rank(made: list[dict[str, Any]], required_classes: tuple[st
     return required_classes
 
 
-__all__ = ["SOURCES", "TapSources", "attach", "attach_rank", "for_ranks", "require_on_every_rank"]
+__all__ = ["SOURCES", "TapSources", "attach", "attached", "attach_rank", "for_ranks", "require_on_every_rank"]

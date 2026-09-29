@@ -1,0 +1,23 @@
+{
+ "deps": {
+  "32c884ee1ea441eab1e6cfd146bc53d281c2e1411f03abd7d55bce6f4d88a985": {
+   "bytes": 700275204,
+   "package": "backends/flock/verifier/lean/level3",
+   "run": "r20260929-032531-8f07",
+   "sha256": "fa99372dfc2eed5e46de196b3ce940c0026271daea7ca2ffa66e2cfd98f69056"
+  },
+  "5c2a23bf8634d77a7eb3d07c2d1d82b9a6ceda4eaa0205286857391ba83e863f": {
+   "bytes": 700275806,
+   "package": "protocols/pous/lean",
+   "run": "r20260929-032531-8f07",
+   "sha256": "76dbcdc0e7837a2c18f5acdd46ffd812fe12e4cacf1cd2abc4e5268132657dd4"
+  },
+  "81e5112021f0d452354c4dbd391323e04a172a1e11a17968f1b884147b5d7be7": {
+   "bytes": 1313926613,
+   "package": "backends/flock/verifier/lean/soundness",
+   "run": "r20260929-032531-8f07",
+   "sha256": "ab583debd99442d229191651497f784b71050bb57dd0384fb528bc74e24c75d8"
+  }
+ },
+ "schema": "lean-deps-pin/v1"
+}

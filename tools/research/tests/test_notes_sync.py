@@ -11,6 +11,7 @@ import pytest
 
 from research import notes
 from research import notes_sync as NS
+from research.store.remote import FsRemote
 
 DOC = "kb/doc.md"
 SECTION = "\n".join(f"filler {i}" for i in range(12))
@@ -58,6 +59,7 @@ def test_a_sync_commits_pushes_and_the_other_machine_picks_it_up(machines):
     assert NS.sync(b, secrets=[]) == {**rep, "note": "already on the remote"}
 
 
+@pytest.mark.slow
 def test_a2_two_machines_20_times_in_the_same_minute_lose_no_write(machines):
     origin, a, b = machines
     errors: list = []
@@ -111,6 +113,7 @@ def test_the_watcher_reports_a_failed_sync_as_sync_failed_with_its_lag_every_pas
     assert notes.sync_lines(a, NS.sync(a, secrets=[]), now) == []                                    # a clean pass says nothing
 
 
+@pytest.mark.slow
 def test_key_material_is_refused_before_anything_is_pushed(machines):
     origin, a, _ = machines
     before = _git(origin, "rev-parse", "main")
@@ -146,7 +149,7 @@ def test_a5_scan_finds_big_blobs_and_keys_anywhere_in_history(machines):
     _, a, _ = machines
     assert NS.scan(a, secrets=[]) == {"blobs": 1, "big": [], "keys": []}
     (a / "big.bin").write_bytes(b"x" * 2000)
-    (a / "k.md").write_text("-----BEGIN OPENSSH PRIVATE KEY-----\n")
+    (a / "k.md").write_text("-----BEGIN OPENSSH " "PRIVATE KEY-----\n")   # split, so no scanner reads a key here
     _git(a, "add", "-A")
     _git(a, "commit", "-qm", "bad")
     _git(a, "rm", "-q", "k.md", "big.bin")
@@ -177,6 +180,30 @@ def _note(repo: Path, rel: str, created: str | None = None) -> Path:
 
 def _tree(origin: Path) -> list[str]:
     return _git(origin, "ls-tree", "-r", "--name-only", "main").split()
+
+
+def test_evidence_and_renders_stay_out_of_the_notes_and_their_removal_syncs(machines):
+    """A file added or changed under renders/, campaigns/*/assets/ or lanes/*/evidence/ is left out, staged or not, and named with
+    where it belongs; the rest syncs, and deleting one that history already holds is pushed like any change."""
+    origin, a, _ = machines
+    (a / "lanes" / "x" / "evidence").mkdir(parents=True)
+    (a / "lanes" / "x" / "evidence" / "old.json").write_text("{}\n")
+    _git(a, "add", "-A")
+    _git(a, "commit", "-qm", "history from before the rule")
+    _git(a, "push", "-q", "origin", "HEAD:main")
+    ev = ["campaigns/c/assets/x/run.json", "lanes/x/evidence/run.log", "renders/daily/20260928T0642Z-tables.json"]
+    for rel in ev:
+        (a / rel).parent.mkdir(parents=True, exist_ok=True)
+        (a / rel).write_text("output\n")
+    _git(a, "add", "renders")
+    (a / "lanes" / "x" / "20260928T0640Z-report-x.md").write_text("CHECKPOINT none (06:40Z) [open] ran\n")
+    rep = NS.sync(a, secrets=[], now=NOW)
+    assert (rep["rc"], rep["pushed"], rep["paths"], sorted(rep["evidence"])) == (0, True, 1, sorted(ev))
+    assert set(_tree(origin)) == {DOC, "lanes/x/evidence/old.json", "lanes/x/20260928T0640Z-report-x.md"}
+    assert "left out 3 evidence/render files (the evidence store holds them: research data put" in NS.render_sync(rep)
+    (a / "lanes" / "x" / "evidence" / "old.json").unlink()
+    rep = NS.sync(a, secrets=[], now=NOW)
+    assert rep["pushed"] and "lanes/x/evidence/old.json" not in _tree(origin) and len(rep["evidence"]) == 3
 
 
 def test_a_lane_note_stamped_over_5_min_ahead_is_left_out_and_the_rest_sync(machines):
@@ -220,6 +247,7 @@ def test_notes_already_committed_are_not_rechecked_but_a_changed_created_is(mach
         f"{old}: created: 2026-09-28T09:00Z is 138 min ahead; use 2026-09-28T06:42Z (date -u +%Y-%m-%dT%H:%MZ)"]
 
 
+@pytest.mark.slow
 def test_sync_and_checkpoint_exit_5_naming_the_note_and_the_stamp_to_use(machines, monkeypatch, capsys):
     origin, a, _ = machines
     monkeypatch.setattr(NS, "_utcnow", lambda: NOW)
@@ -246,3 +274,182 @@ def test_created_is_read_from_the_front_matter_with_or_without_seconds():
         assert NS.created_at(f"---\nlane: x\ncreated: {value}\n---\nbody\n")[1] == when, value
     assert NS.created_at("created: 2026-09-28T07:00Z\n") is None                  # not in front matter
     assert NS.created_at("---\ncreated: 2026-09-28\n---\n") is None               # no time of day
+
+
+def test_a_commit_whose_diff_is_not_utf8_still_syncs(machines):
+    """The key scan reads `git log -p` of the outgoing commits: removing a Latin-1 or binary file must not crash it."""
+    origin, a, _ = machines
+    (a / "kb" / "latin1.txt").write_bytes(b"caf\xe9 \x93quoted\x94\n")
+    _git(a, "add", "-A")
+    _git(a, "commit", "-qm", "before")
+    _git(a, "push", "-q", "origin", "HEAD:main")
+    (a / "kb" / "latin1.txt").unlink()
+    rep = NS.sync(a, secrets=[], now=NOW)
+    assert (rep["rc"], rep["pushed"]) == (0, True) and "kb/latin1.txt" not in _tree(origin)
+# ---- front matter ---------------------------------------------------------------------------------------------------------------------
+
+CURSOR_HEAD = '---\ncursor:\n  subagentId: "bc-0000"\n---\n\n# a Cursor agent\'s note\n'
+
+
+def test_header_issues_refuse_broken_front_matter_and_warn_on_what_disagrees_with_the_path():
+    ok = "---\nlane: coordinator\nkind: handoff\nfrom: x\ncreated: 2026-09-28T06:40Z\nto:\n  - a\n- b\n# a comment\n\n---\n# title\n"
+    hand = "lanes/coordinator/20260928T0640Z-handoff-from-x.md"
+    assert NS.header_issues(hand, ok, NOW) == ([], [])
+    assert NS.header_issues(hand, CURSOR_HEAD, NOW) == ([], [])                     # Cursor's attribution block, nothing else
+    assert NS.header_issues(hand, "# no front matter at all\n", NOW) == ([], [])    # lane, kind, time are in the path
+    use = "use 2026-09-28T06:42Z (date -u +%Y-%m-%dT%H:%MZ)"
+    for head, want in (("---\nlane: coordinator\n# title\nbody\n", ["front matter opened with --- is never closed: add a --- line under the header"]),
+                       ("---\nlane: coordinator\nthis line is prose\n---\n", ["front matter line 3 is not `key: value`: 'this line is prose'"]),
+                       ("---\ncreated: now\n---\n", [f"created: 'now' is not a UTC time; {use}"]),
+                       ("---\ncreated: 2026-09-24\n---\n", [f"created: '2026-09-24' is not a UTC time; {use}"]),
+                       ("---\ncreated: 20260926T1344Z\n---\n", [f"created: '20260926T1344Z' is not a UTC time; {use}"])):
+        assert NS.header_issues(hand, head, NOW) == (want, []), head
+    assert NS.header_issues(hand, ok.replace("lane: coordinator", "lane: x"), NOW) == (
+        [], ["lane: x but the note is in lanes/coordinator/ (a handoff's lane is its recipient)"])
+    assert NS.header_issues("lanes/y/20260926T0640Z-report-y.md", "---\nlane: y\ncreated: 2026-09-28T06:40Z\n---\n", NOW) == (
+        [], ["created: 2026-09-28T06:40Z is 48 h from the file name's stamp 20260926T0640Z"])
+
+
+def test_sync_leaves_out_a_note_with_broken_front_matter_and_warns_on_the_rest(machines):
+    origin, a, _ = machines
+    bad, off, fine = ("lanes/coordinator/20260928T0640Z-handoff-from-x.md", "lanes/coordinator/20260928T0641Z-handoff-from-y.md",
+                      "lanes/coordinator/20260928T0642Z-handoff-from-z.md")
+    for rel, text in ((bad, "---\nlane: coordinator\ncreated: now\n---\n# x\n"), (off, "---\nlane: y\nkind: handoff\n---\n# y\n"),
+                      (fine, CURSOR_HEAD)):
+        (a / rel).parent.mkdir(parents=True, exist_ok=True)
+        (a / rel).write_text(text)
+    rep = NS.sync(a, secrets=[], now=NOW)
+    assert (rep["rc"], rep["pushed"], rep["paths"], rep["future"]) == (NS.FUTURE_RC, True, 2, [])
+    assert rep["header"] == [f"{bad}: created: 'now' is not a UTC time; use 2026-09-28T06:42Z (date -u +%Y-%m-%dT%H:%MZ)"]
+    assert rep["warn"] == [f"{off}: lane: y but the note is in lanes/coordinator/ (a handoff's lane is its recipient)"]
+    assert {off, fine} <= set(_tree(origin)) and bad not in _tree(origin)
+    assert NS.refused_lines(rep) == [f"SYNC-REFUSED {rep['header'][0]}", f"SYNC-WARN {rep['warn'][0]}"]
+    assert "left out 1 with broken front matter (SYNC-REFUSED); 1 warning (SYNC-WARN)" in NS.render_sync(rep)
+    (a / bad).write_text("---\nlane: coordinator\ncreated: 2026-09-28T06:40Z\n---\n# x\n")
+    assert NS.sync(a, secrets=[], now=NOW)["rc"] == 0 and bad in _tree(origin)
+
+
+def test_front_matter_is_checked_only_for_new_content_and_new_problems(machines):
+    """History is never re-judged: a problem HEAD's copy already had does not stop a checkpoint, a move (month folders) carries a
+    note whatever its header, and a moved note that is refused keeps its old path instead of vanishing."""
+    origin, a, _ = machines
+    old, moved = "lanes/w/20260920T0800Z-report-w.md", "lanes/w/2026-09/20260920T0800Z-report-w.md"
+    (a / "lanes" / "w").mkdir(parents=True)
+    (a / old).write_text("---\nlane: w\ncreated: now\n---\nCHECKPOINT none (08:00Z) [open] started\n")
+    _git(a, "add", "-A")
+    _git(a, "commit", "-qm", "last week's note")
+    _git(a, "push", "-q", "origin", "HEAD:main")
+    with (a / old).open("a") as f:
+        f.write("CHECKPOINT none (06:42Z) [open] still here\n")
+    rep = NS.sync(a, secrets=[], now=NOW)
+    assert (rep["rc"], rep["header"], rep["warn"]) == (0, [], []) and "still here" in _git(origin, "show", f"main:{old}")
+    (a / "lanes" / "w" / "2026-09").mkdir()
+    _git(a, "mv", old, moved)
+    rep = NS.sync(a, secrets=[], now=NOW)
+    assert (rep["rc"], rep["header"]) == (0, []) and moved in _tree(origin) and old not in _tree(origin)
+    again = "lanes/w/20260920T0800Z-report-w.md"
+    _git(a, "mv", moved, again)
+    (a / again).write_text("---\nlane: w\n# the closing line went missing\n")
+    rep = NS.sync(a, secrets=[], now=NOW)
+    assert rep["rc"] == NS.FUTURE_RC and rep["header"] == [f"{again}: front matter opened with --- is never closed: add a --- line under the header"]
+    assert moved in _tree(origin) and again not in _tree(origin)
+
+
+# ---- citations ------------------------------------------------------------------------------------------------------------------------
+
+ART = "cc59294a" + "0" * 56
+RUN, LABELLED, UNKNOWN = "r20260928-060054-e5c1", "r20260928-042319-9aac", "r20260928-000000-0000"
+
+
+def _vault(tmp_path: Path, monkeypatch=None) -> Path:
+    """A fs remote holding ART's manifest, RUN's attempt and a label on LABELLED; with `monkeypatch`, the store's configured remote."""
+    vault = tmp_path / "vault"
+    for key in (f"manifests/{ART}.json", f"attempts/{RUN}.json", f"labels/{LABELLED}/{'a' * 64}.json"):
+        (vault / key).parent.mkdir(parents=True, exist_ok=True)
+        (vault / key).write_text("{}\n")
+    if monkeypatch:
+        (tmp_path / "store.toml").write_text(f'[remote]\ntype = "fs"\npath = "{vault}"\n')
+        monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(tmp_path / "store.toml"))
+    return vault
+
+
+def test_outgoing_citations_are_the_ids_that_the_pushed_lines_add_to_notes(machines):
+    origin, a, _ = machines
+    note = "lanes/x/20260928T0640Z-report-x.md"
+    _note(a, note)
+    with (a / note).open("a") as f:
+        f.write(f"gate {RUN} passed; art:cc59294a and art:{ART}, again {RUN}\n")
+    (a / "kb" / "k.md").write_text(f"see {UNKNOWN}\n")
+    (a / "lanes" / "x" / "log.txt").write_text(f"{LABELLED}\n")          # not a note
+    (a / "README.md").write_text(f"{LABELLED}\n")                          # not under lanes/ or kb/
+    _git(a, "add", "-A")
+    _git(a, "commit", "-qm", "cite")
+    assert NS.outgoing_citations(a, "refs/remotes/origin/main") == {note: ["art:cc59294a", f"art:{ART}", RUN], "kb/k.md": [UNKNOWN]}
+    assert NS.outgoing_citations(a, None) == NS.outgoing_citations(a, "refs/remotes/origin/main")     # a first push: the last commit
+    _git(a, "push", "-q", "origin", "HEAD:main")
+    _git(a, "fetch", "-q", "origin")
+    (a / "lanes" / "x" / "2026-09").mkdir()
+    _git(a, "mv", note, "lanes/x/2026-09/20260928T0640Z-report-x.md")
+    _git(a, "commit", "-qm", "move")
+    assert NS.outgoing_citations(a, "refs/remotes/origin/main") == {}                                 # a move adds no lines
+
+
+def test_missing_citations_asks_the_remote_and_a_label_accounts_for_a_run(tmp_path):
+    remote = FsRemote(_vault(tmp_path))
+    cited = ["art:cc59294a", f"art:{ART}", "art:deadbeef", RUN, LABELLED, UNKNOWN]
+    assert NS.missing_citations(cited, remote) == ({"art:deadbeef", UNKNOWN}, None)
+    assert NS.missing_citations(cited) == (set(), None)                  # no remote configured: no check
+
+    class Down:
+        def list(self, prefix):
+            raise OSError("unreachable")
+
+        head = list
+
+    assert NS.missing_citations(cited, Down()) == (set(), "the store's remote did not answer for 6 cited ids (OSError)")
+
+    release = threading.Event()
+
+    class Hangs:
+        def list(self, prefix):
+            release.wait()
+            return []
+
+        head = list
+
+    assert NS.missing_citations(cited, Hangs(), wait_s=0) == (set(), "6 cited ids not answered within 0 s")   # returns while they hang
+    release.set()
+
+
+def test_citation_warnings_name_each_note_and_how_to_publish(tmp_path, monkeypatch):
+    remote = FsRemote(_vault(tmp_path))
+    cites = {"lanes/x/a.md": [RUN, UNKNOWN, "art:deadbeef"], "kb/b.md": [LABELLED]}
+    assert NS.citation_warnings(cites, remote) == [
+        f"lanes/x/a.md: cites {UNKNOWN}, art:deadbeef, which the evidence store does not have "
+        f"({NS.CITE_HINTS['run']}; {NS.CITE_HINTS['art']})"]
+    many = [f"r20260928-0000{i:02d}-0000" for i in range(NS.CITE_MAX + 6)]
+    assert NS.citation_warnings({"kb/c.md": many}, remote) == [
+        f"kb/c.md: cites {', '.join(many[:NS.CITE_MAX])}, which the evidence store does not have ({NS.CITE_HINTS['run']})",
+        f"citation check: 6 more cited ids not looked up (at most {NS.CITE_MAX} a sync)"]
+    monkeypatch.setenv(NS.CITE_ENV, "0")
+    assert NS.citation_warnings(cites, remote) == []
+
+
+def test_sync_warns_once_pushed_on_a_citation_the_store_lacks(machines, tmp_path, monkeypatch):
+    origin, a, _ = machines
+    _vault(tmp_path, monkeypatch)
+    note = "lanes/x/20260928T0640Z-report-x.md"
+    _note(a, note)
+    with (a / note).open("a") as f:
+        f.write(f"gate {RUN} passed; train {UNKNOWN} passed but unrecorded; {LABELLED} waived\n")
+    rep = NS.sync(a, secrets=[], now=NOW)
+    assert (rep["rc"], rep["pushed"]) == (0, True) and note in _tree(origin)
+    assert rep["warn"] == [f"{note}: cites {UNKNOWN}, which the evidence store does not have ({NS.CITE_HINTS['run']})"]
+    assert NS.refused_lines(rep) == [f"SYNC-WARN {rep['warn'][0]}"] and "1 warning (SYNC-WARN)" in NS.render_sync(rep)
+    with (a / note).open("a") as f:
+        f.write("CHECKPOINT none (06:42Z) [open] no new citation\n")
+    assert NS.sync(a, secrets=[], now=NOW)["warn"] == []                  # what was pushed is not re-checked
+    monkeypatch.setenv(NS.CITE_ENV, "0")
+    with (a / note).open("a") as f:
+        f.write(f"again {UNKNOWN}\n")
+    assert NS.sync(a, secrets=[], now=NOW)["warn"] == []

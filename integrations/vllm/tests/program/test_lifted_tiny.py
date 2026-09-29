@@ -353,7 +353,7 @@ def test_lstep_live_continuation_relation():
     assert L.l_step_live(1).evaluate(17, 17) == 0 and L.l_step_live(1).evaluate(16, 17) == 1
 
 
-def test_specified_list_is_closed():
+def _check_specified_list():
     """Only the specified families — the five of v0.4 (+ the labelled PAD-04 candidate `LSplitsForSMS`), the two Continuation_v1 members
     (R17-32, SPEC B6) and `LFixedSelect<E>x<w>` (R17-42 §3, MOE-PAD-SPEC §2; STAGE1-GAPS G2) — are non-strict; everything registered as
     `Lifted[…]` is the strict wrapper.  The Continuation members and LFixedSelect are materialised here so the list is checked with them in it."""
@@ -370,6 +370,15 @@ def test_specified_list_is_closed():
             else:
                 assert getattr(d, "lift_class", None) == "strict", fid
     assert PP.BitAnd.id not in L.specified_ids() and L.lifted_prim(PP.BitAnd).lift_class == "strict"
+
+
+def test_specified_list_is_closed():
+    """`_check_specified_list` in a fresh interpreter: the registry is process-global, so a lifted relation another test in this process
+    resolved would be checked with the ones this module materialises."""
+    import subprocess
+    code = "from tests.program.test_lifted_tiny import _check_specified_list; _check_specified_list()"
+    p = subprocess.run([sys.executable, "-c", code], cwd=Path(__file__).resolve().parents[2], capture_output=True, text=True)
+    assert p.returncode == 0, p.stderr[-4000:]
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -866,6 +875,7 @@ def test_stage1_flip_one_payload_bit_of_bot_is_named_by_every_class_and_never_re
         assert g.evaluate(1, x16, BOT16, 0x3F80, 0x3F80) == INV16  # INV beats bot in an unselected row too (A3: INV anywhere -> INV)
 
 
+@pytest.mark.slow
 def test_stage1_reference_evaluator_exposes_the_complete_assignment_every_gate_with_its_reading(tmp_path):
     """Stage-1 cross-cutting: `serve3_reference.materialize` assigns EVERY gate (not only outputs); `lifted_dump.rows` reads the complete
     assignment back with each gate's class / width / raw word / A3 reading; on the tiny serve fixture with EOS at the raw event the

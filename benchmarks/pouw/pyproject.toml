@@ -1,0 +1,18 @@
+[project]
+name = "verity-pouw-benchmarks"
+version = "0.0.0"
+description = "PoUW's benchmarks and their tests."
+requires-python = ">=3.12"
+dependencies = ["research", "verity-pouw", "numpy"]
+
+# Not an installable package: a workspace member so that its tests run in the workspace environment.
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+research = { workspace = true }
+verity-pouw = { workspace = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]

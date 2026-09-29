@@ -1557,31 +1557,14 @@ def test_moe_evaluators_equal_the_registered_definitions():
         EV.evaluate("MoeExpertGemm_v1", {"E": Es, "K": K, "N": N}, [[x], [np.asarray([Es], dtype=np.uint32)], [slab]], [None, None, slab])
 
 
-def _jit_slow_compile(out):
-    import time
-    d = Path(out).parent
-    with open(d / "compiles", "ab") as fh:
-        fh.write(b"1")
-    payload = b"\x7fELF" + bytes(range(256)) * 64
-    with open(out, "wb") as fh:
-        for i in range(0, len(payload), 1024):            # a slow writer: the partial file is only ever the TEMP path
-            fh.write(payload[i:i + 1024]); fh.flush(); time.sleep(0.005)
-
-
-def _jit_worker(args):
-    from verity_vllm.program.kernels import _jit
-    lib, src = Path(args[0]), Path(args[1])
-    p = _jit.atomic_build(lib, [src], _jit_slow_compile)
-    return len(Path(p).read_bytes()) == 4 + 256 * 64     # a reader after publish always sees the whole library
-
-
 def test_jit_twin_library_build_is_atomic_and_serialised_across_concurrent_first_users(tmp_path, monkeypatch):
     """[rev-cb F-cb-44 second finding; MAN-06g] Sibling first users of a twin .so (forked replay evaluators after a fresh install) used to
     dlopen a half-written library ('file too short').  `_jit.atomic_build` compiles to a private temp path, publishes by os.replace
     and serialises builders on a lock: N concurrent builders yield exactly one compile, every observer sees a complete file, and a
-    fresh library is not rebuilt.  The parent prewarms the evaluators' libraries before forking (`_prewarm_evaluators`)."""
+    fresh library is not rebuilt.  The parent prewarms the evaluators' libraries before forking (`_prewarm_evaluators`).  The race
+    is staged: the first builder stops half-way through its write until five more have found the library missing and reached its lock."""
+    import contextlib
     import multiprocessing as mp
-    import time
     from verity_vllm.program.kernels import _jit
 
     lib = tmp_path / "libtwin.so"
@@ -1589,20 +1572,53 @@ def test_jit_twin_library_build_is_atomic_and_serialised_across_concurrent_first
     src.write_text("int f(){return 1;}\n")
     counter = tmp_path / "compiles"
     payload = b"\x7fELF" + bytes(range(256)) * 64
-    slow_compile = _jit_slow_compile
-
+    half = len(payload) // 2
     ctx = mp.get_context("fork")
-    with ctx.Pool(6) as pool:
-        seen = pool.map(_jit_worker, [(str(lib), str(src))] * 6)
-    assert all(seen) and lib.read_bytes() == payload
+    half_written, release, at_lock, seen = ctx.Event(), ctx.Event(), ctx.SimpleQueue(), ctx.SimpleQueue()
+
+    def compile_to(out):
+        with open(counter, "ab") as fh:
+            fh.write(b"1")
+        with open(out, "wb") as fh:
+            fh.write(payload[:half]); fh.flush()
+            half_written.set(); release.wait()
+            fh.write(payload[half:])
+
+    real_lock = _jit.build_lock
+
+    @contextlib.contextmanager
+    def announced_lock(path):
+        at_lock.put(os.getpid())                         # past the unlocked staleness check, which found no library
+        with real_lock(path):
+            yield
+
+    monkeypatch.setattr(_jit, "build_lock", announced_lock)
+
+    def builder():
+        seen.put(len(Path(_jit.atomic_build(lib, [src], compile_to)).read_bytes()))   # a reader after publish sees the whole library
+
+    builders = [ctx.Process(target=builder) for _ in range(6)]
+    builders[0].start()
+    half_written.wait()
+    assert not lib.exists() and [t.read_bytes() for t in tmp_path.glob("libtwin.so.*.tmp*")] == [payload[:half]], \
+        "the partial file is only ever the TEMP path"
+    for b in builders[1:]:
+        b.start()
+    assert len({at_lock.get() for _ in builders}) == 6   # every builder is at the lock the first one holds
+    release.set()
+    assert [seen.get() for _ in builders] == [len(payload)] * 6
+    for b in builders:
+        b.join()
+        assert b.exitcode == 0
+    assert lib.read_bytes() == payload
     assert counter.read_bytes() == b"1", "exactly one compile across 6 concurrent builders"
     assert not list(tmp_path.glob("libtwin.so.*.tmp*")), "no temp file left behind"
     # fresh: no rebuild; stale source: rebuilt once, atomically
-    _jit.atomic_build(lib, [src], slow_compile)
+    os.utime(src, (1_600_000_000, 1_600_000_000)); os.utime(lib, (1_600_000_100, 1_600_000_100))
+    _jit.atomic_build(lib, [src], compile_to)
     assert counter.read_bytes() == b"1"
-    time.sleep(0.02); src.write_text("int f(){return 2;}\n"); os.utime(src, None)
-    os.utime(lib, (time.time() - 100, time.time() - 100))
-    _jit.atomic_build(lib, [src], slow_compile)
+    src.write_text("int f(){return 2;}\n"); os.utime(src, (1_600_000_200, 1_600_000_200))
+    _jit.atomic_build(lib, [src], compile_to)
     assert counter.read_bytes() == b"11" and lib.read_bytes() == payload
     # the parent prewarm names the rms library for RMSNorm families and nothing for a Gemm-only sample
     assert SR._prewarm_evaluators([{"spec": "Gemm_v1{M=1}"}]) == {}

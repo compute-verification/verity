@@ -74,6 +74,7 @@ EVALUATORS = {
     "SiluMul_v1": "verity_vllm.program.kernels.derived_rows.silu_mul_rows",
     "Embedding_v1": "row gather of the registered embedding field (Embedding_v1)",
     "BiasAdd_v1": "Bf16Add on the composed interior Gemm output + the registered bias slice (one f32 add, RNE; biased linears, MAN-07)",
+    "GemmBias_v1": "Gemm_v1's row (dot_bf16 + f2fp_bf16), then BiasAdd_v1's Bf16Add with the bias slice, per coordinate (GemmBiasCoordinate_v1)",
     "TokenSelect_v1": "first-max argmax over the bf16 logits (TokenSelect_v1: Bf16GtStrict scan, lowest index on ties)",
     # [R16 stoch, rev F-r16-20(a)] the stochastic selector IS replayed: the registered composite GumbelTopPTokenSelect_v1{V} (TemperatureScale
     # -> TopPMask_v1 with the committed `splits` S as its operand -> GumbelSelectF32: Philox draws from the committed seed + the Const64 pos)
@@ -83,6 +84,8 @@ EVALUATORS = {
                                 "TopPMask_v1 (S = the committed `splits` operand) -> GumbelSelectF32 on the committed seed + Const64 pos)",
     "GumbelTopPTokenSelectSharedGreedy_v1": "GumbelTopPTokenSelect_v1's row (the same function, registry.sampling.SHARED_GREEDY; "
                                             "TargetProfile.sampler_construction = shared-greedy)",
+    "GumbelTopPTokenSelect_v2": "GumbelTopPTokenSelect_v1's row at the split count S (registry.topp_words, a single-request Program's select): "
+                                "`splits` = S as v1 reads it, any other value as an unlaunched count, where v1 keeps no lane either",
     # [R16 fp8] the block-scaled FP8 linear (Qwen3-4B-FP8, CutlassFp8BlockScaledMMKernel): the quant is INTERIOR (members [], composed
     # from the committed bf16 row), the GEMM row is the VU -- registered e4m3 weight + f32 `weight_scale_inv` slices (8- and 32-bit fields)
     "Fp8GroupQuant_v1": "verity_vllm.program.kernels.derived_rows.fp8_group_quant_row (per-token-group(128) e4m3 quant: exact fmaxf fold from eps, div.rn, cvt.rn.satfinite.e4m3)",
@@ -357,6 +360,14 @@ def bias_add(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np
     return {"0": D.f2fp_bf16(D.as_u32((y + b).astype(np.float32)))}         # Bf16Add: one f32 add, RNE to bf16
 
 
+def gemm_bias(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
+    """`GemmBias_v1{K,N}(x, W, b)`: `Gemm_v1`'s row, then `BiasAdd_v1`'s add of the bias slice, per coordinate."""
+    if len(ops) != 3:
+        raise ValueError(f"GemmBias_v1 takes 3 operands (x, W, b), the row wires {len(ops)}")
+    y = gemm(statics, ops[:2])["0"]
+    return bias_add({"N": statics["N"]}, (y, ops[2]))
+
+
 def mul_scalar_tensor(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
     """b1.Bf16MulScalarTensor{N}: out_j = F2fpBf16(F32Mul(Bf16ToF32(x_j), Bf16ToF32(s))) -- arg 0 the N bf16 words of the row, arg 1
     the ONE bf16 word of the scalar tensor (the Definition's `s: Array(1, BF16)`); another arity / width is by name."""
@@ -383,6 +394,14 @@ def token_select(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str
 
 def gumbel_topp(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
     return {SAMPLED_MEMBER: np.asarray([gumbel_topp_token_select(statics, [ops[g] for g in range(len(ops))])], dtype=np.uint64)}
+
+
+def gumbel_topp_split(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
+    """`GumbelTopPTokenSelect_v2{V,S}`: v1 wherever `splits` is S; any other value keeps no lane, as v1 at the unlaunched count 0 does."""
+    ops = list(ops)
+    s = np.asarray(ops[5])
+    ops[5] = np.where(s == int(statics["S"]), s, 0).astype(s.dtype)
+    return gumbel_topp(statics, ops)
 
 
 def fp8_group_quant(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
@@ -681,10 +700,17 @@ def _sample_gumbel(rng: np.random.Generator, n: int, params: Sequence[Any], **st
             rng.integers(0, 1 << 20, n).astype(np.uint64), f32(rng.uniform(0.3, 2.0, n)), rng.choice([1, 2, 4, 8], n).astype(np.uint32)]
 
 
+def _sample_gumbel_split(rng: np.random.Generator, n: int, params: Sequence[Any], **statics: Any) -> list[np.ndarray]:
+    """`_sample_gumbel` with splits = S on three rows in four (a Program's `Const32[S]`), another count on the rest."""
+    w = _sample_gumbel(rng, n, params, **statics)
+    w[5] = np.where(rng.random(n) < 0.75, int(statics["S"]), w[5]).astype(np.uint32)
+    return w
+
+
 def _check_targets() -> dict[str, list]:
     """Family -> the small specialisations its self-check binds (the served statics are too wide for the gate reference)."""
     from verity.ir.defs import bind
-    from verity_vllm.program.registry import b1, fa3_check_inf, fp8, hopper, moe, moe_pad, sampling
+    from verity_vllm.program.registry import b1, fa3_check_inf, fp8, gemm_bias, hopper, moe, moe_pad, sampling, topp_words
     P = b1.P
     fa2 = {"DOT": P.AmpereBF16TcDot16, "INV": P.Fa2InvSum}
     fa3 = {"DOT": hopper.HopperBF16WgmmaDot16, "INV": hopper.Fa3InvSum}
@@ -703,10 +729,12 @@ def _check_targets() -> dict[str, list]:
         "SiluMul_v1": [bind(b1.SiluMul, I=8)],
         "Embedding_v1": [bind(b1.Embedding, V=5, H=4)],
         "BiasAdd_v1": [bind(b1.BiasAdd, N=8)],
+        "GemmBias_v1": [bind(gemm_bias.GemmBias, K=32, N=3)],
         "Bf16MulScalarTensor_v1": [bind(b1.Bf16MulScalarTensor, N=8)],
         "TokenSelect_v1": [bind(b1.TokenSelect, V=16)],
         "GumbelTopPTokenSelect_v1": [bind(sampling.GumbelTopPTokenSelect, V=16)],
         "GumbelTopPTokenSelectSharedGreedy_v1": [bind(sampling.GumbelTopPTokenSelectSharedGreedy, V=16)],
+        "GumbelTopPTokenSelect_v2": [bind(topp_words.GumbelTopPTokenSelectV2, V=16, S=4)],
         "Fp8GroupQuant_v1": [bind(fp8.Fp8GroupQuant, K=256, G=128)],
         "ScaledMmFp8Block_v1": [bind(fp8.ScaledMmFp8Block, K=128, N=128, G=128)],
         "ScaledMmFp8BlockSharedScale_v1": [bind(fp8.ScaledMmFp8BlockSharedScale, K=128, N=128, G=128)],
@@ -739,10 +767,12 @@ _row("RMSNormFusedCuda_v2", rmsnorm_fused, ("0", "1"))
 _row("SiluMul_v1", silu_mul, ("out",))
 _row("Embedding_v1", embedding, ("out",), _sample({0: "V"}))
 _row("BiasAdd_v1", bias_add, ("0",))
+_row("GemmBias_v1", gemm_bias, ("0",))
 _row("Bf16MulScalarTensor_v1", mul_scalar_tensor, ("out",))
 _row("TokenSelect_v1", token_select, (SAMPLED_MEMBER,))
 _row("GumbelTopPTokenSelect_v1", gumbel_topp, (SAMPLED_MEMBER,), _sample_gumbel)
 _row("GumbelTopPTokenSelectSharedGreedy_v1", gumbel_topp, (SAMPLED_MEMBER,), _sample_gumbel)
+_row("GumbelTopPTokenSelect_v2", gumbel_topp_split, (SAMPLED_MEMBER,), _sample_gumbel_split)
 _row("Fp8GroupQuant_v1", fp8_group_quant, ("0", "1"))
 _row("ScaledMmFp8Block_v1", scaled_mm_fp8_block, ("0",))
 _row("ScaledMmFp8BlockSharedScale_v1", scaled_mm_fp8_block, ("0",))

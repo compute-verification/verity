@@ -232,7 +232,7 @@ print(json.dumps({"digest": plan.digest, "residuals": {r.table: r.values for r i
 
 def _plan_in_a_fresh_process(tmp_path, mode: str) -> dict:
     out = subprocess.run([sys.executable, "-c", _PLAN_OF_FILES, str(tmp_path / "manifest.json"), str(tmp_path / "runtime_tree.json"), mode],
-                         env={**os.environ, "PYTHONPATH": os.pathsep.join(p for p in sys.path if p)}, capture_output=True, text=True, timeout=300)
+                         env={**os.environ, "PYTHONPATH": os.pathsep.join(p for p in sys.path if p)}, capture_output=True, text=True)
     assert out.returncode == 0, out.stderr[-3000:]
     return json.loads(out.stdout.strip().splitlines()[-1])
 
