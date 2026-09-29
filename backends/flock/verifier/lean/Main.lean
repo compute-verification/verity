@@ -166,7 +166,7 @@ def archivePutCmd (dir : String) (paths : List String) : IO UInt32 := do
 
 /-- `verify --statement ID --circuit F --comp F --public F [--coins seed|os] --session DIR...`: `ID` names the statement's
 tags (`verity/flock-circuit` by default, or `verity/flock-netlist/v1`); `--comp` is the row leaf's pinned compression
-circuit. Each DIR holds `session.json`, `<table>.rep0.bin` and `<table>.rep1.bin`. The statement is set up once; one
+circuit. A session with a work draw needs `--work-table`, `--program` and `--partition`. Each DIR holds `session.json`, `<table>.rep0.bin` and `<table>.rep1.bin`. The statement is set up once; one
 verdict line per session, in order. Exit 0 iff every session is accepted. -/
 def verifyCmd (args : List String) : IO UInt32 := do
   let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--partition F] [--program F] [--work-table F] [--coins seed|os] --session DIR..."

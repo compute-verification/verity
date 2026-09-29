@@ -347,7 +347,9 @@ differ. The stratified law is unchanged.
 - **Work.** Each template's PoUW work per unit comes from the verifier's own work table (`--work-table F`: a JSON
   object from template descriptor id to a natural number, in any fixed unit). Units that do no PoUW work, such as
   dequantization, the quantizer and attention, have work 0. A template the table does not name refuses the law
-  (`HmRow.workLaw`, `flock-verify draw --program P --partition Q --work K --work-table F`).
+  (`HmRow.workLaw`, `flock-verify draw --program P --partition Q --work K --work-table F`). A draw's stated work sets
+  every `k_s`, so `verify` never takes it as stated: it refuses a work draw unless it holds its own work table, program
+  and partition, and then the law must be its own derivation.
 - **Sizes.** With `W = Σ_s w_s n_s ≥ 1` and `1 ≤ K ≤ N`, stratum `s` draws `k_s = min(n_s, max(1, ⌈K w_s n_s / W⌉))`
   (`Draw.workK`). This is its work share of `K`, rounded up. It is never above `n_s`, and never below one: this
   integrity floor binds exactly for the strata that do no work. At most `K` plus one unit per stratum are drawn. A
@@ -367,7 +369,7 @@ and the record keeps it as `unit_draw`. The offline checks:
 | check | rule |
 |---|---|
 | U1 | the record keeps a draw iff the statement carries one, and they are canonically equal |
-| U2 | the draw is well formed: exactly the law's keys; units ascending, distinct and in `[0, N)`; `subset` has `K ≤ N` units; `bernoulli` has `0 ≤ num ≤ den`, `den > 0`, no unit at `p = 0` and every unit at `p = 1`; `stratified` has `1 ≤ K ≤ N`, each stratum exactly `{template, units, k}` with a distinct template, its ranges ascending, disjoint, not adjacent and non-empty, its `k` the rule's, the strata's ranges tiling `[0, N)` exactly, and exactly `k_s` units in each; `work` has the same checks, with each stratum exactly `{template, units, work, k}`, `W ≥ 1` and each `k` the work rule's. When the verifier holds the program and a template-query partition object, a stratified draw's law must be its own derivation from them, at the draw's `K`, and a work draw's also from its work table |
+| U2 | the draw is well formed: exactly the law's keys; units ascending, distinct and in `[0, N)`; `subset` has `K ≤ N` units; `bernoulli` has `0 ≤ num ≤ den`, `den > 0`, no unit at `p = 0` and every unit at `p = 1`; `stratified` has `1 ≤ K ≤ N`, each stratum exactly `{template, units, k}` with a distinct template, its ranges ascending, disjoint, not adjacent and non-empty, its `k` the rule's, the strata's ranges tiling `[0, N)` exactly, and exactly `k_s` units in each; `work` has the same checks, with each stratum exactly `{template, units, work, k}`, `W ≥ 1` and each `k` the work rule's. When the verifier holds the program and a template-query partition object, a stratified draw's law must be its own derivation from them, at the draw's `K`. A work draw's law must always be its own derivation from them and its work table, and `verify` refuses a work draw without all three |
 | U3 | the statement's `instances` is the number of drawn units |
 
 `stratified_agree.py` checks the Lean verifier against core's (#164's `verity_one_stage.draw`, #161's `Stratified`):

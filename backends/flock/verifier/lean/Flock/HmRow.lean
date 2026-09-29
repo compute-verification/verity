@@ -739,6 +739,14 @@ drawn units' statement over it. `work` is the verifier's own work table, which a
 def Stmt.setupH (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins) (tables : List (String × ByteArray) := [])
     (draw : Option Json := none) (partition : Option Json := none) (program : Option ByteArray := none)
     (work : Option (Array (String × Nat)) := none) : V Stmt := do
+  -- a work draw's stated work sets every k_s, so its law must be the verifier's own derivation, never taken as stated
+  if let some d := draw then
+    if let .ok (Draw.Law.work k strata) := (Draw.UnitDraw.ofJson d).map (·.law) then
+      let (some obj, some prog, some table) := (partition, program, work)
+        | throw "U2: a work draw needs the verifier's own work table, program and partition (--work-table, --program, --partition)"
+      let (law, _) ← HmRow.workLaw obj prog k table
+      if law != Draw.Law.work k strata then
+        throw "U2: the draw's work law is not the verifier's own (its program, query and work table)"
   let c ← HmRow.parse tags circuitFile tables
   let finding0 ← if tags.bindings then (some <$> HmRow.checkPartition c partition)
     else if partition.isSome then throw s!"{tags.name}: the statement binds no partition" else pure none
@@ -753,12 +761,6 @@ def Stmt.setupH (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coin
         ((Draw.UnitDraw.ofJson d).map (·.law), partition, program) then
       let (law, _) ← HmRow.stratifiedLaw obj prog k
       if law != Draw.Law.stratified k strata then throw "U2: the draw's strata are not the verifier's own (its program and query)"
-  -- likewise a work draw's strata and work, when it also holds its work table
-  if let (some d, some obj, some prog, some table) := (draw, partition, program, work) then
-    if let .ok (Draw.Law.work k strata) := (Draw.UnitDraw.ofJson d).map (·.law) then
-      let (law, _) ← HmRow.workLaw obj prog k table
-      if law != Draw.Law.work k strata then
-        throw "U2: the draw's work law is not the verifier's own (its program, query and work table)"
   HmRow.checkPublic c pub
   -- a template query's units, derived from the verifier's own program: the statement's units must be instances of its template
   let finding ← match finding0, partition, program with
