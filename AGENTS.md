@@ -59,7 +59,7 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
 - `protocols/`: one distribution per protocol, and each imports only the
  stdlib, `verity` and itself (`protocols/tests/test_protocol_boundaries.py`).
  The first is `protocols/sampled_proofs` (`verity_sampled_proofs`): the
- two-stage law, its beacon-keyed draws, and verification plans. See its
+ two-stage law, its draws from the verifier's own randomness, and verification plans. See its
  `PROTOCOL.md`. `protocols/one_stage` (`verity_one_stage`) is the one-stage
  audit: registration, the verifier's draw over a partition's proof units, and the
  audit record with its profile; `benchmarks/one_stage` runs it end to end with
