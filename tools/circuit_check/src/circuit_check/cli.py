@@ -132,7 +132,7 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
     if tracing:
         todo = []
         for i, k in enumerate(keys):
-            if (hit := CC.lookup(cache, k, REPO)) is not None:
+            if (hit := CC.lookup(cache, k, REPO)) is not None and not _errored(hit[0]):
                 out[i] = {**hit[0], "cache": {"hit": hit[1]}}
                 stats["hits"] += 1
             else:
