@@ -164,6 +164,16 @@ def test_zero_sites_is_unsupported_and_fails_closed():
         install_from_plan(plan, torch.nn.Module())
 
 
+def test_call_boundaries_are_a_native_tap_of_their_module_body():
+    rows = base_rows() + [row("call_boundaries", "body.blocks.0.norm_in/mul_1", "out", rows=3, width=8, dtype="f32"),
+                          row("call_boundaries", "body.blocks.0.missing/add", "out", rows=3, width=8, dtype="f32")]
+    plan, _, _ = make_plan(rows)
+    v = {v.value_id: v for v in plan.values}["body.blocks.0.norm_in/mul_1/out"]
+    assert v.chosen.kind == "native_tap" and v.chosen.module == "body.blocks.0.norm_in/mul_1" and "call-boundary source" in v.chosen.derived_from
+    assert {u.value_id: u for u in plan.unsupported}["body.blocks.0.missing/add/out"].rejected[0]["why"].endswith("is not a module of the runtime tree")
+    assert "body.blocks.0.norm_in/mul_1" not in {h.module for h in plan.hooks()}              # the source installs its own pre-hook
+
+
 def test_sampler_without_runner_is_unsupported():
     rt = tree()
     rt.runner = {"sample": False, "sampler_module": False}

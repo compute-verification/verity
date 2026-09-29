@@ -96,18 +96,19 @@ def query(X: int = 16, W: int = 32) -> dict[str, Any]:
     return {"name": "Q_word", "version": 1, "params": {"X": X, "W": W}}
 
 
-def _template_id(t: Any) -> str:
+def template_id(t: Any) -> str:
+    """A template as the template queries name it: a Definition's descriptor id (`codec.descriptor_id`), or that id."""
     return t if isinstance(t, str) else descriptor_id(t)
 
 
 def template_instance_query(template: Any) -> dict[str, Any]:
     """`Q_template_instance` v0 over `template` (a Definition, written as its descriptor id, or that id)."""
-    return {"name": Q_TEMPLATE_INSTANCE[0], "version": Q_TEMPLATE_INSTANCE[1], "params": {"template": _template_id(template)}}
+    return {"name": Q_TEMPLATE_INSTANCE[0], "version": Q_TEMPLATE_INSTANCE[1], "params": {"template": template_id(template)}}
 
 
 def template_instances_query(templates: Sequence[Any]) -> dict[str, Any]:
     """`Q_template_instances` v0 over `templates`, in the order given."""
-    return {"name": Q_TEMPLATE_INSTANCES[0], "version": Q_TEMPLATE_INSTANCES[1], "params": {"templates": [_template_id(t) for t in templates]}}
+    return {"name": Q_TEMPLATE_INSTANCES[0], "version": Q_TEMPLATE_INSTANCES[1], "params": {"templates": [template_id(t) for t in templates]}}
 
 
 def build(program: Any, q: Mapping[str, Any] | None = None) -> dict[str, Any]:
@@ -402,5 +403,5 @@ def _verdict(bad: dict[str, list]) -> CutVerdict:
 
 
 __all__ = ["FORMAT", "QUERIES", "PARAM_MAX", "QueryInapplicable", "QueryRefused", "Q_TEMPLATE_INSTANCE", "Q_TEMPLATE_INSTANCES",
-           "template_instance_query", "template_instances_query", "TemplatePartition", "ranges_digest", "program_sha512", "query", "build", "canonical", "digest", "validate", "calls", "Partition", "evaluate",
+           "template_id", "template_instance_query", "template_instances_query", "TemplatePartition", "ranges_digest", "program_sha512", "query", "build", "canonical", "digest", "validate", "calls", "Partition", "evaluate",
            "owners_digest", "verify"]

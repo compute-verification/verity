@@ -99,21 +99,21 @@ theorem ligerito_cap (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (cap 
   obtain ⟨-, -, hmc, -⟩ := queryLevel_bind hq h₄
   exact merkleCheck_cap hmc
 
-/-- **One rep refines the model's** (§9–§14). When the executable's `verifyRep` accepts rep `r`, on a statement whose
+/-- **One rep refines the model's** (§9–§14). When the executable's `verifyRep` accepts table `i`'s rep `r`, on a statement whose
 `m`, `k_log`, circuit fold and extra claims are the model's `S` and `extra`, and on a schedule whose dimensions and
 levels are the model's, the record carries the rep's stream and the proof decodes. Then at the proof's openings `o`,
 the model's compiled rep, played with the proof's messages and the coins of every round of the stream, accepts. Its
 caps are the proof's, and its requests passed the executable's Merkle checks. -/
-theorem rep_refines {D : Type} (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m) (h14 : 14 ≤ S.m)
+theorem rep_refines {D : Type} (spec : SessionSpec) (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m) (h14 : 14 ≤ S.m)
     (sch : Flock.Schedule) (hmS : st.m = S.m) (hkS : st.kLog = S.kLog) (hfold : FoldRealizes st.fold S)
     (extra : List (Model.Claim 𝔽 S.m)) (sess : Session) (hext : ExtraRealizes st S sess.points extra)
     (hdim : DimSeam sch) (hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default)) (hschm : sch.m = S.m)
-    (hwf : ∀ s ∈ sess.streams.toList, RoundsWF s.rounds) (r : ℕ) (bytes cap : ByteArray)
-    (h : verifyRep st sch sess r bytes = .ok cap) :
+    (hwf : ∀ s ∈ sess.streams.toList, RoundsWF s.rounds) (i r : ℕ) (bytes cap : ByteArray)
+    (h : verifyRep spec st sch sess i r bytes = .ok cap) :
     ∃ (stream : StreamRec) (p : Proof),
-      sess.streams.find? (fun x => x.name == toString st.spec.table ++ toString "/rep" ++ toString r) = some stream ∧
+      sess.streams.find? (fun x => x.name == toString spec.tables[i]! ++ toString "/rep" ++ toString r) = some stream ∧
       decodeProof (shapeOf st sch extra.length) bytes = .ok p ∧
-      cap = p.cap.foldl (· ++ ·) ByteArray.empty ∧ (cap == sess.rootB) = true ∧
+      cap = p.cap.foldl (· ++ ·) ByteArray.empty ∧ (cap == sess.rootB[i]!) = true ∧
       p.cap.size = 2 ^ (sch.levels.getD 0 default).cap ∧ (∀ b ∈ p.cap.toList, b.size = st.merkle.digestLen) ∧
       ∀ (capD : Array ByteArray → Cap D) (o : Opens 𝔽 D),
         (∀ ℓ < sch.levels.size, ∀ j < (sch.levels.getD ℓ default).q,
@@ -125,7 +125,7 @@ theorem rep_refines {D : Type} (st : Setup) (S : Model.Statement) (hm : 13 ≤ S
           (∀ req ∈ pend.reqs, ReqOK st.merkle sch p.cap p.ligerito req) ∧ pend.verdict o = true := by
   unfold verifyRep at h
   dsimp only at h
-  cases hs : Array.find? (fun x => x.name == toString st.spec.table ++ toString "/rep" ++ toString r)
+  cases hs : Array.find? (fun x => x.name == toString spec.tables[i]! ++ toString "/rep" ++ toString r)
       sess.streams with
   | none => rw [hs] at h; cases h
   | some stream =>
@@ -140,13 +140,13 @@ theorem rep_refines {D : Type} (st : Setup) (S : Model.Statement) (hm : 13 ≤ S
       by_cases c2 : (t.k != stream.rounds.size) = true
       · rw [ite_eq_left c2] at h; obtain ⟨_, h0, _⟩ := ebind_ok h; cases h0
       rw [ite_eq_right c2] at h
-      by_cases c3 : (Array.foldl (fun x1 x2 => x1 ++ x2) ByteArray.empty p.cap != sess.rootB) = true
+      by_cases c3 : (Array.foldl (fun x1 x2 => x1 ++ x2) ByteArray.empty p.cap != sess.rootB[i]!) = true
       · rw [ite_eq_left c3] at h; obtain ⟨_, h0, _⟩ := ebind_ok h; cases h0
       rw [ite_eq_right c3] at h
       cases h
       simp only [bne_iff_ne, ne_eq, not_not] at c2
-      have c3' : (Array.foldl (fun x1 x2 => x1 ++ x2) ByteArray.empty p.cap == sess.rootB) = true := by
-        cases hb : (Array.foldl (fun x1 x2 => x1 ++ x2) ByteArray.empty p.cap == sess.rootB)
+      have c3' : (Array.foldl (fun x1 x2 => x1 ++ x2) ByteArray.empty p.cap == sess.rootB[i]!) = true := by
+        cases hb : (Array.foldl (fun x1 x2 => x1 ++ x2) ByteArray.empty p.cap == sess.rootB[i]!)
         · exact absurd (by simp [bne, hb]) c3
         · rfl
       obtain ⟨hlenx, hcx⟩ := hext extras hex

@@ -1,6 +1,6 @@
 name = "flock_verifier"
 version = "0.1.0"
-defaultTargets = ["flock-verify", "FlockProofs"]
+defaultTargets = ["flock-verify", "flock-rows", "FlockProofs"]
 
 [leanOptions]
 autoImplicit = false
@@ -15,3 +15,8 @@ name = "FlockProofs"
 [[lean_exe]]
 name = "flock-verify"
 root = "Main"
+
+# The rows `Flock.Derive.derive` gives a circuit type, as flock-ir-unit/v2; the Python layout is held to it.
+[[lean_exe]]
+name = "flock-rows"
+root = "FlockRows"

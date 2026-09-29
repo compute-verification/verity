@@ -125,7 +125,7 @@ def test_attention_commits_scores_p_row_values_and_inverse_sum(attn):
     r = W.unit_rule(attn)
     assert not r["violations"]
     heads = {(i["scope"].split("{")[0], i["head"]): i["words"] for i in r["committed_interior"]}
-    assert heads[("DotBf16_v1", "AmpereBF16TcDot16_v1")] == 4 * 21                  # S: one score per (head, key)
+    assert heads[("DotBf16_v1", "AmpereBF16TcDot16_v2")] == 4 * 21                  # S: one score per (head, key)
     assert heads[("AttnBlock_v3", "F2fpBf16_v1")] == 4 * 21                          # P (bf16): what the PV products read
     assert heads[("AttentionHead_v3", "Fa2InvSum_v1")] == 4                          # FIN inv_sum, one per head
     assert heads[("AttnBlock_v3", "MufuEx2Ftz_v1")] == 4 * 21                        # exp2(s * scale - max), f32: the stream's P plane
@@ -135,6 +135,22 @@ def test_attention_commits_scores_p_row_values_and_inverse_sum(attn):
 def test_a_width_over_x_and_w_is_named():
     with pytest.raises(W.QueryRuleViolation, match=r"Gemm_v1\{K=64,N=8\}: output:F2fpBf16_v1"):
         W.check_calls([{"family": "Gemm_v1", "statics": {"K": 64, "N": 8}, "definition": "Gemm_v1{K=64,N=8}", "calls": 3, "where": "m.proj"}], 8, 8)
+
+
+def test_the_gate_limit_is_the_runs_not_the_querys(norm):
+    g = {"family": "RMSNormTriton_v1", "statics": {"N": 2048, "EPS": 1e-05}, "definition": norm.id, "calls": 1}
+    low = norm.gates - 1
+    capped = W.check_calls([g], strict=False, max_gates=f"{low:_}")
+    assert [(v["class"], v["limit"]) for v in capped["violations"]] == [("too-large", low)]
+    assert W.check_calls([g], strict=False)["ok"] and W.gate_limits() == {"*": W.MAX_GATES}
+    for raised in (f"{low},RMSNormTriton_v1={norm.gates}", {"RMSNormTriton_v1": norm.gates}, norm.gates):
+        r = W.check_calls([g], strict=False, max_gates=raised)
+        assert r["ok"] and r["units"] == 2049 and r["query"] == capped["query"] == W.query_id()
+    assert W.gate_limit(norm, f"{low},Gemm_v1=5") == low and W.gate_limit(norm, {norm.id: 7, "RMSNormTriton_v1": 9}) == 7
+    from verity_vllm.pipeline import cli
+    for cmd, argv in (("manifest", ["build", "--program", "p", "--out", "o"]), ("program-graph", ["o", "i"])):
+        assert cli.parse(cmd, argv, {W.MAX_GATES_ENV: "GumbelTopPTokenSelect_v2=120000000"}).word_max_gates == "GumbelTopPTokenSelect_v2=120000000"
+        assert cli.parse(cmd, [*argv, "--word-max-gates", "1"], {}).word_max_gates == "1"
 
 
 def test_uncommitted_boundaries_are_named():

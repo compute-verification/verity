@@ -77,6 +77,9 @@ def test_check_is_enum_and_bool_only_and_reads_values_as_the_catalog_does():
     assert vocab.check("model_agrees", "yes") and vocab.check("zk", 1)
     assert vocab.check("proof_class", "non-zk") and vocab.check("proof_class", "NON_ZK_PROOF") is None
     assert vocab.check("candidate", "A-GKR") is None and "old spelling of 'A-GKR'" in vocab.check("candidate", "A")
+    for value in ("C-Flock", "D-SP1", "SP1", "C"):                                   # SP1 and C: the ledger import's, recorded, still valid
+        assert vocab.check("candidate", value) is None, value
+    assert "is not one of" in vocab.check("candidate", "Flock")
     # free forms are documentation, never checked; int / number forms only object to strings
     for key, value in (("soundness", "2^-128 (heuristic)"), ("K", 1536), ("overhead", 1.5), ("assumptions", ["ROM"]), ("note", "")):
         assert vocab.check(key, value) is None, (key, value)
@@ -95,7 +98,8 @@ def test_canonical_spellings_and_coercion():
     assert vocab.coerce("B", "4096") == 4096 and vocab.coerce("batch", "64") == 64 and vocab.coerce("B", "4096.0") == "4096.0" and vocab.coerce("K", 1536) == 1536
     assert vocab.coerce("overhead", "1.5") == 1.5 and vocab.coerce("overhead", "2") == 2 and vocab.coerce("overhead", "1e3") == 1000.0 and vocab.coerce("overhead", "n/a") == "n/a"
     assert vocab.coerce("soundness", "128") == "128" and vocab.coerce("nonesuch", "true") == "true", "free-text and unknown keys are never coerced"
-    assert set(vocab.CANDIDATES) == {"A-GKR", "B-AIR", "B-Ligero", "C", "SP1", "shared"} and "A" not in vocab.CANDIDATES
+    assert vocab.BACKEND_FAMILIES == ("A-GKR", "B-Ligero", "C-Flock", "D-SP1")
+    assert set(vocab.CANDIDATES) == {*vocab.BACKEND_FAMILIES, "B-AIR", "C", "SP1", "shared"} and "A" not in vocab.CANDIDATES
     assert set(vocab.REF_KEYS) == {"path", "result_artifact", "constructed_from_attempt"} and not (set(vocab.REF_KEYS) & set(vocab.KEYS))
     assert vocab.is_known("finding") and vocab.is_known("level") and vocab.is_known("anchor")
 
@@ -166,6 +170,8 @@ def test_lane_shorthand_folds_into_one_spelling(env, capsys):
     assert vocab.suggest("supersededby") == ["superseded_by"] and vocab.suggest("Axis") == ["sweep"] and vocab.suggest("zzzzzz") == []
     assert not set(vocab.MEASUREMENT_KEYS) & set(vocab.KEYS) and not set(vocab.MEASUREMENT_KEYS) & set(vocab.KEY_ALIASES)
     assert set(vocab.KEY_ALIASES.values()) <= set(vocab.KEYS)
+    for (key, old), new in vocab.VALUE_ALIASES.items():
+        assert vocab.check(key, new) is None and vocab.check(key, old), (key, old, new)
 
 
 def test_label_writes_the_canonical_key_and_form(env, capsys):
