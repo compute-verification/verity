@@ -383,8 +383,9 @@ ended (`research inspect <run id>`). The Lean runs it schedules are declared in 
 `research notes archive LANE` (`notes_archive.py`) moves the lane's notes stamped more than `--older-days` (3) days ago into
 `lanes/<lane>/<YYYY-MM>/` (`--by day`: `<YYYY-MM>/<DD>/`) in one commit, which `research notes sync` pushes; without `--apply` it
 prints the plan. It keeps reports, unstamped names, anything untracked or changed since the last commit, and mail the lane's
-`inbox` has not shown; it overwrites nothing, and a failure puts every file back. `inbox`, `status` and `mail` read only a lane's
-own folder, so that folder stays its working set; `git log --follow` finds a moved note's history.
+`inbox` has not shown (all mail, in a clone without the lane's `.inbox-seen`, which git ignores: run it where the lane reads its
+inbox); it overwrites nothing, and a failure puts every file back. `inbox`, `status` and `mail` read only a lane's own folder, so
+that folder stays its working set; `git log --follow` finds a moved note's history.
 
 ## Not yet built, in order
 

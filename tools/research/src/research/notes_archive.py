@@ -7,9 +7,11 @@ file name is stamped (`YYYYMMDDTHHMMZ-...`) more than `--older-days` days ago in
 `<YYYY-MM>/<DD>/`), in one commit that `research notes sync` then pushes; without `--apply` it only prints the plan.  It never
 moves a report (readers take a lane's newest `*report*` from its folder), a name without a stamp (STATE.md, binding.json), a
 dotfile, a directory, a file git does not track or that changed since the last commit, mail (`*handoff*`, `*asks*`, `*reply*`)
-stamped after the lane's `.inbox-seen`, or a note whose name its folder already holds; nothing is overwritten or deleted.  Readers
-list a lane's own folder, so what moved leaves `inbox` and `status`; `git log --follow` finds a note's history.  Run it again
-whenever the folder fills: it is idempotent, and sync's front matter and citation checks pass a move without reading it.
+newer than the lane's `.inbox-seen`, or a note whose name its folder already holds; nothing is overwritten or deleted.
+`.inbox-seen` is per clone (git ignores it), so in a clone without one no mail moves: run the archive in the clone whose `inbox`
+the lane reads.  Readers list a lane's own folder, so what moved leaves `inbox` and `status`; `git log --follow` finds a note's
+history.  Run it again whenever the folder fills: it is idempotent, and sync's front matter and citation checks pass a move
+without reading it.
 
 The cloud mirror (the coordinator's `cloud-mirror` pass) sends a store handoff whose path the steward's notes clone lacks, so a
 lane it forwards is archived only once the pass skips the names archived there.
@@ -50,8 +52,8 @@ def plan(root: Path, lane: str, now: dt.datetime, older_days: float = 3, by: str
         why = ("dotfile" if p.name.startswith(".") else "directory" if p.is_dir() else "report" if "report" in p.name
                else "unstamped" if t is None else "untracked" if rel not in tracked else "changed" if rel in changed
                else "recent" if t >= cutoff
-               else "unseen mail" if seen is not None and any(fnmatch.fnmatch(p.name, g) for g in notes.MAIL_GLOBS)
-               and notes.file_time(root, p) > seen
+               else "unseen mail" if any(fnmatch.fnmatch(p.name, g) for g in notes.MAIL_GLOBS)
+               and (seen is None or notes.file_time(root, p) > seen)
                else "already archived" if (d / sub / p.name).exists() else None)
         if why:
             kept[why].append(p.name)
@@ -110,6 +112,9 @@ def main(argv: list[str], default_root: Path) -> int:
     where = "<YYYY-MM>/" if ns.by == "month" else "<YYYY-MM>/<DD>/"
     left = ", ".join(f"{len(v)} {k}" for k, v in kept.items() if v) or "nothing"
     cut = f"{now - dt.timedelta(days=ns.older_days):%Y-%m-%dT%H:%MZ}"
+    if kept["unseen mail"] and notes._seen(root, ns.lane) is None:
+        print(f"research notes archive {ns.lane}: this clone has no lanes/{ns.lane}/{notes.SEEN}, so none of its "
+              f"{len(kept['unseen mail'])} mail files moves; run it in the clone whose `research notes inbox` the lane reads")
     if kept["already archived"]:
         print(f"research notes archive {ns.lane}: {len(kept['already archived'])} names are in their folder already, left where "
               f"they are (a copy sent back?): {', '.join(kept['already archived'][:5])}")
