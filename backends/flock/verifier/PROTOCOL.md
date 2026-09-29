@@ -1315,6 +1315,8 @@ digest's leading tag is the statement id, `verity/flock-circuit/types`, as the p
     rows' chains). META stating any of them, or `lookups`, `leaf_cuts` or `unit_log`, is refused.
   - **Checks** (#273's `check_typed`): the root's ports are the rows' words and the output words, 16 bits each, in one
     output group. Each placed layout has one slot per part, of its range's size. The root's slot has a forced-zero row.
+    The rows' circuits (`sha512x3`, `hm96`, found by name) come after the root and the placed layouts, so no part is
+    one of them.
   - **Δ:** first the flat statement's entries. Then, per VU:
     1. each input bit `w` a copy of its message bit (bit `w % 16` of row word `w / 16`);
     2. each part's bound input rows, `(i, i)` and each source, in item order;
