@@ -4,8 +4,8 @@ not pathname), so the manifest, and with it the id, is rebuilt here from the fil
 bytes change on purpose, `research data refresh-fixtures` re-registers it and keeps the superseded id under the map's `previous`
 block, which is not an entry.
 
-An entry git does not track is *fetched* (`research data fetch-fixtures`): its path is gitignored, and where it has been fetched its
-bytes are checked like any other; where it has not, the test says which it skipped (tests never fetch)."""
+An entry git does not track is *fetched*: its path is gitignored, and `research data fetch-fixtures` checks every byte against the
+id as it fetches (`--check` re-checks), so this test never opens it; it lives anywhere in the tree, outside this suite's inputs."""
 from __future__ import annotations
 
 import hashlib
@@ -49,11 +49,13 @@ def test_replica_map_entries_hash_to_their_ids() -> None:
         from research.store.model import ArtifactManifest, Payload, TreeFile
     except ImportError as e:  # pragma: no cover
         pytest.skip(f"research.store not importable: {e}")
-    problems, unfetched = [], []
+    problems = []
     tracked = _tracked()
     for art, rel in _entries().items():
         assert ids.is_art(art), f"{art!r} is not an art: id"
         assert isinstance(rel, str) and rel and not rel.startswith("/") and ".." not in rel.split("/"), f"{art}: bad path {rel!r}"
+        if tracked and not _is_tracked(rel, tracked):
+            continue
         p = REPO / rel
         if p.is_file():
             data = p.read_bytes()
@@ -66,9 +68,6 @@ def test_replica_map_entries_hash_to_their_ids() -> None:
                 b = f.read_bytes()
                 files.append(TreeFile(f.relative_to(p).as_posix(), hashlib.sha256(b).hexdigest(), len(b)))
             payload = Payload.tree(files)
-        elif tracked and not _is_tracked(rel, tracked):
-            unfetched.append(rel)
-            continue
         else:
             problems.append(f"{art}: {rel} is not in the working tree")
             continue
@@ -77,8 +76,6 @@ def test_replica_map_entries_hash_to_their_ids() -> None:
             problems.append(f"{rel}: hashes to {got}, registered as {art} (`research data refresh-fixtures --preserve` re-registers it; "
                             "for a fetched entry, `research data fetch-fixtures` restores the registered bytes)")
     assert not problems, "\n".join(problems)
-    if unfetched:
-        pytest.skip(f"{len(unfetched)} fetched entries are not fetched here (`research data fetch-fixtures`): {', '.join(unfetched[:3])}")
 
 
 def test_replica_map_previous_block_is_history_of_current_entries() -> None:
