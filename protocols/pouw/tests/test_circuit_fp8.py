@@ -224,6 +224,8 @@ def test_the_separator_is_z_and_the_width_rule_holds_with_the_pinned_port():
     assert sep.ok and sep.per_tile_bits == 32 * fp8.D * fp8.D and sep.reached_pouw == 0 and sep.words_delivered == 0
     w = P.circuit_width_rule(c, uc=uc)
     assert w.ok and {uc.units[u].role for u in w.checked} == {"dequant"} and w.exempt == len(uc.units) - 1024
+    with pytest.raises(ValueError):
+        P.circuit_width_rule(c, served=0, uc=uc)                # over no served output it would check nothing (X-SPC-93)
 
 
 @pytest.mark.slow
@@ -324,6 +326,20 @@ def test_a_tiles_closure_adds_the_domain_and_the_pad_cone():
         assert len(nodes) == 3 + 1                              # its path (levels 4, 5, 6) and the all-pad node (4, 3)
     assert len(ups) == 7
     assert lay.tile_work() == -(-R.scheme().wref(PShape(80, 96, 16)) * fp8.D * fp8.D // (80 * 16))   # its cells' share
+
+
+@pytest.mark.parametrize("shape", [(16, 96, 16), (48, 96, 32), (80, 96, 16)])
+def test_the_record_work_law_draws_every_fp8_layout(shape):
+    """`WorkLaw()`, K = 27,713, the window's budget: alone, a call is capped at its units rather than raising (X-SPC-83 on
+    FP8's layouts); every drawn tile is proved with its closure, and its X and Y strips' rows are opened."""
+    from verity.randomness import derive
+    from verity_pouw.circuit import plan as PL
+
+    lay = PL.fp8_layout(fp8.Shape(*shape))
+    plan = PL.draw(derive(b"verifier-secret", PL.DRAW_DOMAIN, {"receipt": b"r"}), lay, PL.WorkLaw())
+    tiles = {u.index for u in lay.units if u.role == "tile"}
+    assert tiles <= set(plan.drawn) and all(set(lay.closure[t]) <= set(plan.proved) for t in tiles)
+    assert set(plan.openings) == {("a", i) for i in range(shape[0])} | {("b", j) for j in range(shape[2])}
 
 
 def test_traced_as_gives_the_fp8_circuit():

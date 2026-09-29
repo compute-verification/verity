@@ -250,12 +250,14 @@ def draw(key: Key, lay: Layout, law: TileLaw) -> Plan:
 
 def openings(lay: Layout, proved, proved_y=()) -> tuple[tuple[str, int], ...]:
     """The input rows the proved units read, one leaf per row: a digest or X unit its strip's 16 A rows, a Y unit (the
-    weight Program's, by column strip) its 16 weight rows."""
+    weight Program's, by column strip, or NCP-FP8's in the call) its 16 weight rows."""
     rows: set[tuple[str, int]] = set()
     for i in proved:
         u = lay.units[i]
         if u.role in ("digest", "form_x"):
             rows.update(("a", D * u.where[0] + r) for r in range(D))
+        elif u.role == "form_y":
+            rows.update(("b", D * u.where[0] + r) for r in range(D))
     for cs in proved_y:
         rows.update(("b", D * cs + r) for r in range(D))
     return tuple(sorted(rows))

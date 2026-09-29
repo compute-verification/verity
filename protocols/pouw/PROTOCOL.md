@@ -473,4 +473,9 @@ it: a pad has no tile beneath it that a wrong one could be charged to. A tile's 
   - H-1T.
 - For NCP-FP8's circuit:
   - production shapes (k in the thousands, m and n up to the model's) as a recorded run;
-  - C-Flock pieces for its primitives.
+  - C-Flock pieces for its primitives;
+  - #295's word leaf at the circuit's tile (X-SPC-92). The reference runs #295's scheme on 16 × 16 tiles, its test
+    instance; its production leaf is one SHAKE256 over a 64 × 64 tile's words. Decided with #295's owner: a two-level
+    leaf, SHAKE256 over each 16 × 16 subtile's words and SHAKE256 over the 16 sub-digests as the 64 × 64 leaf. Until
+    #295 makes it the default, a verifier can't combine #295's transcript with these proofs, and the circuit's tile
+    returns its words unhashed: the sub-digest, and the opening's 15 siblings as committed inputs, come with it.
