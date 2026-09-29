@@ -229,20 +229,63 @@ def check (c : Circuit) (tags : Tags) (leafScheme : Json) : V Unit := do
   if let some pinned := tags.pinnedLeafScheme then
     if (← canon leafScheme) != (← canon pinned) then throw "META: leaf_scheme is not the pinned leaf-commitment scheme"
 
-/-- A template's block with its parts placed: each part's layout circuit and its slot among that circuit's slots, counted
-in item order (#273's `TypedBlock`). -/
-def blockOf (t : Typed.Template) (netOf : String → Option Nat) : V TypedBlock := do
-  let mut parts := #[]
-  let mut seen : Array (Nat × Nat) := #[]
-  for (d, base) in t.parts do
-    let some n := netOf d | throw "a part's layout has no circuit"
-    let q := ((seen.find? (·.1 == n)).map (·.2)).getD 0
-    seen := (seen.filter (·.1 != n)).push (n, q + 1)
-    parts := parts.push (n, q, base)
-  let rangeLogs ← t.layouts.mapM fun (d, _, s) => do
-    let some n := netOf d | throw "a placed layout has no circuit"
-    pure (n, s)
-  return { own := t.own, ins := t.ins, outs := t.outs, inCols := t.inCols, parts, rangeLogs, bind := t.bind, cross := t.cross }
+/-- Part `i`'s slot among its layout's circuit's slots in the VU: how many parts before it place the same layout. -/
+def slotOf (ps : Array (Nat × Nat)) (i : Nat) : Nat :=
+  ((ps.toList.take i).filter (·.1 == (ps.getD i default).1)).length
+
+/-- A template's block with its parts placed (#273's `TypedBlock`), by position: `parse` puts the root's circuit first and
+then the placed layouts' in order, so placed layout `k`'s circuit is `1 + k`. Part `i` is its layout's circuit, its slot
+(`slotOf`, in item order) and its base. -/
+def blockOf (t : Typed.Template) : TypedBlock :=
+  { own := t.own, ins := t.ins, outs := t.outs, inCols := t.inCols,
+    parts := (Array.range t.parts.size).map fun i => (1 + (t.parts.getD i default).1, slotOf t.parts i, (t.parts.getD i default).2),
+    rangeLogs := (Array.range t.layouts.size).map fun k => (1 + k, (t.layouts.getD k default).2.2),
+    bind := t.bind, cross := t.cross }
+
+/-- **A template's block, as `blockOf` builds it** (for audit-lean's T3): the root's size, ports, input columns, bound rows
+and cross entries are the template's; part `i` is circuit `1 + k` of its layout's position `k`, its slot `slotOf`, and its
+base; placed layout `k`'s circuit is `1 + k`, with its range's log size. -/
+theorem blockOf_spec (t : Typed.Template) :
+    let tb := blockOf t
+    tb.own = t.own ∧ tb.ins = t.ins ∧ tb.outs = t.outs ∧ tb.inCols = t.inCols ∧ tb.bind = t.bind ∧ tb.cross = t.cross ∧
+      tb.parts.size = t.parts.size ∧
+      (∀ i (hi : i < t.parts.size) (hb : i < tb.parts.size), tb.parts[i] = (1 + t.parts[i].1, slotOf t.parts i, t.parts[i].2)) ∧
+      tb.rangeLogs.size = t.layouts.size ∧
+      ∀ k (hk : k < t.layouts.size) (hb : k < tb.rangeLogs.size), tb.rangeLogs[k] = (1 + k, t.layouts[k].2.2) := by
+  refine ⟨rfl, rfl, rfl, rfl, rfl, rfl, by simp [blockOf], fun i hi hb => ?_, by simp [blockOf], fun k hk hb => ?_⟩
+  · simp [blockOf, Array.getD, hi]
+  · simp [blockOf, Array.getD, hk]
+
+/-- Part `i`'s slot is below the number of parts on its layout: its own place counts. -/
+theorem slotOf_lt {ps : Array (Nat × Nat)} {i : Nat} (hi : i < ps.size) :
+    slotOf ps i < (ps.toList.filter (·.1 == ps[i].1)).length := by
+  have hl : i < ps.toList.length := by simpa using hi
+  have hsplit : ps.toList = ps.toList.take i ++ ps[i] :: ps.toList.drop (i + 1) := by
+    conv => lhs; rw [← List.take_append_drop i ps.toList]
+    rw [List.drop_eq_getElem_cons hl, Array.getElem_toList]
+  have hg : ps.getD i default = ps[i] := by simp [Array.getD, hi]
+  unfold slotOf
+  rw [hg]
+  conv => rhs; rw [hsplit]
+  simp only [List.filter_append, List.filter_cons, beq_self_eq_true, ↓reduceIte, List.length_append, List.length_cons]
+  omega
+
+/-- Two parts on one layout have distinct slots: a later part's counts the earlier one. -/
+theorem slotOf_lt_of_lt {ps : Array (Nat × Nat)} {i j : Nat} (hij : i < j) (hj : j < ps.size) (he : ps[i].1 = ps[j].1) :
+    slotOf ps i < slotOf ps j := by
+  have hi : i < ps.size := Nat.lt_trans hij hj
+  have hgi : ps.getD i default = ps[i] := by simp [Array.getD, hi]
+  have hgj : ps.getD j default = ps[j] := by simp [Array.getD, hj]
+  unfold slotOf
+  rw [hgi, hgj, he]
+  obtain ⟨d, hd⟩ : ∃ d, j = i + 1 + d := ⟨j - (i + 1), by omega⟩
+  have hti : ps.toList.take (i + 1) = ps.toList.take i ++ [ps[i]] := by
+    rw [List.take_add_one, List.getElem?_eq_getElem (by simpa using hi), Array.getElem_toList]; rfl
+  have htj : ps.toList.take j = ps.toList.take i ++ ps[i] :: (ps.toList.drop (i + 1)).take d := by
+    rw [hd, List.take_add, hti, List.append_assoc]; rfl
+  rw [htj]
+  simp only [List.filter_append, List.filter_cons, he, beq_self_eq_true, ↓reduceIte, List.length_append, List.length_cons]
+  omega
 
 /-- A typed template's META keys that its block derives instead (#273): stating one is refused. -/
 def TEMPLATE_DERIVED : List String :=
@@ -405,7 +448,7 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
   let c : Circuit := { name, sha, nets, ranges, ports, outPorts, g, kLog := ← J.nat mj "k_log" ctx, upv, unitNet,
                        leavesIn, leavesOut, key := ByteArray.empty, dummyDigests, dummyOutputs, leafScheme := leafId, perVu, wires,
                        shaNet, hmNet, classSha, metaJ := mj, outNet, outNetPorts, leafCuts,
-                       typed := ← tmpl.mapM fun t => blockOf t (fun d => nets.findIdx? (·.1 == d)) }
+                       typed := ← tmpl.mapM fun t => pure (blockOf t) }
   check c tags leafScheme
   return c
 

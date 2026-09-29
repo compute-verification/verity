@@ -178,8 +178,8 @@ structure Template where
   root : Net
   /-- each placed layout, in layout order: its digest, its net, its range's log size -/
   layouts : Array (String × Net × Nat)
-  /-- per part, in item order: its layout's digest and its base -/
-  parts : Array (String × Nat)
+  /-- per part, in item order: its layout's position among `layouts` and its base -/
+  parts : Array (Nat × Nat)
   own : Nat
   ins : Array (Nat × Nat)
   outs : Array (Nat × Nat)
@@ -228,11 +228,12 @@ def templateOf (name : String) (done : Array DeriveAll.D) (ls : Array Layout) (u
   let u := done.getD unit default
   if u.reads.any (·.prod0 < u.size) then
     throw "META: the instance type reads a table in its own region, which this verifier's template reading does not fold yet"
+  if u.parts.any (·.1 ≥ ls.size) then throw "META: a part places a layout the file does not have"
   let root ← netOfD (rootOf u) name
   let digests ← ls.toList.mapM (·.digest)
   let placed := (List.range ls.size).filter fun j => u.parts.any (·.1 == j)
   let layouts ← placed.mapM (placedEntry digests ls done held)
-  return { root, layouts := layouts.toArray, parts := u.parts.map fun (j, b) => (digests.getD j "", b), own := u.size,
+  return { root, layouts := layouts.toArray, parts := u.parts.map fun (j, b) => (placed.idxOf j, b), own := u.size,
            ins := t.ins, outs := t.outs, inCols := u.inCols, bind := u.delta.filterMap fun (r, src) => src.map (r, ·.toArray),
            cross := crossOf u }
 
@@ -314,8 +315,8 @@ theorem placedNet_spec {l : Layout} {d : DeriveAll.D} {nm : String} {held : Arra
     refine ⟨n, h, by cases n; simp_all, fun _ => h0, fun _ _ _ _ h' => by simp [hown] at h'⟩
 
 /-- **A template, as `templateOf` builds it** (for audit-lean's `TemplateLayout`): its root is `netOfD` of the unit's own
-rows, its cross entries and bound rows are the unit's, and its `i`-th placed layout is `placedEntry` of the `i`-th layout
-the unit places. -/
+rows, its cross entries and bound rows are the unit's, its `i`-th placed layout is `placedEntry` of the `i`-th layout the
+unit places, and each part names its layout by position among them (every part's layout is placed). -/
 theorem templateOf_spec {name : String} {done : Array DeriveAll.D} {ls : Array Layout} {unit : Nat} {ty : CircuitType}
     {held : Array Held} {t : Template} (h : templateOf name done ls unit ty held = .ok t) :
     let u := done.getD unit default
@@ -323,7 +324,8 @@ theorem templateOf_spec {name : String} {done : Array DeriveAll.D} {ls : Array L
     ∃ digests : List String, ls.toList.mapM (·.digest) = .ok digests ∧
       netOfD (rootOf u) name = .ok t.root ∧ t.own = u.size ∧ t.inCols = u.inCols ∧ t.ins = ty.ins ∧ t.outs = ty.outs ∧
       t.bind = u.delta.filterMap (fun (r, src) => src.map (r, ·.toArray)) ∧ t.cross = crossOf u ∧
-      t.parts = u.parts.map (fun (j, b) => (digests.getD j "", b)) ∧ t.layouts.size = placed.length ∧
+      t.parts = u.parts.map (fun (j, b) => (placed.idxOf j, b)) ∧ (∀ p ∈ u.parts.toList, p.1 ∈ placed) ∧
+      t.layouts.size = placed.length ∧
       ∀ i (hi : i < placed.length) (ht : i < t.layouts.size),
         placedEntry digests ls done held placed[i] = .ok t.layouts[i] := by
   intro u placed
@@ -331,6 +333,9 @@ theorem templateOf_spec {name : String} {done : Array DeriveAll.D} {ls : Array L
   simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
   split at h
   · simp at h
+  split at h
+  · simp at h
+  rename_i hparts
   split at h
   · simp at h
   rename_i root hroot
@@ -343,7 +348,13 @@ theorem templateOf_spec {name : String} {done : Array DeriveAll.D} {ls : Array L
   simp only [Except.ok.injEq] at h
   subst h
   obtain ⟨hlen, hi⟩ := mapM_ok hlays
-  refine ⟨digests, hdig, hroot, rfl, rfl, rfl, rfl, rfl, rfl, rfl, by rw [List.size_toArray]; exact hlen, fun i hx ht => ?_⟩
+  have hmem : ∀ p ∈ u.parts.toList, p.1 ∈ placed := by
+    intro p hp
+    have hp' := Array.mem_toList_iff.1 hp
+    have hlt : p.1 < ls.size := Nat.lt_of_not_le fun hge => hparts (Array.any_eq_true'.2 ⟨p, hp', by simpa using hge⟩)
+    exact List.mem_filter.2 ⟨List.mem_range.2 hlt, Array.any_eq_true'.2 ⟨p, hp', by simp⟩⟩
+  refine ⟨digests, hdig, hroot, rfl, rfl, rfl, rfl, rfl, rfl, rfl, hmem, by rw [List.size_toArray]; exact hlen,
+    fun i hx ht => ?_⟩
   rw [List.getElem_toArray]
   exact hi i hx (by rw [List.size_toArray] at ht; exact ht)
 
