@@ -24,6 +24,8 @@ KINDS: dict[str, str] = {
     "verification-verdict/v1": "meta {result: PASS|FAIL, verifier, detail}; refs.proof, refs.verifier_attempt",
     "proof/v1": "payload = proof bytes; meta {statement_digest, backend, params}",
     "fixture/v1": "a repo-replicated input (golden records, instances); payload file/tree",
+    "commit-map/v1": "a history rewrite's commit map (research.commitmap): payload file of `<old> <new> <same-tree 0|1>` lines; meta {from, to, "
+                     "tool, args}; applies once labelled commit_map=accepted by its approver",
     "input-set/v1": "one subcircuit's input set, synthetic or captured (verity_numerical.bench.input_sets; the vllm-vu-set/v1 "
                     "layout): payload tree = manifest.json + index.json + flat port arrays; meta {set, subcircuit, template, "
                     "parameters, source, n, content_digest, schema, relation, seed?, row?, model?, research_run?}",
