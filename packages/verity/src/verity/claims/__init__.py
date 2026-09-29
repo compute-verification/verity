@@ -59,6 +59,8 @@ PROPERTIES: dict[str, Property] = {p.id: p for p in (
     Property("sis", "Ring-SIS binding", "SIS"),
     # A3 in backends/flock/verifier/lean/soundness/ASSUMPTIONS.md, for the unit draw's bytes
     Property("uniform", "Independent uniform output", "Uniform"),
+    # A4 there, for verity.randomness's keyed streams: SHA-256 keyed by a secret prefix, on prefix-free inputs
+    Property("prf", "Pseudorandom function", "PRF"),
 )}
 
 INSTANCES: dict[str, Instance] = {i.id: i for i in (
