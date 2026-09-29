@@ -3,7 +3,7 @@
 A *part* is (scope, items) where scope is one activation of a specialization S and items are (node j, member m) of S's
 body (m = 0 for primitive/call nodes).  Out(part) = gates of the part that are (a) consumed by a body item outside the
 part, or (b) returned by S's body (escape to the parent; exact when S is the root, conservative otherwise)."""
-import sys, time
+import sys
 sys.path.insert(0, "/private/tmp/lane-coverage")
 from verity.ir.defs import PrimitiveDefinition, bind
 from verity.ir.layout import Scope, GateSelection, resolve
@@ -111,7 +111,7 @@ def out_pred(sc: Scope, items: set[tuple[int, int]], designated: set[int]) -> se
 def check(program: Program, sc: Scope, parts: list[set[tuple[int, int]]], label: str):
     C = program.circuit
     designated = set(C.root_outputs())
-    t0 = time.time(); n_ok = 0; bad = []
+    n_ok = 0; bad = []
     for items in parts:
         gates = []
         for j, m in items:
@@ -125,7 +125,7 @@ def check(program: Program, sc: Scope, parts: list[set[tuple[int, int]]], label:
             bad.append((sorted(items)[:3], sorted(oracle)[:5], sorted(pred)[:5]))
     widths = [sum(C.gate(g).prim.ret.w for g in out_pred(sc, items, designated)) for items in parts]
     print(f"{label}: {n_ok}/{len(parts)} parts agree with GateSelection.out; W_out max={max(widths)} "
-          f"({time.time()-t0:.1f}s, circuit {C.size} gates)")
+          f"(circuit {C.size} gates)")
     for b in bad[:3]:
         print("   MISMATCH items", b[0], "oracle", b[1], "pred", b[2])
     return n_ok == len(parts), widths
