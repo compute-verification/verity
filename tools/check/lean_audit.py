@@ -2,6 +2,7 @@
 
     python tools/check/lean_audit.py --out DIR [--cache DIR] [--deps DIR] [--fresh] [--urls FILE] [--export DIR]
     python tools/check/lean_audit.py --pin RUN        pin the bundles run RUN exported (`lean-deps.json`)
+    python tools/check/lean_audit.py --prepare [--deps DIR] [--urls FILE]   only restore the trees an audit here would take
 
 A package's verdict is reused while everything its audit reads is unchanged. Its key hashes:
 - the tracked files of the package, less the Lake packages nested in it (`audit.lean_modules` skips them);
@@ -408,6 +409,37 @@ def run(out: Path, cache: Path, deps: Path, fresh: bool = False, log=print, urls
     return 0 if not failed else 1
 
 
+def prepare(deps: Path, urls: dict[str, str], log=print) -> int:
+    """Put the dependency trees an audit here would take into ``deps`` ahead of it (`check.py --prepare`): the shared tree
+    where `share` gives one and there is no build sandbox, every other package's own. Those here already stay as they are,
+    and the members' own trees a shared one supersedes are dropped. 1 when one is still missing (no pin, or no URL for it)."""
+    pkgs = packages(CHECK.tracked_files(ROOT) or [])
+    group = share(pkgs)
+    if group and _sandboxed():
+        group = None
+    want = {group[0]} if group else set()
+    want |= {k for p in pkgs if not (group and p in group[1]) and (k := deps_key(ROOT / p))}
+    drop = sorted({deps_key(ROOT / q) for q in group[1]} - want) if group else []
+    pinned, warm = pins(), WarmDeps(deps, urls)
+
+    def one(k: str) -> bool:
+        with warm._lock(k):
+            if (deps / k).is_dir():
+                log(f"lean-audit: prepare: {k[:12]} is here")
+                return True
+            if k in pinned and k in urls:
+                return restore(deps, k, urls[k], pinned[k], pinned[k]["package"], log)
+            log(f"lean-audit: prepare: {k[:12]} has {'no URL' if k in pinned else 'no pin'}; the first audit builds it cold")
+            return False
+
+    for d in drop:
+        with warm._lock(d):
+            shutil.rmtree(deps / d, ignore_errors=True)
+    with ThreadPoolExecutor(max_workers=max(1, len(want))) as ex:
+        ok = list(ex.map(one, sorted(want)))
+    return 0 if all(ok) else 1
+
+
 def presigned(ttl_s: int = URL_TTL_S) -> dict[str, str]:
     """{deps_key: URL} for this tree's pinned bundles, each a GET of the bundle's blob signed by the launcher's store remote.
     Empty when this machine's store has no remote that signs."""
@@ -475,15 +507,21 @@ def main(argv: list[str]) -> int:
     if argv[:1] == ["--pin"] and len(argv) == 2:
         return pin(argv[1])
     ap = argparse.ArgumentParser(prog="lean_audit.py", description=__doc__.split("\n\n")[0])
-    ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--out", type=Path)
     ap.add_argument("--cache", type=Path, default=CHECK.cache_dir() / "lean-audit")
     ap.add_argument("--deps", type=Path, default=CHECK.cache_dir() / "lean-deps")
     ap.add_argument("--fresh", action="store_true", help="audit every package and store nothing")
     ap.add_argument("--urls", type=Path, help=f"{URLS}: presigned URLs for the pinned bundles ({PIN})")
     ap.add_argument("--export", type=Path, help="bundle the dependencies of every package that passed into this directory")
+    ap.add_argument("--prepare", action="store_true", help="only put the pinned dependency trees in --deps, ahead of an audit")
     a = ap.parse_args(argv)
     urls = json.loads(a.urls.read_text()) if a.urls and a.urls.is_file() else None
-    return run(a.out, a.cache, a.deps, a.fresh, log=lambda s: print(s, flush=True), urls=urls, export=a.export)
+    log = lambda s: print(s, flush=True)  # noqa: E731
+    if a.prepare:
+        return prepare(a.deps, urls or {}, log)
+    if a.out is None:
+        ap.error("--out is required")
+    return run(a.out, a.cache, a.deps, a.fresh, log=log, urls=urls, export=a.export)
 
 
 if __name__ == "__main__":

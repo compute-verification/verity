@@ -8,6 +8,9 @@
                                                             (default origin/main), and presigned URLs for the pinned Lean
                                                             dependency bundles
     uv run python tools/check/check.py --lean-deps-files    the `--send` for those URLs, for `research merge --train`
+    uv run python tools/check/check.py --prepare            once on a new check machine (`research run --on M` with that
+                                                            `--send`): the Lean toolchain and dependency trees, so its first
+                                                            check starts warm
 
 Three independent groups run at once, the cores split between them (`--cores N`, default the CPUs this process may use):
 
@@ -144,6 +147,31 @@ def lean_deps_url_file(dest: Path) -> Path | None:
     la = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(la)
     return la.url_file(dest)
+
+
+def prepare(out: Path) -> int:
+    """`--prepare`: make this machine a check environment once, before its first check. It installs the Lean toolchain every
+    Lean package pins, and restores the Lean dependency trees an audit here takes from the store (`lean_audit.py --prepare`,
+    with the presigned URLs sent with the run). What is here already is left as it is, so running it again fetches only what
+    changed; the check's other fixed inputs (the upstream agreement's, fixtures) wait for the fixture fetcher."""
+    urls = take_lean_deps_urls(out)
+    pins = sorted({(ROOT / f).read_text().strip() for f in tracked_files() or [] if f.endswith("/lean-toolchain")
+                   and not f.startswith("tools/lean/")})
+    rc = 0
+    try:
+        for tc in pins:
+            t0 = time.monotonic()
+            r = subprocess.run(["bash", "-c", ELAN + 'elan toolchain install "$0"', tc], cwd=ROOT, env=env())
+            print(f"check: prepare: toolchain {tc}: exit {r.returncode} in {time.monotonic() - t0:.0f} s", flush=True)
+            rc |= r.returncode
+        t0 = time.monotonic()
+        r = subprocess.run([sys.executable, str(ROOT / "tools" / "check" / "lean_audit.py"), "--prepare", "--deps",
+                            str(cache_dir() / "lean-deps"), *(["--urls", str(urls)] if urls else [])], cwd=ROOT, env=env())
+        print(f"check: prepare: Lean dependency trees: exit {r.returncode} in {time.monotonic() - t0:.0f} s", flush=True)
+    finally:
+        if urls and urls.name.startswith("lean-deps-urls-"):
+            urls.unlink(missing_ok=True)
+    return rc or r.returncode
 
 
 def lean_steps(out: Path, cache: bool = True, urls: Path | None = None) -> list[tuple[str, list[str] | str, Path]]:
@@ -491,6 +519,8 @@ def main(argv: list[str]) -> int:
         pin = json.loads(UPSTREAM_PIN.read_text())
         print(" ".join(f"--send {LocalStore().fetch(pin[k]['art'])}" for k in ("upstream", "inputs")))
         return 0
+    if argv == ["--prepare"]:
+        return prepare(Path(os.environ["RESEARCH_RUN_DIR"]) if os.environ.get("RESEARCH_RUN_DIR") else Path(tempfile.mkdtemp()))
     if argv == ["--lean-deps-files"]:
         urls = lean_deps_url_file(Path(tempfile.mkdtemp(prefix="check-lean-deps-")))
         print(f"--send {urls}" if urls else "")

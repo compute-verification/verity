@@ -279,3 +279,28 @@ def test_packages_whose_dependencies_one_pins_all_of_share_its_tree(tmp_path, mo
     rc, ran, _doc = _run(tmp_path, 3)
     assert rc == 0 and sorted(ran) == ["pkg/a cold", "pkg/b cold", "pkg/c cold"]
     assert {LA.deps_key(root / "pkg/a"), k} <= {p.name for p in (tmp_path / "cache" / "lean-deps").iterdir()}
+
+
+def test_prepare_restores_the_trees_an_audit_here_takes_once(tmp_path, monkeypatch):
+    root = _tree(tmp_path, monkeypatch)
+    monkeypatch.setattr(LA, "_sandboxed", lambda: False)
+    c = {"pkg/c/lakefile.toml": "", "pkg/c/lean-toolchain": "v1\n", "pkg/c/lean-audit.json": "{}",
+         "pkg/c/lake-manifest.json": json.dumps({"packages": [{"name": "dep", "type": "git", "rev": "abc"},
+                                                              {"name": "more", "type": "git", "rev": "x"}]})}
+    for f, text in c.items():
+        (root / f).parent.mkdir(parents=True, exist_ok=True)
+        (root / f).write_text(text)
+    files = sorted({*LA.CHECK.tracked_files(), *c})
+    monkeypatch.setattr(LA.CHECK, "tracked_files", lambda r=None: files)
+    k, deps, logs = LA.deps_key(root / "pkg/c"), tmp_path / "deps", []
+    (tmp_path / "made" / "dep").mkdir(parents=True)
+    bundle = tmp_path / "c.tar.gz"
+    pin = LA.bundle(tmp_path / "made", bundle)
+    (root / LA.PIN).write_text(json.dumps({"schema": "lean-deps-pin/v1", "deps": {k: {"package": "pkg/c", **pin, "run": "r1"}}}))
+    (deps / LA.deps_key(root / "pkg/a")).mkdir(parents=True)             # a's own tree, which the shared one supersedes
+    assert LA.prepare(deps, {k: bundle.as_uri()}, logs.append) == 0
+    assert sorted(p.name for p in deps.iterdir() if not p.name.endswith(".lock")) == [k] and (deps / k / "dep").is_dir()
+    bundle.unlink()                                                      # here already: nothing is fetched again
+    assert LA.prepare(deps, {k: bundle.as_uri()}, logs.append) == 0 and "is here" in logs[-1]
+    monkeypatch.setattr(LA, "_sandboxed", lambda: True)                 # in the sandbox a needs its own tree, which has no pin
+    assert LA.prepare(deps, {}, logs.append) == 1 and any("no pin" in s for s in logs)
