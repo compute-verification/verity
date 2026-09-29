@@ -72,6 +72,12 @@ def test_custody_publish_keep_local_and_a_file_changed_since_the_check_stay(tmp_
     assert data_main(["custody", FIXTURE_RID, "--runs-dir", str(runs), "--publish", "--keep-local", "--json"]) == 0
     rep = json.loads(capsys.readouterr().out)
     assert big.exists() and "evicted" not in rep
+    from research.store import evict as EV
+    from research.store.local import LocalStore
+
+    plan = EV.plan_runs(LocalStore(os.environ["RESEARCH_STORE"]), runs, quiet_s=0, now=4e9)
+    assert [(r["artifact"], [f["path"] for f in r["files"]]) for r in plan] == [(rep["run_record"], ["big.bin"])], \
+        "`research data evict --runs` finds a custody run through its run record"
     os.utime(big, (rep["verified_from"] + 1, rep["verified_from"] + 1))
     assert evict_custody(d, rep)["files"] == [] and big.exists(), "touched after the check: not what was verified"
     assert evict_custody(d, {**rep, "preserved": False})["files"] == []
