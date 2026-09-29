@@ -330,3 +330,37 @@ class Index:
             return [d[0] for d in cur.description or []], cur.fetchall()
         finally:
             ro.close()
+
+
+CUSTODY_TABLES = ("replicas", "replica_checks")
+
+
+def compact(src: Path | str, dst: Path | str) -> dict:
+    """A copy of the catalog at `src` for readers that query it rather than fetch from it (`research notes mcp`): the same tables,
+    columns and indexes, with every `manifest_json` left NULL (most of the bytes) and without this machine's custody records
+    (`CUSTODY_TABLES`).  Built in a temp file renamed over `dst`, so a reader never opens half a copy.  {path, bytes, tables}."""
+    dst = Path(dst)
+    tmp = dst.with_name(f".{dst.name}.{os.getpid()}.tmp")
+    tmp.unlink(missing_ok=True)
+    db = sqlite3.connect(tmp.resolve().as_uri(), uri=True, timeout=30)
+    try:
+        db.executescript(SCHEMA)
+        db.execute("ATTACH DATABASE ? AS src", (Path(src).resolve().as_uri() + "?mode=ro",))
+        tables = {}
+        for (t,) in db.execute("SELECT name FROM main.sqlite_master WHERE type='table' ORDER BY name").fetchall():
+            if t in CUSTODY_TABLES:
+                db.execute(f"DROP TABLE main.{t}")
+                continue
+            cols = ", ".join(r[1] for r in db.execute(f"PRAGMA main.table_info({t})") if r[1] != "manifest_json")
+            tables[t] = db.execute(f"INSERT INTO main.{t}({cols}) SELECT {cols} FROM src.{t}").rowcount
+        db.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+        db.commit()
+        db.execute("DETACH DATABASE src")
+        db.execute("VACUUM")
+        db.close()
+        os.replace(tmp, dst)
+    except BaseException:
+        db.close()
+        tmp.unlink(missing_ok=True)
+        raise
+    return {"path": str(dst), "bytes": dst.stat().st_size, "tables": tables}

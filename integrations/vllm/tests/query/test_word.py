@@ -183,6 +183,37 @@ def test_the_manifest_build_runs_the_check(tmp_path):
         M.word_check(P, corr, pop.required, "16/32")
 
 
+def _program_dir(tmp_path, **kw) -> str:
+    import gzip
+    import json
+    from tests.check.test_sampled_replay import _program
+    inst, _w = _program(**kw)
+    with gzip.open(tmp_path / "instances.json.gz", "wt") as f:
+        json.dump(inst, f)
+    (tmp_path / "result.json").write_text(json.dumps({"program": {"digest": "0" * 64, "function": "f"},
+                                                      "target": {"declared": {"compute_capability": [8, 9]}}}))
+    return str(tmp_path)
+
+
+def test_the_manifest_records_the_check_it_passed_in_the_header_and_its_rows_are_unchanged(tmp_path):
+    """The header's `query.word_check` is what the Commit requires (`commit.partition.word_check_refusal`); it is no identity, so the
+    rows digest of a checked build is the unchecked one's.  A check that fails raises before the manifest is written."""
+    from verity_vllm.commit.partition import word_check_refusal
+    from verity_vllm.pipeline import manifest as M
+    d = _program_dir(tmp_path)
+    checked, plain = (M.build(d, request_id="r0", word=w) for w in ("16/32", None))
+    wc = checked["query"]["word_check"]
+    assert wc["query"] == checked["query"]["query_id"] == "Q_word_v1{X=16,W=32,R=no-recompute}"
+    assert wc["strict"] is True and wc["ok"] is True and wc["violations"] == 0 and wc["units"] > wc["calls"] > 0
+    assert wc["max_gates"] == W.gate_limits(None) and "groups" not in wc and word_check_refusal(checked["query"]) is None
+    assert "word_check" not in plain["query"] and "no word check recorded" in word_check_refusal(plain["query"])
+    assert checked["manifest_digest"] == plain["manifest_digest"] and checked["identities"] == plain["identities"]
+    assert {k: v for k, v in checked["query"].items() if k != "word_check"} == plain["query"]
+    (tmp_path / "attn").mkdir()
+    with pytest.raises(W.QueryRuleViolation, match="o_proj"):
+        M.build(_program_dir(tmp_path / "attn", attn=True), request_id="r0", word="16/32")
+
+
 def test_a_dead_gate_joins_the_unit_it_reads():
     r = W.unit_rule(_fn("TokenSelect_v1", V=8))
     assert r["by_kind"] == {"output": 1} and r["classes"][0]["out_bits"] == 32 and not r["violations"]

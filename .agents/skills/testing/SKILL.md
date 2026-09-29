@@ -46,7 +46,8 @@ Uncommitted edits count. Only passes are cached, in `~/.cache/verity/tests`.
 
 ## What a suite may read
 
-The runner's guard (`tools/check/suite_guard.py`) fails a suite whose tests open a repository file outside its inputs. That
+The runner's guard (`tools/check/guard/verity_suite_guard.py`) fails a suite whose tests open a repository file outside its
+inputs, in every process of the suite, including pytest-xdist workers and `conftest.py` imports. That
 keeps the cache sound: a pass is only reused while everything the tests read is unchanged. When it fails:
 
 - **The package imports another at run time:** add it to `[project] dependencies` (with a `[tool.uv.sources]` workspace entry).
@@ -68,17 +69,29 @@ a `sys.path` entry another test file added: every suite runs alone.
 - **GPU, pod and vLLM tests skip themselves** when the hardware or the runtime is absent. Their real runs are recorded runs
   on a pod (`research run --on ...`), never a laptop.
 - A suite's quick tier should finish in about a minute. When it doesn't, make the slow tests smaller before marking more.
+- **A suite over a few minutes declares `parallel = true`** under `[tool.verity.tests]`. The runner then spreads its tests over
+  every `--jobs` slot with pytest-xdist (`--dist worksteal`), and runs parallel suites first, one at a time. C-Flock does
+  (637 s in one process, 209 s on four). Its tests must then run in any order and in any process. Session and module
+  fixtures are built once per worker, so keep them cheap. Declare it only after the suite passes
+  `uv run tools/check/suites.py SUITE --fresh` a few times.
 
 ## Write tests that mean something
 
-- **Deterministic:** seeded randomness, no wall-clock or ordering dependence, no network unless an opt-in variable asks.
+- **Deterministic:** seeded randomness, no ordering dependence, no network unless an opt-in variable asks, and no wall-clock
+  time: `tests/test_no_wall_clock.py` rejects sleeps, clock readings, timeouts and sleeping workloads in every suite. Wait on
+  the event instead (a child's exit, a line of its output, a FIFO the test holds open: `tools/research/tests/waits.py`), and
+  inject the clock or timer that the code under test measures time with (`monkeypatch.setattr(mod, "clock", ...)`).
 - **Isolated:** write only under `tmp_path`; change the environment, `sys.path` or a module only through `monkeypatch`. The
   runner fails a run in which the tests changed a file of the repository, and names the files.
 - **Exact:** for bit-exact code, compare words, digests and pinned vectors, not approximations. A negative checks that the
   code rejects by name, not merely that it raises.
 - **Small fixtures** sit beside the tests (`tests/fixtures/`). Shared ones go under the root `fixtures/`, registered in
-  `fixtures/artifacts.json`. Large evidence lives in the evidence store, not in git: `tests/test_repository.py` caps a
-  tracked file at 5 MiB.
+  `fixtures/artifacts.json`. `tests/test_repository.py` caps a tracked file at 256 KiB (source code aside). A larger
+  fixture is registered there and gitignored instead: `research data put --kind fixture/v1 --file|--tree PATH --preserve`,
+  add the id and path to the registry and the path to `.gitignore`, then `research data export`. `suites.py` fetches it
+  before the suites that read it (`research data fetch-fixtures` by hand, e.g. before `cargo test`), checks every byte
+  against its id, and keys the suite on the id. A verifier's fixtures are the prover's bytes, never regenerated in its test.
+  When a test can recompute an expected output, pin its digest rather than the file.
 
 ## Dummy credentials
 

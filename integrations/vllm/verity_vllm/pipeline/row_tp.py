@@ -2,7 +2,8 @@
 
 * **Build** (CPU): per rank the step Program and one request Program per declared (prompt_len, cap - 1) shape
   (``build --tp W --rank r``), then GP-01 per rank; ``--build-jobs`` wide (default ranks x (shapes + 1)).  A PASS Build
-  also builds the required-value manifest over the W ranks (``manifest build-global --programs-root build/rank<r>``).
+  also builds the required-value manifest over the W ranks (``manifest build-global --programs-root build/rank<r>``), and
+  the row stops (exit 21) when it names call boundaries (``Row.call_boundaries``: a TP Commit attaches no call-boundary source).
 * **Match**: the capture under the observer and collective recorder, the ``--no-observer`` control, the collective-level
   check (``tp-match --arm check``); a request that stopped before its cap gets its served-shape Program derived per rank
   and GP-01 recomposed (``eos-truncated``); then, with a rank profile (default ``derived_<ROLE>_tp<W>``; ``--fold-profile ''``
@@ -220,6 +221,8 @@ class TpRow(Row):
             raise Stop(10)
         rc = self.manifest_global("build.required_manifest", self.to_b)
         self.log(f"build manifest rc={rc}: {R.tp_manifest_line(self.d) or 'no manifest.json'}")
+        if rc == 0:
+            self.call_boundaries(self.to_b)
 
     def guarded_summary(self) -> str:
         try:
