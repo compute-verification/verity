@@ -1581,6 +1581,7 @@ dependencies = [
     { name = "numpy" },
     { name = "research" },
     { name = "verity-pouw" },
+    { name = "verity-vllm" },
 ]
 
 [package.metadata]
@@ -1588,6 +1589,7 @@ requires-dist = [
     { name = "numpy" },
     { name = "research", editable = "tools/research" },
     { name = "verity-pouw", editable = "protocols/pouw" },
+    { name = "verity-vllm", editable = "integrations/vllm" },
 ]
 
 [[package]]
