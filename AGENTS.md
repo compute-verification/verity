@@ -191,7 +191,7 @@ rather than accumulating them.
 - Evidence goes through `research run --tool … --campaign …`: every completed or failed run is auto-published as an Attempt in the evidence store (`~/.research/store`, `research data …`; contract in `tools/research/src/research/store/README.md`).
 - Findings and claims about a run are labels, never edits to a shared table: `research data label <run id|art:…> <key> <value> --by <lane> --ref <run id>` (a red-team verdict is another label by the red-team; tables pick a policy, `store_tables.py --proof-class-by 'red-team-*'`).
 - The ledger `backends/numerical/reports/ledger/*.jsonl` is frozen history (imported once by `ledger_to_store.py`); new rows are labels on the attempt they describe.
-- Repo-replicated inputs are registered in `fixtures/artifacts.json` (`{art id: path}`, `research data put --kind fixture/v1 --file …`); `tools/research/tests/test_repo_replicas.py` checks every entry hashes to its id.
+- Fixtures are registered in `fixtures/artifacts.json` (`{art id: path}`, `research data put --kind fixture/v1 --file …`); `tools/research/tests/test_repo_replicas.py` checks every entry hashes to its id. A tracked file is at most 256 KiB (`tests/test_repository.py`); a larger fixture's path is gitignored and `research data fetch-fixtures` fetches it (the store README §7.3).
 - `tests/test_repository.py` rejects report-genre files (`*HANDOFF*`, `*REPORT*`, `*URGENT*`, `*DRAFT*`, `*TRIAGE*`, `*STATUS*`, anything under `reports/` or `results/`), and `.gitignore` keeps them out of `git add`.
 
 ## Lanes (worker agents)

@@ -2,11 +2,15 @@
 under.  A repo-registered `fixture/v1` carries no meta and no refs (identity is the bytes and the bare file name -- rule 6: content,
 not pathname), so the manifest, and with it the id, is rebuilt here from the file alone; no store state is needed.  When a fixture's
 bytes change on purpose, `research data refresh-fixtures` re-registers it and keeps the superseded id under the map's `previous`
-block, which is not an entry."""
+block, which is not an entry.
+
+An entry git does not track is *fetched* (`research data fetch-fixtures`): its path is gitignored, and where it has been fetched its
+bytes are checked like any other; where it has not, the test says which it skipped (tests never fetch)."""
 from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -31,13 +35,22 @@ def _entries() -> dict[str, str]:
     return entries
 
 
+def _tracked() -> set[str]:
+    return set(subprocess.run(["git", "ls-files", "-z"], cwd=REPO, check=False, capture_output=True).stdout.decode().split("\0")) - {""}
+
+
+def _is_tracked(rel: str, tracked: set[str]) -> bool:
+    return rel in tracked or any(t.startswith(rel.rstrip("/") + "/") for t in tracked)
+
+
 def test_replica_map_entries_hash_to_their_ids() -> None:
     try:
         from research.store import ids
         from research.store.model import ArtifactManifest, Payload, TreeFile
     except ImportError as e:  # pragma: no cover
         pytest.skip(f"research.store not importable: {e}")
-    problems = []
+    problems, unfetched = [], []
+    tracked = _tracked()
     for art, rel in _entries().items():
         assert ids.is_art(art), f"{art!r} is not an art: id"
         assert isinstance(rel, str) and rel and not rel.startswith("/") and ".." not in rel.split("/"), f"{art}: bad path {rel!r}"
@@ -46,20 +59,26 @@ def test_replica_map_entries_hash_to_their_ids() -> None:
             data = p.read_bytes()
             payload = Payload.file(hashlib.sha256(data).hexdigest(), len(data), p.name)
             if len(data) > MAX_BYTES:
-                problems.append(f"{rel}: {len(data)} bytes > 20 MB; large arrays stay out of the repo replica map")
+                problems.append(f"{rel}: {len(data)} bytes > 20 MB; register a large set as several entries")
         elif p.is_dir():
             files = []
             for f in sorted(x for x in p.rglob("*") if x.is_file()):
                 b = f.read_bytes()
                 files.append(TreeFile(f.relative_to(p).as_posix(), hashlib.sha256(b).hexdigest(), len(b)))
             payload = Payload.tree(files)
+        elif tracked and not _is_tracked(rel, tracked):
+            unfetched.append(rel)
+            continue
         else:
             problems.append(f"{art}: {rel} is not in the working tree")
             continue
         got = ArtifactManifest(kind="fixture/v1", meta={}, refs={}, payload=payload).validate().id
         if got != art:
-            problems.append(f"{rel}: hashes to {got}, registered as {art} (`research data refresh-fixtures --preserve` re-registers it)")
+            problems.append(f"{rel}: hashes to {got}, registered as {art} (`research data refresh-fixtures --preserve` re-registers it; "
+                            "for a fetched entry, `research data fetch-fixtures` restores the registered bytes)")
     assert not problems, "\n".join(problems)
+    if unfetched:
+        pytest.skip(f"{len(unfetched)} fetched entries are not fetched here (`research data fetch-fixtures`): {', '.join(unfetched[:3])}")
 
 
 def test_replica_map_previous_block_is_history_of_current_entries() -> None:
@@ -78,11 +97,15 @@ def test_replica_map_previous_block_is_history_of_current_entries() -> None:
         assert len(set(olds)) == len(olds) and art not in olds, f"previous[{art}] lists an id twice or lists itself"
 
 
-def test_replica_map_paths_are_tracked() -> None:
-    import subprocess
-
-    tracked = set(subprocess.run(["git", "ls-files", "-z"], cwd=REPO, check=False, capture_output=True).stdout.decode().split("\0"))
-    if not tracked - {""}:
+def test_replica_map_paths_are_tracked_or_fetched() -> None:
+    tracked = _tracked()
+    if not tracked:
         pytest.skip("not a git checkout")
-    untracked = [rel for rel in _entries().values() if rel not in tracked and not any(t.startswith(rel.rstrip("/") + "/") for t in tracked)]
-    assert not untracked, "replica map names paths git does not track (a fresh clone would not hold the bytes):\n" + "\n".join(untracked)
+    untracked = sorted(rel for rel in _entries().values() if not _is_tracked(rel, tracked))
+    if not untracked:
+        return
+    out = subprocess.run(["git", "check-ignore", "--no-index", "--stdin"], cwd=REPO, input="\n".join(untracked) + "\n",
+                         capture_output=True, text=True).stdout.split("\n")
+    loose = sorted(set(untracked) - {x for x in out if x})
+    assert not loose, ("replica map names paths git neither tracks nor ignores (a fetched entry's path is gitignored, so that a fetched "
+                       "copy is never committed):\n" + "\n".join(loose))
