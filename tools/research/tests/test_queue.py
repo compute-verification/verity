@@ -38,11 +38,14 @@ def _git(repo: Path, *args: str) -> str:
 
 class FakeGitHub:
     def __init__(self, origin: Path):
-        self.origin, self.prs = origin, {}
+        self.origin, self.prs, self.ready = origin, {}, set()
 
-    def put(self, n: int, head: str, *, body: str | None = None, draft: bool = False, labels: tuple[str, ...] = ()) -> None:
+    def put(self, n: int, head: str, *, body: str | None = None, draft: bool = False, labels: tuple[str, ...] = (), ready: bool = True) -> None:
+        """A PR at `head`; `ready`: its owner has said so at this head (`research queue ready`), as every PR here has unless told."""
         _git(self.origin, "update-ref", f"refs/pull/{n}/head", head)
         self.prs[n] = PR(n, head, f"change {n}", f"Lane `lane-{n}`." if body is None else body, draft, labels)
+        if ready:
+            self.ready.add((n, head))
 
     def open_prs(self) -> list[PR]:
         return list(self.prs.values())
@@ -80,6 +83,7 @@ class World:
 
     def queue(self, **kw) -> Queue:
         return Queue(self.tmp / "q" / "verity", remote=str(self.origin), github=self.gh, grants=lambda n, h: self.grants.get((n, h), set()),
+                     ready=lambda n, h: (n, h) in self.gh.ready,
                      store=self.store, notes=self.tmp / "notes", log=self.logs.append, **kw)
 
     def on_next(self, q: Queue) -> list[int]:
@@ -92,7 +96,7 @@ def world(tmp_path: Path) -> World:
     return World(tmp_path)
 
 
-def test_ready_prs_and_drafts_merge_onto_next_in_number_order_and_holds_and_ownerless_prs_wait(world):
+def test_ready_prs_merge_onto_next_in_number_order_drafts_too_and_held_ownerless_or_unmarked_prs_wait(world):
     world.gh.put(3, world.change({"c.txt": "c3\n"}))
     world.gh.put(1, world.change({"a.txt": "a1\n"}))
     world.gh.put(2, world.change({"b.txt": "b2\n"}), draft=True)
@@ -100,11 +104,13 @@ def test_ready_prs_and_drafts_merge_onto_next_in_number_order_and_holds_and_owne
     world.gh.put(5, world.change({"e.txt": "e\n"}), body="no owner here")
     world.gh.put(6, world.change({"f.txt": "f\n"}), body=f"[Open in Web](https://cursor.com/agents/{AGENT})")
     world.gh.put(7, world.change({"g.txt": "g\n"}), draft=True, labels=("hold",))
+    world.gh.put(8, h8 := world.change({"h.txt": "h\n"}), draft=True, ready=False)
     q = world.queue()
     members, entries = q.sync()
     assert [m.pr for m in members] == [1, 2, 3, 6] == world.on_next(q)
     assert members[3].owner == AGENT and members[0].owner == "lane-1"
     assert entries[4].why == entries[7].why == "held (`hold` label)" and entries[5].why.startswith("no owner")
+    assert entries[8].why == f"not marked ready at {h8[:8]}: `research queue ready 8`"
     tip = _git(world.origin, "rev-parse", "refs/heads/next")
     assert _git(world.origin, "rev-parse", f"{tip}^1^1^1^1") == _git(world.origin, "rev-parse", "main")    # one merge commit each
     msg = _git(world.origin, "log", "-1", "--format=%B", tip)
@@ -267,3 +273,28 @@ def test_until_the_move_the_rules_are_read_from_tools_check(world):
     world.gh.put(2, world.change({"integrations/vllm/README.md": "docs only\n"}))
     _, entries = world.queue().sync()
     assert entries[1].why.startswith("waiting for the vllm-coordinator grant") and entries[2].state == "queued"
+
+
+def test_a_ready_label_holds_for_one_head_and_research_queue_ready_writes_it(world, capsys):
+    from research.queue import StoreGrants, ready
+
+    h1 = world.change({"a.txt": "a1\n"})
+    world.gh.put(1, h1, ready=False)
+    labels = StoreGrants(world.store, log=world.logs.append)
+    assert labels.ready(1, h1) is False
+    assert ready(world.gh, world.store, 1, "lane-1") == 0
+    assert f"#1 is ready at {h1[:12]} (pr:1@{h1})" in capsys.readouterr().out
+    assert labels.ready(1, h1) is True
+    q = Queue(world.tmp / "q" / "verity", remote=str(world.origin), github=world.gh, grants=labels, ready=labels.ready,
+              store=world.store, notes=world.tmp / "notes", log=world.logs.append)
+    members, _ = q.sync()
+    assert [m.pr for m in members] == [1]
+    h2 = world.change({"a.txt": "a2\n"})
+    world.gh.put(1, h2, ready=False)                           # a new push: the label was for the old head
+    members, entries = q.sync()
+    assert members == [] and entries[1].why == f"not marked ready at {h2[:8]}: `research queue ready 1`"
+    world.gh.put(1, h2, labels=("hold",), ready=False)
+    assert ready(world.gh, world.store, 1, "lane-1") == 0
+    members, entries = q.sync()
+    assert members == [] and entries[1].why == "held (`hold` label)"   # hold wins over ready
+    assert ready(world.gh, world.store, 99, "lane-1") == 2

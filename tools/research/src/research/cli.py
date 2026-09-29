@@ -13,7 +13,7 @@
   research merge REF [--into main] [--tool check] [-m MSG] [--dry-run]   # the merge gate: `git merge --no-ff REF` only with a passing
                                                  # attempt of the tool for that exact commit in the store (research/merge.py)
   research merge --train A B C [--on MACHINE --project P]                # several refs as one candidate, one check, a fast-forward
-  research queue status|sync|land|eject [--shadow] [--dry-run]          # the merge queue: ready PRs on `next`, `main` fast-forwarded to
+  research queue status|sync|land|eject|ready [--shadow] [--dry-run]    # the merge queue: ready PRs on `next`, `main` fast-forwarded to
                                                  # the newest commit on it with a passing check (research/queue.py)
   research git old2new|remap|check|build ...     # after a history rewrite: an old commit's image, a clone's local work moved onto the
                                                  # rewritten history, the old-history guard, the commit-map/v1 payload (research/commitmap.py)
