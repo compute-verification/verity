@@ -7,6 +7,7 @@ API touches this file only:
     resolve_snapshot(name) -> list[artifact_id]  the member artifact ids of the dataset-snapshot/v1 artifact named `name`
     put_fixture(path, meta) -> artifact_id      store a dir (tree payload) or a file as a `fixture/v1` artifact, return its `art:` id
     attempt(run_id) -> dict                    an attempt manifest (`r2026…` id); attempt_outputs(run_id, kinds) its outputs by kind
+    class_label(row_key) -> dict | None        the newest `class` label by daniel on the row's records of record (lift_expected.py)
     fetch_attempt(run_ids, to) -> Path         the union of the attempts' row-dir account trees (vllm-build/v1, vllm-match-record/v1,
                                                vllm-verdict/v1, execution-evidence/v1) laid out like a v1 row dir
 
@@ -163,6 +164,23 @@ def snapshot(name: str, members: list[str], note: str | None = None) -> str:
     if not ids:
         raise StoreUnavailable(f"snapshot {name}: no art id printed ({p.stdout!r})")
     return ids[-1]
+
+
+def class_label(row_key: str, by: str = "daniel") -> dict | None:
+    """The newest `class` label by `by` on this row's records of record (fixture/v1 trees with meta role=record and row_id=row_key), as
+    {value, target, ts, ref}; None when there is none.  The remote's assertions are read too when a remote is configured (`labels
+    --remote`), so a label asserted on another machine counts before it has been synced here."""
+    p = _cli("select", "--kind", FIXTURE_KIND, "--where", "meta.role=record", "--where", f"meta.row_id={row_key}", "--ids")
+    found: list[dict] = []
+    for art in ART_RE.findall(p.stdout):
+        q = _cli("labels", art, "--key", "class", "--by", by, "--remote", "--json", check=False)
+        try:
+            labs = [x["label"] for x in json.loads(q.stdout)["labels"] if x.get("label")]
+        except (ValueError, KeyError, TypeError):
+            q = _cli("labels", art, "--key", "class", "--by", by, "--json")
+            labs = json.loads(q.stdout or "[]")
+        found += [{"value": lab.get("value"), "target": art, "ts": lab.get("ts") or "", "ref": lab.get("ref")} for lab in labs]
+    return max(found, key=lambda x: x["ts"]) if found else None
 
 
 def push(artifact_ids: list[str]) -> subprocess.CompletedProcess:

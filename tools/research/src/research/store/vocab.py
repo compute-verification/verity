@@ -153,6 +153,10 @@ ANCHOR = "anchor"
 #: A reviewer's grant on a pull request at one head (`pr:<n>@<sha>`), which the merge queue's admission rules require.
 GRANT = "grant"
 GRANT_ROLES = ("red-team", "statement-reviewer", "vllm-coordinator", "review")
+#: A regression fixture row's class of record, decided by a person on the row's record of record (a fixture/v1 tree whose meta names
+#: role=record and the row_id); the vLLM harness's lift_expected.py reads the newest one by its decider over the vault's INDEX.json.
+CLASS = "class"
+CLASS_VALUES = ("GREEN", "FAIL")
 
 
 def canonical_key(name: str) -> str:
@@ -265,6 +269,8 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(OUTCOME, GROUP_VERIFICATION, TEXT, "an Attempt's failure class as judged (CGROUP_OOM, UNKNOWN_EXIT, ...), restating or correcting the classifier's"),
     _k(GRANT, GROUP_VERIFICATION, ENUM, "a reviewer's grant on pr:<n>@<head>: the role that reviewed that exact head (the merge queue admits on it)",
        GRANT_ROLES),
+    _k(CLASS, GROUP_VERIFICATION, ENUM, "a regression fixture row's class of record (GREEN: it must pass; FAIL: it must fail), by the person "
+       "who decided it, on the row's record of record; the vLLM harness's lift_expected.py prefers it to the vault's INDEX.json", CLASS_VALUES),
     # evidence
     _k(INSTRUCTION, GROUP_EVIDENCE, TEXT, "the tensor-core instruction probed, as the registry names it (sm89.mma.m16n8k32.e4m3)"),
     _k(MODEL, GROUP_EVIDENCE, TEXT, "the silicon model the capture was compared with"),

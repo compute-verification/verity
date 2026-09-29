@@ -444,7 +444,8 @@ prints the table; the groups are:
   stay valid when the file moves into a month folder).
 - **verification** — an independent verifier, never the producer: `verified` (enum: accepted | rejected | not-transferable |
   no-dumps), `verifier`, `verifier_seconds`, `same_device` (bool), `below_bar` (bool: verified, but the whole-proof bound misses the tables' 2^-128 bar,
-  so it is shown in the below-bar drill-down and never as a Table 2 cell), `outcome`; `independently_verified` (bool) is the back-fill's
+  so it is shown in the below-bar drill-down and never as a Table 2 cell), `outcome`, `class` (enum: GREEN | FAIL: a regression fixture
+  row's class of record, by the person who decided it, on the row's record of record); `independently_verified` (bool) is the back-fill's
   spelling of `verified` — accepted by every reader, deprecated for new writes; `verified_by` is a ledger row's free text and
   carries no verdict — ignored.
 - **evidence** — probe captures and input sets: `instruction`, `model`, `model_agrees` (bool), `model_status`,
