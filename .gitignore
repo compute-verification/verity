@@ -125,8 +125,8 @@ backends/ligero-verify/fixtures/systems/fp8-hopper-x4.system.bin
 backends/sp1/common/tests/embed_vectors.json
 backends/sp1/common/tests/reduce_vectors.json
 backends/sp1/common/tests/vectors.json
-fixtures/lean-vectors/
-fixtures/redteam-v2/gkr/
+fixtures/lean-vectors
+fixtures/redteam-v2/gkr
 fixtures/tc/autoproof-probe-vectors.json
 fixtures/typed-obligation-v0/stage2--qkv-proj-decode-0-k1536.json
 integrations/vllm/fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/compiled/in_qkv.npy
