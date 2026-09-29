@@ -299,7 +299,7 @@ theorem accepts (σ : Strategy (twoStage L L₂ Unit Int session)) :
     prob (fun o => o.1 = true) (twoStage L L₂ Unit Int session) σ = 1 := by
   simp [twoStage, prob, session, Game.map, L, L₂]
   convert ENNReal.mul_inv_cancel (a := ((Fintype.card (Fin 2 → Unit) : ℕ) : ℝ≥0∞)) (by simp) (by simp) using 3
-  all_goals first | rfl | decide | (norm_cast; decide) | simp [Fintype.card_unique]
+  all_goals rfl
 
 end Two
 
