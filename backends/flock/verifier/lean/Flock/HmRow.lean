@@ -101,6 +101,8 @@ private def intLists (j : Json) (k : String) : V (Array (Array Int)) := do
 one output group); each placed layout's circuit one slot of its range per part; a forced-zero row in the root's slot; the
 pinned dummy values and leaf scheme. -/
 def checkTyped (c : Circuit) (t : TypedBlock) (tags : Tags) (leafScheme : Json) : V Unit := do
+  -- the rows' circuits are found by name, and the placed layouts are named by digest: no part may be one of them
+  if c.shaNet ≤ t.rangeLogs.size || c.hmNet ≤ t.rangeLogs.size then throw "the rows' circuits are among the template's"
   let root := c.unit
   let nOut := c.outWords
   if c.perVu.getD c.unitNet 0 != 1 then throw "the instance's root is not one slot per VU"
@@ -972,11 +974,20 @@ several, the session's units (the draw's, without one the population's) split in
 table `j` is `setupH`'s statement of part `j` as a subset draw of the population, under `Tags.tableIdentity`: every check
 `setupH` makes, it makes on each table. Every part comes from `draw`, the session's, never from a table's header. The
 session's Σ covers every table's; its `unitDraw` is `draw`. `work` is the verifier's own `K` and work table, which a work
-draw's law is held to. -/
+draw's law is held to, and `stratified` its own `K`, at which a stratified draw's law is its own derivation. -/
 def Stmt.setupTables (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins) (count : Nat)
     (tables : List (String × ByteArray) := []) (draw : Option Json := none) (partition : Option Json := none)
-    (program : Option ByteArray := none) (work : Option (Nat × Array (String × Nat)) := none) :
-    V (SessionSpec × Array Stmt) := do
+    (program : Option ByteArray := none) (work : Option (Nat × Array (String × Nat)) := none)
+    (stratified : Option Nat := none) : V (SessionSpec × Array Stmt) := do
+  -- a stratified draw's K and strata set every k_s, so its law must be the verifier's own derivation, never taken as stated
+  if let some d := draw then
+    if let .ok (Draw.Law.stratified k strata) := (Draw.UnitDraw.ofJson d).map (·.law) then
+      let (some obj, some prog, some K) := (partition, program, stratified)
+        | throw "U2: a stratified draw needs the verifier's own K, program and partition (--stratified, --program, --partition)"
+      if k != K then throw s!"U2: the draw's K is {k}, not the verifier's {K}"
+      let (law, _) ← HmRow.stratifiedLaw obj prog K
+      if law != Draw.Law.stratified k strata then
+        throw "U2: the draw's strata are not the verifier's own (its K, program and query)"
   -- a work draw's K and stated work set every k_s, so its law must be the verifier's own derivation, never taken as stated
   if let some d := draw then
     if let .ok (Draw.Law.work k strata) := (Draw.UnitDraw.ofJson d).map (·.law) then

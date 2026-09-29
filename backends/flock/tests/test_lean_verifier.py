@@ -415,6 +415,52 @@ def test_verify_takes_a_work_draw_only_from_its_own_table(tmp_path):
     assert not why(at1, *flags, "--work", "1").startswith("setup: U2:")
 
 
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_verify_takes_a_stratified_draw_only_at_its_own_k(tmp_path):
+    """`verify` refuses a session whose record carries a stratified draw unless it holds its own K (`--stratified K`),
+    program and partition, since the draw's K and strata set every k_s (U2 alone accepts a draw at k = 1, and strata it
+    cannot check); with all three, the law must be its own derivation, so a draw at another K or over other strata is
+    refused."""
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    flags = _work_program(tmp_path)("w.json", {})[:4]
+    (tmp_path / "circuit.txt").write_text("not a circuit\n")
+    (tmp_path / "pub.bin").write_bytes(b"{}\n")
+
+    def session(name, draw):
+        s = tmp_path / name
+        s.mkdir()
+        (s / "session.json").write_text(json.dumps({"kind": "flock-live-session/v1", "unit_draw": draw}))
+        for r in (0, 1):
+            (s / f"circuit.rep{r}.bin").write_bytes(b"\0" * 16)
+        return s
+
+    d4 = _lean_draw_obj([*flags, "--stratified", "4"])
+    at4 = session("k4", d4)
+    at1 = session("k1", _lean_draw_obj([*flags, "--stratified", "1"]))
+    # T0's and T1's names swapped (both 3 units at k 1): well formed, and not the verifier's strata
+    s0, s1, s2 = d4["strata"]
+    swapped = session("swapped", {**d4, "strata": [{**s0, "template": s1["template"]}, {**s1, "template": s0["template"]}, s2]})
+
+    def why(s, *extra):
+        p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "verify", "--circuit", str(tmp_path / "circuit.txt"),
+                            "--public", str(tmp_path / "pub.bin"), *extra, "--session", str(s)],
+                           capture_output=True, text=True)
+        (v,) = [json.loads(line[8:]) for line in p.stdout.splitlines() if line.startswith("VERDICT ")]
+        assert not v["accepted"] and p.returncode == 1
+        return v["why"]
+
+    need = "setup: U2: a stratified draw needs the verifier's own K, program and partition"
+    assert why(at4).startswith(need)
+    assert why(at4, *flags).startswith(need)
+    assert why(at4, "--stratified", "4").startswith(need)
+    assert why(at4, *flags, "--stratified", "1").startswith("setup: U2: the draw's K is 4, not the verifier's 1")
+    assert why(at1, *flags, "--stratified", "4").startswith("setup: U2: the draw's K is 1, not the verifier's 4")
+    assert why(swapped, *flags, "--stratified", "4").startswith("setup: U2: the draw's strata are not the verifier's own")
+    # at its own K, program and partition, setup goes on to the circuit, which this file is not
+    assert not why(at4, *flags, "--stratified", "4").startswith("setup: U2:")
+    assert not why(at1, *flags, "--stratified", "1").startswith("setup: U2:")
+
+
 def _one_stage_draw():
     try:
         from verity_one_stage import draw

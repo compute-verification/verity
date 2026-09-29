@@ -383,3 +383,28 @@ hypotheses of the theorems that use them, never `axiom` declarations, so they ca
 #print axioms FlockSoundness.Layout.placedB_const
 #print axioms FlockSoundness.Layout.placed_pin
 #print axioms FlockSoundness.Layout.realizes
+-- influence through a separator: a downstream cut determines what is delivered, and the audit's influence set
+#print axioms FlockSoundness.Audit.Partition.Separates.mono
+#print axioms FlockSoundness.Audit.Partition.Separates.union
+#print axioms FlockSoundness.Audit.Partition.separates_exits
+#print axioms FlockSoundness.Audit.Partition.outputs_eq_of_separates
+#print axioms FlockSoundness.Audit.Partition.card_delivered_le
+#print axioms FlockSoundness.Audit.Partition.card_influenceSet_le
+#print axioms FlockSoundness.Audit.Partition.audit_influence
+#print axioms FlockSoundness.Audit.Partition.Refines.twoStage_influence
+-- the influence theorems are not vacuous: the statement reviewer's witness
+#print axioms FlockSoundness.Audit.InfluenceWitness.W.lemma47
+#print axioms FlockSoundness.Audit.InfluenceWitness.W.count
+#print axioms FlockSoundness.Audit.InfluenceWitness.W.three_mem_exits
+#print axioms FlockSoundness.Audit.InfluenceWitness.A.influence
+#print axioms FlockSoundness.Audit.InfluenceWitness.A.accepts
+-- harm bounds and influence: the value bits (a harm bound) plus the choice of which units are wrong
+#print axioms FlockSoundness.Audit.escape_lt_of_harm_gt
+#print axioms FlockSoundness.Audit.Partition.card_exits_le
+#print axioms FlockSoundness.Audit.Partition.card_influenceSet_le_harm
+#print axioms FlockSoundness.Audit.Partition.card_admissible_le
+#print axioms FlockSoundness.Audit.InfluenceWitness.Gen.harm_witness
+-- exfiltration: the value bits and the location term, from the influence set
+#print axioms FlockSoundness.Audit.card_guess_le
+#print axioms FlockSoundness.Audit.Partition.audit_exfiltration_influenceSet
+#print axioms FlockSoundness.Audit.Partition.audit_exfiltration

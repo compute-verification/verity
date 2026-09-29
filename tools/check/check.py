@@ -13,7 +13,9 @@ Three independent groups run at once, the cores split between them (`--cores N`,
                     package's tests in their own process, a pass reused while its inputs are unchanged; each suite's log and the
                     outcomes (`suites.json`) beside the run's result
     circuit-check   `circuit-check --all --jobs` the other half: every registered Definition and template (`tools/circuit_check`),
-                    its report beside the run's result
+                    its report beside the run's result; then flock-circuit-build, `backends/flock/check_build.sh`: `cargo check` of
+                    flock-circuit in every CPU feature set a pod builds, the proving builds without `seed-injection` among them (a
+                    Flock b684b12 checkout, cached under $FLOCK_CHECKOUT)
     lean            `lake build` of the Lean verifier (`backends/flock/verifier/lean`), then its partition check against
                     `verity.ir.partition` (`unit_cut_agree.py`), then the audit of every Lake package with a `lean-audit.json`
                     (`tools/lean/audit.py --all --build`: axioms, sorry, declared axioms, escapes, files, kernel bypasses, code
@@ -302,7 +304,8 @@ def groups(out: Path, n: int, cache: bool = True) -> list[list[tuple[str, list[s
     pytest = [*suites, "--json", str(out / "suites.json"), "--logs", str(out / "suites"), "--skip", "verity-vllm", *after_lean, *tail]
     cc = [py, "-m", "circuit_check", "--all", "-q", "--jobs", str(b), "--out", str(out / "circuit-check.json"),
           *(["--cache", str(cache_dir() / "circuit-check")] if cache else [])]
-    return [[("pytest", pytest, ROOT)], [("circuit-check", cc, ROOT)], lean]
+    build = ["bash", str(ROOT / "backends" / "flock" / "check_build.sh")]
+    return [[("pytest", pytest, ROOT)], [("circuit-check", cc, ROOT), ("flock-circuit-build", build, ROOT)], lean]
 
 
 def steps(out: Path, n: int = 1) -> list[tuple[str, list[str] | str, Path]]:

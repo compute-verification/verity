@@ -103,6 +103,9 @@ import FlockSoundness.Audit.FlockWork
 import FlockSoundness.Audit.FlockBatchedAcc
 import FlockSoundness.Audit.FlockLink
 import FlockSoundness.Audit.FlockLinked
+import FlockSoundness.Audit.Harm
+import FlockSoundness.Audit.Influence
+import FlockSoundness.Audit.InfluenceWitness
 import FlockSoundness.E2E
 import FlockSoundness.Types.Units
 import FlockSoundness.Types.Program
