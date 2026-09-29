@@ -11,6 +11,7 @@ circuit, the frame-v3-sha512 roots from the public `b ‖ c` and outputs, and th
 import Flock.Statement
 import Flock.TemplateQuery
 import Flock.Typed
+import Flock.Extract
 
 namespace Flock
 
@@ -663,6 +664,39 @@ def deriveTemplateUnits (c : Circuit) (obj : Json) (program : ByteArray) (indice
     | some (_, _, ti) => if ti != t then throw s!"partition: unit {i} is an instance of {ti}, not the circuit's template {t}"
   return s!"units derived: {name} v{version} over the verifier's program ({pop} units); the statement's {indices.size} units are instances of {t}"
 
+/-- `Q_word` v1's units, derived from the verifier's own program: the program is the object's, the query evaluates on it
+(`Flock.Extract`, `Flock.Qword`), and every unit the statement claims (`indices`) is one whole activation of the circuit's
+template; and every Call's cut holds the partition invariant and the width rule on its whole graph (`Extract.checkCalls`, as
+`partition_object.verify` checks them). -/
+def deriveQwordUnits (c : Circuit) (obj : Json) (program : ByteArray) (indices : Array Nat) : V String := do
+  let q := (obj.getObjVal? "query").toOption.getD Json.null
+  let ps := (q.getObjVal? "params").toOption.getD Json.null
+  let X := (ps.getObjValAs? Nat "X").toOption.getD 0
+  let W := (ps.getObjValAs? Nat "W").toOption.getD 0
+  let P ← Program.decode program
+  if (obj.getObjValAs? String "program").toOption != some (hexOf P.sha512) then
+    throw "partition: the verifier's program is not the one the partition object names"
+  let calls ← match Extract.evaluate P X with
+    | .ok cs => pure cs
+    | .error e => throw s!"partition: {e}"
+  let some t := circuitTemplate c | throw "partition: META program_digests does not name the circuit's one template"
+  let checked ← Extract.checkCalls P calls X W
+  if let some (k, r) := (Extract.cutFailures calls checked)[0]? then
+    throw s!"partition: cut: Call {k}'s cut fails {r.codes}{if r.wide.isEmpty then "" else s!" (too wide, (unit, bits, values): {(r.wide.extract 0 4).toList})"}"
+  match Extract.claimedUnits P calls t indices with
+  | .ok note => return s!"units derived: Q_word v1 {"{"}X: {X}, W: {W}{"}"} over the verifier's program ({note}); every Call's cut holds the partition invariant and the width rule"
+  | .error e => throw s!"partition: {e}"
+
+/-- The partition finding of a query the template queries don't cover, given the verifier's program: `Q_word` v1's units
+derived (`deriveQwordUnits`), any other query's finding as it stands. -/
+def qwordFinding (c : Circuit) (pub : Public) (obj : Json) (program : ByteArray) (f : PartitionFinding) :
+    V (Option PartitionFinding) := do
+  let q := (obj.getObjVal? "query").toOption.getD Json.null
+  if ((q.getObjValAs? String "name").toOption.getD "", (q.getObjValAs? Nat "version").toOption.getD 0) == ("Q_word", 1) then
+    let indices ← (← J.arr (← J.get pub.header "units" "public file") "indices" "public file").mapM (J.asNat · "a unit index")
+    pure (some { f with derived := true, note := ← deriveQwordUnits c obj program indices })
+  else pure (some f)
+
 /-- The circuit's partition binding against the verifier's own copy of the partition object: a `verity/partition/v1` binding
 must be the tagged digest of that object (any query name), over META's `program_sha512`; the provisional unit cover takes
 none. Units are derived only for a query the verifier evaluates, from the program's Call graphs, which it does not decode yet:
@@ -682,7 +716,7 @@ def checkPartition (c : Circuit) (obj : Option Json) : V PartitionFinding := do
     let note := if (TemplateQuery.templatesOf name version Json.null).isSome then
         s!"units taken as stated, not derived: the verifier's copy of the program was not given (--program) to evaluate {name} v{version}"
       else if EVALUABLE.contains (name, version) then
-        s!"units taken as stated, not derived: {name} v{version} is a query the verifier evaluates (Flock.Qword), but it does not yet decode the program into its Call graphs"
+        s!"units taken as stated, not derived: the verifier's copy of the program was not given (--program) to evaluate {name} v{version}"
       else s!"units taken as stated, not derived: the verifier does not evaluate {name} v{version}"
     return { rule, query := s!"{name} v{version}", digest, derived := false, note }
   | _, some _ => throw "partition: the circuit binds the provisional unit cover, not a verity/partition/v1 object"
@@ -757,24 +791,25 @@ units' indices; the public digest covers that header and the population's public
 stay the statement's, with the drawn units' refs into them. -/
 def drawn (c : Circuit) (pub : Public) (draw : Json) : V Public := do
   let d ← Draw.UnitDraw.ofJson draw
+  let proved := d.proved
   if d.population != pub.n || pub.population.isSome then throw "U: the draw's population is not this registered population"
   let np := c.ports.size
   let nOut := c.outWords
   let pctx := "public file"
   let popIdx ← (← J.arr (← J.get pub.header "units" pctx) "indices" pctx).mapM (J.asNat · "a unit index")
-  let indices := d.units.map fun u => popIdx.getD u 0
-  let header := ((pub.header.setObjVal! "unit_draw" draw).setObjVal! "instances" (Lean.toJson d.units.size)
+  let indices := proved.map fun u => popIdx.getD u 0
+  let header := ((pub.header.setObjVal! "unit_draw" draw).setObjVal! "instances" (Lean.toJson proved.size)
     |>.setObjVal! "population" (Lean.toJson pub.n)).setObjVal! "units" (unitsEntry c indices)
   let mut pubs := pub.digests.foldl (· ++ ·) ByteArray.empty
   if let some t := pub.tables then
     for r in t.refs do pubs := pubs ++ le32 r.toUInt32
   for w in pub.outputs do pubs := pubs.push (w % 256).toUInt8 |>.push (w / 256).toUInt8
-  return { header, n := d.units.size,
+  return { header, n := proved.size,
            digests := if pub.tables.isSome then pub.digests
-             else d.units.foldl (fun acc u => acc ++ pub.digests.extract (u * np) (u * np + np)) #[],
-           outputs := d.units.foldl (fun acc u => acc ++ pub.outputs.extract (u * nOut) (u * nOut + nOut)) #[],
+             else proved.foldl (fun acc u => acc ++ pub.digests.extract (u * np) (u * np + np)) #[],
+           outputs := proved.foldl (fun acc u => acc ++ pub.outputs.extract (u * nOut) (u * nOut + nOut)) #[],
            sha := ← publicDigest header pubs, population := some (pub.n, pub.digests, pub.outputs),
-           tables := pub.tables.map fun t => { t with refs := d.units.foldl (fun acc u => acc ++ t.refs.extract (u * np) (u * np + np)) #[] } }
+           tables := pub.tables.map fun t => { t with refs := proved.foldl (fun acc u => acc ++ t.refs.extract (u * np) (u * np + np)) #[] } }
 
 /-- The strata of the verifier's own program and partition object, and the population: the query applied to the program,
 its units grouped by template descriptor id (`Draw.strataOf`). Only `Q_template_instance` v0 and `Q_template_instances` v0
@@ -801,9 +836,9 @@ def stratifiedLaw (obj : Json) (program : ByteArray) (k : Nat) : V (Draw.Law × 
   | .ok law => return (law, population)
   | .error e => throw s!"stratified: {e}"
 
-/-- `work:K` expanded over the verifier's own program, partition object and work table (`Draw.deriveWork`), and the
-population. -/
-def workLaw (obj : Json) (program : ByteArray) (k : Nat) (table : Array (String × Nat)) : V (Draw.Law × Nat) := do
+/-- `work:K` expanded over the verifier's own program, partition object and work table of works and floors
+(`Draw.deriveWork`), and the population. -/
+def workLaw (obj : Json) (program : ByteArray) (k : Nat) (table : Array (String × Nat × Nat)) : V (Draw.Law × Nat) := do
   let (strata, population) ← templateStrata "work" obj program
   match Draw.deriveWork k strata table with
   | .ok law => return (law, population)
@@ -820,8 +855,8 @@ def checkPublic (c : Circuit) (pub : Public) : V Unit := do
   let (n, bcs, outputs) := pub.population.getD (pub.n, pub.digests, pub.outputs)
   if let .ok d := pub.header.getObjVal? "unit_draw" then
     let u ← Draw.UnitDraw.ofJson d
-    if (← J.nat pub.header "instances" "public file") != u.units.size || pub.n != u.units.size then
-      throw "U3: the statement's instances are not the drawn units"
+    if (← J.nat pub.header "instances" "public file") != u.proved.size || pub.n != u.proved.size then
+      throw "U3: the statement's instances are not the drawn units and their closure"
   let H := Sha512.hash
   for p in [0:np] do
     let port := c.ports[p]!
@@ -950,7 +985,7 @@ def Stmt.setupH (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coin
       if (TemplateQuery.templatesOf ((q.getObjValAs? String "name").toOption.getD "") ((q.getObjValAs? Nat "version").toOption.getD 0) Json.null).isSome then
         let indices ← (← J.arr (← J.get pub.header "units" "public file") "indices" "public file").mapM (J.asNat · "a unit index")
         pure (some { f with derived := true, note := ← HmRow.deriveTemplateUnits c obj prog indices })
-      else pure (some f)
+      else HmRow.qwordFinding c pub obj prog f
     | f, _, _ => pure f
   let n := pub.n
   let blocksReal := (n + c.g - 1) / c.g
@@ -978,11 +1013,23 @@ several, the session's units (the draw's, without one the population's) split in
 table `j` is `setupH`'s statement of part `j` as a subset draw of the population, under `Tags.tableIdentity`: every check
 `setupH` makes, it makes on each table. Every part comes from `draw`, the session's, never from a table's header. The
 session's Σ covers every table's; its `unitDraw` is `draw`. `work` is the verifier's own `K` and work table, which a work
-draw's law is held to, and `stratified` its own `K`, at which a stratified draw's law is its own derivation. -/
+draw's law is held to, `stratified` its own `K`, at which a stratified draw's law is its own derivation, and `closure` its
+own closure map, which a work draw's closure is held to. -/
 def Stmt.setupTables (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins) (count : Nat)
     (tables : List (String × ByteArray) := []) (draw : Option Json := none) (partition : Option Json := none)
-    (program : Option ByteArray := none) (work : Option (Nat × Array (String × Nat)) := none)
-    (stratified : Option Nat := none) : V (SessionSpec × Array Stmt) := do
+    (program : Option ByteArray := none) (work : Option (Nat × Array (String × Nat × Nat)) := none)
+    (stratified : Option Nat := none) (closure : Option (Std.HashMap Nat (Array Nat)) := none) :
+    V (SessionSpec × Array Stmt) := do
+  -- a closure draw proves more units than it draws, so what it adds must be the verifier's own closure of the draw
+  if let some d := draw then
+    if let .ok u := Draw.UnitDraw.ofJson d then
+      if let .work .. := u.law then
+        match closure with
+        | some cm =>
+          if u.closure != Draw.closureOf cm u.units then
+            throw "U3: the draw's closure is not the verifier's own (its closure map)"
+        | none =>
+          if !u.closure.isEmpty then throw "U3: a closure draw needs the verifier's own closure map (--closure)"
   -- a stratified draw's K and strata set every k_s, so its law must be the verifier's own derivation, never taken as stated
   if let some d := draw then
     if let .ok (Draw.Law.stratified k strata) := (Draw.UnitDraw.ofJson d).map (·.law) then

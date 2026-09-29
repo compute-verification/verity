@@ -57,34 +57,6 @@ def test_audit_layer_is_abstract():
     assert not admitted, admitted
 
 
-STANDARD_AXIOMS = {"propext", "Classical.choice", "Quot.sound"}
-
-
-def check_axioms(root, target):
-    subprocess.run(["lake", "build", target], cwd=root, check=True, capture_output=True)
-    out = subprocess.run(["lake", "env", "lean", "CheckAxioms.lean"], cwd=root, check=True, capture_output=True, text=True).stdout
-    lines = [l for l in out.splitlines() if "depends on axioms" in l or "does not depend on any axioms" in l]
-    assert lines, out
-    for l in lines:
-        used = set(re.findall(r"[\w.]+", l.split(":", 1)[1])) if "depends on axioms" in l else set()
-        assert used <= STANDARD_AXIOMS, l
-
-
-@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
-def test_proofs_use_only_standard_axioms():
-    check_axioms(LEAN, "FlockProofs")
-
-
-LEVEL3 = LEAN / "level3"
-
-
-@pytest.mark.skipif(shutil.which("lake") is None or not (LEVEL3 / ".lake" / "packages" / "mathlib" / ".lake" / "build").is_dir(),
-                    reason="level3 needs Mathlib's build cache (`lake exe cache get` in lean/level3)")
-def test_field_proofs_use_only_standard_axioms():
-    assert (LEVEL3 / "lean-toolchain").read_text().strip() == TOOLCHAIN
-    check_axioms(LEVEL3, "FlockLevel3")
-
-
 def _has_unit_cut():
     try:
         from verity.ir.partition import validate_unit_cut  # noqa: F401
@@ -317,17 +289,17 @@ def _work_program(tmp_path):
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_work_draw_from_the_verifiers_own_program(tmp_path):
-    """`draw --program --partition --work K --work-table F`: the stratified law's strata, `k_s = min(n_s, max(1,
-    ⌈K w_s n_s / W⌉))` (a stratum that does no work draws its floor of one), each stratum's `subset` on its own segment of
-    the stream, and U2 on work draws, held to the verifier's own law."""
+    """`draw --program --partition --work K --work-table F`: the stratified law's strata, `k_s = min(n_s, max(f_s,
+    ⌈K w_s n_s / W⌉))` with each stratum's floor `f_s` from the table (one by default, so a stratum that does no work draws
+    one), each stratum's `subset` on its own segment of the stream, and U2 on work draws, held to the verifier's own law."""
     import random
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
     ref = _stratified_agree()
     table = _work_program(tmp_path)
     flags = table("w.json", {"T0_v0": 3, "T1_v0": 1, "T2_v0": 0})
-    law = {"law": "work", "k": 2, "strata": [{"template": "T0_v0", "units": [[0, 2], [5, 6]], "work": 3, "k": 2},
-                                             {"template": "T1_v0", "units": [[2, 5]], "work": 1, "k": 1},
-                                             {"template": "T2_v0", "units": [[6, 10]], "work": 0, "k": 1}]}
+    law = {"law": "work", "k": 2, "strata": [{"template": "T0_v0", "units": [[0, 2], [5, 6]], "work": 3, "floor": 1, "k": 2},
+                                             {"template": "T1_v0", "units": [[2, 5]], "work": 1, "floor": 1, "k": 1},
+                                             {"template": "T2_v0", "units": [[6, 10]], "work": 0, "floor": 1, "k": 1}]}
     need = sum(2 * s["k"] * ref.width(sum(hi - lo for lo, hi in s["units"])) + 64 for s in law["strata"])
     rng = random.Random(20260929)
     for _ in range(20):
@@ -363,6 +335,27 @@ def test_work_draw_from_the_verifiers_own_program(tmp_path):
     strat = _lean_draw_obj([*flags[:4], "--stratified", "2"])
     assert [g["ok"] for g in check([other, strat])] == [True, True]
     assert [g["ok"] for g in check([other, strat], *flags, "--work", "2")] == [False, False]
+    # floors per stratum from the table: T2 (no work, 4 of 10 units) at floor 2 draws what stratified:4 draws from it,
+    # at floor 9 all four; a floor on a working stratum lifts it too
+    cases = [({"T0_v0": 3, "T1_v0": 1, "T2_v0": {"work": 0, "floor": 2}}, [1, 1, 2], [2, 1, 2]),
+             ({"T0_v0": 3, "T1_v0": 1, "T2_v0": {"work": 0, "floor": 9}}, [1, 1, 9], [2, 1, 4]),
+             ({"T0_v0": 3, "T1_v0": {"work": 1, "floor": 3}, "T2_v0": 0}, [1, 3, 1], [2, 3, 1])]
+    for i, (work, floors, want) in enumerate(cases):
+        df = _lean_draw_obj([*table(f"wf{i}.json", work), "--work", "2"])
+        assert [s["floor"] for s in df["strata"]] == floors and [s["k"] for s in df["strata"]] == want, work
+    assert _lean_draw_obj([*flags[:4], "--stratified", "4"])["strata"][2]["k"] == 2
+    ff = table("wf.json", cases[0][0])
+    df = _lean_draw_obj([*ff, "--work", "2"])
+    f0, f1, f2 = df["strata"]
+    # U2 refuses a floor of 0, a missing floor and a count key; floor 1 with k 1 is the rule's, and only the verifier's own
+    # table refuses it
+    fbad = [{**df, "strata": [f0, f1, {**f2, "floor": 0}]}, {**df, "strata": [f0, f1, {k: v for k, v in f2.items() if k != "floor"}]},
+            {**df, "count": 4}, {**df, "strata": [f0, f1, {**f2, "floor": 1, "k": 1}], "units": [u for u in df["units"] if u < 6] + [6]}]
+    assert [g["ok"] for g in check([df, *fbad], *ff, "--work", "2")] == [True] + [False] * 4
+    assert [g["ok"] for g in check([df, fbad[3]])] == [True, True]
+    assert [g["ok"] for g in check([df, d], *flags, "--work", "2")] == [False, True]
+    assert _lean_draw_obj([*table("wf0z.json", {"T0_v0": 3, "T1_v0": 1, "T2_v0": {"work": 0, "floor": 0}}), "--work", "2"]) is None
+    assert _lean_draw_obj([*table("wfx.json", {"T0_v0": {"work": 3, "floor": 1, "x": 1}, "T1_v0": 1, "T2_v0": 0}), "--work", "2"]) is None
     for k in ("0", "11"):
         assert _lean_draw_obj([*flags, "--work", k]) is None
     assert _lean_draw_obj([*table("w3.json", {"T0_v0": 3, "T1_v0": 1}), "--work", "2"]) is None
@@ -374,8 +367,8 @@ def test_work_draw_from_the_verifiers_own_program(tmp_path):
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_verify_takes_a_work_draw_only_from_its_own_table(tmp_path):
     """`verify` refuses a session whose record carries a work draw unless it holds its own K, work table, program and
-    partition, since the draw's K and stated work set every k_s; with all four, the law must be its own derivation, so a
-    draw made at another K (k = 1, say, which U2 alone accepts) is refused."""
+    partition, since the draw's K, works and floors set every k_s; with all four, the law must be its own derivation, so a
+    draw made at another K (k = 1, say, which U2 alone accepts) or under other floors is refused."""
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
     table = _work_program(tmp_path)
     flags = table("w.json", {"T0_v0": 3, "T1_v0": 1, "T2_v0": 0})
@@ -413,6 +406,13 @@ def test_verify_takes_a_work_draw_only_from_its_own_table(tmp_path):
     # at its own K and table the law is its own derivation, and setup goes on to the circuit, which this file is not
     assert not why(at2, *flags, "--work", "2").startswith("setup: U2:")
     assert not why(at1, *flags, "--work", "1").startswith("setup: U2:")
+    # the floors are the verifier's too: a draw made under a table with T2's floor at 3 is refused under the verifier's
+    # table (floor 1), and one made under floor 1 is refused under a table with floor 3
+    floored = table("wf.json", {"T0_v0": 3, "T1_v0": 1, "T2_v0": {"work": 0, "floor": 3}})
+    at2f = session("k2f", _lean_draw_obj([*floored, "--work", "2"]))
+    assert why(at2f, *flags, "--work", "2").startswith("setup: U2: the draw's work law is not the verifier's own")
+    assert why(at2, *floored, "--work", "2").startswith("setup: U2: the draw's work law is not the verifier's own")
+    assert not why(at2f, *floored, "--work", "2").startswith("setup: U2:")
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -461,6 +461,85 @@ def test_verify_takes_a_stratified_draw_only_at_its_own_k(tmp_path):
     assert not why(at1, *flags, "--stratified", "1").startswith("setup: U2:")
 
 
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_closure_draw_proves_the_verifiers_closure(tmp_path):
+    """`draw --work K --work-table F --closure C`: the work draw, unchanged, widened by the verifier's closure map (each
+    drawn unit's closure, less the drawn units). U2 on the closure, U3 counting the drawn units and their closure, and
+    `verify` holding the closure to the verifier's own map."""
+    import random
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    ref = _stratified_agree()
+    table = _work_program(tmp_path)
+    flags = table("w.json", {"T0_v0": 3, "T1_v0": 1, "T2_v0": 0})
+    cmap = {0: [6], 1: [6, 7], 5: [8], 2: [9], 3: [9], 4: [7]}
+    (tmp_path / "cl.json").write_text(json.dumps({str(u): cs for u, cs in cmap.items()}))
+    (tmp_path / "cl2.json").write_text(json.dumps({}))
+    cl = ["--closure", str(tmp_path / "cl.json")]
+
+    def closure_of(units):
+        return sorted({c for u in units for c in cmap.get(u, [])} - set(units))
+
+    rng = random.Random(20260929)
+    for _ in range(10):
+        plain = _lean_draw_obj([*flags, "--work", "2"])
+        law = {k: plain[k] for k in ("law", "k", "strata")}
+        need = sum(2 * s["k"] * ref.width(sum(hi - lo for lo, hi in s["units"])) + 64 for s in law["strata"])
+        src = rng.randbytes(need)
+        (tmp_path / "s.bin").write_bytes(src)
+        d = _lean_draw_obj([*flags, "--work", "2", *cl, "--stream-file", str(tmp_path / "s.bin")])
+        assert d["units"] == ref.reference_draw(law, src)
+        assert d.get("closure", []) == closure_of(d["units"])
+    d = _lean_draw_obj([*flags, "--work", "2", *cl])
+    while not d.get("closure"):
+        d = _lean_draw_obj([*flags, "--work", "2", *cl])
+    n = len(d["units"]) + len(d["closure"])
+
+    def check(cases, *extra):
+        (tmp_path / "cases.json").write_text(json.dumps([{"record": x, "statement": x, "instances": i} for x, i in cases]))
+        p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "draw-test", str(tmp_path / "cases.json"), *extra],
+                           capture_output=True, text=True)
+        return [json.loads(line[10:]) for line in p.stdout.splitlines()]
+
+    # U3 counts the drawn units and their closure
+    got = check([(d, n), (d, len(d["units"]))])
+    assert [g["ok"] for g in got] == [True, False] and got[1]["why"].startswith("U3:"), got
+    c = d["closure"]
+    bad = [{**d, "closure": []}, {**d, "closure": c[::-1] if len(c) > 1 else c + [c[0]]},
+           {**d, "closure": sorted(c + [d["units"][0]])}, {**d, "closure": c + [10]}, {**d, "closure": ["7"]}]
+    assert [g["ok"] for g in check([(x, len(x["units"]) + len(x["closure"])) for x in bad])] == [False] * len(bad)
+    strat = _lean_draw_obj([*flags[:4], "--stratified", "2"])
+    assert not check([({**strat, "closure": [9]}, len(strat["units"]) + 1)])[0]["ok"]
+    # the verifier's own map: its closure is accepted, a smaller one refused, and a plain draw lacks its closure
+    smaller = {**d, "closure": c[:-1]} if len(c) > 1 else {k: v for k, v in d.items() if k != "closure"}
+    assert [g["ok"] for g in check([(d, n), (smaller, n - 1)], *flags, "--work", "2", *cl)] == [True, False]
+    (tmp_path / "circuit.txt").write_text("not a circuit\n")
+    (tmp_path / "pub.bin").write_bytes(b"{}\n")
+
+    def session(name, draw):
+        s = tmp_path / name
+        s.mkdir()
+        (s / "session.json").write_text(json.dumps({"kind": "flock-live-session/v1", "unit_draw": draw}))
+        for r in (0, 1):
+            (s / f"circuit.rep{r}.bin").write_bytes(b"\0" * 16)
+        return s
+
+    def why(s, *extra):
+        p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "verify", "--circuit", str(tmp_path / "circuit.txt"),
+                            "--public", str(tmp_path / "pub.bin"), *flags, "--work", "2", *extra, "--session", str(s)],
+                           capture_output=True, text=True)
+        (v,) = [json.loads(line[8:]) for line in p.stdout.splitlines() if line.startswith("VERDICT ")]
+        assert not v["accepted"] and p.returncode == 1
+        return v["why"]
+
+    widened = session("widened", d)
+    assert why(widened).startswith("setup: U3: a closure draw needs the verifier's own closure map (--closure)")
+    assert why(widened, "--closure", str(tmp_path / "cl2.json")).startswith("setup: U3: the draw's closure is not the verifier's own")
+    assert not why(widened, *cl).startswith(("setup: U2:", "setup: U3:"))
+    plain = session("plain", {k: v for k, v in d.items() if k != "closure"})
+    assert why(plain, *cl).startswith("setup: U3: the draw's closure is not the verifier's own")
+    assert not why(plain).startswith(("setup: U2:", "setup: U3:"))
+
+
 def _one_stage_draw():
     try:
         from verity_one_stage import draw
@@ -482,6 +561,87 @@ def test_template_queries_agree_with_the_vectors(tmp_path):
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
     p = subprocess.run(["python3", str(LEAN.parent / "template_query_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
                         "--vectors", str(_template_vectors()), "--out", str(tmp_path)], capture_output=True, text=True)
+    assert p.returncode == 0, p.stdout + p.stderr
+
+
+def _has_check_cut():
+    try:
+        from verity.ir.cut import check_cut  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+@pytest.mark.skipif(shutil.which("lake") is None or not _has_check_cut(), reason="no Lean toolchain or no verity.ir.cut (PR #111)")
+def test_check_cut_agrees_with_the_reference(tmp_path):
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    p = subprocess.run(["python3", str(LEAN.parent / "cut_check_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
+                        "--out", str(tmp_path), "--n", "300"], capture_output=True, text=True)
+    assert p.returncode == 0, p.stdout + p.stderr
+
+
+def _qword_vector_file():
+    try:
+        import verity
+        from verity.ir.codec import decode_program  # noqa: F401
+    except ImportError:
+        return None
+    v = Path(verity.__file__).resolve().parents[2] / "tests" / "ir" / "qword_vectors.json"
+    return v if v.exists() else None
+
+
+@pytest.mark.skipif(shutil.which("lake") is None or _qword_vector_file() is None,
+                    reason="no Lean toolchain or no qword_vectors.json in core (PR #111)")
+def test_qword_cuts_agree_with_core_verify(tmp_path):
+    """Every Call's cut on its whole graph (`qword-program --cuts`: the partition invariant and the width rule), against core's
+    `partition_object.verify`: its pinned cut refusals, and each of its programs at several (X, W)."""
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    p = subprocess.run(["python3", str(LEAN.parent / "qword_program_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
+                        "--out", str(tmp_path), "--qword-vectors", str(_qword_vector_file())], capture_output=True, text=True)
+    assert p.returncode == 0, p.stdout + p.stderr
+    r = json.loads(p.stdout.strip().splitlines()[-1])["qword_vectors"]
+    assert r["cut_refusals"] == 3 and r["cuts"] == 50, r
+
+
+def _qword_vectors():
+    try:
+        import verity.ir.partition_object  # noqa: F401
+        from verity.ir.cut import cut_word  # noqa: F401
+    except ImportError:
+        return None
+    import verity
+    v = Path(verity.__file__).resolve().parents[2] / "tests" / "ir" / "partition_vectors.json"
+    return v if v.exists() else None
+
+
+@pytest.mark.skipif(shutil.which("lake") is None or _qword_vectors() is None, reason="no Lean toolchain or no Q_word evaluator (PR #111)")
+def test_qword_evaluator_agrees_with_the_reference(tmp_path):
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    p = subprocess.run(["python3", str(LEAN.parent / "qword_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
+                        "--out", str(tmp_path), "--n", "300", "--vectors", str(_qword_vectors())], capture_output=True, text=True)
+    assert p.returncode == 0, p.stdout + p.stderr
+
+
+def _format_vectors():
+    try:
+        import verity
+    except ImportError:
+        return None
+    ir = Path(verity.__file__).resolve().parents[2] / "tests" / "ir"
+    need = [ir / "format_vectors.json", ir / "partition_vectors.json", ir / "test_format_spec.py"]
+    return ir if all(p.exists() for p in need) else None
+
+
+@pytest.mark.skipif(shutil.which("lake") is None or _format_vectors() is None,
+                    reason="no Lean toolchain or no program format vectors (PR #120)")
+def test_qword_over_programs_agrees_with_the_reference(tmp_path):
+    ir = _format_vectors()
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    p = subprocess.run(["python3", str(LEAN.parent / "qword_program_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
+                        "--out", str(tmp_path), "--vectors", str(ir / "partition_vectors.json"),
+                        "--format", str(ir / "format_vectors.json")]
+                       + (["--qword-vectors", str(ir / "qword_vectors.json")] if (ir / "qword_vectors.json").exists() else []),
+                       capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr
 
 
@@ -525,12 +685,12 @@ def test_region_refuses_a_repeated_free_bit(tmp_path):
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_pin_is_a_column_of_the_block(tmp_path):
     """Both statements' pin is a column of the block, whatever the layout checks before it established (R9c's refinement
-    uses it as a local fact): a first range starting at `2^k_log` gives a pin outside the block, refused."""
+    uses it as a local fact): a first range of one slot starting at `2^k_log` gives a pin outside the block, refused."""
     subprocess.run(["lake", "build", "Flock"], cwd=LEAN, check=True, capture_output=True)
     f = tmp_path / "Pin.lean"
     f.write_text("import Flock\nopen Flock\n"
                  "def at_ (pos0 : Nat) : Circuit :=\n  { (default : Circuit) with\n    kLog := 10, nets := #[(\"u\", default)],\n"
-                 "    ranges := #[{ kind := .net 0, slotLog := 7, pos0, count := 0, role := .none, packed := true }] }\n"
+                 "    ranges := #[{ kind := .net 0, slotLog := 7, pos0, count := 1, role := .none, packed := true }] }\n"
                  "def show_ : V Nat → String | .ok p => s!\"ok {p}\" | .error e => e\n"
                  "#eval (show_ (HmRow.pin (at_ 8)), show_ ((at_ 8).pin default))\n"
                  "#eval (show_ (HmRow.pin (at_ 7)), show_ ((at_ 7).pin default))\n")

@@ -72,8 +72,8 @@ its `[[run]]` entries, each a recorded `research run --on MACHINE` launched dail
 handoff per lane per pass (a final lane's to `lanes/coordinator/`); `KILLED-UNOWNED <line>` when no lane does.  A rule that fails
 prints `STEWARD-ERROR <rule>: <error>` and the watch goes on.
 
-`relaunch` is contract §C in one command: save the lane's uncommitted work to `lanes/<lane>/evidence/uncommitted-<HHMMZ>*`,
-checkpoint it superseded, bind the successor (`<topic>-<N+1>` unless `--as`) to its branch, worktree and pods, print the
+`relaunch` is contract §C in one command: save the lane's uncommitted work to `~/.research/relaunch/<lane>/uncommitted-<HHMMZ>*`
+(`$RESEARCH_RELAUNCH`; on the worktree's machine, never in the notes), checkpoint it superseded, bind the successor (`<topic>-<N+1>` unless `--as`) to its branch, worktree and pods, print the
 successor's launch message.  `gc-worktrees` lists (`--apply`: removes) clean worktrees under the coordinator's worktree root
 whose lanes are all done and whose branch tip is on origin; branches are never deleted, dirty worktrees never removed.
 
@@ -801,13 +801,16 @@ def is_git_data(p: Path) -> bool:
 
 def snapshot(root: Path, max_bytes: int = SNAPSHOT_MAX_BYTES, now: dt.datetime | None = None) -> dict | None:
     """Commit every change in the notes repo except files over `max_bytes` (dumps belong in the store; .gitignore drops the known
-    kinds).  Only the coordinator's watcher calls this, so lanes never contend for the index lock.  None: not a repo, or clean."""
+    kinds), git data (`refused`) and evidence or renders (`evidence`: `notes_sync.is_evidence`, the store holds them).  Only the
+    coordinator's watcher calls this, so lanes never contend for the index lock.  None: not a repo, or clean."""
+    from .notes_sync import is_evidence  # noqa: PLC0415
+
     if not (root / ".git").exists():
         return None
     st = _git(root, "status", "--porcelain=v1", "-z", "--untracked-files=all")
     if st is None:
         return None
-    entries, paths, big, refused = st.split("\0"), [], [], []
+    entries, paths, big, refused, evidence = st.split("\0"), [], [], [], []
     i = 0
     while i < len(entries):
         e = entries[i]
@@ -824,18 +827,23 @@ def snapshot(root: Path, max_bytes: int = SNAPSHOT_MAX_BYTES, now: dt.datetime |
         if p.is_file() and is_git_data(p):
             refused.append(path)
             continue
+        if p.is_file() and is_evidence(path):
+            evidence.append(path)
+            continue
         (big if p.is_file() and p.stat().st_size > max_bytes else paths).append(path)
+    left = {"skipped": big, "refused": refused, "evidence": evidence}
     if not paths:
-        return {"commit": None, "paths": 0, "skipped": big, "refused": refused} if big or refused else None
+        return {"commit": None, "paths": 0, **left} if big or refused or evidence else None
     subprocess.run(["git", "--literal-pathspecs", "-C", str(root), "add", "-A", "--pathspec-from-file=-", "--pathspec-file-nul"],
                    input="\0".join(paths), text=True, check=True, capture_output=True, timeout=120)
+    if evidence:                                          # a staged copy would be committed anyway
+        _git(root, "--literal-pathspecs", "reset", "-q", "--", *evidence)
     now = now or _utcnow()
     msg = (f"snapshot {now:%Y-%m-%dT%H:%MZ}: {len(paths)} paths" + (f"; {len(big)} too big, not committed" if big else "")
-           + (f"; {len(refused)} git data refused" if refused else ""))
+           + (f"; {len(refused)} git data refused" if refused else "") + (f"; {len(evidence)} evidence left out" if evidence else ""))
     if subprocess.run(["git", "-C", str(root), "commit", "-q", "--no-verify", "-m", msg], capture_output=True, timeout=60).returncode:
-        return {"commit": None, "paths": 0, "skipped": big, "refused": refused}
-    return {"commit": (_git(root, "rev-parse", "--short", "HEAD") or "").strip(), "paths": len(paths), "skipped": big,
-            "refused": refused}
+        return {"commit": None, "paths": 0, **left}
+    return {"commit": (_git(root, "rev-parse", "--short", "HEAD") or "").strip(), "paths": len(paths), **left}
 
 
 # ---- rendering and the watch loop ----------------------------------------------------------------------------------------------------------
@@ -915,6 +923,9 @@ def _snapshot_line(snap: dict) -> str:
     refused = snap.get("refused") or []
     if refused:
         tail += f"; REFUSED {len(refused)} git data (code moves only through verity branches): {', '.join(refused[:3])}"
+    evidence = snap.get("evidence") or []
+    if evidence:
+        tail += f"; left out {len(evidence)} evidence/render files (the evidence store holds them): {', '.join(evidence[:3])}"
     return f"notes snapshot {snap['commit'] or '(none)'}: {snap['paths']} paths{tail}"
 
 
@@ -1060,6 +1071,7 @@ WEEKDAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 #: The artifact kinds whose payloads the render's readers parse (instance-equiv/v1 documents; payload-only bench-result/v1
 #: envelopes): a render entry's store refresh makes them local unless the entry names its own `payloads`.
 RENDER_PAYLOAD_KINDS = ("instance-equiv/v1", "bench-result/v1")
+RENDERS_ENV = "RESEARCH_RENDERS"
 NEVER_RAN = ("refused", "resolving", "shipping")        # remote.json phases of a launch that never reached the machine's runner
 BUDGET_RE = re.compile(r"\$\s*(\d+(?:\.\d+)?)")
 HHMMZ_RE = re.compile(r"(\d{1,2}):(\d{2})Z")
@@ -1339,11 +1351,17 @@ def due_period(at: re.Match, now: dt.datetime, weekday: str | None = None) -> st
     return f"{year}-W{week:02d}" if now >= start else None
 
 
+def renders_root() -> Path:
+    """Where a render entry's relative `out` lands: `$RESEARCH_RENDERS`, else ~/.research/renders.  Never the notes: they are Git."""
+    return Path(os.environ.get(RENDERS_ENV) or Path.home() / ".research" / "renders").expanduser()
+
+
 def render_lines(root: Path, now: dt.datetime, state: dict, config: Path | None = None,
                  run: Callable[[list[str], dict, Path, float], tuple[int | None, str, str]] = _render_run,
                  timeout_s: float = RENDER_TIMEOUT_S) -> list[str]:
     """Scheduled renders, from `[[render]]` entries of <root>/steward.toml (re-read every pass): `at` (HH:MMZ, daily), `source` (a tree
-    with backends/numerical and tools/research), `out` (under the notes root), `store` (default ~/.research/store).  Once per UTC day
+    with backends/numerical and tools/research), `out` (a directory outside the notes: absolute, or relative to :func:`renders_root`;
+    one inside the notes is an invalid entry, since renders never go to Git), `store` (default ~/.research/store).  Once per UTC day
     at or after `at`, `python -m verity_numerical.bench.tables` and `.drilldown --root STORE --format md` run with the source tree's
     workspace import roots and root on PYTHONPATH (`research env --source`, `pythonpath.tree_pythonpath`) into <out>/<stamp>-tables.md / -drilldowns.md: `RENDERED <path>`, or `RENDER-FAILED <entry>: <stderr tail>` (both
     within 10 min).  An entry with `preview = true` also renders `.views` (the approved spec's tables, a labelled preview that is
@@ -1355,8 +1373,8 @@ def render_lines(root: Path, now: dt.datetime, state: dict, config: Path | None 
     difference is a RENDER-FAILED line) as <stamp>-parity.md.  `published = "tables"` is the default.  Before rendering, the entry's store is caught up from the remote
     with `research data refresh --payloads <kinds>` (`payloads`, default :data:`RENDER_PAYLOAD_KINDS`), so a render on a machine
     that did not write the records (the control pod) reads what the pods published, payloads included; `refresh = false` skips it,
-    and a failed refresh is `RENDER-REFRESH-FAILED <entry>: ...` while the render still runs on the store as it is.  The snapshot
-    commits them."""
+    and a failed refresh is `RENDER-REFRESH-FAILED <entry>: ...` while the render still runs on the store as it is.  A render is
+    regenerated from the store on demand, so it is output, not evidence: nothing commits or stores it."""
     entries, lines = steward_entries(config or root / STEWARD_TOML, "render", now, state, "RENDER-FAILED")
     if not entries:
         return lines
@@ -1364,8 +1382,11 @@ def render_lines(root: Path, now: dt.datetime, state: dict, config: Path | None 
     for e in entries:
         at, out = str(e.get("at", "")), str(e.get("out", ""))
         key, m = f"{out}@{at}", HHMMZ_RE.fullmatch(at)
+        dest = renders_root() / Path(out).expanduser()                      # an absolute `out` stays itself
         bad = ("an entry needs at = \"HH:MMZ\", source and out" if not (m and out and e.get("source")) else
-               f"published = {e['published']!r}: \"tables\", \"views\" or \"entities\"" if e.get("published", "tables") not in ("tables", "views", "entities") else None)
+               f"published = {e['published']!r}: \"tables\", \"views\" or \"entities\"" if e.get("published", "tables") not in ("tables", "views", "entities") else
+               f"out {out!r} is inside the notes ({root}): renders never go to Git; use an absolute path outside them, or one relative "
+               f"to ${RENDERS_ENV} (default ~/.research/renders)" if dest.resolve().is_relative_to(Path(root).resolve()) else None)
         if bad:
             if done.get(key) != "invalid":
                 done[key] = "invalid"
@@ -1397,7 +1418,7 @@ def render_lines(root: Path, now: dt.datetime, state: dict, config: Path | None 
             cmd = [sys.executable, "-m", f"verity_numerical.bench.{mod}", "--root", str(store), "--format", fmt, *extra]
             rc, stdout, stderr = run(cmd, env, src, left) if left > 0 else (None, "", f"timeout after {timeout_s:.0f}s")
             if rc == 0:
-                f = root / out / f"{now:%Y%m%dT%H%MZ}-{suffix}.{'md' if fmt == 'md' else 'json'}"
+                f = dest / f"{now:%Y%m%dT%H%MZ}-{suffix}.{'md' if fmt == 'md' else 'json'}"
                 f.parent.mkdir(parents=True, exist_ok=True)
                 f.write_text(stdout)
                 lines.append(f"{now:%H:%MZ} RENDERED {_tilde(f)}")
@@ -1602,6 +1623,12 @@ def save_uncommitted(wt: Path, dest: Path, stamp: str, max_file_mb: float = 100)
     return {"files": files, "dirty": len(lines), "conflicts": [x[3:] for x in lines if x[:2] in UNMERGED], "big": big}
 
 
+def relaunch_dir(lane: str) -> Path:
+    """Where `relaunch` saves a lane's uncommitted work: `$RESEARCH_RELAUNCH/<lane>`, else ~/.research/relaunch/<lane>.  On the
+    worktree's machine, never in the notes: a copy of code is not evidence, and the notes are Git."""
+    return Path(os.environ.get("RESEARCH_RELAUNCH") or Path.home() / ".research" / "relaunch").expanduser() / lane
+
+
 def successor_name(root: Path, lane: str, succ: dict[str, str] | None = None) -> str:
     """`<topic>-<N+1>`: wave-4090 -> wave-4090-2 -> wave-4090-3 (a name some lane dir already has is skipped)."""
     topic, n = attempt(root, lane, succ)
@@ -1629,7 +1656,7 @@ def relaunch(root: Path, lane: str, successor: str | None = None, why: str = "",
     branch = b.get("branch") or f"lane/{lane}"
     wt = b.get("worktree") or (worktrees(repo).get(branch) if repo else None)
     stamp, done = f"{now:%H%MZ}", []
-    saved = save_uncommitted(Path(wt), root / "lanes" / lane / "evidence", stamp) if wt and Path(wt).is_dir() else None
+    saved = save_uncommitted(Path(wt), relaunch_dir(lane), stamp) if wt and Path(wt).is_dir() else None
     if saved:
         done.append(f"saved {saved['dirty']} uncommitted path(s): " + " ".join(_tilde(p) for p in saved["files"]))
     else:

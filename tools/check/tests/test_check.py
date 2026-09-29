@@ -27,21 +27,27 @@ def test_the_build_step_checks_every_cpu_feature_set_a_pod_builds():
     assert "cargo check -q -p flock-live --bin flock-circuit" in script
 
 
-_BIN = b"#!/bin/sh\nexit 0\n"
+#: an upstream verifier that accepts every session it replays (the last argument)
+_BIN = b"#!/bin/sh\nfor a; do s=$a; done\nprintf 'UPSTREAM\\t{\"session\":\"%s\",\"verdict\":{\"accepted\":true,\"why\":\"\"}}\\n' \"$s\"\n"
 
 
-def _pinned(tmp_path, monkeypatch, binary=_BIN):
-    """A verifier tree with a pin over a one-binary upstream build and an inputs tree, both built here."""
+def _pinned(tmp_path, monkeypatch, binary=_BIN, pinned=_BIN):
+    """A verifier tree with a pin over a one-binary upstream build and an inputs tree holding one set's statement and stored
+    honest session, both built here."""
     import hashlib
     import io
     import json
+    import shutil
     import tarfile
 
     v = tmp_path / "verifier"
     (v / "lean").mkdir(parents=True)
     (v / "lean" / "lakefile.toml").write_text("")
     (v / "ci.py").write_text("import json, sys; open(sys.argv[sys.argv.index('--out') + 1] + '/argv.json', 'w').write(json.dumps(sys.argv))\n")
-    (v / "vectors.json").write_text('{"replayable": {"sets": [{"pr83": "abc"}]}}')
+    shutil.copy(ROOT / "backends" / "flock" / "verifier" / "agree.py", v / "agree.py")
+    (v / "vectors.json").write_text(json.dumps({"replayable": {"sets": [{
+        "pr83": "abc", "lean_statement": "verity/flock-circuit@abc", "statement": {"circuit": "art:0123/c.txt", "public": "art:0123/pub.bin"},
+        "sessions": [{"dir": "art:0456/honest", "expect": {"accepted": True, "why": ""}}]}]}}))
 
     def tgz(path, files):
         with tarfile.open(path, "w:gz") as t:
@@ -54,8 +60,8 @@ def _pinned(tmp_path, monkeypatch, binary=_BIN):
     sent = tmp_path / "out" / "inputs"
     sent.mkdir(parents=True)
     up = tgz(sent / "a.tar.gz", {"upstream-abc": binary, "BUILD.json": b"{}"})
-    ins = tgz(sent / "b.tar.gz", {"0123/x": b"x"})
-    pin = {"upstream": {"art": "art:u", "sha256": up, "binaries": {"abc": hashlib.sha256(_BIN).hexdigest()}},
+    ins = tgz(sent / "b.tar.gz", {"0123/c.txt": b"c", "0123/pub.bin": b"p", "0456/honest/session.json": b"{}"})
+    pin = {"upstream": {"art": "art:u", "sha256": up, "binaries": {"abc": hashlib.sha256(pinned).hexdigest()}},
            "inputs": {"art": "art:i", "sha256": ins}, "ci": {"seed": 1, "fuzz": 2}}
     (v / "upstream.json").write_text(json.dumps(pin))
     monkeypatch.setattr(CHECK, "FLOCK_VERIFIER", v)
@@ -81,6 +87,24 @@ def test_the_lean_steps_once_the_verifier_is_on_the_tree(tmp_path, monkeypatch):
     assert CHECK.lean_steps(out)[3][1].startswith("skipped: the pinned upstream build was not sent")
 
 
+def test_the_lean_dependency_urls_leave_the_run_directory_before_any_step(tmp_path, monkeypatch):
+    """The presigned URLs sent with a run reach the audit step from outside the run directory, which the run's record keeps."""
+    monkeypatch.delenv(CHECK.LEAN_DEPS_URLS_ENV, raising=False)
+    assert CHECK.take_lean_deps_urls(tmp_path) is None
+    (tmp_path / "inputs").mkdir()
+    (tmp_path / "inputs" / CHECK.LEAN_DEPS_URLS).write_text('{"k": "https://r2/o?sig"}')
+    got = CHECK.take_lean_deps_urls(tmp_path)
+    try:
+        assert not (tmp_path / "inputs" / CHECK.LEAN_DEPS_URLS).exists() and not got.is_relative_to(tmp_path)
+        assert got.read_text() == '{"k": "https://r2/o?sig"}' and got.stat().st_mode & 0o777 == 0o600
+        audit = CHECK.lean_steps(tmp_path, urls=got)[2][1]
+        assert audit[audit.index("--urls") + 1] == str(got) and "--urls" not in CHECK.lean_steps(tmp_path)[2][1]
+    finally:
+        got.unlink()
+    monkeypatch.setenv(CHECK.LEAN_DEPS_URLS_ENV, "/somewhere/urls.json")                  # a local recorded run's launcher
+    assert CHECK.take_lean_deps_urls(tmp_path) == Path("/somewhere/urls.json")
+
+
 def test_the_agreement_runs_ci_on_the_pinned_binaries_only(tmp_path, monkeypatch):
     import json
 
@@ -92,6 +116,28 @@ def test_the_agreement_runs_ci_on_the_pinned_binaries_only(tmp_path, monkeypatch
     assert int(argv[argv.index("--session-jobs") + 1]) == CHECK.session_jobs() >= 1
     out, sent = _pinned(tmp_path / "t", monkeypatch, binary=b"tampered")
     assert CHECK.lean_agreement(out, sent / "a.tar.gz", sent / "b.tar.gz") == 1
+
+
+def test_a_build_that_cannot_run_here_fails_the_preflight_in_seconds(tmp_path, monkeypatch, capsys):
+    """A binary built for another CPU starts, parses its arguments, and dies of SIGILL on the first instruction this CPU
+    lacks, printing nothing: only a real replay shows it. So does a binary that replays with the wrong verdict."""
+    ill = b"#!/bin/sh\nkill -ILL $$\n"
+    out, sent = _pinned(tmp_path, monkeypatch, binary=ill, pinned=ill)
+    assert CHECK.lean_agreement(out, sent / "a.tar.gz", sent / "b.tar.gz") == 1
+    err = capsys.readouterr().err
+    assert "killed by SIGILL replaying its stored honest session" in err and "target-cpu=native" in err
+    assert not (out / "flock-agreement" / "argv.json").exists()                       # ci.py never started
+    rejects = _BIN.replace(b'"accepted":true', b'"accepted":false')
+    out, sent = _pinned(tmp_path / "r", monkeypatch, binary=rejects, pinned=rejects)
+    assert CHECK.lean_agreement(out, sent / "a.tar.gz", sent / "b.tar.gz") == 1 and "expected" in capsys.readouterr().err
+
+
+def test_the_real_preflight_replays_a_stored_session_per_binary_it_can():
+    """Sets 0-5 store honest sessions: four of the eight pinned binaries replay one; the build flags are the same for all."""
+    import json
+
+    sets = json.loads((ROOT / "backends" / "flock" / "verifier" / "vectors.json").read_text())["replayable"]["sets"]
+    assert len({s["pr83"] for s in sets if s.get("sessions") and "tables" not in s["statement"]}) >= 4
 
 
 def test_the_rule_the_gate_reads(monkeypatch):
