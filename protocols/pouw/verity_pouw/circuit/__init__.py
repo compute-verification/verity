@@ -76,8 +76,16 @@ class Traced:
         an = anchors.weight_inputs()
         return [list(b), an["salt"], an["weight"], an["colids"]]
 
+    def check_layout(self, offered) -> None:
+        """Refuse a layout that isn't the verifier's own, derived from the shape (`layout`): the tiles, each tile's own unit
+        and its closure are the partition's, never a prover's, since the Layout theorems hold only for the window's own."""
+        from ..protocol import DomainError
+
+        if offered != self.layout():
+            raise DomainError(f"{self.scheme}: the layout is not the verifier's for {self.shape}")
+
     def layout(self):
-        """The closure-draw layout (`plan.layout`)."""
+        """The closure-draw layout (`plan.layout`), from the shape alone."""
         from . import plan
 
         return plan.layout(self.shape, self.kind)
