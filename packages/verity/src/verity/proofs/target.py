@@ -231,7 +231,7 @@ class Target:
     anchor_device: str
     status: Status = "frozen"
     instruction: str | None = None
-    #: The ``trust-dossier/v1`` artifact id whose computed trust level this target cites (``verity.proofs.trust``).
+    #: The ``trust-dossier/v1`` artifact id whose computed trust level this target cites (``tools/tc_probe/trust.py``).
     dossier: str | None = None
 
 

@@ -105,10 +105,30 @@ def outRegion (c : Circuit) (pub : Public) : V Region := do
 
 end Circuit
 
+/-- **The statement range the soundness bound covers** (the soundness package's `Stmt.InRange`): at most `2^26` witness
+bits per block, 1024 public regions, and 64 coordinates per link point. `setup` and `setupH` refuse a statement outside
+it, so the verifier accepts only statements the proved bound covers. -/
+def checkInRange (kLog nRegions mPts : Nat) : V Unit :=
+  if kLog ≤ 26 && nRegions ≤ 1024 && mPts ≤ 64 then pure ()
+  else throw s!"statement range: k_log {kLog}, {nRegions} regions, m_pts {mPts}; the soundness bound covers k_log ≤ 26, at most 1024 regions and m_pts ≤ 64"
+
+/-- `checkInRange` accepts exactly the soundness package's `Stmt.InRange`. -/
+theorem checkInRange_ok (kLog nRegions mPts : Nat) :
+    checkInRange kLog nRegions mPts = .ok () ↔ kLog ≤ 26 ∧ nRegions ≤ 1024 ∧ mPts ≤ 64 := by
+  unfold checkInRange
+  by_cases h : kLog ≤ 26 ∧ nRegions ≤ 1024 ∧ mPts ≤ 64
+  · simp [h, pure, Except.pure]
+  · simp only [h, iff_false]
+    have : (decide (kLog ≤ 26) && decide (nRegions ≤ 1024) && decide (mPts ≤ 64)) = false := by
+      simp only [Bool.and_eq_false_iff, decide_eq_false_iff_not]; omega
+    simp [this, throw, throwThe, MonadExceptOf.throw]
+
 /-- The coin source named in `Hello` (§7). -/
 inductive Coins where
   | os
   | seed
+  /-- the verifier's keyed coin tree (`Flock.CoinTree`): `Hello`'s `coins` is its spec, with the prover's nonce -/
+  | tree (spec : CoinTree.Spec)
   deriving BEq, Inhabited
 
 /-- Everything a session needs about the statement. -/
@@ -134,11 +154,16 @@ structure Stmt where
   partition : Json := Json.null
   deriving Inhabited
 
+/-- `Hello`, the session parameters S2 compares. A keyed coin tree's `coins` has an empty nonce here: R7 puts the prover's
+in (`CoinTree.checkHello`). -/
 def helloOf (tags : Tags) (sigma : ByteArray) (mPts : Nat) (coins : Coins) (tables : Array String := #[tags.table]) : V String :=
   let base := [("profile", Json.str "fast100"), ("reps", Lean.toJson (2 : Nat)), ("flavor", Json.str "rs"),
     ("tables", Json.arr (tables.map Json.str)),
     ("link", Json.mkObj [("sigma", Json.str (hexOf sigma)), ("m", Lean.toJson mPts), ("points", Lean.toJson (2 : Nat))])]
-  let base := if coins == .seed then base ++ [("coins", Json.str tags.coinScheme)] else base
+  let base := match coins with
+    | .seed => base ++ [("coins", Json.str tags.coinScheme)]
+    | .tree s => base ++ [("coins", s.coins "")]
+    | .os => base
   let base := if tags.hm96Rows then base ++ [("digests", Json.str "sha512")] else base
   canon (Json.mkObj (if tags.retainRounds then base ++ [("rounds", Json.str "bytes retained")] else base))
 
@@ -159,6 +184,7 @@ def Stmt.setup (tags : Tags) (leaf : RowLeaf) (circuitFile publicFile : ByteArra
   let pin ← c.pin leaf
   let (da, db) ← c.delta leaf pin
   let regions := (← leaf.regions c pub).push (← c.outRegion pub)
+  checkInRange c.kLog regions.size (PT_LOCAL + nbl)
   let mut h := tags.statement.toUTF8 ++ leaf.comp.digest ++ c.sha ++ leaf.key c ++ (← canon tags.identity).toUTF8
   for x in [n, blocksReal, nbl, m, c.kLog, pin, regions.size, c.g] do h := pushLe64 h x
   for d in [da, db] do
@@ -175,7 +201,7 @@ namespace Stmt
 def spec (st : Stmt) : SessionSpec :=
   { tables := #[st.tags.table], domain := fun _ r => st.tags.domain r, sigma := st.sigma, hello := st.hello, mPts := st.mPts,
     retainRounds := st.tags.retainRounds, unitDraw := (st.pub.header.getObjVal? "unit_draw").toOption, instances := st.n,
-    sha512Digests := st.tags.hm96Rows }
+    sha512Digests := st.tags.hm96Rows, coinTree := CoinTree.ofHello st.hello }
 
 /-- `e[s + 64·u] = lw[s] · eq(ρ, u)` for `u < 2^|ρ|`. -/
 def tensor (lw : Array F128) (rho : Array F128) : Array F128 :=

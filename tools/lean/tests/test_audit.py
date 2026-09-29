@@ -153,6 +153,30 @@ def test_the_source_scan_refuses_kernel_bypasses_but_not_prose(tmp_path):
     assert [h.split(" names ")[0] for h in hits] == ["unchecked: P/A.lean:2", "unchecked: lakefile.toml:3"]
 
 
+def test_the_dependency_scan_reads_what_the_build_takes_from_fetched_packages(tmp_path):
+    dep, other = tmp_path / ".lake" / "packages" / "dep", tmp_path / ".lake" / "packages" / "other"
+    lib = dep / ".lake" / "build" / "lib" / "lean"
+    for path, text in ((dep / "D.lean", "/-- Prose may name debug.skipKernelTC. -/\ndef d := 1\n"),
+                       (dep / "D" / "E.lean", "def e := 1\nset_option debug.skipKernelTC true in\ntheorem t : True := trivial\n"),
+                       (dep / "D" / "F.lean", "set_option debug.byAsSorry true\n"),
+                       (dep / "lakefile.toml", "name = \"dep\"\n[leanOptions]\ndebug.byAsSorry = true\n"),
+                       (other / "lakefile.toml", "# nothing of it is imported\n[leanOptions]\ndebug.byAsSorry = true\n")):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+    oleans = [str(lib / "D.olean"), str(lib / "D" / "E.olean"), str(tmp_path / ".lake" / "build" / "lib" / "lean" / "P.olean"),
+              str(tmp_path / "toolchain" / "lib" / "lean" / "Init.olean")]
+    fails, read = A.dependency_scans(tmp_path, oleans, {})
+    assert read == 3 and [f.split(" (")[0] for f in fails] == ["unchecked: .lake/packages/dep/D/E.lean:2",
+                                                               "unchecked: .lake/packages/dep/lakefile.toml:3"]
+    listed = {"D.E": "why", "dep/lakefile.toml": "why", "D.F": "not imported"}
+    assert A.dependency_scans(tmp_path, oleans, {"dependency_unchecked": listed})[0] == [
+        "unchecked: `dependency_unchecked` lists D.F, which the package does not import or which names no such option; "
+        "remove the entry"]
+    (dep / "D.lean").unlink()
+    assert A.dependency_scans(tmp_path, oleans[:1], {"dependency_unchecked": {"dep/lakefile.toml": "why"}})[0] == [
+        "unchecked: the package imports D from dep, whose source .lake/packages/dep/D.lean is missing, so nothing scanned it"]
+
+
 def test_code_run_while_compiling_is_refused_unless_listed(tmp_path):
     (tmp_path / "P").mkdir()
     (tmp_path / "P" / "A.lean").write_text("import Lean\n@[simp] theorem t : True := trivial\nopen Lean in\nrun_cmd pure ()\n"
