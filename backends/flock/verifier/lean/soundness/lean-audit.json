@@ -145,6 +145,11 @@
   }
  },
  "pins": {
+  "FlockSoundness.Audit.InfluenceExamples.accepts": {},
+  "FlockSoundness.Audit.InfluenceExamples.count": {},
+  "FlockSoundness.Audit.InfluenceExamples.influence_met": {},
+  "FlockSoundness.Audit.InfluenceExamples.lemma47": {},
+  "FlockSoundness.Audit.InfluenceExamples.three_mem_exits": {},
   "FlockSoundness.Audit.Partition.Refines.twoStage_influence": {},
   "FlockSoundness.Audit.Partition.Separates.mono": {},
   "FlockSoundness.Audit.Partition.Separates.union": {},
