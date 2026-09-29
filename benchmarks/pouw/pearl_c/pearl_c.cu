@@ -36,7 +36,6 @@ constexpr uint16_t BF_QMAX = 0x43E0;       // 448
 constexpr uint16_t BF_DELTA_R = 0x40B5;    // bf16(f32(delta sqrt r)), delta = 1, r = 32
 constexpr uint16_t BF_DELTA_STD = 0x38B5;  // bf16(f32(delta sqrt r / 256^2))
 constexpr uint16_t BF_FLOOR = 0x2F80;      // 2^-32
-constexpr uint16_t BF_NORM = 0x4600;       // 256 * 32
 
 DEV size_t tiled(int row, int k, int H, int depth) {
   return ((size_t)(row / H) * (depth / 32) + k / 32) * (H * 32) + ((row % H) >> 3) * 256 + ((k & 31) >> 4) * 128 + (row & 7) * 16 +
@@ -302,7 +301,7 @@ DEV uint32_t isqrt(uint32_t v) {
 
 // p0 the line key (8 words), p1 codes (count x 32, row-major), p2 rows tiled (H = 128, depth 32) or 0, p3 transposed tiled
 // (32 x count, H = 32) or 0, p4 transposed tiled (128 x count, H = 128, rows 32-127 left as they are) or 0; i0 side, i1 factor,
-// i2 count
+// i2 count, i3 bf16(32 x the line's L2 norm): 0x4600 for Pearl's 256, 0x4400 for 16
 extern "C" __global__ void __launch_bounds__(128) lines(const Args a) {
   const int line = blockIdx.x * blockDim.x + threadIdx.x, count = a.i[2];
   if (line >= count) return;
@@ -323,7 +322,7 @@ extern "C" __global__ void __launch_bounds__(128) lines(const Args a) {
     xs[j] = (b >> 7 ? -1 : 1) * (int)((b & 0x7F) + 1);
     sumsq += xs[j] * xs[j];
   }
-  const uint16_t scale = bdiv(BF_NORM, f2bf((float)isqrt(sumsq * 1024)));
+  const uint16_t scale = bdiv((uint16_t)a.i[3], f2bf((float)isqrt(sumsq * 1024)));
   uint8_t c[32];
 #pragma unroll
   for (int j = 0; j < 32; j++) c[j] = e4m3(bf2f(bmul(f2bf((float)xs[j]), scale)));
@@ -471,7 +470,7 @@ extern "C" __global__ void __launch_bounds__(128) form(const Args a) {
 }
 
 // ---------------------------------------------------------------- forming v1 (cheap-binding §5)
-constexpr uint32_t S5_LINE = 0x38B504F3;   // f32(sqrt(32) / 256^2)
+constexpr uint32_t S5_LINE = 0x3AB504F3;   // f32(sqrt(32) / (256 * 16))
 constexpr float S5_FLOOR = 0x1p-32f;
 
 // one warp per FP32 row: s = max|x|, rho (32 partial FMA chains over every 8th position, then the xor butterfly), alpha,
@@ -555,6 +554,24 @@ extern "C" __global__ void __launch_bounds__(128) form_s5(const Args a) {
   for (int c = 0; c < 4; c++)
     reinterpret_cast<uint4*>(out + ((size_t)(r0 / 128) * (k / 32) + t0 / 32 + c) * 4096 + (r0 % 128) / 64 * 2048)[tid] =
         reinterpret_cast<const uint4*>(sO + c * 2048)[tid];
+}
+
+// the adopted quantizer (the model's FP8 path with PoUW off): codes = e4m3(alpha x) tiled (H = 128), alpha from stats_s5.
+// p0 rows (FP32), p1 alpha, p2 out codes; i0 rows, i1 k.  One thread per 16 elements
+extern "C" __global__ void quant_s5(const Args a) {
+  const int k = a.i[1];
+  const size_t g = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
+  if (g >= (size_t)a.i[0] * (k / 16)) return;
+  const int row = (int)(g / (k / 16)), t = (int)(g % (k / 16)) * 16;
+  const float al = reinterpret_cast<const float*>(a.p[1])[row];
+  const float4* x = reinterpret_cast<const float4*>(reinterpret_cast<const float*>(a.p[0]) + (size_t)row * k + t);
+  uint32_t o[4];
+#pragma unroll
+  for (int i = 0; i < 4; i++) {
+    const float4 v = x[i];
+    o[i] = e4m3(__fmul_rn(al, v.x)) | e4m3(__fmul_rn(al, v.y)) << 8 | e4m3(__fmul_rn(al, v.z)) << 16 | (uint32_t)e4m3(__fmul_rn(al, v.w)) << 24;
+  }
+  *reinterpret_cast<uint4*>(reinterpret_cast<uint8_t*>(a.p[2]) + tiled(row, t, 128, k)) = make_uint4(o[0], o[1], o[2], o[3]);
 }
 
 // ---------------------------------------------------------------- the plain baseline's quantize and inputs

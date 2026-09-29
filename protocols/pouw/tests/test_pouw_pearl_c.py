@@ -213,12 +213,12 @@ def f32w(x: float) -> int:
 
 
 def test_v1_stats_pinned_on_a_known_row():
-    """All ones at k = 1,024: 128 positions, S = 128, ρ = 1, α = RN(448/5), β_row = RN(RN(ρ·α)·f32(√32/256²))."""
+    """All ones at k = 1,024: 128 positions, S = 128, ρ = 1, α = RN(448/5), β_row = RN(RN(ρ·α)·f32(√32/(256·16)))."""
     s, rho, alpha, beta = C.s5_stats([f32w(1.0)] * 1024)
     assert (s, rho) == (f32w(1.0), f32w(1.0))
     assert alpha == f32w(P.f32(448.0 / 5.0))
     assert beta == f32w(P.f32(P.f32(P.f32_of_bits(alpha)) * P.f32_of_bits(C.S5_LINE)))
-    assert C.S5_LINE == f32w(P.f32(32 ** 0.5 / 65536))
+    assert C.S5_LINE == f32w(P.f32(32 ** 0.5 / 4096))
     zero = C.s5_stats([0] * 1024)
     assert zero[:2] == (0, 0) and zero[2] == f32w(448.0 * 2.0 ** 32) and zero[3] == 0
 
@@ -251,7 +251,8 @@ def test_v1_atom_is_alpha_x_plus_the_noise():
     and the noise E′·F has an RMS near σ·α."""
     s, ctx, noise, ops, checked, a, b = v1_instance("atom")
     k = ctx.matmul.shape.k
-    fa = C._basis(noise.seed_b, 0, k)
+    fa = C._basis(noise.seed_b, 0, k, C.LINE_NORM_V1)
+    assert fa == tuple(tuple(P.sample_line(noise.seed_b, 0, 1, t, 16.0)) for t in range(k))
     ratios = []
     for i in range(4):
         x = C.parse_f32_row(a[i], k)
@@ -312,3 +313,22 @@ def test_v1_lifecycle_on_a_test_instance():
     epoch = Epoch.start(work, prover.weight_roots, b"beacon")
     tr = prover.prove(epoch, {3: rows_a})
     assert Verifier(s, epoch).audit(prover, tr, Sampled(2), b"verifier").accepted
+
+
+def test_v1_domain_rules():
+    """Pearl's row rules with σ: a zero row fails the noise floor (and stays finite), a side with more than 1/64 of its
+    entries at |x| >= 8σ fails liveness; the generated rows pass."""
+    s, ctx, noise, ops, checked, a, b = v1_instance("domain")
+    assert s.admissible(ctx, ops)
+    k = ctx.matmul.shape.k
+    zero = [C.f32_row([0] * k)] + a[1:]
+    tile = Tile(tuple(range(16)), tuple(range(16)))
+    ops0 = s.encode(ctx, noise, zero, b, tile)
+    assert ops0 is not None and all(c == 0 for c in ops0.a.codes[0]) and not s.admissible(ctx, ops0)
+    spiky = []
+    for r in a:
+        w = list(C.parse_f32_row(r, k))
+        for p in range(1, k, 8)[:4]:
+            w[p] = f32w(1e4)
+        spiky.append(C.f32_row(w))
+    assert not s.admissible(ctx, s.encode(ctx, noise, spiky, b, tile))

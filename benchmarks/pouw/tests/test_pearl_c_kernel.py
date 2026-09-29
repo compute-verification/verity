@@ -50,6 +50,9 @@ def test_kernel_constants_match_the_reference():
     assert int(consts["BF_QMAX"], 16) == P.f32_to_bf16(P.Q_MAX) and int(consts["BF_FLOOR"], 16) == P.NORM_FLOOR_BF16
     assert int(consts["S5_LINE"], 16) == C.S5_LINE
     assert "0x1p-32f" in SOURCE and C.S5_FLOOR == P.f32_bits(2.0 ** -32)
+    run = (HERE / "run.py").read_text()
+    n256, n16 = re.search(r"NORM_256, NORM_16 = (0x[0-9A-F]+), (0x[0-9A-F]+)", run).groups()
+    assert int(n256, 16) == P.f32_to_bf16(P.NOISE_NORM * 32) and int(n16, 16) == P.f32_to_bf16(C.LINE_NORM_V1 * 32)
     for d in (C.D_MESSAGE, C.D_LEAF, F.D_ROWS):
         assert f"0x{d:02x}" in SOURCE.lower()
 
@@ -128,6 +131,8 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
         seg = 1280 if name.endswith("fp10") else 1024
         assert i[1] % seg == 0
         return {0: i[0] * i[1], 1: i[0] * (i[1] // seg) * 32}
+    if name == "quant_s5":
+        return {0: 4 * i[0] * i[1], 1: 4 * i[0], 2: i[0] * i[1]}
     if name == "plainq":
         return {0: i[0] * i[1] * (4 if i[2] else 2), 1: i[0] * i[1], 2: 4 * i[0]}
     if name == "open_rows":
@@ -149,7 +154,7 @@ def threads(name: str, i: list[int]) -> int:
             "pa": lambda: 64 * i[0], "pb": lambda: 32 * i[0], "hash_msg": lambda: i[0] * i[1] // 32,
             "hash_leaf": lambda: (i[0] // 64) * (i[1] // 64), "tickets": lambda: (i[0] // 16) * (i[1] // 16),
             "open_rows": lambda: i[0] * i[1] // 8, "gen_fp10": lambda: i[0] * (i[1] + i[1] // 4) // 4,
-            "gen_f32": lambda: i[0] * i[1], "diff_words": lambda: i[0]}.get(name, lambda: 0)()
+            "gen_f32": lambda: i[0] * i[1], "diff_words": lambda: i[0], "quant_s5": lambda: i[0] * i[1] // 16}.get(name, lambda: 0)()
 
 
 @pytest.mark.slow
@@ -199,6 +204,8 @@ def test_runner_dry_run(small_fixture, tmp_path):
                 assert g[:2] == [i[1] // 128, i[0] // 64]
             if name == "plainq":
                 assert g[0] == i[0]
+            if name == "lines":
+                assert i[3] in (0x4600, 0x4400)
             if name.startswith("gemm_") and not name.endswith("_smem"):
                 bn = 32 if name == "gemm_words" else 128
                 assert ev["block"] == 384 and ev["smem"] > 48 * 1024 and g[0] <= (i[0] // 128) * (i[1] // bn)

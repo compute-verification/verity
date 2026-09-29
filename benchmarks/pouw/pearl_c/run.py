@@ -7,9 +7,11 @@ only, nothing built on the pod).
    timing runs only if all of its buffers match (the gate: C~ and U bit-exact against the CPU reference), the plain
    baseline's only if its own do.  PEARLC_UNGATED=1 times regardless and says so.
 2. The timing, at each of SHAPES (default 8192 and 16384, m = n = k), for forming v1 (§5), v0 (#311's, as ported) and the
-   plain FP8 baseline, on generated inputs: each kernel launched REPS times after a warm-up, the median per kernel, the
-   phases (per job; the unit's forming, GEMM, clean-up and hashing), the unit end to end with and without hashing, and
-   consistency checks at that shape (C~ of gemm_ct equals gemm_pearlc's; a second gemm_pearlc gives the same U).
+   FP8 baselines, on generated inputs: each kernel launched REPS times after a warm-up, the median per kernel, the phases
+   (per job; the unit's forming, GEMM, clean-up and hashing), the unit end to end with and without hashing, and consistency
+   checks at that shape (C~ of gemm_ct equals gemm_pearlc's; a second gemm_pearlc gives the same U).  The baselines share
+   the GEMM: plain-max (s = 448/max|x|, `plainq`) for both formings, and for v1 the adopted quantizer (the model's FP8 path
+   with PoUW off: e4m3(alpha x) with v1's alpha, `stats_s5` + `quant_s5`).
 
 One JSON object per line on stdout as each part finishes, a summary on stderr.  Exit 3: not an H100 SXM; 4: a check failed.
 
@@ -29,6 +31,7 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 H100 = "NVIDIA H100 80GB HBM3"
 SM_COUNT, MAX_DYN = 16, 8
+NORM_256, NORM_16 = 0x4600, 0x4400      # bf16(32 x the line norm): E's lines, and F's under v1
 
 u, i32, vp, sz, u64, P = C.c_uint, C.c_int, C.c_void_p, C.c_size_t, C.c_uint64, C.POINTER
 CUDA = {
@@ -214,7 +217,8 @@ class Pipeline:
             "qa": m * k, "qb": n * k, "sa": 4 * m, "sb": 4 * n, "y_plain": m * n * 2, "y_fast": m * n * 2, "diff": 8,
         }
         if v1:
-            sizes.update({"epa_codes": m * 32, "epa_tiled": m * 32, "epb_codes": n * 32, "epb_tiled": n * 32})
+            sizes.update({"epa_codes": m * 32, "epa_tiled": m * 32, "epb_codes": n * 32, "epb_tiled": n * 32,
+                          "qa_s5": m * k, "qb_s5": n * k, "y_adopt": m * n * 2})
         else:
             sizes.update({"xa_bf16": m * k * 2, "xb_bf16": n * k * 2})
         self.size = sizes
@@ -248,8 +252,9 @@ class Pipeline:
         fl = 1 if v1 else 0
 
         def lines(tag, key, side, factor, count, codes, tiled_, t32=0, t128=0):
+            norm = NORM_16 if v1 and factor == 1 else NORM_256
             return (f"lines_{tag}", lambda: d.launch("lines", cdiv(count, 128), 128, p=(key, b[codes], b[tiled_], t32, t128),
-                                                    i=(side, factor, count)))
+                                                    i=(side, factor, count, norm)))
 
         def form_side(tag, rows, x, e_codes, e_tiled, f_tiled, out):
             ep_codes, ep_tiled = f"ep{tag}_codes", f"ep{tag}_tiled"
@@ -298,9 +303,16 @@ class Pipeline:
         plain = [("plainq_a", lambda: d.launch("plainq", m, 256, p=(b[plain_in_a], b["qa"], b["sa"]), i=(m, k, fl))),
                  ("gemm_plain", lambda: self.gemm("gemm_plain", "qa", "qb", m, n, out=(None, None, "y_plain"), rs=b["sa"], cs=b["sb"])),
                  ("gemm_fast", lambda: self.gemm("gemm_fast", "qa", "qb", m, n, out=(None, None, "y_fast"), rs=b["sa"], cs=b["sb"]))]
+        adopted_job = [("quant_b", lambda: d.launch("quant_s5", cdiv(n * k // 16, 256), 256, p=(b["xb"], b["alpha_b"], b["qb_s5"]),
+                                                    i=(n, k)))] if v1 else []
+        adopted = [("quant_a", lambda: d.launch("quant_s5", cdiv(m * k // 16, 256), 256, p=(b["xa"], b["alpha_a"], b["qa_s5"]),
+                                                i=(m, k))),
+                   ("gemm_adopt", lambda: self.gemm("gemm_plain", "qa_s5", "qb_s5", m, n, out=(None, None, "y_adopt"), rs=b["ia_a"],
+                                                    cs=b["ia_b"]))] if v1 else []
         tag = lambda phase, xs: [(nm, phase, f) for nm, f in xs]  # noqa: E731
         return (tag("job", job) + tag("forming", forming) + tag("gemm", gemm) + tag("cleanup", cleanup) + tag("hashing", hashing)
-                + tag("prep", prep) + tag("plain_job", plain_job) + tag("plain", plain))
+                + tag("prep", prep) + tag("plain_job", plain_job) + tag("plain", plain) + tag("adopted_job", adopted_job)
+                + tag("adopted", adopted))
 
     def run_all(self) -> None:
         for _, _, f in self.steps():
@@ -317,9 +329,9 @@ class Pipeline:
 
 # ---- the check ----------------------------------------------------------------------------------------------------
 
-PLAIN_BUFFERS = {"qa", "qb", "sa", "sb", "y_plain", "y_fast", "xa_bf16", "xb_bf16"}
+PLAIN_BUFFERS = {"qa", "qb", "sa", "sb", "y_plain", "y_fast", "xa_bf16", "xb_bf16", "qa_s5", "qb_s5", "y_adopt"}
 GEMM_RERUNS = (("gemm_pearlc", ("c", "u", "y")), ("gemm_ct", ("c2",)), ("gemm_plain", ("y_plain",)), ("gemm_fast", ("y_fast",)),
-               ("af", ("af",)))
+               ("af", ("af",)), ("gemm_adopt", ("y_adopt",)))
 
 
 def compare(dev: Dev, pipe: Pipeline, name: str, want: bytes, alias: str | None = None) -> dict:
@@ -354,6 +366,8 @@ def check(dev: Dev, man: dict, base: str) -> dict:
         steps = {nm: fn for nm, _, fn in pipe.steps()}
         for grid in (1, 3):
             for step, outs in GEMM_RERUNS:
+                if step not in steps:
+                    continue
                 for o in outs:
                     dev.ck("cuMemsetD8_v2", u64(pipe.b[o]), 0xAB, pipe.size[o])
                 real = pipe.gemm
@@ -401,12 +415,13 @@ def timing(dev: Dev, nv: Nvml, size: int, forming: str, reps: int, gates: dict) 
     before = nv.read()
     med, runs = {}, {}
     for name, phase, f in steps:
-        if phase in UNIT_PHASES + ("job",) and not gates["pearl_c"] or phase in ("plain", "plain_job") and not gates["plain"]:
+        if phase in UNIT_PHASES + ("job",) and not gates["pearl_c"] or \
+                phase in ("plain", "plain_job", "adopted", "adopted_job") and not gates["plain"]:
             continue
         t = dev.timed(f, reps)
         runs[name], med[name] = [round(x, 4) for x in t], statistics.median(t)
     after = nv.read()
-    phases = {ph: sum(med.get(nm, 0.0) for nm, p, _ in steps if p == ph) for ph in ("job",) + UNIT_PHASES + ("plain", "plain_job")}
+    phases = {ph: sum(med.get(nm, 0.0) for nm, p, _ in steps if p == ph) for ph in ("job",) + UNIT_PHASES}
     out = {"kind": "timing", "shape": [m, n, k], "forming": forming, "reps": reps, "gates": gates,
            "ms": {nm: round(v, 4) for nm, v in med.items()}, "runs": runs, "clk_before": before, "clk_after": after}
     if gates["pearl_c"]:
@@ -427,12 +442,16 @@ def timing(dev: Dev, nv: Nvml, size: int, forming: str, reps: int, gates: dict) 
         out["fast_unit_ms"] = round(med["plainq_a"] + med["gemm_fast"], 4)
         out["plain_tflops"] = round(2 * m * n * k / med["gemm_plain"] / 1e9, 1)
         out["fast_tflops"] = round(2 * m * n * k / med["gemm_fast"] / 1e9, 1)
+        if "gemm_adopt" in med and "stats_a" in med:
+            out["adopted_unit_ms"] = round(med["stats_a"] + med["quant_a"] + med["gemm_adopt"], 4)
         if gates["pearl_c"]:
-            p = out["plain_unit_ms"]
-            out["ratio_vs_plain"] = {"unit_e2e": round(out["unit_e2e_ms"] / p, 4), "unit_sum": round(out["unit_sum_ms"] / p, 4),
-                                     "no_hash_e2e": round(out["unit_e2e_no_hash_ms"] / p, 4),
-                                     "chain_only": round(med["gemm_ct"] / med["gemm_plain"], 4),
-                                     "with_job": round((out["unit_e2e_ms"] + out["job_ms"]) / (p + med["plainq_b"]), 4)}
+            for key, base, job in (("ratio_vs_plain", out["plain_unit_ms"], med["plainq_b"]),
+                                   ("ratio_vs_adopted", out.get("adopted_unit_ms"), med.get("stats_b", 0) + med.get("quant_b", 0))):
+                if base:
+                    out[key] = {"unit_e2e": round(out["unit_e2e_ms"] / base, 4), "unit_sum": round(out["unit_sum_ms"] / base, 4),
+                                "no_hash_e2e": round(out["unit_e2e_no_hash_ms"] / base, 4),
+                                "chain_only": round(med["gemm_ct"] / med["gemm_plain"], 4),
+                                "with_job": round((out["unit_e2e_ms"] + out["job_ms"]) / (base + job), 4)}
     pipe.free()
     for p_ in (xa, xb, *keys.values()):
         dev.free(p_)
@@ -476,7 +495,8 @@ def main(argv: list[str]) -> int:
                 print(f"{size}^3 {forming}: unit {row['unit_e2e_ms']:.3f} ms end to end = {r['unit_e2e']:.3f}x plain FP8 "
                       f"({row['plain_unit_ms']:.3f} ms, {row['plain_tflops']} TFLOPS); split GEMM {s['gemm']:.3f}, clean-up "
                       f"{s['cleanup']:.3f}, forming {s['forming']:.3f}, hashing {s['hashing']:.3f}; no hashing {r['no_hash_e2e']:.3f}x; "
-                      f"consistency {row['consistency']}", file=sys.stderr)
+                      f"consistency {row['consistency']}" + (f"; {row['ratio_vs_adopted']['unit_e2e']:.3f}x the adopted quantizer's "
+                      f"{row['adopted_unit_ms']:.3f} ms" if "ratio_vs_adopted" in row else ""), file=sys.stderr)
     return 0 if ok else 4
 
 

@@ -38,13 +38,16 @@ words x, with every rounding pinned here:
 ~~~text
 stats     s = max|x|;  S = Σ x_p² over p = 0, 8, 16, …: 32 partial FMA chains from +0 (partial j takes the positions 8(j + 32i),
           i ascending), then the butterfly v_j <- v_j + v_(j xor o) for o = 16, 8, 4, 2, 1;  ρ = sqrt(S / (k/8));  σ = ρ (δ = 1)
-          α = 448 / max(s + 4ρ, 2^−32);  β_row = (σ·α)·f32(√r/256²)                               (FP32, nearest even, in that order)
-lines     E′ = e4m3(β_row · E)                                                          (one FP32 product, one nearest-even cast)
+          α = 448 / max(s + 4ρ, 2^−32);  β_row = (σ·α)·f32(√r/(256·16))                           (FP32, nearest even, in that order)
+lines     E at Pearl's norm 256, F_A and F_B at norm 16;  E′ = e4m3(β_row · E)        (one FP32 product, one nearest-even cast)
 atom      D = HOPPER_E4M3_K32.step(C = α·x, E′_row, F line), then X̃ = e4m3(D)          (saturating nearest-even cast, no BF16)
 peel      P_A = [bf16(E′_A) ‖ RNE_bf16(A′·F_B)],  P_B = [RNE_bf16(Σ_p fma(E′_B, G) − B̃·F_A) ‖ −bf16(E′_B)]
 ~~~
 
-Only ρ depends on A alone (about 4 units per element); the scaling α·x and the cast are the model's own FP8 glue.
+Only ρ depends on A alone (about 4 units per element).  The model adopts s, ρ and α as its own FP8 quantizer (e4m3(α·x)
+with PoUW off), and the accounting is the cheap-binding lane's ``Costs.adopted``: 68 units per element, 64 of them credited
+(the noise atom and the cast).  The domain rules are Pearl's with σ for δ·l2: σ·α ≥ 1 on every row, and at most 1/64 of
+each side's entries at |x| ≥ 8σ.
 """
 
 from __future__ import annotations
@@ -77,12 +80,14 @@ LABELS = {r: f"pearl-c/v0/{r}".encode() for r in ("seed-A", "seed-B")}
 FADD_UNITS, BF16_MAC_UNITS = 32, 2
 #: Forming v0 (#311 as ported) per operand element: the red team's 240–320 for #311's port (X-PC-2), at the upper end
 FORMING_V0_UNITS = 320
-#: Forming v1 per operand element (§5: ρ about 4, the noise atom 32)
-FORMING_V1_UNITS = 36
+#: Forming v1 per operand element (`Costs.adopted`: ρ 4, the noise atom and the cast 64)
+FORMING_V1_UNITS = 68
+#: F's line norm under v1 (E keeps Pearl's 256)
+LINE_NORM_V1 = 16.0
 S5_STRIDE = 8
 S5_FLOOR = 0x2F800000              # 2^-32
 S5_FOUR, S5_QMAX = 0x40800000, 0x43E00000
-S5_LINE = P.f32_bits(P.f32((R ** 0.5) / (P.NOISE_NORM * P.NOISE_NORM)))
+S5_LINE = P.f32_bits(P.f32((R ** 0.5) / (P.NOISE_NORM * LINE_NORM_V1)))
 
 
 def _labelled(message: bytes, role: str) -> bytes:
@@ -144,7 +149,7 @@ class Noise:
 
 @dataclass(slots=True)
 class Formed:
-    """One side formed by v1 (§5): FP32 words for s, ρ, α and β_row, the E′ codes and the operand's codes."""
+    """One side formed by v1 (§5): FP32 words for s, ρ, α and β_row, the E′ codes, the operand's codes and its input."""
 
     codes: list[list[int]]
     alpha: list[int]
@@ -152,6 +157,7 @@ class Formed:
     s: list[int]
     rho: list[int]
     ep: list[list[int]]
+    x: list[list[int]]
 
 
 @dataclass(slots=True)
@@ -175,9 +181,9 @@ class Checked:
 
 
 @lru_cache(maxsize=16)
-def _basis(seed_b: bytes, side: int, k: int) -> tuple[tuple[int, ...], ...]:
-    """F_A (side 0) or F_B (side 1) as k lines of 32 codes (line t is row t of the k x r basis)."""
-    return tuple(tuple(P.sample_line(seed_b, side, 1, t)) for t in range(k))
+def _basis(seed_b: bytes, side: int, k: int, norm: float = P.NOISE_NORM) -> tuple[tuple[int, ...], ...]:
+    """F_A (side 0) or F_B (side 1) as k lines of 32 codes (line t is row t of the k x r basis), each at L2 norm `norm`."""
+    return tuple(tuple(P.sample_line(seed_b, side, 1, t, norm)) for t in range(k))
 
 
 def _column(basis: tuple[tuple[int, ...], ...], p: int) -> list[int]:
@@ -185,9 +191,9 @@ def _column(basis: tuple[tuple[int, ...], ...], p: int) -> list[int]:
 
 
 @lru_cache(maxsize=16)
-def gram(seed_b: bytes, k: int) -> tuple[tuple[int, ...], ...]:
+def gram(seed_b: bytes, k: int, norm: float = P.NOISE_NORM) -> tuple[tuple[int, ...], ...]:
     """G = F_Bᵀ·F_A (r x r) as FP32 words, G_pq = chain(F_B[:, p], F_A[:, q]); once per job."""
-    fa, fb = _basis(seed_b, 0, k), _basis(seed_b, 1, k)
+    fa, fb = _basis(seed_b, 0, k, norm), _basis(seed_b, 1, k, norm)
     fa_cols = [_column(fa, q) for q in range(R)]
     return tuple(tuple(chain(_column(fb, p), fa_cols[q]) for q in range(R)) for p in range(R))
 
@@ -199,19 +205,21 @@ def scaled_noise(side: P.Built | Formed, e_rows: Sequence[Sequence[int]]) -> lis
     return [[_bf16_scaled(beta, e) for e in e_row] for beta, e_row in zip(side.beta, e_rows)]
 
 
-def peel_factors_a(codes: Sequence[Sequence[int]], be_rows: Sequence[Sequence[int]], seed_b: bytes, k: int) -> list[list[int]]:
+def peel_factors_a(codes: Sequence[Sequence[int]], be_rows: Sequence[Sequence[int]], seed_b: bytes, k: int,
+                   norm: float = P.NOISE_NORM) -> list[list[int]]:
     """P_A rows: [be ‖ RNE_bf16(A′·F_B)], the second half the 32 fused columns of the product."""
-    fb = _basis(seed_b, 1, k)
+    fb = _basis(seed_b, 1, k, norm)
     fb_cols = [_column(fb, p) for p in range(R)]
     return [list(be) + [_bf16_of_word(chain(row, fb_cols[p])) for p in range(R)] for row, be in zip(codes, be_rows)]
 
 
-def peel_factors_b(codes: Sequence[Sequence[int]], be_rows: Sequence[Sequence[int]], seed_b: bytes, k: int) -> list[list[int]]:
+def peel_factors_b(codes: Sequence[Sequence[int]], be_rows: Sequence[Sequence[int]], seed_b: bytes, k: int,
+                   norm: float = P.NOISE_NORM) -> list[list[int]]:
     """P_B rows: [RNE_bf16(be·G − B̃·F_A) ‖ −be], once per job.  be·G is the FP32 FMA chain from +0 in p order, and the
     difference one FP32 nearest-even add of the negated B̃·F_A."""
-    fa = _basis(seed_b, 0, k)
+    fa = _basis(seed_b, 0, k, norm)
     fa_cols = [_column(fa, q) for q in range(R)]
-    g = gram(seed_b, k)
+    g = gram(seed_b, k, norm)
     rows = []
     for row, be in zip(codes, be_rows):
         mid = []
@@ -271,13 +279,13 @@ def eprime(beta: int, e_row: Sequence[int]) -> list[int]:
 
 def form_v1(x_rows: Sequence[Sequence[int]], e_rows: Sequence[Sequence[int]], f: Sequence[Sequence[int]]) -> Formed:
     """§5's forming: per element one HOPPER_E4M3_K32 atom with α·x as its accumulator, then the cast."""
-    out = Formed([], [], [], [], [], [])
+    out = Formed([], [], [], [], [], [], [])
     for x, e_row in zip(x_rows, e_rows):
         s, rho, alpha, beta = s5_stats(x)
         ep = eprime(beta, e_row)
         out.codes.append([P.f32_to_fp8(P.f32_of_bits(_check_finite(HOPPER_E4M3_K32.step(fp32.mul(alpha, xt), ep, f[t]))))
                           for t, xt in enumerate(x)])
-        for field, v in (("alpha", alpha), ("beta", beta), ("s", s), ("rho", rho), ("ep", ep)):
+        for field, v in (("alpha", alpha), ("beta", beta), ("s", s), ("rho", rho), ("ep", ep), ("x", list(x))):
             getattr(out, field).append(v)
     return out
 
@@ -301,10 +309,11 @@ class PearlC:
             raise ValueError(f"forming {forming!r}: v0 (#311's, as ported) or v1 (§5's)")
         self.name = NAME if forming == "v0" else NAME_V1
         self.k_min, self.tile, self.forming = k_min, tile, forming
+        self.line_norm = P.NOISE_NORM if forming == "v0" else LINE_NORM_V1
         allowance = ("forming v0 is #311's as ported (FP10 decode and exact norms depend on A alone and are skippable, "
                      "X-PC-2); pearl-c-h100-v1 has the reworked forming") if forming == "v0" else (
                      "forming v1 is §5's: ρ over every 8th position depends on A alone (about 4 units per element) and is "
-                     "not credited; the scaling α·x and the E4M3 cast are the model's own FP8 glue")
+                     "not credited; the model adopts s, ρ and α as its own FP8 quantizer (Costs.adopted)")
         self.certificate = Certificate(
             conjecture="tt-out",
             gamma0=None,
@@ -319,7 +328,7 @@ class PearlC:
             ),
             allowances=(allowance, "the unscale is glue outside the checked values"),
             parameters=(("k_min", k_min), ("tile_m", tile[0]), ("tile_n", tile[1]), ("rank", R), ("window", WINDOW),
-                        ("forming", forming)),
+                        ("forming", forming), ("line_norm_f", self.line_norm)),
         )
 
     def check(self, matmul: Matmul) -> None:
@@ -350,7 +359,7 @@ class PearlC:
     def _side(self, rows: Sequence[bytes], idx: Sequence[int], side: int, seed_e: bytes, seed_b: bytes, k: int
               ) -> tuple[P.Built | Formed, list[list[int]]]:
         e = [P.sample_line(seed_e, side, 0, i) for i in idx]
-        f = _basis(seed_b, side, k)
+        f = _basis(seed_b, side, k, self.line_norm)
         if self.forming == "v1":
             return form_v1([parse_f32_row(r, k) for r in rows], e, f), e
         planes = [P.parse_row(r, k) for r in rows]
@@ -363,13 +372,24 @@ class PearlC:
         try:
             a, e_a = self._side(a_rows, tile.rows, 0, noise.seed_a, noise.seed_b, k)
             b, e_b = self._side(b_rows, tile.cols, 1, noise.seed_b, noise.seed_b, k)
-            return Ops(a, b, e_a, e_b, peel_factors_a(a.codes, scaled_noise(a, e_a), noise.seed_b, k),
-                       peel_factors_b(b.codes, scaled_noise(b, e_b), noise.seed_b, k))
+            return Ops(a, b, e_a, e_b, peel_factors_a(a.codes, scaled_noise(a, e_a), noise.seed_b, k, self.line_norm),
+                       peel_factors_b(b.codes, scaled_noise(b, e_b), noise.seed_b, k, self.line_norm))
         except P.Reject:
             return None
 
     def admissible(self, ctx: Context, ops: Ops) -> bool:
-        """TT_OUT's domain is every input under δ = 1 with promotion every 4 atoms; Pearl's jackpot policy is not used."""
+        """v0: TT_OUT's domain is every input under δ = 1 with promotion every 4 atoms.  v1 adds Pearl's two row rules with
+        σ for δ·l2: the noise floor σ·α ≥ 1 on every row (exact product), and liveness, at most 1/64 of each side's
+        entries at |x| ≥ 8σ.  Pearl's census policy is not used."""
+        if self.forming == "v0":
+            return True
+        for side in (ops.a, ops.b):
+            if any(P.f32_of_bits(r) * P.f32_of_bits(a) < P.SIGMA_MIN for r, a in zip(side.rho, side.alpha)):
+                return False
+            dead = sum(1 for row, r in zip(side.x, side.rho) for w in row
+                       if abs(P.f32_of_bits(w)) >= P.TAU_IDLE * P.f32_of_bits(r))
+            if dead > P.EPS_IDLE * sum(len(row) for row in side.x):
+                return False
         return True
 
     def checked(self, ctx: Context, ops: Ops) -> Checked:

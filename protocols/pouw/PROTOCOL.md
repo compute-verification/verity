@@ -149,7 +149,8 @@ states every step.
 seeds     seed_B = H_"pearl-c/v0/seed-B"(salt ‖ root_B);  seed_A = H_"pearl-c/v0/seed-A"(salt ‖ root_A ‖ root_B ‖ index u64)
 forming   v0, #311's as ported (`pearl_kw`): FP10 rows, exact norms, α, β, N = E·Fᵀ, X̃ = fp8(clamp(fma(α, X, β·N)))
           v1, §5's: FP32 rows x; s = max|x|, ρ = RMS over every 8th position, α = 448/max(s + 4ρ, 2^−32), σ = ρ,
-          β_row = (σ·α)·√r/256², E′ = e4m3(β_row·E), X̃ = e4m3(HOPPER_E4M3_K32.step(C = α·x, E′_row, F line))
+          β_row = (σ·α)·√r/(256·16), E′ = e4m3(β_row·E), X̃ = e4m3(HOPPER_E4M3_K32.step(C = α·x, E′_row, F line)),
+          with F_A and F_B's lines at L2 norm 16 (E's at Pearl's 256)
 chain     C̃ = the H100 replay of A′·B̃ᵀ: a +0 accumulator per 128 products chains four HOPPER_E4M3_K32 atoms,
           promoted by one FP32 nearest-even add (−0 → +0)
 peel      P_A = [bf16(β_A·E_A) ‖ bf16(A′·F_B)],  P_B = [bf16((β_B·E_B)·G − B̃·F_A) ‖ −bf16(β_B·E_B)],  G = F_Bᵀ·F_A
@@ -175,8 +176,11 @@ useful    U/(α_A·α_B), glue
   - v0 is the port, not the design: it keeps #311's FP10 decode and exact norms, whose A-only work the red team counts
     as skippable (X-PC-2).
   - v1 is the rework (`cheap-binding.md` §5), with its roundings pinned in the module docstring: the order of ρ's
-    partial sums, α and β_row's FP32 steps, and the 2^−32 floor that keeps an all-zero row finite. Only ρ depends on A
-    alone; the scaling α·x and the cast are glue.
+    partial sums, α and β_row's FP32 steps, and the 2^−32 floor that keeps an all-zero row finite.
+    - Only ρ depends on A alone. The model adopts s, ρ and α as its own FP8 quantizer, so W_ref counts 68 units per
+      element of forming, 64 of them credited (the lane's `Costs.adopted`).
+    - Its domain rules are Pearl's with σ for δ·l2: σ·α ≥ 1 on every row, and at most 1/64 of each side's entries at
+      |x| ≥ 8σ.
 - **The TurboSHAKE128 reference** is `verity.commitments.turboshake`, checked against RFC 9861 and `hashlib`'s
   Keccak-f[1600].
 

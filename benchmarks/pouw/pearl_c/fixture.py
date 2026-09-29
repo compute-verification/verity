@@ -153,6 +153,11 @@ def plain(x: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     return codes, glue
 
 
+def adopted(x: np.ndarray, alpha: list[int]) -> np.ndarray:
+    """The adopted quantizer (quant_s5): e4m3(α·x) per element, α from v1's statistics."""
+    return np.array([[P.f32_to_fp8(P.f32_of_bits(fp32.mul(a, P.f32_bits(float(v))))) for v in row] for row, a in zip(x, alpha)], np.uint8)
+
+
 def glue_y(words: np.ndarray, rs: np.ndarray, cs: np.ndarray) -> np.ndarray:
     return rne_bf16(fmul(fmul(words, np.broadcast_to(rs[:, None], words.shape).copy()), np.broadcast_to(cs[None, :], words.shape).copy()))
 
@@ -211,19 +216,12 @@ def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024) -> dict:
                 "keys": {"line_a": P._line_key(noise.seed_a).hex(), "line_b": P._line_key(noise.seed_b).hex(),
                          "jackpot": P.subkey("jackpot", noise.seed_a).hex()},
                 "seeds": {"seed_a": noise.seed_a.hex(), "seed_b": noise.seed_b.hex()}, "formings": {}}
-    lines = {name: np.array([P.sample_line(seed, side, factor, t) for t in range(count)], np.uint8)
-             for name, seed, side, factor, count in (("ea", noise.seed_a, 0, 0, m), ("eb", noise.seed_b, 1, 0, n),
-                                                     ("fa", noise.seed_b, 0, 1, k), ("fb", noise.seed_b, 1, 1, k))}
+    lines = {name: np.array([P.sample_line(seed, side, 0, t) for t in range(count)], np.uint8)
+             for name, seed, side, count in (("ea", noise.seed_a, 0, m), ("eb", noise.seed_b, 1, n))}
     common = Out(out_dir)
     for name, x in lines.items():
         common.put(f"{name}_codes", x, "u8")
         common.put(f"{name}_tiled", tiled(x, 128), "u8")
-    common.put("faT32", tiled(lines["fa"].T, 32), "u8")
-    common.put("fbT32", tiled(lines["fb"].T, 32), "u8")
-    common.put("fbT128", tiled(padded(lines["fb"].T, 128), 128), "u8")
-    g = product(padded(lines["fb"].T, 128), lines["fa"].T.copy())
-    common.put("g", g, "u32")
-    assert all(int(g[p, q]) == C.gram(noise.seed_b, k)[p][q] for p, q in ((0, 0), (3, 17), (31, 31)))
     manifest["common"] = common.files
 
     with Pool() as pool:
@@ -231,6 +229,17 @@ def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024) -> dict:
             fdir = out_dir / forming
             fdir.mkdir(exist_ok=True)
             o = Out(fdir)
+            norm = C.PearlC(forming=forming).line_norm
+            for name, side in (("fa", 0), ("fb", 1)):
+                lines[name] = np.array(C._basis(noise.seed_b, side, k, norm), np.uint8)
+                o.put(f"{name}_codes", lines[name], "u8")
+                o.put(f"{name}_tiled", tiled(lines[name], 128), "u8")
+            o.put("faT32", tiled(lines["fa"].T, 32), "u8")
+            o.put("fbT32", tiled(lines["fb"].T, 32), "u8")
+            o.put("fbT128", tiled(padded(lines["fb"].T, 128), 128), "u8")
+            g = product(padded(lines["fb"].T, 128), lines["fa"].T.copy())
+            o.put("g", g, "u32")
+            assert all(int(g[p, q]) == C.gram(noise.seed_b, k, norm)[p][q] for p, q in ((0, 0), (3, 17), (31, 31)))
             make = CV.rows if forming == "v0" else CV.rows_f32
             ra, rb = make(CASE, "A", m, k), make(CASE, "B", n, k)
             o.put("xa", b"".join(ra), "u8")
@@ -293,6 +302,11 @@ def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024) -> dict:
             o.put("sb", sb, "u32")
             o.put("y_plain", glue_y(product(qa, qb), sa, sb), "u16")
             o.put("y_fast", glue_y(product(qa, qb, window=k, raw=True), sa, sb), "u16")
+            if forming == "v1":
+                qa5, qb5 = adopted(fa_vals, a.alpha), adopted(fb_vals, b.alpha)
+                o.put("qa_s5", tiled(qa5, 128), "u8")
+                o.put("qb_s5", tiled(qb5, 128), "u8")
+                o.put("y_adopt", glue_y(product(qa5, qb5), inv["a"], inv["b"]), "u16")
 
             agree = crosscheck(forming, ctx, ra, rb, at, bt, pa, pb, c, u, dg, m, n)
             manifest["formings"][forming] = {"scheme": C.PearlC(forming=forming).name, "files": o.files, "crosscheck": agree}
@@ -314,6 +328,7 @@ def crosscheck(forming, ctx, ra, rb, at, bt, pa, pb, c, u, dg, m, n) -> dict:
     assert ops.pa == pa[64:128].tolist() and ops.pb == pb[n - 64:].tolist()
     assert checked.c == sub(c) and checked.u == sub(u)
     per = n // C.CHUNK
+    assert s.admissible(ctx, ops)
     mine = turboshake128(b"".join(dg[r * per + per - 2 + h] for r in rows for h in range(2)), C.D_LEAF, 32)
     assert s.digest(ctx, noise, checked) == mine
     assert s.tickets(noise, checked) == tickets(np.array(checked.c, np.uint32), noise.seed_a)
