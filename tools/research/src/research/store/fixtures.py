@@ -229,7 +229,8 @@ def fetch_registry(store: LocalStore, repo: Path, paths: Sequence[str] = (), *, 
                    check_only: bool = False) -> dict[str, Any]:
     """Make every fetched entry under `paths` (repo-relative; none = all) present and exactly its id.  `check_only` fetches
     manifests only and writes nothing to the tree.  The report's `entries` say, per entry, `tracked` (git holds it), `present`
-    (already exact), `fetched`, `stale` (check_only: missing or different) or `missing` (no source held it)."""
+    (already exact, which the bytes alone show: no source is needed), `fetched`, `stale` (check_only: missing or different) or
+    `missing` (no source held it)."""
     repo = Path(repo)
     doc = load_map(repo)
     git = tracked(repo)
@@ -239,6 +240,10 @@ def fetch_registry(store: LocalStore, repo: Path, paths: Sequence[str] = (), *, 
     for a, p in chosen.items():
         if a not in want:
             rep["entries"].append({"id": a, "path": p, "status": "tracked"})
+    for a, p in list(want.items()):                          # an entry's id is its bytes: an exact copy needs no manifest and no source
+        if (repo / p).exists() and fixture_id(repo / p) == a:
+            rep["entries"].append({"id": a, "path": p, "status": "present"})
+            del want[a]
     fr = fetchset._report()
     ms = fetchset.fetch_manifests(store, want, srcs, jobs=jobs, report=fr)
     todo: dict[str, str] = {}

@@ -177,6 +177,21 @@ def test_a_stale_fetched_copy_is_restored_exactly(tmp_path):
     assert F.fixture_id(d) == a["set"] and not (d / "leftover.bin").exists()
 
 
+def test_a_shipped_tree_with_no_source_counts_its_exact_entries_as_present(tmp_path):
+    """A `git archive` (no .git) on a machine with no store credentials and no public URL: tracked entries arrive with the tree, and
+    their bytes alone show they are exact; only an absent one is missing."""
+    origin, remote = _store(tmp_path, "origin"), FsRemote(tmp_path / "remote")
+    repo, a = _repo(tmp_path, origin, remote)
+    F.fetch_registry(_store(tmp_path, "dev"), repo, srcs=[remote])
+    subprocess.run(["rm", "-rf", str(repo / ".git")], check=True)
+    rep = F.fetch_registry(_store(tmp_path, "pod"), repo, srcs=[])
+    assert rep["ok"] and {e["path"]: e["status"] for e in rep["entries"]} == {
+        "pkg/tests/fixtures/small.json": "present", "pkg/tests/fixtures/big.proof": "present", "pkg/tests/fixtures/set": "present"}
+    (repo / "pkg/tests/fixtures/big.proof").unlink()
+    rep = F.fetch_registry(_store(tmp_path, "pod2"), repo, srcs=[])
+    assert not rep["ok"] and [e["status"] for e in rep["entries"] if e["path"] == "pkg/tests/fixtures/big.proof"] == ["missing"]
+
+
 def test_a_fixture_no_source_holds_is_reported_missing(tmp_path):
     origin, remote = _store(tmp_path, "origin"), FsRemote(tmp_path / "remote")
     repo, _ = _repo(tmp_path, origin, remote)
