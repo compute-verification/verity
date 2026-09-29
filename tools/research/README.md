@@ -309,6 +309,14 @@ pass until the note is renamed or the clock passes its stamp:
 SYNC-REFUSED lanes/x/20260928T0700Z-report-x.md: stamp 20260928T0700Z is 18 min ahead; use 20260928T0642Z (date -u +%Y%m%dT%H%MZ)
 ~~~
 
+Once pushed, it looks up the `art:` ids and run ids the pushed lines cite on the store's remote, which is what every reader
+resolves, and warns, never refuses, for each note citing one the remote lacks. A run counts once its attempt, or a label on it
+(`custody waived`), is there. `RESEARCH_NOTES_CITE_CHECK=0` turns it off.
+
+~~~text
+SYNC-WARN lanes/x/20260929T0600Z-report-x.md: cites r20260928-042319-9aac, which the evidence store does not have (a run is in the store once its attempt is on the remote: `research data custody <run> --publish` where its run dir is, else `research data label <run> custody waived --by <you>`)
+~~~
+
 ### The steward off the laptop
 
 `research notes watch` is the steward: liveness, reaping, deadlines,

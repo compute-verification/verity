@@ -5,12 +5,14 @@ from __future__ import annotations
 import datetime as dt
 import subprocess
 import threading
+import time
 from pathlib import Path
 
 import pytest
 
 from research import notes
 from research import notes_sync as NS
+from research.store.remote import FsRemote
 
 DOC = "kb/doc.md"
 SECTION = "\n".join(f"filler {i}" for i in range(12))
@@ -318,3 +320,102 @@ def test_front_matter_is_checked_only_for_new_content_and_new_problems(machines)
     rep = NS.sync(a, secrets=[], now=NOW)
     assert rep["rc"] == NS.FUTURE_RC and rep["header"] == [f"{again}: front matter opened with --- is never closed: add a --- line under the header"]
     assert moved in _tree(origin) and again not in _tree(origin)
+
+
+# ---- citations ------------------------------------------------------------------------------------------------------------------------
+
+ART = "cc59294a" + "0" * 56
+RUN, LABELLED, UNKNOWN = "r20260928-060054-e5c1", "r20260928-042319-9aac", "r20260928-000000-0000"
+
+
+def _vault(tmp_path: Path, monkeypatch=None) -> Path:
+    """A fs remote holding ART's manifest, RUN's attempt and a label on LABELLED; with `monkeypatch`, the store's configured remote."""
+    vault = tmp_path / "vault"
+    for key in (f"manifests/{ART}.json", f"attempts/{RUN}.json", f"labels/{LABELLED}/{'a' * 64}.json"):
+        (vault / key).parent.mkdir(parents=True, exist_ok=True)
+        (vault / key).write_text("{}\n")
+    if monkeypatch:
+        (tmp_path / "store.toml").write_text(f'[remote]\ntype = "fs"\npath = "{vault}"\n')
+        monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(tmp_path / "store.toml"))
+    return vault
+
+
+def test_outgoing_citations_are_the_ids_that_the_pushed_lines_add_to_notes(machines):
+    origin, a, _ = machines
+    note = "lanes/x/20260928T0640Z-report-x.md"
+    _note(a, note)
+    with (a / note).open("a") as f:
+        f.write(f"gate {RUN} passed; art:cc59294a and art:{ART}, again {RUN}\n")
+    (a / "kb" / "k.md").write_text(f"see {UNKNOWN}\n")
+    (a / "lanes" / "x" / "log.txt").write_text(f"{LABELLED}\n")          # not a note
+    (a / "README.md").write_text(f"{LABELLED}\n")                          # not under lanes/ or kb/
+    _git(a, "add", "-A")
+    _git(a, "commit", "-qm", "cite")
+    assert NS.outgoing_citations(a, "refs/remotes/origin/main") == {note: ["art:cc59294a", f"art:{ART}", RUN], "kb/k.md": [UNKNOWN]}
+    assert NS.outgoing_citations(a, None) == NS.outgoing_citations(a, "refs/remotes/origin/main")     # a first push: the last commit
+    _git(a, "push", "-q", "origin", "HEAD:main")
+    _git(a, "fetch", "-q", "origin")
+    (a / "lanes" / "x" / "2026-09").mkdir()
+    _git(a, "mv", note, "lanes/x/2026-09/20260928T0640Z-report-x.md")
+    _git(a, "commit", "-qm", "move")
+    assert NS.outgoing_citations(a, "refs/remotes/origin/main") == {}                                 # a move adds no lines
+
+
+def test_missing_citations_asks_the_remote_and_a_label_accounts_for_a_run(tmp_path):
+    remote = FsRemote(_vault(tmp_path))
+    cited = ["art:cc59294a", f"art:{ART}", "art:deadbeef", RUN, LABELLED, UNKNOWN]
+    assert NS.missing_citations(cited, remote) == ({"art:deadbeef", UNKNOWN}, None)
+    assert NS.missing_citations(cited) == (set(), None)                  # no remote configured: no check
+
+    class Down:
+        def list(self, prefix):
+            raise OSError("unreachable")
+
+        head = list
+
+    assert NS.missing_citations(cited, Down()) == (set(), "the store's remote did not answer for 6 cited ids (OSError)")
+
+    class Hangs:
+        def list(self, prefix):
+            time.sleep(1)
+            return []
+
+        head = list
+
+    t0 = time.monotonic()
+    assert NS.missing_citations(cited, Hangs(), wait_s=0.1) == (set(), "6 cited ids not answered within 0.1 s")
+    assert time.monotonic() - t0 < 0.9
+
+
+def test_citation_warnings_name_each_note_and_how_to_publish(tmp_path, monkeypatch):
+    remote = FsRemote(_vault(tmp_path))
+    cites = {"lanes/x/a.md": [RUN, UNKNOWN, "art:deadbeef"], "kb/b.md": [LABELLED]}
+    assert NS.citation_warnings(cites, remote) == [
+        f"lanes/x/a.md: cites {UNKNOWN}, art:deadbeef, which the evidence store does not have "
+        f"({NS.CITE_HINTS['run']}; {NS.CITE_HINTS['art']})"]
+    many = [f"r20260928-0000{i:02d}-0000" for i in range(NS.CITE_MAX + 6)]
+    assert NS.citation_warnings({"kb/c.md": many}, remote) == [
+        f"kb/c.md: cites {', '.join(many[:NS.CITE_MAX])}, which the evidence store does not have ({NS.CITE_HINTS['run']})",
+        f"citation check: 6 more cited ids not looked up (at most {NS.CITE_MAX} a sync)"]
+    monkeypatch.setenv(NS.CITE_ENV, "0")
+    assert NS.citation_warnings(cites, remote) == []
+
+
+def test_sync_warns_once_pushed_on_a_citation_the_store_lacks(machines, tmp_path, monkeypatch):
+    origin, a, _ = machines
+    _vault(tmp_path, monkeypatch)
+    note = "lanes/x/20260928T0640Z-report-x.md"
+    _note(a, note)
+    with (a / note).open("a") as f:
+        f.write(f"gate {RUN} passed; train {UNKNOWN} passed but unrecorded; {LABELLED} waived\n")
+    rep = NS.sync(a, secrets=[], now=NOW)
+    assert (rep["rc"], rep["pushed"]) == (0, True) and note in _tree(origin)
+    assert rep["warn"] == [f"{note}: cites {UNKNOWN}, which the evidence store does not have ({NS.CITE_HINTS['run']})"]
+    assert NS.refused_lines(rep) == [f"SYNC-WARN {rep['warn'][0]}"] and "1 warning (SYNC-WARN)" in NS.render_sync(rep)
+    with (a / note).open("a") as f:
+        f.write("CHECKPOINT none (06:42Z) [open] no new citation\n")
+    assert NS.sync(a, secrets=[], now=NOW)["warn"] == []                  # what was pushed is not re-checked
+    monkeypatch.setenv(NS.CITE_ENV, "0")
+    with (a / note).open("a") as f:
+        f.write(f"again {UNKNOWN}\n")
+    assert NS.sync(a, secrets=[], now=NOW)["warn"] == []
