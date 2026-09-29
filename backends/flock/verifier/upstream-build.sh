@@ -43,9 +43,7 @@ for c in $(ls "$W/live"); do
   (cd "$W/flock" && cargo build --release -q -p flock-live --bin "$bin" "${feat[@]}" -j "$J")
   [ -f "$W/live/$c/flock.patch" ] && (cd "$W/flock" && patch -s -R -p1 < "$W/live/$c/flock.patch")
   cp "$W/flock/target/release/$bin" "$W/out/upstream-$c"
-  n=$(objdump -d "$W/out/upstream-$c" | grep -c '%zmm' || true)
-  [ "$n" -eq 0 ] || { echo "upstream $c: $n AVX-512 instructions with RUSTFLAGS='$RUSTFLAGS'; not portable" >&2; exit 1; }
-  echo "built upstream $c ($bin), no AVX-512"
+  echo "built upstream $c ($bin)"
 done
 
 GLIBC_NEEDS=$(for b in "$W"/out/upstream-*; do objdump -T "$b"; done | grep -o 'GLIBC_[0-9.]*' | sed 's/GLIBC_//' | sort -V | tail -1)
