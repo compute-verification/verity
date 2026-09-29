@@ -112,7 +112,8 @@ def reads(o: dict, a: dict, b: dict, why: list[str]) -> dict:
             g = group(m, x or {}, y, z, why)
         if g is not None:
             defs = A.definitions(g)
-            out[m] = {"digest": A.module_digest(defs), "definitions": dict(sorted(defs.items())), "pins": sorted(g.get("pins", []))}
+            out[m] = {"digest": A.module_digest(defs), "definitions": dict(sorted(defs.items())),
+                      "pins": sorted(g.get("pins", []))}
     return out
 
 

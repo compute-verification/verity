@@ -341,8 +341,8 @@ def facts_of(pkg: Path, policy: dict, work: Path) -> dict:
     return facts
 
 
-#: records written before SHA-256: a pin's `type_hash` is Lean's 32-bit `Expr.hash`, and a read group's definitions are the
-#: first hex digits of a digest over those; both have this many hex digits, and are checked as they are until `--update`
+#: hex digits of the hashes in records written before SHA-256: a pin's `type_hash` (Lean's 32-bit `Expr.hash`) and a read
+#: group's definitions (a digest over those, cut short); such a record is checked as it is until `--update` rewrites it
 OLD = 16
 
 
