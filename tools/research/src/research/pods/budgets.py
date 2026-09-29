@@ -10,10 +10,13 @@ checked by `research pods create`.  A line is the approval: committing it replac
 
     [budgets]
     "vy-circuit-checks-" = { cap_usd = 5, expires = "2026-09-30T06:00Z", max_pod_hours = 12, by = "daniel 2026-09-29" }
+    "vy-coord-" = { cap_usd_per_day = 65, expires = "2026-10-31T00:00Z", max_pod_hours = 168, by = "daniel: the CI pool" }
 
 A line covers every pod whose RunPod name starts with its prefix; when several do, the longest prefix covers it.
   cap_usd        the line's pods' integrated spend (costPerHr x time, from when the guard first sees the line) at or over it trips the
                  line: its pods are terminated, and `pods create` refuses under it until cap_usd is raised above the spend
+  cap_usd_per_day  the same over any rolling 24 hours (not a calendar day, so no reset at midnight lets a day's spend double): its
+                 trip clears by itself once the window's spend falls back under it.  A line needs cap_usd, cap_usd_per_day, or both
   expires        ISO 8601 with a zone: after it `pods create` refuses under the line; its pods are never terminated for the clock (their
                  leases end them)
   max_pod_hours  a pod under the line older than this (RunPod's createdAt) is terminated: the outer bound for a pod whose lease never
@@ -44,7 +47,8 @@ FILE = "budgets.toml"
 GUARD_HOST = "vy-control-verity"
 GUARD_STATE = "/root/.research/pods/guard-budgets.json"
 STALE_S = 180
-LINE_KEYS = {"cap_usd", "expires", "max_pod_hours", "by"}
+LINE_KEYS = {"cap_usd", "cap_usd_per_day", "expires", "max_pod_hours", "by"}
+CAP_KEYS = ("cap_usd", "cap_usd_per_day")
 GUARD_KEYS = {"project", "balance_floor", "terminate_uncovered", "uncovered_grace_min", "exempt"}
 
 
@@ -69,10 +73,11 @@ def iso(t: float | None) -> str | None:
 @dataclass(frozen=True)
 class Line:
     prefix: str
-    cap_usd: float
+    cap_usd: float | None
     expires: float
     max_pod_hours: float
     by: str | None = None
+    cap_usd_per_day: float | None = None
 
     def live(self, now: float) -> bool:
         return now < self.expires
@@ -149,7 +154,7 @@ def parse(text: str) -> Budgets:
             problems.append(f"{where}: not an inline table {{ cap_usd = ..., expires = ..., max_pod_hours = ... }}")
             continue
         bad = sorted(set(v) - LINE_KEYS)
-        missing = sorted({"cap_usd", "expires", "max_pod_hours"} - set(v))
+        missing = sorted({"expires", "max_pod_hours"} - set(v)) + ([] if any(k in v for k in CAP_KEYS) else ["cap_usd or cap_usd_per_day"])
         if bad:
             problems.append(f"{where}: {', '.join(bad)} not a line key ({', '.join(sorted(LINE_KEYS))})")
         if missing:
@@ -157,14 +162,17 @@ def parse(text: str) -> Budgets:
         if bad or missing:
             continue
         exp = parse_time(v["expires"])
-        if not _num(v["cap_usd"]) or v["cap_usd"] < 0:
-            problems.append(f"{where}: cap_usd is not a number of dollars")
+        caps = [k for k in CAP_KEYS if k in v and (not _num(v[k]) or v[k] < 0)]
+        if caps:
+            problems.append(f"{where}: {' and '.join(caps)} {'is' if len(caps) == 1 else 'are'} not a number of dollars")
         elif exp is None:
             problems.append(f"{where}: expires {v['expires']!r} is not ISO 8601 with a zone (2026-09-30T06:00Z)")
         elif not _num(v["max_pod_hours"]) or v["max_pod_hours"] <= 0:
             problems.append(f"{where}: max_pod_hours is not a positive number of hours")
         else:
-            lines[prefix] = Line(prefix, float(v["cap_usd"]), exp, float(v["max_pod_hours"]), str(v["by"]) if v.get("by") is not None else None)
+            lines[prefix] = Line(prefix, float(v["cap_usd"]) if "cap_usd" in v else None, exp, float(v["max_pod_hours"]),
+                                 str(v["by"]) if v.get("by") is not None else None,
+                                 float(v["cap_usd_per_day"]) if "cap_usd_per_day" in v else None)
     if problems:
         raise BudgetError(f"{FILE}: " + "; ".join(problems))
     return Budgets(lines=lines, project=tuple(project), exempt=tuple(exempt), balance_floor=float(floor) if floor is not None else None,
@@ -238,9 +246,13 @@ def gate(name: str, max_hours: float, state: dict[str, Any], now: float, *, host
     exp = parse_time(ln.get("expires"))
     if exp is None or now >= exp:
         return f"the budget line {p!r} expired at {ln.get('expires')}: extend `expires` in budgets.toml to create under it"
-    spent = float(tally.get("spent") or 0.0)
-    if tally.get("tripped") or spent >= float(ln["cap_usd"]):
-        return (f"the budget line {p!r} is at its cap (${spent:.2f} of ${float(ln['cap_usd']):g}): raise cap_usd in budgets.toml to create "
+    spent, day = float(tally.get("spent") or 0.0), float(tally.get("window_usd") or 0.0)
+    cap, per_day = ln.get("cap_usd"), ln.get("cap_usd_per_day")
+    if per_day is not None and (day >= float(per_day) or (tally.get("tripped") or {}).get("kind") == "per_day"):
+        return (f"the budget line {p!r} is at its daily cap (${day:.2f} in the last 24 h of ${float(per_day):g}): it clears by itself as the "
+                f"window moves, or raise cap_usd_per_day in budgets.toml")
+    if tally.get("tripped") or (cap is not None and spent >= float(cap)):
+        return (f"the budget line {p!r} is at its cap (${spent:.2f} of ${float(cap or 0):g}): raise cap_usd in budgets.toml to create "
                 f"under it")
     if max_hours > float(ln["max_pod_hours"]):
         return f"--max-hours {max_hours:g} is over the line {p!r}'s max_pod_hours {float(ln['max_pod_hours']):g}"

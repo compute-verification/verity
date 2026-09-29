@@ -13,6 +13,8 @@ Every `--poll` seconds (default 60), from the budgets in memory (the last good r
              state file, so a restart continues it.
   cap        a line whose spend reaches its cap_usd trips: the pods under it then are terminated.  The trip holds until cap_usd is raised
              above the spend; pods that appear under a tripped line are counted, not terminated (`pods create` refuses them).
+  per day    the same for cap_usd_per_day over the rolling 24 hours (spend kept in BUCKET_S buckets in the state); that trip clears by
+             itself once the window's spend falls back under the cap.
   balance    the account's clientBalance (GraphQL; account-wide) at or under `[guard] balance_floor`: every pod in scope is terminated,
              each poll while it holds.
   max age    a pod under a line older than the line's max_pod_hours (RunPod's createdAt) is terminated: the bound for a pod whose lease
@@ -61,6 +63,8 @@ TERMINATING_S = 600
 KEEP_TERMINATED = 500
 STOP_CODES = (0, 2, 3)          # the guard's exits the supervisor does not answer with a restart: stopped, bad arguments, another guard
 SCHEMA = "research/budgets-guard/v1"
+WINDOW_S = 86400                # cap_usd_per_day's rolling window
+BUCKET_S = 300                  # its spend is kept in buckets this long; a bucket that straddles the window's edge counts whole
 SUPERVISED_ENV = "RESEARCH_GUARD_SUPERVISED"
 
 
@@ -237,7 +241,8 @@ def refresh(cfg: Config, state: dict[str, Any], current: B.Budgets | None, now: 
     old = {p: ln.view() for p, ln in (current.lines.items() if current else [])}
     for p, v in sorted(new.view()["lines"].items()):
         if p not in old:
-            log(f"LINE {p!r} added: cap ${v['cap_usd']:g}, expires {v['expires']}, max_pod_hours {v['max_pod_hours']:g}" + (f", by {v['by']}" if v.get("by") else ""))
+            caps = [f"{k} ${v[k]:g}" for k in B.CAP_KEYS if v.get(k) is not None]
+            log(f"LINE {p!r} added: {', '.join(caps)}, expires {v['expires']}, max_pod_hours {v['max_pod_hours']:g}" + (f", by {v['by']}" if v.get("by") else ""))
         elif old[p] != v:
             log(f"LINE {p!r} changed: " + ", ".join(f"{k} {old[p][k]} -> {v[k]}" for k in v if old[p].get(k) != v[k]))
     for p in sorted(set(old) - set(new.lines)):
@@ -274,6 +279,7 @@ def poll(api: Any, budgets: B.Budgets, cfg: Config, state: dict[str, Any], now: 
             scope.append((p, line))
     for prefix in budgets.lines:
         state["lines"].setdefault(prefix, {"spent": 0.0, "first_seen": now, "tripped": None})
+    bucket = str(int(now // BUCKET_S) * BUCKET_S)
     rate_now = 0.0
     for p, line in scope:
         r = float(p.get("costPerHr") or 0.0)
@@ -283,7 +289,15 @@ def poll(api: Any, budgets: B.Budgets, cfg: Config, state: dict[str, Any], now: 
                  created=parse_time(p.get("createdAt")) or e.get("created"))
         e["spent"] += r * hours
         if line is not None:
-            state["lines"][line.prefix]["spent"] += r * hours
+            t = state["lines"][line.prefix]
+            t["spent"] += r * hours
+            w = t.setdefault("window", {})
+            w[bucket] = w.get(bucket, 0.0) + r * hours
+    for t in state["lines"].values():
+        w = t.setdefault("window", {})
+        for k in [k for k in w if float(k) + BUCKET_S <= now - WINDOW_S]:
+            del w[k]
+        t["window_usd"] = sum(w.values())
     state["last_poll"], state["rate_now"] = now, rate_now
 
     balance = floor = None
@@ -301,13 +315,24 @@ def poll(api: Any, budgets: B.Budgets, cfg: Config, state: dict[str, Any], now: 
     for prefix, line in budgets.lines.items():
         t = state["lines"][prefix]
         members = [p for p, ln in scope if ln is line]
-        if t.get("tripped") and t["spent"] < line.cap_usd:
-            notes.append(f"UNTRIPPED {prefix!r}: cap ${line.cap_usd:g} is over the spend ${t['spent']:.2f}")
+        over = []
+        if line.cap_usd is not None and t["spent"] >= line.cap_usd:
+            over.append(("cap", f"{prefix!r} CAP ${line.cap_usd:g} reached (spent ${t['spent']:.2f})"))
+        if line.cap_usd_per_day is not None and t["window_usd"] >= line.cap_usd_per_day:
+            over.append(("per_day", f"{prefix!r} DAILY CAP ${line.cap_usd_per_day:g} reached (${t['window_usd']:.2f} in the last 24 h)"))
+        if t.get("tripped") and not over:
+            notes.append(f"UNTRIPPED {prefix!r}: " + (f"${t['window_usd']:.2f} in the last 24 h is under the daily cap ${line.cap_usd_per_day:g}"
+                                                     if t["tripped"].get("kind") == "per_day" else
+                                                     f"cap ${line.cap_usd:g} is over the spend ${t['spent']:.2f}" if line.cap_usd is not None else
+                                                     "no cap applies any more"))
             t["tripped"] = None
-        if not t.get("tripped") and t["spent"] >= line.cap_usd:
-            t["tripped"] = {"at": iso(now), "why": f"{prefix!r} CAP ${line.cap_usd:g} reached (spent ${t['spent']:.2f})",
-                            "pods": sorted(p["id"] for p in members)}
-            notes.append(f"TRIPPED: {t['tripped']['why']}")
+        if not t.get("tripped") and over:
+            kind, why = over[0]
+            t["tripped"] = {"at": iso(now), "why": why, "kind": kind, "pods": sorted(p["id"] for p in members)}
+            notes.append(f"TRIPPED: {why}")
+        elif t.get("tripped") and over and t["tripped"].get("kind", "cap") not in [k for k, _ in over]:
+            t["tripped"].update(kind=over[0][0], why=over[0][1])          # still over, now on the other cap: the trip holds
+            notes.append(f"STILL TRIPPED: {over[0][1]}")
         if t.get("tripped"):
             for p in members:
                 if p["id"] in t["tripped"]["pods"]:
@@ -342,8 +367,13 @@ def poll(api: Any, budgets: B.Budgets, cfg: Config, state: dict[str, Any], now: 
         log(d["line"])
     if scope:
         log(f"{len(scope)} pod(s) ${rate_now:.2f}/h: " + " ".join(f"{p['id']}:{p.get('name')}@{p.get('costPerHr')}" for p, _ in scope)
-            + " | " + " ".join(f"{pre}=${t['spent']:.2f}/{budgets.lines[pre].cap_usd:g}" for pre, t in sorted(state["lines"].items()) if pre in budgets.lines))
+            + " | " + " ".join(_line_spend(pre, t, budgets.lines[pre]) for pre, t in sorted(state["lines"].items()) if pre in budgets.lines))
     return done
+
+
+def _line_spend(prefix: str, t: dict[str, Any], line: B.Line) -> str:
+    return (f"{prefix}=${t['spent']:.2f}" + (f"/{line.cap_usd:g}" if line.cap_usd is not None else "")
+            + (f" 24h ${t.get('window_usd', 0.0):.2f}/{line.cap_usd_per_day:g}" if line.cap_usd_per_day is not None else ""))
 
 
 def _terminate(api: Any, cfg: Config, state: dict[str, Any], kills: list[tuple[dict[str, Any], str]], now: float) -> list[dict[str, Any]]:
@@ -500,8 +530,11 @@ def status(dry_run: bool = False, as_json: bool = False, clock: Callable[[], flo
     print("  " + ", ".join(g) + (f"; balance ${out['balance']:.2f}" if out["balance"] is not None else "") + f"; ${out['rate_now'] or 0:.2f}/h in scope")
     for pre, ln in sorted((b.get("lines") or {}).items()):
         t = out["lines"].get(pre) or {}
-        print(f"  {pre!r}: ${t.get('spent', 0.0):.2f} of ${ln['cap_usd']:g}, expires {ln['expires']}, max_pod_hours {ln['max_pod_hours']:g}"
-              + (f" -- TRIPPED {t['tripped']['at']}" if t.get("tripped") else "") + (f" (by {ln['by']})" if ln.get("by") else ""))
+        caps = ([f"${t.get('spent', 0.0):.2f} of ${ln['cap_usd']:g}"] if ln.get("cap_usd") is not None else [f"${t.get('spent', 0.0):.2f}"]) \
+            + ([f"${t.get('window_usd', 0.0):.2f} in 24 h of ${ln['cap_usd_per_day']:g}/day"] if ln.get("cap_usd_per_day") is not None else [])
+        print(f"  {pre!r}: {', '.join(caps)}, expires {ln['expires']}, max_pod_hours {ln['max_pod_hours']:g}"
+              + (f" -- TRIPPED {t['tripped']['at']} ({t['tripped'].get('kind', 'cap')})" if t.get("tripped") else "")
+              + (f" (by {ln['by']})" if ln.get("by") else ""))
     for pid_, e in sorted(out["pods"].items(), key=lambda kv: kv[1].get("created") or 0):
         print(f"  {pid_} {e.get('name')} ${e.get('rate', 0):g}/h spent ${e.get('spent', 0):.2f} created {iso(e.get('created'))} "
               + (f"line {e['line']!r}" if e.get("line") else "UNCOVERED"))
