@@ -6,6 +6,8 @@
                                                             record `research merge` reads; with the pinned upstream build and
                                                             inputs when the commit changes backends/flock/ against --base REF
                                                             (default origin/main)
+    ... [--verdicts-in PACK]                                import the passes another machine stored (`verdicts.py`) before
+                                                            the steps; with --record --on, the pack travels with the run
 
 Three independent groups run at once, the cores split between them (`--cores N`, default the CPUs this process may use):
 
@@ -36,7 +38,8 @@ Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for 
                     tracked files, which pin the upstream build and inputs, the interpreter, the environment)
 
 Inside a recorded run it writes `$RESEARCH_RUN_DIR/result.json` (kind `check/v1`): each step's status, seconds and cache use,
-with each step's log beside it.
+with each step's log beside it, and `verdicts.tar.gz`: the passes this run stored, which another machine imports with
+`--verdicts-in` (the merge queue's pods share their passes this way; the pack imported is named in the result's `verdicts`).
 """
 from __future__ import annotations
 
@@ -58,11 +61,25 @@ ROOT = Path(__file__).resolve().parents[2]
 FLOCK_VERIFIER = ROOT / "backends" / "flock" / "verifier"
 #: environment variables that say nothing about what a step computes (the shell's own bookkeeping)
 VOLATILE = frozenset({"_", "OLDPWD", "PWD", "SHLVL", "TERM", "COLUMNS", "LINES", "TMUX", "TMUX_PANE", "SSH_CLIENT", "SSH_CONNECTION",
-                      "SSH_TTY", "SSH_AUTH_SOCK", "XDG_SESSION_ID", "MAIL", "LOGNAME", "USER"})
+                      "SSH_TTY", "SSH_AUTH_SOCK", "XDG_SESSION_ID", "MAIL", "LOGNAME", "USER", "HOSTNAME", "PUBLIC_KEY"})
+#: variables naming the machine rather than what a step computes: a pod's id, address and pod-scoped key (so a verdict one pod
+#: stored stays valid on another; `verdicts.py`)
+MACHINE_PREFIXES = ("RUNPOD_",)
 
 
 def cache_dir() -> Path:
     return Path(os.environ.get("CHECK_CACHE") or Path.home() / ".cache" / "verity-check")
+
+
+def _load(name: str):
+    spec = importlib.util.spec_from_file_location(f"check_{name}", Path(__file__).resolve().parent / f"{name}.py")
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    return m
+
+
+#: the verdict packs (`verdicts.py`)
+VERDICTS = _load("verdicts")
 
 
 def cores() -> int:
@@ -271,8 +288,19 @@ def record(argv: list[str]) -> int:
             env[AGREEMENT_DIR_ENV] = str(d)
     if on:
         cmd += ["--on", on, "--source", "."]
+        if "--verdicts-in" in rest:                    # the pack travels with the run; on the machine it's found in the run's inputs/
+            cmd += ["--send", str(Path(rest[rest.index("--verdicts-in") + 1]).resolve())]
     cmd += ["--", *tool.CHECK.command, *rest]
     return subprocess.run(cmd, cwd=ROOT, env=env).returncode
+
+
+def verdicts_in(pack: Path, run_dir: Path | None) -> dict:
+    """Import a verdict pack before the steps run (`verdicts.py`): the path given, else its name in a recorded run's `inputs/`."""
+    if not pack.exists() and run_dir is not None and (run_dir / "inputs" / pack.name).exists():
+        pack = run_dir / "inputs" / pack.name
+    added, kept = VERDICTS.import_(pack)
+    print(f"check: verdicts: {added} imported, {kept} already here, from {pack.name}", flush=True)
+    return {"pack": pack.name, "sha256": _sha256(pack), "added": added, "already": kept}
 
 
 def groups(out: Path, n: int, cache: bool = True) -> list[list[tuple[str, list[str] | str, Path]]]:
@@ -326,9 +354,9 @@ def tracked_files(root: Path = ROOT) -> list[str] | None:
 
 
 def _env_key(e: dict[str, str]) -> dict[str, str]:
-    """The environment as a key: without the shell's bookkeeping, and with this tree's path written `<tree>` (a machine keeps each
-    commit's tree at its own path, and `uv run` puts that path in PATH, VIRTUAL_ENV and PYTHONPATH)."""
-    return {k: v.replace(str(ROOT), "<tree>") for k, v in sorted(e.items()) if k not in VOLATILE}
+    """The environment as a key: without the shell's bookkeeping or the machine's identity, and with this tree's path written `<tree>`
+    (a machine keeps each commit's tree at its own path, and `uv run` puts that path in PATH, VIRTUAL_ENV and PYTHONPATH)."""
+    return {k: v.replace(str(ROOT), "<tree>") for k, v in sorted(e.items()) if k not in VOLATILE and not k.startswith(MACHINE_PREFIXES)}
 
 
 def agreement_key(e: dict[str, str]) -> str | None:
@@ -424,15 +452,17 @@ def agreement_verdicts(run_dir: Path) -> list[str]:
     return [str(p.relative_to(run_dir)) for p in files if p.is_file()]
 
 
-def write_result(run_dir: Path, ok: bool, done: list[dict]) -> None:
+def write_result(run_dir: Path, ok: bool, done: list[dict], verdicts: dict | None = None) -> None:
     doc = {"schema": "research/result/v0.1", "kind": "check/v1", "run_id": os.environ["RESEARCH_RUN_ID"],
            "workload_fingerprint": {"steps": [s["step"] for s in done]},
            "validation": {"status": "passed" if ok else "failed", "checker": "tools/check/check.py",
                           "detail": "; ".join(f"{s['step']} {s['status']}" for s in done)},
            "measurements": [{"name": f"{s['step']}_wall", "value": s["seconds"], "unit": "s"} for s in done],
-           "steps": done, "artifacts": [p for p in ("suites.json", "suites/", "circuit-check.json", "lean-audit/",
+           "steps": done, "artifacts": [p for p in ("suites.json", "suites/", "circuit-check.json", "lean-audit/", "verdicts.tar.gz",
                                                     *(s.get("log") for s in done), *agreement_verdicts(run_dir))
                                         if p and (run_dir / p).exists()]}
+    if verdicts:
+        doc["verdicts"] = verdicts
     tmp = run_dir / "result.json.tmp"
     tmp.write_text(json.dumps(doc, indent=1) + "\n")
     os.replace(tmp, run_dir / "result.json")
@@ -454,6 +484,10 @@ def main(argv: list[str]) -> int:
         return record([a for a in argv if a != "--record"])
     cache = "--no-cache" not in argv
     rest = [a for a in argv if a != "--no-cache"]
+    pack = None
+    if "--verdicts-in" in rest and rest.index("--verdicts-in") + 1 < len(rest):
+        i = rest.index("--verdicts-in")
+        pack, rest = Path(rest[i + 1]), rest[:i] + rest[i + 2:]
     n = None
     if rest[:1] == ["--cores"] and len(rest) == 2 and rest[1].isdigit():
         n, rest = int(rest[1]), []
@@ -462,10 +496,14 @@ def main(argv: list[str]) -> int:
         return 2
     run_dir = Path(os.environ["RESEARCH_RUN_DIR"]) if os.environ.get("RESEARCH_RUN_DIR") else None
     out = run_dir or Path(tempfile.mkdtemp(prefix="check-"))
+    verdicts = {"in": verdicts_in(pack, run_dir)} if pack and cache else {}
+    before = VERDICTS.snapshot() if run_dir is not None and cache else None
     t0 = time.monotonic()
     ok, done = run(out, n, cache)
     if run_dir is not None:
-        write_result(run_dir, ok, done)
+        if before is not None:
+            verdicts["out"] = {"file": "verdicts.tar.gz", "entries": VERDICTS.export(run_dir / "verdicts.tar.gz", before)}
+        write_result(run_dir, ok, done, verdicts)
     print(f"check: {'passed' if ok else 'FAILED'} in {time.monotonic() - t0:.1f} s ({', '.join(s['step'] + ' ' + s['status'] for s in done)});"
           f" outputs in {out}")
     return 0 if ok else 1

@@ -364,3 +364,18 @@ def test_the_cache_reads_the_tree_as_git_has_it(tmp_path):
     assert after["dirs"] != before["dirs"] and after["probes"]["b.txt"] == "file"
     CC._VISIBLE.clear()
     CC._MEMO.clear()
+
+
+def test_the_cache_key_is_the_same_on_hosts_that_differ_only_in_their_kernel(monkeypatch):
+    """Pods of one image run on hosts with different kernels; a report one pod stored must count on another."""
+    import platform
+
+    from circuit_check import cache as CC
+
+    here = CC.key({"target": "F32Mul_v1"})
+    monkeypatch.setattr(platform, "release", lambda: "0.0.0-another-host")
+    monkeypatch.setattr(platform, "version", lambda: "#1 SMP another build")
+    monkeypatch.setattr(platform, "platform", lambda *a, **k: "Linux-0.0.0-another-host-x86_64")
+    assert CC.key({"target": "F32Mul_v1"}) == here
+    monkeypatch.setattr(platform, "machine", lambda: "aarch64")
+    assert CC.key({"target": "F32Mul_v1"}) != here                  # a different CPU is a different machine
