@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 from pathlib import Path
 
 import pytest
@@ -284,13 +285,19 @@ def test_the_render_goes_through_a_view_that_writes_nothing_to_the_store_under_t
 
 def test_progress_lines_come_on_schedule(capsys):
     lines: list[str] = []
-    prog = PA.Progress(lines.append, every=0.05)
+    ticked = threading.Event()
+
+    def log(line: str) -> None:
+        lines.append(line)
+        if line.startswith("parity: replicas 3/10 ("):
+            ticked.set()
+
+    prog = PA.Progress(log, every=0.05)
     prog.phase("replicas", 10)
     prog.tick(3)
-    import time as _t
-    _t.sleep(0.2)
+    ticked.wait()                                                  # a periodic line reports the phase's progress
     prog.stop()
-    assert lines[0].startswith("parity: replicas (10) at ") and any(x.startswith("parity: replicas 3/10 (") for x in lines[1:])
+    assert any(x.startswith("parity: replicas (10) at ") for x in lines)
 
 
 def test_the_render_sees_remote_only_records_on_both_sides(env, monkeypatch):
