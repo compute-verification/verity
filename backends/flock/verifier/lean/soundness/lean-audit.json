@@ -265,7 +265,19 @@
    "assumptions": [],
    "type_hash": "0000000048602bdf"
   },
-  "FlockSoundness.Audit.Law.subset_exec_escape_le": {},
+  "FlockSoundness.Audit.Law.subset_exec_escape_le": {
+   "signature": [
+    "FlockSoundness.Audit.Law.subset_exec_escape_le (n k L : Nat) (hk : instLENat.le k n) (B : Finset (Fin n)) :",
+    "  ENNReal.instLE.le",
+    "    (FlockSoundness.Game.prCoin fun f =>",
+    "      Exists fun D =>",
+    "        And (Eq (Flock.Draw.subset k n (FlockSoundness.Audit.Law.streamOf f)) (Option.some D))",
+    "          (∀ (u : Fin n), SetLike.instMembership.mem B u → Not (Array.instMembership.mem D u.val)))",
+    "    ((FlockSoundness.Audit.Law.subset n k hk).escape B)"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000eb32b7aa"
+  },
   "FlockSoundness.Audit.Law.sum_workK_le": {
    "signature": [
     "FlockSoundness.Audit.Law.sum_workK_le {n m : Nat} (σ : Fin n → Fin m) (w : Fin m → Nat) (K : Nat)",
@@ -1257,6 +1269,17 @@
     "FlockSoundness.UProg.rowsL1"
    ]
   },
+  "Flock.Draw": {
+   "digest": "471a346506456d510197eaeb5e49e7f6",
+   "definitions": {
+    "Flock.Draw.beNat": "7ee7e983cabb432c",
+    "Flock.Draw.subset": "a961c5d84f7249e4",
+    "Flock.Draw.uniform": "b76e86e173ce1ee0",
+    "Flock.Draw.width": "da18247367fc9279",
+    "Flock.Draw.workK": "7a35d85a8c7a60b9"
+   },
+   "pins": ["FlockSoundness.Audit.Law.subset_exec_escape_le", "FlockSoundness.Audit.Law.workRule_eq_draw"]
+  },
   "Flock.Layout": {
    "digest": "a73b23aa5e2c98ba1b7586119bfdbf99",
    "definitions": {
@@ -1632,6 +1655,13 @@
     "FlockSoundness.UProg.rowsL1"
    ]
   },
+  "FlockSoundness.Audit.DrawExec": {
+   "digest": "223517e5d74b87649e5e27915e46ebfe",
+   "definitions": {
+    "FlockSoundness.Audit.Law.streamOf": "223517e5d74b8764"
+   },
+   "pins": ["FlockSoundness.Audit.Law.subset_exec_escape_le"]
+  },
   "FlockSoundness.Audit.Extraction": {
    "digest": "21004edc4f6855354dfdcc848d1be100",
    "definitions": {
@@ -1777,7 +1807,7 @@
    ]
   },
   "FlockSoundness.Audit.Law": {
-   "digest": "4e723a6b73b906e945867efd24a8791a",
+   "digest": "083e37cd99feecf7ffb21abee85978dd",
    "definitions": {
     "FlockSoundness.Audit.Law": "ab6311f067d1e558",
     "FlockSoundness.Audit.Law.draw": "e9f1dc8a2d17dfbd",
@@ -1785,6 +1815,7 @@
     "FlockSoundness.Audit.Law.fintype": "e69a6854a7f2747b",
     "FlockSoundness.Audit.Law.incl": "eed2fd973f7e564f",
     "FlockSoundness.Audit.Law.miss": "d7e09d10fca7bd60",
+    "FlockSoundness.Audit.Law.subset": "02ca4235c23b8e1a",
     "FlockSoundness.Audit.Law.Ω": "829fd6ddac35b1ca"
    },
    "pins": [
@@ -1792,6 +1823,7 @@
     "FlockSoundness.Audit.InfluenceWitness.A.influence",
     "FlockSoundness.Audit.InfluenceWitness.Gen.harm_witness",
     "FlockSoundness.Audit.Law.escape_widen_le",
+    "FlockSoundness.Audit.Law.subset_exec_escape_le",
     "FlockSoundness.Audit.Law.work_escape_le",
     "FlockSoundness.Audit.Partition.Refines.twoStage_influence",
     "FlockSoundness.Audit.Partition.audit_exfiltration",
@@ -2070,6 +2102,7 @@
     "FlockSoundness.Audit.InfluenceWitness.A.influence",
     "FlockSoundness.Audit.InfluenceWitness.Gen.harm_witness",
     "FlockSoundness.Audit.Law.escape_widen_le",
+    "FlockSoundness.Audit.Law.subset_exec_escape_le",
     "FlockSoundness.Audit.Law.work_escape_le",
     "FlockSoundness.Audit.Partition.Refines.twoStage_influence",
     "FlockSoundness.Audit.Partition.audit_exfiltration",
