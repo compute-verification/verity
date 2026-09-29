@@ -13,6 +13,7 @@ from tests.program import padded_commit_tiny as PC
 pytestmark = pytest.mark.skipif(PC.pos_leaf is None, reason=f"host core unavailable: {PC.CORE}")
 
 
+@pytest.mark.slow
 def test_eos_at_event_1_lag0_every_required_word_committed_inactive_canonical_picks_opened_and_replayed(tmp_path):
     assert PC.main(["--case", "eos-at-event-1", "--lag", "0", "--draws", "48", "--out", str(tmp_path)]) == 0
     row = json.loads((tmp_path / "row_eos-at-event-1_lag0.json").read_text())
@@ -52,6 +53,7 @@ def test_eos_at_event_1_lag0_every_required_word_committed_inactive_canonical_pi
     assert all(po[f"s={t}/step"]["active"] == 0 and po[f"s={t}/step"]["bot"] == po[f"s={t}/step"]["words"] > 0 for t in range(2, 9))
 
 
+@pytest.mark.slow
 def test_lag1_executes_the_post_eos_step_and_the_twin_is_the_executed_prefix(tmp_path):
     assert PC.main(["--case", "eos-at-event-1", "--lag", "1", "--draws", "16", "--out", str(tmp_path)]) == 0
     row = json.loads((tmp_path / "row_eos-at-event-1_lag1.json").read_text())

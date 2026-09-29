@@ -118,7 +118,7 @@ fn field<'a>(js: &'a str, key: &str) -> &'a str {
 #[test]
 fn batch_verdict_and_statement_do_not_depend_on_jobs() {
     // six honest sub-batches, three of them with their own coins file (checked as `verify --coins`), three without
-    // (replayed coins: the conditional accept of DISCREPANCIES D7); the same batch on 1 job and on 8 jobs (clamped to 6)
+    // (replayed coins: the conditional accept of D7, discrepancies/d7.md); the same batch on 1 job and on 8 jobs (clamped to 6)
     let dir = batch_dir("honest", 6, |i| i % 2 == 0);
     let (c1, j1) = run_batch(&dir, "1", "1");
     let (c8, j8) = run_batch(&dir, "8", "2");
@@ -148,7 +148,7 @@ fn batch_verdict_and_statement_do_not_depend_on_jobs() {
 
 #[test]
 fn the_batch_union_bound_and_n_proofs_are_enforced() {
-    // (b) the scenario of the finding (PROTOCOL.md 8c "Batch verification", DISCREPANCIES D10): every sub-batch verifies
+    // (b) the scenario of the finding (PROTOCOL.md 8c "Batch verification", D10, discrepancies/d10.md): every sub-batch verifies
     // on its own at 2^-128.16, but four of them are only 2^-126.16 -- rejected at the default target, with the reason
     let dir = batch_dir("union", 4, |_| true);
     let (c, js) = run_batch_at(&dir, "4", "1", "128");

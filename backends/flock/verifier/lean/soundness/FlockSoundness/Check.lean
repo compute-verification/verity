@@ -170,6 +170,32 @@ hypotheses of the theorems that use them, never `axiom` declarations, so they ca
 #print axioms FlockSoundness.UnitPlace.decode_one
 #print axioms FlockSoundness.Prog.topo
 #print axioms FlockSoundness.Prog.isRowsUnit
+-- L1 for every flat circuit type: the rows the verifier derives (Flock.Derive.derive) compute the type, and the honest
+-- evaluation satisfies them; the logical order audit-lean's composed rows read
+#print axioms FlockSoundness.Types.compose_sound
+#print axioms FlockSoundness.Types.compose_complete
+#print axioms FlockSoundness.Types.order_nodup
+#print axioms FlockSoundness.Types.order_covers
+-- a verified lowering: RoPE's pinned rows compute its Boolean export, by the kernel in chunks (L1 for RoPE)
+#print axioms FlockSoundness.GateRows.rows_sound
+#print axioms FlockSoundness.GateRows.chunks_sound
+#print axioms FlockSoundness.Rope.pinned_eq
+#print axioms FlockSoundness.Rope.rope_sound
+-- the end-to-end theorem, a skeleton: every gap a named hypothesis (assumptions/e2e-checklist.md)
+#print axioms FlockSoundness.Audit.Partition.flock_e2e_count
+#print axioms FlockSoundness.Audit.Partition.flock_e2e_drawn
+-- a unit's rows in logical order (Rows.compose): placed at their block positions, and for a flat type, ordered and
+-- computing the type
+#print axioms FlockSoundness.Rows.compose
+#print axioms FlockSoundness.placement_of_realizes
+#print axioms FlockSoundness.Compose.ordered_of_take
+#print axioms FlockSoundness.compose_ordered
+#print axioms FlockSoundness.Compose.sat_physical
+#print axioms FlockSoundness.Rows.compose_eval
+-- over the type DAG: the unit's rows as the block holds them (Compose.ofBlock), ordered and computing the unit type
+#print axioms FlockSoundness.ofBlock_ordered
+#print axioms FlockSoundness.outCols_mem
+#print axioms FlockSoundness.Rows.compose_eval_unit
 -- the audit layer: strategy-level probabilities, draw laws, partitions, the one-stage profile
 #print axioms FlockSoundness.Game.prob_or_le
 #print axioms FlockSoundness.Game.prob_map
@@ -291,3 +317,60 @@ hypotheses of the theorems that use them, never `axiom` declarations, so they ca
 #print axioms FlockSoundness.Audit.Partition.placeDecoder
 #print axioms FlockSoundness.Audit.Partition.flock_batched_count_placed
 #print axioms FlockSoundness.Audit.Partition.flock_batched_drawn_placed
+-- the rows the verifier parses, as the audit's Rows: the parser's order check is Rows.topo (PR #147)
+#print axioms FlockSoundness.checkOrder_ok
+#print axioms FlockSoundness.Rows.ofOrdered
+#print axioms FlockSoundness.parse_checkOrder
+#print axioms FlockSoundness.parse_rowOrder
+#print axioms FlockSoundness.pushLe32_data
+#print axioms FlockSoundness.rd32_le32
+#print axioms FlockSoundness.ofRows_spec
+#print axioms FlockSoundness.ofRows_row
+#print axioms FlockSoundness.Rows.ofNet
+#print axioms FlockSoundness.Rows.ofNet_a
+#print axioms FlockSoundness.Rows.ofNet_b
+-- an instance's rows (its unit slots stacked) and their placement from three facts about the level-0 matrices
+#print axioms FlockSoundness.Rows.stack
+#print axioms FlockSoundness.Rows.stackRow_topo
+#print axioms FlockSoundness.stackPlace
+#print axioms FlockSoundness.stackPlace_stackCol
+#print axioms FlockSoundness.stackPlace_comp
+#print axioms FlockSoundness.placement_stack
+-- the rows Δ writes, by loop (HmRow.delta)
+#print axioms FlockSoundness.forIn_id_inv
+#print axioms FlockSoundness.delta_rows
+-- an instance's rows placed by the verifier's level-0 matrices (placedA, placedB), from the layout facts
+#print axioms FlockSoundness.rangesEntry_of_covers
+#print axioms FlockSoundness.sparseEntry_ofRows
+#print axioms FlockSoundness.Layout.delta_unit_comp
+#print axioms FlockSoundness.Layout.delta_unit_const
+#print axioms FlockSoundness.Layout.delta_pin
+#print axioms FlockSoundness.Layout.placement
+#print axioms FlockSoundness.Layout.unitPlace
+-- the layout facts, from the executable's accept step (Stmt.setupH)
+#print axioms FlockSoundness.parse_spec
+#print axioms FlockSoundness.portCols_le
+#print axioms FlockSoundness.delta_split
+#print axioms FlockSoundness.loop_inv
+#print axioms FlockSoundness.parse_facts
+#print axioms FlockSoundness.check_facts
+#print axioms FlockSoundness.build_facts
+#print axioms FlockSoundness.setupH_spec
+#print axioms FlockSoundness.pin_spec
+#print axioms FlockSoundness.rowSlots_spec
+#print axioms FlockSoundness.portCols_toList
+#print axioms FlockSoundness.deltaIn_inBit
+#print axioms FlockSoundness.setupH_layout
+#print axioms FlockSoundness.placement_of_setupH
+#print axioms FlockSoundness.unitPlace_of_setupH
+-- composed rows, placed: the block's facts as one proposition (Compose.Realizes) and the Placement they give, and a flat
+-- accepted statement's unit slots realizing the rows of its unit net
+#print axioms FlockSoundness.Compose.Realizes.placement
+#print axioms FlockSoundness.Compose.BlockFacts.realizes
+#print axioms FlockSoundness.Compose.BlockFacts.placement
+#print axioms FlockSoundness.Layout.placedA_comp
+#print axioms FlockSoundness.Layout.placedB_comp
+#print axioms FlockSoundness.Layout.placedA_const
+#print axioms FlockSoundness.Layout.placedB_const
+#print axioms FlockSoundness.Layout.placed_pin
+#print axioms FlockSoundness.Layout.realizes

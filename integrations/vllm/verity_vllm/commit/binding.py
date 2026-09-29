@@ -67,9 +67,23 @@ def split_name(name: str) -> tuple[str, str]:
             parts = name.split("/")
             return "/".join(parts[:2]), "/".join(parts[2:]) or "out"       # fa2.m1/L3/g4x64x128/... -> ("fa2.m1/L3", "g4x64x128/...")
     if "/" in name:
-        base, member = name.split("/", 1)
+        base, member = name.rsplit("/", 1)                                 # `<module>/<fx node>/<member>`: a call boundary's op_path has a `/`
         return base, member
     return name, "out"
+
+
+def logical_request(rid: str, order: dict[str, str]) -> str:
+    """Engine row id -> workload `r<i>` (`order`: workload request id -> `r<i>`).  vLLM v1 suffixes the external request id with
+    `-<8 hex>` internally; match exact, then with the suffix stripped, then by prefix.  Unmapped ids stay raw (-> coverage FAILS for that
+    request, fail-closed)."""
+    rid = str(rid)
+    if rid in order:
+        return order[rid]
+    base = rid.rsplit("-", 1)[0]
+    if base in order:
+        return order[base]
+    hits = [v for k, v in order.items() if rid.startswith(k)]
+    return hits[0] if len(hits) == 1 else rid
 
 
 def identity(program_digest: str, request_id: str, step: int, invocation: int, op_path: str, member: str, lo: int, hi: int, rank: int = 0) -> tuple:

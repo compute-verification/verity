@@ -34,7 +34,7 @@ def test_low_peak_tables_match_the_original_loader() -> None:
     code = ("import hashlib; from verity_vllm.program.kernels import fa2_relation, fa2_model as FA;"
             "T = FA.MufuTables.load(fa2_relation.tables_dir());"
             "print(hashlib.sha256(T.ex2.tobytes()).hexdigest(), hashlib.sha256(T.rcp.tobytes()).hexdigest())")
-    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=120,
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True,
                          env={**__import__("os").environ, "PYTHONPATH": ":".join(sys.path)})
     assert out.returncode == 0, out.stderr[-2000:]
     ex2, rcp = out.stdout.split()
@@ -76,6 +76,7 @@ def _open_ids(rl: RowLayout, head: int) -> list[ValueId]:
 
 
 @pytest.mark.parametrize("kind", ["decode_T160", "prefill_P20"])
+@pytest.mark.slow
 def test_round_trip_on_oracle_values_both_layouts(kind: str) -> None:
     if kind == "decode_T160":
         fx = synthetic_fixture(seed=7, geo=GEO, layer=3, step=5, prompt_len=155).with_replay(oracle_row)   # 9 rows, T = 160

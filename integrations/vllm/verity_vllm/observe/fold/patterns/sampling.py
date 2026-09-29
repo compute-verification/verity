@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import collections
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from verity.ir.defs import bind
@@ -15,6 +15,7 @@ from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.geometry import is_int, sub_rows
 from verity_vllm.observe.fold.patterns.ops import base_op, bound_args, first, triton_name
 from verity_vllm.observe.fold.patterns.resolutions import ComputeGroup, _fmt, hint_of, unsupported
+from verity_vllm.observe.fold.patterns.target import target_of
 from verity_vllm.observe.fold.patterns.transparent import widened_source
 from verity_vllm.observe.fold.resolver import Compute, Const, Gather, Param, PerRow, Resolution, StepContext, Transparent, Unsupported
 from verity_vllm.observe.fold.tree import TreeNode
@@ -277,6 +278,9 @@ class TokenSelectGumbelTopP:
 
     vocab: int | None = None
     block_size: int = 1024
+    #: the construction the Program declares (`pipeline.match --program-dir`: `sampling_event.program_sampler_construction`); None = the
+    #: record's declared target's.  A single-request Program's select, specialised on its constant S, has no shared-greedy form.
+    construction: str | None = None
     name: str = "sample.gumbel_topp_select"
 
     def match(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
@@ -520,7 +524,8 @@ class TokenSelectGumbelTopP:
         if out.rank == 1:
             out = ViewDesc(out.alloc, out.offset, (R, 1), (out.strides[0], 1), out.dtype, out.device)
         from verity_vllm.program.registry import sampling as _sampling
-        spec = bind(_sampling.GumbelTopPTokenSelect, V=V)
+        construction = self.construction or target_of(ctx)[0].effective_sampler_construction()
+        spec = bind(_sampling.select_for(_sampling.GumbelTopPTokenSelect, construction), V=V)
         S = int(s2["S"])        # the split kernels' constexpr: the launch's S -> the 6th operand (bound to the Program's `splits` Input)
         kernels = (*s2["kernels"], "ArgMaxOps", "gather_kernel")
         parts = []
@@ -581,3 +586,14 @@ class LogitsGather:
         return Transparent("move", (node.id,), src=Gather(src, tuple(int(i) for i in li)), dst=PerRow(out), rows=R,
                            hint=hint_of(node, "hidden[logits_indices]"), kernels=("index_elementwise_kernel", "indexSelectLargeIndex", "indexSelectSmallIndex"),
                            pattern=self.name)
+
+
+def with_sampler_construction(profile, construction: str | None):
+    """`profile` with its top-p select pattern bound under `construction`, the one the Program declares (`pipeline.match --program-dir`);
+    `profile` itself when None.  A construction `TargetProfile` does not name is refused by name."""
+    if construction is None:
+        return profile
+    from verity_vllm.program.frontend.target_profile import TargetProfile
+    if construction not in TargetProfile.SAMPLER_CONSTRUCTIONS:
+        raise SystemExit(f"sampler construction {construction!r} is not one of {list(TargetProfile.SAMPLER_CONSTRUCTIONS)}")
+    return replace(profile, patterns=[replace(p, construction=construction) if isinstance(p, TokenSelectGumbelTopP) else p for p in profile.patterns])
