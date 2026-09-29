@@ -73,8 +73,6 @@ KNOWN_FAILURES = {
         "torch CPU cos/sin against the captured b0 table: max ulp 29,154, the bound 2",
     "tests/engine/test_gen_dense2.py::test_inv_freq_models_cuda_reciprocal_multiply_and_is_identity_for_power_of_two_D":
         "15 inv_freq elements differ at D=96; the model expects 14",
-    "tests/program/test_sampling_rows.py::test_nv_logf_and_nv_log1pf_are_word_equal_to_the_libdevice_transcriptions_on_every_non_nan_word":
-        "nv_logf of a negative word gives NaN 0x7fc00000; the libdevice transcription gives 0xffc00000",
     "tests/program/test_ref_prims.py::test_gelu_ref_vs_torch[none-bf16]":
         "exact GELU against torch CPU: max ulp 128, normalised error inf",
     "tests/program/test_ref_prims.py::test_gelu_ref_vs_torch[none-f32]":
