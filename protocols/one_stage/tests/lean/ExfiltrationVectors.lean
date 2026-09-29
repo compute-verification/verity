@@ -260,6 +260,45 @@ separates it. Its escape is below `miss 678`, by a factor of about `1 + 2·10⁻
 example : meetsS 10 677 [(10000, 100, 340, 338), (10001, 100, 338, 339)] (9561, 9661) (9563, 9663) = false := by
   decide +kernel
 
+/-! ## A4's floored laws
+
+A4 P6's layer 0 (6,771,765 units in six template strata) drawing one unit per template (`a4-floor`) or in proportion to
+output bits (`a4-by-bits`). `certS` would search their counts, up to 773,981 units, one unit at a time in the kernel, so
+their certificates are literal (`tests/lean/a4_certs.py` writes them) and the kernel checks each with `meetsS`, as it
+checks `certS`'s: nothing about how they were found is trusted.
+-/
+
+/-- A certificate for an A4 law at `δ = 2^-e`: `K`, the rows `(N_s, k_s, c_s, c'_s)` of the fills of `K + 1` and `K`,
+and their `τ`. -/
+structure A4Cert where
+  name : String
+  e : ℕ
+  K : ℕ
+  rows : List (ℕ × ℕ × ℕ × ℕ)
+  τ : ℕ × ℕ
+  τ' : ℕ × ℕ
+
+def gridA4 : List A4Cert := [
+  ⟨"a4-floor", 10, 47111, [(287, 1, 0, 0), (6171648, 905, 41837, 41836), (11480, 2, 0, 0), (287, 1, 0, 0), (287, 1, 0, 0), (587776, 86, 5275, 5275)],
+    (6128907, 6129812), (6128908, 6129813)⟩,
+  ⟨"a4-floor", 20, 93892, [(287, 1, 0, 0), (6171648, 905, 84558, 84557), (11480, 2, 0, 0), (287, 1, 0, 0), (287, 1, 0, 0), (587776, 86, 9335, 9335)],
+    (6086186, 6087091), (6086187, 6087092)⟩,
+  ⟨"a4-floor", 40, 186479, [(287, 1, 0, 0), (6171648, 905, 169110, 169110), (11480, 2, 0, 0), (287, 1, 0, 0), (287, 1, 0, 0), (587776, 86, 17370, 17369)],
+    (570321, 570407), (6001634, 6002539)⟩,
+  ⟨"a4-by-bits", 20, 773981, [(287, 10, 0, 0), (6171648, 104, 711244, 711243), (11480, 12, 0, 0), (287, 20, 0, 0), (287, 39, 0, 0), (587776, 10, 62738, 62738)],
+    (5460301, 5460405), (525029, 525039)⟩]
+
+/-- Every A4 certificate meets `meetsS`, evaluated by the kernel. -/
+theorem gridA4_meets : gridA4.all (fun c => meetsS c.e c.K c.rows c.τ c.τ') = true := by decide +kernel
+
+/-- **Each A4 vector's `K` meets `hk`, and no smaller count does**, for every stratified law with its strata:
+`miss (K + 1) < 2^-e ≤ miss K`. -/
+theorem gridA4_counts : ∀ c ∈ gridA4, ∀ {n : ℕ} (σ : Fin n → Fin c.rows.length),
+    (∀ s, (Law.stratum σ s).card = c.rows[s.1].1) → ∃ hk : ∀ s, c.rows[s.1].2.1 ≤ (Law.stratum σ s).card,
+      (Law.stratified σ (fun s => c.rows[s.1].2.1) hk).miss (c.K + 1) < ((2 ^ c.e : ℕ) : ℝ≥0∞)⁻¹ ∧
+        ((2 ^ c.e : ℕ) : ℝ≥0∞)⁻¹ ≤ (Law.stratified σ (fun s => c.rows[s.1].2.1) hk).miss c.K :=
+  fun c hc _ σ hσ => miss_of_meetsS (List.all_eq_true.1 gridA4_meets c hc) σ hσ
+
 /-- `∑ j ∈ range (K + 1), n.choose j` and `n.choose K`, each term from the last: `C(n, j + 1) = C(n, j) · (n − j) / (j + 1)`. -/
 def sumChoose (n : ℕ) : ℕ → ℕ × ℕ
   | 0 => (1, 1)
@@ -275,7 +314,7 @@ theorem sumChoose_eq (n K : ℕ) : sumChoose n K = (∑ j ∈ range (K + 1), n.c
 
 open Lean in
 run_meta do
-  for d in [``grid_counts, ``gridS_counts, ``sumChoose_eq, ``audit_exfiltration_numerator] do
+  for d in [``grid_counts, ``gridS_counts, ``gridA4_counts, ``sumChoose_eq, ``audit_exfiltration_numerator] do
     for a in ← collectAxioms d do
       unless a ∈ [``propext, ``Classical.choice, ``Quot.sound] do
         throwError "{d} uses {a}, beyond propext, Classical.choice and Quot.sound"
@@ -298,10 +337,17 @@ def rowS : List (ℕ × ℕ) × ℕ × ℕ → String
         s!"\"admissible\": {(sumChoose (sh.map (·.1)).sum K).1}" ++ "}"
     | none => "null"
 
+/-- An A4 vector's row: its strata, `K`, and the two fills with their `τ` as `[p, q]`. -/
+def rowA4 (c : A4Cert) : String :=
+  "{" ++ s!"\"name\": \"{c.name}\", \"strata\": {c.rows.map fun x => [x.1, x.2.1]}, \"delta_log2\": -{c.e}, " ++
+    s!"\"K\": {c.K}, \"fill_next\": {c.rows.map (·.2.2.1)}, \"tau_next\": [{c.τ.1}, {c.τ.2}], " ++
+    s!"\"fill\": {c.rows.map (·.2.2.2)}, \"tau\": [{c.τ'.1}, {c.τ'.2}]" ++ "}"
+
 end OneStageExfiltrationVectors
 
 open OneStageExfiltrationVectors in
 def main : IO Unit :=
   IO.println ("{\"source\": \"tests/lean/ExfiltrationVectors.lean via tests/lean/generate.sh\", " ++
     "\"statement\": \"FlockSoundness.Audit.Partition.audit_exfiltration\", \"vectors\": [\n" ++
-    ",\n".intercalate (grid.map row) ++ "\n], \"stratified\": [\n" ++ ",\n".intercalate (gridS.map rowS) ++ "\n]}")
+    ",\n".intercalate (grid.map row) ++ "\n], \"stratified\": [\n" ++ ",\n".intercalate (gridS.map rowS) ++
+    "\n], \"a4\": [\n" ++ ",\n".intercalate (gridA4.map rowA4) ++ "\n]}")

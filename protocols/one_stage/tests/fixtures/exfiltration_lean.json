@@ -2,7 +2,7 @@
  "source": "tests/lean/ExfiltrationVectors.lean via tests/lean/generate.sh",
  "statement": "FlockSoundness.Audit.Partition.audit_exfiltration",
  "inputs": {
-  "protocols/one_stage/tests/lean/ExfiltrationVectors.lean": "ad6ac96e87a84bd5dd1580c00581f9a0e6ed83c57a91689d76cd8e4f4fad8409",
+  "protocols/one_stage/tests/lean/ExfiltrationVectors.lean": "d85e3b6d353c67c22ac1fb1235be9f2b77ed3a7dc92ab0c384b456b7ed7f0963",
   "backends/flock/verifier/lean/soundness/FlockSoundness/Audit/Influence.lean": "ae7a432ea29a44932dc63272e60def5e560557a33ed40a0e353d7c3f8f618c7e",
   "backends/flock/verifier/lean/soundness/FlockSoundness/Audit/Law.lean": "335f8f760b29addd5738cff190d56955508686b083e9a180d752b9037b1188a2",
   "backends/flock/verifier/lean/soundness/FlockSoundness/Audit/Stratified.lean": "2f082213f11c8512655af91c04511ad054b53eeac8f60e446f21faad40790a4f",
@@ -53,5 +53,11 @@
 {"strata": [[64, 0], [512, 16]], "delta_log2": -10, "bits": 16, "K": 241, "H": 3856, "fill_next": [64, 178], "tau_next": [319, 335], "fill": [64, 177], "tau": [320, 336], "admissible": 12762783915355095610846609922921222798714923089150580916576862277231922037784874490927117534011639451906490993469787654970789582227466020494417178394698963398038615358920},
 {"strata": [[16, 1], [16, 1], [16, 1], [16, 1]], "delta_log2": -4, "bits": 1, "K": 32, "H": 32, "fill_next": [9, 8, 8, 8], "tau_next": [7, 8], "fill": [8, 8, 8, 8], "tau": [8, 9], "admissible": 10139684107326071075},
 {"strata": [[16, 1], [16, 1], [16, 1], [16, 1]], "delta_log2": -4, "bits": 16, "K": 32, "H": 512, "fill_next": [9, 8, 8, 8], "tau_next": [7, 8], "fill": [8, 8, 8, 8], "tau": [8, 9], "admissible": 10139684107326071075}
+ ],
+ "a4": [
+{"name": "a4-floor", "strata": [[287, 1], [6171648, 905], [11480, 2], [287, 1], [287, 1], [587776, 86]], "delta_log2": -10, "K": 47111, "fill_next": [0, 41837, 0, 0, 0, 5275], "tau_next": [6128907, 6129812], "fill": [0, 41836, 0, 0, 0, 5275], "tau": [6128908, 6129813]},
+{"name": "a4-floor", "strata": [[287, 1], [6171648, 905], [11480, 2], [287, 1], [287, 1], [587776, 86]], "delta_log2": -20, "K": 93892, "fill_next": [0, 84558, 0, 0, 0, 9335], "tau_next": [6086186, 6087091], "fill": [0, 84557, 0, 0, 0, 9335], "tau": [6086187, 6087092]},
+{"name": "a4-floor", "strata": [[287, 1], [6171648, 905], [11480, 2], [287, 1], [287, 1], [587776, 86]], "delta_log2": -40, "K": 186479, "fill_next": [0, 169110, 0, 0, 0, 17370], "tau_next": [570321, 570407], "fill": [0, 169110, 0, 0, 0, 17369], "tau": [6001634, 6002539]},
+{"name": "a4-by-bits", "strata": [[287, 10], [6171648, 104], [11480, 12], [287, 20], [287, 39], [587776, 10]], "delta_log2": -20, "K": 773981, "fill_next": [0, 711244, 0, 0, 0, 62738], "tau_next": [5460301, 5460405], "fill": [0, 711243, 0, 0, 0, 62738], "tau": [525029, 525039]}
  ]
 }

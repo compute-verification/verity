@@ -118,6 +118,27 @@ def test_stratified_miss_is_the_lean_certified_greedy_fill():
             assert log2(admissible) <= loc <= log2(admissible) + log2(n + 1)
         assert exfiltration_bound(p, b) >= H + log2(admissible)
 
+
+def test_the_a4_counts_are_the_lean_certified_ones():
+    """A4's floored laws (`gridA4_counts`): one unit per template at delta = 2^-10, 2^-20 and 2^-40, and in proportion to
+    output bits at 2^-20.  The kernel checks each certificate as it checks the stratified vectors' (`meetsS`): tau
+    separates each fill exactly, so the fill of K + 1 units attains miss (K + 1) < delta and the fill of K attains
+    miss K >= delta.  Core's `miss` is those fills' exact escapes, and its count bound, the one the exfiltration and
+    compute readings of A4's profiles take, is K."""
+    data = json.loads(LEAN_VECTORS.read_text())
+    assert [(v["name"], v["delta_log2"]) for v in data["a4"]] == [("a4-floor", -10), ("a4-floor", -20),
+                                                                  ("a4-floor", -40), ("a4-by-bits", -20)]
+    for v in data["a4"]:
+        ks = FLOOR if v["name"] == "a4-floor" else BY_BITS
+        assert v["strata"] == [[A4_SIZES[name], ks[name]] for name in A4_SIZES]
+        law, delta, K = a4_law(ks), 2.0 ** v["delta_log2"], v["K"]
+        after, at = dict(zip(A4_SIZES, v["fill_next"])), dict(zip(A4_SIZES, v["fill"]))
+        assert sum(after.values()) == K + 1 and sum(at.values()) == K
+        assert law.miss(K + 1) == law.escape(after) < Fraction(delta) <= law.escape(at) == law.miss(K)
+        p = IntegrityProfile((Level("unit"),), (law.population,), {"unit": law}, delta)
+        assert law.count_bound(delta) == p.bound() == K
+
+
 def test_the_lean_vectors_were_generated_from_this_tree():
     """The vectors record the sha256 of the exporter and of the soundness package's files they read (`lean/generate.sh`):
     `audit_exfiltration` (`Audit/Influence.lean`), the uniform law and `subset_miss` (`Audit/Law.lean`), the stratified

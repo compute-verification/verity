@@ -22,7 +22,7 @@ data["inputs"] = {"protocols/one_stage/tests/lean/ExfiltrationVectors.lean": sha
                                                            "FlockSoundness/Audit/Stratified.lean",
                                                            "FlockSoundness/Audit/StratifiedMiss.lean",
                                                            "lake-manifest.json", "lean-toolchain")}}
-lists = {key: data.pop(key) for key in ("vectors", "stratified")}
+lists = {key: data.pop(key) for key in ("vectors", "stratified", "a4")}
 text = json.dumps(data, indent=1)[:-2] + "".join(f',\n "{key}": [\n' + ",\n".join(json.dumps(v) for v in vs) + "\n ]"
                                                  for key, vs in lists.items()) + "\n}\n"
 (here.parent / "fixtures" / "exfiltration_lean.json").write_text(text)
