@@ -104,6 +104,8 @@ struct CircuitParams {
     /// the compression slots' native witness: per sha512x3 row its (a, b) sources, and the tape's words per slot; null: level by level
     h_plan: *const u32,
     h_tape_words: i32,
+    /// `host0_zab`'s layout: 0 each slot's z, a, b words; 1 its a, b words, z = a & b (mapped host memory only)
+    host0_ab: i32,
 }
 
 #[cfg(feature = "sha512")]
@@ -186,6 +188,7 @@ unsafe extern "C" {
     #[cfg(feature = "sha512")]
     fn flock_cuda_hm96_salts(key: *const u8, nonce: u64, idx: *const i64, n: i32, out: *mut u8) -> i32;
     fn flock_cuda_circuit_kept(tag: u64) -> i32;
+    fn flock_cuda_host_alloc(bytes: usize) -> *mut c_void;
 }
 
 /// Rep 1 proves from rep 0's witness and level-0 commitment, which both reps bind (one level-0 root): rep 0 keeps them on the
@@ -245,36 +248,163 @@ pub fn device_salts(key: &[u8; 32], nonce: u64, idx: &[i64]) -> Vec<u8> {
 /// A slot whose witness the host computed: its absolute F128 word offset and its z, a, b words.
 pub type HostSlot = (usize, Vec<F128>, Vec<F128>, Vec<F128>);
 
-/// Host slots as the device takes them (`host0`): each slot's absolute F128 word offset and word count, and every slot's z, a,
-/// b words back to back. Packed once per witness, so a rep hands the device pointers rather than a copy.
+/// u64 words the host packs for the device: page-locked and mapped (the device reads them directly, beside the compression
+/// witness), or a heap `Vec` (three pageable copies per slot). Mapped buffers go back to a pool when dropped: pinning a
+/// witness's host slots costs more than a rep's upload saves, so a process pins its largest few once.
+pub enum HostBuf {
+    Mapped { ptr: std::ptr::NonNull<u64>, len: usize, cap: usize },
+    Heap(Vec<u64>),
+}
+
+// SAFETY: a mapped buffer is owned memory like a Vec's; the device reads it only inside prove_circuit, while it is borrowed
+unsafe impl Send for HostBuf {}
+unsafe impl Sync for HostBuf {}
+
+/// Mapped buffers dropped by earlier witnesses: (address, capacity in u64)
+static HOST_POOL: std::sync::Mutex<Vec<(usize, usize)>> = std::sync::Mutex::new(Vec::new());
+
+impl HostBuf {
+    /// `len` words of mapped host memory, from the pool or newly pinned; None where the runtime refuses or `FC_HOST_PINNED=0`
+    pub fn mapped(len: usize) -> Option<Self> {
+        if len == 0 || std::env::var("FC_HOST_PINNED").as_deref() == Ok("0") {
+            return None;
+        }
+        let mut pool = HOST_POOL.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let best = pool.iter().enumerate().filter(|(_, e)| e.1 >= len).min_by_key(|(_, e)| e.1).map(|(i, _)| i);
+        let (addr, cap) = match best {
+            Some(i) => pool.swap_remove(i),
+            None => {
+                drop(pool);
+                let p = unsafe { flock_cuda_host_alloc(len * 8) } as usize;
+                (p, len)
+            }
+        };
+        std::ptr::NonNull::new(addr as *mut u64).map(|ptr| HostBuf::Mapped { ptr, len, cap })
+    }
+
+    pub fn is_mapped(&self) -> bool {
+        matches!(self, HostBuf::Mapped { .. })
+    }
+}
+
+impl std::ops::Deref for HostBuf {
+    type Target = [u64];
+    fn deref(&self) -> &[u64] {
+        match self {
+            HostBuf::Mapped { ptr, len, .. } => unsafe { std::slice::from_raw_parts(ptr.as_ptr(), *len) },
+            HostBuf::Heap(v) => v,
+        }
+    }
+}
+
+impl std::ops::DerefMut for HostBuf {
+    fn deref_mut(&mut self) -> &mut [u64] {
+        match self {
+            HostBuf::Mapped { ptr, len, .. } => unsafe { std::slice::from_raw_parts_mut(ptr.as_ptr(), *len) },
+            HostBuf::Heap(v) => v,
+        }
+    }
+}
+
+impl Drop for HostBuf {
+    fn drop(&mut self) {
+        if let HostBuf::Mapped { ptr, cap, .. } = self {
+            HOST_POOL.lock().unwrap_or_else(std::sync::PoisonError::into_inner).push((ptr.as_ptr() as usize, *cap));
+        }
+    }
+}
+
+impl Clone for HostBuf {
+    fn clone(&self) -> Self {
+        match self {
+            HostBuf::Mapped { len, .. } => {
+                let mut c = HostBuf::mapped(*len).unwrap_or_else(|| HostBuf::Heap(vec![0; *len]));
+                c.copy_from_slice(self);
+                c
+            }
+            HostBuf::Heap(v) => HostBuf::Heap(v.clone()),
+        }
+    }
+}
+
+impl Default for HostBuf {
+    fn default() -> Self {
+        HostBuf::Heap(Vec::new())
+    }
+}
+
+/// Host slots as the device takes them (`host0`): each slot's absolute F128 word offset and word count, and every slot's words
+/// back to back. In mapped memory a slot is its a, b words when its z is a & b word for word (an honest witness's, since each
+/// row's output is its own bit), and the device forms z; otherwise, and in heap memory, its z, a, b words. Packed once per
+/// witness, so a rep hands the device pointers rather than a copy.
 #[derive(Clone, Default)]
 pub struct HostSlots {
     pub at: Vec<i64>,
     pub words: Vec<i32>,
-    pub zab: Vec<u64>,
+    pub zab: HostBuf,
+    /// `zab` holds a, b per slot (z = a & b)
+    pub ab: bool,
 }
 
 impl HostSlots {
     pub fn pack(slots: &[HostSlot]) -> Self {
+        Self::pack_in(slots, HostBuf::mapped)
+    }
+
+    /// z, a, b per slot in heap memory: the device copies each slot (the path before mapped host slots)
+    pub fn pack_pageable(slots: &[HostSlot]) -> Self {
+        Self::pack_in(slots, |_| None)
+    }
+
+    /// With `mapped` (a device-readable buffer of n words, or None), a, b per slot when every z is a & b; else z, a, b in heap memory
+    fn pack_in(slots: &[HostSlot], mapped: impl Fn(usize) -> Option<HostBuf>) -> Self {
         let words: Vec<i32> = slots.iter().map(|s| s.1.len() as i32).collect();
-        let mut zab = vec![0u64; words.iter().map(|&w| 6 * w as usize).sum()];
-        let mut rest: &mut [u64] = &mut zab;
+        let at = slots.iter().map(|s| s.0 as i64).collect();
+        let total: usize = words.iter().map(|&w| w as usize).sum();
+        if let Some(mut zab) = mapped(4 * total) {
+            if Self::fill(&mut zab, &words, slots, true) {
+                return HostSlots { at, words, zab, ab: true };
+            }
+            if let Some(mut zab) = mapped(6 * total) {
+                Self::fill(&mut zab, &words, slots, false);
+                return HostSlots { at, words, zab, ab: false };
+            }
+        }
+        let mut zab = HostBuf::Heap(vec![0u64; 6 * total]);
+        Self::fill(&mut zab, &words, slots, false);
+        HostSlots { at, words, zab, ab: false }
+    }
+
+    /// Every slot's words into `out` (a, b with `ab`, else z, a, b); with `ab`, whether every z word is a & b
+    fn fill(out: &mut [u64], words: &[i32], slots: &[HostSlot], ab: bool) -> bool {
+        let per = if ab { 4 } else { 6 };
+        let mut rest: &mut [u64] = out;
         let mut dst = Vec::with_capacity(slots.len());
-        for &w in &words {
-            let (a, b) = std::mem::take(&mut rest).split_at_mut(6 * w as usize);
+        for &w in words {
+            let (a, b) = std::mem::take(&mut rest).split_at_mut(per * w as usize);
             dst.push(a);
             rest = b;
         }
-        dst.into_par_iter().zip(slots.par_iter()).for_each(|(d, (_, z, a, b))| {
+        dst.into_par_iter().zip(slots.par_iter()).all(|(d, (_, z, a, b))| {
             let w = z.len();
-            for (k, v) in [z, a, b].into_iter().enumerate() {
-                assert_eq!(v.len(), w, "a host slot's z, a and b are not one length");
-                for (o, x) in d[2 * k * w..2 * (k + 1) * w].chunks_exact_mut(2).zip(v) {
+            assert!(a.len() == w && b.len() == w, "a host slot's z, a and b are not one length");
+            let vs: &[&Vec<F128>] = if ab { &[a, b] } else { &[z, a, b] };
+            for (k, v) in vs.iter().enumerate() {
+                for (o, x) in d[2 * k * w..2 * (k + 1) * w].chunks_exact_mut(2).zip(v.iter()) {
                     (o[0], o[1]) = (x.lo, x.hi);
                 }
             }
-        });
-        HostSlots { at: slots.iter().map(|s| s.0 as i64).collect(), words, zab }
+            !ab || z.iter().zip(a).zip(b).all(|((z, a), b)| z.lo == a.lo & b.lo && z.hi == a.hi & b.hi)
+        })
+    }
+
+    /// How the device takes them: `mapped-ab` (read directly, z formed there), `mapped` (read directly), `pageable` (copied)
+    pub fn layout(&self) -> &'static str {
+        match (self.zab.is_mapped(), self.ab) {
+            (true, true) => "mapped-ab",
+            (true, false) => "mapped",
+            _ => "pageable",
+        }
     }
 }
 
@@ -563,6 +693,7 @@ pub fn prove_circuit(
         host0_at: host0.map_or(null(), |h| h.at.as_ptr()),
         host0_words: host0.map_or(null(), |h| h.words.as_ptr()),
         host0_zab: host0.map_or(null(), |h| h.zab.as_ptr()),
+        host0_ab: host0.map_or(0, |h| h.ab as i32),
         u_range: t.u_range as i32,
         u_useful: unit.useful as i32,
         u_const: unit.const_pos as i32,
@@ -680,17 +811,33 @@ pub fn prove_circuit(
 mod tests {
     use super::*;
 
-    #[test]
-    fn host_slots_pack_as_the_device_reads_them() {
-        let f = |k: u64, n: usize| (0..n as u64).map(|i| F128::new(k * 1000 + 2 * i, k * 1000 + 2 * i + 1)).collect::<Vec<F128>>();
-        let slots: Vec<HostSlot> = vec![(7, f(1, 3), f(2, 3), f(3, 3)), (40, f(4, 1), f(5, 1), f(6, 1)), (9, vec![], vec![], vec![])];
-        let h = HostSlots::pack(&slots);
+    fn packed(slots: &[HostSlot], ab: bool) -> Vec<u64> {
         let mut want = Vec::new();
-        for (_, z, a, b) in &slots {
-            for v in [z, a, b] {
+        for (_, z, a, b) in slots {
+            for v in if ab { vec![a, b] } else { vec![z, a, b] } {
                 want.extend(v.iter().flat_map(|x| [x.lo, x.hi]));
             }
         }
-        assert_eq!((h.at, h.words, h.zab), (vec![7, 40, 9], vec![3, 1, 0], want));
+        want
+    }
+
+    #[test]
+    fn host_slots_pack_as_the_device_reads_them() {
+        let f = |k: u64, n: usize| (0..n as u64).map(|i| F128::new(k * 1000 + 2 * i, k * 1000 + 2 * i + 1)).collect::<Vec<F128>>();
+        let and = |a: &[F128], b: &[F128]| a.iter().zip(b).map(|(a, b)| F128::new(a.lo & b.lo, a.hi & b.hi)).collect::<Vec<F128>>();
+        let heap = |n: usize| Some(HostBuf::Heap(vec![0; n]));
+        // pageable: z, a, b
+        let slots: Vec<HostSlot> = vec![(7, f(1, 3), f(2, 3), f(3, 3)), (40, f(4, 1), f(5, 1), f(6, 1)), (9, vec![], vec![], vec![])];
+        let h = HostSlots::pack_in(&slots, |_| None);
+        assert_eq!((h.at.clone(), h.words.clone(), h.zab.to_vec(), h.ab), (vec![7, 40, 9], vec![3, 1, 0], packed(&slots, false), false));
+        // device-readable, every z = a & b: a, b
+        let honest: Vec<HostSlot> = slots.iter().map(|(x, _, a, b)| (*x, and(a, b), a.clone(), b.clone())).collect();
+        let h = HostSlots::pack_in(&honest, heap);
+        assert_eq!((h.at.clone(), h.words.clone(), h.zab.to_vec(), h.ab), (vec![7, 40, 9], vec![3, 1, 0], packed(&honest, true), true));
+        // device-readable, one z word not a & b (a tampered witness): z, a, b
+        let mut odd = honest.clone();
+        odd[1].1[0].hi ^= 1 << 5;
+        let h = HostSlots::pack_in(&odd, heap);
+        assert_eq!((h.zab.to_vec(), h.ab), (packed(&odd, false), false));
     }
 }
