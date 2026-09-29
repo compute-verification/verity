@@ -367,6 +367,11 @@ hypotheses of the theorems that use them, never `axiom` declarations, so they ca
 #print axioms FlockSoundness.delta_typed
 #print axioms FlockSoundness.CopyRow.block_eq
 #print axioms FlockSoundness.ZeroRow.block_eq
+-- a typed template's statement: what check, parse (tmpl), parseTyped and setupH accepted
+#print axioms FlockSoundness.check_facts_typed
+#print axioms FlockSoundness.parse_facts_tmpl
+#print axioms FlockSoundness.parseTyped_spec
+#print axioms FlockSoundness.setupH_spec_typed
 -- composed rows, placed: the block's facts as one proposition (Compose.Realizes) and the Placement they give, and a flat
 -- accepted statement's unit slots realizing the rows of its unit net
 #print axioms FlockSoundness.Compose.Realizes.placement

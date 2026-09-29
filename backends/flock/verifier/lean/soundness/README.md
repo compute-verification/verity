@@ -244,6 +244,10 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
     (`delta_split`'s forms), then per VU the input bits' copies of their message bits, the parts' bound rows and the root
     rows' cross entries (`Typed.tail`). `CopyRow` and `ZeroRow` state a block row that reads exactly one column, or none;
     a satisfying witness carries the column's value there (`CopyRow.block_eq`), or 0 (`ZeroRow.block_eq`).
+  - **A typed template's statement** (`ExecTemplate.lean`): what `setupH` accepted for `tags.typed`
+    (`setupH_spec_typed`), `parseTyped`'s template and flat-class paths (`parseTyped_spec`), the template's parse
+    (`parse_facts_tmpl`: its nets the root and placed layouts' circuits first, its block `blockOf t`, the rows' own wires,
+    no leaf map or cut) and check (`check_facts_typed`).
   - Still to prove: `NetRows` for a flat typed class, whose unit net #307 builds from `derive`'s rows (`Typed.netOfD_ok`),
     and a template's block rows from `setupH` (1e, #277).
 
