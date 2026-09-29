@@ -873,6 +873,7 @@ def test_query_cost_independent_of_member_count():
     assert B.consumer_index(sc.spec.body.nodes[jb].fn) is B.consumer_index(sc.child(jb, 5).spec)
 
 
+@pytest.mark.slow
 def test_serve_v4_tiny_program():
     """A whole (tiny) serving program: Serve_v4 over a 2-layer, H=32 config (~37k gates, 40 root nodes: Embedding,
     LayerPre/LayerPost per position and layer, Attention_v3{T=1..5} with Strided KV-cache views, Final, Input gates).

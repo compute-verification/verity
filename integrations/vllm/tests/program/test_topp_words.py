@@ -75,6 +75,7 @@ def _halves(monkeypatch):
 
 
 @pytest.mark.parametrize("V,S,n", [(16, 4, 10), (64, 32, 8), (300, 8, 8), (1025, 32, 6), (3000, 16, "halves")])
+@pytest.mark.slow
 def test_the_keep_word_as_word_gates_is_topp_keep(V, S, n, monkeypatch):
     if n == "halves":
         fn, rows, S = _halves(monkeypatch)
