@@ -18,14 +18,16 @@ Its commitment to the weights of record is made first, in the composition's weig
 layer's weight root); `commitment` is the scheme, the salt, the weights root the salt is derived from and, once closed,
 the transcript root with its unit and tile counts.  The audit (drawing tiles, opening them) is `verity_pouw.audit`'s,
 after the run.  Beside sampled proofs the composition asks `verity_pouw.circuit` (`protocol_options.CIRCUITS`), and only
-``ncp-v2`` has a circuit.  Under ``ncp-v2`` each call is instead bound to its own `NcpLinear_v1` Program call, evaluated
-once and committed (`pouw_circuit`); the replay draws its units (`check.replay.pouw_circuit`).
+``ncp-v2`` has a circuit.  Under ``ncp-v2`` each call is instead bound to its own `NcpLinear_v1` Program call, its units
+computed natively and committed a leaf per unit (`pouw_native`, `pouw_circuit`); the replay draws its units, regenerates
+them and checks each against its template (`check.replay.pouw_circuit`).
 What is a placeholder is listed in `info` (``placeholder``).
 """
 from __future__ import annotations
 
 import hashlib
 import json
+import time
 from collections import deque
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -38,13 +40,13 @@ from verity_pouw import circuit as pouw_circuit
 from verity_pouw import schemes as pouw_schemes
 from verity_pouw.audit import (TILE_SCHEMA, Epoch, Workload, activation_binding, commit_rows, transcript_domain,
                                weight_binding, weights_root)
-from verity_pouw.circuit import reference as CR
 from verity_pouw.protocol import Context as UnitContext
 from verity_pouw.protocol import DomainError, Matmul, Shape
 from verity_pouw.schemes import ncp
 
 from verity.commitments import MerkleTree
 from verity_vllm.protocol_options import pouw_circuit as PC
+from verity_vllm.protocol_options import pouw_native as PN
 from verity_vllm.protocol_options.interface import Context, Option, Target
 
 NAME = "pouw"
@@ -56,7 +58,7 @@ EXECUTES = ("LinearBase.quant_method.apply",)
 EXECUTED = ("ncp-v1", "ncp-v1-shift24", "ncp-v2")
 #: The pinned int7 quantizer of the FP8 lane's reference (docs/pouw-fp8/reference.md), applied without a basis rotation.
 QUANTIZER = "verity.pouw.symmetric-int7-rowmax-rne-f32/v1"
-KEYS = ("beacon", "retain_steps", "transcript_dir")
+KEYS = ("beacon", "retain_steps", "transcript_dir", "draws")
 PLACEHOLDER = (
     "without a `beacon` setting the salt comes from 32 zero bytes, so it is predictable",
     "a forward's weight is not re-checked against the root committed at install",
@@ -80,6 +82,9 @@ class Settings:
     beacon: bytes | None = None
     retain_steps: int = 0
     transcript_dir: str | None = None
+    #: ``ncp-v2``'s replay: the work law's K over the run (`check.replay.pouw_circuit.draw`); None is `RECORD_K`, capped at
+    #: the run's units
+    draws: int | None = None
 
     @classmethod
     def of(cls, raw: Mapping[str, Any]) -> Settings:
@@ -101,7 +106,10 @@ class Settings:
         tdir = raw.get("transcript_dir")
         if tdir is not None and not isinstance(tdir, str):
             raise ValueError("pouw setting 'transcript_dir' is a path string")
-        return cls(beacon, retain, tdir)
+        draws = raw.get("draws")
+        if draws is not None and (not isinstance(draws, int) or isinstance(draws, bool) or draws < 1):
+            raise ValueError("pouw setting 'draws' is a positive integer")
+        return cls(beacon, retain, tdir, draws)
 
 
 def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
@@ -305,8 +313,22 @@ def _bf16_bits(v: np.ndarray) -> np.ndarray:
     return ((b + 0x7FFF + ((b >> 16) & 1)) >> 16).astype(np.uint16)
 
 
+class _LayerRows:
+    """A layer's weight rows, quantized per output channel (`quantize`) as they are read, from the layer's own tensor:
+    no copy of the weight outlives the read (`pouw_circuit.Rows`)."""
+
+    def __init__(self, weight: Any) -> None:
+        self.weight = weight
+        self.n, self.k = weight.shape
+
+    def rows(self, lo: int, hi: int) -> tuple[np.ndarray, np.ndarray]:
+        b, t = quantize(_host(self.weight[lo:hi]))
+        return b, _f32_bits(t)
+
+
 class _CircuitRun:
-    """One install's `ncp-v2` workload: every call bound to its `NcpLinear_v1` Program, evaluated once, and committed."""
+    """One install's `ncp-v2` workload: every call bound to its `NcpLinear_v1` Program's inputs, its units computed
+    natively and committed (`pouw_native`)."""
 
     def __init__(self, scheme: str, entry: str, settings: Settings, weight_roots: dict[int, bytes], salt: bytes) -> None:
         self.scheme, self.entry, self.settings = scheme, entry, settings
@@ -318,23 +340,24 @@ class _CircuitRun:
             "calls_root": None, "calls": 0}
         self.details: dict[str, Any] = {
             "scheme": scheme, "quantizer": QUANTIZER, "basis": "none", "layers": len(weight_roots),
-            "circuit": "verity_pouw.circuit: each call is its own NcpLinear_v1 Program call; y served, credited words committed",
+            "circuit": "verity_pouw.circuit: each call is its own NcpLinear_v1 Program call, its units computed natively and "
+                       "committed a leaf per unit; y served, credited words committed",
             "beacon": "given" if settings.beacon else "placeholder: 32 zero bytes",
-            "calls": 0, "padded_rows": 0, "uncovered": "every GEMM outside LinearBase (lm_head, attention)",
+            "calls": 0, "padded_rows": 0, "commit_seconds": 0.0, "uncovered": "every GEMM outside LinearBase (lm_head, attention)",
             "placeholder": list(PLACEHOLDER)}
 
     def gemm(self, w: int, x: Any, weight: Any, bias: Any) -> Any:
         """The call's anchored fields: the forward index counts the passes (a pass starts at linear 0), the position is
         ``w << 32``, the weight id is ``w``, a pass's rows get global ids from the rows served before it, and the weight's
         rows are its columns 0 … n − 1."""
+        t0 = time.monotonic()
         if w == 0:
             self.forward += 1
             self.row_base = self.rows_seen
-        xs, ws = _host(x), _host(weight)
-        n, k = ws.shape
+        xs = _host(x)
+        n, k = weight.shape
         lead = xs.shape[:-1]
         a, s = quantize(xs.reshape(-1, k))
-        b, t = quantize(ws)
         m = a.shape[0]
         mp = max(16, -(-m // 16) * 16)
         if mp > m:
@@ -343,13 +366,12 @@ class _CircuitRun:
         if w == 0:
             self.rows_seen += mp
         bias_bits = np.full(n, 0x8000, np.uint16) if bias is None else _bf16_bits(_host(bias).reshape(-1))   # −0: the bf16 add's identity
-        call = CR.Call(tuple(tuple(int(v) for v in r) for r in a), tuple(int(v) for v in _f32_bits(s)),
-                       tuple(tuple(int(v) for v in r) for r in b), tuple(int(v) for v in _f32_bits(t)),
-                       tuple(int(v) for v in bias_bits), self.salt, forward=self.forward, layer=w, site=0, weight=w,
-                       rowids=tuple(range(self.row_base, self.row_base + mp)), colids=tuple(range(n)))
-        rec = PC.commit_call(len(self.records), self.scheme, call)
+        call = PC.Call(a, _f32_bits(s), _LayerRows(weight), bias_bits, self.salt, forward=self.forward, layer=w, site=0, weight=w,
+                       rowids=np.arange(self.row_base, self.row_base + mp, dtype=np.uint32), colids=np.arange(n, dtype=np.uint32))
+        rec = PN.commit_call(len(self.records), self.scheme, call)
         self.records.append(rec)
-        self.details.update(calls=len(self.records), padded_rows=self.details["padded_rows"] + mp - m)
+        self.details.update(calls=len(self.records), padded_rows=self.details["padded_rows"] + mp - m,
+                            commit_seconds=round(self.details["commit_seconds"] + time.monotonic() - t0, 3))
         y = (np.asarray(rec.y[:m], dtype=np.uint32) << 16).view(np.float32)
         return _like(y.reshape(*lead, n), x)
 
@@ -362,7 +384,7 @@ class _CircuitRun:
             d = Path(self.settings.transcript_dir)
             d.mkdir(parents=True, exist_ok=True)
             (d / PC.CALLS_FILE).write_text(json.dumps({"entry": self.entry, "commitment": self.commits,
-                                                        "calls": [PC.record_json(r) for r in self.records]}) + "\n")
+                                                        "calls": [PC.summary(r) for r in self.records]}) + "\n")
 
 
 #: The live `ncp-v2` runs by entry, with their sites (the collector's path of each linear -> its ordinal), for the Commit's
