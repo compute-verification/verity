@@ -204,7 +204,16 @@ wref      ⌈m·n·(32·T + p_FADD·n_R) + f_A·m·k + f_B·n·k⌉: an atom wor
   - **The price** is the cell's per-element trace (`d3_trace`) from one `PRICES` row, which prices the forming layer and
     the core's FADD together (`get(name, prices=…)`). `FP8IS` rejects a layer priced from another row.
   - **The rows.**
-    - **`round10`**, the default: Round 10 (`gpu-constants.md` §16, ptxas 12.9), and the red team's reading of it.
+    - **`round11`**, the default: `round10` with the centre at Round 11's 64.00 (§18.4). That is the split form as
+      compiled, with c in a register, and it issues like the immediate form.
+    - **The step rows** `round11-pipe` and `round11-dflow` price FADD at the §16.3 sweep's prediction for each honest
+      step kernel's loop (`STEPS`):
+      - `pipe` (n128 A = 2 U = 4, as built): a 567-instruction loop, FADD 32.0495, measured at 55.44 per add word;
+      - `dflow` (n64 A = 5 U = 2, the short loop): 371 instructions and bank-clean, FADD 32.0118, measured at 52.67 per
+        add word (§18.3, one run).
+    - **`slowdown(forming, shape, step)`** is Track C's real-time model: T − 1 steps at the measured units per add word,
+      plus one atom, plus the forming at class prices with no overlap, all over a plain FP8 GEMM's time.
+    - **`round10`**: Round 10 (`gpu-constants.md` §16, ptxas 12.9), and the red team's reading of it.
       - FADD at its class price, 32.00, which holds for honest loops of at most about 390 instructions with
         bank-clean SASS.
       - `UNPACK_B` 64.17 per two codes, so the unpack (`.H0` and `.H1`) is 32.1 per code.
@@ -222,7 +231,10 @@ wref      ⌈m·n·(32·T + p_FADD·n_R) + f_A·m·k + f_B·n·k⌉: an atom wor
 
     | Cell | Row (FADD) | 2,048³ | 4,096³ | 8,192³ | 16,384³ | 32,768³ |
     |---|---|---:|---:|---:|---:|---:|
-    | **`d3s-v0-f16`** (X_q, f16 sums; the target) | `round10` (32.00) | 5.689% | 3.030% | 1.656% | **0.957%** | **0.605%** |
+    | **`d3s-v0-f16`** (X_q, f16 sums; the target) | `round11` (32.00) | 5.688% | 3.030% | 1.656% | **0.957%** | **0.605%** |
+    | `d3s-v0-f16`, the short loop | `round11-dflow` (32.0118) | 5.705% | 3.048% | 1.674% | **0.975%** | **0.623%** |
+    | `d3s-v0-f16`, as built | `round11-pipe` (32.0495) | 5.757% | 3.103% | 1.731% | 1.033% | **0.681%** |
+    | `d3s-v0-f16` | `round10` (32.00) | 5.689% | 3.030% | 1.656% | **0.957%** | **0.605%** |
     | `d3s-v0-f16` | `round10-built` (32.05) | 5.758% | 3.104% | 1.732% | 1.034% | **0.682%** |
     | `d3s-v0` (X_q, f32 sums) | `round10` | 9.834% | 5.266% | 2.818% | 1.550% | **0.904%** |
     | `d3s-v0-y16-f16` (comparison) | `round10` | 5.688% | 3.030% | 1.656% | **0.957%** | **0.605%** |
@@ -234,10 +246,16 @@ wref      ⌈m·n·(32·T + p_FADD·n_R) + f_A·m·k + f_B·n·k⌉: an atom wor
       built, at 32.05, it is 1.034%, so it needs the honest loop under the knee.
     - **This reproduces the red team's Round 10 re-issue** in all 40 D-3 cells, to rounding.
     - **Nothing clears below 16,384³.**
-    - **The centre is one open point.** With −3/8 held in a register, ptxas splits the centre (HFMA2.MMA + HFMA2),
-      which is the two-source half2 class Round 8 timed at 36.
-      - In that form the target is 0.929% at 32.00, with threshold 32.046, and 1.006% at 32.05.
-      - That exact form is untimed.
+    - **The centre is settled** (Round 11): with c in a register it issues at 64.00 per register, not the 36 of
+      Round 8's two-source class.
+    - **The slowdown over a plain FP8 GEMM** (`slowdown`, a prediction):
+
+      | Step | 8,192³ | 16,384³ |
+      |---|---:|---:|
+      | as built (`pipe`) | 5.280× | 5.239× |
+      | the short loop (`dflow`) | 5.021× | **4.979×** |
+
+      At 16,384³ the short loop clears 5× and 1% together. 8,192³ needs 52.45 per add word for 5×.
     - **γ depends on m and n; k drops out** (under 0.004 points over the frontier's k).
     - `mnk_min` selects any frontier size as the domain's floor.
 - **`d3-v0`** (`D3`), superseded by D-3m: repaired C-2, track D's D-3. It keeps C-2's three NCP blocks and row-RMS

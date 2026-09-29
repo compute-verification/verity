@@ -70,6 +70,9 @@ CVT_UNITS = 16
 #: HMNMX2 at 64.13, the f32-pair F2FP at 64.61, and FADD's class price at 32.00 for loops of at most about 390
 #: instructions; ``round10-built`` is the same at 32.05, today's 567-instruction honest loop.  Round 10 timed the centre
 #: only with both constants immediate (unsplit, 64.02), and ``round10`` prices it there, as the red team does.
+#: ``round11`` (§18, run ``r20260929-033625-cb6e``) times the centre as compiled with c in a register: 64.00, so the split
+#: form issues like the immediate one.  Its step rows price FADD at the §16.3 sweep's prediction for each honest step
+#: kernel's loop (`STEPS`).
 PRICES: dict[str, dict[str, Fraction]] = {
     "round7": {"fadd": Fraction(67, 2), "half2": Fraction(401, 10), "hmnmx2": Fraction(401, 10), "int": Fraction(64),
                "f2fp": Fraction(667, 10), "f2fp_f16": Fraction(667, 5), "unpack": Fraction(667, 10),
@@ -89,7 +92,16 @@ PRICES["round10"] = {**PRICES["round9-sass"], "fadd": Fraction(32), "block_f32":
                      "unpack": Fraction(6417, 100), "f2fp_f16": Fraction(12927, 200), "max3": Fraction(133, 2),
                      "hmnmx2": Fraction(6413, 100), "f2fp": Fraction(6461, 100), "centre": Fraction(6402, 100)}
 PRICES["round10-built"] = {**PRICES["round10"], "fadd": Fraction(3205, 100), "block_f32": 64 + Fraction(3205, 100)}
-DEFAULT_PRICES = "round10"
+PRICES["round11"] = {**PRICES["round10"], "centre": Fraction(64)}
+#: The honest checked step kernels Round 11 timed (§18.3; FADD loop sizes and predictions §17.3): name -> (units per add
+#: word measured beside `wgmma`, FADD loop instructions, the sweep's predicted FADD class price for that loop).
+STEPS: dict[str, tuple[Fraction, int, Fraction]] = {
+    "pipe": (Fraction(5544, 100), 567, Fraction(320495, 10000)),     # n128 A = 2 U = 4, as built (Rounds 10 and 11)
+    "dflow": (Fraction(5267, 100), 371, Fraction(320118, 10000)),    # n64 A = 5 U = 2, drained, the short loop (one run)
+}
+for _step, (_, _, _fadd) in STEPS.items():
+    PRICES[f"round11-{_step}"] = {**PRICES["round11"], "fadd": _fadd, "block_f32": 64 + _fadd}
+DEFAULT_PRICES = "round11"
 
 
 # ---- the core -------------------------------------------------------------------------------------------------------
@@ -856,6 +868,15 @@ FORMINGS: dict[str, Callable[..., Forming]] = {
     (lambda prices=DEFAULT_PRICES, law=law, route=route, sums=sums: D3Family(law, route, prices, sums))
     for law in LAWS for route in ROUTES for sums in SUMS}
 FORMINGS.update({layer.name: (lambda prices=DEFAULT_PRICES, layer=layer: layer()) for layer in (D3, FpNcpV0, D2Draft)})
+
+
+def slowdown(forming: Forming, shape: Shape, step: Fraction) -> Fraction:
+    """Honest time over a plain FP8 GEMM's (k/32 accumulating atoms per output at the full tensor rate), in Track C's
+    model: T − 1 checked steps at ``step`` units per add word (measured beside `wgmma`) plus one atom, and the forming
+    trace at its class prices with no overlap."""
+    t = forming.blocks * shape.k // SLICE
+    f_a, f_b = forming.units_at(shape.k)
+    return (step * (t - 1) + ATOM_UNITS) / shape.k + Fraction(f_a) / shape.n + Fraction(f_b) / shape.m
 
 
 # ---- the scheme -----------------------------------------------------------------------------------------------------

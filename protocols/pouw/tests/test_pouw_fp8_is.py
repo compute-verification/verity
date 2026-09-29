@@ -48,7 +48,7 @@ def test_registry_and_certificates():
         assert isinstance(s, PoUWScheme) and isinstance(s.forming, F.Forming) and isinstance(s.forming, layer)
         assert s.name == name and s.certificate.gamma0 is None and s.certificate.gamma is None
         (f_a, f_b), (c_a, c_b) = s.forming.units, s.forming.credited
-        assert s.prices == "round10" and s.fadd == 32
+        assert s.prices == "round11" and s.fadd == 32
         t = 3 * 8192 // 32
         assert s.certificate.omega == Fraction(32 * t + s.fadd * (t - 1) + f_a + f_b, 32 * (2 * t - 1) + c_a + c_b)
         sh = Shape(8192, 8192, 16384)
@@ -409,7 +409,7 @@ def test_d3_family_round9_prices(law, route, sums):
         s = get(f"fp8-is-h100-{cell_name(law, route, sums)}", prices=prices)
         assert s.forming.sums == sums and s.forming.prices == s.prices == prices
         assert s.forming.units == round9_units(law, route, sums, sass)
-    assert get(f"fp8-is-h100-{cell_name(law, route, sums)}").prices == "round10"
+    assert get(f"fp8-is-h100-{cell_name(law, route, sums)}").prices == "round11"
 
 
 def round10_units(law: str, route: str, sums: str, k: int) -> tuple[Fraction, Fraction]:
@@ -448,7 +448,7 @@ def fadd_threshold(law: str, route: str, sums: str, prices: str, n: int) -> Frac
 def test_round10_target_cell():
     """The red team's target (Round 10 re-issue, 21:13Z): D-3s on X_q with f16 sums at 16,384³ is 0.957% at FADD 32.00
     with threshold 32.028, and 1.034% at the as-built loop's 32.05."""
-    assert f"{float(100 * gamma_at(get('fp8-is-h100-d3s-v0-f16'), 16384)):.3f}" == "0.957"
+    assert f"{float(100 * gamma_at(get('fp8-is-h100-d3s-v0-f16', prices='round10'), 16384)):.3f}" == "0.957"
     assert f"{float(fadd_threshold('d3s', 'xq', 'f16', 'round10', 16384)):.3f}" == "32.028"
     assert f"{float(100 * gamma_at(get('fp8-is-h100-d3s-v0-f16', prices='round10-built'), 16384)):.3f}" == "1.034"
 
@@ -457,6 +457,9 @@ def test_round10_target_cell():
 #: credited at 32 (the certificate's Ω), at each row's FADD (Round 10: 32.00, and 32.05 as built; Round 9: 32.11).
 #: Computed from class prices; the honest D-3 kernel has not been run at any size.
 FRONTIER_GAMMA = {
+    ("round11", "d3s", "xq", "f16"): ("5.688", "3.030", "1.656", "0.957", "0.605"),
+    ("round11-pipe", "d3s", "xq", "f16"): ("5.757", "3.103", "1.731", "1.033", "0.681"),
+    ("round11-dflow", "d3s", "xq", "f16"): ("5.705", "3.048", "1.674", "0.975", "0.623"),
     ("round10", "d3s", "xq", "f16"): ("5.689", "3.030", "1.656", "0.957", "0.605"),
     ("round10", "d3s", "xq", "f32"): ("9.834", "5.266", "2.818", "1.550", "0.904"),
     ("round10", "d3s", "y16", "f16"): ("5.688", "3.030", "1.656", "0.957", "0.605"),
@@ -479,6 +482,33 @@ def test_frontier_gamma(cell):
     prices, *rest = cell
     s = get(f"fp8-is-h100-{cell_name(*rest)}", prices=prices)
     assert tuple(f"{float(100 * gamma_at(s, n)):.3f}" for n in FRONTIER) == FRONTIER_GAMMA[cell]
+
+
+def test_round11_centre_and_step_rows():
+    """Round 11 times the centre as compiled (c in a register) at 64.00, like the immediate form, and each step row
+    prices FADD at the §16.3 sweep's prediction for its kernel's loop."""
+    r10, r11 = F.D3s(prices="round10", sums="f16"), F.D3s(sums="f16")
+    assert r11.prices == "round11" and r10.units_at(16384)[0] - r11.units_at(16384)[0] == Fraction(1, 100)
+    assert F.STEPS["pipe"] == (Fraction(5544, 100), 567, Fraction(320495, 10000))
+    assert F.STEPS["dflow"] == (Fraction(5267, 100), 371, Fraction(320118, 10000))
+    for step, (_, _, fadd) in F.STEPS.items():
+        assert get("fp8-is-h100-d3s-v0-f16", prices=f"round11-{step}").fadd == fadd
+
+
+#: (γ %, slowdown ×) for D-3s on X_q, f16 sums, at 8,192³ and 16,384³: the step at its measured units per add word
+#: and FADD at its loop's predicted class price.  Slowdown is Track C's model (`slowdown`); both are predictions.
+ROUND11_STEPS = {"pipe": (("1.731", "5.280"), ("1.033", "5.239")),       # as built, 567-instruction loop
+                 "dflow": (("1.674", "5.021"), ("0.975", "4.979"))}      # the short loop, 371 instructions
+
+
+@pytest.mark.parametrize("step", sorted(ROUND11_STEPS))
+def test_round11_gamma_and_slowdown(step):
+    """As built the step misses 5× and 16,384³ misses 1%; the short loop clears both at 16,384³ (by 0.021× and 0.025
+    points) and neither at 8,192³, where 5× needs 52.45 per add word."""
+    s = get("fp8-is-h100-d3s-v0-f16", prices=f"round11-{step}")
+    got = tuple((f"{float(100 * gamma_at(s, n)):.3f}", f"{float(F.slowdown(s.forming, Shape(n, n, n), F.STEPS[step][0])):.3f}")
+                for n in (8192, 16384))
+    assert got == ROUND11_STEPS[step]
 
 
 def test_k_drops_out():
