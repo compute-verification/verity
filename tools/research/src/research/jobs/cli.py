@@ -1,0 +1,214 @@
+"""`research jobs` and `research worker`: the Job queue from the command line (Control's `/api/jobs`; `research.jobs.model` is its
+reference).  The Job queue holds batch, unattended work on pods; an interactive session on a pod is a Broker allocation.
+
+    research jobs add merge-check --commit REF [--base SHA] [--verdict-pack ART] [--agreement] [common]
+    research jobs add lean-regen --commit REF --package DIR [--package DIR ...] [common]
+        common: [--priority N] [--timeout-s S] [--max-attempts N] [--dedupe-key K] [--repo OWNER/NAME]
+    research jobs list [--state S] [--kind K] [--limit N] [--json]
+    research jobs show ID [--json]
+    research jobs cancel ID
+    research jobs events [--after ID] [--kind K] [--subject S] [--limit N] [--json]
+    research worker --dispatch --pods A,B,... [--name rc] [--kinds merge-check,lean-regen] [--once] [--workdir DIR] [--repo OWNER/NAME]
+
+`add` resolves --commit in the current checkout, and --base (for `merge_requires`) defaults to `main`'s tip on GitHub, read
+with `git ls-remote` rather than a local ref that may be stale.  The dedupe key defaults to `{kind}:{commit}`, so adding the same
+check twice returns the first job; a deliberate re-run names a new key.  --agreement asks for a pod with AVX-512 (the pinned
+upstream Flock build needs it).  The token is `$JOBS_TOKEN` or ~/.research/jobs/token; the site is `$JOBS_URL`.  Exit 1 when the
+Job queue refuses, 4 when it can't be reached.
+"""
+from __future__ import annotations
+
+import argparse
+import fcntl
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+from .client import HTTPClient, Unreachable
+from .dispatch import KINDS as DISPATCH_KINDS, SHA, WORKDIR, Dispatcher, DispatchError, ResearchRunner
+
+REPO = "danielreuter/verity"
+
+
+def resolve_commit(ref: str) -> str:
+    if SHA.fullmatch(ref):
+        return ref
+    r = subprocess.run(["git", "rev-parse", "--verify", f"{ref}^{{commit}}"], capture_output=True, text=True)
+    if r.returncode:
+        raise SystemExit(f"research jobs: {ref!r} is not a commit here: {r.stderr.strip()}")
+    return r.stdout.strip()
+
+
+def main_tip(repo: str) -> str:
+    r = subprocess.run(["git", "ls-remote", f"https://github.com/{repo}.git", "refs/heads/main"], capture_output=True, text=True)
+    if r.returncode or not r.stdout.split():
+        raise SystemExit(f"research jobs: can't read main's tip on {repo} ({r.stderr.strip() or 'no answer'}); pass --base")
+    return r.stdout.split()[0]
+
+
+def add_body(ns: argparse.Namespace) -> dict:
+    commit = resolve_commit(ns.commit)
+    payload: dict = {"repo": ns.repo, "commit": commit}
+    requirements: dict = {}
+    if ns.kind == "merge-check":
+        payload["base"] = resolve_commit(ns.base) if ns.base else main_tip(ns.repo)
+        payload["verdict_pack"] = ns.verdict_pack
+        if ns.agreement:
+            requirements["avx512"] = True
+    else:
+        if not ns.package:
+            raise SystemExit("research jobs add lean-regen: name at least one --package")
+        payload["packages"] = ns.package
+    if ns.timeout_s:
+        payload["timeout_s"] = ns.timeout_s
+    body = {"kind": ns.kind, "payload": payload, "requirements": requirements, "priority": ns.priority,
+            "dedupe_key": ns.dedupe_key or f"{ns.kind}:{commit}"}
+    if ns.max_attempts:
+        body["max_attempts"] = ns.max_attempts
+    return body
+
+
+def _row(j: dict) -> str:
+    p = j.get("payload") or {}
+    where = j.get("lease_slot") or j.get("lease_worker") or ""
+    return (f"{j['id']:>6}  {j['kind']:<12} {j['state']:<9} {j['priority']:>4}  {j['attempts']}/{j['max_attempts']}  "
+            f"{str(p.get('commit', ''))[:12]:<12}  {where:<14} {j['enqueued_at']}  {j['enqueued_by']}")
+
+
+def _parser() -> argparse.ArgumentParser:
+    ap = argparse.ArgumentParser(prog="research jobs", description="the Job queue (research/jobs/cli.py)")
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    add = sub.add_parser("add")
+    add.add_argument("kind", choices=("merge-check", "lean-regen"))
+    add.add_argument("--commit", required=True)
+    add.add_argument("--base")
+    add.add_argument("--verdict-pack")
+    add.add_argument("--agreement", action="store_true")
+    add.add_argument("--package", action="append", default=[])
+    add.add_argument("--priority", type=int, default=0)
+    add.add_argument("--timeout-s", type=int)
+    add.add_argument("--max-attempts", type=int)
+    add.add_argument("--dedupe-key")
+    add.add_argument("--repo", default=REPO)
+    ls = sub.add_parser("list")
+    ls.add_argument("--state")
+    ls.add_argument("--kind")
+    ls.add_argument("--limit", type=int, default=50)
+    ls.add_argument("--json", action="store_true")
+    show = sub.add_parser("show")
+    show.add_argument("id", type=int)
+    show.add_argument("--json", action="store_true")
+    cancel = sub.add_parser("cancel")
+    cancel.add_argument("id", type=int)
+    ev = sub.add_parser("events")
+    ev.add_argument("--after", type=int, default=0)
+    ev.add_argument("--kind")
+    ev.add_argument("--subject")
+    ev.add_argument("--limit", type=int, default=100)
+    ev.add_argument("--json", action="store_true")
+    return ap
+
+
+def _query(**kw) -> str:
+    q = "&".join(f"{k}={v}" for k, v in kw.items() if v not in (None, ""))
+    return f"?{q}" if q else ""
+
+
+def main(argv: list[str], client=None) -> int:
+    ns = _parser().parse_args(argv)
+    c = client or HTTPClient()
+    try:
+        if ns.cmd == "add":
+            status, body = c.call("POST", "/api/jobs", add_body(ns))
+            if status in (200, 201):
+                print(f"job {body['id']} {'added' if body['created'] else 'already there'} ({body['state']})")
+                return 0
+        elif ns.cmd == "list":
+            status, body = c.call("GET", "/api/jobs" + _query(state=ns.state, kind=ns.kind, limit=ns.limit))
+            if status == 200:
+                print(json.dumps(body["jobs"], indent=1) if ns.json else "\n".join(_row(j) for j in body["jobs"]) or "no jobs")
+                return 0
+        elif ns.cmd == "show":
+            status, body = c.call("GET", f"/api/jobs/{ns.id}")
+            if status == 200:
+                if ns.json:
+                    print(json.dumps(body, indent=1))
+                else:
+                    print(_row(body))
+                    print(f"        payload {json.dumps(body['payload'])}  requirements {json.dumps(body['requirements'])}")
+                    if body.get("result"):
+                        print(f"        result  {json.dumps(body['result'])}")
+                    for a in body.get("history", []):
+                        print(f"        attempt {a['n']}: {a['worker']} {a.get('slot') or ''} {a['claimed_at']} -> "
+                              f"{a.get('outcome') or 'running'} {a.get('run_id') or ''} {a.get('detail') or ''}")
+                return 0
+        elif ns.cmd == "cancel":
+            status, body = c.call("POST", f"/api/jobs/{ns.id}/cancel", {})
+            if status == 200:
+                print(f"job {ns.id}: {body['state']}" + (" (the worker stops it at its next renewal)" if body.get("cancel_requested") else ""))
+                return 0
+        else:
+            status, body = c.call("GET", "/api/events" + _query(after=ns.after, kind=ns.kind, subject=ns.subject, limit=ns.limit))
+            if status == 200:
+                if ns.json:
+                    print(json.dumps(body, indent=1))
+                else:
+                    for e in body["events"]:
+                        print(f"{e['id']:>7}  {e['at']}  {e['kind']:<16} {e['subject']:<10} {e['actor']:<14} {json.dumps(e['payload'])}")
+                    print(f"next {body['next']}")
+                return 0
+    except Unreachable as e:
+        print(f"research jobs: the Job queue is unreachable: {e}", file=sys.stderr)
+        return 4
+    print(f"research jobs: {status} {body.get('error', body)}", file=sys.stderr)
+    return 1
+
+
+def worker_main(argv: list[str]) -> int:
+    ap = argparse.ArgumentParser(prog="research worker", description="stage 1's dispatcher (research/jobs/dispatch.py)")
+    ap.add_argument("--dispatch", action="store_true", help="claim jobs and run them with `research run --on` onto --pods")
+    ap.add_argument("--pods", required=True, help="machines.toml names, comma-separated; one job per pod at a time")
+    ap.add_argument("--name", default="rc", help="the worker is dispatch:{name}")
+    ap.add_argument("--kinds", default=",".join(DISPATCH_KINDS))
+    ap.add_argument("--once", action="store_true", help="one pass, then exit")
+    ap.add_argument("--workdir", default=str(WORKDIR))
+    ap.add_argument("--repo", default=REPO)
+    ns = ap.parse_args(argv)
+    if not ns.dispatch:
+        print("research worker: only --dispatch exists until pull workers (stage 2)", file=sys.stderr)
+        return 2
+    kinds = tuple(k for k in ns.kinds.split(",") if k)
+    if set(kinds) - set(DISPATCH_KINDS):
+        print(f"research worker: the dispatcher runs only {', '.join(DISPATCH_KINDS)}", file=sys.stderr)
+        return 2
+    from .. import remote
+
+    pods = [p for p in ns.pods.split(",") if p]
+    try:
+        for p in pods:
+            remote.resolve_machine(p, "verity")
+    except remote.Refused as e:
+        print(f"research worker: {e}", file=sys.stderr)
+        return 2
+    workdir = Path(ns.workdir).expanduser()
+    workdir.mkdir(parents=True, exist_ok=True)
+    lock = open(workdir / f"dispatch-{ns.name}.lock", "w")
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        print(f"research worker: dispatch:{ns.name} already runs from {workdir}", file=sys.stderr)
+        return 2
+    client = HTTPClient()
+    d = Dispatcher(client, ResearchRunner(repo=ns.repo, workdir=workdir), pods, name=ns.name, kinds=kinds,
+                   state_path=workdir / f"dispatch-{ns.name}.json", out=lambda m: print(m, flush=True))
+    d.log(f"{d.worker} on {client.url}: {', '.join(pods)}; {', '.join(kinds)}")
+    try:
+        d.run(once=ns.once)
+    except DispatchError as e:
+        d.log(f"stopping: {e}")
+        return 1
+    except KeyboardInterrupt:
+        d.log("stopping; the runs in flight keep going, and a restart picks them up from the state file")
+        return 130
+    return 0

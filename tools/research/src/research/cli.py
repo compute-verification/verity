@@ -15,6 +15,8 @@
   research merge --train A B C [--on MACHINE --project P]                # several refs as one candidate, one check, a fast-forward
   research queue status|sync|land|eject [--shadow] [--dry-run]          # the merge queue: ready PRs on `next`, `main` fast-forwarded to
                                                  # the newest commit on it with a passing check (research/queue.py)
+  research jobs add|list|show|cancel|events ...  # the Job queue: batch work on pods, on the control app (research/jobs/cli.py)
+  research worker --dispatch --pods A,B [--name rc]   # stage 1's dispatcher: claims jobs, runs each with `run --on` on a free pod
   research git old2new|remap|check|build ...     # after a history rewrite: an old commit's image, a clone's local work moved onto the
                                                  # rewritten history, the old-history guard, the commit-map/v1 payload (research/commitmap.py)
   research pods check-part <machine|pod-id>      # reference-part gate: name, VRAM vs [families.<fam>] vram_mb, host CPU, load, verdict (exit 3 = variant)
@@ -846,6 +848,14 @@ def main(argv: list[str] | None = None) -> int:
         from .queue import main as queue_main
 
         return queue_main(rest)
+    if cmd == "jobs":
+        from .jobs.cli import main as jobs_main
+
+        return jobs_main(rest)
+    if cmd == "worker":
+        from .jobs.cli import worker_main
+
+        return worker_main(rest)
     if cmd == "git":
         from .commitmap import main as git_main
 

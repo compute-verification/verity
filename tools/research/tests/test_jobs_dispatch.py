@@ -1,0 +1,397 @@
+"""Stage 1's dispatcher (`research.jobs.dispatch`) against the Job queue's reference model, on a fake clock, with a fake runner
+standing in for ssh and `research run --on`; and the launch child against a local git repository."""
+from __future__ import annotations
+
+import json
+import os
+import stat
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+
+from research.jobs import dispatch as D
+from research.jobs import model
+from research.jobs.cli import main as jobs_main
+from research.jobs.client import ModelClient
+
+GOOD = {"avx512": True, "mem_gb": 240, "cpus": 64, "disk_gb": 70, "busy": 0, "tools": ["uv", "lake", "cargo"]}
+C1, C2, BASE = "1" * 40, "2" * 40, "b" * 40
+RUN = "r20260929-000005-aaaa"
+
+
+class Clock:
+    def __init__(self):
+        self.t = 0.0
+
+    def __call__(self) -> float:
+        return self.t
+
+
+class FakeRunner:
+    def __init__(self):
+        self.caps: dict[str, dict] = {}
+        self.launches: dict[str, tuple | None] = {}
+        self.runs: dict[str, D.Observation] = {}
+        self.started, self.stopped, self.killed, self.probes = [], [], [], []
+
+    def probe(self, pod):
+        self.probes.append(pod)
+        return dict(self.caps.get(pod, GOOD))
+
+    def start(self, job, attempt, pod):
+        self.started.append((job["id"], attempt, pod))
+        self.launches[f"L{job['id']}-{attempt}"] = None
+        return f"L{job['id']}-{attempt}"
+
+    def poll(self, launch):
+        return self.launches[launch]
+
+    def kill(self, launch):
+        self.killed.append(launch)
+
+    def observe(self, job, run_id):
+        return self.runs[run_id]
+
+    def stop(self, run_id):
+        self.stopped.append(run_id)
+
+
+class World:
+    def __init__(self, pods=("t1",), state_path=None):
+        self.svc = model.JobService()
+        self.svc.mint("tok-rc", "coordinator", ["jobs:enqueue", "events:read"])
+        self.svc.mint("tok-d", "dispatch-rc", ["jobs:work"])
+        self.svc.register("dispatch:rc", "dispatcher", "dispatch-rc", ["merge-check", "lean-regen"])
+        self.clock = Clock()
+        self.coord = ModelClient(self.svc, "tok-rc", self.clock)
+        self.worker = ModelClient(self.svc, "tok-d", self.clock)
+        self.runner = FakeRunner()
+        self.lines: list[str] = []
+        self.pods, self.state_path = list(pods), state_path
+        self.d = self.dispatcher()
+
+    def dispatcher(self) -> D.Dispatcher:
+        return D.Dispatcher(self.worker, self.runner, self.pods, clock=self.clock, out=self.lines.append, state_path=self.state_path)
+
+    def add(self, commit=C1, **kw) -> int:
+        status, body = self.coord.call("POST", "/api/jobs", {"kind": "merge-check", "payload": {"commit": commit, "base": BASE}, **kw})
+        assert status == 201, body
+        return body["id"]
+
+    def at(self, t: float) -> None:
+        self.clock.t = t
+        self.d.step()
+
+    def job(self, i: int) -> model.Job:
+        return self.svc.jobs[i]
+
+
+def test_a_merge_check_runs_on_a_free_pod_and_completes_with_its_run_id():
+    w = World()
+    j = w.add()
+    w.at(0)
+    assert w.runner.started == [(j, 1, "t1")]
+    assert (w.job(j).state, w.job(j).lease_worker, w.job(j).lease_slot) == ("running", "dispatch:rc", "t1")
+    w.runner.launches["L1-1"] = (0, RUN, "")
+    w.at(5)
+    w.runner.runs[RUN] = D.Observation("running", "running")
+    w.at(65)
+    assert w.job(j).progress == {"pod": "t1", "run_id": RUN, "step": "running"}
+    w.runner.runs[RUN] = D.Observation("passed", "check passed: done rc=0")
+    w.at(130)
+    assert w.job(j).state == "done"
+    assert w.job(j).result == {"outcome": "passed", "run_id": RUN, "summary": "check passed: done rc=0"}
+    assert w.d.slots[0].job is None
+    assert [e["kind"] for e in w.svc.events] == ["job.added", "job.claimed", "job.finished"]
+
+
+def test_preflight_refuses_a_pod_until_it_passes():
+    w = World()
+    j = w.add()
+    w.runner.caps["t1"] = {**GOOD, "tools": ["uv"]}
+    w.at(0)
+    assert w.runner.started == [] and w.job(j).state == "queued"
+    assert any("t1: refused: pod_setup.sh hasn't run (no lake, cargo)" in line for line in w.lines)
+    w.runner.caps["t1"] = GOOD
+    w.at(D.PREFLIGHT_S - 1)
+    assert w.runner.started == [] and w.runner.probes == ["t1"]
+    w.at(D.PREFLIGHT_S - 1 + D.CLAIM_S)
+    assert w.runner.started == [(j, 1, "t1")]
+    assert any("t1: passes preflight again" in line for line in w.lines)
+
+
+@pytest.mark.parametrize("caps,why", [({**GOOD, "busy": 1}, "1 live research run(s) on it"), ({**GOOD, "disk_gb": 10}, "10 GB free, under 25")])
+def test_a_busy_or_full_pod_is_refused(caps, why):
+    assert D.preflight_problem(caps) == why
+    assert D.preflight_problem(GOOD) is None
+
+
+def test_a_pod_that_cant_be_probed_is_refused_not_fatal():
+    w = World()
+    w.add()
+    w.runner.probe = lambda pod: (_ for _ in ()).throw(RuntimeError("probe exited 255: ssh: connect refused"))
+    w.at(0)
+    assert w.runner.started == []
+    assert any("preflight failed: RuntimeError: probe exited 255" in line for line in w.lines)
+
+
+def test_a_job_goes_only_to_a_pod_that_meets_its_requirements():
+    """An idle pass stops at the first empty claim, and the pods take turns asking first, so each pod's capabilities are offered."""
+    w = World(pods=("t1", "t2"))
+    w.runner.caps["t1"] = {**GOOD, "avx512": False}
+    j = w.add(requirements={"avx512": True})
+    w.at(0)
+    assert w.runner.started == []
+    w.at(D.CLAIM_S)
+    assert w.runner.started == [(j, 1, "t2")]
+
+
+def test_every_free_pod_takes_a_job_in_one_pass():
+    w = World(pods=("t1", "t2", "t3"))
+    a, b = w.add(C1), w.add(C2)
+    w.at(0)
+    assert w.runner.started == [(a, 1, "t1"), (b, 1, "t2")]
+
+
+def test_a_failed_check_is_final_and_an_error_is_retried():
+    w = World()
+    a = w.add(C1)
+    w.at(0)
+    w.runner.launches["L1-1"] = (0, RUN, "")
+    w.at(5)
+    w.runner.runs[RUN] = D.Observation("failed", "check failed: failed rc=1")
+    w.at(65)
+    assert w.job(a).state == "failed"
+    b = w.add(C2)
+    w.at(65 + D.CLAIM_S)
+    assert w.runner.started[-1] == (b, 1, "t1")
+    w.runner.launches["L2-1"] = (3, None, "research run --on t1: refused: pod is EXITED")
+    w.at(65 + D.CLAIM_S + 5)
+    assert (w.job(b).state, w.job(b).attempts) == ("queued", 1)
+    assert "refused: pod is EXITED" in w.job(b).result["summary"]
+    w.at(65 + 2 * D.CLAIM_S)
+    assert w.runner.started[-1] == (b, 2, "t1")
+
+
+def test_cancel_stops_the_run_at_the_next_renewal():
+    w = World()
+    j = w.add()
+    w.at(0)
+    w.runner.launches["L1-1"] = (0, RUN, "")
+    w.at(5)
+    w.runner.runs[RUN] = D.Observation("running", "running")
+    assert w.coord.call("POST", f"/api/jobs/{j}/cancel", {})[1] == {"state": "running", "cancel_requested": True}
+    w.at(60)
+    assert w.runner.stopped == [RUN]
+    assert w.job(j).state == "cancelled" and w.d.slots[0].job is None
+
+
+def test_a_lost_lease_stops_the_run_and_drops_the_job():
+    w = World()
+    j = w.add(lease_s=60)
+    w.at(0)
+    w.runner.launches["L1-1"] = (0, RUN, "")
+    w.at(5)
+    w.runner.runs[RUN] = D.Observation("running", "running")
+    w.worker.down = True
+    w.at(60)
+    assert any("renew unreachable" in line for line in w.lines)
+    assert w.svc.tick(61) == [j]
+    w.worker.down = False
+    w.at(62)
+    assert w.runner.stopped == [RUN]
+    assert any("the lease is gone (409" in line for line in w.lines)
+    assert w.runner.started == [(j, 1, "t1"), (j, 2, "t1")]
+
+
+def test_a_restarted_dispatcher_keeps_tending_its_runs(tmp_path):
+    w = World(state_path=tmp_path / "dispatch-rc.json")
+    j = w.add()
+    w.at(0)
+    w.runner.launches["L1-1"] = (0, RUN, "")
+    w.at(5)
+    assert stat.S_IMODE((tmp_path / "dispatch-rc.json").stat().st_mode) == 0o600
+    w.d = w.dispatcher()
+    assert (w.d.slots[0].job["id"], w.d.slots[0].run_id) == (j, RUN)
+    w.runner.runs[RUN] = D.Observation("passed", "check passed")
+    w.at(70)
+    assert w.job(j).state == "done" and w.runner.started == [(j, 1, "t1")]
+    assert json.loads((tmp_path / "dispatch-rc.json").read_text())["slots"] == []
+
+
+def test_a_run_past_its_timeout_is_stopped_and_retried():
+    w = World()
+    j = w.add(payload={"commit": C1, "base": BASE, "timeout_s": 100})
+    w.at(0)
+    w.runner.launches["L1-1"] = (0, RUN, "")
+    w.at(5)
+    w.runner.runs[RUN] = D.Observation("running", "running")
+    w.at(65)
+    assert w.job(j).state == "running"
+    w.at(130)
+    assert w.runner.stopped == [RUN]
+    first = w.svc.attempts[0]
+    assert first.outcome == "error" and "timeout_s (100 s)" in first.detail
+    assert w.runner.started == [(j, 1, "t1"), (j, 2, "t1")]
+
+
+def test_a_launch_that_hangs_is_killed():
+    w = World()
+    j = w.add()
+    w.at(0)
+    w.at(D.LAUNCH_TIMEOUT_S + 1)
+    assert w.runner.killed == ["L1-1"]
+    assert w.job(j).result["summary"] == f"the launch took over {D.LAUNCH_TIMEOUT_S} s"
+
+
+def test_a_complete_that_cant_be_sent_is_sent_later():
+    w = World()
+    j = w.add()
+    w.at(0)
+    w.runner.launches["L1-1"] = (0, RUN, "")
+    w.at(5)
+    w.runner.runs[RUN] = D.Observation("passed", "check passed")
+    w.worker.down = True
+    w.at(65)
+    assert w.job(j).state == "running" and w.d.slots[0].outcome == ["passed", "check passed"]
+    w.worker.down = False
+    w.at(70)
+    assert w.job(j).state == "done"
+
+
+def test_a_refused_claim_stops_the_dispatcher():
+    w = World()
+    w.add()
+    w.svc.revoke("dispatch-rc")
+    with pytest.raises(D.DispatchError, match="claim refused: 401"):
+        w.at(0)
+
+
+@pytest.mark.parametrize("kind,summary,want", [
+    ("merge-check", {"state": "done", "rc": 0, "validation": "passed", "result_valid": True}, "passed"),
+    ("merge-check", {"state": "failed", "rc": 1, "validation": "failed", "result_valid": True}, "failed"),
+    ("merge-check", {"state": "failed", "rc": 1, "validation": None, "result_valid": False, "result": "absent"}, "error"),
+    ("merge-check", {"state": "failed", "rc": None, "signal": 9, "class": "oom"}, "error"),
+    ("merge-check", {"state": "done", "rc": 0, "validation": None, "result": "absent"}, "error"),
+    ("merge-check", {"state": "refused"}, "error"),
+    ("merge-check", {"state": "running"}, "running"),
+    ("merge-check", {"state": "submitted"}, "running"),
+    ("lean-regen", {"state": "done", "rc": 0}, "passed"),
+    ("lean-regen", {"state": "failed", "rc": 1}, "failed"),
+    ("lean-regen", {"state": "failed", "rc": None, "signal": 15}, "error"),
+    ("lean-regen", {"state": "cancelled", "rc": None}, "error"),
+])
+def test_only_a_verdict_is_a_failure(kind, summary, want):
+    assert D.classify(kind, summary).state == want
+
+
+def test_the_commands_each_kind_runs(tmp_path):
+    job = {"kind": "merge-check", "payload": {"commit": C1, "base": BASE}}
+    assert D.command(job, "t1", "py", None) == ["py", "tools/check/check.py", "--record", "--on", "t1", "--base", BASE]
+    assert D.command(job, "t1", "py", tmp_path / "v.tar.gz")[-2:] == ["--verdicts-in", str(tmp_path / "v.tar.gz")]
+    regen = D.command({"kind": "lean-regen", "payload": {"packages": ["backends/flock/verifier/soundness"]}}, "t1", "py", None)
+    assert regen[:12] == ["py", "-m", "research", "run", "--on", "t1", "--project", "verity", "--source", ".", "--cwd", "source"]
+    assert "audit.py --build --update backends/flock/verifier/soundness" in regen[-1]
+    assert '$RESEARCH_RUN_DIR/records/$p' in regen[-1] and regen[-1].endswith("exit $rc")
+
+
+@pytest.mark.parametrize("payload,why", [
+    ({"commit": "abc", "base": BASE}, "full commit sha"),
+    ({"commit": C1}, "payload.base"),
+    ({"commit": C1, "base": BASE, "repo": "someone/else"}, "this dispatcher checks"),
+])
+def test_a_payload_the_dispatcher_cant_run_is_an_error(payload, why):
+    with pytest.raises(ValueError, match=why):
+        D.validate({"kind": "merge-check", "payload": payload}, "danielreuter/verity")
+    with pytest.raises(ValueError, match="package directories"):
+        D.validate({"kind": "lean-regen", "payload": {"commit": C1, "packages": ["../etc"]}}, "danielreuter/verity")
+
+
+def _git(cwd: Path, *args: str) -> str:
+    env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
+    return subprocess.run(["git", "-C", str(cwd), *args], check=True, capture_output=True, text=True, env=env).stdout.strip()
+
+
+def test_the_launch_child_checks_the_commit_in_its_own_worktree_without_the_token(tmp_path):
+    origin, seen = tmp_path / "origin", tmp_path / "seen.json"
+    origin.mkdir()
+    _git(origin, "init", "-q", "-b", "main")
+    (origin / "README.md").write_text("base\n")
+    _git(origin, "add", ".")
+    _git(origin, "commit", "-qm", "base")
+    base = _git(origin, "rev-parse", "HEAD")
+    (origin / "tools" / "check").mkdir(parents=True)
+    (origin / "tools" / "check" / "check.py").write_text(
+        "import json, os, subprocess, sys\n"
+        f"json.dump({{'argv': sys.argv[1:], 'cwd': os.getcwd(), 'token': os.environ.get('JOBS_TOKEN'),\n"
+        "           'head': subprocess.run(['git', 'rev-parse', 'HEAD'], capture_output=True, text=True).stdout.strip()},\n"
+        f"          open({str(seen)!r}, 'w'))\n"
+        "print('research: run r20260929-000000-abcd launched on t1 (podid) pid=1 -> /workspace/research/runs/r20260929-000000-abcd',\n"
+        "      file=sys.stderr)\n")
+    _git(origin, "add", ".")
+    _git(origin, "commit", "-qm", "head")
+    head = _git(origin, "rev-parse", "HEAD")
+    runner = D.ResearchRunner(workdir=tmp_path / "jobs", url=str(origin), environ={**os.environ, "JOBS_TOKEN": "not-for-pr-code"})
+    job = {"id": 7, "kind": "merge-check", "payload": {"commit": head, "base": base}}
+    launch = runner.start(job, 1, "t1")
+    runner.children[launch].wait()
+    assert runner.poll(launch) == (0, "r20260929-000000-abcd", runner.poll(launch)[2])
+    got = json.loads(seen.read_text())
+    assert got["argv"] == ["--record", "--on", "t1", "--base", base]
+    assert got["token"] is None and got["head"] == head
+    assert got["cwd"] == str(tmp_path / "jobs" / "worktrees" / "job-7-1")
+    assert not (tmp_path / "jobs" / "worktrees" / "job-7-1").exists()
+    assert "launch done: 0 r20260929-000000-abcd" in (tmp_path / "jobs" / "logs" / "job-7-1.log").read_text()
+    assert D.launcher_pid(Path(launch)) is None
+
+
+def test_a_launch_of_a_commit_origin_lacks_is_an_error(tmp_path):
+    origin = tmp_path / "origin"
+    origin.mkdir()
+    _git(origin, "init", "-q", "-b", "main")
+    (origin / "README.md").write_text("x\n")
+    _git(origin, "add", ".")
+    _git(origin, "commit", "-qm", "x")
+    runner = D.ResearchRunner(workdir=tmp_path / "jobs", url=str(origin), environ=dict(os.environ))
+    launch = runner.start({"id": 8, "kind": "merge-check", "payload": {"commit": C1, "base": _git(origin, "rev-parse", "HEAD")}}, 1, "t1")
+    runner.children[launch].wait()
+    rc, run_id, tail = runner.poll(launch)
+    assert (rc, run_id) == (-1, None) and f"commit {C1} is not on" in tail
+
+
+def test_research_jobs_adds_lists_shows_cancels_and_reads_events(capsys):
+    w = World()
+    args = ["add", "merge-check", "--commit", C1, "--base", BASE, "--agreement"]
+    assert jobs_main(args, client=w.coord) == 0
+    assert jobs_main(args, client=w.coord) == 0
+    assert capsys.readouterr().out.splitlines() == ["job 1 added (queued)", "job 1 already there (queued)"]
+    assert (w.job(1).dedupe_key, w.job(1).requirements, w.job(1).payload["base"]) == (f"merge-check:{C1}", {"avx512": True}, BASE)
+    assert jobs_main(["list"], client=w.coord) == 0
+    assert "merge-check  queued" in capsys.readouterr().out
+    assert jobs_main(["cancel", "1"], client=w.coord) == 0
+    assert capsys.readouterr().out.strip() == "job 1: cancelled"
+    assert jobs_main(["show", "1"], client=w.coord) == 0
+    assert "cancelled" in capsys.readouterr().out
+    assert jobs_main(["events", "--after", "1"], client=w.coord) == 0
+    out = capsys.readouterr().out.splitlines()
+    assert "job.cancelled" in out[0] and out[-1] == "next 2"
+    assert jobs_main(["show", "9"], client=w.coord) == 1
+    assert "404 no such job" in capsys.readouterr().err
+    w.coord.down = True
+    assert jobs_main(["list"], client=w.coord) == 4
+
+
+def test_the_child_environment_never_holds_the_token():
+    assert "JOBS_TOKEN" not in D.ResearchRunner(environ={"JOBS_TOKEN": "x", "PATH": "/bin"}).env()
+
+
+def test_research_worker_is_wired(capsys):
+    from research.cli import main
+
+    assert main(["worker", "--pods", "t1"]) == 2
+    assert "only --dispatch exists" in capsys.readouterr().err
+    with pytest.raises(SystemExit) as e:
+        main(["jobs", "--help"])
+    assert e.value.code == 0 and "research jobs" in capsys.readouterr().out
