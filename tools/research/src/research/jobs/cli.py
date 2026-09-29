@@ -1,8 +1,9 @@
 """`research jobs` and `research worker`: the Job queue from the command line (Control's `/api/jobs`; `research.jobs.model` is its
 reference).  The Job queue holds batch, unattended work on pods; an interactive session on a pod is a Broker allocation.
 
-    research jobs add merge-check --commit REF [--base SHA] [--verdict-pack ART] [--agreement] [common]
+    research jobs add merge-check --commit REF [--base SHA] [--verdict-pack ART] [common]
     research jobs add lean-regen --commit REF --package DIR [--package DIR ...] [common]
+    research jobs add audit-main [--commit REF] [common]            a cold check of main's tip (the nightly cron's job)
         common: [--priority N] [--timeout-s S] [--max-attempts N] [--dedupe-key K] [--repo OWNER/NAME]
     research jobs list [--state S] [--kind K] [--limit N] [--json]
     research jobs show ID [--json]
@@ -13,7 +14,9 @@ reference).  The Job queue holds batch, unattended work on pods; an interactive 
 `add` resolves --commit in the current checkout, and --base (for `merge_requires`) defaults to `main`'s tip on GitHub, read
 with `git ls-remote` rather than a local ref that may be stale.  --timeout-s defaults to the dispatcher's DEFAULT_TIMEOUT_S, and
 the job asks for a pod whose lease has that long left plus the lease margin (`min_lease_s`), so no check starts on a pod that
-ends before it can finish.  --agreement asks for a pod with AVX-512 (the pinned upstream Flock build needs it).
+ends before it can finish.  A check asks for AVX-512 only when the tree says so, as #440's preflight decides it: the change
+touches what `merge_requires` sends the Lean agreement for, and `upstream.json`'s rustflags match preflight.py's AVX512 pattern
+(read from the commit, never run).  Today's pin is `x86-64-v3`, which needs none.
 
 The dedupe key makes adding idempotent, and a deliberate re-run names a new one (--dedupe-key).  A merge check's is
 `merge-check:{commit}`.  A Lean regeneration's is `lean-regen:{digest of its inputs}`: the blobs, at that commit, of every tracked
@@ -25,16 +28,18 @@ Job queue refuses, 4 when it can't be reached.
 from __future__ import annotations
 
 import argparse
+import ast
 import fcntl
 import hashlib
 import json
 import posixpath
+import re
 import subprocess
 import sys
 from pathlib import Path
 
 from .client import HTTPClient, Unreachable
-from .dispatch import DEFAULT_TIMEOUT_S, SHA, WORKDIR, Dispatcher, DispatchError, ResearchRunner, lease_needed
+from .dispatch import AUDIT_TIMEOUT_S, DEFAULT_TIMEOUT_S, EMPTY_TREE, SHA, WORKDIR, Dispatcher, DispatchError, ResearchRunner, lease_needed
 from .dispatch import KINDS as DISPATCH_KINDS
 
 REPO = "danielreuter/verity"
@@ -97,24 +102,70 @@ def lean_key(commit: str, packages: list[str], cwd: Path | None = None) -> str:
     return h.hexdigest()
 
 
+#: preflight.py's AVX512 (#440), for a tree from before it
+AVX512_BEFORE_PREFLIGHT = r"target-cpu=(native|x86-64-v4)\b|avx512"
+UPSTREAM = "backends/flock/verifier/upstream.json"
+
+
+def _show(commit: str, path: str, cwd: Path | None = None) -> str | None:
+    r = subprocess.run(["git", "show", f"{commit}:{path}"], cwd=cwd, capture_output=True, text=True)
+    return r.stdout if r.returncode == 0 else None
+
+
+def _literal(source: str | None, name: str):
+    """The literal a module assigns to ``name`` (or passes as keyword ``name`` in a call), read without running the module."""
+    for node in ast.walk(ast.parse(source or "")):
+        if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == name for t in node.targets):
+            value = node.value
+            if isinstance(value, ast.Call) and value.args:                 # AVX512 = re.compile(r"...")
+                value = value.args[0]
+            return ast.literal_eval(value)
+        if isinstance(node, ast.keyword) and node.arg == name:
+            return ast.literal_eval(node.value)
+    return None
+
+
+def needs_avx512(commit: str, base: str, cwd: Path | None = None) -> bool:
+    """Whether a check of `commit` against `base` runs the Lean agreement with an upstream build that needs AVX-512."""
+    pin = _show(commit, UPSTREAM, cwd)
+    if pin is None:
+        return False
+    flags = json.loads(pin)["upstream"].get("rustflags") or "target-cpu=native"
+    pattern = _literal(_show(commit, "tools/check/preflight.py", cwd), "AVX512") or AVX512_BEFORE_PREFLIGHT
+    if not re.search(pattern, flags):
+        return False
+    rule = (_literal(_show(commit, "tools/check/tool.py", cwd), "merge_requires") or {}).get("lean-agreement")
+    from ..merge import rule_touches
+
+    changed = _git("diff", "--name-only", base, commit, cwd=cwd).split()
+    return bool(rule and rule_touches(rule, changed))
+
+
 def add_body(ns: argparse.Namespace) -> dict:
-    commit = resolve_commit(ns.commit)
-    timeout = ns.timeout_s or DEFAULT_TIMEOUT_S
+    if ns.commit is None and ns.kind != "audit-main":
+        raise SystemExit(f"research jobs add {ns.kind}: --commit is required")
+    commit = resolve_commit(ns.commit) if ns.commit else main_tip(ns.repo)
+    timeout = ns.timeout_s or (AUDIT_TIMEOUT_S if ns.kind == "audit-main" else DEFAULT_TIMEOUT_S)
     payload: dict = {"repo": ns.repo, "commit": commit, "timeout_s": timeout}
     requirements: dict = {"min_lease_s": lease_needed(timeout)}
     if ns.kind == "merge-check":
         payload["base"] = resolve_commit(ns.base) if ns.base else main_tip(ns.repo)
         payload["verdict_pack"] = ns.verdict_pack
-        if ns.agreement:
+        if needs_avx512(commit, payload["base"]):
             requirements["avx512"] = True
         key = f"merge-check:{commit}"
+    elif ns.kind == "audit-main":
+        if needs_avx512(commit, EMPTY_TREE):
+            requirements["avx512"] = True
+        key = f"audit-main:{commit}"
     else:
         if not ns.package:
             raise SystemExit("research jobs add lean-regen: name at least one --package")
         payload["packages"] = ns.package
         payload["inputs"] = lean_key(commit, ns.package)
         key = f"lean-regen:{payload['inputs']}"
-    body = {"kind": ns.kind, "payload": payload, "requirements": requirements, "priority": ns.priority,
+    priority = ns.priority if ns.priority is not None else (5 if ns.kind == "audit-main" else 0)
+    body = {"kind": ns.kind, "payload": payload, "requirements": requirements, "priority": priority,
             "dedupe_key": ns.dedupe_key or key}
     if ns.max_attempts:
         body["max_attempts"] = ns.max_attempts
@@ -132,13 +183,12 @@ def _parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="research jobs", description="the Job queue (research/jobs/cli.py)")
     sub = ap.add_subparsers(dest="cmd", required=True)
     add = sub.add_parser("add")
-    add.add_argument("kind", choices=("merge-check", "lean-regen"))
-    add.add_argument("--commit", required=True)
+    add.add_argument("kind", choices=("merge-check", "lean-regen", "audit-main"))
+    add.add_argument("--commit")
     add.add_argument("--base")
     add.add_argument("--verdict-pack")
-    add.add_argument("--agreement", action="store_true")
     add.add_argument("--package", action="append", default=[])
-    add.add_argument("--priority", type=int, default=0)
+    add.add_argument("--priority", type=int, default=None, help="default 0, and 5 for audit-main")
     add.add_argument("--timeout-s", type=int)
     add.add_argument("--max-attempts", type=int)
     add.add_argument("--dedupe-key")

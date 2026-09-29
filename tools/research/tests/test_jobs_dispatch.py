@@ -67,7 +67,7 @@ class World:
         self.svc = model.JobService()
         self.svc.mint("tok-rc", "coordinator", ["jobs:enqueue", "events:read"])
         self.svc.mint("tok-d", "dispatch-rc", ["jobs:work"])
-        self.svc.register("dispatch:rc", "dispatcher", "dispatch-rc", ["merge-check", "lean-regen"])
+        self.svc.register("dispatch:rc", "dispatcher", "dispatch-rc", list(D.KINDS))
         self.clock = Clock()
         self.coord = ModelClient(self.svc, "tok-rc", self.clock)
         self.worker = ModelClient(self.svc, "tok-d", self.clock)
@@ -111,34 +111,42 @@ def test_a_merge_check_runs_on_a_free_pod_and_completes_with_its_run_id():
     assert [e["kind"] for e in w.svc.events] == ["job.added", "job.claimed", "job.finished"]
 
 
-def test_preflight_refuses_a_pod_until_it_passes():
-    w = World()
+@pytest.mark.parametrize("tail", [
+    "research run --on t1: refused: the machine failed the preflight tools/check/preflight.py (exit 1): uv is not on the PATH",
+    "research: run r20260929-000001-abcd refused on t1 (PreflightFailed): cpu: no avx512f  (recorded in /x)",
+])
+def test_a_pod_that_fails_checks_preflight_is_benched_and_another_pod_takes_the_job(tail):
+    """Only preflight.py (#440) says whether a pod is prepared; the dispatcher's probe measures, and it believes the preflight."""
+    w = World(pods=("t1", "t2"))
+    w.runner.caps["t1"] = {**GOOD, "tools": [], "disk_gb": 3}           # measured, never judged
     j = w.add()
-    w.runner.caps["t1"] = {**GOOD, "tools": ["uv"]}
     w.at(0)
-    assert w.runner.started == [] and w.job(j).state == "queued"
-    assert any("t1: refused: pod_setup.sh hasn't run (no lake, cargo)" in line for line in w.lines)
-    w.runner.caps["t1"] = GOOD
-    w.at(D.PREFLIGHT_S - 1)
-    assert w.runner.started == [] and w.runner.probes == ["t1"]
-    w.at(D.PREFLIGHT_S - 1 + D.CLAIM_S)
     assert w.runner.started == [(j, 1, "t1")]
-    assert any("t1: passes preflight again" in line for line in w.lines)
+    w.runner.launches["L1-1"] = (3, None, tail)
+    w.at(5)
+    assert (w.job(j).state, w.job(j).attempts) == ("queued", 1) and "t1 failed check's preflight" in w.job(j).result["summary"]
+    assert any("t1: failed check's preflight; benched for 1800 s" in line for line in w.lines)
+    w.at(5 + D.CLAIM_S)
+    assert w.runner.started[-1] == (j, 2, "t2")
+    k = w.add(C2)
+    w.at(5 + D.BENCH_S - 1)
+    assert [x for x in w.runner.started if x[0] == k] == []
+    w.at(5 + D.BENCH_S + D.CLAIM_S)
+    assert w.runner.started[-1] == (k, 1, "t1")
 
 
-@pytest.mark.parametrize("caps,why", [({**GOOD, "busy": 1}, "1 live research run(s) on it"), ({**GOOD, "disk_gb": 10}, "10 GB free, under 25")])
-def test_a_busy_or_full_pod_is_refused(caps, why):
-    assert D.preflight_problem(caps) == why
-    assert D.preflight_problem(GOOD) is None
+def test_the_probe_only_measures_and_occupancy_is_the_one_rule():
+    assert D.occupied({**GOOD, "busy": 1}) == "1 live research run(s) on it"
+    assert D.occupied({**GOOD, "tools": [], "disk_gb": 1, "avx512": False}) is None
 
 
-def test_a_pod_that_cant_be_probed_is_refused_not_fatal():
+def test_a_pod_that_cant_be_measured_asks_for_nothing_and_the_dispatcher_goes_on():
     w = World()
     w.add()
     w.runner.probe = lambda pod: (_ for _ in ()).throw(RuntimeError("probe exited 255: ssh: connect refused"))
     w.at(0)
     assert w.runner.started == []
-    assert any("preflight failed: RuntimeError: probe exited 255" in line for line in w.lines)
+    assert any("t1: skipped: can't be measured: RuntimeError: probe exited 255" in line for line in w.lines)
 
 
 def test_a_job_goes_only_to_a_pod_that_meets_its_requirements():
@@ -296,7 +304,11 @@ def test_the_commands_each_kind_runs(tmp_path):
     assert D.command(job, "t1", "py", None) == ["py", "tools/check/check.py", "--record", "--on", "t1", "--base", BASE]
     assert D.command(job, "t1", "py", tmp_path / "v.tar.gz")[-2:] == ["--verdicts-in", str(tmp_path / "v.tar.gz")]
     regen = D.command({"kind": "lean-regen", "payload": {"packages": ["backends/flock/verifier/soundness"]}}, "t1", "py", None)
-    assert regen[:12] == ["py", "-m", "research", "run", "--on", "t1", "--project", "verity", "--source", ".", "--cwd", "source"]
+    assert regen[:15] == ["py", "-m", "research", "run", "--on", "t1", "--project", "verity", "--source", ".", "--cwd", "source",
+                          "--preflight", "check", "--"]
+    assert "--preflight" not in D.command({"kind": "lean-regen", "payload": {"packages": ["p"]}}, "t1", "py", None, preflight=False)
+    assert D.command({"kind": "audit-main", "payload": {"commit": C1}}, "t1", "py", None) == [
+        "py", "tools/check/check.py", "--record", "--on", "t1", "--base", D.EMPTY_TREE, "--no-cache"]
     assert "audit.py --build --update backends/flock/verifier/soundness" in regen[-1]
     assert '$RESEARCH_RUN_DIR/records/$p' in regen[-1] and regen[-1].endswith("exit $rc")
 
@@ -368,12 +380,12 @@ def test_a_launch_of_a_commit_origin_lacks_is_an_error(tmp_path):
 
 def test_research_jobs_adds_lists_shows_cancels_and_reads_events(capsys):
     w = World()
-    args = ["add", "merge-check", "--commit", C1, "--base", BASE, "--agreement"]
+    args = ["add", "merge-check", "--commit", C1, "--base", BASE]
     assert jobs_main(args, client=w.coord) == 0
     assert jobs_main(args, client=w.coord) == 0
     assert capsys.readouterr().out.splitlines() == ["job 1 added (queued)", "job 1 already there (queued)", f"    added for commit {C1}"]
     assert (w.job(1).dedupe_key, w.job(1).payload["base"], w.job(1).payload["timeout_s"]) == (f"merge-check:{C1}", BASE, D.DEFAULT_TIMEOUT_S)
-    assert w.job(1).requirements == {"avx512": True, "min_lease_s": D.DEFAULT_TIMEOUT_S + 900}
+    assert w.job(1).requirements == {"min_lease_s": D.DEFAULT_TIMEOUT_S + 900}
     assert jobs_main(["list"], client=w.coord) == 0
     assert "merge-check  queued" in capsys.readouterr().out
     assert jobs_main(["cancel", "1"], client=w.coord) == 0
@@ -445,7 +457,7 @@ def test_a_job_is_claimed_only_for_a_pod_whose_lease_covers_it(capsys):
     assert w.runner.started == []
     w.at(D.CLAIM_S)
     assert w.runner.started == [(1, 1, "t2")]
-    assert any("t1: ready: lease 1.2 h, 70 GB free, 240 GB, 64 cpus, avx512" in line for line in w.lines)
+    assert any("t1: free: lease 1.2 h, 70 GB free, 240 GB, 64 cpus, avx512" in line for line in w.lines)
 
 
 def test_a_job_without_min_lease_s_on_a_short_lease_is_named():
@@ -545,3 +557,63 @@ def test_trains_with_the_same_lean_inputs_share_one_regeneration(tmp_path, monke
     assert jobs_main(["add", "lean-regen", "--commit", two, "--package", "a"], client=w.coord) == 0
     assert capsys.readouterr().out.splitlines() == ["job 1 already there (done)", f"    added for commit {one}; run {RUN}"]
     assert w.job(1).dedupe_key == f"lean-regen:{w.job(1).payload['inputs']}" and len(w.svc.jobs) == 1
+
+
+def _flock_repo(tmp_path: Path, rustflags: str, pattern: str | None = None) -> Path:
+    repo = tmp_path / "flock"
+    files = {"backends/flock/verifier/upstream.json": json.dumps({"upstream": {"sha256": "0" * 64, "rustflags": rustflags}}),
+             "backends/flock/src.rs": "fn main() {}", "backends/flock/README.md": "flock", "docs.md": "docs",
+             "tools/check/tool.py": 'CHECK = Tool(name="check", merge_requires={"lean-agreement": ["backends/flock/", "!README.md"]})\n'}
+    if pattern is not None:
+        files["tools/check/preflight.py"] = f"import re\nAVX512 = re.compile({pattern!r})\n"
+    for f, text in files.items():
+        (repo / f).parent.mkdir(parents=True, exist_ok=True)
+        (repo / f).write_text(text)
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-qm", "base")
+    return repo
+
+
+def _change(repo: Path, path: str) -> tuple[str, str]:
+    base = _git(repo, "rev-parse", "HEAD")
+    (repo / path).write_text("changed")
+    _git(repo, "commit", "-qam", path)
+    return _git(repo, "rev-parse", "HEAD"), base
+
+
+@pytest.mark.parametrize("rustflags,pattern,path,want", [
+    ("-C target-cpu=x86-64-v3", r"target-cpu=(native|x86-64-v4)\b|avx512", "backends/flock/src.rs", False),   # today's pin
+    ("-C target-cpu=x86-64-v4", r"target-cpu=(native|x86-64-v4)\b|avx512", "backends/flock/src.rs", True),
+    ("-C target-cpu=x86-64-v4", r"target-cpu=(native|x86-64-v4)\b|avx512", "docs.md", False),                # no agreement runs
+    ("-C target-cpu=x86-64-v4", r"target-cpu=(native|x86-64-v4)\b|avx512", "backends/flock/README.md", False),
+    ("-C target-cpu=x86-64-v4", r"never", "backends/flock/src.rs", False),                                     # the tree's own rule
+    ("-C target-cpu=native", None, "backends/flock/src.rs", True),                                            # a tree before #440
+])
+def test_a_check_asks_for_avx512_only_when_its_tree_says_so(tmp_path, rustflags, pattern, path, want):
+    from research.jobs.cli import needs_avx512
+
+    repo = _flock_repo(tmp_path, rustflags, pattern)
+    commit, base = _change(repo, path)
+    assert needs_avx512(commit, base, repo) is want
+
+
+def test_audit_main_is_a_cold_check_of_mains_tip_with_every_path_changed(tmp_path, monkeypatch, capsys):
+    from research.jobs.cli import needs_avx512
+
+    repo = _flock_repo(tmp_path, "-C target-cpu=x86-64-v4", r"target-cpu=(native|x86-64-v4)\b|avx512")
+    tip = _git(repo, "rev-parse", "HEAD")
+    assert needs_avx512(tip, D.EMPTY_TREE, repo) is True
+    monkeypatch.chdir(repo)
+    w = World()
+    assert jobs_main(["add", "audit-main", "--commit", tip], client=w.coord) == 0
+    j = w.job(1)
+    assert (j.kind, j.priority, j.dedupe_key, j.payload["timeout_s"]) == ("audit-main", 5, f"audit-main:{tip}", D.AUDIT_TIMEOUT_S)
+    assert j.requirements == {"min_lease_s": D.AUDIT_TIMEOUT_S + 900, "avx512": True}
+    w.at(0)
+    assert w.runner.started == [(1, 1, "t1")]
+    w.runner.launches["L1-1"] = (0, RUN, "")
+    w.at(5)
+    w.runner.runs[RUN] = D.Observation("failed", "check failed: failed rc=1")
+    w.at(65)
+    assert w.job(1).state == "failed"

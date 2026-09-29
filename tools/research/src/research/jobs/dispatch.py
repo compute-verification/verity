@@ -1,26 +1,31 @@
-"""`research worker --dispatch`: stage 1's worker.  It claims `merge-check` and `lean-regen` jobs from the Job queue and runs
-each with today's `research run --on` onto one of the pods it was given, one job per pod at a time.
+"""`research worker --dispatch`: stage 1's worker.  It claims `merge-check`, `lean-regen` and `audit-main` jobs from the Job queue
+and runs each with today's `research run --on` onto one of the pods it was given, one job per pod at a time.
 
-    research worker --dispatch --pods vy-coord-t1,vy-coord-t2 [--name rc] [--kinds merge-check,lean-regen] [--once]
+    research worker --dispatch --pods vy-coord-t1,vy-coord-t2 [--name rc] [--kinds merge-check,lean-regen,audit-main] [--once]
 
 It is one worker, `dispatch:{name}`, whose `jobs:work` token the Console mints (`$JOBS_TOKEN` or ~/.research/jobs/token); it
 runs where `research run --on` with custody works today, the research coordinator's VM.  Each pod it holds is a slot:
 
     host        no claim while this host's runs root or workdir has less free space than `research run`'s floor
                 ($RESEARCH_DISK_FLOOR_GB): the launch writes a worktree and records there.  Running jobs are still tended.
-    preflight   before a free pod asks for work, and again every PREFLIGHT_S: over ssh, pod_setup.sh's tools (uv, lake, cargo),
-                AVX-512, memory, cores, free disk (MIN_DISK_GB), the seconds left on the pod's lease, and no live `research` run
-                on it.  A pod that fails is refused with the reason until it passes.  What it measured is sent as the claim's
-                capabilities, so a job that needs AVX-512 only goes to a pod that has it, and a job whose `min_lease_s` (its
-                timeout_s plus the lease margin, set by `research jobs add`) the pod's lease can't cover isn't claimed for it:
-                `check.py --record` sets no --timeout, so its launch doesn't extend the lease.
+    measure     before a free pod asks for work, and again every PREFLIGHT_S, over ssh: AVX-512, memory, cores, free disk,
+                the tools on its PATH, the seconds left on its lease, and whether a `research` run is live on it.  This only
+                measures: what it finds is the claim's capabilities, so a job that needs AVX-512 only goes to a pod that has it,
+                and a job whose `min_lease_s` (timeout_s plus the lease margin, set by `research jobs add`) the pod's lease can't
+                cover isn't claimed for it (`check.py --record` sets no --timeout, so its launch doesn't extend the lease).  The
+                one rule of its own is occupancy: a pod with a live run takes no second job.
+    preflight   whether a pod is prepared is decided in one place, `tools/check/preflight.py` (#440), which `research run --on`
+                runs on the machine before claiming the run: a `--tool check` run gets it, and a `lean-regen` asks for it with
+                `--preflight check`.  A refusal is an error, retried on another pod, and the pod is benched for BENCH_S.
     launch      in a child process (`python -m research.jobs.dispatch launch SPEC`), so renewals never wait on it: fetch the
                 commit into the dispatcher's own clone with forced refspecs, a worktree of it, then
                   merge-check  `check.py --record --on POD --base BASE [--verdicts-in PACK]` (the pack fetched from the store)
+                  audit-main   `check.py --record --on POD --base EMPTY_TREE --no-cache`: a cold check of `main`'s tip with every
+                               path counted as changed, so `merge_requires` sends the Lean agreement's inputs too
                   lean-regen   `research run --on POD --source . --cwd source` of `audit.py --build --update PACKAGE...`, each
                                regenerated lean-audit.json copied to the run dir's records/ (custody publishes it)
                 and the worktree is removed once the source is shipped.  The job's token is not in the child's environment.
-    run         every POLL_S, `research fetch` of the run's records.  merge-check: passed on rc 0 with check's result.json
+    run         every POLL_S, `research fetch` of the run's records.  merge-check, audit-main: passed on rc 0 with check's result.json
                 passed, failed on a result.json that says failed, else error.  lean-regen: passed on rc 0, failed on
                 another exit code, error on a signal or a lost run.  A run past the job's timeout_s is stopped: error.
     lease       renewed every RENEW_S with the run's progress.  A `cancel` answer stops the run by its process group on the pod
@@ -48,20 +53,24 @@ from typing import Any, Callable
 from ..pods.lease import LEASE_FILE, RUN_MARGIN_S
 from .client import TOKEN_ENV, Unreachable
 
-KINDS = ("merge-check", "lean-regen")
+KINDS = ("merge-check", "lean-regen", "audit-main")
+CHECK_KINDS = ("merge-check", "audit-main")
 PROJECT = "verity"
 STEP_S = 5
 CLAIM_S = 30                # how often an idle dispatcher asks for work
 RENEW_S = 60
 POLL_S = 60
 PREFLIGHT_S = 600
+BENCH_S = 1800             # a pod that failed check's preflight sits out this long
 LAUNCH_TIMEOUT_S = 1800
 DEFAULT_TIMEOUT_S = 2 * 3600       # a cold check took 41 min, a Lean regeneration 30-40
-MIN_DISK_GB = 25
-SETUP_TOOLS = ("uv", "lake", "cargo")      # what tools/check/pod_setup.sh puts on a pod
+AUDIT_TIMEOUT_S = 3 * 3600         # a cold check with the Lean agreement
 WORKDIR = Path.home() / ".research" / "jobs"
 SHA = re.compile(r"[0-9a-f]{40}")
+EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"      # git's empty tree: a diff from it names every path
 LAUNCHED = re.compile(r"research: run (r\d{8}-\d{6}-[0-9a-f]{4,}) launched")
+#: `research run --on`'s two ways of saying the machine failed a tool's preflight (#440)
+PREFLIGHT_REFUSED = re.compile(r"\(PreflightFailed\)|failed the preflight|preflight .+ did not finish")
 
 
 class DispatchError(Exception):
@@ -90,6 +99,7 @@ class Slot:
     caps: dict | None = None
     probed: float | None = None
     problem: str | None = None
+    bench_until: float = 0.0     # after a failed preflight
 
 
 def lease_needed(timeout_s: int) -> int:
@@ -103,15 +113,9 @@ def describe(caps: dict) -> str:
             + (", avx512" if caps.get("avx512") else ", no avx512"))
 
 
-def preflight_problem(caps: dict) -> str | None:
-    missing = [t for t in SETUP_TOOLS if t not in caps.get("tools", [])]
-    if missing:
-        return f"pod_setup.sh hasn't run (no {', '.join(missing)})"
-    if caps.get("disk_gb", 0) < MIN_DISK_GB:
-        return f"{caps.get('disk_gb')} GB free, under {MIN_DISK_GB}"
-    if caps.get("busy"):
-        return f"{caps['busy']} live research run(s) on it"
-    return None
+def occupied(caps: dict) -> str | None:
+    """The dispatcher's one rule of its own: one job per pod.  Whether a pod is prepared is preflight.py's to say."""
+    return f"{caps['busy']} live research run(s) on it" if caps.get("busy") else None
 
 
 @dataclass
@@ -175,8 +179,10 @@ class Dispatcher:
         free = free[self.turn % len(free):] + free[:self.turn % len(free)]   # each pod gets the first ask in turn
         self.turn += 1
         for s in free:
+            if self.clock() < s.bench_until:
+                continue
             if s.probed is None or self.clock() - s.probed >= PREFLIGHT_S:
-                self._preflight(s)
+                self._measure(s)
             if s.problem:
                 continue
             try:
@@ -192,18 +198,18 @@ class Dispatcher:
             self._start(s, body)
         self.next_claim = self.clock() + CLAIM_S
 
-    def _preflight(self, s: Slot) -> None:
+    def _measure(self, s: Slot) -> None:
         s.probed = self.clock()
         was = s.problem
         try:
             s.caps = self.runner.probe(s.pod)
-            s.problem = preflight_problem(s.caps)
-        except Exception as e:  # noqa: BLE001 -- an unreachable or missing pod is a refused pod, not a stopped dispatcher
-            s.caps, s.problem = None, f"preflight failed: {type(e).__name__}: {e}"
+            s.problem = occupied(s.caps)
+        except Exception as e:  # noqa: BLE001 -- an unreachable or missing pod asks for nothing, and the dispatcher goes on
+            s.caps, s.problem = None, f"can't be measured: {type(e).__name__}: {e}"
         if s.problem and s.problem != was:
-            self.log(f"{s.pod}: refused: {s.problem}")
+            self.log(f"{s.pod}: skipped: {s.problem}")
         elif not s.problem:
-            self.log(f"{s.pod}: {'passes preflight again' if was else 'ready'}: {describe(s.caps)}")
+            self.log(f"{s.pod}: {'free again' if was else 'free'}: {describe(s.caps)}")
 
     def _start(self, s: Slot, claim: dict) -> None:
         now = self.clock()
@@ -269,6 +275,10 @@ class Dispatcher:
         if rc == 0 and run_id:
             s.run_id, s.phase, s.observed = run_id, "running", self.clock()
             self.log(f"{s.pod}: job {s.job['id']}: run {run_id}")
+        elif PREFLIGHT_REFUSED.search(tail):
+            s.bench_until = self.clock() + BENCH_S
+            s.outcome = ["error", f"{s.pod} failed check's preflight, so another pod takes the job: {tail[-400:]}"]
+            self.log(f"{s.pod}: failed check's preflight; benched for {BENCH_S} s")
         else:
             s.outcome = ["error", f"the launch exited {rc}" + (f" (run {run_id})" if run_id else "") + f": {tail[-400:]}"]
         self._save()
@@ -502,7 +512,7 @@ def classify(kind: str, s: dict) -> Observation:
     what = f"{state} rc={rc}" + (f" signal={s['signal']}" if s.get("signal") else "") + (f" class={s['class']}" if s.get("class") else "")
     if state not in ("done", "failed", "cancelled", "refused"):
         return Observation("running", str(state))
-    if kind == "merge-check":
+    if kind in CHECK_KINDS:
         if rc == 0 and s.get("validation") == "passed":
             return Observation("passed", f"check passed: {what}")
         if s.get("validation") == "failed" and s.get("result_valid"):
@@ -534,17 +544,20 @@ def fetch_commits(clone: Path, url: str, shas: list[str]) -> None:
             raise RuntimeError(f"commit {x} is not on {url}")
 
 
-def command(job: dict, pod: str, python: str, pack: Path | None) -> list[str]:
+def command(job: dict, pod: str, python: str, pack: Path | None, preflight: bool = True) -> list[str]:
+    """What the launch child runs in the commit's worktree.  `preflight`: the launcher's `research run` knows `--preflight` (#440)."""
     p = job["payload"]
     if job["kind"] == "merge-check":
         return [python, "tools/check/check.py", "--record", "--on", pod, "--base", p["base"],
                 *(["--verdicts-in", str(pack)] if pack else [])]
+    if job["kind"] == "audit-main":
+        return [python, "tools/check/check.py", "--record", "--on", pod, "--base", EMPTY_TREE, "--no-cache"]
     if job["kind"] == "lean-regen":
         pkgs = " ".join(shlex.quote(x) for x in p["packages"])
         script = (f"python3 tools/lean/audit.py --build --update {pkgs}; rc=$?; for p in {pkgs}; do "
                   f"mkdir -p \"$RESEARCH_RUN_DIR/records/$p\" && cp \"$p/lean-audit.json\" \"$RESEARCH_RUN_DIR/records/$p/\"; done; exit $rc")
-        return [python, "-m", "research", "run", "--on", pod, "--project", PROJECT, "--source", ".", "--cwd", "source", "--",
-                "sh", "-c", script]
+        return [python, "-m", "research", "run", "--on", pod, "--project", PROJECT, "--source", ".", "--cwd", "source",
+                *(["--preflight", "check"] if preflight else []), "--", "sh", "-c", script]
     raise ValueError(f"this dispatcher doesn't run {job['kind']} jobs")
 
 
@@ -554,6 +567,8 @@ def validate(job: dict, repo: str) -> None:
         raise ValueError(f"the job is for {p.get('repo')}, and this dispatcher checks {repo}")
     if not SHA.fullmatch(str(p.get("commit", ""))):
         raise ValueError("payload.commit must be a full commit sha")
+    if job["kind"] not in KINDS:
+        raise ValueError(f"this dispatcher doesn't run {job['kind']} jobs")
     if job["kind"] == "merge-check" and not SHA.fullmatch(str(p.get("base", ""))):
         raise ValueError("payload.base must be a full commit sha")
     if job["kind"] == "lean-regen" and not (p.get("packages") and all(re.fullmatch(r"[\w./-]+", x) and ".." not in x for x in p["packages"])):
@@ -581,7 +596,9 @@ def launch(spec_path: Path) -> dict:
             from ..store.local import LocalStore
 
             pack = Path(LocalStore().fetch(p["verdict_pack"]))
-        cmd = command(job, pod, spec["python"], pack)
+        from .. import remote
+
+        cmd = command(job, pod, spec["python"], pack, preflight=hasattr(remote, "run_preflight"))
         print(f"dispatch: job {job['id']} in {wt}: {' '.join(shlex.quote(c) for c in cmd[:8])} ...", flush=True)
         proc = subprocess.Popen(cmd, cwd=wt, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
         run_id, tail = None, []
