@@ -149,27 +149,85 @@ theorem exec_fast100_ge {m : ℕ} {s : Flock.Schedule} (hs : Flock.fast100 m = s
   rw [ite_eq_left_of_eq_true _ _ (eq_true this)] at hs
   cases hs
 
+theorem mapM_singleton_ok {α β ε : Type} {f : α → Except ε β} {a : α} {ys : Array β} (h : #[a].mapM f = .ok ys) :
+    ∃ y, f a = .ok y ∧ ys = #[y] := by
+  rw [Array.mapM_eq_mapM_toList] at h
+  simp only [List.mapM_cons, List.mapM_nil] at h
+  cases hf : f a with
+  | error e => rw [hf] at h; cases h
+  | ok y =>
+      rw [hf] at h
+      simp only [Bind.bind, Except.bind, Pure.pure, Except.pure, Functor.map, Except.map, Except.ok.injEq] at h
+      exact ⟨y, rfl, h.symm⟩
+
+theorem forIn_range_one_ok {σ : Type} {s s' : σ} {g : ℕ → σ → V (ForInStep σ)}
+    (h : (forIn [:1] s g : V σ) = .ok s') : ∃ r, g 0 s = .ok r := by
+  rw [Std.Legacy.Range.forIn_eq_forIn_range'] at h
+  simp only [Std.Legacy.Range.size, List.range'] at h
+  obtain ⟨r, hr, -⟩ := ebind_ok (by simpa using h)
+  exact ⟨r, hr⟩
+
+/-- The one-table call accepts: the record decodes, the table's schedule is `fast100`'s, and both reps' checks accept
+with equal caps. -/
+theorem verify_one_ok {spec : SessionSpec} {st : Setup} {record : String} {proofs : Array ByteArray}
+    (h : Flock.verify spec #[st] record proofs = .ok ()) :
+    ∃ sess sch c, Record.decode spec record = .ok sess ∧ Flock.fast100 st.m = some sch ∧
+      verifyRep spec st sch sess 0 0 proofs[0]! = .ok c ∧ verifyRep spec st sch sess 0 1 proofs[1]! = .ok c := by
+  unfold Flock.verify at h
+  dsimp only at h
+  by_cases c0 : (#[st].size != spec.tables.size || #[st].size == 0) = true
+  · rw [ite_eq_left c0] at h; obtain ⟨_, h0, _⟩ := ebind_ok h; cases h0
+  rw [ite_eq_right c0] at h
+  obtain ⟨sess, hsess, h⟩ := ebind_ok h
+  obtain ⟨_, _, h⟩ := ebind_ok h
+  obtain ⟨schs, hschs, h⟩ := ebind_ok h
+  obtain ⟨sch, hsch, rfl⟩ := mapM_singleton_ok hschs
+  split at h
+  · obtain ⟨_, h0, _⟩ := ebind_ok h; cases h0
+  split at h
+  · obtain ⟨_, h0, _⟩ := ebind_ok h; cases h0
+  obtain ⟨_, _, h⟩ := ebind_ok h
+  obtain ⟨_, hloop, _⟩ := ebind_ok h
+  rw [show (#[st] : Array Setup).size = 1 from rfl] at hloop
+  obtain ⟨r, hr⟩ := forIn_range_one_ok hloop
+  obtain ⟨c0', h0, hr⟩ := ebind_ok hr
+  obtain ⟨c1', h1, hr⟩ := ebind_ok hr
+  simp only [Nat.mul_zero, Nat.zero_add] at h0 h1
+  rw [show (#[st] : Array Setup)[0]! = st from rfl, show (#[sch] : Array Flock.Schedule)[0]! = sch from rfl] at h0 h1
+  have hf : Flock.fast100 st.m = some sch := by
+    cases hf : Flock.fast100 st.m with
+    | none => rw [hf] at hsch; cases hsch
+    | some s => rw [hf] at hsch; cases hsch; rfl
+  by_cases c3 : (c0' != c1') = true
+  · rw [ite_eq_left c3] at hr; obtain ⟨_, h0, _⟩ := ebind_ok hr; cases h0
+  have hb : (c0' == c1') = true := by
+    cases hb : (c0' == c1')
+    · exact absurd (by simp [bne, hb]) c3
+    · rfl
+  rw [bytes_eq_of_beq hb] at h0
+  exact ⟨sess, sch, c1', hsess, hf, h0, h1⟩
+
 /-- The proof files' openings (§14): rep `r`'s opened rows and siblings, level by level. -/
 def opensOf (p₀ p₁ : Proof) (sch : Flock.Schedule) : Opens 𝔽 Dig :=
   fun r ℓ j => if r = 0 then openRow p₀.ligerito sch ℓ j else openRow p₁.ligerito sch ℓ j
 
-/-- **The verifier refines the model's table** (§3, §5, §9–§14). When `Flock.verify` accepts a session record and its
-two proof files under the unsalted SHA-512 scheme, on a statement whose `m`, `k_log`, circuit fold and extra claims are
+/-- **The verifier refines the model's table** (§3, §5, §9–§14). When `Flock.verify` accepts a one-table session record
+and its two proof files under the unsalted SHA-512 scheme, on a statement whose `m`, `k_log`, circuit fold and extra claims are
 the model's `S` and `extra`, the record and both proofs decode. Then at the proofs' openings, each rep's compiled game,
 played with its proof's messages and every coin of its stream, accepts, and both reps' paths verify against the one
 level-0 cap. -/
-theorem verify_refines (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m)
+theorem verify_refines (spec : SessionSpec) (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m)
     (hmS : st.m = S.m) (hkS : st.kLog = S.kLog) (hfold : FoldRealizes st.fold S) (msId : String)
     (hms : st.merkle = MerkleScheme.sha512 msId) (extra : Session → List (Model.Claim 𝔽 S.m))
     (record : String) (proofs : Array ByteArray)
-    (hext : ∀ sess, Record.decode st.spec record = .ok sess → ExtraRealizes st S sess.points (extra sess))
-    (h : Flock.verify st record proofs = .ok ()) :
+    (hext : ∀ sess, Record.decode spec record = .ok sess → ExtraRealizes st S sess.points (extra sess))
+    (h : Flock.verify spec #[st] record proofs = .ok ()) :
     ∃ (sess : Session) (sch : Flock.Schedule) (p₀ p₁ : Proof) (s₀ s₁ : StreamRec) (pend₀ pend₁ : PendL 𝔽 Dig),
-      Record.decode st.spec record = .ok sess ∧ Flock.fast100 st.m = some sch ∧
+      Record.decode spec record = .ok sess ∧ Flock.fast100 st.m = some sch ∧
       decodeProof (shapeOf st sch (extra sess).length) proofs[0]! = .ok p₀ ∧
       decodeProof (shapeOf st sch (extra sess).length) proofs[1]! = .ok p₁ ∧
-      sess.streams.find? (fun x => x.name == toString st.spec.table ++ toString "/rep" ++ toString 0) = some s₀ ∧
-      sess.streams.find? (fun x => x.name == toString st.spec.table ++ toString "/rep" ++ toString 1) = some s₁ ∧
+      sess.streams.find? (fun x => x.name == toString spec.tables[0]! ++ toString "/rep" ++ toString 0) = some s₀ ∧
+      sess.streams.find? (fun x => x.name == toString spec.tables[0]! ++ toString "/rep" ++ toString 1) = some s₁ ∧
       Plays fOf (Model.repC execArith 0 S (schedOf sch) hm (extra sess))
         (repMsgs st sch (2 + (extra sess).length) p₀ capDig) (s₀.rounds.toList.map (·.coins)) pend₀ ∧
       Plays fOf (Model.repC execArith 1 S (schedOf sch) hm (extra sess))
@@ -177,79 +235,56 @@ theorem verify_refines (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m)
       pend₀.verdict (opensOf p₀ p₁ sch) = true ∧ pend₁.verdict (opensOf p₀ p₁ sch) = true ∧
       OpensOK H512 enc512 (capDig p₀.cap) 0 pend₀ (opensOf p₀ p₁ sch) ∧
       OpensOK H512 enc512 (capDig p₀.cap) 1 pend₁ (opensOf p₀ p₁ sch) := by
-  unfold Flock.verify at h
-  obtain ⟨sess, hsess, h⟩ := ebind_ok h
-  obtain ⟨_, _, h⟩ := ebind_ok h
-  cases hf : Flock.fast100 st.m with
-  | none => rw [hf] at h; cases h
-  | some sch =>
-      have h14 : 14 ≤ S.m := by have := exec_fast100_ge hf; omega
-      have hwf := decode_roundsWF hsess
-      rw [hf] at h
-      dsimp only at h
-      by_cases c1 : (proofs.size != 2) = true
-      · rw [ite_eq_left c1] at h; obtain ⟨_, h0, _⟩ := ebind_ok h; cases h0
-      rw [ite_eq_right c1] at h
-      split at h
-      · obtain ⟨_, h0, _⟩ := ebind_ok h; cases h0
-      obtain ⟨_, _, h⟩ := ebind_ok h
-      obtain ⟨c0, h0, h⟩ := ebind_ok h
-      obtain ⟨c1', h1, h⟩ := ebind_ok h
-      by_cases c3 : (c0 != c1') = true
-      · rw [ite_eq_left c3] at h; cases h
-      have c3' : c0 = c1' := by
-        have hb : (c0 == c1') = true := by
-          cases hb : (c0 == c1')
-          · exact absurd (by simp [bne, hb]) c3
-          · rfl
-        exact bytes_eq_of_beq hb
-      obtain ⟨hdim, hsm⟩ := fast100_dims st.m sch hf
-      have hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default) := fun i hi =>
-        fast100_level st.m sch hf _ (by unfold Array.getD; rw [dite_eq_left hi]; exact Array.getElem_mem hi)
-      have hschm : sch.m = S.m := hsm.trans hmS
-      obtain ⟨s₀, p₀, hs₀, hp₀, hc₀, -, hsz₀, hw₀, hrest₀⟩ := rep_refines st S hm h14 sch hmS hkS hfold (extra sess)
-        sess (hext sess hsess) hdim hlv hschm hwf 0 _ _ h0
-      obtain ⟨s₁, p₁, hs₁, hp₁, hc₁, -, hsz₁, hw₁, hrest₁⟩ := rep_refines st S hm h14 sch hmS hkS hfold (extra sess)
-        sess (hext sess hsess) hdim hlv hschm hwf 1 _ _ h1
-      obtain ⟨pend₀, hpl₀, hcaps₀, hreqs₀, hver₀⟩ := hrest₀ capDig (opensOf p₀ p₁ sch) fun ℓ _ j _ => rfl
-      obtain ⟨pend₁, hpl₁, hcaps₁, hreqs₁, hver₁⟩ := hrest₁ capDig (opensOf p₀ p₁ sch) fun ℓ _ j _ => rfl
-      rw [hms] at hreqs₀ hreqs₁ hw₀ hw₁
-      have hok₀ := opensOK_of msId sch hlv p₀.cap p₀.ligerito 0 pend₀ (opensOf p₀ p₁ sch) hcaps₀ hreqs₀ fun ℓ j => rfl
-      have hok₁ := opensOK_of msId sch hlv p₁.cap p₁.ligerito 1 pend₁ (opensOf p₀ p₁ sch) hcaps₁ hreqs₁ fun ℓ j => rfl
-      have hcapeq : p₁.cap = p₀.cap := by
-        apply Array.ext'
-        refine entries_eq_of_flat _ _ (fun x hx => hw₁ x hx) (fun x hx => hw₀ x hx) (by simp [hsz₀, hsz₁]) ?_
-        have e := congrArg (fun b : ByteArray => b.data.toList) (hc₁.symm.trans (c3'.symm.trans hc₀))
-        simp only [← Array.foldl_toList, flat_data] at e
-        simpa using e
-      rw [hcapeq] at hok₁
-      exact ⟨sess, sch, p₀, p₁, s₀, s₁, pend₀, pend₁, hsess, rfl, hp₀, hp₁, hs₀, hs₁, hpl₀, hpl₁, hver₀, hver₁, hok₀,
-        hok₁⟩
+  obtain ⟨sess, sch, c, hsess, hf, h0, h1⟩ := verify_one_ok h
+  have h14 : 14 ≤ S.m := by have := exec_fast100_ge hf; omega
+  have hwf := decode_roundsWF hsess
+  obtain ⟨hdim, hsm⟩ := fast100_dims st.m sch hf
+  have hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default) := fun i hi =>
+    fast100_level st.m sch hf _ (by unfold Array.getD; rw [dite_eq_left hi]; exact Array.getElem_mem hi)
+  have hschm : sch.m = S.m := hsm.trans hmS
+  obtain ⟨s₀, p₀, hs₀, hp₀, hc₀, -, hsz₀, hw₀, hrest₀⟩ := rep_refines spec st S hm h14 sch hmS hkS hfold (extra sess)
+    sess (hext sess hsess) hdim hlv hschm hwf 0 0 _ _ h0
+  obtain ⟨s₁, p₁, hs₁, hp₁, hc₁, -, hsz₁, hw₁, hrest₁⟩ := rep_refines spec st S hm h14 sch hmS hkS hfold (extra sess)
+    sess (hext sess hsess) hdim hlv hschm hwf 0 1 _ _ h1
+  obtain ⟨pend₀, hpl₀, hcaps₀, hreqs₀, hver₀⟩ := hrest₀ capDig (opensOf p₀ p₁ sch) fun ℓ _ j _ => rfl
+  obtain ⟨pend₁, hpl₁, hcaps₁, hreqs₁, hver₁⟩ := hrest₁ capDig (opensOf p₀ p₁ sch) fun ℓ _ j _ => rfl
+  rw [hms] at hreqs₀ hreqs₁ hw₀ hw₁
+  have hok₀ := opensOK_of msId sch hlv p₀.cap p₀.ligerito 0 pend₀ (opensOf p₀ p₁ sch) hcaps₀ hreqs₀ fun ℓ j => rfl
+  have hok₁ := opensOK_of msId sch hlv p₁.cap p₁.ligerito 1 pend₁ (opensOf p₀ p₁ sch) hcaps₁ hreqs₁ fun ℓ j => rfl
+  have hcapeq : p₁.cap = p₀.cap := by
+    apply Array.ext'
+    refine entries_eq_of_flat _ _ (fun x hx => hw₁ x hx) (fun x hx => hw₀ x hx) (by simp [hsz₀, hsz₁]) ?_
+    have e := congrArg (fun b : ByteArray => b.data.toList) (hc₁.symm.trans hc₀)
+    simp only [← Array.foldl_toList, flat_data] at e
+    simpa using e
+  rw [hcapeq] at hok₁
+  exact ⟨sess, sch, p₀, p₁, s₀, s₁, pend₀, pend₁, hsess, hf, hp₀, hp₁, hs₀, hs₁, hpl₀, hpl₁, hver₀, hver₁, hok₀,
+    hok₁⟩
 
 open Classical in
-/-- **The verifier refines the model's table, as one run** (§5). When `Flock.verify` accepts, with the extra claims the
+/-- **The verifier refines the model's table, as one run** (§5). When `Flock.verify` accepts a one-table session, with the extra claims the
 model's `extraClaims` at link points `pts` read off the record, some message list makes `tableAfter` accept. The run is
 played on the two streams' coins, rep 0's then rep 1's, and its openings are the proofs'. The messages are existential
 and the schedule is rep 0 first, while the live server may interleave the streams: a bound on the live interaction
 lifts from `verify_refines`, which names each rep's messages and coins. -/
-theorem verify_tableAfter (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m)
+theorem verify_tableAfter (spec : SessionSpec) (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m)
     (hmS : st.m = S.m) (hkS : st.kLog = S.kLog) (hfold : FoldRealizes st.fold S) (msId : String)
     (hms : st.merkle = MerkleScheme.sha512 msId) (ptLocal mPts : ℕ) (pts : Session → Fin 2 → Fin mPts → 𝔽)
     (record : String) (proofs : Array ByteArray)
-    (hext : ∀ sess, Record.decode st.spec record = .ok sess →
+    (hext : ∀ sess, Record.decode spec record = .ok sess →
       ExtraRealizes st S sess.points (Model.extraClaims S ptLocal mPts (pts sess)))
-    (h : Flock.verify st record proofs = .ok ()) :
+    (h : Flock.verify spec #[st] record proofs = .ok ()) :
     ∃ (sess : Session) (sch : Flock.Schedule) (p₀ p₁ : Proof) (s₀ s₁ : StreamRec) (ms : List Msg) (out : OutC 𝔽 Dig),
-      Record.decode st.spec record = .ok sess ∧ Flock.fast100 st.m = some sch ∧
+      Record.decode spec record = .ok sess ∧ Flock.fast100 st.m = some sch ∧
       decodeProof (shapeOf st sch (Model.extraClaims S ptLocal mPts (pts sess)).length) proofs[0]! = .ok p₀ ∧
       decodeProof (shapeOf st sch (Model.extraClaims S ptLocal mPts (pts sess)).length) proofs[1]! = .ok p₁ ∧
-      sess.streams.find? (fun x => x.name == toString st.spec.table ++ toString "/rep" ++ toString 0) = some s₀ ∧
-      sess.streams.find? (fun x => x.name == toString st.spec.table ++ toString "/rep" ++ toString 1) = some s₁ ∧
+      sess.streams.find? (fun x => x.name == toString spec.tables[0]! ++ toString "/rep" ++ toString 0) = some s₀ ∧
+      sess.streams.find? (fun x => x.name == toString spec.tables[0]! ++ toString "/rep" ++ toString 1) = some s₁ ∧
       Plays fOf (tableAfter execArith H512 enc512 S (schedOf sch) hm ptLocal mPts (capDig p₀.cap) (pts sess)) ms
         (s₀.rounds.toList.map (·.coins) ++ s₁.rounds.toList.map (·.coins)) out ∧
       out.accepted = true ∧ out.opens = opensOf p₀ p₁ sch := by
   obtain ⟨sess, sch, p₀, p₁, s₀, s₁, pend₀, pend₁, hsess, hf, hp₀, hp₁, hs₀, hs₁, hpl₀, hpl₁, hv₀, hv₁, hok₀, hok₁⟩ :=
-    verify_refines st S hm hmS hkS hfold msId hms (fun sess => Model.extraClaims S ptLocal mPts (pts sess)) record
+    verify_refines spec st S hm hmS hkS hfold msId hms (fun sess => Model.extraClaims S ptLocal mPts (pts sess)) record
       proofs hext h
   obtain ⟨ms, hint⟩ := Plays.interleave_first hpl₀ hpl₁
   refine ⟨sess, sch, p₀, p₁, s₀, s₁, ms ++ [⟨Opens 𝔽 Dig, opensOf p₀ p₁ sch⟩],

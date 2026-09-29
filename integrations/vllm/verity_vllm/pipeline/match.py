@@ -620,7 +620,7 @@ class Options:
     seed: int | None = option("--seed", type=int, default=None, help="the replay sample's seed (replay_a, replay_chain: required when they run)")
     no_program: bool = option("--no-program", default=False, action="store_true", help="(--worker fold) skip Program(): no digest")
     persist_dir: str | None = option("--persist-dir", default=None, help="(--worker fold) write program.json + instances.jsonl + accesses.jsonl.gz here (D85)")
-    moe_construction: str | None = option("--moe-construction", default=None, help="(--worker fold) [R17-42 route A (4)] the workload's DECLARED MoE construction " "(manifest target.moe_construction: indexed-read | padded); the driver passes it from --workload")
+    moe_construction: str | None = option("--moe-construction", default=None, help="(--worker fold) [R17-42 route A (4)] the workload's DECLARED MoE construction " "(manifest target.moe_construction: indexed-read | indexed-read-ordered | padded); the driver passes it from --workload")
 
 
 def main(a: Options) -> int:
@@ -890,7 +890,7 @@ _EXECUTION_ENFORCE_EAGER = {"bi-eager": True, "bi-eager-fa2": True, "eager": Tru
 
 
 def _workload_moe_construction(path: str | None) -> str | None:
-    """[R17-42 route A (4)] The workload's DECLARED MoE construction (manifest `target.moe_construction`; None = undeclared = indexed-read),
+    """[R17-42 route A (4)] The workload's DECLARED MoE construction (manifest `target.moe_construction`; None = undeclared = the default),
     validated by the frontend's own table so a misspelling fails here by name and is never folded as MOE-01 silently."""
     doc = _workload_doc(path)
     mc = ((doc or {}).get("target") or {}).get("moe_construction")
@@ -939,17 +939,17 @@ def fold_summary(log_path: str | Path, profile_name: str, *, with_program: bool 
 
 def fold_summary_result(log_path: str | Path, profile_name: str, *, with_program: bool = True, moe_construction: str | None = None) -> tuple[dict, Any]:
     """`fold_summary` plus the live `FoldResult` (for `persist_program`).  `moe_construction` [R17-42 route A (4)]: the workload's DECLARED
-    construction; a profile that has no `with_moe_construction` hook cannot fold a declared one -- that FAILS here by name (never MOE-01
-    silently under a `padded` declaration)."""
+    construction; a profile without a `with_moe_construction` hook cannot fold a non-default one -- that FAILS here by name (never another)."""
     from verity_vllm.check.fold_compare import load_profile, summarize
     from verity_vllm.observe.events import Root, RunHeader
     from verity_vllm.observe.fold.fold import fold
     from verity_vllm.observe.log import read_log
+    from verity_vllm.program.frontend.target_profile import TargetProfile
 
     t0 = time.time()
     profile = load_profile(profile_name)
     prof_mod = importlib.import_module(f"verity_vllm.engine.profiles.{profile_name}")
-    if moe_construction not in (None, "indexed-read"):
+    if moe_construction not in (None, TargetProfile.DEFAULT_MOE_CONSTRUCTION):
         hook = getattr(prof_mod, "with_moe_construction", None)
         if hook is None:
             raise SystemExit(f"workload declares moe_construction={moe_construction!r} but profile {profile_name} has no with_moe_construction hook: "

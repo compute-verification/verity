@@ -54,7 +54,8 @@ The audit says when it had to build without one; the `compile-time` check then s
 
 `--fresh` also runs `leanchecker --fresh` on each root: the root's whole import closure, Mathlib and core included,
 through the kernel into an empty environment. It needs one module per root and a lot of memory, so it is not part of
-every run.
+every run: the steward runs `audit.py --all --build --fresh` nightly on `main`, and `upstream.py --fetch` against
+ArkLib's head weekly, each as a recorded run on a pod (`tool.py`; `[[run]]` in `tools/research/README.md`).
 
 `--all` first runs the controls: `tests/fixtures/control`, built with each audited package's toolchain (`--build`
 installs it first, so a machine without elan works), must pass clean and fail once for each violation in

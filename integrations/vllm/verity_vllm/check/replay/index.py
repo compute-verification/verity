@@ -13,6 +13,7 @@ from typing import Any
 import numpy as np
 
 from verity_vllm.query.manifest import format as RM
+from verity_vllm.query.manifest.format import moe_plane_kind
 from verity_vllm.program.kernels.rows import SAMPLED_MEMBER
 
 
@@ -75,17 +76,19 @@ def parse_struct(type_str: str) -> list[tuple[str, int, list[int], int]]:
 
 #: the query engine whose population addresses a Call's committed output (`addresses.rule` on the record)
 V2_QUERY = "v2-query"
+#: the query a `ProgramIndex` addresses under when its caller names none (None: the query of record)
+DEFAULT_QUERY: str | None = None
 
 
 class ProgramIndex:
     """The Program's rows with their manifest addresses: (op_path, member, request-local step, request-local row) per output slice.
 
     A row's members come from the v2 query's population of the SAME Program (`verity_vllm.query.required.Population.members_of`: the
-    required Values a Call produces under `Q_module_body_v1` + the policy, the rows the manifest counts), read with the correspondence of
-    its Build dir (`program_dir`; without one, the rows' recorded names)."""
+    required Values a Call produces under `query` -- the manifest's; the query of record by default -- + the policy, the rows the manifest
+    counts), read with the correspondence of its Build dir (`program_dir`; without one, the rows' recorded names)."""
 
     def __init__(self, inst: dict[str, Any], *, prefix: str | None = None, attention_paths: list[str] | None = None, tp: dict[str, Any] | None = None,
-                 program_dir: str | None = None):
+                 program_dir: str | None = None, query: str | None = None):
         self.rows: list[dict] = list(inst["rows"])
         # [tp TP-08d] a RANK Program (derive_step --tp W --rank r; result.json `tp` = {"world": W, "rank": r}): its population carries the
         # TP-04 policy (the rank-local partials `part_rank<r>` / `shard_rank<r>` beside every collective output), the one the rank's
@@ -101,7 +104,7 @@ class ProgramIndex:
         from verity_vllm.query.required import population
         P = from_instances(inst)
         corr = Correspondence.of(P, program_dir, implementation_paths=attention_paths or ())
-        pop = population(P, corr, tp=self.tp)
+        pop = population(P, corr, tp=self.tp, **({"query": q} if (q := query or DEFAULT_QUERY) else {}))
         for cid in pop.producers():
             mem = pop.members_of(cid)
             if mem:
@@ -366,25 +369,6 @@ class ProgramIndex:
             if name == field:
                 return int(bits) or 16
         return 16
-
-
-def moe_plane_kind(family: str, module: str) -> str | None:
-    """[MAN-06f v3] the fused-MoE block row kinds whose values the collector commits as `moe_block_stream` PLANES (MOE-03: six planes per
-    MoE layer per step, pair-major) rather than as module outputs: `router` (MoeRouterTopK / MoeRouterTopKNorm: router_w + router_ids
-    per token), `up` (MoeExpertGemm: the w13 launch per pair), `act` (the SiluMul rows under the MoE runner module `...experts`: the
-    silu_and_mul per pair), `down` (MoeExpertGemmW: the w2 launch per pair), `sum` (MoeSum per token).  None for every other row.  From the
-    Program's spec family + module name alone."""
-    if family.startswith("MoeRouterTopK"):
-        return "router"
-    if family.startswith("MoeExpertGemmW"):
-        return "down"
-    if family.startswith("MoeExpertGemm"):
-        return "up"
-    if family.startswith("MoeSum"):
-        return "sum"
-    if family.startswith("SiluMul") and module.rsplit(".", 1)[-1] == RM.MOE_LEAF:
-        return "act"
-    return None
 
 
 #: the `moe_block_stream` address schema (the manifest / `binding.py` write `moe/L<layer>` as the op_path of the six
