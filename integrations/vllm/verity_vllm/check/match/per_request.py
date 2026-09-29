@@ -278,6 +278,13 @@ def _request_leg(steps: dict, B: C.Prog, fast: bool, ops: BD.Ops, within_step: s
     return _compare_component(ops, within_step, fast, g, ent, P, A, cd, LP, out)
 
 
+def addressed_instances(A: C.Prog) -> int:
+    """The component's instances as GP-01's address map counts them (`n_instances` = its root nodes): the compared sequence plus the
+    single-request splits constants `Prog._bind_splits` removed from it (one `Const32[S]` per top-p select; a batched component reads S
+    from an Input and has none)."""
+    return len(A.inst) + int(getattr(A, "n_splits_consts_bound", 0))
+
+
 def _compare_component(ops: BD.Ops, within_step: str, fast: bool, g: dict, ent: dict, P: BD.Projection, A: C.Prog | None,
                        cd: str | None, LP: int, out: dict) -> dict:
     """The request's projection against its component over the executed steps: the leg's G3/G4 facts and the canonical address of
@@ -294,8 +301,10 @@ def _compare_component(ops: BD.Ops, within_step: str, fast: bool, g: dict, ent: 
     ga = g.get("global_address")
     if ga:
         ent["global_address"] = ga
-        if ga.get("n_instances") is not None and int(ga["n_instances"]) != len(A.inst):
-            fails.append(("G4", f"{rid}: address map declares {ga['n_instances']} instances for the request, the component has {len(A.inst)}"))
+        n_addressed = addressed_instances(A)
+        if ga.get("n_instances") is not None and int(ga["n_instances"]) != n_addressed:
+            fails.append(("G4", f"{rid}: address map declares {ga['n_instances']} instances for the request, the component has {n_addressed} "
+                                f"({len(A.inst)} compared + {n_addressed - len(A.inst)} bound splits constants)"))
     n_exec = len(P.steps)
     if n_exec > len(A.steps):
         fails.append(("G3", f"{rid}: executed {n_exec} local steps but the bounded component has {len(A.steps)} (output interface exceeded)"))
