@@ -395,8 +395,8 @@ def test_work_draw_from_the_verifiers_own_program(tmp_path):
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_verify_takes_a_work_draw_only_from_its_own_table(tmp_path):
     """`verify` refuses a session whose record carries a work draw unless it holds its own K, work table, program and
-    partition, since the draw's K and stated work set every k_s; with all four, the law must be its own derivation, so a
-    draw made at another K (k = 1, say, which U2 alone accepts) is refused."""
+    partition, since the draw's K, works and floors set every k_s; with all four, the law must be its own derivation, so a
+    draw made at another K (k = 1, say, which U2 alone accepts) or under other floors is refused."""
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
     table = _work_program(tmp_path)
     flags = table("w.json", {"T0_v0": 3, "T1_v0": 1, "T2_v0": 0})
@@ -434,6 +434,13 @@ def test_verify_takes_a_work_draw_only_from_its_own_table(tmp_path):
     # at its own K and table the law is its own derivation, and setup goes on to the circuit, which this file is not
     assert not why(at2, *flags, "--work", "2").startswith("setup: U2:")
     assert not why(at1, *flags, "--work", "1").startswith("setup: U2:")
+    # the floors are the verifier's too: a draw made under a table with T2's floor at 3 is refused under the verifier's
+    # table (floor 1), and one made under floor 1 is refused under a table with floor 3
+    floored = table("wf.json", {"T0_v0": 3, "T1_v0": 1, "T2_v0": {"work": 0, "floor": 3}})
+    at2f = session("k2f", _lean_draw_obj([*floored, "--work", "2"]))
+    assert why(at2f, *flags, "--work", "2").startswith("setup: U2: the draw's work law is not the verifier's own")
+    assert why(at2, *floored, "--work", "2").startswith("setup: U2: the draw's work law is not the verifier's own")
+    assert not why(at2f, *floored, "--work", "2").startswith("setup: U2:")
 
 
 def _one_stage_draw():
