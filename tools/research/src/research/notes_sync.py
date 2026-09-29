@@ -15,6 +15,13 @@ path new since HEAD) or its front matter's `created:` (new or changed since HEAD
 clock: one `SYNC-REFUSED <path>: ...` line each, with the value `date -u` gives now, the rest synced, exit 5 when nothing else
 failed.  What HEAD already has is never re-checked, and a stamp stops being ahead once the clock passes it.
 
+The same goes for a note (`lanes/**/*.md`, `kb/**/*.md`) whose front matter is broken: opened with `---` and never closed, a line
+that is not `key: value` (or a list item, an indented continuation, a comment), or a `created:` that is not a UTC time (the stamp
+check above cannot read it).  Front matter is optional: a note without it is fine, since its lane, kind and time are in its path.
+`SYNC-WARN <path>: ...` lines (committed anyway) name a `lane:` that is not the note's folder (a handoff's lane is its recipient)
+and a `created:` more than a day from the file name's stamp.  Only content the repository has never held is checked (a move, or
+an unchanged file, is not), and only for problems HEAD's copy of the path did not already have.
+
 `scan` reads every blob in the repo's history: files over `--max-bytes` and key material, each with the path it was committed
 under.  Exit 1 when it finds anything; run it before the first push and after (acceptance A5).
 
@@ -49,6 +56,10 @@ KEY_PATTERNS = {
 }
 SECRET_ENV_RE = re.compile(r"(KEY|SECRET|TOKEN|PASSWORD)", re.I)
 NEVER_COMMIT = ("steward-state.json", ".steward-state.json.tmp")
+FRONT_LINE_RE = re.compile(r"^(?:[A-Za-z_][\w.-]*:(?:[ \t].*)?|[ \t]+\S.*|-(?:[ \t].*)?|#.*|[ \t]*)$")
+FRONT_LANE_RE = re.compile(r"^lane:[ \t]*[\"'`]?([^\s\"'`]+)", re.M)
+MAIL_RE = re.compile(r"handoff|asks|reply")
+CREATED_STAMP_SLACK = dt.timedelta(days=1)
 
 
 def _run(root: Path, *args: str, timeout: float = 120, input: str | None = None) -> subprocess.CompletedProcess:
@@ -72,10 +83,11 @@ def find_keys(text: str, secrets: list[str]) -> list[str]:
     return hits + (["env-secret"] if any(s in text for s in secrets) else [])
 
 
-def _changed(root: Path, paths: list[str] | None, max_bytes: int) -> tuple[list[str], list[str]]:
-    """(paths to commit, paths skipped as over max_bytes) among the working tree's changes, limited to `paths` when given."""
+def _changed(root: Path, paths: list[str] | None, max_bytes: int) -> tuple[list[str], list[str], dict[str, str]]:
+    """(paths to commit, paths skipped as over max_bytes, {staged rename's new path: its old path}) among the working tree's
+    changes, limited to `paths` when given."""
     st = _out(root, "status", "--porcelain=v1", "-z", "--untracked-files=all", "--", *(paths or []))
-    entries, keep, big, i = (st or "").split("\0"), [], [], 0
+    entries, keep, big, renames, i = (st or "").split("\0"), [], [], {}, 0
     while i < len(entries):
         e = entries[i]
         i += 1
@@ -84,12 +96,14 @@ def _changed(root: Path, paths: list[str] | None, max_bytes: int) -> tuple[list[
         code, path = e[:2], e[3:]
         if code[0] in "RC":
             keep.append(entries[i])
+            if code[0] == "R":
+                renames[path] = entries[i]
             i += 1
         if path in NEVER_COMMIT:
             continue
         p = root / path
         (big if p.is_file() and p.stat().st_size > max_bytes else keep).append(path)
-    return keep, big
+    return keep, big, renames
 
 
 def _utcnow() -> dt.datetime:
@@ -138,22 +152,89 @@ def future_stamps(root: Path, paths: list[str], now: dt.datetime) -> dict[str, s
     return out
 
 
+def header_issues(path: str, text: str, now: dt.datetime) -> tuple[list[str], list[str]]:
+    """(refusals, warnings) for one note's front matter (module docstring); ([], []) for a note without front matter."""
+    lines = text.split("\n")
+    if lines[0].rstrip() != "---":
+        return [], []
+    end = next((i for i in range(1, len(lines)) if lines[i].rstrip() == "---"), None)
+    if end is None:
+        return ["front matter opened with --- is never closed: add a --- line under the header"], []
+    refuse = [f"front matter line {n} is not `key: value`: {line.strip()[:60]!r}"
+              for n, line in enumerate(lines[1:end], 2) if not FRONT_LINE_RE.match(line.rstrip("\r"))]
+    block, warn, c = "\n".join(lines[1:end]), [], created_at(text)
+    if (m := re.search(r"^created:[ \t]*(.*?)[ \t\r]*$", block, re.M)) and c is None:
+        refuse.append(f"created: {m[1]!r} is not a UTC time; use {now:%Y-%m-%dT%H:%MZ} (date -u +%Y-%m-%dT%H:%MZ)")
+    parts = path.split("/")
+    if parts[0] == "lanes" and len(parts) > 2 and (m := FRONT_LANE_RE.search(block)) and m[1] != parts[1]:
+        warn.append(f"lane: {m[1]} but the note is in lanes/{parts[1]}/" + (" (a handoff's lane is its recipient)" if MAIL_RE.search(parts[-1]) else ""))
+    if c and (s := STAMP_RE.match(parts[-1])):
+        try:
+            off = c[1] - dt.datetime.strptime(s[1], "%Y%m%dT%H%MZ").replace(tzinfo=dt.timezone.utc)
+        except ValueError:
+            off = dt.timedelta(0)
+        if abs(off) > CREATED_STAMP_SLACK:
+            warn.append(f"created: {c[0]} is {abs(off).total_seconds() / 3600:.0f} h from the file name's stamp {s[1]}")
+    return refuse, warn
+
+
+def _known_blobs(root: Path, paths: list[str]) -> set[str]:
+    """The paths whose current content the repository already holds as a blob (a move, a revert, an unchanged file)."""
+    hashes = _run(root, "hash-object", "--stdin-paths", input="\n".join(paths) + "\n").stdout.split()
+    if len(hashes) != len(paths):
+        return set()
+    check = _run(root, "cat-file", "--batch-check", input="\n".join(hashes) + "\n").stdout.splitlines()
+    missing = {line.split()[0] for line in check if line.endswith(" missing")}
+    return {p for p, h in zip(paths, hashes) if h not in missing}
+
+
+def header_problems(root: Path, paths: list[str], now: dt.datetime) -> tuple[dict[str, str], list[str]]:
+    """({path: why} to leave out, [`path: warning`]) for the notes among `paths` with new content: the problems of
+    `header_issues` that HEAD's copy of the path did not already have."""
+    notes = [p for p in paths if p.startswith(("lanes/", "kb/")) and p.endswith(".md") and (root / p).is_file()]
+    known = _known_blobs(root, notes) if notes else set()
+    refused, warned = {}, []
+    for path in notes:
+        if path in known:
+            continue
+        try:
+            refuse, warn = header_issues(path, (root / path).read_text(errors="replace"), now)
+        except OSError:
+            continue
+        if (refuse or warn) and (old := _out(root, "show", f"HEAD:{path}")) is not None:
+            old_refuse, old_warn = header_issues(path, old, now)
+            refuse, warn = [x for x in refuse if x not in old_refuse], [x for x in warn if x not in old_warn]
+        if refuse:
+            refused[path] = "; ".join(refuse)
+        warned += [f"{path}: {x}" for x in warn]
+    return refused, warned
+
+
 def commit(root: Path, paths: list[str] | None = None, message: str | None = None, max_bytes: int = MAX_BYTES,
            now: dt.datetime | None = None) -> dict:
-    """Commit the caller's changes (all, or under `paths`) but lane notes stamped ahead of `now` (`future`: `path: why`).  Retries
-    a held index lock (another writer on this machine) briefly."""
-    keep, big = _changed(root, paths, max_bytes)
-    future = future_stamps(root, keep, now or _utcnow())
-    if future:
-        keep = [p for p in keep if p not in future]
-        _run(root, "--literal-pathspecs", "reset", "-q", "--", *future)          # a staged copy would be committed anyway
-    left = {"skipped": big, "future": [f"{p}: {why}" for p, why in future.items()]}
+    """Commit the caller's changes (all, or under `paths`) but lane notes stamped ahead of `now` (`future`: `path: why`) and notes
+    with a broken header (`header`: `path: why`); `warn` lists `path: warning`.  Retries a held index lock (another writer on this
+    machine) briefly."""
+    keep, big, renames = _changed(root, paths, max_bytes)
+    now = now or _utcnow()
+    future = future_stamps(root, keep, now)
+    header, warn = header_problems(root, [p for p in keep if p not in future], now)
+    if future or header:
+        out = {*future, *header}
+        out |= {renames[p] for p in out if p in renames}                  # a note left out keeps its old path: never half a move
+        keep = [p for p in keep if p not in out]
+        _run(root, "--literal-pathspecs", "reset", "-q", "--", *sorted(out))  # a staged copy would be committed anyway
+    left = {"skipped": big, "future": [f"{p}: {why}" for p, why in future.items()],
+            "header": [f"{p}: {why}" for p, why in header.items()], "warn": warn}
     if not keep:
         return {"commit": None, "paths": 0, **left}
     msg = message or f"notes sync {time.strftime('%Y-%m-%dT%H:%MZ', time.gmtime())}: {len(keep)} paths"
+    moved_from = set(renames.values())          # a staged move's old path: its removal is staged already, and `add` finds no such path
+    to_add = [p for p in keep if p not in moved_from]
     for attempt in range(10):
-        add = _run(root, "--literal-pathspecs", "add", "-A", "--pathspec-from-file=-", "--pathspec-file-nul", input="\0".join(keep))
-        if add.returncode == 0:
+        add = _run(root, "--literal-pathspecs", "add", "-A", "--pathspec-from-file=-", "--pathspec-file-nul", input="\0".join(to_add)) \
+            if to_add else None
+        if add is None or add.returncode == 0:
             c = _run(root, "commit", "-q", "--no-verify", "-m", msg)
             if c.returncode == 0:
                 return {"commit": (_out(root, "rev-parse", "--short", "HEAD") or "").strip(), "paths": len(keep), **left}
@@ -186,13 +267,13 @@ def outgoing_keys(root: Path, base: str | None, secrets: list[str]) -> list[str]
 def sync(root: Path, paths: list[str] | None = None, message: str | None = None, retries: int = 5, remote: str = "origin",
          max_bytes: int = MAX_BYTES, secrets: list[str] | None = None, now: dt.datetime | None = None) -> dict:
     """Commit, then fetch / rebase / push with bounded retries (module docstring).  The report: `commit`, `paths`, `skipped`,
-    `future` (notes left out, stamped ahead of `now`), `pushed` (bool), `attempts`, and on failure `error` plus `conflict` (files)
-    or `keys` (hits); `rc` is the exit code."""
+    `future` (notes left out, stamped ahead of `now`), `header` (notes left out, broken front matter), `warn` (SYNC-WARN lines),
+    `pushed` (bool), `attempts`, and on failure `error` plus `conflict` (files) or `keys` (hits); `rc` is the exit code."""
     root = Path(root)
     if _out(root, "rev-parse", "--git-dir") is None:
         return {"rc": 2, "error": f"{root} is not a git repository"}
     rep = {"rc": 0, "pushed": False, "attempts": 0, **commit(root, paths, message, max_bytes, now)}
-    if rep["future"]:
+    if rep["future"] or rep["header"]:
         rep["rc"] = FUTURE_RC
     if _out(root, "remote", "get-url", remote) is None:
         return {**rep, "note": f"no remote {remote!r}: committed locally only"}
@@ -283,6 +364,10 @@ def render_sync(rep: dict) -> str:
         parts.append(f"skipped {len(rep['skipped'])} over 1 MB (put them in the store): {', '.join(rep['skipped'][:3])}")
     if rep.get("future"):
         parts.append(f"left out {len(rep['future'])} stamped ahead of the clock (SYNC-REFUSED)")
+    if rep.get("header"):
+        parts.append(f"left out {len(rep['header'])} with broken front matter (SYNC-REFUSED)")
+    if rep.get("warn"):
+        parts.append(f"{len(rep['warn'])} warning{'s' if len(rep['warn']) > 1 else ''} (SYNC-WARN)")
     if rep.get("note"):
         parts.append(rep["note"])
     if rep.get("error"):
@@ -291,23 +376,25 @@ def render_sync(rep: dict) -> str:
 
 
 def refused_lines(rep: dict) -> list[str]:
-    return [f"SYNC-REFUSED {x}" for x in rep.get("future", [])]
+    """`SYNC-REFUSED` for each note left out, then `SYNC-WARN` for each note committed with a warning."""
+    return [f"SYNC-REFUSED {x}" for x in rep.get("future", []) + rep.get("header", [])] + [f"SYNC-WARN {x}" for x in rep.get("warn", [])]
 
 
 def auto_sync(root: Path, lanes: list[str]) -> tuple[str | None, int]:
     """After a notes write command: `sync` the lane directories it wrote, when `RESEARCH_NOTES_SYNC=1`.  (report lines, FUTURE_RC
-    when a note was left out for its stamp, else 0; other failures stay advisory, the next sync retries them); (None, 0) when off."""
+    when a note was left out for its stamp or its front matter, else 0; other failures stay advisory, the next sync retries them);
+    (None, 0) when off."""
     if os.environ.get(SYNC_ENV, "").strip() not in ("1", "true", "yes", "on"):
         return None, 0
     rep = sync(root, paths=[f"lanes/{x}" for x in lanes if x], message=f"notes: {', '.join(x for x in lanes if x)}")
-    return "\n".join([render_sync(rep), *refused_lines(rep)]), FUTURE_RC if rep.get("future") else 0
+    return "\n".join([render_sync(rep), *refused_lines(rep)]), FUTURE_RC if rep.get("future") or rep.get("header") else 0
 
 
 def main(argv: list[str], default_root: Path) -> int:
     ap = argparse.ArgumentParser(prog="research notes", description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     sy = sub.add_parser("sync", help="commit your changes, rebase onto the remote, push (bounded retries; a conflict drops nothing; "
-                                     "exit 5: lane notes stamped over 5 min ahead of the clock were left out)")
+                                     "exit 5: lane notes stamped over 5 min ahead of the clock, or with broken front matter, were left out)")
     sy.add_argument("--path", action="append", default=[], metavar="P", help="only changes under P (repeatable; default every change)")
     sy.add_argument("-m", "--message", default=None)
     sy.add_argument("--retries", type=int, default=5)
