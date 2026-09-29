@@ -629,14 +629,15 @@ def drawn (c : Circuit) (pub : Public) (draw : Json) : V Public := do
            sha := ← publicDigest header pubs, population := some (pub.n, pub.digests, pub.outputs),
            tables := pub.tables.map fun t => { t with refs := d.units.foldl (fun acc u => acc ++ t.refs.extract (u * np) (u * np + np)) #[] } }
 
-/-- `stratified:K` expanded over the verifier's own program and partition object (`draw.derive`), and the population: the
-query applied to the program, its units grouped by template descriptor id. Only `Q_template_instance` v0 and
-`Q_template_instances` v0 define strata. -/
-def stratifiedLaw (obj : Json) (program : ByteArray) (k : Nat) : V (Draw.Law × Nat) := do
+/-- The strata of the verifier's own program and partition object, and the population: the query applied to the program,
+its units grouped by template descriptor id (`Draw.strataOf`). Only `Q_template_instance` v0 and `Q_template_instances` v0
+define strata; `law` names the law that asks, in the refusal. -/
+private def templateStrata (law : String) (obj : Json) (program : ByteArray) :
+    V (Array (String × Array (Nat × Nat)) × Nat) := do
   let (name, version) ← checkPartitionObject obj
   let q := (obj.getObjVal? "query").toOption.getD Json.null
   let some ts := TemplateQuery.templatesOf name version ((q.getObjVal? "params").toOption.getD Json.null)
-    | throw s!"stratified: {name} v{version} defines no strata (Q_template_instance v0 and Q_template_instances v0 do)"
+    | throw s!"{law}: {name} v{version} defines no strata (Q_template_instance v0 and Q_template_instances v0 do)"
   let ts ← ts
   let d ← TemplateQuery.Desc.parse program
   if (obj.getObjValAs? String "program").toOption != some (hexOf d.sha512) then
@@ -644,9 +645,22 @@ def stratifiedLaw (obj : Json) (program : ByteArray) (k : Nat) : V (Draw.Law × 
   let rs ← match TemplateQuery.evaluate d ts with
     | .ok rs => pure rs
     | .error e => throw s!"partition: {e}"
-  match Draw.derive k (Draw.strataOf (rs.map fun r => (r.template, r.first, r.count))) with
-  | .ok law => return (law, TemplateQuery.population rs)
+  return (Draw.strataOf (rs.map fun r => (r.template, r.first, r.count)), TemplateQuery.population rs)
+
+/-- `stratified:K` expanded over the verifier's own program and partition object (`draw.derive`), and the population. -/
+def stratifiedLaw (obj : Json) (program : ByteArray) (k : Nat) : V (Draw.Law × Nat) := do
+  let (strata, population) ← templateStrata "stratified" obj program
+  match Draw.derive k strata with
+  | .ok law => return (law, population)
   | .error e => throw s!"stratified: {e}"
+
+/-- `work:K` expanded over the verifier's own program, partition object and work table (`Draw.deriveWork`), and the
+population. -/
+def workLaw (obj : Json) (program : ByteArray) (k : Nat) (table : Array (String × Nat)) : V (Draw.Law × Nat) := do
+  let (strata, population) ← templateStrata "work" obj program
+  match Draw.deriveWork k strata table with
+  | .ok law => return (law, population)
+  | .error e => throw s!"work: {e}"
 
 /-- The frame-v3-sha512 roots recomputed from the population's `b ‖ c` (a shared-row file: each input port's over its table)
 and output words against the header's; the pinned dummy `b ‖ c` against the zero row's (upstream's `check_public`). -/
@@ -721,9 +735,10 @@ def regions (c : Circuit) (pub : Public) : V (Array Region) := do
 end HmRow
 
 /-- `setup` for an `hm96-sha512/row/v1` statement: the circuit, the population's public file and, for a drawn session, the
-drawn units' statement over it. -/
+drawn units' statement over it. `work` is the verifier's own work table, which a work draw's law is held to. -/
 def Stmt.setupH (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins) (tables : List (String × ByteArray) := [])
-    (draw : Option Json := none) (partition : Option Json := none) (program : Option ByteArray := none) : V Stmt := do
+    (draw : Option Json := none) (partition : Option Json := none) (program : Option ByteArray := none)
+    (work : Option (Array (String × Nat)) := none) : V Stmt := do
   let c ← HmRow.parse tags circuitFile tables
   let finding0 ← if tags.bindings then (some <$> HmRow.checkPartition c partition)
     else if partition.isSome then throw s!"{tags.name}: the statement binds no partition" else pure none
@@ -738,6 +753,12 @@ def Stmt.setupH (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coin
         ((Draw.UnitDraw.ofJson d).map (·.law), partition, program) then
       let (law, _) ← HmRow.stratifiedLaw obj prog k
       if law != Draw.Law.stratified k strata then throw "U2: the draw's strata are not the verifier's own (its program and query)"
+  -- likewise a work draw's strata and work, when it also holds its work table
+  if let (some d, some obj, some prog, some table) := (draw, partition, program, work) then
+    if let .ok (Draw.Law.work k strata) := (Draw.UnitDraw.ofJson d).map (·.law) then
+      let (law, _) ← HmRow.workLaw obj prog k table
+      if law != Draw.Law.work k strata then
+        throw "U2: the draw's work law is not the verifier's own (its program, query and work table)"
   HmRow.checkPublic c pub
   -- a template query's units, derived from the verifier's own program: the statement's units must be instances of its template
   let finding ← match finding0, partition, program with
