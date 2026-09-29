@@ -253,6 +253,21 @@ class Row:
             f.write(line + "\n")
         return rc, line
 
+    def call_boundaries(self, to: int | str) -> None:
+        """After a PASS Build: the row stops (exit 21, no Match, no Commit) unless every `call_boundaries` identity of its manifest has
+        a source the Commit attaches (`gate call-boundaries`); the verdict line names the first identity without one."""
+        lf = f"{self.d}/call_boundaries.log"
+        rc = self.run_tl("build.call_boundaries", to, lf, self.cli("gate", "call-boundaries", self.d, "--out", f"{self.d}/call_boundaries.json"))
+        with open(lf, errors="replace") as f:
+            line = (f.read().splitlines() or [""])[-1][:600]
+        if rc == 0:
+            self.verdict("build-call-boundaries", "PASS", line)
+            return
+        self.verdict("build-call-boundaries", "FAIL", f"rc={rc} {line}")
+        self.log("call boundaries without a source the Commit attaches -> stop (see call_boundaries.json)")
+        self.tl("row", "end", ("ok", "false"), ("stopped_at", "call_boundaries"))
+        raise Stop(21)
+
     def timeline_report(self) -> None:
         subprocess.run(self.cli("timeline", "report", self.timeline, "--json", f"{self.d}/timeline_report.json", "--md",
                                 f"{self.d}/timeline_report.md", "--title", self.row),

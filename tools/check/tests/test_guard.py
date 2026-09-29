@@ -5,7 +5,6 @@ from __future__ import annotations
 import importlib.util
 import sys
 import threading
-import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -77,6 +76,14 @@ def test_a_worker_that_sends_no_record_leaves_the_suite_unguarded(monkeypatch):
 def test_slots_go_to_the_suites_in_turn(tmp_path, monkeypatch):
     S = _load(monkeypatch, "suites_under_test", HERE / "suites.py")
     slots, order = S.Slots(2), []
+    waits = threading.Semaphore(0)
+
+    class Counted(threading.Condition):
+        def wait(self, timeout=None):
+            waits.release()
+            return super().wait(timeout)
+
+    slots.cond = Counted()
 
     def take(turn: int, n: int) -> None:
         with slots.take(turn, n):
@@ -86,8 +93,9 @@ def test_slots_go_to_the_suites_in_turn(tmp_path, monkeypatch):
         waiting = [threading.Thread(target=take, args=a) for a in ((2, 2), (1, 1))]
         for t in waiting:
             t.start()
-        time.sleep(0.1)
+        waits.acquire()
+        waits.acquire()                                        # both are waiting for their turn
         assert order == []
     for t in waiting:
-        t.join(5)
+        t.join()
     assert order == [1, 2]

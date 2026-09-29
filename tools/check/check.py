@@ -1,6 +1,6 @@
 """`check`: the repository's one check, what a merge into `main` requires (`research merge`).
 
-    uv run python tools/check/check.py                      run every step here, in the checkout
+    uv run --extra torch-cpu python tools/check/check.py    run every step here, in the checkout, with CPU-only torch
     uv run python tools/check/check.py --record [--on M]    the same through `research run --tool check` (on machine M, a
                                                             multi-core CPU pod): an Attempt of the clean commit checked out, the
                                                             record `research merge` reads; with the pinned upstream build and
@@ -9,16 +9,17 @@
 
 Three independent groups run at once, the cores split between them (`--cores N`, default the CPUs this process may use):
 
-    pytest          every test suite (`tools/check/suites.py`), half the cores' worth at once: each package's tests in their own
-                    process, a pass reused while its inputs are unchanged; each suite's log and the outcomes (`suites.json`)
-                    beside the run's result
+    pytest          every test suite (`tools/check/suites.py`) but those that use Lean, half the cores' worth at once: each
+                    package's tests in their own process, a pass reused while its inputs are unchanged; each suite's log and the
+                    outcomes (`suites.json`) beside the run's result
     circuit-check   `circuit-check --all --jobs` the other half: every registered Definition and template (`tools/circuit_check`),
                     its report beside the run's result
     lean            `lake build` of the Lean verifier (`backends/flock/verifier/lean`), then its partition check against
                     `verity.ir.partition` (`unit_cut_agree.py`), then the audit of every Lake package with a `lean-audit.json`
                     (`tools/lean/audit.py --all --build`: axioms, sorry, declared axioms, escapes, files, kernel bypasses, code
                     run while compiling, dependency .olean digests, pinned statements, a kernel replay; its reports under
-                    `lean-audit/`), then its agreement with upstream's Rust verifier (`ci.py`) on the upstream build stored once
+                    `lean-audit/`), then the suites that use Lean (`AFTER_LEAN`, outcomes in `suites-lean.json`) on what those
+                    steps built, then its agreement with upstream's Rust verifier (`ci.py`) on the upstream build stored once
                     and pinned by hash (`backends/flock/verifier/upstream.json`), when the run has it; skipped by name without
                     it.  `research merge` requires it for a change under backends/flock/ (`tool.py`)
 
@@ -26,8 +27,12 @@ Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for 
 
     pytest          `suites.py`'s own: a suite's pass is reused while its declared inputs are unchanged (`--no-cache` passes
                     `--fresh`)
-    circuit-check   `circuit-check --cache`: a report is reused when every file, directory listing and existence probe the
-                    recorded run made is unchanged, with the checker's own version (`circuit_check.cache`)
+    circuit-check   `circuit-check --cache`, per target: a target's result is reused when every file, directory listing,
+                    existence probe and loaded library its process read is unchanged, with the checker's own version; one after
+                    a read the tracer cannot see (a program it starts) is not stored (`circuit_check.cache`)
+    lean-audit      per package (`lean_audit.py`): a pass is reused while the package, its path dependencies, `tools/lean/`
+                    and its toolchain and manifest are unchanged; a miss is audited on a scratch tree holding only those, so a
+                    read outside them fails there; fetched dependencies stay warm on the machine under manifest + toolchain
     lean-agreement  a pass is reused when everything the job reads is the same (`agreement_key`: backends/flock/verifier/'s
                     tracked files, which pin the upstream build and inputs, the interpreter, the environment)
 
@@ -42,6 +47,7 @@ import json
 import os
 import platform
 import re
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -111,7 +117,7 @@ def agreement_files(out: Path) -> dict[str, Path]:
     return found
 
 
-def lean_steps(out: Path) -> list[tuple[str, list[str] | str, Path]]:
+def lean_steps(out: Path, cache: bool = True) -> list[tuple[str, list[str] | str, Path]]:
     """The Lean steps: nothing on a tree without the verifier (a skip, named); then `lake build`, the Lean partition check's
     conformance with `verity.ir.partition` (`unit_cut_agree.py`), the audit of every Lean package, and the agreement job
     against upstream's Rust verifier on the pinned upstream build (`upstream.json`) when the run has it; without it that step
@@ -132,8 +138,9 @@ def lean_steps(out: Path) -> list[tuple[str, list[str] | str, Path]]:
     return [("lean-build", ["bash", "-c", ELAN + "lake build"], lean),
             ("lean-unit-cut", [sys.executable, str(FLOCK_VERIFIER / "unit_cut_agree.py"), "--lean", str(verify),
                                "--out", str(out / "lean-unit-cut")], ROOT),
-            ("lean-audit", [sys.executable, str(ROOT / "tools" / "lean" / "audit.py"), "--all", "--build", "--root", str(ROOT),
-                            "--out", str(out / "lean-audit")], ROOT),
+            ("lean-audit", [sys.executable, str(ROOT / "tools" / "check" / "lean_audit.py"), "--out", str(out / "lean-audit"),
+                            "--cache", str(cache_dir() / "lean-audit"), "--deps", str(cache_dir() / "lean-deps"),
+                            *([] if cache else ["--fresh"])], ROOT),
             ("lean-agreement", agreement, ROOT)]
 
 
@@ -253,7 +260,8 @@ def record(argv: list[str]) -> int:
         pin = json.loads(UPSTREAM_PIN.read_text())
         store = LocalStore()
         files = {k: Path(store.fetch(pin[k]["art"])) for k in ("upstream", "inputs")}
-        print(f"check: changes under {', '.join(tool.CHECK.merge_requires['lean-agreement'])} against {base}: sending the pinned "
+        print(f"check: changes under {', '.join(r for r in tool.CHECK.merge_requires['lean-agreement'] if not r.startswith('!'))} "
+              f"against {base}: sending the pinned "
               f"upstream build and inputs")
         cmd += [x for k in ("upstream", "inputs") for x in ("--input", f"flock_{k}={pin[k]['art']}")]
         if on:
@@ -269,17 +277,31 @@ def record(argv: list[str]) -> int:
     return subprocess.run(cmd, cwd=ROOT, env=env).returncode
 
 
+#: The suites whose tests run `lake` or what the Lean steps build under `.lake/`: a step of the Lean group once `lean-audit` has
+#: built every Lake package, with elan's `lake` on the PATH, so what they run or skip never depends on how far a concurrent
+#: `lake build` has got, and no test's `lake build` shares a build directory with one (tests/test_no_wall_clock.py holds every
+#: other suite to not skipping on them).
+AFTER_LEAN = ("verity-flock", "verity-lean-audit")
+
+
 def groups(out: Path, n: int, cache: bool = True) -> list[list[tuple[str, list[str] | str, Path]]]:
     """The independent groups, each a sequence of (name, argv or the reason it is skipped / cannot run, cwd)."""
     py = sys.executable
     a = max(1, n // 2)
     b = max(1, n - a)
     commit = ["--commit", os.environ["RESEARCH_SOURCE_SHA"]] if os.environ.get("RESEARCH_SOURCE_SHA") else []   # a shipped tree has no .git
-    pytest = [py, str(ROOT / "tools" / "check" / "suites.py"), "--json", str(out / "suites.json"), "--logs", str(out / "suites"),
-              *commit, "--jobs", str(a), *([] if cache else ["--fresh"])]
+    suites = [py, str(ROOT / "tools" / "check" / "suites.py")]
+    tail = [*commit, "--jobs", str(a), *([] if cache else ["--fresh"])]
+    lean = lean_steps(out, cache)
+    after_lean: list[str] = []
+    if len(lean) > 1:
+        after_lean = [x for s in AFTER_LEAN for x in ("--skip", s)]
+        lean_suites = [*suites, *AFTER_LEAN, "--json", str(out / "suites-lean.json"), "--logs", str(out / "suites"), *tail]
+        lean.insert(3, ("lean-suites", ["bash", "-c", ELAN + shlex.join(lean_suites)], ROOT))
+    pytest = [*suites, "--json", str(out / "suites.json"), "--logs", str(out / "suites"), *after_lean, *tail]
     cc = [py, "-m", "circuit_check", "--all", "-q", "--jobs", str(b), "--out", str(out / "circuit-check.json"),
           *(["--cache", str(cache_dir() / "circuit-check")] if cache else [])]
-    return [[("pytest", pytest, ROOT)], [("circuit-check", cc, ROOT)], lean_steps(out)]
+    return [[("pytest", pytest, ROOT)], [("circuit-check", cc, ROOT)], lean]
 
 
 def steps(out: Path, n: int = 1) -> list[tuple[str, list[str] | str, Path]]:
@@ -386,8 +408,15 @@ def _step(name: str, argv: list[str] | str, cwd: Path, out: Path, cache: bool) -
     return rec
 
 
+#: vLLM's C++ twin models, compiled on first use: built once before the groups start, so that no step compiles them while
+#: another loads them (a check that compiles mid-run is untraceable, and circuit-check stores none of its results)
+PREBUILD = ("try:\n    from verity_vllm.program.kernels import twins\nexcept ImportError:\n    twins = None\n"
+            "if twins:\n    twins.preload()\n")
+
+
 def run(out: Path, n: int | None = None, cache: bool = True) -> tuple[bool, list[dict]]:
     n = n or cores()
+    subprocess.run([sys.executable, "-c", PREBUILD], cwd=ROOT, env=env(), capture_output=True)
 
     def group(g: list) -> list[dict]:
         done = []
@@ -416,7 +445,7 @@ def write_result(run_dir: Path, ok: bool, done: list[dict]) -> None:
            "validation": {"status": "passed" if ok else "failed", "checker": "tools/check/check.py",
                           "detail": "; ".join(f"{s['step']} {s['status']}" for s in done)},
            "measurements": [{"name": f"{s['step']}_wall", "value": s["seconds"], "unit": "s"} for s in done],
-           "steps": done, "artifacts": [p for p in ("suites.json", "suites/", "circuit-check.json", "lean-audit/",
+           "steps": done, "artifacts": [p for p in ("suites.json", "suites-lean.json", "suites/", "circuit-check.json", "lean-audit/",
                                                     *(s.get("log") for s in done), *agreement_verdicts(run_dir))
                                         if p and (run_dir / p).exists()]}
     tmp = run_dir / "result.json.tmp"
