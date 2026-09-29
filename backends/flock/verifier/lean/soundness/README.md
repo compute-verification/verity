@@ -247,7 +247,9 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
     - Δ is exactly the unit's and the parts' constants and the parts' bound inputs, one entry per row (`delta_nodup`,
       `delta_entry`, `delta_const`);
     - each callee's input rows are self rows (`callee_rows`), and the own rows read only own and part columns
-      (`own_reads`).
+      (`own_reads`);
+    - the unit's constant row is `[const]·[const]` (`unit_const_row`), and its order lists only own and part columns
+      (`order_cols`).
   - Still to prove: `NetRows` for a flat typed class, whose unit net #307 builds from `derive`'s rows (`Typed.netOfD_ok`),
     and a template's block rows from `setupH` (1e, #277).
 
