@@ -101,6 +101,8 @@ private def intLists (j : Json) (k : String) : V (Array (Array Int)) := do
 one output group); each placed layout's circuit one slot of its range per part; a forced-zero row in the root's slot; the
 pinned dummy values and leaf scheme. -/
 def checkTyped (c : Circuit) (t : TypedBlock) (tags : Tags) (leafScheme : Json) : V Unit := do
+  -- the rows' circuits are found by name, and the placed layouts are named by digest: no part may be one of them
+  if c.shaNet ≤ t.rangeLogs.size || c.hmNet ≤ t.rangeLogs.size then throw "the rows' circuits are among the template's"
   let root := c.unit
   let nOut := c.outWords
   if c.perVu.getD c.unitNet 0 != 1 then throw "the instance's root is not one slot per VU"
