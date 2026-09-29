@@ -331,3 +331,74 @@ def test_the_agreement_refuses_a_machine_it_cannot_run_on_in_seconds(tmp_path, m
     assert "needs glibc 99.1" in CHECK.agreement_preflight({"upstream": {"glibc": "99.1"}}, [ok])
     monkeypatch.setattr(CHECK, "memory_gb", lambda: 16)
     assert "may use 16 GB; the agreement needs 24" in CHECK.agreement_preflight({"upstream": {}}, [ok])
+
+
+def _fake_run(monkeypatch, groups, pre=()):
+    """`run` over the given groups and preflight, with nothing built first and no Lean URLs."""
+    monkeypatch.setattr(CHECK, "PREBUILD", "pass")
+    monkeypatch.setattr(CHECK, "preflight", lambda: list(pre))
+    monkeypatch.setattr(CHECK, "groups", lambda out, n, cache=True, urls=None: groups)
+    monkeypatch.delenv(CHECK.LEAN_DEPS_URLS_ENV, raising=False)
+
+
+def _py(src: str, *args) -> list[str]:
+    import sys
+
+    return [sys.executable, "-c", src, *map(str, args)]
+
+
+def test_a_failed_step_stops_the_other_groups_and_each_status_is_written_as_it_ends(tmp_path, monkeypatch):
+    """`fails` exits only once `slow` has written to a FIFO, so `slow` is running when it fails: `slow` is interrupted (SIGINT),
+    its group starts nothing more, and steps.jsonl has `fails` before `slow`, each line written as its step ended."""
+    import json
+    import os
+
+    gate, marker = tmp_path / "gate", tmp_path / "never-ran"
+    os.mkfifo(gate)
+    slow = _py("import signal, sys\nwith open(sys.argv[1], 'w') as f:\n    f.write('x')\nsignal.pause()", gate)
+    fails = _py("import sys\nopen(sys.argv[1]).read()\nsys.exit(3)", gate)
+    _fake_run(monkeypatch, [[("slow", slow, tmp_path), ("after-slow", _py("open(__import__('sys').argv[1], 'w')", marker), tmp_path)],
+                            [("fails", fails, tmp_path)]])
+    ok, done = CHECK.run(tmp_path, 2)
+    by = {s["step"]: s for s in done}
+    assert not ok and by["fails"]["status"] == "failed" and by["fails"]["rc"] == 3
+    assert by["slow"]["status"] == "stopped" and by["slow"]["detail"] == "stopped: fails failed"
+    assert "after-slow" not in by and not marker.exists()
+    lines = [json.loads(line) for line in (tmp_path / CHECK.STEPS_LOG).read_text().splitlines()]
+    assert [(r["step"], r["status"]) for r in lines] == [("fails", "failed"), ("slow", "stopped")] and all("ended_utc" in r for r in lines)
+
+
+def test_keep_going_runs_every_other_group_to_its_end(tmp_path, monkeypatch):
+    """The failing step's own group still stops; the others keep their passing steps (and the verdicts those store)."""
+    ok = _py("pass")
+    _fake_run(monkeypatch, [[("fails", _py("raise SystemExit(3)"), tmp_path), ("after-fails", ok, tmp_path)],
+                            [("a", ok, tmp_path), ("b", ok, tmp_path)]])
+    passed, done = CHECK.run(tmp_path, 2, keep_going=True)
+    assert not passed and {s["step"]: s["status"] for s in done} == {"fails": "failed", "a": "passed", "b": "passed"}
+
+
+def test_the_preflight_runs_first_and_a_failure_there_starts_nothing_else(tmp_path, monkeypatch):
+    marker = tmp_path / "ran"
+    touch = _py("open(__import__('sys').argv[1], 'w')", marker)
+    _fake_run(monkeypatch, [[("pytest", touch, tmp_path)]],
+              pre=[("preflight-lock", _py("raise SystemExit(1)"), tmp_path), ("preflight-lints", touch, tmp_path)])
+    ok, done = CHECK.run(tmp_path, 2)
+    assert not ok and [(s["step"], s["status"]) for s in done] == [("preflight-lock", "failed"), ("preflight-lints", "stopped")]
+    assert done[1]["detail"] == "not started: preflight-lock failed" and not marker.exists()
+    _fake_run(monkeypatch, [[("pytest", touch, tmp_path)]], pre=[("preflight-lock", _py("pass"), tmp_path)])
+    assert CHECK.run(tmp_path, 2)[0] and marker.exists()
+
+
+def test_the_preflight_is_the_lockfile_and_the_repository_lints(monkeypatch):
+    """Without bytecode or pytest's cache; every lint it names exists, so a rename can't turn it into a failure of
+    every check. Without uv, the lockfile step fails by name."""
+    (lock, argv, cwd), (lints, pytest, cwd2) = CHECK.preflight()
+    assert (lock, argv[1:], cwd) == ("preflight-lock", ["lock", "--check"], ROOT)
+    assert (lints, pytest[1:4], cwd2) == ("preflight-lints", ["-B", "-m", "pytest"], ROOT) and "no:cacheprovider" in pytest
+    assert pytest[-len(CHECK.LINTS):] == list(CHECK.LINTS)
+    for t in CHECK.LINTS:
+        path, _, name = t.partition("::")
+        assert (ROOT / path).is_file() and (not name or f"def {name}(" in (ROOT / path).read_text())
+    monkeypatch.delenv("UV", raising=False)
+    monkeypatch.setattr(CHECK.shutil, "which", lambda _name: None)
+    assert CHECK.preflight()[0][1].startswith("failed: no `uv` here")
