@@ -155,13 +155,10 @@ def actual(row: resolver.Row) -> dict:
             loaded[p] = _load_program(p)
         programs[str(rid)] = loaded[p]
         dirs[str(rid)] = str(progs_root / base)
-    import time
-    t0 = time.perf_counter()
     doc = recompute(sr, programs, dirs)
     out = lift(doc)
     out["record"] = {"result": sr.get("result"), "grade": sr.get("grade")}
     out["source"] = "recomputed: sampled_replay.{ProgramIndex, population, executed_prefix_of_record, phase_anchor, split_not_executed, sample} over the Programs"
-    out["seconds"] = round(time.perf_counter() - t0, 1)
     return out
 
 
@@ -179,7 +176,6 @@ def main(argv: list[str] | None = None) -> int:
     if a.out:
         json.dump({"row": row.key, "equal": not diff, "differences": diff, "actual": act, "expected": exp}, open(a.out, "w"), indent=1, default=str)
     print(json.dumps({"row": row.key, "equal": not diff, "n_differences": len(diff), "differences": diff[:30], "source": act.get("source"),
-                      "seconds": act.get("seconds"),
                       "population": (act.get("population") or {}).get("vus"), "strata_n": (act.get("population") or {}).get("strata_n"),
                       "picked": (act.get("sample") or {}).get("picked")}, default=str))
     return 0 if not diff else 1

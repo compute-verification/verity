@@ -6,7 +6,6 @@ import os
 import shutil
 import subprocess
 import sys
-import time
 from pathlib import Path
 
 import pytest
@@ -14,6 +13,7 @@ import pytest
 from research import record, result
 from research import runs as R
 from research.cli import EX_DATAERR, main
+from research.telemetry import run as tele_run
 
 FIXTURES = Path(__file__).parent / "fixtures"
 PY = sys.executable
@@ -193,28 +193,37 @@ def test_arguments_with_spaces_survive(tmp_path):
     assert s["command"][-1] == "hello world  two"
 
 
-def test_timeout_kills_the_workload_tree_and_spares_bystanders(tmp_path):
-    bystander = subprocess.Popen([PY, "-c", "import time; time.sleep(30)"])
+#: The workload's child: it takes the write end of the FIFO argv[1], then writes its pid to argv[2] and blocks until signalled.
+TREE_CHILD = ("import os, signal, sys; os.open(sys.argv[1], os.O_WRONLY); open(sys.argv[2] + '.tmp', 'w').write(str(os.getpid())); "
+              "os.replace(sys.argv[2] + '.tmp', sys.argv[2]); signal.pause()")
+TREE = f"import signal, subprocess, sys; subprocess.Popen([sys.executable, '-c', {TREE_CHILD!r}, *sys.argv[1:]]); signal.pause()"
+
+
+def test_timeout_kills_the_workload_tree_and_spares_bystanders(tmp_path, monkeypatch):
+    """The stage clock stands still until the workload's child has written its pid, then jumps past --timeout, so the deadline
+    passes with the whole tree up however slow the machine is.  The child holds the FIFO's only write end: EOF on the read end
+    is its exit, whenever that comes.  The bystander blocks on a pipe the test holds and exits 0 unless something signalled it."""
+    fifo, ready = tmp_path / "tree", tmp_path / "child.pid"
+    os.mkfifo(fifo)
+    tree = os.open(fifo, os.O_RDONLY | os.O_NONBLOCK)              # a reader first, so the child's open for writing does not block
+    monkeypatch.setattr(tele_run, "clock", lambda: 100.0 if ready.exists() else 0.0)
+    bystander = subprocess.Popen([PY, "-c", "import sys; sys.stdin.read()"], stdin=subprocess.PIPE)
     try:
-        code = "import subprocess, sys, time; c = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)']); print(c.pid, flush=True); time.sleep(60)"
         rid = R.new_run_id()
-        rc = main(["run", "--runs-dir", str(tmp_path), "--id", rid, "--stage", "to", "--no-sampler", "--timeout", "1.5", "--grace", "1", "--", PY, "-c", code])
+        rc = main(["run", "--runs-dir", str(tmp_path), "--id", rid, "--stage", "to", "--no-sampler", "--timeout", "1", "--",
+                   PY, "-c", TREE, str(fifo), str(ready)])
         s = R.summarize(tmp_path / rid)
         assert rc in (143, 137) and s["state"] == "cancelled" and s["class"] == "STAGE_TIMEOUT"
-        child_pid = int((Path(s["dir"]) / "stdout.log").read_text().split()[0])
-        deadline = time.time() + 5
-        while time.time() < deadline:
-            try:
-                os.kill(child_pid, 0)
-                time.sleep(0.1)
-            except ProcessLookupError:
-                break
-        else:
-            pytest.fail("workload child survived the timeout")
-        assert bystander.poll() is None, "an unrelated process must not be touched"
         events = [json.loads(l) for l in (Path(s["dir"]) / "events.jsonl").read_text().splitlines()]
-        assert any(e.get("kind") == "cancel_intent" and e.get("actor") == "timeout" for e in events), "kill evidence preserved"
+        intent = next(e for e in events if e.get("kind") == "cancel_intent")
+        assert intent["actor"] == "timeout", "kill evidence preserved"
+        assert int(ready.read_text()) in [m["pid"] for m in intent["target"]["members"]], "the signal went to the workload's group"
+        os.set_blocking(tree, True)
+        assert os.read(tree, 1) == b"", "the workload's child exited"
+        bystander.communicate()
+        assert bystander.returncode == 0, "an unrelated process must not be touched"
     finally:
+        os.close(tree)
         bystander.kill()
 
 

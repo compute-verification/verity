@@ -67,6 +67,29 @@ def test_online_values_without_the_provers_randomness_fail():
     assert not res["strategies"]["abort"]["online"]["online_values"]["real_indistinguishable_from_sim"]
 
 
+def _two_tables(lines, shared):
+    """``lines`` with a second table's proof per proof: fresh values, or table 0's own (randomness shared across tables)."""
+    rng = np.random.default_rng(7)
+    out = []
+    for line in lines:
+        out.append(line)
+        tag, _, body = line.partition("\t")
+        if tag == "ZKVIEWP":
+            v = json.loads(body)
+            w = dict(v) if shared else dict(_row(v["kind"], v["run"], v["rep"], rng), strategy=v["strategy"])
+            out.append("ZKVIEWP\t" + json.dumps(dict(w, table=1)))
+    return out
+
+
+def test_two_tables_are_tested_apart_and_shared_randomness_fails():
+    res = zk_rewind_stats.analyse(*zk_rewind_stats.load(_two_tables(_dump(40), shared=False)))
+    assert res["pass"], json.dumps(res, indent=1)
+    s = res["strategies"]["abort"]
+    assert not any(s["across_tables"].values()) and any(k.startswith("table1:") for k in s["proofs"])
+    bad = zk_rewind_stats.analyse(*zk_rewind_stats.load(_two_tables(_dump(40), shared=True)))
+    assert not bad["pass"] and all(bad["strategies"]["abort"]["across_tables"].values())
+
+
 def _gk(real, fresh, reused=None):
     v = {"strategy": "cap-gated", "eps": 1 / 16, "attempts": 40, "real_complete": real, "extraction_tries": 3,
          "rewinds_complete_fresh": fresh, "rewinds_complete_reused": reused}
