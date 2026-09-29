@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import subprocess
 from pathlib import Path
 
@@ -37,14 +38,16 @@ def _entries() -> dict[str, str]:
 
 def _tracked() -> set[str]:
     """The tree's tracked files: `git ls-files` in a checkout; in a shipped tree (a recorded run's source: no `.git`), the commit's
-    tree as the machine's bare repository holds it (`READY.json` names it), as `tools/check/check.py`'s `tracked_files` reads it."""
+    tree as the machine's bare repository holds it."""
     if (REPO / ".git").exists():
         argv = ["git", "-C", str(REPO), "ls-files", "-z"]
     else:
-        ready, bare = REPO / "READY.json", REPO.parent.parent / "git" / "verity.git"
-        if not (ready.is_file() and bare.exists()):
+        # a shipped tree lives at <root>/src/<commit sha>, beside the machine's bare repository; its name is the commit, so this
+        # opens no file (READY.json would be a read outside the suite's inputs, which fails the suite)
+        bare, rev = REPO.parent.parent / "git" / "verity.git", REPO.name
+        if not (re.fullmatch(r"[0-9a-f]{40}", rev) and bare.exists()):
             return set()
-        argv = ["git", "--git-dir", str(bare), "ls-tree", "-r", "-z", "--name-only", json.loads(ready.read_text())["tree"]]
+        argv = ["git", "--git-dir", str(bare), "ls-tree", "-r", "-z", "--name-only", rev]
     return set(subprocess.run(argv, check=False, capture_output=True).stdout.decode().split("\0")) - {""}
 
 
