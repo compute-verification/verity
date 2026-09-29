@@ -179,13 +179,13 @@ def _headroom() -> int | None:
             return max(0, int(lim) - cur)
     try:
         with open("/proc/meminfo") as f:
-            return next(int(ln.split()[1]) * 1024 for ln in f if ln.startswith("MemAvailable:"))
+            return next(int(ln.split()[1]) * 1024 for ln in f if ln.split(":")[0] == "MemAvailable")
     except (OSError, StopIteration, ValueError, IndexError):
         return None
 
 
-#: a component build's peak memory, from its Call count (`spec_histogram`): the TP2 MoE rows' builds peak at 2.6 KB per Call (OLMoE
-#: LP1024, 2.0 GB at 659K Calls) to 3.0 KB (Qwen3-30B LP1024 T127, 9.0 GB at 2.99M), over a 0.3 GB interpreter; with headroom
+#: a component build's peak memory, from its Call count (`spec_histogram`): the TP2 MoE rows' builds peak at 2.6 KB per Call (2.0 GB
+#: at 659K Calls) to 3.0 KB (9.0 GB at 2.99M), over a 0.3 GB interpreter; with headroom
 PEAK_PER_CALL = 4 << 10
 PEAK_BASE = 512 << 20
 #: the share of the headroom the component builds may take together
