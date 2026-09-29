@@ -50,7 +50,7 @@ def _module(path: Path, name: str):
 
 
 LA = _module(ROOT / "tools" / "check" / "lean_audit.py", "check_preflight_lean_audit")
-CHECK = LA.CHECK
+CHECK = _module(ROOT / "tools" / "check" / "check.py", "check_preflight_check")
 
 
 def _out(argv: list[str]) -> str | None:
