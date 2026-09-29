@@ -86,7 +86,8 @@ unit draw.
 
 - **Statement.** A source is a finite probability space and, on each outcome, the secret. `UniformSecret sec` says every
   event about the secret has the probability it has for `S` uniform bytes. `keyedWindow` draws over the real secret
-  source, and its theorems take A5 as `hsec`.
+  source, and its theorems take A5 as `hsec`. It is satisfiable: the identity source satisfies it
+  (`Law.uniformSecret_id`, `KeyedDraw.lean`).
 - **What A5 assumes of the verifier.** Its window secret is `secrets.token_bytes(32)` from the operating system's CSPRNG,
   drawn once the window's receipt is complete and used for that window alone (#423's `Ledger.open`, root's C2). A
   secret reused across windows is outside it, since later windows would be committed after earlier draws were seen.

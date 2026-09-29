@@ -621,6 +621,9 @@ def keyedWindow {Ω : Type} [Fintype Ω] [Nonempty Ω] {S : ℕ} (sec : Ω → F
     | some D => univ.filter fun u => u.val ∈ D
     | none => univ
 
+/-- A5 is satisfiable: the identity source, `S` uniform bytes themselves. -/
+theorem uniformSecret_id (S : ℕ) : Assumptions.UniformSecret (fun ω : Fin S → Fin 256 => ω) := fun _ => rfl
+
 /-- **Tier 3 for the PoUW window draw**: on a uniform window secret (A5), under A4 for the draw's escape test, the live
 window draw escapes `B` with at most `Law.stratified`'s escape plus `η`, for every number of bytes `L` read per swap. -/
 theorem keyedWindow_escape_le (σ : Fin n → Fin M) (k : Fin M → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
