@@ -61,9 +61,10 @@ def machine(tmp_path, monkeypatch) -> Path:
     return root
 
 
-def _run(tmp_path, repo, *extra: str) -> int:
+def _run(tmp_path, repo, *extra: str, which: tuple[str, ...] = ("--tool", TOOL)) -> int:
+    tmp_path.mkdir(parents=True, exist_ok=True)
     (tmp_path / "sent.txt").write_text("x")
-    return main(["run", "--runs-dir", str(tmp_path / "runs"), "--on", "m", "--project", "p", "--source", str(repo), "--tool", TOOL,
+    return main(["run", "--runs-dir", str(tmp_path / "runs"), "--on", "m", "--project", "p", "--source", str(repo), *which,
                  "--no-custody-r2", "--send", str(tmp_path / "sent.txt"), "--no-sampler", *extra, "--", PY, "-c", "print('ran')"])
 
 
@@ -98,6 +99,31 @@ def test_a_passing_preflight_runs_in_the_tree_with_the_runs_inputs_and_is_record
     assert "research: preflight pf.py --say hi on m: passed" in err and "research: preflight: sent sent.txt" in err
     assert (run_dir / "inputs" / "sent.txt").read_text() == "x", "the run still gets its --send files"
     assert LocalStore().get_attempt(rid) is not None
+
+
+def test_preflight_names_a_tools_preflight_for_a_run_of_anything_else(tmp_path, repo, machine, capsys):
+    """A Lean record regeneration on a check pod is no `--tool check` run, and must not be recorded as one."""
+    assert _run(tmp_path, repo, "--env", "PF_FAIL=1", which=("--preflight", TOOL)) == 3
+    assert "refused on m (PreflightFailed)" in capsys.readouterr().err
+    assert _run(tmp_path / "again", repo, which=("--preflight", TOOL)) == 0
+    [rid] = [p.name for p in (tmp_path / "again" / "runs").iterdir()]
+    wait_runner(machine / "runs" / rid)
+    job = json.loads((machine / "runs" / rid / "job.json").read_text())
+    assert job["run"]["remote"]["preflight"]["rc"] == 0 and job["store"]["tool"]["name"] != "fake", "not recorded as a run of the tool"
+
+
+def test_preflight_refuses_what_it_cannot_run(tmp_path, repo, machine, capsys):
+    assert main(["run", "--runs-dir", str(tmp_path / "runs"), "--on", "m", "--project", "p", "--preflight", TOOL, "--", "true"]) == 2
+    assert "from the tree --source ships" in capsys.readouterr().err
+    assert _run(tmp_path / "other", repo, which=("--preflight", "tools.other.tool:X")) == 3
+    assert "does not declare that tool" in capsys.readouterr().err
+    plain = _tree(tmp_path, decl="from research.store.tool import Tool\nFAKE = Tool(name='fake')\n", name="plain")
+    with pytest.raises(remote.PreflightFailed, match="names no preflight"):
+        remote.tool_preflight([], plain, asked=TOOL)
+    old = tmp_path / "old-research"
+    old.mkdir()
+    (old / "remote.py").write_text("# before --preflight\n")
+    assert remote.knows_preflight(None) and not remote.knows_preflight(old) and remote.knows_preflight(Path(remote.__file__).parent)
 
 
 def _request(root: Path, run_id: str, tree: Path | None, *, custody: bool = False, env=None) -> Path:

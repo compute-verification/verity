@@ -52,7 +52,8 @@
                     else refuses it (PreflightFailed, refused.json; nothing started, no attempt, so never a verdict), with the script's
                     stderr as the reason.  It gets the runner's environment plus RESEARCH_PREFLIGHT_INPUTS (the run's --send files) and,
                     with custody, RESEARCH_PREFLIGHT_CUSTODY (the staged key's dir).  A declaration that cannot be read refuses the run.
-                    job.json run.remote.preflight and the launch's answer carry its report.
+                    `--preflight TOOL` runs TOOL's preflight before a run of anything else (a Lean record regeneration on a check
+                    pod), and refuses when the tree declares none.  job.json run.remote.preflight and the launch's answer carry its report.
     observe/fetch   `research fetch <id>` copies the small records (or --all files) into the local run dir over one ssh+tar, extracted
                     member by member off the pipe (a big run is never in the launcher's memory); remote.json keeps observed_utc.
                     Unreachable means "last observed at T; current status unknown", never "failed".
@@ -367,6 +368,16 @@ def knows_custody(pkg: Path | None) -> bool:
     if pkg is None:
         return True
     return (Path(pkg) / "store" / "custody.py").is_file() and "CUSTODY_DIR" in (Path(pkg) / "remote.py").read_text()
+
+
+def knows_preflight(pkg: Path | None) -> bool:
+    """Whether the research package that will run on the machine runs `--preflight TOOL` (one that predates it would ignore it)."""
+    if pkg is None:
+        return True
+    try:
+        return "preflight_tool" in (Path(pkg) / "remote.py").read_text()
+    except OSError:
+        return False
 
 
 def check_tool(expected: str | None) -> dict[str, str]:
@@ -978,26 +989,33 @@ def ensure_guard(root: Path, idle_min: float, *, pod_id: str | None = None, envi
     return {"installed": True, "started": pid == proc.pid, "pid": pid, **base}
 
 
-def tool_preflight(harness_args: list[str], tree: Path | str | None) -> list[str] | None:
-    """The preflight the run's `--tool` declares in `tree` (`Tool.preflight`), or None: no --tool, no tree, or a tree without the
-    declaration's file.  PreflightFailed when the file is there but cannot be read (it may name a preflight)."""
-    spec = flag_value(harness_args, "--tool")
+def tool_preflight(harness_args: list[str], tree: Path | str | None, asked: str | None = None) -> list[str] | None:
+    """The preflight to run on `tree` before the run: the one `--preflight TOOL` (`asked`) names, else the one the run's `--tool`
+    declares (`Tool.preflight`), else None (no --tool, no tree, or a --tool the tree does not declare or that names none).
+    PreflightFailed when a declaration is there but cannot be read (it may name a preflight), or when `asked` has none to run."""
+    spec = asked or flag_value(harness_args, "--tool")
+    flag = "--preflight" if asked else "--tool"
     if not spec or tree is None:
+        if asked:
+            raise PreflightFailed(f"--preflight {asked}: the run ships no tree to run it from; nothing started")
         return None
     from .store import tools_registry
 
     module, _, attr = tools_registry.REGISTRY.get(spec, spec).rpartition(":")
-    if not module:
-        return None
-    rel = Path(*module.split("."))
-    if not any((Path(tree) / c).is_file() for c in (rel.with_suffix(".py"), rel / "__init__.py")):
+    rel = Path(*module.split(".")) if module else None
+    if rel is None or not any((Path(tree) / c).is_file() for c in (rel.with_suffix(".py"), rel / "__init__.py")):
+        if asked:
+            raise PreflightFailed(f"--preflight {asked}: {tree} does not declare that tool; nothing started")
         return None
     try:
         decl = tools_registry._from_file(module, attr, Path(tree))
     except Exception as e:  # noqa: BLE001
-        raise PreflightFailed(f"--tool {spec}: its declaration in {tree} cannot be read ({type(e).__name__}: {e}), so its preflight is "
+        raise PreflightFailed(f"{flag} {spec}: its declaration in {tree} cannot be read ({type(e).__name__}: {e}), so its preflight is "
                               f"unknown; nothing started") from None
-    return list(getattr(decl, "preflight", None) or []) or None
+    argv = list(getattr(decl, "preflight", None) or [])
+    if not argv and asked:
+        raise PreflightFailed(f"--preflight {asked}: its declaration in {tree} names no preflight; nothing started")
+    return argv or None
 
 
 def _tail(text: str) -> list[str]:
@@ -1078,7 +1096,7 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
         holder = exclusive_holder(runs_root)
         if holder and holder != run_id:
             raise Refused(f"machine is exclusively held by run {holder} (still live); not starting {run_id}")
-        if pf_argv := tool_preflight(req.get("harness_args") or [], src_dir):
+        if pf_argv := tool_preflight(req.get("harness_args") or [], src_dir, req.get("preflight_tool")):
             pf_env = {**env, "RESEARCH_PREFLIGHT_INPUTS": str(request_path.parent / "inputs")}
             if req.get("custody"):
                 pf_env["RESEARCH_PREFLIGHT_CUSTODY"] = str(request_path.parent / CUSTODY_DIR)
@@ -1210,8 +1228,10 @@ def workload_cwd(harness_args: list[str], tool_pkg: Path | None) -> str:
 
 def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, command: list[str], harness_args: list[str],
            source: Path | None, sends: list[Path], cwd: str | None, env: dict[str, str], exclusive: bool,
-           mem_gb: float | None = None, mem_wait_s: float = 0.0, custody_ttl: str | None = None) -> dict[str, Any]:
-    """`custody_ttl` (--custody-r2): mint a delete-free key for that long and stage it for the machine's runner (store.custody)."""
+           mem_gb: float | None = None, mem_wait_s: float = 0.0, custody_ttl: str | None = None,
+           preflight_tool: str | None = None) -> dict[str, Any]:
+    """`custody_ttl` (--custody-r2): mint a delete-free key for that long and stage it for the machine's runner (store.custody).
+    `preflight_tool` (--preflight): run that tool's declared preflight on the machine before this run, whatever the run's --tool."""
     local_dir.mkdir(parents=True, exist_ok=False)
     rec: dict[str, Any] = {"schema": "research/remote/v0.1", "run_id": run_id, "machine": machine_name, "project": project, "phase": "resolving",
                            "created_utc": utc_now_ms(), "observed_utc": None, "last_observed": None, "command": command, "launch_args": harness_args}
@@ -1242,6 +1262,9 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
         if mem_gb and tool_pkg is not None and not (tool_pkg / "mem.py").exists():
             raise Refused(f"--mem-gb: the research package in {source} predates memory admission (no research/mem.py); the machine would "
                           f"ignore the reservation.  Commit a tree that has it, or drop --mem-gb")
+        if preflight_tool and not knows_preflight(tool_pkg):
+            raise Refused(f"--preflight: the research package in {source} predates it, so the machine would not run the preflight.  Commit "
+                          f"a tree that has it, or drop --preflight")
         tool_dir = ship_tool(ssh, m["root"], tool_pkg)
         rec["tool_from"] = str(tool_pkg) if tool_pkg else "launcher"
         rec["tool_identity"] = tool_identity(tool_pkg)
@@ -1267,6 +1290,7 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
                    "guard": {"idle_min": guard_min} if guard_min else None,
                    "lease_extend_s": lease_extend_s(harness_args),
                    **({"custody": custody_pub} if custody_pub else {}),
+                   **({"preflight_tool": preflight_tool} if preflight_tool else {}),
                    "cost": {"provider": "runpod", "pod_id": m["pod_id"], "machine": machine_name, "currency": "USD",
                             "rate_usd_per_hour": tgt["cost_per_hr"], "rate_observed_utc": tgt["rate_observed_utc"], "reason": None},
                    "remote": {"machine": machine_name, "pod_id": m["pod_id"], "pod_name": tgt["pod_name"], "host": tgt["host"], "port": tgt["port"],
