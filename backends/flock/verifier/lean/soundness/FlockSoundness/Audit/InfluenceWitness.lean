@@ -6,8 +6,9 @@ import Mathlib.Tactic.Positivity
 /-!
 # The influence theorems are not vacuous
 
-The statement reviewer's witness (bc-89770364, Phase 19g, X-IC-1): every hypothesis of the influence theorems can be met,
-and the conclusions are not trivial.
+The statement reviewer's witnesses (bc-89770364: Phase 19g, X-IC-1, and the two-stage and exfiltration instances of
+19i, X-IR-4): every hypothesis of the influence theorems can be met, together. `W.lemma47`'s conclusion is also not
+trivial; the others show only that the hypotheses can be met.
 
 * `W.lemma47` (`outputs_eq_of_separates`): a four-gate circuit, input `0`, gates `1 = ¬0` and `3 = ¬0` in unit `0`, gate
   `2 = ¬1` in unit `1`, outputs `{2, 3}`, delivered wires `D = {2}`. `K = {1}` separates `B = {0}` from `D`, and is
@@ -18,6 +19,11 @@ and the conclusions are not trivial.
 * `A.influence`, `A.accepts`: a law that draws nothing, a session that always accepts and the honest committed
   transcript meet `KnowledgeSound 0`, `LinkSound 0` and `AnchorsSound 0`, so `audit_influence` applies, and the audit
   accepts with probability `1`.
+* `Two.influence`, `Two.accepts`: the same for the two-stage audit. `W`'s partition refines itself, both stages draw
+  nothing, and `KnowledgeSound 0`, `LinkSound 0` and `AnchorsSound₂ 0` hold, so `twoStage_influence` applies, and the
+  audit accepts with probability `1`.
+* `Ex.exfil`: `audit_exfiltration`'s hypotheses hold together, for a one-bit message, with `A`'s audit at `0`, `Gen`'s
+  exits, the harm bound `Ex.hH` (each unit's exported width), and `k = n = 2`, where `miss 3 = 0 < δ` (`Ex.hk`).
 -/
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.Audit Finset
@@ -226,5 +232,108 @@ theorem accepts (σ : Strategy (audit L Unit session)) :
   simp [audit, prob, session, Game.map, L]
 
 end A
+
+namespace Two
+
+open W
+
+/-- `W`'s partition refines itself: each unit is its own replay unit. -/
+def r : P.Refines P := ⟨id, fun g => by simp⟩
+
+/-- Both stages draw nothing. -/
+def L : Law 2 := { Ω := Unit, draw := fun _ => ∅ }
+
+def L₂ : Fin 2 → Law 2 := fun _ => L
+
+abbrev Int : Finset (Fin 2) → Type := fun _ => Unit
+
+def session : Finset (Fin 2) → Unit → (S₁ : Finset (Fin 2)) → Int S₁ → Game Bool := fun _ _ _ _ => .ret true
+
+/-- The honest transcript on the anchors `a`. -/
+def H : Fin C.N → Bool := ![false, true, false, true]
+
+def X : (R : Unit) → Cont₁ L L₂ Unit Int session R → (Fin C.N → Bool) := fun _ _ => H
+
+def Yint : (R : Unit) → (ω₁ : L.Ω) → (I : Int (L.draw ω₁)) → Cont₂ L L₂ Unit Int session R ω₁ I →
+    (Fin C.N → Bool) := fun _ _ _ _ => H
+
+def ext : (S : Finset (Fin 2)) → (R : Unit) → (S₁ : Finset (Fin 2)) → (I : Int S₁) →
+    Strategy (session S R S₁ I) → Fin 2 → Option (Fin C.N → Bool) := fun _ _ _ _ _ _ => none
+
+theorem fine_empty (ω₁ : L.Ω) (ω₂ : ∀ u, (L₂ u).Ω) : fineDraw L L₂ ω₁ ω₂ = ∅ := by
+  simp [fineDraw, L]
+
+theorem hks : (r.analysis₂ X Yint ext).KnowledgeSound 0 := by
+  intro R c tgt
+  refine (avg_mono fun ω₁ => (avg_mono fun ω₂ => ?_).trans (avg_const (0 : ℝ≥0∞)).le).trans
+    (avg_const (0 : ℝ≥0∞)).le
+  refine (prob_mono (q := fun _ => False) ?_ _ _).trans (prob_false _ _).le
+  rintro ok ⟨_, v, _, hv, _⟩
+  rw [fine_empty] at hv
+  exact notMem_empty v hv
+
+theorem hlink : (r.analysis₂ X Yint ext).LinkSound 0 := by
+  intro R c tgt
+  refine (avg_mono fun ω₁ => (avg_mono fun ω₂ => ?_).trans (avg_const (0 : ℝ≥0∞)).le).trans
+    (avg_const (0 : ℝ≥0∞)).le
+  refine (prob_mono (q := fun _ => False) ?_ _ _).trans (prob_false _ _).le
+  rintro ok ⟨_, v, _, hv, _⟩
+  rw [fine_empty] at hv
+  exact notMem_empty v hv
+
+theorem hin : Partition.AnchorsSound₂ (C := C) X a 0 := by
+  intro σ
+  refine (prob_mono (q := fun _ => False) ?_ _ _).trans (prob_false _ _).le
+  rintro o ⟨_, hno⟩
+  exact hno (inputs H rfl)
+
+/-- **`twoStage_influence` is not vacuous**: its hypotheses, `AnchorsSound₂` among them, hold at `0`. -/
+theorem influence (δ : ℝ≥0∞) (σ : Strategy (twoStage L L₂ Unit Int session)) :
+    prob (fun o => o.1 = true ∧
+        Partition.out D (X (reg₂ σ) (cont₁ σ)) ∉ P.influenceSet D (effEscape L L₂ r.parent) a δ)
+      (twoStage L L₂ Unit Int session) σ ≤ δ + 0 + 0 + 0 :=
+  r.twoStage_influence X Yint ext hks hlink hin δ σ
+
+/-- The two-stage audit accepts with probability `1`. -/
+theorem accepts (σ : Strategy (twoStage L L₂ Unit Int session)) :
+    prob (fun o => o.1 = true) (twoStage L L₂ Unit Int session) σ = 1 := by
+  simp [twoStage, prob, session, Game.map, L, L₂]
+  convert ENNReal.mul_inv_cancel (a := ((Fintype.card (Fin 2 → Unit) : ℕ) : ℝ≥0∞)) (by simp) (by simp) using 3
+  all_goals first | rfl | decide | (norm_cast; decide) | simp [Fintype.card_unique]
+
+end Two
+
+namespace Ex
+
+/-- `hH`: each unit's harm is its exported width, and the harm bound is their total. -/
+theorem hH (δ : ℝ≥0∞) :
+    IsHarmBound A.L (fun u => ((W.P.exits {u}).card : ℝ)) δ ((∑ u, (W.P.exits {u}).card : ℕ) : ℝ) :=
+  fun B _ => by
+    push_cast
+    exact sum_le_sum_of_subset_of_nonneg (subset_univ _) fun _ _ _ => by positivity
+
+/-- `hk` at `k = n = 2`: no set of two units holds three, so `miss 3 = 0 < δ`. -/
+theorem hk (δ : ℝ≥0∞) (hδ : 0 < δ) : A.L.miss (2 + 1) < δ := by
+  have h0 : A.L.miss (2 + 1) = 0 := by
+    refine le_antisymm (iSup₂_le fun B hB => ?_) (zero_le)
+    have := B.card_le_univ
+    simp only [Fintype.card_fin] at this
+    exact absurd hB (by omega)
+  rw [h0]
+  exact hδ
+
+/-- **`audit_exfiltration`'s hypotheses are met together**: `A`'s audit at `0`, the exits as separators with
+`Gen.exits_card_le`, the harm bound `hH`, and `hk`, for every `δ > 0` and a one-bit message. -/
+theorem exfil (δ : ℝ≥0∞) (hδ : 0 < δ) (σ : Bool → Strategy (audit A.L Unit A.session))
+    (g : (W.D → Bool) → Bool) :
+    avg (fun m => prob (fun o => o.1 = true ∧ g (Partition.out W.D (A.Xc (reg (σ m)) (cont (σ m)))) = m)
+        (audit A.L Unit A.session) (σ m)) ≤
+      ((2 ^ (∑ u, (W.P.exits {u}).card) * ∑ j ∈ range (2 + 1), (2 : ℕ).choose j : ℕ) : ℝ≥0∞) /
+          (Fintype.card Bool : ℝ≥0∞) + (δ + 0 + 0 + 0) :=
+  W.P.audit_exfiltration A.hks A.hlink A.hin W.hD (fun u => (W.P.exits {u}).card) W.P.exits
+    (fun _ => filter_subset _ _) (fun B => W.P.separates_exits B W.hD) (Gen.exits_card_le W.P) (hH δ)
+    (hk δ hδ) σ g
+
+end Ex
 
 end FlockSoundness.Audit.InfluenceWitness

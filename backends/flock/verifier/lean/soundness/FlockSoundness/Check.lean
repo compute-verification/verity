@@ -399,3 +399,7 @@ hypotheses of the theorems that use them, never `axiom` declarations, so they ca
 #print axioms FlockSoundness.Audit.card_guess_le
 #print axioms FlockSoundness.Audit.Partition.audit_exfiltration_influenceSet
 #print axioms FlockSoundness.Audit.Partition.audit_exfiltration
+-- the two-stage and exfiltration witnesses
+#print axioms FlockSoundness.Audit.InfluenceWitness.Two.influence
+#print axioms FlockSoundness.Audit.InfluenceWitness.Two.accepts
+#print axioms FlockSoundness.Audit.InfluenceWitness.Ex.exfil

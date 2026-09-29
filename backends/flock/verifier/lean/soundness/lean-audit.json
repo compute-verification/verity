@@ -186,6 +186,7 @@
    "assumptions": [],
    "type_hash": "000000003bed0d60"
   },
+  "FlockSoundness.Audit.InfluenceWitness.Ex.exfil": {},
   "FlockSoundness.Audit.InfluenceWitness.Gen.harm_witness": {
    "signature": [
     "FlockSoundness.Audit.InfluenceWitness.Gen.harm_witness {C : FlockSoundness.Audit.Circuit} {n : Nat}",
@@ -198,6 +199,8 @@
    "assumptions": [],
    "type_hash": "00000000aebf639e"
   },
+  "FlockSoundness.Audit.InfluenceWitness.Two.accepts": {},
+  "FlockSoundness.Audit.InfluenceWitness.Two.influence": {},
   "FlockSoundness.Audit.InfluenceWitness.W.count": {
    "signature": [
     "FlockSoundness.Audit.InfluenceWitness.W.count :",
