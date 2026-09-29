@@ -335,3 +335,59 @@ def test_traced_as_gives_the_fp8_circuit():
     assert t.query == P.query_of(P.fp8_circuit(fp8.Shape(32, 96, 32), "f16", fp8.Lengths(1, 1, 2)))
     assert len(t.layout().closure) == 4
     assert traced_as("fp8-is-h100-d3s-v0", 32, 96, 32).definition.S().SUMS == "f32"
+
+
+# ---- the anchors (X-SPC-89) -----------------------------------------------------------------------------------------------
+
+def _traced(c: R.Call):
+    from verity_pouw.circuit import traced_as
+
+    scheme = "fp8-is-h100-d3s-v0-f16" if c.sums == "f16" else "fp8-is-h100-d3s-v0"
+    return traced_as(scheme, c.shape.m, c.shape.k, c.shape.n, index=c.index, weight=c.weight)
+
+
+@pytest.mark.parametrize("shape", [(16, 96, 16), (48, 96, 32), (32, 96, 16)])
+def test_the_verifier_builds_every_id_from_the_shape(shape):
+    """From its declaration alone, (salt, index, weight id), the verifier's inputs are exactly the reference call's: the
+    row ranks and lines, the column lines, the pad ranks and the upper nodes are functions of the shape."""
+    from verity_pouw.circuit.anchors import Fp8Anchors
+
+    c = call(*shape, index=300, weight=70_000)
+    an = Fp8Anchors(c.shape, c.salt, c.index, c.weight)
+    assert _traced(c).call_args(an, *c.args()[:5]) == c.args()
+    assert an.call_inputs()["rowids"] == an.call_inputs()["lines"]
+
+
+def test_a_prover_s_ids_must_be_the_verifier_s():
+    """Each free id the red team moved (X-SPC-89) is refused: repeated lines, lines that are not the ranks, other pad ranks
+    or node indices, and another index or weight id."""
+    from verity_pouw.circuit.anchors import Fp8Anchors
+
+    c = call(48, 96, 16)
+    fn, an = _traced(c).definition, Fp8Anchors(c.shape, c.salt, c.index, c.weight)
+    an.check_call(fn, c.args())
+    names = [p for p, _t in fn.signature()[0]]
+    moved = {"lines": [0] * 16 + list(range(16, 48)), "rowids": list(range(47, -1, -1)), "colids": list(range(1, 17)),
+             "padids": [v + 1000 for v in range(48, 64)], "nodeids": [4, 0, 4, 2, 5, 0], "index": [0, 4], "weight": [0, 12]}
+    for name, value in moved.items():
+        args = list(c.args())
+        assert args[names.index(name)] != value
+        args[names.index(name)] = value
+        with pytest.raises(DomainError):
+            an.check_call(fn, args)
+
+
+def test_the_anchors_fix_the_definition_s_byte_lengths_and_a_window_s_indices():
+    from verity_pouw.circuit.anchors import Fp8Anchors, Ledger
+
+    c = call(16, 96, 16)
+    t = _traced(c)
+    with pytest.raises(DomainError):
+        t.call_args(Fp8Anchors(c.shape, c.salt, 300, c.weight), *c.args()[:5])       # a two-byte index, a one-byte Definition
+    with pytest.raises(DomainError):
+        t.call_args(Fp8Anchors(fp8.Shape(32, 96, 16), c.salt, c.index, c.weight), *c.args()[:5])
+    ledger = Ledger()
+    ledger.admit(Fp8Anchors(c.shape, c.salt, c.index, c.weight), c.shape)
+    ledger.admit(Fp8Anchors(c.shape, c.salt, c.index + 1, c.weight), c.shape)
+    with pytest.raises(DomainError):
+        ledger.admit(Fp8Anchors(c.shape, c.salt, c.index, 12), c.shape)

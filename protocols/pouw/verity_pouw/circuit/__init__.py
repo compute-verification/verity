@@ -69,13 +69,20 @@ class Traced:
         if program_digest(decode_program(descriptor, REGISTRY)) != self.digest():
             raise DomainError(f"{self.scheme}: the descriptor is not the verifier's Program for {self.shape}")
 
-    def call_args(self, anchors, a: Sequence[int], s: Sequence[int], ys: Sequence[int], c0s: Sequence[int],
-                  t: Sequence[int], bias: Sequence[int]) -> list:
-        """The call's flat inputs, its anchored ones built from the verifier's ``anchors`` (`anchors.Anchors`)."""
+    def call_args(self, anchors, *data: Sequence[int]) -> list:
+        """The call's flat inputs: its committed ``data`` in parameter order (`ncp-v2`: a, s, ys, c0s, t, bias; NCP-FP8: a,
+        s, b, t, bias), then its anchored ones, built from the verifier's ``anchors`` (`anchors.Anchors`,
+        `anchors.Fp8Anchors`)."""
+        from ..protocol import DomainError
+
         anchors.check(self.shape)
+        if self.lengths is not None and anchors.lengths != self.lengths:
+            raise DomainError(f"{self.scheme}: the anchors' index and weight id take {anchors.lengths}, not {self.lengths}")
         an = anchors.call_inputs()
-        return [list(a), list(s), list(ys), list(c0s), list(t), list(bias), an["salt"], an["forward"], an["position"],
-                an["weight"], an["rowids"]]
+        names = [p for p, _t in self.definition.signature()[0]]
+        if sorted(names[len(data):]) != sorted(an):
+            raise DomainError(f"{self.definition.id} takes {len(names) - len(an)} committed inputs, not {len(data)}")
+        return [list(d) for d in data] + [an[p] for p in names[len(data):]]
 
     def weight_args(self, anchors, b: Sequence[int]) -> list:
         anchors.check(self.shape)

@@ -13,6 +13,21 @@
 The verifier builds these inputs itself (`Anchors.call_inputs`, `Anchors.weight_inputs`), or compares a prover's
 (`Anchors.check_call`, `Anchors.check_weight`); it never takes them as stated.  A window's `Ledger` refuses a repeated
 call index, (forward, position): the Lean statement's A11, `UniqueCallIndices`.
+
+NCP-FP8's (`Fp8Anchors`, X-SPC-89) are its declaration, (salt, index, weight id), and ids that are functions of the shape
+alone, which the verifier builds the same way:
+
+    field        value                                                                     input
+    salt         the run's salt                                                            `salt`
+    index        the matmul's index, the call index                                        `index`
+    weight id    the registered id of the matrix B is                                      `weight`
+    row ranks    0 … m−1, root_A's leaves (`audit.commit_rows`)                            `rowids`
+    row lines    the row ranks: E₁'s row i is row i's                                      `lines`
+    column lines 0 … n−1, F₁'s column j is B's column j under the weight id (#295)         `colids`
+    pad ranks    m … width−1, the tree's pad leaves                                        `padids`
+    upper nodes  (level, index) of each node above the strips (`fp8.upper_nodes`)          `nodeids`
+
+So a row's rank and its line, two inputs, are equal by construction.
 """
 from __future__ import annotations
 
@@ -80,6 +95,53 @@ class Anchors:
         _check(fn, args, self.weight_inputs())
 
 
+@dataclass(frozen=True)
+class Fp8Anchors:
+    """One NCP-FP8 call's anchors: its shape and declaration, from which the verifier builds every id input."""
+
+    shape: object                         # `fp8.Shape`
+    salt: bytes
+    index: int
+    weight: int
+
+    @property
+    def call_index(self) -> int:
+        return self.index
+
+    @property
+    def lengths(self):
+        """The Definition's byte lengths (`fp8.Lengths`) these anchors' index and weight id take."""
+        from .fp8 import Lengths
+
+        return Lengths.of(self.index, self.weight)
+
+    def check(self, shape) -> None:
+        if shape != self.shape:
+            raise DomainError(f"the anchors are a {self.shape} call's, not a {shape} call's")
+        shape.check()
+        if len(self.salt) != 32:
+            raise DomainError("the salt is 32 bytes")
+        if not all(0 <= v <= M64 for v in (self.index, self.weight)):
+            raise DomainError("the index and the weight id are 64-bit")
+
+    def call_inputs(self) -> dict[str, list[int]]:
+        """`NcpFp8Linear`'s anchored inputs, by parameter."""
+        from .fp8 import upper_nodes
+
+        m, n, width = self.shape.m, self.shape.n, self.shape.width
+        out = {"salt": list(self.salt), "index": _lane(self.index)[::-1], "weight": _lane(self.weight)[::-1],
+               "rowids": list(range(m)), "lines": list(range(m)), "colids": list(range(n))}
+        if width > m:
+            out["padids"] = list(range(m, width))
+        if upper_nodes(self.shape):
+            out["nodeids"] = [v for node in upper_nodes(self.shape) for v in node]
+        return out
+
+    def check_call(self, fn, args: Sequence[Sequence[int]]) -> None:
+        """Refuse a call's flat input leaves whose anchored inputs are not these anchors'."""
+        _check(fn, args, self.call_inputs())
+
+
 def _check(fn, args, want: dict[str, list[int]]) -> None:
     params, _ = fn.signature()
     names = [name for name, _t in params]
@@ -96,11 +158,11 @@ class Ledger:
 
     seen: set = field(default_factory=set)
 
-    def admit(self, anchors: Anchors, shape: Shape) -> None:
+    def admit(self, anchors: Anchors | Fp8Anchors, shape) -> None:
         anchors.check(shape)
         if anchors.call_index in self.seen:
-            raise DomainError(f"call index (forward, position) = {anchors.call_index} is repeated in the window")
+            raise DomainError(f"call index {anchors.call_index} is repeated in the window")
         self.seen.add(anchors.call_index)
 
 
-__all__ = ["Anchors", "Ledger"]
+__all__ = ["Anchors", "Fp8Anchors", "Ledger"]
