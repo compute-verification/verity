@@ -323,7 +323,7 @@ The draw is the object
 {"law": "subset",     "population": N, "k": K,                       "units": [u_0 < u_1 < …]}
 {"law": "bernoulli",  "population": N, "p": "num/den",               "units": [u_0 < u_1 < …]}
 {"law": "stratified", "population": N, "k": K, "strata": [stratum…], "units": [u_0 < u_1 < …]}
-{"law": "work",       "population": N, "k": K, "strata": [work stratum…], "units": [u_0 < u_1 < …]}
+{"law": "work",       "population": N, "k": K, ["count": C,] "strata": [work stratum…], "units": [u_0 < u_1 < …]}
 ~~~
 
 **The stratified law** is the default (Daniel, Sep 27; the encoding is `note:20260927T1550Z-handoff-from-stratified-law`,
@@ -350,15 +350,22 @@ differ. The stratified law is unchanged.
   (`HmRow.workLaw`, `flock-verify draw --program P --partition Q --work K --work-table F`). A draw's stated work sets
   every `k_s`, so `verify` never takes it as stated: it refuses a work draw unless it holds its own work table, program
   and partition, and then the law must be its own derivation.
-- **Sizes.** With `W = Σ_s w_s n_s ≥ 1` and `1 ≤ K ≤ N`, stratum `s` draws `k_s = min(n_s, max(1, ⌈K w_s n_s / W⌉))`
-  (`Draw.workK`). This is its work share of `K`, rounded up. It is never above `n_s`, and never below one: this
-  integrity floor binds exactly for the strata that do no work. At most `K` plus one unit per stratum are drawn. A
-  work stratum is `{"template": id, "units": [[lo, hi], …], "work": w_s, "k": k_s}`.
+- **Sizes.** With `W = Σ_s w_s n_s ≥ 1` and `1 ≤ K ≤ N`, stratum `s` draws `k_s = min(n_s, max(f_s, ⌈K w_s n_s / W⌉))`
+  (`Draw.workK`). This is its work share of `K`, rounded up. It is never above `n_s`, and never below its floor `f_s`
+  (`Draw.workFloor`). A work stratum is `{"template": id, "units": [[lo, hi], …], "work": w_s, "k": k_s}`.
+- **Floors.** Without a count budget, every `f_s` is one: this integrity floor binds exactly for the strata that do no
+  work, and at most `K` plus one unit per stratum are drawn. With the law's `count` `C` (`1 ≤ C ≤ N`,
+  `flock-verify draw … --work K --count C`), a stratum that does no work has `f_s = max(1, ⌊(2 C n_s + N) / (2N)⌋)`, the
+  stratified law's size at `C`. So it draws exactly what `stratified:C` draws from it, and the strata that do work keep
+  `f_s = 1`. At most `K + Σ_s f_s` units are drawn.
 - **What it guarantees** (`soundness/FlockSoundness/Audit/Work.lean`). Wrong units that do a fraction `ε` of the work
-  escape with probability at most `(1 − ε)^K` (`work_escape_le`). At the sizing of record, `δ = 2^-40` and `ε = 0.1%`,
-  `K = 27,713` meets it (`record_sizing`) and `K = 27,712` does not (`record_sizing_one_fewer`). Rounding up keeps
-  every unit's inclusion probability at least `K w_s / W`, which the bound needs. Every non-empty stratum draws at
-  least one unit, so a wholly wrong stratum is caught (`audit_work_whole_stratum`).
+  escape with probability at most `(1 − ε)^K` (`work_escape_le`), whatever the floors. At the sizing of record,
+  `δ = 2^-40` and `ε = 0.1%`, `K = 27,713` meets it (`record_sizing`) and `K = 27,712` does not
+  (`record_sizing_one_fewer`). Rounding up keeps every unit's inclusion probability at least `K w_s / W`, which the bound
+  needs. Every non-empty stratum draws at least one unit, so a wholly wrong stratum is caught
+  (`audit_work_whole_stratum`). With a count budget, the strata that do no work keep the stratified law's guarantee at
+  `C`: a set escapes at most as often as its units in those strata escape `stratified:C` (`work_escape_le_count`,
+  `audit_work_rest`).
 - **Closure draws** are not part of this law: proving a drawn tile together with the two strips it reads waits for
   the red team's verdict on the PoUW design's closure theorem. `Law.widen` and `escape_widen_le` carry the work law's
   bounds to any rule that adds units after the draw.
@@ -369,7 +376,7 @@ and the record keeps it as `unit_draw`. The offline checks:
 | check | rule |
 |---|---|
 | U1 | the record keeps a draw iff the statement carries one, and they are canonically equal |
-| U2 | the draw is well formed: exactly the law's keys; units ascending, distinct and in `[0, N)`; `subset` has `K ≤ N` units; `bernoulli` has `0 ≤ num ≤ den`, `den > 0`, no unit at `p = 0` and every unit at `p = 1`; `stratified` has `1 ≤ K ≤ N`, each stratum exactly `{template, units, k}` with a distinct template, its ranges ascending, disjoint, not adjacent and non-empty, its `k` the rule's, the strata's ranges tiling `[0, N)` exactly, and exactly `k_s` units in each; `work` has the same checks, with each stratum exactly `{template, units, work, k}`, `W ≥ 1` and each `k` the work rule's. When the verifier holds the program and a template-query partition object, a stratified draw's law must be its own derivation from them, at the draw's `K`. A work draw's law must always be its own derivation from them and its work table, and `verify` refuses a work draw without all three |
+| U2 | the draw is well formed: exactly the law's keys; units ascending, distinct and in `[0, N)`; `subset` has `K ≤ N` units; `bernoulli` has `0 ≤ num ≤ den`, `den > 0`, no unit at `p = 0` and every unit at `p = 1`; `stratified` has `1 ≤ K ≤ N`, each stratum exactly `{template, units, k}` with a distinct template, its ranges ascending, disjoint, not adjacent and non-empty, its `k` the rule's, the strata's ranges tiling `[0, N)` exactly, and exactly `k_s` units in each; `work` has the same checks, with each stratum exactly `{template, units, work, k}`, an optional `count` in `[1, N]`, `W ≥ 1` and each `k` the work rule's above its floor. When the verifier holds the program and a template-query partition object, a stratified draw's law must be its own derivation from them, at the draw's `K`. A work draw's law must always be its own derivation from them and its work table, and `verify` refuses a work draw without all three |
 | U3 | the statement's `instances` is the number of drawn units |
 
 `stratified_agree.py` checks the Lean verifier against core's (#164's `verity_one_stage.draw`, #161's `Stratified`):
