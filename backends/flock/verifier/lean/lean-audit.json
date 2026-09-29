@@ -69,6 +69,15 @@
    "assumptions": [],
    "type_hash": "000000003ffc6eca"
   },
+  "Flock.checkInRange_ok": {
+   "signature": [
+    "Flock.checkInRange_ok (kLog nRegions mPts : Nat) :",
+    "  Iff (Eq (Flock.checkInRange kLog nRegions mPts) (Except.ok Unit.unit))",
+    "    (And (instLENat.le kLog 26) (And (instLENat.le nRegions 1024) (instLENat.le mPts 64)))"
+   ],
+   "assumptions": [],
+   "type_hash": "0000000036db5def"
+  },
   "Flock.climb_binding": {
    "signature": [
     "Flock.climb_binding (ms : Flock.MerkleScheme) (hs : ms.Sized) (s1 s2 : List ByteArray) (a b : ByteArray) (idx : Nat) :",
