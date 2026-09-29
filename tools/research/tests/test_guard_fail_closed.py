@@ -101,7 +101,7 @@ def test_a_corrupt_state_file_is_set_aside_and_the_guard_keeps_enforcing(budgets
 def test_each_poll_terminates_before_it_logs():
     from research.pods import budgets as B
 
-    api, lines = FakeRunPod([pod("a", "vy-a-1", 4.0, 60)]), []
+    api = FakeRunPod([pod("a", "vy-a-1", 4.0, 60)])
     state = G.new_state(T0)
     order = []
     real_terminate = api.terminate
