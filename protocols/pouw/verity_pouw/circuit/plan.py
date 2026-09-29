@@ -9,13 +9,18 @@ beneath it (Lean `harm_le_unsoundWork`, `closureLaw_escape`).
 **The law is a seam** (`TileLaw`), so the plan switches laws without changing:
 * `CountLaw` is the law on `main` today, one_stage's and #167's stratified law: one stratum per template, a uniform k_s-subset
   inside each, k_s = max(1, round(K·n_s/N)) (rounding half up), K the law's budget over the strata it draws.
-* `WorkLaw` is Verity root's work law (draft #362, `Flock/Draw.lean` `workK`): k_s = min(n_s, max(1, ⌈K·W_s/W⌉)), with
+* `WorkLaw` is Verity root's work law (#362, `Flock/Draw.lean` `workK`): k_s = min(n_s, max(1, ⌈K·W_s/W⌉)), with
   K = `RECORD_K` = 27,713 at ε = 0.1% and δ = 2⁻⁴⁰ (`record_k`). K is a **window's** budget: a call draws its share,
   K_c = ⌈K·W_c/W_window⌉, capped at its units (`window_laws`), which is #362's law with strata by (call, template), so
-  the window keeps its (1 − ε)^K. It is not of record until #362 merges (and root chooses the strata, X-SPC-84).
+  the window keeps its (1 − ε)^K. It is not of record until root chooses the strata (X-SPC-84): these two, or #362's one
+  per template (#372).
 
 **Openings** are row-granular (the red team's X-SPC-57): A and the weight are committed one leaf per row, so a proved
 unit opens exactly the rows it reads.
+
+**The layout is the verifier's.** `layout` derives each tile's own unit and its closure from the shape alone (through the
+Program the verifier builds), never from a prover: `Traced.check_layout` refuses any other, and `draw` refuses one whose
+tile is not its own closure's first unit.
 
 **The profile** is core's `Stratified` over the tile strata, whose `harm_bound` with each tile's W_ref as its harm bounds
 the unsound work at δ (Lean `audit_closure`, `accountable_compute`).
@@ -30,6 +35,7 @@ from typing import Mapping, Protocol, Sequence
 from verity.proofs.profile import Stratified, Stratum
 from verity.randomness import Key
 
+from ..protocol import DomainError
 from ..schemes.ncp import FORM_UNITS
 from .ncp2 import D, Shape, rfc6962
 from .partition import Unit, units
@@ -98,7 +104,7 @@ RECORD_K = 27_713
 
 @dataclass(frozen=True)
 class WorkLaw:
-    """The work law (Verity root's, draft #362, `Flock/Draw.lean` `workK`): each stratum draws
+    """The work law (Verity root's #362, `Flock/Draw.lean` `workK`): each stratum draws
     k_s = min(n_s, max(1, ⌈K·W_s/W⌉)), W_s its work, W the strata's total, 1 ≤ K ≤ N. The floor of one binds exactly for the
     strata that do no work (the dequantization units). ``k`` is the budget K (`record_k`)."""
 
@@ -144,6 +150,17 @@ class Layout:
     def work(self) -> int:
         """The call's work W_c: its strata's."""
         return sum(st.work for st in self.strata)
+
+    def check(self) -> None:
+        """Refuse a layout whose tiles are not the partition's tile units, or whose closure of a tile doesn't hold the tile's
+        own unit first: the Layout theorems (`Layout.accountable_compute`) read τ = the tile's own unit, and a tile mapped to
+        its X strip is C1 again.  `draw` runs it; a verifier compares the whole layout with its own (`Traced.check_layout`)."""
+        tiles = [u for st in self.strata if st.role == "tile" for u in st.units]
+        if set(tiles) != set(self.closure):
+            raise DomainError("the layout's closures are not its tile stratum's")
+        for t in tiles:
+            if self.units[t].role != "tile" or self.closure[t][:1] != (t,):
+                raise DomainError(f"unit {t}: a tile is a tile unit, and its closure holds it first")
 
 
 def layout(shape: Shape, kind: str = "shift24") -> Layout:
@@ -195,6 +212,7 @@ class Plan:
 def draw(key: Key, lay: Layout, law: TileLaw) -> Plan:
     """The plan for one draw: a uniform k_s-subset of each stratum from ``key`` (the verifier's own randomness, derived under
     `DRAW_DOMAIN` after the receipt), then every drawn tile's closure."""
+    lay.check()
     sizes = law.sizes(lay.strata)
     drawn: list[int] = []
     for s in lay.strata:

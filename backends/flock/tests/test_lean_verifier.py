@@ -44,11 +44,11 @@ def test_audit_layer_is_abstract():
     """The audit theorems import only the interaction model, Mathlib and each other, so any backend can instantiate them
     (`soundness/DESIGN.md` §12). The Flock instantiations are the only files that import Flock's theorems:
     `Flock.lean` (oracle layer), `FlockCompiled.lean` (one table), `FlockBatched.lean` (several tables),
-    `FlockBatchedAcc.lean` (the expected-time extractor), `FlockLink.lean` (the link theorem) and `FlockLinked.lean` (the
-    two composed). No proof is admitted."""
+    `FlockBatchedAcc.lean` (the expected-time extractor), `FlockLink.lean` (the link theorem), `FlockLinked.lean` (the
+    two composed) and `FlockWork.lean` (the executable's work rule). No proof is admitted."""
     files = sorted(AUDIT.glob("*.lean"))
     flock = {"Flock.lean", "FlockCompiled.lean", "FlockBatched.lean", "FlockBatchedAcc.lean", "FlockLink.lean",
-             "FlockLinked.lean"}
+             "FlockLinked.lean", "FlockWork.lean"}
     assert files and flock <= {p.name for p in files}
     bad = [f"{p.name}: {line}" for p in files if p.name not in flock for line in p.read_text().splitlines()
            if line.startswith("import ") and not AUDIT_IMPORTS.match(line)]
@@ -290,6 +290,203 @@ def test_stratified_draw_from_the_verifiers_own_program(tmp_path):
         assert _lean_draw_obj([*flags, "--stratified", k]) is None
     (tmp_path / "w.json").write_text(json.dumps({**obj, "query": {"name": "Q_word", "version": 1, "params": {"X": 16, "W": 32}}}))
     assert _lean_draw_obj(["--program", str(tmp_path / "p.desc"), "--partition", str(tmp_path / "w.json"), "--stratified", "4"]) is None
+
+
+def _work_program(tmp_path):
+    """Three templates' units under `Q_template_instances` (T0 at [0, 2) and [5, 6), T1 at [2, 5), T2 at [6, 10)), and a
+    writer of work tables that returns the verifier's flags for it."""
+    import hashlib
+    desc = {"schema": "verity-ir/descriptor/v1", "callees": ["Input8_v1", "T0_v0", "T1_v0", "T2_v0"], "root": "Root_v0",
+            "definitions": {"Root_v0": {"form": "composite", "body": {"nodes": [
+                {"form": "primitive", "fn": 0}, {"form": "batch", "fn": 1, "n": 2}, {"form": "batch", "fn": 2, "n": 3},
+                {"form": "batch", "fn": 1, "n": 1}, {"form": "batch", "fn": 3, "n": 4}]}},
+                "Input8_v1": {"form": "primitive"}, "T0_v0": {"form": "primitive"}, "T1_v0": {"form": "primitive"},
+                "T2_v0": {"form": "primitive"}}}
+    text = json.dumps(desc, sort_keys=True, separators=(",", ":"))
+    (tmp_path / "p.desc").write_text(text)
+    obj = {"format": "verity/partition/v1", "program": hashlib.sha512(text.encode()).hexdigest(),
+           "query": {"name": "Q_template_instances", "version": 0, "params": {"templates": ["T1_v0", "T0_v0", "T2_v0"]}}}
+    (tmp_path / "q.json").write_text(json.dumps(obj))
+
+    def table(name, work):
+        (tmp_path / name).write_text(json.dumps(work))
+        return ["--program", str(tmp_path / "p.desc"), "--partition", str(tmp_path / "q.json"), "--work-table", str(tmp_path / name)]
+
+    return table
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_work_draw_from_the_verifiers_own_program(tmp_path):
+    """`draw --program --partition --work K --work-table F`: the stratified law's strata, `k_s = min(n_s, max(f_s,
+    ⌈K w_s n_s / W⌉))` with each stratum's floor `f_s` from the table (one by default, so a stratum that does no work draws
+    one), each stratum's `subset` on its own segment of the stream, and U2 on work draws, held to the verifier's own law."""
+    import random
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    ref = _stratified_agree()
+    table = _work_program(tmp_path)
+    flags = table("w.json", {"T0_v0": 3, "T1_v0": 1, "T2_v0": 0})
+    law = {"law": "work", "k": 2, "strata": [{"template": "T0_v0", "units": [[0, 2], [5, 6]], "work": 3, "floor": 1, "k": 2},
+                                             {"template": "T1_v0", "units": [[2, 5]], "work": 1, "floor": 1, "k": 1},
+                                             {"template": "T2_v0", "units": [[6, 10]], "work": 0, "floor": 1, "k": 1}]}
+    need = sum(2 * s["k"] * ref.width(sum(hi - lo for lo, hi in s["units"])) + 64 for s in law["strata"])
+    rng = random.Random(20260929)
+    for _ in range(20):
+        src = rng.randbytes(need)
+        (tmp_path / "s.bin").write_bytes(src)
+        d = _lean_draw_obj([*flags, "--work", "2", "--stream-file", str(tmp_path / "s.bin")])
+        assert {k: d[k] for k in ("law", "k", "strata")} == law and d["population"] == 10
+        assert d["units"] == ref.reference_draw(law, src)
+    # W = 3·3 + 1·3 = 12: sized by work, floored at one, capped at n_s
+    for k, want in {"1": [1, 1, 1], "4": [3, 1, 1], "10": [3, 3, 1]}.items():
+        assert [s["k"] for s in _lean_draw_obj([*flags, "--work", k])["strata"]] == want, k
+    d = _lean_draw_obj([*flags, "--work", "2"])
+    assert len(d["units"]) == 4 and sum(u in (0, 1, 5) for u in d["units"]) == 2 and sum(u >= 6 for u in d["units"]) == 1
+    s0, s1, s2 = d["strata"]
+    bad = [{**d, "k": 3}, {**d, "law": "stratified"}, {**d, "units": d["units"][:-1]},
+           {**d, "strata": [s0, s1, {**s2, "k": 0}]}, {**d, "strata": [s0, s1, {k: v for k, v in s2.items() if k != "work"}]},
+           {**d, "strata": [{**s0, "work": "3"}, s1, s2]}, {**d, "strata": [s0, s1, {**s2, "k": True}]},
+           {**d, "strata": [s0, s1, {**s2, "work": 0, "n": 4}]}, {**d, "strata": [s0, s1]},
+           # U2 alone accepts a work of 4 (the same k_s); the verifier's own table refuses it
+           {**d, "strata": [{**s0, "work": 4}, s1, s2]}]
+
+    def check(cases, *extra):
+        (tmp_path / "cases.json").write_text(json.dumps([{"record": x, "statement": x, "instances": len(x["units"])} for x in cases]))
+        p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "draw-test", str(tmp_path / "cases.json"), *extra],
+                           capture_output=True, text=True)
+        return [json.loads(line[10:]) for line in p.stdout.splitlines()]
+
+    got = check([d, *bad], *flags, "--work", "2")
+    assert [g["ok"] for g in got] == [True] + [False] * len(bad), got
+    assert [g["ok"] for g in check([d, bad[-1]])] == [True, True]
+    # another table's law, or the stratified law, is not this verifier's
+    other = _lean_draw_obj([*table("w2.json", {"T0_v0": 1, "T1_v0": 1, "T2_v0": 0}), "--work", "2"])
+    strat = _lean_draw_obj([*flags[:4], "--stratified", "2"])
+    assert [g["ok"] for g in check([other, strat])] == [True, True]
+    assert [g["ok"] for g in check([other, strat], *flags, "--work", "2")] == [False, False]
+    # floors per stratum from the table: T2 (no work, 4 of 10 units) at floor 2 draws what stratified:4 draws from it,
+    # at floor 9 all four; a floor on a working stratum lifts it too
+    cases = [({"T0_v0": 3, "T1_v0": 1, "T2_v0": {"work": 0, "floor": 2}}, [1, 1, 2], [2, 1, 2]),
+             ({"T0_v0": 3, "T1_v0": 1, "T2_v0": {"work": 0, "floor": 9}}, [1, 1, 9], [2, 1, 4]),
+             ({"T0_v0": 3, "T1_v0": {"work": 1, "floor": 3}, "T2_v0": 0}, [1, 3, 1], [2, 3, 1])]
+    for i, (work, floors, want) in enumerate(cases):
+        df = _lean_draw_obj([*table(f"wf{i}.json", work), "--work", "2"])
+        assert [s["floor"] for s in df["strata"]] == floors and [s["k"] for s in df["strata"]] == want, work
+    assert _lean_draw_obj([*flags[:4], "--stratified", "4"])["strata"][2]["k"] == 2
+    ff = table("wf.json", cases[0][0])
+    df = _lean_draw_obj([*ff, "--work", "2"])
+    f0, f1, f2 = df["strata"]
+    # U2 refuses a floor of 0, a missing floor and a count key; floor 1 with k 1 is the rule's, and only the verifier's own
+    # table refuses it
+    fbad = [{**df, "strata": [f0, f1, {**f2, "floor": 0}]}, {**df, "strata": [f0, f1, {k: v for k, v in f2.items() if k != "floor"}]},
+            {**df, "count": 4}, {**df, "strata": [f0, f1, {**f2, "floor": 1, "k": 1}], "units": [u for u in df["units"] if u < 6] + [6]}]
+    assert [g["ok"] for g in check([df, *fbad], *ff, "--work", "2")] == [True] + [False] * 4
+    assert [g["ok"] for g in check([df, fbad[3]])] == [True, True]
+    assert [g["ok"] for g in check([df, d], *flags, "--work", "2")] == [False, True]
+    assert _lean_draw_obj([*table("wf0z.json", {"T0_v0": 3, "T1_v0": 1, "T2_v0": {"work": 0, "floor": 0}}), "--work", "2"]) is None
+    assert _lean_draw_obj([*table("wfx.json", {"T0_v0": {"work": 3, "floor": 1, "x": 1}, "T1_v0": 1, "T2_v0": 0}), "--work", "2"]) is None
+    for k in ("0", "11"):
+        assert _lean_draw_obj([*flags, "--work", k]) is None
+    assert _lean_draw_obj([*table("w3.json", {"T0_v0": 3, "T1_v0": 1}), "--work", "2"]) is None
+    assert _lean_draw_obj([*table("w4.json", {"T0_v0": 0, "T1_v0": 0, "T2_v0": 0}), "--work", "2"]) is None
+    assert _lean_draw_obj([*flags, "--work", "2", "--stratified", "2"]) is None
+    assert _lean_draw_obj([*flags[:4], "--work", "2"]) is None
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_verify_takes_a_work_draw_only_from_its_own_table(tmp_path):
+    """`verify` refuses a session whose record carries a work draw unless it holds its own K, work table, program and
+    partition, since the draw's K, works and floors set every k_s; with all four, the law must be its own derivation, so a
+    draw made at another K (k = 1, say, which U2 alone accepts) or under other floors is refused."""
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    table = _work_program(tmp_path)
+    flags = table("w.json", {"T0_v0": 3, "T1_v0": 1, "T2_v0": 0})
+    other = table("w2.json", {"T0_v0": 1, "T1_v0": 1, "T2_v0": 0})
+    (tmp_path / "circuit.txt").write_text("not a circuit\n")
+    (tmp_path / "pub.bin").write_bytes(b"{}\n")
+
+    def session(name, draw):
+        s = tmp_path / name
+        s.mkdir()
+        (s / "session.json").write_text(json.dumps({"kind": "flock-live-session/v1", "unit_draw": draw}))
+        for r in (0, 1):
+            (s / f"circuit.rep{r}.bin").write_bytes(b"\0" * 16)
+        return s
+
+    at2 = session("k2", _lean_draw_obj([*flags, "--work", "2"]))
+    at1 = session("k1", _lean_draw_obj([*flags, "--work", "1"]))
+
+    def why(s, *extra):
+        p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "verify", "--circuit", str(tmp_path / "circuit.txt"),
+                            "--public", str(tmp_path / "pub.bin"), *extra, "--session", str(s)],
+                           capture_output=True, text=True)
+        (v,) = [json.loads(line[8:]) for line in p.stdout.splitlines() if line.startswith("VERDICT ")]
+        assert not v["accepted"] and p.returncode == 1
+        return v["why"]
+
+    need = "setup: U2: a work draw needs the verifier's own K, work table, program and partition"
+    assert why(at2).startswith(need)
+    assert why(at2, *flags[:4], "--work", "2").startswith(need)
+    assert why(at2, *flags[4:], "--work", "2").startswith(need)
+    assert why(at2, *flags).startswith(need)
+    assert why(at2, *other, "--work", "2").startswith("setup: U2: the draw's work law is not the verifier's own")
+    assert why(at2, *flags, "--work", "3").startswith("setup: U2: the draw's K is 2, not the verifier's 3")
+    assert why(at1, *flags, "--work", "2").startswith("setup: U2: the draw's K is 1, not the verifier's 2")
+    # at its own K and table the law is its own derivation, and setup goes on to the circuit, which this file is not
+    assert not why(at2, *flags, "--work", "2").startswith("setup: U2:")
+    assert not why(at1, *flags, "--work", "1").startswith("setup: U2:")
+    # the floors are the verifier's too: a draw made under a table with T2's floor at 3 is refused under the verifier's
+    # table (floor 1), and one made under floor 1 is refused under a table with floor 3
+    floored = table("wf.json", {"T0_v0": 3, "T1_v0": 1, "T2_v0": {"work": 0, "floor": 3}})
+    at2f = session("k2f", _lean_draw_obj([*floored, "--work", "2"]))
+    assert why(at2f, *flags, "--work", "2").startswith("setup: U2: the draw's work law is not the verifier's own")
+    assert why(at2, *floored, "--work", "2").startswith("setup: U2: the draw's work law is not the verifier's own")
+    assert not why(at2f, *floored, "--work", "2").startswith("setup: U2:")
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_verify_takes_a_stratified_draw_only_at_its_own_k(tmp_path):
+    """`verify` refuses a session whose record carries a stratified draw unless it holds its own K (`--stratified K`),
+    program and partition, since the draw's K and strata set every k_s (U2 alone accepts a draw at k = 1, and strata it
+    cannot check); with all three, the law must be its own derivation, so a draw at another K or over other strata is
+    refused."""
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    flags = _work_program(tmp_path)("w.json", {})[:4]
+    (tmp_path / "circuit.txt").write_text("not a circuit\n")
+    (tmp_path / "pub.bin").write_bytes(b"{}\n")
+
+    def session(name, draw):
+        s = tmp_path / name
+        s.mkdir()
+        (s / "session.json").write_text(json.dumps({"kind": "flock-live-session/v1", "unit_draw": draw}))
+        for r in (0, 1):
+            (s / f"circuit.rep{r}.bin").write_bytes(b"\0" * 16)
+        return s
+
+    d4 = _lean_draw_obj([*flags, "--stratified", "4"])
+    at4 = session("k4", d4)
+    at1 = session("k1", _lean_draw_obj([*flags, "--stratified", "1"]))
+    # T0's and T1's names swapped (both 3 units at k 1): well formed, and not the verifier's strata
+    s0, s1, s2 = d4["strata"]
+    swapped = session("swapped", {**d4, "strata": [{**s0, "template": s1["template"]}, {**s1, "template": s0["template"]}, s2]})
+
+    def why(s, *extra):
+        p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "verify", "--circuit", str(tmp_path / "circuit.txt"),
+                            "--public", str(tmp_path / "pub.bin"), *extra, "--session", str(s)],
+                           capture_output=True, text=True)
+        (v,) = [json.loads(line[8:]) for line in p.stdout.splitlines() if line.startswith("VERDICT ")]
+        assert not v["accepted"] and p.returncode == 1
+        return v["why"]
+
+    need = "setup: U2: a stratified draw needs the verifier's own K, program and partition"
+    assert why(at4).startswith(need)
+    assert why(at4, *flags).startswith(need)
+    assert why(at4, "--stratified", "4").startswith(need)
+    assert why(at4, *flags, "--stratified", "1").startswith("setup: U2: the draw's K is 4, not the verifier's 1")
+    assert why(at1, *flags, "--stratified", "4").startswith("setup: U2: the draw's K is 1, not the verifier's 4")
+    assert why(swapped, *flags, "--stratified", "4").startswith("setup: U2: the draw's strata are not the verifier's own")
+    # at its own K, program and partition, setup goes on to the circuit, which this file is not
+    assert not why(at4, *flags, "--stratified", "4").startswith("setup: U2:")
+    assert not why(at1, *flags, "--stratified", "1").startswith("setup: U2:")
 
 
 def _one_stage_draw():

@@ -727,14 +727,15 @@ def drawn (c : Circuit) (pub : Public) (draw : Json) : V Public := do
            sha := ← publicDigest header pubs, population := some (pub.n, pub.digests, pub.outputs),
            tables := pub.tables.map fun t => { t with refs := d.units.foldl (fun acc u => acc ++ t.refs.extract (u * np) (u * np + np)) #[] } }
 
-/-- `stratified:K` expanded over the verifier's own program and partition object (`draw.derive`), and the population: the
-query applied to the program, its units grouped by template descriptor id. Only `Q_template_instance` v0 and
-`Q_template_instances` v0 define strata. -/
-def stratifiedLaw (obj : Json) (program : ByteArray) (k : Nat) : V (Draw.Law × Nat) := do
+/-- The strata of the verifier's own program and partition object, and the population: the query applied to the program,
+its units grouped by template descriptor id (`Draw.strataOf`). Only `Q_template_instance` v0 and `Q_template_instances` v0
+define strata; `law` names the law that asks, in the refusal. -/
+private def templateStrata (law : String) (obj : Json) (program : ByteArray) :
+    V (Array (String × Array (Nat × Nat)) × Nat) := do
   let (name, version) ← checkPartitionObject obj
   let q := (obj.getObjVal? "query").toOption.getD Json.null
   let some ts := TemplateQuery.templatesOf name version ((q.getObjVal? "params").toOption.getD Json.null)
-    | throw s!"stratified: {name} v{version} defines no strata (Q_template_instance v0 and Q_template_instances v0 do)"
+    | throw s!"{law}: {name} v{version} defines no strata (Q_template_instance v0 and Q_template_instances v0 do)"
   let ts ← ts
   let d ← TemplateQuery.Desc.parse program
   if (obj.getObjValAs? String "program").toOption != some (hexOf d.sha512) then
@@ -742,9 +743,22 @@ def stratifiedLaw (obj : Json) (program : ByteArray) (k : Nat) : V (Draw.Law × 
   let rs ← match TemplateQuery.evaluate d ts with
     | .ok rs => pure rs
     | .error e => throw s!"partition: {e}"
-  match Draw.derive k (Draw.strataOf (rs.map fun r => (r.template, r.first, r.count))) with
-  | .ok law => return (law, TemplateQuery.population rs)
+  return (Draw.strataOf (rs.map fun r => (r.template, r.first, r.count)), TemplateQuery.population rs)
+
+/-- `stratified:K` expanded over the verifier's own program and partition object (`draw.derive`), and the population. -/
+def stratifiedLaw (obj : Json) (program : ByteArray) (k : Nat) : V (Draw.Law × Nat) := do
+  let (strata, population) ← templateStrata "stratified" obj program
+  match Draw.derive k strata with
+  | .ok law => return (law, population)
   | .error e => throw s!"stratified: {e}"
+
+/-- `work:K` expanded over the verifier's own program, partition object and work table of works and floors
+(`Draw.deriveWork`), and the population. -/
+def workLaw (obj : Json) (program : ByteArray) (k : Nat) (table : Array (String × Nat × Nat)) : V (Draw.Law × Nat) := do
+  let (strata, population) ← templateStrata "work" obj program
+  match Draw.deriveWork k strata table with
+  | .ok law => return (law, population)
+  | .error e => throw s!"work: {e}"
 
 /-- The frame-v3-sha512 roots recomputed from the population's `b ‖ c` (a shared-row file: each input port's over its table)
 and output words against the header's; the pinned dummy `b ‖ c` against the zero row's (upstream's `check_public`). -/
@@ -914,10 +928,30 @@ def Stmt.setupH (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coin
 several, the session's units (the draw's, without one the population's) split into `count` equal consecutive parts, and
 table `j` is `setupH`'s statement of part `j` as a subset draw of the population, under `Tags.tableIdentity`: every check
 `setupH` makes, it makes on each table. Every part comes from `draw`, the session's, never from a table's header. The
-session's Σ covers every table's; its `unitDraw` is `draw`. -/
+session's Σ covers every table's; its `unitDraw` is `draw`. `work` is the verifier's own `K` and work table, which a work
+draw's law is held to, and `stratified` its own `K`, at which a stratified draw's law is its own derivation. -/
 def Stmt.setupTables (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins) (count : Nat)
     (tables : List (String × ByteArray) := []) (draw : Option Json := none) (partition : Option Json := none)
-    (program : Option ByteArray := none) : V (SessionSpec × Array Stmt) := do
+    (program : Option ByteArray := none) (work : Option (Nat × Array (String × Nat × Nat)) := none)
+    (stratified : Option Nat := none) : V (SessionSpec × Array Stmt) := do
+  -- a stratified draw's K and strata set every k_s, so its law must be the verifier's own derivation, never taken as stated
+  if let some d := draw then
+    if let .ok (Draw.Law.stratified k strata) := (Draw.UnitDraw.ofJson d).map (·.law) then
+      let (some obj, some prog, some K) := (partition, program, stratified)
+        | throw "U2: a stratified draw needs the verifier's own K, program and partition (--stratified, --program, --partition)"
+      if k != K then throw s!"U2: the draw's K is {k}, not the verifier's {K}"
+      let (law, _) ← HmRow.stratifiedLaw obj prog K
+      if law != Draw.Law.stratified k strata then
+        throw "U2: the draw's strata are not the verifier's own (its K, program and query)"
+  -- a work draw's K and stated work set every k_s, so its law must be the verifier's own derivation, never taken as stated
+  if let some d := draw then
+    if let .ok (Draw.Law.work k strata) := (Draw.UnitDraw.ofJson d).map (·.law) then
+      let (some obj, some prog, some (K, table)) := (partition, program, work)
+        | throw "U2: a work draw needs the verifier's own K, work table, program and partition (--work, --work-table, --program, --partition)"
+      if k != K then throw s!"U2: the draw's K is {k}, not the verifier's {K}"
+      let (law, _) ← HmRow.workLaw obj prog K table
+      if law != Draw.Law.work k strata then
+        throw "U2: the draw's work law is not the verifier's own (its K, program, query and work table)"
   if count ≤ 1 then
     let st ← Stmt.setupH tags circuitFile publicFile coins tables draw partition program
     return (st.spec, #[st])

@@ -25,11 +25,12 @@ from verity.ir.defs import PrimitiveDefinition
 core = [C.Bf16ToF32, C.F32ToBf16Rn, C.F2fpBf16, C.HopperBF16WgmmaDot16, C.AmpereBF16TcDot16, C.F32ToE4m3Sat,
         C.HopperE4m3QgmmaDot32, C.ZERO32, G.DotBf16, G.GemmCoordinate, G.Gemm]
 core += [getattr(S, n) for n in S.__all__ if n not in ("BIT", "BF16", "F32", "I32")]
-fp32 = [getattr(F, n) for n in F.__all__ if isinstance(getattr(F, n), PrimitiveDefinition)]
-core += fp32
+fp32 = {n: getattr(F, n) for n in F.__all__ if isinstance(getattr(F, n), PrimitiveDefinition)}
+core += fp32.values()
 assert all(REGISTRY[d.id] is d for d in core), [d.id for d in core if REGISTRY[d.id] is not d]
 assert (P.Bf16ToF32, P.F32ToBf16Rn, P.F2fpBf16) == (C.Bf16ToF32, C.F32ToBf16Rn, C.F2fpBf16)
-assert len(fp32) == 15 and all(getattr(P, d.name) is d for d in fp32), [d.id for d in fp32 if getattr(P, d.name) is not d]
+assert len(fp32) == 24 and all(getattr(P, n, None) is d for n, d in fp32.items()), [
+    d.id for n, d in fp32.items() if getattr(P, n, None) is not d]
 assert (P.I32Le, P.I32Add, P.I32Eq, P.SelectF32, P.SelectBf16, P.SelectI32, P.Bf16GtStrict) == (
     S.I32Le, S.I32Add, S.I32Eq, S.SelectF32, S.SelectBf16, S.SelectI32, S.Bf16GtStrict)
 assert fp8.FP8_PRIMITIVES == [S.F32Fabs, S.F32Fmaxf, S.F32Fminf, C.F32ToE4m3Sat, C.HopperE4m3QgmmaDot32]

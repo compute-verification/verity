@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from fractions import Fraction
 
+import pytest
+
 from verity.proofs.profile import Stratified, Stratum
 from verity.randomness import derive
 
@@ -112,3 +114,43 @@ def test_the_default_work_law_draws_a_calls_share_of_the_windows_budget():
     assert laws[0].budget(lay.strata) == -(-PL.RECORD_K // 10_000) == 3
     assert laws[0].sizes(lay.strata) == {tile.name: 3, rest.name: 1}
     assert sum(law.sizes(lay.strata)[tile.name] for law in laws) <= PL.RECORD_K + 10_000 * len(lay.strata)
+
+
+def test_a_tiles_closure_contains_the_tile_itself():
+    """A drawn tile is proved itself, not only what it reads: `t ∈ cl t`, as Lean's `Layout.cl` inserts the tile's own unit.
+    Without it a wrong tile over right strips would count as zero harm (the Flock red team's C1 on #390)."""
+    for shape in (ncp2.Shape(32, 64, 32), ncp2.Shape(48, 64, 32)):
+        lay = PL.layout(shape)
+        tiles = {u.index for u in lay.units if u.role == "tile"}
+        assert set(lay.closure) == tiles
+        assert all(lay.closure[t][0] == t for t in tiles)
+        plan = PL.draw(_key(), lay, PL.WorkLaw(len(tiles)))                 # every tile drawn
+        assert tiles <= set(plan.drawn) <= set(plan.proved)
+        assert all(set(lay.closure[t]) <= set(plan.proved) for t in tiles)
+
+
+def test_a_prover_s_layout_mapping_a_tile_to_its_x_strip_is_refused():
+    """The Layout theorems hold only for the window's own layout, so the verifier derives each tile's own unit and its
+    closure from the shape (`Traced.layout`) and never takes a prover's. A layout mapping a tile to its X strip, C1 again,
+    is refused, as a closure headed by the X strip or as the X strip in the tile stratum: by the verifier's comparison
+    (`Traced.check_layout`) and by `draw`'s own check."""
+    from dataclasses import replace
+
+    from verity_pouw.circuit import traced_as
+    from verity_pouw.protocol import DomainError
+
+    t = traced_as("ncp-v2-shift24", 32, 64, 32)
+    lay = t.layout()
+    t.check_layout(lay)
+    tile = next(u.index for u in lay.units if u.role == "tile")
+    xs = lay.closure[tile][1]
+    assert lay.units[xs].role == "form_x"
+    headed_by_x = replace(lay, closure={**lay.closure, tile: (xs, *(u for u in lay.closure[tile] if u not in (tile, xs)))})
+    strata = tuple(replace(s, units=tuple(xs if u == tile else u for u in s.units)) if s.role == "tile" else s
+                   for s in lay.strata)
+    x_as_tile = replace(lay, strata=strata, closure={(xs if u == tile else u): c for u, c in lay.closure.items()})
+    for bad in (headed_by_x, x_as_tile):
+        with pytest.raises(DomainError):
+            t.check_layout(bad)
+        with pytest.raises(DomainError):
+            PL.draw(_key(), bad, PL.WorkLaw())

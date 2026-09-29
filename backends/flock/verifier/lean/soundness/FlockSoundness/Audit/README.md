@@ -52,6 +52,29 @@ stratum**: with $k_s \ge 1$, a set containing $U_s$ never escapes; `audit_whole_
 `extraction_audit_whole_stratum`, the one-stage profile instantiated, so an audit accepts while a whole floored stratum is
 wrong with probability at most the per-unit terms.
 
+**Theorems, the work law** (`Audit/Work.lean`, the draw law's second version; `../../PROTOCOL.md` §7.3): `Law.work σ w f K`
+is `Law.stratified` with stratum $s$ drawing $k_s = \min(n_s, \max(f_s, \lceil K w_s n_s / W \rceil))$, where $w_s$ is the
+PoUW work of each of its units, $W = \sum_s w_s n_s$ and $f_s \ge 1$ its floor, set per stratum in the verifier's work
+table; every stratified and one-stage theorem holds of it as stated, and the theorems below hold for every such $f$.
+`floor_le_workK`, **the floor**: a stratum draws at least $\min(n_s, f_s)$ units, so every non-empty stratum draws at least
+one and `audit_work_whole_stratum` and `extraction_audit_work_whole_stratum` catch a wholly wrong one.
+`work_escape_floor_le`, **the per-stratum floor escape**: a set with $b_s$ units in a non-empty stratum escapes with at most
+$((n_s - b_s)/n_s)^{f_s}$, audited at both layers (`audit_work_floor`, `extraction_audit_work_floor`). `workK_ge`: a
+stratum draws at least $K w_s n_s / W$ units, or all of them. `sum_workK_le`: at most $K + \sum_s f_s$ units are drawn.
+`workK_rest`: a stratum that does no work draws $\min(n_s, f_s)$. `work_escape_le_count`: when those strata have floors of
+at least the stratified law's sizes at $C$ (`countK`, which `countK_eq` shows is `stratumK C n_s N`), a set escapes the
+work law at most as often as its units in them escape the stratified law at $C$ (`choose_div_anti`: the hypergeometric
+escape falls as the draw grows), and `audit_work_rest` and `extraction_audit_work_rest` carry any such integrity profile to
+the audit. `work_escape_le`,
+**the work bound**: a set $B$ of units doing $W_B$ of the work escapes with probability at most $((W - W_B)/W)^K$, from
+the per-stratum hypergeometric and weighted AM-GM over the work shares. `audit_work` and `extraction_audit_work` bound
+$\Pr[\text{accept} \wedge W_{\mathrm{wrong}(X)} \ge T]$ by $((W - T)/W)^K$ plus the per-unit terms. `record_sizing` and
+`audit_work_of_record`: at $K = 27{,}713$, wrong units doing at least 0.1% of the work escape with at most $2^{-40}$;
+`record_sizing_one_fewer`: $K = 27{,}712$ does not reach it under this bound. `Law.widen` and `escape_widen_le`, the seam for
+closure draws: proving more units than are drawn, on the same coins, never raises an escape. `FlockWork.lean`'s
+`workRule_eq_draw` and `countRule_eq_draw`: the executable's `Flock.Draw.workK` and `stratumK` are `Law.workRule` and
+`countRule`.
+
 **Theorems, two-stage** (`Audit/TwoStage.lean`):
 
 - `twoStage_profile`, variant (b), nested sampling: the profile over the coarse partition with the effective escape
@@ -69,6 +92,38 @@ wrong with probability at most the per-unit terms.
 
 **Composition** (`Audit/Circuit.lean`): `compose` (every unit correct and the inputs anchored give the circuit's
 evaluation on every committed wire) and `compose_cone` (the same for a consumer's wires, from its cone alone).
+
+**Influence through a separator** (`Audit/Influence.lean`). $D$ is the set of delivered wires (the served tokens); the
+circuit's other outputs, such as commitments and leaves, are not delivered. $K$ **separates** the units $B$ from $D$
+(`Separates K B D`, a downstream cut) when every gate path from a unit of $B$ to a wire of $D$ meets $K$.
+
+- `outputs_eq_of_separates`, **the influence cap**: two transcripts with the anchors' inputs, whose wrong units lie in
+  $B$, and that agree on a committed separator $K$ of $B$, deliver the same values on $D$;
+- `card_delivered_le`: so they deliver at most $2^{|K|}$ values on $D$;
+- `separates_exits`: the committed wires of the units of $B$ separate $B$ (a replay unit's exports); `Separates.mono`,
+  `Separates.union`;
+- `card_influenceSet_le`: the influence set at $\delta$, what is delivered with the wrong units of some set escaping with
+  probability at least $\delta$, fixed before the prover, has at most $\sum_{B : e(B) \ge \delta} 2^{|K_B|}$ members;
+- `audit_influence`: $\Pr[\text{accept} \wedge \mathrm{out}_D(X) \notin \mathrm{influenceSet}] \le \delta +
+  \varepsilon_{ks} + \delta_{link} + \delta_{in}$, so the prover's influence over what is delivered is
+  $\log_2 |\mathrm{influenceSet}|$ bits; `Refines.twoStage_influence` is the same over replay units, with $e_{\text{eff}}$
+  and the two-stage input hypothesis `AnchorsSound₂` (`Audit/TwoStage.lean`).
+- `card_influenceSet_le_harm` and `card_admissible_le`: that influence is at most $H + \log_2 \sum_{j \le K}
+  \binom{n}{j}$ bits, for a harm bound $H$ (`IsHarmBound`, `Audit/Harm.lean`: the specification of core's `harm_bound`) with
+  each unit's harm the width it adds to a separator, such as its exits (`card_exits_le`), and $\mathrm{miss}(K+1) <
+  \delta$. $H$ counts the value bits and the second term the choice of which units are wrong.
+- `audit_exfiltration`, **exfiltration with the location term**: a prover that picks its strategy from a uniform message
+  $m \in M$, and a receiver that sees only what is delivered on $D$, recover $m$ from an accepted audit with probability
+  at most $2^H \sum_{j \le K} \binom{n}{j} / |M| + \delta + \varepsilon_{ks} + \delta_{link} + \delta_{in}$; with
+  $|M| = 2^\ell$, the first term is $2^{H + \log_2 \sum_{j \le K} \binom{n}{j} - \ell}$. `card_guess_le` is its counting
+  step and `audit_exfiltration_influenceSet` its form over $|\mathrm{influenceSet}|$. Core's reading is
+  `verity_one_stage.consumers.exfiltration_bound`: `harm_bound` over output bits plus `location_bits`.
+- **Not vacuous** (`Audit/InfluenceWitness.lean`, the statement reviewer's witness): on a four-gate circuit,
+  `W.lemma47` applies the influence cap to two different transcripts that both have a wrong unit, with a separator
+  narrower than the unit's exits (`W.three_mem_exits`), and `W.count` bounds what they deliver by 2; `A.influence`
+  meets `audit_influence`'s hypotheses at 0 on an audit that accepts with probability 1 (`A.accepts`); `Gen.harm_witness`
+  meets `card_influenceSet_le_harm`'s on any partition and law, with the exits as separators and each unit's exported
+  width as its harm.
 
 **Tightness and insecurity** (`Audit/Examples.lean`, on `K` chains of `nv` NOT gates, one coarse unit per chain and one
 fine unit per gate, with a uniform `k₂`-subset of each drawn chain's gates in the second stage and an ideal session):

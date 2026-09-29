@@ -177,6 +177,8 @@ current flag), `index_attempt(doc)`, `index_label(label, path)`, `set_presence(a
 `select_artifacts(kind=None, where=None, label=None, attempt=None, tool=None, derivation=None)`, `labels(target, key=None)`,
 `replicas(art_id)`, `sql(query, params=())` and `sql_with_columns(...)` on a read-only (`?mode=ro`) connection. Attempt queries
 return the attempt documents; artifact queries return `{id, kind, bytes, payload_type, manifest, local, remote, repo_path}`.
+`compact(src, dst)` (`research data catalog --compact OUT`) copies the catalog for readers that query it but never fetch
+(`research notes mcp --catalog`): the same tables and indexes, `manifest_json` NULL, no `replicas` / `replica_checks`.
 
 ## 6. Tools, derivations, conditions, closures, scratch
 
@@ -436,7 +438,10 @@ prints the table; the groups are:
   `authentication` (enum: included | included-hash | excluded), `campaign`, `relation`, `mode` (enum: interactive | fiat-shamir), `zk` (bool),
   `overhead`, `seconds_per_vu`, `track` (enum), `scope` (enum: unit | vu | component), `label`, `note`, `assumptions` (list),
   `omitted` (list), `domain` (`total` | `finite-only`: the operand domain the statement covers), `breakthrough` (bool); grouping and configuration a table selects on: `lane`, `row`, `sweep`, `arm`, `stage`,
-  `source`, `superseded_by`, `interaction_attempt_of` (the cell an interaction attempt belongs to), `hash`, `sharing`, `fold` (int), `pipeline` (int).
+  `source`, `superseded_by`, `interaction_attempt_of` (the cell an interaction attempt belongs to), `hash`, `sharing`, `fold` (int), `pipeline` (int);
+  `abandoned` (text: the line of work the evidence belongs to was given up, in a few words; `label` refuses it unless `--ref`
+  names the note that says why, as `note:<lane>/<file name without .md>` or the notes README's `note:<campaign>/<lane>/<name>`, which
+  stay valid when the file moves into a month folder).
 - **verification** — an independent verifier, never the producer: `verified` (enum: accepted | rejected | not-transferable |
   no-dumps), `verifier`, `verifier_seconds`, `same_device` (bool), `below_bar` (bool: verified, but the whole-proof bound misses the tables' 2^-128 bar,
   so it is shown in the below-bar drill-down and never as a Table 2 cell), `outcome`; `independently_verified` (bool) is the back-fill's
