@@ -237,6 +237,8 @@ at its floor, so a wholly wrong one is caught directly (`audit_work_whole_stratu
   - `plan.work_table` is the verifier's `--work-table`: every template of the call, `{"work": w, "floor": f}`, the tile's
     W_ref per tile and 0 for `digest`, `node`, `key`, `form_x` and `dequant`, floors 1 unless POUS sets them.
   - `plan.law_object` is the law `verify` derives from it, each stratum `{template, units, work, floor, k}`.
+  - `plan.widen` takes the verifier's own draw (`flock-verify draw --work K_c --work-table F --closure F`, with
+    `plan.closure_map`) only under that law, holds its closure to the verifier's, and adds the Y units.
   - K is a **window's** budget (X-SPC-83): a call draws its share K_c = ⌈K·W_c/W_window⌉, capped at its units
     (`plan.window_laws`). That is the law `verify` enforces when each call is its own statement with its own K_c
     (`--work K_c`); within one Program (`ncp2.window`) the calls share their templates' strata and one K. The per-call

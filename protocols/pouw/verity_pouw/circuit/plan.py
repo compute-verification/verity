@@ -16,6 +16,10 @@ strip's path to D_A and the call's key unit, each proved once, and its Y strip's
   verifier's floor. `work_table` is the verifier's `--work-table` and `law_object` the law `verify` derives from it. K is
   a **window's** budget: a call draws its share K_c = ⌈K·W_c/W_window⌉, capped at its units (`window_laws`).
 
+**The verifier's draw.** Proving the closure beside the draw is #362's `Law.widen`, under which every bound of the law
+still holds (`escape_widen_le`). `widen` takes the draw the verifier of record issues (`flock-verify draw --work K_c
+--work-table F --closure F`, with `work_table` and `closure_map`), held to this call's own law and closure.
+
 **Openings** are row-granular (the red team's X-SPC-57): A and the weight are committed one leaf per row, so a proved
 unit opens exactly the rows it reads.
 
@@ -246,11 +250,15 @@ def draw(key: Key, lay: Layout, law: TileLaw, call: Sequence[int] = ()) -> Plan:
     for s in lay.strata:
         context = ("call", *call, "stratum", s.name) if call else ("stratum", s.name)
         drawn += [s.units[i] for i in key.subset(sizes[s.name], len(s.units), context)]
+    return _widened(lay, law.name, sizes, drawn)
+
+
+def _widened(lay: Layout, name: str, sizes: Mapping[str, int], drawn: Sequence[int]) -> Plan:
     proved = set(drawn)
     ys = {lay.y_strip[u] for u in drawn if lay.y_strip and u in lay.y_strip}
     for u in drawn:
         proved.update(lay.closure.get(u, ()))
-    return Plan(law.name, sizes, tuple(sorted(drawn)), tuple(sorted(proved)), openings(lay, proved, ys), tuple(sorted(ys)))
+    return Plan(name, dict(sizes), tuple(sorted(drawn)), tuple(sorted(proved)), openings(lay, proved, ys), tuple(sorted(ys)))
 
 
 def work_table(lay: Layout, law: WorkLaw = WorkLaw()) -> dict[str, dict[str, int]]:
@@ -266,6 +274,36 @@ def law_object(lay: Layout, law: WorkLaw) -> dict:
     sizes, table, k = law.sizes(lay.strata), work_table(lay, law), law.budget(lay.strata)
     return {"law": "work", "k": k, "strata": [{"template": s.name, "units": s.ranges(), "work": table[s.name]["work"],
                                                "floor": table[s.name]["floor"], "k": sizes[s.name]} for s in lay.strata]}
+
+
+def closure_map(lay: Layout) -> dict[str, list[int]]:
+    """The verifier's closure map (#362's `--closure`, `Draw.closureMapOfJson`): each tile's unit ↦ its closure, the tile
+    first (t ∈ cl t)."""
+    return {str(t): list(c) for t, c in lay.closure.items()}
+
+
+def widen(lay: Layout, unit_draw: Mapping, floors: tuple[tuple[str, int], ...] = ()) -> Plan:
+    """The plan for a work draw the verifier of record issued (`flock-verify draw`'s `DRAW {...}`): its law must be this call's
+    own derivation under the verifier's floors, never taken as stated (#362's U2), and its units exactly k_s in each
+    stratum; then every drawn tile's closure (`Law.widen`), with the Y units it reads in the weight's Program. A closure
+    draw's stated closure (`--closure`, `closure_map`) must be exactly that one."""
+    if unit_draw.get("law") != "work" or not isinstance(unit_draw.get("k"), int):
+        raise ValueError("not a work draw")
+    law = WorkLaw(unit_draw["k"], floors=floors)
+    own = law_object(lay, law)
+    if {k: unit_draw.get(k) for k in own} != own or unit_draw.get("population") != len(lay.units):
+        raise ValueError("the draw's law is not this call's own (its program, partition and work table)")
+    drawn = list(unit_draw.get("units", ()))
+    if drawn != sorted(set(drawn)) or not all(0 <= u < len(lay.units) for u in drawn):
+        raise ValueError("the drawn units are not ascending, distinct units of the population")
+    sizes = law.sizes(lay.strata)
+    for s in lay.strata:
+        if sum(1 for u in drawn if lay.units[u].template == s.name) != sizes[s.name]:
+            raise ValueError(f"stratum {s.name!r} does not hold its k = {sizes[s.name]} drawn units")
+    plan = _widened(lay, law.name, sizes, drawn)
+    if "closure" in unit_draw and list(unit_draw["closure"]) != sorted(set(plan.proved) - set(drawn)):
+        raise ValueError("the draw's closure is not the verifier's closure of its units")
+    return plan
 
 
 def openings(lay: Layout, proved, proved_y=()) -> tuple[tuple[str, int], ...]:
@@ -294,5 +332,6 @@ def unsound_work_bound(lay: Layout, sizes: Mapping[str, int], delta: float) -> f
     return profile(lay, sizes).harm_bound({s.name: float(lay.tile_work()) for s in lay.strata if s.role == "tile"}, delta)
 
 
-__all__ = ["DRAW_DOMAIN", "RECORD_K", "CountLaw", "Layout", "Plan", "StratumSpec", "TileLaw", "WorkLaw", "draw", "law_object",
-           "layout", "openings", "profile", "record_k", "template_strata", "unsound_work_bound", "window_laws", "work_table"]
+__all__ = ["DRAW_DOMAIN", "RECORD_K", "CountLaw", "Layout", "Plan", "StratumSpec", "TileLaw", "WorkLaw", "closure_map", "draw",
+           "law_object", "layout", "openings", "profile", "record_k", "template_strata", "unsound_work_bound", "widen",
+           "window_laws", "work_table"]

@@ -109,6 +109,28 @@ def test_the_work_table_and_law_object_are_362s():
     assert {s["template"]: (s["floor"], s["k"]) for s in PL.law_object(lay, floored)["strata"]}[deq.name] == (5, 5)
 
 
+def test_widen_takes_a_verifiers_work_draw_only_under_this_calls_own_law():
+    """A work draw's stated work sets every k_s, so `widen` holds it to the call's own law (#362's red team C1), then adds
+    every drawn tile's closure."""
+    import pytest
+
+    lay = PL.layout(ncp2.Shape(32, 64, 32))
+    plan = PL.draw(_key(), lay, PL.WorkLaw(2))
+    d = {**PL.law_object(lay, PL.WorkLaw(2)), "population": len(lay.units), "units": list(plan.drawn)}
+    assert PL.widen(lay, d) == plan
+    closure = sorted(set(plan.proved) - set(plan.drawn))
+    assert PL.widen(lay, {**d, "closure": closure}) == plan                 # a closure draw (`--closure`), the verifier's own
+    s0, *rest = d["strata"]
+    bad = [{**d, "k": 3}, {**d, "law": "stratified"}, {**d, "population": 1035}, {**d, "units": list(plan.drawn)[:-1]},
+           {**d, "units": sorted({*plan.drawn, *(u for u in range(len(lay.units)) if u not in plan.drawn)})[:len(plan.drawn)]},
+           {**d, "strata": [{**s0, "work": s0["work"] + 1}, *rest]}, {**d, "units": list(plan.drawn)[::-1]},
+           {**d, "strata": [{**s0, "floor": 2}, *rest]}, {**d, "closure": closure[:-1]}]
+    for b in bad:
+        with pytest.raises(ValueError):
+            PL.widen(lay, b)
+
+
+
 def test_openings_are_one_leaf_per_row():
     """A and the weight are committed a leaf per row (X-SPC-57): a proved strip opens exactly its 16 rows."""
     lay = PL.layout(ncp2.Shape(32, 64, 32))
