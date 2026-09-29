@@ -31,6 +31,25 @@ On each link:
 - **The record is exactly (grid, status) (W5).** The status is one untimed symbol per link-window: complete, or not
   established with a reason. It carries no bucket index, time or count.
 
+## The published record (`commitment`)
+
+A raw grid is 2.3 GiB per link-window at r = 1,024, B = 4 KiB and T = 600. The warden publishes one digest and the
+status instead, which is 32 bytes per link-window, or about 46 KB per link per day.
+
+- **Padding is elided.** Left-packing (W4) fixes a row by its count n and its n real frames, so a row's digest covers
+  only those: `tagged_sha256("verity-network-warden/row/v1", u32be(n) ‖ f_0 ‖ … ‖ f_{n−1})`. A row that isn't
+  left-packed has no encoding.
+- **The record digest** is `tagged_sha256("verity-network-warden/record/v1", …)`. It covers:
+  - the canonical JSON of the link, the window, (T, r, B, τ_b) and the status;
+  - then the T row digests.
+
+  `tagged_sha256` is `verity.commitments.identity`'s.
+- **The check** recomputes the digest from the Program's grid, with a complete status, and compares. Under `cr/sha-256`,
+  equal digests mean equal records, so the audit stays exact. The verifier never needs the raw grid, because the
+  Program fixes every egress frame.
+- **The status in the clear** is only for classifying a violation. The digest binds it too, so a published status that
+  disagrees with the digest is a mismatch.
+
 ## The Program's logical schedule and the clock-sync advice (`schedule`)
 
 The Program fixes each real frame's content, its **anchor** and its **logical index** λ. The anchor is the recorded
@@ -50,7 +69,7 @@ steps:
 
 A link-window is accepted if:
 - its status is complete;
-- every slot equals the Program's grid;
+- every slot equals the Program's grid (for a committed record: its digest equals the Program grid's digest);
 - its declared clock sync is in the set;
 - its record is present by the verdict deadline.
 
@@ -58,7 +77,7 @@ Anything else is a violation: `status:<reason>`, `advice`, `mismatch` or `no-ver
 rejected**, as a policy signal. There is no halt: later windows are still checked.
 
 Every capacity bound holds on accepted runs only. A rejected window may already have carried up to its unbound capacity,
-about T·r·B bits (`capacity.unbound_bits`).
+about T·r·B bits (`capacity.unbound_bits`). On committed records, the bounds also assume `cr/sha-256`.
 
 ## Capacity (`capacity`)
 
@@ -118,4 +137,8 @@ every frame), the capacity per day, and the K charge by span.
   - a reacting operator;
   - the block bound on random Programs;
 - **`test_network_warden_audit.py`:** record-and-reject;
+- **`test_network_warden_commitment.py`:**
+  - the elided digest is injective on left-packed grids, by enumeration;
+  - it binds the link, window, status and parameters;
+  - the committed audit's verdicts equal the raw audit's;
 - **`test_network_warden_calibration.py`:** the calibration tool.

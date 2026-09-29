@@ -3,11 +3,12 @@
 A spec-level reference for network transparency's timing channel:
 - the constant-rate, left-packed warden;
 - the Program's logical schedule, with its clock-sync advice (δ, ρ);
-- the exact audit with record-and-reject;
+- the exact audit with record-and-reject, on raw records or records committed by hash (padding elided);
 - the capacity counts;
 - the calibration of honest runs.
 
-It is pure Python, standard library only. `PROTOCOL.md` has the semantics and the correspondence to the Lean package.
+It is pure Python. It imports only the standard library and `verity`, for the record digest's `tagged_sha256`.
+`PROTOCOL.md` has the semantics and the correspondence to the Lean package.
 
 ~~~python
 from verity_network_warden.audit import Audit

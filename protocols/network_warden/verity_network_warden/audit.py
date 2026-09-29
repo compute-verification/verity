@@ -9,6 +9,9 @@ It must also be settled by the verdict deadline. Anything else is a **violation*
 rejected, as a policy signal. There is no halt: later windows are still checked and recorded. Every bound in
 `capacity` holds on accepted runs only; a rejected window may already have carried up to its unbound capacity before it
 was rejected.
+
+A record may come raw or committed (`commitment`: its digest, with padding elided). A committed record's grid check
+compares its digest with the digest of the Program's grid, which is exact up to a SHA-256 collision.
 """
 
 from __future__ import annotations
@@ -16,7 +19,8 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
-from verity_network_warden.grid import GridParams, Record
+from verity_network_warden.commitment import CommittedRecord, record_digest
+from verity_network_warden.grid import COMPLETE, GridParams, Record
 from verity_network_warden.schedule import ClockSync, LogicalFrame, SyncSet, expected_grids
 
 
@@ -40,7 +44,7 @@ class Audit:
     def check_link(
         self,
         link: str,
-        records: Sequence[Record],
+        records: Sequence[Record | CommittedRecord],
         frames: Sequence[LogicalFrame],
         syncs: Sequence[ClockSync],
         sync_set: SyncSet,
@@ -58,6 +62,8 @@ class Audit:
                 violation = f"status:{record.status.reason.value}"
             elif sync not in sync_set or expected is None:
                 violation = "advice"
+            elif isinstance(record, CommittedRecord):
+                violation = None if record.digest == record_digest(link, w, expected[w], COMPLETE, params) else "mismatch"
             elif record.grid != expected[w]:
                 violation = "mismatch"
             else:

@@ -1258,6 +1258,12 @@ requires-dist = [
 name = "verity-network-warden"
 version = "0.1.0"
 source = { editable = "protocols/network_warden" }
+dependencies = [
+    { name = "verity" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "verity", editable = "packages/verity" }]
 
 [[package]]
 name = "verity-numerical"
