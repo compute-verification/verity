@@ -1,4 +1,4 @@
-//! The Aeneas-translatable model (`zk/sp1/check-model`) against the
+//! The Aeneas-translatable model (`backends/sp1/check-model`) against the
 //! production checker, on the int8-q7 vector batches: same verdict and same
 //! first error for the honest plan, for every tampered plan of `plan.rs`, and
 //! for the relation pass -- so the restructuring recorded in the model's

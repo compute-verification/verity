@@ -1,4 +1,4 @@
-"""``vllm-v1``: the commitment framing vLLM's production Commit path emits, as a named scheme.
+"""``vllm-v1``: the commitment framing vLLM's serving Commit path emits, as a named scheme.
 
 A permanent scheme beside frame-v3 (:mod:`..merkle`), selectable by backends.  Spec: ``PROTOCOL.md``
 beside this file.  Conformance vectors: ``vectors.json`` beside it, written by

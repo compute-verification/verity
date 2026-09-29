@@ -7,7 +7,7 @@
 //! `lake exe plan_vectors`.
 //!
 //! Drop-in for L3's crate (`origin/vb-l3-guest-opt`, targeted at commit
-//! `ca21f40`): copy to `zk/sp1/common/tests/plan_vectors.rs`.  The file is
+//! `ca21f40`): copy to `backends/sp1/common/tests/plan_vectors.rs`.  The file is
 //! looked up at `$PLAN_VECTORS` or, failing that, at
 //! `<crate>/../../../fixtures/lean-vectors/plan.json`.
 

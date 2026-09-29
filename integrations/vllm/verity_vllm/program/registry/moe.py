@@ -101,6 +101,12 @@ def F32FmaRm(a: int, b: int, c: int) -> int:
     return P.F32_NAN
 
 
+@primitive("F32FmaRm", 2, [("a", F32), ("b", F32), ("c", F32)], F32, conformance="exact-model-tested")
+def F32FmaRmV2(a: int, b: int, c: int) -> int:
+    """`F32FmaRm_v1` with every NaN result `F32_NAN_PTX`, as `F32Fma_v2`."""
+    return P.f32_gpu_nan(F32FmaRm.evaluate(a, b, c))
+
+
 #: The constants of nvcc's `expf` (sm_89, CUDA 12.x math headers; PTX of `y = expf(x)` on the pod, 2026-09-17):
 #:   fma.rn  t  = x * 0f3BBB989D + 0.5          (0x3BBB989D = log2(e) / 252)
 #:   cvt.sat s  = clamp(t, 0, 1)                (NaN -> 0)
@@ -281,7 +287,7 @@ def MoeRouterTopKNorm(B, S, logits):
 
 
 # ---------------------------------------------------------------------------------------------------------
-# the same router in its selection order (opt-in: `TargetProfile.moe_construction = "indexed-read-ordered"`): the softmax once, then
+# the same router in its selection order (`TargetProfile.moe_construction = "indexed-read-ordered"`, the default): the softmax once, then
 # round k takes the expert after round k-1's (p, id) in the kernel's total order -- every value computed once, no masked vector carried
 # ---------------------------------------------------------------------------------------------------------
 

@@ -592,7 +592,7 @@ fn server(p: &Arc<Pure>, inst: &Instances) -> Server {
     let c = commit(inst);
     let sigma = p.sigma(inst, &c.roots);
     let mut cfg = SessionConfig::flock_128_r2(vec![p.spec()]);
-    cfg.link = Some(LinkSpec { sigma, m: 0, points: 0 });
+    cfg.link = Some(LinkSpec { sigma: sigma.to_vec(), m: 0, points: 0 });
     Server::new(cfg, Box::new(PureVerifier { p: p.clone(), digests: c.digests, out: inst.out.clone() }))
 }
 
@@ -654,7 +654,7 @@ fn session(p: &Pure, inst: &Instances, t: SharedTransport, plan: &Plan) -> (Valu
     let sigma = plan.sigma.unwrap_or_else(|| p.sigma(inst, &c.roots));
     let hello = {
         let mut cfg = SessionConfig::flock_128_r2(vec![p.spec()]);
-        cfg.link = Some(LinkSpec { sigma, m: 0, points: 0 });
+        cfg.link = Some(LinkSpec { sigma: sigma.to_vec(), m: 0, points: 0 });
         cfg.hello()
     };
     let tw = Instant::now();
@@ -866,7 +866,7 @@ fn replay(p: &Arc<Pure>, inst: &Instances, rec: &Value, proofs: &[Vec<u8>]) -> R
     let c = commit(inst);
     let sigma = p.sigma(inst, &c.roots);
     let mut cfg = SessionConfig::flock_128_r2(vec![p.spec()]);
-    cfg.link = Some(LinkSpec { sigma, m: 0, points: 0 });
+    cfg.link = Some(LinkSpec { sigma: sigma.to_vec(), m: 0, points: 0 });
     if rec["kind"] != "flock-live-session/v1" {
         return Err("not a flock-live session record".into());
     }

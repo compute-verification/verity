@@ -1,4 +1,6 @@
 import Flock
+import Flock.CircuitType
+import Flock.Layout
 
 open Flock
 
@@ -104,6 +106,17 @@ def buildStmt (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins) (t
   if tags.hm96Rows then Stmt.setupH tags circuitB pubB coins tables draw partition program
   else do Stmt.setup tags (Blake3Row.leaf (← Comp.load Blake3Row.spec compB)) circuitB pubB coins tables
 
+/-- `buildStmt` for a session of `count` tables (`Stmt.setupTables`): the session and each table's statement. `work` is the
+verifier's own `K` and work table, which a work draw's law is held to, and `stratified` its own `K` for a stratified draw. -/
+def buildSession (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins) (tables : List (String × ByteArray))
+    (count : Nat) (draw : Option Lean.Json := none) (partition : Option Lean.Json := none) (program : Option ByteArray := none)
+    (work : Option (Nat × Array (String × Nat)) := none) (stratified : Option Nat := none) : V (SessionSpec × Array Stmt) :=
+  if tags.hm96Rows then Stmt.setupTables tags circuitB pubB coins count tables draw partition program work stratified
+  else if count > 1 then throw s!"{tags.name}: one table per session"
+  else do
+    let st ← buildStmt tags circuitB pubB compB coins tables draw partition program
+    return (st.spec, #[st])
+
 /-- `--program F`: the verifier's own copy of the program's descriptor bytes (a path, or with `--archive` its SHA-512), from which
 it derives a template query's units. -/
 def programInput (args : List String) : IO (Except String (Option ByteArray)) := do
@@ -127,6 +140,21 @@ def partitionInput (args : List String) : IO (Except String (Option Lean.Json)) 
       | .ok j => return .ok (some j)
       | .error e => return .error s!"partition: not JSON: {e}"
 
+/-- `--work-table F`: the verifier's own work table (`Draw.workTableOfJson`: template descriptor id ↦ the PoUW work of one
+of its units), a path, or with `--archive` its SHA-512. -/
+def workTableInput (args : List String) : IO (Except String (Option (Array (String × Nat)))) := do
+  let some f := argOf args "--work-table" | return .ok none
+  let bytes ← match argOf args "--archive" with
+    | none => (try pure (Except.ok (← IO.FS.readBinFile f)) catch e => pure (Except.error s!"work table: {e}"))
+    | some dir => archiveGet dir f
+  match bytes with
+  | .error e => return .error e
+  | .ok b => match String.fromUTF8? b with
+    | none => return .error "work table: not UTF-8"
+    | some t => match Lean.Json.parse t with
+      | .ok j => return (Draw.workTableOfJson j).map some
+      | .error e => return .error s!"work table: not JSON: {e}"
+
 /-- A record's `unit_draw`, when it is a draw (not absent, not null). -/
 def recordDraw (record : String) : Option Lean.Json :=
   match Lean.Json.parse record with
@@ -146,16 +174,46 @@ def archivePutCmd (dir : String) (paths : List String) : IO UInt32 := do
     IO.println s!"{hex}  {path}"
   return 0
 
-/-- `verify --statement ID --circuit F --comp F --public F [--coins seed|os] --session DIR...`: `ID` names the statement's
-tags (`verity/flock-circuit` by default, or `verity/flock-netlist/v1`); `--comp` is the row leaf's pinned compression
-circuit. Each DIR holds `session.json`, `<table>.rep0.bin` and `<table>.rep1.bin`. The statement is set up once; one
-verdict line per session, in order. Exit 0 iff every session is accepted. -/
+/-- `coin-tree-check FILE`: R7 and the record's `coin_tree` for the keyed coin tree (`Flock.CoinTree`), on `{"hello": the
+verifier's Hello object (its coins.nonce empty), "sessions": [{"hello": the prover's Hello, "coin_tree": ...}, ...]}`, in
+order, each key fresh. One `COINTREE` line per session: the nonce and the canonical `coins` it checked, or the refusal. -/
+def coinTreeCmd (path : String) : IO UInt32 := do
+  let j ← match Lean.Json.parse (← IO.FS.readFile path) with
+    | .ok j => pure j
+    | .error e => IO.eprintln s!"coin-tree-check: {e}"; return 2
+  let own := (j.getObjVal? "hello").toOption.getD Lean.Json.null
+  let some spec := CoinTree.ofHello ((canon own).toOption.getD "")
+    | IO.eprintln "coin-tree-check: the Hello names no keyed coin tree"; return 2
+  let mut keys : Array String := #[]
+  let mut all := true
+  for s in (j.getObjValAs? (Array Lean.Json) "sessions").toOption.getD #[] do
+    let res : V (String × String) := do
+      let nonce ← CoinTree.checkHello own ((s.getObjValAs? String "hello").toOption.getD "")
+      let key ← CoinTree.checkRecord spec nonce ((s.getObjVal? "coin_tree").toOption.getD Lean.Json.null)
+      CoinTree.checkFresh keys key
+      return (nonce, key)
+    let line := match res with
+      | .ok (nonce, _) => Lean.Json.mkObj [("ok", Lean.Json.bool true), ("nonce", Lean.Json.str nonce),
+          ("coins", Lean.Json.str ((canon (spec.coins nonce)).toOption.getD ""))]
+      | .error e => Lean.Json.mkObj [("ok", Lean.Json.bool false), ("error", Lean.Json.str e)]
+    if let .ok (_, k) := res then keys := keys.push k
+    all := all && res.toBool
+    IO.println s!"COINTREE {line.compress}"
+  return (if all then 0 else 1)
+
+/-- `verify --statement ID --circuit F --comp F --public F [--coins seed|os] [--session-tables J] --session DIR...`: `ID`
+names the statement's tags (`verity/flock-circuit` by default, or `verity/flock-netlist/v1`); `--comp` is the row leaf's
+pinned compression circuit; `J` (default 1) is the tables of every session (§16.12). A session with a work draw needs the
+verifier's own `--work K`, `--work-table`, `--program` and `--partition`, and one with a stratified draw its own
+`--stratified K`, `--program` and `--partition`. Each DIR holds `session.json` and `<table>.rep<r>.bin` for each table and rep. The statement is set up
+once; one verdict line per session, in order. Exit 0 iff every session is accepted. -/
 def verifyCmd (args : List String) : IO UInt32 := do
-  let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--partition F] [--program F] [--coins seed|os] --session DIR..."
+  let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--coins seed|os] [--session-tables J] --session DIR..."
   let (some _, some _) := (argOf args "--circuit", argOf args "--public") | IO.eprintln usage; return 2
   let some tags := Tags.find? ((argOf args "--statement").getD Tags.circuit.name)
     | IO.eprintln s!"unknown statement; known: {Tags.all.map (·.name)}"; return 2
   if !tags.hm96Rows && (argOf args "--comp").isNone then IO.eprintln s!"{tags.name}: --comp is required"; return 2
+  let some count := ((argOf args "--session-tables").getD "1").toNat? | IO.eprintln usage; return 2
   let dirs := (args.dropWhile (· != "--session")).drop 1
   let coins := if argOf args "--coins" == some "os" then Coins.os else Coins.seed
   let t0 ← IO.monoMsNow
@@ -168,36 +226,68 @@ def verifyCmd (args : List String) : IO UInt32 := do
   let program ← match ← programInput args with
     | .ok p => pure p
     | .error e => IO.eprintln e; return 2
-  let setupOf := fun (draw : Option Lean.Json) => match buildStmt tags circuitB pubB compB coins tables draw partition program with
-    | .ok st => Except.ok (Setup.ofCircuit st, st.partition)
+  let table ← match ← workTableInput args with
+    | .ok w => pure w
+    | .error e => IO.eprintln e; return 2
+  let ownK ← match argOf args "--work" with
+    | none => pure none
+    | some k => match k.toNat? with
+      | some k => pure (some k)
+      | none => IO.eprintln "verify: --work K: K is a natural number"; return 2
+  let work := match ownK, table with
+    | some k, some t => some (k, t)
+    | _, _ => none
+  let stratified ← match argOf args "--stratified" with
+    | none => pure none
+    | some k => match k.toNat? with
+      | some k => pure (some k)
+      | none => IO.eprintln "verify: --stratified K: K is a natural number"; return 2
+  let setupOf := fun (draw : Option Lean.Json) =>
+    match buildSession tags circuitB pubB compB coins tables count draw partition program work stratified with
+    | .ok (spec, sts) => Except.ok (spec, sts.map Setup.ofCircuit, (sts[0]?.map (·.partition)).getD Lean.Json.null)
     | .error e => Except.error s!"setup: {e}"
-  let setup := setupOf none
-  IO.eprintln s!"setup: {(← IO.monoMsNow) - t0} ms"
-  let mut drawn : Array (String × Except String (Setup × Lean.Json)) := #[]
+  IO.eprintln s!"inputs: {(← IO.monoMsNow) - t0} ms"
+  -- each statement is set up once, when a session first needs it: the population's, and each draw's
+  let mut setups : Array (Option String × Except String (SessionSpec × Array Setup × Lean.Json)) := #[]
+  let mut coinKeys : Array String := #[]
   let mut all := true
   for dir in dirs do
     let t1 ← IO.monoMsNow
-    let files ← try
-        let record ← IO.FS.readFile (dir ++ "/session.json")
-        let proofs ← #[0, 1].mapM fun r => IO.FS.readBinFile s!"{dir}/{tags.table}.rep{r}.bin"
-        pure (Except.ok (record, proofs))
+    let record ← try pure (Except.ok (← IO.FS.readFile (dir ++ "/session.json")))
       catch e => pure (Except.error s!"session files: {e}")
-    -- a drawn session is verified against the drawn units' statement (Σ covers the draw)
-    let mut st := setup
-    if tags.hm96Rows then
-      if let .ok (record, _) := files then
-        if let some d := recordDraw record then
-          let key := (canon d).toOption.getD ""
-          match drawn.find? (·.1 == key) with
-          | some (_, s) => st := s
-          | none =>
-            st := setupOf (some d)
-            drawn := drawn.push (key, st)
-    let verdict := do let (record, proofs) ← files; verify (← st).1 record proofs
+    -- a drawn session is verified against the drawn units' statement (Σ covers the draw); several tables split the draw
+    let draw := if tags.hm96Rows then record.toOption.bind recordDraw else none
+    let key := draw.map fun d => (canon d).toOption.getD ""
+    let mut st : Except String (SessionSpec × Array Setup × Lean.Json) := .error "setup: none"
+    match setups.find? (·.1 == key) with
+    | some (_, s) => st := s
+    | none =>
+      st := setupOf draw
+      setups := setups.push (key, st)
+      IO.eprintln s!"setup{if draw.isSome then " (drawn)" else ""}: {(← IO.monoMsNow) - t1} ms"
+    let files ← match record, st with
+      | .ok r, .ok (spec, _, _) =>
+        try pure (Except.ok (r, ← spec.repStreams.mapM fun (_, _, w) => IO.FS.readBinFile s!"{dir}/{w.replace "/" "."}.bin"))
+        catch e => pure (Except.error s!"session files: {e}")
+      | .error e, _ => pure (.error e)
+      | _, .error e => pure (.error e)
+    -- a keyed coin tree's session key is fresh: refuse a key an earlier session of this run used
+    let coinKey : Option String := match st, record with
+      | .ok (spec, _, _), .ok r =>
+        if spec.coinTree.isNone then none
+        else (Lean.Json.parse r).toOption.bind fun j =>
+          (j.getObjVal? "coin_tree").toOption.bind fun ct => (ct.getObjValAs? String "key").toOption
+      | _, _ => none
+    let verdict := do
+      let (record, proofs) ← files
+      if let some k := coinKey then CoinTree.checkFresh coinKeys k
+      let (spec, tabs, _) ← st
+      verify spec tabs record proofs
+    if let some k := coinKey then coinKeys := coinKeys.push k
     let (ok, why) := match verdict with | .ok () => (true, "") | .error e => (false, e)
     all := all && ok
     -- the partition finding: the rule, the query, the digest, and whether the units were derived or taken as stated
-    let part := match st with | .ok (_, p) => p | .error _ => Lean.Json.null
+    let part := match st with | .ok (_, _, p) => p | .error _ => Lean.Json.null
     let line := Lean.Json.mkObj ([("session", Lean.Json.str dir), ("accepted", Lean.Json.bool ok), ("why", Lean.Json.str why)] ++
       (if part.isNull then [] else [("partition", part)]))
     IO.println s!"VERDICT {line.compress}"
@@ -235,6 +325,33 @@ def statementCmd (args : List String) : IO UInt32 := do
     IO.println j.compress
     return 0
   | .error e => IO.println s!"setup: {e}"; return 1
+
+/-- `region-words [--statement ID] --circuit F --public F [--delta Q,COL]...`: the region-word check
+(`HmRow.checkRegionWords`) on an `hm96-sha512` statement, each `--delta` entry `(Q, COL)` added to both Δs. One
+`REGIONWORDS` line: the partial regions' shared columns, and the refusal if any. -/
+def regionWordsCmd (args : List String) : IO UInt32 := do
+  let some tags := Tags.find? ((argOf args "--statement").getD Tags.circuit.name)
+    | IO.eprintln s!"unknown statement; known: {Tags.all.map (·.name)}"; return 2
+  let (circuitB, pubB, _, tables) ← match ← statementInputs args with
+    | .ok x => pure x
+    | .error e => IO.eprintln s!"region-words inputs: {e}"; return 2
+  let extra := (args.zip args.tail).filterMap fun (k, v) => if k != "--delta" then none else
+    match (v.splitOn ",").map String.toNat? with
+    | [some q, some col] => some (q, col)
+    | _ => none
+  let res : V Nat := do
+    let c ← HmRow.parse tags circuitB tables
+    let pub ← HmRow.loadPublic tags c pubB
+    let pin ← HmRow.pin c
+    let (da, db) := HmRow.delta c pin
+    let regions ← HmRow.regions c pub
+    HmRow.checkRegionWords c (da ++ extra.toArray) (db ++ extra.toArray) regions
+    return (HmRow.sharedColumns regions).size
+  let line := match res with
+    | .ok n => Lean.Json.mkObj [("ok", Lean.Json.bool true), ("shared", Lean.toJson n)]
+    | .error e => Lean.Json.mkObj [("ok", Lean.Json.bool false), ("error", Lean.Json.str e)]
+  IO.println s!"REGIONWORDS {line.compress}"
+  return (if (line.getObjValAs? Bool "ok").toOption.getD false then 0 else 1)
 
 /-- `merkle-test FILE`: lines `scheme c d lanes positions rows siblings cap expect` (lists comma-separated, hex; `rows` as
 32-hex F128 words joined by `.` within a row); `expect` 1 = opens, 0 = rejected. -/
@@ -279,6 +396,21 @@ def hm96Test (path : String) (h : Hm96 := Hm96.sha256) : IO UInt32 := do
   IO.println s!"hm96-test: {n} cases, {bad} failures"
   return (if bad == 0 then 0 else 1)
 
+/-- `net-check FILE...`: each file as one `flock-ir-unit/v2` expanded circuit through `Net.parse` (its port groups, input
+rows, constant row and row order); one `NETCHECK {"file", "ok", "error"}` line per file. -/
+def netCheckCmd (paths : List String) : IO UInt32 := do
+  let mut all := true
+  for path in paths do
+    let text ← try IO.FS.readFile path catch _ => pure ""
+    let lines := (text.splitOn "\n").toArray
+    let lines := if lines.back? == some "" then lines.pop else lines
+    let (ok, err) := match Net.parse lines with
+      | .ok _ => (true, "")
+      | .error e => (false, e)
+    all := all && ok
+    IO.println s!"NETCHECK {(Lean.Json.mkObj [("file", Lean.Json.str path), ("ok", Lean.Json.bool ok), ("error", Lean.Json.str err)]).compress}"
+  return (if all then 0 else 1)
+
 /-- `unit-cut FILE...`: the partition invariant (`Flock.Partition.validate`) on each cut, one `CUT` line per file. -/
 def unitCutCmd (paths : List String) : IO UInt32 := do
   let mut all := true
@@ -297,6 +429,38 @@ def unitCutCmd (paths : List String) : IO UInt32 := do
     IO.println s!"CUT {line.compress}"
   return (if all then 0 else 1)
 
+/-- `typed-expand FILE [--out F]`: a `verity/flock-circuit/types` file (item 1e) parsed as `verify` parses it, its unit's
+rows derived (`HmRow.parseTyped`). One `TYPED` line: the circuits, the unit's rows, and the file's SHA-512 and class. With
+`--out`, the file with the derived rows as its `CIRCUIT unit` section (`Typed.expand`). -/
+def typedExpandCmd (args : List String) : IO UInt32 := do
+  let some path := args.head? | IO.eprintln "typed-expand FILE [--out F]"; return 2
+  let bytes ← IO.FS.readBinFile path
+  let tags := Tags.circuitTypes
+  let line ← match HmRow.parseTyped tags bytes with
+    | .error e => pure (Lean.Json.mkObj [("ok", Lean.Json.bool false), ("error", Lean.Json.str e)])
+    | .ok c =>
+      if let some out := argOf args "--out" then
+        if let .ok ex := Typed.expand tags bytes then IO.FS.writeBinFile out ex
+      let u := c.nets[c.unitNet]!.2
+      pure (Lean.Json.mkObj [("ok", Lean.Json.bool true), ("name", Lean.Json.str c.name),
+        ("nets", Lean.toJson (c.nets.map (·.1))), ("unit_useful", Lean.toJson u.useful),
+        ("sha512", Lean.Json.str (hexOf c.sha)), ("class", Lean.Json.str (hexOf c.classSha))])
+  IO.println s!"TYPED {line.compress}"
+  return (if (line.getObjValAs? Bool "ok").toOption.getD false then 0 else 1)
+
+
+/-- `typed-rows FILE [--tables DIR] --out DIR`: a typed template's rows as the verifier derives them, through
+`deriveChecked` with its tables held (`Typed.rows`), written in the writer's `rows/` formats. -/
+def typedRowsCmd (args : List String) : IO UInt32 := do
+  let (some path, some out) := (args.head?, argOf args "--out") | IO.eprintln "typed-rows FILE [--tables DIR] --out DIR"; return 2
+  match Typed.rows Tags.circuitTypes (← IO.FS.readBinFile path) (← readTables args) with
+  | .error e => IO.eprintln s!"typed-rows: {e}"; return 1
+  | .ok files =>
+    IO.FS.createDirAll out
+    for (n, text) in files do IO.FS.writeFile (out ++ "/" ++ n) text
+    IO.println s!"TYPED-ROWS {files.size}"
+    return 0
+
 /-- `--program P --partition Q --stratified K`: the stratified law the verifier derives from its own program and partition
 object (`HmRow.stratifiedLaw`), and the population; none without `--stratified`. -/
 def stratifiedInput (args : List String) : IO (Except String (Option (Draw.Law × Nat))) := do
@@ -312,17 +476,44 @@ def stratifiedInput (args : List String) : IO (Except String (Option (Draw.Law �
     | .error e => return .error e
   return (HmRow.stratifiedLaw obj program k).map some
 
-/-- `draw (--population N (--k K | --p NUM/DEN) | --program P --partition Q --stratified K) [--stream HEX | --stream-file F]`:
-the unit draw (§7.3), from the operating system's randomness (a stratified draw: one stream per stratum), or from the
-given bytes (a test; a stratified draw's streams are its consecutive segments). The stratified law's strata are the verifier's own,
-derived from its program and partition object. Prints `DRAW {…}`, the object the verifier sends in the clear. -/
+/-- `--program P --partition Q --work K --work-table F`: the work law the verifier derives from its own program, partition
+object and work table (`HmRow.workLaw`), and the population; none without `--work`. -/
+def workInput (args : List String) : IO (Except String (Option (Draw.Law × Nat))) := do
+  let some k := argOf args "--work" | return .ok none
+  let some k := k.toNat? | return .error "--work K: K is a natural number"
+  let program ← match ← programInput args with
+    | .ok (some p) => pure p
+    | .ok none => return .error "--work needs --program (the verifier derives the strata itself)"
+    | .error e => return .error e
+  let obj ← match ← partitionInput args with
+    | .ok (some o) => pure o
+    | .ok none => return .error "--work needs --partition"
+    | .error e => return .error e
+  let table ← match ← workTableInput args with
+    | .ok (some t) => pure t
+    | .ok none => return .error "--work needs --work-table (the verifier's own work per template)"
+    | .error e => return .error e
+  return (HmRow.workLaw obj program k table).map some
+
+/-- The verifier's own law from `--stratified K` or `--work K` (at most one), and the population; none without either. -/
+def ownLaw (args : List String) : IO (Except String (Option (Draw.Law × Nat))) :=
+  match argOf args "--stratified", argOf args "--work" with
+  | some _, some _ => pure (.error "at most one of --stratified, --work")
+  | none, some _ => workInput args
+  | _, none => stratifiedInput args
+
+/-- `draw (--population N (--k K | --p NUM/DEN) | --program P --partition Q (--stratified K | --work K --work-table F))
+[--stream HEX | --stream-file F]`: the unit draw (§7.3), from the operating system's randomness (a stratified or work draw:
+one stream per stratum), or from the given bytes (a test; a stratified or work draw's streams are its consecutive segments).
+The strata are the verifier's own, derived from its program and partition object, and a work law's work is its own work
+table's. Prints `DRAW {…}`, the object the verifier sends in the clear. -/
 def drawCmd (args : List String) : IO UInt32 := do
-  let (law, pop) ← match ← stratifiedInput args with
+  let (law, pop) ← match ← ownLaw args with
     | .error e => IO.eprintln s!"draw: {e}"; return 2
     | .ok (some lp) => pure lp
     | .ok none =>
       let some pop := (argOf args "--population").bind String.toNat?
-        | IO.eprintln "draw: --population N, or --program P --partition Q --stratified K"; return 2
+        | IO.eprintln "draw: --population N, or --program P --partition Q (--stratified K | --work K --work-table F)"; return 2
       match argOf args "--k", argOf args "--p" with
       | some k, none => match k.toNat? with
         | some k => if k ≤ pop then pure (Draw.Law.subset k, pop) else IO.eprintln "draw: k > population"; return 2
@@ -348,12 +539,13 @@ def drawCmd (args : List String) : IO UInt32 := do
   IO.println s!"DRAW {d.toJson.compress}"
   return 0
 
-/-- `draw-test FILE [--program P --partition Q --stratified K]`: U1–U3 (§7.3) on each case `{"record", "statement",
-"instances"}` (a draw or null each), one `DRAWCHECK {"ok", "why"}` line per case. With the stratified law's flags, the
-statement's draw is also held to the verifier's own law and population (`draw.check_draw`'s `law` and `population`). -/
+/-- `draw-test FILE [--program P --partition Q (--stratified K | --work K --work-table F)]`: U1–U3 (§7.3) on each case
+`{"record", "statement", "instances"}` (a draw or null each), one `DRAWCHECK {"ok", "why"}` line per case. With a law's
+flags, the statement's draw is also held to the verifier's own law and population (`draw.check_draw`'s `law` and
+`population`). -/
 def drawTest (path : String) (args : List String) : IO UInt32 := do
   let .ok (.arr cases) := Lean.Json.parse (← IO.FS.readFile path) | IO.eprintln "draw-test: not a JSON list"; return 2
-  let own ← match ← stratifiedInput args with
+  let own ← match ← ownLaw args with
     | .ok o => pure o
     | .error e => IO.eprintln s!"draw-test: {e}"; return 2
   for c in cases do
@@ -406,16 +598,23 @@ def templateQueryCmd (paths : List String) : IO UInt32 := do
 def main (args : List String) : IO UInt32 := do
   match args with
   | ["merkle-test", path] => merkleTest path
+  | ["coin-tree-check", path] => coinTreeCmd path
   | ["hm96-test", path] => hm96Test path
   | ["hm96-test", path, "sha512"] => hm96Test path Hm96.sha512
   | "unit-cut" :: paths => unitCutCmd paths
   | "archive-put" :: dir :: paths => archivePutCmd dir paths
   | "template-query" :: paths => templateQueryCmd paths
+  | "net-check" :: paths => netCheckCmd paths
   | "draw" :: rest => drawCmd rest
   | "draw-test" :: path :: rest => drawTest path rest
   | "statement" :: rest => statementCmd rest
   | "verify" :: rest => verifyCmd rest
   | ["comp-check", path] => compCheck path
   | ["field-test", path] => fieldTest path
+  | "region-words" :: rest => regionWordsCmd rest
   | ["hash-test", path] => hashTest path
+  | "typed-expand" :: rest => typedExpandCmd rest
+  | "typed-rows" :: rest => typedRowsCmd rest
+  | "circuit-type" :: paths => CircuitType.cmd paths
+  | "layout" :: paths => Layout.cmd paths
   | _ => IO.eprintln "usage: flock-verify field-test FILE"; return 2

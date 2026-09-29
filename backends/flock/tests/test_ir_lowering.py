@@ -2,6 +2,7 @@
 lowered templates against the IR evaluator on captured #101 slices and synthetic sets, the pins, and the negatives."""
 from __future__ import annotations
 
+import itertools
 import os
 import random
 from pathlib import Path
@@ -9,6 +10,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from verity.ir.defs import REGISTRY
 from verity_flock import fp, gf2
 from verity_flock import ir_lower as IL
 
@@ -23,9 +25,12 @@ REG = lowerings.registry("C-Flock")
 LOWERED = {"rope-head": {"D": 64}, "silu-mul": {"I": 8192}}
 
 
+SPECIAL = [0, 0x80000000, 0x7F800000, 0xFF800000, 1, 0x80000001, 0x7FFFFF, 0x800000, 0x7F7FFFFF, 0x3F800000, 0xBF800000,
+           0x7FC00000, 0xFFC00000, 0x7FC00001, 0xFFC12345, 0x7F800001, 0xFF812345, 0x7FFFFFFF, 0xFFBFFFFF]   # quiet and signalling NaNs
+
+
 def f32_words(rng: random.Random, n: int) -> list[int]:
-    special = [0, 0x80000000, 0x7F800000, 0xFF800000, 1, 0x80000001, 0x7FFFFF, 0x800000, 0x7F7FFFFF, 0x3F800000, 0xBF800000,
-               0x7FC00000, 0xFFC00000, 0x7FC00001, 0xFFC12345, 0x7F800001, 0xFF812345, 0x7FFFFFFF, 0xFFBFFFFF]   # quiet and signalling NaNs
+    special = SPECIAL
     out = []
     for _ in range(n):
         r, s = rng.random(), rng.getrandbits(1) << 31
@@ -81,6 +86,10 @@ TAIL = {"F32AddFtz_v1": 2, "F32SubFtz_v1": 2, "F32MulFtz_v1": 2, "F32FmaFtz_v1":
         "MufuSqrtFtz_v1": 1, "DivFullRcp_v1": 1, "DivFullScaleA_v1": 2, "F32GtStrict_v1": 2}
 PIECES += [(name, (32,) * k, 1 if name == "F32GtStrict_v1" else 32, IL.PIECES[name], _registered()[name].evaluate)
            for name, k in TAIL.items()]
+#: the `_v2` FP32 primitives (every NaN result 0x7FFFFFFF) and their pieces
+V2 = {"F32Add_v2": 2, "F32Mul_v2": 2, "F32Fma_v2": 3, "F32Div_v2": 2, "F32AddFtz_v2": 2, "F32SubFtz_v2": 2, "F32MulFtz_v2": 2,
+      "F32FmaFtz_v2": 3, "F32FmaSubFtz_v2": 3, "F32Sub_v2": 2, "F32FmaRm_v2": 3, "DivFullScaleA_v2": 2}
+PIECES += [(name, (32,) * k, 32, IL.PIECES[name], REGISTRY[name].evaluate) for name, k in V2.items()]
 
 
 @pytest.mark.parametrize("name,widths,out,piece,ref", PIECES, ids=[p[0] for p in PIECES])
@@ -97,6 +106,16 @@ def test_pieces_match_the_ir_primitives(name, widths, out, piece, ref):
     got = run_piece(piece, widths, out, vecs)
     bad = [(v, g) for v, g in zip(vecs, got) if g != ref(*v)]
     assert bad == []                                  # exact bits: a NaN's sign and payload too
+
+
+@pytest.mark.parametrize("name", sorted(V2))
+def test_the_v2_pieces_are_their_primitives_on_every_special_word(name):
+    """Every pair of the special words (every triple of every other one): a NaN operand of either sign and any payload, an
+    invalid operation, and for `DivFullScaleA_v2` a NaN dividend over a huge, tiny or ordinary divisor."""
+    k = V2[name]
+    vecs = [list(v) for v in itertools.product(SPECIAL if k == 2 else SPECIAL[::2], repeat=k)]
+    ref = REGISTRY[name].evaluate
+    assert [(v, g) for v, g in zip(vecs, run_piece(IL.PIECES[name], (32,) * k, 32, vecs)) if g != ref(*v)] == []
 
 
 @pytest.mark.parametrize("name", ["MufuEx2Ftz_v1", "MufuRcpFtz_v1", "Fa2InvSum_v1", "RsqrtApprox_v1", "MufuSqrtFtz_v1",
@@ -116,10 +135,13 @@ def test_mufu_pieces_match_on_every_exponent(name):
     ("GumbelStreamKey_v1", (64, 64), lambda r: [r.getrandbits(64), r.choice([r.getrandbits(64), r.randint(0, 5000)])]),
     ("GumbelNoiseLane_v1", (32, 32), lambda r: [r.getrandbits(32), r.choice([0, 1, 0x7FFFFFFF, 0x80000000, 0xFFFFFFFF,
                                                                             r.randint(0, 128255), r.getrandbits(32)])]),
+    ("GumbelNoiseLane_v2", (32, 32), lambda r: [r.getrandbits(32), r.choice([0, 1, 0x7FFFFFFF, 0x80000000, 0xFFFFFFFF,
+                                                                            r.randint(0, 128255), r.getrandbits(32)])]),
     ("F32Eq_v1", (32, 32), lambda r: (lambda v: [v[0], r.choice([v[1], v[0], v[0] ^ 0x80000000])])(f32_words(r, 2))),
     ("BitOr_v1", (1, 1), lambda r: [r.getrandbits(1), r.getrandbits(1)]),
     ("BitNot_v1", (1,), lambda r: [r.getrandbits(1)]),
 ])
+@pytest.mark.slow
 def test_sampler_pieces_match_the_ir_primitives(name, widths, gen):
     """The sampler's Philox stream key and Gumbel noise lane (libdevice logf / log1pf, its true toward-zero add) and the row's
     bit logic, exact bits."""
@@ -127,6 +149,17 @@ def test_sampler_pieces_match_the_ir_primitives(name, widths, gen):
     vecs = [gen(rng) for _ in range(300 if name.startswith("Gumbel") else 3000)]
     ref = _registered()[name].evaluate
     assert [(v, g) for v, g in zip(vecs, run_piece(IL.PIECES[name], widths, 32, vecs)) if g != ref(*v)] == []
+
+
+@pytest.mark.parametrize("name", ["NvLogf_v1", "NvLogf_v2"])
+def test_the_logf_pieces_match_the_ir_primitives_outside_the_domain_too(name):
+    """``_v1``'s NaN (main's pinned 0xFFC00000 for a negative word, a NaN input's payload) and ``_v2``'s (0x7FFFFFFF for both), on
+    negative words, NaNs of both signs and the positive range."""
+    rng = random.Random(name)
+    vecs = [[w] for w in f32_words(rng, 1500)] + [[w | 0x80000000] for w in f32_words(rng, 300)]
+    vecs += [[w] for w in (0x7FC00123, 0xFFC00123, 0x7F800001, 0xFF800001, 0x80000000, 0x80000001, 0xFF800000, 0x7F800000)]
+    ref = _registered()[name].evaluate
+    assert [(v, g) for v, g in zip(vecs, run_piece(IL.PIECES[name], (32,), 32, vecs)) if g != ref(*v)] == []
 
 
 #: the other rows' primitives (tail_pieces): FA3's inverse sum, the greedy argmax, the FP8 linear's quantizer, the MoE router
@@ -185,6 +218,7 @@ def test_the_fp8_tensor_core_step_matches_the_ir_on_every_encoding():
 
 
 @pytest.mark.parametrize("name,table", [("MufuTanh_v1", "tanh_mufu"), ("TanhF32Rn_v1", "tanh_rn")])
+@pytest.mark.slow
 def test_the_tanh_pieces_match_the_ir_primitives(name, table):
     """Gemma's tanh (a table read over |x|): each region's bounds and their neighbours, both signs, NaNs and infinities, and random
     words across the table's region, exact bits."""
@@ -222,14 +256,79 @@ def test_bit_at_selects_the_bit_or_zero():
     assert [int(x) for x in IL.unslice_words(outs["o"], len(vecs))] == [bit_at(W).evaluate(*v) for v in vecs]
 
 
-def test_a_lookup_is_never_laid_out():
-    """A table read is a lookup, which a Flock unit's expanded circuit does not express: the layout refuses it."""
+#: the pinned rcp table read inline: 16,712 + 584 decoder rows (14 low and 9 high index bits), 9,753 nonempty product rows and
+#: 24 copy rows, its 7 constant value bits wired to the constant; its 93,528,819 set bits
+READ_ROWS, READ_NNZ = 27_073, 93_528_819
+
+
+def test_a_table_read_is_laid_out_as_plain_rows():
+    """A table read is laid out inline as rows of the unit (``ir_lower._Read``), no slot: the rcp table's decoders, a product row
+    per nonempty (value bit, high minterm) and a copy row per live value bit, its set bits in the product rows' forms."""
     C = gf2.Circuit()
     x = C.input("in0", 32)
     C.output("out0", IL.PIECES["MufuRcpFtz_v1"](C, x))
     assert C.counts()["lookups"] == 1
-    with pytest.raises(AssertionError):
-        IL.layout(C, ["in0"], ["out0"])
+    lay = IL.layout(C, ["in0"], ["out0"])
+    assert (lay.counts["reads"], lay.counts["read_rows"], lay.counts["read_nnz_a"]) == (1, READ_ROWS, READ_NNZ)
+
+    def latest(r):
+        cols = np.asarray(r, dtype=np.int64)
+        cols = cols[cols != lay.const]
+        return int(cols.max()) if len(cols) else -1
+
+    first = lay.in_words * IL.WORD
+    assert all(latest(lay.rows_a[i]) < i and latest(lay.rows_b[i]) < i for i in range(first, lay.useful) if i != lay.const)
+
+
+def _rows_eval(lay, words: list[int]) -> tuple[list[int], bool]:
+    """The laid-out rows run on 64 lanes of one 32-bit input port (numpy, for rows with millions of set bits): the output
+    words and whether every row holds."""
+    T, mask = 64, np.uint64(0xFFFFFFFFFFFFFFFF)
+    z = np.zeros(lay.useful, dtype=np.uint64)
+    at = lay.in_port_cols[0]
+    for b in range(32):
+        z[at + b] = np.uint64(sum(((w >> b) & 1) << t for t, w in enumerate(words)))
+    z[lay.const] = mask
+
+    def ev(r):
+        a = np.asarray(r, dtype=np.int64)
+        return np.bitwise_xor.reduce(z[a]) if len(a) else np.uint64(0)
+
+    for i in range(lay.in_words * IL.WORD, lay.useful):
+        if i != lay.const:
+            z[i] = ev(lay.rows_a[i]) & ev(lay.rows_b[i])
+    holds = all(ev(lay.rows_a[i]) & ev(lay.rows_b[i]) == z[i] for i in range(lay.useful))
+    o, nb = lay.out_port_cols[0], lay.out_bits[0]
+    return [sum(((int(z[o + b]) >> t) & 1) << b for b in range(nb)) for t in range(T)], holds
+
+
+@pytest.mark.parametrize("prim", ["MufuRcpFtz_v1", "MufuEx2Ftz_v1", "MufuSqrtFtz_v1", "RsqrtApprox_v1"])
+def test_a_library_reads_rows_compute_its_piece(prim):
+    """A read of a library table, its constant value bits wired to the constant and 14 low index bits: the laid-out rows give
+    the gate circuit's outputs on random and edge words, and every row holds."""
+    C = gf2.Circuit()
+    x = C.input("in0", 32)
+    C.output("out0", IL.PIECES[prim](C, x))
+    lay = IL.layout(C, ["in0"], ["out0"])
+    rng = random.Random(12)
+    words = [0, 0x80000000, 0x7F800000, 0xFF800000, 0x7FC00000, 1, 0x00800000, 0x3F800000] + [rng.getrandbits(32) for _ in range(56)]
+    outs, _ = C.evaluate({"in0": IL.slice_words(words, 32)}, 64)
+    got, holds = _rows_eval(lay, words)
+    assert holds and got == [int(v) for v in IL.unslice_words(outs["out0"], 64)]
+
+
+def test_a_program_table_keeps_a_row_for_every_live_bit(monkeypatch):
+    """A table off core's library list keeps its constant bits as rows, so its layout shows nothing of its content."""
+    words = [(i * 2654435761) & 0x7 | 0x8 for i in range(1 << 6)]
+    monkeypatch.setitem(gf2.TABLES, "toy_program", lambda: words)
+    monkeypatch.setitem(gf2._TABLE_WORDS, "toy_program", words)
+    C = gf2.Circuit()
+    x = C.input("in0", 6)
+    v = C.lookup("toy_program", x, 4)
+    C.output("out0", v)
+    assert IL._library_table("rcp") and not IL._library_table("toy_program")
+    r = IL._Read(C, 0, [0, 1, 2, 3], 0)
+    assert r.const_bits == {} and r.bits == [0, 1, 2, 3]
 
 
 @pytest.mark.parametrize("prim", ["Bf16Add_v1", "Bf16AddF2fp_v1"])
@@ -459,6 +558,7 @@ def test_rmsnorm_widths_refuse_unequal_warps():
     assert "not N = 1536" in REG.supports(TM.subcircuit("rmsnorm-fused-cuda", N=1536, EPS=1e-5), "frame-v3/blake3-keyed")
 
 
+@pytest.mark.slow
 def test_rmsnorm_fused_small_row_against_the_ir(tmp_path):
     """N = 64: two warps of 32 one-element threads; spine synthetic rows, outputs and warp aggregates both compared."""
     sub = TM.subcircuit("rmsnorm-fused-cuda", N=64, EPS=1e-5)
@@ -479,6 +579,7 @@ def test_a_wrong_row_scalar_changes_the_outputs(tmp_path):
     assert (good != bad).any(axis=1).all()
 
 
+@pytest.mark.slow
 def test_the_netlist_accounts_for_every_cut_word(tmp_path):
     """IR1 (the Python half; the Rust verifier refuses the rest, `flock-ir-block selftest`): the netlist's CUT line lists each
     unit's cut ports and the native tail; every cut word is computed exactly once, by a unit or by the tail, from words defined
@@ -506,6 +607,7 @@ def test_the_netlist_accounts_for_every_cut_word(tmp_path):
     assert rope.cut is None and head["cut_words"] == 0 and not rope.text.splitlines()[-1].startswith("CUT")
 
 
+@pytest.mark.slow
 def test_the_pin_covers_the_cut_structure():
     """IR4: N and eps are tail constants in the netlist's CUT line, so another eps is another pin; the unit rows do not
     depend on eps (the row scalar is a cut word)."""
@@ -620,6 +722,7 @@ def test_piece_counts_are_what_the_design_says():
 
 # --- verity/flock-ir-frame/v3: the frame-v3 binding --------------------------------------------------------------------------
 
+@pytest.mark.slow
 def test_frame_plans_take_the_largest_run_that_fits():
     """RoPE and SiLU·mul read whole chunks; an RMSNorm block holds runs of its chunks' compressions (fused: 4 of 16, its four
     warps' elements; Triton: 8 of 16, one warp's), within 2^22 bits."""
@@ -662,6 +765,7 @@ def test_frame_staging_commits_rows_and_outputs(tmp_path):
     assert h["blocks"] == [[[[0, 0, 0, 0], [0, 1, 0, 0], None, None], list(range(32)) + [None] * 32]]
 
 
+@pytest.mark.slow
 def test_frame_staging_carries_the_cut_words(tmp_path):
     """A cut template's frame file ends with every instance's cut words (the IR's), which the verifier checks against the
     netlist's pinned tail; the empty run slot of a three-port component block is padding."""

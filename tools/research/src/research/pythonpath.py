@@ -40,6 +40,8 @@ def _toml(read: Reader, path: str) -> dict:
 def _member_roots(read: Reader, is_dir: Callable[[str], bool], member: str) -> list[str]:
     doc = _toml(read, posixpath.join(member, "pyproject.toml"))
     tool = doc.get("tool") or {}
+    if (tool.get("uv") or {}).get("package") is False:      # a virtual member: no import packages, nothing for PYTHONPATH
+        return []
     pkgs = (((tool.get("hatch") or {}).get("build") or {}).get("targets") or {}).get("wheel", {}).get("packages")
     if pkgs:
         return [posixpath.normpath(posixpath.join(member, posixpath.dirname(p.rstrip("/")) or ".")) for p in pkgs]

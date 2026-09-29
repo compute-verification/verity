@@ -12,7 +12,7 @@ from verity.proofs.int8 import INT8_Q7_MAX_CONTRACTION, make_int8_q7_gate_set, r
 
 
 INT8_Q7_DIGEST = "88162784922551008cdff19a0a08a118d4bd6f02fbd65c71629c502a988b69c6"
-"""Pinned: the Rust checker (`zk/sp1/common/src/gateset.rs`) resolves `veritor.int8-q7@1` to this digest."""
+"""Pinned: the Rust checker (`backends/sp1/common/src/gateset.rs`) resolves `veritor.int8-q7@1` to this digest."""
 
 
 @pytest.fixture(scope="module")

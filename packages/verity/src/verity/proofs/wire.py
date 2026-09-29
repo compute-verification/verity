@@ -10,7 +10,7 @@ exactly the outputs of :func:`encode_statement` (every index range-checked,
 kinds and obligations sorted, no trailing bytes) and re-encoding a decoded
 statement reproduces the input bytes.
 
-The Rust mirror is ``zk/sp1/common/src/codec.rs``; the layout is::
+The Rust mirror is ``backends/sp1/common/src/codec.rs``; the layout is::
 
     Statement   = MAGIC str gate_set_id digest gate_set_digest u32 width
                   list<KindProgram> kinds  list<Obligation> obligations

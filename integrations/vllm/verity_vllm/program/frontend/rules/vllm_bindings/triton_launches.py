@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import torch
+
 from verity.ir.refs import Coll
 from verity_vllm.program.frontend.derive import Alloc
-from verity_vllm.program.frontend.torch_frontend import shape_of
+from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
 from verity_vllm.program.frontend.rules.base import InPlaceRule, RuleInfo
-from verity_vllm.program.frontend.rules.common import from_rows, rows_of, shape
+from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, rows_of, shape
+from verity_vllm.program.frontend.rules.profile import BF16, _bias_shape
 from verity_vllm.program.frontend.rules.triton_iface import launch_meta, launch_tensor, triton_launch
 from verity_vllm.program.frontend.rules.vllm_bindings.operands import _row_value, _strides, _untransposed
 from verity_vllm.program.frontend.rules.vllm_bindings.pins import (GEMM_PINS, RMS_PINS, _pins_ok, _target_kinds, active_gemm_target, gemm_pins_for,
@@ -87,9 +90,11 @@ class TritonRmsNormRule(InPlaceRule):
 class TritonGemmRule(InPlaceRule):
     """`matmul_kernel_persistent[grid](a, b, c, bias, M, N, K, strides…, NUM_SMS, …constexprs)` launched by
     `matmul_persistent` from vLLM's `aten::linear` batch-invariant override -> `Gemm{K,N}` per row of `a`; `c` is rebound.
-    `b` is `W.t()` (a view of the [N, K] parameter: stride_bk == 1, stride_bn == K); the kind takes W as [N, K]."""
+    `b` is `W.t()` (a view of the [N, K] parameter: stride_bk == 1, stride_bn == K); the kind takes W as [N, K].  When the only reader
+    of `c` is the linear's bias add (`_bias_add_reader`), the pair is one `GemmBias_v1{K,N}(a row, W, b)` per row bound to the add's
+    value instead, on the target whose GEMM is `Gemm_v1`."""
     modes = frozenset({"profile"})
-    info = RuleInfo("TritonGemm[vllm-bi]", 1, "in-place-binding",
+    info = RuleInfo("TritonGemm[vllm-bi]", 2, "in-place-binding",
                     applies_to="verity_cba::triton_launch of batch_invariant.matmul_kernel_persistent (kernel name + constexprs pinned)",
                     preconditions=("kernel qualified name is the profile's `matmul_kernel_persistent`; source sha256 pinned",
                                    "the active TargetProfile's capability has a REGISTERED GEMM specialization (verity_vllm.program.registry.gemm_targets: ada cc 8.9 with "
@@ -98,8 +103,11 @@ class TritonGemmRule(InPlaceRule):
                                    "M-bucket row of the target's pinned tuned table); GROUP_SIZE_M 8, *_LARGE False, HAS_BIAS False, "
                                    "NUM_SMS = the active TargetProfile's num_sms (default 128)",
                                    "a is bf16 [M, K] row-major (stride_am K, stride_ak 1); b is bf16 [K, N] with stride_bk 1, stride_bn K (= W[N,K].t())",
-                                   "c is an unwritten allocation [M, N] row-major; bias_ptr is None; M, N, K equal the shapes"),
-                    evidence_domain="structural; numerics: Gemm_v1{K,N} (the same Triton kernel; f32 accumulator over BLOCK_SIZE_K tiles)")
+                                   "c is an unwritten allocation [M, N] row-major; bias_ptr is None; M, N, K equal the shapes",
+                                   "fused bias (Gemm_v1 targets): c's only other reader is aten.add.Tensor(c, b) (either order, alpha 1), the next "
+                                   "computing node, in the launch's module; b bf16 [N] or [1, N]; the sum bf16 [M, N]"),
+                    evidence_domain="structural; numerics: Gemm_v1{K,N} (the same Triton kernel; f32 accumulator over BLOCK_SIZE_K tiles); "
+                                    "GemmBias_v1{K,N} = BiasAdd_v1 of that word (linear_batch_invariant's `output + bias` in bf16)")
 
     def targets(self):
         return {triton_launch.default}
@@ -155,12 +163,51 @@ class TritonGemmRule(InPlaceRule):
         K, N = shape_of(bc.type)[0]
         w_nk = _untransposed(ctx, b, K, N, ctx.hint_name(node) + "/W")  # b = W.t(): the kind's W is [N, K] — a reference rearrangement
         accepted, dot = _target_kinds()   # [R13 hopper] the target's registered k16 step selects Gemm_v1 (accepted) or Gemm_v2{DOT}
-        fn = ctx.kind("gemm", node, K=K, N=N) if accepted else ctx.kind("gemm_dot", node, K=K, N=N, DOT=dot)
-        outs = [ctx.call(fn, r, w_nk, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]") for i, r in enumerate(rows)]
-        ctx.rebind(c, from_rows(outs, lead), self, what="c")
+        fused = _bias_add_reader(node, c, ctx, len(rows), N) if accepted else None
+        if fused is not None:
+            add, bn = fused
+            bias = ctx.coll(bn, "b")
+            if len(shape_of(bias.type)[0]) != 1:
+                bias = bias.reshape(_tensor_type((N,), 16))   # [1, N] -> [N]: the same leaves, the same broadcast
+            fn = ctx.kind("gemm_bias", add, K=K, N=N)
+            outs = [ctx.call(fn, r, w_nk, bias, node=add, rule=self, name=f"{ctx.hint_name(add)}[{i}]") for i, r in enumerate(rows)]
+            ctx.define(add, from_rows(outs, lead))
+            if ctx.weight_of(bn) is not None:
+                ctx.bind_weight_role(bn, self, "linear.bias", N=N)
+        else:
+            fn = ctx.kind("gemm", node, K=K, N=N) if accepted else ctx.kind("gemm_dot", node, K=K, N=N, DOT=dot)
+            outs = [ctx.call(fn, r, w_nk, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]") for i, r in enumerate(rows)]
+            ctx.rebind(c, from_rows(outs, lead), self, what="c")
         ctx.bind_weight_role(b, self, "linear.weight", K=K, N=N)
         wl = ctx.weight_of(b)
         pins, src = gemm_pins_for(sc.get("M"), sc.get("N"), sc.get("K"))
         tgt = active_gemm_target()
         ctx.record(self, node, {"K": K, "N": N, "rows": len(rows), "lookup_key": lookup_key(meta), "pins": pins, "pin_source": src,
-                                "gemm_target": tgt.key, "gemm_target_dot": tgt.dot, "W_is_parameter": wl.name if wl else None}, emitted=f"{fn.id} x{len(rows)}")
+                                "gemm_target": tgt.key, "gemm_target_dot": tgt.dot, "W_is_parameter": wl.name if wl else None,
+                                "bias_add": fused[0].name if fused else None}, emitted=f"{fn.id} x{len(rows)}")
+
+
+def _bias_add_reader(launch, c, ctx, M: int, N: int):
+    """`linear_batch_invariant`'s `output + bias` when it is the launch output's ONLY reader: `aten.add.Tensor(c, b)` (either order,
+    alpha 1) in the launch's module, the first computing node after the launch, `b` a bf16 `[N]` (or `[1, N]`) value, the sum bf16
+    `[M, N]` -> (add node, b node); else None and the pair stays `Gemm_v1` + `BiasAdd_v1`.  The pre-bias word then never leaves its
+    coordinate (`GemmBias_v1`), and `c` is never written: any other read of it is refused as an uninitialised allocation."""
+    readers = [u for u in c.users if u is not launch]
+    if len(readers) != 1:
+        return None
+    add = readers[0]
+    if add.op != "call_function" or add.target is not torch.ops.aten.add.Tensor or len(add.args) != 2 or add.kwargs.get("alpha", 1) != 1:
+        return None
+    nxt = launch.next
+    while nxt is not add and nxt.op != "call_function" and nxt.op != "output":
+        nxt = nxt.next
+    if nxt is not add or ctx.stack_path(add) != ctx.stack_path(launch):
+        return None
+    bn = add.args[1] if add.args[0] is c else add.args[0]
+    if bn is c or not isinstance(bn, torch.fx.Node) or not isinstance(ctx.val(bn), Coll):
+        return None
+    if not (dtype_is(ctx, bn, BF16) and dtype_is(ctx, add, BF16)) or _bias_shape(shape(ctx, bn)) != N or shape(ctx, add) != (M, N):
+        return None
+    if len(shape(ctx, bn)) > 2:
+        return None
+    return add, bn

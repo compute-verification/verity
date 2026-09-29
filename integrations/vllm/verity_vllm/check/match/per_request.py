@@ -278,6 +278,13 @@ def _request_leg(steps: dict, B: C.Prog, fast: bool, ops: BD.Ops, within_step: s
     return _compare_component(ops, within_step, fast, g, ent, P, A, cd, LP, out)
 
 
+def addressed_instances(A: C.Prog) -> int:
+    """The component's instances as GP-01's address map counts them (`n_instances` = its root nodes): the compared sequence plus the
+    single-request splits constants `Prog._bind_splits` removed from it (one `Const32[S]` per top-p select; a batched component reads S
+    from an Input and has none)."""
+    return len(A.inst) + int(getattr(A, "n_splits_consts_bound", 0))
+
+
 def _compare_component(ops: BD.Ops, within_step: str, fast: bool, g: dict, ent: dict, P: BD.Projection, A: C.Prog | None,
                        cd: str | None, LP: int, out: dict) -> dict:
     """The request's projection against its component over the executed steps: the leg's G3/G4 facts and the canonical address of
@@ -294,8 +301,10 @@ def _compare_component(ops: BD.Ops, within_step: str, fast: bool, g: dict, ent: 
     ga = g.get("global_address")
     if ga:
         ent["global_address"] = ga
-        if ga.get("n_instances") is not None and int(ga["n_instances"]) != len(A.inst):
-            fails.append(("G4", f"{rid}: address map declares {ga['n_instances']} instances for the request, the component has {len(A.inst)}"))
+        n_addressed = addressed_instances(A)
+        if ga.get("n_instances") is not None and int(ga["n_instances"]) != n_addressed:
+            fails.append(("G4", f"{rid}: address map declares {ga['n_instances']} instances for the request, the component has {n_addressed} "
+                                f"({len(A.inst)} compared + {n_addressed - len(A.inst)} bound splits constants)"))
     n_exec = len(P.steps)
     if n_exec > len(A.steps):
         fails.append(("G3", f"{rid}: executed {n_exec} local steps but the bounded component has {len(A.steps)} (output interface exceeded)"))
@@ -382,8 +391,14 @@ def _compare_component(ops: BD.Ops, within_step: str, fast: bool, g: dict, ent: 
                 s0 = bad[0]["step"]
                 out["perm"][s0] = perm_match(A, P, s0, ops.dag_hashes(A), ops.dag_hashes(P))
         local_addr = [list(range(len(loc))) for loc in P.steps]
-    if P.xreq:
-        fails.append(("G3", f"{rid}: cross-request reads"))
+    sv = cmp.get("splits_values")
+    why = ["cross-request reads"] if P.xreq else []
+    if sv and not sv["equal"]:   # a single-request component's own Const32[S]: neither criterion above sees its value
+        ent["splits_values"] = sv
+        why.append(f"the component's constant S differs from the fold's at {len(sv['mismatches'])} event(s) "
+                   f"(first [event, component S, fold S] = {sv['mismatches'][0]})")
+    if why:
+        fails.append(("G3", f"{rid}: " + "; ".join(why)))
     out.update({"P_steps": P.steps, "local_addr": local_addr, "A_steps_len": [len(s) for s in A.steps],
                 "exec_pop": sum(len(A.steps[s]) for s in range(min(n_exec, len(A.steps))))})
     return out

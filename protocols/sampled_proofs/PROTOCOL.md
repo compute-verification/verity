@@ -5,27 +5,29 @@ Spot-checks a committed transcript of a Verity Program, and says what an accepte
 ## Lifecycle
 
 1. The prover commits the transcript's boundary (the replay units' interface values) and registers the root.
-2. The RU draw: `law.ru_key(beacon(t), bindings)`, where `beacon(t)` is the first round published after the root's
-   registration time `t`, and `bindings` holds the Program digest and the boundary root. Each replay unit (RU) of a
+2. The RU draw, after the root's registration: the verifier's own randomness (`law.OwnRandomness`). Each replay unit (RU) of a
    class is selected with its stage's probability `p` (`select_replay_units`).
 3. The prover replays the selected RUs, then commits and registers their interiors.
-4. The VU draw: `law.vu_key(beacon(t'), bindings)`, which also binds the interiors root. In each selected RU,
+4. The VU draw, after the interiors' registration: the verifier's own randomness again. In each selected RU,
    exactly `k` of its verification units (VUs) are checked (`select_verification_units`), or all of them when it
    holds fewer.
 5. Each checked VU is established on its authenticated boundary values.
 6. An accepted audit emits a `verity.proofs.profile.IntegrityProfile` per RU class (`TwoStageLaw.profile`). It
    holds the exhaustively checked facts: the evaluated Programs, the prescribed families, linkage, and the families
    covered on every audit (`VerificationPlan.covered`). Its law is one level, `replay` (the `n_r` RUs), drawn
-   `Bernoulli(p * k / n_v)`, with the count drawn and `delta`; it counts wrong RUs (see "The law"). Resource
-   accounting, policies and PoUW each read what they need off it, passing their own utility to `worst_case` (work in VUs
-   charges `n_v` per wrong RU). The application counts `delta` once.
+   `Bernoulli(p * k / n_v)`, with the count drawn and `delta`; it counts wrong RUs (see "The law"), and weights
+   nothing.
 
 ## Randomness
 
-Every coin is drawn through `verity.randomness.derive(source, domain, context)` (decision 42). The source is a beacon
-round or a key holder's secret, never the prover's own root. The domains are `verity/sampled-proofs/ru-sample/v1`
-and `verity/sampled-proofs/vu-sample/v1`. Draws are addressed by RU index in the committed order, so a shard of the
-population draws its own RUs.
+The verifier draws every coin from its own randomness, directly: `law.OwnRandomness` reads the operating system's
+generator with the exact samplers of the Lean verifier's `Flock.Draw` (uniform by rejection on big-endian words,
+Bernoulli as a uniform below the numerator, subset by partial Fisher-Yates), with no hash and no derivation. There is no
+beacon. Each draw comes after the registration it follows: the RU draw after the boundary, the VU draw after the
+interiors. Draws are addressed by RU index in the committed order.
+
+`law.ru_key` and `law.vu_key` keep decision 42's `verity.randomness.derive` of a caller's source and the bindings only for
+vLLM's LEGACY challenge, until its re-baseline. They are not a draw of record.
 
 ## The law
 
@@ -42,6 +44,13 @@ at most `1 - p * k / n_v`, independently across RUs, and the profile is over the
 the verifier from its own randomness after the interiors are committed (pitfall 4). `tests/test_law.py` checks the sampler against the per-RU formula and
 reproduces the attack the old two-level profile missed (§2.9's `TOY`: 64 skipped VUs pass with probability 0.01).
 
+## Consumers
+
+Applications derive their guarantees from the profile, each weighting a wrong RU by what it costs the application, and
+each counts `delta` once. Compute security charges a wrong RU its class's `n_v` VUs, the most work it can hold:
+`verity_one_stage.consumers.compute_bound(profile, n_v)`, the profile's weighted bound `harm_bound(n_v)`. Policies and
+PoUW pass their own utility to `worst_case`.
+
 ## Boundaries
 
 Obligations are built from a call's declared interface (`args`, `returns`). The protocol never reads
@@ -49,7 +58,7 @@ Obligations are built from a call's declared interface (`args`, `returns`). The 
 
 ## Not here yet
 
-- **The audit driver:** steps 1 to 6 as one object, with the registration log and the beacon client. The prototype's
+- **The audit driver:** steps 1 to 6 as one object, with the registration log and the verifier's draws. The prototype's
   version is on `cursor/protocol-prototype-9816`. It lands with the first real consumer of the full lifecycle. Today
   that is vLLM, whose replay runs on one post-commit challenge, with its strata as RUs at `p = 1`.
 - **The security function** and the red-team review (decision 41).

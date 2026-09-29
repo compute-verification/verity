@@ -1,5 +1,7 @@
 # A-GKR: GKR + lookups (`verity-gkr`)
 
+Frozen: kept, still in the tables, not developed. What the merge gate runs for A-GKR: `../README.md`.
+
 The transition unit (one 16-product `mma.sync` update with an arbitrary finite accumulator) as a layered arithmetic
 circuit exported from the WP2 gadget contracts, proved data-parallel over `B` units with sumcheck GKR, LogUp fractional-sum
 GKR for the lookups and a Ligero-style hash commitment; and, since 2026-09-22, the **full K = 1536 VU** (96 chained units
@@ -8,7 +10,7 @@ run what exists.
 
 Labels on every number from this crate: `proof_class = NON_ZK_PROOF_DIAGNOSTIC` (PCS mode) or `ARITHMETIC_DIAGNOSTIC`
 (`--clear`: inputs and hints sent in the clear), `authentication = excluded`, `unit = transition` or `vu`, `domain = finite`.
-No ZK masking anywhere yet; Fiat–Shamir with SHA-256 (the interactive object and step 0 are not implemented; the transcript
+No ZK masking anywhere; Fiat–Shamir with SHA-256 (the interactive object and step 0 are not implemented; the transcript
 records `rounds.protocol` and `rounds.sequential_depth`).
 
 **Latency axis (lane latency, 2026-09-22).** `rounds.sequential_depth` is *measured*: `Transcript::round_trip()` counts
@@ -38,6 +40,9 @@ vy-cpu2: B=64 at 50 ms RTT 18.44 s = 7.20 compute + 0.53 verify + 214 × 50 ms (
   (`units.bin`, `epilogue.bin`, `public.bin` = the output words) and finalises the result envelope;
   `python -m verity_numerical.gkr_export` writes the fixtures). Tests:
   `backends/numerical/tests/gkr_export/`.
+- `gpu/` (the prover on the GPU, torch + Triton, BabyBear^6), `packed/` and `tensor/` (its sumcheck rounds on INT8
+  tensor cores) and `verifier/` (`verity-gkr-verify`, the independent Rust verifier of `gpu/`'s proofs) each have a
+  README. `templates/`: A-GKR's lowerings, one module per subcircuit template; `tests/`: the Python tests.
 
 ## What is proved
 
@@ -55,11 +60,11 @@ vy-cpu2: B=64 at 50 ms RTT 18.44 s = 7.20 compute + 0.53 verify + 214 × 50 ms (
   (row combination restricted to the k-symbol payload + t = 192 opened columns with paths). Linear test only: all
   products are inside the GKR, so no quadratic test is needed.
 
-Soundness by `security/accounting.account_candidate_a` with `LigeroParams(n=16384, k=4096, l=4095, t=192, zk=False)`,
+Soundness by `verity_numerical.security.accounting.account_candidate_a` with `LigeroParams(n=16384, k=4096, l=4095, t=192, zk=False)`,
 `commit_query_wires=True`: **127.7 bits at B = 1, 64, 4096** (IRS query term 2^-130.2; the 0.3 bits under 2^-128 are the
 LogUp identity term over Goldilocks^3, parameterised, not tuned).
 
-Against the census (`security/census.py`: 321 committed columns per unit + query wires) the export materialises 147 extra
+Against the census (`verity_numerical.security.census`: 321 committed columns per unit + query wires) the export materialises 147 extra
 columns (range chunks and query wires bound by assertions, `PROTOCOL.md` §4.3 `commit_query_wires`).
 
 ## Build, test, cross-check
@@ -144,7 +149,7 @@ depth grows from 243 to 27,075 and the checker's wire evaluations from 1.95G to 
 change the picture, so only m = 1 is built and measured; the two extremes are the m = 1 row above (measured) and the
 m = 96 column of §12.4 (cost model, not run).
 
-Not yet built: ZK rows / salted leaves / batched Merkle paths in the commitment (~3× bytes slack), HVZK masking, the
+Not built: ZK rows / salted leaves / batched Merkle paths in the commitment (~3× bytes slack), HVZK masking, the
 interactive object and step 0, a parallel NTT, `R16` sharding (depth 438 → 409), authentication.
 
 ## BabyBear (vy-cpu2, 12 threads, PCS mode, `--features babybear`; lane a-babybear, 2026-09-22)
