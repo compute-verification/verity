@@ -15,9 +15,13 @@ read from git's view of the working tree, so uncommitted edits count; a tree wit
 is keyed from the sha256 of every file in it. A pass is kept under its key in `~/.cache/verity/tests`
 (`VERITY_TEST_CACHE` overrides it) and reused while the key is unchanged.
 
-Every run loads `suite_guard.py`, which fails the suite if its tests open a repository file outside its inputs, so a cached
-pass never hides a change to something the tests read. Programs a test starts as a subprocess are not traced: list what they
-read under `inputs`.
+Every run loads `guard/verity_suite_guard.py`, which fails the suite if its tests open a repository file outside its inputs,
+so a cached pass never hides a change to something the tests read. Programs a test starts as a subprocess are not traced:
+list what they read under `inputs`.
+
+`--jobs` is how many test processes run at once. A suite that declares `[tool.verity.tests] parallel = true` spreads its tests
+over all of them with pytest-xdist, whose workers load the guard too. Parallel suites run first, one at a time, then the
+others side by side, longest first. Without pytest-xdist installed, a parallel suite runs in one process.
 """
 from __future__ import annotations
 
@@ -25,6 +29,7 @@ import argparse
 import concurrent.futures
 import hashlib
 import importlib.metadata
+import importlib.util
 import json
 import os
 import platform
@@ -33,16 +38,20 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import tomllib
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
+GUARD = HERE / "guard"
 CACHE = Path(os.environ.get("VERITY_TEST_CACHE") or Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "verity" / "tests")
 #: Files every key includes besides the workspace's metadata (every pyproject.toml and uv.lock): the runner itself.
-RUNNER = ("tools/check/suites.py", "tools/check/suite_guard.py")
+RUNNER = ("tools/check/suites.py", "tools/check/guard/verity_suite_guard.py")
+XDIST = importlib.util.find_spec("xdist") is not None
 TOOLS = ("lake", "cargo", "nvidia-smi")
 ENV_PREFIXES = ("VERITY_", "FLOCK_")
 QUICK = ["-m", "not slow"]
@@ -124,6 +133,7 @@ class Suite:
     path: str                    # relative to the repository root; "." for the repository's own suite
     requires: tuple[str, ...]    # names of the distributions it depends on
     inputs: tuple[str, ...]      # paths it declares under [tool.verity.tests] inputs
+    parallel: bool = False       # [tool.verity.tests] parallel: its tests may run in several processes at once
 
 
 def _pyproject(path: str) -> dict:
@@ -165,8 +175,8 @@ def discover() -> list[Suite]:
             continue
         project = data.get("project", {})
         name = "repository" if path == "." else _norm(project["name"]) if project else path
-        inputs = tuple(data["tool"].get("verity", {}).get("tests", {}).get("inputs", []))
-        suites.append(Suite(name, path, _requires(project, data), inputs))
+        tests = data["tool"].get("verity", {}).get("tests", {})
+        suites.append(Suite(name, path, _requires(project, data), tuple(tests.get("inputs", [])), tests.get("parallel", False) is True))
     return suites
 
 
@@ -257,26 +267,56 @@ class Result:
     log: Path | None = None
     since: dict | None = None    # for a cached pass, the run it came from
     key: str = ""
+    workers: int = 1
+    unguarded: list | None = None    # xdist workers that sent the guard no record
+    reported: bool = True            # whether the guard wrote its report
 
 
-#: pytest with the guard loaded from its file as a plugin object, so no directory of this tool joins the suite's sys.path.
-_PYTEST = ("import importlib.util, sys, pytest; spec = importlib.util.spec_from_file_location('suite_guard', sys.argv.pop(1)); "
-           "guard = importlib.util.module_from_spec(spec); spec.loader.exec_module(guard); sys.exit(pytest.main(sys.argv[1:], plugins=[guard]))")
+#: pytest with the guard loaded by name (`-p`), which xdist repeats in each worker, from `guard/`: appended to sys.path, and
+#: holding that one module only, so it shadows nothing a suite imports.
+_PYTEST = "import sys, pytest; sys.path.append(sys.argv.pop(1)); sys.exit(pytest.main(sys.argv[1:]))"
+#: xdist's scheduling: an idle worker takes queued tests from a busy one, which evens out suites whose tests differ in length.
+DIST = ["--dist", "worksteal"]
 
 
-def run(suite: Suite, allowed: list[str], args: list[str], logs: Path) -> Result:
+def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: int = 1) -> Result:
     slug = suite.path.replace("/", "_") if suite.path != "." else "repository"
     log, report = logs / f"{slug}.log", logs / f"{slug}.json"
+    report.unlink(missing_ok=True)
     env = dict(os.environ, VERITY_SUITE_ROOT=str(ROOT), VERITY_SUITE_ALLOW=json.dumps(allowed), VERITY_SUITE_REPORT=str(report))
+    spread = ["-n", str(workers), *DIST] if workers > 1 else []
     start = time.monotonic()
     with log.open("w") as out:
-        rc = subprocess.run([sys.executable, "-c", _PYTEST, str(HERE / "suite_guard.py"), "-p", "no:cacheprovider", *args],
-                            cwd=ROOT / suite.path, env=env, stdout=out, stderr=subprocess.STDOUT).returncode
+        rc = subprocess.run([sys.executable, "-c", _PYTEST, str(GUARD), "-p", "verity_suite_guard", "-p", "no:cacheprovider",
+                             *spread, *args], cwd=ROOT / suite.path, env=env, stdout=out, stderr=subprocess.STDOUT).returncode
     seconds = time.monotonic() - start
-    rep = json.loads(report.read_text()) if report.exists() else {}
-    passed = rc == 0 and not rep.get("outside")
+    rep = json.loads(report.read_text()) if report.exists() else None
+    passed = rc == 0 and rep is not None and not rep["outside"] and not rep["unguarded"]
+    rep = rep or {}
     return Result(suite, "passed" if passed else "failed", seconds, rep.get("counts"), rep.get("outside"),
-                  rep.get("unmarked_slow"), log)
+                  rep.get("unmarked_slow"), log, workers=workers, unguarded=rep.get("unguarded"), reported=bool(rep))
+
+
+class Slots:
+    """`--jobs` test processes, handed out in the order the suites were planned: a suite waits for its turn, then for as many
+    free slots as it runs processes."""
+
+    def __init__(self, n: int):
+        self.free, self.turn, self.cond = n, 0, threading.Condition()
+
+    @contextmanager
+    def take(self, turn: int, n: int):
+        with self.cond:
+            self.cond.wait_for(lambda: self.turn == turn and self.free >= n)
+            self.free -= n
+            self.turn += 1
+            self.cond.notify_all()
+        try:
+            yield
+        finally:
+            with self.cond:
+                self.free += n
+                self.cond.notify_all()
 
 
 def select(suites: list[Suite], names: list[str]) -> list[Suite]:
@@ -307,7 +347,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--fresh", action="store_true", help="run even where a pass is cached")
     ap.add_argument("--list", action="store_true", help="list the suites, their inputs, and whether a pass is cached")
     ap.add_argument("--skip", action="append", default=[], metavar="SUITE", help="leave this suite out (repeatable)")
-    ap.add_argument("--jobs", "-j", type=int, default=cpus(), help="suites run at once (default: the CPUs this process may use)")
+    ap.add_argument("--jobs", "-j", type=int, default=cpus(),
+                    help="test processes at once, a parallel suite's xdist workers included (default: the CPUs this process may use)")
     ap.add_argument("--logs", type=Path, help="write each suite's log and report here (default: under the cache)")
     ap.add_argument("--json", type=Path, help="write the outcome of every selected suite here")
     ap.add_argument("--commit", help="the commit these files are, in a tree without git (check passes RESEARCH_SOURCE_SHA)")
@@ -341,21 +382,31 @@ def main(argv: list[str] | None = None) -> int:
     results: list[Result] = [Result(s, "cached", since=hit, key=hit["key"]) for s, _, _, hit in plan if hit and not a.fresh]
     todo = [(s, paths, keys) for s, paths, keys, hit in plan if a.fresh or not hit]
     known = _durations()
-    todo.sort(key=lambda t: -known.get(t[0].path, float("inf")))
+    todo.sort(key=lambda t: (not t[0].parallel, -known.get(t[0].path, float("inf"))))
     for r in results:
         print(f"cached  {r.suite.name:28} passed at {r.since['commit'][:10]} {r.since['when']}")
     for s in skipped:
         print(f"skipped {s.name:28} (--skip)")
+    jobs = max(1, a.jobs)
+    spread = jobs if XDIST else 1
+    if spread == 1 and jobs > 1 and any(s.parallel for s, _, _ in todo):
+        print("pytest-xdist is not installed: each parallel suite runs in one process")
+    slots = Slots(jobs)
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, a.jobs)) as pool:
-        futures = {pool.submit(run, s, paths + meta, args, logs): (s, keys[0]) for s, paths, keys in todo}
+    def start(turn: int, s: Suite, paths: list[str]) -> Result:
+        n = spread if s.parallel else 1
+        with slots.take(turn, n):
+            return run(s, paths + meta + list(RUNNER), args, logs, n)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, len(todo))) as pool:
+        futures = {pool.submit(start, i, s, paths): (s, keys[0]) for i, (s, paths, keys) in enumerate(todo)}
         for fut in concurrent.futures.as_completed(futures):
             s, k = futures[fut]
             r = fut.result()
             r.key = k
             results.append(r)
             known[s.path] = r.seconds
-            print(f"{r.status:7} {s.name:28} {_count(r)} in {r.seconds:.0f} s")
+            print(f"{r.status:7} {s.name:28} {_count(r)} in {r.seconds:.0f} s" + (f" on {r.workers} workers" if r.workers > 1 else ""))
             if r.status == "passed":
                 CACHE.mkdir(parents=True, exist_ok=True)
                 (CACHE / f"{k}.json").write_text(json.dumps({"suite": s.path, "key": k, "commit": head, "dirty": dirty,
@@ -364,7 +415,11 @@ def main(argv: list[str] | None = None) -> int:
             elif r.outside:
                 print(f"        its tests read {len(r.outside)} files outside its inputs, for example {', '.join(r.outside[:3])}:"
                       f" depend on the package, or list the path under [tool.verity.tests] inputs in {s.path}/pyproject.toml")
+            elif r.unguarded:
+                print(f"        xdist workers {', '.join(r.unguarded)} sent the guard no record of what they read\n        log: {r.log}")
             else:
+                if not r.reported:
+                    print("        the guard wrote no report, so nothing vouches for what the tests read")
                 print("        " + "\n        ".join(r.log.read_text().splitlines()[-25:]) + f"\n        log: {r.log}")
     CACHE.mkdir(parents=True, exist_ok=True)
     (CACHE / "durations.json").write_text(json.dumps(known, indent=1, sort_keys=True) + "\n")
@@ -388,8 +443,8 @@ def main(argv: list[str] | None = None) -> int:
           f" {len(failed)} failed; {ran / 60:.1f} min of test time; logs in {logs}")
     if a.json:
         a.json.write_text(json.dumps([{"suite": r.suite.path, "name": r.suite.name, "status": r.status, "key": r.key,
-                                       "seconds": round(r.seconds, 1), "counts": r.counts, "outside": r.outside,
-                                       "since": r.since} for r in results]
+                                       "seconds": round(r.seconds, 1), "workers": r.workers, "counts": r.counts,
+                                       "outside": r.outside, "unguarded": r.unguarded, "since": r.since} for r in results]
                                      + [{"suite": s.path, "name": s.name, "status": "skipped"} for s in skipped], indent=1) + "\n")
     return 1 if failed or written else 0
 
