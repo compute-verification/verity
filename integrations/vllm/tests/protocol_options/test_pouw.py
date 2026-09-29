@@ -70,8 +70,9 @@ def _int7_linear(x, w, bias=None):
 # --- what the adapter refuses ------------------------------------------------------------------------------------------------
 
 def test_schemes_are_the_protocol_packages_and_only_ncp_is_executed():
-    assert pouw.schemes() == tuple(sorted(SCHEMES)) and "ncp-v1" in pouw.schemes()
-    assert pouw.refusals("ncp-v1", _serve("pouw:ncp-v1")) == ()
+    from verity_pouw import circuit
+    assert pouw.schemes() == tuple(sorted({*SCHEMES, *circuit.SCHEMES})) and "ncp-v1" in pouw.schemes()
+    assert pouw.refusals("ncp-v1", _serve("pouw:ncp-v1")) == () and pouw.refusals("ncp-v2", _serve("pouw:ncp-v2")) == ()
     assert PO.refusals(_serve("pouw:ncp-v1")) == ()                           # through the selector, real adapter
     assert "not wired" in pouw.refusals("pearl-fp8-v4", _serve("pouw:pearl-fp8-v4"))[0]
 
@@ -86,11 +87,14 @@ def test_a_run_the_adapter_cannot_serve_is_refused(kw, match):
     assert any(match in r for r in pouw.refusals("ncp-v1", _serve("pouw:ncp-v1", **kw)))
 
 
-def test_pouw_executes_the_linear_apply_and_is_refused_beside_sampled_proofs_until_traced():
+def test_pouw_executes_the_linear_apply_and_only_ncp_v2_is_admitted_beside_sampled_proofs():
     assert pouw.EXECUTES == ("LinearBase.quant_method.apply",) and "pouw" in PO.SITES[pouw.EXECUTES[0]]
-    assert pouw.traced_as("ncp-v1", _serve("pouw:ncp-v1")) is None
-    commit = PO.Context(stage="commit", enabled=("pouw:ncp-v1", "sampled-proofs:vllm-v1"), settings={"pouw": {"beacon": BEACON}})
-    assert any("no Definition" in r for r in PO.refusals(commit))
+    assert not hasattr(pouw, "traced_as") and "ncp-v2" in pouw.schemes() and "ncp-v2" in pouw.EXECUTED
+    for scheme in ("ncp-v1", "ncp-v1-shift24", "pearl-fp8-v4"):
+        commit = PO.Context(stage="commit", enabled=(f"pouw:{scheme}", "sampled-proofs:vllm-v1"), settings={"pouw": {"beacon": BEACON}})
+        assert any("no Definition" in r for r in PO.refusals(commit)), scheme
+    commit = PO.Context(stage="commit", enabled=("pouw:ncp-v2", "sampled-proofs:vllm-v1"), settings={"pouw": {"beacon": BEACON}})
+    assert PO.refusals(commit) == ()
 
 
 def test_a_layer_outside_the_domain_is_refused_at_install_and_leaves_nothing():

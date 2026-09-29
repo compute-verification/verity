@@ -17,8 +17,9 @@ run's workload:
 Its commitment to the weights of record is made first, in the composition's weight phase (`commit_weights`: every
 layer's weight root); `commitment` is the scheme, the salt, the weights root the salt is derived from and, once closed,
 the transcript root with its unit and tile counts.  The audit (drawing tiles, opening them) is `verity_pouw.audit`'s,
-after the run.  Beside sampled proofs PoUW is refused until the int7 linear's Definition is registered (`traced_as`);
-sampled proofs' replay does not re-check PoUW's GEMMs (PoUW's tile audit only, pending the design's open question 2).
+after the run.  Beside sampled proofs the composition asks `verity_pouw.circuit` (`protocol_options.CIRCUITS`), and only
+``ncp-v2`` has a circuit.  Under ``ncp-v2`` each call is instead bound to its own `NcpLinear_v1` Program call, evaluated
+once and committed (`pouw_circuit`); the replay draws its units (`check.replay.pouw_circuit`).
 What is a placeholder is listed in `info` (``placeholder``).
 """
 from __future__ import annotations
@@ -33,22 +34,26 @@ from typing import Any
 
 import numpy as np
 
+from verity_pouw import circuit as pouw_circuit
 from verity_pouw import schemes as pouw_schemes
 from verity_pouw.audit import (TILE_SCHEMA, Epoch, Workload, activation_binding, commit_rows, transcript_domain,
                                weight_binding, weights_root)
+from verity_pouw.circuit import reference as CR
 from verity_pouw.protocol import Context as UnitContext
 from verity_pouw.protocol import DomainError, Matmul, Shape
 from verity_pouw.schemes import ncp
 
 from verity.commitments import MerkleTree
+from verity_vllm.protocol_options import pouw_circuit as PC
 from verity_vllm.protocol_options.interface import Context, Option, Target
 
 NAME = "pouw"
 DEFAULT_SCHEME = "ncp-v1"
 #: PoUW replaces the computation here; POUS wraps it from outside (`protocol_options.SITES`).
 EXECUTES = ("LinearBase.quant_method.apply",)
-#: The schemes this adapter's executor computes; Pearl's FP10 / FP8 operands are not wired.
-EXECUTED = ("ncp-v1", "ncp-v1-shift24")
+#: The schemes this adapter's executor computes; Pearl's FP10 / FP8 operands are not wired. ``ncp-v2`` is NCP-INT as a
+#: circuit (`verity_pouw.circuit`): each call is its own `NcpLinear_v1` Program call (`pouw_circuit`).
+EXECUTED = ("ncp-v1", "ncp-v1-shift24", "ncp-v2")
 #: The pinned int7 quantizer of the FP8 lane's reference (docs/pouw-fp8/reference.md), applied without a basis rotation.
 QUANTIZER = "verity.pouw.symmetric-int7-rowmax-rne-f32/v1"
 KEYS = ("beacon", "retain_steps", "transcript_dir")
@@ -67,7 +72,7 @@ _M32 = 0xFFFFFFFF
 
 
 def schemes() -> tuple[str, ...]:
-    return tuple(sorted(pouw_schemes.SCHEMES))
+    return tuple(sorted({*pouw_schemes.SCHEMES, *pouw_circuit.SCHEMES}))
 
 
 @dataclass(frozen=True)
@@ -290,23 +295,89 @@ class _Run:
                  "retained": [i for i, _ in self.retained]}, indent=1) + "\n")
 
 
-def _executor(run: _Run, w: int):
+def _f32_bits(v: np.ndarray) -> np.ndarray:
+    return np.asarray(v, dtype=np.float32).view(np.uint32)
+
+
+def _bf16_bits(v: np.ndarray) -> np.ndarray:
+    """BF16 encodings of finite FP32 values, rounded to nearest even."""
+    b = _f32_bits(v).astype(np.uint64)
+    return ((b + 0x7FFF + ((b >> 16) & 1)) >> 16).astype(np.uint16)
+
+
+class _CircuitRun:
+    """One install's `ncp-v2` workload: every call bound to its `NcpLinear_v1` Program, evaluated once, and committed."""
+
+    def __init__(self, scheme: str, entry: str, settings: Settings, weight_roots: dict[int, bytes], salt: bytes) -> None:
+        self.scheme, self.entry, self.settings = scheme, entry, settings
+        self.weight_roots, self.salt = weight_roots, salt
+        self.records: list[PC.CallRecord] = []
+        self.forward, self.row_base, self.rows_seen = -1, 0, 0
+        self.commits: dict[str, Any] = {
+            "scheme": scheme, "salt": salt.hex(), "weights_root": weights_root(weight_roots).hex(), "quantizer": QUANTIZER,
+            "calls_root": None, "calls": 0}
+        self.details: dict[str, Any] = {
+            "scheme": scheme, "quantizer": QUANTIZER, "basis": "none", "layers": len(weight_roots),
+            "circuit": "verity_pouw.circuit: each call is its own NcpLinear_v1 Program call; y served, credited words committed",
+            "beacon": "given" if settings.beacon else "placeholder: 32 zero bytes",
+            "calls": 0, "padded_rows": 0, "uncovered": "every GEMM outside LinearBase (lm_head, attention)",
+            "placeholder": list(PLACEHOLDER)}
+
+    def gemm(self, w: int, x: Any, weight: Any, bias: Any) -> Any:
+        """The call's anchored fields: the forward index counts the passes (a pass starts at linear 0), the position is
+        ``w << 32``, the weight id is ``w``, a pass's rows get global ids from the rows served before it, and the weight's
+        rows are its columns 0 … n − 1."""
+        if w == 0:
+            self.forward += 1
+            self.row_base = self.rows_seen
+        xs, ws = _host(x), _host(weight)
+        n, k = ws.shape
+        lead = xs.shape[:-1]
+        a, s = quantize(xs.reshape(-1, k))
+        b, t = quantize(ws)
+        m = a.shape[0]
+        mp = max(16, -(-m // 16) * 16)
+        if mp > m:
+            a = np.concatenate([a, np.zeros((mp - m, k), np.int8)])
+            s = np.concatenate([s, np.ones(mp - m, np.float32)])
+        if w == 0:
+            self.rows_seen += mp
+        bias_bits = np.zeros(n, np.uint16) if bias is None else _bf16_bits(_host(bias).reshape(-1))
+        call = CR.Call(tuple(tuple(int(v) for v in r) for r in a), tuple(int(v) for v in _f32_bits(s)),
+                       tuple(tuple(int(v) for v in r) for r in b), tuple(int(v) for v in _f32_bits(t)),
+                       tuple(int(v) for v in bias_bits), self.salt, forward=self.forward, layer=w, site=0, weight=w,
+                       rowids=tuple(range(self.row_base, self.row_base + mp)), colids=tuple(range(n)))
+        rec = PC.commit_call(len(self.records), self.scheme, call)
+        self.records.append(rec)
+        self.details.update(calls=len(self.records), padded_rows=self.details["padded_rows"] + mp - m)
+        y = (np.asarray(rec.y[:m], dtype=np.uint32) << 16).view(np.float32)
+        return _like(y.reshape(*lead, n), x)
+
+    def finish(self) -> None:
+        """Commit the calls: the root over every call's leaf (`pouw_circuit.calls_root`)."""
+        if self.records:
+            self.commits["calls_root"] = PC.calls_root(self.salt, bytes.fromhex(self.commits["weights_root"]), self.records).hex()
+        self.commits["calls"] = len(self.records)
+        if self.settings.transcript_dir:
+            d = Path(self.settings.transcript_dir)
+            d.mkdir(parents=True, exist_ok=True)
+            calls = [{"index": r.index, "shape": [r.shape.m, r.shape.k, r.shape.n], "forward": r.call.forward,
+                      "position": r.call.position, "weight": r.call.weight, "leaf": PC.leaf(r).hex()} for r in self.records]
+            (d / "pouw-ncp-v2-calls.json").write_text(json.dumps({"entry": self.entry, "commitment": self.commits, "calls": calls},
+                                                                 indent=1) + "\n")
+
+
+def _executor(run: _Run | _CircuitRun, w: int):
     def apply(layer: Any, x: Any, bias: Any = None) -> Any:
         return run.gemm(w, x, layer.weight, bias)
     return apply
 
 
-def traced_as(scheme: str, ctx: Context) -> str | None:
-    """The Definition sampled proofs would trace an executed linear as: for ``ncp-v1``, the int7 linear (``QUANTIZER`` on
-    x and on the weight, the exact int32 GEMM, the FP32 dequantize).  None until that Definition is registered, so the
-    selector refuses PoUW beside sampled proofs; Pearl's output depends on its noise and has none for good."""
-    return None
-
-
 def _layers(scheme: str, target: Target) -> tuple[Any, list[Any], dict[int, tuple[int, int]]]:
     """The scheme and the executed sites, the linear layers by type in module order (a layer's ordinal is its weight id),
     with their (n, k); ValueError names every layer outside the scheme's domain or sharing a quant method."""
-    entry, s = f"{NAME}:{scheme}", pouw_schemes.get(scheme)
+    entry = f"{NAME}:{scheme}"
+    s = None if scheme in pouw_circuit.SCHEMES else pouw_schemes.get(scheme)
     types = linear_types()
     layers = [m for m in target.model.modules() if isinstance(m, types)]
     if not layers:
@@ -316,7 +387,10 @@ def _layers(scheme: str, target: Target) -> tuple[Any, list[Any], dict[int, tupl
         n, k = _host(layer.weight).shape
         shapes[w] = (n, k)
         try:
-            s.check(Matmul(0, Shape(16, k, n), w))
+            if s is None:
+                pouw_circuit.traced_as(scheme, 16, k, n)
+            else:
+                s.check(Matmul(0, Shape(16, k, n), w))
         except DomainError as e:
             bad.append(f"linear {w}: {e}")
         if id(layer.quant_method) in seen:
@@ -346,7 +420,7 @@ def install(scheme: str, target: Target) -> Option:
     roots = {int(w): bytes.fromhex(r) for w, r in committed["weight_roots"].items()}
     declared = Workload(tuple(Matmul(w, Shape(16, k, n), w) for w, (n, k) in shapes.items()))
     salt = Epoch.start(declared, roots, settings.beacon or bytes(32)).salt
-    run = _Run(s, entry, settings, roots, salt)
+    run = _CircuitRun(scheme, entry, settings, roots, salt) if s is None else _Run(s, entry, settings, roots, salt)
     h = target.hooks(entry)
     for w, layer in enumerate(layers):
         h.wrap(layer.quant_method, "apply", lambda orig, w=w: _executor(run, w))
