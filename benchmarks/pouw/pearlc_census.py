@@ -16,6 +16,14 @@ codes = RNE_E4M3(alpha*y). Seeds are the tuple (run, unit index, side), so dupli
 
     python benchmarks/pouw/pearlc_census.py --selftest
     python benchmarks/pouw/pearlc_census.py --ks 8192,16384,65536 --deltas 1 --tile 64x16 --out census.json
+    python benchmarks/pouw/pearlc_census.py --forming s5 --line-norm 16 --ks 8192,65536 --out census_s5.json
+
+--forming s5 is docs/pouw/cheap-binding.md §5's forming, bit-exact: s = max|x|, rho = RMS over every 8th position,
+sigma = delta*rho, alpha = 448/(s + 4*sigma); F's lines are E4M3 codes of (N_F/sqrt(32))*w and E'_row = e4m3((sigma*alpha/N_F)*v)
+(w, v unit-RMS lines of entries +-(1..128)); D = HOPPER_E4M3_K32.step(C = f32(alpha*x), E'_row, F_l) per element; A' =
+RNE_E4M3(D) with saturation. Pi's activation rules are checked per row: the noise floor sigma*alpha >= 1 and liveness (at
+most k/64 entries with |x| >= 8*sigma); a cell whose rows break them is out of the domain ("rejected"). The collision rate
+is how often two independent noise draws give an element the same code: the element-level noise entropy.
 """
 from __future__ import annotations
 
@@ -149,8 +157,40 @@ def form(X: np.ndarray, F: np.ndarray, delta: float, rng: np.random.Generator):
     return codes, nf, float((codes != double).mean())
 
 
+def unit_lines(n: int, rng: np.random.Generator) -> np.ndarray:
+    v = lines(n, rng)
+    return v / np.sqrt((v ** 2).mean(1, keepdims=True))
+
+
+def form_s5(X: np.ndarray, Fc: np.ndarray, delta: float, line_norm: float, rng: np.random.Generator, chunk: int = 1 << 17):
+    """§5's forming of rows X against F's codes Fc (k x 32). Returns codes, a second draw's codes (for the collision rate),
+    the share of E' codes that are zero or subnormal, and the rows' domain verdicts (noise floor, liveness)."""
+    rows, k = X.shape
+    s = np.abs(X).max(1)
+    rho = np.sqrt((X[:, ::8] ** 2).mean(1))
+    sig = delta * rho
+    alpha = np.where(s + 4 * sig > 0, Q_MAX / np.maximum(s + 4 * sig, 1e-300), 0.0)
+    floor_ok = sig * alpha >= 1.0
+    live_ok = (np.abs(X) >= 8 * sig[:, None]).sum(1) * 64 <= k
+    C = (alpha[:, None] * X).astype(np.float32).astype(np.float64)
+    out, sub = [], []
+    for _draw in range(2):
+        Ec = enc(unit_lines(rows, rng) * (sig * alpha / line_norm)[:, None])
+        sub.append(float(((Ec & 0x7F) < 8).mean()))
+        codes = np.empty((rows, k), dtype=np.uint8)
+        idx = np.arange(rows * k)
+        for lo in range(0, rows * k, chunk):
+            ii = idx[lo:lo + chunk]
+            r_, l_ = ii // k, ii % k
+            D, _ = step(C[r_, l_], Ec[r_], Fc[l_])
+            codes[r_, l_] = enc(D)
+        out.append(codes)
+    return out[0], float((out[0] == out[1]).mean()), sub[0], bool(floor_ok.all()), bool(live_ok.all())
+
+
 FAMILIES = ("gaussian", "spike1-first", "spikes-first", "spikes-permuted", "spikes-groupstart", "constant",
             "coherent-gaussian", "orthogonal-FA", "duplicated")
+ACTIVATION_FAMILIES = ("zero-row", "zero-slices", "sparse10", "rank1", "saturated", "grid-aligned", "in-span-FA")
 
 
 def family(name: str, rows: int, cols: int, k: int, FA: np.ndarray, rng: np.random.Generator):
@@ -161,6 +201,25 @@ def family(name: str, rows: int, cols: int, k: int, FA: np.ndarray, rng: np.rand
         A = rng.standard_normal((rows, k))
         Q, _ = np.linalg.qr(FA)
         return A - (A @ Q) @ Q.T, rng.standard_t(4, (cols, k))
+    if name == "zero-row":
+        return np.zeros((rows, k)), rng.standard_t(4, (cols, k))
+    if name == "zero-slices":
+        A = rng.standard_normal((rows, k))
+        A.reshape(rows, k // 32, 32)[:, ::2, :] = 0.0
+        return A, rng.standard_t(4, (cols, k))
+    if name == "sparse10":
+        return rng.standard_normal((rows, k)) * (rng.random((rows, k)) < 0.1), rng.standard_t(4, (cols, k))
+    if name == "rank1":
+        v = rng.standard_normal(k)
+        return np.outer(rng.standard_normal(rows), v), np.outer(rng.standard_normal(cols), rng.standard_t(4, k))
+    if name == "saturated":
+        A = rng.standard_normal((rows, k)) * 0.1
+        A[:, : k // 2] = np.sign(rng.standard_normal((rows, k // 2)))
+        return A, rng.standard_t(4, (cols, k))
+    if name == "grid-aligned":
+        return val(rng.integers(0x30, 0x60, (rows, k)) | (rng.integers(0, 2, (rows, k)) * 0x80)), rng.standard_t(4, (cols, k))
+    if name == "in-span-FA":
+        return rng.standard_normal((rows, 32)) @ FA.T, rng.standard_t(4, (cols, k))
     if name == "duplicated":
         a, b = rng.standard_normal((1, k)), rng.standard_t(4, (1, k))
         return np.repeat(a, rows, 0), np.repeat(b, cols, 0)
@@ -199,35 +258,62 @@ def chain(a: np.ndarray, b: np.ndarray, G: int):
     return tid, tex, words / (P * T), promo
 
 
+def exact_run_mask(tex: np.ndarray, min_run: int = 14) -> np.ndarray:
+    mask, start = np.zeros(len(tex), bool), None
+    for i, e in enumerate(list(tex) + [False]):
+        if e and start is None:
+            start = i
+        elif not e and start is not None:
+            if i - start >= min_run:
+                mask[start:i] = True
+            start = None
+    return mask
+
+
 def exact_run_atoms(tex: np.ndarray, min_run: int = 14) -> int:
-    n, run = 0, 0
-    for e in list(tex) + [False]:
-        if e:
-            run += 1
-        else:
-            n += run if run >= min_run else 0
-            run = 0
-    return n
+    return int(exact_run_mask(tex, min_run).sum())
 
 
 def in_domain(G: int, k: int, delta: float) -> bool:
     return G == 4 or k / delta ** 2 <= 2 ** 15
 
 
-def cell(fam: str, k: int, delta: float, rows: int, cols: int, run: int) -> list[dict]:
+def val(codes: np.ndarray) -> np.ndarray:
+    codes = codes.astype(np.int64)
+    v = MAG[codes & 0x7F]
+    return np.where(codes & 0x80, -v, v)
+
+
+def cell(fam: str, k: int, delta: float, rows: int, cols: int, run: int, forming: str = "census",
+         line_norm: float = 256.0) -> list[dict]:
     rng = _rng(run, fam, k, delta)
     FA, FB = lines(k, _rng(run, "FA", k)), lines(k, _rng(run, "FB", k))
     XA, XB = family(fam, rows, cols, k, FA, rng)
-    a, nfA, drA = form(XA, FA, delta, _rng(run, fam, k, delta, "unit-A"))
-    b, nfB, drB = form(XB, FB, delta, _rng(run, fam, k, delta, "unit-B"))
+    extra = {"forming": forming}
+    if forming == "s5":
+        FcA = enc(unit_lines(k, _rng(run, "FA-lines", k)) * (line_norm / np.sqrt(32)))
+        FcB = enc(unit_lines(k, _rng(run, "FB-lines", k)) * (line_norm / np.sqrt(32)))
+        a, collA, subA, floorA, liveA = form_s5(XA, FcA, delta, line_norm, _rng(run, fam, k, delta, "unit-A"))
+        b, collB, subB, floorB, liveB = form_s5(XB, FcB, delta, line_norm, _rng(run, fam, k, delta, "unit-B"))
+        nfA, drA, drB = np.zeros(1), 0.0, 0.0
+        ok = floorA and liveA and floorB and liveB
+        extra.update({"line_norm": line_norm, "collision_A": round(collA, 6), "collision_B": round(collB, 6),
+                      "e_prime_subnormal_A": round(subA, 6), "rules_ok": ok,
+                      "rejected_by": [n for n, v in (("noise-floor-A", floorA), ("liveness-A", liveA),
+                                                     ("noise-floor-B", floorB), ("liveness-B", liveB)) if not v]})
+    else:
+        a, nfA, drA = form(XA, FA, delta, _rng(run, fam, k, delta, "unit-A"))
+        b, nfB, drB = form(XB, FB, delta, _rng(run, fam, k, delta, "unit-B"))
+        ok = True
     ii, jj = np.meshgrid(np.arange(rows), np.arange(cols), indexing="ij")
     A, B = a[ii.ravel()], b[jj.ravel()]
     out = []
     for G in (0, 4):
         tid, tex, word_id, promo = chain(A, B, G)
         T = k // 32
-        skip = int(tid.sum()) + exact_run_atoms(tex) + promo
-        out.append({"family": fam, "k": k, "delta": delta, "layout": "G4" if G else "pure", "in_domain": in_domain(G, k, delta),
+        skip = int((tid | exact_run_mask(tex)).sum()) + promo
+        out.append({**extra, "family": fam, "k": k, "delta": delta, "layout": "G4" if G else "pure",
+                    "in_domain": in_domain(G, k, delta) and ok,
                     "atoms": T, "tile_identity_atoms": int(tid.sum()), "exact_run_atoms": exact_run_atoms(tex),
                     "tile_exact_atoms": int(tex.sum()), "promotion_identities": promo, "word_identity": round(word_id, 6),
                     "noise_free_entries": float(nfA.mean()), "double_rounding_differs": round((drA + drB) / 2, 6),
@@ -243,6 +329,8 @@ def main() -> None:
     ap.add_argument("--tile", default="64x16")
     ap.add_argument("--families", default=",".join(FAMILIES))
     ap.add_argument("--run", type=int, default=1)
+    ap.add_argument("--forming", choices=("census", "s5"), default="census")
+    ap.add_argument("--line-norm", type=float, default=256.0)
     ap.add_argument("--out", default="pearlc_census.json")
     args = ap.parse_args()
     bad = selftest()
@@ -254,12 +342,12 @@ def main() -> None:
     for delta in map(float, args.deltas.split(",")):
         for k in map(int, args.ks.split(",")):
             for fam in args.families.split(","):
-                for r in cell(fam, k, delta, rows, cols, args.run):
+                for r in cell(fam, k, delta, rows, cols, args.run, args.forming, args.line_norm):
                     rows_out.append(r)
                     print(json.dumps(r), flush=True)
     worst = max((r["skippable_share"] for r in rows_out if r["in_domain"]), default=0.0)
     worst_row = max((r for r in rows_out if r["in_domain"]), key=lambda r: r["skippable_share"], default=None)
-    doc = {"tool": "pouw_pearlc_census", "tile": args.tile, "selftest_mismatches": bad, "cells": rows_out,
+    doc = {"tool": "pouw_pearlc_census", "tile": args.tile, "forming": args.forming, "line_norm": args.line_norm, "selftest_mismatches": bad, "cells": rows_out,
            "worst_in_domain_skippable_share": worst, "worst_in_domain_cell": worst_row, "threshold": 1 / 400,
            "seconds": round(time.time() - t0, 1)}
     out = Path(args.out)

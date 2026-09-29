@@ -24,3 +24,9 @@ def test_generic_tile_has_nothing_to_skip():
 def test_domain_rule():
     assert C.in_domain(4, 65536, 1.0) and C.in_domain(0, 32768, 1.0)
     assert not C.in_domain(0, 65536, 1.0) and not C.in_domain(0, 16384, 0.5)
+
+
+def test_s5_forming_rules():
+    rows = {r["family"]: r for fam in ("gaussian", "zero-row") for r in C.cell(fam, 1024, 1.0, 4, 2, run=1, forming="s5")}
+    assert rows["gaussian"]["rules_ok"] and rows["gaussian"]["collision_A"] < 0.5
+    assert not rows["zero-row"]["rules_ok"] and "noise-floor-A" in rows["zero-row"]["rejected_by"]

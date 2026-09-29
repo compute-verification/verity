@@ -75,8 +75,11 @@ def parse_pearlc_census(argv: list[str]) -> dict:
     ap.add_argument("--tile", default="64x16")
     ap.add_argument("--families", default=None)
     ap.add_argument("--run", type=int, default=1)
+    ap.add_argument("--forming", default="census")
+    ap.add_argument("--line-norm", type=float, default=256.0)
     ns, _ = ap.parse_known_args(argv)
-    return {"ks": ns.ks, "deltas": ns.deltas, "tile": ns.tile, "families": ns.families, "run": ns.run}
+    return {"ks": ns.ks, "deltas": ns.deltas, "tile": ns.tile, "families": ns.families, "run": ns.run,
+            "forming": ns.forming, "line_norm": ns.line_norm}
 
 
 def parse_pearlc_quality(argv: list[str]) -> dict:
@@ -97,7 +100,7 @@ def parse_pearlc_quality(argv: list[str]) -> dict:
 POUW_PEARLC_CENSUS = Tool(name="pouw_pearlc_census", version="1", command=["python", "benchmarks/pouw/pearlc_census.py"],
                           closure=["benchmarks/pouw/pearlc_census.py", "benchmarks/pouw/run_result.py",
                                    "packages/verity/src/verity/ml/tc/**"],
-                          key_params=["ks", "deltas", "tile", "families", "run"], produces=["bench-result/v1", "run-files/v1"],
+                          key_params=["ks", "deltas", "tile", "families", "run", "forming", "line_norm"], produces=["bench-result/v1", "run-files/v1"],
                           parse=parse_pearlc_census)
 POUW_PEARLC_QUALITY = Tool(name="pouw_pearlc_quality", version="1", command=["python", "benchmarks/pouw/pearlc_quality.py"],
                            closure=["benchmarks/pouw/pearlc_quality.py", "benchmarks/pouw/run_result.py"],
