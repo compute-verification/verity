@@ -282,6 +282,8 @@ hypotheses of the theorems that use them, never `axiom` declarations, so they ca
 #print axioms FlockSoundness.Audit.Law.stratified
 #print axioms FlockSoundness.Audit.Law.stratified_escape
 #print axioms FlockSoundness.Audit.Law.stratified_escape_floor
+-- the stratified count curve: a greedy fill attains `miss`
+#print axioms FlockSoundness.Audit.Law.stratified_miss_eq_greedy
 #print axioms FlockSoundness.Audit.audit_whole_stratum
 #print axioms FlockSoundness.Audit.extraction_audit_whole_stratum
 -- the batched audit with the expected-time extractor: reruns in which the session accepts, the

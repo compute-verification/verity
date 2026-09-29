@@ -264,6 +264,7 @@
    "assumptions": [],
    "type_hash": "0000000048602bdf"
   },
+  "FlockSoundness.Audit.Law.stratified_miss_eq_greedy": {},
   "FlockSoundness.Audit.Law.sum_workK_le": {
    "signature": [
     "FlockSoundness.Audit.Law.sum_workK_le {n m : Nat} (σ : Fin n → Fin m) (w : Fin m → Nat) (K : Nat)",
