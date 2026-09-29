@@ -1,6 +1,6 @@
 """`check`: the repository's one check, what a merge into `main` requires (`research merge`).
 
-    uv run python tools/check/check.py                      run every step here, in the checkout
+    uv run --extra torch-cpu python tools/check/check.py    run every step here, in the checkout, with CPU-only torch
     uv run python tools/check/check.py --record [--on M]    the same through `research run --tool check` (on machine M, a
                                                             multi-core CPU pod): an Attempt of the clean commit checked out, the
                                                             record `research merge` reads; with the pinned upstream build and

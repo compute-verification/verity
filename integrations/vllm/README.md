@@ -235,7 +235,7 @@ bit-identical decode; an executor with its Definition, `traced_as`), so its verd
 ## Running
 
 ~~~sh
-uv sync --all-packages --all-extras          # torch (CPU) comes from the `torch` extra; vLLM only on a pod
+uv sync --all-packages --extra torch-cpu     # CPU-only torch; the `torch` extra is the CUDA build; vLLM only on a pod
 cd integrations/vllm
 uv run pytest tests/program verity_vllm        # the CPU oracle; tests that need CUDA / vLLM / a pod tree skip or fail by name
 ~~~
