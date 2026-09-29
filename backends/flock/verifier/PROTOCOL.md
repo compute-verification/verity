@@ -1335,6 +1335,7 @@ digest's leading tag is the statement id, `verity/flock-circuit/types`, as the p
   - `HmRow.parseTyped` inserts the unit's rows as the file's `CIRCUIT unit` section, first, where the old statement has
     it, and parses the result with `HmRow.parse`.
   - The circuit digest and the class are the typed file's own: its SHA-512, and `classOf` over its bytes.
+  - The unit's computed columns (its order after its inputs) must lie past its input rows (`Typed.flatNet`).
   - On RoPE (`D = 64`) and SiLU·mul (`I = 8192`), the derived rows are the old statement's unit section byte for byte
     (`flock-verify typed-expand`, `test_lean_typed_statement.py`).
 - **A template** (GEMM) is parsed with its block (`HmRow.parse`'s `tmpl`, #273's split).
