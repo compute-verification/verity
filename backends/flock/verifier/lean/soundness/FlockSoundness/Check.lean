@@ -209,6 +209,13 @@ hypotheses of the theorems that use them, never `axiom` declarations, so they ca
 #print axioms FlockSoundness.Audit.Law.execStratified_escape_le
 #print axioms FlockSoundness.Audit.Partition.flock_e2e_drawn_exec
 #print axioms FlockSoundness.Audit.Partition.flock_e2e_count_exec
+-- the live draw, drawOS: drawWith on IO.getRandomBytes, extend-and-rerun included, on a uniform byte source (A3)
+#print axioms FlockSoundness.Audit.Law.drawOS_def
+#print axioms FlockSoundness.Audit.Law.drawOS_subset_escape_le
+#print axioms FlockSoundness.Audit.Law.drawOS_stratified_escape_le
+#print axioms FlockSoundness.Audit.Law.drawOS_work_escape_le
+#print axioms FlockSoundness.Audit.Law.execOS_escape_le
+#print axioms FlockSoundness.Audit.Law.execOS_subset_escape_le
 #print axioms FlockSoundness.Audit.Law.avg_escape_subsets
 #print axioms FlockSoundness.Audit.Law.choose_support
 #print axioms FlockSoundness.Audit.Law.subset_minimax

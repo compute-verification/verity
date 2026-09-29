@@ -142,6 +142,11 @@
     "about": "A2's random-oracle shadow (an expected-query birthday bound)",
     "mentions": ["CollisionResistance.romCRAdvantage"],
     "ack": ["CollisionResistance.romCRAdvantage_le_birthday"]
+   },
+   "A3-uniform-bytes": {
+    "about": "A3 (UniformRandomBytes, uniform/io-getrandombytes): the operating system's bytes, which the live draw reads through IO.getRandomBytes, are independent and uniform",
+    "mentions": ["IO.getRandomBytes"],
+    "ack": []
    }
   }
  },
@@ -280,6 +285,12 @@
    "assumptions": [],
    "type_hash": "00000000c86b7230"
   },
+  "FlockSoundness.Audit.Law.drawOS_def": {},
+  "FlockSoundness.Audit.Law.drawOS_stratified_escape_le": {},
+  "FlockSoundness.Audit.Law.drawOS_subset_escape_le": {},
+  "FlockSoundness.Audit.Law.drawOS_work_escape_le": {},
+  "FlockSoundness.Audit.Law.execOS_escape_le": {},
+  "FlockSoundness.Audit.Law.execOS_subset_escape_le": {},
   "FlockSoundness.Audit.Law.execStratified_escape_le": {
    "signature": [
     "FlockSoundness.Audit.Law.execStratified_escape_le {n m : Nat} (σ : Fin n → Fin m) (k : Fin m → Nat)",
