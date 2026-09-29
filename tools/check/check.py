@@ -54,6 +54,7 @@ import platform
 import re
 import shlex
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -208,9 +209,39 @@ def _version(v: str) -> tuple[int, ...]:
     return tuple(int(x) for x in re.findall(r"\d+", v)[:3])
 
 
-def agreement_preflight(pin: dict, bins: list[Path]) -> str | None:
+def upstream_smoke(w: Path) -> list[tuple[str, list[str], dict]]:
+    """One real replay per upstream binary that `vectors.json` gives a stored honest session (a set without lookup tables):
+    (its PR #83 commit, the command `agree.py` would run, the verdict expected), over the unpacked build and inputs in ``w``."""
+    import argparse
+
+    spec = importlib.util.spec_from_file_location("check_flock_agree", FLOCK_VERIFIER / "agree.py")
+    agree = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(agree)
+
+    def fetch(art: str) -> Path:                        # ci.py's layout: art:<id>[/path] under inputs/<id>/
+        ref, _, path = art.partition("/")
+        d = w / "inputs" / ref.split(":", 1)[1]
+        return d / path if path else sorted(d.iterdir())[0]
+
+    out: dict[str, tuple] = {}
+    for s in json.loads((FLOCK_VERIFIER / "vectors.json").read_text())["replayable"]["sets"]:
+        st = s.get("statement", {})
+        if s["pr83"] in out or not s.get("sessions") or "tables" in st:
+            continue
+        honest = fetch(s["sessions"][0]["dir"])
+        a = argparse.Namespace(upstream=str(w / "upstream" / f"upstream-{s['pr83']}"), statement=s["lean_statement"],
+                               circuit=str(fetch(st["circuit"])), tables=None)
+        public = honest / "pub.bin" if (honest / "pub.bin").exists() else fetch(st["public"])
+        extra = ["--drawn-only"] if agree.drawn(str(honest)) else []
+        out[s["pr83"]] = (s["pr83"], [*agree.upstream_cmd(a, str(public), extra), str(honest)], s["sessions"][0]["expect"])
+    return list(out.values())
+
+
+def agreement_preflight(pin: dict, bins: list[Path], w: Path | None = None) -> str | None:
     """Why this machine cannot run the agreement (None when it can): too little memory, a glibc older than the pinned build
-    needs, or a binary the loader refuses.  Seconds, where the job itself would take an hour to disagree on every session."""
+    needs, a binary the loader refuses, or (with ``w``, the unpacked build and inputs) one that cannot replay a stored honest
+    session here: a build for another CPU dies of SIGILL on the first instruction this one lacks, and prints nothing.
+    Seconds, where the job itself would take an hour to disagree on every session."""
     if (gb := memory_gb()) < AGREEMENT_MIN_GB:
         return (f"this machine may use {gb} GB; the agreement needs {AGREEMENT_MIN_GB} (set 13's upstream replay alone takes more "
                 f"than 15 GB): record check on a larger machine")
@@ -228,6 +259,26 @@ def agreement_preflight(pin: dict, bins: list[Path]) -> str | None:
         err = r.stderr + r.stdout
         if "error while loading shared libraries" in err or re.search(r"version `GLIBC_[\d.]+' not found", err):
             return f"{b.name} does not start here: {err.strip().splitlines()[0]}"
+    if w is None:
+        return None
+    smoke = upstream_smoke(w)
+    if not smoke:
+        return "vectors.json gives no stored honest session to replay, so nothing shows the upstream build runs here"
+    flags = pin["upstream"].get("rustflags", "the build host's own (target-cpu=native)")
+    for c, cmd, expect in smoke:
+        try:
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+        except subprocess.TimeoutExpired:
+            return f"upstream-{c} did not finish replaying its stored honest session in 600 s"
+        if r.returncode < 0:
+            sig = signal.Signals(-r.returncode).name
+            return (f"upstream-{c} was killed by {sig} replaying its stored honest session"
+                    + (f": this CPU lacks an instruction the build uses (target flags: {flags}); rebuild for a CPU every check "
+                       f"machine has (upstream-build.sh) and re-pin" if sig == "SIGILL" else ""))
+        got = [json.loads(line.split("\t", 1)[1])["verdict"] for line in r.stdout.splitlines() if line.startswith("UPSTREAM\t")]
+        if r.returncode or not got or got[0]["accepted"] != expect["accepted"]:
+            return (f"upstream-{c} replayed its stored honest session with exit {r.returncode} and verdict "
+                    f"{got[0] if got else 'none'} (expected {expect}): {(r.stderr or r.stdout).strip()[-300:]}")
     return None
 
 
@@ -252,7 +303,7 @@ def lean_agreement(out: Path, upstream: Path, inputs: Path) -> int:
             return 1
         b.chmod(0o755)
         ups += ["--upstream", f"{c}={b}"]
-    if why := agreement_preflight(pin, [w / "upstream" / f"upstream-{c}" for c in sorted(pin["upstream"]["binaries"])]):
+    if why := agreement_preflight(pin, [w / "upstream" / f"upstream-{c}" for c in sorted(pin["upstream"]["binaries"])], w):
         print(f"check: lean-agreement cannot run here: {why}", file=sys.stderr)
         return 1
     ci = pin.get("ci", {})
