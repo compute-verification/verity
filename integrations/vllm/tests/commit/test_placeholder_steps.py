@@ -11,7 +11,6 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 import random
-import time
 
 from verity_vllm.acquire.committer_api import StepCommitment
 from verity_vllm.commit import scheme
@@ -34,7 +33,7 @@ class _LearnOnly(NativeHostCommitter):
             return super()._commit_step(job)
         self._layouts[job.step] = job.metas
         self._done[job.step] = StepCommitment(job.step, b"", b"", 0, sum(m.nbytes for m in job.metas), len(job.metas), b"", job.t_step_end,
-                                              time.perf_counter(), 0)
+                                              job.t_step_end, 0)
         return None
 
 
