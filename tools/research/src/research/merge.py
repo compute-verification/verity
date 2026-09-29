@@ -1,5 +1,6 @@
 """`research merge REF [--into BRANCH] [--tool check] [-m MESSAGE] [--dry-run]`: the merge gate.
 `research merge --train A B C [--on MACHINE --project P] [--command CMD]`: several refs as one checked candidate (`train`).
+`research merge --sweep [--into BRANCH] [--remote origin] [--dry-run]`: close the pull requests that landed (`sweep`).
 
 Run in the checkout of the target branch.  It merges the commit REF names (`git merge --no-ff`) only if the evidence store holds
 a passing attempt of the tool (default `check`) for that exact commit: `state` done, rc 0, source commit REF's, tree clean.  With
@@ -7,6 +8,11 @@ a usable remote the catalog's attempts are refreshed first, so an attempt record
 target checkout that is not on BRANCH or has tracked changes, and a REF the target has moved past (the target's tip must be an
 ancestor of REF), since then the merged tree is not the one that was checked; merge the target into the branch and check the new
 tip.  The merge commit carries a `Check: <attempt id>` trailer.  Exit 0 merged (or would, with --dry-run), 1 refused, 2 usage.
+
+After a merge lands, and on its own with --sweep, every open pull request whose head is on the remote's copy of BRANCH is closed
+with a comment naming the commit it landed in, and every open pull request whose base branch is on it is retargeted onto BRANCH.
+The remote's branch, fetched first, is the truth, never the checkout: `research merge` does not push, so what a merge lands is
+closed by the sweep after the push.
 """
 from __future__ import annotations
 
@@ -207,9 +213,84 @@ def train(repo: Path, refs: list[str], into: str, store, tool: str, command: lis
         _git(repo, "branch", "-D", branch, check=False)
 
 
+def _gh_cli(repo: Path, *args: str) -> str:
+    r = subprocess.run(["gh", *args], cwd=repo, capture_output=True, text=True)
+    if r.returncode:
+        raise Refused(f"gh {' '.join(args[:2])}: {(r.stderr or r.stdout).strip()[-300:]}")
+    return r.stdout
+
+
+def landed_in(repo: Path, commit: str, tip: str) -> str:
+    """The commit on ``tip``'s first-parent line that brought ``commit`` in: ``commit`` itself when it is on that line, otherwise
+    the oldest commit of the line that contains it (the merge that landed it)."""
+    after = set(_git(repo, "rev-list", "--ancestry-path", f"{commit}..{tip}").stdout.split())
+    landed = commit
+    for c in _git(repo, "rev-list", "--first-parent", "-n", str(len(after) + 1), tip).stdout.split():
+        if c not in after:
+            return commit if c == commit else landed
+        landed = c
+    return landed
+
+
+def sweep(repo: Path, into: str = "main", remote: str = "origin", dry_run: bool = False, gh=None, log=print) -> tuple[list[int], list[int]]:
+    """Close every open pull request whose head is on ``remote``'s ``into`` (with a comment naming the commit it landed in) and
+    retarget onto ``into`` every open pull request whose base branch's tip is on it.  Idempotent: what it closed is no longer
+    open, and what it retargeted is based on ``into``.  Returns (closed, retargeted) PR numbers, ascending."""
+    gh = gh or (lambda *a: _gh_cli(repo, *a))
+    _git(repo, "fetch", "-q", remote, f"+refs/heads/{into}:refs/remotes/{remote}/{into}")
+    tip = _git(repo, "rev-parse", f"refs/remotes/{remote}/{into}").stdout.strip()
+
+    def on(sha: str) -> bool:
+        return _git(repo, "merge-base", "--is-ancestor", sha, tip, check=False).returncode == 0
+
+    local = _git(repo, "rev-parse", "--verify", "-q", f"refs/heads/{into}", check=False).stdout.strip()
+    if local and not on(local):
+        log(f"research merge: {into} has commits {remote}/{into} lacks; push it, then `research merge --sweep` closes what they land")
+    prs = sorted(json.loads(gh("pr", "list", "--state", "open", "--limit", "1000", "--json",
+                               "number,headRefName,headRefOid,baseRefName")), key=lambda p: p["number"])
+    done = [p for p in prs if p["headRefName"] != into and on(p["headRefOid"])]
+    rest = [p for p in prs if p not in done]
+    bases = sorted({p["baseRefName"] for p in rest if p["baseRefName"] != into})
+    tips = {}
+    if bases:
+        out = _git(repo, "ls-remote", remote, *[f"refs/heads/{b}" for b in bases]).stdout
+        tips = {ref.removeprefix("refs/heads/"): sha for sha, ref in (line.split() for line in out.splitlines())}
+    moved = [p for p in rest if p["baseRefName"] in tips and on(tips[p["baseRefName"]])]
+    verb = "would " if dry_run else ""
+    for p in moved:
+        log(f"research merge: {verb}retarget #{p['number']} from {p['baseRefName']} (on {remote}/{into}) onto {into}")
+        if not dry_run:
+            gh("pr", "edit", str(p["number"]), "--base", into)
+    for p in done:
+        landed = landed_in(repo, p["headRefOid"], tip)
+        subject = _git(repo, "log", "-1", "--format=%s", landed).stdout.strip()
+        note = f"Merged into {into} at {landed[:12]} ({subject})."
+        log(f"research merge: {verb}close #{p['number']} ({p['headRefName']}): {note}")
+        if not dry_run:
+            gh("pr", "close", str(p["number"]), "--comment", note)
+    if not done and not moved:
+        log(f"research merge: no open pull request is on {remote}/{into} ({tip[:12]}) or based on a branch that is")
+    return [p["number"] for p in done], [p["number"] for p in moved]
+
+
+def _sweep_after(repo: Path, into: str, remote: str) -> None:
+    """The sweep after a merge landed: skipped without the remote; a failure is reported and leaves the merge's result alone."""
+    if _git(repo, "remote", "get-url", remote, check=False).returncode:
+        print(f"research merge: no remote {remote!r}; pull request sweep skipped")
+        return
+    try:
+        sweep(repo, into, remote)
+    except (Refused, ValueError, KeyError) as e:
+        print(f"research merge: pull request sweep failed ({e}); run `research merge --sweep` once GitHub is reachable",
+              file=sys.stderr)
+
+
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="research merge", description=__doc__.split("\n\n")[1])
-    ap.add_argument("ref", nargs="+", help="the commit to merge (a branch, tag or sha); with --train, several, in merge order")
+    ap.add_argument("ref", nargs="*", help="the commit to merge (a branch, tag or sha); with --train, several, in merge order")
+    ap.add_argument("--sweep", action="store_true", help="merge nothing: close the open pull requests on the remote's --into and "
+                    "retarget the ones based on a branch that is (with --dry-run: say what it would do)")
+    ap.add_argument("--remote", default="origin", help="the remote whose --into branch the sweep reads (default origin)")
     ap.add_argument("--train", action="store_true", help="merge the refs as one candidate, record the tool on it, fast-forward on "
                     "a pass, bisect to the offending ref on a failure")
     ap.add_argument("--on", default=None, metavar="MACHINE", help="--train: record the tool on this machine (research run --on)")
@@ -225,6 +306,17 @@ def main(argv: list[str]) -> int:
     from .store.local import LocalStore
 
     repo = Path.cwd()
+    if a.sweep:
+        if a.ref or a.train:
+            ap.error("--sweep takes no refs")
+        try:
+            sweep(repo, a.into, a.remote, a.dry_run)
+        except (Refused, ValueError, KeyError) as e:
+            print(f"research merge: sweep failed: {e}", file=sys.stderr)
+            return 1
+        return 0
+    if not a.ref:
+        ap.error("a ref to merge is required (or --sweep)")
     if a.train:
         from .store import tools_registry
 
@@ -237,6 +329,8 @@ def main(argv: list[str]) -> int:
             return 1
         moved = f"{a.into} fast-forwarded to {land[:12]}" if land else f"{a.into} unchanged"
         print(f"research merge: train {' '.join(a.ref)}: " + (f"`{decl.name}` passed; {moved}" if bad is None else f"{bad} breaks it; {moved}"))
+        if land:
+            _sweep_after(repo, a.into, a.remote)
         return 0 if bad is None else 1
     if len(a.ref) != 1:
         ap.error("several refs need --train")
@@ -257,6 +351,7 @@ def main(argv: list[str]) -> int:
     same = _git(repo, "rev-parse", "HEAD^{tree}").stdout == _git(repo, "rev-parse", f"{commit}^{{tree}}").stdout
     print(f"research merge: merged {a.ref} ({commit[:12]}) into {a.into}; `{a.tool}` passed in {attempt}"
           + ("" if same else "; the merged tree differs from the checked one"))
+    _sweep_after(repo, a.into, a.remote)
     return 0 if same else 1
 
 
