@@ -52,6 +52,7 @@ def test_fork_pool_workers_die_with_a_sigkilled_parent():
     assert alive == []
 
 
+@pytest.mark.slow
 def test_a_plain_fork_pool_orphans_its_workers():
     """The control: without the initializer the workers outlive a SIGKILLed parent (the #23 Commit's two 54 GB workers)."""
     pids, alive = _workers_after_parent_sigkill("plain")

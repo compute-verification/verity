@@ -15,6 +15,7 @@ from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.geometry import is_int, sub_rows
 from verity_vllm.observe.fold.patterns.ops import base_op, bound_args, first, triton_name
 from verity_vllm.observe.fold.patterns.resolutions import ComputeGroup, _fmt, hint_of, unsupported
+from verity_vllm.observe.fold.patterns.target import target_of
 from verity_vllm.observe.fold.patterns.transparent import widened_source
 from verity_vllm.observe.fold.resolver import Compute, Const, Gather, Param, PerRow, Resolution, StepContext, Transparent, Unsupported
 from verity_vllm.observe.fold.tree import TreeNode
@@ -520,7 +521,7 @@ class TokenSelectGumbelTopP:
         if out.rank == 1:
             out = ViewDesc(out.alloc, out.offset, (R, 1), (out.strides[0], 1), out.dtype, out.device)
         from verity_vllm.program.registry import sampling as _sampling
-        spec = bind(_sampling.GumbelTopPTokenSelect, V=V)
+        spec = bind(_sampling.select_for(_sampling.GumbelTopPTokenSelect, target_of(ctx)[0].effective_sampler_construction()), V=V)
         S = int(s2["S"])        # the split kernels' constexpr: the launch's S -> the 6th operand (bound to the Program's `splits` Input)
         kernels = (*s2["kernels"], "ArgMaxOps", "gather_kernel")
         parts = []

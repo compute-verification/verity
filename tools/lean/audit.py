@@ -723,12 +723,14 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--no-replay", action="store_true", help="skip the kernel replay (`Replay.lean`)")
     ap.add_argument("--fresh", action="store_true", help="also `leanchecker --fresh` each root: its whole closure, Mathlib and core "
                     "included, through the kernel (slow: see README)")
-    ap.add_argument("--out", type=Path, default=None, help="where the reports and logs go (default a temporary directory)")
+    ap.add_argument("--out", type=Path, default=None, help="where the reports and logs go (default $RESEARCH_RUN_DIR/lean-audit in a "
+                    "recorded run, else a temporary directory)")
     a = ap.parse_args(argv)
     pkgs = [p.resolve() for p in (packages(a.root.resolve()) if a.all else a.package)]
     if not pkgs or (a.all and a.package) or (a.all and a.update):
         ap.error("name package directories, or --all (which does not --update)")
-    out = a.out or Path(tempfile.mkdtemp(prefix="lean-audit-"))
+    run_dir = os.environ.get("RESEARCH_RUN_DIR")
+    out = a.out or (Path(run_dir) / "lean-audit" if run_dir else Path(tempfile.mkdtemp(prefix="lean-audit-")))
     out.mkdir(parents=True, exist_ok=True)
     TOOL = out / "tool"
     shutil.rmtree(TOOL, ignore_errors=True)

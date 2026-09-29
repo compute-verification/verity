@@ -99,6 +99,7 @@ def test_activity_is_per_request_a_function_of_its_own_committed_tokens_only():
     assert out_a == out_b  # the same request twice is the same value sequence: one specialization, two addresses
 
 
+@pytest.mark.slow
 def test_a5_the_stopped_request_does_not_change_one_word_of_its_batch_mate():
     """ONE EOS set {17}.  Run 1: A = the TINY prompt (stops: EOS at event 3), B = the shifted prompt (never stops).  Run 2: A = the
     shifted prompt too (nobody stops).  Every word of B's subtree is identical in the two runs, and identical to B served ALONE —
@@ -123,6 +124,7 @@ def test_a5_the_stopped_request_does_not_change_one_word_of_its_batch_mate():
     assert all(x == L.enc_bot(32) for x in out_a1[4:]) and all(ia.evaluate(x) for x in out_a1[:4])
 
 
+@pytest.mark.slow
 def test_a1_the_shared_weights_input_carries_no_bot_and_is_read_identically_by_both_requests():
     """The shared Input is Active in every word (a ⊥ weight would be a deleted parameter, refused at the boundary), and both
     requests' first reads of it are the same words — no per-request copy, one value namespace for the weights."""

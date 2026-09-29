@@ -448,7 +448,7 @@ def _tc_dot16_pipeline(acc: np.ndarray, a: np.ndarray, b: np.ndarray, *, groups:
 
 
 def tc_dot16(acc: np.ndarray, a: np.ndarray, b: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """`AmpereBF16TcDot16_v1` vectorised: acc (...,) f32 words, a/b (..., 16) bf16 words -> (f32 words, nonfinite mask).
+    """`AmpereBF16TcDot16_v2` vectorised: acc (...,) f32 words, a/b (..., 16) bf16 words -> (f32 words, nonfinite mask).
     `mma.sync.m16n8k16` bf16 -> f32 on sm_80 / sm_89: two groups of eight products, 25-bit adder, exponent floor -132
     (`veritor.core.silicon.AMPERE_BF16_M16N8K16`).  See `_tc_dot16_pipeline` for the flagging / saturation conventions."""
     return _tc_dot16_pipeline(acc, a, b, groups=(8, 8), width=_TC_WIDTH, floor=_TC_FLOOR)
@@ -518,7 +518,7 @@ def rope_rows(x: np.ndarray, cs: np.ndarray) -> np.ndarray:
 
 #: the k16 step twin per registered `DOT` primitive id (`b1.DotBf16V2{K, DOT}` / `Gemm_v2{K,N,DOT}` statics; the spec text carries
 #: `DOT={"fn":"<id>"}`).  A DOT outside this table has no twin: the consumer refuses by name, never falls back to another chain.
-TC_DOT16_BY_PRIM = {"AmpereBF16TcDot16_v1": tc_dot16, "HopperBF16WgmmaDot16_v1": tc_dot16_hopper}
+TC_DOT16_BY_PRIM = {"AmpereBF16TcDot16_v2": tc_dot16, "HopperBF16WgmmaDot16_v1": tc_dot16_hopper}
 
 
 def _dot_bf16_chain(q: np.ndarray, k: np.ndarray, step) -> tuple[np.ndarray, np.ndarray]:
@@ -905,7 +905,7 @@ def attention_head_states(q: np.ndarray, k: np.ndarray, v: np.ndarray, BN: int |
             "out": f2fp_bf16(y), "total": total, "inv": inv, "nonfinite": nf}
 
 
-def attention_rows(q: np.ndarray, kc: np.ndarray, vc: np.ndarray, BN: int, *, dot_prim: str = "AmpereBF16TcDot16_v1",
+def attention_rows(q: np.ndarray, kc: np.ndarray, vc: np.ndarray, BN: int, *, dot_prim: str = "AmpereBF16TcDot16_v2",
                    inv_prim: str = "Fa2InvSum_v1", masked_from: int | None = None) -> tuple[np.ndarray, np.ndarray]:
     """[R17 dense, ruling R17-3 / BRIEF §4] one attention ROW of the Program -- `Attention_v3{T, NH, KVH, D, BN}` (FA2, the defaults) or
     `Attention_v2{T, NH, KVH, D, BN, DOT, INV}` (FA3 on sm_90: DOT = HopperBF16WgmmaDot16_v1, INV = Fa3InvSum_v1; `Attention_v4` adds ``masked_from``) -- exactly as the

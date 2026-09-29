@@ -553,7 +553,6 @@
     {"file": "verity_vllm/program/registry/moe.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N", "count": 3},
     {"file": "verity_vllm/program/registry/moe.py", "kind": "doc-round", "symbol": "MoeRouterTopKNorm", "detail": "R1N"},
     {"file": "verity_vllm/program/registry/moe_pad.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N", "count": 3},
-    {"file": "verity_vllm/program/registry/prims.py", "kind": "doc-round", "symbol": "_tc_dot16_total", "detail": "R1N", "count": 3},
     {"file": "verity_vllm/program/registry/quarantine/collective/__init__.py", "kind": "doc-date", "symbol": "<module>", "detail": "date"},
     {"file": "verity_vllm/program/registry/quarantine/collective/allreduce_difftest.py", "kind": "doc-date", "symbol": "<module>", "detail": "date"},
     {"file": "verity_vllm/program/registry/quarantine/dense/__init__.py", "kind": "doc-date", "symbol": "<module>", "detail": "date"},

@@ -104,17 +104,22 @@ DTYPE = "dtype"
 
 VERIFIED_ACCEPTED, VERIFIED_REJECTED, VERIFIED_NOT_TRANSFERABLE, VERIFIED_NO_DUMPS = "accepted", "rejected", "not-transferable", "no-dumps"
 VERIFIED_VALUES = (VERIFIED_ACCEPTED, VERIFIED_REJECTED, VERIFIED_NOT_TRANSFERABLE, VERIFIED_NO_DUMPS)
-#: `verity_numerical.bench.contract.PROOF_CLASSES` + the ledger's `COMPONENT` (a bucket measured alone is no proof class).  The store
-#: imports neither package (the `research` rule), so the spelling is pinned here; the ledger's tests cross-check it.
+#: Mirrors `PROOF_CLASSES` in `backends/numerical/python/verity_numerical/bench/contract.py` + the `COMPONENT` that
+#: `bench/ledger.py` adds (a bucket measured alone is no proof class).  The store imports neither package (the `research` rule), so
+#: the spelling is copied here; `backends/numerical/tests/bench/test_tables.py` checks the copy against both.
 PROOF_CLASSES = ("NO_PROOF", "ARITHMETIC_DIAGNOSTIC", "NON_ZK_PROOF_DIAGNOSTIC", "NON_ZK_PROOF", "COMPLETE_HVZK_BACKEND", "COMPLETE_ZK_BACKEND",
                  "COMPONENT")
 AUTHENTICATION_VALUES = ("included", "included-hash", "included-hash-shared", "excluded")
 MODES = ("interactive", "fiat-shamir")
 SCOPES = ("unit", "vu", "component")
 TRACKS = ("A", "B", "C", "shared", "scout", "baseline")
-#: One spelling per candidate, the one Table 1 of `bench.tables` uses for its rows (`A-GKR`, `B-Ligero`, `SP1`); `ledger_to_store.candidate`
-#: derives them from the lane name.  `A` was the ledger import's spelling until 2026-09-23 (`VALUE_ALIASES`): read as `A-GKR`, no longer written.
-CANDIDATES = ("A-GKR", "B-AIR", "B-Ligero", "C", "SP1", "shared")
+#: Mirrors the Glossary's backend families (`README.md`, "Backend family"), which `bench/views.py` spells as `FAMILY_NAMES`; the
+#: backends' tests check the copy.  A `candidate` label written today names one of these.
+BACKEND_FAMILIES = ("A-GKR", "B-Ligero", "C-Flock", "D-SP1")
+#: The backend families, then the values `ledger_to_store.candidate` derives from a frozen ledger lane, which recorded labels carry
+#: and so stay valid: `B-AIR`, `C` (the VOLE candidate in `backends/vole`, not C-Flock), `SP1` (D-SP1 as the frozen ledger and
+#: tables spell it) and `shared`.  `A` was the ledger import's spelling until 2026-09-23 (`VALUE_ALIASES`): read as `A-GKR`, no longer written.
+CANDIDATES = (*BACKEND_FAMILIES, "B-AIR", "C", "SP1", "shared")
 
 # ---- old spellings (2026-09-23 hygiene): accepted on read, never written anew ----------------------------------------------------------------
 
@@ -194,7 +199,7 @@ def _k(name: str, group: str, form: str, doc: str, values: tuple[str, ...] = (),
 
 VOCAB: dict[str, Key] = {k.name: k for k in (
     # result
-    _k(CANDIDATE, GROUP_RESULT, ENUM, "the candidate proof system the result belongs to", CANDIDATES),
+    _k(CANDIDATE, GROUP_RESULT, ENUM, "the backend family the result belongs to (or the older candidate a ledger row names)", CANDIDATES),
     _k(PROOF_CLASS, GROUP_RESULT, ENUM, "the class claimed for the result (a red-team verdict is another proof_class label, by red-team-*)", PROOF_CLASSES),
     _k(SOUNDNESS, GROUP_RESULT, TEXT, "the soundness target or achieved bound as stated, e.g. 2^-128 (qualifiers allowed)"),
     _k(K, GROUP_RESULT, INT, "the relation's K (1536 for the frozen target)"),

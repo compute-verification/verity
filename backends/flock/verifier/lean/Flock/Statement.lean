@@ -134,9 +134,9 @@ structure Stmt where
   partition : Json := Json.null
   deriving Inhabited
 
-def helloOf (tags : Tags) (sigma : ByteArray) (mPts : Nat) (coins : Coins) : V String :=
+def helloOf (tags : Tags) (sigma : ByteArray) (mPts : Nat) (coins : Coins) (tables : Array String := #[tags.table]) : V String :=
   let base := [("profile", Json.str "fast100"), ("reps", Lean.toJson (2 : Nat)), ("flavor", Json.str "rs"),
-    ("tables", Json.arr #[Json.str tags.table]),
+    ("tables", Json.arr (tables.map Json.str)),
     ("link", Json.mkObj [("sigma", Json.str (hexOf sigma)), ("m", Lean.toJson mPts), ("points", Lean.toJson (2 : Nat))])]
   let base := if coins == .seed then base ++ [("coins", Json.str tags.coinScheme)] else base
   let base := if tags.hm96Rows then base ++ [("digests", Json.str "sha512")] else base
@@ -171,8 +171,9 @@ def Stmt.setup (tags : Tags) (leaf : RowLeaf) (circuitFile publicFile : ByteArra
 
 namespace Stmt
 
+/-- A one-table session of the statement. -/
 def spec (st : Stmt) : SessionSpec :=
-  { table := st.tags.table, domain := st.tags.domain, sigma := st.sigma, hello := st.hello, mPts := st.mPts,
+  { tables := #[st.tags.table], domain := fun _ r => st.tags.domain r, sigma := st.sigma, hello := st.hello, mPts := st.mPts,
     retainRounds := st.tags.retainRounds, unitDraw := (st.pub.header.getObjVal? "unit_draw").toOption, instances := st.n,
     sha512Digests := st.tags.hm96Rows }
 

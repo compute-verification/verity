@@ -170,6 +170,32 @@ hypotheses of the theorems that use them, never `axiom` declarations, so they ca
 #print axioms FlockSoundness.UnitPlace.decode_one
 #print axioms FlockSoundness.Prog.topo
 #print axioms FlockSoundness.Prog.isRowsUnit
+-- L1 for every flat circuit type: the rows the verifier derives (Flock.Derive.derive) compute the type, and the honest
+-- evaluation satisfies them; the logical order audit-lean's composed rows read
+#print axioms FlockSoundness.Types.compose_sound
+#print axioms FlockSoundness.Types.compose_complete
+#print axioms FlockSoundness.Types.order_nodup
+#print axioms FlockSoundness.Types.order_covers
+-- a verified lowering: RoPE's pinned rows compute its Boolean export, by the kernel in chunks (L1 for RoPE)
+#print axioms FlockSoundness.GateRows.rows_sound
+#print axioms FlockSoundness.GateRows.chunks_sound
+#print axioms FlockSoundness.Rope.pinned_eq
+#print axioms FlockSoundness.Rope.rope_sound
+-- the end-to-end theorem, a skeleton: every gap a named hypothesis (assumptions/e2e-checklist.md)
+#print axioms FlockSoundness.Audit.Partition.flock_e2e_count
+#print axioms FlockSoundness.Audit.Partition.flock_e2e_drawn
+-- a unit's rows in logical order (Rows.compose): placed at their block positions, and for a flat type, ordered and
+-- computing the type
+#print axioms FlockSoundness.Rows.compose
+#print axioms FlockSoundness.placement_of_realizes
+#print axioms FlockSoundness.Compose.ordered_of_take
+#print axioms FlockSoundness.compose_ordered
+#print axioms FlockSoundness.Compose.sat_physical
+#print axioms FlockSoundness.Rows.compose_eval
+-- over the type DAG: the unit's rows as the block holds them (Compose.ofBlock), ordered and computing the unit type
+#print axioms FlockSoundness.ofBlock_ordered
+#print axioms FlockSoundness.outCols_mem
+#print axioms FlockSoundness.Rows.compose_eval_unit
 -- the audit layer: strategy-level probabilities, draw laws, partitions, the one-stage profile
 #print axioms FlockSoundness.Game.prob_or_le
 #print axioms FlockSoundness.Game.prob_map

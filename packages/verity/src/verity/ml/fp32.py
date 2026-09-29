@@ -20,7 +20,7 @@ from verity.ir.types import Value
 
 BF16, F32 = Value(16), Value(32)
 
-__all__ = ["BF16", "BF16_NAN_F2FP", "BF16_NAN_TORCH", "F32", "F32_NAN", "Bf16Add", "Bf16AddF2fp", "Bf16MulBf16", "Bf16MulF32",
+__all__ = ["f32_decode", "f32_round", "BF16", "BF16_NAN_F2FP", "BF16_NAN_TORCH", "F32", "F32_NAN", "Bf16Add", "Bf16AddF2fp", "Bf16MulBf16", "Bf16MulF32",
            "F32Add", "F32AddFtz", "F32Div", "F32Fma", "F32FmaFtz", "F32FmaSubFtz", "F32Max", "F32Mul", "F32MulFtz", "F32SubFtz",
            "GuardNegInfZero", "bf16_to_f32_bits", "bits_of", "f32_add_bits", "f32_div_bits", "f32_fma_bits", "f32_is_nan",
            "f32_max_bits", "f32_mul_bits", "f32_of", "f32_sub_bits", "f32_to_bf16_rn_bits", "ftz_bits"]
@@ -106,6 +106,10 @@ def _round_f32(x: Fraction, neg_zero: bool = False) -> int:
         return s | n
     return s | ((e + 127) << 23) | (n & 0x7FFFFF)
 
+
+#: the public names of the two helpers above, for code outside core
+f32_decode = _decode
+f32_round = _round_f32
 
 def f32_fma_bits(a: int, b: int, c: int) -> int:
     """IEEE fused multiply-add on encodings, RN-even, one rounding (exact rational arithmetic)."""
