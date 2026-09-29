@@ -410,10 +410,12 @@ def test_a_contradicted_cached_pass_is_named_in_the_result(tmp_path, monkeypatch
     from research import result as RES
 
     (tmp_path / "suites.json").write_text(json.dumps([{"suite": "pkg", "contradicts": ["tests/test_a.py::test_a"]}, {"suite": "b"}]))
-    bad = CHECK.contradictions(tmp_path)
+    (tmp_path / "suites-lean.json").write_text(json.dumps([{"suite": "lean", "nondeterministic": ["tests/test_b.py::test_b"]}]))
+    bad, flaky = CHECK.contradictions(tmp_path), CHECK.contradictions(tmp_path, "nondeterministic")
     assert bad == [{"suite": "pkg", "contradicts": ["tests/test_a.py::test_a"]}]
+    assert flaky == [{"suite": "lean", "nondeterministic": ["tests/test_b.py::test_b"]}]
     monkeypatch.setenv("RESEARCH_RUN_ID", "r20260929-010000-abcd")
-    CHECK.write_result(tmp_path, False, [{"step": "pytest", "status": "failed", "rc": 1, "seconds": 1.0}], None, bad)
+    CHECK.write_result(tmp_path, False, [{"step": "pytest", "status": "failed", "rc": 1, "seconds": 1.0}], None, bad, flaky)
     r = RES.check(tmp_path, "r20260929-010000-abcd")
     assert r.valid, r.errors
-    assert r.doc["cache_contradictions"] == bad
+    assert r.doc["cache_contradictions"] == bad and r.doc["nondeterministic"] == flaky

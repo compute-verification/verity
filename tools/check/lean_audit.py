@@ -2,6 +2,7 @@
 
     python tools/check/lean_audit.py --out DIR [--cache DIR] [--deps DIR] [--fresh] [--urls FILE] [--export DIR]
     python tools/check/lean_audit.py --pin RUN        pin the bundles run RUN exported (`lean-deps.json`)
+    python tools/check/lean_audit.py --explain PKG    why PKG's audit would run: its inputs against the nearest pass kept here
 
 A package's verdict is reused while everything its audit reads is unchanged. Its key hashes:
 - the tracked files of the package, less the Lake packages nested in it (`audit.lean_modules` skips them);
@@ -99,12 +100,58 @@ def inputs(pkg: str, files: list[str]) -> list[str]:
     return sorted({*own, *tool, "tools/check/lean_audit.py", "tools/check/common.py"})
 
 
-def key(pkg: str, files: list[str], flags: list[str]) -> str:
-    h = hashlib.sha256(json.dumps([SCHEMA, pkg, flags]).encode())
-    for f in inputs(pkg, files):
-        p = ROOT / f
-        h.update(f.encode() + b"\0" + (_sha(p).encode() if p.is_file() else b"-") + b"\0")
+def components(pkg: str, files: list[str], flags: list[str]) -> dict:
+    """What a package's key hashes: the schema, the package, the audit's flags, and each input's sha256 ("-" when absent). A pass
+    keeps them beside it, so `--explain` can say what a miss changed."""
+    return {"schema": SCHEMA, "package": pkg, "flags": flags,
+            "files": {f: (_sha(ROOT / f) if (ROOT / f).is_file() else "-") for f in inputs(pkg, files)}}
+
+
+def key_of(c: dict) -> str:
+    h = hashlib.sha256(json.dumps([c["schema"], c["package"], c["flags"]]).encode())
+    for f, d in sorted(c["files"].items()):
+        h.update(f.encode() + b"\0" + d.encode() + b"\0")
     return h.hexdigest()
+
+
+def key(pkg: str, files: list[str], flags: list[str]) -> str:
+    return key_of(components(pkg, files, flags))
+
+
+def explain(name: str, cache: Path) -> tuple[int, list[str]]:
+    """(exit status, lines): whether package ``name`` (its path, or a unique part of one) would reuse a pass, and if not, which of
+    its inputs differ from the nearest pass kept in ``cache`` (fewest differing files)."""
+    files = COMMON.tracked_files(ROOT) or []
+    pkgs = packages(files)
+    match = [p for p in pkgs if p == name.rstrip("/")] or [p for p in pkgs if name in p]
+    if len(match) != 1:
+        return 2, [f"lean_audit: {name!r} matches {len(match)} packages: {', '.join(match) or ', '.join(pkgs)}"]
+    pkg = match[0]
+    now = components(pkg, files, ["--all", "--build"])
+    k = key_of(now)
+    if (cache / f"{k}.json").is_file():
+        return 0, [f"{pkg}: PASS reused ({k[:12]}): every file its audit reads is unchanged"]
+    kept = []
+    for f in cache.glob("*.json") if cache.is_dir() else ():
+        try:
+            e = json.loads(f.read_text())
+        except (OSError, ValueError):
+            continue
+        if e.get("package") == pkg and e.get("components"):
+            kept.append(e)
+    if not kept:
+        return 0, [f"{pkg}: missed ({k[:12]}); no pass of it kept in {cache} records its inputs (passes kept before `--explain` don't)"]
+
+    def diff(was: dict) -> list[str]:
+        a, b = was.get("files", {}), now["files"]
+        out = [f"{'changed' if f in a and f in b else 'new' if f in b else 'no longer an input'}: {f}"
+               for f in sorted(set(a) | set(b)) if a.get(f) != b.get(f)]
+        return out + [f"{x}: {was.get(x)} -> {now[x]}" for x in ("schema", "flags") if was.get(x) != now[x]]
+
+    best = min(kept, key=lambda e: len(diff(e["components"])))
+    lines = diff(best["components"])
+    return 0, [f"{pkg}: missed ({k[:12]}); the nearest pass kept here ({best['key'][:12]}) differs in {len(lines)} input(s):",
+               *(f"  {line}" for line in lines)]
 
 
 def deps_key(pkg: Path) -> str | None:
@@ -274,7 +321,7 @@ def transient(rep: dict) -> bool:
 
 
 def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: Path, cache: Path, deps: Path, fresh: bool,
-           log, urls: dict[str, str] | None = None) -> tuple[list[str], list[str]]:
+           log, urls: dict[str, str] | None = None, comps: dict | None = None) -> tuple[list[str], list[str]]:
     """Audit ``missed`` (and the packages they require by path) on a scratch tree of their inputs, and store each pass.
     Returns (the failed, the audited)."""
     deps.mkdir(parents=True, exist_ok=True)
@@ -305,7 +352,8 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
             if controls_ok and not rep["failures"] and r.returncode in (0, 1) and p in keys and not fresh:
                 cache.mkdir(parents=True, exist_ok=True)
                 tmp = cache / f".{keys[p]}.tmp"
-                tmp.write_text(json.dumps({"schema": SCHEMA, "package": p, "key": keys[p], "report": rep}))
+                tmp.write_text(json.dumps({"schema": SCHEMA, "package": p, "key": keys[p], "report": rep,
+                                           "components": (comps or {}).get(p)}))
                 os.replace(tmp, cache / f"{keys[p]}.json")
         if r.returncode not in (0, 1) and not failed:
             failed = [f"audit.py exit {r.returncode}"]
@@ -327,7 +375,8 @@ def run(out: Path, cache: Path, deps: Path, fresh: bool = False, log=print, urls
         fresh = True
         files = [str(p.relative_to(ROOT)) for p in ROOT.rglob("*") if p.is_file() and ".lake" not in p.parts]
     pkgs = packages(files)
-    keys = {p: key(p, files, ["--all", "--build"]) for p in pkgs}
+    comps = {p: components(p, files, ["--all", "--build"]) for p in pkgs}
+    keys = {p: key_of(c) for p, c in comps.items()}
     out.mkdir(parents=True, exist_ok=True)
     reports, cached = {}, {}
     for p, k in keys.items():
@@ -340,7 +389,7 @@ def run(out: Path, cache: Path, deps: Path, fresh: bool = False, log=print, urls
     for attempt in range(len(RETRIES) + 1):
         if not todo:
             break
-        now, audited = _audit(todo, files, keys, reports, out, cache, deps, fresh, log, urls)
+        now, audited = _audit(todo, files, keys, reports, out, cache, deps, fresh, log, urls, comps)
         failed = [f for f in failed if f not in audited] + now
         retry = [p for p in audited if p in now and transient(reports.get(p, {}))]
         if not retry or attempt == len(RETRIES):
@@ -424,6 +473,11 @@ def pin(run_id: str) -> int:
 def main(argv: list[str]) -> int:
     if argv[:1] == ["--pin"] and len(argv) == 2:
         return pin(argv[1])
+    if argv[:1] == ["--explain"] and len(argv) in (2, 4):
+        cache = Path(argv[3]) if len(argv) == 4 and argv[2] == "--cache" else COMMON.cache_dir() / "lean-audit"
+        rc, lines = explain(argv[1], cache)
+        print("\n".join(lines), file=sys.stderr if rc == 2 else sys.stdout)
+        return rc
     ap = argparse.ArgumentParser(prog="lean_audit.py", description=__doc__.split("\n\n")[0])
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--cache", type=Path, default=COMMON.cache_dir() / "lean-audit")
