@@ -263,6 +263,36 @@ def test_the_red_team_s_capped_window_is_refused():
     PL.window_laws([call1], k=k)                                                 # one work stratum a call: admitted
 
 
+def test_a_window_that_does_no_work_is_refused():
+    """The window pin's `hW`, 0 < W: `window_laws` refuses a window whose calls do no work (every stratum at work 0), so
+    it is never drawn or accepted; one call's work is enough."""
+    import pytest
+
+    shape = ncp2.Shape(16, 64, 16)
+    idle = PL.Layout(shape, (), (PL.StratumSpec("t", "tile", (0,), 0), PL.StratumSpec("y", "dequant", (1, 2), 0)), {})
+    busy = PL.Layout(shape, (), (PL.StratumSpec("t", "tile", (0,), 5), PL.StratumSpec("y", "dequant", (1, 2), 0)), {})
+    for window in ([idle], [idle, idle]):
+        with pytest.raises(ValueError, match="does some work"):
+            PL.window_laws(window)
+    with pytest.raises(ValueError, match="at least one call"):
+        PL.window_laws([])
+    assert len(PL.window_laws([busy])) == 1
+
+
+def test_a_window_with_no_y_cells_is_refused():
+    """The window pin's `hN`, 0 < N: `window_laws` refuses a window with no dequantization units, so its y term is never
+    claimed over an empty population; the verifier's own layouts always have them."""
+    import pytest
+
+    shape = ncp2.Shape(16, 64, 16)
+    dry = PL.Layout(shape, (), (PL.StratumSpec("t", "tile", (0, 1), 10), PL.StratumSpec("k", "key", (2,), 0)), {})
+    for window in ([dry], [dry, dry]):
+        with pytest.raises(ValueError, match="has y cells"):
+            PL.window_laws(window)
+    lay = PL.layout(shape)
+    assert lay.work() > 0 and any(s.role == "dequant" for s in lay.strata)
+    assert len(PL.window_laws([lay, lay])) == 2
+
 def test_the_window_law_is_the_window_pin_s():
     """#418's `Audit/Window.lean` definitions, recomputed on ℕ from their formulas on random small windows, against
     `window_laws`: `callK` = min(N_c, max(1, ⌈K·W_c/W⌉)) is `WorkLaw.budget`, `windowK` = workRule(K_c, w_s, n_s, W_c, f_s)

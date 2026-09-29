@@ -257,17 +257,18 @@ at its floor, so a wholly wrong one is caught directly (`audit_work_whole_stratu
     pending its grant): the per-call law with y's floors at
     K = K_y = 27,713 accepts a window with at least 0.1% of its work unsound or 0.1% of its y cells wrong with probability
     at most 2⁻⁴⁰ + ε_ks + δ_link. Its `callK` and `windowK` are `WorkLaw.budget` and `WorkLaw.sizes`, recomputed from
-    their formulas in `test_the_window_law_is_the_window_pin_s`; its hypotheses are `hone` (above) and y's floors
-    (`hfy`). One Program (`ncp2.window`) is its case C = 1: K_c = min(N, K), the K `verify` takes (`1 <= k <= n`),
-    and y's floor K_y. Outside it, the window's use of it rests on four things:
+    their formulas in `test_the_window_law_is_the_window_pin_s`; its hypotheses are `hone` (above), y's floors
+    (`hfy`), and a window that does some work and has y cells (`hW`, `hN`: `window_laws` refuses W = 0 or N = 0,
+    `plan.py:186`, `plan.py:191`). One Program (`ncp2.window`) is its case C = 1: K_c = min(N, K), the K `verify`
+    takes (`1 <= k <= n`), and y's floor K_y. Outside it, the window's use of it rests on four things:
     - *The verifier derives every number itself.* `window_laws` (`plan.py:164`) takes only the verifier's own layouts
       (`Traced.layout`, `__init__.py:144`; any other is refused by `Traced.check_layout`, `__init__.py:136`). It
-      computes W from them (`plan.py:181`) and N (`plan.py:184`), and the floors ⌈K_y·n_s/N⌉ (`plan.py:187`);
+      computes W from them (`plan.py:185`) and N (`plan.py:190`), and the floors ⌈K_y·n_s/N⌉ (`plan.py:195`);
       `WorkLaw.budget` computes W_c and N_c from the call's own strata and K_c = min(N_c, max(1, ⌈K·W_c/W⌉))
       (`plan.py:153–157`). No prover-stated number enters (X-SPC-80, 81).
     - *Call indices are distinct and the verifier's.* `Traced.draw` admits the call to the window's `Ledger`
       (`__init__.py:97`), which refuses a repeated (forward, position) before anything is drawn (`anchors.py:215–221`),
-      and each stratum's context is ("call", forward, position, "stratum", template) (`plan.py:283`). The index is the
+      and each stratum's context is ("call", forward, position, "stratum", template) (`plan.py:291`). The index is the
       verifier's anchors' (`Anchors`, `anchors.py:42`, which `Anchors.check_call` holds the call's inputs to,
       `anchors.py:83`). This is the pin's M1.
     - *Every call's commitment precedes the window key* (root's C1). A window's `anchors.Receipt` lists every call with
