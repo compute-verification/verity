@@ -264,8 +264,11 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
     `TemplateLayout.blockFacts` proves `BlockFacts` at every VU `g`, at `Typed.col c tb g`, and
     `TemplateLayout.placement` gives a table class's `placed g`.
     - `TemplateLayout` is the accepted statement's layout: its ranges, the root's and the parts' nets and slots, and Δ.
+      A part's net (`PartNet`) is its callee's derived rows, with a generated read's lookup from its held table.
     - `UnitShape` is the unit's shape: its constant row, its order within its own and its parts' columns, no Δ at an
-      input, and no table read.
+      input, and a part's reads its callee's.
+    - At a generated read's product row, the lookup reads what `readSide` reads (`lookupEntry_readSide`), so the block's
+      `B` there is the row as the verifier folds it (`partB`, `PartNet.entryB`).
     - Supporting lemmas: unit columns sit at distinct positions across VUs (`col_inj`), and the typed tail at a unit
       column's position is its bound-input and cross entries (`tail_count`).
   - **From the accept step** (`ExecTemplateSetup.lean`). `setupH_templateLayout` derives `TemplateLayout` from what
@@ -275,7 +278,9 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
     - The rows' circuits come after the root and the placed layouts' circuits, by `checkTyped` (#405,
       `CheckFactsT.rows_after`). The unit's shape comes from `deriveChecked` (`unitShape_of_class`, with #404's
       `unit_const_row` and `order_cols`).
-    - What remains is T3's scope: every part places a derived layout, and the unit reads no table.
+    - A part may place a generated read: its net carries its own read and held table (`placedNet_gen`, `partNet_of`),
+      and the held tables' words are their bytes read as `u32` (`read_held`). #411's `part_reads` and `callee_prod`
+      complete the unit's shape.
     - Supporting lemmas: the class's unit is one of its layouts (`unit_lt`), and Δ's other flat rows are input bits of
       the rows' circuits' slots (`deltaIn_rows`).
     - The unit's own check makes its inputs self rows with no Δ entry (`unit_inputs`), which discharges `UnitShape`'s
@@ -285,7 +290,6 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
       table class's `copy`, when the message bit's position is in the block.
   - Still to prove:
     - `NetRows` for a flat typed class, whose unit net #307 builds from `derive`'s rows (`Typed.netOfD_ok`);
-    - a template whose parts read a table;
     - the message bit's position in the block, for `setupH_inputCopy`.
 
 ### 1.6 Proved from the libraries, not assumed

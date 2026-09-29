@@ -11,10 +11,10 @@ flat entries, then per VU each input's copy of its message bit, each part's boun
 part columns (`crossOf`). Unit column `x` of VU `g` is at `Typed.col c tb g x`.
 
 - **`TemplateLayout st tb words done u`**: the matrix-level facts of the accepted statement that this reads: the ranges, the
-  root's and the parts' nets and slots, and Δ.
-- **`UnitShape done u`**: the facts about the unit's rows that `deriveChecked` doesn't state yet: its constant and its
-  constant row are its own, its order is its own and its parts' columns, no Δ entry sits at an input, and it reads no
-  table.
+  root's and the parts' nets and slots, and Δ. A part's net (`PartNet`) is its callee's derived rows, and a generated
+  read's lookup from the table the verifier holds.
+- **`UnitShape done u`**: the facts about the unit's rows this reads: its constant row, its order within its own and its
+  parts' columns, no Δ entry at an input, and a part's reads its callee's (`deriveChecked` gives each).
 - **`TemplateLayout.blockFacts`**: with those, and #394's part lemmas from `deriveChecked … = .ok done`, the block rows
   at `col g c` are the unit's `blockRow` there, for every VU `g`: `BlockFacts` at `Typed.col c tb g`, which is a table
   class's `placed g` (`BlockFacts.placement`).
@@ -561,8 +561,8 @@ structure TemplateLayout (st : Stmt) (tb : TypedBlock) (words : String → Optio
   m : st.m = st.c.kLog + st.nbl
 
 /-- **The unit's rows, as T3 reads them**, beyond #394's part lemmas: its constant is an own column whose row is
-`[const]·[const]`; its order lists own and part columns only; no Δ entry sits at one of its inputs; and it reads no
-table (a template whose parts are derived layouts). -/
+`[const]·[const]`; its order lists own and part columns only; no Δ entry sits at one of its inputs; a part's rows are
+covered by its callee's reads, shifted; and a covered callee row is `a · []`, its read's low minterms callee rows. -/
 structure UnitShape (done : Array D) (u : D) : Prop where
   const_row : u.rows.getD u.const ([], []) = ([u.const], [u.const])
   order_in : ∀ c ∈ order done u, InUnit done u c
