@@ -11,18 +11,21 @@ template's unit is `nIn` input columns, `nComp` computed rows and the constant, 
 $$z_{nIn+i} = \Big(\bigoplus_{c \in a_i} z_c\Big)\cdot\Big(\bigoplus_{c \in b_i} z_c\Big),$$
 
 reading earlier columns and the constant. In the circuit it is one gate, `Op.row`. A unit of a
-partition is an instance of a template's rows when its gates are those rows, read through an
-injective wiring of the unit's columns to the circuit's gates (`Partition.IsRowsUnit`).
+partition is an instance of a template's rows when its gates are those rows, read through a wiring
+of the unit's columns to the circuit's gates (`Partition.IsRowsUnit`). Only input columns may share
+a gate: a unit may read one source on several inputs.
 
 **The theorem, for every template** (`lowering_sound`). Suppose a witness satisfies a statement in
 which unit `u`'s rows are placed in block `o` (`Placement`: the block matrices' rows at the unit's
-computed columns read exactly its rows' columns, and its constant's rows read the pin). Then the
-transcript decoded from that block makes `u` correct, and carries `true` on the constant
-(`UnitPlace.decode_one`). What each template's rows compute, its gates in the program's Boolean
-circuit, is a separate named hypothesis (L1, `ASSUMPTIONS.md`).
+computed columns read exactly its rows' columns, and its constant's rows read the pin), and the
+unit's input columns on one gate carry one value there. Then the transcript decoded from that
+block makes `u` correct, and carries `true` on the constant (`UnitPlace.decode_one`). What each
+template's rows compute, its gates in the program's Boolean circuit, is a separate named
+hypothesis (L1, `ASSUMPTIONS.md`).
 
 `UnitPlace` bundles a drawn unit's place in a table: its rows, its instance, its block and its
-columns. `UnitPlace.correct` is the compiled lowering for that unit.
+columns, where every satisfying witness carries one value on the unit's inputs that share a gate.
+`UnitPlace.correct` is the compiled lowering for that unit.
 -/
 
 namespace FlockSoundness
@@ -69,10 +72,10 @@ variable {C : Circuit} {n : ℕ} (P : Partition C n)
 
 /-- **Unit `u` is an instance of the rows `R`.** Computed row `i` is the unit's gate
 `wire (R.comp i)`, the row gate of its columns' wires. The unit's gates are exactly these, and its
-input columns and constant are wires outside it. -/
+input columns and constant are wires outside it. Two columns share a gate only if both are inputs. -/
 structure IsRowsUnit (u : Fin n) (R : Rows) where
   wire : Fin R.w → Fin C.N
-  wire_inj : Function.Injective wire
+  shared : ∀ c c', wire c = wire c' → c = c' ∨ c.val < R.nIn ∧ c'.val < R.nIn
   mem : ∀ i, P.unit (wire (R.comp i)) = some u
   op : ∀ i, C.op (wire (R.comp i)) = .row ((R.a i).map wire) ((R.b i).map wire)
   outside : ∀ c, (∀ i, c ≠ R.comp i) → P.unit (wire c) ≠ some u
@@ -83,15 +86,21 @@ namespace IsRowsUnit
 variable {P} {u : Fin n} {R : Rows} (I : P.IsRowsUnit u R)
 
 open Classical in
-/-- **The transcript a unit's column values give**: each of the unit's wires carries its column's
-value, and every other gate is `false`. -/
+/-- **The transcript a unit's column values give**: each of the unit's wires carries the value of a
+column on it, and every other gate is `false`. -/
 noncomputable def decode (z : Fin R.w → Bool) : Fin C.N → Bool :=
   fun g => if h : ∃ c, I.wire c = g then z (Classical.choose h) else false
 
-theorem decode_wire (z : Fin R.w → Bool) (c : Fin R.w) : I.decode z (I.wire c) = z c := by
+/-- **Column values agreeing on shared gates**: the unit's input columns on one gate carry one value. -/
+def Agree (z : Fin R.w → Bool) : Prop :=
+  ∀ c c', I.wire c = I.wire c' → c.val < R.nIn → c'.val < R.nIn → z c = z c'
+
+theorem decode_wire {z : Fin R.w → Bool} (hz : I.Agree z) (c : Fin R.w) : I.decode z (I.wire c) = z c := by
   have h : ∃ c', I.wire c' = I.wire c := ⟨c, rfl⟩
   simp only [decode, dif_pos h]
-  exact congrArg z (I.wire_inj (Classical.choose_spec h))
+  rcases I.shared _ _ (Classical.choose_spec h) with he | ⟨h1, h2⟩
+  · rw [he]
+  · exact hz _ _ (Classical.choose_spec h) h1 h2
 
 /-- A column a row reads, outside the unit, is one of the unit's committed wires. -/
 theorem mem_io_of_read {i : Fin R.nComp} {c : Fin R.w} (hc : c ∈ R.a i ++ R.b i)
@@ -144,9 +153,10 @@ theorem correct {z : Fin R.w → Bool} (hz : R.Sat z) {X : Fin C.N → Bool}
   simp only [io, Finset.mem_filter]
   exact ⟨hg, Or.inl hgu⟩
 
-/-- The decoded transcript makes the unit correct when its column values satisfy its rows. -/
-theorem correct_decode {z : Fin R.w → Bool} (hz : R.Sat z) : P.Correct (I.decode z) u :=
-  I.correct hz fun c _ => I.decode_wire z c
+/-- The decoded transcript makes the unit correct when its column values satisfy its rows and agree on
+shared gates. -/
+theorem correct_decode {z : Fin R.w → Bool} (hz : R.Sat z) (ha : I.Agree z) : P.Correct (I.decode z) u :=
+  I.correct hz fun c _ => I.decode_wire ha c
 
 end IsRowsUnit
 
@@ -225,22 +235,27 @@ theorem Placement.one_eq {S : Statement} {R : Rows} {col : Fin R.w → Fin (2 ^ 
   exact h.symm
 
 /-- **The compiled lowering, for every template.** If a witness satisfies a statement in which unit
-`u`'s rows are placed in block `o` at the columns `col`, the transcript decoded from that block makes
-`u` correct. -/
+`u`'s rows are placed in block `o` at the columns `col`, and the unit's inputs on one gate carry one
+value there, the transcript decoded from that block makes `u` correct. -/
 theorem lowering_sound {C : Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n} {R : Rows}
     (I : P.IsRowsUnit u R) {S : Statement} {col : Fin R.w → Fin (2 ^ S.kLog)}
-    (hpl : Placement S R col) (o : Fin (2 ^ S.nbl)) {z : Witness S.m} (hz : S.Satisfies z) :
+    (hpl : Placement S R col) (o : Fin (2 ^ S.nbl)) {z : Witness S.m} (hz : S.Satisfies z)
+    (ha : I.Agree fun c => bit (S.block z o (col c))) :
     P.Correct (I.decode fun c => bit (S.block z o (col c))) u :=
-  I.correct_decode (rowsSat_of_satisfies hpl hz o)
+  I.correct_decode (rowsSat_of_satisfies hpl hz o) ha
 
 /-- **A drawn unit's place in a table**: its template's rows, its instance in the circuit, and the
-block and columns where the table's statement holds its rows. -/
+block and columns where the table's statement holds its rows. The unit's input columns on one gate
+carry one value in every witness satisfying the statement (`aliased`): they copy one source's
+position, or forced-zero rows. -/
 structure UnitPlace {C : Circuit} {n : ℕ} (P : Audit.Partition C n) (S : Statement) (u : Fin n) where
   R : Rows
   inst : P.IsRowsUnit u R
   o : Fin (2 ^ S.nbl)
   col : Fin R.w → Fin (2 ^ S.kLog)
   placed : Placement S R col
+  aliased : ∀ c c', inst.wire c = inst.wire c' → c.val < R.nIn → c'.val < R.nIn →
+    ∀ z : Witness S.m, S.Satisfies z → S.block z o (col c) = S.block z o (col c')
 
 namespace UnitPlace
 
@@ -250,16 +265,21 @@ variable {C : Circuit} {n : ℕ} {P : Audit.Partition C n} {S : Statement} {u : 
 noncomputable def decode (pl : UnitPlace P S u) (z : Witness S.m) : Fin C.N → Bool :=
   pl.inst.decode fun c => bit (S.block z pl.o (pl.col c))
 
+theorem agree (pl : UnitPlace P S u) {z : Witness S.m} (hz : S.Satisfies z) :
+    pl.inst.Agree fun c => bit (S.block z pl.o (pl.col c)) :=
+  fun c c' h hc hc' => congrArg bit (pl.aliased c c' h hc hc' z hz)
+
 /-- **The compiled lowering for a placed unit**: every witness satisfying the table's statement
 decodes to a transcript on which the unit is correct. -/
 theorem correct (pl : UnitPlace P S u) {z : Witness S.m} (hz : S.Satisfies z) :
     P.Correct (pl.decode z) u :=
-  lowering_sound pl.inst pl.placed pl.o hz
+  lowering_sound pl.inst pl.placed pl.o hz (pl.agree hz)
 
 /-- The decoded transcript carries `true` on the gate the unit's constant reads. -/
 theorem decode_one (pl : UnitPlace P S u) {z : Witness S.m} (hz : S.Satisfies z) :
     pl.decode z (pl.inst.wire pl.R.one) = true := by
-  simp only [decode, Audit.Partition.IsRowsUnit.decode_wire, pl.placed.one_eq hz pl.o]
+  simp only [decode]
+  rw [pl.inst.decode_wire (pl.agree hz), pl.placed.one_eq hz pl.o]
   rfl
 
 end UnitPlace
@@ -287,11 +307,12 @@ theorem isInput_lift (f : Fin N → Fin M) (o : Op N) : (o.lift f).isInput = o.i
 end Audit.Op
 
 /-- **A program of template units**, unit by unit: `k` input gates, then each unit's computed rows.
-A unit's input columns and constant are wired to distinct earlier gates. -/
+A unit's input columns are wired to earlier gates, several possibly to one, and its constant to an
+earlier gate none of them is wired to. -/
 inductive Prog : ℕ → ℕ → Type
   | inputs (k : ℕ) : Prog k 0
   | snoc {N n : ℕ} (p : Prog N n) (R : Rows) (ins : Fin R.nIn → Fin N) (one : Fin N)
-      (hins : Function.Injective ins) (hone : ∀ c, ins c ≠ one) : Prog (N + R.nComp) (n + 1)
+      (hone : ∀ c, ins c ≠ one) : Prog (N + R.nComp) (n + 1)
 
 namespace Prog
 
@@ -323,14 +344,14 @@ theorem colWire_lt_of_not_comp {N : ℕ} (R : Rows) (ins : Fin R.nIn → Fin N) 
 /-- The gates' operations. -/
 def op : {N n : ℕ} → Prog N n → Fin N → Audit.Op N
   | _, _, .inputs _, _ => .input
-  | _, _, @snoc N₀ _ p R ins one _ _, g =>
+  | _, _, @snoc N₀ _ p R ins one _, g =>
       if h : g.val < N₀ then (p.op ⟨g.val, h⟩).lift (Fin.castAdd R.nComp)
       else .row ((R.a ⟨g.val - N₀, by have := g.isLt; omega⟩).map (colWire R ins one))
         ((R.b ⟨g.val - N₀, by have := g.isLt; omega⟩).map (colWire R ins one))
 
 theorem topo : ∀ {N n : ℕ} (p : Prog N n) (g : Fin N), ∀ a ∈ (p.op g).args, a < g
   | _, _, .inputs _, _, _, ha => by simp [op, Audit.Op.args] at ha
-  | _, _, @snoc N₀ _ p R ins one _ _, g, a, ha => by
+  | _, _, @snoc N₀ _ p R ins one _, g, a, ha => by
       by_cases h : g.val < N₀
       · simp only [op, h, dif_pos, Audit.Op.args_lift] at ha
         obtain ⟨a', ha', rfl⟩ := List.mem_map.1 ha
@@ -359,13 +380,13 @@ theorem topo : ∀ {N n : ℕ} (p : Prog N n) (g : Fin N), ∀ a ∈ (p.op g).ar
 /-- The gates' units: the input gates are the input unit, and each unit holds its computed rows. -/
 def unit : {N n : ℕ} → Prog N n → Fin N → Option (Fin n)
   | _, _, .inputs _, _ => none
-  | _, _, @snoc N₀ n₀ p _ _ _ _ _, g =>
+  | _, _, @snoc N₀ n₀ p _ _ _ _, g =>
       if h : g.val < N₀ then (p.unit ⟨g.val, h⟩).map Fin.castSucc else some (Fin.last n₀)
 
 theorem input_iff : ∀ {N n : ℕ} (p : Prog N n) (g : Fin N),
     p.unit g = none ↔ (p.op g).isInput = true
   | _, _, .inputs _, _ => by simp [unit, op, Audit.Op.isInput]
-  | _, _, @snoc N₀ _ p _ _ _ _ _, g => by
+  | _, _, @snoc N₀ _ p _ _ _ _, g => by
       by_cases h : g.val < N₀
       · simp only [unit, op, h, dif_pos, Option.map_eq_none_iff, Audit.Op.isInput_lift]
         exact input_iff p _
@@ -382,7 +403,7 @@ def partition {N n : ℕ} (p : Prog N n) (outs : Finset (Fin N)) : Audit.Partiti
 /-- Each unit's template rows. -/
 def rows : {N n : ℕ} → Prog N n → Fin n → Rows
   | _, _, .inputs _, u => u.elim0
-  | _, _, @snoc _ n₀ p R _ _ _ _, u => if h : u.val < n₀ then p.rows ⟨u.val, h⟩ else R
+  | _, _, @snoc _ n₀ p R _ _ _, u => if h : u.val < n₀ then p.rows ⟨u.val, h⟩ else R
 
 theorem colWire_val {N : ℕ} (R : Rows) (ins : Fin R.nIn → Fin N) (one : Fin N) (c : Fin R.w) :
     (colWire R ins one c).val =
@@ -391,18 +412,17 @@ theorem colWire_val {N : ℕ} (R : Rows) (ins : Fin R.nIn → Fin N) (one : Fin 
   unfold colWire
   split_ifs <;> rfl
 
-theorem colWire_injective {N : ℕ} (R : Rows) (ins : Fin R.nIn → Fin N) (one : Fin N)
-    (hins : Function.Injective ins) (hone : ∀ c, ins c ≠ one) :
-    Function.Injective (colWire R ins one) := by
-  intro c c' h
+/-- Two of a new unit's columns on one gate are one column, or both inputs. -/
+theorem colWire_shared {N : ℕ} (R : Rows) (ins : Fin R.nIn → Fin N) (one : Fin N)
+    (hone : ∀ c, ins c ≠ one) (c c' : Fin R.w) (h : colWire R ins one c = colWire R ins one c') :
+    c = c' ∨ c.val < R.nIn ∧ c'.val < R.nIn := by
   have hv := congrArg Fin.val h
   rw [colWire_val, colWire_val] at hv
   have hc : c.val < R.nIn + R.nComp + 1 := c.isLt
   have hc' : c'.val < R.nIn + R.nComp + 1 := c'.isLt
+  refine (em (c.val < R.nIn ∧ c'.val < R.nIn)).elim Or.inr fun hn => Or.inl ?_
   by_cases h1 : c.val < R.nIn <;> by_cases h2 : c'.val < R.nIn
-  · rw [dif_pos h1, dif_pos h2] at hv
-    have := hins (Fin.ext hv)
-    exact Fin.ext (by simpa using congrArg Fin.val this)
+  · exact absurd ⟨h1, h2⟩ hn
   · rw [dif_pos h1, dif_neg h2] at hv
     have := (ins ⟨c.val, h1⟩).isLt
     split_ifs at hv with h3
@@ -418,22 +438,22 @@ theorem colWire_injective {N : ℕ} (R : Rows) (ins : Fin R.nIn → Fin N) (one 
     split_ifs at hv <;> exact Fin.ext (by omega)
 
 variable {N₀ n₀ : ℕ} (p : Prog N₀ n₀) (R : Rows) (ins : Fin R.nIn → Fin N₀) (one : Fin N₀)
-  (hins : Function.Injective ins) (hone : ∀ c, ins c ≠ one)
+  (hone : ∀ c, ins c ≠ one)
 
 theorem unit_castAdd (g : Fin N₀) :
-    (snoc p R ins one hins hone).unit (Fin.castAdd R.nComp g) = (p.unit g).map Fin.castSucc := by
+    (snoc p R ins one hone).unit (Fin.castAdd R.nComp g) = (p.unit g).map Fin.castSucc := by
   simp [unit, g.isLt]
 
 theorem op_castAdd (g : Fin N₀) :
-    (snoc p R ins one hins hone).op (Fin.castAdd R.nComp g) = (p.op g).lift (Fin.castAdd R.nComp) := by
+    (snoc p R ins one hone).op (Fin.castAdd R.nComp g) = (p.op g).lift (Fin.castAdd R.nComp) := by
   simp [op, g.isLt]
 
 theorem unit_new (i : Fin R.nComp) :
-    (snoc p R ins one hins hone).unit ⟨N₀ + i.val, by omega⟩ = some (Fin.last n₀) := by
+    (snoc p R ins one hone).unit ⟨N₀ + i.val, by omega⟩ = some (Fin.last n₀) := by
   simp [unit]
 
 theorem op_new (i : Fin R.nComp) :
-    (snoc p R ins one hins hone).op ⟨N₀ + i.val, by omega⟩ =
+    (snoc p R ins one hone).op ⟨N₀ + i.val, by omega⟩ =
       .row ((R.a i).map (colWire R ins one)) ((R.b i).map (colWire R ins one)) := by
   have hx : (⟨N₀ + i.val - N₀, by omega⟩ : Fin R.nComp) = i := Fin.ext (by simp)
   simp only [op]
@@ -443,7 +463,7 @@ theorem op_new (i : Fin R.nComp) :
 and partition, stated with the program's gates. -/
 structure RowsWire {N n : ℕ} (p : Prog N n) (u : Fin n) (R : Rows) where
   wire : Fin R.w → Fin N
-  wire_inj : Function.Injective wire
+  shared : ∀ c c', wire c = wire c' → c = c' ∨ c.val < R.nIn ∧ c'.val < R.nIn
   mem : ∀ i, p.unit (wire (R.comp i)) = some u
   op : ∀ i, p.op (wire (R.comp i)) = .row ((R.a i).map wire) ((R.b i).map wire)
   outside : ∀ c, (∀ i, c ≠ R.comp i) → p.unit (wire c) ≠ some u
@@ -452,13 +472,13 @@ structure RowsWire {N n : ℕ} (p : Prog N n) (u : Fin n) (R : Rows) where
 /-- The program-level instance is the audit's. -/
 def RowsWire.toIsRowsUnit {N n : ℕ} {p : Prog N n} {u : Fin n} {R : Rows} (W : p.RowsWire u R)
     (outs : Finset (Fin N)) : (p.partition outs).IsRowsUnit u R :=
-  ⟨W.wire, W.wire_inj, W.mem, W.op, W.outside, W.onto⟩
+  ⟨W.wire, W.shared, W.mem, W.op, W.outside, W.onto⟩
 
 /-- An earlier unit stays an instance of its rows when a unit is added. -/
 def rowsWire_snoc {v : Fin n₀} {R' : Rows} (W : p.RowsWire v R') :
-    (snoc p R ins one hins hone).RowsWire (Fin.castSucc v) R' where
+    (snoc p R ins one hone).RowsWire (Fin.castSucc v) R' where
   wire := fun c => Fin.castAdd R.nComp (W.wire c)
-  wire_inj := fun c c' h => W.wire_inj (Fin.castAdd_injective _ _ h)
+  shared := fun c c' h => W.shared c c' (Fin.castAdd_injective _ _ h)
   mem := fun i => by rw [unit_castAdd, W.mem i]; rfl
   op := fun i => by
     rw [op_castAdd, W.op i]
@@ -478,13 +498,13 @@ def rowsWire_snoc {v : Fin n₀} {R' : Rows} (W : p.RowsWire v R') :
       obtain ⟨i, hi⟩ := W.onto _ hv'
       exact ⟨i, by rw [hg', hi]⟩
     · have hg' : g = ⟨N₀ + (g.val - N₀), by have := g.isLt; omega⟩ := Fin.ext (by simp; omega)
-      rw [hg', unit_new p R ins one hins hone ⟨g.val - N₀, by have := g.isLt; omega⟩] at hg
+      rw [hg', unit_new p R ins one hone ⟨g.val - N₀, by have := g.isLt; omega⟩] at hg
       exact absurd (Option.some.inj hg) (Fin.castSucc_ne_last v).symm
 
 /-- The new unit is an instance of its rows. -/
-def rowsWire_last : (snoc p R ins one hins hone).RowsWire (Fin.last n₀) R where
+def rowsWire_last : (snoc p R ins one hone).RowsWire (Fin.last n₀) R where
   wire := colWire R ins one
-  wire_inj := colWire_injective R ins one hins hone
+  shared := colWire_shared R ins one hone
   mem := fun i => by rw [colWire_comp, unit_new]
   op := fun i => by rw [colWire_comp, op_new]
   outside := fun c hc => by
@@ -505,22 +525,22 @@ def rowsWire_last : (snoc p R ins one hins hone).RowsWire (Fin.last n₀) R wher
       rw [colWire_comp]
       exact Fin.ext (by simp; omega)
 
-omit p R ins one hins hone in
+omit p R ins one hone in
 /-- **Every unit of a program is an instance of its template's rows** (program level). -/
 theorem rowsWire : ∀ {N n : ℕ} (p : Prog N n) (u : Fin n), Nonempty (p.RowsWire u (p.rows u))
   | _, _, .inputs _, u => u.elim0
-  | _, _, @snoc N₀ n₀ p R ins one hins hone, u => by
+  | _, _, @snoc N₀ n₀ p R ins one hone, u => by
       refine Fin.lastCases ?_ (fun v => ?_) u
-      · have hr : (snoc p R ins one hins hone).rows (Fin.last n₀) = R := by simp [rows]
+      · have hr : (snoc p R ins one hone).rows (Fin.last n₀) = R := by simp [rows]
         rw [hr]
-        exact ⟨rowsWire_last p R ins one hins hone⟩
-      · have hr : (snoc p R ins one hins hone).rows (Fin.castSucc v) = p.rows v := by
+        exact ⟨rowsWire_last p R ins one hone⟩
+      · have hr : (snoc p R ins one hone).rows (Fin.castSucc v) = p.rows v := by
           simp [rows, v.isLt]
         rw [hr]
         obtain ⟨W⟩ := rowsWire p v
-        exact ⟨rowsWire_snoc p R ins one hins hone W⟩
+        exact ⟨rowsWire_snoc p R ins one hone W⟩
 
-omit p R ins one hins hone in
+omit p R ins one hone in
 /-- **Every unit of a program's circuit is an instance of its template's rows.** -/
 theorem isRowsUnit {N n : ℕ} (p : Prog N n) (outs : Finset (Fin N)) (u : Fin n) :
     Nonempty ((p.partition outs).IsRowsUnit u (p.rows u)) :=

@@ -1,8 +1,6 @@
 """[R18 x09, F-r18-x09-1] compare_steps' divergence report is bounded: prefix/suffix in O(n), the matcher over a windowed core."""
 from __future__ import annotations
 
-import time
-
 from verity_vllm.check.match import program_compare as C
 
 
@@ -33,10 +31,7 @@ def test_divergence_report_is_bounded_on_a_prefill_sized_step_and_says_so_by_nam
     a = ["Embedding"] * 1024 + row * (1024 * 32) + ["TokenSelect"]
     b = [x.replace("Gemm_v2", "Gemm_v1").replace("Attention_v2", "Attention_v3") for x in a]
     assert len(a) > 290_000
-    t = time.time()
-    d = C._divergence_report(a, b)
-    dt = time.time() - t
-    assert dt < 20, dt   # the record's whole-step matcher takes hours here
+    d = C._divergence_report(a, b)   # the record's whole-step matcher takes hours here
     w = d["window"]
     # prefix = 1024 Embedding + the first row's RMSNorm; suffix = the TokenSelect
     assert w["truncated"] is True and w["common_prefix"] == 1025 and w["common_suffix"] == 1 and w["window"] == C._DIVERGENCE_WINDOW

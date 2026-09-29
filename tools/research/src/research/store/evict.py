@@ -191,9 +191,10 @@ def plan_runs(store: LocalStore, runs_root: Path, *, min_bytes: int = MIN_BYTES,
         if state not in TERMINAL_STATES:
             say(f"{run}: state {state!r}, skipping")
             continue
-        art = (a.get("outputs") or {}).get("run_files")
+        outs = a.get("outputs") or {}
+        art = next((outs[k] for k in ("run_record", "run_files") if outs.get(k) in verified), None) or outs.get("run_record") or outs.get("run_files")
         if not art:
-            say(f"{run}: no run_files artifact ({sum(b for _, b in big) / 1e6:.0f} MB), skipping")
+            say(f"{run}: no run_record or run_files artifact ({sum(b for _, b in big) / 1e6:.0f} MB), skipping")
             continue
         if art not in verified:
             say(f"{run}: {art[:20]} not verified on the remote, skipping")
@@ -247,6 +248,47 @@ def evict_runs(store: LocalStore, runs_root: Path, *, target_free_bytes: int, dr
     rep["reached_target"] = rep["free_after"] >= target_free_bytes
     say(f"{'would free' if dry_run else 'freed'} {rep['evicted_bytes'] / 1e9:.2f} GB; free {'would be' if dry_run else 'now'} {rep['free_after'] / 1e9:.2f} GB")
     return rep
+
+
+def evict_custody(run_dir: Path, custody: dict[str, Any], *, min_bytes: int = MIN_BYTES) -> dict[str, Any]:
+    """The run dir's files that `custody.verify` has just found in the run record on the remote (`custody`, its report with
+    `preserved`), at least `min_bytes` each: `research data custody --publish` removes them, so a published run stops holding the
+    disk (the control pod's filled six times on 2026-09-27/28).  A file is removed only while it is still the size it had and
+    unchanged since `verified_from`; the small records (job.json, status.json, result.json, the logs under `min_bytes`) stay, so
+    `status` and `inspect` still read the run.  `run-files.evicted.json` lists what went and the fetch that brings it back."""
+    rd = Path(run_dir)
+    rep: dict[str, Any] = {"run": rd.name, "artifact": custody.get("run_record"), "files": [], "evicted_bytes": 0}
+    if not custody.get("preserved") or not custody.get("run_record"):
+        return rep
+    t0 = float(custody["verified_from"])
+    for rel, (size, sha) in sorted((custody.get("files") or {}).items(), key=lambda kv: (-kv[1][0], kv[0])):
+        if size < min_bytes:
+            continue
+        p = rd / rel
+        try:
+            st = p.lstat()
+        except OSError:
+            continue
+        if st.st_size != size or st.st_mtime >= t0 or not p.is_file():
+            continue
+        p.unlink()
+        rep["files"].append({"path": rel, "bytes": size, "sha256": sha})
+        rep["evicted_bytes"] += size
+    if rep["files"]:
+        prev = _read_evicted(rd)
+        files = {f["path"]: f for f in (prev.get("files") or [])} | {f["path"]: f for f in rep["files"]}
+        doc = {"schema": EVICTED_SCHEMA, "run_id": custody.get("run_id") or rd.name, "artifact": rep["artifact"], "evicted_utc": utc_now(),
+               "files": sorted(files.values(), key=lambda f: f["path"]), "restore": f"research data fetch {rep['artifact']} --to {rd}"}
+        (rd / EVICTED_FILE).write_text(json.dumps(doc, indent=1) + "\n")
+    return rep
+
+
+def _read_evicted(rd: Path) -> dict[str, Any]:
+    try:
+        doc = json.loads((rd / EVICTED_FILE).read_text())
+    except (OSError, ValueError):
+        return {}
+    return doc if isinstance(doc, dict) else {}
 
 
 def parse_gb(text: str) -> int:

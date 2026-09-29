@@ -13,7 +13,8 @@ import re
 
 PROBE_MARK = "research-notes-probe"          # the watcher's probe script carries it (and the regexes below) in its own argv
 GUARD_MARK = "research-pod-guard"            # the guard's helper processes carry it
-MARKS_RE = rf"{PROBE_MARK}|{GUARD_MARK}|pod_guard"
+LEASE_MARK = "research-pod-lease"            # the lease loop's (pods/sh/lease.sh)
+MARKS_RE = rf"{PROBE_MARK}|{GUARD_MARK}|pod_guard|{LEASE_MARK}|lease\.sh"
 WORK_RE = r"python|cargo|rustc|pytest|ligero|nvcc|\.sh( |$)"
 NOT_WORK_RE = rf"grep|{MARKS_RE}|compile_worker|nginx|jupyter|sshd|start\.sh|live serve|sleep"
 SERVE_RE = "live serve"

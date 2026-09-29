@@ -9,13 +9,19 @@
 
 A suite is a directory whose `pyproject.toml` configures pytest (`[tool.pytest.ini_options]`). Its inputs are its own directory,
 the directories of the workspace packages it depends on (its `[project]` dependencies, transitively), the paths it lists under
-`[tool.verity.tests] inputs`, what it resolves to in `uv.lock` (the lock's entry for each distribution it depends on,
-transitively, with the workspace's dependency groups, which bring pytest) and the installed version of each, and the
-environment: Python, the platform, whether `lake`, `cargo` and `nvidia-smi` are on the PATH, and the `VERITY_*` and `FLOCK_*`
-variables tests switch on. The cache key hashes all of them, read from git's view of the working tree, so uncommitted edits
-count; a tree without .git (what `research run --source` ships) is keyed from the sha256 of every file in it. So a change to
-the lockfile or to another package's `pyproject.toml` re-runs only the suites whose resolved dependencies it changed. A pass is
-kept under its key in `~/.cache/verity/tests` (`VERITY_TEST_CACHE` overrides it) and reused while the key is unchanged.
+`[tool.verity.tests] inputs`, the build outputs it lists under `artifacts` (each file's digest: git ignores them), what it
+resolves to in `uv.lock` (the lock's entry for each distribution it depends on, transitively, with the workspace's dependency
+groups, which bring pytest) and the installed version of each, and the environment: Python, the platform, whether `lake`,
+`cargo` and `nvidia-smi` are on the PATH, and the `VERITY_*` and `FLOCK_*` variables tests switch on. The cache key hashes all
+of them, read from git's view of the working tree, so uncommitted edits count; a tree without .git (what `research run
+--source` ships) is keyed from the sha256 of every file in it. So a change to the lockfile or to another package's
+`pyproject.toml` re-runs only the suites whose resolved dependencies it changed. A pass is kept under its key in
+`~/.cache/verity/tests` (`VERITY_TEST_CACHE` overrides it) and reused while the key is unchanged.
+
+Fixtures too large for git are entries of `fixtures/artifacts.json` whose paths git does not track. Before the suites run, the
+entries under their inputs are fetched (`research data fetch-fixtures`: every byte checked against its id), and each suite's key
+adds the ids of those under its inputs, since git's tree ids leave ignored files out. A suite whose fixtures cannot be fetched
+fails without running.
 
 Every run loads `guard/verity_suite_guard.py`, which fails the suite if its tests open a repository file outside its inputs,
 so a cached pass never hides a change to something the tests read. It also records what the key leaves out but the tests
@@ -59,6 +65,7 @@ XDIST = importlib.util.find_spec("xdist") is not None
 TOOLS = ("lake", "cargo", "nvidia-smi")
 ENV_PREFIXES = ("VERITY_", "FLOCK_")
 QUICK = ["-m", "not slow"]
+REGISTRY = "fixtures/artifacts.json"
 
 
 def _norm(name: str) -> str:
@@ -138,6 +145,7 @@ class Suite:
     requires: tuple[str, ...]    # names of the distributions it depends on
     inputs: tuple[str, ...]      # paths it declares under [tool.verity.tests] inputs
     parallel: bool = False       # [tool.verity.tests] parallel: its tests may run in several processes at once
+    artifacts: tuple[str, ...] = ()   # [tool.verity.tests] artifacts: build outputs its tests run or skip on
 
 
 def _pyproject(path: str) -> dict:
@@ -181,8 +189,23 @@ def discover() -> list[Suite]:
         project = data.get("project", {})
         name = "repository" if path == "." else _norm(project["name"]) if project else path
         tests = data["tool"].get("verity", {}).get("tests", {})
-        suites.append(Suite(name, path, _requires(project, data), tuple(tests.get("inputs", [])), tests.get("parallel", False) is True))
+        suites.append(Suite(name, path, _requires(project, data), tuple(tests.get("inputs", [])), tests.get("parallel", False) is True,
+                            tuple(tests.get("artifacts", []))))
     return suites
+
+
+def artifact_ids(suite: Suite) -> dict[str, str]:
+    """Each declared build output as the key sees it: a file's sha256, "directory", or "absent" (git ignores build outputs, so the
+    tree's object ids never see them)."""
+    out = {}
+    for a in suite.artifacts:
+        p = ROOT / a
+        if p.is_file():
+            with open(p, "rb") as f:
+                out[a] = hashlib.file_digest(f, "sha256").hexdigest()
+        else:
+            out[a] = "directory" if p.is_dir() else "absent"
+    return out
 
 
 def closure(suite: Suite, pkgs: dict[str, str]) -> list[str]:
@@ -294,18 +317,52 @@ def inputs_of(suite: Suite, pkgs: dict[str, str]) -> list[str]:
     return sorted(paths)
 
 
+def _under(path: str, prefixes: list[str]) -> bool:
+    return any(p == "." or path == p or path.startswith(p.rstrip("/") + "/") for p in prefixes)
+
+
+def fetched_fixtures(tree: str | None, paths: set[str]) -> dict[str, str]:
+    """{repo path: art id} of the registry's entries under `paths` that git's view of the tree does not hold (in a tree without
+    git, every entry under them: the fetch leaves one already exact alone)."""
+    p = ROOT / REGISTRY
+    if not p.is_file():
+        return {}
+    reg = {v: k for k, v in json.loads(p.read_text()).items() if k.startswith("art:") and isinstance(v, str) and _under(v, sorted(paths))}
+    if tree is None or not reg:
+        return reg
+    held = object_ids(tree, sorted(reg))
+    return {v: k for v, k in reg.items() if held[v] == "absent"}
+
+
+def fetch_fixtures(fixtures: dict[str, str], logs: Path) -> set[str]:
+    """Fetch the entries (`research data fetch-fixtures`); returns the paths that are still missing or different afterwards."""
+    if not fixtures:
+        return set()
+    log = logs / "fetch-fixtures.log"
+    p = subprocess.run([sys.executable, "-m", "research", "data", "fetch-fixtures", "--repo", str(ROOT), "--json", *sorted(fixtures)],
+                       cwd=ROOT, capture_output=True, text=True)
+    log.write_text(p.stdout + p.stderr)
+    try:
+        rep = json.loads(p.stdout)
+    except ValueError:
+        print(f"fetch-fixtures failed (rc {p.returncode}); log: {log}")
+        return set(fixtures)
+    bad = {e["path"] for e in rep["entries"] if e["status"] in ("missing", "stale")}
+    blobs = rep["fetch"]["blobs"]
+    print(f"fixtures: {len(fixtures)} registry entries checked, {blobs['fetched']} blobs ({blobs['bytes'] / 1e6:.1f} MB) downloaded"
+          + (f", {len(bad)} missing (log: {log})" if bad else ""))
+    return bad
+
+
 def key(suite: Suite, ids: dict[str, str], env: dict, args: list[str], deps: dict[str, list] | None = None) -> str:
-    blob = json.dumps({"suite": suite.path, "inputs": ids, "resolved": deps or {}, "environment": env, "pytest": args}, sort_keys=True)
+    blob = json.dumps({"suite": suite.path, "inputs": ids, "artifacts": artifact_ids(suite), "resolved": deps or {},
+                       "environment": env, "pytest": args}, sort_keys=True)
     return hashlib.sha256(blob.encode()).hexdigest()
 
 
 def cached(k: str) -> dict | None:
     f = CACHE / f"{k}.json"
     return json.loads(f.read_text()) if f.exists() else None
-
-
-def _covered(f: str, paths: list[str]) -> bool:
-    return any(p == "." or f == p or f.startswith(p + "/") for p in paths)
 
 
 def holds(hit: dict, tree: str | None, files: dict[str, str] | None, lock: dict[str, dict], provided: set[str]) -> bool:
@@ -321,7 +378,7 @@ def holds(hit: dict, tree: str | None, files: dict[str, str] | None, lock: dict[
 def used(r: "Result", paths: list[str], deps: dict[str, list], tree: str | None, files: dict[str, str] | None,
          lock: dict[str, dict]) -> dict:
     """What a pass keeps beside its key, for `holds`."""
-    watched = sorted(f for f in r.watched or [] if not _covered(f, paths))
+    watched = sorted(f for f in r.watched or [] if not _under(f, paths))
     return {"watched": object_ids(tree, watched, files) if watched else {},
             "imported": {n: _state(n, lock) for n in sorted({_norm(d) for d in r.distributions or []} - set(deps))},
             "missing": r.missing or []}
@@ -441,12 +498,20 @@ def main(argv: list[str] | None = None) -> int:
     chosen = [s for s in select(suites, a.suites) if s not in skipped]
     args = (QUICK if a.quick else []) + extra
     tree, env = worktree(), environment()
+    inputs = {s: inputs_of(s, pkgs) for s in chosen}
+    fixtures = fetched_fixtures(tree, {p for ps in inputs.values() for p in ps})
+    logs = a.logs or CACHE / "logs" / f"{time.strftime('%Y%m%dT%H%M%S')}-{os.getpid()}"
+    logs.mkdir(parents=True, exist_ok=True)
+    # the repository's own suite keys on the whole tree but reads tracked files only, so it alone never makes a fetch
+    needed = {p: art for p, art in fixtures.items() if any(_under(p, [x for x in ps if x != "."]) for ps in inputs.values())}
+    unfetched = set() if a.list else fetch_fixtures(needed, logs)
     files = None if GIT else digests()
     plan = []
     meta, lock, provided = metadata(), locked(), set(importlib.metadata.packages_distributions())
     for s in chosen:
-        paths = inputs_of(s, pkgs)
+        paths = inputs[s]
         ids = object_ids(tree, sorted(set(paths) | set(RUNNER)), files)
+        ids.update({f"fixture:{p}": art for p, art in fixtures.items() if _under(p, paths)})
         deps = resolved(roots(s, pkgs), lock)
         keys = [key(s, ids, env, args, deps)] + ([key(s, ids, env, extra, deps)] if a.quick else [])   # a full pass also covers --quick
         hit = next((c for c in map(cached, keys) if c and holds(c, tree, files, lock, provided)), None)
@@ -458,12 +523,15 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{s.name:28} {s.path:28} {state}\n    inputs: {', '.join(paths)}")
         return 0
 
-    logs = a.logs or CACHE / "logs" / f"{time.strftime('%Y%m%dT%H%M%S')}-{os.getpid()}"
-    logs.mkdir(parents=True, exist_ok=True)
     head = _git("rev-parse", "HEAD").strip() if GIT else a.commit or "unknown"
     dirty = bool(_git("status", "--porcelain").strip()) if GIT else False
     results: list[Result] = [Result(s, "cached", since=hit, key=hit["key"]) for s, _, _, hit, _ in plan if hit and not a.fresh]
-    todo = [(s, paths, keys, deps) for s, paths, keys, hit, deps in plan if a.fresh or not hit]
+    blocked = [s for s, paths, _, hit, _ in plan if (a.fresh or not hit) and any(_under(p, [x for x in paths if x != "."]) for p in unfetched)]
+    for s in blocked:
+        print(f"failed  {s.name:28} its fixtures could not be fetched: "
+              f"{', '.join(sorted(p for p in unfetched if _under(p, inputs[s])))[:300]} (log: {logs / 'fetch-fixtures.log'})")
+        results.append(Result(s, "failed", log=logs / "fetch-fixtures.log"))
+    todo = [(s, paths, keys, deps) for s, paths, keys, hit, deps in plan if (a.fresh or not hit) and s not in blocked]
     known = _durations()
     todo.sort(key=lambda t: (not t[0].parallel, -known.get(t[0].path, float("inf"))))
     for r in results:
@@ -479,7 +547,7 @@ def main(argv: list[str] | None = None) -> int:
     def start(turn: int, s: Suite, paths: list[str]) -> Result:
         n = spread if s.parallel else 1
         with slots.take(turn, n):
-            return run(s, paths + meta + list(RUNNER), args, logs, n, [m for m in meta if not _covered(m, paths)])
+            return run(s, paths + meta + list(RUNNER), args, logs, n, [m for m in meta if not _under(m, paths)])
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, len(todo))) as pool:
         futures = {pool.submit(start, i, s, paths): (s, keys[0], paths, deps) for i, (s, paths, keys, deps) in enumerate(todo)}

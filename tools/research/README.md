@@ -24,16 +24,14 @@ src/research/
 ├── store/          the evidence store (README.md there is the contract): tool, tools_registry, derivation, attempt, cli_prov (provenance)
 │                   + canon, local, index, remote, kinds, cli (storage)
 ├── telemetry/      the recorded-attempt harness: job.json, status.json, events.jsonl, resources.jsonl, failure.json
-└── pods/           RunPod lifecycle (runpod.py), budget cap, memory guard, and pod-side shell guards under sh/
+└── pods/           RunPod lifecycle (runpod.py), leases (lease.py), budgets.toml and its guard (budgets.py, guard.py), memory guard, pod-side sh/
 tests/              pure-Python; the machine side of --on is exercised locally (launch_request is a plain function)
 tests/fixtures/     job_v0.1.json: a record as the harness alone writes it; run_v0.2/: a finished run dir with a `store` section (state.json -> status.json at test time)
 ~~~
 
 `telemetry/` and `pods/` were promoted from `veritor` `zk/campaign/` at
 commit `df7fbea3d` (branch `lane/r17-mprof`, 2026-09-21) and have since been
-edited here like the rest of the package. `pods/sh/deadline.sh` and
-`rearm.sh` came from the r17 deadman pod (`/root/dm`), where they had never
-been committed.
+edited here like the rest of the package.
 
 `research run` pre-writes `job.json` (the harness keeps an existing one) and
 calls the harness's `run()` directly: one execution engine, one record.
@@ -71,7 +69,9 @@ research fetch RUN [--all]               # records only, or every file sha256-ve
 research status [--refresh] [--all] [--json]
 research inspect RUN [--json]
 research data SUBCOMMAND ...             # the store: put/show/fetch/select/... and lookup / pull / attempt publish
-research pods create|list|terminate|check-part ...                # RunPod lifecycle (pods/runpod.py, pods/part.py)
+research pods create --name N --max-hours H ... | list | terminate | check-part    # RunPod lifecycle (pods/runpod.py, pods/part.py)
+research pods extend TARGET --hours H | lease TARGET                               # the pod's lease (pods/lease.py)
+research pods guard [--budgets NOTES|FILE] [--detach] | status | stop               # the one budgets guard (pods/guard.py, pods/budgets.py)
 research pods register|unregister|registry ...                    # the pod registry, one file per machine (pods/registry.py)
 research pods ssh TARGET [--print] [-- CMD...]                    # TARGET = machines.toml name | pod id | pod name (pods/connect.py)
 research pods sync TARGET [SRC] [--dest DIR] [--exclude G]...     # the worktree's git-visible files -> DIR (default /workspace/src)
@@ -79,6 +79,8 @@ research tele SUBCOMMAND ...             # the harness's own surface
 research data SUBCOMMAND ...             # the evidence store (below)
 research merge REF [--into main] [--tool check] [-m MSG] [--dry-run]   # the merge gate (merge.py)
 research merge --train A B C [--on MACHINE --project P] [--command CMD]  # several refs, one checked candidate
+research merge --sweep [--into main] [--remote origin] [--dry-run]       # close the PRs that landed, retarget their children
+research queue status|sync|land|eject [--shadow] [--dry-run]       # the merge queue on `next` (queue.py)
 ~~~
 
 `research merge` is how `main` receives a merge: in the target's checkout it runs `git merge --no-ff REF` only when the store
@@ -93,11 +95,26 @@ polled there), and fast-forwards the target to it when it passes: the exact tree
 the prefixes are bisected (each checked the same way) to the first ref whose merge breaks it, and the target fast-forwards to
 the longest prefix that passed.
 
+After a merge or a train lands, `research merge` sweeps the pull requests (`gh`), and `research merge --sweep` does only that.
+It fetches the remote's copy of the target, closes every open pull request whose head is on it with a one-line comment naming
+the commit it landed in, and retargets onto the target every open pull request whose base branch's tip is on it. That covers
+the stacked pull requests GitHub never closes because their base isn't the target. The remote's branch is the truth, not the
+checkout, and `research merge` doesn't push: after `git push`, run `research merge --sweep` to close what the merge landed. It
+is idempotent, and `--dry-run` prints what it would close and retarget. Without the remote the sweep is skipped, and a
+failure (no `gh`, no network) is reported without changing the merge's exit code.
+
 A tool's declaration may name result steps a merge needs by path (`Tool.merge_requires`, `{step: [path prefixes]}`, read from
 the target's checkout): when the merge's diff touches a prefix, only an attempt whose `result.json` `steps` show that step
 `passed` admits it; `!` patterns leave paths out (`!README.md`: every file of that name under the prefixes). `check` requires
 `lean-agreement` for `backends/flock/`, less its README.md and PROTOCOL.md files; `--train --send FILE` ships what such a step
 needs.
+
+`research queue` is the merge queue: `next` is `main` plus every admitted PR, one `--no-ff` merge commit each, and `land`
+fast-forwards `main` to the newest commit on `next` that the same gate accepts. A PR is admitted when it's open, not a draft,
+names its owner (a `Lane {name}` line, else its Cursor agent id), has no hold label, and has the grants the rules file
+(`ci/queue.toml`) requires of its change: `grant` labels on `pr:{n}@{head}` in the store. The branch holds the queue's state (each
+merge commit's `PR:`, `Head:` and `Owner:` trailers); a sync keeps the prefix that still matches and merges the rest again, and a
+conflicting or ejected PR's owner gets one handoff per head. `--shadow` builds `queue-shadow`, never moves `main` and tells no one.
 
 The workload receives `RESEARCH_RUN_ID` and `RESEARCH_RUN_DIR` and may write
 `$RESEARCH_RUN_DIR/result.json` (see `result.py` for the envelope). A local
@@ -125,7 +142,7 @@ python = "python3"
 
 The pod registry (`pods/registry.py`) is the same table as one file per machine,
 `machines.d/<name>.toml` in the notes repo, so creating a pod never means
-hand-merging a shared file: `research pods create --name N ... --register
+hand-merging a shared file: `research pods create --name N --max-hours H ... --register
 --project P`, or `research pods register N --pod-id ID --project P` for an
 existing pod. `register` refuses a pod id the RunPod account doesn't know and
 a pod whose name isn't `N`. It is read where `$RESEARCH_MACHINES_D` points,
@@ -212,14 +229,35 @@ admission (`run.remote.mem`) and the attempt records
 `execution.mem_gb_reserved`. `research mem` prints the reading on the machine.
 
 Limitations, stated: until `fetch --all` completes, the only copy of the
-evidence is on the machine. Budget enforcement is `research pods guard`
-(`pods/guard.py`; its docstring is the contract), not this command: scoped to
-a pod-name prefix, sticky trips on deadline / cap / balance floor that
-terminate every scoped pod (the guard's host last), and `--rate-max` shedding
-that terminates the newest scoped pods first and never the guard's host. It
-replaces the loops of `pods/budget_cap.py` and `pods/sh/deadline.sh`, which
-stay verbatim until the fleet switches over. Provisioning is a separate,
-explicit act; `--on` never creates a pod.
+evidence is on the machine. Provisioning is a separate, explicit act; `--on` never creates a pod.
+
+### Pods bound themselves: leases, one budget file, one guard
+
+Nothing that bounds spend may depend on an agent VM, which can be suspended at any moment, or on one guard process staying alive.
+
+- **A lease on every pod** (`pods/lease.py`, `pods/sh/lease.sh`). `research pods create --max-hours H` puts the expiry in the pod's
+  environment, then, once sshd answers, arms the lease loop over ssh with the lease file and starts the idle guard (`pod_guard.sh
+  daemon`: `--first-idle-min`, default 20, before the pod's first run; `--idle-min 0` arms none, for a pool pod kept up idle);
+  `--boot-lease` also runs the loop from a RunPod image's start
+  command, before sshd (opt-in until a live run shows sshd comes up with it). At the
+  expiry the idle guard ends a pod whose runs all have custody; the lease loop ends it after a 15-minute grace whatever is unfetched,
+  with the pod's own key (GraphQL `podTerminate`). A pod that cannot be armed is terminated by `create`. `research run --on` extends
+  the lease to cover the run's `--timeout` plus 15 minutes; `research pods extend TARGET --hours H` extends it by hand (never
+  shortens it), `research pods lease TARGET` shows it.
+- **One budget file** (`pods/budgets.py`): `budgets.toml` at the notes repo's root; each line is a prefix with `cap_usd` (total),
+  `cap_usd_per_day` (any rolling 24 hours; its trip clears as the window moves) or both, `expires`, `max_pod_hours` and `by`. `research pods create` reads the guard's state from its host (one ssh call) and refuses (exit 6) unless
+  the guard polled in the last 3 minutes and its budgets have a live, untripped line covering the name with `max_pod_hours` at least
+  `--max-hours`.
+- **One guard** (`research pods guard`, `pods/guard.py`; its docstring is the contract) on the control pod re-reads `budgets.toml`
+  from the notes origin every poll: per-line caps (a tripped line's pods terminated, new creates refused until the cap is raised),
+  the account balance floor, each line's max pod age, and project pods no line covers. It never trips on the clock. It never fails
+  open: it decides and terminates from memory before it records, every write is best effort, a failed read keeps the last value,
+  and `--detach` runs it under a supervisor that restarts it after a crash.
+
+The disk floor: `research run` and `research fetch --all` refuse (exit 3) while the runs root's filesystem has less than
+`$RESEARCH_DISK_FLOOR_GB` free (default 1.5; `0` turns it off), naming the eviction that frees it. `research data custody RUN
+--publish` removes the run's files of 1 MiB and more once custody holds (`--keep-local` keeps them); `run-files.evicted.json`
+names the fetch that restores them.
 
 ### research data
 
