@@ -25,7 +25,8 @@ def pod(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     monkeypatch.setenv("RESEARCH_RUN_DIR", str(root / "runs" / "r1"))
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
-    for k in ("RESEARCH_STORE_CONFIG", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN"):
+    for k in ("RESEARCH_STORE_CONFIG", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "CHECK_STORE_CUSTODY",
+              "VERITY_STORE_REQUIRED"):
         monkeypatch.delenv(k, raising=False)
     return custody
 

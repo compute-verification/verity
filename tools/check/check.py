@@ -456,7 +456,7 @@ def env() -> dict[str, str]:
     machine's PYTHONPYCACHEPREFIX; the tests start runs of their own, which would inherit them), PYTHONPATH entries inside this
     tree only (a machine's runner puts its shipped `research` first), and a git identity when none is set.  Inside a recorded run,
     the store is required and the run's custody dir is passed on (the module docstring's "The evidence store")."""
-    out = {k: v for k, v in os.environ.items() if not k.startswith("RESEARCH_") and k != "PYTHONPYCACHEPREFIX"}
+    out = {k: v for k, v in os.environ.items() if not k.startswith("RESEARCH_") and k not in ("PYTHONPYCACHEPREFIX", CUSTODY_ENV, STORE_REQUIRED_ENV)}
     if os.environ.get("RESEARCH_RUN_ID"):
         out[STORE_REQUIRED_ENV] = "1"
         if custody := custody_dir():
