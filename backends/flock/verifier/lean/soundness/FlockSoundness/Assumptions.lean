@@ -1,5 +1,6 @@
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import FlockSoundness.Game.Expect
+import FlockSoundness.Randomness
 
 /-!
 # Named assumptions
@@ -9,8 +10,9 @@ uses one takes it as a hypothesis: the development declares no `axiom`, so `#pri
 lists only Lean's three standard axioms, and a mis-stated assumption can make a theorem
 vacuous but can never make Lean prove something false.
 
-There are two. Assumption 2 is a hypothesis about one explicit finder, for the audit's link term. Assumption 3 is a
-hypothesis about the byte source the verifier draws its units from.
+There are three. Assumption 2 is a hypothesis about one explicit finder, for the audit's link term. Assumption 3 is a
+hypothesis about the byte source the verifier draws its units from. Assumption 4 is a hypothesis about one test of
+`verity.randomness`'s keyed streams, for the PoUW window draw.
 Assumption 1, BCHKS25's mutual correlated agreement up to the Johnson bound, is proved
 (`mcaError_le_bchks25`, from DKT26). Merkle binding is proved too (VCVio's binding theorem,
 `Merkle`), and SHA-256's collision resistance enters the compiled theorem as an explicit
@@ -21,6 +23,7 @@ as a hypothesis.
 namespace FlockSoundness.Assumptions
 
 open Game
+open scoped ENNReal
 
 /-- **Assumption 2: expected-time collision resistance of SHA-512**, for the audit's value layer, in
 the expected-time sense of Chiesa, Dall'Agnol, Guan, Spooner and Yogev (ePrint 2024/1434): a finder
@@ -62,5 +65,28 @@ every call's bytes independent of every earlier call's, for every `L`. -/
 def UniformRandomBytes {Ω : Type} [Fintype Ω] {m : ℕ} (L : Fin m → ℕ) (t : Ω → (i : Fin m) → Fin (L i) → Fin 256) :
     Prop :=
   ∀ E : ((i : Fin m) → Fin (L i) → Fin 256) → Prop, prCoin (fun ω => E (t ω)) = prCoin E
+
+/-- **Assumption 4 (`prf/sha-256`): `verity.randomness`'s keyed streams at distinct indices pass a test as independent
+uniform bytes do, up to `η`**, for the PoUW window draw.
+
+A verifier secret `source` of `S` bytes gives the key `Randomness.derive source domain context`. The key's stream at
+index `idx i` is `Randomness.stream key (idx i) (L i)`, its first `L i` bytes, the spec of `Key.stream` that
+`backends/flock/tests/lean/RandomnessVectors.lean` ties to the Python. The streams pass the test `E` with at most the
+probability that independent uniform streams of those lengths do, plus `η`, when the source is uniform and the indices'
+framings (`Randomness.frames`, the bytes each stream hashes after the key) are pairwise distinct.
+
+It is a predicate on one test, as A2 is on one finder. A statement for every test would be refutable, since `2^(8S)`
+sources give at most that many stream tuples. The theorems take it for the test they need, whether the draw computed
+from the streams misses a given set, and `η` enters their bound.
+
+What A4 assumes of SHA-256 is that it is a pseudorandom function keyed by a secret prefix, on the inputs
+`verity.randomness` hashes. Those inputs are prefix-free: `frames` is length-framed and the counter is 8 bytes, so length
+extension doesn't apply. It also assumes the verifier's secret is uniform. -/
+def KeyedStreamsUniform (S : ℕ) (domain : String) (context : List (String × Randomness.Part)) {m : ℕ}
+    (idx : Fin m → List Randomness.Part) (L : Fin m → ℕ) (E : (Fin m → ByteArray) → Prop) (η : ℝ≥0∞) : Prop :=
+  (∀ i j, Randomness.frames (idx i) = Randomness.frames (idx j) → i = j) →
+    prCoin (fun src : Fin S → Fin 256 => E fun i =>
+        Randomness.stream (Randomness.derive ⟨Array.ofFn fun b => UInt8.ofFin (src b)⟩ domain context) (idx i) (L i)) ≤
+      prCoin (fun f : (i : Fin m) → Fin (L i) → Fin 256 => E fun i => ⟨Array.ofFn fun b => UInt8.ofFin (f i b)⟩) + η
 
 end FlockSoundness.Assumptions
