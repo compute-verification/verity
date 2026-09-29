@@ -87,9 +87,10 @@ def parse_pearlc_quality(argv: list[str]) -> dict:
     ap.add_argument("--seqlen", type=int, default=2048)
     ap.add_argument("--max-windows", type=int, default=0)
     ap.add_argument("--seed", type=int, default=20260929)
+    ap.add_argument("--line-norm", type=float, default=256.0)
     ns, _ = ap.parse_known_args(argv)
     return {"model": ns.model, "variant": ns.variant, "delta": ns.delta, "seqlen": ns.seqlen, "max_windows": ns.max_windows,
-            "seed": ns.seed}
+            "seed": ns.seed, "line_norm": ns.line_norm}
 
 
 # Pearl-C (docs/pouw/cheap-binding.md in the research store): TT_OUT's falsification census, and the quality of U.
@@ -100,5 +101,5 @@ POUW_PEARLC_CENSUS = Tool(name="pouw_pearlc_census", version="1", command=["pyth
                           parse=parse_pearlc_census)
 POUW_PEARLC_QUALITY = Tool(name="pouw_pearlc_quality", version="1", command=["python", "benchmarks/pouw/pearlc_quality.py"],
                            closure=["benchmarks/pouw/pearlc_quality.py", "benchmarks/pouw/run_result.py"],
-                           key_params=["model", "variant", "delta", "seqlen", "max_windows", "seed"],
+                           key_params=["model", "variant", "delta", "seqlen", "max_windows", "seed", "line_norm"],
                            produces=["bench-result/v1", "run-files/v1"], parse=parse_pearlc_quality)

@@ -4,7 +4,12 @@
 Variants, every linear layer and lm_head patched:
   bf16    the model as loaded;
   fp8     plain FP8: per-row E4M3 with alpha = 448/max|row| on activations (per token) and weights (per output channel);
-  pearlc  Pearl-C's U: each row x is noised, y = x + bf16(delta*rms(x)*Z) with Z a rank-32 noise row of unit RMS
+  fp8-headroom  plain FP8 with Pearl's headroom scale alpha = 448/(s + 4*delta*rho), s = max|row| and rho the RMS over
+          every 8th position: the model's own quantizer if Pearl-C's scale is adopted (docs/pouw/cheap-binding.md §5);
+  pearlc-s5  Pearl-C's U under §5's forming: alpha as fp8-headroom, noise n = E'.F^T from E4M3 lines (F entries of RMS
+          N_F/sqrt(32), E' = e4m3((sigma*alpha/N_F)*v) with sigma = delta*rho), A' = e4m3(alpha*x + n) with one rounding,
+          and the clean-up removes n exactly, so the operand is (A' - n)/alpha; --line-norm sets N_F (Pearl: 256);
+  pearlc  Pearl-C's U under #311's forming (the first measurement): each row x is noised, y = x + bf16(delta*rms(x)*Z) with Z a rank-32 noise row of unit RMS
           (lines of entries +-(1..128), fresh per call for activations, fixed per run for weights), alpha = 448/max|y|,
           A' = RNE_E4M3(alpha*y); the clean-up removes the noise exactly, so the operand is A'/alpha - delta*rms(x)*Z.
           U = A_eff . W_eff^T in FP32.
@@ -70,7 +75,32 @@ def pearlc_operand(x: torch.Tensor, delta: float, gen: torch.Generator) -> torch
     return e4m3(alpha * y) / alpha - n
 
 
-def patch(model: torch.nn.Module, variant: str, delta: float, run_seed: int) -> int:
+def headroom_alpha(x: torch.Tensor, delta: float) -> tuple[torch.Tensor, torch.Tensor]:
+    s = x.abs().amax(1, keepdim=True)
+    rho = x[:, ::8].pow(2).mean(1, keepdim=True).sqrt()
+    return Q_MAX / (s + 4 * delta * rho).clamp_min(1e-30), delta * rho
+
+
+def headroom_fp8(x: torch.Tensor, delta: float) -> torch.Tensor:
+    alpha, _ = headroom_alpha(x, delta)
+    return e4m3(x * alpha) / alpha
+
+
+def unit_lines(n: int, gen: torch.Generator) -> torch.Tensor:
+    mag = torch.randint(1, 129, (n, R), generator=gen).to(torch.float32)
+    v = mag * (torch.randint(0, 2, (n, R), generator=gen).to(torch.float32) * 2 - 1)
+    return v / v.pow(2).mean(1, keepdim=True).sqrt()
+
+
+def s5_operand(x: torch.Tensor, delta: float, line_norm: float, gen: torch.Generator) -> torch.Tensor:
+    alpha, sigma = headroom_alpha(x, delta)
+    F = e4m3(unit_lines(x.shape[1], gen) * (line_norm / math.sqrt(R)))
+    E = e4m3(unit_lines(x.shape[0], gen) * (sigma * alpha / line_norm))
+    n = E @ F.T
+    return (e4m3(alpha * x + n) - n) / alpha
+
+
+def patch(model: torch.nn.Module, variant: str, delta: float, run_seed: int, line_norm: float = 256.0) -> int:
     count = 0
     for name, mod in model.named_modules():
         if not isinstance(mod, torch.nn.Linear):
@@ -84,6 +114,12 @@ def patch(model: torch.nn.Module, variant: str, delta: float, run_seed: int) -> 
             w = mod.weight.to(torch.float32)
             if variant == "fp8":
                 a, wq = plain_fp8(x2), plain_fp8(w)
+            elif variant == "fp8-headroom":
+                a, wq = headroom_fp8(x2, delta), headroom_fp8(w, delta)
+            elif variant == "pearlc-s5":
+                ga = torch.Generator().manual_seed(seed_of(run_seed, mod._pc_name, "A", mod._pc_calls))
+                gw = torch.Generator().manual_seed(seed_of(run_seed, mod._pc_name, "B"))
+                a, wq = s5_operand(x2, delta, line_norm, ga), s5_operand(w, delta, line_norm, gw)
             else:
                 ga = torch.Generator().manual_seed(seed_of(run_seed, mod._pc_name, "A", mod._pc_calls))
                 gw = torch.Generator().manual_seed(seed_of(run_seed, mod._pc_name, "B"))
@@ -104,7 +140,8 @@ def main() -> None:
 
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default="Qwen/Qwen2.5-0.5B")
-    ap.add_argument("--variant", choices=("bf16", "fp8", "pearlc"), required=True)
+    ap.add_argument("--variant", choices=("bf16", "fp8", "fp8-headroom", "pearlc", "pearlc-s5"), required=True)
+    ap.add_argument("--line-norm", type=float, default=256.0)
     ap.add_argument("--delta", type=float, default=1.0)
     ap.add_argument("--seqlen", type=int, default=2048)
     ap.add_argument("--max-windows", type=int, default=0)
@@ -116,7 +153,7 @@ def main() -> None:
     tok = AutoTokenizer.from_pretrained(args.model)
     model = AutoModelForCausalLM.from_pretrained(args.model, dtype=torch.bfloat16)
     model.eval()
-    patched = 0 if args.variant == "bf16" else patch(model, args.variant, args.delta, args.seed)
+    patched = 0 if args.variant == "bf16" else patch(model, args.variant, args.delta, args.seed, args.line_norm)
     text = "\n\n".join(load_dataset("Salesforce/wikitext", "wikitext-2-raw-v1", split="test")["text"])
     ids = tok(text, return_tensors="pt").input_ids[0]
     nwin = ids.numel() // args.seqlen
@@ -134,7 +171,7 @@ def main() -> None:
             per.append(loss / (chunk.numel() - 1))
             print(json.dumps({"variant": args.variant, "window": w + 1, "windows": nwin, "nll": per[-1],
                               "seconds": round(time.time() - t0, 1)}), flush=True)
-    res = {"model": args.model, "dataset": "wikitext-2-raw-v1:test", "variant": args.variant, "delta": args.delta,
+    res = {"model": args.model, "dataset": "wikitext-2-raw-v1:test", "variant": args.variant, "delta": args.delta, "line_norm": args.line_norm,
            "seqlen": args.seqlen, "windows": nwin, "tokens": ntok, "patched_linears": patched,
            "ppl": math.exp(nll_sum / ntok), "window_nll": per, "seconds": round(time.time() - t0, 1)}
     print(json.dumps({k: v for k, v in res.items() if k != "window_nll"}))
