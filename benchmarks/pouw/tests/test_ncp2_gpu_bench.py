@@ -210,3 +210,115 @@ def test_main_on_the_pod_path_writes_every_piece(monkeypatch, tmp_path, capsys):
     assert set(res) == {"accounting", "host_gate", "device", "gates", "timings", "projection"}
     assert set(res["gates"]) == {"hashes", "committer", "route_u"} and len(res["timings"]["linears"]) == 12
     assert "GATES " in capsys.readouterr().out
+
+
+def test_the_fused_gate_runs_through_the_cpu_twin(monkeypatch):
+    """`gate_fused` with the device swapped for `ncp2_fast.cuh` on the CPU (the low-byte tiles from `lowbyte_leaf`)."""
+    calls = [c for c in B.PD.gate_calls() if c[0] in ("five-strips", "dequant-edges")]
+    monkeypatch.setattr(B.PD, "gate_calls", lambda qwen=False: calls)
+    PC = B.PD.PC
+
+    def timed(i, s, call, on="device", flags=B.PD.HASH):
+        rec = B.PD.commit_call(i, s, call, on="fast")
+        if flags & B.PD.LOWBYTE:
+            nat = B.PN.Native(call)
+            lo, hi = nat.base["tile"], nat.base["dequant"]
+            leaves = rec.leaves[:32 * lo] + b"".join(B.PD.lowbyte_leaf(rec.opening(u)) for u in range(lo, hi)) + rec.leaves[32 * hi:]
+            rec = PC.CallRecord(rec.index, rec.scheme, rec.call, rec.inputs, leaves, PC.units_root(leaves), rec.y, rec.opening)
+        return rec, 1.0
+
+    monkeypatch.setattr(B.PD, "commit_call_timed", timed)
+    got = B.gate_fused()
+    assert [r["call"] for r in got] == ["five-strips", "dequant-edges"]
+    assert all(r["difference"] is None and r["lowbyte_difference"] is None for r in got)
+
+
+class _NT:
+    """A numpy array standing in for the torch tensors `fused_timings` makes."""
+
+    def __init__(self, a):
+        self.a = a
+
+    def view(self, _dtype):
+        return self
+
+
+class _Ev:
+    def record(self):
+        pass
+
+    def elapsed_time(self, _other):
+        return 10.0
+
+
+class _FT:
+    int8, int16, int32, float32 = np.int8, np.int16, np.int32, np.float32
+
+    class Generator:
+        def __init__(self, device=None):
+            pass
+
+        def manual_seed(self, _s):
+            return self
+
+    class cuda:
+        Event = staticmethod(lambda enable_timing=True: _Ev())
+        synchronize = staticmethod(lambda: None)
+        empty_cache = staticmethod(lambda: None)
+
+    @staticmethod
+    def randint(lo, hi, shape, dtype=None, device=None, generator=None):
+        return _NT(np.zeros(shape, dtype))
+
+    @staticmethod
+    def full(shape, v, dtype=None, device=None):
+        return _NT(np.full(shape, v, dtype))
+
+    @staticmethod
+    def zeros(n, dtype=None, device=None):
+        return _NT(np.zeros(n, dtype))
+
+    @staticmethod
+    def arange(n, dtype=None, device=None):
+        return _NT(np.arange(n, dtype=dtype))
+
+    @staticmethod
+    def equal(a, b):
+        return a is b or np.array_equal(a.a, b.a)
+
+
+def test_the_fused_timings_cover_every_shape_and_mode(monkeypatch):
+    class Committer:
+        def __init__(self, salt, flags):
+            self.flags, self.n = flags, 0
+
+        def __call__(self, a, s, b, t, bias, forward, position, weight, rowids, colids):
+            self.n += 1
+            return _NT(np.zeros((a.a.shape[0], b.a.shape[0]), np.int16))
+
+        def tile_ms(self):
+            n, self.n = self.n, 0
+            return 2.0 * n, n
+
+    monkeypatch.setattr(B.PD, "FusedCommitter", Committer)
+    out = B.fused_timings(_FT, 3)
+    assert len(out["calls"]) == len(B.FUSED_ROWS) * len(B.PD.QWEN05)
+    assert all(r["y_equal"] and r["word_tile_ms"] == 2.0 and r["nohash_ms"] == 10.0 / 3 for r in out["calls"])
+    assert set(out["forward_m2048"]) == {"nohash", "word", "lowbyte", "nohash_tile", "word_tile", "lowbyte_tile"}
+
+
+def test_the_vllm_split_adds_up_to_the_slowdown():
+    """`vllm_bench.split`: ncp2's time is the control's tile kernel (GEMM) + (ncp2 − control) (hashing) + the rest."""
+    spec_v = importlib.util.spec_from_file_location("vllm_bench", Path(__file__).parents[1] / "vllm_bench.py")
+    V = importlib.util.module_from_spec(spec_v)
+    spec_v.loader.exec_module(V)
+    bf16 = {"prefill_2048_s": 0.02, "decode_b32_s": 1.0}
+    nohash = {"prefill_2048_s": 0.5, "prefill_2048_tile_ms": 300.0, "decode_b32_s": 4.0, "decode_b32_tile_ms": 1000.0}
+    full = {"prefill_2048_s": 2.0, "prefill_2048_tile_ms": 1500.0, "decode_b32_s": 30.0}
+    low = {"prefill_2048_s": 1.0, "decode_b32_s": 12.0}
+    out = V.split(bf16, full, nohash, low)
+    p = out["prefill_2048"]
+    assert abs(p["gemm_s"] + p["hashing_s"] + p["else_s"] - p["ncp2_s"]) < 1e-12 and p["slowdown"] == 100.0
+    assert abs(p["gemm_x_bf16"] + p["hashing_x_bf16"] + p["else_x_bf16"] - p["slowdown"]) < 1e-9
+    assert (p["gemm_s"], p["hashing_s"]) == (0.3, 1.5) and p["lowbyte_slowdown"] == 50.0
+    assert out["decode_b32"]["slowdown"] == 30.0 and abs(out["decode_b32"]["hashing_x_bf16"] - 26.0) < 1e-12

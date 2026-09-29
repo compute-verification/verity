@@ -149,6 +149,76 @@ ROUTE_U_TILES = {0: (128, 256), 1: (16, 256), 2: (16, 16)}
 CFG0_GATE = (128, *PD.QWEN05[2])
 
 
+def gate_fused() -> list[dict]:
+    """The serving kernel (`ncp2_fused.cu`) against `pouw_native` on every gate call: the committed word leaves leaf for leaf,
+    and the low-byte variant's tile leaves against `pouw_device.lowbyte_leaf` of the tile words, the rest as committed."""
+    out = []
+    for name, call in PD.gate_calls(qwen=True):
+        ref = PN.commit_call(0, "ncp-v2", call)
+        got, ms = PD.commit_call_timed(0, "ncp-v2", call, on="fused")
+        low, ms_low = PD.commit_call_timed(0, "ncp-v2", call, on="fused", flags=PD.HASH | PD.LOWBYTE)
+        diff, diff_low = PD.first_difference(ref, got), PD.lowbyte_difference(ref, low)
+        sh = call.shape
+        out.append({"call": name, "shape": [sh.m, sh.k, sh.n], "difference": diff, "lowbyte_difference": diff_low,
+                    "device_ms": round(ms, 3), "lowbyte_device_ms": round(ms_low, 3)})
+        if diff or diff_low:
+            raise SystemExit(f"fused kernel: {name}: {diff or diff_low}")
+    return out
+
+
+#: the fused kernel's timed shapes: decode at 16 and 32 rows, and prefill
+FUSED_ROWS = (16, 32, 256, 2048)
+#: its modes: no hashing at all (the control), the committed word leaves, the low-byte variant
+FUSED_MODES = {"nohash": PD.TIME_TILES, "word": PD.HASH | PD.TIME_TILES | PD.CACHE_Y,
+               "lowbyte": PD.HASH | PD.TIME_TILES | PD.CACHE_Y | PD.LOWBYTE}
+
+
+def fused_timings(torch, reps: int, save=lambda part: None) -> dict:
+    """Per Qwen2.5-0.5B linear and m, each mode's device time per call and its tile kernel's (the Y leaves cached, as a run's
+    later calls see them), with the tile words' achieved rate."""
+    out: dict = {"calls": []}
+    for m in FUSED_ROWS:
+        for k, n in PD.QWEN05:
+            row: dict = {"m": m, "k": k, "n": n}
+            g = torch.Generator(device="cuda").manual_seed(m * 7 + n)
+            a = torch.randint(-64, 64, (m, k), dtype=torch.int8, device="cuda", generator=g)
+            b = torch.randint(-64, 64, (n, k), dtype=torch.int8, device="cuda", generator=g)
+            s = torch.full((m,), 1e-3, dtype=torch.float32, device="cuda").view(torch.int32)
+            t = torch.full((n,), 1e-2, dtype=torch.float32, device="cuda").view(torch.int32)
+            bias = torch.zeros(n, dtype=torch.int16, device="cuda")
+            rowids = torch.arange(m, dtype=torch.int32, device="cuda")
+            colids = torch.arange(n, dtype=torch.int32, device="cuda")
+            ys = {}
+            for mode, flags in FUSED_MODES.items():
+                c = PD.FusedCommitter(bytes(range(32)), flags)
+                ys[mode] = c(a, s, b, t, bias, 1, 2, n, rowids, colids)
+                torch.cuda.synchronize()
+                c.tile_ms()
+                e0, e1 = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+                e0.record()
+                for i in range(reps):
+                    c(a, s, b, t, bias, 2 + i, 2, n, rowids, colids)
+                e1.record()
+                torch.cuda.synchronize()
+                tile_ms, calls = c.tile_ms()
+                row[f"{mode}_ms"] = e0.elapsed_time(e1) / reps
+                row[f"{mode}_tile_ms"] = tile_ms / max(1, calls)
+            row["y_equal"] = all(bool(torch.equal(ys["word"], v)) for v in ys.values())
+            acc = call_accounting(m, k, n)
+            count, length = acc["messages"]["tile words"]
+            row["tile_word_rate_bytes_per_s"] = count * absorbed("sha256", length) / (row["word_tile_ms"] * 1e-3)
+            row["tile_lowbyte_bytes"] = count * (length - UNIT_TAG) // 4
+            out["calls"].append(row)
+            save(out)
+            del a, b
+            torch.cuda.empty_cache()
+    for m in FUSED_ROWS:
+        rows = [r for r in out["calls"] if r["m"] == m]
+        out[f"forward_m{m}"] = {mode: LAYERS * sum(r[f"{mode}_ms"] for r in rows) for mode in FUSED_MODES} | {
+            f"{mode}_tile": LAYERS * sum(r[f"{mode}_tile_ms"] for r in rows) for mode in FUSED_MODES}
+    return out
+
+
 def _cfgs(m: int, n: int) -> list[int]:
     """The configs whose tile divides (m, n), largest first."""
     return [c for c, (bm, bn) in ROUTE_U_TILES.items() if m % bm == 0 and n % bn == 0]
@@ -299,6 +369,7 @@ def main() -> None:
     ap.add_argument("--dry-run", action="store_true", help="CPU only: the accounting and the host gate")
     ap.add_argument("--reps", type=int, default=20)
     ap.add_argument("--out", type=Path)
+    ap.add_argument("--fused-only", action="store_true", help="the fused kernel's gates and timings only")
     args = ap.parse_args()
     res: dict = {"accounting": [forward_accounting(m) for m in ROWS]}
 
@@ -316,6 +387,13 @@ def main() -> None:
         from kernels import load
 
         save("device", torch.cuda.get_device_name())
+        if args.fused_only:
+            save("gates", {"hashes": gate_hashes()})
+            res["gates"]["fused"] = gate_fused()
+            save("gates", res["gates"])
+            save("fused", fused_timings(torch, args.reps, save=lambda part: save("fused", part)))
+            _report(res)
+            return
         ext = load()
         save("gates", {"hashes": gate_hashes()})
         res["gates"]["committer"] = gate_committer()
