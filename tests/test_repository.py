@@ -183,10 +183,12 @@ CREDENTIAL_FORMATS = {
     "a Slack token": r"\bxox[abposr]-[A-Za-z0-9-]{10,}",
     "a JSON web token": r"\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.",
     "a RunPod API key": r"\brpa_[A-Za-z0-9]{20,}",
+    "an R2 account endpoint": r"\b[0-9a-f]{32}\.r2\.cloudflarestorage\.com",
 }
 _FORMATS = re.compile("|".join(f"(?P<f{i}>{p})" for i, p in enumerate(CREDENTIAL_FORMATS.values())))
 #: A file can match a format only if it holds one of these.
-_FORMAT_HINTS = ("AKIA", "ASIA", "PRIVATE KEY", "ghp_", "gho_", "ghu_", "ghs_", "ghr_", "github_pat_", "xox", "eyJ", "rpa_")
+_FORMAT_HINTS = ("AKIA", "ASIA", "PRIVATE KEY", "ghp_", "gho_", "ghu_", "ghs_", "ghr_", "github_pat_", "xox", "eyJ", "rpa_",
+                 "r2.cloudflarestorage.com")
 #: A value assigned to a credential name: `name = "value"`, `"name": "value"`, or `NAME=value` inside a string.
 CREDENTIAL_ASSIGNMENTS = (re.compile(r"(?<![\w-])(?P<name>[A-Za-z_][\w-]*)[\"']?\s*[:=]\s*[bru]{0,2}[\"'](?P<value>[^\"'\s]{12,})[\"']"),
                           re.compile(r"\b(?P<name>[A-Z][A-Z0-9_]*)=(?P<value>[^\"'\s]{12,})"))
