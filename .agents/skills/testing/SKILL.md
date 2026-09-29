@@ -35,6 +35,12 @@ the paths it declares, the workspace's metadata (every `pyproject.toml` and `uv.
 the platform, whether `lake`, `cargo` and `nvidia-smi` are on the PATH, and every `VERITY_*` and `FLOCK_*` variable.
 Uncommitted edits count. Only passes are cached, in `~/.cache/verity/tests`.
 
+In a `parallel = true` suite each passing test is also cached on its own, even when the suite failed, under its module's key:
+the suite's key less the sibling test modules it can't reach (by import, or by name in a string). A run after a fix to one test
+module re-runs that module and whatever reaches it, and counts the rest as `reused`. So a test depends on another test module
+only by importing or naming it, never through what that module does at import (a top-level call puts it in every key). `--fresh`
+reuses nothing; the nightly `audit-main` job runs `check.py --no-cache` on `main` and names any cached pass it contradicts.
+
 ## Where a test goes
 
 - **In the tests/ of the package it tests**, mirroring the package's modules (`packages/verity/tests/ir/` tests `verity.ir`).

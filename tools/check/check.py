@@ -669,7 +669,18 @@ def agreement_verdicts(run_dir: Path) -> list[str]:
     return [str(p.relative_to(run_dir)) for p in files if p.is_file()]
 
 
-def write_result(run_dir: Path, ok: bool, done: list[dict], verdicts: dict | None = None) -> None:
+def contradictions(out: Path) -> list[dict]:
+    """The suites whose fresh run (`--no-cache`, which the nightly `audit-main` runs on `main`) failed what a cached pass, a
+    suite's or a test's, answers for (`suites.py`): a key that misses an input, or a test whose outcome isn't a function of its
+    inputs."""
+    found = []
+    for f in ("suites.json", "suites-lean.json"):
+        if (out / f).is_file():
+            found += [{"suite": d["suite"], "contradicts": d["contradicts"]} for d in json.loads((out / f).read_text()) if d.get("contradicts")]
+    return found
+
+
+def write_result(run_dir: Path, ok: bool, done: list[dict], verdicts: dict | None = None, contradicted: list[dict] = ()) -> None:
     doc = {"schema": "research/result/v0.1", "kind": "check/v1", "run_id": os.environ["RESEARCH_RUN_ID"],
            "workload_fingerprint": {"steps": [s["step"] for s in done]},
            "validation": {"status": "passed" if ok else "failed", "checker": "tools/check/check.py",
@@ -681,6 +692,8 @@ def write_result(run_dir: Path, ok: bool, done: list[dict], verdicts: dict | Non
                                         if p and (run_dir / p).exists()]}
     if verdicts:
         doc["verdicts"] = verdicts
+    if contradicted:
+        doc["cache_contradictions"] = list(contradicted)
     tmp = run_dir / "result.json.tmp"
     tmp.write_text(json.dumps(doc, indent=1) + "\n")
     os.replace(tmp, run_dir / "result.json")
@@ -727,10 +740,14 @@ def main(argv: list[str]) -> int:
     before = VERDICTS.snapshot() if run_dir is not None and cache else None
     t0 = time.monotonic()
     ok, done = run(out, n, cache, keep_going)
+    bad = contradictions(out)
+    for c in bad:
+        print(f"check: CACHE CONTRADICTED in {c['suite']}: {', '.join(c['contradicts'][:5])} failed fresh, and a cached pass answers for it",
+              flush=True)
     if run_dir is not None:
         if before is not None:
             verdicts["out"] = {"file": "verdicts.tar.gz", "entries": VERDICTS.export(run_dir / "verdicts.tar.gz", before)}
-        write_result(run_dir, ok, done, verdicts)
+        write_result(run_dir, ok, done, verdicts, bad)
     print(f"check: {'passed' if ok else 'FAILED'} in {time.monotonic() - t0:.1f} s ({', '.join(s['step'] + ' ' + s['status'] for s in done)});"
           f" outputs in {out}")
     return 0 if ok else 1
