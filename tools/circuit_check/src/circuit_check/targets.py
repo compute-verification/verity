@@ -187,7 +187,8 @@ def _pouw_roots() -> list[Any]:
 
     return list(ncp2.templates(64, "shift24").values()) + [ncp2.linear(ncp2.Shape(16, 64, 16)),
                                                           bind(pouw_rows.NcpLinearRow, K=64, N=16),
-                                                          bind(pouw_rows.NcpLinearRowBias, K=64, N=16)]
+                                                          bind(pouw_rows.NcpLinearRowBias, K=64, N=16),
+                                                          bind(pouw_rows.NcpLinearCoordinate, K=64)]
 
 
 def _core_roots() -> list[Any]:

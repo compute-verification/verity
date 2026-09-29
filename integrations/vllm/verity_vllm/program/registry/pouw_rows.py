@@ -20,7 +20,7 @@ from __future__ import annotations
 import math
 import struct
 
-from verity.ir.defs import composite, primitive
+from verity.ir.defs import bind, composite, primitive
 from verity.ir.refs import array_of
 from verity.ir.types import Array, Value
 from verity.ml import fp32 as F
@@ -86,25 +86,32 @@ def _quant(B, K, row):
     return [B.call(NcpRneClampI7, B.call(F.F32Div, v, scale)) for v in xf], scale
 
 
-def _row(B, S, x, w, bias):
+@composite("NcpLinearCoordinate", 1, ["K"],
+           lambda S: ((("a", Array(S.K, I7)), ("s", F32), ("wrow", Array(S.K, BF16)), ("bias", BF16)), BF16),
+           conformance="protocol-defined")
+def NcpLinearCoordinate(B, S, a, s, wrow, bias):
+    """One output word of a PoUW row: W's row quantized, the exact dot product with the row's int7 entries ``a`` (scale
+    ``s``) in ascending k from 0, and `NcpDequant` adding ``bias``."""
     if S.K % 16:
-        raise TypeError(f"NcpLinearRow: K = {S.K} is not a multiple of 16")
+        raise TypeError(f"NcpLinearCoordinate: K = {S.K} is not a multiple of 16")
+    b, t = _quant(B, S.K, wrow)
+    z = B.call(ZERO32)
+    for c in range(S.K // 16):
+        z = B.call(NcpDot16I7, z, array_of([a[i] for i in range(16 * c, 16 * c + 16)]), array_of(b[16 * c:16 * c + 16]))
+    return B.call(NcpDequant, z, s, t, bias)
+
+
+def _row(B, S, x, w, bias, bias_axis):
+    """x quantized once, then one `NcpLinearCoordinate_v1` per weight row."""
     a, s = _quant(B, S.K, x)
-    ys = []
-    for j in range(S.N):
-        b, t = _quant(B, S.K, w[j])
-        z = B.call(ZERO32)
-        for c in range(S.K // 16):
-            z = B.call(NcpDot16I7, z, array_of(a[16 * c:16 * c + 16]), array_of(b[16 * c:16 * c + 16]))
-        ys.append(B.call(NcpDequant, z, s, t, bias(j)))
-    return array_of(ys)
+    return B.batch(bind(NcpLinearCoordinate, K=S.K), array_of(a), s, w, bias, axes=(None, None, 0, bias_axis))
 
 
 @composite("NcpLinearRow", 1, ["K", "N"], lambda S: ((("x", Array(S.K, BF16)), ("w", Array(S.N, Array(S.K, BF16)))), Array(S.N, BF16)),
            conformance="protocol-defined")
 def NcpLinearRow(B, S, x, w):
     """One row of a PoUW linear's served y: `x[K]` and `W[N,K]` quantized per row, the exact dot product, `NcpDequant` adding −0."""
-    return _row(B, S, x, w, lambda j: B.call(NEG_ZERO16))
+    return _row(B, S, x, w, B.call(NEG_ZERO16), None)
 
 
 @composite("NcpLinearRowBias", 1, ["K", "N"],
@@ -112,7 +119,7 @@ def NcpLinearRow(B, S, x, w):
            conformance="protocol-defined")
 def NcpLinearRowBias(B, S, x, w, b):
     """One row of a biased PoUW linear's served y: `NcpLinearRow_v1`'s quantize and exact dot product, `NcpDequant` adding b_j."""
-    return _row(B, S, x, w, lambda j: b[j])
+    return _row(B, S, x, w, b, 0)
 
 
-__all__ = ["NcpAbsMax", "NcpDot16I7", "NcpLinearRow", "NcpLinearRowBias", "NcpRneClampI7"]
+__all__ = ["NcpAbsMax", "NcpDot16I7", "NcpLinearCoordinate", "NcpLinearRow", "NcpLinearRowBias", "NcpRneClampI7"]
