@@ -258,17 +258,17 @@ at its floor, so a wholly wrong one is caught directly (`audit_work_whole_stratu
     at most 2⁻⁴⁰ + ε_ks + δ_link. Its hypotheses are `hone` (above) and y's floors (`hfy`); outside it, the window's
     use of it rests on four things:
     - *The verifier derives every number itself.* `window_laws` (`plan.py:164`) takes only the verifier's own layouts
-      (`Traced.layout`, `__init__.py:125`; any other is refused by `Traced.check_layout`, `__init__.py:117`). It
+      (`Traced.layout`, `__init__.py:134`; any other is refused by `Traced.check_layout`, `__init__.py:126`). It
       computes W from them (`plan.py:181`) and N (`plan.py:184`), and the floors ⌈K_y·n_s/N⌉ (`plan.py:187`);
       `WorkLaw.budget` computes W_c and N_c from the call's own strata and K_c = min(N_c, max(1, ⌈K·W_c/W⌉))
       (`plan.py:153–157`). No prover-stated number enters (X-SPC-80, 81).
     - *Call indices are distinct and the verifier's.* `Traced.draw` admits the call to the window's `Ledger`
-      (`__init__.py:94`), which refuses a repeated (forward, position) before anything is drawn (`anchors.py:100–104`),
-      and each stratum's context is ("call", forward, position, "stratum", template) (`plan.py:283`). The index is the
-      verifier's anchors' (`Anchors`, `anchors.py:34`, which `Anchors.check_call` holds the call's inputs to,
-      `anchors.py:75`). This is the pin's M1.
+      (`__init__.py:103`), which refuses a repeated (forward, position) before anything is drawn (`anchors.py:170–174`),
+      and each stratum's context is ("call", forward, position, "stratum", template) (`plan.py:306`). The index is the
+      verifier's anchors' (`Anchors`, `anchors.py:40`, which `Anchors.check_call` holds the call's inputs to,
+      `anchors.py:81`). This is the pin's M1.
     - *Every call's commitment precedes the window key.* `plan.draw` and `Traced.draw` take the key as given
-      (`__init__.py:83`); it must be the verifier's randomness derived under `DRAW_DOMAIN` after the receipt that binds
+      (`__init__.py:92`); it must be the verifier's randomness derived under `DRAW_DOMAIN` after the receipt that binds
       every call's commitment, so W, N and each K_c are fixed before any call's draw. Nothing in this package checks the
       order: the window form of `traced_as` must.
     - *ε_ks and δ_link are the window's.* The pin's are one window `Analysis`'s (M2). The per-call values are not cited
