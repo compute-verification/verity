@@ -380,6 +380,13 @@ theorem build_spec {name : String} {table : ByteArray} {n lo bits : ℕ} {net : 
       { a := r.a.push (Array.map (fun x => d2.1.a.size + i * d2.2.1.size + x) (Array.range d2.2.1.size)),
         b := r.b.push #[KONST] }
     else { a := r.a.push #[], b := r.b.push #[] }) r3 (List.range 128) with hr4
+  rcases hO : Net.checkOrder (toString "lookup " ++ toString name) 128 r4.a.size
+      (Array.map (fun r => Array.map (fun c => if (c == KONST) = true then r4.a.size else c) r) (r4.a.push #[r4.a.size]))
+      (Array.map (fun r => Array.map (fun c => if (c == KONST) = true then r4.a.size else c) r) (r4.b.push #[r4.a.size]))
+    with e | u
+  · rw [hO] at h; cases h
+  rw [hO] at h
+  simp only at h
   rcases hA : Sparse.ofRows (Array.map (fun r => Array.map (fun c => if (c == KONST) = true then r4.a.size else c) r)
       (r4.a.push #[r4.a.size])) (2 ^ max 7 (log2ceil (r4.a.push #[r4.a.size]).size)) with e | A
   · rw [hA] at h; cases h

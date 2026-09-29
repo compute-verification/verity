@@ -59,7 +59,7 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
 - `protocols/`: one distribution per protocol, and each imports only the
  stdlib, `verity` and itself (`protocols/tests/test_protocol_boundaries.py`).
  The first is `protocols/sampled_proofs` (`verity_sampled_proofs`): the
- two-stage law, its beacon-keyed draws, and verification plans. See its
+ two-stage law, its draws from the verifier's own randomness, and verification plans. See its
  `PROTOCOL.md`. `protocols/one_stage` (`verity_one_stage`) is the one-stage
  audit: registration, the verifier's draw over a partition's proof units, and the
  audit record with its profile; `benchmarks/one_stage` runs it end to end with
@@ -67,8 +67,10 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
  PR #192; until then `--m0-pythonpath` names a checkout of it) and the Lean
  verifier. `protocols/pous` (`verity_pous`) is proof of useful space: the reference
  codecs, setup and timed audit, its `PROTOCOL.md`, and its Lean package (`lean/`:
- pinned statements, proofs and a submission grader). Applications (vLLM) compose
- protocols.
+ pinned statements, proofs and a submission grader). `protocols/pouw` (`verity_pouw`)
+ is proof of useful work: the `PoUWScheme` interface (`protocol`), its lifecycle
+ (`audit`) and the named schemes (`schemes.get`: NCP, Pearl's FP8 scheme), each with
+ pinned vectors; see its `PROTOCOL.md`. Applications (vLLM) compose protocols.
 - `census/`: data only, meant to move to its own repository: `hardware.json`, `datatypes.json`, `networks.json`,
  `subcircuits.json`, `input_sets.json`, `workloads.json` (stable ids, sources), a JSON Schema for each under `schemas/`,
  and a README with the id scheme and sourcing rules. Nothing imports it; the renderer and benchmarks
@@ -102,9 +104,9 @@ Dependency direction (README "Development"): `ir <- evaluation <- ml`,
 without a frontend or runtime integration.
 
 ~~~text
-uv sync --all-packages --all-extras       # the whole workspace, editable, with torch for the vLLM integration's CPU tests
+uv sync --all-packages --extra torch-cpu  # the whole workspace, editable, with CPU-only torch (GPU work: a member's `torch` extra)
 uv run tools/check/suites.py              # every test suite whose inputs changed since it last passed; --quick skips slow tests
-uv run python tools/check/check.py        # the check a merge requires; --record publishes it as an Attempt
+uv run --extra torch-cpu python tools/check/check.py  # the check a merge requires; --record publishes it as an Attempt
 ~~~
 
 ## Tests
@@ -113,6 +115,8 @@ Every package's tests live in its own `tests/` and run as one suite, in its own 
 workers), cached by input; the repository's own suite (`tests/`) holds only invariants of the whole tree. How to run them,
 what a suite may read (`[tool.verity.tests] inputs`), and the rules for slow tests, fixtures and dummy credentials:
 `.agents/skills/testing/SKILL.md`.
+No test depends on wall-clock time (no sleeps, clock readings or timeouts; wait on the event itself or inject the clock):
+`tests/test_no_wall_clock.py` enforces it, and its `ALLOWED` list, one reason per entry, holds the exceptions.
 
 ## Circuits
 
@@ -123,11 +127,17 @@ small binding in `circuit_check.targets`, which the suite enforces.
 ## Checking and merging
 
 There is no GitHub Actions CI. `check` (`tools/check/check.py`) is the one check: every test suite (`tools/check/suites.py`),
-`circuit-check --all`, the Lean
-verifier's build and its partition check against `verity.ir`, the Lean audit, and the verifier's cross-check against
-upstream's Rust verifier when the run is sent its input bundle (skipped by name otherwise). `--record` runs it through `research run` as an
-Attempt of the checked-out clean commit. Merge into `main` only through `research merge <branch>`, which refuses without a
-passing `check` of that exact commit in the evidence store, or when `main` has moved past it.
+`circuit-check --all`, the Lean verifier's build and its partition check against `verity.ir`, the Lean audit, and the
+verifier's cross-check against upstream's Rust verifier, at once on a multi-core CPU pod, with caches that hit only on
+identical inputs. `--record` runs it through `research run` as an Attempt of the checked-out clean commit. Merge into `main`
+only through `research merge <branch>`, which refuses without a passing `check` of that exact commit in the evidence store, or
+when `main` has moved past it; `research merge --train A B C --on POD --project verity` lands several at once on one `check`
+of the merged tree. A change under `backends/flock/` also needs `check`'s agreement with upstream's verifier
+(`lean-agreement`, on the build pinned in `backends/flock/verifier/upstream.json`; not for a `README.md` or `PROTOCOL.md`
+alone, and skipped by name elsewhere): record it with
+`uv run python tools/check/check.py --record --on POD`, which sends that build when the commit touches `backends/flock/`.
+`check` reuses a pass (a test suite, a circuit-check target, a Lean package's audit) only while every input it read is
+unchanged, and keeps each pod's Lean dependencies warm under their manifest and toolchain.
 
 ## Lean
 
@@ -169,6 +179,11 @@ Make ordinary reversible engineering decisions independently. Surface changes
 to agreed semantics, acceptance criteria, material spending, or destructive
 behavior.
 
+A guard never fails open, and an agent VM can be suspended at any moment, so
+nothing that bounds spend or preserves results may depend on one: pods bound
+themselves (`research pods create --max-hours`, under a line of the notes repo's
+`budgets.toml`), and runs preserve their results from the pod.
+
 Architectural rationale and human-facing reports belong in Notion;
 experimental evidence belongs in artifact storage. Temporary working notes
 need not become permanent documentation. Remove obsolete rules and machinery
@@ -183,7 +198,7 @@ rather than accumulating them.
 - Evidence goes through `research run --tool … --campaign …`: every completed or failed run is auto-published as an Attempt in the evidence store (`~/.research/store`, `research data …`; contract in `tools/research/src/research/store/README.md`).
 - Findings and claims about a run are labels, never edits to a shared table: `research data label <run id|art:…> <key> <value> --by <lane> --ref <run id>` (a red-team verdict is another label by the red-team; tables pick a policy, `store_tables.py --proof-class-by 'red-team-*'`).
 - The ledger `backends/numerical/reports/ledger/*.jsonl` is frozen history (imported once by `ledger_to_store.py`); new rows are labels on the attempt they describe.
-- Repo-replicated inputs are registered in `fixtures/artifacts.json` (`{art id: path}`, `research data put --kind fixture/v1 --file …`); `tools/research/tests/test_repo_replicas.py` checks every entry hashes to its id.
+- Fixtures are registered in `fixtures/artifacts.json` (`{art id: path}`, `research data put --kind fixture/v1 --file …`); `tools/research/tests/test_repo_replicas.py` checks every entry hashes to its id. A tracked file is at most 256 KiB (`tests/test_repository.py`); a larger fixture's path is gitignored and `research data fetch-fixtures` fetches it (the store README §7.3).
 - `tests/test_repository.py` rejects report-genre files (`*HANDOFF*`, `*REPORT*`, `*URGENT*`, `*DRAFT*`, `*TRIAGE*`, `*STATUS*`, anything under `reports/` or `results/`), and `.gitignore` keeps them out of `git add`.
 
 ## Lanes (worker agents)
@@ -200,3 +215,7 @@ origin lacks.
 
 When creating or modifying a skill in `.agents/skills/`, use
 `.agents/skills/authoring-skills/SKILL.md`.
+
+Before adding, changing or retiring a process (a rule here or in the lane contract, a gate in `check` or `research merge`,
+a required review, a file every PR must update), assess its effect on research velocity with
+`.agents/skills/process-design/SKILL.md`.

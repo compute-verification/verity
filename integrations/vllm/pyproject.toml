@@ -7,6 +7,8 @@ dependencies = [
     "research",
     "verity",
     "verity-sampled-proofs",
+    "verity-pous",
+    "verity-pouw",
     "numpy>=1.26",
 ]
 
@@ -30,6 +32,8 @@ packages = [
 research = { workspace = true }
 verity = { workspace = true }
 verity-sampled-proofs = { workspace = true }
+verity-pous = { workspace = true }
+verity-pouw = { workspace = true }
 
 [tool.pytest.ini_options]
 # Run from this directory: fixtures are read relative to it.  CUDA / vLLM / pod-tree tests skip or fail by name off-pod.
@@ -45,5 +49,5 @@ markers = [
 
 [tool.verity.tests]
 # Test-only: tests/pipeline checks the fixtures this package registers.
-inputs = ["fixtures/artifacts.json"]
+inputs = ["fixtures/artifacts.json", ".gitignore"]
 parallel = true

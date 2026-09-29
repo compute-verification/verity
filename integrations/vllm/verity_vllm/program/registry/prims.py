@@ -33,8 +33,8 @@ from verity.ir.types import Array, Value
 from verity.ml.fp32 import (BF16_NAN_F2FP, BF16_NAN_TORCH, F32_NAN, Bf16Add, Bf16AddF2fp, Bf16MulBf16, Bf16MulF32, F32Add,
                             F32AddFtz, F32Div, F32Fma, F32FmaFtz, F32FmaSubFtz, F32Max, F32Mul, F32MulFtz, F32SubFtz,
                             GuardNegInfZero, bf16_to_f32_bits, bits_of, f32_add_bits, f32_div_bits,
-                            f32_fma_bits, f32_is_nan, f32_max_bits, f32_mul_bits, f32_of, f32_sub_bits, f32_to_bf16_rn_bits,
-                            ftz_bits)
+                            f32_fma_bits, f32_gpu_nan, f32_is_nan, f32_max_bits, f32_mul_bits, f32_of, f32_sub_bits,
+                            f32_to_bf16_rn_bits, ftz_bits)
 from verity.ml.fp32 import f32_decode as _decode, f32_round as _round_f32
 from verity.ml.prims import AmpereBF16TcDot16, Bf16ToF32, F2fpBf16, F32ToBf16Rn   # the k16 tensor-core step: core's `_v2` (same function as the retired `_v1`)
 from verity.ml.scalar import Bf16GtStrict, I32Add, I32Eq, I32Le, SelectBf16, SelectF32, SelectI32
@@ -177,6 +177,25 @@ def DivFullScaleA(a: int, b: int) -> int:
     if ab < np.float32(1.1754943508222875e-38):
         return bits_of(np.float32(fa * np.float32(16777216.0)))
     return a & 0xFFFFFFFF
+
+
+@primitive("DivFullScaleA", 2, [("a", F32), ("b", F32)], F32, conformance="exact-model-tested")
+def DivFullScaleAV2(a: int, b: int) -> int:
+    """`DivFullScaleA_v1` with the GPU's NaN: each scaling is an FMUL whose every NaN result is `F32_NAN_PTX` (`F32Mul_v2`);
+    an unscaled a passes through untouched, a NaN's payload included."""
+    ab = abs(f32_of(b))
+    if ab > np.float32(8.507059173023462e37):
+        return f32_gpu_nan(f32_mul_bits(a, 0x3E800000))
+    if ab < np.float32(1.1754943508222875e-38):
+        return f32_gpu_nan(f32_mul_bits(a, 0x4B800000))
+    return a & 0xFFFFFFFF
+
+
+@primitive("F32Sub", 2, [("a", F32), ("b", F32)], F32, conformance="exact-model-tested")
+def F32SubV2(a: int, b: int) -> int:
+    """FSUB: RN(a - b), no ftz; every NaN result `F32_NAN_PTX`.  `F32Sub_v1` is a reference primitive (`ref_prims`, NaN
+    0x7FC00000), whose module source is its vocabulary's pin, so the GPU's version lives here."""
+    return f32_gpu_nan(f32_sub_bits(a, b))
 
 
 @primitive("RsqrtApprox", 1, [("x", F32)], F32, conformance="exact-model-tested")

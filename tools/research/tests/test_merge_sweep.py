@@ -1,0 +1,152 @@
+"""`research merge`'s pull request sweep: after a merge lands on the remote's branch, every open pull request whose head is on it
+is closed with a comment naming the commit it landed in, and every one based on a branch that landed is retargeted onto it.  The
+remote is a bare repository in tmp and GitHub is a fake `gh`, so nothing here reaches the network."""
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+from pathlib import Path
+
+import research.merge as M
+from research.cli import main as research_main
+
+
+def _git(repo: Path, *args: str) -> str:
+    env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
+    return subprocess.run(["git", "-c", "commit.gpgsign=false", *args], cwd=repo, check=True, capture_output=True, text=True,
+                          env=env).stdout.strip()
+
+
+class FakeGitHub:
+    """`gh pr list | close | edit` over a dict of open pull requests, recording every mutating call."""
+
+    def __init__(self, prs: list[dict]):
+        self.open = {p["number"]: dict(p) for p in prs}
+        self.mutations: list[tuple[str, ...]] = []
+
+    def __call__(self, *args: str) -> str:
+        if args[:2] == ("pr", "list"):
+            return json.dumps(list(self.open.values()))
+        self.mutations.append(args)
+        n = int(args[2])
+        if args[:2] == ("pr", "close"):
+            del self.open[n]
+        elif args[:2] == ("pr", "edit"):
+            self.open[n]["baseRefName"] = args[args.index("--base") + 1]
+        return ""
+
+
+def _world(tmp_path: Path):
+    """A bare `origin`, a clone on main, and branches A <- B <- E and C <- D pushed with a pull request each; B (with A) merged into
+    main and pushed.  Returns (clone, fake GitHub, {branch: tip}, the merge commit)."""
+    origin, repo = tmp_path / "origin.git", tmp_path / "main"
+    _git(tmp_path, "init", "-q", "--bare", "-b", "main", str(origin))
+    repo.mkdir()
+    (repo / "mytools").mkdir()
+    (repo / "mytools" / "decl_check.py").write_text("from research.store.tool import Tool\nT = Tool(name='check', version='1')\n")
+    (repo / ".gitignore").write_text("__pycache__/\n")
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "init")
+    _git(repo, "remote", "add", "origin", str(origin))
+    _git(repo, "push", "-q", "origin", "main")
+    tips = {}
+    for name, base in (("A", "main"), ("B", "A"), ("E", "B"), ("C", "main"), ("D", "C")):
+        _git(repo, "checkout", "-q", "-b", name, base)
+        (repo / f"{name}.txt").write_text(name + "\n")
+        _git(repo, "add", "-A")
+        _git(repo, "commit", "-q", "-m", name)
+        _git(repo, "push", "-q", "origin", name)
+        tips[name] = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "checkout", "-q", "main")
+    _git(repo, "merge", "-q", "--no-ff", "-m", "Merge train T (B)", "B")
+    _git(repo, "push", "-q", "origin", "main")
+    gh = FakeGitHub([{"number": n, "headRefName": h, "headRefOid": tips[h], "baseRefName": b}
+                     for n, h, b in ((1, "A", "main"), (2, "B", "A"), (3, "C", "main"), (4, "D", "C"), (5, "E", "B"))])
+    return repo, gh, tips, _git(repo, "rev-parse", "HEAD")
+
+
+def test_the_sweep_closes_what_landed_and_retargets_its_children(tmp_path):
+    repo, gh, _tips, merge = _world(tmp_path)
+    lines: list[str] = []
+    assert M.sweep(repo, gh=gh, log=lines.append) == ([1, 2], [5])
+    note = f"Merged into main at {merge[:12]} (Merge train T (B))."
+    assert gh.mutations == [("pr", "edit", "5", "--base", "main"),
+                            ("pr", "close", "1", "--comment", note), ("pr", "close", "2", "--comment", note)]
+    assert sorted(gh.open) == [3, 4, 5] and gh.open[5]["baseRefName"] == "main" and gh.open[4]["baseRefName"] == "C"
+    assert any(f"close #1 (A): {note}" in line for line in lines)
+
+
+def test_the_sweep_is_idempotent_and_its_dry_run_changes_nothing(tmp_path):
+    repo, gh, _tips, _merge = _world(tmp_path)
+    lines: list[str] = []
+    assert M.sweep(repo, dry_run=True, gh=gh, log=lines.append) == ([1, 2], [5])
+    assert gh.mutations == [] and sorted(gh.open) == [1, 2, 3, 4, 5]
+    assert "would retarget #5 from B" in lines[0] and "would close #1" in lines[1]
+    M.sweep(repo, gh=gh, log=lambda *_: None)
+    done = list(gh.mutations)
+    lines.clear()
+    assert M.sweep(repo, gh=gh, log=lines.append) == ([], [])
+    assert gh.mutations == done and "no open pull request is on origin/main" in lines[-1]
+
+
+def test_the_sweep_reads_the_remote_branch_not_the_checkout(tmp_path):
+    """C merged into the local main but not pushed: nothing about C moves until the push."""
+    repo, gh, _tips, _merge = _world(tmp_path)
+    M.sweep(repo, gh=gh, log=lambda *_: None)
+    _git(repo, "merge", "-q", "--no-ff", "-m", "Merge C", "C")
+    lines: list[str] = []
+    assert M.sweep(repo, gh=gh, log=lines.append) == ([], [])
+    assert "main has commits origin/main lacks" in lines[0]
+    _git(repo, "push", "-q", "origin", "main")
+    assert M.sweep(repo, gh=gh, log=lambda *_: None) == ([3], [4])
+
+
+def test_landed_in_names_the_merge_or_the_commit_itself(tmp_path):
+    repo, _gh, tips, merge = _world(tmp_path)
+    assert M.landed_in(repo, tips["A"], merge) == merge
+    assert M.landed_in(repo, tips["B"], merge) == merge
+    init = _git(repo, "rev-parse", "HEAD^1")
+    assert M.landed_in(repo, init, merge) == init                               # on the first-parent line
+    _git(repo, "checkout", "-q", "-b", "F")
+    (repo / "F.txt").write_text("F\n")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "F")
+    f = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "checkout", "-q", "main")
+    _git(repo, "merge", "-q", "--ff-only", "F")                                  # a fast-forward: F's commit is on the line
+    assert M.landed_in(repo, f, f) == f and M.landed_in(repo, merge, f) == merge and M.landed_in(repo, tips["A"], f) == merge
+
+
+def test_a_merge_sweeps_after_it_lands_and_says_to_push_first(tmp_path, monkeypatch, capsys):
+    """`research merge C` with a passing check: the merge lands locally, its sweep closes nothing of C's before the push and says
+    so; `research merge --sweep` after the push closes C and retargets D."""
+    repo, gh, _tips, _merge = _world(tmp_path)
+    monkeypatch.setattr(M, "_gh_cli", lambda _repo, *args: gh(*args))
+    M.sweep(repo, gh=gh, log=lambda *_: None)
+    _git(repo, "checkout", "-q", "C")
+    _git(repo, "merge", "-q", "--no-ff", "-m", "main into C", "main")          # the gate needs main's tip in C
+    _git(repo, "push", "-q", "origin", "C")
+    gh.open[3]["headRefOid"] = _git(repo, "rev-parse", "HEAD")
+    monkeypatch.chdir(repo)
+    assert research_main(["run", "--runs-dir", str(tmp_path / "runs"), "--project", "t", "--no-sampler", "--tool",
+                          "mytools.decl_check:T", "--cwd", "source", "--", "true"]) == 0
+    _git(repo, "checkout", "-q", "main")
+    capsys.readouterr()
+    assert M.main(["C"]) == 0
+    out = capsys.readouterr().out
+    assert "merged C" in out and "push it, then `research merge --sweep`" in out and sorted(gh.open) == [3, 4, 5]
+    _git(repo, "push", "-q", "origin", "main")
+    assert M.main(["--sweep", "--dry-run"]) == 0 and sorted(gh.open) == [3, 4, 5]
+    assert M.main(["--sweep"]) == 0
+    assert sorted(gh.open) == [4, 5] and gh.open[4]["baseRefName"] == "main"
+
+
+def test_a_merge_without_the_remote_skips_the_sweep(tmp_path, monkeypatch, capsys):
+    repo, _gh, _tips, _merge = _world(tmp_path)
+    _git(repo, "remote", "remove", "origin")
+    monkeypatch.setattr(M, "_gh_cli", lambda *_: (_ for _ in ()).throw(AssertionError("gh must not run")))
+    monkeypatch.chdir(repo)
+    M._sweep_after(repo, "main", "origin")
+    assert "no remote 'origin'; pull request sweep skipped" in capsys.readouterr().out
