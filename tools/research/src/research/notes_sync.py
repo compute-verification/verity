@@ -3,8 +3,8 @@
     research notes sync [--path P]... [-m MSG] [--retries N] [--remote NAME] [--root DIR]
     research notes scan [--max-bytes N] [--json] [--root DIR]
 
-`sync` commits the caller's changes (every change, or only under `--path`; files over 1 MB and the steward's own state stay out,
-as with `snapshot`), then fetches, rebases onto the remote branch, and pushes; a push that loses a race fetches, rebases and pushes
+`sync` commits the caller's changes (every change, or only under `--path`; files over 1 MB, evidence and renders, and the
+steward's own state stay out, as with `snapshot`), then fetches, rebases onto the remote branch, and pushes; a push that loses a race fetches, rebases and pushes
 again, at most `--retries` times.  A rebase conflict never drops either side: the rebase is aborted, the local commit stays, the
 exit is 3 and the conflicted files are named.  Before anything is pushed, the outgoing commits' added lines are scanned for key
 material (`KEY_PATTERNS`, and the value of any secret-named environment variable); a hit refuses the push (exit 4), naming the
@@ -14,6 +14,10 @@ A lane note (`lanes/**/*.md`) the sync would add or change stays out of the comm
 path new since HEAD) or its front matter's `created:` (new or changed since HEAD) is more than 5 minutes ahead of the sync's
 clock: one `SYNC-REFUSED <path>: ...` line each, with the value `date -u` gives now, the rest synced, exit 5 when nothing else
 failed.  What HEAD already has is never re-checked, and a stamp stops being ahead once the clock passes it.
+
+Evidence and renders never enter the notes' history: a file added or changed under `renders/`, `campaigns/*/assets/` or
+`lanes/*/evidence/` stays out of the commit and is named in the report; it belongs in the evidence store (`research data put
+... --preserve`), cited by its `art:` id.  Deleting one commits like any other change.
 
 `scan` reads every blob in the repo's history: files over `--max-bytes` and key material, each with the path it was committed
 under.  Exit 1 when it finds anything; run it before the first push and after (acceptance A5).
@@ -49,6 +53,12 @@ KEY_PATTERNS = {
 }
 SECRET_ENV_RE = re.compile(r"(KEY|SECRET|TOKEN|PASSWORD)", re.I)
 NEVER_COMMIT = ("steward-state.json", ".steward-state.json.tmp")
+EVIDENCE_PATH = re.compile(r"^(?:renders/|campaigns/[^/]+/assets/|lanes/[^/]+/evidence/)")
+
+
+def is_evidence(path: str) -> bool:
+    """A path under the notes' evidence and render locations, which never enter its history."""
+    return bool(EVIDENCE_PATH.match(path))
 
 
 def _run(root: Path, *args: str, timeout: float = 120, input: str | None = None) -> subprocess.CompletedProcess:
@@ -71,10 +81,11 @@ def find_keys(text: str, secrets: list[str]) -> list[str]:
     return hits + (["env-secret"] if any(s in text for s in secrets) else [])
 
 
-def _changed(root: Path, paths: list[str] | None, max_bytes: int) -> tuple[list[str], list[str]]:
-    """(paths to commit, paths skipped as over max_bytes) among the working tree's changes, limited to `paths` when given."""
+def _changed(root: Path, paths: list[str] | None, max_bytes: int) -> tuple[list[str], list[str], list[str]]:
+    """(paths to commit, paths skipped as over max_bytes, evidence files left out) among the working tree's changes, limited to
+    `paths` when given."""
     st = _out(root, "status", "--porcelain=v1", "-z", "--untracked-files=all", "--", *(paths or []))
-    entries, keep, big, i = (st or "").split("\0"), [], [], 0
+    entries, keep, big, evidence, i = (st or "").split("\0"), [], [], [], 0
     while i < len(entries):
         e = entries[i]
         i += 1
@@ -87,8 +98,11 @@ def _changed(root: Path, paths: list[str] | None, max_bytes: int) -> tuple[list[
         if path in NEVER_COMMIT:
             continue
         p = root / path
+        if p.is_file() and is_evidence(path):
+            evidence.append(path)
+            continue
         (big if p.is_file() and p.stat().st_size > max_bytes else keep).append(path)
-    return keep, big
+    return keep, big, evidence
 
 
 def _utcnow() -> dt.datetime:
@@ -141,12 +155,13 @@ def commit(root: Path, paths: list[str] | None = None, message: str | None = Non
            now: dt.datetime | None = None) -> dict:
     """Commit the caller's changes (all, or under `paths`) but lane notes stamped ahead of `now` (`future`: `path: why`).  Retries
     a held index lock (another writer on this machine) briefly."""
-    keep, big = _changed(root, paths, max_bytes)
+    keep, big, evidence = _changed(root, paths, max_bytes)
     future = future_stamps(root, keep, now or _utcnow())
     if future:
         keep = [p for p in keep if p not in future]
-        _run(root, "--literal-pathspecs", "reset", "-q", "--", *future)          # a staged copy would be committed anyway
-    left = {"skipped": big, "future": [f"{p}: {why}" for p, why in future.items()]}
+    if future or evidence:
+        _run(root, "--literal-pathspecs", "reset", "-q", "--", *future, *evidence)   # a staged copy would be committed anyway
+    left = {"skipped": big, "evidence": evidence, "future": [f"{p}: {why}" for p, why in future.items()]}
     if not keep:
         return {"commit": None, "paths": 0, **left}
     msg = message or f"notes sync {time.strftime('%Y-%m-%dT%H:%MZ', time.gmtime())}: {len(keep)} paths"
@@ -185,7 +200,7 @@ def outgoing_keys(root: Path, base: str | None, secrets: list[str]) -> list[str]
 def sync(root: Path, paths: list[str] | None = None, message: str | None = None, retries: int = 5, remote: str = "origin",
          max_bytes: int = MAX_BYTES, secrets: list[str] | None = None, now: dt.datetime | None = None) -> dict:
     """Commit, then fetch / rebase / push with bounded retries (module docstring).  The report: `commit`, `paths`, `skipped`,
-    `future` (notes left out, stamped ahead of `now`), `pushed` (bool), `attempts`, and on failure `error` plus `conflict` (files)
+    `evidence` (evidence and renders left out), `future` (notes left out, stamped ahead of `now`), `pushed` (bool), `attempts`, and on failure `error` plus `conflict` (files)
     or `keys` (hits); `rc` is the exit code."""
     root = Path(root)
     if _out(root, "rev-parse", "--git-dir") is None:
@@ -280,6 +295,9 @@ def render_sync(rep: dict) -> str:
     parts = [head]
     if rep.get("skipped"):
         parts.append(f"skipped {len(rep['skipped'])} over 1 MB (put them in the store): {', '.join(rep['skipped'][:3])}")
+    if rep.get("evidence"):
+        parts.append(f"left out {len(rep['evidence'])} evidence/render files (the evidence store holds them: research data put ... "
+                     f"--preserve, cite the art: id): {', '.join(rep['evidence'][:3])}")
     if rep.get("future"):
         parts.append(f"left out {len(rep['future'])} stamped ahead of the clock (SYNC-REFUSED)")
     if rep.get("note"):
