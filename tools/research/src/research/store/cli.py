@@ -27,7 +27,8 @@
   research data label  TARGET KEY VALUE --by WHO [--ref REF] [--value-json] [--off-vocab]
                                                    writes the canonical key/spelling in the vocabulary's form (zk true -> a real boolean, batch -> B,
                                                    axis -> sweep, candidate A -> A-GKR); REFUSES (exit 2) an unknown key, a measurement, a ref, an
-                                                   off-enum value or a word in a bool/int key -- --off-vocab writes it anyway
+                                                   off-enum value, a word in a bool/int key, or `abandoned` without --ref note:<lane>/<note>
+                                                   -- --off-vocab writes it anyway
   research data vocab [--json]                     the label vocabulary (vocab.py): key, asserter group, value form, enum values
   research data vocab-check [--json] [--strict]    read-only audit of labels/: unknown keys, old spellings, strings in bool/int keys, off-enum values,
                                                    refs written as labels; counts, asserters, example targets
@@ -467,7 +468,7 @@ def cmd_label(argv: list[str]) -> int:
     value = json.loads(ns.value) if ns.value_json else ns.value
     key = vocab.canonical_key(ns.key)                      # hygiene (§8.1): the canonical key and spelling go in the file, the form the vocabulary
     value = vocab.coerce(key, vocab.canonical_value(key, value))   # declares (a real bool for zk / model_agrees, an int for B), never the word
-    why = vocab.check(key, value)
+    why = vocab.check(key, value) or vocab.check_ref(key, ns.ref)
     if why and not ns.off_vocab:
         print(f"research data label: refused: {why}.  Nothing written (--off-vocab writes it anyway)", file=sys.stderr)
         return 2

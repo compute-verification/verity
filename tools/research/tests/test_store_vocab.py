@@ -39,7 +39,8 @@ def fs_remote(env):
 
 RESULT_KEYS = ("candidate", "proof_class", "soundness", "K", "B", "hardware", "authentication", "campaign", "relation", "mode", "zk", "overhead",
                "seconds_per_vu", "track", "scope", "label", "note", "assumptions", "omitted", "domain", "breakthrough",
-               "lane", "row", "sweep", "arm", "stage", "source", "superseded_by", "interaction_attempt_of", "hash", "sharing", "fold", "pipeline")
+               "lane", "row", "sweep", "arm", "stage", "source", "superseded_by", "abandoned", "interaction_attempt_of", "hash", "sharing", "fold",
+               "pipeline")
 VERIFICATION_KEYS = ("verified", "verifier", "verifier_seconds", "independently_verified", "verified_by", "finding", "same_device", "below_bar", "outcome")
 EVIDENCE_KEYS = ("instruction", "model", "model_agrees", "model_status", "model_rejected", "evidence", "family", "instances_dataset", "instances_tier",
                  "mismatches", "target", "device", "instances_manifest_sha256", "component", "jobs", "level", "anchor", "dtype")
@@ -172,6 +173,27 @@ def test_lane_shorthand_folds_into_one_spelling(env, capsys):
     assert set(vocab.KEY_ALIASES.values()) <= set(vocab.KEYS)
     for (key, old), new in vocab.VALUE_ALIASES.items():
         assert vocab.check(key, new) is None and vocab.check(key, old), (key, old, new)
+
+
+def test_abandoned_is_written_only_with_the_note_that_says_why(env, capsys):
+    """`abandoned` marks evidence of a line of work that was given up; the label is only read with its note, so `--ref` must name one
+    as note:<lane>/<file name without .md> (the name survives a move into a month folder)."""
+    st, note = LocalStore(), "note:flock-backend/20260929T0500Z-report-flock-backend"
+    why = "label key 'abandoned' needs --ref naming the note that says why (note:<lane>/<file name without .md>)"
+    assert vocab.check_ref("abandoned", None) == why and vocab.check_ref("abandoned", note) is None
+    assert vocab.check_ref("abandoned", "note:kb/LANE-CONTRACT") is None
+    assert vocab.check_ref("abandoned", RUN_REAL) == f"{why}, not {RUN_REAL!r}"
+    assert vocab.check_ref("abandoned", "note:lanes/flock-backend/2026-09/x.md") is not None     # a path, not the note's name
+    assert vocab.check_ref("superseded_by", None) is None and vocab.check_ref("note", "anything") is None
+    for ref in ([], ["--ref", RUN_REAL]):
+        assert main(["label", RUN_REAL, "abandoned", "W=31 field, not the protocol's", "--by", "flock-backend", *ref]) == 2
+        err = capsys.readouterr().err
+        assert err.startswith(f"research data label: refused: {why}") and "Nothing written" in err
+    assert st.labels(RUN_REAL) == []
+    assert main(["label", RUN_REAL, "abandoned", "W=31 field, not the protocol's", "--by", "flock-backend", "--ref", note]) == 0
+    assert "refused" not in capsys.readouterr().err
+    (lab,) = st.labels(RUN_REAL)
+    assert (lab.key, lab.value, lab.by, lab.ref) == ("abandoned", "W=31 field, not the protocol's", "flock-backend", note)
 
 
 def test_label_writes_the_canonical_key_and_form(env, capsys):

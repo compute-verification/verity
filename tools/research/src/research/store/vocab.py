@@ -64,6 +64,7 @@ ARM = "arm"
 STAGE = "stage"
 SOURCE = "source"
 SUPERSEDED_BY = "superseded_by"
+ABANDONED = "abandoned"
 INTERACTION_ATTEMPT_OF = "interaction_attempt_of"
 HASH = "hash"
 SHARING = "sharing"
@@ -136,6 +137,11 @@ REF_KEYS = ("path", "result_artifact", "constructed_from_attempt")
 #: the artifact's meta at `put`); a label is what a table selects on or a judgement about the result, so these are refused.
 MEASUREMENT_KEYS = ("l", "n", "subbatches", "per_proof_vus", "R_proved", "threads", "window", "rtt_ms_path", "native_peak", "accumulate",
                     "replicate", "encoder")
+#: A note in the notes repo, as a label's ref names it: `note:<lane>/<file name without .md>` (`note:kb/<name>` for kb/), the same
+#: whichever month folder the file has moved to.
+NOTE_REF_RE = re.compile(r"^note:[A-Za-z0-9][\w.-]*/[\w.-]+$")
+#: Keys whose label is only read with its ref: the form that ref must take, and what it names.
+REF_FORMS: dict[str, tuple[re.Pattern[str], str]] = {ABANDONED: (NOTE_REF_RE, "the note that says why (note:<lane>/<file name without .md>)")}
 #: Label keys that name evidence / findings written by code today (trust dossiers, the ledger's red-team assertions).
 FINDING = "finding"
 LEVEL = "level"
@@ -228,6 +234,8 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(STAGE, GROUP_RESULT, TEXT, "the pipeline stage the result belongs to (build, match, commit)"),
     _k(SOURCE, GROUP_RESULT, TEXT, "branch@commit the result was produced from, for an artifact no Attempt records; old spellings `tree`, `release`"),
     _k(SUPERSEDED_BY, GROUP_RESULT, TEXT, "the run id or art: id of the result that replaces this one (this one stays in the store)"),
+    _k(ABANDONED, GROUP_RESULT, TEXT, "the line of work this evidence belongs to was given up, in a few words; --ref names the note that says why "
+                                      "(note:<lane>/<file name without .md>), so nobody builds on it unawares"),
     _k(INTERACTION_ATTEMPT_OF, GROUP_RESULT, TEXT, "on an interaction attempt that is not the cell's figure (refused, or run on an earlier pair): the art: id of "
        "the cell it belongs to; the cell lists every attempt with its deviation (IX1)"),
     _k(HASH, GROUP_RESULT, TEXT, "the operand commitment proven in-circuit: none, poseidon2-babybear-w24, or the leaf's name"),
@@ -299,6 +307,14 @@ def check(name: str, value: Any) -> str | None:
     if k.form in (INT, NUMBER) and isinstance(value, str):
         return f"{name}={value!r} is not {'an int' if k.form == INT else 'a number'}"
     return k.check(value)
+
+
+def check_ref(name: str, ref: str | None) -> str | None:
+    """Why a `name` label's ref is not the form `REF_FORMS` requires (a missing ref included), as one line, or None."""
+    form = REF_FORMS.get(name)
+    if form is None or (ref is not None and form[0].match(ref)):
+        return None
+    return f"label key {name!r} needs --ref naming {form[1]}" + (f", not {ref!r}" if ref is not None else "")
 
 
 def suggest(name: str) -> list[str]:
