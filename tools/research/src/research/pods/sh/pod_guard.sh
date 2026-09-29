@@ -20,9 +20,11 @@
 #                      /pods and /pods/{self} 403, GraphQL myself Unauthorized) and REST DELETE /pods/{self} is 403, but GraphQL
 #                      podTerminate of its own pod succeeds (guard_terminate_pod tries REST, then GraphQL, then runpodctl).  The account
 #                      key's /root/dm/runpod.py path is only a fallback for pods an old launcher copied it to; `research run --on` never does.
-# The daemon-side per-pod age ceiling (budget_cap.py --pod-max-hours) and the cap/rate/deadline on the controller pod remain the outer layers.
+# The pod's lease (sh/lease.sh, armed by `research pods create`) and the budgets guard on the control pod (`research pods guard`: caps,
+# the balance floor, each line's max pod age) are the outer layers.
 #
-# `research run --on` (the machine side, research.remote.ensure_guard) runs this file as ONE daemon per pod: `guard_daemon`, at the end.
+# `research pods create` (research.pods.lease.arm) and `research run --on` (the machine side, research.remote.ensure_guard) run this
+# file as ONE daemon per pod: `guard_daemon`, at the end.
 
 GUARD_ENVIRON=${GUARD_ENVIRON:-/proc/1/environ}      # RunPod's injected environment (ssh sessions do not inherit it)
 GUARD_LOGF=${GUARD_LOGF:-/root/dm/guard.log}
@@ -236,6 +238,9 @@ guard_trap() { trap 'rc=$?; guard_finish "chain exit rc=$rc"' EXIT; }
 #              (written by a --custody-r2 runner once the attempt and every run file were verified on the store's remote; invalid when
 #              a file was added or changed after it) -> logged with the run ids, re-checked every tick
 #   terminate  idle long enough and every run fetched -> guard_terminate_self (pod-scoped key only; the F7 preserve gate still applies)
+#   expired    the pod's lease (GUARD_LEASE_FILE, default /root/.research/lease: pods/sh/lease.sh) has expired and every run has custody
+#              -> guard_terminate_self, busy or not.  `lease-wait` while a run lacks it: lease.sh ends the pod after its grace anyway.
+# GUARD_FIRST_IDLE_MIN (`pods create`, default 20 there): the idle limit while no run has ever been launched on the pod.
 # <root>/guard/state.json (research/pod-guard/v0.1) carries the verdict, last activity, idle minutes and refusal reasons for the laptop.
 # Test seams: GUARD_PS (a command printing `ps -eo args=`), GUARD_NVSMI (for nvidia-smi), GUARD_NOW (epoch), GUARD_TERMINATE_CMD.
 
@@ -366,7 +371,19 @@ act = {"runners": runners, "work": int(env.get("GUARD_S_WORK") or 0), "serve": i
 busy = bool(runners or act["work"] or act["serve"] or act["gpu_apps"] or (gpu_util or 0) > 0)
 last = now if busy else float(prev.get("last_activity_epoch") or now)
 idle_s = max(0.0, now - last)
-if busy:
+first = float(env.get("GUARD_FIRST_IDLE_MIN") or 0)
+if first > 0 and nruns == 0:
+    idle_min = first                  # `pods create`'s first-run window: a pod that never gets a run does not wait the full idle limit
+
+lease_exp = None                      # pods/sh/lease.sh's file, `EPOCH ISO BY`; unreadable keeps the last expiry this guard read
+try:
+    with open(env.get("GUARD_LEASE_FILE") or "/root/.research/lease") as f:
+        lease_exp = float(f.read().split()[0])
+except (OSError, ValueError, IndexError):
+    lease_exp = prev.get("lease_expires_epoch")
+if lease_exp is not None and now >= lease_exp:
+    verdict = "lease-wait" if unfetched else "expired"
+elif busy:
     verdict = "busy"
 elif idle_s < idle_min * 60:
     verdict = "idle"
@@ -378,9 +395,12 @@ state = {"schema": "research/pod-guard/v0.1", "pod_id": env.get("GUARD_S_POD") o
          "started_utc": prev.get("started_utc") or iso(now), "updated_utc": iso(now), "updated_epoch": now, "idle_min_limit": idle_min,
          "verdict": verdict, "busy": busy, "activity": act, "last_activity_utc": iso(last), "last_activity_epoch": last,
          "idle_min": round(idle_s / 60, 1), "runs": nruns, "unfetched": unfetched,
+         "lease_expires_epoch": lease_exp, "lease_expires_utc": iso(lease_exp) if lease_exp is not None else None,
          "refusal": (f"idle {idle_s / 60:.1f} min >= {idle_min:g} but {len(unfetched)} run(s) not fetched with `research fetch --all`: "
-                     + ", ".join(f"{u['run']} ({u['why']})" for u in unfetched)) if verdict == "refuse" else None,
-         "refused_since_utc": (prev.get("refused_since_utc") or iso(now)) if verdict == "refuse" else None,
+                     + ", ".join(f"{u['run']} ({u['why']})" for u in unfetched)) if verdict == "refuse" else
+                    (f"lease expired {iso(lease_exp)}; waiting for the custody of " + ", ".join(u["run"] for u in unfetched)
+                     + " (the lease loop ends the pod after its grace)") if verdict == "lease-wait" else None,
+         "refused_since_utc": (prev.get("refused_since_utc") or iso(now)) if verdict in ("refuse", "lease-wait") else None,
          "terminate": prev.get("terminate")}
 os.makedirs(gdir, exist_ok=True)
 tmp = os.path.join(gdir, f".state.json.{os.getpid()}")
@@ -458,8 +478,12 @@ guard_daemon() {
       echo "$(date -u +%FT%TZ) $out" >> "$GUARD_LOGF"
     fi
     last_key=$key
-    if [ "$verdict" = terminate ]; then
-      out=$(guard_terminate_self "idle >= ${idle_min} min, every run fetched" 2>&1); rc=$?
+    if [ "$verdict" = terminate ] || [ "$verdict" = expired ]; then
+      if [ "$verdict" = expired ]; then
+        out=$(GUARD_FORCE_TERMINATE=1 guard_terminate_self "the pod's lease expired, every run has custody" 2>&1); rc=$?
+      else
+        out=$(guard_terminate_self "idle >= ${idle_min} min, every run fetched" 2>&1); rc=$?
+      fi
       guard_note_terminate "$root" "$rc" "$out$(tail -3 "$GUARD_LOGF" 2>/dev/null)"
       [ "$rc" -eq 0 ] && { echo "$(date -u +%FT%TZ) GUARD daemon $$: termination accepted; exiting" >> "$GUARD_LOGF"; return 0; }
       sleep "${GUARD_RETRY_S:-300}" 9>&-      # refused by the F7 gate or the API failed: keep guarding, do not hammer the API
