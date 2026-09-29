@@ -4,7 +4,7 @@ reference).  The Job queue holds batch, unattended work on pods; an interactive 
     research jobs add merge-check --commit REF [--base SHA] [--verdict-pack ART] [common]
     research jobs add lean-regen --commit REF --package DIR [--package DIR ...] [common]
     research jobs add audit-main [--commit REF] [common]            a cold check of main's tip (the nightly cron's job)
-        common: [--priority N] [--timeout-s S] [--max-attempts N] [--dedupe-key K] [--repo OWNER/NAME]
+        common: [--priority N] [--timeout-s S] [--max-attempts N] [--dedupe-key K] [--line PREFIX] [--repo OWNER/NAME]
     research jobs list [--state S] [--kind K] [--limit N] [--json]
     research jobs show ID [--json]
     research jobs cancel ID
@@ -169,6 +169,8 @@ def add_body(ns: argparse.Namespace) -> dict:
             "dedupe_key": ns.dedupe_key or key}
     if ns.max_attempts:
         body["max_attempts"] = ns.max_attempts
+    if ns.line:
+        body["line"] = ns.line
     return body
 
 
@@ -192,6 +194,7 @@ def _parser() -> argparse.ArgumentParser:
     add.add_argument("--timeout-s", type=int)
     add.add_argument("--max-attempts", type=int)
     add.add_argument("--dedupe-key")
+    add.add_argument("--line", help="the budget line the job's compute is charged to, e.g. vy-coord-")
     add.add_argument("--repo", default=REPO)
     ls = sub.add_parser("list")
     ls.add_argument("--state")

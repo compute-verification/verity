@@ -53,9 +53,10 @@
                                             "requirements": {"min_lease_s": 8100}}}},
         {"at": 2, "req": ["GET", "/api/events?kind=train.built"], "token": "tok-reader",
          "expect": {"status": 200, "body": {"events": [{"subject": "train:1", "actor": "coordinator", "payload": {"prs": [1, 2], "tip": "m0+a1+b1", "job": 1}}]}}},
-        {"at": 3, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": [7], "requirements": {"avx512": true}},
+        {"at": 3, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": [7], "requirements": {"avx512": true}, "line": "vy-coord-"},
          "expect": {"status": 201, "body": {"id": 2, "tip": "m0+r1", "job": 2}}},
-        {"at": 4, "req": ["GET", "/api/jobs/2"], "token": "tok-reader", "expect": {"status": 200, "body": {"requirements": {"min_lease_s": 8100, "avx512": true}}}},
+        {"at": 4, "req": ["GET", "/api/jobs/2"], "token": "tok-reader", "expect": {"status": 200, "body": {"requirements": {"min_lease_s": 8100, "avx512": true}, "line": "vy-coord-"}}},
+        {"at": 4, "req": ["GET", "/api/jobs/1"], "token": "tok-reader", "expect": {"status": 200, "body": {"line": null}}},
         {"at": 5, "req": ["GET", "/api/trains"], "token": "tok-lane", "expect": {"status": 200, "body": {"trains": [{"id": 2}, {"id": 1}]}}}
       ]
     },
@@ -68,6 +69,7 @@
         {"at": 3, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": []}, "expect": {"status": 400}},
         {"at": 4, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": [1, 1]}, "expect": {"status": 400}},
         {"at": 5, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": [1], "land": "yes"}, "expect": {"status": 400}},
+        {"at": 5, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": [1], "line": "coord"}, "expect": {"status": 400}},
         {"at": 6, "req": ["POST", "/api/trains"], "token": "tok-lane", "body": {"prs": [1]}, "expect": {"status": 403}},
         {"at": 7, "expect_github": {"refs": {"main": "m0", "train/1": null}}},
         {"at": 8, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": [1, 5]}, "expect": {"status": 409}},

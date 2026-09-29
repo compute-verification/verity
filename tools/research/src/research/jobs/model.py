@@ -26,8 +26,12 @@ OUTCOMES = ("passed", "failed", "error")
 #: needs every name in the capability's list
 REQUIREMENTS = {"avx512": "avx512", "min_mem_gb": "mem_gb", "min_cpus": "cpus", "min_disk_gb": "disk_gb", "min_lease_s": "lease_s",
                 "tools": "tools"}
-DEFAULT_LEASE_S, MIN_LEASE_S, MAX_LEASE_S = 900, 60, 3600
+DEFAULT_LEASE_S = 900
+#: (min, max) lease_s by kind, checked in code, not by the database, so the interactive kind can carry leases of hours
+LEASE_BOUNDS = {kind: (60, 3600) for kind in KINDS}
 DEFAULT_MAX_ATTEMPTS = 3
+#: a budget line's prefix, as budgets.toml names them (`vy-coord-`)
+LINE = re.compile(r"[a-z0-9][a-z0-9-]{0,62}-")
 
 
 def sha256(s: str) -> str:
@@ -65,6 +69,7 @@ class Job:
     not_before: float
     max_attempts: int
     lease_s: int
+    line: str | None = None            # the budget line the job's compute is charged to
     state: str = "queued"
     attempts: int = 0
     lease_worker: str | None = None
@@ -145,7 +150,7 @@ class JobService:
         return {"id": j.id, "kind": j.kind, "state": j.state, "priority": j.priority, "payload": j.payload,
                 "requirements": j.requirements, "dedupe_key": j.dedupe_key, "enqueued_by": j.enqueued_by,
                 "enqueued_at": self.iso(j.enqueued_at), "not_before": self.iso(j.not_before), "attempts": j.attempts,
-                "max_attempts": j.max_attempts, "lease_s": j.lease_s, "lease_worker": j.lease_worker, "lease_slot": j.lease_slot,
+                "max_attempts": j.max_attempts, "lease_s": j.lease_s, "line": j.line, "lease_worker": j.lease_worker, "lease_slot": j.lease_slot,
                 "lease_expires_at": self.iso(j.lease_expires), "cancel_requested": j.cancel_requested, "progress": j.progress,
                 "result": j.result, "finished_at": self.iso(j.finished_at)}
 
@@ -234,8 +239,10 @@ class JobService:
         max_attempts = body.get("max_attempts", DEFAULT_MAX_ATTEMPTS)
         if not (_int(prio) and -1000 <= prio <= 1000):
             raise Refused(400, "priority must be an integer from -1000 to 1000")
-        if not (_int(lease_s) and MIN_LEASE_S <= lease_s <= MAX_LEASE_S):
-            raise Refused(400, f"lease_s must be an integer from {MIN_LEASE_S} to {MAX_LEASE_S}")
+        lo, hi = LEASE_BOUNDS[kind]
+        if not (_int(lease_s) and lo <= lease_s <= hi):
+            raise Refused(400, f"lease_s must be an integer from {lo} to {hi} for {kind}")
+        check_line(body.get("line"))
         if not (_int(max_attempts) and 1 <= max_attempts <= 10):
             raise Refused(400, "max_attempts must be an integer from 1 to 10")
         key = body.get("dedupe_key")
@@ -249,7 +256,7 @@ class JobService:
             not_before = self.seconds(body["not_before"]) if body.get("not_before") is not None else now
         except (TypeError, AttributeError, ValueError):
             raise Refused(400, "not_before must be an ISO 8601 time") from None
-        j = Job(len(self.jobs) + 1, kind, payload, prio, req, key, t.name, now, not_before, max_attempts, lease_s)
+        j = Job(len(self.jobs) + 1, kind, payload, prio, req, key, t.name, now, not_before, max_attempts, lease_s, body.get("line"))
         self.jobs[j.id] = j
         self._event(now, "job.added", f"job:{j.id}", t.name, {"kind": kind, "dedupe_key": key})
         return 201, {"id": j.id, "created": True, "state": j.state}
@@ -372,6 +379,11 @@ def meets(requirements: dict, capabilities: dict) -> bool:
         elif not _number(have) or have < want:
             return False
     return True
+
+
+def check_line(line: Any) -> None:
+    if line is not None and not (isinstance(line, str) and LINE.fullmatch(line)):
+        raise Refused(400, "line must be a budget line's prefix, such as vy-coord-")
 
 
 def _int(x: Any) -> bool:

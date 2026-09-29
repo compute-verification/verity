@@ -27,7 +27,19 @@
          "expect": {"status": 200, "body": {"id": 1, "created": false, "state": "queued"}}},
         {"at": 2, "req": ["GET", "/api/jobs/1"], "token": "tok-coordinator",
          "expect": {"status": 200, "body": {"id": 1, "state": "queued", "attempts": 0, "enqueued_by": "coordinator",
-                                            "enqueued_at": "2026-09-29T00:00:00Z", "lease_s": 900, "max_attempts": 3}}}
+                                            "enqueued_at": "2026-09-29T00:00:00Z", "lease_s": 900, "max_attempts": 3, "line": null}}}
+      ]
+    },
+    {
+      "name": "a job may name the budget line its compute is charged to",
+      "steps": [
+        {"at": 0, "req": ["POST", "/api/jobs"], "token": "tok-coordinator", "body": {"kind": "merge-check", "payload": {}, "line": "vy-coord-"}, "expect": {"status": 201, "body": {"id": 1}}},
+        {"at": 1, "req": ["GET", "/api/jobs/1"], "token": "tok-reader", "expect": {"status": 200, "body": {"line": "vy-coord-"}}},
+        {"at": 2, "req": ["POST", "/api/jobs"], "token": "tok-coordinator", "body": {"kind": "merge-check", "payload": {}, "line": "vy-coord"}, "expect": {"status": 400}},
+        {"at": 3, "req": ["POST", "/api/jobs"], "token": "tok-coordinator", "body": {"kind": "merge-check", "payload": {}, "line": "Vy Coord-"}, "expect": {"status": 400}},
+        {"at": 4, "req": ["POST", "/api/jobs"], "token": "tok-coordinator", "body": {"kind": "merge-check", "payload": {}, "line": 7}, "expect": {"status": 400}},
+        {"at": 5, "req": ["POST", "/api/jobs"], "token": "tok-coordinator", "body": {"kind": "audit-main", "payload": {}, "line": null}, "expect": {"status": 201, "body": {"id": 2}}},
+        {"at": 6, "req": ["GET", "/api/jobs?kind=merge-check"], "token": "tok-reader", "expect": {"status": 200, "body": {"jobs": [{"id": 1, "line": "vy-coord-"}]}}}
       ]
     },
     {
@@ -217,6 +229,7 @@
         {"at": 0, "req": ["POST", "/api/jobs"], "token": "tok-coordinator", "body": {"kind": "coffee", "payload": {}}, "expect": {"status": 400}},
         {"at": 1, "req": ["POST", "/api/jobs"], "token": "tok-coordinator", "body": {"kind": "merge-check", "payload": "commit c1"}, "expect": {"status": 400}},
         {"at": 2, "req": ["POST", "/api/jobs"], "token": "tok-coordinator", "body": {"kind": "merge-check", "payload": {}, "lease_s": 30}, "expect": {"status": 400}},
+        {"at": 2, "req": ["POST", "/api/jobs"], "token": "tok-coordinator", "body": {"kind": "lean-regen", "payload": {}, "lease_s": 3601}, "expect": {"status": 400}},
         {"at": 3, "req": ["POST", "/api/jobs"], "token": "tok-coordinator", "body": {"kind": "merge-check", "payload": {}, "requirements": {"gpu": true}}, "expect": {"status": 400}},
         {"at": 4, "req": ["POST", "/api/jobs"], "token": "tok-coordinator", "body": {"kind": "merge-check", "payload": {}, "max_attempts": 0}, "expect": {"status": 400}},
         {"at": 5, "req": ["POST", "/api/jobs/1/complete"], "token": "tok-dispatch", "body": {"lease_token": "x", "outcome": "passed"}, "expect": {"status": 404}},

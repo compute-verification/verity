@@ -26,7 +26,7 @@ import re
 from dataclasses import dataclass, field
 
 from ..merge import rule_touches
-from .model import DEFAULT_MAX_ATTEMPTS, JobService, Refused
+from .model import DEFAULT_MAX_ATTEMPTS, JobService, Refused, check_line
 
 REPO = "danielreuter/verity"
 HOLD = "hold"
@@ -132,6 +132,7 @@ class Train:
     land: bool
     requirements: dict
     by: str
+    line: str | None = None         # passed on to its merge-check jobs
     state: str = "checking"
     why: str | None = None
     rebuilds: int = 0
@@ -179,6 +180,7 @@ class TrainService(JobService):
         if not isinstance(land, bool):
             raise Refused(400, "land must be true or false")
         req = body.get("requirements") or {}
+        check_line(body.get("line"))
         for n in numbers:
             pr = self.github.prs.get(n)
             why = ("no such PR" if pr is None else f"is {pr['state']}" if pr["state"] != "open" else
@@ -191,10 +193,11 @@ class TrainService(JobService):
         tip, conflict = self._build(tid, base, heads)
         if conflict is not None:
             self._event(now, "train.refused", f"train:{tid}", t.name, {"conflict": conflict})
-            self.trains[tid] = Train(tid, heads, base, base, None, land, req, t.name, "refused", f"#{conflict} doesn't merge onto the train")
+            self.trains[tid] = Train(tid, heads, base, base, None, land, req, t.name, body.get("line"), "refused",
+                                     f"#{conflict} doesn't merge onto the train")
             raise Refused(409, f"#{conflict} doesn't merge onto the train so far")
-        job = self._check(tid, tip, base, req, t, now)
-        self.trains[tid] = tr = Train(tid, heads, base, tip, job, land, req, t.name)
+        job = self._check(tid, tip, base, req, body.get("line"), t, now)
+        self.trains[tid] = tr = Train(tid, heads, base, tip, job, land, req, t.name, body.get("line"))
         self._event(now, "train.built", f"train:{tid}", t.name, {"prs": numbers, "tip": tip, "job": job})
         return 201, self.view_train(tr)
 
@@ -208,8 +211,8 @@ class TrainService(JobService):
                 return base, p["number"]
         return self.github.refs[branch], None
 
-    def _check(self, tid: int, tip: str, base: str, req: dict, t, now: float) -> int:
-        body = {"kind": "merge-check", "dedupe_key": f"merge-check:{tip}", "max_attempts": DEFAULT_MAX_ATTEMPTS,
+    def _check(self, tid: int, tip: str, base: str, req: dict, line: str | None, t, now: float) -> int:
+        body = {"kind": "merge-check", "dedupe_key": f"merge-check:{tip}", "max_attempts": DEFAULT_MAX_ATTEMPTS, "line": line,
                 "payload": {"repo": REPO, "commit": tip, "base": base, "train": tid, "verdict_pack": None, "timeout_s": TRAIN_TIMEOUT_S},
                 "requirements": {"min_lease_s": TRAIN_TIMEOUT_S + LEASE_MARGIN_S, **req}}
         return self.add(t, body, now)[1]["id"]
@@ -292,7 +295,7 @@ class TrainService(JobService):
             return
         by = next(t for t in self.tokens.values() if t.name == tr.by)
         tr.base, tr.tip, tr.rebuilds, tr.run_id = base, tip, tr.rebuilds + 1, None
-        tr.job = self._check(tr.id, tip, base, tr.requirements, by, now)
+        tr.job = self._check(tr.id, tip, base, tr.requirements, tr.line, by, now)
         self._event(now, "train.rebuilt", f"train:{tr.id}", "cron", {"base": base, "tip": tip, "job": tr.job})
 
     def _end(self, tr: Train, state: str, why: str | None, now: float) -> None:
