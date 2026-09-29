@@ -110,6 +110,7 @@ def test_a_split_count_the_pipeline_never_launches_keeps_no_lane(bad):
     assert SM.SPLIT_COUNTS == (1, 2, 4, 8, 16, 32)
 
 
+@pytest.mark.slow
 def test_every_launched_split_count_keeps_a_lane():
     rng = np.random.default_rng(5)
     for k in range(40):
