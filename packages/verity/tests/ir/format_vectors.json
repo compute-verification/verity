@@ -1083,6 +1083,73 @@
      2
     ]
    }
+  ],
+  [
+   "a node's first argument, new parts: recorded as (9, 0)",
+   [
+    9,
+    0
+   ],
+   {
+    "concat": [
+     {
+      "affine": [
+       "n",
+       40,
+       0,
+       1
+      ]
+     },
+     {
+      "affine": [
+       "n",
+       41,
+       0,
+       1
+      ]
+     }
+    ]
+   }
+  ],
+  [
+   "its second argument repeats them and is written out: an alias names an earlier node",
+   [
+    9,
+    1
+   ],
+   {
+    "concat": [
+     {
+      "affine": [
+       "n",
+       40,
+       0,
+       1
+      ]
+     },
+     {
+      "affine": [
+       "n",
+       41,
+       0,
+       1
+      ]
+     }
+    ]
+   }
+  ],
+  [
+   "a later node aliases the first argument",
+   [
+    10,
+    0
+   ],
+   {
+    "alias": [
+     9,
+     0
+    ]
+   }
   ]
  ],
  "alias_reader": {
