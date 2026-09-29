@@ -13,16 +13,17 @@ set -m   # the bootstrap as its own process group (pgid = its pid), so the fail-
 bash verity_vllm/ops/pod_bootstrap.sh --cases "$CASES" --out "$OUT" --gpu > "$EV/bootstrap.log" 2>&1 &
 B=$!; set +m
 while kill -0 "$B" 2>/dev/null || [ "$ff" = 0 ]; do
-  if [ "$ff" = 0 ] && nvidia-smi > /dev/null 2>&1 && [ -x "$PY" ] \
-     && timeout 180 "$PY" -c "import torch; torch.cuda.init(); assert torch.cuda.is_available(); import vllm" > /dev/null 2>&1; then
-    ff=1; say "failfast OK: nvidia-smi, torch CUDA init, vllm import $(( $(date +%s) - START )) s after the pod start"
-    dev=$("$PY" -c "import json, torch; p = torch.cuda.get_device_properties(0)
-print(json.dumps({'name': p.name, 'sms': p.multi_processor_count, 'cc': f'{p.major}.{p.minor}', 'count': torch.cuda.device_count()}))" 2>/dev/null)
-    echo "$dev" > "$EV/device.json"; say "device $dev"
-    if [ -n "${EXPECT_SMS:-}" ] && ! python3 -c "import json,sys;d=json.loads(sys.argv[1]);sys.exit(0 if d['sms']==int(sys.argv[2]) and d['cc']==sys.argv[3] else 1)" "$dev" "$EXPECT_SMS" "${EXPECT_CC:-8.9}"; then
-      kill -TERM -- "-$B" 2>/dev/null; sleep 5; kill -KILL -- "-$B" 2>/dev/null
-      say "STOP failfast device check FAIL: $dev is not $EXPECT_SMS SMs at cc ${EXPECT_CC:-8.9} (the splits constants and NUM_SMS would change); terminate this pod"
-      exit 40
+  VVENV=${PY%/*}/verity-vllm   # pod_bootstrap.sh writes it once the venv is installed
+  if [ "$ff" = 0 ] && nvidia-smi > /dev/null 2>&1 && [ -x "$VVENV" ]; then
+    dev=$(timeout 180 "$VVENV" epoch device ${EXPECT_SMS:+--expect-sms "$EXPECT_SMS" --expect-cc "${EXPECT_CC:-8.9}"} 2>/dev/null); drc=$?
+    if [ "$drc" = 0 ] || [ "$drc" = 3 ]; then
+      ff=1; say "failfast OK: nvidia-smi, torch CUDA init, vllm import $(( $(date +%s) - START )) s after the pod start"
+      echo "$dev" > "$EV/device.json"; say "device $dev"
+      if [ "$drc" = 3 ]; then
+        kill -TERM -- "-$B" 2>/dev/null; sleep 5; kill -KILL -- "-$B" 2>/dev/null
+        say "STOP failfast device check FAIL: $dev is not $EXPECT_SMS SMs at cc ${EXPECT_CC:-8.9} (the splits constants and NUM_SMS would change); terminate this pod"
+        exit 40
+      fi
     fi
   fi
   if [ "$ff" = 0 ] && [ "$(date +%s)" -ge "$END" ]; then

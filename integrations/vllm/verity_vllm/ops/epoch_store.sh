@@ -14,10 +14,11 @@ set -u
 D=${1:?row dir}; ROWID=$(basename "$D")
 EV=$RESEARCH_RUN_DIR/evidence
 R=${RESEARCH_CLI:-python3 -m research}
+VV=${VV:-${PY:-/workspace/venv312/bin/python}}; [[ "$VV" == */verity-vllm ]] || VV=${VV%/*}/verity-vllm
 C=${CUSTODY_DIR:-$(dirname "$(dirname "$RESEARCH_RUN_DIR")")/requests/${RESEARCH_RUN_ID:?}/custody}
 [ -f "$C/cred.json" ] || { echo "no custody key at $C"; exit 4; }
 export RESEARCH_STORE_CONFIG=$C/store.toml
-eval "$(python3 -c "import json,shlex;d=json.load(open('$C/cred.json'));print(' '.join(f'export {k}={shlex.quote(d[k])}' for k in ('AWS_ACCESS_KEY_ID','AWS_SECRET_ACCESS_KEY','AWS_SESSION_TOKEN') if d.get(k)))")"
+eval "$("$VV" epoch custody-env "$C")"
 S=${RESEARCH_STORE:-/workspace/epoch/store}/../stage/$RESEARCH_RUN_ID; rm -rf "$S"; mkdir -p "$S/build" "$S/records" "$S/large"
 
 cp -al "$D/." "$S/build/"
@@ -37,33 +38,8 @@ if [ -d "$S/records/match/capture" ] && [ "$(find "$S/records/match/capture" -ty
 fi
 
 meta() {  # meta KIND ROLE -> the tree's meta (serving-view's record-build layout), from the Build's own summaries
-  python3 - "$D" "$1" "$2" <<'EOF'
-import glob, json, os, sys
-d, kind, role = sys.argv[1:]
-def doc(p):
-    try:
-        return json.load(open(p))
-    except Exception:
-        return {}
-progs, wds = {}, {}
-for bs in [f"{d}/build_summary.json", *sorted(glob.glob(f"{d}/build/rank*/build_summary.json"))]:
-    s = doc(bs)
-    r = "0" if os.path.dirname(bs) == d else os.path.basename(os.path.dirname(bs)).removeprefix("rank")
-    for k, v in s.items():
-        if isinstance(v, dict) and v.get("program_digest") and (k in ("request", "step") or k.startswith("build_request")):
-            progs[f"rank{r}/{k}"] = v["program_digest"]
-    wd = (s.get("workload") or {}).get("workload_digest")
-    if wd:
-        wds[f"rank{r}"] = wd
-m, v = doc(f"{d}/manifest.json"), doc(f"{d}/verdict.json")
-row = os.path.basename(d)
-print(json.dumps({"name": f"epoch-{kind}/{row}", "role": role, "row": int(os.environ["ROWNUM"]), "row_id": row,
-                  "epoch": os.environ.get("EPOCH_NAME", "vllm-rebaseline-epoch"), "program_digests": progs, "workload_digests": wds,
-                  "manifest_digest": m.get("manifest_digest"), "query_id": (m.get("query") or {}).get("query_id"),
-                  "verdict": v.get("outcome"),
-                  "build": {"gpu": os.environ.get("GPU_NAME"), "machine": os.environ.get("POD"), "run": os.environ["RESEARCH_RUN_ID"],
-                            "source": os.environ["EPOCH_SHA"], "stage": kind}}))
-EOF
+  "$VV" epoch store-meta "$D" --kind "$1" --role "$2" --rownum "$ROWNUM" --run-id "$RESEARCH_RUN_ID" --epoch-sha "$EPOCH_SHA" \
+    --gpu "${GPU_NAME:-}" --pod "${POD:-}" --epoch "${EPOCH_NAME:-vllm-rebaseline-epoch}"
 }
 
 rc=0; arts=""

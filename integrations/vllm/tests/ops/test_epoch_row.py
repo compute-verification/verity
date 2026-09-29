@@ -1,8 +1,9 @@
 """verity_vllm/ops/epoch_row.sh: every stop of a row -- a stage deadline, STOP_AFTER, a signal, the custody guard -- ends inside the job
 the same way: the Build and records stored, `research data preserved` on them, then END.
 
-CPU only: the script runs from this tree with stand-ins for the stage runner (`$PY -m verity_vllm.pipeline.cli row run ...`), the
-bootstrap (`EPOCH_BOOTSTRAP`) and the store CLI (`RESEARCH_CLI`), in a fake `research run` job (run dir, status.json, custody dir)."""
+CPU only: the script runs from this tree with stand-ins for the stage runner (`verity-vllm row run ...`; every other `verity-vllm` command,
+`epoch ...`, is the real CLI), the bootstrap (`EPOCH_BOOTSTRAP`) and the store CLI (`RESEARCH_CLI`), in a fake `research run` job (run
+dir, status.json, custody dir)."""
 from __future__ import annotations
 
 import json
@@ -24,10 +25,10 @@ ROW = "llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-e
 ART = "art:" + "ab" * 32
 
 STAGE = """#!/bin/bash
-# stand-in for $PY: `-m verity_vllm.pipeline.cli row run ROW ROLE REPO REV --stages S` is a stage whose behaviour FAKE_<S> names
-# (ok | sleep: FAKE_SLEEP seconds); anything else is the real interpreter
-if [ "$1 $2 $3 $4" = "-m verity_vllm.pipeline.cli row run" ]; then
-  s=${10}; d=$SWEEP_DIR/$5; mkdir -p "$d"; echo "stage $s" >> "$CALLS"
+# stand-in for the `verity-vllm` launcher: `row run ROW ROLE REPO REV --stages S` is a stage whose behaviour FAKE_<S> names (ok | sleep:
+# FAKE_SLEEP seconds); every other command is the real CLI
+if [ "$1 $2" = "row run" ]; then
+  s=$8; d=$SWEEP_DIR/$3; mkdir -p "$d"; echo "stage $s" >> "$CALLS"
   if [ "$s" = build ]; then
     echo '{"request": {"program_digest": "p0"}}' > "$d/build_summary.json"
     echo '{"manifest_digest": "m0", "query": {"required_families": ["weights"]}}' > "$d/manifest.json"
@@ -36,7 +37,7 @@ if [ "$1 $2 $3 $4" = "-m verity_vllm.pipeline.cli row run" ]; then
   case "$(eval echo "\\${FAKE_${s^^}:-ok}")" in sleep) exec sleep "${FAKE_SLEEP:-60}";; esac
   exit 0
 fi
-exec "$REAL_PY" "$@"
+exec "$REAL_PY" -m verity_vllm.pipeline.cli "$@"
 """
 CLI = """#!/bin/bash
 # stand-in for `python3 -m research`: logs every call; `data put` prints an artifact id
@@ -63,7 +64,8 @@ def _job(tmp_path: Path, *, timeout_s: float = 7200, key_after_run_s: float = 72
                                                    "expires_utc": _utc(now + timedelta(seconds=timeout_s + key_after_run_s))}))
     b = tmp_path / "bin"
     b.mkdir()
-    for name, text in (("py", STAGE), ("research", CLI), ("bootstrap", "#!/bin/bash\nexit 0\n")):
+    for name, text in (("py", '#!/bin/bash\nexec "$REAL_PY" "$@"\n'), ("verity-vllm", STAGE), ("research", CLI),
+                       ("bootstrap", "#!/bin/bash\nexit 0\n")):
         (b / name).write_text(text)
         (b / name).chmod(0o755)
     env = {k: v for k, v in os.environ.items() if not k.startswith(("DEADLINE_", "STOP_AFTER", "JOB_DEADLINE", "VERITY_"))}
