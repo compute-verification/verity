@@ -134,7 +134,7 @@ def test_d2_input_domain_and_trace_binding():
     assert all(c & 0x7F < 0x7E for c in ops.x[0] + ops.y[0])                             # no transform saturates at the cap
     checked = s.checked(ctx, ops)
     assert len(ops.trace_x[0]) == len(ops.trace_y[0]) == 7 * k * 4 + 3 * k
-    forged = F.Checked(bytes([checked.trace[0] ^ 1]) + checked.trace[1:], checked.cells)
+    forged = F.Checked([bytes([checked.trace_x[0][0] ^ 1]) + checked.trace_x[0][1:]], checked.trace_y, checked.cells)
     assert s.digest(ctx, None, forged) != s.digest(ctx, None, checked)
 
 
@@ -509,6 +509,36 @@ def test_round11_gamma_and_slowdown(step):
     got = tuple((f"{float(100 * gamma_at(s, n)):.3f}", f"{float(F.slowdown(s.forming, Shape(n, n, n), F.STEPS[step][0])):.3f}")
                 for n in (8192, 16384))
     assert got == ROUND11_STEPS[step]
+
+
+def test_the_leaf_is_two_level():
+    """A 64 × 64 tile's leaf is SHAKE256("…/leaf" ‖ 0 ‖ 16 sub-digests, row-major over the 16 × 16 subtiles), each
+    SHAKE256("…/subtile" ‖ 0 ‖ its rows' then columns' forming words ‖ its words, step-major, row-major within a step,
+    I before R), rebuilt here from the bytes.  The words do not depend on the leaf."""
+    rng = random.Random("leaf")
+    steps = 3
+    cells = [[([rng.getrandbits(32) for _ in range(steps)], [None] + [rng.getrandbits(32) for _ in range(steps - 1)])
+              for _ in range(64)] for _ in range(64)]
+    tx, ty = [bytes([i]) for i in range(64)], [bytes([100 + j]) for j in range(64)]
+    checked = F.Checked(tx, ty, cells)
+    s = get("fp8-is-h100-d3s-v0-f16")
+    tag = b"verity/pouw/fp8-is-h100-d3s-v0-f16"
+
+    def le(w):
+        return w.to_bytes(4, "little")
+
+    subs = []
+    for a in range(4):
+        for b in range(4):
+            block = [cells[i][j] for i in range(16 * a, 16 * a + 16) for j in range(16 * b, 16 * b + 16)]
+            words = b"".join(le(atoms[t]) + (b"" if running[t] is None else le(running[t]))
+                             for t in range(steps) for atoms, running in block)
+            trace = b"".join(tx[16 * a:16 * a + 16] + ty[16 * b:16 * b + 16])
+            subs.append(hashlib.shake_256(tag + b"/subtile\0" + trace + words).digest(32))
+    assert s.subdigests(checked) == subs
+    assert s.digest(None, None, checked) == hashlib.shake_256(tag + b"/leaf\0" + b"".join(subs)).digest(32)
+    small = F.Checked(tx[:2], ty[:2], [row[:2] for row in cells[:2]])                  # under 16 a side: one subtile
+    assert len(s.subdigests(small)) == 1
 
 
 def test_k_drops_out():

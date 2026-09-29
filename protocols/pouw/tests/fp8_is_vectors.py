@@ -24,6 +24,7 @@ CASES = (("small-d3s", "d3s-v0", (64, 128, 64), (0, 2), (8, 10), 7, 3),
          ("small-d3s-y16-f16", "d3s-v0-y16-f16", (64, 128, 64), (0, 2), (8, 10), 7, 3),
          *((f"frontier-{n}-d3s-f16", "d3s-v0-f16", (n, n, n), (0, 1), (0, 1), (1 << 64) - 1, 11)
            for n in (2048, 4096, 8192, 16384, 32768)),
+         ("leaf-64-d3s-f16", "d3s-v0-f16", (64, 128, 64), (0, 64), (0, 64), 7, 3),
          ("small-d3m", "d3m-v0", (64, 128, 64), (0, 2), (8, 10), 7, 3),
          ("small-d3", "d3-v0", (64, 128, 64), (0, 2), (8, 10), 7, 3),
          ("lead-k-d3", "d3-v0", (8192, 8192, 8192), (0, 1), (0, 1), (1 << 64) - 1, 11),
@@ -79,6 +80,7 @@ def case_vector(case, forming, shape, r, c, index, weight) -> dict:
             "x_row0": ops.x[0][:16], "y_col0": ops.y[0][:16],
             "trace_sha256": hashlib.sha256(checked.trace).hexdigest(),
             "cell00_atoms": checked.cells[0][0][0][:4], "cell00_running": checked.cells[0][0][1][:4],
+            "subdigests": [d.hex() for d in s.subdigests(checked)],
             "digest": s.digest(ctx, None, checked).hex(),
             "useful_sha256": hashlib.sha256(json.dumps(useful).encode()).hexdigest(), "useful_00": useful[0][0]}
 

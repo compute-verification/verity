@@ -155,8 +155,13 @@ running   R_τ = add.rn.f32(R_(τ−1), I_τ)   (`verity.ml.tc.fp32.add`: binary
           R_0 = +0 for an unseeded layer, and then R_1 = I_1 is not checked (a duplicate in every output,
           `c2FirstRunCopy`); a seeded layer gives each cell a salt word R_0, and R_1 is checked
 checked   the layer's words, then every I_τ and every checked R_τ; useful = R_T (less R_0 when seeded, as glue)
-digest    SHAKE256("verity/pouw/<name>/tile" ‖ 0 ‖ layer words of the tile's rows, then columns ‖ core words)[:32];
-          core words little-endian, step-major, row-major over cells within a step, I_τ before R_τ
+leaf      two-level: the tile's 16 × 16 subtiles, row-major (subtile (a, b) = rows 16a … 16a + 15 and columns
+          16b … 16b + 15 of the tile, before (a, b + 1); a tile under 16 on a side is one subtile), each digested
+          sub(a, b) = SHAKE256("verity/pouw/fp8-is-h100-<tag>/subtile" ‖ 0x00 ‖ layer words of its rows, then columns
+          ‖ its core words)[:32], core words little-endian, step-major, row-major over its cells within a step, I_τ
+          before R_τ; the Merkle leaf is SHAKE256("verity/pouw/fp8-is-h100-<tag>/leaf" ‖ 0x00 ‖ sub(0, 0) ‖ sub(0, 1)
+          ‖ … ‖ sub(3, 3))[:32], so a 64 × 64 leaf holds 16 sub-digests and a proof of one subtile (#380's circuit
+          tile) opens it with the other 15
 tiles     64 × 64 (one m64n64k32 atom per slice: Round 7 measured 32 per word at N ≥ 64, and m64n8 at 22% of peak)
 domain    64 | m, 64 | n, 32 | k, N ≤ m, k, n ≤ 2^16 (N = `mnk_min`: 8,192 by default, or any frontier size)
 wref      ⌈m·n·(32·T + p_FADD·n_R) + f_A·m·k + f_B·n·k⌉: an atom word per cell per slice at 32, an FADD per checked R_τ at
@@ -258,6 +263,12 @@ wref      ⌈m·n·(32·T + p_FADD·n_R) + f_A·m·k + f_B·n·k⌉: an atom wor
       At 16,384³ the short loop clears 5× and 1% together. 8,192³ needs 52.45 per add word for 5×.
     - **γ depends on m and n; k drops out** (under 0.004 points over the frontier's k).
     - `mnk_min` selects any frontier size as the domain's floor.
+- **The two-level leaf's cost** (Round 11's SHAKE256, 2,290.6 units per byte from registers, per Keccak-f block of
+  136 bytes). The combining hash is 5 Keccak-f per 64 × 64 leaf: 0.046× a plain GEMM at 8,192³ and 0.023× at 16,384³.
+  Splitting each leaf into 16 digests adds 5 and 18 more Keccak-f per leaf (their domain strings and padding), 0.046×
+  and 0.084×. Together that is 0.093× and 0.107×, which is +0.005–0.006% of hashing the words themselves (about 1,717×
+  a plain GEMM, 0.75 bytes per MAC). The kernel, the checked words, W_ref and γ don't change. The step's slowdown
+  excludes the commitment, as before.
 - **`d3-v0`** (`D3`), superseded by D-3m: repaired C-2, track D's D-3. It keeps C-2's three NCP blocks and row-RMS
   noise, and adds partner-max full-cell noise, s_l·v_l with s_l the larger E4M3 cell of the entry and of the entry that
   reads the same noise in block 2, which fixes X-C2-B1. Weight streams are keyed per column (X-D2-5).
@@ -282,7 +293,10 @@ wref      ⌈m·n·(32·T + p_FADD·n_R) + f_A·m·k + f_B·n·k⌉: an atom wor
 - **Vectors.** `tests/vectors/fp8_is.json` (from `tests/fp8_is_vectors.py`):
   - every layer on a test instance;
   - `d3-v0` and `d2-draft` at k = 8,192;
-  - the lead cell `d3s-v0-f16` at every frontier size, 2,048³ to 32,768³, one output cell each (bit-exact, CPU).
+  - the lead cell `d3s-v0-f16` at every frontier size, 2,048³ to 32,768³, one output cell each (bit-exact, CPU);
+  - a full 64 × 64 tile of `d3s-v0-f16` (k = 128), with its 16 sub-digests and the leaf.
+
+  Every case records its sub-digests beside the leaf.
 
   The core is checked against the total FP8 step and numpy's float32 running sum, and D-2's exact algebra (before any
   rounding) against A·Bᵀ.
