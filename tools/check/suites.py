@@ -76,14 +76,19 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
 GUARD = HERE / "guard"
+#: on the tests' PYTHONPATH: its `sitecustomize` makes every Python a test starts trace what it reads
+CHILD = GUARD / "child"
 CACHE = Path(os.environ.get("VERITY_TEST_CACHE") or Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "verity" / "tests")
 #: Files every key includes: the runner itself.
-RUNNER = ("tools/check/suites.py", "tools/check/guard/verity_suite_guard.py")
+RUNNER = ("tools/check/suites.py", "tools/check/guard/verity_suite_guard.py", "tools/check/guard/child/sitecustomize.py",
+          "tools/check/guard/child/verity_suite_reads.py")
 XDIST = importlib.util.find_spec("xdist") is not None
 TOOLS = ("lake", "cargo", "nvidia-smi")
 ENV_PREFIXES = ("VERITY_", "FLOCK_")
 #: variables of those prefixes that say where results are kept or which are kept, not what a test computes
-UNKEYED = frozenset({"VERITY_TEST_CACHE", "VERITY_TEST_CACHE_MIN_S", "VERITY_SUITE_REUSE"})
+UNKEYED = frozenset({"VERITY_TEST_CACHE", "VERITY_TEST_CACHE_MIN_S"})
+#: and the runner's own, which it sets for the tests (`VERITY_SUITE_ROOT`, `..._MODULE`, `..._READS`, ...)
+UNKEYED_PREFIX = "VERITY_SUITE_"
 QUICK = ["-m", "not slow"]
 REGISTRY = "fixtures/artifacts.json"
 
@@ -323,7 +328,8 @@ def roots(suite: Suite, pkgs: dict[str, str]) -> list[str]:
 def environment() -> dict:
     return {"python": platform.python_version(), "system": platform.system(), "machine": platform.machine(),
             "tools": {t: shutil.which(t) is not None for t in TOOLS},
-            "variables": {k: v for k, v in sorted(os.environ.items()) if k.startswith(ENV_PREFIXES) and k not in UNKEYED}}
+            "variables": {k: v for k, v in sorted(os.environ.items())
+                          if k.startswith(ENV_PREFIXES) and k not in UNKEYED and not k.startswith(UNKEYED_PREFIX)}}
 
 
 def inputs_of(suite: Suite, pkgs: dict[str, str]) -> list[str]:
@@ -624,8 +630,9 @@ class PerTest:
             by_module.setdefault(base + node.split("::", 1)[0], ({}, {}))[1][node] = when
         self.dir.mkdir(parents=True, exist_ok=True)
         n = 0
+        blind = r.child_outside or {}
         for m, (passed, failed) in sorted(by_module.items()):
-            if m not in self.keys:
+            if m not in self.keys or m in blind or "*" in blind:     # a child read what no key covers: nothing vouches for it
                 continue
             keep = self.keeps[m]
             reads = {f: self.own.get(f, "absent") for f in [*(r.reads or {}).get(m, []), *(r.reads or {}).get("*", [])]
@@ -801,6 +808,7 @@ class Result:
     reused: int = 0                  # tests left out because a kept pass answers for them (`PerTest`)
     contradicts: list | None = None  # in a fresh run: what failed that a cached pass answers for
     nondeterministic: list | None = None     # tests that both passed and failed under one key
+    child_outside: dict | None = None    # test module (or "*") -> what a process its tests started read outside the inputs
 
 
 #: pytest with the guard loaded by name (`-p`), which xdist repeats in each worker, from `guard/`: appended to sys.path, and
@@ -818,7 +826,12 @@ def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: 
     env = dict(os.environ, VERITY_SUITE_ROOT=str(ROOT), VERITY_SUITE_ALLOW=json.dumps(allowed), VERITY_SUITE_REPORT=str(report),
                VERITY_SUITE_WATCH=json.dumps(list(watch)))
     env.pop("VERITY_SUITE_REUSE", None)
+    env.pop("VERITY_SUITE_MODULE", None)
     (logs / f"{slug}.reuse.json").unlink(missing_ok=True)
+    reads_log = logs / f"{slug}.reads"
+    reads_log.unlink(missing_ok=True)
+    env.update(VERITY_SUITE_READS=str(reads_log), VERITY_SUITE_DIR=str(ROOT / suite.path),
+               PYTHONPATH=os.pathsep.join([str(CHILD), *([os.environ["PYTHONPATH"]] if os.environ.get("PYTHONPATH") else [])]))
     if reuse:
         (logs / f"{slug}.reuse.json").write_text(json.dumps(sorted(reuse)))
         env["VERITY_SUITE_REUSE"] = str(logs / f"{slug}.reuse.json")
@@ -832,10 +845,20 @@ def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: 
     ran_all = rc == 0 or (rc == 5 and bool(reuse))           # 5: nothing left to run, every test's pass reused
     passed = ran_all and rep is not None and not rep["outside"] and not rep["unguarded"]
     rep = rep or {}
+    reported = bool(rep)
+    reads, child_outside = {m: set(fs) for m, fs in (rep.get("reads") or {}).items()}, {}
+    for line in reads_log.read_text().splitlines() if reads_log.exists() else ():
+        kind, module, rel = (line.split("\t", 2) + ["", ""])[:3]
+        if kind == "R":
+            reads.setdefault(module, set()).add(rel)
+        elif kind in ("O", "E"):
+            child_outside.setdefault(module, []).append(rel)
+    rep["reads"] = {m: sorted(fs) for m, fs in sorted(reads.items())}
     return Result(suite, "passed" if passed else "failed", seconds, rep.get("counts"), rep.get("outside"),
-                  rep.get("unmarked_slow"), log, workers=workers, unguarded=rep.get("unguarded"), reported=bool(rep),
+                  rep.get("unmarked_slow"), log, workers=workers, unguarded=rep.get("unguarded"), reported=reported,
                   watched=rep.get("watched"), distributions=rep.get("distributions"), missing=rep.get("missing"),
-                  passed=rep.get("passed"), failed_tests=rep.get("failed"), reads=rep.get("reads"), reused=len(reuse))
+                  passed=rep.get("passed"), failed_tests=rep.get("failed"), reads=rep.get("reads"), reused=len(reuse),
+                  child_outside={m: sorted(set(fs)) for m, fs in child_outside.items()})
 
 
 class Slots:
@@ -988,6 +1011,10 @@ def main(argv: list[str] | None = None) -> int:
         r.nondeterministic = sorted(set(per[s].nondeterministic)) if s in per else []
         print(f"{r.status:7} {s.name:28} {_count(r)} in {r.seconds:.0f} s" + (f" on {r.workers} workers" if r.workers > 1 else "")
               + (f"; {kept} per-test passes kept" if kept and per[s].narrow else f"; {kept} outcomes recorded" if kept else ""))
+        if r.child_outside:
+            gone = sorted({f for fs in r.child_outside.values() for f in fs})
+            print(f"        processes its tests started read {len(gone)} files outside its inputs ({', '.join(gone[:3])}): no per-test "
+                  f"verdict is kept for {', '.join(sorted(r.child_outside)[:3])}; list them under [tool.verity.tests] inputs")
         if r.nondeterministic:
             print(f"        NONDETERMINISTIC: {', '.join(r.nondeterministic[:5])}{' ...' if len(r.nondeterministic) > 5 else ''} both passed "
                   "and failed under one key: their inputs were identical")

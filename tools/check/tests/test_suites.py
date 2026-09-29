@@ -420,3 +420,65 @@ def test_an_interrupted_run_keeps_what_finished(tmp_path):
     out = p.communicate()[0]
     assert p.returncode != 0 and "2 per-test passes kept" in out, out
     assert len(list((tmp_path / "cache" / "per-test" / "pkg").glob("pkg~tests~test_heavy.py--*.json"))) == 1
+
+
+_CHILD_TEST = '''import glob, os, subprocess, sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+SIBLINGS = os.path.join(HERE, "*.py")
+
+
+def test_a_child_python_reads_its_siblings():
+    subprocess.run([sys.executable, "-c", "import glob, sys\\nfor p in glob.glob(sys.argv[1]):\\n    open(p).read()", SIBLINGS], check=True)
+
+
+def test_a_fork_reads_its_siblings_and_ends_without_flushing():
+    pid = os.fork()
+    if pid == 0:
+        for p in glob.glob(SIBLINGS):
+            open(p).read()
+        os._exit(0)
+    assert os.waitstatus_to_exitcode(os.waitpid(pid, 0)[1]) == 0
+'''
+
+
+def test_what_a_child_or_a_fork_reads_joins_the_module_s_reads(tmp_path):
+    """A child Python and a forked child that end with `os._exit` still count: their test module re-runs when a sibling it read
+    changes, which a key narrowed from the module's source alone (it names no test module) would miss."""
+    root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
+    _per_test_workspace(root)
+    (tests / "test_sibling.py").write_text("def test_sibling():\n    assert True\n")
+    (tests / "test_child.py").write_text(_CHILD_TEST)
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 0 and "7 per-test passes kept" in p.stdout, p.stdout
+    (tests / "test_heavy.py").write_text((tests / "test_heavy.py").read_text() + "\n")
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 0, p.stdout
+    reused = _reused(tmp_path)
+    assert "tests/test_uses.py::test_uses" in reused and not [n for n in reused if n.startswith(("tests/test_child.py", "tests/test_heavy.py"))]
+
+
+def test_what_a_child_reads_outside_the_inputs_keeps_its_module_out_of_the_per_test_cache(tmp_path):
+    root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
+    _per_test_workspace(root)
+    (tests / "test_sibling.py").write_text("def test_sibling():\n    assert True\n")
+    (root / "elsewhere").mkdir()
+    (root / "elsewhere" / "data.txt").write_text("not an input of pkg\n")
+    (tests / "test_outside.py").write_text(
+        "import os, subprocess, sys\n\ndef test_outside():\n    p = os.path.join(os.path.dirname(__file__), '..', '..', 'elsewhere', 'data.txt')\n"
+        "    subprocess.run([sys.executable, '-c', 'import sys; open(sys.argv[1]).read()', p], check=True)\n")
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 0 and "processes its tests started read 1 files outside its inputs (elsewhere/data.txt)" in p.stdout, p.stdout
+    assert not list((tmp_path / "cache" / "per-test" / "pkg").glob("pkg~tests~test_outside.py--*.json"))
+    assert list((tmp_path / "cache" / "per-test" / "pkg").glob("pkg~tests~test_heavy.py--*.json"))
+
+
+def test_the_child_tracer_hands_on_to_the_interpreter_s_own_sitecustomize(tmp_path):
+    """It shadows the system's `sitecustomize` on PYTHONPATH, so it loads that one after itself."""
+    (tmp_path / "sys").mkdir()
+    (tmp_path / "sys" / "sitecustomize.py").write_text("import builtins\nbuiltins.SYSTEM_SITECUSTOMIZE = True\n")
+    env = {k: v for k, v in os.environ.items() if not k.startswith("VERITY_")}
+    env["PYTHONPATH"] = os.pathsep.join([str(HERE / "guard" / "child"), str(tmp_path / "sys")])
+    p = subprocess.run([sys.executable, "-c", "import builtins, sitecustomize; print(builtins.SYSTEM_SITECUSTOMIZE, sitecustomize.__file__)"],
+                       env=env, capture_output=True, text=True)
+    assert p.returncode == 0 and p.stdout.startswith("True ") and "guard/child/sitecustomize.py" in p.stdout, p.stdout + p.stderr
