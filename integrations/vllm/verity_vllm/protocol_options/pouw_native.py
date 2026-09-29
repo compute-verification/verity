@@ -366,9 +366,23 @@ class Native:
         return PC.CallRecord(index, scheme, c, PC.inputs_digest(c, wd.parts()), blob, PC.units_root(blob), served, self.outputs)
 
 
+def served(call: PC.Call, block: int = BLOCK) -> np.ndarray:
+    """The call's served y alone, without its units: Z = A·Bᵀ exactly (the noise cancels in the circuit's Z; float64 is exact,
+    every sum an integer below 2⁵³) and `dequant`, as `Native.commit` serves it. The weight's rows are read ``block`` at a
+    time."""
+    (m, _k), n = call.a.shape, call.b.n
+    a, y = np.asarray(call.a, np.float64), np.empty((m, n), np.uint16)
+    for lo in range(0, n, block):
+        hi = min(n, lo + block)
+        b, t = call.b.rows(lo, hi)
+        z = ((a @ np.asarray(b, np.float64).T).astype(np.int64) & M32).astype(np.uint32)
+        y[:, lo:hi] = dequant(z, call.s[:, None], np.asarray(t, np.uint32)[None, :], call.bias[None, lo:hi])
+    return y
+
+
 def commit_call(index: int, scheme: str, call: PC.Call, tamper: Mapping[tuple[int, int], int] | None = None) -> PC.CallRecord:
     """One call committed natively (`Native.commit`); its record opens units by regenerating them."""
     return Native(call, tamper=tamper).commit(index, scheme)
 
 
-__all__ = ["BLOCK", "Native", "commit_call", "dequant"]
+__all__ = ["BLOCK", "Native", "commit_call", "dequant", "served"]

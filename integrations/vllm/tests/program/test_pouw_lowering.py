@@ -36,7 +36,7 @@ from verity_vllm.program.registry import b1, pouw_rows
 from verity_vllm.program.registry.serve3_reference import materialize
 
 BF = torch.bfloat16
-M, K, NQ, V = 3, 32, 48, 16
+M, K, NQ, V = 3, 64, 64, 16
 PROF = dict(mode="profile", profile="b1-eager-v3")
 POUW = DEFAULT_TARGET.with_overrides(protocols=("pouw:ncp-v2", "sampled-proofs:vllm-v1"))
 

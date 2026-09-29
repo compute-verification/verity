@@ -95,6 +95,8 @@ def load_workload(path: str | Path, max_tokens: int | None = None) -> dict:
             # built its engine with target=None (engine ARGS still travelled through engine_args_required; environment knobs such as
             # VLLM_USE_DEEP_GEMM have no other channel, and the header carried no `profile.target`).  None when the row declares none.
             "target": dict(doc["target"]) if isinstance(doc.get("target"), dict) and doc.get("target") else None,
+            # each enabled protocol's settings (`protocol_options.load_settings`), never hashed: the capture and the Commit install from it
+            "protocols_config": dict(doc["protocols_config"]) if isinstance(doc.get("protocols_config"), dict) else None,
             "sha256": hashlib.sha256(json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()).hexdigest()}
 
 

@@ -31,6 +31,7 @@ import time
 from collections import deque
 from collections.abc import Mapping
 from dataclasses import dataclass
+from functools import cache
 from pathlib import Path
 from typing import Any
 
@@ -328,10 +329,12 @@ class _LayerRows:
 
 class _CircuitRun:
     """One install's `ncp-v2` workload: every call bound to its `NcpLinear_v1` Program's inputs, its units computed
-    natively and committed (`pouw_native`)."""
+    natively and committed (`pouw_native`). Without ``commit`` (a Match capture) each call serves the same y
+    (`pouw_native.served`) and commits nothing."""
 
-    def __init__(self, scheme: str, entry: str, settings: Settings, weight_roots: dict[int, bytes], salt: bytes) -> None:
-        self.scheme, self.entry, self.settings = scheme, entry, settings
+    def __init__(self, scheme: str, entry: str, settings: Settings, weight_roots: dict[int, bytes], salt: bytes,
+                 commit: bool = True) -> None:
+        self.scheme, self.entry, self.settings, self.commit = scheme, entry, settings, commit
         self.weight_roots, self.salt = weight_roots, salt
         self.records: list[PC.CallRecord] = []
         self.seconds: list[float] = []                  # each call's executor wall time: quantize, commit, dequantize
@@ -369,11 +372,15 @@ class _CircuitRun:
         bias_bits = np.full(n, 0x8000, np.uint16) if bias is None else _bf16_bits(_host(bias).reshape(-1))   # −0: the bf16 add's identity
         call = PC.Call(a, _f32_bits(s), _LayerRows(weight), bias_bits, self.salt, forward=self.forward, layer=w, site=0, weight=w,
                        rowids=np.arange(self.row_base, self.row_base + mp, dtype=np.uint32), colids=np.arange(n, dtype=np.uint32))
-        rec = PN.commit_call(len(self.records), self.scheme, call)
-        self.records.append(rec)
-        y = _like(((np.asarray(rec.y[:m], dtype=np.uint32) << 16).view(np.float32)).reshape(*lead, n), x)
+        if self.commit:
+            rec = PN.commit_call(len(self.records), self.scheme, call)
+            self.records.append(rec)
+            served = rec.y
+        else:
+            served = PN.served(call)
+        y = _like(((np.asarray(served[:m], dtype=np.uint32) << 16).view(np.float32)).reshape(*lead, n), x)
         self.seconds.append(time.monotonic() - t0)
-        self.details.update(calls=len(self.records), padded_rows=self.details["padded_rows"] + mp - m,
+        self.details.update(calls=len(self.seconds), padded_rows=self.details["padded_rows"] + mp - m,
                             commit_seconds=round(sum(self.seconds), 3))
         return y
 
@@ -406,7 +413,32 @@ def _sites(model: Any, layers: list[Any]) -> dict[str, int]:
     return {name: ids[id(m)] for name, m in named() if id(m) in ids}
 
 
+@cache
+def ncp_linear_op() -> Any:
+    """``verity_pouw::ncp_linear(x, weight, bias, entry, w) -> y``: one `ncp-v2` call as one dispatcher op, whose body is the
+    live run's `gemm`. It is the executor's own record of the call: an observer records the op with its operands and its
+    served y, and nothing of the host work inside it (`observe.fold.patterns.pouw`)."""
+    import torch
+
+    @torch.library.custom_op("verity_pouw::ncp_linear", mutates_args=(), schema="(Tensor x, Tensor weight, Tensor? bias, str entry, int w) -> Tensor")
+    def ncp_linear(x, weight, bias, entry, w):
+        return _CIRCUIT_RUNS[entry][0].gemm(w, x, weight, bias)
+
+    @ncp_linear.register_fake
+    def _(x, weight, bias, entry, w):
+        return x.new_empty((*x.shape[:-1], weight.shape[0]))
+
+    return torch.ops.verity_pouw.ncp_linear
+
+
 def _executor(run: _Run | _CircuitRun, w: int):
+    if isinstance(run, _CircuitRun):
+        op = ncp_linear_op()
+
+        def call(layer: Any, x: Any, bias: Any = None) -> Any:
+            return op(x, layer.weight, bias, run.entry, w)
+        return call
+
     def apply(layer: Any, x: Any, bias: Any = None) -> Any:
         return run.gemm(w, x, layer.weight, bias)
     return apply
@@ -459,7 +491,8 @@ def install(scheme: str, target: Target) -> Option:
     roots = {int(w): bytes.fromhex(r) for w, r in committed["weight_roots"].items()}
     declared = Workload(tuple(Matmul(w, Shape(16, k, n), w) for w, (n, k) in shapes.items()))
     salt = Epoch.start(declared, roots, settings.beacon or bytes(32)).salt
-    run = _CircuitRun(scheme, entry, settings, roots, salt) if s is None else _Run(s, entry, settings, roots, salt)
+    run = (_CircuitRun(scheme, entry, settings, roots, salt, commit=target.context.stage != "capture") if s is None
+           else _Run(s, entry, settings, roots, salt))
     if isinstance(run, _CircuitRun):
         _CIRCUIT_RUNS[entry] = (run, _sites(target.model, layers))
     h = target.hooks(entry)

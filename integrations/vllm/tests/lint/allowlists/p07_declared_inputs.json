@@ -230,7 +230,6 @@
     {"file": "verity_vllm/engine/engine_profile.py", "kind": "environ", "symbol": "_backends_probe", "detail": "os.environ.get", "count": 2},
     {"file": "verity_vllm/engine/engine_profile.py", "kind": "environ", "symbol": "gpu_info", "detail": "RUNPOD_POD_ID"},
     {"file": "verity_vllm/engine/engine_profile.py", "kind": "seed-default", "symbol": "engine_kwargs", "detail": "seed"},
-    {"file": "verity_vllm/pipeline/m1_capture.py", "kind": "broad-except", "symbol": "main", "detail": "except Exception"},
     {"file": "verity_vllm/pipeline/m1_capture.py", "kind": "environ", "symbol": "main", "detail": "os.environ.get"},
     {"file": "verity_vllm/observe/observer.py", "kind": "broad-except", "symbol": "Observer.__torch_dispatch__", "detail": "except Exception"},
     {"file": "verity_vllm/observe/observer.py", "kind": "broad-except", "symbol": "Recorder.stream", "detail": "except Exception"},

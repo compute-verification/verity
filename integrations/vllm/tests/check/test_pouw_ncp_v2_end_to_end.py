@@ -23,6 +23,7 @@ import dataclasses
 
 import numpy as np
 import pytest
+import torch
 from verity_pouw.circuit import plan as CPL
 
 from verity_vllm import protocol_options as PO
@@ -125,9 +126,9 @@ class Run:
         self.pi = IX.ProgramIndex(inst)
         self.values, self.blocks, self.dtypes = {}, {}, {}
         lo, hi = woff["model.model.layers.0.mlp.up_proj.weight"]
-        w_up = (weights[lo:hi].astype(np.uint32) << 16).view(np.float32).reshape(NU, H)
+        w_up = torch.from_numpy((weights[lo:hi].astype(np.uint32) << 16).view(np.float32).reshape(NU, H))
         blo, bhi = woff.get("model.model.layers.0.mlp.up_proj.bias", (0, 0))
-        self.bias = (weights[blo:bhi].astype(np.uint32) << 16).view(np.float32) if bhi > blo else None
+        self.bias = torch.from_numpy((weights[blo:bhi].astype(np.uint32) << 16).view(np.float32)) if bhi > blo else None
         monkeypatch.setattr(pouw, "linear_types", lambda: (Linear,))
         self.model = Model(w_up)
         ctx = PO.Context(stage="serve", enabled=("pouw:ncp-v2",), settings={"pouw": {"beacon": BEACON, "transcript_dir": str(tmp_path)}})
@@ -177,7 +178,8 @@ class Run:
                 done.add(d["step"])
                 batch = [(rid, rr) for rid in ("r0", "r1") for rr in pi.rows
                          if pi.describe(rr)["family"] == fam and pi.describe(rr)["step"] == d["step"]]
-                x = np.stack([(np.concatenate(self._inputs(rid, rr)[0][0]).astype(np.uint32) << 16).view(np.float32) for rid, rr in batch])
+                x = torch.from_numpy(np.stack([(np.concatenate(self._inputs(rid, rr)[0][0]).astype(np.uint32) << 16).view(np.float32)
+                                               for rid, rr in batch]))
                 y = self.model.layers[0].quant_method.apply(self.model.layers[0], x, self.bias)
                 ybits = (np.asarray(y, dtype=np.float32).view(np.uint32) >> 16).astype(np.uint16)
                 for (rid, rr), row in zip(batch, ybits):
@@ -466,3 +468,4 @@ def test_a_fused_bias_linears_wrong_a_strip_and_wrong_bias_are_named(fused_world
     records = [b_rec, w.records[1]]
     rep, pw, issues = _verdict(w, records, _recommitted(w, records))
     assert pw["result"] is True and any("bias is not the registered bias" in i for i in issues), issues
+

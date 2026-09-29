@@ -58,7 +58,7 @@ from verity_vllm.engine import hooks
 from verity_vllm.protocol_options.interface import Context, Installed, Option, Target
 
 __all__ = ["ADAPTERS", "RECORD_SCHEMA", "SITES", "Composition", "Context", "Installed", "Option", "Refused", "Target", "adapter",
-           "WeightsView", "at_commit", "at_row", "commit_context", "commit_guard", "install", "into_verdict", "load_settings",
+           "WeightsView", "at_capture", "at_commit", "at_row", "capture_context", "commit_context", "commit_guard", "install", "into_verdict", "load_settings",
            "parse", "refusals", "register_weights", "undeclared", "weights_view", "CIRCUITS", "circuit_registry", "traced_as"]
 
 #: protocol -> its adapter module in this package
@@ -366,6 +366,32 @@ def commit_guard(profile: Any, *, world: int = 1, hot: bool = False, installs: b
         print(f"[delta] REFUSE (fail-closed): {e}", flush=True)
         raise SystemExit(3) from None
     return profile
+
+
+def capture_context(profile: Any, *, settings: Any = None) -> Context | None:
+    """A Match capture's composition context: the declared target's executors and wrappers without sampled proofs, which
+    commits only in the Commit, so the captured run executes what the Commit serves. None when the target declares no
+    other protocol. `Refused` names every refusal."""
+    enabled = tuple(e for e in (getattr(profile, "protocols", None) or ()) if e.partition(":")[0] != "sampled-proofs")
+    if not enabled:
+        return None
+    ctx = Context(stage="capture", enabled=enabled, enforce_eager=getattr(profile, "compilation", None) is None,
+                  settings={k: v for k, v in load_settings(settings).items() if k != "sampled-proofs"})
+    bad = refusals(ctx)
+    if bad:
+        raise Refused(bad)
+    return ctx
+
+
+def at_capture(profile: Any, model: Any, settings: Any = None) -> Composition | None:
+    """Install a Match capture's composition (`capture_context`) on its engine's model: PoUW's executor there serves each call
+    and records it as one op (`pouw.ncp_linear_op`), committing nothing. None when the target declares no such protocol."""
+    ctx = capture_context(profile, settings=settings)
+    if ctx is None:
+        return None
+    comp = install(model, ctx)
+    print(f"[m1] protocol options installed for the capture: {list(comp.entries)}", flush=True)
+    return comp
 
 
 def at_commit(profile: Any, model: Any, versions: dict[str, Any], settings: Any = None) -> Composition | None:
