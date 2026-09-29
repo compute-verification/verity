@@ -135,7 +135,8 @@ def gate_committer() -> list[dict]:
     for name, call in PD.gate_calls(qwen=True):
         got, ms = PD.commit_call_timed(0, "ncp-v2", call)
         diff = PD.first_difference(PN.commit_call(0, "ncp-v2", call), got)
-        out.append({"call": name, "shape": list(call.shape), "difference": diff, "device_ms": round(ms, 3)})
+        sh = call.shape
+        out.append({"call": name, "shape": [sh.m, sh.k, sh.n], "difference": diff, "device_ms": round(ms, 3)})
         if diff:
             raise SystemExit(f"device committer: {name}: {diff}")
     return out
@@ -165,20 +166,38 @@ def gate_route_u(ext, torch) -> list[dict]:
     return out
 
 
-#: the most leaves one timing hashes: past a few waves of the GPU's threads the time is linear in the count, so a larger
-#: count is timed on this many and scaled
+#: the most leaves one timing hashes, and the most bytes of words it reads: past a few waves of the GPU's threads the time is
+#: linear in the leaf count, and past a few blocks linear in the message length, so a larger call is timed within these and
+#: scaled (a call's own count is timed as it is when it is smaller: fewer leaves than the GPU has lanes is part of its time)
 TIMED_UNITS = {"tile words": 1 << 15, "dequant words": 1 << 22}
+TIMED_BYTES = 2 << 30
+#: the saturated from-memory rate: this many leaves of this many words each (64 KiB messages)
+RATE_UNITS, RATE_WORDS = 1 << 15, 1 << 14
+
+
+def _leaf_ms(dev, code: int, count: int, words: int, most: int, reps: int) -> float:
+    """``count`` leaves of ``words`` words each, under hash ``code``: timed on at most ``most`` leaves and `TIMED_BYTES` of words,
+    and scaled to the call."""
+    units = min(count, most)
+    timed_words = min(words, max(1, TIMED_BYTES // (4 * units)))
+    ms = ctypes.c_float(0)
+    if rc := dev.ncp2_leaf_time(code, units, timed_words, reps, ctypes.byref(ms)):
+        raise SystemExit(f"leaf hash {code}: CUDA error {rc}")
+    return ms.value * count / units * (UNIT_TAG + 4 * words) / (UNIT_TAG + 4 * timed_words)
 
 
 def timings(ext, torch, reps: int) -> dict:
     from gemm_bench import timed
 
-    dev, out = PD.device(), {"linears": [], "ceiling_bytes_per_s": {}}
+    dev, out = PD.device(), {"linears": [], "ceiling_bytes_per_s": {}, "from_memory_bytes_per_s": {}}
     for kind, code in CEILING.items():
         rate = ctypes.c_double(0)
         if rc := dev.ncp2_ceiling(code, 128 * 24, 256, 256, ctypes.byref(rate)):
             raise SystemExit(f"ceiling {kind}: CUDA error {rc}")
         out["ceiling_bytes_per_s"][kind] = rate.value
+    for h, (_block, _pad, code) in HASH.items():
+        ms = _leaf_ms(dev, code, RATE_UNITS, RATE_WORDS, RATE_UNITS, reps)
+        out["from_memory_bytes_per_s"][h] = RATE_UNITS * absorbed(h, UNIT_TAG + 4 * RATE_WORDS) / (ms * 1e-3)
     for m in ROWS:
         for k, n in PD.QWEN05:
             row = {"m": m, "k": k, "n": n}
@@ -194,10 +213,7 @@ def timings(ext, torch, reps: int) -> dict:
             for h, (_block, _pad, code) in HASH.items():
                 for part, most in TIMED_UNITS.items():
                     count, length = acc["messages"][part]
-                    units, ms = min(count, most), ctypes.c_float(0)
-                    if rc := dev.ncp2_leaf_time(code, units, (length - UNIT_TAG) // 4, reps, ctypes.byref(ms)):
-                        raise SystemExit(f"{h} {part}: CUDA error {rc}")
-                    row[f"{h} {part} ms"] = ms.value * count / units
+                    row[f"{h} {part} ms"] = _leaf_ms(dev, code, count, (length - UNIT_TAG) // 4, most, reps)
             ms = ctypes.c_float(0)
             if rc := dev.ncp2_f1_time(n, k, reps, ctypes.byref(ms)):
                 raise SystemExit(f"F1: CUDA error {rc}")
@@ -255,6 +271,9 @@ def main() -> None:
         gb = {h: round(a["absorbed"][h]["total"] / 1e9, 2) for h in HASH}
         print(f"m={a['m']:>5}: {a['units']:,} units; absorbed GB {gb}; tile words {a['tile_bytes_per_mac']:.3f} B per MAC; "
               f"XOF {a['xof_bytes'] / 1e9:.3f} GB")
+    for kind in ("ceiling_bytes_per_s", "from_memory_bytes_per_s"):
+        if kind in res.get("timings", {}):
+            print(kind, {h: f"{v / 1e9:.0f} GB/s" for h, v in res["timings"][kind].items()})
     for m, p in res.get("projection", {}).items():
         print(f"m={m:>5}: " + "; ".join(f"{h} unfused {p[h]['unfused_x_bf16']:.1f}x fused {p[h]['fused_x_bf16']:.1f}x" for h in HASH))
 
