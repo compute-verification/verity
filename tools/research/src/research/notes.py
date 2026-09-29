@@ -10,9 +10,12 @@
   research notes push LANE [--repo DIR]                     # after every commit: the lane's branch -> origin (never main, never --force)
   research notes branches [--fetch] [--all] [--lane GLOB] [--json]   # lane branches vs origin; exit 1 if an open lane's work is not there
   research notes sync [--path P]... [-m MSG] | scan          # notes_sync.py: commit, rebase, push with retries | history audit
+  research notes archive LANE [--older-days 3] [--by month|day] [--apply]   # notes_archive.py: older notes into month folders
   research notes status|watch --liveness git [--fetch] ...   # steward.py: notes commit times and origin's lane/* tips, not mtimes
   research notes watch --lease [store|PATH] [--standby] ...   # steward.py: only the steward lease's holder acts
   research notes service systemd|launchd [...] [-- WATCH ARGS] # steward.py: the steward's service definition
+  research notes index [--root DIR] [--catalog PATH] [--search TEXT | --evidence ID]   # notes_index.py: notes, full text, citations
+  research notes mcp [--root DIR] [--catalog PATH]            # notes_mcp.py: that index joined to the evidence catalog, as MCP on stdio
 
 A lane's report is `<root>/lanes/<lane>/<stamp>-report-<lane>.md` (the newest one if several).  `checkpoint` writes
 `CHECKPOINT <sha> (<HH:MM>Z) [<state>] <text>` directly under the front matter (newest first, where lanes already put them),
@@ -1473,7 +1476,8 @@ def run_lines(root: Path, now: dt.datetime, state: dict, config: Path | None = N
 def sync_lines(root: Path, srep: dict, now: dt.datetime) -> list[str]:
     """The watcher's line for its own `notes sync`: the report when it committed, and a failure as `SYNC-FAILED ahead A behind B:
     <report>` every pass it lasts, so a clone that stops syncing (83 commits behind on 2026-09-26) is never silent.  A lane note left
-    out for a stamp ahead of the clock is one `SYNC-REFUSED <path>: ...` line every pass it lasts; the other notes synced."""
+    out for a stamp ahead of the clock or broken front matter is one `SYNC-REFUSED <path>: ...` line every pass it lasts; the other
+    notes synced.  A `SYNC-WARN <path>: ...` line comes once, with the commit that took the note."""
     from . import notes_sync  # noqa: PLC0415
 
     refused = [f"{now:%H:%MZ} {x}" for x in notes_sync.refused_lines(srep)]
@@ -1887,10 +1891,18 @@ def main(argv: list[str]) -> int:
 
     if argv and argv[0] in ("sync", "scan"):
         return notes_sync.main(argv, default_root())
+    if argv and argv[0] == "archive":
+        from .notes_archive import main as archive_main  # noqa: PLC0415
+
+        return archive_main(argv[1:], default_root())
     if argv and argv[0] == "service":
         from .steward import service_main  # noqa: PLC0415
 
         return service_main(argv[1:])
+    if argv and argv[0] in ("index", "mcp"):
+        from . import notes_index, notes_mcp  # noqa: PLC0415
+
+        return (notes_index if argv[0] == "index" else notes_mcp).main(argv[1:], default_root())
     rc = _main(argv)
     if rc in (0, 3) and argv and argv[0] in ("checkpoint", "bind", "relaunch"):
         root = Path(argv[argv.index("--root") + 1]).expanduser() if "--root" in argv[:-1] else default_root()

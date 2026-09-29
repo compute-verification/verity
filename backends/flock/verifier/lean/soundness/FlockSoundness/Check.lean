@@ -317,3 +317,85 @@ hypotheses of the theorems that use them, never `axiom` declarations, so they ca
 #print axioms FlockSoundness.Audit.Partition.placeDecoder
 #print axioms FlockSoundness.Audit.Partition.flock_batched_count_placed
 #print axioms FlockSoundness.Audit.Partition.flock_batched_drawn_placed
+-- the rows the verifier parses, as the audit's Rows: the parser's order check is Rows.topo (PR #147)
+#print axioms FlockSoundness.checkOrder_ok
+#print axioms FlockSoundness.Rows.ofOrdered
+#print axioms FlockSoundness.parse_checkOrder
+#print axioms FlockSoundness.parse_rowOrder
+#print axioms FlockSoundness.pushLe32_data
+#print axioms FlockSoundness.rd32_le32
+#print axioms FlockSoundness.ofRows_spec
+#print axioms FlockSoundness.ofRows_row
+#print axioms FlockSoundness.Rows.ofNet
+#print axioms FlockSoundness.Rows.ofNet_a
+#print axioms FlockSoundness.Rows.ofNet_b
+-- an instance's rows (its unit slots stacked) and their placement from three facts about the level-0 matrices
+#print axioms FlockSoundness.Rows.stack
+#print axioms FlockSoundness.Rows.stackRow_topo
+#print axioms FlockSoundness.stackPlace
+#print axioms FlockSoundness.stackPlace_stackCol
+#print axioms FlockSoundness.stackPlace_comp
+#print axioms FlockSoundness.placement_stack
+-- the rows Δ writes, by loop (HmRow.delta)
+#print axioms FlockSoundness.forIn_id_inv
+#print axioms FlockSoundness.delta_rows
+-- an instance's rows placed by the verifier's level-0 matrices (placedA, placedB), from the layout facts
+#print axioms FlockSoundness.rangesEntry_of_covers
+#print axioms FlockSoundness.sparseEntry_ofRows
+#print axioms FlockSoundness.Layout.delta_unit_comp
+#print axioms FlockSoundness.Layout.delta_unit_const
+#print axioms FlockSoundness.Layout.delta_pin
+#print axioms FlockSoundness.Layout.placement
+#print axioms FlockSoundness.Layout.unitPlace
+-- the layout facts, from the executable's accept step (Stmt.setupH)
+#print axioms FlockSoundness.parse_spec
+#print axioms FlockSoundness.portCols_le
+#print axioms FlockSoundness.delta_split
+#print axioms FlockSoundness.loop_inv
+#print axioms FlockSoundness.parse_facts
+#print axioms FlockSoundness.check_facts
+#print axioms FlockSoundness.build_facts
+#print axioms FlockSoundness.setupH_spec
+#print axioms FlockSoundness.pin_spec
+#print axioms FlockSoundness.rowSlots_spec
+#print axioms FlockSoundness.portCols_toList
+#print axioms FlockSoundness.deltaIn_inBit
+#print axioms FlockSoundness.setupH_layout
+#print axioms FlockSoundness.placement_of_setupH
+#print axioms FlockSoundness.unitPlace_of_setupH
+-- composed rows, placed: the block's facts as one proposition (Compose.Realizes) and the Placement they give, and a flat
+-- accepted statement's unit slots realizing the rows of its unit net
+#print axioms FlockSoundness.Compose.Realizes.placement
+#print axioms FlockSoundness.Compose.BlockFacts.realizes
+#print axioms FlockSoundness.Compose.BlockFacts.placement
+#print axioms FlockSoundness.Layout.placedA_comp
+#print axioms FlockSoundness.Layout.placedB_comp
+#print axioms FlockSoundness.Layout.placedA_const
+#print axioms FlockSoundness.Layout.placedB_const
+#print axioms FlockSoundness.Layout.placed_pin
+#print axioms FlockSoundness.Layout.realizes
+-- influence through a separator: a downstream cut determines what is delivered, and the audit's influence set
+#print axioms FlockSoundness.Audit.Partition.Separates.mono
+#print axioms FlockSoundness.Audit.Partition.Separates.union
+#print axioms FlockSoundness.Audit.Partition.separates_exits
+#print axioms FlockSoundness.Audit.Partition.outputs_eq_of_separates
+#print axioms FlockSoundness.Audit.Partition.card_delivered_le
+#print axioms FlockSoundness.Audit.Partition.card_influenceSet_le
+#print axioms FlockSoundness.Audit.Partition.audit_influence
+#print axioms FlockSoundness.Audit.Partition.Refines.twoStage_influence
+-- the influence theorems are not vacuous: the statement reviewer's witness
+#print axioms FlockSoundness.Audit.InfluenceWitness.W.lemma47
+#print axioms FlockSoundness.Audit.InfluenceWitness.W.count
+#print axioms FlockSoundness.Audit.InfluenceWitness.W.three_mem_exits
+#print axioms FlockSoundness.Audit.InfluenceWitness.A.influence
+#print axioms FlockSoundness.Audit.InfluenceWitness.A.accepts
+-- harm bounds and influence: the value bits (a harm bound) plus the choice of which units are wrong
+#print axioms FlockSoundness.Audit.escape_lt_of_harm_gt
+#print axioms FlockSoundness.Audit.Partition.card_exits_le
+#print axioms FlockSoundness.Audit.Partition.card_influenceSet_le_harm
+#print axioms FlockSoundness.Audit.Partition.card_admissible_le
+#print axioms FlockSoundness.Audit.InfluenceWitness.Gen.harm_witness
+-- exfiltration: the value bits and the location term, from the influence set
+#print axioms FlockSoundness.Audit.card_guess_le
+#print axioms FlockSoundness.Audit.Partition.audit_exfiltration_influenceSet
+#print axioms FlockSoundness.Audit.Partition.audit_exfiltration
