@@ -230,13 +230,13 @@ second field of `NcpTile`'s return (`partition.SEPARATOR_PORTS`). The registrant
 on that strip's path and the key, each once, and its Y unit in the weight's Program (`Plan.proved_y`), once per plan. The
 dequantization units are drawn at the law's floor. The law is a seam:
 - `CountLaw` is `main`'s stratified rule today, k_s = max(1, round(K·n_s/N)).
-- `WorkLaw` is Verity root's work law (draft #362, `Flock/Draw.lean`): k_s = min(n_s, max(1, ⌈K·W_s/W⌉)), with
+- `WorkLaw` is Verity root's work law (#362, `Flock/Draw.lean`): k_s = min(n_s, max(1, ⌈K·W_s/W⌉)), with
   K = 27,713 at ε = 0.1% and δ = 2⁻⁴⁰ (`plan.record_k`; 27,712 misses).
   - K is a **window's** budget (X-SPC-83). A call draws its share K_c = ⌈K·W_c/W_window⌉, capped at its units
     (`plan.window_laws`): #362's law with strata by (call, template), so the window keeps its (1 − ε)^K, and it draws at
     most K plus one floor unit per stratum.
-  - It is of record when #362 merges, in the strata root chooses: this plan's two (tiles and dequantization, with the
-    closure) or #362's one per template (#372), X-SPC-84.
+  - It is of record once root chooses the strata: this plan's two (tiles and dequantization, with the closure) or
+    #362's one per template (#372), X-SPC-84.
 
 The profile is `Stratified` over the tile strata, and its `harm_bound`, at W_ref per tile, bounds the unsound work.
 
@@ -248,7 +248,7 @@ The profile is `Stratified` over the tile strata, and its `harm_bound`, at W_ref
 - For `ncp-v2`:
   - the lead domain's shapes (k ≥ 1,088) as a recorded run rather than a test;
   - C-Flock pieces for the PoUW primitives;
-  - the work law's merge (#362);
+  - root's choice of the work law's strata (X-SPC-84);
   - the served-output designation and the pinned ports in `Q_nested_instances` v0's spec, evaluator and Lean port;
   - the vLLM adapter's `traced_as`;
   - the reuse of a weight's Y proofs across a run's windows (X-SPC-51), which needs its commitments linked across windows;

@@ -9,10 +9,11 @@ beneath it (Lean `harm_le_unsoundWork`, `closureLaw_escape`).
 **The law is a seam** (`TileLaw`), so the plan switches laws without changing:
 * `CountLaw` is the law on `main` today, one_stage's and #167's stratified law: one stratum per template, a uniform k_s-subset
   inside each, k_s = max(1, round(K·n_s/N)) (rounding half up), K the law's budget over the strata it draws.
-* `WorkLaw` is Verity root's work law (draft #362, `Flock/Draw.lean` `workK`): k_s = min(n_s, max(1, ⌈K·W_s/W⌉)), with
+* `WorkLaw` is Verity root's work law (#362, `Flock/Draw.lean` `workK`): k_s = min(n_s, max(1, ⌈K·W_s/W⌉)), with
   K = `RECORD_K` = 27,713 at ε = 0.1% and δ = 2⁻⁴⁰ (`record_k`). K is a **window's** budget: a call draws its share,
   K_c = ⌈K·W_c/W_window⌉, capped at its units (`window_laws`), which is #362's law with strata by (call, template), so
-  the window keeps its (1 − ε)^K. It is not of record until #362 merges (and root chooses the strata, X-SPC-84).
+  the window keeps its (1 − ε)^K. It is not of record until root chooses the strata (X-SPC-84): these two, or #362's one
+  per template (#372).
 
 **Openings** are row-granular (the red team's X-SPC-57): A and the weight are committed one leaf per row, so a proved
 unit opens exactly the rows it reads.
@@ -98,7 +99,7 @@ RECORD_K = 27_713
 
 @dataclass(frozen=True)
 class WorkLaw:
-    """The work law (Verity root's, draft #362, `Flock/Draw.lean` `workK`): each stratum draws
+    """The work law (Verity root's #362, `Flock/Draw.lean` `workK`): each stratum draws
     k_s = min(n_s, max(1, ⌈K·W_s/W⌉)), W_s its work, W the strata's total, 1 ≤ K ≤ N. The floor of one binds exactly for the
     strata that do no work (the dequantization units). ``k`` is the budget K (`record_k`)."""
 

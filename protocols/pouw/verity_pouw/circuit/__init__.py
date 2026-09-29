@@ -9,7 +9,7 @@
 * `partition`: the `Q_template_instances` partition, the whole-call cut (no value computed in two units), the Z separator and
   the width rule with the separator port pinned by the protocol.
 * `anchors`: the anchored inputs' anchors, which the verifier builds, and the window's refusal of a repeated call index.
-* `plan`: closure draws behind a draw-law seam (`CountLaw` today, `WorkLaw`, root's #362 law, when it merges).
+* `plan`: closure draws behind a draw-law seam (`CountLaw`, and `WorkLaw`, root's #362 law).
 
 `traced_as(scheme, m, k, n)` is what a composition (the vLLM integration's protocol options) calls: for a scheme whose circuit
 is here, the Programs sampled proofs traces for one PoUW linear and its weight, their partition queries, the served outputs
