@@ -359,18 +359,24 @@ theorem templateOf_spec {name : String} {done : Array DeriveAll.D} {ls : Array L
   exact hi i hx (by rw [List.size_toArray] at ht; exact ht)
 
 /-- A flat unit's net (`netOfD`), whose computed columns (the unit's order after its inputs: its constant, items and
-outputs) lie at or past the net's input rows. `deriveOne` lays the input groups out first, so no honest unit is refused;
-`Net.ofRows` alone would accept an empty row (an item whose forms cancel) below them. -/
+outputs) lie at or past the net's input rows, and whose input columns are the net's input port bits, in order.
+`deriveOne` lays the input groups out first and puts input bit `d` of each group at its start plus `d`, so no honest
+unit is refused; `Net.ofRows` alone would accept an empty row (an item whose forms cancel) below the input rows, and
+`netOfD` takes the unit's input groups as given. -/
 def flatNet (done : Array DeriveAll.D) (u : DeriveAll.D) (name : String) : V Net := do
   let net ← netOfD u name
   if ((DeriveAll.order done u).drop u.inCols.size).any (· < net.inWords * Flock.WORD) then
     throw "a flat unit's computed column lies among its input rows"
+  if u.inCols.toList != (portCols net.inGroups).toList.flatMap fun p => List.range' p.1 p.2 then
+    throw "a flat unit's input columns are not its net's input port bits"
   return net
 
-/-- `flatNet` is `netOfD`, with every computed column at or past the input rows. -/
+/-- `flatNet` is `netOfD`, with every computed column at or past the input rows, and the input columns the net's input
+port bits in order. -/
 theorem flatNet_ok {done : Array DeriveAll.D} {u : DeriveAll.D} {name : String} {net : Net}
     (h : flatNet done u name = .ok net) :
-    netOfD u name = .ok net ∧ ∀ c ∈ (DeriveAll.order done u).drop u.inCols.size, net.inWords * Flock.WORD ≤ c := by
+    netOfD u name = .ok net ∧ (∀ c ∈ (DeriveAll.order done u).drop u.inCols.size, net.inWords * Flock.WORD ≤ c) ∧
+      u.inCols.toList = (portCols net.inGroups).toList.flatMap fun p => List.range' p.1 p.2 := by
   unfold flatNet at h
   simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
   split at h
@@ -379,9 +385,12 @@ theorem flatNet_ok {done : Array DeriveAll.D} {u : DeriveAll.D} {name : String} 
   split at h
   · simp at h
   rename_i hany
+  split at h
+  · simp at h
+  rename_i hcols
   simp only [Except.ok.injEq] at h
   subst h
-  refine ⟨hn, fun c hc => Nat.le_of_not_lt fun hlt => hany ?_⟩
+  refine ⟨hn, fun c hc => Nat.le_of_not_lt fun hlt => hany ?_, by simpa using hcols⟩
   exact List.any_eq_true.2 ⟨c, hc, by simpa using hlt⟩
 
 /-- **A typed file, read** (item 1e): its class, its rows derived once through `deriveChecked`, and the nets built from
@@ -394,13 +403,14 @@ def read (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) 
   if isFlat u then return (k, .inl (← flatNet k.done u name))
   return (k, .inr (← templateOf name k.done k.ls k.unit t k.held))
 
-/-- A flat class read: its unit's net is built from the class's own unit rows, and the unit's computed columns lie at or
-past the net's input rows (`flatNet`). -/
+/-- A flat class read: its unit's net is built from the class's own unit rows, the unit's computed columns lie at or past
+the net's input rows, and its input columns are the net's input port bits in order (`flatNet`). -/
 theorem read_flat {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {k : Class} {net : Net}
     (h : read tags bytes tables = .ok (k, .inl net)) :
     ∃ name, netOfD (k.done.getD k.unit default) name = .ok net ∧
-      ∀ c ∈ (DeriveAll.order k.done (k.done.getD k.unit default)).drop (k.done.getD k.unit default).inCols.size,
-        net.inWords * Flock.WORD ≤ c := by
+      (∀ c ∈ (DeriveAll.order k.done (k.done.getD k.unit default)).drop (k.done.getD k.unit default).inCols.size,
+        net.inWords * Flock.WORD ≤ c) ∧
+      (k.done.getD k.unit default).inCols.toList = (portCols net.inGroups).toList.flatMap fun p => List.range' p.1 p.2 := by
   unfold read at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   split at h
