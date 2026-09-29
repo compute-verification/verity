@@ -14,6 +14,7 @@ from verity_vllm.program.frontend.rules.triton_iface import launch_meta, launch_
 from verity_vllm.program.frontend.rules.vllm_bindings.operands import _row_value, _strides, _untransposed
 from verity_vllm.program.frontend.rules.vllm_bindings.pins import (GEMM_PINS, RMS_PINS, _pins_ok, _target_kinds, active_gemm_target, gemm_pins_for,
                                                                    lookup_key)
+from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile
 
 
 # -- direct Triton launches -----------------------------------------------------------------------------------------------
@@ -163,7 +164,8 @@ class TritonGemmRule(InPlaceRule):
         K, N = shape_of(bc.type)[0]
         w_nk = _untransposed(ctx, b, K, N, ctx.hint_name(node) + "/W")  # b = W.t(): the kind's W is [N, K] — a reference rearrangement
         accepted, dot = _target_kinds()   # [R13 hopper] the target's registered k16 step selects Gemm_v1 (accepted) or Gemm_v2{DOT}
-        fused = _bias_add_reader(node, c, ctx, len(rows), N) if accepted else None
+        pouw = _pouw_scheme(node)         # under pouw:ncp-v2 a linear layer's launch is its call's served rows (NcpLinearRow_v1)
+        fused = _bias_add_reader(node, c, ctx, len(rows), N) if accepted and pouw is None else None
         if fused is not None:
             add, bn = fused
             bias = ctx.coll(bn, "b")
@@ -175,7 +177,10 @@ class TritonGemmRule(InPlaceRule):
             if ctx.weight_of(bn) is not None:
                 ctx.bind_weight_role(bn, self, "linear.bias", N=N)
         else:
-            fn = ctx.kind("gemm", node, K=K, N=N) if accepted else ctx.kind("gemm_dot", node, K=K, N=N, DOT=dot)
+            if pouw is not None:
+                fn = ctx.kind("pouw_linear_row", node, K=K, N=N)
+            else:
+                fn = ctx.kind("gemm", node, K=K, N=N) if accepted else ctx.kind("gemm_dot", node, K=K, N=N, DOT=dot)
             outs = [ctx.call(fn, r, w_nk, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]") for i, r in enumerate(rows)]
             ctx.rebind(c, from_rows(outs, lead), self, what="c")
         ctx.bind_weight_role(b, self, "linear.weight", K=K, N=N)
@@ -185,6 +190,23 @@ class TritonGemmRule(InPlaceRule):
         ctx.record(self, node, {"K": K, "N": N, "rows": len(rows), "lookup_key": lookup_key(meta), "pins": pins, "pin_source": src,
                                 "gemm_target": tgt.key, "gemm_target_dot": tgt.dot, "W_is_parameter": wl.name if wl else None,
                                 "bias_add": fused[0].name if fused else None}, emitted=f"{fn.id} x{len(rows)}")
+
+
+def _pouw_scheme(node) -> str | None:
+    """The PoUW scheme a launch is lowered under: the active target's ``pouw:<scheme>`` when that scheme has a circuit
+    (`verity_pouw.circuit.SCHEMES`) and the launch belongs to a linear layer (vLLM's ``LinearBase``, the PoUW adapter's
+    executed site, by the module's class in the node's module stack). A biased linear's add stays its own row (the
+    circuit's dequantization adds the bias as `BiasAdd_v1` does)."""
+    from verity_pouw import circuit
+
+    entries = dict(e.split(":", 1) for e in (active_target_profile().protocols or ()))
+    scheme = entries.get("pouw")
+    if scheme not in circuit.SCHEMES:
+        return None
+    from vllm.model_executor.layers.linear import LinearBase
+    stack = node.meta.get("nn_module_stack") or {}
+    cls = list(stack.values())[-1][1] if stack else None
+    return scheme if isinstance(cls, type) and issubclass(cls, LinearBase) else None
 
 
 def _bias_add_reader(launch, c, ctx, M: int, N: int):

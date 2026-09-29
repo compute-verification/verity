@@ -27,6 +27,7 @@ from verity_pouw.circuit.ncp2 import Shape
 from verity_pouw.protocol import tagged
 
 from verity.ir import partition_object as PO
+from verity_vllm.query.manifest.format import spec_family
 from verity.ir.evaluate import evaluate_region
 
 #: The model Program's family for one row of a PoUW site: its served output, checked by the replay against the call.
@@ -106,7 +107,7 @@ def leaf(rec: CallRecord) -> bytes:
 
 def calls_root(salt: bytes, weights_root: bytes, records: Sequence[CallRecord]) -> bytes:
     """The root over every call's leaf, in call order."""
-    return commit_rows(tagged(CALLS_BINDING, salt, weights_root), -3, [leaf(r) for r in records]).commitment.root
+    return commit_rows(tagged(CALLS_BINDING, salt, weights_root), -1, [leaf(r) for r in records]).commitment.root
 
 
 #: The file under the option's ``transcript_dir`` holding the commitment and every call's record (the prover's openings).
@@ -134,14 +135,15 @@ def record_of(obj: Mapping[str, Any]) -> CallRecord:
 def lower(inst: dict[str, Any], sites: Mapping[str, str]) -> dict[str, Any]:
     """The Build's lowering of a model Program (an instance sequence) under ``pouw:<scheme>``: every row of a PoUW site
     (``sites``: op path prefix of a linear module -> scheme, e.g. ``model.layers.0.mlp.down_proj`` -> ``ncp-v2``), a
-    ``Gemm_v1{K,N}`` row, becomes ``NcpLinearRow_v1{K,N,SCHEME}`` over the same arguments. The rest is unchanged."""
+    ``Gemm_v1{K,N}`` row, becomes ``NcpLinearRow_v1{K,N}`` over the same arguments (`program.registry.pouw_rows`). The rest is
+    unchanged; the scheme is the calls'."""
     rows = []
     for r in inst["rows"]:
         spec, name = r.get("spec", ""), r.get("name", "")
         site = next((p for p in sites if name.startswith(p + "/")), None)
-        if site is not None and spec.startswith("Gemm_v1{"):
-            statics = spec[len("Gemm_v1{"):-1]
-            r = dict(r, spec=f"{ROW_FAMILY}{{{statics},SCHEME={sites[site]}}}")
+        if site is not None and spec_family(spec) == "Gemm_v1":
+            statics = spec[spec.index("{") + 1:-1]
+            r = dict(r, spec=f"{ROW_FAMILY}{{{statics}}}")
         rows.append(r)
     return dict(inst, rows=rows)
 
