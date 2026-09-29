@@ -90,6 +90,14 @@ unit draw.
 - **What A5 assumes of the verifier.** Its window secret is `secrets.token_bytes(32)` from the operating system's CSPRNG,
   drawn once the window's receipt is complete and used for that window alone (#423's `Ledger.open`, root's C2). A
   secret reused across windows is outside it, since later windows would be committed after earlier draws were seen.
+- **The platform: Linux, with CPython 3.12 or later** (the red team's wording,
+  `lanes/pous/20260929T1817Z-redteam-423-receipt-key.md`, question 3). Re-read this on any other platform.
+  - `secrets.token_bytes` reads `os.urandom`, which is `getrandom(2)`, the kernel's CSPRNG. It blocks until that is
+    initialized.
+  - It keeps no user-space state, so a forked process doesn't repeat its output.
+  - A VM snapshot restored more than once must not repeat the kernel's CSPRNG state. That holds when the kernel reseeds
+    on a VM generation change (vmgenid, Linux 5.18 and later, with hypervisor support) or mixes in a hardware RNG.
+  - The CSPRNG is idealized as exactly uniform. The true bound carries its negligible distinguishing advantage.
 - **Split out of A4** at the red team's request: it is a property of what produces the secret, not of SHA-256.
 - **Upstream:** watch entry `A5-uniform-secret`.
 

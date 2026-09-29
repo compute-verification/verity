@@ -100,7 +100,14 @@ window. A source is a finite probability space `Ω` (`prCoin` weighs its outcome
 
 What A5 assumes of the verifier is that its window secret is such a source: `secrets.token_bytes(32)` from the operating
 system's CSPRNG, drawn once the window's receipt is complete and used for that window alone (#423's `Ledger.open`). A
-secret reused across windows is outside it, since later windows would be committed after earlier draws were seen. -/
+secret reused across windows is outside it, since later windows would be committed after earlier draws were seen.
+
+The verifier's platform is Linux, with CPython 3.12 or later. There `secrets.token_bytes` reads `os.urandom`, which is
+`getrandom(2)`, the kernel's CSPRNG, and blocks until that is initialized. It keeps no user-space state, so a forked
+process doesn't repeat its output. A VM snapshot restored more than once must not repeat the kernel's CSPRNG state, which
+holds when the kernel reseeds on a VM generation change (vmgenid, Linux 5.18 and later, with hypervisor support) or mixes
+in a hardware RNG. The CSPRNG is idealized as exactly uniform; the true bound carries its negligible distinguishing
+advantage. Re-read this on any other platform. -/
 def UniformSecret {Ω : Type} [Fintype Ω] {S : ℕ} (sec : Ω → Fin S → Fin 256) : Prop :=
   ∀ E : (Fin S → Fin 256) → Prop, prCoin (fun ω => E (sec ω)) = prCoin E
 
