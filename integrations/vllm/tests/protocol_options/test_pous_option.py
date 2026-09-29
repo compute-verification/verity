@@ -153,7 +153,8 @@ def test_pous_serves_decoded_weights_releases_the_plaintext_and_passes_its_own_a
     assert v.run(opt.answer).accepted and opt.answered == 20
     lying = protocol.Verifier(s.scheme, vk, protocol.challenge_key(b"audit", vk), k=20, research=True, clock=_ticks())
     assert not lying.run(lambda i: bytes(len(s.blocks[i]))).accepted
-    assert comp.verdict()["of_record"] is False and comp.info()[f"pous:{BAND}"]["salt_source"] == "settings"
+    assert comp.verdict() == {"protocols": [f"pous:{BAND}"], "record": comp.record()["digest"]}
+    assert comp.info()[f"pous:{BAND}"]["salt_source"] == "settings"
 
     comp.close()
     assert {n: layer.weight.raw for n, layer in toy.layers.items()} == {"q": toy.plain["q"], "k": toy.plain["k"], "head": toy.plain["q"]}

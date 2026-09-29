@@ -39,8 +39,6 @@ NAME = "pous"
 DEFAULT_SCHEME = "band-chain/d12/v1"
 SETTINGS = ("salt_source", "responder_cpu", "port", "decode_group", "experimental")
 COVERS = "linears"
-OUTSIDE_PROGRAM = ("placeholder: the Program describes the served computation (the decode is input provenance and W is "
-                   "bit-identical), but no Commit with a protocol option on is of record yet")
 
 
 def schemes() -> tuple[str, ...]:
@@ -253,7 +251,7 @@ def install(scheme: str, target: Target) -> PousOption:
         return out
 
     hooks = target.hooks(entry)
-    opt = PousOption(name=entry, hooks=hooks, outside_program=OUTSIDE_PROGRAM, decoded=plaintext, store=store, names=names)
+    opt = PousOption(name=entry, hooks=hooks, decoded=plaintext, store=store, names=names)
     params = [m.weight for _, m in layers]
 
     def release() -> list[Any]:
