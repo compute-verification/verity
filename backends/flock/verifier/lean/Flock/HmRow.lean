@@ -752,12 +752,11 @@ def stratifiedLaw (obj : Json) (program : ByteArray) (k : Nat) : V (Draw.Law × 
   | .ok law => return (law, population)
   | .error e => throw s!"stratified: {e}"
 
-/-- `work:K` (with `count`, `work:K:C`) expanded over the verifier's own program, partition object and work table
+/-- `work:K` expanded over the verifier's own program, partition object and work table of works and floors
 (`Draw.deriveWork`), and the population. -/
-def workLaw (obj : Json) (program : ByteArray) (k : Nat) (count : Option Nat) (table : Array (String × Nat)) :
-    V (Draw.Law × Nat) := do
+def workLaw (obj : Json) (program : ByteArray) (k : Nat) (table : Array (String × Nat × Nat)) : V (Draw.Law × Nat) := do
   let (strata, population) ← templateStrata "work" obj program
-  match Draw.deriveWork k count strata table with
+  match Draw.deriveWork k strata table with
   | .ok law => return (law, population)
   | .error e => throw s!"work: {e}"
 
@@ -929,18 +928,21 @@ def Stmt.setupH (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coin
 several, the session's units (the draw's, without one the population's) split into `count` equal consecutive parts, and
 table `j` is `setupH`'s statement of part `j` as a subset draw of the population, under `Tags.tableIdentity`: every check
 `setupH` makes, it makes on each table. Every part comes from `draw`, the session's, never from a table's header. The
-session's Σ covers every table's; its `unitDraw` is `draw`. -/
+session's Σ covers every table's; its `unitDraw` is `draw`. `work` is the verifier's own `K` and work table, which a work
+draw's law is held to. -/
 def Stmt.setupTables (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins) (count : Nat)
     (tables : List (String × ByteArray) := []) (draw : Option Json := none) (partition : Option Json := none)
-    (program : Option ByteArray := none) (work : Option (Array (String × Nat)) := none) : V (SessionSpec × Array Stmt) := do
-  -- a work draw's stated work sets every k_s, so its law must be the verifier's own derivation, never taken as stated
+    (program : Option ByteArray := none) (work : Option (Nat × Array (String × Nat × Nat)) := none) :
+    V (SessionSpec × Array Stmt) := do
+  -- a work draw's K and stated work set every k_s, so its law must be the verifier's own derivation, never taken as stated
   if let some d := draw then
-    if let .ok (Draw.Law.work k count strata) := (Draw.UnitDraw.ofJson d).map (·.law) then
-      let (some obj, some prog, some table) := (partition, program, work)
-        | throw "U2: a work draw needs the verifier's own work table, program and partition (--work-table, --program, --partition)"
-      let (law, _) ← HmRow.workLaw obj prog k count table
-      if law != Draw.Law.work k count strata then
-        throw "U2: the draw's work law is not the verifier's own (its program, query and work table)"
+    if let .ok (Draw.Law.work k strata) := (Draw.UnitDraw.ofJson d).map (·.law) then
+      let (some obj, some prog, some (K, table)) := (partition, program, work)
+        | throw "U2: a work draw needs the verifier's own K, work table, program and partition (--work, --work-table, --program, --partition)"
+      if k != K then throw s!"U2: the draw's K is {k}, not the verifier's {K}"
+      let (law, _) ← HmRow.workLaw obj prog K table
+      if law != Draw.Law.work k strata then
+        throw "U2: the draw's work law is not the verifier's own (its K, program, query and work table)"
   if count ≤ 1 then
     let st ← Stmt.setupH tags circuitFile publicFile coins tables draw partition program
     return (st.spec, #[st])

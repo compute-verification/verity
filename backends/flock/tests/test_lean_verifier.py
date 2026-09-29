@@ -386,36 +386,46 @@ def test_work_draw_from_the_verifiers_own_program(tmp_path):
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_verify_takes_a_work_draw_only_from_its_own_table(tmp_path):
-    """`verify` refuses a session whose record carries a work draw unless it holds its own work table, program and
-    partition, since a draw's stated work sets every k_s; with all three, the law must be its own derivation."""
+    """`verify` refuses a session whose record carries a work draw unless it holds its own K, work table, program and
+    partition, since the draw's K and stated work set every k_s; with all four, the law must be its own derivation, so a
+    draw made at another K (k = 1, say, which U2 alone accepts) is refused."""
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
     table = _work_program(tmp_path)
     flags = table("w.json", {"T0_v0": 3, "T1_v0": 1, "T2_v0": 0})
     other = table("w2.json", {"T0_v0": 1, "T1_v0": 1, "T2_v0": 0})
-    session = tmp_path / "s"
-    session.mkdir()
-    (session / "session.json").write_text(json.dumps({"kind": "flock-live-session/v1",
-                                                      "unit_draw": _lean_draw_obj([*flags, "--work", "2"])}))
-    for r in (0, 1):
-        (session / f"circuit.rep{r}.bin").write_bytes(b"\0" * 16)
     (tmp_path / "circuit.txt").write_text("not a circuit\n")
     (tmp_path / "pub.bin").write_bytes(b"{}\n")
 
-    def why(*extra):
+    def session(name, draw):
+        s = tmp_path / name
+        s.mkdir()
+        (s / "session.json").write_text(json.dumps({"kind": "flock-live-session/v1", "unit_draw": draw}))
+        for r in (0, 1):
+            (s / f"circuit.rep{r}.bin").write_bytes(b"\0" * 16)
+        return s
+
+    at2 = session("k2", _lean_draw_obj([*flags, "--work", "2"]))
+    at1 = session("k1", _lean_draw_obj([*flags, "--work", "1"]))
+
+    def why(s, *extra):
         p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "verify", "--circuit", str(tmp_path / "circuit.txt"),
-                            "--public", str(tmp_path / "pub.bin"), *extra, "--session", str(session)],
+                            "--public", str(tmp_path / "pub.bin"), *extra, "--session", str(s)],
                            capture_output=True, text=True)
         (v,) = [json.loads(line[8:]) for line in p.stdout.splitlines() if line.startswith("VERDICT ")]
         assert not v["accepted"] and p.returncode == 1
         return v["why"]
 
-    need = "setup: U2: a work draw needs the verifier's own work table, program and partition"
-    assert why().startswith(need)
-    assert why(*flags[:4]).startswith(need)
-    assert why(*flags[4:]).startswith(need)
-    assert why(*other).startswith("setup: U2: the draw's work law is not the verifier's own")
-    # with its own table the law is its own derivation, and setup goes on to the circuit, which this file is not
-    assert not why(*flags).startswith("setup: U2:")
+    need = "setup: U2: a work draw needs the verifier's own K, work table, program and partition"
+    assert why(at2).startswith(need)
+    assert why(at2, *flags[:4], "--work", "2").startswith(need)
+    assert why(at2, *flags[4:], "--work", "2").startswith(need)
+    assert why(at2, *flags).startswith(need)
+    assert why(at2, *other, "--work", "2").startswith("setup: U2: the draw's work law is not the verifier's own")
+    assert why(at2, *flags, "--work", "3").startswith("setup: U2: the draw's K is 2, not the verifier's 3")
+    assert why(at1, *flags, "--work", "2").startswith("setup: U2: the draw's K is 1, not the verifier's 2")
+    # at its own K and table the law is its own derivation, and setup goes on to the circuit, which this file is not
+    assert not why(at2, *flags, "--work", "2").startswith("setup: U2:")
+    assert not why(at1, *flags, "--work", "1").startswith("setup: U2:")
 
 
 def _one_stage_draw():
