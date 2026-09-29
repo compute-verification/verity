@@ -8,6 +8,7 @@ from contextlib import redirect_stdout
 from fractions import Fraction
 
 from verity_network_warden import calibration, capacity
+from verity_network_warden.schedule import LogicalFrame, SyncSet
 
 
 def synthetic_trace(seed=0, sessions=40, window_buckets=20, frames_per_session=6, gap=1, latency=(1, 4)):
@@ -89,10 +90,34 @@ def test_a_mid_session_stall_is_an_honest_miss():
 
 def test_fraction_at_most_rounds_down():
     assert calibration.fraction_at_most(Fraction(1, 3)) == Fraction(1, 3)
-    assert calibration.fraction_at_most(0.0751) == Fraction(3, 40)
-    assert calibration.fraction_at_most(0.001) == Fraction(1, 64)
-    for x in (0.07, 0.5, 1.9, 10.4):
-        assert calibration.fraction_at_most(x) <= Fraction(x)
+    assert calibration.fraction_at_most(Fraction(2, 161)) == Fraction(2, 161)  # an 8.05 s step at 100 ms buckets
+    assert calibration.fraction_at_most(0.0751, 64) == Fraction(3, 40)
+    assert calibration.fraction_at_most(1e-4) == Fraction(1, 1024)
+    for x in (0.0124, 0.07, 0.5, 1.9, 10.4):
+        f = calibration.fraction_at_most(x)
+        assert f <= Fraction(x) and Fraction(x) - f < Fraction(1, 1024)
+
+
+def test_step_major_order_interleaves_windows():
+    """A batching engine's canonical order is step-major: a session anchored in window 0 keeps producing while a
+    session anchored in window 1 starts, one frame each per step. No window misses, and the second session isn't held
+    behind the first."""
+    frames = []
+    for step in range(30):
+        frames.append({"session": "a", "index": step, "anchor": 15, "ready": 16 + step})
+        if step >= 10:
+            frames.append({"session": "b", "index": step - 10, "anchor": 25, "ready": 26 + step - 10})
+    trace = {"bucket_ms": 100, "window_buckets": 20, "frame_bytes": 4096, "queue_capacity": 4096,
+             "configurations": [{"name": "interleaved", "egress": [{"link": "responses", "frames": frames}]}]}
+    sync = calibration.calibrate(trace)["clock_sync"]
+    assert sync["honest_miss_rate"] == 0
+    assert sync["first_frame_latency_ms"]["p99"] <= 200
+    lf = [LogicalFrame(b"", f["anchor"], f["index"]) for f in frames]
+    syncs, hands, misses = calibration.choose_syncs(lf, [f["ready"] for f in frames],
+                                                    SyncSet((0, 1, 2), (Fraction(1, 2), 1)), 20)
+    assert misses == 0 and len(syncs) == 2
+    assert all(h >= f["ready"] for h, f in zip(hands, frames))
+    assert hands[frames.index(next(f for f in frames if f["session"] == "b"))] <= 27
 
 
 def test_ingress_from_timestamps():

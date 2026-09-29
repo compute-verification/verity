@@ -17,7 +17,7 @@ The trace is JSON, with one entry per configuration:
                     "frames": [{"session": "s1", "index": 0, "anchor": 12, "ready": 14}, ...]}],
         "ingress": [{"link": "requests", "arrival_ms": [3.2, 41.0, 41.5, ...]}]}]}
 
-- **Egress frames** are listed in the Program's canonical order, with anchors non-decreasing. `anchor` is the recorded
+- **Egress frames** are listed in the Program's canonical order (step-major for a batching engine). `anchor` is the recorded
   bucket of the request a frame answers, and `ready` is the first bucket that starts after the frame is ready to send.
 - **Ingress `arrival_ms`** is each frame's arrival time at the warden, in ms. A trace may give `arrivals` instead, the
   count of frames per trace bucket; then the ingress bucket must be a multiple of the trace bucket.
@@ -39,7 +39,7 @@ from verity_network_warden import capacity
 from verity_network_warden.schedule import ClockSync, LogicalFrame, SyncSet, eligible
 
 SPANS_S = (60, 600, 3600, 86400)
-MAX_RHO_DENOMINATOR = 64
+MAX_RHO_DENOMINATOR = 1024
 
 
 def percentile(xs: Sequence[float], p: float) -> float:
@@ -83,7 +83,7 @@ def choose_sync_set(latencies: Sequence[int], low_rates: Sequence[Fraction], typ
     """The spec's §2:
     - **δ** runs from 0 up to the p99.99 first-frame latency, in `n_delta` steps;
     - **ρ** runs geometrically from the p0.01 production rate up to the p50 rate, in `n_rho` values, each rounded down to
-      a fraction with denominator at most 64. ρ is below 1 for sessions slower than one frame per bucket.
+      a fraction with denominator at most 1024. ρ is below 1 for sessions slower than one frame per bucket.
 
     `low_rates` should come from the heaviest configuration, and `typical_rates` from the lightest."""
     hi = math.ceil(percentile(latencies, 99.99)) if latencies else 0
@@ -98,46 +98,57 @@ def choose_sync_set(latencies: Sequence[int], low_rates: Sequence[Fraction], typ
     return SyncSet(deltas, tuple(sorted(rhos)))
 
 
-def _hand(frames: Sequence[LogicalFrame], ready: Sequence[int], sync: ClockSync, last: int) -> tuple[bool, list[int]]:
-    """Hand a window's frames under `sync`, after the previous hand time `last`. Returns whether every frame was ready
-    by its logical bucket, and the actual hand times (a late frame goes when ready, delaying those behind it)."""
-    ok, out, h_last, a_last = True, [], last, last
-    for f, r in zip(frames, ready, strict=True):
-        h_last = max(eligible(f, sync), h_last)
-        ok = ok and r <= h_last
-        a_last = max(h_last, r, a_last)
-        out.append(a_last)
-    return ok, out
-
-
 def choose_syncs(frames: Sequence[LogicalFrame], ready: Sequence[int], sync_set: SyncSet,
                  window_buckets: int) -> tuple[list[ClockSync], list[int], int]:
     """Replay the honest prover's choice, window by window. It declares the met sync with the least latency (smallest δ,
     then largest ρ). A window that no value meets is a miss, which is a violation; the replay continues with the most
-    lenient value. Returns the chosen syncs, the actual hand times and the number of misses."""
-    if any(a.anchor > b.anchor for a, b in zip(frames, frames[1:])):
-        raise ValueError("egress frames must be in canonical order with non-decreasing anchors")
-    windows = (max((f.anchor for f in frames), default=0) // window_buckets) + 1
+    lenient value. Returns the chosen syncs, the actual hand times (a late frame goes when ready, delaying those
+    behind it) and the number of misses.
+
+    The frames are in the Program's canonical order. For a batching engine that order is step-major, so a long session
+    anchored in one window interleaves with sessions anchored in later ones, and anchors need not be monotone. Each
+    window's first frame must come after the first frame of every earlier window (requests are admitted in order).
+    While window w is chosen, later windows take their most eager value (least δ, largest ρ). That only lowers hand
+    times, so a window found met stays met once later windows are fixed."""
+    if not frames:
+        return [], [], 0
+    win = [f.anchor // window_buckets for f in frames]
+    first: dict[int, int] = {}
+    last: dict[int, int] = {}
+    for k, w in enumerate(win):
+        first.setdefault(w, k)
+        last[w] = k
+    if any(first[a] > first[b] for a, b in zip(sorted(first), sorted(first)[1:])):
+        raise ValueError("each window's first frame must follow the first frame of every earlier window")
+    windows = max(win) + 1
     order = sorted(sync_set, key=lambda s: (s.delta, -s.rho))
-    lenient = max(sync_set, key=lambda s: (s.delta, -s.rho))
-    syncs, hands, misses, last, k = [], [], 0, 0, 0
+    eager, lenient = order[0], max(sync_set, key=lambda s: (s.delta, -s.rho))
+    syncs = [eager] * windows
+    misses, h_prefix, k0 = 0, 0, 0
     for w in range(windows):
-        j = k
-        while j < len(frames) and frames[j].anchor // window_buckets == w:
-            j += 1
-        chunk, chunk_ready = frames[k:j], ready[k:j]
+        if w not in first:
+            continue
+        for k in range(k0, first[w]):
+            h_prefix = max(eligible(frames[k], syncs[win[k]]), h_prefix)
+        k0 = first[w]
         for sync in order:
-            ok, out = _hand(chunk, chunk_ready, sync, last)
+            syncs[w] = sync
+            h, ok = h_prefix, True
+            for k in range(first[w], last[w] + 1):
+                h = max(eligible(frames[k], syncs[win[k]]), h)
+                if win[k] == w and ready[k] > h:
+                    ok = False
+                    break
             if ok:
                 break
         else:
             misses += 1
-            sync = lenient
-            _, out = _hand(chunk, chunk_ready, sync, last)
-        syncs.append(sync)
-        hands.extend(out)
-        last = out[-1] if out else last
-        k = j
+            syncs[w] = lenient
+    hands, h, actual = [], 0, 0
+    for k, f in enumerate(frames):
+        h = max(eligible(f, syncs[win[k]]), h)
+        actual = max(h, ready[k], actual)
+        hands.append(actual)
     return syncs, hands, misses
 
 
@@ -231,8 +242,10 @@ def size_ingress_ms(arrival_ms: Sequence[float], ingress_bucket_ms: int = 100, q
 
 def calibrate(trace: dict, *, ingress_bucket_ms: int = 100, n_delta: int = 16, n_rho: int = 8,
               headroom: float = 2.0, epsilon: float = 1e-4, target_k_share: float | None = None,
-              target_span_s: int = 3600) -> dict:
-    """Size every link of the trace and report as the spec's §5 lays out."""
+              target_span_s: int = 3600, ingress_max_delay_ms: int | None = None) -> dict:
+    """Size every link of the trace and report as the spec's §5 lays out. The ingress FIFO's p99 delay is at most one
+    ingress bucket, or `ingress_max_delay_ms` when given."""
+    in_delay = 1 if ingress_max_delay_ms is None else max(1, ingress_max_delay_ms // ingress_bucket_ms)
     bucket_ms = trace.get("bucket_ms", 100)
     T = trace["window_buckets"]
     frame_bytes = trace.get("frame_bytes", 4096)
@@ -288,13 +301,15 @@ def calibrate(trace: dict, *, ingress_bucket_ms: int = 100, n_delta: int = 16, n
     ingress = []
     for name, runs in per_link_arrivals.items():
         joined = [c for run in runs for c in run]
-        ingress.append({"link": name, "direction": "ingress"} | size_ingress(joined, bucket_ms, ingress_bucket_ms, q))
+        ingress.append({"link": name, "direction": "ingress"}
+                       | size_ingress(joined, bucket_ms, ingress_bucket_ms, q, in_delay))
     for name, runs in per_link_arrival_ms.items():
         joined_ms, offset = [], 0.0
         for run in runs:
             joined_ms += [t + offset for t in run]
             offset = (math.ceil(max(joined_ms, default=offset) / ingress_bucket_ms) + 2) * ingress_bucket_ms
-        ingress.append({"link": name, "direction": "ingress"} | size_ingress_ms(joined_ms, ingress_bucket_ms, q))
+        ingress.append({"link": name, "direction": "ingress"}
+                       | size_ingress_ms(joined_ms, ingress_bucket_ms, q, in_delay))
 
     miss_rate = misses_total / windows_total if windows_total else 0.0
     windows_per_day = 86400 * 1000 / (T * bucket_ms)
@@ -340,12 +355,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--epsilon", type=float, default=1e-4, help="target honest miss rate per window")
     ap.add_argument("--target-k-share", type=float, default=None)
     ap.add_argument("--target-span-s", type=int, default=3600)
+    ap.add_argument("--ingress-max-delay-ms", type=int, default=None,
+                    help="p99 ingress FIFO delay budget (default: one ingress bucket)")
     args = ap.parse_args(argv)
     with open(args.trace, encoding="utf-8") as fh:
         trace = json.load(fh)
     report = calibrate(trace, ingress_bucket_ms=args.ingress_bucket_ms, n_delta=args.deltas, n_rho=args.rhos,
                        headroom=args.headroom, epsilon=args.epsilon, target_k_share=args.target_k_share,
-                       target_span_s=args.target_span_s)
+                       target_span_s=args.target_span_s, ingress_max_delay_ms=args.ingress_max_delay_ms)
     json.dump(report, sys.stdout, indent=1)
     sys.stdout.write("\n")
     return 0

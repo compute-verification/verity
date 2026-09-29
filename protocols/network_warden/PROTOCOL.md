@@ -84,15 +84,20 @@ docstring) and sizes:
 - **Σ_sync:**
   - δ from 0 up to the p99.99 first-frame latency, in 16 steps;
   - ρ geometrically from the p0.01 production rate up to the p50 rate, in 8 values, each rounded down to a fraction
-    with denominator at most 64 (rounding down keeps a value lenient).
-- **The honest miss rate:** per window, the prover declares the met value with the least latency. A window that no value
-  meets is a miss, which is a violation. The target is 1e-4.
+    with denominator at most 1024 (rounding down keeps a value lenient).
+- **The honest prover's choice:** per window, the met value with the least latency. Frames are in the Program's
+  canonical order, which is step-major for a batching engine, so a long session interleaves with later windows' frames.
+  While a window is chosen, later windows take their most eager value; that only lowers hand times, so a window found
+  met stays met.
+- **The honest miss rate:** a window that no value meets is a miss, which is a violation. The target is 1e-4.
 - **The egress allocation r:** the least r at or above twice the p99.9 of per-bucket demand whose FIFO replay has no
   overflow and a p99 queueing delay of at most one bucket. Both improve monotonically in r, so the search doubles and
   then bisects.
 - **The ingress grid:** the smallest r_in that carries honest ingress, at τ_in. τ_in is decision D, 100 ms by default,
   and a parameter. With arrival times (`arrival_ms`), τ_in may be finer than the trace bucket, and the report adds the
-  delivery delay: a frame waits for the next ingress bucket boundary, then for its FIFO slot.
+  delivery delay: a frame waits for the next ingress bucket boundary, then for its FIFO slot. The p99 FIFO delay is at
+  most one ingress bucket by default; `--ingress-max-delay-ms` sets the budget in ms instead, so different τ_in are
+  compared at the same latency.
 
 The report has the per-link bandwidth, the utilization and padding share, the clock-sync set and its bits, the (δ, ρ)
 range the honest prover declared, the added first-frame latency, the capacity per day, and the K charge by span.
