@@ -12,8 +12,9 @@ units run over `σ`'s stratum.
 
 * `stratified_exec_escape_le`: over independent uniform streams, the executable draw misses `B` with probability at most
   `Law.stratified`'s escape, the product over strata of `subset_exec_escape_le` (`ExecDraw.lean`).
-* `execStratified`: the executable draw as a law, a draw that runs out drawing every unit. `execStratified_miss_le`: its
-  count curve is at most `Law.stratified`'s, which `stratified_miss_eq_greedy` computes.
+* `execStratified`: the executable draw as a law, a draw that runs out drawing every unit. `execStratified_escape_le`: it
+  misses each set with at most `Law.stratified`'s escape. `execStratified_miss_le`: its count curve is at most
+  `Law.stratified`'s, which `stratified_miss_eq_greedy` computes.
 * `flock_e2e_drawn_exec`, `flock_e2e_count_exec`: `flock_e2e_drawn` and `flock_e2e_count` (`E2E.lean`) at that law, the
   count curve bounded by `Law.stratified`'s `miss`.
 

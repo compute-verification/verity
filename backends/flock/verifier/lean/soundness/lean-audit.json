@@ -280,6 +280,17 @@
    "assumptions": [],
    "type_hash": "00000000c86b7230"
   },
+  "FlockSoundness.Audit.Law.execStratified_escape_le": {
+   "signature": [
+    "FlockSoundness.Audit.Law.execStratified_escape_le {n m : Nat} (σ : Fin n → Fin m) (k : Fin m → Nat)",
+    "  (hk : ∀ (s : Fin m), instLENat.le (k s) (FlockSoundness.Audit.Law.stratum σ s).card) (S : Fin m → Flock.Draw.Stratum)",
+    "  (hS : FlockSoundness.Audit.Law.ExecStrata σ k S) (L : Fin m → Nat) (B : Finset (Fin n)) :",
+    "  ENNReal.instLE.le ((FlockSoundness.Audit.Law.execStratified S L).escape B)",
+    "    ((FlockSoundness.Audit.Law.stratified σ k hk).escape B)"
+   ],
+   "assumptions": [],
+   "type_hash": "0000000044bab560"
+  },
   "FlockSoundness.Audit.Law.floor_le_workK": {
    "signature": [
     "FlockSoundness.Audit.Law.floor_le_workK {n m : Nat} (σ : Fin n → Fin m) (w f : Fin m → Nat) (K : Nat) (s : Fin m) :",
@@ -2440,6 +2451,7 @@
    },
    "pins": [
     "FlockSoundness.Audit.Law.countRule_eq_draw",
+    "FlockSoundness.Audit.Law.execStratified_escape_le",
     "FlockSoundness.Audit.Law.stratified_exec_escape_le",
     "FlockSoundness.Audit.Law.subset_exec_escape_le",
     "FlockSoundness.Audit.Law.workRule_eq_draw",
@@ -3211,6 +3223,7 @@
     "FlockSoundness.Audit.Law.closure_escape",
     "FlockSoundness.Audit.Law.closure_escape_le_work",
     "FlockSoundness.Audit.Law.escape_widen_le",
+    "FlockSoundness.Audit.Law.execStratified_escape_le",
     "FlockSoundness.Audit.Law.mem_closure_draw",
     "FlockSoundness.Audit.Law.stratified_exec_escape_le",
     "FlockSoundness.Audit.Law.subset_exec_escape_le",
@@ -3293,6 +3306,7 @@
    "pins": [
     "FlockSoundness.Audit.Law.closure_escape_le_work",
     "FlockSoundness.Audit.Law.countK_eq",
+    "FlockSoundness.Audit.Law.execStratified_escape_le",
     "FlockSoundness.Audit.Law.floor_le_workK",
     "FlockSoundness.Audit.Law.stratified_exec_escape_le",
     "FlockSoundness.Audit.Law.sum_workK_le",
@@ -3527,6 +3541,7 @@
     "FlockSoundness.Audit.Law.streamOf": "223517e5d74b8764"
    },
    "pins": [
+    "FlockSoundness.Audit.Law.execStratified_escape_le",
     "FlockSoundness.Audit.Law.stratified_exec_escape_le",
     "FlockSoundness.Audit.Law.subset_exec_escape_le",
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
@@ -3540,6 +3555,7 @@
     "FlockSoundness.Audit.Law.execStratified": "a839dbc85a1975cc"
    },
    "pins": [
+    "FlockSoundness.Audit.Law.execStratified_escape_le",
     "FlockSoundness.Audit.Law.stratified_exec_escape_le",
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec"
@@ -3595,6 +3611,7 @@
     "FlockSoundness.Audit.Law.closure_escape",
     "FlockSoundness.Audit.Law.closure_escape_le_work",
     "FlockSoundness.Audit.Law.escape_widen_le",
+    "FlockSoundness.Audit.Law.execStratified_escape_le",
     "FlockSoundness.Audit.Law.stratified_exec_escape_le",
     "FlockSoundness.Audit.Law.subset_exec_escape_le",
     "FlockSoundness.Audit.Law.work_escape_floor_le",
