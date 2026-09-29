@@ -327,6 +327,22 @@ called PRESERVED without a remote; nothing in the store is ever overwritten.
 - `research data lookup --tool T [--param k=v]... [--condition k=v]...
   [--source-tree SHA | --any-source] [-- ARGV...]` answers "have we done this?"
 
+### Notes and evidence over MCP
+
+`research notes mcp` (`notes_mcp.py`) serves a notes clone and the evidence catalog to an agent's MCP client over stdio; it hosts
+nothing and reads no credential. Its tools: `search_notes` (full text ranked, or the newest notes, by lane, kind and time; each
+hit says how many of its cited ids the catalog holds), `read_note`, `evidence` (for a run id, an `art:` prefix or `note:<id>`: what
+the catalog holds, and the notes citing it) and `sql` (read-only, over the notes index and the catalog attached as `ev`). The
+index (`notes_index.py`) catches up with the clone before every call, re-reading only the notes that changed; `research notes
+index` builds it, or answers `--search` / `--evidence` in a shell. The catalog is the local store's `catalog.sqlite`, or
+`--catalog` names a copy made by `research data catalog --compact`: the same tables without the whole manifests, for a machine
+that queries evidence without keeping a store. The notes root defaults to `$RESEARCH_NOTES` or `~/.research/notes`. In Cursor,
+`.cursor/mcp.json`:
+
+~~~json
+{"mcpServers": {"research-notes": {"command": "uv", "args": ["--directory", "/workspace", "run", "research", "notes", "mcp"]}}}
+~~~
+
 ### Notes stamped ahead of the clock
 
 `research notes sync` (`notes_sync.py`; `checkpoint`, `bind` and `relaunch` run it with `RESEARCH_NOTES_SYNC=1`) leaves out any

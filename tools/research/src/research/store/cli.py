@@ -45,6 +45,7 @@
                                                    content parity against a store built from the remote alone (parity.py); exit 0 iff explained
   research data catalog [--json]                   catalog schema version vs the code's (older catalogs migrate forward on open; a newer one is
                                                    refused, exit 3, unless RESEARCH_CATALOG_IGNORE_VERSION=1), row counts per table
+  research data catalog --compact OUT              a copy without the whole manifests or replica records, for readers that query (notes mcp)
   research data sql "SELECT ..." [--json]          read-only connection
   research data mint-credential [--ttl 6h] [--permission object-read-write] [--prefix P]... [--actions A,B] [--via auto|local|api] [--env]
                                                    a short-lived bucket-scoped R2 credential for a pod (JSON, or --env export lines)
@@ -66,7 +67,7 @@ from pathlib import Path
 from typing import Callable
 
 from . import ids, vocab
-from .index import IGNORE_VERSION_ENV, CatalogVersionError
+from .index import IGNORE_VERSION_ENV, CatalogVersionError, compact
 from .local import REFRESH_PAYLOAD_MAX, LocalStore, StoreError, store_root
 from .remote import ConfigError, RemoteConflict
 
@@ -686,7 +687,15 @@ def cmd_catalog(argv: list[str]) -> int:
     the code -- see `CatalogVersionError`."""
     ap = _ap("catalog")
     ap.add_argument("--json", action="store_true")
+    ap.add_argument("--compact", type=Path, metavar="OUT", help="write a copy without manifest_json or the replica records (index.compact)")
     ns = ap.parse_args(argv)
+    if ns.compact:
+        rep = compact(LocalStore(ns.store).index.path, ns.compact)
+        if ns.json:
+            _dump(rep)
+        else:
+            print(f"{rep['path']}: {rep['bytes'] / 1e6:.1f} MB; " + ", ".join(f"{t} {n}" for t, n in rep["tables"].items()))
+        return 0
     info = LocalStore(ns.store).index.info()
     if ns.json:
         _dump(info)
