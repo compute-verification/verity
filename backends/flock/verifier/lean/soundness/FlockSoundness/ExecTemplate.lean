@@ -22,6 +22,7 @@ structure ParseFactsT (tags : Tags) (t : Typed.Template) (c : Circuit) : Prop wh
     ∀ x ∈ more, (∃ lines, Net.parse lines = .ok x.2) ∨ ∃ nm tb n lo bits, Lookup.build nm tb n lo bits = .ok x.2
   ports : ∀ p ∈ c.ports.toList, 0 < p.chunks
   unitNet : c.unitNet < c.nets.size
+  root : c.unitNet = 0
   shaNet : c.shaNet < c.nets.size
   hmNet : c.hmNet < c.nets.size
   kinds : ∀ r ∈ c.ranges.toList, ∀ i, r.kind = .net i → i < c.nets.size
@@ -313,7 +314,18 @@ theorem parse_facts_tmpl {tags : Tags} {bytes : ByteArray} {tables : List (Strin
     · obtain ⟨_, hx, -⟩ := except_bind_ok hs; cases hx
     · rename_i hk; cases hs; exact ⟨⟨_, rfl⟩, by simpa using hk⟩) hderived
   exact { pre := by obtain ⟨more, hm, hmore⟩ := hnets; exact ⟨more, hm, hmore⟩
-          ports := hports, unitNet := findIdx?_lt hunit, shaNet := hnetOf _ _ hsha,
+          ports := hports, unitNet := findIdx?_lt hunit
+          root := by
+            obtain ⟨more, hm, -⟩ := hnets
+            obtain ⟨hlt, -, hmin⟩ := Array.findIdx?_eq_some_iff_getElem.1 hunit
+            by_contra hne
+            have h0 := hmin 0 (Nat.pos_of_ne_zero hne)
+            have h1 : nets2[0]? = some ("root", t.root) := by
+              rw [← Array.getElem?_toList, hm]; simp [nets0]
+            have h2 : nets2[0] = ("root", t.root) := by
+              rw [Array.getElem?_eq_getElem (by omega)] at h1; exact Option.some.inj h1
+            simp [h2] at h0
+          shaNet := hnetOf _ _ hsha,
           hmNet := hnetOf _ _ hhm, kinds := hkinds, check := ⟨ls, by cases w; exact hcheck⟩
           typed := htyped
           upv := (Except.ok.inj hupv).symm

@@ -264,6 +264,11 @@ structure CheckFactsT (c : Circuit) (tb : TypedBlock) : Prop where
   rangeLogs : ∀ e ∈ tb.rangeLogs.toList, c.perVu.getD e.1 0 = (tb.parts.filter (·.1 == e.1)).size ∧
     (c.nets.getD e.1 default).2.unitLog = e.2
   root_zero : c.unit.useful < 2 ^ c.unit.unitLog
+  sha_in : (portCols (c.nets.getD c.shaNet default).2.inGroups).size = 6 ∧
+    ∀ i < 6, ((portCols (c.nets.getD c.shaNet default).2.inGroups)[i]!).2 = if i % 2 == 0 then 512 else 1024
+  hm_in : (portCols (c.nets.getD c.hmNet default).2.inGroups).map (·.2) = #[512, 1024, 8 * HmRow.SALT_BYTES]
+  perVu_sha : c.perVu.getD c.shaNet 0 = (HmRow.rowSlots c.ports).1
+  perVu_hm : c.perVu.getD c.hmNet 0 = nextPow2 c.ports.size
 
 theorem check_facts_typed {c : Circuit} {tags : Tags} {ls : Lean.Json} {tb : TypedBlock} (ht : c.typed = some tb)
     (h : HmRow.check c tags ls = .ok ()) : CheckFactsT c tb := by
@@ -376,6 +381,11 @@ theorem check_facts_typed {c : Circuit} {tags : Tags} {ls : Lean.Json} {tb : Typ
       simp only [Bool.or_eq_true, not_or, bne_iff_ne, ne_eq, not_not] at hc
       exact ⟨⟨_, rfl⟩, hc⟩) hrl
   simp only [bne_iff_ne, ne_eq, not_not] at hpv1
+  have hpv' : ¬(c.perVu.getD c.shaNet 0 != (HmRow.rowSlots c.ports).1 ||
+      c.perVu.getD c.hmNet 0 != nextPow2 c.ports.size) = true := hpv
+  simp only [Bool.or_eq_true, not_or, bne_iff_ne, ne_eq, not_not] at hpv'
+  simp only [Bool.or_eq_true, not_or, bne_iff_ne, ne_eq, not_not, List.any_eq_true, List.mem_range, not_exists,
+    not_and] at hports
   exact {
     bound_slotLog := hr1
     disj := disj
@@ -384,6 +394,10 @@ theorem check_facts_typed {c : Circuit} {tags : Tags} {ls : Lean.Json} {tb : Typ
     one_range := fun n hn => one_range n (Nat.zero_le _) hn
     root_perVu := hpv1
     rangeLogs := rangeLogs
-    root_zero := Nat.lt_of_not_le hz }
+    root_zero := Nat.lt_of_not_le hz
+    sha_in := ⟨by rw [hports.1.1.1.1]; rfl, fun i hi => hports.1.1.1.2 i (by rw [hports.1.1.1.1]; exact hi)⟩
+    hm_in := hports.1.2
+    perVu_sha := hpv'.1
+    perVu_hm := hpv'.2 }
 
 end FlockSoundness
