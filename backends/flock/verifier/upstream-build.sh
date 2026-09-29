@@ -12,9 +12,10 @@
 # GLIBC_2.39 and cannot start on 22.04's 2.35). On RunPod: `--image runpod/base:1.3.3-ubuntu2204`.
 #
 # Build for a CPU every check pod has: the bundle's `.cargo/config.toml` asks for `target-cpu=native`, and a build on an
-# AVX-512 host then dies of SIGILL on one without (AMD Zen 3). RUSTFLAGS overrides it (default x86-64-v3: AVX2, no AVX-512),
-# the build fails if an AVX-512 instruction is left, and BUILD.json records the flags. RUST_TOOLCHAIN (default the one the
-# pinned build used) keeps a rebuild to the flags alone.
+# AVX-512 host then dies of SIGILL on one without (AMD Zen 3). RUSTFLAGS overrides it (default x86-64-v3: AVX2, no AVX-512)
+# and BUILD.json records the flags. AVX-512 code behind runtime CPU detection (hash crates' kernels) stays and is portable,
+# so counting instructions proves nothing: check's agreement preflight replays a stored session on the check machine instead.
+# RUST_TOOLCHAIN (default the one the pinned build used) keeps a rebuild to the flags alone.
 set -euo pipefail
 RUN=${RESEARCH_RUN_DIR:?run under research run}
 W=${WORK:-$HOME/flock-upstream-build}
