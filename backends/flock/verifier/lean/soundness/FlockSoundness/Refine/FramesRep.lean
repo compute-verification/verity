@@ -1,4 +1,5 @@
 import FlockSoundness.Refine.FramesLigerito
+import FlockSoundness.Refine.Table
 
 /-!
 # The PIOP's rounds, as the frames they emit (R11b)
@@ -9,6 +10,9 @@ by emitting its frames, in order.
   are left pending for the lincheck's first round.
 * `lincheck_emitted`: the lincheck (§10), `lcFrames`.
 * `ringSwitch_emitted`: the opening's ring switch (§12.2–§12.3), `rsFrames`.
+
+`rep_rounds` composes them with `ligerito_frames`: when `verifyRep` accepts, every round of the rep's stream retained
+the bytes of its chunk of `repFrames`, one chunk per round.
 -/
 
 namespace FlockSoundness.Refine
@@ -152,5 +156,75 @@ theorem ringSwitch_emitted (m : ℕ) (claims : Array Flock.Claim) (rs : Array (A
   obtain ⟨rfl, rfl⟩ := pure_ok h
   have := e₁.trans (eL.trans e₃)
   simpa [rsFrames] using this
+
+/-- **A rep's frames** (PROTOCOL.md §6–§13): its domain; the statement binding and the zerocheck; the lincheck; the ring
+switch of `n` claims; and Ligerito, whose first frames absorb the ring switch's batched value `T`. -/
+def repFrames (st : Setup) (sch : Flock.Schedule) (domain : ByteArray) (n : ℕ) (p : Proof) (T : F128) : List Frame :=
+  .dom domain :: (zcFrames st.m st.digest (p.cap.foldl (· ++ ·) ByteArray.empty) p.zerocheck ++
+    lcFrames st.fold.kLog p.lincheck ++ rsFrames n p.ringSwitches ++ ligFrames sch T p.cap p.ligerito)
+
+/-- **Every round of a verified rep's stream retained its frames** (PROTOCOL.md §6, §9–§13). When `verifyRep` accepts
+rep `r` of table `i`, its stream and proof decode, and on a stream whose rounds all retained their bytes, round `j`
+retained the bytes of the `j`-th chunk of the rep's frames, and there is one chunk per round. -/
+theorem rep_rounds (spec : SessionSpec) (st : Setup) (sch : Flock.Schedule) (sess : Session) (i r : ℕ)
+    (bytes cap : ByteArray) (hm : 14 ≤ st.m) (hdim : DimSeam sch)
+    (hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default))
+    (h : verifyRep spec st sch sess i r bytes = .ok cap) :
+    ∃ (stream : StreamRec) (p : Proof) (extras : Array Flock.Claim) (T : F128),
+      sess.streams.find? (fun x => x.name == toString spec.tables[i]! ++ toString "/rep" ++ toString r) = some stream ∧
+      st.extra sess.points = .ok extras ∧ decodeProof (shapeOf st sch extras.size) bytes = .ok p ∧
+      (AllRetained stream.rounds →
+        (chunks (repFrames st sch (spec.domain spec.tables[i]! r).toUTF8 (2 + extras.size) p T)).1.length =
+          stream.rounds.size ∧
+        ∀ j < stream.rounds.size, Retains (stream.rounds[j]!)
+          (encs ((chunks (repFrames st sch (spec.domain spec.tables[i]! r).toUTF8 (2 + extras.size) p T)).1.getD j []))) := by
+  unfold verifyRep at h
+  dsimp only at h
+  cases hs : Array.find? (fun x => x.name == toString spec.tables[i]! ++ toString "/rep" ++ toString r)
+      sess.streams with
+  | none => rw [hs] at h; cases h
+  | some stream =>
+      rw [hs] at h
+      obtain ⟨extras, hex, h⟩ := ebind_ok h
+      obtain ⟨p, hp, h⟩ := ebind_ok h
+      by_cases c1 : (p.params != pcsParams st.merkle sch) = true
+      · rw [ite_eq_left c1] at h; obtain ⟨_, h0, _⟩ := ebind_ok h; cases h0
+      rw [ite_eq_right c1] at h
+      obtain ⟨⟨u, tr⟩, hrun, h⟩ := ebind_ok h
+      change (if (tr.k != stream.rounds.size) = true then _ else _) = _ at h
+      by_cases c2 : (tr.k != stream.rounds.size) = true
+      · rw [ite_eq_left c2] at h; obtain ⟨_, h0, _⟩ := ebind_ok h; cases h0
+      simp only [bne_iff_ne, ne_eq, not_not] at c2
+      refine ⟨stream, p, extras, ?_⟩
+      rw [StateT.run] at hrun
+      obtain ⟨zc, t₁, h₁, hrun⟩ := bind_ok hrun
+      obtain ⟨lc, t₂, h₂, hrun⟩ := bind_ok hrun
+      obtain ⟨⟨T, sws⟩, t₃, h₃, h₄⟩ := bind_ok hrun
+      refine ⟨T, rfl, hex, hp, fun hret => ?_⟩
+      have e₀ : Emitted ⟨stream.rounds, 0, ByteArray.empty⟩
+          (Transcript.init stream.rounds (spec.domain spec.tables[i]! r).toUTF8)
+          [.dom (spec.domain spec.tables[i]! r).toUTF8] :=
+        emitted_absorb rfl rfl rfl (by rw [init_enc]; rfl)
+      have r₀ : AllRetained (Transcript.init stream.rounds (spec.domain spec.tables[i]! r).toUTF8).rounds := hret
+      have e₁ := zerocheck_emitted st.m hm _ _ _ _ _ zc r₀ h₁
+      have e₂ := lincheck_emitted _ _ _ _ _ lc (e₁.retained r₀) h₂
+      have hsz : (abcClaims st.m st.kLog zc lc ++ extras).size = 2 + extras.size := by simp [abcClaims]
+      have e₃ := ringSwitch_emitted _ _ _ (by rw [hsz]; omega) _ _ _ (e₂.retained (e₁.retained r₀)) h₃
+      rw [hsz] at e₃
+      have e₄ := ligerito_frames _ sch _ _ _ _ hdim hlv (e₃.retained (e₂.retained (e₁.retained r₀))) h₄
+      have e := e₀.trans (e₁.trans (e₂.trans (e₃.trans e₄)))
+      have hfr : [Frame.dom (spec.domain spec.tables[i]! r).toUTF8] ++
+          (zcFrames st.m st.digest (p.cap.foldl (· ++ ·) ByteArray.empty) p.zerocheck ++
+            (lcFrames st.fold.kLog p.lincheck ++ (rsFrames (2 + extras.size) p.ringSwitches ++
+              ligFrames sch T p.cap p.ligerito))) =
+          repFrames st sch (spec.domain spec.tables[i]! r).toUTF8 (2 + extras.size) p T := by
+        simp [repFrames, List.append_assoc]
+      rw [hfr] at e
+      obtain ⟨-, hk, hR, -⟩ := e
+      refine ⟨by rw [← c2, hk]; simp, fun j hj => ?_⟩
+      have hj' : j < (chunks (repFrames st sch (spec.domain spec.tables[i]! r).toUTF8 (2 + extras.size) p T)).1.length := by
+        rw [← c2, hk] at hj; simpa using hj
+      have := hR j hj'
+      simpa using this
 
 end FlockSoundness.Refine
