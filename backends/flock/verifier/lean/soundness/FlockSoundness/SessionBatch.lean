@@ -186,13 +186,13 @@ open Classical in
 /-- **Knowledge soundness of table `j` in a batched session**, in the product form: table `j`
 accepts in a fresh run after `Commit`, while the extraction from `Kr` independent reruns fails,
 with probability at most `ε_c⁻ + K·adv₀ + N₀/(eK)`. -/
-theorem joint_le_B (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) (hA : A.Correct)
+theorem joint_le_B (A : Arith F K) (hA : A.Correct)
     [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (ts : List (TabSpec mPts))
     (j : Fin ts.length) (Kr : ℕ) (hK : 1 ≤ Kr) (τ : Strategy (sessionB A H E ts)) :
     expect (ind fun outs : List (OutC F D) => (outs.getD j dfltOut).accepted = true)
         (sessAfterB (gamesB A H E ts τ.1)) τ.2 * failProbB A H E ts j Kr τ ≤
       ksBoundB A H E ts j Kr τ := by
-  have h := session_knowledge_sound hMCA A hA H E (ts.get j).S (ts.get j).m (ts.get j).k0
+  have h := session_knowledge_sound A hA H E (ts.get j).S (ts.get j).m (ts.get j).k0
     (ts.get j).l₀ (ts.get j).l₁ (ts.get j).rest (ts.get j).ext (ts.get j).hsch (ts.get j).hm
     (ts.get j).ptLocal mPts (ts.get j).hlay ((gamesB A H E ts τ.1).take j)
     ((gamesB A H E ts τ.1).drop (j + 1)) (τ.1 j) (stratB A H E ts j τ) Kr hK
@@ -206,7 +206,7 @@ theorem joint_le_B (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) (hA : A.Cor
 open Classical in
 /-- **The same, for the session's verdict**, in the audit's `ℝ≥0∞` form:
 `Pr[the session accepts] · Pr[table j's extraction fails] ≤ ksBoundB`. -/
-theorem joint_le_B' (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) (hA : A.Correct)
+theorem joint_le_B' (A : Arith F K) (hA : A.Correct)
     [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (ts : List (TabSpec mPts))
     (j : Fin ts.length) (Kr : ℕ) (hK : 1 ≤ Kr) (τ : Strategy (sessionB A H E ts)) :
     prob (acceptedB ts) (sessionB A H E ts) τ * ENNReal.ofReal (failProbB A H E ts j Kr τ) ≤
@@ -228,7 +228,7 @@ theorem joint_le_B' (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) (hA : A.Co
     _ ≤ ENNReal.ofReal (ksBoundB A H E ts j Kr τ) := by
         refine ENNReal.ofReal_le_ofReal ?_
         rw [prob_toReal]
-        exact joint_le_B hMCA A hA H E ts j Kr hK τ
+        exact joint_le_B A hA H E ts j Kr hK τ
 
 open Classical in
 /-- **The audit's `cover`, per table.** If commitment implies `G`, every extracted table is

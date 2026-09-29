@@ -1,14 +1,16 @@
 import FlockSoundness.LigeritoQueries
+import FlockSoundness.JohnsonMCA
 import VCVio.OracleComp.Constructions.SampleableType.NativeMeasure
 
 /-!
 # Mutual correlated agreement at Ligerito's folds (PROTOCOL.md §13.3)
 
-From the named assumption (`Assumptions.BCHKS25Thm46`) to Ligerito's coins:
+From mutual correlated agreement up to the Johnson bound (`mcaError_le_bchks25`, proved from DKT26)
+to Ligerito's coins:
 
 * **The coin bound** (`prCoin_mca_le`): for a Reed–Solomon code in the Johnson range over any finite
   field, whatever two words the prover fixes, a uniform coin makes the MCA event happen with
-  probability at most `a/|L|`. This is the assumption read through `prCoin`
+  probability at most `a/|L|`. This is `mcaError_le_bchks25` read through `prCoin`
   (VCVio's `prEvent_uniformSample`).
 * **One fold round** (`rowsAgreeOn_of_fold`, `prCoin_fold_mca_le`): a round folds lanes `2ℓ` and
   `2ℓ + 1` into `R(2ℓ) + r·(R(2ℓ+1) + R(2ℓ))`, an affine line. Outside the rounds' MCA events, if
@@ -28,28 +30,28 @@ open scoped ENNReal NNReal
 
 /-! ## The coin bound -/
 
-/-- **BCHKS25 Theorem 4.6, read as a coin bound.** For a Reed–Solomon code of `k` coefficients on
-`n` points and a radius `0 < δ < 1 − √((k − 1)/n)`, whatever two words the prover fixes, a uniform
-`γ` makes the MCA event happen with probability at most `a/|L|`. -/
-theorem prCoin_mca_le (hMCA : Assumptions.BCHKS25Thm46) {ι : Type} [Fintype ι] [Nonempty ι]
-    {L : Type} [Field L] [Fintype L] [DecidableEq L] (domain : ι ↪ L) (k : ℕ) (δ : ℝ≥0)
-    (hk : 1 < k) (hδ : 0 < δ)
-    (hδJ : (δ : ℝ) < 1 - ((((k - 1 : ℕ) : ℝ) / Fintype.card ι) ^ ((1 : ℝ) / 2)))
-    (U : Fin 2 → ι → L) :
+/-- **Mutual correlated agreement, read as a coin bound.** For a Reed–Solomon code of `k`
+coefficients on `n` points and a radius `0 ≤ δ < 1 − √((k − 1)/n)`, whatever two words the prover
+fixes, a uniform `γ` makes the MCA event happen with probability at most `a/|L|`, BCHKS25's printed
+bound (`mcaError_le_bchks25`). -/
+theorem prCoin_mca_le {n : ℕ} {L : Type} [Field L] [Fintype L] [DecidableEq L]
+    (domain : Fin n ↪ L) (k : ℕ) (δ : ℝ≥0) (hk : 1 < k)
+    (hδJ : (δ : ℝ) < 1 - ((((k - 1 : ℕ) : ℝ) / Fintype.card (Fin n)) ^ ((1 : ℝ) / 2)))
+    (U : Fin 2 → Fin n → L) :
     prCoin (fun γ : L => IsMCA (AffineLineGenerator L) (ReedSolomon.code domain k) γ U δ) ≤
       ENNReal.ofReal
-        (let n : ℝ := Fintype.card ι
+        (let n : ℝ := Fintype.card (Fin n)
          let ρ : ℝ := (k - 1 : ℕ) / n
          let m : ℝ := max ⌈(ρ ^ ((1 : ℝ) / 2)) / (1 - ρ ^ ((1 : ℝ) / 2) - δ)⌉ 3
          ((2 * (m + 1/2) ^ 5 + 3 * (m + 1/2) * δ * ρ) / (3 * ρ ^ ((3 : ℝ) / 2)) * n
           + (m + 1/2) / ρ ^ ((1 : ℝ) / 2)) / (Fintype.card L : ℝ)) := by
   classical
   letI : SampleableType L := SampleableType.ofFintype L
-  have h := hMCA domain k δ hk hδ hδJ
+  have h := mcaError_le_bchks25 domain k δ hk hδJ
   refine le_trans ?_ h
   have hU : Pr{let γ ← $ᵗ L}[IsMCA (AffineLineGenerator L) (ReedSolomon.code domain k) γ U δ] ≤
       mcaError (AffineLineGenerator L) (ReedSolomon.code domain k) (δ : ℝ) :=
-    le_iSup (fun U : Fin 2 → (ι → L) =>
+    le_iSup (fun U : Fin 2 → (Fin n → L) =>
       Pr{let γ ← $ᵗ L}[IsMCA (AffineLineGenerator L) (ReedSolomon.code domain k) γ U δ]) U
   refine le_trans (le_of_eq ?_) hU
   rw [SampleableType.prEvent_uniformSample, prCoin_eq_card]

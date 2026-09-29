@@ -7,7 +7,7 @@ import Mathlib.Order.ConditionallyCompleteLattice.Finset
 /-!
 # The rewinding lemma: openings off the plurality table cost collisions
 
-The compiled theorem (`ASSUMPTIONS.md` §1.2) covers every prover, including one that never
+The compiled theorem (`README.md` §1.2) covers every prover, including one that never
 "knows" a table. Its committed table is the **plurality** table: at each position, the column the
 prover opens in the most runs (`IsPlurality`). A run is `bad` when it opens some position to a
 column off the plurality; a pair of runs `conflict`s when both open one position, to different

@@ -4,7 +4,9 @@ import Mathlib.Data.Finset.Card
 /-!
 # Circuits, partitions, and the correctness of a unit
 
-A circuit is Boolean: input gates, and AND, XOR and NOT gates over earlier gates. A partition puts
+A circuit is Boolean: input gates, and AND, XOR and NOT gates over earlier gates, and rows: the AND
+of the XOR of some earlier gates and the XOR of others, a row as the verifier parses it (PROTOCOL.md
+§16.5; the compiled lowering reads a template's rows as these gates, `Lowering.lean`). A partition puts
 every computed gate in exactly one of `n` units; the input gates are the input unit (`none`). The
 committed wires are derived, never stored: the inputs, the outputs, and every gate that a gate of
 another unit reads (`Partition.committed`).
@@ -26,12 +28,27 @@ inputs (`Partition.Correct`): evaluate `u`'s gates in order, reading every other
 
 namespace FlockSoundness.Audit
 
+/-- The XOR of the values at a list of places. -/
+def xorSum {ι : Type} (l : List ι) (v : ι → Bool) : Bool := (l.map v).foldr Bool.xor false
+
+theorem xorSum_congr {ι : Type} {l : List ι} {v w : ι → Bool} (h : ∀ x ∈ l, v x = w x) :
+    xorSum l v = xorSum l w := by
+  unfold xorSum
+  rw [List.map_congr_left h]
+
+theorem xorSum_map {ι κ : Type} (l : List ι) (f : ι → κ) (v : κ → Bool) :
+    xorSum (l.map f) v = xorSum l (v ∘ f) := by
+  unfold xorSum
+  rw [List.map_map]
+
 /-- A gate. -/
 inductive Op (N : ℕ) where
   | input
   | and (a b : Fin N)
   | xor (a b : Fin N)
   | not (a : Fin N)
+  /-- A row: `(⊕_{x ∈ a} x) ∧ (⊕_{x ∈ b} x)`. -/
+  | row (a b : List (Fin N))
 
 namespace Op
 
@@ -43,6 +60,7 @@ def args : Op N → List (Fin N)
   | and a b => [a, b]
   | xor a b => [a, b]
   | not a => [a]
+  | row a b => a ++ b
 
 def isInput : Op N → Bool
   | input => true
@@ -54,10 +72,16 @@ def apply : Op N → (Fin N → Bool) → Bool
   | and a b, v => v a && v b
   | xor a b, v => Bool.xor (v a) (v b)
   | not a, v => !v a
+  | row a b, v => xorSum a v && xorSum b v
 
 theorem apply_congr (o : Op N) {v w : Fin N → Bool} (h : ∀ x ∈ o.args, v x = w x) :
     o.apply v = o.apply w := by
-  cases o <;> simp_all [args, apply]
+  cases o
+  case row a b =>
+    simp only [apply]
+    rw [xorSum_congr fun x hx => h x (List.mem_append_left _ hx),
+      xorSum_congr fun x hx => h x (List.mem_append_right _ hx)]
+  all_goals simp_all [args, apply]
 
 end Op
 

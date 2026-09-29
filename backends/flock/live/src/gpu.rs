@@ -35,11 +35,11 @@ pub fn device_count() -> i32 {
     flock_cuda_ffi::gpu::device_count()
 }
 
-type LiveCb = unsafe extern "C" fn(*mut c_void, *const u8, usize, u32, *mut u64) -> i32;
-type LinkCb = unsafe extern "C" fn(*mut c_void, *const u8, usize, i32, *mut u64, i32) -> i32;
+pub(crate) type LiveCb = unsafe extern "C" fn(*mut c_void, *const u8, usize, u32, *mut u64) -> i32;
+pub(crate) type LinkCb = unsafe extern "C" fn(*mut c_void, *const u8, usize, i32, *mut u64, i32) -> i32;
 
 #[repr(C)]
-struct ProveParams {
+pub(crate) struct ProveParams {
     m: i32,
     statement_digest: *const u8,
     domain: *const u8,
@@ -80,71 +80,71 @@ struct ProveParams {
 }
 
 #[repr(C)]
-struct ChunkParams {
-    n_comp_log: i32,
-    cv: *const u32,
-    msg: *const u32,
-    ctr: *const u64,
-    blen: *const u32,
-    flags: *const u32,
-    delta_a: *const u32,
-    n_delta_a: i32,
-    delta_b: *const u32,
-    n_delta_b: i32,
-    sub_log: i32,
-    link_cb: Option<LinkCb>,
-    link_ctx: *mut c_void,
-    gamma_bits: i32,
-    phase_s: *mut f64,
-    mode: i32,
-    comp_slots: i32,
-    units: i32,
-    unit_log: i32,
-    unit_pos0: i32,
-    u_a_col_ptr: *const u32,
-    u_a_rows: *const u32,
-    u_a_nnz: u32,
-    u_b_col_ptr: *const u32,
-    u_b_rows: *const u32,
-    u_b_nnz: u32,
-    u_a_off: *const u32,
-    u_a_col: *const u32,
-    u_b_off: *const u32,
-    u_b_col: *const u32,
-    u_useful: i32,
-    u_const: i32,
-    u_n_in: i32,
-    u_inputs: *const u64,
-    rows_x: *const u8,
-    rows_w: *const u8,
-    accs: *const u32,
-    vus: i32,
-    row_bytes: i32,
-    units_per_vu: i32,
-    keys: *const u32,
-    blocks_real: i32,
-    unit_cache: i32,
-    pub_cv: *mut u32,
-    pub_y16: *mut u32,
-    pub_acc: *mut u32,
-    u_out_acc: i32,
-    u_out_y: i32,
-    per_role: i32,
-    chunks_per_block: i32,
-    chunk_nb0: i32,
-    chunk_nb1: i32,
-    blocks_per_vu: i32,
-    dummy_keyed: i32,
-    host_z: *const u64,
-    host_a: *const u64,
-    host_b: *const u64,
-    sha256: i32,
-    sha_mid: *const u32,
-    sha_pad: *const u32,
-    last_blen: i32,
-    last_root: i32,
-    scale_slot0: i32,
-    last_data_words: i32,
+pub(crate) struct ChunkParams {
+    pub(crate) n_comp_log: i32,
+    pub(crate) cv: *const u32,
+    pub(crate) msg: *const u32,
+    pub(crate) ctr: *const u64,
+    pub(crate) blen: *const u32,
+    pub(crate) flags: *const u32,
+    pub(crate) delta_a: *const u32,
+    pub(crate) n_delta_a: i32,
+    pub(crate) delta_b: *const u32,
+    pub(crate) n_delta_b: i32,
+    pub(crate) sub_log: i32,
+    pub(crate) link_cb: Option<LinkCb>,
+    pub(crate) link_ctx: *mut c_void,
+    pub(crate) gamma_bits: i32,
+    pub(crate) phase_s: *mut f64,
+    pub(crate) mode: i32,
+    pub(crate) comp_slots: i32,
+    pub(crate) units: i32,
+    pub(crate) unit_log: i32,
+    pub(crate) unit_pos0: i32,
+    pub(crate) u_a_col_ptr: *const u32,
+    pub(crate) u_a_rows: *const u32,
+    pub(crate) u_a_nnz: u32,
+    pub(crate) u_b_col_ptr: *const u32,
+    pub(crate) u_b_rows: *const u32,
+    pub(crate) u_b_nnz: u32,
+    pub(crate) u_a_off: *const u32,
+    pub(crate) u_a_col: *const u32,
+    pub(crate) u_b_off: *const u32,
+    pub(crate) u_b_col: *const u32,
+    pub(crate) u_useful: i32,
+    pub(crate) u_const: i32,
+    pub(crate) u_n_in: i32,
+    pub(crate) u_inputs: *const u64,
+    pub(crate) rows_x: *const u8,
+    pub(crate) rows_w: *const u8,
+    pub(crate) accs: *const u32,
+    pub(crate) vus: i32,
+    pub(crate) row_bytes: i32,
+    pub(crate) units_per_vu: i32,
+    pub(crate) keys: *const u32,
+    pub(crate) blocks_real: i32,
+    pub(crate) unit_cache: i32,
+    pub(crate) pub_cv: *mut u32,
+    pub(crate) pub_y16: *mut u32,
+    pub(crate) pub_acc: *mut u32,
+    pub(crate) u_out_acc: i32,
+    pub(crate) u_out_y: i32,
+    pub(crate) per_role: i32,
+    pub(crate) chunks_per_block: i32,
+    pub(crate) chunk_nb0: i32,
+    pub(crate) chunk_nb1: i32,
+    pub(crate) blocks_per_vu: i32,
+    pub(crate) dummy_keyed: i32,
+    pub(crate) host_z: *const u64,
+    pub(crate) host_a: *const u64,
+    pub(crate) host_b: *const u64,
+    pub(crate) sha256: i32,
+    pub(crate) sha_mid: *const u32,
+    pub(crate) sha_pad: *const u32,
+    pub(crate) last_blen: i32,
+    pub(crate) last_root: i32,
+    pub(crate) scale_slot0: i32,
+    pub(crate) last_data_words: i32,
 }
 
 unsafe extern "C" {
@@ -152,7 +152,7 @@ unsafe extern "C" {
     fn flock_cuda_free(p: *mut u8);
 }
 
-unsafe extern "C" fn live_cb(ctx: *mut c_void, content: *const u8, len: usize, n: u32, out: *mut u64) -> i32 {
+pub(crate) unsafe extern "C" fn live_cb(ctx: *mut c_void, content: *const u8, len: usize, n: u32, out: *mut u64) -> i32 {
     let ch = unsafe { &mut *(ctx as *mut LiveChallenger) };
     let c = unsafe { from_raw_parts(content, len) }.to_vec();
     match catch_unwind(AssertUnwindSafe(|| ch.round(c, n as usize))) {
@@ -169,9 +169,59 @@ unsafe extern "C" fn live_cb(ctx: *mut c_void, content: *const u8, len: usize, n
     }
 }
 
+/// Every live round through the caller's handler instead of the rep's `LiveChallenger` (M1: the masking challenger in front of
+/// it, `crate::replay_round`). The device aborts on a refused coin, so a failed round is kept here instead: its message is
+/// recorded, the device gets zero coins, and no later round reaches the handler (nothing more is sent); the caller raises
+/// `failed` when the device returns.
+pub struct Rounds<'a> {
+    pub handler: &'a mut dyn FnMut(&[u8], usize) -> Vec<F128>,
+    pub failed: Option<String>,
+    pub rounds: usize,
+}
+
+unsafe extern "C" fn rounds_cb(ctx: *mut c_void, content: *const u8, len: usize, n: u32, out: *mut u64) -> i32 {
+    let r = unsafe { &mut *(ctx as *mut Rounds<'_>) };
+    let c = unsafe { from_raw_parts(content, len) };
+    if std::env::var_os("FC_TRACE_ROUNDS").is_some() {
+        let ops: Vec<(u8, u8, u64)> = (0..).map(|_| ()).scan(0usize, |at, _| {
+            let h = c.get(*at..*at + 16)?;
+            let (op, kind, l) = (h[0], h[1], u64::from_le_bytes(h[8..].try_into().unwrap()));
+            *at += 16 + match op { 0x03 => 16 * l as usize, 0x04 => 0, _ => (l as usize).div_ceil(16) * 16 };
+            Some((op, kind, l))
+        }).take(6).collect();
+        eprintln!("ROUND\t{} {} bytes, {n} coins, failed {}, ops {ops:?}", r.rounds, len, r.failed.is_some());
+    }
+    r.rounds += 1;
+    let coins = match r.failed {
+        Some(_) => vec![F128::ZERO; n as usize],
+        None => catch_unwind(AssertUnwindSafe(|| (r.handler)(c, n as usize))).unwrap_or_else(|e| {
+            let why = e.downcast_ref::<String>().cloned().or_else(|| e.downcast_ref::<&str>().map(|s| s.to_string()))
+                .unwrap_or_else(|| "a live round failed".into());
+            eprintln!("LIVE-ROUND-FAILED\tround {}: {why} (nothing more is sent; raised when the device returns)", r.rounds - 1);
+            r.failed = Some(why);
+            vec![F128::ZERO; n as usize]
+        }),
+    };
+    for (i, x) in coins.iter().enumerate() {
+        unsafe {
+            *out.add(2 * i) = x.lo;
+            *out.add(2 * i + 1) = x.hi;
+        }
+    }
+    0
+}
+
+impl ProveParams {
+    pub(crate) fn with_rounds(mut self, r: &mut Rounds<'_>) -> Self {
+        self.live_cb = Some(rounds_cb);
+        self.live_ctx = r as *mut Rounds<'_> as *mut c_void;
+        self
+    }
+}
+
 type Hook<'a> = &'a mut dyn FnMut(&[u8]) -> Vec<Vec<F128>>;
 
-unsafe extern "C" fn link_cb(ctx: *mut c_void, cap: *const u8, cap_len: usize, m: i32, x_out: *mut u64, max: i32) -> i32 {
+pub(crate) unsafe extern "C" fn link_cb(ctx: *mut c_void, cap: *const u8, cap_len: usize, m: i32, x_out: *mut u64, max: i32) -> i32 {
     let hook = unsafe { &mut *(ctx as *mut Hook<'_>) };
     let cap = unsafe { from_raw_parts(cap, cap_len) };
     match catch_unwind(AssertUnwindSafe(|| hook(cap))) {
@@ -191,7 +241,7 @@ unsafe extern "C" fn link_cb(ctx: *mut c_void, cap: *const u8, cap_len: usize, m
     }
 }
 
-fn csc_from_rows(m: &SparseBinaryMatrix) -> (Vec<u32>, Vec<u32>) {
+pub(crate) fn csc_from_rows(m: &SparseBinaryMatrix) -> (Vec<u32>, Vec<u32>) {
     let mut col_ptr = vec![0u32; m.num_cols + 1];
     for row in m.rows.iter() {
         for &c in row {
@@ -212,13 +262,13 @@ fn csc_from_rows(m: &SparseBinaryMatrix) -> (Vec<u32>, Vec<u32>) {
     (col_ptr, rows_flat)
 }
 
-struct Static {
-    a: (Vec<u32>, Vec<u32>),
-    b: (Vec<u32>, Vec<u32>),
+pub(crate) struct Static {
+    pub(crate) a: (Vec<u32>, Vec<u32>),
+    pub(crate) b: (Vec<u32>, Vec<u32>),
     mcol: Vec<u8>,
     f8mul: Vec<u8>,
-    da: Vec<u32>,
-    db: Vec<u32>,
+    pub(crate) da: Vec<u32>,
+    pub(crate) db: Vec<u32>,
 }
 
 fn statics(st: &ChunkStmt) -> &'static Static {
@@ -231,7 +281,7 @@ fn statics_with(da: &[(u32, u32)], db: &[(u32, u32)]) -> &'static Static {
 }
 
 /// [`statics_with`] with another compression circuit (the CSC the lincheck folds per slot).
-fn statics_for(c: &flock_prover::r1cs::BlockR1cs, da: &[(u32, u32)], db: &[(u32, u32)]) -> &'static Static {
+pub(crate) fn statics_for(c: &flock_prover::r1cs::BlockR1cs, da: &[(u32, u32)], db: &[(u32, u32)]) -> &'static Static {
     static S: OnceLock<Static> = OnceLock::new();
     S.get_or_init(|| {
         let ntt_s = AdditiveNttGf8::new(K_SKIP, F8::ZERO);
@@ -286,12 +336,22 @@ impl Reader<'_> {
         let n = self.u64() as usize;
         (0..n).map(|_| self.f128()).collect()
     }
-    fn hash(&mut self) -> [u8; 32] {
-        let h: [u8; 32] = self.b[self.o..self.o + 32].try_into().unwrap();
-        self.o += 32;
+    fn hash(&mut self) -> flock_hash::Digest {
+        let h = crate::merkle_digest_read(&self.b[self.o..]);
+        self.o += std::mem::size_of::<flock_hash::Digest>();
         h
     }
-    fn hashes(&mut self) -> Vec<[u8; 32]> {
+    /// An opening's hm96-sha512 salts (a u64 count, then 192 bytes each): the circuit statement's SHA-512 build writes them.
+    #[cfg(feature = "sha512")]
+    fn salts(&mut self) -> Vec<flock_merkle::hm96::Salt> {
+        let n = self.u64() as usize;
+        let s = (0..n).map(|i| flock_merkle::hm96::salt_of(&self.b[self.o + 192 * i..])).collect();
+        self.o += 192 * n;
+        s
+    }
+    #[cfg(not(feature = "sha512"))]
+    fn salts(&mut self) {}
+    fn hashes(&mut self) -> Vec<flock_hash::Digest> {
         let n = self.u64() as usize;
         (0..n).map(|_| self.hash()).collect()
     }
@@ -397,7 +457,7 @@ pub fn prove_chunk(
 }
 
 impl ChunkParams {
-    fn none() -> Self {
+    pub(crate) fn none() -> Self {
         ChunkParams {
             n_comp_log: 0, cv: null(), msg: null(), ctr: null(), blen: null(), flags: null(), delta_a: null(), n_delta_a: 0,
             delta_b: null(), n_delta_b: 0, sub_log: 0, link_cb: None, link_ctx: null_mut(), gamma_bits: 0, phase_s: null_mut(),
@@ -413,7 +473,7 @@ impl ChunkParams {
 }
 
 /// The pinned Fast100 schedule and the compression circuit, as the FFI takes them (`hook`/`ch` filled by the caller).
-struct Sched {
+pub(crate) struct Sched {
     log_inv_rates: Vec<i32>,
     recursive_ks: Vec<i32>,
     queries: Vec<i32>,
@@ -423,7 +483,15 @@ struct Sched {
     ood_samples: Vec<i32>,
 }
 
-fn sched(pcs: &PcsParams) -> (Sched, flock_prover::pcs::ligerito::ProverConfig) {
+impl Sched {
+    /// Level 0's query count (M1: its padded code's, `zk::prover_config`).
+    pub(crate) fn with_queries0(mut self, q: usize) -> Self {
+        self.queries[0] = q as i32;
+        self
+    }
+}
+
+pub(crate) fn sched(pcs: &PcsParams) -> (Sched, flock_prover::pcs::ligerito::ProverConfig) {
     let cfg = pcs.ligerito_prover_config().unwrap_or_else(|_| panic!("no ligerito config for m={}", pcs.m));
     let to_i32 = |v: &[usize]| -> Vec<i32> { v.iter().map(|&x| x as i32).collect() };
     (
@@ -441,8 +509,8 @@ fn sched(pcs: &PcsParams) -> (Sched, flock_prover::pcs::ligerito::ProverConfig) 
 }
 
 #[allow(clippy::too_many_arguments)]
-fn prove_params(s: &Static, sc: &Sched, cfg: &flock_prover::pcs::ligerito::ProverConfig, pcs: &PcsParams, digest: &[u8; 32], domain: &[u8],
-                k_log: usize, pin: usize, ch: &mut LiveChallenger) -> ProveParams {
+pub(crate) fn prove_params(s: &Static, sc: &Sched, cfg: &flock_prover::pcs::ligerito::ProverConfig, pcs: &PcsParams, digest: &[u8; 32], domain: &[u8],
+                k_log: usize, pin: usize, ch: Option<&mut LiveChallenger>) -> ProveParams {
     let m = pcs.m;
     let zc = pcs.zerocheck_grinding();
     let lc = pcs.lincheck_grinding();
@@ -484,8 +552,8 @@ fn prove_params(s: &Static, sc: &Sched, cfg: &flock_prover::pcs::ligerito::Prove
         rs_bits: og.ring_switch_bits as i32,
         gamma_bits: og.claim_batch_bits as i32,
         dump_z_path: null(),
-        live_cb: Some(live_cb),
-        live_ctx: ch as *mut LiveChallenger as *mut c_void,
+        live_cb: ch.is_some().then_some(live_cb as LiveCb),
+        live_ctx: ch.map_or(null_mut(), |c| c as *mut LiveChallenger as *mut c_void),
     }
 }
 
@@ -518,7 +586,7 @@ pub fn prove_pure(
     let s = statics_for(st.lay.comp(), &st.circuit.da, &st.circuit.db);
     let (sc, cfg) = sched(pcs);
     let m = pcs.m;
-    let params = prove_params(s, &sc, &cfg, pcs, &st.digest, domain, st.lay.k_log(), st.lay.pin(), ch);
+    let params = prove_params(s, &sc, &cfg, pcs, &st.digest, domain, st.lay.k_log(), st.lay.pin(), Some(ch));
     static U: OnceLock<(Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>)> = OnceLock::new();
     let u = U.get_or_init(|| {
         let k = 1usize << st.ul;
@@ -681,7 +749,7 @@ pub fn prove_vllm(
     let s = statics_for(vb::sha_comp(), &st.circuit.da, &st.circuit.db);
     let (sc, cfg) = sched(pcs);
     let m = pcs.m;
-    let params = prove_params(s, &sc, &cfg, pcs, &st.digest, domain, st.lay.k_log(), vb::PIN, ch);
+    let params = prove_params(s, &sc, &cfg, pcs, &st.digest, domain, st.lay.k_log(), vb::PIN, Some(ch));
     let n_comp = st.blocks() * st.lay.comp_slots();
     let (mut cv, mut msg, mut zeros32, mut zeros64) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
     let (mut hz, mut ha, mut hb, mut uin): (*const u64, *const u64, *const u64, *const u64) = (null(), null(), null(), null());
@@ -782,8 +850,19 @@ fn run(params: &ProveParams, chunk: &ChunkParams, pcs: &PcsParams, m: usize) -> 
     assert_eq!(rc, 0, "CUDA chunk prover returned error {rc} at m={m}");
     let bytes = unsafe { from_raw_parts(out, out_len) }.to_vec();
     unsafe { flock_cuda_free(out) };
+    decode(&bytes, pcs)
+}
 
-    let mut r = Reader { b: &bytes, o: 0 };
+/// The FFI's proof stream as a proof and its commitment.
+pub(crate) fn decode(bytes: &[u8], pcs: &PcsParams) -> (R1csProofLigerito, Commitment) {
+    decode_with(bytes, pcs, false)
+}
+
+/// [`decode`]; `zk`: the stream ends in M1's zk section (the circuit prover's `fc_write_zk`): level 0's hiding messages, the
+/// lane phase's record and lincheck's folded comb, as the CPU prover leaves them in the proof (never serialized: the record and
+/// the comb are the prover's own).
+pub(crate) fn decode_with(bytes: &[u8], pcs: &PcsParams, zk: bool) -> (R1csProofLigerito, Commitment) {
+    let mut r = Reader { b: bytes, o: 0 };
     let cap = r.hashes();
     let round1_ab = r.f128s();
     let round1_c = r.f128s();
@@ -802,9 +881,10 @@ fn run(params: &ProveParams, chunk: &ChunkParams, pcs: &PcsParams, m: usize) -> 
         (0..n_cl).map(|_| RingSwitchProof { s_hat_v: r.f128s(), grinding_nonce: r.u64() }).collect();
     let batching_nonces = r.u64s();
     let n_rcaps = r.u64() as usize;
-    let recursive_caps: Vec<Vec<[u8; 32]>> = (0..n_rcaps).map(|_| r.hashes()).collect();
+    let recursive_caps: Vec<Vec<flock_hash::Digest>> = (0..n_rcaps).map(|_| r.hashes()).collect();
     let n_opens = r.u64() as usize;
-    let mut opens: Vec<(Vec<Vec<F128>>, Vec<[u8; 32]>)> = (0..n_opens).map(|_| (r.rows(), r.hashes())).collect();
+    #[allow(clippy::let_unit_value)]
+    let mut opens: Vec<_> = (0..n_opens).map(|_| (r.rows(), r.hashes(), r.salts())).collect();
     let yr = r.f128s();
     let n_sc = r.u64() as usize;
     let sumcheck_transcript_f256: Vec<SumcheckMessage256> = (0..n_sc).map(|_| SumcheckMessage256 { u_0: r.f256(), u_2: r.f256() }).collect();
@@ -812,23 +892,63 @@ fn run(params: &ProveParams, chunk: &ChunkParams, pcs: &PcsParams, m: usize) -> 
     let grinding_nonces = r.u64s();
     let claim_batch_grinding_nonces = r.u64s();
     let consistency_batch_grinding_nonces = r.u64s();
+    #[cfg(feature = "sha512")]
+    let (zk_level0, zk_record, comb_partial) = if zk {
+        use flock_prover::pcs::ligerito::zk::{Level0ZkProof, Level0ZkRecord};
+        let (e, t_prime) = ([r.f256(), r.f256()], r.f256());
+        let n = r.u64() as usize;
+        let ybar = (0..n).map(|_| r.f256()).collect();
+        let target = r.f128();
+        let n = r.u64() as usize;
+        let ood = (0..n).map(|_| (r.f128(), r.f128())).collect();
+        let n = r.u64() as usize;
+        let challenges = (0..n).map(|_| r.f256()).collect();
+        let rho = [r.f256(), r.f256()];
+        let queries0 = r.u64s().into_iter().map(|q| q as usize).collect();
+        let comb = r.f128s();
+        (Some(Level0ZkProof { e, t_prime, ybar }), Some(Level0ZkRecord { target, ood, challenges, rho, queries0, queries1: Vec::new() }), comb)
+    } else {
+        (None, None, Vec::new())
+    };
+    #[cfg(not(feature = "sha512"))]
+    assert!(!zk, "M1's zk section needs the SHA-512 build");
     assert_eq!(r.o, bytes.len(), "trailing bytes in the FFI stream");
-    let (initial_rows, initial_mp) = opens.remove(0);
-    let (final_rows, final_mp) = opens.pop().expect("final open");
-    let recursive_proofs: Vec<RecursiveProof> =
-        opens.into_iter().map(|(rows, mp)| RecursiveProof { opened_rows: rows, merkle_proof: mp }).collect();
+    let (initial_rows, initial_mp, _initial_salts) = opens.remove(0);
+    let (final_rows, final_mp, _final_salts) = opens.pop().expect("final open");
+    let recursive_proofs: Vec<RecursiveProof> = opens
+        .into_iter()
+        .map(|(rows, mp, _salts)| RecursiveProof {
+            opened_rows: rows,
+            merkle_proof: mp,
+            #[cfg(feature = "sha512")]
+            opened_salts: _salts,
+        })
+        .collect();
     let proof = R1csProofLigerito {
         zerocheck: ZerocheckProof { round1_ab, round1_c, multilinear_rounds, final_a_eval, final_b_eval, final_c_eval, grinding_nonces: zc_nonces },
-        lincheck: LincheckProof { rounds: lc_rounds, z_partial, matrix_evals: Vec::new(), grinding_nonces: lc_nonces },
+        lincheck: LincheckProof { rounds: lc_rounds, z_partial, matrix_evals: Vec::new(), grinding_nonces: lc_nonces,
+                                  #[cfg(feature = "sha512")]
+                                  comb_partial },
         pcs_open: BatchOpeningProofLigerito {
             ring_switches,
             batching_nonces,
             ligerito: LigeritoProof {
                 initial_cap: cap.clone(),
-                initial_proof: RecursiveProof { opened_rows: initial_rows, merkle_proof: initial_mp },
+                initial_proof: RecursiveProof {
+                    opened_rows: initial_rows,
+                    merkle_proof: initial_mp,
+                    #[cfg(feature = "sha512")]
+                    opened_salts: _initial_salts,
+                },
                 recursive_caps,
                 recursive_proofs,
-                final_proof: FinalProof { yr, opened_rows: final_rows, merkle_proof: final_mp },
+                final_proof: FinalProof {
+                    yr,
+                    opened_rows: final_rows,
+                    merkle_proof: final_mp,
+                    #[cfg(feature = "sha512")]
+                    opened_salts: _final_salts,
+                },
                 sumcheck_transcript: Vec::new(),
                 sumcheck_transcript_f256,
                 grinding_nonces,
@@ -836,6 +956,10 @@ fn run(params: &ProveParams, chunk: &ChunkParams, pcs: &PcsParams, m: usize) -> 
                 fold_grinding_nonces: Vec::new(),
                 claim_batch_grinding_nonces,
                 consistency_batch_grinding_nonces,
+                #[cfg(feature = "sha512")]
+                zk_level0,
+                #[cfg(feature = "sha512")]
+                zk_record,
             },
         },
     };
@@ -844,7 +968,7 @@ fn run(params: &ProveParams, chunk: &ChunkParams, pcs: &PcsParams, m: usize) -> 
 
 /// A block of compression slots and unit slots as Flock-CUDA's host-witness mode 1 takes it (lane flock-ir-lowering's
 /// `crate::ir_block` and `crate::ir_frame`): the BLAKE3 compression circuit at 2^14-bit slots `0 .. comp_slots`, the unit
-/// netlist at 2^unit_log slots `unit_pos0 ..`, Δ, and the region claims (points from `hook`) in the sparse ring switch.
+/// circuit at 2^unit_log slots `unit_pos0 ..`, Δ, and the region claims (points from `hook`) in the sparse ring switch.
 pub struct SlotStmt<'a> {
     pub digest: [u8; 32],
     pub k_log: usize,
@@ -891,7 +1015,7 @@ pub fn prove_slots(
     let (sc, cfg) = sched(pcs);
     let m = pcs.m;
     assert_eq!(z.len(), 1 << (m - 7));
-    let params = prove_params(s, &sc, &cfg, pcs, &st.digest, domain, st.k_log, st.pin, ch);
+    let params = prove_params(s, &sc, &cfg, pcs, &st.digest, domain, st.k_log, st.pin, Some(ch));
     type U8 = (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>);
     static U: OnceLock<U8> = OnceLock::new();
     let u = U.get_or_init(|| {

@@ -8,7 +8,16 @@ namespace Flock
 
 open Lean (Json)
 
-/-- The public file: its header, one row digest per instance and input port, the output words. -/
+/-- A shared-row file's row tables (header `shared_rows: {port: R_p}`): input port `p`'s rows are table `p`, `counts[p]` rows
+starting at `starts[p]` among the tables' rows (port-major), and instance `i` reads row `refs[i · ports + p]` of table `p`. -/
+structure Tables where
+  counts : Array Nat
+  starts : Array Nat
+  refs : Array Nat
+  deriving Inhabited
+
+/-- The public file: its header, one row digest per instance and input port (a shared-row file: per table row), the output
+words. -/
 structure Public where
   header : Json
   n : Nat
@@ -18,6 +27,7 @@ structure Public where
   sha : ByteArray
   /-- a drawn statement's registered population (its size, `b ‖ c` and outputs): the frame-v3 roots are over it -/
   population : Option (Nat × Array ByteArray × Array Nat) := none
+  tables : Option Tables := none
   deriving Inhabited
 
 def Public.load (tags : Tags) (c : Circuit) (file : ByteArray) : V Public := do
@@ -44,7 +54,11 @@ def Public.load (tags : Tags) (c : Circuit) (file : ByteArray) : V Public := do
   let sha := Sha256.hash ((← canon header).toUTF8 ++ body)
   return { header, n, digests, outputs, sha }
 
-def Public.digest (pub : Public) (i p np : Nat) : ByteArray := pub.digests.getD (i * np + p) ByteArray.empty
+/-- Instance `i`'s port-`p` row digest: its own, or (a shared-row file) the table row its ref names. -/
+def Public.digest (pub : Public) (i p np : Nat) : ByteArray :=
+  match pub.tables with
+  | some t => pub.digests.getD (t.starts.getD p 0 + t.refs.getD (i * np + p) 0) ByteArray.empty
+  | none => pub.digests.getD (i * np + p) ByteArray.empty
 
 /- frame-v3 hashing (§16.6) -/
 namespace FV3

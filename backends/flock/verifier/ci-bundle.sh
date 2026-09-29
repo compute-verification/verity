@@ -20,7 +20,7 @@ mkdir -p "$T/flock" "$T/live" "$T/store"
 # (SHA-512 Merkle trees) ships it as live/<commit>/flock.patch with the crate's features in live/<commit>/features.
 for spec in 9294e161:netlist-vectors.patch:HEAD 19c7269a:circuit-vectors.patch:9605a77d fd02e847:circuit-vectors.patch:a2c4e9fd \
     631567f7:circuit-vectors.patch:HEAD eb90718f:circuit-vectors-eb90718f.patch:HEAD e51e2b86:circuit-vectors-eb90718f.patch:HEAD \
-    25519ba1:circuit-vectors-25519ba1.patch:HEAD; do
+    25519ba1:circuit-vectors-25519ba1.patch:HEAD 967b8d06:circuit-vectors-967b8d06.patch:HEAD; do
   IFS=: read -r c p at <<<"$spec"
   git -C "$REPO" worktree add -q --detach "$T/wt-$c" "$c"
   git -C "$REPO" show "$at:backends/flock/verifier/$p" > "$T/$c.patch"
@@ -29,7 +29,7 @@ for spec in 9294e161:netlist-vectors.patch:HEAD 19c7269a:circuit-vectors.patch:9
   if [ -f "$T/wt-$c/backends/flock/flock-sha512-b684b12.patch" ]; then
     cp "$T/wt-$c/backends/flock/flock-sha512-b684b12.patch" "$T/live/$c/flock.patch"
     # eb90718f's and e51e2b86's selftest records pin seed_injection: true, so their replay binaries are the harness build
-    case "$c" in eb90718f|e51e2b86|25519ba1) echo "sha512 seed-injection" > "$T/live/$c/features" ;; *) echo sha512 > "$T/live/$c/features" ;; esac
+    case "$c" in eb90718f|e51e2b86|25519ba1|967b8d06) echo "sha512 seed-injection" > "$T/live/$c/features" ;; *) echo sha512 > "$T/live/$c/features" ;; esac
   fi
   git -C "$REPO" worktree remove --force "$T/wt-$c"
 done

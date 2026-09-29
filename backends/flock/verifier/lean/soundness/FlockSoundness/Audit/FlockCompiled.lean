@@ -1,36 +1,42 @@
 import FlockSoundness.Audit.Extraction
 import FlockSoundness.Audit.Flock
 import FlockSoundness.Knowledge
+import FlockSoundness.Lowering
 
 /-!
-# The Flock audit at the compiled layer: `ε_ks` from `table_knowledge_sound_joint`
+# The Flock audit at the compiled layer, one table: `ε_ks` from `table_knowledge_sound_joint_tight`
 
 The configuration of `docs/audit-protocols.md` §0.2: the verifier holds the leaf layer (every
 commit string and output word) before the draw, so the serving-tree term is zero, and the drawn
 units are packed into **one** compiled table, whose statement the verifier derives from the draw and
-the registration (`plan`). The session is that table (`sessionC`).
+the registration (`plan`). The session is that table on its own (`sessionC`); the protocol's batched
+session of several tables is `FlockBatched.lean`.
 
 **The extractor** of a drawn unit is the table's (`Knowledge.lean`): `Kr` reruns of the prover after
 its level-0 cap, the first verifying opening at each position, then decoding. The analysis
 (`analysisC`) reads it jointly over the fresh run and the reruns, as the table theorem states it:
 
 * `ks`: the table accepts and the extracted table packs no satisfying witness within the level-0
-  radius (`FlockTableC.ksJoint`, `table_knowledge_sound_joint`'s left side);
+  radius (`FlockTableC.ksJoint`, `table_knowledge_sound_joint_tight`'s left side);
 * `link`: the table accepts, the extracted table is committed, but every close message packing a
   satisfying witness decodes, on the unit's committed wires, to values other than the committed
   transcript's (`LinkEvent`, `linkJoint`). This is the weakest link event: the link theorem need
   only show that some satisfying candidate agrees with `X`.
 
-`cover` (`Pr[accept] ≤ ks + link` at a wrong drawn unit, pointwise in the reruns) follows from
-**the lowering** (`LoweringSoundC`, named): a message packing a witness that satisfies the table's
-statement decodes to values on which every drawn unit is correct.
+The decoder is **per drawn unit** (`Decoder`): two drawn units that share a wire hold it in their
+own columns, and only the link makes the two readings agree. `cover` (`Pr[accept] ≤ ks + link` at a
+wrong drawn unit, pointwise in the reruns) follows from **the lowering** (`LoweringSoundC`, named):
+a message packing a witness that satisfies the table's statement decodes, for each drawn unit, to
+values on which that unit is correct. `loweringSoundC_of_place` discharges it from each drawn
+unit's place in the table (`UnitPlace`, `Lowering.lean`), where the audit's circuit `C` is the rows
+the verifier parses and "each template's rows compute its gates" is ASSUMPTIONS.md's L1.
 
 **The discharge** (`flock_compiled_knowledgeSound`): the audit's knowledge term is the table
 theorem's bound for the prover's strategy after each draw, averaged over the draw,
-$$\varepsilon_{ks}(R, \tau) = \mathbb E_\omega\big[2\varepsilon_c^-(\sigma_\omega) + 2(K\,\mathrm{Adv}_0(\sigma_\omega) + N_0/(eK))\big],$$
-from `table_knowledge_sound_joint` (BCHKS25 Theorem 4.6 its only named assumption). The link term
-stays a named hypothesis (`LinkSound`): removing it needs a spec decision (expected-time collision
-resistance, or the random-oracle column).
+$$\varepsilon_{ks}(R, \tau) = \mathbb E_\omega\big[\varepsilon_c^-(\sigma_\omega) + K\,\mathrm{Adv}_0(\sigma_\omega) + N_0/(eK)\big],$$
+from `table_knowledge_sound_joint_tight`, with no named assumption. The link term
+stays a named hypothesis (`LinkSound`) until the link theorem, under expected-time collision
+resistance (`Assumptions.SHA512ExpectedTimeCR`, DESIGN.md §3).
 
 `flock_compiled_count`: `Pr[accept ∧ at least K wrong units] ≤ miss K + ε_ks(σ) + δ_link(σ)`.
 -/
@@ -78,20 +84,21 @@ noncomputable def ksJoint (Kr : ℕ) (σ : Strategy (T.game H E)) : ℝ :=
     (fun bs => expect (ind fun out : OutC 𝔽 D => out.accepted = true ∧
       ¬ Committed execArith T.S T.sch (extractTable H E T.sch σ.1 bs)) (T.game H E) σ)
 
-/-- `table_knowledge_sound_joint`'s bound for the strategy `σ`. -/
+/-- `table_knowledge_sound_joint_tight`'s bound for the strategy `σ`:
+`ε_c⁻ + K·adv₀ + N₀/(eK)`. -/
 noncomputable def ksBound [Inhabited D] (Kr : ℕ) (σ : Strategy (T.game H E)) : ℝ :=
-  2 * epsCminus execArith H E T.S T.m T.k0 T.l₀ T.l₁ T.rest T.ext (fast100_shape T.S.m _ T.hsch).2.1
+  epsCminus execArith H E T.S T.m T.k0 T.l₀ T.l₁ T.rest T.ext (fast100_shape T.S.m _ T.hsch).2.1
       T.hm T.ptLocal T.mPts σ +
-    2 * (Kr * adv₀ execArith H E T.S T.sch T.hm T.ptLocal T.mPts σ +
+    (Kr * adv₀ execArith H E T.S T.sch T.hm T.ptLocal T.mPts σ +
       2 ^ T.l₀.logLen / (Real.exp 1 * Kr))
 
 theorem ksJoint_nonneg (Kr : ℕ) (σ : Strategy (T.game H E)) : 0 ≤ T.ksJoint H E Kr σ :=
   expectN_nonneg _ _ (fun _ => expect_nonneg (ind_nonneg _) _ _) _
 
-/-- **The table**: `table_knowledge_sound_joint`, given BCHKS25 Theorem 4.6. -/
-theorem ksJoint_le [Inhabited D] (hMCA : Assumptions.BCHKS25Thm46) (Kr : ℕ) (hK : 1 ≤ Kr)
+/-- **The table**: `table_knowledge_sound_joint_tight`. -/
+theorem ksJoint_le [Inhabited D] (Kr : ℕ) (hK : 1 ≤ Kr)
     (σ : Strategy (T.game H E)) : T.ksJoint H E Kr σ ≤ T.ksBound H E Kr σ :=
-  table_knowledge_sound_joint hMCA execArith execArith_correct H E T.S T.m T.k0 T.l₀ T.l₁
+  table_knowledge_sound_joint_tight execArith execArith_correct H E T.S T.m T.k0 T.l₀ T.l₁
     T.rest T.ext T.hsch T.hm T.ptLocal T.mPts T.hlay σ Kr hK
 
 end FlockTableC
@@ -111,9 +118,9 @@ noncomputable def tabStrat {S : Finset (Fin n)} {R : Reg} (τ : Strategy (sessio
     Strategy ((plan S R).game H E) :=
   Strategy.ofMap _ _ τ
 
-/-- A decoder: the values behind the drawn units' commit strings that a level-0 message of the
-table packs (the `hm96` openings in the witness). -/
-abbrev Decoder := (S : Finset (Fin n)) → (R : Reg) →
+/-- A decoder: for each drawn unit, the values a level-0 message of the table packs for it. Two
+drawn units that share a wire hold it in different columns, so each has its own reading. -/
+abbrev Decoder := (S : Finset (Fin n)) → (R : Reg) → Fin n →
   Message 𝔽 (plan S R).sch.k0 (plan S R).sch.level₀.logCols → (Fin C.N → Bool)
 
 /-- **The lowering, compiled** (named hypothesis): a message packing a witness that satisfies the
@@ -121,7 +128,7 @@ table's statement decodes to values on which every drawn unit is correct. -/
 def LoweringSoundC (decode : Decoder (C := C) (Reg := Reg) plan) : Prop :=
   ∀ S R u, u ∈ S → ∀ M, (plan S R).S.Satisfies
     (witnessOf execArith (plan S R).S.m (plan S R).sch.k0 (plan S R).sch.level₀.logCols M) →
-    P.Correct (decode S R M) u
+    P.Correct (decode S R u M) u
 
 /-- **The link event** on the extractor's reruns `bs`: the extracted table is committed, but every
 close message packing a satisfying witness decodes, on `u`'s committed wires, to values other than
@@ -135,7 +142,18 @@ def LinkEvent (decode : Decoder (C := C) (Reg := Reg) plan) (S : Finset (Fin n))
         (encode execArith (plan S R).sch.level₀.logLen M) →
       (plan S R).S.Satisfies
         (witnessOf execArith (plan S R).S.m (plan S R).sch.k0 (plan S R).sch.level₀.logCols M) →
-      ∃ g ∈ P.io u, decode S R M g ≠ Xc g
+      ∃ g ∈ P.io u, decode S R u M g ≠ Xc g
+
+/-- **The lowering from the drawn units' places** (`Lowering.lean`): if every drawn unit has a place
+in its table, reading each unit from its block discharges `LoweringSoundC`. -/
+theorem loweringSoundC_of_place (place : ∀ S R u, u ∈ S → UnitPlace P (plan S R).S u) :
+    P.LoweringSoundC plan fun S R u M =>
+      if h : u ∈ S then (place S R u h).decode
+        (witnessOf execArith (plan S R).S.m (plan S R).sch.k0 (plan S R).sch.level₀.logCols M)
+      else fun _ => false := by
+  intro S R u hu M hM
+  simp only [hu, ↓reduceDIte]
+  exact (place S R u hu).correct hM
 
 open Classical in
 /-- **Accept and the link fails**, jointly over the fresh run and the extractor's `Kr` reruns. -/
@@ -214,8 +232,8 @@ noncomputable def analysisC (decode : Decoder (C := C) (Reg := Reg) plan)
           (expect_add _ _ _ _)) Kr
       _ = _ := expectN_add _ _ _ _ Kr
 
-/-- **The compiled audit's knowledge term**, per prover: `table_knowledge_sound_joint`'s bound for
-its table strategy after each draw, averaged over the draw. -/
+/-- **The compiled audit's knowledge term**, per prover: `table_knowledge_sound_joint_tight`'s bound
+for its table strategy after each draw, averaged over the draw. -/
 noncomputable def ksAvg (Kr : ℕ) (R : Reg) (τ : Cont L Reg (sessionC H E plan) R) : ℝ≥0∞ :=
   avg fun ω => ENNReal.ofReal ((plan (L.draw ω) R).ksBound H E Kr (tabStrat H E plan (τ ω)))
 
@@ -226,19 +244,19 @@ theorem atTgt_le_const (S : Finset (Fin n)) (t : Option (Fin n)) (c : ℝ≥0∞
   | some u => simp only [atTgt, Option.elim_some]; split_ifs <;> simp
 
 /-- **`ε_ks` is discharged at the compiled layer.** The compiled audit's analysis is
-`KnowledgeSound` with the table theorem's bound averaged over the draw, given BCHKS25 Theorem 4.6. -/
-theorem flock_compiled_knowledgeSound (hMCA : Assumptions.BCHKS25Thm46)
+`KnowledgeSound` with the table theorem's bound averaged over the draw. -/
+theorem flock_compiled_knowledgeSound
     (decode : Decoder (C := C) (Reg := Reg) plan)
     (Xc : (R : Reg) → Cont L Reg (sessionC H E plan) R → (Fin C.N → Bool)) {Kr : ℕ} (hK : 1 ≤ Kr)
     (hlow : P.LoweringSoundC plan decode) :
     (P.analysisC H E plan decode Xc Kr hlow).KnowledgeSound (ksAvg H E plan Kr) := by
   intro R τ tgt
   exact avg_mono fun ω => (atTgt_le_const _ _ _).trans
-    (ENNReal.ofReal_le_ofReal ((plan (L.draw ω) R).ksJoint_le H E hMCA Kr hK _))
+    (ENNReal.ofReal_le_ofReal ((plan (L.draw ω) R).ksJoint_le H E Kr hK _))
 
 /-- **The compiled Flock audit's count curve**: `δ(K) = miss K + ε_ks(σ) + δ_link(σ)`, with
 `ε_ks` the table theorem's bound averaged over the draw, and `δ_link` named. -/
-theorem flock_compiled_count (hMCA : Assumptions.BCHKS25Thm46)
+theorem flock_compiled_count
     (decode : Decoder (C := C) (Reg := Reg) plan)
     (Xc : (R : Reg) → Cont L Reg (sessionC H E plan) R → (Fin C.N → Bool)) {Kr : ℕ} (hK : 1 ≤ Kr)
     (hlow : P.LoweringSoundC plan decode)
@@ -251,10 +269,10 @@ theorem flock_compiled_count (hMCA : Assumptions.BCHKS25Thm46)
   show prob (fun o => o.1 = true ∧ K ≤ ((P.analysisC H E plan decode Xc Kr hlow).wrong
     ((P.analysisC H E plan decode Xc Kr hlow).committedOf σ)).card) _ σ ≤ _
   exact extraction_audit_count (P.analysisC H E plan decode Xc Kr hlow)
-    (P.flock_compiled_knowledgeSound H E plan hMCA decode Xc hK hlow) hlink K σ
+    (P.flock_compiled_knowledgeSound H E plan decode Xc hK hlow) hlink K σ
 
 /-- **Drawn units of the compiled Flock audit** are correct up to `ε_ks(σ) + δ_link(σ)`. -/
-theorem flock_compiled_drawn (hMCA : Assumptions.BCHKS25Thm46)
+theorem flock_compiled_drawn
     (decode : Decoder (C := C) (Reg := Reg) plan)
     (Xc : (R : Reg) → Cont L Reg (sessionC H E plan) R → (Fin C.N → Bool)) {Kr : ℕ} (hK : 1 ≤ Kr)
     (hlow : P.LoweringSoundC plan decode)
@@ -265,7 +283,7 @@ theorem flock_compiled_drawn (hMCA : Assumptions.BCHKS25Thm46)
         (audit L Reg (sessionC H E plan)) σ ≤
       ksAvg H E plan Kr (reg σ) (cont σ) + δlink (reg σ) (cont σ) :=
   extraction_audit_drawn (P.analysisC H E plan decode Xc Kr hlow)
-    (P.flock_compiled_knowledgeSound H E plan hMCA decode Xc hK hlow) hlink σ
+    (P.flock_compiled_knowledgeSound H E plan decode Xc hK hlow) hlink σ
 
 end Partition
 

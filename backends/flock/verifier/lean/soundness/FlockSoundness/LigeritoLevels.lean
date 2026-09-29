@@ -1,16 +1,16 @@
 import FlockSoundness.LigeritoMCA
 
 /-!
-# Ligerito's levels meet the named assumption (PROTOCOL.md §13, §15)
+# Ligerito's levels meet the Johnson-range MCA bound (PROTOCOL.md §13, §15)
 
 Each level's folds happen over `K`, in the level's Reed–Solomon code embedded from `F`
 (`codeK`: `2^logCols` coefficients on the `2^logLen` points `ω_q`). For every level of a
-`fast100` schedule (`Level.Ok`), the named assumption applies at the level's radius, and its
+`fast100` schedule (`Level.Ok`), `prCoin_mca_le` applies at the level's radius, and its
 bound is the accounting's `Level.mcaA / qK` (`prCoin_level_mca_le`):
 * `1 < 2^logCols`, since `logCols ≥ 1`;
 * the radius `1 − √ρ − η` is positive, since `ρ ≤ 1/2`;
 * the radius is in the Johnson range `< 1 − √((k − 1)/n)`, since `(k − 1)/n < ρ`;
-* the assumption's numerator, at `n = 2^logLen`, `k = 2^logCols` and `δ` the radius, is `mcaA`.
+* the bound's numerator, at `n = 2^logLen`, `k = 2^logCols` and `δ` the radius, is `mcaA`.
 -/
 
 namespace FlockSoundness
@@ -64,18 +64,17 @@ theorem radius_lt_johnson (l : Level) (hl : l.Ok) :
   unfold Level.radius eta
   linarith
 
-/-- **The named assumption at a level.** For every level of a `fast100` schedule, whatever two
+/-- **The MCA bound at a level.** For every level of a `fast100` schedule, whatever two
 words the prover fixes, the MCA event of the level's code over `K` at the level's radius has
 probability at most `mcaA / 2^256`. -/
-theorem prCoin_level_mca_le (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) (hA : A.Correct)
+theorem prCoin_level_mca_le (A : Arith F K) (hA : A.Correct)
     (l : Level) (hl : l.Ok) (hf : l.Fits) (U : Fin 2 → Fin (2 ^ l.logLen) → K) :
     prCoin (fun γ : K => IsMCA (AffineLineGenerator K) (codeK A hA l hf) γ U l.radius) ≤
       ENNReal.ofReal (l.mcaA / qK) := by
   have hr := radius_pos l hl
   have hk : 1 < 2 ^ l.logCols := Nat.one_lt_two_pow (by have := hl.2.2; omega)
   have hJ := radius_lt_johnson l hl
-  have h := prCoin_mca_le hMCA (domainK A hA l.logLen hf.2) (2 ^ l.logCols) l.radius.toNNReal hk
-    (Real.toNNReal_pos.2 hr)
+  have h := prCoin_mca_le (domainK A hA l.logLen hf.2) (2 ^ l.logCols) l.radius.toNNReal hk
     (by rw [Fintype.card_fin, Real.coe_toNNReal _ hr.le]; push_cast; exact hJ) U
   rw [Real.coe_toNNReal _ hr.le] at h
   refine h.trans (le_of_eq ?_)

@@ -14,6 +14,7 @@ import os
 import time
 from typing import Any
 
+from verity_vllm.commit.partition import word_check_refusal
 from verity_vllm.config import checkpoint_dir
 
 
@@ -313,42 +314,81 @@ def served_shape(d: str) -> str:
     return "LP=%d T_r=%d cap_T=%d" % (lp, t, cap) if t > 0 and t != cap else ""
 
 
-def manifest_engine(path: str) -> str:
-    """The query engine a manifest's header names (``v2-query`` for the manifest of record), "" when unreadable."""
-    try:
-        m = json.load(open(path))
-    except (OSError, ValueError):
-        return ""
-    q = m.get("query") or {}
-    return q.get("engine") if isinstance(q, dict) else ""
+#: the query the row builds its manifest of record under: `query.required.QUERY_OF_RECORD`, spelt here because the row driver
+#: imports no core module (tests/pipeline/test_row.py pins the two equal)
+QUERY_OF_RECORD = "Q_word_v1{X=16,W=32,R=no-recompute}"
 
 
-#: the opt-in taps a row runs (never the record): (CommitConfig field, manifest build / verify flag, the query header key its policy writes)
+#: the taps a row runs by default, NORM_TAP=0 etc. opting out for A/B only: (CommitConfig field, manifest build / verify flag, the query
+#: header key its policy writes, which is also its identities' family)
 TAP_POLICIES = (("norm_tap", "--norm-scales", "norm_scales"), ("router_tap", "--router-softmax", "router_softmax"),
                 ("vocab_tap", "--vocab-range", "vocab_range"))
+#: the tap policies and the guarded max, which lengthens the attention stream's identities instead of adding a family
+POLICIES = (*TAP_POLICIES, ("guarded_max_tap", "--guarded-max", "guarded_max"))
 
 
 def tap_policy_flags(ck: Any) -> list[str]:
-    """The manifest build / verify flags of the taps the row's CommitConfig turns on (NORM_TAP, ROUTER_TAP, VOCAB_TAP = 1)."""
-    return [flag for field, flag, _key in TAP_POLICIES if getattr(ck, field, "0") == "1"]
+    """The manifest build / verify flags of the row's CommitConfig, every policy explicit (`--no-norm-scales` etc. under NORM_TAP=0)."""
+    return [flag if getattr(ck, field, "0") == "1" else f"--no-{flag[2:]}" for field, flag, _key in POLICIES]
 
 
-def manifest_missing_policies(path: str, ck: Any) -> list[str]:
-    """The policies the row runs that a manifest was not built under (every one when it is unreadable)."""
+def policy_mismatch(q: Any, ck: Any) -> list[str]:
+    """The policies a manifest's query header `q` disagrees with the row's CommitConfig on, either way (every policy the row runs when
+    there is no header)."""
+    return [key for field, _flag, key in POLICIES if (getattr(ck, field, "0") == "1") != (isinstance(q, dict) and isinstance(q.get(key), dict))]
+
+
+def manifest_policy_mismatch(path: str, ck: Any) -> list[str]:
+    """`policy_mismatch` of the manifest at `path` (every policy the row runs when it is unreadable)."""
+    doc = load_json(path)
+    return policy_mismatch(doc.get("query") if isinstance(doc, dict) else None, ck)
+
+
+def manifest_not_of_record(doc: Any, program_digest: str, ck: Any) -> tuple[str, str]:
+    """Why the manifest `doc` beside a Build is not the Commit's manifest of record, as (the slug its moved-aside file is named by, the
+    reason); ("", "") when it is: built under the query of record with a partition, of the Build's Program digest (`program_digest`,
+    the one the Commit is keyed by; unknown is not a match), under the row's tap policies, and recording the word check it passed (the
+    Commit refuses one without: `commit.partition.word_check_refusal`)."""
+    q = doc.get("query") if isinstance(doc, dict) and isinstance(doc.get("query"), dict) else {}
+    qid = str(q.get("query_id") or "")
+    if qid != QUERY_OF_RECORD:
+        return "other-query", f"is not built under the query of record {QUERY_OF_RECORD} (query.query_id={qid or 'none'})"
+    if not isinstance(q.get("partition"), dict):
+        return "no-partition", "names no partition (query.partition)"
+    if not program_digest or doc.get("program_digest") != program_digest:
+        return "other-program", (f"is of Program {str(doc.get('program_digest'))[:16]}, not the Build's "
+                                 f"{program_digest[:16] if program_digest else '(unknown: no build_summary.json)'}")
+    mismatch = policy_mismatch(q, ck)
+    if mismatch:
+        return "policy-" + "-".join(mismatch).replace("_", "-"), f"disagrees with this Commit's taps on the {', '.join(mismatch)} policy"
+    unchecked = word_check_refusal(q)
+    if unchecked:
+        return "unchecked", f"does not record a passing word check ({unchecked})"
+    return "", ""
+
+
+def applicable_taps(path: str, ck: Any) -> list[str]:
+    """The taps the row runs that apply to it: on, and the manifest names at least one identity of the tap's family (a dense model has
+    no router, a TP1 row no vocabulary range).  The row passes a tap's Commit source for these only."""
     try:
-        q = json.load(open(path)).get("query")
+        fams = {r.get("family") for r in json.load(open(path)).get("identities") or []}
     except (OSError, ValueError, AttributeError):
-        q = None
-    return [key for field, _flag, key in TAP_POLICIES if getattr(ck, field, "0") == "1" and not (isinstance(q, dict) and isinstance(q.get(key), dict))]
+        fams = set()
+    return [field for field, _flag, key in TAP_POLICIES if getattr(ck, field, "0") == "1" and key in fams]
 
 
-def manifest_guarded_max(path: str) -> bool:
-    """Whether a manifest was built under the guarded-max policy (`query.guarded_max`); False when unreadable."""
-    from verity_vllm.query.guarded_max import policy_of
-    try:
-        return policy_of(json.load(open(path)))
-    except (OSError, ValueError):
-        return False
+def tap_source_args(taps: list[str], env: Any) -> list[str]:
+    """The Commit's tap source flags (`acquire.sources.taps.TapSources`) of the applicable taps."""
+    args = {"norm_tap": ["--norm-tap-so", env.norm_tap_so], "router_tap": ["--router-tap-so", env.router_tap_so], "vocab_tap": ["--vocab-range"]}
+    return [a for t in taps for a in args[t]]
+
+
+def missing_tap_build(taps: list[str], env: Any) -> str:
+    """Why the row cannot run its applicable taps: a tap build that is not on disk ("" when every one is)."""
+    for t, so, script in (("norm_tap", env.norm_tap_so, "pod_norm_tap.sh"), ("router_tap", env.router_tap_so, "pod_router_tap.sh")):
+        if t in taps and not os.path.isfile(so):
+            return f"{t.upper()}=1 and the manifest names its family, but the tap .so is missing: {so} (ops/{script}, run by ops/pod_bootstrap.sh)"
+    return ""
 
 
 def program_digest_of_record(d: str, batch: int) -> str:

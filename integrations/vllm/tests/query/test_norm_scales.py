@@ -12,7 +12,7 @@ from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.query import norm_scales as NS
 from verity_vllm.query.manifest import format as fmt
 from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView
-from verity_vllm.query.required import request_manifest
+from verity_vllm.query.required import Q_MODULE_BODY_ID, request_manifest
 
 W = "model.model"
 H = 8
@@ -113,13 +113,21 @@ def test_kernel_norms_commit_one_scale_per_call_row():
 
 
 def test_an_aten_chain_norm_commits_its_rsqrt_output():
+    """Under the module-body query the chain is interior to the norm's body and the policy promotes the rsqrt output alone.  Under Q_word
+    (the record) every Call boundary of the chain is required whatever the policy says; the policy only spells the rsqrt output as the
+    norm scale instead of a `call_boundaries` row."""
     P = chain_program(rows=3)
-    off, on = _manifest(P), _manifest(P, norm_scales=True)
+    off, on = _manifest(P, query=Q_MODULE_BODY_ID), _manifest(P, norm_scales=True, query=Q_MODULE_BODY_ID)
     rsqrt = {R(c.id, "out") for c in P.calls if c.family == "RsqrtF32_v1"}
     assert not rsqrt & off.required.values and rsqrt <= on.required.values
     assert _rows(on.manifest, NS.FAMILY) == [("model.layers.0.input_layernorm", NS.MEMBER, (0, 3), "RsqrtF32_v1", "f32")]
     interior = {R(c.id, "out") for c in P.calls if c.family in ("SquareBf16_v1", "MeanTriton_v1", "AddScalarF32_v1")}
     assert not interior & on.required.values, "the rest of the chain stays interior to the norm's body"
+    w_off, w_on = _manifest(P), _manifest(P, norm_scales=True)
+    assert rsqrt | interior <= w_off.required.values and rsqrt | interior <= w_on.required.values
+    assert _rows(w_on.manifest, NS.FAMILY) == _rows(on.manifest, NS.FAMILY)
+    assert not any(x["family"] == "call_boundaries" and x.get("spec") == "RsqrtF32_v1" for x in w_on.manifest["identities"])
+    assert any(x["family"] == "call_boundaries" and x.get("spec") == "RsqrtF32_v1" for x in w_off.manifest["identities"])
     q = on.manifest["query"]
     assert q["norm_scales"]["words_by_family"] == {"RsqrtF32_v1": 3} and q["residuals_applied"]["encoding:norm scale"] == 3
     assert NS.manifest_modules(on.manifest) == {"model.layers.0.input_layernorm": "RsqrtF32_v1"}

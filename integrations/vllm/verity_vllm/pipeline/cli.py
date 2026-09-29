@@ -132,6 +132,7 @@ def _doc(cls: type) -> str | None:
 
 
 def _add_options(parser: argparse.ArgumentParser, cls: type, environ: Mapping[str, str]) -> None:
+    parser.register("action", "boolean_optional", argparse.BooleanOptionalAction)
     for f in dataclasses.fields(cls):
         if not f.init or "environ" in f.metadata:
             continue

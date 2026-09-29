@@ -268,7 +268,7 @@ fn mufu_ex2(xb: u32, t: &[u32]) -> u32 {
         return if xb >> 31 != 0 { 0 } else { 0x7F80_0000 };
     }
     let mant = ((ax & 0x7F_FFFF) | 0x80_0000) as u64;
-    let k = if unb >= 0 { mant << unb } else { mant >> (-unb) };
+    let k = if unb >= 0 { mant << unb } else { mant.checked_shr((-unb) as u32).unwrap_or(0) };
     let fixed: i64 = if xb >> 31 == 0 { k as i64 } else if k & 0x7F_FFFF == 0 { -(k as i64) } else { -(k as i64) - 1 };
     let (n, j) = (fixed >> 23, (fixed & 0x7F_FFFF) as usize);
     let tj = t[j];

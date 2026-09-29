@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 
 from verity.ir.layout import GateSelection
+from verity.ir.cut import call_scope
 from verity_vllm.query import word as W
 
 
@@ -59,7 +60,7 @@ def test_widths_are_the_irs_out_where_no_wiring_sits_between_units(fam, statics)
     fn = _fn(fam, **statics)
     G = W.Graph(fn)
     R = W.units(G, 16, 32)
-    c, call = W._call_scope(fn)
+    c, call = call_scope(fn)
     for u in range(len(R["kinds"])):
         gates = (G.keep[np.flatnonzero(R["owner"] == u)] + call.offset).tolist()
         out = GateSelection(c, gates).out
@@ -124,7 +125,7 @@ def test_attention_commits_scores_p_row_values_and_inverse_sum(attn):
     r = W.unit_rule(attn)
     assert not r["violations"]
     heads = {(i["scope"].split("{")[0], i["head"]): i["words"] for i in r["committed_interior"]}
-    assert heads[("DotBf16_v1", "AmpereBF16TcDot16_v1")] == 4 * 21                  # S: one score per (head, key)
+    assert heads[("DotBf16_v1", "AmpereBF16TcDot16_v2")] == 4 * 21                  # S: one score per (head, key)
     assert heads[("AttnBlock_v3", "F2fpBf16_v1")] == 4 * 21                          # P (bf16): what the PV products read
     assert heads[("AttentionHead_v3", "Fa2InvSum_v1")] == 4                          # FIN inv_sum, one per head
     assert heads[("AttnBlock_v3", "MufuEx2Ftz_v1")] == 4 * 21                        # exp2(s * scale - max), f32: the stream's P plane
@@ -134,6 +135,22 @@ def test_attention_commits_scores_p_row_values_and_inverse_sum(attn):
 def test_a_width_over_x_and_w_is_named():
     with pytest.raises(W.QueryRuleViolation, match=r"Gemm_v1\{K=64,N=8\}: output:F2fpBf16_v1"):
         W.check_calls([{"family": "Gemm_v1", "statics": {"K": 64, "N": 8}, "definition": "Gemm_v1{K=64,N=8}", "calls": 3, "where": "m.proj"}], 8, 8)
+
+
+def test_the_gate_limit_is_the_runs_not_the_querys(norm):
+    g = {"family": "RMSNormTriton_v1", "statics": {"N": 2048, "EPS": 1e-05}, "definition": norm.id, "calls": 1}
+    low = norm.gates - 1
+    capped = W.check_calls([g], strict=False, max_gates=f"{low:_}")
+    assert [(v["class"], v["limit"]) for v in capped["violations"]] == [("too-large", low)]
+    assert W.check_calls([g], strict=False)["ok"] and W.gate_limits() == {"*": W.MAX_GATES}
+    for raised in (f"{low},RMSNormTriton_v1={norm.gates}", {"RMSNormTriton_v1": norm.gates}, norm.gates):
+        r = W.check_calls([g], strict=False, max_gates=raised)
+        assert r["ok"] and r["units"] == 2049 and r["query"] == capped["query"] == W.query_id()
+    assert W.gate_limit(norm, f"{low},Gemm_v1=5") == low and W.gate_limit(norm, {norm.id: 7, "RMSNormTriton_v1": 9}) == 7
+    from verity_vllm.pipeline import cli
+    for cmd, argv in (("manifest", ["build", "--program", "p", "--out", "o"]), ("program-graph", ["o", "i"])):
+        assert cli.parse(cmd, argv, {W.MAX_GATES_ENV: "GumbelTopPTokenSelect_v2=120000000"}).word_max_gates == "GumbelTopPTokenSelect_v2=120000000"
+        assert cli.parse(cmd, [*argv, "--word-max-gates", "1"], {}).word_max_gates == "1"
 
 
 def test_uncommitted_boundaries_are_named():
@@ -164,6 +181,37 @@ def test_the_manifest_build_runs_the_check(tmp_path):
     assert {(v["definition"].split("{")[0], v["class"]) for v in r["violations"]} == {("Gemm_v1", "output-not-committed")}
     with pytest.raises(W.QueryRuleViolation, match="o_proj"):
         M.word_check(P, corr, pop.required, "16/32")
+
+
+def _program_dir(tmp_path, **kw) -> str:
+    import gzip
+    import json
+    from tests.check.test_sampled_replay import _program
+    inst, _w = _program(**kw)
+    with gzip.open(tmp_path / "instances.json.gz", "wt") as f:
+        json.dump(inst, f)
+    (tmp_path / "result.json").write_text(json.dumps({"program": {"digest": "0" * 64, "function": "f"},
+                                                      "target": {"declared": {"compute_capability": [8, 9]}}}))
+    return str(tmp_path)
+
+
+def test_the_manifest_records_the_check_it_passed_in_the_header_and_its_rows_are_unchanged(tmp_path):
+    """The header's `query.word_check` is what the Commit requires (`commit.partition.word_check_refusal`); it is no identity, so the
+    rows digest of a checked build is the unchecked one's.  A check that fails raises before the manifest is written."""
+    from verity_vllm.commit.partition import word_check_refusal
+    from verity_vllm.pipeline import manifest as M
+    d = _program_dir(tmp_path)
+    checked, plain = (M.build(d, request_id="r0", word=w) for w in ("16/32", None))
+    wc = checked["query"]["word_check"]
+    assert wc["query"] == checked["query"]["query_id"] == "Q_word_v1{X=16,W=32,R=no-recompute}"
+    assert wc["strict"] is True and wc["ok"] is True and wc["violations"] == 0 and wc["units"] > wc["calls"] > 0
+    assert wc["max_gates"] == W.gate_limits(None) and "groups" not in wc and word_check_refusal(checked["query"]) is None
+    assert "word_check" not in plain["query"] and "no word check recorded" in word_check_refusal(plain["query"])
+    assert checked["manifest_digest"] == plain["manifest_digest"] and checked["identities"] == plain["identities"]
+    assert {k: v for k, v in checked["query"].items() if k != "word_check"} == plain["query"]
+    (tmp_path / "attn").mkdir()
+    with pytest.raises(W.QueryRuleViolation, match="o_proj"):
+        M.build(_program_dir(tmp_path / "attn", attn=True), request_id="r0", word="16/32")
 
 
 def test_a_dead_gate_joins_the_unit_it_reads():
@@ -233,3 +281,38 @@ def test_a_call_that_only_rearranges_bits_returns_its_inputs():
     R = W.units(G, 16, 32)
     assert G.n == 0 and len(G.returned_inputs) == 8 and R["cut"].ok, R["cut"].codes
     assert W.unit_rule(f)["violations"] == []
+
+
+def test_the_graph_is_the_core_reference_and_a_programs_partition_object_verifies_in_core():
+    # word.Graph is verity.ir.cut.CallGraph with numpy views; a Program's cut, as verity/partition/v1, checks in core
+    from verity.ir import cut, partition_object as PO
+    from verity.ir.defs import CompositeDefinition, bind
+    from verity.ir.program import Program
+    from verity.ir.refs import tuple_of
+    from verity.ir.types import Tuple
+    fns = [_fn("RMSNormTriton_v1", N=64, EPS=1e-05), _fn("TokenSelect_v1", V=8), _fn("Attention_v3", T=3, NH=2, KVH=1, D=16, BN=128)]
+    for f in fns:
+        c, g = cut.CallGraph(f), W.Graph(f)
+        assert (c.n, c.free, c.outputs, c.recomputed, c.input_reads) == (g.n, g.free, g.outputs, g.recomputed, g.input_reads)
+        assert list(c.src) == g.src.tolist() and list(c.width) == g.width.tolist()
+        R = W.units(g, 16, 32)
+        own, _kinds, head = W.partition(g, 16)
+        assert cut.derived_committed(c, own.tolist()) == np.flatnonzero(head >= 0).tolist()   # the heads are the derived committed set
+        ob, og = cut.boundary_widths(c, R["owner"].tolist(), len(R["kinds"]))
+        assert ob == R["out_bits"].tolist() and og == R["out_gates"].tolist()
+    sig = [f.signature() for f in fns]
+    params = tuple((f"p{i}_{n}", t) for i, (ps, _r) in enumerate(sig) for n, t in ps)
+
+    def body(B, S, *a):
+        outs, i = [], 0
+        for f, (ps, _r) in zip(fns, sig):
+            outs.append(B.call(f, *a[i:i + len(ps)]))
+            i += len(ps)
+        return tuple_of(*outs)
+
+    P = Program(bind(CompositeDefinition("PartitionTop", 1, (), lambda S: (params, Tuple(*[r for _p, r in sig])), body, register=False)))
+    obj = PO.build(P)
+    assert PO.validate(obj).ok and PO.verify(obj, P).ok
+    part = PO.evaluate(P)
+    assert part.population == sum(W.unit_rule(f)["units_per_call"] for f in fns) and len(part.calls) == 3
+    assert PO.owners_digest(part) == PO.owners_digest(PO.evaluate(P))

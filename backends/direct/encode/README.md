@@ -271,7 +271,7 @@ prover randomness (3.2 ms at an assumed 100 GB/s).
 | `buckets_ref.py` | numpy / Python-int references (`F_c` arithmetic, `is_irreducible_binomial`) |
 | `encode_ntt_simt.py` | v2 gains `ncosets`, cosets-only `(R, 3k)` output, `min_blocks_per_sm` (register cap), `gather=True` + `.gather(rows, columns)` |
 | `commit_bench.py`, `buckets_bench.py` | the recorded measurements (raw `results_commit_*.json`, `results_buckets_*.json`) |
-| `reprice_measured.py` | `Priced.times(measured=...)` re-pricing -> `reports/b_measured_4090.json` / `.md` |
+| `reprice_measured.py` | `Priced.times(measured=...)` re-pricing -> `backends/numerical/reports/b_measured_4090.json` |
 
 ~~~bash
 # pod (commit first):
@@ -288,7 +288,7 @@ fewer shared-memory passes are the levers); the `r^T A` generation kernel (needs
 a witness-generation kernel; a cheaper linear test (the 6 coordinate encodings per row are inherent to `q_add` over
 `F_c` with `F_t` rows; only a structural shortcut through the per-unit constraint pattern could remove them --
 **done by the b-lintest lane, next section**).
-Ledger `backends/numerical/reports/ledger/b-commit.jsonl` (5 entries), plot `plots/overhead_b-commit.png`.
+Ledger `backends/numerical/reports/ledger/b-commit.jsonl` (5 entries).
 
 
 ---
@@ -380,7 +380,7 @@ makes it `O(rows + |pattern|)` (note:r20-proof/b-lintest/20260922T0733Z-report-l
 
 Files: `lintest_structured.py`, `tests/test_lintest_structured.py` (the structure test runs on the laptop), `note:r20-proof/b-lintest/20260922T0733Z-report-lintest`,
 `results_lintest_<run>.json`, `reprice_measured.py --lintest results_lintest_r20260922-073017-0924.json --lintest-config linear_test_structured_M3_X256_lazy`; ledger
-`backends/numerical/reports/ledger/b-lintest.jsonl`, plot `plots/overhead_b-lintest.png`.
+`backends/numerical/reports/ledger/b-lintest.jsonl`.
 
 **Not done**: the `pi`/scalar generation kernel from the real constraint system (the toy `UnitPatternSystem` proves the
 algebra; the b-ligero port's constraint emitter must adopt the enumeration); merging the helper-row classes to `M = 2`;

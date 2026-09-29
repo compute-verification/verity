@@ -544,7 +544,22 @@ def checkPartition (c : Circuit) (obj : Option Json) : V PartitionFinding := do
 def publicDigest (header : Json) (pubs : ByteArray) : V ByteArray := do
   return Sha512.hash ((← canon header).toUTF8 ++ pubs)
 
-/-- The verifier's `flock-circuit-inputs` file (no rows, no salts): every `b ‖ c`, then every output word. -/
+/-- Header `shared_rows` (from PR #83 `967b8d06`): exactly the circuit's input ports, each a table of at least one row (a count
+that is not a non-negative integer counts as none, as upstream reads it); none for a per-instance file. -/
+def sharedRows (tags : Tags) (c : Circuit) (header : Json) : V (Option (Array Nat)) := do
+  let .ok s := header.getObjVal? "shared_rows" | return none
+  if !tags.sharedRows then throw s!"public file: shared_rows: a {tags.name} file has none (shared-row files are verity/flock-circuit@967b8d06's)"
+  let .obj kvs := s | throw "header: shared_rows is not an object"
+  if kvs.toArray.size != c.ports.size || c.ports.any (fun p => !(s.getObjVal? p.name).isOk) then
+    throw "header: shared_rows does not name exactly the circuit's input ports"
+  let counts := c.ports.map fun p => match s.getObjVal? p.name with
+    | .ok (.num x) => if x.exponent == 0 && x.mantissa ≥ 0 then x.mantissa.toNat else 0
+    | _ => 0
+  if counts.contains 0 then throw "header: a shared_rows table has no row"
+  return some counts
+
+/-- The verifier's `flock-circuit-inputs` file (no rows, no salts): every `b ‖ c`, then every output word. A shared-row file's
+`b ‖ c` are its tables' rows (port-major), followed by every instance's refs (u32 LE, instance-major, ports in order). -/
 def loadPublic (tags : Tags) (c : Circuit) (file : ByteArray) : V Public := do
   let some nl := findByte file 10 | throw "public file: no header line"
   let text ← match String.fromUTF8? (file.extract 0 nl) with
@@ -561,11 +576,22 @@ def loadPublic (tags : Tags) (c : Circuit) (file : ByteArray) : V Public := do
   if (← J.bool header "rows" pctx) then throw "public file: it holds rows (the verifier's public file has none)"
   let np := c.ports.size
   let nOut := c.outWords
+  let counts ← sharedRows tags c header
+  let nBcs := (counts.map (·.foldl (· + ·) 0)).getD (n * np)
+  let refsLen := if counts.isSome then 4 * n * np else 0
   let body := file.extract (nl + 1) file.size
-  if body.size != BC_BYTES * n * np + 2 * n * nOut then throw "public file: length"
-  let bcs := (Array.range (n * np)).map fun i => body.extract (BC_BYTES * i) (BC_BYTES * i + BC_BYTES)
-  let o := BC_BYTES * n * np
+  if body.size != BC_BYTES * nBcs + refsLen + 2 * n * nOut then throw "public file: length"
+  let bcs := (Array.range nBcs).map fun i => body.extract (BC_BYTES * i) (BC_BYTES * i + BC_BYTES)
+  let o := BC_BYTES * nBcs + refsLen
   let outputs := (Array.range (n * nOut)).map fun i => (body.get! (o + 2 * i)).toNat + 256 * (body.get! (o + 2 * i + 1)).toNat
+  let tables ← match counts with
+    | none => pure none
+    | some counts => do
+      let refs := (Array.range (n * np)).map fun k => (u32OfLE body (BC_BYTES * nBcs + 4 * k)).toNat
+      if (Array.range refs.size).any (fun k => refs[k]! ≥ counts[k % np]!) then
+        throw "shared rows: an instance's ref is past its table"
+      let starts := (counts.foldl (fun (acc : Array Nat × Nat) r => (acc.1.push acc.2, acc.2 + r)) (#[], 0)).1
+      pure (some ({ counts, starts, refs } : Tables))
   let units ← J.get header "units" pctx
   let indices ← (← J.arr units "indices" pctx).mapM (J.asNat · "a unit index")
   if !c.classSha.isEmpty then
@@ -576,11 +602,12 @@ def loadPublic (tags : Tags) (c : Circuit) (file : ByteArray) : V Public := do
       || (← canon units) != (← canon (unitsEntry c indices)) then
     throw "header: the instances' unit indices are not ascending, one per instance, blocks of vus_per_block"
   if J.has header "unit_draw" then throw "header: a staged file is a registered population; a draw is made in the session"
-  return { header, n, digests := bcs, outputs, sha := ← publicDigest header body }
+  return { header, n, digests := bcs, outputs, sha := ← publicDigest header body, tables }
 
 /-- The drawn units' statement over a registered population (upstream's `Instances::drawn`): instance `i` is the
 population's `units[i]`; the header is the population's with the draw, `instances = K`, `population = N` and the drawn
-units' indices; the public digest covers that header and the population's public bytes. -/
+units' indices; the public digest covers that header and the population's public bytes. A shared-row population's tables
+stay the statement's, with the drawn units' refs into them. -/
 def drawn (c : Circuit) (pub : Public) (draw : Json) : V Public := do
   let d ← Draw.UnitDraw.ofJson draw
   if d.population != pub.n || pub.population.isSome then throw "U: the draw's population is not this registered population"
@@ -592,14 +619,37 @@ def drawn (c : Circuit) (pub : Public) (draw : Json) : V Public := do
   let header := ((pub.header.setObjVal! "unit_draw" draw).setObjVal! "instances" (Lean.toJson d.units.size)
     |>.setObjVal! "population" (Lean.toJson pub.n)).setObjVal! "units" (unitsEntry c indices)
   let mut pubs := pub.digests.foldl (· ++ ·) ByteArray.empty
+  if let some t := pub.tables then
+    for r in t.refs do pubs := pubs ++ le32 r.toUInt32
   for w in pub.outputs do pubs := pubs.push (w % 256).toUInt8 |>.push (w / 256).toUInt8
   return { header, n := d.units.size,
-           digests := d.units.foldl (fun acc u => acc ++ pub.digests.extract (u * np) (u * np + np)) #[],
+           digests := if pub.tables.isSome then pub.digests
+             else d.units.foldl (fun acc u => acc ++ pub.digests.extract (u * np) (u * np + np)) #[],
            outputs := d.units.foldl (fun acc u => acc ++ pub.outputs.extract (u * nOut) (u * nOut + nOut)) #[],
-           sha := ← publicDigest header pubs, population := some (pub.n, pub.digests, pub.outputs) }
+           sha := ← publicDigest header pubs, population := some (pub.n, pub.digests, pub.outputs),
+           tables := pub.tables.map fun t => { t with refs := d.units.foldl (fun acc u => acc ++ t.refs.extract (u * np) (u * np + np)) #[] } }
 
-/-- The frame-v3-sha512 roots recomputed from the population's `b ‖ c` and output words against the header's; the pinned
-dummy `b ‖ c` against the zero row's (upstream's `check_public`). -/
+/-- `stratified:K` expanded over the verifier's own program and partition object (`draw.derive`), and the population: the
+query applied to the program, its units grouped by template descriptor id. Only `Q_template_instance` v0 and
+`Q_template_instances` v0 define strata. -/
+def stratifiedLaw (obj : Json) (program : ByteArray) (k : Nat) : V (Draw.Law × Nat) := do
+  let (name, version) ← checkPartitionObject obj
+  let q := (obj.getObjVal? "query").toOption.getD Json.null
+  let some ts := TemplateQuery.templatesOf name version ((q.getObjVal? "params").toOption.getD Json.null)
+    | throw s!"stratified: {name} v{version} defines no strata (Q_template_instance v0 and Q_template_instances v0 do)"
+  let ts ← ts
+  let d ← TemplateQuery.Desc.parse program
+  if (obj.getObjValAs? String "program").toOption != some (hexOf d.sha512) then
+    throw "partition: the verifier's program is not the one the partition object names"
+  let rs ← match TemplateQuery.evaluate d ts with
+    | .ok rs => pure rs
+    | .error e => throw s!"partition: {e}"
+  match Draw.derive k (Draw.strataOf (rs.map fun r => (r.template, r.first, r.count))) with
+  | .ok law => return (law, TemplateQuery.population rs)
+  | .error e => throw s!"stratified: {e}"
+
+/-- The frame-v3-sha512 roots recomputed from the population's `b ‖ c` (a shared-row file: each input port's over its table)
+and output words against the header's; the pinned dummy `b ‖ c` against the zero row's (upstream's `check_public`). -/
 def checkPublic (c : Circuit) (pub : Public) : V Unit := do
   let fv ← pub.frameV3
   if (← J.str fv "frame" "public file") != "frame-v3-sha512"
@@ -617,7 +667,10 @@ def checkPublic (c : Circuit) (pub : Public) : V Unit := do
     let dom ← pub.fv3Bytes "domain_ids" port.name
     if (← J.str (← J.get fv "schemas" "public file") port.name "public file") != ROW_SCHEMA then
       throw s!"input port {port.name}: schema is not {ROW_SCHEMA}"
-    let leaves := (Array.range n).map fun i => FV3.leaf dom i ROW_SCHEMA (Hm96.Default512.treeLeaf (bcs.getD (i * np + p) ByteArray.empty)) H
+    let (count, row) : Nat × (Nat → Nat) := match pub.tables with
+      | some t => (t.counts[p]!, fun r => t.starts[p]! + r)
+      | none => (n, fun i => i * np + p)
+    let leaves := (Array.range count).map fun r => FV3.leaf dom r ROW_SCHEMA (Hm96.Default512.treeLeaf (bcs.getD (row r) ByteArray.empty)) H
     if FV3.root dom leaves H != (← pub.fv3Bytes "roots" port.name) then
       throw s!"input port {port.name}: the rows' b || c do not hash to the header's frame-v3-sha512 root"
     if zeroRowBc port.words != c.dummyDigests.getD p ByteArray.empty then
@@ -679,6 +732,12 @@ def Stmt.setupH (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coin
   let pub ← match draw with
     | some d => HmRow.drawn c pop d
     | none => pure pop
+  -- a stratified draw's strata are the verifier's own, from its program and query, when it holds both
+  if let some d := draw then
+    if let (Except.ok (Draw.Law.stratified k strata), some obj, some prog) :=
+        ((Draw.UnitDraw.ofJson d).map (·.law), partition, program) then
+      let (law, _) ← HmRow.stratifiedLaw obj prog k
+      if law != Draw.Law.stratified k strata then throw "U2: the draw's strata are not the verifier's own (its program and query)"
   HmRow.checkPublic c pub
   -- a template query's units, derived from the verifier's own program: the statement's units must be instances of its template
   let finding ← match finding0, partition, program with

@@ -58,7 +58,8 @@ def test_envelope_problems_are_reported(conforming: dict) -> None:
     [
         ("profile", "another-target", "profile must be a target of verity.proofs.target"),
         ("profile", None, "profile must be a target of verity.proofs.target"),
-        ("domain", "", "domain must be a non-empty string"),
+        ("domain", "", "domain must be one of"),
+        ("domain", "exact", "domain must be one of"),
         ("K", 24, "K must be a positive multiple of 16"),
         ("K", None, "K must be a positive multiple of 16"),
         ("K", True, "K must be a positive multiple of 16"),
@@ -283,7 +284,7 @@ def test_incomparable_lists_differences_and_missing(conforming: dict) -> None:
     other = {**fp, "proof_class": "ARITHMETIC_DIAGNOSTIC", "authentication": "excluded"}
     assert [f for f, _, _ in contract.incomparable(fp, other)] == ["proof_class", "authentication"]
     lacking = {k: v for k, v in fp.items() if k != "domain"}
-    assert contract.incomparable(fp, lacking) == [("domain", "finite", contract.MISSING)]
+    assert contract.incomparable(fp, lacking) == [("domain", "finite-only", contract.MISSING)]
     with pytest.raises(ValueError, match="allow takes identity fields"):
         contract.incomparable(fp, fp, allow=["zk_mode"])
 
@@ -473,7 +474,7 @@ def test_campaign_fields_read_off_the_object() -> None:
     vr = _vector_run()
     rec = json.loads((FIXTURES / f"{K16_VECTOR}.json").read_text())
     assert vr.campaign_fields(rec, "sp1-prove", False) == {
-        "profile": FIRST.name, "domain": "finite", "K": 16, "B": 1, "proof_class": "NON_ZK_PROOF", "authentication": "included",
+        "profile": FIRST.name, "domain": "finite-only", "K": 16, "B": 1, "proof_class": "NON_ZK_PROOF", "authentication": "included",
         "statement_machinery": "included",
     }
     diagnostic = vr.campaign_fields(rec, "sp1-prove", True)
@@ -514,7 +515,7 @@ def test_reference_run_writes_a_conforming_result(tmp_path) -> None:
     assert contract.validate(result) == [], contract.validate(result)
     fp = result["workload_fingerprint"]
     assert (fp["profile"], fp["domain"], fp["K"], fp["B"], fp["proof_class"], fp["authentication"], fp["zk_mode"], fp["retention"]) == (
-        FIRST.name, "finite", 16, 1, "NO_PROOF", "included", "none", "retained")
+        FIRST.name, "finite-only", 16, 1, "NO_PROOF", "included", "none", "retained")
     assert fp["security"]["target"] is None and set(fp["hardware"]) == {"gpu", "cpu"}
     assert fp["software"]["backend"]["name"] == "verity.proofs.transparent"
     assert {m["name"] for m in result["measurements"]} >= {"reference_check_wall", "vu.count", "workload_wall"}
@@ -608,3 +609,29 @@ def test_compare_instances_conflicts_and_warnings(conforming: dict) -> None:
     conflict, warnings = contract.compare_instances({k: v for k, v in a.items() if k != "instances"}, {**b, "instances": None})
     assert conflict is None and len(warnings) == 2 and warnings[0].startswith("baseline does not record instances")
 
+
+
+def test_no_writer_hardcodes_the_domain_and_new_fingerprints_use_the_vocab() -> None:
+    """red-team-flock-3's M0 (coordinator 2026-09-27 13:45Z): every cell recorded ``domain: finite`` whatever it proved.  A
+    fingerprint's domain is now its statement's, one of the vocab's; the old hardcode is refused on new writes, still read on
+    old results (as ``finite-only``, so identity comparisons with them hold)."""
+    import re
+    from pathlib import Path
+
+    from research.store import vocab
+
+    assert set(contract.DOMAINS) == set(vocab.DOMAINS)
+    root = Path(contract.__file__).resolve().parents[5]
+    writers = [*root.glob("backends/flock/python/verity_flock/*.py"), *root.glob("backends/numerical/python/verity_numerical/bench/*.py")]
+    assert writers and not [str(p) for p in writers if re.search(r'domain\s*=\s*"finite"', p.read_text())]
+    kw = dict(profile=None, K=None, B=4, proof_class="NON_ZK_PROOF", authentication="included-hash", zk_mode="none",
+              security={"target": -128}, hardware={"gpu": None, "cpu": {"model": "x"}},
+              software={"backend": {"name": "b", "commit": None}, "toolchain": {}}, preprocessing="none", retention="retained",
+              instances=None, subcircuit="silu-mul/i8192")
+    assert contract.fingerprint(domain="total", **kw)["domain"] == "total"
+    with pytest.raises(ValueError, match="pre-2026-09-27 hardcode"):
+        contract.fingerprint(domain="finite", **kw)
+    old = {**contract.fingerprint(domain="finite-only", **kw), "domain": "finite"}
+    assert contract.validate_fingerprint(old) == [] and contract.identity(old)["domain"] == "finite-only"
+    assert contract.incomparable(old, {**old, "domain": "finite-only"}) == []
+    assert [f for f, _, _ in contract.incomparable(old, {**old, "domain": "total"})] == ["domain"]

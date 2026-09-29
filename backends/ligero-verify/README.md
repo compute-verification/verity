@@ -1,10 +1,12 @@
 # ligero-verify: the independent verifier for B-Ligero's chain proofs
 
+Frozen: kept, still in the tables, not developed. What the merge gate runs for B-Ligero: `../README.md`.
+
 Lanes `b-verifier` / `b-verifier-2` (the latter brought it to the b-zk-fix protocol, `main` a52441c). A dependency-free Rust verifier for the chain proofs of `backends/direct/ligero` (BabyBear Ligero
 with statement-bound SHAKE-256 challenges, BLAKE3 Merkle, BLAKE2b statement digest and HM96 coin commitments;
-PROTOCOL.md sections 3, 4, 6, 7b, 8b, 8c). It shares no code with the Python prover/verifier: BLAKE3, BLAKE2b,
-SHAKE-256 (Keccak), the BabyBear NTT, the coset code, the file parsers and every check are written from
-`PROTOCOL.md`, `HANDOFF.md` and the red-team transcript rules (`note:r20-proof/red-team-vu/20260922T1042Z-report-redteam-vu` F1-F3), with the Python sources read
+`backends/direct/ligero/PROTOCOL.md` sections 3, 4, 6, 7b, 8b, 8c; "PROTOCOL.md" below is that file). It shares no code
+with the Python prover/verifier: BLAKE3, BLAKE2b, SHAKE-256 (Keccak), the BabyBear NTT, the coset code, the file parsers
+and every check are written from `PROTOCOL.md`, the b-ligero lane's handoff (not in the repository) and the red-team transcript rules (`note:r20-proof/red-team-vu/20260922T1042Z-report-redteam-vu` F1-F3), with the Python sources read
 as the *reference of record* where the document is silent (each such place is a finding in `DISCREPANCIES.md`).
 
 Before it, every B-Ligero proof had been verified only by the code that produced it (shared `field.py`, shared
@@ -14,7 +16,7 @@ matrix against the Python verifier is in `note:r20-proof/b-verifier/20260922T113
 
 **Read this first if you verify an `--mode interactive` file.**  In that mode the challenges are functions of the
 verifier's step-0 coins alone (PROTOCOL.md 8c after b-zk-fix), so a proof *file* verifies against the coins it
-carries -- and a prover that chose them can forge any statement (DISCREPANCIES.md D7: 49/49 forged files accepted).
+carries -- and a prover that chose them can forge any statement (D7, `discrepancies/d7.md`: 49/49 forged files accepted).
 Without `--coins` the verdict reads `accept (interactive: coins replayed from the transcript; sound only if they
 were the verifier's step-0 coins)`; pass `--coins FILE` (your own `r1 || s1 || r2 || s2`, 128 bytes raw or hex) to
 check a transcript from your own session.  Fiat-Shamir files (`--mode fiat-shamir`) are transferable and get a plain
@@ -81,7 +83,7 @@ per-proof soundness gate, and accepts the batch iff every sub-batch accepts AND 
 `sum_i 2^-b_i` of this verifier's OWN per-proof bounds (`soundness()` from each statement's `n, k, l, t, D, mode`; never
 a prover field) over the `N` proofs presented is `<= 2^-target` (`--target-bits`, default 128; `--soundness-bits` is
 its alias here), and every proof's `n_proofs` equals `N`.  Before this rule `N` proofs each sized for `n_proofs = 1`
-(2^-128.16 each) were accepted as a batch that is only 2^-(128.16 - log2 N); DISCREPANCIES D10.  The summary reports
+(2^-128.16 each) were accepted as a batch that is only 2^-(128.16 - log2 N); D10, `discrepancies/d10.md`.  The summary reports
 `target_bits`, `batch_log2`, `batch_bits` (= `-log2 sum`), `per_proof_bits[]`, `n_proofs_claimed[]`; the Python file
 verifier (`python -m backends.direct.ligero.serialize verify-batch --dir DIR [--target-bits 128]`) applies the same
 rule with the same strings and agrees on the bits to 1e-6 (`protocol.batch_bound`).
@@ -162,7 +164,7 @@ Every NTT (D messages, D x R chain rows) and every column loop (Merkle, quadrati
 threads`). Stage timings (`shared, parse, statement_hash, challenge_hash, merkle, ntt, dfold, quadratic, chain`) are
 in the JSON.
 
-## Byte-level facts the document does not state (DISCREPANCIES.md D5)
+## Byte-level facts the document does not state (D5, `discrepancies/d5.md`)
 
 * Challenge-1 word order inside each of the `D` slices: `r (M) | rho_lin (L) | rho_quad (Q) | 7 chain families x l`;
   SHAKE-256 output taken as u32 LE words, each `u mod p`.

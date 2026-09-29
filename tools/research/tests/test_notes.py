@@ -5,6 +5,7 @@ import datetime as dt
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -355,7 +356,7 @@ def test_snapshot_commits_the_notes_repo_except_files_over_the_cap(tmp_path):
     assert (snap["paths"], snap["skipped"]) == (2, ["lanes/a/evidence/big.log"])
     assert _git(root, "log", "--format=%s") == "snapshot 2026-09-23T21:00Z: 2 paths; 1 too big, not committed\n"
     assert sorted(_git(root, "ls-files").splitlines()) == ["lanes/a/20260923T1700Z-report-a.md", "lanes/a/evidence/odd [name]*.md"]
-    assert notes.snapshot(root, max_bytes=1000) == {"commit": None, "paths": 0, "skipped": ["lanes/a/evidence/big.log"]}
+    assert notes.snapshot(root, max_bytes=1000) == {"commit": None, "paths": 0, "skipped": ["lanes/a/evidence/big.log"], "refused": []}
     (root / "lanes" / "a" / "20260923T1700Z-report-a.md").unlink()
     (root / "lanes" / "a" / "evidence" / "big.log").unlink()
     assert notes.snapshot(root)["paths"] == 1 and _git(root, "ls-files").splitlines() == ["lanes/a/evidence/odd [name]*.md"]
@@ -572,7 +573,9 @@ def test_relaunch_saves_the_work_supersedes_binds_the_successor_and_prints_its_l
     import tarfile
     assert tarfile.open(ev / "uncommitted-2100Z-untracked.tgz").getnames() == ["notes.txt"]
     assert (ev / "uncommitted-2100Z.merge").read_text().strip() == _git(repo, "rev-parse", "other").strip()
-    row = notes.lane_status(notes.report_for(root, "wave-4090"), NOW, 30)
+    report = notes.report_for(root, "wave-4090")
+    os.utime(report, (NOW.timestamp(), NOW.timestamp()))   # written at NOW: a checkpoint's HH:MM is dated from its file's time
+    row = notes.lane_status(report, NOW, 30)
     assert row["state"] == "superseded" and row["text"] == "by wave-4090-2 (relaunch): stall 4"
     assert notes.binding(root, "wave-4090-2") == {"branch": "lane/wave-4090", "worktree": str(repo), "pod": "vy-wave-4090",
                                                   "succeeds": "wave-4090", "brief": "campaigns/w/BRIEF.md", "final": "06:30Z", "budget": "$5"}
@@ -629,6 +632,7 @@ def test_push_sends_the_lane_branch_never_main_and_never_forces(tmp_path, repo):
     assert notes.push_branch(root, "nobranch", repo) == (f"REFUSED nobranch: no local branch lane/nobranch in {repo}", 2)
 
 
+@pytest.mark.slow
 def test_branches_lists_what_origin_lacks_and_blocks_only_on_open_lanes(tmp_path, repo):
     root = tmp_path / "notes"
     origin = tmp_path / "origin.git"
@@ -1012,6 +1016,73 @@ def test_the_render_imports_every_workspace_package_of_its_source_tree(tmp_path)
     assert envs[0] == pythonpath(str(repo), import_roots_dir(repo), extra=str(repo))
 
 
+FRESH = ["--on", "vy-lean", "--project", "verity", "--source", ".", "--cwd", "source", "--tool", "lean_audit", "--",
+         "python", "tools/lean/audit.py", "--all", "--build", "--fresh"]
+
+
+def _run_toml(*entries: str) -> str:
+    return "\n".join(f"[[run]]\n{e}\n" for e in entries)
+
+
+def test_scheduled_runs_launch_once_per_utc_day_or_iso_week_at_or_after_their_time(tmp_path):
+    (tmp_path / "steward.toml").write_text(_run_toml(
+        f'name = "lean-fresh"\nat = "20:30Z"\nsource = "~/src"\nargs = {json.dumps(FRESH)}',
+        'name = "lean-upstream"\nat = "10:00Z"\nweekday = "thu"\nsource = "/src"\nargs = ["--on=vy-small", "--project", "verity", "--", "true"]',
+        'name = "later"\nat = "22:00Z"\nsource = "/src"\nargs = ["--on", "vy-x", "--", "true"]'))
+    calls, ids = [], iter(f"r{i}" for i in range(1, 99))
+
+    def run(cmd, env, cwd, timeout):
+        calls.append((cmd, env["PYTHONPATH"], cwd, timeout))
+        return (3, "", "research run --on vy-x: refused: machine 'vy-x' is not listed") if "vy-x" in cmd else (0, "", "research: run launched")
+
+    def at(days: float = 0, minutes: float = 0, state: dict | None = None) -> list[str]:
+        return notes.run_lines(tmp_path, NOW + dt.timedelta(days=days, minutes=minutes), state, run=run, new_id=lambda: next(ids))
+
+    state, home = {}, Path.home()                                  # NOW: Wednesday 2026-09-23 21:00Z, ISO week 39
+    assert at(state=state) == ["21:00Z LAUNCHED lean-fresh r1 on vy-lean"]
+    assert calls == [([sys.executable, "-m", "research", "run", "--id", "r1", *FRESH], f"{home}/src", home / "src", notes.RUN_LAUNCH_TIMEOUT_S)]
+    assert state["run"]["lean-fresh"] == {"period": "2026-09-23", "run": "r1", "rc": 0}
+    assert at(minutes=50, state=state) == []                       # once a day; `later` is not due before 22:00Z
+    assert at(minutes=60, state=state) == ["22:00Z RUN-FAILED later r2: research run --on vy-x: refused: machine 'vy-x' is not listed"]
+    assert at(minutes=70, state=state) == [] and len(calls) == 2   # a failed launch waits for the next period
+    assert at(days=1, state=state) == ["21:00Z LAUNCHED lean-fresh r3 on vy-lean", "21:00Z LAUNCHED lean-upstream r4 on vy-small"]
+    assert at(days=2, state=state) == ["21:00Z LAUNCHED lean-fresh r5 on vy-lean"]             # the weekly one: once in week 39
+    assert at(days=7, state=state) == ["21:00Z LAUNCHED lean-fresh r6 on vy-lean"]             # week 40, before its Thursday
+    assert at(days=8, state=state)[1] == "21:00Z LAUNCHED lean-upstream r8 on vy-small"
+    assert at(days=3, minutes=-11 * 60, state={}) == ["10:00Z LAUNCHED lean-upstream r9 on vy-small"]   # a steward down on Thursday: Saturday
+    lines = notes.run_lines(tmp_path, NOW, {}, run=lambda *a: (None, "", "timeout after 600s"), new_id=lambda: "r0")
+    assert lines[0] == "21:00Z RUN-FAILED lean-fresh r0: timeout after 600s"
+
+
+def test_an_invalid_run_entry_is_one_line_until_it_changes(tmp_path):
+    ok = 'at = "20:00Z"\nsource = "/src"\nargs = ["--on", "vy-x", "--", "true"]'
+    (tmp_path / "steward.toml").write_text(_run_toml(
+        'name = "no-args"\nat = "20:00Z"\nsource = "/src"', 'name = "nine"\nat = "9am"\nsource = "/src"\nargs = ["--on", "vy-x", "--", "true"]',
+        f'name = "monday"\nweekday = "monday"\n{ok}', 'name = "local"\nat = "20:00Z"\nsource = "/src"\nargs = ["--project", "p", "--", "research", "--on", "x"]',
+        'name = "named"\nat = "20:00Z"\nsource = "/src"\nargs = ["--on", "vy-x", "--id", "r1", "--", "true"]',
+        f'name = "twice"\n{ok}', f'name = "twice"\n{ok}'))
+    calls, state = [], {}
+
+    def run(*a):
+        calls.append(a)
+        return 0, "", ""
+
+    assert notes.run_lines(tmp_path, NOW, state, run=run, new_id=lambda: "r9") == [
+        '21:00Z RUN-FAILED no-args: an entry needs name, at = "HH:MMZ", source and args (a list of strings)',
+        '21:00Z RUN-FAILED nine: an entry needs name, at = "HH:MMZ", source and args (a list of strings)',
+        "21:00Z RUN-FAILED monday: weekday = 'monday': one of mon, tue, wed, thu, fri, sat, sun",
+        '21:00Z RUN-FAILED local: args put the run on a machine: ["--on", MACHINE, ..., "--", CMD...]',
+        "21:00Z RUN-FAILED named: args set --id: the steward names the run",
+        "21:00Z LAUNCHED twice r9 on vy-x", "21:00Z RUN-FAILED twice: name 'twice' is used by another entry"]
+    assert len(calls) == 1 and notes.run_lines(tmp_path, NOW, state, run=run) == []             # each said once
+    (tmp_path / "steward.toml").write_text(_run_toml(f'name = "monday"\nweekday = "mon"\n{ok}'))
+    assert notes.run_lines(tmp_path, NOW, state, run=run, new_id=lambda: "r10") == ["21:00Z LAUNCHED monday r10 on vy-x"]   # fixed: it runs
+    (tmp_path / "steward.toml").write_text("[[run]\n")
+    assert notes.run_lines(tmp_path, NOW, state, run=run)[0].startswith("21:00Z RUN-FAILED steward.toml: ")
+    assert notes.run_lines(tmp_path, NOW, state, run=run) == []                                 # a broken file is said once
+    assert notes.run_lines(tmp_path / "nowhere", NOW, {}, run=run) == [] and len(calls) == 2
+
+
 def test_guardian_kills_go_to_the_owning_lanes_inbox_by_machine_pod_hint_or_cwd(tmp_path):
     root, log, wt = tmp_path / "notes", tmp_path / "mem_guardian.log", tmp_path / "wt" / "tables-fix"
     for lane in ("sp1-formats", "agkr-table", "tables-fix", "tables-fix-2"):
@@ -1059,6 +1130,25 @@ def test_guardian_kills_go_to_the_owning_lanes_inbox_by_machine_pod_hint_or_cwd(
                            "# the laptop guardian killed 1 process(es) of tables-fix-2 (final) (per-proc cap 1.0GB): rerun\n")
 
 
+def test_snapshot_refuses_git_data_by_name_and_by_content(tmp_path):
+    """The notes repo is public: a git bundle, pack or index (14 bundles of the private repo were found there, 2026-09-27) is never
+    committed, whatever its name, and is reported as refused."""
+    root = tmp_path / "notes"
+    _git(tmp_path, "init", "-q", "-b", "main", str(root))
+    _git(root, "config", "user.email", "t@t")
+    _git(root, "config", "user.name", "t")
+    _touch(root / "lanes" / "a" / "20260927T1100Z-report-a.md", 5, "# a\n")
+    (root / "lanes" / "a" / "evidence").mkdir(parents=True)
+    (root / "lanes" / "a" / "evidence" / "main-abc.bundle").write_bytes(b"anything")
+    (root / "lanes" / "a" / "evidence" / "renamed.txt").write_bytes(b"# v2 git bundle\nabc refs/heads/main\n")
+    (root / "lanes" / "a" / "evidence" / "objects.dat").write_bytes(b"PACK\x00\x00\x00\x02")
+    snap = notes.snapshot(root, now=NOW)
+    assert snap["paths"] == 1 and sorted(snap["refused"]) == ["lanes/a/evidence/main-abc.bundle", "lanes/a/evidence/objects.dat",
+                                                              "lanes/a/evidence/renamed.txt"]
+    assert _git(root, "ls-files").splitlines() == ["lanes/a/20260927T1100Z-report-a.md"]
+    assert "3 git data refused" in _git(root, "log", "--format=%s")
+
+
 def test_snapshot_leaves_the_steward_state_out(tmp_path):
     root = tmp_path / "notes"
     _touch(root / "lanes" / "a" / "20260923T1700Z-report-a.md", 5, "# a\n")
@@ -1091,7 +1181,8 @@ def test_cli_watch_pass_runs_the_steward_rules_on_a_temp_root(tmp_path, capsys):
     (bench / "tables.py").write_text("import sys\nprint('# tables', *sys.argv[1:])\n")
     (src / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = ["backends/numerical"]\n')
     (src / "backends" / "numerical" / "pyproject.toml").write_text('[tool.hatch.build.targets.wheel]\npackages = ["python/verity_numerical"]\n')
-    (root / "steward.toml").write_text(f'[[render]]\nat = "00:00Z"\nsource = "{src}"\nout = "render"\nstore = "{tmp_path / "store"}"\n')
+    (root / "steward.toml").write_text(f'[[render]]\nat = "00:00Z"\nsource = "{src}"\nout = "render"\nstore = "{tmp_path / "store"}"\n\n'
+                                       f'[[run]]\nname = "here"\nat = "00:00Z"\nsource = "{src}"\nargs = ["--", "true"]\n')
     log.write_text(f"2026-09-24T10:00:00+00:00 KILLED pid=7 mem=1.1GB reason=per-proc cap 1.0GB cwd={wt} cmd=python -m pytest\n")
     notes.save_state(root, {"guardian": {"path": str(log), "offset": 0, "ino": log.stat().st_ino}})
     assert notes.main(["watch", "--root", str(root), "--all", "--passes", "1", "--guardian-log", str(log)]) == 1    # late is STALE
@@ -1100,6 +1191,7 @@ def test_cli_watch_pass_runs_the_steward_rules_on_a_temp_root(tmp_path, capsys):
     rendered = sorted((root / "render").iterdir())
     assert [p.name[-10:] for p in rendered] == ["-tables.md"] and rendered[0].read_text() == f"# tables --root {tmp_path / 'store'} --format md\n"
     assert f" RENDERED {rendered[0]}" in out and " RENDER-FAILED render@00:00Z (drilldown): " in out and "No module named" in out
+    assert ' RUN-FAILED here: args put the run on a machine: ["--on", MACHINE, ..., "--", CMD...]' in out
     state = notes.load_state(root)
     assert state["overdue"]["late"]["alerted"] and state["render"] == {"render@00:00Z": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d")}
     assert notes.main(["watch", "--root", str(root), "--all", "--passes", "1", "--guardian-log", "none"]) == 1

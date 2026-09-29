@@ -8,6 +8,7 @@ emitted first and in parameter order as `batch(Input<w>, n)` nodes, then the pro
 from __future__ import annotations
 
 import inspect
+import re
 from typing import Any
 
 from .defs import Body, Builder, CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
@@ -16,6 +17,13 @@ from .refs import Coll, coll_concat
 from .types import Array, Record, Tuple as TupleT, Type, Value
 
 _INPUT_PRIMS: dict[int, PrimitiveDefinition] = {}
+
+#: the ids that denote `Input<w>` (w in canonical decimal): a node is an Input node exactly when its callee's id matches
+INPUT_ID = re.compile(r"^Input([1-9][0-9]*)_v1$")
+
+
+def is_input(fn: Any) -> bool:
+    return isinstance(fn, PrimitiveDefinition) and INPUT_ID.match(fn.id) is not None
 
 
 def input_prim(w: int) -> PrimitiveDefinition:
@@ -77,7 +85,7 @@ class Program:
 
     @property
     def input_gates(self) -> int:
-        return sum(n.gates for n in self.root.body.nodes if getattr(n.fn, "family", None) == "Input")
+        return sum(n.gates for n in self.root.body.nodes if is_input(n.fn))
 
     def input_coll(self, pi: int) -> Coll:
         """Root-scoped gate indices of prescribed parameter `pi`, as a typed collection over gate indices."""

@@ -58,7 +58,9 @@ inline uint32_t mufu_ex2_bits(uint32_t xb, const uint32_t* T) {
     int unb = e - 127;
     if (unb >= 30) return (xb >> 31) ? 0u : 0x7F800000u;
     uint64_t mant = (uint64_t)((ax & 0x7FFFFF) | 0x800000);
-    uint64_t K = (unb >= 0) ? (mant << unb) : (mant >> (-unb));
+    // mant < 2^24, so every right shift of 24 or more is 0 (|x| < 2^-23 reads T[0] = 1.0 at n = 0); a shift count >= 64
+    // is undefined in C++ (x86-64 and arm64 take it mod 64), while the device the rule was verified on clamps it
+    uint64_t K = (unb >= 0) ? (mant << unb) : (-unb >= 24 ? 0 : (mant >> (-unb)));
     long long fixed;
     if (!(xb >> 31)) fixed = (long long)K;
     else if ((K & 0x7FFFFF) == 0) fixed = -(long long)K;

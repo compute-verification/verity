@@ -48,6 +48,18 @@ def test_a_table_that_is_not_the_pinned_one_does_not_load(monkeypatch):
         P.MufuTanh.evaluate(TANH_TABLE_WORD)
 
 
+def test_the_decoded_tables_are_core_library_tables():
+    """Each measured MUFU table, decoded as raw little-endian u32 words, has the SHA-256 and SHA-512 core's library lists."""
+    from verity.ml import library as L
+
+    t, fa2 = rms_relation.tables("cuda"), fa2_relation.tables()
+    for name in ("rsq", "sqrt", "rcp", "ex2"):
+        raw = np.ascontiguousarray(getattr(fa2 if name == "ex2" else t, name), dtype="<u4").tobytes()
+        entry = L.table(name)
+        assert len(raw) == 4 * entry.words
+        assert (hashlib.sha256(raw).hexdigest(), hashlib.sha512(raw).hexdigest()) == (entry.sha256, entry.sha512)
+
+
 def test_the_arch_is_declared_never_read_from_the_environment(monkeypatch):
     monkeypatch.setenv("VERITY_ARCH", "sm_89")
     assert FA.arch_of({}) is None and FA.arch_of({"arch": "sm_89"}) == "sm_89"

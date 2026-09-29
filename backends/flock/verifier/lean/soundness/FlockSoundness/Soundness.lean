@@ -9,8 +9,8 @@ import FlockSoundness.LinkSound
 of the committed table packs a witness satisfying the statement, is at most
 `tableError (fast100 m) shape`.
 
-**`table_sound_fast100`, `table_sound_fast100_34_35`.** With the numbers: at most `2^-195.5` for
-`22 ≤ m ≤ 33` and `2^-195.4` for `m = 34, 35`, for every statement shape in `Stmt.InRange`.
+**`table_sound_fast100`, `table_sound_fast100_34_35`.** With the numbers: at most `2^-205` for
+`22 ≤ m ≤ 33` and `2^-205` for `m = 34, 35`, for every statement shape in `Stmt.InRange`.
 
 This is the interactive-oracle layer, a16z's security stage 1a (`DESIGN.md` §7): the
 committed tables are oracles. The Merkle layer (`Merkle`, stages 1b and 1c with live coins) adds
@@ -18,8 +18,8 @@ SHA-256's collision term for the compiled protocol.
 
 **Status.** Proved. `table_sound` follows from `rep_sound` (one rep from a doomed start,
 `RepSound`, itself proved from four phase lemmas, Ligerito's in `LigeritoPhase`) and `link_sound`
-(the link points, `LinkSound`). The one named assumption, BCHKS25 Theorem 4.6
-(`Assumptions.BCHKS25Thm46`), is a hypothesis; `Check.lean` audits the axioms.
+(the link points, `LinkSound`). Mutual correlated agreement up to the Johnson bound is proved
+(`mcaError_le_bchks25`, from DKT26), so there is no named assumption; `Check.lean` audits the axioms.
 
 Both theorems assume the link points' layout (`Statement.LinkLayout`): each region's free bits
 are distinct and read link coordinates below `PT_LOCAL`, and the block coordinates `PT_LOCAL …`
@@ -57,7 +57,7 @@ theorem link_sound (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Sched
 accepts both reps while the committed values do not satisfy the statement with probability at most
 `tableError`. `table_sound` is its form for every prover strategy; this form composes with other
 tables through `Game.value_interleave_le`. -/
-theorem table_value_sound (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) (hA : A.Correct)
+theorem table_value_sound (A : Arith F K) (hA : A.Correct)
     (S : Statement) (sch : Schedule) (hsch : fast100 S.m = some sch) (hm : 13 ≤ S.m)
     (ptLocal mPts : ℕ) (hlay : S.LinkLayout ptLocal mPts) :
     value (fun out => out.1 = true ∧ ¬ Committed A S sch out.2) (table A S sch hm ptLocal mPts)
@@ -87,7 +87,7 @@ theorem table_value_sound (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) (hA 
       (link_sound A hA S sch hsch ptLocal mPts C hC hlay) fun pts hpts => ?_).trans ?_
     · rw [not_not] at hpts
       rw [value_bind_ret]
-      have h := rep_sound hMCA A hA S sch hsch hm mPts C _
+      have h := rep_sound A hA S sch hsch hm mPts C _
         (extraClaims_length S ptLocal mPts pts) hpts
       calc value (fun acc : Bool × Bool =>
               (acc.1 && acc.2, C).1 = true ∧ ¬ Committed A S sch (acc.1 && acc.2, C).2)
@@ -104,33 +104,33 @@ theorem table_value_sound (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) (hA 
 /-- **Soundness of one table** (interactive-oracle layer). For every prover strategy, the
 verifier accepts both reps while the committed values do not satisfy the statement with
 probability at most `tableError`. -/
-theorem table_sound (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) (hA : A.Correct)
+theorem table_sound (A : Arith F K) (hA : A.Correct)
     (S : Statement) (sch : Schedule) (hsch : fast100 S.m = some sch) (hm : 13 ≤ S.m)
     (ptLocal mPts : ℕ) (hlay : S.LinkLayout ptLocal mPts)
     (σ : Strategy (table A S sch hm ptLocal mPts)) :
     prob (fun out => out.1 = true ∧ ¬ Committed A S sch out.2) (table A S sch hm ptLocal mPts) σ
       ≤ ENNReal.ofReal (tableError sch (S.shape mPts)) :=
-  (prob_le_value _ _ σ).trans (table_value_sound hMCA A hA S sch hsch hm ptLocal mPts hlay)
+  (prob_le_value _ _ σ).trans (table_value_sound A hA S sch hsch hm ptLocal mPts hlay)
 
 /-- **The theorem with the numbers.** `fast100` run twice on one root with live coins: at most
-`2^-195.5` per table for `22 ≤ m ≤ 33`, for every statement shape in range. -/
-theorem table_sound_fast100 (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) (hA : A.Correct)
+`2^-205` per table for `22 ≤ m ≤ 33`, for every statement shape in range. -/
+theorem table_sound_fast100 (A : Arith F K) (hA : A.Correct)
     (S : Statement) (sch : Schedule) (hsch : fast100 S.m = some sch) (hm1 : 22 ≤ S.m)
     (hm2 : S.m ≤ 33) (ptLocal mPts : ℕ) (hshape : (S.shape mPts).InRange)
     (hlay : S.LinkLayout ptLocal mPts) (σ : Strategy (table A S sch (by omega) ptLocal mPts)) :
     prob (fun out => out.1 = true ∧ ¬ Committed A S sch out.2)
-      (table A S sch (by omega) ptLocal mPts) σ ≤ ENNReal.ofReal ((2 : ℝ) ^ (-(195.5 : ℝ))) :=
-  (table_sound hMCA A hA S sch hsch (by omega) ptLocal mPts hlay σ).trans
+      (table A S sch (by omega) ptLocal mPts) σ ≤ ENNReal.ofReal ((2 : ℝ) ^ (-(205 : ℝ))) :=
+  (table_sound A hA S sch hsch (by omega) ptLocal mPts hlay σ).trans
     (ENNReal.ofReal_le_ofReal (tableError_le_of_le_33 hm1 hm2 hsch _ hshape))
 
 /-- **The numbers, `m = 34, 35`.** -/
-theorem table_sound_fast100_34_35 (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K)
+theorem table_sound_fast100_34_35 (A : Arith F K)
     (hA : A.Correct) (S : Statement) (sch : Schedule) (hsch : fast100 S.m = some sch)
     (hm1 : 34 ≤ S.m) (hm2 : S.m ≤ 35) (ptLocal mPts : ℕ) (hshape : (S.shape mPts).InRange)
     (hlay : S.LinkLayout ptLocal mPts) (σ : Strategy (table A S sch (by omega) ptLocal mPts)) :
     prob (fun out => out.1 = true ∧ ¬ Committed A S sch out.2)
-      (table A S sch (by omega) ptLocal mPts) σ ≤ ENNReal.ofReal ((2 : ℝ) ^ (-(195.4 : ℝ))) :=
-  (table_sound hMCA A hA S sch hsch (by omega) ptLocal mPts hlay σ).trans
+      (table A S sch (by omega) ptLocal mPts) σ ≤ ENNReal.ofReal ((2 : ℝ) ^ (-(205 : ℝ))) :=
+  (table_sound A hA S sch hsch (by omega) ptLocal mPts hlay σ).trans
     (ENNReal.ofReal_le_ofReal (tableError_le_of_34_35 hm1 hm2 hsch _ hshape))
 
 end FlockSoundness

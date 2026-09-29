@@ -12,6 +12,8 @@ def test_a_primitive_assumption_is_property_slash_instance_with_its_label_and_st
     assert (e.id, e.kind, e.name, e.label, e.standing) == ("cr/sha-512", "assumption", "Collision resistance of SHA-512", "CR · SHA-512", "standard")
     assert assumption("cr", "poseidon2-koalabear").standing == "algebraic" and get("xof/shake-256").label == "XOF · SHAKE-256"
     assert all(get(f"{p}/{i}").id == f"{p}/{i}" for p in PROPERTIES for i in INSTANCES)
+    e = get("ecr/sha-512")
+    assert (e.name, e.label, e.standing) == ("Expected-time collision resistance of SHA-512", "ECR · SHA-512", "standard")
 
 
 def test_entries_are_keyed_by_id_and_unknown_ids_raise() -> None:

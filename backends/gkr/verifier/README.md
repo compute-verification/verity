@@ -79,7 +79,7 @@ whole.
   a-verifier lane's 3.02 s before the a-verifier-2 work (batched AVX-512 NTTs, output-pruned forward transforms,
   planar functional fill).  44/44 negatives, 16485/16485 mutations rejected.  Run r20260922-105647-c947; per-stage
   numbers and what changed in `note:r20-proof/a-verifier-2/20260922T1110Z-report-a-verifier-2`; ledger `ledger/a-verifier-2.jsonl`.
-* **F1 settled**: the kernel path's proofs are byte-identical to the torch path's on a clean 4090 (`gpu/F1_TRIAGE.md`);
+* **F1 settled**: the kernel path's proofs are byte-identical to the torch path's on a clean 4090;
   `main`'s prover is Rust-verified at B <= 512 from a committed tree.
 * **Checker v2** (`"variant": "v2"` manifests: `chain.txt` links, `itable` implicit tables, table union across the
   segments): `lane/a-gpu-v2`'s pos64 and synth proofs accepted, 4/4 chain + 44/44 negatives + 786/786 sampled

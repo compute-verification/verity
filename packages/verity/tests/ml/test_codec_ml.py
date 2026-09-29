@@ -27,7 +27,7 @@ def test_gemm_coordinate_round_trips_and_names_the_step(dot) -> None:
     prog = Program(bind(G.GemmCoordinate, K=64, DOT=dot))
     desc = encode_program(prog)
     root = desc["program_fn"]
-    # statics in declaration order; a function-valued static is a `{"fn": id}` record: the step is part of the VU's id
+    # statics in declaration order; a function-valued static is a `{"fn": id}` record: the step is part of the proof unit's id
     assert root == f'GemmCoordinate_v2{{K=64,DOT={{"fn":"{dot.id}"}}}}', root
     assert f'DotBf16_v2{{K=64,DOT={{"fn":"{dot.id}"}}}}' in desc["definitions"]
     back = decode_program(json.loads(json.dumps(desc)), REGISTRY)

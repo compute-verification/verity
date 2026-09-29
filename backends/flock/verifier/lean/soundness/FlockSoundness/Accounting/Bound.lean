@@ -20,7 +20,7 @@ changes (§19, A11): folding challenges in GF(2^256), two out-of-domain samples 
 level, stratified queries.
 
 **List sizes.** `Level.listBound` is ArkLib's proved Johnson bound for interleaved Reed–Solomon
-codes (`irs_lambda_le_johnson_mds`): at radius `1 − √ρ − η` at most `1 / (2ηρ) = 25·2^r`
+codes (`irs_lambda_le_johnson_mds`): at radius `1 − √ρ − η` at most `1 / (2ηρ) = 100·2^r`
 codewords. Flock's own accounting uses the sharper `1 / (2η√ρ)`; the difference moves the total
 by less than 0.001 bit.
 -/
@@ -33,8 +33,9 @@ noncomputable def qF : ℝ := 2 ^ 128
 /-- `|GF(2^256)|`. -/
 noncomputable def qK : ℝ := 2 ^ 256
 
-/-- The Johnson slack `η = 0.02` of every level (§15). -/
-noncomputable def eta : ℝ := 1 / 50
+/-- The Johnson slack `η` of every level: the analysis's choice, which the verifier never reads.
+Over the GF(2^256) fold field the MCA term stays far below the query terms at `1/200`. -/
+noncomputable def eta : ℝ := 1 / 200
 
 /-- The statement's shape: the parameters of §16 the bound depends on. -/
 structure Stmt where
@@ -63,8 +64,8 @@ namespace Level
 /-- The code rate `ρ = 2^-r`. -/
 noncomputable def rate (l : Level) : ℝ := (2⁻¹ : ℝ) ^ l.logInvRate
 
-/-- ArkLib's proved list bound at this level's radius: `1 / (2ηρ) = 25·2^r`. -/
-def listBound (l : Level) : ℕ := 25 * 2 ^ l.logInvRate
+/-- ArkLib's proved list bound at this level's radius: `1 / (2ηρ) = 100·2^r`. -/
+def listBound (l : Level) : ℕ := 100 * 2 ^ l.logInvRate
 
 /-- The proximity radius `γ = 1 − √ρ − η`. -/
 noncomputable def radius (l : Level) : ℝ := 1 - Real.sqrt l.rate - eta
@@ -74,7 +75,7 @@ noncomputable def radius (l : Level) : ℝ := 1 - Real.sqrt l.rate - eta
 noncomputable def queryError (l : Level) : ℝ := (Real.sqrt l.rate + eta) ^ l.queries
 
 /-- The numerator `a` of the Johnson-range mutual-correlated-agreement bound `a / |field|`
-(BCHKS25 Theorem 4.6, in the printed form ArkLib pins as `rs_mcaError_le_in_johnson_range`), for
+(BCHKS25 Theorem 4.6's printed numerator, which `mcaError_le_bchks25` proves from DKT26), for
 this level's code `RS[n = 2^d, k = 2^logCols]` at radius `γ`. -/
 noncomputable def mcaA (l : Level) : ℝ :=
   let n : ℝ := (2 : ℝ) ^ l.logLen
