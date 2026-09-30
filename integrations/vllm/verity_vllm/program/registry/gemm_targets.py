@@ -186,9 +186,16 @@ REGISTERED: dict[str, GemmTarget] = {
         kind="Gemm_v2{K,N,DOT=HopperBF16WgmmaDot16_v1}",
         evidence=("core verity.ml.tc.instructions: the cc 12.0 mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32 entry is pinned to "
                   "HOPPER_BF16_M16N8K16 (one group of 16, width 26, floor -133; dossier art:b87e5a5b4dfaa5e4cfc501fa834df2c968e5ce3d53839660e37a42a2525218d2, "
-                  "run r20260922-182911-1f10: 204,800/204,800 elements, the Ampere/Ada pipeline fails 48,569 of them). Registered on the step's pin "
-                  "alone: the GEMM correspondence on cc 12.0 (the bf16 linear under VLLM_BATCH_INVARIANT=1, cuBLASLt with split-K disabled, on the "
-                  "models' GEMM shapes x M, on an RTX PRO 6000 with 188 SMs) is still to run",)),
+                  "run r20260922-182911-1f10: 204,800/204,800 elements, the Ampere/Ada pipeline fails 48,569 of them)",
+                  "the cc 12.0 port's GEMM lane: verity_vllm/program/kernels/gemm_target_correspondence.py on an RTX PRO 6000 (188 SMs, driver "
+                  "595.91.07, torch 2.13.0+cu129, vLLM d9105ea80 under VLLM_BATCH_INVARIANT=1: cuBLASLt with split-K disabled), run "
+                  "r20260930-031354-3b6d: every linear (K, N) of the 14 bf16 HF configs of engine/profiles/hf_configs at TP1 and TP2 x M in "
+                  "{1..8,12,13,16,17,31,32,33,64,65,127,128,129,255,256,257,512,515,1024,1033,2048,2049,4096,8192} (+ four stress families at M "
+                  "1/7/129/1033): 4,794 cases over about 30 cuBLASLt kernels (CUTLASS s16816 and wmma s161616 tilings, chosen by M). Every linear "
+                  "without a bias is bit-exact against the ascending HopperBF16WgmmaDot16_v1 chain (181M sampled coordinates, both tile tails kept; "
+                  "the step cross-checked against the registered primitive on 1.2M), and every GPU rerun is bit-identical. A linear with a bias is "
+                  "bit-exact at M >= 2 with the bias added in FP32 before the rounding (cuBLASLt's epilogue, not GemmBias_v1's bf16 add after it); "
+                  "at M = 1 cuBLAS runs a gemv kernel that is not this chain (20 of 24 cases off in 1 to 3 of 1,024 coordinates)")),
 }
 
 
