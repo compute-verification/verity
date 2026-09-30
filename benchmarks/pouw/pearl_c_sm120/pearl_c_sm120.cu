@@ -753,28 +753,35 @@ DEV float fmax_nan(float a, float b) {
   return d;
 }
 
-// a row's s and rho's sum of squares by its warp (every lane gets both: the butterfly's adds are commutative); with SN, sn
-// the row's max |x| as a NaN if any entry is one (s skips NaNs)
-template <bool SN = false> DEV void row_stats(const float4* x, int k, int lane, float& s, float& part, float& sn) {
-  const int src = 2 * (lane & 15);
-  s = 0.0f, part = 0.0f, sn = 0.0f;
-#pragma unroll 4
-  for (int j = lane; j < k / 4; j += 64) {
-    const float4 v = x[j], w = x[j + 32];
-    s = fmaxf(s, fmaxf(fmaxf(fmaxf(fabsf(v.x), fabsf(v.y)), fmaxf(fabsf(v.z), fabsf(v.w))),
-                       fmaxf(fmaxf(fabsf(w.x), fabsf(w.y)), fmaxf(fabsf(w.z), fabsf(w.w)))));
-    if (SN)
-      sn = fmax_nan(sn, fmax_nan(fmax_nan(fmax_nan(fabsf(v.x), fabsf(v.y)), fmax_nan(fabsf(v.z), fabsf(v.w))),
-                                 fmax_nan(fmax_nan(fabsf(w.x), fabsf(w.y)), fmax_nan(fabsf(w.z), fabsf(w.w)))));
-    const float lo = __shfl_sync(~0u, v.x, src), hi = __shfl_sync(~0u, w.x, src), e = lane < 16 ? lo : hi;
-    part = __fmaf_rn(e, e, part);
-  }
+// one iteration of row_stats' loop, on lane l's vectors v = x[j] and w = x[j + 32] at j = l + 64 t (src = 2 (l mod 16))
+template <bool SN> DEV void stats_step(float4 v, float4 w, int src, int lane, float& s, float& part, float& sn) {
+  s = fmaxf(s, fmaxf(fmaxf(fmaxf(fabsf(v.x), fabsf(v.y)), fmaxf(fabsf(v.z), fabsf(v.w))),
+                     fmaxf(fmaxf(fabsf(w.x), fabsf(w.y)), fmaxf(fabsf(w.z), fabsf(w.w)))));
+  if (SN)
+    sn = fmax_nan(sn, fmax_nan(fmax_nan(fmax_nan(fabsf(v.x), fabsf(v.y)), fmax_nan(fabsf(v.z), fabsf(v.w))),
+                               fmax_nan(fmax_nan(fabsf(w.x), fabsf(w.y)), fmax_nan(fabsf(w.z), fabsf(w.w)))));
+  const float lo = __shfl_sync(~0u, v.x, src), hi = __shfl_sync(~0u, w.x, src), e = lane < 16 ? lo : hi;
+  part = __fmaf_rn(e, e, part);
+}
+
+// row_stats' butterfly over the lanes' s, part (and sn)
+template <bool SN> DEV void stats_reduce(float& s, float& part, float& sn) {
 #pragma unroll
   for (int o = 16; o; o >>= 1) {
     s = fmaxf(s, __shfl_xor_sync(~0u, s, o));
     if (SN) sn = fmax_nan(sn, __shfl_xor_sync(~0u, sn, o));
     part = __fadd_rn(part, __shfl_xor_sync(~0u, part, o));
   }
+}
+
+// a row's s and rho's sum of squares by its warp (every lane gets both: the butterfly's adds are commutative); with SN, sn
+// the row's max |x| as a NaN if any entry is one (s skips NaNs)
+template <bool SN = false> DEV void row_stats(const float4* x, int k, int lane, float& s, float& part, float& sn) {
+  const int src = 2 * (lane & 15);
+  s = 0.0f, part = 0.0f, sn = 0.0f;
+#pragma unroll 4
+  for (int j = lane; j < k / 4; j += 64) stats_step<SN>(x[j], x[j + 32], src, lane, s, part, sn);
+  stats_reduce<SN>(s, part, sn);
 }
 
 // a row's (alpha, rho, beta) from its (s, part)
@@ -849,27 +856,124 @@ extern "C" __global__ void __launch_bounds__(256) stats_s5(const Args a) {
   if (!lane) put_stats(a, row, s, st);
 }
 
-// stats_s5 and A's -h1 row leaves (h1_rows_p's) in one launch, a warp a row and blockDim / 32 rows a CTA: the row's leaf, then
-// its stats from the row the leaf's loads left in L2 while the rows in flight fit (to about k = 8,192).  Leaf first hides the
-// DRAM reads behind the hashing (at 8,192^3 0.261 ms against 0.311 ms stats first); at 96 registers five CTAs of 4 warps fit an
-// SM.  p0 .. p5 stats_s5's, p6 the tree (the leaves of the rows under i2), p7 the domain id; i0 rows, i1 k (a multiple of 256),
-// i2 the rows committed.  Dynamic shared memory: rows_w_words(4 k) words a warp.
+// row_leaf_v's (h1_sm120.cuh, P256) chunk c of a row of rb bytes at src: its chaining value into cv_out
+DEV void leaf_chunk(const uint8_t* src, uint32_t rb, uint64_t row, const uint32_t* key, int c, uint32_t* cv_out) {
+  const uint64_t len = ROW_PREFIX + (uint64_t)rb, left = len - 1024ull * c;
+  const int n = (int)((len + 1023) / 1024);
+  const uint4* src4 = reinterpret_cast<const uint4*>(src);
+  const bool aligned = rb % 16 == 0 && (reinterpret_cast<uint64_t>(src) & 15) == 0;
+  const uint32_t clen = (uint32_t)(left < 1024 ? left : 1024);
+  const int blocks = (int)((clen + 63) / 64);
+  auto fast = [&](int b) { const uint64_t j0 = 256ull * c + 16ull * b; return aligned && j0 >= 16 && 4 * j0 <= rb; };
+  uint32_t cv[8];
+  uint4 nxt[4];
+#pragma unroll
+  for (int i = 0; i < 8; i++) cv[i] = key[i];
+  bool nxt_fast = fast(0);
+  if (nxt_fast) {
+#pragma unroll
+    for (int q = 0; q < 4; q++) nxt[q] = ld_nc_256(src4 + (64ull * c - 4) + q);
+  }
+  for (int b = 0; b < blocks; b++) {
+    const uint64_t j0 = 256ull * c + 16ull * b;
+    uint32_t m[16];
+    const bool cur_fast = nxt_fast;
+#pragma unroll
+    for (int q = 0; q < 4; q++) { m[4 * q] = nxt[q].x; m[4 * q + 1] = nxt[q].y; m[4 * q + 2] = nxt[q].z; m[4 * q + 3] = nxt[q].w; }
+    if (b + 1 < blocks) {
+      nxt_fast = fast(b + 1);
+      if (nxt_fast) {
+#pragma unroll
+        for (int q = 0; q < 4; q++) nxt[q] = ld_nc_256(src4 + j0 / 4 + q);
+      }
+    }
+    if (!cur_fast) {
+#pragma unroll
+      for (int w = 0; w < 16; w++) m[w] = row_msg_word(src, rb, row, j0 + w);
+    }
+    const bool last = b == blocks - 1;
+    const uint32_t f = B3_KEYED | (b == 0 ? B3_START : 0) | (last ? B3_END : 0) | (last && n == 1 ? B3_ROOT : 0);
+    b3c(cv, m, (uint64_t)c, last ? clen - 64 * b : 64, f, cv);
+  }
+#pragma unroll
+  for (int i = 0; i < 8; i++) cv_out[i] = cv[i];
+}
+
+// row_leaf_v's parents over the n chunks' chaining values in cvs: the leaf to h on lane 0
+DEV void leaf_root(const uint32_t* key, uint32_t (*cvs)[8], int n, int lane, uint32_t* h) {
+  __syncwarp();
+  for (int w = 1; w < n; w <<= 1) {
+    for (int i = 2 * w * lane; i < n; i += 64 * w)
+      if (i + w < n && block_size(n, i) >= 2 * w) b3_parent(key, cvs[i], cvs[i + w], 2 * w == n ? B3_ROOT : 0, cvs[i]);
+    __syncwarp();
+  }
+  if (lane != 0) return;
+  const int top = 31 - __clz(n);
+  if (n == 1 << top) {
+#pragma unroll
+    for (int i = 0; i < 8; i++) h[i] = cvs[0][i];
+  } else {
+    int off = n - (n & -n);
+#pragma unroll
+    for (int i = 0; i < 8; i++) h[i] = cvs[off][i];
+    int rest = n - (n & -n);
+    while (rest) {
+      const int low = rest & -rest;
+      off = rest - low;
+      rest -= low;
+      b3_parent(key, cvs[off], h, rest ? 0 : B3_ROOT, h);
+    }
+  }
+}
+
+// A row's -h1 leaf (row_leaf_v's, where `leaf`) and row_stats' s, part and sn by its warp, round by round: the lanes hash
+// chunks 32 r .. 32 r + 31 (row words 8,192 r - 16 ..), then take row_stats' iterations t = 32 r .. 32 r + 31 (row words
+// 8,192 r ..) from the words those loads left in L2, so a word's second read follows its first by one round at any k.  Each
+// lane's FMA chain keeps row_stats' order (t ascending).  Every lane gets s, part and sn (butterflied), lane 0 the leaf.
+template <bool SN>
+DEV void row_leaf_stats(const float4* x, int k, uint64_t row, bool leaf, const uint32_t* key, uint32_t (*cvs)[8], int lane,
+                        uint32_t* h, float& s, float& part, float& sn) {
+  const uint32_t rb = 4u * (uint32_t)k;
+  const int n = (int)((ROW_PREFIX + rb + 1023) / 1024), iters = k / 256, src = 2 * (lane & 15);
+  s = 0.0f, part = 0.0f, sn = 0.0f;
+  for (int r = 0; 32 * r < n; r++) {
+    if (leaf && 32 * r + lane < n) leaf_chunk(reinterpret_cast<const uint8_t*>(x), rb, row, key, 32 * r + lane, cvs[32 * r + lane]);
+    const int t1 = min(32 * r + 32, iters);
+#pragma unroll 4
+    for (int t = 32 * r; t < t1; t++) stats_step<SN>(x[lane + 64 * t], x[lane + 64 * t + 32], src, lane, s, part, sn);
+  }
+  stats_reduce<SN>(s, part, sn);
+  if (leaf) leaf_root(key, cvs, n, lane, h);
+}
+
+// stats_s5 and A's -h1 row leaves (h1_rows_p's) in one launch, a warp a row and blockDim / 32 rows a CTA, round by round
+// (row_leaf_stats): the leaf's loads bring 32 KB of the row from DRAM, the stats reread it from L2.  At 96 registers five CTAs
+// of 4 warps fit an SM.  p0 .. p5 stats_s5's, p6 the tree (the leaves of the rows under i2), p7 the domain id; i0 rows, i1 k (a
+// multiple of 256), i2 the rows committed.  Dynamic shared memory: rows_w_words(4 k) words a warp.
 extern "C" __global__ void __launch_bounds__(128, 5) h1_rows_stats(const Args a) {
   extern __shared__ uint32_t sh[];
   const int lane = threadIdx.x % 32, warp = threadIdx.x / 32, row = blockIdx.x * (blockDim.x / 32) + warp, k = a.i[1];
   if (row >= a.i[0]) return;
-  const uint32_t rb = 4u * (uint32_t)k;
   const float4* x = reinterpret_cast<const float4*>(a.p[0]) + (size_t)row * (k / 4);
-  if (row < a.i[2]) {
-    uint32_t key[8], h[8];
-    load_key(a.p[7], key);
-    row_leaf_v<true>(reinterpret_cast<const uint8_t*>(x), rb, (uint64_t)row, key,
-                     reinterpret_cast<uint32_t(*)[8]>(sh + (size_t)warp * rows_w_words((int)rb)), lane, h);
-    if (!lane) store_cv(a.p[6] + (uint64_t)row * 32, h);
+  const bool leaf = row < a.i[2];
+  uint32_t* verdicts = reinterpret_cast<uint32_t*>(a.p[5]);
+  uint32_t key[8], h[8];
+  if (leaf) load_key(a.p[7], key);
+  uint32_t(*cvs)[8] = reinterpret_cast<uint32_t(*)[8]>(sh + (size_t)warp * rows_w_words(4 * k));
+  float s, part, sn;
+  if (verdicts)
+    row_leaf_stats<true>(x, k, (uint64_t)row, leaf, key, cvs, lane, h, s, part, sn);
+  else
+    row_leaf_stats<false>(x, k, (uint64_t)row, leaf, key, cvs, lane, h, s, part, sn);
+  const float3 st = s5_of(s, part, k);
+  if (verdicts) {
+    const uint32_t v = row_verdict(x, k, lane, part, sn, st);
+    if (!lane) verdicts[row] = v;
   }
-  float s;
-  const float3 st = row_s5(x, k, lane, row, reinterpret_cast<uint32_t*>(a.p[5]), s);
-  if (!lane) put_stats(a, row, s, st);
+  if (!lane) {
+    put_stats(a, row, s, st);
+    if (leaf) store_cv(a.p[6] + (uint64_t)row * 32, h);
+  }
 }
 
 // v2-hot's H_i (v2-hot-start-rule.md, the public constant c0 = 64): bit 31 and bits 0-22 of the first word of the keyed line
