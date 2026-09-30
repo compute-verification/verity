@@ -7,7 +7,10 @@ FP4 headline, divided by the ``nvfp4`` baseline) and `PearlC4Mx` (``pearl-c-mxfp
 The prover is dev.py's `Pipeline` on BF16 A and B: per call, A's commitment as the verifier checks it (`audit.commit_rows`,
 SHA-256 whole-row leaves) and seed_a from its root, A's forming with E_A's lines, A′F_B, the chain with the peel and the
 fused digests, the tile leaves; per (weight, epoch), `weight_side` (B's commitment and seed_b first).  The host supplies the
-operands, the salt (a label of the operand set) and the two domain ids (verity.commitments', public before A exists).
+operands, the salt and the two domain ids (verity.commitments', public before A exists).  The salt is the verifier's
+(`audit.Epoch.start` over B's root, committed on the host, and an epoch beacon that is a label of the operand set: a
+shortcut for a public round).  With PEARLC4_TRANSCRIPTS=DIR, the first hash-role call freed at each shape dumps its
+transcript into DIR/<scheme>-<shape> (`dump`), for `verity_pouw.schemes.pearl_c4_replay` to prove and verify after timing.
 Flag roles: ``hash`` (all of it), ``nohash`` (no hashing: no commitment, E_A's lines primed once, no digests or leaves) and
 ``plain`` (the forming and the chain alone: y from C̃).  The scheme's domain is m a multiple of 64 (its 64 x 64 tile), so
 an m that isn't is the scheme's matmul of A padded with zero filler rows: the call first copies A into the padded buffer;
@@ -66,14 +69,14 @@ class _Call:
         self.arm, self.d, self.shape, self.flags, self.mode = arm, arm.d, shape, flags, mode
         self.m_pad = -(-shape.m // TILE) * TILE
         self.a_src, self.a_bytes = operands.a.ptr, shape.m * shape.k * 2
-        self.salt, self.weight = arm.salt(shape, operands), WEIGHT_BASE + operands.weight_id
+        self.weight = WEIGHT_BASE + operands.weight_id
+        self.beacon, self.salt = arm.epoch(shape, operands, self.weight)
         self.dom_a, self.dom_b = arm.domains(shape, self.salt, self.weight)
         self.pl = self._pipeline(operands)
         self.pad(self.pl, 0)
         self.pl.weight_side()
         self.pl.prime()
         self.d.sync()
-        self.seed_a, self.seed_b = (self.d.read(self.pl.buf[nm], 32) for nm in ("seed_a", "seed_b"))
         self.outputs = {n: Buffer(self.pl.buf[n], self.pl.sizes[n]) for n in OUTPUTS[mode_of(flags)]}
         self.phases = {part: (lambda stream, part=part: self._part(part, stream)) for part in ("before", "gemm", "after")}
 
@@ -106,7 +109,23 @@ class _Call:
         self.pl.weight_side(stream)
 
     def free(self) -> None:
+        out = os.environ.get("PEARLC4_TRANSCRIPTS")
+        if out and self.mode == "hash" and self.arm.first_dump(self.shape):
+            self.dump(Path(out) / f"{self.arm.name}-{self.shape.label}")
         self.pl.free()
+
+    def dump(self, path: Path) -> None:
+        """The call's transcript as the timed code emits it (`pearl_c4_replay.write_dump`): the call launched once more on
+        its operands as they stand, then A's and B's rows, both roots and the tile leaves read back."""
+        from verity_pouw.schemes import pearl_c4_replay as R
+        self.launch(0)
+        self.d.sync()
+        d, b, s = self.d, self.pl.buf, self.shape
+        call = {"scheme": self.arm.name, "shape": [self.m_pad, s.k, s.n], "index": 0, "weight": self.weight,
+                "real_rows": s.m, "epoch_beacon": self.beacon.hex(), "label": s.label, "device": d.uuid,
+                "flags": sorted(self.flags)}
+        R.write_dump(path, call, d.read(b["xa"], self.m_pad * s.k * 2), d.read(b["xb"], s.n * s.k * 2),
+                     d.read(b["root_a"], 32), d.read(b["root_b"], 32), d.read(b["leaves"], self.pl.sizes["leaves"]))
 
 
 class _PearlC4:
@@ -119,6 +138,14 @@ class _PearlC4:
     def __init__(self):
         self.d: D.Dev | None = None
         self._jobs: dict = {}
+        self._epochs: dict = {}
+        self._dumped: set = set()
+
+    def first_dump(self, shape: Shape) -> bool:
+        """True once per shape: the first hash-role call freed there dumps its transcript."""
+        new = shape.label not in self._dumped
+        self._dumped.add(shape.label)
+        return new
 
     def build(self, ctx: dict) -> dict:
         cubin = Path(os.environ.get("PEARLC4_CUBIN", HERE / "pearl_c4.cubin"))
@@ -154,9 +181,23 @@ class _PearlC4:
                     weight_hashed_bytes={"b_rows": n * k * 2, "e_b_lines": n * LINE_IN, "f_lines": 2 * k * LINE_IN},
                     gamma={"status": "unstated: the certificate's tt-out-fp4 conjecture is pending (fp4-design.md, Q1)"})
 
-    @staticmethod
-    def salt(shape: Shape, operands) -> bytes:
-        return hashlib.sha256(f"verity/pouw/pearl-c4-arm/salt/{shape.label}/{operands.seed}/{operands.index}".encode()).digest()
+    def epoch(self, shape: Shape, operands, weight: int) -> tuple[bytes, bytes]:
+        """(epoch beacon, salt) of an operand set: the beacon a label of the set (the benchmark's stand-in for a public
+        round), the salt derived from it and B's root as the verifier derives it (`audit.Epoch.start`, with B's rows
+        committed on the host)."""
+        key = (shape.label, operands.index, operands.seed, operands.b.ptr, weight)
+        if key not in self._epochs:
+            _, _, au = _ref()
+            from verity_pouw.protocol import Matmul
+            from verity_pouw.protocol import Shape as PShape
+            m_pad, k, n = -(-shape.m // TILE) * TILE, shape.k, shape.n
+            beacon = hashlib.sha256(f"verity/pouw/pearl-c4-arm/beacon/{shape.label}/{operands.seed}/{operands.index}"
+                                    .encode()).digest()
+            raw = self.d.read(operands.b.ptr, n * k * 2)
+            root_b = au.commit_rows(au.weight_binding(weight), -2, [raw[i * 2 * k:(i + 1) * 2 * k] for i in range(n)])
+            unit = Matmul(0, PShape(m_pad, k, n), weight)
+            self._epochs[key] = beacon, au.Epoch.start(au.Workload((unit,)), {weight: root_b.commitment.root}, beacon).salt
+        return self._epochs[key]
 
     @staticmethod
     def domains(shape: Shape, salt: bytes, weight: int) -> tuple[bytes, bytes]:
