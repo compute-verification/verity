@@ -30,8 +30,6 @@ source unrolled at export time; data-dependent control flow is `Unsupported(dyna
 
 from __future__ import annotations
 
-import contextlib
-
 import hashlib
 import operator
 from dataclasses import dataclass, field
@@ -522,8 +520,7 @@ def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: 
                   check_registry: bool = True, rank: tuple[int, int] | None = None, exported=None) -> DeriveReport:
     """`rank=(world, rank)`: the rank coordinate of a tensor-parallel rank Program.  It is written into the runtime correspondence
     (`annotations["correspondence"].rank`, explicit integers) and NOWHERE else: not a static, not a config -- the Program's identity
-    (`program_digest`) does not depend on it.  `exported`: the caller's `torch.export` of `source` on `example_inputs` under the same
-    shims, derived from instead of exporting again."""
+    (`program_digest`) does not depend on it.  `exported`: the caller's export of `source` (same inputs and shims), derived from."""
     if mode not in ("profile", "reference"):
         raise ValueError("mode must be 'profile' or 'reference'")
     if rank is not None and not (len(rank) == 2 and 0 <= int(rank[1]) < int(rank[0])):
@@ -623,18 +620,6 @@ def _describe_source(source, example_inputs, mode, profile, config, allowed_dims
     return d
 
 
-@contextlib.contextmanager
-def no_fx_stack_traces():
-    """Export without FX stack traces: nothing reads `node.meta["stack_trace"]`, and recording one per node was a tenth of a derive."""
-    import torch.fx.config as fx_config
-    before = fx_config.do_not_emit_stack_traces
-    fx_config.do_not_emit_stack_traces = True
-    try:
-        yield
-    finally:
-        fx_config.do_not_emit_stack_traces = before
-
-
 def _export(source, example_inputs):
     # inputs are shape/dtype carriers only: export traces with fake tensors and never reads a value. They live on
     # the module's device (meta for meta-constructed modules) so that export sees one device.
@@ -657,7 +642,7 @@ def _export(source, example_inputs):
         mod = _Wrap()
     try:
         # factory calls inside forward (`torch.ones(1, dtype=bool)`, a step's zero) land on the module's device
-        with torch.no_grad(), torch.device(dev), no_fx_stack_traces():
+        with torch.no_grad(), torch.device(dev):
             return torch.export.export(mod, tuple(metas), strict=False)
     except Refuse:
         raise
