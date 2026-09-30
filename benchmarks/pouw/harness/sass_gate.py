@@ -50,6 +50,8 @@ FAST_PATHS = {
 }
 NVIDIA_LIB = re.compile(r"lib(cublas|cublasLt|cudart|cuda|nvrtc|nvrtc-builtins|nvJitLink|cufft|cufftw|curand|cusparse|cusolver"
                         r"|cudnn\w*|nccl|cupti|nvToolsExt|nvperf_\w+|nvidia-[\w-]+)\.so(\.\d+)*")
+#: how /proc/self/maps names a MAP_SHARED | MAP_ANONYMOUS mapping: no file behind it, like private anonymous memory
+SHARED_ANONYMOUS = "/dev/zero (deleted)"
 PTX_FTZ = re.compile(r"\b(add|sub|mul|fma|mad)(\.r[nzmp])?\.ftz(\.sat)?\.f32(x2)?\b")
 FATBIN_MAGIC = 0xBA55ED50
 FATBIN_COMPRESSED = 0x2000
@@ -370,6 +372,9 @@ class Gate:
         """Mapped files with device code, NVIDIA's libraries aside (recorded as not scanned)."""
         out = []
         for p in mapped():
+            if p == SHARED_ANONYMOUS:
+                self.not_scanned[p] = "shared anonymous memory, not a file (the CUDA driver maps some)"
+                continue
             if p.endswith(" (deleted)"):
                 raise SassGateFailed(f"{p} is mapped but deleted: the gate can't read it")
             if os.path.realpath(p) in self.records or p in self.not_scanned or not has_device_code(p):

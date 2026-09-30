@@ -232,6 +232,19 @@ def test_discovery_takes_mapped_device_code_and_leaves_nvidias_libraries_unscann
         g.discover()
 
 
+def test_shared_anonymous_memory_is_not_a_deleted_file(tmp_path, monkeypatch):
+    """The CUDA driver maps 2 MB MAP_SHARED | MAP_ANONYMOUS regions, which /proc/self/maps names "/dev/zero (deleted)"
+    (node 2, r20260930-115405-c561: four in every harness process, example arm included)."""
+    lib = a_library(tmp_path / "libarm.so")
+    monkeypatch.setattr(SG, "mapped", lambda: [SG.SHARED_ANONYMOUS, str(lib)])
+    g = SG.Gate(tools=TOOLS, cache=None)
+    assert g.discover() == [str(lib)]
+    assert g.report()["not_scanned"][0]["path"] == SG.SHARED_ANONYMOUS
+    monkeypatch.setattr(SG, "mapped", lambda: ["/dev/shm/x (deleted)"])
+    with pytest.raises(SG.SassGateFailed, match="mapped but deleted"):
+        g.discover()
+
+
 def test_this_process_maps_the_python_interpreter():
     assert any(Path(p).name.startswith("python") or "libpython" in p for p in SG.mapped())
 
