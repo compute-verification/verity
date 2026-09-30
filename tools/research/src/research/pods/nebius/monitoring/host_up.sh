@@ -10,7 +10,7 @@ ip=$(ip -4 -o addr show eth0 | awk '{print $4}' | cut -d/ -f1)
 [ -n "$ip" ] || { echo "host_up: no IPv4 address on eth0" >&2; exit 2; }
 lib=/usr/local/lib/vy-monitoring
 sudo install -d -m 755 "$lib"
-sudo install -m 644 "$here/vy_exporter.py" "$here/alert_sink.py" "$lib/"
+sudo install -m 644 "$here/vy_exporter.py" "$here/alert_sink.py" "$here/lanes.tsv" "$lib/"
 sudo install -d -o research -g research -m 755 /workspace/monitoring/alerts /workspace/monitoring/alerts/outbox
 sudo tee /etc/systemd/system/vy-exporter.service > /dev/null <<EOF
 [Unit]
