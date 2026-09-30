@@ -634,7 +634,8 @@ def test_the_device_path_commits_with_its_schemes_hashing_format(device_run):
     assert PPD._bytes(run.const[:64]) == fmt.message_key() + fmt.leaf_key()
     assert C.H1_KEYS == {"message": blake3(b"pearl-c/h1/message"), "leaf": blake3(b"pearl-c/h1/leaf")}
     assert not hasattr(PPD, "TREE_HASH") and all(SchemeId.parse(n).name == n for n in PPD.SCHEMES)
-    assert PPD.tree_hash(SCHEME) == "blake3" and C.PearlC(forming="v1", hashing="h0").commitment_hash == "sha256"
+    assert not hasattr(PPD, "tree_hash") and not hasattr(PPD, "variant")
+    assert C.PearlC(forming="v1", hashing="h0").commitment_hash == "sha256"
     with pytest.raises(KeyError, match="this device path runs"):
         PPD.scheme_of("pearl-c-sm120-v1-h2")
 
