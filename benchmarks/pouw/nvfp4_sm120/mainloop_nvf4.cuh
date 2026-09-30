@@ -260,9 +260,12 @@ template <int TM, int STAGES = 3, int RP = 40, int BORDER = 0> struct Mainloop {
       if (on) load_part(nxt, st, j, g);
     }
   }
+  Frag f0;               // the next step's fragments: loaded ahead, from the next tile's first stage too if `next`
+  bool primed = false;   // f0 holds them
   // one tile's chain into acc (from +0): step 1's fragments load behind step 0's MMAs and the next stage's step 0 behind
-  // step 1's; a stage is released after step 1's first group (its last fragments were read behind step 0)
-  NV_DEV void tile(int K, float (&acc)[4][4][2][4]) {
+  // step 1's; a stage is released after step 1's first group (its last fragments were read behind step 0).  next: this warp
+  // runs tile() again, so the last step loads the next tile's first fragments (behind its MMAs, not after the epilogue)
+  NV_DEV void tile(int K, float (&acc)[4][4][2][4], bool next = false) {
     const int KT = K / BK;
 #pragma unroll
     for (int mi = 0; mi < 4; mi++)
@@ -272,20 +275,23 @@ template <int TM, int STAGES = 3, int RP = 40, int BORDER = 0> struct Mainloop {
         for (int jl = 0; jl < 2; jl++)
 #pragma unroll
           for (int e = 0; e < 4; e++) acc[mi][i][jl][e] = 0.0f;
-    Frag f0, f1;
-    mbar_wait_warp(full(s), ph);
-    load(f0, stage(s), 0);
+    Frag f1;
+    if (!primed) {
+      mbar_wait_warp(full(s), ph);
+      load(f0, stage(s), 0);
+    }
 #pragma unroll 1
     for (int kt = 0; kt < KT; kt++) {
       const uint32_t done = empty(s);
       step(acc, f0, f1, stage(s), 1, true, [] {});
       advance();
-      const bool more = kt + 1 < KT;
+      const bool more = kt + 1 < KT || next;
       step(acc, f1, f0, stage(s), 0, more, [&] {
         mbar_release(done);
         if (more) mbar_wait_warp(full(s), ph);
       });
     }
+    primed = next;
   }
 
   // ---- epilogues: tile (tm, tn) of C, row-major with ldc elements a row

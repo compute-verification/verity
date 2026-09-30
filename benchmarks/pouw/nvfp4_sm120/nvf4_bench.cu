@@ -117,7 +117,7 @@ DEV void nv_gemm_body(const Args& a) {
     int tm, tn;
     nvf4::raster(t, tiles_m, tiles_n, group, tm, tn);
     float acc[4][4][2][4];
-    ml.tile(K, acc);
+    ml.tile(K, acc, t + (int)gridDim.x < tiles_m * tiles_n);
     if constexpr (BF16) ml.store_bf16(reinterpret_cast<uint16_t*>(a.p[2]), N, tm, tn, acc);
     else ml.store_f32(reinterpret_cast<float*>(a.p[2]), N, tm, tn, acc);
   }
