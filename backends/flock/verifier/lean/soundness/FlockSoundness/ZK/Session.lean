@@ -12,6 +12,11 @@ The paper's Lemmas A and B are per session, with `J` tables (`docs/zk-proof-publ
   tables' views, each a function of its own table's randomness. The tables' witnesses may overlap (two drawn units in
   different tables can read one row); they are fixed.
 
+The one place the tables meet is the link exchange, and it carries only public values: the link points are the verifier's
+coins, `Link(0)` is the constant 0 for every table, and each table's region claims at the shared points send their public
+values (H_reg, `sReg w = pubReg`). The session's other framing (`Register`, `Hello`, the one `Commit` with every table's
+cap) is a public function of the statement, the coins and the tables' views.
+
 So the session's statements follow from the tables' by two facts about independent components: equal distributions give
 equal distributions of the tuples (`SameDist.pi`), and closeness adds up (`prCoin_pi_close`, one table at a time).
 

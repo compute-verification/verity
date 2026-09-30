@@ -4770,7 +4770,12 @@
    ],
    "assumptions": [],
    "type_hash": "7e0c11a4d90441db227b441f593fc687e9eca34586574971bc5863213962da4a"
-  }
+  },
+  "FlockSoundness.ZK.SameDist.pi": {},
+  "FlockSoundness.ZK.prCoin_pi_close": {},
+  "FlockSoundness.ZK.Session.session_shvzk": {},
+  "FlockSoundness.ZK.Session.session_prefinal_indep": {},
+  "FlockSoundness.ZK.Session.session_shvzk_hm96": {}
  },
  "reads": {
   "Flock.CircuitType": {
