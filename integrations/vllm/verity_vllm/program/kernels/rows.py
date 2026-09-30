@@ -381,7 +381,7 @@ def gemm_bias(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, n
     """`GemmBias_v1{K,N}(x, W, b)`: `Gemm_v1`'s row, then `BiasAdd_v1`'s add of the bias slice, per coordinate."""
     if len(ops) != 3:
         raise ValueError(f"GemmBias_v1 takes 3 operands (x, W, b), the row wires {len(ops)}")
-    y = gemm(statics, ops[:2])["0"]
+    y = gemm(statics, (ops[0], ops[1]))["0"]                                  # the replay's operands index, they don't slice
     return bias_add({"N": statics["N"]}, (y, ops[2]))
 
 
@@ -389,7 +389,7 @@ def gemm_bias_dot(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[st
     """`GemmBias_v2{K,N,DOT}(x, W, b)`: `Gemm_v2`'s row, then `BiasAdd_v1`'s add of the bias slice, per coordinate."""
     if len(ops) != 3:
         raise ValueError(f"GemmBias_v2 takes 3 operands (x, W, b), the row wires {len(ops)}")
-    y = gemm_dot(statics, ops[:2])["0"]
+    y = gemm_dot(statics, (ops[0], ops[1]))["0"]
     return bias_add({"N": statics["N"]}, (y, ops[2]))
 
 

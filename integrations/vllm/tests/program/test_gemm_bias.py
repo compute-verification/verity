@@ -90,6 +90,17 @@ def test_gemm_bias_v2_is_bit_equal_to_gemm_v2_then_bias_add_on_edge_and_random_v
     assert compared >= 24
 
 
+@pytest.mark.parametrize("spec", [bind(gemm_bias.GemmBias, K=K, N=N), bind(gemm_bias.GemmBiasV2, K=K, N=N, DOT=hopper.HopperBF16WgmmaDot16)],
+                         ids=lambda s: s.id.split("{")[0])
+def test_the_replay_evaluates_a_one_call_biased_linear_from_a_committed_row_and_two_weight_slices(spec):
+    from verity_vllm.check.replay.evaluate import evaluate as replay_evaluate
+    from verity_vllm.query.manifest import format as RM
+    x, w, b = _vectors(1, 5)[-1]
+    out = replay_evaluate(spec.id.split("{")[0], RM.spec_statics(spec.id), [[np.array(x, np.uint16)], [], []],
+                          [None, np.array(w, np.uint16), np.array(b, np.uint16)])["0"]
+    assert out.tolist() == list(evaluate(spec, x, w, b))
+
+
 def test_q_word_cuts_gemm_bias_v2_into_one_unit_per_output_word_with_no_committed_interior():
     rule = W.unit_rule(bind(gemm_bias.GemmBiasV2, K=K, N=N, DOT=hopper.HopperBF16WgmmaDot16))
     assert rule["units_per_call"] == N and rule["committed_interior_words"] == 0 and rule["max_out_bits"] == 16, rule
