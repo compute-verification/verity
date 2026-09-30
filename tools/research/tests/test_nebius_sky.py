@@ -89,8 +89,10 @@ def test_the_config_run_holds_a_gpu_only_for_its_commit(tmp_path):
     text = (SKY / "jobs" / "config-run.yaml").read_text()
     head, build, gpu, replay = text.split("\n---\n")
     assert "accelerators" not in replay and "queue-name: deployments-cpu" in replay and "row stage replay" in replay
-    assert 'if [ "${REPLAY_DEFERRED:-0}" != 1 ]; then' in replay and 'REPLAY_DEFERRED: "0"' in replay and 'REPLAY_DEFERRED: "0"' in gpu
-    assert '[ "${REPLAY_DEFERRED:-0}" != 1 ] || deferred=(--replay-deferred 1)' in gpu and '"${deferred[@]}"' in gpu
+    assert 'if [ "$REPLAY_DEFERRED" != 1 ]; then' in replay and "REPLAY_DEFERRED: auto" in replay and "REPLAY_DEFERRED: auto" in gpu
+    assert '[ "$REPLAY_DEFERRED" != 1 ] || deferred=(--replay-deferred 1)' in gpu and '"${deferred[@]}"' in gpu
+    detect = "grep -q VLLM_REPLAY"
+    assert gpu.count(detect) == 1 and replay.count(detect) == 2                        # setup and run resolve it as the Commit does
     assert 'if [ "$rc" = 0 ] && [ -s "$SWEEP_DIR/$ROW/config_record.json" ]; then rm -rf "$SWEEP_DIR/$ROW"/commit/replay_bundle_p*' in replay
     assert "accelerators" not in build and 'verity.dev/build: "true"' in build and "CUDA_VISIBLE_DEVICES=" in build
     assert "row stage build \"$ROW\" \"$ROLE\" \"$REPO\" \"$REVISION\" --config-run 1 --replay-k 460" in build

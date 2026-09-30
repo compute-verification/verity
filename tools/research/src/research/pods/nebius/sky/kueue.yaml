@@ -2,8 +2,8 @@
 # lines below, from usage_report.py's summary.
 #
 # One cohort (nebius). GPU generation and CPU checking are separate queues (Daniel, 16:05Z: batch everything):
-#   deployments-gpu  a vLLM deployment's GPU work (Commits; port captures): 5 GPUs and a fixed 4 vCPU per GPU, so it never waits on
-#                    CPU quota. Every pod it runs requests at most 4 vCPU per GPU (test_nebius_sky) and bursts onto idle cores.
+#   deployments-gpu  a vLLM deployment's GPU work (Commits; port captures): 5 GPUs, a fixed 4 vCPU and 160 GiB per GPU (a batch-8
+#                    Commit requests 170 GB; 20:40Z), so it never waits on CPU or memory quota. Every pod it runs requests at most 4 vCPU per GPU (test_nebius_sky) and bursts onto idle cores.
 #   deployments-cpu  a vLLM deployment's CPU work (Builds, replay and checks): no GPU, and it can't borrow one.
 #   provers          the provers' 3 GPUs; never borrows (borrowingLimit 0; root 14:34Z): a bench admitted on borrowed quota was
 #                    evicted mid-run by a reclaim, twice (fv2-a8's GPU, m0-v3-a14's CPU), and benches pinned to 160-191 run one at a time.
@@ -47,7 +47,7 @@ spec:
       resources:
       - {name: nvidia.com/gpu, nominalQuota: "5", borrowingLimit: "2"}
       - {name: cpu, nominalQuota: "20", borrowingLimit: "8"}
-      - {name: memory, nominalQuota: "640Gi", borrowingLimit: "256Gi"}
+      - {name: memory, nominalQuota: "800Gi", borrowingLimit: "320Gi"}
 ---
 apiVersion: kueue.x-k8s.io/v1beta2
 kind: ClusterQueue
@@ -67,7 +67,7 @@ spec:
       resources:
       - {name: nvidia.com/gpu, nominalQuota: "0", borrowingLimit: "0"}
       - {name: cpu, nominalQuota: "100", borrowingLimit: "16"}
-      - {name: memory, nominalQuota: "640Gi", borrowingLimit: "128Gi"}
+      - {name: memory, nominalQuota: "480Gi", borrowingLimit: "128Gi"}
 ---
 apiVersion: kueue.x-k8s.io/v1beta2
 kind: ClusterQueue
