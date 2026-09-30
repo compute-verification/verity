@@ -13,7 +13,25 @@
 #include "cutlass/gemm/dispatch_policy.hpp"
 #include "cutlass/gemm/kernel/gemm_universal.hpp"
 #include "cutlass/util/packed_stride.hpp"
+#include "cutlass/block_striped.h"
 #include "cutlass_api.h"
+
+// Stream-K's middle peers add their FP32 partials into the workspace with atomics, and an FP32 atomic add flushes subnormals
+// (RED.ADD.F32.FTZ; PTX has no .noftz for f32), which the SASS gate refuses. Under the Deterministic reduction, which every
+// stream-K call here sets, each peer adds only after the one before it has arrived, so a plain load, add and store gives the
+// same sum without the flush; store, load and load_add stay CUTLASS's.
+namespace cutlass {
+template <int BlockThreads, typename ArrayT>
+struct BlockStripedReduce<BlockThreads, ArrayT, float> : BlockStriped<BlockThreads, ArrayT, float> {
+  CUTLASS_DEVICE
+  static void reduce(ArrayT* ptr, const ArrayT& data, int thread_idx) {
+    float* out = reinterpret_cast<float*>(ptr);
+    const float* in = reinterpret_cast<const float*>(&data);
+    CUTLASS_PRAGMA_UNROLL
+    for (int i = 0; i < BlockStripedReduce::kStripes; ++i) out[BlockThreads * i + thread_idx] += in[i];
+  }
+};
+}  // namespace cutlass
 
 using namespace cute;
 
@@ -97,6 +115,9 @@ struct Problem {
       args.epilogue.thread.beta = 0.0f;
     } else {
       args = {cutlass::gemm::GemmUniversalMode::kGemm, {M, N, k, 1}, {a, sA, b, sB}, {{1.0f, 0.0f}, d, sC, d, sD}};
+    }
+    if constexpr (K::kStreamK) {
+      args.scheduler.reduction_mode = decltype(args.scheduler.reduction_mode)::Deterministic;
     }
   }
 };
