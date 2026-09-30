@@ -1,8 +1,9 @@
 """Pearl-C's sm_120 tree off the card (benchmarks/pouw/pearl_c_sm120): the shared-memory swizzles conflict-free for every
 ldmatrix phase and the GEMMs within sm_120's 99 KB, the kernel's constants the scheme's, the SASS gate refusing a lowered or
 spilling build, the check fixture against the scheme on both device records, and run.py's identity refusal and dry run on
-a CPU stand-in for libcuda (an RTX PRO 6000's name, SM count, compute capability, UUID and shared-memory limit), every
-launch's pointers and sizes checked against each kernel's footprint as pearl_c_sm120.cu states it.  The FP8 bench arm
+a CPU stand-in for libcuda (#449's, with fake_tma.c's tensor maps; an RTX PRO 6000's name, SM count, compute capability,
+UUID and shared-memory limit), every launch's pointers and sizes checked against each kernel's footprint as pearl_c_sm120.cu
+states it, and each mainloop GEMM's operands against the tensor maps encoded for them.  The FP8 bench arm
 (pearlc_arm.py) against the harness's arm interface v0: its accounting the scheme's, its calls on the stand-in as the harness
 drives them, and its gate on the fixture.  With VERITY_POUW_NVCC naming a CUDA >= 12.8 toolkit, the real sm_120a build passes
 the gate."""
@@ -71,14 +72,23 @@ def test_swizzles_are_the_kernels_and_conflict_free():
                 assert len({(swz(base + j, c) // 16) % 8 for j in range(8)}) == 8
 
 
+MAINLOOP = (HERE / "mainloop_sm120.cuh").read_text()
+#: the mainloop's dynamic shared memory at 128 x 128 (ML_GEMM's Mainloop<128, 128, G, 3, ...>): 3 stages of 128-byte depth
+#: and a barrier pair of 16 bytes per stage
+ML_SMEM = 3 * (128 + 128) * 128 + 16 * 3
+
+
 def gemm_smem(mode: str, tm: int, bn: int) -> int:
+    """gemm_body's dynamic shared memory (the 64 x 64 and 128 x 32 GEMMs)."""
     bk, stages, peel = const("BK"), const("STAGES"), const("PEEL_ROW")
     return stages * (tm + bn) * bk + ((tm + bn) * peel if mode in ("M_PEARLC", "M_PEARLC_S") else 0)
 
 
 def gemms() -> list[tuple[str, str, int, int, int]]:
-    return [(n, m, int(tm), int(bn), int(g))
-            for n, m, tm, bn, g in re.findall(r"^GEMM\((\w+), (M_\w+), (\d+), (\d+), (\d+)\)", SOURCE, re.M)]
+    """Every GEMM kernel (name, mode, tile, G): the 128 x 128 ones on the mainloop (ML_GEMM), the others on gemm_body."""
+    return ([(n, m, 128, 128, int(g)) for n, m, g in re.findall(r"^ML_GEMM\((\w+), (M_\w+), (\d+)\)", SOURCE, re.M)]
+            + [(n, m, int(tm), int(bn), int(g))
+               for n, m, tm, bn, g in re.findall(r"^GEMM\((\w+), (M_\w+), (\d+), (\d+), (\d+)\)", SOURCE, re.M)])
 
 
 def gemm_tile(name: str) -> tuple[int, int]:
@@ -88,15 +98,20 @@ def gemm_tile(name: str) -> tuple[int, int]:
 
 
 def test_gemms_fit_sm120_shared_memory():
+    """gemm_body's GEMMs and the mainloop's (ML_GEMM, all at 128 x 128, each with its _smem probe the mainloop's SMEM) fit
+    sm_120's 99 KB, and the gate knows every one."""
     assert "STAGES * (TM + BN) * BK + (MODE == M_PEARLC || MODE == M_PEARLC_S ? (TM + BN) * PEEL_ROW : 0)" in SOURCE
+    assert "SMEM = STAGES * STAGE + 16 * STAGES" in MAINLOOP and "STAGE = (TM + BN) * BK" in MAINLOOP
+    assert "*out = ml::Mainloop<128, 128, G, 3, true, 1, ML_RP<G>>::SMEM;" in SOURCE
     names = {n for n, *_ in gemms()}
-    assert names == {"gemm_plain", "gemm_fast", "gemm_ct", "gemm_pearlc", "gemm_ct_u", "gemm_pearlc_u",
-                     "gemm_ct_d", "gemm_pearlc_d", "gemm_ct_d_u", "gemm_pearlc_d_u", "gemm_words", "gemm_words_u"}
+    ml = {"gemm_plain", "gemm_fast", "gemm_ct", "gemm_pearlc", "gemm_ct_u", "gemm_pearlc_u", "gemm_pearlc_s", "gemm_pearlc_s_u",
+          "gemm_pearlc_b", "gemm_pearlc_b_u"}
+    assert names == ml | {"gemm_ct_d", "gemm_pearlc_d", "gemm_ct_d_u", "gemm_pearlc_d_u", "gemm_words", "gemm_words_u"}
     for name, mode, tm, bn, g in gemms():
-        assert gemm_smem(mode, tm, bn) <= SM120_MAX_DYN, name
-        assert (tm, bn) == gemm_tile(name)
+        assert (ML_SMEM if name in ml else gemm_smem(mode, tm, bn)) <= SM120_MAX_DYN, name
+        assert (tm, bn) == gemm_tile(name) and (name in ml) == ((tm, bn) == (128, 128))
         assert g in (0, 4) and (g == 0) == (name.endswith("_u") or name == "gemm_fast")
-    assert gemm_smem("M_PEARLC", 128, 128) == 98304 and gemm_smem("M_PEARLC", 64, 64) == 49152
+    assert ML_SMEM == 98352 and gemm_smem("M_PEARLC", 64, 64) == 49152
     assert form_rates() == ["form_rate", "form_rate_scalar", "form_rate_nocast", "form_rate_atoms"]
     assert set(S.WANT) - {"form_s5", "form_s5_scalar", "words", "words_u", *form_rates()} == names
 
@@ -263,10 +278,14 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
             assert base == "gemm_ct" or N == 32, name
             need[2] = 4 * M * N
         else:
-            assert base in ("gemm_pearlc", "gemm_pearlc_s"), name
+            assert base in ("gemm_pearlc", "gemm_pearlc_s", "gemm_pearlc_b"), name
             need.update({4: 2 * M * N, 5: 128 * M, 6: 128 * N, 7: 4 * M, 8: 4 * N})
             if base == "gemm_pearlc":
                 need.update({2: 4 * M * N, 3: 4 * M * N})
+            if base == "gemm_pearlc_b":
+                need.update({9: M * N, 11: 32})       # a 32-byte digest per row and 32 columns; the message key
+        if gemm_tile(name) == (128, 128):
+            need[10] = 4 * 128                        # ml::Maps: A, B, P_A, P_B
         return need
     if name in ("words", "words_u"):
         M, N, K = i[:3]
@@ -323,7 +342,7 @@ def ship(tmp_path_factory):
     if not cc:
         pytest.skip("no C compiler for the libcuda stand-in")
     out = tmp_path_factory.mktemp("pearl-c-sm120-ship")
-    subprocess.run([cc, "-O1", "-Wall", "-Werror", "-shared", "-fPIC", "-o", str(out / "fake_cuda.so"), str(H100_DIR / "fake_cuda.c")],
+    subprocess.run([cc, "-O1", "-Wall", "-Werror", "-shared", "-fPIC", "-o", str(out / "fake_cuda.so"), str(HERE / "fake_tma.c")],
                    check=True)
     shutil.copy(HERE / "run.py", out)
     (out / "pearl_c_sm120.cubin").write_bytes(b"\x7fELF" + bytes(14) + bytes([190, 0]) + bytes(44))
@@ -333,7 +352,7 @@ def ship(tmp_path_factory):
 def dry_env(ship: Path, log: Path, **kw) -> dict:
     env = dict(os.environ, PEARLC_LIBCUDA=str(ship / "fake_cuda.so"), PEARLC_LIBNVML="/nonexistent", FAKE_LOG=str(log),
                FAKE_KERNELS=",".join(kernel_names()), FAKE_NAME=RTX, FAKE_SMS="188", FAKE_CC="12.0",
-               FAKE_UUID=UUID[4:].replace("-", ""), FAKE_MAXDYN=str(SM120_MAX_DYN), FAKE_SMEM=str(gemm_smem("M_PEARLC", 128, 128)),
+               FAKE_UUID=UUID[4:].replace("-", ""), FAKE_MAXDYN=str(SM120_MAX_DYN), FAKE_SMEM=str(ML_SMEM),
                CUDA_VISIBLE_DEVICES="1", CUDA_DEVICE_ORDER="PCI_BUS_ID", PEARLC_EXPECT_UUID=UUID, SHAPES="1024", REPS="2")
     env.update(kw)
     return {k: v for k, v in env.items() if v is not None}
@@ -382,12 +401,15 @@ def test_runner_dry_run(small_fixture, ship, tmp_path):
         assert {"form_a_scalar", "form_b_scalar"} <= set(t["ms"])
 
     allocs: dict[int, int] = {}
-    seen = set()
+    seen, maps = set(), set()
     for ev in map(json.loads, log.read_text().splitlines()):
-        track(ev, allocs)
+        track(ev, allocs, maps)
         if ev["op"] == "launch":
             seen.add(ev["name"])
     assert seen == set(own_kernels()) | H1_LAUNCHED
+    for t in rows[3:]:
+        assert t["fused"] and set(t["consistency"]) >= {"y_s_vs_unfused_words_differing", "y_fused_vs_unfused_words_differing",
+                                         "digests_fused_vs_unfused_words_differing"}
 
 
 def room(allocs: dict[int, int], ptr: int) -> int:
@@ -395,9 +417,10 @@ def room(allocs: dict[int, int], ptr: int) -> int:
     return next((base + n - ptr for base, n in allocs.items() if base <= ptr < base + n), 0)
 
 
-def track(ev: dict, allocs: dict[int, int]) -> None:
+def track(ev: dict, allocs: dict[int, int], maps: set | None = None) -> None:
     """One stand-in log line against the live allocations: a launch's pointers and grid cover its footprint, a copy's
-    ranges are allocated."""
+    ranges are allocated, a tensor map's matrix is; with `maps` (the maps encoded so far), a mainloop GEMM's operands (and
+    its peel's P_A, P_B) have maps of their shapes."""
     if ev["op"] == "alloc":
         allocs[ev["ptr"]] = ev["bytes"]
     elif ev["op"] == "free":
@@ -405,6 +428,10 @@ def track(ev: dict, allocs: dict[int, int]) -> None:
     elif ev["op"] == "copy":
         for end in ("dst", "src"):
             assert allocs.get(ev[end], 0) >= ev["bytes"], ev
+    elif ev["op"] == "tmap":
+        assert room(allocs, ev["ptr"]) >= ev["depth"] * ev["rows"] and ev["box"] == [128, 128], ev
+        if maps is not None:
+            maps.add((ev["ptr"], ev["depth"], ev["rows"]))
     elif ev["op"] == "launch":
         name, p, i = ev["name"], ev["p"], ev["i"]
         for slot, n in needs(name, p, i).items():
@@ -425,8 +452,13 @@ def track(ev: dict, allocs: dict[int, int]) -> None:
             assert i[3] in (0x4600, 0x4400)
         if name.startswith("gemm_") and not name.endswith("_smem"):
             tm, bn = gemm_tile(name)
-            assert ev["block"] == 256 and 48 * 1024 < ev["smem"] <= SM120_MAX_DYN
+            ml = (tm, bn) == (128, 128)
+            assert ev["block"] == (384 if ml else 256) and 48 * 1024 < ev["smem"] <= SM120_MAX_DYN
             assert g[0] <= min(188, (i[0] // tm) * (i[1] // bn)) and i[2] % 128 == 0 and i[0] % tm == 0 and i[1] % bn == 0
+            if ml and maps is not None:
+                M, N, K = i[:3]
+                assert {(p[0], K, M), (p[1], K, N)} <= maps, name
+                assert not p[5] or {(p[5], 128, M), (p[6], 128, N)} <= maps, name
         if name in ("words", "words_u"):
             assert g[0] == i[0] // 16 and ev["block"] == 128
 
@@ -561,9 +593,9 @@ def driver(A, ship: Path, arm_dir: Path, tmp: Path, cls: str, mode: str, *args: 
 def windows(log: Path) -> tuple[list[tuple[dict, list[dict]]], dict[int, int]]:
     """The stand-in's log cut at the driver's marks: each launch, weight side or transcript window with the launches, copies
     and flips inside."""
-    out, allocs, cur = [], {}, None
+    out, allocs, maps, cur = [], {}, set(), None
     for ev in map(json.loads, log.read_text().splitlines()):
-        track(ev, allocs)
+        track(ev, allocs, maps)
         if ev["op"] == "mark" and ev["what"] in ("launch", "weight", "phases", "transcripts"):
             cur = (ev, [])
         elif ev["op"] == "mark" and ev["what"] == "end":
@@ -592,19 +624,24 @@ def test_arm_dry_run(A, ship, arm_dir, tmp_path, cls):
     arm = getattr(A, cls)()
     sx = "" if arm.device.g else "_u"
     end = rows[-1]
+    fused = {"pre": True, "dec": False}             # prefill's 256 rows are 128 x 128 tiles; decode's 32 pad to 64 x 64
     for g in rows[:-1]:
         assert not g["ok"] and set(g["checked"].values()) == {"all"}
-        assert set(g["checked"]) == {"y", "c", "u"} | (set(A.HASHED) if g["role"] == "hash" else set())
+        stored = set() if fused[g["shape"]] else {"c", "u"}
+        assert set(g["checked"]) == {"y"} | stored | (set(A.HASHED) if g["role"] == "hash" else set())
         assert g["detail"]["scheme"] == arm.name and all(t["failed"] for t in g["detail"]["twin_tiles"])
         if g["role"] == "hash":
             assert g["detail"]["seeds"] == {"seed_a": False, "line_a": False, "seed_b": True}
     assert end["live"] == [] and set(end["transcribed"]) == {"pre", "dec"}
 
     words = {"pre": "gemm_words", "dec": "words"}
-    chain = lambda shape: {"pre": "gemm_pearlc", "dec": "gemm_pearlc_d"}[shape] + sx  # noqa: E731
+
+    def chain(shape: str, role: str = "hash") -> str:
+        return ("gemm_pearlc_s" if role == "nohash" else "gemm_pearlc_b") + sx if fused[shape] else "gemm_pearlc_d" + sx
+
     commit = ["hash_rows_w", "hash_tree_small", "seed_line_a", "lines"]
     forming = lambda shape: ["stats_s5", "eprime", "form_s5", words[shape] + sx, "pa"]  # noqa: E731
-    hashes = ["hash_msg_v", "hash_leaf_p", "hash_tree_leaves", "hash_tree_small"]
+    hashes = lambda shape: ([] if fused[shape] else ["hash_msg_v"]) + ["hash_leaf_p", "hash_tree_leaves", "hash_tree_small"]  # noqa: E731
     weight = (["hash_node_keys", "hash_rows_w", "hash_tree_small", "hash_node_keys", "hash_node_keys"] + ["lines"] * 3
               + ["stats_s5", "eprime", "form_s5"] + ["gemm_words" + sx] * 2 + ["pb"])
     got, allocs = windows(tmp_path / "dry.jsonl")
@@ -615,7 +652,8 @@ def test_arm_dry_run(A, ship, arm_dir, tmp_path, cls):
         names = [ev.get("name", ev["op"] if ev["op"] == "copy" else ev.get("what")) for ev in evs]
         copy = ["copy"] if mark["shape"] == "dec" else []
         if mark["what"] == "transcripts":
-            assert all(ev["stream"] == 0 for ev in evs) and names == copy + commit + forming(mark["shape"]) + [chain(mark["shape"])] + hashes
+            sh = mark["shape"]
+            assert all(ev["stream"] == 0 for ev in evs) and names == copy + commit + forming(sh) + [chain(sh)] + hashes(sh)
             man, _ = transcript(tmp_path / "run", arm.name, mark["shape"])
             m, n = man["shape"]["m"], man["shape"]["n"]
             tiles = -(-m // 64) * (n // 64)
@@ -638,45 +676,51 @@ def test_arm_dry_run(A, ship, arm_dir, tmp_path, cls):
                     cur.append(ev)
             whole = launched[(mark["shape"], mark["role"], mark["set"])]
             assert [ev for p in ("before", "gemm", "after") for ev in parts[p]] == whole, mark
-            assert [ev["name"] for ev in parts["gemm"]] == [chain(mark["shape"])]
-            assert [ev["name"] for ev in parts["after"]] == (hashes if mark["role"] == "hash" else [])
+            assert [ev["name"] for ev in parts["gemm"]] == [chain(mark["shape"], mark["role"])]
+            assert [ev["name"] for ev in parts["after"]] == (hashes(mark["shape"]) if mark["role"] == "hash" else [])
             continue
         launched[(mark["shape"], mark["role"], mark["set"])] = evs
-        f = forming(mark["shape"])
-        want = {"hash": copy + commit + f + [chain(mark["shape"])] + hashes, "nohash": copy + f + [chain(mark["shape"])],
-                "known_bad": copy + commit + f + [chain(mark["shape"]), "xor_byte"] + hashes}[mark["role"]]
+        sh, f = mark["shape"], forming(mark["shape"])
+        want = {"hash": copy + commit + f + [chain(sh)] + hashes(sh), "nohash": copy + f + [chain(sh, "nohash")],
+                "known_bad": copy + commit + f + [chain(sh), "xor_byte"] + hashes(sh)}[mark["role"]]
         assert names == want, mark
         by = {ev.get("name"): ev for ev in evs}
         if mark["role"] != "nohash":
-            seed, lines = by["seed_line_a"], by["lines"]
+            seed, lines, gemm = by["seed_line_a"], by["lines"], by[chain(sh)]
             assert lines["p"][0] == seed["p"][2] and seed["p"][1] == mark["keys"]["unit"]
-            assert lines["i"][2] == A.padded({"pre": 256, "dec": 32}[mark["shape"]])
-            assert by["eprime"]["p"][0] == lines["p"][1] and by["hash_msg_v"]["p"][:2] == by[chain(mark["shape"])]["p"][2:4]
+            assert lines["i"][2] == A.padded({"pre": 256, "dec": 32}[sh])
+            assert by["eprime"]["p"][0] == lines["p"][1]
+            if fused[sh]:        # the digests gemm_pearlc_b writes under the message key are those the tile leaves read
+                assert gemm["p"][9] == by["hash_leaf_p"]["p"][0] and gemm["p"][11] == mark["keys"]["k_msg"] and not gemm["p"][2]
+            else:
+                assert by["hash_msg_v"]["p"][:2] == gemm["p"][2:4] and by["hash_msg_v"]["p"][2] == by["hash_leaf_p"]["p"][0]
         e = by["eprime"]["p"][0]
         assert ea.setdefault((mark["shape"], mark["set"]), e) == e
     for shape in ("pre", "dec"):
         assert ea[(shape, 0)] != ea[(shape, 1)]
         calls = [next(ev for ev in launched[(shape, "hash", s)] if ev.get("name") == chain(shape)) for s in (0, 1)]
-        assert all(calls[0]["p"][j] != calls[1]["p"][j] for j in (0, 2, 3, 4))
+        assert all(calls[0]["p"][j] != calls[1]["p"][j] for j in ((0, 4, 9, 10) if fused[shape] else (0, 2, 3, 4)))
 
 
 @pytest.mark.slow
 @pytest.mark.parametrize("cls", ARMS)
 def test_arm_gate_accepts_the_fixture_and_rejects_a_flip(A, small_fixture, ship, arm_dir, tmp_path, cls):
     """The fixture's bytes (the scheme's, at its epoch and seeds) where the kernels would have written them pass the gate, the
-    device's seed_A and E_A's line key the scheme's from its root_A; one C̃ word flipped in the last sampled tile fails it twice
-    over, against the second launch (gemm_pearlc and gemm_ct both) and against the twin; restored, it passes again and freeing
-    the call writes the transcript, which the reference verifier (verify.py, `verity_pouw.audit.Verifier`) accepts."""
+    device's seed_A and E_A's line key the scheme's from its root_A.  At the fixture's 128 rows the call is fused, so it stores
+    y and the digests, no C̃ or U: the twin reads the second (unfused) launch's C̃ and U, and one message digest flipped in the
+    last sampled tile's row fails the gate against the second launch's hash_msg_v (on the stand-in, which computes no tile
+    leaf, there alone).  Restored, it passes again and freeing the call writes the transcript, which the reference verifier
+    (verify.py, `verity_pouw.audit.Verifier`) accepts."""
     first, flipped, restored = driver(A, ship, arm_dir, tmp_path, cls, "accept", str(small_fixture / "check.json"))
     arm = getattr(A, cls)()
-    assert first["ok"] and first["checked"] == {name: "all" for name in ("y", "c", "u") + A.HASHED}
+    assert first["ok"] and first["checked"] == {name: "all" for name in ("y",) + A.HASHED}
     assert not any(first["detail"]["words_differing_from_relaunch"].values())
     assert first["detail"]["seeds"] == {"seed_a": True, "line_a": True, "seed_b": True}
     assert len(first["detail"]["twin_tiles"]) == 3 and not any(t["failed"] for t in first["detail"]["twin_tiles"])
-    assert not flipped["ok"] and flipped["flipped"][0] == "c"
+    assert not flipped["ok"] and flipped["flipped"][0] == "digests"
     diff = flipped["detail"]["words_differing_from_relaunch"]
-    assert diff["c"] == diff["c@gemm_ct"] == 1 and sum(diff.values()) == 2
-    assert [t["failed"] for t in flipped["detail"]["twin_tiles"]] == [[], [], ["c"]]
+    assert diff["digests"] == 1 and sum(diff.values()) == 1
+    assert not any(t["failed"] for t in flipped["detail"]["twin_tiles"])
     assert restored["ok"] and set(restored["transcribed"]) == {"fixture"}
 
     man, path = transcript(tmp_path / "run", arm.name, "fixture")

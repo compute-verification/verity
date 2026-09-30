@@ -6,15 +6,18 @@
    12.0, an "NVIDIA RTX PRO 6000 Blackwell" name, and its UUID equal to PEARLC_EXPECT_UUID (server.md's table).  NVML is
    addressed by that UUID, never by index (NVML ignores CUDA_VISIBLE_DEVICES).  A mismatch exits 3 before any launch.
 1. The check.  At check.json's shape (fixture.py's), every kernel runs on the fixture's inputs and every buffer it writes is
-   compared byte for byte with the fixture, for each variant (`sm120`, G = 4, and `sm120-unpromoted`); the GEMMs are re-run
-   persistent on 1 and 3 CTAs and compared again, and the chain's 64 x 64 kernels (decode's) too.  A variant is timed only if
-   all of its buffers match (C~ and U bit-exact against the CPU reference), the plain baselines only if theirs do.  Exit 4 if
-   any check fails.
+   compared byte for byte with the fixture, for each variant (`sm120`, G = 4, and `sm120-unpromoted`), on the unfused call
+   (C~ and U stored, hash_msg's digests); the GEMMs, with gemm_pearlc_s (y alone) and the fused gemm_pearlc_b (y and the
+   message digests from registers), are re-run on all, 1 and 3 CTAs and compared again (`<buffer>@<step>/<tile>/grid<n>`), and
+   the chain's 64 x 64 kernels (decode's) too.  A variant is timed only if all of its buffers match (C~ and U bit-exact
+   against the CPU reference), the plain baselines only if theirs do.  Exit 4 if any check fails.
 2. Diagnostic timing (not the headline: GPU 6's harness times the arm against autotuned baselines), at each of SHAPES
    (default 8192, m = n = k; or MxNxK, m padded to 64 rows): each kernel REPS times after a warm-up, its median, the phases
-   (the weight side; the call's commitment of A, forming, GEMM, clean-up and hashing, hashing format -h1), the call end to
-   end with and without its hashes (commit and hashing), and consistency checks (C~ of gemm_ct equals gemm_pearlc's; a
-   second gemm_pearlc gives the same U; form_s5_scalar, timed beside form_s5, and the RATE kernels write form_s5's codes).
+   (the weight side; the call's commitment of A, forming, GEMM, clean-up and hashing, hashing format -h1; fused at 128 x 128
+   tiles, gemm_pearlc_b's time less gemm_pearlc_s's is hashing), the call end to end with and without its hashes (commit and
+   hashing; without, the chain is gemm_pearlc_s where it runs), and consistency checks (C~ of gemm_ct equals gemm_pearlc's;
+   a second gemm_pearlc gives the same U; gemm_pearlc_s's and gemm_pearlc_b's y and gemm_pearlc_b's digests equal the
+   unfused call's; form_s5_scalar, timed beside form_s5, and the RATE kernels write form_s5's codes).
    `form_rates` prices the forming loop per code in the mix it runs in, in units of one dense E4M3 MAC, and the packed cast
    within it (form_rate less form_rate_nocast).  The timing's keys and domain ids are stand-ins of the same sizes (diagnostic
    only; the arm's calls run on a real epoch).  NVML's clocks, power and throttle reasons before and after.
@@ -43,7 +46,12 @@ NAME_PREFIX = "NVIDIA RTX PRO 6000 Blackwell"
 SM_COUNT, MAX_DYN, CC_MAJOR, CC_MINOR = 16, 8, 75, 76
 NORM_256, NORM_16 = 0x4600, 0x4400      # bf16(32 x the line norm): E's lines, and F's under v1
 NT, BM, BM_D, RASTER = 256, 128, 64, 8
+ML_NT = 384                  # mainloop_sm120.cuh's block: a TMA producer warpgroup and 8 consumer warps
 VARIANT_G = {"sm120": 4, "sm120-unpromoted": 0}
+TMAP_UINT8, TMAP_SWIZZLE_128B, TMAP_L2_128B, TMAP_BYTES = 0, 3, 2, 128
+#: the mainloop GEMMs' operand pairs, a set of four tensor maps (A, B, P_A, P_B) each at `tma` + ML_SET * slot
+ML_MAPS = {("at", "bt"): 0, ("qa", "qb"): 1, ("qa_s5", "qb_s5"): 2}
+ML_SET = 4 * TMAP_BYTES
 
 u, i32, vp, sz, u64, P = C.c_uint, C.c_int, C.c_void_p, C.c_size_t, C.c_uint64, C.POINTER
 CUDA = {
@@ -217,6 +225,19 @@ class Dev:
     def sync(self) -> None:
         self.ck("cuCtxSynchronize")
 
+    def tmap(self, ptr: int, depth: int, rows: int, box_rows: int = BM) -> bytes:
+        """A CUtensorMap over a row-major (rows x depth) byte matrix as mainloop_sm120.cuh loads it: UINT8, rank 2, boxes of
+        box_rows x 128 bytes, SWIZZLE_128B, L2 promotion 128B, no fill."""
+        f = self.cu.cuTensorMapEncodeTiled
+        f.argtypes, f.restype = [vp, i32, u, vp, P(u64), P(u64), P(u), P(u), i32, i32, i32, i32], i32
+        raw = C.create_string_buffer(TMAP_BYTES + 64)
+        at = (C.addressof(raw) + 63) & ~63
+        dims, strides = (u64 * 2)(depth, rows), (u64 * 1)(depth)
+        box, estr = (u * 2)(TMAP_BYTES, box_rows), (u * 2)(1, 1)
+        self.ck("cuTensorMapEncodeTiled", vp(at), TMAP_UINT8, 2, vp(ptr), dims, strides, box, estr, 0, TMAP_SWIZZLE_128B,
+                TMAP_L2_128B, 0)
+        return C.string_at(at, TMAP_BYTES)
+
     def timed(self, body, reps: int) -> list[float]:
         body()
         self.sync()
@@ -269,6 +290,11 @@ def gemm_tile(name: str) -> tuple[int, int]:
     return (BM_D, BM_D) if name.endswith(("_d", "_d_u")) else (BM, BM)
 
 
+def is_ml(name: str) -> bool:
+    """The 128 x 128 GEMMs, which run on the mainloop (ML_GEMM): ML_NT threads, operands by tensor map."""
+    return gemm_tile(name) == (BM, BM)
+
+
 class Pipeline:
     """One (shape, variant) instance: its buffers and its kernels in order, each a (name, phase, launch) step.  Phases:
     `epoch` (B's frame-b3 row tree, whose root the epoch's salt and seed_B follow), `unit` (the level keys and pads of A's
@@ -277,7 +303,10 @@ class Pipeline:
     (gemm_ct, the chain alone, for the split), `cleanup` and `hashing` (-h1: the message digests, the tile leaves and the tile
     tree); and the baselines' `plain_job`, `plain`, `adopted_job`, `adopted` (at m a multiple of 128 only).  The chain runs
     on 128 x 128 tiles when m is a multiple of 128, else on 64 x 64 (`bm` forces either); the 32-column words on 128 x 32 CTA
-    tiles, but A'F_B at 64 x 64 on the `words` kernel's warp tiles.
+    tiles, but A'F_B at 64 x 64 on the `words` kernel's warp tiles.  The 128 x 128 GEMMs run on the mainloop, their operands
+    by the tensor maps in `tma` (ML_MAPS).  `fused` (the default where it applies: 128 x 128 tiles over m_real = m rows) makes
+    the clean-up's chain gemm_pearlc_b, which stores y and the message digests hashed from registers, C~ and U never stored,
+    and drops hash_msg from the hashing; unfused, gemm_pearlc stores C~, U and y and hash_msg digests them.
 
     `keys` are device pointers: `line_b` (E_B's and the F lines' key), the domain ids `dom_a`, `dom_b`, `dom_t`, the -h1
     labels `k_msg`, `k_leaf`, and `unit`, the unit's 104 bytes that seed_A reads (salt ‖ root_B ‖ u64 index ‖
@@ -286,7 +315,8 @@ class Pipeline:
     GEMM_SMEM: dict[str, int] = {}
 
     def __init__(self, dev: Dev, m: int, n: int, k: int, variant: str, keys: dict[str, int], xa: int, xb: int,
-                 bufs: dict[str, int] | None = None, m_real: int | None = None, bm: int | None = None):
+                 bufs: dict[str, int] | None = None, m_real: int | None = None, bm: int | None = None,
+                 fused: bool | None = None):
         """`bufs` names the buffers when the caller owns them (only those its steps touch); `m_real` rows of A are the
         matmul's, committed and hashed, the rest filler that only the products see."""
         self.dev, self.m, self.n, self.k, self.variant, self.keys = dev, m, n, k, variant, keys
@@ -296,6 +326,11 @@ class Pipeline:
         self.bm = bm or (BM if m % BM == 0 else BM_D)
         if m % self.bm or n % BM or k % 1024:
             raise ValueError(f"the kernels take m a multiple of {self.bm}, n of 128 and k of 1024, not {(m, n, k)}")
+        self.fusable = self.bm == BM and self.m_real == m
+        if fused and not self.fusable:
+            raise ValueError(f"gemm_pearlc_b digests every row of 128 x 128 tiles: m = {m} rows at bm = {self.bm}, m_real = "
+                             f"{self.m_real}")
+        self.fused = self.fusable if fused is None else fused
         self.row_bytes = 4 * k
         self.tiles = cdiv(self.m_real, TILE) * (n // TILE)
         sizes = self.sizes(m, n, k, self.m_real)
@@ -304,6 +339,18 @@ class Pipeline:
         self.b = {name: dev.alloc(s) for name, s in sizes.items()} if self.owned else dict(bufs)
         self.b["xa"], self.b["xb"] = xa, xb
         self.size["xa"], self.size["xb"] = m * self.row_bytes, n * self.row_bytes
+        if self.bm == BM:
+            self.encode_maps()
+
+    def encode_maps(self) -> None:
+        """The tensor maps into `tma`, a set per operand pair of ML_MAPS whose buffers the pipeline has: P_A and P_B the
+        peel's for the chain's pair, A and B again for the plain GEMMs' (which load no tail)."""
+        d, b, m, n, k = self.dev, self.b, self.m, self.n, self.k
+        for (x, y), slot in ML_MAPS.items():
+            if x in b and y in b:
+                ab = d.tmap(b[x], k, m) + d.tmap(b[y], k, n)
+                tail = d.tmap(b["pa_t"], 128, m) + d.tmap(b["pb_t"], 128, n) if slot == 0 else ab
+                d.ck("cuMemcpyHtoD_v2", u64(b["tma"] + ML_SET * slot), C.c_char_p(ab + tail), ML_SET)
 
     @staticmethod
     def sizes(m: int, n: int, k: int, m_real: int | None = None) -> dict[str, int]:
@@ -316,8 +363,8 @@ class Pipeline:
             "alpha_a": 4 * m, "beta_a": 4 * m, "ia_a": 4 * m, "aux_a": 8 * m, "epa_codes": m * 32,
             "alpha_b": 4 * n, "beta_b": 4 * n, "ia_b": 4 * n, "aux_b": 8 * n, "epb_codes": n * 32,
             "at": m * k, "bt": n * k, "at2": max(m, n) * k, "af": m * 32 * 4, "bf": n * 32 * 4, "pa_t": m * 128, "pb_t": n * 128,
-            "c": m * n * 4, "c2": m * n * 4, "u": m * n * 4, "y": m * n * 2,
-            "line_a": 32, "seed_a": 32, "digests": m_real * n, "leaves": tiles * 32,
+            "c": m * n * 4, "c2": m * n * 4, "u": m * n * 4, "y": m * n * 2, "y2": m * n * 2, "tma": ML_SET * len(ML_MAPS),
+            "line_a": 32, "seed_a": 32, "digests": m_real * n, "digests2": m_real * n, "leaves": tiles * 32,
             **{f"{part}_{t}": size for t, count in (("a", m_real), ("b", n), ("t", tiles)) for part, size in tree(count).items()},
             "qa": m * k, "qb": n * k, "sa": 4 * m, "sb": 4 * n, "y_plain": m * n * 2, "y_fast": m * n * 2,
             "qa_s5": m * k, "qb_s5": n * k, "y_adopt": m * n * 2, "diff": 8,
@@ -378,7 +425,7 @@ class Pipeline:
                 self.dev.free(p)
 
     def gemm(self, name: str, a: str, b: str, M: int, N: int, grid: int | None = None, out=("c",), pa=0, pb=0, rs=0, cs=0,
-             dg=0):
+             dg=0, key=0):
         if name not in self.GEMM_SMEM:
             probe = self.dev.alloc(16)
             self.dev.launch(name + "_smem", 1, 1, p=(probe,))
@@ -388,11 +435,31 @@ class Pipeline:
             self.dev.ck("cuFuncSetAttribute", self.dev.fn(name), MAX_DYN, self.GEMM_SMEM[name])
         tm, bn = gemm_tile(name)
         tiles = (M // tm) * (N // bn)
-        ptrs = [self.b[a], self.b[b], 0, 0, 0, 0, 0, 0, 0, dg]
-        for slot, key in zip((2, 3, 4), out):
-            ptrs[slot] = self.b[key] if key else 0
+        ptrs = [self.b[a], self.b[b], 0, 0, 0, 0, 0, 0, 0, dg, 0, key]
+        for slot, x in zip((2, 3, 4), out):
+            ptrs[slot] = self.b[x] if x else 0
         ptrs[5], ptrs[6], ptrs[7], ptrs[8] = pa, pb, rs, cs
-        self.dev.launch(name, min(tiles, grid or self.dev.sms), NT, self.GEMM_SMEM[name], p=ptrs, i=(M, N, self.k, RASTER))
+        block = NT
+        if is_ml(name):
+            ptrs[10], block = self.b["tma"] + ML_SET * ML_MAPS[(a, b)], ML_NT
+        self.dev.launch(name, min(tiles, grid or self.dev.sms), block, self.GEMM_SMEM[name], p=ptrs, i=(M, N, self.k, RASTER))
+
+    def extra(self) -> dict[str, object]:
+        """The chain's launches by name, beside `steps`' choice: `gemm_pearlc_cu` (C~, U and y stored) and `hash_msg`
+        (hash_msg_v over them), the unfused call's; at 128 x 128 tiles `gemm_pearlc_s` (y alone: the call without hashing);
+        and where fusable `gemm_pearlc_b` (y and the message digests from registers)."""
+        d, b, m, n, mr, sx, kk = self.dev, self.b, self.m, self.n, self.m_real, self.suffix, self.keys
+        tile = "_d" if self.bm == BM_D else ""
+        peel = {"pa": b["pa_t"], "pb": b["pb_t"], "rs": b["ia_a"], "cs": b["ia_b"]}
+        out = {"gemm_pearlc_cu": lambda: self.gemm(f"gemm_pearlc{tile}{sx}", "at", "bt", m, n, out=("c", "u", "y"), **peel),
+               "hash_msg": lambda: d.launch("hash_msg_v", cdiv(mr * n // 32, 128), 128, p=(b["c"], b["u"], b["digests"], kk["k_msg"]),
+                                            i=(mr, n))}
+        if self.bm == BM:
+            out["gemm_pearlc_s"] = lambda: self.gemm("gemm_pearlc_s" + sx, "at", "bt", m, n, out=(None, None, "y"), **peel)
+        if self.fusable:
+            out["gemm_pearlc_b"] = lambda: self.gemm("gemm_pearlc_b" + sx, "at", "bt", m, n, out=(None, None, "y"), dg=b["digests"],
+                                                     key=kk["k_msg"], **peel)
+        return out
 
     def words(self, a: str, b: str, M: int, out: str, warps: bool = False) -> None:
         """The FP32 words of an (M x K) by (32 x K) product: on 128 x 32 CTA tiles, or with `warps` one warp per m16 x n8
@@ -405,7 +472,7 @@ class Pipeline:
     def steps(self) -> list[tuple[str, str, object]]:
         d, b, m, n, k, sx = self.dev, self.b, self.m, self.n, self.k, self.suffix
         tile = "_d" if self.bm == BM_D else ""
-        ct, pearlc = f"gemm_ct{tile}{sx}", f"gemm_pearlc{tile}{sx}"
+        ct, chain = f"gemm_ct{tile}{sx}", self.extra()
 
         def lines(tag, key, side, factor, count, codes, t32=0, t128=0):
             norm = NORM_16 if factor == 1 else NORM_256
@@ -433,15 +500,13 @@ class Pipeline:
         gemm = [("gemm_ct", lambda: self.gemm(ct, "at", "bt", m, n, out=("c2",)))]
         cleanup = [("af", lambda: self.words("at", "fbT32", m, "af", warps=self.bm == BM_D)),
                    ("pa", lambda: d.launch("pa", cdiv(m * 64, 256), 256, p=(b["epa_codes"], 0, b["af"], b["pa_t"]), i=(m,))),
-                   ("gemm_pearlc", lambda: self.gemm(pearlc, "at", "bt", m, n, out=("c", "u", "y"), pa=b["pa_t"], pb=b["pb_t"],
-                                                     rs=b["ia_a"], cs=b["ia_b"]))]
+                   ("gemm_pearlc", chain["gemm_pearlc_b" if self.fused else "gemm_pearlc_cu"])]
         mr, kk, tiles = self.m_real, self.keys, self.tiles
         epoch = self.tree_setup("b", n, "dom_b") + self.row_tree("b", "xb", n, "dom_b")
         unit = self.tree_setup("a", mr, "dom_a") + self.tree_setup("t", tiles, "dom_t")
         commit = self.row_tree("a", "xa", mr, "dom_a") + [
             ("seed_a", lambda: d.launch("seed_line_a", 1, 32, p=(self.root("a"), kk["unit"], b["line_a"], b["seed_a"])))]
-        hashing = [("hash_msg", lambda: d.launch("hash_msg_v", cdiv(mr * n // 32, 128), 128, p=(b["c"], b["u"], b["digests"], kk["k_msg"]),
-                                                 i=(mr, n))),
+        hashing = ([] if self.fused else [("hash_msg", chain["hash_msg"])]) + [
                    ("hash_leaf", lambda: d.launch("hash_leaf_p", cdiv(tiles, 32), 128, p=(b["digests"], b["leaves"], kk["k_leaf"]),
                                                   i=(mr, n))),
                    ("tree_leaves_t", lambda: d.launch("hash_tree_leaves", cdiv(tiles, 128), 128, p=(b["leaves"], b["tree_t"], kk["dom_t"]),
@@ -481,7 +546,8 @@ class Pipeline:
 
 PLAIN_BUFFERS = {"qa", "qb", "sa", "sb", "y_plain", "y_fast", "qa_s5", "qb_s5", "y_adopt"}
 GEMM_RERUNS = (("gemm_pearlc", ("c", "u", "y")), ("gemm_ct", ("c2",)), ("gemm_plain", ("y_plain",)), ("gemm_fast", ("y_fast",)),
-               ("af", ("af",)), ("bf", ("bf",)), ("gemm_adopt", ("y_adopt",)))
+               ("af", ("af",)), ("bf", ("bf",)), ("gemm_adopt", ("y_adopt",)), ("gemm_pearlc_s", ("y",)),
+               ("gemm_pearlc_b", ("y", "digests")))
 ALIASES = {"c2": "c"}
 #: the 64 x 64 pipeline's: the chain, and A'F_B on the words kernel
 SMALL_RERUNS = GEMM_RERUNS[:2] + (("af", ("af",)),)
@@ -506,7 +572,7 @@ def check(dev: Dev, man: dict, base: str, variants: list[str]) -> dict:
         files = man["variants"][variant]["files"]
         want = lambda name: load(variant, files[name]) if name in files else load("", common[name])  # noqa: E731
         xa, xb = dev.put(load("", common["xa"])), dev.put(load("", common["xb"]))
-        pipe = Pipeline(dev, m, n, k, variant, keys, xa, xb)
+        pipe = Pipeline(dev, m, n, k, variant, keys, xa, xb, fused=False)
         pipe.run_all()
         res = {}
         for name in [*common, *files]:
@@ -519,10 +585,12 @@ def check(dev: Dev, man: dict, base: str, variants: list[str]) -> dict:
             pipe.form_scalar(tag)
             res[f"{tag}t@form_s5_scalar"] = compare(dev, pipe, f"{tag}t", want(f"{tag}t"), alias="at2")
         small = Pipeline(dev, m, n, k, variant, keys, xa, xb, bufs=pipe.b, bm=BM_D)
-        for p_, grids, tag in ((pipe, (1, 3), ""), (small, (None, 3), "bm64")):
-            steps = {nm: fn for nm, _, fn in p_.steps()}
+        for p_, grids, tag in ((pipe, (None, 1, 3), ""), (small, (None, 3), "bm64")):
+            steps = {**p_.extra(), **{nm: fn for nm, _, fn in p_.steps()}}
             for grid in grids:
                 for step, outs in SMALL_RERUNS if p_ is small else GEMM_RERUNS:
+                    if step not in steps:
+                        continue
                     for o in outs:
                         dev.ck("cuMemsetD8_v2", u64(pipe.b[o]), 0xAB, pipe.size[o])
                     real = p_.gemm
@@ -535,7 +603,7 @@ def check(dev: Dev, man: dict, base: str, variants: list[str]) -> dict:
                     p_.gemm = real
                     dev.sync()
                     for o in outs:
-                        res[f"{o}@{tag}" + (f"grid{grid}" if grid else "")] = compare(dev, pipe, o, want(ALIASES.get(o, o)))
+                        res[f"{o}@{step}/{tag or 'bm128'}/grid{grid or 'all'}"] = compare(dev, pipe, o, want(ALIASES.get(o, o)))
         pipe.free()
         dev.free(xa)
         dev.free(xb)
@@ -629,7 +697,7 @@ def form_rates(dev: Dev, nv: Nvml, pipe: Pipeline, reps: int) -> dict:
 
 def measure(dev: Dev, nv: Nvml, pipe: Pipeline, reps: int, gates: dict) -> dict:
     """The timed part of `timing` on a pipeline whose kernels have run once: medians, phases, ratios, consistency."""
-    m, n, k, steps = pipe.m, pipe.n, pipe.k, pipe.steps()
+    m, n, k, steps, extra = pipe.m, pipe.n, pipe.k, pipe.steps(), pipe.extra()
     before = nv.read()
     med, runs = {}, {}
     for name, phase, f in steps:
@@ -642,25 +710,44 @@ def measure(dev: Dev, nv: Nvml, pipe: Pipeline, reps: int, gates: dict) -> dict:
         for tag in ("a", "b"):
             t = dev.timed(lambda tag=tag: pipe.form_scalar_launch(tag), reps)
             runs[f"form_{tag}_scalar"], med[f"form_{tag}_scalar"] = [round(x, 4) for x in t], statistics.median(t)
+        for name, f in extra.items():
+            if name not in med:
+                t = dev.timed(f, reps)
+                runs[name], med[name] = [round(x, 4) for x in t], statistics.median(t)
     after = nv.read()
     phases = {ph: sum(med.get(nm, 0.0) for nm, p, _ in steps if p == ph) for ph in ("job",) + CALL_PHASES}
     out = {"kind": "timing", "label": "diagnostic, unlocked unless the clock record says so", "shape": [m, n, k],
-           "variant": pipe.variant, "reps": reps, "gates": gates, "ms": {nm: round(v, 4) for nm, v in med.items()}, "runs": runs,
-           "clk_before": before, "clk_after": after}
+           "variant": pipe.variant, "fused": pipe.fused, "reps": reps, "gates": gates,
+           "ms": {nm: round(v, 4) for nm, v in med.items()}, "runs": runs, "clk_before": before, "clk_after": after}
     if gates["pearl_c"]:
         call = [f for nm, p, f in steps if p in ("commit", "forming", "cleanup", "hashing")]
-        no_hash = [f for nm, p, f in steps if p in ("forming", "cleanup")]
+        y_only = extra.get("gemm_pearlc_s")
+        no_hash = [y_only if y_only and nm == "gemm_pearlc" else f for nm, p, f in steps if p in ("forming", "cleanup")]
         e2e = statistics.median(dev.timed(lambda: [f() for f in call], reps))
         e2e_nh = statistics.median(dev.timed(lambda: [f() for f in no_hash], reps))
+        # fused, the digests' part of gemm_pearlc_b (its time less gemm_pearlc_s's) is hashing, not clean-up
+        chain = med["gemm_pearlc_s"] if pipe.fused else med["gemm_pearlc"]
         split = {"commit": phases["commit"], "forming": phases["forming"], "gemm": med["gemm_ct"],
-                 "cleanup": med["af"] + med["pa"] + med["gemm_pearlc"] - med["gemm_ct"], "hashing": phases["hashing"]}
+                 "cleanup": med["af"] + med["pa"] + chain - med["gemm_ct"],
+                 "hashing": phases["hashing"] + med["gemm_pearlc"] - chain}
         out.update({"split_ms": {kk: round(v, 4) for kk, v in split.items()}, "call_sum_ms": round(sum(split.values()), 4),
                     "call_e2e_ms": round(e2e, 4), "call_e2e_no_hash_ms": round(e2e_nh, 4), "job_ms": round(phases["job"], 4),
-                    "pearlc_tflops": round(2 * m * n * k / med["gemm_pearlc"] / 1e9, 1)})
+                    "pearlc_tflops": round(2 * m * n * k / chain / 1e9, 1)})
+        extra["gemm_pearlc_cu"]()
         out["consistency"] = {"c_ct_vs_pearlc_words_differing": pipe.diff("c2", "c")}
         dev.copy(pipe.b["c2"], pipe.b["u"], pipe.size["u"])
-        [f for nm, _, f in steps if nm == "gemm_pearlc"][0]()
+        extra["gemm_pearlc_cu"]()
         out["consistency"]["u_rerun_words_differing"] = pipe.diff("c2", "u")
+        dev.copy(pipe.b["y2"], pipe.b["y"], pipe.size["y"])
+        if y_only:
+            y_only()
+            out["consistency"]["y_s_vs_unfused_words_differing"] = pipe.diff("y", "y2")
+        if "gemm_pearlc_b" in extra:
+            extra["hash_msg"]()
+            dev.copy(pipe.b["digests2"], pipe.b["digests"], pipe.size["digests"])
+            extra["gemm_pearlc_b"]()
+            out["consistency"]["y_fused_vs_unfused_words_differing"] = pipe.diff("y", "y2")
+            out["consistency"]["digests_fused_vs_unfused_words_differing"] = pipe.diff("digests", "digests2")
         out["consistency"].update({f"{tag}t_form_s5_vs_scalar_words_differing": pipe.form_scalar(tag) for tag in ("a", "b")})
         out["form_rate"] = rate = form_rates(dev, nv, pipe, reps)
         out["consistency"].update({f"bt_{nm}_codes_differing": rate[nm]["codes_differing"]
