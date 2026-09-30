@@ -47,20 +47,20 @@ secrets:
 
 setup: |
   set -euo pipefail
-  # the job runs from its own copy of $SRC: the job user (uid 1000) can't write the synced tree, which is research's, and a
-  # later `research pods sync` of the same lane can't change the code under a running job (one copy per pod)
-  JOB_SRC=/workspace/jobs/src/$(hostname)
-  rm -rf "$JOB_SRC" && mkdir -p "$JOB_SRC" && cp -a "$SRC"/. "$JOB_SRC"/
-  export SRC=$JOB_SRC
+  # the job runs from the one copy of $SRC per tree content (job_tree.sh): uid 1000 can write it, a later sync can't change it, and
+  # every job of the tree compiles its taps at the same paths, so they are built once
+  SRC=$(bash "$SRC/tools/research/src/research/pods/nebius/sky/job_tree.sh" "$SRC"); export SRC
   [ -x /workspace/jobs/bin/uv ] || curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/workspace/jobs/bin UV_NO_MODIFY_PATH=1 sh
   cd "$SRC"
   cd integrations/vllm
-  flock /workspace/jobs/.vllm-bootstrap.lock env -u REPO WORK=/workspace/jobs HF_HOME=/workspace/hf bash verity_vllm/ops/pod_bootstrap.sh --cpu --out /workspace/jobs/bootstrap/capture-cpu
+  bash "$SRC/tools/research/src/research/pods/nebius/sky/vllm_bootstrap.sh" --cpu --out /workspace/jobs/bootstrap/capture-cpu     # skipped, without the lock, once this tree, role and venv passed
 
 run: |
   set -euo pipefail
   export PATH=/workspace/jobs/venv312/bin:$PATH    # the venv's tools (ninja for vLLM/FlashInfer JIT builds)
-  export SRC=/workspace/jobs/src/$(hostname)
+  SRC=$(bash "$SRC/tools/research/src/research/pods/nebius/sky/job_tree.sh" --mine)
+  # $CMD may write into its tree, so each capture runs from a private copy of the shared one (seconds: a capture builds no taps)
+  priv=/workspace/jobs/src/pod-$(hostname); rm -rf "$priv" && mkdir -p "$priv" && cp -a "$SRC"/. "$priv"/; export SRC=$priv
   cd "$SRC"
   export PATH=$CUDA_HOME/bin:$PATH
   PYTHONPATH=$SRC/tools/research/src /workspace/jobs/bin/uv run --no-project --python 3.12 python -m research run --campaign "$CAMPAIGN" -- bash -c "cd \"$SRC\" && $CMD"
