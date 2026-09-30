@@ -13,7 +13,8 @@ verifier derives (`dp`, `hL1`).
 ## Named assumptions (taken without proof)
 
 There are three, each a `Prop` taken as a hypothesis:
-- A2 (`Assumptions.SHA512ExpectedTimeCR`), which the link theorem (`flock_batched_linkSoundE`) takes as `hCR`;
+- A2 (`Assumptions.SHA512ExpectedTimeCR`), for the link finders of the prover bounded (`LinkCR`), which the end-to-end
+  theorems take as `hCR`;
 - A3 (`Assumptions.UniformRandomBytes`), which the live draw's theorems take as `ht`;
 - A4 (`Assumptions.KeyedStreamsUniform`), which the PoUW window's keyed draw takes as `hA4`;
 - A5 (`Assumptions.UniformSecret`), which the same draw takes as `hsec`;
@@ -28,8 +29,12 @@ audit's value layer (Daniel, Sep 27; constant corrected the same day).
 - **Statement.** A collision finder whose expected number of SHA-512 evaluations is `T` succeeds with probability at
   most `T/2^256`. `SHA512ExpectedTimeCR` states it for one finder: a game with a fixed strategy, whose outcomes
   record the pair output and the evaluations made, `t` for each run of the prover.
-- **Per finder.** Some finder outputs a collision after no evaluations, since collisions exist. So the `Prop` is not
-  stated for all finders: the link theorem takes it for the finder it builds from the prover.
+- **Per finder, and per prover.** Some finder outputs a collision after no evaluations, since collisions exist. So the
+  `Prop` is not stated for all finders: the link theorem takes it for the finders it builds from the prover it bounds
+  (`LinkCR … R τ …`). It is not asked of every prover at once, which SHA-512 can't meet: a prover that hard-codes two
+  openings of one commit string has finders that find a collision. `flock_batched_linkSoundE` gives the bound at each
+  prover whose finders satisfy A2, and `⊤` at any other (`linkBoundCR`); the end-to-end theorems take `hCR` for `σ`'s
+  finders alone (red-team review of #511, C1).
 - **Why it is plausible, and where it is used:** `assumptions/a2-sha512-expected-time-cr.md`.
 - **Upstream:** watch entries `collision-resistance`, `keyed-cr` and `rom-cr` (see Upstream status).
 
@@ -203,9 +208,9 @@ fails when either changes until the record is rewritten, and a rewritten record 
 pins include the table theorems (`README.md` §1.1 and §1.2, with their `_exec` forms), `execArith_correct` and
 `Merkle.opening_binding`; none takes a named assumption. So do the knowledge-soundness theorems of `README.md` §1.3
 (`table_knowledge_sound`, `table_knowledge_sound_joint`, `table_knowledge_sound_joint_tight`, `session_knowledge_sound`,
-and the batched session's `flock_batched_knowledgeSoundE`), and the link theorem, `flock_batched_linkSoundE`, which takes A2
-as `hCR`. The end-to-end skeleton's `flock_e2e_count` and `flock_e2e_drawn` are pinned too; they take A2 as `hCR` and pass
-it to the link theorem. `flock_inputs_sound`, `flock_session_sound`, `lowering_sound` and `mcaError_le_bchks25` are not
+and the batched session's `flock_batched_knowledgeSoundE`), and the link theorem, `flock_batched_linkSoundE`, whose bound is
+`linkBoundCR`: finite exactly at the provers whose link finders satisfy A2. The end-to-end skeleton's `flock_e2e_count` and
+`flock_e2e_drawn` are pinned too; they take A2 for `σ`'s link finders as `hCR`. `flock_inputs_sound`, `flock_session_sound`, `lowering_sound` and `mcaError_le_bchks25` are not
 pinned. A theorem that is not in `pins` is still audited (standard axioms, kernel replay), but a change to its statement
 would not fail the audit.
 

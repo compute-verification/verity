@@ -113,6 +113,7 @@ import FlockSoundness.Audit.Window
 import FlockSoundness.Audit.FlockBatchedAcc
 import FlockSoundness.Audit.FlockLink
 import FlockSoundness.Audit.FlockLinked
+import FlockSoundness.Audit.FlockPublic
 import FlockSoundness.Audit.Harm
 import FlockSoundness.Audit.Influence
 import FlockSoundness.Audit.InfluenceWitness
