@@ -4,9 +4,8 @@
 # the same job, 71's timed sweep on the path before it (BASE, under BASE_ENV: by default FC_UNIT_FLAT=0 FC_UNIT_FUSED=0;
 # out/base/result.json); one sweep per pipeline depth in DEPTHS (out/d<depth>/result.json); the sweep with every session
 # building its own witness (NOPIPE: FC_PIPELINE=0, out/nopipe/result.json); then the equality check (CHECK: FC_UNIT_CHECK runs
-# eval64 beside the one pass on every lane group, packs the host slots unfused beside the fused ones, and reads back the
-# device's copies under FC_DEV_PREFETCH=1, and asserts they agree; eval64's time in the UNITPROF lines). UNITPROF lines:
-# out/unitprof.tsv.
+# eval64 beside the one pass on every lane group, and packs the host slots unfused beside the fused ones, and asserts they
+# agree; eval64's time in the UNITPROF lines). UNITPROF lines: out/unitprof.tsv.
 # Run from the verity tree (research run --cwd source), in a Kueue job (FLOCK_WORK under /workspace/jobs).
 # env: FLOCK_WORK=/workspace/jobs/flock-v2  SEED_CACHE= (a stage cache to hard-link from: statements of the same staging code)
 #      TORCH= (a torch venv for the native GEMMs)  BASE=1  BASE_ENV=  DEPTHS=  NOPIPE=1  CHECK=1  and any KEY=VALUE for
