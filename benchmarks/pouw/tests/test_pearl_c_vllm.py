@@ -575,3 +575,80 @@ def test_the_fused_screen_decides_the_rows_as_the_torch_screen_and_the_rules(mon
     want = tuple(i for i, row in enumerate(words) if not PW.row_passes([int(v) for v in row]))
     assert PPD.excluded(fused[:, 0].bool(), fused[:, 1].bool(), x) == PPD.excluded(ref[:, 0].bool(), ref[:, 1].bool(), x) == want
     assert torch.equal(fused, ref)
+
+
+# ---- the quality run ----------------------------------------------------------------------------------------------
+
+def test_the_unpromoted_scheme_runs_gpu_1s_unpromoted_kernels(device_run):
+    _, kernel, weights, roots, salt = device_run
+    s = PPD.scheme_of("pearl-c-sm120-unpromoted-v1-h1")
+    assert s.device.name == "sm120-unpromoted" and "pearl-c-sm120-unpromoted-v1-h1" in PPD.SCHEMES
+    run = PPD.PearlCDeviceRun(s, "pouw:pearl-c-sm120-unpromoted-v1-h1", kernel, weights, roots, salt, BEACON, capacity=1 << 12)
+    kernel.dev.log.clear()
+    run.gemm(0, torch.randn(32, 1024).to(torch.bfloat16), weights[0], None)
+    names = [n for n, *_ in kernel.dev.log if not n.endswith("_smem")]
+    assert "gemm_pearlc_d_u" in names and "words_u" in names and "gemm_pearlc_d" not in names
+
+
+class _Logprob:
+    def __init__(self, logprob, rank):
+        self.logprob, self.rank = logprob, rank
+
+
+def test_prompt_logprobs_sums_every_token_after_the_first_and_keeps_the_top_1():
+    E2E = load("pearl_c_vllm_e2e", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
+    windows = [[1, 5, 6, 7], [1, 8, 9]]
+
+    def timed(prompts, sp):
+        outs = []
+        for p in prompts:
+            w = p["prompt_token_ids"]
+            lps = [None] + [{t: _Logprob(-0.5, 1)} if t % 2 else {t: _Logprob(-2.0, 3), 42: _Logprob(-0.1, 1)} for t in w[1:]]
+            outs.append(types.SimpleNamespace(prompt_logprobs=lps))
+        return 0.0, 0.0, {}, outs
+    got = E2E.prompt_logprobs(None, lambda **kw: kw, timed, windows)
+    assert got["tokens"] == 5 and got["nll"] == pytest.approx(0.5 + 2.0 + 0.5 + 2.0 + 0.5) and got["top1"] == [5, 42, 7, 42, 9]
+    parts = {"bf16": {"nll": 5.0, "tokens": 5, "top1": [5, 42, 7, 42, 9], "chat": {"tokens": [[1, 2, 3]]}},
+             "pearlc-v1": {"scheme": "pearl-c-sm120-v1-h1", "nll": 6.0, "tokens": 5, "top1": [5, 42, 7, 1, 9], "chat": {"tokens": [[1, 2, 4]]}}}
+    q = E2E.quality_summary(parts)
+    assert q["bf16"]["perplexity"] == pytest.approx(np.exp(1.0)) and q["pearlc-v1"]["perplexity"] == pytest.approx(np.exp(1.2))
+    assert q["pearlc-v1"]["top1_agreement_vs_bf16"] == 0.8 and q["pearlc-v1"]["greedy_token_agreement_vs_bf16"] == pytest.approx(2 / 3)
+
+
+def test_the_quality_run_does_a_group_a_chunk_and_skips_the_ones_done(tmp_path, monkeypatch):
+    E2E = load("pearl_c_vllm_e2e", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
+    monkeypatch.setattr(E2E, "wikitext_windows", lambda model, limit: [[1, 2, 3]])
+    started = []
+
+    class Fake:
+        live: ClassVar[list] = []
+
+        def __init__(self, ctx, args, group, beacon):
+            started.append((group, args.scheme, args.batch_tokens))
+            self.ready = {"gate": [{"ok": True}], "committer": "x"} if group == "arm" else {}
+
+        def ask(self, **cmd):
+            if cmd["op"] == "ppl":
+                return {"nll": 2.0 if cmd["mode"] == "pearlc" else 1.0, "tokens": 2, "top1": [2, 3]}
+            return {"tokens": [[1, 2]], "texts": ["t"]}
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(E2E, "Worker", Fake)
+    args = types.SimpleNamespace(out=tmp_path / "quality.json", model="m", ppl_windows=None, chunk_min=0.0)
+    assert [E2E.perplexity(args) for _ in range(3)] == [99, 99, 0]
+    assert started == [("base", None, 2048), ("arm", "pearl-c-sm120-v1-h1", 2048), ("arm", "pearl-c-sm120-unpromoted-v1-h1", 2048)]
+    doc = json.loads(args.out.read_text())
+    assert set(doc["summary"]) == {"fp8", "bf16", "pearlc-v1", "pearlc-v2"} and all(doc["gates"].values())
+    assert doc["summary"]["pearlc-v2"]["scheme"] == "pearl-c-sm120-unpromoted-v1-h1"
+    assert E2E.perplexity(args) == 0 and len(started) == 3
+    (tmp_path / "quality-v2.json").unlink()
+
+    class Ungated(Fake):
+        def __init__(self, *a):
+            super().__init__(*a)
+            self.ready["gate"] = [{"ok": False}]
+    monkeypatch.setattr(E2E, "Worker", Ungated)
+    with pytest.raises(SystemExit, match="gate failed"):
+        E2E.perplexity(args)

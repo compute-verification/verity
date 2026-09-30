@@ -3,7 +3,7 @@
 # (pod_bootstrap.sh --cpu, no checkpoint cases), Llama-3.1-8B-Instruct at its pinned revision, and FlashInfer's sampling
 # kernels, which vLLM's top-p/top-k sampler would otherwise JIT-compile on its first call inside a window.  They are built
 # for window.sh's FLASHINFER_CUDA_ARCH_LIST (12.0f, what the card's (12, 0) maps to) with the venv's ninja first on PATH, so
-# the window's build flags and cache path are these and nothing rebuilds there.
+# the window's build flags and cache path are these and nothing rebuilds there.  pyarrow reads the quality run's WikiText-2.
 #   research run --on vy-nebius-2 --project verity --campaign pouw --source <run tree> --cwd source \
 #     --env GPU_LEASE_WHO=bc-dd22acf8 -- bash benchmarks/pouw/pearl_c_vllm/setup.sh
 # Env: WORK (/workspace/pouw/mvp-e2e), HF_HOME (/workspace/hf).  Writes $WORK/ready.json.
@@ -28,6 +28,7 @@ ready = {"model": repo, "revision": rev, "path": str(p), "vllm": vllm.__version_
 (Path(os.environ["WORK"]) / "ready.json").write_text(json.dumps(ready, indent=1) + "\n")
 print(json.dumps(ready))
 EOF
+"$WORK/venv312/bin/python" -c "import pyarrow" 2>/dev/null || uv pip install --python "$WORK/venv312/bin/python" -q pyarrow
 PATH=$WORK/venv312/bin:$PATH FLASHINFER_CUDA_ARCH_LIST=12.0f CUDA_VISIBLE_DEVICES= "$WORK/venv312/bin/python" - <<'EOF'
 import json, os
 from pathlib import Path
