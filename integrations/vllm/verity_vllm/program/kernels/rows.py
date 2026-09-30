@@ -797,3 +797,4 @@ _row("MoeFfnFixed_v1", partial(moe_ffn_fixed, router_gemm=True), ("out",))
 _row("MoeSum_v1", moe_sum, ("sum",))
 
 from verity_vllm.program.kernels import dense_rows  # noqa: E402  -- the dense chain's kernels (registers them) and the float64 GEMM chain
+from verity_vllm.program.kernels import gemv_rows  # noqa: E402,F401  -- registers the M = 1 gemv row (GemvBiasF32_v1)

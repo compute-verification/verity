@@ -198,6 +198,24 @@ REGISTERED: dict[str, GemmTarget] = {
                   "at M = 1 cuBLAS runs a gemv kernel that is not this chain (20 of 24 cases off in 1 to 3 of 1,024 coordinates)")),
 }
 
+#: cuBLAS gemvx at M = 1 with a bias, per GEMM target: (K, N) -> (V, T) of `GemvBiasF32_v1` (V-wide chunks of k over T threads).  A
+#: fact of the GPU and the cuBLAS build, not of the kernel source: re-measured whenever either changes.  A (K, N) outside the table is
+#: refused by name.
+GEMV_BIAS_TABLES: dict[str, dict[tuple[int, int], tuple[int, int]]] = {
+    "blackwell_consumer": {
+        (384, 768): (1, 32), (768, 768): (1, 32), (768, 1152): (1, 32), (768, 1536): (1, 32), (768, 2304): (48, 16), (768, 3072): (1, 16),
+        (896, 576): (1, 32), (896, 1152): (1, 32), (1536, 768): (1, 32), (1536, 1024): (1, 32), (1536, 2048): (1, 16), (3072, 768): (1, 32),
+        (3584, 2304): (1, 16), (3584, 4608): (1, 16),
+    },
+}
+GEMV_BIAS_TABLE_EVIDENCE: dict[str, str] = {
+    "blackwell_consumer": ("RTX PRO 6000 (188 SMs, driver 580.173.02, SM clock locked at 2,100 MHz), torch 2.13.0+cu129, cuBLAS 12.9.1.4, "
+                           "vLLM d9105ea80 under VLLM_BATCH_INVARIANT=1: cancellation triplets (x = 1, b = 0, a row +2^25 at i, -2^25 at j, +1 "
+                           "at 0), 0 mismatching pairs on every entry, run r20260930-063002-c5fe on vy-nebius-1; the same table on a RunPod "
+                           "PRO 6000 (driver 595.91.07), run r20260930-044507-fe26.  The entries are the biased linears of the bf16 sweep's "
+                           "configs (engine/profiles/hf_configs) at TP1 and TP2"),
+}
+
 
 def vllm_tuned_gemm_arch_family(compute_capability: tuple[int, int]) -> str | None:
     """vLLM's `_get_tuned_matmul_arch_family` for a capability: the pinned vLLM's own function when it is importable (construction and

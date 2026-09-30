@@ -32,9 +32,9 @@ from verity.ir.defs import bind
 from verity.ml.prims import HopperBF16WgmmaDot16
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import fa3_check_inf as F3
-from verity_vllm.program.registry import gemm_bias
+from verity_vllm.program.registry import gemm_bias, gemv_bias
 from verity_vllm.program.registry import prims as P
-from verity_vllm.program.registry.gemm_targets import UnregisteredGemmTarget
+from verity_vllm.program.registry.gemm_targets import GEMV_BIAS_TABLES, UnregisteredGemmTarget
 from verity_vllm.program.registry.hopper import Fa3InvSum
 
 
@@ -262,13 +262,26 @@ F32_BIAS_EPILOGUE_FAMILIES = ("blackwell_consumer",)
 def gemm_bias_spec(profile, K: int, N: int):
     """The registered Definition of a bf16 linear WITH a bias on the declared target: `GemmBias_v1{K,N}` on the Ampere family (the Triton
     linear adds the bias in bf16 after the rounding), `GemmBiasF32Epilogue_v1{K,N,DOT}` where the linear is cuBLASLt's (M >= 2; at M = 1
-    cuBLAS runs a gemv, which no registered Definition models), refused by name elsewhere."""
+    cuBLAS runs a gemv: `gemv_bias_spec`), refused by name elsewhere."""
     fam = target_family(profile)
     if fam == "ampere":
         return bind(gemm_bias.GemmBias, K=int(K), N=int(N))
     if fam in F32_BIAS_EPILOGUE_FAMILIES:
         return bind(gemm_bias.GemmBiasF32Epilogue, K=int(K), N=int(N), DOT=tensor_core_dot(profile))
     raise UnregisteredTarget(f"bf16 linear with a bias on {fam} ({profile.capability_str}): no registered binding")
+
+
+def gemv_bias_spec(profile, K: int, N: int):
+    """The registered Definition of a bf16 linear with a bias at M = 1 where the linear is cuBLAS's: `GemvBiasF32_v1{K,N,V,T}` with
+    (V, T) from the target's gemv table; refused by name elsewhere, and `unsupported:gemv-table` for a (K, N) the table lacks."""
+    gt = gemm_target(profile)
+    table = GEMV_BIAS_TABLES.get(gt.key)
+    if table is None:
+        raise UnregisteredTarget(f"bf16 linear with a bias at M = 1 on {gt.key} ({profile.capability_str}): no gemv table")
+    vt = table.get((int(K), int(N)))
+    if vt is None:
+        raise UnregisteredTarget(f"unsupported:gemv-table: (K={K}, N={N}) is not in {gt.key}'s gemv table (gemm_targets.GEMV_BIAS_TABLES)")
+    return bind(gemv_bias.GemvBiasF32, K=int(K), N=int(N), V=vt[0], T=vt[1])
 
 
 def attention_spec(profile, T: int, NH: int, KVH: int, D: int, seqlen_q: int, row: int | None = None):
@@ -305,5 +318,5 @@ def describe(profile) -> dict[str, Any]:
 
 __all__ = ["TARGETS", "DOTS", "UnregisteredTarget", "target_family", "gemm_target", "tensor_core_dot", "tuned_gemm_table",
            "check_flash_attn_registered", "fa3_kblock_n", "fa3_tile_m", "fa3_check_inf", "fa3_masked_from", "attention_geometry", "uses_accepted_kinds", "gemm_spec",
-           "F32_BIAS_EPILOGUE_FAMILIES", "gemm_bias_spec", "attention_spec", "describe",
+           "F32_BIAS_EPILOGUE_FAMILIES", "gemm_bias_spec", "gemv_bias_spec", "attention_spec", "describe",
            "LaunchContextConflict", "parse_launch_context", "launch_seqlen_q"]
