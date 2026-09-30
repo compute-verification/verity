@@ -32,8 +32,7 @@
    alternative to fusing the message digests (fuse only if the pair costs more than about 3 us over the GEMM alone).
    form_s5's codes and the lines' transposed F lines are in K32 order (pearl_c_sm120.cu); the check's fixture holds them in
    it, and every product over k against the unpermuted operands'.  `alt_ms` times the commitment's and hashing's steps under
-   OTHER_FORMS and forming's under OTHER_FORMINGS, `rows_stats_ms_by_ctas` form `s`'s h1_rows_stats on 1, 2 and 3 CTAs an
-   SM and on a CTA per 8 rows (`all`), `call_e2e_ms_by_form` the call end to end under each of FORMS and
+   OTHER_FORMS and forming's under OTHER_FORMINGS, `call_e2e_ms_by_form` the call end to end under each of FORMS and
    FORMINGS, and `call_e2e_ms_by_epilogue` under each of EPILOGUES where the variant has gemm_pearlc_w.  Every step
    launches as bound at its first call (Pipeline.bind); `call_e2e_unbound_ms` times the call with each launch's argument
    block built at the call instead, and `call_host_us` the host's time to enqueue the call either way.  The timing's keys
@@ -319,9 +318,7 @@ def cdiv(a: int, b: int) -> int:
 
 
 TILE, TREE_SMALL, ROWS_WARPS = 64, 2048, 8     # the leaf's tile; hash_tree_small's widest level 0; hash_rows_w's rows a CTA
-#: h1_rows_stats' CTAs an SM: 188 x 8 rows in flight, 48 MB of 32 KB rows (k = 8,192), well inside the 128 MB L2 its second read
-#: of each row counts on
-ROWS_S_CTAS = 1
+ROWS_S_WARPS = 4                               # h1_rows_stats' rows a CTA (its launch bounds: 128 threads, 5 CTAs an SM)
 WORDS_WARPS = 1                                # the words kernel's warps (m16 x n8 tiles) a block: a tile an SM at decode
 #: the forms of the row leaves and of the trees, all writing the same bytes: ALT_FORMS, hash_rows_w (a warp a row) and
 #: hash_nodes a level a launch down to hash_tree_small, are the call's unless PEARLC_A_FORMS names another; their steps and
@@ -332,8 +329,8 @@ WORDS_WARPS = 1                                # the words kernel's warps (m16 x
 #: forming's stats_a in one pass over A (h1_rows_stats, step `hash_rows_a`, which writes stats_a's words: forming drops
 #: stats_a and runs A's side split under either forming).  Every form's levels read their keys from `keys_<tag>`, which
 #: tree_setup's `node_keys_<tag>` writes outside the call (the unit's; B's, the epoch's).  The check reruns every form but the
-#: call's against the fixture (`s` with forming, and A's forming buffers too), the timing prices them as `alt_ms` (and
-#: h1_rows_stats by its CTAs an SM, `rows_stats_ms_by_ctas`), and the arm's gate relaunches under ALT_FORMS.
+#: call's against the fixture (`s` with forming, and A's forming buffers too), the timing prices them as `alt_ms`, and the
+#: arm's gate relaunches under ALT_FORMS.
 ROWS_FORM, TREE_FORM = os.environ.get("PEARLC_A_FORMS", "w,nodes").split(",")
 ALT_FORMS = ("w", "nodes")
 FORMS = (ALT_FORMS, ("p", "one"), ("p", "fold"), ("s", "one"))
@@ -576,15 +573,15 @@ class Pipeline:
         return [(f"hash_rows_{tag}", rows),
                 (f"tree_{tag}", (lambda: self.tree_one(tag, count, dom)) if one else (lambda: self.levels(tag, count)))]
 
-    def rows_stats(self, ctas: int | None = None) -> None:
+    def rows_stats(self) -> None:
         """Rows form `s`'s A side: stats_a over A's m rows and the row leaves of its m_real in one pass (h1_rows_stats), a
-        warp a row, on ROWS_S_CTAS CTAs an SM (or `ctas` CTAs) striding over the rows."""
+        warp a row, ROWS_S_WARPS rows a CTA (a CTA a row per SM when the rows fit)."""
         d, b, m = self.dev, self.b, self.m
-        warps = 1 if m <= d.sms else ROWS_WARPS
+        warps = 1 if m <= d.sms else ROWS_S_WARPS
         smem = 4 * warps * rows_w_words(self.row_bytes)
         if smem > 48 * 1024:
             d.ck("cuFuncSetAttribute", d.fn("h1_rows_stats"), MAX_DYN, smem)
-        d.launch("h1_rows_stats", min(cdiv(m, warps), ctas or ROWS_S_CTAS * d.sms), 32 * warps, smem,
+        d.launch("h1_rows_stats", cdiv(m, warps), 32 * warps, smem,
                  p=(b["xa"], b["alpha_a"], b["beta_a"], b["ia_a"], b["aux_a"], b.get("live_a", 0), b["tree_a"], self.keys["dom_a"]),
                  i=(m, self.k, self.m_real))
 
@@ -1205,8 +1202,6 @@ def measure(dev: Dev, nv: Nvml, pipe: Pipeline, reps: int, gates: dict) -> dict:
             alt.forming_form = forming
             out["alt_ms"].update({f"{nm}@forming={forming}": round(statistics.median(dev.timed(f, reps)), 4)
                                   for nm, p, f in alt.steps() if p == "forming"})
-        out["rows_stats_ms_by_ctas"] = {str(c or "all"): round(statistics.median(dev.timed(
-            lambda c=c: pipe.rows_stats(c * dev.sms if c else m), reps)), 4) for c in (1, 2, 3, 0)}
         out["call_e2e_ms_by_form"] = {}
         for forms in FORMS:
             for forming in FORMINGS:
