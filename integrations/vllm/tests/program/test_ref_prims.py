@@ -11,8 +11,8 @@ Three layers, kept separate (brief boundary 5 — semantics vs evidence):
      rotate_half RoPE) bit equality is asserted;
   3. **vocabulary pin** — manifest/digest stability and the codec round trip of a reference program.
 
-Run on the pod (GUIDANCE §37):  `PYTHONPATH=. python -m pytest tests/program/test_ref_prims.py -q`
-Records are written to `$REF_PRIMS_RECORD_DIR` (default `<repo>/docs/data/ref-prims`).
+Run on the pod (GUIDANCE §37):  `REF_PRIMS_RECORD_DIR=docs/data/ref-prims PYTHONPATH=. python -m pytest tests/program/test_ref_prims.py -q`
+Records are written to `$REF_PRIMS_RECORD_DIR`, and without it to a temporary directory: a plain run leaves the tree alone.
 """
 
 from __future__ import annotations
@@ -21,6 +21,7 @@ import json
 import os
 import platform
 import sys
+import tempfile
 from pathlib import Path
 
 import numpy as np
@@ -40,7 +41,7 @@ torch = pytest.importorskip("torch")
 F = torch.nn.functional
 
 REPO = Path(__file__).resolve().parents[2]
-RECORD_DIR = Path(os.environ.get("REF_PRIMS_RECORD_DIR", REPO / "docs" / "data" / "ref-prims"))
+RECORD_DIR = Path(os.environ.get("REF_PRIMS_RECORD_DIR") or tempfile.mkdtemp(prefix="ref-prims-"))
 SEED = 20260909
 LABEL = "conformance over tested domain, not universal correctness"
 

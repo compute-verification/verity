@@ -373,6 +373,8 @@ class _Watchdog:
     stalled TLS stream that trickles, a peer that never answers) returns at once and the request fails as retriable.  The socket
     timeout alone bounds each recv, not the request: a laptop parity run sat 65 min in such reads."""
 
+    timer = threading.Timer          # arms the deadline; a test replaces it to decide when a deadline passes
+
     def __init__(self, conn: http.client.HTTPConnection, seconds: float):
         self.conn, self.fired, self.sock = conn, False, None     # `sock` is taken once the request is sent: http.client hands a
                                                                   # closing connection's socket to the response and clears conn.sock
@@ -390,7 +392,7 @@ class _Watchdog:
 
     def extend(self, seconds: float) -> None:
         self.cancel()
-        self._t = threading.Timer(seconds, self._fire)
+        self._t = self.timer(seconds, self._fire)
         self._t.daemon = True
         self._t.start()
 

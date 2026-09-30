@@ -682,7 +682,7 @@ def test_s3remote_against_a_fake_bucket(tmp_path):
     finally:
         srv.shutdown()
         srv.server_close()
-        th.join(5)
+        th.join()
 
 
 class FakeS3:
@@ -854,7 +854,7 @@ class FakeS3:
     def close(self) -> None:
         self.srv.shutdown()
         self.srv.server_close()
-        self.thread.join(5)
+        self.thread.join()
 
 
 @pytest.fixture
@@ -1186,11 +1186,12 @@ def test_mint_local_ports_cloudflares_reference_signing():
 
     from research.store import credentials as C
 
-    ep, acct, ak, sk = "https://1d4dfa0a7dc0639e19f5d0125f14a634.r2.cloudflarestorage.com", "1d4dfa0a7dc0639e19f5d0125f14a634", "PARENTKEYID", "parent-secret"
-    c = C.mint_local(ep, acct, ak, sk, "verity-dev", "object-read-only", ttl_s=900, now=1_790_000_000)
+    acct = "0" * 32                                                  # a dummy account id: 32 hex digits, as R2 has
+    ep, ak, sk = f"https://{acct}.r2.cloudflarestorage.com", "PARENTKEYID", "parent-secret"
+    c = C.mint_local(ep, acct, ak, sk, "store-bucket", "object-read-only", ttl_s=900, now=1_790_000_000)
     head, claims = C.decode_jwt(c["jwt"])
     assert head == {"alg": "HS256", "typ": "JWT"}
-    assert claims == {"bucket": "verity-dev", "scope": "object-read-only", "sub": acct, "iss": ak, "aud": "1d4dfa0a7dc0639e19f5d0125f14a634.r2.cloudflarestorage.com",
+    assert claims == {"bucket": "store-bucket", "scope": "object-read-only", "sub": acct, "iss": ak, "aud": f"{acct}.r2.cloudflarestorage.com",
                       "iat": 1_790_000_000, "exp": 1_790_000_900}
     assert list(claims) == ["bucket", "scope", "sub", "iss", "aud", "iat", "exp"], "claim order as jose emits it"
     h, p, s = c["jwt"].split(".")
@@ -1199,9 +1200,9 @@ def test_mint_local_ports_cloudflares_reference_signing():
     assert c["secretAccessKey"] == hashlib.sha256(c["jwt"].encode()).hexdigest()
     assert base64.b64decode(c["sessionToken"]).decode() == "jwt/" + c["jwt"]
     assert c["expires_utc"] == "2026-09-21T14:28:20Z"
-    same = C.mint_local(ep, acct, ak, sk, "verity-dev", "object-read-only", ttl_s=900, now=1_790_000_000)
+    same = C.mint_local(ep, acct, ak, sk, "store-bucket", "object-read-only", ttl_s=900, now=1_790_000_000)
     assert same == c, "deterministic for a fixed `now`"
-    assert C.mint_local(ep, acct, ak, "other", "verity-dev", "object-read-only", ttl_s=900, now=1_790_000_000)["jwt"] != c["jwt"]
+    assert C.mint_local(ep, acct, ak, "other", "store-bucket", "object-read-only", ttl_s=900, now=1_790_000_000)["jwt"] != c["jwt"]
 
     scoped = C.mint_local(ep, acct, ak, sk, "b", "object-read-write", actions=["PutObject", "HeadObject"], prefixes=["scratch/x/"], now=1)
     claims = C.decode_jwt(scoped["jwt"])[1]
@@ -1241,11 +1242,11 @@ def test_mint_api_calls_the_temp_access_credentials_endpoint():
             return r
 
     ok = {"success": True, "errors": [], "result": {"accessKeyId": "tmpid", "secretAccessKey": "tmpsecret", "sessionToken": "tok"}}
-    c = C.mint_api("acct123", "cf-token", "verity-dev", "PARENT", "object-read-write", ttl_s=3600, prefixes=["objects/"], opener=Opener(body=ok))
+    c = C.mint_api("acct123", "cf-token", "store-bucket", "PARENT", "object-read-write", ttl_s=3600, prefixes=["objects/"], opener=Opener(body=ok))
     url, method, headers, body = calls[0]
     assert url == "https://api.cloudflare.com/client/v4/accounts/acct123/r2/temp-access-credentials" and method == "POST"
     assert headers["Authorization"] == "Bearer cf-token" and headers["Content-type"] == "application/json"
-    assert body == {"bucket": "verity-dev", "parentAccessKeyId": "PARENT", "permission": "object-read-write", "ttlSeconds": 3600, "prefixes": ["objects/"]}
+    assert body == {"bucket": "store-bucket", "parentAccessKeyId": "PARENT", "permission": "object-read-write", "ttlSeconds": 3600, "prefixes": ["objects/"]}
     assert {k: c[k] for k in ("accessKeyId", "secretAccessKey", "sessionToken")} == ok["result"] and c["expires_utc"].endswith("Z")
     with pytest.raises(C.MintError, match="Authentication error"):
         C.mint_api("acct123", "bad", "b", "P", "object-read-only", opener=Opener(status=403))
@@ -1263,8 +1264,9 @@ def test_mint_resolves_inputs_from_config_and_env_and_the_cli_prints_env_lines(e
     three export lines and nothing is written anywhere."""
     from research.store import credentials as C
 
-    ep = "https://1d4dfa0a7dc0639e19f5d0125f14a634.r2.cloudflarestorage.com"
-    (env / "store.toml").write_text(f'[remote]\ntype = "s3"\nbucket = "verity-dev"\nendpoint = "{ep}"\naccess_key_id_env = "P_AK"\nsecret_access_key_env = "P_SK"\n')
+    acct = "0" * 32                                                  # a dummy account id
+    ep = f"https://{acct}.r2.cloudflarestorage.com"
+    (env / "store.toml").write_text(f'[remote]\ntype = "s3"\nbucket = "store-bucket"\nendpoint = "{ep}"\naccess_key_id_env = "P_AK"\nsecret_access_key_env = "P_SK"\n')
     for v in ("P_AK", "P_SK", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "CLOUDFLARE_API_TOKEN", "R2_ACCOUNT_ID", "CLOUDFLARE_ACCOUNT_ID",
               "R2_ENDPOINT", "R2_BUCKET"):                              # a developer shell that sourced r2.env must not leak into the test
         monkeypatch.delenv(v, raising=False)
@@ -1273,8 +1275,8 @@ def test_mint_resolves_inputs_from_config_and_env_and_the_cli_prints_env_lines(e
     monkeypatch.setenv("P_AK", "PARENT")
     monkeypatch.setenv("P_SK", "psecret")
     c = C.mint(scope="object-read-only", ttl_s=600, prefixes=["manifests/"])
-    assert c["via"] == "local" and c["bucket"] == "verity-dev" and c["account_id"] == "1d4dfa0a7dc0639e19f5d0125f14a634" and c["accessKeyId"] == "PARENT"
-    assert C.decode_jwt(c["jwt"])[1]["aud"] == "1d4dfa0a7dc0639e19f5d0125f14a634.r2.cloudflarestorage.com" and c["scope"] == "object-read-only"
+    assert c["via"] == "local" and c["bucket"] == "store-bucket" and c["account_id"] == acct and c["accessKeyId"] == "PARENT"
+    assert C.decode_jwt(c["jwt"])[1]["aud"] == f"{acct}.r2.cloudflarestorage.com" and c["scope"] == "object-read-only"
     assert C.mint(actions=["GetObject"])["scope"] is None
     with pytest.raises(C.MintError, match="local signing only"):
         C.mint(via="api", actions=["GetObject"])
