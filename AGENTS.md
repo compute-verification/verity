@@ -75,7 +75,9 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
  is proof of useful work: the `PoUWScheme` interface (`protocol`), its lifecycle
  (`audit`) and the named schemes (`schemes.get`: NCP, Pearl's FP8 scheme), each with
  pinned vectors, and `circuit`, `ncp-v2` as a Program that sampled proofs verifies; see
- its `PROTOCOL.md`. Applications (vLLM) compose protocols.
+ its `PROTOCOL.md`. `protocols/network_warden` (`verity_network_warden`) is network
+ transparency's timing channel: the warden, its audit and calibration, and its Lean package
+ (`lean/`). Applications (vLLM) compose protocols.
 - `census/`: data only, meant to move to its own repository: `hardware.json`, `datatypes.json`, `networks.json`,
  `subcircuits.json`, `input_sets.json`, `workloads.json` (stable ids, sources), a JSON Schema for each under `schemas/`,
  and a README with the id scheme and sourcing rules. Nothing imports it; the renderer and benchmarks
@@ -235,6 +237,9 @@ jobs detached on the pod, write one-line checkpoints, and hand off only to unblo
 Push your branch after every commit: `research notes push <you>` (never `main`, never `--force`). Only the research
 coordinator merges `main`, from origin and through `research merge`; `research notes branches --fetch` lists open lanes' work
 origin lacks.
+
+Slack (computeverification.slack.com) is for handle holders (coordinators and service agents) and named humans only; a worker asks its
+own coordinator. The coordination API (ask, announce, 👀/✅/❌, who subscribes, the wake recipe): `.agents/skills/using-slack/SKILL.md`.
 
 ## Skills
 
