@@ -640,7 +640,10 @@ def _stage_job(s: str) -> dict:
         tmp.mkdir(parents=True)
         for f in (c["out"] / s[:16]).iterdir():
             if f.is_file():
-                shutil.copyfile(f, tmp / f.name)
+                try:
+                    os.link(f, tmp / f.name)   # a staged circuit is 1-3 GB; the cache never holds a second copy of it
+                except OSError:
+                    shutil.copyfile(f, tmp / f.name)
         (tmp / "rec.json").write_text(json.dumps(rec, default=str))
         try:
             os.rename(tmp, cache)
