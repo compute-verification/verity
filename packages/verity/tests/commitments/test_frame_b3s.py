@@ -185,3 +185,62 @@ def test_root_from_the_layout_alone():
         k = key(dom, b"\x02" + bytes([lv]))
         level = [key(k, level[i] + level[i + 1]) for i in range(0, len(level), 2)]
     assert level[0].hex() == PINNED["root"]
+
+
+def test_every_hash_is_a_complete_keyed_blake3_call():
+    """Every node of both trees (segment tree and the tree over leaves), every segment hash, key, pad and the empty root is a
+    complete keyed BLAKE3 call, the ROOT flag included: each equals the Rust `blake3` package's keyed hash of the documented
+    message, and no node equals the bare PARENT compression of its children, with or without ROOT."""
+    b3 = pytest.importorskip("blake3")
+    from verity.commitments.blake3 import compress
+
+    def words(k: bytes) -> tuple[int, ...]:
+        return tuple(int.from_bytes(k[4 * i:4 * i + 4], "little") for i in range(8))
+
+    def parent(key: bytes, block: bytes, flags: int) -> bytes:
+        return b"".join(w.to_bytes(4, "little") for w in compress(words(key), block, 0, 64, flags)[:8])
+
+    rust = lambda k, m: b3.blake3(m, key=k).digest()  # noqa: E731
+    d = domain(7)
+    vals = {r: bytes((r + 3 * i) & 0xFF for i in range(256 * (r + 1) + 9)) for r in range(7)}
+    for r, v in vals.items():
+        levels = b3s_levels(d.domain_id, r, r, "rows", v)
+        for j, g in enumerate(levels[0]):
+            key = b3s_segment_key(d.domain_id, r, r, "rows", len(v), j)
+            assert g == rust(key, v[256 * j:256 * j + 256])
+            assert key == rust(d.domain_id, b"\x05" + r.to_bytes(8, "little") * 2 + len(v).to_bytes(8, "little")
+                               + j.to_bytes(4, "little") + (4).to_bytes(2, "little") + b"rows")
+        for l, (below, above) in enumerate(zip(levels, levels[1:])):
+            k = b3s_level_key(d.domain_id, l)
+            assert k == rust(d.domain_id, b"\x06" + bytes([l]))
+            for i in range(len(below) // 2):
+                block = below[2 * i] + below[2 * i + 1]
+                assert above[i] == rust(k, block)
+                assert above[i] not in (parent(k, block, 4 | 16), parent(k, block, 4 | 8 | 16))
+    tree = MerkleTree(d, vals, lambda _: "rows")
+    leaves = [d.leaf(r, r, "rows", vals[r]) for r in range(7)] + [d.pad(7)]
+    assert d.pad(7) == rust(d.domain_id, b"\x03" + (7).to_bytes(8, "little")) and d.empty_root() == rust(d.domain_id, b"\x04")
+    level, lv = leaves, 0
+    while len(level) > 1:
+        k = blake3_node_key(d.domain_id, lv)
+        assert k == rust(d.domain_id, b"\x02" + bytes([lv]))
+        up = [rust(k, level[i] + level[i + 1]) for i in range(0, len(level), 2)]
+        assert [d.node(lv, i // 2, level[i], level[i + 1]) for i in range(0, len(level), 2)] == up
+        assert all(u != parent(k, level[2 * i] + level[2 * i + 1], 4 | 8 | 16) for i, u in enumerate(up))
+        level, lv = up, lv + 1
+    assert level[0] == tree.commitment.root
+
+
+def test_every_key_is_derived_from_the_domain():
+    """No -h2 key is a constant: the segment and level keys come from the domain id, which comes from the binding, owner,
+    positions and count, so the same value under another domain has other keys and another leaf, and no segment or level
+    key is the all-zero or the frame's IV key."""
+    from verity.commitments.blake3 import IV
+    iv = b"".join(w.to_bytes(4, "little") for w in IV)
+    v = bytes(range(256)) * 3
+    ds = [domain(), domain(owner=4), domain(binding=bytes(32)), domain(count=6)]
+    assert len({d.domain_id for d in ds}) == 4
+    assert len({d.leaf(1, 1, "rows", v) for d in ds}) == 4
+    for d in ds:
+        keys = [b3s_segment_key(d.domain_id, 1, 1, "rows", len(v), j) for j in range(3)] + [b3s_level_key(d.domain_id, l) for l in range(3)]
+        assert not {bytes(32), iv, d.domain_id} & set(keys)

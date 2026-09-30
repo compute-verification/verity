@@ -101,3 +101,42 @@ def test_whole_trees_are_merkle_trees_roots(m, rb, schema):
     T.launch("hash_tree_small", 1, max(1, m // 2), [tree, keys], [m])
     want = MerkleTree(d, {r: vals[r * rb:(r + 1) * rb] for r in range(m)}, lambda _: schema).commitment.root
     assert tree.raw[32 * (2 * m - 2):32 * (2 * m - 1)] == want
+
+
+def test_kernel_nodes_are_complete_keyed_blake3_calls():
+    """The kernels' segment-tree node, the node over two leaves (hash_tree_small) and a one-segment leaf are complete keyed
+    BLAKE3 calls (the ROOT flag included): equal to the standard keyed hash, and not to the bare PARENT compression."""
+    from verity.commitments.blake3 import compress, keyed
+    from verity.commitments.merkle import b3s_levels, b3s_segment_key, blake3_node_key
+
+    def parent(key: bytes, block: bytes, flags: int) -> bytes:
+        kw = tuple(int.from_bytes(key[4 * i:4 * i + 4], "little") for i in range(8))
+        return b"".join(w.to_bytes(4, "little") for w in compress(kw, block, 0, 64, flags)[:8])
+
+    d = domain(2)
+    rows = data("complete calls", 2 * 512)
+    got = rows_b3s(rows, 2, 512, d)
+    for r in range(2):
+        g = b3s_levels(d.domain_id, r, r, ROW, rows[512 * r:512 * r + 512])[0]
+        k0 = b3s_level_key(d.domain_id, 0)
+        assert got[32 * r:32 * r + 32] == keyed(k0, g[0] + g[1])
+        assert got[32 * r:32 * r + 32] not in (parent(k0, g[0] + g[1], 4 | 16), parent(k0, g[0] + g[1], 4 | 8 | 16))
+    tree, keys = T.buffer(got + bytes(64)), T.buffer(32 * 16)
+    T.launch("hash_node_keys", 1, 32, [keys, T.buffer(d.domain_id)], [1])
+    T.launch("hash_tree_small", 1, 1, [tree, keys], [2])
+    k = blake3_node_key(d.domain_id, 0)
+    assert tree.raw[64:96] == keyed(k, got) != parent(k, got, 4 | 8 | 16)
+    one = data("one segment", 256)
+    assert rows_b3s(one, 1, 256, d, rank0=1) == keyed(b3s_segment_key(d.domain_id, 1, 1, ROW, 256, 0), one)
+
+
+def test_kernel_keys_follow_the_domain():
+    """The kernels take no key but the domain id: the same rows under three domains give three sets of leaves, each the
+    reference's under its own derived keys."""
+    rows = data("keys follow", 3 * 1300)
+    outs = set()
+    for d in (domain(8), domain(8, owner=9), CommitmentDomain(bytes(32), 7, RangeIndexedDomain(8), hash="blake3-s256")):
+        got = rows_b3s(rows, 3, 1300, d)
+        assert [got[32 * r:32 * r + 32] for r in range(3)] == [d.leaf(r, r, ROW, rows[1300 * r:1300 * (r + 1)]) for r in range(3)]
+        outs.add(got)
+    assert len(outs) == 3

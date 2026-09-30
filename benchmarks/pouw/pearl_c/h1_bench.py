@@ -92,6 +92,8 @@ class Bench(R.Dev):
         self.h1, self.h2 = vp(), vp()
         self.ck("cuStreamCreateWithPriority", C.byref(self.h1), 1, greatest.value)
         self.ck("cuStreamCreateWithPriority", C.byref(self.h2), 1, least.value)
+        self.h3 = vp()                                       # P2's A tree: beside the GEMM, never behind the tile hashing
+        self.ck("cuStreamCreateWithPriority", C.byref(self.h3), 1, greatest.value)
         self.priority_range = (least.value, greatest.value)
         self.args: list = []
         self.dyn: dict[str, int] = {}
@@ -344,6 +346,11 @@ def gates(d: Bench, V: dict) -> dict:
     tmpl = {sch: (d.put(t[0]), t[1]) for sch, t in ((ROW, b3s_template(ROW)), (TILE, b3s_template(TILE)))}
     dom, sk = d.put(bytes.fromhex(h2["rows"]["domain"])), d.alloc(32 * 16)
     d.go(None, "b3s_level_keys", 1, 32, (sk, dom), (10,))
+    d.sync()
+    ok = d.read(sk, 32 * 10).hex() == "".join(h2["rows"]["level_keys"])
+    out["trees"]["h2 segment level keys, derived on the card"] = ok
+    if not ok:
+        bad.append("h2 segment level keys")
     wrong = 0
     for case in h2["rows"]["cases"]:
         rb = case["rb"]
@@ -576,8 +583,8 @@ ARMS = [
     ("candidate: h1 bf16 rows, keys precomputed, side stream, priorities", ROW_BF16, "pre", "side"),
     ("h2 A alone", ROW_F32, "h2", "none"), ("h2, side stream, priorities", ROW_F32, "h2", "side"),
     ("h2, deferred side stream, priorities", ROW_F32, "h2", "deferred"),
-    ("P2 prototype: h2 A alone, tree on the side stream, priorities", ROW_F32, "h2p2", "none"),
-    ("P2 prototype: h2, tree on the side stream, deferred side stream, priorities", ROW_F32, "h2p2", "deferred"),
+    ("P2 prototype: h2 A alone, tree on its own stream, priorities", ROW_F32, "h2p2", "none"),
+    ("P2 prototype: h2, tree on its own stream, deferred side stream, priorities", ROW_F32, "h2p2", "deferred"),
 ]
 
 
@@ -592,8 +599,8 @@ PRESETS = {"p1": ["plain fp32 rows", "A tuned, keys precomputed", "h1 tuned, key
                   "candidate: h1 A segment layout s=256, side stream deferred, priorities"],
            "h2": ["plain fp32 rows", "A tuned, keys precomputed", "h1 tuned, keys precomputed, side stream, priorities",
                   "h2 A alone", "h2, side stream, priorities", "h2, deferred side stream, priorities",
-                  "P2 prototype: h2 A alone, tree on the side stream, priorities",
-                  "P2 prototype: h2, tree on the side stream, deferred side stream, priorities"]}
+                  "P2 prototype: h2 A alone, tree on its own stream, priorities",
+                  "P2 prototype: h2, tree on its own stream, deferred side stream, priorities"]}
 
 #: the A modes whose level keys go on the side stream at each call's start
 EARLY = ("keys", "one", "producer", "overlap")
@@ -693,9 +700,9 @@ def decode(d: Bench, nv: R.Nvml, reps: int, V: dict, tdir: str | None, only: lis
                 if st.get("tree_done") is not None:
                     d.wait(s1, st.pop("tree_done"))
                 launch_rows_h2(d, s1, rows[rb], a_tree, h2d["a2"], a2_skeys, tmpl[ROW], m, rb)
-                d.wait(s2, d.event(s1))
-                d.go(s2, "hash_tree_small", 1, max(1, m // 2), (a_tree, a2_keys), (m,))
-                st["tree_done"] = d.event(s2)
+                d.wait(d.h3, d.event(s1))
+                d.go(d.h3, "hash_tree_small", 1, max(1, m // 2), (a_tree, a2_keys), (m,))
+                st["tree_done"] = d.event(d.h3)
             elif amode != "none":
                 if early:
                     d.wait(s1, ek)

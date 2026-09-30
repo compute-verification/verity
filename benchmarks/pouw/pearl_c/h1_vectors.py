@@ -16,6 +16,7 @@ from pathlib import Path
 import blake3
 
 from verity.commitments import CommitmentDomain, MerkleTree, RangeIndexedDomain
+from verity.commitments.merkle import b3s_level_key
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "protocols" / "pouw"))
@@ -137,7 +138,8 @@ def h2_cases(tile: dict) -> dict:
     a = shake("gate tree fp32", M * 4 * N)
     root_a = MerkleTree(da, {r: a[r * 4 * N:(r + 1) * 4 * N] for r in range(M)}, lambda _: ROW).commitment.root
     dt = CommitmentDomain(BINDING, 9, RangeIndexedDomain(tile["tiles"]), hash="blake3-s256")
-    return {"rows": {"domain": d.domain_id.hex(), "cases": rows},
+    return {"rows": {"domain": d.domain_id.hex(), "cases": rows,
+                     "level_keys": [b3s_level_key(d.domain_id, l).hex() for l in range(10)]},
             "tree": {"domain": da.domain_id.hex(), "root": root_a.hex()},
             "tiles": {"domain": dt.domain_id.hex(), "root": MerkleTree(dt, dict(enumerate(tile_leaves(tile))), lambda _: TILE)
                       .commitment.root.hex()}}
