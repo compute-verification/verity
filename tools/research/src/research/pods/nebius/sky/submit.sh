@@ -96,8 +96,8 @@ if [ -n "${VY_ROW_CLASS:-}${VY_BUILD_MEMORY:-}${VY_GPU_MEMORY:-}" ]; then   # co
   python3 - "$yaml" "${VY_ROW_CLASS:-}" "${VY_BUILD_MEMORY:-}" "${VY_GPU_MEMORY:-}" > "$rendered" <<'PY'
 import re, sys
 text, cls, build_gb, gpu_gb = open(sys.argv[1]).read(), sys.argv[2], sys.argv[3], sys.argv[4]
-table = {"small": (64, 64, 1), "dense": (160, 192, 1), "long": (160, 256, 1), "moe": (256, 384, 1), "b64": (256, 512, 1),
-         "tp2": (160, 384, 2)}
+table = {"small": (64, 64, 1), "dense": (160, 64, 1), "long": (160, 64, 1), "moe": (256, 64, 1), "b64": (256, 64, 1),
+         "tp2": (160, 128, 2)}                          # the gpu task: 64 GB per GPU, the GPU queue's fixed share
 if cls and cls not in table:
     sys.exit(f"VY_ROW_CLASS={cls}: one of {sorted(table)}")
 parts = text.split("\n---\n")
@@ -106,17 +106,18 @@ if len(parts) != 3:
 build, gpu, n = table.get(cls) or (None, None, None)
 build, gpu = int(build_gb or build or 0), int(gpu_gb or gpu or 0)
 if build:
-    parts[1] = re.sub(r"(?m)^  memory: \d+$", f"  memory: {build}", parts[1])
+    parts[1] = re.sub(r"(?m)^  memory: \d+", f"  memory: {build}", parts[1])
     parts[1] = re.sub(r'(?m)^  BUILD_RAM_BUDGET_GB: "\d+"$', f'  BUILD_RAM_BUDGET_GB: "{build}"', parts[1])
 if gpu:
-    parts[2] = re.sub(r"(?m)^  memory: \d+$", f"  memory: {gpu}", parts[2])
+    parts[2] = re.sub(r"(?m)^  memory: \d+", f"  memory: {gpu}", parts[2])
 if n:
     parts[2] = re.sub(r"(?m)^  accelerators: RTXPRO6000:\d+$", f"  accelerators: RTXPRO6000:{n}", parts[2])
+    parts[2] = re.sub(r"(?m)^  cpus: \d+", f"  cpus: {4 * n}", parts[2])                           # the GPU queue's 4 vCPU per GPU
 sys.stdout.write("\n---\n".join(parts))
 PY
   yaml=$rendered
 fi
-# At most VY_MAX_WAITING_CELLS coverage cells (default 4) and VY_MAX_WAITING jobs in all (default 6) wait in Kueue: a job waiting for
+# At most VY_MAX_WAITING_CELLS vLLM deployments' tasks (default 4) and VY_MAX_WAITING jobs in all (default 6) wait in Kueue: a job waiting for
 # quota still holds one of the SkyPilot controller's 8 launch slots (provision_timeout: -1), and with every slot held no other job
 # reaches Kueue. Until the dispatcher submits Kueue Jobs directly (postmortem action 3). A queue it can't read doesn't block: this
 # caps throughput loss, it guards no spend.
@@ -134,10 +135,10 @@ def waiting(w):
     done = any(c.get("type") == "Finished" and c.get("status") == "True" for c in st.get("conditions") or [])
     return not st.get("admission") and not done
 pending = [w for w in items if waiting(w)]
-cells = sum((w.get("spec") or {}).get("queueName") == "circuits" for w in pending)
+cells = sum((w.get("spec") or {}).get("queueName") in ("deployments-cpu", "deployments-gpu", "circuits") for w in pending)
 why = ""
 if template in ("config-run", "config-run-row") and cells >= cells_max:
-    why = f"{cells} coverage cells already wait in Kueue (at most {cells_max}, VY_MAX_WAITING_CELLS): submit when one is admitted"
+    why = f"{cells} vLLM deployments already wait in Kueue (at most {cells_max}, VY_MAX_WAITING_CELLS): submit when one is admitted"
 elif len(pending) >= all_max:
     why = f"{len(pending)} jobs already wait in Kueue (at most {all_max} of SkyPilot's 8 launch slots, VY_MAX_WAITING)"
 if why:

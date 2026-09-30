@@ -40,25 +40,29 @@ def quotas(path: Path) -> dict[str, dict[str, float]]:
 
 def test_the_queues_fit_the_server_and_config_runs_never_borrow():
     q = quotas(SKY / "kueue.yaml")
-    assert set(q) == {"circuits", "provers", "backfill"} and set(q["backfill"].values()) == {0}          # backfill only borrows
-    assert (q["circuits"]["nvidia.com/gpu"], q["provers"]["nvidia.com/gpu"]) == (5, 3)       # tonight: coverage is the binding workstream
-    assert (q["circuits"]["cpu"], q["provers"]["cpu"]) == (124, 64)
+    assert set(q) == {"deployments-gpu", "deployments-cpu", "circuits", "provers", "backfill"}
+    assert set(q["backfill"].values()) == set(q["circuits"].values()) == {0}                          # backfill borrows; circuits drains
+    assert (q["deployments-gpu"]["nvidia.com/gpu"], q["deployments-cpu"]["nvidia.com/gpu"], q["provers"]["nvidia.com/gpu"]) == (5, 0, 3)
+    assert q["deployments-gpu"]["cpu"] == 4 * q["deployments-gpu"]["nvidia.com/gpu"]                   # 4 vCPU per GPU: never waits on CPU
+    assert (q["deployments-cpu"]["cpu"], q["provers"]["cpu"]) == (100, 64)
     assert sum(x["cpu"] for x in q.values()) + CONTROLLER["cpu"] <= NODE["cpu"]              # every admitted pod can be placed           # checks and pinned benches run outside Kueue
     for res, cap in NODE.items():
         assert sum(x[res] for x in q.values()) <= cap, res
     assert sum(x["memory"] for x in q.values()) + CONTROLLER["memory"] <= NODE["memory"]
     text = (SKY / "kueue.yaml").read_text()
-    circuits = next(d for d in documents(SKY / "kueue.yaml") if "metadata: {name: circuits}" in d and "ClusterQueue" in d)
-    assert "{name: nvidia.com/gpu, nominalQuota: 5, borrowingLimit: 2}" in circuits
-    assert "borrowWithinCohort: {policy: LowerPriority, maxPriorityThreshold: 10}" in circuits          # it evicts only backfill to borrow
+    gpuq = next(d for d in documents(SKY / "kueue.yaml") if "metadata: {name: deployments-gpu}" in d and "ClusterQueue" in d)
+    cpuq = next(d for d in documents(SKY / "kueue.yaml") if "metadata: {name: deployments-cpu}" in d and "ClusterQueue" in d)
+    assert '{name: nvidia.com/gpu, nominalQuota: "5", borrowingLimit: "2"}' in gpuq and '{name: nvidia.com/gpu, nominalQuota: "0", borrowingLimit: "0"}' in cpuq
+    for d in (gpuq, cpuq):
+        assert "borrowWithinCohort: {policy: LowerPriority, maxPriorityThreshold: 10}" in d and "reclaimWithinCohort: LowerPriority" in d
     provers = text.split("metadata: {name: provers}")[1].split("\n---\n")[0]
     assert provers.count("borrowingLimit: 0") == 3 == provers.count("nominalQuota")              # a borrowed bench is evicted by reclaim
-    assert text.count("    withinClusterQueue: Never") == 3 and text.count("policy: LowerPriority") == 1   # never evict a running Build
-    assert text.count("cohortName: nebius") == 3 and text.count("    reclaimWithinCohort: Any") == 2
+    assert text.count("    withinClusterQueue: Never") == 5 and text.count("policy: LowerPriority") == 2   # never evict a running Build
+    assert text.count("cohortName: nebius") == 5 and text.count("    reclaimWithinCohort: Any") == 1
     backfill = next(d for d in documents(SKY / "kueue.yaml") if "metadata: {name: backfill}" in d and "ClusterQueue" in d)
     assert "reclaimWithinCohort: Never" in backfill and "borrowWithinCohort: {policy: Never}" in backfill and "borrowingLimit" not in backfill
     values = dict(re.findall(r"metadata: \{name: (\S+)\}\nvalue: (\d+)", text))
-    assert sorted(values, key=lambda k: -int(values[k])) == ["capture", "sweep-night", "circuits", "prover-bench", "dev", "backfill"]
+    assert sorted(values, key=lambda k: -int(values[k])) == ["capture", "sweep-night", "circuits-gpu", "circuits", "prover-bench", "dev", "backfill"]
     # an unquoted ": " inside a one-line value is invalid YAML (kubectl refused a description that had one); the tests read this
     # file with regexes, so check it here
     assert not [ln for ln in text.splitlines() if re.match(r"^\s*description: [^'\"].*: ", ln)]
@@ -76,8 +80,8 @@ def test_every_job_template_names_a_defined_queue_and_priority():
         assert queue in local and prio in priorities, f.name
         assert "provision_timeout: -1" in t and "infra: ssh/vy-nebius" in t and "budget-line:" in t, f.name
         seen[f.stem] = (queue, prio)
-    assert seen == {"config-run": ("circuits", "circuits"), "config-run-row": ("circuits", "circuits"),
-                    "port-capture": ("circuits", "capture"), "prover-dev": ("provers", "dev"), "prover-bench": ("provers", "prover-bench")}
+    assert seen == {"config-run": ("deployments-cpu", "circuits"), "config-run-row": ("deployments-gpu", "circuits-gpu"),
+                    "port-capture": ("deployments-gpu", "capture"), "prover-dev": ("provers", "dev"), "prover-bench": ("provers", "prover-bench")}
 
 
 def test_the_config_run_holds_a_gpu_only_for_its_commit(tmp_path):
@@ -88,7 +92,8 @@ def test_the_config_run_holds_a_gpu_only_for_its_commit(tmp_path):
     assert "row stage build \"$ROW\" \"$ROLE\" \"$REPO\" \"$REVISION\" --config-run 1 --replay-k 460" in build
     assert "row stage commit \"$ROW\" \"$ROLE\" \"$REPO\" \"$REVISION\" --config-run 1 --replay-k 460" in gpu
     assert "accelerators: RTXPRO6000:1" in gpu and "row stage match" not in text                     # config runs have no Match
-    assert build.count("kueue.x-k8s.io/queue-name: circuits") == gpu.count("kueue.x-k8s.io/queue-name: circuits") == 1
+    assert "kueue.x-k8s.io/priority-class: circuits-gpu" in gpu and "kueue.x-k8s.io/priority-class: circuits\n" in build  # Commits first
+    assert build.count("kueue.x-k8s.io/queue-name: deployments-cpu") == gpu.count("kueue.x-k8s.io/queue-name: deployments-gpu") == 1
     assert 'ov.noisy: "true"' in gpu and "--out" in build and "--out" in gpu                          # bootstrap writes outside the tree
     for part in (build, gpu):
         assert "GUARD_PRESERVE_FILE: /workspace/jobs/dm/guard.preserve" in part and "HOT_ROOT: /workspace/jobs/hot" in part
@@ -99,16 +104,16 @@ def test_the_config_run_holds_a_gpu_only_for_its_commit(tmp_path):
                              capture_output=True, text=True, check=True).stdout
         return out.split("\n---\n")[1:]
     b2, g2 = render("tp2", "", "")
-    assert "  memory: 160" in b2 and "  memory: 384" in g2 and "accelerators: RTXPRO6000:2" in g2
+    assert "  memory: 160" in b2 and "  memory: 128" in g2 and "accelerators: RTXPRO6000:2" in g2 and "  cpus: 8 " in g2
     b3, g3 = render("moe", "300", "")                                                                  # a per-cell figure wins
-    assert "  memory: 300" in b3 and 'BUILD_RAM_BUDGET_GB: "300"' in b3 and "  memory: 384" in g3
+    assert "  memory: 300" in b3 and 'BUILD_RAM_BUDGET_GB: "300"' in b3 and "  memory: 64 " in g3
 
 
 def test_benches_are_labelled_noisy_and_the_quiet_hour_holds_circuits():
     bench = (SKY / "jobs" / "prover-bench.yaml").read_text()
     assert 'ov.noisy: "true"' in bench and 'OV_NOISY: "true"' in bench and "podAntiAffinity" not in bench
     quiet = (SKY / "quiet_hour.sh").read_text()
-    assert "clusterqueue circuits" in quiet and '"stopPolicy\\":\\"$policy' in quiet
+    assert "QUEUES=${VY_QUIET_QUEUES:-deployments-cpu deployments-gpu circuits}" in quiet and '"stopPolicy\\":\\"$policy' in quiet
     up = (SKY / "cluster_up.sh").read_text()
     assert "hold:12:30 release:13:30" in up and "quiet_hour.sh" in up
 
@@ -121,7 +126,10 @@ def test_jobs_write_only_under_workspace_jobs_and_set_their_thread_count():
                 continue
             cpus = int(re.search(r"^  cpus: (\d+)", task, re.M).group(1))
             threads = int(re.search(r'^  OMP_NUM_THREADS: "(\d+)"', task, re.M).group(1))    # SkyPilot's runner sets 1
-            assert threads == cpus or (f.stem == "config-run" and "\nname: build" in task and (cpus, threads) == (4, 16)), f.name
+            assert threads >= cpus, f.name                                                   # threads may burst past the request
+            if "queue-name: deployments-gpu" in task:
+                gpus = int(re.search(r"accelerators: RTXPRO6000:(\d+)", task).group(1))
+                assert cpus == 4 * gpus, f.name                                                 # the GPU queue's fixed share
         assert "RESEARCH_RUNS: /workspace/jobs/runs" in t and "workdir" not in t, f.name
         assert "--python 3.12" in t, f.name                                               # the image's python is 3.10
 
@@ -253,7 +261,7 @@ def test_submit_caps_what_waits_in_kueue_until_the_dispatcher_runs(tmp_path):
                               capture_output=True, text=True)
     assert check("config-run", ["circuits"] * 3, finished=5).returncode == 0
     r = check("config-run", ["circuits"] * 4)
-    assert r.returncode == 4 and "4 coverage cells" in r.stderr
+    assert r.returncode == 4 and "4 vLLM deployments" in r.stderr
     assert check("prover-bench", ["circuits"] * 4).returncode == 0                 # the cell cap is coverage's; provers has its own slot
     assert check("prover-bench", ["circuits"] * 4 + ["provers"] * 2).returncode == 4
     (tmp_path / "wl.json").write_text("not json")

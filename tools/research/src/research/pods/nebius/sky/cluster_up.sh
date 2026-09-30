@@ -220,13 +220,13 @@ fi
 run sudo systemctl daemon-reload
 run sudo systemctl enable --now vy-usage.timer
 
-grep -q "metadata: {name: circuits}" "$QUEUES" && run sudo install -m 755 "$SRC/quiet_hour.sh" /usr/local/bin/vy-quiet-hour
-grep -q "metadata: {name: circuits}" "$QUEUES" && for what in hold:12:30 release:13:30; do
+grep -q "metadata: {name: deployments-cpu}" "$QUEUES" && run sudo install -m 755 "$SRC/quiet_hour.sh" /usr/local/bin/vy-quiet-hour
+grep -q "metadata: {name: deployments-cpu}" "$QUEUES" && for what in hold:12:30 release:13:30; do
   verb=${what%%:*}
   at=${what#*:}
   if [ ! -f "/etc/systemd/system/vy-quiet-$verb.timer" ]; then
     if [ "$mode" = --apply ]; then
-      printf '[Unit]\nDescription=quiet hour: %s circuits admissions\n\n[Service]\nType=oneshot\nExecStart=/usr/local/bin/vy-quiet-hour %s\n' "$verb" "$verb" \
+      printf '[Unit]\nDescription=quiet hour: %s the vLLM deployments queues' admissions\n\n[Service]\nType=oneshot\nExecStart=/usr/local/bin/vy-quiet-hour %s\n' "$verb" "$verb" \
         | sudo tee "/etc/systemd/system/vy-quiet-$verb.service" > /dev/null
       printf '[Unit]\nDescription=quiet hour %s at %sZ\n\n[Timer]\nOnCalendar=*-*-* %s:00 UTC\n\n[Install]\nWantedBy=timers.target\n' "$verb" "$at" "$at" \
         | sudo tee "/etc/systemd/system/vy-quiet-$verb.timer" > /dev/null
@@ -236,7 +236,7 @@ grep -q "metadata: {name: circuits}" "$QUEUES" && for what in hold:12:30 release
   fi
 done
 run sudo systemctl daemon-reload
-grep -q "metadata: {name: circuits}" "$QUEUES" && run sudo systemctl enable --now vy-quiet-hold.timer vy-quiet-release.timer
+grep -q "metadata: {name: deployments-cpu}" "$QUEUES" && run sudo systemctl enable --now vy-quiet-hold.timer vy-quiet-release.timer
 
 step "5. the host's CUDA driver library for GPU-less pods (/workspace/jobs/cuda-driver)"
 # A coverage cell's Build task has no GPU, and so no driver libraries in its pod, but importing vLLM's CUDA platform (#536) loads

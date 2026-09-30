@@ -104,18 +104,45 @@ def test_the_exporter_publishes_each_queue_and_which_pod_is_in_it(tmp_path):
     assert "vy_exporter_ok{} 0" in ex.render({}, {}, {}, ok=False)
 
 
-def test_a_firing_notification_becomes_one_markdown_note_for_root():
+def test_a_firing_notification_becomes_markdown_notes_naming_the_job_and_its_lane(tmp_path):
     sink = load("alert_sink")
-    firing = {"commonLabels": {"alertname": "Pod holds a GPU at 0%"},
-              "alerts": [{"status": "firing", "fingerprint": "f1", "startsAt": "2026-09-30T15:40:00.000Z",
-                          "labels": {"alertname": "Pod holds a GPU at 0%", "gpu": "5", "pod": "gpu-209-head", "namespace": "default"},
-                          "annotations": {"description": "Pod default/gpu-209-head has held GPU 5 at 0% for 10 minutes"}},
-                         {"status": "resolved", "fingerprint": "f2", "labels": {"gpu": "1"}}]}
-    name, text = sink.note(firing, 1790783000)
-    assert re.fullmatch(r"\d{8}T\d{4}Z-alert-pod-holds-a-gpu-at-0-[0-9a-f]{8}\.md", name)
-    assert text.startswith("---\nid: " + name[:-3] + "\n") and "\nlane: verity-root\n" in text and "\nkind: finding\n" in text
-    assert "gpu 5, pod gpu-209-head, namespace default" in text and "since 2026-09-30T15:40:00Z" in text and "GPU 1" not in text
-    assert sink.note({"alerts": [{"status": "resolved"}]}, 0) is None and sink.note({}, 0) is None
+    assert sink.job_id_of("gpu-209-ce1b86e4-head") == 209 and sink.job_id_of("m0-v3-a13-198-ce1b86e4-head") == 198
+    assert sink.job_id_of("grafana-7d9f") is None
+    table = sink.lane_table(MON / "lanes.tsv")
+    assert sink.lane_of("cov-g003", table) == "vllm-epoch-run" and sink.lane_of("m0-v3-a15b", table) == "flock-netlist (M0)"
+    assert sink.lane_of("sm120-qwen05-gb2-b1-2", table) is None and sink.lane_of(None, table) is None
+    runs = tmp_path / "runs"
+    (runs / "r1").mkdir(parents=True)
+    (runs / "r1" / "events.jsonl").write_text('{"id": "run#1@gpu-209-ce1b86e4-head:11:22"}\n')
+    (runs / "r1" / "job.json").write_text(json.dumps({"store": {"params": {"row": "phi3__b8"}}}))
+    (runs / "r2").mkdir()
+    (runs / "r2" / "events.jsonl").write_text('{"id": "run#1@gpu-5-ce1b86e4-head:1:2"}\n')
+    (runs / "r2" / "job.json").write_text(json.dumps({"execution": {"command": ["py", "-m", "cli", "row", "stage", "commit", "q__b1", "R"]}}))
+    assert sink.pod_row("gpu-209-ce1b86e4-head", str(runs)) == "phi3__b8" and sink.pod_row("gpu-5-ce1b86e4-head", str(runs)) == "q__b1"
+    assert sink.pod_row("gpu-7-ce1b86e4-head", str(runs)) is None
+    tl = tmp_path / "timeline.jsonl"
+    tl.write_text("".join(json.dumps(e) + "\n" for e in (
+        {"pid": 1, "stage": "engine.build", "ev": "start"}, {"pid": 1, "stage": "engine.build", "ev": "end"},
+        {"pid": 1, "stage": "validate.sampled_replay", "ev": "start"})))
+    assert sink.open_stages(tl) == {"validate.sampled_replay"} and sink.open_stages(tmp_path / "absent") == set()
+    ctx = {"gpu-209-ce1b86e4-head": {"job": "cov-g003", "lane": "vllm-epoch-run", "row": "phi3__b8", "open": {"validate.sampled_replay"}},
+           "gpu-214-ce1b86e4-head": {"job": "cov-k23-2", "lane": "vllm-epoch-run", "row": "q__b1", "open": {"committer_setup"}}}
+    alert = lambda pod, gpu, fp: {"status": "firing", "fingerprint": fp, "startsAt": "2026-09-30T15:40:00.000Z",  # noqa: E731
+                                  "labels": {"alertname": "Pod holds a GPU at 0%", "gpu": gpu, "pod": pod, "namespace": "default"},
+                                  "annotations": {"description": f"Pod default/{pod} has held GPU {gpu} at 0% for 10 minutes"}}
+    payload = {"commonLabels": {"alertname": "Pod holds a GPU at 0%"},
+               "alerts": [alert("gpu-209-ce1b86e4-head", "5", "f1"), alert("gpu-214-ce1b86e4-head", "3", "f2"),
+                          {"status": "resolved", "fingerprint": "f3", "labels": {"gpu": "1"}}]}
+    (stall_name, stall), (replay_name, replay) = sink.notes(payload, 1790783000, ctx.get)
+    assert re.fullmatch(r"\d{8}T\d{4}Z-alert-pod-holds-a-gpu-at-0-[0-9a-f]{8}\.md", stall_name)
+    assert re.fullmatch(r"\d{8}T\d{4}Z-alert-replay-on-gpu-[0-9a-f]{8}\.md", replay_name)
+    for name, text in ((stall_name, stall), (replay_name, replay)):
+        assert text.startswith("---\nid: " + name[:-3] + "\n") and "\nlane: verity-root\n" in text and "\nkind: finding\n" in text
+    assert "gpu 3, pod gpu-214-ce1b86e4-head, namespace default** (job cov-k23-2; lane vllm-epoch-run; row q__b1)" in stall
+    assert "gpu-209" not in stall and "GPU 1" not in stall and "tags:" not in stall
+    assert "\ntags: [replay-on-gpu]\n" in replay and "[replay-on-gpu]: 1 firing" in replay and "gpu 5, pod gpu-209-ce1b86e4-head" in replay
+    assert sink.notes({"alerts": [{"status": "resolved"}]}, 0) == [] and sink.notes({}, 0) == []
+    assert len(sink.notes({"alerts": [alert("x-1-abcdef12-head", "0", "f9")]}, 0)) == 1          # no context: one plain note
 
 
 def test_the_idle_rules_deliver_to_the_markdown_sink_and_mute_the_quiet_hour():
