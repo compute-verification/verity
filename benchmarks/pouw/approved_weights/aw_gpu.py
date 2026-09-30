@@ -185,32 +185,30 @@ def install_act(model, rung, seed, dev):
                 model.get_submodule(nm).weight.fill_(1.0)
     for n, m in linears(model):
         m._aw_rin = m._aw_rout = None
-        if rung == "bf16":
-            m.forward = torch.nn.Linear.forward.__get__(m)
-            continue
-        w = m._aw_orig.to(dev).float()
-        if norm_of(n) in gam:
-            w = w * gam[norm_of(n)].to(dev)[None, :]
-        q = nvfp4_rows if fmt == "nvfp4" else fp8_rows
-        with torch.no_grad():
-            if base == "rot" and n.endswith(("o_proj", "down_proj")):
-                r = rot_matrix(w.shape[0], dev, seed)
-                m.weight.copy_(q(r.T @ w).to(m.weight.dtype))
-                m._aw_rout = rot_dtype(r.shape[0], dev, seed, m.weight.dtype)
-            elif base == "rot":
-                r = rot_matrix(w.shape[1], dev, seed)
-                m.weight.copy_(q(w @ r).to(m.weight.dtype))
-                m._aw_rin = rot_dtype(r.shape[0], dev, seed, m.weight.dtype)
-            else:
-                m.weight.copy_(q(w).to(m.weight.dtype))
-        k = m.in_features
-        m._aw_f = torch.randn(k, 32, generator=gen(dev, "act-F", n, seed), device=dev)
-        m._aw_g = gen(dev, "act-E", n, seed)
+        if rung != "bf16":
+            w = m._aw_orig.to(dev).float()
+            if norm_of(n) in gam:
+                w = w * gam[norm_of(n)].to(dev)[None, :]
+            q = nvfp4_rows if fmt == "nvfp4" else fp8_rows
+            with torch.no_grad():
+                if base == "rot" and n.endswith(("o_proj", "down_proj")):
+                    r = rot_matrix(w.shape[0], dev, seed)
+                    m.weight.copy_(q(r.T @ w).to(m.weight.dtype))
+                    m._aw_rout = rot_dtype(r.shape[0], dev, seed, m.weight.dtype)
+                elif base == "rot":
+                    r = rot_matrix(w.shape[1], dev, seed)
+                    m.weight.copy_(q(w @ r).to(m.weight.dtype))
+                    m._aw_rin = rot_dtype(r.shape[0], dev, seed, m.weight.dtype)
+                else:
+                    m.weight.copy_(q(w).to(m.weight.dtype))
+            k = m.in_features
+            m._aw_f = torch.randn(k, 32, generator=gen(dev, "act-F", n, seed), device=dev)
+            m._aw_g = gen(dev, "act-E", n, seed)
 
-        def fwd(x, m=m, fmt=fmt):
+        def fwd(x, m=m, fmt=None if rung == "bf16" else fmt):
             if m._aw_rin is not None:
                 x = x @ m._aw_rin
-            y = F.linear(act_quant(x, fmt, m._aw_f, m._aw_g), m.weight, m.bias)
+            y = F.linear(x if fmt is None else act_quant(x, fmt, m._aw_f, m._aw_g), m.weight, m.bias)
             if getattr(m, "_aw_scale", None) is not None:
                 y = y * m._aw_scale.to(y.dtype) + m._aw_shift.to(y.dtype)
             if m._aw_rout is not None:
