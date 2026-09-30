@@ -31,22 +31,24 @@ The Lean model is `chainDense` (POUS `lean/submissions/sponge-dense/SpongeModel.
 The Lean model is `p3Scheme` (POUS `lean/submissions/p3-meets/P3Meets.lean`) over `p3Model'`
 (`pebbling/ColumnAwareDraft.lean`) and `Pous.Model.Invertible`. The prose is POUS `docs/p3-scheme.md` (§1, §2c) and
 `docs/p3-instantiation.md`. Where they disagree, the code follows Lean, except where the instantiation deliberately
-changes the scheme (items 3, 5 and 6), which the Lean model has yet to absorb.
+changes the scheme (items 3, 5 and 6). `p3Scheme` has not absorbed those changes, but the concrete-`H` model has:
+`Pous.P3Concrete.p3SchemeC` and `p3SchemeNC` over `Pous.Sponge.p3ChainModel` (`lean/Pous/Model/P3Chain.lean`). The pins
+`P3ConcreteMeets64`, `P3ConcreteMeets14GB` and `P3ConcreteMeets64D12` are proved over it with no hypothesis (`lean/PousProofs/Chain/Flat.lean`).
 
 | # | Topic | Lean model | Prose | This code |
 |---|---|---|---|---|
 | 1 | Label width | `Lab n wc`, so `n` divides `m`; `p3Scheme` has `m = 220 · 37 = 8140` bits | `m = 8192` with `w_c = m/n ≈ 37` (§1); "64 KB", `m/n ≈ 2380` (§2c); `m = 65,560` B, `w_c = 2384` bits (instantiation) | `Params(n, wc, k)` with `m = n · wc`; default `wc = 2384` (65,560 B); `LEAN_P3_MEETS` has `wc = 37` |
 | 2 | Layer indices | `Fin 2`: 0 lower, 1 top | 1 and 2 | 0 and 1 |
-| 3 | Key tag and salt | `KQ'` carries `Bits 256`; `tagOf` puts a 128-bit salt in bits 0..127, zeros above (segment 0 only) | `(salt, s)` as fields (§1); `tag_s = salt (24 B) ‖ u64(s)` (instantiation) | the instantiation's; for segment 0 with a salt under 2^128 it equals `tagOf` |
+| 3 | Key tag and salt | `KQ'` carries `Bits 256`; `tagOf` puts a 128-bit salt in bits 0..127, zeros above (segment 0 only). `p3ChainModel` has the instantiation's `tagR salt s = salt (24 B) ‖ u64(s)`, in the key domain `domP3` and in `P`'s tweak | `(salt, s)` as fields (§1); `tag_s = salt (24 B) ‖ u64(s)` (instantiation) | the instantiation's; for segment 0 with a salt under 2^128 it equals `tagOf` |
 | 4 | Segments | `p3Scheme` is one segment of 220 labels; `n10prime` covers one segment | many segments per `W` | `N` segments, segment-major in `W` and `C`; `N = 1` is Lean's scheme |
-| 5 | `H` | a monolithic random oracle `KQ' → Lab`; the pilot `p3SpongeModel` (`sponge-dense`) has the XOR sponge over `Π` | a sponge over `Π` of `m + 512` bits (§2c), then an overwrite chain over `Π₂` of `2m + 512` bits (instantiation, 16:45Z) | pluggable; the default is the overwrite chain, and the broken XOR sponge and Miyaguchi–Preneel are kept for attack replay. The header encodes only `npar`, so `H` is injective on the scheme's queries (`parentsOf`), not on every partial assignment in `KQ'` |
-| 6 | `P` | one untweaked ideal permutation `ω.2` | tweakable `P_T`, `T = (tag_s, layer, v)` (instantiation) | `P_T`; the Lean cross-check uses a toy that ignores `T` |
+| 5 | `H` | a monolithic random oracle `KQ' → Lab`; the pilot `p3SpongeModel` (`sponge-dense`) has the XOR sponge over `Π`; `p3ChainModel` has the overwrite chain over `Π₂` (`ovKey`), the code's default | a sponge over `Π` of `m + 512` bits (§2c), then an overwrite chain over `Π₂` of `2m + 512` bits (instantiation, 16:45Z) | pluggable; the default is the overwrite chain, and the broken XOR sponge and Miyaguchi–Preneel are kept for attack replay. The header encodes only `npar`, so `H` is injective on the scheme's queries (`parentsOf`), not on every partial assignment in `KQ'` |
+| 6 | `P` | one untweaked ideal permutation `ω.2`; `p3ChainModel` has `P_T`, an independent uniform permutation for each `T = (tag_s, layer, v)` | tweakable `P_T`, `T = (tag_s, layer, v)` (instantiation) | `P_T`; the Lean cross-check uses a toy that ignores `T` |
 | 7 | Decode rounds | `decodeW`: key and `P⁻¹` independent, so one round each pass with a monolithic `H` | "key, then `P⁻¹`" (§1) | key and `P⁻¹` side by side; an overwrite-chain key takes `npar + 1` rounds |
-| 8 | Rounds per level | `n10prime` assumes `ColumnHard G ⌊(D + 1)/2⌋` (2 rounds per level) | `⌊(D − 1)/13⌋ + 1` (§2c); 3 calls per level at worst, `⌊(D − 1)/3⌋ + 1` (instantiation §1) | rounds measured exactly per derivation; `CERTIFIED_ROUNDS = 28` uses the instantiation's rule |
+| 8 | Rounds per level | `n10prime` assumes `ColumnHard G ⌊(D + 1)/2⌋` (2 rounds per level); the concrete-`H` pins count `P`/`Π₂` rounds directly, `D = 10` on `B(220, 12)` and 12 on `B(220, 16)` | `⌊(D − 1)/13⌋ + 1` (§2c); 3 calls per level at worst, `⌊(D − 1)/3⌋ + 1` (instantiation §1) | rounds measured exactly per derivation; `CERTIFIED_ROUNDS = 10`, the pins' `D` (the instantiation's rule read `band_twoWay_220_12`'s 10 game levels as 28 rounds, which no `Meets` statement covers) |
 | 9 | The column game's units | `colRound` charges one game round each for a reverse and for a promotion | — | an oracle adversary pays 1 round for a reverse (with a monolithic `H`) and 0 for a promotion. See below |
 | 10 | Band graph at `k = 0` | `bandGraph n 0` keeps the spine parent `v − 1` | `par(v) = {v − k, …, v − 1}`, empty at `k = 0` | Lean's; the same for `k ≥ 1` |
 | 11 | Verifier | the audit compares answers with the true blocks ("idealizes the per-block tags") | per-block tags; a SHA-256 Merkle root (instantiation §4) | the instantiation's tree (RFC 6962 shape) with leaf digests |
-| 12 | Audit parameters | `p3_meets`: `D = 20`, `Q = 2^20`, `k = 119` (relies on the `pos = 0` collapse) or `185` (no-mask charge) | `k = 423`/`229` (§2a); `k = 132`, `Δ = 300` µs (§2c); `Δ = 0.5` ms plus RTT (`p3-gpu-measurements.md`); `k = 117` at `D = 10` (`scheme-choice-e2e.md`) | `k = 132`, `Δ = 0.5` ms, `rtt_allowance_ns = 0`, `Q = 2^14`, `CERTIFIED_ROUNDS = 28` |
+| 12 | Audit parameters | `P3ConcreteMeets64` (concrete `H`): `D = 10`, `Q = 2^20`, `k = 106`, one segment on `B(220, 12)`; `P3ConcreteMeets14GB`, the same at 971 segments; `P3ConcreteMeets64D12`, `D = 12` on `B(220, 16)`. `p3_meets` (monolithic `H`): `D = 20`, `Q = 2^20`, `k = 119` (relies on the `pos = 0` collapse) or `185` (no-mask charge) | `k = 423`/`229` (§2a); `k = 132`, `Δ = 300` µs (§2c); `Δ = 0.5` ms plus RTT (`p3-gpu-measurements.md`); `k = 117` at `D = 10` (`scheme-choice-e2e.md`) | `k = 132`, `Δ = 0.5` ms, `rtt_allowance_ns = 0`, `Q = 2^14`, `CERTIFIED_ROUNDS = 10` |
 | 13 | Key inputs | full parent labels (P3.0) | P3.1 digest keys, later dropped | P3.0 |
 | 14 | Encoder and coins | `enc W ω salt`, with the salt uniform in `Coins` after `W` | the server encodes after committing to `W`; the verifier draws the salt and computes `vk` itself (§2c) | the prose's protocol (`setup`), which matches Lean's order when the commitment precedes the salt |
 | 15 | Bytes | `Bits` via `codeEquiv` | little-endian integers (instantiation) | consistent: bit `i` of a string is bit `i mod 8` of byte `⌊i/8⌋` |
@@ -62,16 +64,18 @@ monolithic `H`, the reverse costs 1 oracle round and the promotion none, while `
   20 oracle rounds, using 211 `P⁻¹` queries. The game needs 12 rounds for it. That is under the certified `X = 3`, but
   it shows the certificate is needed at 12 game rounds, while `band_twoWay_220_12` is proved at 10 and 11.
 - With the instantiation's overwrite chain, a reverse costs at least `npar + 1` rounds, since it needs the top's key.
-  Whether a gap remains under `⌊(D − 1)/3⌋ + 1` has not been checked.
+  Whether a gap remains under `⌊(D − 1)/3⌋ + 1` has not been checked. The concrete-`H` pins do not use that rule: they
+  count oracle rounds of `p3ChainModel` directly.
 
 **Item 5, the storage breaks of the earlier `H`.** The pilot proved that the XOR sponge's pre-squeeze states are not
 full-price pebbles once `Π⁻¹` is queryable. With a public first state, one stored state regenerates two labels
 (`dense_two_labels_from_one_state`). The model's B5 freshness step therefore fails for it. `tests/test_pous_two_for_one.py`
 replays that attack, and the Miyaguchi–Preneel pre-image attack on band rows, on real labels, and shows both fail on the
-overwrite chain. A Lean statement for the overwrite chain (the two-permutation model with `Π₂`) is not written yet.
+overwrite chain. The overwrite chain's Lean statement is the two-permutation model of `lean/Pous/Model/P3Chain.lean`,
+with the pins `P3ConcreteMeets64`, `P3ConcreteMeets14GB` and `P3ConcreteMeets64D12`, proved with no hypothesis.
 
 **What the Lean cross-check covers.** Lean evaluated `c1'`, `topLabel'`, `transpose`, `decodeLower`, `tagOf`, the
 decoder, `bandGraph` and `colRound` for `n ≤ 3` (encode) and `n ≤ 6` (game), and the code matches on every value. The
 `rfl` theorems in `tests/lean/PousRefCheck.lean` tie the generic definitions it evaluates to `P3Meets`' own at
-`n = 220`. Items 3, 5 and 6 are outside the model, so the check plugs in a monolithic toy `H` and a tweak-ignoring
-toy `P`.
+`n = 220`. Items 3, 5 and 6 are outside `p3Scheme`, so the check plugs in a monolithic toy `H` and a tweak-ignoring
+toy `P`. It does not evaluate `p3ChainModel` yet.
