@@ -17,6 +17,10 @@ strip's path to D_A and the call's key unit, each proved once, and its Y strip's
   a **window's** budget: a call draws its share K_c = ⌈K·W_c/W_window⌉, capped at its units, and its y cells at the
   floor ⌈K_y·n_c/N⌉ of the window's N, K_y = K (`window_laws`, root's option B on X-SPC-105).
 
+**The verifier's draw.** Proving the closure beside the draw is #362's `Law.widen`, under which every bound of the law
+still holds (`escape_widen_le`). `widen` takes the draw the verifier of record issues (`flock-verify draw --work K_c
+--work-table F --closure F`, with `work_table` and `closure_map`), held to this call's own law and closure.
+
 **Openings** are row-granular (the red team's X-SPC-57): A and the weight are committed one leaf per row, so a proved
 unit opens exactly the rows it reads.
 
@@ -175,13 +179,21 @@ def window_laws(layouts: Sequence["Layout"], k: int = RECORD_K, floors: tuple[tu
     The other zero-work templates keep their floors (1 unless ``floors`` names them, X-SPC-84). Per call these are pinned
     (`audit_work_floor`); over the window, the per-call split (X-SPC-83, 106) and B (X-SPC-105) are root's window pin
     `audit_window_split_of_record` (`FlockSoundness/Audit/Window.lean`, #418), which takes each call's work
-    in one stratum (`check_work_strata`) and each call's draw under its own key context (`Traced.draw`'s `Ledger`)."""
+    in one stratum (`check_work_strata`) and each call's draw under its own key context (`Traced.draw`'s `Ledger`).
+    It also takes a window that does some work (0 < W, its `hW`) and has y cells (0 < N, its `hN`): a window with
+    either empty is refused here, so none is ever drawn or accepted."""
+    if not layouts:
+        raise ValueError("a window has at least one call")
     for lay in layouts:
         check_work_strata(lay.strata)
     total = sum(lay.work() for lay in layouts)
+    if total <= 0:
+        raise ValueError("a window does some work (0 < W, the window pin's hW): this one does none")
     k_y = k if k_y is None else k_y
     ys = [[s for s in lay.strata if s.role == "dequant"] for lay in layouts]
     n = sum(len(s.units) for ss in ys for s in ss)
+    if n <= 0:
+        raise ValueError("a window has y cells (0 < N, the window pin's hN): this one has none")
     out = []
     for ss in ys:
         f = dict(floors) | {s.name: -(-k_y * len(s.units) // n) for s in ss}
@@ -322,11 +334,15 @@ def draw(key: Key, lay: Layout, law: TileLaw, call: Sequence[int] = ()) -> Plan:
     for s in lay.strata:
         context = ("call", *call, "stratum", s.name) if call else ("stratum", s.name)
         drawn += [s.units[i] for i in key.subset(sizes[s.name], len(s.units), context)]
+    return _widened(lay, law.name, sizes, drawn)
+
+
+def _widened(lay: Layout, name: str, sizes: Mapping[str, int], drawn: Sequence[int]) -> Plan:
     proved = set(drawn)
     ys = {lay.y_strip[u] for u in drawn if lay.y_strip and u in lay.y_strip}
     for u in drawn:
         proved.update(lay.closure.get(u, ()))
-    return Plan(law.name, sizes, tuple(sorted(drawn)), tuple(sorted(proved)), openings(lay, proved, ys), tuple(sorted(ys)))
+    return Plan(name, dict(sizes), tuple(sorted(drawn)), tuple(sorted(proved)), openings(lay, proved, ys), tuple(sorted(ys)))
 
 
 def work_table(lay: Layout, law: WorkLaw = WorkLaw()) -> dict[str, dict[str, int]]:
@@ -344,6 +360,35 @@ def law_object(lay: Layout, law: WorkLaw) -> dict:
     sizes, table, k = law.sizes(lay.strata), work_table(lay, law), law.budget(lay.strata)
     return {"law": "work", "k": k, "strata": [{"template": s.name, "units": s.ranges(), "work": table[s.name]["work"],
                                                "floor": table[s.name]["floor"], "k": sizes[s.name]} for s in lay.strata]}
+
+
+def closure_map(lay: Layout) -> dict[str, list[int]]:
+    """The verifier's closure map (#362's `--closure`, `Draw.closureMapOfJson`): each tile's unit ↦ its closure, the tile
+    first (t ∈ cl t)."""
+    return {str(t): list(c) for t, c in lay.closure.items()}
+
+
+def widen(lay: Layout, unit_draw: Mapping, law: WorkLaw) -> Plan:
+    """The plan for a work draw the verifier of record issued (`flock-verify draw`'s `DRAW {...}`), held whole to the
+    verifier's own law: ``law`` is its `WorkLaw` for this call (K_c from `window_laws`, and its floors), and the draw's
+    law must be exactly `law_object(lay, law)`, its K included, never taken as stated (#362's U2, X-SPC-80, X-SPC-114).
+    Its units must be exactly k_s in each stratum; then every drawn tile's closure (`Law.widen`), with the Y units it
+    reads in the weight's Program. A closure draw's stated closure (`--closure`, `closure_map`) must be exactly that
+    one. The verifier calls it through `Traced.widen`, over its own layout (X-SPC-115)."""
+    own = law_object(lay, law)
+    if {k: unit_draw.get(k) for k in own} != own or unit_draw.get("population") != len(lay.units):
+        raise ValueError("the draw's law is not this call's own (its program, partition and work table)")
+    drawn = list(unit_draw.get("units", ()))
+    if drawn != sorted(set(drawn)) or not all(0 <= u < len(lay.units) for u in drawn):
+        raise ValueError("the drawn units are not ascending, distinct units of the population")
+    sizes = law.sizes(lay.strata)
+    for s in lay.strata:
+        if sum(1 for u in drawn if lay.units[u].template == s.name) != sizes[s.name]:
+            raise ValueError(f"stratum {s.name!r} does not hold its k = {sizes[s.name]} drawn units")
+    plan = _widened(lay, law.name, sizes, drawn)
+    if "closure" in unit_draw and list(unit_draw["closure"]) != sorted(set(plan.proved) - set(drawn)):
+        raise ValueError("the draw's closure is not the verifier's closure of its units")
+    return plan
 
 
 def openings(lay: Layout, proved, proved_y=()) -> tuple[tuple[str, int], ...]:
@@ -374,5 +419,5 @@ def unsound_work_bound(lay: Layout, sizes: Mapping[str, int], delta: float) -> f
 
 
 __all__ = ["DRAW_DOMAIN", "RECORD_K", "CountLaw", "Layout", "Plan", "StratumSpec", "TileLaw", "WorkLaw", "check_work_strata",
-           "draw", "fp8_layout", "law_object", "layout", "openings", "profile", "record_k", "template_strata",
-           "unsound_work_bound", "window_laws", "work_table"]
+           "closure_map", "draw", "fp8_layout", "law_object", "layout", "openings", "profile", "record_k",
+           "template_strata", "unsound_work_bound", "widen", "window_laws", "work_table"]

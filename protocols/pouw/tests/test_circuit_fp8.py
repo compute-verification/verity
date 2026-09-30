@@ -568,43 +568,72 @@ def test_the_circuit_s_tiles_give_295s_production_leaf():
 
 # ---- the verifier's draw and the weight link -----------------------------------------------------------------------------
 
-def _draw_key():
-    from verity.randomness import derive
-    from verity_pouw.circuit import plan as PL
+def _window(t, calls, source=bytes(range(32))):
+    """A window over ``calls`` (`Fp8Anchors`, commitment) of ``t``'s shape: its `Receipt` and the `Ledger` opened from it,
+    with the fresh source replaced by ``source`` so the draws are reproducible."""
+    from unittest import mock
 
-    return derive(b"verifier-secret", PL.DRAW_DOMAIN, {"receipt": b"r"})
+    from verity_pouw.circuit import anchors as A
+
+    receipt = A.Receipt(tuple((an, t.shape, commitment) for an, commitment in calls))
+    with mock.patch.object(A, "_fresh_source", lambda: source):
+        return receipt, A.Ledger.open(receipt)
 
 
 def test_equal_calls_under_one_key_draw_different_tiles():
-    """X-SPC-96 on FP8: each stratum's subset is keyed by the call's index, the matmul index, with its template, so two
-    equal calls under one key draw different tiles, and `Traced.draw` draws over the verifier's own layout. It admits each
-    call to the window's `Ledger` first, so a repeated matmul index is refused before it draws (M1)."""
+    """X-SPC-96 on FP8: each stratum's subset is keyed by the call's index, the matmul index, with its template, so equal
+    calls under the window's one key draw different tiles, and `Traced.draw` draws over the verifier's own layout, under
+    the key of the ledger opened from the window's receipt. A call the receipt doesn't list, or one already drawn, is
+    refused before it draws (C1, M1)."""
     from verity_pouw.circuit import plan as PL
-    from verity_pouw.circuit.anchors import Fp8Anchors, Ledger
+    from verity_pouw.circuit.anchors import Fp8Anchors
 
     c = call(64, 96, 64, index=3)
-    t, law, window = _traced(c), PL.WorkLaw(4), Ledger()
+    t, law = _traced(c), PL.WorkLaw(4)
     lay = t.layout()
+    ans = {i: Fp8Anchors(c.shape, c.salt, i, c.weight, c.sums) for i in (3, 4, 5, 6, 7)}
+    _receipt, window = _window(t, [(ans[i], hashlib.sha256(b"call %d" % i).digest()) for i in (3, 4, 5, 6)])
+    tiles = lambda plan: [u for u in plan.drawn if lay.units[u].role == "tile"]  # noqa: E731
+    drawn = {i: tiles(t.draw(law, ans[i], window)) for i in (3, 4, 5, 6)}
+    assert drawn[3] == tiles(PL.draw(window.key, lay, law, (3,)))
+    assert all(drawn[i] != drawn[3] for i in (4, 5, 6))
+    for again, match in ((ans[3], "repeated"), (ans[7], "not on the window's receipt")):
+        with pytest.raises(DomainError, match=match):
+            t.draw(law, again, window)
 
-    def tiles(index, ledger):
-        plan = t.draw(_draw_key(), law, Fp8Anchors(c.shape, c.salt, index, c.weight, c.sums), ledger)
-        return [u for u in plan.drawn if lay.units[u].role == "tile"]
 
-    first = tiles(3, window)
-    assert first == tiles(3, Ledger()) and all(tiles(i, window) != first for i in (4, 5, 6))
-    with pytest.raises(DomainError, match="repeated"):
-        tiles(3, window)
+def test_an_fp8_call_s_openings_answer_to_root_a_on_the_receipt():
+    """#423's opening check on NCP-FP8: the call's commitment on the window's receipt is root_A, `audit.commit_rows` over
+    its rows under `activation_binding(salt, index)`, and the plan's A rows open under it and under nothing else."""
+    from verity_pouw import audit
+    from verity_pouw.circuit import plan as PL
+    from verity_pouw.circuit.anchors import Fp8Anchors
+
+    c = call(32, 96, 32)
+    t, an = _traced(c), Fp8Anchors(c.shape, c.salt, c.index, c.weight, c.sums)
+    binding, rows = audit.activation_binding(c.salt, c.index), [bytes(r) for r in c.a]
+    tree = audit.commit_rows(binding, c.index, rows)
+    assert tree.commitment.root == R.root_a(c)
+    _receipt, window = _window(t, [(an, R.root_a(c))])
+    plan = t.draw(PL.WorkLaw(1), an, window)
+    domain, opened = audit.rows_domain(binding, c.index, len(rows)), sorted(r for k, r in plan.openings if k == "a")
+    t.check_openings(plan, an, window, domain, [tree.open(r) for r in opened])
+    other = audit.commit_rows(binding, c.index, [bytes(len(r)) for r in rows])
+    with pytest.raises(DomainError):
+        t.check_openings(plan, an, window, domain, [other.open(r) for r in opened])
 
 
 def test_the_call_s_h_and_amplitudes_are_linked_to_the_weight_program():
     """X-SPC-101: the plan opens the call's h and amplitudes at each drawn tile's column strip beside the weight Program's
     outputs there (`Traced.check_link`). Another weight's h and amplitudes, or one amplitude changed, are refused."""
     from verity_pouw.circuit import plan as PL
-    from verity_pouw.circuit.anchors import Fp8Anchors, Ledger
+    from verity_pouw.circuit.anchors import Fp8Anchors
 
     c = call(16, 96, 32)
     t = _traced(c)
-    plan = t.draw(_draw_key(), PL.WorkLaw(1), Fp8Anchors(c.shape, c.salt, c.index, c.weight, c.sums), Ledger())
+    an = Fp8Anchors(c.shape, c.salt, c.index, c.weight, c.sums)
+    _receipt, window = _window(t, [(an, R.root_a(c))])
+    plan = t.draw(PL.WorkLaw(1), an, window)
     assert {cs for role, cs in plan.openings if role == "y"} == set(plan.proved_y) != set()
     weight_out = list(evaluate(fp8.weight(c.shape, c.sums), *c.weight_args()))
     args = c.args()
