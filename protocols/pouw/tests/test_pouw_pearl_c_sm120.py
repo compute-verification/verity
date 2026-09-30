@@ -33,9 +33,9 @@ def test_records_are_leans_pipelines():
     assert DEVICES == {"h100": H100, "sm120": SM120, "sm120-unpromoted": SM120_UNPROMOTED}
     assert H100.pipelines == {"atom": ((32,), 14, -139), "peel": ((16,), 26, -133)} and H100.window == 128
     assert SM120.pipelines == {"atom": ((32,), 26, -133), "peel": ((16,), 26, -133)} and SM120.window == 128
-    assert H100.standins == () and [s.split(":")[0] for s in SM120.standins] == ["peel", "g", "prices", "k_max"]
+    assert H100.standins == () and [s.split(":")[0] for s in SM120.standins] == ["peel", "g", "k_max"]
     assert SM120_UNPROMOTED.pipelines == SM120.pipelines and SM120_UNPROMOTED.window == 32
-    assert [s.split(":")[0] for s in SM120_UNPROMOTED.standins] == ["peel", "prices", "k_max", "g"]
+    assert [s.split(":")[0] for s in SM120_UNPROMOTED.standins] == ["peel", "k_max", "g"]
     assert (H100.promotions(8192), SM120.promotions(8192), SM120_UNPROMOTED.promotions(8192)) == (64, 64, 0)
     with pytest.raises(ValueError):
         dataclasses.replace(SM120, atom=HOPPER_BF16_M16N8K16)
@@ -159,19 +159,22 @@ def test_debit_replays_the_devices_atom():
                 if replay(a, b, skip) == out:
                     keeps |= skip
             assert {t for t in range(g, g + SM120.g) if flags[t]} == keeps
-    assert D.atom_units(SM120) == D.ATOM_UNITS == 40 and D.debit_units(3, 2, SM120) == 3 * 40 + 2 * 64
+    assert D.atom_units(H100) == D.ATOM_UNITS == 40 and D.atom_units(SM120) == 34
+    assert D.debit_units(3, 2, device=SM120) == D.debit_units(3, 2, C.SM120_PRICES) == 3 * 34 + 2 * 40
     other = dataclasses.replace(SM120, g=8, prices=dataclasses.replace(SM120.prices, fadd=16, forming_credited=60))
-    assert D.atom_units(other) == 34 and D.debit_units(3, 2, other) == 3 * 34 + 2 * 60
+    assert D.atom_units(other) == 34 and D.debit_units(3, 2, device=other) == 3 * 34 + 2 * 60
 
 
 @pytest.mark.parametrize("m,k,n", [(1, 128, 128), (128, 3584, 4608), (2048, 18944, 3584)])
 def test_accounting_reads_the_record(m, k, n):
-    """At the stand-in prices and G, sm120's W_ref, credit and weight side are the H100's; another record's G and prices
-    move each term by its own price."""
+    """sm120's W_ref, credit and weight side are the H100's atom's at SM120_PRICES (the same G = 4 window), below the
+    H100's own; another record's G and prices move each term by its own price."""
     sh = Shape(m, k, n)
-    h, s = get("pearl-c-h100-v1"), get("pearl-c-sm120-v1")
-    assert (s.wref(sh), s.credit_of(sh), s.job_cost(n, k)) == (h.wref(sh), h.credit_of(sh), h.job_cost(n, k))
-    pr = Prices(fadd=16, bf16_mac=3, forming_credited=60, forming_a_only=5, hash_byte=1)
+    h, s, hs = get("pearl-c-h100-v1"), get("pearl-c-sm120-v1"), C.PearlC(forming="v1", prices=C.SM120_PRICES)
+    assert s.prices == C.SM120_PRICES and hs.name == "pearl-c-h100-v1@sm_120"
+    assert (s.wref(sh), s.credit_of(sh), s.job_cost(n, k)) == (hs.wref(sh), hs.credit_of(sh), hs.job_cost(n, k))
+    assert s.credit_of(sh) < h.credit_of(sh)
+    pr = Prices("test", fadd=16, bf16_mac=3, forming_credited=60, forming_a_only=5)
     o = C.PearlC(forming="v1", device=dataclasses.replace(SM120, g=2, prices=pr, standins=()))
     chain = m * n * (k + 16 * (k // 64))
     assert o.wref(sh) == chain + m * k * 32 + 3 * 64 * m * n + 65 * m * k
@@ -209,7 +212,7 @@ def test_unpromoted_instance_and_accounting():
     assert "no promotion" in s.certificate.hypotheses[0]
     sh = Shape(128, 4096, 256)
     promoted = C.PearlC(forming="v1", device=SM120)
-    assert promoted.wref(sh) - s.wref(sh) == 128 * 256 * 32 * (4096 // 128)
+    assert promoted.wref(sh) - s.wref(sh) == 128 * 256 * C.SM120_PRICES.fadd * (4096 // 128)
     with pytest.raises(KeyError):
         get("pearl-c-sm120-unpromoted-v1")
     with pytest.raises(NotImplementedError):

@@ -10,9 +10,10 @@ names hardware.
 * `H100` is the record every ``pearl-c-h100-*`` output was pinned on: `HOPPER_E4M3_K32`, `HOPPER_BF16_WGMMA_K16`, G = 4,
   Rounds 10-11's W1 prices (research store ``docs/pouw/cheap-binding.md`` §1) and k <= 2^16 (the pure-chain freezing bound).
 * `SM120` is the RTX PRO 6000 Blackwell's (``mma.sync``: ``kind::f8f6f4`` m16n8k32 E4M3 and m16n8k16 BF16).  The atom is the
-  card's captured step, `BLACKWELL_SM120_E4M3_M16N8K32` (one group of 32 in a 26-bit adder); the other fields are stand-ins
-  (`standins` names each): `HOPPER_BF16_M16N8K16` for the peel, and the H100's G = 4, prices and k bound.  G, the prices and
-  the k bound are statement parameters: they change through the coordinator and the cheap-binding and Lean lanes, not here.
+  card's captured step, `BLACKWELL_SM120_E4M3_M16N8K32` (one group of 32 in a 26-bit adder), and the prices are
+  `SM120_PRICES` (`Prices.sm120`, measured on node 2); the other fields are stand-ins (`standins` names each):
+  `HOPPER_BF16_M16N8K16` for the peel, and the H100's G = 4 and k bound.  G, the prices and the k bound are statement
+  parameters: they change through the coordinator and the cheap-binding and Lean lanes, not here.
 * `SM120_UNPROMOTED` is `SM120` without promotion (G is None: one accumulator from +0 over the whole of k, and the word is
   the last atom's output).  It is the panel's ``pearl-c-sm120`` v2, built for the kernels and the twin; no scheme
   is registered on it and its debit raises until the theory and Lean lanes restate Pearl-C without promotion.
@@ -28,13 +29,18 @@ from verity.ml.tc.models import (BLACKWELL_SM120_E4M3_M16N8K32, HOPPER_BF16_M16N
 
 @dataclass(frozen=True, slots=True)
 class Prices:
-    """W1 prices, in units of one dense FP8 MAC on the device."""
+    """A device's W1 prices, in units of one dense FP8 MAC on that device (the device statement's `Prices`: `add`,
+    `bf16`, `Costs`'s `fs` and `qa`).  Each credited step is at its cheapest bit-exact implementation on the device."""
 
-    fadd: int                # one FP32 add (a promotion)
+    device: str
+    fadd: int                # one FP32 add per word: a promotion, and P_B's FMA chain per step
     bf16_mac: int            # one BF16 MAC (the peel)
-    forming_credited: int    # `Costs.adopted`'s fs per operand element: the noise atom and the noisy cast
-    forming_a_only: int      # `Costs.adopted`'s qa per operand element: ρ, which reads the activations alone
-    hash_byte: int           # one TurboSHAKE128 byte; reported beside the unit, never in W_ref (the random oracle's)
+    forming_credited: int    # fs per activation element: the noise atom and the cast (depend on the salt)
+    forming_a_only: int      # qa per activation element: ρ's squared accumulate (reads the activations alone)
+
+    @property
+    def forming(self) -> int:
+        return self.forming_credited + self.forming_a_only
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,18 +76,23 @@ class Device:
         return {s: (m.groups, m.width, m.zero_exponent) for s, m in (("atom", self.atom), ("peel", self.peel))}
 
 
-H100_PRICES = Prices(fadd=32, bf16_mac=2, forming_credited=64, forming_a_only=4, hash_byte=826)
+#: sm_90, the H100 (Rounds 10–11, `Prices.h100`): FADD 32, a BF16 MAC 2, and `Costs.adopted`'s forming, 64 + 4
+H100_PRICES = Prices("sm_90", fadd=32, bf16_mac=2, forming_credited=64, forming_a_only=4)
+#: sm_120, the RTX PRO 6000 (`Prices.sm120`; node 2, locked 2,100 MHz, `r20260930-063213-c94a` and
+#: `r20260930-061717-3e84`): FADD 8, issue-bound (8.38 in the measured 64-add loop); a BF16 MAC 2; the k32 noise atom
+#: (32) and the E4M3 cast alone (8; 12.31 in the packing loop), 40; ρ's one FFMA per 8 elements, 1
+SM120_PRICES = Prices("sm_120", fadd=8, bf16_mac=2, forming_credited=40, forming_a_only=1)
+PRICES = {p.device: p for p in (H100_PRICES, SM120_PRICES)}
 
 H100 = Device("h100", HOPPER_E4M3_K32, HOPPER_BF16_WGMMA_K16, 4, H100_PRICES, 1 << 16)
 
 SM120 = Device(
-    "sm120", BLACKWELL_SM120_E4M3_M16N8K32, HOPPER_BF16_M16N8K16, 4, H100_PRICES, 1 << 16,
+    "sm120", BLACKWELL_SM120_E4M3_M16N8K32, HOPPER_BF16_M16N8K16, 4, SM120_PRICES, 1 << 16,
     standins=(
         "peel: HOPPER_BF16_M16N8K16, matched on the RTX 5090's mma.sync m16n8k16 bf16 (204,800/204,800) and exact in the "
         "vLLM lanes' RTX PRO 6000 cuBLASLt and MoE correspondences; mma.sync m16n8k16 not probed on the RTX PRO 6000 itself",
         "g: 4, the H100 statement's promotion period (it answers Hopper's 14-bit adder); P1 and the debit not yet re-derived "
         "for the 26-bit atom",
-        "prices: the H100's W1 prices (fadd 32, bf16 MAC 2, fs 64, qa 4, 826 per hashed byte), until measured on the card",
         "k_max: 2^16, the H100's pure-chain freezing bound, until re-derived on the captured atom",
     ),
 )
