@@ -238,6 +238,9 @@ origin lacks.
 When creating or modifying a skill in `.agents/skills/`, use
 `.agents/skills/authoring-skills/SKILL.md`.
 
+GPU kernel work (PoUW kernels on sm_120: what's been tried, gates, timing, recording every attempt, vLLM hookup):
+`.agents/skills/kernel-engineering/SKILL.md`.
+
 Before adding, changing or retiring a process (a rule here or in the lane contract, a gate in `check` or `research merge`,
 a required review, a file every PR must update), assess its effect on research velocity with
 `.agents/skills/process-design/SKILL.md`.
