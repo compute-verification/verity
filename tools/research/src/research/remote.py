@@ -398,12 +398,13 @@ def knows_queue(pkg: Path | None) -> bool:
     if pkg is None:
         return True
     try:
-        return "QUEUE_WRAP" in (Path(pkg) / "remote.py").read_text()
+        return "QUEUE_WORKLOAD_WRAP" in (Path(pkg) / "remote.py").read_text()
     except OSError:
         return False
 
 
-QUEUE_WRAP = "wrap"
+QUEUE_WRAP = "wrap"                       # the runner's, custody included: the job's CPU allocation
+QUEUE_WORKLOAD_WRAP = "workload_wrap"     # the workload's alone: a GPU phase's lease
 
 
 def queue_placement(source: Path | None, run_id: str, spec: dict[str, Any]) -> dict[str, Any]:
@@ -1201,8 +1202,8 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
         argv += ["--exclusive-lock", str(runs_root / ".exclusive.lock")]
     if req.get("custody"):
         argv += ["--custody-dir", str(request_path.parent / CUSTODY_DIR)]
-    argv += [*(req.get("harness_args") or []), "--", *req["command"]]
-    if req.get(QUEUE_WRAP):                        # --queue: the runner, custody included, runs inside the job's allocation
+    argv += [*(req.get("harness_args") or []), "--", *(req.get(QUEUE_WORKLOAD_WRAP) or []), *req["command"]]
+    if req.get(QUEUE_WRAP):                        # --queue: the runner, custody included, runs inside the job's CPU allocation
         argv = [*req[QUEUE_WRAP], *argv]
     log = open(run_dir / "launcher.log", "ab")
     try:
@@ -1377,7 +1378,7 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
                    "lease_extend_s": lease_extend_s(harness_args),
                    **({"custody": custody_pub} if custody_pub else {}),
                    **({"preflight_tool": preflight_tool} if preflight_tool else {}),
-                   **({QUEUE_WRAP: queue["wrap"], "queue": queue} if queue else {}),
+                   **({QUEUE_WRAP: queue["wrap"], QUEUE_WORKLOAD_WRAP: queue.get("workload_wrap") or [], "queue": queue} if queue else {}),
                    "cost": {"provider": m.get("provider", "runpod"), "pod_id": m.get("pod_id"), "machine": machine_name, "currency": "USD",
                             "rate_usd_per_hour": tgt["cost_per_hr"], "rate_observed_utc": tgt["rate_observed_utc"], "reason": None},
                    "remote": {"machine": machine_name, "pod_id": m.get("pod_id"), "pod_name": tgt["pod_name"], "host": tgt["host"], "port": tgt["port"],

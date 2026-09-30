@@ -14,9 +14,10 @@ def _job(**kw):
     return submit.job(**{"run_id": "r1", "project": "verity", "submitter": "lane-x", "max_s": 600, "custody_s": 900, **kw})
 
 
-def test_the_allocation_covers_the_jobs_time_and_its_custody():
+def test_a_cpu_allocation_covers_the_jobs_time_and_its_custody_and_a_gpu_lease_the_workload_alone():
     j = _job()
     assert j.id == "rr-r1" and j.max_s == 1500 and j.kind == "batch"
+    assert _job(gpus=1).max_s == 600
 
 
 def test_a_cpu_job_goes_home_in_a_capped_pinned_scope_with_cuda_hidden():
@@ -27,24 +28,23 @@ def test_a_cpu_job_goes_home_in_a_capped_pinned_scope_with_cuda_hidden():
     assert w[w.index("systemd-run"):][:7] == ["systemd-run", "--user", "--scope", "--quiet", "--collect", "--unit", "cluster-r1"]
     assert "MemoryMax=16G" in w and "MemorySwapMax=0" in w
     assert w[-3:] == ["taskset", "-c", "96-191"], "the owner runs outside node 1's reserved pools, at its own priority"
+    assert out["workload_wrap"] == []
 
 
-def test_a_guest_gpu_job_goes_to_node_2_through_gpu_lease_on_its_shares_cpus():
+def test_a_guest_gpu_job_goes_to_node_2_its_runner_on_its_shares_cpus_and_its_workload_alone_in_gpu_lease():
     out = submit.resolve(model.load(NEBIUS), _job(gpus=1, cpus=4, memory_gib=64), "r1", T)
     assert out["node"] == "vy-nebius-2" and "Kueue" in out["why"]
-    w = out["wrap"]
-    lease = w[w.index(submit.GPU_LEASE):w.index("--")]
-    assert lease == [submit.GPU_LEASE, "1", "--wait", "--max-min", "25", "--mem-gb", "64", "--preemptible"]
-    assert w[w.index("--") + 1:] == ["taskset", "-c", "48-95", "nice", "-n", "19"]
-    assert out["job"]["node"] == "vy-nebius-2" and out["job"]["max_s"] == 1500
+    assert "systemd-run" in out["wrap"] and out["wrap"][-6:] == ["taskset", "-c", "48-95", "nice", "-n", "19"]
+    assert submit.GPU_LEASE not in out["wrap"], "custody runs in the CPU allocation, not under the GPU lease"
+    assert out["workload_wrap"] == [submit.GPU_LEASE, "1", "--wait", "--max-min", "10", "--mem-gb", "64", "--preemptible", "--"]
+    assert out["job"]["node"] == "vy-nebius-2" and out["job"]["max_s"] == 600
 
 
 def test_quiet_and_pinned_gpus_reach_gpu_lease():
     out = submit.resolve(model.load(NEBIUS), _job(project="pous", gpus=2, quiet=True, preempt="never", gpu_ids=(3, 4)), "r1", T)
-    w = out["wrap"]
-    lease = w[w.index(submit.GPU_LEASE):w.index("--")]
-    assert "--timed" in lease and "--preemptible" not in lease and lease[-2:] == ["--on", "3,4"]
-    assert w[-1] == "--", "the owner of node 2 runs unpinned and at its own priority, as gpu-lease leases do today"
+    lease = out["workload_wrap"]
+    assert "--timed" in lease and "--preemptible" not in lease and lease[-3:] == ["--on", "3,4", "--"]
+    assert out["wrap"][-3] == "taskset" and "nice" not in out["wrap"], "the owner runs at its own priority"
 
 
 def test_refusals_name_every_nodes_reason():

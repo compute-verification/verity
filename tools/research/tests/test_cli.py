@@ -129,7 +129,8 @@ open(sys.argv[0] + '.argv', 'w').write(json.dumps(sys.argv[1:]))
 a = sys.argv
 if '--gpus' in a and a[a.index('--gpus') + 1] == '9':
     print(json.dumps({'refused': 'vy-nebius-2: not 9 GPUs'})); sys.exit(3)
-print(json.dumps({'node': 'vy-nebius-2', 'machine': 'vy-nebius-2', 'why': 'stub', 'job': {}, 'wrap': ['env', 'HELD=1']}))
+print(json.dumps({'node': 'vy-nebius-2', 'machine': 'vy-nebius-2', 'why': 'stub', 'job': {}, 'wrap': ['env', 'HELD=1'],
+                  'workload_wrap': ['lease', '--']}))
 """
 
 
@@ -144,8 +145,9 @@ def _queue_source(tmp_path) -> Path:
 
 def test_run_queue_places_the_job_then_launches_on_the_placed_machine_with_its_wrapper(tmp_path, monkeypatch, capsys):
     """`research run --queue`: the declared resources reach `cluster submit` from the --source tree, and the run launches as an
-    `--on` run on the machine it names, carrying the wrapper; the job's time becomes the runner's --timeout."""
-    from research import remote
+    `--on` run on the machine it names, carrying the wrappers, its kind and its phase; the runner's --timeout is the job's time
+    plus, for a gpu phase, the time the lease may take to be granted."""
+    from research import cli, remote
     src, seen = _queue_source(tmp_path), []
 
     def launch(**kw):
@@ -155,7 +157,7 @@ def test_run_queue_places_the_job_then_launches_on_the_placed_machine_with_its_w
     monkeypatch.setenv("RESEARCH_LANE", "lane-x")
     base = ["run", "--runs-dir", str(tmp_path / "runs"), "--queue", "--source", str(src), "--project", "verity"]
     assert main([*base, "--mem-gb", "64", "--gpus", "1", "--max-min", "10", "--preemptible", "--quiet", "--class", "bench",
-                 "--", "true"]) == 0
+                 "--kind", "vllm.commit", "--", "true"]) == 0
     assert "the queue places run" in capsys.readouterr().err
     argv = json.loads((src / "tools" / "cluster" / "src" / "cluster" / "__main__.py.argv").read_text())
     assert argv[:2] == ["submit", str(src / "tools" / "cluster" / "descriptions" / "nebius.toml")]
@@ -165,11 +167,18 @@ def test_run_queue_places_the_job_then_launches_on_the_placed_machine_with_its_w
     assert "--quiet" in argv
     [kw] = seen
     assert kw["machine_name"] == "vy-nebius-2" and kw["queue"]["wrap"] == ["env", "HELD=1"] and kw["mem_gb"] is None
-    assert kw["harness_args"][kw["harness_args"].index("--timeout") + 1] == "600"
+    assert kw["queue"]["workload_wrap"] == ["lease", "--"] and (kw["queue"]["kind"], kw["queue"]["phase"]) == ("vllm.commit", "gpu")
+    assert kw["harness_args"][kw["harness_args"].index("--timeout") + 1] == str(600 + 60 * cli.GPU_WAIT_MIN)
+    assert main([*base, "--mem-gb", "8", "--max-min", "10", "--", "true"]) == 0
+    assert seen[-1]["queue"]["kind"] == "adhoc" and seen[-1]["queue"]["phase"] == "cpu"
+    assert seen[-1]["harness_args"][seen[-1]["harness_args"].index("--timeout") + 1] == "600"
+    assert main([*base, "--mem-gb", "8", "--max-min", "10", "--phase", "cpu", "--gpus", "1", "--", "true"]) == 2
+    assert "a cpu phase takes no --gpus" in capsys.readouterr().err
+    assert main([*base, "--mem-gb", "8", "--max-min", "10", "--phase", "gpu", "--", "true"]) == 2
 
     assert main([*base, "--mem-gb", "8", "--gpus", "9", "--max-min", "1", "--", "true"]) == 3
     assert "the queue refuses the job: vy-nebius-2: not 9 GPUs" in capsys.readouterr().err
-    assert len(seen) == 1
+    assert len(seen) == 2
 
 
 def test_run_queue_needs_source_memory_and_a_longest_time(tmp_path, capsys):

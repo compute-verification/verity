@@ -2,7 +2,7 @@
 
   research run [--project P] [--stage S] [--timeout T] [--expect K=V ...] [--require-result] [--runs-dir D] [harness flags] -- CMD...
   research run [--tool NAME|module:NAME] [--scratch NAME ...] [--campaign C] [...] -- CMD...   # evidence store: derivation before, attempt after
-  research run --queue --source GITDIR --project P --mem-gb G (--max-min M | --timeout T) [--gpus N] [--cpus N] [--class P] [--preemptible] [--quiet] [--on NODE] -- CMD...
+  research run --queue --source GITDIR --project P --mem-gb G (--max-min M | --timeout T) [--gpus N] [--cpus N] [--class P] [--kind K] [--phase cpu|gpu] [--preemptible] [--quiet] [--on NODE] -- CMD...
                                                  # the one queue (tools/cluster) places the job and runs it under its node's executor
   research run --on MACHINE --project P [--source GITDIR] [--send FILE ...] [--env K=V ...] [--exclusive] [--mem-gb N [--mem-wait S]]
                [--custody-ttl 6h | --no-custody-r2] [--preflight TOOL] [...] -- CMD...   # run custody on the store's remote is the default
@@ -149,7 +149,12 @@ def cmd_run(argv: list[str]) -> int:
     q.add_argument("--gpu-model", default=None, metavar="M", help="e.g. rtx-pro-6000; a node with other GPUs is never chosen")
     q.add_argument("--cpus", type=int, default=1, metavar="N")
     q.add_argument("--max-min", type=int, default=None, metavar="M",
-                   help="its longest run in minutes (--timeout if not given; one of them is required); the allocation adds custody's margin")
+                   help="its longest run in minutes, which the GPU lease enforces (--timeout if not given; one of them is required); "
+                        "without --timeout, a GPU job's runner also allows GPU_WAIT_MIN for the lease to be granted")
+    q.add_argument("--kind", dest="queue_kind", default="adhoc", metavar="K", help="what the job is, recorded (e.g. vllm.build; default adhoc)")
+    q.add_argument("--phase", dest="queue_phase", choices=("cpu", "gpu"), default=None,
+                   help="the phase this run is (default: gpu with --gpus, else cpu); a GPU is booked only for a gpu phase, and only "
+                        "around the workload, so the runner's custody runs in the CPU allocation")
     q.add_argument("--preemptible", action="store_true", help="it may be stopped for higher-ranked work and requeued (a guest's must be)")
     q.add_argument("--quiet", action="store_true", help="a timed job: the node is kept quiet while it runs (the node's owner only)")
     q.add_argument("--gpu-ids", default=None, metavar="LIST", help="the GPU indices it must get, comma-separated")
@@ -557,9 +562,13 @@ def _source_identity_hint(git_dir: Path) -> dict | None:
     return {"commit": src["source.commit"], "tree": src["source.tree"], "dirty": src["source.dirty"], "dirty_digest": src["source.dirty_digest"]}
 
 
+GPU_WAIT_MIN = 120
+
+
 def _run_queued(ns: argparse.Namespace, harness_opts: list[str], command: list[str]) -> int:
     """`research run --queue`: the queue places the job (`cluster submit`), then it launches as `--on` the placed machine does, with
-    the runner inside the node executor's wrapper. Its records, status and logs are an `--on` run's."""
+    the runner inside the job's CPU allocation and a gpu phase's workload alone inside its GPU lease. Its records, status and logs
+    are an `--on` run's."""
     if not ns.source or not ns.project or ns.mem_gb is None:
         print("research run --queue: --source GITDIR (the tree with tools/cluster), --project and --mem-gb (the job's memory, "
               "its cap) are required", file=sys.stderr)
@@ -568,9 +577,13 @@ def _run_queued(ns: argparse.Namespace, harness_opts: list[str], command: list[s
     if ns.max_min is None and not timeout:
         print("research run --queue: give the job's longest run, --max-min M or --timeout", file=sys.stderr)
         return 2
+    phase = ns.queue_phase or ("gpu" if ns.gpus else "cpu")
+    if (phase == "gpu") != bool(ns.gpus):
+        print(f"research run --queue: a {phase} phase {'needs --gpus N' if phase == 'gpu' else 'takes no --gpus'}", file=sys.stderr)
+        return 2
     max_s = int(ns.max_min * 60 if ns.max_min is not None else timeout)
     if timeout is None:
-        harness_opts = [*harness_opts, "--timeout", str(max_s)]
+        harness_opts = [*harness_opts, "--timeout", str(max_s + (GPU_WAIT_MIN * 60 if ns.gpus else 0))]
     from .pods.lease import RUN_MARGIN_S
 
     root = R.runs_root(ns.runs_dir)
@@ -584,7 +597,9 @@ def _run_queued(ns: argparse.Namespace, harness_opts: list[str], command: list[s
     except remote.Refused as e:
         print(f"research run --queue: refused: {e}", file=sys.stderr)
         return 3
-    print(f"research: the queue places run {run_id} on {placed['machine']} ({placed['why']})", file=sys.stderr)
+    placed.update(kind=ns.queue_kind, phase=phase)
+    print(f"research: the queue places run {run_id} ({ns.queue_kind}, {phase} phase) on {placed['machine']} ({placed['why']})",
+          file=sys.stderr)
     ns.on, ns.mem_gb = placed["machine"], None
     if ns.custody_r2 is not False and (why := _custody_ttl_problem(ns.custody_ttl, harness_opts)):
         print(f"research run: {why}", file=sys.stderr)
