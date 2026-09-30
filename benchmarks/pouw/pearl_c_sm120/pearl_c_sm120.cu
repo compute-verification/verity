@@ -14,6 +14,8 @@
 #include <cuda_fp16.h>
 #include <cuda_fp8.h>
 
+#include "../pouw_hash/pouw_hash.cuh"
+
 struct Args { uint64_t p[16]; int32_t i[16]; };
 
 #define DEV __device__ __forceinline__
@@ -64,11 +66,18 @@ DEV void hmma(float* d, const uint32_t* a, const uint32_t* b) {
 //   PLAIN   y = bf16(total sa sb)
 //   CT      stores C~ (FP32)
 //   PEARLC  stores C~, then four k16 BF16 mma of P_A P_B^T into the total, stores U and y = bf16(U ia ib)
+//   PEARLC_S  PEARLC without storing C~ or U (only y): the hash-free control of PEARLC_H
+//   PEARLC_H  PEARLC_S, hashing C~ and U from registers instead of storing them: each (row, 32-column chunk)'s message
+//             digest of C~ and U (hashing format h0's TurboSHAKE128, D = 0x21, into p9 in hash_msg's layout). C~ is kept in
+//             the promotion accumulators through the peel; each warp's 1 KB scratch is its share of the pipeline's stages,
+//             free after the main loop.
+//   PEARLC_B  PEARLC_H under hashing format -h1: BLAKE3 keyed by blake3("pearl-c/h1/message") (32 bytes at p10), one chunk of
+//             four blocks per message, into p9 in hash.cuh's hash_msg layout
 //   WORDS   BN = 32, stores the FP32 words (A'F_B, B~F_A, G)
-enum { M_PLAIN, M_CT, M_PEARLC, M_WORDS };
+enum { M_PLAIN, M_CT, M_PEARLC, M_WORDS, M_PEARLC_S, M_PEARLC_H, M_PEARLC_B };
 constexpr int BM = 128, BK = 64, STAGES = 4, NT = 256, PEEL_ROW = 128;
 template <int MODE, int BN> __host__ __device__ constexpr int gemm_smem() {
-  return STAGES * (BM + BN) * BK + (MODE == M_PEARLC ? (BM + BN) * PEEL_ROW : 0);
+  return STAGES * (BM + BN) * BK + (MODE >= M_PEARLC_S || MODE == M_PEARLC ? (BM + BN) * PEEL_ROW : 0);
 }
 
 DEV uint32_t swz64(int r, int c) { return r * 64 + ((c ^ ((r >> 1) & 3)) << 4); }
@@ -91,6 +100,8 @@ template <int ROWS> DEV void peel_rows(uint8_t* s, const uint8_t* g, int tid) {
   }
 }
 
+template <int N> struct Int { static constexpr int value = N; };
+
 DEV void raster(int t, int tiles_m, int tiles_n, int group, int& tm, int& tn) {
   const int per = group * tiles_n, first = (t / per) * group, size = min(tiles_m - first, group), r = t % per;
   tm = first + r % size;
@@ -104,11 +115,14 @@ DEV void store_y(uint16_t* p, float a, float b, float sr, float sc0, float sc1) 
 
 template <int MODE, int BN, int G> DEV void gemm_body(const Args& a) {
   constexpr int WN = 32, WARPS_N = BN / WN, WARPS_M = 8 / WARPS_N, WM = BM / WARPS_M, MI = WM / 16, NI = WN / 8;
-  constexpr bool PEEL = MODE == M_PEARLC, PROMOTE = G > 0;
+  constexpr bool PEEL = MODE == M_PEARLC || MODE >= M_PEARLC_S, HASH = MODE == M_PEARLC_H || MODE == M_PEARLC_B;
+  constexpr bool STORE_CU = MODE == M_PEARLC || MODE == M_CT || MODE == M_WORDS, PROMOTE = G > 0;
   constexpr int PERIOD = PROMOTE ? G / 2 : 1;
   static_assert(G == 0 || G % 2 == 0, "a promotion window is whole 64-byte stages");
   constexpr uint32_t A_ST = BM * BK, B_ST = BN * BK;
   static_assert(WARPS_M * WARPS_N == 8 && MI >= 1 && NI % 2 == 0, "8 warps of 16k x 32 columns");
+  constexpr int SCRATCH = 1024;          // a warp's share of the stages: the quad transpose's scratch
+  static_assert(!HASH || (MI == 4 && NI == 4 && 8 * SCRATCH <= STAGES * (A_ST + B_ST)), "a hashed warp tile is 64 x 32");
   extern __shared__ __align__(128) uint8_t smem[];
   uint8_t* sA = smem;
   uint8_t* sB = smem + STAGES * A_ST;
@@ -212,6 +226,7 @@ template <int MODE, int BN, int G> DEV void gemm_body(const Args& a) {
     __syncthreads();
 
     const int row0 = tm * BM + wm * WM + g, col0 = tn * BN + wn * WN + 2 * q;
+    uint8_t* const scratch = smem + SCRATCH * warp;
     if constexpr (MODE == M_PLAIN) {
 #pragma unroll
       for (int mi = 0; mi < MI; mi++) {
@@ -225,7 +240,7 @@ template <int MODE, int BN, int G> DEV void gemm_body(const Args& a) {
           store_y(Y + (size_t)(row + 8) * N + col, total[mi][ni][2], total[mi][ni][3], r1, c0, c1);
         }
       }
-    } else {
+    } else if constexpr (STORE_CU) {
 #pragma unroll
       for (int mi = 0; mi < MI; mi++)
 #pragma unroll
@@ -236,6 +251,14 @@ template <int MODE, int BN, int G> DEV void gemm_body(const Args& a) {
         }
     }
     if constexpr (PEEL) {
+      if constexpr (HASH) {
+#pragma unroll
+        for (int mi = 0; mi < MI; mi++)
+#pragma unroll
+          for (int ni = 0; ni < NI; ni++)
+#pragma unroll
+            for (int e = 0; e < 4; e++) acc[mi][ni][e] = total[mi][ni][e];
+      }
       const uint32_t pa0 = sa(sPA), pb0 = sa(sPB);
 #pragma unroll
       for (int s = 0; s < 4; s++) {
@@ -261,12 +284,39 @@ template <int MODE, int BN, int G> DEV void gemm_body(const Args& a) {
         for (int ni = 0; ni < NI; ni++) {
           const int col = col0 + 8 * ni;
           const float c0 = cs[col], c1 = cs[col + 1];
-          store2(U + (size_t)row * N + col, total[mi][ni][0], total[mi][ni][1]);
-          store2(U + (size_t)(row + 8) * N + col, total[mi][ni][2], total[mi][ni][3]);
+          if constexpr (STORE_CU) {
+            store2(U + (size_t)row * N + col, total[mi][ni][0], total[mi][ni][1]);
+            store2(U + (size_t)(row + 8) * N + col, total[mi][ni][2], total[mi][ni][3]);
+          }
           store_y(Y + (size_t)row * N + col, total[mi][ni][0], total[mi][ni][1], r0, c0, c1);
           store_y(Y + (size_t)(row + 8) * N + col, total[mi][ni][2], total[mi][ni][3], r1, c0, c1);
         }
       }
+    }
+    if constexpr (HASH) {
+      uint8_t* dg = reinterpret_cast<uint8_t*>(a.p[9]) + (size_t)(tn * BN + wn * WN) / 32 * 32;
+      const int per = N / 32, row = tm * BM + wm * WM;
+      auto region = [&](auto pc) {
+        constexpr int p = decltype(pc)::value;
+        auto frag = [&](int arr, int j, int i) { return arr ? total[2 * p + (j >> 2)][j & 3][i] : acc[2 * p + (j >> 2)][j & 3][i]; };
+        uint4* o = reinterpret_cast<uint4*>(dg + (size_t)(row + ph::pearlc::narrow_row(p, lane)) * per * 32);
+        if constexpr (MODE == M_PEARLC_H) {
+          uint64_t h[4];
+          ph::quad_msg_digest<2>(frag, ph::pearlc::D_MESSAGE, reinterpret_cast<uint64_t*>(scratch), h);
+          reinterpret_cast<ulonglong2*>(o)[0] = make_ulonglong2(h[0], h[1]);
+          reinterpret_cast<ulonglong2*>(o)[1] = make_ulonglong2(h[2], h[3]);
+        } else {
+          uint32_t key[8], h[8];
+          const uint4* kp = reinterpret_cast<const uint4*>(a.p[10]);
+          const uint4 k0 = kp[0], k1 = kp[1];
+          key[0] = k0.x; key[1] = k0.y; key[2] = k0.z; key[3] = k0.w; key[4] = k1.x; key[5] = k1.y; key[6] = k1.z; key[7] = k1.w;
+          ph::quad_msg_digest_b3<2>(frag, key, reinterpret_cast<uint64_t*>(scratch), h);
+          o[0] = make_uint4(h[0], h[1], h[2], h[3]);
+          o[1] = make_uint4(h[4], h[5], h[6], h[7]);
+        }
+      };
+      region(Int<0>{});
+      region(Int<1>{});
     }
     __syncthreads();
   }
@@ -283,6 +333,12 @@ GEMM(gemm_pearlc, M_PEARLC, 128, 4)
 GEMM(gemm_words, M_WORDS, 32, 4)
 GEMM(gemm_ct_u, M_CT, 128, 0)
 GEMM(gemm_pearlc_u, M_PEARLC, 128, 0)
+GEMM(gemm_pearlc_s, M_PEARLC_S, 128, 4)
+GEMM(gemm_pearlc_s_u, M_PEARLC_S, 128, 0)
+GEMM(gemm_pearlc_h, M_PEARLC_H, 128, 4)
+GEMM(gemm_pearlc_h_u, M_PEARLC_H, 128, 0)
+GEMM(gemm_pearlc_b, M_PEARLC_B, 128, 4)
+GEMM(gemm_pearlc_b_u, M_PEARLC_B, 128, 0)
 GEMM(gemm_words_u, M_WORDS, 32, 0)
 
 // ---------------------------------------------------------------- noise lines (Pearl's line rule)
