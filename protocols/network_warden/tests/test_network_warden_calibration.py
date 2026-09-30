@@ -7,6 +7,8 @@ import random
 from contextlib import redirect_stdout
 from fractions import Fraction
 
+import pytest
+
 from verity_network_warden import calibration, capacity
 from verity_network_warden.schedule import ClockSync, LogicalFrame, SyncSet
 
@@ -50,6 +52,16 @@ def test_calibrate_honest_trace():
     assert ingress["bucket_ms"] == 100  # decision D
     assert ingress["rate_bps"] == capacity.ingress_rate(ingress["allocation"], 100)
     assert set(report["k_charge"]["share_of_k_by_span"]) == {"60s", "600s", "3600s", "86400s"}
+
+
+def test_a_bucket_over_the_queue_capacity_overflows_at_every_allocation():
+    """Five frames in one bucket with Q = 3 overflow whatever r is, so sizing raises instead of searching forever. At Q
+    = 3, three frames still fit."""
+    with pytest.raises(ValueError, match="hands 5 frames, more than the queue capacity Q = 3"):
+        calibration.least_allocation([0] * 5, queue_capacity=3, max_delay=1)
+    assert calibration.least_allocation([0] * 3, queue_capacity=3, max_delay=1) == 2
+    with pytest.raises(ValueError, match="queue capacity"):
+        calibration.size_ingress_ms([10.0] * 5, 100, queue_capacity=3)
 
 
 def test_ingress_allocation_is_minimal():
@@ -158,3 +170,13 @@ def test_cli(tmp_path):
     report = json.loads(out.getvalue())
     assert report["ingress"][0]["bucket_ms"] == 200
     assert "meets_target" in report["k_charge"]["target"]
+
+
+def test_cli_reports_a_trace_no_allocation_carries(tmp_path, capsys):
+    path = tmp_path / "trace.json"
+    path.write_text(json.dumps({"window_buckets": 20, "queue_capacity": 3, "configurations": [
+        {"name": "burst", "ingress": [{"link": "requests", "arrivals": [5]}]}]}))
+    assert calibration.main([str(path)]) == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "error: a bucket hands 5 frames, more than the queue capacity Q = 3" in captured.err

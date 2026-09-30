@@ -112,7 +112,8 @@ docstring) and sizes:
 - **The honest miss rate:** a window that no value meets is a miss, which is a violation. The target is 1e-4.
 - **The egress allocation r:** the least r at or above twice the p99.9 of per-bucket demand whose FIFO replay has no
   overflow and a p99 queueing delay of at most one bucket. Both improve monotonically in r, so the search doubles and
-  then bisects.
+  then bisects. If one bucket's demand exceeds Q, every r overflows: the tool exits with an error naming the demand and
+  Q, for the egress and the ingress grid alike.
 - **The ingress grid:** the smallest r_in that carries honest ingress, at τ_in. τ_in is **100 ms** (decision D,
   decided 29 Sep, with the timing-channel doc's §3.6 calibration as evidence). The grid stays configurable, so
   `--ingress-bucket-ms` still compares alternatives. With arrival times (`arrival_ms`), τ_in may be finer than the trace bucket, and the report adds the

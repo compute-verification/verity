@@ -32,7 +32,7 @@ import argparse
 import json
 import math
 import sys
-from collections import defaultdict, deque
+from collections import Counter, defaultdict, deque
 from collections.abc import Sequence
 from fractions import Fraction
 
@@ -192,14 +192,23 @@ def replay_fifo(hands: Sequence[int], allocation: int, queue_capacity: int) -> t
 
 def least_allocation(hands: Sequence[int], queue_capacity: int, max_delay: int, start: int = 1) -> int:
     """The least r ≥ `start` whose FIFO replay has no overflow and a p99 queueing delay of at most `max_delay` buckets.
-    Both only improve as r grows, so doubling and then bisection finds it."""
+    Both only improve as r grows, so doubling and then bisection finds it.
+
+    At r equal to the largest bucket demand the queue empties every bucket, so that r fits unless the demand exceeds
+    the queue capacity: then every r overflows, and this raises `ValueError`."""
 
     def fits(r: int) -> bool:
         ok, delays = replay_fifo(hands, r, queue_capacity)
         return ok and percentile(delays, 99) <= max_delay
 
+    if max_delay < 0:
+        raise ValueError("the delay budget is at least 0 buckets")
     if not hands:
         return start
+    peak = max(Counter(hands).values())
+    if peak > queue_capacity:
+        raise ValueError(f"a bucket hands {peak} frames, more than the queue capacity Q = {queue_capacity}, "
+                         "so every allocation overflows")
     lo, hi = start - 1, start
     while not fits(hi):
         lo, hi = hi, 2 * hi
@@ -385,9 +394,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = ap.parse_args(argv)
     with open(args.trace, encoding="utf-8") as fh:
         trace = json.load(fh)
-    report = calibrate(trace, ingress_bucket_ms=args.ingress_bucket_ms, n_delta=args.deltas, n_rho=args.rhos,
-                       headroom=args.headroom, epsilon=args.epsilon, target_k_share=args.target_k_share,
-                       target_span_s=args.target_span_s, ingress_max_delay_ms=args.ingress_max_delay_ms)
+    try:
+        report = calibrate(trace, ingress_bucket_ms=args.ingress_bucket_ms, n_delta=args.deltas, n_rho=args.rhos,
+                           headroom=args.headroom, epsilon=args.epsilon, target_k_share=args.target_k_share,
+                           target_span_s=args.target_span_s, ingress_max_delay_ms=args.ingress_max_delay_ms)
+    except ValueError as e:
+        print(f"{ap.prog}: error: {e}", file=sys.stderr)
+        return 2
     json.dump(report, sys.stdout, indent=1)
     sys.stdout.write("\n")
     return 0
