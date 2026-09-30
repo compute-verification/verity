@@ -41,7 +41,7 @@ def test_the_audit_verifier_audits_the_live_responder_under_the_scheme(tmp_path)
         try:
             rc = pous_dense_audit.main(opts)
         finally:
-            t.join(timeout=5)
+            t.join()
             sock.close()
         return rc, json.loads((tmp_path / "audit.json").read_text())
 
