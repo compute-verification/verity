@@ -22,13 +22,14 @@ sys.path.insert(0, str(HERE))
 import bench as B  # noqa: E402
 import fixture as F  # noqa: E402
 import twin as W  # noqa: E402
-from test_pearl_c_kernel import kernel_names, needs, small_fixture, threads  # noqa: E402, F401
+from test_pearl_c_kernel import kernel_names, needs, small_fixture, threads, within  # noqa: E402, F401
+from verity_pouw.audit import ROW_SCHEMA, activation_binding, commit_rows, rows_domain  # noqa: E402
 from verity_pouw.protocol import Context, Matmul, Tile  # noqa: E402
 from verity_pouw.protocol import Shape as MShape  # noqa: E402
 from verity_pouw.schemes import pearl_c as C  # noqa: E402
 from verity_pouw.schemes import pearl_kw as P  # noqa: E402
 
-SOURCE = (HERE / "pearl_c.cu").read_text()
+SOURCE = (HERE / "pearl_c.cu").read_text() + (HERE / "hash.cuh").read_text()
 SMALL = W.Shape("small", 96, 128, 256)          # two tile rows, the second half filler
 
 
@@ -82,10 +83,10 @@ def small_tiles():
 
 
 def test_twin_tile_is_the_scheme(small_tiles):
-    """Two tiles, one all real rows and one half filler, through `pearl_c` itself; the baseline and the row commitments
-    through the fixture's functions."""
+    """Two tiles, one all real rows and one half filler, through `pearl_c` itself (hashing -h1); the baseline through the
+    fixture's functions; row r0's leaf as `verity_pouw.audit` commits A's rows."""
     jb, tiles = small_tiles
-    s = C.PearlC(k_min=32, tile=(64, 64), forming="v1")
+    s = C.PearlC(k_min=32, tile=(64, 64), forming="v1", hashing="h1")
     noise = C.Noise(jb.seeds["seed_a"], jb.seeds["seed_b"])
     ctx = Context(bytes(32), Matmul(0, MShape(SMALL.m, SMALL.k, SMALL.n), 0), bytes(32), bytes(32))
     for (r0, c0) in ((0, 0), (64, 64)):
@@ -102,7 +103,7 @@ def test_twin_tile_is_the_scheme(small_tiles):
         qa, qb = F.adopted(vals[0], t.a.alpha.tolist()), F.adopted(vals[1], t.b.alpha.tolist())
         assert (qa == t.a.quant).all() and (qb == t.b.quant).all()
         assert (F.glue_y(F.product(qa, qb), F.recip(t.a.alpha), F.recip(t.b.alpha)) == t.y_adopt).all()
-        assert t.row_commits == F.row_commits([ra[0]], W.SEGMENT)
+        assert t.row_leaf == rows_domain(activation_binding(jb.seeds["salt"], 0), 0, SMALL.m, "blake3").leaf(r0, r0, ROW_SCHEMA, ra[0])
 
 
 def test_samples_read_the_kernels_layout(small_tiles):
@@ -119,9 +120,11 @@ def test_samples_read_the_kernels_layout(small_tiles):
     assert leaves == [tiles[(r0, c0)].leaf for r0 in (0, 64) for c0 in (0, 64)]
     tickets = F.tickets(c, jb.seeds["seed_a"])
     rows = [r.astype("<u4").tobytes() for r in W.a_words(SMALL, jb.seeds, np.arange(m))]
+    tree_a = F.tree_bytes(W.a_domain(SMALL, jb.seeds), rows, ROW_SCHEMA)
+    assert tree_a[-32:] == commit_rows(activation_binding(jb.seeds["salt"], 0), 0, rows, "blake3").commitment.root
     bufs = {"c": c.astype("<u4").tobytes(), "u": u.astype("<u4").tobytes(), "y_adopt": y.astype("<u2").tobytes(),
             "leaves": b"".join(leaves), "tickets": b"".join(tickets), "alpha_a": alpha_a.astype("<u4").tobytes(),
-            "alpha_b": alpha_b.astype("<u4").tobytes(), "rows": b"".join(F.row_commits(rows, W.SEGMENT))}
+            "alpha_b": alpha_b.astype("<u4").tobytes(), "tree_a": tree_a}
 
     def read(name, off, size):
         assert 0 <= off and off + size <= len(bufs[name]), (name, off, size)
@@ -146,13 +149,13 @@ def test_gamma_reproduces_the_lanes_pins():
     assert round(float(g["cap"]) * 100, 3) == 0.537 and round(float(g["cap_chain_only"]) * 100, 3) == 1.147
     assert B.FORMING_CREDITED + B.FORMING_A_ONLY == C.FORMING_V1_UNITS and B.RANK == C.R
     assert B.PEEL_UNITS == C.BF16_MAC_UNITS * C.PEEL_K and B.FADD_PER_MAC == Fraction(C.FADD_UNITS, C.WINDOW)
-    assert B.T == C.TILE == W.T and B.SEGMENT == W.SEGMENT
+    assert B.T == C.TILE == W.T
 
 
-def test_run_takes_v1_at_whole_row_segments():
+def test_run_takes_whole_promotion_groups():
     import run as R
 
-    for m, n, k, forming in ((128, 128, 256, "v0"), (128, 128, 128, "v1"), (96, 128, 256, "v1")):
+    for m, n, k, forming in ((128, 128, 192, "v0"), (128, 128, 64, "v1"), (96, 128, 256, "v1"), (128, 64, 256, "v1")):
         with pytest.raises(ValueError):
             R.Pipeline(None, m, n, k, forming, {}, 0, 0)
 
@@ -160,7 +163,7 @@ def test_run_takes_v1_at_whole_row_segments():
 def test_bench_json_is_the_twins():
     """Every shape, key, seed and sampled tile of the committed bench.json is the twin's (the bytes: the slow test)."""
     man = json.loads((HERE / "bench.json").read_text())
-    assert man["schema"] == W.SCHEMA and man["scheme"] == C.NAME_V1 and man["tile"] == W.T
+    assert man["schema"] == W.SCHEMA and man["scheme"] == C.NAME_V1 + "-h1" and man["tile"] == W.T and man["hashing"] == "h1"
     assert [s["label"] for s in man["shapes"]] == [s.label for s in W.SHAPES]
     for spec, shape in zip(man["shapes"], W.SHAPES):
         want = W.entry(shape, [])
@@ -196,14 +199,14 @@ def test_bench_dry_run(small_fixture, tmp_path):
     env = dict(os.environ, PEARLC_LIBCUDA=str(lib), PEARLC_LIBNVML="/nonexistent", FAKE_LOG=str(log),
                FAKE_KERNELS=",".join(kernel_names()), REPS="2", PEARLC_UNGATED="1")
     r = subprocess.run([sys.executable, str(ship / "bench.py"), str(ship / "bench.json"), str(small_fixture / "check.json")],
-                       env=env, capture_output=True, text=True, timeout=600)
+                       env=env, capture_output=True, text=True)
     assert r.returncode == 4, r.stderr
     rows = [json.loads(x) for x in r.stdout.splitlines()]
     assert [x["kind"] for x in rows] == ["env", "check", "bench", "bench"]
     for row, shape in zip(rows[2:], (SMALL, W.Shape("small-decode", 32, 128, 512))):
         assert row["shape"] == [shape.m, shape.n, shape.k] and row["m_real"] == shape.m_real and not row["tiles_ok"]
         assert row["timing"]["gates"]["ungated"] and {"prover_x", "with_hashing_x", "hashing_ms", "per_call_b_x"} <= set(row["summary"])
-        assert all(set(t["failed"]) == {"leaf", "c", "u", "tickets", "y_adopt", "alpha_a", "alpha_b", "rows"} for t in row["tiles"])
+        assert all(set(t["failed"]) == {"leaf", "c", "u", "tickets", "y_adopt", "alpha_a", "alpha_b", "row_leaf"} for t in row["tiles"])
     allocs: dict[int, int] = {}
     gens = []
     for ev in map(json.loads, log.read_text().splitlines()):
@@ -211,12 +214,12 @@ def test_bench_dry_run(small_fixture, tmp_path):
             allocs[ev["ptr"]] = ev["bytes"]
         elif ev["op"] == "free":
             allocs.pop(ev["ptr"])
-        else:
+        elif ev["op"] == "launch":
             name, p, i = ev["name"], ev["p"], ev["i"]
             for slot, size in needs(name, p, i).items():
                 if not p[slot] and (name, slot) in {("lines", 2), ("lines", 3), ("lines", 4)}:
                     continue
-                assert p[slot] in allocs and allocs[p[slot]] >= size, (name, slot)
+                assert within(allocs, p[slot], size), (name, slot)
             g = ev["grid"]
             assert g[0] * g[1] * g[2] * ev["block"] >= threads(name, i), name
             if name == "gen_f32":

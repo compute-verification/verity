@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import ctypes
 import os
-import subprocess
 from dataclasses import asdict, dataclass, field
 
 import numpy as np
@@ -14,7 +13,7 @@ from verity_vllm.program.kernels.mma import TCModel
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CPP_SRC = os.path.join(HERE, "cpp", "tc_model.cpp")
-LIB = str(_jit.lib_path("libtc_model.so"))             # build product (cpp/build/, gitignored), compiled on first use
+LIB = str(_jit.lib_path("libtc_model.so"))             # build product (the _jit cache, outside the checkout), compiled on first use
 
 _lib = None
 
@@ -23,10 +22,7 @@ def build() -> str:
     """Compile cpp/tc_model.cpp; atomic publish + builder lock (``_jit``): no half-written .so for a concurrent dlopen."""
     from pathlib import Path
 
-    def _compile(out: Path) -> None:
-        subprocess.run(["g++", "-O2", "-std=c++17", "-fopenmp", "-fPIC", "-shared", "-o", str(out), CPP_SRC], check=True)
-
-    return str(_jit.atomic_build(Path(LIB), [Path(CPP_SRC)], _compile))
+    return str(_jit.atomic_build(Path(LIB), [Path(CPP_SRC)], lambda out: _jit.cxx_compile(out, Path(CPP_SRC))))
 
 
 def lib() -> ctypes.CDLL:

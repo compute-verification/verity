@@ -2,8 +2,9 @@
 kernels write, for both formings and the plain baseline.  Forming, lines and hashes come from
 `verity_pouw.schemes.pearl_c` itself; the products over every cell are batched in numpy with
 `verity.ml.kernels.group_sum_total_batch`, and one whole 64 x 64 tile is recomputed by the scheme (`encode`,
-`checked`, `digest`, `tickets`) and must agree.  run.py compares the device's buffers with these bytes before it times
-anything.
+`checked`, `digest`, `tickets`) and must agree.  The hashing is format -h1, the verifier's: BLAKE3 messages and leaves,
+and A's rows and the tile leaves committed as `verity_pouw.audit` commits them (frame-b3), whose roots must agree too.
+run.py compares the device's buffers with these bytes before it times anything.
 
   uv run python benchmarks/pouw/pearl_c/fixture.py OUT_DIR [m n k]     (default 256 384 1024; m, n multiples of 128)
 
@@ -26,16 +27,20 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "protocols" / "pouw" / "tests"))
 
 import pearl_c_vectors as CV  # noqa: E402
-from verity.commitments.turboshake import turboshake128  # noqa: E402
+from verity.commitments.blake3 import keyed  # noqa: E402
 from verity.ml.kernels import group_sum_total_batch  # noqa: E402
 from verity.ml.tc import fp32  # noqa: E402
 from verity.ml.tc.models import HOPPER_BF16_WGMMA_K16, HOPPER_E4M3_K32  # noqa: E402
+from verity.commitments import MerkleTree  # noqa: E402
+from verity.commitments.merkle import tree_levels  # noqa: E402
+from verity_pouw.audit import (ROW_SCHEMA, TILE_SCHEMA, Epoch, Workload, activation_binding, commit_rows,  # noqa: E402
+                               rows_domain, transcript_domain)
 from verity_pouw.protocol import Context, Matmul, Shape, Tile  # noqa: E402
 from verity_pouw.schemes import pearl_c as C  # noqa: E402
 from verity_pouw.schemes import pearl_kw as P  # noqa: E402
 
 CASE, INDEX, WEIGHT = "gpu-check", 5, 1
-FP10_SEGMENT, F32_SEGMENT, D_ROWS = 1280, 1024, 0x23
+HASHING = "h1"                     # the kernels' hashing format: BLAKE3 messages, leaves and frame-b3 trees
 
 
 # ---- layouts --------------------------------------------------------------------------------------------------------
@@ -170,15 +175,17 @@ def digests(c: np.ndarray, u: np.ndarray) -> list[bytes]:
     out = []
     for i in range(c.shape[0]):
         for h in range(0, c.shape[1], C.CHUNK):
-            out.append(turboshake128(c[i, h:h + C.CHUNK].astype("<u4").tobytes() + u[i, h:h + C.CHUNK].astype("<u4").tobytes(),
-                                     C.D_MESSAGE, 32))
+            out.append(C.message_digest(c[i, h:h + C.CHUNK].astype("<u4").tobytes() + u[i, h:h + C.CHUNK].astype("<u4").tobytes(),
+                                        HASHING))
     return out
 
 
 def leaves(dg: list[bytes], m: int, n: int) -> list[bytes]:
+    """The tile leaves, row-major; the last row tile is partial when 64 ∤ m (decode's 32 x 64: 64 digests)."""
     per = n // C.CHUNK
-    return [turboshake128(b"".join(dg[r * per + 2 * tj + h] for r in range(64 * ti, 64 * ti + 64) for h in range(2)), C.D_LEAF, 32)
-            for ti in range(m // 64) for tj in range(n // 64)]
+    return [keyed(C.H1_KEYS["leaf"], b"".join(dg[r * per + 2 * tj + h] for r in range(64 * ti, min(64 * ti + 64, m))
+                                              for h in range(2)))
+            for ti in range(-(-m // 64)) for tj in range(n // 64)]
 
 
 def tickets(c: np.ndarray, seed_a: bytes) -> list[bytes]:
@@ -186,8 +193,20 @@ def tickets(c: np.ndarray, seed_a: bytes) -> list[bytes]:
             for i in range(0, c.shape[0], 16) for j in range(0, c.shape[1], 16)]
 
 
-def row_commits(rows: list[bytes], segment: int) -> list[bytes]:
-    return [turboshake128(r[s:s + segment], D_ROWS, 32) for r in rows for s in range(0, len(r), segment)]
+def tree_bytes(domain, values: list[bytes], schema: str) -> bytes:
+    """A frame-b3 tree's levels as the kernels lay them out: level 0 (leaves, then pads), then each level above."""
+    return b"".join(b"".join(level) for level in tree_levels(domain, [domain.leaf(i, i, schema, v) for i, v in enumerate(values)]))
+
+
+def a_domain(ctx: Context):
+    """The domain A's rows are committed under (`verity_pouw.audit`): the activation binding, frame-b3."""
+    return rows_domain(activation_binding(ctx.salt, ctx.matmul.index), ctx.matmul.index, ctx.matmul.shape.m, "blake3")
+
+
+def t_domain(ctx: Context, tiles: int):
+    """The tile tree's domain for a one-unit epoch whose weight root is the context's."""
+    epoch = Epoch(Workload((ctx.matmul,)), {ctx.matmul.weight: ctx.root_b}, ctx.salt)
+    return transcript_domain(epoch, tiles, "blake3")
 
 
 # ---- the fixture -------------------------------------------------------------------------------------------------
@@ -214,7 +233,10 @@ def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024) -> dict:
     noise = C.PearlC().noise(ctx)
     manifest = {"schema": "verity-pouw/pearl-c-gpu-check/v1", "shape": [m, n, k], "case": CASE,
                 "keys": {"line_a": P._line_key(noise.seed_a).hex(), "line_b": P._line_key(noise.seed_b).hex(),
-                         "jackpot": P.subkey("jackpot", noise.seed_a).hex()},
+                         "jackpot": P.subkey("jackpot", noise.seed_a).hex(), "dom_a": a_domain(ctx).domain_id.hex(),
+                         "dom_t": t_domain(ctx, (m // 64) * (n // 64)).domain_id.hex(), "k_msg": C.H1_KEYS["message"].hex(),
+                         "k_leaf": C.H1_KEYS["leaf"].hex()},
+                "hashing": HASHING,
                 "seeds": {"seed_a": noise.seed_a.hex(), "seed_b": noise.seed_b.hex()}, "formings": {}}
     lines = {name: np.array([P.sample_line(seed, side, 0, t) for t in range(count)], np.uint8)
              for name, seed, side, count in (("ea", noise.seed_a, 0, m), ("eb", noise.seed_b, 1, n))}
@@ -281,9 +303,11 @@ def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024) -> dict:
             o.put("y", glue_y(u, inv["a"], inv["b"]), "u16")
             dg = digests(c, u)
             o.put("digests", dg, "u8")
-            o.put("leaves", leaves(dg, m, n), "u8")
+            lv = leaves(dg, m, n)
+            o.put("leaves", lv, "u8")
             o.put("tickets", tickets(c, noise.seed_a), "u8")
-            o.put("rows", row_commits(ra, FP10_SEGMENT if forming == "v0" else F32_SEGMENT), "u8")
+            o.put("tree_a", tree_bytes(a_domain(ctx), ra, ROW_SCHEMA), "u8")
+            o.put("tree_t", tree_bytes(t_domain(ctx, len(lv)), lv, TILE_SCHEMA), "u8")
 
             if forming == "v0":
                 xa = np.array([P.open_row(*P.parse_row(r, k)) for r in ra], "<u2")
@@ -308,15 +332,21 @@ def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024) -> dict:
                 o.put("qb_s5", tiled(qb5, 128), "u8")
                 o.put("y_adopt", glue_y(product(qa5, qb5), inv["a"], inv["b"]), "u16")
 
-            agree = crosscheck(forming, ctx, ra, rb, at, bt, pa, pb, c, u, dg, m, n)
-            manifest["formings"][forming] = {"scheme": C.PearlC(forming=forming).name, "files": o.files, "crosscheck": agree}
+            agree = crosscheck(forming, ctx, ra, rb, at, bt, pa, pb, c, u, dg, lv, m, n)
+            manifest["formings"][forming] = {"scheme": C.PearlC(forming=forming, hashing=HASHING).name, "files": o.files,
+                                             "crosscheck": agree}
     (out_dir / "check.json").write_text(json.dumps(manifest, indent=1) + "\n")
     return manifest
 
 
-def crosscheck(forming, ctx, ra, rb, at, bt, pa, pb, c, u, dg, m, n) -> dict:
-    """One 64 x 64 tile (rows 64-127, the last 64 columns) through the scheme itself: encode, checked, digest, tickets."""
-    s = C.PearlC(forming=forming)
+def crosscheck(forming, ctx, ra, rb, at, bt, pa, pb, c, u, dg, lv, m, n) -> dict:
+    """One 64 x 64 tile (rows 64-127, the last 64 columns) through the scheme itself: encode, checked, digest, tickets; and the
+    trees' roots as `verity_pouw.audit` commits A's rows and the tile leaves."""
+    s = C.PearlC(forming=forming, hashing=HASHING)
+    root_a = commit_rows(activation_binding(ctx.salt, ctx.matmul.index), ctx.matmul.index, ra, s.commitment_hash).commitment.root
+    assert tree_bytes(a_domain(ctx), ra, ROW_SCHEMA)[-32:] == root_a
+    tree_t = MerkleTree(t_domain(ctx, len(lv)), dict(enumerate(lv)), lambda _: TILE_SCHEMA)
+    assert tree_bytes(t_domain(ctx, len(lv)), lv, TILE_SCHEMA)[-32:] == tree_t.commitment.root
     rows, cols = range(64, 128), range(n - 64, n)
     tile = Tile(tuple(rows), tuple(cols))
     noise = s.noise(ctx)
@@ -329,7 +359,7 @@ def crosscheck(forming, ctx, ra, rb, at, bt, pa, pb, c, u, dg, m, n) -> dict:
     assert checked.c == sub(c) and checked.u == sub(u)
     per = n // C.CHUNK
     assert s.admissible(ctx, ops)
-    mine = turboshake128(b"".join(dg[r * per + per - 2 + h] for r in rows for h in range(2)), C.D_LEAF, 32)
+    mine = keyed(C.H1_KEYS["leaf"], b"".join(dg[r * per + per - 2 + h] for r in rows for h in range(2)))
     assert s.digest(ctx, noise, checked) == mine
     assert s.tickets(noise, checked) == tickets(np.array(checked.c, np.uint32), noise.seed_a)
     return {"tile": [64, n - 64], "cells": 64 * 64, "agree": True}

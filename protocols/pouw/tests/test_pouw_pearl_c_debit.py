@@ -1,4 +1,4 @@
-"""Pearl-C's debit replay (`pearl_c_debit`, red team F1): `Skip.wordFlags` against P1's 552 Lean-checked word vectors,
+"""Pearl-C's debit replay (`pearl_c_debit`, red team F1): `Skip.wordFlags` against 448 of P1's Lean-checked word vectors,
 checked from scratch on skips, additive over a tile's words, and over the cap on the aligned-spike tile."""
 
 from __future__ import annotations
@@ -17,9 +17,12 @@ from verity_pouw.schemes import pearl_c_debit as D
 from verity_pouw.schemes import pearl_kw as P
 
 VECTORS = Path(__file__).parent / "vectors"
-#: P1's conformance vectors (research store internal/pouw-fp8/pearl-c-scripts/pearlc_skip_vectors*.txt.gz): one word per
-#: line, `family forming k i j A′-row B̃-row flags`; `Skip.wordFlags` agrees on all 552 (decide +kernel up to k = 256)
-FILES = {"pearl_c_skip_vectors.txt.gz": "86a319222445205b5598cef91a2108f02e510fe806168614b2182b90539edbd6",
+#: P1's conformance vectors (research store internal/pouw-fp8/pearl-c-scripts/pearlc_skip_vectors*.txt.gz), one word per
+#: line, `family forming k i j A′-row B̃-row flags`, their lines verbatim. The k ≤ 2,048 file (SHA-256 86a31922…, 552 words
+#: with the k = 8,192 file) is cut under the repository's 256 KiB blob limit to every word with k ≤ 512 (the 272 words
+#: `decide +kernel` checks among them) and, at k = 2,048, the aligned-spike words under §5's forming: 440 of its 544.
+#: The replay agreed on all 552 when it was cut.
+FILES = {"pearl_c_skip_vectors.txt.gz": "7f105baecf407a1b81bb1eef549d3c53696307c978a743d79a9308bf55c217f3",
          "pearl_c_skip_vectors_k8192.txt.gz": "307d4770d8146eadf42c90ae9399ff8af8c21e1f0b621af6ad64ed414bc2235d"}
 
 
@@ -36,7 +39,7 @@ def test_word_flags_are_p1s_lean_checked_vectors():
     for name, digest in FILES.items():
         assert hashlib.sha256((VECTORS / name).read_bytes()).hexdigest() == digest
     vs = vectors()
-    assert len(vs) == 552 and sum(k == 8192 for _, k, *_ in vs) == 8
+    assert len(vs) == 448 and sum(k == 8192 for _, k, *_ in vs) == 8 and sum(k <= 256 for _, k, *_ in vs) == 272
     assert [D.word_flags(a, b) for _, _, a, b, _ in vs] == [flags for *_, flags in vs]
 
 

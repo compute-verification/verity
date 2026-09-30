@@ -156,9 +156,11 @@ theorem hold_words {types : Array (String × CircuitType)} {tables : List (Strin
     · simp [Functor.map, Except.map, throw, throwThe, MonadExceptOf.throw] at hs
 
 set_option maxHeartbeats 1000000 in
-theorem classOf_held {mj : Lean.Json} {tables : List (String × ByteArray)} {kt : Typed.Class × CircuitType}
+/-- **What `classOf` returns**: its class holds the tables `hold` read, and its type is the unit layout's. -/
+theorem classOf_facts {mj : Lean.Json} {tables : List (String × ByteArray)} {kt : Typed.Class × CircuitType}
     (h : Typed.classOf mj tables = .ok kt) :
-    ∃ types, Typed.hold types tables = .ok kt.1.held := by
+    (∃ types, Typed.hold types tables = .ok kt.1.held) ∧
+      (kt.1.ls.getD kt.1.unit default).type.bind (Typed.typeIn kt.1.types) = some kt.2 := by
   unfold Typed.classOf at h
   extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp0 at h
   split at h
@@ -171,8 +173,6 @@ theorem classOf_held {mj : Lean.Json} {tables : List (String × ByteArray)} {kt 
   extract_lets (config := { underBinder := false, onlyGivenNames := true }) types1 at h
   obtain ⟨_, -, h⟩ := except_bind_ok h
   obtain ⟨held, hheld, h⟩ := except_bind_ok h
-  refine ⟨types1, ?_⟩
-  suffices kt.1.held = held by rw [this]; exact hheld
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨ls, -, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨unit, -, h⟩ := hh)
@@ -183,9 +183,11 @@ theorem classOf_held {mj : Lean.Json} {tables : List (String × ByteArray)} {kt 
   split at h
   swap
   · cases h
+  rename_i ul hul
   split at h
   swap
   · cases h
+  rename_i ut hut
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp2 at h
   replace h := ite_throw_ok h
@@ -204,9 +206,41 @@ theorem classOf_held {mj : Lean.Json} {tables : List (String × ByteArray)} {kt 
   split at h
   swap
   · cases h
+  rename_i ty hty
   split at h
-  · cases h; rfl
   · cases h
+    refine ⟨⟨types1, hheld⟩, ?_⟩
+    show (ls.getD unit default).type.bind (Typed.typeIn types1) = some ty
+    rw [Array.getD_eq_getD_getElem?, hul, Option.getD_some, hut]
+    exact hty
+  · cases h
+
+theorem classOf_held {mj : Lean.Json} {tables : List (String × ByteArray)} {kt : Typed.Class × CircuitType}
+    (h : Typed.classOf mj tables = .ok kt) : ∃ types, Typed.hold types tables = .ok kt.1.held :=
+  (classOf_facts h).1
+
+/-- **A template read's block is `templateOf` on the unit layout's own type.** -/
+theorem read_template_ty {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {k : Typed.Class}
+    {t : Typed.Template} (h : Typed.read tags bytes tables = .ok (k, .inr t)) :
+    ∃ name ty, Typed.templateOf name k.done k.ls k.unit ty k.held = .ok t ∧
+      (k.ls.getD k.unit default).type.bind (Typed.typeIn k.types) = some ty := by
+  unfold Typed.read at h
+  simp only [bind, Except.bind, pure, Except.pure] at h
+  split at h
+  · simp at h
+  rename_i s _
+  split at h
+  · simp at h
+  rename_i kt hkt
+  have hty := (classOf_facts hkt).2
+  split at h
+  · split at h <;> simp at h
+  · split at h
+    · simp at h
+    · rename_i v hv
+      simp only [Except.ok.injEq, Prod.mk.injEq, Sum.inr.injEq] at h
+      obtain ⟨rfl, rfl⟩ := h
+      exact ⟨s.2.1, kt.2, hv, hty⟩
 
 /-- **The class `Typed.read` returns holds its tables' words as their bytes, read as `u32`.** -/
 theorem read_held {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {k : Typed.Class}
@@ -234,7 +268,7 @@ theorem read_held {tags : Tags} {bytes : ByteArray} {tables : List (String × By
 /-! ## The rows' wires are into the rows' circuits -/
 
 theorem rowSlots_all (ports : Array Port) :
-    ∀ w ∈ (HmRow.rowSlots ports).2.toList, ∀ e ∈ w.toList, e.1 < (HmRow.rowSlots ports).1 := by
+    ∀ w ∈ (HmRow.rowSlots ports).2.toList, ∀ e ∈ w.toList, e.1 < (HmRow.rowSlots ports).1 ∧ e.2 < 3 := by
   unfold HmRow.rowSlots
   simp only [HmRow.PER_SLOT]
   rw [← Array.forIn_toList]
@@ -245,7 +279,7 @@ theorem rowSlots_all (ports : Array Port) :
     (fun p L s hs => ⟨_, rfl, ?_⟩) ports.toList (0, #[]) (by simp)
   · intro w hw e he
     obtain ⟨k, rfl, hlt⟩ := this w hw e he
-    show k / 3 < (_ + 3 - 1) / 3
+    show k / 3 < (_ + 3 - 1) / 3 ∧ k % 3 < 3
     omega
   · intro w hw e he
     simp only [Array.toList_push, List.mem_append, List.mem_singleton] at hw
@@ -281,7 +315,7 @@ theorem rowWires_dst (ports : Array Port) (hp : ∀ p ∈ ports.toList, 0 < p.ch
     simp only [Array.toList_push, List.mem_append, List.mem_singleton] at hw'
     rcases hw' with hw' | rfl
     · exact hout w hw'
-    · exact Or.inl ⟨rfl, hall _ hw (where_[p]!)[k]! (getElem_mem_toList' hk)⟩
+    · exact Or.inl ⟨rfl, (hall _ hw (where_[p]!)[k]! (getElem_mem_toList' hk)).1⟩
   · exact Or.inr ⟨rfl, by rw [← hsz]; exact hpl⟩
 
 /-- **Δ's other flat rows, for a template, are input bits of the rows' circuits' slots**: no leaf map or cut, and the
@@ -624,6 +658,91 @@ theorem tmpl_net_facts {tags : Tags} {c : Circuit} (P : ParseFactsT tags t c)
     rw [hd]
     exact ⟨by decide, fun h => absurd h hi⟩
 
+/-! ## An input's message bit is a column of the block -/
+
+theorem nested_getElem! {α : Type} [Inhabited α] (xs : Array (Array α)) (p k : ℕ) :
+    (xs[p]!)[k]! = default ∨ ∃ w ∈ xs.toList, (xs[p]!)[k]! ∈ w.toList := by
+  by_cases hp : p < xs.size
+  · rw [getElem!_pos xs p hp]
+    by_cases hk : k < xs[p].size
+    · exact Or.inr ⟨xs[p], Array.getElem_mem_toList hp, by rw [getElem!_pos _ k hk]; exact Array.getElem_mem_toList hk⟩
+    · exact Or.inl (getElem!_neg _ k hk)
+  · left
+    rw [getElem!_neg xs p hp]
+    exact getElem!_neg _ k (by show ¬ k < (#[] : Array α).size; simp)
+
+/-- **The rows' circuits fit their slots and their input ports lie in their input rows**: they are the file's own text
+nets or lookup slots, past the template's (`CheckFactsT.rows_after`). -/
+theorem rows_netOK {tags : Tags} {t : Typed.Template} {c : Circuit} (P : ParseFactsT tags t c)
+    (C : CheckFactsT c (HmRow.blockOf t)) : ∀ n, n = c.shaNet ∨ n = c.hmNet → NetOK (c.nets.getD n default).2 := by
+  obtain ⟨-, -, -, -, -, -, -, -, hbrl, -⟩ := HmRow.blockOf_spec t
+  have hrows : t.layouts.size < c.shaNet ∧ t.layouts.size < c.hmNet := by
+    have := C.rows_after; rw [hbrl] at this; exact this
+  intro n hn
+  have hnl : n < c.nets.size := by rcases hn with rfl | rfl; exact P.shaNet; exact P.hmNet
+  have hgt : t.layouts.size < n := by rcases hn with rfl | rfl; exact hrows.1; exact hrows.2
+  rcases tmpl_nets P hnl with ⟨h0, -⟩ | ⟨k, hk', h1, -⟩ | ⟨-, ⟨lines, hp⟩ | ⟨_, _, _, _, _, hb⟩⟩
+  · omega
+  · omega
+  · exact (netOK_parsed hp).1
+  · exact (netOK_lookup hb).1
+
+/-- **A message bit's column is in the block**: for any row, byte and bit, it is a column of a `sha512x3` slot's message
+port, when the file has a row. -/
+theorem msgCol_lt {tags : Tags} {t : Typed.Template} {c : Circuit} (P : ParseFactsT tags t c)
+    (C : CheckFactsT c (HmRow.blockOf t)) (hne : 0 < c.ports.size) {g : ℕ} (hg : g < c.g) (p byte b : ℕ)
+    (hb : b < 8) : Typed.msgCol c g p byte b < 2 ^ c.kLog := by
+  obtain ⟨hws, hw0⟩ := rowSlots_spec c.ports P.ports
+  have hall := rowSlots_all c.ports
+  have hns : 0 < (HmRow.rowSlots c.ports).1 := by
+    have hw : (HmRow.rowSlots c.ports).2[0]! ∈ (HmRow.rowSlots c.ports).2.toList :=
+      getElem_mem_toList' (by rw [hws]; exact hne)
+    exact lt_of_le_of_lt (Nat.zero_le _) (hw0 _ hw).1
+  have hent : ((HmRow.rowSlots c.ports).2[p]!)[byte / 128]!.1 < (HmRow.rowSlots c.ports).1 ∧
+      ((HmRow.rowSlots c.ports).2[p]!)[byte / 128]!.2 < 3 := by
+    rcases nested_getElem! (HmRow.rowSlots c.ports).2 p (byte / 128) with h | ⟨w, hw, he⟩
+    · rw [h]; exact ⟨hns, by decide⟩
+    · exact hall w hw _ he
+  obtain ⟨hm, hk, -⟩ := rangeOf_spec (C.one_range _ P.shaNet)
+  have hc := C.count _ hm _ hk
+  have hsl := ((C.bound_slotLog _ hm).2 _ hk).symm
+  obtain ⟨-, hW, hports⟩ := rows_netOK P C _ (Or.inl rfl)
+  have hpv := C.perVu_sha
+  obtain ⟨hsz, hsin⟩ := C.sha_in
+  unfold Typed.msgCol
+  generalize hrs : HmRow.rowSlots c.ports = rs at hent hns hpv
+  obtain ⟨nSha, where_⟩ := rs
+  simp only at hent hpv ⊢
+  generalize hE : (where_[p]!)[byte / 128]! = e at hent ⊢
+  obtain ⟨slot, sub⟩ := e
+  simp only at hent ⊢
+  have hsub : 2 * sub + 1 < 6 := by omega
+  have hq : ((portCols (c.nets.getD c.shaNet default).2.inGroups)[2 * sub + 1]!).2 = 1024 := by
+    rw [hsin _ hsub]
+    have : (2 * sub + 1) % 2 = 1 := by omega
+    simp [this]
+  have hqm := hports _ (getElem_mem_toList' (by rw [hsz]; exact hsub))
+  have hat : AtSlot c c.shaNet (g * c.perVu.getD c.shaNet 0 + slot)
+      (((portCols (c.nets.getD c.shaNet default).2.inGroups)[2 * sub + 1]!).1 + 64 * (byte % 128 / 8) +
+        (56 - 8 * (byte % 128 % 8)) + b)
+      (c.slotCol c.shaNet g slot + ((portCols (c.nets.getD c.shaNet default).2.inGroups)[2 * sub + 1]!).1 +
+        64 * (byte % 128 / 8) + 56 - 8 * (byte % 128 % 8) + b) := by
+    refine ⟨by rw [hc, hpv]; exact Rows.mul_add_lt hg hent.1, ?_, ?_⟩
+    · rw [hsl]
+      have h1 : 64 * (byte % 128 / 8) ≤ 960 := by omega
+      have h2 : 8 * (byte % 128 % 8) ≤ 56 := by omega
+      omega
+    · unfold Circuit.slotCol
+      have h2 : 8 * (byte % 128 % 8) ≤ 56 := by omega
+      omega
+  exact hat.lt (fun r hr => (C.bound_slotLog r hr).1) hm
+
+theorem unit_inCols_size {types : String → Option CircuitType} {ls : Array Flock.Layout}
+    {info : String → Option TableInfo} {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D}
+    (hd : deriveChecked types ls info words unit = .ok done) {ty : CircuitType}
+    (hty : (ls.getD unit default).type.bind types = some ty) : (done.getD unit default).inCols.size = ty.inBits :=
+  (checkLayout_spec ((deriveChecked_spec hd).1 unit (unit_lt hd)) hty).2.2.1
+
 /-! ## The accepted template statement's layout -/
 
 /-- **`TemplateLayout` for a template statement, from its parse and check.** For the circuit `parse` accepted for the
@@ -758,7 +877,7 @@ theorem setupH_templateLayout (ht : tags.typed = true)
     have C' : CheckFactsT st.c (HmRow.blockOf t) := by
       rw [hc]
       exact ⟨C.bound_slotLog, C.disj, C.unit_lookup, C.count, C.one_range, C.root_perVu, C.rangeLogs, C.root_zero,
-        C.sha_in, C.hm_in, C.perVu_sha, C.perVu_hm, C.rows_after⟩
+        C.sha_in, C.hm_in, C.perVu_sha, C.perVu_hm, C.rows_after, C.ins⟩
     exact templateLayout_of P' C' htm k.hd (read_held hr) rfl hpin hda hdb hm hk
   · cases hrn
 
@@ -1046,20 +1165,58 @@ theorem input_copy (hd : deriveChecked types ls info words unit = .ok done) (T :
 
 end TemplateLayout
 
+/-- **An accepted template statement's inputs read message bits inside the block**: input `w` of VU `g` copies
+`Typed.copySrc st.c g w`, a column of a `sha512x3` slot's message port. The file has a row, since the instance's inputs
+are its rows' words (`checkTyped`) and the unit has input `w`. -/
+theorem setupH_copySrc_lt {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
+    {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt} (ht : tags.typed = true)
+    (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) {k : Typed.Class} {t : Typed.Template}
+    (hr : Typed.read tags cf tables = .ok (k, .inr t)) {g w : ℕ} (hg : g < st.c.g)
+    (hw : w < (k.done.getD k.unit default).inCols.size) : Typed.copySrc st.c g w < 2 ^ st.c.kLog := by
+  obtain ⟨hp, -, -, -, -, -⟩ := setupH_spec_typed ht h
+  obtain ⟨k', r, hr', hcase⟩ := parseTyped_spec hp
+  rw [hr] at hr'
+  obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Except.ok.inj hr')
+  rcases hcase with ⟨t', c', hrt, hpc, hc⟩ | ⟨net, c', hrn, -, -⟩
+  · cases hrt
+    have P := parse_facts_tmpl hpc
+    obtain ⟨ls', hcheck⟩ := P.check
+    have C := check_facts_typed P.typed hcheck
+    have P' : ParseFactsT tags t st.c := by
+      rw [hc]
+      exact ⟨P.pre, P.ports, P.unitNet, P.root, P.shaNet, P.hmNet, P.kinds, ⟨ls', hcheck⟩, P.typed, P.upv,
+        P.leavesIn, P.wires, P.leafCuts⟩
+    have C' : CheckFactsT st.c (HmRow.blockOf t) := by
+      rw [hc]
+      exact ⟨C.bound_slotLog, C.disj, C.unit_lookup, C.count, C.one_range, C.root_perVu, C.rangeLogs, C.root_zero,
+        C.sha_in, C.hm_in, C.perVu_sha, C.perVu_hm, C.rows_after, C.ins⟩
+    obtain ⟨name, ty, htm, hty⟩ := read_template_ty hr
+    obtain ⟨-, -, -, -, -, hti, -⟩ := Typed.templateOf_spec htm
+    obtain ⟨-, hbi, -⟩ := HmRow.blockOf_spec t
+    have hne : 0 < st.c.ports.size := by
+      by_contra h0
+      have hp0 : st.c.ports = #[] := Array.eq_empty_of_size_eq_zero (by omega)
+      have hins : ty.ins = #[] := by rw [← hti, ← hbi, C'.ins, hp0]; simp
+      have hin := unit_inCols_size k.hd hty
+      have : ty.inBits = 0 := by unfold CircuitType.inBits; rw [hins]; rfl
+      omega
+    unfold Typed.copySrc
+    exact msgCol_lt P' C' hne hg _ _ _ (Nat.mod_lt _ (by norm_num))
+  · cases hrn
+
 /-- **The inputs of an accepted template statement copy their message bits** (a table class's `copy`): input `w` of VU
-`g` is a copy row of `Typed.copySrc st.c g w` in the model of the accepted statement, when that position is in the
-block. -/
+`g` is a copy row of `Typed.copySrc st.c g w` in the model of the accepted statement. -/
 theorem setupH_inputCopy {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt} (ht : tags.typed = true)
     (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) {k : Typed.Class} {t : Typed.Template}
     (hr : Typed.read tags cf tables = .ok (k, .inr t))
     (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {g w : ℕ} (hg : g < st.c.g)
-    (hw : w < (k.done.getD k.unit default).inCols.size) (hs : Typed.copySrc st.c g w < 2 ^ st.c.kLog) :
+    (hw : w < (k.done.getD k.unit default).inCols.size) :
     CopyRow ((setupH_templateLayout ht h hr).2.2.model regs)
       ⟨Typed.col st.c (HmRow.blockOf t) g (k.done.getD k.unit default).inCols[w],
         (setupH_templateLayout ht h hr).2.2.col_lt k.hd hg
           (TemplateLayout.inCols_row k.hd (unit_lt k.hd) (unitShape_of_class k) (Array.getElem_mem hw)).1⟩
-      ⟨Typed.copySrc st.c g w, hs⟩ :=
-  (setupH_templateLayout ht h hr).2.2.input_copy k.hd (unitShape_of_class k) regs hg hw hs
+      ⟨Typed.copySrc st.c g w, setupH_copySrc_lt ht h hr hg hw⟩ :=
+  (setupH_templateLayout ht h hr).2.2.input_copy k.hd (unitShape_of_class k) regs hg hw _
 
 end FlockSoundness

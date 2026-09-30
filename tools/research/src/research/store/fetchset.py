@@ -23,15 +23,15 @@ from .local import IntegrityError, LocalStore, manifest_key, object_key, sha256_
 from .model import ArtifactManifest
 from .remote import HttpRemote, Remote
 
-#: The public export's base URL: fixtures served read-only at `<PUBLIC_URL>/manifests/<hex>.json` and `<PUBLIC_URL>/objects/sha256/<hex>`.
-#: Empty until the route has passed `research data export --verify-url` end to end.
-PUBLIC_URL = ""
-PUBLIC_URL_ENV = "RESEARCH_FIXTURES_URL"
+#: The store's public half, read-only, at the store's own keys: `<PUBLIC_URL>/manifests/<hex>.json` and `<PUBLIC_URL>/objects/sha256/<hex>`
+#: (the site's `/store` base, which redirects to the `verity-public` bucket).
+PUBLIC_URL = "https://website-docs-sage.vercel.app/store"
+PUBLIC_URL_ENV = "RESEARCH_PUBLIC_URL"
 JOBS = 32
 
 
 def public_url(explicit: str | None = None) -> str:
-    """`explicit`, else `$RESEARCH_FIXTURES_URL`, else `PUBLIC_URL`; an empty string means no public source."""
+    """`explicit`, else `$RESEARCH_PUBLIC_URL`, else `PUBLIC_URL`; an empty string means no public source."""
     if explicit is not None:
         return explicit
     return os.environ.get(PUBLIC_URL_ENV, PUBLIC_URL)

@@ -120,14 +120,14 @@ def test_padding_stuffing_is_rejected():
     assert "A row 0 is not zero past the kept width" in W.check_opened(S, unit, tile, rows_a, rows_b, ops_for(rows_a, rows_b, k))
 
 
-def lifecycle(rows_a=None, real=20):
+def lifecycle(rows_a=None, real=20, scheme=S):
     """32 x 128 x 16 on 16 x 16 tiles: A's rows 20 … 31 are zero filler and row 3 fails liveness; B passes."""
     if rows_a is None:
         rows_a = CV.rows_f32("work-life", "A", real, K) + [C.f32_row([0] * K)] * (32 - real)
         rows_a[3] = spiked(rows_a[3])
     rows_b = CV.rows_f32("work-life", "B", 16, K)
     work = Workload((Matmul(3, Shape(32, K, 16), 9),))
-    prover = Prover(S, {9: rows_b})
+    prover = Prover(scheme, {9: rows_b})
     epoch = Epoch.start(work, prover.weight_roots, b"beacon")
     return epoch, prover, prover.prove(epoch, {3: rows_a}), rows_a, rows_b
 
@@ -143,6 +143,15 @@ def test_audit_credits_real_rows_and_checks_the_excluded_ones():
     assert out.audit.accepted and len(out.audit.verdicts) == 9 and out.audit.selected[-1] == 0
     assert out.wref == W.cell_wref(S, records[0]) * 19 * 16 and out.audit.profile.work == int(out.wref)
     assert out.credit == (1 - D.CAP) * W.cell_credit(S, records[0]) * 19 * 16 and out.job == S.job_cost(16, K)
+
+
+def test_audit_under_hashing_h1():
+    """The work law's audit is the same under hashing format -h1: its openings verify against frame-b3 roots."""
+    h1 = C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h1")
+    epoch, prover, tr, rows_a, rows_b = lifecycle(scheme=h1)
+    records = W.declare(h1, epoch, {3: rows_a}, {9: rows_b}, SPLITS, real_rows={3: 20})
+    assert W.audit(h1, epoch, prover, tr, SPLITS, records, BEFORE, AFTER, 4).audit.accepted
+    assert not W.audit(S, epoch, prover, tr, SPLITS, records, BEFORE, AFTER, 4).audit.accepted
 
 
 def test_audit_rejects_what_the_red_team_found():

@@ -1,9 +1,9 @@
 """verity_vllm/ops/epoch_row.sh: every stop of a row -- a stage deadline, STOP_AFTER, a signal, the custody guard -- ends inside the job
 the same way: the Build and records stored, `research data preserved` on them, then END.
 
-CPU only: the script runs from this tree with stand-ins for the stage runner (`verity-vllm row run ...`; every other `verity-vllm` command,
-`epoch ...`, is the real CLI), the bootstrap (`EPOCH_BOOTSTRAP`) and the store CLI (`RESEARCH_CLI`), in a fake `research run` job (run
-dir, status.json, custody dir)."""
+CPU only: the script runs from this tree with stand-ins for the stage runner (`verity-vllm row run ...` and `epoch word-check`; every
+other `verity-vllm` command, `epoch ...`, is the real CLI), the bootstrap (`EPOCH_BOOTSTRAP`), the store CLI (`RESEARCH_CLI`) and the
+record stage (`$PY -m tests.regression.rebaseline`), in a fake `research run` job (run dir, status.json, custody dir)."""
 from __future__ import annotations
 
 import json
@@ -39,14 +39,24 @@ if [ "$1 $2" = "row run" ]; then
   case "$(eval echo "\\${FAKE_${s^^}:-ok}")" in sleep) exec sleep "${FAKE_SLEEP:-60}";; esac
   exit 0
 fi
+[ "$1 $2" = "epoch word-check" ] && { echo "PASS (stand-in)"; exit 0; }
 exec "$REAL_PY" -m verity_vllm.pipeline.cli "$@"
 """
 CLI = """#!/bin/bash
-# stand-in for `python3 -m research`: logs every call; `data put` prints an artifact id
+# stand-in for `python3 -m research`: logs every call; `data put` prints an artifact id, and first moves the EPOCH_NOW=@FILE clock on
+# by FAKE_PUT_S seconds when that is set (a store that takes that long per tree)
 echo "$*" >> "$CALLS"
-[ "$1 $2" = "data put" ] && echo '{"artifact": "%s"}'
+if [ "$1 $2" = "data put" ]; then
+  [ -n "${FAKE_PUT_S:-}" ] && echo $(( $(cat "${EPOCH_NOW#@}") + FAKE_PUT_S )) > "${EPOCH_NOW#@}"
+  echo '{"artifact": "%s"}'
+fi
 exit 0
 """ % ART
+PY = """#!/bin/bash
+# stand-in for $PY: the record stage (`-m tests.regression.rebaseline run ...`) is logged and passes; everything else is the real python
+[ "$1 $2" = "-m tests.regression.rebaseline" ] && { echo "record $*" >> "$CALLS"; echo "1 passed"; exit 0; }
+exec "$REAL_PY" "$@"
+"""
 
 
 def _utc(dt: datetime) -> str:
@@ -66,7 +76,7 @@ def _job(tmp_path: Path, *, timeout_s: float = 7200, key_after_run_s: float = 72
                                                    "expires_utc": _utc(now + timedelta(seconds=timeout_s + key_after_run_s))}))
     b = tmp_path / "bin"
     b.mkdir()
-    for name, text in (("py", '#!/bin/bash\nexec "$REAL_PY" "$@"\n'), ("verity-vllm", STAGE), ("research", CLI),
+    for name, text in (("py", PY), ("verity-vllm", STAGE), ("research", CLI),
                        ("bootstrap", "#!/bin/bash\nexit 0\n")):
         (b / name).write_text(text)
         (b / name).chmod(0o755)
@@ -124,6 +134,35 @@ def test_the_run_timeout_less_the_store_reserve_is_the_job_deadline(tmp_path: Pa
     r = _run(env)
     assert r.returncode == 124, (r.stdout, r.stderr)
     assert "STOP build: deadline" in _progress(env)
+    _stored_then_preserved(env)
+
+
+def _clock(tmp_path: Path, env: dict[str, str]) -> None:
+    c = tmp_path / "now"
+    c.write_text(str(int(START.timestamp())))
+    env["EPOCH_NOW"] = f"@{c}"
+
+
+def test_a_store_that_ends_past_the_job_end_leaves_the_record_stage_the_run_end(tmp_path: Path) -> None:
+    env = _job(tmp_path)                                # the run ends at +7200 s; the job, 2400 s before, at +4800 s
+    _clock(tmp_path, env)
+    env["FAKE_PUT_S"] = "2600"                          # two trees: the store ends at +5200 s
+    r = _run(env)
+    assert r.returncode == 0, (r.stdout, r.stderr)
+    assert [c for c in _calls(env) if c.startswith("stage")] == ["stage build", "stage match", "stage commit"]
+    assert "rebaseline run rc=0 1 passed" in _progress(env)
+    assert [c for c in _calls(env) if c.startswith("record ")], _calls(env)
+    _stored_then_preserved(env)
+
+
+def test_a_store_that_ends_inside_the_finish_reserve_skips_the_record_stage(tmp_path: Path) -> None:
+    env = _job(tmp_path)
+    _clock(tmp_path, env)
+    env["FAKE_PUT_S"] = "3500"                          # the store ends at +7000 s, inside the run's last 300 s
+    r = _run(env)
+    assert r.returncode == 0, (r.stdout, r.stderr)
+    assert "rebaseline run rc=124" in _progress(env)
+    assert not [c for c in _calls(env) if c.startswith("record ")], _calls(env)
     _stored_then_preserved(env)
 
 
