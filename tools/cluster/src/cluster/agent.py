@@ -61,10 +61,6 @@ class Footprint:
                 "max_rss_kib": ru.ru_maxrss, "execs": self.execs, "nvml_calls": self.nvml_calls, "nvml_seen": self.seen[:5]}
 
 
-class Stop(Exception):
-    pass
-
-
 def status_timed(path: Path) -> tuple[bool | None, float | None]:
     """`status.txt`'s first line says `timed True` or `timed False`; None when it is missing or says neither."""
     try:
@@ -158,7 +154,6 @@ def run(cluster: Cluster, out: Path, *, mode: str = "shadow", clock: Callable[[]
 
     def on_term(signum, frame):
         stop["why"] = "SIGTERM"
-        raise Stop()
 
     if mode == "live":
         executor = executor or Executor(lease_dir)
@@ -169,7 +164,7 @@ def run(cluster: Cluster, out: Path, *, mode: str = "shadow", clock: Callable[[]
     except ValueError:
         pass
     try:
-        while True:
+        while stop["why"] is None:
             now = clock()
             if until is not None and now >= until:
                 stop["why"] = "until"
@@ -207,8 +202,6 @@ def run(cluster: Cluster, out: Path, *, mode: str = "shadow", clock: Callable[[]
                 continue
             in_window_since = None
             sleep(tick_s)
-    except Stop:
-        pass
     except Exception:
         exception = traceback.format_exc(limit=8)
         stop["why"] = "exception"

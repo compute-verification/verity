@@ -302,13 +302,27 @@ def quiet_agreement(wins: list[dict[str, Any]], quiet_log: list[dict[str, Any]],
     return out
 
 
+def sampler_windows(cluster: Cluster, rows: Iterable[dict[str, Any]], node: str = nebius2.NODE) -> dict[int, int]:
+    """The timed windows the node's sampler saw: each window holder's pid, with the first time it was seen."""
+    out: dict[int, int] = {}
+    for rec in rows:
+        obs = nebius2.from_sampler(rec)
+        if nebius2.timed_now(cluster, obs, node):
+            for a in nebius2.allocations(cluster, obs, node):
+                if a.job.quiet:
+                    out.setdefault(int(a.job.id[3:]), obs.t)
+    return out
+
+
 def evaluate(out: Path, quiet_log: list[dict[str, Any]] | None = None, *, tolerance_s: int = 30,
-             since: int | None = None, until: int | None = None) -> dict[str, Any]:
+             since: int | None = None, until: int | None = None,
+             sampled: dict[int, int] | None = None) -> dict[str, Any]:
     """The shadow's pass bar over its output directory: the ledger verifies; no safety divergence (a plan that breaks a
     rule, a timed window the planner would start over 5 s after `gpu-lease`, a request left waiting over 10 minutes beside
     free GPUs); every window agrees with node_ops' quiet log; the agent stayed under 1% of a core, made no NVML call and
     raised nothing. The evidence (hours covered, windows seen) is reported against the 3 h / 6-window guide, not
-    required. Design divergences are listed for review."""
+    required. Design divergences are listed for review. `sampled` (`sampler_windows` of the node's own log) lists the
+    windows the agent never saw hold their GPUs (it learnt of them from `status.txt` alone), which it could not time."""
     out = Path(out)
     records = ledger.read(out / "ledger.jsonl") if (out / "ledger.jsonl").exists() else []
     summary = json.loads((out / "summary.json").read_text()) if (out / "summary.json").exists() else {}
@@ -343,7 +357,9 @@ def evaluate(out: Path, quiet_log: list[dict[str, Any]] | None = None, *, tolera
         "observed": [d["msg"] for d in by.get("observed", [])],
         "quiet_disagreements": quiet_agreement(wins, qlog, tolerance_s),
         "windows_not_quiet": [{"alloc": w["alloc"], "beside": w["beside"]} for w in wins if not w["quiet"]],
+        "windows_missed": sorted(f"gl-{pid} at {t}" for pid, t in (sampled or {}).items()
+                                 if t_lo <= t <= t_hi and pid not in {w["pid"] for w in wins}),
     }
 
 
-__all__ = ["Shadow", "Request", "replay", "evaluate", "windows", "quiet_agreement", "WINDOW_LAG_S", "STARVE_S"]
+__all__ = ["Shadow", "Request", "replay", "evaluate", "windows", "sampler_windows", "quiet_agreement", "WINDOW_LAG_S", "STARVE_S"]

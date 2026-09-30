@@ -8,7 +8,7 @@
   cluster ledger usage LEDGER.jsonl [--since T]         # held against busy GPU time per holder, lowest share first
   cluster agent DESCRIPTION.toml --out DIR [--mode shadow|live] [--hours H] [--stop-file P] [--copy-to DIR]
   cluster shadow replay DESCRIPTION.toml --sampler UTIL.jsonl[.gz] --preempted LOG[.gz] --out DIR
-  cluster shadow evaluate DIR [--quiet-log QUIET.jsonl[.gz]]  # the pass bar; exit 0 when it passes, 2 when not
+  cluster shadow evaluate DIR [--quiet-log QUIET.jsonl[.gz]] [--sampler UTIL.jsonl[.gz]...]  # the pass bar: exit 0 or 2
 
 A snapshot is `{"node", "now", "allocations": [...], "queue": [...], "done": [...], "has": [...], "held_locks": [...],
 "last_busy": {alloc: t}, "idle_s": {kind: s}}`, in the shapes `model.allocation_to_dict` and `model.job_to_dict` write.
@@ -83,6 +83,8 @@ def main(argv: list[str] | None = None) -> int:
     se = ssub.add_parser("evaluate")
     se.add_argument("dir")
     se.add_argument("--quiet-log")
+    se.add_argument("--sampler", nargs="*", default=[], help="the node's util/*.jsonl[.gz] over the same span")
+    se.add_argument("--description", default=str(Path(__file__).parents[2] / "descriptions" / "nebius.toml"))
     a = ap.parse_args(argv)
 
     if a.cmd == "agent":
@@ -109,7 +111,11 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(json.loads((Path(a.out) / "summary.json").read_text()), sort_keys=True))
             return 0
         q = [json.loads(x) for x in _lines(a.quiet_log) if x.strip()] if a.quiet_log else None
-        rep = shadow.evaluate(Path(a.dir), q)
+        sampled = None
+        if a.sampler:
+            c = model.load(a.description)
+            sampled = shadow.sampler_windows(c, (json.loads(x) for f in a.sampler for x in _lines(f) if x.strip()))
+        rep = shadow.evaluate(Path(a.dir), q, sampled=sampled)
         print(json.dumps(rep, indent=1, sort_keys=True))
         return 0 if rep["pass"] else 2
 
