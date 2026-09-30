@@ -36,6 +36,7 @@ DISPATCH_SKY = Path(os.environ.get("DISPATCH_SKY", "/workspace/jobs/dispatch/inf
 REPO_SKY = "tools/research/src/research/pods/nebius/sky"
 IDLE_UTIL, IDLE_S, UNLEASED_FB_MIB = 10.0, 300, 1024
 CLASS_OF_QUEUE = {"pous-overflow": "pous"}
+LEASE_STATE = Path(os.environ.get("GPU_LEASE_DIR", "/run/gpu-lease")) / "n1-lease.json"
 
 
 def iso(t: float) -> str:
@@ -81,8 +82,20 @@ def observe() -> dict:
         "pods": kubectl("get", "pods")["items"],
         "jobs": kubectl("get", "jobs")["items"],
         "workloads": kubectl("get", "workloads")["items"],
+        "lease_pool": lease_pool(),
     }
     return obs
+
+
+def lease_pool() -> dict[int, dict]:
+    """n1_lease.py's GPUs in the lease pool (index -> its record), when its state is fresh; else none."""
+    try:
+        s = json.loads(LEASE_STATE.read_text())
+    except (OSError, ValueError):
+        return {}
+    if time.time() - datetime.strptime(s["t"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp() > 120:
+        return {}
+    return {g["index"]: g for g in s.get("gpus") or [] if g.get("holder")}
 
 
 def _cond(w: dict, kind: str) -> bool:
@@ -98,7 +111,8 @@ def _gpu_request(w: dict) -> int:
 
 
 def build(obs: dict, drift: dict | None = None) -> dict:
-    """The `nodes.n1` entry from one observation (see observe()); `drift` is template_drift()'s monitor, if any."""
+    """The `nodes.n1` entry from one observation (see observe()); `drift` is template_drift()'s monitor, if any.  A GPU in
+    n1_lease.py's pool is attributed to its lease (the lease files), not to the holder pod DCGM names."""
     t = obs["t"]
     admitted: dict[str, dict] = {}                           # Job or Pod name -> its admitted, unfinished Workload
     waiting_gpu = waiting_cpu = 0
@@ -122,7 +136,20 @@ def build(obs: dict, drift: dict | None = None) -> dict:
         wl = admitted.get(job or "") or admitted.get(pod_name or "")
         busy5, util5, fb = obs["busy_5m"].get(i), obs["util_5m"].get(i, 0.0), obs["fb_mib"].get(i, 0.0)
         holder, cls = None, "free"
-        if wl:
+        pooled = (obs.get("lease_pool") or {}).get(i)
+        if pooled:
+            lease = pooled.get("lease")
+            holder, cls = (f"lease:{lease.get('who')}", "verity") if lease else ("pool:free", "free")
+            since = (lease or {}).get("since")
+            held_s = t - datetime.strptime(since, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp() if since else 0
+            if lease and held_s >= IDLE_S and util5 < IDLE_UTIL:
+                name = lease.get("pod") or lease.get("run") or "-"
+                meta = (jobs.get((pods.get(name) or {}).get("metadata", {}).get("labels", {}).get("job-name", "")) or {}).get("metadata", {})
+                kind = (meta.get("annotations") or {}).get("verity.dev/template") or "unlabeled:" + "-".join(name.split("-")[:3])
+                monitors.append({"kind": "gpu-idle-in-lease", "gpu": i, "owner": lease.get("who"), "job_kind": kind,
+                                 "mean_util_5m": round(util5, 1), "lease_since": since, "key": f"n1:{name}:gpu{i}",
+                                 "msg": f"{name} ({kind}, gpu-lease for {lease.get('who')}) holds GPU {i} at {util5:.1f}% over 5 min"})
+        elif wl:
             holder = f"kueue:{job or pod_name}"
             cls = CLASS_OF_QUEUE.get(wl["spec"].get("queueName", ""), "verity")
             since = (pod or {}).get("status", {}).get("startTime")

@@ -577,6 +577,12 @@ def test_pool_n1_flags_an_idle_admitted_gpu_and_an_unleased_one_and_counts_waiti
            "jobs": [{"metadata": {"name": "nd-vllm-commit-1", "annotations": {"verity.dev/template": "config-run@9c6a"}}}],
            "workloads": [wl("nd-vllm-commit-1", "deployments-gpu", True), wl("nd-po-1", "pous-overflow", True),
                          wl("wait-g", "deployments-gpu", False), wl("wait-c", "deployments-cpu", False, gpus=0)]}
+    n1 = m.build({**obs, "busy_5m": {**obs["busy_5m"], 5: 0.0, 6: 1.0}, "util_5m": {**obs["util_5m"], 5: 0.0, 6: 90.0},
+                  "pod_of_gpu": {**obs["pod_of_gpu"], 5: "gpu-pool-1-a", 6: "gpu-pool-2-b"},
+                  "lease_pool": {5: {"index": 5, "holder": "gpu-pool-1"},
+                                 6: {"index": 6, "holder": "gpu-pool-2", "lease": {"who": "backend-sweep-2", "since": "2026-09-30T21:30:00Z",
+                                                                                   "pod": "nd-bs-x"}}}})
+    assert [(g["index"], g["holder"], g["class"]) for g in n1["gpus"]][5:] == [(5, "pool:free", "free"), (6, "lease:backend-sweep-2", "verity")]
     n1 = m.build(obs)
     assert [(g["index"], g["holder"], g["class"]) for g in n1["gpus"]] == [
         (0, "kueue:nd-vllm-commit-1", "verity"), (1, "kueue:nd-po-1", "pous"), (2, None, "free"), (3, "rogue", "direct"), (4, None, "free")]
@@ -732,3 +738,142 @@ def test_publish_pool_merges_node_1s_own_file_only_while_it_is_fresh():
     assert merged["nodes"]["n1"] == {"gpu_busy_5m": 0.05, "generated_at": "2026-09-30T21:50:00Z"}
     assert "n1" not in pp.merge(doc(), {**n1, "generated_at": "2026-09-30T21:40:00Z"}, now)["nodes"]
     assert pp.merge(doc(), None, now) == doc()
+
+
+# ---- n1_lease: node 1's process-level GPU leases --------------------------------------------------------------------------------------
+
+def _n1_lease(monkeypatch, tmp_path, holders=(), **env):
+    """The controller over a 4-GPU table, with kubectl faked: `holders` are (job, pod, uuid) running holder Jobs."""
+    monkeypatch.setenv("GPU_LEASE_DIR", str(tmp_path / "gl"))
+    for k, v in env.items():
+        monkeypatch.setenv(k, str(v))
+    (tmp_path / "gl").mkdir(exist_ok=True)
+    spec = importlib.util.spec_from_file_location("n1_lease_under_test", NEBIUS / "n1_lease.py")
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    calls: list[tuple] = []
+    state = {"holders": list(holders), "pods": []}
+
+    def kubectl(*args, stdin=None):
+        calls.append((args, stdin))
+        if args[:2] == ("get", "jobs"):
+            return json.dumps({"items": [{"metadata": {"name": j}, "status": {"active": 1}} for j, _, _ in state["holders"]]})
+        if args[:2] == ("get", "pods"):
+            return json.dumps({"items": [{"metadata": {"name": p, "uid": f"uid-{p}", "labels": {"job-name": j}},
+                                          "status": {"phase": "Running"}} for j, p, _ in state["holders"] + state["pods"]]})
+        if args[0] == "logs":
+            return next(u for _, p, u in state["holders"] if p == args[1]) + "\n"
+        return ""
+
+    monkeypatch.setattr(m, "kubectl", kubectl)
+    monkeypatch.setattr(m, "gpu_table", lambda: {"GPU-a": 0, "GPU-b": 1, "GPU-c": 2, "GPU-d": 3})
+    return m, calls, state
+
+
+@pytest.fixture
+def fences(tmp_path):
+    yield
+    for line in Path("/proc/locks").read_text().splitlines():
+        pid = int(line.split()[4])
+        if "n1-lease-fence" in " ".join(Path(f"/proc/{pid}/cmdline").read_bytes().decode(errors="replace").split("\0")) \
+                if Path(f"/proc/{pid}").exists() else False:
+            if str(tmp_path) in Path(f"/proc/{pid}/cmdline").read_bytes().decode(errors="replace"):
+                os.killpg(pid, 15)
+
+
+@needs_flock
+def test_n1_lease_fences_every_gpu_outside_the_pool_so_gpu_lease_takes_only_a_holders_gpu(monkeypatch, tmp_path, fences):
+    m, calls, _ = _n1_lease(monkeypatch, tmp_path, holders=[("gpu-pool-1", "gpu-pool-1-x", "GPU-c")])
+    s = m.Controller().tick(1_800_000_000.0)
+    assert s["pool"] == 1 and [bool(g["fence_pids"]) for g in s["gpus"]] == [True, True, False, True]
+    assert "who=kubernetes" in (tmp_path / "gl" / "0.owner").read_text()
+    env = {**gpu_env(tmp_path, count=4), "GPU_LEASE_ALLOWED_FILE": str(tmp_path / "gl" / "pool.gpus")}
+    got = subprocess.run(["bash", str(GPU_LEASE), "1", "--mem-gb", "0", "--", "sh", "-c", "echo $CUDA_VISIBLE_DEVICES"], env=env,
+                         capture_output=True, text=True, timeout=60)
+    assert got.returncode == 0 and got.stdout.strip() == "2"
+    two = subprocess.run(["bash", str(GPU_LEASE), "2", "--mem-gb", "0", "--", "true"], env=env, capture_output=True, text=True,
+                         timeout=60)
+    assert two.returncode == 75
+
+
+@needs_flock
+def test_n1_lease_grows_the_pool_for_a_waiter_and_shrinks_a_gpu_left_idle(monkeypatch, tmp_path, fences):
+    import fcntl
+    m, calls, state = _n1_lease(monkeypatch, tmp_path, VY_POOL_IDLE_S=120)
+    c = m.Controller()
+    w = tmp_path / "gl" / "wait.1.4242"
+    w.write_text("pid=4242 n=1 run=r-x who=backend-sweep-2 since=2026-09-30T22:00:00Z\n")
+    fd = os.open(w, os.O_RDONLY)
+    fcntl.flock(fd, fcntl.LOCK_SH)
+    t = 1_800_000_000.0
+    s = c.tick(t)
+    created = [json.loads(st) for a, st in calls if a[0] == "create"]
+    assert len(created) == 1 and created[0]["spec"]["template"]["spec"]["containers"][0]["resources"]["limits"] == {"nvidia.com/gpu": "1"}
+    assert created[0]["metadata"]["labels"]["kueue.x-k8s.io/queue-name"] == "provers" and s["pool"] == 0
+    assert all(g["fence_pids"] for g in s["gpus"])
+    state["holders"] = [(created[0]["metadata"]["name"], "hold-1", "GPU-b")]
+    before = len(calls)
+    s = c.tick(t + 10)
+    assert s["pool"] == 1 and not s["gpus"][1]["fence_pids"] and not [a for a, _ in calls[before:] if a[0] == "create"]
+    os.close(fd)
+    w.unlink()
+    c.tick(t + 20)
+    assert not [a for a, _ in calls if a[:2] == ("delete", "job")]
+    s = c.tick(t + 20 + 121)
+    assert [a[2] for a, _ in calls if a[:2] == ("delete", "job")] == [created[0]["metadata"]["name"]]
+    assert s["gpus"][1]["fence_pids"]
+
+
+@needs_flock
+def test_n1_lease_expires_a_lease_past_its_until_and_stops_one_outside_the_pool(monkeypatch, tmp_path, fences):
+    import fcntl
+    m, calls, state = _n1_lease(monkeypatch, tmp_path, holders=[("gpu-pool-1", "gpu-pool-1-x", "GPU-a")])
+    monkeypatch.setattr(m, "pod_uid_of", lambda pid: "uid-job-pod")
+    t = 1_800_000_000.0
+    c = m.Controller()
+    c.tick(t)
+    lock = os.open(tmp_path / "gl" / "0.lock", os.O_WRONLY)
+    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    (tmp_path / "gl" / "0.owner").write_text(f"pid={os.getpid()} run=r-x who=backend-sweep-2 uuid=GPU-a "
+                                             f"since={m.iso(t - 3600)} until={m.iso(t - 200)} cmd=bash -c x\n")
+    state["pods"].append(("job-x", "job-pod", "-"))
+    s = c.tick(t + 1)
+    assert s["gpus"][0]["lease"]["pod"] == "job-pod" and s["gpus"][0]["lease"]["owner_alive"]
+    assert ("delete", "pod", "job-pod", "--wait=false") in [a for a, _ in calls]
+    assert [e["ev"] for e in s["events"]] == ["expired"]
+    calls.clear()
+    (tmp_path / "gl" / "0.owner").write_text(f"pid={os.getpid()} run=r-x who=backend-sweep-2 since={m.iso(t)} cmd=x\n")
+    state["holders"] = []
+    c.tick(t + 2)
+    assert not [a for a, _ in calls if a[0] == "delete"]
+    s = c.tick(t + 3)
+    assert [e["ev"] for e in s["events"]] == ["lease-outside-pool"] and ("delete", "pod", "job-pod", "--wait=false") in [a for a, _ in calls]
+    os.close(lock)
+
+
+@needs_flock
+def test_n1_lease_holds_agent_lock_while_the_brain_answers_and_falls_back_when_it_stops(monkeypatch, tmp_path, fences):
+    import fcntl
+    brain = tmp_path / "brain.sh"
+    brain.write_text('#!/bin/sh\n[ -e "$(dirname "$0")/down" ] && exit 1\ncat > /dev/null\n'
+                     'echo \'{"grants": {"4242": [2]}, "pool_target": 1}\'\n')
+    m, calls, state = _n1_lease(monkeypatch, tmp_path, holders=[("gpu-pool-1", "gpu-pool-1-x", "GPU-c")],
+                                VY_LEASE_BRAIN=f"sh {brain}")
+    w = tmp_path / "gl" / "wait.1.4242"
+    w.write_text("pid=4242 n=1 run=r-x who=backend-sweep-2 since=2026-09-30T22:00:00Z\n")
+    fd = os.open(w, os.O_RDONLY)
+    fcntl.flock(fd, fcntl.LOCK_SH)
+    c = m.Controller()
+    t = 1_800_000_000.0
+    s = c.tick(t)
+    assert s["mode"] == "brain" and (tmp_path / "gl" / "grant.4242").read_text().strip() == "2"
+    probe = os.open(tmp_path / "gl" / "agent.lock", os.O_RDONLY)
+    with pytest.raises(BlockingIOError):
+        fcntl.flock(probe, fcntl.LOCK_SH | fcntl.LOCK_NB)
+    (tmp_path / "down").write_text("")
+    assert c.tick(t + 5)["mode"] == "brain"
+    s = c.tick(t + 10)
+    assert s["mode"] == "local" and [e["ev"] for e in s["events"]] == ["brain-down"]
+    fcntl.flock(probe, fcntl.LOCK_SH | fcntl.LOCK_NB)
+    os.close(probe)
+    os.close(fd)
