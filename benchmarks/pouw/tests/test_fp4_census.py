@@ -300,6 +300,8 @@ def test_the_falsifier_families_sit_where_they_claim(fmt):
     A = C.family("stride-row-grid", 4, 4096, rng)[0]
     rho, amax = np.sqrt((A[:, ::8] ** 2).mean(1)), np.abs(A).max(1)
     assert np.allclose(rho, 0.1) and np.allclose(amax, 1.0)
+    E = C.family("stride-row-grid-edge", 64, 4096, rng)[0]
+    assert not C.dss_dead(E, fmt).any() and C.dss_dead(A, fmt).mean() > 0.99   # inside sqrt(90) rho; the 10 rho edge is screened
 
 
 def test_merge_rate_codes_is_merge_rate_on_the_codes_given():

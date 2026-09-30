@@ -397,7 +397,7 @@ def operand_stats(codes: np.ndarray, sc: np.ndarray, fmt: str, clean_codes: np.n
 
 FAMILIES = ("gaussian", "student-t4", "grid-aligned", "uniform-block-amax", "outlier-in-block", "sparse-2of4", "zero-blocks",
             "scale-spread-30", "acc-freeze", "coherent", "rank-1", "spiky-row", "stride-row", "stride-row-tight",
-            "stride-row-grid")
+            "stride-row-grid", "stride-row-grid-edge")
 
 
 def _spiky(rows: int, k: int, rng) -> np.ndarray:
@@ -466,10 +466,13 @@ def family(name: str, rows: int, k: int, rng) -> tuple[np.ndarray, np.ndarray]:
     if name in ("stride-row", "stride-row-tight"):          # the proposer's rho = amax/10 sits on the 10 rho screen; /9 inside it
         div = 10.0 if name == "stride-row" else 9.0
         return _stride(rows, k, rng, div), 0.02 * _stride(rows, k, rng, div)
-    if name == "stride-row-grid":                           # the top two E2M1 codes of amax 1, rho = 1/10 exactly: the screen's edge
+    if name in ("stride-row-grid", "stride-row-grid-edge"):
+        # the top two E2M1 codes of amax 1, and rho = 1/10 exactly (the 10 rho screen's edge) or 1/9.45 (1/9.44 in BF16,
+        # inside the sqrt(90) screen)
         g = lambda: rng.choice([-1.0, 1.0], (rows, k)) * rng.choice([2 / 3, 1.0], (rows, k))  # noqa: E731
         A, B = g(), g()
-        A[:, ::8], B[:, ::8] = (0.1 * rng.choice([-1.0, 1.0], (rows, k // 8)) for _ in range(2))
+        r = 0.1 if name == "stride-row-grid" else 1 / 9.45
+        A[:, ::8], B[:, ::8] = (r * rng.choice([-1.0, 1.0], (rows, k // 8)) for _ in range(2))
         return A, 2.0 ** -6 * B                             # a power of two keeps B's BF16 rho at A's, on the screen's side
     raise ValueError(name)
 
