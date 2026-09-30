@@ -418,18 +418,35 @@ pub struct HostSlots {
     /// device copies of `zab` and of the compressions' input rows ([`HostSlots::upload`]), which the device reads instead
     pub dev_zab: Option<DevBuf>,
     pub dev_rows: Option<DevBuf>,
+    /// a page-locked copy of the compressions' input rows ([`HostSlots::pin_rows`]), which the device copies at full speed
+    pub pinned_rows: Option<HostBuf>,
 }
 
 impl Clone for HostSlots {
     /// The host words only: a clone may be changed, so it takes no device copy
     fn clone(&self) -> Self {
-        HostSlots { at: self.at.clone(), words: self.words.clone(), zab: self.zab.clone(), ab: self.ab, dev_zab: None, dev_rows: None }
+        HostSlots { at: self.at.clone(), words: self.words.clone(), zab: self.zab.clone(), ab: self.ab, dev_zab: None, dev_rows: None,
+            pinned_rows: None }
     }
 }
 
 impl HostSlots {
     fn of(at: Vec<i64>, words: Vec<i32>, zab: HostBuf, ab: bool) -> Self {
-        HostSlots { at, words, zab, ab, dev_zab: None, dev_rows: None }
+        HostSlots { at, words, zab, ab, dev_zab: None, dev_rows: None, pinned_rows: None }
+    }
+
+    /// Copy `rows` (the compressions' input rows) into page-locked memory, which the device copies from at full speed rather
+    /// than through pageable staging; for mapped host slots only, and not with `FC_ROWS_PINNED=0`
+    pub fn pin_rows(&mut self, rows: &[F128]) {
+        if !self.zab.is_mapped() || std::env::var("FC_ROWS_PINNED").as_deref() == Ok("0") {
+            return;
+        }
+        // SAFETY: an F128 is two u64 words (lo, hi)
+        let rw: &[u64] = unsafe { std::slice::from_raw_parts(rows.as_ptr() as *const u64, 2 * rows.len()) };
+        if let Some(mut b) = HostBuf::mapped(rw.len()) {
+            b.copy_from_slice(rw);
+            self.pinned_rows = Some(b);
+        }
     }
 
     /// Copy the a, b host slots and `rows` (the compressions' input rows the device takes beside them) to device memory, which
@@ -807,6 +824,10 @@ pub fn prove_circuit(
             // SAFETY: an F128 is two u64 words (lo, hi)
             let rw: &[u64] = unsafe { std::slice::from_raw_parts(hin, 2 * rows.len()) };
             let check = std::env::var("FC_UNIT_CHECK").as_deref() == Ok("1");
+            if let Some(p) = host.pinned_rows.as_ref().filter(|p| p.len() == rw.len()) {
+                assert!(!check || p[..] == *rw, "the pinned copy of the compression rows is not the rows");
+                hin = p.as_ptr();
+            }
             if let Some(d) = host.dev_rows.as_ref().filter(|d| d.words() == rw.len()) {
                 assert!(!check || d.holds(rw), "the device's copy of the compression rows is not the host's");
                 hin = d.as_ptr();

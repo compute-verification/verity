@@ -2289,18 +2289,21 @@ fn prebuild(st: &Arc<Stmt>, inst: &Arc<Instances>, plan: &Plan, seed: ProverSeed
 }
 
 /// [`witness`], and with `FC_DEV_PREFETCH=1` its host slots and compression rows copied to device memory
-/// (`HostSlots::upload`), which the session's device then reads. Built ahead (`prebuild`), the copies run beside the previous
-/// session's device work; either way their time counts as the build's.
+/// (`HostSlots::upload`), which the session's device then reads; otherwise its compression rows copied to page-locked memory
+/// (`HostSlots::pin_rows`). Built ahead (`prebuild`), the copies run beside the previous session's device work; either way their
+/// time counts as the build's.
 fn witness_uploaded(st: &Stmt, w: &Wit, mode: (bool, bool, bool)) -> (WitData, f64) {
     #[allow(unused_mut)]
     let (mut wt, mut s) = witness(st, w, mode.0, mode.1, mode.2);
     #[cfg(feature = "gpu")]
-    if std::env::var("FC_DEV_PREFETCH").as_deref() == Ok("1") {
-        if let WitData::Dev(rows, h, _) = &mut wt {
-            let t = Instant::now();
+    if let WitData::Dev(rows, h, _) = &mut wt {
+        let t = Instant::now();
+        if std::env::var("FC_DEV_PREFETCH").as_deref() == Ok("1") {
             h.upload(rows);
-            s += t.elapsed().as_secs_f64();
+        } else {
+            h.pin_rows(rows);
         }
+        s += t.elapsed().as_secs_f64();
     }
     (wt, s)
 }
