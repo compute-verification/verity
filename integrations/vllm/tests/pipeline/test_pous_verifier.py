@@ -42,7 +42,7 @@ def _run(blocks: list[bytes], scheme: protocol.Scheme, vk: VerifierKey) -> dict:
     try:
         return pv.run("127.0.0.1", sock.getsockname()[1], scheme, vk, audits=2, pings=20, k=16)
     finally:
-        t.join(timeout=5)
+        t.join()
         sock.close()
 
 
